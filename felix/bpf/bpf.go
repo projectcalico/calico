@@ -96,6 +96,8 @@ const (
 
 	DefaultBPFfsPath = "/sys/fs/bpf"
 	CgroupV2Path     = "/run/calico/cgroup"
+
+	GlobalPinDir = DefaultBPFfsPath + "/tc/globals/"
 )
 
 var (
@@ -2309,7 +2311,7 @@ func MapPinPath(typ int, name, iface string, hook Hook) string {
 		case HookXDP:
 			subDir = ifName + "_xdp"
 		case HookIngress:
-			subDir = ifName + "_igr/"
+			subDir = ifName + "_igr"
 		case HookEgress:
 			subDir = ifName + "_egr"
 		default:
