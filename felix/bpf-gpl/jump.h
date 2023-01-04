@@ -26,7 +26,11 @@ struct bpf_map_def_extended __attribute__((section("maps"))) cali_jump3 = {
 	.max_entries = 32,
 };
 
+#if CALI_F_XDP
 #define CALI_JUMP_TO(ctx, index) bpf_tail_call(ctx, &map_symbol(cali_jump, 3), index)
+#else
+#define CALI_JUMP_TO(ctx, index) bpf_tail_call(ctx, &map_symbol(cali_jump, 3), __globals.jumps[index])
+#endif
 
 /* Add new values to the end as these are program indices */
 enum cali_jump_index {
