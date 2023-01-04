@@ -362,6 +362,12 @@ func TcSetGlobals(
 	cName := C.CString(globalData.IfaceName)
 	defer C.free(unsafe.Pointer(cName))
 
+	cJumps := make([]C.uint, len(globalData.Jumps))
+
+	for i, v := range globalData.Jumps {
+		cJumps[i] = C.uint(v)
+	}
+
 	_, err := C.bpf_tc_set_globals(m.bpfMap,
 		cName,
 		C.uint(globalData.HostIP),
@@ -376,6 +382,7 @@ func TcSetGlobals(
 		C.ushort(globalData.WgPort),
 		C.uint(globalData.NatIn),
 		C.uint(globalData.NatOut),
+		&cJumps[0], // it is safe because we hold the reference here until we return.
 	)
 
 	return err

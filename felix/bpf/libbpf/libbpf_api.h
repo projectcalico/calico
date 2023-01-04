@@ -117,7 +117,8 @@ void bpf_tc_set_globals(struct bpf_map *map,
 			uint flags,
 			ushort wg_port,
 			uint natin,
-			uint natout)
+			uint natout,
+			uint *jumps)
 {
 	struct cali_tc_globals data = {
 		.host_ip = host_ip,
@@ -136,6 +137,12 @@ void bpf_tc_set_globals(struct bpf_map *map,
 
 	strncpy(data.iface_name, iface_name, sizeof(data.iface_name));
 	data.iface_name[sizeof(data.iface_name)-1] = '\0';
+
+	int i;
+
+	for (i = 0; i < sizeof(data.jumps)/sizeof(__u32); i++) {
+		data.jumps[i] = jumps[i];
+	}
 
 	set_errno(bpf_map__set_initial_value(map, (void*)(&data), sizeof(data)));
 }
