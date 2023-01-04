@@ -199,9 +199,9 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		ipSetIDAllocator = idalloc.New()
 		vxlanMTU = 0
 		nodePortDSR = true
-		bpfMapContext = &bpf.MapContext{
-			RepinningEnabled: true,
-		}
+
+		bpf.EnabledRepin()
+
 		bpfMapContext.IpsetsMap = bpfipsets.Map(bpfMapContext)
 		bpfMapContext.StateMap = state.Map(bpfMapContext)
 		bpfMapContext.CtMap = conntrack.Map(bpfMapContext)

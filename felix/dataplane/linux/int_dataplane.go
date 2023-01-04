@@ -601,6 +601,10 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		defaultRPFilter = []byte{'1'}
 	}
 
+	if config.BPFMapRepin {
+		bpf.EnabledRepin()
+	}
+
 	bpfMapContext := bpfmap.CreateBPFMapContext(
 		config.BPFMapSizeIPSets,
 		config.BPFMapSizeNATFrontend,
@@ -609,7 +613,6 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		config.BPFMapSizeRoute,
 		config.BPFMapSizeConntrack,
 		config.BPFMapSizeIfState,
-		config.BPFMapRepin,
 	)
 
 	var bpfEndpointManager *bpfEndpointManager

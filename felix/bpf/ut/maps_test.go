@@ -55,7 +55,10 @@ func TestMapResize(t *testing.T) {
 	rtMapSize := 500
 	ctMapSize := 600
 	ifStateMapSize := 100
-	mc := bpfmap.CreateBPFMapContext(ipsetsMapSize, natFeMapSize, natBeMapSize, natAffMapSize, rtMapSize, ctMapSize, ifStateMapSize, true)
+
+	bpf.EnabledRepin()
+
+	mc := bpfmap.CreateBPFMapContext(ipsetsMapSize, natFeMapSize, natBeMapSize, natAffMapSize, rtMapSize, ctMapSize, ifStateMapSize)
 	err := bpfmap.CreateBPFMaps(mc)
 	Expect(err).NotTo(HaveOccurred())
 	defer restoreMaps(mc)
@@ -83,7 +86,7 @@ func TestMapResizeWithCopy(t *testing.T) {
 	ifStateMapSize := 100
 
 	// Resize the CT map to 600. New map should have the entry in the old map
-	mc := bpfmap.CreateBPFMapContext(ipsetsMapSize, natFeMapSize, natBeMapSize, natAffMapSize, rtMapSize, ctMapSize, ifStateMapSize, true)
+	mc := bpfmap.CreateBPFMapContext(ipsetsMapSize, natFeMapSize, natBeMapSize, natAffMapSize, rtMapSize, ctMapSize, ifStateMapSize)
 	err = bpfmap.CreateBPFMaps(mc)
 	Expect(err).NotTo(HaveOccurred())
 	defer restoreMaps(mc)
@@ -117,7 +120,7 @@ func TestMapDownSize(t *testing.T) {
 
 	// New map creation should panic as the number of entries in old map is more than what the new map can
 	// accommodate
-	mc := bpfmap.CreateBPFMapContext(ipsetsMapSize, natFeMapSize, natBeMapSize, natAffMapSize, rtMapSize, ctMapSize, ifStateMapSize, true)
+	mc := bpfmap.CreateBPFMapContext(ipsetsMapSize, natFeMapSize, natBeMapSize, natAffMapSize, rtMapSize, ctMapSize, ifStateMapSize)
 	defer restoreMaps(mc)
 	err := bpfmap.CreateBPFMaps(mc)
 	expectedError := fmt.Sprintf("Failed to create %s map, err=new map cannot hold all the data from the old map %s", ctMap.GetName(), ctMap.GetName())
@@ -138,7 +141,7 @@ func TestCTDeltaMigration(t *testing.T) {
 	ctMapSize := 600
 	ifStateMapSize := 100
 
-	mc := bpfmap.CreateBPFMapContext(ipsetsMapSize, natFeMapSize, natBeMapSize, natAffMapSize, rtMapSize, ctMapSize, ifStateMapSize, true)
+	mc := bpfmap.CreateBPFMapContext(ipsetsMapSize, natFeMapSize, natBeMapSize, natAffMapSize, rtMapSize, ctMapSize, ifStateMapSize)
 	err = bpfmap.CreateBPFMaps(mc)
 	Expect(err).NotTo(HaveOccurred())
 

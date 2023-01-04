@@ -42,11 +42,9 @@ func CreateBPFMapContext(
 	routeMapSize,
 	ctMapSize,
 	ifstateSize int,
-	repinEnabled bool,
 ) *bpf.MapContext {
 	bpfMapContext := &bpf.MapContext{
-		RepinningEnabled: repinEnabled,
-		MapSizes:         map[string]uint32{},
+		MapSizes: map[string]uint32{},
 	}
 	bpfMapContext.MapSizes[ipsets.MapParameters.VersionedName()] = uint32(ipsetsMapSize)
 	bpfMapContext.MapSizes[nat.FrontendMapParameters.VersionedName()] = uint32(natFEMapSize)

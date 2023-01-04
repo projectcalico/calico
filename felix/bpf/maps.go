@@ -52,6 +52,12 @@ type Value interface {
 	AsBytes
 }
 
+var repinningEnabled bool
+
+func EnabledRepin() {
+	repinningEnabled = true
+}
+
 type IterCallback func(k, v []byte) IteratorAction
 
 type Map interface {
@@ -110,21 +116,20 @@ func (mp *MapParameters) versionedFilename() string {
 }
 
 type MapContext struct {
-	RepinningEnabled bool
-	IpsetsMap        Map
-	StateMap         Map
-	ArpMap           Map
-	FailsafesMap     Map
-	FrontendMap      Map
-	BackendMap       Map
-	AffinityMap      Map
-	RouteMap         Map
-	CtMap            Map
-	SrMsgMap         Map
-	CtNatsMap        Map
-	IfStateMap       Map
-	RuleCountersMap  Map
-	MapSizes         map[string]uint32
+	IpsetsMap       Map
+	StateMap        Map
+	ArpMap          Map
+	FailsafesMap    Map
+	FrontendMap     Map
+	BackendMap      Map
+	AffinityMap     Map
+	RouteMap        Map
+	CtMap           Map
+	SrMsgMap        Map
+	CtNatsMap       Map
+	IfStateMap      Map
+	RuleCountersMap Map
+	MapSizes        map[string]uint32
 }
 
 func (c *MapContext) NewPinnedMap(params MapParameters) MapWithExistsCheck {
@@ -182,13 +187,6 @@ func (b *PinnedMap) Close() error {
 	b.oldfd = 0
 	b.fd = 0
 	return err
-}
-
-func (b *PinnedMap) RepinningEnabled() bool {
-	if b.context == nil {
-		return false
-	}
-	return b.context.RepinningEnabled
 }
 
 func ShowMapCmd(m Map) ([]string, error) {
@@ -487,7 +485,7 @@ func (b *PinnedMap) Open() error {
 			return err
 		}
 		logrus.Debug("Map file didn't exist")
-		if b.context.RepinningEnabled {
+		if repinningEnabled {
 			logrus.WithField("name", b.Name).Info("Looking for map by name (to repin it)")
 			err = RepinMap(b.VersionedName(), b.versionedFilename())
 			if err != nil && !os.IsNotExist(err) {
