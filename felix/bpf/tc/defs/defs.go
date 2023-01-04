@@ -51,6 +51,7 @@ const (
 	ProgIndexV6Allowed
 	ProgIndexV6Icmp
 	ProgIndexV6Drop
+	ProgIndexEnd
 )
 
 const (
