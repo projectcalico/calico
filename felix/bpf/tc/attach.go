@@ -469,6 +469,10 @@ func (ap *AttachPoint) ConfigureProgram(m *libbpf.Map) error {
 		}
 	}
 
+	for i := 0; i < tcdefs.ProgIndexEnd; i++ {
+		globalData.Jumps[i] = uint32(i)
+	}
+
 	return ConfigureProgram(m, ap.Iface, &globalData)
 }
 

@@ -545,6 +545,11 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 					Flags:        1,
 					HostTunnelIP: ipToU32(node1tunIP),
 				}
+
+				for i := 0; i < tcdefs.ProgIndexEnd; i++ {
+					globals.Jumps[i] = uint32(i)
+				}
+
 				if err := tc.ConfigureProgram(m, ifaceLog, &globals); err != nil {
 					return nil, fmt.Errorf("failed to configure tc program: %w", err)
 				}
