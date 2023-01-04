@@ -43,7 +43,7 @@ protocol static {
 {{- end}}
 {{- if $bgp_peer_global}}
    # Static routes needed for global BGP peers
-{{range gets "/bgp/v1/global/peer_v6/*"}}{{$data := json .Value}}
+{{- range gets "/bgp/v1/global/peer_v6/*"}}{{$data := json .Value}}
 {{- if and $data.ip $data.reachable_by}}
    route {{$data.ip}}/128 via {{$data.reachable_by}};
 {{- end}}
