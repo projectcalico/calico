@@ -1,8 +1,11 @@
 [template]
 src = "bird6_aggr.cfg.template"
 dest = "/etc/calico/confd/config/bird6_aggr.cfg"
+prefix = "/calico/"
 keys = [
-    "/calico/ipam/v2/host//NODENAME/ipv6/block",
-    "/calico/staticroutesv6",
+    "/bgp/v1/host",
+    "/bgp/v1/global",
+    "/ipam/v2/host//NODENAME/ipv6/block",
+    "/staticroutesv6",
 ]
 reload_cmd = "sv hup bird6 || true"
