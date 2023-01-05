@@ -39,7 +39,7 @@ spec:
           operator: Exists
       serviceAccountName: {{include "nodeName" . }}
       # Minimize downtime during a rolling upgrade or deletion; tell Kubernetes to do a "force
-      # deletion": https://kubernetes.io/docs/concepts/workloads/pods/pod/#termination-of-pods.
+      # deletion": https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/#pod-termination.
       terminationGracePeriodSeconds: 0
       priorityClassName: system-node-critical
       initContainers:
@@ -650,8 +650,8 @@ spec:
           hostPath:
             type: DirectoryOrCreate
             path: /var/run/nodeagent
----
 
+---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -660,7 +660,6 @@ metadata:
 
 {{- if and (eq .Values.datastore "etcd") (eq .Values.network "flannel") }}
 ---
-
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
@@ -673,9 +672,7 @@ subjects:
 - kind: ServiceAccount
   name: canal-node
   namespace: kube-system
-
 ---
-
 kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
