@@ -2534,6 +2534,25 @@ var endpointSliceActiveSpecNoPorts = endpointSliceAndLocalWorkload.withKVUpdates
 	},
 )
 
+// Add the egress policy too...
+var endpointSliceActiveSpecPortsAndNoPorts = endpointSliceActiveSpecNoPorts.withKVUpdates(
+	KVPair{Key: servicePolicyKey2, Value: &servicePolicy},
+).withName(
+	"EndpointSliceActivePortsNoPorts",
+).withIPSet("svc:Jhwii46PCMT5NlhWsUqZmv7al8TeHFbNQMhoVg", []string{
+	"10.0.0.1,tcp:80",
+}).withActivePolicies(
+	proto.PolicyID{Tier: "default", Name: "svc-policy"},
+	proto.PolicyID{Tier: "default", Name: "svc-policy2"},
+).withEndpoint(
+	localWlEp1Id,
+	[]mock.TierInfo{
+		{Name: "default",
+			IngressPolicyNames: []string{"svc-policy"},
+			EgressPolicyNames:  []string{"svc-policy2"}},
+	},
+)
+
 var encapWithIPIPPool = empty.withKVUpdates(
 	KVPair{Key: ipPoolKey, Value: &ipPoolWithIPIP},
 ).withExpectedEncapsulation(
