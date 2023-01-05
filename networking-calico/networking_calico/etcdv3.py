@@ -406,14 +406,15 @@ _client = None
 class Etcd3AuthClient(Etcd3Client):
     def __init__(self, host='localhost', port=2379, protocol="http",
                  ca_cert=None, cert_key=None, cert_cert=None, timeout=None,
-                 username=None, password=None):
+                 username=None, password=None, api_path=None):
         super(Etcd3AuthClient, self).__init__(host=host,
                                               port=port,
                                               protocol=protocol,
                                               ca_cert=ca_cert,
                                               cert_key=cert_key,
                                               cert_cert=cert_cert,
-                                              timeout=timeout)
+                                              timeout=timeout,
+                                              api_path=api_path)
         self.username = username
         self.password = password
 
@@ -491,12 +492,14 @@ def _get_client():
                                       cert_key=calico_cfg.etcd_key_file,
                                       cert_cert=calico_cfg.etcd_cert_file,
                                       username=calico_cfg.etcd_username,
-                                      password=calico_cfg.etcd_password)
+                                      password=calico_cfg.etcd_password,
+                                      api_path=calico_cfg.etcd_api_path)
         else:
             LOG.info("TLS disabled, using HTTP to connect to etcd.")
             _client = Etcd3AuthClient(host=calico_cfg.etcd_host,
                                       port=calico_cfg.etcd_port,
                                       protocol="http",
                                       username=calico_cfg.etcd_username,
-                                      password=calico_cfg.etcd_password)
+                                      password=calico_cfg.etcd_password,
+                                      api_path=calico_cfg.etcd_api_path)
     return _client
