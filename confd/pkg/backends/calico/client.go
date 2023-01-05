@@ -820,8 +820,8 @@ func (c *client) nodeAsBGPPeers(nodeName string, v4 bool, v6 bool, v3Peer *apiv3
 			peer.TTLSecurity = *v3Peer.Spec.TTLSecurity
 		}
 
-		if v3peer.Spec.ReachableBy != "" {
-			peer.ReachableBy = v3peer.Spec.ReachableBy
+		if v3Peer.Spec.ReachableBy != "" {
+			peer.ReachableBy = v3Peer.Spec.ReachableBy
 		}
 
 		// If peer node has listenPort set in BGPConfiguration, use that.
