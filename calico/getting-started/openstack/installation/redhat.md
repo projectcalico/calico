@@ -50,13 +50,13 @@ These steps are detailed in this section.
     EOF
     ```
 
-1.  Install the `etcd3-gateway` Python package.  A current copy of that code is
+1.  Install version 1.0.1 of the `etcd3gw` Python package.  This is
     needed by {{site.prodname}}'s OpenStack driver and DHCP agent, so you
     should install it with `pip3`.
 
     ```
     yum install python3-pip
-    pip3 install git+https://github.com/dims/etcd3-gateway.git@5a3157a122368c2314c7a961f61722e47355f981
+    pip3 install etcd3gw==1.0.1
     ```
 
 1.  Edit `/etc/neutron/neutron.conf`.  Add a `[calico]` section with
