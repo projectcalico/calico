@@ -413,6 +413,15 @@ var baseTests = []StateList{
 	{
 		endpointSliceActiveSpecNoPorts,
 	},
+	{
+		// This case repros an aliasing bug where having an ingress rule and an egress rule for the
+		// same selector resulted in collision at cleanup time.
+		endpointSliceActiveSpecNoPorts,
+		endpointSliceActiveSpecPortsAndNoPorts,
+		endpointSliceActiveSpecNoPorts,
+		endpointSliceActiveSpecPortsAndNoPorts,
+		endpointSliceActiveNewIPs,
+	},
 }
 
 var logOnce sync.Once
