@@ -40,6 +40,9 @@ SHARED_OPTS = [
     cfg.StrOpt('etcd_password',
                help="Password for accessing an etcd cluster with "
                     "authentication enabled."),
+    cfg.StrOpt('etcd_api_path', default='/v3alpha/',
+               help="Can be set to '/v3beta/' or '/v3/' if the etcd server "
+                    "requires that instead of the default '/v3alpha/'."),
     # Large etcd subtree snapshot reads can take time, hence the
     # default of 60 seconds here as opposed to something much shorter.
     cfg.IntOpt('etcd_timeout', default=60,
