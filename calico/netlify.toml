@@ -49,7 +49,7 @@
 
 [build.environment]
   RUBY_VERSION = "2.5.4"
-  RELEASE_VERSION = "master"
+  RELEASE_VERSION = "v3.25"
 
 [context.deploy-preview]
   command = '''

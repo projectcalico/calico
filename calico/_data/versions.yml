@@ -1,38 +1,38 @@
-- title: master
+- title: v3.25.0-pre
   note: ""
-  manifests_url: https://raw.githubusercontent.com/projectcalico/calico/master
+  manifests_url: https://raw.githubusercontent.com/projectcalico/calico/release-v3.25
   chart:
-    version: 1
+    version: 0
   tigera-operator:
    image: tigera/operator
    registry: quay.io
-   version: master
+   version: release-v3.25
   components:
      typha:
-      version: master
+      version: release-v3.25
      calicoctl:
-      version: master
+      version: release-v3.25
      calico/node:
-      version: master
+      version: release-v3.25
      calico/cni:
-      version: master
+      version: release-v3.25
      calico/apiserver:
-      version: master
+      version: release-v3.25
      calico/kube-controllers:
-      version: master
+      version: release-v3.25
      calico/flannel-migration-controller:
-      version: master
+      version: release-v3.25
      calico/windows:
-      version: master
+      version: release-v3.25
      networking-calico:
-      version: master
+      version: release-v3.25
      flannel:
       version: v0.16.3
      calico/dikastes:
-      version: master
+      version: release-v3.25
      flexvol:
-      version: master
+      version: release-v3.25
      csi-driver:
-      version: master
+      version: release-v3.25
      csi-node-driver-registrar:
-      version: master
+      version: release-v3.25
