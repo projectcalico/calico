@@ -58,7 +58,7 @@ var arpCmd = &cobra.Command{
 }
 
 func dumpARP() error {
-	arpMap := arp.Map(&bpf.MapContext{})
+	arpMap := arp.Map()
 
 	if err := arpMap.Open(); err != nil {
 		return errors.WithMessage(err, "failed to open map")
@@ -82,7 +82,7 @@ func dumpARP() error {
 }
 
 func cleanARP() error {
-	arpMap := arp.Map(&bpf.MapContext{})
+	arpMap := arp.Map()
 
 	if err := arpMap.Open(); err != nil {
 		return errors.WithMessage(err, "failed to open map")

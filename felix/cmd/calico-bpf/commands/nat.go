@@ -19,8 +19,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/projectcalico/calico/felix/bpf"
-
 	"github.com/docopt/docopt-go"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
@@ -83,8 +81,7 @@ var natDelCmd = &cobra.Command{
 }
 
 func dumpAff(cmd *cobra.Command) (err error) {
-	mc := &bpf.MapContext{}
-	affMap, err := nat.LoadAffinityMap(nat.AffinityMap(mc))
+	affMap, err := nat.LoadAffinityMap(nat.AffinityMap())
 	if err != nil {
 		return err
 	}
@@ -99,13 +96,12 @@ func dumpAff(cmd *cobra.Command) (err error) {
 }
 
 func dump(cmd *cobra.Command) error {
-	mc := &bpf.MapContext{}
-	natMap, err := nat.LoadFrontendMap(nat.FrontendMap(mc))
+	natMap, err := nat.LoadFrontendMap(nat.FrontendMap())
 	if err != nil {
 		return err
 	}
 
-	back, err := nat.LoadBackendMap(nat.BackendMap(mc))
+	back, err := nat.LoadBackendMap(nat.BackendMap())
 	if err != nil {
 		return err
 	}
@@ -227,7 +223,7 @@ func (cmd *natFrontend) ArgsSet(c *cobra.Command, args []string) error {
 }
 
 func (cmd *natFrontend) RunSet(c *cobra.Command, _ []string) {
-	natMap := nat.FrontendMap(&bpf.MapContext{})
+	natMap := nat.FrontendMap()
 	if err := natMap.Open(); err != nil {
 		log.WithError(err).Error("Failed to access NATMap")
 	}
@@ -273,7 +269,7 @@ func (cmd *natFrontend) ArgsDel(c *cobra.Command, args []string) error {
 }
 
 func (cmd *natFrontend) RunDel(c *cobra.Command, _ []string) {
-	natMap := nat.FrontendMap(&bpf.MapContext{})
+	natMap := nat.FrontendMap()
 	if err := natMap.Open(); err != nil {
 		log.WithError(err).Error("Failed to access NATMap")
 	}
@@ -358,8 +354,7 @@ func (cmd *natBackend) ArgsSet(c *cobra.Command, args []string) error {
 }
 
 func (cmd *natBackend) RunSet(c *cobra.Command, _ []string) {
-	mc := &bpf.MapContext{}
-	m := nat.BackendMap(mc)
+	m := nat.BackendMap()
 	if err := m.Open(); err != nil {
 		log.WithError(err).Error("Failed to access NATMap")
 	}
@@ -405,8 +400,7 @@ func (cmd *natBackend) ArgsDel(c *cobra.Command, args []string) error {
 }
 
 func (cmd *natBackend) RunDel(c *cobra.Command, _ []string) {
-	mc := &bpf.MapContext{}
-	m := nat.BackendMap(mc)
+	m := nat.BackendMap()
 	if err := m.Open(); err != nil {
 		log.WithError(err).Error("Failed to access NATMap")
 	}

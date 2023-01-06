@@ -24,6 +24,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/bpf/bpfmap"
 	"github.com/projectcalico/calico/felix/bpf/nat"
 	"github.com/projectcalico/calico/felix/bpf/routes"
 	"github.com/projectcalico/calico/felix/cachingmap"
@@ -60,15 +61,15 @@ type KubeProxy struct {
 
 // StartKubeProxy start a new kube-proxy if there was no error
 func StartKubeProxy(k8s kubernetes.Interface, hostname string,
-	bpfMapContext *bpf.MapContext, opts ...Option) (*KubeProxy, error) {
+	bpfMaps *bpfmap.Maps, opts ...Option) (*KubeProxy, error) {
 
 	kp := &KubeProxy{
 		k8s:         k8s,
 		hostname:    hostname,
-		frontendMap: bpfMapContext.FrontendMap.(bpf.MapWithExistsCheck),
-		backendMap:  bpfMapContext.BackendMap.(bpf.MapWithExistsCheck),
-		affinityMap: bpfMapContext.AffinityMap,
-		ctMap:       bpfMapContext.CtMap,
+		frontendMap: bpfMaps.FrontendMap.(bpf.MapWithExistsCheck),
+		backendMap:  bpfMaps.BackendMap.(bpf.MapWithExistsCheck),
+		affinityMap: bpfMaps.AffinityMap,
+		ctMap:       bpfMaps.CtMap,
 		opts:        opts,
 		rt:          NewRTCache(),
 

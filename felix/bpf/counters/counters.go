@@ -154,7 +154,7 @@ func NewCounters(iface string) *Counters {
 	for index, hook := range bpf.Hooks {
 		pinPath := bpf.MapPinPath(unix.BPF_MAP_TYPE_PERCPU_ARRAY,
 			bpf.CountersMapName(), iface, hook)
-		cntr.maps[index] = Map(&bpf.MapContext{}, pinPath)
+		cntr.maps[index] = Map(pinPath)
 		logrus.Debugf("%s counter map pin path: %v", hook, pinPath)
 	}
 	return &cntr
