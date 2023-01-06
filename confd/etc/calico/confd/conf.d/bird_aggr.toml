@@ -1,8 +1,11 @@
 [template]
 src = "bird_aggr.cfg.template"
 dest = "/etc/calico/confd/config/bird_aggr.cfg"
+prefix = "/calico/"
 keys = [
-    "/calico/ipam/v2/host//NODENAME/ipv4/block",
-    "/calico/staticroutes",
+    "/bgp/v1/host",
+    "/bgp/v1/global",
+    "/ipam/v2/host//NODENAME/ipv4/block",
+    "/staticroutes",
 ]
 reload_cmd = "sv hup bird || true"
