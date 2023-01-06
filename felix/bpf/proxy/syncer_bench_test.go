@@ -180,10 +180,10 @@ func runBenchmarkServiceUpdate(b *testing.B, svcCnt, epCnt int, mockMaps bool, o
 		)
 		Expect(err).ShouldNot(HaveOccurred())
 	} else {
-		feMap := nat.FrontendMap(new(bpf.MapContext))
+		feMap := nat.FrontendMap()
 		err = feMap.EnsureExists()
 		Expect(err).ShouldNot(HaveOccurred())
-		beMap := nat.BackendMap(new(bpf.MapContext))
+		beMap := nat.BackendMap()
 		err = beMap.EnsureExists()
 		Expect(err).ShouldNot(HaveOccurred())
 

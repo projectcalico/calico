@@ -17,8 +17,6 @@ package counters
 import (
 	"encoding/binary"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/felix/bpf"
 )
 
@@ -34,13 +32,13 @@ var MapParameters = bpf.MapParameters{
 	Name:       bpf.CountersMapName(),
 }
 
-func Map(mc *bpf.MapContext, pinPath string) bpf.Map {
+func Map(pinPath string) bpf.Map {
 	MapParameters.Filename = pinPath
-	return mc.NewPinnedMap(MapParameters)
+	return bpf.NewPinnedMap(MapParameters)
 }
 
-func MapForTest(mc *bpf.MapContext) bpf.Map {
-	return mc.NewPinnedMap(MapParameters)
+func MapForTest() bpf.Map {
+	return bpf.NewPinnedMap(MapParameters)
 }
 
 var PolicyMapParameters = bpf.MapParameters{
@@ -53,8 +51,8 @@ var PolicyMapParameters = bpf.MapParameters{
 	Version:    2,
 }
 
-func PolicyMap(mc *bpf.MapContext) bpf.Map {
-	return mc.NewPinnedMap(PolicyMapParameters)
+func PolicyMap() bpf.Map {
+	return bpf.NewPinnedMap(PolicyMapParameters)
 }
 
 type PolicyMapMem map[uint64]uint64
@@ -86,14 +84,5 @@ func PolicyMapMemIter(m PolicyMapMem) bpf.IterCallback {
 		}
 		m[key] = value
 		return bpf.IterNone
-	}
-}
-
-func DeleteAllPolicyCounters(mc *bpf.MapContext) {
-	err := mc.RuleCountersMap.Iter(func(k, v []byte) bpf.IteratorAction {
-		return bpf.IterDelete
-	})
-	if err != nil {
-		logrus.WithError(err).Warn("Failed to iterate over policy counters map")
 	}
 }

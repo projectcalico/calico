@@ -19,8 +19,6 @@ import (
 	"net"
 	"testing"
 
-	"github.com/projectcalico/calico/felix/bpf"
-
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	. "github.com/onsi/gomega"
@@ -44,12 +42,11 @@ func TestSNATHostServiceRemotePod(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 	udp := l4.(*layers.UDP)
 
-	mc := &bpf.MapContext{}
-	natMap := nat.FrontendMap(mc)
+	natMap := nat.FrontendMap()
 	err = natMap.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 
-	natBEMap := nat.BackendMap(mc)
+	natBEMap := nat.BackendMap()
 	err = natBEMap.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 
@@ -68,7 +65,7 @@ func TestSNATHostServiceRemotePod(t *testing.T) {
 	)
 	Expect(err).NotTo(HaveOccurred())
 
-	ctMap := conntrack.Map(mc)
+	ctMap := conntrack.Map()
 	err = ctMap.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 	resetCTMap(ctMap) // ensure it is clean
