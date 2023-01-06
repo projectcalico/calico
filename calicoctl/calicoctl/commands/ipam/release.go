@@ -17,7 +17,6 @@ package ipam
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"runtime"
 	"strings"
 	"time"
@@ -160,7 +159,7 @@ func releaseFromReports(ctx context.Context, c client.Interface, force bool, rep
 	var reports []Report
 	for _, reportFile := range reportFiles {
 		r := Report{}
-		bytes, err := ioutil.ReadFile(reportFile)
+		bytes, err := os.ReadFile(reportFile)
 		if err != nil {
 			return err
 		}

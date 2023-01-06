@@ -18,7 +18,6 @@ import (
 	"context"
 	goerrors "errors"
 	"fmt"
-	"io/ioutil"
 	"reflect"
 
 	"github.com/kelseyhightower/envconfig"
@@ -128,7 +127,7 @@ func LoadClientConfig(filename string) (*api.CalicoAPIConfig, error) {
 
 	// Override / merge with values loaded from the specified file.
 	if filename != "" {
-		b, err := ioutil.ReadFile(filename)
+		b, err := os.ReadFile(filename)
 		if err != nil {
 			return nil, err
 		}

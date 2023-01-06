@@ -17,7 +17,6 @@ package main_test
 import (
 	"bytes"
 	"encoding/json"
-	"io/ioutil"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -25,7 +24,7 @@ import (
 
 var _ = Describe("Windows CNI config template tests", func() {
 	It("should be valid JSON", func() {
-		f, err := ioutil.ReadFile("../../windows-packaging/CalicoWindows/cni.conf.template")
+		f, err := os.ReadFile("../../windows-packaging/CalicoWindows/cni.conf.template")
 		Expect(err).NotTo(HaveOccurred())
 
 		// Swap out placeholders in the CNI config template for a valid JSON

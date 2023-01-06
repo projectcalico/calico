@@ -20,7 +20,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
 	"path/filepath"
@@ -29,7 +28,6 @@ import (
 	"time"
 
 	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 
@@ -67,7 +65,7 @@ var _ = Context("_POL-SYNC_ _BPF-SAFE_ policy sync API tests", func() {
 		// Create a temporary directory to map into the container as /var/run/calico/policysync, which
 		// is where we tell Felix to put the policy sync mounts and credentials.
 		var err error
-		tempDir, err = ioutil.TempDir("", "felixfv")
+		tempDir, err = os.MkdirTemp("", "felixfv")
 		Expect(err).NotTo(HaveOccurred())
 
 		// Configure felix to enable the policy sync API.
@@ -141,7 +139,7 @@ var _ = Context("_POL-SYNC_ _BPF-SAFE_ policy sync API tests", func() {
 			credentialFileName := credentials.Uid + binder.CredentialsExtension
 
 			credsFileTmp := filepath.Join(tempDir, credentialFileName)
-			err = ioutil.WriteFile(credsFileTmp, attrs, 0777)
+			err = os.WriteFile(credsFileTmp, attrs, 0777)
 			if err != nil {
 				return err
 			}

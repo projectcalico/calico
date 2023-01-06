@@ -16,7 +16,6 @@ package intdataplane
 
 import (
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
 	"reflect"
@@ -237,7 +236,7 @@ type UpdateBatchResolver interface {
 // and ipsets.  It communicates with the datastore-facing part of Felix via the
 // Send/RecvMessage methods, which operate on the protobuf-defined API objects.
 //
-// Architecture
+// # Architecture
 //
 // The internal dataplane driver is organised around a main event loop, which handles
 // update events from the datastore and dataplane.
@@ -254,7 +253,7 @@ type UpdateBatchResolver interface {
 // In addition, it allows for different managers to make updates without having to
 // coordinate on their sequencing.
 //
-// Requirements on the API
+// # Requirements on the API
 //
 // The internal dataplane does not do consistency checks on the incoming data (as the
 // old Python-based driver used to do).  It expects to be told about dependent resources
@@ -990,7 +989,7 @@ func writeMTUFile(mtu int) error {
 	// Write the smallest MTU to disk so other components can rely on this calculation consistently.
 	filename := "/var/lib/calico/mtu"
 	log.Debugf("Writing %d to "+filename, mtu)
-	if err := ioutil.WriteFile(filename, []byte(fmt.Sprintf("%d", mtu)), 0644); err != nil {
+	if err := os.WriteFile(filename, []byte(fmt.Sprintf("%d", mtu)), 0644); err != nil {
 		log.WithError(err).Error("Unable to write to " + filename)
 		return err
 	}
