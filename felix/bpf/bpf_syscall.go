@@ -260,7 +260,7 @@ func checkMapIfDebug(mapFD MapFD, keySize, valueSize int) error {
 		log.WithError(err).Error("Failed to read map information")
 		return err
 	}
-	log.WithField("mapInfo", mapInfo).Debug("Map metadata")
+	log.WithField("fd", mapFD).WithField("mapInfo", mapInfo).Debug("Map metadata")
 	if keySize != mapInfo.KeySize {
 		log.WithField("mapInfo", mapInfo).WithField("keyLen", keySize).Panic("Incorrect key length")
 	}
