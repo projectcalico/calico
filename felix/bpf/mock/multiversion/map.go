@@ -73,48 +73,48 @@ func GetKeyValueTypeFromVersion(version int, k, v []byte) (bpf.Upgradable, bpf.U
 	}
 }
 
-func MapV2(mc *bpf.MapContext, maxEntries int) bpf.Map {
+func MapV2(maxEntries int) bpf.Map {
 	mockParams := v2.MockMapParams
 	if maxEntries > 0 {
 		mockParams.MaxEntries = maxEntries
 	}
-	b := mc.NewPinnedMap(mockParams)
+	b := bpf.NewPinnedMap(mockParams)
 	b.(*bpf.PinnedMap).UpgradeFn = upgrade.UpgradeBPFMap
 	b.(*bpf.PinnedMap).GetMapParams = GetMapParams
 	b.(*bpf.PinnedMap).KVasUpgradable = GetKeyValueTypeFromVersion
 	return b
 }
 
-func MapV3(mc *bpf.MapContext, maxEntries int) bpf.Map {
+func MapV3(maxEntries int) bpf.Map {
 	mockParams := v3.MockMapParams
 	if maxEntries > 0 {
 		mockParams.MaxEntries = maxEntries
 	}
-	b := mc.NewPinnedMap(mockParams)
+	b := bpf.NewPinnedMap(mockParams)
 	b.(*bpf.PinnedMap).UpgradeFn = upgrade.UpgradeBPFMap
 	b.(*bpf.PinnedMap).GetMapParams = GetMapParams
 	b.(*bpf.PinnedMap).KVasUpgradable = GetKeyValueTypeFromVersion
 	return b
 }
 
-func MapV4(mc *bpf.MapContext, maxEntries int) bpf.Map {
+func MapV4(maxEntries int) bpf.Map {
 	mockParams := v4.MockMapParams
 	if maxEntries > 0 {
 		mockParams.MaxEntries = maxEntries
 	}
-	b := mc.NewPinnedMap(mockParams)
+	b := bpf.NewPinnedMap(mockParams)
 	b.(*bpf.PinnedMap).UpgradeFn = upgrade.UpgradeBPFMap
 	b.(*bpf.PinnedMap).GetMapParams = GetMapParams
 	b.(*bpf.PinnedMap).KVasUpgradable = GetKeyValueTypeFromVersion
 	return b
 }
 
-func MapV5(mc *bpf.MapContext, maxEntries int) bpf.Map {
+func MapV5(maxEntries int) bpf.Map {
 	mockParams := v5.MockMapParams
 	if maxEntries > 0 {
 		mockParams.MaxEntries = maxEntries
 	}
-	b := mc.NewPinnedMap(mockParams)
+	b := bpf.NewPinnedMap(mockParams)
 	b.(*bpf.PinnedMap).UpgradeFn = upgrade.UpgradeBPFMap
 	b.(*bpf.PinnedMap).GetMapParams = GetMapParams
 	b.(*bpf.PinnedMap).KVasUpgradable = GetKeyValueTypeFromVersion

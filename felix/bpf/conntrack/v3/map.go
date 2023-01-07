@@ -502,10 +502,6 @@ var MapParams = bpf.MapParameters{
 	UpdatedByBPF: true,
 }
 
-func Map(mc *bpf.MapContext) bpf.Map {
-	return mc.NewPinnedMap(MapParams)
-}
-
 const (
 	ProtoICMP = 1
 	ProtoTCP  = 6

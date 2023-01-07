@@ -52,7 +52,6 @@ type AttachPoint struct {
 	PSNATStart           uint16
 	PSNATEnd             uint16
 	IPv6Enabled          bool
-	MapSizes             map[string]uint32
 	RPFEnforceOption     uint8
 	NATin                uint32
 	NATout               uint32
@@ -482,7 +481,7 @@ func ConfigureProgram(m *libbpf.Map, iface string, globalData *libbpf.TcGlobalDa
 }
 
 func (ap *AttachPoint) setMapSize(m *libbpf.Map) error {
-	if size, ok := ap.MapSizes[m.Name()]; ok {
+	if size := bpf.MapSize(m.Name()); size != 0 {
 		return m.SetMapSize(size)
 	}
 	return nil

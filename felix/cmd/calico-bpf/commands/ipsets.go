@@ -48,7 +48,7 @@ var ipsetsCmd = &cobra.Command{
 }
 
 func dumpIPSets() error {
-	ipsetMap := ipsets.Map(&bpf.MapContext{})
+	ipsetMap := ipsets.Map()
 
 	if err := ipsetMap.Open(); err != nil {
 		return errors.WithMessage(err, "failed to open map")
