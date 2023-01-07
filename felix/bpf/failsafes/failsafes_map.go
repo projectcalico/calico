@@ -26,6 +26,10 @@ import (
 	"github.com/projectcalico/calico/felix/bpf"
 )
 
+func init() {
+	bpf.SetMapSize(MapParams.VersionedName(), MapParams.MaxEntries)
+}
+
 const (
 	// PrefixLen (4) + Port (2) + Proto (1) + Flags (1) + IP (4)
 	KeySize   = 12
@@ -56,7 +60,6 @@ func (k Key) String() string {
 }
 
 var MapParams = bpf.MapParameters{
-	Filename:   "/sys/fs/bpf/tc/globals/cali_v4_fsafes",
 	Type:       "lpm_trie",
 	KeySize:    KeySize,
 	ValueSize:  ValueSize,
@@ -66,8 +69,8 @@ var MapParams = bpf.MapParameters{
 	Version:    2,
 }
 
-func Map(mc *bpf.MapContext) bpf.Map {
-	return mc.NewPinnedMap(MapParams)
+func Map() bpf.Map {
+	return bpf.NewPinnedMap(MapParams)
 }
 
 func MakeKey(ipProto uint8, port uint16, outbound bool, ip string, mask int) Key {

@@ -430,20 +430,18 @@ var (
 
 func initMapsOnce() {
 	mapInitOnce.Do(func() {
-		mc := &bpf.MapContext{}
-
-		natMap = nat.FrontendMap(mc)
-		natBEMap = nat.BackendMap(mc)
-		ctMap = conntrack.Map(mc)
-		rtMap = routes.Map(mc)
-		ipsMap = ipsets.Map(mc)
-		stateMap = state.Map(mc)
-		testStateMap = state.MapForTest(mc)
-		affinityMap = nat.AffinityMap(mc)
-		arpMap = arp.Map(mc)
-		fsafeMap = failsafes.Map(mc)
-		countersMap = counters.MapForTest(mc)
-		ifstateMap = ifstate.Map(mc)
+		natMap = nat.FrontendMap()
+		natBEMap = nat.BackendMap()
+		ctMap = conntrack.Map()
+		rtMap = routes.Map()
+		ipsMap = ipsets.Map()
+		stateMap = state.Map()
+		testStateMap = state.MapForTest()
+		affinityMap = nat.AffinityMap()
+		arpMap = arp.Map()
+		fsafeMap = failsafes.Map()
+		countersMap = counters.MapForTest()
+		ifstateMap = ifstate.Map()
 
 		allMaps = []bpf.Map{natMap, natBEMap, ctMap, rtMap, ipsMap, stateMap, testStateMap,
 			affinityMap, arpMap, fsafeMap, countersMap, ifstateMap}
@@ -516,7 +514,7 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 
 	forXDP := topts.xdp
 
-	jumpMap = jump.MapForTest(&bpf.MapContext{})
+	jumpMap = jump.MapForTest()
 	if ipFamily == "IPv4" {
 		// don't do for v6 as that requires v4 atm
 		_ = unix.Unlink(jumpMap.Path())
@@ -1215,8 +1213,12 @@ func resetBPFMaps() {
 func TestMapIterWithDelete(t *testing.T) {
 	RegisterTestingT(t)
 
-	m := (&bpf.MapContext{}).NewPinnedMap(bpf.MapParameters{
+<<<<<<< HEAD
+	m := bpf.NewPinnedMap(bpf.MapParameters{
 		Filename:   "/sys/fs/bpf/tc/globals/cali_tmap",
+=======
+	m := (&bpf.MapContext{}).NewPinnedMap(bpf.MapParameters{
+>>>>>>> 477c94473c ([BPF] no explicit pin file name in maps)
 		Type:       "hash",
 		KeySize:    8,
 		ValueSize:  8,
@@ -1263,8 +1265,12 @@ func TestMapIterWithDelete(t *testing.T) {
 func TestMapIterWithDeleteLastOfBatch(t *testing.T) {
 	RegisterTestingT(t)
 
-	m := (&bpf.MapContext{}).NewPinnedMap(bpf.MapParameters{
+<<<<<<< HEAD
+	m := bpf.NewPinnedMap(bpf.MapParameters{
 		Filename:   "/sys/fs/bpf/tc/globals/cali_tmap",
+=======
+	m := (&bpf.MapContext{}).NewPinnedMap(bpf.MapParameters{
+>>>>>>> 477c94473c ([BPF] no explicit pin file name in maps)
 		Type:       "hash",
 		KeySize:    8,
 		ValueSize:  8,

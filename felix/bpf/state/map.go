@@ -22,6 +22,10 @@ import (
 	"github.com/projectcalico/calico/felix/bpf"
 )
 
+func init() {
+	bpf.SetMapSize(MapParameters.VersionedName(), MapParameters.MaxEntries)
+}
+
 type PolicyResult int32
 
 const (
@@ -134,7 +138,6 @@ func StateFromBytes(bytes []byte) State {
 }
 
 var MapParameters = bpf.MapParameters{
-	Filename:   "/sys/fs/bpf/tc/globals/cali_state",
 	Type:       "percpu_array",
 	KeySize:    4,
 	ValueSize:  expectedSize,
@@ -143,13 +146,12 @@ var MapParameters = bpf.MapParameters{
 	Version:    2,
 }
 
-func Map(mc *bpf.MapContext) bpf.Map {
-	return mc.NewPinnedMap(MapParameters)
+func Map() bpf.Map {
+	return bpf.NewPinnedMap(MapParameters)
 }
 
-func MapForTest(mc *bpf.MapContext) bpf.Map {
-	return mc.NewPinnedMap(bpf.MapParameters{
-		Filename:   "/sys/fs/bpf/tc/globals/test_state",
+func MapForTest() bpf.Map {
+	return bpf.NewPinnedMap(bpf.MapParameters{
 		Type:       "array",
 		KeySize:    4,
 		ValueSize:  expectedSize,

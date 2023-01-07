@@ -109,12 +109,11 @@ func dumpCtMapV2(ctMap bpf.Map) error {
 
 func (cmd *conntrackDumpCmd) Run(c *cobra.Command, _ []string) {
 	var ctMap bpf.Map
-	mc := &bpf.MapContext{}
 	switch cmd.version {
 	case "2":
-		ctMap = conntrack.MapV2(mc)
+		ctMap = conntrack.MapV2()
 	default:
-		ctMap = conntrack.Map(mc)
+		ctMap = conntrack.Map()
 	}
 	if err := ctMap.Open(); err != nil {
 		log.WithError(err).Fatal("Failed to access ConntrackMap")
@@ -267,8 +266,7 @@ func (cmd *conntrackRemoveCmd) Args(c *cobra.Command, args []string) error {
 }
 
 func (cmd *conntrackRemoveCmd) Run(c *cobra.Command, _ []string) {
-	mc := &bpf.MapContext{}
-	ctMap := conntrack.Map(mc)
+	ctMap := conntrack.Map()
 	if err := ctMap.Open(); err != nil {
 		log.WithError(err).Error("Failed to access ConntrackMap")
 	}
@@ -300,8 +298,7 @@ func (cmd *conntrackRemoveCmd) Run(c *cobra.Command, _ []string) {
 }
 
 func runClean(c *cobra.Command, _ []string) {
-	mc := &bpf.MapContext{}
-	ctMap := conntrack.Map(mc)
+	ctMap := conntrack.Map()
 	if err := ctMap.Open(); err != nil {
 		log.WithError(err).Error("Failed to access ConntrackMap")
 	}
@@ -355,12 +352,11 @@ func (cmd *conntrackCreateCmd) Args(c *cobra.Command, args []string) error {
 
 func (cmd *conntrackCreateCmd) Run(c *cobra.Command, _ []string) {
 	var ctMap bpf.Map
-	mc := &bpf.MapContext{}
 	switch cmd.version {
 	case "2":
-		ctMap = conntrack.MapV2(mc)
+		ctMap = conntrack.MapV2()
 	default:
-		ctMap = conntrack.Map(mc)
+		ctMap = conntrack.Map()
 	}
 	if err := ctMap.EnsureExists(); err != nil {
 		log.WithError(err).Errorf("Failed to create conntrackMap version %s", cmd.version)
@@ -436,12 +432,11 @@ func (cmd *conntrackWriteCmd) Args(c *cobra.Command, args []string) error {
 }
 
 func (cmd *conntrackWriteCmd) Run(c *cobra.Command, _ []string) {
-	mc := &bpf.MapContext{}
 	var ctMap bpf.Map
 	if cmd.version == "2" {
-		ctMap = conntrack.MapV2(mc)
+		ctMap = conntrack.MapV2()
 	} else {
-		ctMap = conntrack.Map(mc)
+		ctMap = conntrack.Map()
 	}
 
 	if err := ctMap.Open(); err != nil {
@@ -475,8 +470,7 @@ func newConntrackFillCmd() *cobra.Command {
 }
 
 func (cmd *conntrackFillCmd) Run(c *cobra.Command, _ []string) {
-	mc := &bpf.MapContext{}
-	ctMap := conntrack.Map(mc)
+	ctMap := conntrack.Map()
 
 	var key conntrack.Key
 	copy(key[:], cmd.key)
