@@ -32,7 +32,7 @@ static CALI_BPF_INLINE bool wep_rpf_check(struct cali_tc_ctx *ctx, struct cali_r
 static CALI_BPF_INLINE bool hep_rpf_check(struct cali_tc_ctx *ctx)
 {
 	bool ret = false;
-    bool strict;
+	bool strict;
 
 	if (!(GLOBAL_FLAGS & CALI_GLOBALS_RPF_OPTION_ENABLED)) {
 		CALI_DEBUG("Host RPF check disabled\n");
