@@ -111,7 +111,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test configurable
 			cfg.Spec.BPFMapSizeConntrack = &newCtMapSize
 		})
 
-		ctMap := conntrack.Map(&bpf.MapContext{})
+		ctMap := conntrack.Map()
 		Eventually(func() int { return getMapSize(felixes[0], ctMap) }, "10s", "200ms").Should(Equal(newCtMapSize))
 		out, err = felixes[0].ExecOutput("calico-bpf", "conntrack", "dump")
 		Expect(err).NotTo(HaveOccurred())
@@ -120,12 +120,12 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test configurable
 	})
 
 	It("should program new map sizes", func() {
-		affMap := nat.AffinityMap(&bpf.MapContext{})
-		feMap := nat.FrontendMap(&bpf.MapContext{})
-		beMap := nat.BackendMap(&bpf.MapContext{})
-		rtMap := routes.Map(&bpf.MapContext{})
-		ipsMap := ipsets.Map(&bpf.MapContext{})
-		ctMap := conntrack.Map(&bpf.MapContext{})
+		affMap := nat.AffinityMap()
+		feMap := nat.FrontendMap()
+		beMap := nat.BackendMap()
+		rtMap := routes.Map()
+		ipsMap := ipsets.Map()
+		ctMap := conntrack.Map()
 
 		felix := felixes[0]
 		Eventually(func() int { return getMapSize(felix, rtMap) }, "10s", "200ms").Should(Equal((rtMap.(*bpf.PinnedMap)).MaxEntries))

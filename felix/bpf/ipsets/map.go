@@ -41,7 +41,6 @@ const IPSetEntrySize = 20
 type IPSetEntry [IPSetEntrySize]byte
 
 var MapParameters = bpf.MapParameters{
-	Filename:   "/sys/fs/bpf/tc/globals/cali_v4_ip_sets",
 	Type:       "lpm_trie",
 	KeySize:    IPSetEntrySize,
 	ValueSize:  4,
@@ -50,8 +49,16 @@ var MapParameters = bpf.MapParameters{
 	Flags:      unix.BPF_F_NO_PREALLOC,
 }
 
-func Map(mc *bpf.MapContext) bpf.Map {
-	return mc.NewPinnedMap(MapParameters)
+func init() {
+	SetMapSize(MapParameters.MaxEntries)
+}
+
+func SetMapSize(size int) {
+	bpf.SetMapSize(MapParameters.VersionedName(), size)
+}
+
+func Map() bpf.Map {
+	return bpf.NewPinnedMap(MapParameters)
 }
 
 func (e IPSetEntry) SetID() uint64 {

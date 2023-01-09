@@ -22,7 +22,6 @@ import (
 
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 
-	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	"github.com/projectcalico/calico/felix/bpf/routes"
 	"github.com/projectcalico/calico/felix/ip"
@@ -104,9 +103,7 @@ func TestAllowEnterHostToWorkload(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 	udp := l4.(*layers.UDP)
 
-	mc := &bpf.MapContext{}
-
-	ctMap := conntrack.Map(mc)
+	ctMap := conntrack.Map()
 	err = ctMap.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 	resetCTMap(ctMap) // ensure it is clean
@@ -174,9 +171,7 @@ func TestAllowWorkloadToWorkload(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 	udp := l4.(*layers.UDP)
 
-	mc := &bpf.MapContext{}
-
-	ctMap := conntrack.Map(mc)
+	ctMap := conntrack.Map()
 	err = ctMap.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 	resetCTMap(ctMap) // ensure it is clean

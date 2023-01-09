@@ -18,9 +18,8 @@ import (
 	"github.com/projectcalico/calico/felix/bpf"
 )
 
-func MapForTest(mc *bpf.MapContext) bpf.Map {
-	return mc.NewPinnedMap(bpf.MapParameters{
-		Filename:   "/sys/fs/bpf/tc/globals/cali_jump2",
+func MapForTest() bpf.Map {
+	return bpf.NewPinnedMap(bpf.MapParameters{
 		Type:       "prog_array",
 		KeySize:    4,
 		ValueSize:  4,

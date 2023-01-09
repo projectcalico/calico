@@ -45,7 +45,7 @@ var ifstateCmd = &cobra.Command{
 }
 
 func dumpIfState(cmd *cobra.Command) error {
-	ifstateMap := ifstate.Map(&bpf.MapContext{})
+	ifstateMap := ifstate.Map()
 
 	if err := ifstateMap.Open(); err != nil {
 		return errors.WithMessage(err, "failed to open map")

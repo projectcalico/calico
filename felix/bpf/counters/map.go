@@ -17,8 +17,6 @@ package counters
 import (
 	"encoding/binary"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/felix/bpf"
 )
 
@@ -26,7 +24,6 @@ const PolicyMapKeySize = 8
 const PolicyMapValueSize = 8
 
 var MapParameters = bpf.MapParameters{
-	Filename:   "/sys/fs/bpf/tc/globals/cali_counters",
 	Type:       "percpu_array",
 	KeySize:    counterMapKeySize, // __u32
 	ValueSize:  counterMapValueSize * MaxCounterNumber,
@@ -34,17 +31,16 @@ var MapParameters = bpf.MapParameters{
 	Name:       bpf.CountersMapName(),
 }
 
-func Map(mc *bpf.MapContext, pinPath string) bpf.Map {
-	MapParameters.Filename = pinPath
-	return mc.NewPinnedMap(MapParameters)
+func Map(pinDir string) bpf.Map {
+	MapParameters.PinDir = pinDir
+	return bpf.NewPinnedMap(MapParameters)
 }
 
-func MapForTest(mc *bpf.MapContext) bpf.Map {
-	return mc.NewPinnedMap(MapParameters)
+func MapForTest() bpf.Map {
+	return bpf.NewPinnedMap(MapParameters)
 }
 
 var PolicyMapParameters = bpf.MapParameters{
-	Filename:   "/sys/fs/bpf/tc/globals/cali_rule_ctrs",
 	Type:       "percpu_hash",
 	KeySize:    PolicyMapKeySize,
 	ValueSize:  PolicyMapValueSize,
@@ -53,8 +49,8 @@ var PolicyMapParameters = bpf.MapParameters{
 	Version:    2,
 }
 
-func PolicyMap(mc *bpf.MapContext) bpf.Map {
-	return mc.NewPinnedMap(PolicyMapParameters)
+func PolicyMap() bpf.Map {
+	return bpf.NewPinnedMap(PolicyMapParameters)
 }
 
 type PolicyMapMem map[uint64]uint64
@@ -86,14 +82,5 @@ func PolicyMapMemIter(m PolicyMapMem) bpf.IterCallback {
 		}
 		m[key] = value
 		return bpf.IterNone
-	}
-}
-
-func DeleteAllPolicyCounters(mc *bpf.MapContext) {
-	err := mc.RuleCountersMap.Iter(func(k, v []byte) bpf.IteratorAction {
-		return bpf.IterDelete
-	})
-	if err != nil {
-		logrus.WithError(err).Warn("Failed to iterate over policy counters map")
 	}
 }

@@ -55,7 +55,6 @@ import (
 	bpfarp "github.com/projectcalico/calico/felix/bpf/arp"
 	"github.com/projectcalico/calico/felix/bpf/asm"
 	"github.com/projectcalico/calico/felix/bpf/bpfmap"
-	"github.com/projectcalico/calico/felix/bpf/counters"
 	"github.com/projectcalico/calico/felix/bpf/ifstate"
 	"github.com/projectcalico/calico/felix/bpf/polprog"
 	"github.com/projectcalico/calico/felix/bpf/tc"
@@ -204,7 +203,7 @@ type bpfEndpointManager struct {
 	dsrEnabled              bool
 	bpfExtToServiceConnmark int
 	psnatPorts              numorstring.Port
-	bpfMapContext           *bpf.MapContext
+	maps                    *bpfmap.Maps
 	ifStateMap              *cachingmap.CachingMap[ifstate.Key, ifstate.Value]
 
 	ruleRenderer        bpfAllowChainRenderer
@@ -274,7 +273,7 @@ type bpfAllowChainRenderer interface {
 func newBPFEndpointManager(
 	dp bpfDataplane,
 	config *Config,
-	bpfMapContext *bpf.MapContext,
+	maps *bpfmap.Maps,
 	fibLookupEnabled bool,
 	workloadIfaceRegex *regexp.Regexp,
 	ipSetIDAlloc *idalloc.IDAllocator,
@@ -312,10 +311,10 @@ func newBPFEndpointManager(
 		dsrEnabled:              config.BPFNodePortDSREnabled,
 		bpfExtToServiceConnmark: config.BPFExtToServiceConnmark,
 		psnatPorts:              config.BPFPSNATPorts,
-		bpfMapContext:           bpfMapContext,
+		maps:                    maps,
 		ifStateMap: cachingmap.New[ifstate.Key, ifstate.Value](ifstate.MapParams.Name,
 			bpf.NewTypedMap[ifstate.Key, ifstate.Value](
-				bpfMapContext.IfStateMap.(bpf.MapWithExistsCheck), ifstate.KeyFromBytes, ifstate.ValueFromBytes,
+				maps.IfStateMap.(bpf.MapWithExistsCheck), ifstate.KeyFromBytes, ifstate.ValueFromBytes,
 			)),
 		ruleRenderer:        iptablesRuleRenderer,
 		iptablesFilterTable: iptablesFilterTable,
@@ -331,7 +330,7 @@ func newBPFEndpointManager(
 		bpfPolicyDebugEnabled: config.BPFPolicyDebugEnabled,
 		polNameToMatchIDs:     map[string]set.Set[polprog.RuleMatchID]{},
 		dirtyRules:            set.New[polprog.RuleMatchID](),
-		arpMap:                bpfMapContext.ArpMap,
+		arpMap:                maps.ArpMap,
 	}
 
 	// Calculate allowed XDP attachment modes.  Note, in BPF mode untracked ingress policy is
@@ -406,7 +405,12 @@ func newBPFEndpointManager(
 	}
 
 	if m.bpfPolicyDebugEnabled {
-		counters.DeleteAllPolicyCounters(m.bpfMapContext)
+		err := m.maps.RuleCountersMap.Iter(func(k, v []byte) bpf.IteratorAction {
+			return bpf.IterDelete
+		})
+		if err != nil {
+			log.WithError(err).Warn("Failed to iterate over policy counters map")
+		}
 	}
 
 	return m, nil
@@ -755,7 +759,7 @@ func (m *bpfEndpointManager) removeDirtyPolicies() {
 	m.dirtyRules.Iter(func(item polprog.RuleMatchID) error {
 		binary.LittleEndian.PutUint64(b, item)
 		log.WithField("ruleId", item).Debug("deleting entry")
-		err := m.bpfMapContext.RuleCountersMap.Delete(b)
+		err := m.maps.RuleCountersMap.Delete(b)
 		if err != nil && !bpf.IsNotExists(err) {
 			log.WithField("ruleId", item).Info("error deleting entry")
 		}
@@ -853,7 +857,10 @@ func (m *bpfEndpointManager) CompleteDeferredWork() error {
 	// Copy data from old map to the new map
 	m.copyDeltaOnce.Do(func() {
 		log.Info("Copy delta entries from old map to the new map")
-		bpfmap.MigrateDataFromOldMap(m.bpfMapContext)
+		err := m.maps.CtMap.CopyDeltaFromOldMap()
+		if err != nil {
+			log.WithError(err).Debugf("Failed to copy data from old conntrack map %s", err)
+		}
 	})
 	return nil
 }
@@ -1398,7 +1405,6 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(policyDirection PolDirection
 	ap.PSNATStart = m.psnatPorts.MinPort
 	ap.PSNATEnd = m.psnatPorts.MaxPort
 	ap.IPv6Enabled = m.ipv6Enabled
-	ap.MapSizes = m.bpfMapContext.MapSizes
 
 	switch m.rpfEnforceOption {
 	case "Strict":
@@ -2062,8 +2068,8 @@ func policyProgramName(iface, polDir string, ipFamily proto.IPVersion) string {
 func (m *bpfEndpointManager) doUpdatePolicyProgram(progName string, jumpMapFD bpf.MapFD, rules polprog.Rules,
 	ipFamily proto.IPVersion) (asm.Insns, error) {
 
-	pg := polprog.NewBuilder(m.ipSetIDAlloc, m.bpfMapContext.IpsetsMap.MapFD(),
-		m.bpfMapContext.StateMap.MapFD(), jumpMapFD, m.bpfPolicyDebugEnabled)
+	pg := polprog.NewBuilder(m.ipSetIDAlloc, m.maps.IpsetsMap.MapFD(),
+		m.maps.StateMap.MapFD(), jumpMapFD, m.bpfPolicyDebugEnabled)
 	if ipFamily == proto.IPVersion_IPV6 {
 		pg.EnableIPv6Mode()
 	}
