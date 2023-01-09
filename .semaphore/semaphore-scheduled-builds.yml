@@ -79,7 +79,7 @@ global_job_config:
     - sudo umount /var/lib/docker && sudo killall qemu-nbd || true
     - sudo systemctl start docker
     # Free up space on the build machine.
-    - sudo rm -rf ~/.kiex ~/.phpbrew ~/.rbenv ~/.nvm ~/.kerl ~/.sbt ~/.npm /usr/lib/jvm /opt/firefox* /opt/apache-maven* /opt/scala /usr/local/golang
+    - sudo rm -rf ~/{.kerl,.kiex,.npm,.nvm,.phpbrew,.rbenv,.sbt} /opt/{apache-maven*,firefox*,scala} /usr/lib/jvm /usr/local/{aws2,golang,phantomjs*}
     - echo $DOCKERHUB_PASSWORD | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
     # Disable initramfs update to save space on the Semaphore VM (and we don't need it because we're not going to reboot).
     - sudo apt-get install -y -u crudini
