@@ -237,7 +237,7 @@ type UpdateBatchResolver interface {
 // and ipsets.  It communicates with the datastore-facing part of Felix via the
 // Send/RecvMessage methods, which operate on the protobuf-defined API objects.
 //
-// Architecture
+// # Architecture
 //
 // The internal dataplane driver is organised around a main event loop, which handles
 // update events from the datastore and dataplane.
@@ -254,7 +254,7 @@ type UpdateBatchResolver interface {
 // In addition, it allows for different managers to make updates without having to
 // coordinate on their sequencing.
 //
-// Requirements on the API
+// # Requirements on the API
 //
 // The internal dataplane does not do consistency checks on the incoming data (as the
 // old Python-based driver used to do).  It expects to be told about dependent resources
@@ -1230,12 +1230,12 @@ func (d *InternalDataplane) RegisterManager(mgr Manager) {
 	d.allManagers = append(d.allManagers, mgr)
 }
 
-func (d *InternalDataplane) Start() {
+func (d *InternalDataplane) Start(configParams *config.Config) {
 	// Do our start-of-day configuration.
 	d.doStaticDataplaneConfig()
 
 	// Then, start the worker threads.
-	go d.loopUpdatingDataplane()
+	go d.loopUpdatingDataplane(configParams)
 	go d.loopReportingStatus()
 	go d.ifaceMonitor.MonitorInterfaces()
 	go d.monitorHostMTU()
@@ -1639,7 +1639,7 @@ func (d *InternalDataplane) shutdownXDPCompletely() error {
 	return fmt.Errorf("Failed to wipe the XDP state after %v tries over %v seconds: Error %v", maxTries, waitInterval, err)
 }
 
-func (d *InternalDataplane) loopUpdatingDataplane() {
+func (d *InternalDataplane) loopUpdatingDataplane(configParams *config.Config) {
 	log.Info("Started internal iptables dataplane driver loop")
 	healthTicks := time.NewTicker(healthInterval).C
 	d.reportHealth()
@@ -1702,7 +1702,7 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 
 	processIfaceUpdate := func(ifaceUpdate *ifaceUpdate) {
 		log.WithField("msg", ifaceUpdate).Info("Received interface update")
-		if ifaceUpdate.Name == KubeIPVSInterface {
+		if ifaceUpdate.Name == KubeIPVSInterface && !configParams.BPFEnabled {
 			d.checkIPVSConfigOnStateUpdate(ifaceUpdate.State)
 			return
 		}
