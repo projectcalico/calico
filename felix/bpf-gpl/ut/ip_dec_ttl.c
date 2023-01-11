@@ -19,7 +19,7 @@ static CALI_BPF_INLINE int calico_unittest_entry (struct __sk_buff *skb)
 	}
 
 	if (skb_refresh_validate_ptrs(&ctx, UDP_SIZE)) {
-		DENY_REASON(&ctx, CALI_REASON_SHORT);
+		deny_reason(&ctx, CALI_REASON_SHORT);
 		CALI_DEBUG("Too short\n");
 		return -1;
 	}
