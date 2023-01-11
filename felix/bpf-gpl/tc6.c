@@ -29,7 +29,7 @@ int calico_tc(struct __sk_buff *skb)
 	CALI_DEBUG("Entering IPv6 prologue program\n");
 	struct cali_tc_ctx ctx = {
 		.state = state_get(),
-		.counters = counters_get(),
+		.counters = counters_get(skb->ifindex),
 		.skb = skb,
 		.fwd = {
 			.res = TC_ACT_UNSPEC,

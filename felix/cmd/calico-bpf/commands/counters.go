@@ -47,10 +47,22 @@ var countersDumpCmd = &cobra.Command{
 	Short: "dumps counters",
 	Run: func(cmd *cobra.Command, args []string) {
 		iface := parseFlags(cmd)
+		m := counters.Map()
+		if err := m.Open(); err != nil {
+			log.WithError(err).Error("Failed to open counter map.")
+			return
+		}
+		defer m.Close()
+
 		if iface == "" {
-			doForAllInterfaces(cmd, "dump", dumpInterface)
+			doForAllInterfaces("dump", dumpInterface)
 		} else {
-			if err := dumpInterface(cmd, iface); err != nil {
+			i, err := net.InterfaceByName(iface)
+			if err != nil {
+				log.WithError(err).Errorf("No such interface: %s", iface)
+				return
+			}
+			if err := dumpInterface(m, i); err != nil {
 				log.WithError(err).Error("Failed to dump counter map.")
 			}
 		}
@@ -62,10 +74,22 @@ var countersFlushCmd = &cobra.Command{
 	Short: "flush counters",
 	Run: func(cmd *cobra.Command, args []string) {
 		iface := parseFlags(cmd)
+		m := counters.Map()
+		if err := m.Open(); err != nil {
+			log.WithError(err).Error("Failed to open counter map.")
+			return
+		}
+		defer m.Close()
+
 		if iface == "" {
-			doForAllInterfaces(cmd, "flush", flushInterface)
+			doForAllInterfaces("flush", flushInterface)
 		} else {
-			if err := flushInterface(cmd, iface); err != nil {
+			i, err := net.InterfaceByName(iface)
+			if err != nil {
+				log.WithError(err).Errorf("No such interface: %s", iface)
+				return
+			}
+			if err := flushInterface(m, i); err != nil {
 				log.WithError(err).Error("Failed to flush counter map.")
 			}
 		}
@@ -80,14 +104,22 @@ func parseFlags(cmd *cobra.Command) string {
 	return iface
 }
 
-func doForAllInterfaces(cmd *cobra.Command, action string, fn func(cmd *cobra.Command, iface string) error) {
+func doForAllInterfaces(action string, fn func(bpf.Map, *net.Interface) error) {
 	interfaces, err := net.Interfaces()
 	if err != nil {
 		log.WithError(err).Error("failed to get list of interfaces.")
 		return
 	}
+
+	m := counters.Map()
+	if err := m.Open(); err != nil {
+		log.WithError(err).Error("Failed to open counter map.")
+		return
+	}
+	defer m.Close()
+
 	for _, i := range interfaces {
-		err = fn(cmd, i.Name)
+		err = fn(m, &i)
 		if err != nil {
 			log.WithError(err).Errorf("Failed to %s interface %s", action, i.Name)
 			continue
@@ -95,41 +127,32 @@ func doForAllInterfaces(cmd *cobra.Command, action string, fn func(cmd *cobra.Co
 	}
 }
 
-func dumpInterface(cmd *cobra.Command, iface string) error {
-	if iface == "" {
-		return fmt.Errorf("empty interface name")
-	}
-	bpfCounters := counters.NewCounters(iface)
-
+func dumpInterface(m bpf.Map, iface *net.Interface) error {
 	values := make([][]uint64, len(bpf.Hooks))
-	for index, hook := range bpf.Hooks {
-		val, err := bpfCounters.Read(index)
+	for _, hook := range bpf.Hooks {
+		val, err := counters.Read(m, iface.Index, hook)
 		if err != nil {
-			if hook == bpf.HookXDP {
-				log.Infof("Failed to read XDP bpf counters. err=%v", err)
-				continue
-			}
-			return fmt.Errorf("Failed to read bpf counters. iface=%v hook=%s err=%w", iface, hook, err)
+			continue
 		}
 		if len(val) < counters.MaxCounterNumber {
-			return fmt.Errorf("Failed to read enough data from bpf counters. iface=%v hook=%s", iface, hook)
+			return fmt.Errorf("failed to read enough data from bpf counters. iface=%v hook=%s", iface.Name, hook)
 		}
-		values[index] = val
+		values[hook] = val
 	}
 
 	table := tablewriter.NewWriter(os.Stdout)
-	table.SetCaption(true, fmt.Sprintf("dumped %s counters.", iface))
+	table.SetCaption(true, fmt.Sprintf("dumped %s counters.", iface.Name))
 	table.SetHeader([]string{"CATEGORY", "TYPE", "INGRESS", "EGRESS", "XDP"})
 
 	var rows [][]string
 	for _, c := range counters.Descriptions() {
 		newRow := []string{c.Category, c.Caption}
 		// Now add value related to each hook, i.e. ingress, egress and XDP
-		for index := range bpf.Hooks {
-			if values[index] == nil {
+		for hook := range bpf.Hooks {
+			if values[hook] == nil {
 				newRow = append(newRow, "N/A")
 			} else {
-				newRow = append(newRow, fmt.Sprintf("%v", values[index][c.Counter]))
+				newRow = append(newRow, fmt.Sprintf("%v", values[hook][c.Counter]))
 			}
 		}
 		rows = append(rows, newRow)
@@ -141,14 +164,13 @@ func dumpInterface(cmd *cobra.Command, iface string) error {
 	return nil
 }
 
-func flushInterface(cmd *cobra.Command, iface string) error {
-	bpfCounters := counters.NewCounters(iface)
-	for index, hook := range bpf.Hooks {
-		err := bpfCounters.Flush(index)
+func flushInterface(m bpf.Map, iface *net.Interface) error {
+	for _, hook := range bpf.Hooks {
+		err := counters.Flush(m, iface.Index, hook)
 		if err != nil {
-			log.Infof("Failed to flush bpf counters for interface=%s hook=%s err=%v", iface, hook, err)
+			log.Infof("Failed to flush bpf counters for interface=%s hook=%s err=%v", iface.Name, hook, err)
 		} else {
-			log.Infof("Successfully flushed counters map for interface=%s hook=%s", iface, hook)
+			log.Infof("Successfully flushed counters map for interface=%s hook=%s", iface.Name, hook)
 		}
 	}
 	return nil
