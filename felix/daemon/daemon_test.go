@@ -15,9 +15,17 @@
 package daemon
 
 import (
+	"context"
+
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
+
+	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
+	"github.com/projectcalico/calico/libcalico-go/lib/errors"
+	"github.com/projectcalico/calico/libcalico-go/lib/options"
+	"github.com/projectcalico/calico/libcalico-go/lib/watch"
 
 	"github.com/projectcalico/calico/felix/config"
 	"github.com/projectcalico/calico/typha/pkg/discovery"
@@ -83,20 +91,20 @@ var _ = Describe("Typha address discovery", func() {
 
 	It("should return address if configured", func() {
 		configParams.TyphaAddr = "10.0.0.1:8080"
-		typhaAddr, err := discoverTyphaAddrs(configParams, nil)
+		_, typhaAddr, err := discoverTyphaAddrs(configParams, nil, &MockNodesClient{})
 		Expect(err).NotTo(HaveOccurred())
 		Expect(typhaAddr).To(Equal([]discovery.Typha{{Addr: "10.0.0.1:8080"}}))
 	})
 
 	It("should return nothing if no service name", func() {
 		configParams.TyphaK8sServiceName = ""
-		typhaAddr, err := discoverTyphaAddrs(configParams, nil)
+		_, typhaAddr, err := discoverTyphaAddrs(configParams, nil, &MockNodesClient{})
 		Expect(err).NotTo(HaveOccurred())
 		Expect(typhaAddr).To(BeNil())
 	})
 
 	It("should return IP from endpoints", func() {
-		typhaAddr, err := discoverTyphaAddrs(configParams, k8sClient)
+		_, typhaAddr, err := discoverTyphaAddrs(configParams, k8sClient, &MockNodesClient{})
 		Expect(err).NotTo(HaveOccurred())
 		Expect(typhaAddr).To(ConsistOf(
 			discovery.Typha{Addr: "10.0.0.2:8156", IP: "10.0.0.2"},
@@ -106,7 +114,7 @@ var _ = Describe("Typha address discovery", func() {
 	It("should bracket an IPv6 Typha address", func() {
 		endpoints.Subsets[1].Addresses[0].IP = "fd5f:65af::2"
 		refreshClient()
-		typhaAddr, err := discoverTyphaAddrs(configParams, k8sClient)
+		_, typhaAddr, err := discoverTyphaAddrs(configParams, k8sClient, &MockNodesClient{})
 		Expect(err).NotTo(HaveOccurred())
 		Expect(typhaAddr).To(ConsistOf(
 			discovery.Typha{Addr: "[fd5f:65af::2]:8156", IP: "fd5f:65af::2"},
@@ -116,7 +124,7 @@ var _ = Describe("Typha address discovery", func() {
 	It("should error if no Typhas", func() {
 		endpoints.Subsets = nil
 		refreshClient()
-		_, err := discoverTyphaAddrs(configParams, k8sClient)
+		_, _, err := discoverTyphaAddrs(configParams, k8sClient, &MockNodesClient{})
 		Expect(err).To(HaveOccurred())
 	})
 
@@ -124,7 +132,7 @@ var _ = Describe("Typha address discovery", func() {
 		endpoints.Subsets[1].Addresses = append(endpoints.Subsets[1].Addresses, v1.EndpointAddress{IP: "10.0.0.6"})
 		refreshClient()
 
-		addr, err := discoverTyphaAddrs(configParams, k8sClient)
+		_, addr, err := discoverTyphaAddrs(configParams, k8sClient, &MockNodesClient{})
 		Expect(err).NotTo(HaveOccurred())
 		Expect(addr).To(
 			ContainElements(
@@ -134,3 +142,34 @@ var _ = Describe("Typha address discovery", func() {
 		)
 	})
 })
+
+type MockNodesClient struct {
+}
+
+func (m *MockNodesClient) Nodes() client.NodeInterface {
+	return m
+}
+
+func (m *MockNodesClient) Create(ctx context.Context, res *libapiv3.Node, opts options.SetOptions) (*libapiv3.Node, error) {
+	panic("implement me")
+}
+
+func (m *MockNodesClient) Update(ctx context.Context, res *libapiv3.Node, opts options.SetOptions) (*libapiv3.Node, error) {
+	panic("implement me")
+}
+
+func (m *MockNodesClient) Delete(ctx context.Context, name string, opts options.DeleteOptions) (*libapiv3.Node, error) {
+	panic("implement me")
+}
+
+func (m *MockNodesClient) Get(ctx context.Context, name string, opts options.GetOptions) (*libapiv3.Node, error) {
+	return nil, errors.ErrorResourceDoesNotExist{}
+}
+
+func (m *MockNodesClient) List(ctx context.Context, opts options.ListOptions) (*libapiv3.NodeList, error) {
+	panic("implement me")
+}
+
+func (m *MockNodesClient) Watch(ctx context.Context, opts options.ListOptions) (watch.Interface, error) {
+	panic("implement me")
+}
