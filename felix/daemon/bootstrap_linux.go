@@ -28,7 +28,7 @@ import (
 //
 // See wireguard.BootstrapAndFilterTyphaAddresses for details.
 func bootstrapWireguardAndFilterTyphaAddresses(
-	configParams *config.Config, v3Client clientv3.Interface, typhas []discovery.Typha,
+	configParams *config.Config, v3Client clientv3.NodesClient, typhas []discovery.Typha,
 ) ([]discovery.Typha, error) {
 	log.Debug("bootstrapping wireguard host connectivity")
 	return wireguard.BootstrapAndFilterTyphaAddresses(
