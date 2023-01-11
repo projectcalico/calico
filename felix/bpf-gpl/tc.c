@@ -69,7 +69,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 			/* This generates a bit more richer output for logging */
 			struct cali_tc_ctx ctx = {
 				.state = state_get(),
-				.counters = counters_get(),
+				.counters = counters_get(skb->ifindex),
 				.skb = skb,
 				.fwd = {
 					.res = TC_ACT_UNSPEC,
@@ -125,7 +125,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 	 * we use to pass data from one program to the next via tail calls. */
 	struct cali_tc_ctx ctx = {
 		.state = state_get(),
-		.counters = counters_get(),
+		.counters = counters_get(skb->ifindex),
 		.skb = skb,
 		.fwd = {
 			.res = TC_ACT_UNSPEC,
@@ -575,7 +575,7 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 	 * we use to pass data from one program to the next via tail calls. */
 	struct cali_tc_ctx ctx = {
 		.state = state_get(),
-		.counters = counters_get(),
+		.counters = counters_get(skb->ifindex),
 		.skb = skb,
 		.fwd = {
 			.res = TC_ACT_UNSPEC,
@@ -1349,7 +1349,7 @@ int calico_tc_skb_send_icmp_replies(struct __sk_buff *skb)
 	 * we use to pass data from one program to the next via tail calls. */
 	struct cali_tc_ctx ctx = {
 		.state = state_get(),
-		.counters = counters_get(),
+		.counters = counters_get(skb->ifindex),
 		.skb = skb,
 		.fwd = {
 			.res = TC_ACT_UNSPEC,
@@ -1410,7 +1410,7 @@ int calico_tc_host_ct_conflict(struct __sk_buff *skb)
 	 * we use to pass data from one program to the next via tail calls. */
 	struct cali_tc_ctx ctx = {
 		.state = state_get(),
-		.counters = counters_get(),
+		.counters = counters_get(skb->ifindex),
 		.skb = skb,
 		.fwd = {
 			.res = TC_ACT_UNSPEC,
@@ -1483,7 +1483,7 @@ int calico_tc_skb_drop(struct __sk_buff *skb)
 	CALI_DEBUG("Entering calico_tc_skb_drop\n");
 	struct cali_tc_ctx ctx = {
 		.state = state_get(),
-		.counters = counters_get(),
+		.counters = counters_get(skb->ifindex),
 		.ipheader_len = IP_SIZE,
 	};
 
