@@ -16,7 +16,7 @@
 
 set -e
 
-num_unfiltered_lines=1000
+num_unfiltered_lines=2000
 log_monitor_regexps=(
   "Failure"
   "FAIL"
@@ -71,7 +71,8 @@ tail --pid $pid -n 1000000 -F "$log_file" | {
 } &
 mon_pid=$!
 
-final_result=0
+final_result=1
+final_msg="==== Command ${cmd_escaped}INTERRUPTED (PID=$pid).  Full command output in artifacts/${log_file_name}."
 cmd_done=false
 function cleanup()
 {
@@ -79,21 +80,37 @@ function cleanup()
   if ! $cmd_done; then
     echo "==== Stopping command PID=${pid}..."
     kill $pid || true
-    final_result=1
   fi
-  echo "==== Done, exiting with RC=$final_result"
+
+  sleep 1 # So tail and grep can finish after stopping the main process.
+  output-tail
+  echo "$final_msg; exit with RC=$final_result"
   exit $final_result
 }
 trap cleanup EXIT
 
+function output-tail()
+{
+  # Output the last num_unfiltered_lines lines of the log, unless the log is short, in which case
+  # don't log lines that were already logged by head, above.
+  num_lines=$(wc "$log_file" | cut -d ' ' -f1)
+  if (( num_lines > num_unfiltered_lines )); then
+    num_lines_to_tail=$(( num_lines - num_unfiltered_lines ))
+    if (( num_lines_to_tail > num_unfiltered_lines )); then
+      num_lines_to_tail=$num_unfiltered_lines
+    fi
+    echo "---- Tail of output (may duplicate some lines that hit the log filter above) ----";
+    tail -n $num_lines_to_tail "$log_file"
+  fi
+}
+
 echo "==== Filtered output to screen, full output in artifacts/${log_file_name} (main PID=$pid, filter PID=$mon_pid)"
 if wait "$pid"; then
-  sleep 1 # so tail can finish
-  echo "==== Command ${cmd_escaped}SUCCEEDED (PID=$pid).  Full command output in artifacts/${log_file_name}."
+  final_msg="==== Command ${cmd_escaped}SUCCEEDED (PID=$pid).  Full command output in artifacts/${log_file_name}."
+  final_result=0
 else
-  sleep 1 # so tail can finish
-  echo "==== Command ${cmd_escaped}FAILED (PID=$pid).  Full command output in artifacts/${log_file_name}."
-  final_result=1
+  final_msg="==== Command ${cmd_escaped}FAILED (PID=$pid).  Full command output in artifacts/${log_file_name}."
 fi
+
 cmd_done=true
 
