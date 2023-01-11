@@ -18,7 +18,6 @@
 #include "conntrack_types.h"
 #include "nat_types.h"
 #include "reasons.h"
-#include "counters.h"
 
 #define MAX_RULE_IDS    32
 
@@ -150,7 +149,7 @@ struct cali_tc_ctx {
   struct calico_nat_dest *nat_dest;
   struct arp_key arpk;
   struct fwd fwd;
-  counters_t *counters;
+  void *counters;
 };
 
 static CALI_BPF_INLINE struct iphdr* ip_hdr(struct cali_tc_ctx *ctx)
@@ -186,6 +185,15 @@ static CALI_BPF_INLINE struct icmphdr* icmp_hdr(struct cali_tc_ctx *ctx)
 static CALI_BPF_INLINE struct ipv6_opt_hdr* ipv6ext_hdr(struct cali_tc_ctx *ctx)
 {
 	return (struct ipv6_opt_hdr *)ctx->nh;
+}
+
+static CALI_BPF_INLINE __u32 ctx_ifindex(struct cali_tc_ctx *ctx)
+{
+#if CALI_F_XDP
+	return ctx->xdp->ingress_ifindex;
+#else
+	return ctx->skb->ifindex;
+#endif
 }
 
 #endif /* __CALI_BPF_TYPES_H__ */
