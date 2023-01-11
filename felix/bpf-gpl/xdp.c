@@ -35,7 +35,7 @@ static CALI_BPF_INLINE int calico_xdp(struct xdp_md *xdp)
 	 * we use to pass data from one program to the next via tail calls. */
 	struct cali_tc_ctx ctx = {
 		.state = state_get(),
-		.counters = counters_get(),
+		.counters = counters_get(xdp->ingress_ifindex),
 		.xdp = xdp,
 		.fwd = {
 			.res = XDP_PASS, // TODO: Adjust based on the design
@@ -130,7 +130,7 @@ int calico_xdp_accepted_entrypoint(struct xdp_md *xdp)
 {
 	CALI_DEBUG("Entering calico_xdp_accepted_entrypoint\n");
 	struct cali_tc_ctx ctx = {
-		.counters = counters_get(),
+		.counters = counters_get(xdp->ingress_ifindex),
 		.fwd = {
 			.res = XDP_PASS,
 			.reason = CALI_REASON_UNKNOWN,
@@ -158,7 +158,7 @@ int calico_xdp_drop(struct xdp_md *xdp)
 	CALI_DEBUG("Entering calico_xdp_drop\n");
 	struct cali_tc_ctx ctx = {
 		.state = state_get(),
-		.counters = counters_get(),
+		.counters = counters_get(xdp->ingress_ifindex),
 		.ipheader_len = IP_SIZE,
 	};
 
