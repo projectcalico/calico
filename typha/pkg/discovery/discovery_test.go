@@ -222,3 +222,8 @@ var _ = Describe("Typha address discovery", func() {
 		Expect(shuffledRemote).To(BeTrue())
 	})
 })
+
+func DiscoverTyphaAddrs(opts ...Option) ([]Typha, error) {
+	discoverer := New(opts...)
+	return discoverer.LoadTyphaAddrs()
+}
