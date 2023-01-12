@@ -21,45 +21,25 @@ import (
 )
 
 type Interface interface {
-	// Nodes returns an interface for managing node resources.
-	Nodes() NodeInterface
-	// GlobalNetworkPolicies returns an interface for managing global network policy resources.
-	GlobalNetworkPolicies() GlobalNetworkPolicyInterface
-	// NetworkPolicies returns an interface for managing namespaced network policy resources.
-	NetworkPolicies() NetworkPolicyInterface
-	// IPPools returns an interface for managing IP pool resources.
-	IPPools() IPPoolInterface
-	// IPReservations returns an interface for managing IP reservation resources.
-	IPReservations() IPReservationInterface
-	// Profiles returns an interface for managing profile resources.
-	Profiles() ProfileInterface
-	// GlobalNetworkSets returns an interface for managing global network sets resources.
-	GlobalNetworkSets() GlobalNetworkSetInterface
-	// NetworkSets returns an interface for managing network sets resources.
-	NetworkSets() NetworkSetInterface
-	// HostEndpoints returns an interface for managing host endpoint resources.
-	HostEndpoints() HostEndpointInterface
-	// WorkloadEndpoints returns an interface for managing workload endpoint resources.
-	WorkloadEndpoints() WorkloadEndpointInterface
-	// BGPPeers returns an interface for managing BGP peer resources.
-	BGPPeers() BGPPeerInterface
-	// IPAM returns an interface for managing IP address assignment and releasing.
-	IPAM() ipam.Interface
-	// BGPConfigurations returns an interface for managing the BGP configuration resources.
-	BGPConfigurations() BGPConfigurationInterface
-	// FelixConfigurations returns an interface for managing the Felix configuration resources.
-	FelixConfigurations() FelixConfigurationInterface
-	// ClusterInformation returns an interface for managing the cluster information resource.
-	ClusterInformation() ClusterInformationInterface
-	// KubeControllersConfiguration returns an interface for managing the
-	// KubeControllersConfiguration resource.
-	KubeControllersConfiguration() KubeControllersConfigurationInterface
-	// CalicoNodeStatus returns an interface for managing CalicoNodeStatus resources.
-	CalicoNodeStatus() CalicoNodeStatusInterface
-	// IPAMConfig returns an interface for managing IPAMConfig resources.
-	IPAMConfig() IPAMConfigInterface
-	// BlockAffinities returns an interface for viewing IPAM block affinity resources.
-	BlockAffinities() BlockAffinityInterface
+	NodesClient
+	GlobalNetworkPoliciesClient
+	NetworkPoliciesClient
+	IPPoolsClient
+	IPReservationsClient
+	ProfilesClient
+	GlobalNetworkSetsClient
+	NetworkSetsClient
+	HostEndpointsClient
+	WorkloadEndpointsClient
+	BGPPeersClient
+	IPAMClient
+	BGPConfigurationsClient
+	FelixConfigurationsClient
+	ClusterInformationClient
+	KubeControllersConfigurationClient
+	CalicoNodeStatusClient
+	IPAMConfigClient
+	BlockAffinitiesClient
 
 	// EnsureInitialized is used to ensure the backend datastore is correctly
 	// initialized for use by Calico.  This method may be called multiple times, and
@@ -68,6 +48,101 @@ type Interface interface {
 	// method and so a general consumer of this API can assume that the datastore
 	// is already initialized.
 	EnsureInitialized(ctx context.Context, calicoVersion, clusterType string) error
+}
+
+type NodesClient interface {
+	// Nodes returns an interface for managing node resources.
+	Nodes() NodeInterface
+}
+
+type GlobalNetworkPoliciesClient interface {
+	// GlobalNetworkPolicies returns an interface for managing global network policy resources.
+	GlobalNetworkPolicies() GlobalNetworkPolicyInterface
+}
+
+type NetworkPoliciesClient interface {
+	// NetworkPolicies returns an interface for managing namespaced network policy resources.
+	NetworkPolicies() NetworkPolicyInterface
+}
+
+type IPPoolsClient interface {
+	// IPPools returns an interface for managing IP pool resources.
+	IPPools() IPPoolInterface
+}
+
+type IPReservationsClient interface {
+	// IPReservations returns an interface for managing IP reservation resources.
+	IPReservations() IPReservationInterface
+}
+
+type ProfilesClient interface {
+	// Profiles returns an interface for managing profile resources.
+	Profiles() ProfileInterface
+}
+
+type GlobalNetworkSetsClient interface {
+	// GlobalNetworkSets returns an interface for managing global network sets resources.
+	GlobalNetworkSets() GlobalNetworkSetInterface
+}
+
+type NetworkSetsClient interface {
+	// NetworkSets returns an interface for managing network sets resources.
+	NetworkSets() NetworkSetInterface
+}
+
+type HostEndpointsClient interface {
+	// HostEndpoints returns an interface for managing host endpoint resources.
+	HostEndpoints() HostEndpointInterface
+}
+
+type WorkloadEndpointsClient interface {
+	// WorkloadEndpoints returns an interface for managing workload endpoint resources.
+	WorkloadEndpoints() WorkloadEndpointInterface
+}
+
+type BGPPeersClient interface {
+	// BGPPeers returns an interface for managing BGP peer resources.
+	BGPPeers() BGPPeerInterface
+}
+
+type IPAMClient interface {
+	// IPAM returns an interface for managing IP address assignment and releasing.
+	IPAM() ipam.Interface
+}
+
+type BGPConfigurationsClient interface {
+	// BGPConfigurations returns an interface for managing the BGP configuration resources.
+	BGPConfigurations() BGPConfigurationInterface
+}
+
+type FelixConfigurationsClient interface {
+	// FelixConfigurations returns an interface for managing the Felix configuration resources.
+	FelixConfigurations() FelixConfigurationInterface
+}
+
+type ClusterInformationClient interface {
+	// ClusterInformation returns an interface for managing the cluster information resource.
+	ClusterInformation() ClusterInformationInterface
+}
+
+type KubeControllersConfigurationClient interface {
+	// KubeControllersConfiguration returns an interface for managing the KubeControllersConfiguration resource.
+	KubeControllersConfiguration() KubeControllersConfigurationInterface
+}
+
+type CalicoNodeStatusClient interface {
+	// CalicoNodeStatus returns an interface for managing CalicoNodeStatus resources.
+	CalicoNodeStatus() CalicoNodeStatusInterface
+}
+
+type IPAMConfigClient interface {
+	// IPAMConfig returns an interface for managing IPAMConfig resources.
+	IPAMConfig() IPAMConfigInterface
+}
+
+type BlockAffinitiesClient interface {
+	// BlockAffinities returns an interface for viewing IPAM block affinity resources.
+	BlockAffinities() BlockAffinityInterface
 }
 
 // Compile-time assertion that our client implements its interface.
