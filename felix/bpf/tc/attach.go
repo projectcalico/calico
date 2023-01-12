@@ -52,7 +52,6 @@ type AttachPoint struct {
 	PSNATStart           uint16
 	PSNATEnd             uint16
 	IPv6Enabled          bool
-	MapSizes             map[string]uint32
 	RPFEnforceOption     uint8
 	NATin                uint32
 	NATout               uint32
@@ -116,8 +115,8 @@ func (ap *AttachPoint) loadObject(ipVer int, file string) (*libbpf.Obj, error) {
 		if err := ap.setMapSize(m); err != nil {
 			return nil, fmt.Errorf("error setting map size %s : %w", m.Name(), err)
 		}
-		pinPath := bpf.MapPinPath(m.Type(), m.Name(), ap.Iface, ap.Hook)
-		if err := m.SetPinPath(pinPath); err != nil {
+		pinDir := bpf.MapPinDir(m.Type(), m.Name(), ap.Iface, ap.Hook)
+		if err := m.SetPinPath(path.Join(pinDir, m.Name())); err != nil {
 			return nil, fmt.Errorf("error pinning map %s: %w", m.Name(), err)
 		}
 	}
@@ -482,7 +481,7 @@ func ConfigureProgram(m *libbpf.Map, iface string, globalData *libbpf.TcGlobalDa
 }
 
 func (ap *AttachPoint) setMapSize(m *libbpf.Map) error {
-	if size, ok := ap.MapSizes[m.Name()]; ok {
+	if size := bpf.MapSize(m.Name()); size != 0 {
 		return m.SetMapSize(size)
 	}
 	return nil

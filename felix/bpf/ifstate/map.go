@@ -24,6 +24,14 @@ import (
 	"github.com/projectcalico/calico/felix/bpf"
 )
 
+func init() {
+	SetMapSize(MapParams.MaxEntries)
+}
+
+func SetMapSize(size int) {
+	bpf.SetMapSize(MapParams.VersionedName(), size)
+}
+
 const (
 	KeySize    = 4
 	ValueSize  = 4 + 16
@@ -41,7 +49,6 @@ var flagsToStr = map[uint32]string{
 }
 
 var MapParams = bpf.MapParameters{
-	Filename:     "/sys/fs/bpf/tc/globals/cali_iface",
 	Type:         "hash",
 	KeySize:      KeySize,
 	ValueSize:    ValueSize,
@@ -52,8 +59,8 @@ var MapParams = bpf.MapParameters{
 	UpdatedByBPF: false,
 }
 
-func Map(mc *bpf.MapContext) bpf.Map {
-	return mc.NewPinnedMap(MapParams)
+func Map() bpf.Map {
+	return bpf.NewPinnedMap(MapParams)
 }
 
 type Key [4]byte

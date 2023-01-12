@@ -50,8 +50,7 @@ var routesCmd = &cobra.Command{
 }
 
 func dumpRoutes() error {
-	mc := &bpf.MapContext{}
-	routesMap := routes.Map(mc)
+	routesMap := routes.Map()
 
 	if err := routesMap.Open(); err != nil {
 		return errors.WithMessage(err, "failed to open map")

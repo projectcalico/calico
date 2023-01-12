@@ -491,7 +491,6 @@ func (e Value) Upgrade() bpf.Upgradable {
 }
 
 var MapParams = bpf.MapParameters{
-	Filename:     "/sys/fs/bpf/tc/globals/cali_v4_ct",
 	Type:         "hash",
 	KeySize:      KeySize,
 	ValueSize:    ValueSize,
@@ -500,10 +499,6 @@ var MapParams = bpf.MapParameters{
 	Flags:        unix.BPF_F_NO_PREALLOC,
 	Version:      3,
 	UpdatedByBPF: true,
-}
-
-func Map(mc *bpf.MapContext) bpf.Map {
-	return mc.NewPinnedMap(MapParams)
 }
 
 const (
