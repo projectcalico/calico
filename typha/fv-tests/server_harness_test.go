@@ -194,7 +194,7 @@ func (h *ServerHarness) ExpectAllClientsToReachState(status api.SyncStatus, kvs 
 func (h *ServerHarness) createClient(id interface{}, options syncclient.Options, callbacks api.SyncerCallbacks) *ClientState {
 	serverAddr := fmt.Sprintf("127.0.0.1:%d", h.Server.Port())
 	client := syncclient.New(
-		[]discovery.Typha{{Addr: serverAddr}},
+		discovery.New(discovery.WithAddrOverride(serverAddr)),
 		"test-version",
 		fmt.Sprintf("test-host-%v", id),
 		"test-info",
@@ -305,6 +305,10 @@ func (h *ServerHarness) SendConfigUpdates(n int) map[string]api.Update {
 		h.Decoupler.OnUpdates([]api.Update{update})
 	}
 	return expectedEndState
+}
+
+func (h *ServerHarness) Discoverer() *discovery.Discoverer {
+	return discovery.New(discovery.WithAddrOverride(h.Addr()))
 }
 
 func generatePod(n int) *corev1.Pod {
