@@ -21,7 +21,7 @@ import (
 )
 
 func bootstrapWireguardAndFilterTyphaAddresses(
-	_ *config.Config, _ clientv3.Interface, typhas []discovery.Typha,
+	_ *config.Config, _ clientv3.NodesClient, typhas []discovery.Typha,
 ) ([]discovery.Typha, error) {
 	return typhas, nil
 } // no filtering
