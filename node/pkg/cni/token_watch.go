@@ -22,7 +22,7 @@ import (
 )
 
 const (
-	defaultNodeAccountName         = "calico-cni-plugin"
+	defaultServiceAccountName      = "calico-cni-plugin"
 	serviceAccountNamespace        = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
 	tokenFile                      = "/var/run/secrets/kubernetes.io/serviceaccount/token"
 	defaultCNITokenValiditySeconds = 24 * 60 * 60
@@ -217,7 +217,7 @@ func Run() {
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to create in cluster client set")
 	}
-	tr := NewTokenRefresher(clientset, NamespaceOfUsedServiceAccount(), NodeServiceAccountName())
+	tr := NewTokenRefresher(clientset, NamespaceOfUsedServiceAccount(), CNIServiceAccountName())
 	tokenChan := tr.TokenChan()
 	go tr.Run()
 
@@ -239,12 +239,12 @@ func Run() {
 
 // CNIServiceAccountName returns the name of the serviceaccount to use for the CNI plugin token request.
 // This can be set via the CALICO_CNI_SERVICE_ACCOUNT environment variable, and defaults to "calico-cni-plugin" otherwise.
-func NodeServiceAccountName() string {
+func CNIServiceAccountName() string {
 	if na := os.Getenv("CALICO_NODE_SERVICE_ACCOUNT"); na != "" {
 		logrus.WithField("name", na).Debug("Using service account from CALICO_NODE_SERVICE_ACCOUNT")
 		return na
 	}
-	return defaultNodeAccountName
+	return defaultServiceAccountName
 }
 
 // writeKubeconfig writes an updated kubeconfig file to disk that the CNI plugin can use to access the Kubernetes API.
