@@ -8,6 +8,7 @@ bin/
 vendor/
 artifacts/
 postrelease-checks.xml
+crypto/tmp
 
 /* Produced as part of release */
 hack/release/release
