@@ -96,6 +96,8 @@ section:
     path: /getting-started/kubernetes/microk8s
   - title: Minikube
     path: /getting-started/kubernetes/minikube
+  - title: Kind
+    path: /getting-started/kubernetes/kind
   - title: Calico the hard way
     path: /getting-started/kubernetes/hardway/
     section:

@@ -428,9 +428,9 @@ type FelixConfigurationSpec struct {
 	// BPFHostConntrackBypass Controls whether to bypass Linux conntrack in BPF mode for
 	// workloads and services. [Default: true - bypass Linux conntrack]
 	BPFHostConntrackBypass *bool `json:"bpfHostConntrackBypass,omitempty"`
-	// BPFEnforceRPF enforce strict RPF on all interfaces with BPF programs regardless of
-	// what is the per-interfaces or global setting. Possible values are Disabled or
-	// Strict. [Default: Strict]
+	// BPFEnforceRPF enforce strict RPF on all host interfaces with BPF programs regardless of
+	// what is the per-interfaces or global setting. Possible values are Disabled, Strict
+	// or Loose. [Default: Strict]
 	BPFEnforceRPF string `json:"bpfEnforceRPF,omitempty"`
 	// BPFPolicyDebugEnabled when true, Felix records detailed information
 	// about the BPF policy programs, which can be examined with the calico-bpf command-line tool.

@@ -46,9 +46,7 @@
 
 #define HAS_HOST_CONFLICT_PROG CALI_F_TO_HEP
 
-#if !defined(__BPFTOOL_LOADER__)
 const volatile struct cali_tc_globals __globals;
-#endif
 
 /* calico_tc is the main function used in all of the tc programs.  It is specialised
  * for particular hook at build time based on the CALI_F build flags.
@@ -398,7 +396,7 @@ syn_force_policy:
 	/* DNAT in state is set correctly now */
 
 	if ((!(ctx->state->tun_ip) && CALI_F_FROM_HEP) && !CALI_F_NAT_IF && !CALI_F_LO) {
-		if (!hep_rpf_check(ctx, false)) {
+		if (!hep_rpf_check(ctx)) {
 			goto deny;
 		}
 	}

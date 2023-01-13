@@ -24,8 +24,11 @@ import (
 	"github.com/projectcalico/calico/felix/bpf"
 )
 
+func init() {
+	bpf.SetMapSize(MapParams.VersionedName(), MapParams.MaxEntries)
+}
+
 var MapParams = bpf.MapParameters{
-	Filename:   "/sys/fs/bpf/tc/globals/cali_v4_arp",
 	Type:       "lru_hash",
 	KeySize:    KeySize,
 	ValueSize:  ValueSize,
@@ -34,8 +37,8 @@ var MapParams = bpf.MapParameters{
 	Version:    2,
 }
 
-func Map(mc *bpf.MapContext) bpf.Map {
-	return mc.NewPinnedMap(MapParams)
+func Map() bpf.Map {
+	return bpf.NewPinnedMap(MapParams)
 }
 
 const KeySize = 8

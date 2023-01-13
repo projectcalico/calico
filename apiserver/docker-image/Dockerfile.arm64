@@ -18,7 +18,7 @@ RUN mkdir /tmp
 FROM scratch
 COPY  --from=ubi /code /code
 COPY  --from=ubi /tmp /tmp
-# copies the shared linux libs requred by apiserver
+# copies the shared linux libs required by apiserver
 COPY --from=ubi /lib64/libpthread.so.0 /lib64/libpthread.so.0
 COPY --from=ubi /lib64/libc.so.6 /lib64/libc.so.6
 

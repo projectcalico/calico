@@ -44,6 +44,7 @@ Encapsulation of workload traffic is typically required only when traffic crosse
 **Limitations** 
 
 - IP in IP supports only IPv4 addresses
+- VXLAN in IPv6 is only supported for kernel versions >= 3.12
 
 ### How to
 

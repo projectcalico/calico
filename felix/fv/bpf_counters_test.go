@@ -27,7 +27,6 @@ import (
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/counters"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/utils"
@@ -228,7 +227,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test counters", [
 })
 
 func dumpRuleCounterMap(felix *infrastructure.Felix) counters.PolicyMapMem {
-	rcMap := counters.PolicyMap(&bpf.MapContext{})
+	rcMap := counters.PolicyMap()
 	m := make(counters.PolicyMapMem)
 	dumpBPFMap(felix, rcMap, counters.PolicyMapMemIter(m))
 	return m

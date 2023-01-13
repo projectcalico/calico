@@ -1,5 +1,5 @@
 # Project Calico BPF dataplane build scripts.
-# Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+# Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
 # Disable implicit rules.
@@ -83,6 +83,8 @@ to%_v6.ll: tc6.c tc.d calculate-flags
 from%_v6.ll: tc6.c tc.d calculate-flags
 	$(COMPILE)
 test%.ll: tc.c tc.d calculate-flags
+	$(COMPILE)
+test%_v6.ll: tc6.c tc.d calculate-flags
 	$(COMPILE)
 xdp%.ll: xdp.c xdp.d calculate-flags
 	$(COMPILE)

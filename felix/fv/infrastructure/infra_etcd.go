@@ -56,6 +56,8 @@ func GetEtcdDatastoreInfra() (*EtcdDatastoreInfra, error) {
 		return nil, errors.New("failed to create etcd container")
 	}
 
+	arch := utils.GetSysArch()
+
 	// In BPF mode, start BPF logging.
 	if os.Getenv("FELIX_FV_ENABLE_BPF") == "true" {
 		eds.bpfLog = containers.Run("bpf-log",
@@ -64,7 +66,7 @@ func GetEtcdDatastoreInfra() (*EtcdDatastoreInfra, error) {
 				IgnoreEmptyLines: true,
 			},
 			"--privileged",
-			"calico/bpftool:v5.3-amd64", "/bpftool", "prog", "tracelog")
+			"calico/bpftool:v5.3-"+arch, "/bpftool", "prog", "tracelog")
 	}
 
 	eds.Endpoint = fmt.Sprintf("https://%s:6443", eds.etcdContainer.IP)

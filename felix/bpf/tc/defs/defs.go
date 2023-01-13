@@ -53,6 +53,12 @@ const (
 	ProgIndexV6Drop
 )
 
+const (
+	RPFEnforceOptionDisabled = iota
+	RPFEnforceOptionStrict
+	RPFEnforceOptionLoose
+)
+
 var ProgramNames = []string{
 	"", /* reserved for filter program */
 	"", /* reserved for filter program */

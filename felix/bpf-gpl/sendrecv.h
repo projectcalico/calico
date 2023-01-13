@@ -19,7 +19,7 @@ struct sendrecv4_val {
 CALI_MAP_V1(cali_v4_srmsg,
 		BPF_MAP_TYPE_LRU_HASH,
 		struct sendrecv4_key, struct sendrecv4_val,
-		510000, 0, MAP_PIN_GLOBAL)
+		510000, 0)
 
 struct ct_nats_key {
 	__u64 cookie;
@@ -32,7 +32,7 @@ struct ct_nats_key {
 CALI_MAP_V1(cali_v4_ct_nats,
 		BPF_MAP_TYPE_LRU_HASH,
 		struct ct_nats_key, struct sendrecv4_val,
-		10000, 0, MAP_PIN_GLOBAL)
+		10000, 0)
 
 static CALI_BPF_INLINE __u16 ctx_port_to_host(__u32 port)
 {
