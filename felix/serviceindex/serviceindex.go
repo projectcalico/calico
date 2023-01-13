@@ -317,7 +317,10 @@ func (idx *ServiceIndex) DeleteIPSet(id string) {
 	}
 
 	delete(idx.activeIPSetsByID, id)
-	delete(idx.activeIPSetsByService, as.ServiceName)
+	delete(idx.activeIPSetsByService[as.ServiceName], id)
+	if len(idx.activeIPSetsByService[as.ServiceName]) == 0 {
+		delete(idx.activeIPSetsByService, as.ServiceName)
+	}
 }
 
 func (idx *ServiceIndex) maybeReportLive() {

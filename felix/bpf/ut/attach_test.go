@@ -47,7 +47,7 @@ func TestReattachPrograms(t *testing.T) {
 	vethName1, veth1 := createVeth()
 	defer deleteLink(veth1)
 	ap1.Iface = vethName1
-	log.Debugf("Testing %v in %v", ap1.ProgramName(), ap1.FileName())
+	log.Debugf("Testing %v in %v", ap1.ProgramName(), ap1.FileName(4))
 
 	// TC program 2
 	ap2 := tc.AttachPoint{
@@ -60,7 +60,7 @@ func TestReattachPrograms(t *testing.T) {
 	vethName2, veth2 := createVeth()
 	defer deleteLink(veth2)
 	ap2.Iface = vethName2
-	log.Debugf("Testing %v in %v", ap2.ProgramName(), ap2.FileName())
+	log.Debugf("Testing %v in %v", ap2.ProgramName(), ap2.FileName(4))
 
 	// XDP Program 1
 	ap3 := xdp.AttachPoint{

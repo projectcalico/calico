@@ -175,12 +175,8 @@ enum calico_skb_mark {
 	/* "BYPASS_FWD" is a special case of "BYPASS" used when a packet returns from one of our
 	 * VXLAN tunnels.  It tells the downstream program to forward the packet. */
 	CALI_SKB_MARK_BYPASS_FWD             = CALI_SKB_MARK_BYPASS  | 0x00300000,
-	/* "BYPASS_FWD_SRC_FIXUP" is a special case of "BYPASS" used when a from-workload program
-	 * is returning a packet to our VXLAN tunnel.  The from-workload program does the encapsulation
-	 * but, due to RPF, it cannot set the source IP of the outer IP header.  The mark bit
-	 * tells the downstream HEP program to fix up the source IP to be the host IP as it leaves the
-	 * host namespace. */
-	CALI_SKB_MARK_BYPASS_FWD_SRC_FIXUP   = CALI_SKB_MARK_BYPASS  | 0x00500000,
+	/* Now unused mark */
+	CALI_SKB_MARK_free_to_use            = CALI_SKB_MARK_BYPASS  | 0x00500000,
 	CALI_SKB_MARK_BYPASS_MASK            = CALI_SKB_MARK_SEEN_MASK | 0x02700000,
 	/* The FALLTHROUGH bit is used by programs that are towards the host namespace to indicate
 	 * that the packet is not known in BPF conntrack. We have iptables rules to drop or allow
@@ -246,39 +242,21 @@ static CALI_BPF_INLINE void ip_dec_ttl(struct iphdr *ip)
 
 #define ip_ttl_exceeded(ip) (CALI_F_TO_HOST && !CALI_F_TUNNEL && (ip)->ttl <= 1)
 
-#if !defined(__BPFTOOL_LOADER__) && (!CALI_F_XDP)
+#if CALI_F_XDP
 
-#if !CALI_F_CGROUP
+extern const volatile struct cali_xdp_globals __globals;
+#define CALI_CONFIGURABLE(name) 1 /* any value will do, it is not configured */
+
+#elif (!CALI_F_CGROUP) || defined(UNITTEST)
+
 extern const volatile struct cali_tc_globals __globals;
-#endif
-
-#define CALI_CONFIGURABLE_DEFINE(name, pattern)
 #define CALI_CONFIGURABLE(name)  __globals.name
 
-#else /* loader */
+#else
 
-#define CALI_CONFIGURABLE_DEFINE(name, pattern)							\
-static CALI_BPF_INLINE __be32 cali_configurable_##name()					\
-{												\
-	__u32 ret;										\
-	asm("%0 = " #pattern ";" : "=r"(ret) /* output */ : /* no inputs */ : /* no clobber */);\
-	return ret;										\
-}
-#define CALI_CONFIGURABLE(name)	cali_configurable_##name()
+#define CALI_CONFIGURABLE(name) 1 /* any value will do, it is not configured */
 
 #endif /* loader */
-
-CALI_CONFIGURABLE_DEFINE(host_ip, 0x54534f48) /* be 0x54534f48 = ASCII(HOST) */
-CALI_CONFIGURABLE_DEFINE(tunnel_mtu, 0x55544d54) /* be 0x55544d54 = ASCII(TMTU) */
-CALI_CONFIGURABLE_DEFINE(vxlan_port, 0x52505856) /* be 0x52505856 = ASCII(VXPR) */
-CALI_CONFIGURABLE_DEFINE(intf_ip, 0x46544e49) /*be 0x46544e49 = ASCII(INTF) */
-CALI_CONFIGURABLE_DEFINE(ext_to_svc_mark, 0x4b52414d) /*be 0x4b52414d = ASCII(MARK) */
-CALI_CONFIGURABLE_DEFINE(psnat_start, 0x53545250) /* be 0x53545250 = ACSII(PRTS) */
-CALI_CONFIGURABLE_DEFINE(psnat_len, 0x4c545250) /* be 0x4c545250 = ACSII(PRTL) */
-CALI_CONFIGURABLE_DEFINE(flags, 0x53474c46) /* be 0x53474c46 = ASCII(FLGS) */
-CALI_CONFIGURABLE_DEFINE(host_tunnel_ip, 0x4c4e5554) /* be 0x4c4e5554 = ACSII(TUNL) */
-CALI_CONFIGURABLE_DEFINE(wg_port, 0x54504757) /* be 0x54504757 = ASCII(WGPT) */
-CALI_CONFIGURABLE_DEFINE(natin_idx, 0xdeadbeef)
 
 #define HOST_IP		CALI_CONFIGURABLE(host_ip)
 #define TUNNEL_MTU 	CALI_CONFIGURABLE(tunnel_mtu)
@@ -293,16 +271,17 @@ CALI_CONFIGURABLE_DEFINE(natin_idx, 0xdeadbeef)
 #define NATIN_IFACE	CALI_CONFIGURABLE(natin_idx)
 
 #ifdef UNITTEST
-CALI_CONFIGURABLE_DEFINE(__skb_mark, 0x4d424b53) /* be 0x4d424b53 = ASCII(SKBM) */
-#define SKB_MARK	CALI_CONFIGURABLE(__skb_mark)
-#endif
+#define CALI_PATCH_DEFINE(name, pattern)							\
+static CALI_BPF_INLINE __be32 cali_patch_##name()					\
+{												\
+	__u32 ret;										\
+	asm("%0 = " #pattern ";" : "=r"(ret) /* output */ : /* no inputs */ : /* no clobber */);\
+	return ret;										\
+}
+#define CALI_PATCH(name)	cali_patch_##name()
 
-#define MAP_PIN_GLOBAL	2
-
-#ifndef __BPFTOOL_LOADER__
-#define CALI_MAP_TC_EXT_PIN(pin)	.pinning_strategy = pin,
-#else
-#define CALI_MAP_TC_EXT_PIN(pin)
+CALI_PATCH_DEFINE(__skb_mark, 0x4d424b53) /* be 0x4d424b53 = ASCII(SKBM) */
+#define SKB_MARK	CALI_PATCH(__skb_mark)
 #endif
 
 #define map_symbol(name, ver) name##ver
@@ -325,21 +304,7 @@ static CALI_BPF_INLINE int name##_delete_elem(const void* key)	\
 	return bpf_map_delete_elem(&map_symbol(name, ver), key);	\
 }
 
-#if defined(__BPFTOOL_LOADER__)
-#define CALI_MAP(name, ver,  map_type, key_type, val_type, size, flags, pin)		\
-struct bpf_map_def_extended __attribute__((section("maps"))) map_symbol(name, ver) = {	\
-	.type = map_type,								\
-	.key_size = sizeof(key_type),							\
-	.value_size = sizeof(val_type),							\
-	.map_flags = flags,								\
-	.max_entries = size,								\
-	CALI_MAP_TC_EXT_PIN(pin)							\
-};											\
-	MAP_LOOKUP_FN(name, ver)							\
-	MAP_UPDATE_FN(name, ver)							\
-	MAP_DELETE_FN(name, ver)
-#else
-#define CALI_MAP(name, ver,  map_type, key_type, val_type, size, flags, pin)		\
+#define CALI_MAP(name, ver,  map_type, key_type, val_type, size, flags)			\
 struct {										\
 	__uint(type, map_type);								\
 	__type(key, key_type);								\
@@ -351,9 +316,9 @@ struct {										\
 	MAP_UPDATE_FN(name, ver)							\
 	MAP_DELETE_FN(name, ver)
 
-#endif
-#define CALI_MAP_V1(name, map_type, key_type, val_type, size, flags, pin)		\
-		CALI_MAP(name,, map_type, key_type, val_type, size, flags, pin)
+#define CALI_MAP_V1(name, map_type, key_type, val_type, size, flags)			\
+		CALI_MAP(name,, map_type, key_type, val_type, size, flags)
 
+char ____license[] __attribute__((section("license"), used)) = "GPL";
 
 #endif /* __CALI_BPF_H__ */

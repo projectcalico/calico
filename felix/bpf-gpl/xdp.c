@@ -24,6 +24,9 @@
 #include "failsafe.h"
 #include "jump.h"
 #include "metadata.h"
+#include "globals.h"
+
+const volatile struct cali_xdp_globals __globals;
 
 /* calico_xdp is the main function used in all of the xdp programs */
 static CALI_BPF_INLINE int calico_xdp(struct xdp_md *xdp)
@@ -197,5 +200,3 @@ int xdp_calico_entry(struct xdp_md *xdp)
 {
 	return calico_xdp(xdp);
 }
-
-char ____license[] __attribute__((section("license"), used)) = "GPL";

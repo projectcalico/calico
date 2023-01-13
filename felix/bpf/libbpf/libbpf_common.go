@@ -29,3 +29,7 @@ type TcGlobalData struct {
 	NatIn        uint32
 	NatOut       uint32
 }
+
+type XDPGlobalData struct {
+	IfaceName string
+}

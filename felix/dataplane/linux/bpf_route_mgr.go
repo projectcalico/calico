@@ -23,6 +23,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/bpf/bpfmap"
 	"github.com/projectcalico/calico/felix/bpf/routes"
 	"github.com/projectcalico/calico/felix/ifacemonitor"
 	"github.com/projectcalico/calico/felix/ip"
@@ -85,7 +86,7 @@ type bpfRouteManager struct {
 	wgEnabled bool
 }
 
-func newBPFRouteManager(config *Config, mc *bpf.MapContext,
+func newBPFRouteManager(config *Config, maps *bpfmap.Maps,
 	opReporter logutils.OpRecorder) *bpfRouteManager {
 
 	// Record the external node CIDRs and pre-mark them as dirty.  These can only change with a config update,
@@ -119,7 +120,7 @@ func newBPFRouteManager(config *Config, mc *bpf.MapContext,
 		dirtyCIDRs:        dirtyCIDRs,
 
 		desiredRoutes: map[routes.Key]routes.Value{},
-		routeMap:      mc.RouteMap,
+		routeMap:      maps.RouteMap,
 
 		dirtyRoutes:     set.New[routes.Key](),
 		resyncScheduled: true,

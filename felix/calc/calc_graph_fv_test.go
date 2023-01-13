@@ -421,6 +421,15 @@ var baseTests = []StateList{
 	{
 		endpointSliceActiveSpecNoPorts,
 	},
+	{
+		// This case repros an aliasing bug where having an ingress rule and an egress rule for the
+		// same selector resulted in collision at cleanup time.
+		endpointSliceActiveSpecNoPorts,
+		endpointSliceActiveSpecPortsAndNoPorts,
+		endpointSliceActiveSpecNoPorts,
+		endpointSliceActiveSpecPortsAndNoPorts,
+		endpointSliceActiveNewIPs,
+	},
 
 	// IPv6 VXLAN tests.
 
@@ -693,6 +702,9 @@ func expectCorrectDataplaneState(mockDataplane *mock.MockDataplane, state State)
 		state.Name)
 	Expect(mockDataplane.ActiveWireguardV6Endpoints()).To(Equal(state.ExpectedWireguardV6Endpoints),
 		"Active IPv6 Wireguard Endpoints were incorrect after moving to state: %v",
+		state.Name)
+	Expect(mockDataplane.ActiveHostMetadataV4V6()).To(Equal(state.ExpectedHostMetadataV4V6),
+		"Active Host MetadataV4V6 were incorrect after moving to state: %v",
 		state.Name)
 	// Comparing stringified versions of the routes here so that, on failure, we get much more readable output.
 	Expect(stringifyRoutes(mockDataplane.ActiveRoutes())).To(Equal(stringifyRoutes(state.ExpectedRoutes)),

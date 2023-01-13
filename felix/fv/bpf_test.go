@@ -608,7 +608,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 			if testOpts.protocol != "udp" { // No need to run these tests per-protocol.
 
-				mapPath := conntrack.Map(&bpf.MapContext{}).Path()
+				mapPath := conntrack.Map().Path()
 
 				Describe("with map repinning enabled", func() {
 					BeforeEach(func() {
@@ -2345,7 +2345,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							Eventually(func() nat.BackendValue {
 								// Remove the affinity entry to emulate timer
 								// expiring / no prior affinity.
-								m := nat.AffinityMap(&bpf.MapContext{})
+								m := nat.AffinityMap()
 								cmd, err := bpf.MapDeleteKeyCmd(m, mkey.AsBytes())
 								Expect(err).NotTo(HaveOccurred())
 								err = felixes[0].ExecMayFail(cmd...)
@@ -2901,9 +2901,18 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								clusterIP := testSvc.Spec.ClusterIP
 								ports := ExpectWithPorts(uint16(testSvc.Spec.Ports[0].Port))
 
+								felixes[0].Exec("sysctl", "-w", "net.ipv6.conf.eth0.disable_ipv6=0")
+								felixes[1].Exec("sysctl", "-w", "net.ipv6.conf.eth0.disable_ipv6=0")
+
 								// Also try host networked pods, both on a local and remote node.
 								cc.Expect(Some, hostW[0], TargetIP(clusterIP), ports, hostW0SrcIP)
 								cc.Expect(Some, hostW[1], TargetIP(clusterIP), ports, hostW1SrcIP)
+
+								if testOpts.protocol == "tcp" {
+									// Also excercise ipv4 as ipv6
+									cc.Expect(Some, hostW[0], TargetIPv4AsIPv6(clusterIP), ports, hostW0SrcIP)
+									cc.Expect(Some, hostW[1], TargetIPv4AsIPv6(clusterIP), ports, hostW1SrcIP)
+								}
 
 								cc.CheckConnectivity()
 							})
@@ -3790,42 +3799,42 @@ func dumpBPFMap(felix *infrastructure.Felix, m bpf.Map, iter bpf.IterCallback) {
 }
 
 func dumpNATMap(felix *infrastructure.Felix) nat.MapMem {
-	bm := nat.FrontendMap(&bpf.MapContext{})
+	bm := nat.FrontendMap()
 	m := make(nat.MapMem)
 	dumpBPFMap(felix, bm, nat.MapMemIter(m))
 	return m
 }
 
 func dumpEPMap(felix *infrastructure.Felix) nat.BackendMapMem {
-	bm := nat.BackendMap(&bpf.MapContext{})
+	bm := nat.BackendMap()
 	m := make(nat.BackendMapMem)
 	dumpBPFMap(felix, bm, nat.BackendMapMemIter(m))
 	return m
 }
 
 func dumpAffMap(felix *infrastructure.Felix) nat.AffinityMapMem {
-	bm := nat.AffinityMap(&bpf.MapContext{})
+	bm := nat.AffinityMap()
 	m := make(nat.AffinityMapMem)
 	dumpBPFMap(felix, bm, nat.AffinityMapMemIter(m))
 	return m
 }
 
 func dumpCTMap(felix *infrastructure.Felix) conntrack.MapMem {
-	bm := conntrack.Map(&bpf.MapContext{})
+	bm := conntrack.Map()
 	m := make(conntrack.MapMem)
 	dumpBPFMap(felix, bm, conntrack.MapMemIter(m))
 	return m
 }
 
 func dumpSendRecvMap(felix *infrastructure.Felix) nat.SendRecvMsgMapMem {
-	bm := nat.SendRecvMsgMap(&bpf.MapContext{})
+	bm := nat.SendRecvMsgMap()
 	m := make(nat.SendRecvMsgMapMem)
 	dumpBPFMap(felix, bm, nat.SendRecvMsgMapMemIter(m))
 	return m
 }
 
 func dumpIfStateMap(felix *infrastructure.Felix) ifstate.MapMem {
-	im := ifstate.Map(&bpf.MapContext{})
+	im := ifstate.Map()
 	m := make(ifstate.MapMem)
 	dumpBPFMap(felix, im, ifstate.MapMemIter(m))
 	return m

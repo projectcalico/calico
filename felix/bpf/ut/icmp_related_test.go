@@ -48,6 +48,9 @@ var rulesAllowUDP = &polprog.Rules{
 func TestICMPRelatedPlain(t *testing.T) {
 	RegisterTestingT(t)
 
+	bpfIfaceName = "ICMPPlain"
+	defer func() { bpfIfaceName = "" }()
+
 	defer resetBPFMaps()
 
 	_, ipv4, l4, _, pktBytes, err := testPacketUDPDefault()
@@ -253,7 +256,7 @@ func TestICMPRelatedFromHostBeforeNAT(t *testing.T) {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
 	})
-	expectMark(tcdefs.MarkSeenBypassForwardSourceFixup)
+	expectMark(tcdefs.MarkSeenBypassForward)
 
 	// we base the packet on the original packet before NAT as if we let the original packet through
 	// before we do the actual NAT as that is where we check for TTL as doing it for the tunneled

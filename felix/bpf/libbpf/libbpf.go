@@ -21,6 +21,8 @@ import (
 	"time"
 	"unsafe"
 
+	"golang.org/x/sys/unix"
+
 	"github.com/projectcalico/calico/felix/bpf/bpfutils"
 )
 
@@ -71,7 +73,11 @@ func (m *Map) SetPinPath(path string) error {
 	return nil
 }
 
-func (m *Map) SetMapSize(size uint32) error {
+func (m *Map) MaxEntries() int {
+	return int(C.bpf_map__max_entries(m.bpfMap))
+}
+
+func (m *Map) SetMapSize(size int) error {
 	_, err := C.bpf_map_set_max_entries(m.bpfMap, C.uint(size))
 	if err != nil {
 		return fmt.Errorf("setting %s map size failed %w", m.Name(), err)
@@ -81,6 +87,10 @@ func (m *Map) SetMapSize(size uint32) error {
 
 func (m *Map) IsMapInternal() bool {
 	return bool(C.bpf_map__is_internal(m.bpfMap))
+}
+
+func (m *Map) IsJumpMap() bool {
+	return m.Type() == int(C.BPF_MAP_TYPE_PROG_ARRAY)
 }
 
 func OpenObject(filename string) (*Obj, error) {
@@ -168,6 +178,54 @@ func (o *Obj) AttachXDP(ifName, progName string, oldID int, mode uint) (int, err
 		return -1, fmt.Errorf("error querying xdp information. interface %s: %w", ifName, err)
 	}
 	return int(progId), nil
+}
+
+func (o *Obj) Pin(path string) error {
+	cPath := C.CString(path)
+	defer C.free(unsafe.Pointer(cPath))
+	errno := C.bpf_object__pin(o.obj, cPath)
+	if errno != 0 {
+		err := syscall.Errno(errno)
+		return fmt.Errorf("pinning programs failed %w", err)
+	}
+	return nil
+}
+
+func (o *Obj) Unpin(path string) error {
+	return unix.Unlink(path)
+}
+
+func (o *Obj) PinPrograms(path string) error {
+	cPath := C.CString(path)
+	defer C.free(unsafe.Pointer(cPath))
+	errno := C.bpf_object__pin_programs(o.obj, cPath)
+	if errno != 0 {
+		err := syscall.Errno(errno)
+		return fmt.Errorf("pinning programs failed %w", err)
+	}
+	return nil
+}
+
+func (o *Obj) UnpinPrograms(path string) error {
+	cPath := C.CString(path)
+	defer C.free(unsafe.Pointer(cPath))
+	errno := C.bpf_object__unpin_programs(o.obj, cPath)
+	if errno != 0 {
+		err := syscall.Errno(errno)
+		return fmt.Errorf("pinning programs failed %w", err)
+	}
+	return nil
+}
+
+func (o *Obj) PinMaps(path string) error {
+	cPath := C.CString(path)
+	defer C.free(unsafe.Pointer(cPath))
+	errno := C.bpf_object__pin_maps(o.obj, cPath)
+	if errno != 0 {
+		err := syscall.Errno(errno)
+		return fmt.Errorf("pinning maps failed %w", err)
+	}
+	return nil
 }
 
 func DetachXDP(ifName string, mode uint) error {
@@ -292,7 +350,8 @@ func (o *Obj) AttachCGroup(cgroup, progName string) (*Link, error) {
 const (
 	// Set when IPv6 is enabled to configure bpf dataplane accordingly
 	GlobalsIPv6Enabled      uint32 = C.CALI_GLOBALS_IPV6_ENABLED
-	GlobalsRPFStrictEnabled uint32 = C.CALI_GLOBALS_RPF_STRICT_ENABLED
+	GlobalsRPFOptionEnabled uint32 = C.CALI_GLOBALS_RPF_OPTION_ENABLED
+	GlobalsRPFOptionStrict  uint32 = C.CALI_GLOBALS_RPF_OPTION_STRICT
 )
 
 func TcSetGlobals(
@@ -325,6 +384,19 @@ func TcSetGlobals(
 func CTLBSetGlobals(m *Map, udpNotSeen time.Duration, excludeUDP bool) error {
 	udpNotSeen /= time.Second // Convert to seconds
 	_, err := C.bpf_ctlb_set_globals(m.bpfMap, C.uint(udpNotSeen), C.bool(excludeUDP))
+
+	return err
+}
+
+func XDPSetGlobals(
+	m *Map,
+	globalData *XDPGlobalData,
+) error {
+
+	cName := C.CString(globalData.IfaceName)
+	defer C.free(unsafe.Pointer(cName))
+
+	_, err := C.bpf_xdp_set_globals(m.bpfMap, cName)
 
 	return err
 }
