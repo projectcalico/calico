@@ -1,7 +1,7 @@
 # Calico authors
 
-This file is auto-generated based on contribution records reported
-by GitHub for the core repositories within the projectcalico/ organization. It is ordered alphabetically.
+This file is auto-generated based on commit records reported
+by git for the projectcalico/calico repository. It is ordered alphabetically.
 
 | Name   | Email  |
 |--------|--------|
@@ -47,9 +47,12 @@ by GitHub for the core repositories within the projectcalico/ organization. It i
 | Anders Janmyr                            | anders@janmyr.com  |
 | Andreas Jaeger                           | aj@suse.com  |
 | Andrei Nistor                            | andrei_nistor@smart-x.net  |
+| Andrew DeMaria                           | ademaria@cloudflare.com  |
 | Andrew Donald Kennedy                    | andrew.international@gmail.com  |
 | Andrew Gaffney                           | andrew@agaffney.org  |
 | Andy Randall                             | andy@tigera.io  |
+| Angelos Kolaitis                         | neoaggelos@gmail.com  |
+| Anthony                                  | anthony.tam@tigera.io  |
 | Anthony ARNAUD                           | aarnaud@eidosmontreal.com  |
 | Anthony BESCOND                          | anthony.bescond@kiln.fi  |
 | Anthony T                                | 25327116+anthonytwh@users.noreply.github.com  |
@@ -105,12 +108,14 @@ by GitHub for the core repositories within the projectcalico/ organization. It i
 | Cezar Sa Espinola                        | cezarsa@gmail.com  |
 | Chakravarthy Gopi                        | cgopi@us.ibm.com  |
 | Chance Zibolski                          | chance.zibolski@gmail.com  |
+| chen bojian                              | chenbojian@foxmail.com  |
 | Chen Donghui                             | chendh521@gmail.com  |
 | Chengwei Yang                            | yangchengwei@qiyi.com  |
 | chenqijun                                | chenqijun@corp.netease.com  |
 | Chris Armstrong                          | chris@opdemand.com  |
 | Chris Church                             | chris.church@gmail.com  |
 | Chris Hoge                               | chris@hogepodge.com  |
+| Chris Johnson                            | chrisjohnson00@hotmail.com  |
 | Chris McNabb                             | raizyr@gmail.com  |
 | Chris Tomkins                            | chris.tomkins@tigera.io  |
 | Christian Klauser                        | christianklauser@outlook.com  |
@@ -123,6 +128,8 @@ by GitHub for the core repositories within the projectcalico/ organization. It i
 | Ciprian Hacman                           | ciprian@hakman.dev  |
 | Clement Laforet                          | sheepkiller@cotds.org  |
 | Cody McCain                              | cody@tigera.io  |
+| Congrool                                 | chpzhangyifei@zju.edu.cn  |
+| Conner Crosby                            | conner@cavcrosby.tech  |
 | Cookie                                   | luckymrwang@163.com  |
 | Cory Benfield                            | lukasaoz@gmail.com  |
 | crandl201                                | christopher_randles@cable.comcast.com  |
@@ -135,6 +142,7 @@ by GitHub for the core repositories within the projectcalico/ organization. It i
 | Dan O'Brien                              | dobrien.nj@gmail.com  |
 | Dan Osborne                              | djosborne10@gmail.com  |
 | Daniel Hoherd                            | daniel.hoherd@gmail.com  |
+| Daniel Lipovetsky                        | dlipovetsky@d2iq.com  |
 | Daniel Megyesi                           | daniel.megyesi@liligo.com  |
 | Dario Nieuwenhuis                        | dirbaio@dirbaio.net  |
 | Darren Chin                              | dc@darrench.in  |
@@ -149,6 +157,7 @@ by GitHub for the core repositories within the projectcalico/ organization. It i
 | derek mcquay                             | derek@tigera.io  |
 | Derk Muenchhausen                        | derk@muenchhausen.de  |
 | Didier Durand                            | durand.didier@gmail.com  |
+| Dimitri Nicolopoulos                     | dimitri@tigera.io  |
 | Dominic DeMarco                          | ddemarc@us.ibm.com  |
 | Doug Collier                             | doug@tigera.io  |
 | Doug Davis                               | duglin@users.noreply.github.com  |
@@ -160,11 +169,12 @@ by GitHub for the core repositories within the projectcalico/ organization. It i
 | Duong Ha-Quang                           | duonghq@vn.fujitsu.com  |
 | Dylan Pindur                             | dylanpindur@gmail.com  |
 | Ed Harrison                              | eepyaich@users.noreply.github.com  |
-| Edbert                                   | ecandra@protonmail.com  |
+| Edbert                                   | edbert@tigera.io  |
 | Elson Rodriguez                          | elson.rodriguez@gmail.com  |
 | emanic                                   | emily@tigera.io  |
 | Emma Gordon                              | emma@projectcalico.org  |
 | EmmEff                                   | mikef17@gmail.com  |
+| Eng Zer Jun                              | engzerjun@gmail.com  |
 | Eran Reshef                              | eran.reshef@arm.com  |
 | Eric Anderson                            | anderson@stackengine.com  |
 | Eric Barch                               | ericb@ericbarch.com  |
@@ -189,7 +199,6 @@ by GitHub for the core repositories within the projectcalico/ organization. It i
 | Frank Greco Jr                           | frankgreco@northwesternmutual.com  |
 | François PICOT                           | fpicot@users.noreply.github.com  |
 | Fredrik Steen                            | stone4x4@gmail.com  |
-| freecaykes                               | edbert@tigera.io  |
 | frnkdny                                  | frank.danyo@gmail.com  |
 | fumihiko kakuma                          | kakuma@valinux.co.jp  |
 | Gabriel Monroy                           | gabriel@opdemand.com  |
@@ -203,7 +212,10 @@ by GitHub for the core repositories within the projectcalico/ organization. It i
 | Giancarlo Rubio                          | gianrubio@gmail.com  |
 | Gianluca                                 | 52940363+gianlucam76@users.noreply.github.com  |
 | Gianluca Mardente                        | gianluca@tigera.io  |
+| Girish Sankaran                          | girish@tigera.io  |
 | Gobinath Krishnamoorthy                  | gobinath@tigera.io  |
+| Gopi Chinnappa                           | gopihc@gmail.com  |
+| Gregory Whorley                          | 11302134+gregwhorley@users.noreply.github.com  |
 | Guang Ya Liu                             | gyliu513@gmail.com  |
 | Guangming Wang                           | guangming.wang@daocloud.io  |
 | Guillaume LECERF                         | glecerf@gmail.com  |
@@ -215,7 +227,7 @@ by GitHub for the core repositories within the projectcalico/ organization. It i
 | halfcrazy                                | hackzhuyan@gmail.com  |
 | Hanamantagoud                            | hanamantagoud.v.kandagal@est.tech  |
 | hanamantagoudvk                          | 68010010+hanamantagoudvk@users.noreply.github.com  |
-| hedi bouattour                           | hbouatto@cisco.com  |
+| hedi bouattour                           | hedibouattour2010@gmail.com  |
 | Helen Chang                              | c6h3un@gmail.com  |
 | Henry Gessau                             | gessau@gmail.com  |
 | huang.zhiping                            | huang.zhiping@99cloud.net  |
@@ -223,13 +235,13 @@ by GitHub for the core repositories within the projectcalico/ organization. It i
 | Hui Kang                                 | kangh@us.ibm.com  |
 | Huo Qi Feng                              | huoqif@cn.ibm.com  |
 | Iago López Galeiras                      | iago@kinvolk.io  |
-| ialidzhikov                              | i.alidjikov@gmail.com  |
 | Ian Wienand                              | iwienand@redhat.com  |
 | Icarus9913                               | icaruswu66@qq.com  |
 | Igor Kapkov                              | igasgeek@me.com  |
 | Ihar Hrachyshka                          | ihrachys@redhat.com  |
 | ijumps                                   | “bigerjump@gmail.com”  |
 | ISHIDA Wataru                            | ishida.wataru@lab.ntt.co.jp  |
+| Ismail Alidzhikov                        | i.alidjikov@gmail.com  |
 | Ivar Larsson                             | ivar@bloglovin.com  |
 | IWAMOTO Toshihiro                        | iwamoto@valinux.co.jp  |
 | J. Grizzard                              | jgrizzard@box.com  |
@@ -253,6 +265,7 @@ by GitHub for the core repositories within the projectcalico/ organization. It i
 | Jesper Dangaard Brouer                   | brouer@redhat.com  |
 | Jiawei Huang                             | jiawei@tigera.io  |
 | Jimmy McCrory                            | jimmy.mccrory@gmail.com  |
+| Jing Geng                                | jgeng25@bloomberg.net  |
 | jinglinax@163.com                        | jinglinax@163.com  |
 | jmjoy                                    | 918734043@qq.com  |
 | Joanna Solmon                            | joanna.solmon@gmail.com  |
@@ -271,11 +284,13 @@ by GitHub for the core repositories within the projectcalico/ organization. It i
 | Jonathan Sokolowski                      | jonathan.sokolowski@gmail.com  |
 | jose-bigio                               | jose.bigio@docker.com  |
 | Joseph Gu                                | aceralon@outlook.com  |
+| Josh                                     | 105011265+Josh-Tigera@users.noreply.github.com  |
 | Josh Conant                              | deathbeforedishes@gmail.com  |
 | Josh Lucas                               | josh.lucas@tigera.io  |
 | joshti                                   | 56737865+joshti@users.noreply.github.com  |
 | Joshua Allard                            | josh@tigera.io  |
 | joshuactm                                | joshua.colvin@ticketmaster.com  |
+| Juan Manuel Fresia                       | juanmanuelfresia@gmail.com  |
 | Julien Dehee                             | PrFalken@users.noreply.github.com  |
 | Jussi Nummelin                           | jussi.nummelin@digia.com  |
 | Justin                                   | justin@tigera.io  |
@@ -327,6 +342,7 @@ by GitHub for the core repositories within the projectcalico/ organization. It i
 | maao                                     | maao@cmss.chinamobile.com  |
 | Manjunath A Kumatagi                     | mkumatag@in.ibm.com  |
 | Manuel Buil                              | mbuil@suse.com  |
+| Manuel Stausberg                         | stausberg@denic.de  |
 | Marga Millet                             | marga.sfo@gmail.com  |
 | Marius Grigaitis                         | marius.grigaitis@home24.de  |
 | Mark Fermor                              | markfermor@holidayextras.com  |
@@ -337,7 +353,9 @@ by GitHub for the core repositories within the projectcalico/ organization. It i
 | Martijn Koster                           | mak-github@greenhills.co.uk  |
 | Martin Evgeniev                          | suizman@users.noreply.github.com  |
 | marvin-tigera                            | marvin-tigera@users.noreply.github.com  |
+| Masashi Honma                            | masashi.honma@gmail.com  |
 | Mat Meredith                             | matthew.meredith@metaswitch.net  |
+| Mate GABRI                               | mate.gabri@playhq.com  |
 | Mateusz Gozdek                           | mgozdek@microsoft.com  |
 | Mathias Lafeldt                          | mathias.lafeldt@gmail.com  |
 | Matt                                     | matt@projectcalico.org  |
@@ -378,11 +396,13 @@ by GitHub for the core repositories within the projectcalico/ organization. It i
 | Mohamed                                  | mohamed.elzarei@motius.de  |
 | Molnigt                                  | jan.munkhammar@safespring.com  |
 | Monty Taylor                             | mordred@inaugust.com  |
+| Morten Tryfoss                           | morten@tryfoss.no  |
 | Mridul Gain                              | mridulgain@gmail.com  |
 | Muhammad Saghir                          | msagheer92@gmail.com  |
 | Muhammet Arslan                          | muhammet.arsln@gmail.com  |
 | Murali Paluru                            | leodotcloud@gmail.com  |
 | Mészáros Mihály                          | misi@majd.eu  |
+| Natalie Zou                              | natalie@tigera.io  |
 | Nate Taylor                              | ntaylor1781@gmail.com  |
 | Nathan Fritz                             | fritzy@netflint.net  |
 | Nathan Skrzypczak                        | nathan.skrzypczak@gmail.com  |
@@ -390,11 +410,13 @@ by GitHub for the core repositories within the projectcalico/ organization. It i
 | Neil Jerram                              | nj@metaswitch.com  |
 | Nic Doye                                 | nic@worldofnic.org  |
 | Nick Bartos                              | nick@pistoncloud.com  |
+| Nick Perry                               | nick@nickperry.co.uk  |
 | Nick Wood                                | nwood@microsoft.com  |
 | Nikkau                                   | nikkau@nikkau.net  |
 | Nirman Narang                            | narang@us.ibm.com  |
 | njuptlzf                                 | njuptlzf@163.com  |
 | Noah Treuhaft                            | noah.treuhaft@docker.com  |
+| Noel Georgi                              | git@frezbo.dev  |
 | nohajc                                   | nohajc@gmail.com  |
 | nuczzz                                   | 33566732+nuczzz@users.noreply.github.com  |
 | nuxeric                                  | 48699932+nuxeric@users.noreply.github.com  |
@@ -403,9 +425,10 @@ by GitHub for the core repositories within the projectcalico/ organization. It i
 | Olivier Bourdon                          | obourdon@mirantis.com  |
 | Onong Tayeng                             | onong.tayeng@gmail.com  |
 | OpenDev Sysadmins                        | openstack-infra@lists.openstack.org  |
+| Orville Q. Song                          | orville@anislet.dev  |
 | Otto Sulin                               | otto.sulin@gmail.com  |
 | Owen Tuz                                 | owen@segfault.re  |
-| pasanw                                   | pasanweerasinghe@gmail.com  |
+| Pasan Weerasinghe                        | pasanweerasinghe@gmail.com  |
 | Patrick Marques                          | pmarques@users.noreply.github.com  |
 | Patrik Lundin                            | patrik@sigterm.se  |
 | Paul Tiplady                             | symmetricone@gmail.com  |
@@ -420,6 +443,7 @@ by GitHub for the core repositories within the projectcalico/ organization. It i
 | Peter White                              | peter.white@metaswitch.com  |
 | Phil Kates                               | me@philkates.com  |
 | Philip Southam                           | philip.southam@jpl.nasa.gov  |
+| Philipp Born                             | git@pborn.eu  |
 | Phu Kieu                                 | pkieu@jpl.nasa.gov  |
 | Pierre Grimaud                           | grimaud.pierre@gmail.com  |
 | Pike.SZ.fish                             | pikeszfish@gmail.com  |
@@ -431,6 +455,7 @@ by GitHub for the core repositories within the projectcalico/ organization. It i
 | Rafal Borczuch                           | rafalq.b+github@gmail.com  |
 | Rafe Colton                              | r.colton@modcloth.com  |
 | Rahul Krishna Upadhyaya                  | rakrup@gmail.com  |
+| Ramanujadasu VSRR                        | ramanujadasu.mca@gmail.com  |
 | rao yunkun                               | yunkunrao@gmail.com  |
 | Renan Gonçalves                          | renan.saddam@gmail.com  |
 | Rene Dekker                              | rene@tigera.io  |
@@ -488,6 +513,7 @@ by GitHub for the core repositories within the projectcalico/ organization. It i
 | Stefan Bueringer                         | sbueringer@gmail.com  |
 | Stephen Schlie                           | schlie@tigera.io  |
 | Steve Gao                                | steve@tigera.io  |
+| Steven Boland                            | steven@tigera.io  |
 | Stéphane Cottin                          | stephane.cottin@vixns.com  |
 | Suraiya Hameed                           | 22776421+Suraiya-Hameed@users.noreply.github.com  |
 | Suraj Narwade                            | surajnarwade353@gmail.com  |
@@ -525,7 +551,10 @@ by GitHub for the core repositories within the projectcalico/ organization. It i
 | Viacheslav Vasilyev                      | avoidik@gmail.com  |
 | Vieri                                    | 15050873171@163.com  |
 | Vincent Schwarzer                        | vincent.schwarzer@yahoo.de  |
+| Vitaliy Leschenko                        | v.leschenko@vitaliy.org  |
 | Vivek Thrivikraman                       | vivek.thrivikraman@est.tech  |
+| vsrr.ramanujadasu-a                      | vsrr.ramanujadasu@rakuten.com  |
+| Walter Doekes                            | walter+github@wjd.nu  |
 | wangwengang                              | wangwengang@inspur.com  |
 | Wei Kin Huang                            | weikin.huang04@gmail.com  |
 | Wei.ZHAO                                 | zhaowei@qiyi.com  |
@@ -539,6 +568,7 @@ by GitHub for the core repositories within the projectcalico/ organization. It i
 | Xiang Liu                                | lx1036@126.com  |
 | xieyanker                                | xjsisnice@gmail.com  |
 | Xin He                                   | he_xinworld@126.com  |
+| xin.li                                   | xin.li@daocloud.io  |
 | YAMAMOTO Takashi                         | yamamoto@midokura.com  |
 | Yan Zhu                                  | yanzhu@alauda.io  |
 | yang59324                                | yang59324@163.com  |
@@ -550,8 +580,10 @@ by GitHub for the core repositories within the projectcalico/ organization. It i
 | ymyang                                   | yangym9@lenovo.com  |
 | Yongkun Gui                              | ygui@google.com  |
 | Yuji Azama                               | yuji.azama@gmail.com  |
+| Yussuf Shaikh                            | yussuf.shaikh1@ibm.com  |
 | zealic                                   | zealic@gmail.com  |
 | zhangjie                                 | zhangjie0619@yeah.net  |
+| zhaojli                                  | zhaojun.li@hotmail.com  |
 | zhouxinyong                              | zhouxinyong@inspur.com  |
 | Zopanix                                  | zopanix@gmail.com  |
 | Zuul                                     | zuul@review.openstack.org  |
