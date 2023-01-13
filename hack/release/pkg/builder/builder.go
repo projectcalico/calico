@@ -118,6 +118,9 @@ func (r *ReleaseBuilder) BuildRelease() error {
 	// Build the helm charts
 	r.runner.Run("make", []string{"chart"}, []string{})
 
+	// Build OpenShift bundle.
+	r.runner.Run("make", []string{"bin/ocp.tgz"}, []string{})
+
 	// TODO: Assert the produced images are OK. e.g., have correct
 	// commit and version information compiled in.
 
@@ -260,7 +263,7 @@ func (r *ReleaseBuilder) collectGithubArtifacts(ver string) error {
 		return err
 	}
 
-	// Add in the already-built windows zip archive, the Windows install script, and the helm chart.
+	// Add in the already-built windows zip archive, the Windows install script, ocp bundle, and the helm chart.
 	if _, err := r.runner.Run("cp", []string{fmt.Sprintf("node/dist/calico-windows-%s.zip", ver), uploadDir}, nil); err != nil {
 		return err
 	}
@@ -268,6 +271,9 @@ func (r *ReleaseBuilder) collectGithubArtifacts(ver string) error {
 		return err
 	}
 	if _, err := r.runner.Run("cp", []string{fmt.Sprintf("bin/tigera-operator-%s.tgz", ver), uploadDir}, nil); err != nil {
+		return err
+	}
+	if _, err := r.runner.Run("cp", []string{"manifests/ocp.tgz", ver, uploadDir}, nil); err != nil {
 		return err
 	}
 
@@ -404,6 +410,7 @@ Attached to this release are the following artifacts:
 - {release_tar}: container images, binaries, and kubernetes manifests.
 - {calico_windows_zip}: Calico for Windows.
 - {helm_chart}: Calico Helm v3 chart.
+- ocp.tgz: Manifest bundle for OpenShift.
 `
 	sv, err := semver.NewVersion(strings.TrimPrefix(ver, "v"))
 	if err != nil {
