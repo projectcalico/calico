@@ -240,9 +240,9 @@ func Run() {
 // CNIServiceAccountName returns the name of the serviceaccount to use for the CNI plugin token request.
 // This can be set via the CALICO_CNI_SERVICE_ACCOUNT environment variable, and defaults to "calico-cni-plugin" otherwise.
 func CNIServiceAccountName() string {
-	if na := os.Getenv("CALICO_NODE_SERVICE_ACCOUNT"); na != "" {
-		logrus.WithField("name", na).Debug("Using service account from CALICO_NODE_SERVICE_ACCOUNT")
-		return na
+	if sa := os.Getenv("CALICO_CNI_SERVICE_ACCOUNT"); sa != "" {
+		logrus.WithField("name", sa).Debug("Using service account from CALICO_NODE_SERVICE_ACCOUNT")
+		return sa
 	}
 	return defaultServiceAccountName
 }
