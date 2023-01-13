@@ -483,7 +483,7 @@ func (r *ReleaseBuilder) assertManifestVersions(ver string) error {
 	// Go through a subset of yaml files in manifests/ and extract the images
 	// that they use. Verify that the images are using the given version.
 	// We also do the manifests/ocp/ yaml to check the calico/ctl image is correct.
-	manifests := []string{"calico.yaml", "manifests/ocp/02-tigera-operator.yaml"}
+	manifests := []string{"calico.yaml", "ocp/02-tigera-operator.yaml"}
 
 	for _, m := range manifests {
 		args := []string{"-Po", `image:\K(.*)`, m}
