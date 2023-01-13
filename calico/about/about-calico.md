@@ -45,7 +45,6 @@ custom_css: css/intro.css
   <div class="col-md-6">
     <h3 id="best-practices" style="margin-top: 5px">Best practices for network security</h3>
     <p>{{site.prodname}}’s rich network policy model makes it easy to lock down communication so the only traffic that flows is the traffic you want to flow. Plus with built in support for Wireguard encryption, securing your pod-to-pod traffic across the network has never been easier.</p>
-
     <p>{{site.prodname}}’s policy engine can enforce the same policy model at the host networking layer and (if using Istio & Envoy) at the service mesh layer, protecting your infrastructure from compromised workloads and protecting your workloads from compromised infrastructure.</p>
   </div>
 </div>
