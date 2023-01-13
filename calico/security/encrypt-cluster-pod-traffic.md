@@ -31,13 +31,15 @@ This how-to guide uses the following {{site.prodname}} features:
 **Unsupported**
 
 - GKE
+- EKS with Calico CNI
 - Using your own custom keys to encrypt traffic
 
 **Limitations**
 
-- IPv4 only
-- EKS, only with AWS CNI
-- AKS, only with Azure CNI
+- Encryption for pod-to-pod traffic, IPv4 only
+- Encryption for direct node-to-node communication (IPv4/IPv6) is supported only on EKS and AKS-managed clusters:
+  - EKS, AWS CNI only
+  - AKS, Azure CNI only
 
 **Supported encryption**
 
