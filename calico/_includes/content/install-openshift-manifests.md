@@ -2,6 +2,6 @@ Download the {{site.prodname}} manifests for OpenShift and add them to the gener
 
 ```bash
 mkdir calico
-wget -qO- {{ "/manifests/ocp.tgz" | absolute_url }} | tar xvz --strip-components=1 -C calico
+wget -qO- https://github.com/projectcalico/calico/releases/download/{{page.version}}/ocp.tgz | tar xvz --strip-components=1 -C calico
 cp calico/* manifests/
 ```
