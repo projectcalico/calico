@@ -387,7 +387,7 @@ networkpolicy_name2_rev1 = {
         'deletionTimestamp': '2006-01-02T15:04:07Z',
         'deletionGracePeriodSeconds': 30,
         'ownerReferences': [{
-            'apiVersion': 'extensions/v1beta1',
+            'apiVersion': 'apps/v1',
             'blockOwnerDeletion': True,
             'controller': True,
             'kind': 'DaemonSet',

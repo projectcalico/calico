@@ -3,7 +3,7 @@
 # the 'test-mgmt'/creds directory.
 # TBD: Change the nodeagent image to be one that reads from the cred's directory.
 ##
-apiVersion: extensions/v1beta1
+apiVersion: apps/v1
 kind: DaemonSet
 metadata:
   name: nodeagent
