@@ -31,7 +31,6 @@ This how-to guide uses the following {{site.prodname}} features:
 **Unsupported**
 
 - GKE
-- EKS with Calico CNI
 - Using your own custom keys to encrypt traffic
 
 **Limitations**
