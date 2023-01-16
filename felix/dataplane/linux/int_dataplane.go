@@ -1238,12 +1238,12 @@ func (d *InternalDataplane) RegisterManager(mgr Manager) {
 	d.allManagers = append(d.allManagers, mgr)
 }
 
-func (d *InternalDataplane) Start(configParams *config.Config) {
+func (d *InternalDataplane) Start() {
 	// Do our start-of-day configuration.
 	d.doStaticDataplaneConfig()
 
 	// Then, start the worker threads.
-	go d.loopUpdatingDataplane(configParams)
+	go d.loopUpdatingDataplane()
 	go d.loopReportingStatus()
 	go d.ifaceMonitor.MonitorInterfaces()
 	go d.monitorHostMTU()
@@ -1647,7 +1647,7 @@ func (d *InternalDataplane) shutdownXDPCompletely() error {
 	return fmt.Errorf("Failed to wipe the XDP state after %v tries over %v seconds: Error %v", maxTries, waitInterval, err)
 }
 
-func (d *InternalDataplane) loopUpdatingDataplane(configParams *config.Config) {
+func (d *InternalDataplane) loopUpdatingDataplane() {
 	log.Info("Started internal iptables dataplane driver loop")
 	healthTicks := time.NewTicker(healthInterval).C
 	d.reportHealth()
@@ -1710,7 +1710,7 @@ func (d *InternalDataplane) loopUpdatingDataplane(configParams *config.Config) {
 
 	processIfaceUpdate := func(ifaceUpdate *ifaceUpdate) {
 		log.WithField("msg", ifaceUpdate).Info("Received interface update")
-		if ifaceUpdate.Name == KubeIPVSInterface && !configParams.BPFEnabled {
+		if ifaceUpdate.Name == KubeIPVSInterface && !d.config.BPFEnabled {
 			d.checkIPVSConfigOnStateUpdate(ifaceUpdate.State)
 			return
 		}
