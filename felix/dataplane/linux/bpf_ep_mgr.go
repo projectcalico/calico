@@ -804,6 +804,18 @@ func (m *bpfEndpointManager) markExistingWEPDirty(wlID proto.WorkloadEndpointID,
 	}
 }
 
+func (m *bpfEndpointManager) syncIfStateMap() {
+	m.ifStateMap.IterDataplaneCache(func(k ifstate.Key, v ifstate.Value) {
+		ifindex := int(k.IfIndex())
+		_, err := net.InterfaceByIndex(ifindex)
+		if err != nil {
+			m.ifStateMap.DeleteDesired(k)
+		} else {
+			m.ifStateMap.SetDesired(k, v)
+		}
+	})
+}
+
 func (m *bpfEndpointManager) CompleteDeferredWork() error {
 	// Do one-off initialisation.
 	m.startupOnce.Do(func() {
@@ -820,6 +832,10 @@ func (m *bpfEndpointManager) CompleteDeferredWork() error {
 			}
 			return nil
 		})
+
+		// Makes sure that we delete entries for non-existing devices and preserve entries
+		// for those that exists until we can make sure that they did (not) change.
+		m.syncIfStateMap()
 
 		m.initUnknownIfaces = nil
 	})
@@ -1761,6 +1777,10 @@ func (m *bpfEndpointManager) ensureStarted() {
 	m.initAttaches, err = bpf.ListCalicoAttached()
 	if err != nil {
 		log.WithError(err).Warn("Failed to list previously attached programs. We may not clean up some.")
+	}
+
+	if err := m.ifStateMap.LoadCacheFromDataplane(); err != nil {
+		log.WithError(err).Fatal("Cannot load interface state map - essential for consisten operation.")
 	}
 }
 
