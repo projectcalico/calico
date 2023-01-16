@@ -11,8 +11,14 @@ Enable WireGuard to secure on-the-wire, in-cluster pod traffic in a {{site.prodn
 
 When this feature is enabled, {{ site.prodname }} automatically creates and manages WireGuard tunnels between nodes providing transport-level security for on-the-wire, in-cluster pod traffic. WireGuard provides {% include open-new-window.html text='formally verified' url='https://www.wireguard.com/formal-verification/' %} secure and {% include open-new-window.html text='performant tunnels' url='https://www.wireguard.com/performance/' %} without any specialized hardware. For a deep dive in to WireGuard implementation, see this {% include open-new-window.html text='whitepaper' url='https://www.wireguard.com/papers/wireguard.pdf' %}.
 
-{{ site.prodname }} supports WireGuard encryption for both IPv4 and IPv6 traffic. These can be independently enabled in the FelixConfiguration resource: `wireguardEnabled`
-enables encrypting IPv4 traffic over an IPv4 underlay network and `wireguardEnabledV6` enables encrypting IPv6 traffic over an IPv6 underlay network.
+## Concepts
+### About WireGuard
+
+WireGuard supports both host-to-host encryption for pod traffic and direct node-to-node communication. Because {{site.prodname}} is not implemented using a sidecar, traffic is not encrypted for the full journey from one pod to another; traffic is only encrypted on the host-to-host portion of the journey. Though there is unencrypted traffic between the host-to-pod portion of the journey, attackers cannot easily intercept this traffic. To intercept the unencrypted traffic, they would need root access to the node.
+
+{{site.prodname}} supports WireGuard encryption for both IPv4 and IPv6 traffic. You can enable traffic independently using parameters in the FelixConfiguration resource:
+ - `wireguardEnabled` -  enables encrypting IPv4 traffic over an IPv4 underlay network
+ - `wireguardEnabledV6` - enables encrypting IPv6 traffic over an IPv6 underlay network
 
 ### Features
 
@@ -22,17 +28,22 @@ This how-to guide uses the following {{site.prodname}} features:
 
 ### Before you begin...
 
-The following platforms:
+**Unsupported**
 
-- Kubernetes, on-premises
-- EKS using Calico CNI
-- EKS using AWS CNI
-- AKS using Azure CNI
+- GKE
+- Using your own custom keys to encrypt traffic
+
+**Limitations**
+
+- Encryption for pod-to-pod traffic, IPv4 only
+- Encryption for direct node-to-node communication (IPv4/IPv6) is supported only on EKS and AKS-managed clusters:
+  - EKS, AWS CNI only
+  - AKS, Azure CNI only
 
 **Supported encryption**
 
-- Host-to-host encryption for pod traffic
-- Encryption for direct node-to-node communication - supported only on managed clusters deployed on EKS and AKS
+- Pod-to-pod traffic
+- Encryption for direct node-to-node communication is supported only on managed clusters deployed on EKS (AWS CNI) and AKS (Azure CNI)
 
 **Required**
 
