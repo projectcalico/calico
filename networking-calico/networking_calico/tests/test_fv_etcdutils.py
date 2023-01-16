@@ -50,6 +50,7 @@ class TestFVEtcdutils(unittest.TestCase):
 
     def start_etcd_server(self):
         shutil.rmtree(".default.etcd", ignore_errors=True)
+        shutil.rmtree("default.etcd", ignore_errors=True)
         self.etcd = subprocess.Popen([
             "/usr/local/bin/etcd",
             "--advertise-client-urls", "http://127.0.0.1:2379",
