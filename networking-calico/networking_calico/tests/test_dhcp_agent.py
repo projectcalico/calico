@@ -83,95 +83,101 @@ class TestDhcpAgent(base.BaseTestCase):
         # Create the DHCP agent.
         agent = CalicoDhcpAgent()
 
+        # Mock the MTU watcher.
+        agent.etcd.mtu_watcher = mock.Mock()
+        agent.etcd.mtu_watcher.get_mtu.return_value = 1500
+
+        # Mock the dnsmasq updater.
+        agent.etcd.dnsmasq_updater = mock.Mock()
+
         # Check that running it invokes the etcd watcher loop.
         with mock.patch.object(agent, 'etcd') as etcdobj:
             agent.run()
             etcdobj.start.assert_called_with()
 
         # Notify initial snapshot (empty).
-        with mock.patch.object(agent, 'call_driver') as call_driver:
-            snapshot_data = agent.etcd._pre_snapshot_hook()
-            agent.etcd._post_snapshot_hook(snapshot_data)
-            call_driver.assert_not_called()
+        snapshot_data = agent.etcd._pre_snapshot_hook()
+        agent.etcd._post_snapshot_hook(snapshot_data)
+        agent.etcd.dnsmasq_updater.update_network.assert_not_called()
 
-        with mock.patch.object(agent, 'call_driver') as call_driver:
-            # Notify subnets.
-            agent.etcd.subnet_watcher.on_subnet_set(
-                EtcdResponse(value=json.dumps({
-                    'cidr': '10.28.0.0/24',
-                    'gateway_ip': '10.28.0.1',
-                    'host_routes': []
-                })),
-                'v4subnet-1'
-            )
-            agent.etcd.subnet_watcher.on_subnet_set(
-                EtcdResponse(value=json.dumps({
-                    'cidr': '2001:db8:1::/80',
-                    'gateway_ip': '2001:db8:1::1'
-                })),
-                'v6subnet-1'
-            )
-            agent.etcd.subnet_watcher.on_subnet_set(
-                EtcdResponse(value=json.dumps({
-                    'cidr': '10.29.0.0/24',
-                    'gateway_ip': '10.29.0.1',
-                    'host_routes': [{'destination': '11.11.0.0/16',
-                                     'nexthop': '10.65.0.1'}]
-                })),
-                'v4subnet-2'
-            )
+        # Notify subnets.
+        agent.etcd.subnet_watcher.on_subnet_set(
+            EtcdResponse(value=json.dumps({
+                'cidr': '10.28.0.0/24',
+                'gateway_ip': '10.28.0.1',
+                'host_routes': []
+            })),
+            'v4subnet-1'
+        )
+        agent.etcd.subnet_watcher.on_subnet_set(
+            EtcdResponse(value=json.dumps({
+                'cidr': '2001:db8:1::/80',
+                'gateway_ip': '2001:db8:1::1'
+            })),
+            'v6subnet-1'
+        )
+        agent.etcd.subnet_watcher.on_subnet_set(
+            EtcdResponse(value=json.dumps({
+                'cidr': '10.29.0.0/24',
+                'gateway_ip': '10.29.0.1',
+                'host_routes': [{'destination': '11.11.0.0/16',
+                                 'nexthop': '10.65.0.1'}]
+            })),
+            'v4subnet-2'
+        )
 
-            # Notify an endpoint.
-            agent.etcd.on_endpoint_set(EtcdResponse(value=json.dumps({'spec': {
-                'interfaceName': 'tap1234',
-                'mac': 'fe:16:65:12:33:44',
-                'profiles': ['profile-1'],
-                'ipNetworks': ['10.28.0.2/32', '2001:db8:1::2/128'],
-                'ipv4Gateway': '10.28.0.1',
-                'ipv6Gateway': '2001:db8:1::1'
-            }})),
-                make_endpoint_name('endpoint-1')
-            )
+        # Notify an endpoint.
+        agent.etcd.on_endpoint_set(EtcdResponse(value=json.dumps({'spec': {
+            'interfaceName': 'tap1234',
+            'mac': 'fe:16:65:12:33:44',
+            'profiles': ['profile-1'],
+            'ipNetworks': ['10.28.0.2/32', '2001:db8:1::2/128'],
+            'ipv4Gateway': '10.28.0.1',
+            'ipv6Gateway': '2001:db8:1::1'
+        }})),
+                                   make_endpoint_name('endpoint-1'))
 
-            # Check DHCP driver was asked to restart.
-            call_driver.assert_called_with('restart', mock.ANY)
+        # Check DHCP driver was asked to restart.
+        agent.etcd.dnsmasq_updater.update_network.assert_called()
+        agent.etcd.dnsmasq_updater.update_network.reset_mock()
 
-            # Notify another endpoint (using the same subnets).
-            agent.etcd.on_endpoint_set(EtcdResponse(value=json.dumps({'spec': {
-                'interfaceName': 'tap5678',
-                'mac': 'fe:16:65:12:33:55',
-                'profiles': ['profile-1'],
-                'ipNetworks': ['10.28.0.3/32', '2001:db8:1::3/128'],
-                'ipv4Gateway': '10.28.0.1',
-                'ipv6Gateway': '2001:db8:1::1',
-                'fqdn': 'calico-vm17.datcon.co.uk'
-            }})),
-                make_endpoint_name('endpoint-2')
-            )
+        # Notify another endpoint (using the same subnets).
+        agent.etcd.on_endpoint_set(EtcdResponse(value=json.dumps({'spec': {
+            'interfaceName': 'tap5678',
+            'mac': 'fe:16:65:12:33:55',
+            'profiles': ['profile-1'],
+            'ipNetworks': ['10.28.0.3/32', '2001:db8:1::3/128'],
+            'ipv4Gateway': '10.28.0.1',
+            'ipv6Gateway': '2001:db8:1::1',
+            'fqdn': 'calico-vm17.datcon.co.uk'
+        }})),
+                                   make_endpoint_name('endpoint-2'))
 
-            # Check DHCP driver was asked to restart.
-            call_driver.assert_called_with('restart', mock.ANY)
+        # Check DHCP driver was asked to restart.
+        agent.etcd.dnsmasq_updater.update_network.assert_called()
+        agent.etcd.dnsmasq_updater.update_network.reset_mock()
 
-            # Notify deletion of the first endpoint.
-            agent.etcd.on_endpoint_delete(None,
-                                          make_endpoint_name('endpoint-1'))
+        # Notify deletion of the first endpoint.
+        agent.etcd.on_endpoint_delete(None,
+                                      make_endpoint_name('endpoint-1'))
 
-            # Check DHCP driver was asked to reload allocations.
-            call_driver.assert_called_with('restart', mock.ANY)
+        # Check DHCP driver was asked to reload allocations.
+        agent.etcd.dnsmasq_updater.update_network.assert_called()
+        agent.etcd.dnsmasq_updater.update_network.reset_mock()
 
-            # Notify another endpoint using a new subnet.
-            agent.etcd.on_endpoint_set(EtcdResponse(value=json.dumps({'spec': {
-                'interfaceName': 'tapABCD',
-                'mac': 'fe:16:65:12:33:66',
-                'profiles': ['profile-1'],
-                'ipNetworks': ['10.29.0.3/32'],
-                'ipv4Gateway': '10.29.0.1',
-            }})),
-                make_endpoint_name('endpoint-3')
-            )
+        # Notify another endpoint using a new subnet.
+        agent.etcd.on_endpoint_set(EtcdResponse(value=json.dumps({'spec': {
+            'interfaceName': 'tapABCD',
+            'mac': 'fe:16:65:12:33:66',
+            'profiles': ['profile-1'],
+            'ipNetworks': ['10.29.0.3/32'],
+            'ipv4Gateway': '10.29.0.1',
+        }})),
+                                   make_endpoint_name('endpoint-3'))
 
-            # Check DHCP driver was asked to restart.
-            call_driver.assert_called_with('restart', mock.ANY)
+        # Check DHCP driver was asked to restart.
+        agent.etcd.dnsmasq_updater.update_network.assert_called()
+        agent.etcd.dnsmasq_updater.update_network.reset_mock()
 
     def test_initial_snapshot(self):
         # Create the DHCP agent.
