@@ -179,10 +179,6 @@ func (ap *AttachPoint) AttachProgram() (int, error) {
 	}
 	logCxt.Info("Program attached to TC.")
 
-	if err := ap.ensureCounters(); err != nil {
-		return -1, err
-	}
-
 	if err := ap.detachPrograms(progsToClean); err != nil {
 		return -1, err
 	}
@@ -198,8 +194,7 @@ func (ap *AttachPoint) AttachProgram() (int, error) {
 	return progId, nil
 }
 
-func (ap *AttachPoint) ensureCounters() error {
-	cm := counters.Map()
+func (ap *AttachPoint) EnsureCounters(cm bpf.Map) error {
 	if err := cm.Open(); err != nil {
 		return fmt.Errorf("cannot not open counters map: %w", err)
 	}
