@@ -51,6 +51,10 @@ func NewKey(ifindex int, hook bpf.Hook) Key {
 
 }
 
+func (k Key) IfIndex() int {
+	return int(binary.LittleEndian.Uint32(k[:4]))
+}
+
 // The following values are used as index to counters map, and should be kept in sync
 // with constants defined in bpf-gpl/reasons.h.
 const (
@@ -170,14 +174,16 @@ func Read(m bpf.Map, ifindex int, hook bpf.Hook) ([]uint64, error) {
 }
 
 func Flush(m bpf.Map, ifindex int, hook bpf.Hook) error {
-	if err := m.(*bpf.PinnedMap).UpdateWithFlags(NewKey(ifindex, hook).AsBytes(), zeroVal, unix.BPF_EXIST); err != nil {
+	if err := m.(bpf.MapWithUpdateWithFlags).
+		UpdateWithFlags(NewKey(ifindex, hook).AsBytes(), zeroVal, unix.BPF_EXIST); err != nil {
 		return fmt.Errorf("failed to update counters map. err=%v", err)
 	}
 	return nil
 }
 
 func EnsureExists(m bpf.Map, ifindex int, hook bpf.Hook) error {
-	err := m.(*bpf.PinnedMap).UpdateWithFlags(NewKey(ifindex, hook).AsBytes(), zeroVal, unix.BPF_NOEXIST)
+	err := m.(bpf.MapWithUpdateWithFlags).
+		UpdateWithFlags(NewKey(ifindex, hook).AsBytes(), zeroVal, unix.BPF_NOEXIST)
 	if err != nil && !os.IsExist(err) {
 		return fmt.Errorf("failed to ensure counters map. err=%v", err)
 	}
