@@ -407,14 +407,26 @@ class Etcd3AuthClient(Etcd3Client):
     def __init__(self, host='localhost', port=2379, protocol="http",
                  ca_cert=None, cert_key=None, cert_cert=None, timeout=None,
                  username=None, password=None, api_path=None):
-        super(Etcd3AuthClient, self).__init__(host=host,
-                                              port=port,
-                                              protocol=protocol,
-                                              ca_cert=ca_cert,
-                                              cert_key=cert_key,
-                                              cert_cert=cert_cert,
-                                              timeout=timeout,
-                                              api_path=api_path)
+        try:
+            super(Etcd3AuthClient, self).__init__(host=host,
+                                                  port=port,
+                                                  protocol=protocol,
+                                                  ca_cert=ca_cert,
+                                                  cert_key=cert_key,
+                                                  cert_cert=cert_cert,
+                                                  timeout=timeout,
+                                                  api_path=api_path)
+        except TypeError:
+            # Indicates an old version of etcd3gw that doesn't support the
+            # api_path keyword.
+            super(Etcd3AuthClient, self).__init__(host=host,
+                                                  port=port,
+                                                  protocol=protocol,
+                                                  ca_cert=ca_cert,
+                                                  cert_key=cert_key,
+                                                  cert_cert=cert_cert,
+                                                  timeout=timeout)
+
         self.username = username
         self.password = password
 
