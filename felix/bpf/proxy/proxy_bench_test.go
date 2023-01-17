@@ -118,7 +118,7 @@ func makeSvcs(n int) []runtime.Object {
 		ip := net.IPv4(10, byte((i&0xff0000)>>16), byte((i&0xff00)>>8), byte(i&0xff))
 		svcs[i] = &v1.Service{
 			TypeMeta:   typeMetaV1("Service"),
-			ObjectMeta: objectMeataV1(fmt.Sprintf("service-%d", i)),
+			ObjectMeta: objectMetaV1(fmt.Sprintf("service-%d", i)),
 			Spec: v1.ServiceSpec{
 				ClusterIP: ip.String(),
 				Type:      v1.ServiceTypeClusterIP,
@@ -148,7 +148,7 @@ func makeEps(sn, ep int) []runtime.Object {
 		}
 		ep := &v1.Endpoints{
 			TypeMeta:   typeMetaV1("Endpoints"),
-			ObjectMeta: objectMeataV1(fmt.Sprintf("service-%d", i)),
+			ObjectMeta: objectMetaV1(fmt.Sprintf("service-%d", i)),
 			Subsets: []v1.EndpointSubset{
 				{
 					Addresses: addrs,
