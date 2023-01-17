@@ -108,6 +108,11 @@ type MapWithExistsCheck interface {
 	ErrIsNotExists(error) bool
 }
 
+type MapWithUpdateWithFlags interface {
+	Map
+	UpdateWithFlags(k, v []byte, flags int) error
+}
+
 type MapParameters struct {
 	PinDir       string
 	Type         string
