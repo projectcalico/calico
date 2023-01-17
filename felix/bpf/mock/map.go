@@ -15,6 +15,8 @@
 package mock
 
 import (
+	"fmt"
+
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 
@@ -95,6 +97,16 @@ func (m *Map) Update(k, v []byte) error {
 	m.Contents[string(k)] = string(v)
 
 	return nil
+}
+
+func (m *Map) UpdateWithFlags(k, v []byte, flags int) error {
+	if (flags & unix.BPF_EXIST) != 0 {
+		if _, ok := m.Contents[string(k)]; ok {
+			return fmt.Errorf("key exists")
+		}
+	}
+
+	return m.Update(k, v)
 }
 
 func (m *Map) Get(k []byte) ([]byte, error) {
