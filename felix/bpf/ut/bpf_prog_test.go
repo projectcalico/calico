@@ -542,7 +542,7 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 					VxlanPort:    testVxlanPort,
 					PSNatStart:   uint16(topts.psnaStart),
 					PSNatLen:     uint16(topts.psnatEnd-topts.psnaStart) + 1,
-					Flags:        1,
+					Flags:        libbpf.GlobalsIPv6Enabled | libbpf.GlobalsNoDSRCidrs,
 					HostTunnelIP: ipToU32(node1tunIP),
 				}
 				if err := tc.ConfigureProgram(m, ifaceLog, &globals); err != nil {
