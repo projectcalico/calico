@@ -1,3 +1,4 @@
-# The Calico Documentation
+# README
 
-Run `make serve` to run a documentation site served on localhost to preview changes.
+Looking for docs?
+[We moved them](https://github.com/tigera/docs).
