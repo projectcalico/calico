@@ -55,6 +55,7 @@ import (
 	bpfarp "github.com/projectcalico/calico/felix/bpf/arp"
 	"github.com/projectcalico/calico/felix/bpf/asm"
 	"github.com/projectcalico/calico/felix/bpf/bpfmap"
+	"github.com/projectcalico/calico/felix/bpf/counters"
 	"github.com/projectcalico/calico/felix/bpf/ifstate"
 	"github.com/projectcalico/calico/felix/bpf/polprog"
 	"github.com/projectcalico/calico/felix/bpf/tc"
@@ -823,6 +824,41 @@ func (m *bpfEndpointManager) syncIfStateMap() {
 	})
 }
 
+func (m *bpfEndpointManager) syncIfaceCounters() error {
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return fmt.Errorf("cannot list interfaces: %w", err)
+	}
+
+	exists := set.New[int]()
+	for i := range ifaces {
+		exists.Add(ifaces[i].Index)
+	}
+
+	c := m.maps.CountersMap
+	if err := c.Open(); err != nil {
+		return fmt.Errorf("cannot not open counters map: %w", err)
+	}
+	defer c.Close()
+
+	err = c.Iter(func(k, v []byte) bpf.IteratorAction {
+		var key counters.Key
+		copy(key[:], k)
+
+		if !exists.Contains(key.IfIndex()) {
+			return bpf.IterDelete
+		}
+
+		return bpf.IterNone
+	})
+
+	if err != nil {
+		return fmt.Errorf("iterating over countrs map failed")
+	}
+
+	return nil
+}
+
 func (m *bpfEndpointManager) CompleteDeferredWork() error {
 	// Do one-off initialisation.
 	m.startupOnce.Do(func() {
@@ -845,6 +881,11 @@ func (m *bpfEndpointManager) CompleteDeferredWork() error {
 		m.syncIfStateMap()
 
 		m.initUnknownIfaces = nil
+
+		if err := m.syncIfaceCounters(); err != nil {
+			log.WithError(err).Warn("Failed to sync counters map with existing interfaces - some counters may have leaked.")
+		}
+
 	})
 
 	m.applyProgramsToDirtyDataInterfaces()
