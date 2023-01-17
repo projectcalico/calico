@@ -134,3 +134,8 @@ var _ = Describe("Typha address discovery", func() {
 		)
 	})
 })
+
+func discoverTyphaAddrs(params *config.Config, sClient *fake.Clientset) ([]discovery.Typha, error) {
+	disc := createTyphaDiscoverer(params, sClient)
+	return disc.LoadTyphaAddrs()
+}
