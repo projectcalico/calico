@@ -45,6 +45,7 @@ type AttachPoint struct {
 	FIB                  bool
 	ToHostDrop           bool
 	DSR                  bool
+	DSROptoutCIDRs       bool
 	TunnelMTU            uint16
 	VXLANPort            uint16
 	WgPort               uint16
@@ -450,6 +451,10 @@ func (ap *AttachPoint) ConfigureProgram(m *libbpf.Map) error {
 
 	if ap.IPv6Enabled {
 		globalData.Flags |= libbpf.GlobalsIPv6Enabled
+	}
+
+	if ap.DSROptoutCIDRs {
+		globalData.Flags |= libbpf.GlobalsNoDSRCidrs
 	}
 
 	switch ap.RPFEnforceOption {

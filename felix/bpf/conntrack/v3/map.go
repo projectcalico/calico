@@ -193,6 +193,7 @@ const (
 	FlagSvcSelf   uint16 = (1 << 10)
 	FlagNPLoop    uint16 = (1 << 11)
 	FlagNPRemote  uint16 = (1 << 12)
+	FlagNoDSR     uint16 = (1 << 13)
 )
 
 func (e Value) ReverseNATKey() Key {
@@ -464,6 +465,10 @@ func (e Value) String() string {
 
 		if flags&FlagNPRemote != 0 {
 			flagsStr += " np-remote"
+		}
+
+		if flags&FlagNPRemote != 0 {
+			flagsStr += " no-dsr"
 		}
 	}
 
