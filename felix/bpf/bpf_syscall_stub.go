@@ -50,6 +50,10 @@ func UpdateMapEntry(mapFD MapFD, k, v []byte) error {
 	panic("BPF syscall stub")
 }
 
+func UpdateMapEntryWithFlags(mapFD MapFD, k, v []byte, flags int) error {
+	panic("BPF syscall stub")
+}
+
 func GetMapEntry(mapFD MapFD, k []byte, valueSize int) ([]byte, error) {
 	panic("BPF syscall stub")
 }
