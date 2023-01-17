@@ -661,20 +661,6 @@ blocks:
           - sudo journalctl > logs/journalctl.txt
           - artifact push job --expire-in 1d logs
 
-- name: "Documentation"
-  run:
-    when: "${FORCE_RUN} or change_in(['/*', '/calico/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
-  dependencies: ["Prerequisites"]
-  task:
-    prologue:
-      commands:
-      - cd calico
-    jobs:
-    - name: "htmlproofer, kubeval"
-      commands:
-      - ../.semaphore/run-and-monitor htmlproofer.log make htmlproofer
-      - ../.semaphore/run-and-monitor kubeval.log make kubeval
-
 after_pipeline:
   task:
     jobs:
