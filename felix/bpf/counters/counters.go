@@ -51,6 +51,10 @@ func NewKey(ifindex int, hook bpf.Hook) Key {
 
 }
 
+func (k Key) IfIndex() int {
+	return int(binary.LittleEndian.Uint32(k[:4]))
+}
+
 // The following values are used as index to counters map, and should be kept in sync
 // with constants defined in bpf-gpl/reasons.h.
 const (
