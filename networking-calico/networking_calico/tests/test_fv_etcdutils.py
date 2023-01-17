@@ -84,6 +84,7 @@ class TestFVEtcdutils(unittest.TestCase):
 
         # Set up minimal config, so EtcdWatcher will use that etcd.
         calico_config.register_options(cfg.CONF)
+        cfg.CONF.set_override('etcd_api_path', '/v3/', group='calico')
 
         # Ensure etcd server is ready.
         self.wait_etcd_ready()
@@ -122,6 +123,7 @@ class TestFVEtcdutils(unittest.TestCase):
 
         # Set up minimal config, so EtcdWatcher will use that etcd.
         calico_config.register_options(cfg.CONF)
+        cfg.CONF.set_override('etcd_api_path', '/v3/', group='calico')
 
         # Ensure etcd server is ready.
         self.wait_etcd_ready()
