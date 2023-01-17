@@ -440,7 +440,7 @@ func initMapsOnce() {
 		affinityMap = nat.AffinityMap()
 		arpMap = arp.Map()
 		fsafeMap = failsafes.Map()
-		countersMap = counters.MapForTest()
+		countersMap = counters.Map()
 		ifstateMap = ifstate.Map()
 
 		allMaps = []bpf.Map{natMap, natBEMap, ctMap, rtMap, ipsMap, stateMap, testStateMap,

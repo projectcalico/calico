@@ -29,6 +29,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/bpfutils"
+	"github.com/projectcalico/calico/felix/bpf/counters"
 	"github.com/projectcalico/calico/felix/bpf/libbpf"
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 )
@@ -171,7 +172,7 @@ func (ap *AttachPoint) AttachProgram() (int, error) {
 		defer obj.Close()
 	}
 
-	progId, err := obj.AttachClassifier(SectionName(ap.Type, ap.ToOrFrom), ap.Iface, string(ap.Hook))
+	progId, err := obj.AttachClassifier(SectionName(ap.Type, ap.ToOrFrom), ap.Iface, ap.Hook == bpf.HookIngress)
 	if err != nil {
 		logCxt.Warnf("Failed to attach to TC section %s", SectionName(ap.Type, ap.ToOrFrom))
 		return -1, err
@@ -193,6 +194,20 @@ func (ap *AttachPoint) AttachProgram() (int, error) {
 	return progId, nil
 }
 
+func (ap *AttachPoint) EnsureCounters(cm bpf.Map) error {
+	if err := cm.Open(); err != nil {
+		return fmt.Errorf("cannot not open counters map: %w", err)
+	}
+	defer cm.Close()
+
+	iface, err := net.InterfaceByName(ap.Iface)
+	if err != nil {
+		return fmt.Errorf("did not find device %s: %w", ap.Iface, err)
+	}
+
+	return counters.EnsureExists(cm, iface.Index, ap.Hook)
+}
+
 func (ap *AttachPoint) DetachProgram() error {
 	progsToClean, err := ap.listAttachedPrograms()
 	if err != nil {
@@ -207,7 +222,7 @@ func (ap *AttachPoint) detachPrograms(progsToClean []attachedProg) error {
 	for _, p := range progsToClean {
 		log.WithField("prog", p).Debug("Cleaning up old calico program")
 		attemptCleanup := func() error {
-			_, err := ExecTC("filter", "del", "dev", ap.Iface, string(ap.Hook), "pref", p.pref, "handle", p.handle, "bpf")
+			_, err := ExecTC("filter", "del", "dev", ap.Iface, ap.Hook.String(), "pref", p.pref, "handle", p.handle, "bpf")
 			return err
 		}
 		err := attemptCleanup()
@@ -284,7 +299,7 @@ type attachedProg struct {
 }
 
 func (ap *AttachPoint) listAttachedPrograms() ([]attachedProg, error) {
-	out, err := ExecTC("filter", "show", "dev", ap.Iface, string(ap.Hook))
+	out, err := ExecTC("filter", "show", "dev", ap.Iface, ap.Hook.String())
 	if err != nil {
 		return nil, fmt.Errorf("failed to list tc filters on interface: %w", err)
 	}
@@ -318,7 +333,7 @@ var ErrNoTC = errors.New("no TC program attached")
 // TODO: we should try to not get the program ID via 'tc' binary and rather
 // we should use libbpf to obtain it.
 func (ap *AttachPoint) ProgramID() (int, error) {
-	out, err := ExecTC("filter", "show", "dev", ap.IfaceName(), string(ap.Hook))
+	out, err := ExecTC("filter", "show", "dev", ap.IfaceName(), ap.Hook.String())
 	if err != nil {
 		return -1, fmt.Errorf("Failed to check interface %s program ID: %w", ap.Iface, err)
 	}
@@ -396,10 +411,10 @@ func RemoveQdisc(ifaceName string) error {
 	}
 
 	// Remove the json files of the programs attached to the interface for both directions
-	if err = bpf.ForgetAttachedProg(ifaceName, "ingress"); err != nil {
+	if err = bpf.ForgetAttachedProg(ifaceName, bpf.HookIngress); err != nil {
 		return fmt.Errorf("Failed to remove runtime json file of ingress direction: %w", err)
 	}
-	if err = bpf.ForgetAttachedProg(ifaceName, "egress"); err != nil {
+	if err = bpf.ForgetAttachedProg(ifaceName, bpf.HookEgress); err != nil {
 		return fmt.Errorf("Failed to remove runtime json file of egress direction: %w", err)
 	}
 
@@ -409,7 +424,7 @@ func RemoveQdisc(ifaceName string) error {
 // Return a key that uniquely identifies this attach point, amongst all of the possible attach
 // points associated with a single given interface.
 func (ap *AttachPoint) JumpMapFDMapKey() string {
-	return string(ap.Hook)
+	return ap.Hook.String()
 }
 
 func (ap *AttachPoint) IfaceName() string {

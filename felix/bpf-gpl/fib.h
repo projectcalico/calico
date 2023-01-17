@@ -78,7 +78,7 @@ static CALI_BPF_INLINE int forward_or_drop(struct cali_tc_ctx *ctx)
 
 		/* Revalidate the access to the packet */
 		if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
-			DENY_REASON(ctx, CALI_REASON_SHORT);
+			deny_reason(ctx, CALI_REASON_SHORT);
 			CALI_DEBUG("Too short\n");
 			goto deny;
 		}
@@ -117,7 +117,7 @@ static CALI_BPF_INLINE int forward_or_drop(struct cali_tc_ctx *ctx)
 
 		/* Revalidate the access to the packet */
 		if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
-			DENY_REASON(ctx, CALI_REASON_SHORT);
+			deny_reason(ctx, CALI_REASON_SHORT);
 			CALI_DEBUG("Too short\n");
 			goto deny;
 		}
@@ -149,7 +149,7 @@ skip_redir_ifindex:
 	if (fwd_fib(&ctx->fwd)) {
 		/* Revalidate the access to the packet */
 		if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
-			DENY_REASON(ctx, CALI_REASON_SHORT);
+			deny_reason(ctx, CALI_REASON_SHORT);
 			CALI_DEBUG("Too short\n");
 			goto deny;
 		}
