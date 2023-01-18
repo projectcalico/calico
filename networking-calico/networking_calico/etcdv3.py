@@ -25,6 +25,11 @@ from etcd3gw.utils import _increment_last_byte
 from networking_calico.compat import cfg
 from networking_calico.compat import log
 
+# Incantations for enabling oslo_log debug logging, when desired:
+# log.register_options(cfg.CONF)
+# cfg.CONF.debug = True
+# cfg.CONF.use_stderr = True
+# log.setup(cfg.CONF, "demo")
 
 LOG = log.getLogger(__name__)
 
