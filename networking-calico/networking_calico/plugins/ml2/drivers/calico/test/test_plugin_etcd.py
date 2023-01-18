@@ -1783,8 +1783,8 @@ class TestStatusWatcher(TestStatusWatcherBase):
             mock.call("hostname", "ep1", {"status": "up"}, priority="low"),
         ], any_order=True)
 
-        # Resync after deleting the Felix status.  We should see the other
-        # endpoint reported with status None.
+        # Resync after deleting the Felix status.  This does not affect the
+        # status of ep1.
         del self.etcd_data[felix_status_key]
         self.driver.on_felix_alive.reset_mock()
         self.driver.on_port_status_changed.reset_mock()
@@ -1792,7 +1792,7 @@ class TestStatusWatcher(TestStatusWatcherBase):
         self.watcher.start()
         self.driver.on_felix_alive.assert_not_called()
         self.driver.on_port_status_changed.assert_has_calls([
-            mock.call("hostname", "ep1", None, priority="low"),
+            mock.call("hostname", "ep1", {"status": "up"}, priority="low"),
         ], any_order=True)
 
         # Resync with some follow-on events; checks that the priority goes

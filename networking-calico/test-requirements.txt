@@ -20,5 +20,3 @@ neutron>=16,<17
 neutron-lib==2.3.0
 mock>=3.0.0 # BSD
 pyroute2<0.6.0 # Apache v2
-
-nose2
