@@ -14,7 +14,6 @@
 # limitations under the License.
 
 import functools
-import socket
 
 from etcd3gw.client import Etcd3Client
 from etcd3gw.exceptions import Etcd3Exception
@@ -34,8 +33,8 @@ LOG = log.getLogger(__name__)
 # we leave plenty of headroom.
 CHUNK_SIZE_LIMIT = 200
 
-# Indicates that a put operation must update an existing resource and not create
-# a new resource.
+# Indicates that a put operation must update an existing resource and not
+# create a new resource.
 MUST_UPDATE = "MUST_UPDATE"
 
 
@@ -120,7 +119,8 @@ def put(key, value, mod_revision=None, lease=None, existing_value=None):
             'version': 0,
         }]
     elif mod_revision is not None:
-        # Write operation must _replace_ a KV entry with the specified revision.
+        # Write operation must _replace_ a KV entry with the specified
+        # revision.
         base64_key = _encode(key)
         txn['compare'] = [{
             'key': base64_key,
