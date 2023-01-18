@@ -42,8 +42,18 @@ class TestFVEtcdutils(unittest.TestCase):
     def setUp(self):
         super(TestFVEtcdutils, self).setUp()
         self.etcd_server_running = False
+        self.normal_api_paths = etcdv3._possible_etcd_api_paths
+
+        # Add in an invalid API path so as to make sure to test the failure
+        # handling logic even when most installations support '/v3/'.
+        etcdv3._possible_etcd_api_paths = ['/invalid/'] + self.normal_api_paths
 
     def tearDown(self):
+        # Restore normal etcd API paths in case they are relevant to other test
+        # files.  (In practice I don't think they are; this is the only test
+        # file that connects to a real etcd server.)
+        etcdv3._possible_etcd_api_paths = self.normal_api_paths
+
         self.stop_etcd_server()
         etcdv3._client = None
         super(TestFVEtcdutils, self).tearDown()
