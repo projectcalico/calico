@@ -21,7 +21,7 @@ ipmo .\libs\calico\calico.psm1 -Force
 Wait-ForCalicoInit
 
 # Copy the nodename from the global setting.
-$env:FELIX_FELIXHOSTNAME = $env:NODENAME
+$env:FELIX_FELIXHOSTNAME = $(hostname).ToLower()
 
 # Disable OpenStack metadata server support, which is not available on Windows.
 $env:FELIX_METADATAADDR = "none"

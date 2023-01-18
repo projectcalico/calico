@@ -281,6 +281,14 @@ $(NODE_CONTAINER_CREATED): $(REMOTE_DEPS) ./Dockerfile.$(ARCH) $(NODE_CONTAINER_
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 
+image-windows: clean-windows build 
+	docker buildx create --name img-builder --use --platform windows/amd64 
+	docker buildx build --platform windows/amd64 --output=type=registry --pull -t $(NODE_IMAGE):latest-$(ARCH)-windows --build-arg GIT_VERSION=$(GIT_VERSION) -f Dockerfile-windows .
+	docker buildx rm img-builder 
+
+clean-windows:
+	docker buildx rm img-builder || true
+
 # download BIRD source to include in image.
 $(BIRD_SOURCE): .bird-source.created
 .bird-source.created:

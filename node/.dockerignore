@@ -8,3 +8,6 @@
 # - CentOS repository file and our license
 !centos.repo
 !LICENSE
+!windows-packaging/CalicoWindows/libs
+!windows-packaging/CalicoWindows/node
+!windows-packaging/CalicoWindows/felix
