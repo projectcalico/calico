@@ -55,6 +55,7 @@ import (
 	bpfarp "github.com/projectcalico/calico/felix/bpf/arp"
 	"github.com/projectcalico/calico/felix/bpf/asm"
 	"github.com/projectcalico/calico/felix/bpf/bpfmap"
+	"github.com/projectcalico/calico/felix/bpf/counters"
 	"github.com/projectcalico/calico/felix/bpf/ifstate"
 	"github.com/projectcalico/calico/felix/bpf/polprog"
 	"github.com/projectcalico/calico/felix/bpf/tc"
@@ -804,6 +805,7 @@ func (m *bpfEndpointManager) markExistingWEPDirty(wlID proto.WorkloadEndpointID,
 	}
 }
 
+<<<<<<< HEAD
 func (m *bpfEndpointManager) syncIfStateMap() {
 	m.ifStateMap.IterDataplaneCache(func(k ifstate.Key, v ifstate.Value) {
 		ifindex := int(k.IfIndex())
@@ -821,6 +823,41 @@ func (m *bpfEndpointManager) syncIfStateMap() {
 			m.ifStateMap.SetDesired(k, v)
 		}
 	})
+=======
+func (m *bpfEndpointManager) syncIfaceCounters() error {
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return fmt.Errorf("cannot list interfaces: %w", err)
+	}
+
+	exists := set.New[int]()
+	for i := range ifaces {
+		exists.Add(ifaces[i].Index)
+	}
+
+	c := m.maps.CountersMap
+	if err := c.Open(); err != nil {
+		return fmt.Errorf("cannot not open counters map: %w", err)
+	}
+	defer c.Close()
+
+	err = c.Iter(func(k, v []byte) bpf.IteratorAction {
+		var key counters.Key
+		copy(key[:], k)
+
+		if !exists.Contains(key.IfIndex()) {
+			return bpf.IterDelete
+		}
+
+		return bpf.IterNone
+	})
+
+	if err != nil {
+		return fmt.Errorf("iterating over countrs map failed")
+	}
+
+	return nil
+>>>>>>> a508497484 ([BPF] sync/clenup counters on start up)
 }
 
 func (m *bpfEndpointManager) CompleteDeferredWork() error {
@@ -845,6 +882,11 @@ func (m *bpfEndpointManager) CompleteDeferredWork() error {
 		m.syncIfStateMap()
 
 		m.initUnknownIfaces = nil
+
+		if err := m.syncIfaceCounters(); err != nil {
+			log.WithError(err).Warn("Failed to sync counters map with existing interfaces - some counters may have leaked.")
+		}
+
 	})
 
 	m.applyProgramsToDirtyDataInterfaces()
@@ -1331,7 +1373,7 @@ func (m *bpfEndpointManager) attachXDPProgram(ifaceName string, ep *proto.HostEn
 			ForXDP:           true,
 		}
 		ap.Log().Debugf("Rules: %v", rules)
-		return m.dp.updatePolicyProgram(jumpMapFD, rules, string(bpf.HookXDP), ap)
+		return m.dp.updatePolicyProgram(jumpMapFD, rules, "xdp", ap)
 	} else {
 		return m.dp.ensureNoProgram(ap)
 	}
@@ -2006,7 +2048,7 @@ func (m *bpfEndpointManager) removePolicyDebugInfo(ifaceName string, ipFamily pr
 	if !m.bpfPolicyDebugEnabled {
 		return
 	}
-	filename := bpf.PolicyDebugJSONFileName(ifaceName, string(hook), ipFamily)
+	filename := bpf.PolicyDebugJSONFileName(ifaceName, hook.String(), ipFamily)
 	err := os.Remove(filename)
 	if err != nil {
 		log.WithError(err).Debugf("Failed to remove the policy debug file %v. Ignoring", filename)
@@ -2028,7 +2070,7 @@ func (m *bpfEndpointManager) writePolicyDebugInfo(insns asm.Insns, ifaceName str
 
 	var policyDebugInfo = bpf.PolicyDebugInfo{
 		IfaceName:  ifaceName,
-		Hook:       "tc " + string(hook),
+		Hook:       "tc " + hook.String(),
 		PolicyInfo: insns,
 		Error:      errStr,
 	}
@@ -2080,16 +2122,8 @@ func policyProgramName(iface, polDir string, ipFamily proto.IPVersion) string {
 	if ipFamily == proto.IPVersion_IPV6 {
 		version = "6"
 	}
-	var hook string
-	switch strings.ToLower(polDir) {
-	case string(bpf.HookIngress):
-		hook = "i"
-	case string(bpf.HookEgress):
-		hook = "e"
-	case string(bpf.HookXDP):
-		hook = "x"
-	}
-	return fmt.Sprintf("p%v%s_%s", version, hook, iface)
+
+	return fmt.Sprintf("p%v%c_%s", version, polDir[0], iface)
 }
 
 func (m *bpfEndpointManager) doUpdatePolicyProgram(progName string, jumpMapFD bpf.MapFD, rules polprog.Rules,
