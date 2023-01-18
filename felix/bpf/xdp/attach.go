@@ -58,7 +58,7 @@ func (ap *AttachPoint) Config() string {
 }
 
 func (ap *AttachPoint) JumpMapFDMapKey() string {
-	return string(bpf.HookXDP)
+	return bpf.HookXDP.String()
 }
 
 func (ap *AttachPoint) FileName() string {
@@ -248,7 +248,7 @@ func (ap *AttachPoint) DetachProgram() error {
 	ap.Log().Infof("XDP program detached. program ID: %v", progID)
 
 	// Program is detached, now remove the json file we saved for it
-	if err = bpf.ForgetAttachedProg(ap.IfaceName(), "xdp"); err != nil {
+	if err = bpf.ForgetAttachedProg(ap.IfaceName(), bpf.HookXDP); err != nil {
 		return fmt.Errorf("failed to delete hash of BPF program from disk: %w", err)
 	}
 	return nil

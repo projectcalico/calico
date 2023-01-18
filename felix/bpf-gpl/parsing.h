@@ -23,7 +23,7 @@ static CALI_BPF_INLINE int parse_packet_ip(struct cali_tc_ctx *ctx) {
 	 */
 	if (CALI_F_XDP) {
 		if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
-			DENY_REASON(ctx, CALI_REASON_SHORT);
+			deny_reason(ctx, CALI_REASON_SHORT);
 			CALI_DEBUG("Too short\n");
 			goto deny;
 		}
@@ -67,7 +67,7 @@ static CALI_BPF_INLINE int parse_packet_ip(struct cali_tc_ctx *ctx) {
 	// already done for XDP programs at the beginning of the function.
 	if (!CALI_F_XDP) {
 		if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
-			DENY_REASON(ctx, CALI_REASON_SHORT);
+			deny_reason(ctx, CALI_REASON_SHORT);
 			CALI_DEBUG("Too short\n");
 			goto deny;
 		}
@@ -78,14 +78,14 @@ static CALI_BPF_INLINE int parse_packet_ip(struct cali_tc_ctx *ctx) {
 	// Drop malformed IP packets
 	if (ip_hdr(ctx)->ihl < 5) {
 		CALI_DEBUG("Drop malformed IP packets\n");
-		DENY_REASON(ctx, CALI_REASON_IP_MALFORMED);
+		deny_reason(ctx, CALI_REASON_IP_MALFORMED);
 		goto deny;
 	} else if (ip_hdr(ctx)->ihl > 5) {
 		/* Drop packets with IP options from/to WEP.
 		 * Also drop packets with IP options if the dest IP is not host IP
 		 */
 		if (CALI_F_WEP || (CALI_F_FROM_HEP && !rt_addr_is_local_host(ip_hdr(ctx)->daddr))) {
-			DENY_REASON(ctx, CALI_REASON_IP_OPTIONS);
+			deny_reason(ctx, CALI_REASON_IP_OPTIONS);
 			CALI_DEBUG("Drop packets with IP options\n");
 			goto deny;
 		}
@@ -145,7 +145,7 @@ static CALI_BPF_INLINE int tc_state_fill_from_nexthdr(struct cali_tc_ctx *ctx)
 	case IPPROTO_TCP:
 		// Re-check buffer space for TCP (has larger headers than UDP).
 		if (skb_refresh_validate_ptrs(ctx, TCP_SIZE)) {
-			DENY_REASON(ctx, CALI_REASON_SHORT);
+			deny_reason(ctx, CALI_REASON_SHORT);
 			CALI_DEBUG("Too short\n");
 			goto deny;
 		}
@@ -186,7 +186,7 @@ static CALI_BPF_INLINE int tc_state_fill_from_nexthdr(struct cali_tc_ctx *ctx)
 		if (CALI_F_TUNNEL | CALI_F_L3_DEV) {
 			// IPIP should never be sent down the tunnel.
 			CALI_DEBUG("IPIP traffic to/from tunnel: drop\n");
-			DENY_REASON(ctx, CALI_REASON_UNAUTH_SOURCE);
+			deny_reason(ctx, CALI_REASON_UNAUTH_SOURCE);
 			goto deny;
 		}
 		if (CALI_F_FROM_HEP) {
@@ -195,7 +195,7 @@ static CALI_BPF_INLINE int tc_state_fill_from_nexthdr(struct cali_tc_ctx *ctx)
 				goto allow;
 			} else {
 				CALI_DEBUG("IPIP packet from unknown source, drop.\n");
-				DENY_REASON(ctx, CALI_REASON_UNAUTH_SOURCE);
+				deny_reason(ctx, CALI_REASON_UNAUTH_SOURCE);
 				goto deny;
 			}
 		} else if (CALI_F_TO_HEP && !CALI_F_TUNNEL && !CALI_F_L3_DEV) {
@@ -204,13 +204,13 @@ static CALI_BPF_INLINE int tc_state_fill_from_nexthdr(struct cali_tc_ctx *ctx)
 				goto allow;
 			} else {
 				CALI_DEBUG("IPIP packet to unknown dest, drop.\n");
-				DENY_REASON(ctx, CALI_REASON_UNAUTH_SOURCE);
+				deny_reason(ctx, CALI_REASON_UNAUTH_SOURCE);
 				goto deny;
 			}
 		}
 		if (CALI_F_FROM_WEP) {
 			CALI_DEBUG("IPIP traffic from workload: drop\n");
-			DENY_REASON(ctx, CALI_REASON_UNAUTH_SOURCE);
+			deny_reason(ctx, CALI_REASON_UNAUTH_SOURCE);
 			goto deny;
 		}
 	default:

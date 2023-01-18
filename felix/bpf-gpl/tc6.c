@@ -12,6 +12,7 @@
 
 #include "bpf.h"
 #include "types.h"
+#include "counters.h"
 #include "log.h"
 #include "skb.h"
 #include "routes.h"
@@ -29,7 +30,6 @@ int calico_tc(struct __sk_buff *skb)
 	CALI_DEBUG("Entering IPv6 prologue program\n");
 	struct cali_tc_ctx ctx = {
 		.state = state_get(),
-		.counters = counters_get(),
 		.skb = skb,
 		.fwd = {
 			.res = TC_ACT_UNSPEC,
@@ -43,12 +43,6 @@ int calico_tc(struct __sk_buff *skb)
 		return TC_ACT_SHOT;
 	}
 
-	if (!ctx.counters) {
-		CALI_DEBUG("Counters map lookup failed: DROP\n");
-		// We don't want to drop packets just because counters initialization fails, but
-		// failing here normally should not happen.
-		return TC_ACT_SHOT;
-	}
 	// TODO: Add IPv6 counters
 
 	if (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_INFO) {
@@ -56,7 +50,7 @@ int calico_tc(struct __sk_buff *skb)
 	}
 
 	if (skb_refresh_validate_ptrs(&ctx, UDP_SIZE)) {
-		DENY_REASON(&ctx, CALI_REASON_SHORT);
+		deny_reason(&ctx, CALI_REASON_SHORT);
 		CALI_DEBUG("Too short\n");
 		goto deny;
 	}
