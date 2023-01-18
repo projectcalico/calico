@@ -390,6 +390,11 @@ def logging_exceptions(fn):
 _client = None
 
 
+# Possible API paths for connecting to an etcd server.  Defined as a variable
+# here so that test code can override it after importing this file.
+_possible_etcd_api_paths = ['/v3/', '/v3beta/', '/v3alpha/']
+
+
 # Wrap Etcd3Client to authenticate when needed and add an
 # Authorization header to the session headers.
 #
@@ -412,9 +417,8 @@ class Etcd3AuthClient(Etcd3Client):
     def __init__(self, host='localhost', port=2379, protocol="http",
                  ca_cert=None, cert_key=None, cert_cert=None, timeout=None,
                  username=None, password=None):
-        # Begin with an invalid API path so as to keep testing the failure
-        # handling logic even when most installations support '/v3/'.
-        possible_api_paths = ['/invalid/', '/v3/', '/v3beta/', '/v3alpha/']
+        global _possible_etcd_api_paths
+        possible_api_paths = _possible_etcd_api_paths
         created_working_client = False
         while not created_working_client:
             try:
