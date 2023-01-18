@@ -406,29 +406,52 @@ _client = None
 class Etcd3AuthClient(Etcd3Client):
     def __init__(self, host='localhost', port=2379, protocol="http",
                  ca_cert=None, cert_key=None, cert_cert=None, timeout=None,
-                 username=None, password=None, api_path=None):
-        try:
-            super(Etcd3AuthClient, self).__init__(host=host,
-                                                  port=port,
-                                                  protocol=protocol,
-                                                  ca_cert=ca_cert,
-                                                  cert_key=cert_key,
-                                                  cert_cert=cert_cert,
-                                                  timeout=timeout,
-                                                  api_path=api_path)
-        except TypeError:
-            # Indicates an old version of etcd3gw that doesn't support the
-            # api_path keyword.
-            super(Etcd3AuthClient, self).__init__(host=host,
-                                                  port=port,
-                                                  protocol=protocol,
-                                                  ca_cert=ca_cert,
-                                                  cert_key=cert_key,
-                                                  cert_cert=cert_cert,
-                                                  timeout=timeout)
+                 username=None, password=None):
+        # Begin with an invalid API path so as to keep testing the failure
+        # handling logic even when most installations support '/v3/'.
+        possible_api_paths = ['/invalid/', '/v3/', '/v3beta/', '/v3alpha/']
+        created_working_client = False
+        while not created_working_client:
+            try:
+                LOG.info("Try creating etcd3gw client with %s",
+                         possible_api_paths[0])
+                super(Etcd3AuthClient, self).__init__(
+                    host=host,
+                    port=port,
+                    protocol=protocol,
+                    ca_cert=ca_cert,
+                    cert_key=cert_key,
+                    cert_cert=cert_cert,
+                    timeout=timeout,
+                    api_path=possible_api_paths[0])
+                possible_api_paths = possible_api_paths[1:]
+            except TypeError:
+                # Indicates an old version of etcd3gw that doesn't support the
+                # api_path keyword.
+                possible_api_paths = []
+                super(Etcd3AuthClient, self).__init__(
+                    host=host,
+                    port=port,
+                    protocol=protocol,
+                    ca_cert=ca_cert,
+                    cert_key=cert_key,
+                    cert_cert=cert_cert,
+                    timeout=timeout)
 
-        self.username = username
-        self.password = password
+            self.username = username
+            self.password = password
+
+            # Now test if this client is really working.
+            try:
+                status = self.status()
+                LOG.info("Status = %r", status)
+                created_working_client = True
+            except Exception:
+                LOG.exception("etcd3gw client not working")
+                # If there are no more possible API paths to try, reraise the
+                # current exception.
+                if not possible_api_paths:
+                    raise
 
     def authenticate(self):
         # When authenticating, there mustn't be an Authorization
@@ -504,14 +527,12 @@ def _get_client():
                                       cert_key=calico_cfg.etcd_key_file,
                                       cert_cert=calico_cfg.etcd_cert_file,
                                       username=calico_cfg.etcd_username,
-                                      password=calico_cfg.etcd_password,
-                                      api_path=calico_cfg.etcd_api_path)
+                                      password=calico_cfg.etcd_password)
         else:
             LOG.info("TLS disabled, using HTTP to connect to etcd.")
             _client = Etcd3AuthClient(host=calico_cfg.etcd_host,
                                       port=calico_cfg.etcd_port,
                                       protocol="http",
                                       username=calico_cfg.etcd_username,
-                                      password=calico_cfg.etcd_password,
-                                      api_path=calico_cfg.etcd_api_path)
+                                      password=calico_cfg.etcd_password)
     return _client
