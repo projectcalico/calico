@@ -779,9 +779,12 @@ func epsToSliceWithZones(eps *v1.Endpoints, zones []string) *discovery.EndpointS
 		AddressType: discovery.AddressTypeIPv4,
 	}
 
+	zone := ""
 	for i, subset := range eps.Subsets {
 		for j, addr := range subset.Addresses {
-			zone := zones[j]
+			if zones != nil {
+				zone = zones[j]
+			}
 			slice.Endpoints = append(slice.Endpoints, discovery.Endpoint{
 				Addresses: []string{addr.IP},
 				Hostname:  &addr.Hostname,
@@ -825,53 +828,5 @@ func epsToSliceWithZones(eps *v1.Endpoints, zones []string) *discovery.EndpointS
 }
 
 func epsToSlice(eps *v1.Endpoints) *discovery.EndpointSlice {
-	slice := &discovery.EndpointSlice{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "EndpointSlice",
-			APIVersion: "discovery.k8s.io/v1",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      eps.ObjectMeta.Name,
-			Namespace: eps.ObjectMeta.Namespace,
-			Labels: map[string]string{
-				"kubernetes.io/service-name": eps.ObjectMeta.Name,
-			},
-		},
-		AddressType: discovery.AddressTypeIPv4,
-	}
-
-	for i, subset := range eps.Subsets {
-		for _, addr := range subset.Addresses {
-			slice.Endpoints = append(slice.Endpoints, discovery.Endpoint{
-				Addresses: []string{addr.IP},
-				Hostname:  &addr.Hostname,
-				NodeName:  addr.NodeName,
-			})
-		}
-
-		for k, p := range subset.Ports {
-			port := p
-			ep := discovery.EndpointPort{
-				Port: &port.Port,
-			}
-
-			if port.Name != "" {
-				ep.Name = &port.Name
-			} else {
-				name := fmt.Sprintf("port-%d-%d-%d", i, k, port.Port)
-				ep.Name = &name
-			}
-
-			if port.Protocol != "" {
-				ep.Protocol = &port.Protocol
-			} else {
-				tcp := v1.ProtocolTCP
-				ep.Protocol = &tcp
-			}
-
-			slice.Ports = append(slice.Ports, ep)
-		}
-	}
-
-	return slice
+	return epsToSliceWithZones(eps, nil)
 }
