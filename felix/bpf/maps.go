@@ -108,6 +108,11 @@ type MapWithExistsCheck interface {
 	ErrIsNotExists(error) bool
 }
 
+type MapWithUpdateWithFlags interface {
+	Map
+	UpdateWithFlags(k, v []byte, flags int) error
+}
+
 type MapParameters struct {
 	PinDir       string
 	Type         string
@@ -402,6 +407,16 @@ func (b *PinnedMap) Update(k, v []byte) error {
 		}
 	}
 	return UpdateMapEntry(b.fd, k, v)
+}
+
+func (b *PinnedMap) UpdateWithFlags(k, v []byte, flags int) error {
+	if b.perCPU {
+		// Per-CPU maps need a buffer of value-size * num-CPUs.
+		if len(v) < b.ValueSize*NumPossibleCPUs() {
+			return fmt.Errorf("Not enough data for per-cpu map entry")
+		}
+	}
+	return UpdateMapEntryWithFlags(b.fd, k, v, flags)
 }
 
 func (b *PinnedMap) Get(k []byte) ([]byte, error) {
