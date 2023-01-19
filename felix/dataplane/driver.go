@@ -362,6 +362,7 @@ func StartDataplaneDriver(configParams *config.Config,
 
 		if configParams.BPFExternalServiceMode == "dsr" {
 			dpConfig.BPFNodePortDSREnabled = true
+			dpConfig.BPFDSROptoutCIDRs = configParams.BPFDSROptoutCIDRs
 		}
 
 		intDP := intdataplane.NewIntDataplaneDriver(dpConfig)

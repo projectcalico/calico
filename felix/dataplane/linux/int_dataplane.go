@@ -197,6 +197,7 @@ type Config struct {
 	BPFConnTimeLBEnabled               bool
 	BPFMapRepin                        bool
 	BPFNodePortDSREnabled              bool
+	BPFDSROptoutCIDRs                  []string
 	BPFPSNATPorts                      numorstring.Port
 	BPFMapSizeRoute                    int
 	BPFMapSizeConntrack                int

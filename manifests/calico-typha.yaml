@@ -870,6 +870,13 @@ spec:
                   connections.  The only reason to disable it is for debugging purposes.  [Default:
                   true]'
                 type: boolean
+              bpfDSROptoutCIDRs:
+                description: BPFDSROptoutCIDRs is a list of CIDRs which are excluded
+                  from DSR. That is, clients in those CIDRs will accesses nodeports
+                  as if BPFExternalServiceMode was set to Tunnel.
+                items:
+                  type: string
+                type: array
               bpfDataIfacePattern:
                 description: BPFDataIfacePattern is a regular expression that controls
                   which interfaces Felix should attach BPF programs to in order to
