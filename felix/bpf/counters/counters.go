@@ -17,9 +17,9 @@ package counters
 import (
 	"encoding/binary"
 	"fmt"
+	"os"
 	"sort"
 
-	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/calico/felix/bpf"
@@ -27,15 +27,33 @@ import (
 
 const (
 	MaxCounterNumber    int = 14
-	counterMapKeySize   int = 4
+	counterMapKeySize   int = 8
 	counterMapValueSize int = 8
 )
 
 var (
-	// zeroKey is the key to the counters map, and it is set to 0 as it has only one entry
-	zeroKey = make([]byte, counterMapKeySize)
 	zeroVal = make([]byte, counterMapValueSize*MaxCounterNumber*bpf.NumPossibleCPUs())
 )
+
+type Key [8]byte
+
+func (k Key) AsBytes() []byte {
+	return k[:]
+}
+
+func NewKey(ifindex int, hook bpf.Hook) Key {
+	var k Key
+
+	binary.LittleEndian.PutUint32(k[:4], uint32(ifindex))
+	binary.LittleEndian.PutUint32(k[4:8], uint32(hook))
+
+	return k
+
+}
+
+func (k Key) IfIndex() int {
+	return int(binary.LittleEndian.Uint32(k[:4]))
+}
 
 // The following values are used as index to counters map, and should be kept in sync
 // with constants defined in bpf-gpl/reasons.h.
@@ -138,48 +156,15 @@ func Descriptions() DescList {
 	return descriptions
 }
 
-type Counters struct {
-	iface    string
-	numOfCpu int
-	maps     []bpf.Map
-}
-
-func NewCounters(iface string) *Counters {
-	cntr := Counters{
-		iface:    iface,
-		numOfCpu: bpf.NumPossibleCPUs(),
-		maps:     make([]bpf.Map, len(bpf.Hooks)),
-	}
-
-	for index, hook := range bpf.Hooks {
-		pinDir := bpf.MapPinDir(unix.BPF_MAP_TYPE_PERCPU_ARRAY,
-			bpf.CountersMapName(), iface, hook)
-		cntr.maps[index] = Map(pinDir)
-		logrus.Debugf("%s counter map pin dir: %v", hook, pinDir)
-	}
-	return &cntr
-}
-
-func (c Counters) Read(index int) ([]uint64, error) {
-	err := c.maps[index].Open()
-	if err != nil {
-		return []uint64{}, fmt.Errorf("failed to open counters map. err=%w", err)
-	}
-	defer func() {
-		err := c.maps[index].Close()
-		if err != nil {
-			logrus.WithError(err).Errorf("failed to close counters map.")
-		}
-	}()
-
-	values, err := c.maps[index].Get(zeroKey)
+func Read(m bpf.Map, ifindex int, hook bpf.Hook) ([]uint64, error) {
+	values, err := m.Get(NewKey(ifindex, hook).AsBytes())
 	if err != nil {
 		return []uint64{}, fmt.Errorf("failed to read counters map. err=%w", err)
 	}
 
 	bpfCounters := make([]uint64, MaxCounterNumber)
 	for i := range bpfCounters {
-		for cpu := 0; cpu < c.numOfCpu; cpu++ {
+		for cpu := 0; cpu < bpf.NumPossibleCPUs(); cpu++ {
 			begin := i*counterMapValueSize + cpu*MaxCounterNumber*counterMapValueSize
 			data := uint64(binary.LittleEndian.Uint32(values[begin : begin+counterMapValueSize]))
 			bpfCounters[i] += data
@@ -188,21 +173,19 @@ func (c Counters) Read(index int) ([]uint64, error) {
 	return bpfCounters, nil
 }
 
-func (c *Counters) Flush(index int) error {
-	err := c.maps[index].Open()
-	if err != nil {
-		return fmt.Errorf("failed to open counters map. err=%v", err)
-	}
-	defer func() {
-		err := c.maps[index].Close()
-		if err != nil {
-			logrus.WithError(err).Errorf("failed to close counters map.")
-		}
-	}()
-
-	err = c.maps[index].Update(zeroKey, zeroVal)
-	if err != nil {
+func Flush(m bpf.Map, ifindex int, hook bpf.Hook) error {
+	if err := m.(bpf.MapWithUpdateWithFlags).
+		UpdateWithFlags(NewKey(ifindex, hook).AsBytes(), zeroVal, unix.BPF_EXIST); err != nil {
 		return fmt.Errorf("failed to update counters map. err=%v", err)
+	}
+	return nil
+}
+
+func EnsureExists(m bpf.Map, ifindex int, hook bpf.Hook) error {
+	err := m.(bpf.MapWithUpdateWithFlags).
+		UpdateWithFlags(NewKey(ifindex, hook).AsBytes(), zeroVal, unix.BPF_NOEXIST)
+	if err != nil && !os.IsExist(err) {
+		return fmt.Errorf("failed to ensure counters map. err=%v", err)
 	}
 	return nil
 }
