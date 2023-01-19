@@ -337,3 +337,20 @@ type loggerRecorder struct{}
 
 func (r *loggerRecorder) Eventf(regarding runtime.Object, related runtime.Object, eventtype, reason, action, note string, args ...interface{}) {
 }
+
+func InvokeCategorizeEndpoints(svcMap k8sp.ServiceMap, epsMap k8sp.EndpointsMap, nodeLabels map[string]string) (clusterEndpoints, localEndpoints, allReachableEndpoints []k8sp.Endpoint, hasAnyEndpoints bool) {
+
+	// TODO - correct this because if the map has more than one entry then only the last entry would be used!
+	var svcInfo k8sp.ServicePort
+	for k := range svcMap {
+		svcInfo = svcMap[k]
+	}
+
+	var endpoints []k8sp.Endpoint
+	for k := range epsMap {
+		endpoints = epsMap[k]
+	}
+
+	clusterEndpoints, localEndpoints, allReachableEndpoints, hasAnyEndpoints = k8sp.CategorizeEndpoints(endpoints, svcInfo, nodeLabels)
+	return clusterEndpoints, localEndpoints, allReachableEndpoints, hasAnyEndpoints
+}
