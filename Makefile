@@ -125,6 +125,11 @@ helm-index:
 			     SEMAPHORE_WORKFLOW_FILE=../releases/calico/helmindex/update_helm.yml \
 			     $(MAKE) semaphore-run-workflow
 
+# Creates the tar file used for installing Calico on OpenShift.
+bin/ocp.tgz: manifests/ocp/
+	mkdir -p bin
+	tar czvf $@ -C manifests/ ocp
+
 ## Generates release notes for the given version.
 .PHONY: release-notes
 release-notes:
