@@ -16,6 +16,7 @@ package proxy_test
 
 import (
 	"fmt"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"net"
 	"runtime"
 	"time"
@@ -536,6 +537,133 @@ var _ = Describe("BPF Proxy", func() {
 		},
 		)
 	})
+
+	Describe("with k8s client and Topology Aware Hints", func() {
+		Context("filter endpoints by corresponding zone", func() {
+			var (
+				p   proxy.Proxy
+				dp  *mockSyncer
+				k8s *fake.Clientset
+			)
+
+			testTopologySvc := &v1.Service{
+				TypeMeta: typeMetaV1("Service"),
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "customer",
+					Namespace: "yaobank",
+					Labels: map[string]string{
+						"app": "customer",
+					},
+					Annotations: map[string]string{
+						v1.AnnotationTopologyAwareHints: "Auto",
+					},
+				},
+				Spec: v1.ServiceSpec{
+					ClusterIP: "10.96.98.148",
+					Ports: []v1.ServicePort{
+						{
+							Name:       "http",
+							NodePort:   30180,
+							Port:       80,
+							Protocol:   v1.ProtocolTCP,
+							TargetPort: intstr.FromInt(80),
+						},
+					},
+					Type: v1.ServiceTypeNodePort,
+					Selector: map[string]string{
+						"app": "customer",
+					},
+				},
+			}
+
+			testTopologyEndpoint := &v1.Endpoints{
+				TypeMeta: typeMetaV1("Endpoints"),
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "customer",
+					Namespace: "yaobank",
+					Labels: map[string]string{
+						"app": "customer",
+					},
+				},
+				Subsets: []v1.EndpointSubset{
+					{
+						Addresses: []v1.EndpointAddress{
+							{
+								IP:       "192.168.152.3",
+								NodeName: strPtr("stevepro-bz-wyo0-worker2"),
+								TargetRef: &v1.ObjectReference{
+									Kind:      "Pod",
+									Name:      "customer-5dd6b8478-k9l5l",
+									Namespace: "yaobank",
+								},
+							},
+							{
+								IP:       "192.168.185.67",
+								NodeName: strPtr("stevepro-bz-wyo0-worker3"),
+								TargetRef: &v1.ObjectReference{
+									Kind:      "Pod",
+									Name:      "customer-5dd6b8478-dswzk",
+									Namespace: "yaobank",
+								},
+							},
+						},
+						Ports: []v1.EndpointPort{
+							{
+								Name:     "http",
+								Port:     80,
+								Protocol: v1.ProtocolTCP,
+							},
+						},
+					},
+				},
+			}
+
+			zones := []string{"us-west-2a", "us-west-2b"}
+			testTopologySvcEpsSlice := epsToSliceWithZones(testTopologyEndpoint, zones)
+
+			k8s = fake.NewSimpleClientset(testTopologySvc, testTopologySvcEpsSlice)
+
+			BeforeEach(func() {
+				By("creating proxy with fake client and mock syncer", func() {
+					var err error
+
+					syncStop = make(chan struct{})
+					dp = newMockSyncer(syncStop)
+
+					opts := []proxy.Option{proxy.WithImmediateSync()}
+
+					p, err = proxy.New(k8s, dp, "testnode", opts...)
+					Expect(err).NotTo(HaveOccurred())
+				})
+			})
+
+			AfterEach(func() {
+				By("stopping the proxy", func() {
+					close(syncStop)
+					p.Stop()
+				})
+			})
+
+			It("should invoke k8s CategorizeEndpoints", func() {
+
+				By("successfully syncing the service and endpoint maps", func() {
+					dp.checkState(func(s proxy.DPSyncerState) {
+						Expect(len(s.SvcMap)).To(Equal(1))
+						Expect(len(s.EpsMap)).To(Equal(1))
+
+						// Test Topology Aware Hints function.
+						nodeLabels := map[string]string{v1.LabelTopologyZone: "us-west-2a"}
+						clusterEndpoints, localEndpoints, allReachableEndpoints, hasAnyEndpoints := proxy.InvokeCategorizeEndpoints(s.SvcMap, s.EpsMap, nodeLabels)
+						Expect(len(clusterEndpoints)).To(Equal(1))
+						Expect(len(localEndpoints)).To(Equal(0))
+						Expect(len(allReachableEndpoints)).To(Equal(1))
+						Expect(hasAnyEndpoints).To(BeTrue())
+					})
+				})
+			})
+
+		})
+	})
 })
 
 type mockSyncer struct {
@@ -635,7 +763,7 @@ func strPtr(s string) *string {
 	return &s
 }
 
-func epsToSlice(eps *v1.Endpoints) *discovery.EndpointSlice {
+func epsToSliceWithZones(eps *v1.Endpoints, zones []string) *discovery.EndpointSlice {
 	slice := &discovery.EndpointSlice{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "EndpointSlice",
@@ -651,16 +779,28 @@ func epsToSlice(eps *v1.Endpoints) *discovery.EndpointSlice {
 		AddressType: discovery.AddressTypeIPv4,
 	}
 
+	zone := ""
 	for i, subset := range eps.Subsets {
-		for _, addr := range subset.Addresses {
+		for j, addr := range subset.Addresses {
+			if zones != nil {
+				zone = zones[j]
+			}
 			slice.Endpoints = append(slice.Endpoints, discovery.Endpoint{
 				Addresses: []string{addr.IP},
 				Hostname:  &addr.Hostname,
 				NodeName:  addr.NodeName,
+				Hints: &discovery.EndpointHints{
+					ForZones: []discovery.ForZone{
+						{
+							Name: zone,
+						},
+					},
+				},
+				Zone: strPtr(zone),
 			})
 		}
 
-		for j, p := range subset.Ports {
+		for k, p := range subset.Ports {
 			port := p
 			ep := discovery.EndpointPort{
 				Port: &port.Port,
@@ -669,7 +809,7 @@ func epsToSlice(eps *v1.Endpoints) *discovery.EndpointSlice {
 			if port.Name != "" {
 				ep.Name = &port.Name
 			} else {
-				name := fmt.Sprintf("port-%d-%d-%d", i, j, port.Port)
+				name := fmt.Sprintf("port-%d-%d-%d", i, k, port.Port)
 				ep.Name = &name
 			}
 
@@ -685,4 +825,8 @@ func epsToSlice(eps *v1.Endpoints) *discovery.EndpointSlice {
 	}
 
 	return slice
+}
+
+func epsToSlice(eps *v1.Endpoints) *discovery.EndpointSlice {
+	return epsToSliceWithZones(eps, nil)
 }
