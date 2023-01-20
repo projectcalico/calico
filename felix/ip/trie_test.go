@@ -65,7 +65,7 @@ var _ = Describe("CIDRTrie tests", func() {
 	var trie *ip.CIDRTrie
 
 	BeforeEach(func() {
-		trie = &ip.CIDRTrie{}
+		trie = ip.NewCIDRTrie()
 	})
 
 	update := func(cidr string) {
@@ -112,7 +112,7 @@ var _ = Describe("CIDRTrie tests", func() {
 
 	Context("IPv4", func() {
 		BeforeEach(func() {
-			trie = &ip.CIDRTrie{}
+			trie = ip.NewCIDRTrie()
 		})
 
 		It("should allow inserting a single CIDR", func() {
@@ -180,7 +180,7 @@ var _ = Describe("CIDRTrie tests", func() {
 
 	Context("IPv6", func() {
 		BeforeEach(func() {
-			trie = &ip.CIDRTrie{}
+			trie = ip.NewCIDRTrie()
 		})
 
 		It("should allow inserting a single CIDR", func() {
@@ -285,7 +285,7 @@ var _ = Describe("CIDRTrie tests", func() {
 	Context("LPM", func() {
 		Context("IPv4", func() {
 			BeforeEach(func() {
-				trie = &ip.CIDRTrie{}
+				trie = ip.NewCIDRTrie()
 			})
 
 			Context("single node", func() {
@@ -351,7 +351,7 @@ var _ = Describe("CIDRTrie tests", func() {
 
 		Context("IPv6", func() {
 			BeforeEach(func() {
-				trie = &ip.CIDRTrie{}
+				trie = ip.NewCIDRTrie()
 			})
 
 			Context("single node", func() {

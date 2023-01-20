@@ -236,7 +236,7 @@ type LPMv4 struct {
 
 func NewLPMv4() *LPMv4 {
 	return &LPMv4{
-		t: new(ip.CIDRTrie),
+		t: ip.NewCIDRTrie(),
 	}
 }
 
