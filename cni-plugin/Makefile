@@ -38,6 +38,7 @@ CNI_SPEC_VERSION?=0.3.1
 # Markers for various images we produce.
 DEPLOY_CONTAINER_STATIC_MARKER=cni_deploy_container-$(ARCH).created
 DEPLOY_CONTAINER_FIPS_MARKER=cni_deploy_container-$(ARCH)-fips.created
+DEPLOY_CONTAINER_MARKER_WINDOWS=cni_deploy_container-windows.created
 
 # Set FIPS to true to enable a FIPS compliant build using BoringSSL and CGO.
 # Note that this produces binaries that are dynamically linked, and so have dependencies
@@ -60,9 +61,13 @@ clean:
 	# Clean .created files which indicate images / releases have been built.
 	find . -name '.*.created*' -type f -delete
 	find . -name '.*.published*' -type f -delete
-	rm -rf $(BIN) bin $(DEPLOY_CONTAINER_MARKER) .go-pkg-cache pkg/install/install.test 
+	rm -rf $(BIN) bin $(DEPLOY_CONTAINER_MARKER) $(DEPLOY_CONTAINER_MARKER_WINDOWS) .go-pkg-cache pkg/install/install.test
 	rm -f *.created
 	rm -rf config/
+		docker buildx rm img-builder 
+
+clean-windows:
+	docker buildx rm img-builder
 
 ###############################################################################
 # Building the binary
@@ -71,7 +76,7 @@ build: $(BIN)/install $(BIN)/calico $(BIN)/calico-ipam
 ifeq ($(ARCH),amd64)
 # Go only supports amd64 for Windows builds.
 BIN_WIN=bin/windows
-build: $(BIN_WIN)/calico.exe $(BIN_WIN)/calico-ipam.exe
+build: $(BIN_WIN)/install.exe $(BIN_WIN)/calico.exe $(BIN_WIN)/calico-ipam.exe
 endif
 # If ARCH is arm based, find the requested version/variant
 ifeq ($(word 1,$(subst v, ,$(ARCH))),arm)
@@ -97,19 +102,25 @@ else
 endif
 
 ## Build the Calico network plugin and ipam plugins for Windows
-$(BIN_WIN)/calico.exe $(BIN_WIN)/calico-ipam.exe: $(SRC_FILES)
+$(BIN_WIN)/install.exe $(BIN_WIN)/calico.exe $(BIN_WIN)/calico-ipam.exe: $(SRC_FILES)
 	$(DOCKER_RUN) \
 	-e GOOS=windows \
 	-e CGO_ENABLED=1 \
 	    $(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
 		go build -v -buildvcs=false -o $(BIN_WIN)/calico.exe -ldflags "$(LDFLAGS)" $(PACKAGE_NAME)/cmd/calico && \
-		go build -v -buildvcs=false -o $(BIN_WIN)/calico-ipam.exe -ldflags "$(LDFLAGS)" $(PACKAGE_NAME)/cmd/calico'
+		go build -v -buildvcs=false -o $(BIN_WIN)/calico-ipam.exe -ldflags "$(LDFLAGS)" $(PACKAGE_NAME)/cmd/calico\ 
+		go build -v -buildvcs=false -o $(BIN_WIN)/install.exe -ldflags "$(LDFLAGS)" $(PACKAGE_NAME)/cmd/calico'
 
 
 ###############################################################################
 # Building the image
 ###############################################################################
+BIN=bin/$(ARCH)
 image: $(DEPLOY_CONTAINER_MARKER)
+ifeq ($(ARCH),amd64)
+# Go only supports amd64 for Windows builds.
+image: $(DEPLOY_CONTAINER_MARKER_WINDOWS)
+endif
 image-all: $(addprefix sub-image-,$(VALIDARCHES)) sub-image-fips-amd64
 sub-image-%:
 	$(MAKE) image ARCH=$*
@@ -117,7 +128,7 @@ sub-image-fips-%:
 	$(MAKE) image FIPS=true ARCH=$*
 
 # Builds the statically compiled binaries into a container.
-$(DEPLOY_CONTAINER_STATIC_MARKER): Dockerfile.$(ARCH) build fetch-cni-bins
+$(DEPLOY_CONTAINER_STATIC_MARKER): Dockerfile.$(ARCH) build $(BIN)/fetch-cni-bins
 	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BIN) -t $(CNI_PLUGIN_IMAGE):latest-$(ARCH) -f Dockerfile.$(ARCH) . --load
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
@@ -128,8 +139,13 @@ $(DEPLOY_CONTAINER_FIPS_MARKER): Dockerfile.$(ARCH) build fetch-cni-bins
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
 	touch $@
 
-.PHONY: fetch-cni-bins
-fetch-cni-bins: $(BIN)/flannel $(BIN)/loopback $(BIN)/host-local $(BIN)/portmap $(BIN)/tuning $(BIN)/bandwidth
+$(DEPLOY_CONTAINER_MARKER_WINDOWS): Dockerfile-windows build 
+	docker buildx create --name img-builder --use --platform windows/amd64 
+	GO111MODULE=on docker buildx build --platform windows/amd64 --output=type=registry --pull -t $(CNI_PLUGIN_IMAGE):latest-$(ARCH)-windows --build-arg GIT_VERSION=$(GIT_VERSION) -f Dockerfile-windows .
+	docker buildx rm img-builder 
+
+$(BIN)/fetch-cni-bins: $(BIN)/flannel $(BIN)/loopback $(BIN)/host-local $(BIN)/portmap $(BIN)/tuning $(BIN)/bandwidth
+$(WIN_BIN)/fetch-cni-bins: $(WIN_BIN)/flannel
 
 $(BIN)/loopback $(BIN)/host-local $(BIN)/portmap $(BIN)/tuning $(BIN)/bandwidth:
 	mkdir -p $(BIN)
