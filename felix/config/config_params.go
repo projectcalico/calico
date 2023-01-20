@@ -379,7 +379,7 @@ type Config struct {
 	Variant string `config:"string;Calico"`
 
 	// Configures MTU auto-detection.
-	MTUIfacePattern *regexp.Regexp `config:"regexp;^((en|wl|ww|sl|ib)[copsx].*|(eth|wlan|wwan).*)"`
+	MTUIfacePattern *regexp.Regexp `config:"regexp;^((en|wl|ww|sl|ib)[Pcopsx].*|(eth|wlan|wwan).*)"`
 
 	// Encapsulation information calculated from IP Pools and FelixConfiguration (VXLANEnabled and IpInIpEnabled)
 	Encapsulation Encapsulation
