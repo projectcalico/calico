@@ -4006,8 +4006,6 @@ status:
 
 ---
 # Source: crds/operator.tigera.io_apiservers_crd.yaml
-
----
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -5367,8 +5365,6 @@ status:
 
 ---
 # Source: crds/operator.tigera.io_imagesets_crd.yaml
-
----
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -5447,8 +5443,6 @@ status:
 
 ---
 # Source: crds/operator.tigera.io_installations_crd.yaml
-
----
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -17708,8 +17702,6 @@ status:
 
 ---
 # Source: crds/operator.tigera.io_tigerastatuses_crd.yaml
-
----
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
