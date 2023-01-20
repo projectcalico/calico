@@ -9,7 +9,7 @@
 static CALI_BPF_INLINE int calico_unittest_entry (struct __sk_buff *skb)
 {
 	struct cali_tc_ctx ctx = {
-		.counters = counters_get(),
+		.counters = counters_get(skb->ifindex),
 		.skb = skb,
 		.fwd = {
 			.res = TC_ACT_UNSPEC,
