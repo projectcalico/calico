@@ -151,6 +151,35 @@ endif
 GO_BUILD_IMAGE ?= calico/go-build
 CALICO_BUILD    = $(GO_BUILD_IMAGE):$(GO_BUILD_VER)
 
+
+# We use BoringCrypto as FIPS validated cryptography in order to allow users to run in FIPS Mode (amd64 only).
+ifeq ($(ARCH), $(filter $(ARCH),amd64))
+GOEXPERIMENT?=boringcrypto
+TAGS?=boringcrypto,osusergo,netgo
+CGO_ENABLED?=1
+CHECK_BORINGSSL=go tool nm bin/* > bin/tags.txt && grep '_Cfunc__goboringcrypto_'bin/tags.txt 1> /dev/null
+else
+CGO_ENABLED?=0
+CHECK_BORINGSSL=echo 'Skipping boringSSL check'
+endif
+
+# Build a static binary with boring crypto support.
+# This function expects you to pass in two arguments:
+#   1st arg: path/to/input/package(s)
+#   2nd arg: path/to/output/binary
+# Only when arch = amd64 it will use boring crypto to build the binary.
+# Uses VERSION_FLAGS when set.
+# TODO: once all images can be built using this function, we can revert the $(DOCKER_RUN)... line with $(DOCKER_BUILD_CGO)
+define build_cgo_boring_binary
+	echo "building a static binary..."
+	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) -e CGO_LDFLAGS=$(CGO_LDFLAGS) -e CGO_CFLAGS=$(CGO_CFLAGS) $(GO_BUILD_IMAGE):$(GO19_BUILD_VER) \
+		sh -c '$(GIT_CONFIG_SSH) \
+		GOEXPERIMENT=$(GOEXPERIMENT) go build -o $(2)  \
+		-tags $(TAGS) -v -buildvcs=false \
+		-ldflags "$(VERSION_FLAGS) -linkmode external -extldflags -static" \
+		$(1)'
+endef
+
 # Images used in build / test across multiple directories.
 PROTOC_CONTAINER=calico/protoc:$(PROTOC_VER)-$(BUILDARCH)
 ETCD_IMAGE ?= quay.io/coreos/etcd:$(ETCD_VERSION)-$(ARCH)
@@ -161,8 +190,7 @@ endif
 UBI_IMAGE ?= registry.access.redhat.com/ubi8/ubi-minimal:$(UBI_VERSION)
 
 ifeq ($(GIT_USE_SSH),true)
-	GIT_CONFIG_SSH ?= git config --global url."ssh://git@github.com/".insteadOf "https://github.com/" && \
-	git config --global --add safe.directory "*";
+	GIT_CONFIG_SSH ?= git config --global url."ssh://git@github.com/".insteadOf "https://github.com/";
 endif
 
 # Get version from git.
