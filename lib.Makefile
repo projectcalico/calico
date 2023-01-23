@@ -157,10 +157,8 @@ ifeq ($(ARCH), $(filter $(ARCH),amd64))
 GOEXPERIMENT?=boringcrypto
 TAGS?=boringcrypto,osusergo,netgo
 CGO_ENABLED?=1
-CHECK_BORINGSSL=go tool nm bin/* > bin/tags.txt && grep '_Cfunc__goboringcrypto_'bin/tags.txt 1> /dev/null
 else
 CGO_ENABLED?=0
-CHECK_BORINGSSL=echo 'Skipping boringSSL check'
 endif
 
 # Build a static binary with boring crypto support.
@@ -172,7 +170,7 @@ endif
 # TODO: once all images can be built using this function, we can revert the $(DOCKER_RUN)... line with $(DOCKER_BUILD_CGO)
 define build_cgo_boring_binary
 	echo "building a static binary..."
-	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) -e CGO_LDFLAGS=$(CGO_LDFLAGS) -e CGO_CFLAGS=$(CGO_CFLAGS) $(GO_BUILD_IMAGE):$(GO19_BUILD_VER) \
+	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(GO_BUILD_IMAGE):$(GO19_BUILD_VER) \
 		sh -c '$(GIT_CONFIG_SSH) \
 		GOEXPERIMENT=$(GOEXPERIMENT) go build -o $(2)  \
 		-tags $(TAGS) -v -buildvcs=false \
