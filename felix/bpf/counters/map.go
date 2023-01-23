@@ -24,19 +24,15 @@ const PolicyMapKeySize = 8
 const PolicyMapValueSize = 8
 
 var MapParameters = bpf.MapParameters{
-	Type:       "percpu_array",
-	KeySize:    counterMapKeySize, // __u32
+	Type:       "percpu_hash",
+	KeySize:    counterMapKeySize,
 	ValueSize:  counterMapValueSize * MaxCounterNumber,
-	MaxEntries: 1,
-	Name:       bpf.CountersMapName(),
+	MaxEntries: 20000,
+	Name:       "cali_counters",
+	Version:    2,
 }
 
-func Map(pinDir string) bpf.Map {
-	MapParameters.PinDir = pinDir
-	return bpf.NewPinnedMap(MapParameters)
-}
-
-func MapForTest() bpf.Map {
+func Map() bpf.Map {
 	return bpf.NewPinnedMap(MapParameters)
 }
 

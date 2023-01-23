@@ -39,14 +39,12 @@ void bpf_obj_load(struct bpf_object *obj) {
 	set_errno(bpf_object__load(obj));
 }
 
-struct bpf_tc_opts bpf_tc_program_attach(struct bpf_object *obj, char *secName, int ifIndex, int isIngress) {
-
-	DECLARE_LIBBPF_OPTS(bpf_tc_hook, hook, .attach_point = BPF_TC_EGRESS);
+struct bpf_tc_opts bpf_tc_program_attach(struct bpf_object *obj, char *secName, int ifIndex, bool ingress)
+{
+	DECLARE_LIBBPF_OPTS(bpf_tc_hook, hook,
+			.attach_point = ingress ? BPF_TC_INGRESS : BPF_TC_EGRESS,
+			);
 	DECLARE_LIBBPF_OPTS(bpf_tc_opts, attach);
-
-	if (isIngress) {
-		hook.attach_point = BPF_TC_INGRESS;
-	}
 
 	attach.prog_fd = bpf_program__fd(bpf_object__find_program_by_name(obj, secName));
 	if (attach.prog_fd < 0) {
