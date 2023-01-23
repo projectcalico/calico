@@ -2321,10 +2321,6 @@ func PolicyDebugJSONFileName(iface, polDir string, ipFamily proto.IPVersion) str
 	return path.Join(RuntimePolDir, fmt.Sprintf("%s_%s_v%d.json", iface, polDir, ipFamily))
 }
 
-func CountersMapName() string {
-	return "cali_counters"
-}
-
 func MapPinDir(typ int, name, iface string, hook Hook) string {
 	PinBaseDir := path.Join(DefaultBPFfsPath, "tc")
 	subDir := "globals"
@@ -2389,8 +2385,7 @@ func ListPerEPMaps() (map[int]string, error) {
 		if strings.Contains(p, "globals") {
 			return nil
 		}
-		if strings.HasPrefix(info.Name(), JumpMapName()) ||
-			strings.HasPrefix(info.Name(), CountersMapName()) {
+		if strings.HasPrefix(info.Name(), JumpMapName()) {
 			log.WithField("path", p).Debug("Examining map")
 
 			out, err := exec.Command("bpftool", "map", "show", "pinned", p).Output()
