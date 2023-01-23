@@ -28,7 +28,7 @@ var MapParameters = bpf.MapParameters{
 	KeySize:    counterMapKeySize,
 	ValueSize:  counterMapValueSize * MaxCounterNumber,
 	MaxEntries: 20000,
-	Name:       bpf.CountersMapName(),
+	Name:       "cali_counters",
 	Version:    2,
 }
 
