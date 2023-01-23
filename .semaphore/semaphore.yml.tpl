@@ -630,8 +630,6 @@ blocks:
     when: "false or change_in(['/lib.Makefile', '/crypto/'])"
   dependencies: ["Prerequisites"]
   task:
-    secrets:
-      - name: test-customer-license
     prologue:
       commands:
         - cd crypto
