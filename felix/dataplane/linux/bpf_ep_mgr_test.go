@@ -190,6 +190,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		ruleRenderer         rules.RuleRenderer
 		filterTableV4        iptablesTable
 		ifStateMap           *mock.Map
+		countersMap          *mock.Map
 	)
 
 	BeforeEach(func() {
@@ -210,6 +211,10 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		maps.CtMap = conntrack.Map()
 		ifStateMap = mock.NewMockMap(ifstate.MapParams)
 		maps.IfStateMap = ifStateMap
+		cparams := counters.MapParameters
+		cparams.ValueSize *= bpf.NumPossibleCPUs()
+		countersMap = mock.NewMockMap(cparams)
+		maps.CountersMap = countersMap
 		maps.RuleCountersMap = mock.NewMockMap(counters.PolicyMapParameters)
 		rrConfigNormal = rules.Config{
 			IPIPEnabled:                 true,
@@ -795,6 +800,32 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			err = bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(dp.routes).To(HaveLen(0))
+		})
+	})
+
+	Describe("counters", func() {
+		It("should clean up after restart", func() {
+			err := counters.EnsureExists(countersMap, 12345, bpf.HookEgress)
+			Expect(err).NotTo(HaveOccurred())
+			err = counters.EnsureExists(countersMap, 12345, bpf.HookIngress)
+			Expect(err).NotTo(HaveOccurred())
+			err = counters.EnsureExists(countersMap, 12345, bpf.HookXDP)
+			Expect(err).NotTo(HaveOccurred())
+			err = counters.EnsureExists(countersMap, 54321, bpf.HookEgress)
+			Expect(err).NotTo(HaveOccurred())
+			err = counters.EnsureExists(countersMap, 54321, bpf.HookIngress)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(countersMap.Contents).To(HaveLen(5))
+
+			genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
+			genWLUpdate("cali12345")()
+
+			err = bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(countersMap.Contents).To(HaveLen(0))
+			// The BPF programs will create the counters the first time they
 		})
 	})
 

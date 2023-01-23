@@ -27,8 +27,4 @@ enum calico_reason {
 	CALI_REASON_NATIFACE,
 };
 
-#define DENY_REASON(ctx, res) 	\
-	(ctx)->fwd.reason = res; 	\
-	COUNTER_INC(ctx, res);
-
 #endif /* __CALI_REASONS_H__ */
