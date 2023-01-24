@@ -173,7 +173,7 @@ func (ap *AttachPoint) AttachProgram() (int, error) {
 		defer obj.Close()
 	}
 
-	progId, err := obj.AttachClassifier(SectionName(ap.Type, ap.ToOrFrom), ap.Iface, ap.Hook == bpf.HookIngress)
+	progId, err := obj.AttachClassifier("calico_tc_main", ap.Iface, ap.Hook == bpf.HookIngress)
 	if err != nil {
 		logCxt.Warnf("Failed to attach to TC section %s", SectionName(ap.Type, ap.ToOrFrom))
 		return -1, err
