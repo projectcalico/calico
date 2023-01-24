@@ -39,8 +39,8 @@ const (
 )
 
 const (
-	ProgIndexNoDebug = iota
-	ProgIndexDebug
+	ProgIndexPreamble = iota
+	ProgIndexMain
 	ProgIndexPolicy
 	ProgIndexAllowed
 	ProgIndexIcmp
@@ -52,6 +52,9 @@ const (
 	ProgIndexV6Icmp
 	ProgIndexV6Drop
 	ProgIndexEnd
+
+	ProgIndexDebug   = ProgIndexMain
+	ProgIndexNoDebug = ProgIndexMain
 )
 
 const (
@@ -61,16 +64,16 @@ const (
 )
 
 var ProgramNames = []string{
-	"", /* reserved for filter program */
-	"", /* reserved for filter program */
+	"", // tc preamble
 	/* ipv4 */
+	"calico_tc_main",
 	"calico_tc_norm_pol_tail",
 	"calico_tc_skb_accepted_entrypoint",
 	"calico_tc_skb_send_icmp_replies",
 	"calico_tc_skb_drop",
 	"calico_tc_host_ct_conflict",
 	/* ipv6 */
-	"calico_tc",
+	"calico_tc6",
 	"calico_tc_norm_pol_tail",
 	"calico_tc_skb_accepted_entrypoint",
 	"calico_tc_skb_send_icmp_replies",
@@ -79,6 +82,7 @@ var ProgramNames = []string{
 
 var JumpMapIndexes = map[string][]int{
 	"IPv4": []int{
+		ProgIndexMain,
 		ProgIndexPolicy,
 		ProgIndexAllowed,
 		ProgIndexIcmp,
