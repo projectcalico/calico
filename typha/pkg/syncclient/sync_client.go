@@ -172,11 +172,9 @@ func (s *SyncerClient) Start(cxt context.Context) error {
 	// Connect synchronously so that we can return an error early if we can't connect at all.
 	s.logCxt.Info("Starting Typha client...")
 
-	// Defensive: set a sanity limit in case NextAddr() keeps finding new Typha addresses.
-	maxTries := len(s.discoverer.CachedTyphaAddrs()) * 2
-	if maxTries < 6 {
-		maxTries = 6
-	}
+	// Defensive: in case there's a bug in NextAddr() and it never stops returning values,
+	// set a sanity limit on the number of tries.
+	maxTries := s.calculateConnectionAttemptLimit(len(s.discoverer.CachedTyphaAddrs()))
 	remainingTries := maxTries
 	cat := discovery.NewConnAttemptTracker(s.discoverer)
 	for {
@@ -222,6 +220,20 @@ func (s *SyncerClient) Start(cxt context.Context) error {
 		}
 	}()
 	return nil
+}
+
+func (s *SyncerClient) calculateConnectionAttemptLimit(numDiscoveredTyphas int) int {
+	expectedNumTyphas := numDiscoveredTyphas
+	if expectedNumTyphas < 3 {
+		// Most clusters have at least 3 Typha instances so, if we discovered fewer instances,
+		// assume that there may be more starting up.
+		expectedNumTyphas = 3
+	}
+	// During upgrade, we expect all Typha instances to be replaced one by one so, for a safe
+	// upper bound on the number of potential connection attempts, assume that we try to connect
+	// to double the number of instances that we detected.
+	maxTries := expectedNumTyphas * 2
+	return maxTries
 }
 
 // SupportsNodeResourceUpdates waits for the Typha server to send a hello and returns true if
