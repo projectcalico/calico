@@ -12,13 +12,12 @@ canonical_url: '/getting-started/kubernetes/requirements'
 
 We test {{site.prodname}} {{page.version}} against the following Kubernetes versions.
 
-- v1.22
 - v1.23
 - v1.24
 - v1.25
 
 Due to changes in the Kubernetes API, {{site.prodname}} {{page.version}} will not work
-on Kubernetes v1.15 or below.  v1.16-v1.18 may work, but they are no longer tested. 
+on Kubernetes v1.20 or below.  v1.21 may work, but is no longer tested.
 Newer versions may also work, but we recommend upgrading to a version of {{site.prodname}}
 that is tested against the newer Kubernetes version.
 

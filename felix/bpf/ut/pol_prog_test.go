@@ -62,7 +62,7 @@ func TestLoadAllowAllProgram(t *testing.T) {
 func TestLoadProgramWithMapAccess(t *testing.T) {
 	RegisterTestingT(t)
 
-	ipsMap := ipsets.Map(&bpf.MapContext{})
+	ipsMap := ipsets.Map()
 	Expect(ipsMap.EnsureExists()).NotTo(HaveOccurred())
 	Expect(ipsMap.MapFD()).NotTo(BeZero())
 
@@ -2404,7 +2404,7 @@ func runTest(t *testing.T, tp testPolicy) {
 
 	setUpIPSets(tp.IPSets(), realAlloc, ipsMap)
 
-	jumpMap = jump.MapForTest(&bpf.MapContext{})
+	jumpMap = jump.MapForTest()
 	_ = unix.Unlink(jumpMap.Path())
 	err := jumpMap.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())

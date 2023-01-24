@@ -77,7 +77,7 @@ func (m *Map) MaxEntries() int {
 	return int(C.bpf_map__max_entries(m.bpfMap))
 }
 
-func (m *Map) SetMapSize(size uint32) error {
+func (m *Map) SetMapSize(size int) error {
 	_, err := C.bpf_map_set_max_entries(m.bpfMap, C.uint(size))
 	if err != nil {
 		return fmt.Errorf("setting %s map size failed %w", m.Name(), err)

@@ -14,7 +14,7 @@ FROM scratch
 COPY  --from=ubi /code /code
 COPY  --from=ubi /tmp /tmp
 
-# Copy the shared linux libs requred by apiserver identified by ldd bin/apiserver-ARCH`
+# Copy the shared linux libs required by apiserver identified by ldd bin/apiserver-ARCH`
 COPY --from=ubi /lib64/ld-linux-x86-64.so.2 /lib64/ld-linux-x86-64.so.2
 COPY --from=ubi /lib64/libpthread.so.0 /lib64/libpthread.so.0
 COPY --from=ubi /lib64/libc.so.6 /lib64/libc.so.6

@@ -1,4 +1,4 @@
-# This is a tech-preview manifest which installs the Calico API server. Note that this manfiest is liable to change
+# This is a tech-preview manifest which installs the Calico API server. Note that this manifest is liable to change
 # or be removed in future releases without further warning.
 #
 # Namespace and namespace-scoped resources.

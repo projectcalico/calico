@@ -20,8 +20,6 @@ import (
 	"fmt"
 	"os"
 
-	log "github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/arp"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
@@ -34,101 +32,99 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/state"
 )
 
-func CreateBPFMapContext(
-	ipsetsMapSize,
-	natFEMapSize,
-	natBEMapSize,
-	natAffMapSize,
-	routeMapSize,
-	ctMapSize,
-	ifstateSize int,
-	repinEnabled bool,
-) *bpf.MapContext {
-	bpfMapContext := &bpf.MapContext{
-		RepinningEnabled: repinEnabled,
-		MapSizes:         map[string]uint32{},
-	}
-	bpfMapContext.MapSizes[ipsets.MapParameters.VersionedName()] = uint32(ipsetsMapSize)
-	bpfMapContext.MapSizes[nat.FrontendMapParameters.VersionedName()] = uint32(natFEMapSize)
-	bpfMapContext.MapSizes[nat.BackendMapParameters.VersionedName()] = uint32(natBEMapSize)
-	bpfMapContext.MapSizes[nat.AffinityMapParameters.VersionedName()] = uint32(natAffMapSize)
-	bpfMapContext.MapSizes[routes.MapParameters.VersionedName()] = uint32(routeMapSize)
-	bpfMapContext.MapSizes[conntrack.MapParams.VersionedName()] = uint32(ctMapSize)
-
-	bpfMapContext.MapSizes[state.MapParameters.VersionedName()] = uint32(state.MapParameters.MaxEntries)
-	bpfMapContext.MapSizes[arp.MapParams.VersionedName()] = uint32(arp.MapParams.MaxEntries)
-	bpfMapContext.MapSizes[failsafes.MapParams.VersionedName()] = uint32(failsafes.MapParams.MaxEntries)
-	bpfMapContext.MapSizes[nat.SendRecvMsgMapParameters.VersionedName()] = uint32(nat.SendRecvMsgMapParameters.MaxEntries)
-	bpfMapContext.MapSizes[nat.CTNATsMapParameters.VersionedName()] = uint32(nat.CTNATsMapParameters.MaxEntries)
-	bpfMapContext.MapSizes[ifstate.MapParams.VersionedName()] = uint32(ifstateSize)
-
-	return bpfMapContext
+type Maps struct {
+	IpsetsMap       bpf.Map
+	StateMap        bpf.Map
+	ArpMap          bpf.Map
+	FailsafesMap    bpf.Map
+	FrontendMap     bpf.Map
+	BackendMap      bpf.Map
+	AffinityMap     bpf.Map
+	RouteMap        bpf.Map
+	CtMap           bpf.Map
+	SrMsgMap        bpf.Map
+	CtNatsMap       bpf.Map
+	IfStateMap      bpf.Map
+	RuleCountersMap bpf.Map
 }
 
-func MigrateDataFromOldMap(mc *bpf.MapContext) {
-	ctMap := mc.CtMap
-	err := ctMap.CopyDeltaFromOldMap()
-	if err != nil {
-		log.WithError(err).Debugf("Failed to copy data from old conntrack map %s", err)
+func (m *Maps) Destroy() {
+	maps := []bpf.Map{
+		m.IpsetsMap,
+		m.StateMap,
+		m.ArpMap,
+		m.FailsafesMap,
+		m.FrontendMap,
+		m.BackendMap,
+		m.AffinityMap,
+		m.RouteMap,
+		m.CtMap,
+		m.SrMsgMap,
+		m.CtNatsMap,
 	}
-}
 
-func DestroyBPFMaps(mc *bpf.MapContext) {
-	maps := []bpf.Map{mc.IpsetsMap, mc.StateMap, mc.ArpMap, mc.FailsafesMap, mc.FrontendMap,
-		mc.BackendMap, mc.AffinityMap, mc.RouteMap, mc.CtMap, mc.SrMsgMap, mc.CtNatsMap}
 	for _, m := range maps {
 		os.Remove(m.(*bpf.PinnedMap).Path())
 		m.(*bpf.PinnedMap).Close()
 	}
 }
 
-func CreateBPFMaps(mc *bpf.MapContext) error {
+func CreateBPFMaps() (*Maps, error) {
 	maps := []bpf.Map{}
+	ret := new(Maps)
 
-	mc.IpsetsMap = ipsets.Map(mc)
-	maps = append(maps, mc.IpsetsMap)
+	ret.IpsetsMap = ipsets.Map()
+	maps = append(maps, ret.IpsetsMap)
 
-	mc.StateMap = state.Map(mc)
-	maps = append(maps, mc.StateMap)
+	ret.StateMap = state.Map()
+	maps = append(maps, ret.StateMap)
 
-	mc.ArpMap = arp.Map(mc)
-	maps = append(maps, mc.ArpMap)
+	ret.ArpMap = arp.Map()
+	maps = append(maps, ret.ArpMap)
 
-	mc.FailsafesMap = failsafes.Map(mc)
-	maps = append(maps, mc.FailsafesMap)
+	ret.FailsafesMap = failsafes.Map()
+	maps = append(maps, ret.FailsafesMap)
 
-	mc.FrontendMap = nat.FrontendMap(mc)
-	maps = append(maps, mc.FrontendMap)
+	ret.FrontendMap = nat.FrontendMap()
+	maps = append(maps, ret.FrontendMap)
 
-	mc.BackendMap = nat.BackendMap(mc)
-	maps = append(maps, mc.BackendMap)
+	ret.BackendMap = nat.BackendMap()
+	maps = append(maps, ret.BackendMap)
 
-	mc.AffinityMap = nat.AffinityMap(mc)
-	maps = append(maps, mc.AffinityMap)
+	ret.AffinityMap = nat.AffinityMap()
+	maps = append(maps, ret.AffinityMap)
 
-	mc.RouteMap = routes.Map(mc)
-	maps = append(maps, mc.RouteMap)
+	ret.RouteMap = routes.Map()
+	maps = append(maps, ret.RouteMap)
 
-	mc.CtMap = conntrack.Map(mc)
-	maps = append(maps, mc.CtMap)
+	ret.CtMap = conntrack.Map()
+	maps = append(maps, ret.CtMap)
 
-	mc.SrMsgMap = nat.SendRecvMsgMap(mc)
-	maps = append(maps, mc.SrMsgMap)
+	ret.SrMsgMap = nat.SendRecvMsgMap()
+	maps = append(maps, ret.SrMsgMap)
 
-	mc.CtNatsMap = nat.AllNATsMsgMap(mc)
-	maps = append(maps, mc.CtNatsMap)
+	ret.CtNatsMap = nat.AllNATsMsgMap()
+	maps = append(maps, ret.CtNatsMap)
 
-	mc.IfStateMap = ifstate.Map(mc)
-	maps = append(maps, mc.IfStateMap)
+	ret.IfStateMap = ifstate.Map()
+	maps = append(maps, ret.IfStateMap)
 
-	mc.RuleCountersMap = counters.PolicyMap(mc)
-	maps = append(maps, mc.RuleCountersMap)
+	ret.RuleCountersMap = counters.PolicyMap()
+	maps = append(maps, ret.RuleCountersMap)
 
-	for _, bpfMap := range maps {
+	for i, bpfMap := range maps {
 		err := bpfMap.EnsureExists()
 		if err != nil {
-			return fmt.Errorf("Failed to create %s map, err=%w", bpfMap.GetName(), err)
+
+			for j := 0; j < i; j++ {
+				m := maps[j]
+				os.Remove(m.(*bpf.PinnedMap).Path())
+				m.(*bpf.PinnedMap).Close()
+			}
+
+			return nil, fmt.Errorf("failed to create %s map, err=%w", bpfMap.GetName(), err)
 		}
 	}
-	return nil
+
+	return ret, nil
 }

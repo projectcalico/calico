@@ -146,8 +146,8 @@ func (ap *AttachPoint) AttachProgram() (int, error) {
 			continue
 		}
 		// TODO: We need to set map size here like tc.
-		pinPath := bpf.MapPinPath(m.Type(), m.Name(), ap.Iface, bpf.HookXDP)
-		if err := m.SetPinPath(pinPath); err != nil {
+		pinDir := bpf.MapPinDir(m.Type(), m.Name(), ap.Iface, bpf.HookXDP)
+		if err := m.SetPinPath(path.Join(pinDir, m.Name())); err != nil {
 			return -1, fmt.Errorf("error pinning map %s: %w", m.Name(), err)
 		}
 	}

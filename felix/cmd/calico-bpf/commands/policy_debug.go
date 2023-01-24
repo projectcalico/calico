@@ -65,7 +65,7 @@ var policyDumpCmd = &cobra.Command{
 			hooks = []bpf.Hook{bpf.HookXDP}
 		}
 
-		rmap := counters.PolicyMap(&bpf.MapContext{})
+		rmap := counters.PolicyMap()
 		m, err := counters.LoadPolicyMap(rmap)
 		if err != nil {
 			log.WithError(err).Error("error loading rule counters map.")

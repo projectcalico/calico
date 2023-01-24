@@ -14,7 +14,6 @@
 # limitations under the License.
 
 import functools
-import socket
 
 from etcd3gw.client import Etcd3Client
 from etcd3gw.exceptions import Etcd3Exception
@@ -26,6 +25,11 @@ from etcd3gw.utils import _increment_last_byte
 from networking_calico.compat import cfg
 from networking_calico.compat import log
 
+# Incantations for enabling oslo_log debug logging, when desired:
+# log.register_options(cfg.CONF)
+# cfg.CONF.debug = True
+# cfg.CONF.use_stderr = True
+# log.setup(cfg.CONF, "demo")
 
 LOG = log.getLogger(__name__)
 
@@ -34,8 +38,8 @@ LOG = log.getLogger(__name__)
 # we leave plenty of headroom.
 CHUNK_SIZE_LIMIT = 200
 
-# Indicates that a put operation must update an existing resource and not create
-# a new resource.
+# Indicates that a put operation must update an existing resource and not
+# create a new resource.
 MUST_UPDATE = "MUST_UPDATE"
 
 
@@ -120,7 +124,8 @@ def put(key, value, mod_revision=None, lease=None, existing_value=None):
             'version': 0,
         }]
     elif mod_revision is not None:
-        # Write operation must _replace_ a KV entry with the specified revision.
+        # Write operation must _replace_ a KV entry with the specified
+        # revision.
         base64_key = _encode(key)
         txn['compare'] = [{
             'key': base64_key,
@@ -385,6 +390,11 @@ def logging_exceptions(fn):
 _client = None
 
 
+# Possible API paths for connecting to an etcd server.  Defined as a variable
+# here so that test code can override it after importing this file.
+_possible_etcd_api_paths = ['/v3/', '/v3beta/', '/v3alpha/']
+
+
 # Wrap Etcd3Client to authenticate when needed and add an
 # Authorization header to the session headers.
 #
@@ -407,15 +417,50 @@ class Etcd3AuthClient(Etcd3Client):
     def __init__(self, host='localhost', port=2379, protocol="http",
                  ca_cert=None, cert_key=None, cert_cert=None, timeout=None,
                  username=None, password=None):
-        super(Etcd3AuthClient, self).__init__(host=host,
-                                              port=port,
-                                              protocol=protocol,
-                                              ca_cert=ca_cert,
-                                              cert_key=cert_key,
-                                              cert_cert=cert_cert,
-                                              timeout=timeout)
-        self.username = username
-        self.password = password
+        global _possible_etcd_api_paths
+        possible_api_paths = _possible_etcd_api_paths
+        created_working_client = False
+        while not created_working_client:
+            try:
+                LOG.info("Try creating etcd3gw client with %s",
+                         possible_api_paths[0])
+                super(Etcd3AuthClient, self).__init__(
+                    host=host,
+                    port=port,
+                    protocol=protocol,
+                    ca_cert=ca_cert,
+                    cert_key=cert_key,
+                    cert_cert=cert_cert,
+                    timeout=timeout,
+                    api_path=possible_api_paths[0])
+                possible_api_paths = possible_api_paths[1:]
+            except TypeError:
+                # Indicates an old version of etcd3gw that doesn't support the
+                # api_path keyword.
+                possible_api_paths = []
+                super(Etcd3AuthClient, self).__init__(
+                    host=host,
+                    port=port,
+                    protocol=protocol,
+                    ca_cert=ca_cert,
+                    cert_key=cert_key,
+                    cert_cert=cert_cert,
+                    timeout=timeout)
+
+            self.username = username
+            self.password = password
+
+            # Now test if this client is really working.
+            try:
+                status = self.status()
+                LOG.info("Status = %r", status)
+                created_working_client = True
+            except Exception:
+                LOG.exception("etcd3gw client not working")
+                # If there are no more possible API paths to try, reraise the
+                # current exception.
+                if not possible_api_paths:
+                    raise
 
     def authenticate(self):
         # When authenticating, there mustn't be an Authorization

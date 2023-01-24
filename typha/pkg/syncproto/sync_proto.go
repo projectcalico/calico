@@ -184,6 +184,8 @@ import (
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
@@ -383,11 +385,15 @@ type SerializedUpdate struct {
 
 var ErrBadKey = errors.New("Unable to parse key.")
 
+var kvRLL = logutils.NewRateLimitedLogger()
+
 func (s SerializedUpdate) ToUpdate() (api.Update, error) {
 	// Parse the key.
 	parsedKey := model.KeyFromDefaultPath(s.Key)
 	if parsedKey == nil {
-		log.WithField("key", s.Key).Error("BUG: cannot parse key.")
+		kvRLL.WithField("key", s.Key).Warn("Failed to parse key of key/value pair sent from Typha. " +
+			"This is normal during upgrade if we're connected to a different version of Typha but it is a bug if Typha " +
+			"is the same version as this component.")
 		return api.Update{}, ErrBadKey
 	}
 	var parsedValue interface{}
@@ -395,8 +401,9 @@ func (s SerializedUpdate) ToUpdate() (api.Update, error) {
 		var err error
 		parsedValue, err = model.ParseValue(parsedKey, s.Value)
 		if err != nil {
-			log.WithField("rawValue", string(s.Value)).Error(
-				"Failed to parse value.")
+			kvRLL.WithField("rawValue", string(s.Value)).Error(
+				"Failed to parse value sent by Typha. This may occur during upgrade if we're connected to a " +
+					"different version of Typha but it is a bug if Typha is the same version as this component.")
 		} else {
 			if obj, ok := parsedValue.(v1.Object); ok {
 				log.Debug("v3 resource, populating its internal resource version.")

@@ -28,6 +28,20 @@ import (
 	"github.com/projectcalico/calico/felix/ip"
 )
 
+func init() {
+	bpf.SetMapSize(FrontendMapParameters.VersionedName(), FrontendMapParameters.MaxEntries)
+	bpf.SetMapSize(BackendMapParameters.VersionedName(), BackendMapParameters.MaxEntries)
+	bpf.SetMapSize(AffinityMapParameters.VersionedName(), AffinityMapParameters.MaxEntries)
+	bpf.SetMapSize(SendRecvMsgMapParameters.VersionedName(), SendRecvMsgMapParameters.MaxEntries)
+	bpf.SetMapSize(CTNATsMapParameters.VersionedName(), CTNATsMapParameters.MaxEntries)
+}
+
+func SetMapSizes(fsize, bsize, asize int) {
+	bpf.SetMapSize(FrontendMapParameters.VersionedName(), fsize)
+	bpf.SetMapSize(BackendMapParameters.VersionedName(), bsize)
+	bpf.SetMapSize(AffinityMapParameters.VersionedName(), asize)
+}
+
 // struct calico_nat_v4_key {
 //    uint32_t prefixLen;
 //    uint32_t addr; // NBO
@@ -294,7 +308,6 @@ func BackendValueFromBytes(b []byte) BackendValue {
 }
 
 var FrontendMapParameters = bpf.MapParameters{
-	Filename:   "/sys/fs/bpf/tc/globals/cali_v4_nat_fe",
 	Type:       "lpm_trie",
 	KeySize:    frontendKeySize,
 	ValueSize:  frontendValueSize,
@@ -304,12 +317,11 @@ var FrontendMapParameters = bpf.MapParameters{
 	Version:    3,
 }
 
-func FrontendMap(mc *bpf.MapContext) bpf.MapWithExistsCheck {
-	return mc.NewPinnedMap(FrontendMapParameters)
+func FrontendMap() bpf.MapWithExistsCheck {
+	return bpf.NewPinnedMap(FrontendMapParameters)
 }
 
 var BackendMapParameters = bpf.MapParameters{
-	Filename:   "/sys/fs/bpf/tc/globals/cali_v4_nat_be",
 	Type:       "hash",
 	KeySize:    backendKeySize,
 	ValueSize:  backendValueSize,
@@ -318,8 +330,8 @@ var BackendMapParameters = bpf.MapParameters{
 	Flags:      unix.BPF_F_NO_PREALLOC,
 }
 
-func BackendMap(mc *bpf.MapContext) bpf.MapWithExistsCheck {
-	return mc.NewPinnedMap(BackendMapParameters)
+func BackendMap() bpf.MapWithExistsCheck {
+	return bpf.NewPinnedMap(BackendMapParameters)
 }
 
 // NATMapMem represents FrontendMap loaded into memory
@@ -546,7 +558,6 @@ func (v AffinityValue) AsBytes() []byte {
 
 // AffinityMapParameters describe the AffinityMap
 var AffinityMapParameters = bpf.MapParameters{
-	Filename:   "/sys/fs/bpf/tc/globals/cali_v4_nat_aff",
 	Type:       "lru_hash",
 	KeySize:    affinityKeySize,
 	ValueSize:  affinityValueSize,
@@ -555,8 +566,8 @@ var AffinityMapParameters = bpf.MapParameters{
 }
 
 // AffinityMap returns an instance of an affinity map
-func AffinityMap(mc *bpf.MapContext) bpf.Map {
-	return mc.NewPinnedMap(AffinityMapParameters)
+func AffinityMap() bpf.Map {
+	return bpf.NewPinnedMap(AffinityMapParameters)
 }
 
 // AffinityMapMem represents affinity map in memory
@@ -655,7 +666,6 @@ func (v SendRecvMsgValue) String() string {
 
 // SendRecvMsgMapParameters define SendRecvMsgMap
 var SendRecvMsgMapParameters = bpf.MapParameters{
-	Filename:   "/sys/fs/bpf/tc/globals/cali_v4_srmsg",
 	Type:       "lru_hash",
 	KeySize:    sendRecvMsgKeySize,
 	ValueSize:  sendRecvMsgValueSize,
@@ -664,7 +674,6 @@ var SendRecvMsgMapParameters = bpf.MapParameters{
 }
 
 var CTNATsMapParameters = bpf.MapParameters{
-	Filename:   "/sys/fs/bpf/tc/globals/cali_v4_ct_nats",
 	Type:       "lru_hash",
 	KeySize:    ctNATsMsgKeySize,
 	ValueSize:  sendRecvMsgValueSize,
@@ -674,12 +683,12 @@ var CTNATsMapParameters = bpf.MapParameters{
 
 // SendRecvMsgMap tracks reverse translations for sendmsg/recvmsg of
 // unconnected UDP
-func SendRecvMsgMap(mc *bpf.MapContext) bpf.Map {
-	return mc.NewPinnedMap(SendRecvMsgMapParameters)
+func SendRecvMsgMap() bpf.Map {
+	return bpf.NewPinnedMap(SendRecvMsgMapParameters)
 }
 
-func AllNATsMsgMap(mc *bpf.MapContext) bpf.Map {
-	return mc.NewPinnedMap(CTNATsMapParameters)
+func AllNATsMsgMap() bpf.Map {
+	return bpf.NewPinnedMap(CTNATsMapParameters)
 }
 
 // SendRecvMsgMapMem represents affinity map in memory

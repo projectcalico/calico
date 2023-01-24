@@ -233,7 +233,7 @@ func releaseIPs(ctx context.Context, c clientv3.Interface, notInUseIPs map[strin
 
 	unallocated, err := c.IPAM().ReleaseIPs(ctx, ipsToRelease...)
 	if err != nil {
-		fmt.Printf("An error occured while releasing some IPs: %s.  "+
+		fmt.Printf("An error occurred while releasing some IPs: %s.  "+
 			"Problems are often caused by an out-of-date IPAM report.  "+
 			"Try regenerating the IPAM report and retry.\n", err)
 	} else {
