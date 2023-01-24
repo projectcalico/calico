@@ -24,6 +24,7 @@ func MapForTest() maps.Map {
 		KeySize:    4,
 		ValueSize:  4,
 		MaxEntries: 32,
-		Name:       maps.JumpMapName(),
+		Name:       "cali_jump",
+		Version:    2,
 	})
 }
