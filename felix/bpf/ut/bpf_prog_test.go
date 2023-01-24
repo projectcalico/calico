@@ -277,6 +277,12 @@ func setupAndRun(logger testLogger, loglevel, section string, rules *polprog.Rul
 		}
 	}
 
+	if !topts.xdp {
+		o, err := objLoad("../../bpf-gpl/bin/tc_preamble.o", bpfFsDir, "tc preamble", topts, false, false)
+		Expect(err).NotTo(HaveOccurred())
+		defer o.Close()
+	}
+
 	log.Infof("Patching binary %s", obj+".o")
 
 	bin, err := bpf.BinaryFromFile(obj + ".o")
@@ -326,7 +332,11 @@ func setupAndRun(logger testLogger, loglevel, section string, rules *polprog.Rul
 		log.WithField("rules", rules).Debug("set policy")
 	}
 
-	runFn(bpfFsDir + "/" + section)
+	if !topts.xdp {
+		runFn(bpfFsDir + "/classifier_tc_preamble")
+	} else {
+		runFn(bpfFsDir + "/" + section)
+	}
 }
 
 func caller(skip int) string {
@@ -516,8 +526,7 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 	forXDP := topts.xdp
 
 	jumpMap = jump.MapForTest()
-	if ipFamily == "IPv4" {
-		// don't do for v6 as that requires v4 atm
+	if ipFamily == "tc preamble" {
 		_ = unix.Unlink(jumpMap.Path())
 	}
 	err := jumpMap.EnsureExists()
@@ -554,6 +563,7 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 				if err := tc.ConfigureProgram(m, ifaceLog, &globals); err != nil {
 					return nil, fmt.Errorf("failed to configure tc program: %w", err)
 				}
+				log.WithField("program", fname).Debugf("Configured BPF program iface \"%s\"", ifaceLog)
 			}
 			continue
 		}
@@ -624,6 +634,7 @@ out:
 		return nil, fmt.Errorf("%s: %w", ipFamily, err)
 	}
 
+	log.WithField("program", fname).Debug("Loaded BPF program")
 	return obj, nil
 }
 
