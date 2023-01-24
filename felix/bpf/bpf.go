@@ -51,12 +51,41 @@ import (
 
 // Hook is the hook to which a BPF program should be attached. This is relative to
 // the host namespace so workload PolDirnIngress policy is attached to the HookEgress.
-type Hook string
+type Hook int
+
+func (h Hook) String() string {
+	switch h {
+	case HookIngress:
+		return "ingress"
+	case HookEgress:
+		return "egress"
+	case HookXDP:
+		return "xdp"
+	}
+
+	return "unknown"
+}
+
+func StringToHook(s string) Hook {
+	switch s {
+	case "ingress":
+		return HookIngress
+	case "egress":
+		return HookEgress
+	case "xdp":
+		return HookXDP
+	}
+
+	return HookBad
+}
 
 const (
-	HookIngress Hook = "ingress"
-	HookEgress  Hook = "egress"
-	HookXDP     Hook = "xdp"
+	HookIngress Hook = iota
+	HookEgress
+	HookXDP
+	HookCount
+
+	HookBad Hook = -1
 )
 
 var Hooks = []Hook{HookIngress, HookEgress, HookXDP}
@@ -2292,19 +2321,12 @@ func PolicyDebugJSONFileName(iface, polDir string, ipFamily proto.IPVersion) str
 	return path.Join(RuntimePolDir, fmt.Sprintf("%s_%s_v%d.json", iface, polDir, ipFamily))
 }
 
-const countersMapVersion = 1
-
-func CountersMapName() string {
-	return fmt.Sprintf("cali_counters%d", countersMapVersion)
-}
-
 func MapPinDir(typ int, name, iface string, hook Hook) string {
 	PinBaseDir := path.Join(DefaultBPFfsPath, "tc")
 	subDir := "globals"
 	// We need one jump map and one counter map for each program, thus we need to pin those
 	// to a unique path, which is /sys/fs/bpf/tc/[iface]_[igr|egr|xdp]/[map_name].
-	if (typ == unix.BPF_MAP_TYPE_PROG_ARRAY && strings.Contains(name, JumpMapName())) ||
-		(typ == unix.BPF_MAP_TYPE_PERCPU_ARRAY && strings.Contains(name, CountersMapName())) {
+	if typ == unix.BPF_MAP_TYPE_PROG_ARRAY && strings.Contains(name, JumpMapName()) {
 		// Remove period in the interface name if any
 		ifName := strings.ReplaceAll(iface, ".", "")
 		switch hook {
@@ -2363,8 +2385,7 @@ func ListPerEPMaps() (map[int]string, error) {
 		if strings.Contains(p, "globals") {
 			return nil
 		}
-		if strings.HasPrefix(info.Name(), JumpMapName()) ||
-			strings.HasPrefix(info.Name(), CountersMapName()) {
+		if strings.HasPrefix(info.Name(), JumpMapName()) {
 			log.WithField("path", p).Debug("Examining map")
 
 			out, err := exec.Command("bpftool", "map", "show", "pinned", p).Output()

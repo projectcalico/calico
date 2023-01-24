@@ -46,6 +46,7 @@ type Maps struct {
 	CtNatsMap       bpf.Map
 	IfStateMap      bpf.Map
 	RuleCountersMap bpf.Map
+	CountersMap     bpf.Map
 }
 
 func (m *Maps) Destroy() {
@@ -111,6 +112,9 @@ func CreateBPFMaps() (*Maps, error) {
 
 	ret.RuleCountersMap = counters.PolicyMap()
 	maps = append(maps, ret.RuleCountersMap)
+
+	ret.CountersMap = counters.Map()
+	maps = append(maps, ret.CountersMap)
 
 	for i, bpfMap := range maps {
 		err := bpfMap.EnsureExists()

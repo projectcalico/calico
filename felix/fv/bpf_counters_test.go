@@ -90,6 +90,18 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test counters", [
 	}
 
 	It("should update generic counters", func() {
+		By("ensuring we have counters")
+		// Counters are created by the bpf programs the first time they are
+		// needed, so make sure that they exist.
+		_, err := w[0].RunCmd("pktgen", w[0].IP, w[1].IP, "udp", "--port-dst", "8055")
+		Expect(err).NotTo(HaveOccurred())
+
+		By("flushing counters")
+		out, err := felixes[0].ExecOutput("calico-bpf", "counters", "flush")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(out).Should(BeZero())
+		checkDroppedByPolicyCounters(felixes[0], w[1].InterfaceName, 0, 0)
+
 		By("installing a deny policy between workloads")
 		pol := api.NewGlobalNetworkPolicy()
 		pol.Namespace = "default"
@@ -108,12 +120,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test counters", [
 			}}
 		pol.Spec.Egress = []api.Rule{{Action: api.Allow}}
 		pol = createPolicy(pol)
-
-		By("flushing counters")
-		out, err := felixes[0].ExecOutput("calico-bpf", "counters", "flush")
-		Expect(err).NotTo(HaveOccurred())
-		Expect(out).Should(BeZero())
-		checkDroppedByPolicyCounters(felixes[0], w[1].InterfaceName, 0, 0)
 
 		By("generating packets and checking the counter")
 		numberOfpackets := 10
