@@ -16,7 +16,6 @@ package xdp
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"strings"
@@ -121,7 +120,7 @@ func ConfigureProgram(m *libbpf.Map, iface string) error {
 }
 
 func (ap *AttachPoint) AttachProgram() (int, error) {
-	tempDir, err := ioutil.TempDir("", "calico-xdp")
+	tempDir, err := os.MkdirTemp("", "calico-xdp")
 	if err != nil {
 		return -1, fmt.Errorf("failed to create temporary directory: %w", err)
 	}

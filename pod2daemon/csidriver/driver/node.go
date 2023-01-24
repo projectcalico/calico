@@ -18,7 +18,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 	"strings"
 	"syscall"
@@ -243,7 +243,7 @@ func (ns *nodeService) addCredentialFile(volumeID string, podInfo *creds.Credent
 	}
 
 	credsFileTmp := strings.Join([]string{ns.config.NodeAgentManagementHomeDir, volumeID + ".json"}, "/")
-	_ = ioutil.WriteFile(credsFileTmp, attrs, 0644)
+	_ = os.WriteFile(credsFileTmp, attrs, 0644)
 
 	// Move it to the right location now.
 	credsFile := strings.Join([]string{ns.config.NodeAgentCredentialsHomeDir, volumeID + ".json"}, "/")
@@ -266,7 +266,7 @@ func (ns *nodeService) retrievePodInfoFromFile(volumeID string) (*creds.Credenti
 
 	defer credsFile.Close()
 
-	credsFileBytes, err := ioutil.ReadAll(credsFile)
+	credsFileBytes, err := io.ReadAll(credsFile)
 	if err != nil {
 		return nil, err
 	}

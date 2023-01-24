@@ -23,7 +23,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math"
 	"net"
 	"os"
@@ -352,7 +351,7 @@ func (s *Server) serve(cxt context.Context) {
 		// Arrange for server to verify the clients' certificates.
 		logCxt.Info("Will verify client certificates")
 		tlsConfig.ClientAuth = tls.RequireAndVerifyClientCert
-		caPEMBlock, tlsErr := ioutil.ReadFile(s.config.CAFile)
+		caPEMBlock, tlsErr := os.ReadFile(s.config.CAFile)
 		if tlsErr != nil {
 			logCxt.WithError(tlsErr).Panic("Failed to read CA data")
 		}

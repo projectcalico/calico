@@ -17,7 +17,6 @@ package policysync_test
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
 	"path"
@@ -1410,7 +1409,7 @@ func getDialer(proto string) func(context.Context, string) (net.Conn, error) {
 const ListenerSocket = "policysync.sock"
 
 func makeTmpListenerDir() string {
-	dirPath, err := ioutil.TempDir("/tmp", "felixut")
+	dirPath, err := os.MkdirTemp("/tmp", "felixut")
 	Expect(err).ToNot(HaveOccurred())
 	return dirPath
 }
