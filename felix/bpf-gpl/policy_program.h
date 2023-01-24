@@ -60,6 +60,17 @@ allow:
 SEC("classifier/tc/policy")
 int calico_tc_norm_pol_tail(struct __sk_buff *skb)
 {
+	struct cali_tc_ctx _ctx = {
+		.skb = skb,
+		.globals = state_get_globals_tc(),
+	};
+	struct cali_tc_ctx *ctx = &_ctx;
+
+	if (!ctx->globals) {
+		CALI_LOG_IF(CALI_LOG_LEVEL_DEBUG, "State map globals lookup failed: DROP\n");
+		return TC_ACT_SHOT;
+	}
+
 	CALI_DEBUG("Entering normal policy program\n");
 
 #ifndef IPVER6
@@ -73,9 +84,9 @@ int calico_tc_norm_pol_tail(struct __sk_buff *skb)
 					    state->ip_dst, state->sport, state->dport);
 
 	CALI_DEBUG("jumping to allowed\n");
-	CALI_JUMP_TO(skb, PROG_INDEX_ALLOWED);
+	CALI_JUMP_TO(ctx, PROG_INDEX_ALLOWED);
 #else
-	CALI_JUMP_TO(skb, PROG_INDEX_V6_ALLOWED);
+	CALI_JUMP_TO(ctx, PROG_INDEX_V6_ALLOWED);
 #endif
 	CALI_DEBUG("Tail call to post-policy program failed: DROP\n");
 
