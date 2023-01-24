@@ -1,6 +1,7 @@
-include ../metadata.mk
-
 PACKAGE_NAME = github.com/projectcalico/calico/crypto
+
+include ../metadata.mk
+include ../lib.Makefile
 
 .PHONY: ci
 ci: fv
@@ -20,13 +21,11 @@ fv: setup-fv bin/fips-test-build
 	diff fv/expected-nmap.log  tmp/nmap.log
 
 bin/fips-test-build:
-	$(DOCKER_RUN) $(CALICO_BUILD) \
-			sh -c '$(GIT_CONFIG_SSH) \
-			GOEXPERIMENT=boringcrypto go build -tags boringcrypto -o $@ -v -buildvcs=false -ldflags "-linkmode external -extldflags -static" $(PACKAGE_NAME)/fv/main'
+	$(call build_cgo_boring_binary, $(PACKAGE_NAME)/fv/main, $@)
 
 setup-fv: kill
 	mkdir -p bin tmp
-	$(DOCKER_RUN) $(CALICO_BUILD) openssl req -batch -new -newkey rsa:2048 -sha256 -days 365 -nodes -x509 -keyout tmp/tls.key -out tmp/tls.crt
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'openssl req -batch -new -newkey rsa:2048 -sha256 -days 365 -nodes -x509 -keyout tmp/tls.key -out tmp/tls.crt'
 
 kill:
 	pgrep fips-test-build | xargs kill || true
