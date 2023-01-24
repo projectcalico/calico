@@ -422,6 +422,10 @@ var _ = Describe("_HEALTH_ _BPF-SAFE_ health tests", func() {
 			startTypha(k8sInfra.GetDockerArgs)
 			startFelix(typhaContainer.IP+":5474", k8sInfra.GetDockerArgs, felixParams{dataplaneTimeout: "20", healthHost: "0.0.0.0"})
 		})
+		AfterEach(func() {
+			felix.Stop()
+			typhaContainer.Stop()
+		})
 		It("should become unready, then die", func() {
 			Eventually(felixReady, "5s", "1s").ShouldNot(BeGood())
 			Consistently(felix.Stopped, "20s").Should(BeFalse()) // Should stay up for 20+s

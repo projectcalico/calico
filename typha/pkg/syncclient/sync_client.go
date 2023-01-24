@@ -111,7 +111,7 @@ func (o *Options) validate() (err error) {
 }
 
 func New(
-	addrs []discovery.Typha,
+	discoverer *discovery.Discoverer,
 	myVersion, myHostname, myInfo string,
 	cbs api.SyncerCallbacks,
 	options *Options,
@@ -130,8 +130,8 @@ func New(
 			"myID": id,
 			"type": options.SyncerType,
 		}),
-		callbacks: cbs,
-		addrs:     addrs,
+		callbacks:  cbs,
+		discoverer: discoverer,
 
 		myVersion:  myVersion,
 		myHostname: myHostname,
@@ -147,7 +147,7 @@ func New(
 type SyncerClient struct {
 	ID                            uint64
 	logCxt                        *log.Entry
-	addrs                         []discovery.Typha
+	discoverer                    *discovery.Discoverer
 	connInfo                      *discovery.Typha
 	myHostname, myVersion, myInfo string
 	options                       *Options
@@ -169,22 +169,32 @@ type handshakeStatus struct {
 }
 
 func (s *SyncerClient) Start(cxt context.Context) error {
-	s.logCxt.WithField("addresses", s.addrs).Info("Syncer started")
-	// Connect synchronously.
-	var connectOk bool
-	for i, addr := range s.addrs {
-		s.logCxt.Infof("connecting to typha endpoint %s (%d of %d)", addr.Addr, i+1, len(s.addrs))
-		err := s.connect(cxt, addr)
+	// Connect synchronously so that we can return an error early if we can't connect at all.
+	s.logCxt.Info("Starting Typha client...")
+
+	// Defensive: in case there's a bug in NextAddr() and it never stops returning values,
+	// set a sanity limit on the number of tries.
+	maxTries := s.calculateConnectionAttemptLimit(len(s.discoverer.CachedTyphaAddrs()))
+	remainingTries := maxTries
+	cat := discovery.NewConnAttemptTracker(s.discoverer)
+	for {
+		remainingTries--
+		if remainingTries < 0 {
+			return fmt.Errorf("failed to connect to Typha after %d tries", maxTries)
+		}
+		addr, err := cat.NextAddr()
 		if err != nil {
-			s.logCxt.WithError(err).Warnf("error connecting to typha endpoint (%d of %d) %s", i+1, len(s.addrs), addr.Addr)
+			return fmt.Errorf("failed to load next Typha address to try: %w", err)
+		}
+		s.logCxt.Infof("Connecting to typha endpoint %s.", addr.Addr)
+		err = s.connect(cxt, addr)
+		if err != nil {
+			s.logCxt.WithError(err).Warnf("Failed to connect to typha endpoint %s.  Will try another if available...", addr.Addr)
+			time.Sleep(100 * time.Millisecond) // Avoid tight loop.
 		} else {
-			connectOk = true
+			s.logCxt.Infof("Successfully connected to Typha at %s.", addr.Addr)
 			break
 		}
-	}
-	// ran out of addresses with errors
-	if !connectOk {
-		return fmt.Errorf("connection to typhas (%v) failed", s.addrs)
 	}
 
 	// Then start our background goroutines.  We start the main loop and a second goroutine to
@@ -210,6 +220,20 @@ func (s *SyncerClient) Start(cxt context.Context) error {
 		}
 	}()
 	return nil
+}
+
+func (s *SyncerClient) calculateConnectionAttemptLimit(numDiscoveredTyphas int) int {
+	expectedNumTyphas := numDiscoveredTyphas
+	if expectedNumTyphas < 3 {
+		// Most clusters have at least 3 Typha instances so, if we discovered fewer instances,
+		// assume that there may be more starting up.
+		expectedNumTyphas = 3
+	}
+	// During upgrade, we expect all Typha instances to be replaced one by one so, for a safe
+	// upper bound on the number of potential connection attempts, assume that we try to connect
+	// to double the number of instances that we detected.
+	maxTries := expectedNumTyphas * 2
+	return maxTries
 }
 
 // SupportsNodeResourceUpdates waits for the Typha server to send a hello and returns true if
