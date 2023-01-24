@@ -146,6 +146,8 @@ struct cali_tc_ctx {
   long ipheader_len;
 
   struct cali_tc_state *state;
+  const volatile struct cali_tc_globals *globals;
+  const volatile struct cali_xdp_globals *xdp_globals; /* XXX we must split the state between tc/xdp */
   struct calico_nat_dest *nat_dest;
   struct arp_key arpk;
   struct fwd fwd;
