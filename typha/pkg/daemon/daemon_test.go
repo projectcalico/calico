@@ -167,7 +167,7 @@ var _ = Describe("Daemon", func() {
 				addr := fmt.Sprintf("127.0.0.1:%d", port)
 				cbs := fvtests.NewRecorder()
 				client := syncclient.New(
-					[]discovery.Typha{{Addr: addr}},
+					discovery.New(discovery.WithAddrOverride(addr)),
 					"",
 					"",
 					"",
