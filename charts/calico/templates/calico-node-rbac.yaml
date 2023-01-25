@@ -12,7 +12,7 @@ rules:
     resourceNames:
 {{- if eq .Values.network "flannel" }}
       - canal
-      - canal-cni-plugin
+      - calico-cni-plugin
 {{- else }}
       - calico-node
       - calico-cni-plugin
@@ -78,7 +78,7 @@ rules:
     verbs:
       - list
       - watch
-#  # The CNI plugin patches pods/status.
+  # The CNI plugin patches pods/status.
   - apiGroups: [""]
     resources:
       - pods/status
@@ -178,7 +178,7 @@ rules:
 
 ---
 
-#CNI cluster role
+# CNI cluster role
 kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1
 metadate:
@@ -270,19 +270,6 @@ subjects:
 - kind: ServiceAccount
   name: canal
   namespace: kube-system
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: canal-cni-plugin
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: calico-cni-plugin
-subject:
-  kind: ServiceAccount
-  name: canal-cni-plugin
-  namespace: kube-system
 {{- else }}
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -296,9 +283,9 @@ subjects:
 - kind: ServiceAccount
   name: calico-node
   namespace: kube-system
----
-apiVersion: rbac.authorization.k8s.io/v1
+{{- end }}
 kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   name: calico-cni-plugin
 roleRef:
@@ -309,4 +296,3 @@ subject:
   kind: ServiceAccount
   name: calico-cni-plugin
   namespace: kube-system
-{{- end }}
