@@ -22,8 +22,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
+	"os"
 	"sync"
 	"time"
 
@@ -279,7 +279,7 @@ func (s *SyncerClient) connect(cxt context.Context, typhaAddr discovery.Typha) e
 		// we don't always want that.  We will do certificate chain verification ourselves
 		// inside CertificateVerifier.
 		tlsConfig.InsecureSkipVerify = true
-		caPEMBlock, err := ioutil.ReadFile(s.options.CAFile)
+		caPEMBlock, err := os.ReadFile(s.options.CAFile)
 		if err != nil {
 			log.WithError(err).Error("Failed to read CA data")
 			return err

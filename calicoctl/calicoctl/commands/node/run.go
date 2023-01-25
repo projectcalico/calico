@@ -17,7 +17,6 @@ package node
 import (
 	"bufio"
 	"fmt"
-	"io/ioutil"
 	gonet "net"
 	"os"
 	"os/exec"
@@ -451,7 +450,7 @@ func loadModules() {
 
 func setupIPForwarding() error {
 	fmt.Println("Enabling IPv4 forwarding")
-	err := ioutil.WriteFile("/proc/sys/net/ipv4/ip_forward",
+	err := os.WriteFile("/proc/sys/net/ipv4/ip_forward",
 		[]byte("1"), 0)
 	if err != nil {
 		return fmt.Errorf("ERROR: Could not enable ipv4 forwarding")
@@ -459,7 +458,7 @@ func setupIPForwarding() error {
 
 	if _, err := os.Stat("/proc/sys/net/ipv6"); err == nil {
 		fmt.Println("Enabling IPv6 forwarding")
-		err := ioutil.WriteFile("/proc/sys/net/ipv6/conf/all/forwarding",
+		err := os.WriteFile("/proc/sys/net/ipv6/conf/all/forwarding",
 			[]byte("1"), 0)
 		if err != nil {
 			return fmt.Errorf("ERROR: Could not enable ipv6 forwarding")
@@ -478,7 +477,7 @@ func setNFConntrackMax() {
 	// To avoid this becoming a problem, we recommend increasing the conntrack
 	// table size. To do so, run the following commands:
 	fmt.Println("Increasing conntrack limit")
-	err := ioutil.WriteFile("/proc/sys/net/netfilter/nf_conntrack_max",
+	err := os.WriteFile("/proc/sys/net/netfilter/nf_conntrack_max",
 		[]byte("1000000"), 0)
 	if err != nil {
 		fmt.Println("WARNING: Could not set nf_contrack_max. This may have an impact at scale.")
