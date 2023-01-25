@@ -18,17 +18,18 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
+	"path"
 	"testing"
 
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
-	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/bpf/bpfdefs"
 	"github.com/projectcalico/calico/felix/bpf/bpfutils"
-	"github.com/projectcalico/calico/felix/bpf/tc"
+	"github.com/projectcalico/calico/felix/bpf/hook"
+	"github.com/projectcalico/calico/felix/bpf/libbpf"
 	"github.com/projectcalico/calico/felix/bpf/utils"
-	"github.com/projectcalico/calico/felix/bpf/xdp"
 )
 
 func checkBTFEnabled() []bool {
@@ -49,82 +50,49 @@ func TestPrecompiledBinariesAreLoadable(t *testing.T) {
 		bpfutils.BTFEnabled = bpfutils.SupportsBTF()
 	}()
 
-	defer bpf.CleanUpMaps()
-
-	for _, at := range tc.ListAttachTypes() {
-		for _, btfEnabled := range checkBTFEnabled() {
-			bpfutils.BTFEnabled = btfEnabled
-			if at.Family == 6 {
-				continue
-			}
-
-			ap := tc.AttachPoint{
-				IPv6Enabled: true,
-				Type:        at.Type,
-				ToOrFrom:    at.ToOrFrom,
-				Hook:        bpf.HookIngress,
-				ToHostDrop:  at.ToHostDrop,
-				FIB:         at.FIB,
-				DSR:         at.DSR,
-				LogLevel:    at.LogLevel,
-				HostIP:      net.ParseIP("10.0.0.1"),
-				IntfIP:      net.ParseIP("10.0.0.2"),
-			}
-
-			t.Run(ap.FileName(4), func(t *testing.T) {
-				RegisterTestingT(t)
-				log.WithField("AttachType", at).WithField("btf", btfEnabled).
-					Debugf("Testing %v in %v", ap.ProgramName(), ap.FileName(4))
-
-				vethName, veth := createVeth()
-				defer deleteLink(veth)
-				ap.Iface = vethName
-				err := tc.EnsureQdisc(ap.Iface)
-				Expect(err).NotTo(HaveOccurred())
-				opts, err := ap.AttachProgram()
-				Expect(err).NotTo(HaveOccurred())
-				Expect(opts).NotTo(Equal(nil))
-			})
-		}
+	testObject := func(file string) {
+		obj, err := libbpf.OpenObject(file)
+		defer func() { _ = obj.Close() }()
+		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("failed to open object %s", file))
+		err = obj.Load()
+		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("failed to load object %s", file))
 	}
 
-	// Test XDP objects are loadable
-	for _, logLevel := range []string{"OFF", "INFO", "DEBUG"} {
-		logLevel := logLevel
-		// Compile the XDP endpoint programs.
-		logCxt := log.WithField("logLevel", logLevel)
+	// all unique objects
+	objects := make(map[string]struct{})
 
-		ap := xdp.AttachPoint{
-			LogLevel: logLevel,
-			Modes:    []bpf.XDPMode{bpf.XDPGeneric},
-		}
+	for _, at := range hook.ListAttachTypes() {
+		objects[at.ObjectFile()] = struct{}{}
+	}
 
-		t.Run(ap.FileName(), func(t *testing.T) {
+	for obj := range objects {
+		log.Debugf("Object %s", obj)
+		t.Run(obj, func(t *testing.T) {
 			RegisterTestingT(t)
-			logCxt.Debugf("Testing %v in %v", ap.ProgramName(), ap.FileName())
-
-			vethName, veth := createVeth()
-			defer deleteLink(veth)
-			ap.Iface = vethName
-			opts, err := ap.AttachProgram()
-			Expect(err).NotTo(HaveOccurred())
-			Expect(opts).NotTo(Equal(nil))
+			testObject(path.Join(bpfdefs.ObjectDir, obj))
 		})
 	}
+
+	testObject(path.Join(bpfdefs.ObjectDir, "tc_preamble.o"))
+	testObject(path.Join(bpfdefs.ObjectDir, "xdp_preamble.o"))
 }
 
 func createVeth() (string, netlink.Link) {
 	vethName := fmt.Sprintf("test%xa", rand.Uint32())
+	return vethName, createVethName(vethName)
+}
+
+func createVethName(name string) netlink.Link {
 	var veth netlink.Link = &netlink.Veth{
 		LinkAttrs: netlink.LinkAttrs{
-			Name:  vethName,
+			Name:  name,
 			Flags: net.FlagUp,
 		},
-		PeerName: vethName + "b",
+		PeerName: name + "b",
 	}
 	err := netlink.LinkAdd(veth)
-	Expect(err).NotTo(HaveOccurred(), "failed to create test veth")
-	return vethName, veth
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "failed to create test veth")
+	return veth
 }
 
 func deleteLink(veth netlink.Link) {
