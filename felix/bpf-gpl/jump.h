@@ -33,24 +33,37 @@ static CALI_BPF_INLINE struct cali_xdp_globals *state_get_globals_xdp(void)
 	return cali_state_lookup_elem(&key);
 }
 
-#define cali_jump_map map_symbol(cali_jump, 3)
+#if CALI_F_XDP
+
+#define cali_jump_map map_symbol(xdp_cali_progs, 2)
 
 struct bpf_map_def_extended __attribute__((section("maps"))) cali_jump_map = {
 	.type = BPF_MAP_TYPE_PROG_ARRAY,
 	.key_size = 4,
 	.value_size = 4,
-	.max_entries = 1100,
+	.max_entries = 200,
 };
 
-#if CALI_F_XDP
-#define CALI_JUMP_TO(ctx, index) bpf_tail_call((ctx)->xdp, &cali_jump_map, index)
+#define CALI_JUMP_TO(ctx, index) bpf_tail_call((ctx)->xdp, &cali_jump_map, (ctx)->xdp_globals->jumps[index])
 #else
-#define CALI_JUMP_TO(ctx, index) bpf_tail_call((ctx)->skb, &cali_jump_map, (ctx)->globals->jumps[index])
+
+#define cali_jump_map map_symbol(cali_progs, 2)
+
+struct bpf_map_def_extended __attribute__((section("maps"))) cali_jump_map = {
+	.type = BPF_MAP_TYPE_PROG_ARRAY,
+	.key_size = 4,
+	.value_size = 4,
+	.max_entries = 200,
+};
+
+#define CALI_JUMP_TO(ctx, index) do {	\
+	CALI_DEBUG("jump to idx %d prog at %d\n", index, (ctx)->globals->jumps[index]);	\
+	bpf_tail_call((ctx)->skb, &cali_jump_map, (ctx)->globals->jumps[index]);	\
+} while (0)
 #endif
 
 /* Add new values to the end as these are program indices */
 enum cali_jump_index {
-	PROG_INDEX_PREAMBLE,
 	PROG_INDEX_MAIN,
 	PROG_INDEX_POLICY,
 	PROG_INDEX_ALLOWED,
@@ -63,4 +76,35 @@ enum cali_jump_index {
 	PROG_INDEX_V6_ICMP,
 	PROG_INDEX_V6_DROP,
 };
+
+#if CALI_F_XDP
+
+#define cali_policy_map map_symbol(xdp_cali_pols, 2)
+
+struct bpf_map_def_extended __attribute__((section("maps"))) cali_policy_map = {
+	.type = BPF_MAP_TYPE_PROG_ARRAY,
+	.key_size = 4,
+	.value_size = 4,
+	.max_entries = 100,
+};
+
+#define CALI_JUMP_TO_POLICY(ctx) bpf_tail_call((ctx)->xdp, &cali_policy_map, (ctx)->xdp_globals->jumps[PROG_INDEX_POLICY])
+#else
+
+#define cali_policy_map map_symbol(cali_pols, 2)
+
+struct bpf_map_def_extended __attribute__((section("maps"))) cali_policy_map = {
+	.type = BPF_MAP_TYPE_PROG_ARRAY,
+	.key_size = 4,
+	.value_size = 4,
+	.max_entries = 1100,
+};
+
+#define CALI_JUMP_TO_POLICY(ctx) do {	\
+	CALI_DEBUG("jump to policy prog at %d\n", (ctx)->globals->jumps[PROG_INDEX_POLICY]);		\
+	bpf_tail_call((ctx)->skb, &cali_policy_map, (ctx)->globals->jumps[PROG_INDEX_POLICY]);	\
+} while (0)
+
+#endif
+
 #endif /* __CALI_BPF_JUMP_H__ */

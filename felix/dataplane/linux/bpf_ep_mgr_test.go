@@ -36,6 +36,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/bpfmap"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	"github.com/projectcalico/calico/felix/bpf/counters"
+	"github.com/projectcalico/calico/felix/bpf/hook"
 	"github.com/projectcalico/calico/felix/bpf/ifstate"
 	bpfipsets "github.com/projectcalico/calico/felix/bpf/ipsets"
 	bpfmaps "github.com/projectcalico/calico/felix/bpf/maps"
@@ -51,21 +52,21 @@ import (
 )
 
 type mockDataplane struct {
-	mutex  sync.Mutex
-	lastFD uint32
-	fds    map[string]uint32
-	state  map[uint32]polprog.Rules
-	routes map[ip.V4CIDR]struct{}
+	mutex      sync.Mutex
+	lastProgID int
+	progs      map[string]int
+	policy     map[string]polprog.Rules
+	routes     map[ip.V4CIDR]struct{}
 
 	ensureStartedFn func()
 }
 
 func newMockDataplane() *mockDataplane {
 	return &mockDataplane{
-		lastFD: 5,
-		fds:    map[string]uint32{},
-		state:  map[uint32]polprog.Rules{},
-		routes: map[ip.V4CIDR]struct{}{},
+		lastProgID: 5,
+		progs:      map[string]int{},
+		policy:     map[string]polprog.Rules{},
+		routes:     map[ip.V4CIDR]struct{}{},
 	}
 }
 
@@ -79,25 +80,29 @@ func (m *mockDataplane) ensureBPFDevices() error {
 	return nil
 }
 
-func (m *mockDataplane) ensureProgramAttached(ap attachPoint) (bpfmaps.FD, error) {
+func (m *mockDataplane) loadDefaultPolicies() error {
+	return nil
+}
+
+func (m *mockDataplane) ensureProgramAttached(ap attachPoint) error {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
-	key := ap.IfaceName() + ":" + ap.JumpMapFDMapKey()
-	if fd, exists := m.fds[key]; exists {
-		return bpfmaps.FD(fd), nil
+	key := ap.IfaceName() + ":" + ap.HookName().String()
+	if _, exists := m.progs[key]; exists {
+		return nil
 	}
-	m.lastFD += 1
-	m.fds[key] = m.lastFD
-	return bpfmaps.FD(m.lastFD), nil
+	m.lastProgID += 1
+	m.progs[key] = m.lastProgID
+	return nil
 }
 
 func (m *mockDataplane) ensureNoProgram(ap attachPoint) error {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
-	key := ap.IfaceName() + ":" + ap.JumpMapFDMapKey()
-	if fd, exists := m.fds[key]; exists {
-		delete(m.state, uint32(fd))
-		delete(m.fds, key)
+	key := ap.IfaceName() + ":" + ap.HookName().String()
+	if _, exists := m.progs[key]; exists {
+		delete(m.policy, key)
+		delete(m.progs, key)
 	}
 	return nil
 }
@@ -106,17 +111,19 @@ func (m *mockDataplane) ensureQdisc(iface string) error {
 	return nil
 }
 
-func (m *mockDataplane) updatePolicyProgram(jumpMapFD bpfmaps.FD, rules polprog.Rules, polDir string, ap attachPoint) error {
+func (m *mockDataplane) updatePolicyProgram(rules polprog.Rules, polDir string, ap attachPoint) error {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
-	m.state[uint32(jumpMapFD)] = rules
+	key := ap.IfaceName() + ":" + ap.HookName().String()
+	m.policy[key] = rules
 	return nil
 }
 
-func (m *mockDataplane) removePolicyProgram(jumpMapFD bpfmaps.FD, ap attachPoint) error {
+func (m *mockDataplane) removePolicyProgram(ap attachPoint) error {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
-	delete(m.state, uint32(jumpMapFD))
+	key := ap.IfaceName() + ":" + ap.HookName().String()
+	delete(m.policy, key)
 	return nil
 }
 
@@ -131,9 +138,8 @@ func (m *mockDataplane) setRPFilter(iface string, val int) error {
 func (m *mockDataplane) getRules(key string) *polprog.Rules {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
-	fd := m.fds[key]
-	if fd != 0 {
-		rules, exist := m.state[fd]
+	if _, ok := m.progs[key]; ok {
+		rules, exist := m.policy[key]
 		if exist {
 			return &rules
 		}
@@ -151,7 +157,7 @@ func (m *mockDataplane) setAndReturn(vari **polprog.Rules, key string) func() *p
 func (m *mockDataplane) programAttached(key string) bool {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
-	return m.fds[key] != 0
+	return m.progs[key] != 0
 }
 
 func (m *mockDataplane) setRoute(cidr ip.V4CIDR) {
@@ -217,6 +223,21 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		countersMap = mock.NewMockMap(cparams)
 		maps.CountersMap = countersMap
 		maps.RuleCountersMap = mock.NewMockMap(counters.PolicyMapParameters)
+
+		progsParams := bpfmaps.MapParameters{
+			Type:       "prog_array",
+			KeySize:    4,
+			ValueSize:  4,
+			MaxEntries: 1000,
+			Name:       "cali_progs",
+			Version:    2,
+		}
+
+		maps.ProgramsMap = mock.NewMockMap(progsParams)
+		maps.XDPProgramsMap = mock.NewMockMap(progsParams)
+		maps.PolicyMap = mock.NewMockMap(progsParams)
+		maps.XDPPolicyMap = mock.NewMockMap(progsParams)
+
 		rrConfigNormal = rules.Config{
 			IPIPEnabled:                 true,
 			IPIPTunnelAddress:           nil,
@@ -807,15 +828,15 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 	Describe("counters", func() {
 		It("should clean up after restart", func() {
-			err := counters.EnsureExists(countersMap, 12345, bpf.HookEgress)
+			err := counters.EnsureExists(countersMap, 12345, hook.Egress)
 			Expect(err).NotTo(HaveOccurred())
-			err = counters.EnsureExists(countersMap, 12345, bpf.HookIngress)
+			err = counters.EnsureExists(countersMap, 12345, hook.Ingress)
 			Expect(err).NotTo(HaveOccurred())
-			err = counters.EnsureExists(countersMap, 12345, bpf.HookXDP)
+			err = counters.EnsureExists(countersMap, 12345, hook.XDP)
 			Expect(err).NotTo(HaveOccurred())
-			err = counters.EnsureExists(countersMap, 54321, bpf.HookEgress)
+			err = counters.EnsureExists(countersMap, 54321, hook.Egress)
 			Expect(err).NotTo(HaveOccurred())
-			err = counters.EnsureExists(countersMap, 54321, bpf.HookIngress)
+			err = counters.EnsureExists(countersMap, 54321, hook.Ingress)
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(countersMap.Contents).To(HaveLen(5))
@@ -834,9 +855,9 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			genIfaceUpdate("cali12345", ifacemonitor.StateUp, 12345)()
 			genWLUpdate("cali12345")()
 
-			err := counters.EnsureExists(countersMap, 12345, bpf.HookEgress)
+			err := counters.EnsureExists(countersMap, 12345, hook.Egress)
 			Expect(err).NotTo(HaveOccurred())
-			err = counters.EnsureExists(countersMap, 12345, bpf.HookIngress)
+			err = counters.EnsureExists(countersMap, 12345, hook.Ingress)
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(countersMap.Contents).To(HaveLen(2))
@@ -852,33 +873,31 @@ var _ = Describe("BPF Endpoint Manager", func() {
 	Describe("ifstate", func() {
 		checkIfState := func(idx int, name string, flags uint32) {
 			k := ifstate.NewKey(uint32(idx))
-			v := ifstate.NewValue(flags, name)
 			vb, err := ifStateMap.Get(k.AsBytes())
 			if err != nil {
 				Fail(fmt.Sprintf("Ifstate does not have key %s", k), 1)
 			}
-			if string(v.AsBytes()) != string(vb) {
-				vv := ifstate.ValueFromBytes(vb)
-				Fail(fmt.Sprintf("Ifstate key %s value %s does not match expected %s", k, vv, v), 1)
-			}
+			vv := ifstate.ValueFromBytes(vb)
+			Expect(flags).To(Equal(vv.Flags()))
+			Expect(name).To(Equal(vv.IfName()))
 		}
 
 		It("should clean up", func() {
 			_ = ifStateMap.Update(
 				ifstate.NewKey(123).AsBytes(),
-				ifstate.NewValue(ifstate.FlgReady, "eth123").AsBytes(),
+				ifstate.NewValue(ifstate.FlgReady, "eth123", -1, -1, -1).AsBytes(),
 			)
 			_ = ifStateMap.Update(
 				ifstate.NewKey(124).AsBytes(),
-				ifstate.NewValue(0, "eth124").AsBytes(),
+				ifstate.NewValue(0, "eth124", -1, -1, -1).AsBytes(),
 			)
 			_ = ifStateMap.Update(
 				ifstate.NewKey(125).AsBytes(),
-				ifstate.NewValue(ifstate.FlgWEP|ifstate.FlgReady, "eth125").AsBytes(),
+				ifstate.NewValue(ifstate.FlgWEP|ifstate.FlgReady, "eth125", -1, -1, -1).AsBytes(),
 			)
 			_ = ifStateMap.Update(
 				ifstate.NewKey(126).AsBytes(),
-				ifstate.NewValue(ifstate.FlgWEP, "eth123").AsBytes(),
+				ifstate.NewValue(ifstate.FlgWEP, "eth123", -1, -1, -1).AsBytes(),
 			)
 
 			err := bpfEpMgr.CompleteDeferredWork()
@@ -890,7 +909,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		It("should clean up with update", func() {
 			_ = ifStateMap.Update(
 				ifstate.NewKey(123).AsBytes(),
-				ifstate.NewValue(ifstate.FlgReady, "eth123").AsBytes(),
+				ifstate.NewValue(ifstate.FlgReady, "eth123", -1, -1, -1).AsBytes(),
 			)
 
 			genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()

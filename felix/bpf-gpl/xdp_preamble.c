@@ -12,12 +12,12 @@
 #include "jump.h"
 #include "log.h"
 
-const volatile struct cali_tc_globals __globals;
+const volatile struct cali_xdp_globals __globals;
 
-SEC("classifier/tc/preamble")
-int  cali_tc_preamble(struct __sk_buff *skb)
+SEC("xdp/preamble")
+int  cali_xdp_preamble(struct __sk_buff *skb)
 {
-	struct cali_tc_globals *globals = state_get_globals_tc();
+	struct cali_xdp_globals *globals = state_get_globals_xdp();
 
 	if (!globals) {
 		return TC_ACT_SHOT;
@@ -30,7 +30,7 @@ int  cali_tc_preamble(struct __sk_buff *skb)
 
 	/* Jump to the start of the prog chain. */
 	bpf_tail_call(skb, &cali_jump_map, globals->jumps[PROG_INDEX_MAIN]);
+	CALI_LOG("xdp_preamble iface %s failed to call main %d\n", globals->iface_name, globals->jumps[PROG_INDEX_MAIN]);
 	/* Drop the packet in the unexpected case of not being able to make the jump. */
-	CALI_LOG("tc_preamble iface %s failed to call main %d\n", globals->iface_name, globals->jumps[PROG_INDEX_MAIN]);
 	return TC_ACT_SHOT;
 }

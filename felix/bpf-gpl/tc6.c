@@ -20,7 +20,6 @@
 #include "ipv6.h"
 #include "jump.h"
 #include "policy.h"
-#include "policy_program.h"
 
 const volatile struct cali_tc_globals __globals;
 
