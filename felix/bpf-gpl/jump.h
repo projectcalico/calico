@@ -39,7 +39,7 @@ struct bpf_map_def_extended __attribute__((section("maps"))) cali_jump_map = {
 	.type = BPF_MAP_TYPE_PROG_ARRAY,
 	.key_size = 4,
 	.value_size = 4,
-	.max_entries = 32,
+	.max_entries = 1100,
 };
 
 #if CALI_F_XDP
