@@ -680,39 +680,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					})
 				})
 
-				It("should clean up jump maps", func() {
-					numJumpMaps := func() int {
-						command := fmt.Sprintf("find /sys/fs/bpf/tc -name %s", maps.JumpMapName())
-						output, err := felixes[0].ExecOutput("sh", "-c", command)
-						Expect(err).NotTo(HaveOccurred())
-						return strings.Count(output, maps.JumpMapName())
-					}
-
-					expJumpMaps := func(numWorkloads int) int {
-						numHostIfaces := 1
-						specialIfaces := 0
-						if ctlbWorkaround {
-							specialIfaces = 2 /* nat + lo */
-						}
-						expectedNumMaps := 2*numWorkloads + 2*numHostIfaces + 2*specialIfaces
-						return expectedNumMaps
-					}
-
-					// Check start-of-day number of interfaces.
-					Eventually(numJumpMaps, "15s", "200ms").Should(
-						BeNumerically("==", expJumpMaps(len(w))),
-						"Unexpected number of jump maps at start of day")
-
-					// Remove a workload.
-					w[0].RemoveFromInfra(infra)
-					w[0].Stop()
-
-					// Need a long timeout here because felix throttles cleanups.
-					Eventually(numJumpMaps, "15s", "200ms").Should(
-						BeNumerically("==", expJumpMaps(len(w)-1)),
-						"Unexpected number of jump maps after removing workload")
-				})
-
 				It("should recover if the BPF programs are removed", func() {
 					flapInterface := func() {
 						By("Flapping interface")
@@ -750,7 +717,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						Eventually(func() string {
 							out, _ := felixes[0].ExecOutput("tc", "filter", "show", "ingress", "dev", w[0].InterfaceName)
 							return out
-						}, "5s", "200ms").Should(ContainSubstring("calico_from_wor"),
+						}, "5s", "200ms").Should(ContainSubstring("cali_tc_preambl"),
 							fmt.Sprintf("from wep not loaded for %s", w[0].InterfaceName))
 
 						By("handling egress program removal")
@@ -764,7 +731,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						Eventually(func() string {
 							out, _ := felixes[0].ExecOutput("tc", "filter", "show", "egress", "dev", w[0].InterfaceName)
 							return out
-						}, "5s", "200ms").Should(ContainSubstring("calico_to_wor"),
+						}, "5s", "200ms").Should(ContainSubstring("cali_tc_preambl"),
 							fmt.Sprintf("to wep not loaded for %s", w[0].InterfaceName))
 						cc.CheckConnectivity()
 
@@ -778,12 +745,12 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						Eventually(func() string {
 							out, _ := felixes[0].ExecOutput("tc", "filter", "show", "ingress", "dev", w[0].InterfaceName)
 							return out
-						}, "5s", "200ms").Should(ContainSubstring("calico_from_wor"),
+						}, "5s", "200ms").Should(ContainSubstring("cali_tc_preambl"),
 							fmt.Sprintf("from wep not loaded for %s", w[0].InterfaceName))
 						Eventually(func() string {
 							out, _ := felixes[0].ExecOutput("tc", "filter", "show", "egress", "dev", w[0].InterfaceName)
 							return out
-						}, "5s", "200ms").Should(ContainSubstring("calico_to_wor"),
+						}, "5s", "200ms").Should(ContainSubstring("cali_tc_preambl"),
 							fmt.Sprintf("to wep not loaded for %s", w[0].InterfaceName))
 						cc.CheckConnectivity()
 						cc.ResetExpectations()
