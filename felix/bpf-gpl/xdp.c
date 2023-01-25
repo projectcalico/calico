@@ -28,10 +28,9 @@
 #include "metadata.h"
 #include "globals.h"
 
-const volatile struct cali_xdp_globals __globals;
-
 /* calico_xdp is the main function used in all of the xdp programs */
-static CALI_BPF_INLINE int calico_xdp(struct xdp_md *xdp)
+SEC("xdp/main")
+int calico_xdp_main(struct xdp_md *xdp)
 {
 	/* Initialise the context, which is stored on the stack, and the state, which
 	 * we use to pass data from one program to the next via tail calls. */
@@ -47,7 +46,7 @@ static CALI_BPF_INLINE int calico_xdp(struct xdp_md *xdp)
 	};
 	struct cali_tc_ctx *ctx = &_ctx;
 
-	if (!ctx->globals) {
+	if (!ctx->xdp_globals) {
 		CALI_LOG_IF(CALI_LOG_LEVEL_DEBUG, "State map globals lookup failed: DROP\n");
 		return XDP_DROP;
 	}
@@ -107,7 +106,7 @@ static CALI_BPF_INLINE int calico_xdp(struct xdp_md *xdp)
 
 	// Jump to the policy program
 	CALI_DEBUG("About to jump to policy program.\n");
-	CALI_JUMP_TO(ctx, PROG_INDEX_POLICY);
+	CALI_JUMP_TO_POLICY(ctx);
 
 allow:
 	return XDP_PASS;
@@ -195,16 +194,4 @@ int calico_xdp_drop(struct xdp_md *xdp)
 
 	CALI_DEBUG("DENY due to policy");
 	return XDP_DROP;
-}
-
-#ifndef CALI_ENTRYPOINT_NAME_XDP
-#define CALI_ENTRYPOINT_NAME_XDP calico_entrypoint
-#endif
-
-// Entrypoint with definable name.  It's useful to redefine the name for each entrypoint
-// because the name is exposed by bpftool et al.
-SEC("xdp/"XSTR(CALI_ENTRYPOINT_NAME_XDP))
-int xdp_calico_entry(struct xdp_md *xdp)
-{
-	return calico_xdp(xdp);
 }
