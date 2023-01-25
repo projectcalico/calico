@@ -19,4 +19,5 @@ const (
 	CgroupV2Path     = "/run/calico/cgroup"
 
 	GlobalPinDir = DefaultBPFfsPath + "/tc/globals/"
+	ObjectDir    = "/usr/lib/calico/bpf"
 )
