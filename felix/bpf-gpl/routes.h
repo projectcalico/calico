@@ -29,6 +29,7 @@ enum cali_rt_flags {
 	CALI_RT_HOST        = 0x10,
 	CALI_RT_SAME_SUBNET = 0x20,
 	CALI_RT_TUNNELED    = 0x40,
+	CALI_RT_NO_DSR      = 0x80,
 };
 
 struct cali_rt {

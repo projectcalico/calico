@@ -31,6 +31,10 @@ type CIDRNode struct {
 	data     interface{}
 }
 
+func NewCIDRTrie() *CIDRTrie {
+	return new(CIDRTrie)
+}
+
 func (t *CIDRTrie) Delete(cidr CIDR) {
 	if t.root == nil {
 		// Trie is empty.

@@ -202,6 +202,7 @@ type bpfEndpointManager struct {
 	vxlanPort               uint16
 	wgPort                  uint16
 	dsrEnabled              bool
+	dsrOptoutCidrs          bool
 	bpfExtToServiceConnmark int
 	psnatPorts              numorstring.Port
 	maps                    *bpfmap.Maps
@@ -310,6 +311,7 @@ func newBPFEndpointManager(
 		vxlanPort:               uint16(config.VXLANPort),
 		wgPort:                  uint16(config.Wireguard.ListeningPort),
 		dsrEnabled:              config.BPFNodePortDSREnabled,
+		dsrOptoutCidrs:          len(config.BPFDSROptoutCIDRs) > 0,
 		bpfExtToServiceConnmark: config.BPFExtToServiceConnmark,
 		psnatPorts:              config.BPFPSNATPorts,
 		maps:                    maps,
@@ -1464,6 +1466,7 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(policyDirection PolDirection
 	ap.ToHostDrop = (m.epToHostAction == "DROP")
 	ap.FIB = m.fibLookupEnabled
 	ap.DSR = m.dsrEnabled
+	ap.DSROptoutCIDRs = m.dsrOptoutCidrs
 	ap.LogLevel = m.bpfLogLevel
 	ap.VXLANPort = m.vxlanPort
 	ap.PSNATStart = m.psnatPorts.MinPort

@@ -66,7 +66,8 @@ type bpfRouteManager struct {
 	// IPIP and VXLAN to/from them).
 	externalNodeCIDRs set.Set[ip.V4CIDR]
 	// Set of CIDRs for which we need to update the BPF routes.
-	dirtyCIDRs set.Set[ip.V4CIDR]
+	dirtyCIDRs     set.Set[ip.V4CIDR]
+	dsrOptoutCIDRs *ip.CIDRTrie
 
 	// These fields track the desired state of the dataplane and the set of inconsistencies
 	// between that and the real state of the dataplane.
@@ -106,6 +107,21 @@ func newBPFRouteManager(config *Config, maps *bpfmap.Maps,
 		extCIDRs.Add(cidr.(ip.V4CIDR))
 		dirtyCIDRs.Add(cidr.(ip.V4CIDR))
 	}
+	noDsrCIDRs := ip.NewCIDRTrie()
+	something := new(struct{})
+	for _, cidrStr := range config.BPFDSROptoutCIDRs {
+		if strings.Contains(cidrStr, ":") {
+			log.WithField("cidr", cidrStr).Debug("Ignoring IPv6 DSR optout CIDR")
+			continue
+		}
+		cidr, err := ip.ParseCIDROrIP(cidrStr)
+		if err != nil {
+			log.WithError(err).WithField("cidr", cidr).Error(
+				"Failed to parse DSR optout CIDR (which should have been validated already).")
+		}
+		noDsrCIDRs.Update(cidr.(ip.V4CIDR), something) // We need to store something
+		dirtyCIDRs.Add(cidr.(ip.V4CIDR))
+	}
 
 	return &bpfRouteManager{
 		myNodename:        config.Hostname,
@@ -118,6 +134,7 @@ func newBPFRouteManager(config *Config, maps *bpfmap.Maps,
 		ifaceNameToWEPIDs: map[string]set.Set[proto.WorkloadEndpointID]{},
 		externalNodeCIDRs: extCIDRs,
 		dirtyCIDRs:        dirtyCIDRs,
+		dsrOptoutCIDRs:    noDsrCIDRs,
 
 		desiredRoutes: map[routes.Key]routes.Value{},
 		routeMap:      maps.RouteMap,
@@ -228,6 +245,11 @@ func (m *bpfRouteManager) calculateRoute(cidr ip.V4CIDR) *routes.Value {
 	if m.externalNodeCIDRs.Contains(cidr) {
 		log.WithField("cidr", cidr).Debug("CIDR is for external nodes.")
 		flags |= routes.FlagHost
+	}
+
+	if m.dsrOptoutCIDRs.Covers(cidr) {
+		log.WithField("cidr", cidr).Debug("CIDR is optout from DSR.")
+		flags |= routes.FlagNoDSR
 	}
 
 	cgRoute, cgRouteExists := m.cidrToRoute[cidr]

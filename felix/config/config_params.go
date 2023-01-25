@@ -180,6 +180,7 @@ type Config struct {
 	BPFL3IfacePattern                  *regexp.Regexp   `config:"regexp;"`
 	BPFConnectTimeLoadBalancingEnabled bool             `config:"bool;true"`
 	BPFExternalServiceMode             string           `config:"oneof(tunnel,dsr);tunnel;non-zero"`
+	BPFDSROptoutCIDRs                  []string         `config:"cidr-list;;"`
 	BPFKubeProxyIptablesCleanupEnabled bool             `config:"bool;true"`
 	BPFKubeProxyMinSyncPeriod          time.Duration    `config:"seconds;1"`
 	BPFKubeProxyEndpointSlicesEnabled  bool             `config:"bool;true"`

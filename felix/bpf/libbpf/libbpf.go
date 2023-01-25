@@ -347,6 +347,7 @@ const (
 	GlobalsIPv6Enabled      uint32 = C.CALI_GLOBALS_IPV6_ENABLED
 	GlobalsRPFOptionEnabled uint32 = C.CALI_GLOBALS_RPF_OPTION_ENABLED
 	GlobalsRPFOptionStrict  uint32 = C.CALI_GLOBALS_RPF_OPTION_STRICT
+	GlobalsNoDSRCidrs       uint32 = C.CALI_GLOBALS_NO_DSR_CIDRS
 )
 
 func TcSetGlobals(
