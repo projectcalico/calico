@@ -155,7 +155,7 @@ func MapForTest() maps.Map {
 		Type:       "array",
 		KeySize:    4,
 		ValueSize:  expectedSize,
-		MaxEntries: 1,
+		MaxEntries: 2,
 		Name:       "test_state",
 	})
 }
