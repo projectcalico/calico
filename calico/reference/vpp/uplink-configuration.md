@@ -15,93 +15,73 @@ You can choose different ways to consume the host's primary interface with VPP, 
 
 ## General mechanics
 
-The main interface configuration is controlled by a variable named `CALICOVPP_NATIVE_DRIVER` that is passed to the `vpp` container.
-You can edit the .yaml file as follows or use the overlays provided in `./yaml/overlays/*`.
+The `calico-vpp-config` ConfigMap section of the manifest yaml contains the key `CALICOVPP_INTERFACES` which is a dictionary with parameters
+specific to interfaces in calicovpp:
 
-By default, leaving `CALICOVPP_NATIVE_DRIVER` empty (or unspecified) will try all drivers supported in your setup, starting with the most performant. You'll still
-need to allocate hugepages if you want e.g. Virtio to work.
 
-````yaml
-kind: DaemonSet
-apiVersion: apps/v1
-metadata:
-  name: calico-vpp-node
-  namespace: calico-vpp-dataplane
-spec:
-  template:
-    spec:
-      containers:
-        - name: vpp
-          env:
-            - name: CALICOVPP_NATIVE_DRIVER
-              value: "af_packet"
-````
-
-For most deployments (except for DPDK) you should ensure that the vpp configuration stanza has DPDK disabled
-
-````yaml
-vpp_config_template: |-
-    ...
-    # removed dpdk { ... }
-    ...
-    plugins {
-        plugin default { enable }
-        plugin calico_plugin.so { enable }
-        plugin dpdk_plugin.so { disable }
+```yaml
+ # Configures parameters for calicovpp agent and vpp manager
+  CALICOVPP_INTERFACES: |-
+    {
+      "maxPodIfSpec": {
+        "rx": 10, "tx": 10, "rxqsz": 1024, "txqsz": 1024
+      },
+      "defaultPodIfSpec": {
+        "rx": 1, "tx":1, "isl3": true
+      },
+      "vppHostTapSpec": {
+        "rx": 1, "tx":1, "rxqsz": 1024, "txqsz": 1024, "isl3": false
+      },
+      "uplinkInterfaces": [
+        {
+          "interfaceName": "eth1",
+          "vppDriver": "af_packet"
+        }
+      ]
     }
-````
+```
+
+The field `uplinkInterfaces` contains a list of interfaces and their configuration, with the first element being the primary/main interface, and the
+rest (if any) being the secondary host interfaces. The way the primary interface gets configured is controlled by the `vppDriver` field in `uplinkInterfaces[0]`.
+Leaving the `vppDriver` field empty (or unspecified) will try all drivers supported in your setup, starting with the most performant. You'll still
+need to allocate hugepages if you want, for example, virtio to work.
+
+> **Note**: `CALICOVPP_NATIVE_DRIVER` way of specifying the driver to use is still supported. Refer to **Legacy options** sub-section of [Getting Started]({{site.baseurl}}/getting-started/kubernetes/vpp/getting-started).
+  {: .alert .alert-info}
+
 
 ## Using the native Virtio driver
 
 You can use this driver if your primary interface is virtio [`realpath /sys/bus/pci/devices/<PCI_ID>/driver` gives `.../virtio-net`]
 
-* Ensure you have hugepages available on your system (`sysctl -w vm.nr_hugepages=256`)
+* Ensure you have hugepages available on your system (`sysctl -w vm.nr_hugepages=512`)
 * Ensure `vfio-pci` is loaded (`sudo modprobe vfio-pci`)
-
-* Pass `CALICOVPP_NATIVE_DRIVER = virtio` to the `vpp` container
+* Set `vppDriver` as "virtio" in `uplinkInterfaces[0]`
 * Also ensure that your vpp config has no `dpdk` stanza and its plugin disabled
-* Optionally `CALICOVPP_RX_QUEUES` controls the number of queues used, `CALICOVPP_RING_SIZE` their size
+
+Optionally if you would like to set the number/size of **rx** queues, refer to **UplinkInterfaceSpec** sub-section
+of [Getting Started]({{site.baseurl}}/getting-started/kubernetes/vpp/getting-started).
 
 ## Using the native AVF driver
 
 You can use this driver if your primary interface is supported by AVF [`realpath /sys/bus/pci/devices/<PCI_ID>/driver` gives `.../i40e`]
 
 * Ensure `vfio-pci` is loaded (`sudo modprobe vfio-pci`)
-
-* Pass `CALICOVPP_NATIVE_DRIVER = avf` to the `vpp` container
+* Set `vppDriver` as "avf" in `uplinkInterfaces[0]`
 * Also ensure that your vpp config has no `dpdk` stanza and its plugin disabled
-* Optionally `CALICOVPP_RX_QUEUES` controls the number of queues used, `CALICOVPP_RING_SIZE` their size
+
+Optionally if you would like to set the number/size of **rx** queues, refer to **UplinkInterfaceSpec** sub-section
+of [Getting Started]({{site.baseurl}}/getting-started/kubernetes/vpp/getting-started).
 
 ## Using AF_XDP
 
 > **Caution:**  Ensure your kernel is at least `5.4` with `uname -r`
   {: .alert .alert-danger}
 
-* Pass `CALICOVPP_NATIVE_DRIVER = af_xdp` to the `vpp` container
+* Set `vppDriver` as "af_xdp" in `uplinkInterfaces[0]`
 * Also ensure that your vpp config has no `dpdk` stanza and its plugin disabled
-* Optionally `CALICOVPP_RX_QUEUES` controls the number of queues used, `CALICOVPP_RING_SIZE` their size
-* `CALICOVPP_RX_MODE` controls whether we busy-poll the interface (`polling`), only use interrupts to wake us up (`interrupt`) or switch between both depending on the load (`adaptive`)
 * Finally `FELIX_XDPENABLED` should be set to `false` on the `calico-node` container otherwise felix will periodically cleanup the VPP configuration
 ````yaml
-kind: DaemonSet
-apiVersion: apps/v1
-metadata:
-  name: calico-vpp-node
-  namespace: calico-vpp-dataplane
-spec:
-  template:
-    spec:
-      containers:
-        - name: vpp
-          env:
-            - name: CALICOVPP_NATIVE_DRIVER
-              value: "af_xdp"
-            - name: CALICOVPP_RING_SIZE
-              value: "1024"
-            - name: CALICOVPP_RX_QUEUES
-              value: "1"
-            - name: CALICOVPP_RX_MODE
-              value: "polling"
 ---
 kind: DaemonSet
 apiVersion: apps/v1
@@ -117,103 +97,47 @@ spec:
             - name: FELIX_XDPENABLED
               value: "false"
 ````
-
 With kustomize use `kubectl kustomize ./yaml/overlays/af-xdp | kubectl apply -f -`
 
-#### Side nodes
+Optionally if you would like to set the number/size of **rx** queues or if you would like to customize whether we busy-poll the interface (`polling`),
+only use interrupts to wake us up (`interrupt`) or switch between both depending on the load (`adaptive`), refer to **UplinkInterfaceSpec** sub-section
+of [Getting Started]({{site.baseurl}}/getting-started/kubernetes/vpp/getting-started). 
+
+
+#### Side notes
 
 * AF_XDP won't start if you specify `buffers { buffers-per-numa }` to be too big (65536 should work)
 
+
 ## Using AF_PACKET
 
-* Pass `CALICOVPP_NATIVE_DRIVER = af_packet` to the `vpp` container
+* Set `vppDriver` as "af_packet" in `uplinkInterfaces[0]`
 * Also ensure that your vpp config has no `dpdk` stanza and the dpdk plugin is disabled
 
 You can also use `kubectl kustomize ./yaml/overlays/af-packet | kubectl apply -f -`
 
+
 ## Using DPDK
 
-### With available hugepages
+### With hugepages
 
-* Ensure you have hugepages available on your system (`sysctl -w vm.nr_hugepages=256`)
-* Pass `CALICOVPP_NATIVE_DRIVER = none` to the `vpp` container
-* The vpp config in the `calico-config` ConfigMap should look like the following, `__PCI_DEVICE_ID__` will be automatically populated with the PCI ID of `CALICOVPP_INTERFACE` at startup.
-* `CALICOVPP_RX_QUEUES` and `CALICOVPP_RING_SIZE` have no more effect. They are controlled by their counterparts in the `dpdk {}` stanza namely `num-rx-queues` and `num-rx-desc`
-
-````yaml
-vpp_config_template: |-
-    unix {
-      nodaemon
-      full-coredump
-      cli-listen /var/run/vpp/cli.sock
-    }
-    api-trace { on }
-    cpu {
-        main-core 1
-        workers 0
-    }
-    socksvr {
-        socket-name /var/run/vpp/vpp-api.sock
-    }
-    dpdk {
-      dev __PCI_DEVICE_ID__ { num-rx-queues 1  num-tx-queues 1 }
-    }
-    plugins {
-        plugin default { enable }
-        plugin calico_plugin.so { enable }
-    }
-````
+* Ensure you have hugepages available on your system (`sysctl -w vm.nr_hugepages=512`)
+* Set `vppDriver` as "dpdk" in `uplinkInterfaces[0]`
 
 ### Without hugepages
 
-DPDK can also run without hugepages with the a configuration similar to the previous one
-* Pass `CALICOVPP_NATIVE_DRIVER = none` to the `vpp` container
-* The vpp config in the `calico-config` ConfigMap should look like the following, with `__PCI_DEVICE_ID__` automatically populated with that of `CALICOVPP_INTERFACE` at startup
-* `CALICOVPP_RX_QUEUES` and `CALICOVPP_RING_SIZE` have no more effect. They are controlled by their counterparts in the `dpdk {}` stanza namely `num-rx-queues` and `num-rx-desc`
+DPDK can also run without hugepages but you would need to turn off **unsafe_iommu**, ie, you need to `echo N | sudo tee /sys/module/vfio/parameters/enable_unsafe_noiommu_mode`,
+and of course, you need to set `vppDriver` as "dpdk" in `uplinkInterfaces[0]`.
 
-You also need to tell `dpdk` to no try allocating hugepages on its own
-* `dpdk { no-hugetlb iova-mode va }` does this for the dpdk plugin
-* `buffers { no-hugetlb }` does this for the buffers backing VPP's packets
-
-> **Caution:**  This won't run with unsafe_iommu on. You need to `echo N | sudo tee /sys/module/vfio/parameters/enable_unsafe_noiommu_mode`
-  {: .alert .alert-danger}
-
-````yaml
-vpp_config_template: |-
-    unix {
-      nodaemon
-      full-coredump
-      cli-listen /var/run/vpp/cli.sock
-    }
-    api-trace { on }
-    cpu {
-        main-core 1
-        workers 0
-    }
-    socksvr {
-        socket-name /var/run/vpp/vpp-api.sock
-    }
-    dpdk {
-      dev __PCI_DEVICE_ID__ { num-rx-queues 1  num-tx-queues 1 }
-      iova-mode va
-      no-hugetlb
-    }
-    buffers {
-      no-hugetlb
-    }
-    plugins {
-        plugin default { enable }
-        plugin calico_plugin.so { enable }
-    }
-````
 
 ## Using native drivers with vpp's CLI
 
-This is a rather advanced/experimental setup, we'll take the example of the AVF driver for this, using vpp cli, but any vpp driver can be used. This allow to efficiently support other interface types.
+This is a rather advanced/experimental setup and we'll take the example of the AVF driver for this, using vpp cli, but any vpp driver can be used.
+This allow to efficiently support other interface types.
 
-* Pass `CALICOVPP_NATIVE_DRIVER = none` to the `vpp` container
-* Same as before, you should remove the `dpdk { ... }` section in `vpp_config_template` and update the `plugins { ... }` definitions as follows
-* Also add a `exec /etc/vpp/startup.exec` entry in `unix { .. }`
+* Set `vppDriver` as "none" in `uplinkInterfaces[0]`
+* Ensure that your vpp config has no `dpdk` stanza and the dpdk plugin is disabled
+* Lastly, in the vpp config add an `exec /etc/vpp/startup.exec` entry in `unix { .. }`
 
 ````yaml
 vpp_config_template: |-
@@ -233,7 +157,9 @@ vpp_config_template: |-
         plugin dpdk_plugin.so { disable }
     }
 ````
+
 Then update the `CALICOVPP_CONFIG_EXEC_TEMPLATE` environment variable to pass the interface creation cli(s).
+
 ````yaml
 kind: DaemonSet
 apiVersion: apps/v1
