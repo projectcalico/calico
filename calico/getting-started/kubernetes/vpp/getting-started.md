@@ -275,9 +275,9 @@ Then locate the `calico-vpp-config` ConfigMap in this yaml manifest and configur
 
 ```yaml
 CALICOVPP_INTERFACES: |-
-    {
-      "uplinkInterfaces": [ { "interfaceName": "eth0" } ]
-	}
+  {
+    "uplinkInterfaces": [ { "interfaceName": "eth0" } ]
+  }
 ```
 The name of the used interface must be the name of a Linux interface, up and configured with an address. The address configured on this interface **must** be the node address in Kubernetes (`kubectl get nodes -o wide`).
 
@@ -343,9 +343,9 @@ The supported values will depend on the interface type. Available values are:
 
 **Legacy options**
 
-We maintain legacy support for the `CALICOVPP_INTERFACE` env var and `CALICOVPP_NATIVE_DRIVER` that corresponds to the following:
+We maintain legacy support for the `CALICOVPP_INTERFACE` and `CALICOVPP_NATIVE_DRIVER` env vars that correspond to the following:
 
-`CALICOVPP_INTERFACES` -> `uplinkInterfaces[0].interfaceName`
+`CALICOVPP_INTERFACE` -> `uplinkInterfaces[0].interfaceName`
 
 `CALICOVPP_NATIVE_DRIVER` -> `uplinkInterfaces[0].vppDriver`
 
