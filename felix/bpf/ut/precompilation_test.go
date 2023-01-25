@@ -51,78 +51,40 @@ func TestPrecompiledBinariesAreLoadable(t *testing.T) {
 
 	defer bpf.CleanUpMaps()
 
-	for _, logLevel := range []string{"OFF", "INFO", "DEBUG"} {
-		logLevel := logLevel
-		// Compile the TC endpoint programs.
-		logCxt := log.WithField("logLevel", logLevel)
+	for _, at := range tc.ListAttachTypes() {
 		for _, btfEnabled := range checkBTFEnabled() {
 			bpfutils.BTFEnabled = btfEnabled
-			for _, epToHostDrop := range []bool{false, true} {
-				epToHostDrop := epToHostDrop
-				logCxt = logCxt.WithField("epToHostDrop", epToHostDrop)
-				for _, fibEnabled := range []bool{false, true} {
-					fibEnabled := fibEnabled
-					logCxt = logCxt.WithField("fibEnabled", fibEnabled)
-					epTypes := []tc.EndpointType{
-						tc.EpTypeWorkload,
-						tc.EpTypeHost,
-						tc.EpTypeTunnel,
-						tc.EpTypeL3Device,
-					}
-					for _, epType := range epTypes {
-						epType := epType
-						logCxt = logCxt.WithField("epType", epType)
-						if epToHostDrop && epType != tc.EpTypeWorkload {
-							log.Debug("Skipping combination since epToHostDrop only affect workloads")
-							continue
-						}
-						for _, toOrFrom := range []tc.ToOrFromEp{tc.FromEp, tc.ToEp} {
-							toOrFrom := toOrFrom
-
-							logCxt := logCxt.WithField("toOrFrom", toOrFrom)
-							if toOrFrom == tc.ToEp && (fibEnabled || epToHostDrop) {
-								log.Debug("Skipping combination since fibEnabled/epToHostDrop only affect from targets")
-								continue
-							}
-
-							for _, dsr := range []bool{false, true} {
-								if dsr && !((epType == tc.EpTypeWorkload && toOrFrom == tc.FromEp) ||
-									(epType == tc.EpTypeHost)) {
-									log.Debug("DSR only affects from WEP and HEP")
-									continue
-								}
-
-								ap := tc.AttachPoint{
-									IPv6Enabled: true,
-									Type:        epType,
-									ToOrFrom:    toOrFrom,
-									Hook:        bpf.HookIngress,
-									ToHostDrop:  epToHostDrop,
-									FIB:         fibEnabled,
-									DSR:         dsr,
-									LogLevel:    logLevel,
-									HostIP:      net.ParseIP("10.0.0.1"),
-									IntfIP:      net.ParseIP("10.0.0.2"),
-								}
-
-								t.Run(ap.FileName(4), func(t *testing.T) {
-									RegisterTestingT(t)
-									logCxt.Debugf("Testing %v in %v", ap.ProgramName(), ap.FileName(4))
-
-									vethName, veth := createVeth()
-									defer deleteLink(veth)
-									ap.Iface = vethName
-									err := tc.EnsureQdisc(ap.Iface)
-									Expect(err).NotTo(HaveOccurred())
-									opts, err := ap.AttachProgram()
-									Expect(err).NotTo(HaveOccurred())
-									Expect(opts).NotTo(Equal(nil))
-								})
-							}
-						}
-					}
-				}
+			if at.Family == 6 {
+				continue
 			}
+
+			ap := tc.AttachPoint{
+				IPv6Enabled: true,
+				Type:        at.Type,
+				ToOrFrom:    at.ToOrFrom,
+				Hook:        bpf.HookIngress,
+				ToHostDrop:  at.ToHostDrop,
+				FIB:         at.FIB,
+				DSR:         at.DSR,
+				LogLevel:    at.LogLevel,
+				HostIP:      net.ParseIP("10.0.0.1"),
+				IntfIP:      net.ParseIP("10.0.0.2"),
+			}
+
+			t.Run(ap.FileName(4), func(t *testing.T) {
+				RegisterTestingT(t)
+				log.WithField("AttachType", at).WithField("btf", btfEnabled).
+					Debugf("Testing %v in %v", ap.ProgramName(), ap.FileName(4))
+
+				vethName, veth := createVeth()
+				defer deleteLink(veth)
+				ap.Iface = vethName
+				err := tc.EnsureQdisc(ap.Iface)
+				Expect(err).NotTo(HaveOccurred())
+				opts, err := ap.AttachProgram()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(opts).NotTo(Equal(nil))
+			})
 		}
 	}
 
