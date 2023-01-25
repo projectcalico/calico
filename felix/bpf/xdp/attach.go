@@ -25,6 +25,8 @@ import (
 	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/bpf/bpfdefs"
+	"github.com/projectcalico/calico/felix/bpf/hook"
 	"github.com/projectcalico/calico/felix/bpf/libbpf"
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
@@ -50,8 +52,8 @@ func (ap *AttachPoint) IfaceName() string {
 	return ap.Iface
 }
 
-func (ap *AttachPoint) HookName() bpf.Hook {
-	return bpf.HookXDP
+func (ap *AttachPoint) HookName() hook.Hook {
+	return hook.XDP
 }
 
 func (ap *AttachPoint) Config() string {
@@ -59,7 +61,7 @@ func (ap *AttachPoint) Config() string {
 }
 
 func (ap *AttachPoint) JumpMapFDMapKey() string {
-	return bpf.HookXDP.String()
+	return hook.XDP.String()
 }
 
 func (ap *AttachPoint) FileName() string {
@@ -131,7 +133,7 @@ func (ap *AttachPoint) AttachProgram() (int, error) {
 	}()
 
 	filename := ap.FileName()
-	preCompiledBinary := path.Join(bpf.ObjectDir, filename)
+	preCompiledBinary := path.Join(bpfdefs.ObjectDir, filename)
 
 	obj, err := libbpf.OpenObject(preCompiledBinary)
 	if err != nil {
@@ -147,7 +149,7 @@ func (ap *AttachPoint) AttachProgram() (int, error) {
 			continue
 		}
 		// TODO: We need to set map size here like tc.
-		pinDir := bpf.MapPinDir(m.Type(), m.Name(), ap.Iface, bpf.HookXDP)
+		pinDir := bpf.MapPinDir(m.Type(), m.Name(), ap.Iface, hook.XDP)
 		if err := m.SetPinPath(path.Join(pinDir, m.Name())); err != nil {
 			return -1, fmt.Errorf("error pinning map %s: %w", m.Name(), err)
 		}
@@ -217,7 +219,7 @@ func (ap *AttachPoint) DetachProgram() error {
 		return nil
 	}
 
-	ourProg, err := bpf.AlreadyAttachedProg(ap, path.Join(bpf.ObjectDir, ap.FileName()), progID)
+	ourProg, err := bpf.AlreadyAttachedProg(ap, path.Join(bpfdefs.ObjectDir, ap.FileName()), progID)
 	if err != nil || !ourProg {
 		return fmt.Errorf("XDP expected program ID does match with current one: %w", err)
 	}
@@ -249,7 +251,7 @@ func (ap *AttachPoint) DetachProgram() error {
 	ap.Log().Infof("XDP program detached. program ID: %v", progID)
 
 	// Program is detached, now remove the json file we saved for it
-	if err = bpf.ForgetAttachedProg(ap.IfaceName(), bpf.HookXDP); err != nil {
+	if err = bpf.ForgetAttachedProg(ap.IfaceName(), hook.XDP); err != nil {
 		return fmt.Errorf("failed to delete hash of BPF program from disk: %w", err)
 	}
 	return nil

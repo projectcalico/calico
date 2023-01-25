@@ -28,6 +28,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/felix/bpf/hook"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -42,7 +43,7 @@ type AttachedProgInfo struct {
 // AttachPointInfo describes what we need to know about an attach point
 type AttachPointInfo interface {
 	IfaceName() string
-	HookName() Hook
+	HookName() hook.Hook
 	Config() string
 }
 
@@ -120,7 +121,7 @@ func RememberAttachedProg(a AttachPointInfo, object string, id int) error {
 
 // ForgetAttachedProg removes what we store about the iface/hook
 // program.
-func ForgetAttachedProg(iface string, hook Hook) error {
+func ForgetAttachedProg(iface string, hook hook.Hook) error {
 	err := os.Remove(RuntimeJSONFilename(iface, hook))
 	// If the hash file does not exist, just ignore the err code, and return false
 	if err != nil && !os.IsNotExist(err) {
@@ -132,7 +133,7 @@ func ForgetAttachedProg(iface string, hook Hook) error {
 // ForgetIfaceAttachedProg removes information we store about any programs
 // associated with an iface.
 func ForgetIfaceAttachedProg(iface string) error {
-	for _, hook := range Hooks {
+	for _, hook := range hook.All {
 		err := ForgetAttachedProg(iface, hook)
 		if err != nil {
 			return err
@@ -155,7 +156,7 @@ func CleanAttachedProgDir() {
 
 	expectedJSONFiles := set.New[string]()
 	for _, iface := range interfaces {
-		for _, hook := range Hooks {
+		for _, hook := range hook.All {
 			expectedJSONFiles.Add(RuntimeJSONFilename(iface.Name, hook))
 		}
 	}
@@ -185,7 +186,7 @@ func CleanAttachedProgDir() {
 // RuntimeJSONFilename returns filename where we store information about
 // attached program. The filename is [iface name]_[hook].json, for
 // example, eth0_egress.json
-func RuntimeJSONFilename(iface string, hook Hook) string {
+func RuntimeJSONFilename(iface string, hook hook.Hook) string {
 	return path.Join(RuntimeProgDir, fmt.Sprintf("%s_%s.json", iface, hook))
 }
 

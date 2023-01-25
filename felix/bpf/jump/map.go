@@ -18,15 +18,15 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/maps"
 )
 
-const MaxEntries = 1100
+const MaxEntries = 200
 
-func MapForTest() bpf.Map {
+func MapForTest() maps.Map {
 	return maps.NewPinnedMap(maps.MapParameters{
 		Type:       "prog_array",
 		KeySize:    4,
 		ValueSize:  4,
 		MaxEntries: MaxEntries,
-		Name:       "cali_jump",
-		Version:    3,
+		Name:       "cali_progs",
+		Version:    2,
 	})
 }

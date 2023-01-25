@@ -28,8 +28,6 @@
 #include "metadata.h"
 #include "globals.h"
 
-const volatile struct cali_xdp_globals __globals;
-
 /* calico_xdp is the main function used in all of the xdp programs */
 static CALI_BPF_INLINE int calico_xdp(struct xdp_md *xdp)
 {
@@ -47,7 +45,7 @@ static CALI_BPF_INLINE int calico_xdp(struct xdp_md *xdp)
 	};
 	struct cali_tc_ctx *ctx = &_ctx;
 
-	if (!ctx->globals) {
+	if (!ctx->xdp_globals) {
 		CALI_LOG_IF(CALI_LOG_LEVEL_DEBUG, "State map globals lookup failed: DROP\n");
 		return XDP_DROP;
 	}
@@ -107,7 +105,7 @@ static CALI_BPF_INLINE int calico_xdp(struct xdp_md *xdp)
 
 	// Jump to the policy program
 	CALI_DEBUG("About to jump to policy program.\n");
-	CALI_JUMP_TO(ctx, PROG_INDEX_POLICY);
+	CALI_JUMP_TO_POLICY(ctx);
 
 allow:
 	return XDP_PASS;

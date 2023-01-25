@@ -40,6 +40,7 @@ import (
 	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/calico/felix/bpf/bpfdefs"
+	"github.com/projectcalico/calico/felix/bpf/hook"
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/utils"
 	"github.com/projectcalico/calico/felix/environment"
@@ -47,47 +48,6 @@ import (
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
-
-// Hook is the hook to which a BPF program should be attached. This is relative to
-// the host namespace so workload PolDirnIngress policy is attached to the HookEgress.
-type Hook int
-
-func (h Hook) String() string {
-	switch h {
-	case HookIngress:
-		return "ingress"
-	case HookEgress:
-		return "egress"
-	case HookXDP:
-		return "xdp"
-	}
-
-	return "unknown"
-}
-
-func StringToHook(s string) Hook {
-	switch s {
-	case "ingress":
-		return HookIngress
-	case "egress":
-		return HookEgress
-	case "xdp":
-		return HookXDP
-	}
-
-	return HookBad
-}
-
-const (
-	HookIngress Hook = iota
-	HookEgress
-	HookXDP
-	HookCount
-
-	HookBad Hook = -1
-)
-
-var Hooks = []Hook{HookIngress, HookEgress, HookXDP}
 
 type XDPMode int
 
@@ -2177,7 +2137,7 @@ func PolicyDebugJSONFileName(iface, polDir string, ipFamily proto.IPVersion) str
 	return path.Join(RuntimePolDir, fmt.Sprintf("%s_%s_v%d.json", iface, polDir, ipFamily))
 }
 
-func MapPinDir(typ int, name, iface string, hook Hook) string {
+func MapPinDir(typ int, name, iface string, h hook.Hook) string {
 	PinBaseDir := path.Join(bpfdefs.DefaultBPFfsPath, "tc")
 	subDir := "globals"
 	// We need one jump map and one counter map for each program, thus we need to pin those
@@ -2185,12 +2145,12 @@ func MapPinDir(typ int, name, iface string, hook Hook) string {
 	if typ == unix.BPF_MAP_TYPE_PROG_ARRAY && strings.Contains(name, maps.JumpMapName()) {
 		// Remove period in the interface name if any
 		ifName := strings.ReplaceAll(iface, ".", "")
-		switch hook {
-		case HookXDP:
+		switch h {
+		case hook.XDP:
 			subDir = ifName + "_xdp"
-		case HookIngress:
+		case hook.Ingress:
 			subDir = ifName + "_igr"
-		case HookEgress:
+		case hook.Egress:
 			subDir = ifName + "_egr"
 		default:
 			panic("Invalid hook")

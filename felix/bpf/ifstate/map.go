@@ -34,7 +34,7 @@ func SetMapSize(size int) {
 
 const (
 	KeySize    = 4
-	ValueSize  = 4 + 16
+	ValueSize  = 4 + 16 + 3*4
 	MaxEntries = 1000
 )
 
@@ -87,12 +87,17 @@ func KeyFromBytes(b []byte) Key {
 	return k
 }
 
-type Value [4 + 16]byte
+type Value [ValueSize]byte
 
 func NewValue(flags uint32, name string) Value {
 	var v Value
 
+	undef := int32(-1)
+
 	binary.LittleEndian.PutUint32(v[:], flags)
+	binary.LittleEndian.PutUint32(v[4+16:4+16+4], uint32(undef))
+	binary.LittleEndian.PutUint32(v[4+16+4:4+16+8], uint32(undef))
+	binary.LittleEndian.PutUint32(v[4+16+8:4+16+12], uint32(undef))
 	copy(v[4:4+15], []byte(name))
 
 	return v
@@ -108,6 +113,18 @@ func (v Value) Flags() uint32 {
 
 func (v Value) IfName() string {
 	return strings.TrimRight(string(v[4:]), "\x00")
+}
+
+func (v Value) XDPPolicy() int {
+	return int(int32(binary.LittleEndian.Uint32(v[4+16 : 4+16+4])))
+}
+
+func (v Value) IngressPolicy() int {
+	return int(int32(binary.LittleEndian.Uint32(v[4+16+4 : 4+16+8])))
+}
+
+func (v Value) EgressPolicy() int {
+	return int(int32(binary.LittleEndian.Uint32(v[4+16+8 : 4+16+12])))
 }
 
 func (v Value) String() string {

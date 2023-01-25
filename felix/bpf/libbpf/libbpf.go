@@ -278,7 +278,7 @@ func CreateQDisc(ifName string) error {
 	}
 	_, err = C.bpf_tc_create_qdisc(C.int(ifIndex))
 	if err != nil {
-		return fmt.Errorf("Error creating qdisc %w", err)
+		return fmt.Errorf("creating qdisc %w", err)
 	}
 	return nil
 }
@@ -292,7 +292,7 @@ func RemoveQDisc(ifName string) error {
 	}
 	_, err = C.bpf_tc_remove_qdisc(C.int(ifIndex))
 	if err != nil {
-		return fmt.Errorf("Error removing qdisc %w", err)
+		return fmt.Errorf("removing qdisc %w", err)
 	}
 	return nil
 }
@@ -304,7 +304,7 @@ func (o *Obj) UpdateJumpMap(mapName, progName string, mapIndex int) error {
 	defer C.free(unsafe.Pointer(cProgName))
 	_, err := C.bpf_update_jump_map(o.obj, cMapName, cProgName, C.int(mapIndex))
 	if err != nil {
-		return fmt.Errorf("Error updating %s at index %d: %w", mapName, mapIndex, err)
+		return fmt.Errorf("updating %s at index %d: %w", mapName, mapIndex, err)
 	}
 	return nil
 }

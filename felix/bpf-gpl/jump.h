@@ -33,17 +33,17 @@ static CALI_BPF_INLINE struct cali_xdp_globals *state_get_globals_xdp(void)
 	return cali_state_lookup_elem(&key);
 }
 
-#define cali_jump_map map_symbol(cali_jump, 3)
+#define cali_jump_map map_symbol(cali_progs, 2)
 
 struct bpf_map_def_extended __attribute__((section("maps"))) cali_jump_map = {
 	.type = BPF_MAP_TYPE_PROG_ARRAY,
 	.key_size = 4,
 	.value_size = 4,
-	.max_entries = 1100,
+	.max_entries = 200,
 };
 
 #if CALI_F_XDP
-#define CALI_JUMP_TO(ctx, index) bpf_tail_call((ctx)->xdp, &cali_jump_map, index)
+#define CALI_JUMP_TO(ctx, index) bpf_tail_call((ctx)->xdp, &cali_jump_map, (ctx)->xdp_globals->jumps[index])
 #else
 #define CALI_JUMP_TO(ctx, index) bpf_tail_call((ctx)->skb, &cali_jump_map, (ctx)->globals->jumps[index])
 #endif
@@ -63,4 +63,20 @@ enum cali_jump_index {
 	PROG_INDEX_V6_ICMP,
 	PROG_INDEX_V6_DROP,
 };
+
+#define cali_policy_map map_symbol(cali_pols, 2)
+
+struct bpf_map_def_extended __attribute__((section("maps"))) cali_policy_map = {
+	.type = BPF_MAP_TYPE_PROG_ARRAY,
+	.key_size = 4,
+	.value_size = 4,
+	.max_entries = 1100,
+};
+
+#if CALI_F_XDP
+#define CALI_JUMP_TO_POLICY(ctx) bpf_tail_call((ctx)->xdp, &cali_policy_map, (ctx)->xdp_globals->jumps[PROG_INDEX_POLICY])
+#else
+#define CALI_JUMP_TO_POLICY(ctx) bpf_tail_call((ctx)->skb, &cali_policy_map, (ctx)->globals->jumps[PROG_INDEX_POLICY])
+#endif
+
 #endif /* __CALI_BPF_JUMP_H__ */

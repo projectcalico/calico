@@ -26,6 +26,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/bpfutils"
+	"github.com/projectcalico/calico/felix/bpf/hook"
 	"github.com/projectcalico/calico/felix/bpf/tc"
 	"github.com/projectcalico/calico/felix/bpf/utils"
 	"github.com/projectcalico/calico/felix/bpf/xdp"
@@ -51,80 +52,79 @@ func TestPrecompiledBinariesAreLoadable(t *testing.T) {
 
 	defer bpf.CleanUpMaps()
 
-	for _, at := range tc.ListAttachTypes() {
-		for _, btfEnabled := range checkBTFEnabled() {
-			bpfutils.BTFEnabled = btfEnabled
-			if at.Family == 6 {
-				continue
+	for _, at := range hook.ListAttachTypes() {
+		switch at.Hook {
+		case hook.XDP:
+			ap := xdp.AttachPoint{
+				LogLevel: at.LogLevel,
+				Modes:    []bpf.XDPMode{bpf.XDPGeneric},
 			}
 
-			ap := tc.AttachPoint{
-				IPv6Enabled: true,
-				Type:        at.Type,
-				ToOrFrom:    at.ToOrFrom,
-				Hook:        bpf.HookIngress,
-				ToHostDrop:  at.ToHostDrop,
-				FIB:         at.FIB,
-				DSR:         at.DSR,
-				LogLevel:    at.LogLevel,
-				HostIP:      net.ParseIP("10.0.0.1"),
-				IntfIP:      net.ParseIP("10.0.0.2"),
-			}
-
-			t.Run(ap.FileName(4), func(t *testing.T) {
+			t.Run(at.ObjectFile(), func(t *testing.T) {
 				RegisterTestingT(t)
-				log.WithField("AttachType", at).WithField("btf", btfEnabled).
-					Debugf("Testing %v in %v", ap.ProgramName(), ap.FileName(4))
+				log.WithField("AttachType", at).Debugf("Testing %v in %v", ap.ProgramName(), at.ObjectFile())
 
 				vethName, veth := createVeth()
 				defer deleteLink(veth)
 				ap.Iface = vethName
-				err := tc.EnsureQdisc(ap.Iface)
-				Expect(err).NotTo(HaveOccurred())
 				opts, err := ap.AttachProgram()
 				Expect(err).NotTo(HaveOccurred())
 				Expect(opts).NotTo(Equal(nil))
 			})
+		default:
+			for _, btfEnabled := range checkBTFEnabled() {
+				bpfutils.BTFEnabled = btfEnabled
+				if at.Family == 6 {
+					continue
+				}
+
+				ap := tc.AttachPoint{
+					IPv6Enabled: true,
+					Type:        at.Type,
+					Hook:        at.Hook,
+					ToHostDrop:  at.ToHostDrop,
+					FIB:         at.FIB,
+					DSR:         at.DSR,
+					LogLevel:    at.LogLevel,
+					HostIP:      net.ParseIP("10.0.0.1"),
+					IntfIP:      net.ParseIP("10.0.0.2"),
+				}
+
+				t.Run(at.ObjectFile(), func(t *testing.T) {
+					RegisterTestingT(t)
+					log.WithField("AttachType", at).WithField("btf", btfEnabled).
+						Debugf("Testing %v in %v", ap.ProgramName(), at.ObjectFile())
+
+					vethName, veth := createVeth()
+					defer deleteLink(veth)
+					ap.Iface = vethName
+					err := tc.EnsureQdisc(ap.Iface)
+					Expect(err).NotTo(HaveOccurred())
+					opts, err := ap.AttachProgram()
+					Expect(err).NotTo(HaveOccurred())
+					Expect(opts).NotTo(Equal(nil))
+				})
+			}
 		}
-	}
-
-	// Test XDP objects are loadable
-	for _, logLevel := range []string{"OFF", "INFO", "DEBUG"} {
-		logLevel := logLevel
-		// Compile the XDP endpoint programs.
-		logCxt := log.WithField("logLevel", logLevel)
-
-		ap := xdp.AttachPoint{
-			LogLevel: logLevel,
-			Modes:    []bpf.XDPMode{bpf.XDPGeneric},
-		}
-
-		t.Run(ap.FileName(), func(t *testing.T) {
-			RegisterTestingT(t)
-			logCxt.Debugf("Testing %v in %v", ap.ProgramName(), ap.FileName())
-
-			vethName, veth := createVeth()
-			defer deleteLink(veth)
-			ap.Iface = vethName
-			opts, err := ap.AttachProgram()
-			Expect(err).NotTo(HaveOccurred())
-			Expect(opts).NotTo(Equal(nil))
-		})
 	}
 }
 
 func createVeth() (string, netlink.Link) {
 	vethName := fmt.Sprintf("test%xa", rand.Uint32())
+	return vethName, createVethName(vethName)
+}
+
+func createVethName(name string) netlink.Link {
 	var veth netlink.Link = &netlink.Veth{
 		LinkAttrs: netlink.LinkAttrs{
-			Name:  vethName,
+			Name:  name,
 			Flags: net.FlagUp,
 		},
-		PeerName: vethName + "b",
+		PeerName: name + "b",
 	}
 	err := netlink.LinkAdd(veth)
 	Expect(err).NotTo(HaveOccurred(), "failed to create test veth")
-	return vethName, veth
+	return veth
 }
 
 func deleteLink(veth netlink.Link) {

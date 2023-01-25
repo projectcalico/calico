@@ -520,6 +520,26 @@ func ipToU32(ip net.IP) uint32 {
 	return binary.LittleEndian.Uint32([]byte(ip[:]))
 }
 
+func tcUpdateJumpMap(obj *libbpf.Obj, progs []int, hasPolicyProg, hasHostConflictProg bool) error {
+	mapName := maps.JumpMapName()
+
+	for _, idx := range progs {
+		if (idx == tcdefs.ProgIndexPolicy || idx == tcdefs.ProgIndexV6Policy) && !hasPolicyProg {
+			continue
+		}
+		if idx == tcdefs.ProgIndexHostCtConflict && !hasHostConflictProg {
+			continue
+		}
+		log.WithField("prog", tcdefs.ProgramNames[idx]).Debug("UpdateJumpMap")
+		err := obj.UpdateJumpMap(mapName, tcdefs.ProgramNames[idx], idx)
+		if err != nil {
+			return fmt.Errorf("error updating %s program: %w", tcdefs.ProgramNames[idx], err)
+		}
+	}
+
+	return nil
+}
+
 func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostConflictProg bool) (*libbpf.Obj, error) {
 	log.WithField("program", fname).Debug("Loading BPF program")
 
@@ -616,11 +636,11 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 	}
 
 	if !forXDP {
-		err = tc.UpdateJumpMap(obj, tcdefs.JumpMapIndexes[ipFamily], false, hasHostConflictProg)
+		err = tcUpdateJumpMap(obj, tcdefs.JumpMapIndexes[ipFamily], false, hasHostConflictProg)
 		if err != nil && !strings.Contains(err.Error(), "error updating calico_tc_host_ct_conflict program") {
 			goto out
 		}
-		err = tc.UpdateJumpMap(obj, tcdefs.JumpMapIndexes[ipFamily], false, false)
+		err = tcUpdateJumpMap(obj, tcdefs.JumpMapIndexes[ipFamily], false, false)
 	} else {
 		if err := xdp.UpdateJumpMap(obj, xdp.JumpMapIndexes[ipFamily]); err != nil {
 			goto out

@@ -12,12 +12,12 @@
 #include "jump.h"
 #include "log.h"
 
-const volatile struct cali_tc_globals __globals;
+const volatile struct cali_xdp_globals __globals;
 
-SEC("classifier/tc/preamble")
+SEC("classifier/xdp/preamble")
 int  cali_tc_preamble(struct __sk_buff *skb)
 {
-	struct cali_tc_globals *globals = state_get_globals_tc();
+	struct cali_xdp_globals *globals = state_get_globals_xdp();
 
 	if (!globals) {
 		return TC_ACT_SHOT;
