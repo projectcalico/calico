@@ -31,9 +31,9 @@ import (
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	"github.com/projectcalico/calico/felix/bpf/ipsets"
+	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/nat"
 	"github.com/projectcalico/calico/felix/bpf/routes"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
@@ -128,12 +128,12 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test configurable
 		ctMap := conntrack.Map()
 
 		felix := felixes[0]
-		Eventually(func() int { return getMapSize(felix, rtMap) }, "10s", "200ms").Should(Equal((rtMap.(*bpf.PinnedMap)).MaxEntries))
-		Eventually(func() int { return getMapSize(felix, feMap) }, "10s", "200ms").Should(Equal((feMap.(*bpf.PinnedMap)).MaxEntries))
-		Eventually(func() int { return getMapSize(felix, beMap) }, "10s", "200ms").Should(Equal((beMap.(*bpf.PinnedMap)).MaxEntries))
-		Eventually(func() int { return getMapSize(felix, affMap) }, "10s", "200ms").Should(Equal((affMap.(*bpf.PinnedMap)).MaxEntries))
-		Eventually(func() int { return getMapSize(felix, ipsMap) }, "10s", "200ms").Should(Equal((ipsMap.(*bpf.PinnedMap)).MaxEntries))
-		Eventually(func() int { return getMapSize(felix, ctMap) }, "10s", "200ms").Should(Equal((ctMap.(*bpf.PinnedMap)).MaxEntries))
+		Eventually(func() int { return getMapSize(felix, rtMap) }, "10s", "200ms").Should(Equal((rtMap.(*maps.PinnedMap)).MaxEntries))
+		Eventually(func() int { return getMapSize(felix, feMap) }, "10s", "200ms").Should(Equal((feMap.(*maps.PinnedMap)).MaxEntries))
+		Eventually(func() int { return getMapSize(felix, beMap) }, "10s", "200ms").Should(Equal((beMap.(*maps.PinnedMap)).MaxEntries))
+		Eventually(func() int { return getMapSize(felix, affMap) }, "10s", "200ms").Should(Equal((affMap.(*maps.PinnedMap)).MaxEntries))
+		Eventually(func() int { return getMapSize(felix, ipsMap) }, "10s", "200ms").Should(Equal((ipsMap.(*maps.PinnedMap)).MaxEntries))
+		Eventually(func() int { return getMapSize(felix, ctMap) }, "10s", "200ms").Should(Equal((ctMap.(*maps.PinnedMap)).MaxEntries))
 
 		By("configuring route map size = 1000, nat fe size = 2000, nat be size = 3000, nat affinity size = 4000")
 		newRtSize := 1000
@@ -159,15 +159,15 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test configurable
 	})
 })
 
-func getMapSize(felix *infrastructure.Felix, m bpf.Map) int {
+func getMapSize(felix *infrastructure.Felix, m maps.Map) int {
 	output := showBpfMap(felix, m)
 	return int(output["max_entries"].(float64))
 }
 
-func showBpfMap(felix *infrastructure.Felix, m bpf.Map) map[string]interface{} {
+func showBpfMap(felix *infrastructure.Felix, m maps.Map) map[string]interface{} {
 	fileExists := felix.FileExists(m.Path())
 	Expect(fileExists).Should(BeTrue(), fmt.Sprintf("showBpfMap: map %s didn't show up inside container", m.Path()))
-	cmd, err := bpf.ShowMapCmd(m)
+	cmd, err := maps.ShowMapCmd(m)
 	Expect(err).NotTo(HaveOccurred(), "Failed to get BPF map show command: "+m.Path())
 	log.WithField("cmd", cmd).Debug("showBPFMap")
 	out, err := felix.ExecOutput(cmd...)
