@@ -23,6 +23,7 @@ import (
 	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/bpf/maps"
 )
 
 const (
@@ -32,7 +33,7 @@ const (
 )
 
 var (
-	zeroVal = make([]byte, counterMapValueSize*MaxCounterNumber*bpf.NumPossibleCPUs())
+	zeroVal = make([]byte, counterMapValueSize*MaxCounterNumber*maps.NumPossibleCPUs())
 )
 
 type Key [8]byte
@@ -156,7 +157,7 @@ func Descriptions() DescList {
 	return descriptions
 }
 
-func Read(m bpf.Map, ifindex int, hook bpf.Hook) ([]uint64, error) {
+func Read(m maps.Map, ifindex int, hook bpf.Hook) ([]uint64, error) {
 	values, err := m.Get(NewKey(ifindex, hook).AsBytes())
 	if err != nil {
 		return []uint64{}, fmt.Errorf("failed to read counters map. err=%w", err)
@@ -164,7 +165,7 @@ func Read(m bpf.Map, ifindex int, hook bpf.Hook) ([]uint64, error) {
 
 	bpfCounters := make([]uint64, MaxCounterNumber)
 	for i := range bpfCounters {
-		for cpu := 0; cpu < bpf.NumPossibleCPUs(); cpu++ {
+		for cpu := 0; cpu < maps.NumPossibleCPUs(); cpu++ {
 			begin := i*counterMapValueSize + cpu*MaxCounterNumber*counterMapValueSize
 			data := uint64(binary.LittleEndian.Uint32(values[begin : begin+counterMapValueSize]))
 			bpfCounters[i] += data
@@ -173,16 +174,16 @@ func Read(m bpf.Map, ifindex int, hook bpf.Hook) ([]uint64, error) {
 	return bpfCounters, nil
 }
 
-func Flush(m bpf.Map, ifindex int, hook bpf.Hook) error {
-	if err := m.(bpf.MapWithUpdateWithFlags).
+func Flush(m maps.Map, ifindex int, hook bpf.Hook) error {
+	if err := m.(maps.MapWithUpdateWithFlags).
 		UpdateWithFlags(NewKey(ifindex, hook).AsBytes(), zeroVal, unix.BPF_EXIST); err != nil {
 		return fmt.Errorf("failed to update counters map. err=%v", err)
 	}
 	return nil
 }
 
-func EnsureExists(m bpf.Map, ifindex int, hook bpf.Hook) error {
-	err := m.(bpf.MapWithUpdateWithFlags).
+func EnsureExists(m maps.Map, ifindex int, hook bpf.Hook) error {
+	err := m.(maps.MapWithUpdateWithFlags).
 		UpdateWithFlags(NewKey(ifindex, hook).AsBytes(), zeroVal, unix.BPF_NOEXIST)
 	if err != nil && !os.IsExist(err) {
 		return fmt.Errorf("failed to ensure counters map. err=%v", err)

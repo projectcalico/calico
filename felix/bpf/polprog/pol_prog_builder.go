@@ -21,8 +21,7 @@ import (
 	"strings"
 
 	"github.com/projectcalico/calico/felix/bpf/ipsets"
-
-	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/bpf/maps"
 
 	log "github.com/sirupsen/logrus"
 
@@ -42,9 +41,9 @@ type Builder struct {
 	rulePartID      int
 	ipSetIDProvider ipSetIDProvider
 
-	ipSetMapFD         bpf.MapFD
-	stateMapFD         bpf.MapFD
-	jumpMapFD          bpf.MapFD
+	ipSetMapFD         maps.FD
+	stateMapFD         maps.FD
+	jumpMapFD          maps.FD
 	policyDebugEnabled bool
 	forIPv6            bool
 }
@@ -53,7 +52,7 @@ type ipSetIDProvider interface {
 	GetNoAlloc(ipSetID string) uint64
 }
 
-func NewBuilder(ipSetIDProvider ipSetIDProvider, ipsetMapFD, stateMapFD, jumpMapFD bpf.MapFD, policyDebugEnabled bool) *Builder {
+func NewBuilder(ipSetIDProvider ipSetIDProvider, ipsetMapFD, stateMapFD, jumpMapFD maps.FD, policyDebugEnabled bool) *Builder {
 	b := &Builder{
 		ipSetIDProvider:    ipSetIDProvider,
 		ipSetMapFD:         ipsetMapFD,
