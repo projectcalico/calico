@@ -31,7 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	k8sp "k8s.io/kubernetes/pkg/proxy"
 
-	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/mock"
 	"github.com/projectcalico/calico/felix/bpf/nat"
 )
@@ -104,9 +104,9 @@ func stateToBPFMaps(state DPSyncerState) (
 	}
 
 	feCache := cachingmap.New[nat.FrontendKey, nat.FrontendValue](nat.FrontendMapParameters.Name,
-		bpf.NewTypedMap[nat.FrontendKey, nat.FrontendValue](fe, nat.FrontendKeyFromBytes, nat.FrontendValueFromBytes))
+		maps.NewTypedMap[nat.FrontendKey, nat.FrontendValue](fe, nat.FrontendKeyFromBytes, nat.FrontendValueFromBytes))
 	beCache := cachingmap.New[nat.BackendKey, nat.BackendValue](nat.BackendMapParameters.Name,
-		bpf.NewTypedMap[nat.BackendKey, nat.BackendValue](be, nat.BackendKeyFromBytes, nat.BackendValueFromBytes))
+		maps.NewTypedMap[nat.BackendKey, nat.BackendValue](be, nat.BackendKeyFromBytes, nat.BackendValueFromBytes))
 
 	return feCache, beCache
 }
@@ -165,10 +165,10 @@ func runBenchmarkServiceUpdate(b *testing.B, svcCnt, epCnt int, mockMaps bool, o
 	if mockMaps {
 
 		feCache := cachingmap.New[nat.FrontendKey, nat.FrontendValue](nat.FrontendMapParameters.Name,
-			bpf.NewTypedMap[nat.FrontendKey, nat.FrontendValue](
+			maps.NewTypedMap[nat.FrontendKey, nat.FrontendValue](
 				&mock.DummyMap{}, nat.FrontendKeyFromBytes, nat.FrontendValueFromBytes))
 		beCache := cachingmap.New[nat.BackendKey, nat.BackendValue](nat.BackendMapParameters.Name,
-			bpf.NewTypedMap[nat.BackendKey, nat.BackendValue](
+			maps.NewTypedMap[nat.BackendKey, nat.BackendValue](
 				&mock.DummyMap{}, nat.BackendKeyFromBytes, nat.BackendValueFromBytes))
 
 		syncer, err = NewSyncer(
@@ -188,10 +188,10 @@ func runBenchmarkServiceUpdate(b *testing.B, svcCnt, epCnt int, mockMaps bool, o
 		Expect(err).ShouldNot(HaveOccurred())
 
 		feCache := cachingmap.New[nat.FrontendKey, nat.FrontendValue](nat.FrontendMapParameters.Name,
-			bpf.NewTypedMap[nat.FrontendKey, nat.FrontendValue](
+			maps.NewTypedMap[nat.FrontendKey, nat.FrontendValue](
 				feMap, nat.FrontendKeyFromBytes, nat.FrontendValueFromBytes))
 		beCache := cachingmap.New[nat.BackendKey, nat.BackendValue](nat.BackendMapParameters.Name,
-			bpf.NewTypedMap[nat.BackendKey, nat.BackendValue](
+			maps.NewTypedMap[nat.BackendKey, nat.BackendValue](
 				beMap, nat.BackendKeyFromBytes, nat.BackendValueFromBytes))
 
 		syncer, err = NewSyncer(

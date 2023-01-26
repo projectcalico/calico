@@ -22,8 +22,8 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"github.com/projectcalico/calico/felix/bpf"
 	v3 "github.com/projectcalico/calico/felix/bpf/conntrack/v3"
+	"github.com/projectcalico/calico/felix/bpf/maps"
 )
 
 // struct calico_ct_key {
@@ -66,7 +66,7 @@ func (k Key) String() string {
 		k.Proto(), k.AddrA(), k.PortA(), k.AddrB(), k.PortB())
 }
 
-func (k Key) Upgrade() bpf.Upgradable {
+func (k Key) Upgrade() maps.Upgradable {
 	var key3 v3.Key
 	copy(key3[:], k[:])
 	return key3
@@ -460,7 +460,7 @@ func (e Value) IsForwardDSR() bool {
 	return e.Flags()&FlagNATFwdDsr != 0
 }
 
-func (e Value) Upgrade() bpf.Upgradable {
+func (e Value) Upgrade() maps.Upgradable {
 	var val3 v3.Value
 
 	ctType := e.Type()
@@ -484,7 +484,7 @@ func (e Value) Upgrade() bpf.Upgradable {
 	return val3
 }
 
-var MapParams = bpf.MapParameters{
+var MapParams = maps.MapParameters{
 	Type:         "hash",
 	KeySize:      KeySize,
 	ValueSize:    ValueSize,
@@ -498,10 +498,10 @@ var MapParams = bpf.MapParameters{
 type MapMem map[Key]Value
 
 // LoadMapMem loads ConntrackMap into memory
-func LoadMapMem(m bpf.Map) (MapMem, error) {
+func LoadMapMem(m maps.Map) (MapMem, error) {
 	ret := make(MapMem)
 
-	err := m.Iter(func(k, v []byte) bpf.IteratorAction {
+	err := m.Iter(func(k, v []byte) maps.IteratorAction {
 		ks := len(Key{})
 		vs := len(Value{})
 
@@ -512,18 +512,18 @@ func LoadMapMem(m bpf.Map) (MapMem, error) {
 		copy(val[:vs], v[:vs])
 
 		ret[key] = val
-		return bpf.IterNone
+		return maps.IterNone
 	})
 
 	return ret, err
 }
 
-// MapMemIter returns bpf.MapIter that loads the provided MapMem
-func MapMemIter(m MapMem) bpf.IterCallback {
+// MapMemIter returns maps.MapIter that loads the provided MapMem
+func MapMemIter(m MapMem) maps.IterCallback {
 	ks := len(Key{})
 	vs := len(Value{})
 
-	return func(k, v []byte) bpf.IteratorAction {
+	return func(k, v []byte) maps.IteratorAction {
 		var key Key
 		copy(key[:ks], k[:ks])
 
@@ -531,6 +531,6 @@ func MapMemIter(m MapMem) bpf.IterCallback {
 		copy(val[:vs], v[:vs])
 
 		m[key] = val
-		return bpf.IterNone
+		return maps.IterNone
 	}
 }
