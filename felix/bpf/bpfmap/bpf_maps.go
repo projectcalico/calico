@@ -20,37 +20,37 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/arp"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	"github.com/projectcalico/calico/felix/bpf/counters"
 	"github.com/projectcalico/calico/felix/bpf/failsafes"
 	"github.com/projectcalico/calico/felix/bpf/ifstate"
 	"github.com/projectcalico/calico/felix/bpf/ipsets"
+	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/nat"
 	"github.com/projectcalico/calico/felix/bpf/routes"
 	"github.com/projectcalico/calico/felix/bpf/state"
 )
 
 type Maps struct {
-	IpsetsMap       bpf.Map
-	StateMap        bpf.Map
-	ArpMap          bpf.Map
-	FailsafesMap    bpf.Map
-	FrontendMap     bpf.Map
-	BackendMap      bpf.Map
-	AffinityMap     bpf.Map
-	RouteMap        bpf.Map
-	CtMap           bpf.Map
-	SrMsgMap        bpf.Map
-	CtNatsMap       bpf.Map
-	IfStateMap      bpf.Map
-	RuleCountersMap bpf.Map
-	CountersMap     bpf.Map
+	IpsetsMap       maps.Map
+	StateMap        maps.Map
+	ArpMap          maps.Map
+	FailsafesMap    maps.Map
+	FrontendMap     maps.Map
+	BackendMap      maps.Map
+	AffinityMap     maps.Map
+	RouteMap        maps.Map
+	CtMap           maps.Map
+	SrMsgMap        maps.Map
+	CtNatsMap       maps.Map
+	IfStateMap      maps.Map
+	RuleCountersMap maps.Map
+	CountersMap     maps.Map
 }
 
 func (m *Maps) Destroy() {
-	maps := []bpf.Map{
+	mps := []maps.Map{
 		m.IpsetsMap,
 		m.StateMap,
 		m.ArpMap,
@@ -64,66 +64,66 @@ func (m *Maps) Destroy() {
 		m.CtNatsMap,
 	}
 
-	for _, m := range maps {
-		os.Remove(m.(*bpf.PinnedMap).Path())
-		m.(*bpf.PinnedMap).Close()
+	for _, m := range mps {
+		os.Remove(m.(*maps.PinnedMap).Path())
+		m.(*maps.PinnedMap).Close()
 	}
 }
 
 func CreateBPFMaps() (*Maps, error) {
-	maps := []bpf.Map{}
+	mps := []maps.Map{}
 	ret := new(Maps)
 
 	ret.IpsetsMap = ipsets.Map()
-	maps = append(maps, ret.IpsetsMap)
+	mps = append(mps, ret.IpsetsMap)
 
 	ret.StateMap = state.Map()
-	maps = append(maps, ret.StateMap)
+	mps = append(mps, ret.StateMap)
 
 	ret.ArpMap = arp.Map()
-	maps = append(maps, ret.ArpMap)
+	mps = append(mps, ret.ArpMap)
 
 	ret.FailsafesMap = failsafes.Map()
-	maps = append(maps, ret.FailsafesMap)
+	mps = append(mps, ret.FailsafesMap)
 
 	ret.FrontendMap = nat.FrontendMap()
-	maps = append(maps, ret.FrontendMap)
+	mps = append(mps, ret.FrontendMap)
 
 	ret.BackendMap = nat.BackendMap()
-	maps = append(maps, ret.BackendMap)
+	mps = append(mps, ret.BackendMap)
 
 	ret.AffinityMap = nat.AffinityMap()
-	maps = append(maps, ret.AffinityMap)
+	mps = append(mps, ret.AffinityMap)
 
 	ret.RouteMap = routes.Map()
-	maps = append(maps, ret.RouteMap)
+	mps = append(mps, ret.RouteMap)
 
 	ret.CtMap = conntrack.Map()
-	maps = append(maps, ret.CtMap)
+	mps = append(mps, ret.CtMap)
 
 	ret.SrMsgMap = nat.SendRecvMsgMap()
-	maps = append(maps, ret.SrMsgMap)
+	mps = append(mps, ret.SrMsgMap)
 
 	ret.CtNatsMap = nat.AllNATsMsgMap()
-	maps = append(maps, ret.CtNatsMap)
+	mps = append(mps, ret.CtNatsMap)
 
 	ret.IfStateMap = ifstate.Map()
-	maps = append(maps, ret.IfStateMap)
+	mps = append(mps, ret.IfStateMap)
 
 	ret.RuleCountersMap = counters.PolicyMap()
-	maps = append(maps, ret.RuleCountersMap)
+	mps = append(mps, ret.RuleCountersMap)
 
 	ret.CountersMap = counters.Map()
-	maps = append(maps, ret.CountersMap)
+	mps = append(mps, ret.CountersMap)
 
-	for i, bpfMap := range maps {
+	for i, bpfMap := range mps {
 		err := bpfMap.EnsureExists()
 		if err != nil {
 
 			for j := 0; j < i; j++ {
-				m := maps[j]
-				os.Remove(m.(*bpf.PinnedMap).Path())
-				m.(*bpf.PinnedMap).Close()
+				m := mps[j]
+				os.Remove(m.(*maps.PinnedMap).Path())
+				m.(*maps.PinnedMap).Close()
 			}
 
 			return nil, fmt.Errorf("failed to create %s map, err=%w", bpfMap.GetName(), err)

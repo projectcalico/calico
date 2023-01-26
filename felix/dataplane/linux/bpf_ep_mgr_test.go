@@ -38,6 +38,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/counters"
 	"github.com/projectcalico/calico/felix/bpf/ifstate"
 	bpfipsets "github.com/projectcalico/calico/felix/bpf/ipsets"
+	bpfmaps "github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/mock"
 	"github.com/projectcalico/calico/felix/bpf/polprog"
 	"github.com/projectcalico/calico/felix/bpf/state"
@@ -78,16 +79,16 @@ func (m *mockDataplane) ensureBPFDevices() error {
 	return nil
 }
 
-func (m *mockDataplane) ensureProgramAttached(ap attachPoint) (bpf.MapFD, error) {
+func (m *mockDataplane) ensureProgramAttached(ap attachPoint) (bpfmaps.FD, error) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 	key := ap.IfaceName() + ":" + ap.JumpMapFDMapKey()
 	if fd, exists := m.fds[key]; exists {
-		return bpf.MapFD(fd), nil
+		return bpfmaps.FD(fd), nil
 	}
 	m.lastFD += 1
 	m.fds[key] = m.lastFD
-	return bpf.MapFD(m.lastFD), nil
+	return bpfmaps.FD(m.lastFD), nil
 }
 
 func (m *mockDataplane) ensureNoProgram(ap attachPoint) error {
@@ -105,14 +106,14 @@ func (m *mockDataplane) ensureQdisc(iface string) error {
 	return nil
 }
 
-func (m *mockDataplane) updatePolicyProgram(jumpMapFD bpf.MapFD, rules polprog.Rules, polDir string, ap attachPoint) error {
+func (m *mockDataplane) updatePolicyProgram(jumpMapFD bpfmaps.FD, rules polprog.Rules, polDir string, ap attachPoint) error {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 	m.state[uint32(jumpMapFD)] = rules
 	return nil
 }
 
-func (m *mockDataplane) removePolicyProgram(jumpMapFD bpf.MapFD, ap attachPoint) error {
+func (m *mockDataplane) removePolicyProgram(jumpMapFD bpfmaps.FD, ap attachPoint) error {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 	delete(m.state, uint32(jumpMapFD))
@@ -202,7 +203,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		vxlanMTU = 0
 		nodePortDSR = true
 
-		bpf.EnableRepin()
+		bpfmaps.EnableRepin()
 
 		maps = new(bpfmap.Maps)
 
@@ -212,7 +213,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		ifStateMap = mock.NewMockMap(ifstate.MapParams)
 		maps.IfStateMap = ifStateMap
 		cparams := counters.MapParameters
-		cparams.ValueSize *= bpf.NumPossibleCPUs()
+		cparams.ValueSize *= bpfmaps.NumPossibleCPUs()
 		countersMap = mock.NewMockMap(cparams)
 		maps.CountersMap = countersMap
 		maps.RuleCountersMap = mock.NewMockMap(counters.PolicyMapParameters)
@@ -237,7 +238,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 	})
 
 	AfterEach(func() {
-		bpf.DisableRepin()
+		bpfmaps.DisableRepin()
 	})
 
 	newBpfEpMgr := func() {
@@ -638,7 +639,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			egrRuleMatchId := bpfEpMgr.dp.ruleMatchID("Egress", "Allow", "Policy", "allowPol", 0)
 			k := make([]byte, 8)
 			v := make([]byte, 8)
-			rcMap := bpfEpMgr.maps.RuleCountersMap
+			rcMap := bpfEpMgr.bpfmaps.RuleCountersMap
 
 			// create a new policy
 			bpfEpMgr.OnUpdate(&proto.ActivePolicyUpdate{
@@ -704,7 +705,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			egrRuleMatchId := bpfEpMgr.dp.ruleMatchID("Egress", "Allow", "Policy", "allowPol", 0)
 			k := make([]byte, 8)
 			v := make([]byte, 8)
-			rcMap := bpfEpMgr.maps.RuleCountersMap
+			rcMap := bpfEpMgr.bpfmaps.RuleCountersMap
 
 			binary.LittleEndian.PutUint64(k, ingRuleMatchId)
 			binary.LittleEndian.PutUint64(v, uint64(10))
