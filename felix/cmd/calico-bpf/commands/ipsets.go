@@ -18,8 +18,8 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/ipsets"
+	"github.com/projectcalico/calico/felix/bpf/maps"
 
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
@@ -55,7 +55,7 @@ func dumpIPSets() error {
 	}
 
 	membersBySet := map[uint64][]string{}
-	err := ipsetMap.Iter(func(k, v []byte) bpf.IteratorAction {
+	err := ipsetMap.Iter(func(k, v []byte) maps.IteratorAction {
 		var entry ipsets.IPSetEntry
 		copy(entry[:], k[:])
 		var member string
@@ -65,7 +65,7 @@ func dumpIPSets() error {
 			member = fmt.Sprintf("%s:%d (proto %d)", entry.Addr(), entry.Port(), entry.Protocol())
 		}
 		membersBySet[entry.SetID()] = append(membersBySet[entry.SetID()], member)
-		return bpf.IterNone
+		return maps.IterNone
 	})
 	if err != nil {
 		return err
