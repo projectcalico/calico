@@ -15,15 +15,15 @@
 package jump
 
 import (
-	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/bpf/maps"
 )
 
-func MapForTest() bpf.Map {
-	return bpf.NewPinnedMap(bpf.MapParameters{
+func MapForTest() maps.Map {
+	return maps.NewPinnedMap(maps.MapParameters{
 		Type:       "prog_array",
 		KeySize:    4,
 		ValueSize:  4,
 		MaxEntries: 32,
-		Name:       bpf.JumpMapName(),
+		Name:       maps.JumpMapName(),
 	})
 }

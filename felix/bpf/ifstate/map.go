@@ -21,7 +21,7 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/bpf/maps"
 )
 
 func init() {
@@ -29,7 +29,7 @@ func init() {
 }
 
 func SetMapSize(size int) {
-	bpf.SetMapSize(MapParams.VersionedName(), size)
+	maps.SetSize(MapParams.VersionedName(), size)
 }
 
 const (
@@ -48,7 +48,7 @@ var flagsToStr = map[uint32]string{
 	FlgReady: "ready",
 }
 
-var MapParams = bpf.MapParameters{
+var MapParams = maps.MapParameters{
 	Type:         "hash",
 	KeySize:      KeySize,
 	ValueSize:    ValueSize,
@@ -59,8 +59,8 @@ var MapParams = bpf.MapParameters{
 	UpdatedByBPF: false,
 }
 
-func Map() bpf.Map {
-	return bpf.NewPinnedMap(MapParams)
+func Map() maps.Map {
+	return maps.NewPinnedMap(MapParams)
 }
 
 type Key [4]byte
@@ -135,11 +135,11 @@ func ValueFromBytes(b []byte) Value {
 
 type MapMem map[Key]Value
 
-func MapMemIter(m MapMem) bpf.IterCallback {
+func MapMemIter(m MapMem) func(k, v []byte) {
 	ks := len(Key{})
 	vs := len(Value{})
 
-	return func(k, v []byte) bpf.IteratorAction {
+	return func(k, v []byte) {
 		var key Key
 		copy(key[:ks], k[:ks])
 
@@ -147,6 +147,5 @@ func MapMemIter(m MapMem) bpf.IterCallback {
 		copy(val[:vs], v[:vs])
 
 		m[key] = val
-		return bpf.IterNone
 	}
 }

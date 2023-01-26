@@ -20,7 +20,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/timeshim"
 )
 
@@ -98,7 +98,7 @@ func (l *LivenessScanner) Check(ctKey Key, ctVal Value, get EntryGet) ScanVerdic
 	case TypeNATForward:
 		// Look up the reverse entry, where we do the book-keeping.
 		revEntry, err := get(ctVal.ReverseNATKey())
-		if err != nil && bpf.IsNotExists(err) {
+		if err != nil && maps.IsNotExists(err) {
 			// Forward entry exists but no reverse entry. We might have come across the reverse
 			// entry first and removed it. It is useless on its own, so delete it now.
 			//
