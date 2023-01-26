@@ -12,21 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package upgrade
+package maps
 
 import (
 	"fmt"
-
-	"github.com/projectcalico/calico/felix/bpf"
 )
 
-func UpgradeBPFMap(oldMap, newMap *bpf.PinnedMap) error {
+func Upgrade(oldMap, newMap *PinnedMap) error {
 	oldVersion := oldMap.Version
 	newVersion := newMap.Version
 
 	newCache := make(map[string]string)
 
-	err := oldMap.Iter(func(k, v []byte) bpf.IteratorAction {
+	err := oldMap.Iter(func(k, v []byte) IteratorAction {
 		tmpK, tmpV := newMap.KVasUpgradable(oldVersion, k, v)
 		for i := oldVersion; i < newVersion; i++ {
 			tmpK = tmpK.Upgrade()
@@ -34,7 +32,7 @@ func UpgradeBPFMap(oldMap, newMap *bpf.PinnedMap) error {
 		}
 		newCache[string(tmpK.AsBytes())] = string(tmpV.AsBytes())
 
-		return bpf.IterNone
+		return IterNone
 	})
 
 	if err != nil {

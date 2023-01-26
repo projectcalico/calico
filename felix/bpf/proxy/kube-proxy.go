@@ -23,8 +23,8 @@ import (
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/client-go/kubernetes"
 
-	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/bpfmap"
+	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/nat"
 	"github.com/projectcalico/calico/felix/bpf/routes"
 	"github.com/projectcalico/calico/felix/cachingmap"
@@ -49,10 +49,10 @@ type KubeProxy struct {
 
 	k8s         kubernetes.Interface
 	hostname    string
-	frontendMap bpf.MapWithExistsCheck
-	backendMap  bpf.MapWithExistsCheck
-	affinityMap bpf.Map
-	ctMap       bpf.Map
+	frontendMap maps.MapWithExistsCheck
+	backendMap  maps.MapWithExistsCheck
+	affinityMap maps.Map
+	ctMap       maps.Map
 	rt          *RTCache
 	opts        []Option
 
@@ -66,8 +66,8 @@ func StartKubeProxy(k8s kubernetes.Interface, hostname string,
 	kp := &KubeProxy{
 		k8s:         k8s,
 		hostname:    hostname,
-		frontendMap: bpfMaps.FrontendMap.(bpf.MapWithExistsCheck),
-		backendMap:  bpfMaps.BackendMap.(bpf.MapWithExistsCheck),
+		frontendMap: bpfMaps.FrontendMap.(maps.MapWithExistsCheck),
+		backendMap:  bpfMaps.BackendMap.(maps.MapWithExistsCheck),
 		affinityMap: bpfMaps.AffinityMap,
 		ctMap:       bpfMaps.CtMap,
 		opts:        opts,
@@ -116,11 +116,11 @@ func (kp *KubeProxy) run(hostIPs []net.IP) error {
 	withLocalNP = append(withLocalNP, podNPIP)
 
 	feCache := cachingmap.New[nat.FrontendKey, nat.FrontendValue](nat.FrontendMapParameters.Name,
-		bpf.NewTypedMap[nat.FrontendKey, nat.FrontendValue](
+		maps.NewTypedMap[nat.FrontendKey, nat.FrontendValue](
 			kp.frontendMap, nat.FrontendKeyFromBytes, nat.FrontendValueFromBytes,
 		))
 	beCache := cachingmap.New[nat.BackendKey, nat.BackendValue](nat.BackendMapParameters.Name,
-		bpf.NewTypedMap[nat.BackendKey, nat.BackendValue](
+		maps.NewTypedMap[nat.BackendKey, nat.BackendValue](
 			kp.backendMap, nat.BackendKeyFromBytes, nat.BackendValueFromBytes,
 		))
 

@@ -19,10 +19,10 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/bpf/maps"
 )
 
-var MockMapParams = bpf.MapParameters{
+var MockMapParams = maps.MapParameters{
 	Type:         "hash",
 	KeySize:      40,
 	ValueSize:    88,
@@ -62,10 +62,10 @@ func NewValue(v uint32) Value {
 	return val
 }
 
-func (k Key) Upgrade() bpf.Upgradable {
+func (k Key) Upgrade() maps.Upgradable {
 	panic("upgrade not supported")
 }
 
-func (v Value) Upgrade() bpf.Upgradable {
+func (v Value) Upgrade() maps.Upgradable {
 	panic("upgrade not supported")
 }
