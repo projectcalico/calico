@@ -156,7 +156,7 @@ systemctl status kubelet
 If there is a problem, check the journal
 
 ```bash
-journalclt -u kubelet | head
+journalctl -u kubelet | head
 ```
 
 #### Check the status of other system pods
