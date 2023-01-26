@@ -27,6 +27,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/bpfutils"
 	"github.com/projectcalico/calico/felix/bpf/tc"
+	"github.com/projectcalico/calico/felix/bpf/utils"
 	"github.com/projectcalico/calico/felix/bpf/xdp"
 )
 
@@ -40,7 +41,7 @@ func checkBTFEnabled() []bool {
 func TestPrecompiledBinariesAreLoadable(t *testing.T) {
 	RegisterTestingT(t)
 
-	bpffs, err := bpf.MaybeMountBPFfs()
+	bpffs, err := utils.MaybeMountBPFfs()
 	Expect(err).NotTo(HaveOccurred())
 	Expect(bpffs).To(Equal("/sys/fs/bpf"))
 

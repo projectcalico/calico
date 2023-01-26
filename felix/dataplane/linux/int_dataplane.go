@@ -35,6 +35,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/bpf/bpfmap"
 	"github.com/projectcalico/calico/felix/bpf/failsafes"
+	bpfmaps "github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/nat"
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 	"github.com/projectcalico/calico/felix/environment"
@@ -605,9 +606,9 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	}
 
 	if config.BPFMapRepin {
-		bpf.EnableRepin()
+		bpfmaps.EnableRepin()
 	} else {
-		bpf.DisableRepin()
+		bpfmaps.DisableRepin()
 	}
 
 	bpfipsets.SetMapSize(config.BPFMapSizeIPSets)
