@@ -572,8 +572,8 @@ $(WINDOWS_UPGRADE_INSTALL_ZIP): build-windows-archive $(WINDOWS_UPGRADE_DIST_STA
 # Build the docs site and copy over the install-calico-windows.ps1 script.
 $(WINDOWS_INSTALL_SCRIPT):
 	-mkdir -p dist
-	make -C ../calico clean _site
-	cp $(CURDIR)/../calico/_site/scripts/install-calico-windows.ps1 $@
+	cp $(CURDIR)/windows-packaging/install-calico-windows.ps1 $@
+	sed -i s/VERSION/$(GIT_VERSION)/g $@
 
 # Copy the install-calico-windows.ps1 script to the temporary directory where we
 # build the windows upgrade zip file.
@@ -629,8 +629,7 @@ sub-image-tar-windows-%:
 	# copy install entrypoint script to staging dir
 	cp $(WINDOWS_PACKAGING_ROOT)/host-process-install.ps1 $(WINDOWS_DIST_STAGE)
 	# build and copy install script to staging dir
-	make -C ../calico build
-	cp ../calico/_site/scripts/install-calico-windows.ps1 $(WINDOWS_DIST_STAGE)
+	cp $(WINDOWS_INSTALL_SCRIPT) $(WINDOWS_DIST_STAGE)
 	# copy calico install zip file to staging dir
 	cp dist/calico-windows-$(GIT_VERSION).zip $(WINDOWS_DIST_STAGE)/calico-windows.zip
 	cd $(WINDOWS_DIST_STAGE) && \
