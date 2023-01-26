@@ -20,7 +20,6 @@ import (
 	"net"
 	"time"
 
-	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/timeshim/mocktime"
 
 	. "github.com/onsi/ginkgo"
@@ -29,6 +28,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	v2 "github.com/projectcalico/calico/felix/bpf/conntrack/v2"
+	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/mock"
 )
 
@@ -113,7 +113,7 @@ var _ = Describe("BPF Conntrack LivenessCalculator", func() {
 			scanner.Scan()
 			_, err = ctMap.Get(key.AsBytes())
 			if expExpired {
-				Expect(bpf.IsNotExists(err)).To(BeTrue(), "Scan() should have cleaned up entry")
+				Expect(maps.IsNotExists(err)).To(BeTrue(), "Scan() should have cleaned up entry")
 			} else {
 				Expect(err).NotTo(HaveOccurred(), "Scan() deleted entry unexpectedly")
 			}
@@ -124,7 +124,7 @@ var _ = Describe("BPF Conntrack LivenessCalculator", func() {
 			mockTime.IncrementTime(2 * time.Hour)
 			scanner.Scan()
 			_, err = ctMap.Get(key.AsBytes())
-			Expect(bpf.IsNotExists(err)).To(BeTrue(), "Scan() should have cleaned up entry")
+			Expect(maps.IsNotExists(err)).To(BeTrue(), "Scan() should have cleaned up entry")
 		},
 		Entry("TCP just created", tcpKey, tcpJustCreated, false),
 		Entry("TCP handshake timeout", tcpKey, tcpHandshakeTimeout, true),
