@@ -30,6 +30,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/bpfutils"
 	"github.com/projectcalico/calico/felix/bpf/libbpf"
+	"github.com/projectcalico/calico/felix/bpf/maps"
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 )
 
@@ -486,8 +487,8 @@ func ConfigureProgram(m *libbpf.Map, iface string, globalData *libbpf.TcGlobalDa
 }
 
 func (ap *AttachPoint) setMapSize(m *libbpf.Map) error {
-	if size := bpf.MapSize(m.Name()); size != 0 {
-		return m.SetMapSize(size)
+	if size := maps.Size(m.Name()); size != 0 {
+		return m.SetSize(size)
 	}
 	return nil
 }
@@ -520,7 +521,7 @@ func (ap *AttachPoint) updateJumpMap(ipVer int, obj *libbpf.Obj) error {
 }
 
 func UpdateJumpMap(obj *libbpf.Obj, progs []int, hasPolicyProg, hasHostConflictProg bool) error {
-	mapName := bpf.JumpMapName()
+	mapName := maps.JumpMapName()
 
 	for _, idx := range progs {
 		if (idx == tcdefs.ProgIndexPolicy || idx == tcdefs.ProgIndexV6Policy) && !hasPolicyProg {

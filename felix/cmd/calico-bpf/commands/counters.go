@@ -21,6 +21,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/counters"
+	"github.com/projectcalico/calico/felix/bpf/maps"
 
 	"github.com/olekukonko/tablewriter"
 	log "github.com/sirupsen/logrus"
@@ -104,7 +105,7 @@ func parseFlags(cmd *cobra.Command) string {
 	return iface
 }
 
-func doForAllInterfaces(action string, fn func(bpf.Map, *net.Interface) error) {
+func doForAllInterfaces(action string, fn func(maps.Map, *net.Interface) error) {
 	interfaces, err := net.Interfaces()
 	if err != nil {
 		log.WithError(err).Error("failed to get list of interfaces.")
@@ -127,7 +128,7 @@ func doForAllInterfaces(action string, fn func(bpf.Map, *net.Interface) error) {
 	}
 }
 
-func dumpInterface(m bpf.Map, iface *net.Interface) error {
+func dumpInterface(m maps.Map, iface *net.Interface) error {
 	values := make([][]uint64, len(bpf.Hooks))
 	for _, hook := range bpf.Hooks {
 		val, err := counters.Read(m, iface.Index, hook)
@@ -164,7 +165,7 @@ func dumpInterface(m bpf.Map, iface *net.Interface) error {
 	return nil
 }
 
-func flushInterface(m bpf.Map, iface *net.Interface) error {
+func flushInterface(m maps.Map, iface *net.Interface) error {
 	for _, hook := range bpf.Hooks {
 		err := counters.Flush(m, iface.Index, hook)
 		if err != nil {

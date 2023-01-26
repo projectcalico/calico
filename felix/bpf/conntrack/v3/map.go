@@ -23,7 +23,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 
-	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/bpf/maps"
 )
 
 // struct calico_ct_key {
@@ -66,7 +66,7 @@ func (k Key) String() string {
 		k.Proto(), k.AddrA(), k.PortA(), k.AddrB(), k.PortB())
 }
 
-func (k Key) Upgrade() bpf.Upgradable {
+func (k Key) Upgrade() maps.Upgradable {
 	panic("conntrack map key already at its latest version")
 }
 
@@ -491,11 +491,11 @@ func (e Value) IsForwardDSR() bool {
 	return e.Flags()&FlagNATFwdDsr != 0
 }
 
-func (e Value) Upgrade() bpf.Upgradable {
+func (e Value) Upgrade() maps.Upgradable {
 	panic("conntrack map value already at its latest version")
 }
 
-var MapParams = bpf.MapParameters{
+var MapParams = maps.MapParameters{
 	Type:         "hash",
 	KeySize:      KeySize,
 	ValueSize:    ValueSize,
@@ -533,10 +533,10 @@ func ValueFromBytes(v []byte) Value {
 type MapMem map[Key]Value
 
 // LoadMapMem loads ConntrackMap into memory
-func LoadMapMem(m bpf.Map) (MapMem, error) {
+func LoadMapMem(m maps.Map) (MapMem, error) {
 	ret := make(MapMem)
 
-	err := m.Iter(func(k, v []byte) bpf.IteratorAction {
+	err := m.Iter(func(k, v []byte) maps.IteratorAction {
 		ks := len(Key{})
 		vs := len(Value{})
 
@@ -547,18 +547,18 @@ func LoadMapMem(m bpf.Map) (MapMem, error) {
 		copy(val[:vs], v[:vs])
 
 		ret[key] = val
-		return bpf.IterNone
+		return maps.IterNone
 	})
 
 	return ret, err
 }
 
-// MapMemIter returns bpf.MapIter that loads the provided MapMem
-func MapMemIter(m MapMem) bpf.IterCallback {
+// MapMemIter returns maps.MapIter that loads the provided MapMem
+func MapMemIter(m MapMem) func(k, v []byte) {
 	ks := len(Key{})
 	vs := len(Value{})
 
-	return func(k, v []byte) bpf.IteratorAction {
+	return func(k, v []byte) {
 		var key Key
 		copy(key[:ks], k[:ks])
 
@@ -566,6 +566,5 @@ func MapMemIter(m MapMem) bpf.IterCallback {
 		copy(val[:vs], v[:vs])
 
 		m[key] = val
-		return bpf.IterNone
 	}
 }
