@@ -26,21 +26,21 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/bpfmap"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
+	bpfmaps "github.com/projectcalico/calico/felix/bpf/maps"
 )
 
 func restoreMaps(maps *bpfmap.Maps) {
 	if maps != nil {
 		maps.Destroy()
 	}
-	bpf.ResetMapSizes()
+	bpfmaps.ResetSizes()
 	// close the already created map and recreate them
 	for _, m := range allMaps {
 		os.Remove(m.Path())
 		os.Remove(m.Path() + "_old")
-		m.(*bpf.PinnedMap).Close()
+		m.(*bpfmaps.PinnedMap).Close()
 		err := m.EnsureExists()
 		if err != nil {
 			logrus.WithError(err).Panic("Failed to initialise maps")
@@ -50,19 +50,19 @@ func restoreMaps(maps *bpfmap.Maps) {
 }
 
 func TestMapResize(t *testing.T) {
-	// Resize the maps.
+	// Resize the bpfmaps.
 	RegisterTestingT(t)
 	conntrack.SetMapSize(600)
-	defer bpf.ResetMapSizes()
+	defer bpfmaps.ResetSizes()
 
-	bpf.EnableRepin()
-	defer bpf.DisableRepin()
+	bpfmaps.EnableRepin()
+	defer bpfmaps.DisableRepin()
 
 	maps, err := bpfmap.CreateBPFMaps()
 	Expect(err).NotTo(HaveOccurred())
 	defer restoreMaps(maps)
 	// New CT map should have max_entries as 600
-	ctMapInfo, err := bpf.GetMapInfo(maps.CtMap.MapFD())
+	ctMapInfo, err := bpfmaps.GetMapInfo(maps.CtMap.MapFD())
 	Expect(err).NotTo(HaveOccurred(), "Failed to get ct map info")
 	Expect(ctMapInfo.MaxEntries).To(Equal(600))
 	// Except CT map, other map's old pins should be deleted.
@@ -193,22 +193,22 @@ func TestMapEntryDeletion(t *testing.T) {
 	// Defer error checking since the Delete calls do the cleanup for this test...
 	Expect(err1).NotTo(HaveOccurred(), "Failed to create map entry")
 	Expect(err2).NotTo(HaveOccurred(), "Failed to delete map entry")
-	Expect(bpf.IsNotExists(err3)).To(Equal(true), "Error from deletion of non-existent entry was incorrect")
+	Expect(bpfmaps.IsNotExists(err3)).To(Equal(true), "Error from deletion of non-existent entry was incorrect")
 }
 
 func TestMapIterActionDelete(t *testing.T) {
 	k, err1 := setUpMapTestWithSingleKV(t)
 
 	seenKey := false
-	iterErr := ctMap.Iter(func(k2, v []byte) bpf.IteratorAction {
+	iterErr := ctMap.Iter(func(k2, v []byte) bpfmaps.IteratorAction {
 		seenKey = seenKey || reflect.DeepEqual(k2, k[:])
-		return bpf.IterDelete
+		return bpfmaps.IterDelete
 	})
 
 	seenKeyAfterDel := false
-	iterErr2 := ctMap.Iter(func(k2, v []byte) bpf.IteratorAction {
+	iterErr2 := ctMap.Iter(func(k2, v []byte) bpfmaps.IteratorAction {
 		seenKeyAfterDel = seenKeyAfterDel || reflect.DeepEqual(k2, k[:])
-		return bpf.IterNone
+		return bpfmaps.IterNone
 	})
 
 	// Defer error checking since the Delete call does the cleanup for this test...
@@ -223,17 +223,17 @@ func TestMapIterationDeleteAfter(t *testing.T) {
 	k, err1 := setUpMapTestWithSingleKV(t)
 
 	seenKey := false
-	iterErr := ctMap.Iter(func(k2, v []byte) bpf.IteratorAction {
+	iterErr := ctMap.Iter(func(k2, v []byte) bpfmaps.IteratorAction {
 		seenKey = seenKey || reflect.DeepEqual(k2, k[:])
-		return bpf.IterNone
+		return bpfmaps.IterNone
 	})
 
 	err2 := ctMap.Delete(k.AsBytes())
 
 	seenKeyAfterDel := false
-	iterErr2 := ctMap.Iter(func(k2, v []byte) bpf.IteratorAction {
+	iterErr2 := ctMap.Iter(func(k2, v []byte) bpfmaps.IteratorAction {
 		seenKeyAfterDel = seenKeyAfterDel || reflect.DeepEqual(k2, k[:])
-		return bpf.IterNone
+		return bpfmaps.IterNone
 	})
 
 	// Defer error checking since the Delete call does the cleanup for this test...
@@ -271,11 +271,11 @@ func testDelDuringIterN(numEntries int) {
 	}
 	// First pass, no deletions.
 	seenKeys := map[conntrack.Key]bool{}
-	err := ctMap.Iter(func(k, v []byte) bpf.IteratorAction {
+	err := ctMap.Iter(func(k, v []byte) bpfmaps.IteratorAction {
 		key := conntrack.KeyFromBytes(k)
 		Expect(seenKeys[key]).To(BeFalse(), "Saw a duplicate key")
 		seenKeys[key] = true
-		return bpf.IterNone
+		return bpfmaps.IterNone
 	})
 	Expect(err).NotTo(HaveOccurred())
 	Expect(seenKeys).To(HaveLen(numEntries), "Should have seen expected num entries on first iteration")
@@ -284,7 +284,7 @@ func testDelDuringIterN(numEntries int) {
 	seenKeys = map[conntrack.Key]bool{}
 	deleteNextKey := false
 	expectedKeys := map[conntrack.Key]bool{}
-	err = ctMap.Iter(func(k, v []byte) bpf.IteratorAction {
+	err = ctMap.Iter(func(k, v []byte) bpfmaps.IteratorAction {
 		defer func() {
 			deleteNextKey = !deleteNextKey
 		}()
@@ -292,10 +292,10 @@ func testDelDuringIterN(numEntries int) {
 		Expect(seenKeys[key]).To(BeFalse(), "Saw a duplicate key")
 		seenKeys[key] = true
 		if deleteNextKey {
-			return bpf.IterDelete
+			return bpfmaps.IterDelete
 		} else {
 			expectedKeys[key] = true
-			return bpf.IterNone
+			return bpfmaps.IterNone
 		}
 	})
 	Expect(err).NotTo(HaveOccurred())
@@ -308,7 +308,7 @@ func testDelDuringIterN(numEntries int) {
 	insertClock := 0
 	insertIdx := numEntries
 	numInsertedInThirdPass := 0
-	err = ctMap.Iter(func(k, v []byte) bpf.IteratorAction {
+	err = ctMap.Iter(func(k, v []byte) bpfmaps.IteratorAction {
 		defer func() {
 			deleteNextKey = !deleteNextKey
 			insertClock++
@@ -324,9 +324,9 @@ func testDelDuringIterN(numEntries int) {
 			numInsertedInThirdPass++
 		}
 		if deleteNextKey {
-			return bpf.IterDelete
+			return bpfmaps.IterDelete
 		} else {
-			return bpf.IterNone
+			return bpfmaps.IterNone
 		}
 	})
 	Expect(err).NotTo(HaveOccurred())
@@ -379,10 +379,10 @@ func benchMapIteration(b *testing.B, n int) {
 	var keepK, keepV []byte
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
-		err := ctMap.Iter(func(k, v []byte) bpf.IteratorAction {
+		err := ctMap.Iter(func(k, v []byte) bpfmaps.IteratorAction {
 			keepK = k
 			keepV = v
-			return bpf.IterNone
+			return bpfmaps.IterNone
 		})
 		if err != nil {
 			panic(err)
@@ -446,7 +446,7 @@ func benchMapIteratorMulti(b *testing.B, n int) {
 }
 
 func doSingleMapIteratorMultiTest(n int) {
-	iter, err := bpf.NewMapIterator(ctMap.MapFD(), conntrack.KeySize, conntrack.ValueSize, conntrack.MaxEntries)
+	iter, err := bpfmaps.NewIterator(ctMap.MapFD(), conntrack.KeySize, conntrack.ValueSize, conntrack.MaxEntries)
 	if err != nil {
 		panic(err)
 	}
@@ -456,7 +456,7 @@ func doSingleMapIteratorMultiTest(n int) {
 	for {
 		k, v, err = iter.Next()
 		if err != nil {
-			if err == bpf.ErrIterationFinished {
+			if err == bpfmaps.ErrIterationFinished {
 				break
 			}
 			panic(err)
