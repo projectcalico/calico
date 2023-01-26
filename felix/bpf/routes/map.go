@@ -23,7 +23,7 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/sys/unix"
 
-	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/ip"
 )
 
@@ -32,7 +32,7 @@ func init() {
 }
 
 func SetMapSize(size int) {
-	bpf.SetMapSize(MapParameters.VersionedName(), size)
+	maps.SetSize(MapParameters.VersionedName(), size)
 }
 
 //
@@ -197,7 +197,7 @@ func NewValueWithIfIndex(flags Flags, ifIndex int) Value {
 	return v
 }
 
-var MapParameters = bpf.MapParameters{
+var MapParameters = maps.MapParameters{
 	Type:       "lpm_trie",
 	KeySize:    KeySize,
 	ValueSize:  ValueSize,
@@ -206,24 +206,24 @@ var MapParameters = bpf.MapParameters{
 	Flags:      unix.BPF_F_NO_PREALLOC,
 }
 
-func Map() bpf.Map {
-	return bpf.NewPinnedMap(MapParameters)
+func Map() maps.Map {
+	return maps.NewPinnedMap(MapParameters)
 }
 
 type MapMem map[Key]Value
 
 // LoadMap loads a routes.Map into memory
-func LoadMap(rtm bpf.Map) (MapMem, error) {
+func LoadMap(rtm maps.Map) (MapMem, error) {
 	m := make(MapMem)
 
-	err := rtm.Iter(func(k, v []byte) bpf.IteratorAction {
+	err := rtm.Iter(func(k, v []byte) maps.IteratorAction {
 		var key Key
 		var value Value
 		copy(key[:], k)
 		copy(value[:], v)
 
 		m[key] = value
-		return bpf.IterNone
+		return maps.IterNone
 	})
 
 	return m, err
