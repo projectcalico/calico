@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2023 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,28 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build !cgo
+package bpfdefs
 
-package bpf
+const (
+	DefaultBPFfsPath = "/sys/fs/bpf"
+	CgroupV2Path     = "/run/calico/cgroup"
 
-import (
-	"github.com/projectcalico/calico/felix/bpf/asm"
+	GlobalPinDir = DefaultBPFfsPath + "/tc/globals/"
 )
-
-const MapIteratorNumKeys = 16
-
-func SyscallSupport() bool {
-	return false
-}
-
-func LoadBPFProgramFromInsns(insns asm.Insns, name, license string, progType uint32) (ProgFD, error) {
-	panic("BPF syscall stub")
-}
-
-func RunBPFProgram(fd ProgFD, dataIn []byte, repeat int) (pr ProgResult, err error) {
-	panic("BPF syscall stub")
-}
-
-func PinBPFProgram(fd ProgFD, filename string) error {
-	panic("BPF syscall stub")
-}
