@@ -21,7 +21,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/idalloc"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/logutils"
@@ -48,7 +48,7 @@ type bpfIPSets struct {
 
 	ipSetIDAllocator *idalloc.IDAllocator
 
-	bpfMap bpf.Map
+	bpfMap maps.Map
 
 	dirtyIPSetIDs   set.Set[uint64]
 	resyncScheduled bool
@@ -59,7 +59,7 @@ type bpfIPSets struct {
 func NewBPFIPSets(
 	ipVersionConfig *ipsets.IPVersionConfig,
 	ipSetIDAllocator *idalloc.IDAllocator,
-	ipSetsMap bpf.Map,
+	ipSetsMap maps.Map,
 	opRecorder logutils.OpRecorder,
 ) *bpfIPSets {
 	return &bpfIPSets{
@@ -245,7 +245,7 @@ func (m *bpfIPSets) ApplyUpdates() {
 		}
 
 		var unknownEntries []IPSetEntry
-		err := m.bpfMap.Iter(func(k, v []byte) bpf.IteratorAction {
+		err := m.bpfMap.Iter(func(k, v []byte) maps.IteratorAction {
 			var entry IPSetEntry
 			copy(entry[:], k)
 			setID := entry.SetID()
@@ -266,7 +266,7 @@ func (m *bpfIPSets) ApplyUpdates() {
 					ipSet.PendingRemoves.Add(entry)
 				}
 			}
-			return bpf.IterNone
+			return maps.IterNone
 		})
 		if err != nil {
 			log.WithError(err).Error("Failed to iterate over BPF map; IP sets may be out of sync")

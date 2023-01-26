@@ -494,7 +494,7 @@ release-build: .release-$(VERSION).created
 .PHONY: ut-no-cover
 ut-no-cover: $(SRC_FILES)
 	@echo Running Go UTs without coverage.
-	$(DOCKER_GO_BUILD) ginkgo -r -skipPackage $(UT_PACKAGES_TO_SKIP) $(GINKGO_ARGS)
+	$(DOCKER_GO_BUILD_CGO) ginkgo -r -skipPackage $(UT_PACKAGES_TO_SKIP) $(GINKGO_ARGS)
 
 .PHONY: ut-watch
 ut-watch: $(SRC_FILES)

@@ -18,8 +18,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/projectcalico/calico/felix/bpf"
-
+	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/routes"
 	"github.com/projectcalico/calico/felix/ip"
 
@@ -59,7 +58,7 @@ func dumpRoutes() error {
 	var dests []ip.CIDR
 	valueByDest := map[ip.CIDR]routes.Value{}
 
-	err := routesMap.Iter(func(k, v []byte) bpf.IteratorAction {
+	err := routesMap.Iter(func(k, v []byte) maps.IteratorAction {
 		var key routes.Key
 		var value routes.Value
 		copy(key[:], k)
@@ -68,7 +67,7 @@ func dumpRoutes() error {
 		dest := key.Dest()
 		valueByDest[dest] = value
 		dests = append(dests, dest)
-		return bpf.IterNone
+		return maps.IterNone
 	})
 	if err != nil {
 		return err
