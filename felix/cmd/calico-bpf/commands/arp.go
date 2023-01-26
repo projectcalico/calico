@@ -17,8 +17,8 @@ package commands
 import (
 	"fmt"
 
-	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/arp"
+	"github.com/projectcalico/calico/felix/bpf/maps"
 
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
@@ -64,7 +64,7 @@ func dumpARP() error {
 		return errors.WithMessage(err, "failed to open map")
 	}
 
-	err := arpMap.Iter(func(k, v []byte) bpf.IteratorAction {
+	err := arpMap.Iter(func(k, v []byte) maps.IteratorAction {
 		var (
 			key arp.Key
 			val arp.Value
@@ -75,7 +75,7 @@ func dumpARP() error {
 
 		fmt.Printf("dev %4d: %15s : %s -> %s\n", key.IfIndex(), key.IP(), val.SrcMAC(), val.DstMAC())
 
-		return bpf.IterNone
+		return maps.IterNone
 	})
 
 	return err
@@ -88,8 +88,8 @@ func cleanARP() error {
 		return errors.WithMessage(err, "failed to open map")
 	}
 
-	err := arpMap.Iter(func(k, v []byte) bpf.IteratorAction {
-		return bpf.IterDelete
+	err := arpMap.Iter(func(k, v []byte) maps.IteratorAction {
+		return maps.IterDelete
 	})
 
 	return err
