@@ -1,7 +1,4 @@
----
-layout: null
----
-# Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
+# Copyright (c) 2020-2023 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -22,13 +19,9 @@ layout: null
 #>
 
 Param(
-    # Note: we don't publish a release artifact for the "master" branch. To test
-    # against master, build calico-windows.zip from projectcalico/node.
-{%- if site.url contains "projectcalico" %}
-    [parameter(Mandatory = $false)] $ReleaseBaseURL="https://github.com/projectcalico/calico/releases/download/{{site.data.versions.first.components["calico/node"].version}}/",
-{%- else %}
-    [parameter(Mandatory = $false)] $ReleaseBaseURL="{{site.url}}/files/windows/",
-{%- endif %}
+    # Note: This URl only works for releases. To test development code, build calico-windows.zip from source.
+    # VERSION is replaced by our build tooling.
+    [parameter(Mandatory = $false)] $ReleaseBaseURL="https://github.com/projectcalico/calico/releases/download/VERSION/",
     [parameter(Mandatory = $false)] $ReleaseFile="calico-windows-{{site.data.versions.first.components["calico/node"].version}}.zip",
     [parameter(Mandatory = $false)] $KubeVersion="",
     [parameter(Mandatory = $false)] $DownloadOnly="no",
