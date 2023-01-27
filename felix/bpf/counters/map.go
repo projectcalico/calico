@@ -17,13 +17,13 @@ package counters
 import (
 	"encoding/binary"
 
-	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/bpf/maps"
 )
 
 const PolicyMapKeySize = 8
 const PolicyMapValueSize = 8
 
-var MapParameters = bpf.MapParameters{
+var MapParameters = maps.MapParameters{
 	Type:       "percpu_hash",
 	KeySize:    counterMapKeySize,
 	ValueSize:  counterMapValueSize * MaxCounterNumber,
@@ -32,11 +32,11 @@ var MapParameters = bpf.MapParameters{
 	Version:    2,
 }
 
-func Map() bpf.Map {
-	return bpf.NewPinnedMap(MapParameters)
+func Map() maps.Map {
+	return maps.NewPinnedMap(MapParameters)
 }
 
-var PolicyMapParameters = bpf.MapParameters{
+var PolicyMapParameters = maps.MapParameters{
 	Type:       "percpu_hash",
 	KeySize:    PolicyMapKeySize,
 	ValueSize:  PolicyMapValueSize,
@@ -45,20 +45,25 @@ var PolicyMapParameters = bpf.MapParameters{
 	Version:    2,
 }
 
-func PolicyMap() bpf.Map {
-	return bpf.NewPinnedMap(PolicyMapParameters)
+func PolicyMap() maps.Map {
+	return maps.NewPinnedMap(PolicyMapParameters)
 }
 
 type PolicyMapMem map[uint64]uint64
 
-func LoadPolicyMap(m bpf.Map) (PolicyMapMem, error) {
+func LoadPolicyMap(m maps.Map) (PolicyMapMem, error) {
 	ret := make(PolicyMapMem)
 
 	if err := m.Open(); err != nil {
 		return nil, err
 	}
 
-	err := m.Iter(PolicyMapMemIter(ret))
+	iterFn := PolicyMapMemIter(ret)
+
+	err := m.Iter(func(k, v []byte) maps.IteratorAction {
+		iterFn(k, v)
+		return maps.IterNone
+	})
 	if err != nil {
 		ret = nil
 	}
@@ -66,17 +71,16 @@ func LoadPolicyMap(m bpf.Map) (PolicyMapMem, error) {
 	return ret, err
 }
 
-// PolicyMapMemIter returns bpf.MapIter that loads the provided PolicyMapMem
-func PolicyMapMemIter(m PolicyMapMem) bpf.IterCallback {
-	return func(k, v []byte) bpf.IteratorAction {
+// PolicyMapMemIter returns maps.MapIter that loads the provided PolicyMapMem
+func PolicyMapMemIter(m PolicyMapMem) func(k, v []byte) {
+	return func(k, v []byte) {
 		var value uint64
 		key := binary.LittleEndian.Uint64(k)
-		for i := 0; i < bpf.NumPossibleCPUs(); i++ {
+		for i := 0; i < maps.NumPossibleCPUs(); i++ {
 			start := i * PolicyMapValueSize
 			val := binary.LittleEndian.Uint64(v[start : start+PolicyMapValueSize])
 			value = value + val
 		}
 		m[key] = value
-		return bpf.IterNone
 	}
 }

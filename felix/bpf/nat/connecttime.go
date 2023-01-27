@@ -28,8 +28,11 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/bpf/bpfdefs"
 	"github.com/projectcalico/calico/felix/bpf/bpfutils"
 	"github.com/projectcalico/calico/felix/bpf/libbpf"
+	"github.com/projectcalico/calico/felix/bpf/maps"
+	"github.com/projectcalico/calico/felix/bpf/utils"
 )
 
 type cgroupProgs struct {
@@ -119,13 +122,13 @@ func installProgram(name, ipver, bpfMount, cgroupPath, logLevel string, udpNotSe
 			continue
 		}
 
-		if size := bpf.MapSize(m.Name()); size != 0 {
-			err := m.SetMapSize(size)
+		if size := maps.Size(m.Name()); size != 0 {
+			err := m.SetSize(size)
 			if err != nil {
 				return fmt.Errorf("error set map size %s: %w", m.Name(), err)
 			}
 		}
-		if err := m.SetPinPath(path.Join(bpf.GlobalPinDir, m.Name())); err != nil {
+		if err := m.SetPinPath(path.Join(bpfdefs.GlobalPinDir, m.Name())); err != nil {
 			return fmt.Errorf("error pinning map %s: %w", m.Name(), err)
 		}
 		log.WithFields(log.Fields{"program": progName, "map": m.Name()}).Debug("Pinned map")
@@ -148,7 +151,7 @@ func installProgram(name, ipver, bpfMount, cgroupPath, logLevel string, udpNotSe
 
 func InstallConnectTimeLoadBalancer(cgroupv2 string, logLevel string, udpNotSeen time.Duration, excludeUDP bool) error {
 
-	bpfMount, err := bpf.MaybeMountBPFfs()
+	bpfMount, err := utils.MaybeMountBPFfs()
 	if err != nil {
 		log.WithError(err).Error("Failed to mount bpffs, unable to do connect-time load balancing")
 		return err
@@ -217,7 +220,7 @@ func ProgFileName(logLevel string, ipver int) string {
 }
 
 func ensureCgroupPath(cgroupv2 string) (string, error) {
-	cgroupRoot, err := bpf.MaybeMountCgroupV2()
+	cgroupRoot, err := utils.MaybeMountCgroupV2()
 	if err != nil {
 		return "", err
 	}
