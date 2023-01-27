@@ -69,7 +69,7 @@ func benchmarkProxyUpdates(b *testing.B, svcN, epsN int) {
 
 		b.StartTimer()
 
-		proxy, err := proxy.New(k8s, &benchS, "somename", proxy.WithImmediateSync())
+		proxy, err := proxy.New(k8s, &benchS, "somename", nil, proxy.WithImmediateSync())
 		Expect(err).ShouldNot(HaveOccurred())
 		// Wait for the initial sync to complete
 		<-benchS.syncC
