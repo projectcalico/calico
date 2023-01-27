@@ -49,8 +49,9 @@ type Proxy interface {
 
 // DPSyncerState groups the information passed to the DPSyncer's Apply
 type DPSyncerState struct {
-	SvcMap k8sp.ServiceMap
-	EpsMap k8sp.EndpointsMap
+	SvcMap     k8sp.ServiceMap
+	EpsMap     k8sp.EndpointsMap
+	NodeLabels map[string]string
 }
 
 // DPSyncer is an interface representing the dataplane syncer that applies the

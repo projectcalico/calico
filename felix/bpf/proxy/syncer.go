@@ -527,6 +527,14 @@ func (s *Syncer) apply(state DPSyncerState) error {
 	log.Infof("Applying new state, %d service", len(state.SvcMap))
 	log.Debugf("Applying new state, %v", state)
 
+	// Extract node labels, service hints annotation and endpoint zone hints
+	// as required to check for Topology Aware Hints implementation on apply.
+	nodeLabels := state.NodeLabels
+	zone, ok := nodeLabels[v1.LabelTopologyZone]
+	if !ok || zone == "" {
+		log.Debugf("Skipping topology aware endpoint filtering since node is missing label '%s'\n", v1.LabelTopologyZone)
+	}
+
 	// we need to copy the maps from the new state to compute the diff in the
 	// next call. We cannot keep the provided maps as the generic k8s proxy code
 	// updates them. This function is called with a lock held so we are safe
@@ -543,13 +551,24 @@ func (s *Syncer) apply(state DPSyncerState) error {
 
 	// insert or update existing services
 	for sname, sinfo := range state.SvcMap {
+		hintsAnnotation := sinfo.HintsAnnotation()
+
 		log.WithField("service", sname).Debug("Applying service")
 		skey := getSvcKey(sname, "")
 
 		eps := make([]k8sp.Endpoint, 0, len(state.EpsMap[sname]))
 		for _, ep := range state.EpsMap[sname] {
+			zoneHints := ep.GetZoneHints()
 			if ep.IsReady() {
-				eps = append(eps, ep)
+				if ShouldAppendTopologyAwareEndpoint(nodeLabels, hintsAnnotation, zoneHints) {
+					eps = append(eps, ep)
+				} else {
+					log.Infof("Topology Aware Hints: '%s' for Endpoint: '%s' however Zone: '%s' does not match Zone Hints: '%v'\n",
+						hintsAnnotation,
+						ep.IP(),
+						zone,
+						zoneHints)
+				}
 			}
 		}
 
