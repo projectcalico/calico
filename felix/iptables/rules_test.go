@@ -70,7 +70,7 @@ var _ = Describe("Rule hashing tests", func() {
 })
 
 var _ = Describe("Hash extraction tests", func() {
-	var table *Table
+	var tbl *table
 
 	BeforeEach(func() {
 		fd := environment.NewFeatureDetector(nil)
@@ -80,7 +80,7 @@ var _ = Describe("Hash extraction tests", func() {
 		fd.NewCmd = func(name string, arg ...string) cmdshim.CmdIface {
 			return cmdshim.NewRealCmd("echo", "iptables v1.4.7")
 		}
-		table = NewTable(
+		tbl = NewTable(
 			"filter",
 			4,
 			"cali:",
@@ -94,11 +94,11 @@ var _ = Describe("Hash extraction tests", func() {
 					return s, nil
 				},
 			},
-		)
+		).(*table)
 	})
 
 	It("should extract an old felix rule by prefix", func() {
-		hashes, rules, err := table.readHashesAndRulesFrom(newClosableBuf("-A FORWARD -j felix-FORWARD\n"))
+		hashes, rules, err := tbl.readHashesAndRulesFrom(newClosableBuf("-A FORWARD -j felix-FORWARD\n"))
 		Expect(err).NotTo(HaveOccurred())
 		Expect(hashes).To(Equal(map[string][]string{
 			"FORWARD": {"OLD INSERT RULE"},
@@ -108,7 +108,7 @@ var _ = Describe("Hash extraction tests", func() {
 		}))
 	})
 	It("should extract an old felix rule by special case", func() {
-		hashes, rules, err := table.readHashesAndRulesFrom(newClosableBuf(
+		hashes, rules, err := tbl.readHashesAndRulesFrom(newClosableBuf(
 			"-A FORWARD -j an-old-rule\n" +
 				"-A FORWARD -j ignore-me\n",
 		))
@@ -127,7 +127,7 @@ var _ = Describe("Hash extraction tests", func() {
 		}))
 	})
 	It("should extract a rule with a hash", func() {
-		hashes, rules, err := table.readHashesAndRulesFrom(newClosableBuf(
+		hashes, rules, err := tbl.readHashesAndRulesFrom(newClosableBuf(
 			"-A FORWARD -m comment --comment \"cali:wUHhoiAYhphO9Mso\" -j cali-FORWARD\n"))
 		Expect(err).NotTo(HaveOccurred())
 		Expect(hashes).To(Equal(map[string][]string{
@@ -140,7 +140,7 @@ var _ = Describe("Hash extraction tests", func() {
 		}))
 	})
 	It("should extract a hash or a gap from each rule", func() {
-		hashes, rules, err := table.readHashesAndRulesFrom(newClosableBuf(
+		hashes, rules, err := tbl.readHashesAndRulesFrom(newClosableBuf(
 			"-A FORWARD -m comment --comment \"cali:wUHhoiAYhphO9Mso\" -j cali-FORWARD\n" +
 				"-A FORWARD -m comment --comment \"cali:abcdefghij1234-_\" -j cali-FORWARD\n" +
 				"-A FORWARD --src '1.2.3.4'\n" +
@@ -165,7 +165,7 @@ var _ = Describe("Hash extraction tests", func() {
 	})
 
 	It("should handle multiple chains", func() {
-		hashes, rules, err := table.readHashesAndRulesFrom(newClosableBuf(
+		hashes, rules, err := tbl.readHashesAndRulesFrom(newClosableBuf(
 			"-A cali-abcd -m comment --comment \"cali:wUHhoiAYhphO9Mso\" -j cali-FORWARD\n" +
 				"-A cali-abcd -m comment --comment \"cali:abcdefghij1234-_\" -j cali-FORWARD\n" +
 				"-A FORWARD --src '1.2.3.4'\n" +
@@ -190,7 +190,7 @@ var _ = Describe("Hash extraction tests", func() {
 	})
 
 	It("should extract a rule with a hash and a label commeent", func() {
-		hashes, rules, err := table.readHashesAndRulesFrom(newClosableBuf(
+		hashes, rules, err := tbl.readHashesAndRulesFrom(newClosableBuf(
 			"-A FORWARD -m comment --comment \"cali:wUHhoiAYhphO9Mso\" -m comment --comment \"key=value\" -j cali-FORWARD\n"))
 		Expect(err).NotTo(HaveOccurred())
 		Expect(hashes).To(Equal(map[string][]string{
