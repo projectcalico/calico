@@ -49,6 +49,7 @@ type KubeProxy struct {
 
 	k8s         kubernetes.Interface
 	hostname    string
+	nodeLabels  map[string]string
 	frontendMap bpf.MapWithExistsCheck
 	backendMap  bpf.MapWithExistsCheck
 	affinityMap bpf.Map
@@ -60,12 +61,13 @@ type KubeProxy struct {
 }
 
 // StartKubeProxy start a new kube-proxy if there was no error
-func StartKubeProxy(k8s kubernetes.Interface, hostname string,
+func StartKubeProxy(k8s kubernetes.Interface, hostname string, nodeLabels map[string]string,
 	bpfMaps *bpfmap.Maps, opts ...Option) (*KubeProxy, error) {
 
 	kp := &KubeProxy{
 		k8s:         k8s,
 		hostname:    hostname,
+		nodeLabels:  nodeLabels,
 		frontendMap: bpfMaps.FrontendMap.(bpf.MapWithExistsCheck),
 		backendMap:  bpfMaps.BackendMap.(bpf.MapWithExistsCheck),
 		affinityMap: bpfMaps.AffinityMap,
@@ -129,7 +131,7 @@ func (kp *KubeProxy) run(hostIPs []net.IP) error {
 		return errors.WithMessage(err, "new bpf syncer")
 	}
 
-	proxy, err := New(kp.k8s, syncer, kp.hostname, kp.opts...)
+	proxy, err := New(kp.k8s, syncer, kp.hostname, kp.nodeLabels, kp.opts...)
 	if err != nil {
 		return errors.WithMessage(err, "new proxy")
 	}

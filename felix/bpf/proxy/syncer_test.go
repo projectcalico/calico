@@ -30,6 +30,8 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	k8sp "k8s.io/kubernetes/pkg/proxy"
 
+	"k8s.io/apimachinery/pkg/util/sets"
+
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	"github.com/projectcalico/calico/felix/bpf/mock"
@@ -76,11 +78,13 @@ var _ = Describe("BPF Syncer", func() {
 				net.IPv4(10, 0, 0, 1),
 				1234,
 				v1.ProtocolTCP,
+				"",
 			),
 		},
 		EpsMap: k8sp.EndpointsMap{
 			svcKey: []k8sp.Endpoint{&k8sp.BaseEndpointInfo{Ready: true, Endpoint: "10.1.0.1:5555"}},
 		},
+		NodeLabels: nil,
 	}
 
 	makestep := func(step func()) func() {
@@ -129,6 +133,7 @@ var _ = Describe("BPF Syncer", func() {
 				net.IPv4(10, 0, 0, 2),
 				2222,
 				v1.ProtocolTCP,
+				"",
 			)
 			state.EpsMap[svcKey2] = []k8sp.Endpoint{
 				&k8sp.BaseEndpointInfo{Ready: false, Endpoint: "10.2.0.0:1111"},
@@ -280,6 +285,7 @@ var _ = Describe("BPF Syncer", func() {
 				net.IPv4(10, 0, 0, 2),
 				2222,
 				v1.ProtocolTCP,
+				"",
 				proxy.K8sSvcWithExternalIPs([]string{"35.0.0.2"}),
 			)
 
@@ -306,6 +312,7 @@ var _ = Describe("BPF Syncer", func() {
 				net.IPv4(10, 0, 0, 2),
 				2222,
 				v1.ProtocolTCP,
+				"",
 				proxy.K8sSvcWithExternalIPs([]string{"35.0.0.2"}),
 			)
 
@@ -339,6 +346,7 @@ var _ = Describe("BPF Syncer", func() {
 				net.IPv4(10, 0, 0, 2),
 				2222,
 				v1.ProtocolTCP,
+				"",
 			)
 
 			err := s.Apply(state)
@@ -362,6 +370,7 @@ var _ = Describe("BPF Syncer", func() {
 				net.IPv4(10, 0, 0, 2),
 				2222,
 				v1.ProtocolTCP,
+				"",
 				proxy.K8sSvcWithNodePort(2222),
 			)
 
@@ -409,6 +418,7 @@ var _ = Describe("BPF Syncer", func() {
 				net.IPv4(10, 0, 0, 3),
 				3333,
 				v1.ProtocolUDP,
+				"",
 				proxy.K8sSvcWithNodePort(3232),
 			)
 			state.EpsMap[svcKey3] = []k8sp.Endpoint{
@@ -443,6 +453,7 @@ var _ = Describe("BPF Syncer", func() {
 				net.IPv4(10, 0, 0, 3),
 				3355,
 				v1.ProtocolUDP,
+				"",
 				proxy.K8sSvcWithNodePort(3232),
 			)
 			state.EpsMap[svcKey3] = []k8sp.Endpoint{
@@ -475,6 +486,7 @@ var _ = Describe("BPF Syncer", func() {
 				net.IPv4(10, 0, 0, 3),
 				3355,
 				v1.ProtocolUDP,
+				"",
 				proxy.K8sSvcWithNodePort(1212),
 			)
 			state.EpsMap[svcKey3] = []k8sp.Endpoint{
@@ -553,6 +565,7 @@ var _ = Describe("BPF Syncer", func() {
 				net.IPv4(10, 0, 0, 2),
 				2222,
 				v1.ProtocolTCP,
+				"",
 				proxy.K8sSvcWithNodePort(4444),
 				proxy.K8sSvcWithLocalOnly(),
 			)
@@ -706,6 +719,7 @@ var _ = Describe("BPF Syncer", func() {
 				net.IPv4(10, 0, 0, 2),
 				2222,
 				v1.ProtocolTCP,
+				"",
 				proxy.K8sSvcWithNodePort(4444),
 				proxy.K8sSvcWithLocalOnly(),
 			)
@@ -793,6 +807,7 @@ var _ = Describe("BPF Syncer", func() {
 				net.IPv4(10, 0, 0, 2),
 				2222,
 				v1.ProtocolTCP,
+				"",
 				proxy.K8sSvcWithNodePort(4444),
 				proxy.K8sSvcWithLocalOnly(),
 			)
@@ -859,6 +874,7 @@ var _ = Describe("BPF Syncer", func() {
 				net.IPv4(10, 0, 0, 2),
 				2222,
 				v1.ProtocolTCP,
+				"",
 				proxy.K8sSvcWithStickyClientIP(5),
 			)
 
@@ -1002,6 +1018,96 @@ var _ = Describe("BPF Syncer", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(cnt).To(Equal(0))
+		}))
+
+		By("checking topology aware hints auto in service with multiple endpoints match first zone", makestep(func() {
+			state.SvcMap[svcKey] = proxy.NewK8sServicePort(
+				net.IPv4(10, 0, 0, 1),
+				1234,
+				v1.ProtocolTCP,
+				"auto",
+			)
+			state.EpsMap[svcKey] = []k8sp.Endpoint{
+				&k8sp.BaseEndpointInfo{Ready: true, Endpoint: "10.1.0.1:5555", ZoneHints: sets.NewString("us-west-2a")},
+				&k8sp.BaseEndpointInfo{Ready: true, Endpoint: "10.2.0.2:5555", ZoneHints: sets.NewString("us-west-2b")},
+			}
+			state.NodeLabels = map[string]string{v1.LabelTopologyZone: "us-west-2a"}
+
+			err := s.Apply(state)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(eps.m).To(HaveLen(1))
+		}))
+
+		By("checking topology aware hints auto in service with multiple endpoints match second zone", makestep(func() {
+			state.SvcMap[svcKey] = proxy.NewK8sServicePort(
+				net.IPv4(10, 0, 0, 1),
+				1234,
+				v1.ProtocolTCP,
+				"auto",
+			)
+			state.EpsMap[svcKey] = []k8sp.Endpoint{
+				&k8sp.BaseEndpointInfo{Ready: true, Endpoint: "10.1.0.1:5555", ZoneHints: sets.NewString("us-west-2a")},
+				&k8sp.BaseEndpointInfo{Ready: true, Endpoint: "10.2.0.2:5555", ZoneHints: sets.NewString("us-west-2b")},
+			}
+			state.NodeLabels = map[string]string{v1.LabelTopologyZone: "us-west-2b"}
+
+			err := s.Apply(state)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(eps.m).To(HaveLen(1))
+		}))
+
+		By("checking topology aware hints disabled in service with multiple endpoints match all zones", makestep(func() {
+			state.SvcMap[svcKey] = proxy.NewK8sServicePort(
+				net.IPv4(10, 0, 0, 1),
+				1234,
+				v1.ProtocolTCP,
+				"disabled",
+			)
+			state.EpsMap[svcKey] = []k8sp.Endpoint{
+				&k8sp.BaseEndpointInfo{Ready: true, Endpoint: "10.1.0.1:5555", ZoneHints: sets.NewString("us-west-2a")},
+				&k8sp.BaseEndpointInfo{Ready: true, Endpoint: "10.2.0.2:5555", ZoneHints: sets.NewString("us-west-2b")},
+			}
+			state.NodeLabels = map[string]string{v1.LabelTopologyZone: "us-west-2b"}
+
+			err := s.Apply(state)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(eps.m).To(HaveLen(2))
+		}))
+
+		By("checking topology aware hints empty in service with multiple endpoints match all zones", makestep(func() {
+			state.SvcMap[svcKey] = proxy.NewK8sServicePort(
+				net.IPv4(10, 0, 0, 1),
+				1234,
+				v1.ProtocolTCP,
+				"",
+			)
+			state.EpsMap[svcKey] = []k8sp.Endpoint{
+				&k8sp.BaseEndpointInfo{Ready: true, Endpoint: "10.1.0.1:5555", ZoneHints: sets.NewString("us-west-2a")},
+				&k8sp.BaseEndpointInfo{Ready: true, Endpoint: "10.2.0.2:5555", ZoneHints: sets.NewString("us-west-2b")},
+			}
+			state.NodeLabels = map[string]string{v1.LabelTopologyZone: "us-west-2b"}
+
+			err := s.Apply(state)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(eps.m).To(HaveLen(2))
+		}))
+
+		By("checking topology aware hints auto in service with multiple endpoints without node labels match all zones", makestep(func() {
+			state.SvcMap[svcKey] = proxy.NewK8sServicePort(
+				net.IPv4(10, 0, 0, 1),
+				1234,
+				v1.ProtocolTCP,
+				"auto",
+			)
+			state.EpsMap[svcKey] = []k8sp.Endpoint{
+				&k8sp.BaseEndpointInfo{Ready: true, Endpoint: "10.1.0.1:5555", ZoneHints: sets.NewString("us-west-2a")},
+				&k8sp.BaseEndpointInfo{Ready: true, Endpoint: "10.2.0.2:5555", ZoneHints: sets.NewString("us-west-2b")},
+			}
+			state.NodeLabels = nil
+
+			err := s.Apply(state)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(eps.m).To(HaveLen(2))
 		}))
 
 	})
