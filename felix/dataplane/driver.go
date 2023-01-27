@@ -17,6 +17,8 @@
 package dataplane
 
 import (
+	"context"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"math/bits"
 	"net"
 	"net/http"
@@ -183,8 +185,19 @@ func StartDataplaneDriver(configParams *config.Config,
 			log.WithError(err).Warning("Unable to assign table index for IPv6 wireguard")
 		}
 
+		// Extract node labels from the hosts such they could be referenced later
+		// e.g. Topology Aware Hints.
+		felixHostname := configParams.FelixHostname
+		felixNode, err := k8sClientSet.CoreV1().Nodes().Get(context.Background(), felixHostname, v1.GetOptions{})
+		if err != nil {
+			log.WithFields(log.Fields{
+				"felixHostname": felixHostname,
+			}).Info("Unabled to extract node labels from Felix host")
+		}
+
 		dpConfig := intdataplane.Config{
-			Hostname:           configParams.FelixHostname,
+			Hostname:           felixHostname,
+			NodeLabels:         felixNode.Labels,
 			FloatingIPsEnabled: strings.EqualFold(configParams.FloatingIPs, string(apiv3.FloatingIPsEnabled)),
 			IfaceMonitorConfig: ifacemonitor.Config{
 				InterfaceExcludes: configParams.InterfaceExclude,
