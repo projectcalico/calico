@@ -30,6 +30,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/environment"
+	"github.com/projectcalico/calico/felix/iptables"
 	"github.com/projectcalico/calico/felix/logutils"
 
 	"github.com/projectcalico/calico/felix/bpf"
@@ -188,7 +189,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		maps                 *bpfmap.Maps
 		rrConfigNormal       rules.Config
 		ruleRenderer         rules.RuleRenderer
-		filterTableV4        iptablesTable
+		filterTableV4        iptables.Table
 		ifStateMap           *mock.Map
 		countersMap          *mock.Map
 	)
