@@ -41,10 +41,10 @@ var _ = Describe("BPF Proxy", func() {
 	var syncStop chan struct{}
 
 	It("should fail without k8s client", func() {
-		_, err := proxy.New(nil, nil, "testnode")
+		_, err := proxy.New(nil, nil, "testnode", nil)
 		Expect(err).To(HaveOccurred())
 
-		_, err = proxy.New(fake.NewSimpleClientset(), nil, "testnode")
+		_, err = proxy.New(fake.NewSimpleClientset(), nil, "testnode", nil)
 		Expect(err).To(HaveOccurred())
 	})
 
@@ -54,7 +54,7 @@ var _ = Describe("BPF Proxy", func() {
 		syncStop = make(chan struct{})
 		dp := newMockSyncer(syncStop)
 
-		p, err := proxy.New(k8s, dp, "testnode", proxy.WithImmediateSync())
+		p, err := proxy.New(k8s, dp, "testnode", nil, proxy.WithImmediateSync())
 		Expect(err).NotTo(HaveOccurred())
 
 		defer func() {
@@ -171,7 +171,7 @@ var _ = Describe("BPF Proxy", func() {
 
 					opts := []proxy.Option{proxy.WithImmediateSync()}
 
-					p, err = proxy.New(k8s, dp, "testnode", opts...)
+					p, err = proxy.New(k8s, dp, "testnode", nil, opts...)
 					Expect(err).NotTo(HaveOccurred())
 				})
 			})
@@ -511,7 +511,7 @@ var _ = Describe("BPF Proxy", func() {
 
 					opts := []proxy.Option{proxy.WithImmediateSync()}
 
-					p, err = proxy.New(k8s, dp, testNodeName, opts...)
+					p, err = proxy.New(k8s, dp, testNodeName, nil, opts...)
 					Expect(err).NotTo(HaveOccurred())
 				})
 			})

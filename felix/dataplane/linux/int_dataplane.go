@@ -131,8 +131,8 @@ func init() {
 }
 
 type Config struct {
-	Hostname string
-
+	Hostname             string
+	NodeLabels           map[string]string
 	IPv6Enabled          bool
 	RuleRendererOverride rules.RuleRenderer
 	IPIPMTU              int
@@ -699,6 +699,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			kp, err := bpfproxy.StartKubeProxy(
 				config.KubeClientSet,
 				config.Hostname,
+				config.NodeLabels,
 				bpfMaps,
 				bpfproxyOpts...,
 			)
