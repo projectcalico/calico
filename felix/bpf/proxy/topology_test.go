@@ -15,8 +15,9 @@
 package proxy_test
 
 import (
-	"github.com/projectcalico/calico/felix/bpf/proxy"
 	"testing"
+
+	"github.com/projectcalico/calico/felix/bpf/proxy"
 
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
