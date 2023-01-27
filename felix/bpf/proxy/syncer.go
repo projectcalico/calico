@@ -1340,12 +1340,13 @@ type K8sServicePortOption func(interface{})
 
 // NewK8sServicePort creates a new k8s ServicePort
 func NewK8sServicePort(clusterIP net.IP, port int, proto v1.Protocol,
-	opts ...K8sServicePortOption) k8sp.ServicePort {
+	hintsAnnotation string, opts ...K8sServicePortOption) k8sp.ServicePort {
 
 	x := &serviceInfo{
-		clusterIP: clusterIP,
-		port:      port,
-		protocol:  proto,
+		clusterIP:       clusterIP,
+		port:            port,
+		protocol:        proto,
+		hintsAnnotation: hintsAnnotation,
 	}
 
 	for _, o := range opts {
