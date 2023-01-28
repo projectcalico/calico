@@ -28,15 +28,18 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/bpf"
-	"github.com/projectcalico/calico/felix/bpf/bpfutils"
+	"github.com/projectcalico/calico/felix/bpf/bpfdefs"
+	"github.com/projectcalico/calico/felix/bpf/hook"
 	"github.com/projectcalico/calico/felix/bpf/libbpf"
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 )
 
 type AttachPoint struct {
-	Type                 EndpointType
-	ToOrFrom             ToOrFromEp
-	Hook                 bpf.Hook
+	Type                 tcdefs.EndpointType
+	ToOrFrom             tcdefs.ToOrFromEp
+	Hook                 hook.Hook
+	HookLayout4          hook.Layout
+	HookLayout6          hook.Layout
 	Iface                string
 	LogLevel             string
 	HostIP               net.IP
@@ -70,32 +73,6 @@ func (ap *AttachPoint) Log() *log.Entry {
 	})
 }
 
-func (ap *AttachPoint) AlreadyAttached(object string) (int, bool) {
-	logCxt := log.WithField("attachPoint", ap)
-	progID, err := ap.ProgramID()
-	if err != nil {
-		logCxt.WithError(err).Debugf("Couldn't get the attached TC program ID.")
-		return -1, false
-	}
-
-	progsToClean, err := ap.listAttachedPrograms()
-	if err != nil {
-		logCxt.WithError(err).Debugf("Couldn't get the list of already attached TC programs")
-		return -1, false
-	}
-
-	isAttached, err := bpf.AlreadyAttachedProg(ap, object, progID)
-	if err != nil {
-		logCxt.WithError(err).Debugf("Failed to check if BPF program was already attached.")
-		return -1, false
-	}
-
-	if isAttached && len(progsToClean) == 1 {
-		return progID, true
-	}
-	return -1, false
-}
-
 func (ap *AttachPoint) loadObject(ipVer int, file string) (*libbpf.Obj, error) {
 	obj, err := libbpf.OpenObject(file)
 	if err != nil {
@@ -113,9 +90,6 @@ func (ap *AttachPoint) loadObject(ipVer int, file string) (*libbpf.Obj, error) {
 			continue
 		}
 
-		if err := ap.setMapSize(m); err != nil {
-			return nil, fmt.Errorf("error setting map size %s : %w", m.Name(), err)
-		}
 		pinDir := bpf.MapPinDir(m.Type(), m.Name(), ap.Iface, ap.Hook)
 		if err := m.SetPinPath(path.Join(pinDir, m.Name())); err != nil {
 			return nil, fmt.Errorf("error pinning map %s: %w", m.Name(), err)
@@ -126,11 +100,6 @@ func (ap *AttachPoint) loadObject(ipVer int, file string) (*libbpf.Obj, error) {
 		return nil, fmt.Errorf("error loading program: %w", err)
 	}
 
-	err = ap.updateJumpMap(ipVer, obj)
-	if err != nil {
-		return nil, fmt.Errorf("error updating jump map %v", err)
-	}
-
 	return obj, nil
 }
 
@@ -138,22 +107,15 @@ func (ap *AttachPoint) loadObject(ipVer int, file string) (*libbpf.Obj, error) {
 func (ap *AttachPoint) AttachProgram() (int, error) {
 	logCxt := log.WithField("attachPoint", ap)
 
-	filename := ap.FileName(4)
-	binaryToLoad := path.Join(bpf.ObjectDir, filename)
+	// By now the attach type specific generic set of programs is loaded and we
+	// only need to load and configure the preamble that will pass the
+	// configuration further to the selected set of programs.
+	binaryToLoad := path.Join(bpfdefs.ObjectDir, "tc_preamble.o")
 
 	progsToClean, err := ap.listAttachedPrograms()
 	if err != nil {
 		return -1, err
 	}
-
-	// Check if the bpf object is already attached, and we should skip
-	// re-attaching it if the binary and its configuration are the same.
-	progID, isAttached := ap.AlreadyAttached(binaryToLoad)
-	if isAttached {
-		logCxt.Infof("Program already attached to TC, skip reattaching %s", filename)
-		return progID, nil
-	}
-	logCxt.Debugf("Continue with attaching BPF program %s", filename)
 
 	obj, err := ap.loadObject(4, binaryToLoad)
 	if err != nil {
@@ -162,19 +124,9 @@ func (ap *AttachPoint) AttachProgram() (int, error) {
 	}
 	defer obj.Close()
 
-	if ap.IPv6Enabled {
-		filename := ap.FileName(6)
-		obj, err := ap.loadObject(6, path.Join(bpf.ObjectDir, filename))
-		if err != nil {
-			logCxt.Warn("Failed to load program")
-			return -1, fmt.Errorf("object v6: %w", err)
-		}
-		defer obj.Close()
-	}
-
-	progId, err := obj.AttachClassifier(SectionName(ap.Type, ap.ToOrFrom), ap.Iface, ap.Hook == bpf.HookIngress)
+	progId, err := obj.AttachClassifier("cali_tc_preamble", ap.Iface, ap.Hook == hook.Ingress)
 	if err != nil {
-		logCxt.Warnf("Failed to attach to TC section %s", SectionName(ap.Type, ap.ToOrFrom))
+		logCxt.Warnf("Failed to attach to TC section cali_tc_preamble")
 		return -1, err
 	}
 	logCxt.Info("Program attached to TC.")
@@ -311,7 +263,7 @@ func (ap *AttachPoint) listAttachedPrograms() ([]attachedProg, error) {
 
 // ProgramName returns the name of the program associated with this AttachPoint
 func (ap *AttachPoint) ProgramName() string {
-	return SectionName(ap.Type, ap.ToOrFrom)
+	return tcdefs.SectionName(ap.Type, ap.ToOrFrom)
 }
 
 var ErrNoTC = errors.New("no TC program attached")
@@ -340,11 +292,6 @@ func (ap *AttachPoint) ProgramID() (int, error) {
 		}
 	}
 	return -1, fmt.Errorf("Couldn't find 'id <ID> in 'tc filter' command out=\n%v err=%w", string(out), ErrNoTC)
-}
-
-// FileName return the file the AttachPoint will load the program from
-func (ap *AttachPoint) FileName(ipVer int) string {
-	return ProgFilename(ipVer, ap.Type, ap.ToOrFrom, ap.ToHostDrop, ap.FIB, ap.DSR, ap.LogLevel, bpfutils.BTFEnabled)
 }
 
 func (ap *AttachPoint) IsAttached() (bool, error) {
@@ -397,10 +344,10 @@ func RemoveQdisc(ifaceName string) error {
 	}
 
 	// Remove the json files of the programs attached to the interface for both directions
-	if err = bpf.ForgetAttachedProg(ifaceName, bpf.HookIngress); err != nil {
+	if err = bpf.ForgetAttachedProg(ifaceName, hook.Ingress); err != nil {
 		return fmt.Errorf("Failed to remove runtime json file of ingress direction: %w", err)
 	}
-	if err = bpf.ForgetAttachedProg(ifaceName, bpf.HookEgress); err != nil {
+	if err = bpf.ForgetAttachedProg(ifaceName, hook.Egress); err != nil {
 		return fmt.Errorf("Failed to remove runtime json file of egress direction: %w", err)
 	}
 
@@ -417,7 +364,7 @@ func (ap *AttachPoint) IfaceName() string {
 	return ap.Iface
 }
 
-func (ap *AttachPoint) HookName() bpf.Hook {
+func (ap *AttachPoint) HookName() hook.Hook {
 	return ap.Hook
 }
 
@@ -474,6 +421,18 @@ func (ap *AttachPoint) ConfigureProgram(m *libbpf.Map) error {
 		}
 	}
 
+	if ap.HookLayout4 != nil {
+		for p, i := range ap.HookLayout4 {
+			globalData.Jumps[p] = uint32(i)
+		}
+	}
+
+	if ap.HookLayout6 != nil {
+		for p, i := range ap.HookLayout6 {
+			globalData.Jumps[p] = uint32(i)
+		}
+	}
+
 	return ConfigureProgram(m, ap.Iface, &globalData)
 }
 
@@ -485,58 +444,13 @@ func ConfigureProgram(m *libbpf.Map, iface string, globalData *libbpf.TcGlobalDa
 	return libbpf.TcSetGlobals(m, globalData)
 }
 
-func (ap *AttachPoint) setMapSize(m *libbpf.Map) error {
-	if size := bpf.MapSize(m.Name()); size != 0 {
-		return m.SetMapSize(size)
-	}
-	return nil
-}
-
 func (ap *AttachPoint) hasPolicyProg() bool {
 	switch ap.Type {
-	case EpTypeHost, EpTypeNAT, EpTypeLO:
+	case tcdefs.EpTypeHost, tcdefs.EpTypeNAT, tcdefs.EpTypeLO:
 		return false
 	}
 
 	return true
-}
-
-func (ap *AttachPoint) hasHostConflictProg() bool {
-	switch ap.Type {
-	case EpTypeWorkload:
-		return false
-	}
-
-	return ap.ToOrFrom == ToEp
-}
-
-func (ap *AttachPoint) updateJumpMap(ipVer int, obj *libbpf.Obj) error {
-	ipVersion := "IPv4"
-	if ipVer == 6 {
-		ipVersion = "IPv6"
-	}
-
-	return UpdateJumpMap(obj, tcdefs.JumpMapIndexes[ipVersion], ap.hasPolicyProg(), ap.hasHostConflictProg())
-}
-
-func UpdateJumpMap(obj *libbpf.Obj, progs []int, hasPolicyProg, hasHostConflictProg bool) error {
-	mapName := bpf.JumpMapName()
-
-	for _, idx := range progs {
-		if (idx == tcdefs.ProgIndexPolicy || idx == tcdefs.ProgIndexV6Policy) && !hasPolicyProg {
-			continue
-		}
-		if idx == tcdefs.ProgIndexHostCtConflict && !hasHostConflictProg {
-			continue
-		}
-		log.WithField("prog", tcdefs.ProgramNames[idx]).Debug("UpdateJumpMap")
-		err := obj.UpdateJumpMap(mapName, tcdefs.ProgramNames[idx], idx)
-		if err != nil {
-			return fmt.Errorf("error updating %s program: %w", tcdefs.ProgramNames[idx], err)
-		}
-	}
-
-	return nil
 }
 
 func convertIPToUint32(ip net.IP) (uint32, error) {

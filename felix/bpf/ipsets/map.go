@@ -24,7 +24,7 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/ip"
 )
 
@@ -40,7 +40,7 @@ const IPSetEntrySize = 20
 
 type IPSetEntry [IPSetEntrySize]byte
 
-var MapParameters = bpf.MapParameters{
+var MapParameters = maps.MapParameters{
 	Type:       "lpm_trie",
 	KeySize:    IPSetEntrySize,
 	ValueSize:  4,
@@ -54,11 +54,11 @@ func init() {
 }
 
 func SetMapSize(size int) {
-	bpf.SetMapSize(MapParameters.VersionedName(), size)
+	maps.SetSize(MapParameters.VersionedName(), size)
 }
 
-func Map() bpf.Map {
-	return bpf.NewPinnedMap(MapParameters)
+func Map() maps.Map {
+	return maps.NewPinnedMap(MapParameters)
 }
 
 func (e IPSetEntry) SetID() uint64 {

@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2023 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,246 +15,51 @@
 package ut
 
 import (
-	"net"
-	"os"
-	"path/filepath"
-	"strings"
+	"regexp"
 	"testing"
 
 	. "github.com/onsi/gomega"
-	log "github.com/sirupsen/logrus"
-
-	"github.com/projectcalico/calico/felix/bpf"
-	"github.com/projectcalico/calico/felix/bpf/tc"
-	"github.com/projectcalico/calico/felix/bpf/xdp"
+	"github.com/projectcalico/calico/felix/bpf/bpfmap"
+	linux "github.com/projectcalico/calico/felix/dataplane/linux"
+	"github.com/projectcalico/calico/felix/ifacemonitor"
+	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/felix/rules"
 )
 
-func TestReattachPrograms(t *testing.T) {
+func TestAttach(t *testing.T) {
 	RegisterTestingT(t)
 
-	bpffs, err := bpf.MaybeMountBPFfs()
+	bpfmaps, err := bpfmap.CreateBPFMaps()
 	Expect(err).NotTo(HaveOccurred())
-	Expect(bpffs).To(Equal("/sys/fs/bpf"))
 
-	// TC program 1
-	ap1 := tc.AttachPoint{
-		Type:     tc.EpTypeWorkload,
-		ToOrFrom: tc.ToEp,
-		Hook:     bpf.HookIngress,
-		DSR:      true,
-		LogLevel: "DEBUG",
-	}
-	vethName1, veth1 := createVeth()
-	defer deleteLink(veth1)
-	ap1.Iface = vethName1
-	log.Debugf("Testing %v in %v", ap1.ProgramName(), ap1.FileName(4))
-
-	// TC program 2
-	ap2 := tc.AttachPoint{
-		Type:     tc.EpTypeWorkload,
-		ToOrFrom: tc.ToEp,
-		Hook:     bpf.HookEgress,
-		DSR:      false,
-		LogLevel: "DEBUG",
-	}
-	vethName2, veth2 := createVeth()
-	defer deleteLink(veth2)
-	ap2.Iface = vethName2
-	log.Debugf("Testing %v in %v", ap2.ProgramName(), ap2.FileName(4))
-
-	// XDP Program 1
-	ap3 := xdp.AttachPoint{
-		LogLevel: "DEBUG",
-		Modes:    []bpf.XDPMode{bpf.XDPGeneric},
-	}
-	vethName3, veth3 := createVeth()
-	defer deleteLink(veth3)
-	ap3.Iface = vethName3
-	log.Debugf("Testing %v in %v", ap3.ProgramName(), ap3.FileName())
-
-	// Start with a clean base state in case another test left something behind.
-	t.Log("Doing initial clean up")
-	bpf.CleanUpMaps()
-	bpf.CleanAttachedProgDir()
-
-	startingJumpMaps := countJumpMaps()
-	startingTCDirs := countTCDirs()
-	startingHashFiles := countHashFiles()
-
-	// Attach the first TC program
-	t.Log("Adding program, should add one dir and one map")
-	ap1.HostIP = net.ParseIP("10.0.0.1")
-	ap1.IntfIP = net.ParseIP("10.0.0.2")
-	err = tc.EnsureQdisc(ap1.Iface)
+	bpfEpMgr, err := linux.NewTestEpMgr(
+		&linux.Config{
+			Hostname:              "uthost",
+			BPFLogLevel:           "info",
+			BPFDataIfacePattern:   regexp.MustCompile("^eth12345"),
+			VXLANMTU:              1000,
+			VXLANPort:             1234,
+			BPFNodePortDSREnabled: false,
+			RulesConfig: rules.Config{
+				EndpointToHostAction: "RETURN",
+			},
+			BPFExtToServiceConnmark: 0,
+			FeatureGates: map[string]string{
+				"BPFConnectTimeLoadBalancingWorkaround": "enabled",
+			},
+			BPFPolicyDebugEnabled: true,
+		},
+		bpfmaps,
+		regexp.MustCompile("cali"),
+	)
 	Expect(err).NotTo(HaveOccurred())
-	ap1ProgIdOld, err := ap1.AttachProgram()
+
+	veth12345 := createVethName("eth12345")
+	defer deleteLink(veth12345)
+
+	bpfEpMgr.OnUpdate(linux.NewIfaceUpdate("eth12345", ifacemonitor.StateUp, veth12345.Attrs().Index))
+	bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("eth12345", "1.2.3.4"))
+	bpfEpMgr.OnUpdate(&proto.HostMetadataUpdate{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
+	err = bpfEpMgr.CompleteDeferredWork()
 	Expect(err).NotTo(HaveOccurred())
-	Expect(countJumpMaps()).To(BeNumerically("==", startingJumpMaps+1), "unexpected number of jump maps")
-	Expect(countTCDirs()).To(BeNumerically("==", startingTCDirs+1), "unexpected number of TC dirs")
-	Expect(countHashFiles()).To(BeNumerically("==", startingHashFiles+1), "unexpected number of hash files")
-	Expect(bpf.RuntimeJSONFilename(ap1.IfaceName(), bpf.HookIngress)).To(BeARegularFile())
-
-	// Reattach the same TC program
-	t.Log("Replacing program should not add another map and dir")
-	ap1ProgIdNew, err := ap1.AttachProgram()
-	Expect(err).NotTo(HaveOccurred())
-	Expect(ap1ProgIdOld).To(Equal(ap1ProgIdNew)) // no change, no reload
-	Expect(countJumpMaps()).To(BeNumerically("==", startingJumpMaps+1), "unexpected number of jump maps")
-	Expect(countTCDirs()).To(BeNumerically("==", startingTCDirs+1), "unexpected number of TC dirs")
-	Expect(countHashFiles()).To(BeNumerically("==", startingHashFiles+1), "unexpected number of hash files")
-	Expect(bpf.RuntimeJSONFilename(ap1.IfaceName(), bpf.HookIngress)).To(BeARegularFile())
-
-	t.Log("Replacing program should not add another map and dir")
-	ap1.HostIP = net.ParseIP("10.0.0.3")
-	ap1.IntfIP = net.ParseIP("10.0.0.4")
-	ap1ProgIdOld = ap1ProgIdNew
-	ap1ProgIdNew, err = ap1.AttachProgram()
-	Expect(err).NotTo(HaveOccurred())
-	Expect(ap1ProgIdOld).NotTo(Equal(ap1ProgIdNew)) // because we changed configuration, so reloaded
-
-	// Attach the second TC program
-	t.Log("Adding another program, should add one dir and one map")
-	ap2.HostIP = net.ParseIP("10.0.1.1")
-	ap2.IntfIP = net.ParseIP("10.0.1.2")
-	err = tc.EnsureQdisc(ap2.Iface)
-	Expect(err).NotTo(HaveOccurred())
-	_, err = ap2.AttachProgram()
-	Expect(err).NotTo(HaveOccurred())
-	Expect(countJumpMaps()).To(BeNumerically("==", startingJumpMaps+2), "unexpected number of jump maps")
-	Expect(countTCDirs()).To(BeNumerically("==", startingTCDirs+2), "unexpected number of TC dirs")
-	Expect(countHashFiles()).To(BeNumerically("==", startingHashFiles+2), "unexpected number of hash files")
-	Expect(bpf.RuntimeJSONFilename(ap1.IfaceName(), bpf.HookIngress)).To(BeARegularFile())
-	Expect(bpf.RuntimeJSONFilename(ap2.IfaceName(), bpf.HookEgress)).To(BeARegularFile())
-
-	// Attach the first XDP program
-	t.Log("Adding another program (XDP), should add one dir and one map")
-	ap2.HostIP = net.ParseIP("10.0.3.1")
-	ap2.IntfIP = net.ParseIP("10.0.3.2")
-	_, err = ap3.AttachProgram()
-	Expect(err).NotTo(HaveOccurred())
-	Expect(countJumpMaps()).To(BeNumerically("==", startingJumpMaps+3), "unexpected number of jump maps")
-	Expect(countTCDirs()).To(BeNumerically("==", startingTCDirs+3), "unexpected number of TC dirs")
-	Expect(countHashFiles()).To(BeNumerically("==", startingHashFiles+3), "unexpected number of hash files")
-	Expect(bpf.RuntimeJSONFilename(ap1.IfaceName(), bpf.HookIngress)).To(BeARegularFile())
-	Expect(bpf.RuntimeJSONFilename(ap2.IfaceName(), bpf.HookEgress)).To(BeARegularFile())
-	Expect(bpf.RuntimeJSONFilename(ap3.IfaceName(), bpf.HookXDP)).To(BeARegularFile())
-
-	list, err := bpf.ListCalicoAttached()
-	Expect(err).NotTo(HaveOccurred())
-	Expect(list).To(HaveLen(3))
-	Expect(list).To(HaveKey(vethName1))
-	Expect(list[vethName1].TCId).NotTo(Equal(0))
-	Expect(list[vethName1].XDPId).To(Equal(0))
-	Expect(list).To(HaveKey(vethName2))
-	Expect(list[vethName2].TCId).NotTo(Equal(0))
-	Expect(list[vethName2].XDPId).To(Equal(0))
-	Expect(list).To(HaveKey(vethName3))
-	Expect(list[vethName3].TCId).To(Equal(0))
-	Expect(list[vethName3].XDPId).NotTo(Equal(0))
-
-	// Clean up maps, but nothing should change
-	t.Log("Cleaning up, should remove the first map")
-	bpf.CleanUpMaps()
-	Expect(countJumpMaps()).To(BeNumerically("==", startingJumpMaps+3), "unexpected number of jump maps")
-	Expect(countTCDirs()).To(BeNumerically("==", startingTCDirs+3), "unexpected number of TC dirs")
-	Expect(countHashFiles()).To(BeNumerically("==", startingHashFiles+3), "unexpected number of hash files")
-	Expect(bpf.RuntimeJSONFilename(ap1.IfaceName(), bpf.HookIngress)).To(BeARegularFile())
-	Expect(bpf.RuntimeJSONFilename(ap2.IfaceName(), bpf.HookEgress)).To(BeARegularFile())
-	Expect(bpf.RuntimeJSONFilename(ap3.IfaceName(), bpf.HookXDP)).To(BeARegularFile())
-
-	// Remove both TC programs
-	t.Log("Removing all TC programs and cleaning up their jump maps, should keep only one jump map and hash file")
-	err = tc.RemoveQdisc(vethName1)
-	Expect(err).NotTo(HaveOccurred())
-	err = tc.RemoveQdisc(vethName2)
-	Expect(err).NotTo(HaveOccurred())
-	bpf.CleanUpMaps()
-	Expect(countJumpMaps()).To(BeNumerically("==", startingJumpMaps+1), "unexpected number of jump maps")
-	Expect(countTCDirs()).To(BeNumerically("==", startingTCDirs+1), "unexpected number of TC dirs")
-	Expect(countHashFiles()).To(BeNumerically("==", startingHashFiles+1), "unexpected number of hash files")
-	Expect(bpf.RuntimeJSONFilename(ap1.IfaceName(), bpf.HookIngress)).ToNot(BeAnExistingFile())
-	Expect(bpf.RuntimeJSONFilename(ap2.IfaceName(), bpf.HookEgress)).ToNot(BeAnExistingFile())
-	Expect(bpf.RuntimeJSONFilename(ap3.IfaceName(), bpf.HookXDP)).To(BeARegularFile())
-
-	// Reattach the same XDP program, nothing should change
-	t.Log("Reattaching the same XDP program, should not add any dir or map")
-	ap2.HostIP = net.ParseIP("10.0.3.3")
-	ap2.IntfIP = net.ParseIP("10.0.3.4")
-	_, err = ap3.AttachProgram()
-	Expect(err).NotTo(HaveOccurred())
-	Expect(countJumpMaps()).To(BeNumerically("==", startingJumpMaps+1), "unexpected number of jump maps")
-	Expect(countTCDirs()).To(BeNumerically("==", startingTCDirs+1), "unexpected number of TC dirs")
-	Expect(countHashFiles()).To(BeNumerically("==", startingHashFiles+1), "unexpected number of hash files")
-	Expect(bpf.RuntimeJSONFilename(ap1.IfaceName(), bpf.HookIngress)).ToNot(BeAnExistingFile())
-	Expect(bpf.RuntimeJSONFilename(ap2.IfaceName(), bpf.HookEgress)).ToNot(BeAnExistingFile())
-	Expect(bpf.RuntimeJSONFilename(ap3.IfaceName(), bpf.HookXDP)).To(BeARegularFile())
-
-	// Remove the XDP program, everything should go back to the initial state
-	t.Log("Removing the XDP program and cleaning up its jump map, should return to base state")
-	err = ap3.DetachProgram()
-	Expect(err).NotTo(HaveOccurred())
-	bpf.CleanUpMaps()
-	Expect(countJumpMaps()).To(BeNumerically("==", startingJumpMaps), "unexpected number of jump maps")
-	Expect(countTCDirs()).To(BeNumerically("==", startingTCDirs), "unexpected number of TC dirs")
-	Expect(countHashFiles()).To(BeNumerically("==", startingHashFiles), "unexpected number of hash files")
-	Expect(bpf.RuntimeJSONFilename(ap1.IfaceName(), bpf.HookIngress)).ToNot(BeAnExistingFile())
-	Expect(bpf.RuntimeJSONFilename(ap2.IfaceName(), bpf.HookEgress)).ToNot(BeAnExistingFile())
-	Expect(bpf.RuntimeJSONFilename(ap3.IfaceName(), bpf.HookXDP)).ToNot(BeAnExistingFile())
-}
-
-func countJumpMaps() int {
-	var count int
-	err := filepath.Walk("/sys/fs/bpf/tc", func(p string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if strings.HasPrefix(info.Name(), bpf.JumpMapName()) {
-			log.Debugf("Jump map: %s", p)
-			count++
-		}
-		return nil
-	})
-
-	if err != nil {
-		panic(err)
-	}
-	return count
-}
-
-func countTCDirs() int {
-	var count int
-	err := filepath.Walk("/sys/fs/bpf/tc", func(p string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if info.IsDir() {
-			log.Debugf("TC dir: %s", p)
-			count++
-		}
-		return nil
-	})
-
-	if err != nil {
-		panic(err)
-	}
-	return count
-}
-
-func countHashFiles() int {
-	var count int
-	err := filepath.Walk(bpf.RuntimeProgDir, func(p string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if strings.HasSuffix(info.Name(), ".json") {
-			log.Debugf("Hash file: %s", p)
-			count++
-		}
-		return nil
-	})
-
-	if err != nil {
-		panic(err)
-	}
-	return count
 }

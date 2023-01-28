@@ -70,7 +70,7 @@ type floatingIPManager struct {
 	ipVersion uint8
 
 	// Our dependencies.
-	natTable     iptablesTable
+	natTable     iptables.Table
 	ruleRenderer rules.RuleRenderer
 
 	// Internal state.
@@ -82,7 +82,7 @@ type floatingIPManager struct {
 }
 
 func newFloatingIPManager(
-	natTable iptablesTable,
+	natTable iptables.Table,
 	ruleRenderer rules.RuleRenderer,
 	ipVersion uint8,
 	enabled bool,

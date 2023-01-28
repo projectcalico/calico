@@ -73,7 +73,7 @@ var _ = Describe("Table with an empty dataplane (legacy)", func() {
 
 func describeEmptyDataplaneTests(dataplaneMode string) {
 	var dataplane *testutils.MockDataplane
-	var table *Table
+	var table Table
 	var iptLock *mockMutex
 	var featureDetector *environment.FeatureDetector
 	BeforeEach(func() {
@@ -945,7 +945,7 @@ var _ = Describe("Tests of post-update recheck behaviour with no refresh timer (
 
 func describePostUpdateCheckTests(enableRefresh bool, dataplaneMode string) {
 	var dataplane *testutils.MockDataplane
-	var table *Table
+	var table Table
 	var requestedDelay time.Duration
 
 	BeforeEach(func() {
@@ -1105,7 +1105,7 @@ func describeDirtyDataplaneTests(appendMode bool, dataplaneMode string) {
 	// - rules from previous Calico versions, using different chain name prefixes
 	// - rules that only match the special-case regex.
 	var dataplane *testutils.MockDataplane
-	var table *Table
+	var table Table
 	initialChains := func() map[string][]string {
 		return map[string][]string{
 			"FORWARD": {
@@ -1584,7 +1584,7 @@ var _ = Describe("Table with inserts and a non-Calico chain (nft)", func() {
 
 func describeInsertAndNonCalicoChainTests(dataplaneMode string) {
 	var dataplane *testutils.MockDataplane
-	var table *Table
+	var table Table
 	var iptLock *mockMutex
 	BeforeEach(func() {
 		dataplane = testutils.NewMockDataplane("filter", map[string][]string{

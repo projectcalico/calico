@@ -35,6 +35,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/bpf/bpfmap"
 	"github.com/projectcalico/calico/felix/bpf/failsafes"
+	bpfmaps "github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/nat"
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 	"github.com/projectcalico/calico/felix/environment"
@@ -269,11 +270,11 @@ type InternalDataplane struct {
 	toDataplane   chan interface{}
 	fromDataplane chan interface{}
 
-	allIptablesTables    []*iptables.Table
-	iptablesMangleTables []*iptables.Table
-	iptablesNATTables    []*iptables.Table
-	iptablesRawTables    []*iptables.Table
-	iptablesFilterTables []*iptables.Table
+	allIptablesTables    []iptables.Table
+	iptablesMangleTables []iptables.Table
+	iptablesNATTables    []iptables.Table
+	iptablesRawTables    []iptables.Table
+	iptablesFilterTables []iptables.Table
 	ipSets               []common.IPSetsDataplane
 
 	ipipManager *ipipManager
@@ -606,9 +607,9 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	}
 
 	if config.BPFMapRepin {
-		bpf.EnableRepin()
+		bpfmaps.EnableRepin()
 	} else {
-		bpf.DisableRepin()
+		bpfmaps.DisableRepin()
 	}
 
 	bpfipsets.SetMapSize(config.BPFMapSizeIPSets)
@@ -1270,6 +1271,14 @@ type ifaceUpdate struct {
 	Index int
 }
 
+func NewIfaceUpdate(name string, state ifacemonitor.State, index int) any {
+	return &ifaceUpdate{
+		Name:  name,
+		State: state,
+		Index: index,
+	}
+}
+
 // Check if current felix ipvs config is correct when felix gets a kube-ipvs0 interface update.
 // If KubeIPVSInterface is UP and felix ipvs support is disabled (kube-proxy switched from iptables to ipvs mode),
 // or if KubeIPVSInterface is DOWN and felix ipvs support is enabled (kube-proxy switched from ipvs to iptables mode),
@@ -1302,6 +1311,13 @@ func (d *InternalDataplane) onIfaceAddrsChange(ifaceName string, addrs set.Set[s
 type ifaceAddrsUpdate struct {
 	Name  string
 	Addrs set.Set[string]
+}
+
+func NewIfaceAddrsUpdate(name string, ips ...string) any {
+	return &ifaceAddrsUpdate{
+		Name:  name,
+		Addrs: set.FromArray[string](ips),
+	}
 }
 
 func (d *InternalDataplane) SendMessage(msg interface{}) error {
@@ -1433,7 +1449,7 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 			Action: iptables.AcceptAction{},
 		})
 
-		if t.IPVersion == 6 {
+		if t.IPVersion() == 6 {
 			for _, prefix := range rulesConfig.WorkloadIfacePrefixes {
 				// In BPF mode, we don't support IPv6 yet.  Drop it.
 				fwdRules = append(fwdRules, iptables.Rule{
@@ -1497,20 +1513,20 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 	}
 
 	for _, t := range d.iptablesNATTables {
-		t.UpdateChains(d.ruleRenderer.StaticNATPostroutingChains(t.IPVersion))
+		t.UpdateChains(d.ruleRenderer.StaticNATPostroutingChains(t.IPVersion()))
 		t.InsertOrAppendRules("POSTROUTING", []iptables.Rule{{
 			Action: iptables.JumpAction{Target: rules.ChainNATPostrouting},
 		}})
 	}
 
 	for _, t := range d.iptablesRawTables {
-		t.UpdateChains(d.ruleRenderer.StaticBPFModeRawChains(t.IPVersion,
+		t.UpdateChains(d.ruleRenderer.StaticBPFModeRawChains(t.IPVersion(),
 			d.config.Wireguard.EncryptHostTraffic, d.config.BPFHostConntrackBypass,
 		))
 		t.InsertOrAppendRules("PREROUTING", []iptables.Rule{{
 			Action: iptables.JumpAction{Target: rules.ChainRawPrerouting},
 		}})
-		if t.IPVersion == 4 {
+		if t.IPVersion() == 4 {
 			t.InsertOrAppendRules("OUTPUT", []iptables.Rule{{
 				Action: iptables.JumpAction{Target: rules.ChainRawOutput},
 			}})
@@ -1534,7 +1550,7 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 
 func (d *InternalDataplane) setUpIptablesNormal() {
 	for _, t := range d.iptablesRawTables {
-		rawChains := d.ruleRenderer.StaticRawTableChains(t.IPVersion)
+		rawChains := d.ruleRenderer.StaticRawTableChains(t.IPVersion())
 		t.UpdateChains(rawChains)
 		t.InsertOrAppendRules("PREROUTING", []iptables.Rule{{
 			Action: iptables.JumpAction{Target: rules.ChainRawPrerouting},
@@ -1544,7 +1560,7 @@ func (d *InternalDataplane) setUpIptablesNormal() {
 		}})
 	}
 	for _, t := range d.iptablesFilterTables {
-		filterChains := d.ruleRenderer.StaticFilterTableChains(t.IPVersion)
+		filterChains := d.ruleRenderer.StaticFilterTableChains(t.IPVersion())
 		t.UpdateChains(filterChains)
 		t.InsertOrAppendRules("FORWARD", []iptables.Rule{{
 			Action: iptables.JumpAction{Target: rules.ChainFilterForward},
@@ -1560,7 +1576,7 @@ func (d *InternalDataplane) setUpIptablesNormal() {
 		t.AppendRules("FORWARD", d.ruleRenderer.StaticFilterForwardAppendRules())
 	}
 	for _, t := range d.iptablesNATTables {
-		t.UpdateChains(d.ruleRenderer.StaticNATTableChains(t.IPVersion))
+		t.UpdateChains(d.ruleRenderer.StaticNATTableChains(t.IPVersion()))
 		t.InsertOrAppendRules("PREROUTING", []iptables.Rule{{
 			Action: iptables.JumpAction{Target: rules.ChainNATPrerouting},
 		}})
@@ -1572,7 +1588,7 @@ func (d *InternalDataplane) setUpIptablesNormal() {
 		}})
 	}
 	for _, t := range d.iptablesMangleTables {
-		t.UpdateChains(d.ruleRenderer.StaticMangleTableChains(t.IPVersion))
+		t.UpdateChains(d.ruleRenderer.StaticMangleTableChains(t.IPVersion()))
 		t.InsertOrAppendRules("PREROUTING", []iptables.Rule{{
 			Action: iptables.JumpAction{Target: rules.ChainManglePrerouting},
 		}})
@@ -2048,7 +2064,7 @@ func (d *InternalDataplane) apply() {
 	var iptablesWG sync.WaitGroup
 	for _, t := range d.allIptablesTables {
 		iptablesWG.Add(1)
-		go func(t *iptables.Table) {
+		go func(t iptables.Table) {
 			tableReschedAfter := t.Apply()
 
 			reschedDelayMutex.Lock()
@@ -2140,14 +2156,6 @@ func (d *InternalDataplane) loopReportingStatus() {
 		}
 		time.Sleep(d.config.StatusReportingInterval)
 	}
-}
-
-// iptablesTable is a shim interface for iptables.Table.
-type iptablesTable interface {
-	UpdateChain(chain *iptables.Chain)
-	UpdateChains([]*iptables.Chain)
-	RemoveChains([]*iptables.Chain)
-	RemoveChainByName(name string)
 }
 
 func (d *InternalDataplane) reportHealth() {

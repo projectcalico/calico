@@ -77,7 +77,7 @@ func (m *Map) MaxEntries() int {
 	return int(C.bpf_map__max_entries(m.bpfMap))
 }
 
-func (m *Map) SetMapSize(size int) error {
+func (m *Map) SetSize(size int) error {
 	_, err := C.bpf_map_set_max_entries(m.bpfMap, C.uint(size))
 	if err != nil {
 		return fmt.Errorf("setting %s map size failed %w", m.Name(), err)
@@ -278,7 +278,7 @@ func CreateQDisc(ifName string) error {
 	}
 	_, err = C.bpf_tc_create_qdisc(C.int(ifIndex))
 	if err != nil {
-		return fmt.Errorf("Error creating qdisc %w", err)
+		return fmt.Errorf("creating qdisc %w", err)
 	}
 	return nil
 }
@@ -292,7 +292,7 @@ func RemoveQDisc(ifName string) error {
 	}
 	_, err = C.bpf_tc_remove_qdisc(C.int(ifIndex))
 	if err != nil {
-		return fmt.Errorf("Error removing qdisc %w", err)
+		return fmt.Errorf("removing qdisc %w", err)
 	}
 	return nil
 }
@@ -304,7 +304,7 @@ func (o *Obj) UpdateJumpMap(mapName, progName string, mapIndex int) error {
 	defer C.free(unsafe.Pointer(cProgName))
 	_, err := C.bpf_update_jump_map(o.obj, cMapName, cProgName, C.int(mapIndex))
 	if err != nil {
-		return fmt.Errorf("Error updating %s at index %d: %w", mapName, mapIndex, err)
+		return fmt.Errorf("updating %s at index %d: %w", mapName, mapIndex, err)
 	}
 	return nil
 }
@@ -358,6 +358,12 @@ func TcSetGlobals(
 	cName := C.CString(globalData.IfaceName)
 	defer C.free(unsafe.Pointer(cName))
 
+	cJumps := make([]C.uint, len(globalData.Jumps))
+
+	for i, v := range globalData.Jumps {
+		cJumps[i] = C.uint(v)
+	}
+
 	_, err := C.bpf_tc_set_globals(m.bpfMap,
 		cName,
 		C.uint(globalData.HostIP),
@@ -372,6 +378,7 @@ func TcSetGlobals(
 		C.ushort(globalData.WgPort),
 		C.uint(globalData.NatIn),
 		C.uint(globalData.NatOut),
+		&cJumps[0], // it is safe because we hold the reference here until we return.
 	)
 
 	return err

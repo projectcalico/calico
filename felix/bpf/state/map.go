@@ -19,11 +19,11 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/bpf/maps"
 )
 
 func init() {
-	bpf.SetMapSize(MapParameters.VersionedName(), MapParameters.MaxEntries)
+	maps.SetSize(MapParameters.VersionedName(), MapParameters.MaxEntries)
 }
 
 type PolicyResult int32
@@ -137,21 +137,21 @@ func StateFromBytes(bytes []byte) State {
 	return s
 }
 
-var MapParameters = bpf.MapParameters{
+var MapParameters = maps.MapParameters{
 	Type:       "percpu_array",
 	KeySize:    4,
 	ValueSize:  expectedSize,
-	MaxEntries: 1,
+	MaxEntries: 2,
 	Name:       "cali_state",
-	Version:    2,
+	Version:    3,
 }
 
-func Map() bpf.Map {
-	return bpf.NewPinnedMap(MapParameters)
+func Map() maps.Map {
+	return maps.NewPinnedMap(MapParameters)
 }
 
-func MapForTest() bpf.Map {
-	return bpf.NewPinnedMap(bpf.MapParameters{
+func MapForTest() maps.Map {
+	return maps.NewPinnedMap(maps.MapParameters{
 		Type:       "array",
 		KeySize:    4,
 		ValueSize:  expectedSize,

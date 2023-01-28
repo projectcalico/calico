@@ -15,6 +15,8 @@
 package intdataplane
 
 import (
+	"time"
+
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 
@@ -35,6 +37,13 @@ func newMockTable(table string) *mockTable {
 		expectedChains: map[string]*iptables.Chain{},
 	}
 }
+
+func (t *mockTable) Name() string                                                { return "" }
+func (t *mockTable) IPVersion() uint8                                            { return 0 }
+func (t *mockTable) InsertOrAppendRules(chainName string, rules []iptables.Rule) {}
+func (t *mockTable) AppendRules(chainName string, rules []iptables.Rule)         {}
+func (t *mockTable) InvalidateDataplaneCache(reason string)                      {}
+func (t *mockTable) Apply() time.Duration                                        { return 0 }
 
 func logChains(message string, chains []*iptables.Chain) {
 	if chains == nil {

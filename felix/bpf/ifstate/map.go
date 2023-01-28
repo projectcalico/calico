@@ -21,7 +21,7 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/bpf/maps"
 )
 
 func init() {
@@ -29,12 +29,12 @@ func init() {
 }
 
 func SetMapSize(size int) {
-	bpf.SetMapSize(MapParams.VersionedName(), size)
+	maps.SetSize(MapParams.VersionedName(), size)
 }
 
 const (
 	KeySize    = 4
-	ValueSize  = 4 + 16
+	ValueSize  = 4 + 16 + 3*4
 	MaxEntries = 1000
 )
 
@@ -48,7 +48,7 @@ var flagsToStr = map[uint32]string{
 	FlgReady: "ready",
 }
 
-var MapParams = bpf.MapParameters{
+var MapParams = maps.MapParameters{
 	Type:         "hash",
 	KeySize:      KeySize,
 	ValueSize:    ValueSize,
@@ -59,8 +59,8 @@ var MapParams = bpf.MapParameters{
 	UpdatedByBPF: false,
 }
 
-func Map() bpf.Map {
-	return bpf.NewPinnedMap(MapParams)
+func Map() maps.Map {
+	return maps.NewPinnedMap(MapParams)
 }
 
 type Key [4]byte
@@ -87,12 +87,17 @@ func KeyFromBytes(b []byte) Key {
 	return k
 }
 
-type Value [4 + 16]byte
+type Value [ValueSize]byte
 
 func NewValue(flags uint32, name string) Value {
 	var v Value
 
+	undef := int32(-1)
+
 	binary.LittleEndian.PutUint32(v[:], flags)
+	binary.LittleEndian.PutUint32(v[4+16:4+16+4], uint32(undef))
+	binary.LittleEndian.PutUint32(v[4+16+4:4+16+8], uint32(undef))
+	binary.LittleEndian.PutUint32(v[4+16+8:4+16+12], uint32(undef))
 	copy(v[4:4+15], []byte(name))
 
 	return v
@@ -108,6 +113,18 @@ func (v Value) Flags() uint32 {
 
 func (v Value) IfName() string {
 	return strings.TrimRight(string(v[4:]), "\x00")
+}
+
+func (v Value) XDPPolicy() int {
+	return int(int32(binary.LittleEndian.Uint32(v[4+16 : 4+16+4])))
+}
+
+func (v Value) IngressPolicy() int {
+	return int(int32(binary.LittleEndian.Uint32(v[4+16+4 : 4+16+8])))
+}
+
+func (v Value) EgressPolicy() int {
+	return int(int32(binary.LittleEndian.Uint32(v[4+16+8 : 4+16+12])))
 }
 
 func (v Value) String() string {
@@ -135,11 +152,11 @@ func ValueFromBytes(b []byte) Value {
 
 type MapMem map[Key]Value
 
-func MapMemIter(m MapMem) bpf.IterCallback {
+func MapMemIter(m MapMem) func(k, v []byte) {
 	ks := len(Key{})
 	vs := len(Value{})
 
-	return func(k, v []byte) bpf.IteratorAction {
+	return func(k, v []byte) {
 		var key Key
 		copy(key[:ks], k[:ks])
 
@@ -147,6 +164,5 @@ func MapMemIter(m MapMem) bpf.IterCallback {
 		copy(val[:vs], v[:vs])
 
 		m[key] = val
-		return bpf.IterNone
 	}
 }
