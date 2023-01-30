@@ -148,7 +148,7 @@ blocks:
     - name: "Build image"
       matrix:
       - env_var: ARCH
-        values: [ "arm64", "ppc64le" ]
+        values: [ "arm64", "ppc64le", "s390x" ]
       commands:
       - ../.semaphore/run-and-monitor image-$ARCH.log make image ARCH=$ARCH
 
