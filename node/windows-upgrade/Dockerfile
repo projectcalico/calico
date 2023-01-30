@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 ARG WINDOWS_VERSION
-FROM --platform=linux/amd64 alpine:latest as base
+FROM --platform=linux/amd64 alpine:3.17.2 as base
 
 # We can't RUN commands in the Windows image build.
 # Create dirs we need that we copy over in the final stage.
