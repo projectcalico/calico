@@ -1,9 +1,10 @@
 # Copyright IBM Corp. 2017
-FROM ppc64le/alpine:3.8
+FROM ppc64le/alpine:3.18
 MAINTAINER David Wilder <wilder@us.ibm.com>
 
 RUN apk add --no-cache \
-    python \
+    python3  \
+    py3-pip \
     netcat-openbsd
 COPY udpping.sh tcpping.sh responder.py /code/
 WORKDIR /code/
