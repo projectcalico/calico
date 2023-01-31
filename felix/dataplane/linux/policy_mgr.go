@@ -58,8 +58,8 @@ func newRawEgressPolicyManager(rawTable iptablesTable, ruleRenderer policyRender
 	ipSetsCallback func(neededIPSets set.Set[string])) *policyManager {
 	return &policyManager{
 		rawTable:       rawTable,
-		mangleTable:    &noopTable{},
-		filterTable:    &noopTable{},
+		mangleTable:    iptables.NewNoopTable(),
+		filterTable:    iptables.NewNoopTable(),
 		ruleRenderer:   ruleRenderer,
 		ipVersion:      ipVersion,
 		rawEgressOnly:  true,
@@ -148,11 +148,3 @@ func (m *policyManager) CompleteDeferredWork() error {
 	// Nothing to do, we don't defer any work.
 	return nil
 }
-
-// noopTable fulfils the iptablesTable interface but does nothing.
-type noopTable struct{}
-
-func (t *noopTable) UpdateChain(chain *iptables.Chain) {}
-func (t *noopTable) UpdateChains([]*iptables.Chain)    {}
-func (t *noopTable) RemoveChains([]*iptables.Chain)    {}
-func (t *noopTable) RemoveChainByName(name string)     {}
