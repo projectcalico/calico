@@ -96,5 +96,5 @@ privileged container. This requires that the kubelet be allowed to run privilege
 containers. There are two ways this can be achieved.
 
 - Specify `--allow-privileged` on the kubelet (deprecated).
-- Use a {% include open-new-window.html text='pod security policy' url='https://kubernetes.io/docs/concepts/policy/pod-security-policy/' %}.
+- Use a {% include open-new-window.html text='pod security policy' url='https://kubernetes.io/docs/concepts/policy/pod-security-policy/' %}(deprecated).
 {% endif -%}
