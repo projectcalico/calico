@@ -17,6 +17,7 @@ fv: setup-fv bin/fips-test-build
 	docker run --net=host --rm -it instrumentisto/nmap --script ssl-enum-ciphers -p 8083 127.0.0.1 > tmp/nmap.log
 	# remove times and dates from file
 	sed -i '1,4d;19d' tmp/nmap.log
+	$(MAKE) kill
 	# If the ciphers are as expected, we get exit code 0.
 	diff fv/expected-nmap.log  tmp/nmap.log
 
