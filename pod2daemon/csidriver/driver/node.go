@@ -68,6 +68,7 @@ func (ns *nodeService) NodePublishVolume(ctx context.Context, req *csi.NodePubli
 	podInfo, err := extractPodInfo(req)
 	if err != nil {
 		log.Errorf("Could not extract pod info: %v", err)
+		return nil, status.Errorf(codes.Internal, "Could not extractPodInfo :%v", err)
 	}
 
 	// Mount in the relevant directories at the TargetPath
