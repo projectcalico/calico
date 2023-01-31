@@ -265,7 +265,7 @@ Also bind the `calicoctl-user` role to sam at the cluster level so that they can
 kubectl create clusterrolebinding calicoctl-user-sam --clusterrole=calicoctl-user --user=sam
 ```
 
-Sam cannot create global network set resources (like Nik can as network admin)
+Sam cannot 'get or create' global network set resources (like Nik can as network admin)
 
 ```bash
 KUBECONFIG=./sam.kubeconfig calicoctl get globalnetworkset -o wide
