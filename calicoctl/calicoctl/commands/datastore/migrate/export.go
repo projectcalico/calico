@@ -402,4 +402,8 @@ func ConvertIptablesFields(felixConfig *apiv3.FelixConfiguration) {
 	if felixConfig.Spec.IptablesMangleAllowAction != "" {
 		felixConfig.Spec.IptablesMangleAllowAction = title.String(strings.ToLower(felixConfig.Spec.IptablesMangleAllowAction))
 	}
+
+	if felixConfig.Spec.IptablesFilterDenyAction != "" {
+		felixConfig.Spec.IptablesFilterDenyAction = title.String(strings.ToLower(felixConfig.Spec.IptablesFilterDenyAction))
+	}
 }
