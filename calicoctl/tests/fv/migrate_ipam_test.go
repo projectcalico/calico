@@ -16,7 +16,6 @@ package fv_test
 
 import (
 	"context"
-	"io/ioutil"
 	"os"
 	"regexp"
 	"strconv"
@@ -154,7 +153,7 @@ func TestDatastoreMigrationIPAM(t *testing.T) {
 
 	// Export the data
 	// Create a temporary file
-	tempfile, err := ioutil.TempFile("", "ipam-migration-test")
+	tempfile, err := os.CreateTemp("", "ipam-migration-test")
 	defer os.Remove(tempfile.Name())
 	Expect(err).NotTo(HaveOccurred())
 	out = Calicoctl(false, "datastore", "migrate", "export")

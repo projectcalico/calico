@@ -16,7 +16,6 @@ package builder
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"strings"
 
@@ -248,7 +247,7 @@ func (r *ReleaseBuilder) collectGithubArtifacts(ver string) error {
 	}
 
 	// We attach calicoctl binaries directly to the release as well.
-	files, err := ioutil.ReadDir("calicoctl/bin/")
+	files, err := os.ReadDir("calicoctl/bin/")
 	if err != nil {
 		return err
 	}
@@ -280,7 +279,7 @@ func (r *ReleaseBuilder) collectGithubArtifacts(ver string) error {
 	// Generate a SHA256SUMS file containing the checksums for each artifact
 	// that we attach to the release. These can be confirmed by end users via the following command:
 	// sha256sum -c --ignore-missing SHA256SUMS
-	files, err = ioutil.ReadDir(uploadDir)
+	files, err = os.ReadDir(uploadDir)
 	if err != nil {
 		return err
 	}

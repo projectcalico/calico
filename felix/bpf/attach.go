@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"os"
 	"path"
@@ -49,7 +48,7 @@ type AttachPointInfo interface {
 // AlreadyAttachedProg checks that the program we are going to attach has the
 // same parameters as what we remembered about the currently attached.
 func AlreadyAttachedProg(a AttachPointInfo, object string, id int) (bool, error) {
-	bytesToRead, err := ioutil.ReadFile(RuntimeJSONFilename(a.IfaceName(), a.HookName()))
+	bytesToRead, err := os.ReadFile(RuntimeJSONFilename(a.IfaceName(), a.HookName()))
 	if err != nil {
 		// If file does not exist, just ignore the err code, and return false
 		if os.IsNotExist(err) {
@@ -111,7 +110,7 @@ func RememberAttachedProg(a AttachPointInfo, object string, id int) error {
 		return err
 	}
 
-	if err = ioutil.WriteFile(RuntimeJSONFilename(a.IfaceName(), a.HookName()), bytesToWrite, 0600); err != nil {
+	if err = os.WriteFile(RuntimeJSONFilename(a.IfaceName(), a.HookName()), bytesToWrite, 0600); err != nil {
 		return err
 	}
 
