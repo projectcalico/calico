@@ -168,13 +168,22 @@ endif
 # Only when arch = amd64 it will use boring crypto to build the binary.
 # Uses VERSION_FLAGS when set.
 # TODO: once all images can be built using this function, we can revert the $(DOCKER_RUN)... line with $(DOCKER_BUILD_CGO)
-define build_cgo_boring_binary
-	echo "building a static binary..."
-	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(GO_BUILD_IMAGE):$(GO19_BUILD_VER) \
+define build_static_cgo_boring_binary
+    $(DOCKER_RUN) -e CGO_ENABLED=1 $(GO_BUILD_IMAGE):$(GO19_BUILD_VER) \
+        sh -c '$(GIT_CONFIG_SSH) \
+        GOEXPERIMENT=boringcrypto go build -o $(2)  \
+        -tags fipsstrict,osusergo,netgo -v -buildvcs=false \
+        -ldflags "$(VERSION_FLAGS) -linkmode external -extldflags -static" \
+        $(1)'
+endef
+
+# For binaries that do not require boring crypto.
+define build_binary
+	$(DOCKER_RUN) $(GO_BUILD_IMAGE):$(GO19_BUILD_VER) \
 		sh -c '$(GIT_CONFIG_SSH) \
-		GOEXPERIMENT=$(GOEXPERIMENT) go build -o $(2)  \
-		-tags $(TAGS) -v -buildvcs=false \
-		-ldflags "$(VERSION_FLAGS) -linkmode external -extldflags -static" \
+		go build -o $(2)  \
+		-v -buildvcs=false \
+		-ldflags "$(VERSION_FLAGS)" \
 		$(1)'
 endef
 

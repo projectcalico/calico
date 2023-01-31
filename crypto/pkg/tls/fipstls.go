@@ -1,4 +1,4 @@
-//go:build boringcrypto
+//go:build fipsstrict
 
 package tls
 
