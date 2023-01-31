@@ -209,7 +209,7 @@ type bpfEndpointManager struct {
 	ifStateMap              *cachingmap.CachingMap[ifstate.Key, ifstate.Value]
 
 	ruleRenderer        bpfAllowChainRenderer
-	iptablesFilterTable iptablesTable
+	iptablesFilterTable IptablesTable
 
 	startupOnce      sync.Once
 	copyDeltaOnce    sync.Once
@@ -280,7 +280,7 @@ func newBPFEndpointManager(
 	workloadIfaceRegex *regexp.Regexp,
 	ipSetIDAlloc *idalloc.IDAllocator,
 	iptablesRuleRenderer bpfAllowChainRenderer,
-	iptablesFilterTable iptablesTable,
+	iptablesFilterTable IptablesTable,
 	livenessCallback func(),
 	opReporter logutils.OpRecorder,
 	featureDetector environment.FeatureDetectorIface,
