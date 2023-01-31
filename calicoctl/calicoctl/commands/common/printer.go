@@ -18,7 +18,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"reflect"
 	"sort"
@@ -154,7 +153,7 @@ type ResourcePrinterTemplateFile struct {
 }
 
 func (r ResourcePrinterTemplateFile) Print(client client.Interface, resources []runtime.Object) error {
-	template, err := ioutil.ReadFile(r.TemplateFile)
+	template, err := os.ReadFile(r.TemplateFile)
 	if err != nil {
 		return err
 	}

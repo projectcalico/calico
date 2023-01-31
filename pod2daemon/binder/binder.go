@@ -16,7 +16,6 @@ package binder
 
 import (
 	"encoding/json"
-	"io/ioutil"
 	"log"
 	"net"
 	"os"
@@ -150,7 +149,7 @@ func (b *binder) addListener(uid string) {
 }
 
 func readCredentials(path string, c *Credentials) error {
-	data, err := ioutil.ReadFile(path)
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return err
 	}

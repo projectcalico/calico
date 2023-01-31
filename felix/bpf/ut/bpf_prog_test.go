@@ -18,7 +18,6 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
 	"os/exec"
@@ -227,7 +226,7 @@ func setupAndRun(logger testLogger, loglevel, section string, rules *polprog.Rul
 		o(&topts)
 	}
 
-	tempDir, err := ioutil.TempDir("", "calico-bpf-")
+	tempDir, err := os.MkdirTemp("", "calico-bpf-")
 	Expect(err).NotTo(HaveOccurred())
 	defer os.RemoveAll(tempDir)
 
@@ -650,7 +649,7 @@ func bpftoolProgRun(progName string, dataIn, ctxIn []byte) (bpfRunResult, error)
 func bpftoolProgRunN(progName string, dataIn, ctxIn []byte, N int) (bpfRunResult, error) {
 	var res bpfRunResult
 
-	tempDir, err := ioutil.TempDir("", "bpftool-data-")
+	tempDir, err := os.MkdirTemp("", "bpftool-data-")
 	Expect(err).NotTo(HaveOccurred())
 
 	defer os.RemoveAll(tempDir)
@@ -661,12 +660,12 @@ func bpftoolProgRunN(progName string, dataIn, ctxIn []byte, N int) (bpfRunResult
 	ctxInFname := tempDir + "/ctx_in"
 	ctxOutFname := tempDir + "/ctx_out"
 
-	if err := ioutil.WriteFile(dataInFname, dataIn, 0644); err != nil {
+	if err := os.WriteFile(dataInFname, dataIn, 0644); err != nil {
 		return res, errors.Errorf("failed to write input data in file: %s", err)
 	}
 
 	if ctxIn != nil {
-		if err := ioutil.WriteFile(ctxInFname, ctxIn, 0644); err != nil {
+		if err := os.WriteFile(ctxInFname, ctxIn, 0644); err != nil {
 			return res, errors.Errorf("failed to write input ctx in file: %s", err)
 		}
 	}
@@ -688,13 +687,13 @@ func bpftoolProgRunN(progName string, dataIn, ctxIn []byte, N int) (bpfRunResult
 		return res, errors.Errorf("failed to unmarshall json: %s", err)
 	}
 
-	res.dataOut, err = ioutil.ReadFile(dataOutFname)
+	res.dataOut, err = os.ReadFile(dataOutFname)
 	if err != nil {
 		return res, errors.Errorf("failed to read output data from file: %s", err)
 	}
 
 	if ctxIn != nil {
-		ctxOut, err := ioutil.ReadFile(ctxOutFname)
+		ctxOut, err := os.ReadFile(ctxOutFname)
 		if err != nil {
 			return res, errors.Errorf("failed to read output ctx from file: %s", err)
 		}
@@ -726,7 +725,7 @@ func runBpfUnitTest(t *testing.T, source string, testFn func(bpfProgRunFn), opts
 		log.SetLevel(topts.logLevel)
 	}
 
-	tempDir, err := ioutil.TempDir("", "calico-bpf-")
+	tempDir, err := os.MkdirTemp("", "calico-bpf-")
 	Expect(err).NotTo(HaveOccurred())
 	defer os.RemoveAll(tempDir)
 
