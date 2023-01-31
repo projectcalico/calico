@@ -189,7 +189,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		maps                 *bpfmap.Maps
 		rrConfigNormal       rules.Config
 		ruleRenderer         rules.RuleRenderer
-		filterTableV4        iptablesTable
+		filterTableV4        IptablesTable
 		ifStateMap           *mock.Map
 		countersMap          *mock.Map
 	)
