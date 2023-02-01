@@ -36,12 +36,11 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/nat"
 )
 
-func makeSvcEpsPair(svcIdx, epCnt, port int, hintsAnnotation string, opts ...K8sServicePortOption) (k8sp.ServicePort, []k8sp.Endpoint) {
+func makeSvcEpsPair(svcIdx, epCnt, port int, opts ...K8sServicePortOption) (k8sp.ServicePort, []k8sp.Endpoint) {
 	svc := NewK8sServicePort(
 		net.IPv4(10, byte((svcIdx&0xff0000)>>16), byte((svcIdx&0xff00)>>8), byte(svcIdx&0xff)),
 		port,
 		v1.ProtocolTCP,
-		hintsAnnotation,
 		opts...,
 	)
 
@@ -70,7 +69,7 @@ func makeState(svcCnt, epCnt int, opts ...K8sServicePortOption) DPSyncerState {
 
 	for i := 0; i < svcCnt; i++ {
 		sk := makeSvcKey(i)
-		state.SvcMap[sk], state.EpsMap[sk] = makeSvcEpsPair(i, epCnt, 1234, "", opts...)
+		state.SvcMap[sk], state.EpsMap[sk] = makeSvcEpsPair(i, epCnt, 1234, opts...)
 	}
 
 	return state
@@ -223,7 +222,7 @@ func runBenchmarkServiceUpdate(b *testing.B, svcCnt, epCnt int, mockMaps bool, o
 			delete(state.SvcMap, delKey)
 			delete(state.EpsMap, delKey)
 
-			state.SvcMap[newKey], state.EpsMap[newKey] = makeSvcEpsPair(newIdx, epCnt, 1234, "", opts...)
+			state.SvcMap[newKey], state.EpsMap[newKey] = makeSvcEpsPair(newIdx, epCnt, 1234, opts...)
 
 			b.StartTimer()
 

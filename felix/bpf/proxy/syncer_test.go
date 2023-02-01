@@ -78,7 +78,6 @@ var _ = Describe("BPF Syncer", func() {
 				net.IPv4(10, 0, 0, 1),
 				1234,
 				v1.ProtocolTCP,
-				"",
 			),
 		},
 		EpsMap: k8sp.EndpointsMap{
@@ -133,7 +132,6 @@ var _ = Describe("BPF Syncer", func() {
 				net.IPv4(10, 0, 0, 2),
 				2222,
 				v1.ProtocolTCP,
-				"",
 			)
 			state.EpsMap[svcKey2] = []k8sp.Endpoint{
 				&k8sp.BaseEndpointInfo{Ready: false, Endpoint: "10.2.0.0:1111"},
@@ -285,7 +283,6 @@ var _ = Describe("BPF Syncer", func() {
 				net.IPv4(10, 0, 0, 2),
 				2222,
 				v1.ProtocolTCP,
-				"",
 				proxy.K8sSvcWithExternalIPs([]string{"35.0.0.2"}),
 			)
 
@@ -312,7 +309,6 @@ var _ = Describe("BPF Syncer", func() {
 				net.IPv4(10, 0, 0, 2),
 				2222,
 				v1.ProtocolTCP,
-				"",
 				proxy.K8sSvcWithExternalIPs([]string{"35.0.0.2"}),
 			)
 
@@ -346,7 +342,6 @@ var _ = Describe("BPF Syncer", func() {
 				net.IPv4(10, 0, 0, 2),
 				2222,
 				v1.ProtocolTCP,
-				"",
 			)
 
 			err := s.Apply(state)
@@ -370,7 +365,6 @@ var _ = Describe("BPF Syncer", func() {
 				net.IPv4(10, 0, 0, 2),
 				2222,
 				v1.ProtocolTCP,
-				"",
 				proxy.K8sSvcWithNodePort(2222),
 			)
 
@@ -418,7 +412,6 @@ var _ = Describe("BPF Syncer", func() {
 				net.IPv4(10, 0, 0, 3),
 				3333,
 				v1.ProtocolUDP,
-				"",
 				proxy.K8sSvcWithNodePort(3232),
 			)
 			state.EpsMap[svcKey3] = []k8sp.Endpoint{
@@ -453,7 +446,6 @@ var _ = Describe("BPF Syncer", func() {
 				net.IPv4(10, 0, 0, 3),
 				3355,
 				v1.ProtocolUDP,
-				"",
 				proxy.K8sSvcWithNodePort(3232),
 			)
 			state.EpsMap[svcKey3] = []k8sp.Endpoint{
@@ -486,7 +478,6 @@ var _ = Describe("BPF Syncer", func() {
 				net.IPv4(10, 0, 0, 3),
 				3355,
 				v1.ProtocolUDP,
-				"",
 				proxy.K8sSvcWithNodePort(1212),
 			)
 			state.EpsMap[svcKey3] = []k8sp.Endpoint{
@@ -565,7 +556,6 @@ var _ = Describe("BPF Syncer", func() {
 				net.IPv4(10, 0, 0, 2),
 				2222,
 				v1.ProtocolTCP,
-				"",
 				proxy.K8sSvcWithNodePort(4444),
 				proxy.K8sSvcWithLocalOnly(),
 			)
@@ -719,7 +709,6 @@ var _ = Describe("BPF Syncer", func() {
 				net.IPv4(10, 0, 0, 2),
 				2222,
 				v1.ProtocolTCP,
-				"",
 				proxy.K8sSvcWithNodePort(4444),
 				proxy.K8sSvcWithLocalOnly(),
 			)
@@ -807,7 +796,6 @@ var _ = Describe("BPF Syncer", func() {
 				net.IPv4(10, 0, 0, 2),
 				2222,
 				v1.ProtocolTCP,
-				"",
 				proxy.K8sSvcWithNodePort(4444),
 				proxy.K8sSvcWithLocalOnly(),
 			)
@@ -874,7 +862,6 @@ var _ = Describe("BPF Syncer", func() {
 				net.IPv4(10, 0, 0, 2),
 				2222,
 				v1.ProtocolTCP,
-				"",
 				proxy.K8sSvcWithStickyClientIP(5),
 			)
 
@@ -1025,7 +1012,7 @@ var _ = Describe("BPF Syncer", func() {
 				net.IPv4(10, 0, 0, 1),
 				1234,
 				v1.ProtocolTCP,
-				"auto",
+				proxy.K8sSvcWithHintsAnnotation("auto"),
 			)
 			state.EpsMap[svcKey] = []k8sp.Endpoint{
 				&k8sp.BaseEndpointInfo{Ready: true, Endpoint: "10.1.0.1:5555", ZoneHints: sets.NewString("us-west-2a")},
@@ -1043,7 +1030,7 @@ var _ = Describe("BPF Syncer", func() {
 				net.IPv4(10, 0, 0, 1),
 				1234,
 				v1.ProtocolTCP,
-				"auto",
+				proxy.K8sSvcWithHintsAnnotation("auto"),
 			)
 			state.EpsMap[svcKey] = []k8sp.Endpoint{
 				&k8sp.BaseEndpointInfo{Ready: true, Endpoint: "10.1.0.1:5555", ZoneHints: sets.NewString("us-west-2a")},
@@ -1061,7 +1048,7 @@ var _ = Describe("BPF Syncer", func() {
 				net.IPv4(10, 0, 0, 1),
 				1234,
 				v1.ProtocolTCP,
-				"disabled",
+				proxy.K8sSvcWithHintsAnnotation("disabled"),
 			)
 			state.EpsMap[svcKey] = []k8sp.Endpoint{
 				&k8sp.BaseEndpointInfo{Ready: true, Endpoint: "10.1.0.1:5555", ZoneHints: sets.NewString("us-west-2a")},
@@ -1079,7 +1066,6 @@ var _ = Describe("BPF Syncer", func() {
 				net.IPv4(10, 0, 0, 1),
 				1234,
 				v1.ProtocolTCP,
-				"",
 			)
 			state.EpsMap[svcKey] = []k8sp.Endpoint{
 				&k8sp.BaseEndpointInfo{Ready: true, Endpoint: "10.1.0.1:5555", ZoneHints: sets.NewString("us-west-2a")},
@@ -1097,7 +1083,7 @@ var _ = Describe("BPF Syncer", func() {
 				net.IPv4(10, 0, 0, 1),
 				1234,
 				v1.ProtocolTCP,
-				"auto",
+				proxy.K8sSvcWithHintsAnnotation("auto"),
 			)
 			state.EpsMap[svcKey] = []k8sp.Endpoint{
 				&k8sp.BaseEndpointInfo{Ready: true, Endpoint: "10.1.0.1:5555", ZoneHints: sets.NewString("us-west-2a")},
