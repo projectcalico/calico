@@ -31,6 +31,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/asm"
 	"github.com/projectcalico/calico/felix/bpf/ipsets"
 	"github.com/projectcalico/calico/felix/bpf/jump"
+	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/polprog"
 	"github.com/projectcalico/calico/felix/bpf/state"
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
@@ -2470,7 +2471,7 @@ func runTest(t *testing.T, tp testPolicy) {
 }
 
 // installAllowedProgram installs a trivial BPF program into the jump table that returns RCAllowedReached.
-func installAllowedProgram(jumpMap bpf.Map, jumpMapindex int) bpf.ProgFD {
+func installAllowedProgram(jumpMap maps.Map, jumpMapindex int) bpf.ProgFD {
 	b := asm.NewBlock(false)
 
 	// Load the RC into the return register.
@@ -2493,7 +2494,7 @@ func installAllowedProgram(jumpMap bpf.Map, jumpMapindex int) bpf.ProgFD {
 }
 
 // installDropProgram installs a trivial BPF program into the jump table that returns RCDropReached.
-func installDropProgram(jumpMap bpf.Map, jumpMapindex int) bpf.ProgFD {
+func installDropProgram(jumpMap maps.Map, jumpMapindex int) bpf.ProgFD {
 	b := asm.NewBlock(false)
 
 	// Load the RC into the return register.
@@ -2515,7 +2516,7 @@ func installDropProgram(jumpMap bpf.Map, jumpMapindex int) bpf.ProgFD {
 	return dropFD
 }
 
-func runProgram(tc testCase, stateMap bpf.Map, progFD bpf.ProgFD, expProgRC int, expPolRC state.PolicyResult) {
+func runProgram(tc testCase, stateMap maps.Map, progFD bpf.ProgFD, expProgRC int, expPolRC state.PolicyResult) {
 	// The policy program takes its input from the state map (rather than looking at the
 	// packet).  Set up the state map.
 	stateIn := tc.StateIn()
@@ -2541,7 +2542,7 @@ func runProgram(tc testCase, stateMap bpf.Map, progFD bpf.ProgFD, expProgRC int,
 	tc.MatchStateOut(stateOut)
 }
 
-func setUpIPSets(ipSets map[string][]string, alloc *idalloc.IDAllocator, ipsMap bpf.Map) {
+func setUpIPSets(ipSets map[string][]string, alloc *idalloc.IDAllocator, ipsMap maps.Map) {
 	for name, members := range ipSets {
 		id := alloc.GetOrAlloc(name)
 		for _, m := range members {
@@ -2556,11 +2557,11 @@ func cleanIPSetMap() {
 	// Clean out any existing IP sets.  (The other maps have a fixed number of keys that
 	// we set as needed.)
 	var keys [][]byte
-	err := ipsMap.Iter(func(k, v []byte) bpf.IteratorAction {
+	err := ipsMap.Iter(func(k, v []byte) maps.IteratorAction {
 		kCopy := make([]byte, len(k))
 		copy(kCopy, k)
 		keys = append(keys, kCopy)
-		return bpf.IterNone
+		return maps.IterNone
 	})
 	Expect(err).NotTo(HaveOccurred(), "failed to clean out map before test")
 	for _, k := range keys {
