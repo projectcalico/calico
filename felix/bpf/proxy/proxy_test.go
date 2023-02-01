@@ -54,7 +54,7 @@ var _ = Describe("BPF Proxy", func() {
 		syncStop = make(chan struct{})
 		dp := newMockSyncer(syncStop)
 
-		p, err := proxy.New(k8s, dp, "testnode", nil, proxy.WithImmediateSync())
+		p, err := proxy.New(k8s, dp, "testnode", proxy.WithImmediateSync())
 		Expect(err).NotTo(HaveOccurred())
 
 		defer func() {
@@ -171,7 +171,7 @@ var _ = Describe("BPF Proxy", func() {
 
 					opts := []proxy.Option{proxy.WithImmediateSync()}
 
-					p, err = proxy.New(k8s, dp, "testnode", nil, opts...)
+					p, err = proxy.New(k8s, dp, "testnode", opts...)
 					Expect(err).NotTo(HaveOccurred())
 				})
 			})
@@ -511,7 +511,7 @@ var _ = Describe("BPF Proxy", func() {
 
 					opts := []proxy.Option{proxy.WithImmediateSync()}
 
-					p, err = proxy.New(k8s, dp, testNodeName, nil, opts...)
+					p, err = proxy.New(k8s, dp, testNodeName, opts...)
 					Expect(err).NotTo(HaveOccurred())
 				})
 			})
