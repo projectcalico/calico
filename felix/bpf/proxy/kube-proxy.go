@@ -49,7 +49,6 @@ type KubeProxy struct {
 
 	k8s         kubernetes.Interface
 	hostname    string
-	nodeLabels  map[string]string
 	frontendMap bpf.MapWithExistsCheck
 	backendMap  bpf.MapWithExistsCheck
 	affinityMap bpf.Map

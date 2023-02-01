@@ -20,7 +20,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 )
 
-func ShouldAppendTopologyAwareEndpoint(nodeLabels map[string]string, hintsAnnotation string, zoneHints sets.String) bool {
+func ShouldAppendTopologyAwareEndpoint(nodeZone string, hintsAnnotation string, zoneHints sets.String) bool {
 
 	// In order for an endpoint to be Topology Aware and added to endpoint collection the following must be true
 	// Service annotation contains: "service.kubernetes.io/topology-aware-hints: auto"
@@ -40,10 +40,9 @@ func ShouldAppendTopologyAwareEndpoint(nodeLabels map[string]string, hintsAnnota
 		return true
 	}
 
-	// If node labels map does not contain Topology zone key then ignore Topology Aware Hints.
-	zone, ok := nodeLabels[v1.LabelTopologyZone]
-	if !ok || zone == "" {
-		log.Debugf("Skipping topology aware endpoint filtering since node is missing label '%s'\n", v1.LabelTopologyZone)
+	// If node zone is empty then ignore Topology Aware Hints.
+	if len(nodeZone) == 0 {
+		log.Debugf("Skipping topology aware endpoint filtering since node zone is empty")
 		return true
 	}
 
@@ -54,5 +53,5 @@ func ShouldAppendTopologyAwareEndpoint(nodeLabels map[string]string, hintsAnnota
 	}
 
 	// Return whether zone hints contain node label zone.
-	return zoneHints.Has(zone)
+	return zoneHints.Has(nodeZone)
 }

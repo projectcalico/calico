@@ -20,63 +20,57 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/proxy"
 
 	. "github.com/onsi/gomega"
-	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 )
 
 func TestShouldAppendTopologyAwareEndpoint(t *testing.T) {
 	testCases := []struct {
-		nodeLabels      map[string]string
+		nodeZone        string
 		hintsAnnotation string
 		zoneHints       sets.String
 		expect          bool
 		actual          bool
 	}{{
-		nodeLabels:      nil,
+		nodeZone:        "",
 		hintsAnnotation: "",
 		zoneHints:       nil,
 		expect:          true,
 	}, {
-		nodeLabels:      map[string]string{v1.LabelTopologyZone: "us-west-2a"},
+		nodeZone:        "us-west-2a",
 		hintsAnnotation: "",
 		zoneHints:       nil,
 		expect:          true,
 	}, {
-		nodeLabels:      map[string]string{"kubernetes.io/arch": "amd64"},
-		hintsAnnotation: "",
-		zoneHints:       nil,
-		expect:          true,
-	}, {
-		nodeLabels:      map[string]string{v1.LabelTopologyZone: "us-west-2a"},
+		nodeZone:        "us-west-2a",
 		hintsAnnotation: "auto",
 		zoneHints:       nil,
 		expect:          true,
 	}, {
-		nodeLabels:      map[string]string{v1.LabelTopologyZone: "us-west-2a"},
+		nodeZone:        "us-west-2a",
 		hintsAnnotation: "disabled",
 		expect:          true,
 	}, {
-		nodeLabels:      map[string]string{v1.LabelTopologyZone: "us-west-2a"},
+		nodeZone:        "us-west-2a",
 		hintsAnnotation: "",
 		zoneHints:       nil,
 		expect:          true,
 	}, {
-		nodeLabels:      map[string]string{v1.LabelTopologyZone: "us-west-2a"},
+		nodeZone:        "us-west-2a",
 		hintsAnnotation: "auto",
 		zoneHints:       sets.NewString("us-west-2a"),
 		expect:          true,
 	}, {
-		nodeLabels:      map[string]string{v1.LabelTopologyZone: "us-west-2a"},
+		nodeZone:        "us-west-2a",
 		hintsAnnotation: "auto",
 		zoneHints:       sets.NewString("us-west-2b"),
 		expect:          false,
 	}, {
-		nodeLabels:      map[string]string{v1.LabelTopologyZone: "us-west-2a"},
+		nodeZone:        "us-west-2a",
 		hintsAnnotation: "disabled",
 		zoneHints:       sets.NewString("us-west-2b"),
 		expect:          true,
 	}, {
-		nodeLabels:      map[string]string{v1.LabelTopologyZone: "us-west-2a"},
+		nodeZone:        "us-west-2a",
 		hintsAnnotation: "dummy",
 		zoneHints:       sets.NewString("us-west-2b"),
 		expect:          true,
@@ -84,7 +78,7 @@ func TestShouldAppendTopologyAwareEndpoint(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run("ShouldAppendTopologyAwareEndpoint", func(t *testing.T) {
-			tc.actual = proxy.ShouldAppendTopologyAwareEndpoint(tc.nodeLabels, tc.hintsAnnotation, tc.zoneHints)
+			tc.actual = proxy.ShouldAppendTopologyAwareEndpoint(tc.nodeZone, tc.hintsAnnotation, tc.zoneHints)
 			Expect(tc.actual).To(Equal(tc.expect))
 		})
 	}
