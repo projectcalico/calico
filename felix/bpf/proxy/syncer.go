@@ -1359,13 +1359,12 @@ type K8sServicePortOption func(interface{})
 
 // NewK8sServicePort creates a new k8s ServicePort
 func NewK8sServicePort(clusterIP net.IP, port int, proto v1.Protocol,
-	hintsAnnotation string, opts ...K8sServicePortOption) k8sp.ServicePort {
+	opts ...K8sServicePortOption) k8sp.ServicePort {
 
 	x := &serviceInfo{
-		clusterIP:       clusterIP,
-		port:            port,
-		protocol:        proto,
-		hintsAnnotation: hintsAnnotation,
+		clusterIP: clusterIP,
+		port:      port,
+		protocol:  proto,
 	}
 
 	for _, o := range opts {
@@ -1460,5 +1459,12 @@ func K8sSvcWithStickyClientIP(seconds int) K8sServicePortOption {
 	return func(s interface{}) {
 		s.(*serviceInfo).stickyMaxAgeSeconds = seconds
 		s.(*serviceInfo).sessionAffinityType = v1.ServiceAffinityClientIP
+	}
+}
+
+// K8sSvcWithHintsAnnotation sets hints annotation to service info object
+func K8sSvcWithHintsAnnotation(hintsAnnotation string) K8sServicePortOption {
+	return func(s interface{}) {
+		s.(*serviceInfo).hintsAnnotation = hintsAnnotation
 	}
 }
