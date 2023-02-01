@@ -256,9 +256,7 @@ func (aggregator *HealthAggregator) Summary() *HealthReport {
 	for _, reporter := range aggregator.reporters {
 		log.WithField("reporter", reporter).Debug("Checking state of reporter")
 		live, livenessStr := reporter.liveness()
-		if live {
-			aggregator.previouslyLive = true
-		} else {
+		if !live {
 			if aggregator.previouslyLive {
 				log.WithField("name", reporter.name).Warnf("Reporter is not live: %v.", livenessStr)
 			} else {
@@ -267,9 +265,7 @@ func (aggregator *HealthAggregator) Summary() *HealthReport {
 			summary.Live = false
 		}
 		ready, readinessStr := reporter.readiness()
-		if ready {
-			aggregator.previouslyReady = true
-		} else {
+		if !ready {
 			if aggregator.previouslyReady {
 				log.WithField("name", reporter.name).Warnf("Reporter is not ready: %v.", readinessStr)
 			} else {
@@ -311,6 +307,12 @@ func (aggregator *HealthAggregator) Summary() *HealthReport {
 	}
 
 	log.WithField("healthResult", summary).Debug("Calculated health summary")
+	if summary.Live {
+		aggregator.previouslyLive = true
+	}
+	if summary.Ready {
+		aggregator.previouslyReady = true
+	}
 
 	return summary
 }
