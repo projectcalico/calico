@@ -84,7 +84,6 @@ var _ = Describe("BPF Syncer", func() {
 		EpsMap: k8sp.EndpointsMap{
 			svcKey: []k8sp.Endpoint{&k8sp.BaseEndpointInfo{Ready: true, Endpoint: "10.1.0.1:5555"}},
 		},
-		NodeLabels: nil,
 	}
 
 	makestep := func(step func()) func() {
@@ -1019,7 +1018,7 @@ var _ = Describe("BPF Syncer", func() {
 				&k8sp.BaseEndpointInfo{Ready: true, Endpoint: "10.1.0.1:5555", ZoneHints: sets.NewString("us-west-2a")},
 				&k8sp.BaseEndpointInfo{Ready: true, Endpoint: "10.2.0.2:5555", ZoneHints: sets.NewString("us-west-2b")},
 			}
-			state.NodeLabels = map[string]string{v1.LabelTopologyZone: "us-west-2a"}
+			state.NodeZone = "us-west-2a"
 
 			err := s.Apply(state)
 			Expect(err).NotTo(HaveOccurred())
@@ -1037,7 +1036,7 @@ var _ = Describe("BPF Syncer", func() {
 				&k8sp.BaseEndpointInfo{Ready: true, Endpoint: "10.1.0.1:5555", ZoneHints: sets.NewString("us-west-2a")},
 				&k8sp.BaseEndpointInfo{Ready: true, Endpoint: "10.2.0.2:5555", ZoneHints: sets.NewString("us-west-2b")},
 			}
-			state.NodeLabels = map[string]string{v1.LabelTopologyZone: "us-west-2b"}
+			state.NodeZone = "us-west-2b"
 
 			err := s.Apply(state)
 			Expect(err).NotTo(HaveOccurred())
@@ -1055,7 +1054,7 @@ var _ = Describe("BPF Syncer", func() {
 				&k8sp.BaseEndpointInfo{Ready: true, Endpoint: "10.1.0.1:5555", ZoneHints: sets.NewString("us-west-2a")},
 				&k8sp.BaseEndpointInfo{Ready: true, Endpoint: "10.2.0.2:5555", ZoneHints: sets.NewString("us-west-2b")},
 			}
-			state.NodeLabels = map[string]string{v1.LabelTopologyZone: "us-west-2b"}
+			state.NodeZone = "us-west-2b"
 
 			err := s.Apply(state)
 			Expect(err).NotTo(HaveOccurred())
@@ -1072,14 +1071,14 @@ var _ = Describe("BPF Syncer", func() {
 				&k8sp.BaseEndpointInfo{Ready: true, Endpoint: "10.1.0.1:5555", ZoneHints: sets.NewString("us-west-2a")},
 				&k8sp.BaseEndpointInfo{Ready: true, Endpoint: "10.2.0.2:5555", ZoneHints: sets.NewString("us-west-2b")},
 			}
-			state.NodeLabels = map[string]string{v1.LabelTopologyZone: "us-west-2b"}
+			state.NodeZone = "us-west-2b"
 
 			err := s.Apply(state)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(eps.m).To(HaveLen(2))
 		}))
 
-		By("checking topology aware hints auto in service with multiple endpoints without node labels match all zones", makestep(func() {
+		By("checking topology aware hints auto in service with multiple endpoints without node zone match all zones", makestep(func() {
 			state.SvcMap[svcKey] = proxy.NewK8sServicePort(
 				net.IPv4(10, 0, 0, 1),
 				1234,
@@ -1090,7 +1089,7 @@ var _ = Describe("BPF Syncer", func() {
 				&k8sp.BaseEndpointInfo{Ready: true, Endpoint: "10.1.0.1:5555", ZoneHints: sets.NewString("us-west-2a")},
 				&k8sp.BaseEndpointInfo{Ready: true, Endpoint: "10.2.0.2:5555", ZoneHints: sets.NewString("us-west-2b")},
 			}
-			state.NodeLabels = nil
+			state.NodeZone = ""
 
 			err := s.Apply(state)
 			Expect(err).NotTo(HaveOccurred())

@@ -49,9 +49,9 @@ type Proxy interface {
 
 // DPSyncerState groups the information passed to the DPSyncer's Apply
 type DPSyncerState struct {
-	SvcMap     k8sp.ServiceMap
-	EpsMap     k8sp.EndpointsMap
-	NodeLabels map[string]string
+	SvcMap   k8sp.ServiceMap
+	EpsMap   k8sp.EndpointsMap
+	NodeZone string
 }
 
 // DPSyncer is an interface representing the dataplane syncer that applies the
@@ -68,9 +68,9 @@ type DPSyncer interface {
 type proxy struct {
 	initState
 
-	hostname   string
-	nodeLabels map[string]string
-	k8s        kubernetes.Interface
+	hostname string
+	nodeZone string
+	k8s      kubernetes.Interface
 
 	epsChanges *k8sp.EndpointChangeTracker
 	svcChanges *k8sp.ServiceChangeTracker
@@ -234,9 +234,9 @@ func (p *proxy) invokeDPSyncer() {
 	}
 
 	err := p.dpSyncer.Apply(DPSyncerState{
-		SvcMap:     p.svcMap,
-		EpsMap:     p.epsMap,
-		NodeLabels: p.nodeLabels,
+		SvcMap:   p.svcMap,
+		EpsMap:   p.epsMap,
+		NodeZone: p.nodeZone,
 	})
 
 	if err != nil {

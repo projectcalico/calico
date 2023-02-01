@@ -27,10 +27,10 @@ import (
 	"strings"
 	"time"
 
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
+	coreV1 "k8s.io/api/core/v1"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/utils/clock"
 
@@ -192,13 +192,14 @@ func StartDataplaneDriver(configParams *config.Config,
 		felixNode, err := k8sClientSet.CoreV1().Nodes().Get(context.Background(), felixHostname, v1.GetOptions{})
 		if err != nil {
 			log.WithFields(log.Fields{
-				"felixHostname": felixHostname,
+				"FelixHostname": felixHostname,
 			}).Info("Unabled to extract node labels from Felix host")
 		}
 
+		felixNodeZone := felixNode.Labels[coreV1.LabelTopologyZone]
 		dpConfig := intdataplane.Config{
 			Hostname:           felixHostname,
-			NodeLabels:         felixNode.Labels,
+			NodeZone:           felixNodeZone,
 			FloatingIPsEnabled: strings.EqualFold(configParams.FloatingIPs, string(apiv3.FloatingIPsEnabled)),
 			IfaceMonitorConfig: ifacemonitor.Config{
 				InterfaceExcludes: configParams.InterfaceExclude,
