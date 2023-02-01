@@ -13,7 +13,7 @@ import (
 	etcd "k8s.io/apiserver/pkg/storage/etcd3"
 	"k8s.io/apiserver/pkg/storage/storagebackend/factory"
 
-	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
@@ -49,9 +49,6 @@ func NewBGPFilterStorage(opts Options) (registry.DryRunnableStorage, factory.Des
 		olo := opts.(options.ListOptions)
 		return c.BGPFilter().Watch(ctx, olo)
 	}
-	hasRestrictionsFn := func(obj resourceObject) bool {
-		return false
-	}
 
 	dryRunnableStorage := registry.DryRunnableStorage{Storage: &resourceStore{
 		client:            c,
@@ -70,7 +67,6 @@ func NewBGPFilterStorage(opts Options) (registry.DryRunnableStorage, factory.Des
 		watch:             watchFn,
 		resourceName:      "BGPFilter",
 		converter:         BGPFilterConverter{},
-		hasRestrictions:   hasRestrictionsFn,
 	}, Codec: opts.RESTOptions.StorageConfig.Codec}
 	return dryRunnableStorage, func() {}
 }

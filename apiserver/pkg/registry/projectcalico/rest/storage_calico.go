@@ -271,8 +271,7 @@ func (p RESTStorageProvider) NewV3Storage(
 			Trigger:       nil,
 		},
 		calicostorage.Options{
-			RESTOptions:    bgpFilterRESTOptions,
-			LicenseMonitor: licenseMonitor,
+			RESTOptions: bgpFilterRESTOptions,
 		},
 		p.StorageType,
 		authorizer,

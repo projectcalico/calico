@@ -19,7 +19,7 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	api "github.com/tigera/api/pkg/apis/projectcalico/v3"
+	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"

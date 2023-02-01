@@ -32,6 +32,7 @@ type Interface interface {
 	HostEndpointsClient
 	WorkloadEndpointsClient
 	BGPPeersClient
+	BGPFilterClient
 	IPAMClient
 	BGPConfigurationsClient
 	FelixConfigurationsClient
