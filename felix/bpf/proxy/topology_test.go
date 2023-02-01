@@ -25,51 +25,56 @@ import (
 
 func TestShouldAppendTopologyAwareEndpoint(t *testing.T) {
 	testCases := []struct {
+		description     string
 		nodeZone        string
 		hintsAnnotation string
 		zoneHints       sets.String
 		expect          bool
 		actual          bool
 	}{{
+		description:     "node zone empty, hints annotation empty, zone hints empty, expect should append topology aware endpoint true",
 		nodeZone:        "",
 		hintsAnnotation: "",
 		zoneHints:       nil,
 		expect:          true,
 	}, {
+		description:     "node zone us-west-2a, hints annotation empty, zone hints empty, expect should append topology aware endpoint true",
 		nodeZone:        "us-west-2a",
 		hintsAnnotation: "",
 		zoneHints:       nil,
 		expect:          true,
 	}, {
+		description:     "node zone us-west-2a, hints annotation auto, zone hints empty, expect should append topology aware endpoint true",
 		nodeZone:        "us-west-2a",
 		hintsAnnotation: "auto",
 		zoneHints:       nil,
 		expect:          true,
 	}, {
+		description:     "node zone us-west-2a, hints annotation disabled, zone hints empty, expect should append topology aware endpoint true",
 		nodeZone:        "us-west-2a",
 		hintsAnnotation: "disabled",
-		expect:          true,
-	}, {
-		nodeZone:        "us-west-2a",
-		hintsAnnotation: "",
 		zoneHints:       nil,
 		expect:          true,
 	}, {
+		description:     "node zone us-west-2a, hints annotation auto, zone hints us-west-2a, expect should append topology aware endpoint true",
 		nodeZone:        "us-west-2a",
 		hintsAnnotation: "auto",
 		zoneHints:       sets.NewString("us-west-2a"),
 		expect:          true,
 	}, {
+		description:     "node zone us-west-2a, hints annotation auto, zone hints us-west-2b, expect should append topology aware endpoint false",
 		nodeZone:        "us-west-2a",
 		hintsAnnotation: "auto",
 		zoneHints:       sets.NewString("us-west-2b"),
 		expect:          false,
 	}, {
+		description:     "node zone us-west-2a, hints annotation disabled, zone hints us-west-2b, expect should append topology aware endpoint true",
 		nodeZone:        "us-west-2a",
 		hintsAnnotation: "disabled",
 		zoneHints:       sets.NewString("us-west-2b"),
 		expect:          true,
 	}, {
+		description:     "node zone us-west-2a, hints annotation dummy, zone hints us-west-2b, expect should append topology aware endpoint true",
 		nodeZone:        "us-west-2a",
 		hintsAnnotation: "dummy",
 		zoneHints:       sets.NewString("us-west-2b"),
