@@ -138,6 +138,10 @@ type HealthAggregator struct {
 
 	// HTTP server.  Non-nil when there should be a server running.
 	httpServer *http.Server
+
+	// Track whether we have previously reported live and ready overall.
+	previouslyLive  bool
+	previouslyReady bool
 }
 
 // RegisterReporter registers a reporter with a HealthAggregator.  The aggregator uses NAME to
@@ -228,8 +232,6 @@ func genResponse(rsp http.ResponseWriter, quality string, state bool, detail str
 		if len(detail) == 0 {
 			status = StatusGoodNoContent
 		}
-	} else {
-		log.Warn("Health: not " + quality)
 	}
 	rsp.WriteHeader(status)
 	rsp.Write([]byte(detail))
@@ -254,13 +256,25 @@ func (aggregator *HealthAggregator) Summary() *HealthReport {
 	for _, reporter := range aggregator.reporters {
 		log.WithField("reporter", reporter).Debug("Checking state of reporter")
 		live, livenessStr := reporter.liveness()
-		if !live {
-			log.WithField("name", reporter.name).Warnf("Reporter is not live: %v.", livenessStr)
+		if live {
+			aggregator.previouslyLive = true
+		} else {
+			if aggregator.previouslyLive {
+				log.WithField("name", reporter.name).Warnf("Reporter is not live: %v.", livenessStr)
+			} else {
+				log.WithField("name", reporter.name).Infof("Reporter is not live: %v.", livenessStr)
+			}
 			summary.Live = false
 		}
 		ready, readinessStr := reporter.readiness()
-		if !ready {
-			log.WithField("name", reporter.name).Warnf("Reporter is not ready: %v.", readinessStr)
+		if ready {
+			aggregator.previouslyReady = true
+		} else {
+			if aggregator.previouslyReady {
+				log.WithField("name", reporter.name).Warnf("Reporter is not ready: %v.", readinessStr)
+			} else {
+				log.WithField("name", reporter.name).Infof("Reporter is not ready: %v.", readinessStr)
+			}
 			summary.Ready = false
 		}
 		componentNames = append(componentNames, reporter.name)
