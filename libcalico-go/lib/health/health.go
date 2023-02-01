@@ -77,26 +77,30 @@ type reporterState struct {
 	timestamp time.Time
 }
 
-func (r *reporterState) HasReadinessProblem() bool {
+func (r *reporterState) readiness() (bool, string) {
 	if !r.reports.Ready {
-		return false
+		return true, "-"
 	}
 	if r.TimedOut() {
-		log.WithField("name", r.name).Warn("Report timed out")
-		return true
+		return false, "timed out"
 	}
-	return !r.latest.Ready
+	if r.latest.Ready {
+		return true, "reporting ready"
+	}
+	return false, "reporting non-ready"
 }
 
-func (r *reporterState) HasLivenessProblem() bool {
+func (r *reporterState) liveness() (bool, string) {
 	if !r.reports.Live {
-		return false
+		return true, "-"
 	}
 	if r.TimedOut() {
-		log.WithField("name", r.name).Warn("Report timed out")
-		return true
+		return false, "timed out"
 	}
-	return !r.latest.Live
+	if r.latest.Live {
+		return true, "reporting live"
+	}
+	return false, "reporting non-live"
 }
 
 // TimedOut checks whether the reporter is due for another report. This is the case when
@@ -249,29 +253,15 @@ func (aggregator *HealthAggregator) Summary() *HealthReport {
 	// Now for each reporter...
 	for _, reporter := range aggregator.reporters {
 		log.WithField("reporter", reporter).Debug("Checking state of reporter")
-		livenessStr := "-"
-		if reporter.HasLivenessProblem() {
-			log.WithField("name", reporter.name).Warn("Reporter is not live.")
+		live, livenessStr := reporter.liveness()
+		if !live {
+			log.WithField("name", reporter.name).Warnf("Reporter is not live: %v.", livenessStr)
 			summary.Live = false
-			if reporter.TimedOut() {
-				livenessStr = "timed out"
-			} else {
-				livenessStr = "reporting non-live"
-			}
-		} else if reporter.reports.Live {
-			livenessStr = "reporting live"
 		}
-		readinessStr := "-"
-		if reporter.HasReadinessProblem() {
-			log.WithField("name", reporter.name).Warn("Reporter is not ready.")
+		ready, readinessStr := reporter.readiness()
+		if !ready {
+			log.WithField("name", reporter.name).Warnf("Reporter is not ready: %v.", readinessStr)
 			summary.Ready = false
-			if reporter.TimedOut() {
-				readinessStr = "timed out"
-			} else {
-				readinessStr = "reporting non-ready"
-			}
-		} else if reporter.reports.Ready {
-			readinessStr = "reporting ready"
 		}
 		componentNames = append(componentNames, reporter.name)
 
