@@ -95,7 +95,7 @@ struct bpf_map_def_extended {
 #define CALI_F_L3_INGRESS    (CALI_F_INGRESS && CALI_F_L3_DEV)
 
 #define CALI_F_CGROUP	(((CALI_COMPILE_FLAGS) & CALI_CGROUP) != 0)
-#define CALI_F_DSR	(CALI_COMPILE_FLAGS & CALI_TC_DSR)
+#define CALI_F_DSR	((CALI_COMPILE_FLAGS & CALI_TC_DSR) != 0)
 
 #define CALI_RES_REDIR_BACK	108 /* packet should be sent back the same iface */
 #define CALI_RES_REDIR_IFINDEX	109 /* packet should be sent straight to

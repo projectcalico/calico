@@ -70,7 +70,7 @@ var _ = Describe("BPF Proxy", func() {
 
 	testSvc := &v1.Service{
 		TypeMeta:   typeMetaV1("Service"),
-		ObjectMeta: objectMeataV1("testService"),
+		ObjectMeta: objectMetaV1("testService"),
 		Spec: v1.ServiceSpec{
 			ClusterIP: "10.1.0.1",
 			Type:      v1.ServiceTypeClusterIP,
@@ -88,7 +88,7 @@ var _ = Describe("BPF Proxy", func() {
 
 	testSvcEpsSlice := epsToSlice(&v1.Endpoints{
 		TypeMeta:   typeMetaV1("Endpoints"),
-		ObjectMeta: objectMeataV1("testService"),
+		ObjectMeta: objectMetaV1("testService"),
 		Subsets: []v1.EndpointSubset{
 			{
 				Addresses: []v1.EndpointAddress{
@@ -111,7 +111,7 @@ var _ = Describe("BPF Proxy", func() {
 
 	secondSvc := &v1.Service{
 		TypeMeta:   typeMetaV1("Service"),
-		ObjectMeta: objectMeataV1("second-service"),
+		ObjectMeta: objectMetaV1("second-service"),
 		Spec: v1.ServiceSpec{
 			ClusterIP: "10.1.0.1",
 			Type:      v1.ServiceTypeClusterIP,
@@ -130,7 +130,7 @@ var _ = Describe("BPF Proxy", func() {
 
 	secondSvcEpsSlice := epsToSlice(&v1.Endpoints{
 		TypeMeta:   typeMetaV1("Endpoints"),
-		ObjectMeta: objectMeataV1("second-service"),
+		ObjectMeta: objectMetaV1("second-service"),
 		Subsets: []v1.EndpointSubset{
 			{
 				Addresses: []v1.EndpointAddress{
@@ -196,7 +196,7 @@ var _ = Describe("BPF Proxy", func() {
 					err := k8s.Tracker().Add(
 						&v1.Service{
 							TypeMeta:   typeMetaV1("Service"),
-							ObjectMeta: objectMeataV1("added"),
+							ObjectMeta: objectMetaV1("added"),
 							Spec: v1.ServiceSpec{
 								ClusterIP: "10.1.0.3",
 								Type:      v1.ServiceTypeClusterIP,
@@ -233,7 +233,7 @@ var _ = Describe("BPF Proxy", func() {
 				By("deleting an endpoint of the second-service", func() {
 					eps := &v1.Endpoints{
 						TypeMeta:   typeMetaV1("Endpoints"),
-						ObjectMeta: objectMeataV1("second-service"),
+						ObjectMeta: objectMetaV1("second-service"),
 						Subsets: []v1.EndpointSubset{
 							{
 								Addresses: []v1.EndpointAddress{
@@ -287,7 +287,7 @@ var _ = Describe("BPF Proxy", func() {
 				By("adding Endpoints with named ports", func() {
 					httpSvcEps := &v1.Endpoints{
 						TypeMeta:   typeMetaV1("Endpoints"),
-						ObjectMeta: objectMeataV1("http-service"),
+						ObjectMeta: objectMetaV1("http-service"),
 						Subsets: []v1.EndpointSubset{
 							{
 								Addresses: []v1.EndpointAddress{
@@ -347,7 +347,7 @@ var _ = Describe("BPF Proxy", func() {
 				By("including endpoints without service", func() {
 					eps := &v1.Endpoints{
 						TypeMeta:   typeMetaV1("Endpoints"),
-						ObjectMeta: objectMeataV1("noservice"),
+						ObjectMeta: objectMetaV1("noservice"),
 						Subsets: []v1.EndpointSubset{
 							{
 								Addresses: []v1.EndpointAddress{
@@ -376,7 +376,7 @@ var _ = Describe("BPF Proxy", func() {
 				By("adding a NodePort", func() {
 					nodeport := &v1.Service{
 						TypeMeta:   typeMetaV1("Service"),
-						ObjectMeta: objectMeataV1("nodeport"),
+						ObjectMeta: objectMetaV1("nodeport"),
 						Spec: v1.ServiceSpec{
 							ClusterIP: "10.1.0.1",
 							Type:      v1.ServiceTypeNodePort,
@@ -395,7 +395,7 @@ var _ = Describe("BPF Proxy", func() {
 
 					nodeportEps := &v1.Endpoints{
 						TypeMeta:   typeMetaV1("Endpoints"),
-						ObjectMeta: objectMeataV1("nodeport"),
+						ObjectMeta: objectMetaV1("nodeport"),
 						Subsets: []v1.EndpointSubset{
 							{
 								Addresses: []v1.EndpointAddress{
@@ -454,7 +454,7 @@ var _ = Describe("BPF Proxy", func() {
 
 			nodeport := &v1.Service{
 				TypeMeta:   typeMetaV1("Service"),
-				ObjectMeta: objectMeataV1("nodeport"),
+				ObjectMeta: objectMetaV1("nodeport"),
 				Spec: v1.ServiceSpec{
 					ClusterIP: "10.1.0.1",
 					Type:      v1.ServiceTypeNodePort,
@@ -474,7 +474,7 @@ var _ = Describe("BPF Proxy", func() {
 
 			nodeportEps := &v1.Endpoints{
 				TypeMeta:   typeMetaV1("Endpoints"),
-				ObjectMeta: objectMeataV1("nodeport"),
+				ObjectMeta: objectMetaV1("nodeport"),
 				Subsets: []v1.EndpointSubset{
 					{
 						Addresses: []v1.EndpointAddress{
@@ -624,7 +624,7 @@ func typeMetaV1(kind string) metav1.TypeMeta {
 	}
 }
 
-func objectMeataV1(name string) metav1.ObjectMeta {
+func objectMetaV1(name string) metav1.ObjectMeta {
 	return metav1.ObjectMeta{
 		Name:      name,
 		Namespace: metav1.NamespaceDefault,

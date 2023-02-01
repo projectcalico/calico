@@ -16,7 +16,6 @@ package intdataplane
 
 import (
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
 	"reflect"
@@ -35,6 +34,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/bpf/bpfmap"
 	"github.com/projectcalico/calico/felix/bpf/failsafes"
+	bpfmaps "github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/nat"
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 	"github.com/projectcalico/calico/felix/environment"
@@ -197,6 +197,7 @@ type Config struct {
 	BPFConnTimeLBEnabled               bool
 	BPFMapRepin                        bool
 	BPFNodePortDSREnabled              bool
+	BPFDSROptoutCIDRs                  []string
 	BPFPSNATPorts                      numorstring.Port
 	BPFMapSizeRoute                    int
 	BPFMapSizeConntrack                int
@@ -605,9 +606,9 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	}
 
 	if config.BPFMapRepin {
-		bpf.EnableRepin()
+		bpfmaps.EnableRepin()
 	} else {
-		bpf.DisableRepin()
+		bpfmaps.DisableRepin()
 	}
 
 	bpfipsets.SetMapSize(config.BPFMapSizeIPSets)
@@ -998,7 +999,7 @@ func writeMTUFile(mtu int) error {
 	// Write the smallest MTU to disk so other components can rely on this calculation consistently.
 	filename := "/var/lib/calico/mtu"
 	log.Debugf("Writing %d to "+filename, mtu)
-	if err := ioutil.WriteFile(filename, []byte(fmt.Sprintf("%d", mtu)), 0644); err != nil {
+	if err := os.WriteFile(filename, []byte(fmt.Sprintf("%d", mtu)), 0644); err != nil {
 		log.WithError(err).Error("Unable to write to " + filename)
 		return err
 	}

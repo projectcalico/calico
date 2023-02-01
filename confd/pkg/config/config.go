@@ -2,7 +2,6 @@ package config
 
 import (
 	"flag"
-	"io/ioutil"
 	"os"
 
 	"github.com/BurntSushi/toml"
@@ -82,7 +81,7 @@ func InitConfig(ignoreFlags bool) (*Config, error) {
 		log.Info("Skipping confd config file.")
 	} else {
 		log.Info("Loading " + configFile)
-		configBytes, err := ioutil.ReadFile(configFile)
+		configBytes, err := os.ReadFile(configFile)
 		if err != nil {
 			return nil, err
 		}

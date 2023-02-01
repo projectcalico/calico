@@ -36,6 +36,7 @@ enum cali_ct_type {
 #define CALI_CT_FLAG_SVC_SELF	0x400 /* marks connections from a pod via service to self */
 #define CALI_CT_FLAG_NP_LOOP	0x800 /* marks connections that were turned around when accessing nodeport on a local IP */
 #define CALI_CT_FLAG_NP_REMOTE	0x1000 /* marks connections from local host to remote backend of a nodeport */
+#define CALI_CT_FLAG_NP_NO_DSR	0x2000 /* marks connections from a client which is excluded from DSR */
 
 struct calico_ct_leg {
 	__u64 bytes;

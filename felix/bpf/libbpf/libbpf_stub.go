@@ -58,7 +58,7 @@ func (m *Map) NextMap() (*Map, error) {
 	panic("LIBBPF syscall stub")
 }
 
-func (o *Obj) AttachClassifier(secName, ifName, hook string) (int, error) {
+func (o *Obj) AttachClassifier(secName, ifName string, ingress bool) (int, error) {
 	panic("LIBBPF syscall stub")
 }
 
@@ -102,6 +102,7 @@ const (
 	GlobalsIPv6Enabled      uint32 = 1
 	GlobalsRPFOptionEnabled uint32 = 16
 	GlobalsRPFOptionStrict  uint32 = 32
+	GlobalsNoDSRCidrs       uint32 = 12345
 )
 
 func TcSetGlobals(_ *Map, globalData *TcGlobalData) error {
@@ -116,7 +117,7 @@ func XDPSetGlobals(_ *Map, _ *XDPGlobalData) error {
 	panic("LIBBPF syscall stub")
 }
 
-func (m *Map) SetMapSize(size int) error {
+func (m *Map) SetSize(size int) error {
 	panic("LIBBPF syscall stub")
 }
 

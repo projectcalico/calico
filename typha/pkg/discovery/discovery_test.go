@@ -15,6 +15,8 @@
 package discovery
 
 import (
+	"errors"
+	"fmt"
 	"reflect"
 
 	. "github.com/onsi/ginkgo"
@@ -83,6 +85,29 @@ var _ = Describe("Typha address discovery", func() {
 		Expect(typhaAddr).To(Equal([]Typha{{Addr: "10.0.0.1:8080"}}))
 	})
 
+	It("should apply a filter", func() {
+		typhaAddr, err := DiscoverTyphaAddrs(
+			WithAddrOverride("10.0.0.1:8080"),
+			WithPostDiscoveryFilter(func(typhaAddresses []Typha) ([]Typha, error) {
+				return append(typhaAddresses, Typha{Addr: "10.0.0.2:8080"}), nil
+			}),
+		)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(typhaAddr).To(Equal([]Typha{
+			{Addr: "10.0.0.1:8080"},
+			{Addr: "10.0.0.2:8080"},
+		}))
+	})
+	It("should return error from filter", func() {
+		_, err := DiscoverTyphaAddrs(
+			WithAddrOverride("10.0.0.1:8080"),
+			WithPostDiscoveryFilter(func(typhaAddresses []Typha) ([]Typha, error) {
+				return nil, fmt.Errorf("BANG")
+			}),
+		)
+		Expect(err).To(HaveOccurred())
+	})
+
 	It("should return nothing if no service name and no client", func() {
 		typhaAddr, err := DiscoverTyphaAddrs()
 		Expect(err).NotTo(HaveOccurred())
@@ -96,11 +121,17 @@ var _ = Describe("Typha address discovery", func() {
 	})
 
 	It("should return IP from endpoints", func() {
-		typhaAddr, err := DiscoverTyphaAddrs(
+		discoverer := New(
 			WithKubeService("kube-system", "calico-typha-service"),
 			WithKubeClient(k8sClient),
 		)
+		typhaAddr, err := discoverer.LoadTyphaAddrs()
 		Expect(err).NotTo(HaveOccurred())
+		Expect(typhaAddr).To(Equal([]Typha{
+			{Addr: "10.0.0.2:8156", IP: "10.0.0.2", NodeName: &remoteNodeName},
+		}))
+		By("Returning the same result from the cache")
+		typhaAddr = discoverer.CachedTyphaAddrs()
 		Expect(typhaAddr).To(Equal([]Typha{
 			{Addr: "10.0.0.2:8156", IP: "10.0.0.2", NodeName: &remoteNodeName},
 		}))
@@ -222,3 +253,100 @@ var _ = Describe("Typha address discovery", func() {
 		Expect(shuffledRemote).To(BeTrue())
 	})
 })
+
+func DiscoverTyphaAddrs(opts ...Option) ([]Typha, error) {
+	discoverer := New(opts...)
+	return discoverer.LoadTyphaAddrs()
+}
+
+var _ = Describe("ConnectionAttemptTracker", func() {
+	var (
+		cat        *ConnectionAttemptTracker
+		discoverer *mockDiscoverer
+
+		typha1 = Typha{Addr: "10.0.0.1:8157", IP: "10.0.0.1"}
+		typha2 = Typha{Addr: "10.0.0.2:8157", IP: "10.0.0.2"}
+		typha3 = Typha{Addr: "10.0.0.3:8157", IP: "10.0.0.3"}
+		typha4 = Typha{Addr: "10.0.0.4:8157", IP: "10.0.0.4"}
+	)
+
+	BeforeEach(func() {
+		discoverer = &mockDiscoverer{}
+		cat = NewConnAttemptTracker(discoverer)
+	})
+
+	Describe("with same addrs each time", func() {
+		BeforeEach(func() {
+			addrs := []Typha{typha1, typha2}
+			discoverer.TyphaAddrsToReturn = []typhaAddrsResp{
+				{ts: addrs},
+				{ts: addrs},
+			}
+			discoverer.CachedAddrs = addrs
+		})
+		It("should return the addresses in order then give up", func() {
+			Expect(cat.NextAddr()).To(Equal(typha1))
+			Expect(cat.NextAddr()).To(Equal(typha2))
+			_, err := cat.NextAddr()
+			Expect(err).To(Equal(ErrTriedAllAddrs))
+		})
+	})
+
+	Describe("with changing addrs", func() {
+		BeforeEach(func() {
+			discoverer.TyphaAddrsToReturn = []typhaAddrsResp{
+				{ts: []Typha{typha1, typha3}},
+				{ts: []Typha{typha3, typha4}},
+				{ts: []Typha{typha3, typha4}},
+			}
+			discoverer.CachedAddrs = []Typha{typha1, typha2}
+		})
+		It("should return the addresses in order then give up", func() {
+			Expect(cat.NextAddr()).To(Equal(typha1))
+			Expect(cat.NextAddr()).To(Equal(typha3))
+			Expect(cat.NextAddr()).To(Equal(typha4))
+			_, err := cat.NextAddr()
+			Expect(err).To(Equal(ErrTriedAllAddrs))
+		})
+	})
+
+	Describe("with an error", func() {
+		mockErr := fmt.Errorf("BANG")
+		BeforeEach(func() {
+			discoverer.TyphaAddrsToReturn = []typhaAddrsResp{
+				{err: mockErr},
+			}
+			discoverer.CachedAddrs = []Typha{typha1, typha2}
+		})
+		It("should return the cached address and then an error", func() {
+			Expect(cat.NextAddr()).To(Equal(typha1))
+			_, err := cat.NextAddr()
+			Expect(errors.Is(err, mockErr)).To(BeTrue(), "wrong/no error returned")
+		})
+	})
+})
+
+type typhaAddrsResp struct {
+	ts  []Typha
+	err error
+}
+
+type mockDiscoverer struct {
+	TyphaAddrsToReturn []typhaAddrsResp
+	CachedAddrs        []Typha
+}
+
+func (m *mockDiscoverer) LoadTyphaAddrs() (ts []Typha, err error) {
+	if len(m.TyphaAddrsToReturn) == 0 {
+		Fail("no more canned results")
+	}
+	ts = m.TyphaAddrsToReturn[0].ts
+	err = m.TyphaAddrsToReturn[0].err
+	m.TyphaAddrsToReturn = m.TyphaAddrsToReturn[1:]
+	m.CachedAddrs = ts
+	return
+}
+
+func (m *mockDiscoverer) CachedTyphaAddrs() []Typha {
+	return m.CachedAddrs
+}

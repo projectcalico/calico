@@ -26,6 +26,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	v2 "github.com/projectcalico/calico/felix/bpf/conntrack/v2"
+	"github.com/projectcalico/calico/felix/bpf/maps"
 
 	"github.com/docopt/docopt-go"
 	"github.com/pkg/errors"
@@ -85,8 +86,8 @@ func (cmd *conntrackDumpCmd) Args(c *cobra.Command, args []string) error {
 	return nil
 }
 
-func dumpCtMapV2(ctMap bpf.Map) error {
-	err := ctMap.Iter(func(k, v []byte) bpf.IteratorAction {
+func dumpCtMapV2(ctMap maps.Map) error {
+	err := ctMap.Iter(func(k, v []byte) maps.IteratorAction {
 		var ctKey v2.Key
 		if len(k) != len(ctKey) {
 			log.Panic("Key has unexpected length")
@@ -102,13 +103,13 @@ func dumpCtMapV2(ctMap bpf.Map) error {
 		fmt.Printf("%v -> %v", ctKey, ctVal)
 		dumpExtrav2(ctKey, ctVal)
 		fmt.Printf("\n")
-		return bpf.IterNone
+		return maps.IterNone
 	})
 	return err
 }
 
 func (cmd *conntrackDumpCmd) Run(c *cobra.Command, _ []string) {
-	var ctMap bpf.Map
+	var ctMap maps.Map
 	switch cmd.version {
 	case "2":
 		ctMap = conntrack.MapV2()
@@ -125,7 +126,7 @@ func (cmd *conntrackDumpCmd) Run(c *cobra.Command, _ []string) {
 		}
 		return
 	}
-	err := ctMap.Iter(func(k, v []byte) bpf.IteratorAction {
+	err := ctMap.Iter(func(k, v []byte) maps.IteratorAction {
 		var ctKey conntrack.Key
 		if len(k) != len(ctKey) {
 			log.Panic("Key has unexpected length")
@@ -141,7 +142,7 @@ func (cmd *conntrackDumpCmd) Run(c *cobra.Command, _ []string) {
 		fmt.Printf("%v -> %v", ctKey, ctVal)
 		dumpExtra(ctKey, ctVal)
 		fmt.Printf("\n")
-		return bpf.IterNone
+		return maps.IterNone
 	})
 	if err != nil {
 		log.WithError(err).Fatal("Failed to iterate over conntrack entries")
@@ -270,7 +271,7 @@ func (cmd *conntrackRemoveCmd) Run(c *cobra.Command, _ []string) {
 	if err := ctMap.Open(); err != nil {
 		log.WithError(err).Error("Failed to access ConntrackMap")
 	}
-	err := ctMap.Iter(func(k, v []byte) bpf.IteratorAction {
+	err := ctMap.Iter(func(k, v []byte) maps.IteratorAction {
 		var ctKey conntrack.Key
 		if len(k) != len(ctKey) {
 			log.Panic("Key has unexpected length")
@@ -280,17 +281,17 @@ func (cmd *conntrackRemoveCmd) Run(c *cobra.Command, _ []string) {
 		log.Infof("Examining conntrack key: %v", ctKey)
 
 		if ctKey.Proto() != cmd.proto {
-			return bpf.IterNone
+			return maps.IterNone
 		}
 
 		if ctKey.AddrA().Equal(cmd.ip1) && ctKey.AddrB().Equal(cmd.ip2) {
 			log.Info("Match")
-			return bpf.IterDelete
+			return maps.IterDelete
 		} else if ctKey.AddrB().Equal(cmd.ip1) && ctKey.AddrA().Equal(cmd.ip2) {
 			log.Info("Match")
-			return bpf.IterDelete
+			return maps.IterDelete
 		}
-		return bpf.IterNone
+		return maps.IterNone
 	})
 	if err != nil {
 		log.WithError(err).Fatal("Failed to iterate over conntrack entries")
@@ -306,8 +307,8 @@ func runClean(c *cobra.Command, _ []string) {
 	// Disable debug if set while deleting
 	loglevel := log.GetLevel()
 	log.SetLevel(log.WarnLevel)
-	err := ctMap.Iter(func(k, v []byte) bpf.IteratorAction {
-		return bpf.IterDelete
+	err := ctMap.Iter(func(k, v []byte) maps.IteratorAction {
+		return maps.IterDelete
 	})
 
 	log.SetLevel(loglevel)
@@ -351,7 +352,7 @@ func (cmd *conntrackCreateCmd) Args(c *cobra.Command, args []string) error {
 }
 
 func (cmd *conntrackCreateCmd) Run(c *cobra.Command, _ []string) {
-	var ctMap bpf.Map
+	var ctMap maps.Map
 	switch cmd.version {
 	case "2":
 		ctMap = conntrack.MapV2()
@@ -432,7 +433,7 @@ func (cmd *conntrackWriteCmd) Args(c *cobra.Command, args []string) error {
 }
 
 func (cmd *conntrackWriteCmd) Run(c *cobra.Command, _ []string) {
-	var ctMap bpf.Map
+	var ctMap maps.Map
 	if cmd.version == "2" {
 		ctMap = conntrack.MapV2()
 	} else {

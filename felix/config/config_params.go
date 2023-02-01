@@ -34,7 +34,6 @@ import (
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
-	"github.com/projectcalico/calico/typha/pkg/discovery"
 )
 
 var (
@@ -181,6 +180,7 @@ type Config struct {
 	BPFL3IfacePattern                  *regexp.Regexp   `config:"regexp;"`
 	BPFConnectTimeLoadBalancingEnabled bool             `config:"bool;true"`
 	BPFExternalServiceMode             string           `config:"oneof(tunnel,dsr);tunnel;non-zero"`
+	BPFDSROptoutCIDRs                  []string         `config:"cidr-list;;"`
 	BPFKubeProxyIptablesCleanupEnabled bool             `config:"bool;true"`
 	BPFKubeProxyMinSyncPeriod          time.Duration    `config:"seconds;1"`
 	BPFKubeProxyEndpointSlicesEnabled  bool             `config:"bool;true"`
@@ -1032,13 +1032,6 @@ func (config *Config) SetLoadClientConfigFromEnvironmentFunction(fnc func() (*ap
 func (config *Config) OverrideParam(name, value string) (bool, error) {
 	config.internalOverrides[name] = value
 	return config.UpdateFrom(config.internalOverrides, InternalOverride)
-}
-
-func (config *Config) TyphaDiscoveryOpts() []discovery.Option {
-	return []discovery.Option{
-		discovery.WithAddrOverride(config.TyphaAddr),
-		discovery.WithKubeService(config.TyphaK8sNamespace, config.TyphaK8sServiceName),
-	}
 }
 
 // RouteTableIndices compares provided args for the deprecated RoutTableRange arg
