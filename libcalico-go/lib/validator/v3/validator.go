@@ -92,6 +92,7 @@ var (
 	routeSource           = regexp.MustCompile("^(WorkloadIPs|CalicoIPAM)$")
 	dropAcceptReturnRegex = regexp.MustCompile("^(Drop|Accept|Return)$")
 	acceptReturnRegex     = regexp.MustCompile("^(Accept|Return)$")
+	dropRejectRegex       = regexp.MustCompile("^(Drop|Reject)$")
 	ipTypeRegex           = regexp.MustCompile("^(CalicoNodeIP|InternalIP|ExternalIP)$")
 	standardCommunity     = regexp.MustCompile(`^(\d+):(\d+)$`)
 	largeCommunity        = regexp.MustCompile(`^(\d+):(\d+):(\d+)$`)
@@ -170,6 +171,7 @@ func init() {
 	registerFieldValidator("bpfServiceMode", validateBPFServiceMode)
 	registerFieldValidator("dropAcceptReturn", validateFelixEtoHAction)
 	registerFieldValidator("acceptReturn", validateAcceptReturn)
+	registerFieldValidator("dropReject", validateDropReject)
 	registerFieldValidator("portName", validatePortName)
 	registerFieldValidator("mustBeNil", validateMustBeNil)
 	registerFieldValidator("mustBeFalse", validateMustBeFalse)
@@ -421,6 +423,12 @@ func validateAcceptReturn(fl validator.FieldLevel) bool {
 	s := fl.Field().String()
 	log.Debugf("Validate Accept Return Action: %s", s)
 	return acceptReturnRegex.MatchString(s)
+}
+
+func validateDropReject(fl validator.FieldLevel) bool {
+	s := fl.Field().String()
+	log.Debugf("Validate Drop Reject Action: %s", s)
+	return dropRejectRegex.MatchString(s)
 }
 
 func validateSelector(fl validator.FieldLevel) bool {
