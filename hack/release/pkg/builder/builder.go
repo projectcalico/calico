@@ -16,7 +16,6 @@ package builder
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"strings"
 
@@ -117,6 +116,9 @@ func (r *ReleaseBuilder) BuildRelease() error {
 
 	// Build the helm charts
 	r.runner.Run("make", []string{"chart"}, []string{})
+
+	// Build OpenShift bundle.
+	r.runner.Run("make", []string{"bin/ocp.tgz"}, []string{})
 
 	// TODO: Assert the produced images are OK. e.g., have correct
 	// commit and version information compiled in.
@@ -245,7 +247,7 @@ func (r *ReleaseBuilder) collectGithubArtifacts(ver string) error {
 	}
 
 	// We attach calicoctl binaries directly to the release as well.
-	files, err := ioutil.ReadDir("calicoctl/bin/")
+	files, err := os.ReadDir("calicoctl/bin/")
 	if err != nil {
 		return err
 	}
@@ -260,7 +262,7 @@ func (r *ReleaseBuilder) collectGithubArtifacts(ver string) error {
 		return err
 	}
 
-	// Add in the already-built windows zip archive, the Windows install script, and the helm chart.
+	// Add in the already-built windows zip archive, the Windows install script, ocp bundle, and the helm chart.
 	if _, err := r.runner.Run("cp", []string{fmt.Sprintf("node/dist/calico-windows-%s.zip", ver), uploadDir}, nil); err != nil {
 		return err
 	}
@@ -270,11 +272,14 @@ func (r *ReleaseBuilder) collectGithubArtifacts(ver string) error {
 	if _, err := r.runner.Run("cp", []string{fmt.Sprintf("bin/tigera-operator-%s.tgz", ver), uploadDir}, nil); err != nil {
 		return err
 	}
+	if _, err := r.runner.Run("cp", []string{"manifests/ocp.tgz", ver, uploadDir}, nil); err != nil {
+		return err
+	}
 
 	// Generate a SHA256SUMS file containing the checksums for each artifact
 	// that we attach to the release. These can be confirmed by end users via the following command:
 	// sha256sum -c --ignore-missing SHA256SUMS
-	files, err = ioutil.ReadDir(uploadDir)
+	files, err = os.ReadDir(uploadDir)
 	if err != nil {
 		return err
 	}
@@ -404,6 +409,7 @@ Attached to this release are the following artifacts:
 - {release_tar}: container images, binaries, and kubernetes manifests.
 - {calico_windows_zip}: Calico for Windows.
 - {helm_chart}: Calico Helm v3 chart.
+- ocp.tgz: Manifest bundle for OpenShift.
 `
 	sv, err := semver.NewVersion(strings.TrimPrefix(ver, "v"))
 	if err != nil {
@@ -483,7 +489,7 @@ func (r *ReleaseBuilder) assertManifestVersions(ver string) error {
 	// Go through a subset of yaml files in manifests/ and extract the images
 	// that they use. Verify that the images are using the given version.
 	// We also do the manifests/ocp/ yaml to check the calico/ctl image is correct.
-	manifests := []string{"calico.yaml", "manifests/ocp/02-tigera-operator.yaml"}
+	manifests := []string{"calico.yaml", "ocp/02-tigera-operator.yaml"}
 
 	for _, m := range manifests {
 		args := []string{"-Po", `image:\K(.*)`, m}

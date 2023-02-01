@@ -73,9 +73,9 @@ require (
 	go.etcd.io/etcd/client/pkg/v3 v3.5.6
 	go.etcd.io/etcd/client/v2 v2.305.6
 	go.etcd.io/etcd/client/v3 v3.5.6
-	golang.org/x/net v0.2.0
+	golang.org/x/net v0.4.0
 	golang.org/x/sync v0.1.0
-	golang.org/x/sys v0.2.0
+	golang.org/x/sys v0.3.0
 	golang.org/x/text v0.5.0
 	golang.zx2c4.com/wireguard/wgctrl v0.0.0-20200324154536-ceff61240acf
 	google.golang.org/genproto v0.0.0-20221024183307-1bc688fe9f3e
@@ -91,7 +91,7 @@ require (
 	k8s.io/component-base v0.24.0
 	k8s.io/klog/v2 v2.60.1
 	k8s.io/kube-openapi v0.0.0-20220328201542-3ee0da9b0b42
-	k8s.io/kubernetes v0.0.0-00010101000000-000000000000
+	k8s.io/kubernetes v1.24.0
 	k8s.io/utils v0.0.0-20220210201930-3a6ce19ff2f9
 	modernc.org/memory v1.5.0
 	sigs.k8s.io/kind v0.11.1
@@ -249,7 +249,7 @@ require (
 	golang.org/x/crypto v0.1.0 // indirect
 	golang.org/x/mod v0.6.0 // indirect
 	golang.org/x/oauth2 v0.0.0-20221014153046-6fdb5e3db783 // indirect
-	golang.org/x/term v0.2.0 // indirect
+	golang.org/x/term v0.3.0 // indirect
 	golang.org/x/time v0.0.0-20220609170525-579cf78fd858 // indirect
 	golang.org/x/tools v0.2.0 // indirect
 	golang.zx2c4.com/wireguard v0.0.20200121 // indirect

@@ -31,8 +31,11 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
 )
 
-func restoreMaps(mc *bpf.MapContext) {
-	bpfmap.DestroyBPFMaps(mc)
+func restoreMaps(maps *bpfmap.Maps) {
+	if maps != nil {
+		maps.Destroy()
+	}
+	bpf.ResetMapSizes()
 	// close the already created map and recreate them
 	for _, m := range allMaps {
 		os.Remove(m.Path())
@@ -43,30 +46,29 @@ func restoreMaps(mc *bpf.MapContext) {
 			logrus.WithError(err).Panic("Failed to initialise maps")
 		}
 	}
+	logrus.Info("maps restored")
 }
 
 func TestMapResize(t *testing.T) {
 	// Resize the maps.
 	RegisterTestingT(t)
-	ipsetsMapSize := 100
-	natFeMapSize := 200
-	natBeMapSize := 300
-	natAffMapSize := 400
-	rtMapSize := 500
-	ctMapSize := 600
-	ifStateMapSize := 100
-	mc := bpfmap.CreateBPFMapContext(ipsetsMapSize, natFeMapSize, natBeMapSize, natAffMapSize, rtMapSize, ctMapSize, ifStateMapSize, true)
-	err := bpfmap.CreateBPFMaps(mc)
+	conntrack.SetMapSize(600)
+	defer bpf.ResetMapSizes()
+
+	bpf.EnableRepin()
+	defer bpf.DisableRepin()
+
+	maps, err := bpfmap.CreateBPFMaps()
 	Expect(err).NotTo(HaveOccurred())
-	defer restoreMaps(mc)
+	defer restoreMaps(maps)
 	// New CT map should have max_entries as 600
-	ctMapInfo, err := bpf.GetMapInfo(mc.CtMap.MapFD())
+	ctMapInfo, err := bpf.GetMapInfo(maps.CtMap.MapFD())
 	Expect(err).NotTo(HaveOccurred(), "Failed to get ct map info")
-	Expect(ctMapInfo.MaxEntries).To(Equal(ctMapSize))
+	Expect(ctMapInfo.MaxEntries).To(Equal(600))
 	// Except CT map, other map's old pins should be deleted.
-	_, err = os.Stat(mc.RouteMap.Path() + "_old")
+	_, err = os.Stat(maps.RouteMap.Path() + "_old")
 	Expect(err).To(HaveOccurred(), "old route map present")
-	_, err = os.Stat(mc.CtMap.Path() + "_old")
+	_, err = os.Stat(maps.CtMap.Path() + "_old")
 	Expect(err).NotTo(HaveOccurred(), "old ct map not present")
 }
 
@@ -74,27 +76,21 @@ func TestMapResizeWithCopy(t *testing.T) {
 	// Add a k,v pair to the old ctmap
 	k, err := setUpMapTestWithSingleKV(t)
 	Expect(err).NotTo(HaveOccurred(), "Failed to create ct entry")
-	ipsetsMapSize := 100
-	natFeMapSize := 200
-	natBeMapSize := 300
-	natAffMapSize := 400
-	rtMapSize := 500
-	ctMapSize := 600
-	ifStateMapSize := 100
 
 	// Resize the CT map to 600. New map should have the entry in the old map
-	mc := bpfmap.CreateBPFMapContext(ipsetsMapSize, natFeMapSize, natBeMapSize, natAffMapSize, rtMapSize, ctMapSize, ifStateMapSize, true)
-	err = bpfmap.CreateBPFMaps(mc)
+	conntrack.SetMapSize(600)
+	maps, err := bpfmap.CreateBPFMaps()
 	Expect(err).NotTo(HaveOccurred())
-	defer restoreMaps(mc)
-	val, err := mc.CtMap.Get(k.AsBytes())
+	defer restoreMaps(maps)
+	val, err := maps.CtMap.Get(k.AsBytes())
 	Expect(err).NotTo(HaveOccurred(), "ct entry not present in the new map")
 	v := conntrack.Value{}
 	for i := range v {
 		v[i] = uint8(i)
 	}
 	Expect(v.AsBytes()).To(Equal(val))
-	bpfmap.MigrateDataFromOldMap(mc)
+	err = maps.CtMap.CopyDeltaFromOldMap()
+	Expect(err).NotTo(HaveOccurred(), "migration failed")
 }
 
 func TestMapDownSize(t *testing.T) {
@@ -107,20 +103,13 @@ func TestMapDownSize(t *testing.T) {
 	}
 
 	// Resize the ct map to 6, which is less than the total number of entries
-	ipsetsMapSize := 100
-	natFeMapSize := 200
-	natBeMapSize := 300
-	natAffMapSize := 400
-	rtMapSize := 500
-	ctMapSize := 6
-	ifStateMapSize := 100
+	conntrack.SetMapSize(6)
 
 	// New map creation should panic as the number of entries in old map is more than what the new map can
 	// accommodate
-	mc := bpfmap.CreateBPFMapContext(ipsetsMapSize, natFeMapSize, natBeMapSize, natAffMapSize, rtMapSize, ctMapSize, ifStateMapSize, true)
-	defer restoreMaps(mc)
-	err := bpfmap.CreateBPFMaps(mc)
-	expectedError := fmt.Sprintf("Failed to create %s map, err=new map cannot hold all the data from the old map %s", ctMap.GetName(), ctMap.GetName())
+	maps, err := bpfmap.CreateBPFMaps()
+	defer restoreMaps(maps)
+	expectedError := fmt.Sprintf("failed to create %s map, err=new map cannot hold all the data from the old map %s", ctMap.GetName(), ctMap.GetName())
 	Expect(err.Error()).To(Equal(expectedError))
 }
 
@@ -129,29 +118,24 @@ func TestCTDeltaMigration(t *testing.T) {
 	k, err := setUpMapTestWithSingleKV(t)
 	Expect(err).NotTo(HaveOccurred(), "Failed to create ct entry")
 
-	// Resize the ctmap to size 600 entries
-	ipsetsMapSize := 100
-	natFeMapSize := 200
-	natBeMapSize := 300
-	natAffMapSize := 400
-	rtMapSize := 500
-	ctMapSize := 600
-	ifStateMapSize := 100
+	// Resize the ctmap
+	conntrack.SetMapSize(666)
 
-	mc := bpfmap.CreateBPFMapContext(ipsetsMapSize, natFeMapSize, natBeMapSize, natAffMapSize, rtMapSize, ctMapSize, ifStateMapSize, true)
-	err = bpfmap.CreateBPFMaps(mc)
+	maps, err := bpfmap.CreateBPFMaps()
 	Expect(err).NotTo(HaveOccurred())
 
-	defer restoreMaps(mc)
+	defer restoreMaps(maps)
 	v := conntrack.Value{}
 	for i := range v {
 		v[i] = uint8(i)
 	}
 
 	// Total number of k,v in old map should be 1
-	ctSaved := saveCTMap(mc.CtMap)
+	ctSaved := saveCTMap(maps.CtMap)
 	Expect(ctSaved).To(HaveLen(1))
 	Expect(ctSaved).Should(HaveKeyWithValue(k, v))
+
+	t.Log("STEP: update existing key in the old map")
 
 	// update the value for the old key in the old map
 	newVal := conntrack.Value{}
@@ -161,6 +145,8 @@ func TestCTDeltaMigration(t *testing.T) {
 
 	err = ctMap.Update(k.AsBytes(), newVal[:])
 	Expect(err).NotTo(HaveOccurred())
+
+	t.Log("STEP: add 10 entries to the old map")
 
 	// Add 10 more entries to the old map
 	numEntries := 10
@@ -182,16 +168,19 @@ func TestCTDeltaMigration(t *testing.T) {
 		}
 	}
 
-	_, err = os.Stat(mc.CtMap.Path() + "_old")
-	Expect(err).NotTo(HaveOccurred(), "old route map present")
+	t.Log("STEP: copy delta")
+
+	_, err = os.Stat(maps.CtMap.Path() + "_old")
+	Expect(err).NotTo(HaveOccurred(), "old conntrack map present")
 	// Migrate the delta (10 k,v pairs) to the new map
-	bpfmap.MigrateDataFromOldMap(mc)
-	ctSaved = saveCTMap(mc.CtMap)
+	err = maps.CtMap.CopyDeltaFromOldMap()
+	Expect(err).NotTo(HaveOccurred(), "migration failed")
+	ctSaved = saveCTMap(maps.CtMap)
 	Expect(ctSaved).To(HaveLen(numEntries + 1))
 	matchKeyVals(ctSaved)
 
 	Expect(err).NotTo(HaveOccurred())
-	_, err = os.Stat(mc.CtMap.Path() + "_old")
+	_, err = os.Stat(maps.CtMap.Path() + "_old")
 	Expect(err).To(HaveOccurred(), "old conntrack map present")
 }
 

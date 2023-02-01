@@ -1,5 +1,5 @@
 // Project Calico BPF dataplane programs.
-// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2023 Tigera, Inc. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
 #include <linux/types.h>
@@ -21,6 +21,7 @@
 
 #include "bpf.h"
 #include "types.h"
+#include "counters.h"
 #include "log.h"
 #include "skb.h"
 #include "policy.h"
@@ -46,9 +47,7 @@
 
 #define HAS_HOST_CONFLICT_PROG CALI_F_TO_HEP
 
-#if !defined(__BPFTOOL_LOADER__)
 const volatile struct cali_tc_globals __globals;
-#endif
 
 /* calico_tc is the main function used in all of the tc programs.  It is specialised
  * for particular hook at build time based on the CALI_F build flags.
@@ -71,7 +70,6 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 			/* This generates a bit more richer output for logging */
 			struct cali_tc_ctx ctx = {
 				.state = state_get(),
-				.counters = counters_get(),
 				.skb = skb,
 				.fwd = {
 					.res = TC_ACT_UNSPEC,
@@ -79,12 +77,6 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 				},
 				.ipheader_len = IP_SIZE,
 			};
-			if (!ctx.counters) {
-				CALI_DEBUG("Counters map lookup failed: DROP\n");
-				// We don't want to drop packets just because counters initialization fails, but
-				// failing here normally should not happen.
-				return TC_ACT_SHOT;
-			}
 			parse_packet_ip(&ctx);
 		}
 		return TC_ACT_UNSPEC;
@@ -127,7 +119,6 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 	 * we use to pass data from one program to the next via tail calls. */
 	struct cali_tc_ctx ctx = {
 		.state = state_get(),
-		.counters = counters_get(),
 		.skb = skb,
 		.fwd = {
 			.res = TC_ACT_UNSPEC,
@@ -141,13 +132,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 	}
 	__builtin_memset(ctx.state, 0, sizeof(*ctx.state));
 
-	if (!ctx.counters) {
-		CALI_DEBUG("Counters map lookup failed: DROP\n");
-		// We don't want to drop packets just because counters initialization fails, but
-		// failing here normally should not happen.
-		return TC_ACT_SHOT;
-	}
-	COUNTER_INC(&ctx, COUNTER_TOTAL_PACKETS);
+	counter_inc(&ctx, COUNTER_TOTAL_PACKETS);
 
 	if (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_INFO) {
 		ctx.state->prog_start_time = bpf_ktime_get_ns();
@@ -164,7 +149,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 		switch (skb->mark & CALI_SKB_MARK_BYPASS_MASK) {
 		case CALI_SKB_MARK_BYPASS_FWD:
 			CALI_DEBUG("Packet approved for forward.\n");
-			COUNTER_INC(&ctx, CALI_REASON_BYPASS);
+			counter_inc(&ctx, CALI_REASON_BYPASS);
 			goto allow;
 		}
 	}
@@ -209,7 +194,7 @@ static CALI_BPF_INLINE int pre_policy_processing(struct cali_tc_ctx *ctx)
 	/* Now we've got as far as the UDP header, check if this is one of our VXLAN packets, which we
 	 * use to forward traffic for node ports. */
 	if (dnat_should_decap() /* Compile time: is this a BPF program that should decap packets? */ &&
-			is_vxlan_tunnel(ip_hdr(ctx)) /* Is this a VXLAN packet? */ ) {
+			is_vxlan_tunnel(ip_hdr(ctx), VXLAN_PORT) /* Is this a VXLAN packet? */ ) {
 		/* Decap it; vxlan_attempt_decap will revalidate the packet if needed. */
 		switch (vxlan_attempt_decap(ctx)) {
 		case -1:
@@ -377,7 +362,7 @@ static CALI_BPF_INLINE void calico_tc_process_ct_lookup(struct cali_tc_ctx *ctx)
 
 	if (nat_res == NAT_FE_LOOKUP_DROP) {
 		CALI_DEBUG("Packet is from an unauthorised source: DROP\n");
-		DENY_REASON(ctx, CALI_REASON_UNAUTH_SOURCE);
+		deny_reason(ctx, CALI_REASON_UNAUTH_SOURCE);
 		goto deny;
 	}
 	if (ctx->nat_dest != NULL) {
@@ -398,7 +383,7 @@ syn_force_policy:
 	/* DNAT in state is set correctly now */
 
 	if ((!(ctx->state->tun_ip) && CALI_F_FROM_HEP) && !CALI_F_NAT_IF && !CALI_F_LO) {
-		if (!hep_rpf_check(ctx, false)) {
+		if (!hep_rpf_check(ctx)) {
 			goto deny;
 		}
 	}
@@ -442,7 +427,7 @@ syn_force_policy:
 	 * adding possible packet pulls in the VXLAN logic.  I believe it is spurious but the verifier is
 	 * not clever enough to spot that we'd have already bailed out if one of the pulls failed. */
 	if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
-		DENY_REASON(ctx, CALI_REASON_SHORT);
+		deny_reason(ctx, CALI_REASON_SHORT);
 		CALI_DEBUG("Too short\n");
 		goto deny;
 	}
@@ -484,7 +469,7 @@ syn_force_policy:
 		CALI_DEBUG("Source IP is local host.\n");
 		if (CALI_F_TO_HEP && is_failsafe_out(ctx->state->ip_proto, ctx->state->post_nat_dport, ctx->state->post_nat_ip_dst)) {
 			CALI_DEBUG("Outbound failsafe port: %d. Skip policy.\n", ctx->state->post_nat_dport);
-			COUNTER_INC(ctx, CALI_REASON_ACCEPTED_BY_FAILSAFE);
+			counter_inc(ctx, CALI_REASON_ACCEPTED_BY_FAILSAFE);
 			goto skip_policy;
 		}
 		ctx->state->flags |= CALI_ST_SRC_IS_HOST;
@@ -511,7 +496,7 @@ syn_force_policy:
 		CALI_DEBUG("Post-NAT dest IP is local host.\n");
 		if (CALI_F_FROM_HEP && is_failsafe_in(ctx->state->ip_proto, ctx->state->post_nat_dport, ctx->state->ip_src)) {
 			CALI_DEBUG("Inbound failsafe port: %d. Skip policy.\n", ctx->state->post_nat_dport);
-			COUNTER_INC(ctx, CALI_REASON_ACCEPTED_BY_FAILSAFE);
+			counter_inc(ctx, CALI_REASON_ACCEPTED_BY_FAILSAFE);
 			goto skip_policy;
 		}
 		ctx->state->flags |= CALI_ST_DEST_IS_HOST;
@@ -577,7 +562,6 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 	 * we use to pass data from one program to the next via tail calls. */
 	struct cali_tc_ctx ctx = {
 		.state = state_get(),
-		.counters = counters_get(),
 		.skb = skb,
 		.fwd = {
 			.res = TC_ACT_UNSPEC,
@@ -591,15 +575,8 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 		return TC_ACT_SHOT;
 	}
 
-	if (!ctx.counters) {
-		CALI_DEBUG("Counters map lookup failed: DROP\n");
-		// We don't want to drop packets just because counters initialization fails, but
-		// failing here normally should not happen.
-		return TC_ACT_SHOT;
-	}
-
 	if (!(ctx.state->flags & CALI_ST_SKIP_POLICY)) {
-		COUNTER_INC(&ctx, CALI_REASON_ACCEPTED_BY_POLICY);
+		counter_inc(&ctx, CALI_REASON_ACCEPTED_BY_POLICY);
 	}
 
 	if (CALI_F_HEP) {
@@ -611,7 +588,7 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 	}
 
 	if (skb_refresh_validate_ptrs(&ctx, UDP_SIZE)) {
-		DENY_REASON(&ctx, CALI_REASON_SHORT);
+		deny_reason(&ctx, CALI_REASON_SHORT);
 		CALI_DEBUG("Too short\n");
 		goto deny;
 	}
@@ -720,7 +697,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 				int res = bpf_l3_csum_replace(skb, l3_csum_off,
 						state->ip_src, state->ct_result.nat_ip, 4);
 				if (res) {
-					DENY_REASON(ctx, CALI_REASON_CSUM_FAIL);
+					deny_reason(ctx, CALI_REASON_CSUM_FAIL);
 					goto deny;
 				}
 				CALI_DEBUG("ICMP related: outer IP SNAT to %x\n",
@@ -730,7 +707,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 			/* Related ICMP traffic must be an error response so it should include inner IP
 			 * and 8 bytes as payload. */
 			if (skb_refresh_validate_ptrs(ctx, ICMP_SIZE + sizeof(struct iphdr) + 8)) {
-				DENY_REASON(ctx, CALI_REASON_SHORT);
+				deny_reason(ctx, CALI_REASON_SHORT);
 				CALI_DEBUG("Failed to revalidate packet size\n");
 				goto deny;
 			}
@@ -742,7 +719,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 			ctx->ip_header = (void *)(icmp_hdr(ctx) + 1); /* skip to inner ip */
 			if (ip_hdr(ctx)->ihl != 5) {
 				CALI_INFO("ICMP inner IP header has options; unsupported\n");
-				DENY_REASON(ctx, CALI_REASON_IP_OPTIONS);
+				deny_reason(ctx, CALI_REASON_IP_OPTIONS);
 				ctx->fwd.res = TC_ACT_SHOT;
 				goto deny;
 			}
@@ -856,9 +833,20 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 			ct_ctx_nat.flags |= CALI_CT_FLAG_VIA_NAT_IF;
 		}
 
+		/* If we just received the first packet for a NP forwarded from a
+		 * different node via a tunnel and we are in DSR mode and there are optout
+		 * CIDRs from DSR, we need to make a check if this client also opted out
+		 * and save the information in conntrack.
+		 */
+		if (CALI_F_FROM_HEP && CALI_F_DSR && (GLOBAL_FLAGS & CALI_GLOBALS_NO_DSR_CIDRS)) {
+			if (state->tun_ip && cali_rt_lookup_flags(state->ip_src) & CALI_RT_NO_DSR) {
+				ct_ctx_nat.flags |= CALI_CT_FLAG_NP_NO_DSR;
+			}
+		}
+
 		if (state->ip_proto == IPPROTO_TCP) {
 			if (skb_refresh_validate_ptrs(ctx, TCP_SIZE)) {
-				DENY_REASON(ctx, CALI_REASON_SHORT);
+				deny_reason(ctx, CALI_REASON_SHORT);
 				CALI_DEBUG("Too short for TCP: DROP\n");
 				goto deny;
 			}
@@ -943,7 +931,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 				 */
 				rt = cali_rt_lookup(state->post_nat_ip_dst);
 				if (!rt) {
-					DENY_REASON(ctx, CALI_REASON_RT_UNKNOWN);
+					deny_reason(ctx, CALI_REASON_RT_UNKNOWN);
 					goto deny;
 				}
 				CALI_DEBUG("rt found for 0x%x local %d\n",
@@ -953,7 +941,8 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 				if (encap_needed) {
 					if (CALI_F_FROM_HEP && state->tun_ip == 0) {
 						if (CALI_F_DSR) {
-							ct_ctx_nat.flags |= CALI_CT_FLAG_DSR_FWD;
+							ct_ctx_nat.flags |= CALI_CT_FLAG_DSR_FWD |
+								(state->ct_result.flags & CALI_CT_FLAG_NP_NO_DSR);
 						}
 						ct_ctx_nat.flags |= CALI_CT_FLAG_NP_FWD;
 					}
@@ -1061,7 +1050,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 		}
 
 		if (res) {
-			DENY_REASON(ctx, CALI_REASON_CSUM_FAIL);
+			deny_reason(ctx, CALI_REASON_CSUM_FAIL);
 			goto deny;
 		}
 
@@ -1074,7 +1063,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 		 */
 		if (ct_related && state->ip_proto == IPPROTO_ICMP
 				&& state->ct_result.tun_ip
-				&& !CALI_F_DSR) {
+				&& (!CALI_F_DSR || (state->ct_result.flags & CALI_CT_FLAG_NP_NO_DSR))) {
 			if (dnat_return_should_encap()) {
 				CALI_DEBUG("Returning related ICMP from workload to tunnel\n");
 			} else if (CALI_F_TO_HEP) {
@@ -1105,7 +1094,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 				bpf_ntohl(state->ct_result.nat_ip), state->ct_result.nat_port);
 
 		if (dnat_return_should_encap() && state->ct_result.tun_ip) {
-			if (CALI_F_DSR) {
+			if (CALI_F_DSR && !(state->ct_result.flags & CALI_CT_FLAG_NP_NO_DSR)) {
 				/* SNAT will be done after routing, when leaving HEP */
 				CALI_DEBUG("DSR enabled, skipping SNAT + encap\n");
 				goto allow;
@@ -1163,7 +1152,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 		res |= csum_rc;
 
 		if (res) {
-			DENY_REASON(ctx, CALI_REASON_CSUM_FAIL);
+			deny_reason(ctx, CALI_REASON_CSUM_FAIL);
 			goto deny;
 		}
 
@@ -1260,7 +1249,7 @@ nat_encap:
 			/* Don't drop it yet, we might get lucky and the MAC is correct */
 		} else {
 			if (skb_refresh_validate_ptrs(ctx, 0)) {
-				DENY_REASON(ctx, CALI_REASON_SHORT);
+				deny_reason(ctx, CALI_REASON_SHORT);
 				CALI_DEBUG("Too short\n");
 				goto deny;
 			}
@@ -1274,7 +1263,7 @@ nat_encap:
 	}
 
 	if (vxlan_v4_encap(ctx, state->ip_src, state->ip_dst)) {
-		DENY_REASON(ctx, CALI_REASON_ENCAP_FAIL);
+		deny_reason(ctx, CALI_REASON_ENCAP_FAIL);
 		goto  deny;
 	}
 
@@ -1351,7 +1340,6 @@ int calico_tc_skb_send_icmp_replies(struct __sk_buff *skb)
 	 * we use to pass data from one program to the next via tail calls. */
 	struct cali_tc_ctx ctx = {
 		.state = state_get(),
-		.counters = counters_get(),
 		.skb = skb,
 		.fwd = {
 			.res = TC_ACT_UNSPEC,
@@ -1361,13 +1349,6 @@ int calico_tc_skb_send_icmp_replies(struct __sk_buff *skb)
 	};
 	if (!ctx.state) {
 		CALI_DEBUG("State map lookup failed: DROP\n");
-		return TC_ACT_SHOT;
-	}
-
-	if (!ctx.counters) {
-		CALI_DEBUG("Counters map lookup failed: DROP\n");
-		// We don't want to drop packets just because counters initialization fails, but
-		// failing here normally should not happen.
 		return TC_ACT_SHOT;
 	}
 
@@ -1391,7 +1372,7 @@ int calico_tc_skb_send_icmp_replies(struct __sk_buff *skb)
 	}
 
 	if (skb_refresh_validate_ptrs(&ctx, ICMP_SIZE)) {
-		DENY_REASON(&ctx, CALI_REASON_SHORT);
+		deny_reason(&ctx, CALI_REASON_SHORT);
 		CALI_DEBUG("Too short\n");
 		goto deny;
 	}
@@ -1412,7 +1393,6 @@ int calico_tc_host_ct_conflict(struct __sk_buff *skb)
 	 * we use to pass data from one program to the next via tail calls. */
 	struct cali_tc_ctx ctx = {
 		.state = state_get(),
-		.counters = counters_get(),
 		.skb = skb,
 		.fwd = {
 			.res = TC_ACT_UNSPEC,
@@ -1428,13 +1408,8 @@ int calico_tc_host_ct_conflict(struct __sk_buff *skb)
 		goto deny;
 	}
 
-	if (!ctx.counters) {
-		CALI_DEBUG("Counters map lookup failed: DROP\n");
-		return TC_ACT_SHOT;
-	}
-
 	if (skb_refresh_validate_ptrs(&ctx, UDP_SIZE)) {
-		DENY_REASON(&ctx, CALI_REASON_SHORT);
+		deny_reason(&ctx, CALI_REASON_SHORT);
 		CALI_DEBUG("Too short\n");
 		goto deny;
 	}
@@ -1484,8 +1459,8 @@ int calico_tc_skb_drop(struct __sk_buff *skb)
 {
 	CALI_DEBUG("Entering calico_tc_skb_drop\n");
 	struct cali_tc_ctx ctx = {
+		.skb = skb,
 		.state = state_get(),
-		.counters = counters_get(),
 		.ipheader_len = IP_SIZE,
 	};
 
@@ -1494,12 +1469,8 @@ int calico_tc_skb_drop(struct __sk_buff *skb)
 		return TC_ACT_SHOT;
 	}
 
-	if (!ctx.counters) {
-		CALI_DEBUG("Counters map lookup failed: DROP\n");
-		return TC_ACT_SHOT;
-	}
 	update_rule_counters(ctx.state);
-	COUNTER_INC(&ctx, CALI_REASON_DROPPED_BY_POLICY);
+	counter_inc(&ctx, CALI_REASON_DROPPED_BY_POLICY);
 
 	CALI_DEBUG("proto=%d\n", ctx.state->ip_proto);
 	CALI_DEBUG("src=%x dst=%x\n", bpf_ntohl(ctx.state->ip_src),

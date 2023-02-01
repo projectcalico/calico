@@ -33,6 +33,7 @@ import (
 	"github.com/projectcalico/calico/felix/logutils"
 
 	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/bpf/bpfmap"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	"github.com/projectcalico/calico/felix/bpf/counters"
 	"github.com/projectcalico/calico/felix/bpf/ifstate"
@@ -184,11 +185,12 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		ipSetIDAllocator     *idalloc.IDAllocator
 		vxlanMTU             int
 		nodePortDSR          bool
-		bpfMapContext        *bpf.MapContext
+		maps                 *bpfmap.Maps
 		rrConfigNormal       rules.Config
 		ruleRenderer         rules.RuleRenderer
 		filterTableV4        iptablesTable
 		ifStateMap           *mock.Map
+		countersMap          *mock.Map
 	)
 
 	BeforeEach(func() {
@@ -199,15 +201,21 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		ipSetIDAllocator = idalloc.New()
 		vxlanMTU = 0
 		nodePortDSR = true
-		bpfMapContext = &bpf.MapContext{
-			RepinningEnabled: true,
-		}
-		bpfMapContext.IpsetsMap = bpfipsets.Map(bpfMapContext)
-		bpfMapContext.StateMap = state.Map(bpfMapContext)
-		bpfMapContext.CtMap = conntrack.Map(bpfMapContext)
+
+		bpf.EnableRepin()
+
+		maps = new(bpfmap.Maps)
+
+		maps.IpsetsMap = bpfipsets.Map()
+		maps.StateMap = state.Map()
+		maps.CtMap = conntrack.Map()
 		ifStateMap = mock.NewMockMap(ifstate.MapParams)
-		bpfMapContext.IfStateMap = ifStateMap
-		bpfMapContext.RuleCountersMap = mock.NewMockMap(counters.PolicyMapParameters)
+		maps.IfStateMap = ifStateMap
+		cparams := counters.MapParameters
+		cparams.ValueSize *= bpf.NumPossibleCPUs()
+		countersMap = mock.NewMockMap(cparams)
+		maps.CountersMap = countersMap
+		maps.RuleCountersMap = mock.NewMockMap(counters.PolicyMapParameters)
 		rrConfigNormal = rules.Config{
 			IPIPEnabled:                 true,
 			IPIPTunnelAddress:           nil,
@@ -226,6 +234,10 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		}
 		ruleRenderer = rules.NewRenderer(rrConfigNormal)
 		filterTableV4 = newMockTable("filter")
+	})
+
+	AfterEach(func() {
+		bpf.DisableRepin()
 	})
 
 	newBpfEpMgr := func() {
@@ -247,7 +259,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 				},
 				BPFPolicyDebugEnabled: true,
 			},
-			bpfMapContext,
+			maps,
 			fibLookupEnabled,
 			regexp.MustCompile(workloadIfaceRegex),
 			ipSetIDAllocator,
@@ -626,7 +638,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			egrRuleMatchId := bpfEpMgr.dp.ruleMatchID("Egress", "Allow", "Policy", "allowPol", 0)
 			k := make([]byte, 8)
 			v := make([]byte, 8)
-			rcMap := bpfEpMgr.bpfMapContext.RuleCountersMap
+			rcMap := bpfEpMgr.maps.RuleCountersMap
 
 			// create a new policy
 			bpfEpMgr.OnUpdate(&proto.ActivePolicyUpdate{
@@ -692,7 +704,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			egrRuleMatchId := bpfEpMgr.dp.ruleMatchID("Egress", "Allow", "Policy", "allowPol", 0)
 			k := make([]byte, 8)
 			v := make([]byte, 8)
-			rcMap := bpfEpMgr.bpfMapContext.RuleCountersMap
+			rcMap := bpfEpMgr.maps.RuleCountersMap
 
 			binary.LittleEndian.PutUint64(k, ingRuleMatchId)
 			binary.LittleEndian.PutUint64(v, uint64(10))
@@ -788,6 +800,32 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			err = bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(dp.routes).To(HaveLen(0))
+		})
+	})
+
+	Describe("counters", func() {
+		It("should clean up after restart", func() {
+			err := counters.EnsureExists(countersMap, 12345, bpf.HookEgress)
+			Expect(err).NotTo(HaveOccurred())
+			err = counters.EnsureExists(countersMap, 12345, bpf.HookIngress)
+			Expect(err).NotTo(HaveOccurred())
+			err = counters.EnsureExists(countersMap, 12345, bpf.HookXDP)
+			Expect(err).NotTo(HaveOccurred())
+			err = counters.EnsureExists(countersMap, 54321, bpf.HookEgress)
+			Expect(err).NotTo(HaveOccurred())
+			err = counters.EnsureExists(countersMap, 54321, bpf.HookIngress)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(countersMap.Contents).To(HaveLen(5))
+
+			genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
+			genWLUpdate("cali12345")()
+
+			err = bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(countersMap.Contents).To(HaveLen(0))
+			// The BPF programs will create the counters the first time they
 		})
 	})
 

@@ -47,6 +47,7 @@ generate:
 	$(MAKE) -C api gen-files
 	$(MAKE) -C libcalico-go gen-files
 	$(MAKE) -C felix gen-files
+	$(MAKE) -C calicoctl gen-crds
 	$(MAKE) -C app-policy protobuf
 	$(MAKE) gen-manifests
 
@@ -123,6 +124,11 @@ helm-index:
 			     SEMAPHORE_WORKFLOW_BRANCH=master \
 			     SEMAPHORE_WORKFLOW_FILE=../releases/calico/helmindex/update_helm.yml \
 			     $(MAKE) semaphore-run-workflow
+
+# Creates the tar file used for installing Calico on OpenShift.
+bin/ocp.tgz: manifests/ocp/
+	mkdir -p bin
+	tar czvf $@ -C manifests/ ocp
 
 ## Generates release notes for the given version.
 .PHONY: release-notes

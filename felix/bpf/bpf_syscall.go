@@ -207,6 +207,10 @@ func PinBPFProgram(fd ProgFD, filename string) error {
 }
 
 func UpdateMapEntry(mapFD MapFD, k, v []byte) error {
+	return UpdateMapEntryWithFlags(mapFD, k, v, unix.BPF_ANY)
+}
+
+func UpdateMapEntryWithFlags(mapFD MapFD, k, v []byte, flags int) error {
 	log.Debugf("UpdateMapEntry(%v, %v, %v)", mapFD, k, v)
 
 	err := checkMapIfDebug(mapFD, len(k), len(v))
@@ -222,7 +226,7 @@ func UpdateMapEntry(mapFD MapFD, k, v []byte) error {
 	cV := C.CBytes(v)
 	defer C.free(cV)
 
-	C.bpf_attr_setup_map_elem(bpfAttr, C.uint(mapFD), cK, cV, unix.BPF_ANY)
+	C.bpf_attr_setup_map_elem(bpfAttr, C.uint(mapFD), cK, cV, C.ulonglong(flags))
 
 	_, _, errno := unix.Syscall(unix.SYS_BPF, unix.BPF_MAP_UPDATE_ELEM, uintptr(unsafe.Pointer(bpfAttr)), C.sizeof_union_bpf_attr)
 
@@ -260,7 +264,7 @@ func checkMapIfDebug(mapFD MapFD, keySize, valueSize int) error {
 		log.WithError(err).Error("Failed to read map information")
 		return err
 	}
-	log.WithField("mapInfo", mapInfo).Debug("Map metadata")
+	log.WithField("fd", mapFD).WithField("mapInfo", mapInfo).Debug("Map metadata")
 	if keySize != mapInfo.KeySize {
 		log.WithField("mapInfo", mapInfo).WithField("keyLen", keySize).Panic("Incorrect key length")
 	}

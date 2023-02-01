@@ -27,7 +27,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
 	"os/exec"
@@ -51,12 +50,41 @@ import (
 
 // Hook is the hook to which a BPF program should be attached. This is relative to
 // the host namespace so workload PolDirnIngress policy is attached to the HookEgress.
-type Hook string
+type Hook int
+
+func (h Hook) String() string {
+	switch h {
+	case HookIngress:
+		return "ingress"
+	case HookEgress:
+		return "egress"
+	case HookXDP:
+		return "xdp"
+	}
+
+	return "unknown"
+}
+
+func StringToHook(s string) Hook {
+	switch s {
+	case "ingress":
+		return HookIngress
+	case "egress":
+		return HookEgress
+	case "xdp":
+		return HookXDP
+	}
+
+	return HookBad
+}
 
 const (
-	HookIngress Hook = "ingress"
-	HookEgress  Hook = "egress"
-	HookXDP     Hook = "xdp"
+	HookIngress Hook = iota
+	HookEgress
+	HookXDP
+	HookCount
+
+	HookBad Hook = -1
 )
 
 var Hooks = []Hook{HookIngress, HookEgress, HookXDP}
@@ -96,6 +124,8 @@ const (
 
 	DefaultBPFfsPath = "/sys/fs/bpf"
 	CgroupV2Path     = "/run/calico/cgroup"
+
+	GlobalPinDir = DefaultBPFfsPath + "/tc/globals/"
 )
 
 var (
@@ -471,7 +501,7 @@ func (b *BPFLib) NewCIDRMap(ifName string, family IPFamily) (string, error) {
 
 func (b *BPFLib) ListCIDRMaps(family IPFamily) ([]string, error) {
 	var ifNames []string
-	maps, err := ioutil.ReadDir(b.xdpDir)
+	maps, err := os.ReadDir(b.xdpDir)
 	if err != nil {
 		return nil, err
 	}
@@ -2290,33 +2320,26 @@ func PolicyDebugJSONFileName(iface, polDir string, ipFamily proto.IPVersion) str
 	return path.Join(RuntimePolDir, fmt.Sprintf("%s_%s_v%d.json", iface, polDir, ipFamily))
 }
 
-const countersMapVersion = 1
-
-func CountersMapName() string {
-	return fmt.Sprintf("cali_counters%d", countersMapVersion)
-}
-
-func MapPinPath(typ int, name, iface string, hook Hook) string {
+func MapPinDir(typ int, name, iface string, hook Hook) string {
 	PinBaseDir := path.Join(DefaultBPFfsPath, "tc")
 	subDir := "globals"
 	// We need one jump map and one counter map for each program, thus we need to pin those
 	// to a unique path, which is /sys/fs/bpf/tc/[iface]_[igr|egr|xdp]/[map_name].
-	if (typ == unix.BPF_MAP_TYPE_PROG_ARRAY && strings.Contains(name, JumpMapName())) ||
-		(typ == unix.BPF_MAP_TYPE_PERCPU_ARRAY && strings.Contains(name, CountersMapName())) {
+	if typ == unix.BPF_MAP_TYPE_PROG_ARRAY && strings.Contains(name, JumpMapName()) {
 		// Remove period in the interface name if any
 		ifName := strings.ReplaceAll(iface, ".", "")
 		switch hook {
 		case HookXDP:
 			subDir = ifName + "_xdp"
 		case HookIngress:
-			subDir = ifName + "_igr/"
+			subDir = ifName + "_igr"
 		case HookEgress:
 			subDir = ifName + "_egr"
 		default:
 			panic("Invalid hook")
 		}
 	}
-	return path.Join(PinBaseDir, subDir, name)
+	return path.Join(PinBaseDir, subDir)
 }
 
 type TcList []struct {
@@ -2358,8 +2381,10 @@ func ListPerEPMaps() (map[int]string, error) {
 		if err != nil {
 			return err
 		}
-		if strings.HasPrefix(info.Name(), JumpMapName()) ||
-			strings.HasPrefix(info.Name(), CountersMapName()) {
+		if strings.Contains(p, "globals") {
+			return nil
+		}
+		if strings.HasPrefix(info.Name(), JumpMapName()) {
 			log.WithField("path", p).Debug("Examining map")
 
 			out, err := exec.Command("bpftool", "map", "show", "pinned", p).Output()

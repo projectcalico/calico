@@ -19,7 +19,6 @@ import (
 	"net"
 	"testing"
 
-	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/failsafes"
 	"github.com/projectcalico/calico/felix/bpf/polprog"
 	"github.com/projectcalico/calico/felix/proto"
@@ -28,17 +27,6 @@ import (
 	"github.com/google/gopacket/layers"
 	. "github.com/onsi/gomega"
 )
-
-func MapForTest(mc *bpf.MapContext) bpf.Map {
-	return mc.NewPinnedMap(bpf.MapParameters{
-		Filename:   "/sys/fs/bpf/cali_jump_xdp",
-		Type:       "prog_array",
-		KeySize:    4,
-		ValueSize:  4,
-		MaxEntries: 16,
-		Name:       bpf.JumpMapName(),
-	})
-}
 
 const (
 	TOS_BYTE   = 15
@@ -248,7 +236,10 @@ func TestXDPPrograms(t *testing.T) {
 	)
 	Expect(err).NotTo(HaveOccurred())
 
-	for _, tc := range xdpTestCases {
+	defer func() { bpfIfaceName = "" }()
+
+	for i, tc := range xdpTestCases {
+		bpfIfaceName = fmt.Sprintf("XDP-%d", i)
 		runBpfTest(t, "xdp_calico_entrypoint", tc.Rules, func(bpfrun bpfProgRunFn) {
 			_, _, _, _, pktBytes, err := testPacket(nil, tc.IPv4Header, tc.NextHeader, nil)
 			Expect(err).NotTo(HaveOccurred())

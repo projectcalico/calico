@@ -45,6 +45,7 @@ type AttachPoint struct {
 	FIB                  bool
 	ToHostDrop           bool
 	DSR                  bool
+	DSROptoutCIDRs       bool
 	TunnelMTU            uint16
 	VXLANPort            uint16
 	WgPort               uint16
@@ -52,8 +53,7 @@ type AttachPoint struct {
 	PSNATStart           uint16
 	PSNATEnd             uint16
 	IPv6Enabled          bool
-	MapSizes             map[string]uint32
-	RPFStrictEnabled     bool
+	RPFEnforceOption     uint8
 	NATin                uint32
 	NATout               uint32
 }
@@ -116,8 +116,8 @@ func (ap *AttachPoint) loadObject(ipVer int, file string) (*libbpf.Obj, error) {
 		if err := ap.setMapSize(m); err != nil {
 			return nil, fmt.Errorf("error setting map size %s : %w", m.Name(), err)
 		}
-		pinPath := bpf.MapPinPath(m.Type(), m.Name(), ap.Iface, ap.Hook)
-		if err := m.SetPinPath(pinPath); err != nil {
+		pinDir := bpf.MapPinDir(m.Type(), m.Name(), ap.Iface, ap.Hook)
+		if err := m.SetPinPath(path.Join(pinDir, m.Name())); err != nil {
 			return nil, fmt.Errorf("error pinning map %s: %w", m.Name(), err)
 		}
 	}
@@ -172,7 +172,7 @@ func (ap *AttachPoint) AttachProgram() (int, error) {
 		defer obj.Close()
 	}
 
-	progId, err := obj.AttachClassifier(SectionName(ap.Type, ap.ToOrFrom), ap.Iface, string(ap.Hook))
+	progId, err := obj.AttachClassifier(SectionName(ap.Type, ap.ToOrFrom), ap.Iface, ap.Hook == bpf.HookIngress)
 	if err != nil {
 		logCxt.Warnf("Failed to attach to TC section %s", SectionName(ap.Type, ap.ToOrFrom))
 		return -1, err
@@ -208,7 +208,7 @@ func (ap *AttachPoint) detachPrograms(progsToClean []attachedProg) error {
 	for _, p := range progsToClean {
 		log.WithField("prog", p).Debug("Cleaning up old calico program")
 		attemptCleanup := func() error {
-			_, err := ExecTC("filter", "del", "dev", ap.Iface, string(ap.Hook), "pref", p.pref, "handle", p.handle, "bpf")
+			_, err := ExecTC("filter", "del", "dev", ap.Iface, ap.Hook.String(), "pref", p.pref, "handle", p.handle, "bpf")
 			return err
 		}
 		err := attemptCleanup()
@@ -285,7 +285,7 @@ type attachedProg struct {
 }
 
 func (ap *AttachPoint) listAttachedPrograms() ([]attachedProg, error) {
-	out, err := ExecTC("filter", "show", "dev", ap.Iface, string(ap.Hook))
+	out, err := ExecTC("filter", "show", "dev", ap.Iface, ap.Hook.String())
 	if err != nil {
 		return nil, fmt.Errorf("failed to list tc filters on interface: %w", err)
 	}
@@ -319,7 +319,7 @@ var ErrNoTC = errors.New("no TC program attached")
 // TODO: we should try to not get the program ID via 'tc' binary and rather
 // we should use libbpf to obtain it.
 func (ap *AttachPoint) ProgramID() (int, error) {
-	out, err := ExecTC("filter", "show", "dev", ap.IfaceName(), string(ap.Hook))
+	out, err := ExecTC("filter", "show", "dev", ap.IfaceName(), ap.Hook.String())
 	if err != nil {
 		return -1, fmt.Errorf("Failed to check interface %s program ID: %w", ap.Iface, err)
 	}
@@ -397,10 +397,10 @@ func RemoveQdisc(ifaceName string) error {
 	}
 
 	// Remove the json files of the programs attached to the interface for both directions
-	if err = bpf.ForgetAttachedProg(ifaceName, "ingress"); err != nil {
+	if err = bpf.ForgetAttachedProg(ifaceName, bpf.HookIngress); err != nil {
 		return fmt.Errorf("Failed to remove runtime json file of ingress direction: %w", err)
 	}
-	if err = bpf.ForgetAttachedProg(ifaceName, "egress"); err != nil {
+	if err = bpf.ForgetAttachedProg(ifaceName, bpf.HookEgress); err != nil {
 		return fmt.Errorf("Failed to remove runtime json file of egress direction: %w", err)
 	}
 
@@ -410,7 +410,7 @@ func RemoveQdisc(ifaceName string) error {
 // Return a key that uniquely identifies this attach point, amongst all of the possible attach
 // points associated with a single given interface.
 func (ap *AttachPoint) JumpMapFDMapKey() string {
-	return string(ap.Hook)
+	return ap.Hook.String()
 }
 
 func (ap *AttachPoint) IfaceName() string {
@@ -452,8 +452,17 @@ func (ap *AttachPoint) ConfigureProgram(m *libbpf.Map) error {
 	if ap.IPv6Enabled {
 		globalData.Flags |= libbpf.GlobalsIPv6Enabled
 	}
-	if ap.RPFStrictEnabled {
-		globalData.Flags |= libbpf.GlobalsRPFStrictEnabled
+
+	if ap.DSROptoutCIDRs {
+		globalData.Flags |= libbpf.GlobalsNoDSRCidrs
+	}
+
+	switch ap.RPFEnforceOption {
+	case tcdefs.RPFEnforceOptionStrict:
+		globalData.Flags |= libbpf.GlobalsRPFOptionEnabled
+		globalData.Flags |= libbpf.GlobalsRPFOptionStrict
+	case tcdefs.RPFEnforceOptionLoose:
+		globalData.Flags |= libbpf.GlobalsRPFOptionEnabled
 	}
 
 	globalData.HostTunnelIP = globalData.HostIP
@@ -465,15 +474,19 @@ func (ap *AttachPoint) ConfigureProgram(m *libbpf.Map) error {
 		}
 	}
 
+	return ConfigureProgram(m, ap.Iface, &globalData)
+}
+
+func ConfigureProgram(m *libbpf.Map, iface string, globalData *libbpf.TcGlobalData) error {
 	in := []byte("---------------")
-	copy(in, ap.Iface)
+	copy(in, iface)
 	globalData.IfaceName = string(in)
 
-	return libbpf.TcSetGlobals(m, &globalData)
+	return libbpf.TcSetGlobals(m, globalData)
 }
 
 func (ap *AttachPoint) setMapSize(m *libbpf.Map) error {
-	if size, ok := ap.MapSizes[m.Name()]; ok {
+	if size := bpf.MapSize(m.Name()); size != 0 {
 		return m.SetMapSize(size)
 	}
 	return nil
@@ -503,18 +516,23 @@ func (ap *AttachPoint) updateJumpMap(ipVer int, obj *libbpf.Obj) error {
 		ipVersion = "IPv6"
 	}
 
+	return UpdateJumpMap(obj, tcdefs.JumpMapIndexes[ipVersion], ap.hasPolicyProg(), ap.hasHostConflictProg())
+}
+
+func UpdateJumpMap(obj *libbpf.Obj, progs []int, hasPolicyProg, hasHostConflictProg bool) error {
 	mapName := bpf.JumpMapName()
 
-	for _, idx := range tcdefs.JumpMapIndexes[ipVersion] {
-		if (idx == tcdefs.ProgIndexPolicy || idx == tcdefs.ProgIndexV6Policy) && !ap.hasPolicyProg() {
+	for _, idx := range progs {
+		if (idx == tcdefs.ProgIndexPolicy || idx == tcdefs.ProgIndexV6Policy) && !hasPolicyProg {
 			continue
 		}
-		if idx == tcdefs.ProgIndexHostCtConflict && !ap.hasHostConflictProg() {
+		if idx == tcdefs.ProgIndexHostCtConflict && !hasHostConflictProg {
 			continue
 		}
+		log.WithField("prog", tcdefs.ProgramNames[idx]).Debug("UpdateJumpMap")
 		err := obj.UpdateJumpMap(mapName, tcdefs.ProgramNames[idx], idx)
 		if err != nil {
-			return fmt.Errorf("error updating %v %s program: %w", ipVersion, tcdefs.ProgramNames[idx], err)
+			return fmt.Errorf("error updating %s program: %w", tcdefs.ProgramNames[idx], err)
 		}
 	}
 

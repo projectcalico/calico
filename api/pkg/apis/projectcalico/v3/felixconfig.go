@@ -381,6 +381,10 @@ type FelixConfigurationSpec struct {
 	// is sent directly from the remote node.  In "DSR" mode, the remote node appears to use the IP of the ingress
 	// node; this requires a permissive L2 network.  [Default: Tunnel]
 	BPFExternalServiceMode string `json:"bpfExternalServiceMode,omitempty" validate:"omitempty,bpfServiceMode"`
+	// BPFDSROptoutCIDRs is a list of CIDRs which are excluded from DSR. That is, clients
+	// in those CIDRs will accesses nodeports as if BPFExternalServiceMode was set to
+	// Tunnel.
+	BPFDSROptoutCIDRs *[]string `json:"bpfDSROptoutCIDRs,omitempty" validate:"omitempty,cidrs"`
 	// BPFExtToServiceConnmark in BPF mode, control a 32bit mark that is set on connections from an
 	// external client to a local service. This mark allows us to control how packets of that
 	// connection are routed within the host and how is routing interpreted by RPF check. [Default: 0]
@@ -428,9 +432,9 @@ type FelixConfigurationSpec struct {
 	// BPFHostConntrackBypass Controls whether to bypass Linux conntrack in BPF mode for
 	// workloads and services. [Default: true - bypass Linux conntrack]
 	BPFHostConntrackBypass *bool `json:"bpfHostConntrackBypass,omitempty"`
-	// BPFEnforceRPF enforce strict RPF on all interfaces with BPF programs regardless of
-	// what is the per-interfaces or global setting. Possible values are Disabled or
-	// Strict. [Default: Strict]
+	// BPFEnforceRPF enforce strict RPF on all host interfaces with BPF programs regardless of
+	// what is the per-interfaces or global setting. Possible values are Disabled, Strict
+	// or Loose. [Default: Strict]
 	BPFEnforceRPF string `json:"bpfEnforceRPF,omitempty"`
 	// BPFPolicyDebugEnabled when true, Felix records detailed information
 	// about the BPF policy programs, which can be examined with the calico-bpf command-line tool.

@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"strconv"
 	"sync"
@@ -98,7 +97,7 @@ var _ = Describe("Daemon", func() {
 
 		BeforeEach(func() {
 			var err error
-			configFile, err = ioutil.TempFile("", "typha")
+			configFile, err = os.CreateTemp("", "typha")
 			Expect(err).NotTo(HaveOccurred())
 
 			_, err = configFile.Write(configContents)
@@ -167,7 +166,7 @@ var _ = Describe("Daemon", func() {
 				addr := fmt.Sprintf("127.0.0.1:%d", port)
 				cbs := fvtests.NewRecorder()
 				client := syncclient.New(
-					[]discovery.Typha{{Addr: addr}},
+					discovery.New(discovery.WithAddrOverride(addr)),
 					"",
 					"",
 					"",

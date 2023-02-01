@@ -29,6 +29,7 @@ enum cali_rt_flags {
 	CALI_RT_HOST        = 0x10,
 	CALI_RT_SAME_SUBNET = 0x20,
 	CALI_RT_TUNNELED    = 0x40,
+	CALI_RT_NO_DSR      = 0x80,
 };
 
 struct cali_rt {
@@ -44,7 +45,7 @@ struct cali_rt {
 CALI_MAP_V1(cali_v4_routes,
 		BPF_MAP_TYPE_LPM_TRIE,
 		union cali_rt_lpm_key, struct cali_rt,
-		256*1024, BPF_F_NO_PREALLOC, MAP_PIN_GLOBAL)
+		256*1024, BPF_F_NO_PREALLOC)
 
 static CALI_BPF_INLINE struct cali_rt *cali_rt_lookup(__be32 addr)
 {

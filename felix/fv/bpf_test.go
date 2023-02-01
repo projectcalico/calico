@@ -182,6 +182,35 @@ FELIX_1_TNL/32: remote host in-pool nat-out tunneled
 FELIX_2/32: remote host
 FELIX_2_TNL/32: remote host in-pool nat-out tunneled`
 
+const expectedRouteDumpDSR = `10.65.0.0/16: remote in-pool nat-out
+10.65.0.2/32: local workload in-pool nat-out idx -
+10.65.0.3/32: local workload in-pool nat-out idx -
+10.65.1.0/26: remote workload in-pool nat-out nh FELIX_1
+10.65.2.0/26: remote workload in-pool nat-out nh FELIX_2
+111.222.0.1/32: local host
+111.222.1.1/32: remote host
+111.222.2.1/32: remote host
+245.245.0.0/16: remote no-dsr
+FELIX_0/32: local host
+FELIX_1/32: remote host
+FELIX_2/32: remote host`
+
+const expectedRouteDumpWithTunnelAddrDSR = `10.65.0.0/16: remote in-pool nat-out
+10.65.0.2/32: local workload in-pool nat-out idx -
+10.65.0.3/32: local workload in-pool nat-out idx -
+10.65.1.0/26: remote workload in-pool nat-out tunneled nh FELIX_1
+10.65.2.0/26: remote workload in-pool nat-out tunneled nh FELIX_2
+111.222.0.1/32: local host
+111.222.1.1/32: remote host
+111.222.2.1/32: remote host
+245.245.0.0/16: remote no-dsr
+FELIX_0/32: local host
+FELIX_0_TNL/32: local host
+FELIX_1/32: remote host
+FELIX_1_TNL/32: remote host in-pool nat-out tunneled
+FELIX_2/32: remote host
+FELIX_2_TNL/32: remote host in-pool nat-out tunneled`
+
 const extIP = "10.1.2.3"
 
 func BPFMode() bool {
@@ -261,6 +290,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			}
 
 			options = infrastructure.DefaultTopologyOptions()
+			options.FelixLogSeverity = "Debug"
 			options.NATOutgoingEnabled = true
 			options.AutoHEPsEnabled = true
 			// override IPIP being enabled by default
@@ -294,6 +324,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			}
 			options.ExternalIPs = true
 			options.ExtraEnvVars["FELIX_BPFExtToServiceConnmark"] = "0x80"
+			options.ExtraEnvVars["FELIX_BPFDSROptoutCIDRs"] = "245.245.0.0/16"
 
 			if ctlbWorkaround {
 				if testOpts.protocol == "udp" {
@@ -608,7 +639,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 			if testOpts.protocol != "udp" { // No need to run these tests per-protocol.
 
-				mapPath := conntrack.Map(&bpf.MapContext{}).Path()
+				mapPath := conntrack.Map().Path()
 
 				Describe("with map repinning enabled", func() {
 					BeforeEach(func() {
@@ -955,6 +986,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				tunnelAddrFelix1 := ""
 				tunnelAddrFelix2 := ""
 				expectedRoutes := expectedRouteDump
+				if testOpts.dsr {
+					expectedRoutes = expectedRouteDumpDSR
+				}
 				switch {
 				case felixes[0].ExpectedIPIPTunnelAddr != "":
 					tunnelAddr = felixes[0].ExpectedIPIPTunnelAddr
@@ -972,6 +1006,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 				if tunnelAddr != "" {
 					expectedRoutes = expectedRouteDumpWithTunnelAddr
+					if testOpts.dsr {
+						expectedRoutes = expectedRouteDumpWithTunnelAddrDSR
+					}
 				}
 
 				dumpRoutes := func() string {
@@ -2345,7 +2382,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							Eventually(func() nat.BackendValue {
 								// Remove the affinity entry to emulate timer
 								// expiring / no prior affinity.
-								m := nat.AffinityMap(&bpf.MapContext{})
+								m := nat.AffinityMap()
 								cmd, err := bpf.MapDeleteKeyCmd(m, mkey.AsBytes())
 								Expect(err).NotTo(HaveOccurred())
 								err = felixes[0].ExecMayFail(cmd...)
@@ -2901,9 +2938,18 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								clusterIP := testSvc.Spec.ClusterIP
 								ports := ExpectWithPorts(uint16(testSvc.Spec.Ports[0].Port))
 
+								felixes[0].Exec("sysctl", "-w", "net.ipv6.conf.eth0.disable_ipv6=0")
+								felixes[1].Exec("sysctl", "-w", "net.ipv6.conf.eth0.disable_ipv6=0")
+
 								// Also try host networked pods, both on a local and remote node.
 								cc.Expect(Some, hostW[0], TargetIP(clusterIP), ports, hostW0SrcIP)
 								cc.Expect(Some, hostW[1], TargetIP(clusterIP), ports, hostW1SrcIP)
+
+								if testOpts.protocol == "tcp" {
+									// Also excercise ipv4 as ipv6
+									cc.Expect(Some, hostW[0], TargetIPv4AsIPv6(clusterIP), ports, hostW0SrcIP)
+									cc.Expect(Some, hostW[1], TargetIPv4AsIPv6(clusterIP), ports, hostW1SrcIP)
+								}
 
 								cc.CheckConnectivity()
 							})
@@ -3790,42 +3836,42 @@ func dumpBPFMap(felix *infrastructure.Felix, m bpf.Map, iter bpf.IterCallback) {
 }
 
 func dumpNATMap(felix *infrastructure.Felix) nat.MapMem {
-	bm := nat.FrontendMap(&bpf.MapContext{})
+	bm := nat.FrontendMap()
 	m := make(nat.MapMem)
 	dumpBPFMap(felix, bm, nat.MapMemIter(m))
 	return m
 }
 
 func dumpEPMap(felix *infrastructure.Felix) nat.BackendMapMem {
-	bm := nat.BackendMap(&bpf.MapContext{})
+	bm := nat.BackendMap()
 	m := make(nat.BackendMapMem)
 	dumpBPFMap(felix, bm, nat.BackendMapMemIter(m))
 	return m
 }
 
 func dumpAffMap(felix *infrastructure.Felix) nat.AffinityMapMem {
-	bm := nat.AffinityMap(&bpf.MapContext{})
+	bm := nat.AffinityMap()
 	m := make(nat.AffinityMapMem)
 	dumpBPFMap(felix, bm, nat.AffinityMapMemIter(m))
 	return m
 }
 
 func dumpCTMap(felix *infrastructure.Felix) conntrack.MapMem {
-	bm := conntrack.Map(&bpf.MapContext{})
+	bm := conntrack.Map()
 	m := make(conntrack.MapMem)
 	dumpBPFMap(felix, bm, conntrack.MapMemIter(m))
 	return m
 }
 
 func dumpSendRecvMap(felix *infrastructure.Felix) nat.SendRecvMsgMapMem {
-	bm := nat.SendRecvMsgMap(&bpf.MapContext{})
+	bm := nat.SendRecvMsgMap()
 	m := make(nat.SendRecvMsgMapMem)
 	dumpBPFMap(felix, bm, nat.SendRecvMsgMapMemIter(m))
 	return m
 }
 
 func dumpIfStateMap(felix *infrastructure.Felix) ifstate.MapMem {
-	im := ifstate.Map(&bpf.MapContext{})
+	im := ifstate.Map()
 	m := make(ifstate.MapMem)
 	dumpBPFMap(felix, im, ifstate.MapMemIter(m))
 	return m
@@ -3875,7 +3921,7 @@ func ensureBPFProgramsAttachedOffset(offset int, felix *infrastructure.Felix, if
 			}
 		}
 		return prog
-	}, "20s", "200ms").Should(ContainElements(expectedIfaces))
+	}, "1m", "1s").Should(ContainElements(expectedIfaces))
 }
 
 func k8sService(name, clusterIP string, w *workload.Workload, port,

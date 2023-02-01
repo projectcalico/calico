@@ -1,5 +1,5 @@
 // Project Calico BPF dataplane programs.
-// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2023 Tigera, Inc. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
 #ifndef __CALI_NAT_H__
@@ -86,7 +86,7 @@ static CALI_BPF_INLINE int vxlan_v4_encap(struct cali_tc_ctx *ctx,  __be32 ip_sr
 	ret = -1;
 
 	if (skb_refresh_validate_ptrs(ctx, new_hdrsz)) {
-		DENY_REASON(ctx, CALI_REASON_SHORT);
+		deny_reason(ctx, CALI_REASON_SHORT);
 		CALI_DEBUG("Too short VXLAN encap\n");
 		goto out;
 	}
@@ -145,12 +145,12 @@ static CALI_BPF_INLINE int vxlan_v4_decap(struct __sk_buff *skb)
 	return ret;
 }
 
-static CALI_BPF_INLINE int is_vxlan_tunnel(struct iphdr *ip)
+static CALI_BPF_INLINE int is_vxlan_tunnel(struct iphdr *ip, __u16 vxlanport)
 {
 	struct udphdr *udp = (struct udphdr *)(ip +1);
 
 	return ip->protocol == IPPROTO_UDP &&
-		udp->dest == bpf_htons(VXLAN_PORT);
+		udp->dest == bpf_htons(vxlanport);
 }
 
 static CALI_BPF_INLINE bool vxlan_size_ok(struct cali_tc_ctx *ctx)
@@ -212,7 +212,7 @@ static CALI_BPF_INLINE int vxlan_attempt_decap(struct cali_tc_ctx *ctx) {
 	}
 	if (!vxlan_size_ok(ctx)) {
 		/* UDP header said VXLAN but packet wasn't long enough. */
-		DENY_REASON(ctx, CALI_REASON_SHORT);
+		deny_reason(ctx, CALI_REASON_SHORT);
 		CALI_DEBUG("Too short\n");
 		goto deny;
 	}
@@ -229,13 +229,13 @@ static CALI_BPF_INLINE int vxlan_attempt_decap(struct cali_tc_ctx *ctx) {
 	}
 	if (!rt_addr_is_remote_host(ip_hdr(ctx)->saddr)) {
 		CALI_DEBUG("VXLAN with our VNI from unexpected source.\n");
-		DENY_REASON(ctx, CALI_REASON_UNAUTH_SOURCE);
+		deny_reason(ctx, CALI_REASON_UNAUTH_SOURCE);
 		goto deny;
 	}
 	if (!vxlan_udp_csum_ok(udp_hdr(ctx))) {
 		/* Our VNI but checksum is incorrect (we always use check=0). */
 		CALI_DEBUG("VXLAN with our VNI but incorrect checksum.\n");
-		DENY_REASON(ctx, CALI_REASON_UNAUTH_SOURCE);
+		deny_reason(ctx, CALI_REASON_UNAUTH_SOURCE);
 		goto deny;
 	}
 
@@ -252,13 +252,13 @@ static CALI_BPF_INLINE int vxlan_attempt_decap(struct cali_tc_ctx *ctx) {
 	ctx->state->tun_ip = ip_hdr(ctx)->saddr;
 	CALI_DEBUG("vxlan decap\n");
 	if (vxlan_v4_decap(ctx->skb)) {
-		DENY_REASON(ctx, CALI_REASON_DECAP_FAIL);
+		deny_reason(ctx, CALI_REASON_DECAP_FAIL);
 		goto deny;
 	}
 
 	/* Revalidate the packet after the decap. */
 	if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
-		DENY_REASON(ctx, CALI_REASON_SHORT);
+		deny_reason(ctx, CALI_REASON_SHORT);
 		CALI_DEBUG("Too short\n");
 		goto deny;
 	}

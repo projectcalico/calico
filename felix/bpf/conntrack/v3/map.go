@@ -193,6 +193,7 @@ const (
 	FlagSvcSelf   uint16 = (1 << 10)
 	FlagNPLoop    uint16 = (1 << 11)
 	FlagNPRemote  uint16 = (1 << 12)
+	FlagNoDSR     uint16 = (1 << 13)
 )
 
 func (e Value) ReverseNATKey() Key {
@@ -465,6 +466,10 @@ func (e Value) String() string {
 		if flags&FlagNPRemote != 0 {
 			flagsStr += " np-remote"
 		}
+
+		if flags&FlagNPRemote != 0 {
+			flagsStr += " no-dsr"
+		}
 	}
 
 	ret := fmt.Sprintf("Entry{Type:%d, Created:%d, LastSeen:%d, Flags:%s ",
@@ -491,7 +496,6 @@ func (e Value) Upgrade() bpf.Upgradable {
 }
 
 var MapParams = bpf.MapParameters{
-	Filename:     "/sys/fs/bpf/tc/globals/cali_v4_ct",
 	Type:         "hash",
 	KeySize:      KeySize,
 	ValueSize:    ValueSize,
@@ -500,10 +504,6 @@ var MapParams = bpf.MapParameters{
 	Flags:        unix.BPF_F_NO_PREALLOC,
 	Version:      3,
 	UpdatedByBPF: true,
-}
-
-func Map(mc *bpf.MapContext) bpf.Map {
-	return mc.NewPinnedMap(MapParams)
 }
 
 const (
