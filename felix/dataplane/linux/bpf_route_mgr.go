@@ -22,8 +22,8 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/bpfmap"
+	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/routes"
 	"github.com/projectcalico/calico/felix/ifacemonitor"
 	"github.com/projectcalico/calico/felix/ip"
@@ -35,7 +35,7 @@ import (
 type bpfRouteManager struct {
 	myNodename      string
 	resyncScheduled bool
-	routeMap        bpf.Map
+	routeMap        maps.Map
 
 	// These fields contain our cache of the input data, indexed for efficient updates
 	// and lookups:
@@ -402,7 +402,7 @@ func (m *bpfRouteManager) resyncWithDataplane() {
 	}
 
 	// Scan the dataplane, discarding any routes that are already correct.
-	err := m.routeMap.Iter(func(k, v []byte) bpf.IteratorAction {
+	err := m.routeMap.Iter(func(k, v []byte) maps.IteratorAction {
 		var key routes.Key
 		var value routes.Value
 		copy(key[:], k)
@@ -426,7 +426,7 @@ func (m *bpfRouteManager) resyncWithDataplane() {
 			}
 			m.dirtyRoutes.Add(key)
 		}
-		return bpf.IterNone
+		return maps.IterNone
 	})
 	if err != nil {
 		log.WithError(err).Panic("Failed to scan BPF map.")

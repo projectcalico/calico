@@ -17,7 +17,6 @@
 package bpf
 
 import (
-	"errors"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -26,13 +25,6 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/asm"
 )
 
-type MapFD uint32
-
-func (f MapFD) Close() error {
-	log.WithField("fd", int(f)).Debug("Closing MapFD")
-	return unix.Close(int(f))
-}
-
 type ProgFD uint32
 
 func (f ProgFD) Close() error {
@@ -40,21 +32,10 @@ func (f ProgFD) Close() error {
 	return unix.Close(int(f))
 }
 
-func IsNotExists(err error) bool {
-	return err == unix.ENOENT
-}
-
 type ProgResult struct {
 	RC       int32
 	Duration time.Duration
 	DataOut  []byte
-}
-
-type MapInfo struct {
-	Type       int
-	KeySize    int
-	ValueSize  int
-	MaxEntries int
 }
 
 // PolicyDebugInfo describes policy debug info
@@ -70,10 +51,3 @@ const (
 	RuntimeProgDir = "/var/run/calico/bpf/prog"
 	RuntimePolDir  = "/var/run/calico/bpf/policy"
 )
-
-// ErrIterationFinished is returned by the MapIterator's Next() method when there are no more keys.
-var ErrIterationFinished = errors.New("iteration finished")
-
-// ErrVisitedTooManyKeys is returned by the MapIterator's Next() method if it sees many more keys than there should
-// be in the map.
-var ErrVisitedTooManyKeys = errors.New("visited 10x the max size of the map keys")

@@ -25,14 +25,16 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/tc"
+	"github.com/projectcalico/calico/felix/bpf/utils"
 	"github.com/projectcalico/calico/felix/bpf/xdp"
 )
 
 func TestReattachPrograms(t *testing.T) {
 	RegisterTestingT(t)
 
-	bpffs, err := bpf.MaybeMountBPFfs()
+	bpffs, err := utils.MaybeMountBPFfs()
 	Expect(err).NotTo(HaveOccurred())
 	Expect(bpffs).To(Equal("/sys/fs/bpf"))
 
@@ -208,7 +210,7 @@ func countJumpMaps() int {
 		if err != nil {
 			return err
 		}
-		if strings.HasPrefix(info.Name(), bpf.JumpMapName()) {
+		if strings.HasPrefix(info.Name(), maps.JumpMapName()) {
 			log.Debugf("Jump map: %s", p)
 			count++
 		}

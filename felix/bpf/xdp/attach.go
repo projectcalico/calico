@@ -25,6 +25,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/libbpf"
+	"github.com/projectcalico/calico/felix/bpf/maps"
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 )
 
@@ -279,7 +280,7 @@ func updateJumpMap(obj *libbpf.Obj) error {
 }
 
 func UpdateJumpMap(obj *libbpf.Obj, progs map[int]string) error {
-	mapName := bpf.JumpMapName()
+	mapName := maps.JumpMapName()
 
 	for idx, name := range progs {
 		err := obj.UpdateJumpMap(mapName, name, idx)

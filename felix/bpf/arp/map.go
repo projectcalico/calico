@@ -21,14 +21,14 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/bpf/maps"
 )
 
 func init() {
-	bpf.SetMapSize(MapParams.VersionedName(), MapParams.MaxEntries)
+	maps.SetSize(MapParams.VersionedName(), MapParams.MaxEntries)
 }
 
-var MapParams = bpf.MapParameters{
+var MapParams = maps.MapParameters{
 	Type:       "lru_hash",
 	KeySize:    KeySize,
 	ValueSize:  ValueSize,
@@ -37,8 +37,8 @@ var MapParams = bpf.MapParameters{
 	Version:    2,
 }
 
-func Map() bpf.Map {
-	return bpf.NewPinnedMap(MapParams)
+func Map() maps.Map {
+	return maps.NewPinnedMap(MapParams)
 }
 
 const KeySize = 8
@@ -107,10 +107,10 @@ func (v Value) AsBytes() []byte {
 type MapMem map[Key]Value
 
 // LoadMapMem loads ConntrackMap into memory
-func LoadMapMem(m bpf.Map) (MapMem, error) {
+func LoadMapMem(m maps.Map) (MapMem, error) {
 	ret := make(MapMem)
 
-	err := m.Iter(func(k, v []byte) bpf.IteratorAction {
+	err := m.Iter(func(k, v []byte) maps.IteratorAction {
 		ks := len(Key{})
 		vs := len(Value{})
 
@@ -121,18 +121,18 @@ func LoadMapMem(m bpf.Map) (MapMem, error) {
 		copy(val[:vs], v[:vs])
 
 		ret[key] = val
-		return bpf.IterNone
+		return maps.IterNone
 	})
 
 	return ret, err
 }
 
-// MapMemIter returns bpf.MapIter that loads the provided MapMem
-func MapMemIter(m MapMem) bpf.IterCallback {
+// MapMemIter returns maps.MapIter that loads the provided MapMem
+func MapMemIter(m MapMem) maps.IterCallback {
 	ks := len(Key{})
 	vs := len(Value{})
 
-	return func(k, v []byte) bpf.IteratorAction {
+	return func(k, v []byte) maps.IteratorAction {
 		var key Key
 		copy(key[:ks], k[:ks])
 
@@ -140,6 +140,6 @@ func MapMemIter(m MapMem) bpf.IterCallback {
 		copy(val[:vs], v[:vs])
 
 		m[key] = val
-		return bpf.IterNone
+		return maps.IterNone
 	}
 }
