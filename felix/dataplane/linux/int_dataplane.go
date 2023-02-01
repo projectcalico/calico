@@ -698,7 +698,6 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			kp, err := bpfproxy.StartKubeProxy(
 				config.KubeClientSet,
 				config.Hostname,
-				config.NodeLabels,
 				bpfMaps,
 				bpfproxyOpts...,
 			)

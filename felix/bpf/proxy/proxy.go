@@ -105,7 +105,7 @@ type stoppableRunner interface {
 }
 
 // New returns a new Proxy for the given k8s interface
-func New(k8s kubernetes.Interface, dp DPSyncer, hostname string, nodeLabels map[string]string, opts ...Option) (Proxy, error) {
+func New(k8s kubernetes.Interface, dp DPSyncer, hostname string, opts ...Option) (Proxy, error) {
 
 	if k8s == nil {
 		return nil, errors.Errorf("no k8s client")
@@ -116,12 +116,11 @@ func New(k8s kubernetes.Interface, dp DPSyncer, hostname string, nodeLabels map[
 	}
 
 	p := &proxy{
-		k8s:        k8s,
-		dpSyncer:   dp,
-		hostname:   hostname,
-		nodeLabels: nodeLabels,
-		svcMap:     make(k8sp.ServiceMap),
-		epsMap:     make(k8sp.EndpointsMap),
+		k8s:      k8s,
+		dpSyncer: dp,
+		hostname: hostname,
+		svcMap:   make(k8sp.ServiceMap),
+		epsMap:   make(k8sp.EndpointsMap),
 
 		recorder: new(loggerRecorder),
 
