@@ -77,26 +77,30 @@ type reporterState struct {
 	timestamp time.Time
 }
 
-func (r *reporterState) HasReadinessProblem() bool {
+func (r *reporterState) readiness() (bool, string) {
 	if !r.reports.Ready {
-		return false
+		return true, "-"
 	}
 	if r.TimedOut() {
-		log.WithField("name", r.name).Warn("Report timed out")
-		return true
+		return false, "timed out"
 	}
-	return !r.latest.Ready
+	if r.latest.Ready {
+		return true, "reporting ready"
+	}
+	return false, "reporting non-ready"
 }
 
-func (r *reporterState) HasLivenessProblem() bool {
+func (r *reporterState) liveness() (bool, string) {
 	if !r.reports.Live {
-		return false
+		return true, "-"
 	}
 	if r.TimedOut() {
-		log.WithField("name", r.name).Warn("Report timed out")
-		return true
+		return false, "timed out"
 	}
-	return !r.latest.Live
+	if r.latest.Live {
+		return true, "reporting live"
+	}
+	return false, "reporting non-live"
 }
 
 // TimedOut checks whether the reporter is due for another report. This is the case when
@@ -134,6 +138,10 @@ type HealthAggregator struct {
 
 	// HTTP server.  Non-nil when there should be a server running.
 	httpServer *http.Server
+
+	// Track whether we have previously reported live and ready overall.
+	previouslyLive  bool
+	previouslyReady bool
 }
 
 // RegisterReporter registers a reporter with a HealthAggregator.  The aggregator uses NAME to
@@ -224,8 +232,6 @@ func genResponse(rsp http.ResponseWriter, quality string, state bool, detail str
 		if len(detail) == 0 {
 			status = StatusGoodNoContent
 		}
-	} else {
-		log.Warn("Health: not " + quality)
 	}
 	rsp.WriteHeader(status)
 	rsp.Write([]byte(detail))
@@ -249,29 +255,27 @@ func (aggregator *HealthAggregator) Summary() *HealthReport {
 	// Now for each reporter...
 	for _, reporter := range aggregator.reporters {
 		log.WithField("reporter", reporter).Debug("Checking state of reporter")
-		livenessStr := "-"
-		if reporter.HasLivenessProblem() {
-			log.WithField("name", reporter.name).Warn("Reporter is not live.")
+		live, livenessStr := reporter.liveness()
+		if live {
+			aggregator.previouslyLive = true
+		} else {
+			if aggregator.previouslyLive {
+				log.WithField("name", reporter.name).Warnf("Reporter is not live: %v.", livenessStr)
+			} else {
+				log.WithField("name", reporter.name).Infof("Reporter is not live: %v.", livenessStr)
+			}
 			summary.Live = false
-			if reporter.TimedOut() {
-				livenessStr = "timed out"
-			} else {
-				livenessStr = "reporting non-live"
-			}
-		} else if reporter.reports.Live {
-			livenessStr = "reporting live"
 		}
-		readinessStr := "-"
-		if reporter.HasReadinessProblem() {
-			log.WithField("name", reporter.name).Warn("Reporter is not ready.")
-			summary.Ready = false
-			if reporter.TimedOut() {
-				readinessStr = "timed out"
+		ready, readinessStr := reporter.readiness()
+		if ready {
+			aggregator.previouslyReady = true
+		} else {
+			if aggregator.previouslyReady {
+				log.WithField("name", reporter.name).Warnf("Reporter is not ready: %v.", readinessStr)
 			} else {
-				readinessStr = "reporting non-ready"
+				log.WithField("name", reporter.name).Infof("Reporter is not ready: %v.", readinessStr)
 			}
-		} else if reporter.reports.Ready {
-			readinessStr = "reporting ready"
+			summary.Ready = false
 		}
 		componentNames = append(componentNames, reporter.name)
 
