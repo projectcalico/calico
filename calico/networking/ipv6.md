@@ -109,6 +109,9 @@ spec:
    | `IP6`         | `autodetect` |
    | `FELIX_IPV6SUPPORT` | `true` |
 
+   **Note**: For IPv6 IP Pools with private IPs, the environment `CALICO_IPV6POOL_NAT_OUTGOING: true` should be set to perform outbound NAT for connections from pods to outside of the cluster.
+   {: .alert .alert-info}
+
 1. For clusters **not** provisioned with kubeadm (see note below), configure the default IPv6 IP pool by adding the following variable setting to the environment for the `calico-node` container:
 
    | Variable name | Value |
@@ -190,6 +193,9 @@ spec:
    | ------------- | ----- |
    | `IP6`         | `autodetect` |
    | `FELIX_IPV6SUPPORT` | `true` |
+
+   **Note**: For IPv6 IP Pools with private IPs, the environment `CALICO_IPV6POOL_NAT_OUTGOING: true` should be set to perform outbound NAT for connections from pods to outside of the cluster.
+   {: .alert .alert-info}
 
 1. For clusters **not** provisioned with kubeadm (see note below), configure the default IPv6 IP pool by adding the following variable setting to the environment for the `calico-node` container:
 
