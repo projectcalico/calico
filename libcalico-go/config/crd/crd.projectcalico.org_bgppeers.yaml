@@ -35,6 +35,11 @@ spec:
                 description: The AS Number of the peer.
                 format: int32
                 type: integer
+              filters:
+                description: The ordered set of BGPFilters applied on this BGP peer.
+                items:
+                  type: string
+                type: array
               keepOriginalNextHop:
                 description: Option to keep the original nexthop field when routes
                   are sent to a BGP Peer. Setting "true" configures the selected BGP

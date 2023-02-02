@@ -223,6 +223,12 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 		libapiv3.KindBlockAffinity,
 		resources.NewBlockAffinityClient(cs, crdClientV1),
 	)
+	kubeClient.registerResourceClient(
+		reflect.TypeOf(model.ResourceKey{}),
+		reflect.TypeOf(model.ResourceListOptions{}),
+		apiv3.KindBGPFilter,
+		resources.NewBGPFilterClient(cs, crdClientV1),
+	)
 
 	if !ca.K8sUsePodCIDR {
 		// Using Calico IPAM - use CRDs to back IPAM resources.
@@ -423,6 +429,7 @@ func (c *KubeClient) Clean() error {
 		apiv3.KindKubeControllersConfiguration,
 		libapiv3.KindIPAMConfig,
 		libapiv3.KindBlockAffinity,
+		apiv3.KindBGPFilter,
 	}
 	ctx := context.Background()
 	for _, k := range kinds {
@@ -544,6 +551,8 @@ func buildCRDClientV1(cfg rest.Config) (*rest.RESTClient, error) {
 					&apiv3.KubeControllersConfigurationList{},
 					&apiv3.CalicoNodeStatus{},
 					&apiv3.CalicoNodeStatusList{},
+					&apiv3.BGPFilter{},
+					&apiv3.BGPFilterList{},
 				)
 				return nil
 			})
