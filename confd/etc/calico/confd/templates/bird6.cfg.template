@@ -113,9 +113,9 @@ protocol device {
 }
 
 {{- $ignored_interfaces := ""}}
-{{- $node_ignored_interfaces_key := printf "/host/%s/ignored_interfaces" (getenv "NODENAME")}}
+{{- $node_ignored_interfaces_key := printf "/bgp/v1/host/%s/ignored_interfaces" (getenv "NODENAME")}}
 {{- if exists $node_ignored_interfaces_key }}{{$ignored_interfaces = getv $node_ignored_interfaces_key}}
-{{- else if exists "/global/ignored_interfaces" }}{{$ignored_interfaces = getv "/global/ignored_interfaces"}}
+{{- else if exists "/bgp/v1/global/ignored_interfaces" }}{{$ignored_interfaces = getv "/bgp/v1/global/ignored_interfaces"}}
 {{- end}}
 
 protocol direct {

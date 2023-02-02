@@ -24,31 +24,31 @@ execute_test_suite() {
     rm $LOGPATH/rendered/*.cfg || true
 
     if [ "$DATASTORE_TYPE" = kubernetes ]; then
-        #run_extra_test test_node_mesh_bgp_password
-        #run_extra_test test_bgp_password_deadlock
-        #run_extra_test test_bgp_ttl_security
-        #run_extra_test test_bgp_ignored_interfaces
-        #run_extra_test test_bgp_reachable_by
+        run_extra_test test_node_mesh_bgp_password
+        run_extra_test test_bgp_password_deadlock
+        run_extra_test test_bgp_ttl_security
+        run_extra_test test_bgp_ignored_interfaces
+        run_extra_test test_bgp_reachable_by
         run_extra_test test_bgp_filters
     fi
 
     if [ "$DATASTORE_TYPE" = etcdv3 ]; then
-        #run_extra_test test_node_mesh_bgp_password
-        #run_extra_test test_bgp_password
-        #run_extra_test test_bgp_sourceaddr_gracefulrestart
-        #run_extra_test test_node_deletion
-        #run_extra_test test_idle_peers
-        #run_extra_test test_router_id_hash
-        #run_extra_test test_bgp_ttl_security
-        #run_extra_test test_bgp_ignored_interfaces
-        #run_extra_test test_bgp_reachable_by
+        run_extra_test test_node_mesh_bgp_password
+        run_extra_test test_bgp_password
+        run_extra_test test_bgp_sourceaddr_gracefulrestart
+        run_extra_test test_node_deletion
+        run_extra_test test_idle_peers
+        run_extra_test test_router_id_hash
+        run_extra_test test_bgp_ttl_security
+        run_extra_test test_bgp_ignored_interfaces
+        run_extra_test test_bgp_reachable_by
         run_extra_test test_bgp_filters
         echo "Extra etcdv3 tests passed"
     fi
 
     # Run the set of tests using confd in oneshot mode.
     echo "Execute oneshot-mode tests"
-    #execute_tests_oneshot
+    execute_tests_oneshot
     echo "Oneshot-mode tests passed"
 
     # Now run a set of tests with confd running continuously.
@@ -56,10 +56,10 @@ execute_test_suite() {
     # confd, so order the tests accordingly.  We'll start with a set of tests that use the
     # node mesh enabled, so turn it on now before we start confd.
     echo "Execute daemon-mode tests"
-    #turn_mesh_on
-    #for i in $(seq 1 2); do
-   #    execute_tests_daemon
-    #done
+    turn_mesh_on
+    for i in $(seq 1 2); do
+       execute_tests_daemon
+    done
     echo "Daemon-mode tests passed"
 }
 
@@ -3921,19 +3921,19 @@ EOF
 
 test_bgp_filters() {
   test_single_bgp_filter_with_global_peers
-  #test_single_bgp_filter_with_explicit_peers
-  #test_multiple_bgp_filter_with_global_peers
-  #test_multiple_bgp_filter_with_explicit_peers
-  #test_bgp_filter_with_node_mesh_enabled
-  #test_bgp_filter_deletion
-  #test_bgp_filter_names
-  #test_bgp_filter_match_operators
-  #test_bgp_filter_import_only_explicit_peers
-  #test_bgp_filter_import_only_global_peers
-  #test_bgp_filter_export_only_explicit_peers
-  #test_bgp_filter_export_only_global_peers
-  #test_bgp_filter_v4_only_explicit_peers
-  #test_bgp_filter_v4_only_global_peers
-  #test_bgp_filter_v6_only_explicit_peers
-  #test_bgp_filter_v6_only_global_peers
+  test_single_bgp_filter_with_explicit_peers
+  test_multiple_bgp_filter_with_global_peers
+  test_multiple_bgp_filter_with_explicit_peers
+  test_bgp_filter_with_node_mesh_enabled
+  test_bgp_filter_deletion
+  test_bgp_filter_names
+  test_bgp_filter_match_operators
+  test_bgp_filter_import_only_explicit_peers
+  test_bgp_filter_import_only_global_peers
+  test_bgp_filter_export_only_explicit_peers
+  test_bgp_filter_export_only_global_peers
+  test_bgp_filter_v4_only_explicit_peers
+  test_bgp_filter_v4_only_global_peers
+  test_bgp_filter_v6_only_explicit_peers
+  test_bgp_filter_v6_only_global_peers
 }
