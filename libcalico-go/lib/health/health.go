@@ -139,9 +139,8 @@ type HealthAggregator struct {
 	// HTTP server.  Non-nil when there should be a server running.
 	httpServer *http.Server
 
-	// Track whether we have previously reported live and ready overall.
-	previouslyLive  bool
-	previouslyReady bool
+	// Track whether we have ever previously reported as ready overall.
+	everReady bool
 }
 
 // RegisterReporter registers a reporter with a HealthAggregator.  The aggregator uses NAME to
@@ -257,16 +256,12 @@ func (aggregator *HealthAggregator) Summary() *HealthReport {
 		log.WithField("reporter", reporter).Debug("Checking state of reporter")
 		live, livenessStr := reporter.liveness()
 		if !live {
-			if aggregator.previouslyLive {
-				log.WithField("name", reporter.name).Warnf("Reporter is not live: %v.", livenessStr)
-			} else {
-				log.WithField("name", reporter.name).Infof("Reporter is not live: %v.", livenessStr)
-			}
+			log.WithField("name", reporter.name).Warnf("Reporter is not live: %v.", livenessStr)
 			summary.Live = false
 		}
 		ready, readinessStr := reporter.readiness()
 		if !ready {
-			if aggregator.previouslyReady {
+			if aggregator.everReady {
 				log.WithField("name", reporter.name).Warnf("Reporter is not ready: %v.", readinessStr)
 			} else {
 				log.WithField("name", reporter.name).Infof("Reporter is not ready: %v.", readinessStr)
@@ -307,11 +302,9 @@ func (aggregator *HealthAggregator) Summary() *HealthReport {
 	}
 
 	log.WithField("healthResult", summary).Debug("Calculated health summary")
-	if summary.Live {
-		aggregator.previouslyLive = true
-	}
+
 	if summary.Ready {
-		aggregator.previouslyReady = true
+		aggregator.everReady = true
 	}
 
 	return summary
