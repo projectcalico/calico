@@ -19,6 +19,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/nat"
 	"github.com/projectcalico/calico/felix/cachingmap"
 
@@ -57,10 +58,10 @@ var _ = Describe("BPF Syncer", func() {
 	rt := proxy.NewRTCache()
 
 	feCache := cachingmap.New[nat.FrontendKey, nat.FrontendValue](nat.FrontendMapParameters.Name,
-		bpf.NewTypedMap[nat.FrontendKey, nat.FrontendValue](
+		maps.NewTypedMap[nat.FrontendKey, nat.FrontendValue](
 			svcs, nat.FrontendKeyFromBytes, nat.FrontendValueFromBytes))
 	beCache := cachingmap.New[nat.BackendKey, nat.BackendValue](nat.BackendMapParameters.Name,
-		bpf.NewTypedMap[nat.BackendKey, nat.BackendValue](
+		maps.NewTypedMap[nat.BackendKey, nat.BackendValue](
 			eps, nat.BackendKeyFromBytes, nat.BackendValueFromBytes))
 
 	s, _ := proxy.NewSyncer(nodeIPs, feCache, beCache, aff, rt)
@@ -200,13 +201,13 @@ var _ = Describe("BPF Syncer", func() {
 
 			cnt := 0
 
-			err := ct.Iter(func(k, v []byte) bpf.IteratorAction {
+			err := ct.Iter(func(k, v []byte) maps.IteratorAction {
 				cnt++
 				key := conntrack.KeyFromBytes(k)
 				val := conntrack.ValueFromBytes(v)
 				log("key = %s\n", key)
 				log("val = %s\n", val)
-				return bpf.IterNone
+				return maps.IterNone
 			})
 			Expect(err).NotTo(HaveOccurred())
 
@@ -237,13 +238,13 @@ var _ = Describe("BPF Syncer", func() {
 
 			cnt := 0
 
-			err := ct.Iter(func(k, v []byte) bpf.IteratorAction {
+			err := ct.Iter(func(k, v []byte) maps.IteratorAction {
 				cnt++
 				key := conntrack.KeyFromBytes(k)
 				val := conntrack.ValueFromBytes(v)
 				log("key = %s\n", key)
 				log("val = %s\n", val)
-				return bpf.IterNone
+				return maps.IterNone
 			})
 			Expect(err).NotTo(HaveOccurred())
 
@@ -993,13 +994,13 @@ var _ = Describe("BPF Syncer", func() {
 
 			cnt := 0
 
-			err := ct.Iter(func(k, v []byte) bpf.IteratorAction {
+			err := ct.Iter(func(k, v []byte) maps.IteratorAction {
 				cnt++
 				key := conntrack.KeyFromBytes(k)
 				val := conntrack.ValueFromBytes(v)
 				log("key = %s\n", key)
 				log("val = %s\n", val)
-				return bpf.IterNone
+				return maps.IterNone
 			})
 			Expect(err).NotTo(HaveOccurred())
 
@@ -1104,7 +1105,7 @@ type mockNATMap struct {
 	m map[nat.FrontendKey]nat.FrontendValue
 }
 
-func (m *mockNATMap) MapFD() bpf.MapFD {
+func (m *mockNATMap) MapFD() maps.FD {
 	panic("implement me")
 }
 
@@ -1122,7 +1123,7 @@ func (m *mockNATMap) Path() string {
 	return "/sys/fs/bpf/tc/nat"
 }
 
-func (m *mockNATMap) Iter(iter bpf.IterCallback) error {
+func (m *mockNATMap) Iter(iter maps.IterCallback) error {
 	m.Lock()
 	defer m.Unlock()
 
@@ -1130,7 +1131,7 @@ func (m *mockNATMap) Iter(iter bpf.IterCallback) error {
 	vs := len(nat.FrontendValue{})
 	for k, v := range m.m {
 		action := iter(k[:ks], v[:vs])
-		if action == bpf.IterDelete {
+		if action == maps.IterDelete {
 			delete(m.m, k)
 		}
 	}
@@ -1197,7 +1198,7 @@ type mockNATBackendMap struct {
 	m map[nat.BackendKey]nat.BackendValue
 }
 
-func (m *mockNATBackendMap) MapFD() bpf.MapFD {
+func (m *mockNATBackendMap) MapFD() maps.FD {
 	panic("implement me")
 }
 
@@ -1215,7 +1216,7 @@ func (m *mockNATBackendMap) Path() string {
 	return "/sys/fs/bpf/tc/natbe"
 }
 
-func (m *mockNATBackendMap) Iter(iter bpf.IterCallback) error {
+func (m *mockNATBackendMap) Iter(iter maps.IterCallback) error {
 	m.Lock()
 	defer m.Unlock()
 
@@ -1223,7 +1224,7 @@ func (m *mockNATBackendMap) Iter(iter bpf.IterCallback) error {
 	vs := len(nat.BackendValue{})
 	for k, v := range m.m {
 		action := iter(k[:ks], v[:vs])
-		if action == bpf.IterDelete {
+		if action == maps.IterDelete {
 			delete(m.m, k)
 		}
 	}
@@ -1304,7 +1305,7 @@ func (m *mockAffinityMap) Path() string {
 	return "/sys/fs/bpf/tc/aff"
 }
 
-func (m *mockAffinityMap) Iter(iter bpf.IterCallback) error {
+func (m *mockAffinityMap) Iter(iter maps.IterCallback) error {
 	m.Lock()
 	defer m.Unlock()
 
@@ -1312,7 +1313,7 @@ func (m *mockAffinityMap) Iter(iter bpf.IterCallback) error {
 	vs := len(nat.AffinityValue{})
 	for k, v := range m.m {
 		action := iter(k[:ks], v[:vs])
-		if action == bpf.IterDelete {
+		if action == maps.IterDelete {
 			delete(m.m, k)
 		}
 	}
@@ -1365,11 +1366,11 @@ func (m *mockAffinityMap) Delete(k []byte) error {
 	return nil
 }
 
-func (m *mockAffinityMap) MapFD() bpf.MapFD {
+func (m *mockAffinityMap) MapFD() maps.FD {
 	panic("implement me")
 }
 
-func ctEntriesForSvc(ct bpf.Map, proto v1.Protocol,
+func ctEntriesForSvc(ct maps.Map, proto v1.Protocol,
 	svcIP net.IP, svcPort uint16, ep k8sp.Endpoint, srcIP net.IP, srcPort uint16) {
 
 	p, err := proxy.ProtoV1ToInt(proto)

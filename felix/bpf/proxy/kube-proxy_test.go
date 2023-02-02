@@ -44,7 +44,7 @@ var _ = Describe("BPF kube-proxy", func() {
 	BeforeEach(func() {
 		testSvc := &v1.Service{
 			TypeMeta:   typeMetaV1("Service"),
-			ObjectMeta: objectMeataV1("testService"),
+			ObjectMeta: objectMetaV1("testService"),
 			Spec: v1.ServiceSpec{
 				ClusterIP: "10.1.0.1",
 				Type:      v1.ServiceTypeClusterIP,
@@ -63,7 +63,7 @@ var _ = Describe("BPF kube-proxy", func() {
 
 		testSvcEps := &v1.Endpoints{
 			TypeMeta:   typeMetaV1("Endpoints"),
-			ObjectMeta: objectMeataV1("testService"),
+			ObjectMeta: objectMetaV1("testService"),
 			Subsets: []v1.EndpointSubset{
 				{
 					Addresses: []v1.EndpointAddress{

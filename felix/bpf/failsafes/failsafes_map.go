@@ -23,11 +23,11 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/bpf/maps"
 )
 
 func init() {
-	bpf.SetMapSize(MapParams.VersionedName(), MapParams.MaxEntries)
+	maps.SetSize(MapParams.VersionedName(), MapParams.MaxEntries)
 }
 
 const (
@@ -59,7 +59,7 @@ func (k Key) String() string {
 		k.Port, k.IPProto, flags, k.IP, k.IPMask)
 }
 
-var MapParams = bpf.MapParameters{
+var MapParams = maps.MapParameters{
 	Type:       "lpm_trie",
 	KeySize:    KeySize,
 	ValueSize:  ValueSize,
@@ -69,8 +69,8 @@ var MapParams = bpf.MapParameters{
 	Version:    2,
 }
 
-func Map() bpf.Map {
-	return bpf.NewPinnedMap(MapParams)
+func Map() maps.Map {
+	return maps.NewPinnedMap(MapParams)
 }
 
 func MakeKey(ipProto uint8, port uint16, outbound bool, ip string, mask int) Key {

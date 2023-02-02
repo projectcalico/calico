@@ -1209,6 +1209,12 @@ spec:
                 type: string
               iptablesFilterAllowAction:
                 type: string
+              iptablesFilterDenyAction:
+                description: IptablesFilterDenyAction controls what happens to traffic
+                  that is denied by network policy. By default Calico blocks traffic
+                  with an iptables "DROP" action. If you want to use "REJECT" action
+                  instead you can configure it in here.
+                type: string
               iptablesLockFilePath:
                 description: 'IptablesLockFilePath is the location of the iptables
                   lock file. You may need to change this if the lock file is not in
