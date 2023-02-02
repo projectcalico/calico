@@ -555,7 +555,7 @@ func (s *Syncer) apply(state DPSyncerState) error {
 				if ShouldAppendTopologyAwareEndpoint(nodeZone, hintsAnnotation, zoneHints) {
 					eps = append(eps, ep)
 				} else {
-					log.Infof("Topology Aware Hints: '%s' for Endpoint: '%s' however Zone: '%s' does not match Zone Hints: '%v'\n",
+					log.Debugf("Topology Aware Hints: '%s' for Endpoint: '%s' however Zone: '%s' does not match Zone Hints: '%v'\n",
 						hintsAnnotation,
 						ep.IP(),
 						nodeZone,
