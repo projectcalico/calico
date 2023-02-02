@@ -1496,7 +1496,7 @@ func TestBGPFilterClient(t *testing.T) {
 		return func(t *testing.T) {
 			client, shutdownServer := getFreshApiserverAndClient(t, func() runtime.Object {
 				return &v3.BGPFilter{}
-			}, false)
+			})
 			defer shutdownServer()
 			if err := testBGPFilterClient(client, name); err != nil {
 				t.Fatal(err)

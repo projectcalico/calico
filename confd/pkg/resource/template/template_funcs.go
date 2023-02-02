@@ -6,8 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/kelseyhightower/memkv"
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"net"
 	"os"
 	"path"
@@ -15,6 +13,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/kelseyhightower/memkv"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 )
 
 func newFuncMap() map[string]interface{} {

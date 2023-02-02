@@ -2,10 +2,11 @@ package template
 
 import (
 	"encoding/json"
-	"github.com/kelseyhightower/memkv"
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"reflect"
 	"testing"
+
+	"github.com/kelseyhightower/memkv"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 )
 
 func Test_hashToIPv4_invalid_range(t *testing.T) {
