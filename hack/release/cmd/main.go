@@ -11,12 +11,16 @@ import (
 	"github.com/projectcalico/calico/hack/release/pkg/builder"
 )
 
-var create, publish, newBranch bool
+var create, publish, newBranch, meta bool
+var dir string
 
 func init() {
 	flag.BoolVar(&create, "create", false, "Create a release from the current commit")
 	flag.BoolVar(&publish, "publish", false, "Publish the release built from the current tag")
 	flag.BoolVar(&newBranch, "new-branch", false, "Create a new release branch from master")
+	flag.BoolVar(&meta, "metadata", false, "Product release metadata")
+
+	flag.StringVar(&dir, "dir", "./", "Directory to place build metadata in")
 
 	flag.Parse()
 }
@@ -24,6 +28,16 @@ func init() {
 func main() {
 	// Create a releaseBuilder to use.
 	r := builder.NewReleaseBuilder(&builder.RealCommandRunner{})
+
+	if meta {
+		configureLogging("metadata.log")
+		err := r.BuildMetadata(dir)
+		if err != nil {
+			logrus.WithError(err).Error("Failed to produce release metadata")
+			os.Exit(1)
+		}
+		return
+	}
 
 	if create {
 		configureLogging("release-build.log")
