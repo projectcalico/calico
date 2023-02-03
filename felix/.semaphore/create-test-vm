@@ -44,7 +44,6 @@ function create-vm() {
   gcloud --quiet compute ssh --zone=${zone} "ubuntu@${vm_name}" -- sudo apt install -y --no-install-recommends git docker-ce=5:20.10.9~3-0~ubuntu-focal docker-ce-cli=5:20.10.9~3-0~ubuntu-focal containerd.io make iproute2 wireguard && \
   gcloud --quiet compute ssh --zone=${zone} "ubuntu@${vm_name}" -- sudo usermod -a -G docker ubuntu && \
   gcloud --quiet compute ssh --zone=${zone} "ubuntu@${vm_name}" -- sudo modprobe ipip && \
-  gcloud --quiet compute ssh --zone=${zone} "ubuntu@${vm_name}" -- sudo mkdir -p /etc/docker && \
   gcloud --quiet compute ssh --zone=${zone} "ubuntu@${vm_name}" -- 'if [ -s /etc/docker/daemon.json ] ; then cat /etc/docker/daemon.json | sed "\$d" | sed "\$s/\$/,/" > /tmp/daemon.json ; else echo -en {\\n > /tmp/daemon.json ; fi' && \
   gcloud --quiet compute ssh --zone=${zone} "ubuntu@${vm_name}" -- 'cat >> /tmp/daemon.json << EOF
   "ipv6": true,
