@@ -255,7 +255,7 @@ type FelixConfigurationSpec struct {
 	HealthHost    *string `json:"healthHost,omitempty"`
 	HealthPort    *int    `json:"healthPort,omitempty"`
 	// HealthTimeoutOverrides allows the internal watchdog timeouts of individual subcomponents to be
-	// overriden.  This is useful for working around "false positive" liveness timeouts that can occur
+	// overridden.  This is useful for working around "false positive" liveness timeouts that can occur
 	// in particularly stressful workloads or if CPU is constrained.  For a list of active
 	// subcomponents, see Felix's logs.
 	HealthTimeoutOverrides []HealthTimeoutOverride `json:"healthTimeoutOverrides,omitempty" validate:"omitempty,dive"`
