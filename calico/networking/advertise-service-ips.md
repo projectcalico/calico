@@ -240,6 +240,11 @@ For example, to exclude the node `control-plane-01` from service advertisement, 
 kubectl label node control-plane-01 node.kubernetes.io/exclude-from-external-load-balancers=true
 ```
 
+#### Fine-grained IP range advertisement
+
+The [BGPFilter]({{site.baseurl}}/reference/resources/bgpfilter) resource in conjunction with BGPPeer resource can be used for fine-grained control over which routes
+and IP ranges are exported or imported to or from the specified peers respectively.
+
 ### Tutorial
 
 For a tutorial on how service advertisement works with {{site.prodname}}, see the blog {% include open-new-window.html text='Kubernetes Service IP Route Advertisement' url='https://www.projectcalico.org/kubernetes-service-ip-route-advertisement/' %}.
