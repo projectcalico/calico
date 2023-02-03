@@ -463,6 +463,7 @@ type bgpPeer struct {
 	NumAllowLocalAS int32                `json:"num_allow_local_as"`
 	TTLSecurity     uint8                `json:"ttl_security"`
 	ReachableBy     string               `json:"reachable_by"`
+	Filters         []string             `json:"filters"`
 }
 
 type bgpPrefix struct {
@@ -615,6 +616,7 @@ func (c *client) updatePeersV1() {
 					KeepNextHop:     v3res.Spec.KeepOriginalNextHop,
 					CalicoNode:      isCalicoNode,
 					TTLSecurity:     ttlSecurityHopCount,
+					Filters:         v3res.Spec.Filters,
 					NumAllowLocalAS: numLocalAS,
 					ReachableBy:     reachableBy,
 				})
@@ -824,6 +826,8 @@ func (c *client) nodeAsBGPPeers(nodeName string, v4 bool, v6 bool, v3Peer *apiv3
 			peer.ReachableBy = v3Peer.Spec.ReachableBy
 		}
 
+		peer.Filters = v3Peer.Spec.Filters
+
 		// If peer node has listenPort set in BGPConfiguration, use that.
 		if port, ok := c.nodeListenPorts[nodeName]; ok {
 			peer.Port = port
@@ -1001,6 +1005,11 @@ func (c *client) onUpdates(updates []api.Update, needUpdatePeersV1 bool) {
 			// Note need to recompute equivalent v1 peerings.
 			needUpdatePeersV1 = true
 			needUpdatePeersReasons = append(needUpdatePeersReasons, "BGP peer updated or deleted")
+		}
+
+		if v3key.Kind == apiv3.KindBGPFilter {
+			needUpdatePeersV1 = true
+			needUpdatePeersReasons = append(needUpdatePeersReasons, "BGPFilter updated or deleted")
 		}
 	}
 

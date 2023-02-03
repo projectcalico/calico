@@ -13,6 +13,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/kelseyhightower/memkv"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 )
 
 func newFuncMap() map[string]interface{} {
@@ -37,6 +40,8 @@ func newFuncMap() map[string]interface{} {
 	m["base64Encode"] = Base64Encode
 	m["base64Decode"] = Base64Decode
 	m["hashToIPv4"] = hashToIPv4
+	m["emitFunctionName"] = EmitFunctionName
+	m["emitBIRDBGPFilterFuncs"] = EmitBIRDBGPFilterFuncs
 	return m
 }
 
@@ -44,6 +49,234 @@ func addFuncs(out, in map[string]interface{}) {
 	for name, fn := range in {
 		out[name] = fn
 	}
+}
+
+func emitFilterStatement(matchOperator, cidr, action string) (string, error) {
+	matchOperatorLUT := map[string]string{
+		string(v3.Equal): "=",
+		v3.NotEqual:      "!=",
+		v3.In:            "~",
+		v3.NotIn:         "!~",
+	}
+
+	op, ok := matchOperatorLUT[matchOperator]
+	if !ok {
+		err := fmt.Errorf("Unexpected operator found in BGPFilter: %s", matchOperator)
+		return "", err
+	}
+
+	return fmt.Sprintf("if ( net %s %s ) then { %s; }", op, cidr, strings.ToLower(action)), nil
+}
+
+// EmitFunctionName returns a formatted name for use as a BIRD function, truncating and hashing if the provided
+// name would result in a function name longer than the max allowable length of 64 chars.
+// e.g. input of ("my-bgp-filter", "import", "4") would result in output of "'bgp_my-bpg-filter_importFilterV4'"
+func EmitFunctionName(filterName, direction, version string) (string, error) {
+	normalizedDirection := strings.ToLower(direction)
+	switch normalizedDirection {
+	case "import":
+	case "export":
+	default:
+		return "", fmt.Errorf("Provided direction '%s' does not map to either 'import' or 'export'", direction)
+	}
+	pieces := []string{"bgp_", "", "_", normalizedDirection, "FilterV", version}
+	maxBIRDSymLen := 64
+	resizedName, err := truncateAndHashName(filterName, maxBIRDSymLen-len(strings.Join(pieces, "")))
+	if err != nil {
+		return "", err
+	}
+	pieces[1] = resizedName
+	fullName := strings.Join(pieces, "")
+	return fmt.Sprintf("'%s'", fullName), nil
+}
+
+// EmitBIRDBGPFilterFuncs generates a set of BIRD functions for BGPFilter resources that have been packaged into KVPairs.
+// By doing the formatting inside of this function we eliminate the need to copy and paste repeated blocks of golang
+// template code into our BIRD config templates that is both difficult to read and prone to errors
+//
+// e.g. for a BGPFilter resource specified as follows:
+//
+// kind: BGPFilter
+// apiVersion: projectcalico.org/v3
+// metadata:
+//   name: test-bgpfilter
+// spec:
+//   exportV4:
+//     - action: Accept
+//       matchOperator: In
+//       cidr: 77.0.0.0/16
+//     - action: Reject
+//       matchOperator: In
+//       cidr: 77.1.0.0/16
+//   importV4:
+//     - action: Accept
+//       matchOperator: In
+//       cidr: 44.0.0.0/16
+//     - action: Reject
+//       matchOperator: In
+//       cidr: 44.1.0.0/16
+//
+// Would produce the following string array that can be easily output via BIRD config template:
+//
+// []string{
+//   "# v4 BGPFilter test-bgpfilter",
+//   "function 'bgp_test-bgpfilter_importFilterV4'() {",
+//   "  if ( net ~ 44.0.0.0/16 ) then { accept; }",
+//   "  if ( net ~ 44.1.0.0/16 ) then { reject; }",
+//   "}",
+//   "function 'bgp_test-bgpfilter_exportFilterV4'() {",
+//   "  if ( net ~ 77.0.0.0/16 ) then { accept; }",
+//   "  if ( net ~ 77.1.0.0/16 ) then { reject; }",
+//   "}",
+//  }
+func EmitBIRDBGPFilterFuncs(pairs memkv.KVPairs, version int) ([]string, error) {
+	lines := []string{}
+	var line string
+	var versionStr string
+
+	switch version {
+	case 4:
+		fallthrough
+	case 6:
+		versionStr = fmt.Sprintf("%d", version)
+	default:
+		return []string{}, fmt.Errorf("Version must be either 4 or 6")
+	}
+
+	for _, kvp := range pairs {
+		var filter v3.BGPFilter
+		err := json.Unmarshal([]byte(kvp.Value), &filter)
+		if err != nil {
+			return []string{}, fmt.Errorf("Error unmarshalling JSON: %s", err)
+		}
+
+		importFiltersV4 := filter.Spec.ImportV4
+		exportFiltersV4 := filter.Spec.ExportV4
+		importFiltersV6 := filter.Spec.ImportV6
+		exportFiltersV6 := filter.Spec.ExportV6
+
+		var filterName string
+		var emitImports bool
+		var emitExports bool
+		v4Selected := version == 4
+
+		if v4Selected {
+			emitImports = len(importFiltersV4) > 0
+			emitExports = len(exportFiltersV4) > 0
+		} else {
+			emitImports = len(importFiltersV6) > 0
+			emitExports = len(exportFiltersV6) > 0
+		}
+
+		if emitImports || emitExports {
+			filterName = path.Base(kvp.Key)
+			line = fmt.Sprintf("# v%s BGPFilter %s", versionStr, filterName)
+			lines = append(lines, line)
+		}
+
+		var filterFuncName string
+		var filterRule string
+		if emitImports {
+			filterFuncName, err = EmitFunctionName(filterName, "import", versionStr)
+			if err != nil {
+				return []string{}, err
+			}
+			line = fmt.Sprintf("function %s() {", filterFuncName)
+			lines = append(lines, line)
+
+			var ruleFields [][]string
+
+			if v4Selected {
+				for _, importV4 := range importFiltersV4 {
+					ruleFields = append(ruleFields, []string{string(importV4.MatchOperator), importV4.CIDR,
+						string(importV4.Action)})
+				}
+			} else {
+				for _, importV6 := range importFiltersV6 {
+					ruleFields = append(ruleFields, []string{string(importV6.MatchOperator), importV6.CIDR,
+						string(importV6.Action)})
+				}
+			}
+
+			for _, fields := range ruleFields {
+				filterRule, err = emitFilterStatement(fields[0], fields[1], fields[2])
+				if err != nil {
+					return []string{}, err
+				}
+				line = fmt.Sprintf("  %s", filterRule)
+				lines = append(lines, line)
+			}
+
+			line = "}"
+			lines = append(lines, line)
+		}
+
+		if emitExports {
+			filterFuncName, err = EmitFunctionName(filterName, "export", versionStr)
+			if err != nil {
+				return []string{}, err
+			}
+			line = fmt.Sprintf("function %s() {", filterFuncName)
+			lines = append(lines, line)
+
+			var ruleFields [][]string
+
+			if v4Selected {
+				for _, exportV4 := range exportFiltersV4 {
+					ruleFields = append(ruleFields, []string{string(exportV4.MatchOperator), exportV4.CIDR,
+						string(exportV4.Action)})
+				}
+			} else {
+				for _, exportV6 := range exportFiltersV6 {
+					ruleFields = append(ruleFields, []string{string(exportV6.MatchOperator), exportV6.CIDR,
+						string(exportV6.Action)})
+				}
+			}
+
+			for _, fields := range ruleFields {
+				filterRule, err = emitFilterStatement(fields[0], fields[1], fields[2])
+				if err != nil {
+					return []string{}, err
+				}
+				line = fmt.Sprintf("  %s", filterRule)
+				lines = append(lines, line)
+			}
+
+			line = "}"
+			lines = append(lines, line)
+		}
+	}
+	if len(lines) == 0 {
+		line = fmt.Sprintf("# No v%s BGPFilters configured", versionStr)
+		lines = append(lines, line)
+	}
+	return lines, nil
+}
+
+// The maximum length of a k8s resource (253 bytes) is longer than the maximum length of BIRD symbols (64 chars).
+// This function provides a way to map the k8s resource name to a BIRD symbol name that accounts
+// for the length difference in a way that minimizes the chance of collisions
+func truncateAndHashName(name string, maxLen int) (string, error) {
+	if len(name) <= maxLen {
+		return name, nil
+	}
+	// SHA256 outputs a hash 64 chars long but we'll use only the first 16
+	hashCharsToUse := 16
+	// Account for underscore we insert between truncated name and hash string
+	hashStrSize := hashCharsToUse + 1
+	if maxLen <= hashStrSize {
+		return "", fmt.Errorf("Max truncated string length must be greater than the mininum size of %d",
+			hashStrSize)
+	}
+	hash := sha256.New()
+	_, err := hash.Write([]byte(name))
+	if err != nil {
+		return "", err
+	}
+	truncationLen := maxLen - hashStrSize
+	hashStr := fmt.Sprintf("%X", hash.Sum(nil))
+	truncatedName := fmt.Sprintf("%s_%s", name[:truncationLen], hashStr[:hashCharsToUse])
+	return truncatedName, nil
 }
 
 // hashToIPv4 hashes the given string and
