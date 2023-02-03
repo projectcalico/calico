@@ -25,8 +25,12 @@ If you want to use a package manager:
 
 - [Homebrew] users can use `brew install calicoctl`.
 
+More detailed installation instructions, including how to install `calicoctl` as a
+Kubernetes pod, are available in the [online documentation][detailed install instructions].
+
 [Releases page]: https://github.com/projectcalico/calicoctl/releases
 [Homebrew]: https://brew.sh/
+[detailed install instructions]: https://projectcalico.docs.tigera.io/master/maintenance/clis/calicoctl/install
 
 ### Developing
 
