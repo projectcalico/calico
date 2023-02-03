@@ -11386,7 +11386,7 @@ int bpf_object__open_skeleton(struct bpf_object_skeleton *s,
 	struct bpf_object *obj;
 	int i;
 
-	/* Attempt to preserve opts->object_name, unless overriden by user
+	/* Attempt to preserve opts->object_name, unless overridden by user
 	 * explicitly. Overwriting object name for skeletons is discouraged,
 	 * as it breaks global data maps, because they contain object name
 	 * prefix as their own map name prefix. When skeleton is generated,
