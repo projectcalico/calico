@@ -249,8 +249,8 @@ rules:
     resources:
       - globalfelixconfigs
       - felixconfigurations
-      - bgpfilters
       - bgppeers
+      - bgpfilters
       - globalbgpconfigs
       - bgpconfigurations
       - ippools

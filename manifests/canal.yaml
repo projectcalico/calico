@@ -4442,6 +4442,7 @@ rules:
       - globalfelixconfigs
       - felixconfigurations
       - bgppeers
+      - bgpfilters
       - globalbgpconfigs
       - bgpconfigurations
       - ippools
