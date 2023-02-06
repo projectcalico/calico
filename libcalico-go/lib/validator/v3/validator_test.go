@@ -687,6 +687,8 @@ func init() {
 		Entry("should accept a valid IptablesFilterAllowAction value 'Accept'", api.FelixConfigurationSpec{IptablesFilterAllowAction: "Accept"}, true),
 		Entry("should accept a valid IptablesMangleAllowAction value 'Return'", api.FelixConfigurationSpec{IptablesMangleAllowAction: "Return"}, true),
 		Entry("should reject an invalid IptablesMangleAllowAction value 'Drop'", api.FelixConfigurationSpec{IptablesMangleAllowAction: "Drop"}, false),
+		Entry("should accept a valid IptablesFilterDenyAction value 'Drop'", api.FelixConfigurationSpec{IptablesFilterDenyAction: "Drop"}, true),
+		Entry("should accept a valid IptablesFilterDenyAction value 'Reject'", api.FelixConfigurationSpec{IptablesFilterDenyAction: "Reject"}, true),
 		Entry("should accept a valid KubeNodePortRanges value", api.FelixConfigurationSpec{KubeNodePortRanges: &[]numorstring.Port{
 			mustParsePortRange(3000, 4000), mustParsePortRange(5000, 6000),
 			mustParsePortRange(7000, 8000), mustParsePortRange(8000, 9000),

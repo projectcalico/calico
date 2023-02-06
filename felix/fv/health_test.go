@@ -37,7 +37,7 @@ package fv_test
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"math/rand"
 	"net/http"
 	"time"
@@ -422,6 +422,10 @@ var _ = Describe("_HEALTH_ _BPF-SAFE_ health tests", func() {
 			startTypha(k8sInfra.GetDockerArgs)
 			startFelix(typhaContainer.IP+":5474", k8sInfra.GetDockerArgs, felixParams{dataplaneTimeout: "20", healthHost: "0.0.0.0"})
 		})
+		AfterEach(func() {
+			felix.Stop()
+			typhaContainer.Stop()
+		})
 		It("should become unready, then die", func() {
 			Eventually(felixReady, "5s", "1s").ShouldNot(BeGood())
 			Consistently(felix.Stopped, "20s").Should(BeFalse()) // Should stay up for 20+s
@@ -440,7 +444,7 @@ func getHealthStatus(ip, port, endpoint string) func() int {
 			return statusErr
 		}
 		defer resp.Body.Close()
-		body, _ := ioutil.ReadAll(resp.Body)
+		body, _ := io.ReadAll(resp.Body)
 		log.WithField("resp", resp).Infof("Health response:\n%v\n", string(body))
 		return resp.StatusCode
 	}

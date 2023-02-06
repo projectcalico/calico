@@ -2109,6 +2109,13 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Format: "",
 						},
 					},
+					"iptablesFilterDenyAction": {
+						SchemaProps: spec.SchemaProps{
+							Description: "IptablesFilterDenyAction controls what happens to traffic that is denied by network policy. By default Calico blocks traffic with an iptables \"DROP\" action. If you want to use \"REJECT\" action instead you can configure it in here.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 					"logPrefix": {
 						SchemaProps: spec.SchemaProps{
 							Description: "LogPrefix is the log prefix that Felix uses when rendering LOG rules. [Default: calico-packet]",
@@ -2543,6 +2550,21 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Description: "BPFExternalServiceMode in BPF mode, controls how connections from outside the cluster to services (node ports and cluster IPs) are forwarded to remote workloads.  If set to \"Tunnel\" then both request and response traffic is tunneled to the remote node.  If set to \"DSR\", the request traffic is tunneled but the response traffic is sent directly from the remote node.  In \"DSR\" mode, the remote node appears to use the IP of the ingress node; this requires a permissive L2 network.  [Default: Tunnel]",
 							Type:        []string{"string"},
 							Format:      "",
+						},
+					},
+					"bpfDSROptoutCIDRs": {
+						SchemaProps: spec.SchemaProps{
+							Description: "BPFDSROptoutCIDRs is a list of CIDRs which are excluded from DSR. That is, clients in those CIDRs will accesses nodeports as if BPFExternalServiceMode was set to Tunnel.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: "",
+										Type:    []string{"string"},
+										Format:  "",
+									},
+								},
+							},
 						},
 					},
 					"bpfExtToServiceConnmark": {

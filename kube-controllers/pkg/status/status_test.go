@@ -15,7 +15,6 @@
 package status
 
 import (
-	"io/ioutil"
 	"os"
 	"strconv"
 	"sync"
@@ -32,7 +31,7 @@ var _ = Describe("Status pkg UTs", func() {
 	})
 
 	It("should update the status file when changes happen", func() {
-		f, err := ioutil.TempFile("", "test")
+		f, err := os.CreateTemp("", "test")
 		Expect(err).NotTo(HaveOccurred())
 		defer os.Remove(f.Name())
 		st := New(f.Name())

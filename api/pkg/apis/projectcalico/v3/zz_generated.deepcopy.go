@@ -1168,6 +1168,15 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(bool)
 		**out = **in
 	}
+	if in.BPFDSROptoutCIDRs != nil {
+		in, out := &in.BPFDSROptoutCIDRs, &out.BPFDSROptoutCIDRs
+		*out = new([]string)
+		if **in != nil {
+			in, out := *in, *out
+			*out = make([]string, len(*in))
+			copy(*out, *in)
+		}
+	}
 	if in.BPFExtToServiceConnmark != nil {
 		in, out := &in.BPFExtToServiceConnmark, &out.BPFExtToServiceConnmark
 		*out = new(int)

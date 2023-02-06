@@ -53,6 +53,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	"github.com/projectcalico/calico/felix/bpf/ifstate"
+	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/nat"
 	. "github.com/projectcalico/calico/felix/fv/connectivity"
 	"github.com/projectcalico/calico/felix/fv/containers"
@@ -182,6 +183,35 @@ FELIX_1_TNL/32: remote host in-pool nat-out tunneled
 FELIX_2/32: remote host
 FELIX_2_TNL/32: remote host in-pool nat-out tunneled`
 
+const expectedRouteDumpDSR = `10.65.0.0/16: remote in-pool nat-out
+10.65.0.2/32: local workload in-pool nat-out idx -
+10.65.0.3/32: local workload in-pool nat-out idx -
+10.65.1.0/26: remote workload in-pool nat-out nh FELIX_1
+10.65.2.0/26: remote workload in-pool nat-out nh FELIX_2
+111.222.0.1/32: local host
+111.222.1.1/32: remote host
+111.222.2.1/32: remote host
+245.245.0.0/16: remote no-dsr
+FELIX_0/32: local host
+FELIX_1/32: remote host
+FELIX_2/32: remote host`
+
+const expectedRouteDumpWithTunnelAddrDSR = `10.65.0.0/16: remote in-pool nat-out
+10.65.0.2/32: local workload in-pool nat-out idx -
+10.65.0.3/32: local workload in-pool nat-out idx -
+10.65.1.0/26: remote workload in-pool nat-out tunneled nh FELIX_1
+10.65.2.0/26: remote workload in-pool nat-out tunneled nh FELIX_2
+111.222.0.1/32: local host
+111.222.1.1/32: remote host
+111.222.2.1/32: remote host
+245.245.0.0/16: remote no-dsr
+FELIX_0/32: local host
+FELIX_0_TNL/32: local host
+FELIX_1/32: remote host
+FELIX_1_TNL/32: remote host in-pool nat-out tunneled
+FELIX_2/32: remote host
+FELIX_2_TNL/32: remote host in-pool nat-out tunneled`
+
 const extIP = "10.1.2.3"
 
 func BPFMode() bool {
@@ -261,6 +291,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			}
 
 			options = infrastructure.DefaultTopologyOptions()
+			options.FelixLogSeverity = "Debug"
 			options.NATOutgoingEnabled = true
 			options.AutoHEPsEnabled = true
 			// override IPIP being enabled by default
@@ -294,6 +325,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			}
 			options.ExternalIPs = true
 			options.ExtraEnvVars["FELIX_BPFExtToServiceConnmark"] = "0x80"
+			options.ExtraEnvVars["FELIX_BPFDSROptoutCIDRs"] = "245.245.0.0/16"
 
 			if ctlbWorkaround {
 				if testOpts.protocol == "udp" {
@@ -648,10 +680,10 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 				It("should clean up jump maps", func() {
 					numJumpMaps := func() int {
-						command := fmt.Sprintf("find /sys/fs/bpf/tc -name %s", bpf.JumpMapName())
+						command := fmt.Sprintf("find /sys/fs/bpf/tc -name %s", maps.JumpMapName())
 						output, err := felixes[0].ExecOutput("sh", "-c", command)
 						Expect(err).NotTo(HaveOccurred())
-						return strings.Count(output, bpf.JumpMapName())
+						return strings.Count(output, maps.JumpMapName())
 					}
 
 					expJumpMaps := func(numWorkloads int) int {
@@ -955,6 +987,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				tunnelAddrFelix1 := ""
 				tunnelAddrFelix2 := ""
 				expectedRoutes := expectedRouteDump
+				if testOpts.dsr {
+					expectedRoutes = expectedRouteDumpDSR
+				}
 				switch {
 				case felixes[0].ExpectedIPIPTunnelAddr != "":
 					tunnelAddr = felixes[0].ExpectedIPIPTunnelAddr
@@ -972,6 +1007,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 				if tunnelAddr != "" {
 					expectedRoutes = expectedRouteDumpWithTunnelAddr
+					if testOpts.dsr {
+						expectedRoutes = expectedRouteDumpWithTunnelAddrDSR
+					}
 				}
 
 				dumpRoutes := func() string {
@@ -2346,7 +2384,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								// Remove the affinity entry to emulate timer
 								// expiring / no prior affinity.
 								m := nat.AffinityMap()
-								cmd, err := bpf.MapDeleteKeyCmd(m, mkey.AsBytes())
+								cmd, err := maps.MapDeleteKeyCmd(m, mkey.AsBytes())
 								Expect(err).NotTo(HaveOccurred())
 								err = felixes[0].ExecMayFail(cmd...)
 								if err != nil {
@@ -3779,18 +3817,18 @@ func dumpNATMaps(felix *infrastructure.Felix) (nat.MapMem, nat.BackendMapMem) {
 	return dumpNATMap(felix), dumpEPMap(felix)
 }
 
-func dumpBPFMap(felix *infrastructure.Felix, m bpf.Map, iter bpf.IterCallback) {
+func dumpBPFMap(felix *infrastructure.Felix, m maps.Map, iter func(k, v []byte)) {
 	// Wait for the map to exist before trying to access it.  Otherwise, we
 	// might fail a test that was retrying this dump anyway.
 	Eventually(func() bool {
 		return felix.FileExists(m.Path())
 	}, "10s", "300ms").Should(BeTrue(), fmt.Sprintf("dumpBPFMap: map %s didn't show up inside container", m.Path()))
-	cmd, err := bpf.DumpMapCmd(m)
+	cmd, err := maps.DumpMapCmd(m)
 	Expect(err).NotTo(HaveOccurred(), "Failed to get BPF map dump command: "+m.Path())
 	log.WithField("cmd", cmd).Debug("dumpBPFMap")
 	out, err := felix.ExecOutput(cmd...)
 	Expect(err).NotTo(HaveOccurred(), "Failed to get dump BPF map: "+m.Path())
-	if strings.Contains(m.(*bpf.PinnedMap).Type, "percpu") {
+	if strings.Contains(m.(*maps.PinnedMap).Type, "percpu") {
 		err = bpf.IterPerCpuMapCmdOutput([]byte(out), iter)
 	} else {
 		err = bpf.IterMapCmdOutput([]byte(out), iter)
@@ -3884,7 +3922,7 @@ func ensureBPFProgramsAttachedOffset(offset int, felix *infrastructure.Felix, if
 			}
 		}
 		return prog
-	}, "20s", "200ms").Should(ContainElements(expectedIfaces))
+	}, "1m", "1s").Should(ContainElements(expectedIfaces))
 }
 
 func k8sService(name, clusterIP string, w *workload.Workload, port,

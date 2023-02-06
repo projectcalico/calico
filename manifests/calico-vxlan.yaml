@@ -854,6 +854,13 @@ spec:
                   connections.  The only reason to disable it is for debugging purposes.  [Default:
                   true]'
                 type: boolean
+              bpfDSROptoutCIDRs:
+                description: BPFDSROptoutCIDRs is a list of CIDRs which are excluded
+                  from DSR. That is, clients in those CIDRs will accesses nodeports
+                  as if BPFExternalServiceMode was set to Tunnel.
+                items:
+                  type: string
+                type: array
               bpfDataIfacePattern:
                 description: BPFDataIfacePattern is a regular expression that controls
                   which interfaces Felix should attach BPF programs to in order to
@@ -1201,6 +1208,12 @@ spec:
                   be used. The default is Auto.
                 type: string
               iptablesFilterAllowAction:
+                type: string
+              iptablesFilterDenyAction:
+                description: IptablesFilterDenyAction controls what happens to traffic
+                  that is denied by network policy. By default Calico blocks traffic
+                  with an iptables "DROP" action. If you want to use "REJECT" action
+                  instead you can configure it in here.
                 type: string
               iptablesLockFilePath:
                 description: 'IptablesLockFilePath is the location of the iptables

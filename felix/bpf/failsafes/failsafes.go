@@ -25,14 +25,14 @@ import (
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 
-	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/config"
 	"github.com/projectcalico/calico/felix/logutils"
 )
 
 type Manager struct {
 	// failsafesMap is the BPF map containing host enpodint failsafe ports.
-	failsafesMap bpf.Map
+	failsafesMap maps.Map
 	// failsafesInSync is set to true if the failsafe map is in sync.
 	failsafesInSync bool
 	// failsafesIn the inbound failsafe ports, from configuration.
@@ -47,7 +47,7 @@ func (m *Manager) OnUpdate(_ interface{}) {
 }
 
 func NewManager(
-	failsafesMap bpf.Map,
+	failsafesMap maps.Map,
 	failsafesIn, failsafesOut []config.ProtoPort,
 	opReporter logutils.OpRecorder,
 ) *Manager {
@@ -71,10 +71,10 @@ func (m *Manager) ResyncFailsafes() error {
 
 	syncFailed := false
 	unknownKeys := set.New[Key]()
-	err := m.failsafesMap.Iter(func(rawKey, _ []byte) bpf.IteratorAction {
+	err := m.failsafesMap.Iter(func(rawKey, _ []byte) maps.IteratorAction {
 		key := KeyFromSlice(rawKey)
 		unknownKeys.Add(key)
-		return bpf.IterNone
+		return maps.IterNone
 	})
 	if err != nil {
 		log.WithError(err).Panic("Failed to iterate failsafe ports map.")

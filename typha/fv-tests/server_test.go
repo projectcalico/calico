@@ -20,7 +20,6 @@ import (
 	"encoding/gob"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
 	"path/filepath"
@@ -633,7 +632,7 @@ var _ = Describe("With an in-process Server with short ping timeout", func() {
 		clientCxt, clientCancel := context.WithCancel(context.Background())
 		recorder := NewRecorder()
 		client := syncclient.New(
-			[]discovery.Typha{{Addr: h.Addr()}},
+			h.Discoverer(),
 			"test-version",
 			"test-host",
 			"test-info",
@@ -670,7 +669,7 @@ var _ = Describe("With an in-process Server with short ping timeout", func() {
 		recorder := NewRecorder()
 
 		client := syncclient.New(
-			[]discovery.Typha{{Addr: h.Addr()}},
+			h.Discoverer(),
 			"test-version",
 			"test-host",
 			"test-info",
@@ -894,7 +893,7 @@ var _ = Describe("With an in-process Server with long ping interval", func() {
 		clientCxt, clientCancel := context.WithCancel(context.Background())
 		recorder := NewRecorder()
 		client := syncclient.New(
-			[]discovery.Typha{{Addr: h.Addr()}},
+			h.Discoverer(),
 			"test-version",
 			"test-host",
 			"test-info",
@@ -1005,7 +1004,7 @@ var _ = Describe("With an in-process Server with short grace period", func() {
 			recorder.BlockAfterNUpdates(1, 2500*time.Millisecond)
 
 			client := syncclient.New(
-				[]discovery.Typha{{Addr: h.Addr()}},
+				h.Discoverer(),
 				"test-version",
 				"test-host",
 				"test-info",
@@ -1074,7 +1073,7 @@ var _ = Describe("With an in-process Server with short grace period", func() {
 			recorder.BlockAfterNUpdates(initialSnapshotSize+1, 2500*time.Millisecond)
 
 			client := syncclient.New(
-				[]discovery.Typha{{Addr: h.Addr()}},
+				h.Discoverer(),
 				"test-version",
 				"test-host",
 				"test-info",
@@ -1200,7 +1199,7 @@ var _ = Describe("With an in-process Server with short write timeout", func() {
 					recorder.BlockAfterNUpdates(1, 1*time.Second)
 
 					client := syncclient.New(
-						[]discovery.Typha{{Addr: h.Addr()}},
+						h.Discoverer(),
 						"test-version",
 						"test-host",
 						"test-info",
@@ -1334,7 +1333,7 @@ var _ = Describe("with server requiring TLS", func() {
 
 		// Create a temporary directory for certificates.
 		var err error
-		certDir, err = ioutil.TempDir("", "typhafv")
+		certDir, err = os.MkdirTemp("", "typhafv")
 		tlsutils.PanicIfErr(err)
 
 		// Trusted CA.
@@ -1426,7 +1425,7 @@ var _ = Describe("with server requiring TLS", func() {
 		recorder := NewRecorder()
 		serverAddr := fmt.Sprintf("127.0.0.1:%d", server.Port())
 		client := syncclient.New(
-			[]discovery.Typha{{Addr: serverAddr}},
+			discovery.New(discovery.WithAddrOverride(serverAddr)),
 			"test-version",
 			"test-host-1",
 			"test-info",

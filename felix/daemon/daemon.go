@@ -174,7 +174,7 @@ func Run(configFile string, gitVersion string, buildDate string, gitRevision str
 	var v3Client client.Interface
 	var datastoreConfig apiconfig.CalicoAPIConfig
 	var configParams *config.Config
-	var typhaAddresses []discovery.Typha
+	var typhaDiscoverer *discovery.Discoverer
 	var numClientsCreated int
 	var k8sClientSet *kubernetes.Clientset
 	var kubernetesVersion string
@@ -333,12 +333,30 @@ configRetry:
 			log.Info("no Kubernetes client available")
 		}
 
-		// If we're configured to discover Typha, do that now so we can retry if we fail.
-		typhaAddresses, err = discoverTyphaAddrs(configParams, k8sClientSet)
+		// If we're configured to discover Typha, do a one-shot discovery now to make sure that our config is
+		// sound before we exit the loop.
+		typhaDiscoverer = createTyphaDiscoverer(configParams, k8sClientSet)
+		// Wireguard can block connection to Typha, add a post-discovery hook to detect and resolve any
+		// interactions.  (This will be a no-op if wireguard has never been turned on.)
+		typhaDiscoverer.AddPostDiscoveryFilter(func(typhaAddresses []discovery.Typha) ([]discovery.Typha, error) {
+			// Perform wireguard bootstrap processing. This may remove wireguard configuration if wireguard
+			// is disabled or if the configuration is obviously broken. This also filters the typha addresses
+			// based on whether routing is obviously broken to the typha node (due to wireguard routing
+			// asymmetry). If all typha instances would be filtered out then we temporarily disable wireguard
+			// on this node to allow bootstrap to proceed.
+			log.Info("Got post-discovery callback from Typha discoverer; checking if we need to " +
+				"filter out any Typha addresses due to Wireguard bootstrap.")
+			return bootstrapWireguardAndFilterTyphaAddresses(configParams, v3Client, typhaAddresses)
+		})
+		typhaAddresses, err := typhaDiscoverer.LoadTyphaAddrs()
 		if err != nil {
 			log.WithError(err).Error("Typha discovery enabled but discovery failed.")
 			time.Sleep(1 * time.Second)
 			continue configRetry
+		} else if len(typhaAddresses) > 0 {
+			log.WithField("typhaAddrs", typhaAddresses).Info("Discovered initial set of Typha instances.")
+		} else {
+			log.Info("Typha not enabled.")
 		}
 
 		break configRetry
@@ -386,16 +404,6 @@ configRetry:
 	if configParams.DebugSimulateDataRace {
 		log.Warn("DebugSimulateDataRace is set, will start some racing goroutines!")
 		simulateDataRace()
-	}
-
-	// Perform wireguard bootstrap processing. This may remove wireguard configuration if wireguard is disabled or
-	// if the configuration is obviously broken. This also filters the typha addresses based on whether routing is
-	// obviously broken to the typha node (due to wireguard routing asymmetry). If all typhas would be filtered out then
-	// wireguard is removed from the node and all typhas are returned (unfiltered).
-	typhaAddresses, err := bootstrapWireguardAndFilterTyphaAddresses(configParams, v3Client, typhaAddresses)
-	if err != nil {
-		time.Sleep(2 * time.Second) // avoid a tight restart loop
-		log.WithError(err).Fatal("Couldn't bootstrap WireGuard host connectivity")
 	}
 
 	// Start up the dataplane driver.  This may be the internal go-based driver or an external
@@ -479,11 +487,11 @@ configRetry:
 	var typhaConnection *syncclient.SyncerClient
 	syncerToValidator := calc.NewSyncerCallbacksDecoupler()
 
-	if len(typhaAddresses) > 0 {
+	if typhaDiscoverer.TyphaEnabled() {
 		// Use a remote Syncer, via the Typha server.
-		log.WithField("addresses", typhaAddresses).Info("Connecting to Typha.")
+		log.Info("Connecting to Typha.")
 		typhaConnection = syncclient.New(
-			typhaAddresses,
+			typhaDiscoverer,
 			buildinfo.GitVersion,
 			configParams.FelixHostname,
 			fmt.Sprintf("Revision: %s; Build date: %s",
@@ -513,37 +521,39 @@ configRetry:
 		log.Infof("Starting the datastore Syncer")
 		syncer.Start()
 	} else {
-		log.Infof("Starting the Typha connection")
-		err := typhaConnection.Start(context.Background())
-		if err != nil {
-			log.WithError(err).Error("Failed to connect to Typha. Retrying...")
-			startTime := time.Now()
-			for err != nil && time.Since(startTime) < 30*time.Second {
-				// Set Ready to false and Live to true when unable to connect to typha
-				healthAggregator.Report(healthName, &health.HealthReport{Live: true, Ready: false})
-				err = typhaConnection.Start(context.Background())
-				if err == nil {
-					break
-				}
-				log.WithError(err).Debug("Retrying Typha connection")
-				time.Sleep(1 * time.Second)
+		startTime := time.Now()
+		for attempt := 1; ; attempt++ {
+			if attempt != 1 {
+				log.Info("Sleeping before Typha connection retry...")
 			}
+			log.Infof("Starting the Typha connection...")
+			// Try to connect to Typha, this actually tries all available Typha instances before it returns.
+			err := typhaConnection.Start(context.Background())
 			if err != nil {
-				// We failed to connect to typha. Remove wireguard configuration if necessary (just in case this is
-				// why the connection is failing).
-				if err2 := bootstrapRemoveWireguard(configParams, v3Client); err2 != nil {
-					log.WithError(err2).Error("Failed to remove wireguard configuration")
+				// Can't connect to Typha, report that we're not ready.
+				log.WithError(err).Error("Failed to connect to Typha.")
+				healthAggregator.Report(healthName, &health.HealthReport{Live: true, Ready: false})
+				if time.Since(startTime) > 30*time.Second {
+					// As a last-ditch effort, remove all wireguard configuration (just in case this is why the
+					// connection is failing).
+					if err2 := bootstrapRemoveWireguard(configParams, v3Client); err2 != nil {
+						log.WithError(err2).Error("Failed to remove wireguard configuration")
+					}
+
+					log.WithError(err).Fatal("Failed to connect to Typha, giving up after timeout")
 				}
-				log.WithError(err).Fatal("Failed to connect to Typha")
-			} else {
-				log.Info("Connected to Typha after retries.")
-				healthAggregator.Report(healthName, &health.HealthReport{Live: true, Ready: true})
+				continue
 			}
+
+			log.Infof("Connected to Typha on attempt %d", attempt)
+			break
 		}
+		healthAggregator.Report(healthName, &health.HealthReport{Live: true, Ready: true})
 
 		supportsNodeResourceUpdates, err := typhaConnection.SupportsNodeResourceUpdates(10 * time.Second)
 		if err != nil {
-			log.WithError(err).Error("Did not get hello message from Typha in time, assuming it does not support node resource updates")
+			time.Sleep(time.Second) // Avoid tight restart loop in case we didn't really wait 10s above.
+			log.WithError(err).Fatal("Did not get hello message from Typha in time")
 			return
 		}
 		log.Debugf("Typha supports node resource updates: %v", supportsNodeResourceUpdates)
@@ -1300,15 +1310,12 @@ func (fc *DataplaneConnector) ApplyNoRestartConfig(old, new *config.Config) {
 	}
 }
 
-func discoverTyphaAddrs(configParams *config.Config, k8sClientSet kubernetes.Interface) ([]discovery.Typha, error) {
-	typhaDiscoveryOpts := configParams.TyphaDiscoveryOpts()
-	typhaDiscoveryOpts = append(typhaDiscoveryOpts,
+func createTyphaDiscoverer(configParams *config.Config, k8sClientSet kubernetes.Interface) *discovery.Discoverer {
+	typhaDiscoverer := discovery.New(
+		discovery.WithAddrOverride(configParams.TyphaAddr),
+		discovery.WithKubeService(configParams.TyphaK8sNamespace, configParams.TyphaK8sServiceName),
 		discovery.WithKubeClient(k8sClientSet),
 		discovery.WithNodeAffinity(configParams.FelixHostname),
 	)
-	res, err := discovery.DiscoverTyphaAddrs(typhaDiscoveryOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return res, nil
+	return typhaDiscoverer
 }

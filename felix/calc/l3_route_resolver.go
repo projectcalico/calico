@@ -908,8 +908,8 @@ type RouteTrie struct {
 
 func NewRouteTrie() *RouteTrie {
 	return &RouteTrie{
-		v4T:        &ip.CIDRTrie{},
-		v6T:        &ip.CIDRTrie{},
+		v4T:        ip.NewCIDRTrie(),
+		v6T:        ip.NewCIDRTrie(),
 		dirtyCIDRs: set.NewBoxed[ip.CIDR](),
 
 		OnAlive: func() {},

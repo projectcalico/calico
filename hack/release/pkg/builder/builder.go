@@ -16,12 +16,12 @@ package builder
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"strings"
 
 	"github.com/coreos/go-semver/semver"
 	"github.com/sirupsen/logrus"
+	"gopkg.in/yaml.v2"
 )
 
 // Global configuration for releases.
@@ -51,6 +51,59 @@ func NewReleaseBuilder(runner CommandRunner) *ReleaseBuilder {
 type ReleaseBuilder struct {
 	// Allow specification of command runner so it can be overridden in tests.
 	runner CommandRunner
+}
+
+// releaseImages returns the set of images that should be expected for a release.
+// This function needs to be kept up-to-date with the actual release artifacts produced for a
+// release if images are added or removed.
+func releaseImages(version, operatorVersion string) []string {
+	return []string{
+		fmt.Sprintf("quay.io/tigera/operator:%s", operatorVersion),
+		fmt.Sprintf("calico/typha:%s", version),
+		fmt.Sprintf("calico/ctl:%s", version),
+		fmt.Sprintf("calico/node:%s", version),
+		fmt.Sprintf("calico/cni:%s", version),
+		fmt.Sprintf("calico/apiserver:%s", version),
+		fmt.Sprintf("calico/kube-controllers:%s", version),
+		fmt.Sprintf("calico/windows:%s", version),
+		fmt.Sprintf("calico/dikastes:%s", version),
+		fmt.Sprintf("calico/pod2daemon-flexvol:%s", version),
+		fmt.Sprintf("calico/csi:%s", version),
+		fmt.Sprintf("calico/node-driver-registrar:%s", version),
+	}
+}
+
+func (r *ReleaseBuilder) BuildMetadata(dir string) error {
+	type metadata struct {
+		Version          string   `json:"version"`
+		OperatorVersion  string   `json:"operator_version" yaml:"operatorVersion"`
+		Images           []string `json:"images"`
+		HelmChartVersion string   `json:"helm_chart_version" yaml:"helmChartVersion"`
+	}
+
+	// Determine the versions to use based on the manifests, which should
+	// have already been updated with the correct tags.
+	calicoVersion, operatorVersion := r.getVersionsFromManifests()
+
+	m := metadata{
+		Version:          calicoVersion,
+		OperatorVersion:  operatorVersion,
+		Images:           releaseImages(calicoVersion, operatorVersion),
+		HelmChartVersion: calicoVersion,
+	}
+
+	// Render it as yaml and write it to a file.
+	bs, err := yaml.Marshal(m)
+	if err != nil {
+		return err
+	}
+
+	err = os.WriteFile(fmt.Sprintf("%s/metadata.yaml", dir), []byte(bs), 0o644)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // BuildRelease creates a Calico release.
@@ -117,6 +170,9 @@ func (r *ReleaseBuilder) BuildRelease() error {
 
 	// Build the helm charts
 	r.runner.Run("make", []string{"chart"}, []string{})
+
+	// Build OpenShift bundle.
+	r.runner.Run("make", []string{"bin/ocp.tgz"}, []string{})
 
 	// TODO: Assert the produced images are OK. e.g., have correct
 	// commit and version information compiled in.
@@ -241,11 +297,17 @@ func (r *ReleaseBuilder) collectGithubArtifacts(ver string) error {
 	// TODO: Delete if already exists.
 	err := os.MkdirAll(uploadDir, os.ModePerm)
 	if err != nil {
-		return fmt.Errorf("Failed to create dir: %s", err)
+		return fmt.Errorf("failed to create dir: %s", err)
+	}
+
+	// Add in a release metadata file.
+	err = r.BuildMetadata(uploadDir)
+	if err != nil {
+		return fmt.Errorf("failed to build release metadata file: %s", err)
 	}
 
 	// We attach calicoctl binaries directly to the release as well.
-	files, err := ioutil.ReadDir("calicoctl/bin/")
+	files, err := os.ReadDir("calicoctl/bin/")
 	if err != nil {
 		return err
 	}
@@ -260,7 +322,7 @@ func (r *ReleaseBuilder) collectGithubArtifacts(ver string) error {
 		return err
 	}
 
-	// Add in the already-built windows zip archive, the Windows install script, and the helm chart.
+	// Add in the already-built windows zip archive, the Windows install script, ocp bundle, and the helm chart.
 	if _, err := r.runner.Run("cp", []string{fmt.Sprintf("node/dist/calico-windows-%s.zip", ver), uploadDir}, nil); err != nil {
 		return err
 	}
@@ -270,11 +332,14 @@ func (r *ReleaseBuilder) collectGithubArtifacts(ver string) error {
 	if _, err := r.runner.Run("cp", []string{fmt.Sprintf("bin/tigera-operator-%s.tgz", ver), uploadDir}, nil); err != nil {
 		return err
 	}
+	if _, err := r.runner.Run("cp", []string{"manifests/ocp.tgz", ver, uploadDir}, nil); err != nil {
+		return err
+	}
 
 	// Generate a SHA256SUMS file containing the checksums for each artifact
 	// that we attach to the release. These can be confirmed by end users via the following command:
 	// sha256sum -c --ignore-missing SHA256SUMS
-	files, err = ioutil.ReadDir(uploadDir)
+	files, err = os.ReadDir(uploadDir)
 	if err != nil {
 		return err
 	}
@@ -404,6 +469,7 @@ Attached to this release are the following artifacts:
 - {release_tar}: container images, binaries, and kubernetes manifests.
 - {calico_windows_zip}: Calico for Windows.
 - {helm_chart}: Calico Helm v3 chart.
+- ocp.tgz: Manifest bundle for OpenShift.
 `
 	sv, err := semver.NewVersion(strings.TrimPrefix(ver, "v"))
 	if err != nil {
@@ -505,6 +571,47 @@ func (r *ReleaseBuilder) assertManifestVersions(ver string) error {
 	}
 
 	return nil
+}
+
+// getVersionsFromManifests returns the Calico and Operator versions in-use by this
+// release based on the generated manifests to be used for this release.
+func (r *ReleaseBuilder) getVersionsFromManifests() (string, string) {
+	manifests := []string{"calico.yaml", "tigera-operator.yaml"}
+
+	var operatorVersion, version string
+	for _, m := range manifests {
+		args := []string{"-Po", `image:\K(.*)`, m}
+		out, err := r.runner.RunInDir("manifests", "grep", args, nil)
+		if err != nil {
+			panic(err)
+		}
+
+		imgs := strings.Split(out, "\n")
+
+		for _, i := range imgs {
+			if strings.Contains(i, "operator") && operatorVersion == "" {
+				splits := strings.SplitAfter(i, ":")
+				operatorVersion = splits[len(splits)-1]
+				logrus.Infof("Using version %s from image %s", version, i)
+			} else if strings.Contains(i, "calico/") && version == "" {
+				splits := strings.SplitAfter(i, ":")
+				version = splits[len(splits)-1]
+				logrus.Infof("Using version %s from image %s", version, i)
+			}
+			if operatorVersion != "" && version != "" {
+				break
+			}
+		}
+		if operatorVersion != "" && version != "" {
+			break
+		}
+	}
+
+	if version == "" || operatorVersion == "" {
+		panic("Missing version!")
+	}
+
+	return version, operatorVersion
 }
 
 // determineReleaseVersion uses historical clues to figure out the next semver

@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"crypto/rand"
 	"encoding/binary"
-	"io/ioutil"
 	"os"
 
 	"github.com/sirupsen/logrus"
@@ -33,7 +32,7 @@ type Binary struct {
 
 // BinaryFromFile reads a binary from a file
 func BinaryFromFile(ifile string) (*Binary, error) {
-	raw, err := ioutil.ReadFile(ifile)
+	raw, err := os.ReadFile(ifile)
 	if err != nil {
 		return nil, err
 	}
@@ -45,7 +44,7 @@ func BinaryFromFile(ifile string) (*Binary, error) {
 
 // WriteToFile writes the binary to a file
 func (b *Binary) WriteToFile(ofile string) error {
-	err := ioutil.WriteFile(ofile, b.raw, 0600)
+	err := os.WriteFile(ofile, b.raw, 0600)
 	if err != nil {
 		return err
 	}

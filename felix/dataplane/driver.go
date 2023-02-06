@@ -248,6 +248,7 @@ func StartDataplaneDriver(configParams *config.Config,
 				EndpointToHostAction:      configParams.DefaultEndpointToHostAction,
 				IptablesFilterAllowAction: configParams.IptablesFilterAllowAction,
 				IptablesMangleAllowAction: configParams.IptablesMangleAllowAction,
+				IptablesFilterDenyAction:  configParams.IptablesFilterDenyAction,
 
 				FailsafeInboundHostPorts:  configParams.FailsafeInboundHostPorts,
 				FailsafeOutboundHostPorts: configParams.FailsafeOutboundHostPorts,
@@ -362,6 +363,7 @@ func StartDataplaneDriver(configParams *config.Config,
 
 		if configParams.BPFExternalServiceMode == "dsr" {
 			dpConfig.BPFNodePortDSREnabled = true
+			dpConfig.BPFDSROptoutCIDRs = configParams.BPFDSROptoutCIDRs
 		}
 
 		intDP := intdataplane.NewIntDataplaneDriver(dpConfig)
