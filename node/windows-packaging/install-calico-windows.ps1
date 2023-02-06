@@ -21,8 +21,9 @@
 Param(
     # Note: This URL only works for releases. To test development code, build calico-windows.zip from source.
     # VERSION is replaced by our build tooling.
-    [parameter(Mandatory = $false)] $ReleaseBaseURL="https://github.com/projectcalico/calico/releases/download/VERSION/",
-    [parameter(Mandatory = $false)] $ReleaseFile="calico-windows-VERSION.zip",
+    [parameter(Mandatory = $false)] $CalicoVersion="v3.25.0",
+    [parameter(Mandatory = $false)] $ReleaseBaseURL="https://github.com/projectcalico/calico/releases/download/$($CalicoVersion)",
+    [parameter(Mandatory = $false)] $ReleaseFile="calico-windows-$($CalicoVersion).zip",
     [parameter(Mandatory = $false)] $KubeVersion="",
     [parameter(Mandatory = $false)] $DownloadOnly="no",
     [parameter(Mandatory = $false)] $StartCalico="yes",
