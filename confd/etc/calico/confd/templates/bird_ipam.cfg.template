@@ -8,7 +8,7 @@ function reject_disabled_pools ()
 {{- end}}
 }
 
-filter calico_export_to_bgp_peers {
+function calico_export_to_bgp_peers () {
   # filter code terminates when it calls `accept;` or `reject;`, call reject_disabled_pools() first, then apply_communities() and then calico_aggr()
   reject_disabled_pools();
   apply_communities();
@@ -32,7 +32,6 @@ filter calico_export_to_bgp_peers {
   }
 {{- end}}
 {{- end}}
-  reject;
 }
 
 {{$network_key := printf "/bgp/v1/host/%s/network_v4" (getenv "NODENAME")}}

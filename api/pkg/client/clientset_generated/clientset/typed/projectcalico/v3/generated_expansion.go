@@ -6,6 +6,8 @@ package v3
 
 type BGPConfigurationExpansion interface{}
 
+type BGPFilterExpansion interface{}
+
 type BGPPeerExpansion interface{}
 
 type BlockAffinityExpansion interface{}

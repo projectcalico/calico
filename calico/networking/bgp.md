@@ -21,6 +21,7 @@ This how-to guide uses the following {{site.prodname}} features:
 - **BGPPeer resources**
   - **Global peer**
   - **Node-specific peer**
+- **BGPFilter resource**
 
 ### Concepts
 
@@ -69,6 +70,8 @@ For a deeper look at common on-premises deployment models, see [Calico over IP F
 - [View BGP peering status for a node](#view-bgp-peering-status-for-a-node)
 - [Change the default global AS number](#change-the-default-global-as-number)
 - [Change AS number for a particular node](#change-as-number-for-a-particular-node)
+- [Configure a BGP filter](#configure-a-bgp-filter)
+- [Configure a BGP peer with a BGP filter](#configure-a-bgp-peer-with-a-bgp-filter)
 
 #### Configure a global BGP peer
 
@@ -204,8 +207,101 @@ You can configure an AS for a particular node by modifying the node object using
 calicoctl patch node node-1 -p '{"spec": {"bgp": {"asNumber": "64514"}}}'
 ```
 
+#### Configure a BGP filter
+
+BGP filters control which routes are imported and exported between BGP peers.
+
+The following example creates a BGPFilter
+```
+kind: BGPFilter
+apiVersion: projectcalico.org/v3
+metadata:
+  name: my-first-bgp-filter
+spec:
+  exportV4:
+    - action: Accept
+      matchOperator: In
+      cidr: 77.0.0.0/16
+  importV4:
+    - action: Accept
+      matchOperator: NotIn
+      cidr: 44.0.0.0/16
+  exportV6:
+    - action: Accept
+      matchOperator: Equal
+      cidr: 9000::0/64
+  importV6:
+    - action: Accept
+      matchOperator: NotEqual
+      cidr: 5000::0/64
+```
+
+#### Configure a BGP peer with a BGP filter
+
+BGP peers can use BGP filters to control which routes are imported or exported between them.
+
+The following example creates a BGPFilter and associates it with a BGPPeer
+>**Note**: BGPFilters are applied in the order listed on a BGPPeer
+{: .alert .alert-info}
+
+```
+kind: BGPFilter
+apiVersion: projectcalico.org/v3
+metadata:
+  name: first-bgp-filter
+spec:
+  exportV4:
+    - action: Accept
+      matchOperator: In
+      cidr: 77.0.0.0/16
+  importV4:
+    - action: Accept
+      matchOperator: NotIn
+      cidr: 44.0.0.0/16
+  exportV6:
+    - action: Accept
+      matchOperator: Equal
+      cidr: 9000::0/64
+  importV6:
+    - action: Accept
+      matchOperator: NotEqual
+      cidr: 5000::0/64
+---
+kind: BGPFilter
+apiVersion: projectcalico.org/v3
+metadata:
+  name: second-bgp-filter
+spec:
+  exportV4:
+    - action: Accept
+      matchOperator: In
+      cidr: 99.0.0.0/16
+  importV4:
+    - action: Accept
+      matchOperator: NotIn
+      cidr: 55.0.0.0/16
+  exportV6:
+    - action: Accept
+      matchOperator: Equal
+      cidr: 7000::0/64
+  importV6:
+    - action: Accept
+      matchOperator: NotEqual
+      cidr: 4000::0/64
+---
+kind: BGPPeer
+apiVersion: projectcalico.org/v3
+metadata:
+  name: peer-with-filter
+spec:
+  peerSelector: has(filter-bgp)
+  filters:
+    - first-bgp-filter
+    - second-bgp-filter
+```
 ### Above and beyond
 
 - [Node resource]({{ site.baseurl }}/reference/resources/node)
 - [BGP configuration resource]({{ site.baseurl }}/reference/resources/bgpconfig)
 - [BGP peer resource]({{ site.baseurl }}/reference/resources/bgppeer)
+- [BGP filter resource]({{ site.baseurl }}/reference/resources/bgpfilter)
