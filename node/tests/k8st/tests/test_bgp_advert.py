@@ -722,6 +722,60 @@ EOF
                     self.assertNotIn(cip, routes)
             retry_until_success(check_routes_gone, retries=10, wait_time=5)
 
+    def test_bgp_filter_ip_advertisement(self):
+        with DiagsCollector():
+            # Add BGPConfiguration with serviceClusterIP
+            kubectl("""apply -f - << EOF
+apiVersion: projectcalico.org/v3
+kind: BGPConfiguration
+metadata:
+  name: default
+spec:
+  serviceClusterIPs:
+  - cidr: 10.96.0.0/12
+EOF
+""")
+            # Assert that a route to the service IP range is present.
+            retry_until_success(lambda: self.assertIn("10.96.0.0/12", self.get_routes()))
+
+            # Create a Local type NodePort service with a single replica.
+            local_svc = "nginx-local"
+            self.deploy("nginx:1.7.9", local_svc, self.ns, 80)
+            self.wait_until_exists(local_svc, "svc", self.ns)
+
+            # Get clusterIPs.
+            local_svc_ip = self.get_svc_cluster_ip(local_svc, self.ns)
+
+            # Wait for the deployment to roll out.
+            self.wait_for_deployment(local_svc, self.ns)
+
+            # Assert that nginx service can be curled from the external node.
+            retry_until_success(curl, function_args=[local_svc_ip])
+
+            # Assert that local clusterIP is an advertised route.
+            retry_until_success(lambda: self.assertIn(local_svc_ip, self.get_routes()))
+
+            # Create an export BGP filter that rejects the service IP range
+            kubectl("""apply -f - <<EOF
+apiVersion: projectcalico.org/v3
+kind: BGPFilter
+metadata:
+  name: test-filter-export-1
+spec:
+  exportV4:
+  - cidr: 10.96.0.0/12
+    matchOperator: In
+    action: Reject
+EOF
+""")
+        kubectl("patch bgppeer node-extra.peer --patch '{\"spec\": {\"filters\": [\"test-filter-export-1\"]}}'")
+        self.add_cleanup(lambda: kubectl("patch bgppeer node-extra.peer --patch '{\"spec\": {\"filters\": []}}'"))
+        self.add_cleanup(lambda: kubectl("delete bgpfilter test-filter-export-1"))
+
+        # Assert that local clusterIP is no longer advertised.
+        retry_until_success(lambda: self.assertNotIn(local_svc_ip, self.get_routes()))
+        # Assert that a route to the service IP range is no longer present.
+        retry_until_success(lambda: self.assertNotIn("10.96.0.0/12", self.get_routes()))
 
 class TestBGPAdvertRR(_TestBGPAdvert):
 

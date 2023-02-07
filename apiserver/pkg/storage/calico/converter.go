@@ -81,6 +81,11 @@ func convertToAAPI(libcalicoObject runtime.Object) (res runtime.Object) {
 		aapi := &aapi.BGPPeer{}
 		BGPPeerConverter{}.convertToAAPI(lcg, aapi)
 		return aapi
+	case *api.BGPFilter:
+		lcg := libcalicoObject.(*api.BGPFilter)
+		aapi := &api.BGPFilter{}
+		BGPFilterConverter{}.convertToAAPI(lcg, aapi)
+		return aapi
 	case *api.Profile:
 		lcg := libcalicoObject.(*api.Profile)
 		aapi := &aapi.Profile{}
