@@ -3,6 +3,10 @@
 
 # To redirect manifest requests for master.
 
+# Troubleshooting
+/* https://docs.tigera.io/calico/latest/:splat 301!
+
+
 /master/manifests/* https://raw.githubusercontent.com/projectcalico/calico/master/manifests/:splat 301
 
 # To redirect traffic from latest version links.
