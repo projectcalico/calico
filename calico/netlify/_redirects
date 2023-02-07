@@ -17,36 +17,36 @@
 
 # To redirect old versions.
 # /archive/v3.25 https://docs.tigera.io/calico/3.25/about/about-calico 301
-/archive/v3.24 https://docs.tigera.io/calico/3.24/about/about-calico 301
-/archive/v3.23 https://docs.tigera.io/archive/v3.23/about/about-calico 301
-/archive/v3.22 https://docs.tigera.io/archive/v3.22/about/about-calico 301
-/archive/v3.15 https://docs.tigera.io/archive/v3.15/about/about-calico 301
-/archive/v3.14 https://docs.tigera.io/archive/v3.14/introduction/ 301
-/archive/v3.13 https://docs.tigera.io/archive/v3.13/introduction 301
-/archive/v3.12 https://docs.tigera.io/archive/v3.12/introduction 301
-/archive/v3.11 https://docs.tigera.io/archive/v3.11/introduction 301
-/archive/v3.10 https://docs.tigera.io/archive/v3.10/introduction 301
-/archive/v3.9 https://docs.tigera.io/archive/v3.9/introduction 301
-/archive/v3.8 https://docs.tigera.io/archive/v3.8/introduction 301
-/archive/v3.7 https://docs.tigera.io/archive/v3.7/introduction 301
-/archive/v3.6 https://docs.tigera.io/archive/v3.6/introduction 301
-/archive/v3.5 https://docs.tigera.io/archive/v3.5/introduction 301
-/archive/v3.4 https://docs.tigera.io/archive/v3.4/introduction 301
-/archive/v3.3 https://docs.tigera.io/archive/v3.3/introduction 301
-/archive/v3.2 https://docs.tigera.io/archive/v3.2/introduction 301
-/archive/v3.1 https://docs.tigera.io/archive/v3.1/introduction 301
-/archive/v3.0 https://docs.tigera.io/archive/v3.0/introduction 301
-/archive/v2.6 https://docs.tigera.io/archive/v2.6/introduction 301
-/archive/v2.5 https://docs.tigera.io/archive/v2.5/introduction 301
-/archive/v2.4 https://docs.tigera.io/archive/v2.4/introduction 301
-/archive/v2.3 https://docs.tigera.io/archive/v2.3/introduction 301
-/archive/v2.2 https://docs.tigera.io/archive/v2.2/introduction 301
-/archive/v2.1 https://docs.tigera.io/archive/v2.1/introduction 301
-/archive/v2.0 https://docs.tigera.io/archive/v2.0/introduction 301
-/archive/v1.6 https://docs.tigera.io/archive/v1.6/introduction 301
-/archive/v1.5 https://docs.tigera.io/archive/v1.5/introduction 301
-/master https://docs.tigera.io/calico/next/about/about-calico 301
-
+# /archive/v3.24 https://docs.tigera.io/calico/3.24/about/about-calico 301
+# /archive/v3.23 https://docs.tigera.io/archive/v3.23/about/about-calico 301
+# /archive/v3.22 https://docs.tigera.io/archive/v3.22/about/about-calico 301
+# /archive/v3.15 https://docs.tigera.io/archive/v3.15/about/about-calico 301
+# /archive/v3.14 https://docs.tigera.io/archive/v3.14/introduction/ 301
+# /archive/v3.13 https://docs.tigera.io/archive/v3.13/introduction 301
+# /archive/v3.12 https://docs.tigera.io/archive/v3.12/introduction 301
+# /archive/v3.11 https://docs.tigera.io/archive/v3.11/introduction 301
+# /archive/v3.10 https://docs.tigera.io/archive/v3.10/introduction 301
+# /archive/v3.9 https://docs.tigera.io/archive/v3.9/introduction 301
+# /archive/v3.8 https://docs.tigera.io/archive/v3.8/introduction 301
+# /archive/v3.7 https://docs.tigera.io/archive/v3.7/introduction 301
+# /archive/v3.6 https://docs.tigera.io/archive/v3.6/introduction 301
+# /archive/v3.5 https://docs.tigera.io/archive/v3.5/introduction 301
+# /archive/v3.4 https://docs.tigera.io/archive/v3.4/introduction 301
+# /archive/v3.3 https://docs.tigera.io/archive/v3.3/introduction 301
+# /archive/v3.2 https://docs.tigera.io/archive/v3.2/introduction 301
+# /archive/v3.1 https://docs.tigera.io/archive/v3.1/introduction 301
+# /archive/v3.0 https://docs.tigera.io/archive/v3.0/introduction 301
+# /archive/v2.6 https://docs.tigera.io/archive/v2.6/introduction 301
+# /archive/v2.5 https://docs.tigera.io/archive/v2.5/introduction 301
+# /archive/v2.4 https://docs.tigera.io/archive/v2.4/introduction 301
+# /archive/v2.3 https://docs.tigera.io/archive/v2.3/introduction 301
+# /archive/v2.2 https://docs.tigera.io/archive/v2.2/introduction 301
+# /archive/v2.1 https://docs.tigera.io/archive/v2.1/introduction 301
+# /archive/v2.0 https://docs.tigera.io/archive/v2.0/introduction 301
+# /archive/v1.6 https://docs.tigera.io/archive/v1.6/introduction 301
+# /archive/v1.5 https://docs.tigera.io/archive/v1.5/introduction 301
+# /master https://docs.tigera.io/calico/next/about/about-calico 301
+#
 # explicit redirects for any old that does not exist at an identical path in the
 # latest docs.
 /introduction/ https://docs.tigera.io/calico/latest/about/about-calico 301
