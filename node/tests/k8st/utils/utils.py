@@ -22,6 +22,8 @@ import string
 import subprocess
 import time
 
+from kubernetes import client, config
+
 _log = logging.getLogger(__name__)
 
 ROUTER_IMAGE = os.getenv("ROUTER_IMAGE", "calico/bird:latest")
