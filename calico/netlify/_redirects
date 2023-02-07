@@ -16,7 +16,7 @@
 /release-notes/* https://docs.tigera.io/calico/latest/release-notes/:splat 301
 
 # To redirect old versions.
-/archive/v3.25 https://docs.tigera.io/calico/3.25/about/about-calico 301
+# /archive/v3.25 https://docs.tigera.io/calico/3.25/about/about-calico 301
 /archive/v3.24 https://docs.tigera.io/calico/3.24/about/about-calico 301
 /archive/v3.23 https://docs.tigera.io/archive/v3.23/about/about-calico 301
 /archive/v3.22 https://docs.tigera.io/archive/v3.22/about/about-calico 301
