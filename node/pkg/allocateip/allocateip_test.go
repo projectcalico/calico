@@ -1472,6 +1472,11 @@ func (c shimClient) WorkloadEndpoints() client.WorkloadEndpointInterface {
 	return c.client.WorkloadEndpoints()
 }
 
+// BGPFilter returns an interface for managing BGPFilter resources.
+func (c shimClient) BGPFilter() client.BGPFilterInterface {
+	return c.client.BGPFilter()
+}
+
 // BGPPeers returns an interface for managing BGP peer resources.
 func (c shimClient) BGPPeers() client.BGPPeerInterface {
 	return c.client.BGPPeers()

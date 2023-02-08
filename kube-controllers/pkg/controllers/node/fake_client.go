@@ -99,6 +99,11 @@ func (f *FakeCalicoClient) WorkloadEndpoints() clientv3.WorkloadEndpointInterfac
 	panic("not implemented")
 }
 
+// BGPFilter returns an interface for managing BGPFilter resources.
+func (f *FakeCalicoClient) BGPFilter() clientv3.BGPFilterInterface {
+	panic("not implemented")
+}
+
 // BGPPeers returns an interface for managing BGP peer resources.
 func (f *FakeCalicoClient) BGPPeers() clientv3.BGPPeerInterface {
 	panic("not implemented")

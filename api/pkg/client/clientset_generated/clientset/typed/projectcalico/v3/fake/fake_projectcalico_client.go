@@ -18,6 +18,10 @@ func (c *FakeProjectcalicoV3) BGPConfigurations() v3.BGPConfigurationInterface {
 	return &FakeBGPConfigurations{c}
 }
 
+func (c *FakeProjectcalicoV3) BGPFilters() v3.BGPFilterInterface {
+	return &FakeBGPFilters{c}
+}
+
 func (c *FakeProjectcalicoV3) BGPPeers() v3.BGPPeerInterface {
 	return &FakeBGPPeers{c}
 }
