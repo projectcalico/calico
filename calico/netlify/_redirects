@@ -1,7 +1,7 @@
 # redirect old docs to latest at root.
 # note that you can still access these old docs at https://docs.projectcalico.org/archive/*
 
-/charts/* https://calico-public.s3.amazonaws.com/charts/:splat 200
+# /charts/* https://calico-public.s3.amazonaws.com/charts/:splat 200
 
 # To redirect manifest requests for master.
 
@@ -325,4 +325,4 @@
 
 # Final catch for everything not specified above
 
-/* https://docs.tigera.io/calico/latest/:splat 301!
+#/* https://docs.tigera.io/calico/latest/:splat 301!
