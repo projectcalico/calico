@@ -16,6 +16,7 @@ package health
 
 import (
 	"bytes"
+	"fmt"
 	"net"
 	"net/http"
 	"sort"
@@ -60,6 +61,20 @@ type HealthReport struct {
 	Detail string
 }
 
+func (h *HealthReport) String() string {
+	var parts []string
+	if h.Live {
+		parts = append(parts, "live")
+	}
+	if h.Ready {
+		parts = append(parts, "ready")
+	}
+	if h.Detail != "" {
+		parts = append(parts, "detail="+h.Detail)
+	}
+	return strings.Join(parts, ",")
+}
+
 type reporterState struct {
 	// The reporter's name.
 	name string
@@ -75,6 +90,23 @@ type reporterState struct {
 
 	// Time of that most recent report.
 	timestamp time.Time
+}
+
+func (r *reporterState) String() string {
+	var timeoutStr string
+	if r.timeout == 0 {
+		timeoutStr = "none"
+	} else {
+		timeoutStr = r.timeout.String()
+	}
+	timestampStr := "-"
+	agoStr := "-"
+	if !r.timestamp.IsZero() {
+		timestampStr = r.timestamp.Format("15:04:05")
+		agoStr = fmt.Sprintf("%.1f", time.Since(r.timestamp).Seconds())
+	}
+	return fmt.Sprintf("health.reporterState{name:%q, reports:%q, latest:%q, timestamp:%s(%ss ago) timeout:%s}",
+		r.name, r.reports.String(), r.latest.String(), timestampStr, agoStr, timeoutStr)
 }
 
 func (r *reporterState) readiness() (bool, string) {
@@ -106,16 +138,11 @@ func (r *reporterState) liveness() (bool, string) {
 // TimedOut checks whether the reporter is due for another report. This is the case when
 // the reports are configured to expire and the time since the last report exceeds the report timeout duration.
 func (r *reporterState) TimedOut() bool {
-	timeout := r.Timeout()
-	return timeout != 0 && time.Since(r.timestamp) > timeout
-}
-
-func (r *reporterState) Timeout() time.Duration {
-	o := GlobalOverride(r.name)
-	if o != nil {
-		return *o
+	timeout := r.timeout
+	if o := GlobalOverride(r.name); o != nil {
+		timeout = *o
 	}
-	return r.timeout
+	return timeout != 0 && time.Since(r.timestamp) > timeout
 }
 
 // A HealthAggregator receives health reports from individual reporters (which are typically
@@ -270,17 +297,23 @@ func (aggregator *HealthAggregator) Summary() *HealthReport {
 		}
 		componentNames = append(componentNames, reporter.name)
 
-		ov := GlobalOverride(reporter.name)
-		var timeout string
-		if ov != nil {
-			timeout = ov.String() + " (override)"
-		} else {
-			timeout = reporter.timeout.String()
+		suffix := ""
+		timeout := reporter.timeout
+		if ov := GlobalOverride(reporter.name); ov != nil {
+			suffix = " (override)"
+			timeout = *ov
 		}
+		var timeoutStr string
+		if timeout == 0 {
+			timeoutStr = "-"
+		} else {
+			timeoutStr = timeout.String()
+		}
+		timeoutStr += suffix
 
 		componentData[reporter.name] = []string{
 			reporter.name,
-			timeout,
+			timeoutStr,
 			livenessStr,
 			readinessStr,
 			reporter.latest.Detail,
@@ -293,15 +326,15 @@ func (aggregator *HealthAggregator) Summary() *HealthReport {
 		table.Append(componentData[name])
 	}
 	table.Render()
+
 	summary.Detail = strings.TrimSpace(buf.String())
+	log.Debugf("Calculated health summary: live=%v ready=%v\n%s", summary.Live, summary.Ready, summary.Detail)
 
 	// Summary status has changed so update previous status and log.
 	if aggregator.lastReport == nil || *summary != *aggregator.lastReport {
 		aggregator.lastReport = summary
 		log.Infof("Overall health status changed: live=%v ready=%v\n%s", summary.Live, summary.Ready, summary.Detail)
 	}
-
-	log.WithField("healthResult", summary).Debug("Calculated health summary")
 
 	if summary.Ready {
 		aggregator.everReady = true
