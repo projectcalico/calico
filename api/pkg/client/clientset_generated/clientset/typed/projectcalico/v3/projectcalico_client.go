@@ -15,6 +15,7 @@ import (
 type ProjectcalicoV3Interface interface {
 	RESTClient() rest.Interface
 	BGPConfigurationsGetter
+	BGPFiltersGetter
 	BGPPeersGetter
 	BlockAffinitiesGetter
 	CalicoNodeStatusesGetter
@@ -39,6 +40,10 @@ type ProjectcalicoV3Client struct {
 
 func (c *ProjectcalicoV3Client) BGPConfigurations() BGPConfigurationInterface {
 	return newBGPConfigurations(c)
+}
+
+func (c *ProjectcalicoV3Client) BGPFilters() BGPFilterInterface {
+	return newBGPFilters(c)
 }
 
 func (c *ProjectcalicoV3Client) BGPPeers() BGPPeerInterface {

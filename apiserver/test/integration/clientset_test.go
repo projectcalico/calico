@@ -1488,3 +1488,104 @@ func testBlockAffinityClient(client calicoclient.Interface, name string) error {
 
 	return nil
 }
+
+// TestBGPFilterClient exercises the BGPFilter client.
+func TestBGPFilterClient(t *testing.T) {
+	const name = "test-bgpfilter"
+	rootTestFunc := func() func(t *testing.T) {
+		return func(t *testing.T) {
+			client, shutdownServer := getFreshApiserverAndClient(t, func() runtime.Object {
+				return &v3.BGPFilter{}
+			})
+			defer shutdownServer()
+			if err := testBGPFilterClient(client, name); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+
+	if !t.Run(name, rootTestFunc()) {
+		t.Errorf("test-bgpfilter test failed")
+	}
+}
+
+func testBGPFilterClient(client calicoclient.Interface, name string) error {
+	bgpFilterClient := client.ProjectcalicoV3().BGPFilters()
+	acceptRuleV4 := v3.BGPFilterRuleV4{
+		CIDR:          "10.10.10.0/24",
+		MatchOperator: v3.In,
+		Action:        v3.Accept,
+	}
+	rejectRuleV4 := v3.BGPFilterRuleV4{
+		CIDR:          "11.11.11.0/24",
+		MatchOperator: v3.NotIn,
+		Action:        v3.Reject,
+	}
+	acceptRuleV6 := v3.BGPFilterRuleV6{
+		CIDR:          "dead:beef:1::/64",
+		MatchOperator: v3.Equal,
+		Action:        v3.Accept,
+	}
+	rejectRuleV6 := v3.BGPFilterRuleV6{
+		CIDR:          "dead:beef:2::/64",
+		MatchOperator: v3.NotEqual,
+		Action:        v3.Reject,
+	}
+	bgpFilter := &v3.BGPFilter{
+		ObjectMeta: metav1.ObjectMeta{Name: name},
+
+		Spec: v3.BGPFilterSpec{
+			ExportV4: []v3.BGPFilterRuleV4{acceptRuleV4},
+			ImportV4: []v3.BGPFilterRuleV4{rejectRuleV4},
+			ExportV6: []v3.BGPFilterRuleV6{acceptRuleV6},
+			ImportV6: []v3.BGPFilterRuleV6{rejectRuleV6},
+		},
+	}
+	ctx := context.Background()
+
+	_, err := bgpFilterClient.List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return fmt.Errorf("error listing BGPFilters: %s", err)
+	}
+
+	bgpFilterNew, err := bgpFilterClient.Create(ctx, bgpFilter, metav1.CreateOptions{})
+	if err != nil {
+		return fmt.Errorf("error creating the object '%v' (%v)", bgpFilter, err)
+	}
+
+	if bgpFilterNew.Name != bgpFilter.Name {
+		return fmt.Errorf("didn't get the same object back from the server \n%+v\n%+v", bgpFilter, bgpFilterNew)
+	}
+
+	if len(bgpFilterNew.Spec.ExportV4) != 1 || bgpFilterNew.Spec.ExportV4[0] != bgpFilter.Spec.ExportV4[0] || len(bgpFilterNew.Spec.ImportV4) != 1 || bgpFilterNew.Spec.ImportV4[0] != bgpFilter.Spec.ImportV4[0] || len(bgpFilterNew.Spec.ExportV6) != 1 || bgpFilterNew.Spec.ExportV6[0] != bgpFilter.Spec.ExportV6[0] || len(bgpFilterNew.Spec.ImportV6) != 1 || bgpFilterNew.Spec.ImportV6[0] != bgpFilter.Spec.ImportV6[0] {
+		return fmt.Errorf("didn't get the correct object back from the server \n%+v\n%+v", bgpFilter, bgpFilterNew)
+	}
+
+	bgpFilterNew, err = bgpFilterClient.Get(ctx, bgpFilter.Name, metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("error getting object %s (%s)", bgpFilter.Name, err)
+	}
+
+	bgpFilterNew.Spec.ExportV4 = nil
+
+	_, err = bgpFilterClient.Update(ctx, bgpFilterNew, metav1.UpdateOptions{})
+	if err != nil {
+		return fmt.Errorf("error updating object %s (%s)", name, err)
+	}
+
+	bgpFilterUpdated, err := bgpFilterClient.Get(ctx, bgpFilter.Name, metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("error getting object %s (%s)", bgpFilter.Name, err)
+	}
+
+	if bgpFilterUpdated.Spec.ExportV4 != nil {
+		return fmt.Errorf("didn't get the correct object back from the server \n%+v\n%+v", bgpFilterUpdated, bgpFilterNew)
+	}
+
+	err = bgpFilterClient.Delete(ctx, bgpFilter.Name, metav1.DeleteOptions{})
+	if err != nil {
+		return fmt.Errorf("object should be deleted (%s)", err)
+	}
+
+	return nil
+}
