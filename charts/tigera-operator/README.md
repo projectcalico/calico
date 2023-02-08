@@ -8,20 +8,20 @@ Calico provides two major services for Cloud Native applications:
 
 Calico’s flexible architecture supports a wide range of deployment options, using modular components and technologies, including:
 
-- Choice of data plane technology, whether it be [eBPF](https://projectcalico.docs.tigera.io/maintenance/ebpf/use-cases-ebpf), standard Linux, [Windows HNS](https://docs.microsoft.com/en-us/virtualization/windowscontainers/container-networking/architecture) or [VPP](https://github.com/projectcalico/vpp-dataplane)
+- Choice of data plane technology, whether it be [eBPF](https://docs.tigera.io/calico/latest/operations/ebpf/use-cases-ebpf), standard Linux, [Windows HNS](https://docs.microsoft.com/en-us/virtualization/windowscontainers/container-networking/architecture) or [VPP](https://github.com/projectcalico/vpp-dataplane)
 - Enforcement of the full set of Kubernetes network policy features, plus for those needing a richer set of policy features, Calico network policies.
 - An optimized Kubernetes Service implementation using eBPF.
 - Kubernetes [apiserver integration](./apiserver), for managing Calico configuration and Calico network policies.
-- Both non-overlay and [overlay (via IPIP or VXLAN)](https://projectcalico.docs.tigera.io/networking/vxlan-ipip) networking options in either public cloud or on-prem deployments.
-- [CNI plugins](./cni-plugin) for Kubernetes to provide highly efficient pod networking and IP Address Management (IPAM).
-- A [BGP routing stack](https://projectcalico.docs.tigera.io/networking/bgp) that can advertise routes for workload and service IP addresses to physical network infrastructure.
+- Both non-overlay and [overlay (via IPIP or VXLAN)](https://docs.tigera.io/calico/latest/networking/configuring/vxlan-ipip) networking options in either public cloud or on-prem deployments.
+- [CNI plugins](https://docs.tigera.io/calico/latest/networking/determine-best-networking#calico-compatible-cni-plugins-and-cloud-provider-integrations) for Kubernetes to provide highly efficient pod networking and IP Address Management (IPAM).
+- A [BGP routing stack](https://docs.tigera.io/calico/latest/networking/configuring/bgp) that can advertise routes for workload and service IP addresses to physical network infrastructure.
 
 # Installing
 
 1. Add the projectcalico helm repository.
 
    ```
-   helm repo add projectcalico https://projectcalico.docs.tigera.io/charts
+   helm repo add projectcalico https://docs.tigera.io/calico/charts
    ```
 
 1. Create the tigera-operator namespace.
@@ -96,7 +96,7 @@ imagePullSecrets: {}
 
 # Configures general installation parameters for Calico. Schema is based
 # on the operator.tigera.io/Installation API documented
-# here: https://projectcalico.docs.tigera.io/reference/installation/api#operator.tigera.io/v1.InstallationSpec
+# here: https://docs.tigera.io/calico/latest/reference/installation/api#operator.tigera.io/v1.InstallationSpec
 installation:
   enabled: true
   kubernetesProvider: ""
@@ -110,7 +110,7 @@ installation:
 
 # Configures general installation parameters for Calico. Schema is based
 # on the operator.tigera.io/Installation API documented
-# here: https://projectcalico.docs.tigera.io/reference/installation/api#operator.tigera.io/v1.APIServerSpec
+# here: https://docs.tigera.io/calico/latest/reference/installation/api#operator.tigera.io/v1.APIServerSpec
 apiServer:
   enabled: true
 
