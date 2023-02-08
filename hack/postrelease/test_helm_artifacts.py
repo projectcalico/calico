@@ -20,7 +20,7 @@ def test_calico_release_in_helm_index():
         % (RELEASE_VERSION, RELEASE_VERSION)
     )
 
-    req = requests.get("https://projectcalico.docs.tigera.io/charts/index.yaml")
+    req = requests.get("https://docs.tigera.io/calico/charts/index.yaml")
     assert req.status_code == 200, "Could not get helm index"
     index = yaml.safe_load(req.text)
     # Find entry
