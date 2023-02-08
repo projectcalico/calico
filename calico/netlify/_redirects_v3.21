@@ -6,6 +6,9 @@
 
 # proxy rules to keep helm charts working
 
+
+/getting-started/kubernetes/installation/config-options           https://docs.tigera.io/calico/latest/getting-started/kubernetes/self-managed-onprem/config-options 301!
+
 /charts/*                                                         https://calico-public.s3.amazonaws.com/charts/:splat                                              200
 
 # proxy rules to keep master manifests accessible
