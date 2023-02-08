@@ -2,7 +2,7 @@
 # note that you can still access these old docs at https://docs.projectcalico.org/archive/*
 
 # /charts/* https://calico-public.s3.amazonaws.com/charts/:splat 200
-
+/robots.txt /robots.txt 301!
 # To redirect manifest requests for master.
 
 /master/manifests/* https://raw.githubusercontent.com/projectcalico/calico/master/manifests/:splat 301!
