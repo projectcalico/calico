@@ -263,7 +263,6 @@ EOF
                 self.add_cleanup(lambda: kubectl("delete bgpfilter test-filter-export-v6-1"))
                 self.add_cleanup(lambda: self._patch_peer_filters("node-extra-v6.peer", []))
 
-                # Use link-local address as 'via'
                 self._assert_route_not_present_in_external_bird("kube-node-extra-v6", "Mesh_with_node_1", cluster_route_regex_v6, "fe80::.*", ipv6=True)
 
             # Add BGPFilter with import rule and check that the egress node no longer has the route advertised by the external bird instance
