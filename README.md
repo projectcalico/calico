@@ -5,7 +5,7 @@
 [![CII Best Practices](https://bestpractices.coreinfrastructure.org/projects/6064/badge)](https://bestpractices.coreinfrastructure.org/projects/6064)
 
 <div align=center>
-<img src="http://docs.projectcalico.org/images/felix.png" width="100" height="100"> 
+<img src="https://docs.tigera.io/img/calico/felix_icon.png" width="100" height="100"> 
 <h1>Calico</h1>
 <h2>
 <a href="https://projectcalico.docs.tigera.io/getting-started/kubernetes/quickstart">Quickstart</a> | 
