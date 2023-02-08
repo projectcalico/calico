@@ -96,14 +96,8 @@ sudo sysctl -w net.ipv6.conf.all.forwarding=1
 
 # Clone the DevStack repository (if not already present).
 test -e devstack || \
-    git clone ${DEVSTACK_REPO:-https://opendev.org/openstack/devstack}
+    git clone -b ${DEVSTACK_BRANCH:-master} ${DEVSTACK_REPO:-https://github.com/openstack/devstack} --depth=1
 cd devstack
-
-# If DEVSTACK_BRANCH has been specified, check out that branch.  (Otherwise we
-# use DevStack's master branch.)
-if [ -n "$DEVSTACK_BRANCH" ]; then
-    git checkout ${DEVSTACK_BRANCH}
-fi
 
 # Prepare DevStack config.
 cat > local.conf <<EOF
@@ -122,6 +116,21 @@ LOGFILE=stack.log
 LOG_COLOR=False
 
 TEMPEST_BRANCH=29.0.0
+
+# We commonly hit GnuTLS errors when git cloning OpenStack repos, for example:
+# Cloning into 'devstack'...
+# remote: Enumerating objects: 28788, done.
+# remote: Counting objects: 100% (28788/28788), done.
+# remote: Compressing objects: 100% (9847/9847), done.
+# error: RPC failed; curl 56 GnuTLS recv error (-9): A TLS packet with unexpected length was received.
+#
+# https://stackoverflow.com/questions/38378914/how-to-fix-git-error-rpc-failed-curl-56-gnutls
+# suggests that this can be mitigated by reducing the depth of the git clone.
+GIT_DEPTH=1
+
+# Unfortunately we still see GnuTLS errors with the above.  Let's try cloning from GitHub instead of
+# from opendev.org.
+GIT_BASE=https://github.com
 
 EOF
 
