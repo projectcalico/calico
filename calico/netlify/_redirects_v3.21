@@ -6,6 +6,9 @@
 
 # proxy rules to keep helm charts working
 
+
+/getting-started/kubernetes/installation/config-options           https://docs.tigera.io/calico/latest/getting-started/kubernetes/self-managed-onprem/config-options 301!
+
 /charts/*                                                         https://calico-public.s3.amazonaws.com/charts/:splat                                              200
 
 # proxy rules to keep master manifests accessible
@@ -26,7 +29,7 @@
 /manifests/*                                                      https://calico-tigera.netlify.app/manifests/:splat                                         200!
 /security/tutorials/*                                             https://calico-tigera.netlify.app/security/tutorials/:splat                                200!
 /getting-started/kubernetes/installation/*                        https://calico-tigera.netlify.app/getting-started/kubernetes/installation/:splat           200!
-
+/getting-started/kubernetes/installation/config-options
 # proxy rules to keep manifest files accessible for versions v3.21 and below, all new version manifests will be accessible through https://projectcalico.docs.tigera.io
 
 /v3.21/manifests/*                                                https://calico-v3-21.netlify.app/archive/v3.21/manifests/:splat                                   200
