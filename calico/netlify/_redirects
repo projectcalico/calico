@@ -8,7 +8,7 @@
 /master/manifests/* https://raw.githubusercontent.com/projectcalico/calico/master/manifests/:splat 301!
 
 # To redirect traffic from latest version links.
-
+/about/about-calico https://docs.tigera.io/calico/latest/about 301!
 /about/* https://docs.tigera.io/calico/latest/about/:splat 301!
 /getting-started/* https://docs.tigera.io/calico/latest/getting-started/:splat 301!
 /networking/* https://docs.tigera.io/calico/latest/networking/:splat 301!
