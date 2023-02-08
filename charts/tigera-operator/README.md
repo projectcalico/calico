@@ -146,4 +146,7 @@ tigeraOperator:
   registry: quay.io
 calicoctl:
   image: docker.io/calico/ctl
+
+# Configures the image pull policy for all containers in the tigera/operator deployment.
+imagePullPolicy: IfNotPresent
 ```
