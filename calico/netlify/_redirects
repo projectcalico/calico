@@ -269,7 +269,7 @@
 /reference/without-docker-networking/prerequisites https://docs.tigera.io/calico/latest/introduction 301!
 /releases/ https://docs.tigera.io/archive 301!
 /security/advanced-policy https://docs.tigera.io/calico/latest/security/kubernetes-network-policy 301!
-/security/app-layer-policy/ https://docs.tigera.io/calico/latest/security/tutorials/app-layer-policy/enforce-policy-istio 301!
+/security/app-layer-policy/ https://docs.tigera.io/calico/latest/network-policy/istio/app-layer-policy 301!
 /security/host-endpoints/ https://docs.tigera.io/calico/latest/security/protect-hosts 301!
 /security/host-endpoints/connectivity https://docs.tigera.io/calico/latest/security/protect-hosts 301!
 /security/host-endpoints/conntrack https://docs.tigera.io/calico/latest/security/high-connection-workloads 301!
