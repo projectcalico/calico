@@ -1,8 +1,13 @@
 # redirect old docs to latest at root.
 # note that you can still access these old docs at https://docs.projectcalico.org/archive/*
 
-# /charts/* https://calico-public.s3.amazonaws.com/charts/:splat 200
+/charts/* https://calico-public.s3.amazonaws.com/charts/:splat 200!
+/archive/v3.25/* https://calico-v3-25.netlify.app/archive/v3.25/:splat 200!
+/archive/v3.24/* https://calico-v3-24.netlify.app/archive/v3.24/:splat 200!
+/archive/v3.23/* https://calico-v3-23.netlify.app/archive/v3.23/:splat 200!
+
 /robots.txt /robots.txt 200
+
 # To redirect manifest requests for master.
 
 /master/manifests/* https://raw.githubusercontent.com/projectcalico/calico/master/manifests/:splat 301!
