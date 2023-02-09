@@ -86,6 +86,21 @@
 
 # proxy redirects for website and manifests for v3.22
 [[redirects]]
+  from = "/archive/v3.25/*"
+  to = "https://calico-v3-25.netlify.app/archive/v3.22/:splat"
+  status = 200
+
+[[redirects]]
+  from = "/archive/v3.24/*"
+  to = "https://calico-v3-24.netlify.app/archive/v3.24/:splat"
+  status = 200
+
+[[redirects]]
+  from = "/archive/v3.23/*"
+  to = "https://calico-v3-23.netlify.app/archive/v3.23/:splat"
+  status = 200
+
+[[redirects]]
   from = "/archive/v3.22/*"
   to = "https://calico-v3-22.netlify.app/archive/v3.22/:splat"
   status = 200
@@ -325,6 +340,11 @@
   to = "/:splat"
   status = 301
 
+[[redirects]]
+  from = "/*"
+  to = "/:splat"
+  status = 301
+
 [[headers]]
   for = "/*.yaml"
   [headers.values]
@@ -344,3 +364,4 @@
   for = "/*.bash"
   [headers.values]
     content-type = "text/x-shellscript"
+
