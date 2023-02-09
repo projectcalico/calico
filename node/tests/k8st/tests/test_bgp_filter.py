@@ -38,6 +38,11 @@ class TestBGPFilter(TestBase):
     def setUp(self):
         super(TestBGPFilter, self).setUp()
 
+        # Enable debug logging
+        update_ds_env("calico-node",
+                      "kube-system",
+                      {"BGP_LOGSEVERITYSCREEN": "debug"})
+
         # Create test namespace
         self.ns = "bgpfilter-test"
         self.create_namespace(self.ns)
@@ -58,11 +63,6 @@ class TestBGPFilter(TestBase):
         kubectl("label node %s egress=true --overwrite" % self.egress_node)
 
         self.egress_calico_pod = self.get_calico_node_pod(self.egress_node)
-
-        # Enable debug logging
-        update_ds_env("calico-node",
-                      "kube-system",
-                      {"BGP_LOGSEVERITYSCREEN": "debug"})
 
         # Establish BGPPeer from cluster nodes to node-extra
         kubectl("""apply -f - << EOF
@@ -224,9 +224,7 @@ EOF
             if ipv4:
                 self._assert_route_present_in_external_bird("kube-node-extra", "Mesh_with_node_1", cluster_route_regex_v4, re.escape(self.egress_node_ip))
             if ipv6:
-                # Use link-local address as 'via'
-                self._assert_route_present_in_external_bird("kube-node-extra-v6", "Mesh_with_node_1", cluster_route_regex_v6, "fe80::.*", ipv6=True)
-
+                self._assert_route_present_in_external_bird("kube-node-extra-v6", "Mesh_with_node_1", cluster_route_regex_v6, "2001:20::1", ipv6=True)
             # Add BGPFilter with export rule and check that the external bird instance no longer has the route for an IPAM block from the default IP pool
             if ipv4:
                 kubectl("""apply -f - <<EOF
@@ -265,8 +263,7 @@ EOF
                 self.add_cleanup(lambda: kubectl("delete bgpfilter test-filter-export-v6-1"))
                 self.add_cleanup(lambda: self._patch_peer_filters("node-extra-v6.peer", []))
 
-                # Use link-local address as 'via'
-                self._assert_route_not_present_in_external_bird("kube-node-extra-v6", "Mesh_with_node_1", cluster_route_regex_v6, "fe80::.*", ipv6=True)
+                self._assert_route_not_present_in_external_bird("kube-node-extra-v6", "Mesh_with_node_1", cluster_route_regex_v6, "2001:20::1", ipv6=True)
 
             # Add BGPFilter with import rule and check that the egress node no longer has the route advertised by the external bird instance
             if ipv4:
