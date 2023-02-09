@@ -342,7 +342,8 @@
 
 [[redirects]]
   from = "/*"
-  to = "/:splat"
+  to = "https://docs.tigera.io"
+  force = true
   status = 301
 
 [[headers]]
