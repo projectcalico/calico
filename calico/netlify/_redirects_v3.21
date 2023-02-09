@@ -12,7 +12,14 @@
 /charts/*                                                         https://calico-public.s3.amazonaws.com/charts/:splat                                              200
 /archive/v3.25/* https://calico-v3-25.netlify.app/archive/v3.25/:splat 200
 /archive/v3.24/* https://calico-v3-24.netlify.app/archive/v3.24/:splat 200
-/archive/v3.23/* https://calico-v3-23.netlify.app/archive/v3.23/:splat 200
+
+## Testing proxy structure to get 3.23 manifest links working
+/v3.23/manifests/*                                                https://calico-v3-23.netlify.app/archive/v3.23/manifests/:splat                                   200
+/v3.23/security/tutorials/*                                       https://calico-v3-23.netlify.app/archive/v3.23/security/tutorials/:splat                          200
+/v3.23/getting-started/kubernetes/installation/*                  https://calico-v3-23.netlify.app/archive/v3.23/getting-started/kubernetes/installation/:splat     200
+/archive/v3.23/manifests/*                                        https://calico-v3-23.netlify.app/archive/v3.23/manifests/:splat                                   200
+/archive/v3.23/security/tutorials/*                               https://calico-v3-23.netlify.app/archive/v3.23/security/tutorials/:splat                          200
+/archive/v3.23/getting-started/kubernetes/installation/*          https://calico-v3-23.netlify.app/archive/v3.23/getting-started/kubernetes/installation/:splat     200
 
 # proxy rules to keep master manifests accessible
 
