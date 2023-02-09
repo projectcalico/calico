@@ -1,0 +1,67 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx
+  namespace: demo
+  labels:
+    app: nginx
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.8
+    ports:
+    - containerPort: 80
+  nodeSelector:
+    beta.kubernetes.io/os: linux
+
+---
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx-b
+  namespace: demo
+  labels:
+    app: nginx-b
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.8
+    ports:
+    - containerPort: 80
+  nodeSelector:
+    beta.kubernetes.io/os: linux
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx
+  namespace: demo
+  labels:
+    app: nginx
+spec:
+  type: NodePort
+  ports:
+  - port: 80
+    targetPort: 80
+  selector:
+    app: nginx
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-b
+  namespace: demo
+  labels:
+    app: nginx-b
+spec:
+  type: NodePort
+  ports:
+  - port: 80
+    targetPort: 80
+  selector:
+    app: nginx-b

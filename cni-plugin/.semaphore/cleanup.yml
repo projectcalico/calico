@@ -34,9 +34,8 @@ blocks:
     jobs:
     - name: Clean up winfv aws resources
       commands:
-      - git clone git@github.com:tigera/process.git
       - aws ec2 delete-key-pair --key-name ${KEYPAIR_NAME} || true
-      - cd process/testing/winfv && NAME_PREFIX="${CLUSTER_NAME}-containerd" ./setup-fv.sh -q -u || true
+      - cd ~/calico/process/testing/winfv && NAME_PREFIX="${CLUSTER_NAME}-containerd" ./setup-fv.sh -q -u || true
       - NAME_PREFIX="${CLUSTER_NAME}-docker" ./setup-fv.sh -q -u | true
       env_vars:
       - name: AWS_DEFAULT_REGION
