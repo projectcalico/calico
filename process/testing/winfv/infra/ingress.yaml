@@ -1,0 +1,20 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-client
+  namespace: demo
+spec:
+  podSelector:
+    matchLabels:
+      app: porter
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: client
+    ports:
+    - protocol: TCP
+      port: 80
+

@@ -3,7 +3,7 @@
 set -e
 set -x
 
-FV_DIR="/home/semaphore/process/testing/winfv"
+FV_DIR="/home/semaphore/calico/process/testing/winfv"
 CONTAINER_RUNTIME="${CONTAINER_RUNTIME:=docker}"
 
 pushd ${FV_DIR}
@@ -34,7 +34,7 @@ ${SSH_CMD} time /home/ubuntu/winfv/wait-report.sh
 ${SSH_CMD} ls -ltr /home/ubuntu/report
 popd
 
-# Get results and logs 
+# Get results and logs
 SCP_CMD=$(echo scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ${FV_DIR}/${MASTER_CONNECT_KEY})
 ${SCP_CMD} -r ubuntu@${MASTER_IP}:/home/ubuntu/report /home/semaphore
 
@@ -57,5 +57,5 @@ then
     echo "Windows FV return error."
     exit 1
 fi
-   
+
 echo "Run Windows FV is done."

@@ -288,7 +288,6 @@ blocks:
       - export KEYPAIR_NAME=${CLUSTER_NAME}
       - echo CLUSTER_NAME=${CLUSTER_NAME}
       - sudo apt-get install -y putty-tools
-      - git clone git@github.com:tigera/process.git ~/process
       - cd felix
       - make bin/calico-felix.exe fv/win-fv.exe
     epilogue:
@@ -297,7 +296,7 @@ blocks:
         - artifact push job ${REPORT_DIR} --destination semaphore/test-results --expire-in ${SEMAPHORE_ARTIFACT_EXPIRY} || true
         - artifact push job ${LOGS_DIR} --destination semaphore/logs --expire-in ${SEMAPHORE_ARTIFACT_EXPIRY} || true
         - aws ec2 delete-key-pair --key-name ${KEYPAIR_NAME} || true
-        - cd ~/process/testing/winfv && NAME_PREFIX="${CLUSTER_NAME}" ./setup-fv.sh -q -u
+        - cd ~/calico/process/testing/winfv && NAME_PREFIX="${CLUSTER_NAME}" ./setup-fv.sh -q -u
     env_vars:
     - name: SEMAPHORE_ARTIFACT_EXPIRY
       value: 2w
@@ -569,7 +568,6 @@ blocks:
       - export KEYPAIR_NAME=${CLUSTER_NAME}
       - echo CLUSTER_NAME=${CLUSTER_NAME}
       - sudo apt-get install -y putty-tools
-      - git clone git@github.com:tigera/process.git ~/process
       - cd cni-plugin
       - ../.semaphore/run-and-monitor build.log make bin/windows/calico.exe bin/windows/calico-ipam.exe bin/windows/win-fv.exe
     epilogue:
@@ -578,7 +576,7 @@ blocks:
         - artifact push job ${REPORT_DIR} --destination semaphore/test-results --expire-in ${SEMAPHORE_ARTIFACT_EXPIRY} || true
         - artifact push job ${LOGS_DIR} --destination semaphore/logs --expire-in ${SEMAPHORE_ARTIFACT_EXPIRY} || true
         - aws ec2 delete-key-pair --key-name ${KEYPAIR_NAME} || true
-        - cd ~/process/testing/winfv && NAME_PREFIX="${CLUSTER_NAME}" ./setup-fv.sh -q -u
+        - cd ~/calico/process/testing/winfv && NAME_PREFIX="${CLUSTER_NAME}" ./setup-fv.sh -q -u
     env_vars:
     - name: SEMAPHORE_ARTIFACT_EXPIRY
       value: 2w
