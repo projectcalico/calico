@@ -399,7 +399,7 @@ blocks:
     jobs:
     - name: UT/FV tests on new kernel
       execution_time_limit:
-        minutes: 120
+        minutes: 180
       commands:
       - ./.semaphore/run-tests-on-vms ${VM_PREFIX}
     epilogue:
