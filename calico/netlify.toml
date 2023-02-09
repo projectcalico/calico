@@ -98,6 +98,7 @@
 [[redirects]]
   from = "/archive/v3.23/*"
   to = "https://calico-v3-23.netlify.app/archive/v3.23/:splat"
+  force = true
   status = 200
 
 # proxy redirects for website and manifests for v3.22
