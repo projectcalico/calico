@@ -234,6 +234,9 @@ endif
 ifeq ($(ARCH),ppc64le)
 TARGET_PLATFORM=--platform=linux/ppc64le
 endif
+ifeq ($(ARCH),s390x)
+TARGET_PLATFORM=--platform=linux/s390x
+endif
 
 # DOCKER_BUILD is the base build command used for building all images.
 DOCKER_BUILD=docker buildx build --pull \
