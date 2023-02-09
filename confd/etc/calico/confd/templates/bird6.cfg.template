@@ -1,11 +1,11 @@
 function apply_communities ()
 {
   {{- $prefix_advertisements_key := ""}}
-  {{- $node_prefix_advertisements_key := printf "/host/%s/prefix_advertisements/ip_v6" (getenv "NODENAME")}}
+  {{- $node_prefix_advertisements_key := printf "/bgp/v1/host/%s/prefix_advertisements/ip_v6" (getenv "NODENAME")}}
   {{- if exists $node_prefix_advertisements_key}}
     {{- $prefix_advertisements_key = $node_prefix_advertisements_key}}
-  {{- else if exists "/global/prefix_advertisements/ip_v6"}}
-    {{- $prefix_advertisements_key = "/global/prefix_advertisements/ip_v6"}}
+  {{- else if exists "/bgp/v1/global/prefix_advertisements/ip_v6"}}
+    {{- $prefix_advertisements_key = "/bgp/v1/global/prefix_advertisements/ip_v6"}}
   {{- end}}
   {{- if ne "" $prefix_advertisements_key}}
     {{- range gets $prefix_advertisements_key}}
@@ -31,8 +31,8 @@ function apply_communities ()
 include "bird6_aggr.cfg";
 include "bird6_ipam.cfg";
 
-{{- $node_ip_key := printf "/host/%s/ip_addr_v4" (getenv "NODENAME")}}{{$node_ip := getv $node_ip_key}}
-{{- $node_ip6_key := printf "/host/%s/ip_addr_v6" (getenv "NODENAME")}}{{$node_ip6 := getv $node_ip6_key}}
+{{- $node_ip_key := printf "/bgp/v1/host/%s/ip_addr_v4" (getenv "NODENAME")}}{{$node_ip := getv $node_ip_key}}
+{{- $node_ip6_key := printf "/bgp/v1/host/%s/ip_addr_v6" (getenv "NODENAME")}}{{$node_ip6 := getv $node_ip6_key}}
 {{- $router_id := getenv "CALICO_ROUTER_ID" ""}}
 
 {{- $node_name := getenv "NODENAME"}}
@@ -45,24 +45,24 @@ router id {{if eq "hash" ($router_id) -}}
 
 {{- $listen_address := ""}}
 {{- $bind_mode := ""}}
-{{- $host_bind_mode_key := printf "/host/%s/bind_mode" (getenv "NODENAME")}}
+{{- $host_bind_mode_key := printf "/bgp/v1/host/%s/bind_mode" (getenv "NODENAME")}}
 {{- if exists $host_bind_mode_key }}
 {{- $bind_mode = getv $host_bind_mode_key}}
-{{- else if exists "/global/bind_mode" }}
-{{- $bind_mode = getv "/global/bind_mode"}}
+{{- else if exists "/bgp/v1/global/bind_mode" }}
+{{- $bind_mode = getv "/bgp/v1/global/bind_mode"}}
 {{- end}}
 {{- if and (eq $bind_mode "NodeIP") (ne $node_ip6 "")}}
 {{- $listen_address = print " address " $node_ip6}}
 {{- end}}
 
 {{- $listen_port := ""}}
-{{- $node_listen_port_key := printf "/host/%s/listen_port" (getenv "NODENAME")}}
+{{- $node_listen_port_key := printf "/bgp/v1/host/%s/listen_port" (getenv "NODENAME")}}
 {{- if exists $node_listen_port_key}}
 # Set node listen_port
 {{- $listen_port = print " port " (getv $node_listen_port_key)}}
-{{- else if exists "/global/listen_port" }}
+{{- else if exists "/bgp/v1/global/listen_port" }}
 # Set global listen_port
-{{- $listen_port = print " port " (getv "/global/listen_port")}}
+{{- $listen_port = print " port " (getv "/bgp/v1/global/listen_port")}}
 {{- end}}
 
 {{- if or (ne $listen_address "") (ne $listen_port "")}}
@@ -70,7 +70,7 @@ listen bgp{{$listen_address}}{{$listen_port}};
 {{- end}}
 
 {{- define "LOGGING"}}
-{{- $node_logging_key := printf "/host/%s/loglevel" (getenv "NODENAME")}}
+{{- $node_logging_key := printf "/bgp/v1/host/%s/loglevel" (getenv "NODENAME")}}
 {{- if exists $node_logging_key}}
 {{- $logging := getv $node_logging_key}}
 {{- if eq $logging "debug"}}
@@ -78,8 +78,8 @@ listen bgp{{$listen_address}}{{$listen_port}};
 {{- else if ne $logging "none"}}
   debug { states };
 {{- end}}
-{{- else if exists "/global/loglevel"}}
-{{- $logging := getv "/global/loglevel"}}
+{{- else if exists "/bgp/v1/global/loglevel"}}
+{{- $logging := getv "/bgp/v1/global/loglevel"}}
 {{- if eq $logging "debug"}}
   debug all;
 {{- else if ne $logging "none"}}
@@ -113,9 +113,9 @@ protocol device {
 }
 
 {{- $ignored_interfaces := ""}}
-{{- $node_ignored_interfaces_key := printf "/host/%s/ignored_interfaces" (getenv "NODENAME")}}
+{{- $node_ignored_interfaces_key := printf "/bgp/v1/host/%s/ignored_interfaces" (getenv "NODENAME")}}
 {{- if exists $node_ignored_interfaces_key }}{{$ignored_interfaces = getv $node_ignored_interfaces_key}}
-{{- else if exists "/global/ignored_interfaces" }}{{$ignored_interfaces = getv "/global/ignored_interfaces"}}
+{{- else if exists "/bgp/v1/global/ignored_interfaces" }}{{$ignored_interfaces = getv "/bgp/v1/global/ignored_interfaces"}}
 {{- end}}
 
 protocol direct {
@@ -136,18 +136,15 @@ protocol direct {
 }
 
 {{if eq "" ($node_ip6)}}# IPv6 disabled on this node.
-{{else}}{{$node_as_key := printf "/host/%s/as_num" (getenv "NODENAME")}}
+{{else}}{{$node_as_key := printf "/bgp/v1/host/%s/as_num" (getenv "NODENAME")}}
 # Template for all BGP clients
 template bgp bgp_template {
-{{- $as_key := or (and (exists $node_as_key) $node_as_key) "/global/as_num"}}
+{{- $as_key := or (and (exists $node_as_key) $node_as_key) "/bgp/v1/global/as_num"}}
 {{- $node_as_num := getv $as_key}}
 {{- template "LOGGING"}}
   description "Connection to BGP peer";
   local as {{$node_as_num}};
   gateway recursive; # This should be the default, but just in case.
-  import all;        # Import all routes, since we don't know what the upstream
-                     # topology is and therefore have to trust the ToR/RR.
-  export filter calico_export_to_bgp_peers;  # Only want to export routes for workloads.
   add paths on;
   graceful restart;  # See comment in kernel section about graceful restart.
   connect delay time 2;
@@ -155,25 +152,30 @@ template bgp bgp_template {
   error wait time 5,30;
 }
 
+# -------------- BGP Filters ------------------
+{{- range $line := emitBIRDBGPFilterFuncs (gets "/resources/v3/projectcalico.org/bgpfilters/*") 6 }}
+{{ $line }}
+{{- end }}
+
 # ------------- Node-to-node mesh -------------
-{{- $node_cid_key := printf "/host/%s/rr_cluster_id" (getenv "NODENAME")}}
+{{- $node_cid_key := printf "/bgp/v1/host/%s/rr_cluster_id" (getenv "NODENAME")}}
 {{- $node_cluster_id := getv $node_cid_key}}
 {{- if ne "" ($node_cluster_id)}}
 # This node ({{getenv "NODENAME"}}) is configured as a route reflector with cluster ID {{$node_cluster_id}};
 # ignore node-to-node mesh setting.
 {{- else}}
-{{if (json (getv "/global/node_mesh")).enabled}}
-{{range $host := lsdir "/host"}}
-{{$onode_as_key := printf "/host/%s/as_num" .}}
-{{$onode_ip_key := printf "/host/%s/ip_addr_v6" .}}{{if exists $onode_ip_key}}{{$onode_ip := getv $onode_ip_key}}
+{{if (json (getv "/bgp/v1/global/node_mesh")).enabled}}
+{{range $host := lsdir "/bgp/v1/host"}}
+{{$onode_as_key := printf "/bgp/v1/host/%s/as_num" .}}
+{{$onode_ip_key := printf "/bgp/v1/host/%s/ip_addr_v6" .}}{{if exists $onode_ip_key}}{{$onode_ip := getv $onode_ip_key}}
 {{- $listen_port := ""}}
-{{- $onode_listen_port_key := printf "/host/%s/listen_port" .}}
+{{- $onode_listen_port_key := printf "/bgp/v1/host/%s/listen_port" .}}
 {{- if exists $onode_listen_port_key}}
 {{- $listen_port = getv $onode_listen_port_key}}
-{{- else if exists "/global/listen_port"}}
-{{- $listen_port = getv "/global/listen_port"}}
+{{- else if exists "/bgp/v1/global/listen_port"}}
+{{- $listen_port = getv "/bgp/v1/global/listen_port"}}
 {{- end}}
-{{- $onode_cid_key := printf "/host/%s/rr_cluster_id" .}}
+{{- $onode_cid_key := printf "/bgp/v1/host/%s/rr_cluster_id" .}}
 {{- $onode_cluster_id := getv $onode_cid_key}}
 {{$nums := split $onode_ip ":"}}{{$id := join $nums "_"}}
 # For peer {{$onode_ip_key}}
@@ -181,10 +183,14 @@ template bgp bgp_template {
 {{- else if ne "" ($onode_cluster_id)}}# Skipping {{$onode_ip}} ({{.}}) as it is a route reflector with cluster ID {{$onode_cluster_id}}
 {{else if eq "" $onode_ip}}# No IPv6 address configured for this node
 {{else}}protocol bgp Mesh_{{$id}} from bgp_template {
-  multihop;
-  ttl security off;
-  neighbor {{$onode_ip}} {{if ne "" $listen_port}}port {{$listen_port}} {{end}}as {{if exists $onode_as_key}}{{getv $onode_as_key}}{{else}}{{getv "/global/as_num"}}{{end}};
+  neighbor {{$onode_ip}} {{if ne "" $listen_port}}port {{$listen_port}} {{end}}as {{if exists $onode_as_key}}{{getv $onode_as_key}}{{else}}{{getv "/bgp/v1/global/as_num"}}{{end}};
   source address {{$node_ip6}};  # The local address we use for the TCP connection
+  import all;        # Import all routes, since we don't know what the upstream
+                       # topology is and therefore have to trust the ToR/RR.
+  export filter {
+    calico_export_to_bgp_peers();
+    reject;
+  };  # Only want to export routes for workloads.
   {{- /*
        Make the peering unidirectional. This avoids a race where
        - peer A opens a connection and begins a graceful restart
@@ -194,11 +200,11 @@ template bgp bgp_template {
   {{if gt $onode_ip $node_ip6 }}
   passive on; # Mesh is unidirectional, peer will connect to us.
   {{- end}}
-  {{- if exists "/global/node_mesh_restart_time"}}{{$node_mesh_restart_time := getv "/global/node_mesh_restart_time"}}
+  {{- if exists "/bgp/v1/global/node_mesh_restart_time"}}{{$node_mesh_restart_time := getv "/bgp/v1/global/node_mesh_restart_time"}}
   {{- if ne ($node_mesh_restart_time) ""}}
   graceful restart time {{$node_mesh_restart_time}};
   {{- end}}{{end}}
-  {{- if exists "/global/node_mesh_password"}}{{$node_mesh_password := getv "/global/node_mesh_password"}}
+  {{- if exists "/bgp/v1/global/node_mesh_password"}}{{$node_mesh_password := getv "/bgp/v1/global/node_mesh_password"}}
   {{- if ne ($node_mesh_password) ""}}
   password "{{$node_mesh_password}}";
   {{- end}}{{end}}
@@ -210,8 +216,8 @@ template bgp bgp_template {
 
 
 # ------------- Global peers -------------
-{{if ls "/global/peer_v6"}}
-{{range gets "/global/peer_v6/*"}}{{$data := json .Value}}
+{{if ls "/bgp/v1/global/peer_v6"}}
+{{range gets "/bgp/v1/global/peer_v6/*"}}{{$data := json .Value}}
 {{$nums := split $data.ip ":"}}{{$id := join $nums "_"}}
 {{- if $data.port}}
 {{- $id = printf "%s_port_%.0f" $id $data.port}}
@@ -232,6 +238,32 @@ protocol bgp Global_{{$id}} from bgp_template {
 {{- if eq $data.source_addr "UseNodeIP"}}
   source address {{$node_ip6}};  # The local address we use for the TCP connection
 {{- end}}
+  import filter {
+    {{- range $filter := $data.filters }}
+    {{- $filterKey := printf "/resources/v3/projectcalico.org/bgpfilters/%s" $filter }}
+    {{- if exists $filterKey }}
+    {{- $filterVal := json (getv $filterKey) }}
+    {{- if $filterVal.spec.importV6 }}
+    {{ emitFunctionName $filter "import" "6" }}();
+    {{- end }}
+    {{- end }}
+    {{- end }}
+    accept; # Prior to introduction of BGP Filters we used "import all" so use default accept behaviour on import
+  };
+  export filter {
+    {{- range $filter := $data.filters }}
+    {{- $filterKey := printf "/resources/v3/projectcalico.org/bgpfilters/%s" $filter }}
+    {{- if exists $filterKey }}
+    {{- $filterVal := json (getv $filterKey) }}
+    {{- if $filterVal.spec.exportV6 }}
+    {{ emitFunctionName $filter "export" "6" }}();
+    {{- end }}
+    {{- end }}
+    {{- end }}
+    calico_export_to_bgp_peers();
+    reject; # Prior to introduction of BGP Filters anything not explicitly exported through calico_export_to_bgp_peers()
+            # was rejected so use default reject behaviour on export
+  };  # Only want to export routes for workloads.
 {{- if and ($data.calico_node) (gt $data.ip $node_ip6)}}
   passive on; # Peering is unidirectional, peer will connect to us.
 {{- end}}
@@ -258,7 +290,7 @@ protocol bgp Global_{{$id}} from bgp_template {
 
 
 # ------------- Node-specific peers -------------
-{{$node_peers_key := printf "/host/%s/peer_v6" (getenv "NODENAME")}}
+{{$node_peers_key := printf "/bgp/v1/host/%s/peer_v6" (getenv "NODENAME")}}
 {{if ls $node_peers_key}}
 {{range gets (printf "%s/*" $node_peers_key)}}{{$data := json .Value}}
 {{$nums := split $data.ip ":"}}{{$id := join $nums "_"}}
@@ -281,6 +313,32 @@ protocol bgp Node_{{$id}} from bgp_template {
 {{- if eq $data.source_addr "UseNodeIP"}}
   source address {{$node_ip6}};  # The local address we use for the TCP connection
 {{- end}}
+  import filter {
+    {{- range $filter := $data.filters }}
+    {{- $filterKey := printf "/resources/v3/projectcalico.org/bgpfilters/%s" $filter }}
+    {{- if exists $filterKey }}
+    {{- $filterVal := json (getv $filterKey) }}
+    {{- if $filterVal.spec.importV6 }}
+    {{ emitFunctionName $filter "import" "6" }}();
+    {{- end }}
+    {{- end }}
+    {{- end }}
+    accept; # Prior to introduction of BGP Filters we used "import all" so use default accept behaviour on import
+  };
+  export filter {
+    {{- range $filter := $data.filters }}
+    {{- $filterKey := printf "/resources/v3/projectcalico.org/bgpfilters/%s" $filter }}
+    {{- if exists $filterKey }}
+    {{- $filterVal := json (getv $filterKey) }}
+    {{- if $filterVal.spec.exportV6 }}
+    {{ emitFunctionName $filter "export" "6" }}();
+    {{- end }}
+    {{- end }}
+    {{- end }}
+    calico_export_to_bgp_peers();
+    reject; # Prior to introduction of BGP Filters anything not explicitly exported through calico_export_to_bgp_peers()
+            # was rejected so use default reject behaviour on export
+  };  # Only want to export routes for workloads.
 {{- if ne $data.restart_time ""}}
   graceful restart time {{$data.restart_time}};
 {{- end}}

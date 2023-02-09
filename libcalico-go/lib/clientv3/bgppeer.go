@@ -19,7 +19,9 @@ import (
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
+	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
+	"github.com/projectcalico/calico/libcalico-go/lib/set"
 	validator "github.com/projectcalico/calico/libcalico-go/lib/validator/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/watch"
 )
@@ -39,9 +41,53 @@ type bgpPeers struct {
 	client client
 }
 
+// validate validates BGPPeer fields before creating or updating a BGPPeer.
+// Currently it only verifies that any BGPFilters that are specified do
+// indeed exist.
+func (r bgpPeers) validate(ctx context.Context, new *apiv3.BGPPeer) error {
+	if len(new.Spec.Filters) == 0 {
+		return nil
+	}
+
+	allFilterList, err := r.client.BGPFilter().List(ctx, options.ListOptions{})
+	if err != nil {
+		return err
+	}
+
+	allFilterSet := set.New[string]()
+	missingFilters := []string{}
+
+	for _, f := range allFilterList.Items {
+		allFilterSet.Add(f.Name)
+	}
+
+	for _, f := range new.Spec.Filters {
+		if !allFilterSet.Contains(f) {
+			missingFilters = append(missingFilters, f)
+		}
+	}
+
+	if len(missingFilters) > 0 {
+		return cerrors.ErrorValidation{
+			ErroredFields: []cerrors.ErroredField{{
+				Name:   "BGPPeer.Spec.Filters",
+				Reason: "BGPFilter(s) not found",
+				Value:  missingFilters,
+			}},
+		}
+	}
+
+	return nil
+}
+
 // Create takes the representation of a BGPPeer and creates it.  Returns the stored
 // representation of the BGPPeer, and an error, if there is any.
 func (r bgpPeers) Create(ctx context.Context, res *apiv3.BGPPeer, opts options.SetOptions) (*apiv3.BGPPeer, error) {
+	// Validate before creating the resource.
+	if err := r.validate(ctx, res); err != nil {
+		return nil, err
+	}
+
 	if err := validator.Validate(res); err != nil {
 		return nil, err
 	}
@@ -56,6 +102,10 @@ func (r bgpPeers) Create(ctx context.Context, res *apiv3.BGPPeer, opts options.S
 // Update takes the representation of a BGPPeer and updates it. Returns the stored
 // representation of the BGPPeer, and an error, if there is any.
 func (r bgpPeers) Update(ctx context.Context, res *apiv3.BGPPeer, opts options.SetOptions) (*apiv3.BGPPeer, error) {
+	// Validate before updating the resource.
+	if err := r.validate(ctx, res); err != nil {
+		return nil, err
+	}
 	if err := validator.Validate(res); err != nil {
 		return nil, err
 	}
