@@ -392,11 +392,21 @@ func (w *Workload) SourceIPs() []string {
 	return []string{w.IP}
 }
 
+func (w *Workload) PreConncheckCleanup(ip, port, protocol string, opts ...connectivity.CheckOption) {
+	anyPort := w.conncheckAnyPort()
+	anyPort.PreConncheckCleanup(ip, port, protocol, opts...)
+}
+
 func (w *Workload) CanConnectTo(ip, port, protocol string, opts ...connectivity.CheckOption) *connectivity.Result {
+	anyPort := w.conncheckAnyPort()
+	return anyPort.CanConnectTo(ip, port, protocol, opts...)
+}
+
+func (w *Workload) conncheckAnyPort() Port {
 	anyPort := Port{
 		Workload: w,
 	}
-	return anyPort.CanConnectTo(ip, port, protocol, opts...)
+	return anyPort
 }
 
 func (w *Workload) Port(port uint16) *Port {
@@ -677,9 +687,19 @@ type SpoofedWorkload struct {
 	SpoofedSourceIP string
 }
 
+func (s *SpoofedWorkload) PreConncheckCleanup(ip, port, protocol string, opts ...connectivity.CheckOption) {
+	opts = s.appendSourceIPOpt(opts)
+	s.Workload.preConncheckCleanupInner(ip, port, protocol, "(spoofed)", opts...)
+}
+
 func (s *SpoofedWorkload) CanConnectTo(ip, port, protocol string, opts ...connectivity.CheckOption) *connectivity.Result {
+	opts = s.appendSourceIPOpt(opts)
+	return s.Workload.canConnectToInner(ip, port, protocol, "(spoofed)", opts...)
+}
+
+func (s *SpoofedWorkload) appendSourceIPOpt(opts []connectivity.CheckOption) []connectivity.CheckOption {
 	opts = append(opts, connectivity.WithSourceIP(s.SpoofedSourceIP))
-	return canConnectTo(s.Workload, ip, port, protocol, "(spoofed)", opts...)
+	return opts
 }
 
 type Port struct {
@@ -698,17 +718,26 @@ func (p *Port) SourceIPs() []string {
 	return []string{p.IP}
 }
 
+func (p *Port) PreConncheckCleanup(ip, port, protocol string, opts ...connectivity.CheckOption) {
+	opts = p.maybeAppendPortOpt(opts)
+	p.Workload.preConncheckCleanupInner(ip, port, protocol, "(with source port)", opts...)
+}
+
 // Return if a connection is good and packet loss string "PacketLoss[xx]".
 // If it is not a packet loss test, packet loss string is "".
 func (p *Port) CanConnectTo(ip, port, protocol string, opts ...connectivity.CheckOption) *connectivity.Result {
+	opts = p.maybeAppendPortOpt(opts)
+	return p.Workload.canConnectToInner(ip, port, protocol, "(with source port)", opts...)
+}
+
+func (p *Port) maybeAppendPortOpt(opts []connectivity.CheckOption) []connectivity.CheckOption {
 	if p.Port != 0 {
 		opts = append(opts, connectivity.WithSourcePort(strconv.Itoa(int(p.Port))))
 	}
-	return canConnectTo(p.Workload, ip, port, protocol, "(with source port)", opts...)
+	return opts
 }
 
-func canConnectTo(w *Workload, ip, port, protocol, logSuffix string, opts ...connectivity.CheckOption) *connectivity.Result {
-
+func (w *Workload) preConncheckCleanupInner(ip, port, protocol, logSuffix string, opts ...connectivity.CheckOption) {
 	if protocol == "udp" || protocol == "sctp" {
 		// If this is a retry then we may have stale conntrack entries and we don't want those
 		// to influence the connectivity check.  UDP lacks a sequence number, so conntrack operates
@@ -720,7 +749,9 @@ func canConnectTo(w *Workload, ip, port, protocol, logSuffix string, opts ...con
 			_ = w.C.ExecMayFail("conntrack", "-D", "-p", protocol, "-s", w.IP, "-d", ip)
 		}
 	}
+}
 
+func (w *Workload) canConnectToInner(ip, port, protocol, logSuffix string, opts ...connectivity.CheckOption) *connectivity.Result {
 	logMsg := "Connection test"
 
 	// enforce the name space as we want to execute it in the workload
