@@ -340,12 +340,6 @@
   to = "/:splat"
   status = 301
 
-[[redirects]]
-  from = "/*"
-  to = "https://docs.tigera.io"
-  force = true
-  status = 301
-
 [[headers]]
   for = "/*.yaml"
   [headers.values]

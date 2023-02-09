@@ -293,5 +293,3 @@
 /v3.18/reference/kube-controllers/prometheus                     https://docs.tigera.io                                                             301!
 
 # blanket forced redirect for content
-
-/* https://docs.tigera.io 301!
