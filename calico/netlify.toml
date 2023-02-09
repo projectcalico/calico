@@ -342,8 +342,8 @@
 
 [[redirects]]
   from = "/*"
-  to = "/:splat"
-  status = 301
+  to = "https://docs.tigera.io"
+  status = 301!
 
 [[headers]]
   for = "/*.yaml"
