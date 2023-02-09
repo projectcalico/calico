@@ -20,7 +20,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	. "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 )
 
 var (
@@ -40,8 +40,8 @@ var _ = Describe("NetworkPolicySpec", func() {
 	var gnpFieldsByName map[string]reflect.StructField
 
 	BeforeEach(func() {
-		npFieldsByName = fieldsByName(NetworkPolicySpec{})
-		gnpFieldsByName = fieldsByName(GlobalNetworkPolicySpec{})
+		npFieldsByName = fieldsByName(apiv3.NetworkPolicySpec{})
+		gnpFieldsByName = fieldsByName(apiv3.GlobalNetworkPolicySpec{})
 	})
 
 	It("and GlobalNetworkPolicySpec shared fields should have the same tags", func() {

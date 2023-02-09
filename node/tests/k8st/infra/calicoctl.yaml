@@ -74,6 +74,7 @@ rules:
   - apiGroups: ["crd.projectcalico.org"]
     resources:
       - bgppeers
+      - bgpfilters
       - bgpconfigurations
       - clusterinformations
       - felixconfigurations
