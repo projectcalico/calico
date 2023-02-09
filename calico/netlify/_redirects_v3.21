@@ -10,6 +10,9 @@
 /getting-started/kubernetes/installation/config-options           https://docs.tigera.io/calico/latest/getting-started/kubernetes/self-managed-onprem/config-options 301!
 
 /charts/*                                                         https://calico-public.s3.amazonaws.com/charts/:splat                                              200
+/archive/v3.25/* https://calico-v3-25.netlify.app/archive/v3.25/:splat 200!
+/archive/v3.24/* https://calico-v3-24.netlify.app/archive/v3.24/:splat 200!
+/archive/v3.23/* https://calico-v3-23.netlify.app/archive/v3.23/:splat 200!
 
 # proxy rules to keep master manifests accessible
 
