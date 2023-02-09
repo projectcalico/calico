@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2023 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,9 +15,12 @@
 package resources
 
 import (
+	"strings"
+
 	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/json"
@@ -138,6 +141,7 @@ func ConvertCalicoResourceToK8sResource(resIn Resource) (Resource, error) {
 	romCopy.ResourceVersion = ""
 	romCopy.Labels = nil
 	romCopy.Annotations = nil
+	romCopy.UID = ""
 
 	// Marshal the data and store the json representation in the annotations.
 	metadataBytes, err := json.Marshal(romCopy)
@@ -158,7 +162,10 @@ func ConvertCalicoResourceToK8sResource(resIn Resource) (Resource, error) {
 	meta.Namespace = rom.GetNamespace()
 	meta.ResourceVersion = rom.GetResourceVersion()
 	meta.Labels = rom.GetLabels()
-	meta.UID = rom.GetUID()
+
+	// Do not use the same UID as the underlying CRD as this breaks garbage collection. We reverse the underlying
+	// UID so that it can be reversed back again when applying to the CRD.
+	meta.UID = ReverseUID(rom.GetUID())
 
 	resOut := resIn.DeepCopyObject().(Resource)
 	romOut := resOut.GetObjectMeta()
@@ -201,7 +208,10 @@ func ConvertK8sResourceToCalicoResource(res Resource) error {
 	meta.ResourceVersion = rom.GetResourceVersion()
 	meta.Labels = rom.GetLabels()
 	meta.Annotations = annotations
-	meta.UID = rom.GetUID()
+
+	// Do not use the same UID as the underlying CRD as this breaks garbage collection. We reverse the underlying
+	// UID so that it can be reversed back again when applying to the CRD.
+	meta.UID = ReverseUID(rom.GetUID())
 
 	// If no creation timestamp was stored in the metadata annotation, use the one from the CR.
 	// The timestamp is normally set in the clientv3 code. However, for objects that bypass
@@ -215,4 +225,27 @@ func ConvertK8sResourceToCalicoResource(res Resource) error {
 	meta.DeepCopyInto(rom.(*metav1.ObjectMeta))
 
 	return nil
+}
+
+// ReverseUID reverses the segments of a UID to create another UID.
+//
+// We use this to map between the CRD and v3 resource types. It is not possible to use the same UID as this breaks
+// garbage collection of the v3 resource types. We need to be able to deterministically map between the v3 and CRD
+// UID and this seems like a reasonable approach. We could potentially store in the annotation (so both CRD and v3
+// have this annotation and we switch annotation w/ the metadata UID) - however that doesn't work for deletes where
+// the metadata is unavailable, but a UID may have been supplied to handle atomicity.
+func ReverseUID(uid types.UID) types.UID {
+	parts := strings.Split(string(uid), "-")
+	for ii := range parts {
+		parts[ii] = ReverseString(parts[ii])
+	}
+	return types.UID(strings.Join(parts, "-"))
+}
+
+func ReverseString(s string) string {
+	r := []rune(s)
+	for ii, jj := 0, len(r)-1; ii < len(r)/2; ii, jj = ii+1, jj-1 {
+		r[ii], r[jj] = r[jj], r[ii]
+	}
+	return string(r)
 }
