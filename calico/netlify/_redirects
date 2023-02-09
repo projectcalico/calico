@@ -324,5 +324,3 @@
 /usage/troubleshooting/logging https://docs.tigera.io/calico/latest/maintenance/component-logs 301!
 
 # Final catch for everything not specified above
-
-#/* https://docs.tigera.io/calico/latest/:splat 301!
