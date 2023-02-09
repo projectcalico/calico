@@ -66,7 +66,8 @@ function retry_kubectl() {
 
 # install calico
 ROOT="./winfv"
-kubectl create -f https://docs.projectcalico.org/manifests/tigera-operator.yaml
+docs_url=`curl https://latest-os.docs.eng.tigera.net/master.txt`
+kubectl create -f ${docs_url}/manifests/tigera-operator.yaml
 sleep 5
 
 # Deply OS Calico but for EE FV, apply EE crds and RBAC later.
@@ -102,4 +103,3 @@ if [ "$FV_TYPE" == "tigera-felix" ]; then
   kubectl apply -f ee/license.yaml
 fi
 popd
-
