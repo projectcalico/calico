@@ -296,7 +296,7 @@ blocks:
         - artifact push job ${REPORT_DIR} --destination semaphore/test-results --expire-in ${SEMAPHORE_ARTIFACT_EXPIRY} || true
         - artifact push job ${LOGS_DIR} --destination semaphore/logs --expire-in ${SEMAPHORE_ARTIFACT_EXPIRY} || true
         - aws ec2 delete-key-pair --key-name ${KEYPAIR_NAME} || true
-        - cd ~/process/testing/winfv && NAME_PREFIX="${CLUSTER_NAME}" ./setup-fv.sh -q -u
+        - cd ~/calico/process/testing/winfv && NAME_PREFIX="${CLUSTER_NAME}" ./setup-fv.sh -q -u
     env_vars:
     - name: SEMAPHORE_ARTIFACT_EXPIRY
       value: 2w
@@ -576,7 +576,7 @@ blocks:
         - artifact push job ${REPORT_DIR} --destination semaphore/test-results --expire-in ${SEMAPHORE_ARTIFACT_EXPIRY} || true
         - artifact push job ${LOGS_DIR} --destination semaphore/logs --expire-in ${SEMAPHORE_ARTIFACT_EXPIRY} || true
         - aws ec2 delete-key-pair --key-name ${KEYPAIR_NAME} || true
-        - cd ~/process/testing/winfv && NAME_PREFIX="${CLUSTER_NAME}" ./setup-fv.sh -q -u
+        - cd ~/calico/process/testing/winfv && NAME_PREFIX="${CLUSTER_NAME}" ./setup-fv.sh -q -u
     env_vars:
     - name: SEMAPHORE_ARTIFACT_EXPIRY
       value: 2w
