@@ -288,7 +288,6 @@ blocks:
       - export KEYPAIR_NAME=${CLUSTER_NAME}
       - echo CLUSTER_NAME=${CLUSTER_NAME}
       - sudo apt-get install -y putty-tools
-      - git clone git@github.com:tigera/process.git ~/process
       - cd felix
       - make bin/calico-felix.exe fv/win-fv.exe
     epilogue:
@@ -569,7 +568,6 @@ blocks:
       - export KEYPAIR_NAME=${CLUSTER_NAME}
       - echo CLUSTER_NAME=${CLUSTER_NAME}
       - sudo apt-get install -y putty-tools
-      - git clone git@github.com:tigera/process.git ~/process
       - cd cni-plugin
       - ../.semaphore/run-and-monitor build.log make bin/windows/calico.exe bin/windows/calico-ipam.exe bin/windows/win-fv.exe
     epilogue:
