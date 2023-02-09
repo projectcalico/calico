@@ -12,16 +12,6 @@
 
 /master/manifests/* https://raw.githubusercontent.com/projectcalico/calico/master/manifests/:splat 301!
 
-# To redirect traffic from latest version links.
-
-/about/* https://docs.tigera.io/calico/latest/about/:splat 301!
-/getting-started/* https://docs.tigera.io/calico/latest/getting-started/:splat 301!
-/networking/* https://docs.tigera.io/calico/latest/networking/:splat 301!
-/security/* https://docs.tigera.io/calico/latest/network-policy/:splat 301!
-/maintenance/* https://docs.tigera.io/calico/latest/operations/:splat 301!
-/reference/* https://docs.tigera.io/calico/latest/reference/:splat 301!
-/release-notes/* https://docs.tigera.io/calico/latest/release-notes/:splat 301!
-
 # To redirect old versions.
 /archive/v3.25 https://docs.tigera.io/calico/3.25/about 301!
 /archive/v3.24 https://docs.tigera.io/calico/3.24/about 301!
@@ -269,7 +259,7 @@
 /reference/without-docker-networking/prerequisites https://docs.tigera.io/calico/latest/introduction 301!
 /releases/ https://docs.tigera.io/archive 301!
 /security/advanced-policy https://docs.tigera.io/calico/latest/security/kubernetes-network-policy 301!
-/security/app-layer-policy/ https://docs.tigera.io/calico/latest/security/tutorials/app-layer-policy/enforce-policy-istio 301!
+/security/app-layer-policy/ https://docs.tigera.io/calico/latest/network-policy/istio/app-layer-policy 301!
 /security/host-endpoints/ https://docs.tigera.io/calico/latest/security/protect-hosts 301!
 /security/host-endpoints/connectivity https://docs.tigera.io/calico/latest/security/protect-hosts 301!
 /security/host-endpoints/conntrack https://docs.tigera.io/calico/latest/security/high-connection-workloads 301!
@@ -328,4 +318,13 @@
 /usage/troubleshooting/faq-2 https://docs.tigera.io/calico/latest/reference/faq 301!
 /usage/troubleshooting/logging https://docs.tigera.io/calico/latest/maintenance/component-logs 301!
 
-# Final catch for everything not specified above
+# To redirect other traffic from latest version links.
+
+/about/* https://docs.tigera.io/calico/latest/about/:splat 301!
+/getting-started/* https://docs.tigera.io/calico/latest/getting-started/:splat 301!
+/networking/* https://docs.tigera.io/calico/latest/networking/:splat 301!
+/security/* https://docs.tigera.io/calico/latest/network-policy/:splat 301!
+/maintenance/* https://docs.tigera.io/calico/latest/operations/:splat 301!
+/reference/* https://docs.tigera.io/calico/latest/reference/:splat 301!
+/release-notes/* https://docs.tigera.io/calico/latest/release-notes/:splat 301!
+
