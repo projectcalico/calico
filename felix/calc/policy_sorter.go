@@ -27,12 +27,12 @@ import (
 )
 
 type PolicySorter struct {
-	tier *tierInfo
+	Tier *tierInfo
 }
 
 func NewPolicySorter() *PolicySorter {
 	return &PolicySorter{
-		tier: &tierInfo{
+		Tier: &tierInfo{
 			Name:     "default",
 			Policies: make(map[model.PolicyKey]*model.Policy),
 		},
@@ -54,30 +54,45 @@ func policyTypesEqual(pol1, pol2 *model.Policy) bool {
 func (poc *PolicySorter) OnUpdate(update api.Update) (dirty bool) {
 	switch key := update.Key.(type) {
 	case model.PolicyKey:
-		oldPolicy := poc.tier.Policies[key]
+		var newPolicy *model.Policy
 		if update.Value != nil {
-			newPolicy := update.Value.(*model.Policy)
-			if oldPolicy == nil ||
-				oldPolicy.Order != newPolicy.Order ||
-				oldPolicy.DoNotTrack != newPolicy.DoNotTrack ||
-				oldPolicy.PreDNAT != newPolicy.PreDNAT ||
-				oldPolicy.ApplyOnForward != newPolicy.ApplyOnForward ||
-				!policyTypesEqual(oldPolicy, newPolicy) {
-				dirty = true
-			}
-			poc.tier.Policies[key] = newPolicy
+			newPolicy = update.Value.(*model.Policy)
 		} else {
-			if oldPolicy != nil {
-				delete(poc.tier.Policies, key)
-				dirty = true
-			}
+			newPolicy = nil
+		}
+		dirty = poc.UpdatePolicy(key, newPolicy)
+	}
+	return
+}
+
+func (poc *PolicySorter) HasPolicy(key model.PolicyKey) (found bool) {
+	_, found = poc.Tier.Policies[key]
+	return found
+}
+
+func (poc *PolicySorter) UpdatePolicy(key model.PolicyKey, newPolicy *model.Policy) (dirty bool) {
+	oldPolicy := poc.Tier.Policies[key]
+	if newPolicy != nil {
+		if oldPolicy == nil ||
+			oldPolicy.Order != newPolicy.Order ||
+			oldPolicy.DoNotTrack != newPolicy.DoNotTrack ||
+			oldPolicy.PreDNAT != newPolicy.PreDNAT ||
+			oldPolicy.ApplyOnForward != newPolicy.ApplyOnForward ||
+			!policyTypesEqual(oldPolicy, newPolicy) {
+			dirty = true
+		}
+		poc.Tier.Policies[key] = newPolicy
+	} else {
+		if oldPolicy != nil {
+			delete(poc.Tier.Policies, key)
+			dirty = true
 		}
 	}
 	return
 }
 
 func (poc *PolicySorter) Sorted() *tierInfo {
-	tierInfo := poc.tier
+	tierInfo := poc.Tier
 	tierInfo.OrderedPolicies = make([]PolKV, 0, len(tierInfo.Policies))
 	for k, v := range tierInfo.Policies {
 		tierInfo.OrderedPolicies = append(tierInfo.OrderedPolicies, PolKV{Key: k, Value: v})
