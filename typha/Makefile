@@ -33,11 +33,10 @@ include ../lib.Makefile
 #
 # We use -B to insert a build ID note into the executable, without which, the
 # RPM build tools complain.
-LDFLAGS:=-ldflags "\
-	-X $(PACKAGE_NAME)/pkg/buildinfo.GitVersion=$(GIT_DESCRIPTION) \
-	-X $(PACKAGE_NAME)/pkg/buildinfo.BuildDate=$(DATE) \
-	-X $(PACKAGE_NAME)/pkg/buildinfo.GitRevision=$(GIT_COMMIT) \
-	-B 0x$(BUILD_ID)"
+LDFLAGS := -X $(PACKAGE_NAME)/pkg/buildinfo.GitVersion=$(GIT_DESCRIPTION) \
+			-X $(PACKAGE_NAME)/pkg/buildinfo.BuildDate=$(DATE) \
+			-X $(PACKAGE_NAME)/pkg/buildinfo.GitRevision=$(GIT_COMMIT) \
+			-B 0x$(BUILD_ID)
 
 # All Typha go files.
 SRC_FILES:=$(shell find . $(foreach dir,$(NON_TYPHA_DIRS),-path ./$(dir) -prune -o) -type f -name '*.go' -print)
@@ -76,13 +75,13 @@ bin/calico-typha: bin/calico-typha-$(ARCH)
 bin/calico-typha-$(ARCH): $(SRC_FILES)
 	mkdir -p bin
 	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) \
-	    sh -c '$(GIT_CONFIG_SSH) go build -v -i -o $@ -v $(LDFLAGS) $(PACKAGE_NAME)/cmd/calico-typha'
+	    sh -c '$(GIT_CONFIG_SSH) go build -v -i -o $@ -v -buildvcs=false -ldflags "$(LDFLAGS)" $(PACKAGE_NAME)/cmd/calico-typha'
 
 bin/typha-client-$(ARCH): $(SRC_FILES)
 	@echo Building typha client...
 	mkdir -p bin
 	$(DOCKER_RUN) $(CALICO_BUILD) \
-	    sh -c '$(GIT_CONFIG_SSH) go build -v -i -o $@ -v $(LDFLAGS) "$(PACKAGE_NAME)/cmd/typha-client" && \
+	    sh -c '$(GIT_CONFIG_SSH) go build -v -i -o $@ -buildvcs=false -v -ldflags "$(LDFLAGS)" "$(PACKAGE_NAME)/cmd/typha-client" && \
 		( ldd $@ 2>&1 | grep -q -e "Not a valid dynamic program" \
 		-e "not a dynamic executable" || \
 		( echo "Error: bin/typha-client was not statically linked"; false ) )'
@@ -165,7 +164,7 @@ st:
 # Release
 ###############################################################################
 ## Produces a clean build of release artifacts at the specified version.
-release-build: .release-$(VERSION).created 
+release-build: .release-$(VERSION).created
 .release-$(VERSION).created:
 	$(MAKE) clean image-all RELEASE=true
 	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=$(VERSION)
