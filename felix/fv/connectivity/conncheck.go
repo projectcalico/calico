@@ -180,37 +180,57 @@ func (c *Checker) ResetExpectations() {
 // ActualConnectivity calculates the current connectivity for all the expected paths.  It returns a
 // slice containing one response for each attempted check (or nil if the check failed) along with
 // a same-length slice containing a pretty-printed description of the check and its result.
-func (c *Checker) ActualConnectivity() ([]*Result, []string) {
+func (c *Checker) ActualConnectivity(isARetry bool) ([]*Result, []string) {
 	UnactivatedCheckers.Discard(c)
 	var wg sync.WaitGroup
 	responses := make([]*Result, len(c.expectations))
 	pretty := make([]string, len(c.expectations))
+
+	p := "tcp"
+	if c.Protocol != "" {
+		p = c.Protocol
+	}
+
+	// Pre-calculate the options for each connectivity check...
+	preCalcOpts := make([][]CheckOption, len(c.expectations))
+	for i, exp := range c.expectations {
+		opts := []CheckOption{
+			WithDuration(exp.ExpectedPacketLoss.Duration),
+		}
+
+		if exp.sendLen > 0 || exp.recvLen > 0 {
+			opts = append(opts, WithSendLen(exp.sendLen), WithRecvLen(exp.recvLen))
+		}
+
+		if exp.srcPort != 0 {
+			opts = append(opts, WithSourcePort(strconv.Itoa(int(exp.srcPort))))
+		}
+		preCalcOpts[i] = opts
+	}
+
+	if isARetry {
+		// Give all the checkers a chance to run some pre-test cleanup.  For example, removing conntrack entries that
+		// might have been leaked by an earlier run.  Important to do this first rather than in-line to avoid
+		// one checker running its cleanup in parallel with another actually doing its check.
+		log.Debug("Retry, calling pre-retry cleanup functions.")
+		for i, exp := range c.expectations {
+			wg.Add(1)
+			go func(i int, exp Expectation) {
+				defer ginkgo.GinkgoRecover()
+				defer wg.Done()
+				exp.From.PreRetryCleanup(exp.To.IP, exp.To.Port, p, preCalcOpts[i]...)
+			}(i, exp)
+		}
+		wg.Wait()
+	}
+
+	// Actually run the checks and format the results.
 	for i, exp := range c.expectations {
 		wg.Add(1)
 		go func(i int, exp Expectation) {
 			defer ginkgo.GinkgoRecover()
 			defer wg.Done()
-			p := "tcp"
-			if c.Protocol != "" {
-				p = c.Protocol
-			}
-
-			var res *Result
-
-			opts := []CheckOption{
-				WithDuration(exp.ExpectedPacketLoss.Duration),
-			}
-
-			if exp.sendLen > 0 || exp.recvLen > 0 {
-				opts = append(opts, WithSendLen(exp.sendLen), WithRecvLen(exp.recvLen))
-			}
-
-			if exp.srcPort != 0 {
-				opts = append(opts, WithSourcePort(strconv.Itoa(int(exp.srcPort))))
-			}
-
-			res = exp.From.CanConnectTo(exp.To.IP, exp.To.Port, p, opts...)
-
+			res := exp.From.CanConnectTo(exp.To.IP, exp.To.Port, p, preCalcOpts[i]...)
 			pretty[i] += fmt.Sprintf("%s -> %s = %v", exp.From.SourceName(), exp.To.TargetName, res.HasConnectivity())
 
 			if res != nil {
@@ -315,7 +335,8 @@ func (c *Checker) CheckConnectivityWithTimeoutOffset(callerSkip int, timeout tim
 
 	for {
 		checkStartTime := time.Now()
-		actualConn, actualConnPretty = c.ActualConnectivity()
+		isARetry := completedAttempts > 0
+		actualConn, actualConnPretty = c.ActualConnectivity(isARetry)
 		failed := false
 		finalErr = nil
 		expConnectivity = c.ExpectedConnectivityPretty()
@@ -456,12 +477,14 @@ type Matcher struct {
 }
 
 type ConnectionSource interface {
+	PreRetryCleanup(ip, port, protocol string, opts ...CheckOption)
 	CanConnectTo(ip, port, protocol string, opts ...CheckOption) *Result
 	SourceName() string
 	SourceIPs() []string
 }
 
 func (m *Matcher) Match(actual interface{}) (success bool, err error) {
+	actual.(ConnectionSource).PreRetryCleanup(m.IP, m.Port, m.Protocol)
 	success = actual.(ConnectionSource).CanConnectTo(m.IP, m.Port, m.Protocol) != nil
 	return
 }
