@@ -702,7 +702,7 @@ func (c *Container) SourceIPs() []string {
 	return ips
 }
 
-func (c *Container) PreConncheckCleanup(ip, port, protocol string, opts ...connectivity.CheckOption) {
+func (c *Container) PreRetryCleanup(ip, port, protocol string, opts ...connectivity.CheckOption) {
 }
 
 func (c *Container) CanConnectTo(ip, port, protocol string, opts ...connectivity.CheckOption) *connectivity.Result {

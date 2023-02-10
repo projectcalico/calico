@@ -61,6 +61,8 @@ type Workload struct {
 	isRunning             bool
 	isSpoofing            bool
 	listenAnyIP           bool
+
+	cleanupLock sync.Mutex
 }
 
 func (w *Workload) GetIP() string {
@@ -392,9 +394,9 @@ func (w *Workload) SourceIPs() []string {
 	return []string{w.IP}
 }
 
-func (w *Workload) PreConncheckCleanup(ip, port, protocol string, opts ...connectivity.CheckOption) {
+func (w *Workload) PreRetryCleanup(ip, port, protocol string, opts ...connectivity.CheckOption) {
 	anyPort := w.conncheckAnyPort()
-	anyPort.PreConncheckCleanup(ip, port, protocol, opts...)
+	anyPort.PreRetryCleanup(ip, port, protocol, opts...)
 }
 
 func (w *Workload) CanConnectTo(ip, port, protocol string, opts ...connectivity.CheckOption) *connectivity.Result {
@@ -687,9 +689,9 @@ type SpoofedWorkload struct {
 	SpoofedSourceIP string
 }
 
-func (s *SpoofedWorkload) PreConncheckCleanup(ip, port, protocol string, opts ...connectivity.CheckOption) {
+func (s *SpoofedWorkload) PreRetryCleanup(ip, port, protocol string, opts ...connectivity.CheckOption) {
 	opts = s.appendSourceIPOpt(opts)
-	s.Workload.preConncheckCleanupInner(ip, port, protocol, "(spoofed)", opts...)
+	s.Workload.preRetryCleanupInner(ip, port, protocol, "(spoofed)", opts...)
 }
 
 func (s *SpoofedWorkload) CanConnectTo(ip, port, protocol string, opts ...connectivity.CheckOption) *connectivity.Result {
@@ -718,9 +720,9 @@ func (p *Port) SourceIPs() []string {
 	return []string{p.IP}
 }
 
-func (p *Port) PreConncheckCleanup(ip, port, protocol string, opts ...connectivity.CheckOption) {
+func (p *Port) PreRetryCleanup(ip, port, protocol string, opts ...connectivity.CheckOption) {
 	opts = p.maybeAppendPortOpt(opts)
-	p.Workload.preConncheckCleanupInner(ip, port, protocol, "(with source port)", opts...)
+	p.Workload.preRetryCleanupInner(ip, port, protocol, "(with source port)", opts...)
 }
 
 // Return if a connection is good and packet loss string "PacketLoss[xx]".
@@ -737,8 +739,13 @@ func (p *Port) maybeAppendPortOpt(opts []connectivity.CheckOption) []connectivit
 	return opts
 }
 
-func (w *Workload) preConncheckCleanupInner(ip, port, protocol, logSuffix string, opts ...connectivity.CheckOption) {
+func (w *Workload) preRetryCleanupInner(ip, port, protocol, logSuffix string, opts ...connectivity.CheckOption) {
 	if protocol == "udp" || protocol == "sctp" {
+		// Defensive, we might get called in parallel for different ports, avoid trying to run
+		// clashing cleanup commands at the same time.
+		w.cleanupLock.Lock()
+		defer w.cleanupLock.Unlock()
+
 		// If this is a retry then we may have stale conntrack entries and we don't want those
 		// to influence the connectivity check.  UDP lacks a sequence number, so conntrack operates
 		// on a simple timer. In the case of SCTP, conntrack appears to match packets even when
