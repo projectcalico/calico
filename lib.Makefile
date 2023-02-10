@@ -166,24 +166,46 @@ endif
 #   1st arg: path/to/input/package(s)
 #   2nd arg: path/to/output/binary
 # Only when arch = amd64 it will use boring crypto to build the binary.
-# Uses VERSION_FLAGS when set.
-# TODO: once all images can be built using this function, we can revert the $(DOCKER_RUN)... line with $(DOCKER_BUILD_CGO)
+# Uses LDFLAGS, CGO_LDFLAGS, CGO_CFLAGS when set.
 define build_static_cgo_boring_binary
-    $(DOCKER_RUN) -e CGO_ENABLED=1 $(GO_BUILD_IMAGE):$(GO19_BUILD_VER) \
+    $(DOCKER_RUN) \
+        -e CGO_ENABLED=1 \
+        -e CGO_LDFLAGS=$(CGO_LDFLAGS) \
+        -e CGO_CFLAGS=$(CGO_CFLAGS) \
+        $(GO_BUILD_IMAGE):$(GO_BUILD_VER) \
         sh -c '$(GIT_CONFIG_SSH) \
-        GOEXPERIMENT=boringcrypto go build -o $(2)  \
-        -tags fipsstrict,osusergo,netgo -v -buildvcs=false \
-        -ldflags "$(VERSION_FLAGS) -linkmode external -extldflags -static" \
-        $(1)'
+            GOEXPERIMENT=boringcrypto go build -o $(2)  \
+            -tags fipsstrict,osusergo,netgo -v -buildvcs=false \
+            -ldflags "$(LDFLAGS) -linkmode external -extldflags -static" \
+            $(1)'
+endef
+
+# Build a binary with boring crypto support.
+# This function expects you to pass in two arguments:
+#   1st arg: path/to/input/package(s)
+#   2nd arg: path/to/output/binary
+# Only when arch = amd64 it will use boring crypto to build the binary.
+# Uses LDFLAGS, CGO_LDFLAGS, CGO_CFLAGS when set.
+define build_cgo_boring_binary
+    $(DOCKER_RUN) \
+        -e CGO_ENABLED=1 \
+        -e CGO_LDFLAGS=$(CGO_LDFLAGS) \
+        -e CGO_CFLAGS=$(CGO_CFLAGS) \
+        $(GO_BUILD_IMAGE):$(GO_BUILD_VER) \
+        sh -c '$(GIT_CONFIG_SSH) \
+            GOEXPERIMENT=boringcrypto go build -o $(2)  \
+            -tags fipsstrict -v -buildvcs=false \
+            -ldflags "$(LDFLAGS)" \
+            $(1)'
 endef
 
 # For binaries that do not require boring crypto.
 define build_binary
-	$(DOCKER_RUN) $(GO_BUILD_IMAGE):$(GO19_BUILD_VER) \
+	$(DOCKER_RUN) $(GO_BUILD_IMAGE):$(GO_BUILD_VER) \
 		sh -c '$(GIT_CONFIG_SSH) \
 		go build -o $(2)  \
 		-v -buildvcs=false \
-		-ldflags "$(VERSION_FLAGS)" \
+		-ldflags "$(LDFLAGS)" \
 		$(1)'
 endef
 
