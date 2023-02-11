@@ -235,7 +235,6 @@ DOCKER_GO_BUILD_CGO_WINDOWS=$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO
 $(NODE_CONTAINER_BINARY): filesystem/usr/lib/calico/bpf $(LIBBPF_A) $(SRC_FILES) ../go.mod
 	$(call build_cgo_boring_binary, ./cmd/calico-node/main.go, $@)
 
-
 $(WINDOWS_BINARY):
 	$(DOCKER_RUN) \
 		-e GOOS=windows \

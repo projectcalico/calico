@@ -167,6 +167,7 @@ endif
 #   2nd arg: path/to/output/binary
 # Only when arch = amd64 it will use boring crypto to build the binary.
 # Uses LDFLAGS, CGO_LDFLAGS, CGO_CFLAGS when set.
+# Tests that the resulting binary contains boringcrypto symbols.
 define build_static_cgo_boring_binary
     $(DOCKER_RUN) \
         -e CGO_ENABLED=1 \
@@ -177,7 +178,8 @@ define build_static_cgo_boring_binary
             GOEXPERIMENT=boringcrypto go build -o $(2)  \
             -tags fipsstrict,osusergo,netgo -v -buildvcs=false \
             -ldflags "$(LDFLAGS) -linkmode external -extldflags -static" \
-            $(1)'
+            $(1) \
+            && go tool nm $(2) | grep '_Cfunc__goboringcrypto_' 1> /dev/null'
 endef
 
 # Build a binary with boring crypto support.
@@ -186,6 +188,7 @@ endef
 #   2nd arg: path/to/output/binary
 # Only when arch = amd64 it will use boring crypto to build the binary.
 # Uses LDFLAGS, CGO_LDFLAGS, CGO_CFLAGS when set.
+# Tests that the resulting binary contains boringcrypto symbols.
 define build_cgo_boring_binary
     $(DOCKER_RUN) \
         -e CGO_ENABLED=1 \
@@ -196,7 +199,8 @@ define build_cgo_boring_binary
             GOEXPERIMENT=boringcrypto go build -o $(2)  \
             -tags fipsstrict -v -buildvcs=false \
             -ldflags "$(LDFLAGS)" \
-            $(1)'
+            $(1) \
+            && go tool nm $(2) | grep '_Cfunc__goboringcrypto_' 1> /dev/null'
 endef
 
 # For binaries that do not require boring crypto.
