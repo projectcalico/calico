@@ -7,13 +7,6 @@ PACKAGE_NAME = github.com/projectcalico/calico/typha
 TYPHA_IMAGE    ?=typha
 BUILD_IMAGES   ?=$(TYPHA_IMAGE)
 
-# We need CGO to leverage Boring SSL.  However, the cross-compile doesn't support CGO yet.
-ifeq ($(ARCH), $(filter $(ARCH),amd64))
-CGO_ENABLED=1
-else
-CGO_ENABLED=0
-endif
-
 # Add in local static-checks
 LOCAL_CHECKS=check-boring-ssl
 
@@ -72,19 +65,18 @@ sub-build-%:
 bin/calico-typha: bin/calico-typha-$(ARCH)
 	ln -f bin/calico-typha-$(ARCH) bin/calico-typha
 
+bin/wrapper: bin/wrapper-$(ARCH)
+	ln -f bin/wrapper-$(ARCH) bin/wrapper
+
+bin/wrapper-$(ARCH): $(SRC_FILES) $(LOCAL_BUILD_DEP)
+	$(call build_static_cgo_boring_binary, ./cmd/wrapper, $@)
+
 bin/calico-typha-$(ARCH): $(SRC_FILES)
-	mkdir -p bin
-	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) \
-	    sh -c '$(GIT_CONFIG_SSH) go build -v -i -o $@ -v -buildvcs=false -ldflags "$(LDFLAGS)" $(PACKAGE_NAME)/cmd/calico-typha'
+	$(call build_static_cgo_boring_binary, ./cmd/calico-typha, $@)
 
 bin/typha-client-$(ARCH): $(SRC_FILES)
 	@echo Building typha client...
-	mkdir -p bin
-	$(DOCKER_RUN) $(CALICO_BUILD) \
-	    sh -c '$(GIT_CONFIG_SSH) go build -v -i -o $@ -buildvcs=false -v -ldflags "$(LDFLAGS)" "$(PACKAGE_NAME)/cmd/typha-client" && \
-		( ldd $@ 2>&1 | grep -q -e "Not a valid dynamic program" \
-		-e "not a dynamic executable" || \
-		( echo "Error: bin/typha-client was not statically linked"; false ) )'
+	$(call build_static_cgo_boring_binary, ./cmd/typha-client, $@)
 
 ###############################################################################
 # Building the image
