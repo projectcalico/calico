@@ -44,6 +44,7 @@ func PortString() string {
 
 func GetMetric(ip string, port int, name, caFile, certFile, keyFile string) (metric string, err error) {
 	httpClient := http.Client{Timeout: time.Second}
+	defer httpClient.CloseIdleConnections()
 	method := "http"
 	// Client setup for TLS.
 	if certFile != "" {
@@ -98,6 +99,9 @@ func GetMetric(ip string, port int, name, caFile, certFile, keyFile string) (met
 		}
 		httpClient.Transport = &transport
 		method = "https"
+	} else {
+		// Use a dedicated transport to avoid sharing connections between attempts.
+		httpClient.Transport = &http.Transport{}
 	}
 	var resp *http.Response
 	resp, err = httpClient.Get(fmt.Sprintf("%v://%v:%v/metrics", method, ip, port))
