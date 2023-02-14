@@ -308,15 +308,17 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			case "vxlan":
 				options.VXLANMode = api.VXLANModeAlways
 			case "wireguard":
-				// Delay running Felix until Node resource has been created.
-				options.DelayFelixStart = true
-				options.TriggerDelayedFelixStart = true
 				// Allocate tunnel address for Wireguard.
 				options.WireguardEnabled = true
 				// Enable Wireguard.
 				options.ExtraEnvVars["FELIX_WIREGUARDENABLED"] = "true"
 			default:
 				Fail("bad tunnel option")
+			}
+			if testOpts.tunnel != "" {
+				// Avoid felix restart mid-test, wait for the node resource to be created before starting Felix.
+				options.DelayFelixStart = true
+				options.TriggerDelayedFelixStart = true
 			}
 			options.ExtraEnvVars["FELIX_BPFConnectTimeLoadBalancingEnabled"] = fmt.Sprint(testOpts.connTimeEnabled)
 			options.ExtraEnvVars["FELIX_BPFLogLevel"] = fmt.Sprint(testOpts.bpfLogLevel)
