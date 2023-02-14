@@ -1413,6 +1413,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								Ports:         "57005", // 0xdead
 								Protocol:      testOpts.protocol,
 								InterfaceName: "eth20",
+								MTU:           1500, // Need to match host MTU or felix will restart.
 							}
 							err := eth20.Start()
 							Expect(err).NotTo(HaveOccurred())
@@ -1434,6 +1435,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								Ports:         "57005", // 0xdead
 								Protocol:      testOpts.protocol,
 								InterfaceName: "eth30",
+								MTU:           1500, // Need to match host MTU or felix will restart.
 							}
 							err = eth30.Start()
 							Expect(err).NotTo(HaveOccurred())
@@ -3215,6 +3217,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 											Ports:         "57005", // 0xdead
 											Protocol:      testOpts.protocol,
 											InterfaceName: "eth20",
+											MTU:           1500, // Need to match host MTU or felix will restart.
 										}
 										err := eth20.Start()
 										Expect(err).NotTo(HaveOccurred())

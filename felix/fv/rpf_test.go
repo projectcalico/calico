@@ -105,6 +105,7 @@ var _ = infrastructure.DatastoreDescribe(
 					Ports:         "57005", // 0xdead
 					Protocol:      "udp",
 					InterfaceName: "eth20",
+					MTU:           1500, // Need to match host MTU or felix will restart.
 				}
 				err := external.Start()
 				Expect(err).NotTo(HaveOccurred())
