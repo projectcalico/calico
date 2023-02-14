@@ -41,10 +41,10 @@ var _ = Describe("BPF Proxy", func() {
 	var syncStop chan struct{}
 
 	It("should fail without k8s client", func() {
-		_, err := proxy.New(nil, nil, "testnode")
+		_, err := proxy.New(nil, nil, "testnode", nil)
 		Expect(err).To(HaveOccurred())
 
-		_, err = proxy.New(fake.NewSimpleClientset(), nil, "testnode")
+		_, err = proxy.New(fake.NewSimpleClientset(), nil, "testnode", nil)
 		Expect(err).To(HaveOccurred())
 	})
 

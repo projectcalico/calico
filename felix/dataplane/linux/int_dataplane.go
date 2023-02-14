@@ -131,8 +131,8 @@ func init() {
 }
 
 type Config struct {
-	Hostname string
-
+	Hostname             string
+	NodeZone             string
 	IPv6Enabled          bool
 	RuleRendererOverride rules.RuleRenderer
 	IPIPMTU              int
@@ -692,6 +692,10 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 		if config.BPFNodePortDSREnabled {
 			bpfproxyOpts = append(bpfproxyOpts, bpfproxy.WithDSREnabled())
+		}
+
+		if len(config.NodeZone) != 0 {
+			bpfproxyOpts = append(bpfproxyOpts, bpfproxy.WithTopologyNodeZone(config.NodeZone))
 		}
 
 		if config.KubeClientSet != nil {
