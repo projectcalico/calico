@@ -24,6 +24,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/resources"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
@@ -188,7 +189,7 @@ func checkPreconditions(key string, preconditions *storage.Preconditions, out ru
 	if err != nil {
 		return storage.NewInternalErrorf("can't enforce preconditions %v on un-introspectable object %v, got error: %v", *preconditions, out, err)
 	}
-	if preconditions.UID != nil && *preconditions.UID != objMeta.GetUID() {
+	if preconditions.UID != nil && *preconditions.UID != resources.ReverseUID(objMeta.GetUID()) {
 		errMsg := fmt.Sprintf("Precondition failed: UID in precondition: %v, UID in object meta: %v", *preconditions.UID, objMeta.GetUID())
 		return storage.NewInvalidObjError(key, errMsg)
 	}
@@ -347,20 +348,21 @@ func decode(
 //
 // s := /* implementation of Interface */
 // err := s.GuaranteedUpdate(
-//     "myKey", &MyType{}, true,
-//     func(input runtime.Object, res ResponseMeta) (runtime.Object, *uint64, error) {
-//       // Before each incovation of the user defined function, "input" is reset to
-//       // current contents for "myKey" in database.
-//       curr := input.(*MyType)  // Guaranteed to succeed.
 //
-//       // Make the modification
-//       curr.Counter++
+//	    "myKey", &MyType{}, true,
+//	    func(input runtime.Object, res ResponseMeta) (runtime.Object, *uint64, error) {
+//	      // Before each incovation of the user defined function, "input" is reset to
+//	      // current contents for "myKey" in database.
+//	      curr := input.(*MyType)  // Guaranteed to succeed.
 //
-//       // Return the modified object - return an error to stop iterating. Return
-//       // a uint64 to alter the TTL on the object, or nil to keep it the same value.
-//       return cur, nil, nil
-//    }
-// })
+//	      // Make the modification
+//	      curr.Counter++
+//
+//	      // Return the modified object - return an error to stop iterating. Return
+//	      // a uint64 to alter the TTL on the object, or nil to keep it the same value.
+//	      return cur, nil, nil
+//	   }
+//	})
 func (rs *resourceStore) GuaranteedUpdate(
 	ctx context.Context, key string, out runtime.Object, ignoreNotFound bool,
 	preconditions *storage.Preconditions, userUpdate storage.UpdateFunc, cachedExistingObject runtime.Object) error {
