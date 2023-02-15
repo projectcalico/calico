@@ -90,6 +90,10 @@ func (o *Obj) PinMaps(_ string) error {
 	panic("LIBBPF syscall stub")
 }
 
+func (o *Obj) ProgramFD(_ string) (int, error) {
+	panic("LIBBPF syscall stub")
+}
+
 func CreateQDisc(ifName string) error {
 	panic("LIBBPF syscall stub")
 }
