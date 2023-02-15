@@ -2392,7 +2392,6 @@ type testCase interface {
 }
 
 func runTest(t *testing.T, tp testPolicy) {
-	log.Infof("nina")
 	RegisterTestingT(t)
 
 	// The prog builder refuses to allocate IDs as a precaution, give it an allocator that forces allocations.
