@@ -308,15 +308,17 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			case "vxlan":
 				options.VXLANMode = api.VXLANModeAlways
 			case "wireguard":
-				// Delay running Felix until Node resource has been created.
-				options.DelayFelixStart = true
-				options.TriggerDelayedFelixStart = true
 				// Allocate tunnel address for Wireguard.
 				options.WireguardEnabled = true
 				// Enable Wireguard.
 				options.ExtraEnvVars["FELIX_WIREGUARDENABLED"] = "true"
 			default:
 				Fail("bad tunnel option")
+			}
+			if testOpts.tunnel != "none" {
+				// Avoid felix restart mid-test, wait for the node resource to be created before starting Felix.
+				options.DelayFelixStart = true
+				options.TriggerDelayedFelixStart = true
 			}
 			options.ExtraEnvVars["FELIX_BPFConnectTimeLoadBalancingEnabled"] = fmt.Sprint(testOpts.connTimeEnabled)
 			options.ExtraEnvVars["FELIX_BPFLogLevel"] = fmt.Sprint(testOpts.bpfLogLevel)
@@ -1413,6 +1415,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								Ports:         "57005", // 0xdead
 								Protocol:      testOpts.protocol,
 								InterfaceName: "eth20",
+								MTU:           1500, // Need to match host MTU or felix will restart.
 							}
 							err := eth20.Start()
 							Expect(err).NotTo(HaveOccurred())
@@ -1434,6 +1437,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								Ports:         "57005", // 0xdead
 								Protocol:      testOpts.protocol,
 								InterfaceName: "eth30",
+								MTU:           1500, // Need to match host MTU or felix will restart.
 							}
 							err = eth30.Start()
 							Expect(err).NotTo(HaveOccurred())
@@ -3215,6 +3219,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 											Ports:         "57005", // 0xdead
 											Protocol:      testOpts.protocol,
 											InterfaceName: "eth20",
+											MTU:           1500, // Need to match host MTU or felix will restart.
 										}
 										err := eth20.Start()
 										Expect(err).NotTo(HaveOccurred())
