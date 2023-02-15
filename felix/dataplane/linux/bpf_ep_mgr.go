@@ -223,6 +223,8 @@ type bpfEndpointManager struct {
 	policyMapAlloc    *policyMapAlloc
 	xdpPolicyMapAlloc *policyMapAlloc
 	policyDefaultObj  *libbpf.Obj
+	policyTcAllowFD   bpf.ProgFD
+	policyTcDenyFD    bpf.ProgFD
 
 	ruleRenderer        bpfAllowChainRenderer
 	iptablesFilterTable IptablesTable
@@ -981,11 +983,19 @@ func (m *bpfEndpointManager) loadDefaultPolicies() error {
 		return fmt.Errorf("default policies: %w", err)
 	}
 
-	if err := obj.PinPrograms(bpfdefs.GlobalPinDir); err != nil {
-		return fmt.Errorf("default policies: %w", err)
-	}
-
 	m.policyDefaultObj = obj
+
+	fd, err := obj.ProgramFD("calico_tc_deny")
+	if err != nil {
+		return fmt.Errorf("failed to load default deny policy program: %w", err)
+	}
+	m.policyTcDenyFD = bpf.ProgFD(fd)
+
+	fd, err = obj.ProgramFD("calico_tc_allow")
+	if err != nil {
+		return fmt.Errorf("failed to load default allow policy program: %w", err)
+	}
+	m.policyTcAllowFD = bpf.ProgFD(fd)
 
 	return nil
 }
@@ -2109,6 +2119,20 @@ func (m *bpfEndpointManager) ensureProgramAttached(ap attachPoint) error {
 		at.Family = 4
 		if aptc.HookLayout4, err = pm.LoadObj(at); err != nil {
 			return fmt.Errorf("loading generic v4 tc hook program: %w", err)
+		}
+
+		// Load deafault policy before the real policy is created and loaded.
+		switch at.DefaultPolicy() {
+		case hook.DefPolicyAllow:
+			err = maps.UpdateMapEntry(m.bpfmaps.PolicyMap.MapFD(),
+				polprog.Key(ap.PolicyIdx(4)), polprog.Value(m.policyTcAllowFD))
+		case hook.DefPolicyDeny:
+			err = maps.UpdateMapEntry(m.bpfmaps.PolicyMap.MapFD(),
+				polprog.Key(ap.PolicyIdx(4)), polprog.Value(m.policyTcDenyFD))
+		}
+
+		if err != nil {
+			return fmt.Errorf("failed to set default policy: %w", err)
 		}
 
 		if aptc.IPv6Enabled {
