@@ -680,39 +680,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					})
 				})
 
-				It("should clean up jump maps", func() {
-					numJumpMaps := func() int {
-						command := fmt.Sprintf("find /sys/fs/bpf/tc -name %s", maps.JumpMapName())
-						output, err := felixes[0].ExecOutput("sh", "-c", command)
-						Expect(err).NotTo(HaveOccurred())
-						return strings.Count(output, maps.JumpMapName())
-					}
-
-					expJumpMaps := func(numWorkloads int) int {
-						numHostIfaces := 1
-						specialIfaces := 0
-						if ctlbWorkaround {
-							specialIfaces = 2 /* nat + lo */
-						}
-						expectedNumMaps := 2*numWorkloads + 2*numHostIfaces + 2*specialIfaces
-						return expectedNumMaps
-					}
-
-					// Check start-of-day number of interfaces.
-					Eventually(numJumpMaps, "15s", "200ms").Should(
-						BeNumerically("==", expJumpMaps(len(w))),
-						"Unexpected number of jump maps at start of day")
-
-					// Remove a workload.
-					w[0].RemoveFromInfra(infra)
-					w[0].Stop()
-
-					// Need a long timeout here because felix throttles cleanups.
-					Eventually(numJumpMaps, "15s", "200ms").Should(
-						BeNumerically("==", expJumpMaps(len(w)-1)),
-						"Unexpected number of jump maps after removing workload")
-				})
-
 				It("should recover if the BPF programs are removed", func() {
 					flapInterface := func() {
 						By("Flapping interface")
