@@ -2525,7 +2525,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"healthTimeoutOverrides": {
 						SchemaProps: spec.SchemaProps{
-							Description: "HealthTimeoutOverrides allows the internal watchdog timeouts of individual subcomponents to be overriden.  This is useful for working around \"false positive\" liveness timeouts that can occur in particularly stressful workloads or if CPU is constrained.  For a list of active subcomponents, see Felix's logs.",
+							Description: "HealthTimeoutOverrides allows the internal watchdog timeouts of individual subcomponents to be overridden.  This is useful for working around \"false positive\" liveness timeouts that can occur in particularly stressful workloads or if CPU is constrained.  For a list of active subcomponents, see Felix's logs.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
