@@ -222,13 +222,17 @@ create:
 
 		ct_value.orig_sport = sport;
 
+		bool src_lt_dest = ip_src < ip_dst;
+
 		for (i = 0; i < PSNAT_RETRIES; i++) {
 			sport = psnat_get_port(ctx);
 			CALI_DEBUG("New sport %d\n", sport);
 
-			bool srcLTDest = (ip_src < ip_dst) || ((ip_src == ip_dst) && sport < dport);
+			if (ip_src == ip_dst) {
+				src_lt_dest = sport < dport;
+			}
 
-			*k = ct_make_key(srcLTDest, ct_ctx->proto, ip_src, ip_dst, sport, dport);
+			*k = ct_make_key(src_to_dst, ct_ctx->proto, ip_src, ip_dst, sport, dport);
 
 			if (!(err = cali_v4_ct_update_elem(k, &ct_value, BPF_NOEXIST))) {
 				ct_ctx->sport = sport;
