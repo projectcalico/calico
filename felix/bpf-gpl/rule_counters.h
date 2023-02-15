@@ -11,15 +11,15 @@ CALI_MAP(cali_rule_ctrs, 2,
 		BPF_MAP_TYPE_PERCPU_HASH,
 		__u64, __u64, 10000, 0)
 
-static CALI_BPF_INLINE void update_rule_counters(struct cali_tc_state *state) {
+static CALI_BPF_INLINE void update_rule_counters(struct cali_tc_ctx *ctx) {
 	int ret = 0;
 	__u64 value = 1;
 	__u64 *val = NULL;
 	for (int i = 0; i < MAX_RULE_IDS; i++) {
-		if (i >= state->rules_hit) {
+		if (i >= ctx->state->rules_hit) {
 			break;
 		}
-		__u64 ruleId = state->rule_ids[i];
+		__u64 ruleId = ctx->state->rule_ids[i];
 		val = cali_rule_ctrs_lookup_elem(&ruleId);
 		if (val) {
 			*val = *val + 1;
