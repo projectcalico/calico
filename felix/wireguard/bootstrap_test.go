@@ -282,11 +282,11 @@ var _ = Describe("Wireguard bootstrapping", func() {
 						FelixHostname:                  nodeName1,
 					}
 					if enableIPv4 {
+						la := netlink.NewLinkAttrs()
+						la.Name = "wireguard.cali"
+						la.Index = 10
 						link = &mocknetlink.MockLink{
-							LinkAttrs: netlink.LinkAttrs{
-								Name:  "wireguard.cali",
-								Index: 10,
-							},
+							LinkAttrs:           la,
 							LinkType:            "wireguard",
 							WireguardPrivateKey: node1PrivateKey,
 							WireguardPublicKey:  node1PrivateKey.PublicKey(),
@@ -299,11 +299,11 @@ var _ = Describe("Wireguard bootstrapping", func() {
 						netlinkDataplane.NameToLink["wireguard.cali"] = link
 					}
 					if enableIPv6 {
+						la := netlink.NewLinkAttrs()
+						la.Name = "wg-v6.cali"
+						la.Index = 10
 						linkV6 = &mocknetlink.MockLink{
-							LinkAttrs: netlink.LinkAttrs{
-								Name:  "wg-v6.cali",
-								Index: 10,
-							},
+							LinkAttrs:           la,
 							LinkType:            "wireguard",
 							WireguardPrivateKey: node1PrivateKeyV6,
 							WireguardPublicKey:  node1PrivateKeyV6.PublicKey(),

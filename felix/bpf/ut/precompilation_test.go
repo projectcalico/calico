@@ -153,12 +153,12 @@ func TestPrecompiledBinariesAreLoadable(t *testing.T) {
 
 func createVeth() (string, netlink.Link) {
 	vethName := fmt.Sprintf("test%xa", rand.Uint32())
+	la := netlink.NewLinkAttrs()
+	la.Name = vethName
+	la.Flags = net.FlagUp
 	var veth netlink.Link = &netlink.Veth{
-		LinkAttrs: netlink.LinkAttrs{
-			Name:  vethName,
-			Flags: net.FlagUp,
-		},
-		PeerName: vethName + "b",
+		LinkAttrs: la,
+		PeerName:  vethName + "b",
 	}
 	err := netlink.LinkAdd(veth)
 	Expect(err).NotTo(HaveOccurred(), "failed to create test veth")

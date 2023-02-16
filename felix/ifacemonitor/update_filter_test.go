@@ -286,11 +286,10 @@ func routeUpdate(cidrStr string, up bool, ifaceIdx int) netlink.RouteUpdate {
 }
 
 func linkUpdateWithIndex(idx int) netlink.LinkUpdate {
+	la := netlink.NewLinkAttrs()
+	la.Index = idx
 	return netlink.LinkUpdate{
-		Link: &netlink.Device{LinkAttrs: netlink.LinkAttrs{
-			Index: idx,
-		},
-		},
+		Link: &netlink.Device{LinkAttrs: la},
 		IfInfomsg: nl.IfInfomsg{
 			IfInfomsg: unix.IfInfomsg{
 				Index: int32(idx),
