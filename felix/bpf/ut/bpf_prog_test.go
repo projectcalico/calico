@@ -159,6 +159,33 @@ func expectMark(expect int) {
 	}
 }
 
+var xdpJumpMapIndexes = map[string]map[int]string{
+	"IPv4": map[int]string{
+		tcdefs.ProgIndexMain:    "calico_xdp_main",
+		tcdefs.ProgIndexPolicy:  "calico_xdp_norm_pol_tail",
+		tcdefs.ProgIndexAllowed: "calico_xdp_accepted_entrypoint",
+		tcdefs.ProgIndexDrop:    "calico_xdp_drop",
+	},
+}
+
+var tcJumpMapIndexes = map[string][]int{
+	"IPv4": []int{
+		tcdefs.ProgIndexMain,
+		tcdefs.ProgIndexPolicy,
+		tcdefs.ProgIndexAllowed,
+		tcdefs.ProgIndexIcmp,
+		tcdefs.ProgIndexDrop,
+		tcdefs.ProgIndexHostCtConflict,
+	},
+	"IPv6": []int{
+		tcdefs.ProgIndexV6Prologue,
+		tcdefs.ProgIndexV6Policy,
+		tcdefs.ProgIndexV6Allowed,
+		tcdefs.ProgIndexV6Icmp,
+		tcdefs.ProgIndexV6Drop,
+	},
+}
+
 func TestCompileTemplateRun(t *testing.T) {
 	skbMark = tcdefs.MarkSeen
 	runBpfTest(t, "calico_to_workload_ep", &polprog.Rules{}, func(bpfrun bpfProgRunFn) {
@@ -664,13 +691,13 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 	}
 
 	if !forXDP {
-		err = tcUpdateJumpMap(obj, tcdefs.JumpMapIndexes[ipFamily], false, hasHostConflictProg)
+		err = tcUpdateJumpMap(obj, tcJumpMapIndexes[ipFamily], false, hasHostConflictProg)
 		if err != nil && !strings.Contains(err.Error(), "error updating calico_tc_host_ct_conflict program") {
 			goto out
 		}
-		err = tcUpdateJumpMap(obj, tcdefs.JumpMapIndexes[ipFamily], false, false)
+		err = tcUpdateJumpMap(obj, tcJumpMapIndexes[ipFamily], false, false)
 	} else {
-		if err = xdp.UpdateJumpMap(obj, xdp.JumpMapIndexes[ipFamily]); err != nil {
+		if err = xdpUpdateJumpMap(obj, xdpJumpMapIndexes[ipFamily]); err != nil {
 			goto out
 		}
 	}
@@ -684,6 +711,18 @@ out:
 
 	log.WithField("program", fname).Debug("Loaded BPF program")
 	return obj, nil
+}
+
+func xdpUpdateJumpMap(obj *libbpf.Obj, progs map[int]string) error {
+	for idx, name := range progs {
+		err := obj.UpdateJumpMap(hook.NewXDPProgramsMap().GetName(), name, idx)
+		if err != nil {
+			return fmt.Errorf("failed to update program '%s' at index %d: %w", name, idx, err)
+		}
+		log.Debugf("xdp set program '%s' at index %d", name, idx)
+	}
+
+	return nil
 }
 
 type bpfRunResult struct {
