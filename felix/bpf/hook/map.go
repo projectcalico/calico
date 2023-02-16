@@ -57,6 +57,7 @@ var xdpSubProgNames = []string{
 	"calico_xdp_main",
 	"", // index reserved for policy program
 	"calico_xdp_accepted_entrypoint",
+	"", // reserved / nothing
 	"calico_xdp_drop",
 }
 
@@ -165,10 +166,10 @@ func (pm *ProgramsMap) newLayout(at AttachType, obj *libbpf.Obj) (Layout, error)
 	}
 
 	for idx, subprog := range subs {
-		if SubProg(idx) == SubProgTCPolicy || SubProg(idx) == SubProgXDPPolicy {
-			// normal policies are also loaded into the policy map
+		if subprog == "" {
 			continue
 		}
+
 		if SubProg(idx) == SubProgTCHostCtConflict && !at.hasHostConflictProg() {
 			continue
 		}
