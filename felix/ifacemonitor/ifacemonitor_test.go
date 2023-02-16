@@ -154,16 +154,16 @@ func (nl *netlinkTest) signalLink(name string, oldIndex int) {
 	nl.linksMutex.Unlock()
 
 	// Build the update.
+	la := netlink.NewLinkAttrs()
+	la.Name = name
+	la.Index = index
+	la.RawFlags = rawFlags
 	update := netlink.LinkUpdate{
 		Header: unix.NlMsghdr{
 			Type: msgType,
 		},
 		Link: &netlink.Dummy{
-			LinkAttrs: netlink.LinkAttrs{
-				Name:     name,
-				Index:    index,
-				RawFlags: rawFlags,
-			},
+			LinkAttrs: la,
 		},
 	}
 
@@ -245,12 +245,12 @@ func (nl *netlinkTest) LinkList() ([]netlink.Link, error) {
 		if link.state == "up" {
 			rawFlags = syscall.IFF_RUNNING
 		}
+		la := netlink.NewLinkAttrs()
+		la.Name = name
+		la.Index = link.index
+		la.RawFlags = rawFlags
 		links = append(links, &netlink.Dummy{
-			LinkAttrs: netlink.LinkAttrs{
-				Name:     name,
-				Index:    link.index,
-				RawFlags: rawFlags,
-			},
+			LinkAttrs: la,
 		})
 	}
 	nl.linksMutex.Unlock()
