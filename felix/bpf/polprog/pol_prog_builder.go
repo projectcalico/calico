@@ -326,7 +326,8 @@ func (p *Builder) writeProgramFooter(forXDP bool) {
 	// Execute the tail call to drop program
 	p.b.Mov64(R1, R6)                      // First arg is the context.
 	p.b.LoadMapFD(R2, uint32(p.jumpMapFD)) // Second arg is the map.
-	p.b.MovImm32(R3, int32(p.denyJmp))     // Third arg is the index (rather than a pointer to the index).
+	p.b.AddComment(fmt.Sprintf("Deny jump to %d", p.denyJmp))
+	p.b.MovImm32(R3, int32(p.denyJmp)) // Third arg is the index (rather than a pointer to the index).
 	p.b.Call(HelperTailCall)
 
 	// Fall through if tail call fails.
@@ -352,7 +353,8 @@ func (p *Builder) writeProgramFooter(forXDP bool) {
 		// Execute the tail call.
 		p.b.Mov64(R1, R6)                      // First arg is the context.
 		p.b.LoadMapFD(R2, uint32(p.jumpMapFD)) // Second arg is the map.
-		p.b.MovImm32(R3, int32(p.allowJmp))    // Third arg is the index (rather than a pointer to the index).
+		p.b.AddComment(fmt.Sprintf("Allow jump to %d", p.allowJmp))
+		p.b.MovImm32(R3, int32(p.allowJmp)) // Third arg is the index (rather than a pointer to the index).
 		p.b.Call(HelperTailCall)
 
 		// Fall through if tail call fails.
