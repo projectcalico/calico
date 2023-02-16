@@ -85,24 +85,6 @@ var ProgramNames = []string{
 	"calico_tc_skb_drop",
 }
 
-var JumpMapIndexes = map[string][]int{
-	"IPv4": []int{
-		ProgIndexMain,
-		ProgIndexPolicy,
-		ProgIndexAllowed,
-		ProgIndexIcmp,
-		ProgIndexDrop,
-		ProgIndexHostCtConflict,
-	},
-	"IPv6": []int{
-		ProgIndexV6Prologue,
-		ProgIndexV6Policy,
-		ProgIndexV6Allowed,
-		ProgIndexV6Icmp,
-		ProgIndexV6Drop,
-	},
-}
-
 type ToOrFromEp string
 
 const (
