@@ -465,8 +465,12 @@ func (tc *testConn) tryLoopFile(loopFile string, logPongs bool, timeout time.Dur
 			retryStart = zeroTime
 		} else if os.IsTimeout(err) {
 			fmt.Printf("receive timeout\n")
-			if timeout > 0 && time.Since(retryStart) > timeout {
-				log.WithError(err).Fatalf("Failed to receive after %+v", timeout)
+			if timeout > 0 {
+				if time.Since(retryStart) > timeout {
+					log.WithError(err).Fatalf("Failed to receive after %+v", timeout)
+				} else {
+					continue
+				}
 			}
 			if !ls.Next() {
 				break
