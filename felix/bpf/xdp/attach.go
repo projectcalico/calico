@@ -33,16 +33,25 @@ const DetachedID = 0
 
 type AttachPoint struct {
 	bpf.AttachPoint
+	HookLayout hook.Layout
 
 	Modes []bpf.XDPMode
 }
 
 func (ap *AttachPoint) PolicyAllowJumpIdx(family int) int {
-	return tcdefs.ProgIndexAllowed
+	if ap.HookLayout != nil {
+		return ap.HookLayout[hook.SubProgXDPAllowed]
+	}
+
+	return -1
 }
 
 func (ap *AttachPoint) PolicyDenyJumpIdx(family int) int {
-	return tcdefs.ProgIndexDrop
+	if ap.HookLayout != nil {
+		return ap.HookLayout[hook.SubProgXDPDrop]
+	}
+
+	return -1
 }
 
 func (ap *AttachPoint) Config() string {
@@ -122,10 +131,8 @@ func (ap *AttachPoint) AttachProgram() (int, error) {
 		if m.IsMapInternal() {
 			var globals libbpf.XDPGlobalData
 
-			// XXX We have a single type of a program so far, change if we
-			// introduce more. Leaving it like this so far for simplicity.
-			for i := 0; i < tcdefs.ProgIndexEnd; i++ {
-				globals.Jumps[i] = uint32(i)
+			for p, i := range ap.HookLayout {
+				globals.Jumps[p] = uint32(i)
 			}
 			globals.Jumps[tcdefs.ProgIndexPolicy] = uint32(ap.PolicyIdx(4))
 
