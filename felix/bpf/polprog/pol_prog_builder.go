@@ -247,7 +247,7 @@ normalPolicy:
 		p.b.LabelNextInsn("to_or_from_host")
 		if rules.ForXDP {
 			p.writeTiers(rules.HostNormalTiers, legDestPreNAT, "allowed_by_host_policy")
-			p.b.Jump("xdp_pass")
+			p.b.Jump("allow")
 		} else {
 			p.writeTiers(rules.HostNormalTiers, legDest, "allowed_by_host_policy")
 			p.writeProfiles(rules.HostProfiles, "allowed_by_host_policy")
@@ -330,12 +330,6 @@ func (p *Builder) writeProgramFooter(forXDP bool) {
 		p.b.MovImm64(R0, 2 /* TC_ACT_SHOT */)
 	}
 	p.b.Exit()
-
-	if forXDP {
-		p.b.LabelNextInsn("xdp_pass")
-		p.b.MovImm64(R0, 2 /* XDP_PASS */)
-		p.b.Exit()
-	}
 
 	if p.b.TargetIsUsed("allow") {
 		p.b.LabelNextInsn("allow")
