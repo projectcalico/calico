@@ -29,15 +29,6 @@ import (
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 )
 
-var JumpMapIndexes = map[string]map[int]string{
-	"IPv4": map[int]string{
-		tcdefs.ProgIndexMain:    "calico_xdp_main",
-		tcdefs.ProgIndexPolicy:  "calico_xdp_norm_pol_tail",
-		tcdefs.ProgIndexAllowed: "calico_xdp_accepted_entrypoint",
-		tcdefs.ProgIndexDrop:    "calico_xdp_drop",
-	},
-}
-
 const DetachedID = 0
 
 type AttachPoint struct {
@@ -251,16 +242,4 @@ func (ap *AttachPoint) ProgramID() (int, error) {
 		return -1, fmt.Errorf("Couldn't check for XDP program on iface %v: %w", ap.Iface, err)
 	}
 	return progID, nil
-}
-
-func UpdateJumpMap(obj *libbpf.Obj, progs map[int]string) error {
-	for idx, name := range progs {
-		err := obj.UpdateJumpMap(hook.NewXDPProgramsMap().GetName(), name, idx)
-		if err != nil {
-			return fmt.Errorf("failed to update program '%s' at index %d: %w", name, idx, err)
-		}
-		log.Debugf("xdp set program '%s' at index %d", name, idx)
-	}
-
-	return nil
 }
