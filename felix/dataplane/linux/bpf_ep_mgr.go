@@ -2114,6 +2114,8 @@ func (m *bpfEndpointManager) ensureQdisc(iface string) error {
 
 // Ensure TC/XDP program is attached to the specified interface and return its jump map FD.
 func (m *bpfEndpointManager) ensureProgramAttached(ap attachPoint) error {
+	var err error
+
 	if aptc, ok := ap.(*tc.AttachPoint); ok {
 		at := hook.AttachType{
 			Hook:       aptc.HookName(),
@@ -2123,7 +2125,6 @@ func (m *bpfEndpointManager) ensureProgramAttached(ap attachPoint) error {
 			ToHostDrop: aptc.ToHostDrop,
 			DSR:        aptc.DSR,
 		}
-		var err error
 
 		pm := m.bpfmaps.ProgramsMap.(*hook.ProgramsMap)
 
@@ -2148,7 +2149,7 @@ func (m *bpfEndpointManager) ensureProgramAttached(ap attachPoint) error {
 
 		if aptc.IPv6Enabled {
 			at.Family = 6
-			if aptc.HookLayout4, err = pm.LoadObj(at); err != nil {
+			if aptc.HookLayout6, err = pm.LoadObj(at); err != nil {
 				return fmt.Errorf("loading generic v6 tc hook program: %w", err)
 			}
 		}
@@ -2158,8 +2159,9 @@ func (m *bpfEndpointManager) ensureProgramAttached(ap attachPoint) error {
 			Hook:     hook.XDP,
 			LogLevel: apxdp.LogLevel,
 		}
+
 		pm := m.bpfmaps.XDPProgramsMap.(*hook.ProgramsMap)
-		if _, err := pm.LoadObj(at); err != nil {
+		if apxdp.HookLayout, err = pm.LoadObj(at); err != nil {
 			return fmt.Errorf("loading generic xdp hook program: %w", err)
 		}
 	} else {
@@ -2172,7 +2174,7 @@ func (m *bpfEndpointManager) ensureProgramAttached(ap attachPoint) error {
 	m.cleanupLock.RLock()
 	ap.Log().Debug("AttachProgram got lock.")
 
-	_, err := ap.AttachProgram()
+	_, err = ap.AttachProgram()
 	m.cleanupLock.RUnlock()
 
 	return err
@@ -2213,7 +2215,7 @@ func (m *bpfEndpointManager) removePolicyDebugInfo(ifaceName string, ipFamily pr
 	}
 }
 
-func (m *bpfEndpointManager) writePolicyDebugInfo(insns asm.Insns, ifaceName string, ipFamily proto.IPVersion, polDir string, hook hook.Hook, polErr error) error {
+func (m *bpfEndpointManager) writePolicyDebugInfo(insns asm.Insns, ifaceName string, ipFamily proto.IPVersion, polDir string, h hook.Hook, polErr error) error {
 	if !m.bpfPolicyDebugEnabled {
 		return nil
 	}
@@ -2228,7 +2230,7 @@ func (m *bpfEndpointManager) writePolicyDebugInfo(insns asm.Insns, ifaceName str
 
 	var policyDebugInfo = bpf.PolicyDebugInfo{
 		IfaceName:  ifaceName,
-		Hook:       "tc " + hook.String(),
+		Hook:       "tc " + h.String(),
 		PolicyInfo: insns,
 		Error:      errStr,
 	}
@@ -2244,6 +2246,7 @@ func (m *bpfEndpointManager) writePolicyDebugInfo(insns asm.Insns, ifaceName str
 	if err := os.WriteFile(filename, buffer.Bytes(), 0600); err != nil {
 		return err
 	}
+	log.Debugf("Policy iface %s hook %s written to %s", ifaceName, h, filename)
 	return nil
 }
 
