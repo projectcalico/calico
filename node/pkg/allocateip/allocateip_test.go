@@ -441,12 +441,12 @@ var _ = Describe("ensureHostTunnelAddress", func() {
 		err = be.Clean()
 		Expect(err).ToNot(HaveOccurred())
 
-		//create client.
+		// create client.
 		c, _ = client.New(*cfg)
 
 		pool1CIDR, _, pool2CIDR, _ := getEnsureCIDRAndExpectedAddrForIPVersion(4)
 
-		//create IPPool which has only one ip available.
+		// create IPPool which has only one ip available.
 		_, err = c.IPPools().Create(ctx, makeIPPool("pool1-v4", pool1CIDR, 32, api.IPIPModeAlways, api.VXLANModeNever), options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
@@ -470,11 +470,11 @@ var _ = Describe("ensureHostTunnelAddress", func() {
 
 		pool1CIDR, _, pool2CIDR, _ = getEnsureCIDRAndExpectedAddrForIPVersion(6)
 
-		//create IPPool which has only one ip available.
+		// create IPPool which has only one ip available.
 		_, err = c.IPPools().Create(ctx, makeIPPool("pool1-v6", pool1CIDR, 128, api.IPIPModeNever, api.VXLANModeAlways), options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
-		//create IPPool which has only two ips available.
+		// create IPPool which has only two ips available.
 		_, err = c.IPPools().Create(ctx, makeIPPool("pool2-v6", pool2CIDR, 127, api.IPIPModeNever, api.VXLANModeAlways), options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
@@ -745,7 +745,7 @@ var _ = Describe("removeHostTunnelAddress", func() {
 		err = be.Clean()
 		Expect(err).ToNot(HaveOccurred())
 
-		//create client and IPPools
+		// create client and IPPools
 		c, _ = client.New(*cfg)
 
 		poolCIDR, _, _, _ := getRemoveCIDRAndAddrForIPVersion(4)
@@ -1029,6 +1029,48 @@ var _ = Describe("determineEnabledPoolCIDRs", func() {
 			_, cidr2, _ := net.ParseCIDR("172.128.0.1/9")
 			Expect(cidrs).To(ContainElement(*cidr1))
 			Expect(cidrs).ToNot(ContainElement(*cidr2))
+		})
+
+		It("should ignore IP pools that do not allow tunnel IPs", func() {
+			// Mock out the node and ip pools
+			n := libapi.Node{ObjectMeta: metav1.ObjectMeta{Name: "bee-node", Labels: map[string]string{"foo": "bar"}}}
+			pl := api.IPPoolList{
+				Items: []api.IPPool{
+					{
+						ObjectMeta: metav1.ObjectMeta{Name: "ip-pool-1"},
+						Spec: api.IPPoolSpec{
+							Disabled:    false,
+							CIDR:        "172.1.0.0/16",
+							AllowedUses: []api.IPPoolAllowedUse{api.IPPoolAllowedUseTunnel},
+							IPIPMode:    api.IPIPModeAlways,
+						},
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{Name: "ip-pool-1"},
+						Spec: api.IPPoolSpec{
+							Disabled:    false,
+							CIDR:        "172.2.0.0/16",
+							AllowedUses: []api.IPPoolAllowedUse{api.IPPoolAllowedUseWorkload},
+							IPIPMode:    api.IPIPModeAlways,
+						},
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{Name: "ip-pool-2"},
+						Spec: api.IPPoolSpec{
+							Disabled:    false,
+							CIDR:        "172.3.0.0/16",
+							AllowedUses: []api.IPPoolAllowedUse{api.IPPoolAllowedUseWorkload, api.IPPoolAllowedUseTunnel},
+							IPIPMode:    api.IPIPModeAlways,
+						},
+					},
+				},
+			}
+
+			// Execute and test assertions.
+			cidrs := determineEnabledPoolCIDRs(n, pl, felixconfig.New(), ipam.AttributeTypeIPIP)
+			_, cidr1, _ := net.ParseCIDR("172.1.0.1/16")
+			_, cidr2, _ := net.ParseCIDR("172.3.0.1/16")
+			Expect(cidrs).To(ConsistOf(*cidr1, *cidr2))
 		})
 	})
 
