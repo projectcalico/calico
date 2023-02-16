@@ -110,7 +110,7 @@ int calico_xdp_main(struct xdp_md *xdp)
 	}
 
 	// Jump to the policy program
-	CALI_DEBUG("About to jump to policy program.\n");
+	CALI_DEBUG("About to jump to policy program at %d\n", ctx->xdp_globals->jumps[PROG_INDEX_POLICY]);
 	CALI_JUMP_TO_POLICY(ctx);
 
 allow:
