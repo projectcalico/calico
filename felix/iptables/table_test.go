@@ -75,7 +75,7 @@ func describeEmptyDataplaneTests(dataplaneMode string) {
 	var dataplane *testutils.MockDataplane
 	var table *Table
 	var iptLock *mockMutex
-	var featureDetector *environment.FeatureDetector
+	var featureDetector *environment.FeatureDetectorImpl
 	BeforeEach(func() {
 		dataplane = testutils.NewMockDataplane("filter", map[string][]string{
 			"FORWARD": {},

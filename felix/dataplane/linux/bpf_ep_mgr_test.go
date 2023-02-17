@@ -268,6 +268,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			filterTableV4,
 			nil,
 			logutils.NewSummarizer("test"),
+			&environment.FakeFeatureDetector{},
 		)
 		bpfEpMgr.Features = environment.NewFeatureDetector(nil).GetFeatures()
 		bpfEpMgr.hostIP = net.ParseIP("1.2.3.4")

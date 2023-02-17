@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2023 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,16 +27,17 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
-
-	cprometheus "github.com/projectcalico/calico/libcalico-go/lib/prometheus"
-	"github.com/projectcalico/calico/libcalico-go/lib/set"
+	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/calico/felix/conntrack"
+	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/ifacemonitor"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/netlinkshim"
 	"github.com/projectcalico/calico/felix/timeshim"
+	cprometheus "github.com/projectcalico/calico/libcalico-go/lib/prometheus"
+	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 const (
@@ -181,7 +182,8 @@ const (
 // not desire and adds those that we do. It skips over devices that we do not
 // manage not to interfare with other users of the route tables.
 type RouteTable struct {
-	logCxt *log.Entry
+	logCxt          *log.Entry
+	featureDetector environment.FeatureDetector
 
 	ipVersion      uint8
 	netlinkFamily  int
@@ -254,6 +256,7 @@ func New(
 	removeExternalRoutes bool,
 	tableIndex int,
 	opReporter logutils.OpRecorder,
+	featureDetector environment.FeatureDetector,
 	opts ...RouteTableOpt,
 ) *RouteTable {
 	return NewWithShims(
@@ -270,6 +273,7 @@ func New(
 		removeExternalRoutes,
 		tableIndex,
 		opReporter,
+		featureDetector,
 		opts...,
 	)
 }
@@ -289,6 +293,7 @@ func NewWithShims(
 	removeExternalRoutes bool,
 	tableIndex int,
 	opReporter logutils.OpRecorder,
+	featureDetector environment.FeatureDetector,
 	opts ...RouteTableOpt,
 ) *RouteTable {
 	var filteredRegexes []string
@@ -331,6 +336,7 @@ func NewWithShims(
 
 	rt := &RouteTable{
 		logCxt:                         logCxt,
+		featureDetector:                featureDetector,
 		ipVersion:                      ipVersion,
 		netlinkFamily:                  family,
 		ifacePrefixRegexp:              ifacePrefixRegexp,
@@ -507,6 +513,17 @@ func (r *RouteTable) getNetlink() (netlinkshim.Interface, error) {
 				"Failed to set netlink timeout")
 			nlHandle.Delete()
 			return nil, err
+		}
+		if r.featureDetector.GetFeatures().KernelSideRouteFiltering {
+			log.Debug("Kernel supports route filtering, enabling 'strict' netlink mode.")
+			err = nlHandle.SetStrictCheck(true)
+			if err != nil {
+				r.numConsistentNetlinkFailures++
+				log.WithError(err).WithField("numFailures", r.numConsistentNetlinkFailures).Error(
+					"Failed to set netlink strict mode")
+				nlHandle.Delete()
+				return nil, err
+			}
 		}
 		r.cachedNetlinkHandle = nlHandle
 	}
@@ -1004,13 +1021,21 @@ func (r *RouteTable) readProgrammedRoutes(logCxt *log.Entry, ifaceName string) (
 		routeFilter.LinkIndex = 1
 	}
 	programmedRoutes, err := nl.RouteListFiltered(r.netlinkFamily, routeFilter, routeFilterFlags)
+	if errors.Is(err, unix.ENOENT) {
+		// In strict mode, get this if the routing table doesn't exist (yet).
+		err = nil
+		programmedRoutes = nil
+	}
 	r.livenessCallback()
 	if err != nil {
 		// Filter the error so that we don't spam errors if the interface is being torn
 		// down.
 		filteredErr := r.filterErrorByIfaceState(ifaceName, err, ListFailed, false)
 		if filteredErr == ListFailed {
-			logCxt.WithError(err).Error("Error listing routes")
+			logCxt.WithError(err).WithFields(log.Fields{
+				"routeFilter": routeFilter,
+				"flags":       routeFilterFlags,
+			}).Error("Error listing routes")
 			r.closeNetlink() // Defensive: force a netlink reconnection next time.
 		} else {
 			logCxt.WithError(err).Info("Failed to list routes; interface down/gone.")
