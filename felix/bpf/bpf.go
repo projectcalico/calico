@@ -1502,6 +1502,32 @@ func getAllProgs() ([]ProgInfo, error) {
 	return progs, nil
 }
 
+func GetProgByID(id int) (ProgInfo, error) {
+	cmd := "bpftool"
+	args := []string{
+		"--json",
+		"--pretty",
+		"prog",
+		"show",
+		"id",
+		strconv.Itoa(id),
+	}
+
+	printCommand(cmd, args...)
+	output, err := exec.Command(cmd, args...).CombinedOutput()
+	if err != nil {
+		return ProgInfo{}, fmt.Errorf("failed to get prog: %s\n%s", err, output)
+	}
+
+	var prog ProgInfo
+	err = json.Unmarshal(output, &prog)
+	if err != nil {
+		return ProgInfo{}, fmt.Errorf("cannot parse json output: %v\n%s", err, output)
+	}
+
+	return prog, nil
+}
+
 func (b *BPFLib) getAttachedSockopsID() (int, error) {
 	prog := "bpftool"
 	args := []string{
@@ -2172,7 +2198,7 @@ func ListTcXDPAttachedProgs(dev ...string) (TcList, XDPList, error) {
 			return nil, nil, fmt.Errorf("failed to list attached bpf programs: %w", err)
 		}
 	} else {
-		out, err = exec.Command("bpftool", "-j", "net", "dev", dev[0]).Output()
+		out, err = exec.Command("bpftool", "-j", "net", "show", "dev", dev[0]).Output()
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to list attached bpf programs: %w", err)
 		}
