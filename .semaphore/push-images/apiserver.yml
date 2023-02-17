@@ -38,10 +38,11 @@ blocks:
       - name: docker
       jobs:
       # The apiserver build takes a long time due to some architectures, so we split it up.
-      # TODO: Add support for other architectures
+      # Only build the other architectures for the daily scheduled runs.
       - name: "Linux amd64"
         env_vars:
         - name: DEV_REGISTRIES
           value: quay.io/calico docker.io/calico
         commands:
-        - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make VALIDARCHES=amd64 -C apiserver image-all cd-common CONFIRM=true; fi
+        - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ] && ["${SEMAPHORE_WORKFLOW_TRIGGERED_BY_SCHEDULE}" == "false"]; then make VALIDARCHES=amd64 -C apiserver image-all cd-common CONFIRM=true; fi
+        - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ] && ["${SEMAPHORE_WORKFLOW_TRIGGERED_BY_SCHEDULE}" == "true"]; then make -C apiserver image-all cd-common CONFIRM=true; fi
