@@ -39,6 +39,16 @@ void bpf_obj_load(struct bpf_object *obj) {
 	set_errno(bpf_object__load(obj));
 }
 
+int bpf_program_fd(struct bpf_object *obj, char *secname)
+{
+	int fd = bpf_program__fd(bpf_object__find_program_by_name(obj, secname));
+	if (fd < 0) {
+		errno = -fd;
+	}
+
+	return fd;
+}
+
 struct bpf_tc_opts bpf_tc_program_attach(struct bpf_object *obj, char *secName, int ifIndex, bool ingress)
 {
 	DECLARE_LIBBPF_OPTS(bpf_tc_hook, hook,
@@ -117,7 +127,8 @@ void bpf_tc_set_globals(struct bpf_map *map,
 			uint flags,
 			ushort wg_port,
 			uint natin,
-			uint natout)
+			uint natout,
+			uint *jumps)
 {
 	struct cali_tc_globals data = {
 		.host_ip = host_ip,
@@ -136,6 +147,12 @@ void bpf_tc_set_globals(struct bpf_map *map,
 
 	strncpy(data.iface_name, iface_name, sizeof(data.iface_name));
 	data.iface_name[sizeof(data.iface_name)-1] = '\0';
+
+	int i;
+
+	for (i = 0; i < sizeof(data.jumps)/sizeof(uint); i++) {
+		data.jumps[i] = jumps[i];
+	}
 
 	set_errno(bpf_map__set_initial_value(map, (void*)(&data), sizeof(data)));
 }
@@ -235,13 +252,19 @@ void bpf_ctlb_set_globals(struct bpf_map *map, uint udp_not_seen_timeo, bool exc
 	set_errno(bpf_map__set_initial_value(map, (void*)(&data), sizeof(data)));
 }
 
-void bpf_xdp_set_globals(struct bpf_map *map, char *iface_name)
+void bpf_xdp_set_globals(struct bpf_map *map, char *iface_name, uint *jumps)
 {
 	struct cali_xdp_globals data = {
 	};
 
 	strncpy(data.iface_name, iface_name, sizeof(data.iface_name));
 	data.iface_name[sizeof(data.iface_name)-1] = '\0';
+	
+	int i;
+
+	for (i = 0; i < sizeof(data.jumps)/sizeof(__u32); i++) {
+		data.jumps[i] = jumps[i];
+	}
 
 	set_errno(bpf_map__set_initial_value(map, (void*)(&data), sizeof(data)));
 }

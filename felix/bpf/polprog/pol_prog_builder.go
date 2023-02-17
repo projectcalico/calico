@@ -27,7 +27,6 @@ import (
 
 	. "github.com/projectcalico/calico/felix/bpf/asm"
 	"github.com/projectcalico/calico/felix/bpf/state"
-	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/rules"
@@ -46,19 +45,27 @@ type Builder struct {
 	jumpMapFD          maps.FD
 	policyDebugEnabled bool
 	forIPv6            bool
+	allowJmp           int
+	denyJmp            int
 }
 
 type ipSetIDProvider interface {
 	GetNoAlloc(ipSetID string) uint64
 }
 
-func NewBuilder(ipSetIDProvider ipSetIDProvider, ipsetMapFD, stateMapFD, jumpMapFD maps.FD, policyDebugEnabled bool) *Builder {
+func NewBuilder(
+	ipSetIDProvider ipSetIDProvider,
+	ipsetMapFD, stateMapFD, jumpMapFD maps.FD,
+	allowJmp, denyJmp int,
+	policyDebugEnabled bool) *Builder {
 	b := &Builder{
 		ipSetIDProvider:    ipSetIDProvider,
 		ipSetMapFD:         ipsetMapFD,
 		stateMapFD:         stateMapFD,
 		jumpMapFD:          jumpMapFD,
 		policyDebugEnabled: policyDebugEnabled,
+		allowJmp:           allowJmp,
+		denyJmp:            denyJmp,
 	}
 	return b
 }
@@ -300,22 +307,6 @@ func (p *Builder) writeJumpIfToOrFromHost(label string) {
 	p.b.JumpNEImm64(R1, 0, label)
 }
 
-func (p *Builder) indexOfDropProgram() int32 {
-	if p.forIPv6 {
-		return int32(tcdefs.ProgIndexV6Drop)
-	} else {
-		return int32(tcdefs.ProgIndexDrop)
-	}
-}
-
-func (p *Builder) indexOfAllowesProgram() int32 {
-	if p.forIPv6 {
-		return int32(tcdefs.ProgIndexV6Allowed)
-	} else {
-		return int32(tcdefs.ProgIndexAllowed)
-	}
-}
-
 // writeProgramFooter emits the program exit jump targets.
 func (p *Builder) writeProgramFooter(forXDP bool) {
 	// Fall through here if there's no match.  Also used when we hit an error or if policy rejects packet.
@@ -326,9 +317,10 @@ func (p *Builder) writeProgramFooter(forXDP bool) {
 	p.b.Store32(R9, R1, stateOffPolResult)
 
 	// Execute the tail call to drop program
-	p.b.Mov64(R1, R6)                        // First arg is the context.
-	p.b.LoadMapFD(R2, uint32(p.jumpMapFD))   // Second arg is the map.
-	p.b.MovImm32(R3, p.indexOfDropProgram()) // Third arg is the index (rather than a pointer to the index).
+	p.b.Mov64(R1, R6)                      // First arg is the context.
+	p.b.LoadMapFD(R2, uint32(p.jumpMapFD)) // Second arg is the map.
+	p.b.AddComment(fmt.Sprintf("Deny jump to %d", p.denyJmp))
+	p.b.MovImm32(R3, int32(p.denyJmp)) // Third arg is the index (rather than a pointer to the index).
 	p.b.Call(HelperTailCall)
 
 	// Fall through if tail call fails.
@@ -352,9 +344,10 @@ func (p *Builder) writeProgramFooter(forXDP bool) {
 		p.b.MovImm32(R1, int32(state.PolicyAllow))
 		p.b.Store32(R9, R1, stateOffPolResult)
 		// Execute the tail call.
-		p.b.Mov64(R1, R6)                           // First arg is the context.
-		p.b.LoadMapFD(R2, uint32(p.jumpMapFD))      // Second arg is the map.
-		p.b.MovImm32(R3, p.indexOfAllowesProgram()) // Third arg is the index (rather than a pointer to the index).
+		p.b.Mov64(R1, R6)                      // First arg is the context.
+		p.b.LoadMapFD(R2, uint32(p.jumpMapFD)) // Second arg is the map.
+		p.b.AddComment(fmt.Sprintf("Allow jump to %d", p.allowJmp))
+		p.b.MovImm32(R3, int32(p.allowJmp)) // Third arg is the index (rather than a pointer to the index).
 		p.b.Call(HelperTailCall)
 
 		// Fall through if tail call fails.
