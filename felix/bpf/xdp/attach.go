@@ -200,9 +200,14 @@ func (ap *AttachPoint) DetachProgram() error {
 		return nil
 	}
 
-	ourProg, err := bpf.AlreadyAttachedProg(ap, path.Join(bpfdefs.ObjectDir, ap.FileName()), progID)
-	if err != nil || !ourProg {
-		return fmt.Errorf("XDP expected program ID does match with current one: %w", err)
+	prog, err := bpf.GetProgByID(progID)
+	if err != nil {
+		return fmt.Errorf("failed to get prog by id %d: %w", progID, err)
+	}
+
+	if prog.Name != "cali_xdp_preamb" {
+		ap.Log().Debugf("Program id %d name %s not ours.", progID, prog.Name)
+		return nil
 	}
 
 	// Try to remove our XDP program in all modes, until the program ID is 0
