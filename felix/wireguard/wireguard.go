@@ -27,6 +27,8 @@ import (
 	"github.com/vishvananda/netlink"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 
+	"github.com/projectcalico/calico/felix/environment"
+
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 
 	"github.com/projectcalico/calico/felix/ifacemonitor"
@@ -179,6 +181,7 @@ func New(
 	deviceRouteProtocol netlink.RouteProtocol,
 	statusCallback func(publicKey wgtypes.Key) error,
 	opRecorder logutils.OpRecorder,
+	featureDetector environment.FeatureDetector,
 ) *Wireguard {
 	return NewWithShims(
 		hostname,
@@ -194,6 +197,7 @@ func New(
 		statusCallback,
 		writeProcSys,
 		opRecorder,
+		featureDetector,
 	)
 }
 
@@ -212,6 +216,7 @@ func NewWithShims(
 	statusCallback func(publicKey wgtypes.Key) error,
 	writeProcSys func(path, value string) error,
 	opRecorder logutils.OpRecorder,
+	featureDetector environment.FeatureDetector,
 ) *Wireguard {
 	logCtx := log.WithField("ipVersion", ipVersion)
 
@@ -240,6 +245,7 @@ func NewWithShims(
 			true, // removeExternalRoutes
 			config.RoutingTableIndex,
 			opRecorder,
+			featureDetector,
 		)
 	} else {
 		logCtx.Info("RouteSyncDisabled is true, using DummyTable.")
@@ -1414,7 +1420,7 @@ func (w *Wireguard) ensureLink(netlinkClient netlinkshim.Interface) (bool, error
 	logCtx := w.logCtx.WithField("ifaceName", w.interfaceName)
 
 	if w.config.EncryptHostTraffic && w.ipVersion == 4 {
-		//TODO: what is the IPv6 equivalent for this?
+		// TODO: what is the IPv6 equivalent for this?
 		logCtx.Debug("Enabling src valid mark for WireGuard")
 		if err := w.writeProcSys(allSrcValidMarkPath, "1"); err != nil {
 			return false, err
