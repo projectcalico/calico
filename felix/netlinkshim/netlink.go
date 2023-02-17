@@ -23,6 +23,7 @@ import (
 
 type Interface interface {
 	SetSocketTimeout(to time.Duration) error
+	SetStrictCheck(b bool) error
 	LinkList() ([]netlink.Link, error)
 	LinkByName(name string) (netlink.Link, error)
 	LinkAdd(link netlink.Link) error
