@@ -295,6 +295,7 @@ replace (
 	github.com/projectcalico/api => ./api
 	github.com/prometheus/common => github.com/prometheus/common v0.26.0
 
+	github.com/vishvananda/netlink => github.com/fasaxc/netlink v1.0.1-0.20230217095430-b965d134cda0
 	google.golang.org/grpc => google.golang.org/grpc v1.40.0
 	k8s.io/api => k8s.io/api v0.24.0
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.24.0
