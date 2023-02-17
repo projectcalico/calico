@@ -145,6 +145,27 @@ func TestAttach(t *testing.T) {
 		Expect(xdppm).To(HaveKey(hostep1State.XDPPolicy()))
 	})
 
+	t.Run("remove the untracked (xdp) policy", func(t *testing.T) {
+		bpfEpMgr.OnUpdate(&proto.ActivePolicyRemove{
+			Id: &proto.PolicyID{Tier: "default", Name: "untracked"},
+		})
+		bpfEpMgr.OnHEPUpdate(map[string]proto.HostEndpoint{
+			"hostep1": proto.HostEndpoint{
+				Name: "hostep1",
+			},
+		})
+
+		err = bpfEpMgr.CompleteDeferredWork()
+		Expect(err).NotTo(HaveOccurred())
+
+		xdppm := polprogMapDump(bpfmaps.XDPPolicyMap)
+		Expect(xdppm).To(HaveLen(0))
+
+		_, xdpProgs, err := bpf.ListTcXDPAttachedProgs("hostep1")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(xdpProgs).To(HaveLen(0))
+	})
+
 	host2 := createVethName("hostep2")
 	defer deleteLink(host2)
 

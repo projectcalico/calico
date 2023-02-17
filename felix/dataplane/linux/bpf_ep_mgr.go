@@ -1083,29 +1083,44 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 		}
 
 		var (
+			err                           error
 			up                            bool
 			xdpIdx, ingressIdx, egressIdx int
 		)
-
-		if xdpIdx = m.xdpPolicyMapAlloc.Get(); xdpIdx == -1 {
-			return fmt.Errorf("ran out of policy map indexes")
-		}
-		if ingressIdx = m.policyMapAlloc.Get(); ingressIdx == -1 {
-			return fmt.Errorf("ran out of policy map indexes")
-		}
-		if egressIdx = m.policyMapAlloc.Get(); egressIdx == -1 {
-			return fmt.Errorf("ran out of policy map indexes")
-		}
 
 		m.ifacesLock.Lock()
 		defer m.ifacesLock.Unlock()
 		m.withIface(iface, func(iface *bpfInterface) bool {
 			up = iface.info.ifaceIsUp()
+
+			if xdpIdx = iface.dpState.policyIdx[hook.XDP]; xdpIdx == -1 {
+				if xdpIdx = m.xdpPolicyMapAlloc.Get(); xdpIdx == -1 {
+					err = fmt.Errorf("ran out of policy map indexes")
+					return false
+				}
+			}
+			if ingressIdx = iface.dpState.policyIdx[hook.Ingress]; ingressIdx == -1 {
+				if ingressIdx = m.policyMapAlloc.Get(); ingressIdx == -1 {
+					err = fmt.Errorf("ran out of policy map indexes")
+					return false
+				}
+			}
+			if egressIdx = iface.dpState.policyIdx[hook.Egress]; egressIdx == -1 {
+				if egressIdx = m.policyMapAlloc.Get(); egressIdx == -1 {
+					err = fmt.Errorf("ran out of policy map indexes")
+					return false
+				}
+			}
+
 			iface.dpState.policyIdx[hook.XDP] = xdpIdx
 			iface.dpState.policyIdx[hook.Ingress] = ingressIdx
 			iface.dpState.policyIdx[hook.Egress] = egressIdx
 			return false
 		})
+
+		if err != nil {
+			return err
+		}
 
 		if !up {
 			log.WithField("iface", iface).Debug("Ignoring interface that is down")
@@ -2170,6 +2185,10 @@ func (m *bpfEndpointManager) ensureProgramAttached(ap attachPoint) error {
 func (m *bpfEndpointManager) ensureNoProgram(ap attachPoint) error {
 	// Ensure interface does not have our program attached.
 	err := ap.DetachProgram()
+
+	if err := m.policyMapDelete(ap.HookName(), ap.PolicyIdx(4)); err != nil {
+		log.WithError(err).Warn("Policy program may leak.")
+	}
 
 	// Forget the policy debug info
 	m.removePolicyDebugInfo(ap.IfaceName(), 4, ap.HookName())
