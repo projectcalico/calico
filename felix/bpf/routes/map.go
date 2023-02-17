@@ -35,7 +35,6 @@ func SetMapSize(size int) {
 	maps.SetSize(MapParameters.VersionedName(), size)
 }
 
-//
 // struct cali_rt_key {
 // __u32 mask;
 // __be32 addr; // NBO
@@ -86,14 +85,13 @@ const (
 	_ = FlagsUnknown
 )
 
-//
-// struct cali_rt_value {
-//   __u32 flags;
-//   union {
-//     __u32 next_hop;
-//     __u32 ifIndex;
-//   };
-// };
+//	struct cali_rt_value {
+//	  __u32 flags;
+//	  union {
+//	    __u32 next_hop;
+//	    __u32 ifIndex;
+//	  };
+//	};
 const ValueSize = 8
 
 type Value [ValueSize]byte

@@ -42,49 +42,49 @@ func SetMapSizes(fsize, bsize, asize int) {
 	maps.SetSize(AffinityMapParameters.VersionedName(), asize)
 }
 
-// struct calico_nat_v4_key {
-//    uint32_t prefixLen;
-//    uint32_t addr; // NBO
-//    uint16_t port; // HBO
-//    uint8_t protocol;
-//    uint32_t saddr;
-//    uint8_t pad;
-// };
+//	struct calico_nat_v4_key {
+//	   uint32_t prefixLen;
+//	   uint32_t addr; // NBO
+//	   uint16_t port; // HBO
+//	   uint8_t protocol;
+//	   uint32_t saddr;
+//	   uint8_t pad;
+//	};
 const frontendKeySize = 16
 
-// struct calico_nat {
-//	uint32_t addr;
-//	uint16_t port;
-//	uint8_t  protocol;
-//	uint8_t  pad;
-// };
+//	struct calico_nat {
+//		uint32_t addr;
+//		uint16_t port;
+//		uint8_t  protocol;
+//		uint8_t  pad;
+//	};
 const frontendAffKeySize = 8
 
-// struct calico_nat_v4_value {
-//    uint32_t id;
-//    uint32_t count;
-//    uint32_t local;
-//    uint32_t affinity_timeo;
-//    uint32_t flags;
-// };
+//	struct calico_nat_v4_value {
+//	   uint32_t id;
+//	   uint32_t count;
+//	   uint32_t local;
+//	   uint32_t affinity_timeo;
+//	   uint32_t flags;
+//	};
 const frontendValueSize = 20
 
-// struct calico_nat_secondary_v4_key {
-//   uint32_t id;
-//   uint32_t ordinal;
-// };
+//	struct calico_nat_secondary_v4_key {
+//	  uint32_t id;
+//	  uint32_t ordinal;
+//	};
 const backendKeySize = 8
 
-// struct calico_nat_dest {
-//    uint32_t addr;
-//    uint16_t port;
-//    uint8_t pad[2];
-// };
+//	struct calico_nat_dest {
+//	   uint32_t addr;
+//	   uint16_t port;
+//	   uint8_t pad[2];
+//	};
 const backendValueSize = 8
 
 const BlackHoleCount uint32 = 0xffffffff
 
-//(sizeof(addr) + sizeof(port) + sizeof(proto)) in bits
+// (sizeof(addr) + sizeof(port) + sizeof(proto)) in bits
 const ZeroCIDRPrefixLen = 56
 
 var ZeroCIDR = ip.MustParseCIDROrIP("0.0.0.0/0").(ip.V4CIDR)

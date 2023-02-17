@@ -5222,7 +5222,7 @@ func schema_api_pkg_lib_numorstring_Port(ref common.ReferenceCallback) common.Op
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "Port represents either a range of numeric ports or a named port.\n\n    - For a named port, set the PortName, leaving MinPort and MaxPort as 0.\n    - For a port range, set MinPort and MaxPort to the (inclusive) port numbers.  Set\n      PortName to \"\".\n    - For a single port, set MinPort = MaxPort and PortName = \"\".",
+				Description: "Port represents either a range of numeric ports or a named port.\n\n  - For a named port, set the PortName, leaving MinPort and MaxPort as 0.\n  - For a port range, set MinPort and MaxPort to the (inclusive) port numbers.  Set\n    PortName to \"\".\n  - For a single port, set MinPort = MaxPort and PortName = \"\".",
 				Type:        numorstring.Port{}.OpenAPISchemaType(),
 				Format:      numorstring.Port{}.OpenAPISchemaFormat(),
 			},
