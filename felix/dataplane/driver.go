@@ -27,9 +27,10 @@ import (
 	"strings"
 	"time"
 
+	coreV1 "k8s.io/api/core/v1"
+
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
-	coreV1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/utils/clock"
@@ -189,14 +190,21 @@ func StartDataplaneDriver(configParams *config.Config,
 		// Extract node labels from the hosts such they could be referenced later
 		// e.g. Topology Aware Hints.
 		felixHostname := configParams.FelixHostname
-		felixNode, err := k8sClientSet.CoreV1().Nodes().Get(context.Background(), felixHostname, v1.GetOptions{})
-		if err != nil {
-			log.WithFields(log.Fields{
-				"FelixHostname": felixHostname,
-			}).Info("Unabled to extract node labels from Felix host")
+
+		var felixNodeZone string
+		if k8sClientSet != nil {
+
+			// Code defensively here as k8sClientSet may be nil for certain FV tests e.g. OpenStack
+			felixNode, err := k8sClientSet.CoreV1().Nodes().Get(context.Background(), felixHostname, v1.GetOptions{})
+			if err != nil {
+				log.WithFields(log.Fields{
+					"FelixHostname": felixHostname,
+				}).Info("Unable to extract node labels from Felix host")
+			}
+
+			felixNodeZone = felixNode.Labels[coreV1.LabelTopologyZone]
 		}
 
-		felixNodeZone := felixNode.Labels[coreV1.LabelTopologyZone]
 		dpConfig := intdataplane.Config{
 			Hostname:           felixHostname,
 			NodeZone:           felixNodeZone,
