@@ -34,7 +34,6 @@ Options:
 `
 
 // main is the entry point to the calico-felix binary.
-//
 func main() {
 	// Parse command-line args.
 	version := "Version:            " + buildinfo.GitVersion + "\n" +
