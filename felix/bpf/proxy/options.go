@@ -67,3 +67,11 @@ func WithDSREnabled() Option {
 		return nil
 	})
 }
+
+// WithTopologyNodeZone sets the topology node zone
+func WithTopologyNodeZone(nodeZone string) Option {
+	return makeOption(func(p *proxy) error {
+		p.nodeZone = nodeZone
+		return nil
+	})
+}
