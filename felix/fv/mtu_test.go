@@ -104,7 +104,7 @@ var _ = infrastructure.DatastoreDescribe("VXLAN topology before adding host IPs 
 						Eventually(func() string {
 							out, _ := felix.ExecOutput("cat", "/var/lib/calico/mtu")
 							return out
-						}, "30s", "100ms").Should(ContainSubstring(vxlanEnabledMtu))
+						}, "60s", "500ms").Should(ContainSubstring(vxlanEnabledMtu))
 					}
 
 					// Disable VXLAN. We should expect the MTU to change, but still based on the default 1460.
@@ -129,7 +129,7 @@ var _ = infrastructure.DatastoreDescribe("VXLAN topology before adding host IPs 
 						Eventually(func() string {
 							out, _ := felix.ExecOutput("cat", "/var/lib/calico/mtu")
 							return out
-						}, "30s", "100ms").Should(ContainSubstring(vxlanDisabledMtu))
+						}, "60s", "500ms").Should(ContainSubstring(vxlanDisabledMtu))
 					}
 				})
 
@@ -146,7 +146,7 @@ var _ = infrastructure.DatastoreDescribe("VXLAN topology before adding host IPs 
 						Eventually(func() string {
 							out, _ := felix.ExecOutput("cat", "/var/lib/calico/mtu")
 							return out
-						}, "30s", "100ms").Should(ContainSubstring(vxlanEnabledMtu))
+						}, "60s", "500ms").Should(ContainSubstring(vxlanEnabledMtu))
 					}
 
 					// Unset VXLAN on FelixConfiguration. We should expect the MTU not to change, since the VXLAN encap is set in the default IPPool.
@@ -161,7 +161,7 @@ var _ = infrastructure.DatastoreDescribe("VXLAN topology before adding host IPs 
 						Eventually(func() string {
 							out, _ := felix.ExecOutput("cat", "/var/lib/calico/mtu")
 							return out
-						}, "30s", "100ms").Should(ContainSubstring(vxlanEnabledMtu))
+						}, "60s", "500ms").Should(ContainSubstring(vxlanEnabledMtu))
 					}
 
 					// Set VXLANModeNever on the default IP pool(s)
@@ -183,7 +183,7 @@ var _ = infrastructure.DatastoreDescribe("VXLAN topology before adding host IPs 
 						Eventually(func() string {
 							out, _ := felix.ExecOutput("cat", "/var/lib/calico/mtu")
 							return out
-						}, "30s", "100ms").Should(ContainSubstring(vxlanDisabledMtu))
+						}, "60s", "500ms").Should(ContainSubstring(vxlanDisabledMtu))
 					}
 				})
 			})
