@@ -46,6 +46,8 @@ var (
 	v3Dot10Dot0 = MustParseVersion("3.10.0")
 	// v3Dot14Dot0 added the random-fully feature on the iptables interface.
 	v3Dot14Dot0 = MustParseVersion("3.14.0")
+	// v4Dot10Dot0 adds support for kernel-side route filtering.
+	v4Dot10Dot0 = MustParseVersion("4.10.0")
 	// v5Dot14Dot0 is the fist kernel version that IPIP tunnels acts like other L3
 	// devices where bpf programs only see inner IP header. In RHEL based distros,
 	// kernel 4.18.0 (v4Dot18Dot0_330) is the first one with this behavior.
@@ -67,9 +69,16 @@ type Features struct {
 	ChecksumOffloadBroken bool
 	// IPIPDeviceIsL3 represent if ipip tunnels acts like other l3 devices
 	IPIPDeviceIsL3 bool
+	// KernelSideRouteFiltering is true if the kernel supports filtering netlink route dumps kernel-side.
+	// This is much more efficient.
+	KernelSideRouteFiltering bool
 }
 
-type FeatureDetector struct {
+type FeatureDetector interface {
+	GetFeatures() *Features
+}
+
+type FeatureDetectorImpl struct {
 	lock            sync.Mutex
 	featureCache    *Features
 	featureOverride map[string]string
@@ -81,15 +90,15 @@ type FeatureDetector struct {
 	NewCmd cmdshim.CmdFactory
 }
 
-func NewFeatureDetector(overrides map[string]string) *FeatureDetector {
-	return &FeatureDetector{
+func NewFeatureDetector(overrides map[string]string) *FeatureDetectorImpl {
+	return &FeatureDetectorImpl{
 		GetKernelVersionReader: GetKernelVersionReader,
 		NewCmd:                 cmdshim.NewRealCmd,
 		featureOverride:        overrides,
 	}
 }
 
-func (d *FeatureDetector) GetFeatures() *Features {
+func (d *FeatureDetectorImpl) GetFeatures() *Features {
 	d.lock.Lock()
 	defer d.lock.Unlock()
 
@@ -100,14 +109,14 @@ func (d *FeatureDetector) GetFeatures() *Features {
 	return d.featureCache
 }
 
-func (d *FeatureDetector) RefreshFeatures() {
+func (d *FeatureDetectorImpl) RefreshFeatures() {
 	d.lock.Lock()
 	defer d.lock.Unlock()
 
 	d.refreshFeaturesLockHeld()
 }
 
-func (d *FeatureDetector) refreshFeaturesLockHeld() {
+func (d *FeatureDetectorImpl) refreshFeaturesLockHeld() {
 	// Get the versions.  If we fail to detect a version for some reason, we use a safe default.
 	log.Debug("Refreshing detected iptables features")
 
@@ -116,11 +125,12 @@ func (d *FeatureDetector) refreshFeaturesLockHeld() {
 
 	// Calculate the features.
 	features := Features{
-		SNATFullyRandom:       iptV.Compare(v1Dot6Dot0) >= 0 && kerV.Compare(v3Dot14Dot0) >= 0,
-		MASQFullyRandom:       iptV.Compare(v1Dot6Dot2) >= 0 && kerV.Compare(v3Dot14Dot0) >= 0,
-		RestoreSupportsLock:   iptV.Compare(v1Dot6Dot2) >= 0,
-		ChecksumOffloadBroken: true, // Was supposed to be fixed in v5.7 but still seems to be broken.
-		IPIPDeviceIsL3:        d.ipipDeviceIsL3(),
+		SNATFullyRandom:          iptV.Compare(v1Dot6Dot0) >= 0 && kerV.Compare(v3Dot14Dot0) >= 0,
+		MASQFullyRandom:          iptV.Compare(v1Dot6Dot2) >= 0 && kerV.Compare(v3Dot14Dot0) >= 0,
+		RestoreSupportsLock:      iptV.Compare(v1Dot6Dot2) >= 0,
+		ChecksumOffloadBroken:    true, // Was supposed to be fixed in v5.7 but still seems to be broken.
+		IPIPDeviceIsL3:           d.ipipDeviceIsL3(),
+		KernelSideRouteFiltering: kerV.Compare(v4Dot10Dot0) >= 0,
 	}
 
 	for k, v := range d.featureOverride {
@@ -162,7 +172,7 @@ func (d *FeatureDetector) refreshFeaturesLockHeld() {
 	}
 }
 
-func (d *FeatureDetector) kernelIsAtLeast(v *Version) (bool, *Version, error) {
+func (d *FeatureDetectorImpl) kernelIsAtLeast(v *Version) (bool, *Version, error) {
 	versionReader, err := d.GetKernelVersionReader()
 	if err != nil {
 		return false, nil, fmt.Errorf("failed to get kernel version reader: %w", err)
@@ -178,7 +188,7 @@ func (d *FeatureDetector) kernelIsAtLeast(v *Version) (bool, *Version, error) {
 
 // KernelIsAtLeast returns whether the predicate is true or not and an error in
 // case it was not able to determine it.
-func (d *FeatureDetector) KernelIsAtLeast(v string) (bool, error) {
+func (d *FeatureDetectorImpl) KernelIsAtLeast(v string) (bool, error) {
 	ver, err := NewVersion(v)
 	if err != nil {
 		return false, fmt.Errorf("failed to parse kernel version: %w", err)
@@ -189,7 +199,7 @@ func (d *FeatureDetector) KernelIsAtLeast(v string) (bool, error) {
 	return ok, err
 }
 
-func (d *FeatureDetector) isAtLeastKernel(v *Version) error {
+func (d *FeatureDetectorImpl) isAtLeastKernel(v *Version) error {
 	ok, kernelVersion, err := d.kernelIsAtLeast(v)
 	if err != nil {
 		return err
@@ -201,7 +211,7 @@ func (d *FeatureDetector) isAtLeastKernel(v *Version) error {
 	return nil
 }
 
-func (d *FeatureDetector) getDistributionName() string {
+func (d *FeatureDetectorImpl) getDistributionName() string {
 	versionReader, err := d.GetKernelVersionReader()
 	if err != nil {
 		log.Errorf("failed to get kernel version reader: %v", err)
@@ -216,7 +226,7 @@ func (d *FeatureDetector) getDistributionName() string {
 	return GetDistFromString(string(kernVersion))
 }
 
-func (d *FeatureDetector) ipipDeviceIsL3() bool {
+func (d *FeatureDetectorImpl) ipipDeviceIsL3() bool {
 	switch d.getDistributionName() {
 	case RedHat:
 		if err := d.isAtLeastKernel(v4Dot18Dot0_330); err != nil {
@@ -231,7 +241,7 @@ func (d *FeatureDetector) ipipDeviceIsL3() bool {
 	}
 }
 
-func (d *FeatureDetector) getIptablesVersion() *Version {
+func (d *FeatureDetectorImpl) getIptablesVersion() *Version {
 	cmd := d.NewCmd("iptables", "--version")
 	out, err := cmd.Output()
 	if err != nil {
@@ -256,7 +266,7 @@ func (d *FeatureDetector) getIptablesVersion() *Version {
 	return parsedVersion
 }
 
-func (d *FeatureDetector) getKernelVersion() *Version {
+func (d *FeatureDetectorImpl) getKernelVersion() *Version {
 	reader, err := d.GetKernelVersionReader()
 	if err != nil {
 		log.WithError(err).Warn("Failed to get the kernel version reader, assuming old version with no optional features")
@@ -356,3 +366,15 @@ func FindBestBinary(lookPath func(file string) (string, error), ipVersion uint8,
 	logCxt.Panic("Failed to find iptables command")
 	return ""
 }
+
+type FakeFeatureDetector struct {
+	Features
+}
+
+func (f *FakeFeatureDetector) GetFeatures() *Features {
+	cp := f.Features
+	return &cp
+}
+
+var _ FeatureDetector = (*FakeFeatureDetector)(nil)
+var _ FeatureDetector = (*FeatureDetectorImpl)(nil)
