@@ -1096,6 +1096,23 @@ var _ = Describe("BPF Syncer", func() {
 			Expect(eps.m).To(HaveLen(2))
 		}))
 
+		By("checking topology aware hints auto in service with multiple endpoints with different node zone match no zones", makestep(func() {
+			state.SvcMap[svcKey] = proxy.NewK8sServicePort(
+				net.IPv4(10, 0, 0, 1),
+				1234,
+				v1.ProtocolTCP,
+				proxy.K8sSvcWithHintsAnnotation("auto"),
+			)
+			state.EpsMap[svcKey] = []k8sp.Endpoint{
+				&k8sp.BaseEndpointInfo{Ready: true, Endpoint: "10.1.0.1:5555", ZoneHints: sets.NewString("us-west-2a")},
+				&k8sp.BaseEndpointInfo{Ready: true, Endpoint: "10.2.0.2:5555", ZoneHints: sets.NewString("us-west-2b")},
+			}
+			state.NodeZone = "us-west-2c"
+
+			err := s.Apply(state)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(eps.m).To(HaveLen(0))
+		}))
 	})
 })
 
