@@ -480,7 +480,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		if !config.RouteSyncDisabled {
 			log.Debug("RouteSyncDisabled is false.")
 			routeTableVXLAN = routetable.New([]string{"^vxlan.calico$"}, 4, true, config.NetlinkTimeout,
-				config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, true, unix.RT_TABLE_UNSPEC,
+				config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, true, unix.RT_TABLE_MAIN,
 				dp.loopSummarizer, featureDetector, routetable.WithLivenessCB(dp.reportHealth))
 		} else {
 			log.Info("RouteSyncDisabled is true, using DummyTable.")
@@ -743,7 +743,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	if !config.RouteSyncDisabled {
 		log.Debug("RouteSyncDisabled is false.")
 		routeTableV4 = routetable.New(interfaceRegexes, 4, false, config.NetlinkTimeout,
-			config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, config.RemoveExternalRoutes, unix.RT_TABLE_UNSPEC,
+			config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, config.RemoveExternalRoutes, unix.RT_TABLE_MAIN,
 			dp.loopSummarizer, featureDetector, routetable.WithLivenessCB(dp.reportHealth),
 			routetable.WithRouteCleanupGracePeriod(routeCleanupGracePeriod))
 	} else {
@@ -850,7 +850,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			if !config.RouteSyncDisabled {
 				log.Debug("RouteSyncDisabled is false.")
 				routeTableVXLANV6 = routetable.New([]string{"^vxlan-v6.calico$"}, 6, true, config.NetlinkTimeout,
-					config.DeviceRouteSourceAddressIPv6, config.DeviceRouteProtocol, true, unix.RT_TABLE_UNSPEC,
+					config.DeviceRouteSourceAddressIPv6, config.DeviceRouteProtocol, true, unix.RT_TABLE_MAIN,
 					dp.loopSummarizer, featureDetector, routetable.WithLivenessCB(dp.reportHealth))
 			} else {
 				log.Debug("RouteSyncDisabled is true, using DummyTable for routeTableVXLANV6.")
@@ -879,7 +879,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			routeTableV6 = routetable.New(
 				interfaceRegexes, 6, false, config.NetlinkTimeout,
 				config.DeviceRouteSourceAddressIPv6, config.DeviceRouteProtocol, config.RemoveExternalRoutes,
-				unix.RT_TABLE_UNSPEC, dp.loopSummarizer, featureDetector, routetable.WithLivenessCB(dp.reportHealth),
+				unix.RT_TABLE_MAIN, dp.loopSummarizer, featureDetector, routetable.WithLivenessCB(dp.reportHealth),
 				routetable.WithRouteCleanupGracePeriod(routeCleanupGracePeriod))
 		} else {
 			log.Debug("RouteSyncDisabled is true, using DummyTable for routeTableV6.")

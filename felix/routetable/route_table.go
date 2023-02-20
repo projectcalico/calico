@@ -307,6 +307,13 @@ func NewWithShims(
 		}
 	}
 
+	if tableIndex == 0 {
+		// If we set route.Table to 0, what we actually get is a route in RT_TABLE_MAIN.  However,
+		// RouteListFiltered is much more efficient if we give it the "real" table number.
+		log.Debug("RouteTable created with unspecified table; defaulting to unix.RT_TABLE_MAIN.")
+		tableIndex = unix.RT_TABLE_MAIN
+	}
+
 	logCxt := log.WithFields(log.Fields{
 		"ipVersion":  ipVersion,
 		"tableIndex": tableIndex,
@@ -1022,7 +1029,9 @@ func (r *RouteTable) readProgrammedRoutes(logCxt *log.Entry, ifaceName string) (
 	}
 	programmedRoutes, err := nl.RouteListFiltered(r.netlinkFamily, routeFilter, routeFilterFlags)
 	if errors.Is(err, unix.ENOENT) {
-		// In strict mode, get this if the routing table doesn't exist (yet).
+		// In strict mode, get this if the routing table doesn't exist; it'll be auto-created
+		// when we add the first route so just treat it as empty.
+		log.WithError(err).Debug("Routing table doesn't exist (yet). Treating as empty.")
 		err = nil
 		programmedRoutes = nil
 	}

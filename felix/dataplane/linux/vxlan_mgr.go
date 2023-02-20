@@ -26,6 +26,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
+	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/calico/felix/environment"
 
@@ -123,7 +124,7 @@ func newVXLANManager(
 			dpConfig.DeviceRouteSourceAddress,
 			blackHoleProto,
 			false,
-			0,
+			unix.RT_TABLE_MAIN,
 			opRecorder,
 			featureDetector,
 		)
@@ -136,7 +137,7 @@ func newVXLANManager(
 				dpConfig.DeviceRouteSourceAddressIPv6,
 				blackHoleProto,
 				false,
-				0,
+				unix.RT_TABLE_MAIN,
 				opRecorder,
 				featureDetector,
 			)
@@ -158,7 +159,7 @@ func newVXLANManager(
 		func(interfaceRegexes []string, ipVersion uint8, vxlan bool, netlinkTimeout time.Duration,
 			deviceRouteSourceAddress net.IP, deviceRouteProtocol netlink.RouteProtocol, removeExternalRoutes bool) routetable.RouteTableInterface {
 			return routetable.New(interfaceRegexes, ipVersion, vxlan, netlinkTimeout,
-				deviceRouteSourceAddress, deviceRouteProtocol, removeExternalRoutes, 0,
+				deviceRouteSourceAddress, deviceRouteProtocol, removeExternalRoutes, unix.RT_TABLE_MAIN,
 				opRecorder, featureDetector,
 			)
 		},
