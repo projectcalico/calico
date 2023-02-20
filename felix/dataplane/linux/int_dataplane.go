@@ -480,8 +480,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		if !config.RouteSyncDisabled {
 			log.Debug("RouteSyncDisabled is false.")
 			routeTableVXLAN = routetable.New([]string{"^vxlan.calico$"}, 4, true, config.NetlinkTimeout,
-				config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, true, unix.RT_TABLE_UNSPEC,
-				dp.loopSummarizer, routetable.WithLivenessCB(dp.reportHealth))
+				config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, true, unix.RT_TABLE_MAIN,
+				dp.loopSummarizer, featureDetector, routetable.WithLivenessCB(dp.reportHealth))
 		} else {
 			log.Info("RouteSyncDisabled is true, using DummyTable.")
 			routeTableVXLAN = &routetable.DummyTable{}
@@ -494,6 +494,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			config,
 			dp.loopSummarizer,
 			4,
+			featureDetector,
 		)
 		go vxlanManager.KeepVXLANDeviceInSync(config.VXLANMTU, dataplaneFeatures.ChecksumOffloadBroken, 10*time.Second)
 		dp.RegisterManager(vxlanManager)
@@ -668,6 +669,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			filterTableV4,
 			dp.reportHealth,
 			dp.loopSummarizer,
+			featureDetector,
 		)
 
 		if err != nil {
@@ -745,8 +747,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	if !config.RouteSyncDisabled {
 		log.Debug("RouteSyncDisabled is false.")
 		routeTableV4 = routetable.New(interfaceRegexes, 4, false, config.NetlinkTimeout,
-			config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, config.RemoveExternalRoutes, unix.RT_TABLE_UNSPEC,
-			dp.loopSummarizer, routetable.WithLivenessCB(dp.reportHealth),
+			config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, config.RemoveExternalRoutes, unix.RT_TABLE_MAIN,
+			dp.loopSummarizer, featureDetector, routetable.WithLivenessCB(dp.reportHealth),
 			routetable.WithRouteCleanupGracePeriod(routeCleanupGracePeriod))
 	} else {
 		log.Info("RouteSyncDisabled is true, using DummyTable.")
@@ -797,7 +799,9 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			}
 			return nil
 		},
-		dp.loopSummarizer)
+		dp.loopSummarizer,
+		featureDetector,
+	)
 	dp.wireguardManager = newWireguardManager(cryptoRouteTableWireguard, config, 4)
 	dp.RegisterManager(dp.wireguardManager) // IPv4
 
@@ -850,8 +854,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			if !config.RouteSyncDisabled {
 				log.Debug("RouteSyncDisabled is false.")
 				routeTableVXLANV6 = routetable.New([]string{"^vxlan-v6.calico$"}, 6, true, config.NetlinkTimeout,
-					config.DeviceRouteSourceAddressIPv6, config.DeviceRouteProtocol, true, unix.RT_TABLE_UNSPEC,
-					dp.loopSummarizer, routetable.WithLivenessCB(dp.reportHealth))
+					config.DeviceRouteSourceAddressIPv6, config.DeviceRouteProtocol, true, unix.RT_TABLE_MAIN,
+					dp.loopSummarizer, featureDetector, routetable.WithLivenessCB(dp.reportHealth))
 			} else {
 				log.Debug("RouteSyncDisabled is true, using DummyTable for routeTableVXLANV6.")
 				routeTableVXLANV6 = &routetable.DummyTable{}
@@ -864,6 +868,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 				config,
 				dp.loopSummarizer,
 				6,
+				featureDetector,
 			)
 			go vxlanManagerV6.KeepVXLANDeviceInSync(config.VXLANMTUV6, dataplaneFeatures.ChecksumOffloadBroken, 10*time.Second)
 			dp.RegisterManager(vxlanManagerV6)
@@ -878,7 +883,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			routeTableV6 = routetable.New(
 				interfaceRegexes, 6, false, config.NetlinkTimeout,
 				config.DeviceRouteSourceAddressIPv6, config.DeviceRouteProtocol, config.RemoveExternalRoutes,
-				unix.RT_TABLE_UNSPEC, dp.loopSummarizer, routetable.WithLivenessCB(dp.reportHealth),
+				unix.RT_TABLE_MAIN, dp.loopSummarizer, featureDetector, routetable.WithLivenessCB(dp.reportHealth),
 				routetable.WithRouteCleanupGracePeriod(routeCleanupGracePeriod))
 		} else {
 			log.Debug("RouteSyncDisabled is true, using DummyTable for routeTableV6.")
@@ -926,7 +931,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 				}
 				return nil
 			},
-			dp.loopSummarizer)
+			dp.loopSummarizer,
+			featureDetector)
 		dp.wireguardManagerV6 = newWireguardManager(cryptoRouteTableWireguardV6, config, 6)
 		dp.RegisterManager(dp.wireguardManagerV6)
 	}

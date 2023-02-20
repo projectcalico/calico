@@ -26,6 +26,9 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
+	"golang.org/x/sys/unix"
+
+	"github.com/projectcalico/calico/felix/environment"
 
 	"github.com/projectcalico/calico/felix/dataplane/common"
 	"github.com/projectcalico/calico/felix/ethtool"
@@ -101,6 +104,7 @@ func newVXLANManager(
 	dpConfig Config,
 	opRecorder logutils.OpRecorder,
 	ipVersion uint8,
+	featureDetector environment.FeatureDetector,
 ) *vxlanManager {
 	nlHandle, _ := netlink.NewHandle()
 
@@ -120,8 +124,9 @@ func newVXLANManager(
 			dpConfig.DeviceRouteSourceAddress,
 			blackHoleProto,
 			false,
-			0,
+			unix.RT_TABLE_MAIN,
 			opRecorder,
+			featureDetector,
 		)
 		if ipVersion == 6 {
 			brt = routetable.New(
@@ -132,8 +137,9 @@ func newVXLANManager(
 				dpConfig.DeviceRouteSourceAddressIPv6,
 				blackHoleProto,
 				false,
-				0,
+				unix.RT_TABLE_MAIN,
 				opRecorder,
+				featureDetector,
 			)
 		} else if ipVersion != 4 {
 			logrus.WithField("ipVersion", ipVersion).Panic("Unknown IP version")
@@ -153,8 +159,8 @@ func newVXLANManager(
 		func(interfaceRegexes []string, ipVersion uint8, vxlan bool, netlinkTimeout time.Duration,
 			deviceRouteSourceAddress net.IP, deviceRouteProtocol netlink.RouteProtocol, removeExternalRoutes bool) routetable.RouteTableInterface {
 			return routetable.New(interfaceRegexes, ipVersion, vxlan, netlinkTimeout,
-				deviceRouteSourceAddress, deviceRouteProtocol, removeExternalRoutes, 0,
-				opRecorder,
+				deviceRouteSourceAddress, deviceRouteProtocol, removeExternalRoutes, unix.RT_TABLE_MAIN,
+				opRecorder, featureDetector,
 			)
 		},
 	)
