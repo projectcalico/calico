@@ -69,6 +69,7 @@ var _ = Describe("RouteTable v6", func() {
 			true,
 			0,
 			logutils.NewSummarizer("test"),
+			dataplane,
 		)
 	})
 
@@ -135,6 +136,7 @@ var _ = Describe("RouteTable", func() {
 			true,
 			0,
 			logutils.NewSummarizer("test"),
+			dataplane,
 			WithRouteCleanupGracePeriod(10*time.Second),
 		)
 	})
@@ -278,6 +280,7 @@ var _ = Describe("RouteTable", func() {
 					true,
 					0,
 					logutils.NewSummarizer("test"),
+					dataplane,
 				)
 			})
 			It("Should delete routes without a source address", func() {
@@ -396,6 +399,7 @@ var _ = Describe("RouteTable", func() {
 					true,
 					0,
 					logutils.NewSummarizer("test"),
+					dataplane,
 				)
 			})
 			It("Should delete routes without a protocol", func() {
@@ -1010,6 +1014,7 @@ var _ = Describe("RouteTable (main table)", func() {
 			true,
 			0,
 			logutils.NewSummarizer("test"),
+			dataplane,
 			WithRouteCleanupGracePeriod(10*time.Second),
 		)
 	})
@@ -1110,6 +1115,7 @@ var _ = Describe("RouteTable (table 100)", func() {
 			true,
 			100,
 			logutils.NewSummarizer("test"),
+			dataplane,
 			WithRouteCleanupGracePeriod(10*time.Second),
 		)
 	})
@@ -1372,6 +1378,7 @@ var _ = Describe("Tests to verify ip version is policed", func() {
 				true,
 				100,
 				logutils.NewSummarizer("test"),
+				dataplane,
 			)
 		}).To(Panic())
 	})
