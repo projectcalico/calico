@@ -236,25 +236,24 @@ $(NODE_CONTAINER_BINARY): filesystem/usr/lib/calico/bpf $(LIBBPF_A) $(SRC_FILES)
 	$(call build_cgo_boring_binary, ./cmd/calico-node/main.go, $@)
 
 $(WINDOWS_BINARY):
-	$(DOCKER_RUN) \
-		-e GOOS=windows \
-		$(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
-		go build -v -o $@ -ldflags "$(LDFLAGS)" ./cmd/calico-node/main.go'
+	$(DOCKER_GO_BUILD_CGO_WINDOWS) sh -c '$(GIT_CONFIG_SSH) \
+		GOOS=windows CC=x86_64-w64-mingw32-gcc \
+		go build -buildvcs=false --buildmode=exe -v -o $@ -ldflags "$(LDFLAGS)" ./cmd/calico-node/main.go'
 
 $(WINDOWS_ARCHIVE_ROOT)/cni/calico.exe:
 	$(DOCKER_RUN) \
 		-e GOOS=windows \
 		$(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
-		go build -v -o $@ -ldflags "$(LDFLAGS)" ./cmd/calico'
+		go build -buildvcs=false -v -o $@ -ldflags "$(LDFLAGS)" ./cmd/calico'
 
 $(WINDOWS_ARCHIVE_ROOT)/cni/calico-ipam.exe:
 	$(DOCKER_RUN) \
 		-e GOOS=windows \
 		$(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
-		go build -v -o $@ -ldflags "$(LDFLAGS)" ./cmd/calico-ipam'
+		go build -buildvcs=false -v -o $@ -ldflags "$(LDFLAGS)" ./cmd/calico-ipam'
 
 $(TOOLS_MOUNTNS_BINARY):
-	$(call build_cgo_boring_binary, ./cmd/mountns, $@)
+	$(call build_cgo_binary, ./cmd/mountns, $@)
 
 ###############################################################################
 # Building the image

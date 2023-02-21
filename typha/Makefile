@@ -69,14 +69,26 @@ bin/wrapper: bin/wrapper-$(ARCH)
 	ln -f bin/wrapper-$(ARCH) bin/wrapper
 
 bin/wrapper-$(ARCH): $(SRC_FILES) $(LOCAL_BUILD_DEP)
+ifeq ($(ARCH), amd64)
 	$(call build_static_cgo_boring_binary, ./cmd/wrapper, $@)
+else
+	$(call build_binary, ./cmd/wrapper, $@)
+endif
 
 bin/calico-typha-$(ARCH): $(SRC_FILES)
+ifeq ($(ARCH), amd64)
 	$(call build_static_cgo_boring_binary, ./cmd/calico-typha, $@)
+else
+	$(call build_binary, ./cmd/calico-typha, $@)
+endif
 
 bin/typha-client-$(ARCH): $(SRC_FILES)
+ifeq ($(ARCH), amd64)
 	@echo Building typha client...
 	$(call build_static_cgo_boring_binary, ./cmd/typha-client, $@)
+else
+	$(call build_binary, ./cmd/typha-client, $@)
+endif
 
 ###############################################################################
 # Building the image
