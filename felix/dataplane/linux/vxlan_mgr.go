@@ -28,9 +28,8 @@ import (
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
 
-	"github.com/projectcalico/calico/felix/environment"
-
 	"github.com/projectcalico/calico/felix/dataplane/common"
+	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/ethtool"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/ipsets"
@@ -104,7 +103,7 @@ func newVXLANManager(
 	dpConfig Config,
 	opRecorder logutils.OpRecorder,
 	ipVersion uint8,
-	featureDetector environment.FeatureDetector,
+	featureDetector environment.FeatureDetectorIface,
 ) *vxlanManager {
 	nlHandle, _ := netlink.NewHandle()
 

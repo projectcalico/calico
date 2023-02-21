@@ -1029,15 +1029,19 @@ var _ = Describe("RouteTable", func() {
 
 	Describe("with an interface that disappears", func() {
 		BeforeEach(func() {
+			// Add an interface so that hte route table tries to list the routes assocaited with it.
 			dataplane.AddIface(2, "cali1", true, true)
+			// But trigger the interface to disappear just before the list call.  This will trigger
+			// a list operation with no interface, resulting in an ENODEV.
 			dataplane.DeleteInterfaceAfterLinkByName = true
 		})
-		It("it should suppress the error", func() {
+		It("it should suppress the ENODEV error", func() {
 			rt.RouteUpdate("cali1", Target{
 				CIDR: ip.MustParseCIDROrIP("10.0.20.0/24"),
 			})
 			err := rt.Apply()
 			Expect(err).NotTo(HaveOccurred())
+			// Check that we really hit the case we intended to hit.
 			Expect(dataplane.HitRouteListFilteredNoDev).To(BeTrue(),
 				"RouteListFiltered wasn't called with missing device?  Perhaps test needs updating.")
 		})
@@ -1425,7 +1429,7 @@ var _ = Describe("RouteTable (table 100)", func() {
 		})
 		It("should create the table as needed", func() {
 			// In "strict" mode, RouteListFiltered returns an error if the routing table doesn't exist.
-			// Check that is handled and that we proceed to crete the route (and thus create the routing table).
+			// Check that is handled and that we proceed to create the route (and thus create the routing table).
 			rt.RouteUpdate("cali", Target{
 				CIDR: ip.MustParseCIDROrIP("10.0.0.1/32"),
 			})

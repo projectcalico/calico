@@ -183,7 +183,7 @@ const (
 // manage not to interfare with other users of the route tables.
 type RouteTable struct {
 	logCxt          *log.Entry
-	featureDetector environment.FeatureDetector
+	featureDetector environment.FeatureDetectorIface
 
 	ipVersion      uint8
 	netlinkFamily  int
@@ -256,7 +256,7 @@ func New(
 	removeExternalRoutes bool,
 	tableIndex int,
 	opReporter logutils.OpRecorder,
-	featureDetector environment.FeatureDetector,
+	featureDetector environment.FeatureDetectorIface,
 	opts ...RouteTableOpt,
 ) *RouteTable {
 	return NewWithShims(
@@ -293,7 +293,7 @@ func NewWithShims(
 	removeExternalRoutes bool,
 	tableIndex int,
 	opReporter logutils.OpRecorder,
-	featureDetector environment.FeatureDetector,
+	featureDetector environment.FeatureDetectorIface,
 	opts ...RouteTableOpt,
 ) *RouteTable {
 	var filteredRegexes []string
