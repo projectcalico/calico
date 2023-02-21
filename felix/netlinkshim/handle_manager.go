@@ -17,8 +17,9 @@ package netlinkshim
 import (
 	"time"
 
-	"github.com/projectcalico/calico/felix/environment"
 	"github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/felix/environment"
 )
 
 const (
