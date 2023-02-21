@@ -37,7 +37,7 @@ type HandleManager struct {
 	family        int
 	socketTimeout time.Duration
 
-	featureDetector  environment.FeatureDetector
+	featureDetector  environment.FeatureDetectorIface
 	newNetlinkHandle func() (Interface, error)
 }
 
@@ -57,7 +57,7 @@ func WithNewHandleOverride(newNetlinkHandle func() (Interface, error)) NetlinkHa
 
 func NewHandleManager(
 	netlinkFamily int,
-	featureDetector environment.FeatureDetector,
+	featureDetector environment.FeatureDetectorIface,
 	opts ...NetlinkHandleManagerOpt,
 ) *HandleManager {
 	nlm := &HandleManager{

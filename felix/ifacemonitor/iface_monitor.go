@@ -81,7 +81,7 @@ type ifaceInfo struct {
 }
 
 func New(config Config,
-	featureDetector environment.FeatureDetector,
+	featureDetector environment.FeatureDetectorIface,
 	fatalErrCallback func(error),
 ) *InterfaceMonitor {
 	// Interface monitor using the real netlink.

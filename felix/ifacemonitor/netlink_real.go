@@ -30,7 +30,7 @@ type netlinkReal struct {
 	handleMgr *netlinkshim.HandleManager
 }
 
-func newRealNetlink(featureDetector environment.FeatureDetector, timeout time.Duration) *netlinkReal {
+func newRealNetlink(featureDetector environment.FeatureDetectorIface, timeout time.Duration) *netlinkReal {
 	return &netlinkReal{
 		handleMgr: netlinkshim.NewHandleManager(netlink.FAMILY_ALL, featureDetector, netlinkshim.WithSocketTimeout(timeout)),
 	}
