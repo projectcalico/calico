@@ -68,7 +68,7 @@ require (
 	github.com/spf13/viper v1.14.0
 	github.com/tchap/go-patricia/v2 v2.3.1
 	github.com/termie/go-shutil v0.0.0-20140729215957-bcacb06fecae
-	github.com/vishvananda/netlink v1.2.1-beta.2.0.20220630165224-c591ada0fb2b
+	github.com/vishvananda/netlink v1.2.1-beta.2.0.20230206183746-70ca0345eede
 	go.etcd.io/etcd/api/v3 v3.5.6
 	go.etcd.io/etcd/client/pkg/v3 v3.5.6
 	go.etcd.io/etcd/client/v2 v2.305.6
@@ -97,7 +97,7 @@ require (
 	sigs.k8s.io/kind v0.11.1
 )
 
-require gopkg.in/yaml.v2 v2.4.0 // indirect
+require gopkg.in/yaml.v2 v2.4.0
 
 require (
 	cloud.google.com/go/compute v1.12.1 // indirect

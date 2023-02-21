@@ -212,6 +212,7 @@ func StartDataplaneDriver(configParams *config.Config,
 			IfaceMonitorConfig: ifacemonitor.Config{
 				InterfaceExcludes: configParams.InterfaceExclude,
 				ResyncInterval:    configParams.InterfaceRefreshInterval,
+				NetlinkTimeout:    configParams.NetlinkTimeoutSecs,
 			},
 			RulesConfig: rules.Config{
 				WorkloadIfacePrefixes: configParams.InterfacePrefixes(),
