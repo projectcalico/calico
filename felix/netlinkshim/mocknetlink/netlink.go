@@ -31,6 +31,7 @@ import (
 	"golang.org/x/sys/unix"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 
+	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/netlinkshim"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
@@ -38,6 +39,7 @@ import (
 
 func New() *MockNetlinkDataplane {
 	dp := &MockNetlinkDataplane{
+		ExistingTables:  set.From(unix.RT_TABLE_MAIN, 253, 255),
 		NameToLink:      map[string]*MockLink{},
 		RouteKeyToRoute: map[string]netlink.Route{},
 		Rules: []netlink.Rule{
@@ -56,6 +58,7 @@ func New() *MockNetlinkDataplane {
 		},
 	}
 	dp.ResetDeltas()
+	dp.AddIface(1, "lo", true, true)
 	return dp
 }
 
@@ -98,6 +101,7 @@ const (
 	FailNextWireguardClose
 	FailNextWireguardDeviceByName
 	FailNextWireguardConfigureDevice
+	FailNextSetStrict
 	FailNone FailFlags = 0
 )
 
@@ -112,6 +116,7 @@ var RoutetableFailureScenarios = []FailFlags{
 	FailNextAddARP,
 	FailNextNewNetlink,
 	FailNextSetSocketTimeout,
+	FailNextSetStrict,
 }
 
 func (f FailFlags) String() string {
@@ -191,6 +196,9 @@ func (f FailFlags) String() string {
 	if f&FailNextWireguardConfigureDevice != 0 {
 		parts = append(parts, "FailNextWireguardConfigureDevice")
 	}
+	if f&FailNextSetStrict != 0 {
+		parts = append(parts, "FailNextSetStrict")
+	}
 	if f == 0 {
 		parts = append(parts, "FailNone")
 	}
@@ -208,34 +216,48 @@ type MockNetlinkDataplane struct {
 	AddedRules   []netlink.Rule
 	DeletedRules []netlink.Rule
 
+	ExistingTables   set.Set[int]
 	RouteKeyToRoute  map[string]netlink.Route
 	AddedRouteKeys   set.Set[string]
 	DeletedRouteKeys set.Set[string]
 	UpdatedRouteKeys set.Set[string]
 
-	NumNewNetlinkCalls     int
-	NetlinkOpen            bool
-	NumNewWireguardCalls   int
-	WireguardOpen          bool
-	NumLinkAddCalls        int
-	NumLinkDeleteCalls     int
-	ImmediateLinkUp        bool
-	NumRuleListCalls       int
-	NumRuleAddCalls        int
-	NumRuleDelCalls        int
-	WireguardConfigUpdated bool
-	LastWireguardUpdates   map[wgtypes.Key]wgtypes.PeerConfig
+	StrictEnabled               bool
+	NumNewNetlinkCalls          int
+	NetlinkOpen                 bool
+	NumNewWireguardCalls        int
+	WireguardOpen               bool
+	NumLinkAddCalls             int
+	NumLinkDeleteCalls          int
+	ImmediateLinkUp             bool
+	NumRuleListCalls            int
+	NumRuleAddCalls             int
+	NumRuleDelCalls             int
+	WireguardConfigUpdated      bool
+	HitRouteListFilteredNoDev   bool
+	HitRouteListFilteredNoTable bool
+	LastWireguardUpdates        map[wgtypes.Key]wgtypes.PeerConfig
 
 	PersistentlyFailToConnect bool
 
-	PersistFailures    bool
-	FailuresToSimulate FailFlags
+	PersistFailures                bool
+	FailuresToSimulate             FailFlags
+	DeleteInterfaceAfterLinkByName bool
 
 	addedArpEntries set.Set[string]
 
 	mutex                   sync.Mutex
 	deletedConntrackEntries set.Set[ip.Addr]
 	ConntrackSleep          time.Duration
+}
+
+func (d *MockNetlinkDataplane) RefreshFeatures() {
+}
+
+func (d *MockNetlinkDataplane) GetFeatures() *environment.Features {
+	return &environment.Features{
+		KernelSideRouteFiltering: true,
+	}
 }
 
 func (d *MockNetlinkDataplane) ResetDeltas() {
@@ -346,6 +368,19 @@ func (d *MockNetlinkDataplane) SetSocketTimeout(to time.Duration) error {
 	return nil
 }
 
+func (d *MockNetlinkDataplane) SetStrictCheck(b bool) error {
+	d.mutex.Lock()
+	defer d.mutex.Unlock()
+	defer GinkgoRecover()
+
+	Expect(d.NetlinkOpen).To(BeTrue())
+	if d.shouldFail(FailNextSetStrict) {
+		return SimulatedError
+	}
+	d.StrictEnabled = b
+	return nil
+}
+
 func (d *MockNetlinkDataplane) LinkList() ([]netlink.Link, error) {
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
@@ -373,6 +408,9 @@ func (d *MockNetlinkDataplane) LinkByName(name string) (netlink.Link, error) {
 	}
 	if d.shouldFail(FailNextLinkByName) {
 		return nil, SimulatedError
+	}
+	if d.DeleteInterfaceAfterLinkByName {
+		defer delete(d.NameToLink, name)
 	}
 	if link, ok := d.NameToLink[name]; ok {
 		return link.copy(), nil
@@ -610,6 +648,47 @@ func (d *MockNetlinkDataplane) RouteListFiltered(family int, filter *netlink.Rou
 	if d.shouldFail(FailNextRouteList) {
 		return nil, SimulatedError
 	}
+
+	if d.StrictEnabled {
+		// If strict mode is enabled, the kernel behaves differently in a few respects:
+		// - It does kernel side route filtering.  This is why we enable strict mode.
+		// - It returns errors in more cases: if the device we filter on doesn't exist or if the routing table
+		//   doesn't exist.
+		//
+		// netlink library note: the netlink library does kernel-side filtering for all non-default fields
+		// in the filter route, so it's right that we don't condition on filterMask for this part of the check.
+
+		// Check if the filter's table exists.
+		if filter.Table != 0 && !d.ExistingTables.Contains(filter.Table) {
+			// No routing table gives ENOENT.
+			d.HitRouteListFilteredNoTable = true
+			return nil, unix.ENOENT
+		}
+
+		// Check if the link exists.
+		if filter.LinkIndex != 0 {
+			found := false
+			for _, l := range d.NameToLink {
+				if l.LinkAttrs.Index == filter.LinkIndex {
+					found = true
+					break
+				}
+			}
+			if !found {
+				d.HitRouteListFilteredNoDev = true
+				return nil, unix.ENODEV
+			}
+		}
+
+		{
+			filterCopy := *filter
+			filterCopy.Table = 0
+			filterCopy.LinkIndex = 0
+			Expect(filterCopy).To(Equal(netlink.Route{}), fmt.Sprintf(
+				"filter route uses fields that mock doesn't understand: %+v", filterCopy))
+		}
+	}
+
 	var routes []netlink.Route
 	for _, route := range d.RouteKeyToRoute {
 		log.Debugf("Maybe include route: %v", route)
@@ -640,9 +719,10 @@ func (d *MockNetlinkDataplane) RouteListFiltered(family int, filter *netlink.Rou
 func (d *MockNetlinkDataplane) AddMockRoute(route *netlink.Route) {
 	key := KeyForRoute(route)
 	r := *route
-	if r.Table == unix.RT_TABLE_MAIN {
-		// Store the main table with index 0 for simplicity with comparisons.
-		r.Table = 0
+	d.ExistingTables.Add(r.Table)
+	if r.Table == 0 {
+		// Table 0 is "unspecified", which gets defaulted to the main table.
+		r.Table = unix.RT_TABLE_MAIN
 	}
 	d.RouteKeyToRoute[key] = r
 }
@@ -664,13 +744,14 @@ func (d *MockNetlinkDataplane) RouteAdd(route *netlink.Route) error {
 	key := KeyForRoute(route)
 	log.WithField("routeKey", key).Info("Mock dataplane: RouteUpdate called")
 	d.AddedRouteKeys.Add(key)
+	d.ExistingTables.Add(route.Table)
 	if _, ok := d.RouteKeyToRoute[key]; ok {
 		return AlreadyExistsError
 	} else {
 		r := *route
-		if r.Table == unix.RT_TABLE_MAIN {
-			// Store main table routes with 0 index for simplicity of comparison.
-			r.Table = 0
+		if r.Table == 0 {
+			// Table 0 is "unspecified", which gets defaulted to the main table.
+			r.Table = unix.RT_TABLE_MAIN
 		}
 		d.RouteKeyToRoute[key] = r
 		return nil
