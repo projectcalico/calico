@@ -28,9 +28,6 @@ import (
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 
 	"github.com/projectcalico/calico/felix/environment"
-
-	"github.com/projectcalico/calico/libcalico-go/lib/set"
-
 	"github.com/projectcalico/calico/felix/ifacemonitor"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/logutils"
@@ -39,6 +36,7 @@ import (
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/timeshim"
 	lclogutils "github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 const (
@@ -181,7 +179,7 @@ func New(
 	deviceRouteProtocol netlink.RouteProtocol,
 	statusCallback func(publicKey wgtypes.Key) error,
 	opRecorder logutils.OpRecorder,
-	featureDetector environment.FeatureDetector,
+	featureDetector environment.FeatureDetectorIface,
 ) *Wireguard {
 	return NewWithShims(
 		hostname,
@@ -216,7 +214,7 @@ func NewWithShims(
 	statusCallback func(publicKey wgtypes.Key) error,
 	writeProcSys func(path, value string) error,
 	opRecorder logutils.OpRecorder,
-	featureDetector environment.FeatureDetector,
+	featureDetector environment.FeatureDetectorIface,
 ) *Wireguard {
 	logCtx := log.WithField("ipVersion", ipVersion)
 

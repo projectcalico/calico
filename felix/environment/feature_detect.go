@@ -74,11 +74,12 @@ type Features struct {
 	KernelSideRouteFiltering bool
 }
 
-type FeatureDetector interface {
+type FeatureDetectorIface interface {
 	GetFeatures() *Features
+	RefreshFeatures()
 }
 
-type FeatureDetectorImpl struct {
+type FeatureDetector struct {
 	lock            sync.Mutex
 	featureCache    *Features
 	featureOverride map[string]string
@@ -90,15 +91,15 @@ type FeatureDetectorImpl struct {
 	NewCmd cmdshim.CmdFactory
 }
 
-func NewFeatureDetector(overrides map[string]string) *FeatureDetectorImpl {
-	return &FeatureDetectorImpl{
+func NewFeatureDetector(overrides map[string]string) *FeatureDetector {
+	return &FeatureDetector{
 		GetKernelVersionReader: GetKernelVersionReader,
 		NewCmd:                 cmdshim.NewRealCmd,
 		featureOverride:        overrides,
 	}
 }
 
-func (d *FeatureDetectorImpl) GetFeatures() *Features {
+func (d *FeatureDetector) GetFeatures() *Features {
 	d.lock.Lock()
 	defer d.lock.Unlock()
 
@@ -109,14 +110,14 @@ func (d *FeatureDetectorImpl) GetFeatures() *Features {
 	return d.featureCache
 }
 
-func (d *FeatureDetectorImpl) RefreshFeatures() {
+func (d *FeatureDetector) RefreshFeatures() {
 	d.lock.Lock()
 	defer d.lock.Unlock()
 
 	d.refreshFeaturesLockHeld()
 }
 
-func (d *FeatureDetectorImpl) refreshFeaturesLockHeld() {
+func (d *FeatureDetector) refreshFeaturesLockHeld() {
 	// Get the versions.  If we fail to detect a version for some reason, we use a safe default.
 	log.Debug("Refreshing detected iptables features")
 
@@ -172,7 +173,7 @@ func (d *FeatureDetectorImpl) refreshFeaturesLockHeld() {
 	}
 }
 
-func (d *FeatureDetectorImpl) kernelIsAtLeast(v *Version) (bool, *Version, error) {
+func (d *FeatureDetector) kernelIsAtLeast(v *Version) (bool, *Version, error) {
 	versionReader, err := d.GetKernelVersionReader()
 	if err != nil {
 		return false, nil, fmt.Errorf("failed to get kernel version reader: %w", err)
@@ -188,7 +189,7 @@ func (d *FeatureDetectorImpl) kernelIsAtLeast(v *Version) (bool, *Version, error
 
 // KernelIsAtLeast returns whether the predicate is true or not and an error in
 // case it was not able to determine it.
-func (d *FeatureDetectorImpl) KernelIsAtLeast(v string) (bool, error) {
+func (d *FeatureDetector) KernelIsAtLeast(v string) (bool, error) {
 	ver, err := NewVersion(v)
 	if err != nil {
 		return false, fmt.Errorf("failed to parse kernel version: %w", err)
@@ -199,7 +200,7 @@ func (d *FeatureDetectorImpl) KernelIsAtLeast(v string) (bool, error) {
 	return ok, err
 }
 
-func (d *FeatureDetectorImpl) isAtLeastKernel(v *Version) error {
+func (d *FeatureDetector) isAtLeastKernel(v *Version) error {
 	ok, kernelVersion, err := d.kernelIsAtLeast(v)
 	if err != nil {
 		return err
@@ -211,7 +212,7 @@ func (d *FeatureDetectorImpl) isAtLeastKernel(v *Version) error {
 	return nil
 }
 
-func (d *FeatureDetectorImpl) getDistributionName() string {
+func (d *FeatureDetector) getDistributionName() string {
 	versionReader, err := d.GetKernelVersionReader()
 	if err != nil {
 		log.Errorf("failed to get kernel version reader: %v", err)
@@ -226,7 +227,7 @@ func (d *FeatureDetectorImpl) getDistributionName() string {
 	return GetDistFromString(string(kernVersion))
 }
 
-func (d *FeatureDetectorImpl) ipipDeviceIsL3() bool {
+func (d *FeatureDetector) ipipDeviceIsL3() bool {
 	switch d.getDistributionName() {
 	case RedHat:
 		if err := d.isAtLeastKernel(v4Dot18Dot0_330); err != nil {
@@ -241,7 +242,7 @@ func (d *FeatureDetectorImpl) ipipDeviceIsL3() bool {
 	}
 }
 
-func (d *FeatureDetectorImpl) getIptablesVersion() *Version {
+func (d *FeatureDetector) getIptablesVersion() *Version {
 	cmd := d.NewCmd("iptables", "--version")
 	out, err := cmd.Output()
 	if err != nil {
@@ -266,7 +267,7 @@ func (d *FeatureDetectorImpl) getIptablesVersion() *Version {
 	return parsedVersion
 }
 
-func (d *FeatureDetectorImpl) getKernelVersion() *Version {
+func (d *FeatureDetector) getKernelVersion() *Version {
 	reader, err := d.GetKernelVersionReader()
 	if err != nil {
 		log.WithError(err).Warn("Failed to get the kernel version reader, assuming old version with no optional features")
@@ -371,10 +372,13 @@ type FakeFeatureDetector struct {
 	Features
 }
 
+func (f *FakeFeatureDetector) RefreshFeatures() {
+}
+
 func (f *FakeFeatureDetector) GetFeatures() *Features {
 	cp := f.Features
 	return &cp
 }
 
-var _ FeatureDetector = (*FakeFeatureDetector)(nil)
-var _ FeatureDetector = (*FeatureDetectorImpl)(nil)
+var _ FeatureDetectorIface = (*FakeFeatureDetector)(nil)
+var _ FeatureDetectorIface = (*FeatureDetector)(nil)
