@@ -737,6 +737,20 @@ func determineEnabledPoolCIDRs(
 			log.WithError(err).Fatalf("Failed to parse CIDR '%s' for IPPool '%s'", ipPool.Spec.CIDR, ipPool.Name)
 		}
 
+		// Check if the pool has tunnel IPs in its allowed uses.
+		if len(ipPool.Spec.AllowedUses) > 0 {
+			allowed := false
+			for _, use := range ipPool.Spec.AllowedUses {
+				if use == api.IPPoolAllowedUseTunnel {
+					allowed = true
+				}
+			}
+			if !allowed {
+				log.Debugf("IPPool '%s' is not allowed for tunnel IPs.  Allowed uses: %v", ipPool.Name, ipPool.Spec.AllowedUses)
+				continue
+			}
+		}
+
 		// Check if IP pool selects the node
 		if selects, err := ipam.SelectsNode(ipPool, node); err != nil {
 			log.WithError(err).Errorf("Failed to compare nodeSelector '%s' for IPPool '%s', skipping", ipPool.Spec.NodeSelector, ipPool.Name)
