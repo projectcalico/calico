@@ -289,7 +289,7 @@ func (d *MockNetlinkDataplane) AddIface(idx int, name string, up bool, running b
 	}
 	d.NameToLink[name] = link
 	d.SetIface(name, up, running)
-	return link
+	return link.copy()
 }
 
 func (d *MockNetlinkDataplane) SetIface(name string, up bool, running bool) {
@@ -357,7 +357,7 @@ func (d *MockNetlinkDataplane) LinkList() ([]netlink.Link, error) {
 	}
 	var links []netlink.Link
 	for _, link := range d.NameToLink {
-		links = append(links, link)
+		links = append(links, link.copy())
 	}
 	return links, nil
 }
@@ -375,7 +375,7 @@ func (d *MockNetlinkDataplane) LinkByName(name string) (netlink.Link, error) {
 		return nil, SimulatedError
 	}
 	if link, ok := d.NameToLink[name]; ok {
-		return link, nil
+		return link.copy(), nil
 	}
 	return nil, NotFoundError
 }
@@ -779,6 +779,34 @@ func (l *MockLink) Attrs() *netlink.LinkAttrs {
 
 func (l *MockLink) Type() string {
 	return l.LinkType
+}
+
+func (l *MockLink) copy() *MockLink {
+	var addrsCopy []netlink.Addr
+	if l.Addrs != nil {
+		addrsCopy = append(addrsCopy, l.Addrs...)
+	}
+
+	// Need to deep copy the map to avoid concurrent access.
+	var wgPeersCopy map[wgtypes.Key]wgtypes.Peer
+	if l.WireguardPeers != nil {
+		wgPeersCopy = map[wgtypes.Key]wgtypes.Peer{}
+		for k, v := range l.WireguardPeers {
+			wgPeersCopy[k] = v
+		}
+	}
+
+	return &MockLink{
+		LinkAttrs: l.LinkAttrs, // Shallow copy, but we don't use the nested pointers AFAICT.
+		Addrs:     addrsCopy,
+		LinkType:  l.LinkType,
+
+		WireguardPrivateKey:   l.WireguardPrivateKey,
+		WireguardPublicKey:    l.WireguardPublicKey,
+		WireguardListenPort:   l.WireguardListenPort,
+		WireguardFirewallMark: l.WireguardFirewallMark,
+		WireguardPeers:        wgPeersCopy,
+	}
 }
 
 func getArpKey(cidr ip.CIDR, destMAC net.HardwareAddr, ifaceName string) string {
