@@ -65,7 +65,7 @@ bin/csi-driver-armv7: ARCH=armv7
 bin/csi-driver-ppc64le: ARCH=ppc64le
 bin/csi-driver-s390x: ARCH=s390x
 bin/csi-driver-%: $(SRC_FILES)
-	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) go build -v -o bin/csi-driver-$(ARCH) csidriver/main.go
+	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) go build -buildvcs=false -v -o bin/csi-driver-$(ARCH) csidriver/main.go
 
 bin/csi-driver-amd64: $(SRC_FILES)
 	$(call build_static_cgo_boring_binary, csidriver/main.go, $@)

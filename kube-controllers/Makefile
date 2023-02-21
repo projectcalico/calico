@@ -54,7 +54,7 @@ ifeq ($(ARCH), amd64)
 	$(call build_cgo_boring_binary, ./cmd/kube-controllers/, $@)
 else
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c '\
-		$(GIT_CONFIG_SSH) go build -buildvcs=false -v -o ./cmd/kube-controllers/ -ldflags "$(LDFLAGS)" ./cmd/kube-controllers/'
+		$(GIT_CONFIG_SSH) go build -buildvcs=false -v -o $@ -ldflags "$(LDFLAGS)" ./cmd/kube-controllers/'
 endif
 
 bin/wrapper-$(ARCH):
