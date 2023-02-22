@@ -81,13 +81,20 @@ cd: image-all cd-common
 # "apiserver" instead of "$(BINDIR)/apiserver".
 #########################################################################
 $(BINDIR)/apiserver-$(ARCH): $(K8SAPISERVER_GO_FILES)
-	mkdir -p $(BINDIR)
+ifeq ($(ARCH),amd64)
 	$(call build_cgo_boring_binary, $(PACKAGE_NAME)/cmd/apiserver, $@)
-
+else
+	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) \
+		sh -c '$(GIT_CONFIG_SSH) go build -v -o $@ -ldflags "$(VERSION_FLAGS)" $(PACKAGE_NAME)/cmd/apiserver'
+endif
 
 $(BINDIR)/filecheck-$(ARCH): $(K8SAPISERVER_GO_FILES)
+ifeq ($(ARCH),amd64)
+	$(call build_cgo_boring_binary, $(PACKAGE_NAME)/cmd/filecheck, $@)
+else
 	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) \
-		sh -c '$(GIT_CONFIG_SSH) go build -v -o $@ -ldflags "$(VERSION_FLAGS)" $(PACKAGE_NAME)/cmd/filecheck'
+    		sh -c '$(GIT_CONFIG_SSH) go build -v -o $@ -ldflags "$(VERSION_FLAGS)" $(PACKAGE_NAME)/cmd/filecheck'
+endif
 
 ###############################################################################
 # Building the image
