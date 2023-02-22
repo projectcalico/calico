@@ -4,6 +4,8 @@
 
 # The version of github.com/projectcalico/go-build to use.
 GO_BUILD_VER = v0.78
+# The following version is not yet ready for project-wide roll-out.
+GO19_BUILD_VER = v0.80
 
 # Version of Kubernetes to use for tests.
 K8S_VERSION     = v1.24.7
