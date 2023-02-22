@@ -26,7 +26,6 @@ import (
 	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/calico/felix/environment"
-
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 

@@ -23,9 +23,9 @@ import (
 )
 
 const (
-	maxConnFailures = 3
+	maxConnFailures      = 3
+	defaultSocketTimeout = 10 * time.Second
 )
-const defaultSocketTimeout = 10 * time.Second
 
 type HandleManager struct {
 	// Current netlink handle, or nil if we need to reconnect.
