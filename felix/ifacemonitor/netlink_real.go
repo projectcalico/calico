@@ -15,18 +15,33 @@
 package ifacemonitor
 
 import (
+	"fmt"
+	"time"
+
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
+
+	"github.com/projectcalico/calico/felix/environment"
+	"github.com/projectcalico/calico/felix/netlinkshim"
 )
 
 type netlinkReal struct {
+	handleMgr *netlinkshim.HandleManager
+}
+
+func newRealNetlink(featureDetector environment.FeatureDetectorIface, timeout time.Duration) *netlinkReal {
+	return &netlinkReal{
+		handleMgr: netlinkshim.NewHandleManager(netlink.FAMILY_ALL, featureDetector, netlinkshim.WithSocketTimeout(timeout)),
+	}
 }
 
 func (nl *netlinkReal) Subscribe(
 	linkUpdates chan netlink.LinkUpdate,
 	routeUpdates chan netlink.RouteUpdate,
 ) (chan struct{}, error) {
+	// Note: this method doesn't use the HandleManager because each subscription gets its own
+	// socket under the covers.
 	cancel := make(chan struct{})
 
 	if err := netlink.LinkSubscribeWithOptions(linkUpdates, cancel, netlink.LinkSubscribeOptions{
@@ -54,14 +69,25 @@ func (nl *netlinkReal) Subscribe(
 }
 
 func (nl *netlinkReal) LinkList() ([]netlink.Link, error) {
-	return netlink.LinkList()
+	h, err := nl.handleMgr.Handle()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get netlink handle: %w", err)
+	}
+	return h.LinkList()
 }
 
 func (nl *netlinkReal) ListLocalRoutes(link netlink.Link, family int) ([]netlink.Route, error) {
+	h, err := nl.handleMgr.Handle()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get netlink handle: %w", err)
+	}
 	routeFilter := &netlink.Route{}
+	filterFlags := netlink.RT_FILTER_TABLE | netlink.RT_FILTER_TYPE
+	routeFilter.Table = unix.RT_TABLE_LOCAL
+	routeFilter.Type = unix.RTN_LOCAL
 	if link != nil {
+		filterFlags |= netlink.RT_FILTER_OIF
 		routeFilter.LinkIndex = link.Attrs().Index
 	}
-	routeFilter.Table = unix.RT_TABLE_LOCAL
-	return netlink.RouteListFiltered(family, routeFilter, netlink.RT_FILTER_TABLE|netlink.RT_FILTER_OIF)
+	return h.RouteListFiltered(family, routeFilter, filterFlags)
 }

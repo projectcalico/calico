@@ -361,11 +361,12 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		log.WithError(err).Error("Failed to write MTU file, pod MTU may not be properly set")
 	}
 
+	featureDetector := environment.NewFeatureDetector(config.FeatureDetectOverrides)
 	dp := &InternalDataplane{
 		toDataplane:      make(chan interface{}, msgPeekLimit),
 		fromDataplane:    make(chan interface{}, 100),
 		ruleRenderer:     ruleRenderer,
-		ifaceMonitor:     ifacemonitor.New(config.IfaceMonitorConfig, config.FatalErrorRestartCallback),
+		ifaceMonitor:     ifacemonitor.New(config.IfaceMonitorConfig, featureDetector, config.FatalErrorRestartCallback),
 		ifaceUpdates:     make(chan *ifaceUpdate, 100),
 		ifaceAddrUpdates: make(chan *ifaceAddrsUpdate, 100),
 		config:           config,
@@ -414,9 +415,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		iptablesNATOptions.ExtraCleanupRegexPattern += "|" + rules.HistoricInsertedNATRuleRegex
 	}
 
-	featureDetector := environment.NewFeatureDetector(config.FeatureDetectOverrides)
 	dataplaneFeatures := featureDetector.GetFeatures()
-
 	var iptablesLock sync.Locker
 	if dataplaneFeatures.RestoreSupportsLock {
 		log.Debug("Calico implementation of iptables lock disabled (because detected version of " +
