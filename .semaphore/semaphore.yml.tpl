@@ -7,7 +7,7 @@ execution_time_limit:
 agent:
   machine:
     type: e1-standard-2
-    os_image: ubuntu1804
+    os_image: ubuntu2004
 
 auto_cancel:
   running:
@@ -622,6 +622,19 @@ blocks:
     - name: "cni-plugin tests"
       commands:
       - ../.semaphore/run-and-monitor ci.log make ci
+
+- name: 'crypto'
+  run:
+    when: "false or change_in(['/lib.Makefile', '/crypto/'])"
+  dependencies: ["Prerequisites"]
+  task:
+    prologue:
+      commands:
+        - cd crypto
+    jobs:
+      - name: "crypto tests"
+        commands:
+          - ../.semaphore/run-and-monitor ci.log make ci
 
 - name: 'networking-calico'
   run:

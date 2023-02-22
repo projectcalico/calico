@@ -34,7 +34,7 @@ type FieldOffset struct {
 	Field  string
 }
 
-//noinspection GoUnusedConst
+// noinspection GoUnusedConst
 const (
 	// Registers.
 

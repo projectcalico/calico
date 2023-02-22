@@ -42,8 +42,8 @@ import (
 )
 
 // ResourceManager provides a useful function for each resource type.  This includes:
-//	-  Commands to assist with generation of table output format of resources
-//	-  Commands to manage resource instances through an un-typed interface.
+//   - Commands to assist with generation of table output format of resources
+//   - Commands to manage resource instances through an un-typed interface.
 type ResourceManager interface {
 	GetTableDefaultHeadings(wide bool) []string
 	GetTableTemplate(columns []string, printNamespace bool) (string, error)
@@ -74,13 +74,13 @@ type ResourceListActionCommand func(context.Context, client.Interface, ResourceO
 
 // ResourceHelper encapsulates details about a specific version of a specific resource:
 //
-// 	-  The type of resource (Kind and Version).  This includes the list types (even
-//	   though they are not strictly resources themselves).
-// 	-  The concrete resource struct for this version
-//	-  Template strings used to format output for each resource type.
-//	-  Functions to handle resource management actions (apply, create, update, delete, list).
-//         These functions are an untyped interface (generic Resource interfaces) that map through
-//         to the Calico clients typed interface.
+//   - The type of resource (Kind and Version).  This includes the list types (even
+//     though they are not strictly resources themselves).
+//   - The concrete resource struct for this version
+//   - Template strings used to format output for each resource type.
+//   - Functions to handle resource management actions (apply, create, update, delete, list).
+//     These functions are an untyped interface (generic Resource interfaces) that map through
+//     to the Calico clients typed interface.
 type resourceHelper struct {
 	resource          runtime.Object
 	listResource      ResourceListObject
@@ -406,8 +406,8 @@ func newResource(tm schema.GroupVersionKind) (runtime.Object, error) {
 }
 
 // Create the resource from the specified byte array encapsulating the resource.
-// -  The byte array may be JSON or YAML encoding of either a single resource or list of
-//    resources as defined by the API objects in /api.
+//   - The byte array may be JSON or YAML encoding of either a single resource or list of
+//     resources as defined by the API objects in /api.
 //
 // The returned Resource will either be a single resource document or a List of documents.
 // If the file does not contain any valid Resources this function returns an error.
@@ -479,9 +479,9 @@ func unmarshalSliceOfResources(tml []unstructured.Unstructured, b []byte) ([]run
 }
 
 // CreateResourcesFromFile creates the Resource from the specified file f.
-// 	-  The file format may be JSON or YAML encoding of either a single resource or list of
-// 	   resources as defined by the API objects in /api.
-// 	-  A filename of "-" means "Read from stdin".
+//   - The file format may be JSON or YAML encoding of either a single resource or list of
+//     resources as defined by the API objects in /api.
+//   - A filename of "-" means "Read from stdin".
 //
 // The returned Resource will either be a single Resource or a List containing zero or more
 // Resources.  If the file does not contain any valid Resources this function returns an error.
