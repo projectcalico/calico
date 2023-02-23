@@ -81,7 +81,7 @@ Check the status of each of these items daily in the week leading up to the rele
 
 When starting development on a new minor release, the first step is to create a release branch.
 
-**For patch releases, this section can be skipped and you can go directly to [Performing a release](#performing-a-release)**
+**For patch releases, this section can be skipped and you can go directly to [Performing a release](#4-performing-a-release)**
 
 ### Setting up the branch
 
