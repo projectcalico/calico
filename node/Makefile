@@ -258,7 +258,12 @@ $(WINDOWS_ARCHIVE_ROOT)/cni/calico-ipam.exe:
 		go build -buildvcs=false -v -o $@ -ldflags "$(LDFLAGS)" ./cmd/calico-ipam'
 
 $(TOOLS_MOUNTNS_BINARY):
-	$(call build_cgo_binary, ./cmd/mountns, $@)
+ifeq ($(CGO_ENABLED),1)
+	$(call build_cgo_boring_binary, ./cmd/calico-node/main.go, $@)
+else
+	$(call build_binary, ./cmd/calico-node/main.go, $@)
+endif
+
 
 ###############################################################################
 # Building the image
