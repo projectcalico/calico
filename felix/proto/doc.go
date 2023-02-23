@@ -17,30 +17,29 @@
 // on a given host, and the "dataplane driver", which renders that policy
 // into the dataplane.
 //
-//	              +-----------+
-//	              | Datastore |
-//	              +-----+-----+
-//	                    |
-//	                    | <etcd/k8s/etc API>
-//	                    |
-//	         +----------+---------------+
-//	         | libcalico-go "client"    |
-//	         +---------<go API>---------+
-//	         | Felix calculation engine |
-//	         +----------+---------------+
-//	                    |
-//	                    | <this API>
-//	                    |
-//	         +----------+---------------+
-//	         | Dataplane driver         |
-//	         +----------+---------------+
-//	                    |
-//	                    | <dataplane-specific API>
-//	                    |
-//	         ======= Dataplane ==========
+//	     +-----------+
+//	     | Datastore |
+//	     +-----+-----+
+//	           |
+//	           | <etcd/k8s/etc API>
+//	           |
+//	+----------+---------------+
+//	| libcalico-go "client"    |
+//	+---------<go API>---------+
+//	| Felix calculation engine |
+//	+----------+---------------+
+//	           |
+//	           | <this API>
+//	           |
+//	+----------+---------------+
+//	| Dataplane driver         |
+//	+----------+---------------+
+//	           |
+//	           | <dataplane-specific API>
+//	           |
+//	======= Dataplane ==========
 //
-//
-// Data Model Overview
+// # Data Model Overview
 //
 // The data model used on the dataplane driver API uses similar concepts to
 // the main "datastore" data model (such as host/workload endpoints, policies
@@ -105,7 +104,7 @@
 //	                                          | 10.0.0.53         ||
 //	                                          +-------------------+
 //
-// Protocol Overview
+// # Protocol Overview
 //
 // The protocol is defined as a series of protobuf messages.  This allows for
 // a dataplane driver to run either in-process or in another process.
@@ -131,7 +130,7 @@
 // The dataplane driver should send status updates for itself and
 // the endpoints that it is controlling.
 //
-// Handshake
+// # Handshake
 //
 // Before sending its stream of updates, the calculation engine loads and resolves
 // the configuration (from file, environment variables and the datastore) and
@@ -143,7 +142,7 @@
 // updates.  If the config is updated after the process is running, it will
 // trigger a process exit, so that the init system can restart it.
 //
-// Resync and updates
+// # Resync and updates
 //
 // After the initial ConfigUpdate message, the protocol is in resync state.
 // The calculation engine will send a stream of updates that merges the current state
@@ -166,7 +165,7 @@
 // performance, IP set updates are communicated as an initial IPSetUpdate,
 // followed by a sequence of IPSetDeltaUpdate messages.
 //
-// Graceful restart
+// # Graceful restart
 //
 // During the resync, the dataplane driver is likely to have an incomplete
 // picture of the desired state of the dataplane.  If it started programming
@@ -175,14 +174,14 @@
 // the dataplane driver should delay programming of potentially incorrect
 // state until after it receives the InSync message.
 //
-// Driver status updates
+// # Driver status updates
 //
 // The driver should send a ProcessStatusUpdate message every 10s to verify its
 // liveness.  That message flows through to the datastore and some orchestrators
 // (such as OpenStack) rely on the status messages to make scheduling
 // decisions.
 //
-// Endpoint status updates
+// # Endpoint status updates
 //
 // The driver should report the status for each endpoint that it is managing
 // and update the status when it changes.  The driver does not need to periodically
@@ -192,13 +191,13 @@
 // Once an endpoint is removed, the dataplane driver should send an
 // XXXEndpointStatusRemove message so the calculation engine can clear up its cache entry.
 //
-// Special cases
+// # Special cases
 //
 // Due to coalescing of updates in the calculation engine, the dataplane driver
 // may receive Remove messages for resources that it didn't previously receive an
 // Update for; it should ignore such Remove messages.
 //
-// Illustration
+// # Illustration
 //
 // The protocol flow is illustrated below.
 //
@@ -270,8 +269,7 @@
 //	      |------------------------------------------------------>|
 //	      |                                                       |
 //
-//
-// Example
+// # Example
 //
 // The sequence diagram below illustrates a scenario where the initial resync finds
 // one local endpoint, then a new endpoint is added, an IP set updated and the
@@ -369,7 +367,7 @@
 //	      |---------------------------------------------------------------------->|
 //	      |                                                                       |
 //
-// Wire format for external dataplane driver
+// # Wire format for external dataplane driver
 //
 // The protocol between the driver and main process is protobuf based.
 // On the wire, each message consists of an 8-byte, little-endian length,

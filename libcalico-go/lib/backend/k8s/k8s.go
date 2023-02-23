@@ -263,8 +263,9 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 }
 
 // deduplicate removes any duplicated values and returns a new slice, keeping the order unchanged
-// 	based on deduplicate([]string) []string found in k8s.io/client-go/tools/clientcmd/loader.go#634
-// 	Copyright 2014 The Kubernetes Authors.
+//
+//	based on deduplicate([]string) []string found in k8s.io/client-go/tools/clientcmd/loader.go#634
+//	Copyright 2014 The Kubernetes Authors.
 func deduplicate(s []string) []string {
 	encountered := map[string]struct{}{}
 	ret := make([]string, 0)
