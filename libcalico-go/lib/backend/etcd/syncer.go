@@ -73,11 +73,11 @@ func newSyncer(keysAPI etcd.KeysAPI, callbacks api.SyncerCallbacks) *etcdSyncer 
 // watch on our directory in etcd. It sends an "eventually consistent" stream of
 // events to its callback.
 //
-// Syncer architecture
+// # Syncer architecture
 //
 // The syncer's processing is divided into four goroutines:
 //
-// The merge goroutine
+// # The merge goroutine
 //
 // The merge goroutine receives updates about newly loaded snapshots (from the
 // snapshot reeading goroutine) and events (from the watcher goroutine) and
@@ -95,13 +95,13 @@ func newSyncer(keysAPI etcd.KeysAPI, callbacks api.SyncerCallbacks) *etcdSyncer 
 // sending the request via the merge goroutine makes for easier reasoning about
 // the thread safety.
 //
-// The snapshot reading goroutine
+// # The snapshot reading goroutine
 //
 // When requested by the merge goroutine, the snapshot-reading goroutine
 // reads a consistent point-in-time snapshot from etcd and streams it to the
 // merge goroutine.  Then it waits for the next request.
 //
-// The watcher goroutine
+// # The watcher goroutine
 //
 // The watcher goroutine polls etcd for new events.  A typical use of the
 // etcd API would load a snapshot first, then start polling from the snapshot
@@ -112,7 +112,7 @@ func newSyncer(keysAPI etcd.KeysAPI, callbacks api.SyncerCallbacks) *etcdSyncer 
 // current etcd index; then it triggers a snapshot read from the point it started
 // polling.
 //
-// The cluster ID poll goroutine
+// # The cluster ID poll goroutine
 //
 // This goroutine simply polls etcd for its cluster ID every few seconds and
 // kills the process if it changes.  This ensures that we recover if etcd is
