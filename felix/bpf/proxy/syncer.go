@@ -552,7 +552,7 @@ func (s *Syncer) apply(state DPSyncerState) error {
 		eps := make([]k8sp.Endpoint, 0, len(state.EpsMap[sname]))
 		for _, ep := range state.EpsMap[sname] {
 			zoneHints := ep.GetZoneHints()
-			if ep.IsReady() {
+			if ep.IsReady() || ep.IsTerminating() {
 				if ShouldAppendTopologyAwareEndpoint(nodeZone, hintsAnnotation, zoneHints) {
 					eps = append(eps, ep)
 				} else {
