@@ -4,7 +4,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//	http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -859,10 +859,10 @@ func (c *client) nodeAsBGPPeers(nodeName string, v4 bool, v6 bool, v3Peer *apiv3
 // OnUpdates is called from the BGP syncer to indicate that new updates are available from the
 // Calico datastore.
 // This client does the following:
-// -  stores the updates in its local cache
-// -  increments the revision number associated with each of the affected watch prefixes
-// -  wakes up the watchers so that they can check if any of the prefixes they are
-//    watching have been updated.
+//   - stores the updates in its local cache
+//   - increments the revision number associated with each of the affected watch prefixes
+//   - wakes up the watchers so that they can check if any of the prefixes they are
+//     watching have been updated.
 func (c *client) OnUpdates(updates []api.Update) {
 	c.syncerC <- updates
 }

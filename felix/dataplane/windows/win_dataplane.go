@@ -71,7 +71,7 @@ type Config struct {
 // datastore-facing part of Felix via the Send/RecvMessage methods, which operate on the
 // protobuf-defined API objects.
 //
-// Architecture
+// # Architecture
 //
 // The Windows dataplane driver is organised around a main event loop, which handles
 // update events from the datastore and dataplane.
@@ -88,7 +88,7 @@ type Config struct {
 // we refer back to the caches to recalculate the sets of rules which need to be sent to HNS. As the
 // HNS API surface is enhanced, we may be able to optimize and remove some or all of these caches.
 //
-// Requirements on the API
+// # Requirements on the API
 //
 // The dataplane does not do consistency checks on the incoming data. It expects to be told about
 // dependent resources before they are needed and for their lifetime to exceed that of the resources
