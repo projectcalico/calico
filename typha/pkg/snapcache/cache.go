@@ -98,7 +98,7 @@ func init() {
 // Keys and values are stored in their serialized form so that each request handling thread
 // has less work to do.
 //
-// Implementation
+// # Implementation
 //
 // To avoid the overhead of taking a complete copy of the state for each Breadcrumb, we use a B-tree,
 // which supports efficient, concurrent-read-safe snapshots.  The main thread of the SnapshotCache

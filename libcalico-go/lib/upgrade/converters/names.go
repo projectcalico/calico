@@ -89,9 +89,9 @@ func qualifiedName(orig, final string) string {
 }
 
 // Convert an IP to an IPv4 or IPv6 representation
-// - IPv4 addresses will be of the format 1-2-3-4
-// - IPv6 addresses will be of the format 00aa-00bb-0000-0000-0000-0000-0000-0000
-//   with all zeros expanded
+//   - IPv4 addresses will be of the format 1-2-3-4
+//   - IPv6 addresses will be of the format 00aa-00bb-0000-0000-0000-0000-0000-0000
+//     with all zeros expanded
 func convertIpToName(ip net.IP) string {
 	name := ""
 	if ip.To4() != nil {

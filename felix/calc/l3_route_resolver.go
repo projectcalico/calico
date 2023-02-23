@@ -876,21 +876,21 @@ func (r nodenameRoute) String() string {
 
 // RouteTrie stores the information that we've gleaned from various resources in a way that allows us to
 //
-// - Look up a CIDR and find all the information that we know about the containing CIDRs.
-//   Example: if we look up a workload /32 CIDR then we'll also find the IP pool that contains it.
-// - Deal with collisions where resources from different sources share the same CIDR.
-//   Example: an IP pool and an IPAM block can share the same CIDR.  When we do a lookup, we want to know
-//   about both the pool and the block.
+//   - Look up a CIDR and find all the information that we know about the containing CIDRs.
+//     Example: if we look up a workload /32 CIDR then we'll also find the IP pool that contains it.
+//   - Deal with collisions where resources from different sources share the same CIDR.
+//     Example: an IP pool and an IPAM block can share the same CIDR.  When we do a lookup, we want to know
+//     about both the pool and the block.
 //
 // More examples of nesting and collisions to be aware of:
 //
-// - Disabled IPAM pools that contain no blocks, which are used for tagging "external" IPs as safe destinations that
-//   don't require SNAT and for adding IP ranges for BIRD to export.
-// - IPAM blocks that are /32s so they overlap with the pod IP inside them (and potentially with a
-//   misconfigured host IP).
-// - Transient misconfigurations during a resync where we may see things out of order (for example, two hosts
-//   sharing an IP).
-// - In future, /32s that we've learned from workload endpoints that are not contained within IP pools.
+//   - Disabled IPAM pools that contain no blocks, which are used for tagging "external" IPs as safe destinations that
+//     don't require SNAT and for adding IP ranges for BIRD to export.
+//   - IPAM blocks that are /32s so they overlap with the pod IP inside them (and potentially with a
+//     misconfigured host IP).
+//   - Transient misconfigurations during a resync where we may see things out of order (for example, two hosts
+//     sharing an IP).
+//   - In future, /32s that we've learned from workload endpoints that are not contained within IP pools.
 //
 // Approach: for each CIDR in the trie, we store a RouteInfo struct, which has a disjoint nested struct for
 // tracking data from each source.  All updates are done via the updateCIDR method, which handles cleaning up

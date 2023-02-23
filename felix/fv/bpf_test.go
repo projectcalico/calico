@@ -65,10 +65,10 @@ import (
 )
 
 // We run with and without connection-time load balancing for a couple of reasons:
-// - We can only test the non-connection time NAT logic (and node ports) with it disabled.
-// - Since the connection time program applies to the whole host, the different felix nodes actually share the
-//   connection-time program.  This is a bit of a broken test but it's better than nothing since all felix nodes
-//   should be programming the same NAT mappings.
+//   - We can only test the non-connection time NAT logic (and node ports) with it disabled.
+//   - Since the connection time program applies to the whole host, the different felix nodes actually share the
+//     connection-time program.  This is a bit of a broken test but it's better than nothing since all felix nodes
+//     should be programming the same NAT mappings.
 var _ = describeBPFTests(withProto("tcp"), withConnTimeLoadBalancingEnabled(), withNonProtocolDependentTests())
 var _ = describeBPFTests(withProto("udp"), withConnTimeLoadBalancingEnabled())
 var _ = describeBPFTests(withProto("udp"), withConnTimeLoadBalancingEnabled(), withUDPUnConnected())
