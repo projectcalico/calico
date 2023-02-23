@@ -259,7 +259,7 @@ $(WINDOWS_ARCHIVE_ROOT)/cni/calico-ipam.exe:
 
 $(TOOLS_MOUNTNS_BINARY):
 ifeq ($(ARCH),amd64)
-	$(call build_cgo_boring_binary, ./cmd/mountns, $@)
+	$(call build_cgo_binary, ./cmd/mountns, $@)
 else ifeq ($(CGO_ENABLED),1)
 	$(DOCKER_GO_BUILD_CGO) sh -c '$(GIT_CONFIG_SSH) go build -buildvcs=false -v -o $@ $(BUILD_FLAGS)  ./cmd/mountns'
 else
