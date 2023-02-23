@@ -89,12 +89,7 @@ else
 endif
 
 $(BINDIR)/filecheck-$(ARCH): $(K8SAPISERVER_GO_FILES)
-ifeq ($(ARCH),amd64)
-	$(call build_cgo_boring_binary, $(PACKAGE_NAME)/cmd/filecheck, $@)
-else
-	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) \
-    		sh -c '$(GIT_CONFIG_SSH) go build -v -o $@ -ldflags "$(VERSION_FLAGS)" $(PACKAGE_NAME)/cmd/filecheck'
-endif
+	$(call build_binary, $(PACKAGE_NAME)/cmd/filecheck, $@)
 
 ###############################################################################
 # Building the image
