@@ -15,6 +15,7 @@
 package wireguard_test
 
 import (
+	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/logutils"
 	. "github.com/projectcalico/calico/felix/wireguard"
 
@@ -75,14 +76,14 @@ var (
 	ipnet_2    = cidr_2.ToIPNet()
 	ipnet_3    = cidr_3.ToIPNet()
 	ipnet_4    = cidr_4.ToIPNet()
-	//ipnet_5    = cidr_5.ToIPNet()
-	//ipnet_6    = cidr_6.ToIPNet()
+	// ipnet_5    = cidr_5.ToIPNet()
+	// ipnet_6    = cidr_6.ToIPNet()
 	routekey_cidr_local = fmt.Sprintf("%d-%s", tableIndex, cidr_local)
-	//routekey_1 = fmt.Sprintf("%d-%s", tableIndex, cidr_1)
-	//routekey_2 = fmt.Sprintf("%d-%s", tableIndex, cidr_2)
-	//routekey_3 = fmt.Sprintf("%d-%s", tableIndex, cidr_3)
+	// routekey_1 = fmt.Sprintf("%d-%s", tableIndex, cidr_1)
+	// routekey_2 = fmt.Sprintf("%d-%s", tableIndex, cidr_2)
+	// routekey_3 = fmt.Sprintf("%d-%s", tableIndex, cidr_3)
 	routekey_4 = fmt.Sprintf("%d-%s", tableIndex, cidr_4)
-	//routekey_5 = fmt.Sprintf("%d-%s", tableIndex, cidr_5)
+	// routekey_5 = fmt.Sprintf("%d-%s", tableIndex, cidr_5)
 	routekey_6 = fmt.Sprintf("%d-%s", tableIndex, cidr_6)
 
 	ipv6_int1 = ip.FromString("2001:db8::192:168:0:0")
@@ -106,14 +107,14 @@ var (
 	ipnetV6_2    = cidrV6_2.ToIPNet()
 	ipnetV6_3    = cidrV6_3.ToIPNet()
 	ipnetV6_4    = cidrV6_4.ToIPNet()
-	//ipnetV6_5    = cidrV6_5.ToIPNet()
-	//ipnetV6_6    = cidrV6_6.ToIPNet()
+	// ipnetV6_5    = cidrV6_5.ToIPNet()
+	// ipnetV6_6    = cidrV6_6.ToIPNet()
 	routekey_cidrV6_local = fmt.Sprintf("%d-%s", tableIndex, cidrV6_local)
-	//routekeyV6_1 = fmt.Sprintf("%d-%s", tableIndex, cidrV6_1)
-	//routekeyV6_2 = fmt.Sprintf("%d-%s", tableIndex, cidrV6_2)
-	//routekeyV6_3 = fmt.Sprintf("%d-%s", tableIndex, cidrV6_3)
+	// routekeyV6_1 = fmt.Sprintf("%d-%s", tableIndex, cidrV6_1)
+	// routekeyV6_2 = fmt.Sprintf("%d-%s", tableIndex, cidrV6_2)
+	// routekeyV6_3 = fmt.Sprintf("%d-%s", tableIndex, cidrV6_3)
 	routekeyV6_4 = fmt.Sprintf("%d-%s", tableIndex, cidrV6_4)
-	//routekeyV6_5 = fmt.Sprintf("%d-%s", tableIndex, cidr_5)
+	// routekeyV6_5 = fmt.Sprintf("%d-%s", tableIndex, cidr_5)
 	routekeyV6_6 = fmt.Sprintf("%d-%s", tableIndex, cidrV6_6)
 )
 
@@ -243,6 +244,11 @@ var _ = Describe("Enable wireguard", func() {
 				EncryptHostTraffic:  true,
 			}
 
+			mockFeatureDetector := &environment.FakeFeatureDetector{
+				Features: environment.Features{
+					KernelSideRouteFiltering: true,
+				},
+			}
 			if enableV4 {
 				wg = NewWithShims(
 					hostname,
@@ -258,6 +264,7 @@ var _ = Describe("Enable wireguard", func() {
 					s.status,
 					s.writeProcSys,
 					logutils.NewSummarizer("test loop v4"),
+					mockFeatureDetector,
 				)
 
 				rule = netlink.NewRule()
@@ -284,6 +291,7 @@ var _ = Describe("Enable wireguard", func() {
 					sV6.status,
 					sV6.writeProcSys,
 					logutils.NewSummarizer("test loop v6"),
+					mockFeatureDetector,
 				)
 
 				ruleV6 = netlink.NewRule()
@@ -3334,6 +3342,11 @@ var _ = Describe("Wireguard (disabled)", func() {
 			MTUV6:               1042,
 		}
 
+		mockFeatureDetector := &environment.FakeFeatureDetector{
+			Features: environment.Features{
+				KernelSideRouteFiltering: true,
+			},
+		}
 		wg = NewWithShims(
 			hostname,
 			config,
@@ -3348,6 +3361,7 @@ var _ = Describe("Wireguard (disabled)", func() {
 			s.status,
 			s.writeProcSys,
 			logutils.NewSummarizer("test loop"),
+			mockFeatureDetector,
 		)
 
 		wgV6 = NewWithShims(
@@ -3364,6 +3378,7 @@ var _ = Describe("Wireguard (disabled)", func() {
 			sV6.status,
 			sV6.writeProcSys,
 			logutils.NewSummarizer("test loop"),
+			mockFeatureDetector,
 		)
 	})
 
@@ -3641,6 +3656,11 @@ var _ = Describe("Wireguard (with no table index)", func() {
 		t = mocktime.New()
 		t.SetAutoIncrement(11 * time.Second)
 
+		mockFeatureDetector := &environment.FakeFeatureDetector{
+			Features: environment.Features{
+				KernelSideRouteFiltering: true,
+			},
+		}
 		wgFn = func(enabled bool, ipVersion uint8) {
 			NewWithShims(
 				hostname,
@@ -3668,6 +3688,7 @@ var _ = Describe("Wireguard (with no table index)", func() {
 				s.status,
 				s.writeProcSys,
 				logutils.NewSummarizer("test loop"),
+				mockFeatureDetector,
 			)
 		}
 	})
