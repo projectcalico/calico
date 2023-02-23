@@ -258,10 +258,12 @@ $(WINDOWS_ARCHIVE_ROOT)/cni/calico-ipam.exe:
 		go build -buildvcs=false -v -o $@ -ldflags "$(LDFLAGS)" ./cmd/calico-ipam'
 
 $(TOOLS_MOUNTNS_BINARY):
-ifeq ($(CGO_ENABLED),1)
-	$(call build_cgo_boring_binary, ./cmd/calico-node/main.go, $@)
+ifeq ($(ARCH),amd64)
+	$(call build_cgo_boring_binary, ./cmd/mountns, $@)
+else ifeq ($(CGO_ENABLED),1)
+	$(DOCKER_GO_BUILD_CGO) sh -c '$(GIT_CONFIG_SSH) go build -buildvcs=false -v -o $@ $(BUILD_FLAGS)  ./cmd/mountns'
 else
-	$(call build_binary, ./cmd/calico-node/main.go, $@)
+	$(call build_binary, ./cmd/mountns, $@)
 endif
 
 
