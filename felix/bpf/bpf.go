@@ -440,6 +440,7 @@ type perCpuMapEntry []struct {
 
 type ProgInfo struct {
 	Id     int    `json:"id"`
+	Name   string `json:"name"`
 	Type   string `json:"type"`
 	Tag    string `json:"tag"`
 	MapIds []int  `json:"map_ids"`
@@ -965,9 +966,72 @@ func (b *BPFLib) LoadXDPAuto(ifName string, mode XDPMode) error {
 	return b.LoadXDP(xdpFilename, ifName, mode)
 }
 
+func (b *BPFLib) getCalicoBPFProgIds() ([]int, error) {
+	// Get a list of ids of BPF programs that were loaded by Calico.
+	// Programs are identified by 'name', which is inherited from func name.
+	// For example, in bpf/bpf-apache/filter.c, a function name is 'prefilter'.
+	progName := "prefilter"
+
+	prog := "bpftool"
+	args := []string{
+		"--json",
+		"--pretty",
+		"prog",
+		"show",
+	}
+	printCommand(prog, args...)
+	output, err := exec.Command(prog, args...).CombinedOutput()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get list of BPF programs: %s\n%s", err, output)
+	}
+	var p []ProgInfo
+	err = json.Unmarshal(output, &p)
+	if err != nil {
+		return nil, fmt.Errorf("cannot parse json output: %v\n%s", err, output)
+	}
+
+	var ids = []int{}
+	for _, v := range p {
+		if v.Name == progName {
+			ids = append(ids, v.Id)
+		}
+	}
+
+	return ids, nil
+}
+
+func (b *BPFLib) verifyCalicoXDP(ifName string) (bool, error) {
+	ids, err := b.getCalicoBPFProgIds()
+	if err != nil {
+		return false, err
+	}
+	xdpID, err := b.GetXDPID(ifName)
+	if err != nil {
+		return false, err
+	}
+
+	for _, id := range ids {
+		if id == xdpID {
+			return true, nil
+		}
+	}
+
+	return false, fmt.Errorf("failed to detach XDP program from %s: interface has bogus, but not loaded by Calico.", ifName)
+}
+
 func (b *BPFLib) RemoveXDP(ifName string, mode XDPMode) error {
 	progName := getProgName(ifName)
 	progPath := filepath.Join(b.xdpDir, progName)
+
+	// Verify XDP program of interface is loaded by Calico.
+	ok, err := b.verifyCalicoXDP(ifName)
+	if err != nil {
+		return err
+	}
+	// XDP program is not loaded by Calico, simply skip it.
+	if !ok {
+		return nil
+	}
 
 	prog := "ip"
 	args := []string{
