@@ -43,8 +43,6 @@ To publish Calico, you need **the following permissions**:
 
 - You must be able to access binaries.projectcalico.org.
 
-- You must have admin access to projectcalico.docs.tigera.io site on netlify.
-
 - To publish the helm release to the repo, you’ll need an AWS helm profile:
   Add this to your ~/.aws/config
       ```
