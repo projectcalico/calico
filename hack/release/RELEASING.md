@@ -43,8 +43,6 @@ To publish Calico, you need **the following permissions**:
 
 - You must be able to access binaries.projectcalico.org.
 
-- You must have admin access to projectcalico.docs.tigera.io site on netlify.
-
 - To publish the helm release to the repo, you’ll need an AWS helm profile:
   Add this to your ~/.aws/config
       ```
@@ -69,7 +67,7 @@ for the main Calico repo.
 
 To verify that the code and GitHub are in the right state for releasing the chosen version.
 
-1. [Make sure the Milestone is empty](https://github.com/projectcalico/calico/pulls?q=is%3Aopen+is%3Apr+milestone%3A%22Calico+v3.21.3%22) either by merging PRs, or kicking them out of the Milestone.
+1. [Make sure the Milestone is empty](https://github.com/projectcalico/calico/milestones) either by merging PRs, or kicking them out of the Milestone.
 1. [Make sure that there are no pending cherry-pick PRs](https://github.com/projectcalico/calico/pulls?q=is%3Aopen+is%3Apr+label%3Acherry-pick-candidate+) relevant to the release.
 1. [Make sure there are no pending PRs which need docs](https://github.com/projectcalico/calico/pulls?q=is%3Apr+label%3Adocs-pr-required+is%3Aclosed+milestone%3A%22Calico+v3.21.3%22) for this release.
 1. [Make sure each PR with a release note is within a Milestone](https://github.com/projectcalico/calico/pulls?q=is%3Apr+label%3Arelease-note-required+is%3Aclosed+milestone%3A%22Calico+v3.21.3%22+).
@@ -81,7 +79,7 @@ Check the status of each of these items daily in the week leading up to the rele
 
 When starting development on a new minor release, the first step is to create a release branch.
 
-**For patch releases, this section can be skipped and you can go directly to [Performing a release](#performing-a-release)**
+**For patch releases, this section can be skipped and you can go directly to [Performing a release](#4-performing-a-release)**
 
 ### Setting up the branch
 
