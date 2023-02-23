@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2023 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,20 +27,17 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
-
-	cprometheus "github.com/projectcalico/calico/libcalico-go/lib/prometheus"
-	"github.com/projectcalico/calico/libcalico-go/lib/set"
+	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/calico/felix/conntrack"
+	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/ifacemonitor"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/netlinkshim"
 	"github.com/projectcalico/calico/felix/timeshim"
-)
-
-const (
-	maxConnFailures = 3
+	cprometheus "github.com/projectcalico/calico/libcalico-go/lib/prometheus"
+	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 var (
@@ -181,16 +178,9 @@ const (
 // not desire and adds those that we do. It skips over devices that we do not
 // manage not to interfare with other users of the route tables.
 type RouteTable struct {
-	logCxt *log.Entry
-
-	ipVersion      uint8
-	netlinkFamily  int
-	netlinkTimeout time.Duration
-	// numConsistentNetlinkFailures counts the number of repeated netlink connection failures.
-	// reset on successful connection.
-	numConsistentNetlinkFailures int
-	// Current netlink handle, or nil if we need to reconnect.
-	cachedNetlinkHandle netlinkshim.Interface
+	logCxt        *log.Entry
+	ipVersion     uint8
+	netlinkFamily int
 
 	// Interface update tracking.
 	reSync                bool
@@ -214,11 +204,12 @@ type RouteTable struct {
 	deviceRouteProtocol  netlink.RouteProtocol
 	removeExternalRoutes bool
 
+	nl *netlinkshim.HandleManager
+
 	// The route table index. A value of 0 defaults to the main table.
 	tableIndex int
 
 	// Testing shims, swapped with mock versions for UT
-	newNetlinkHandle  func() (netlinkshim.Interface, error)
 	addStaticARPEntry func(cidr ip.CIDR, destMAC net.HardwareAddr, ifaceName string) error
 	conntrack         conntrackIface
 	time              timeshim.Interface
@@ -254,6 +245,7 @@ func New(
 	removeExternalRoutes bool,
 	tableIndex int,
 	opReporter logutils.OpRecorder,
+	featureDetector environment.FeatureDetectorIface,
 	opts ...RouteTableOpt,
 ) *RouteTable {
 	return NewWithShims(
@@ -270,6 +262,7 @@ func New(
 		removeExternalRoutes,
 		tableIndex,
 		opReporter,
+		featureDetector,
 		opts...,
 	)
 }
@@ -289,6 +282,7 @@ func NewWithShims(
 	removeExternalRoutes bool,
 	tableIndex int,
 	opReporter logutils.OpRecorder,
+	featureDetector environment.FeatureDetectorIface,
 	opts ...RouteTableOpt,
 ) *RouteTable {
 	var filteredRegexes []string
@@ -300,6 +294,13 @@ func NewWithShims(
 		} else {
 			filteredRegexes = append(filteredRegexes, interfaceRegex)
 		}
+	}
+
+	if tableIndex == 0 {
+		// If we set route.Table to 0, what we actually get is a route in RT_TABLE_MAIN.  However,
+		// RouteListFiltered is much more efficient if we give it the "real" table number.
+		log.Debug("RouteTable created with unspecified table; defaulting to unix.RT_TABLE_MAIN.")
+		tableIndex = unix.RT_TABLE_MAIN
 	}
 
 	logCxt := log.WithFields(log.Fields{
@@ -343,8 +344,6 @@ func NewWithShims(
 		reSync:                         true,
 		ifaceNameToUpdateType:          map[string]updateType{},
 		pendingConntrackCleanups:       map[ip.Addr]chan struct{}{},
-		newNetlinkHandle:               newNetlinkHandle,
-		netlinkTimeout:                 netlinkTimeout,
 		addStaticARPEntry:              addStaticARPEntry,
 		conntrack:                      conntrack,
 		time:                           timeShim,
@@ -355,6 +354,12 @@ func NewWithShims(
 		tableIndex:                     tableIndex,
 		opReporter:                     opReporter,
 		livenessCallback:               func() {},
+		nl: netlinkshim.NewHandleManager(
+			family,
+			featureDetector,
+			netlinkshim.WithNewHandleOverride(newNetlinkHandle),
+			netlinkshim.WithSocketTimeout(netlinkTimeout),
+		),
 	}
 
 	for _, o := range opts {
@@ -486,46 +491,6 @@ func (r *RouteTable) QueueResync() {
 	r.reSync = true
 }
 
-func (r *RouteTable) getNetlink() (netlinkshim.Interface, error) {
-	if r.cachedNetlinkHandle == nil {
-		if r.numConsistentNetlinkFailures >= maxConnFailures {
-			log.WithField("numFailures", r.numConsistentNetlinkFailures).Panic(
-				"Repeatedly failed to connect to netlink.")
-		}
-		log.Debug("Trying to connect to netlink")
-		nlHandle, err := r.newNetlinkHandle()
-		if err != nil {
-			r.numConsistentNetlinkFailures++
-			log.WithError(err).WithField("numFailures", r.numConsistentNetlinkFailures).Error(
-				"Failed to connect to netlink")
-			return nil, err
-		}
-		err = nlHandle.SetSocketTimeout(r.netlinkTimeout)
-		if err != nil {
-			r.numConsistentNetlinkFailures++
-			log.WithError(err).WithField("numFailures", r.numConsistentNetlinkFailures).Error(
-				"Failed to set netlink timeout")
-			nlHandle.Delete()
-			return nil, err
-		}
-		r.cachedNetlinkHandle = nlHandle
-	}
-	if r.numConsistentNetlinkFailures > 0 {
-		log.WithField("numFailures", r.numConsistentNetlinkFailures).Info(
-			"Connected to netlink after previous failures.")
-		r.numConsistentNetlinkFailures = 0
-	}
-	return r.cachedNetlinkHandle, nil
-}
-
-func (r *RouteTable) closeNetlink() {
-	if r.cachedNetlinkHandle == nil {
-		return
-	}
-	r.cachedNetlinkHandle.Delete()
-	r.cachedNetlinkHandle = nil
-}
-
 func (r *RouteTable) Apply() error {
 	if r.reSync {
 		r.opReporter.RecordOperation(fmt.Sprint("resync-routes-v", r.ipVersion))
@@ -536,7 +501,7 @@ func (r *RouteTable) Apply() error {
 			// If there is an interface regex then we need to query links to find matching links for this route table
 			// instance and mark the interface for update.
 			log.Debug("Check interfaces matching regex")
-			nl, err := r.getNetlink()
+			nl, err := r.nl.Handle()
 			if err != nil {
 				r.logCxt.WithError(err).Error("Failed to connect to netlink, retrying...")
 				return ConnectFailed
@@ -544,7 +509,7 @@ func (r *RouteTable) Apply() error {
 			links, err := nl.LinkList()
 			if err != nil {
 				r.logCxt.WithError(err).Error("Failed to list interfaces, retrying...")
-				r.closeNetlink() // Defensive: force a netlink reconnection next time.
+				r.nl.CloseHandle() // Defensive: force a netlink reconnection next time.
 				return ListFailed
 			}
 			// Track the seen interfaces, and for each seen interface flag for full resync. No point in doing a full resync
@@ -721,7 +686,7 @@ func (r *RouteTable) syncRoutesForLink(ifaceName string, fullSync bool, firstTry
 	if err != nil {
 		return err
 	}
-	nl, err := r.getNetlink()
+	nl, err := r.nl.Handle()
 	if err != nil {
 		logCxt.Debug("Failed to connect to netlink")
 		return ConnectFailed
@@ -771,7 +736,7 @@ func (r *RouteTable) syncRoutesForLink(ifaceName string, fullSync bool, firstTry
 	}
 
 	if updatesFailed {
-		r.closeNetlink() // Defensive: force a netlink reconnection next time.
+		r.nl.CloseHandle() // Defensive: force a netlink reconnection next time.
 
 		// Recheck whether the interface exists so we don't produce spammy logs during
 		// interface removal.
@@ -973,7 +938,7 @@ func (r *RouteTable) fullResyncRoutesForLink(logCxt *log.Entry, ifaceName string
 
 func (r *RouteTable) readProgrammedRoutes(logCxt *log.Entry, ifaceName string) ([]netlink.Route, error) {
 	// Get the netlink client and the link attributes
-	nl, err := r.getNetlink()
+	nl, err := r.nl.Handle()
 	if err != nil {
 		logCxt.Debug("Failed to connect to netlink")
 		return nil, ConnectFailed
@@ -1004,14 +969,24 @@ func (r *RouteTable) readProgrammedRoutes(logCxt *log.Entry, ifaceName string) (
 		routeFilter.LinkIndex = 1
 	}
 	programmedRoutes, err := nl.RouteListFiltered(r.netlinkFamily, routeFilter, routeFilterFlags)
+	if errors.Is(err, unix.ENOENT) {
+		// In strict mode, get this if the routing table doesn't exist; it'll be auto-created
+		// when we add the first route so just treat it as empty.
+		log.WithError(err).Debug("Routing table doesn't exist (yet). Treating as empty.")
+		err = nil
+		programmedRoutes = nil
+	}
 	r.livenessCallback()
 	if err != nil {
 		// Filter the error so that we don't spam errors if the interface is being torn
 		// down.
 		filteredErr := r.filterErrorByIfaceState(ifaceName, err, ListFailed, false)
 		if filteredErr == ListFailed {
-			logCxt.WithError(err).Error("Error listing routes")
-			r.closeNetlink() // Defensive: force a netlink reconnection next time.
+			logCxt.WithError(err).WithFields(log.Fields{
+				"routeFilter": routeFilter,
+				"flags":       routeFilterFlags,
+			}).Error("Error listing routes")
+			r.nl.CloseHandle() // Defensive: force a netlink reconnection next time.
 		} else {
 			logCxt.WithError(err).Info("Failed to list routes; interface down/gone.")
 		}
@@ -1104,7 +1079,7 @@ func (r *RouteTable) syncL2RoutesForLink(ifaceName string) error {
 	}
 
 	if updatesFailed {
-		r.closeNetlink() // Defensive: force a netlink reconnection next time.
+		r.nl.CloseHandle() // Defensive: force a netlink reconnection next time.
 
 		// Recheck whether the interface exists so we don't produce spammy logs during
 		// interface removal.
@@ -1207,7 +1182,7 @@ func (r *RouteTable) filterErrorByIfaceState(ifaceName string, currentErr, defau
 	}
 	// If the current error wasn't clear, try to look up the interface to see if there's a
 	// well-understood reason for the failure.
-	nl, err := r.getNetlink()
+	nl, err := r.nl.Handle()
 	if err != nil {
 		log.WithError(err).WithFields(log.Fields{
 			"ifaceName":  ifaceName,
@@ -1255,7 +1230,7 @@ func (r *RouteTable) getLinkAttributes(ifaceName string) (*netlink.LinkAttrs, er
 	// Try to get the link.  This may fail if it's been deleted out from under us.
 	logCxt := r.logCxt.WithField("ifaceName", ifaceName)
 
-	nl, err := r.getNetlink()
+	nl, err := r.nl.Handle()
 	if err != nil {
 		r.logCxt.WithError(err).Error("Failed to connect to netlink, retrying...")
 		return nil, ConnectFailed
@@ -1268,7 +1243,7 @@ func (r *RouteTable) getLinkAttributes(ifaceName string) (*netlink.LinkAttrs, er
 		filteredErr := r.filterErrorByIfaceState(ifaceName, err, GetFailed, false)
 		if filteredErr == GetFailed {
 			logCxt.WithError(err).Error("Failed to get interface.")
-			r.closeNetlink() // Defensive: force a netlink reconnection next time.
+			r.nl.CloseHandle() // Defensive: force a netlink reconnection next time.
 		} else {
 			logCxt.WithError(err).Info("Failed to get interface; it's down/gone.")
 		}
