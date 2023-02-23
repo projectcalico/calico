@@ -99,36 +99,39 @@ func EmitFunctionName(filterName, direction, version string) (string, error) {
 // kind: BGPFilter
 // apiVersion: projectcalico.org/v3
 // metadata:
-//   name: test-bgpfilter
+//
+//	name: test-bgpfilter
+//
 // spec:
-//   exportV4:
-//     - action: Accept
-//       matchOperator: In
-//       cidr: 77.0.0.0/16
-//     - action: Reject
-//       matchOperator: In
-//       cidr: 77.1.0.0/16
-//   importV4:
-//     - action: Accept
-//       matchOperator: In
-//       cidr: 44.0.0.0/16
-//     - action: Reject
-//       matchOperator: In
-//       cidr: 44.1.0.0/16
+//
+//	exportV4:
+//	  - action: Accept
+//	    matchOperator: In
+//	    cidr: 77.0.0.0/16
+//	  - action: Reject
+//	    matchOperator: In
+//	    cidr: 77.1.0.0/16
+//	importV4:
+//	  - action: Accept
+//	    matchOperator: In
+//	    cidr: 44.0.0.0/16
+//	  - action: Reject
+//	    matchOperator: In
+//	    cidr: 44.1.0.0/16
 //
 // Would produce the following string array that can be easily output via BIRD config template:
 //
-// []string{
-//   "# v4 BGPFilter test-bgpfilter",
-//   "function 'bgp_test-bgpfilter_importFilterV4'() {",
-//   "  if ( net ~ 44.0.0.0/16 ) then { accept; }",
-//   "  if ( net ~ 44.1.0.0/16 ) then { reject; }",
-//   "}",
-//   "function 'bgp_test-bgpfilter_exportFilterV4'() {",
-//   "  if ( net ~ 77.0.0.0/16 ) then { accept; }",
-//   "  if ( net ~ 77.1.0.0/16 ) then { reject; }",
-//   "}",
-//  }
+//	[]string{
+//	  "# v4 BGPFilter test-bgpfilter",
+//	  "function 'bgp_test-bgpfilter_importFilterV4'() {",
+//	  "  if ( net ~ 44.0.0.0/16 ) then { accept; }",
+//	  "  if ( net ~ 44.1.0.0/16 ) then { reject; }",
+//	  "}",
+//	  "function 'bgp_test-bgpfilter_exportFilterV4'() {",
+//	  "  if ( net ~ 77.0.0.0/16 ) then { accept; }",
+//	  "  if ( net ~ 77.1.0.0/16 ) then { reject; }",
+//	  "}",
+//	 }
 func EmitBIRDBGPFilterFuncs(pairs memkv.KVPairs, version int) ([]string, error) {
 	lines := []string{}
 	var line string
