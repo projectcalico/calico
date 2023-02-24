@@ -4,7 +4,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//	http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -271,22 +271,22 @@ func DeleteIPAM(conf types.NetConf, args *skel.CmdArgs, logger *logrus.Entry) er
 // unmarshaling it into a struct.  The structure of the JSON is as follows; we support replacing usePodCidr in
 // either the "ipam" dict or its nested ranges section:
 //
-//    {
-//      "cniVersion": "%s",
-//      ...
-//      "ipam": {
-//        "type": "host-local",
-//        "subnet": "usePodCidr",
-//        "ranges": [
-//          [
-//             {
-//               "subnet": "usePodCidr"
-//             }
-//          ]
-//        ]
-//      }
-//      ...
-//    }
+//	{
+//	  "cniVersion": "%s",
+//	  ...
+//	  "ipam": {
+//	    "type": "host-local",
+//	    "subnet": "usePodCidr",
+//	    "ranges": [
+//	      [
+//	         {
+//	           "subnet": "usePodCidr"
+//	         }
+//	      ]
+//	    ]
+//	  }
+//	  ...
+//	}
 func ReplaceHostLocalIPAMPodCIDRs(logger *logrus.Entry, stdinData map[string]interface{}, getPodCIDRs func() (string, string, error)) error {
 	ipamData, ok := stdinData["ipam"].(map[string]interface{})
 	if !ok {
