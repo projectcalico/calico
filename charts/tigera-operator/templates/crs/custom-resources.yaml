@@ -16,6 +16,13 @@ spec:
 
 {{ end }}
 
+{{- if .Values.imageRegistry }}
+  registry: {{.Values.imageRegistry}}
+{{- end }}
+{{- if .Values.imagePath }}
+  imagePath: {{.Values.imagePath}}
+{{- end }}
+
 {{ if .Values.apiServer.enabled }}
 {{ $apiServerSpec := omit .Values.apiServer "enabled" }}
 ---

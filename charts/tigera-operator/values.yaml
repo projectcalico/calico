@@ -1,5 +1,8 @@
 imagePullSecrets: {}
 
+imageRegistry: ""
+imagePath: ""
+
 installation:
   enabled: true
   kubernetesProvider: ""

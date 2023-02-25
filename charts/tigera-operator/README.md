@@ -92,6 +92,12 @@ The default values.yaml should be suitable for most basic deployments.
 # Populates the `imagePullSecrets` property for all Pods controlled by the `Installation` resource.
 imagePullSecrets: {}
 
+# Install from a third-party (private) container repository
+imageRegistry: ""
+
+# Directory in the third-party (private) registry that contains images required
+imagePath: ""
+
 # Configures general installation parameters for Calico. Schema is based
 # on the operator.tigera.io/Installation API documented
 # here: https://projectcalico.docs.tigera.io/reference/installation/api#operator.tigera.io/v1.InstallationSpec
