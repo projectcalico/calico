@@ -20,7 +20,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"os"
 	"path/filepath"
@@ -82,7 +81,7 @@ func nodenameFromFile(filename string) string {
 	if filename == "" {
 		filename = "/var/lib/calico/nodename"
 	}
-	data, err := ioutil.ReadFile(filename)
+	data, err := os.ReadFile(filename)
 	if err != nil {
 		if os.IsNotExist(err) {
 			// File doesn't exist, return empty string.
@@ -101,7 +100,7 @@ func MTUFromFile(filename string) (int, error) {
 	if filename == "" {
 		filename = "/var/lib/calico/mtu"
 	}
-	data, err := ioutil.ReadFile(filename)
+	data, err := os.ReadFile(filename)
 	if err != nil {
 		if os.IsNotExist(err) {
 			// File doesn't exist, return zero.

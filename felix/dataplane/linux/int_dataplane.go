@@ -16,7 +16,6 @@ package intdataplane
 
 import (
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
 	"reflect"
@@ -995,7 +994,7 @@ func writeMTUFile(mtu int) error {
 	// Write the smallest MTU to disk so other components can rely on this calculation consistently.
 	filename := "/var/lib/calico/mtu"
 	log.Debugf("Writing %d to "+filename, mtu)
-	if err := ioutil.WriteFile(filename, []byte(fmt.Sprintf("%d", mtu)), 0644); err != nil {
+	if err := os.WriteFile(filename, []byte(fmt.Sprintf("%d", mtu)), 0644); err != nil {
 		log.WithError(err).Error("Unable to write to " + filename)
 		return err
 	}

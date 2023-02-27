@@ -24,7 +24,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log/syslog"
 	"os"
 	"os/exec"
@@ -411,7 +410,7 @@ func addCredentialFile(ninputs *creds.Credentials) error {
 	}
 
 	credsFileTmp := strings.Join([]string{configuration.NodeAgentManagementHomeDir, ninputs.UID + ".json"}, "/")
-	_ = ioutil.WriteFile(credsFileTmp, attrs, 0644)
+	_ = os.WriteFile(credsFileTmp, attrs, 0644)
 
 	// Move it to the right location now.
 	credsFile := strings.Join([]string{configuration.NodeAgentCredentialsHomeDir, ninputs.UID + ".json"}, "/")
@@ -434,7 +433,7 @@ func initConfiguration() {
 		return
 	}
 
-	bytes, err := ioutil.ReadFile(CONFIG_FILE)
+	bytes, err := os.ReadFile(CONFIG_FILE)
 	if err != nil {
 		logError("initConfiguration", "", fmt.Sprintf("Not able to read %s: %s\n", CONFIG_FILE, err.Error()), syslogOnlyTrue)
 		return
