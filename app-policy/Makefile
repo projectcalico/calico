@@ -18,6 +18,11 @@ SRC_FILES=$(shell find . -name '*.go' |grep -v vendor) $(GENERATED_FILES)
 DIKASTES_IMAGE ?=dikastes
 BUILD_IMAGES ?= $(DIKASTES_IMAGE)
 
+LDFLAGS = -X $(PACKAGE_NAME)/buildinfo.GitVersion=$(GIT_DESCRIPTION) \
+			-X $(PACKAGE_NAME)/buildinfo.BuildDate=$(DATE) \
+			-X $(PACKAGE_NAME)/buildinfo.GitRevision=$(GIT_COMMIT) \
+			-B 0x$(BUILD_ID)
+
 ##############################################################################
 # Download and include ../lib.Makefile before anything else
 #   Additions to EXTRA_DOCKER_ARGS need to happen before the include since
@@ -78,23 +83,14 @@ bin/dikastes-arm64: ARCH=arm64
 bin/dikastes-ppc64le: ARCH=ppc64le
 bin/dikastes-s390x: ARCH=s390x
 bin/dikastes-%: protobuf $(SRC_FILES)
-	mkdir -p bin
-	$(DOCKER_RUN_RO) \
-	  -e CGO_ENABLED=$(CGO_ENABLED) \
-	  -v $(CURDIR)/bin:/go/src/$(PACKAGE_NAME)/bin \
-	  $(CALICO_BUILD) go build $(BUILD_FLAGS) -ldflags "-X main.VERSION=$(GIT_VERSION)" -v -o bin/dikastes-$(ARCH) ./cmd/dikastes
+	$(call build_cgo_boring_binary, ./cmd/dikastes, $@)
 
 bin/healthz-amd64: ARCH=amd64
 bin/healthz-arm64: ARCH=arm64
 bin/healthz-ppc64le: ARCH=ppc64le
 bin/healthz-s390x: ARCH=s390x
 bin/healthz-%: protobuf $(SRC_FILES)
-	mkdir -p bin || true
-	-mkdir -p .go-pkg-cache $(GOMOD_CACHE) || true
-	$(DOCKER_RUN_RO) \
-	  -e CGO_ENABLED=$(CGO_ENABLED) \
-	  -v $(CURDIR)/bin:/go/src/$(PACKAGE_NAME)/bin \
-	  $(CALICO_BUILD) go build $(BUILD_FLAGS) -ldflags "-X main.VERSION=$(GIT_VERSION)" -v -o bin/healthz-$(ARCH) ./cmd/healthz
+	$(call build_static_cgo_boring_binary, ./cmd/healthz, $@)
 
 # We use gogofast for protobuf compilation.  Regular gogo is incompatible with
 # gRPC, since gRPC uses golang/protobuf for marshalling/unmarshalling in that
@@ -184,7 +180,7 @@ cd: image-all cd-common
 # Release
 ###############################################################################
 ## Produces a clean build of release artifacts at the specified version.
-release-build: .release-$(VERSION).created 
+release-build: .release-$(VERSION).created
 .release-$(VERSION).created:
 	$(MAKE) clean image-all RELEASE=true
 	$(MAKE) retag-build-images-with-registries IMAGETAG=$(VERSION) RELEASE=true

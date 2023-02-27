@@ -2,64 +2,66 @@
 // source: felixbackend.proto
 
 /*
-	Package proto is a generated protocol buffer package.
+Package proto is a generated protocol buffer package.
 
-	It is generated from these files:
-		felixbackend.proto
-		healthz.proto
+It is generated from these files:
 
-	It has these top-level messages:
-		SyncRequest
-		ToDataplane
-		FromDataplane
-		ConfigUpdate
-		InSync
-		IPSetUpdate
-		IPSetDeltaUpdate
-		IPSetRemove
-		ActiveProfileUpdate
-		ActiveProfileRemove
-		ProfileID
-		Profile
-		ActivePolicyUpdate
-		ActivePolicyRemove
-		PolicyID
-		Policy
-		Rule
-		ServiceAccountMatch
-		HTTPMatch
-		IcmpTypeAndCode
-		Protocol
-		PortRange
-		WorkloadEndpointID
-		WorkloadEndpointUpdate
-		WorkloadEndpoint
-		WorkloadEndpointRemove
-		HostEndpointID
-		HostEndpointUpdate
-		HostEndpoint
-		HostEndpointRemove
-		TierInfo
-		NatInfo
-		ProcessStatusUpdate
-		HostEndpointStatusUpdate
-		EndpointStatus
-		HostEndpointStatusRemove
-		WorkloadEndpointStatusUpdate
-		WorkloadEndpointStatusRemove
-		HostMetadataUpdate
-		HostMetadataRemove
-		IPAMPoolUpdate
-		IPAMPoolRemove
-		IPAMPool
-		ServiceAccountUpdate
-		ServiceAccountRemove
-		ServiceAccountID
-		NamespaceUpdate
-		NamespaceRemove
-		NamespaceID
-		HealthCheckRequest
-		HealthCheckResponse
+	felixbackend.proto
+	healthz.proto
+
+It has these top-level messages:
+
+	SyncRequest
+	ToDataplane
+	FromDataplane
+	ConfigUpdate
+	InSync
+	IPSetUpdate
+	IPSetDeltaUpdate
+	IPSetRemove
+	ActiveProfileUpdate
+	ActiveProfileRemove
+	ProfileID
+	Profile
+	ActivePolicyUpdate
+	ActivePolicyRemove
+	PolicyID
+	Policy
+	Rule
+	ServiceAccountMatch
+	HTTPMatch
+	IcmpTypeAndCode
+	Protocol
+	PortRange
+	WorkloadEndpointID
+	WorkloadEndpointUpdate
+	WorkloadEndpoint
+	WorkloadEndpointRemove
+	HostEndpointID
+	HostEndpointUpdate
+	HostEndpoint
+	HostEndpointRemove
+	TierInfo
+	NatInfo
+	ProcessStatusUpdate
+	HostEndpointStatusUpdate
+	EndpointStatus
+	HostEndpointStatusRemove
+	WorkloadEndpointStatusUpdate
+	WorkloadEndpointStatusRemove
+	HostMetadataUpdate
+	HostMetadataRemove
+	IPAMPoolUpdate
+	IPAMPoolRemove
+	IPAMPool
+	ServiceAccountUpdate
+	ServiceAccountRemove
+	ServiceAccountID
+	NamespaceUpdate
+	NamespaceRemove
+	NamespaceID
+	HealthCheckRequest
+	HealthCheckResponse
 */
 package proto
 
