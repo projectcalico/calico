@@ -60,18 +60,17 @@ func MetricsPortReachable(felix *infrastructure.Felix, bpf bool) bool {
 //
 // - When there is no policy or endpoint configuration, the port should be reachable.
 //
-// - When there is a local workload endpoint, the port should be reachable.  (Existence of workload
-//   endpoints should make no difference to reachability to ports on the host itself.)
+//   - When there is a local workload endpoint, the port should be reachable.  (Existence of workload
+//     endpoints should make no difference to reachability to ports on the host itself.)
 //
-// - When a host endpoint is configured for the host's interface (eth0) or for
-//   all-interfaces, but not yet any policy, the port should be unreachable.
+//   - When a host endpoint is configured for the host's interface (eth0) or for
+//     all-interfaces, but not yet any policy, the port should be unreachable.
 //
 //   - When pre-DNAT policy is then configured, to allow ingress to some other
 //     port, it should still be unreachable again.
 //
 //   - When pre-DNAT policy is then configured, to allow ingress to the metrics port, it should be
 //     reachable again.
-//
 var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ host-port tests", []apiconfig.DatastoreType{apiconfig.EtcdV3, apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
 	var (
 		bpfEnabled           = os.Getenv("FELIX_FV_ENABLE_BPF") == "true"
