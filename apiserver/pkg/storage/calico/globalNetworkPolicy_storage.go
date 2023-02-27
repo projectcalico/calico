@@ -10,7 +10,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/registry/generic/registry"
 	"k8s.io/apiserver/pkg/storage"
-	etcd "k8s.io/apiserver/pkg/storage/etcd3"
 	"k8s.io/apiserver/pkg/storage/storagebackend/factory"
 
 	aapi "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -55,7 +54,7 @@ func NewGlobalNetworkPolicyStorage(opts Options) (registry.DryRunnableStorage, f
 	dryRunnableStorage := registry.DryRunnableStorage{Storage: &resourceStore{
 		client:            c,
 		codec:             opts.RESTOptions.StorageConfig.Codec,
-		versioner:         etcd.APIObjectVersioner{},
+		versioner:         APIObjectVersioner{},
 		aapiType:          reflect.TypeOf(aapi.GlobalNetworkPolicy{}),
 		aapiListType:      reflect.TypeOf(aapi.GlobalNetworkPolicyList{}),
 		libCalicoType:     reflect.TypeOf(api.GlobalNetworkPolicy{}),
