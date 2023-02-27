@@ -16,7 +16,6 @@ package file_test
 
 import (
 	"errors"
-	"io/ioutil"
 	"os"
 	"strings"
 
@@ -37,61 +36,61 @@ var _ = Describe("File and directory iteration", func() {
 
 	BeforeEach(func() {
 		// Create a temporary file and directory with a couple of files for performing our tests
-		f, err := ioutil.TempFile(".", "testfile*")
+		f, err := os.CreateTemp(".", "testfile*")
 		Expect(err).NotTo(HaveOccurred())
 		fname = f.Name()
 		err = f.Close()
 		Expect(err).NotTo(HaveOccurred())
 
-		dname, err = ioutil.TempDir(".", "testdir*")
+		dname, err = os.MkdirTemp(".", "testdir*")
 		Expect(err).NotTo(HaveOccurred())
 
-		f, err = ioutil.TempFile(dname, "testfile*.yaml")
+		f, err = os.CreateTemp(dname, "testfile*.yaml")
 		Expect(err).NotTo(HaveOccurred())
 		dfname1 = f.Name()
 		err = f.Close()
 		Expect(err).NotTo(HaveOccurred())
 
-		f, err = ioutil.TempFile(dname, "testfile*.yml")
+		f, err = os.CreateTemp(dname, "testfile*.yml")
 		Expect(err).NotTo(HaveOccurred())
 		dfname2 = f.Name()
 		err = f.Close()
 		Expect(err).NotTo(HaveOccurred())
 
-		f, err = ioutil.TempFile(dname, "testfile*.json")
+		f, err = os.CreateTemp(dname, "testfile*.json")
 		Expect(err).NotTo(HaveOccurred())
 		dfname3 = f.Name()
 		err = f.Close()
 		Expect(err).NotTo(HaveOccurred())
 
-		f, err = ioutil.TempFile(dname, "testfile*.txt")
+		f, err = os.CreateTemp(dname, "testfile*.txt")
 		Expect(err).NotTo(HaveOccurred())
 		err = f.Close()
 		Expect(err).NotTo(HaveOccurred())
 
 		// Create a sub-directory.
-		dname2, err := ioutil.TempDir(dname, "subdir*")
+		dname2, err := os.MkdirTemp(dname, "subdir*")
 		Expect(err).NotTo(HaveOccurred())
 
-		f, err = ioutil.TempFile(dname2, "testfile*.yaml")
+		f, err = os.CreateTemp(dname2, "testfile*.yaml")
 		Expect(err).NotTo(HaveOccurred())
 		df2name1 = f.Name()
 		err = f.Close()
 		Expect(err).NotTo(HaveOccurred())
 
-		f, err = ioutil.TempFile(dname2, "testfile*.yml")
+		f, err = os.CreateTemp(dname2, "testfile*.yml")
 		Expect(err).NotTo(HaveOccurred())
 		df2name2 = f.Name()
 		err = f.Close()
 		Expect(err).NotTo(HaveOccurred())
 
-		f, err = ioutil.TempFile(dname2, "testfile*.json")
+		f, err = os.CreateTemp(dname2, "testfile*.json")
 		Expect(err).NotTo(HaveOccurred())
 		df2name3 = f.Name()
 		err = f.Close()
 		Expect(err).NotTo(HaveOccurred())
 
-		f, err = ioutil.TempFile(dname2, "testfile*.txt")
+		f, err = os.CreateTemp(dname2, "testfile*.txt")
 		Expect(err).NotTo(HaveOccurred())
 		err = f.Close()
 		Expect(err).NotTo(HaveOccurred())
