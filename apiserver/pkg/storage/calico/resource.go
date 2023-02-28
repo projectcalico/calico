@@ -347,20 +347,21 @@ func decode(
 //
 // s := /* implementation of Interface */
 // err := s.GuaranteedUpdate(
-//     "myKey", &MyType{}, true,
-//     func(input runtime.Object, res ResponseMeta) (runtime.Object, *uint64, error) {
-//       // Before each incovation of the user defined function, "input" is reset to
-//       // current contents for "myKey" in database.
-//       curr := input.(*MyType)  // Guaranteed to succeed.
 //
-//       // Make the modification
-//       curr.Counter++
+//	    "myKey", &MyType{}, true,
+//	    func(input runtime.Object, res ResponseMeta) (runtime.Object, *uint64, error) {
+//	      // Before each incovation of the user defined function, "input" is reset to
+//	      // current contents for "myKey" in database.
+//	      curr := input.(*MyType)  // Guaranteed to succeed.
 //
-//       // Return the modified object - return an error to stop iterating. Return
-//       // a uint64 to alter the TTL on the object, or nil to keep it the same value.
-//       return cur, nil, nil
-//    }
-// })
+//	      // Make the modification
+//	      curr.Counter++
+//
+//	      // Return the modified object - return an error to stop iterating. Return
+//	      // a uint64 to alter the TTL on the object, or nil to keep it the same value.
+//	      return cur, nil, nil
+//	   }
+//	})
 func (rs *resourceStore) GuaranteedUpdate(
 	ctx context.Context, key string, out runtime.Object, ignoreNotFound bool,
 	preconditions *storage.Preconditions, userUpdate storage.UpdateFunc, cachedExistingObject runtime.Object) error {
