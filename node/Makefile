@@ -573,7 +573,7 @@ $(WINDOWS_UPGRADE_INSTALL_ZIP): build-windows-archive $(WINDOWS_UPGRADE_DIST_STA
 $(WINDOWS_INSTALL_SCRIPT):
 	-mkdir -p dist
 	cp $(CURDIR)/windows-packaging/install-calico-windows.ps1 $@
-	sed -i s/\$\(\$CalicoVersion\)/$(GIT_VERSION)/g $@
+	sed -i s/VERSION/$(GIT_VERSION)/g $@
 
 # Copy the install-calico-windows.ps1 script to the temporary directory where we
 # build the windows upgrade zip file.
