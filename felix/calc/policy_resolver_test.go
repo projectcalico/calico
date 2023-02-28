@@ -55,9 +55,6 @@ func TestPolicyResolver_OnPolicyMatch(t *testing.T) {
 	pr.AllPolicies[polKey] = &pol
 	pr.OnPolicyMatch(polKey, endpointKey)
 
-	if !pr.SortRequired {
-		t.Error("Adding new policy - expected SortRequired to be true but it was false")
-	}
 	if !pr.PolicyIDToEndpointIDs.ContainsKey(polKey) {
 		t.Error("Adding new policy - expected PolicyIDToEndpointIDs to contain new policy but it does not")
 	}
@@ -68,12 +65,7 @@ func TestPolicyResolver_OnPolicyMatch(t *testing.T) {
 		t.Error("Adding new policy - expected DirtyEndpoints to contain endpoint for policy but it does not")
 	}
 
-	pr.SortRequired = false
 	pr.OnPolicyMatch(polKey, endpointKey)
-
-	if pr.SortRequired {
-		t.Error("Adding existing policy - expected SortRequired to be false but it was true")
-	}
 }
 
 func TestPolicyResolver_OnPolicyMatchStopped(t *testing.T) {
@@ -94,9 +86,6 @@ func TestPolicyResolver_OnPolicyMatchStopped(t *testing.T) {
 	pr.PolicySorter.UpdatePolicy(polKey, &pol)
 	pr.OnPolicyMatchStopped(polKey, endpointKey)
 
-	if !pr.SortRequired {
-		t.Error("Deleting existing policy - expected SortRequired to be true but it was false")
-	}
 	if pr.PolicyIDToEndpointIDs.ContainsKey(polKey) {
 		t.Error("Deleting existing policy - expected PolicyIDToEndpointIDs not to contain policy but it does")
 	}
@@ -107,10 +96,5 @@ func TestPolicyResolver_OnPolicyMatchStopped(t *testing.T) {
 		t.Error("Deleting existing policy - expected DirtyEndpoints to contain endpoint but it does not")
 	}
 
-	pr.SortRequired = false
 	pr.OnPolicyMatchStopped(polKey, endpointKey)
-
-	if pr.SortRequired {
-		t.Error("Deleting non-existent policy - expected SortRequired to be false but it was true")
-	}
 }

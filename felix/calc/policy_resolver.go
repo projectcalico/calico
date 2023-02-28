@@ -56,7 +56,6 @@ type PolicyResolver struct {
 	sortedTierData        *tierInfo
 	endpoints             map[model.Key]interface{}
 	DirtyEndpoints        set.Set[any] /* FIXME model.WorkloadEndpointKey or model.HostEndpointKey */
-	SortRequired          bool
 	PolicySorter          *PolicySorter
 	Callbacks             PolicyResolverCallbacks
 	InSync                bool
@@ -112,7 +111,6 @@ func (pr *PolicyResolver) OnUpdate(update api.Update) (filterOut bool) {
 			pr.markEndpointsMatchingPolicyDirty(key)
 		}
 	}
-	pr.SortRequired = pr.SortRequired || policiesDirty
 	pr.maybeFlush()
 	gaugeNumActivePolicies.Set(float64(pr.PolicyIDToEndpointIDs.Len()))
 	return
@@ -123,12 +121,6 @@ func (pr *PolicyResolver) OnDatamodelStatus(status api.SyncStatus) {
 		pr.InSync = true
 		pr.maybeFlush()
 	}
-}
-
-func (pr *PolicyResolver) refreshSortOrder() {
-	pr.sortedTierData = pr.PolicySorter.Sorted()
-	pr.SortRequired = false
-	log.Debugf("New sort order: %v", pr.sortedTierData)
 }
 
 func (pr *PolicyResolver) markEndpointsMatchingPolicyDirty(polKey model.PolicyKey) {
@@ -143,7 +135,7 @@ func (pr *PolicyResolver) OnPolicyMatch(policyKey model.PolicyKey, endpointKey i
 	// If it's first time the policy become matched, add it to the tier
 	if !pr.PolicySorter.HasPolicy(policyKey) {
 		policy := pr.AllPolicies[policyKey]
-		pr.SortRequired = pr.PolicySorter.UpdatePolicy(policyKey, policy)
+		pr.PolicySorter.UpdatePolicy(policyKey, policy)
 	}
 	pr.PolicyIDToEndpointIDs.Put(policyKey, endpointKey)
 	pr.EndpointIDToPolicyIDs.Put(endpointKey, policyKey)
@@ -158,7 +150,7 @@ func (pr *PolicyResolver) OnPolicyMatchStopped(policyKey model.PolicyKey, endpoi
 
 	// This policy is not active anymore, we no longer need to track it for sorting.
 	if !pr.PolicyIDToEndpointIDs.ContainsKey(policyKey) {
-		pr.SortRequired = pr.PolicySorter.UpdatePolicy(policyKey, nil)
+		pr.PolicySorter.UpdatePolicy(policyKey, nil)
 	}
 
 	pr.DirtyEndpoints.Add(endpointKey)
@@ -170,9 +162,7 @@ func (pr *PolicyResolver) maybeFlush() {
 		log.Debugf("Not in sync, skipping flush")
 		return
 	}
-	if pr.SortRequired {
-		pr.refreshSortOrder()
-	}
+	pr.sortedTierData = pr.PolicySorter.Tier
 	pr.DirtyEndpoints.Iter(pr.sendEndpointUpdate)
 	pr.DirtyEndpoints = set.NewBoxed[any]()
 }

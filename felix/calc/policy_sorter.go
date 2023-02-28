@@ -16,10 +16,9 @@ package calc
 
 import (
 	"fmt"
-	"sort"
 	"strings"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/google/btree"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -33,8 +32,9 @@ type PolicySorter struct {
 func NewPolicySorter() *PolicySorter {
 	return &PolicySorter{
 		Tier: &tierInfo{
-			Name:     "default",
-			Policies: make(map[model.PolicyKey]*model.Policy),
+			Name:           "default",
+			Policies:       make(map[model.PolicyKey]*model.Policy),
+			SortedPolicies: btree.NewG[PolKV](2, PolKVLess),
 		},
 	}
 }
@@ -81,28 +81,31 @@ func (poc *PolicySorter) UpdatePolicy(key model.PolicyKey, newPolicy *model.Poli
 			!policyTypesEqual(oldPolicy, newPolicy) {
 			dirty = true
 		}
+		if oldPolicy != nil {
+			// Need to do a delete prior to ReplaceOrInsert because we don't insert strictly based on key but rather a
+			// combination of key + value so if for instance we add PolKV{k1, v1} then add PolKV{k1, v2} we'll simply have
+			// both KVs in the tree instead of only {k1, v2} like we want. By deleting first we guarantee that only the
+			// newest value remains in the tree.
+			poc.Tier.SortedPolicies.Delete(PolKV{Key: key, Value: oldPolicy})
+		}
+		poc.Tier.SortedPolicies.ReplaceOrInsert(PolKV{Key: key, Value: newPolicy})
 		poc.Tier.Policies[key] = newPolicy
 	} else {
 		if oldPolicy != nil {
+			poc.Tier.SortedPolicies.Delete(PolKV{Key: key, Value: oldPolicy})
 			delete(poc.Tier.Policies, key)
 			dirty = true
 		}
 	}
-	return
-}
-
-func (poc *PolicySorter) Sorted() *tierInfo {
-	tierInfo := poc.Tier
-	tierInfo.OrderedPolicies = make([]PolKV, 0, len(tierInfo.Policies))
-	for k, v := range tierInfo.Policies {
-		tierInfo.OrderedPolicies = append(tierInfo.OrderedPolicies, PolKV{Key: k, Value: v})
+	if dirty {
+		poc.Tier.OrderedPolicies = make([]PolKV, 0, len(poc.Tier.Policies))
+		poc.Tier.SortedPolicies.Ascend(func(kv PolKV) bool {
+			poc.Tier.OrderedPolicies = append(poc.Tier.OrderedPolicies, kv)
+			return true
+		})
 	}
-	// Note: using explicit Debugf() here rather than WithFields(); we want the []PolKV slice
-	// to be stringified with %v rather than %#v (as used by WithField()).
-	log.Debugf("Order before sorting: %v", tierInfo.OrderedPolicies)
-	sort.Sort(PolicyByOrder(tierInfo.OrderedPolicies))
-	log.Debugf("Order after sorting: %v", tierInfo.OrderedPolicies)
-	return tierInfo
+
+	return
 }
 
 // Note: PolKV is really internal to the calc package.  It is named with an initial capital so that
@@ -157,30 +160,26 @@ func (p *PolKV) GovernsEgress() bool {
 	return *p.egress
 }
 
-type PolicyByOrder []PolKV
-
-func (a PolicyByOrder) Len() int      { return len(a) }
-func (a PolicyByOrder) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
-func (a PolicyByOrder) Less(i, j int) bool {
-	bothNil := a[i].Value.Order == nil && a[j].Value.Order == nil
-	bothSet := a[i].Value.Order != nil && a[j].Value.Order != nil
-	ordersEqual := bothNil || bothSet && (*a[i].Value.Order == *a[j].Value.Order)
+func PolKVLess(i, j PolKV) bool {
+	bothNil := i.Value.Order == nil && j.Value.Order == nil
+	bothSet := i.Value.Order != nil && j.Value.Order != nil
+	ordersEqual := bothNil || bothSet && (*i.Value.Order == *j.Value.Order)
 
 	if ordersEqual {
 		// Use name as tie-break.
-		result := a[i].Key.Name < a[j].Key.Name
+		result := i.Key.Name < j.Key.Name
 		return result
 	}
 
 	// nil order maps to "infinity"
-	if a[i].Value.Order == nil {
+	if i.Value.Order == nil {
 		return false
-	} else if a[j].Value.Order == nil {
+	} else if j.Value.Order == nil {
 		return true
 	}
 
 	// Otherwise, use numeric comparison.
-	return *a[i].Value.Order < *a[j].Value.Order
+	return *i.Value.Order < *j.Value.Order
 }
 
 type tierInfo struct {
@@ -188,6 +187,7 @@ type tierInfo struct {
 	Valid           bool
 	Order           *float64
 	Policies        map[model.PolicyKey]*model.Policy
+	SortedPolicies  *btree.BTreeG[PolKV]
 	OrderedPolicies []PolKV
 }
 
