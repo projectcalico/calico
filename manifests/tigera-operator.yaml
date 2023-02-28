@@ -5,28 +5,6 @@ metadata:
   labels:
     name: tigera-operator
 ---
-# Source: crds/calico/_.yaml
-apiVersion: apiextensions.k8s.io/v1
-kind: CustomResourceDefinition
-metadata:
-  annotations:
-    controller-gen.kubebuilder.io/version: (devel)
-  creationTimestamp: null
-spec:
-  group: ""
-  names:
-    kind: ""
-    plural: ""
-  scope: ""
-  versions: null
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: null
-  storedVersions: null
-
----
 # Source: crds/calico/crd.projectcalico.org_bgpconfigurations.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
