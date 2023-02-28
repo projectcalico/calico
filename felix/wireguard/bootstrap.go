@@ -109,17 +109,17 @@ const (
 // BootstrapAndFilterTyphaAddresses performs wireguard bootstrap processing and filtering of typha addresses. This is
 // primarily to handle the fact that Host Encryption can cause routing asymmetry due to timing windows. This results in
 // felixes being locked out from typhas.
-// - If wireguard is disabled then just remove all wireguard configuration from the node (kernel and published key).
-//   We do this whether host encryption is enabled or not.
+//   - If wireguard is disabled then just remove all wireguard configuration from the node (kernel and published key).
+//     We do this whether host encryption is enabled or not.
 //
 // For host encryption only:
-// - If the published key and the kernel key don't match remove all wireguard configuration from the node.
-// - If the kernel has no programmed peers then remove all wireguard configuration from the node (since we can't
-//   be talking over wireguard yet anyways).
-// -  If a set of typha endpoints has been supplied, filter them to exclude endpoints that we know we cannot reach
-//    due to asymmetric routing.  This will be the case if this node currently has a published wireguard key and:
-//    - Typha node does not have a public key, but the typha IP address programmed in the kernel as a wireguard peer.
-//    - Typha node has a public key but the key does not match any of the peer keys programmed in the kernel.
+//   - If the published key and the kernel key don't match remove all wireguard configuration from the node.
+//   - If the kernel has no programmed peers then remove all wireguard configuration from the node (since we can't
+//     be talking over wireguard yet anyways).
+//   - If a set of typha endpoints has been supplied, filter them to exclude endpoints that we know we cannot reach
+//     due to asymmetric routing.  This will be the case if this node currently has a published wireguard key and:
+//   - Typha node does not have a public key, but the typha IP address programmed in the kernel as a wireguard peer.
+//   - Typha node has a public key but the key does not match any of the peer keys programmed in the kernel.
 //
 // -----
 //
@@ -130,7 +130,7 @@ func BootstrapAndFilterTyphaAddresses(
 	configParams *config.Config,
 	getNetlinkHandle func() (netlinkshim.Interface, error),
 	getWireguardHandle func() (netlinkshim.Wireguard, error),
-	calicoClient clientv3.Interface,
+	calicoClient clientv3.NodesClient,
 	typhas []discovery.Typha,
 ) ([]discovery.Typha, error) {
 	var (
@@ -181,7 +181,7 @@ func bootstrapAndFilterTyphaAddressesForIPVersion(
 	configParams *config.Config,
 	getNetlinkHandle func() (netlinkshim.Interface, error),
 	getWireguardHandle func() (netlinkshim.Wireguard, error),
-	calicoClient clientv3.Interface,
+	calicoClient clientv3.NodesClient,
 	typhas []discovery.Typha,
 	ipVersion uint8,
 ) ([]discovery.Typha, error) {
@@ -299,7 +299,7 @@ func RemoveWireguardConditionallyOnBootstrap(
 func removeWireguardConditionallyOnBootstrapForIPVersion(
 	configParams *config.Config,
 	getNetlinkHandle func() (netlinkshim.Interface, error),
-	calicoClient clientv3.Interface,
+	calicoClient clientv3.NodesClient,
 	ipVersion uint8,
 ) error {
 	logCtx := log.WithField("ipVersion", ipVersion)
@@ -325,7 +325,7 @@ func removeWireguardConditionallyOnBootstrapForIPVersion(
 // to succeed. Any errors encountered are swallowed and the associated peer is just included.
 func filterTyphaEndpoints(
 	configParams *config.Config,
-	calicoClient clientv3.Interface,
+	calicoClient clientv3.NodesClient,
 	typhas []discovery.Typha,
 	peers set.Set[string],
 	ipVersion uint8,
@@ -393,7 +393,7 @@ func filterTyphaEndpoints(
 func removeWireguardForBootstrapping(
 	configParams *config.Config,
 	getNetlinkHandle func() (netlinkshim.Interface, error),
-	calicoClient clientv3.Interface,
+	calicoClient clientv3.NodesClient,
 	ipVersion uint8,
 ) error {
 	var errors []error
@@ -412,7 +412,7 @@ func removeWireguardForBootstrapping(
 }
 
 // getPublicKeyForNode returns the configured wireguard public key for a given node.
-func getPublicKeyForNode(logCtx *log.Entry, nodeName string, calicoClient clientv3.Interface, maxRetries int, ipVersion uint8) (string, error) {
+func getPublicKeyForNode(logCtx *log.Entry, nodeName string, calicoClient clientv3.NodesClient, maxRetries int, ipVersion uint8) (string, error) {
 	expBackoffMgr := wait.NewExponentialBackoffManager(
 		bootstrapBackoffDuration,
 		bootstrapBackoffMax,
@@ -556,7 +556,7 @@ func removeWireguardDevice(
 // removeWireguardPublicKey removes the public key from the node.
 func removeWireguardPublicKey(
 	nodeName string,
-	calicoClient clientv3.Interface,
+	calicoClient clientv3.NodesClient,
 	ipVersion uint8,
 ) error {
 	logCtx := log.WithFields(log.Fields{

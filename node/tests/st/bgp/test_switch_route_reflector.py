@@ -73,11 +73,11 @@ class TestSwitchRouteReflector(TestBase):
             t1 = ThreadPool(1)
             ping1_result = t1.apply_async(workload_host1.check_can_ping_continuously,
                                          (workload_host2.ip,),
-                                         {'timeout':60})
+                                         {'timeout':60, 'retries': 3})
             t2 = ThreadPool(1)
             ping2_result = t2.apply_async(workload_host2.check_can_ping_continuously,
                                          (workload_host1.ip,),
-                                         {'timeout':60})
+                                         {'timeout':60, 'retries': 3})
 
             # Make host3 act as a route reflector.
             node3 = host3.calicoctl("get Node %s -o yaml" % host3.get_hostname())

@@ -92,6 +92,7 @@ var (
 	routeSource           = regexp.MustCompile("^(WorkloadIPs|CalicoIPAM)$")
 	dropAcceptReturnRegex = regexp.MustCompile("^(Drop|Accept|Return)$")
 	acceptReturnRegex     = regexp.MustCompile("^(Accept|Return)$")
+	dropRejectRegex       = regexp.MustCompile("^(Drop|Reject)$")
 	ipTypeRegex           = regexp.MustCompile("^(CalicoNodeIP|InternalIP|ExternalIP)$")
 	standardCommunity     = regexp.MustCompile(`^(\d+):(\d+)$`)
 	largeCommunity        = regexp.MustCompile(`^(\d+):(\d+):(\d+)$`)
@@ -109,6 +110,9 @@ var (
 	globalSelectorOnly    = fmt.Sprintf("%v cannot be combined with other selectors", globalSelector)
 
 	SourceAddressRegex = regexp.MustCompile("^(UseNodeIP|None)$")
+
+	filterActionRegex  = regexp.MustCompile("^(Accept|Reject)$")
+	matchOperatorRegex = regexp.MustCompile("^(Equal|In|NotEqual|NotIn)$")
 
 	ipv4LinkLocalNet = net.IPNet{
 		IP:   net.ParseIP("169.254.0.0"),
@@ -170,6 +174,7 @@ func init() {
 	registerFieldValidator("bpfServiceMode", validateBPFServiceMode)
 	registerFieldValidator("dropAcceptReturn", validateFelixEtoHAction)
 	registerFieldValidator("acceptReturn", validateAcceptReturn)
+	registerFieldValidator("dropReject", validateDropReject)
 	registerFieldValidator("portName", validatePortName)
 	registerFieldValidator("mustBeNil", validateMustBeNil)
 	registerFieldValidator("mustBeFalse", validateMustBeFalse)
@@ -185,6 +190,15 @@ func init() {
 	registerFieldValidator("routeSource", validateRouteSource)
 	registerFieldValidator("wireguardPublicKey", validateWireguardPublicKey)
 	registerFieldValidator("IP:port", validateIPPort)
+	registerFieldValidator("reachableBy", validateReachableByField)
+
+	// Register filter action and match operator validators (used in BGPFilter)
+	registerFieldValidator("filterAction", RegexValidator("FilterAction", filterActionRegex))
+	registerFieldValidator("matchOperator", RegexValidator("MatchOperator", matchOperatorRegex))
+
+	// Register filter action and match operator validators (used in BGPFilter)
+	registerFieldValidator("filterAction", RegexValidator("FilterAction", filterActionRegex))
+	registerFieldValidator("matchOperator", RegexValidator("MatchOperator", matchOperatorRegex))
 
 	// Register network validators (i.e. validating a correctly masked CIDR).  Also
 	// accepts an IP address without a mask (assumes a full mask).
@@ -422,6 +436,12 @@ func validateAcceptReturn(fl validator.FieldLevel) bool {
 	return acceptReturnRegex.MatchString(s)
 }
 
+func validateDropReject(fl validator.FieldLevel) bool {
+	s := fl.Field().String()
+	log.Debugf("Validate Drop Reject Action: %s", s)
+	return dropRejectRegex.MatchString(s)
+}
+
 func validateSelector(fl validator.FieldLevel) bool {
 	s := fl.Field().String()
 	log.Debugf("Validate selector: %s", s)
@@ -602,38 +622,45 @@ func validateKeyValueList(fl validator.FieldLevel) bool {
 // validateIPPort validates the IP and Port given in either <IPv4>:<port> or [<IPv6>]:<port> or <IP> format
 func validateIPPort(fl validator.FieldLevel) bool {
 	ipPort := fl.Field().String()
+	_, _, ok := processIPPort(ipPort)
+	return ok
+}
+
+// processIPPort processes the IP and Port given in either <IPv4>:<port> or [<IPv6>]:<port> or <IP> format
+// and return the IP, port and a bool if the format is as expected
+func processIPPort(ipPort string) (string, int, bool) {
 	if ipPort != "" {
 		var ipStr, portStr string
 		var err error
+		var port uint64
 		ipStr = ipPort
 		// If PeerIP has both IP and port, validate both
 		if IPv4PortFormat.MatchString(ipPort) || IPv6PortFormat.MatchString(ipPort) {
 			ipStr, portStr, err = net.SplitHostPort(ipPort)
 			if err != nil {
 				log.Debugf("PeerIP value is invalid, it should either be \"<IP>\" or \"<IPv4>:<port>\" or \"[<IPv6>]:<port>\".")
-				return false
+				return "", 0, false
 			}
-			var port uint64
 			port, err = strconv.ParseUint(portStr, 10, 16)
 			if err != nil {
 				log.Debugf("PeerIP value has invalid port.")
-				return false
+				return "", 0, false
 			}
 			if port < 1 {
 				log.Debugf("PeerIP value has invalid port.")
-				return false
+				return "", 0, false
 			}
 		}
 
 		parsedIP := net.ParseIP(ipStr)
 		if parsedIP == nil {
 			log.Debugf("PeerIP value is invalid.")
-			return false
+			return "", 0, false
 		}
 
-		return true
+		return ipStr, int(port), true
 	}
-	return false
+	return "", 0, false
 }
 
 // validateHTTPMethods checks if the HTTP method match clauses are valid.
@@ -1200,6 +1227,51 @@ func validateBGPPeerSpec(structLevel validator.StructLevel) {
 		structLevel.ReportError(reflect.ValueOf(ps.ASNumber), "ASNumber", "",
 			reason("ASNumber field must be empty when PeerSelector is specified"), "")
 	}
+	ok, msg := validateReachableBy(ps.ReachableBy, ps.PeerIP)
+	if !ok {
+		structLevel.ReportError(reflect.ValueOf(ps.ReachableBy), "ReachableBy", "",
+			reason(msg), "")
+	}
+}
+
+func validateReachableBy(reachableBy, peerIP string) (bool, string) {
+	if reachableBy == "" {
+		return true, ""
+	}
+	if reachableBy != "" && peerIP == "" {
+		return false, "ReachablyBy field must be empty when PeerIP is empty"
+	}
+	reachableByAddr := cnet.ParseIP(reachableBy)
+	if reachableByAddr == nil {
+		return false, "ReachableBy is invalid address"
+	}
+	peerAddrStr, _, ok := processIPPort(peerIP)
+	if !ok {
+		return false, "PeerIP is invalid address"
+	}
+	peerAddr := cnet.ParseIP(peerAddrStr)
+	if peerAddr == nil {
+		return false, "PeerIP is invalid IP address"
+	}
+	if reachableByAddr.Version() != peerAddr.Version() {
+		return false, "ReachableBy and PeerIP address family mismatched"
+	}
+	return true, ""
+}
+
+// validateReachableByField validates that reachableBy value, the address of the
+// gateway the BGP peer is connected to, is a correct address
+func validateReachableByField(fl validator.FieldLevel) bool {
+	reachableBy := fl.Field().String()
+
+	if reachableBy != "" {
+		reachableByAddr := cnet.ParseIP(reachableBy)
+		if reachableByAddr == nil {
+			log.Debugf("ReachableBy value is invalid address")
+			return false
+		}
+	}
+	return true
 }
 
 func validateEndpointPort(structLevel validator.StructLevel) {

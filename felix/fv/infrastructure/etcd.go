@@ -15,6 +15,8 @@
 package infrastructure
 
 import (
+	"fmt"
+
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/fv/containers"
@@ -22,17 +24,25 @@ import (
 )
 
 func RunEtcd() *containers.Container {
-	log.Info("Starting etcd")
-	return containers.Run("etcd",
-		containers.RunOpts{
-			AutoRemove: true,
-			StopSignal: "SIGKILL",
-		},
+	args := []string{
 		"--privileged", // So that we can add routes inside the etcd container,
 		// when using the etcd container to model an external client connecting
 		// into the cluster.
 		utils.Config.EtcdImage,
 		"etcd",
 		"--advertise-client-urls", "http://127.0.0.1:2379",
-		"--listen-client-urls", "http://0.0.0.0:2379")
+		"--listen-client-urls", "http://0.0.0.0:2379"}
+	arch := utils.GetSysArch()
+	if arch != "amd64" {
+		args = append([]string{"-e", fmt.Sprintf("ETCD_UNSUPPORTED_ARCH=%s", arch)},
+			args...)
+	}
+
+	log.Info("Starting etcd")
+	return containers.Run("etcd",
+		containers.RunOpts{
+			AutoRemove: true,
+			StopSignal: "SIGKILL",
+		},
+		args...)
 }

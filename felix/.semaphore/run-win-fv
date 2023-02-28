@@ -16,7 +16,7 @@
 
 set -ex
 
-FV_DIR="/home/semaphore/process/testing/winfv"
+FV_DIR="/home/semaphore/calico/process/testing/winfv"
 
 pushd ${FV_DIR}
 # Prepare local files

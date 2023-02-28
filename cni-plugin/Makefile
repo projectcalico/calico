@@ -18,6 +18,8 @@ BUILD_IMAGES   ?=$(CNI_PLUGIN_IMAGE)
 include ../lib.Makefile
 
 ###############################################################################
+LDFLAGS = -X main.VERSION=$(GIT_VERSION)
+
 SRC_FILES=$(shell find pkg cmd internal -name '*.go')
 TEST_SRC_FILES=$(shell find tests -name '*.go')
 WINFV_SRCFILES=$(shell find win_tests -name '*.go')
@@ -25,8 +27,10 @@ WINFV_SRCFILES=$(shell find win_tests -name '*.go')
 # fail if unable to download
 CURL=curl -C - -sSf
 
-CNI_VERSION=v1.1.1
-FLANNEL_VERSION=v1.0.1
+# Use forked CNI plugin URL and corresponding tagged artifacts.
+CNI_VERSION=v1.1.1-calico+go-1.18.9
+CNI_ARTIFACTS_URL=https://github.com/projectcalico/containernetworking-plugins/releases/download
+FLANNEL_VERSION=v1.1.2
 
 # By default set the CNI_SPEC_VERSION to 0.3.1 for tests.
 CNI_SPEC_VERSION?=0.3.1
@@ -42,13 +46,11 @@ FIPS ?= false
 
 ifeq ($(FIPS), true)
 CGO_ENABLED=1
-CHECK_BORINGSSL=go tool nm $(BIN)/install > $(BIN)/tags.txt && grep '_Cfunc__goboringcrypto_' $(BIN)/tags.txt 1> /dev/null
 BIN=bin/$(ARCH)-fips
 DEPLOY_CONTAINER_MARKER=$(DEPLOY_CONTAINER_FIPS_MARKER)
 VALIDARCHES=amd64
 else
 CGO_ENABLED=0
-CHECK_BORINGSSL=echo 'Skipping boringSSL check'
 BIN=bin/$(ARCH)
 DEPLOY_CONTAINER_MARKER=$(DEPLOY_CONTAINER_STATIC_MARKER)
 endif
@@ -87,11 +89,12 @@ sub-build-%:
 
 ## Build the Calico network plugin and ipam plugins
 $(BIN)/install binary: $(SRC_FILES)
-	-mkdir -p .go-pkg-cache
-	-mkdir -p $(BIN)
+ifeq ($(FIPS), true)
+	$(call build_cgo_boring_binary, $(PACKAGE_NAME)/cmd/calico, $(BIN)/install)
+else
 	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) sh -c '\
-		$(GIT_CONFIG_SSH) go build -v -o $(BIN)/install -ldflags "-X main.VERSION=$(GIT_VERSION)" $(PACKAGE_NAME)/cmd/calico && \
-		$(CHECK_BORINGSSL)'
+		$(GIT_CONFIG_SSH) go build -buildvcs=false -v -o $(BIN)/install -ldflags "$(LDFLAGS)" $(PACKAGE_NAME)/cmd/calico'
+endif
 
 ## Build the Calico network plugin and ipam plugins for Windows
 $(BIN_WIN)/calico.exe $(BIN_WIN)/calico-ipam.exe: $(SRC_FILES)
@@ -99,8 +102,8 @@ $(BIN_WIN)/calico.exe $(BIN_WIN)/calico-ipam.exe: $(SRC_FILES)
 	-e GOOS=windows \
 	-e CGO_ENABLED=1 \
 	    $(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
-		go build -v -o $(BIN_WIN)/calico.exe -ldflags "-X main.VERSION=$(GIT_VERSION)" $(PACKAGE_NAME)/cmd/calico && \
-		go build -v -o $(BIN_WIN)/calico-ipam.exe -ldflags "-X main.VERSION=$(GIT_VERSION)" $(PACKAGE_NAME)/cmd/calico'
+		go build -v -buildvcs=false -o $(BIN_WIN)/calico.exe -ldflags "$(LDFLAGS)" $(PACKAGE_NAME)/cmd/calico && \
+		go build -v -buildvcs=false -o $(BIN_WIN)/calico-ipam.exe -ldflags "$(LDFLAGS)" $(PACKAGE_NAME)/cmd/calico'
 
 
 ###############################################################################
@@ -130,7 +133,7 @@ fetch-cni-bins: $(BIN)/flannel $(BIN)/loopback $(BIN)/host-local $(BIN)/portmap 
 
 $(BIN)/loopback $(BIN)/host-local $(BIN)/portmap $(BIN)/tuning $(BIN)/bandwidth:
 	mkdir -p $(BIN)
-	$(CURL) -L --retry 5 https://github.com/containernetworking/plugins/releases/download/$(CNI_VERSION)/cni-plugins-linux-$(subst v7,,$(ARCH))-$(CNI_VERSION).tgz | tar -xz -C $(BIN) ./loopback ./host-local ./portmap ./tuning ./bandwidth
+	$(CURL) -L --retry 5 $(CNI_ARTIFACTS_URL)/$(CNI_VERSION)/cni-plugins-linux-$(subst v7,,$(ARCH))-$(CNI_VERSION).tgz | tar -xz -C $(BIN) ./loopback ./host-local ./portmap ./tuning ./bandwidth
 
 $(BIN)/flannel:
 	mkdir -p $(BIN)

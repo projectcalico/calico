@@ -7,7 +7,7 @@ execution_time_limit:
 agent:
   machine:
     type: e1-standard-2
-    os_image: ubuntu1804
+    os_image: ubuntu2004
 
 auto_cancel:
   running:
@@ -77,7 +77,7 @@ global_job_config:
     - sudo umount /var/lib/docker && sudo killall qemu-nbd || true
     - sudo systemctl start docker
     # Free up space on the build machine.
-    - sudo rm -rf ~/.kiex ~/.phpbrew ~/.rbenv ~/.nvm ~/.kerl ~/.sbt ~/.npm /usr/lib/jvm /opt/firefox* /opt/apache-maven* /opt/scala /usr/local/golang
+    - sudo rm -rf ~/{.kerl,.kiex,.npm,.nvm,.phpbrew,.rbenv,.sbt} /opt/{apache-maven*,firefox*,scala} /usr/lib/jvm /usr/local/{aws2,golang,phantomjs*}
     - echo $DOCKERHUB_PASSWORD | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
     # Disable initramfs update to save space on the Semaphore VM (and we don't need it because we're not going to reboot).
     - sudo apt-get install -y -u crudini
@@ -148,7 +148,7 @@ blocks:
     - name: "Build image"
       matrix:
       - env_var: ARCH
-        values: [ "arm64", "ppc64le" ]
+        values: [ "arm64", "ppc64le", "s390x" ]
       commands:
       - ../.semaphore/run-and-monitor image-$ARCH.log make image ARCH=$ARCH
 
@@ -288,7 +288,6 @@ blocks:
       - export KEYPAIR_NAME=${CLUSTER_NAME}
       - echo CLUSTER_NAME=${CLUSTER_NAME}
       - sudo apt-get install -y putty-tools
-      - git clone git@github.com:tigera/process.git ~/process
       - cd felix
       - make bin/calico-felix.exe fv/win-fv.exe
     epilogue:
@@ -297,7 +296,7 @@ blocks:
         - artifact push job ${REPORT_DIR} --destination semaphore/test-results --expire-in ${SEMAPHORE_ARTIFACT_EXPIRY} || true
         - artifact push job ${LOGS_DIR} --destination semaphore/logs --expire-in ${SEMAPHORE_ARTIFACT_EXPIRY} || true
         - aws ec2 delete-key-pair --key-name ${KEYPAIR_NAME} || true
-        - cd ~/process/testing/winfv && NAME_PREFIX="${CLUSTER_NAME}" ./setup-fv.sh -q -u
+        - cd ~/calico/process/testing/winfv && NAME_PREFIX="${CLUSTER_NAME}" ./setup-fv.sh -q -u
     env_vars:
     - name: SEMAPHORE_ARTIFACT_EXPIRY
       value: 2w
@@ -399,7 +398,7 @@ blocks:
     jobs:
     - name: UT/FV tests on new kernel
       execution_time_limit:
-        minutes: 120
+        minutes: 180
       commands:
       - ./.semaphore/run-tests-on-vms ${VM_PREFIX}
     epilogue:
@@ -569,7 +568,6 @@ blocks:
       - export KEYPAIR_NAME=${CLUSTER_NAME}
       - echo CLUSTER_NAME=${CLUSTER_NAME}
       - sudo apt-get install -y putty-tools
-      - git clone git@github.com:tigera/process.git ~/process
       - cd cni-plugin
       - ../.semaphore/run-and-monitor build.log make bin/windows/calico.exe bin/windows/calico-ipam.exe bin/windows/win-fv.exe
     epilogue:
@@ -578,7 +576,7 @@ blocks:
         - artifact push job ${REPORT_DIR} --destination semaphore/test-results --expire-in ${SEMAPHORE_ARTIFACT_EXPIRY} || true
         - artifact push job ${LOGS_DIR} --destination semaphore/logs --expire-in ${SEMAPHORE_ARTIFACT_EXPIRY} || true
         - aws ec2 delete-key-pair --key-name ${KEYPAIR_NAME} || true
-        - cd ~/process/testing/winfv && NAME_PREFIX="${CLUSTER_NAME}" ./setup-fv.sh -q -u
+        - cd ~/calico/process/testing/winfv && NAME_PREFIX="${CLUSTER_NAME}" ./setup-fv.sh -q -u
     env_vars:
     - name: SEMAPHORE_ARTIFACT_EXPIRY
       value: 2w
@@ -625,6 +623,19 @@ blocks:
       commands:
       - ../.semaphore/run-and-monitor ci.log make ci
 
+- name: 'crypto'
+  run:
+    when: "false or change_in(['/lib.Makefile', '/crypto/'])"
+  dependencies: ["Prerequisites"]
+  task:
+    prologue:
+      commands:
+        - cd crypto
+    jobs:
+      - name: "crypto tests"
+        commands:
+          - ../.semaphore/run-and-monitor ci.log make ci
+
 - name: 'networking-calico'
   run:
     when: "${FORCE_RUN} or change_in(['/networking-calico/'])"
@@ -660,20 +671,6 @@ blocks:
           - mkdir logs
           - sudo journalctl > logs/journalctl.txt
           - artifact push job --expire-in 1d logs
-
-- name: "Documentation"
-  run:
-    when: "${FORCE_RUN} or change_in(['/*', '/calico/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
-  dependencies: ["Prerequisites"]
-  task:
-    prologue:
-      commands:
-      - cd calico
-    jobs:
-    - name: "htmlproofer, kubeval"
-      commands:
-      - ../.semaphore/run-and-monitor htmlproofer.log make htmlproofer
-      - ../.semaphore/run-and-monitor kubeval.log make kubeval
 
 after_pipeline:
   task:

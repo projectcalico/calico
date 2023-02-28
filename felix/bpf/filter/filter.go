@@ -21,12 +21,12 @@ import (
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
 
-	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/asm"
+	"github.com/projectcalico/calico/felix/bpf/maps"
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 )
 
-func New(linkType layers.LinkType, minLen int, expression string, jumpMapFD bpf.MapFD) (asm.Insns, error) {
+func New(linkType layers.LinkType, minLen int, expression string, jumpMapFD maps.FD) (asm.Insns, error) {
 	return newFilter(linkType, minLen, expression, jumpMapFD, false)
 }
 
@@ -38,7 +38,7 @@ func newFilter(
 	linkType layers.LinkType,
 	minLen int,
 	expression string,
-	jumpMapFD bpf.MapFD,
+	jumpMapFD maps.FD,
 	standAlone bool) (asm.Insns, error) {
 
 	b := asm.NewBlock(true)
@@ -131,7 +131,7 @@ func programFooterStandAlone(b *asm.Block) {
 	b.Exit()
 }
 
-func programFooter(b *asm.Block, fd bpf.MapFD, expression string) {
+func programFooter(b *asm.Block, fd maps.FD, expression string) {
 	b.LabelNextInsn("hit")
 
 	// Execute the tail call to log program

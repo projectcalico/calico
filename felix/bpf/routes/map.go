@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2023 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,11 +23,18 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/sys/unix"
 
-	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/ip"
 )
 
-//
+func init() {
+	SetMapSize(MapParameters.MaxEntries)
+}
+
+func SetMapSize(size int) {
+	maps.SetSize(MapParameters.VersionedName(), size)
+}
+
 // struct cali_rt_key {
 // __u32 mask;
 // __be32 addr; // NBO
@@ -65,6 +72,7 @@ const (
 	FlagHost        Flags = 0x10
 	FlagSameSubnet  Flags = 0x20
 	FlagTunneled    Flags = 0x40
+	FlagNoDSR       Flags = 0x80
 
 	FlagsUnknown            Flags = 0
 	FlagsRemoteWorkload           = FlagWorkload
@@ -77,14 +85,13 @@ const (
 	_ = FlagsUnknown
 )
 
-//
-// struct cali_rt_value {
-//   __u32 flags;
-//   union {
-//     __u32 next_hop;
-//     __u32 ifIndex;
-//   };
-// };
+//	struct cali_rt_value {
+//	  __u32 flags;
+//	  union {
+//	    __u32 next_hop;
+//	    __u32 ifIndex;
+//	  };
+//	};
 const ValueSize = 8
 
 type Value [ValueSize]byte
@@ -136,6 +143,10 @@ func (v Value) String() string {
 		parts = append(parts, "same-subnet")
 	}
 
+	if typeFlags&FlagNoDSR != 0 {
+		parts = append(parts, "no-dsr")
+	}
+
 	if typeFlags&FlagTunneled != 0 {
 		parts = append(parts, "tunneled")
 	}
@@ -184,8 +195,7 @@ func NewValueWithIfIndex(flags Flags, ifIndex int) Value {
 	return v
 }
 
-var MapParameters = bpf.MapParameters{
-	Filename:   "/sys/fs/bpf/tc/globals/cali_v4_routes",
+var MapParameters = maps.MapParameters{
 	Type:       "lpm_trie",
 	KeySize:    KeySize,
 	ValueSize:  ValueSize,
@@ -194,24 +204,24 @@ var MapParameters = bpf.MapParameters{
 	Flags:      unix.BPF_F_NO_PREALLOC,
 }
 
-func Map(mc *bpf.MapContext) bpf.Map {
-	return mc.NewPinnedMap(MapParameters)
+func Map() maps.Map {
+	return maps.NewPinnedMap(MapParameters)
 }
 
 type MapMem map[Key]Value
 
 // LoadMap loads a routes.Map into memory
-func LoadMap(rtm bpf.Map) (MapMem, error) {
+func LoadMap(rtm maps.Map) (MapMem, error) {
 	m := make(MapMem)
 
-	err := rtm.Iter(func(k, v []byte) bpf.IteratorAction {
+	err := rtm.Iter(func(k, v []byte) maps.IteratorAction {
 		var key Key
 		var value Value
 		copy(key[:], k)
 		copy(value[:], v)
 
 		m[key] = value
-		return bpf.IterNone
+		return maps.IterNone
 	})
 
 	return m, err
@@ -224,7 +234,7 @@ type LPMv4 struct {
 
 func NewLPMv4() *LPMv4 {
 	return &LPMv4{
-		t: new(ip.CIDRTrie),
+		t: ip.NewCIDRTrie(),
 	}
 }
 

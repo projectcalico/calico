@@ -26,14 +26,6 @@ func SyscallSupport() bool {
 	return false
 }
 
-func GetMapFDByPin(filename string) (MapFD, error) {
-	panic("BPF syscall stub")
-}
-
-func GetMapFDByID(mapID int) (MapFD, error) {
-	panic("BPF syscall stub")
-}
-
 func LoadBPFProgramFromInsns(insns asm.Insns, name, license string, progType uint32) (ProgFD, error) {
 	panic("BPF syscall stub")
 }
@@ -44,43 +36,4 @@ func RunBPFProgram(fd ProgFD, dataIn []byte, repeat int) (pr ProgResult, err err
 
 func PinBPFProgram(fd ProgFD, filename string) error {
 	panic("BPF syscall stub")
-}
-
-func UpdateMapEntry(mapFD MapFD, k, v []byte) error {
-	panic("BPF syscall stub")
-}
-
-func GetMapEntry(mapFD MapFD, k []byte, valueSize int) ([]byte, error) {
-	panic("BPF syscall stub")
-}
-
-func GetMapInfo(fd MapFD) (*MapInfo, error) {
-	panic("BPF syscall stub")
-}
-
-func DeleteMapEntry(mapFD MapFD, k []byte, valueSize int) error {
-	panic("BPF syscall stub")
-}
-
-func DeleteMapEntryIfExists(mapFD MapFD, k []byte, valueSize int) error {
-	panic("BPF syscall stub")
-}
-
-func GetMapNextKey(mapFD MapFD, k []byte, keySize int) ([]byte, error) {
-	panic("BPF syscall stub")
-}
-
-func NewMapIterator(mapFD MapFD, keySize, valueSize, maxEntries int) (*MapIterator, error) {
-	panic("BPF syscall stub")
-}
-
-type MapIterator struct {
-}
-
-func (m *MapIterator) Next() (k, v []byte, err error) {
-	return
-}
-
-func (m *MapIterator) Close() error {
-	return nil
 }

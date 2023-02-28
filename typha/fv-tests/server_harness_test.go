@@ -93,11 +93,13 @@ func NewHarness() *ServerHarness {
 }
 
 type ClientState struct {
-	clientCxt    context.Context
-	clientCancel context.CancelFunc
-	client       *syncclient.SyncerClient
-	recorder     *StateRecorder
-	syncerType   syncproto.SyncerType
+	clientCxt      context.Context
+	clientCancel   context.CancelFunc
+	recorderCtx    context.Context
+	recorderCancel context.CancelFunc
+	client         *syncclient.SyncerClient
+	recorder       *StateRecorder
+	syncerType     syncproto.SyncerType
 }
 
 func (h *ServerHarness) Start() {
@@ -133,6 +135,9 @@ func (h *ServerHarness) Stop() {
 			log.Info("Done waiting for client to shut down.")
 		}
 	}
+	for _, c := range allClients {
+		c.recorderCancel()
+	}
 
 	h.ServerCancel()
 	log.Info("Waiting for server to shut down")
@@ -151,7 +156,7 @@ func (h *ServerHarness) CreateClient(id interface{}, syncType syncproto.SyncerTy
 	recorder := NewRecorder()
 	c := h.createClient(id, syncclient.Options{SyncerType: syncType}, recorder)
 	c.recorder = recorder
-	go recorder.Loop(c.clientCxt)
+	go recorder.Loop(c.recorderCtx)
 	h.ClientStates = append(h.ClientStates, c)
 	return c
 }
@@ -160,7 +165,7 @@ func (h *ServerHarness) CreateClientNoDecodeRestart(id interface{}, syncType syn
 	recorder := NewRecorder()
 	c := h.createClient(id, syncclient.Options{SyncerType: syncType, DisableDecoderRestart: true}, recorder)
 	c.recorder = recorder
-	go recorder.Loop(c.clientCxt)
+	go recorder.Loop(c.recorderCtx)
 	h.ClientStates = append(h.ClientStates, c)
 	return c
 }
@@ -187,10 +192,9 @@ func (h *ServerHarness) ExpectAllClientsToReachState(status api.SyncStatus, kvs 
 }
 
 func (h *ServerHarness) createClient(id interface{}, options syncclient.Options, callbacks api.SyncerCallbacks) *ClientState {
-	clientCxt, clientCancel := context.WithCancel(context.Background())
 	serverAddr := fmt.Sprintf("127.0.0.1:%d", h.Server.Port())
 	client := syncclient.New(
-		[]discovery.Typha{{Addr: serverAddr}},
+		discovery.New(discovery.WithAddrOverride(serverAddr)),
 		"test-version",
 		fmt.Sprintf("test-host-%v", id),
 		"test-info",
@@ -198,14 +202,18 @@ func (h *ServerHarness) createClient(id interface{}, options syncclient.Options,
 		&options,
 	)
 
+	clientCxt, clientCancel := context.WithCancel(context.Background())
+	recorderCtx, recorderCancel := context.WithCancel(context.Background())
 	err := client.Start(clientCxt)
 	Expect(err).NotTo(HaveOccurred())
 
 	cs := &ClientState{
-		clientCxt:    clientCxt,
-		client:       client,
-		clientCancel: clientCancel,
-		syncerType:   options.SyncerType,
+		clientCxt:      clientCxt,
+		client:         client,
+		clientCancel:   clientCancel,
+		recorderCtx:    recorderCtx,
+		recorderCancel: recorderCancel,
+		syncerType:     options.SyncerType,
 	}
 	return cs
 }
@@ -297,6 +305,10 @@ func (h *ServerHarness) SendConfigUpdates(n int) map[string]api.Update {
 		h.Decoupler.OnUpdates([]api.Update{update})
 	}
 	return expectedEndState
+}
+
+func (h *ServerHarness) Discoverer() *discovery.Discoverer {
+	return discovery.New(discovery.WithAddrOverride(h.Addr()))
 }
 
 func generatePod(n int) *corev1.Pod {

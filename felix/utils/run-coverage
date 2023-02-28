@@ -30,7 +30,7 @@ go_dirs=$(find -type f -name '*.go' | \
 echo "Covering: $go_dirs"
 test ! -z "$go_dirs"
 
-test_pkgs=$(go list -f '{{ if .TestGoFiles | or .XTestGoFiles }}{{ .ImportPath }}{{ end }}' \
+test_pkgs=$(go list -buildvcs=false -f '{{ if .TestGoFiles | or .XTestGoFiles }}{{ .ImportPath }}{{ end }}' \
                     ./... | grep -v /vendor/ )
 test ! -z "$test_pkgs"
 echo "Packages with tests: $test_pkgs"

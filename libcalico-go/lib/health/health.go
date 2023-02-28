@@ -16,6 +16,7 @@ package health
 
 import (
 	"bytes"
+	"fmt"
 	"net"
 	"net/http"
 	"sort"
@@ -60,6 +61,20 @@ type HealthReport struct {
 	Detail string
 }
 
+func (h *HealthReport) String() string {
+	var parts []string
+	if h.Live {
+		parts = append(parts, "live")
+	}
+	if h.Ready {
+		parts = append(parts, "ready")
+	}
+	if h.Detail != "" {
+		parts = append(parts, "detail="+h.Detail)
+	}
+	return strings.Join(parts, ",")
+}
+
 type reporterState struct {
 	// The reporter's name.
 	name string
@@ -77,41 +92,57 @@ type reporterState struct {
 	timestamp time.Time
 }
 
-func (r *reporterState) HasReadinessProblem() bool {
-	if !r.reports.Ready {
-		return false
+func (r *reporterState) String() string {
+	var timeoutStr string
+	if r.timeout == 0 {
+		timeoutStr = "none"
+	} else {
+		timeoutStr = r.timeout.String()
 	}
-	if r.TimedOut() {
-		log.WithField("name", r.name).Warn("Report timed out")
-		return true
+	timestampStr := "-"
+	agoStr := "-"
+	if !r.timestamp.IsZero() {
+		timestampStr = r.timestamp.Format("15:04:05")
+		agoStr = fmt.Sprintf("%.1f", time.Since(r.timestamp).Seconds())
 	}
-	return !r.latest.Ready
+	return fmt.Sprintf("health.reporterState{name:%q, reports:%q, latest:%q, timestamp:%s(%ss ago) timeout:%s}",
+		r.name, r.reports.String(), r.latest.String(), timestampStr, agoStr, timeoutStr)
 }
 
-func (r *reporterState) HasLivenessProblem() bool {
-	if !r.reports.Live {
-		return false
+func (r *reporterState) readiness() (bool, string) {
+	if !r.reports.Ready {
+		return true, "-"
 	}
 	if r.TimedOut() {
-		log.WithField("name", r.name).Warn("Report timed out")
-		return true
+		return false, "timed out"
 	}
-	return !r.latest.Live
+	if r.latest.Ready {
+		return true, "reporting ready"
+	}
+	return false, "reporting non-ready"
+}
+
+func (r *reporterState) liveness() (bool, string) {
+	if !r.reports.Live {
+		return true, "-"
+	}
+	if r.TimedOut() {
+		return false, "timed out"
+	}
+	if r.latest.Live {
+		return true, "reporting live"
+	}
+	return false, "reporting non-live"
 }
 
 // TimedOut checks whether the reporter is due for another report. This is the case when
 // the reports are configured to expire and the time since the last report exceeds the report timeout duration.
 func (r *reporterState) TimedOut() bool {
-	timeout := r.Timeout()
-	return timeout != 0 && time.Since(r.timestamp) > timeout
-}
-
-func (r *reporterState) Timeout() time.Duration {
-	o := GlobalOverride(r.name)
-	if o != nil {
-		return *o
+	timeout := r.timeout
+	if o := GlobalOverride(r.name); o != nil {
+		timeout = *o
 	}
-	return r.timeout
+	return timeout != 0 && time.Since(r.timestamp) > timeout
 }
 
 // A HealthAggregator receives health reports from individual reporters (which are typically
@@ -134,6 +165,9 @@ type HealthAggregator struct {
 
 	// HTTP server.  Non-nil when there should be a server running.
 	httpServer *http.Server
+
+	// Track whether we have ever previously reported as ready overall.
+	everReady bool
 }
 
 // RegisterReporter registers a reporter with a HealthAggregator.  The aggregator uses NAME to
@@ -224,8 +258,6 @@ func genResponse(rsp http.ResponseWriter, quality string, state bool, detail str
 		if len(detail) == 0 {
 			status = StatusGoodNoContent
 		}
-	} else {
-		log.Warn("Health: not " + quality)
 	}
 	rsp.WriteHeader(status)
 	rsp.Write([]byte(detail))
@@ -249,43 +281,39 @@ func (aggregator *HealthAggregator) Summary() *HealthReport {
 	// Now for each reporter...
 	for _, reporter := range aggregator.reporters {
 		log.WithField("reporter", reporter).Debug("Checking state of reporter")
-		livenessStr := "-"
-		if reporter.HasLivenessProblem() {
-			log.WithField("name", reporter.name).Warn("Reporter is not live.")
+		live, livenessStr := reporter.liveness()
+		if !live {
+			log.WithField("name", reporter.name).Warnf("Reporter is not live: %v.", livenessStr)
 			summary.Live = false
-			if reporter.TimedOut() {
-				livenessStr = "timed out"
-			} else {
-				livenessStr = "reporting non-live"
-			}
-		} else if reporter.reports.Live {
-			livenessStr = "reporting live"
 		}
-		readinessStr := "-"
-		if reporter.HasReadinessProblem() {
-			log.WithField("name", reporter.name).Warn("Reporter is not ready.")
-			summary.Ready = false
-			if reporter.TimedOut() {
-				readinessStr = "timed out"
+		ready, readinessStr := reporter.readiness()
+		if !ready {
+			if aggregator.everReady {
+				log.WithField("name", reporter.name).Warnf("Reporter is not ready: %v.", readinessStr)
 			} else {
-				readinessStr = "reporting non-ready"
+				log.WithField("name", reporter.name).Infof("Reporter is not ready: %v.", readinessStr)
 			}
-		} else if reporter.reports.Ready {
-			readinessStr = "reporting ready"
+			summary.Ready = false
 		}
 		componentNames = append(componentNames, reporter.name)
 
-		ov := GlobalOverride(reporter.name)
-		var timeout string
-		if ov != nil {
-			timeout = ov.String() + " (override)"
-		} else {
-			timeout = reporter.timeout.String()
+		suffix := ""
+		timeout := reporter.timeout
+		if ov := GlobalOverride(reporter.name); ov != nil {
+			suffix = " (override)"
+			timeout = *ov
 		}
+		var timeoutStr string
+		if timeout == 0 {
+			timeoutStr = "-"
+		} else {
+			timeoutStr = timeout.String()
+		}
+		timeoutStr += suffix
 
 		componentData[reporter.name] = []string{
 			reporter.name,
-			timeout,
+			timeoutStr,
 			livenessStr,
 			readinessStr,
 			reporter.latest.Detail,
@@ -298,7 +326,9 @@ func (aggregator *HealthAggregator) Summary() *HealthReport {
 		table.Append(componentData[name])
 	}
 	table.Render()
+
 	summary.Detail = strings.TrimSpace(buf.String())
+	log.Debugf("Calculated health summary: live=%v ready=%v\n%s", summary.Live, summary.Ready, summary.Detail)
 
 	// Summary status has changed so update previous status and log.
 	if aggregator.lastReport == nil || *summary != *aggregator.lastReport {
@@ -306,7 +336,9 @@ func (aggregator *HealthAggregator) Summary() *HealthReport {
 		log.Infof("Overall health status changed: live=%v ready=%v\n%s", summary.Live, summary.Ready, summary.Detail)
 	}
 
-	log.WithField("healthResult", summary).Debug("Calculated health summary")
+	if summary.Ready {
+		aggregator.everReady = true
+	}
 
 	return summary
 }

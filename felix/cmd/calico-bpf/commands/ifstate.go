@@ -15,8 +15,8 @@
 package commands
 
 import (
-	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/ifstate"
+	"github.com/projectcalico/calico/felix/bpf/maps"
 
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
@@ -45,13 +45,13 @@ var ifstateCmd = &cobra.Command{
 }
 
 func dumpIfState(cmd *cobra.Command) error {
-	ifstateMap := ifstate.Map(&bpf.MapContext{})
+	ifstateMap := ifstate.Map()
 
 	if err := ifstateMap.Open(); err != nil {
 		return errors.WithMessage(err, "failed to open map")
 	}
 
-	err := ifstateMap.Iter(func(k, v []byte) bpf.IteratorAction {
+	err := ifstateMap.Iter(func(k, v []byte) maps.IteratorAction {
 		var (
 			key ifstate.Key
 			val ifstate.Value
@@ -62,7 +62,7 @@ func dumpIfState(cmd *cobra.Command) error {
 
 		cmd.Printf("%5d : %s\n", key.IfIndex(), val)
 
-		return bpf.IterNone
+		return maps.IterNone
 	})
 
 	return err

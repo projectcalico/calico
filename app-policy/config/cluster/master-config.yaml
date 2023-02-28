@@ -57,7 +57,6 @@ coreos:
         --admission-control=NamespaceLifecycle,LimitRanger,ServiceAccount,PersistentVolumeLabel,DefaultStorageClass,DefaultTolerationSeconds,MutatingAdmissionWebhook,ValidatingAdmissionWebhook,ResourceQuota \
         --advertise-address=$private_ipv4 \
         --service-cluster-ip-range=10.100.0.0/24 \
-        --logtostderr=true \
         --basic-auth-file=/etc/kubernetes/k8s-passwd.csv \
         --authorization-mode=RBAC \
         --tls-cert-file=/etc/kubernetes/apiserver.crt \
@@ -84,7 +83,6 @@ coreos:
         ExecStart=/opt/bin/kube-controller-manager \
         --master=$private_ipv4:8080 \
         --service-account-private-key-file=/etc/kubernetes/apiserver.key \
-        --logtostderr=true \
         --allocate-node-cidrs=true \
         --cluster-cidr="192.168.128.0/18" \
         --root-ca-file=/etc/kubernetes/apiserver.crt \
@@ -130,7 +128,6 @@ coreos:
         --cluster-dns=10.100.0.10 \
         --cluster-domain=cluster.local \
         --hostname-override=$private_ipv4 \
-        --logtostderr=true \
         --register-node=true \
         --register-schedulable=false \
         --volume-plugin-dir=/opt/bin/volume-plugins
@@ -157,7 +154,6 @@ coreos:
         --master=http://$private_ipv4:8080 \
         --cluster-cidr="192.168.128.0/18" \
         --proxy-mode=iptables \
-        --logtostderr=true
         Restart=always
         RestartSec=10
 

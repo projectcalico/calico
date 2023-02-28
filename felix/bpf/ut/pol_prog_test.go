@@ -30,6 +30,8 @@ import (
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/asm"
 	"github.com/projectcalico/calico/felix/bpf/ipsets"
+	"github.com/projectcalico/calico/felix/bpf/jump"
+	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/polprog"
 	"github.com/projectcalico/calico/felix/bpf/state"
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
@@ -61,7 +63,7 @@ func TestLoadAllowAllProgram(t *testing.T) {
 func TestLoadProgramWithMapAccess(t *testing.T) {
 	RegisterTestingT(t)
 
-	ipsMap := ipsets.Map(&bpf.MapContext{})
+	ipsMap := ipsets.Map()
 	Expect(ipsMap.EnsureExists()).NotTo(HaveOccurred())
 	Expect(ipsMap.MapFD()).NotTo(BeZero())
 
@@ -121,7 +123,7 @@ func TestLoadKitchenSinkPolicy(t *testing.T) {
 
 	cleanIPSetMap()
 
-	pg := polprog.NewBuilder(alloc, ipsMap.MapFD(), stateMap.MapFD(), tcJumpMap.MapFD(), false)
+	pg := polprog.NewBuilder(alloc, ipsMap.MapFD(), stateMap.MapFD(), jumpMap.MapFD(), false)
 	insns, err := pg.Instructions(polprog.Rules{
 		Tiers: []polprog.Tier{{
 			Name: "base tier",
@@ -2390,7 +2392,6 @@ type testCase interface {
 }
 
 func runTest(t *testing.T, tp testPolicy) {
-	log.Infof("nina")
 	RegisterTestingT(t)
 
 	// The prog builder refuses to allocate IDs as a precaution, give it an allocator that forces allocations.
@@ -2403,8 +2404,13 @@ func runTest(t *testing.T, tp testPolicy) {
 
 	setUpIPSets(tp.IPSets(), realAlloc, ipsMap)
 
+	jumpMap = jump.MapForTest()
+	_ = unix.Unlink(jumpMap.Path())
+	err := jumpMap.EnsureExists()
+	Expect(err).NotTo(HaveOccurred())
+
 	// Build the program.
-	pg := polprog.NewBuilder(forceAlloc, ipsMap.MapFD(), testStateMap.MapFD(), tcJumpMap.MapFD(), false)
+	pg := polprog.NewBuilder(forceAlloc, ipsMap.MapFD(), testStateMap.MapFD(), jumpMap.MapFD(), false)
 	if tp.ForIPv6() {
 		pg.EnableIPv6Mode()
 	}
@@ -2426,7 +2432,7 @@ func runTest(t *testing.T, tp testPolicy) {
 	if tp.ForIPv6() {
 		jumpMapIndex = tcdefs.ProgIndexV6Allowed
 	}
-	epiFD := installAllowedProgram(tcJumpMap, jumpMapIndex)
+	epiFD := installAllowedProgram(jumpMap, jumpMapIndex)
 	defer func() {
 		err := epiFD.Close()
 		Expect(err).NotTo(HaveOccurred())
@@ -2436,7 +2442,7 @@ func runTest(t *testing.T, tp testPolicy) {
 	if tp.ForIPv6() {
 		jumpMapIndex = tcdefs.ProgIndexV6Drop
 	}
-	dropFD := installDropProgram(tcJumpMap, jumpMapIndex)
+	dropFD := installDropProgram(jumpMap, jumpMapIndex)
 	defer func() {
 		err := dropFD.Close()
 		Expect(err).NotTo(HaveOccurred())
@@ -2464,7 +2470,7 @@ func runTest(t *testing.T, tp testPolicy) {
 }
 
 // installAllowedProgram installs a trivial BPF program into the jump table that returns RCAllowedReached.
-func installAllowedProgram(jumpMap bpf.Map, jumpMapindex int) bpf.ProgFD {
+func installAllowedProgram(jumpMap maps.Map, jumpMapindex int) bpf.ProgFD {
 	b := asm.NewBlock(false)
 
 	// Load the RC into the return register.
@@ -2487,7 +2493,7 @@ func installAllowedProgram(jumpMap bpf.Map, jumpMapindex int) bpf.ProgFD {
 }
 
 // installDropProgram installs a trivial BPF program into the jump table that returns RCDropReached.
-func installDropProgram(jumpMap bpf.Map, jumpMapindex int) bpf.ProgFD {
+func installDropProgram(jumpMap maps.Map, jumpMapindex int) bpf.ProgFD {
 	b := asm.NewBlock(false)
 
 	// Load the RC into the return register.
@@ -2509,7 +2515,7 @@ func installDropProgram(jumpMap bpf.Map, jumpMapindex int) bpf.ProgFD {
 	return dropFD
 }
 
-func runProgram(tc testCase, stateMap bpf.Map, progFD bpf.ProgFD, expProgRC int, expPolRC state.PolicyResult) {
+func runProgram(tc testCase, stateMap maps.Map, progFD bpf.ProgFD, expProgRC int, expPolRC state.PolicyResult) {
 	// The policy program takes its input from the state map (rather than looking at the
 	// packet).  Set up the state map.
 	stateIn := tc.StateIn()
@@ -2535,7 +2541,7 @@ func runProgram(tc testCase, stateMap bpf.Map, progFD bpf.ProgFD, expProgRC int,
 	tc.MatchStateOut(stateOut)
 }
 
-func setUpIPSets(ipSets map[string][]string, alloc *idalloc.IDAllocator, ipsMap bpf.Map) {
+func setUpIPSets(ipSets map[string][]string, alloc *idalloc.IDAllocator, ipsMap maps.Map) {
 	for name, members := range ipSets {
 		id := alloc.GetOrAlloc(name)
 		for _, m := range members {
@@ -2550,11 +2556,11 @@ func cleanIPSetMap() {
 	// Clean out any existing IP sets.  (The other maps have a fixed number of keys that
 	// we set as needed.)
 	var keys [][]byte
-	err := ipsMap.Iter(func(k, v []byte) bpf.IteratorAction {
+	err := ipsMap.Iter(func(k, v []byte) maps.IteratorAction {
 		kCopy := make([]byte, len(k))
 		copy(kCopy, k)
 		keys = append(keys, kCopy)
-		return bpf.IterNone
+		return maps.IterNone
 	})
 	Expect(err).NotTo(HaveOccurred(), "failed to clean out map before test")
 	for _, k := range keys {

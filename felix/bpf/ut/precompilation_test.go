@@ -27,6 +27,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/bpfutils"
 	"github.com/projectcalico/calico/felix/bpf/tc"
+	"github.com/projectcalico/calico/felix/bpf/utils"
 	"github.com/projectcalico/calico/felix/bpf/xdp"
 )
 
@@ -40,13 +41,15 @@ func checkBTFEnabled() []bool {
 func TestPrecompiledBinariesAreLoadable(t *testing.T) {
 	RegisterTestingT(t)
 
-	bpffs, err := bpf.MaybeMountBPFfs()
+	bpffs, err := utils.MaybeMountBPFfs()
 	Expect(err).NotTo(HaveOccurred())
 	Expect(bpffs).To(Equal("/sys/fs/bpf"))
 
 	defer func() {
 		bpfutils.BTFEnabled = bpfutils.SupportsBTF()
 	}()
+
+	defer bpf.CleanUpMaps()
 
 	for _, logLevel := range []string{"OFF", "INFO", "DEBUG"} {
 		logLevel := logLevel
@@ -90,20 +93,21 @@ func TestPrecompiledBinariesAreLoadable(t *testing.T) {
 								}
 
 								ap := tc.AttachPoint{
-									Type:       epType,
-									ToOrFrom:   toOrFrom,
-									Hook:       bpf.HookIngress,
-									ToHostDrop: epToHostDrop,
-									FIB:        fibEnabled,
-									DSR:        dsr,
-									LogLevel:   logLevel,
-									HostIP:     net.ParseIP("10.0.0.1"),
-									IntfIP:     net.ParseIP("10.0.0.2"),
+									IPv6Enabled: true,
+									Type:        epType,
+									ToOrFrom:    toOrFrom,
+									Hook:        bpf.HookIngress,
+									ToHostDrop:  epToHostDrop,
+									FIB:         fibEnabled,
+									DSR:         dsr,
+									LogLevel:    logLevel,
+									HostIP:      net.ParseIP("10.0.0.1"),
+									IntfIP:      net.ParseIP("10.0.0.2"),
 								}
 
-								t.Run(ap.FileName(), func(t *testing.T) {
+								t.Run(ap.FileName(4), func(t *testing.T) {
 									RegisterTestingT(t)
-									logCxt.Debugf("Testing %v in %v", ap.ProgramName(), ap.FileName())
+									logCxt.Debugf("Testing %v in %v", ap.ProgramName(), ap.FileName(4))
 
 									vethName, veth := createVeth()
 									defer deleteLink(veth)

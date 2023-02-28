@@ -57,8 +57,6 @@ coreos:
         --cluster-dns=10.100.0.10 \
         --cluster-domain=cluster.local \
         --hostname-override=$private_ipv4 \
-        --logtostderr=true \
-        --network-plugin=cni \
         --volume-plugin-dir=/opt/bin/volume-plugins
         Restart=always
         RestartSec=10
@@ -83,6 +81,5 @@ coreos:
         --master=http://172.18.18.101:8080 \
         --cluster-cidr="192.168.128.0/18" \
         --proxy-mode=iptables \
-        --logtostderr=true
         Restart=always
         RestartSec=10

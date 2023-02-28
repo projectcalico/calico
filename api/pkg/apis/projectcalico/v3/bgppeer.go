@@ -105,6 +105,15 @@ type BGPPeerSpec struct {
 	// (edges) between the peers.
 	// +optional
 	TTLSecurity *uint8 `json:"ttlSecurity,omitempty"`
+
+	// Add an exact, i.e. /32, static route toward peer IP in order to prevent route flapping.
+	// ReachableBy contains the address of the gateway which peer can be reached by.
+	// +optional
+	ReachableBy string `json:"reachableBy,omitempty" validate:"omitempty,reachableBy"`
+
+	// The ordered set of BGPFilters applied on this BGP peer.
+	// +optional
+	Filters []string `json:"filters,omitempty" validate:"omitempty,dive,name"`
 }
 
 type SourceAddress string

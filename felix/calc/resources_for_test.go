@@ -879,6 +879,7 @@ var endpointSlice2NewIPs2 = discovery.EndpointSlice{
 	},
 }
 var servicePolicyKey = model.PolicyKey{Name: "svc-policy"}
+var servicePolicyKey2 = model.PolicyKey{Name: "svc-policy2"}
 var servicePolicy = model.Policy{
 	Namespace: "default",
 	OutboundRules: []model.Rule{

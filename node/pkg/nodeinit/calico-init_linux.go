@@ -27,7 +27,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/bpf/bpfdefs"
 	"github.com/projectcalico/calico/node/pkg/lifecycle/startup"
 )
 
@@ -65,7 +65,7 @@ func ensureBPFFilesystem() error {
 		mountPoint := parts[1]
 		fs := parts[2]
 
-		if mountPoint == bpf.DefaultBPFfsPath && fs == "bpf" {
+		if mountPoint == bpfdefs.DefaultBPFfsPath && fs == "bpf" {
 			logrus.Info("BPF filesystem is mounted.")
 			return nil
 		}
@@ -76,7 +76,7 @@ func ensureBPFFilesystem() error {
 
 	// If we get here, the BPF filesystem is not mounted.  Try to mount it.
 	logrus.Info("BPF filesystem is not mounted. Trying to mount it...")
-	err = syscall.Mount(bpf.DefaultBPFfsPath, bpf.DefaultBPFfsPath, "bpf", 0, "")
+	err = syscall.Mount(bpfdefs.DefaultBPFfsPath, bpfdefs.DefaultBPFfsPath, "bpf", 0, "")
 	if err != nil {
 		return fmt.Errorf("failed to mount BPF filesystem: %w", err)
 	}
@@ -106,7 +106,7 @@ func ensureCgroupV2Filesystem() error {
 		if len(extraInfo) > 1 {
 			fsType := strings.Split(extraInfo[1], " ")[0] // fsType is the first string after -
 
-			if mountPoint == bpf.CgroupV2Path && fsType == "cgroup2" {
+			if mountPoint == bpfdefs.CgroupV2Path && fsType == "cgroup2" {
 				logrus.Info("Cgroup2 filesystem is mounted.")
 				return nil
 			}
@@ -119,13 +119,13 @@ func ensureCgroupV2Filesystem() error {
 	// If we get here, the Cgroup2 filesystem is not mounted.  Try to mount it.
 	logrus.Info("Cgroup2 filesystem is not mounted. Trying to mount it...")
 
-	err = os.MkdirAll(bpf.CgroupV2Path, 0700)
+	err = os.MkdirAll(bpfdefs.CgroupV2Path, 0700)
 	if err != nil {
-		return fmt.Errorf("failed to prepare mount point: %v. err: %w.", bpf.CgroupV2Path, err)
+		return fmt.Errorf("failed to prepare mount point: %v. err: %w.", bpfdefs.CgroupV2Path, err)
 	}
-	logrus.Infof("Mount point %s is ready for mounting root cgroup2 fs.", bpf.CgroupV2Path)
+	logrus.Infof("Mount point %s is ready for mounting root cgroup2 fs.", bpfdefs.CgroupV2Path)
 
-	mountCmd := exec.Command("mountns", bpf.CgroupV2Path)
+	mountCmd := exec.Command("mountns", bpfdefs.CgroupV2Path)
 	out, err := mountCmd.Output()
 	logrus.Debugf("Executed %v. err:%v out:\n%s", mountCmd, err, out)
 	if err != nil {

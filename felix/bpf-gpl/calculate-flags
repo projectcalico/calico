@@ -34,11 +34,11 @@ else
 fi
 
 if [[ "${filename}" =~ test_.* ]]; then
-  args+=("-D__BPFTOOL_LOADER__")
+  args+=("-DUNITTEST")
 fi
 
-if [[ "${filename}" =~ test_.* ]]; then
-  args+=("-DUNITTEST")
+if [[ "${filename}" =~ .*_v6.o ]]; then
+  args+=("-DIPVER6")
 fi
 
 flags=0

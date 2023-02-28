@@ -19,12 +19,11 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/bpf/maps"
 	v4 "github.com/projectcalico/calico/felix/bpf/mock/multiversion/v4"
 )
 
-var MockMapParams = bpf.MapParameters{
-	Filename:     "/sys/fs/bpf/tc/globals/cali_mock",
+var MockMapParams = maps.MapParameters{
 	Type:         "hash",
 	KeySize:      24,
 	ValueSize:    72,
@@ -64,13 +63,13 @@ func NewValue(v uint32) Value {
 	return val
 }
 
-func (k Key) Upgrade() bpf.Upgradable {
+func (k Key) Upgrade() maps.Upgradable {
 	var key4 v4.Key
 	copy(key4[:], k[:])
 	return key4
 }
 
-func (v Value) Upgrade() bpf.Upgradable {
+func (v Value) Upgrade() maps.Upgradable {
 	var val4 v4.Value
 	copy(val4[:], v[:])
 	return val4

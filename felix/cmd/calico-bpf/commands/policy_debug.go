@@ -17,7 +17,7 @@ package commands
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 	"strconv"
 	"strings"
@@ -65,7 +65,7 @@ var policyDumpCmd = &cobra.Command{
 			hooks = []bpf.Hook{bpf.HookXDP}
 		}
 
-		rmap := counters.PolicyMap(&bpf.MapContext{})
+		rmap := counters.PolicyMap()
 		m, err := counters.LoadPolicyMap(rmap)
 		if err != nil {
 			log.WithError(err).Error("error loading rule counters map.")
@@ -85,9 +85,7 @@ func parseArgs(args []string) (string, string, error) {
 	if len(args) != 2 {
 		return "", "", fmt.Errorf("Insufficient arguments")
 	}
-	switch bpf.Hook(args[1]) {
-	case bpf.HookIngress, bpf.HookEgress, bpf.HookXDP, "all":
-	default:
+	if bpf.StringToHook(args[1]) == bpf.HookBad && args[1] != "all" {
 		return "", "", fmt.Errorf("Invalid argument")
 	}
 	return args[0], args[1], nil
@@ -117,7 +115,7 @@ func getRuleMatchID(comment string) uint64 {
 
 func dumpPolicyInfo(cmd *cobra.Command, iface string, hook bpf.Hook, m counters.PolicyMapMem) error {
 	var policyDbg bpf.PolicyDebugInfo
-	filename := bpf.PolicyDebugJSONFileName(iface, string(hook), proto.IPVersion_IPV4)
+	filename := bpf.PolicyDebugJSONFileName(iface, hook.String(), proto.IPVersion_IPV4)
 	_, err := os.Stat(filename)
 	if err != nil {
 		return err
@@ -128,7 +126,7 @@ func dumpPolicyInfo(cmd *cobra.Command, iface string, hook bpf.Hook, m counters.
 		return err
 	}
 
-	byteValue, _ := ioutil.ReadAll(jsonFile)
+	byteValue, _ := io.ReadAll(jsonFile)
 	dec := json.NewDecoder(strings.NewReader(string(byteValue)))
 	err = dec.Decode(&policyDbg)
 	if err != nil {

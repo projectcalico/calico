@@ -101,20 +101,19 @@ class StatusWatcher(etcdutils.EtcdWatcher):
         # Look for previous endpoints that are no longer present...
         for hostname, ep_ids in old_endpoints_by_host.items():
             LOG.info("host: %s", hostname)
+            # Avoid self._endpoints_by_host[hostname] since that would
+            # auto-create the entry in the new dict, which would cause a
+            # leak.
+            new_ep_ids = self._endpoints_by_host.get(hostname, set())
             # Check for particular endpoints that have disappeared, and
             # signal those.
-            for ep_id in ep_ids:
-                # Avoid self._endpoints_by_host[hostname] since that would
-                # auto-create the entry in the new dict, which would cause a
-                # leak.
-                new_ep_ids = self._endpoints_by_host.get(hostname, set())
-                if ep_ids not in new_ep_ids:
-                    LOG.info("signal None for %s", ep_id.endpoint)
-                    self.calico_driver.on_port_status_changed(
-                        hostname,
-                        ep_id.endpoint,
-                        None,
-                        priority="low")
+            for ep_id in ep_ids.difference(new_ep_ids):
+                LOG.info("signal None for %s", ep_id.endpoint)
+                self.calico_driver.on_port_status_changed(
+                    hostname,
+                    ep_id.endpoint,
+                    None,
+                    priority="low")
         self.processing_snapshot = False
 
     def _on_status_set(self, response, hostname):

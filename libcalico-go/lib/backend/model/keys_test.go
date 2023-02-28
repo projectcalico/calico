@@ -471,6 +471,66 @@ var _ = DescribeTable(
 			},
 		},
 	),
+	Entry(
+		"BGPFilter",
+		ResourceKey{
+			Kind: apiv3.KindBGPFilter,
+			Name: "my-bgp-filter",
+		},
+		`{"spec":{"exportV4": [{"action": "Accept", "cidr": "77.7.1.0/24", "matchOperator": "In"}, {"action": "Reject", "cidr": "77.7.2.0/24", "matchOperator": "NotEqual"}], "importV4": [{"action": "Accept", "cidr": "77.7.3.0/24", "matchOperator": "NotIn"}, {"action": "Reject", "cidr": "77.7.4.0/24", "matchOperator": "Equal"}], "exportV6": [{"action": "Accept", "cidr": "7000:1::0/64", "matchOperator": "Equal"}, {"action": "Reject", "cidr": "7000:2::0/64", "matchOperator": "NotEqual"}], "importV6": [{"action": "Accept", "cidr": "7000:3::0/64", "matchOperator": "In"}, {"action": "Reject", "cidr": "7000:4::0/64", "matchOperator": "NotIn"}]}}`,
+		&apiv3.BGPFilter{
+			Spec: apiv3.BGPFilterSpec{
+				ExportV4: []apiv3.BGPFilterRuleV4{
+					{
+						Action:        apiv3.Accept,
+						CIDR:          "77.7.1.0/24",
+						MatchOperator: apiv3.In,
+					},
+					{
+						Action:        apiv3.Reject,
+						CIDR:          "77.7.2.0/24",
+						MatchOperator: apiv3.NotEqual,
+					},
+				},
+				ImportV4: []apiv3.BGPFilterRuleV4{
+					{
+						Action:        apiv3.Accept,
+						CIDR:          "77.7.3.0/24",
+						MatchOperator: apiv3.NotIn,
+					},
+					{
+						Action:        apiv3.Reject,
+						CIDR:          "77.7.4.0/24",
+						MatchOperator: apiv3.Equal,
+					},
+				},
+				ExportV6: []apiv3.BGPFilterRuleV6{
+					{
+						Action:        apiv3.Accept,
+						CIDR:          "7000:1::0/64",
+						MatchOperator: apiv3.Equal,
+					},
+					{
+						Action:        apiv3.Reject,
+						CIDR:          "7000:2::0/64",
+						MatchOperator: apiv3.NotEqual,
+					},
+				},
+				ImportV6: []apiv3.BGPFilterRuleV6{
+					{
+						Action:        apiv3.Accept,
+						CIDR:          "7000:3::0/64",
+						MatchOperator: apiv3.In,
+					},
+					{
+						Action:        apiv3.Reject,
+						CIDR:          "7000:4::0/64",
+						MatchOperator: apiv3.NotIn,
+					},
+				},
+			},
+		},
+	),
 )
 
 func mustParseCIDR(s string) net.IPNet {

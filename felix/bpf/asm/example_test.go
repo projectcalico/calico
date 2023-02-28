@@ -17,8 +17,8 @@ package asm_test
 import (
 	"fmt"
 
-	"github.com/projectcalico/calico/felix/bpf"
 	. "github.com/projectcalico/calico/felix/bpf/asm"
+	"github.com/projectcalico/calico/felix/bpf/maps"
 )
 
 func ExampleBlock() {
@@ -60,7 +60,7 @@ func ExampleBlock() {
 
 func ExampleBlock_Call() {
 	// Made up map file descriptor, this needs to be loaded form the kernel.
-	var mapFD bpf.MapFD = 5
+	var mapFD maps.FD = 5
 
 	b := NewBlock(false)
 

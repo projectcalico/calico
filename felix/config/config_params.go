@@ -34,7 +34,6 @@ import (
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
-	"github.com/projectcalico/calico/typha/pkg/discovery"
 )
 
 var (
@@ -177,10 +176,11 @@ type Config struct {
 	BPFEnabled                         bool             `config:"bool;false"`
 	BPFDisableUnprivileged             bool             `config:"bool;true"`
 	BPFLogLevel                        string           `config:"oneof(off,info,debug);off;non-zero"`
-	BPFDataIfacePattern                *regexp.Regexp   `config:"regexp;^((en|wl|ww|sl|ib)[opsx].*|(eth|wlan|wwan).*|tunl0$|vxlan.calico$|wireguard.cali$|wg-v6.cali$)"`
+	BPFDataIfacePattern                *regexp.Regexp   `config:"regexp;^((en|wl|ww|sl|ib)[Popsx].*|(eth|wlan|wwan).*|tunl0$|vxlan.calico$|wireguard.cali$|wg-v6.cali$)"`
 	BPFL3IfacePattern                  *regexp.Regexp   `config:"regexp;"`
 	BPFConnectTimeLoadBalancingEnabled bool             `config:"bool;true"`
 	BPFExternalServiceMode             string           `config:"oneof(tunnel,dsr);tunnel;non-zero"`
+	BPFDSROptoutCIDRs                  []string         `config:"cidr-list;;"`
 	BPFKubeProxyIptablesCleanupEnabled bool             `config:"bool;true"`
 	BPFKubeProxyMinSyncPeriod          time.Duration    `config:"seconds;1"`
 	BPFKubeProxyEndpointSlicesEnabled  bool             `config:"bool;true"`
@@ -194,7 +194,7 @@ type Config struct {
 	BPFMapSizeIPSets                   int              `config:"int;1048576;non-zero"`
 	BPFMapSizeIfState                  int              `config:"int;1000;non-zero"`
 	BPFHostConntrackBypass             bool             `config:"bool;true"`
-	BPFEnforceRPF                      string           `config:"oneof(Disabled,Strict);Strict;non-zero"`
+	BPFEnforceRPF                      string           `config:"oneof(Disabled,Strict,Loose);Strict;non-zero"`
 	BPFPolicyDebugEnabled              bool             `config:"bool;true"`
 
 	// DebugBPFCgroupV2 controls the cgroup v2 path that we apply the connect-time load balancer to.  Most distros
@@ -270,6 +270,7 @@ type Config struct {
 	DefaultEndpointToHostAction string `config:"oneof(DROP,RETURN,ACCEPT);DROP;non-zero,die-on-fail"`
 	IptablesFilterAllowAction   string `config:"oneof(ACCEPT,RETURN);ACCEPT;non-zero,die-on-fail"`
 	IptablesMangleAllowAction   string `config:"oneof(ACCEPT,RETURN);ACCEPT;non-zero,die-on-fail"`
+	IptablesFilterDenyAction    string `config:"oneof(DROP,REJECT);DROP;non-zero,die-on-fail"`
 	LogPrefix                   string `config:"string;calico-packet"`
 
 	LogFilePath string `config:"file;/var/log/calico/felix.log;die-on-fail"`
@@ -379,7 +380,7 @@ type Config struct {
 	Variant string `config:"string;Calico"`
 
 	// Configures MTU auto-detection.
-	MTUIfacePattern *regexp.Regexp `config:"regexp;^((en|wl|ww|sl|ib)[copsx].*|(eth|wlan|wwan).*)"`
+	MTUIfacePattern *regexp.Regexp `config:"regexp;^((en|wl|ww|sl|ib)[Pcopsx].*|(eth|wlan|wwan).*)"`
 
 	// Encapsulation information calculated from IP Pools and FelixConfiguration (VXLANEnabled and IpInIpEnabled)
 	Encapsulation Encapsulation
@@ -1032,13 +1033,6 @@ func (config *Config) SetLoadClientConfigFromEnvironmentFunction(fnc func() (*ap
 func (config *Config) OverrideParam(name, value string) (bool, error) {
 	config.internalOverrides[name] = value
 	return config.UpdateFrom(config.internalOverrides, InternalOverride)
-}
-
-func (config *Config) TyphaDiscoveryOpts() []discovery.Option {
-	return []discovery.Option{
-		discovery.WithAddrOverride(config.TyphaAddr),
-		discovery.WithKubeService(config.TyphaK8sNamespace, config.TyphaK8sServiceName),
-	}
 }
 
 // RouteTableIndices compares provided args for the deprecated RoutTableRange arg

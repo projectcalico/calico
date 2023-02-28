@@ -321,7 +321,7 @@ func (c *VXLANResolver) sendVTEPUpdateOrRemove(node string) {
 
 	if hasSentVTEP {
 		if c.vtepEqual(oldVTEP, vtep) {
-			logCtx.Info("VTEP information has not changed, skipping duplicate update")
+			logCtx.Debug("VTEP information has not changed, skipping duplicate update")
 			return
 		}
 		// Skip removing node from c.nodeNameToSentVTEP because it will be updated below

@@ -15,6 +15,6 @@ struct arp_value {
 	char mac_dst[6];
 };
 
-CALI_MAP(cali_v4_arp, 2, BPF_MAP_TYPE_LRU_HASH, struct arp_key, struct arp_value, 10000, 0, MAP_PIN_GLOBAL)
+CALI_MAP(cali_v4_arp, 2, BPF_MAP_TYPE_LRU_HASH, struct arp_key, struct arp_value, 10000, 0)
 
 #endif /* __CALI_ARP_H__ */

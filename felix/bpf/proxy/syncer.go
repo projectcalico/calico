@@ -32,6 +32,7 @@ import (
 	"github.com/projectcalico/calico/felix/cachingmap"
 
 	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/nat"
 	"github.com/projectcalico/calico/felix/bpf/routes"
 	"github.com/projectcalico/calico/felix/ip"
@@ -106,7 +107,7 @@ type stickyFrontend struct {
 type Syncer struct {
 	bpfSvcs *cachingmap.CachingMap[nat.FrontendKey, nat.FrontendValue]
 	bpfEps  *cachingmap.CachingMap[nat.BackendKey, nat.BackendValue]
-	bpfAff  bpf.Map
+	bpfAff  maps.Map
 
 	nextSvcID uint32
 
@@ -195,7 +196,7 @@ func uniqueIPs(ips []net.IP) []net.IP {
 func NewSyncer(nodePortIPs []net.IP,
 	svcsmap *cachingmap.CachingMap[nat.FrontendKey, nat.FrontendValue],
 	epsmap *cachingmap.CachingMap[nat.BackendKey, nat.BackendValue],
-	affmap bpf.Map, rt Routes) (*Syncer, error) {
+	affmap maps.Map, rt Routes) (*Syncer, error) {
 
 	s := &Syncer{
 		bpfSvcs:     svcsmap,
@@ -532,6 +533,7 @@ func (s *Syncer) apply(state DPSyncerState) error {
 	// here and now.
 	s.newSvcMap = make(map[svcKey]svcInfo, len(state.SvcMap))
 	s.newEpsMap = make(k8sp.EndpointsMap, len(state.EpsMap))
+	nodeZone := state.NodeZone
 
 	var expNPMisses []*expandMiss
 
@@ -542,13 +544,24 @@ func (s *Syncer) apply(state DPSyncerState) error {
 
 	// insert or update existing services
 	for sname, sinfo := range state.SvcMap {
+		hintsAnnotation := sinfo.HintsAnnotation()
+
 		log.WithField("service", sname).Debug("Applying service")
 		skey := getSvcKey(sname, "")
 
 		eps := make([]k8sp.Endpoint, 0, len(state.EpsMap[sname]))
 		for _, ep := range state.EpsMap[sname] {
+			zoneHints := ep.GetZoneHints()
 			if ep.IsReady() {
-				eps = append(eps, ep)
+				if ShouldAppendTopologyAwareEndpoint(nodeZone, hintsAnnotation, zoneHints) {
+					eps = append(eps, ep)
+				} else {
+					log.Debugf("Topology Aware Hints: '%s' for Endpoint: '%s' however Zone: '%s' does not match Zone Hints: '%v'\n",
+						hintsAnnotation,
+						ep.IP(),
+						nodeZone,
+						zoneHints)
+				}
 			}
 		}
 
@@ -1100,7 +1113,7 @@ func (s *Syncer) cleanupSticky() error {
 
 	now := time.Duration(bpf.KTimeNanos())
 
-	err := s.bpfAff.Iter(func(k, v []byte) bpf.IteratorAction {
+	err := s.bpfAff.Iter(func(k, v []byte) maps.IteratorAction {
 		copy(key[:], k[:ks])
 		copy(val[:], v[:vs])
 
@@ -1109,26 +1122,26 @@ func (s *Syncer) cleanupSticky() error {
 			if debug {
 				log.Debugf("cleaning affinity %v:%v - no such a service", key, val)
 			}
-			return bpf.IterDelete
+			return maps.IterDelete
 		}
 
 		if _, ok := s.stickyEps[fend.id][val.Backend()]; !ok {
 			if debug {
 				log.Debugf("cleaning affinity %v:%v - no such a backend", key, val)
 			}
-			return bpf.IterDelete
+			return maps.IterDelete
 		}
 
 		if now-val.Timestamp() > fend.timeo {
 			if debug {
 				log.Debugf("cleaning affinity %v:%v - expired", key, val)
 			}
-			return bpf.IterDelete
+			return maps.IterDelete
 		}
 		if debug {
 			log.Debugf("cleaning affinity %v:%v - keeping", key, val)
 		}
-		return bpf.IterNone
+		return maps.IterNone
 	})
 	if err != nil {
 		return errors.Errorf("NAT affinity map iterator failed: %s", err)
@@ -1439,5 +1452,12 @@ func K8sSvcWithStickyClientIP(seconds int) K8sServicePortOption {
 	return func(s interface{}) {
 		s.(*serviceInfo).stickyMaxAgeSeconds = seconds
 		s.(*serviceInfo).sessionAffinityType = v1.ServiceAffinityClientIP
+	}
+}
+
+// K8sSvcWithHintsAnnotation sets hints annotation to service info object
+func K8sSvcWithHintsAnnotation(hintsAnnotation string) K8sServicePortOption {
+	return func(s interface{}) {
+		s.(*serviceInfo).hintsAnnotation = hintsAnnotation
 	}
 }

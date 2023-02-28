@@ -23,7 +23,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math"
 	"net"
 	"os"
@@ -352,7 +351,7 @@ func (s *Server) serve(cxt context.Context) {
 		// Arrange for server to verify the clients' certificates.
 		logCxt.Info("Will verify client certificates")
 		tlsConfig.ClientAuth = tls.RequireAndVerifyClientCert
-		caPEMBlock, tlsErr := ioutil.ReadFile(s.config.CAFile)
+		caPEMBlock, tlsErr := os.ReadFile(s.config.CAFile)
 		if tlsErr != nil {
 			logCxt.WithError(tlsErr).Panic("Failed to read CA data")
 		}
@@ -676,12 +675,15 @@ type connection struct {
 	conn            net.Conn
 	// connW is the writer to use to send things to the client.  It may be the net.Conn itself or a wrapper
 	// around it.
-	connW                io.Writer
-	currentWriteDeadline time.Time
+	connW io.Writer
 
-	encoder     *gob.Encoder
-	flushWriter func() error
-	readC       chan interface{}
+	// writeLock is used to protect calls that write to the connection after the initial synchronous handshake.
+	// The delta-sending goroutine and the pinger both write to the connection.
+	writeLock            sync.Mutex
+	currentWriteDeadline time.Time
+	encoder              *gob.Encoder
+	flushWriter          func() error
+	readC                chan interface{}
 
 	logCxt                       *log.Entry
 	chosenCompression            syncproto.CompressionAlgorithm
@@ -1001,7 +1003,7 @@ func (h *connection) waitForAckAndRestartEncoder() error {
 	return nil
 }
 
-// sendMsg sends a message to the client.  It may be called from multiple goroutines because the Encoder is thread-safe.
+// sendMsg sends a message to the client.  It may be called from multiple goroutines.
 func (h *connection) sendMsg(msg interface{}) error {
 	if h.cxt.Err() != nil {
 		// Optimisation, don't bother to send if we're being torn down.
@@ -1012,6 +1014,10 @@ func (h *connection) sendMsg(msg interface{}) error {
 		Message: msg,
 	}
 	startTime := time.Now()
+
+	// The gob Encoder has its own mutex, but we need to synchronise around the flush operation as well.
+	h.writeLock.Lock()
+	defer h.writeLock.Unlock()
 
 	// Make sure we have a timeout on the connection so that we can't block forever in the synchronous
 	// part of the protocol.  After we send the snapshot we rely more on the layer 7 ping/pong.

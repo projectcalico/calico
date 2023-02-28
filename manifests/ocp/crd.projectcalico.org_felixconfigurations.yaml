@@ -59,6 +59,13 @@ spec:
                   connections.  The only reason to disable it is for debugging purposes.  [Default:
                   true]'
                 type: boolean
+              bpfDSROptoutCIDRs:
+                description: BPFDSROptoutCIDRs is a list of CIDRs which are excluded
+                  from DSR. That is, clients in those CIDRs will accesses nodeports
+                  as if BPFExternalServiceMode was set to Tunnel.
+                items:
+                  type: string
+                type: array
               bpfDataIfacePattern:
                 description: BPFDataIfacePattern is a regular expression that controls
                   which interfaces Felix should attach BPF programs to in order to
@@ -79,9 +86,10 @@ spec:
                   [Default: false]'
                 type: boolean
               bpfEnforceRPF:
-                description: 'BPFEnforceRPF enforce strict RPF on all interfaces with
-                  BPF programs regardless of what is the per-interfaces or global
-                  setting. Possible values are Disabled or Strict. [Default: Strict]'
+                description: 'BPFEnforceRPF enforce strict RPF on all host interfaces
+                  with BPF programs regardless of what is the per-interfaces or global
+                  setting. Possible values are Disabled, Strict or Loose. [Default:
+                  Strict]'
                 type: string
               bpfExtToServiceConnmark:
                 description: 'BPFExtToServiceConnmark in BPF mode, control a 32bit
@@ -346,7 +354,7 @@ spec:
                 type: integer
               healthTimeoutOverrides:
                 description: HealthTimeoutOverrides allows the internal watchdog timeouts
-                  of individual subcomponents to be overriden.  This is useful for
+                  of individual subcomponents to be overridden.  This is useful for
                   working around "false positive" liveness timeouts that can occur
                   in particularly stressful workloads or if CPU is constrained.  For
                   a list of active subcomponents, see Felix's logs.
@@ -405,6 +413,12 @@ spec:
                   be used. The default is Auto.
                 type: string
               iptablesFilterAllowAction:
+                type: string
+              iptablesFilterDenyAction:
+                description: IptablesFilterDenyAction controls what happens to traffic
+                  that is denied by network policy. By default Calico blocks traffic
+                  with an iptables "DROP" action. If you want to use "REJECT" action
+                  instead you can configure it in here.
                 type: string
               iptablesLockFilePath:
                 description: 'IptablesLockFilePath is the location of the iptables

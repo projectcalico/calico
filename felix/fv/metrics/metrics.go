@@ -20,9 +20,9 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -44,6 +44,7 @@ func PortString() string {
 
 func GetMetric(ip string, port int, name, caFile, certFile, keyFile string) (metric string, err error) {
 	httpClient := http.Client{Timeout: time.Second}
+	defer httpClient.CloseIdleConnections()
 	method := "http"
 	// Client setup for TLS.
 	if certFile != "" {
@@ -76,7 +77,7 @@ func GetMetric(ip string, port int, name, caFile, certFile, keyFile string) (met
 			// tlsConfig.ServerName, and we don't want that.  We will do certificate
 			// chain verification ourselves inside CertificateVerifier.
 			transport.TLSClientConfig.InsecureSkipVerify = true
-			caPEMBlock, err := ioutil.ReadFile(caFile)
+			caPEMBlock, err := os.ReadFile(caFile)
 			if err != nil {
 				log.WithError(err).Error("Failed to read CA data")
 				return "", err
@@ -98,6 +99,9 @@ func GetMetric(ip string, port int, name, caFile, certFile, keyFile string) (met
 		}
 		httpClient.Transport = &transport
 		method = "https"
+	} else {
+		// Use a dedicated transport to avoid sharing connections between attempts.
+		httpClient.Transport = &http.Transport{}
 	}
 	var resp *http.Response
 	resp, err = httpClient.Get(fmt.Sprintf("%v://%v:%v/metrics", method, ip, port))

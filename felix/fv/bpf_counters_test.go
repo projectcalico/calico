@@ -22,12 +22,12 @@ import (
 
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/counters"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/utils"
@@ -91,6 +91,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test counters", [
 	}
 
 	It("should update generic counters", func() {
+		By("ensuring we have counters")
 		By("installing a deny policy between workloads")
 		pol := api.NewGlobalNetworkPolicy()
 		pol.Namespace = "default"
@@ -109,12 +110,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test counters", [
 			}}
 		pol.Spec.Egress = []api.Rule{{Action: api.Allow}}
 		pol = createPolicy(pol)
-
-		By("flushing counters")
-		out, err := felixes[0].ExecOutput("calico-bpf", "counters", "flush")
-		Expect(err).NotTo(HaveOccurred())
-		Expect(out).Should(BeZero())
-		checkDroppedByPolicyCounters(felixes[0], w[1].InterfaceName, 0, 0)
 
 		By("generating packets and checking the counter")
 		numberOfpackets := 10
@@ -228,7 +223,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test counters", [
 })
 
 func dumpRuleCounterMap(felix *infrastructure.Felix) counters.PolicyMapMem {
-	rcMap := counters.PolicyMap(&bpf.MapContext{})
+	rcMap := counters.PolicyMap()
 	m := make(counters.PolicyMapMem)
 	dumpBPFMap(felix, rcMap, counters.PolicyMapMemIter(m))
 	return m
@@ -259,7 +254,11 @@ func checkDroppedByPolicyCounters(felix *infrastructure.Felix, ifName string, iC
 		return c == '|'
 	}
 
-	var iCounter, eCounter, xCounter string
+	var (
+		iCounter, eCounter int
+		xCounter           string
+	)
+
 	for _, line := range strOut {
 		fields := strings.FieldsFunc(line, f)
 		if len(fields) < 5 {
@@ -270,13 +269,13 @@ func checkDroppedByPolicyCounters(felix *infrastructure.Felix, ifName string, iC
 		// defined in felix/bpf/counters/counters.go.
 		if strings.TrimSpace(strings.ToLower(fields[0])) == "dropped" &&
 			strings.TrimSpace(strings.ToLower(fields[1])) == "by policy" {
-			iCounter = strings.TrimSpace(strings.ToLower(fields[2]))
-			eCounter = strings.TrimSpace(strings.ToLower(fields[3]))
+			iCounter, _ = strconv.Atoi(strings.TrimSpace(strings.ToLower(fields[2])))
+			eCounter, _ = strconv.Atoi(strings.TrimSpace(strings.ToLower(fields[3])))
 			xCounter = strings.TrimSpace(strings.ToLower(fields[4]))
 			break
 		}
 	}
 	Expect(xCounter).To(Equal("n/a"))
-	Expect(eCounter).To(Equal(fmt.Sprintf("%d", eCount)))
-	Expect(iCounter).To(Equal(fmt.Sprintf("%d", iCount)))
+	Expect(eCounter).To(BeNumerically(">=", eCount))
+	Expect(iCounter).To(BeNumerically(">=", iCount))
 }

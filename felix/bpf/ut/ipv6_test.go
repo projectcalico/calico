@@ -84,6 +84,6 @@ func TestIPv6Parsing(t *testing.T) {
 			Expect(res.RetvalStr()).To(Equal(result), fmt.Sprintf("expected the program to return %s", result))
 			Expect(res.dataOut).To(HaveLen(len(tc.pkt.bytes)))
 			Expect(res.dataOut).To(Equal(tc.pkt.bytes))
-		})
+		}, withIPv6(), withDescription(tc.Description))
 	}
 }

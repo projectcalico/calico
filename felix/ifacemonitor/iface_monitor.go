@@ -25,6 +25,7 @@ import (
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
 
+	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -53,6 +54,7 @@ type Config struct {
 	InterfaceExcludes []*regexp.Regexp
 	// ResyncInterval is the interval at which we rescan all the interfaces.  If <0 rescan is disabled.
 	ResyncInterval time.Duration
+	NetlinkTimeout time.Duration
 }
 
 type InterfaceMonitor struct {
@@ -77,8 +79,11 @@ type ifaceInfo struct {
 	Addrs      set.Set[string]
 }
 
-func New(config Config, fatalErrCallback func(error)) *InterfaceMonitor {
-	// Interface monitor using the real netlink, and resyncing every 10 seconds.
+func New(config Config,
+	featureDetector environment.FeatureDetectorIface,
+	fatalErrCallback func(error),
+) *InterfaceMonitor {
+	// Interface monitor using the real netlink.
 	var resyncC <-chan time.Time
 	if config.ResyncInterval > 0 {
 		log.WithField("interval", config.ResyncInterval).Info(
@@ -86,7 +91,7 @@ func New(config Config, fatalErrCallback func(error)) *InterfaceMonitor {
 		resyncTicker := time.NewTicker(config.ResyncInterval)
 		resyncC = resyncTicker.C
 	}
-	return NewWithStubs(config, &netlinkReal{}, resyncC, fatalErrCallback)
+	return NewWithStubs(config, newRealNetlink(featureDetector, config.NetlinkTimeout), resyncC, fatalErrCallback)
 }
 
 func NewWithStubs(config Config, netlinkStub netlinkStub, resyncC <-chan time.Time, fatalErrCallback func(error)) *InterfaceMonitor {

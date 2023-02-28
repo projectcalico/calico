@@ -105,7 +105,7 @@ func init() {
 // caches the desired state of that table, then attempts to bring it into sync when Apply() is
 // called.
 //
-// API Model
+// # API Model
 //
 // Table supports two classes of operation:  "rule insertions" and "full chain updates".
 //
@@ -126,7 +126,7 @@ func init() {
 // chain updates and insertions may occur in any order as long as they are consistent (i.e. there
 // are no references to non-existent chains) by the time Apply() is called.
 //
-// Design
+// # Design
 //
 // We had several goals in designing the iptables machinery in 2.0.0:
 //
@@ -153,7 +153,7 @@ func init() {
 // inserted special-case rules that were not marked as Calico rules in any sensible way making
 // cleanup of those rules after an upgrade difficult.
 //
-// Implementation
+// # Implementation
 //
 // For high performance (goal 1), we use iptables-restore to do bulk updates to iptables.  This is
 // much faster than individual iptables calls.
@@ -181,7 +181,7 @@ func init() {
 // to know exactly which rules to expect.  To deal with cleanup after upgrade from older versions
 // that did not write rule IDs, we support special-case regexes to detect our old rules.
 //
-// Thread safety
+// # Thread safety
 //
 // Table doesn't do any internal synchronization, its methods should only be called from one
 // thread.  To avoid conflicts in the dataplane itself, there should only be one instance of
@@ -191,7 +191,7 @@ type Table struct {
 	IPVersion uint8
 
 	// featureDetector detects the features of the dataplane.
-	featureDetector *environment.FeatureDetector
+	featureDetector environment.FeatureDetectorIface
 
 	// chainToInsertedRules maps from chain name to a list of rules to be inserted at the start
 	// of that chain.  Rules are written with rule hash comments.  The Table cleans up inserted
@@ -314,7 +314,7 @@ func NewTable(
 	ipVersion uint8,
 	hashPrefix string,
 	iptablesWriteLock sync.Locker,
-	featuredetector *environment.FeatureDetector,
+	featureDetector environment.FeatureDetectorIface,
 	options TableOptions,
 ) *Table {
 	// Calculate the regex used to match the hash comment.  The comment looks like this:
@@ -389,7 +389,7 @@ func NewTable(
 	table := &Table{
 		Name:                   name,
 		IPVersion:              ipVersion,
-		featureDetector:        featuredetector,
+		featureDetector:        featureDetector,
 		chainToInsertedRules:   inserts,
 		chainToAppendedRules:   appends,
 		dirtyInsertAppend:      dirtyInsertAppend,

@@ -39,26 +39,25 @@ type Felix struct {
 	*containers.Container
 
 	// ExpectedIPIPTunnelAddr contains the IP that the infrastructure expects to
-	// get assigned to the IPIP tunnel.  Filled in by AddNode().
+	// get assigned to the IPIP tunnel.  Filled in by SetExpectedIPIPTunnelAddr().
 	ExpectedIPIPTunnelAddr string
 	// ExpectedVXLANTunnelAddr contains the IP that the infrastructure expects to
-	// get assigned to the IPv4 VXLAN tunnel.  Filled in by AddNode().
+	// get assigned to the IPv4 VXLAN tunnel.  Filled in by SetExpectedVXLANTunnelAddr().
 	ExpectedVXLANTunnelAddr string
 	// ExpectedVXLANV6TunnelAddr contains the IP that the infrastructure expects to
-	// get assigned to the IPv6 VXLAN tunnel.  Filled in by AddNode().
+	// get assigned to the IPv6 VXLAN tunnel.  Filled in by SetExpectedVXLANV6TunnelAddr().
 	ExpectedVXLANV6TunnelAddr string
 	// ExpectedWireguardTunnelAddr contains the IPv4 address that the infrastructure expects to
-	// get assigned to the IPv4 Wireguard tunnel.  Filled in by AddNode().
+	// get assigned to the IPv4 Wireguard tunnel.  Filled in by SetExpectedWireguardTunnelAddr().
 	ExpectedWireguardTunnelAddr string
 	// ExpectedWireguardV6TunnelAddr contains the IPv6 address that the infrastructure expects to
-	// get assigned to the IPv6 Wireguard tunnel.  Filled in by AddNode().
+	// get assigned to the IPv6 Wireguard tunnel.  Filled in by SetExpectedWireguardV6TunnelAddr().
 	ExpectedWireguardV6TunnelAddr string
 
 	// IP of the Typha that this Felix is using (if any).
 	TyphaIP string
 
-	// If sets, acts like an external IP of a node. Filled in by AddNode().
-	// XXX setup routes
+	// If set, acts like an external IP of a node. Filled in by SetExternalIP().
 	ExternalIP string
 
 	startupDelayed bool
@@ -124,9 +123,12 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 	// Collect the volumes for this container.
 	wd, err := os.Getwd()
 	Expect(err).NotTo(HaveOccurred(), "failed to get working directory")
+
+	arch := utils.GetSysArch()
+
 	fvBin := os.Getenv("FV_BINARY")
 	if fvBin == "" {
-		fvBin = "bin/calico-felix-amd64"
+		fvBin = fmt.Sprintf("bin/calico-felix-%s", arch)
 	}
 	volumes := map[string]string{
 		path.Join(wd, "..", "bin"):        "/usr/local/bin",

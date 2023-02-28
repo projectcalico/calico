@@ -41,9 +41,18 @@ class TestBase(TestCase):
         Clean up before every test.
         """
         self.cluster = self.k8s_client()
+        self.cleanups = []
 
         # Log a newline to ensure that the first log appears on its own line.
         logger.info("")
+
+    def tearDown(self):
+        for cleanup in reversed(self.cleanups):
+            cleanup()
+        super(TestBase, self).tearDown()
+
+    def add_cleanup(self, cleanup):
+        self.cleanups.append(cleanup)
 
     @staticmethod
     def assert_same(thing1, thing2):
@@ -243,6 +252,136 @@ class TestBase(TestCase):
         return kubectl("scale deployment %s -n %s --replicas %s" %
                        (deployment, ns, replicas)).strip()
 
+
+class Container(object):
+
+    def __init__(self, image, args, flags=""):
+        self.id = run("docker run --rm -d --net=kind %s %s %s" % (
+            flags,
+            image,
+            args)).strip().split("\n")[-1].strip()
+        self._ip = None
+
+    def kill(self):
+        run("docker rm -f %s" % self.id)
+
+    def inspect(self, template):
+        return run("docker inspect -f '%s' %s" % (template, self.id))
+
+    def running(self):
+        return self.inspect("{{.State.Running}}").strip()
+
+    def assert_running(self):
+        assert self.running() == "true"
+
+    def wait_running(self):
+        retry_until_success(self.assert_running)
+
+    @property
+    def ip(self):
+        if not self._ip:
+            self._ip = self.inspect(
+                "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}"
+            ).strip()
+        return self._ip
+
+    def logs(self):
+        return run("docker logs %s" % self.id)
+
+    def execute(self, cmd):
+        return run("docker exec %s %s" % (self.id, cmd))
+
+
+class Pod(object):
+
+    def __init__(self, ns, name, node=None, image=None, labels=None, annotations=None, yaml=None, cmd=None):
+        if yaml:
+            # Caller has provided the complete pod YAML.
+            kubectl("""apply -f - <<'EOF'
+%s
+EOF
+""" % yaml)
+        else:
+            # Build YAML with specified namespace, name and image.
+            pod = {
+                "apiVersion": "v1",
+                "kind": "Pod",
+                "metadata": {
+                    "name": name,
+                    "namespace": ns,
+                },
+                "spec": {
+                    "containers": [
+                        {
+                            "name": name,
+                            "image": image,
+                        },
+                    ],
+                    "terminationGracePeriodSeconds": 0,
+                },
+            }
+            if node:
+                pod["spec"]["nodeName"] = node
+            if annotations:
+                pod["metadata"]["annotations"] = annotations
+            if labels:
+                pod["metadata"]["labels"] = labels
+            if cmd:
+                pod["spec"]["containers"][0]["command"] = cmd
+            kubectl("""apply -f - <<'EOF'
+%s
+EOF
+""" % json.dumps(pod))
+
+        self.name = name
+        self.ns = ns
+        self._ip = None
+        self._hostip = None
+        self._nodename = None
+
+    def delete(self):
+        kubectl("delete pod/%s -n %s" % (self.name, self.ns))
+
+    def wait_ready(self):
+        kubectl("wait --for=condition=ready pod/%s -n %s --timeout=300s" % (self.name, self.ns))
+
+    def wait_not_ready(self):
+        kubectl("wait --for=condition=Ready=false pod/%s -n %s --timeout=300s" % (self.name, self.ns))
+
+    @property
+    def ip(self):
+        start_time = time.time()
+        while not self._ip:
+            assert time.time() - start_time < 30, "Pod failed to get IP address within 30s"
+            ip = run("kubectl get po %s -n %s -o json | jq '.status.podIP'" % (self.name, self.ns)).strip().strip('"')
+            if ip != "null":
+                self._ip = ip
+                break
+            time.sleep(0.1)
+        return self._ip
+
+    @property
+    def hostip(self):
+        if not self._hostip:
+            self._hostip = run("kubectl get po %s -n %s -o json | jq '.status.hostIP'" %
+                           (self.name, self.ns)).strip().strip('"')
+        return self._hostip
+
+    @property
+    def nodename(self):
+        if not self._nodename:
+            # spec.nodeName will be populated for a running pod regardless of being specified or not on pod creation.
+            self._nodename = run("kubectl get po %s -n %s -o json | jq '.spec.nodeName'" %
+                               (self.name, self.ns)).strip().strip('"')
+        return self._nodename
+
+    @property
+    def annotations(self):
+        return json.loads(run("kubectl get po %s -n %s -o json | jq '.metadata.annotations'" %
+                           (self.name, self.ns)).strip().strip('"'))
+
+    def execute(self, cmd, timeout=0):
+        return kubectl("exec %s -n %s -- %s" % (self.name, self.ns, cmd), timeout=timeout)
 
 class TestBaseV6(TestBase):
 

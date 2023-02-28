@@ -35,6 +35,11 @@ spec:
                 description: The AS Number of the peer.
                 format: int32
                 type: integer
+              filters:
+                description: The ordered set of BGPFilters applied on this BGP peer.
+                items:
+                  type: string
+                type: array
               keepOriginalNextHop:
                 description: Option to keep the original nexthop field when routes
                   are sent to a BGP Peer. Setting "true" configures the selected BGP
@@ -99,6 +104,11 @@ spec:
                   and an IPv6 peering if both ends have NodeBGPSpec.IPv6Address specified.  The
                   remote AS number comes from the remote node's NodeBGPSpec.ASNumber,
                   or the global default if that is not set.
+                type: string
+              reachableBy:
+                description: Add an exact, i.e. /32, static route toward peer IP in
+                  order to prevent route flapping. ReachableBy contains the address
+                  of the gateway which peer can be reached by.
                 type: string
               sourceAddress:
                 description: Specifies whether and how to configure a source address

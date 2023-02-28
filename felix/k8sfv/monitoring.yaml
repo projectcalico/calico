@@ -1,11 +1,14 @@
 ---
-apiVersion: extensions/v1beta1
+apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: prometheus-operator
   labels:
     operator: prometheus
 spec:
+  selector:
+    matchLabels:
+      operator: prometheus
   replicas: 1
   template:
     metadata:
@@ -845,13 +848,16 @@ data:
       "version": 0
     }
 ---
-apiVersion: extensions/v1beta1
+apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: grafana
   labels:
     app: grafana
 spec:
+  selector:
+    matchLabels:
+      app: grafana
   replicas: 1
   revisionHistoryLimit: 2
   template:

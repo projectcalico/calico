@@ -1107,6 +1107,26 @@ class TestCalicoctlCommands(TestBase):
         rc.assert_output_contains("gtsm-peers")
         rc.assert_output_not_contains("global")
 
+    def test_bgp_reachable_by(self):
+        rc = calicoctl("create", data={
+            'apiVersion': API_VERSION,
+            'kind': 'BGPPeer',
+            'metadata': {
+                'name': 'route-reflector'
+            },
+            'spec': {
+                'node': 'somenode',
+                'peerIP': '10.20.20.20',
+                'reachableBy': '10.10.10.10',
+            }
+        })
+        rc.assert_no_error()
+
+        rc = calicoctl("get bgpp")
+        rc.assert_no_error()
+        rc.assert_output_contains("route-reflector")
+        rc.assert_output_not_contains("global")
+
     def test_label_command(self):
         """
         Test calicoctl label command.

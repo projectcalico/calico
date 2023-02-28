@@ -36,6 +36,7 @@ enum cali_ct_type {
 #define CALI_CT_FLAG_SVC_SELF	0x400 /* marks connections from a pod via service to self */
 #define CALI_CT_FLAG_NP_LOOP	0x800 /* marks connections that were turned around when accessing nodeport on a local IP */
 #define CALI_CT_FLAG_NP_REMOTE	0x1000 /* marks connections from local host to remote backend of a nodeport */
+#define CALI_CT_FLAG_NP_NO_DSR	0x2000 /* marks connections from a client which is excluded from DSR */
 
 struct calico_ct_leg {
 	__u64 bytes;
@@ -146,7 +147,7 @@ struct ct_create_ctx {
 CALI_MAP(cali_v4_ct, 3,
 		BPF_MAP_TYPE_HASH,
 		struct calico_ct_key, struct calico_ct_value,
-		512000, BPF_F_NO_PREALLOC, MAP_PIN_GLOBAL)
+		512000, BPF_F_NO_PREALLOC)
 
 enum calico_ct_result_type {
 	/* CALI_CT_NEW means that the packet is not part of a known conntrack flow.

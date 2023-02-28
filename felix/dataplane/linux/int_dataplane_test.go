@@ -80,6 +80,7 @@ var _ = Describe("Constructor test", func() {
 				EndpointToHostAction:      configParams.DefaultEndpointToHostAction,
 				IptablesFilterAllowAction: configParams.IptablesFilterAllowAction,
 				IptablesMangleAllowAction: configParams.IptablesMangleAllowAction,
+				IptablesFilterDenyAction:  configParams.IptablesFilterDenyAction,
 			},
 			IPIPMTU:          configParams.IpInIpMtu,
 			HealthAggregator: healthAggregator,

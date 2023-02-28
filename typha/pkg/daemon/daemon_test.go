@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"strconv"
 	"sync"
@@ -98,7 +97,7 @@ var _ = Describe("Daemon", func() {
 
 		BeforeEach(func() {
 			var err error
-			configFile, err = ioutil.TempFile("", "typha")
+			configFile, err = os.CreateTemp("", "typha")
 			Expect(err).NotTo(HaveOccurred())
 
 			_, err = configFile.Write(configContents)
@@ -167,7 +166,7 @@ var _ = Describe("Daemon", func() {
 				addr := fmt.Sprintf("127.0.0.1:%d", port)
 				cbs := fvtests.NewRecorder()
 				client := syncclient.New(
-					[]discovery.Typha{{Addr: addr}},
+					discovery.New(discovery.WithAddrOverride(addr)),
 					"",
 					"",
 					"",
@@ -175,12 +174,14 @@ var _ = Describe("Daemon", func() {
 					nil,
 				)
 				clientCxt, clientCancelFn := context.WithCancel(context.Background())
+				recorderCtx, recorderCancelFn := context.WithCancel(context.Background())
 				defer func() {
 					clientCancelFn()
 					client.Finished.Wait()
+					recorderCancelFn()
 				}()
 				err := client.Start(clientCxt)
-				go cbs.Loop(clientCxt)
+				go cbs.Loop(recorderCtx)
 				Expect(err).NotTo(HaveOccurred())
 
 				// Send in an update at the top of the processing pipeline.
@@ -324,6 +325,11 @@ func (b *mockDatastore) HostEndpoints() clientv3.HostEndpointInterface {
 
 // WorkloadEndpoints returns an interface for managing workload endpoint resources.
 func (b *mockDatastore) WorkloadEndpoints() clientv3.WorkloadEndpointInterface {
+	panic("not implemented")
+}
+
+// BGPFilter returns an interface for managing BGP peer resources.
+func (b *mockDatastore) BGPFilter() clientv3.BGPFilterInterface {
 	panic("not implemented")
 }
 
