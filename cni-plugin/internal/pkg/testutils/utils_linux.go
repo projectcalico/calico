@@ -345,13 +345,13 @@ func CreateHostVeth(containerId, k8sName, k8sNamespace, nodename string) error {
 		}
 	}
 
+	la := netlink.NewLinkAttrs()
+	la.Name = hostVethName
+	la.Flags = net.FlagUp
+	la.MTU = 1500
 	veth := &netlink.Veth{
-		LinkAttrs: netlink.LinkAttrs{
-			Name:  hostVethName,
-			Flags: net.FlagUp,
-			MTU:   1500,
-		},
-		PeerName: peerVethName,
+		LinkAttrs: la,
+		PeerName:  peerVethName,
 	}
 
 	if err := netlink.LinkAdd(veth); err != nil {

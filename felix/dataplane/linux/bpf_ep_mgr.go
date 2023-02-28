@@ -1846,11 +1846,11 @@ func (m *bpfEndpointManager) ensureBPFDevices() error {
 
 	bpfin, err := netlink.LinkByName(bpfInDev)
 	if err != nil {
+		la := netlink.NewLinkAttrs()
+		la.Name = bpfInDev
 		nat := &netlink.Veth{
-			LinkAttrs: netlink.LinkAttrs{
-				Name: bpfInDev,
-			},
-			PeerName: bpfOutDev,
+			LinkAttrs: la,
+			PeerName:  bpfOutDev,
 		}
 		if err := netlink.LinkAdd(nat); err != nil {
 			return fmt.Errorf("failed to add %s: %w", bpfInDev, err)

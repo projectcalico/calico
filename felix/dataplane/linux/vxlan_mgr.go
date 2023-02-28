@@ -633,11 +633,11 @@ func (m *vxlanManager) configureVXLANDevice(mtu int, localVTEP *proto.VXLANTunne
 		addr = localVTEP.Ipv6Addr
 		parentDeviceIP = localVTEP.ParentDeviceIpv6
 	}
+	la := netlink.NewLinkAttrs()
+	la.Name = m.vxlanDevice
+	la.HardwareAddr = mac
 	vxlan := &netlink.Vxlan{
-		LinkAttrs: netlink.LinkAttrs{
-			Name:         m.vxlanDevice,
-			HardwareAddr: mac,
-		},
+		LinkAttrs:    la,
 		VxlanId:      m.vxlanID,
 		Port:         m.vxlanPort,
 		VtepDevIndex: parent.Attrs().Index,

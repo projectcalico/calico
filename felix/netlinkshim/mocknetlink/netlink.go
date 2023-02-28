@@ -302,12 +302,12 @@ func (d *MockNetlinkDataplane) AddIface(idx int, name string, up bool, running b
 	if strings.Contains(name, "wireguard") {
 		t = "wireguard"
 	}
+	la := netlink.NewLinkAttrs()
+	la.Name = name
+	la.Index = idx
 	link := &MockLink{
-		LinkAttrs: netlink.LinkAttrs{
-			Name:  name,
-			Index: idx,
-		},
-		LinkType: t,
+		LinkAttrs: la,
+		LinkType:  t,
 	}
 	d.NameToLink[name] = link
 	d.SetIface(name, up, running)

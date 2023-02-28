@@ -125,8 +125,10 @@ func createPod(clientset *kubernetes.Clientset, d deployment, nsName string, spe
 		log.WithField("podNamespace", podNamespace).Debug("Created namespace")
 
 		// Create a veth pair.
+		la := netlink.NewLinkAttrs()
+		la.Name = interfaceName
 		veth := &netlink.Veth{
-			LinkAttrs: netlink.LinkAttrs{Name: interfaceName},
+			LinkAttrs: la,
 			PeerName:  "p" + interfaceName[1:],
 		}
 
