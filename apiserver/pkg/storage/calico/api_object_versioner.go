@@ -7,13 +7,13 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
-	etcd "k8s.io/apiserver/pkg/storage/etcd3"
+	k8sStorage "k8s.io/apiserver/pkg/storage"
 )
 
 // APIObjectVersioner implements versioning and extracting etcd node information
 // for objects that have an embedded ObjectMeta or ListMeta field.
 type APIObjectVersioner struct {
-	*etcd.APIObjectVersioner
+	*k8sStorage.APIObjectVersioner
 }
 
 // ObjectResourceVersion implements Versioner
