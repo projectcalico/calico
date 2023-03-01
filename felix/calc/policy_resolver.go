@@ -53,7 +53,7 @@ type PolicyResolver struct {
 	PolicyIDToEndpointIDs multidict.IfaceToIface
 	EndpointIDToPolicyIDs multidict.IfaceToIface
 	AllPolicies           map[model.PolicyKey]*model.Policy
-	sortedTierData        *tierInfo
+	sortedTierData        *TierInfo
 	endpoints             map[model.Key]interface{}
 	DirtyEndpoints        set.Set[any] /* FIXME model.WorkloadEndpointKey or model.HostEndpointKey */
 	PolicySorter          *PolicySorter
@@ -62,7 +62,7 @@ type PolicyResolver struct {
 }
 
 type PolicyResolverCallbacks interface {
-	OnEndpointTierUpdate(endpointKey model.Key, endpoint interface{}, filteredTiers []tierInfo)
+	OnEndpointTierUpdate(endpointKey model.Key, endpoint interface{}, filteredTiers []TierInfo)
 }
 
 func NewPolicyResolver() *PolicyResolver {
@@ -173,13 +173,13 @@ func (pr *PolicyResolver) sendEndpointUpdate(endpointID interface{}) error {
 	if !ok {
 		log.Debugf("Endpoint is unknown, sending nil update")
 		pr.Callbacks.OnEndpointTierUpdate(endpointID.(model.Key),
-			nil, []tierInfo{})
+			nil, []TierInfo{})
 		return nil
 	}
-	applicableTiers := []tierInfo{}
+	applicableTiers := []TierInfo{}
 	tier := pr.sortedTierData
 	tierMatches := false
-	filteredTier := tierInfo{
+	filteredTier := TierInfo{
 		Name:  tier.Name,
 		Order: tier.Order,
 	}

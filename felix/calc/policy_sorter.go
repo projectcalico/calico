@@ -26,12 +26,12 @@ import (
 )
 
 type PolicySorter struct {
-	Tier *tierInfo
+	Tier *TierInfo
 }
 
 func NewPolicySorter() *PolicySorter {
 	return &PolicySorter{
-		Tier: &tierInfo{
+		Tier: &TierInfo{
 			Name:           "default",
 			Policies:       make(map[model.PolicyKey]*model.Policy),
 			SortedPolicies: btree.NewG[PolKV](2, PolKVLess),
@@ -82,7 +82,7 @@ func (poc *PolicySorter) UpdatePolicy(key model.PolicyKey, newPolicy *model.Poli
 			dirty = true
 		}
 		if oldPolicy != nil {
-			// Need to do a delete prior to ReplaceOrInsert because we don't insert strictly based on key but rather a
+			// Need to do delete prior to ReplaceOrInsert because we don't insert strictly based on key but rather a
 			// combination of key + value so if for instance we add PolKV{k1, v1} then add PolKV{k1, v2} we'll simply have
 			// both KVs in the tree instead of only {k1, v2} like we want. By deleting first we guarantee that only the
 			// newest value remains in the tree.
@@ -108,7 +108,7 @@ func (poc *PolicySorter) UpdatePolicy(key model.PolicyKey, newPolicy *model.Poli
 	return
 }
 
-// Note: PolKV is really internal to the calc package.  It is named with an initial capital so that
+// PolKV is really internal to the calc package.  It is named with an initial capital so that
 // the test package calc_test can also use it.
 type PolKV struct {
 	Key   model.PolicyKey
@@ -131,7 +131,7 @@ func (p PolKV) String() string {
 	return fmt.Sprintf("%s(%s)", p.Key.Name, orderStr)
 }
 
-func (p *PolKV) governsType(wanted string) bool {
+func (p PolKV) governsType(wanted string) bool {
 	// Back-compatibility: no Types means Ingress and Egress.
 	if len(p.Value.Types) == 0 {
 		return true
@@ -144,7 +144,7 @@ func (p *PolKV) governsType(wanted string) bool {
 	return false
 }
 
-func (p *PolKV) GovernsIngress() bool {
+func (p PolKV) GovernsIngress() bool {
 	if p.ingress == nil {
 		governsIngress := p.governsType("ingress")
 		p.ingress = &governsIngress
@@ -152,7 +152,7 @@ func (p *PolKV) GovernsIngress() bool {
 	return *p.ingress
 }
 
-func (p *PolKV) GovernsEgress() bool {
+func (p PolKV) GovernsEgress() bool {
 	if p.egress == nil {
 		governsEgress := p.governsType("egress")
 		p.egress = &governsEgress
@@ -182,7 +182,7 @@ func PolKVLess(i, j PolKV) bool {
 	return *i.Value.Order < *j.Value.Order
 }
 
-type tierInfo struct {
+type TierInfo struct {
 	Name            string
 	Valid           bool
 	Order           *float64
@@ -191,14 +191,14 @@ type tierInfo struct {
 	OrderedPolicies []PolKV
 }
 
-func NewTierInfo(name string) *tierInfo {
-	return &tierInfo{
+func NewTierInfo(name string) *TierInfo {
+	return &TierInfo{
 		Name:     name,
 		Policies: make(map[model.PolicyKey]*model.Policy),
 	}
 }
 
-func (t tierInfo) String() string {
+func (t TierInfo) String() string {
 	policies := make([]string, len(t.OrderedPolicies))
 	for ii, pol := range t.OrderedPolicies {
 		polType := "t"
