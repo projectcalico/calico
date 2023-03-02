@@ -1110,7 +1110,7 @@ var _ = Describe("BPF Syncer", func() {
 
 			err := s.Apply(state)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(eps.m).To(HaveLen(3))
+			Expect(eps.m).To(HaveLen(2))
 		}))
 
 	})
