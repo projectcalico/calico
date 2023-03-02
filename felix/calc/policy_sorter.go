@@ -51,6 +51,15 @@ func policyTypesEqual(pol1, pol2 *model.Policy) bool {
 	return types1.Equals(types2)
 }
 
+func (poc *PolicySorter) Sorted() *TierInfo {
+	poc.Tier.OrderedPolicies = make([]PolKV, 0, len(poc.Tier.Policies))
+	poc.Tier.SortedPolicies.Ascend(func(kv PolKV) bool {
+		poc.Tier.OrderedPolicies = append(poc.Tier.OrderedPolicies, kv)
+		return true
+	})
+	return poc.Tier
+}
+
 func (poc *PolicySorter) OnUpdate(update api.Update) (dirty bool) {
 	switch key := update.Key.(type) {
 	case model.PolicyKey:
@@ -96,13 +105,6 @@ func (poc *PolicySorter) UpdatePolicy(key model.PolicyKey, newPolicy *model.Poli
 			delete(poc.Tier.Policies, key)
 			dirty = true
 		}
-	}
-	if dirty {
-		poc.Tier.OrderedPolicies = make([]PolKV, 0, len(poc.Tier.Policies))
-		poc.Tier.SortedPolicies.Ascend(func(kv PolKV) bool {
-			poc.Tier.OrderedPolicies = append(poc.Tier.OrderedPolicies, kv)
-			return true
-		})
 	}
 
 	return
