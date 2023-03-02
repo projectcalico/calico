@@ -9,7 +9,7 @@ execution_time_limit:
 agent:
   machine:
     type: e1-standard-2
-    os_image: ubuntu1804
+    os_image: ubuntu2004
 
 auto_cancel:
   running:
@@ -290,7 +290,6 @@ blocks:
       - export KEYPAIR_NAME=${CLUSTER_NAME}
       - echo CLUSTER_NAME=${CLUSTER_NAME}
       - sudo apt-get install -y putty-tools
-      - git clone git@github.com:tigera/process.git ~/process
       - cd felix
       - make bin/calico-felix.exe fv/win-fv.exe
     epilogue:
@@ -299,7 +298,7 @@ blocks:
         - artifact push job ${REPORT_DIR} --destination semaphore/test-results --expire-in ${SEMAPHORE_ARTIFACT_EXPIRY} || true
         - artifact push job ${LOGS_DIR} --destination semaphore/logs --expire-in ${SEMAPHORE_ARTIFACT_EXPIRY} || true
         - aws ec2 delete-key-pair --key-name ${KEYPAIR_NAME} || true
-        - cd ~/process/testing/winfv && NAME_PREFIX="${CLUSTER_NAME}" ./setup-fv.sh -q -u
+        - cd ~/calico/process/testing/winfv && NAME_PREFIX="${CLUSTER_NAME}" ./setup-fv.sh -q -u
     env_vars:
     - name: SEMAPHORE_ARTIFACT_EXPIRY
       value: 2w
@@ -401,7 +400,7 @@ blocks:
     jobs:
     - name: UT/FV tests on new kernel
       execution_time_limit:
-        minutes: 120
+        minutes: 180
       commands:
       - ./.semaphore/run-tests-on-vms ${VM_PREFIX}
     epilogue:
@@ -571,7 +570,6 @@ blocks:
       - export KEYPAIR_NAME=${CLUSTER_NAME}
       - echo CLUSTER_NAME=${CLUSTER_NAME}
       - sudo apt-get install -y putty-tools
-      - git clone git@github.com:tigera/process.git ~/process
       - cd cni-plugin
       - ../.semaphore/run-and-monitor build.log make bin/windows/calico.exe bin/windows/calico-ipam.exe bin/windows/win-fv.exe
     epilogue:
@@ -580,7 +578,7 @@ blocks:
         - artifact push job ${REPORT_DIR} --destination semaphore/test-results --expire-in ${SEMAPHORE_ARTIFACT_EXPIRY} || true
         - artifact push job ${LOGS_DIR} --destination semaphore/logs --expire-in ${SEMAPHORE_ARTIFACT_EXPIRY} || true
         - aws ec2 delete-key-pair --key-name ${KEYPAIR_NAME} || true
-        - cd ~/process/testing/winfv && NAME_PREFIX="${CLUSTER_NAME}" ./setup-fv.sh -q -u
+        - cd ~/calico/process/testing/winfv && NAME_PREFIX="${CLUSTER_NAME}" ./setup-fv.sh -q -u
     env_vars:
     - name: SEMAPHORE_ARTIFACT_EXPIRY
       value: 2w
@@ -627,6 +625,19 @@ blocks:
       commands:
       - ../.semaphore/run-and-monitor ci.log make ci
 
+- name: 'crypto'
+  run:
+    when: "false or change_in(['/lib.Makefile', '/crypto/'])"
+  dependencies: ["Prerequisites"]
+  task:
+    prologue:
+      commands:
+        - cd crypto
+    jobs:
+      - name: "crypto tests"
+        commands:
+          - ../.semaphore/run-and-monitor ci.log make ci
+
 - name: 'networking-calico'
   run:
     when: "false or change_in(['/networking-calico/'])"
@@ -662,20 +673,6 @@ blocks:
           - mkdir logs
           - sudo journalctl > logs/journalctl.txt
           - artifact push job --expire-in 1d logs
-
-- name: "Documentation"
-  run:
-    when: "false or change_in(['/*', '/calico/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
-  dependencies: ["Prerequisites"]
-  task:
-    prologue:
-      commands:
-      - cd calico
-    jobs:
-    - name: "htmlproofer, kubeval"
-      commands:
-      - ../.semaphore/run-and-monitor htmlproofer.log make htmlproofer
-      - ../.semaphore/run-and-monitor kubeval.log make kubeval
 
 after_pipeline:
   task:

@@ -138,11 +138,11 @@ func StartSingleNodeEtcdTopology(options TopologyOptions) (felix *Felix, etcd *c
 // StartNNodeEtcdTopology starts an etcd container and a set of Felix hosts.  If n > 1, sets
 // up IPIP, otherwise this is skipped.
 //
-// - Configures an IPAM pool for 10.65.0.0/16 (so that Felix programs the all-IPAM blocks IP set)
-//   but (for simplicity) we don't actually use IPAM to assign IPs.
-// - Configures routes between the hosts, giving each host 10.65.x.0/24, where x is the
-//   index in the returned array.  When creating workloads, use IPs from the relevant block.
-// - Configures the Tunnel IP for each host as 10.65.x.1.
+//   - Configures an IPAM pool for 10.65.0.0/16 (so that Felix programs the all-IPAM blocks IP set)
+//     but (for simplicity) we don't actually use IPAM to assign IPs.
+//   - Configures routes between the hosts, giving each host 10.65.x.0/24, where x is the
+//     index in the returned array.  When creating workloads, use IPs from the relevant block.
+//   - Configures the Tunnel IP for each host as 10.65.x.1.
 func StartNNodeEtcdTopology(n int, opts TopologyOptions) (felixes []*Felix, etcd *containers.Container, client client.Interface, infra DatastoreInfra) {
 	log.Infof("Starting a %d-node etcd topology.", n)
 
@@ -167,11 +167,11 @@ func StartSingleNodeTopology(options TopologyOptions, infra DatastoreInfra) (fel
 // StartNNodeEtcdTopology starts an etcd container and a set of Felix hosts.  If n > 1, sets
 // up IPIP, otherwise this is skipped.
 //
-// - Configures an IPAM pool for 10.65.0.0/16 (so that Felix programs the all-IPAM blocks IP set)
-//   but (for simplicity) we don't actually use IPAM to assign IPs.
-// - Configures routes between the hosts, giving each host 10.65.x.0/24, where x is the
-//   index in the returned array.  When creating workloads, use IPs from the relevant block.
-// - Configures the Tunnel IP for each host as 10.65.x.1.
+//   - Configures an IPAM pool for 10.65.0.0/16 (so that Felix programs the all-IPAM blocks IP set)
+//     but (for simplicity) we don't actually use IPAM to assign IPs.
+//   - Configures routes between the hosts, giving each host 10.65.x.0/24, where x is the
+//     index in the returned array.  When creating workloads, use IPs from the relevant block.
+//   - Configures the Tunnel IP for each host as 10.65.x.1.
 func StartNNodeTopology(n int, opts TopologyOptions, infra DatastoreInfra) (felixes []*Felix, client client.Interface) {
 	log.WithField("options", opts).Infof("Starting a %d-node topology", n)
 	success := false
@@ -287,6 +287,9 @@ func StartNNodeTopology(n int, opts TopologyOptions, infra DatastoreInfra) (feli
 		felix := felixes[i]
 		felix.TyphaIP = typhaIP
 
+		if opts.EnableIPv6 {
+			Expect(felix.IPv6).ToNot(BeEmpty(), "IPv6 enabled but Felix didn't get an IPv6 address, is docker configured for IPv6?")
+		}
 		expectedIPs := []string{felix.IP}
 
 		if kdd, ok := infra.(*K8sDatastoreInfra); ok && opts.ExternalIPs {

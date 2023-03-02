@@ -41,7 +41,7 @@ func NewRecorderChanSize(n int) *StateRecorder {
 // stateRecorder is our mock client callback, it records the updates it receives in a map.  When accessed via methods,
 // all fields are protected by a mutex so it can be used with this construction:
 //
-//     Eventually(recorder.State).Should(Equal(...))
+//	Eventually(recorder.State).Should(Equal(...))
 type StateRecorder struct {
 	L             sync.Mutex
 	status        api.SyncStatus

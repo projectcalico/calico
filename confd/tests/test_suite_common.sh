@@ -29,6 +29,7 @@ execute_test_suite() {
         run_extra_test test_bgp_ttl_security
         run_extra_test test_bgp_ignored_interfaces
         run_extra_test test_bgp_reachable_by
+        run_extra_test test_bgp_filters
     fi
 
     if [ "$DATASTORE_TYPE" = etcdv3 ]; then
@@ -41,6 +42,7 @@ execute_test_suite() {
         run_extra_test test_bgp_ttl_security
         run_extra_test test_bgp_ignored_interfaces
         run_extra_test test_bgp_reachable_by
+        run_extra_test test_bgp_filters
         echo "Extra etcdv3 tests passed"
     fi
 
@@ -56,7 +58,7 @@ execute_test_suite() {
     echo "Execute daemon-mode tests"
     turn_mesh_on
     for i in $(seq 1 2); do
-        execute_tests_daemon
+       execute_tests_daemon
     done
     echo "Daemon-mode tests passed"
 }
@@ -835,12 +837,16 @@ compare_templates() {
     done
 
     if [ $rc -eq 2 ]; then
+        echo "Recording failed testcase directory to ${LOGPATH}/testcase_directory.txt"
+        echo "${testdir}" > ${LOGPATH}/testcase_directory.txt
         echo "Copying nodes to ${LOGPATH}/nodes.yaml"
         $CALICOCTL get nodes -o yaml > ${LOGPATH}/nodes.yaml
         echo "Copying bgp config to ${LOGPATH}/bgpconfig.yaml"
         $CALICOCTL get bgpconfigs -o yaml > ${LOGPATH}/bgpconfig.yaml
         echo "Copying bgp peers to ${LOGPATH}/bgppeers.yaml"
         $CALICOCTL get bgppeers -o yaml > ${LOGPATH}/bgppeers.yaml
+        echo "Copying bgp filters to ${LOGPATH}/bgpfilters.yaml"
+        $CALICOCTL get bgpfilters -o yaml > ${LOGPATH}/bgpfilters.yaml
         echo "Copying ip pools to ${LOGPATH}/ippools.yaml"
         $CALICOCTL get ippools -o yaml > ${LOGPATH}/ippools.yaml
         echo "Listing running processes"
@@ -1681,4 +1687,2253 @@ EOF
     if [ "$DATASTORE_TYPE" = kubernetes ]; then
         kill_typha
     fi
+}
+
+test_single_bgp_filter_with_global_peers() {
+    # For KDD, run Typha and clean up the output directory.
+    if [ "$DATASTORE_TYPE" = kubernetes ]; then
+        start_typha
+        rm -f /etc/calico/confd/config/*
+    fi
+
+    # Run confd as a background process.
+    echo "Running confd as background process"
+    NODENAME=kube-master BGP_LOGSEVERITYSCREEN="debug" confd -confdir=/etc/calico/confd >$LOGPATH/logd1 2>&1 &
+    CONFD_PID=$!
+    echo "Running with PID " $CONFD_PID
+
+    # Turn the node-mesh off
+    turn_mesh_off
+
+    # Create 3 nodes and a BGPFilter then globally pair the nodes all using the same filter
+    $CALICOCTL apply -f - <<EOF
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-master
+  labels:
+    global-peer: yes
+spec:
+  bgp:
+    ipv4Address: 10.192.0.2/16
+    ipv6Address: "2001::102/64"
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-node-1
+  labels:
+    global-peer: yes
+spec:
+  bgp:
+    ipv4Address: 10.192.0.3/16
+    ipv6Address: "2001::103/64"
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-node-2
+  labels:
+    global-peer: yes
+spec:
+  bgp:
+    ipv4Address: 10.192.0.4/16
+    ipv6Address: "2001::104/64"
+---
+kind: BGPFilter
+apiVersion: projectcalico.org/v3
+metadata:
+  name: test-filter
+spec:
+  exportV4:
+    - action: Accept
+      matchOperator: In
+      cidr: 77.0.0.0/16
+    - action: Reject
+      matchOperator: In
+      cidr: 77.1.0.0/16
+  importV4:
+    - action: Accept
+      matchOperator: In
+      cidr: 44.0.0.0/16
+    - action: Reject
+      matchOperator: In
+      cidr: 44.1.0.0/16
+  exportV6:
+    - action: Accept
+      matchOperator: In
+      cidr: 9000::0/64
+    - action: Reject
+      matchOperator: In
+      cidr: 9000:1::0/64
+  importV6:
+    - action: Accept
+      matchOperator: In
+      cidr: 5000::0/64
+    - action: Reject
+      matchOperator: In
+      cidr: 5000:1::0/64
+---
+kind: BGPPeer
+apiVersion: projectcalico.org/v3
+metadata:
+  name: test-global-peer-with-filter
+spec:
+  peerSelector: has(global-peer)
+  filters:
+    - test-filter
+EOF
+
+    test_confd_templates bgpfilter/single_filter/global_peer
+
+    # Kill confd.
+    kill -9 $CONFD_PID
+
+    # Turn the node-mesh back on.
+    turn_mesh_on
+
+    # Delete remaining resources.
+    $CALICOCTL delete bgpfilter test-filter
+    $CALICOCTL delete bgppeer test-global-peer-with-filter
+    if [ "$DATASTORE_TYPE" = etcdv3 ]; then
+      $CALICOCTL delete node kube-master
+      $CALICOCTL delete node kube-node-1
+      $CALICOCTL delete node kube-node-2
+    fi
+
+    # For KDD, kill Typha.
+    if [ "$DATASTORE_TYPE" = kubernetes ]; then
+        kill_typha
+    fi
+}
+
+test_single_bgp_filter_with_explicit_peers() {
+    # For KDD, run Typha and clean up the output directory.
+    if [ "$DATASTORE_TYPE" = kubernetes ]; then
+        start_typha
+        rm -f /etc/calico/confd/config/*
+    fi
+
+    # Run confd as a background process.
+    echo "Running confd as background process"
+    NODENAME=kube-master BGP_LOGSEVERITYSCREEN="debug" confd -confdir=/etc/calico/confd >$LOGPATH/logd1 2>&1 &
+    CONFD_PID=$!
+    echo "Running with PID " $CONFD_PID
+
+    # Turn the node-mesh off
+    turn_mesh_off
+
+    # Create 3 nodes, 2 BGPFilters, and 2 peerings that each use one of the filters
+    $CALICOCTL apply -f - <<EOF
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-master
+spec:
+  bgp:
+    ipv4Address: 10.192.0.2/16
+    ipv6Address: "2001::102/64"
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-node-1
+spec:
+  bgp:
+    ipv4Address: 10.192.0.3/16
+    ipv6Address: "2001::103/64"
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-node-2
+spec:
+  bgp:
+    ipv4Address: 10.192.0.4/16
+    ipv6Address: "2001::104/64"
+---
+kind: BGPFilter
+apiVersion: projectcalico.org/v3
+metadata:
+  name: test-filter-1
+spec:
+  exportV4:
+    - action: Accept
+      matchOperator: In
+      cidr: 77.0.0.0/16
+    - action: Reject
+      matchOperator: In
+      cidr: 77.1.0.0/16
+  importV4:
+    - action: Accept
+      matchOperator: In
+      cidr: 44.0.0.0/16
+    - action: Reject
+      matchOperator: In
+      cidr: 44.1.0.0/16
+  exportV6:
+    - action: Accept
+      matchOperator: In
+      cidr: 9000::0/64
+    - action: Reject
+      matchOperator: In
+      cidr: 9000:1::0/64
+  importV6:
+    - action: Accept
+      matchOperator: In
+      cidr: 5000::0/64
+    - action: Reject
+      matchOperator: In
+      cidr: 5000:1::0/64
+---
+kind: BGPFilter
+apiVersion: projectcalico.org/v3
+metadata:
+  name: test-filter-2
+spec:
+  exportV4:
+    - action: Accept
+      matchOperator: In
+      cidr: 77.2.0.0/16
+    - action: Reject
+      matchOperator: In
+      cidr: 77.3.0.0/16
+  importV4:
+    - action: Accept
+      matchOperator: In
+      cidr: 44.2.0.0/16
+    - action: Reject
+      matchOperator: In
+      cidr: 44.3.0.0/16
+  exportV6:
+    - action: Accept
+      matchOperator: In
+      cidr: 9000:2::0/64
+    - action: Reject
+      matchOperator: In
+      cidr: 9000:3::0/64
+  importV6:
+    - action: Accept
+      matchOperator: In
+      cidr: 5000:2::0/64
+    - action: Reject
+      matchOperator: In
+      cidr: 5000:3::0/64
+---
+kind: BGPPeer
+apiVersion: projectcalico.org/v3
+metadata:
+  name: test-explicit-peer-with-filter-1-v4
+spec:
+  node: kube-master
+  peerIP: 10.192.0.3
+  asNumber: 64517
+  filters:
+    - test-filter-1
+---
+kind: BGPPeer
+apiVersion: projectcalico.org/v3
+metadata:
+  name: test-explicit-peer-with-filter-1-v6
+spec:
+  node: kube-master
+  peerIP: 2001::103
+  asNumber: 64517
+  filters:
+    - test-filter-1
+---
+kind: BGPPeer
+apiVersion: projectcalico.org/v3
+metadata:
+  name: test-explicit-peer-with-filter-2-v4
+spec:
+  node: kube-master
+  peerIP: 10.192.0.4
+  asNumber: 64517
+  filters:
+    - test-filter-2
+---
+kind: BGPPeer
+apiVersion: projectcalico.org/v3
+metadata:
+  name: test-explicit-peer-with-filter-2-v6
+spec:
+  node: kube-master
+  peerIP: 2001::104
+  asNumber: 64517
+  filters:
+    - test-filter-2
+EOF
+
+    test_confd_templates bgpfilter/single_filter/explicit_peer
+    # Kill confd.
+    kill -9 $CONFD_PID
+    # Turn the node-mesh back on.
+    turn_mesh_on
+
+    # Delete remaining resources.
+    $CALICOCTL delete bgpfilter test-filter-1
+    $CALICOCTL delete bgpfilter test-filter-2
+    $CALICOCTL delete bgppeer test-explicit-peer-with-filter-1-v4
+    $CALICOCTL delete bgppeer test-explicit-peer-with-filter-1-v6
+    $CALICOCTL delete bgppeer test-explicit-peer-with-filter-2-v4
+    $CALICOCTL delete bgppeer test-explicit-peer-with-filter-2-v6
+    if [ "$DATASTORE_TYPE" = etcdv3 ]; then
+      $CALICOCTL delete node kube-master
+      $CALICOCTL delete node kube-node-1
+      $CALICOCTL delete node kube-node-2
+    fi
+    # For KDD, kill Typha.
+    if [ "$DATASTORE_TYPE" = kubernetes ]; then
+        kill_typha
+    fi
+}
+
+test_multiple_bgp_filter_with_global_peers() {
+    # For KDD, run Typha and clean up the output directory.
+    if [ "$DATASTORE_TYPE" = kubernetes ]; then
+        start_typha
+        rm -f /etc/calico/confd/config/*
+    fi
+
+    # Run confd as a background process.
+    echo "Running confd as background process"
+    NODENAME=kube-master BGP_LOGSEVERITYSCREEN="debug" confd -confdir=/etc/calico/confd >$LOGPATH/logd1 2>&1 &
+    CONFD_PID=$!
+    echo "Running with PID " $CONFD_PID
+
+    # Turn the node-mesh off
+    turn_mesh_off
+
+    # Create 3 nodes and 2 BGPFilters then globally pair the nodes all using the same 2 filters
+    $CALICOCTL apply -f - <<EOF
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-master
+  labels:
+    global-peer: yes
+spec:
+  bgp:
+    ipv4Address: 10.192.0.2/16
+    ipv6Address: "2001::102/64"
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-node-1
+  labels:
+    global-peer: yes
+spec:
+  bgp:
+    ipv4Address: 10.192.0.3/16
+    ipv6Address: "2001::103/64"
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-node-2
+  labels:
+    global-peer: yes
+spec:
+  bgp:
+    ipv4Address: 10.192.0.4/16
+    ipv6Address: "2001::104/64"
+---
+kind: BGPFilter
+apiVersion: projectcalico.org/v3
+metadata:
+  name: test-filter-1
+spec:
+  exportV4:
+    - action: Accept
+      matchOperator: In
+      cidr: 77.0.0.0/16
+    - action: Reject
+      matchOperator: In
+      cidr: 77.1.0.0/16
+  importV4:
+    - action: Accept
+      matchOperator: In
+      cidr: 44.0.0.0/16
+    - action: Reject
+      matchOperator: In
+      cidr: 44.1.0.0/16
+  exportV6:
+    - action: Accept
+      matchOperator: In
+      cidr: 9000::0/64
+    - action: Reject
+      matchOperator: In
+      cidr: 9000:1::0/64
+  importV6:
+    - action: Accept
+      matchOperator: In
+      cidr: 5000::0/64
+    - action: Reject
+      matchOperator: In
+      cidr: 5000:1::0/64
+---
+kind: BGPFilter
+apiVersion: projectcalico.org/v3
+metadata:
+  name: test-filter-2
+spec:
+  exportV4:
+    - action: Accept
+      matchOperator: In
+      cidr: 77.2.0.0/16
+    - action: Reject
+      matchOperator: In
+      cidr: 77.3.0.0/16
+  importV4:
+    - action: Accept
+      matchOperator: In
+      cidr: 44.2.0.0/16
+    - action: Reject
+      matchOperator: In
+      cidr: 44.3.0.0/16
+  exportV6:
+    - action: Accept
+      matchOperator: In
+      cidr: 9000:2::0/64
+    - action: Reject
+      matchOperator: In
+      cidr: 9000:3::0/64
+  importV6:
+    - action: Accept
+      matchOperator: In
+      cidr: 5000:2::0/64
+    - action: Reject
+      matchOperator: In
+      cidr: 5000:3::0/64
+---
+kind: BGPPeer
+apiVersion: projectcalico.org/v3
+metadata:
+  name: test-global-peer-with-multiple-filters
+spec:
+  peerSelector: has(global-peer)
+  filters:
+    - test-filter-1
+    - test-filter-2
+EOF
+
+    test_confd_templates bgpfilter/multi_filter/global_peer
+
+    # Kill confd.
+    kill -9 $CONFD_PID
+
+    # Turn the node-mesh back on.
+    turn_mesh_on
+
+    # Delete remaining resources.
+    $CALICOCTL delete bgpfilter test-filter-1
+    $CALICOCTL delete bgpfilter test-filter-2
+    $CALICOCTL delete bgppeer test-global-peer-with-multiple-filters
+    if [ "$DATASTORE_TYPE" = etcdv3 ]; then
+      $CALICOCTL delete node kube-master
+      $CALICOCTL delete node kube-node-1
+      $CALICOCTL delete node kube-node-2
+    fi
+
+    # For KDD, kill Typha.
+    if [ "$DATASTORE_TYPE" = kubernetes ]; then
+        kill_typha
+    fi
+}
+
+test_multiple_bgp_filter_with_explicit_peers() {
+    # For KDD, run Typha and clean up the output directory.
+    if [ "$DATASTORE_TYPE" = kubernetes ]; then
+        start_typha
+        rm -f /etc/calico/confd/config/*
+    fi
+
+    # Run confd as a background process.
+    echo "Running confd as background process"
+    NODENAME=kube-master BGP_LOGSEVERITYSCREEN="debug" confd -confdir=/etc/calico/confd >$LOGPATH/logd1 2>&1 &
+    CONFD_PID=$!
+    echo "Running with PID " $CONFD_PID
+
+    # Turn the node-mesh off
+    turn_mesh_off
+    # Create 3 nodes and 2 BGPFilters then pair kube-master with each of the other 2 nodes with each peering using
+    # both filters
+    $CALICOCTL apply -f - <<EOF
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-master
+spec:
+  bgp:
+    ipv4Address: 10.192.0.2/16
+    ipv6Address: "2001::102/64"
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-node-1
+spec:
+  bgp:
+    ipv4Address: 10.192.0.3/16
+    ipv6Address: "2001::103/64"
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-node-2
+spec:
+  bgp:
+    ipv4Address: 10.192.0.4/16
+    ipv6Address: "2001::104/64"
+---
+kind: BGPFilter
+apiVersion: projectcalico.org/v3
+metadata:
+  name: test-filter-1
+spec:
+  exportV4:
+    - action: Accept
+      matchOperator: In
+      cidr: 77.0.0.0/16
+    - action: Reject
+      matchOperator: In
+      cidr: 77.1.0.0/16
+  importV4:
+    - action: Accept
+      matchOperator: In
+      cidr: 44.0.0.0/16
+    - action: Reject
+      matchOperator: In
+      cidr: 44.1.0.0/16
+  exportV6:
+    - action: Accept
+      matchOperator: In
+      cidr: 9000::0/64
+    - action: Reject
+      matchOperator: In
+      cidr: 9000:1::0/64
+  importV6:
+    - action: Accept
+      matchOperator: In
+      cidr: 5000::0/64
+    - action: Reject
+      matchOperator: In
+      cidr: 5000:1::0/64
+---
+kind: BGPFilter
+apiVersion: projectcalico.org/v3
+metadata:
+  name: test-filter-2
+spec:
+  exportV4:
+    - action: Accept
+      matchOperator: In
+      cidr: 77.2.0.0/16
+    - action: Reject
+      matchOperator: In
+      cidr: 77.3.0.0/16
+  importV4:
+    - action: Accept
+      matchOperator: In
+      cidr: 44.2.0.0/16
+    - action: Reject
+      matchOperator: In
+      cidr: 44.3.0.0/16
+  exportV6:
+    - action: Accept
+      matchOperator: In
+      cidr: 9000:2::0/64
+    - action: Reject
+      matchOperator: In
+      cidr: 9000:3::0/64
+  importV6:
+    - action: Accept
+      matchOperator: In
+      cidr: 5000:2::0/64
+    - action: Reject
+      matchOperator: In
+      cidr: 5000:3::0/64
+---
+kind: BGPPeer
+apiVersion: projectcalico.org/v3
+metadata:
+  name: test-explicit-peer-with-multiple-filters-1-v4
+spec:
+  peerIP: 10.192.0.3
+  asNumber: 64517
+  filters:
+    - test-filter-1
+    - test-filter-2
+---
+kind: BGPPeer
+apiVersion: projectcalico.org/v3
+metadata:
+  name: test-explicit-peer-with-multiple-filters-1-v6
+spec:
+  peerIP: 2001::103
+  asNumber: 64517
+  filters:
+    - test-filter-1
+    - test-filter-2
+---
+kind: BGPPeer
+apiVersion: projectcalico.org/v3
+metadata:
+  name: test-explicit-peer-with-multiple-filters-2-v4
+spec:
+  peerIP: 10.192.0.4
+  asNumber: 64517
+  filters:
+    - test-filter-1
+    - test-filter-2
+---
+kind: BGPPeer
+apiVersion: projectcalico.org/v3
+metadata:
+  name: test-explicit-peer-with-multiple-filters-2-v6
+spec:
+  peerIP: 2001::104
+  asNumber: 64517
+  filters:
+    - test-filter-1
+    - test-filter-2
+EOF
+
+    test_confd_templates bgpfilter/multi_filter/explicit_peer
+    # Kill confd.
+    kill -9 $CONFD_PID
+
+    # Turn the node-mesh back on.
+    turn_mesh_on
+
+    # Delete remaining resources.
+    $CALICOCTL delete bgpfilter test-filter-1
+    $CALICOCTL delete bgpfilter test-filter-2
+    $CALICOCTL delete bgppeer test-explicit-peer-with-multiple-filters-1-v4
+    $CALICOCTL delete bgppeer test-explicit-peer-with-multiple-filters-1-v6
+    $CALICOCTL delete bgppeer test-explicit-peer-with-multiple-filters-2-v4
+    $CALICOCTL delete bgppeer test-explicit-peer-with-multiple-filters-2-v6
+    if [ "$DATASTORE_TYPE" = etcdv3 ]; then
+      $CALICOCTL delete node kube-master
+      $CALICOCTL delete node kube-node-1
+      $CALICOCTL delete node kube-node-2
+    fi
+
+    # For KDD, kill Typha.
+    if [ "$DATASTORE_TYPE" = kubernetes ]; then
+        kill_typha
+    fi
+}
+
+test_bgp_filter_with_node_mesh_enabled() {
+    # For KDD, run Typha and clean up the output directory.
+    if [ "$DATASTORE_TYPE" = kubernetes ]; then
+        start_typha
+        rm -f /etc/calico/confd/config/*
+    fi
+
+    # Run confd as a background process.
+    echo "Running confd as background process"
+    NODENAME=kube-master BGP_LOGSEVERITYSCREEN="debug" confd -confdir=/etc/calico/confd >$LOGPATH/logd1 2>&1 &
+    CONFD_PID=$!
+    echo "Running with PID " $CONFD_PID
+
+    # Turn the node-mesh on
+    turn_mesh_on
+
+    # Create 3 nodes and a BGPFilter
+    $CALICOCTL apply -f - <<EOF
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-master
+spec:
+  bgp:
+    ipv4Address: 10.192.0.2/16
+    ipv6Address: "2001::102/64"
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-node-1
+spec:
+  bgp:
+    ipv4Address: 10.192.0.3/16
+    ipv6Address: "2001::103/64"
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-node-2
+spec:
+  bgp:
+    ipv4Address: 10.192.0.4/16
+    ipv6Address: "2001::104/64"
+---
+kind: BGPFilter
+apiVersion: projectcalico.org/v3
+metadata:
+  name: test-filter
+spec:
+  exportV4:
+    - action: Accept
+      matchOperator: In
+      cidr: 77.0.0.0/16
+    - action: Reject
+      matchOperator: In
+      cidr: 77.1.0.0/16
+  importV4:
+    - action: Accept
+      matchOperator: In
+      cidr: 44.0.0.0/16
+    - action: Reject
+      matchOperator: In
+      cidr: 44.1.0.0/16
+  exportV6:
+    - action: Accept
+      matchOperator: In
+      cidr: 9000::0/64
+    - action: Reject
+      matchOperator: In
+      cidr: 9000:1::0/64
+  importV6:
+    - action: Accept
+      matchOperator: In
+      cidr: 5000::0/64
+    - action: Reject
+      matchOperator: In
+      cidr: 5000:1::0/64
+EOF
+
+    test_confd_templates bgpfilter/node_mesh
+
+    # Kill confd.
+    kill -9 $CONFD_PID
+
+    # Delete remaining resources.
+    $CALICOCTL delete bgpfilter test-filter
+    if [ "$DATASTORE_TYPE" = etcdv3 ]; then
+      $CALICOCTL delete node kube-master
+      $CALICOCTL delete node kube-node-1
+      $CALICOCTL delete node kube-node-2
+    fi
+
+    # For KDD, kill Typha.
+    if [ "$DATASTORE_TYPE" = kubernetes ]; then
+        kill_typha
+    fi
+}
+
+test_bgp_filter_deletion() {
+    # For KDD, run Typha and clean up the output directory.
+    if [ "$DATASTORE_TYPE" = kubernetes ]; then
+        start_typha
+        rm -f /etc/calico/confd/config/*
+    fi
+
+    # Run confd as a background process.
+    echo "Running confd as background process"
+    NODENAME=kube-master BGP_LOGSEVERITYSCREEN="debug" confd -confdir=/etc/calico/confd >$LOGPATH/logd1 2>&1 &
+    CONFD_PID=$!
+    echo "Running with PID " $CONFD_PID
+
+    # Turn the node-mesh off
+    turn_mesh_off
+
+    # Create 3 nodes and a BGPFilter then globally pair the nodes all using the same filter
+    $CALICOCTL apply -f - <<EOF
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-master
+  labels:
+    global-peer: yes
+spec:
+  bgp:
+    ipv4Address: 10.192.0.2/16
+    ipv6Address: "2001::102/64"
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-node-1
+  labels:
+    global-peer: yes
+spec:
+  bgp:
+    ipv4Address: 10.192.0.3/16
+    ipv6Address: "2001::103/64"
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-node-2
+  labels:
+    global-peer: yes
+spec:
+  bgp:
+    ipv4Address: 10.192.0.4/16
+    ipv6Address: "2001::104/64"
+---
+kind: BGPFilter
+apiVersion: projectcalico.org/v3
+metadata:
+  name: test-filter
+spec:
+  exportV4:
+    - action: Accept
+      matchOperator: In
+      cidr: 77.0.0.0/16
+    - action: Reject
+      matchOperator: In
+      cidr: 77.1.0.0/16
+  importV4:
+    - action: Accept
+      matchOperator: In
+      cidr: 44.0.0.0/16
+    - action: Reject
+      matchOperator: In
+      cidr: 44.1.0.0/16
+  exportV6:
+    - action: Accept
+      matchOperator: In
+      cidr: 9000::0/64
+    - action: Reject
+      matchOperator: In
+      cidr: 9000:1::0/64
+  importV6:
+    - action: Accept
+      matchOperator: In
+      cidr: 5000::0/64
+    - action: Reject
+      matchOperator: In
+      cidr: 5000:1::0/64
+---
+kind: BGPPeer
+apiVersion: projectcalico.org/v3
+metadata:
+  name: test-global-peer-with-filter
+spec:
+  peerSelector: has(global-peer)
+  filters:
+    - test-filter
+EOF
+
+    test_confd_templates bgpfilter/filter_deletion/step1
+
+    # Now delete the BGPFilter
+
+    $CALICOCTL delete bgpfilter test-filter
+
+    test_confd_templates bgpfilter/filter_deletion/step2
+    # Kill confd.
+    kill -9 $CONFD_PID
+
+    # Turn the node-mesh back on.
+    turn_mesh_on
+
+    # Delete remaining resources.
+    $CALICOCTL delete bgppeer test-global-peer-with-filter
+    if [ "$DATASTORE_TYPE" = etcdv3 ]; then
+      $CALICOCTL delete node kube-master
+      $CALICOCTL delete node kube-node-1
+      $CALICOCTL delete node kube-node-2
+    fi
+
+    # For KDD, kill Typha.
+    if [ "$DATASTORE_TYPE" = kubernetes ]; then
+        kill_typha
+    fi
+}
+
+test_bgp_filter_match_operators() {
+    # For KDD, run Typha and clean up the output directory.
+    if [ "$DATASTORE_TYPE" = kubernetes ]; then
+        start_typha
+        rm -f /etc/calico/confd/config/*
+    fi
+
+    # Run confd as a background process.
+    echo "Running confd as background process"
+    NODENAME=kube-master BGP_LOGSEVERITYSCREEN="debug" confd -confdir=/etc/calico/confd >$LOGPATH/logd1 2>&1 &
+    CONFD_PID=$!
+    echo "Running with PID " $CONFD_PID
+
+    # Turn the node-mesh off
+    turn_mesh_off
+
+    # Create 3 nodes and a BGPFilter then globally pair the nodes all using the same filter
+    $CALICOCTL apply -f - <<EOF
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-master
+  labels:
+    global-peer: yes
+spec:
+  bgp:
+    ipv4Address: 10.192.0.2/16
+    ipv6Address: "2001::102/64"
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-node-1
+  labels:
+    global-peer: yes
+spec:
+  bgp:
+    ipv4Address: 10.192.0.3/16
+    ipv6Address: "2001::103/64"
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-node-2
+  labels:
+    global-peer: yes
+spec:
+  bgp:
+    ipv4Address: 10.192.0.4/16
+    ipv6Address: "2001::104/64"
+---
+kind: BGPFilter
+apiVersion: projectcalico.org/v3
+metadata:
+  name: test-filter-match-operators
+spec:
+  exportV4:
+    - action: Accept
+      matchOperator: In
+      cidr: 77.0.0.0/16
+    - action: Reject
+      matchOperator: NotIn
+      cidr: 77.1.0.0/16
+    - action: Accept
+      matchOperator: Equal
+      cidr: 77.2.0.0/16
+    - action: Reject
+      matchOperator: NotEqual
+      cidr: 77.3.0.0/16
+  importV4:
+    - action: Accept
+      matchOperator: In
+      cidr: 44.0.0.0/16
+    - action: Reject
+      matchOperator: NotIn
+      cidr: 44.1.0.0/16
+    - action: Accept
+      matchOperator: Equal
+      cidr: 44.2.0.0/16
+    - action: Reject
+      matchOperator: NotEqual
+      cidr: 44.3.0.0/16
+  exportV6:
+    - action: Accept
+      matchOperator: In
+      cidr: 9000:0::0/64
+    - action: Reject
+      matchOperator: NotIn
+      cidr: 9000:1::0/64
+    - action: Accept
+      matchOperator: Equal
+      cidr: 9000:2::0/64
+    - action: Reject
+      matchOperator: NotEqual
+      cidr: 9000:3::0/64
+  importV6:
+    - action: Accept
+      matchOperator: In
+      cidr: 5000:0::0/64
+    - action: Reject
+      matchOperator: NotIn
+      cidr: 5000:1::0/64
+    - action: Accept
+      matchOperator: Equal
+      cidr: 5000:2::0/64
+    - action: Reject
+      matchOperator: NotEqual
+      cidr: 5000:3::0/64
+---
+kind: BGPPeer
+apiVersion: projectcalico.org/v3
+metadata:
+  name: test-global-peer-with-filter
+spec:
+  peerSelector: has(global-peer)
+  filters:
+    - test-filter-match-operators
+EOF
+
+    test_confd_templates bgpfilter/match_operators
+
+    # Kill confd.
+    kill -9 $CONFD_PID
+
+    # Turn the node-mesh back on.
+    turn_mesh_on
+
+    # Delete remaining resources.
+    $CALICOCTL delete bgpfilter test-filter-match-operators
+    $CALICOCTL delete bgppeer test-global-peer-with-filter
+    if [ "$DATASTORE_TYPE" = etcdv3 ]; then
+      $CALICOCTL delete node kube-master
+      $CALICOCTL delete node kube-node-1
+      $CALICOCTL delete node kube-node-2
+    fi
+
+    # For KDD, kill Typha.
+    if [ "$DATASTORE_TYPE" = kubernetes ]; then
+        kill_typha
+    fi
+}
+
+test_bgp_filter_names() {
+    # For KDD, run Typha and clean up the output directory.
+    if [ "$DATASTORE_TYPE" = kubernetes ]; then
+        start_typha
+        rm -f /etc/calico/confd/config/*
+    fi
+
+    # Run confd as a background process.
+    echo "Running confd as background process"
+    NODENAME=kube-master BGP_LOGSEVERITYSCREEN="debug" confd -confdir=/etc/calico/confd >$LOGPATH/logd1 2>&1 &
+    CONFD_PID=$!
+    echo "Running with PID " $CONFD_PID
+
+    # Turn the node-mesh off
+    turn_mesh_off
+
+    # Create 3 nodes and a BGPFilter then globally pair the nodes all using the same filter that contains
+    # a very long filter name with all possible characters (eg. '.' and '-'). The significance of 45 here is
+    # that BIRD symbol names max out at 64 chars, so 45 is the maximum filter name size after subtracting our
+    # boilerplate content eg. "bgp_" + "[ex | im]portFilterV[4 | 6]"
+    $CALICOCTL apply -f - <<EOF
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-master
+  labels:
+    global-peer: yes
+spec:
+  bgp:
+    ipv4Address: 10.192.0.2/16
+    ipv6Address: "2001::102/64"
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-node-1
+  labels:
+    global-peer: yes
+spec:
+  bgp:
+    ipv4Address: 10.192.0.3/16
+    ipv6Address: "2001::103/64"
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-node-2
+  labels:
+    global-peer: yes
+spec:
+  bgp:
+    ipv4Address: 10.192.0.4/16
+    ipv6Address: "2001::104/64"
+---
+kind: BGPFilter
+apiVersion: projectcalico.org/v3
+metadata:
+  name: 45characters.exactly.so.should.not.truncate-1
+spec:
+  exportV4:
+    - action: Accept
+      matchOperator: In
+      cidr: 77.0.0.0/16
+    - action: Reject
+      matchOperator: In
+      cidr: 77.1.0.0/16
+  importV4:
+    - action: Accept
+      matchOperator: In
+      cidr: 44.0.0.0/16
+    - action: Reject
+      matchOperator: In
+      cidr: 44.1.0.0/16
+  exportV6:
+    - action: Accept
+      matchOperator: In
+      cidr: 9000::0/64
+    - action: Reject
+      matchOperator: In
+      cidr: 9000:1::0/64
+  importV6:
+    - action: Accept
+      matchOperator: In
+      cidr: 5000::0/64
+    - action: Reject
+      matchOperator: In
+      cidr: 5000:1::0/64
+---
+kind: BGPFilter
+apiVersion: projectcalico.org/v3
+metadata:
+  name: 46characters.exactly.so.should.truncate-123456
+spec:
+  exportV4:
+    - action: Accept
+      matchOperator: In
+      cidr: 77.2.0.0/16
+    - action: Reject
+      matchOperator: In
+      cidr: 77.3.0.0/16
+  importV4:
+    - action: Accept
+      matchOperator: In
+      cidr: 44.2.0.0/16
+    - action: Reject
+      matchOperator: In
+      cidr: 44.3.0.0/16
+  exportV6:
+    - action: Accept
+      matchOperator: In
+      cidr: 9000:2::0/64
+    - action: Reject
+      matchOperator: In
+      cidr: 9000:3::0/64
+  importV6:
+    - action: Accept
+      matchOperator: In
+      cidr: 5000:2::0/64
+    - action: Reject
+      matchOperator: In
+      cidr: 5000:3::0/64
+---
+kind: BGPFilter
+apiVersion: projectcalico.org/v3
+metadata:
+  name: greater-than-64-characters.so.this.should.definitely.truncate-1234567890
+spec:
+  exportV4:
+    - action: Accept
+      matchOperator: In
+      cidr: 77.4.0.0/16
+    - action: Reject
+      matchOperator: In
+      cidr: 77.5.0.0/16
+  importV4:
+    - action: Accept
+      matchOperator: In
+      cidr: 44.4.0.0/16
+    - action: Reject
+      matchOperator: In
+      cidr: 44.5.0.0/16
+  exportV6:
+    - action: Accept
+      matchOperator: In
+      cidr: 9000:4::0/64
+    - action: Reject
+      matchOperator: In
+      cidr: 9000:5::0/64
+  importV6:
+    - action: Accept
+      matchOperator: In
+      cidr: 5000:4::0/64
+    - action: Reject
+      matchOperator: In
+      cidr: 5000:5::0/64
+---
+kind: BGPPeer
+apiVersion: projectcalico.org/v3
+metadata:
+  name: test-global-peer-with-truncated-filter-name
+spec:
+  peerSelector: has(global-peer)
+  filters:
+    - 45characters.exactly.so.should.not.truncate-1
+    - 46characters.exactly.so.should.truncate-123456
+    - greater-than-64-characters.so.this.should.definitely.truncate-1234567890
+EOF
+
+    test_confd_templates bgpfilter/filter_names/
+
+    # Kill confd.
+    kill -9 $CONFD_PID
+
+    # Turn the node-mesh back on.
+    turn_mesh_on
+
+    # Delete remaining resources.
+    $CALICOCTL delete bgpfilter 45characters.exactly.so.should.not.truncate-1
+    $CALICOCTL delete bgpfilter 46characters.exactly.so.should.truncate-123456
+    $CALICOCTL delete bgpfilter greater-than-64-characters.so.this.should.definitely.truncate-1234567890
+    $CALICOCTL delete bgppeer test-global-peer-with-truncated-filter-name
+    if [ "$DATASTORE_TYPE" = etcdv3 ]; then
+      $CALICOCTL delete node kube-master
+      $CALICOCTL delete node kube-node-1
+      $CALICOCTL delete node kube-node-2
+    fi
+
+    # For KDD, kill Typha.
+    if [ "$DATASTORE_TYPE" = kubernetes ]; then
+        kill_typha
+    fi
+}
+
+test_bgp_filter_import_only_explicit_peers() {
+    # For KDD, run Typha and clean up the output directory.
+    if [ "$DATASTORE_TYPE" = kubernetes ]; then
+        start_typha
+        rm -f /etc/calico/confd/config/*
+    fi
+
+    # Run confd as a background process.
+    echo "Running confd as background process"
+    NODENAME=kube-master BGP_LOGSEVERITYSCREEN="debug" confd -confdir=/etc/calico/confd >$LOGPATH/logd1 2>&1 &
+    CONFD_PID=$!
+    echo "Running with PID " $CONFD_PID
+
+    # Turn the node-mesh off
+    turn_mesh_off
+
+    # Create 3 nodes, 2 BGPFilters, and 2 peerings that each use one of the filters
+    $CALICOCTL apply -f - <<EOF
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-master
+spec:
+  bgp:
+    ipv4Address: 10.192.0.2/16
+    ipv6Address: "2001::102/64"
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-node-1
+spec:
+  bgp:
+    ipv4Address: 10.192.0.3/16
+    ipv6Address: "2001::103/64"
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-node-2
+spec:
+  bgp:
+    ipv4Address: 10.192.0.4/16
+    ipv6Address: "2001::104/64"
+---
+kind: BGPFilter
+apiVersion: projectcalico.org/v3
+metadata:
+  name: import-only-filter-1
+spec:
+  importV4:
+    - action: Accept
+      matchOperator: In
+      cidr: 44.0.0.0/16
+    - action: Reject
+      matchOperator: In
+      cidr: 44.1.0.0/16
+  importV6:
+    - action: Accept
+      matchOperator: In
+      cidr: 5000::0/64
+    - action: Reject
+      matchOperator: In
+      cidr: 5000:1::0/64
+---
+kind: BGPFilter
+apiVersion: projectcalico.org/v3
+metadata:
+  name: import-only-filter-2
+spec:
+  importV4:
+    - action: Accept
+      matchOperator: In
+      cidr: 44.2.0.0/16
+    - action: Reject
+      matchOperator: In
+      cidr: 44.3.0.0/16
+  importV6:
+    - action: Accept
+      matchOperator: In
+      cidr: 5000:2::0/64
+    - action: Reject
+      matchOperator: In
+      cidr: 5000:3::0/64
+---
+kind: BGPPeer
+apiVersion: projectcalico.org/v3
+metadata:
+  name: test-explicit-peer-with-filter-1-v4
+spec:
+  node: kube-master
+  peerIP: 10.192.0.3
+  asNumber: 64517
+  filters:
+    - import-only-filter-1
+---
+kind: BGPPeer
+apiVersion: projectcalico.org/v3
+metadata:
+  name: test-explicit-peer-with-filter-1-v6
+spec:
+  node: kube-master
+  peerIP: 2001::103
+  asNumber: 64517
+  filters:
+    - import-only-filter-1
+---
+kind: BGPPeer
+apiVersion: projectcalico.org/v3
+metadata:
+  name: test-explicit-peer-with-filter-2-v4
+spec:
+  node: kube-master
+  peerIP: 10.192.0.4
+  asNumber: 64517
+  filters:
+    - import-only-filter-2
+---
+kind: BGPPeer
+apiVersion: projectcalico.org/v3
+metadata:
+  name: test-explicit-peer-with-filter-2-v6
+spec:
+  node: kube-master
+  peerIP: 2001::104
+  asNumber: 64517
+  filters:
+    - import-only-filter-2
+EOF
+
+    test_confd_templates bgpfilter/import_only/explicit_peer
+
+    # Kill confd.
+    kill -9 $CONFD_PID
+
+    # Turn the node-mesh back on.
+    turn_mesh_on
+
+    # Delete remaining resources.
+    $CALICOCTL delete bgpfilter import-only-filter-1
+    $CALICOCTL delete bgpfilter import-only-filter-2
+    $CALICOCTL delete bgppeer test-explicit-peer-with-filter-1-v4
+    $CALICOCTL delete bgppeer test-explicit-peer-with-filter-1-v6
+    $CALICOCTL delete bgppeer test-explicit-peer-with-filter-2-v4
+    $CALICOCTL delete bgppeer test-explicit-peer-with-filter-2-v6
+    if [ "$DATASTORE_TYPE" = etcdv3 ]; then
+      $CALICOCTL delete node kube-master
+      $CALICOCTL delete node kube-node-1
+      $CALICOCTL delete node kube-node-2
+    fi
+
+    # For KDD, kill Typha.
+    if [ "$DATASTORE_TYPE" = kubernetes ]; then
+        kill_typha
+    fi
+}
+
+test_bgp_filter_import_only_global_peers() {
+    # For KDD, run Typha and clean up the output directory.
+    if [ "$DATASTORE_TYPE" = kubernetes ]; then
+        start_typha
+        rm -f /etc/calico/confd/config/*
+    fi
+
+    # Run confd as a background process.
+    echo "Running confd as background process"
+    NODENAME=kube-master BGP_LOGSEVERITYSCREEN="debug" confd -confdir=/etc/calico/confd >$LOGPATH/logd1 2>&1 &
+    CONFD_PID=$!
+    echo "Running with PID " $CONFD_PID
+
+    # Turn the node-mesh off
+    turn_mesh_off
+
+    # Create 3 nodes and a BGPFilter then globally pair the nodes all using the same filter
+    $CALICOCTL apply -f - <<EOF
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-master
+  labels:
+    global-peer: yes
+spec:
+  bgp:
+    ipv4Address: 10.192.0.2/16
+    ipv6Address: "2001::102/64"
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-node-1
+  labels:
+    global-peer: yes
+spec:
+  bgp:
+    ipv4Address: 10.192.0.3/16
+    ipv6Address: "2001::103/64"
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-node-2
+  labels:
+    global-peer: yes
+spec:
+  bgp:
+    ipv4Address: 10.192.0.4/16
+    ipv6Address: "2001::104/64"
+---
+kind: BGPFilter
+apiVersion: projectcalico.org/v3
+metadata:
+  name: import-only-filter
+spec:
+  importV4:
+    - action: Accept
+      matchOperator: In
+      cidr: 44.0.0.0/16
+    - action: Reject
+      matchOperator: In
+      cidr: 44.1.0.0/16
+  importV6:
+    - action: Accept
+      matchOperator: In
+      cidr: 5000::0/64
+    - action: Reject
+      matchOperator: In
+      cidr: 5000:1::0/64
+---
+kind: BGPPeer
+apiVersion: projectcalico.org/v3
+metadata:
+  name: test-global-peer-with-filter
+spec:
+  peerSelector: has(global-peer)
+  filters:
+    - import-only-filter
+EOF
+
+    test_confd_templates bgpfilter/import_only/global_peer
+
+    # Kill confd.
+    kill -9 $CONFD_PID
+
+    # Turn the node-mesh back on.
+    turn_mesh_on
+
+    # Delete remaining resources.
+    $CALICOCTL delete bgpfilter import-only-filter
+    $CALICOCTL delete bgppeer test-global-peer-with-filter
+    if [ "$DATASTORE_TYPE" = etcdv3 ]; then
+      $CALICOCTL delete node kube-master
+      $CALICOCTL delete node kube-node-1
+      $CALICOCTL delete node kube-node-2
+    fi
+
+    # For KDD, kill Typha.
+    if [ "$DATASTORE_TYPE" = kubernetes ]; then
+        kill_typha
+    fi
+}
+
+test_bgp_filter_export_only_explicit_peers() {
+    # For KDD, run Typha and clean up the output directory.
+    if [ "$DATASTORE_TYPE" = kubernetes ]; then
+        start_typha
+        rm -f /etc/calico/confd/config/*
+    fi
+
+    # Run confd as a background process.
+    echo "Running confd as background process"
+    NODENAME=kube-master BGP_LOGSEVERITYSCREEN="debug" confd -confdir=/etc/calico/confd >$LOGPATH/logd1 2>&1 &
+    CONFD_PID=$!
+    echo "Running with PID " $CONFD_PID
+
+    # Turn the node-mesh off
+    turn_mesh_off
+
+    # Create 3 nodes, 2 BGPFilters, and 2 peerings that each use one of the filters
+    $CALICOCTL apply -f - <<EOF
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-master
+spec:
+  bgp:
+    ipv4Address: 10.192.0.2/16
+    ipv6Address: "2001::102/64"
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-node-1
+spec:
+  bgp:
+    ipv4Address: 10.192.0.3/16
+    ipv6Address: "2001::103/64"
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-node-2
+spec:
+  bgp:
+    ipv4Address: 10.192.0.4/16
+    ipv6Address: "2001::104/64"
+---
+kind: BGPFilter
+apiVersion: projectcalico.org/v3
+metadata:
+  name: export-only-filter-1
+spec:
+  exportV4:
+    - action: Accept
+      matchOperator: In
+      cidr: 44.0.0.0/16
+    - action: Reject
+      matchOperator: In
+      cidr: 44.1.0.0/16
+  exportV6:
+    - action: Accept
+      matchOperator: In
+      cidr: 5000::0/64
+    - action: Reject
+      matchOperator: In
+      cidr: 5000:1::0/64
+---
+kind: BGPFilter
+apiVersion: projectcalico.org/v3
+metadata:
+  name: export-only-filter-2
+spec:
+  exportV4:
+    - action: Accept
+      matchOperator: In
+      cidr: 44.2.0.0/16
+    - action: Reject
+      matchOperator: In
+      cidr: 44.3.0.0/16
+  exportV6:
+    - action: Accept
+      matchOperator: In
+      cidr: 5000:2::0/64
+    - action: Reject
+      matchOperator: In
+      cidr: 5000:3::0/64
+---
+kind: BGPPeer
+apiVersion: projectcalico.org/v3
+metadata:
+  name: test-explicit-peer-with-filter-1-v4
+spec:
+  node: kube-master
+  peerIP: 10.192.0.3
+  asNumber: 64517
+  filters:
+    - export-only-filter-1
+---
+kind: BGPPeer
+apiVersion: projectcalico.org/v3
+metadata:
+  name: test-explicit-peer-with-filter-1-v6
+spec:
+  node: kube-master
+  peerIP: 2001::103
+  asNumber: 64517
+  filters:
+    - export-only-filter-1
+---
+kind: BGPPeer
+apiVersion: projectcalico.org/v3
+metadata:
+  name: test-explicit-peer-with-filter-2-v4
+spec:
+  node: kube-master
+  peerIP: 10.192.0.4
+  asNumber: 64517
+  filters:
+    - export-only-filter-2
+---
+kind: BGPPeer
+apiVersion: projectcalico.org/v3
+metadata:
+  name: test-explicit-peer-with-filter-2-v6
+spec:
+  node: kube-master
+  peerIP: 2001::104
+  asNumber: 64517
+  filters:
+    - export-only-filter-2
+EOF
+
+    test_confd_templates bgpfilter/export_only/explicit_peer
+
+    # Kill confd.
+    kill -9 $CONFD_PID
+
+    # Turn the node-mesh back on.
+    turn_mesh_on
+
+    # Delete remaining resources.
+    $CALICOCTL delete bgpfilter export-only-filter-1
+    $CALICOCTL delete bgpfilter export-only-filter-2
+    $CALICOCTL delete bgppeer test-explicit-peer-with-filter-1-v4
+    $CALICOCTL delete bgppeer test-explicit-peer-with-filter-1-v6
+    $CALICOCTL delete bgppeer test-explicit-peer-with-filter-2-v4
+    $CALICOCTL delete bgppeer test-explicit-peer-with-filter-2-v6
+    if [ "$DATASTORE_TYPE" = etcdv3 ]; then
+      $CALICOCTL delete node kube-master
+      $CALICOCTL delete node kube-node-1
+      $CALICOCTL delete node kube-node-2
+    fi
+
+    # For KDD, kill Typha.
+    if [ "$DATASTORE_TYPE" = kubernetes ]; then
+        kill_typha
+    fi
+}
+
+test_bgp_filter_export_only_global_peers() {
+    # For KDD, run Typha and clean up the output directory.
+    if [ "$DATASTORE_TYPE" = kubernetes ]; then
+        start_typha
+        rm -f /etc/calico/confd/config/*
+    fi
+
+    # Run confd as a background process.
+    echo "Running confd as background process"
+    NODENAME=kube-master BGP_LOGSEVERITYSCREEN="debug" confd -confdir=/etc/calico/confd >$LOGPATH/logd1 2>&1 &
+    CONFD_PID=$!
+    echo "Running with PID " $CONFD_PID
+
+    # Turn the node-mesh off
+    turn_mesh_off
+
+    # Create 3 nodes and a BGPFilter then globally pair the nodes all using the same filter
+    $CALICOCTL apply -f - <<EOF
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-master
+  labels:
+    global-peer: yes
+spec:
+  bgp:
+    ipv4Address: 10.192.0.2/16
+    ipv6Address: "2001::102/64"
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-node-1
+  labels:
+    global-peer: yes
+spec:
+  bgp:
+    ipv4Address: 10.192.0.3/16
+    ipv6Address: "2001::103/64"
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-node-2
+  labels:
+    global-peer: yes
+spec:
+  bgp:
+    ipv4Address: 10.192.0.4/16
+    ipv6Address: "2001::104/64"
+---
+kind: BGPFilter
+apiVersion: projectcalico.org/v3
+metadata:
+  name: export-only-filter
+spec:
+  exportV4:
+    - action: Accept
+      matchOperator: In
+      cidr: 44.0.0.0/16
+    - action: Reject
+      matchOperator: In
+      cidr: 44.1.0.0/16
+  exportV6:
+    - action: Accept
+      matchOperator: In
+      cidr: 5000::0/64
+    - action: Reject
+      matchOperator: In
+      cidr: 5000:1::0/64
+---
+kind: BGPPeer
+apiVersion: projectcalico.org/v3
+metadata:
+  name: test-global-peer-with-filter
+spec:
+  peerSelector: has(global-peer)
+  filters:
+    - export-only-filter
+EOF
+
+    test_confd_templates bgpfilter/export_only/global_peer
+
+    # Kill confd.
+    kill -9 $CONFD_PID
+
+    # Turn the node-mesh back on.
+    turn_mesh_on
+
+    # Delete remaining resources.
+    $CALICOCTL delete bgpfilter export-only-filter
+    $CALICOCTL delete bgppeer test-global-peer-with-filter
+    if [ "$DATASTORE_TYPE" = etcdv3 ]; then
+      $CALICOCTL delete node kube-master
+      $CALICOCTL delete node kube-node-1
+      $CALICOCTL delete node kube-node-2
+    fi
+
+    # For KDD, kill Typha.
+    if [ "$DATASTORE_TYPE" = kubernetes ]; then
+        kill_typha
+    fi
+}
+
+test_bgp_filter_v4_only_explicit_peers() {
+    # For KDD, run Typha and clean up the output directory.
+    if [ "$DATASTORE_TYPE" = kubernetes ]; then
+        start_typha
+        rm -f /etc/calico/confd/config/*
+    fi
+
+    # Run confd as a background process.
+    echo "Running confd as background process"
+    NODENAME=kube-master BGP_LOGSEVERITYSCREEN="debug" confd -confdir=/etc/calico/confd >$LOGPATH/logd1 2>&1 &
+    CONFD_PID=$!
+    echo "Running with PID " $CONFD_PID
+
+    # Turn the node-mesh off
+    turn_mesh_off
+
+    # Create 3 nodes, 2 BGPFilters, and 2 peerings that each use one of the filters
+    $CALICOCTL apply -f - <<EOF
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-master
+spec:
+  bgp:
+    ipv4Address: 10.192.0.2/16
+    ipv6Address: "2001::102/64"
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-node-1
+spec:
+  bgp:
+    ipv4Address: 10.192.0.3/16
+    ipv6Address: "2001::103/64"
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-node-2
+spec:
+  bgp:
+    ipv4Address: 10.192.0.4/16
+    ipv6Address: "2001::104/64"
+---
+kind: BGPFilter
+apiVersion: projectcalico.org/v3
+metadata:
+  name: test-filter-1
+spec:
+  exportV4:
+    - action: Accept
+      matchOperator: In
+      cidr: 77.0.0.0/16
+    - action: Reject
+      matchOperator: In
+      cidr: 77.1.0.0/16
+  importV4:
+    - action: Accept
+      matchOperator: In
+      cidr: 44.0.0.0/16
+    - action: Reject
+      matchOperator: In
+      cidr: 44.1.0.0/16
+---
+kind: BGPFilter
+apiVersion: projectcalico.org/v3
+metadata:
+  name: test-filter-2
+spec:
+  exportV4:
+    - action: Accept
+      matchOperator: In
+      cidr: 77.2.0.0/16
+    - action: Reject
+      matchOperator: In
+      cidr: 77.3.0.0/16
+  importV4:
+    - action: Accept
+      matchOperator: In
+      cidr: 44.2.0.0/16
+    - action: Reject
+      matchOperator: In
+      cidr: 44.3.0.0/16
+---
+kind: BGPPeer
+apiVersion: projectcalico.org/v3
+metadata:
+  name: test-explicit-peer-with-filter-1-v4
+spec:
+  node: kube-master
+  peerIP: 10.192.0.3
+  asNumber: 64517
+  filters:
+    - test-filter-1
+---
+kind: BGPPeer
+apiVersion: projectcalico.org/v3
+metadata:
+  name: test-explicit-peer-with-filter-1-v6
+spec:
+  node: kube-master
+  peerIP: 2001::103
+  asNumber: 64517
+---
+kind: BGPPeer
+apiVersion: projectcalico.org/v3
+metadata:
+  name: test-explicit-peer-with-filter-2-v4
+spec:
+  node: kube-master
+  peerIP: 10.192.0.4
+  asNumber: 64517
+  filters:
+    - test-filter-2
+---
+kind: BGPPeer
+apiVersion: projectcalico.org/v3
+metadata:
+  name: test-explicit-peer-with-filter-2-v6
+spec:
+  node: kube-master
+  peerIP: 2001::104
+  asNumber: 64517
+EOF
+
+    test_confd_templates bgpfilter/v4_only/explicit_peer
+
+    # Kill confd.
+    kill -9 $CONFD_PID
+
+    # Turn the node-mesh back on.
+    turn_mesh_on
+
+    # Delete remaining resources.
+    $CALICOCTL delete bgpfilter test-filter-1
+    $CALICOCTL delete bgpfilter test-filter-2
+    $CALICOCTL delete bgppeer test-explicit-peer-with-filter-1-v4
+    $CALICOCTL delete bgppeer test-explicit-peer-with-filter-1-v6
+    $CALICOCTL delete bgppeer test-explicit-peer-with-filter-2-v4
+    $CALICOCTL delete bgppeer test-explicit-peer-with-filter-2-v6
+    if [ "$DATASTORE_TYPE" = etcdv3 ]; then
+      $CALICOCTL delete node kube-master
+      $CALICOCTL delete node kube-node-1
+      $CALICOCTL delete node kube-node-2
+    fi
+
+    # For KDD, kill Typha.
+    if [ "$DATASTORE_TYPE" = kubernetes ]; then
+        kill_typha
+    fi
+}
+
+test_bgp_filter_v4_only_global_peers() {
+    # For KDD, run Typha and clean up the output directory.
+    if [ "$DATASTORE_TYPE" = kubernetes ]; then
+        start_typha
+        rm -f /etc/calico/confd/config/*
+    fi
+
+    # Run confd as a background process.
+    echo "Running confd as background process"
+    NODENAME=kube-master BGP_LOGSEVERITYSCREEN="debug" confd -confdir=/etc/calico/confd >$LOGPATH/logd1 2>&1 &
+    CONFD_PID=$!
+    echo "Running with PID " $CONFD_PID
+
+    # Turn the node-mesh off
+    turn_mesh_off
+
+    # Create 3 nodes and a BGPFilter then globally pair the nodes all using the same filter
+    $CALICOCTL apply -f - <<EOF
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-master
+  labels:
+    global-peer: yes
+spec:
+  bgp:
+    ipv4Address: 10.192.0.2/16
+    ipv6Address: "2001::102/64"
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-node-1
+  labels:
+    global-peer: yes
+spec:
+  bgp:
+    ipv4Address: 10.192.0.3/16
+    ipv6Address: "2001::103/64"
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-node-2
+  labels:
+    global-peer: yes
+spec:
+  bgp:
+    ipv4Address: 10.192.0.4/16
+    ipv6Address: "2001::104/64"
+---
+kind: BGPFilter
+apiVersion: projectcalico.org/v3
+metadata:
+  name: test-filter
+spec:
+  exportV4:
+    - action: Accept
+      matchOperator: In
+      cidr: 77.0.0.0/16
+    - action: Reject
+      matchOperator: In
+      cidr: 77.1.0.0/16
+  importV4:
+    - action: Accept
+      matchOperator: In
+      cidr: 44.0.0.0/16
+    - action: Reject
+      matchOperator: In
+      cidr: 44.1.0.0/16
+---
+kind: BGPPeer
+apiVersion: projectcalico.org/v3
+metadata:
+  name: test-global-peer-with-filter
+spec:
+  peerSelector: has(global-peer)
+  filters:
+    - test-filter
+EOF
+
+    test_confd_templates bgpfilter/v4_only/global_peer
+
+    # Kill confd.
+    kill -9 $CONFD_PID
+
+    # Turn the node-mesh back on.
+    turn_mesh_on
+
+    # Delete remaining resources.
+    $CALICOCTL delete bgpfilter test-filter
+    $CALICOCTL delete bgppeer test-global-peer-with-filter
+    if [ "$DATASTORE_TYPE" = etcdv3 ]; then
+      $CALICOCTL delete node kube-master
+      $CALICOCTL delete node kube-node-1
+      $CALICOCTL delete node kube-node-2
+    fi
+
+    # For KDD, kill Typha.
+    if [ "$DATASTORE_TYPE" = kubernetes ]; then
+        kill_typha
+    fi
+}
+
+test_bgp_filter_v6_only_explicit_peers() {
+    # For KDD, run Typha and clean up the output directory.
+    if [ "$DATASTORE_TYPE" = kubernetes ]; then
+        start_typha
+        rm -f /etc/calico/confd/config/*
+    fi
+
+    # Run confd as a background process.
+    echo "Running confd as background process"
+    NODENAME=kube-master BGP_LOGSEVERITYSCREEN="debug" confd -confdir=/etc/calico/confd >$LOGPATH/logd1 2>&1 &
+    CONFD_PID=$!
+    echo "Running with PID " $CONFD_PID
+
+    # Turn the node-mesh off
+    turn_mesh_off
+
+    # Create 3 nodes, 2 BGPFilters, and 2 peerings that each use one of the filters
+    $CALICOCTL apply -f - <<EOF
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-master
+spec:
+  bgp:
+    ipv4Address: 10.192.0.2/16
+    ipv6Address: "2001::102/64"
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-node-1
+spec:
+  bgp:
+    ipv4Address: 10.192.0.3/16
+    ipv6Address: "2001::103/64"
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-node-2
+spec:
+  bgp:
+    ipv4Address: 10.192.0.4/16
+    ipv6Address: "2001::104/64"
+---
+kind: BGPFilter
+apiVersion: projectcalico.org/v3
+metadata:
+  name: test-filter-1
+spec:
+  exportV6:
+    - action: Accept
+      matchOperator: In
+      cidr: 9000::0/64
+    - action: Reject
+      matchOperator: In
+      cidr: 9000:1::0/64
+  importV6:
+    - action: Accept
+      matchOperator: In
+      cidr: 5000::0/64
+    - action: Reject
+      matchOperator: In
+      cidr: 5000:1::0/64
+---
+kind: BGPFilter
+apiVersion: projectcalico.org/v3
+metadata:
+  name: test-filter-2
+spec:
+  exportV6:
+    - action: Accept
+      matchOperator: In
+      cidr: 9000:2::0/64
+    - action: Reject
+      matchOperator: In
+      cidr: 9000:3::0/64
+  importV6:
+    - action: Accept
+      matchOperator: In
+      cidr: 5000:2::0/64
+    - action: Reject
+      matchOperator: In
+      cidr: 5000:3::0/64
+---
+kind: BGPPeer
+apiVersion: projectcalico.org/v3
+metadata:
+  name: test-explicit-peer-with-filter-1-v4
+spec:
+  node: kube-master
+  peerIP: 10.192.0.3
+  asNumber: 64517
+---
+kind: BGPPeer
+apiVersion: projectcalico.org/v3
+metadata:
+  name: test-explicit-peer-with-filter-1-v6
+spec:
+  node: kube-master
+  peerIP: 2001::103
+  asNumber: 64517
+  filters:
+    - test-filter-1
+---
+kind: BGPPeer
+apiVersion: projectcalico.org/v3
+metadata:
+  name: test-explicit-peer-with-filter-2-v4
+spec:
+  node: kube-master
+  peerIP: 10.192.0.4
+  asNumber: 64517
+---
+kind: BGPPeer
+apiVersion: projectcalico.org/v3
+metadata:
+  name: test-explicit-peer-with-filter-2-v6
+spec:
+  node: kube-master
+  peerIP: 2001::104
+  asNumber: 64517
+  filters:
+    - test-filter-2
+EOF
+
+    test_confd_templates bgpfilter/v6_only/explicit_peer
+
+    # Kill confd.
+    kill -9 $CONFD_PID
+
+    # Turn the node-mesh back on.
+    turn_mesh_on
+
+    # Delete remaining resources.
+    $CALICOCTL delete bgpfilter test-filter-1
+    $CALICOCTL delete bgpfilter test-filter-2
+    $CALICOCTL delete bgppeer test-explicit-peer-with-filter-1-v4
+    $CALICOCTL delete bgppeer test-explicit-peer-with-filter-1-v6
+    $CALICOCTL delete bgppeer test-explicit-peer-with-filter-2-v4
+    $CALICOCTL delete bgppeer test-explicit-peer-with-filter-2-v6
+    if [ "$DATASTORE_TYPE" = etcdv3 ]; then
+      $CALICOCTL delete node kube-master
+      $CALICOCTL delete node kube-node-1
+      $CALICOCTL delete node kube-node-2
+    fi
+
+    # For KDD, kill Typha.
+    if [ "$DATASTORE_TYPE" = kubernetes ]; then
+        kill_typha
+    fi
+}
+
+test_bgp_filter_v6_only_global_peers() {
+    # For KDD, run Typha and clean up the output directory.
+    if [ "$DATASTORE_TYPE" = kubernetes ]; then
+        start_typha
+        rm -f /etc/calico/confd/config/*
+    fi
+
+    # Run confd as a background process.
+    echo "Running confd as background process"
+    NODENAME=kube-master BGP_LOGSEVERITYSCREEN="debug" confd -confdir=/etc/calico/confd >$LOGPATH/logd1 2>&1 &
+    CONFD_PID=$!
+    echo "Running with PID " $CONFD_PID
+
+    # Turn the node-mesh off
+    turn_mesh_off
+
+    # Create 3 nodes and a BGPFilter then globally pair the nodes all using the same filter
+    $CALICOCTL apply -f - <<EOF
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-master
+  labels:
+    global-peer: yes
+spec:
+  bgp:
+    ipv4Address: 10.192.0.2/16
+    ipv6Address: "2001::102/64"
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-node-1
+  labels:
+    global-peer: yes
+spec:
+  bgp:
+    ipv4Address: 10.192.0.3/16
+    ipv6Address: "2001::103/64"
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-node-2
+  labels:
+    global-peer: yes
+spec:
+  bgp:
+    ipv4Address: 10.192.0.4/16
+    ipv6Address: "2001::104/64"
+---
+kind: BGPFilter
+apiVersion: projectcalico.org/v3
+metadata:
+  name: test-filter
+spec:
+  exportV6:
+    - action: Accept
+      matchOperator: In
+      cidr: 9000::0/64
+    - action: Reject
+      matchOperator: In
+      cidr: 9000:1::0/64
+  importV6:
+    - action: Accept
+      matchOperator: In
+      cidr: 5000::0/64
+    - action: Reject
+      matchOperator: In
+      cidr: 5000:1::0/64
+---
+kind: BGPPeer
+apiVersion: projectcalico.org/v3
+metadata:
+  name: test-global-peer-with-filter
+spec:
+  peerSelector: has(global-peer)
+  filters:
+    - test-filter
+EOF
+
+    test_confd_templates bgpfilter/v6_only/global_peer
+
+    # Kill confd.
+    kill -9 $CONFD_PID
+
+    # Turn the node-mesh back on.
+    turn_mesh_on
+
+    # Delete remaining resources.
+    $CALICOCTL delete bgpfilter test-filter
+    $CALICOCTL delete bgppeer test-global-peer-with-filter
+    if [ "$DATASTORE_TYPE" = etcdv3 ]; then
+      $CALICOCTL delete node kube-master
+      $CALICOCTL delete node kube-node-1
+      $CALICOCTL delete node kube-node-2
+    fi
+
+    # For KDD, kill Typha.
+    if [ "$DATASTORE_TYPE" = kubernetes ]; then
+        kill_typha
+    fi
+}
+
+test_bgp_filters() {
+  test_single_bgp_filter_with_global_peers
+  test_single_bgp_filter_with_explicit_peers
+  test_multiple_bgp_filter_with_global_peers
+  test_multiple_bgp_filter_with_explicit_peers
+  test_bgp_filter_with_node_mesh_enabled
+  test_bgp_filter_deletion
+  test_bgp_filter_names
+  test_bgp_filter_match_operators
+  test_bgp_filter_import_only_explicit_peers
+  test_bgp_filter_import_only_global_peers
+  test_bgp_filter_export_only_explicit_peers
+  test_bgp_filter_export_only_global_peers
+  test_bgp_filter_v4_only_explicit_peers
+  test_bgp_filter_v4_only_global_peers
+  test_bgp_filter_v6_only_explicit_peers
+  test_bgp_filter_v6_only_global_peers
 }

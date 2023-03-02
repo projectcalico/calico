@@ -163,7 +163,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 
 						// Prepare route entry.
 						routeEntriesV6[i] = fmt.Sprintf("dead:beef::100:%d:0/122 dev %s metric 1024 pref medium", i, wireguardInterfaceNameV6Default)
-
 					}
 					// Swap route entry to match between workloads.
 					routeEntriesV6[0], routeEntriesV6[1] = routeEntriesV6[1], routeEntriesV6[0]

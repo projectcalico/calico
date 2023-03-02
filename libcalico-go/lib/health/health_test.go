@@ -184,7 +184,7 @@ var _ = Describe("Health timeouts", func() {
 				"| COMPONENT | TIMEOUT |    LIVENESS    |    READINESS    |     DETAIL     |",
 				"+-----------+---------+----------------+-----------------+----------------+",
 				"| source1   | 100ms   | -              | reporting ready |                |",
-				"| source2   | 0s      | reporting live | reporting ready | but very busy! |",
+				"| source2   | -       | reporting live | reporting ready | but very busy! |",
 				"+-----------+---------+----------------+-----------------+----------------+",
 			}, "\n")))
 		})
@@ -220,7 +220,7 @@ var _ = Describe("Health timeouts", func() {
 					"| COMPONENT |     TIMEOUT      |    LIVENESS    |    READINESS    |     DETAIL     |",
 					"+-----------+------------------+----------------+-----------------+----------------+",
 					"| source1   | 300ms (override) | -              | reporting ready |                |",
-					"| source2   | 0s               | reporting live | reporting ready | but very busy! |",
+					"| source2   | -                | reporting live | reporting ready | but very busy! |",
 					"+-----------+------------------+----------------+-----------------+----------------+",
 				}, "\n")))
 
@@ -233,7 +233,7 @@ var _ = Describe("Health timeouts", func() {
 					"| COMPONENT |     TIMEOUT      |    LIVENESS    |    READINESS    |     DETAIL     |",
 					"+-----------+------------------+----------------+-----------------+----------------+",
 					"| source1   | 300ms (override) | -              | reporting ready |                |",
-					"| source2   | 0s               | reporting live | reporting ready | but very busy! |",
+					"| source2   | -                | reporting live | reporting ready | but very busy! |",
 					"+-----------+------------------+----------------+-----------------+----------------+",
 				}, "\n")))
 
@@ -246,7 +246,7 @@ var _ = Describe("Health timeouts", func() {
 					"| COMPONENT |     TIMEOUT      |    LIVENESS    |    READINESS    |     DETAIL     |",
 					"+-----------+------------------+----------------+-----------------+----------------+",
 					"| source1   | 300ms (override) | -              | timed out       |                |",
-					"| source2   | 0s               | reporting live | reporting ready | but very busy! |",
+					"| source2   | -                | reporting live | reporting ready | but very busy! |",
 					"+-----------+------------------+----------------+-----------------+----------------+",
 				}, "\n")))
 			})

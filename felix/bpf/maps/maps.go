@@ -360,7 +360,7 @@ func (b *PinnedMap) Iter(f IterCallback) error {
 		if action == IterDelete {
 			// The previous iteration asked us to delete its key; do that now before we check for the end of
 			// the iteration.
-			err := DeleteMapEntry(b.MapFD(), keyToDelete, b.ValueSize)
+			err := DeleteMapEntry(b.MapFD(), keyToDelete, valueSize)
 			if err != nil && !IsNotExists(err) {
 				return fmt.Errorf("failed to delete map entry: %w", err)
 			}

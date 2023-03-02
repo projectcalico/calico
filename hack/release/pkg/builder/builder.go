@@ -326,7 +326,7 @@ func (r *ReleaseBuilder) collectGithubArtifacts(ver string) error {
 	if _, err := r.runner.Run("cp", []string{fmt.Sprintf("node/dist/calico-windows-%s.zip", ver), uploadDir}, nil); err != nil {
 		return err
 	}
-	if _, err := r.runner.Run("cp", []string{"calico/_site/scripts/install-calico-windows.ps1", uploadDir}, nil); err != nil {
+	if _, err := r.runner.Run("cp", []string{"node/dist/install-calico-windows.ps1", uploadDir}, nil); err != nil {
 		return err
 	}
 	if _, err := r.runner.Run("cp", []string{fmt.Sprintf("bin/tigera-operator-%s.tgz", ver), uploadDir}, nil); err != nil {
@@ -416,7 +416,7 @@ func (r *ReleaseBuilder) buildReleaseTar(ver string, targetDir string) error {
 	}
 
 	// Add in manifests directory generated from the docs.
-	if _, err := r.runner.Run("cp", []string{"-r", "calico/_site/manifests", releaseBase}, nil); err != nil {
+	if _, err := r.runner.Run("cp", []string{"-r", "/manifests", releaseBase}, nil); err != nil {
 		return err
 	}
 
@@ -470,6 +470,11 @@ Attached to this release are the following artifacts:
 - {calico_windows_zip}: Calico for Windows.
 - {helm_chart}: Calico Helm v3 chart.
 - ocp.tgz: Manifest bundle for OpenShift.
+
+Additional links:
+
+- [VPP data plane release information](https://github.com/projectcalico/vpp-dataplane/blob/master/RELEASE_NOTES.md)
+
 `
 	sv, err := semver.NewVersion(strings.TrimPrefix(ver, "v"))
 	if err != nil {

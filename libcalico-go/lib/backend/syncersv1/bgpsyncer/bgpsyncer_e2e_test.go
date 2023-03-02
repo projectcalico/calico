@@ -210,6 +210,51 @@ var _ = testutils.E2eDatastoreDescribe("BGP syncer tests", testutils.DatastoreAl
 			syncTester.ExpectCacheSize(expectedCacheSize)
 			syncTester.ExpectPath("/calico/resources/v3/projectcalico.org/bgppeers/peer1")
 
+			By("Creating a BGPFilter")
+			_, err = c.BGPFilter().Create(
+				ctx,
+				&apiv3.BGPFilter{
+					ObjectMeta: metav1.ObjectMeta{Name: "filter-1"},
+					Spec: apiv3.BGPFilterSpec{
+						ExportV4: []apiv3.BGPFilterRuleV4{
+							{
+								CIDR:          "10.10.10.0/24",
+								MatchOperator: apiv3.In,
+								Action:        apiv3.Accept,
+							},
+						},
+						ImportV4: []apiv3.BGPFilterRuleV4{
+							{
+								CIDR:          "11.11.11.0/24",
+								MatchOperator: apiv3.NotIn,
+								Action:        apiv3.Reject,
+							},
+						},
+						ExportV6: []apiv3.BGPFilterRuleV6{
+							{
+								CIDR:          "dead:beef:1::/64",
+								MatchOperator: apiv3.Equal,
+								Action:        apiv3.Accept,
+							},
+						},
+						ImportV6: []apiv3.BGPFilterRuleV6{
+							{
+								CIDR:          "dead:beef:2::/64",
+								MatchOperator: apiv3.NotEqual,
+								Action:        apiv3.Reject,
+							},
+						},
+					},
+				},
+				options.SetOptions{},
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			// The peer will add as single entry ( +1 )
+			expectedCacheSize += 1
+			syncTester.ExpectCacheSize(expectedCacheSize)
+			syncTester.ExpectPath("/calico/resources/v3/projectcalico.org/bgpfilters/filter-1")
+
 			// For non-kubernetes, check that we can allocate an IP address and get a syncer update
 			// for the allocation block.
 			var blockAffinityKeyV1 model.BlockAffinityKey

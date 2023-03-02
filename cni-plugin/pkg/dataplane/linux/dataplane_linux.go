@@ -76,14 +76,14 @@ func (d *linuxDataplane) DoNetworking(
 	}
 
 	err = ns.WithNetNSPath(args.Netns, func(hostNS ns.NetNS) error {
+		la := netlink.NewLinkAttrs()
+		la.Name = contVethName
+		la.MTU = d.mtu
+		la.NumTxQueues = d.queues
+		la.NumRxQueues = d.queues
 		veth := &netlink.Veth{
-			LinkAttrs: netlink.LinkAttrs{
-				Name:        contVethName,
-				MTU:         d.mtu,
-				NumTxQueues: d.queues,
-				NumRxQueues: d.queues,
-			},
-			PeerName: hostVethName,
+			LinkAttrs: la,
+			PeerName:  hostVethName,
 		}
 
 		if err := netlink.LinkAdd(veth); err != nil {

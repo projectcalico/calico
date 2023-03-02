@@ -15,10 +15,10 @@
 // Flexvolume driver that is invoked by kubelet when a pod installs a flexvolume drive
 // of type nodeagent/uds
 // This driver communicates to the nodeagent using either
-//   * (Default) writing credentials of workloads to a file or
-//   * gRPC message defined at protos/nodeagementmgmt.proto,
-// to shares the properties of the pod with nodeagent.
+//   - (Default) writing credentials of workloads to a file or
+//   - gRPC message defined at protos/nodeagementmgmt.proto,
 //
+// to shares the properties of the pod with nodeagent.
 package main
 
 import (

@@ -50,8 +50,10 @@ func (s *TestServer) Add(ctx context.Context, in *pb.AddRequest) (*pb.AddReply, 
 	// Create an unconfigured veth just to make the test code happy
 	if s.retval {
 		err := ns.WithNetNSPath(in.Netns, func(hostNS ns.NetNS) error {
+			la := netlink.NewLinkAttrs()
+			la.Name = in.InterfaceName
 			veth := &netlink.Veth{
-				LinkAttrs: netlink.LinkAttrs{Name: in.InterfaceName},
+				LinkAttrs: la,
 				PeerName:  "peer0",
 			}
 

@@ -242,6 +242,11 @@ func (c *MockIPAMClient) BGPPeers() client.BGPPeerInterface {
 	return nil
 }
 
+func (c *MockIPAMClient) BGPFilter() client.BGPFilterInterface {
+	// DO NOTHING
+	return nil
+}
+
 func (c *MockIPAMClient) IPAM() ipam.Interface {
 	// DO NOTHING
 	return nil

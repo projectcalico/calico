@@ -22,6 +22,8 @@ import string
 import subprocess
 import time
 
+from kubernetes import client, config
+
 _log = logging.getLogger(__name__)
 
 ROUTER_IMAGE = os.getenv("ROUTER_IMAGE", "calico/bird:latest")
@@ -177,7 +179,7 @@ def function_name(f):
         return "<unknown function>"
 
 
-def run(command, logerr=True, allow_fail=False):
+def run(command, logerr=True, allow_fail=False, allow_codes=[], returnerr=False):
     out = ""
     _log.info("[%s] %s", datetime.datetime.now(), command)
     try:
@@ -190,6 +192,8 @@ def run(command, logerr=True, allow_fail=False):
             _log.exception("Failure output:\n%s", e.output)
         if not allow_fail:
             raise
+        if returnerr:
+            return e.output
     return out
 
 
@@ -203,9 +207,16 @@ def curl(hostname, container="kube-node-extra"):
     return run(cmd)
 
 
-def kubectl(args, logerr=True, allow_fail=False):
-    return run("kubectl " + args, logerr=logerr, allow_fail=allow_fail)
-
+def kubectl(args, logerr=True, allow_fail=False, allow_codes=[], timeout=0, returnerr=False):
+    if timeout == 0:
+        cmd = "kubectl "
+    else:
+        cmd = "timeout -s %d kubectl " % timeout
+    return run(cmd + args,
+               logerr=logerr,
+               allow_fail=allow_fail,
+               allow_codes=allow_codes,
+               returnerr=returnerr)
 
 def calicoctl(args, allow_fail=False):
     return kubectl("exec -i -n kube-system calicoctl -- /calicoctl --allow-version-mismatch " + args,
@@ -255,3 +266,53 @@ def node_info():
         node_ip = kubectl("get node --selector='!node-role.kubernetes.io/control-plane' -o jsonpath='{.items[%d].status.addresses[0].address}'" % i)
         ips.append(node_ip)
     return nodes, ips, ip6s
+
+def update_ds_env(ds, ns, env_vars):
+        config.load_kube_config(os.environ.get('KUBECONFIG'))
+        api = client.AppsV1Api(client.ApiClient())
+        node_ds = api.read_namespaced_daemon_set(ds, ns, exact=True, export=False)
+        for container in node_ds.spec.template.spec.containers:
+            if container.name == ds:
+                for k, v in env_vars.items():
+                    _log.info("Set %s=%s", k, v)
+                    env_present = False
+                    for env in container.env:
+                        if env.name == k:
+                            if env.value == v:
+                                env_present = True
+                            else:
+                                container.env.remove(env)
+
+                    if not env_present:
+                        v1_ev = client.V1EnvVar(name=k, value=v, value_from=None)
+                        container.env.append(v1_ev)
+        api.replace_namespaced_daemon_set(ds, ns, node_ds)
+
+        # Wait until the DaemonSet reports that all nodes have been updated.
+        # In the past we've seen that the calico-node on kind-control-plane can
+        # hang, in a not Ready state, for about 15 minutes.  Here we want to
+        # detect in case that happens again, and fail the test case if so.  We
+        # do that by querying the number of nodes that have been updated, every
+        # 10s, and failing the test if that number does not change for 4 cycles
+        # i.e. for 40s.
+        last_number = 0
+        iterations_with_no_change = 0
+        while True:
+            time.sleep(10)
+            node_ds = api.read_namespaced_daemon_set_status("calico-node", "kube-system")
+            _log.info("%d/%d nodes updated",
+                      node_ds.status.updated_number_scheduled,
+                      node_ds.status.desired_number_scheduled)
+            if node_ds.status.updated_number_scheduled == node_ds.status.desired_number_scheduled:
+                break
+            if node_ds.status.updated_number_scheduled == last_number:
+                iterations_with_no_change += 1
+                if iterations_with_no_change == 4:
+                    run("docker exec kind-control-plane conntrack -L", allow_fail=True)
+                    raise Exception("calico-node DaemonSet update failed to make progress for 40s")
+            else:
+                last_number = node_ds.status.updated_number_scheduled
+                iterations_with_no_change = 0
+
+        # Wait until all calico-node pods are ready.
+        kubectl("wait pod --for=condition=Ready -l k8s-app=calico-node -n kube-system --timeout=300s")

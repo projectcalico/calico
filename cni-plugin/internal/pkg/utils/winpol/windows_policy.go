@@ -132,22 +132,22 @@ func CalculateEndpointPolicies(
 //
 // For example, we convert from raw JSON like:
 //
-// {
-//   "Type":  "OutBoundNAT",
-//   "ExceptionList":  [
-//     "10.96.0.0/12",
-//     "192.168.0.0/16"
-//   ]
-// }
+//	{
+//	  "Type":  "OutBoundNAT",
+//	  "ExceptionList":  [
+//	    "10.96.0.0/12",
+//	    "192.168.0.0/16"
+//	  ]
+//	}
 //
 // to:
 //
-// hcn.EndpointPolicy{
-//   Type: hcn.OutBoundNAT,
-//   Settings: json.RawMessage(
-//     []byte(`{"ExceptionList":["10.96.0.0/12","192.168.0.0/16"]}`),
-//   ),
-// }
+//	hcn.EndpointPolicy{
+//	  Type: hcn.OutBoundNAT,
+//	  Settings: json.RawMessage(
+//	    []byte(`{"ExceptionList":["10.96.0.0/12","192.168.0.0/16"]}`),
+//	  ),
+//	}
 func convertToHcnEndpointPolicy(policy map[string]interface{}) (hcn.EndpointPolicy, error) {
 	hcnPolicy := hcn.EndpointPolicy{}
 

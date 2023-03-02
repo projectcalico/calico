@@ -32,6 +32,7 @@ type Interface interface {
 	HostEndpointsClient
 	WorkloadEndpointsClient
 	BGPPeersClient
+	BGPFilterClient
 	IPAMClient
 	BGPConfigurationsClient
 	FelixConfigurationsClient
@@ -143,6 +144,11 @@ type IPAMConfigClient interface {
 type BlockAffinitiesClient interface {
 	// BlockAffinities returns an interface for viewing IPAM block affinity resources.
 	BlockAffinities() BlockAffinityInterface
+}
+
+type BGPFilterClient interface {
+	// BGPFilter returns an interface for managing BGPFilter resources.
+	BGPFilter() BGPFilterInterface
 }
 
 // Compile-time assertion that our client implements its interface.

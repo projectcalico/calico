@@ -223,6 +223,12 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 		libapiv3.KindBlockAffinity,
 		resources.NewBlockAffinityClient(cs, crdClientV1),
 	)
+	kubeClient.registerResourceClient(
+		reflect.TypeOf(model.ResourceKey{}),
+		reflect.TypeOf(model.ResourceListOptions{}),
+		apiv3.KindBGPFilter,
+		resources.NewBGPFilterClient(cs, crdClientV1),
+	)
 
 	if !ca.K8sUsePodCIDR {
 		// Using Calico IPAM - use CRDs to back IPAM resources.
@@ -257,8 +263,9 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 }
 
 // deduplicate removes any duplicated values and returns a new slice, keeping the order unchanged
-// 	based on deduplicate([]string) []string found in k8s.io/client-go/tools/clientcmd/loader.go#634
-// 	Copyright 2014 The Kubernetes Authors.
+//
+//	based on deduplicate([]string) []string found in k8s.io/client-go/tools/clientcmd/loader.go#634
+//	Copyright 2014 The Kubernetes Authors.
 func deduplicate(s []string) []string {
 	encountered := map[string]struct{}{}
 	ret := make([]string, 0)
@@ -423,6 +430,7 @@ func (c *KubeClient) Clean() error {
 		apiv3.KindKubeControllersConfiguration,
 		libapiv3.KindIPAMConfig,
 		libapiv3.KindBlockAffinity,
+		apiv3.KindBGPFilter,
 	}
 	ctx := context.Background()
 	for _, k := range kinds {
@@ -544,6 +552,8 @@ func buildCRDClientV1(cfg rest.Config) (*rest.RESTClient, error) {
 					&apiv3.KubeControllersConfigurationList{},
 					&apiv3.CalicoNodeStatus{},
 					&apiv3.CalicoNodeStatusList{},
+					&apiv3.BGPFilter{},
+					&apiv3.BGPFilterList{},
 				)
 				return nil
 			})
