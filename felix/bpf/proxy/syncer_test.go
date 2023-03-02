@@ -1096,6 +1096,23 @@ var _ = Describe("BPF Syncer", func() {
 			Expect(eps.m).To(HaveLen(2))
 		}))
 
+		By("checking endpointslice terminating status should be included in endpointslice collection for processing", makestep(func() {
+			state.SvcMap[svcKey] = proxy.NewK8sServicePort(
+				net.IPv4(10, 0, 0, 1),
+				1234,
+				v1.ProtocolTCP,
+			)
+			state.EpsMap[svcKey] = []k8sp.Endpoint{
+				&k8sp.BaseEndpointInfo{Ready: true, Endpoint: "10.1.0.1:5555"},
+				&k8sp.BaseEndpointInfo{Ready: true, Endpoint: "10.2.0.2:5555"},
+				&k8sp.BaseEndpointInfo{Terminating: true, Endpoint: "10.1.0.3:5555"},
+			}
+
+			err := s.Apply(state)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(eps.m).To(HaveLen(3))
+		}))
+
 	})
 })
 
