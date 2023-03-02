@@ -121,8 +121,8 @@ tar C $global:NssmInstallDirectory -xvf .\nssm.zip --strip-components 2 */$arch/
 Remove-Item -Force .\nssm.zip
 
 $env:path += ";$global:NssmInstallDirectory"
-$newPath = "$global:NssmInstallDirectory;" +
-        [Environment]::GetEnvironmentVariable("PATH", [EnvironmentVariableTarget]::Machine)
+$newPath = "$global:NssmInstallDirectory;"
+[Environment]::GetEnvironmentVariable("PATH", [EnvironmentVariableTarget]::Machine)
 
 [Environment]::SetEnvironmentVariable("PATH", $newPath, [EnvironmentVariableTarget]::Machine)
 
