@@ -1112,7 +1112,7 @@ var _ = Describe("BPF Syncer", func() {
 			Expect(eps.m).To(HaveLen(1))
 		}))
 
-		By("after checking endpointslice terminating status ensure conntrack scan processes correct number of maps", makestep(func() {
+		By("checking that conntrack scan does not remove the terminating endpoint connection", makestep(func() {
 			svc := state.SvcMap[svcKey]
 			eps := state.EpsMap[svcKey]
 			for _, ep := range eps {
