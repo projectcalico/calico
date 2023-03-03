@@ -969,8 +969,9 @@ func (b *BPFLib) LoadXDPAuto(ifName string, mode XDPMode) error {
 
 func (b *BPFLib) getCalicoBPFProgIds() ([]int, error) {
 	// Get a list of ids of BPF programs that were loaded by Calico.
-	// Programs are identified by 'xdpProgName', which is inherited from func name.
-	// For example, in bpf/bpf-apache/filter.c, a function name is 'prefilter'.
+	// Programs are identified by 'xdpProgName', which is inherited from the name
+	// of the entry function of the XDP program (taken from the BPF ELF header).
+	// For example, in bpf/bpf-apache/filter.c, the function name is 'prefilter'.
 	prog := "bpftool"
 	args := []string{
 		"--json",
@@ -983,9 +984,8 @@ func (b *BPFLib) getCalicoBPFProgIds() ([]int, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to get list of BPF programs: %s\n%s", err, output)
 	}
-	fmt.Println(string(output))
 	var p []ProgInfo
-	if err = json.Unmarshal(output, &p); err != nil {
+	if err := json.Unmarshal(output, &p); err != nil {
 		return nil, fmt.Errorf("cannot parse json output: %v\n%s", err, output)
 	}
 
@@ -1004,7 +1004,6 @@ func (b *BPFLib) verifyCalicoXDP(ifName string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Println(ids)
 	xdpID, err := b.GetXDPID(ifName)
 	if err != nil {
 		return err
