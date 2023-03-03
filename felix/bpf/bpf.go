@@ -291,7 +291,7 @@ func getCIDRMapName(ifName string, family IPFamily) string {
 }
 
 func getProgName(ifName string) string {
-	return fmt.Sprintf("%s_%s_%s", xdpProgName, xdpProgVersion, ifName)
+	return strings.Join([]string{xdpProgName, xdpProgVersion, ifName}, "_")
 }
 
 func newMap(name, path, kind string, entries, keySize, valueSize, flags int) (string, error) {
@@ -1015,7 +1015,7 @@ func (b *BPFLib) verifyCalicoXDP(ifName string) error {
 		}
 	}
 
-	return fmt.Errorf("failed to detach XDP program from %s: interface has bogus, but not loaded by Calico.", ifName)
+	return fmt.Errorf("failed to detach XDP program from %s: program not loaded by Calico.", ifName)
 }
 
 func (b *BPFLib) RemoveXDP(ifName string, mode XDPMode) error {
