@@ -1096,6 +1096,46 @@ var _ = Describe("BPF Syncer", func() {
 			Expect(eps.m).To(HaveLen(2))
 		}))
 
+		By("checking endpointslice terminating status should be included in endpointslice collection for processing", makestep(func() {
+			state.SvcMap[svcKey] = proxy.NewK8sServicePort(
+				net.IPv4(10, 0, 0, 1),
+				1234,
+				v1.ProtocolTCP,
+			)
+			state.EpsMap[svcKey] = []k8sp.Endpoint{
+				&k8sp.BaseEndpointInfo{Ready: true, Endpoint: "10.1.0.1:5555"},
+				&k8sp.BaseEndpointInfo{Terminating: true, Endpoint: "10.1.0.2:5555"},
+			}
+
+			err := s.Apply(state)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(eps.m).To(HaveLen(1))
+		}))
+
+		By("checking that conntrack scan does not remove the terminating endpoint connection", makestep(func() {
+			svc := state.SvcMap[svcKey]
+			eps := state.EpsMap[svcKey]
+			for _, ep := range eps {
+				if ep.IsReady() {
+					ctEntriesForSvc(ct, svc.Protocol(), svc.ClusterIP(), uint16(svc.Port()), ep, net.IPv4(5, 6, 7, 8), 123)
+				}
+			}
+			connScan.Scan()
+
+			cnt := 0
+			err := ct.Iter(func(k, v []byte) maps.IteratorAction {
+				cnt++
+				key := conntrack.KeyFromBytes(k)
+				val := conntrack.ValueFromBytes(v)
+				log("key = %s\n", key)
+				log("val = %s\n", val)
+				return maps.IterNone
+			})
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cnt).To(Equal(2))
+		}))
+
 	})
 })
 
