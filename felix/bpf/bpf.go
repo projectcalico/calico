@@ -291,7 +291,7 @@ func getCIDRMapName(ifName string, family IPFamily) string {
 }
 
 func getProgName(ifName string) string {
-	return fmt.Sprintf("%s_%s_%s", xdpProgVersion, ifName)
+	return fmt.Sprintf("%s_%s_%s", xdpProgName, xdpProgVersion, ifName)
 }
 
 func newMap(name, path, kind string, entries, keySize, valueSize, flags int) (string, error) {
@@ -983,6 +983,7 @@ func (b *BPFLib) getCalicoBPFProgIds() ([]int, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to get list of BPF programs: %s\n%s", err, output)
 	}
+	fmt.Println(string(output))
 	var p []ProgInfo
 	if err = json.Unmarshal(output, &p); err != nil {
 		return nil, fmt.Errorf("cannot parse json output: %v\n%s", err, output)
@@ -1003,6 +1004,7 @@ func (b *BPFLib) verifyCalicoXDP(ifName string) error {
 	if err != nil {
 		return err
 	}
+	fmt.Println(ids)
 	xdpID, err := b.GetXDPID(ifName)
 	if err != nil {
 		return err
@@ -1791,7 +1793,8 @@ func (b *BPFLib) loadBPF(objPath, progPath, progType string, mapArgs []string) e
 		objPath,
 		progPath,
 		"type",
-		progType}
+		progType,
+	}
 
 	args = append(args, mapArgs...)
 

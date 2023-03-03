@@ -26,6 +26,7 @@ import (
 	"os/exec"
 	"testing"
 
+	"path/filepath"
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/felix/environment"
@@ -352,10 +353,65 @@ func TestCIDRMapContent(t *testing.T) {
 var objFile = "filter.o"
 
 func TestXDP(t *testing.T) {
+	prog := "readelf"
+	args := []string{
+		"-h",
+		filepath.Join("../bpf-apache/bin", "filter.o"),
+	}
+
+	printCommand(prog, args...)
+	output, err := exec.Command(prog, args...).CombinedOutput()
+	if err != nil {
+		t.Fatalf("could not execute objcopy command: %v\n%s", err, output)
+	}
+	fmt.Println(string(output))
+	prog = "llvm-objcopy"
+	args = []string{
+		"--redefine-sym",
+		"prefilter=test",
+		filepath.Join("../bpf-apache/bin", "filter.o"),
+		filepath.Join("../bpf-apache/bin", "test.o"),
+	}
+
+	printCommand(prog, args...)
+	output, err = exec.Command(prog, args...).CombinedOutput()
+	if err != nil {
+		t.Fatalf("could not execute objcopy command: %v\n%s", err, output)
+	}
+
 	cmdVethPairArgs := []string{"-c", "ip link add test_A type veth peer name test_B || true"}
-	output, err := exec.Command("/bin/sh", cmdVethPairArgs...).CombinedOutput()
+	output, err = exec.Command("/bin/sh", cmdVethPairArgs...).CombinedOutput()
 	if err != nil {
 		t.Fatalf("cannot create veth pair: %v\n%s", err, output)
+	}
+
+	progPath := filepath.Join(bpfDP.GetBPFCalicoDir(), "test")
+	err = bpfDP.loadBPF(filepath.Join("../bpf-apache/bin", "test.o"), progPath, "xdpgeneric", nil)
+	if err != nil {
+		t.Fatalf("could not load sample program: %v", err)
+	}
+
+	prog = "ip"
+	args = []string{
+		"link",
+		"set",
+		"dev",
+		"test_B",
+		"xdpgeneric",
+		"pinned",
+		progPath,
+	}
+
+	prog = "ip"
+	args = []string{
+		"link",
+		"show",
+	}
+	printCommand(prog, args...)
+	output, err = exec.Command(prog, args...).CombinedOutput()
+	t.Log(string(output))
+	if err != nil {
+		t.Fatalf("could not execute ip command: %v\n%s", err, output)
 	}
 
 	t.Log("Loading an XDP program to a veth iface should succeed")
@@ -365,10 +421,20 @@ func TestXDP(t *testing.T) {
 	}
 
 	t.Log("Removing an XDP program from a veth iface should succeed")
+
 	err = bpfDP.RemoveXDP("test_A", XDPGeneric)
 	if err != nil {
 		t.Fatalf("cannot remove xdp: %v", err)
 	}
+
+	prog = "ip"
+	args = []string{
+		"link",
+		"show",
+	}
+	printCommand(prog, args...)
+	output, err = exec.Command(prog, args...).CombinedOutput()
+	t.Log(string(output))
 
 	t.Log("Getting the XDP tag of an iface that doesn't have an XDP program attached should fail")
 	_, err = bpfDP.GetXDPTag("test_A")
@@ -426,28 +492,14 @@ func TestXDP(t *testing.T) {
 		t.Fatalf("getting maps ids from XDP should have failed")
 	}
 
-	err = bpfDP.loadBPF(objFile, "test", "xdp", nil)
-	prog := "ip"
-	args := []string{
-		"link",
-		"set",
-		"dev",
-		"test_B",
-		"xdp",
-		"pinned",
-		"test"}
-
-	printCommand(prog, args...)
-	output, err = exec.Command(prog, args...).CombinedOutput()
-	log.Debugf("out:\n%v", string(output))
-
 	t.Log("An XDP program that is not attached to Calico should not get removed")
 	err = bpfDP.RemoveXDP("test_B", XDPGeneric) // other iface
 	if err == nil {
 		t.Fatalf("removal should have failed")
 	}
 
-	if _, err := os.Stat("test"); errors.Is(err, os.ErrNotExist) {
+	t.Log("Program attached to test_B should not be removed")
+	if _, err := os.Stat(progPath); errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("test should not have been deleted")
 	}
 
@@ -489,6 +541,17 @@ func TestXDP(t *testing.T) {
 	if err == nil {
 		t.Fatalf("getting maps ids from XDP after deletion should have failed")
 	}
+
+	prog = "ip"
+	args = []string{
+		"link",
+		"show",
+	}
+	printCommand(prog, args...)
+	output, err = exec.Command(prog, args...).CombinedOutput()
+	t.Log(string(output))
+
+	t.Fatalf("done")
 }
 
 func TestLoadBadXDP(t *testing.T) {
