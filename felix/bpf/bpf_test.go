@@ -19,6 +19,7 @@ package bpf
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -423,6 +424,31 @@ func TestXDP(t *testing.T) {
 	_, err = bpfDP.GetMapsFromXDP("test_B") // other iface
 	if err == nil {
 		t.Fatalf("getting maps ids from XDP should have failed")
+	}
+
+	err = bpfDP.loadBPF(objFile, "test", "xdp", nil)
+	prog := "ip"
+	args := []string{
+		"link",
+		"set",
+		"dev",
+		"test_B",
+		"xdp",
+		"pinned",
+		"test"}
+
+	printCommand(prog, args...)
+	output, err = exec.Command(prog, args...).CombinedOutput()
+	log.Debugf("out:\n%v", string(output))
+
+	t.Log("An XDP program that is not attached to Calico should not get removed")
+	err = bpfDP.RemoveXDP("test_B", XDPGeneric) // other iface
+	if err == nil {
+		t.Fatalf("removal should have failed")
+	}
+
+	if _, err := os.Stat("test"); errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("test should not have been deleted")
 	}
 
 	t.Log("Getting the XDP program ID from an iface with an XDP program attached should succeed")
