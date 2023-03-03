@@ -108,6 +108,7 @@ const (
 	cidrMapVersion        = "v1"
 	failsafeMapVersion    = "v1"
 	xdpProgVersion        = "v1"
+	xdpProgName           = "prefilter"
 	failsafeMapName       = "calico_failsafe_ports_" + failsafeMapVersion
 	failsafeSymbolMapName = "calico_failsafe_ports" // no need to version the symbol name
 
@@ -290,7 +291,7 @@ func getCIDRMapName(ifName string, family IPFamily) string {
 }
 
 func getProgName(ifName string) string {
-	return fmt.Sprintf("prefilter_%s_%s", xdpProgVersion, ifName)
+	return fmt.Sprintf("%s_%s_%s", xdpProgVersion, ifName)
 }
 
 func newMap(name, path, kind string, entries, keySize, valueSize, flags int) (string, error) {
@@ -936,8 +937,8 @@ func (b *BPFLib) getMapArgs(ifName string) ([]string, error) {
 	// key: symbol of the map definition in the XDP program
 	// value: path where the map is pinned
 	maps := map[string]string{
-		"calico_prefilter_v4": mapPath,
-		failsafeSymbolMapName: failsafeMapPath,
+		fmt.Sprintf("calico_%s_v4", xdpProgName): mapPath,
+		failsafeSymbolMapName:                    failsafeMapPath,
 	}
 
 	var mapArgs []string
@@ -968,10 +969,8 @@ func (b *BPFLib) LoadXDPAuto(ifName string, mode XDPMode) error {
 
 func (b *BPFLib) getCalicoBPFProgIds() ([]int, error) {
 	// Get a list of ids of BPF programs that were loaded by Calico.
-	// Programs are identified by 'name', which is inherited from func name.
+	// Programs are identified by 'xdpProgName', which is inherited from func name.
 	// For example, in bpf/bpf-apache/filter.c, a function name is 'prefilter'.
-	progName := "prefilter"
-
 	prog := "bpftool"
 	args := []string{
 		"--json",
@@ -985,14 +984,13 @@ func (b *BPFLib) getCalicoBPFProgIds() ([]int, error) {
 		return nil, fmt.Errorf("failed to get list of BPF programs: %s\n%s", err, output)
 	}
 	var p []ProgInfo
-	err = json.Unmarshal(output, &p)
-	if err != nil {
+	if err = json.Unmarshal(output, &p); err != nil {
 		return nil, fmt.Errorf("cannot parse json output: %v\n%s", err, output)
 	}
 
 	var ids = []int{}
 	for _, v := range p {
-		if v.Name == progName {
+		if v.Name == xdpProgName {
 			ids = append(ids, v.Id)
 		}
 	}
@@ -1000,38 +998,34 @@ func (b *BPFLib) getCalicoBPFProgIds() ([]int, error) {
 	return ids, nil
 }
 
-func (b *BPFLib) verifyCalicoXDP(ifName string) (bool, error) {
+func (b *BPFLib) verifyCalicoXDP(ifName string) error {
 	ids, err := b.getCalicoBPFProgIds()
 	if err != nil {
-		return false, err
+		return err
 	}
 	xdpID, err := b.GetXDPID(ifName)
 	if err != nil {
-		return false, err
+		return err
 	}
 
 	for _, id := range ids {
 		if id == xdpID {
-			return true, nil
+			return nil
 		}
 	}
 
-	return false, fmt.Errorf("failed to detach XDP program from %s: interface has bogus, but not loaded by Calico.", ifName)
+	return fmt.Errorf("failed to detach XDP program from %s: interface has bogus, but not loaded by Calico.", ifName)
 }
 
 func (b *BPFLib) RemoveXDP(ifName string, mode XDPMode) error {
-	progName := getProgName(ifName)
-	progPath := filepath.Join(b.xdpDir, progName)
-
 	// Verify XDP program of interface is loaded by Calico.
-	ok, err := b.verifyCalicoXDP(ifName)
+	err := b.verifyCalicoXDP(ifName)
 	if err != nil {
 		return err
 	}
-	// XDP program is not loaded by Calico, simply skip it.
-	if !ok {
-		return nil
-	}
+
+	progName := getProgName(ifName)
+	progPath := filepath.Join(b.xdpDir, progName)
 
 	prog := "ip"
 	args := []string{
