@@ -1104,20 +1104,22 @@ var _ = Describe("BPF Syncer", func() {
 			)
 			state.EpsMap[svcKey] = []k8sp.Endpoint{
 				&k8sp.BaseEndpointInfo{Ready: true, Endpoint: "10.1.0.1:5555"},
-				&k8sp.BaseEndpointInfo{Ready: true, Endpoint: "10.2.0.2:5555"},
-				&k8sp.BaseEndpointInfo{Terminating: true, Endpoint: "10.1.0.3:5555"},
+				&k8sp.BaseEndpointInfo{Terminating: true, Endpoint: "10.1.0.2:5555"},
 			}
 
 			err := s.Apply(state)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(eps.m).To(HaveLen(2))
+			Expect(eps.m).To(HaveLen(1))
 		}))
 
 		By("after checking endpointslice terminating status ensure conntrack scan processes correct number of maps", makestep(func() {
 			svc := state.SvcMap[svcKey]
-			ep := state.EpsMap[svcKey][0]
-			ctEntriesForSvc(ct, svc.Protocol(), svc.ClusterIP(), uint16(svc.Port()), ep, net.IPv4(5, 6, 7, 8), 123)
-
+			eps := state.EpsMap[svcKey]
+			for _, ep := range eps {
+				if ep.IsReady() {
+					ctEntriesForSvc(ct, svc.Protocol(), svc.ClusterIP(), uint16(svc.Port()), ep, net.IPv4(5, 6, 7, 8), 123)
+				}
+			}
 			connScan.Scan()
 
 			cnt := 0
