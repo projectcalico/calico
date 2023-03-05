@@ -45,7 +45,8 @@ APISERVER_GIT_DESCRIPTION?=$(shell git describe --tags)
 LDFLAGS = -X $(PACKAGE_NAME)/cmd/apiserver/server.VERSION=$(APISERVER_VERSION) \
 	-X $(PACKAGE_NAME)/cmd/apiserver/server.BUILD_DATE=$(APISERVER_BUILD_DATE) \
 	-X $(PACKAGE_NAME)/cmd/apiserver/server.GIT_DESCRIPTION=$(APISERVER_GIT_DESCRIPTION) \
-	-X $(PACKAGE_NAME)/cmd/apiserver/server.GIT_REVISION=$(APISERVER_GIT_REVISION)
+	-X $(PACKAGE_NAME)/cmd/apiserver/server.GIT_REVISION=$(APISERVER_GIT_REVISION) \
+	$(RELEASE_LDFLAGS)"
 
 ##############################################################################
 # Download and include ../lib.Makefile before anything else
@@ -85,7 +86,7 @@ ifeq ($(ARCH),amd64)
 	$(call build_cgo_boring_binary, $(PACKAGE_NAME)/cmd/apiserver, $@)
 else
 	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) \
-		sh -c '$(GIT_CONFIG_SSH) go build -v -o $@ -ldflags "$(VERSION_FLAGS)" $(PACKAGE_NAME)/cmd/apiserver'
+		sh -c '$(GIT_CONFIG_SSH) go build -v -o $@ -ldflags "$(LDFLAGS)" $(PACKAGE_NAME)/cmd/apiserver'
 endif
 
 $(BINDIR)/filecheck-$(ARCH): $(K8SAPISERVER_GO_FILES)

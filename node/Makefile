@@ -153,7 +153,8 @@ DATE:=$(shell date -u +'%FT%T%z')
 LDFLAGS= -X $(PACKAGE_NAME)/pkg/lifecycle/startup.VERSION=$(GIT_VERSION) \
 	-X $(PACKAGE_NAME)/buildinfo.GitVersion=$(GIT_DESCRIPTION) \
 	-X $(PACKAGE_NAME)/buildinfo.BuildDate=$(DATE) \
-	-X $(PACKAGE_NAME)/buildinfo.GitRevision=$(GIT_COMMIT)
+	-X $(PACKAGE_NAME)/buildinfo.GitRevision=$(GIT_COMMIT) \
+	$(RELEASE_LDFLAGS)"
 
 # Source golang files on which compiling the calico-node binary depends.
 SRC_FILES=$(shell find ./pkg -name '*.go') \

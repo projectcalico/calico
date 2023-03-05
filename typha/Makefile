@@ -29,7 +29,8 @@ include ../lib.Makefile
 LDFLAGS := -X $(PACKAGE_NAME)/pkg/buildinfo.GitVersion=$(GIT_DESCRIPTION) \
 			-X $(PACKAGE_NAME)/pkg/buildinfo.BuildDate=$(DATE) \
 			-X $(PACKAGE_NAME)/pkg/buildinfo.GitRevision=$(GIT_COMMIT) \
-			-B 0x$(BUILD_ID)
+			-B 0x$(BUILD_ID) \
+			$(RELEASE_LDFLAGS)"
 
 # All Typha go files.
 SRC_FILES:=$(shell find . $(foreach dir,$(NON_TYPHA_DIRS),-path ./$(dir) -prune -o) -type f -name '*.go' -print)
