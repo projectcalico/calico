@@ -44,7 +44,7 @@ default: build
 all: build
 
 ## Run the tests for the current platform/architecture
-test: ut
+test: build-all ut
 
 .PHONY: clean
 ## Clean enough that a new release build will be clean
