@@ -93,7 +93,7 @@ ifeq ($(ARCH),amd64)
 else
 	$(DOCKER_RUN_RO) \
 	  -e CGO_ENABLED=$(CGO_ENABLED) \
-	  $(CALICO_BUILD) go build $(BUILD_FLAGS) -buildvcs=false -ldflags "-X main.VERSION=$(GIT_VERSION)" -v -o bin/dikastes-$(ARCH) ./cmd/dikastes
+	  $(CALICO_BUILD) go build -buildvcs=false -ldflags "-X main.VERSION=$(GIT_VERSION)" -v -o bin/dikastes-$(ARCH) ./cmd/dikastes
 endif
 
 bin/healthz-amd64: ARCH=amd64
@@ -106,7 +106,7 @@ ifeq ($(ARCH),amd64)
 else
 	$(DOCKER_RUN_RO) \
 	  -e CGO_ENABLED=$(CGO_ENABLED) \
-	  $(CALICO_BUILD) go build $(BUILD_FLAGS) -buildvcs=false -ldflags "-X main.VERSION=$(GIT_VERSION)" -v -o bin/healthz-$(ARCH) ./cmd/healthz
+	  $(CALICO_BUILD) go build -buildvcs=false -ldflags "-X main.VERSION=$(GIT_VERSION)" -v -o bin/healthz-$(ARCH) ./cmd/healthz
 endif
 
 # We use gogofast for protobuf compilation.  Regular gogo is incompatible with
