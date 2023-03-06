@@ -83,14 +83,31 @@ bin/dikastes-arm64: ARCH=arm64
 bin/dikastes-ppc64le: ARCH=ppc64le
 bin/dikastes-s390x: ARCH=s390x
 bin/dikastes-%: protobuf $(SRC_FILES)
+ifeq ($(ARCH),amd64)
 	$(call build_cgo_boring_binary, ./cmd/dikastes, $@)
+else
+	mkdir -p bin
+	$(DOCKER_RUN_RO) \
+	  -e CGO_ENABLED=$(CGO_ENABLED) \
+	  -v $(CURDIR)/bin:/go/src/$(PACKAGE_NAME)/bin \
+	  $(CALICO_BUILD) go build $(BUILD_FLAGS) -ldflags "-X main.VERSION=$(GIT_VERSION)" -v -o bin/dikastes-$(ARCH) ./cmd/dikastes
+endif
 
 bin/healthz-amd64: ARCH=amd64
 bin/healthz-arm64: ARCH=arm64
 bin/healthz-ppc64le: ARCH=ppc64le
 bin/healthz-s390x: ARCH=s390x
 bin/healthz-%: protobuf $(SRC_FILES)
+ifeq ($(ARCH),amd64)
 	$(call build_static_cgo_boring_binary, ./cmd/healthz, $@)
+else
+	mkdir -p bin || true
+	-mkdir -p .go-pkg-cache $(GOMOD_CACHE) || true
+	$(DOCKER_RUN_RO) \
+	  -e CGO_ENABLED=$(CGO_ENABLED) \
+	  -v $(CURDIR)/bin:/go/src/$(PACKAGE_NAME)/bin \
+	  $(CALICO_BUILD) go build $(BUILD_FLAGS) -ldflags "-X main.VERSION=$(GIT_VERSION)" -v -o bin/healthz-$(ARCH) ./cmd/healthz
+endif
 
 # We use gogofast for protobuf compilation.  Regular gogo is incompatible with
 # gRPC, since gRPC uses golang/protobuf for marshalling/unmarshalling in that
