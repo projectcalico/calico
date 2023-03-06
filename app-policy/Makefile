@@ -72,11 +72,16 @@ clean-generated:
 
 .PHONY: build-all
 ## Build the binaries for all architectures and platforms
-build-all: $(addprefix bin/dikastes-,$(VALIDARCHES))
+$(VALIDARCHES):
+	$(MAKE) build ARCH=$@
+
+build-all: $(VALIDARCHES)
 
 .PHONY: build
 ## Build the binary for the current architecture and platform
-build: bin/dikastes-$(ARCH) bin/healthz-$(ARCH)
+build: 
+	$(MAKE) bin/dikastes-$(ARCH) ARCH=$(ARCH)
+	$(MAKE) bin/healthz-$(ARCH) ARCH=$(ARCH)
 
 bin/dikastes-amd64: ARCH=amd64
 bin/dikastes-arm64: ARCH=arm64
