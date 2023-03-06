@@ -127,6 +127,13 @@ var _ = Describe("BPF Syncer", func() {
 			},
 		}
 
+		svcKey4 := k8sp.ServicePortName{
+			NamespacedName: types.NamespacedName{
+				Namespace: "default",
+				Name:      "fourth-service",
+			},
+		}
+
 		By("inserting another service with multiple endpoints", makestep(func() {
 			state.SvcMap[svcKey2] = proxy.NewK8sServicePort(
 				net.IPv4(10, 0, 0, 2),
@@ -1094,6 +1101,62 @@ var _ = Describe("BPF Syncer", func() {
 			err := s.Apply(state)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(eps.m).To(HaveLen(2))
+		}))
+
+		By("checking endpointslice terminating status should be included in endpointslice collection for processing", makestep(func() {
+
+			// Clean up all prior state.
+			delete(state.SvcMap, svcKey)
+			delete(state.SvcMap, svcKey2)
+			delete(state.SvcMap, svcKey3)
+			delete(state.EpsMap, svcKey)
+			delete(state.EpsMap, svcKey2)
+			delete(state.EpsMap, svcKey3)
+
+			// Apply new SvcMap and Eps state.
+			state.SvcMap[svcKey4] = proxy.NewK8sServicePort(
+				net.IPv4(10, 0, 0, 1),
+				1234,
+				v1.ProtocolTCP,
+			)
+			state.EpsMap[svcKey4] = []k8sp.Endpoint{
+				&k8sp.BaseEndpointInfo{Ready: true, Endpoint: "10.1.0.1:5555"},
+				&k8sp.BaseEndpointInfo{Terminating: true, Endpoint: "10.1.0.2:6666"},
+				&k8sp.BaseEndpointInfo{Ready: true, Endpoint: "10.1.0.3:7777"},
+			}
+
+			// Expect 2x new map entries for Ready pods only; Terminating pods not added to map.
+			err := s.Apply(state)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(eps.m).To(HaveLen(2))
+		}))
+
+		By("checking that conntrack scan does not remove the terminating endpoint connection", makestep(func() {
+
+			// Unroll conntrack entries for service additions following convention in unit test above.
+			svc := state.SvcMap[svcKey4]
+			ep := state.EpsMap[svcKey4][0]
+			ctEntriesForSvc(ct, svc.Protocol(), svc.ClusterIP(), uint16(svc.Port()), ep, net.IPv4(5, 6, 7, 8), 111)
+			ep = state.EpsMap[svcKey4][1]
+			ctEntriesForSvc(ct, svc.Protocol(), svc.ClusterIP(), uint16(svc.Port()), ep, net.IPv4(5, 6, 7, 8), 222)
+			ep = state.EpsMap[svcKey4][2]
+			ctEntriesForSvc(ct, svc.Protocol(), svc.ClusterIP(), uint16(svc.Port()), ep, net.IPv4(5, 6, 7, 8), 333)
+
+			connScan.Scan()
+
+			cnt := 0
+			err := ct.Iter(func(k, v []byte) maps.IteratorAction {
+				cnt++
+				key := conntrack.KeyFromBytes(k)
+				val := conntrack.ValueFromBytes(v)
+				log("key = %s\n", key)
+				log("val = %s\n", val)
+				return maps.IterNone
+			})
+
+			// Expect 6x new conntrack entries from 3x pods NAT forward and 3x pods NAT reverse total.
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cnt).To(Equal(6))
 		}))
 
 	})
