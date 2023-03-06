@@ -168,7 +168,7 @@ ut: protobuf
 ###############################################################################
 
 .PHONY: ci
-ci: mod-download build-all check-generated-files static-checks ut
+ci: mod-download build-all image-all check-generated-files static-checks ut
 
 check-boring-ssl: bin/dikastes-amd64
 	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) \
