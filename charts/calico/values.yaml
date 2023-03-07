@@ -14,7 +14,7 @@ kubeControllers:
   image: docker.io/calico/kube-controllers
 flannel:
   image: docker.io/flannelcni/flannel
-  tag: v0.16.3
+  tag: v0.21.2
 flannelMigration:
   image: docker.io/calico/flannel-migration
 dikastes:
