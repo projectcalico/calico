@@ -52,23 +52,24 @@ func init() {
 type PolicyResolver struct {
 	policyIDToEndpointIDs multidict.IfaceToIface
 	endpointIDToPolicyIDs multidict.IfaceToIface
-	sortedTierData        *tierInfo
+	allPolicies           map[model.PolicyKey]*model.Policy
+	sortedTierData        *TierInfo
 	endpoints             map[model.Key]interface{}
 	dirtyEndpoints        set.Set[any] /* FIXME model.WorkloadEndpointKey or model.HostEndpointKey */
-	sortRequired          bool
 	policySorter          *PolicySorter
 	Callbacks             PolicyResolverCallbacks
 	InSync                bool
 }
 
 type PolicyResolverCallbacks interface {
-	OnEndpointTierUpdate(endpointKey model.Key, endpoint interface{}, filteredTiers []tierInfo)
+	OnEndpointTierUpdate(endpointKey model.Key, endpoint interface{}, filteredTiers []TierInfo)
 }
 
 func NewPolicyResolver() *PolicyResolver {
 	return &PolicyResolver{
 		policyIDToEndpointIDs: multidict.NewIfaceToIface(),
 		endpointIDToPolicyIDs: multidict.NewIfaceToIface(),
+		allPolicies:           map[model.PolicyKey]*model.Policy{},
 		sortedTierData:        NewTierInfo("default"),
 		endpoints:             make(map[model.Key]interface{}),
 		dirtyEndpoints:        set.NewBoxed[any](),
@@ -96,12 +97,20 @@ func (pr *PolicyResolver) OnUpdate(update api.Update) (filterOut bool) {
 		gaugeNumActiveEndpoints.Set(float64(len(pr.endpoints)))
 	case model.PolicyKey:
 		log.Debugf("Policy update: %v", key)
+		if update.Value == nil {
+			delete(pr.allPolicies, key)
+		} else {
+			policy := update.Value.(*model.Policy)
+			pr.allPolicies[key] = policy
+		}
+		if !pr.policyIDToEndpointIDs.ContainsKey(key) {
+			return
+		}
 		policiesDirty = pr.policySorter.OnUpdate(update)
 		if policiesDirty {
 			pr.markEndpointsMatchingPolicyDirty(key)
 		}
 	}
-	pr.sortRequired = pr.sortRequired || policiesDirty
 	pr.maybeFlush()
 	gaugeNumActivePolicies.Set(float64(pr.policyIDToEndpointIDs.Len()))
 	return
@@ -114,12 +123,6 @@ func (pr *PolicyResolver) OnDatamodelStatus(status api.SyncStatus) {
 	}
 }
 
-func (pr *PolicyResolver) refreshSortOrder() {
-	pr.sortedTierData = pr.policySorter.Sorted()
-	pr.sortRequired = false
-	log.Debugf("New sort order: %v", pr.sortedTierData)
-}
-
 func (pr *PolicyResolver) markEndpointsMatchingPolicyDirty(polKey model.PolicyKey) {
 	log.Debugf("Marking all endpoints matching %v dirty", polKey)
 	pr.policyIDToEndpointIDs.Iter(polKey, func(epID interface{}) {
@@ -129,6 +132,11 @@ func (pr *PolicyResolver) markEndpointsMatchingPolicyDirty(polKey model.PolicyKe
 
 func (pr *PolicyResolver) OnPolicyMatch(policyKey model.PolicyKey, endpointKey interface{}) {
 	log.Debugf("Storing policy match %v -> %v", policyKey, endpointKey)
+	// If it's first time the policy become matched, add it to the tier
+	if !pr.policySorter.HasPolicy(policyKey) {
+		policy := pr.allPolicies[policyKey]
+		pr.policySorter.UpdatePolicy(policyKey, policy)
+	}
 	pr.policyIDToEndpointIDs.Put(policyKey, endpointKey)
 	pr.endpointIDToPolicyIDs.Put(endpointKey, policyKey)
 	pr.dirtyEndpoints.Add(endpointKey)
@@ -139,6 +147,12 @@ func (pr *PolicyResolver) OnPolicyMatchStopped(policyKey model.PolicyKey, endpoi
 	log.Debugf("Deleting policy match %v -> %v", policyKey, endpointKey)
 	pr.policyIDToEndpointIDs.Discard(policyKey, endpointKey)
 	pr.endpointIDToPolicyIDs.Discard(endpointKey, policyKey)
+
+	// This policy is not active anymore, we no longer need to track it for sorting.
+	if !pr.policyIDToEndpointIDs.ContainsKey(policyKey) {
+		pr.policySorter.UpdatePolicy(policyKey, nil)
+	}
+
 	pr.dirtyEndpoints.Add(endpointKey)
 	pr.maybeFlush()
 }
@@ -148,9 +162,7 @@ func (pr *PolicyResolver) maybeFlush() {
 		log.Debugf("Not in sync, skipping flush")
 		return
 	}
-	if pr.sortRequired {
-		pr.refreshSortOrder()
-	}
+	pr.sortedTierData = pr.policySorter.Sorted()
 	pr.dirtyEndpoints.Iter(pr.sendEndpointUpdate)
 	pr.dirtyEndpoints = set.NewBoxed[any]()
 }
@@ -161,13 +173,13 @@ func (pr *PolicyResolver) sendEndpointUpdate(endpointID interface{}) error {
 	if !ok {
 		log.Debugf("Endpoint is unknown, sending nil update")
 		pr.Callbacks.OnEndpointTierUpdate(endpointID.(model.Key),
-			nil, []tierInfo{})
+			nil, []TierInfo{})
 		return nil
 	}
-	applicableTiers := []tierInfo{}
+	applicableTiers := []TierInfo{}
 	tier := pr.sortedTierData
 	tierMatches := false
-	filteredTier := tierInfo{
+	filteredTier := TierInfo{
 		Name:  tier.Name,
 		Order: tier.Order,
 	}
