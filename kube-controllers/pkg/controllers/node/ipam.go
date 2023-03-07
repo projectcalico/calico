@@ -30,8 +30,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
+	v1lister "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/util/workqueue"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -113,20 +112,20 @@ func init() {
 	prometheus.MustRegister(legacyBlocksGauge)
 }
 
-func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs kubernetes.Interface, ni cache.Indexer) *ipamController {
+func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, pi, ni cache.Indexer) *ipamController {
 	var leakGracePeriod *time.Duration
 	if cfg.LeakGracePeriod != nil {
 		leakGracePeriod = &cfg.LeakGracePeriod.Duration
 	}
 	return &ipamController{
-		client:    c,
-		clientset: cs,
-		config:    cfg,
-		rl:        workqueue.DefaultControllerRateLimiter(),
+		client: c,
+		config: cfg,
+		rl:     workqueue.DefaultControllerRateLimiter(),
 
 		syncChan: make(chan interface{}, 1),
 
-		nodeIndexer: ni,
+		podLister:  v1lister.NewPodLister(pi),
+		nodeLister: v1lister.NewNodeLister(ni),
 
 		// Buffered channels for potentially bursty channels.
 		syncerUpdates: make(chan interface{}, batchUpdateSize),
@@ -154,11 +153,11 @@ func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs k
 }
 
 type ipamController struct {
-	rl          workqueue.RateLimiter
-	client      client.Interface
-	clientset   kubernetes.Interface
-	nodeIndexer cache.Indexer
-	config      config.NodeControllerConfig
+	rl         workqueue.RateLimiter
+	client     client.Interface
+	podLister  v1lister.PodLister
+	nodeLister v1lister.NodeLister
+	config     config.NodeControllerConfig
 
 	syncStatus bapi.SyncStatus
 
@@ -918,7 +917,7 @@ func (c *ipamController) allocationIsValid(a *allocation, preferCache bool) bool
 	}
 	if p == nil {
 		logc.Debug("Querying Kubernetes API for pod")
-		p, err = c.clientset.CoreV1().Pods(ns).Get(context.Background(), pod, metav1.GetOptions{})
+		p, err = c.podLister.Pods(ns).Get(pod)
 		if err != nil {
 			if !errors.IsNotFound(err) {
 				log.WithError(err).Warn("Failed to query pod, assume it exists and allocation is valid")
@@ -1110,7 +1109,7 @@ func (c *ipamController) cleanupNode(cnode string) error {
 
 // nodeExists returns true if the given node still exists in the Kubernetes API.
 func (c *ipamController) nodeExists(knode string) bool {
-	_, err := c.clientset.CoreV1().Nodes().Get(context.Background(), knode, metav1.GetOptions{})
+	_, err := c.nodeLister.Get(knode)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			return false
@@ -1129,17 +1128,9 @@ func (c *ipamController) nodeIsBeingMigrated(name string) (bool, error) {
 		return false, err
 	}
 	// Get node to inspect labels
-	obj, ok, err := c.nodeIndexer.GetByKey(kname)
-	if !ok {
-		// Node doesn't exist, so isn't being migrated.
-		return false, nil
-	}
+	node, err := c.nodeLister.Get(kname)
 	if err != nil {
 		return false, fmt.Errorf("failed to check node for migration status: %w", err)
-	}
-	node, ok := obj.(*v1.Node)
-	if !ok {
-		return false, fmt.Errorf("failed to check node for migration status: unexpected error: object is not a node")
 	}
 
 	for labelName, labelVal := range node.ObjectMeta.Labels {

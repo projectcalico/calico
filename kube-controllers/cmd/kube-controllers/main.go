@@ -450,7 +450,7 @@ type controllerControl struct {
 func (cc *controllerControl) InitControllers(ctx context.Context, cfg config.RunConfig, k8sClientset *kubernetes.Clientset, calicoClient client.Interface) {
 	// Create a shared informer factory to allow cache sharing between controllers monitoring the
 	// same resource.
-	factory := informers.NewSharedInformerFactory(k8sClientset, 0)
+	factory := informers.NewSharedInformerFactory(k8sClientset, 1*time.Minute)
 	podInformer := factory.Core().V1().Pods().Informer()
 	nodeInformer := factory.Core().V1().Nodes().Informer()
 
