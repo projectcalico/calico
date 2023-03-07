@@ -294,6 +294,7 @@ fv-prereqs: $(REMOTE_DEPS) \
             bin/iptables-locker \
             bin/test-workload \
             bin/test-connection \
+            bin/felix-api-proxy \
             bin/calico-bpf \
             bin/pktgen \
             build-bpf \
@@ -453,6 +454,13 @@ bin/test-connection: ../go.mod fv/cgroup/cgroup.go fv/utils/utils.go fv/connecti
 	mkdir -p bin
 	$(DOCKER_GO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
 	    GOEXPERIMENT=$(GOEXPERIMENT) go build -v -o $@ -tags $(TAGS) -v -buildvcs=false $(BUILD_FLAGS) $(LDFLAGS) "$(PACKAGE_NAME)/fv/test-connection"'
+
+bin/felix-api-proxy:
+	@echo Building felix-api-proxy...
+	mkdir -p bin
+	$(DOCKER_GO_BUILD) \
+	    sh -c 'go build -o $@ fv/api-proxy/felix-api-proxy.go'
+
 st:
 	@echo "No STs available"
 
