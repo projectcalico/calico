@@ -82,7 +82,7 @@ func NewNodeController(ctx context.Context,
 	nodeDeletionFuncs := []func(){}
 
 	// Create the IPAM controller.
-	nc.ipamCtrl = NewIPAMController(cfg, calicoClient, k8sClientset, nodeInformer.GetIndexer())
+	nc.ipamCtrl = NewIPAMController(cfg, calicoClient, podInformer.GetIndexer(), nodeInformer.GetIndexer())
 	nc.ipamCtrl.RegisterWith(nc.dataFeed)
 	nodeDeletionFuncs = append(nodeDeletionFuncs, nc.ipamCtrl.OnKubernetesNodeDeleted)
 
@@ -133,7 +133,7 @@ func NewNodeController(ctx context.Context,
 		nc.ipamCtrl.OnKubernetesPodUpdated(key, pod)
 	}
 	podHandlers.DeleteFunc = func(obj interface{}) {
-		key, err := cache.MetaNamespaceKeyFunc(obj)
+		key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
 		if err != nil {
 			log.WithError(err).Error("Failed to generate key")
 			return
