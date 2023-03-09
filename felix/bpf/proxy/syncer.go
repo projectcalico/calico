@@ -552,7 +552,7 @@ func (s *Syncer) apply(state DPSyncerState) error {
 		eps := make([]k8sp.Endpoint, 0, len(state.EpsMap[sname]))
 		for _, ep := range state.EpsMap[sname] {
 			zoneHints := ep.GetZoneHints()
-			if ep.IsReady() {
+			if ep.IsReady() || ep.IsTerminating() {
 				if ShouldAppendTopologyAwareEndpoint(nodeZone, hintsAnnotation, zoneHints) {
 					eps = append(eps, ep)
 				} else {
@@ -707,8 +707,12 @@ func (s *Syncer) updateService(skey svcKey, sinfo k8sp.ServicePort, id uint32, e
 		if !ep.GetIsLocal() {
 			continue
 		}
-		if err := s.writeSvcBackend(id, uint32(cnt), ep); err != nil {
-			return 0, 0, err
+
+		// eps could contain Ready and Terminating pods but only write Ready pods to backend.
+		if ep.IsReady() {
+			if err := s.writeSvcBackend(id, uint32(cnt), ep); err != nil {
+				return 0, 0, err
+			}
 		}
 
 		cpEps = append(cpEps, ep)
@@ -720,8 +724,12 @@ func (s *Syncer) updateService(skey svcKey, sinfo k8sp.ServicePort, id uint32, e
 		if ep.GetIsLocal() {
 			continue
 		}
-		if err := s.writeSvcBackend(id, uint32(cnt), ep); err != nil {
-			return 0, 0, err
+
+		// eps could contain Ready and Terminating pods but only write Ready pods to backend.
+		if ep.IsReady() {
+			if err := s.writeSvcBackend(id, uint32(cnt), ep); err != nil {
+				return 0, 0, err
+			}
 		}
 
 		cpEps = append(cpEps, ep)

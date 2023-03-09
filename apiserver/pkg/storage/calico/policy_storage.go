@@ -10,8 +10,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/registry/generic/registry"
-	"k8s.io/apiserver/pkg/storage"
-	etcd "k8s.io/apiserver/pkg/storage/etcd3"
+	k8sStorage "k8s.io/apiserver/pkg/storage"
 	"k8s.io/apiserver/pkg/storage/storagebackend/factory"
 
 	aapi "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -25,7 +24,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/watch"
 )
 
-// NewNetworkPolicyStorage creates a new libcalico-based storage.Interface implementation for Policy
+// NewNetworkPolicyStorage creates a new libcalico-based k8sStorage.Interface implementation for Policy
 func NewNetworkPolicyStorage(opts Options) (registry.DryRunnableStorage, factory.DestroyFunc) {
 	c := CreateClientFromConfig()
 	createFn := func(ctx context.Context, c clientv3.Interface, obj resourceObject, opts clientOpts) (resourceObject, error) {
@@ -78,7 +77,7 @@ func NewNetworkPolicyStorage(opts Options) (registry.DryRunnableStorage, factory
 	dryRunnableStorage := registry.DryRunnableStorage{Storage: &resourceStore{
 		client:            c,
 		codec:             opts.RESTOptions.StorageConfig.Codec,
-		versioner:         APIObjectVersioner{&etcd.APIObjectVersioner{}},
+		versioner:         APIObjectVersioner{&k8sStorage.APIObjectVersioner{}},
 		aapiType:          reflect.TypeOf(aapi.NetworkPolicy{}),
 		aapiListType:      reflect.TypeOf(aapi.NetworkPolicyList{}),
 		libCalicoType:     reflect.TypeOf(api.NetworkPolicy{}),
@@ -118,7 +117,7 @@ func (rc NetworkPolicyConverter) convertToAAPI(libcalicoObject resourceObject, a
 	aapiPolicy.ObjectMeta = lcgPolicy.ObjectMeta
 }
 
-func (rc NetworkPolicyConverter) convertToAAPIList(libcalicoListObject resourceListObject, aapiListObj runtime.Object, pred storage.SelectionPredicate) {
+func (rc NetworkPolicyConverter) convertToAAPIList(libcalicoListObject resourceListObject, aapiListObj runtime.Object, pred k8sStorage.SelectionPredicate) {
 	lcgPolicyList := libcalicoListObject.(*api.NetworkPolicyList)
 	aapiPolicyList := aapiListObj.(*aapi.NetworkPolicyList)
 	if libcalicoListObject == nil {
