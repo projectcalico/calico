@@ -1035,7 +1035,11 @@ func (r *RouteTable) syncL2RoutesForLink(ifaceName string) error {
 	var updatesFailed bool
 
 	for _, existing := range existingNeigh {
-		if _, ok := expected[existing.HardwareAddr.String()]; !ok && existing.HardwareAddr != nil {
+		if existing.HardwareAddr == nil {
+				log.WithField("entry", entry).Debug("Ignoring existing ARP entry with no hardware addr")
+				continue
+		}
+		if _, ok := expected[existing.HardwareAddr.String()]; !ok {
 			logCxt.WithField("neighbor", existing).Debug("Neighbor should no longer be programmed")
 
 			// Remove the FDB entry for this neighbor.
