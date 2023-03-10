@@ -38,6 +38,7 @@ import (
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/json"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
+	validatorv3 "github.com/projectcalico/calico/libcalico-go/lib/validator/v3"
 )
 
 const (
@@ -230,13 +231,10 @@ func K8sNodeToCalico(k8sNode *kapiv1.Node, usePodCIDR bool) (*model.KVPair, erro
 	// Extract the BGP configuration stored in the annotations.
 	bgpSpec := &libapiv3.NodeBGPSpec{}
 	annotations := k8sNode.ObjectMeta.Annotations
-	bgpSpec.IPv4Address = annotations[nodeBgpIpv4AddrAnnotation]
-	bgpSpec.IPv6Address = annotations[nodeBgpIpv6AddrAnnotation]
-	// Validate the IP address specified for route reflector.
-	// When route reflector is configured using calicoctl, the address
-	// is already validated. When the node is annotated directly without
-	// using calicoctl, the IP address specified must be validated here.
-	bgpSpec.RouteReflectorClusterID = getAnnotation(k8sNode, nodeBgpCIDAnnotation, validateIPv4Address)
+	bgpSpec.IPv4Address = getAnnotation(k8sNode, nodeBgpIpv4AddrAnnotation, validatorv3.ValidateCIDRv4)
+	bgpSpec.IPv6Address = getAnnotation(k8sNode, nodeBgpIpv6AddrAnnotation, validatorv3.ValidateCIDRv6)
+	bgpSpec.RouteReflectorClusterID = getAnnotation(k8sNode, nodeBgpCIDAnnotation, validatorv3.ValidateIPv4Network)
+
 	asnString, ok := annotations[nodeBgpAsnAnnotation]
 	if ok {
 		asn, err := numorstring.ASNumberFromString(asnString)
@@ -269,9 +267,9 @@ func K8sNodeToCalico(k8sNode *kapiv1.Node, usePodCIDR bool) (*model.KVPair, erro
 		}
 	} else {
 		// We are not using host local, so assign tunnel addresses from annotations.
-		bgpSpec.IPv4IPIPTunnelAddr = annotations[nodeBgpIpv4IPIPTunnelAddrAnnotation]
-		wireguardSpec.InterfaceIPv4Address = annotations[nodeWireguardIpv4IfaceAddrAnnotation]
-		wireguardSpec.InterfaceIPv6Address = annotations[nodeWireguardIpv6IfaceAddrAnnotation]
+		bgpSpec.IPv4IPIPTunnelAddr = getAnnotation(k8sNode, nodeBgpIpv4IPIPTunnelAddrAnnotation, validatorv3.ValidateIPv4Network)
+		wireguardSpec.InterfaceIPv4Address = getAnnotation(k8sNode, nodeWireguardIpv4IfaceAddrAnnotation, validatorv3.ValidateIPv4Network)
+		wireguardSpec.InterfaceIPv6Address = getAnnotation(k8sNode, nodeWireguardIpv6IfaceAddrAnnotation, validatorv3.ValidateIPv4Network)
 	}
 
 	// Only set the BGP spec if it is not empty.
@@ -285,10 +283,10 @@ func K8sNodeToCalico(k8sNode *kapiv1.Node, usePodCIDR bool) (*model.KVPair, erro
 	}
 
 	// Set the VXLAN tunnel addresses based on annotation.
-	calicoNode.Spec.IPv4VXLANTunnelAddr = annotations[nodeBgpIpv4VXLANTunnelAddrAnnotation]
-	calicoNode.Spec.VXLANTunnelMACAddr = annotations[nodeBgpVXLANTunnelMACAddrAnnotation]
-	calicoNode.Spec.IPv6VXLANTunnelAddr = annotations[nodeBgpIpv6VXLANTunnelAddrAnnotation]
-	calicoNode.Spec.VXLANTunnelMACAddrV6 = annotations[nodeBgpVXLANTunnelMACAddrV6Annotation]
+	calicoNode.Spec.IPv4VXLANTunnelAddr = getAnnotation(k8sNode, nodeBgpIpv4VXLANTunnelAddrAnnotation, validatorv3.ValidateIPv4Network)
+	calicoNode.Spec.VXLANTunnelMACAddr = getAnnotation(k8sNode, nodeBgpVXLANTunnelMACAddrAnnotation, validatorv3.ValidateMAC)
+	calicoNode.Spec.IPv6VXLANTunnelAddr = getAnnotation(k8sNode, nodeBgpIpv6VXLANTunnelAddrAnnotation, validatorv3.ValidateIPv4Network)
+	calicoNode.Spec.VXLANTunnelMACAddrV6 = getAnnotation(k8sNode, nodeBgpVXLANTunnelMACAddrV6Annotation, validatorv3.ValidateMAC)
 
 	// Set the node status
 	nodeStatus := libapiv3.NodeStatus{}
@@ -571,16 +569,4 @@ func getAnnotation(n *kapiv1.Node, key string, validator validatorFunc) string {
 		return ""
 	}
 	return value
-}
-
-// validateIPv4Address validates if the given string is a valid IPv4 address.
-func validateIPv4Address(ipAddr string) error {
-	ip := net.ParseIP(ipAddr)
-	if ip == nil {
-		return fmt.Errorf("Error parsing IP %s", ipAddr)
-	}
-	if ip.To4() == nil {
-		return fmt.Errorf("%s is not a valid IPv4 address", ipAddr)
-	}
-	return nil
 }
