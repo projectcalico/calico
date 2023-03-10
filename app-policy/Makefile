@@ -4,7 +4,7 @@ PACKAGE_NAME = github.com/projectcalico/calico/app-policy
 
 ###############################################################################
 
-GENERATED_FILES=proto/healthz.pb.go
+GENERATED_FILES=../felix/proto/felixbackend.pb.go proto/healthz.pb.go
 SRC_FILES=$(shell find . -name '*.go' |grep -v vendor) $(GENERATED_FILES)
 
 # Name of the images.
@@ -100,6 +100,17 @@ ifeq ($(FIPS),true)
 else
 	$(call build_binary, ./cmd/healthz, $@)
 endif
+
+
+###############################################################################
+# Protobufs, 
+#
+# 1. defer to felix's makefile for felixbackend stuff
+# 2. build proto for healthz
+###############################################################################
+
+../felix/proto/felixbackend.pb.go: ../felix/proto/felixbackend.proto
+	$(MAKE) --directory ../felix protobuf
 
 # We use gogofast for protobuf compilation.  Regular gogo is incompatible with
 # gRPC, since gRPC uses golang/protobuf for marshalling/unmarshalling in that
