@@ -728,6 +728,12 @@ func (c *Container) NumTCBPFProgs(ifaceName string) int {
 	return total
 }
 
+func (c *Container) NumTCBPFProgsFn(ifaceName string) func() int {
+	return func() int {
+		return c.NumTCBPFProgs(ifaceName)
+	}
+}
+
 // NumTCBPFProgs Returns the number of TC BPF programs attached to eth0.  Only direct-action programs are
 // listed (i.e. the type that we use).
 func (c *Container) NumTCBPFProgsEth0() int {
