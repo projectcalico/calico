@@ -371,7 +371,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			log.Info("AfterEach starting")
 			for _, f := range felixes {
 				if !felixPanicExpected {
-					f.Exec("calico-bpf", "connect-time", "clean")
+					_ = f.ExecMayFail("calico-bpf", "connect-time", "clean")
 				}
 				f.Stop()
 			}
