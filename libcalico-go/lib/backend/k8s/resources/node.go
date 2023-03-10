@@ -64,6 +64,8 @@ func NewNodeClient(c *kubernetes.Clientset, usePodCIDR bool) K8sResourceClient {
 	}
 }
 
+type validatorFunc func(string) error
+
 // Implements the api.Client interface for Nodes.
 type nodeClient struct {
 	clientSet  *kubernetes.Clientset
@@ -230,7 +232,11 @@ func K8sNodeToCalico(k8sNode *kapiv1.Node, usePodCIDR bool) (*model.KVPair, erro
 	annotations := k8sNode.ObjectMeta.Annotations
 	bgpSpec.IPv4Address = annotations[nodeBgpIpv4AddrAnnotation]
 	bgpSpec.IPv6Address = annotations[nodeBgpIpv6AddrAnnotation]
-	bgpSpec.RouteReflectorClusterID = annotations[nodeBgpCIDAnnotation]
+	// Validate the IP address specified for route reflector.
+	// When route reflector is configured using calicoctl, the address
+	// is already validated. When the node is annotated directly without
+	// using calicoctl, the IP address specified must be validated here.
+	bgpSpec.RouteReflectorClusterID = getAnnotation(k8sNode, nodeBgpCIDAnnotation, validateIPv4Address)
 	asnString, ok := annotations[nodeBgpAsnAnnotation]
 	if ok {
 		asn, err := numorstring.ASNumberFromString(asnString)
@@ -550,4 +556,31 @@ func getStaticTunnelAddress(n *kapiv1.Node) (string, error) {
 	tunIp[3]++
 
 	return tunIp.String(), nil
+}
+
+// getAnnotation reads the annotation from node object, runs the value through the validator function
+// and returns it if the validation passes, else returns "".
+func getAnnotation(n *kapiv1.Node, key string, validator validatorFunc) string {
+	value := n.ObjectMeta.Annotations[key]
+	if value == "" {
+		return ""
+	}
+	err := validator(value)
+	if err != nil {
+		log.WithError(err).Infof("Annotation %s=%s is invalid, ignoring it.", key, value)
+		return ""
+	}
+	return value
+}
+
+// validateIPv4Address validates if the given string is a valid IPv4 address.
+func validateIPv4Address(ipAddr string) error {
+	ip := net.ParseIP(ipAddr)
+	if ip == nil {
+		return fmt.Errorf("Error parsing IP %s", ipAddr)
+	}
+	if ip.To4() == nil {
+		return fmt.Errorf("%s is not a valid IPv4 address", ipAddr)
+	}
+	return nil
 }

@@ -77,6 +77,84 @@ var _ = Describe("Test Node conversion", func() {
 		Expect(asn.String()).To(Equal("2546"))
 	})
 
+	It("should ignore RR cluster ID if its an invalid IPv4 address", func() {
+		l := map[string]string{"net.beta.kubernetes.io/role": "master"}
+		node := k8sapi.Node{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:            "TestNode",
+				Labels:          l,
+				ResourceVersion: "1234",
+				Annotations: map[string]string{
+					nodeBgpIpv4AddrAnnotation: "172.17.17.10",
+					nodeBgpCIDAnnotation:      "288.0.4.5",
+				},
+			},
+			Status: k8sapi.NodeStatus{
+				Addresses: []k8sapi.NodeAddress{
+					k8sapi.NodeAddress{
+						Type:    k8sapi.NodeInternalIP,
+						Address: "172.17.17.10",
+					},
+					k8sapi.NodeAddress{
+						Type:    k8sapi.NodeExternalIP,
+						Address: "192.168.1.100",
+					},
+					k8sapi.NodeAddress{
+						Type:    k8sapi.NodeHostName,
+						Address: "172-17-17-10",
+					},
+				},
+			},
+			Spec: k8sapi.NodeSpec{
+				PodCIDR: "10.0.0.1/24",
+			},
+		}
+
+		n, err := K8sNodeToCalico(&node, false)
+		Expect(err).NotTo(HaveOccurred())
+		rrClusterID := n.Value.(*libapiv3.Node).Spec.BGP.RouteReflectorClusterID
+		Expect(rrClusterID).To(Equal(""))
+	})
+
+	It("should ignore RR cluster ID if it an IPv6 address", func() {
+		l := map[string]string{"net.beta.kubernetes.io/role": "master"}
+		node := k8sapi.Node{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:            "TestNode",
+				Labels:          l,
+				ResourceVersion: "1234",
+				Annotations: map[string]string{
+					nodeBgpIpv4AddrAnnotation: "172.17.17.10",
+					nodeBgpCIDAnnotation:      "fd10::10",
+				},
+			},
+			Status: k8sapi.NodeStatus{
+				Addresses: []k8sapi.NodeAddress{
+					k8sapi.NodeAddress{
+						Type:    k8sapi.NodeInternalIP,
+						Address: "172.17.17.10",
+					},
+					k8sapi.NodeAddress{
+						Type:    k8sapi.NodeExternalIP,
+						Address: "192.168.1.100",
+					},
+					k8sapi.NodeAddress{
+						Type:    k8sapi.NodeHostName,
+						Address: "172-17-17-10",
+					},
+				},
+			},
+			Spec: k8sapi.NodeSpec{
+				PodCIDR: "10.0.0.1/24",
+			},
+		}
+
+		n, err := K8sNodeToCalico(&node, false)
+		Expect(err).NotTo(HaveOccurred())
+		rrClusterID := n.Value.(*libapiv3.Node).Spec.BGP.RouteReflectorClusterID
+		Expect(rrClusterID).To(Equal(""))
+	})
+
 	It("should parse a k8s Node to a Calico Node with RR cluster ID", func() {
 		l := map[string]string{"net.beta.kubernetes.io/role": "master"}
 		node := k8sapi.Node{
