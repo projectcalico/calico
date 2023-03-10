@@ -4,7 +4,7 @@ PACKAGE_NAME = github.com/projectcalico/calico/app-policy
 
 ###############################################################################
 
-GENERATED_FILES=proto/felixbackend.pb.go proto/healthz.pb.go
+GENERATED_FILES=proto/healthz.pb.go
 SRC_FILES=$(shell find . -name '*.go' |grep -v vendor) $(GENERATED_FILES)
 
 # Name of the images.
@@ -111,15 +111,7 @@ endif
 PROTOC_IMPORTS =  -I proto\
 		  -I ./
 
-protobuf: proto/felixbackend.pb.go proto/healthz.pb.go
-
-proto/felixbackend.pb.go: proto/felixbackend.proto
-	$(DOCKER_RUN) -v $(CURDIR):/src:rw --user $(LOCAL_USER_ID):$(LOCAL_GROUP_ID) \
-		      $(PROTOC_CONTAINER) \
-		      $(PROTOC_IMPORTS) \
-		      proto/*.proto \
-		      --gogofast_out=plugins=grpc:proto
-	$(MAKE) fix
+protobuf: $(GENERATED_FILES)
 
 proto/healthz.pb.go: proto/healthz.proto
 	$(DOCKER_RUN) -v $(CURDIR):/src:rw --user $(LOCAL_USER_ID):$(LOCAL_GROUP_ID) \

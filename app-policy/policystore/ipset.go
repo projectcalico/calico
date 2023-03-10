@@ -20,7 +20,7 @@ import (
 	"strconv"
 	"strings"
 
-	syncapi "github.com/projectcalico/calico/app-policy/proto"
+	syncapi "github.com/projectcalico/calico/felix/proto"
 
 	envoyapi "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	log "github.com/sirupsen/logrus"
