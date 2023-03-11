@@ -269,7 +269,7 @@ func K8sNodeToCalico(k8sNode *kapiv1.Node, usePodCIDR bool) (*model.KVPair, erro
 		// We are not using host local, so assign tunnel addresses from annotations.
 		bgpSpec.IPv4IPIPTunnelAddr = getAnnotation(k8sNode, nodeBgpIpv4IPIPTunnelAddrAnnotation, validatorv3.ValidateIPv4Network)
 		wireguardSpec.InterfaceIPv4Address = getAnnotation(k8sNode, nodeWireguardIpv4IfaceAddrAnnotation, validatorv3.ValidateIPv4Network)
-		wireguardSpec.InterfaceIPv6Address = getAnnotation(k8sNode, nodeWireguardIpv6IfaceAddrAnnotation, validatorv3.ValidateIPv4Network)
+		wireguardSpec.InterfaceIPv6Address = getAnnotation(k8sNode, nodeWireguardIpv6IfaceAddrAnnotation, validatorv3.ValidateIPv6Network)
 	}
 
 	// Only set the BGP spec if it is not empty.
@@ -285,7 +285,7 @@ func K8sNodeToCalico(k8sNode *kapiv1.Node, usePodCIDR bool) (*model.KVPair, erro
 	// Set the VXLAN tunnel addresses based on annotation.
 	calicoNode.Spec.IPv4VXLANTunnelAddr = getAnnotation(k8sNode, nodeBgpIpv4VXLANTunnelAddrAnnotation, validatorv3.ValidateIPv4Network)
 	calicoNode.Spec.VXLANTunnelMACAddr = getAnnotation(k8sNode, nodeBgpVXLANTunnelMACAddrAnnotation, validatorv3.ValidateMAC)
-	calicoNode.Spec.IPv6VXLANTunnelAddr = getAnnotation(k8sNode, nodeBgpIpv6VXLANTunnelAddrAnnotation, validatorv3.ValidateIPv4Network)
+	calicoNode.Spec.IPv6VXLANTunnelAddr = getAnnotation(k8sNode, nodeBgpIpv6VXLANTunnelAddrAnnotation, validatorv3.ValidateIPv6Network)
 	calicoNode.Spec.VXLANTunnelMACAddrV6 = getAnnotation(k8sNode, nodeBgpVXLANTunnelMACAddrV6Annotation, validatorv3.ValidateMAC)
 
 	// Set the node status
