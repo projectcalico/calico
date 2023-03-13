@@ -4370,7 +4370,6 @@ rules:
     resources:
       - serviceaccounts/token
     resourceNames:
-      - calico-node
       - calico-cni-plugin
     verbs:
       - create

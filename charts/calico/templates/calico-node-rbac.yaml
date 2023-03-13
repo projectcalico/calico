@@ -14,7 +14,6 @@ rules:
       - canal
       - calico-cni-plugin
 {{- else }}
-      - calico-node
       - calico-cni-plugin
 {{- end }}
     verbs:
