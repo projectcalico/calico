@@ -264,7 +264,7 @@ func (c *ipamController) acceptScheduleRequests(stopCh <-chan struct{}) {
 			kick(c.syncChan)
 		case <-t.C:
 			// Periodic IPAM sync.
-			log.Info("Periodic IPAM sync")
+			log.Debug("Periodic IPAM sync")
 			err := c.syncIPAM()
 			if err != nil {
 				log.WithError(err).Warn("Periodic IPAM sync failed")
@@ -272,7 +272,7 @@ func (c *ipamController) acceptScheduleRequests(stopCh <-chan struct{}) {
 			log.Debug("Periodic IPAM sync complete")
 		case <-c.syncChan:
 			// Triggered IPAM sync.
-			log.Info("Triggered IPAM sync")
+			log.Debug("Triggered IPAM sync")
 			err := c.syncIPAM()
 			if err != nil {
 				// We can kick ourselves on error for a retry. We have rate limiting
@@ -283,7 +283,7 @@ func (c *ipamController) acceptScheduleRequests(stopCh <-chan struct{}) {
 
 			// Update prometheus metrics.
 			c.updateMetrics()
-			log.Info("Triggered IPAM sync complete")
+			log.Debug("Triggered IPAM sync complete")
 		case req := <-c.pauseRequestChannel:
 			// For testing purposes - allow the tests to pause the main processing loop.
 			log.Warn("Pausing main loop so tests can read state")
