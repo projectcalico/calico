@@ -115,7 +115,7 @@ var _ = Describe("IPAM controller UTs", func() {
 
 		// Create a new controller. We don't register with a data feed,
 		// as the tests themselves will drive the controller.
-		c = NewIPAMController(cfg, cli, pi, ni)
+		c = NewIPAMController(cfg, cli, cs, pi, ni)
 	})
 
 	AfterEach(func() {
@@ -1018,7 +1018,6 @@ var _ = Describe("IPAM controller UTs", func() {
 			// Deleting the pod should invalidate the IPv4 address, and result in both IPs being GC'd.
 			err = cs.CoreV1().Pods(pod.Namespace).Delete(context.TODO(), pod.Name, metav1.DeleteOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			c.OnKubernetesPodDeleted(fmt.Sprintf("%s/%s", pod.Namespace, pod.Name))
 		})
 
 		By("Verifying final state", func() {
