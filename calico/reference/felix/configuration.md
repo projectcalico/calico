@@ -229,19 +229,19 @@ For more information on how to use and set these variables, refer to
 
 #### WireGuard configuration
 
-| Configuration parameter | Environment variable   | Description | Schema |
-| ----------------------- | ---------------------- | ----------- | ------ |
-| wireguardEnabled                   | Enable encryption for IPv4 on WireGuard supported nodes in cluster. When enabled, pod to pod traffic will be sent over encrypted tunnels between the nodes. | `true`, `false` | boolean | `false` |
-| wireguardEnabledV6                 | Enable encryption for IPv6 on WireGuard supported nodes in cluster. When enabled, pod to pod traffic will be sent over encrypted tunnels between the nodes. | `true`, `false` | boolean | `false` |
-| wireguardInterfaceName             | Name of the IPv4 WireGuard interface created by Felix. If you change the name, and want to clean up the previously-configured interface names on each node, this is a manual process. | string | string | wireguard.cali |
-| wireguardInterfaceNameV6           | Name of the IPv6 WireGuard interface created by Felix. If you change the name, and want to clean up the previously-configured interface names on each node, this is a manual process. | string | string | wg-v6.cali |
-| wireguardListeningPort             | Port used by IPv4 WireGuard tunnels. Felix sets up an IPv4 WireGuard tunnel on each node specified by this port. Available for configuration only in the global FelixConfiguration resource; setting it per host, config-file or environment variable will not work. | 1-65535 | int | 51820 |
-| wireguardListeningPortV6           | Port used by IPv6 WireGuard tunnels. Felix sets up an IPv6 WireGuard tunnel on each node specified by this port. Available for configuration only in the global FelixConfiguration resource; setting it per host, config-file or environment variable will not work. | 1-65535 | int | 51821 |
-| wireguardMTU                       | MTU set on the IPv4 WireGuard interface created by Felix. Zero value means auto-detect. See [Configuring MTU]({{ site.baseurl }}/networking/mtu). | int | int | 0 |
-| wireguardMTUV6                     | MTU set on the IPv6 WireGuard interface created by Felix. Zero value means auto-detect. See [Configuring MTU]({{ site.baseurl }}/networking/mtu). | int | int | 0 |
-| wireguardRoutingRulePriority       | WireGuard routing rule priority value set up by Felix. If you change the default value, set it to a value most appropriate to routing rules for your nodes. | 1-32765 | int | 99 |
-| wireguardHostEncryptionEnabled     | **Experimental**: Adds host-namespace workload IP's to WireGuard's list of peers. Should **not** be enabled when WireGuard is enabled on a cluster's control-plane node, as networking deadlock can occur. | true, false | boolean | false |
-| wireguardKeepAlive                 | WireguardKeepAlive controls Wireguard PersistentKeepalive option. Set 0 to disable. [Default: 0] | int | int | 25 |
+| Configuration parameter          | Environment variable                   | Description | Schema | Default |
+| -------------------------------- | -------------------------------------- | ----------- | ------ | ------- |
+| `wireguardEnabled`               | `FELIX_WIREGUARDENABLED`               | Enable encryption for IPv4 on WireGuard supported nodes in cluster. When enabled, pod to pod traffic will be sent over encrypted tunnels between the nodes. | `true`, `false` | `false` |
+| `wireguardEnabledV6`             | `FELIX_WIREGUARDENABLEDV6`             | Enable encryption for IPv6 on WireGuard supported nodes in cluster. When enabled, pod to pod traffic will be sent over encrypted tunnels between the nodes. | `true`, `false` | `false` |
+| `wireguardInterfaceName`         | `FELIX_WIREGUARDINTERFACENAME`         | Name of the IPv4 WireGuard interface created by Felix. If you change the name, and want to clean up the previously-configured interface names on each node, this is a manual process. | string | wireguard.cali |
+| `wireguardInterfaceNameV6`       | `FELIX_WIREGUARDINTERFACENAMEV6`       | Name of the IPv6 WireGuard interface created by Felix. If you change the name, and want to clean up the previously-configured interface names on each node, this is a manual process. | string | wg-v6.cali |
+| `wireguardListeningPort`         | `FELIX_WIREGUARDLISTENINGPORT`         | Port used by IPv4 WireGuard tunnels. Felix sets up an IPv4 WireGuard tunnel on each node specified by this port. Available for configuration only in the global FelixConfiguration resource; setting it per host, config-file or environment variable will not work. | 1-65535 | 51820 |
+| `wireguardListeningPortV6`       | `FELIX_WIREGUARDLISTENINGPORTV6`       | Port used by IPv6 WireGuard tunnels. Felix sets up an IPv6 WireGuard tunnel on each node specified by this port. Available for configuration only in the global FelixConfiguration resource; setting it per host, config-file or environment variable will not work. | 1-65535 | 51821 |
+| `wireguardMTU`                   | `FELIX_WIREGUARDMTU`                   | MTU set on the IPv4 WireGuard interface created by Felix. Zero value means auto-detect. See [Configuring MTU]({{ site.baseurl }}/networking/mtu). | int | 0 |
+| `wireguardMTUV6`                 | `FELIX_WIREGUARDMTUV6`                 | MTU set on the IPv6 WireGuard interface created by Felix. Zero value means auto-detect. See [Configuring MTU]({{ site.baseurl }}/networking/mtu). | int | 0 |
+| `wireguardRoutingRulePriority`   | `FELIX_WIREGUARDROUTINGRULEPRIORITY`   | WireGuard routing rule priority value set up by Felix. If you change the default value, set it to a value most appropriate to routing rules for your nodes. | 1-32765 | 99 |
+| `wireguardHostEncryptionEnabled` | `FELIX_WIREGUARDHOSTENCRYPTIONENABLED` | **Experimental**: Adds host-namespace workload IP's to WireGuard's list of peers. Should **not** be enabled when WireGuard is enabled on a cluster's control-plane node, as networking deadlock can occur. | true, false | false |
+| `wireguardKeepAlive`             | `FELIX_WIREGUARDKEEPALIVE`             | WireguardKeepAlive controls Wireguard PersistentKeepalive option. Set 0 to disable. [Default: 0] | int | 25 |
 
 For more information on encrypting in-cluster traffic with WireGuard, refer to
 [Encrypt cluster pod traffic](../../security/encrypt-cluster-pod-traffic)
