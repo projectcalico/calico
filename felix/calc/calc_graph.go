@@ -56,7 +56,7 @@ type rulesUpdateCallbacks interface {
 type endpointCallbacks interface {
 	OnEndpointTierUpdate(endpointKey model.Key,
 		endpoint interface{},
-		filteredTiers []tierInfo)
+		filteredTiers []TierInfo)
 }
 
 type configCallbacks interface {

@@ -16,6 +16,7 @@ package ifacemonitor
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"regexp"
 	"syscall"
@@ -359,6 +360,10 @@ func (m *InterfaceMonitor) storeAndNotifyLinkInner(ifaceExists bool, ifaceName s
 	for _, family := range [2]int{netlink.FAMILY_V4, netlink.FAMILY_V6} {
 		routes, err := m.netlinkStub.ListLocalRoutes(link, family)
 		if err != nil {
+			if errors.Is(err, unix.ENODEV) {
+				log.Debug("Tried to list routes for interface but it is gone, ignoring...")
+				continue
+			}
 			log.WithError(err).Warn("Netlink route list operation failed.")
 		}
 		for _, route := range routes {
