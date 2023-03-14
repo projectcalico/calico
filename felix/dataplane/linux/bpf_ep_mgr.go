@@ -887,29 +887,82 @@ func (m *bpfEndpointManager) syncIfStateMap() {
 	palloc := set.New[int]()
 	xdpPalloc := set.New[int]()
 
+	m.ifacesLock.Lock()
+	defer m.ifacesLock.Unlock()
+
 	m.ifStateMap.IterDataplaneCache(func(k ifstate.Key, v ifstate.Value) {
 		ifindex := int(k.IfIndex())
-		_, err := net.InterfaceByIndex(ifindex)
+		netiface, err := net.InterfaceByIndex(ifindex)
 		if err != nil {
 			// "net" does not export the strings or err types :(
 			if strings.Contains(err.Error(), "no such network interface") {
 				m.ifStateMap.DeleteDesired(k)
+				// Device does not exist anymore so delete all associated policies we know
+				// about as we will not hear about that device again.
+				if idx := v.XDPPolicy(); idx != -1 {
+					if err = maps.DeleteMapEntry(m.bpfmaps.XDPPolicyMap.MapFD(), polprog.Key(idx), 4); err != nil {
+						log.WithError(err).Warn("Policy program may leak.")
+					}
+				}
+				if idx := v.IngressPolicy(); idx != -1 {
+					if err = maps.DeleteMapEntry(m.bpfmaps.PolicyMap.MapFD(), polprog.Key(idx), 4); err != nil {
+						log.WithError(err).Warn("Policy program may leak.")
+					}
+				}
+				if idx := v.EgressPolicy(); idx != -1 {
+					if err = maps.DeleteMapEntry(m.bpfmaps.PolicyMap.MapFD(), polprog.Key(idx), 4); err != nil {
+						log.WithError(err).Warn("Policy program may leak.")
+					}
+				}
 			} else {
 				// It will get deleted by the first CompleteDeferredWork() if we
 				// do not get any state update on that interface.
 				log.WithError(err).Warnf("Failed to sync ifstate for iface %d, deffering it.", ifindex)
 			}
-		} else {
+		} else if m.isDataIface(netiface.Name) || m.isWorkloadIface(netiface.Name) || m.isL3Iface(netiface.Name) {
+			// We only add iface that we still manage as configuration could have changed.
+
 			m.ifStateMap.SetDesired(k, v)
-			if idx := v.XDPPolicy(); idx != -1 {
-				xdpPalloc.Add(idx)
-			}
-			if idx := v.IngressPolicy(); idx != -1 {
-				palloc.Add(idx)
-			}
-			if idx := v.EgressPolicy(); idx != -1 {
-				palloc.Add(idx)
-			}
+
+			m.withIface(netiface.Name, func(iface *bpfInterface) bool {
+				if netiface.Flags&net.FlagUp != 0 {
+					iface.info.ifIndex = netiface.Index
+					iface.info.isUP = true
+					if v.Flags()&ifstate.FlgReady != 0 {
+						iface.dpState.isReady = true
+					}
+				}
+
+				var idx int
+
+				if idx = v.XDPPolicy(); idx != -1 {
+					xdpPalloc.Add(idx)
+				}
+				iface.dpState.policyIdx[hook.XDP] = idx
+
+				if idx = v.IngressPolicy(); idx != -1 {
+					palloc.Add(idx)
+				}
+				iface.dpState.policyIdx[hook.Ingress] = idx
+
+				if idx = v.EgressPolicy(); idx != -1 {
+					palloc.Add(idx)
+				}
+				iface.dpState.policyIdx[hook.Egress] = idx
+
+				// Mark all interfaces that we knew about, that we still manage and
+				// that exist as dirty. Since they exist, we either have to deal
+				// with them sooner or later or they will disappear and we get
+				// notified about that. Either way they won't be dirty anymore.
+				//
+				// The first time we see that we have no dirty ifaces, we can
+				// release old jump maps because we know that all the ifaces now use
+				// the new jump maps!
+				return true
+			})
+		} else {
+			// We no longer manage this device
+			m.ifStateMap.DeleteDesired(k)
 		}
 	})
 
@@ -1001,6 +1054,10 @@ func (m *bpfEndpointManager) loadDefaultPolicies() error {
 }
 
 func (m *bpfEndpointManager) CompleteDeferredWork() error {
+	defer func() {
+		log.Debug("CompleteDeferredWork done.")
+	}()
+
 	// Do one-off initialisation.
 	m.startupOnce.Do(func() {
 		m.dp.ensureStarted()
