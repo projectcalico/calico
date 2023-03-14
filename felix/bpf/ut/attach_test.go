@@ -62,7 +62,7 @@ func TestAttach(t *testing.T) {
 			BPFPolicyDebugEnabled: true,
 		},
 		bpfmaps,
-		regexp.MustCompile("^workloadep[12]"),
+		regexp.MustCompile("^workloadep[123]"),
 	)
 	Expect(err).NotTo(HaveOccurred())
 
@@ -310,6 +310,121 @@ func TestAttach(t *testing.T) {
 		// We remember the state from above
 		Expect(pm).NotTo(HaveKey(wl1State.IngressPolicy()))
 		Expect(pm).NotTo(HaveKey(wl1State.EgressPolicy()))
+	})
+
+	t.Run("restart", func(t *testing.T) {
+		// First create wl3 and remove the device before restart
+
+		workload3 := createVethName("workloadep3")
+		bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep3", ifacemonitor.StateUp, workload3.Attrs().Index))
+		bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("workloadep3", "1.6.6.8"))
+		err = bpfEpMgr.CompleteDeferredWork()
+
+		if err != nil {
+			deleteLink(workload3)
+		}
+
+		Expect(err).NotTo(HaveOccurred())
+		ifstateMap := ifstateMapDump(bpfmaps.IfStateMap)
+		wl2State := ifstateMap[ifstate.NewKey(uint32(workload2.Attrs().Index))]
+		Expect(ifstateMap).To(HaveKey(ifstate.NewKey(uint32(workload3.Attrs().Index))))
+
+		deleteLink(workload3)
+
+		bpfEpMgr, err = linux.NewTestEpMgr(
+			&linux.Config{
+				Hostname:              "uthost",
+				BPFLogLevel:           loglevel,
+				BPFDataIfacePattern:   regexp.MustCompile("^hostep[12]"),
+				VXLANMTU:              1000,
+				VXLANPort:             1234,
+				BPFNodePortDSREnabled: false,
+				RulesConfig: rules.Config{
+					EndpointToHostAction: "RETURN",
+				},
+				BPFExtToServiceConnmark: 0,
+				FeatureGates: map[string]string{
+					"BPFConnectTimeLoadBalancingWorkaround": "enabled",
+				},
+				BPFPolicyDebugEnabled: true,
+			},
+			bpfmaps,
+			regexp.MustCompile("^workloadep[123]"),
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		err := bpfEpMgr.CompleteDeferredWork()
+		Expect(err).NotTo(HaveOccurred())
+
+		bpfEpMgr.OnUpdate(&proto.HostMetadataUpdate{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
+		bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep2", ifacemonitor.StateUp, workload2.Attrs().Index))
+		bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("workloadep2", "1.6.6.1"))
+		bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("hostep2", ifacemonitor.StateUp, host2.Attrs().Index))
+		bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("hostep2", "4.3.2.1"))
+		err = bpfEpMgr.CompleteDeferredWork()
+		Expect(err).NotTo(HaveOccurred())
+
+		pm := polprogMapDump(bpfmaps.PolicyMap)
+		// We remember the state from above
+		Expect(pm).To(HaveLen(2))
+		Expect(pm).To(HaveKey(wl2State.IngressPolicy()))
+		Expect(pm).To(HaveKey(wl2State.EgressPolicy()))
+	})
+
+	t.Run("restart - CompleteDeferredWork at once", func(t *testing.T) {
+		// First create wl3 and remove the device before restart
+
+		workload3 := createVethName("workloadep3")
+		bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep3", ifacemonitor.StateUp, workload3.Attrs().Index))
+		bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("workloadep3", "1.6.6.8"))
+		err = bpfEpMgr.CompleteDeferredWork()
+
+		if err != nil {
+			deleteLink(workload3)
+		}
+
+		Expect(err).NotTo(HaveOccurred())
+		ifstateMap := ifstateMapDump(bpfmaps.IfStateMap)
+		wl2State := ifstateMap[ifstate.NewKey(uint32(workload2.Attrs().Index))]
+		Expect(ifstateMap).To(HaveKey(ifstate.NewKey(uint32(workload3.Attrs().Index))))
+
+		deleteLink(workload3)
+
+		bpfEpMgr, err = linux.NewTestEpMgr(
+			&linux.Config{
+				Hostname:              "uthost",
+				BPFLogLevel:           loglevel,
+				BPFDataIfacePattern:   regexp.MustCompile("^hostep[12]"),
+				VXLANMTU:              1000,
+				VXLANPort:             1234,
+				BPFNodePortDSREnabled: false,
+				RulesConfig: rules.Config{
+					EndpointToHostAction: "RETURN",
+				},
+				BPFExtToServiceConnmark: 0,
+				FeatureGates: map[string]string{
+					"BPFConnectTimeLoadBalancingWorkaround": "enabled",
+				},
+				BPFPolicyDebugEnabled: true,
+			},
+			bpfmaps,
+			regexp.MustCompile("^workloadep[123]"),
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		bpfEpMgr.OnUpdate(&proto.HostMetadataUpdate{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
+		bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep2", ifacemonitor.StateUp, workload2.Attrs().Index))
+		bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("workloadep2", "1.6.6.1"))
+		bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("hostep2", ifacemonitor.StateUp, host2.Attrs().Index))
+		bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("hostep2", "4.3.2.1"))
+		err = bpfEpMgr.CompleteDeferredWork()
+		Expect(err).NotTo(HaveOccurred())
+
+		pm := polprogMapDump(bpfmaps.PolicyMap)
+		// We remember the state from above
+		Expect(pm).To(HaveLen(2))
+		Expect(pm).To(HaveKey(wl2State.IngressPolicy()))
+		Expect(pm).To(HaveKey(wl2State.EgressPolicy()))
 	})
 
 	ifstateMap := ifstateMapDump(bpfmaps.IfStateMap)
