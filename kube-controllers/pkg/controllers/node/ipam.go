@@ -243,7 +243,6 @@ func (c *ipamController) acceptScheduleRequests(stopCh <-chan struct{}) {
 		// Wait until something wakes us up, or we are stopped.
 		select {
 		case upd := <-c.syncerUpdates:
-			log.Infof("Handling syncer updatges")
 			c.handleUpdate(upd)
 
 			// It's possible we get a rapid series of updates in a row. Use
