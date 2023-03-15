@@ -16,10 +16,9 @@ package calc
 
 import (
 	"fmt"
-	"sort"
 	"strings"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/google/btree"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -27,14 +26,15 @@ import (
 )
 
 type PolicySorter struct {
-	tier *tierInfo
+	Tier *TierInfo
 }
 
 func NewPolicySorter() *PolicySorter {
 	return &PolicySorter{
-		tier: &tierInfo{
-			Name:     "default",
-			Policies: make(map[model.PolicyKey]*model.Policy),
+		Tier: &TierInfo{
+			Name:           "default",
+			Policies:       make(map[model.PolicyKey]*model.Policy),
+			SortedPolicies: btree.NewG[PolKV](2, PolKVLess),
 		},
 	}
 }
@@ -51,46 +51,66 @@ func policyTypesEqual(pol1, pol2 *model.Policy) bool {
 	return types1.Equals(types2)
 }
 
+func (poc *PolicySorter) Sorted() *TierInfo {
+	poc.Tier.OrderedPolicies = make([]PolKV, 0, len(poc.Tier.Policies))
+	poc.Tier.SortedPolicies.Ascend(func(kv PolKV) bool {
+		poc.Tier.OrderedPolicies = append(poc.Tier.OrderedPolicies, kv)
+		return true
+	})
+	return poc.Tier
+}
+
 func (poc *PolicySorter) OnUpdate(update api.Update) (dirty bool) {
 	switch key := update.Key.(type) {
 	case model.PolicyKey:
-		oldPolicy := poc.tier.Policies[key]
+		var newPolicy *model.Policy
 		if update.Value != nil {
-			newPolicy := update.Value.(*model.Policy)
-			if oldPolicy == nil ||
-				oldPolicy.Order != newPolicy.Order ||
-				oldPolicy.DoNotTrack != newPolicy.DoNotTrack ||
-				oldPolicy.PreDNAT != newPolicy.PreDNAT ||
-				oldPolicy.ApplyOnForward != newPolicy.ApplyOnForward ||
-				!policyTypesEqual(oldPolicy, newPolicy) {
-				dirty = true
-			}
-			poc.tier.Policies[key] = newPolicy
+			newPolicy = update.Value.(*model.Policy)
 		} else {
-			if oldPolicy != nil {
-				delete(poc.tier.Policies, key)
-				dirty = true
-			}
+			newPolicy = nil
 		}
+		dirty = poc.UpdatePolicy(key, newPolicy)
 	}
 	return
 }
 
-func (poc *PolicySorter) Sorted() *tierInfo {
-	tierInfo := poc.tier
-	tierInfo.OrderedPolicies = make([]PolKV, 0, len(tierInfo.Policies))
-	for k, v := range tierInfo.Policies {
-		tierInfo.OrderedPolicies = append(tierInfo.OrderedPolicies, PolKV{Key: k, Value: v})
-	}
-	// Note: using explicit Debugf() here rather than WithFields(); we want the []PolKV slice
-	// to be stringified with %v rather than %#v (as used by WithField()).
-	log.Debugf("Order before sorting: %v", tierInfo.OrderedPolicies)
-	sort.Sort(PolicyByOrder(tierInfo.OrderedPolicies))
-	log.Debugf("Order after sorting: %v", tierInfo.OrderedPolicies)
-	return tierInfo
+func (poc *PolicySorter) HasPolicy(key model.PolicyKey) (found bool) {
+	_, found = poc.Tier.Policies[key]
+	return found
 }
 
-// Note: PolKV is really internal to the calc package.  It is named with an initial capital so that
+func (poc *PolicySorter) UpdatePolicy(key model.PolicyKey, newPolicy *model.Policy) (dirty bool) {
+	oldPolicy := poc.Tier.Policies[key]
+	if newPolicy != nil {
+		if oldPolicy == nil ||
+			oldPolicy.Order != newPolicy.Order ||
+			oldPolicy.DoNotTrack != newPolicy.DoNotTrack ||
+			oldPolicy.PreDNAT != newPolicy.PreDNAT ||
+			oldPolicy.ApplyOnForward != newPolicy.ApplyOnForward ||
+			!policyTypesEqual(oldPolicy, newPolicy) {
+			dirty = true
+		}
+		if oldPolicy != nil {
+			// Need to do delete prior to ReplaceOrInsert because we don't insert strictly based on key but rather a
+			// combination of key + value so if for instance we add PolKV{k1, v1} then add PolKV{k1, v2} we'll simply have
+			// both KVs in the tree instead of only {k1, v2} like we want. By deleting first we guarantee that only the
+			// newest value remains in the tree.
+			poc.Tier.SortedPolicies.Delete(PolKV{Key: key, Value: oldPolicy})
+		}
+		poc.Tier.SortedPolicies.ReplaceOrInsert(PolKV{Key: key, Value: newPolicy})
+		poc.Tier.Policies[key] = newPolicy
+	} else {
+		if oldPolicy != nil {
+			poc.Tier.SortedPolicies.Delete(PolKV{Key: key, Value: oldPolicy})
+			delete(poc.Tier.Policies, key)
+			dirty = true
+		}
+	}
+
+	return
+}
+
+// PolKV is really internal to the calc package.  It is named with an initial capital so that
 // the test package calc_test can also use it.
 type PolKV struct {
 	Key   model.PolicyKey
@@ -113,7 +133,7 @@ func (p PolKV) String() string {
 	return fmt.Sprintf("%s(%s)", p.Key.Name, orderStr)
 }
 
-func (p *PolKV) governsType(wanted string) bool {
+func (p PolKV) governsType(wanted string) bool {
 	// Back-compatibility: no Types means Ingress and Egress.
 	if len(p.Value.Types) == 0 {
 		return true
@@ -126,7 +146,7 @@ func (p *PolKV) governsType(wanted string) bool {
 	return false
 }
 
-func (p *PolKV) GovernsIngress() bool {
+func (p PolKV) GovernsIngress() bool {
 	if p.ingress == nil {
 		governsIngress := p.governsType("ingress")
 		p.ingress = &governsIngress
@@ -134,7 +154,7 @@ func (p *PolKV) GovernsIngress() bool {
 	return *p.ingress
 }
 
-func (p *PolKV) GovernsEgress() bool {
+func (p PolKV) GovernsEgress() bool {
 	if p.egress == nil {
 		governsEgress := p.governsType("egress")
 		p.egress = &governsEgress
@@ -142,48 +162,45 @@ func (p *PolKV) GovernsEgress() bool {
 	return *p.egress
 }
 
-type PolicyByOrder []PolKV
-
-func (a PolicyByOrder) Len() int      { return len(a) }
-func (a PolicyByOrder) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
-func (a PolicyByOrder) Less(i, j int) bool {
-	bothNil := a[i].Value.Order == nil && a[j].Value.Order == nil
-	bothSet := a[i].Value.Order != nil && a[j].Value.Order != nil
-	ordersEqual := bothNil || bothSet && (*a[i].Value.Order == *a[j].Value.Order)
+func PolKVLess(i, j PolKV) bool {
+	bothNil := i.Value.Order == nil && j.Value.Order == nil
+	bothSet := i.Value.Order != nil && j.Value.Order != nil
+	ordersEqual := bothNil || bothSet && (*i.Value.Order == *j.Value.Order)
 
 	if ordersEqual {
 		// Use name as tie-break.
-		result := a[i].Key.Name < a[j].Key.Name
+		result := i.Key.Name < j.Key.Name
 		return result
 	}
 
 	// nil order maps to "infinity"
-	if a[i].Value.Order == nil {
+	if i.Value.Order == nil {
 		return false
-	} else if a[j].Value.Order == nil {
+	} else if j.Value.Order == nil {
 		return true
 	}
 
 	// Otherwise, use numeric comparison.
-	return *a[i].Value.Order < *a[j].Value.Order
+	return *i.Value.Order < *j.Value.Order
 }
 
-type tierInfo struct {
+type TierInfo struct {
 	Name            string
 	Valid           bool
 	Order           *float64
 	Policies        map[model.PolicyKey]*model.Policy
+	SortedPolicies  *btree.BTreeG[PolKV]
 	OrderedPolicies []PolKV
 }
 
-func NewTierInfo(name string) *tierInfo {
-	return &tierInfo{
+func NewTierInfo(name string) *TierInfo {
+	return &TierInfo{
 		Name:     name,
 		Policies: make(map[model.PolicyKey]*model.Policy),
 	}
 }
 
-func (t tierInfo) String() string {
+func (t TierInfo) String() string {
 	policies := make([]string, len(t.OrderedPolicies))
 	for ii, pol := range t.OrderedPolicies {
 		polType := "t"

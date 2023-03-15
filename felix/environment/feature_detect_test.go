@@ -242,43 +242,43 @@ func TestIptablesBackendDetection(t *testing.T) {
 		{
 			"No output from cmds",
 			"auto",
-			ipOutputFactory{0, 0, 0, 0},
+			ipOutputFactory{0, 0, 0, 0, 0, 0, 0, 0},
 			"legacy",
 		},
 		{
 			"Output from legacy cmds",
 			"auto",
-			ipOutputFactory{10, 10, 0, 0},
+			ipOutputFactory{10, 10, 0, 0, 0, 0, 0, 0},
 			"legacy",
 		},
 		{
 			"Output from nft cmds",
 			"auto",
-			ipOutputFactory{0, 0, 10, 10},
+			ipOutputFactory{0, 0, 10, 10, 0, 0, 0, 0},
 			"nft",
 		},
 		{
 			"Detected and Specified backend of nft match",
 			"nft",
-			ipOutputFactory{0, 0, 10, 10},
+			ipOutputFactory{0, 0, 10, 10, 0, 0, 0, 0},
 			"nft",
 		},
 		{
 			"Detected and Specified backend of legacy match",
 			"legacy",
-			ipOutputFactory{10, 10, 0, 0},
+			ipOutputFactory{10, 10, 0, 0, 0, 0, 0, 0},
 			"legacy",
 		},
 		{
 			"Backend detected as nft does not match Specified legacy",
 			"legacy",
-			ipOutputFactory{0, 0, 10, 10},
+			ipOutputFactory{0, 0, 10, 10, 0, 0, 0, 0},
 			"legacy",
 		},
 		{
 			"Backend detected as legacy does not match Specified nft",
 			"nft",
-			ipOutputFactory{10, 10, 0, 0},
+			ipOutputFactory{10, 10, 0, 0, 0, 0, 0, 0},
 			"nft",
 		},
 		{
@@ -301,7 +301,7 @@ func TestIptablesBackendDetection(t *testing.T) {
 				Ip6Nft:    10,
 				Ip4Nft:    10,
 			},
-			"legacy",
+			"nft",
 		},
 		{
 			"Only ipv6 output from legacy cmds",
@@ -312,7 +312,7 @@ func TestIptablesBackendDetection(t *testing.T) {
 				Ip6Nft:    10,
 				Ip4Nft:    10,
 			},
-			"legacy",
+			"nft",
 		},
 		{
 			"Only ipv6 output from nft cmds still detects nft",
@@ -324,6 +324,50 @@ func TestIptablesBackendDetection(t *testing.T) {
 				Ip4Nft:    -1,
 			},
 			"nft",
+		},
+		{
+			"Output from nft with kube chains",
+			"auto",
+			ipOutputFactory{
+				Ip6legacy:     0,
+				Ip4legacy:     0,
+				Ip6Nft:        64,
+				Ip4Nft:        123,
+				Ip6legacyKube: 0,
+				Ip4legacyKube: 0,
+				Ip6NftKube:    2,
+				Ip4NftKube:    2,
+			},
+			"nft",
+		},
+		{
+			"Output from nft with kube chains and has legacy chains",
+			"auto",
+			ipOutputFactory{
+				Ip6legacy:     20,
+				Ip4legacy:     20,
+				Ip6Nft:        2,
+				Ip4Nft:        2,
+				Ip6legacyKube: 0,
+				Ip4legacyKube: 0,
+				Ip6NftKube:    2,
+				Ip4NftKube:    2,
+			},
+			"nft",
+		}, {
+			"Output from legacy with kube chains and has nft chains",
+			"auto",
+			ipOutputFactory{
+				Ip6legacy:     20,
+				Ip4legacy:     20,
+				Ip6Nft:        30,
+				Ip4Nft:        30,
+				Ip6legacyKube: 2,
+				Ip4legacyKube: 2,
+				Ip6NftKube:    0,
+				Ip4NftKube:    0,
+			},
+			"legacy",
 		},
 	} {
 		tst := tst
@@ -341,24 +385,30 @@ type ipOutputFactory struct {
 	Ip4legacy int
 	Ip6Nft    int
 	Ip4Nft    int
+
+	Ip6legacyKube int
+	Ip4legacyKube int
+	Ip6NftKube    int
+	Ip4NftKube    int
 }
 
 func (f *ipOutputFactory) NewCmd(name string, arg ...string) cmdshim.CmdIface {
 	switch name {
 	case "iptables-legacy-save":
-		return &ipOutputCmd{out: f.Ip4legacy}
+		return &ipOutputCmd{out: f.Ip4legacy, outKube: f.Ip4legacyKube}
 	case "ip6tables-legacy-save":
-		return &ipOutputCmd{out: f.Ip6legacy}
+		return &ipOutputCmd{out: f.Ip6legacy, outKube: f.Ip6legacyKube}
 	case "iptables-nft-save":
-		return &ipOutputCmd{out: f.Ip4Nft}
+		return &ipOutputCmd{out: f.Ip4Nft, outKube: f.Ip4NftKube}
 	case "ip6tables-nft-save":
-		return &ipOutputCmd{out: f.Ip6Nft}
+		return &ipOutputCmd{out: f.Ip6Nft, outKube: f.Ip6NftKube}
 	}
 	return nil
 }
 
 type ipOutputCmd struct {
-	out int
+	out     int
+	outKube int
 }
 
 func (d *ipOutputCmd) String() string {
@@ -393,10 +443,18 @@ func (d *ipOutputCmd) Output() ([]byte, error) {
 	if d.out < 0 {
 		return nil, errors.New("iptables command failed")
 	}
+	if d.outKube > d.out {
+		return nil, errors.New("iptables command failed")
+	}
+
 	out := []byte{}
-	for i := 0; i < d.out; i++ {
+	for i := 0; i < d.outKube; i++ {
+		out = append(out, []byte(fmt.Sprintf("KUBE-IPTABLES-HINT - [0:0] %d\n", i))...)
+	}
+	for i := 0; i < d.out-d.outKube; i++ {
 		out = append(out, []byte(fmt.Sprintf("-Output line %d\n", i))...)
 	}
+
 	return out, nil
 }
 

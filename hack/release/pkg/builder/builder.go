@@ -470,6 +470,11 @@ Attached to this release are the following artifacts:
 - {calico_windows_zip}: Calico for Windows.
 - {helm_chart}: Calico Helm v3 chart.
 - ocp.tgz: Manifest bundle for OpenShift.
+
+Additional links:
+
+- [VPP data plane release information](https://github.com/projectcalico/vpp-dataplane/blob/master/RELEASE_NOTES.md)
+
 `
 	sv, err := semver.NewVersion(strings.TrimPrefix(ver, "v"))
 	if err != nil {
