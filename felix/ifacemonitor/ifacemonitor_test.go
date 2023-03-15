@@ -70,9 +70,12 @@ type linkUpdate struct {
 	index int
 }
 
+type inSyncupdate struct{}
+
 type mockDataplane struct {
 	linkC chan linkUpdate
 	addrC chan addrState
+	syncC chan inSyncupdate
 }
 
 func (nl *netlinkTest) addLink(name string) {
@@ -389,12 +392,28 @@ func (dp *mockDataplane) expectAddrStateCb(ifaceName string, addr string, presen
 	}
 }
 
+func (dp *mockDataplane) synchronizationCallBack() {
+	log.Info("In sync callback fired")
+	dp.syncC <- inSyncupdate{}
+	log.Info("mock dataplane reported sync callback")
+}
+
+func (dp *mockDataplane) expectInSyncCB() {
+	var syncIface inSyncupdate
+	EventuallyWithOffset(1, dp.syncC).Should(Receive(&syncIface))
+}
+
+func (dp *mockDataplane) expectNoInSyncCB() {
+	ConsistentlyWithOffset(1, dp.syncC, "100ms").ShouldNot(Receive())
+}
+
 var errFatal = errors.New("fatal error")
 
 var _ = Describe("ifacemonitor", func() {
 	var nl *netlinkTest
 	var resyncC chan time.Time
 	var fatalErrC chan struct{}
+	var expectInSync bool
 	var im *ifacemonitor.InterfaceMonitor
 	var dp *mockDataplane
 
@@ -433,9 +452,12 @@ var _ = Describe("ifacemonitor", func() {
 		dp = &mockDataplane{
 			linkC: make(chan linkUpdate, 1),
 			addrC: make(chan addrState, 2),
+			syncC: make(chan inSyncupdate, 1),
 		}
 		im.StateCallback = dp.linkStateCallback
 		im.AddrCallback = dp.addrStateCallback
+		im.InSyncCallback = dp.synchronizationCallBack
+		expectInSync = true
 	})
 
 	JustBeforeEach(func() {
@@ -453,12 +475,18 @@ var _ = Describe("ifacemonitor", func() {
 			im.MonitorInterfaces()
 		}()
 		Eventually(nl.userSubscribed).Should(Receive())
+		if expectInSync {
+			dp.expectInSyncCB()
+		} else {
+			dp.expectNoInSyncCB()
+		}
 		log.Info("Monitor interfaces subscribed")
 	})
 
 	Context("with an error from LinkList", func() {
 		BeforeEach(func() {
 			nl.LinkListErr = fmt.Errorf("dummy err")
+			expectInSync = false
 		})
 
 		It("should report a fatal error", func() {
