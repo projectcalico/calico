@@ -151,7 +151,7 @@ func newBPFRouteManager(config *Config, maps *bpfmap.Maps,
 func (m *bpfRouteManager) OnUpdate(msg interface{}) {
 	switch msg := msg.(type) {
 	// Updates to local IPs.  We use these to include host IPs in the map.
-	case *ifaceUpdate:
+	case *ifaceStateUpdate:
 		m.onIfaceUpdate(msg)
 	case *ifaceAddrsUpdate:
 		m.onIfaceAddrsUpdate(msg)
@@ -433,7 +433,7 @@ func (m *bpfRouteManager) resyncWithDataplane() {
 	}
 }
 
-func (m *bpfRouteManager) onIfaceUpdate(msg *ifaceUpdate) {
+func (m *bpfRouteManager) onIfaceUpdate(msg *ifaceStateUpdate) {
 	// We're interested in the mapping from interface name to interface index.
 	if msg.State == ifacemonitor.StateUp {
 		oldIdx, ok := m.ifaceNameToIdx[msg.Name]
