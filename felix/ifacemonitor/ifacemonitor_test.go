@@ -70,9 +70,12 @@ type linkUpdate struct {
 	index int
 }
 
+type inSyncupdate struct{}
+
 type mockDataplane struct {
 	linkC chan linkUpdate
 	addrC chan addrState
+	syncC chan inSyncupdate
 }
 
 func (nl *netlinkTest) addLink(name string) {
@@ -389,6 +392,17 @@ func (dp *mockDataplane) expectAddrStateCb(ifaceName string, addr string, presen
 	}
 }
 
+func (dp *mockDataplane) synchronizationCallBack() {
+	log.Info("In sync callback fired")
+	dp.syncC <- inSyncupdate{}
+	log.Info("mock dataplane reported sync callback")
+}
+
+func (dp *mockDataplane) expectInSyncCB() {
+	var syncIface inSyncupdate
+	Eventually(dp.syncC).Should(Receive(&syncIface))
+}
+
 var errFatal = errors.New("fatal error")
 
 var _ = Describe("ifacemonitor", func() {
@@ -433,9 +447,11 @@ var _ = Describe("ifacemonitor", func() {
 		dp = &mockDataplane{
 			linkC: make(chan linkUpdate, 1),
 			addrC: make(chan addrState, 2),
+			syncC: make(chan inSyncupdate, 1),
 		}
 		im.StateCallback = dp.linkStateCallback
 		im.AddrCallback = dp.addrStateCallback
+		im.InSyncCallback = dp.synchronizationCallBack
 	})
 
 	JustBeforeEach(func() {
@@ -451,6 +467,7 @@ var _ = Describe("ifacemonitor", func() {
 				panic(v)
 			}()
 			im.MonitorInterfaces()
+			dp.expectInSyncCB()
 		}()
 		Eventually(nl.userSubscribed).Should(Receive())
 		log.Info("Monitor interfaces subscribed")
@@ -474,6 +491,7 @@ var _ = Describe("ifacemonitor", func() {
 
 			nl.addLink(iface)
 			resyncC <- time.Time{}
+			dp.expectInSyncCB()
 			dp.notExpectAddrStateCb()
 			dp.expectLinkStateCb(iface, ifacemonitor.StateDown, idx)
 			nl.addAddr(iface, "10.100.0.1/32")
@@ -495,6 +513,7 @@ var _ = Describe("ifacemonitor", func() {
 			idx = nl.nextIndex
 			nl.addLink(iface)
 			resyncC <- time.Time{}
+			dp.expectInSyncCB()
 			dp.expectLinkStateCb(iface, ifacemonitor.StateDown, idx)
 			dp.notExpectAddrStateCb()
 
@@ -530,6 +549,7 @@ var _ = Describe("ifacemonitor", func() {
 		idx := nl.nextIndex
 		nl.addLink("eth0")
 		resyncC <- time.Time{}
+		dp.expectInSyncCB()
 		dp.expectLinkStateCb("eth0", ifacemonitor.StateDown, idx)
 		dp.expectAddrStateCb("eth0", "", true)
 		nl.addAddr("eth0", "10.0.240.10/24")
@@ -568,6 +588,7 @@ var _ = Describe("ifacemonitor", func() {
 		// accordingly.
 		nl.delLinkNoSignal("eth0")
 		resyncC <- time.Time{}
+		dp.expectInSyncCB()
 		dp.expectLinkStateCb("eth0", ifacemonitor.StateNotPresent, idx)
 		dp.expectAddrStateCb("eth0", "", false)
 
@@ -576,7 +597,9 @@ var _ = Describe("ifacemonitor", func() {
 		// trigger.  (This would block if the interface monitor's main loop was not yet
 		// ready to read it.)
 		resyncC <- time.Time{}
+		dp.expectInSyncCB()
 		resyncC <- time.Time{}
+		dp.expectInSyncCB()
 
 		Expect(fatalErrC).ToNot(BeClosed())
 	})
@@ -593,6 +616,7 @@ var _ = Describe("ifacemonitor", func() {
 		idx := nl.nextIndex
 		nl.addLink("eth0")
 		resyncC <- time.Time{}
+		dp.expectInSyncCB()
 		dp.expectAddrStateCb("eth0", "", true)
 		nl.addAddr("eth0", "10.0.240.10/24")
 		dp.expectAddrStateCb("eth0", "10.0.240.10", true)
@@ -615,7 +639,9 @@ var _ = Describe("ifacemonitor", func() {
 		// trigger.  (This would block if the interface monitor's main loop was not yet
 		// ready to read it.)
 		resyncC <- time.Time{}
+		dp.expectInSyncCB()
 		resyncC <- time.Time{}
+		dp.expectInSyncCB()
 
 		Expect(fatalErrC).ToNot(BeClosed())
 	})
@@ -625,6 +651,7 @@ var _ = Describe("ifacemonitor", func() {
 		idx := nl.nextIndex
 		nl.addLink("eth0")
 		resyncC <- time.Time{}
+		dp.expectInSyncCB()
 		dp.expectLinkStateCb("eth0", ifacemonitor.StateDown, idx)
 		dp.expectAddrStateCb("eth0", "", true)
 		nl.addAddr("eth0", "10.0.240.10/24")
@@ -639,6 +666,7 @@ var _ = Describe("ifacemonitor", func() {
 		// assume that there is never any Netlink signal for the link deletion.
 		_ = nl.delLinkNoSignal("eth0")
 		resyncC <- time.Time{}
+		dp.expectInSyncCB()
 		dp.expectLinkStateCb("eth0", ifacemonitor.StateNotPresent, idx)
 		dp.expectAddrStateCb("eth0", "", false)
 
