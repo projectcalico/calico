@@ -49,6 +49,7 @@ const (
 
 type InterfaceStateCallback func(ifaceName string, ifaceState State, ifIndex int)
 type AddrStateCallback func(ifaceName string, addrs set.Set[string])
+type InSyncCallback func()
 
 type Config struct {
 	// InterfaceExcludes is a list of interface names that we don't want callbacks for.
@@ -69,6 +70,7 @@ type InterfaceMonitor struct {
 
 	StateCallback    InterfaceStateCallback
 	AddrCallback     AddrStateCallback
+	InSyncCallback   InSyncCallback
 	fatalErrCallback func(error)
 }
 
@@ -127,6 +129,8 @@ func (m *InterfaceMonitor) MonitorInterfaces() {
 			if nlCancelC, err = m.netlinkStub.Subscribe(updates, routeUpdates); err != nil {
 				// If we can't even subscribe, something must have gone very wrong.  Bail.
 				m.fatalErrCallback(fmt.Errorf("failed to subscribe to netlink: %w", err))
+				filterUpdatesCancel()
+				return
 			}
 			go FilterUpdates(filterUpdatesCtx, filteredRouteUpdates, routeUpdates, filteredUpdates, updates)
 		}
@@ -138,8 +142,13 @@ func (m *InterfaceMonitor) MonitorInterfaces() {
 		err := m.resync()
 		if err != nil {
 			m.fatalErrCallback(fmt.Errorf("failed to read from netlink (initial resync): %w", err))
+			filterUpdatesCancel()
+			return
 		}
 
+		// when resync is complete, send a message to the "in-sync" callback received in the dataplane
+		// to program the iptables
+		m.InSyncCallback()
 	readLoop:
 		for {
 			log.WithFields(log.Fields{
@@ -167,6 +176,9 @@ func (m *InterfaceMonitor) MonitorInterfaces() {
 				err := m.resync()
 				if err != nil {
 					m.fatalErrCallback(fmt.Errorf("failed to read from netlink (resync): %w", err))
+					close(nlCancelC)
+					filterUpdatesCancel()
+					return
 				}
 			}
 		}
