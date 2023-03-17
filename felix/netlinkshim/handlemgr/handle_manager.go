@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package netlinkshim
+package handlemgr
 
 import (
 	"time"
@@ -20,6 +20,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/environment"
+	"github.com/projectcalico/calico/felix/netlinkshim"
 )
 
 const (
@@ -29,7 +30,7 @@ const (
 
 type HandleManager struct {
 	// Current netlink handle, or nil if we need to reconnect.
-	cachedHandle Interface
+	cachedHandle netlinkshim.Interface
 	// numRepeatFailures counts the number of repeated netlink connection failures.
 	// reset on successful connection.
 	numRepeatFailures int
@@ -38,7 +39,7 @@ type HandleManager struct {
 	socketTimeout time.Duration
 
 	featureDetector  environment.FeatureDetectorIface
-	newNetlinkHandle func() (Interface, error)
+	newNetlinkHandle func() (netlinkshim.Interface, error)
 }
 
 type NetlinkHandleManagerOpt func(*HandleManager)
@@ -49,7 +50,7 @@ func WithSocketTimeout(d time.Duration) NetlinkHandleManagerOpt {
 	}
 }
 
-func WithNewHandleOverride(newNetlinkHandle func() (Interface, error)) NetlinkHandleManagerOpt {
+func WithNewHandleOverride(newNetlinkHandle func() (netlinkshim.Interface, error)) NetlinkHandleManagerOpt {
 	return func(manager *HandleManager) {
 		manager.newNetlinkHandle = newNetlinkHandle
 	}
@@ -64,7 +65,7 @@ func NewHandleManager(
 		family:           netlinkFamily,
 		socketTimeout:    defaultSocketTimeout,
 		featureDetector:  featureDetector,
-		newNetlinkHandle: NewRealNetlink,
+		newNetlinkHandle: netlinkshim.NewRealNetlink,
 	}
 	for _, o := range opts {
 		o(nlm)
@@ -73,7 +74,7 @@ func NewHandleManager(
 }
 
 // Handle returns the cached netlink handle, initialising it if needed.
-func (r *HandleManager) Handle() (Interface, error) {
+func (r *HandleManager) Handle() (netlinkshim.Interface, error) {
 	if r.cachedHandle == nil {
 		nlHandle, err := r.newHandle()
 		if err != nil {
@@ -89,7 +90,7 @@ func (r *HandleManager) Handle() (Interface, error) {
 	return r.cachedHandle, nil
 }
 
-func (r *HandleManager) newHandle() (Interface, error) {
+func (r *HandleManager) newHandle() (netlinkshim.Interface, error) {
 	if r.numRepeatFailures >= maxConnFailures {
 		logrus.WithField("numFailures", r.numRepeatFailures).Panic(
 			"Repeatedly failed to connect to netlink.")
