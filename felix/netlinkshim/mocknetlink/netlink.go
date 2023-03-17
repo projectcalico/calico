@@ -58,6 +58,8 @@ func New() *MockNetlinkDataplane {
 				Table:    253,
 			},
 		},
+		SetStrictCheckErr: SimulatedError,
+
 		// Use a single global mutex.  This works around an issue in the wireguard tests, which use multiple
 		// mock dataplanes to hand to different parts of the code under test.  That led to concurrency bugs
 		// where one dataplane modified another dataplane's object without holding the right lock.
@@ -248,6 +250,7 @@ type MockNetlinkDataplane struct {
 
 	PersistFailures                bool
 	FailuresToSimulate             FailFlags
+	SetStrictCheckErr              error
 	DeleteInterfaceAfterLinkByName bool
 
 	addedArpEntries set.Set[string]
@@ -381,7 +384,7 @@ func (d *MockNetlinkDataplane) SetStrictCheck(b bool) error {
 
 	Expect(d.NetlinkOpen).To(BeTrue())
 	if d.shouldFail(FailNextSetStrict) {
-		return SimulatedError
+		return d.SetStrictCheckErr
 	}
 	d.StrictEnabled = b
 	return nil
