@@ -18,21 +18,21 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/projectcalico/calico/felix/netlinkshim/handlemgr"
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/calico/felix/environment"
-	"github.com/projectcalico/calico/felix/netlinkshim"
 )
 
 type netlinkReal struct {
-	handleMgr *netlinkshim.HandleManager
+	handleMgr *handlemgr.HandleManager
 }
 
 func newRealNetlink(featureDetector environment.FeatureDetectorIface, timeout time.Duration) *netlinkReal {
 	return &netlinkReal{
-		handleMgr: netlinkshim.NewHandleManager(netlink.FAMILY_ALL, featureDetector, netlinkshim.WithSocketTimeout(timeout)),
+		handleMgr: handlemgr.NewHandleManager(netlink.FAMILY_ALL, featureDetector, handlemgr.WithSocketTimeout(timeout)),
 	}
 }
 
