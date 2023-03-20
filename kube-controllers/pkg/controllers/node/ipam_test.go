@@ -737,12 +737,11 @@ var _ = Describe("IPAM controller UTs", func() {
 		n.Spec.OrchRefs = []libapiv3.OrchRef{{NodeName: "kname", Orchestrator: apiv3.OrchestratorKubernetes}}
 		_, err := cli.Nodes().Create(context.TODO(), &n, options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
-		var node *v1.Node
-		Eventually(nodes).WithTimeout(time.Second).Should(Receive(&node))
 		kn := v1.Node{}
 		kn.Name = "kname"
 		_, err = cs.CoreV1().Nodes().Create(context.TODO(), &kn, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
+		var node *v1.Node
 		Eventually(nodes).WithTimeout(time.Second).Should(Receive(&node))
 
 		// Create a pod for the allocation so that it doesn't get GC'd.
@@ -902,12 +901,11 @@ var _ = Describe("IPAM controller UTs", func() {
 		n.Spec.OrchRefs = []libapiv3.OrchRef{{NodeName: "kname", Orchestrator: apiv3.OrchestratorKubernetes}}
 		_, err := cli.Nodes().Create(context.TODO(), &n, options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
-		var node *v1.Node
-		Eventually(nodes).WithTimeout(time.Second).Should(Receive(&node))
 		kn := v1.Node{}
 		kn.Name = "kname"
 		_, err = cs.CoreV1().Nodes().Create(context.TODO(), &kn, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
+		var node *v1.Node
 		Eventually(nodes).WithTimeout(time.Second).Should(Receive(&node))
 
 		// Create a pod for the allocation - the pod will have a single IP in its status, but there will be
@@ -1078,14 +1076,13 @@ var _ = Describe("IPAM controller UTs", func() {
 		n.Spec.OrchRefs = []libapiv3.OrchRef{{NodeName: "kname", Orchestrator: apiv3.OrchestratorKubernetes}}
 		_, err := cli.Nodes().Create(context.TODO(), &n, options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
-		var node *v1.Node
-		Eventually(nodes).WithTimeout(time.Second).Should(Receive(&node))
 
 		// Add the matching Kubernetes node.
 		kn := v1.Node{}
 		kn.Name = "kname"
 		_, err = cs.CoreV1().Nodes().Create(context.TODO(), &kn, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
+		var node *v1.Node
 		Eventually(nodes).WithTimeout(time.Second).Should(Receive(&node))
 
 		// Start the controller.
@@ -1151,12 +1148,11 @@ var _ = Describe("IPAM controller UTs", func() {
 		n.Spec.OrchRefs = []libapiv3.OrchRef{{NodeName: "kname", Orchestrator: apiv3.OrchestratorKubernetes}}
 		_, err := cli.Nodes().Create(context.TODO(), &n, options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
-		var node *v1.Node
-		Eventually(nodes).WithTimeout(time.Second).Should(Receive(&node))
 		kn := v1.Node{}
 		kn.Name = "kname"
 		_, err = cs.CoreV1().Nodes().Create(context.TODO(), &kn, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
+		var node *v1.Node
 		Eventually(nodes).WithTimeout(time.Second).Should(Receive(&node))
 
 		// Create a pod for the allocation so that it doesn't get GC'd.
@@ -1261,12 +1257,11 @@ var _ = Describe("IPAM controller UTs", func() {
 		n.Spec.OrchRefs = []libapiv3.OrchRef{{NodeName: "kname", Orchestrator: apiv3.OrchestratorKubernetes}}
 		_, err := cli.Nodes().Create(context.TODO(), &n, options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
-		var node *v1.Node
-		Eventually(nodes).WithTimeout(time.Second).Should(Receive(&node))
 		kn := v1.Node{}
 		kn.Name = "kname"
 		_, err = cs.CoreV1().Nodes().Create(context.TODO(), &kn, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
+		var node *v1.Node
 		Eventually(nodes).WithTimeout(time.Second).Should(Receive(&node))
 
 		// Create a pod for the allocation so that it doesn't get GC'd.
@@ -1371,12 +1366,11 @@ var _ = Describe("IPAM controller UTs", func() {
 		n.Spec.OrchRefs = []libapiv3.OrchRef{{NodeName: "kname", Orchestrator: apiv3.OrchestratorKubernetes}}
 		_, err := cli.Nodes().Create(context.TODO(), &n, options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
-		var node *v1.Node
-		Eventually(nodes).WithTimeout(time.Second).Should(Receive(&node))
 		kn := v1.Node{}
 		kn.Name = "kname"
 		_, err = cs.CoreV1().Nodes().Create(context.TODO(), &kn, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
+		var node *v1.Node
 		Eventually(nodes).WithTimeout(time.Second).Should(Receive(&node))
 
 		// Create a pod for the allocation so that it doesn't get GC'd.
