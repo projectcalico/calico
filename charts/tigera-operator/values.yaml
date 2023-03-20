@@ -46,3 +46,5 @@ tigeraOperator:
 calicoctl:
   image: docker.io/calico/ctl
   tag: master
+
+kubeletVolumePluginPath: /var/lib/kubelet
