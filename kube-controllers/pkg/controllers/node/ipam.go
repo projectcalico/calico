@@ -22,6 +22,7 @@ import (
 	"strings"
 	"time"
 
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/flannelmigration"
@@ -31,7 +32,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
+	v1lister "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/util/workqueue"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -113,7 +114,7 @@ func init() {
 	prometheus.MustRegister(legacyBlocksGauge)
 }
 
-func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs kubernetes.Interface, ni cache.Indexer) *ipamController {
+func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs kubernetes.Interface, pi, ni cache.Indexer) *ipamController {
 	var leakGracePeriod *time.Duration
 	if cfg.LeakGracePeriod != nil {
 		leakGracePeriod = &cfg.LeakGracePeriod.Duration
@@ -126,11 +127,11 @@ func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs k
 
 		syncChan: make(chan interface{}, 1),
 
-		nodeIndexer: ni,
+		podLister:  v1lister.NewPodLister(pi),
+		nodeLister: v1lister.NewNodeLister(ni),
 
 		// Buffered channels for potentially bursty channels.
 		syncerUpdates: make(chan interface{}, batchUpdateSize),
-		podUpdate:     make(chan podUpdate, batchUpdateSize),
 
 		allBlocks:                   make(map[string]model.KVPair),
 		allocationsByBlock:          make(map[string]map[string]*allocation),
@@ -138,7 +139,6 @@ func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs k
 		handleTracker:               newHandleTracker(),
 		kubernetesNodesByCalicoName: make(map[string]string),
 		confirmedLeaks:              make(map[string]*allocation),
-		podCache:                    make(map[string]*v1.Pod),
 		nodesByBlock:                make(map[string]string),
 		blocksByNode:                make(map[string]map[string]bool),
 		emptyBlocks:                 make(map[string]string),
@@ -154,11 +154,12 @@ func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs k
 }
 
 type ipamController struct {
-	rl          workqueue.RateLimiter
-	client      client.Interface
-	clientset   kubernetes.Interface
-	nodeIndexer cache.Indexer
-	config      config.NodeControllerConfig
+	rl         workqueue.RateLimiter
+	client     client.Interface
+	clientset  kubernetes.Interface
+	podLister  v1lister.PodLister
+	nodeLister v1lister.NodeLister
+	config     config.NodeControllerConfig
 
 	syncStatus bapi.SyncStatus
 
@@ -170,8 +171,6 @@ type ipamController struct {
 
 	// For update / deletion events from the syncer.
 	syncerUpdates chan interface{}
-
-	podUpdate chan podUpdate
 
 	// Raw block storage.
 	allBlocks map[string]model.KVPair
@@ -186,9 +185,6 @@ type ipamController struct {
 	confirmedLeaks      map[string]*allocation
 	poolManager         *poolManager
 	blockReleaseTracker *blockReleaseTracker
-
-	// Cache pods to avoid unnecessary API queries.
-	podCache map[string]*v1.Pod
 
 	// Cache datastoreReady to avoid too much API queries.
 	datastoreReady bool
@@ -231,14 +227,6 @@ func (c *ipamController) OnKubernetesNodeDeleted() {
 	kick(c.syncChan)
 }
 
-func (c *ipamController) OnKubernetesPodUpdated(key string, p *v1.Pod) {
-	c.podUpdate <- podUpdate{key: key, pod: p}
-}
-
-func (c *ipamController) OnKubernetesPodDeleted(key string) {
-	c.podUpdate <- podUpdate{key: key}
-}
-
 // acceptScheduleRequests is the main worker routine of the IPAM controller. It monitors
 // the updates channel and triggers syncs.
 func (c *ipamController) acceptScheduleRequests(stopCh <-chan struct{}) {
@@ -252,22 +240,8 @@ func (c *ipamController) acceptScheduleRequests(stopCh <-chan struct{}) {
 	t := time.NewTicker(period)
 	log.Infof("Will run periodic IPAM sync every %s", period)
 	for {
-		// Wait until something wakes us up, or we are stopped
+		// Wait until something wakes us up, or we are stopped.
 		select {
-		case pu := <-c.podUpdate:
-			c.handlePodUpdate(pu)
-
-			// It's possible we get a rapid series of updates in a row. Use
-			// a consolidation loop to handle "batches" of updates before triggering a sync.
-			var i int
-			for i = 1; i < batchUpdateSize; i++ {
-				select {
-				case pu = <-c.podUpdate:
-					c.handlePodUpdate(pu)
-				default:
-					break
-				}
-			}
 		case upd := <-c.syncerUpdates:
 			c.handleUpdate(upd)
 
@@ -409,15 +383,6 @@ func (c *ipamController) handleClusterInformationUpdate(kvp model.KVPair) {
 		}
 	} else {
 		c.datastoreReady = false
-	}
-}
-
-// handlePodUpdate wraps up the logic to execute when receiving a pod update.
-func (c *ipamController) handlePodUpdate(pu podUpdate) {
-	if pu.pod != nil {
-		c.podCache[pu.key] = pu.pod
-	} else {
-		delete(c.podCache, pu.key)
 	}
 }
 
@@ -911,26 +876,21 @@ func (c *ipamController) allocationIsValid(a *allocation, preferCache bool) bool
 	// Query the pod referenced by this allocation. If preferCache is true, then check the cache first.
 	var err error
 	var p *v1.Pod
-	key := fmt.Sprintf("%s/%s", ns, pod)
 	if preferCache {
 		logc.Debug("Checking cache for pod")
-		p = c.podCache[key]
-	}
-	if p == nil {
+		p, err = c.podLister.Pods(ns).Get(pod)
+	} else {
 		logc.Debug("Querying Kubernetes API for pod")
 		p, err = c.clientset.CoreV1().Pods(ns).Get(context.Background(), pod, metav1.GetOptions{})
-		if err != nil {
-			if !errors.IsNotFound(err) {
-				log.WithError(err).Warn("Failed to query pod, assume it exists and allocation is valid")
-				return true
-			}
-			// Pod not found. Assume this is a leak.
-			logc.Debug("Pod not found, assume it's a leak")
-			return false
+	}
+	if err != nil {
+		if !errors.IsNotFound(err) {
+			log.WithError(err).Warn("Failed to query pod, assume it exists and allocation is valid")
+			return true
 		}
-
-		// Proactively keep our cache up-to-date.
-		c.podCache[key] = p
+		// Pod not found. Assume this is a leak.
+		logc.Debug("Pod not found, assume it's a leak")
+		return false
 	}
 
 	// The pod exists - check if it is still on the original node.
@@ -1110,7 +1070,7 @@ func (c *ipamController) cleanupNode(cnode string) error {
 
 // nodeExists returns true if the given node still exists in the Kubernetes API.
 func (c *ipamController) nodeExists(knode string) bool {
-	_, err := c.clientset.CoreV1().Nodes().Get(context.Background(), knode, metav1.GetOptions{})
+	_, err := c.nodeLister.Get(knode)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			return false
@@ -1129,17 +1089,12 @@ func (c *ipamController) nodeIsBeingMigrated(name string) (bool, error) {
 		return false, err
 	}
 	// Get node to inspect labels
-	obj, ok, err := c.nodeIndexer.GetByKey(kname)
-	if !ok {
-		// Node doesn't exist, so isn't being migrated.
-		return false, nil
-	}
+	node, err := c.nodeLister.Get(kname)
 	if err != nil {
+		if errors.IsNotFound(err) { // Node doesn't exist, so isn't being migrated.
+			return false, nil
+		}
 		return false, fmt.Errorf("failed to check node for migration status: %w", err)
-	}
-	node, ok := obj.(*v1.Node)
-	if !ok {
-		return false, fmt.Errorf("failed to check node for migration status: unexpected error: object is not a node")
 	}
 
 	for labelName, labelVal := range node.ObjectMeta.Labels {
@@ -1318,14 +1273,6 @@ func clearReclaimedIPCountForNode(node string) {
 
 func ordinalToIP(b *model.AllocationBlock, ord int) net.IP {
 	return b.OrdinalToIP(ord).IP
-}
-
-// podUpdate is an internal struct used to send information about new, updated,
-// or deleted pods to the main worker goroutine in response to calls from the
-// informer.
-type podUpdate struct {
-	key string
-	pod *v1.Pod
 }
 
 // pauseRequest is used internally for testing.
