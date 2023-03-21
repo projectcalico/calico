@@ -17,12 +17,17 @@ package ut
 import (
 	"encoding/binary"
 	"fmt"
+	"io/fs"
+	"os"
+	"path"
+	"path/filepath"
 	"regexp"
 	"testing"
 
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/bpf/bpfdefs"
 	"github.com/projectcalico/calico/felix/bpf/bpfmap"
 	"github.com/projectcalico/calico/felix/bpf/hook"
 	"github.com/projectcalico/calico/felix/bpf/ifstate"
@@ -125,7 +130,7 @@ func TestAttach(t *testing.T) {
 		Expect(hostep1State.EgressPolicy()).NotTo(Equal(-1))
 		Expect(hostep1State.XDPPolicy()).NotTo(Equal(-1))
 
-		pm := polprogMapDump(bpfmaps.PolicyMap)
+		pm := jumpMapDump(bpfmaps.PolicyMap)
 		Expect(pm).To(HaveKey(hostep1State.IngressPolicy()))
 		Expect(pm).To(HaveKey(hostep1State.EgressPolicy()))
 
@@ -140,7 +145,7 @@ func TestAttach(t *testing.T) {
 		}
 		Expect(hasXDP).To(BeTrue())
 
-		xdppm := polprogMapDump(bpfmaps.XDPPolicyMap)
+		xdppm := jumpMapDump(bpfmaps.XDPPolicyMap)
 		Expect(xdppm).To(HaveLen(1))
 		Expect(xdppm).To(HaveKey(hostep1State.XDPPolicy()))
 	})
@@ -158,7 +163,7 @@ func TestAttach(t *testing.T) {
 		err = bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
-		xdppm := polprogMapDump(bpfmaps.XDPPolicyMap)
+		xdppm := jumpMapDump(bpfmaps.XDPPolicyMap)
 		Expect(xdppm).To(HaveLen(0))
 
 		_, xdpProgs, err := bpf.ListTcXDPAttachedProgs("hostep1")
@@ -177,7 +182,7 @@ func TestAttach(t *testing.T) {
 
 		Expect(programs.Count()).To(Equal(9))
 
-		pm := polprogMapDump(bpfmaps.PolicyMap)
+		pm := jumpMapDump(bpfmaps.PolicyMap)
 		Expect(len(pm)).To(Equal(2)) // no policy for hep2
 	})
 
@@ -216,7 +221,7 @@ func TestAttach(t *testing.T) {
 		Expect(wl1State.EgressPolicy()).NotTo(Equal(-1))
 		Expect(wl1State.XDPPolicy()).To(Equal(-1))
 
-		pm := polprogMapDump(bpfmaps.PolicyMap)
+		pm := jumpMapDump(bpfmaps.PolicyMap)
 		Expect(pm).To(HaveKey(wl1State.IngressPolicy()))
 		Expect(pm).To(HaveKey(wl1State.EgressPolicy()))
 	})
@@ -232,7 +237,7 @@ func TestAttach(t *testing.T) {
 
 		Expect(programs.Count()).To(Equal(17))
 
-		pm := polprogMapDump(bpfmaps.PolicyMap)
+		pm := jumpMapDump(bpfmaps.PolicyMap)
 		Expect(len(pm)).To(Equal((2 /* wl 1+2 */ + 1 /* hep1 */) * 2))
 	})
 
@@ -242,11 +247,11 @@ func TestAttach(t *testing.T) {
 		err := bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
-		pm := polprogMapDump(bpfmaps.PolicyMap)
+		pm := jumpMapDump(bpfmaps.PolicyMap)
 		// We remember the state from above
 		Expect(pm).NotTo(HaveKey(hostep1State.IngressPolicy()))
 		Expect(pm).NotTo(HaveKey(hostep1State.EgressPolicy()))
-		xdppm := polprogMapDump(bpfmaps.XDPPolicyMap)
+		xdppm := jumpMapDump(bpfmaps.XDPPolicyMap)
 		Expect(xdppm).To(HaveLen(0))
 	})
 
@@ -257,7 +262,7 @@ func TestAttach(t *testing.T) {
 		wl1State = ifstateMap[ifstate.NewKey(uint32(workload1.Attrs().Index))]
 		fmt.Printf("wl1State = %+v\n", wl1State)
 
-		pm := polprogMapDump(bpfmaps.PolicyMap)
+		pm := jumpMapDump(bpfmaps.PolicyMap)
 		wl1IngressPol := pm[wl1State.IngressPolicy()]
 		wl1EgressPol := pm[wl1State.EgressPolicy()]
 
@@ -289,7 +294,7 @@ func TestAttach(t *testing.T) {
 		Expect(wl1State2).To(Equal(wl1State))
 
 		// ... but the policy programs changed
-		pm = polprogMapDump(bpfmaps.PolicyMap)
+		pm = jumpMapDump(bpfmaps.PolicyMap)
 		Expect(wl1IngressPol).NotTo(Equal(pm[wl1State2.IngressPolicy()]))
 		Expect(wl1EgressPol).NotTo(Equal(pm[wl1State2.IngressPolicy()]))
 
@@ -306,7 +311,7 @@ func TestAttach(t *testing.T) {
 		err := bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
-		pm := polprogMapDump(bpfmaps.PolicyMap)
+		pm := jumpMapDump(bpfmaps.PolicyMap)
 		// We remember the state from above
 		Expect(pm).NotTo(HaveKey(wl1State.IngressPolicy()))
 		Expect(pm).NotTo(HaveKey(wl1State.EgressPolicy()))
@@ -331,6 +336,16 @@ func TestAttach(t *testing.T) {
 
 		deleteLink(workload3)
 
+		attached, err := bpf.ListCalicoAttached()
+		Expect(err).NotTo(HaveOccurred())
+		Expect(attached).To(HaveKey("workloadep1"))
+		Expect(attached).To(HaveKey("workloadep2"))
+		Expect(attached).To(HaveKey("hostep1"))
+		Expect(attached).To(HaveKey("hostep2"))
+		Expect(attached).NotTo(HaveKey("workloadep3"))
+
+		programs.ResetCount() // Because we recycle it, restarted Felix would get a fresh copy.
+
 		bpfEpMgr, err = linux.NewTestEpMgr(
 			&linux.Config{
 				Hostname:              "uthost",
@@ -353,8 +368,53 @@ func TestAttach(t *testing.T) {
 		)
 		Expect(err).NotTo(HaveOccurred())
 
-		err := bpfEpMgr.CompleteDeferredWork()
+		// Existing maps are repinned
+		oldBase := path.Join(bpfdefs.GlobalPinDir, "old_jumps")
+		_, err = os.Stat(path.Join(bpfdefs.GlobalPinDir, "old_jumps"))
 		Expect(err).NotTo(HaveOccurred())
+
+		var tmp string
+		err = filepath.Walk(oldBase, func(path string, info fs.FileInfo, err error) error {
+			if len(path) > len(oldBase) {
+				tmp = path
+				return filepath.SkipDir
+			}
+			return nil
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		// And they still have the same data so that existing preamble programs
+		// and policies can still point to the right stuff.
+		oldProgsParams := hook.ProgramsMapParameters
+		oldProgsParams.PinDir = tmp
+		oldProgs := maps.NewPinnedMap(oldProgsParams)
+		err = oldProgs.Open()
+		Expect(err).NotTo(HaveOccurred())
+		pm := jumpMapDump(oldProgs)
+		Expect(pm).To(HaveLen(17))
+
+		oldPoliciesParams := polprog.MapParameters
+		oldPoliciesParams.PinDir = tmp
+		oldPolicies := maps.NewPinnedMap(oldPoliciesParams)
+		err = oldPolicies.Open()
+		Expect(err).NotTo(HaveOccurred())
+		pm = jumpMapDump(oldPolicies)
+		Expect(pm).To(HaveLen(4))
+
+		// After restat we get new maps which are empty
+		Expect(programs.Count()).To(Equal(0))
+		pm = jumpMapDump(bpfmaps.ProgramsMap)
+		Expect(pm).To(HaveLen(0))
+		pm = jumpMapDump(bpfmaps.PolicyMap)
+		Expect(pm).To(HaveLen(0))
+
+		err = bpfEpMgr.CompleteDeferredWork()
+		Expect(err).NotTo(HaveOccurred())
+
+		// We got no new updates, we still have the same programs attached
+		attached2, err := bpf.ListCalicoAttached()
+		Expect(err).NotTo(HaveOccurred())
+		Expect(attached2).To(Equal(attached))
 
 		bpfEpMgr.OnUpdate(&proto.HostMetadataUpdate{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
 		bpfEpMgr.OnUpdate(linux.NewIfaceUpdate("workloadep2", ifacemonitor.StateUp, workload2.Attrs().Index))
@@ -364,11 +424,28 @@ func TestAttach(t *testing.T) {
 		err = bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
-		pm := polprogMapDump(bpfmaps.PolicyMap)
+		Expect(programs.Count()).To(Equal(17))
+		pm = jumpMapDump(bpfmaps.ProgramsMap)
+		Expect(pm).To(HaveLen(17))
+
+		pm = jumpMapDump(bpfmaps.PolicyMap)
 		// We remember the state from above
 		Expect(pm).To(HaveLen(2))
 		Expect(pm).To(HaveKey(wl2State.IngressPolicy()))
 		Expect(pm).To(HaveKey(wl2State.EgressPolicy()))
+
+		_, err = os.Stat(path.Join(bpfdefs.GlobalPinDir, "old_jumps"))
+		Expect(err).To(HaveOccurred())
+
+		attachedNew, err := bpf.ListCalicoAttached()
+		Expect(err).NotTo(HaveOccurred())
+		// All programs are replaced by now
+		// XXX down infaces are not removed yet
+		for _, iface := range []string{"hostep2", "workloadep2"} {
+			Expect(attachedNew).To(HaveKey(iface))
+			Expect(attached[iface].Ingress).NotTo(Equal(attachedNew[iface].Ingress))
+			Expect(attached[iface].Egress).NotTo(Equal(attachedNew[iface].Egress))
+		}
 	})
 
 	t.Run("restart - CompleteDeferredWork at once", func(t *testing.T) {
@@ -390,6 +467,8 @@ func TestAttach(t *testing.T) {
 
 		deleteLink(workload3)
 
+		programs.ResetCount() // Because we recycle it, restarted Felix would get a fresh copy.
+
 		bpfEpMgr, err = linux.NewTestEpMgr(
 			&linux.Config{
 				Hostname:              "uthost",
@@ -412,6 +491,9 @@ func TestAttach(t *testing.T) {
 		)
 		Expect(err).NotTo(HaveOccurred())
 
+		pm := jumpMapDump(bpfmaps.PolicyMap)
+		Expect(pm).To(HaveLen(0))
+
 		bpfEpMgr.OnUpdate(&proto.HostMetadataUpdate{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
 		bpfEpMgr.OnUpdate(linux.NewIfaceUpdate("workloadep2", ifacemonitor.StateUp, workload2.Attrs().Index))
 		bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("workloadep2", "1.6.6.1"))
@@ -420,11 +502,84 @@ func TestAttach(t *testing.T) {
 		err = bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
-		pm := polprogMapDump(bpfmaps.PolicyMap)
+		pm = jumpMapDump(bpfmaps.PolicyMap)
 		// We remember the state from above
 		Expect(pm).To(HaveLen(2))
 		Expect(pm).To(HaveKey(wl2State.IngressPolicy()))
 		Expect(pm).To(HaveKey(wl2State.EgressPolicy()))
+	})
+
+	t.Run("restart - Partial update", func(t *testing.T) {
+		attached, err := bpf.ListCalicoAttached()
+		Expect(err).NotTo(HaveOccurred())
+
+		programs.ResetCount() // Because we recycle it, restarted Felix would get a fresh copy.
+
+		bpfEpMgr, err = linux.NewTestEpMgr(
+			&linux.Config{
+				Hostname:              "uthost",
+				BPFLogLevel:           loglevel,
+				BPFDataIfacePattern:   regexp.MustCompile("^hostep[12]"),
+				VXLANMTU:              1000,
+				VXLANPort:             1234,
+				BPFNodePortDSREnabled: false,
+				RulesConfig: rules.Config{
+					EndpointToHostAction: "RETURN",
+				},
+				BPFExtToServiceConnmark: 0,
+				FeatureGates: map[string]string{
+					"BPFConnectTimeLoadBalancingWorkaround": "enabled",
+				},
+				BPFPolicyDebugEnabled: true,
+			},
+			bpfmaps,
+			regexp.MustCompile("^workloadep[123]"),
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		err = bpfEpMgr.CompleteDeferredWork()
+		Expect(err).NotTo(HaveOccurred())
+
+		_, err = os.Stat(path.Join(bpfdefs.GlobalPinDir, "old_jumps"))
+		Expect(err).NotTo(HaveOccurred())
+
+		bpfEpMgr.OnUpdate(&proto.HostMetadataUpdate{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
+		bpfEpMgr.OnUpdate(linux.NewIfaceUpdate("hostep2", ifacemonitor.StateUp, host2.Attrs().Index))
+		bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("hostep2", "4.3.2.1"))
+		err = bpfEpMgr.CompleteDeferredWork()
+		Expect(err).NotTo(HaveOccurred())
+
+		/*
+				// workloadep2 is still dirty, we got no update yet
+				_, err = os.Stat(path.Join(bpfdefs.GlobalPinDir, "old_jumps"))
+				Expect(err).NotTo(HaveOccurred())
+
+			attachedNew, err := bpf.ListCalicoAttached()
+			Expect(err).NotTo(HaveOccurred())
+				// hostep2 updated already
+				Expect(attachedNew).To(HaveKey("hostep2"))
+				Expect(attached["hostep2"]).NotTo(Equal(attachedNew["hostep2"]))
+				// workloadep2 not updated yet
+				Expect(attachedNew).To(HaveKey("workloadep2"))
+				Expect(attached["workloadep2"]).To(Equal(attachedNew["workloadep2"]))
+		*/
+
+		bpfEpMgr.OnUpdate(linux.NewIfaceUpdate("workloadep2", ifacemonitor.StateUp, workload2.Attrs().Index))
+		bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("workloadep2", "1.6.6.1"))
+		err = bpfEpMgr.CompleteDeferredWork()
+		Expect(err).NotTo(HaveOccurred())
+
+		_, err = os.Stat(path.Join(bpfdefs.GlobalPinDir, "old_jumps"))
+		Expect(err).To(HaveOccurred())
+
+		attachedNew, err := bpf.ListCalicoAttached()
+		Expect(err).NotTo(HaveOccurred())
+		// All programs are replaced by now
+		for _, iface := range []string{"hostep2", "workloadep2"} {
+			Expect(attachedNew).To(HaveKey(iface))
+			Expect(attached[iface].Ingress).NotTo(Equal(attachedNew[iface].Ingress))
+			Expect(attached[iface].Egress).NotTo(Equal(attachedNew[iface].Egress))
+		}
 	})
 
 	ifstateMap := ifstateMapDump(bpfmaps.IfStateMap)
@@ -442,14 +597,14 @@ func ifstateMapDump(m maps.Map) ifstate.MapMem {
 	return ifstateMap
 }
 
-func polprogMapDump(m maps.Map) map[int]int {
-	polprogMap := make(map[int]int)
+func jumpMapDump(m maps.Map) map[int]int {
+	jumpMap := make(map[int]int)
 
 	for i := 0; i < 100; i++ {
-		if v, err := m.Get(polprog.Key(i)); err == nil {
-			polprogMap[i] = int(binary.LittleEndian.Uint32(v))
+		if v, err := m.Get(polprog.Key(i) /* a good key for any jump map */); err == nil {
+			jumpMap[i] = int(binary.LittleEndian.Uint32(v))
 		}
 	}
 
-	return polprogMap
+	return jumpMap
 }
