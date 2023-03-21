@@ -232,8 +232,9 @@ func sha256OfFile(name string) (string, error) {
 
 // EPAttachInfo tells what programs are attached to an endpoint.
 type EPAttachInfo struct {
-	TCId    int
-	XDPId   int
+	Ingress int
+	Egress  int
+	XDP     int
 	XDPMode string
 }
 
@@ -249,14 +250,20 @@ func ListCalicoAttached() (map[string]EPAttachInfo, error) {
 
 	for _, p := range aTC {
 		if strings.HasPrefix(p.Name, "cali") {
-			ai[p.DevName] = EPAttachInfo{TCId: p.ID}
+			info := ai[p.DevName]
+			if p.Kind == "clsact/egress" {
+				info.Egress = p.ID
+			} else {
+				info.Ingress = p.ID
+			}
+			ai[p.DevName] = info
 		}
 	}
 
 	for _, p := range aXDP {
 		if strings.HasPrefix(p.Name, "cali") {
 			info := ai[p.DevName]
-			info.XDPId = p.ID
+			info.XDP = p.ID
 			info.XDPMode = p.Mode
 			ai[p.DevName] = info
 		}
