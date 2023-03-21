@@ -8,6 +8,9 @@
 struct ifstate_val {
 	__u32 flags;
 	char  name[16];
+	__s32 xdp_policy;
+	__s32 ingress_policy;
+	__s32 egress_policy;
 };
 
 CALI_MAP(cali_iface, 2,
