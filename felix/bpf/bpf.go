@@ -2174,6 +2174,7 @@ type TcList []struct {
 	DevName string `json:"devname"`
 	ID      int    `json:"id"`
 	Name    string `json:"name"`
+	Kind    string `json:"kind"`
 }
 
 type XDPList []struct {
