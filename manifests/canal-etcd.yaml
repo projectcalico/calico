@@ -29,6 +29,13 @@ metadata:
   name: canal-node
   namespace: kube-system
 ---
+# Source: calico/templates/calico-node.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: calico-cni-plugin
+  namespace: kube-system
+---
 # Source: calico/templates/calico-etcd-secrets.yaml
 # The following contains k8s Secrets for use with a TLS enabled etcd cluster.
 # For information on populating Secrets, see http://kubernetes.io/docs/user-guide/secrets/
@@ -203,7 +210,7 @@ rules:
 # CNI cluster role
 kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1
-metadate:
+metadata:
   name: calico-cni-plugin
 rules:
   - apiGroups: [""]
@@ -301,16 +308,18 @@ subjects:
 - kind: ServiceAccount
   name: canal
   namespace: kube-system
-kind: ClusterRoleBinding
+---
+# Source: calico/templates/calico-node-rbac.yaml
 apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
 metadata:
   name: calico-cni-plugin
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
   name: calico-cni-plugin
-subject:
-  kind: ServiceAccount
+subjects:
+- kind: ServiceAccount
   name: calico-cni-plugin
   namespace: kube-system
 ---

@@ -657,6 +657,13 @@ kind: ServiceAccount
 metadata:
   name: {{include "nodeName" . }}
   namespace: kube-system
+---
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: calico-cni-plugin
+  namespace: kube-system
 
 {{- if and (eq .Values.datastore "etcd") (eq .Values.network "flannel") }}
 ---

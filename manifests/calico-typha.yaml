@@ -45,6 +45,13 @@ metadata:
   name: calico-node
   namespace: kube-system
 ---
+# Source: calico/templates/calico-node.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: calico-cni-plugin
+  namespace: kube-system
+---
 # Source: calico/templates/calico-config.yaml
 # This ConfigMap is used to configure a self-hosted Calico installation.
 kind: ConfigMap
@@ -4529,7 +4536,7 @@ rules:
 # CNI cluster role
 kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1
-metadate:
+metadata:
   name: calico-cni-plugin
 rules:
   - apiGroups: [""]
@@ -4549,18 +4556,16 @@ rules:
       - blockaffinities
       - ipamblocks
       - ipamhandles
+      - clusterinformations
+      - ippools
+      - ipreservations
+      - ipamconfigs
     verbs:
       - get
       - list
       - create
       - update
       - delete
-  - apiGroups: [ "crd.projectcalico.org" ]
-    resources:
-      - ipamconfigs
-    verbs:
-      - get
-      - create
 ---
 # Source: calico/templates/calico-kube-controllers-rbac.yaml
 kind: ClusterRoleBinding
@@ -4589,16 +4594,18 @@ subjects:
 - kind: ServiceAccount
   name: calico-node
   namespace: kube-system
-kind: ClusterRoleBinding
+---
+# Source: calico/templates/calico-node-rbac.yaml
 apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
 metadata:
   name: calico-cni-plugin
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
   name: calico-cni-plugin
-subject:
-  kind: ServiceAccount
+subjects:
+- kind: ServiceAccount
   name: calico-cni-plugin
   namespace: kube-system
 ---
