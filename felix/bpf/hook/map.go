@@ -71,17 +71,19 @@ type ProgramsMap struct {
 	programs map[AttachType]Layout
 }
 
+var ProgramsMapParameters = maps.MapParameters{
+	Type:       "prog_array",
+	KeySize:    4,
+	ValueSize:  4,
+	MaxEntries: maxPrograms,
+	Name:       "cali_progs",
+	Version:    2,
+}
+
 func NewProgramsMap() maps.Map {
 	return &ProgramsMap{
-		PinnedMap: maps.NewPinnedMap(maps.MapParameters{
-			Type:       "prog_array",
-			KeySize:    4,
-			ValueSize:  4,
-			MaxEntries: maxPrograms,
-			Name:       "cali_progs",
-			Version:    2,
-		}),
-		programs: make(map[AttachType]Layout),
+		PinnedMap: maps.NewPinnedMap(ProgramsMapParameters),
+		programs:  make(map[AttachType]Layout),
 	}
 }
 
@@ -196,6 +198,17 @@ func (pm *ProgramsMap) Count() int {
 	defer pm.lock.Unlock()
 
 	return pm.nextIdx
+}
+
+// ResetCount for unittesting only.
+func (pm *ProgramsMap) ResetCount() {
+	pm.lock.Lock()
+	defer pm.lock.Unlock()
+
+	// We keep the same pinned map but reset the accounting as the map is
+	// replaced by repinning by the user.
+	pm.nextIdx = 0
+	pm.programs = make(map[AttachType]Layout)
 }
 
 func (pm *ProgramsMap) Programs() map[AttachType]Layout {

@@ -219,6 +219,7 @@ type bpfEndpointManager struct {
 	psnatPorts              numorstring.Port
 	bpfmaps                 *bpfmap.Maps
 	ifStateMap              *cachingmap.CachingMap[ifstate.Key, ifstate.Value]
+	removeOldJumps          bool
 
 	policyMapAlloc    *policyMapAlloc
 	xdpPolicyMapAlloc *policyMapAlloc
@@ -462,7 +463,70 @@ func newBPFEndpointManager(
 		}
 	}
 
+	// If not running in test
+	if m.dp == m {
+		// Repin jump maps to a differnt path so that exesting programs keep working
+		// as if nothing has changed. We keep those maps as long as we have dirty
+		// devices.
+		//
+		// Since we are restarting, we reload programs for all the devices, the
+		// generic sets and the preables and then we can just remove the old maps.
+		// We never copy from the old maps to the new ones.
+		if err := m.repinJumpMaps(); err != nil {
+			return nil, err
+		}
+		m.removeOldJumps = true
+	}
+
 	return m, nil
+}
+
+func (m *bpfEndpointManager) repinJumpMaps() error {
+	oldBase := path.Join(bpfdefs.GlobalPinDir, "old_jumps")
+	err := os.Mkdir(oldBase, 0700)
+	if err != nil && !os.IsExist(err) {
+		return fmt.Errorf("cannot create %s: %w", oldBase, err)
+	}
+
+	tmp, err := os.MkdirTemp(oldBase, "")
+	if err != nil && !os.IsExist(err) {
+		return fmt.Errorf("cannot create temp dir in %s: %w", oldBase, err)
+	}
+
+	mps := []maps.Map{
+		m.bpfmaps.ProgramsMap,
+		m.bpfmaps.PolicyMap,
+		m.bpfmaps.XDPProgramsMap,
+		m.bpfmaps.XDPPolicyMap,
+	}
+
+	for _, mp := range mps {
+		pin := path.Join(tmp, mp.GetName())
+		if err := libbpf.ObjPin(int(mp.MapFD()), pin); err != nil {
+			_ = os.RemoveAll(tmp)
+			return fmt.Errorf("failed to repin %s to %s: %w", mp.GetName(), pin, err)
+		}
+	}
+
+	for _, mp := range mps {
+		if err := mp.Close(); err != nil {
+			_ = os.RemoveAll(tmp)
+			return fmt.Errorf("failed to close %s: %w", mp.Path(), err)
+		}
+		if err := os.Remove(mp.Path()); err != nil {
+			_ = os.RemoveAll(tmp)
+			return fmt.Errorf("failed to remove %s from %s: %w", mp.GetName(), mp.Path(), err)
+		}
+	}
+
+	for _, mp := range mps {
+		if err := mp.EnsureExists(); err != nil {
+			_ = os.RemoveAll(tmp)
+			return fmt.Errorf("failed to recreate %s: %w", mp.Path(), err)
+		}
+	}
+
+	return nil
 }
 
 // withIface handles the bookkeeping for working with a particular bpfInterface value.  It
@@ -653,7 +717,7 @@ func (m *bpfEndpointManager) deleteIfaceCounters(name string, ifindex int) {
 }
 
 func (m *bpfEndpointManager) cleanupOldAttach(iface string, ai bpf.EPAttachInfo) error {
-	if ai.XDPId != 0 {
+	if ai.XDP != 0 {
 		ap := xdp.AttachPoint{
 			AttachPoint: bpf.AttachPoint{
 				Iface: iface,
@@ -667,7 +731,7 @@ func (m *bpfEndpointManager) cleanupOldAttach(iface string, ai bpf.EPAttachInfo)
 			return fmt.Errorf("xdp: %w", err)
 		}
 	}
-	if ai.TCId != 0 {
+	if ai.Ingress != 0 || ai.Egress != 0 {
 		ap := tc.AttachPoint{
 			AttachPoint: bpf.AttachPoint{
 				Iface: iface,
@@ -1098,7 +1162,6 @@ func (m *bpfEndpointManager) CompleteDeferredWork() error {
 		if err := m.syncIfaceCounters(); err != nil {
 			log.WithError(err).Warn("Failed to sync counters map with existing interfaces - some counters may have leaked.")
 		}
-
 	})
 
 	m.applyProgramsToDirtyDataInterfaces()
@@ -1139,6 +1202,15 @@ func (m *bpfEndpointManager) CompleteDeferredWork() error {
 			log.WithError(err).Debugf("Failed to copy data from old conntrack map %s", err)
 		}
 	})
+
+	if m.removeOldJumps && m.dirtyIfaceNames.Len() == 0 {
+		oldBase := path.Join(bpfdefs.GlobalPinDir, "old_jumps")
+		if err := os.RemoveAll(oldBase); err != nil && os.IsNotExist(err) {
+			return fmt.Errorf("failed to remove %s: %w", oldBase, err)
+		}
+		m.removeOldJumps = false
+	}
+
 	return nil
 }
 
@@ -2239,8 +2311,6 @@ func (m *bpfEndpointManager) ensureProgramAttached(ap attachPoint) error {
 	} else {
 		return fmt.Errorf("unknown attach type")
 	}
-
-	// XXX check if the program is there XXX
 
 	ap.Log().Debug("AttachProgram waiting for lock...")
 	m.cleanupLock.RLock()
