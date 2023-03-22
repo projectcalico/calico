@@ -2283,7 +2283,7 @@ func NumPossibleCPUs() int {
 	return cachedNumPossibleCPUs
 }
 
-const jumpMapVersion = 2
+const jumpMapVersion = 3
 
 func JumpMapName() string {
 	return fmt.Sprintf("cali_jump%d", jumpMapVersion)
