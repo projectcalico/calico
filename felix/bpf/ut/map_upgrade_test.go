@@ -22,6 +22,7 @@ import (
 
 	. "github.com/onsi/gomega"
 
+	"github.com/projectcalico/calico/felix/bpf/libbpf"
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	mock "github.com/projectcalico/calico/felix/bpf/mock/multiversion"
 	v2 "github.com/projectcalico/calico/felix/bpf/mock/multiversion/v2"
@@ -343,12 +344,10 @@ func TestMapUpgradeWhileResizeInProgress(t *testing.T) {
 	}
 
 	// repin /sys/fs/bpf/tc/globals/cali_mock2 to /sys/fs/bpt/tc/globals/cali_mock2_old1
-	err = maps.RepinMap(mockMapv2_old.GetName(), mockMapv2_old.Path()+"_old1")
+	err = libbpf.ObjPin(int(mockMapv2_old.MapFD()), mockMapv2_old.Path()+"_old1")
 	Expect(err).NotTo(HaveOccurred())
 	// Delete /sys/fs/bpf/tc/globals/cali_mock2
 	os.Remove(mockMapv2_old.Path())
-	mapId, err := maps.GetMapIdFromPin(mockMapv2_old.Path() + "_old1")
-	Expect(err).NotTo(HaveOccurred())
 
 	// create another v2 map and add only the last 5 entries
 	mockMapv2 := mock.MapV2(30)
@@ -363,7 +362,7 @@ func TestMapUpgradeWhileResizeInProgress(t *testing.T) {
 	}
 
 	// Reping /sys/fs/bpt/tc/globals/cali_mock2_old1 to /sys/fs/bpt/tc/globals/cali_mock2_old
-	err = maps.RepinMapFromId(mapId, mockMapv2.Path()+"_old")
+	err = libbpf.ObjPin(int(mockMapv2_old.MapFD()), mockMapv2.Path()+"_old")
 	Expect(err).NotTo(HaveOccurred())
 	// Remove /sys/fs/bpt/tc/globals/cali_mock2_old1
 	os.Remove(mockMapv2_old.Path() + "_old1")
