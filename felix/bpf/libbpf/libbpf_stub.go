@@ -78,6 +78,22 @@ func (o *Obj) AttachCGroup(_, _ string) (*Link, error) {
 	panic("LIBBPF syscall stub")
 }
 
+func (o *Obj) PinPrograms(_ string) error {
+	panic("LIBBPF syscall stub")
+}
+
+func (o *Obj) UnpinPrograms(_ string) error {
+	panic("LIBBPF syscall stub")
+}
+
+func (o *Obj) PinMaps(_ string) error {
+	panic("LIBBPF syscall stub")
+}
+
+func (o *Obj) ProgramFD(_ string) (int, error) {
+	panic("LIBBPF syscall stub")
+}
+
 func CreateQDisc(ifName string) error {
 	panic("LIBBPF syscall stub")
 }
@@ -123,4 +139,12 @@ func (m *Map) SetSize(size int) error {
 
 func NumPossibleCPUs() (int, error) {
 	return runtime.NumCPU(), nil
+}
+
+func ObjPin(_ int, _ string) error {
+	panic("LIBBPF syscall stub")
+}
+
+func ObjGet(_ string) (int, error) {
+	panic("LIBBPF syscall stub")
 }
