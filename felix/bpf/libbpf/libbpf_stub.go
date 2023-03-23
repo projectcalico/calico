@@ -124,3 +124,7 @@ func (m *Map) SetSize(size int) error {
 func NumPossibleCPUs() (int, error) {
 	return runtime.NumCPU(), nil
 }
+
+func ObjPin(_ int, _ string) error {
+	panic("LIBBPF syscall stub")
+}
