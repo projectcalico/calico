@@ -408,3 +408,21 @@ func NumPossibleCPUs() (int, error) {
 	}
 	return ncpus, nil
 }
+
+func ObjPin(fd int, path string) error {
+	cPath := C.CString(path)
+	defer C.free(unsafe.Pointer(cPath))
+
+	_, err := C.bpf_obj_pin(C.int(fd), cPath)
+
+	return err
+}
+
+func ObjGet(path string) (int, error) {
+	cPath := C.CString(path)
+	defer C.free(unsafe.Pointer(cPath))
+
+	fd, err := C.bpf_obj_get(cPath)
+
+	return int(fd), err
+}
