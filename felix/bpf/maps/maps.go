@@ -24,6 +24,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 
 	"golang.org/x/sys/unix"
 
@@ -569,8 +570,8 @@ func (b *PinnedMap) Open() error {
 	return err
 }
 
-func (b *PinnedMap) repinAt(from, to string) error {
-	err := RepinMap(b.VersionedName(), to)
+func (b *PinnedMap) repinAt(fd int, from, to string) error {
+	err := libbpf.ObjPin(fd, to)
 	if err != nil {
 		return fmt.Errorf("error repinning %s to %s: %w", from, to, err)
 	}
@@ -605,7 +606,12 @@ func (b *PinnedMap) EnsureExists() error {
 		if _, err := os.Stat(b.Path()); err == nil {
 			os.Remove(b.Path())
 		}
-		err := b.repinAt(oldMapPath, b.Path())
+		fd, err := libbpf.ObjGet(oldMapPath)
+		if err != nil {
+			return fmt.Errorf("cannot get old map at %s: %w", oldMapPath, err)
+		}
+		err = b.repinAt(fd, oldMapPath, b.Path())
+		syscall.Close(fd)
 		if err != nil {
 			return fmt.Errorf("error repinning old map %s to %s, err=%w", oldMapPath, b.Path(), err)
 		}
@@ -627,7 +633,7 @@ func (b *PinnedMap) EnsureExists() error {
 		b.oldfd = b.MapFD()
 		b.oldSize = mapInfo.MaxEntries
 
-		err = b.repinAt(b.Path(), oldMapPath)
+		err = b.repinAt(int(b.MapFD()), b.Path(), oldMapPath)
 		if err != nil {
 			return fmt.Errorf("error migrating the old map %w", err)
 		}
@@ -711,11 +717,9 @@ func GetMapIdFromPin(pinPath string) (int, error) {
 	return mapData.ID, nil
 }
 
-func RepinMapFromId(id int, path string) error {
-	cmd := exec.Command("bpftool", "map", "pin", "id", fmt.Sprint(id), path)
-	return errors.Wrap(cmd.Run(), "bpftool failed to reping map from id")
-}
-
+// RepinMap finds a map by a given name and pins it to a path. Note that if
+// there are multiple maps of the same name in the system, it will use the first
+// one it finds.
 func RepinMap(name string, filename string) error {
 	cmd := exec.Command("bpftool", "map", "list", "-j")
 	out, err := cmd.Output()
