@@ -12,8 +12,9 @@ rules:
     resourceNames:
 {{- if eq .Values.network "flannel" }}
       - canal
+      - calico-cni-plugin
 {{- else }}
-      - calico-node
+      - calico-cni-plugin
 {{- end }}
     verbs:
       - create
@@ -177,6 +178,45 @@ rules:
 
 ---
 
+# CNI cluster role
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: calico-cni-plugin
+rules:
+  - apiGroups: [""]
+    resources:
+      - pods
+      - nodes
+      - namespaces
+    verbs:
+      - get
+{{- if eq .Values.datastore "kubernetes" }}
+  - apiGroups: [""]
+    resources:
+      - pods/status
+    verbs:
+      - patch
+{{- if eq .Values.network "calico" }}
+  - apiGroups: ["crd.projectcalico.org"]
+    resources:
+      - blockaffinities
+      - ipamblocks
+      - ipamhandles
+      - clusterinformations
+      - ippools
+      - ipreservations
+      - ipamconfigs
+    verbs:
+      - get
+      - list
+      - create
+      - update
+      - delete
+{{- end }}
+{{- end }}
+---
+
 {{- if eq .Values.network "flannel" }}
 # Flannel ClusterRole
 # Pulled from https://github.com/coreos/flannel/blob/master/Documentation/kube-flannel-rbac.yml
@@ -242,3 +282,17 @@ subjects:
   name: calico-node
   namespace: kube-system
 {{- end }}
+---
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: calico-cni-plugin
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: calico-cni-plugin
+subjects:
+- kind: ServiceAccount
+  name: calico-cni-plugin
+  namespace: kube-system

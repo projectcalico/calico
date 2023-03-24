@@ -29,6 +29,13 @@ metadata:
   name: canal-node
   namespace: kube-system
 ---
+# Source: calico/templates/calico-node.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: calico-cni-plugin
+  namespace: kube-system
+---
 # Source: calico/templates/calico-etcd-secrets.yaml
 # The following contains k8s Secrets for use with a TLS enabled etcd cluster.
 # For information on populating Secrets, see http://kubernetes.io/docs/user-guide/secrets/
@@ -159,6 +166,7 @@ rules:
       - serviceaccounts/token
     resourceNames:
       - canal
+      - calico-cni-plugin
     verbs:
       - create
   # The CNI plugin needs to get pods, nodes, and namespaces.
@@ -197,6 +205,21 @@ rules:
     verbs:
       # Needed for clearing NodeNetworkUnavailable flag.
       - patch
+---
+# Source: calico/templates/calico-node-rbac.yaml
+# CNI cluster role
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: calico-cni-plugin
+rules:
+  - apiGroups: [""]
+    resources:
+      - pods
+      - nodes
+      - namespaces
+    verbs:
+      - get
 ---
 # Source: calico/templates/calico-node-rbac.yaml
 # Flannel ClusterRole
@@ -284,6 +307,20 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: canal
+  namespace: kube-system
+---
+# Source: calico/templates/calico-node-rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: calico-cni-plugin
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: calico-cni-plugin
+subjects:
+- kind: ServiceAccount
+  name: calico-cni-plugin
   namespace: kube-system
 ---
 # Source: calico/templates/calico-node.yaml
