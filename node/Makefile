@@ -503,7 +503,7 @@ release-publish: release-prereqs .release-$(VERSION).published
 
 # WARNING: Only run this target if this release is the latest stable release. Do NOT
 # run this target for alpha / beta / release candidate builds, or patches to earlier Calico versions.
-## Pushes `latest` release images. WARNING: Only run this for latest stable releases.
+# Pushes `latest` release images. WARNING: Only run this for latest stable releases.
 release-publish-latest: release-verify
 	$(MAKE) push-images-to-registries push-manifests IMAGETAG=latest RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
 
