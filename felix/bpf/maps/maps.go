@@ -36,12 +36,6 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/utils"
 )
 
-const jumpMapVersion = 3
-
-func JumpMapName() string {
-	return fmt.Sprintf("cali_jump%d", jumpMapVersion)
-}
-
 func IsNotExists(err error) bool {
 	return err == unix.ENOENT
 }
@@ -150,6 +144,11 @@ type MapWithUpdateWithFlags interface {
 	UpdateWithFlags(k, v []byte, flags int) error
 }
 
+type MapWithDeleteIfExists interface {
+	Map
+	DeleteIfExists(k []byte) error
+}
+
 type MapParameters struct {
 	PinDir       string
 	Type         string
@@ -221,7 +220,7 @@ func ResetSizes() {
 	mapSizes = make(map[string]int)
 }
 
-func NewPinnedMap(params MapParameters) MapWithExistsCheck {
+func NewPinnedMap(params MapParameters) *PinnedMap {
 	if len(params.VersionedName()) >= unix.BPF_OBJ_NAME_LEN {
 		log.WithField("name", params.Name).Panic("Bug: BPF map name too long")
 	}
@@ -423,6 +422,15 @@ func (b *PinnedMap) Delete(k []byte) error {
 		log.Debugf("Set value size to %v for deleting an entry from Per-CPU map", valueSize)
 	}
 	return DeleteMapEntry(b.fd, k, valueSize)
+}
+
+func (b *PinnedMap) DeleteIfExists(k []byte) error {
+	valueSize := b.ValueSize
+	if b.perCPU {
+		valueSize = b.ValueSize * NumPossibleCPUs()
+		log.Debugf("Set value size to %v for deleting an entry from Per-CPU map", valueSize)
+	}
+	return DeleteMapEntryIfExists(b.fd, k, valueSize)
 }
 
 func (b *PinnedMap) updateDeltaEntries() error {
@@ -832,14 +840,14 @@ func (b *PinnedMap) upgrade() error {
 	oldMapParams.MaxEntries = b.MaxEntries
 	oldBpfMap := NewPinnedMap(oldMapParams)
 	defer func() {
-		oldBpfMap.(*PinnedMap).Close()
-		oldBpfMap.(*PinnedMap).fd = 0
+		oldBpfMap.Close()
+		oldBpfMap.fd = 0
 	}()
 	err = oldBpfMap.EnsureExists()
 	if err != nil {
 		return err
 	}
-	return b.UpgradeFn(oldBpfMap.(*PinnedMap), b)
+	return b.UpgradeFn(oldBpfMap, b)
 }
 
 type Upgradable interface {
