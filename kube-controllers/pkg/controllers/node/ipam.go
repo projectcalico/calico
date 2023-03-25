@@ -812,7 +812,7 @@ func (c *ipamController) checkAllocations() ([]string, error) {
 				// The allocation is NOT valid, we can skip the candidacy stage.
 				// We know this with confidence because:
 				// - The node the allocation belongs to no longer exists.
-				// - There pod owning this allocation no longer exists.
+				// - The pod owning this allocation no longer exists.
 				a.markConfirmedLeak()
 			} else if c.config.LeakGracePeriod != nil {
 				// The allocation is NOT valid, but the Kubernetes node still exists, so our confidence is lower.
@@ -985,12 +985,15 @@ func (c *ipamController) syncIPAM() error {
 
 	// Delete any nodes that we determined can be removed above.
 	var storedErr error
+	if len(nodesToRelease) > 0 {
+		log.WithField("num", len(nodesToRelease)).Info("Found a batch of nodes to release")
+	}
 	for _, cnode := range nodesToRelease {
 		logc := log.WithField("node", cnode)
 
 		// Potentially rate limit node cleanup.
 		time.Sleep(c.rl.When(RateLimitCalicoDelete))
-		logc.Info("Cleaning up IPAM resources for deleted node")
+		logc.Info("Cleaning up IPAM affinities for deleted node")
 		if err := c.cleanupNode(cnode); err != nil {
 			// Store the error, but continue. Storing the error ensures we'll retry.
 			logc.WithError(err).Warnf("Error cleaning up node")
