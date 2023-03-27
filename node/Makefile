@@ -511,6 +511,7 @@ release-publish-latest: release-verify
 # Windows packaging
 ###############################################################################
 # Pull the BGP configuration scripts and templates from the confd repo.
+
 $(WINDOWS_MOD_CACHED_FILES):
 
 $(WINDOWS_ARCHIVE_ROOT)/confd/config-bgp%: windows-packaging/config-bgp%
