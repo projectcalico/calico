@@ -52,14 +52,21 @@ type ipSetIDProvider interface {
 	GetNoAlloc(ipSetID string) uint64
 }
 
-func NewBuilder(ipSetIDProvider ipSetIDProvider, ipsetMapFD, stateMapFD, jumpMapFD maps.FD, policyDebugEnabled bool) *Builder {
+// Option is an additional option that can change default behaviour
+type Option func(b *Builder)
+
+func NewBuilder(ipSetIDProvider ipSetIDProvider, ipsetMapFD, stateMapFD, jumpMapFD maps.FD, opts ...Option) *Builder {
 	b := &Builder{
-		ipSetIDProvider:    ipSetIDProvider,
-		ipSetMapFD:         ipsetMapFD,
-		stateMapFD:         stateMapFD,
-		jumpMapFD:          jumpMapFD,
-		policyDebugEnabled: policyDebugEnabled,
+		ipSetIDProvider: ipSetIDProvider,
+		ipSetMapFD:      ipsetMapFD,
+		stateMapFD:      stateMapFD,
+		jumpMapFD:       jumpMapFD,
 	}
+
+	for _, option := range opts {
+		option(b)
+	}
+
 	return b
 }
 
@@ -1036,6 +1043,13 @@ func protocolToNumber(protocol *proto.Protocol) uint8 {
 		pcol = uint8(p.Number)
 	}
 	return pcol
+}
+
+// WithPolicyDebug enabled policy debug.
+func WithPolicyDebugEnabled() Option {
+	return func(b *Builder) {
+		b.policyDebugEnabled = true
+	}
 }
 
 func protocolToName(protocol *proto.Protocol) string {
