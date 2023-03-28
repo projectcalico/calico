@@ -416,7 +416,7 @@ func (r *ReleaseBuilder) buildReleaseTar(ver string, targetDir string) error {
 	}
 
 	// Add in manifests directory generated from the docs.
-	if _, err := r.runner.Run("cp", []string{"-r", "calico/_site/manifests", releaseBase}, nil); err != nil {
+	if _, err := r.runner.Run("cp", []string{"-r", "manifests", releaseBase}, nil); err != nil {
 		return err
 	}
 
@@ -672,5 +672,5 @@ func (r *ReleaseBuilder) makeInDirectory(dir, target string, env ...string) erro
 }
 
 func (r *ReleaseBuilder) makeInDirectoryWithOutput(dir, target string, env ...string) (string, error) {
-	return r.runner.Run("make", []string{"-C", dir, target}, env)
+	return r.runner.Run("make", []string{"-j32", "-C", dir, target}, env)
 }
