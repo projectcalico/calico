@@ -119,7 +119,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test counters", [
 			_, err = w[0].RunCmd("pktgen", w[0].IP, felixes[0].IP, "udp", "--port-dst", "8055")
 			Expect(err).NotTo(HaveOccurred())
 		}
-		checkDroppedByPolicyCounters(felixes[0], w[1].InterfaceName, 0, numberOfpackets)
+		Eventually(func() error {
+			return checkDroppedByPolicyCounters(felixes[0], w[1].InterfaceName, 0, numberOfpackets)
+		}, "1s", "250ms").Should(Succeed())
 	})
 
 	It("should update rule counters", func() {
@@ -245,7 +247,7 @@ func checkRuleCounters(felix *infrastructure.Felix, ifName, hook, polName string
 	Expect(strings.Contains(strOut[startOfPol+2], fmt.Sprintf("count = %d", count))).To(BeTrue())
 }
 
-func checkDroppedByPolicyCounters(felix *infrastructure.Felix, ifName string, iCount, eCount int) {
+func checkDroppedByPolicyCounters(felix *infrastructure.Felix, ifName string, iCount, eCount int) error {
 	out, err := felix.ExecOutput("calico-bpf", "counters", "dump", fmt.Sprintf("--iface=%s", ifName))
 	Expect(err).NotTo(HaveOccurred())
 	strOut := strings.Split(out, "\n")
@@ -278,4 +280,6 @@ func checkDroppedByPolicyCounters(felix *infrastructure.Felix, ifName string, iC
 	Expect(xCounter).To(Equal("n/a"))
 	Expect(eCounter).To(BeNumerically(">=", eCount))
 	Expect(iCounter).To(BeNumerically(">=", iCount))
+
+	return nil
 }
