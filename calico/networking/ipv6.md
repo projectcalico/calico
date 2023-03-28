@@ -46,7 +46,7 @@ This how-to guide uses the following {{site.prodname}} features:
   - The sysctl setting, `net.ipv6.conf.all.forwarding`, is set to `1`.
     This ensures both Kubernetes service traffic and {{site.prodname}} traffic is forwarded appropriately.
   - A default IPv6 route
-  - VXLAN in IPv6 is only supported for kernel versions >= 3.12
+  - VXLAN in IPv6 is only supported for kernel versions >=4.19.1 or redhat kernel version >= 4.18.0
 
 **Kubernetes IPv4 host requirements**
   - An IPv4 address that is reachable from the other hosts
