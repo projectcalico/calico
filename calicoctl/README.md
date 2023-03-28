@@ -13,7 +13,7 @@ Note that the documentation in this repo is targeted at Calico contributors.
 <h1>Documentation for Calico users is here:<br><a href="https://docs.projectcalico.org">https://docs.projectcalico.org</a></h1>
 </blockquote>
 
-For information on `calicoctl` usage, see the [calicoctl reference information](http://docs.projectcalico.org/master/reference/calicoctl/)
+For information on `calicoctl` usage, see the [calicoctl reference information](https://docs.tigera.io/calico/latest/reference/calicoctl/)
 
 ### Install
 
