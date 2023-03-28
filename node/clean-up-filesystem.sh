@@ -216,7 +216,7 @@ while read -r path; do
     continue
   fi
   # Well-known plugins, not directly linked.
-  if [[ "$path" =~ xtables|netfilter|conntrack|ct_|pam|libnss|libresolv ]] && ! [[ "$path" =~ systemd ]] ; then
+  if [[ "$path" =~ xtables|netfilter|conntrack|ct_|libnss|libresolv ]] && ! [[ "$path" =~ systemd ]] ; then
     echo "PLUGIN: $path"
     libs_to_keep[$path]=true
     continue
@@ -268,16 +268,16 @@ packages_to_keep=(
   libpcap
   libpwquality
   libselinux
-  libzstd
+  #libzstd
   ncurses
   net-tools
   openssl-libs
   p11-kit-trust
-  pam
+  #pam
   pcre
   redhat-release
   rootfiles
-  rpm
+  #rpm
   sed
   setup
   shadow-utils
