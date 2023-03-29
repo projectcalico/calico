@@ -24,9 +24,11 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
 
 	log "github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/felix/bpf/hook"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -41,8 +43,35 @@ type AttachedProgInfo struct {
 // AttachPointInfo describes what we need to know about an attach point
 type AttachPointInfo interface {
 	IfaceName() string
-	HookName() Hook
+	HookName() hook.Hook
 	Config() string
+}
+
+type AttachPoint struct {
+	Hook       hook.Hook
+	PolicyIdx4 int
+	PolicyIdx6 int
+	Iface      string
+	LogLevel   string
+}
+
+func (ap *AttachPoint) IfaceName() string {
+	return ap.Iface
+}
+
+func (ap *AttachPoint) HookName() hook.Hook {
+	return ap.Hook
+}
+
+func (ap *AttachPoint) PolicyIdx(family int) int {
+	switch family {
+	case 4:
+		return ap.PolicyIdx4
+	case 6:
+		return ap.PolicyIdx6
+	}
+
+	return -1
 }
 
 // AlreadyAttachedProg checks that the program we are going to attach has the
@@ -119,7 +148,7 @@ func RememberAttachedProg(a AttachPointInfo, object string, id int) error {
 
 // ForgetAttachedProg removes what we store about the iface/hook
 // program.
-func ForgetAttachedProg(iface string, hook Hook) error {
+func ForgetAttachedProg(iface string, hook hook.Hook) error {
 	err := os.Remove(RuntimeJSONFilename(iface, hook))
 	// If the hash file does not exist, just ignore the err code, and return false
 	if err != nil && !os.IsNotExist(err) {
@@ -131,7 +160,7 @@ func ForgetAttachedProg(iface string, hook Hook) error {
 // ForgetIfaceAttachedProg removes information we store about any programs
 // associated with an iface.
 func ForgetIfaceAttachedProg(iface string) error {
-	for _, hook := range Hooks {
+	for _, hook := range hook.All {
 		err := ForgetAttachedProg(iface, hook)
 		if err != nil {
 			return err
@@ -154,7 +183,7 @@ func CleanAttachedProgDir() {
 
 	expectedJSONFiles := set.New[string]()
 	for _, iface := range interfaces {
-		for _, hook := range Hooks {
+		for _, hook := range hook.All {
 			expectedJSONFiles.Add(RuntimeJSONFilename(iface.Name, hook))
 		}
 	}
@@ -184,7 +213,7 @@ func CleanAttachedProgDir() {
 // RuntimeJSONFilename returns filename where we store information about
 // attached program. The filename is [iface name]_[hook].json, for
 // example, eth0_egress.json
-func RuntimeJSONFilename(iface string, hook Hook) string {
+func RuntimeJSONFilename(iface string, hook hook.Hook) string {
 	return path.Join(RuntimeProgDir, fmt.Sprintf("%s_%s.json", iface, hook))
 }
 
@@ -203,8 +232,9 @@ func sha256OfFile(name string) (string, error) {
 
 // EPAttachInfo tells what programs are attached to an endpoint.
 type EPAttachInfo struct {
-	TCId    int
-	XDPId   int
+	Ingress int
+	Egress  int
+	XDP     int
 	XDPMode string
 }
 
@@ -216,53 +246,24 @@ func ListCalicoAttached() (map[string]EPAttachInfo, error) {
 		return nil, err
 	}
 
-	attachedProgIDs := set.New[int]()
-
-	for _, p := range aTC {
-		attachedProgIDs.Add(p.ID)
-	}
-
-	for _, p := range aXDP {
-		attachedProgIDs.Add(p.ID)
-	}
-
-	maps, err := ListPerEPMaps()
-	if err != nil {
-		return nil, err
-	}
-
-	allProgs, err := GetAllProgs()
-	if err != nil {
-		return nil, err
-	}
-
-	caliProgs := set.New[int]()
-
-	for _, p := range allProgs {
-		if !attachedProgIDs.Contains(p.Id) {
-			continue
-		}
-
-		for _, m := range p.MapIds {
-			if _, ok := maps[m]; ok {
-				caliProgs.Add(p.Id)
-				break
-			}
-		}
-	}
-
 	ai := make(map[string]EPAttachInfo)
 
 	for _, p := range aTC {
-		if caliProgs.Contains(p.ID) {
-			ai[p.DevName] = EPAttachInfo{TCId: p.ID}
+		if strings.HasPrefix(p.Name, "cali") {
+			info := ai[p.DevName]
+			if p.Kind == "clsact/egress" {
+				info.Egress = p.ID
+			} else {
+				info.Ingress = p.ID
+			}
+			ai[p.DevName] = info
 		}
 	}
 
 	for _, p := range aXDP {
-		if caliProgs.Contains(p.ID) {
+		if strings.HasPrefix(p.Name, "cali") {
 			info := ai[p.DevName]
-			info.XDPId = p.ID
+			info.XDP = p.ID
 			info.XDPMode = p.Mode
 			ai[p.DevName] = info
 		}

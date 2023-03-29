@@ -19,6 +19,7 @@ struct cali_tc_globals {
 	__u32 natin_idx;
 	__u32 natout_idx;
 	__u8 iface_name[16];
+	__u32 jumps[16];
 };
 
 enum cali_globals_flags {
@@ -40,6 +41,7 @@ struct cali_ctlb_globals {
 
 struct cali_xdp_globals {
 	__u8 iface_name[16];
+	__u32 jumps[16];
 };
 
 #endif /* __CALI_GLOBALS_H__ */

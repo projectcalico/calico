@@ -21,7 +21,11 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup(__be32 ip_sr
 								    bool from_tun,
 								    nat_lookup_result *res,
 								    int affinity_always_timeo,
-								    bool affinity_tmr_update)
+								    bool affinity_tmr_update
+#if !(CALI_F_XDP) && !(CALI_F_CGROUP)
+								  , struct cali_tc_ctx *ctx
+#endif
+								    )
 {
 	struct calico_nat_v4_key nat_key = {
 		.prefixlen = NAT_PREFIX_LEN_WITH_SRC_MATCH_IN_BITS,
@@ -206,12 +210,15 @@ skip_affinity:
 	return nat_lv2_val;
 }
 
-static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup2(__be32 ip_src, __be32 ip_dst,
-								    __u8 ip_proto, __u16 dport,
-								    bool from_tun,
-								    nat_lookup_result *res)
+#if !(CALI_F_XDP) && !(CALI_F_CGROUP)
+static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup_tc(struct cali_tc_ctx *ctx,
+								       __be32 ip_src, __be32 ip_dst,
+								       __u8 ip_proto, __u16 dport,
+								       bool from_tun,
+								       nat_lookup_result *res)
 {
-	return calico_v4_nat_lookup(ip_src, ip_dst, ip_proto, dport, from_tun, res, 0, false);
+	return calico_v4_nat_lookup(ip_src, ip_dst, ip_proto, dport, from_tun, res, 0, false, ctx);
 }
+#endif
 
 #endif /* __CALI_NAT_LOOKUP_H__ */
