@@ -672,5 +672,5 @@ func (r *ReleaseBuilder) makeInDirectory(dir, target string, env ...string) erro
 }
 
 func (r *ReleaseBuilder) makeInDirectoryWithOutput(dir, target string, env ...string) (string, error) {
-	return r.runner.Run("make", []string{"-j32", "-C", dir, target}, env)
+	return r.runner.Run("make", []string{"-C", dir, target}, env)
 }
