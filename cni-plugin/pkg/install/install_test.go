@@ -227,7 +227,7 @@ PuB/TL+u2y+iQUyXxLy3
 		// Create calico-node service account
 		serviceAccount := &v1.ServiceAccount{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: "calico-node",
+				Name: "calico-cni-plugin",
 			},
 		}
 		_, err = createKubernetesClient().CoreV1().ServiceAccounts("kube-system").Create(context.Background(), serviceAccount, metav1.CreateOptions{})
@@ -238,7 +238,7 @@ PuB/TL+u2y+iQUyXxLy3
 		// Cleanup temp directory
 		os.RemoveAll(tempDir)
 		// Cleanup calico-node service account
-		err := createKubernetesClient().CoreV1().ServiceAccounts("kube-system").Delete(context.Background(), "calico-node", metav1.DeleteOptions{})
+		err := createKubernetesClient().CoreV1().ServiceAccounts("kube-system").Delete(context.Background(), "calico-cni-plugin", metav1.DeleteOptions{})
 		Expect(err).NotTo(HaveOccurred())
 	})
 
