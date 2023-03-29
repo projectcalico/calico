@@ -119,9 +119,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test counters", [
 			_, err = w[0].RunCmd("pktgen", w[0].IP, felixes[0].IP, "udp", "--port-dst", "8055")
 			Expect(err).NotTo(HaveOccurred())
 		}
-		Eventually(func() error {
-			return checkDroppedByPolicyCounters(felixes[0], w[1].InterfaceName, 0, numberOfpackets)
-		}, "1s", "250ms").Should(Succeed())
+		Eventually(func(g Gomega) {
+			checkDroppedByPolicyCounters(g, felixes[0], w[1].InterfaceName, 0, numberOfpackets)
+		}, "5s", "500ms").Should(Succeed())
 	})
 
 	It("should update rule counters", func() {
@@ -247,9 +247,9 @@ func checkRuleCounters(felix *infrastructure.Felix, ifName, hook, polName string
 	Expect(strings.Contains(strOut[startOfPol+2], fmt.Sprintf("count = %d", count))).To(BeTrue())
 }
 
-func checkDroppedByPolicyCounters(felix *infrastructure.Felix, ifName string, iCount, eCount int) error {
+func checkDroppedByPolicyCounters(g Gomega, felix *infrastructure.Felix, ifName string, iCount, eCount int) {
 	out, err := felix.ExecOutput("calico-bpf", "counters", "dump", fmt.Sprintf("--iface=%s", ifName))
-	Expect(err).NotTo(HaveOccurred())
+	g.Expect(err).NotTo(HaveOccurred())
 	strOut := strings.Split(out, "\n")
 
 	f := func(c rune) bool {
@@ -277,9 +277,7 @@ func checkDroppedByPolicyCounters(felix *infrastructure.Felix, ifName string, iC
 			break
 		}
 	}
-	Expect(xCounter).To(Equal("n/a"))
-	Expect(eCounter).To(BeNumerically(">=", eCount))
-	Expect(iCounter).To(BeNumerically(">=", iCount))
-
-	return nil
+	g.Expect(xCounter).To(Equal("n/a"))
+	g.Expect(eCounter).To(BeNumerically(">=", eCount))
+	g.Expect(iCounter).To(BeNumerically(">=", iCount))
 }
