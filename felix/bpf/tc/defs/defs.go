@@ -14,6 +14,13 @@
 
 package tcdefs
 
+import (
+	"fmt"
+	"strings"
+
+	"github.com/sirupsen/logrus"
+)
+
 const (
 	MarkSeen                  = 0x01000000
 	MarkSeenMask              = MarkSeen
@@ -39,8 +46,7 @@ const (
 )
 
 const (
-	ProgIndexNoDebug = iota
-	ProgIndexDebug
+	ProgIndexMain = iota
 	ProgIndexPolicy
 	ProgIndexAllowed
 	ProgIndexIcmp
@@ -51,6 +57,10 @@ const (
 	ProgIndexV6Allowed
 	ProgIndexV6Icmp
 	ProgIndexV6Drop
+	ProgIndexEnd
+
+	ProgIndexDebug   = ProgIndexMain
+	ProgIndexNoDebug = ProgIndexMain
 )
 
 const (
@@ -60,35 +70,105 @@ const (
 )
 
 var ProgramNames = []string{
-	"", /* reserved for filter program */
-	"", /* reserved for filter program */
 	/* ipv4 */
+	"calico_tc_main",
 	"calico_tc_norm_pol_tail",
 	"calico_tc_skb_accepted_entrypoint",
 	"calico_tc_skb_send_icmp_replies",
 	"calico_tc_skb_drop",
 	"calico_tc_host_ct_conflict",
 	/* ipv6 */
-	"calico_tc",
+	"calico_tc6",
 	"calico_tc_norm_pol_tail",
 	"calico_tc_skb_accepted_entrypoint",
 	"calico_tc_skb_send_icmp_replies",
 	"calico_tc_skb_drop",
 }
 
-var JumpMapIndexes = map[string][]int{
-	"IPv4": []int{
-		ProgIndexPolicy,
-		ProgIndexAllowed,
-		ProgIndexIcmp,
-		ProgIndexDrop,
-		ProgIndexHostCtConflict,
-	},
-	"IPv6": []int{
-		ProgIndexV6Prologue,
-		ProgIndexV6Policy,
-		ProgIndexV6Allowed,
-		ProgIndexV6Icmp,
-		ProgIndexV6Drop,
-	},
+type ToOrFromEp string
+
+const (
+	FromEp ToOrFromEp = "from"
+	ToEp   ToOrFromEp = "to"
+)
+
+type EndpointType string
+
+const (
+	EpTypeWorkload EndpointType = "workload"
+	EpTypeHost     EndpointType = "host"
+	EpTypeTunnel   EndpointType = "tunnel"
+	EpTypeL3Device EndpointType = "l3dev"
+	EpTypeNAT      EndpointType = "nat"
+	EpTypeLO       EndpointType = "lo"
+)
+
+func SectionName(endpointType EndpointType, fromOrTo ToOrFromEp) string {
+	return fmt.Sprintf("calico_%s_%s_ep", fromOrTo, endpointType)
+}
+
+func ProgFilename(ipVer int, epType EndpointType, toOrFrom ToOrFromEp, epToHostDrop, fib, dsr bool, logLevel string, btf bool) string {
+	if epToHostDrop && (epType != EpTypeWorkload || toOrFrom == ToEp) {
+		// epToHostDrop only makes sense in the from-workload program.
+		logrus.Debug("Ignoring epToHostDrop, doesn't apply to this target")
+		epToHostDrop = false
+	}
+
+	// Should match CALI_FIB_LOOKUP_ENABLED in bpf.h
+	if fib {
+		toHost := (epType == EpTypeWorkload || epType == EpTypeHost || epType == EpTypeLO) && toOrFrom == FromEp
+		toHEP := (epType == EpTypeHost || epType == EpTypeLO) && toOrFrom == ToEp
+
+		realFIB := epType != EpTypeL3Device && (toHost || toHEP)
+
+		if !realFIB {
+			// FIB lookup only makes sense for traffic towards the host.
+			logrus.Debug("Ignoring fib enabled, doesn't apply to this target")
+		}
+		fib = realFIB
+	}
+
+	var hostDropPart string
+	if epType == EpTypeWorkload && epToHostDrop {
+		hostDropPart = "host_drop_"
+	}
+	fibPart := ""
+	if fib {
+		fibPart = "fib_"
+	}
+	dsrPart := ""
+	if dsr && ((epType == EpTypeWorkload && toOrFrom == FromEp) || (epType == EpTypeHost)) {
+		dsrPart = "dsr_"
+	}
+	logLevel = strings.ToLower(logLevel)
+	if logLevel == "off" {
+		logLevel = "no_log"
+	}
+	var epTypeShort string
+	switch epType {
+	case EpTypeWorkload:
+		epTypeShort = "wep"
+	case EpTypeHost:
+		epTypeShort = "hep"
+	case EpTypeTunnel:
+		epTypeShort = "tnl"
+	case EpTypeL3Device:
+		epTypeShort = "l3"
+	case EpTypeNAT:
+		epTypeShort = "nat"
+	case EpTypeLO:
+		epTypeShort = "lo"
+	}
+	corePart := ""
+	if btf {
+		corePart = "_co-re"
+	}
+
+	if ipVer == 6 {
+		corePart += "_v6"
+	}
+
+	oFileName := fmt.Sprintf("%v_%v_%s%s%s%v%s.o",
+		toOrFrom, epTypeShort, hostDropPart, fibPart, dsrPart, logLevel, corePart)
+	return oFileName
 }
