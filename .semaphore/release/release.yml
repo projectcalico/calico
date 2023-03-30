@@ -6,7 +6,7 @@ agent:
     os_image: ubuntu1804
 
 execution_time_limit:
-  minutes: 180
+  minutes: 360
 
 blocks:
   - name: "Publish official release"
