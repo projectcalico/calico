@@ -3,6 +3,8 @@ package builder
 import (
 	"bytes"
 	"fmt"
+	"io"
+	"os"
 	"os/exec"
 	"strings"
 
@@ -46,6 +48,8 @@ func (r *RealCommandRunner) RunInDirNoCapture(dir, name string, args []string, e
 	if len(env) != 0 {
 		cmd.Env = env
 	}
+	cmd.Stdout = io.Writer(os.Stdout)
+	cmd.Stderr = io.Writer(os.Stderr)
 	cmd.Dir = dir
 	logrus.WithField("cmd", cmd.String()).Infof("Running %s command", name)
 	err := cmd.Run()
