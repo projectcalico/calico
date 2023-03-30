@@ -1,37 +1,37 @@
-- title: v3.25.0
-  manifests_url: https://raw.githubusercontent.com/projectcalico/calico/v3.25.0
+- title: v3.25.1
+  manifests_url: https://raw.githubusercontent.com/projectcalico/calico/v3.25.1
   chart:
     version: 0
   tigera-operator:
    image: tigera/operator
    registry: quay.io
-   version: v1.29.0
+   version: v1.29.3
   components:
      typha:
-      version: v3.25.0
+      version: v3.25.1
      calicoctl:
-      version: v3.25.0
+      version: v3.25.1
      calico/node:
-      version: v3.25.0
+      version: v3.25.1
      calico/cni:
-      version: v3.25.0
+      version: v3.25.1
      calico/apiserver:
-      version: v3.25.0
+      version: v3.25.1
      calico/kube-controllers:
-      version: v3.25.0
+      version: v3.25.1
      calico/flannel-migration-controller:
-      version: v3.25.0
+      version: v3.25.1
      calico/windows:
-      version: v3.25.0
+      version: v3.25.1
      networking-calico:
-      version: v3.25.0
+      version: v3.25.1
      flannel:
       version: v0.16.3
      calico/dikastes:
-      version: v3.25.0
+      version: v3.25.1
      flexvol:
-      version: v3.25.0
+      version: v3.25.1
      csi-driver:
-      version: v3.25.0
+      version: v3.25.1
      csi-node-driver-registrar:
-      version: v3.25.0
+      version: v3.25.1
