@@ -67,6 +67,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test counters", [
 	AfterEach(func() {
 		if CurrentGinkgoTestDescription().Failed {
 			infra.DumpErrorData()
+			for _, felix := range felixes {
+				felix.Exec("calico-bpf", "counters", "dump")
+			}
 		}
 
 		for i := 0; i < 2; i++ {
@@ -111,10 +114,13 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test counters", [
 		pol.Spec.Egress = []api.Rule{{Action: api.Allow}}
 		pol = createPolicy(pol)
 
+		bpfWaitForPolicy(felixes[0], w[1].InterfaceName, "ingress", "default.drop-workload0-to-workload1")
+
+
 		By("generating packets and checking the counter")
 		numberOfpackets := 10
 		for i := 0; i < numberOfpackets; i++ {
-			_, err := w[0].RunCmd("pktgen", w[0].IP, w[1].IP, "udp", "--port-dst", "8055")
+			_, err := w[0].RunCmd("pktgen", w[0].IP, w[1].IP, "udp", "--port-dst", "8055","--ip-id", strconv.Itoa(i+1))
 			Expect(err).NotTo(HaveOccurred())
 			_, err = w[0].RunCmd("pktgen", w[0].IP, felixes[0].IP, "udp", "--port-dst", "8055")
 			Expect(err).NotTo(HaveOccurred())
