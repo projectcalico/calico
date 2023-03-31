@@ -53,7 +53,7 @@ The `*_FILE` variables are _paths_ to the corresponding certificates/keys. As su
 must ensure that the files exist within the pod. This is usually done in one of two ways:
 
 * Mount the certificates from the host. This requires that the certificates be present on the host running the controller.
-* Use Kubernetes [Secrets](http://kubernetes.io/docs/user-guide/secrets/){:target="_blank"} to mount the certificates into the pod as files.
+* Use Kubernetes [Secrets](https://kubernetes.io/docs/concepts/configuration/secret/){:target="_blank"} to mount the certificates into the pod as files.
 
 #### kubernetes
 
