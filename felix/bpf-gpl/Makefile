@@ -50,7 +50,10 @@ UT_C_FILES:=$(shell find ut -name '*.c')
 UT_OBJS:=$(UT_C_FILES:.c=.o) $(shell ./list-ut-objs)
 
 OBJS:=$(shell ./list-objs)
-C_FILES:=tc.c tc6.c connect_balancer.c connect_balancer_v6.c xdp.c
+OBJS+=bin/tc_preamble.o
+OBJS+=bin/xdp_preamble.o
+OBJS+=bin/policy_default.o
+C_FILES:=tc_preamble.c tc.c tc6.c connect_balancer.c connect_balancer_v6.c xdp_preamble.c xdp.c policy_default.c
 
 all: $(OBJS)
 ut-objs: $(UT_OBJS)
@@ -72,6 +75,15 @@ UT_CFLAGS=\
 ut/%.ll: ut/%.c ut/ut.h tc.c tc.d
 	$(CC) $(UT_CFLAGS) $(CFLAGS) -c $< -o $@
 
+tc_preamble.ll: tc_preamble.c tc_preamble.d
+	$(CC) $(CFLAGS) -c $< -o $@
+
+xdp_preamble.ll: xdp_preamble.c xdp_preamble.d
+	$(CC) $(CFLAGS) -DCALI_COMPILE_FLAGS=64 -c $< -o $@
+
+policy_default.ll: policy_default.c policy_default.d
+	$(CC) $(CFLAGS) -c $< -o $@
+
 # Production and UT versions of the main binaries.
 # Combining the targets into one rule causes make to fail to rebuild the .ll files.  Not sure why.
 to%.ll: tc.c tc.d calculate-flags
@@ -92,6 +104,12 @@ test_xdp%.ll: xdp.c xdp.d calculate-flags
 	$(COMPILE)
 
 LINK=$(LD) -march=bpf -filetype=obj -o $@ $<
+bin/tc_preamble.o: tc_preamble.ll | bin
+	$(LINK)
+bin/xdp_preamble.o: xdp_preamble.ll | bin
+	$(LINK)
+bin/policy_default.o: policy_default.ll | bin
+	$(LINK)
 bin/to%.o: to%.ll | bin
 	$(LINK)
 bin/from%.o: from%.ll | bin
