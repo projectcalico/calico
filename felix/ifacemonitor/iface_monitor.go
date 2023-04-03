@@ -16,6 +16,7 @@ package ifacemonitor
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"regexp"
 	"syscall"
@@ -48,6 +49,7 @@ const (
 
 type InterfaceStateCallback func(ifaceName string, ifaceState State, ifIndex int)
 type AddrStateCallback func(ifaceName string, addrs set.Set[string])
+type InSyncCallback func()
 
 type Config struct {
 	// InterfaceExcludes is a list of interface names that we don't want callbacks for.
@@ -68,6 +70,7 @@ type InterfaceMonitor struct {
 
 	StateCallback    InterfaceStateCallback
 	AddrCallback     AddrStateCallback
+	InSyncCallback   InSyncCallback
 	fatalErrCallback func(error)
 }
 
@@ -126,6 +129,8 @@ func (m *InterfaceMonitor) MonitorInterfaces() {
 			if nlCancelC, err = m.netlinkStub.Subscribe(updates, routeUpdates); err != nil {
 				// If we can't even subscribe, something must have gone very wrong.  Bail.
 				m.fatalErrCallback(fmt.Errorf("failed to subscribe to netlink: %w", err))
+				filterUpdatesCancel()
+				return
 			}
 			go FilterUpdates(filterUpdatesCtx, filteredRouteUpdates, routeUpdates, filteredUpdates, updates)
 		}
@@ -137,8 +142,12 @@ func (m *InterfaceMonitor) MonitorInterfaces() {
 		err := m.resync()
 		if err != nil {
 			m.fatalErrCallback(fmt.Errorf("failed to read from netlink (initial resync): %w", err))
+			filterUpdatesCancel()
+			return
 		}
 
+		// Let the main goroutine know that we're in sync in order to unblock dataplane programming.
+		m.InSyncCallback()
 	readLoop:
 		for {
 			log.WithFields(log.Fields{
@@ -166,6 +175,9 @@ func (m *InterfaceMonitor) MonitorInterfaces() {
 				err := m.resync()
 				if err != nil {
 					m.fatalErrCallback(fmt.Errorf("failed to read from netlink (resync): %w", err))
+					close(nlCancelC)
+					filterUpdatesCancel()
+					return
 				}
 			}
 		}
@@ -359,6 +371,10 @@ func (m *InterfaceMonitor) storeAndNotifyLinkInner(ifaceExists bool, ifaceName s
 	for _, family := range [2]int{netlink.FAMILY_V4, netlink.FAMILY_V6} {
 		routes, err := m.netlinkStub.ListLocalRoutes(link, family)
 		if err != nil {
+			if errors.Is(err, unix.ENODEV) {
+				log.Debug("Tried to list routes for interface but it is gone, ignoring...")
+				continue
+			}
 			log.WithError(err).Warn("Netlink route list operation failed.")
 		}
 		for _, route := range routes {

@@ -276,7 +276,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 	genIfaceUpdate := func(name string, state ifacemonitor.State, index int) func() {
 		return func() {
-			bpfEpMgr.OnUpdate(&ifaceUpdate{Name: name, State: state, Index: index})
+			bpfEpMgr.OnUpdate(&ifaceStateUpdate{Name: name, State: state, Index: index})
 			err := bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
 			if state == ifacemonitor.StateUp && (bpfEpMgr.isDataIface(name) || bpfEpMgr.isWorkloadIface(name)) {

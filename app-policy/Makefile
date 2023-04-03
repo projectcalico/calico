@@ -72,25 +72,44 @@ clean-generated:
 
 .PHONY: build-all
 ## Build the binaries for all architectures and platforms
-build-all: $(addprefix bin/dikastes-,$(VALIDARCHES))
+$(VALIDARCHES):
+	$(MAKE) build ARCH=$@
+
+build-all: $(VALIDARCHES)
 
 .PHONY: build
 ## Build the binary for the current architecture and platform
-build: bin/dikastes-$(ARCH) bin/healthz-$(ARCH)
+build: 
+	$(MAKE) bin/dikastes-$(ARCH) ARCH=$(ARCH)
+	$(MAKE) bin/healthz-$(ARCH) ARCH=$(ARCH)
 
 bin/dikastes-amd64: ARCH=amd64
 bin/dikastes-arm64: ARCH=arm64
 bin/dikastes-ppc64le: ARCH=ppc64le
 bin/dikastes-s390x: ARCH=s390x
 bin/dikastes-%: protobuf $(SRC_FILES)
+ifeq ($(ARCH),amd64)
 	$(call build_cgo_boring_binary, ./cmd/dikastes, $@)
+else
+	$(DOCKER_RUN_RO) \
+	  -e CGO_ENABLED=$(CGO_ENABLED) \
+	  -v $(CURDIR)/bin:/go/src/$(PACKAGE_NAME)/bin \
+	  $(CALICO_BUILD) go build -buildvcs=false -ldflags "-X main.VERSION=$(GIT_VERSION)" -v -o bin/dikastes-$(ARCH) ./cmd/dikastes
+endif
 
 bin/healthz-amd64: ARCH=amd64
 bin/healthz-arm64: ARCH=arm64
 bin/healthz-ppc64le: ARCH=ppc64le
 bin/healthz-s390x: ARCH=s390x
 bin/healthz-%: protobuf $(SRC_FILES)
+ifeq ($(ARCH),amd64)
 	$(call build_static_cgo_boring_binary, ./cmd/healthz, $@)
+else
+	$(DOCKER_RUN_RO) \
+	  -e CGO_ENABLED=$(CGO_ENABLED) \
+	  -v $(CURDIR)/bin:/go/src/$(PACKAGE_NAME)/bin \
+	  $(CALICO_BUILD) go build -buildvcs=false -ldflags "-X main.VERSION=$(GIT_VERSION)" -v -o bin/healthz-$(ARCH) ./cmd/healthz
+endif
 
 # We use gogofast for protobuf compilation.  Regular gogo is incompatible with
 # gRPC, since gRPC uses golang/protobuf for marshalling/unmarshalling in that

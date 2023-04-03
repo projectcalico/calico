@@ -346,7 +346,7 @@ func (m *endpointManager) OnUpdate(protoBufMsg interface{}) {
 		delete(m.rawHostEndpoints, *msg.Id)
 		m.hostEndpointsDirty = true
 		m.epIDsToUpdateStatus.Add(*msg.Id)
-	case *ifaceUpdate:
+	case *ifaceStateUpdate:
 		log.WithField("update", msg).Debug("Interface state changed.")
 		m.pendingIfaceUpdates[msg.Name] = msg.State
 	case *ifaceAddrsUpdate:

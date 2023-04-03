@@ -15,10 +15,10 @@
 package calc_test
 
 import (
-	. "github.com/projectcalico/calico/felix/calc"
+	"testing"
 
-	. "github.com/onsi/ginkgo/extensions/table"
-	. "github.com/onsi/gomega"
+	. "github.com/projectcalico/calico/felix/calc"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
@@ -27,15 +27,166 @@ var (
 	tenPointFive = 10.5
 )
 
-var _ = DescribeTable("PolKV should stringify correctly",
-	func(kv PolKV, expected string) {
-		Expect(kv.String()).To(Equal(expected))
-	},
-	Entry("zero", PolKV{}, "(nil policy)"),
-	Entry("nil policy", PolKV{Key: model.PolicyKey{Name: "name"}}, "name(nil policy)"),
-	Entry("nil order",
-		PolKV{Key: model.PolicyKey{Name: "name"}, Value: &model.Policy{}}, "name(default)"),
-	Entry("order set",
-		PolKV{Key: model.PolicyKey{Name: "name"}, Value: &model.Policy{Order: &tenPointFive}},
-		"name(10.5)"),
-)
+func TestPolKV_String(t *testing.T) {
+	type kvTestType struct {
+		name     string
+		kv       PolKV
+		expected string
+	}
+
+	tests := []kvTestType{
+		{
+			name:     "zero",
+			kv:       PolKV{},
+			expected: "(nil policy)",
+		},
+		{
+			name:     "nil policy",
+			kv:       PolKV{Key: model.PolicyKey{Name: "name"}},
+			expected: "name(nil policy)"},
+		{
+			name:     "nil order",
+			kv:       PolKV{Key: model.PolicyKey{Name: "name"}, Value: &model.Policy{}},
+			expected: "name(default)",
+		},
+		{
+			name:     "order set",
+			kv:       PolKV{Key: model.PolicyKey{Name: "name"}, Value: &model.Policy{Order: &tenPointFive}},
+			expected: "name(10.5)",
+		},
+	}
+
+	for _, tc := range tests {
+		got := tc.kv.String()
+		if got != tc.expected {
+			t.Errorf("%v - expected: %v, got: %v", tc.name, tc.expected, got)
+		}
+	}
+}
+
+func TestPolicySorter_OnUpdate(t *testing.T) {
+	poc := NewPolicySorter()
+
+	policy := model.Policy{}
+	kvp := model.KVPair{
+		Key: model.PolicyKey{
+			Name: "test-policy",
+		},
+		Value: &policy,
+	}
+	update := api.Update{}
+	update.Key = kvp.Key
+	update.Value = kvp.Value
+
+	dirty := poc.OnUpdate(update)
+	if !dirty {
+		t.Error("Update containing new policy - expected dirty to be true but it was false")
+	}
+
+	update.Value = nil
+
+	dirty = poc.OnUpdate(update)
+	if !dirty {
+		t.Error("Update containing empty value for existing policy - expected dirty to be true but it was false")
+	}
+
+	update.Value = kvp.Value
+	update.Key = model.HostEndpointKey{}
+
+	dirty = poc.OnUpdate(update)
+	if dirty {
+		t.Error("Update containing key type other than PolicyKey - expected dirty to be false but it was true")
+	}
+}
+
+func TestPolicySorter_UpdatePolicy(t *testing.T) {
+	poc := NewPolicySorter()
+
+	polKey := model.PolicyKey{
+		Name: "test-policy",
+	}
+
+	pol := model.Policy{}
+
+	dirty := poc.UpdatePolicy(polKey, &pol)
+	if !dirty {
+		t.Error("Adding new policy - expected dirty to be true but it was false")
+	}
+	if _, found := poc.Tier.Policies[polKey]; !found {
+		t.Error("Adding new policy - expected policy to be in Policies but it is not")
+	}
+
+	newOrder := float64(7)
+	newPol := model.Policy{}
+	newPol.Order = &newOrder
+
+	dirty = poc.UpdatePolicy(polKey, &newPol)
+	if !dirty {
+		t.Error("Updating existing policy Order field - expected dirty to be true but it was false")
+	}
+
+	pol.DoNotTrack = true
+
+	dirty = poc.UpdatePolicy(polKey, &pol)
+	if !dirty {
+		t.Error("Updating existing policy DoNotTrack field - expected dirty to be true but it was false")
+	}
+
+	newPol.PreDNAT = true
+
+	dirty = poc.UpdatePolicy(polKey, &newPol)
+	if !dirty {
+		t.Error("Updating existing policy PreDNAT field - expected dirty to be true but it was false")
+	}
+
+	pol.ApplyOnForward = true
+
+	dirty = poc.UpdatePolicy(polKey, &pol)
+	if !dirty {
+		t.Error("Updating existing policy ApplyOnForward field - expected dirty to be true but it was false")
+	}
+
+	newPol.Types = []string{"don't care"}
+
+	dirty = poc.UpdatePolicy(polKey, &newPol)
+	if !dirty {
+		t.Error("Updating existing policy Types field - expected dirty to be true but it was false")
+	}
+
+	dirty = poc.UpdatePolicy(polKey, &newPol)
+	if dirty {
+		t.Error("Updating existing policy with identical policy - expected dirty to be false but it was true")
+	}
+
+	dirty = poc.UpdatePolicy(polKey, nil)
+	if !dirty {
+		t.Error("Deleting existing policy - expected dirty to be true but it was false")
+	}
+	if _, found := poc.Tier.Policies[polKey]; found {
+		t.Error("Deleting existing policy - expected policy not to be in Policies but it is")
+	}
+
+	dirty = poc.UpdatePolicy(polKey, nil)
+	if dirty {
+		t.Error("Deleting non-existent policy - expected dirty to be false but it was true")
+	}
+}
+
+func TestPolicySorter_HasPolicy(t *testing.T) {
+	poc := NewPolicySorter()
+	polKey := model.PolicyKey{
+		Name: "test-policy",
+	}
+	found := poc.HasPolicy(polKey)
+	if found {
+		t.Error("Unexpectedly found policy when it should not be present")
+	}
+
+	pol := model.Policy{}
+	_ = poc.UpdatePolicy(polKey, &pol)
+
+	found = poc.HasPolicy(polKey)
+	if !found {
+		t.Error("Policy that should be present was not found")
+	}
+}

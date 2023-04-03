@@ -26,6 +26,10 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/bpfutils"
 )
 
+// #cgo CFLAGS: -I${SRCDIR}/../../bpf-gpl/include/libbpf/src -I${SRCDIR}/../../bpf-gpl
+// #cgo amd64 LDFLAGS: -L${SRCDIR}/../../bpf-gpl/include/libbpf/src/amd64 -lbpf -lelf -lz
+// #cgo arm64 LDFLAGS: -L${SRCDIR}/../../bpf-gpl/include/libbpf/src/arm64 -lbpf -lelf -lz
+// #cgo armv7 LDFLAGS: -L${SRCDIR}/../../bpf-gpl/include/libbpf/src/armv7 -lbpf -lelf -lz
 // #include "libbpf_api.h"
 import "C"
 
@@ -403,4 +407,22 @@ func NumPossibleCPUs() (int, error) {
 		return ncpus, fmt.Errorf("Invalid number of CPUs: %d", ncpus)
 	}
 	return ncpus, nil
+}
+
+func ObjPin(fd int, path string) error {
+	cPath := C.CString(path)
+	defer C.free(unsafe.Pointer(cPath))
+
+	_, err := C.bpf_obj_pin(C.int(fd), cPath)
+
+	return err
+}
+
+func ObjGet(path string) (int, error) {
+	cPath := C.CString(path)
+	defer C.free(unsafe.Pointer(cPath))
+
+	fd, err := C.bpf_obj_get(cPath)
+
+	return int(fd), err
 }
