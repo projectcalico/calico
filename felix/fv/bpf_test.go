@@ -371,7 +371,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			log.Info("AfterEach starting")
 			for _, f := range felixes {
 				if !felixPanicExpected {
-					f.Exec("calico-bpf", "connect-time", "clean")
+					_ = f.ExecMayFail("calico-bpf", "connect-time", "clean")
 				}
 				f.Stop()
 			}
@@ -1452,6 +1452,12 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							_, err = eth30.RunCmd("ip", "route", "add", w[1][1].IP+"/32", "via", "10.0.0.30")
 							Expect(err).NotTo(HaveOccurred())
 
+							// Make sure Felix adds a BPF program before we run the test, otherwise the conntrack
+							// may be crated in the reverse direction.  Since we're pretending to be a host interface
+							// Felix doesn't block traffic by default.
+							Eventually(felixes[1].NumTCBPFProgsFn("eth20"), "30s", "200ms").Should(Equal(2))
+							Eventually(felixes[1].NumTCBPFProgsFn("eth30"), "30s", "200ms").Should(Equal(2))
+
 							// Make sure that networking with the .20 and .30 networks works
 							cc.ResetExpectations()
 							cc.ExpectSome(w[1][1], TargetIP(eth20.IP), 0xdead)
@@ -1509,8 +1515,10 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 							// Ifindex must have changed
 							// B2A because of IPA > IPB - deterministic
-							Expect(ctBefore[k].Data().B2A.Ifindex).NotTo(BeNumerically("==", 0))
-							Expect(ctAfter[k].Data().B2A.Ifindex).NotTo(BeNumerically("==", 0))
+							Expect(ctBefore[k].Data().B2A.Ifindex).NotTo(BeNumerically("==", 0),
+								"Expected 'before' conntrack B2A ifindex to be set")
+							Expect(ctAfter[k].Data().B2A.Ifindex).NotTo(BeNumerically("==", 0),
+								"Expected 'after' conntrack B2A ifindex to be set")
 							Expect(ctBefore[k].Data().B2A.Ifindex).
 								NotTo(BeNumerically("==", ctAfter[k].Data().B2A.Ifindex))
 						})

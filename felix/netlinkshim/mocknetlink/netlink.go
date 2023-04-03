@@ -37,6 +37,8 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
+var globalMutex sync.Mutex
+
 func New() *MockNetlinkDataplane {
 	dp := &MockNetlinkDataplane{
 		ExistingTables:  set.From(unix.RT_TABLE_MAIN, 253, 255),
@@ -56,6 +58,12 @@ func New() *MockNetlinkDataplane {
 				Table:    253,
 			},
 		},
+		SetStrictCheckErr: SimulatedError,
+
+		// Use a single global mutex.  This works around an issue in the wireguard tests, which use multiple
+		// mock dataplanes to hand to different parts of the code under test.  That led to concurrency bugs
+		// where one dataplane modified another dataplane's object without holding the right lock.
+		mutex: &globalMutex,
 	}
 	dp.ResetDeltas()
 	dp.AddIface(1, "lo", true, true)
@@ -242,11 +250,12 @@ type MockNetlinkDataplane struct {
 
 	PersistFailures                bool
 	FailuresToSimulate             FailFlags
+	SetStrictCheckErr              error
 	DeleteInterfaceAfterLinkByName bool
 
 	addedArpEntries set.Set[string]
 
-	mutex                   sync.Mutex
+	mutex                   *sync.Mutex
 	deletedConntrackEntries set.Set[ip.Addr]
 	ConntrackSleep          time.Duration
 }
@@ -375,7 +384,7 @@ func (d *MockNetlinkDataplane) SetStrictCheck(b bool) error {
 
 	Expect(d.NetlinkOpen).To(BeTrue())
 	if d.shouldFail(FailNextSetStrict) {
-		return SimulatedError
+		return d.SetStrictCheckErr
 	}
 	d.StrictEnabled = b
 	return nil

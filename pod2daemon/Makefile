@@ -71,7 +71,7 @@ bin/csi-driver-amd64: $(SRC_FILES)
 	$(call build_static_cgo_boring_binary, csidriver/main.go, $@)
 
 UPSTREAM_REGISTRAR_PROJECT ?= kubernetes-csi/$(REGISTRAR_IMAGE)
-UPSTREAM_REGISTRAR_TAG     ?= v2.5.1
+UPSTREAM_REGISTRAR_TAG     ?= v2.6.3
 
 REGISTRAR_TIGERA_BUILD_CMD="cd /go/src/github.com/$(UPSTREAM_REGISTRAR_PROJECT) && \
                     			  go build -buildvcs=false -tags $(TAGS) -v -o bin/csi-node-driver-registrar cmd/csi-node-driver-registrar/*.go"
@@ -92,13 +92,13 @@ CGO_ENABLED=0
 GOARCH=arm -e GOARM=7
 REGISTRAR_BUILD_CMD=$(REGISTRAR_TIGERA_BUILD_CMD)
 else ifeq ($(ARCH), $(filter $(ARCH),ppc64le))
-BUILD_PLATFORMS="linux ppc64le -ppc64le"
+BUILD_PLATFORMS="linux ppc64le ppc64le"
 REGISTRAR_BUILD_CMD=$(REGISTRAR_UPSTREAM_BUILD_CMD)
 else ifeq ($(ARCH), $(filter $(ARCH),s390x))
-BUILD_PLATFORMS="linux s390x -s390x"
+BUILD_PLATFORMS="linux s390x s390x"
 REGISTRAR_BUILD_CMD=$(REGISTRAR_UPSTREAM_BUILD_CMD)
 else ifeq ($(ARCH), $(filter $(ARCH),win64))
-BUILD_PLATFORMS="windows amd64 .exe"
+BUILD_PLATFORMS="windows amd64 amd64"
 REGISTRAR_BUILD_CMD=$(REGISTRAR_UPSTREAM_BUILD_CMD)
 endif
 

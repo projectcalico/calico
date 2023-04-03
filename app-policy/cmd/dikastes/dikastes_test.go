@@ -15,6 +15,7 @@
 package main
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -83,7 +84,7 @@ func TestHttpTerminationHandler_RunHTTPServer(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		gotSvr, _, gotErr := th.RunHTTPServer(tc.in.addr, tc.in.port)
+		gotSvr, wg, gotErr := th.RunHTTPServer(tc.in.addr, tc.in.port)
 		got := output{"", ""}
 		if gotSvr != nil {
 			got.addr = gotSvr.Addr
@@ -93,6 +94,13 @@ func TestHttpTerminationHandler_RunHTTPServer(t *testing.T) {
 		}
 		if !reflect.DeepEqual(tc.want, got) {
 			t.Fatalf("%s: expected: %v got: %v", tc.name, tc.want, got)
+		}
+
+		if gotSvr != nil {
+			if err := gotSvr.Shutdown(context.Background()); err != nil {
+				t.Fatalf("failed to shutdown: %v", err)
+			}
+			wg.Wait()
 		}
 	}
 }

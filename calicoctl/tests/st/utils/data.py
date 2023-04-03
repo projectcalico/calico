@@ -394,7 +394,6 @@ networkpolicy_name2_rev1 = {
             'name': 'endpoint1',
             'uid': 'test-uid-change',
         }],
-        'clusterName': 'cluster1',
         'labels': {'label1': 'l1', 'label2': 'l2'},
         'annotations': {'key': 'value'},
         'selfLink': 'test-self-link',

@@ -47,8 +47,8 @@ RUN dnf install -y 'dnf-command(config-manager)' && \
     yum install --allowerasing -y rpm-build yum-utils make && \
     # Need these to build runit.
     yum install --allowerasing  -y wget glibc-static gcc && \
-    # Ensure security updates are installed.
-    yum -y update-minimal --security --sec-severity=Important --sec-severity=Critical
+    # Ensure all security updates are installed.
+    yum -y update-minimal --security 
 
 # In order to rebuild the iptables RPM, we first need to rebuild the libnftnl RPM because building
 # iptables requires libnftnl-devel but libnftnl-devel is not available on ubi or CentOS repos.
@@ -115,6 +115,7 @@ ARG RUNIT_VER
 
 # Update base packages to pick up security updates.  Must do this before adding the centos repo.
 RUN microdnf update
+RUN microdnf upgrade
 
 # Copy in runit binaries
 COPY --from=centos  /tmp/admin/runit-${RUNIT_VER}/command/* /usr/local/bin/

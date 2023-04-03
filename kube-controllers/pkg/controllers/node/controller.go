@@ -25,7 +25,6 @@ import (
 
 	"github.com/projectcalico/calico/kube-controllers/pkg/config"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/controller"
-	"github.com/projectcalico/calico/kube-controllers/pkg/converter"
 	api "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 )
@@ -82,7 +81,7 @@ func NewNodeController(ctx context.Context,
 	nodeDeletionFuncs := []func(){}
 
 	// Create the IPAM controller.
-	nc.ipamCtrl = NewIPAMController(cfg, calicoClient, k8sClientset, nodeInformer.GetIndexer())
+	nc.ipamCtrl = NewIPAMController(cfg, calicoClient, k8sClientset, podInformer.GetIndexer(), nodeInformer.GetIndexer())
 	nc.ipamCtrl.RegisterWith(nc.dataFeed)
 	nodeDeletionFuncs = append(nodeDeletionFuncs, nc.ipamCtrl.OnKubernetesNodeDeleted)
 
@@ -104,42 +103,6 @@ func NewNodeController(ctx context.Context,
 				f()
 			}
 		}}
-
-	podHandlers := cache.ResourceEventHandlerFuncs{}
-	podHandlers.AddFunc = func(obj interface{}) {
-		key, err := cache.MetaNamespaceKeyFunc(obj)
-		if err != nil {
-			log.WithError(err).Error("Failed to generate key")
-			return
-		}
-		pod, err := converter.ExtractPodFromUpdate(obj)
-		if err != nil {
-			log.WithError(err).Error("Failed to extract pod")
-			return
-		}
-		nc.ipamCtrl.OnKubernetesPodUpdated(key, pod)
-	}
-	podHandlers.UpdateFunc = func(_, obj interface{}) {
-		key, err := cache.MetaNamespaceKeyFunc(obj)
-		if err != nil {
-			log.WithError(err).Error("Failed to generate key")
-			return
-		}
-		pod, err := converter.ExtractPodFromUpdate(obj)
-		if err != nil {
-			log.WithError(err).Error("Failed to extract pod")
-			return
-		}
-		nc.ipamCtrl.OnKubernetesPodUpdated(key, pod)
-	}
-	podHandlers.DeleteFunc = func(obj interface{}) {
-		key, err := cache.MetaNamespaceKeyFunc(obj)
-		if err != nil {
-			log.WithError(err).Error("Failed to generate key")
-			return
-		}
-		nc.ipamCtrl.OnKubernetesPodDeleted(key)
-	}
 
 	// Create the Auto HostEndpoint sub-controller and register it to receive data.
 	// We always launch this controller, even if auto-HEPs are disabled, since the controller
@@ -163,7 +126,6 @@ func NewNodeController(ctx context.Context,
 
 	// Set the handlers on the informers.
 	nc.nodeInformer.AddEventHandler(nodeHandlers)
-	nc.podInformer.AddEventHandler(podHandlers)
 
 	// Start the Calico data feed.
 	nc.dataFeed.Start()
