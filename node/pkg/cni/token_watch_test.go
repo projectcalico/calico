@@ -2,8 +2,10 @@ package cni_test
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -36,6 +38,18 @@ var _ = Describe("FV tests", func() {
 		tu, err := tr.UpdateToken()
 		Expect(err).ShouldNot(HaveOccurred())
 		Expect(tu.Token).NotTo(BeEmpty())
+	})
+
+	It("should bind a token to service account successfully", func() {
+		os.Setenv("CALICO_CNI_SERVICE_ACCOUNT", serviceAccountName)
+		tr := cni.NewTokenRefresher(clientset, namespace, cni.CNIServiceAccountName())
+		tu, err := tr.UpdateToken()
+		Expect(err).ShouldNot(HaveOccurred())
+		tokenSegments := strings.Split(tu.Token, ".")
+		decodedClaims, err := base64.StdEncoding.DecodeString(tokenSegments[1])
+		stringClaims := fmt.Sprintf("%q\n", decodedClaims)
+		Expect(err).ShouldNot(HaveOccurred())
+		Expect(stringClaims).To(ContainSubstring(serviceAccountName))
 	})
 
 	It("should create a token successfully and deliver it through the channel", func() {

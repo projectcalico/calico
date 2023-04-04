@@ -456,7 +456,7 @@ func (m *bpfEndpointManager) OnUpdate(msg interface{}) {
 	// Updates from the dataplane:
 
 	// Interface updates.
-	case *ifaceUpdate:
+	case *ifaceStateUpdate:
 		m.onInterfaceUpdate(msg)
 	case *ifaceAddrsUpdate:
 		m.onInterfaceAddrsUpdate(msg)
@@ -600,7 +600,7 @@ func (m *bpfEndpointManager) cleanupOldAttach(iface string, ai bpf.EPAttachInfo)
 	return nil
 }
 
-func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceUpdate) {
+func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceStateUpdate) {
 	log.Debugf("Interface update for %v, state %v", update.Name, update.State)
 	// Should be safe without the lock since there shouldn't be any active background threads
 	// but taking it now makes us robust to refactoring.
@@ -2133,8 +2133,13 @@ func policyProgramName(iface, polDir string, ipFamily proto.IPVersion) string {
 func (m *bpfEndpointManager) doUpdatePolicyProgram(progName string, jumpMapFD maps.FD, rules polprog.Rules,
 	ipFamily proto.IPVersion) (asm.Insns, error) {
 
+	opts := []polprog.Option{}
+	if m.bpfPolicyDebugEnabled {
+		opts = append(opts, polprog.WithPolicyDebugEnabled())
+	}
+
 	pg := polprog.NewBuilder(m.ipSetIDAlloc, m.bpfmaps.IpsetsMap.MapFD(),
-		m.bpfmaps.StateMap.MapFD(), jumpMapFD, m.bpfPolicyDebugEnabled)
+		m.bpfmaps.StateMap.MapFD(), jumpMapFD, opts...)
 	if ipFamily == proto.IPVersion_IPV6 {
 		pg.EnableIPv6Mode()
 	}
