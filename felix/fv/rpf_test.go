@@ -224,9 +224,7 @@ var _ = infrastructure.DatastoreDescribe(
 		})
 
 		Context("With BPFEnforceRPF=Loose", func() {
-			BeforeEach(func() {
-				options.ExtraEnvVars["FELIX_BPFEnforceRPF"] = "Loose"
-			})
+			// No need to set anything, Loose is the default
 
 			It("should allow packets from wrong direction with loose RPF on main device", func() {
 				fakeWorkloadIP := "10.65.15.15"
