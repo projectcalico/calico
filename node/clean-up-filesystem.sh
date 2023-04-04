@@ -268,16 +268,13 @@ packages_to_keep=(
   libpcap
   libpwquality
   libselinux
-  #libzstd
   ncurses
   net-tools
   openssl-libs
   p11-kit-trust
-  #pam
   pcre
   redhat-release
   rootfiles
-  #rpm
   sed
   setup
   shadow-utils
