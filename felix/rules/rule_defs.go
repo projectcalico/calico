@@ -240,6 +240,8 @@ type RuleRenderer interface {
 	BlockedCIDRsToIptablesChains(cidrs []string, ipVersion uint8) []*iptables.Chain
 
 	WireguardIncomingMarkChain() *iptables.Chain
+
+	IptablesFilterDenyAction() iptables.Action
 }
 
 type DefaultRuleRenderer struct {
@@ -248,7 +250,11 @@ type DefaultRuleRenderer struct {
 	filterAllowAction        iptables.Action
 	mangleAllowAction        iptables.Action
 	blockCIDRAction          iptables.Action
-	IptablesFilterDenyAction iptables.Action
+	iptablesFilterDenyAction iptables.Action
+}
+
+func (r *DefaultRuleRenderer) IptablesFilterDenyAction() iptables.Action {
+	return r.iptablesFilterDenyAction
 }
 
 func (r *DefaultRuleRenderer) ipSetConfig(ipVersion uint8) *ipsets.IPVersionConfig {
@@ -376,14 +382,14 @@ func NewRenderer(config Config) RuleRenderer {
 	config.validate()
 
 	// First, what should we do when packets are not accepted.
-	var IptablesFilterDenyAction iptables.Action
+	var iptablesFilterDenyAction iptables.Action
 	switch config.IptablesFilterDenyAction {
 	case "REJECT":
 		log.Info("packets that are not passed by any policy or profile will be rejected.")
-		IptablesFilterDenyAction = iptables.RejectAction{}
+		iptablesFilterDenyAction = iptables.RejectAction{}
 	default:
 		log.Info("packets that are not passed by any policy or profile will be dropped.")
-		IptablesFilterDenyAction = iptables.DropAction{}
+		iptablesFilterDenyAction = iptables.DropAction{}
 	}
 
 	// Convert configured actions to rule slices.
@@ -442,6 +448,6 @@ func NewRenderer(config Config) RuleRenderer {
 		filterAllowAction:        filterAllowAction,
 		mangleAllowAction:        mangleAllowAction,
 		blockCIDRAction:          blockCIDRAction,
-		IptablesFilterDenyAction: IptablesFilterDenyAction,
+		iptablesFilterDenyAction: iptablesFilterDenyAction,
 	}
 }
