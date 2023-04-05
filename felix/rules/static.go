@@ -222,8 +222,8 @@ func (r *DefaultRuleRenderer) filterInputChain(ipVersion uint8) *Chain {
 			},
 			Rule{
 				Match:   Match().ProtocolNum(ProtoIPIP),
-				Action:  r.IptablesFilterDenyAction,
-				Comment: []string{fmt.Sprintf("%s IPIP packets from non-Calico hosts", r.IptablesFilterDenyAction)},
+				Action:  r.IptablesFilterDenyAction(),
+				Comment: []string{fmt.Sprintf("%s IPIP packets from non-Calico hosts", r.IptablesFilterDenyAction())},
 			},
 		)
 	}
@@ -266,8 +266,8 @@ func (r *DefaultRuleRenderer) filterInputChain(ipVersion uint8) *Chain {
 				Match: Match().ProtocolNum(ProtoUDP).
 					DestPorts(uint16(r.Config.VXLANPort)).
 					DestAddrType(AddrTypeLocal),
-				Action:  r.IptablesFilterDenyAction,
-				Comment: []string{fmt.Sprintf("%s IPv6 VXLAN packets from non-allowed hosts", r.IptablesFilterDenyAction)},
+				Action:  r.IptablesFilterDenyAction(),
+				Comment: []string{fmt.Sprintf("%s IPv6 VXLAN packets from non-allowed hosts", r.IptablesFilterDenyAction())},
 			},
 		)
 	}
@@ -1258,7 +1258,7 @@ func (r *DefaultRuleRenderer) StaticRawPreroutingChain(ipVersion uint8) *Chain {
 	// usually spoof but privileged containers and VMs can.
 	//
 	rules = append(rules,
-		RPFilter(ipVersion, markFromWorkload, markFromWorkload, r.OpenStackSpecialCasesEnabled, false, r.IptablesFilterDenyAction)...)
+		RPFilter(ipVersion, markFromWorkload, markFromWorkload, r.OpenStackSpecialCasesEnabled, false, r.IptablesFilterDenyAction())...)
 
 	rules = append(rules,
 		// Send non-workload traffic to the untracked policy chains.
