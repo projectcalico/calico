@@ -329,7 +329,7 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 		// Endpoint is admin-down, drop all traffic to/from it.
 		rules = append(rules, Rule{
 			Match:   Match(),
-			Action:  r.IptablesFilterDenyAction,
+			Action:  r.IptablesFilterDenyAction(),
 			Comment: []string{"Endpoint admin disabled"},
 		})
 		return &Chain{
@@ -363,15 +363,15 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 		rules = append(rules, Rule{
 			Match: Match().ProtocolNum(ProtoUDP).
 				DestPorts(uint16(r.Config.VXLANPort)),
-			Action:  r.IptablesFilterDenyAction,
-			Comment: []string{fmt.Sprintf("%s VXLAN encapped packets originating in workloads", r.IptablesFilterDenyAction)},
+			Action:  r.IptablesFilterDenyAction(),
+			Comment: []string{fmt.Sprintf("%s VXLAN encapped packets originating in workloads", r.IptablesFilterDenyAction())},
 		})
 	}
 	if !allowIPIPEncap {
 		rules = append(rules, Rule{
 			Match:   Match().ProtocolNum(ProtoIPIP),
-			Action:  r.IptablesFilterDenyAction,
-			Comment: []string{fmt.Sprintf("%s IPinIP encapped packets originating in workloads", r.IptablesFilterDenyAction)},
+			Action:  r.IptablesFilterDenyAction(),
+			Comment: []string{fmt.Sprintf("%s IPinIP encapped packets originating in workloads", r.IptablesFilterDenyAction())},
 		})
 	}
 
@@ -423,8 +423,8 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 			// normal rules still to be applied to the packet in the filter table.
 			rules = append(rules, Rule{
 				Match:   Match().MarkClear(r.IptablesMarkPass),
-				Action:  r.IptablesFilterDenyAction,
-				Comment: []string{fmt.Sprintf("%s if no policies passed packet", r.IptablesFilterDenyAction)},
+				Action:  r.IptablesFilterDenyAction(),
+				Comment: []string{fmt.Sprintf("%s if no policies passed packet", r.IptablesFilterDenyAction())},
 			})
 		}
 
@@ -464,8 +464,8 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 		//if dropIfNoProfilesMatched {
 		rules = append(rules, Rule{
 			Match:   Match(),
-			Action:  r.IptablesFilterDenyAction,
-			Comment: []string{fmt.Sprintf("%s if no profiles matched", r.IptablesFilterDenyAction)},
+			Action:  r.IptablesFilterDenyAction(),
+			Comment: []string{fmt.Sprintf("%s if no profiles matched", r.IptablesFilterDenyAction())},
 		})
 		//}
 	}
@@ -499,7 +499,7 @@ func (r *DefaultRuleRenderer) appendConntrackRules(rules []Rule, allowAction Act
 		// connection.
 		rules = append(rules, Rule{
 			Match:  Match().ConntrackState("INVALID"),
-			Action: r.IptablesFilterDenyAction,
+			Action: r.IptablesFilterDenyAction(),
 		})
 	}
 	return rules
