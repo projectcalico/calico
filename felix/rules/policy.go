@@ -524,7 +524,7 @@ func (r *DefaultRuleRenderer) CalculateActions(pRule *proto.Rule, ipVersion uint
 		actions = append(actions, iptables.ReturnAction{})
 	case "deny":
 		// Deny maps to DROP/REJECT.
-		actions = append(actions, r.IptablesFilterDenyAction)
+		actions = append(actions, r.IptablesFilterDenyAction())
 	case "log":
 		// This rule should log.
 		actions = append(actions, iptables.LogAction{
