@@ -683,7 +683,7 @@ func removeHostTunnelAddr(ctx context.Context, c client.Interface, nodename stri
 		_, updateError = c.Nodes().Update(ctx, node, options.SetOptions{})
 		if _, ok := updateError.(cerrors.ErrorResourceUpdateConflict); ok {
 			// Wait for a second and try again if there was a conflict during the resource update.
-			logCtx.Infof("Error updating node %s: %s. Retrying.", node.Name, err)
+			logCtx.WithError(err).Infof("Error updating node %s. Retrying.", node.Name)
 			time.Sleep(1 * time.Second)
 			continue
 		}
