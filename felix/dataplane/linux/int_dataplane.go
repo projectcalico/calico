@@ -290,7 +290,6 @@ type InternalDataplane struct {
 	managersWithRouteTables []ManagerWithRouteTables
 	managersWithRouteRules  []ManagerWithRouteRules
 	ruleRenderer            rules.RuleRenderer
-	defaultRuleRenderer     rules.DefaultRuleRenderer
 
 	// datastoreInSync is set to true after we receive the "in sync" message from the datastore.
 	// We delay programming of the dataplane until we're in sync with the datastore.
@@ -1301,6 +1300,14 @@ type ifaceStateUpdate struct {
 	Index int
 }
 
+func NewIfaceStateUpdate(name string, state ifacemonitor.State, index int) any {
+	return &ifaceStateUpdate{
+		Name:  name,
+		State: state,
+		Index: index,
+	}
+}
+
 // Check if current felix ipvs config is correct when felix gets a kube-ipvs0 interface update.
 // If KubeIPVSInterface is UP and felix ipvs support is disabled (kube-proxy switched from iptables to ipvs mode),
 // or if KubeIPVSInterface is DOWN and felix ipvs support is enabled (kube-proxy switched from ipvs to iptables mode),
@@ -1333,6 +1340,13 @@ func (d *InternalDataplane) onIfaceAddrsChange(ifaceName string, addrs set.Set[s
 type ifaceAddrsUpdate struct {
 	Name  string
 	Addrs set.Set[string]
+}
+
+func NewIfaceAddrsUpdate(name string, ips ...string) any {
+	return &ifaceAddrsUpdate{
+		Name:  name,
+		Addrs: set.FromArray[string](ips),
+	}
 }
 
 func (d *InternalDataplane) SendMessage(msg interface{}) error {
@@ -1410,8 +1424,8 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 			},
 			iptables.Rule{
 				Match:   iptables.Match().MarkMatchesWithMask(tcdefs.MarkSeenFallThrough, tcdefs.MarkSeenFallThroughMask),
-				Comment: []string{fmt.Sprintf("%s packets from unknown flows.", d.defaultRuleRenderer.IptablesFilterDenyAction)},
-				Action:  d.defaultRuleRenderer.IptablesFilterDenyAction,
+				Comment: []string{fmt.Sprintf("%s packets from unknown flows.", d.ruleRenderer.IptablesFilterDenyAction())},
+				Action:  d.ruleRenderer.IptablesFilterDenyAction(),
 			},
 		)
 
@@ -1433,7 +1447,7 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 				// Drop/reject packets that have come from a workload but have not been through our BPF program.
 				iptables.Rule{
 					Match:   iptables.Match().InInterface(prefix+"+").NotMarkMatchesWithMask(tcdefs.MarkSeen, tcdefs.MarkSeenMask),
-					Action:  d.defaultRuleRenderer.IptablesFilterDenyAction,
+					Action:  d.ruleRenderer.IptablesFilterDenyAction(),
 					Comment: []string{"From workload without BPF seen mark"},
 				},
 			)
@@ -1450,7 +1464,7 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 			// Catch any workload to host packets that haven't been through the BPF program.
 			inputRules = append(inputRules, iptables.Rule{
 				Match:  iptables.Match().InInterface(prefix+"+").NotMarkMatchesWithMask(tcdefs.MarkSeen, tcdefs.MarkSeenMask),
-				Action: d.defaultRuleRenderer.IptablesFilterDenyAction,
+				Action: d.ruleRenderer.IptablesFilterDenyAction(),
 			})
 		}
 
@@ -1469,7 +1483,7 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 				// In BPF mode, we don't support IPv6 yet.  Drop it.
 				fwdRules = append(fwdRules, iptables.Rule{
 					Match:   iptables.Match().OutInterface(prefix + "+"),
-					Action:  d.defaultRuleRenderer.IptablesFilterDenyAction,
+					Action:  d.ruleRenderer.IptablesFilterDenyAction(),
 					Comment: []string{"To workload, drop IPv6."},
 				})
 			}
@@ -2182,8 +2196,8 @@ func (d *InternalDataplane) loopReportingStatus() {
 	}
 }
 
-// iptablesTable is a shim interface for iptables.Table.
-type iptablesTable interface {
+// IptablesTable is a shim interface for iptables.Table.
+type IptablesTable interface {
 	UpdateChain(chain *iptables.Chain)
 	UpdateChains([]*iptables.Chain)
 	RemoveChains([]*iptables.Chain)
