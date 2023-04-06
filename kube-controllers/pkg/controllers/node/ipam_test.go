@@ -4,7 +4,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//	http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -86,7 +86,6 @@ func assertConsistentState(c *ipamController) {
 }
 
 var _ = Describe("IPAM controller UTs", func() {
-
 	var c *ipamController
 	var cli client.Interface
 	var cs kubernetes.Interface
@@ -675,7 +674,7 @@ var _ = Describe("IPAM controller UTs", func() {
 		// Start the controller.
 		c.Start(stopChan)
 		var node *v1.Node
-		Eventually(nodes).WithTimeout(time.Second).Should(Receive(&node))
+		Eventually(nodes).Should(Receive(&node))
 
 		idx := 0
 		handle := "test-handle"
@@ -742,7 +741,7 @@ var _ = Describe("IPAM controller UTs", func() {
 		_, err = cs.CoreV1().Nodes().Create(context.TODO(), &kn, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		var node *v1.Node
-		Eventually(nodes).WithTimeout(time.Second).Should(Receive(&node))
+		Eventually(nodes).Should(Receive(&node))
 
 		// Create a pod for the allocation so that it doesn't get GC'd.
 		pod := v1.Pod{}
@@ -752,7 +751,7 @@ var _ = Describe("IPAM controller UTs", func() {
 		_, err = cs.CoreV1().Pods(pod.Namespace).Create(context.TODO(), &pod, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		var gotPod *v1.Pod
-		Eventually(pods).WithTimeout(time.Second).Should(Receive(&gotPod))
+		Eventually(pods).Should(Receive(&gotPod))
 
 		// Start the controller.
 		c.Start(stopChan)
@@ -906,7 +905,7 @@ var _ = Describe("IPAM controller UTs", func() {
 		_, err = cs.CoreV1().Nodes().Create(context.TODO(), &kn, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		var node *v1.Node
-		Eventually(nodes).WithTimeout(time.Second).Should(Receive(&node))
+		Eventually(nodes).Should(Receive(&node))
 
 		// Create a pod for the allocation - the pod will have a single IP in its status, but there will be
 		// two IPs allocated which belong to the pod's handle - one "leaked" and one valid. This simulates
@@ -921,7 +920,7 @@ var _ = Describe("IPAM controller UTs", func() {
 		_, err = cs.CoreV1().Pods(pod.Namespace).Create(context.TODO(), &pod, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		var gotPod *v1.Pod
-		Eventually(pods).WithTimeout(time.Second).Should(Receive(&gotPod))
+		Eventually(pods).Should(Receive(&gotPod))
 
 		// Add a new block with the IPv4 address.
 		idx := 0
@@ -1083,7 +1082,7 @@ var _ = Describe("IPAM controller UTs", func() {
 		_, err = cs.CoreV1().Nodes().Create(context.TODO(), &kn, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		var node *v1.Node
-		Eventually(nodes).WithTimeout(time.Second).Should(Receive(&node))
+		Eventually(nodes).Should(Receive(&node))
 
 		// Start the controller.
 		c.Start(stopChan)
@@ -1153,7 +1152,7 @@ var _ = Describe("IPAM controller UTs", func() {
 		_, err = cs.CoreV1().Nodes().Create(context.TODO(), &kn, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		var node *v1.Node
-		Eventually(nodes).WithTimeout(time.Second).Should(Receive(&node))
+		Eventually(nodes).Should(Receive(&node))
 
 		// Create a pod for the allocation so that it doesn't get GC'd.
 		pod := v1.Pod{}
@@ -1163,7 +1162,7 @@ var _ = Describe("IPAM controller UTs", func() {
 		_, err = cs.CoreV1().Pods(pod.Namespace).Create(context.TODO(), &pod, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		var gotPod *v1.Pod
-		Eventually(pods).WithTimeout(time.Second).Should(Receive(&gotPod))
+		Eventually(pods).Should(Receive(&gotPod))
 
 		// Start the controller.
 		c.Start(stopChan)
@@ -1262,7 +1261,7 @@ var _ = Describe("IPAM controller UTs", func() {
 		_, err = cs.CoreV1().Nodes().Create(context.TODO(), &kn, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		var node *v1.Node
-		Eventually(nodes).WithTimeout(time.Second).Should(Receive(&node))
+		Eventually(nodes).Should(Receive(&node))
 
 		// Create a pod for the allocation so that it doesn't get GC'd.
 		pod := v1.Pod{}
@@ -1272,7 +1271,7 @@ var _ = Describe("IPAM controller UTs", func() {
 		_, err = cs.CoreV1().Pods(pod.Namespace).Create(context.TODO(), &pod, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		var gotPod *v1.Pod
-		Eventually(pods).WithTimeout(time.Second).Should(Receive(&gotPod))
+		Eventually(pods).Should(Receive(&gotPod))
 
 		// Start the controller.
 		c.Start(stopChan)
@@ -1371,7 +1370,7 @@ var _ = Describe("IPAM controller UTs", func() {
 		_, err = cs.CoreV1().Nodes().Create(context.TODO(), &kn, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		var node *v1.Node
-		Eventually(nodes).WithTimeout(time.Second).Should(Receive(&node))
+		Eventually(nodes).Should(Receive(&node))
 
 		// Create a pod for the allocation so that it doesn't get GC'd.
 		pod := v1.Pod{}
@@ -1381,7 +1380,7 @@ var _ = Describe("IPAM controller UTs", func() {
 		_, err = cs.CoreV1().Pods(pod.Namespace).Create(context.TODO(), &pod, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		var gotPod *v1.Pod
-		Eventually(pods).WithTimeout(time.Second).Should(Receive(&gotPod))
+		Eventually(pods).Should(Receive(&gotPod))
 
 		// Start the controller.
 		c.Start(stopChan)
@@ -1442,7 +1441,5 @@ var _ = Describe("IPAM controller UTs", func() {
 		}
 		Eventually(numBlocks, 1*time.Second, 100*time.Millisecond).Should(Equal(1))
 		Consistently(numBlocks, assertionTimeout, 100*time.Millisecond).Should(Equal(1))
-
 	})
-
 })
