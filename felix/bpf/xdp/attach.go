@@ -205,7 +205,7 @@ func (ap *AttachPoint) DetachProgram() error {
 		return fmt.Errorf("failed to get prog by id %d: %w", progID, err)
 	}
 
-	if prog.Name != "cali_xdp_preamb" {
+	if !strings.HasPrefix(prog.Name, "cali_xdp_preamb") {
 		ap.Log().Debugf("Program id %d name %s not ours.", progID, prog.Name)
 		return nil
 	}
