@@ -152,7 +152,11 @@ func (i *bpfInterfaceState) clearPolicies() {
 	i.policyIdx = [hook.Count]int{-1, -1, -1}
 }
 
-var zeroIface bpfInterface
+var zeroIface bpfInterface = func() bpfInterface {
+	var i bpfInterface
+	i.dpState.clearPolicies()
+	return i
+}()
 
 type bpfInterfaceInfo struct {
 	ifIndex    int
@@ -538,7 +542,6 @@ func (m *bpfEndpointManager) withIface(ifaceName string, fn func(iface *bpfInter
 	iface, ok := m.nameToIface[ifaceName]
 	if !ok {
 		iface = zeroIface
-		iface.dpState.clearPolicies()
 	}
 	ifaceCopy := iface
 	dirty := fn(&iface)
@@ -703,6 +706,7 @@ func (m *bpfEndpointManager) updateIfaceStateMap(name string, iface *bpfInterfac
 		iface.dpState.policyIdx[hook.Egress] = -1
 
 		m.ifStateMap.DeleteDesired(k)
+		iface.dpState.clearPolicies()
 	}
 }
 
@@ -808,7 +812,6 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceStateUpdate) {
 			iface.dpState.isReady = false
 			iface.info.isUP = false
 			m.updateIfaceStateMap(update.Name, iface)
-			iface.dpState.clearPolicies()
 			iface.info.ifIndex = 0
 		}
 		return true // Force interface to be marked dirty in case we missed a transition during a resync.
