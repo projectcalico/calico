@@ -97,7 +97,7 @@ struct bpf_map_def_extended __attribute__((section("maps"))) cali_policy_map = {
 	.type = BPF_MAP_TYPE_PROG_ARRAY,
 	.key_size = 4,
 	.value_size = 4,
-	.max_entries = 1100,
+	.max_entries = 10000,
 };
 
 #define CALI_JUMP_TO_POLICY(ctx) do {	\
