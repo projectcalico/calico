@@ -2322,10 +2322,10 @@ func (m *bpfEndpointManager) ensureProgramAttached(ap attachPoint) error {
 
 	ap.Log().Debug("AttachProgram waiting for lock...")
 	m.cleanupLock.RLock()
+	defer m.cleanupLock.RUnlock()
 	ap.Log().Debug("AttachProgram got lock.")
 
 	_, err = ap.AttachProgram()
-	m.cleanupLock.RUnlock()
 
 	return err
 }
