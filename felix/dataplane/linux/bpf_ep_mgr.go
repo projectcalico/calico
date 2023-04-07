@@ -465,7 +465,7 @@ func newBPFEndpointManager(
 
 	// If not running in test
 	if m.dp == m {
-		// Repin jump maps to a differnt path so that exesting programs keep working
+		// Repin jump maps to a differnt path so that existing programs keep working
 		// as if nothing has changed. We keep those maps as long as we have dirty
 		// devices.
 		//
@@ -681,19 +681,25 @@ func (m *bpfEndpointManager) updateIfaceStateMap(name string, iface *bpfInterfac
 		if err := m.policyMapDelete(hook.XDP, iface.dpState.policyIdx[hook.XDP]); err != nil {
 			log.WithError(err).Warn("Policy program may leak.")
 		}
-		m.xdpPolicyMapAlloc.Put(iface.dpState.policyIdx[hook.XDP])
+		if err := m.xdpPolicyMapAlloc.Put(iface.dpState.policyIdx[hook.XDP]); err != nil {
+			log.WithError(err).Error("XDP")
+		}
 		iface.dpState.policyIdx[hook.XDP] = -1
 
 		if err := m.policyMapDelete(hook.Ingress, iface.dpState.policyIdx[hook.Ingress]); err != nil {
 			log.WithError(err).Warn("Policy program may leak.")
 		}
-		m.policyMapAlloc.Put(iface.dpState.policyIdx[hook.Ingress])
+		if err := m.policyMapAlloc.Put(iface.dpState.policyIdx[hook.Ingress]); err != nil {
+			log.WithError(err).Error("Ingress")
+		}
 		iface.dpState.policyIdx[hook.Ingress] = -1
 
 		if err := m.policyMapDelete(hook.Egress, iface.dpState.policyIdx[hook.Egress]); err != nil {
 			log.WithError(err).Warn("Policy program may leak.")
 		}
-		m.policyMapAlloc.Put(iface.dpState.policyIdx[hook.Egress])
+		if err := m.policyMapAlloc.Put(iface.dpState.policyIdx[hook.Egress]); err != nil {
+			log.WithError(err).Error("Ingress")
+		}
 		iface.dpState.policyIdx[hook.Egress] = -1
 
 		m.ifStateMap.DeleteDesired(k)
@@ -1050,12 +1056,12 @@ func (m *bpfEndpointManager) syncIfStateMap() {
 	// Fill unallocated indexes.
 	for i := 0; i < polprog.MaxEntries; i++ {
 		if !palloc.Contains(i) {
-			m.policyMapAlloc.Put(i)
+			_ = m.policyMapAlloc.Put(i)
 		}
 	}
 	for i := 0; i < polprog.XDPMaxEntries; i++ {
 		if !xdpPalloc.Contains(i) {
-			m.xdpPolicyMapAlloc.Put(i)
+			_ = m.xdpPolicyMapAlloc.Put(i)
 		}
 	}
 }
@@ -1237,20 +1243,17 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 			up = iface.info.ifaceIsUp()
 
 			if xdpIdx = iface.dpState.policyIdx[hook.XDP]; xdpIdx == -1 {
-				if xdpIdx = m.xdpPolicyMapAlloc.Get(); xdpIdx == -1 {
-					err = fmt.Errorf("ran out of policy map indexes")
+				if xdpIdx, err = m.xdpPolicyMapAlloc.Get(); err != nil {
 					return false
 				}
 			}
 			if ingressIdx = iface.dpState.policyIdx[hook.Ingress]; ingressIdx == -1 {
-				if ingressIdx = m.policyMapAlloc.Get(); ingressIdx == -1 {
-					err = fmt.Errorf("ran out of policy map indexes")
+				if ingressIdx, err = m.policyMapAlloc.Get(); err != nil {
 					return false
 				}
 			}
 			if egressIdx = iface.dpState.policyIdx[hook.Egress]; egressIdx == -1 {
-				if egressIdx = m.policyMapAlloc.Get(); egressIdx == -1 {
-					err = fmt.Errorf("ran out of policy map indexes")
+				if egressIdx, err = m.policyMapAlloc.Get(); err != nil {
 					return false
 				}
 			}
@@ -1465,17 +1468,19 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 		return state, nil
 	}
 
+	var err error
+
 	if state.policyIdx[hook.Ingress] == -1 {
-		state.policyIdx[hook.Ingress] = m.policyMapAlloc.Get()
-		if state.policyIdx[hook.Ingress] == -1 {
-			return state, fmt.Errorf("ran out of policy map indexes")
+		state.policyIdx[hook.Ingress], err = m.policyMapAlloc.Get()
+		if err != nil {
+			return state, err
 		}
 	}
 
 	if state.policyIdx[hook.Egress] == -1 {
-		state.policyIdx[hook.Egress] = m.policyMapAlloc.Get()
-		if state.policyIdx[hook.Egress] == -1 {
-			return state, fmt.Errorf("ran out of policy map indexes")
+		state.policyIdx[hook.Egress], err = m.policyMapAlloc.Get()
+		if err != nil {
+			return state, err
 		}
 	}
 
@@ -1484,7 +1489,7 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 	// get the jump map ready to insert the policy if the endpoint shows up.
 
 	// Attach the qdisc first; it is shared between the directions.
-	err := m.dp.ensureQdisc(ifaceName)
+	err = m.dp.ensureQdisc(ifaceName)
 	if err != nil {
 		if isLinkNotFoundError(err) {
 			// Interface is gone, nothing to do.
@@ -2768,23 +2773,24 @@ type policyMapAlloc struct {
 	free chan int
 }
 
-func (pa *policyMapAlloc) Get() int {
+func (pa *policyMapAlloc) Get() (int, error) {
 	select {
 	case i := <-pa.free:
-		return i
+		return i, nil
 	default:
-		return -1
+		return -1, errors.New("ran out of policy map indexes")
 	}
 }
 
-func (pa *policyMapAlloc) Put(i int) {
+func (pa *policyMapAlloc) Put(i int) error {
 	if i < 0 || i >= pa.max {
-		return // ignore, expecially if an index is -1 aka unused
+		return nil // ignore, expecially if an index is -1 aka unused
 	}
 
 	select {
 	case pa.free <- i:
+		return nil
 	default:
-		log.Error("Returning more policy indexes then previously allocated!")
+		return errors.New("returning more policy indexes than previously allocated!")
 	}
 }
