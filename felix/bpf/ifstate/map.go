@@ -55,7 +55,7 @@ var MapParams = maps.MapParameters{
 	MaxEntries:   MaxEntries,
 	Name:         "cali_iface",
 	Flags:        unix.BPF_F_NO_PREALLOC,
-	Version:      2,
+	Version:      3,
 	UpdatedByBPF: false,
 }
 
