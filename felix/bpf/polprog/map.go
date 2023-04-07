@@ -22,7 +22,7 @@ import (
 )
 
 const (
-	MaxEntries    = 1100
+	MaxEntries    = 10000
 	XDPMaxEntries = 100
 )
 
