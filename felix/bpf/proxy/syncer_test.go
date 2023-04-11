@@ -74,7 +74,7 @@ var _ = Describe("BPF Syncer", func() {
 	}
 
 	state := proxy.DPSyncerState{
-		SvcMap: k8sp.ServiceMap{
+		SvcMap: k8sp.ServicePortMap{
 			svcKey: proxy.NewK8sServicePort(
 				net.IPv4(10, 0, 0, 1),
 				1234,
