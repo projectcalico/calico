@@ -114,7 +114,6 @@ ARG IPSET_VER
 ARG RUNIT_VER
 
 # Update base packages to pick up security updates.  Must do this before adding the centos repo.
-RUN microdnf update
 RUN microdnf upgrade
 
 # Copy in runit binaries
