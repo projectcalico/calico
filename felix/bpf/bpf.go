@@ -2237,7 +2237,7 @@ func ListTcXDPAttachedProgs() (TcList, XDPList, error) {
 
 func ListPerEPMaps() (map[int]string, error) {
 	mapIDToPath := make(map[int]string)
-	err := filepath.Walk("/sys/fs/bpf/tc", func(p string, info os.FileInfo, err error) error {
+	err := filepath.Walk(path.Join(bpfdefs.DefaultBPFfsPath, "tc"), func(p string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -2340,7 +2340,7 @@ func CleanUpMaps() {
 
 	// Look for empty dirs.
 	emptyAutoDirs := set.New[string]()
-	err = filepath.Walk("/sys/fs/bpf/tc", func(p string, info os.FileInfo, err error) error {
+	err = filepath.Walk(path.Join(bpfdefs.DefaultBPFfsPath, "tc"), func(p string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}

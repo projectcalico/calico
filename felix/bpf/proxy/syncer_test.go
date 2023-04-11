@@ -19,6 +19,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/projectcalico/calico/felix/bpf/bpfdefs"
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/nat"
 	"github.com/projectcalico/calico/felix/cachingmap"
@@ -1183,7 +1184,7 @@ func (m *mockNATMap) GetName() string {
 }
 
 func (m *mockNATMap) Path() string {
-	return "/sys/fs/bpf/tc/nat"
+	return bpfdefs.GlobalPinDir + "/nat"
 }
 
 func (m *mockNATMap) Iter(iter maps.IterCallback) error {
@@ -1276,7 +1277,7 @@ func (m *mockNATBackendMap) GetName() string {
 }
 
 func (m *mockNATBackendMap) Path() string {
-	return "/sys/fs/bpf/tc/natbe"
+	return bpfdefs.GlobalPinDir + "/natbe"
 }
 
 func (m *mockNATBackendMap) Iter(iter maps.IterCallback) error {
@@ -1365,7 +1366,7 @@ func (m *mockAffinityMap) GetName() string {
 }
 
 func (m *mockAffinityMap) Path() string {
-	return "/sys/fs/bpf/tc/aff"
+	return bpfdefs.GlobalPinDir + "/aff"
 }
 
 func (m *mockAffinityMap) Iter(iter maps.IterCallback) error {
