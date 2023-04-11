@@ -7,7 +7,7 @@ execution_time_limit:
 agent:
   machine:
     type: e1-standard-2
-    os_image: ubuntu1804
+    os_image: ubuntu2004
 
 auto_cancel:
   running:
@@ -45,7 +45,7 @@ blocks:
     agent:
       machine:
         type: e1-standard-4
-        os_image: ubuntu1804
+        os_image: ubuntu2004
     jobs:
     - name: Build and run UT, k8sfv
       execution_time_limit:
@@ -206,7 +206,7 @@ blocks:
       machine:
         # Linters use a lot of RAM so use a bigger machine type.
         type: e1-standard-8
-        os_image: ubuntu1804
+        os_image: ubuntu2004
     prologue:
       commands:
       - checkout
