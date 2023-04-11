@@ -102,6 +102,9 @@ func (o *CalicoServerOptions) Config() (*apiserver.Config, error) {
 		}
 	}
 
+	if err := o.RecommendedOptions.Etcd.Complete(serverConfig.StorageObjectCountTracker, serverConfig.DrainedNotify(), serverConfig.AddPostStartHook); err != nil {
+		return nil, err
+	}
 	if err := o.RecommendedOptions.Etcd.ApplyTo(&serverConfig.Config); err != nil {
 		return nil, err
 	}
