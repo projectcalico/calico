@@ -129,7 +129,7 @@ func (ap *AttachPoint) AttachProgram() (int, error) {
 
 	/* XXX we should remember the tag of the program and skip the rest if the tag is
 	* still the same */
-	progsToClean, err := ap.listAttachedPrograms()
+	progsToClean, err := ap.listAttachedPrograms(true)
 	if err != nil {
 		return -1, err
 	}
@@ -156,7 +156,7 @@ func (ap *AttachPoint) AttachProgram() (int, error) {
 }
 
 func (ap *AttachPoint) DetachProgram() error {
-	progsToClean, err := ap.listAttachedPrograms()
+	progsToClean, err := ap.listAttachedPrograms(true)
 	if err != nil {
 		return err
 	}
@@ -245,7 +245,7 @@ type attachedProg struct {
 	handle string
 }
 
-func (ap *AttachPoint) listAttachedPrograms() ([]attachedProg, error) {
+func (ap *AttachPoint) listAttachedPrograms(includeLegacy bool) ([]attachedProg, error) {
 	out, err := ExecTC("filter", "show", "dev", ap.Iface, ap.Hook.String())
 	if err != nil {
 		return nil, fmt.Errorf("failed to list tc filters on interface: %w", err)
@@ -254,7 +254,7 @@ func (ap *AttachPoint) listAttachedPrograms() ([]attachedProg, error) {
 	// filter protocol all pref 49152 bpf chain 0 handle 0x1 to_hep_no_log.o:[calico_to_host_ep] direct-action not_in_hw id 821 tag ee402594f8f85ac3 jited
 	var progsToClean []attachedProg
 	for _, line := range strings.Split(string(out), "\n") {
-		if !strings.Contains(line, "cali_tc_preambl") {
+		if !strings.Contains(line, "cali_tc_preambl") && (!includeLegacy || !strings.Contains(line, "calico")) {
 			continue
 		}
 		// find the pref and the handle
@@ -311,7 +311,7 @@ func (ap *AttachPoint) IsAttached() (bool, error) {
 	if !hasQ {
 		return false, nil
 	}
-	progs, err := ap.listAttachedPrograms()
+	progs, err := ap.listAttachedPrograms(false)
 	if err != nil {
 		return false, err
 	}
