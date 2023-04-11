@@ -28,9 +28,10 @@ func TestShouldAppendTopologyAwareEndpoint(t *testing.T) {
 		description     string
 		nodeZone        string
 		hintsAnnotation string
-		zoneHints       sets.String
-		expect          bool
-		actual          bool
+		//nolint:staticcheck // Ignore SA1019 deprecated until kubernetes/pkg/proxy/types.go fixes sets.String
+		zoneHints sets.String
+		expect    bool
+		actual    bool
 	}{{
 		description:     "node zone empty, hints annotation empty, zone hints empty, expect should append topology aware endpoint true",
 		nodeZone:        "",
