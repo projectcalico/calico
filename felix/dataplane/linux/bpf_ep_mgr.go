@@ -61,6 +61,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/counters"
 	"github.com/projectcalico/calico/felix/bpf/hook"
 	"github.com/projectcalico/calico/felix/bpf/ifstate"
+	"github.com/projectcalico/calico/felix/bpf/legacy"
 	"github.com/projectcalico/calico/felix/bpf/libbpf"
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/polprog"
@@ -220,6 +221,7 @@ type bpfEndpointManager struct {
 	bpfmaps                 *bpfmap.Maps
 	ifStateMap              *cachingmap.CachingMap[ifstate.Key, ifstate.Value]
 	removeOldJumps          bool
+	legacyCleanUp           bool
 
 	policyMapAlloc    *policyMapAlloc
 	xdpPolicyMapAlloc *policyMapAlloc
@@ -476,6 +478,8 @@ func newBPFEndpointManager(
 			return nil, err
 		}
 		m.removeOldJumps = true
+		// Make sure that we envetually clean up after previous versions.
+		m.legacyCleanUp = true
 	}
 
 	return m, nil
@@ -1208,12 +1212,18 @@ func (m *bpfEndpointManager) CompleteDeferredWork() error {
 		}
 	})
 
-	if m.removeOldJumps && m.dirtyIfaceNames.Len() == 0 {
-		oldBase := path.Join(bpfdefs.GlobalPinDir, "old_jumps")
-		if err := os.RemoveAll(oldBase); err != nil && os.IsNotExist(err) {
-			return fmt.Errorf("failed to remove %s: %w", oldBase, err)
+	if m.dirtyIfaceNames.Len() == 0 {
+		if m.removeOldJumps {
+			oldBase := path.Join(bpfdefs.GlobalPinDir, "old_jumps")
+			if err := os.RemoveAll(oldBase); err != nil && os.IsNotExist(err) {
+				return fmt.Errorf("failed to remove %s: %w", oldBase, err)
+			}
+			m.removeOldJumps = false
 		}
-		m.removeOldJumps = false
+		if m.legacyCleanUp {
+			legacy.CleanUpMaps()
+			m.legacyCleanUp = false
+		}
 	}
 
 	return nil
