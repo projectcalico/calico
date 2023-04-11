@@ -20,6 +20,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 )
 
+//nolint:staticcheck // Ignore SA1019 deprecated until kubernetes/pkg/proxy/types.go fixes sets.String
 func ShouldAppendTopologyAwareEndpoint(nodeZone string, hintsAnnotation string, zoneHints sets.String) bool {
 
 	// In order for an endpoint to be Topology Aware and added to endpoint collection the following must be true
