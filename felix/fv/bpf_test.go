@@ -55,6 +55,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/ifstate"
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/nat"
+	"github.com/projectcalico/calico/felix/bpfdefs"
 	. "github.com/projectcalico/calico/felix/fv/connectivity"
 	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
@@ -682,7 +683,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 				It("should clean up jump maps", func() {
 					numJumpMaps := func() int {
-						command := fmt.Sprintf("find /sys/fs/bpf/tc -name %s", maps.JumpMapName())
+						command := fmt.Sprintf("find "+bpfdefs.DefaultBPFfsPath+"/tc -name %s", maps.JumpMapName())
 						output, err := felixes[0].ExecOutput("sh", "-c", command)
 						Expect(err).NotTo(HaveOccurred())
 						return strings.Count(output, maps.JumpMapName())

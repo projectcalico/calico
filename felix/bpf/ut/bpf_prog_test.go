@@ -40,6 +40,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/arp"
+	"github.com/projectcalico/calico/felix/bpf/bpfdefs"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	"github.com/projectcalico/calico/felix/bpf/counters"
 	"github.com/projectcalico/calico/felix/bpf/failsafes"
@@ -551,7 +552,7 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 			}
 			continue
 		}
-		pin := "/sys/fs/bpf/tc/globals/" + m.Name()
+		pin := bpfdefs.GlobalPinDir + m.Name()
 		log.WithField("pin", pin).Debug("Pinning map")
 		cmd := exec.Command("bpftool", "map", "show", "pinned", pin)
 		log.WithField("cmd", cmd.String()).Debugf("executing")

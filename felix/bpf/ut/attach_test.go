@@ -25,6 +25,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/bpf/bpfdefs"
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/tc"
 	"github.com/projectcalico/calico/felix/bpf/utils"
@@ -206,7 +207,7 @@ func TestReattachPrograms(t *testing.T) {
 
 func countJumpMaps() int {
 	var count int
-	err := filepath.Walk("/sys/fs/bpf/tc", func(p string, info os.FileInfo, err error) error {
+	err := filepath.Walk(bpfdefs.DefaultBPFfsPath+"/tc", func(p string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -225,7 +226,7 @@ func countJumpMaps() int {
 
 func countTCDirs() int {
 	var count int
-	err := filepath.Walk("/sys/fs/bpf/tc", func(p string, info os.FileInfo, err error) error {
+	err := filepath.Walk(bpfdefs.DefaultBPFfsPath+"/tc", func(p string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}

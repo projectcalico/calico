@@ -17,6 +17,7 @@ package tc
 import (
 	"encoding/json"
 	"os/exec"
+	"path"
 	"regexp"
 	"strconv"
 	"strings"
@@ -26,6 +27,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 
 	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/bpf/bpfdefs"
 )
 
 // CleanUpProgramsAndPins makes a best effort to remove all our TC BPF programs.
@@ -119,7 +121,7 @@ func CleanUpProgramsAndPins() {
 		return nil
 	})
 
-	bpf.CleanUpCalicoPins("/sys/fs/bpf/tc")
+	bpf.CleanUpCalicoPins(path.Join(bpfdefs.DefaultBPFfsPath, "tc"))
 }
 
 var tcFiltRegex = regexp.MustCompile(`filter .*? bpf .*? id (\d+)`)
