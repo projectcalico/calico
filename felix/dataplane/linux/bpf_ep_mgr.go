@@ -189,10 +189,6 @@ type bpfEndpointManager struct {
 	ifacesLock  sync.Mutex
 	nameToIface map[string]bpfInterface
 
-	// Using the RLock allows multiple attach calls to proceed in parallel unless
-	// CleanUpMaps() (which takes the writer lock) is running.
-	cleanupLock sync.RWMutex
-
 	allWEPs        map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint
 	happyWEPs      map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint
 	happyWEPsDirty bool
@@ -2308,11 +2304,6 @@ func (m *bpfEndpointManager) ensureProgramAttached(ap attachPoint) error {
 	} else {
 		return fmt.Errorf("unknown attach type")
 	}
-
-	ap.Log().Debug("AttachProgram waiting for lock...")
-	m.cleanupLock.RLock()
-	defer m.cleanupLock.RUnlock()
-	ap.Log().Debug("AttachProgram got lock.")
 
 	_, err = ap.AttachProgram()
 
