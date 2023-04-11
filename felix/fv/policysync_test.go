@@ -31,6 +31,7 @@ import (
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
@@ -208,7 +209,7 @@ var _ = Context("_POL-SYNC_ _BPF-SAFE_ policy sync API tests", func() {
 
 				createWorkloadConn := func(i int) (*grpc.ClientConn, proto.PolicySyncClient) {
 					var opts []grpc.DialOption
-					opts = append(opts, grpc.WithInsecure())
+					opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 					opts = append(opts, grpc.WithDialer(unixDialer))
 					var conn *grpc.ClientConn
 					conn, err = grpc.Dial(hostWlSocketPath[i], opts...)
