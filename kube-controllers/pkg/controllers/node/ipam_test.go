@@ -115,19 +115,21 @@ var _ = Describe("IPAM controller UTs", func() {
 		stopChan = make(chan struct{})
 
 		pods = make(chan *v1.Pod, 1)
-		podInformer.AddEventHandler(&cache.ResourceEventHandlerFuncs{
+		_, err := podInformer.AddEventHandler(&cache.ResourceEventHandlerFuncs{
 			AddFunc: func(obj interface{}) {
 				pod := obj.(*v1.Pod)
 				pods <- pod
 			},
 		})
+		Expect(err).NotTo(HaveOccurred())
 		nodes = make(chan *v1.Node, 1)
-		nodeInformer.AddEventHandler(&cache.ResourceEventHandlerFuncs{
+		_, err = nodeInformer.AddEventHandler(&cache.ResourceEventHandlerFuncs{
 			AddFunc: func(obj interface{}) {
 				node := obj.(*v1.Node)
 				nodes <- node
 			},
 		})
+		Expect(err).NotTo(HaveOccurred())
 
 		factory.Start(stopChan)
 		cache.WaitForCacheSync(stopChan, podInformer.HasSynced)
