@@ -131,7 +131,7 @@ ARG RUNIT_VER
 COPY --from=qemu /usr/bin/qemu-*-static /usr/bin/
 
 # Update base packages to pick up security updates.  Must do this before adding the centos repo.
-RUN microdnf update
+RUN microdnf upgrade
 
 # Copy in runit binaries
 COPY --from=centos  /tmp/admin/runit-${RUNIT_VER}/command/* /usr/local/bin/
