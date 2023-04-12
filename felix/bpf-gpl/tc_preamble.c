@@ -37,3 +37,12 @@ int  cali_tc_preamble(struct __sk_buff *skb)
 
 	return TC_ACT_SHOT;
 }
+
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunused-local-typedef"
+#pragma clang diagnostic ignored "-Wunused"
+static CALI_BPF_INLINE void __compile_tc_asserts(void) {
+/* We store globals in the state map to pass them between programs, they must fit! */
+COMPILE_TIME_ASSERT(sizeof(struct cali_tc_globals) < sizeof(struct cali_tc_state))
+}
+#pragma clang diagnostic pop
