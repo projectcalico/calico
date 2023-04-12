@@ -17,7 +17,7 @@ global_job_config:
     - checkout
     # Semaphore is doing shallow clone on a commit without tags.
     # unshallow it because we need a reliable git describe.
-    - git fetch --unshallow
+    - retry git fetch --unshallow
     - git config --global user.email marvin@tigera.io
     - git config --global user.name Marvin
     - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/tigera-infra-access.json

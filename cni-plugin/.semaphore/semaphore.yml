@@ -54,7 +54,7 @@ blocks:
           - checkout
           # Semaphore is doing shallow clone on a commit without tags.
           # unshallow it for GIT_VERSION:=$(shell git describe --tags --dirty --always) @ Makefile.common
-          - git fetch --unshallow
+          - retry git fetch --unshallow
       jobs:
         - name: Test Version
           execution_time_limit:
@@ -75,7 +75,7 @@ blocks:
           - checkout
           # Semaphore is doing shallow clone on a commit without tags.
           # unshallow it for GIT_VERSION:=$(shell git describe --tags --dirty --always) @ Makefile.common
-          - git fetch --unshallow
+          - retry git fetch --unshallow
       jobs:
         - name: Static Checks
           execution_time_limit:
@@ -191,7 +191,7 @@ blocks:
           - checkout
           # Semaphore is doing shallow clone on a commit without tags.
           # unshallow it for GIT_VERSION:=$(shell git describe --tags --dirty --always) @ Makefile.common
-          - git fetch --unshallow
+          - retry git fetch --unshallow
           # Correct permissions since they are too open by default:
           - chmod 0600 ~/.keys/*
           # Add the key to the ssh agent:
