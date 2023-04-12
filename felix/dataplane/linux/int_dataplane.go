@@ -187,6 +187,7 @@ type Config struct {
 	BPFDisableUnprivileged             bool
 	BPFKubeProxyIptablesCleanupEnabled bool
 	BPFLogLevel                        string
+	BPFLogFilters                      map[string]string
 	BPFExtToServiceConnmark            int
 	BPFDataIfacePattern                *regexp.Regexp
 	BPFL3IfacePattern                  *regexp.Regexp
@@ -737,9 +738,16 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 					excludeUDP = true
 				}
 			}
+			logLevel := strings.ToLower(config.BPFLogLevel)
+			if config.BPFLogFilters != nil {
+				v, ok := config.BPFLogFilters["ctlb"]
+				if logLevel != "off" && (!ok || v != "on") {
+					logLevel = "off"
+				}
+			}
 			// Activate the connect-time load balancer.
 			err = bpfnat.InstallConnectTimeLoadBalancer(
-				config.BPFCgroupV2, config.BPFLogLevel, config.BPFConntrackTimeouts.UDPLastSeen, excludeUDP)
+				config.BPFCgroupV2, logLevel, config.BPFConntrackTimeouts.UDPLastSeen, excludeUDP)
 			if err != nil {
 				log.WithError(err).Panic("BPFConnTimeLBEnabled but failed to attach connect-time load balancer, bailing out.")
 			}
