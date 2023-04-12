@@ -2783,6 +2783,13 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Format:      "",
 						},
 					},
+					"bpfLogFilters": {
+						SchemaProps: spec.SchemaProps{
+							Description: "BPFLogFilters is a comma-separated list of key=values where the value is a pcap filter expression and the key is an interface name with 'all' denoting all interfaces, 'weps' all workload endpoints and 'heps' all host endpoints. 'ctlb' can take a value of 'on' or 'off' to set whether connect time load balance debug output is enabled when BPFLogLevel is debug. It is off by default. [Default: unset - means all debug logs are emitted]",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 					"bpfDataIfacePattern": {
 						SchemaProps: spec.SchemaProps{
 							Description: "BPFDataIfacePattern is a regular expression that controls which interfaces Felix should attach BPF programs to in order to catch traffic to/from the network.  This needs to match the interfaces that Calico workload traffic flows over as well as any interfaces that handle incoming traffic to nodeports and services from outside the cluster.  It should not match the workload interfaces (usually named cali...).",
