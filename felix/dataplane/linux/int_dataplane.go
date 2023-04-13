@@ -1559,21 +1559,35 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 // setUpIptablesBPFEarly that need to be written asap
 func (d *InternalDataplane) setUpIptablesBPFEarly() {
 	rules := bpfMarkPreestablishedFlowsRules()
-	cp := []iptables.Rule{}
-
-	for _, r := range rules {
-		r.Comment = append(r.Comment, "cali:BOOTSTRAP")
-		cp = append(cp, r)
-	}
 
 	for _, t := range d.iptablesFilterTables {
-		if err := t.InsertRulesNow("FORWARD", cp); err != nil {
-			log.WithError(err).
-				Warn("Failed inserting some early rules to filter FORWARD, some flows may get temporarily disrupted.")
+		// We want to prevent inserting the rules over and over again if something later
+		// crashed. We do not expect that we would inset just a part of the batch as that
+		// should be handled by the iptables-restore transaction.  Never the less if we
+		// see that unexpected case, perhaps due to an upgrade, we skip over updating the
+		// iptables now and will wait for the full resync. That could be temporarily
+		// disrupting.
+		if present := t.CheckRulesPresent("FORWARD", rules); present != nil {
+			if len(present) != len(rules) {
+				log.WithField("present rules", present).
+					Warn("Some early rules on filter FORWARD, skipping adding other, full resync will resolve it.")
+			}
+		} else {
+			if err := t.InsertRulesNow("FORWARD", rules); err != nil {
+				log.WithError(err).
+					Warn("Failed inserting some early rules to filter FORWARD, some flows may get temporarily disrupted.")
+			}
 		}
-		if err := t.InsertRulesNow("OUTPUT", cp); err != nil {
-			log.WithError(err).
-				Warn("Failed inserting some early rules to filter OUTPUT, some flows may get temporarily disrupted.")
+		if present := t.CheckRulesPresent("OUTPUT", rules); present != nil {
+			if len(present) != len(rules) {
+				log.WithField("present rules", present).
+					Warn("Some early rules on filter OUTPUT, skipping adding other, full resync will resolve it.")
+			}
+		} else {
+			if err := t.InsertRulesNow("OUTPUT", rules); err != nil {
+				log.WithError(err).
+					Warn("Failed inserting some early rules to filter OUTPUT, some flows may get temporarily disrupted.")
+			}
 		}
 	}
 }

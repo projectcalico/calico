@@ -718,12 +718,12 @@ func (t *Table) expectedHashesForInsertAppendChain(
 	allHashes = make([]string, len(insertedRules)+len(appendedRules)+numNonCalicoRules)
 	features := t.featureDetector.GetFeatures()
 	if len(insertedRules) > 0 {
-		ourInsertedHashes = calculateRuleHashes(chainName, insertedRules, features)
+		ourInsertedHashes = CalculateRuleHashes(chainName, insertedRules, features)
 	}
 	if len(appendedRules) > 0 {
 		// Add *append* to chainName to produce a unique hash in case append chain/rules are same
 		// as insert chain/rules above.
-		ourAppendedHashes = calculateRuleHashes(chainName+"*appends*", appendedRules, features)
+		ourAppendedHashes = CalculateRuleHashes(chainName+"*appends*", appendedRules, features)
 	}
 	offset := 0
 	if t.insertMode == "append" {
@@ -1356,16 +1356,42 @@ func (t *Table) execIptablesRestore(buf *RestoreInputBuilder) error {
 	return nil
 }
 
+// CheckRulesPresent returns list of rules with the hashes that are already
+// programmed. Return value of nil means that none of the rules are present.
+func (t *Table) CheckRulesPresent(chain string, rules []Rule) []Rule {
+	features := t.featureDetector.GetFeatures()
+
+	hashes := CalculateRuleHashes(chain, rules, features)
+
+	dpHashes, _ := t.getHashesAndRulesFromDataplane()
+	dpHashesSet := set.New[string]()
+	for _, h := range dpHashes[chain] {
+		dpHashesSet.Add(h)
+	}
+
+	var present []Rule
+	for i, r := range rules {
+		if dpHashesSet.Contains(hashes[i]) {
+			present = append(present, r)
+		}
+	}
+
+	return present
+}
+
 // InsertRulesNow insets the given rules immediately without removing or syncing
 // other rules. This is primarily useful when bootstrapping and we cannot wait
 // until we have the full state.
 func (t *Table) InsertRulesNow(chain string, rules []Rule) error {
 	features := t.featureDetector.GetFeatures()
 
+	hashes := CalculateRuleHashes(chain, rules, features)
+
 	buf := new(RestoreInputBuilder)
 	buf.StartTransaction(t.Name)
 	for i, r := range rules {
-		buf.WriteLine(r.RenderInsertAtRuleNumber(chain, i+1, "", features))
+		prefixFrag := t.commentFrag(hashes[i])
+		buf.WriteLine(r.RenderInsertAtRuleNumber(chain, i+1, prefixFrag, features))
 	}
 	buf.EndTransaction()
 
@@ -1410,7 +1436,7 @@ func (t *Table) renderDeleteByValueLine(chainName string, ruleNum int) (string, 
 	return strings.Replace(rule, "-A", "-D", 1), nil
 }
 
-func calculateRuleHashes(chainName string, rules []Rule, features *environment.Features) []string {
+func CalculateRuleHashes(chainName string, rules []Rule, features *environment.Features) []string {
 	chain := Chain{
 		Name:  chainName,
 		Rules: rules,
