@@ -1266,7 +1266,7 @@ func (t *Table) applyUpdates() error {
 		// accessing the buffer's internal array; don't touch the buffer after this point.
 		t.opReporter.RecordOperation(fmt.Sprintf("update-%v-v%d", t.Name, t.IPVersion))
 
-		if err := t.writeOutBuffer(buf, features); err != nil {
+		if err := t.execIptablesRestore(buf); err != nil {
 			return fmt.Errorf("writting out buffer: %w", err)
 		}
 
@@ -1293,7 +1293,8 @@ func (t *Table) applyUpdates() error {
 	return nil
 }
 
-func (t *Table) writeOutBuffer(buf *RestoreInputBuilder, features *environment.Features) error {
+func (t *Table) execIptablesRestore(buf *RestoreInputBuilder) error {
+	features := t.featureDetector.GetFeatures()
 	inputBytes := buf.GetBytesAndReset()
 
 	if log.GetLevel() >= log.DebugLevel {
@@ -1368,7 +1369,7 @@ func (t *Table) InsertRulesNow(chain string, rules []Rule) error {
 	}
 	buf.EndTransaction()
 
-	if err := t.writeOutBuffer(buf, features); err != nil {
+	if err := t.execIptablesRestore(buf); err != nil {
 		return fmt.Errorf("writting out buffer: %w", err)
 	}
 

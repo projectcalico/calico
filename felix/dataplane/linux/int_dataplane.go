@@ -1568,10 +1568,12 @@ func (d *InternalDataplane) setUpIptablesBPFEarly() {
 
 	for _, t := range d.iptablesFilterTables {
 		if err := t.InsertRulesNow("FORWARD", cp); err != nil {
-			log.Warn("Failed inserting some early rules to filter FORWARD, some flows may get temporarily disrupted.")
+			log.WithError(err).
+				Warn("Failed inserting some early rules to filter FORWARD, some flows may get temporarily disrupted.")
 		}
 		if err := t.InsertRulesNow("OUTPUT", cp); err != nil {
-			log.Warn("Failed inserting some early rules to filter OUTPUT, some flows may get temporarily disrupted.")
+			log.WithError(err).
+				Warn("Failed inserting some early rules to filter OUTPUT, some flows may get temporarily disrupted.")
 		}
 	}
 }
