@@ -1649,6 +1649,92 @@ func describeInsertAndNonCalicoChainTests(dataplaneMode string) {
 	})
 }
 
+var _ = Describe("Insert early rules (legacy)", func() {
+	describeInsertEarlyRules("legacy")
+})
+
+var _ = Describe("Insert early rules (nft)", func() {
+	describeInsertEarlyRules("nft")
+})
+
+func describeInsertEarlyRules(dataplaneMode string) {
+	var dataplane *testutils.MockDataplane
+	var table *Table
+	var iptLock *mockMutex
+	var featureDetector *environment.FeatureDetector
+	BeforeEach(func() {
+		dataplane = testutils.NewMockDataplane("filter", map[string][]string{
+			"FORWARD": {"-m comment --comment \"some rule\""},
+		}, dataplaneMode)
+		iptLock = &mockMutex{}
+		featureDetector = environment.NewFeatureDetector(nil)
+		featureDetector.NewCmd = dataplane.NewCmd
+		featureDetector.GetKernelVersionReader = dataplane.GetKernelVersionReader
+		table = NewTable(
+			"filter",
+			4,
+			rules.RuleHashPrefix,
+			iptLock,
+			featureDetector,
+			TableOptions{
+				HistoricChainPrefixes: rules.AllHistoricChainNamePrefixes,
+				NewCmdOverride:        dataplane.NewCmd,
+				SleepOverride:         dataplane.Sleep,
+				NowOverride:           dataplane.Now,
+				BackendMode:           dataplaneMode,
+				LookPathOverride:      testutils.LookPathNoLegacy,
+				OpRecorder:            logutils.NewSummarizer("test loop"),
+			},
+		)
+	})
+
+	It("should insert rules immediately without Apply", func() {
+		rls := []Rule{
+			{Action: DropAction{}, Comment: []string{"my rule"}},
+			{Action: AcceptAction{}, Comment: []string{"my other rule"}},
+		}
+
+		hashes := CalculateRuleHashes("FORWARD", rls, featureDetector.GetFeatures())
+
+		err := table.InsertRulesNow("FORWARD", rls)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(dataplane.Chains).To(Equal(map[string][]string{
+			"FORWARD": {
+				"-m comment --comment \"" + rules.RuleHashPrefix + hashes[0] +
+					"\" -m comment --comment \"my rule\" --jump DROP",
+				"-m comment --comment \"" + rules.RuleHashPrefix + hashes[1] +
+					"\" -m comment --comment \"my other rule\" --jump ACCEPT",
+				"-m comment --comment \"some rule\"",
+			},
+		}))
+	})
+
+	It("should find out if rules already present", func() {
+		rls := []Rule{
+			{Action: DropAction{}, Comment: []string{"my rule"}},
+			{Action: AcceptAction{}, Comment: []string{"my other rule"}},
+		}
+
+		hashes := CalculateRuleHashes("FORWARD", rls, featureDetector.GetFeatures())
+
+		// Init chains
+		dataplane.Chains = map[string][]string{
+			"FORWARD": {
+				"-m comment --comment \"" + rules.RuleHashPrefix + hashes[0] +
+					"\" -m comment --comment \"my rule\" --jump DROP",
+				"-m comment --comment \"" + rules.RuleHashPrefix + hashes[1] +
+					"\" -m comment --comment \"my other rule\" --jump ACCEPT",
+				"-m comment --comment \"some rule\"",
+			},
+		}
+
+		res := table.CheckRulesPresent("FORWARD", rls)
+
+		Expect(res).To(HaveLen(2))
+	})
+}
+
 type mockMutex struct {
 	Held     bool
 	WasTaken bool
