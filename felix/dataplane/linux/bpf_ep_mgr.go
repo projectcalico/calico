@@ -118,9 +118,13 @@ type attachPoint interface {
 	AttachProgram() (int, error)
 	DetachProgram() error
 	Log() *log.Entry
+	PolicyIdx(int) int
+}
+
+type attachPointWithPolicyJumps interface {
+	attachPoint
 	PolicyAllowJumpIdx(int) int
 	PolicyDenyJumpIdx(int) int
-	PolicyIdx(int) int
 }
 
 type bpfDataplane interface {
@@ -2432,23 +2436,27 @@ func (m *bpfEndpointManager) doUpdatePolicyProgram(ap attachPoint, progName stri
 		opts = append(opts, polprog.WithPolicyDebugEnabled())
 	}
 
-	allow := ap.PolicyAllowJumpIdx(int(ipFamily))
-	if allow == -1 {
-		return nil, fmt.Errorf("no allow jump index")
-	}
-
-	deny := ap.PolicyDenyJumpIdx(int(ipFamily))
-	if deny == -1 {
-		return nil, fmt.Errorf("no deny jump index")
-	}
-
 	progsMap := m.bpfmaps.ProgramsMap.MapFD()
 	if ap.HookName() == hook.XDP {
 		progsMap = m.bpfmaps.XDPProgramsMap.MapFD()
 	}
 
+	if apj, ok := ap.(attachPointWithPolicyJumps); ok {
+		allow := apj.PolicyAllowJumpIdx(int(ipFamily))
+		if allow == -1 {
+			return nil, fmt.Errorf("no allow jump index")
+		}
+
+		deny := apj.PolicyDenyJumpIdx(int(ipFamily))
+		if deny == -1 {
+			return nil, fmt.Errorf("no deny jump index")
+		}
+
+		opts = append(opts, polprog.WithAllowDenyJumps(allow, deny))
+	}
+
 	pg := polprog.NewBuilder(m.ipSetIDAlloc, m.bpfmaps.IpsetsMap.MapFD(),
-		m.bpfmaps.StateMap.MapFD(), progsMap, allow, deny, opts...)
+		m.bpfmaps.StateMap.MapFD(), progsMap, opts...)
 	if ipFamily == proto.IPVersion_IPV6 {
 		pg.EnableIPv6Mode()
 	}
