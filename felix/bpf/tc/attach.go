@@ -72,22 +72,6 @@ func (ap *AttachPoint) Log() *log.Entry {
 	})
 }
 
-func (ap *AttachPoint) PolicyAllowJumpIdx(family int) int {
-	if family == 4 && ap.HookLayout4 != nil {
-		return ap.HookLayout4[hook.SubProgTCAllowed]
-	}
-
-	return -1
-}
-
-func (ap *AttachPoint) PolicyDenyJumpIdx(family int) int {
-	if family == 4 && ap.HookLayout4 != nil {
-		return ap.HookLayout4[hook.SubProgTCDrop]
-	}
-
-	return -1
-}
-
 func (ap *AttachPoint) loadObject(ipVer int, file string) (*libbpf.Obj, error) {
 	obj, err := libbpf.OpenObject(file)
 	if err != nil {

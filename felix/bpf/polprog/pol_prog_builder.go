@@ -47,6 +47,7 @@ type Builder struct {
 	forIPv6            bool
 	allowJmp           int
 	denyJmp            int
+	useJmps            bool
 }
 
 type ipSetIDProvider interface {
@@ -59,15 +60,12 @@ type Option func(b *Builder)
 func NewBuilder(
 	ipSetIDProvider ipSetIDProvider,
 	ipsetMapFD, stateMapFD, jumpMapFD maps.FD,
-	allowJmp, denyJmp int,
 	opts ...Option) *Builder {
 	b := &Builder{
 		ipSetIDProvider: ipSetIDProvider,
 		ipSetMapFD:      ipsetMapFD,
 		stateMapFD:      stateMapFD,
 		jumpMapFD:       jumpMapFD,
-		allowJmp:        allowJmp,
-		denyJmp:         denyJmp,
 	}
 
 	for _, option := range opts {
@@ -124,6 +122,9 @@ var (
 	stateOffRuleIDs  = FieldOffset{Offset: stateEventHdrSize + 104, Field: "state->rule_ids"}
 
 	stateOffFlags = FieldOffset{Offset: stateEventHdrSize + 408, Field: "state->flags"}
+
+	skbCb0 = FieldOffset{Offset: 12*4 + 0*4, Field: "skb->cb[0]"}
+	skbCb1 = FieldOffset{Offset: 12*4 + 1*4, Field: "skb->cb[1]"}
 
 	// Compile-time check that IPSetEntrySize hasn't changed; if it changes, the code will need to change.
 	_ = [1]struct{}{{}}[20-ipsets.IPSetEntrySize]
@@ -326,8 +327,12 @@ func (p *Builder) writeProgramFooter(forXDP bool) {
 	// Execute the tail call to drop program
 	p.b.Mov64(R1, R6)                      // First arg is the context.
 	p.b.LoadMapFD(R2, uint32(p.jumpMapFD)) // Second arg is the map.
-	p.b.AddComment(fmt.Sprintf("Deny jump to %d", p.denyJmp))
-	p.b.MovImm32(R3, int32(p.denyJmp)) // Third arg is the index (rather than a pointer to the index).
+	if p.useJmps {
+		p.b.AddComment(fmt.Sprintf("Deny jump to %d", p.denyJmp))
+		p.b.MovImm32(R3, int32(p.denyJmp)) // Third arg is the index (rather than a pointer to the index).
+	} else {
+		p.b.Load32(R3, R6, skbCb1) // Third arg is the index from skb->cb[1]).
+	}
 	p.b.Call(HelperTailCall)
 
 	// Fall through if tail call fails.
@@ -353,8 +358,12 @@ func (p *Builder) writeProgramFooter(forXDP bool) {
 		// Execute the tail call.
 		p.b.Mov64(R1, R6)                      // First arg is the context.
 		p.b.LoadMapFD(R2, uint32(p.jumpMapFD)) // Second arg is the map.
-		p.b.AddComment(fmt.Sprintf("Allow jump to %d", p.allowJmp))
-		p.b.MovImm32(R3, int32(p.allowJmp)) // Third arg is the index (rather than a pointer to the index).
+		if p.useJmps {
+			p.b.AddComment(fmt.Sprintf("Allow jump to %d", p.allowJmp))
+			p.b.MovImm32(R3, int32(p.allowJmp)) // Third arg is the index (rather than a pointer to the index).
+		} else {
+			p.b.Load32(R3, R6, skbCb0) // Third arg is the index from skb->cb[0]).
+		}
 		p.b.Call(HelperTailCall)
 
 		// Fall through if tail call fails.
@@ -1042,6 +1051,14 @@ func protocolToNumber(protocol *proto.Protocol) uint8 {
 func WithPolicyDebugEnabled() Option {
 	return func(b *Builder) {
 		b.policyDebugEnabled = true
+	}
+}
+
+func WithAllowDenyJumps(allow, deny int) Option {
+	return func(b *Builder) {
+		b.allowJmp = allow
+		b.denyJmp = deny
+		b.useJmps = true
 	}
 }
 
