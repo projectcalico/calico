@@ -322,6 +322,7 @@ type InternalDataplane struct {
 	config Config
 
 	debugHangC <-chan time.Time
+	retryImmC  chan struct{}
 
 	xdpState          *xdpState
 	sockmapState      *sockmapState
@@ -382,6 +383,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		config:         config,
 		applyThrottle:  throttle.New(10),
 		loopSummarizer: logutils.NewSummarizer("dataplane reconciliation loops"),
+		retryImmC:      make(chan struct{}, 1), // alow non-blocking write
 	}
 	dp.applyThrottle.Refill() // Allow the first apply() immediately.
 	dp.ifaceMonitor.StateCallback = dp.onIfaceStateChange
@@ -1300,6 +1302,14 @@ type ifaceStateUpdate struct {
 	Index int
 }
 
+func NewIfaceStateUpdate(name string, state ifacemonitor.State, index int) any {
+	return &ifaceStateUpdate{
+		Name:  name,
+		State: state,
+		Index: index,
+	}
+}
+
 // Check if current felix ipvs config is correct when felix gets a kube-ipvs0 interface update.
 // If KubeIPVSInterface is UP and felix ipvs support is disabled (kube-proxy switched from iptables to ipvs mode),
 // or if KubeIPVSInterface is DOWN and felix ipvs support is enabled (kube-proxy switched from ipvs to iptables mode),
@@ -1334,6 +1344,13 @@ type ifaceAddrsUpdate struct {
 	Addrs set.Set[string]
 }
 
+func NewIfaceAddrsUpdate(name string, ips ...string) any {
+	return &ifaceAddrsUpdate{
+		Name:  name,
+		Addrs: set.FromArray[string](ips),
+	}
+}
+
 func (d *InternalDataplane) SendMessage(msg interface{}) error {
 	d.toDataplane <- msg
 	return nil
@@ -1366,6 +1383,7 @@ func (d *InternalDataplane) doStaticDataplaneConfig() {
 	d.configureKernel()
 
 	if d.config.BPFEnabled {
+		d.setUpIptablesBPFEarly()
 		d.setUpIptablesBPF()
 	} else {
 		d.setUpIptablesNormal()
@@ -1380,6 +1398,18 @@ func (d *InternalDataplane) doStaticDataplaneConfig() {
 	} else {
 		log.Info("IPIP disabled. Not starting tunnel update thread.")
 	}
+}
+
+func bpfMarkPreestablishedFlowsRules() []iptables.Rule {
+	return []iptables.Rule{{
+		Match: iptables.Match().
+			ConntrackState("ESTABLISHED,RELATED"),
+		Comment: []string{"Mark pre-established flows."},
+		Action: iptables.SetMaskedMarkAction{
+			Mark: tcdefs.MarkLinuxConntrackEstablished,
+			Mask: tcdefs.MarkLinuxConntrackEstablishedMask,
+		},
+	}}
 }
 
 func (d *InternalDataplane) setUpIptablesBPF() {
@@ -1415,17 +1445,7 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 		)
 
 		// Mark traffic leaving the host that already has an established linux conntrack entry.
-		outputRules = append(outputRules,
-			iptables.Rule{
-				Match: iptables.Match().
-					ConntrackState("ESTABLISHED,RELATED"),
-				Comment: []string{"Mark pre-established host flows."},
-				Action: iptables.SetMaskedMarkAction{
-					Mark: tcdefs.MarkLinuxConntrackEstablished,
-					Mask: tcdefs.MarkLinuxConntrackEstablishedMask,
-				},
-			},
-		)
+		outputRules = append(outputRules, bpfMarkPreestablishedFlowsRules()...)
 
 		for _, prefix := range rulesConfig.WorkloadIfacePrefixes {
 			fwdRules = append(fwdRules,
@@ -1474,17 +1494,7 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 			}
 		} else {
 			// Let the BPF programs know if Linux conntrack knows about the flow.
-			fwdRules = append(fwdRules,
-				iptables.Rule{
-					Match: iptables.Match().
-						ConntrackState("ESTABLISHED,RELATED"),
-					Comment: []string{"Mark pre-established flows."},
-					Action: iptables.SetMaskedMarkAction{
-						Mark: tcdefs.MarkLinuxConntrackEstablished,
-						Mask: tcdefs.MarkLinuxConntrackEstablishedMask,
-					},
-				},
-			)
+			fwdRules = append(fwdRules, bpfMarkPreestablishedFlowsRules()...)
 			// The packet may be about to go to a local workload.  However, the local workload may not have a BPF
 			// program attached (yet).  To catch that case, we send the packet through a dispatch chain.  We only
 			// add interfaces to the dispatch chain if the BPF program is in place.
@@ -1558,6 +1568,26 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 				Comment: []string{"Mark connections with ExtToServiceConnmark"},
 				Action:  iptables.SetConnMarkAction{Mark: mark, Mask: mark},
 			}})
+		}
+	}
+}
+
+// setUpIptablesBPFEarly that need to be written asap
+func (d *InternalDataplane) setUpIptablesBPFEarly() {
+	rules := bpfMarkPreestablishedFlowsRules()
+	cp := []iptables.Rule{}
+
+	for _, r := range rules {
+		r.Comment = append(r.Comment, "cali:BOOTSTRAP")
+		cp = append(cp, r)
+	}
+
+	for _, t := range d.iptablesFilterTables {
+		if err := t.InsertRulesNow("FORWARD", cp); err != nil {
+			log.Warn("Failed inserting some early rules to filter FORWARD, some flows may get temporarily disrupted.")
+		}
+		if err := t.InsertRulesNow("OUTPUT", cp); err != nil {
+			log.Warn("Failed inserting some early rules to filter OUTPUT, some flows may get temporarily disrupted.")
 		}
 	}
 }
@@ -2181,8 +2211,8 @@ func (d *InternalDataplane) loopReportingStatus() {
 	}
 }
 
-// iptablesTable is a shim interface for iptables.Table.
-type iptablesTable interface {
+// IptablesTable is a shim interface for iptables.Table.
+type IptablesTable interface {
 	UpdateChain(chain *iptables.Chain)
 	UpdateChains([]*iptables.Chain)
 	RemoveChains([]*iptables.Chain)
