@@ -341,17 +341,18 @@ func setupAndRun(logger testLogger, loglevel, section string, rules *polprog.Rul
 	if rules != nil {
 		jmpMap := jumpMap
 		polMap := policyMap
+		popts := []polprog.Option{}
 		if topts.xdp {
 			jmpMap = jumpMapXDP
 			polMap = policyMapXDP
+			popts = append(popts, polprog.WithAllowDenyJumps(tcdefs.ProgIndexAllowed, tcdefs.ProgIndexDrop))
 		}
 		alloc := &forceAllocator{alloc: idalloc.New()}
 		ipsMapFD := ipsMap.MapFD()
 		Expect(ipsMapFD).NotTo(BeZero())
 		stateMapFD := stateMap.MapFD()
 		Expect(stateMapFD).NotTo(BeZero())
-		pg := polprog.NewBuilder(alloc, ipsMapFD, stateMapFD, jmpMap.MapFD(),
-			tcdefs.ProgIndexAllowed, tcdefs.ProgIndexDrop)
+		pg := polprog.NewBuilder(alloc, ipsMapFD, stateMapFD, jmpMap.MapFD(), popts...)
 		insns, err := pg.Instructions(*rules)
 		Expect(err).NotTo(HaveOccurred())
 		var polProgFD bpf.ProgFD
@@ -1418,7 +1419,7 @@ func TestJumpMap(t *testing.T) {
 
 	jumpMapFD := jumpMap.MapFD()
 	pg := polprog.NewBuilder(idalloc.New(), ipsMap.MapFD(), stateMap.MapFD(), jumpMapFD,
-		tcdefs.ProgIndexAllowed, tcdefs.ProgIndexDrop)
+		polprog.WithAllowDenyJumps(tcdefs.ProgIndexAllowed, tcdefs.ProgIndexDrop))
 	rules := polprog.Rules{}
 	insns, err := pg.Instructions(rules)
 	Expect(err).NotTo(HaveOccurred())

@@ -123,7 +123,7 @@ func TestLoadKitchenSinkPolicy(t *testing.T) {
 	cleanIPSetMap()
 
 	pg := polprog.NewBuilder(alloc, ipsMap.MapFD(), stateMap.MapFD(), jumpMap.MapFD(),
-		tcdefs.ProgIndexAllowed, tcdefs.ProgIndexDrop)
+		polprog.WithAllowDenyJumps(tcdefs.ProgIndexAllowed, tcdefs.ProgIndexDrop))
 	insns, err := pg.Instructions(polprog.Rules{
 		Tiers: []polprog.Tier{{
 			Name: "base tier",
@@ -2423,7 +2423,7 @@ func runTest(t *testing.T, tp testPolicy) {
 
 	// Build the program.
 	pg := polprog.NewBuilder(forceAlloc, ipsMap.MapFD(), testStateMap.MapFD(), jumpMap.MapFD(),
-		tcdefs.ProgIndexAllowed, tcdefs.ProgIndexDrop)
+		polprog.WithAllowDenyJumps(tcdefs.ProgIndexAllowed, tcdefs.ProgIndexDrop))
 	if tp.ForIPv6() {
 		pg.EnableIPv6Mode()
 	}

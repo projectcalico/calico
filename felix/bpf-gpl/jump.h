@@ -89,6 +89,7 @@ struct bpf_map_def_extended __attribute__((section("maps"))) cali_policy_map = {
 };
 
 #define CALI_JUMP_TO_POLICY(ctx) bpf_tail_call((ctx)->xdp, &cali_policy_map, (ctx)->xdp_globals->jumps[PROG_INDEX_POLICY])
+
 #else
 
 #define cali_policy_map map_symbol(cali_pols, 2)
@@ -101,7 +102,9 @@ struct bpf_map_def_extended __attribute__((section("maps"))) cali_policy_map = {
 };
 
 #define CALI_JUMP_TO_POLICY(ctx) do {	\
-	CALI_DEBUG("jump to policy prog at %d\n", (ctx)->globals->jumps[PROG_INDEX_POLICY]);		\
+	(ctx)->skb->cb[0] = (ctx)->globals->jumps[PROG_INDEX_ALLOWED];				\
+	(ctx)->skb->cb[1] = (ctx)->globals->jumps[PROG_INDEX_DROP];				\
+	CALI_DEBUG("jump to policy prog at %d\n", (ctx)->globals->jumps[PROG_INDEX_POLICY]);	\
 	bpf_tail_call((ctx)->skb, &cali_policy_map, (ctx)->globals->jumps[PROG_INDEX_POLICY]);	\
 } while (0)
 
