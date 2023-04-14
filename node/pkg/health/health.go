@@ -30,8 +30,10 @@ import (
 	"github.com/projectcalico/calico/node/pkg/health/bird"
 )
 
-var felixReadinessEp string
-var felixLivenessEp string
+var (
+	felixReadinessEp string
+	felixLivenessEp  string
+)
 
 func init() {
 	felixPort := os.Getenv("FELIX_HEALTHPORT")
@@ -78,6 +80,16 @@ func Run(bird, bird6, felixReady, felixLive, birdLive, bird6Live bool, threshold
 			if err := checkServiceIsLive([]string{"confd", "bird"}); err != nil {
 				return fmt.Errorf("calico/node is not ready: bird/confd is not live: %+v", err)
 			}
+
+			// Check that BIRD is actually responding to commands.
+			out, err := exec.Command("/usr/bin/birdcl", "-s", "/var/run/calico/bird.ctl", "show", "status").Output()
+			if err != nil {
+				return fmt.Errorf("calico/node is not ready: bird is not live: %+v", err)
+			}
+			cmdOutput := string(out)
+			if !strings.HasPrefix(cmdOutput, "BIRD") {
+				return fmt.Errorf("calico/node is not ready: bad response from bird: %s", cmdOutput)
+			}
 			return nil
 		})
 	}
@@ -86,6 +98,16 @@ func Run(bird, bird6, felixReady, felixLive, birdLive, bird6Live bool, threshold
 		g.Go(func() error {
 			if err := checkServiceIsLive([]string{"confd", "bird6"}); err != nil {
 				return fmt.Errorf("calico/node is not ready: bird6/confd is not live: %+v", err)
+			}
+
+			// Check that BIRD is actually responding to commands.
+			out, err := exec.Command("/usr/bin/birdcl", "-s", "/var/run/calico/bird6.ctl", "show", "status").Output()
+			if err != nil {
+				return fmt.Errorf("calico/node is not ready: bird6 is not live: %+v", err)
+			}
+			cmdOutput := string(out)
+			if !strings.HasPrefix(cmdOutput, "BIRD") {
+				return fmt.Errorf("calico/node is not ready: bad response from bird6: %s", cmdOutput)
 			}
 			return nil
 		})
@@ -140,7 +162,7 @@ func checkService(serviceName string) error {
 		return err
 	}
 
-	var cmdOutput = string(out)
+	cmdOutput := string(out)
 	if !strings.HasPrefix(cmdOutput, "run") {
 		return fmt.Errorf(fmt.Sprintf("Service %s is not running. Output << %s >>", serviceName, strings.Trim(cmdOutput, "\n")))
 	}
