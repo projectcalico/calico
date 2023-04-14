@@ -718,12 +718,12 @@ func (t *Table) expectedHashesForInsertAppendChain(
 	allHashes = make([]string, len(insertedRules)+len(appendedRules)+numNonCalicoRules)
 	features := t.featureDetector.GetFeatures()
 	if len(insertedRules) > 0 {
-		ourInsertedHashes = calculateRuleHashes(chainName, insertedRules, features)
+		ourInsertedHashes = CalculateRuleHashes(chainName, insertedRules, features)
 	}
 	if len(appendedRules) > 0 {
 		// Add *append* to chainName to produce a unique hash in case append chain/rules are same
 		// as insert chain/rules above.
-		ourAppendedHashes = calculateRuleHashes(chainName+"*appends*", appendedRules, features)
+		ourAppendedHashes = CalculateRuleHashes(chainName+"*appends*", appendedRules, features)
 	}
 	offset := 0
 	if t.insertMode == "append" {
@@ -1266,63 +1266,10 @@ func (t *Table) applyUpdates() error {
 		// accessing the buffer's internal array; don't touch the buffer after this point.
 		t.opReporter.RecordOperation(fmt.Sprintf("update-%v-v%d", t.Name, t.IPVersion))
 
-		inputBytes := buf.GetBytesAndReset()
-
-		if log.GetLevel() >= log.DebugLevel {
-			// Only convert (potentially very large slice) to string at debug level.
-			inputStr := string(inputBytes)
-			t.logCxt.WithField("iptablesInput", inputStr).Debug("Writing to iptables")
+		if err := t.execIptablesRestore(buf); err != nil {
+			return fmt.Errorf("writting out buffer: %w", err)
 		}
 
-		var outputBuf, errBuf bytes.Buffer
-		args := []string{"--noflush", "--verbose"}
-		if features.RestoreSupportsLock {
-			// Versions of iptables-restore that support the xtables lock also make it impossible to disable.  Make
-			// sure that we configure it to retry and configure for a short retry interval (the default is to try to
-			// acquire the lock only once).
-			lockTimeout := t.lockTimeout.Seconds()
-			if lockTimeout <= 0 {
-				// Before iptables-restore added lock support, we were able to disable the lock completely, which
-				// was indicated by a value <=0 (and was our default).  Newer versions of iptables-restore require the
-				// lock so we override the default and set it to 10s.
-				lockTimeout = 10
-			}
-			lockProbeMicros := t.lockProbeInterval.Nanoseconds() / 1000
-			timeoutStr := fmt.Sprintf("%.0f", lockTimeout)
-			intervalStr := fmt.Sprintf("%d", lockProbeMicros)
-			args = append(args,
-				"--wait", timeoutStr, // seconds
-				"--wait-interval", intervalStr, // microseconds
-			)
-			log.WithFields(log.Fields{
-				"timeoutSecs":         timeoutStr,
-				"probeIntervalMicros": intervalStr,
-			}).Debug("Using native iptables-restore xtables lock.")
-		}
-		cmd := t.newCmd(t.iptablesRestoreCmd, args...)
-		cmd.SetStdin(bytes.NewReader(inputBytes))
-		cmd.SetStdout(&outputBuf)
-		cmd.SetStderr(&errBuf)
-		countNumRestoreCalls.Inc()
-		// Note: calicoXtablesLock will be a dummy lock if our xtables lock is disabled (i.e. if iptables-restore
-		// supports the xtables lock itself, or if our implementation is disabled by config.
-		t.calicoXtablesLock.Lock()
-		err := cmd.Run()
-		t.calicoXtablesLock.Unlock()
-		if err != nil {
-			// To log out the input, we must convert to string here since, after we return, the buffer can be re-used
-			// (and the logger may convert to string on a background thread).
-			inputStr := string(inputBytes)
-			t.logCxt.WithFields(log.Fields{
-				"output":      outputBuf.String(),
-				"errorOutput": errBuf.String(),
-				"error":       err,
-				"input":       inputStr,
-			}).Warn("Failed to execute ip(6)tables-restore command")
-			t.inSyncWithDataPlane = false
-			countNumRestoreErrors.Inc()
-			return err
-		}
 		t.lastWriteTime = t.timeNow()
 		t.postWriteInterval = t.initialPostWriteInterval
 	}
@@ -1342,6 +1289,115 @@ func (t *Table) applyUpdates() error {
 		}
 	}
 	t.chainToFullRules = newChainToFullRules
+
+	return nil
+}
+
+func (t *Table) execIptablesRestore(buf *RestoreInputBuilder) error {
+	features := t.featureDetector.GetFeatures()
+	inputBytes := buf.GetBytesAndReset()
+
+	if log.GetLevel() >= log.DebugLevel {
+		// Only convert (potentially very large slice) to string at debug level.
+		inputStr := string(inputBytes)
+		t.logCxt.WithField("iptablesInput", inputStr).Debug("Writing to iptables")
+	}
+
+	var outputBuf, errBuf bytes.Buffer
+	args := []string{"--noflush", "--verbose"}
+	if features.RestoreSupportsLock {
+		// Versions of iptables-restore that support the xtables lock also make it impossible to disable.  Make
+		// sure that we configure it to retry and configure for a short retry interval (the default is to try to
+		// acquire the lock only once).
+		lockTimeout := t.lockTimeout.Seconds()
+		if lockTimeout <= 0 {
+			// Before iptables-restore added lock support, we were able to disable the lock completely, which
+			// was indicated by a value <=0 (and was our default).  Newer versions of iptables-restore require the
+			// lock so we override the default and set it to 10s.
+			lockTimeout = 10
+		}
+		lockProbeMicros := t.lockProbeInterval.Nanoseconds() / 1000
+		timeoutStr := fmt.Sprintf("%.0f", lockTimeout)
+		intervalStr := fmt.Sprintf("%d", lockProbeMicros)
+		args = append(args,
+			"--wait", timeoutStr, // seconds
+			"--wait-interval", intervalStr, // microseconds
+		)
+		log.WithFields(log.Fields{
+			"timeoutSecs":         timeoutStr,
+			"probeIntervalMicros": intervalStr,
+		}).Debug("Using native iptables-restore xtables lock.")
+	}
+	cmd := t.newCmd(t.iptablesRestoreCmd, args...)
+	cmd.SetStdin(bytes.NewReader(inputBytes))
+	cmd.SetStdout(&outputBuf)
+	cmd.SetStderr(&errBuf)
+	countNumRestoreCalls.Inc()
+	// Note: calicoXtablesLock will be a dummy lock if our xtables lock is disabled (i.e. if iptables-restore
+	// supports the xtables lock itself, or if our implementation is disabled by config.
+	t.calicoXtablesLock.Lock()
+	err := cmd.Run()
+	t.calicoXtablesLock.Unlock()
+	if err != nil {
+		// To log out the input, we must convert to string here since, after we return, the buffer can be re-used
+		// (and the logger may convert to string on a background thread).
+		inputStr := string(inputBytes)
+		t.logCxt.WithFields(log.Fields{
+			"output":      outputBuf.String(),
+			"errorOutput": errBuf.String(),
+			"error":       err,
+			"input":       inputStr,
+		}).Warn("Failed to execute ip(6)tables-restore command")
+		t.inSyncWithDataPlane = false
+		countNumRestoreErrors.Inc()
+		return err
+	}
+
+	return nil
+}
+
+// CheckRulesPresent returns list of rules with the hashes that are already
+// programmed. Return value of nil means that none of the rules are present.
+func (t *Table) CheckRulesPresent(chain string, rules []Rule) []Rule {
+	features := t.featureDetector.GetFeatures()
+
+	hashes := CalculateRuleHashes(chain, rules, features)
+
+	dpHashes, _ := t.getHashesAndRulesFromDataplane()
+	dpHashesSet := set.New[string]()
+	for _, h := range dpHashes[chain] {
+		dpHashesSet.Add(h)
+	}
+
+	var present []Rule
+	for i, r := range rules {
+		if dpHashesSet.Contains(hashes[i]) {
+			present = append(present, r)
+		}
+	}
+
+	return present
+}
+
+// InsertRulesNow insets the given rules immediately without removing or syncing
+// other rules. This is primarily useful when bootstrapping and we cannot wait
+// until we have the full state.
+func (t *Table) InsertRulesNow(chain string, rules []Rule) error {
+	features := t.featureDetector.GetFeatures()
+
+	hashes := CalculateRuleHashes(chain, rules, features)
+
+	buf := new(RestoreInputBuilder)
+	buf.StartTransaction(t.Name)
+	for i, r := range rules {
+		prefixFrag := t.commentFrag(hashes[i])
+		buf.WriteLine(r.RenderInsertAtRuleNumber(chain, i+1, prefixFrag, features))
+	}
+	buf.EndTransaction()
+
+	if err := t.execIptablesRestore(buf); err != nil {
+		return fmt.Errorf("writting out buffer: %w", err)
+	}
 
 	return nil
 }
@@ -1380,7 +1436,7 @@ func (t *Table) renderDeleteByValueLine(chainName string, ruleNum int) (string, 
 	return strings.Replace(rule, "-A", "-D", 1), nil
 }
 
-func calculateRuleHashes(chainName string, rules []Rule, features *environment.Features) []string {
+func CalculateRuleHashes(chainName string, rules []Rule, features *environment.Features) []string {
 	chain := Chain{
 		Name:  chainName,
 		Rules: rules,
