@@ -312,7 +312,6 @@ func (d *restoreCmd) Run() error {
 			d.Dataplane.ChainMods.Add(chainMod{name: chainName, ruleNum: len(chains[chainName])})
 		case "-I", "--insert":
 			chainName = parts[1]
-			rest := strings.Join(parts[2:], " ")
 			Expect(chains[chainName]).NotTo(BeNil(), "Insert to unknown chain: "+chainName)
 			chains[chainName] = append(chains[chainName], "") // Make room
 			chain := chains[chainName]
@@ -320,16 +319,14 @@ func (d *restoreCmd) Run() error {
 			// If the first arg after the chain name is a line number, then insert by line number.
 			if lineNum, err := strconv.Atoi(parts[2]); err == nil {
 				ruleIdx := lineNum - 1 // 0-indexed
-				chain = append(chain, "")
 				copy(chain[ruleIdx+1:], chain[ruleIdx:])
-				chain[ruleIdx] = rest
+				chain[ruleIdx] = strings.Join(parts[3:], " ")
+				chains[chainName] = chain
 				d.Dataplane.ChainMods.Add(chainMod{name: chainName, ruleNum: lineNum})
 			} else {
 				// Otherwise insert at the top.
-				for i := len(chain) - 1; i > 0; i-- {
-					chain[i] = chain[i-1]
-				}
-				chain[0] = rest
+				copy(chain[1:], chain[:len(chain)-1])
+				chain[0] = strings.Join(parts[2:], " ")
 				d.Dataplane.ChainMods.Add(chainMod{name: chainName, ruleNum: 1})
 			}
 		case "-R", "--replace":
