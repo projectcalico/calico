@@ -1036,7 +1036,7 @@ func (r *RouteTable) syncL2RoutesForLink(ifaceName string) error {
 
 	for _, existing := range existingNeigh {
 		if existing.HardwareAddr == nil {
-			log.WithField("entry", entry).Debug("Ignoring existing ARP entry with no hardware addr")
+			log.WithField("neighbor", existing).Debug("Ignoring existing ARP entry with no hardware addr")
 			continue
 		}
 		if _, ok := expected[existing.HardwareAddr.String()]; !ok {
