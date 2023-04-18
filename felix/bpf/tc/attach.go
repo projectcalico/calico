@@ -361,6 +361,8 @@ func (ap *AttachPoint) ConfigureProgram(m *libbpf.Map) error {
 		WgPort:       ap.WgPort,
 		NatIn:        ap.NATin,
 		NatOut:       ap.NATout,
+
+		LogFilterJmp: 0xffffffff, /* uint32(-1) */
 	}
 	var err error
 	globalData.HostIP, err = convertIPToUint32(ap.HostIP)
@@ -399,6 +401,10 @@ func (ap *AttachPoint) ConfigureProgram(m *libbpf.Map) error {
 		if err != nil {
 			return err
 		}
+	}
+
+	for i := 0; i < len(globalData.Jumps); i++ {
+		globalData.Jumps[i] = 0xffffffff /* uint32(-1) */
 	}
 
 	if ap.HookLayout4 != nil {

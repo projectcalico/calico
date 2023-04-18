@@ -37,6 +37,7 @@ const (
 	SubProgTCIcmp
 	SubProgTCDrop
 	SubProgTCHostCtConflict
+	SubProgTCMainDebug
 
 	SubProgXDPMain    = SubProgTCMain
 	SubProgXDPPolicy  = SubProgTCPolicy
@@ -162,9 +163,12 @@ func (pm *ProgramsMap) newLayout(at AttachType, obj *libbpf.Obj) (Layout, error)
 
 	l := make(Layout)
 
+	offset := 0
 	subs := tcSubProgNames
 	if at.Hook == XDP {
 		subs = xdpSubProgNames
+	} else if at.LogLevel == "debug" {
+		offset = int(SubProgTCMainDebug)
 	}
 
 	for idx, subprog := range subs {
@@ -183,7 +187,11 @@ func (pm *ProgramsMap) newLayout(at AttachType, obj *libbpf.Obj) (Layout, error)
 		}
 		log.Debugf("generic file %s prog %s loaded at %d", objectFiles[at], subprog, pm.nextIdx)
 
-		l[SubProg(idx)] = pm.nextIdx
+		i := idx + offset
+		if SubProg(idx) == SubProgTCPolicy {
+			i = idx // Debug programs share the same policy
+		}
+		l[SubProg(i)] = pm.nextIdx
 		pm.nextIdx++
 	}
 
