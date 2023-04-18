@@ -166,6 +166,12 @@ var xdpJumpMapIndexes = map[string]map[int]string{
 		tcdefs.ProgIndexAllowed: "calico_xdp_accepted_entrypoint",
 		tcdefs.ProgIndexDrop:    "calico_xdp_drop",
 	},
+	"IPv4 debug": map[int]string{
+		tcdefs.ProgIndexMain:    "calico_xdp_main",
+		tcdefs.ProgIndexPolicy:  "calico_xdp_norm_pol_tail",
+		tcdefs.ProgIndexAllowed: "calico_xdp_accepted_entrypoint",
+		tcdefs.ProgIndexDrop:    "calico_xdp_drop",
+	},
 }
 
 var tcJumpMapIndexes = map[string][]int{
@@ -177,12 +183,20 @@ var tcJumpMapIndexes = map[string][]int{
 		tcdefs.ProgIndexDrop,
 		tcdefs.ProgIndexHostCtConflict,
 	},
+	"IPv4 debug": []int{
+		tcdefs.ProgIndexMainDebug,
+		tcdefs.ProgIndexPolicyDebug,
+		tcdefs.ProgIndexAllowedDebug,
+		tcdefs.ProgIndexIcmpDebug,
+		tcdefs.ProgIndexDropDebug,
+		tcdefs.ProgIndexHostCtConflictDebug,
+	},
 	"IPv6": []int{
-		tcdefs.ProgIndexV6Prologue,
-		tcdefs.ProgIndexV6Policy,
-		tcdefs.ProgIndexV6Allowed,
-		tcdefs.ProgIndexV6Icmp,
-		tcdefs.ProgIndexV6Drop,
+		tcdefs.ProgIndexV6PrologueDebug,
+		tcdefs.ProgIndexV6PolicyDebug,
+		tcdefs.ProgIndexV6AllowedDebug,
+		tcdefs.ProgIndexV6IcmpDebug,
+		tcdefs.ProgIndexV6DropDebug,
 	},
 }
 
@@ -323,7 +337,12 @@ func setupAndRun(logger testLogger, loglevel, section string, rules *polprog.Rul
 	err = bin.WriteToFile(tempObj)
 	Expect(err).NotTo(HaveOccurred())
 
-	o, err := objLoad(tempObj, bpfFsDir, "IPv4", topts, rules != nil, true)
+	ipFamily := "IPv4"
+	if loglevel == "debug" {
+		ipFamily += " debug"
+	}
+
+	o, err := objLoad(tempObj, bpfFsDir, ipFamily, topts, rules != nil, true)
 	Expect(err).NotTo(HaveOccurred())
 	defer o.Close()
 
@@ -558,10 +577,18 @@ func ipToU32(ip net.IP) uint32 {
 
 func tcUpdateJumpMap(obj *libbpf.Obj, progs []int, hasPolicyProg, hasHostConflictProg bool) error {
 	for _, idx := range progs {
-		if (idx == tcdefs.ProgIndexPolicy || idx == tcdefs.ProgIndexV6Policy) && !hasPolicyProg {
-			continue
+		switch idx {
+		case
+			tcdefs.ProgIndexPolicy,
+			tcdefs.ProgIndexPolicyDebug,
+			tcdefs.ProgIndexV6Policy,
+			tcdefs.ProgIndexV6PolicyDebug:
+
+			if !hasPolicyProg {
+				continue
+			}
 		}
-		if idx == tcdefs.ProgIndexHostCtConflict && !hasHostConflictProg {
+		if (idx == tcdefs.ProgIndexHostCtConflict || idx == tcdefs.ProgIndexHostCtConflictDebug) && !hasHostConflictProg {
 			continue
 		}
 		log.WithField("prog", tcdefs.ProgramNames[idx]).WithField("idx", idx).Debug("UpdateJumpMap")
@@ -659,7 +686,7 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 	progDir := bpfFsDir
 	policyIdx := tcdefs.ProgIndexPolicy
 
-	if ipFamily == "IPv6" {
+	if strings.HasPrefix(ipFamily, "IPv6") {
 		progDir += "_v6"
 		policyIdx = tcdefs.ProgIndexV6Policy
 	}
@@ -692,6 +719,7 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 	}
 
 	if !forXDP {
+		log.WithField("ipFamily", ipFamily).Debug("Udating jump map")
 		err = tcUpdateJumpMap(obj, tcJumpMapIndexes[ipFamily], false, hasHostConflictProg)
 		if err != nil && !strings.Contains(err.Error(), "error updating calico_tc_host_ct_conflict program") {
 			goto out
