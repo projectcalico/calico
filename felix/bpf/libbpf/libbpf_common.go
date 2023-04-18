@@ -28,10 +28,11 @@ type TcGlobalData struct {
 	WgPort       uint16
 	NatIn        uint32
 	NatOut       uint32
-	Jumps        [16]uint32
+	LogFilterJmp uint32
+	Jumps        [32]uint32
 }
 
 type XDPGlobalData struct {
 	IfaceName string
-	Jumps     [16]uint32
+	Jumps     [32]uint32
 }
