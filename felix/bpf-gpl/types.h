@@ -152,6 +152,25 @@ struct cali_tc_ctx {
   void *counters;
 };
 
+#define DECLARE_TC_CTX(NAME, ...)						\
+	struct cali_tc_ctx NAME = ({						\
+			struct cali_tc_state *state = state_get();		\
+			if (!state) {						\
+				CALI_DEBUG("State map lookup failed: DROP\n");	\
+				bpf_exit(TC_ACT_SHOT);				\
+			}							\
+			void * counters = counters_get(skb->ifindex);		\
+			if (!counters) {						\
+				CALI_DEBUG("no counters: DROP\n");		\
+				bpf_exit(TC_ACT_SHOT);				\
+			}							\
+			(struct cali_tc_ctx) {					\
+				.state = state,					\
+				.counters = counters,				\
+				__VA_ARGS__					\
+			};							\
+	})									\
+
 static CALI_BPF_INLINE struct iphdr* ip_hdr(struct cali_tc_ctx *ctx)
 {
 	return (struct iphdr *)ctx->ip_header;

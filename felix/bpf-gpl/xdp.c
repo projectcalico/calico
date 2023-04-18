@@ -36,6 +36,7 @@ static CALI_BPF_INLINE int calico_xdp(struct xdp_md *xdp)
 	 * we use to pass data from one program to the next via tail calls. */
 	struct cali_tc_ctx ctx = {
 		.state = state_get(),
+		.counters = counters_get(xdp->ingress_ifindex),
 		.xdp = xdp,
 		.fwd = {
 			.res = XDP_PASS, // TODO: Adjust based on the design
@@ -47,6 +48,10 @@ static CALI_BPF_INLINE int calico_xdp(struct xdp_md *xdp)
 	if (!ctx.state) {
 		CALI_DEBUG("State map lookup failed: PASS\n");
 		return XDP_PASS; // TODO: Adjust base on the design
+	}
+	if (!ctx.counters) {
+		CALI_DEBUG("No counters: DROP\n");
+		return XDP_DROP;
 	}
 	__builtin_memset(ctx.state, 0, sizeof(*ctx.state));
 
@@ -134,6 +139,10 @@ int calico_xdp_accepted_entrypoint(struct xdp_md *xdp)
 
 	if (!ctx.counters) {
 		CALI_DEBUG("Counters map lookup failed: DROP\n");
+		return XDP_DROP;
+	}
+	if (!ctx.counters) {
+		CALI_DEBUG("No counters: DROP\n");
 		return XDP_DROP;
 	}
 
