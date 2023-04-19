@@ -68,15 +68,14 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 		CALI_INFO("Final result=ALLOW (%d). Bypass mark set.\n", CALI_REASON_BYPASS);
 		if  (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_DEBUG) {
 			/* This generates a bit more richer output for logging */
-			struct cali_tc_ctx ctx = {
-				.state = state_get(),
+			DECLARE_TC_CTX(ctx,
 				.skb = skb,
 				.fwd = {
 					.res = TC_ACT_UNSPEC,
 					.reason = CALI_REASON_UNKNOWN,
 				},
 				.ipheader_len = IP_SIZE,
-			};
+			);
 			parse_packet_ip(&ctx);
 		}
 		return TC_ACT_UNSPEC;
@@ -117,19 +116,14 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 
 	/* Initialise the context, which is stored on the stack, and the state, which
 	 * we use to pass data from one program to the next via tail calls. */
-	struct cali_tc_ctx ctx = {
-		.state = state_get(),
+	DECLARE_TC_CTX(ctx,
 		.skb = skb,
 		.fwd = {
 			.res = TC_ACT_UNSPEC,
 			.reason = CALI_REASON_UNKNOWN,
 		},
 		.ipheader_len = IP_SIZE,
-	};
-	if (!ctx.state) {
-		CALI_DEBUG("State map lookup failed: DROP\n");
-		return TC_ACT_SHOT;
-	}
+	);
 	__builtin_memset(ctx.state, 0, sizeof(*ctx.state));
 
 	counter_inc(&ctx, COUNTER_TOTAL_PACKETS);
@@ -560,8 +554,7 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 	CALI_DEBUG("Entering calico_tc_skb_accepted_entrypoint\n");
 	/* Initialise the context, which is stored on the stack, and the state, which
 	 * we use to pass data from one program to the next via tail calls. */
-	struct cali_tc_ctx ctx = {
-		.state = state_get(),
+	DECLARE_TC_CTX(ctx,
 		.skb = skb,
 		.fwd = {
 			.res = TC_ACT_UNSPEC,
@@ -569,11 +562,7 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 			.mark = CALI_SKB_MARK_SEEN,
 		},
 		.ipheader_len = IP_SIZE,
-	};
-	if (!ctx.state) {
-		CALI_DEBUG("State map lookup failed: DROP\n");
-		return TC_ACT_SHOT;
-	}
+	);
 
 	if (!(ctx.state->flags & CALI_ST_SKIP_POLICY)) {
 		counter_inc(&ctx, CALI_REASON_ACCEPTED_BY_POLICY);
@@ -1338,19 +1327,14 @@ int calico_tc_skb_send_icmp_replies(struct __sk_buff *skb)
 
 	/* Initialise the context, which is stored on the stack, and the state, which
 	 * we use to pass data from one program to the next via tail calls. */
-	struct cali_tc_ctx ctx = {
-		.state = state_get(),
+	DECLARE_TC_CTX(ctx,
 		.skb = skb,
 		.fwd = {
 			.res = TC_ACT_UNSPEC,
 			.reason = CALI_REASON_UNKNOWN,
 		},
 		.ipheader_len = IP_SIZE,
-	};
-	if (!ctx.state) {
-		CALI_DEBUG("State map lookup failed: DROP\n");
-		return TC_ACT_SHOT;
-	}
+	);
 
 	CALI_DEBUG("ICMP type %d and code %d\n",ctx.state->icmp_type, ctx.state->icmp_code);
 
@@ -1391,22 +1375,16 @@ int calico_tc_host_ct_conflict(struct __sk_buff *skb)
 	CALI_DEBUG("Entering calico_tc_host_ct_conflict_entrypoint\n");
 	/* Initialise the context, which is stored on the stack, and the state, which
 	 * we use to pass data from one program to the next via tail calls. */
-	struct cali_tc_ctx ctx = {
-		.state = state_get(),
+	DECLARE_TC_CTX(ctx,
 		.skb = skb,
 		.fwd = {
 			.res = TC_ACT_UNSPEC,
 			.reason = CALI_REASON_UNKNOWN,
 		},
 		.ipheader_len = IP_SIZE,
-	};
+	);
 
 	struct calico_nat_dest nat_dest_ident;
-
-	if (!ctx.state) {
-		CALI_DEBUG("State map lookup failed: DROP\n");
-		goto deny;
-	}
 
 	if (skb_refresh_validate_ptrs(&ctx, UDP_SIZE)) {
 		deny_reason(&ctx, CALI_REASON_SHORT);
@@ -1458,16 +1436,10 @@ SEC("classifier/tc/drop")
 int calico_tc_skb_drop(struct __sk_buff *skb)
 {
 	CALI_DEBUG("Entering calico_tc_skb_drop\n");
-	struct cali_tc_ctx ctx = {
+	DECLARE_TC_CTX(ctx,
 		.skb = skb,
-		.state = state_get(),
 		.ipheader_len = IP_SIZE,
-	};
-
-	if (!ctx.state) {
-		CALI_DEBUG("State map lookup failed: no event generated\n");
-		return TC_ACT_SHOT;
-	}
+	);
 
 	update_rule_counters(ctx.state);
 	counter_inc(&ctx, CALI_REASON_DROPPED_BY_POLICY);
