@@ -116,16 +116,6 @@ EOF
 
         return bird_conf % (self.egress_node_ip)
 
-    def get_calico_node_pod(self, nodeName):
-        """Get the calico-node pod name for a given kind node"""
-        def fn():
-            calicoPod = kubectl("-n kube-system get pods -o wide | grep calico-node | grep '%s '| cut -d' ' -f1" % nodeName)
-            if calicoPod is None:
-                raise Exception('calicoPod is None')
-            return calicoPod.strip()
-        calicoPod = retry_until_success(fn)
-        return calicoPod
-
     def _check_route_in_cluster_bird(self, calicoPod, route, peerIP, ipv6=False, globalPeer=False, present=True):
         """Check that a route is present/not present in a (in-cluster) calico-node bird instance"""
         def fn():
