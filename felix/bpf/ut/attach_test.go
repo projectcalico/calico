@@ -18,6 +18,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io/fs"
+	"net"
 	"os"
 	"path"
 	"path/filepath"
@@ -25,6 +26,7 @@ import (
 	"testing"
 
 	. "github.com/onsi/gomega"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/bpfdefs"
@@ -33,6 +35,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/ifstate"
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/polprog"
+	"github.com/projectcalico/calico/felix/bpf/tc"
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 	linux "github.com/projectcalico/calico/felix/dataplane/linux"
 	"github.com/projectcalico/calico/felix/ifacemonitor"
@@ -531,4 +534,44 @@ func jumpMapDump(m maps.Map) map[int]int {
 	}
 
 	return jumpMap
+}
+
+func BenchmarkAttachProgram(b *testing.B) {
+	RegisterTestingT(b)
+
+	b.StopTimer()
+
+	vethName, veth := createVeth()
+	defer deleteLink(veth)
+
+	tc.EnsureQdisc(vethName)
+
+	ap := tc.AttachPoint{
+		AttachPoint: bpf.AttachPoint{
+			Hook:     hook.Egress,
+			Iface:    vethName,
+			LogLevel: "off",
+		},
+		Type:     tcdefs.EpTypeWorkload,
+		ToOrFrom: tcdefs.FromEp,
+		FIB:      true,
+		HostIP:   net.IPv4(1, 1, 1, 1),
+		IntfIP:   net.IPv4(1, 1, 1, 1),
+	}
+
+	_, err := ap.AttachProgram()
+	Expect(err).NotTo(HaveOccurred())
+
+	logLevel := log.GetLevel()
+	log.SetLevel(log.PanicLevel)
+	defer log.SetLevel(logLevel)
+
+	b.StartTimer()
+
+	for n := 0; n < b.N; n++ {
+		_, err := ap.AttachProgram()
+		if err != nil {
+			b.Fatalf("AttachProgram failed: %s", err)
+		}
+	}
 }
