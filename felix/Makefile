@@ -533,6 +533,18 @@ ut-bpf: $(LIBBPF_A) bin/bpf_ut.test bin/bpf.test build-bpf
 		cd /go/src/$(PACKAGE_NAME)/bpf/ut && \
 		../../bin/bpf_ut.test -test.v -test.run "$(FOCUS)"'
 
+.PHONY: bench-bpf
+bench-bpf: $(LIBBPF_A) bin/bpf_ut.test bin/bpf.test build-bpf
+	$(DOCKER_RUN) \
+		--privileged \
+		-e RUN_AS_ROOT=true \
+		-v `pwd`:/code \
+		-v `pwd`/bpf-gpl/bin:/usr/lib/calico/bpf \
+		$(CALICO_BUILD) sh -c ' \
+		mount bpffs /sys/fs/bpf -t bpf && \
+		cd /go/src/$(PACKAGE_NAME)/bpf/ut && \
+		../../bin/bpf_ut.test -test.v -test.bench="$(FOCUS)" -test.run "$(FOCUS)"'
+
 ## Launch a browser with Go coverage stats for the whole project.
 .PHONY: cover-browser
 cover-browser: combined.coverprofile
