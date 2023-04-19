@@ -49,7 +49,7 @@ type Proxy interface {
 
 // DPSyncerState groups the information passed to the DPSyncer's Apply
 type DPSyncerState struct {
-	SvcMap   k8sp.ServiceMap
+	SvcMap   k8sp.ServicePortMap
 	EpsMap   k8sp.EndpointsMap
 	NodeZone string
 }
@@ -75,7 +75,7 @@ type proxy struct {
 	epsChanges *k8sp.EndpointChangeTracker
 	svcChanges *k8sp.ServiceChangeTracker
 
-	svcMap k8sp.ServiceMap
+	svcMap k8sp.ServicePortMap
 	epsMap k8sp.EndpointsMap
 
 	dpSyncer DPSyncer
@@ -119,7 +119,7 @@ func New(k8s kubernetes.Interface, dp DPSyncer, hostname string, opts ...Option)
 		k8s:      k8s,
 		dpSyncer: dp,
 		hostname: hostname,
-		svcMap:   make(k8sp.ServiceMap),
+		svcMap:   make(k8sp.ServicePortMap),
 		epsMap:   make(k8sp.EndpointsMap),
 
 		recorder: new(loggerRecorder),

@@ -235,7 +235,7 @@ type syncRef struct {
 
 // svcMapToIPPortProtoMap takes the kubernetes service representation and makes an index
 // so we can cross reference with the values we learn from the dataplane.
-func (s *Syncer) svcMapToIPPortProtoMap(svcs k8sp.ServiceMap) map[nat.FrontendKey]syncRef {
+func (s *Syncer) svcMapToIPPortProtoMap(svcs k8sp.ServicePortMap) map[nat.FrontendKey]syncRef {
 	ref := make(map[nat.FrontendKey]syncRef, len(svcs))
 
 	for key, svc := range svcs {
