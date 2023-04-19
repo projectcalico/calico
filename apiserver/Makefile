@@ -71,7 +71,7 @@ LINT_ARGS := --disable gosimple,govet,structcheck,errcheck,goimports,unused,inef
 ###############################################################################
 .PHONY: ci
 ## Run what CI runs
-ci: clean static-checks image fv ut
+ci: clean static-checks image ut fv
 
 ## Deploys images to registry
 cd: image-all cd-common
@@ -132,7 +132,7 @@ st:
 check-copyright:
 	@../hack/check-copyright.sh
 
-GITHUB_TEST_INTEGRATION_URI := https://raw.githubusercontent.com/kubernetes/kubernetes/v1.16.4/hack/lib
+GITHUB_TEST_INTEGRATION_URI := https://raw.githubusercontent.com/kubernetes/kubernetes/$(KUBECTL_VERSION)/hack/lib
 
 hack-lib:
 	mkdir -p hack/lib/
