@@ -25,6 +25,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/asm"
 	"github.com/projectcalico/calico/felix/bpf/counters"
+	"github.com/projectcalico/calico/felix/bpf/hook"
 	"github.com/projectcalico/calico/felix/proto"
 
 	log "github.com/sirupsen/logrus"
@@ -48,21 +49,21 @@ var policyDumpCmd = &cobra.Command{
 		"\n\thook - can be 'ingress', 'egress', 'xdp' or 'all'.",
 	Short: "dumps policy",
 	Run: func(cmd *cobra.Command, args []string) {
-		iface, hook, err := parseArgs(args)
+		iface, h, err := parseArgs(args)
 		if err != nil {
 			log.WithError(err).Error("Failed to dump policy info.")
 			return
 		}
-		var hooks []bpf.Hook
-		switch hook {
+		var hooks []hook.Hook
+		switch h {
 		case "all":
-			hooks = bpf.Hooks
+			hooks = hook.All
 		case "egress":
-			hooks = []bpf.Hook{bpf.HookEgress}
+			hooks = []hook.Hook{hook.Egress}
 		case "ingress":
-			hooks = []bpf.Hook{bpf.HookIngress}
+			hooks = []hook.Hook{hook.Ingress}
 		case "xdp":
-			hooks = []bpf.Hook{bpf.HookXDP}
+			hooks = []hook.Hook{hook.XDP}
 		}
 
 		rmap := counters.PolicyMap()
@@ -85,7 +86,7 @@ func parseArgs(args []string) (string, string, error) {
 	if len(args) != 2 {
 		return "", "", fmt.Errorf("Insufficient arguments")
 	}
-	if bpf.StringToHook(args[1]) == bpf.HookBad && args[1] != "all" {
+	if hook.StringToHook(args[1]) == hook.Bad && args[1] != "all" {
 		return "", "", fmt.Errorf("Invalid argument")
 	}
 	return args[0], args[1], nil
@@ -113,9 +114,9 @@ func getRuleMatchID(comment string) uint64 {
 	return id
 }
 
-func dumpPolicyInfo(cmd *cobra.Command, iface string, hook bpf.Hook, m counters.PolicyMapMem) error {
+func dumpPolicyInfo(cmd *cobra.Command, iface string, h hook.Hook, m counters.PolicyMapMem) error {
 	var policyDbg bpf.PolicyDebugInfo
-	filename := bpf.PolicyDebugJSONFileName(iface, hook.String(), proto.IPVersion_IPV4)
+	filename := bpf.PolicyDebugJSONFileName(iface, h.String(), proto.IPVersion_IPV4)
 	_, err := os.Stat(filename)
 	if err != nil {
 		return err
