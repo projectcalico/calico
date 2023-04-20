@@ -526,20 +526,16 @@ func setSuidBit(file string) error {
 func destinationUptoDate(src, dst string) (bool, error) {
 	// Stat the src file.
 	f1info, err := os.Stat(src)
-	if os.IsNotExist(err) {
+	if os.IsNotExist(err) || err != nil {
 		// If the source file doesn't exist, that's an unrecoverable problem.
-		return false, err
-	} else if err != nil {
 		return false, err
 	}
 
 	// Stat the dst file.
 	f2info, err := os.Stat(dst)
-	if os.IsNotExist(err) {
+	if os.IsNotExist(err) || err != nil {
 		// If the destination file doesn't exist, it means the
 		// two files are not equal.
-		return false, nil
-	} else if err != nil {
 		return false, err
 	}
 
