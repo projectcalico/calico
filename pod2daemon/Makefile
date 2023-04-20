@@ -15,6 +15,7 @@ BUILD_IMAGES    ?=$(FLEXVOL_IMAGE) $(CSI_IMAGE) $(REGISTRAR_IMAGE)
 
 include ../lib.Makefile
 
+LDFLAGS= $(RELEASE_LDFLAGS)
 ###############################################################################
 
 
@@ -58,14 +59,14 @@ bin/flexvol-armv7: ARCH=armv7
 bin/flexvol-ppc64le: ARCH=ppc64le
 bin/flexvol-s390x: ARCH=s390x
 bin/flexvol-%: $(SRC_FILES)
-	$(DOCKER_RUN) -e CGO_ENABLED=0 $(CALICO_BUILD) go build -buildvcs=false -v -o bin/flexvol-$(ARCH) flexvol/flexvoldriver.go
+	$(DOCKER_RUN) -e CGO_ENABLED=0 $(CALICO_BUILD) go build -buildvcs=false -v -o bin/flexvol-$(ARCH) -ldflags "$(LDFLAGS)" flexvol/flexvoldriver.go
 
 bin/csi-driver-arm64: ARCH=arm64
 bin/csi-driver-armv7: ARCH=armv7
 bin/csi-driver-ppc64le: ARCH=ppc64le
 bin/csi-driver-s390x: ARCH=s390x
 bin/csi-driver-%: $(SRC_FILES)
-	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) go build -buildvcs=false -v -o bin/csi-driver-$(ARCH) csidriver/main.go
+	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) go build -buildvcs=false -v -o bin/csi-driver-$(ARCH) -ldflags "$(LDFLAGS)" csidriver/main.go
 
 bin/csi-driver-amd64: $(SRC_FILES)
 	$(call build_static_cgo_boring_binary, csidriver/main.go, $@)
