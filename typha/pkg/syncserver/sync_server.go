@@ -572,6 +572,12 @@ func (s *Server) handleGracefulShutDown(cxt context.Context, serverCancelFn cont
 	}
 
 	numConns := s.NumActiveConnections()
+	if numConns == 0 {
+		logCxt.Info("No active connections; shutting down immediately.")
+		serverCancelFn()
+		return
+	}
+
 	// Aim to close connections within 95% of the allotted time.
 	dropInterval := s.config.ShutdownTimeout * 95 / 100 / time.Duration(numConns)
 	logCtx := log.WithFields(log.Fields{
@@ -601,7 +607,7 @@ func (s *Server) handleGracefulShutDown(cxt context.Context, serverCancelFn cont
 				// We don't need to worry about that because serverCancelFn will shut down all remaining connections
 				// by canceling their parent context.
 				serverCancelFn()
-				break
+				return
 			}
 		case <-cxt.Done():
 			logCxt.Info("Context asked us to stop")
