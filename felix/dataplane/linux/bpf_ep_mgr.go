@@ -568,6 +568,22 @@ func (m *bpfEndpointManager) updateIfaceStateMap(name string, iface *bpfInterfac
 	}
 }
 
+func (m *bpfEndpointManager) deleteIfaceCounters(name string, ifindex int) {
+	err := m.bpfmaps.CountersMap.Delete(counters.NewKey(ifindex, bpf.HookIngress).AsBytes())
+	if err != nil && !maps.IsNotExists(err) {
+		log.WithError(err).Warnf("Failed to remove  ingress counters for dev %s ifindex %d.", name, ifindex)
+	}
+	err = m.bpfmaps.CountersMap.Delete(counters.NewKey(ifindex, bpf.HookEgress).AsBytes())
+	if err != nil && !maps.IsNotExists(err) {
+		log.WithError(err).Warnf("Failed to remove  egress counters for dev %s ifindex %d.", name, ifindex)
+	}
+	err = m.bpfmaps.CountersMap.Delete(counters.NewKey(ifindex, bpf.HookXDP).AsBytes())
+	if err != nil && !maps.IsNotExists(err) {
+		log.WithError(err).Warnf("Failed to remove  XDP counters for dev %s ifindex %d.", name, ifindex)
+	}
+	log.Debugf("Deleted counters for dev %s ifindex %d.", name, ifindex)
+}
+
 func (m *bpfEndpointManager) cleanupOldAttach(iface string, ai bpf.EPAttachInfo) error {
 	if ai.XDPId != 0 {
 		ap := xdp.AttachPoint{
@@ -662,6 +678,7 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceStateUpdate) {
 				m.removeHEPFromIndexes(update.Name, &m.wildcardHostEndpoint)
 				delete(m.hostIfaceToEpMap, update.Name)
 			}
+			m.deleteIfaceCounters(update.Name, iface.info.ifIndex)
 			iface.dpState.isReady = false
 			iface.info.isUP = false
 			m.updateIfaceStateMap(update.Name, iface)
@@ -839,13 +856,7 @@ func (m *bpfEndpointManager) syncIfaceCounters() error {
 		exists.Add(ifaces[i].Index)
 	}
 
-	c := m.bpfmaps.CountersMap
-	if err := c.Open(); err != nil {
-		return fmt.Errorf("cannot not open counters map: %w", err)
-	}
-	defer c.Close()
-
-	err = c.Iter(func(k, v []byte) maps.IteratorAction {
+	err = m.bpfmaps.CountersMap.Iter(func(k, v []byte) maps.IteratorAction {
 		var key counters.Key
 		copy(key[:], k)
 

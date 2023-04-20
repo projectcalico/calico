@@ -829,6 +829,24 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			Expect(countersMap.Contents).To(HaveLen(0))
 			// The BPF programs will create the counters the first time they
 		})
+
+		It("should GC counters when dev goes down", func() {
+			genIfaceUpdate("cali12345", ifacemonitor.StateUp, 12345)()
+			genWLUpdate("cali12345")()
+
+			err := counters.EnsureExists(countersMap, 12345, bpf.HookEgress)
+			Expect(err).NotTo(HaveOccurred())
+			err = counters.EnsureExists(countersMap, 12345, bpf.HookIngress)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(countersMap.Contents).To(HaveLen(2))
+
+			genIfaceUpdate("cali12345", ifacemonitor.StateDown, 12345)()
+			err = bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(countersMap.Contents).To(HaveLen(0))
+		})
 	})
 
 	Describe("ifstate", func() {
