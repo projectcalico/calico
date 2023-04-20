@@ -293,8 +293,8 @@ def update_ds_env(ds, ns, env_vars):
         # hang, in a not Ready state, for about 15 minutes.  Here we want to
         # detect in case that happens again, and fail the test case if so.  We
         # do that by querying the number of nodes that have been updated, every
-        # 10s, and failing the test if that number does not change for 4 cycles
-        # i.e. for 40s.
+        # 10s, and failing the test if that number does not change for 12 cycles
+        # i.e. for 120s.
         last_number = 0
         iterations_with_no_change = 0
         while True:
@@ -307,9 +307,9 @@ def update_ds_env(ds, ns, env_vars):
                 break
             if node_ds.status.updated_number_scheduled == last_number:
                 iterations_with_no_change += 1
-                if iterations_with_no_change == 4:
+                if iterations_with_no_change == 12:
                     run("docker exec kind-control-plane conntrack -L", allow_fail=True)
-                    raise Exception("calico-node DaemonSet update failed to make progress for 40s")
+                    raise Exception("calico-node DaemonSet update failed to make progress for 120s")
             else:
                 last_number = node_ds.status.updated_number_scheduled
                 iterations_with_no_change = 0

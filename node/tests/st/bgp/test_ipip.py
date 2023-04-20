@@ -24,8 +24,8 @@ from tests.st.test_base import TestBase
 from tests.st.utils.docker_host import DockerHost, CLUSTER_STORE_DOCKER_OPTIONS
 from tests.st.utils.constants import DEFAULT_IPV4_POOL_CIDR
 from tests.st.utils.route_reflector import RouteReflectorCluster
-from tests.st.utils.utils import check_bird_status, retry_until_success, \
-        update_bgp_config
+from tests.st.utils.utils import check_bird_status, update_bgp_config
+from tests.k8st.utils.utils import retry_until_success
 
 from .peer import create_bgp_peer
 
@@ -211,6 +211,10 @@ class TestIPIP(TestBase):
             # Create an IP pool with IP-in-IP disabled.
             self.pool_action(host1, "create", DEFAULT_IPV4_POOL_CIDR, ipip_mode="Never")
 
+            # Update nodeMeshMaxRestartTime to a shorter value.
+            # So that when BGP peering breaks, routes can be removed within 20s.
+            update_bgp_config(host2, nodeMeshMaxRestartTime="20s")
+
             # Autodetect the IP addresses - this should ensure the subnet is
             # correctly configured.
             host1.start_calico_node("--ip=autodetect --backend={0}".format(backend))
@@ -260,10 +264,13 @@ class TestIPIP(TestBase):
                 # At this point, since we are toggling between IPIP connectivity and no IPIP
                 # connectivity, there will be a mistmatch between the two nodes because host1
                 # does not have the BGP daemon running on it.
-                self.assert_ip_connectivity(workload_list=[workload_host1],
-                                            ip_pass_list=[],
-                                            ip_fail_list=[workload_host2.ip],
-                                            retries=10)
+                def check():
+                    host1.execute("ip r")
+                    host2.execute("ip r")
+                    self.assert_ip_connectivity(workload_list=[workload_host1],
+                                                ip_pass_list=[],
+                                                ip_fail_list=[workload_host2.ip])
+                retry_until_success(check, retries=12, wait_time=5)
 
                 # Start the calico-node.  Connectivity should be restored once the BGP daemon
                 # on host1 fixes the route.
@@ -616,3 +623,4 @@ class TestIPIP(TestBase):
             host1.set_ipip_enabled(with_ipip)
 
 TestIPIP.batchnumber = 4  # Add batch label to these tests for parallel running
+

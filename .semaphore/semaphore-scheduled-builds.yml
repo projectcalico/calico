@@ -391,7 +391,7 @@ blocks:
       - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/secret.google-service-account-key.json
       - export SHORT_WORKFLOW_ID=$(echo ${SEMAPHORE_WORKFLOW_ID} | sha256sum | cut -c -8)
       - export ZONE=europe-west3-c
-      - export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-
+      - export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-felix-
       - echo VM_PREFIX=${VM_PREFIX}
       - export REPO_NAME=$(basename $(pwd))
       - export NUM_FV_BATCHES=8
@@ -443,14 +443,42 @@ blocks:
     - name: "Node: CI"
       commands:
       - ../.semaphore/run-and-monitor ci.log make ci
-    - name: "Node: k8s-test"
-      commands:
-      - ../.semaphore/run-and-monitor k8s-test.log make k8s-test
     epilogue:
       always:
         commands:
         - test-results publish ./report/nosetests.xml --name "node-ci" || true
-        - test-results publish ./report/k8s-tests.xml --name "node-k8s-test" || true
+
+- name: "Node/kind-cluster tests"
+  run:
+    when: "true or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/confd/', '/bird/', '/pod2daemon/', '/node/', '/hack/test/certs/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+  dependencies: ["Prerequisites"]
+  task:
+    prologue:
+      commands:
+      - cd node
+      - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/secret.google-service-account-key.json
+      - export SHORT_WORKFLOW_ID=$(echo ${SEMAPHORE_WORKFLOW_ID} | sha256sum | cut -c -8)
+      - export ZONE=europe-west3-c
+      - export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-kind-
+      - echo VM_PREFIX=${VM_PREFIX}
+      - export REPO_NAME=$(basename $(pwd))
+      - export VM_DISK_SIZE=80GB
+      - mkdir artifacts
+      - ../.semaphore/vms/create-test-vms ${ZONE} ${VM_PREFIX}
+    jobs:
+    - name: "Node: kind-cluster tests"
+      execution_time_limit:
+        minutes: 120
+      commands:
+      - ../.semaphore/vms/run-tests-on-vms ${ZONE} ${VM_PREFIX}
+    epilogue:
+      always:
+        commands:
+          - ../.semaphore/vms/publish-artifacts
+          - ../.semaphore/vms/clean-up-vms ${ZONE} ${VM_PREFIX}
+          - test-results publish ./report/*.xml --name "node-kind-tests" || true
+    secrets:
+    - name: google-service-account-for-gce
 
 - name: "Node: build all architectures"
   run:
