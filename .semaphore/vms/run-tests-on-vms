@@ -1,0 +1,112 @@
+#!/usr/bin/env bash
+# Copyright (c) 2023 Tigera, Inc. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+set -e
+
+source ../.semaphore/vms/vm-tests-common.sh
+
+zone=$1
+vm_name_prefix=$2
+my_dir="$(dirname $0)"
+repo_dir="."
+artifacts_dir="$repo_dir/artifacts"
+
+echo
+echo "===== Starting tests ====="
+echo
+
+pids=()
+monitor_pids=()
+log_files=()
+for batch in "${batches[@]}"; do
+  vm_name="$vm_name_prefix$batch"
+  log_file="$artifacts_dir/test-$batch.log"
+  log_files+=( $log_file )
+  case $batch in
+    k8s-test)
+      cmd="make --directory=calico/${REPO_NAME} k8s-test"
+      ;;
+    *)
+      echo "invalid batch name" && exit 1
+      ;;
+  esac
+
+  $my_dir/on-test-vm ${zone} ${vm_name} $cmd >& "$log_file" &
+  pid=$!
+  pids+=( $pid )
+
+  prefix="[batch=${batch} pid=${pid}]"
+  echo "$prefix Started test batch in background; monitoring its log ($log_file)."
+  (
+    tail -F $log_file | grep --line-buffered \
+      -e "^test.*\.\.\. ok" \
+      -e "\.\.\. ERROR$" \
+      -e "Failure output:" \
+      -e "^ERROR:" \
+      -e "^Traceback" \
+      -e "^FAILED" \
+      -e "^OK$" \
+      -e "^XML:" \
+      -e "^\[success\]" \
+      -e "^\[error\]" \
+      -C10 | sed 's/.*/'"${prefix}"' &/';
+  ) &
+  mon_pid=$!
+  monitor_pids+=( $mon_pid )
+done
+
+final_result=0
+
+echo
+echo "===== Waiting for background test runners to finish ===="
+echo
+
+summary=()
+for i in ${!batches[@]}; do
+  batch=${batches[$i]}
+  pid=${pids[$i]}
+  echo "Waiting for test batch $batch to finish (PID=$pid)..."
+  if wait "$pid"; then
+    summary+=( "Test batch $batch SUCCEEDED" )
+    echo "===== Test batch $batch SUCCEEDED (PID=$pid).  Log file will be uploaded as artifact ${log_files[$i]}. ====="
+  else
+    summary+=( "Test batch $batch FAILED; Log file will be uploaded as artifact ${log_files[$i]}" )
+    echo "===== Test batch $batch FAILED (PID=$pid).  Log file will be uploaded as artifact ${log_files[$i]}. ====="
+    final_result=1
+  fi
+done
+
+echo
+echo "===== Shutting down test monitors ====="
+for pid in "${monitor_pids[@]}"; do
+  kill $pid || true
+done
+
+echo "===== Results summary ====="
+for s in "${summary[@]}"; do
+  echo "  $s"
+done
+echo
+
+echo "===== Retrieving report files ====="
+for batch in "${batches[@]}"; do
+  vm_name="$vm_name_prefix$batch"
+  $my_dir/scp-from-test-vm ${zone} ${vm_name} /home/ubuntu/calico/node/report/* $repo_dir/report/
+done
+echo
+
+echo "===== Done, exiting with RC=$final_result ====="
+
+exit $final_result
