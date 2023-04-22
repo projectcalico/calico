@@ -21,7 +21,6 @@ require (
 	github.com/docopt/docopt-go v0.0.0-20180111231733-ee0de3bc6815
 	github.com/envoyproxy/go-control-plane v0.10.2-0.20220325020618-49ff273808a1
 	github.com/fsnotify/fsnotify v1.6.0
-	github.com/ghodss/yaml v1.0.0
 	github.com/go-ini/ini v1.63.2
 	github.com/gofrs/flock v0.8.0
 	github.com/gogo/protobuf v1.3.2
@@ -97,6 +96,7 @@ require (
 	k8s.io/utils v0.0.0-20230313181309-38a27ef9d749
 	modernc.org/memory v1.5.0
 	sigs.k8s.io/kind v0.11.1
+	sigs.k8s.io/yaml v1.3.0
 )
 
 require (
@@ -273,7 +273,6 @@ require (
 	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.0.36 // indirect
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.2.3 // indirect
-	sigs.k8s.io/yaml v1.3.0 // indirect
 )
 
 replace (
