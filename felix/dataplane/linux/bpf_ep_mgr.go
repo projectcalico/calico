@@ -1465,10 +1465,6 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 	m.withIface(ifaceName, func(iface *bpfInterface) (forceDirty bool) {
 		ifaceUp = iface.info.ifaceIsUp()
 		endpointID = iface.info.endpointID
-		if !ifaceUp {
-			log.WithField("iface", ifaceName).Debug("Interface is down/gone, closing jump maps.")
-			iface.dpState.clearPolicies()
-		}
 		state = iface.dpState
 		return false
 	})
