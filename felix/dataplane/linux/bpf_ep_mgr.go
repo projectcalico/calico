@@ -691,7 +691,6 @@ func (m *bpfEndpointManager) updateIfaceStateMap(name string, iface *bpfInterfac
 		if err := m.xdpPolicyMapAlloc.Put(iface.dpState.policyIdx[hook.XDP]); err != nil {
 			log.WithError(err).Error("XDP")
 		}
-		iface.dpState.policyIdx[hook.XDP] = -1
 
 		if err := m.policyMapDelete(hook.Ingress, iface.dpState.policyIdx[hook.Ingress]); err != nil {
 			log.WithError(err).Warn("Policy program may leak.")
@@ -699,7 +698,6 @@ func (m *bpfEndpointManager) updateIfaceStateMap(name string, iface *bpfInterfac
 		if err := m.policyMapAlloc.Put(iface.dpState.policyIdx[hook.Ingress]); err != nil {
 			log.WithError(err).Error("Ingress")
 		}
-		iface.dpState.policyIdx[hook.Ingress] = -1
 
 		if err := m.policyMapDelete(hook.Egress, iface.dpState.policyIdx[hook.Egress]); err != nil {
 			log.WithError(err).Warn("Policy program may leak.")
@@ -707,7 +705,6 @@ func (m *bpfEndpointManager) updateIfaceStateMap(name string, iface *bpfInterfac
 		if err := m.policyMapAlloc.Put(iface.dpState.policyIdx[hook.Egress]); err != nil {
 			log.WithError(err).Error("Ingress")
 		}
-		iface.dpState.policyIdx[hook.Egress] = -1
 
 		m.ifStateMap.DeleteDesired(k)
 		iface.dpState.clearPolicies()
@@ -2270,7 +2267,7 @@ func (m *bpfEndpointManager) ensureQdisc(iface string) error {
 	return tc.EnsureQdisc(iface)
 }
 
-// Ensure TC/XDP program is attached to the specified interface and return its jump map FD.
+// Ensure TC/XDP program is attached to the specified interface.
 func (m *bpfEndpointManager) ensureProgramAttached(ap attachPoint) error {
 	var err error
 
