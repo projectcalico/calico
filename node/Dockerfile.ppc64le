@@ -20,7 +20,7 @@ FROM ${BIRD_IMAGE} as bird
 
 FROM calico/bpftool:v5.0-ppc64le as bpftool
 
-FROM ppc64le/alpine:3.8
+FROM ppc64le/alpine:3.17.2
 MAINTAINER David Wilder <wilder@us.ibm.com>
 
 ARG ARCH=ppc64le
