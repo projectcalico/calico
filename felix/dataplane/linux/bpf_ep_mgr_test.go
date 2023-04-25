@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"hash/fnv"
 	"net"
+	"os"
 	"regexp"
 	"strconv"
 	"sync"
@@ -33,16 +34,19 @@ import (
 	"github.com/projectcalico/calico/felix/logutils"
 
 	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/bpf/asm"
 	"github.com/projectcalico/calico/felix/bpf/bpfmap"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	"github.com/projectcalico/calico/felix/bpf/counters"
 	"github.com/projectcalico/calico/felix/bpf/hook"
 	"github.com/projectcalico/calico/felix/bpf/ifstate"
 	bpfipsets "github.com/projectcalico/calico/felix/bpf/ipsets"
+	"github.com/projectcalico/calico/felix/bpf/maps"
 	bpfmaps "github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/mock"
 	"github.com/projectcalico/calico/felix/bpf/polprog"
 	"github.com/projectcalico/calico/felix/bpf/state"
+	"github.com/projectcalico/calico/felix/bpf/xdp"
 	"github.com/projectcalico/calico/felix/idalloc"
 	"github.com/projectcalico/calico/felix/ifacemonitor"
 	"github.com/projectcalico/calico/felix/ip"
@@ -87,6 +91,14 @@ func (m *mockDataplane) loadDefaultPolicies() error {
 func (m *mockDataplane) ensureProgramAttached(ap attachPoint) error {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
+
+	if apxdp, ok := ap.(*xdp.AttachPoint); ok {
+		apxdp.HookLayout = hook.Layout{
+			hook.SubProgXDPAllowed: 123,
+			hook.SubProgXDPDrop:    456,
+		}
+	}
+
 	key := ap.IfaceName() + ":" + ap.HookName().String()
 	if _, exists := m.progs[key]; exists {
 		return nil
@@ -180,11 +192,31 @@ func (m *mockDataplane) ruleMatchID(dir, action, owner, name string, idx int) po
 	return h.Sum64()
 }
 
+type mockProgMapDP struct {
+	*mockDataplane
+}
+
+func (m *mockProgMapDP) loadPolicyProgram(_ string, _ proto.IPVersion, _ polprog.Rules, _ maps.Map, _ ...polprog.Option) (
+	bpf.ProgFD, asm.Insns, error) {
+
+	file, err := os.CreateTemp("/tmp", "test_file")
+	if err != nil {
+		return 0, nil, err
+	}
+
+	if err := os.Remove(file.Name()); err != nil {
+		return 0, nil, err
+	}
+
+	return bpf.ProgFD(file.Fd()), []asm.Insn{{Comments: []string{"blah"}}}, nil
+}
+
 var _ = Describe("BPF Endpoint Manager", func() {
 
 	var (
 		bpfEpMgr             *bpfEndpointManager
 		dp                   *mockDataplane
+		mockDP               bpfDataplane
 		fibLookupEnabled     bool
 		endpointToHostAction string
 		dataIfacePattern     string
@@ -198,6 +230,8 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		filterTableV4        IptablesTable
 		ifStateMap           *mock.Map
 		countersMap          *mock.Map
+		policyMap            *mock.Map
+		xdpPolicyMap         *mock.Map
 	)
 
 	BeforeEach(func() {
@@ -235,8 +269,10 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 		maps.ProgramsMap = mock.NewMockMap(progsParams)
 		maps.XDPProgramsMap = mock.NewMockMap(progsParams)
-		maps.PolicyMap = mock.NewMockMap(progsParams)
-		maps.XDPPolicyMap = mock.NewMockMap(progsParams)
+		policyMap = mock.NewMockMap(progsParams)
+		maps.PolicyMap = policyMap
+		xdpPolicyMap = mock.NewMockMap(progsParams)
+		maps.XDPPolicyMap = xdpPolicyMap
 
 		rrConfigNormal = rules.Config{
 			IPIPEnabled:                 true,
@@ -265,7 +301,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 	newBpfEpMgr := func() {
 		var err error
 		bpfEpMgr, err = newBPFEndpointManager(
-			dp,
+			mockDP,
 			&Config{
 				Hostname:              "uthost",
 				BPFLogLevel:           "info",
@@ -344,16 +380,24 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		}
 	}
 
-	genWLUpdate := func(name string) func() {
+	genWLUpdate := func(name string, policies ...string) func() {
 		return func() {
-			bpfEpMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
+			update := &proto.WorkloadEndpointUpdate{
 				Id: &proto.WorkloadEndpointID{
 					OrchestratorId: "k8s",
 					WorkloadId:     name,
 					EndpointId:     name,
 				},
 				Endpoint: &proto.WorkloadEndpoint{Name: name},
-			})
+			}
+			if len(policies) > 0 {
+				update.Endpoint.Tiers = []*proto.TierInfo{{
+					Name:            "default",
+					IngressPolicies: policies,
+					EgressPolicies:  policies,
+				}}
+			}
+			bpfEpMgr.OnUpdate(update)
 			err := bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
 		}
@@ -382,6 +426,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 	JustBeforeEach(func() {
 		dp = newMockDataplane()
+		mockDP = dp
 		newBpfEpMgr()
 	})
 
@@ -1025,6 +1070,61 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			checkIfState(15, "cali12345", ifstate.FlgWEP|ifstate.FlgReady)
+		})
+	})
+
+	Describe("program map", func() {
+		JustBeforeEach(func() {
+			mockDP = &mockProgMapDP{
+				dp,
+			}
+			newBpfEpMgr()
+		})
+
+		It("should clean up WL policies when iface down", func() {
+			genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
+			genPolicy("default", "mypolicy")()
+			genWLUpdate("cali12345", "mypolicy")()
+
+			err := bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(policyMap.Contents).To(HaveLen(2))
+			Expect(xdpPolicyMap.Contents).To(HaveLen(0))
+
+			genIfaceUpdate("cali12345", ifacemonitor.StateDown, 15)()
+
+			err = bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(policyMap.Contents).To(HaveLen(0))
+			Expect(xdpPolicyMap.Contents).To(HaveLen(0))
+		})
+
+		It("should clean up HEP policies when iface down", func() {
+			genIfaceUpdate("eth0", ifacemonitor.StateUp, 10)()
+			genUntracked("default", "untracked1")()
+			genPolicy("default", "mypolicy")()
+			hostEp := hostEpNorm
+			hostEp.UntrackedTiers = []*proto.TierInfo{{
+				Name:            "default",
+				IngressPolicies: []string{"untracked1"},
+			}}
+			genHEPUpdate("eth0", hostEp)()
+
+			err := bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(policyMap.Contents).To(HaveLen(2))
+			Expect(xdpPolicyMap.Contents).To(HaveLen(1))
+
+			genIfaceUpdate("eth0", ifacemonitor.StateDown, 10)()
+
+			err = bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(policyMap.Contents).To(HaveLen(0))
+			Expect(xdpPolicyMap.Contents).To(HaveLen(0))
 		})
 	})
 })
