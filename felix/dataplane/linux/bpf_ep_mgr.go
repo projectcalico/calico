@@ -143,6 +143,12 @@ type bpfDataplane interface {
 	loadDefaultPolicies() error
 }
 
+type hasLoadPolicyProgram interface {
+	loadPolicyProgram(progName string,
+		ipFamily proto.IPVersion, rules polprog.Rules, progsMap maps.Map, opts ...polprog.Option) (
+		bpf.ProgFD, asm.Insns, error)
+}
+
 type bpfInterface struct {
 	// info contains the information about the interface sent to us from external sources. For example,
 	// the ID of the controlling workload interface and our current expectation of its "oper state".
@@ -241,6 +247,11 @@ type bpfEndpointManager struct {
 
 	// onStillAlive is called from loops to reset the watchdog.
 	onStillAlive func()
+
+	loadPolicyProgramFn func(progName string,
+		ipFamily proto.IPVersion, rules polprog.Rules, progsMap maps.Map, opts ...polprog.Option) (
+		bpf.ProgFD, asm.Insns, error)
+	updatePolicyProgramFn func(rules polprog.Rules, polDir string, ap attachPoint) error
 
 	// HEP processing.
 	hostIfaceToEpMap     map[string]proto.HostEndpoint
@@ -484,6 +495,13 @@ func newBPFEndpointManager(
 		m.removeOldJumps = true
 		// Make sure that we envetually clean up after previous versions.
 		m.legacyCleanUp = true
+	}
+
+	m.updatePolicyProgramFn = m.dp.updatePolicyProgram
+
+	if x, ok := m.dp.(hasLoadPolicyProgram); ok {
+		m.loadPolicyProgramFn = x.loadPolicyProgram
+		m.updatePolicyProgramFn = m.updatePolicyProgram
 	}
 
 	return m, nil
@@ -974,6 +992,21 @@ func (m *bpfEndpointManager) markExistingWEPDirty(wlID proto.WorkloadEndpointID,
 	}
 }
 
+func policyMapDeleteEntry(m maps.Map, idx int) error {
+	if err := m.Delete(polprog.Key(idx)); err != nil {
+		if maps.IsNotExists(err) {
+			log.WithError(err).WithField("idx", idx).
+				Warn("Policy program already not in table - inconsistency fixed!")
+			return nil
+		} else {
+			log.WithError(err).Warn("Policy program may leak.")
+			return err
+		}
+	}
+
+	return nil
+}
+
 func (m *bpfEndpointManager) syncIfStateMap() {
 	palloc := set.New[int]()
 	xdpPalloc := set.New[int]()
@@ -991,19 +1024,13 @@ func (m *bpfEndpointManager) syncIfStateMap() {
 				// Device does not exist anymore so delete all associated policies we know
 				// about as we will not hear about that device again.
 				if idx := v.XDPPolicy(); idx != -1 {
-					if err = maps.DeleteMapEntry(m.bpfmaps.XDPPolicyMap.MapFD(), polprog.Key(idx), 4); err != nil {
-						log.WithError(err).Warn("Policy program may leak.")
-					}
+					_ = policyMapDeleteEntry(m.bpfmaps.XDPPolicyMap, idx)
 				}
 				if idx := v.IngressPolicy(); idx != -1 {
-					if err = maps.DeleteMapEntry(m.bpfmaps.PolicyMap.MapFD(), polprog.Key(idx), 4); err != nil {
-						log.WithError(err).Warn("Policy program may leak.")
-					}
+					_ = policyMapDeleteEntry(m.bpfmaps.PolicyMap, idx)
 				}
 				if idx := v.EgressPolicy(); idx != -1 {
-					if err = maps.DeleteMapEntry(m.bpfmaps.PolicyMap.MapFD(), polprog.Key(idx), 4); err != nil {
-						log.WithError(err).Warn("Policy program may leak.")
-					}
+					_ = policyMapDeleteEntry(m.bpfmaps.PolicyMap, idx)
 				}
 			} else {
 				// It will get deleted by the first CompleteDeferredWork() if we
@@ -1620,7 +1647,7 @@ func (m *bpfEndpointManager) attachWorkloadProgram(ifaceName string, jumpIdx int
 		rules.SuppressNormalHostPolicy = true
 	}
 
-	return m.dp.updatePolicyProgram(rules, polDirection.RuleDir(), ap)
+	return m.updatePolicyProgramFn(rules, polDirection.RuleDir(), ap)
 }
 
 func (m *bpfEndpointManager) addHostPolicy(rules *polprog.Rules, hostEndpoint *proto.HostEndpoint, polDirection PolDirection) {
@@ -1677,7 +1704,7 @@ func (m *bpfEndpointManager) attachDataIfaceProgram(ifaceName string, ep *proto.
 			ForHostInterface: true,
 		}
 		m.addHostPolicy(&rules, ep, polDirection)
-		return m.dp.updatePolicyProgram(rules, polDirection.RuleDir(), ap)
+		return m.updatePolicyProgramFn(rules, polDirection.RuleDir(), ap)
 	}
 
 	if err := m.dp.removePolicyProgram(ap); err != nil {
@@ -1710,7 +1737,7 @@ func (m *bpfEndpointManager) attachXDPProgram(ifaceName string, ep *proto.HostEn
 			ForXDP:           true,
 		}
 		ap.Log().Debugf("Rules: %v", rules)
-		return m.dp.updatePolicyProgram(rules, "xdp", ap)
+		return m.updatePolicyProgramFn(rules, "xdp", ap)
 	} else {
 		return m.dp.ensureNoProgram(ap)
 	}
@@ -1845,6 +1872,10 @@ func (m *bpfEndpointManager) extractTiers(tier *proto.TierInfo, direction PolDir
 
 		for i, polName := range directionalPols {
 			pol := m.policies[proto.PolicyID{Tier: tier.Name, Name: polName}]
+			if pol == nil {
+				log.WithField("tier", tier).Warn("Tier refers to unknown policy!")
+				continue
+			}
 			var prules []*proto.Rule
 			if direction == PolDirnIngress {
 				prules = pol.InboundRules
@@ -2432,6 +2463,31 @@ func policyProgramName(iface, polDir string, ipFamily proto.IPVersion) string {
 	return fmt.Sprintf("p%v%c_%s", version, polDir[0], iface)
 }
 
+func (m *bpfEndpointManager) loadPolicyProgram(progName string,
+	ipFamily proto.IPVersion, rules polprog.Rules, progsMap maps.Map, opts ...polprog.Option) (
+	bpf.ProgFD, asm.Insns, error) {
+
+	pg := polprog.NewBuilder(m.ipSetIDAlloc, m.bpfmaps.IpsetsMap.MapFD(),
+		m.bpfmaps.StateMap.MapFD(), progsMap.MapFD(), opts...)
+	if ipFamily == proto.IPVersion_IPV6 {
+		pg.EnableIPv6Mode()
+	}
+	insns, err := pg.Instructions(rules)
+	if err != nil {
+		return 0, nil, fmt.Errorf("failed to generate policy bytecode v%v: %w", ipFamily, err)
+	}
+	progType := unix.BPF_PROG_TYPE_SCHED_CLS
+	if rules.ForXDP {
+		progType = unix.BPF_PROG_TYPE_XDP
+	}
+	progFD, err := bpf.LoadBPFProgramFromInsns(insns, progName, "Apache-2.0", uint32(progType))
+	if err != nil {
+		return 0, nil, fmt.Errorf("failed to load BPF policy program v%v: %w", ipFamily, err)
+	}
+
+	return progFD, insns, nil
+}
+
 func (m *bpfEndpointManager) doUpdatePolicyProgram(ap attachPoint, progName string, rules polprog.Rules,
 	ipFamily proto.IPVersion) (asm.Insns, error) {
 
@@ -2440,9 +2496,9 @@ func (m *bpfEndpointManager) doUpdatePolicyProgram(ap attachPoint, progName stri
 		opts = append(opts, polprog.WithPolicyDebugEnabled())
 	}
 
-	progsMap := m.bpfmaps.ProgramsMap.MapFD()
+	progsMap := m.bpfmaps.ProgramsMap
 	if ap.HookName() == hook.XDP {
-		progsMap = m.bpfmaps.XDPProgramsMap.MapFD()
+		progsMap = m.bpfmaps.XDPProgramsMap
 	}
 
 	if apj, ok := ap.(attachPointWithPolicyJumps); ok {
@@ -2459,23 +2515,11 @@ func (m *bpfEndpointManager) doUpdatePolicyProgram(ap attachPoint, progName stri
 		opts = append(opts, polprog.WithAllowDenyJumps(allow, deny))
 	}
 
-	pg := polprog.NewBuilder(m.ipSetIDAlloc, m.bpfmaps.IpsetsMap.MapFD(),
-		m.bpfmaps.StateMap.MapFD(), progsMap, opts...)
-	if ipFamily == proto.IPVersion_IPV6 {
-		pg.EnableIPv6Mode()
-	}
-	insns, err := pg.Instructions(rules)
+	progFD, insns, err := m.loadPolicyProgramFn(progName, ipFamily, rules, progsMap, opts...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate policy bytecode v%v: %w", ipFamily, err)
+		return nil, err
 	}
-	progType := unix.BPF_PROG_TYPE_SCHED_CLS
-	if rules.ForXDP {
-		progType = unix.BPF_PROG_TYPE_XDP
-	}
-	progFD, err := bpf.LoadBPFProgramFromInsns(insns, progName, "Apache-2.0", uint32(progType))
-	if err != nil {
-		return nil, fmt.Errorf("failed to load BPF policy program v%v: %w", ipFamily, err)
-	}
+
 	defer func() {
 		// Once we've put the program in the map, we don't need its FD any more.
 		err := progFD.Close()
@@ -2492,13 +2536,13 @@ func (m *bpfEndpointManager) doUpdatePolicyProgram(ap attachPoint, progName stri
 }
 
 func (m *bpfEndpointManager) policyMapUpdate(ap attachPoint, family int, fd bpf.ProgFD) error {
-	polMap := m.bpfmaps.PolicyMap.MapFD()
+	polMap := m.bpfmaps.PolicyMap
 	if ap.HookName() == hook.XDP {
-		polMap = m.bpfmaps.XDPPolicyMap.MapFD()
+		polMap = m.bpfmaps.XDPPolicyMap
 	}
 
 	jumpIdx := ap.PolicyIdx(int(family))
-	if err := maps.UpdateMapEntry(polMap, polprog.Key(jumpIdx), polprog.Value(fd)); err != nil {
+	if err := polMap.Update(polprog.Key(jumpIdx), polprog.Value(fd)); err != nil {
 		return fmt.Errorf("failed to update %s policy jump map [%d]=%d: %w", ap.HookName(), jumpIdx, fd, err)
 	}
 
@@ -2515,11 +2559,7 @@ func (m *bpfEndpointManager) policyMapDelete(h hook.Hook, idx int) error {
 		polMap = m.bpfmaps.XDPPolicyMap
 	}
 
-	if err := polMap.DeleteIfExists(polprog.Key(idx)); err != nil {
-		return fmt.Errorf("failed to delete %s policy jump map %d: %w", h, idx, err)
-	}
-
-	return nil
+	return policyMapDeleteEntry(polMap, idx)
 }
 
 func (m *bpfEndpointManager) removePolicyProgram(ap attachPoint) error {
@@ -2529,21 +2569,26 @@ func (m *bpfEndpointManager) removePolicyProgram(ap attachPoint) error {
 	}
 
 	for _, ipFamily := range ipVersions {
-		if err := m.doRemovePolicyProgram(ipFamily); err != nil {
-			return fmt.Errorf("failed to remove policy program %d: %w", ipFamily, err)
+		idx := ap.PolicyIdx(int(ipFamily))
+		if idx == -1 {
+			continue
 		}
+
+		var pm maps.Map
+
+		if ap.HookName() == hook.XDP {
+			pm = m.bpfmaps.PolicyMap
+		} else {
+			pm = m.bpfmaps.XDPPolicyMap
+		}
+
+		if err := policyMapDeleteEntry(pm, idx); err != nil {
+			return fmt.Errorf("removing policy iface %s hook %s: %w", ap.IfaceName(), ap.HookName(), err)
+		}
+
 		m.removePolicyDebugInfo(ap.IfaceName(), ipFamily, ap.HookName())
 	}
-	return nil
-}
 
-func (m *bpfEndpointManager) doRemovePolicyProgram(ipFamily proto.IPVersion) error {
-	/* XXX
-	err := maps.DeleteMapEntryIfExists(jumpPolicyKey(ipFamily), 4)
-	if err != nil {
-		return fmt.Errorf("failed to update jump map: %w", err)
-	}
-	*/
 	return nil
 }
 
