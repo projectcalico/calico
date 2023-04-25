@@ -2442,7 +2442,6 @@ func (m *bpfEndpointManager) updatePolicyProgram(rules polprog.Rules, polDir str
 	for _, ipFamily := range ipVersions {
 		progName := policyProgramName(ap.IfaceName(), polDir, ipFamily)
 		insns, err := m.doUpdatePolicyProgram(ap, progName, rules, ipFamily)
-		// XXX THIS IS BROKEN MAY BE FLIPPED NOW, FIX POLICIES HOOK XXX
 		perr := m.writePolicyDebugInfo(insns, ap.IfaceName(), ipFamily, polDir, ap.HookName(), err)
 		if perr != nil {
 			log.WithError(perr).Warn("error writing policy debug information")
