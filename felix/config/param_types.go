@@ -702,3 +702,24 @@ func (p *KeyDurationListParam) Parse(raw string) (result interface{}, err error)
 	result, err = stringutils.ParseKeyDurationList(raw)
 	return
 }
+
+type StringSliceParam struct {
+	Metadata
+}
+
+func (c *StringSliceParam) Parse(raw string) (result interface{}, err error) {
+	log.WithField("StringSliceParam raw", raw).Info("StringSliceParam")
+	values := strings.Split(raw, ",")
+
+	resultSlice := []string{}
+	for _, in := range values {
+		val := strings.Trim(in, " ")
+		if len(val) == 0 {
+			continue
+		}
+
+		resultSlice = append(resultSlice, val)
+	}
+
+	return resultSlice, nil
+}
