@@ -203,6 +203,7 @@ var _ = Describe("Config override empty", func() {
 })
 
 var t bool = true
+var nilStringSlice []string = nil
 
 var _ = DescribeTable("Config parsing",
 	func(key, value string, expected interface{}, errorExpected ...bool) {
@@ -504,6 +505,11 @@ var _ = DescribeTable("Config parsing",
 		map[string]time.Duration{"a": 0}, false),
 	// Not a required parameter so a bad value is translated to nil:
 	Entry("HealthTimeoutOverrides non-duration", "HealthTimeoutOverrides", "foo=bar", map[string]time.Duration(nil), false),
+
+	Entry("BPFForceTrackPacketsFromIfaces", "BPFForceTrackPacketsFromIfaces", "", nilStringSlice),
+	Entry("BPFForceTrackPacketsFromIfaces", "BPFForceTrackPacketsFromIfaces", "docker0", []string{"docker0"}),
+	Entry("BPFForceTrackPacketsFromIfaces", "BPFForceTrackPacketsFromIfaces", "docker+", []string{"docker+"}),
+	Entry("BPFForceTrackPacketsFromIfaces", "BPFForceTrackPacketsFromIfaces", "docker0,docker1", []string{"docker0", "docker1"}),
 )
 
 var _ = DescribeTable("OpenStack heuristic tests",
