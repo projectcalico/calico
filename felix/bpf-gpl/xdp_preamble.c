@@ -26,7 +26,9 @@ int  cali_xdp_preamble(struct __sk_buff *skb)
 	/* Set the globals for the rest of the prog chain. */
 	*globals = __globals;
 
+#if EMIT_LOGS
 	CALI_LOG("xdp_preamble iface %s\n", globals->iface_name);
+#endif
 
 	/* Jump to the start of the prog chain. */
 	bpf_tail_call(skb, &cali_jump_map, globals->jumps[PROG_INDEX_MAIN]);
