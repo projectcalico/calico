@@ -29,9 +29,9 @@ import (
 // policyManager simply renders policy/profile updates into iptables.Chain objects and sends
 // them to the dataplane layer.
 type policyManager struct {
-	rawTable       iptablesTable
-	mangleTable    iptablesTable
-	filterTable    iptablesTable
+	rawTable       IptablesTable
+	mangleTable    IptablesTable
+	filterTable    IptablesTable
 	ruleRenderer   policyRenderer
 	ipVersion      uint8
 	rawEgressOnly  bool
@@ -44,7 +44,7 @@ type policyRenderer interface {
 	ProfileToIptablesChains(profileID *proto.ProfileID, policy *proto.Profile, ipVersion uint8) (inbound, outbound *iptables.Chain)
 }
 
-func newPolicyManager(rawTable, mangleTable, filterTable iptablesTable, ruleRenderer policyRenderer, ipVersion uint8) *policyManager {
+func newPolicyManager(rawTable, mangleTable, filterTable IptablesTable, ruleRenderer policyRenderer, ipVersion uint8) *policyManager {
 	return &policyManager{
 		rawTable:     rawTable,
 		mangleTable:  mangleTable,
@@ -54,12 +54,12 @@ func newPolicyManager(rawTable, mangleTable, filterTable iptablesTable, ruleRend
 	}
 }
 
-func newRawEgressPolicyManager(rawTable iptablesTable, ruleRenderer policyRenderer, ipVersion uint8,
+func newRawEgressPolicyManager(rawTable IptablesTable, ruleRenderer policyRenderer, ipVersion uint8,
 	ipSetsCallback func(neededIPSets set.Set[string])) *policyManager {
 	return &policyManager{
 		rawTable:       rawTable,
-		mangleTable:    &noopTable{},
-		filterTable:    &noopTable{},
+		mangleTable:    iptables.NewNoopTable(),
+		filterTable:    iptables.NewNoopTable(),
 		ruleRenderer:   ruleRenderer,
 		ipVersion:      ipVersion,
 		rawEgressOnly:  true,
@@ -148,11 +148,3 @@ func (m *policyManager) CompleteDeferredWork() error {
 	// Nothing to do, we don't defer any work.
 	return nil
 }
-
-// noopTable fulfils the iptablesTable interface but does nothing.
-type noopTable struct{}
-
-func (t *noopTable) UpdateChain(chain *iptables.Chain) {}
-func (t *noopTable) UpdateChains([]*iptables.Chain)    {}
-func (t *noopTable) RemoveChains([]*iptables.Chain)    {}
-func (t *noopTable) RemoveChainByName(name string)     {}
