@@ -442,6 +442,10 @@ type FelixConfigurationSpec struct {
 	// BPFPolicyDebugEnabled when true, Felix records detailed information
 	// about the BPF policy programs, which can be examined with the calico-bpf command-line tool.
 	BPFPolicyDebugEnabled *bool `json:"bpfPolicyDebugEnabled,omitempty"`
+	// BPFForceTrackPacketsFromIfaces forces BPF to track packets from a list of specified interfaces.
+	// Essentially this excludes the specified list of interfaces from being NOTRACKed in IP Tables.
+	BPFForceTrackPacketsFromIfaces *[]string `json:"bpfForceTrackPacketsFromIfaces,omitempty"`
+
 	// RouteSource configures where Felix gets its routing information.
 	// - WorkloadIPs: use workload endpoints to construct routes.
 	// - CalicoIPAM: the default - use IPAM data to construct routes.
