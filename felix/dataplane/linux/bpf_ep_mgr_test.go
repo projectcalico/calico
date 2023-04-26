@@ -230,8 +230,8 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		filterTableV4        IptablesTable
 		ifStateMap           *mock.Map
 		countersMap          *mock.Map
-		policyMap            *mock.Map
-		xdpPolicyMap         *mock.Map
+		jumpMap              *mock.Map
+		xdpJumpMap           *mock.Map
 	)
 
 	BeforeEach(func() {
@@ -269,10 +269,10 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 		maps.ProgramsMap = mock.NewMockMap(progsParams)
 		maps.XDPProgramsMap = mock.NewMockMap(progsParams)
-		policyMap = mock.NewMockMap(progsParams)
-		maps.PolicyMap = policyMap
-		xdpPolicyMap = mock.NewMockMap(progsParams)
-		maps.XDPPolicyMap = xdpPolicyMap
+		jumpMap = mock.NewMockMap(progsParams)
+		maps.JumpMap = jumpMap
+		xdpJumpMap = mock.NewMockMap(progsParams)
+		maps.XDPJumpMap = xdpJumpMap
 
 		rrConfigNormal = rules.Config{
 			IPIPEnabled:                 true,
@@ -1089,16 +1089,16 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			err := bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(policyMap.Contents).To(HaveLen(2))
-			Expect(xdpPolicyMap.Contents).To(HaveLen(0))
+			Expect(jumpMap.Contents).To(HaveLen(2))
+			Expect(xdpJumpMap.Contents).To(HaveLen(0))
 
 			genIfaceUpdate("cali12345", ifacemonitor.StateDown, 15)()
 
 			err = bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(policyMap.Contents).To(HaveLen(0))
-			Expect(xdpPolicyMap.Contents).To(HaveLen(0))
+			Expect(jumpMap.Contents).To(HaveLen(0))
+			Expect(xdpJumpMap.Contents).To(HaveLen(0))
 		})
 
 		It("should clean up HEP policies when iface down", func() {
@@ -1115,16 +1115,16 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			err := bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(policyMap.Contents).To(HaveLen(2))
-			Expect(xdpPolicyMap.Contents).To(HaveLen(1))
+			Expect(jumpMap.Contents).To(HaveLen(2))
+			Expect(xdpJumpMap.Contents).To(HaveLen(1))
 
 			genIfaceUpdate("eth0", ifacemonitor.StateDown, 10)()
 
 			err = bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(policyMap.Contents).To(HaveLen(0))
-			Expect(xdpPolicyMap.Contents).To(HaveLen(0))
+			Expect(jumpMap.Contents).To(HaveLen(0))
+			Expect(xdpJumpMap.Contents).To(HaveLen(0))
 		})
 	})
 })
