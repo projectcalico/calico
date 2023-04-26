@@ -46,6 +46,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/hook"
 	"github.com/projectcalico/calico/felix/bpf/ifstate"
 	"github.com/projectcalico/calico/felix/bpf/ipsets"
+	"github.com/projectcalico/calico/felix/bpf/jump"
 	"github.com/projectcalico/calico/felix/bpf/libbpf"
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/nat"
@@ -358,12 +359,12 @@ func setupAndRun(logger testLogger, loglevel, section string, rules *polprog.Rul
 	Expect(err).NotTo(HaveOccurred())
 
 	if rules != nil {
-		jmpMap := jumpMap
-		polMap := policyMap
+		jmpMap := progMap
+		polMap := jumpMap
 		popts := []polprog.Option{}
 		if topts.xdp {
-			jmpMap = jumpMapXDP
-			polMap = policyMapXDP
+			jmpMap = progMapXDP
+			polMap = jumpMapXDP
 			popts = append(popts, polprog.WithAllowDenyJumps(tcdefs.ProgIndexAllowed, tcdefs.ProgIndexDrop))
 		}
 		alloc := &forceAllocator{alloc: idalloc.New()}
@@ -490,8 +491,8 @@ func bpftool(args ...string) ([]byte, error) {
 var (
 	mapInitOnce sync.Once
 
-	natMap, natBEMap, ctMap, rtMap, ipsMap, stateMap, testStateMap, jumpMap, jumpMapXDP, affinityMap, arpMap, fsafeMap, countersMap, ifstateMap, policyMap, policyMapXDP maps.Map
-	allMaps                                                                                                                                                              []maps.Map
+	natMap, natBEMap, ctMap, rtMap, ipsMap, stateMap, testStateMap, progMap, progMapXDP, affinityMap, arpMap, fsafeMap, countersMap, ifstateMap, jumpMap, jumpMapXDP maps.Map
+	allMaps                                                                                                                                                          []maps.Map
 )
 
 func initMapsOnce() {
@@ -528,7 +529,7 @@ func cleanUpMaps() {
 	defer log.SetLevel(logLevel)
 
 	for _, m := range allMaps {
-		if m == stateMap || m == testStateMap || m == jumpMap || m == countersMap {
+		if m == stateMap || m == testStateMap || m == progMap || m == countersMap {
 			continue // Can't clean up array maps
 		}
 		log.WithField("map", m.GetName()).Info("Cleaning")
@@ -592,7 +593,7 @@ func tcUpdateJumpMap(obj *libbpf.Obj, progs []int, hasPolicyProg, hasHostConflic
 			continue
 		}
 		log.WithField("prog", tcdefs.ProgramNames[idx]).WithField("idx", idx).Debug("UpdateJumpMap")
-		err := obj.UpdateJumpMap(jumpMap.GetName(), tcdefs.ProgramNames[idx], idx)
+		err := obj.UpdateJumpMap(progMap.GetName(), tcdefs.ProgramNames[idx], idx)
 		if err != nil {
 			return fmt.Errorf("error updating %s program: %w", tcdefs.ProgramNames[idx], err)
 		}
@@ -607,23 +608,23 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 	forXDP := topts.xdp
 
 	// XXX we do not need to create both sets of maps, but, well, who cares here ;-)
-	jumpMap = hook.NewProgramsMap()
-	policyMap = polprog.Map()
-	jumpMapXDP = hook.NewXDPProgramsMap()
-	policyMapXDP = polprog.XDPMap()
+	progMap = hook.NewProgramsMap()
+	jumpMap = jump.Map()
+	progMapXDP = hook.NewXDPProgramsMap()
+	jumpMapXDP = jump.XDPMap()
 	if ipFamily == "preamble" {
+		_ = unix.Unlink(progMap.Path())
 		_ = unix.Unlink(jumpMap.Path())
-		_ = unix.Unlink(policyMap.Path())
+		_ = unix.Unlink(progMapXDP.Path())
 		_ = unix.Unlink(jumpMapXDP.Path())
-		_ = unix.Unlink(policyMapXDP.Path())
 	}
-	err := jumpMap.EnsureExists()
+	err := progMap.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
-	err = policyMap.EnsureExists()
+	err = jumpMap.EnsureExists()
+	Expect(err).NotTo(HaveOccurred())
+	err = progMapXDP.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 	err = jumpMapXDP.EnsureExists()
-	Expect(err).NotTo(HaveOccurred())
-	err = policyMapXDP.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 
 	obj, err := libbpf.OpenObject(fname)
@@ -705,9 +706,9 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 		polProgPath = path.Join(bpfFsDir, polProgPath)
 		_, err = os.Stat(polProgPath)
 		if err == nil {
-			m := policyMap
+			m := jumpMap
 			if forXDP {
-				m = policyMapXDP
+				m = jumpMapXDP
 			}
 			err = jumpMapUpdatePinned(m, policyIdx, polProgPath)
 			if err != nil {
@@ -1450,7 +1451,7 @@ func TestMapIterWithDeleteLastOfBatch(t *testing.T) {
 func TestJumpMap(t *testing.T) {
 	RegisterTestingT(t)
 
-	jumpMapFD := jumpMap.MapFD()
+	jumpMapFD := progMap.MapFD()
 	pg := polprog.NewBuilder(idalloc.New(), ipsMap.MapFD(), stateMap.MapFD(), jumpMapFD,
 		polprog.WithAllowDenyJumps(tcdefs.ProgIndexAllowed, tcdefs.ProgIndexDrop))
 	rules := polprog.Rules{}

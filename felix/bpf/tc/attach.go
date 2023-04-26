@@ -37,6 +37,7 @@ import (
 type AttachPoint struct {
 	bpf.AttachPoint
 
+	LogFilter            string
 	Type                 tcdefs.EndpointType
 	ToOrFrom             tcdefs.ToOrFromEp
 	HookLayout4          hook.Layout
