@@ -95,9 +95,9 @@ enum cali_jump_index {
 
 #if CALI_F_XDP
 
-#define cali_policy_map map_symbol(xdp_cali_pols, 2)
+#define cali_jump_prog_map map_symbol(xdp_cali_jump, 2)
 
-struct bpf_map_def_extended __attribute__((section("maps"))) cali_policy_map = {
+struct bpf_map_def_extended __attribute__((section("maps"))) cali_jump_prog_map = {
 	.type = BPF_MAP_TYPE_PROG_ARRAY,
 	.key_size = 4,
 	.value_size = 4,
@@ -108,12 +108,12 @@ struct bpf_map_def_extended __attribute__((section("maps"))) cali_policy_map = {
  * is shared!
  */
 #define CALI_JUMP_TO_POLICY(ctx) \
-	bpf_tail_call((ctx)->xdp, &cali_policy_map, (ctx)->xdp_globals->jumps[PROG_INDEX_POLICY])
+	bpf_tail_call((ctx)->xdp, &cali_jump_prog_map, (ctx)->xdp_globals->jumps[PROG_INDEX_POLICY])
 #else
 
-#define cali_policy_map map_symbol(cali_pols, 2)
+#define cali_jump_prog_map map_symbol(cali_jump, 2)
 
-struct bpf_map_def_extended __attribute__((section("maps"))) cali_policy_map = {
+struct bpf_map_def_extended __attribute__((section("maps"))) cali_jump_prog_map = {
 	.type = BPF_MAP_TYPE_PROG_ARRAY,
 	.key_size = 4,
 	.value_size = 4,
@@ -121,12 +121,12 @@ struct bpf_map_def_extended __attribute__((section("maps"))) cali_policy_map = {
 };
 
 #define CALI_JUMP_TO_POLICY(ctx) do {	\
-	(ctx)->skb->cb[0] = (ctx)->globals->jumps[PROG_PATH(PROG_INDEX_ALLOWED)];		\
-	(ctx)->skb->cb[1] = (ctx)->globals->jumps[PROG_PATH(PROG_INDEX_DROP)];			\
+	(ctx)->skb->cb[0] = (ctx)->globals->jumps[PROG_PATH(PROG_INDEX_ALLOWED)];			\
+	(ctx)->skb->cb[1] = (ctx)->globals->jumps[PROG_PATH(PROG_INDEX_DROP)];				\
 	CALI_DEBUG("policy allow prog at %d\n", (ctx)->globals->jumps[PROG_PATH(PROG_INDEX_ALLOWED)]);	\
 	CALI_DEBUG("policy deny prog at %d\n", (ctx)->globals->jumps[PROG_PATH(PROG_INDEX_DROP)]);	\
-	CALI_DEBUG("jump to policy prog at %d\n", (ctx)->globals->jumps[PROG_INDEX_POLICY]);	\
-	bpf_tail_call((ctx)->skb, &cali_policy_map, (ctx)->globals->jumps[PROG_INDEX_POLICY]);	\
+	CALI_DEBUG("jump to policy prog at %d\n", (ctx)->globals->jumps[PROG_INDEX_POLICY]);		\
+	bpf_tail_call((ctx)->skb, &cali_jump_prog_map, (ctx)->globals->jumps[PROG_INDEX_POLICY]);	\
 } while (0)
 
 #endif
