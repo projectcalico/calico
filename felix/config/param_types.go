@@ -702,3 +702,35 @@ func (p *KeyDurationListParam) Parse(raw string) (result interface{}, err error)
 	result, err = stringutils.ParseKeyDurationList(raw)
 	return
 }
+
+type StringSliceParam struct {
+	Metadata
+	ValidationRegex *regexp.Regexp
+}
+
+func (p *StringSliceParam) Parse(raw string) (result interface{}, err error) {
+	log.WithField("StringSliceParam raw", raw).Info("StringSliceParam")
+	values := strings.Split(raw, ",")
+
+	resultSlice := []string{}
+	for _, in := range values {
+		val := strings.Trim(in, " ")
+		if len(val) == 0 {
+			continue
+		}
+
+		// Validate string slice entry as necessary.
+		if p.ValidationRegex != nil {
+			match := p.ValidationRegex.MatchString(val)
+			if !match {
+				err = p.parseFailed(raw,
+					fmt.Sprintf("invalid entry does not match regex %s", p.ValidationRegex.String()))
+				return
+			}
+		}
+
+		resultSlice = append(resultSlice, val)
+	}
+
+	return resultSlice, nil
+}
