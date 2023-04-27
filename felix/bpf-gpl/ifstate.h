@@ -11,6 +11,8 @@ struct ifstate_val {
 	__s32 xdp_policy;
 	__s32 ingress_policy;
 	__s32 egress_policy;
+	__s32 tc_filter_ingress;
+	__s32 tc_filter_egress;
 };
 
 CALI_MAP(cali_iface, 3,
