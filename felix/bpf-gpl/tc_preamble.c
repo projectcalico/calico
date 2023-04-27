@@ -36,15 +36,17 @@ int  cali_tc_preamble(struct __sk_buff *skb)
 	if (globals->log_filter_jmp != (__u32)-1) {
 		skb->cb[0] = globals->jumps[PROG_INDEX_MAIN];
 		skb->cb[1] = globals->jumps[PROG_INDEX_MAIN_DEBUG];
-		bpf_tail_call(skb, &cali_jump_map, globals->log_filter_jmp);
+		bpf_tail_call(skb, &cali_jump_prog_map, globals->log_filter_jmp);
 		CALI_LOG("tc_preamble iface %s failed to call log filter %d\n",
 				globals->iface_name, globals->log_filter_jmp);
 		/* try to jump to the regular path */
 	}
 
 	/* Jump to the start of the prog chain. */
+#if EMIT_LOGS
 	CALI_LOG("tc_preamble iface %s jump to %d\n",
 			globals->iface_name, globals->jumps[PROG_INDEX_MAIN]);
+#endif
 	bpf_tail_call(skb, &cali_jump_map, globals->jumps[PROG_INDEX_MAIN]);
 	CALI_LOG("tc_preamble iface %s failed to call main %d\n",
 			globals->iface_name, globals->jumps[PROG_INDEX_MAIN]);

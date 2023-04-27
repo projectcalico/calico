@@ -50,7 +50,7 @@ func TestAttach(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 
 	programs := bpfmaps.ProgramsMap.(*hook.ProgramsMap)
-	loglevel := "debug"
+	loglevel := "off"
 
 	bpfEpMgr, err := linux.NewTestEpMgr(
 		&linux.Config{

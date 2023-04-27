@@ -34,7 +34,7 @@ func SetMapSize(size int) {
 
 const (
 	KeySize    = 4
-	ValueSize  = 4 + 16 + 3*4
+	ValueSize  = 4 + 16 + 3*4 + 2*4
 	MaxEntries = 1000
 )
 
@@ -93,7 +93,7 @@ func KeyFromBytes(b []byte) Key {
 
 type Value [ValueSize]byte
 
-func NewValue(flags uint32, name string, xdpPol, ingressPol, egressPol int) Value {
+func NewValue(flags uint32, name string, xdpPol, ingressPol, egressPol, tcIngressFilter, tcEgressFilter int) Value {
 	var v Value
 
 	binary.LittleEndian.PutUint32(v[:], flags)
@@ -101,6 +101,8 @@ func NewValue(flags uint32, name string, xdpPol, ingressPol, egressPol int) Valu
 	binary.LittleEndian.PutUint32(v[4+16+0:4+16+4], uint32(xdpPol))
 	binary.LittleEndian.PutUint32(v[4+16+4:4+16+8], uint32(ingressPol))
 	binary.LittleEndian.PutUint32(v[4+16+8:4+16+12], uint32(egressPol))
+	binary.LittleEndian.PutUint32(v[4+16+12:4+16+16], uint32(tcIngressFilter))
+	binary.LittleEndian.PutUint32(v[4+16+16:4+16+20], uint32(tcEgressFilter))
 
 	return v
 }
@@ -127,6 +129,14 @@ func (v Value) IngressPolicy() int {
 
 func (v Value) EgressPolicy() int {
 	return int(int32(binary.LittleEndian.Uint32(v[4+16+8 : 4+16+12])))
+}
+
+func (v Value) TcIngressFilter() int {
+	return int(int32(binary.LittleEndian.Uint32(v[4+16+12 : 4+16+16])))
+}
+
+func (v Value) TcEgressFilter() int {
+	return int(int32(binary.LittleEndian.Uint32(v[4+16+16 : 4+16+20])))
 }
 
 func (v Value) String() string {
