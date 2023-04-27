@@ -139,6 +139,10 @@ func (m *mockDataplane) removePolicyProgram(ap attachPoint) error {
 	return nil
 }
 
+func (m *mockDataplane) updateLogFilter(ap attachPoint) error {
+	return nil
+}
+
 func (m *mockDataplane) setAcceptLocal(iface string, val bool) error {
 	return nil
 }
@@ -932,19 +936,19 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		It("should clean up", func() {
 			_ = ifStateMap.Update(
 				ifstate.NewKey(123).AsBytes(),
-				ifstate.NewValue(ifstate.FlgReady, "eth123", -1, -1, -1).AsBytes(),
+				ifstate.NewValue(ifstate.FlgReady, "eth123", -1, -1, -1, -1, -1).AsBytes(),
 			)
 			_ = ifStateMap.Update(
 				ifstate.NewKey(124).AsBytes(),
-				ifstate.NewValue(0, "eth124", -1, -1, -1).AsBytes(),
+				ifstate.NewValue(0, "eth124", -1, -1, -1, -1, -1).AsBytes(),
 			)
 			_ = ifStateMap.Update(
 				ifstate.NewKey(125).AsBytes(),
-				ifstate.NewValue(ifstate.FlgWEP|ifstate.FlgReady, "eth125", -1, -1, -1).AsBytes(),
+				ifstate.NewValue(ifstate.FlgWEP|ifstate.FlgReady, "eth125", -1, -1, -1, -1, -1).AsBytes(),
 			)
 			_ = ifStateMap.Update(
 				ifstate.NewKey(126).AsBytes(),
-				ifstate.NewValue(ifstate.FlgWEP, "eth123", -1, -1, -1).AsBytes(),
+				ifstate.NewValue(ifstate.FlgWEP, "eth123", -1, -1, -1, -1, -1).AsBytes(),
 			)
 
 			err := bpfEpMgr.CompleteDeferredWork()
@@ -956,7 +960,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		It("should clean up with update", func() {
 			_ = ifStateMap.Update(
 				ifstate.NewKey(123).AsBytes(),
-				ifstate.NewValue(ifstate.FlgReady, "eth123", -1, -1, -1).AsBytes(),
+				ifstate.NewValue(ifstate.FlgReady, "eth123", -1, -1, -1, -1, -1).AsBytes(),
 			)
 
 			genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
