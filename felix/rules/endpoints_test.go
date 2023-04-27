@@ -89,7 +89,8 @@ var _ = Describe("Endpoints", func() {
 
 		dropVXLANRule := Rule{
 			Match: Match().ProtocolNum(ProtoUDP).
-				DestPorts(uint16(VXLANPort)),
+				DestPorts(VXLANPort).
+				VXLANVNI(VXLANVNI),
 			Action:  denyAction,
 			Comment: []string{fmt.Sprintf("%s VXLAN encapped packets originating in workloads", denyActionString)},
 		}
