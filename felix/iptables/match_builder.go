@@ -20,6 +20,7 @@ import (
 	"strings"
 
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/net/bpf"
 
 	"github.com/projectcalico/calico/felix/proto"
 )
@@ -310,16 +311,19 @@ func (m MatchCriteria) NotICMPV6TypeAndCode(t, c uint8) MatchCriteria {
 
 // VXLANVNI matches on the VNI contained within the VXLAN header.  It assumes that this is indeed a VXLAN
 // packet; i.e. it should be used with a protocol==UDP and port==VXLAN port match.
-//
-// Note: the -m u32 option is not supported on iptables in NFT mode.
-// https://wiki.nftables.org/wiki-nftables/index.php/Supported_features_compared_to_xtables#u32
 func (m MatchCriteria) VXLANVNI(vni uint32) MatchCriteria {
-	// This uses the U32 module, a simple VM for extracting bytes from a packet.  See
-	// http://www.stearns.org/doc/iptables-u32.current.html
-	return append(m, fmt.Sprintf(`-m u32 --u32 "`+
-		`0>>22&0x3C@` /* jump over the IP header */ +
-		`12>>8=0x%x` /* skip over 8 bytes of UDP header and 4 of VXLAN and compare 3 bytes with the expected VNI */ +
-		`"`, vni))
+	// This uses the bpf module, which matches with a cBPF (and on more recent kernels, eBPF)
+	// socket filter program. See https://ipset.netfilter.org/iptables-extensions.man.html#lbAH
+	prog := matchVXLANVNI(vni)
+
+	var b strings.Builder
+	b.WriteString(`-m bpf --bytecode "`)
+	fmt.Fprintf(&b, "%d", len(prog))
+	for _, ins := range prog {
+		fmt.Fprintf(&b, ",%d %d %d %d", ins.Op, ins.Jt, ins.Jf, ins.K)
+	}
+	b.WriteByte('"')
+	return append(m, b.String())
 }
 
 func PortsToMultiport(ports []uint16) string {
@@ -342,4 +346,30 @@ func PortRangessToMultiport(ports []*proto.PortRange) string {
 	}
 	portsString := strings.Join(portFragments, ",")
 	return portsString
+}
+
+// vniMatchBPF returns a cBPF socket filter program which matches on the VXLAN
+// Network ID of encapsulated packets. The program assumes that it will only be
+// applied to VXLAN UDP datagrams. It is compatible with both IPv4 and IPv6.
+func matchVXLANVNI(vni uint32) []bpf.RawInstruction {
+	asm, err := bpf.Assemble([]bpf.Instruction{
+		// Load offset of UDP payload into X.
+		bpf.LoadExtension{Num: bpf.ExtPayloadOffset}, // ld poff
+		bpf.TAX{}, // tax
+
+		bpf.LoadIndirect{Off: 4, Size: 4},                      // ld [x + 4] ; Load VXLAN ID into top 24 bits of A
+		bpf.ALUOpConstant{Op: bpf.ALUOpShiftRight, Val: 8},     // rsh #8     ; A >>= 8
+		bpf.JumpIf{Cond: bpf.JumpEqual, Val: vni, SkipTrue: 1}, // jeq $vni, match
+		bpf.RetConstant{Val: 0},                                // ret #0
+		bpf.RetConstant{Val: ^uint32(0)},                       // match: ret #-1
+	})
+	// bpf.Assemble() only errors if an instruction is invalid. As the only variable
+	// part of the program is an instruction value for which the entire range is
+	// valid, whether the program can be successfully assembled is independent of
+	// the input. Given that the only recourse is to fix this function and
+	// recompile, there's little value in bubbling the error up to the caller.
+	if err != nil {
+		panic(err)
+	}
+	return asm
 }
