@@ -42,6 +42,7 @@ ADD bin/healthz-amd64 /healthz
 COPY --from=ubi /lib64/libpthread.so.0 /lib64/libpthread.so.0
 COPY --from=ubi /lib64/libc.so.6 /lib64/libc.so.6
 COPY --from=ubi /lib64/ld-linux-x86-64.so.2 /lib64/ld-linux-x86-64.so.2
+COPY --from=ubi /lib64/libresolv.so.2 /lib64/libresolv.so.2
 
 # Copy hostname configuration files from UBI so glibc hostname lookups work.
 COPY --from=ubi /etc/host.conf /etc/host.conf
