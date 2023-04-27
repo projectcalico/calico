@@ -362,7 +362,8 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 	if !allowVXLANEncap {
 		rules = append(rules, Rule{
 			Match: Match().ProtocolNum(ProtoUDP).
-				DestPorts(uint16(r.Config.VXLANPort)),
+				DestPorts(uint16(r.Config.VXLANPort)).
+				VXLANVNI(uint32(r.Config.VXLANVNI)),
 			Action:  r.IptablesFilterDenyAction(),
 			Comment: []string{fmt.Sprintf("%s VXLAN encapped packets originating in workloads", r.IptablesFilterDenyAction())},
 		})

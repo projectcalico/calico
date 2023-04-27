@@ -229,21 +229,23 @@ func (r *DefaultRuleRenderer) filterInputChain(ipVersion uint8) *Chain {
 	}
 
 	if ipVersion == 4 && r.VXLANEnabled {
-		// IPv4 VXLAN is enabled, filter incoming VXLAN packets that match our VXLAN port to ensure they
+		// IPv4 VXLAN is enabled, filter incoming VXLAN packets that match our VXLAN port and VNI to ensure they
 		// come from a recognised host and are going to a local address on the host.
 		inputRules = append(inputRules,
 			Rule{
 				Match: Match().ProtocolNum(ProtoUDP).
 					DestPorts(uint16(r.Config.VXLANPort)).
 					SourceIPSet(r.IPSetConfigV4.NameForMainIPSet(IPSetIDAllVXLANSourceNets)).
-					DestAddrType(AddrTypeLocal),
+					DestAddrType(AddrTypeLocal).
+					VXLANVNI(uint32(r.Config.VXLANVNI)), /* relies on protocol and port check */
 				Action:  r.filterAllowAction,
 				Comment: []string{"Allow IPv4 VXLAN packets from allowed hosts"},
 			},
 			Rule{
 				Match: Match().ProtocolNum(ProtoUDP).
 					DestPorts(uint16(r.Config.VXLANPort)).
-					DestAddrType(AddrTypeLocal),
+					DestAddrType(AddrTypeLocal).
+					VXLANVNI(uint32(r.Config.VXLANVNI)), /* relies on protocol and port check */
 				Action:  DropAction{},
 				Comment: []string{"Drop IPv4 VXLAN packets from non-allowed hosts"},
 			},
@@ -251,21 +253,23 @@ func (r *DefaultRuleRenderer) filterInputChain(ipVersion uint8) *Chain {
 	}
 
 	if ipVersion == 6 && r.VXLANEnabledV6 {
-		// IPv6 VXLAN is enabled, filter incoming VXLAN packets that match our VXLAN port to ensure they
+		// IPv6 VXLAN is enabled, filter incoming VXLAN packets that match our VXLAN port and VNI to ensure they
 		// come from a recognised host and are going to a local address on the host.
 		inputRules = append(inputRules,
 			Rule{
 				Match: Match().ProtocolNum(ProtoUDP).
 					DestPorts(uint16(r.Config.VXLANPort)).
 					SourceIPSet(r.IPSetConfigV6.NameForMainIPSet(IPSetIDAllVXLANSourceNets)).
-					DestAddrType(AddrTypeLocal),
+					DestAddrType(AddrTypeLocal).
+					VXLANVNI(uint32(r.Config.VXLANVNI)), /* relies on protocol and port check */
 				Action:  r.filterAllowAction,
 				Comment: []string{"Allow IPv6 VXLAN packets from allowed hosts"},
 			},
 			Rule{
 				Match: Match().ProtocolNum(ProtoUDP).
 					DestPorts(uint16(r.Config.VXLANPort)).
-					DestAddrType(AddrTypeLocal),
+					DestAddrType(AddrTypeLocal).
+					VXLANVNI(uint32(r.Config.VXLANVNI)), /* relies on protocol and port check */
 				Action:  r.IptablesFilterDenyAction(),
 				Comment: []string{fmt.Sprintf("%s IPv6 VXLAN packets from non-allowed hosts", r.IptablesFilterDenyAction())},
 			},
@@ -744,7 +748,8 @@ func (r *DefaultRuleRenderer) filterOutputChain(ipVersion uint8) *Chain {
 				Match: Match().ProtocolNum(ProtoUDP).
 					DestPorts(uint16(r.Config.VXLANPort)).
 					SrcAddrType(AddrTypeLocal, false).
-					DestIPSet(r.IPSetConfigV4.NameForMainIPSet(IPSetIDAllVXLANSourceNets)),
+					DestIPSet(r.IPSetConfigV4.NameForMainIPSet(IPSetIDAllVXLANSourceNets)).
+					VXLANVNI(uint32(r.Config.VXLANVNI)), /* relies on protocol and port check */
 				Action:  r.filterAllowAction,
 				Comment: []string{"Allow IPv4 VXLAN packets to other allowed hosts"},
 			},
@@ -760,7 +765,8 @@ func (r *DefaultRuleRenderer) filterOutputChain(ipVersion uint8) *Chain {
 				Match: Match().ProtocolNum(ProtoUDP).
 					DestPorts(uint16(r.Config.VXLANPort)).
 					SrcAddrType(AddrTypeLocal, false).
-					DestIPSet(r.IPSetConfigV6.NameForMainIPSet(IPSetIDAllVXLANSourceNets)),
+					DestIPSet(r.IPSetConfigV6.NameForMainIPSet(IPSetIDAllVXLANSourceNets)).
+					VXLANVNI(uint32(r.Config.VXLANVNI)), /* relies on protocol and port check */
 				Action:  r.filterAllowAction,
 				Comment: []string{"Allow IPv6 VXLAN packets to other allowed hosts"},
 			},
