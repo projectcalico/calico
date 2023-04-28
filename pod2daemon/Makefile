@@ -69,7 +69,7 @@ bin/csi-driver-%: $(SRC_FILES)
 	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) go build -v -o bin/csi-driver-$(ARCH) csidriver/main.go
 
 UPSTREAM_REGISTRAR_PROJECT ?= kubernetes-csi/$(REGISTRAR_IMAGE)
-UPSTREAM_REGISTRAR_TAG     ?= v2.5.1
+UPSTREAM_REGISTRAR_TAG     ?= v2.8.0
 
 REGISTRAR_TIGERA_BUILD_CMD="cd /go/src/github.com/$(UPSTREAM_REGISTRAR_PROJECT) && \
                     			  go build -v -o bin/csi-node-driver-registrar cmd/csi-node-driver-registrar/*.go"
