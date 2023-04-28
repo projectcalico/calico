@@ -179,6 +179,7 @@ func init() {
 	registerFieldValidator("mustBeNil", validateMustBeNil)
 	registerFieldValidator("mustBeFalse", validateMustBeFalse)
 	registerFieldValidator("ifaceFilter", validateIfaceFilter)
+	registerFieldValidator("ifaceFilterSlice", validateIfaceFilterSlice)
 	registerFieldValidator("mac", validateMAC)
 	registerFieldValidator("iptablesBackend", validateIptablesBackend)
 	registerFieldValidator("keyValueList", validateKeyValueList)
@@ -295,6 +296,22 @@ func validateIfaceFilter(fl validator.FieldLevel) bool {
 	s := fl.Field().String()
 	log.Debugf("Validate Interface Filter : %s", s)
 	return ifaceFilterRegex.MatchString(s)
+}
+
+func validateIfaceFilterSlice(fl validator.FieldLevel) bool {
+	slice := fl.Field().Interface().([]string)
+	log.Debugf("Validate Interface Filter Slice : %v", slice)
+
+	for _, val := range slice {
+		// Important: must use ifaceFilterRegex to allow interface wildcard match
+		// e.g. "docker+" which the standard interfaceRegex does not accommodate.
+		match := ifaceFilterRegex.MatchString(val)
+		if !match {
+			return false
+		}
+	}
+
+	return true
 }
 
 func validateDatastoreType(fl validator.FieldLevel) bool {
