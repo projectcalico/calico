@@ -950,12 +950,12 @@ spec:
                   permissive L2 network.  [Default: Tunnel]'
                 type: string
               bpfForceTrackPacketsFromIfaces:
-                description: BPFForceTrackPacketsFromIfaces in BPF mode, forces traffic
-                  from these interfaces to skip Calico's iptables NOTRACK rule, allowing
+                description: 'BPFForceTrackPacketsFromIfaces in BPF mode, forces traffic
+                  from these interfaces to skip Calico''s iptables NOTRACK rule, allowing
                   traffic from those interfaces to be tracked by Linux conntrack.  Should
                   only be used for interfaces that are not used for the Calico fabric.  For
                   example, a docker bridge device for non-Calico-networked containers.
-                  BPFForceTrackPacketsFromIfaces *[]string `json:"bpfForceTrackPacketsFromIfaces,omitempty"`
+                  [Default: docker+]'
                 items:
                   type: string
                 type: array
