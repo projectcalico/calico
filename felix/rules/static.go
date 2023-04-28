@@ -1146,8 +1146,6 @@ func (r *DefaultRuleRenderer) StaticBPFModeRawChains(ipVersion uint8,
 
 	// BPF Untracked Flow Rules:
 	var bpfUntrackedFlowRules []Rule
-	var bpfUntrackedFlowChain *Chain
-
 	if bypassHostConntrack {
 		// Iterate all BPF interfaces forced to track packets and append rule.
 		for _, interfaceName := range r.BPFForceTrackPacketsFromIfaces {
@@ -1188,7 +1186,7 @@ func (r *DefaultRuleRenderer) StaticBPFModeRawChains(ipVersion uint8,
 			},
 		)
 	}
-	bpfUntrackedFlowChain = &Chain{
+	bpfUntrackedFlowChain := &Chain{
 		Name:  ChainRawUntrackedFlows,
 		Rules: bpfUntrackedFlowRules,
 	}
