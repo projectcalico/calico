@@ -196,7 +196,7 @@ type Config struct {
 	BPFHostConntrackBypass             bool             `config:"bool;true"`
 	BPFEnforceRPF                      string           `config:"oneof(Disabled,Strict,Loose);Loose;non-zero"`
 	BPFPolicyDebugEnabled              bool             `config:"bool;true"`
-	BPFForceTrackPacketsFromIfaces     []string         `config:"string-slice;;die-on-fail"`
+	BPFForceTrackPacketsFromIfaces     []string         `config:"string-slice;docker+"`
 
 	// DebugBPFCgroupV2 controls the cgroup v2 path that we apply the connect-time load balancer to.  Most distros
 	// are configured for cgroup v1, which prevents all but the root cgroup v2 from working so this is only useful
