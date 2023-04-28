@@ -15,15 +15,51 @@
 package jump
 
 import (
+	"encoding/binary"
+
+	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/maps"
 )
 
-func MapForTest() maps.Map {
-	return maps.NewPinnedMap(maps.MapParameters{
-		Type:       "prog_array",
-		KeySize:    4,
-		ValueSize:  4,
-		MaxEntries: 32,
-		Name:       maps.JumpMapName(),
-	})
+const (
+	MaxEntries    = 10000
+	XDPMaxEntries = 100
+)
+
+var MapParameters = maps.MapParameters{
+	Type:       "prog_array",
+	KeySize:    4,
+	ValueSize:  4,
+	MaxEntries: MaxEntries,
+	Name:       "cali_jump",
+	Version:    2,
+}
+
+func Map() maps.Map {
+	return maps.NewPinnedMap(MapParameters)
+}
+
+var XDPMapParameters = maps.MapParameters{
+	Type:       "prog_array",
+	KeySize:    4,
+	ValueSize:  4,
+	MaxEntries: XDPMaxEntries,
+	Name:       "xdp_cali_jump",
+	Version:    2,
+}
+
+func XDPMap() maps.Map {
+	return maps.NewPinnedMap(XDPMapParameters)
+}
+
+func Key(idx int) []byte {
+	var k [4]byte
+	binary.LittleEndian.PutUint32(k[:], uint32(idx))
+	return k[:]
+}
+
+func Value(fd bpf.ProgFD) []byte {
+	var v [4]byte
+	binary.LittleEndian.PutUint32(v[:], uint32(fd))
+	return v[:]
 }
