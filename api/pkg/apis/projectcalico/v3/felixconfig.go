@@ -442,9 +442,12 @@ type FelixConfigurationSpec struct {
 	// BPFPolicyDebugEnabled when true, Felix records detailed information
 	// about the BPF policy programs, which can be examined with the calico-bpf command-line tool.
 	BPFPolicyDebugEnabled *bool `json:"bpfPolicyDebugEnabled,omitempty"`
-	// BPFForceTrackPacketsFromIfaces forces BPF to track packets from a list of specified interfaces.
-	// Essentially this excludes the specified list of interfaces from being NOTRACKed in IP Tables.
-	BPFForceTrackPacketsFromIfaces *[]string `json:"bpfForceTrackPacketsFromIfaces,omitempty"`
+	// BPFForceTrackPacketsFromIfaces in BPF mode, forces traffic from these interfaces
+	// to skip Calico's iptables NOTRACK rule, allowing traffic from those interfaces to be
+	// tracked by Linux conntrack.  Should only be used for interfaces that are not used for
+	// the Calico fabric.  For example, a docker bridge device for non-Calico-networked
+	// containers. [Default: docker+]
+	BPFForceTrackPacketsFromIfaces *[]string `json:"bpfForceTrackPacketsFromIfaces,omitempty" validate:"omitempty,ifaceFilterSlice"`
 
 	// RouteSource configures where Felix gets its routing information.
 	// - WorkloadIPs: use workload endpoints to construct routes.
