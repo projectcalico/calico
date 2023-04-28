@@ -353,9 +353,8 @@ func PortRangessToMultiport(ports []*proto.PortRange) string {
 // applied to VXLAN UDP datagrams. It is compatible with both IPv4 and IPv6.
 func matchVXLANVNI(vni uint32) []bpf.RawInstruction {
 	asm, err := bpf.Assemble([]bpf.Instruction{
-		// Load offset of UDP payload into X.
-		bpf.LoadExtension{Num: bpf.ExtPayloadOffset}, // ld poff
-		bpf.TAX{}, // tax
+		bpf.LoadExtension{Num: bpf.ExtPayloadOffset}, // ld poff ; Load offset of UDP payload into X
+		bpf.TAX{}, // tax ; Copy X to A
 
 		bpf.LoadIndirect{Off: 4, Size: 4},                      // ld [x + 4] ; Load VXLAN ID into top 24 bits of A
 		bpf.ALUOpConstant{Op: bpf.ALUOpShiftRight, Val: 8},     // rsh #8     ; A >>= 8
@@ -369,7 +368,7 @@ func matchVXLANVNI(vni uint32) []bpf.RawInstruction {
 	// the input. Given that the only recourse is to fix this function and
 	// recompile, there's little value in bubbling the error up to the caller.
 	if err != nil {
-		panic(err)
+		log.WithError(err).Panic("Failed to assemble static BPF VNI match program.")
 	}
 	return asm
 }
