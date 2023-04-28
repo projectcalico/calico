@@ -2930,7 +2930,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"bpfForceTrackPacketsFromIfaces": {
 						SchemaProps: spec.SchemaProps{
-							Description: "BPFForceTrackPacketsFromIfaces forces BPF to track packets from a list of specified interfaces. Essentially this excludes the specified list of interfaces from being NOTRACKed in IP Tables.",
+							Description: "BPFForceTrackPacketsFromIfaces in BPF mode, forces traffic from these interfaces to skip Calico's iptables NOTRACK rule, allowing traffic from those interfaces to be tracked by Linux conntrack.  Should only be used for interfaces that are not used for the Calico fabric.  For example, a docker bridge device for non-Calico-networked containers. BPFForceTrackPacketsFromIfaces *[]string `json:\"bpfForceTrackPacketsFromIfaces,omitempty\"`",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
