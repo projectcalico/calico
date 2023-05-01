@@ -43,6 +43,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	"github.com/projectcalico/calico/felix/bpf/counters"
 	"github.com/projectcalico/calico/felix/bpf/failsafes"
+	"github.com/projectcalico/calico/felix/bpf/hook"
 	"github.com/projectcalico/calico/felix/bpf/ifstate"
 	"github.com/projectcalico/calico/felix/bpf/ipsets"
 	"github.com/projectcalico/calico/felix/bpf/jump"
@@ -159,6 +160,47 @@ func expectMark(expect int) {
 	}
 }
 
+var xdpJumpMapIndexes = map[string]map[int]string{
+	"IPv4": map[int]string{
+		tcdefs.ProgIndexMain:    "calico_xdp_main",
+		tcdefs.ProgIndexPolicy:  "calico_xdp_norm_pol_tail",
+		tcdefs.ProgIndexAllowed: "calico_xdp_accepted_entrypoint",
+		tcdefs.ProgIndexDrop:    "calico_xdp_drop",
+	},
+	"IPv4 debug": map[int]string{
+		tcdefs.ProgIndexMain:    "calico_xdp_main",
+		tcdefs.ProgIndexPolicy:  "calico_xdp_norm_pol_tail",
+		tcdefs.ProgIndexAllowed: "calico_xdp_accepted_entrypoint",
+		tcdefs.ProgIndexDrop:    "calico_xdp_drop",
+	},
+}
+
+var tcJumpMapIndexes = map[string][]int{
+	"IPv4": []int{
+		tcdefs.ProgIndexMain,
+		tcdefs.ProgIndexPolicy,
+		tcdefs.ProgIndexAllowed,
+		tcdefs.ProgIndexIcmp,
+		tcdefs.ProgIndexDrop,
+		tcdefs.ProgIndexHostCtConflict,
+	},
+	"IPv4 debug": []int{
+		tcdefs.ProgIndexMainDebug,
+		tcdefs.ProgIndexPolicyDebug,
+		tcdefs.ProgIndexAllowedDebug,
+		tcdefs.ProgIndexIcmpDebug,
+		tcdefs.ProgIndexDropDebug,
+		tcdefs.ProgIndexHostCtConflictDebug,
+	},
+	"IPv6": []int{
+		tcdefs.ProgIndexV6PrologueDebug,
+		tcdefs.ProgIndexV6PolicyDebug,
+		tcdefs.ProgIndexV6AllowedDebug,
+		tcdefs.ProgIndexV6IcmpDebug,
+		tcdefs.ProgIndexV6DropDebug,
+	},
+}
+
 func TestCompileTemplateRun(t *testing.T) {
 	skbMark = tcdefs.MarkSeen
 	runBpfTest(t, "calico_to_workload_ep", &polprog.Rules{}, func(bpfrun bpfProgRunFn) {
@@ -271,9 +313,17 @@ func setupAndRun(logger testLogger, loglevel, section string, rules *polprog.Rul
 
 		if strings.Contains(section, "_dsr") {
 			obj += "_dsr"
-			// XXX bit of a hack, we should change the section names to contain _dsr
-			section = strings.Trim(section, "_dsr")
 		}
+	}
+
+	if !topts.xdp {
+		o, err := objLoad("../../bpf-gpl/bin/tc_preamble.o", bpfFsDir, "preamble", topts, false, false)
+		Expect(err).NotTo(HaveOccurred())
+		defer o.Close()
+	} else {
+		o, err := objLoad("../../bpf-gpl/bin/xdp_preamble.o", bpfFsDir, "preamble", topts, false, false)
+		Expect(err).NotTo(HaveOccurred())
+		defer o.Close()
 	}
 
 	log.Infof("Patching binary %s", obj+".o")
@@ -288,7 +338,12 @@ func setupAndRun(logger testLogger, loglevel, section string, rules *polprog.Rul
 	err = bin.WriteToFile(tempObj)
 	Expect(err).NotTo(HaveOccurred())
 
-	o, err := objLoad(tempObj, bpfFsDir, "IPv4", topts, rules != nil, true)
+	ipFamily := "IPv4"
+	if loglevel == "debug" {
+		ipFamily += " debug"
+	}
+
+	o, err := objLoad(tempObj, bpfFsDir, ipFamily, topts, rules != nil, true)
 	Expect(err).NotTo(HaveOccurred())
 	defer o.Close()
 
@@ -304,12 +359,20 @@ func setupAndRun(logger testLogger, loglevel, section string, rules *polprog.Rul
 	Expect(err).NotTo(HaveOccurred())
 
 	if rules != nil {
+		jmpMap := progMap
+		polMap := jumpMap
+		popts := []polprog.Option{}
+		if topts.xdp {
+			jmpMap = progMapXDP
+			polMap = jumpMapXDP
+			popts = append(popts, polprog.WithAllowDenyJumps(tcdefs.ProgIndexAllowed, tcdefs.ProgIndexDrop))
+		}
 		alloc := &forceAllocator{alloc: idalloc.New()}
 		ipsMapFD := ipsMap.MapFD()
 		Expect(ipsMapFD).NotTo(BeZero())
 		stateMapFD := stateMap.MapFD()
 		Expect(stateMapFD).NotTo(BeZero())
-		pg := polprog.NewBuilder(alloc, ipsMapFD, stateMapFD, jumpMap.MapFD())
+		pg := polprog.NewBuilder(alloc, ipsMapFD, stateMapFD, jmpMap.MapFD(), popts...)
 		insns, err := pg.Instructions(*rules)
 		Expect(err).NotTo(HaveOccurred())
 		var polProgFD bpf.ProgFD
@@ -320,12 +383,16 @@ func setupAndRun(logger testLogger, loglevel, section string, rules *polprog.Rul
 		}
 		Expect(err).NotTo(HaveOccurred(), "Failed to load rules program.")
 		defer func() { _ = polProgFD.Close() }()
-		err = jumpMapUpdate(jumpMap, tcdefs.ProgIndexPolicy, int(polProgFD))
+		err = jumpMapUpdate(polMap, tcdefs.ProgIndexPolicy, int(polProgFD))
 		Expect(err).NotTo(HaveOccurred())
 		log.WithField("rules", rules).Debug("set policy")
 	}
 
-	runFn(bpfFsDir + "/" + section)
+	if !topts.xdp {
+		runFn(bpfFsDir + "/classifier_tc_preamble")
+	} else {
+		runFn(bpfFsDir + "/xdp_preamble")
+	}
 }
 
 func caller(skip int) string {
@@ -424,8 +491,8 @@ func bpftool(args ...string) ([]byte, error) {
 var (
 	mapInitOnce sync.Once
 
-	natMap, natBEMap, ctMap, rtMap, ipsMap, stateMap, testStateMap, jumpMap, affinityMap, arpMap, fsafeMap, countersMap, ifstateMap maps.Map
-	allMaps                                                                                                                         []maps.Map
+	natMap, natBEMap, ctMap, rtMap, ipsMap, stateMap, testStateMap, progMap, progMapXDP, affinityMap, arpMap, fsafeMap, countersMap, ifstateMap, jumpMap, jumpMapXDP maps.Map
+	allMaps                                                                                                                                                          []maps.Map
 )
 
 func initMapsOnce() {
@@ -462,7 +529,7 @@ func cleanUpMaps() {
 	defer log.SetLevel(logLevel)
 
 	for _, m := range allMaps {
-		if m == stateMap || m == testStateMap || m == jumpMap || m == countersMap {
+		if m == stateMap || m == testStateMap || m == progMap || m == countersMap {
 			continue // Can't clean up array maps
 		}
 		log.WithField("map", m.GetName()).Info("Cleaning")
@@ -509,17 +576,55 @@ func ipToU32(ip net.IP) uint32 {
 	return binary.LittleEndian.Uint32([]byte(ip[:]))
 }
 
+func tcUpdateJumpMap(obj *libbpf.Obj, progs []int, hasPolicyProg, hasHostConflictProg bool) error {
+	for _, idx := range progs {
+		switch idx {
+		case
+			tcdefs.ProgIndexPolicy,
+			tcdefs.ProgIndexPolicyDebug,
+			tcdefs.ProgIndexV6Policy,
+			tcdefs.ProgIndexV6PolicyDebug:
+
+			if !hasPolicyProg {
+				continue
+			}
+		}
+		if (idx == tcdefs.ProgIndexHostCtConflict || idx == tcdefs.ProgIndexHostCtConflictDebug) && !hasHostConflictProg {
+			continue
+		}
+		log.WithField("prog", tcdefs.ProgramNames[idx]).WithField("idx", idx).Debug("UpdateJumpMap")
+		err := obj.UpdateJumpMap(progMap.GetName(), tcdefs.ProgramNames[idx], idx)
+		if err != nil {
+			return fmt.Errorf("error updating %s program: %w", tcdefs.ProgramNames[idx], err)
+		}
+	}
+
+	return nil
+}
+
 func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostConflictProg bool) (*libbpf.Obj, error) {
 	log.WithField("program", fname).Debug("Loading BPF program")
 
 	forXDP := topts.xdp
 
-	jumpMap = jump.MapForTest()
-	if ipFamily == "IPv4" {
-		// don't do for v6 as that requires v4 atm
+	// XXX we do not need to create both sets of maps, but, well, who cares here ;-)
+	progMap = hook.NewProgramsMap()
+	jumpMap = jump.Map()
+	progMapXDP = hook.NewXDPProgramsMap()
+	jumpMapXDP = jump.XDPMap()
+	if ipFamily == "preamble" {
+		_ = unix.Unlink(progMap.Path())
 		_ = unix.Unlink(jumpMap.Path())
+		_ = unix.Unlink(progMapXDP.Path())
+		_ = unix.Unlink(jumpMapXDP.Path())
 	}
-	err := jumpMap.EnsureExists()
+	err := progMap.EnsureExists()
+	Expect(err).NotTo(HaveOccurred())
+	err = jumpMap.EnsureExists()
+	Expect(err).NotTo(HaveOccurred())
+	err = progMapXDP.EnsureExists()
+	Expect(err).NotTo(HaveOccurred())
+	err = jumpMapXDP.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 
 	obj, err := libbpf.OpenObject(fname)
@@ -530,7 +635,12 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 	for m, err := obj.FirstMap(); m != nil && err == nil; m, err = m.NextMap() {
 		if m.IsMapInternal() {
 			if forXDP {
-				if err := xdp.ConfigureProgram(m, bpfIfaceName); err != nil {
+				var globals libbpf.XDPGlobalData
+				for i := 0; i < tcdefs.ProgIndexEnd; i++ {
+					globals.Jumps[i] = uint32(i)
+				}
+
+				if err := xdp.ConfigureProgram(m, bpfIfaceName, &globals); err != nil {
 					return nil, err
 				}
 			} else {
@@ -545,9 +655,15 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 					Flags:        libbpf.GlobalsIPv6Enabled | libbpf.GlobalsNoDSRCidrs,
 					HostTunnelIP: ipToU32(node1tunIP),
 				}
+
+				for i := 0; i < tcdefs.ProgIndexEnd; i++ {
+					globals.Jumps[i] = uint32(i)
+				}
+
 				if err := tc.ConfigureProgram(m, ifaceLog, &globals); err != nil {
 					return nil, fmt.Errorf("failed to configure tc program: %w", err)
 				}
+				log.WithField("program", fname).Debugf("Configured BPF program iface \"%s\"", ifaceLog)
 			}
 			continue
 		}
@@ -571,7 +687,7 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 	progDir := bpfFsDir
 	policyIdx := tcdefs.ProgIndexPolicy
 
-	if ipFamily == "IPv6" {
+	if strings.HasPrefix(ipFamily, "IPv6") {
 		progDir += "_v6"
 		policyIdx = tcdefs.ProgIndexV6Policy
 	}
@@ -590,7 +706,11 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 		polProgPath = path.Join(bpfFsDir, polProgPath)
 		_, err = os.Stat(polProgPath)
 		if err == nil {
-			err = jumpMapUpdatePinned(jumpMap, policyIdx, polProgPath)
+			m := jumpMap
+			if forXDP {
+				m = jumpMapXDP
+			}
+			err = jumpMapUpdatePinned(m, policyIdx, polProgPath)
 			if err != nil {
 				err = errors.Wrap(err, "failed to update jump map (policy program)")
 				goto out
@@ -600,13 +720,14 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 	}
 
 	if !forXDP {
-		err = tc.UpdateJumpMap(obj, tcdefs.JumpMapIndexes[ipFamily], false, hasHostConflictProg)
+		log.WithField("ipFamily", ipFamily).Debug("Udating jump map")
+		err = tcUpdateJumpMap(obj, tcJumpMapIndexes[ipFamily], false, hasHostConflictProg)
 		if err != nil && !strings.Contains(err.Error(), "error updating calico_tc_host_ct_conflict program") {
 			goto out
 		}
-		err = tc.UpdateJumpMap(obj, tcdefs.JumpMapIndexes[ipFamily], false, false)
+		err = tcUpdateJumpMap(obj, tcJumpMapIndexes[ipFamily], false, false)
 	} else {
-		if err := xdp.UpdateJumpMap(obj, xdp.JumpMapIndexes[ipFamily]); err != nil {
+		if err = xdpUpdateJumpMap(obj, xdpJumpMapIndexes[ipFamily]); err != nil {
 			goto out
 		}
 	}
@@ -618,7 +739,20 @@ out:
 		return nil, fmt.Errorf("%s: %w", ipFamily, err)
 	}
 
+	log.WithField("program", fname).Debug("Loaded BPF program")
 	return obj, nil
+}
+
+func xdpUpdateJumpMap(obj *libbpf.Obj, progs map[int]string) error {
+	for idx, name := range progs {
+		err := obj.UpdateJumpMap(hook.NewXDPProgramsMap().GetName(), name, idx)
+		if err != nil {
+			return fmt.Errorf("failed to update program '%s' at index %d: %w", name, idx, err)
+		}
+		log.Debugf("xdp set program '%s' at index %d", name, idx)
+	}
+
+	return nil
 }
 
 type bpfRunResult struct {
@@ -739,7 +873,12 @@ func runBpfUnitTest(t *testing.T, source string, testFn func(bpfProgRunFn), opts
 
 	objFname := "../../bpf-gpl/ut/" + strings.TrimSuffix(source, path.Ext(source)) + ".o"
 
-	obj, err := objLoad(objFname, bpfFsDir, "IPv4", topts, true, false)
+	ipFamily := "IPv4"
+	if topts.logLevel != log.DebugLevel {
+		ipFamily += " debug"
+	}
+
+	obj, err := objLoad(objFname, bpfFsDir, ipFamily, topts, true, false)
 	Expect(err).NotTo(HaveOccurred())
 	defer func() { _ = obj.UnpinPrograms(bpfFsDir) }()
 	defer obj.Close()
@@ -1312,8 +1451,9 @@ func TestMapIterWithDeleteLastOfBatch(t *testing.T) {
 func TestJumpMap(t *testing.T) {
 	RegisterTestingT(t)
 
-	jumpMapFD := jumpMap.MapFD()
-	pg := polprog.NewBuilder(idalloc.New(), ipsMap.MapFD(), stateMap.MapFD(), jumpMapFD)
+	jumpMapFD := progMap.MapFD()
+	pg := polprog.NewBuilder(idalloc.New(), ipsMap.MapFD(), stateMap.MapFD(), jumpMapFD,
+		polprog.WithAllowDenyJumps(tcdefs.ProgIndexAllowed, tcdefs.ProgIndexDrop))
 	rules := polprog.Rules{}
 	insns, err := pg.Instructions(rules)
 	Expect(err).NotTo(HaveOccurred())
