@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"hash/fnv"
 	"net"
-	"os"
 	"regexp"
 	"strconv"
 	"sync"
@@ -193,17 +192,11 @@ func (m *mockDataplane) ruleMatchID(dir, action, owner, name string, idx int) po
 	return h.Sum64()
 }
 
-func (m *mockDataplane) loadTCLogFilter(ap *tc.AttachPoint) (bpf.ProgFD, int, error) {
-	file, err := os.CreateTemp("/tmp", "test_file")
-	if err != nil {
-		return 0, 0, err
-	}
+var fdCounter = uint32(1234)
 
-	if err := os.Remove(file.Name()); err != nil {
-		return 0, 0, err
-	}
-
-	return bpf.ProgFD(file.Fd()), ap.LogFilterIdx, nil
+func (m *mockDataplane) loadTCLogFilter(ap *tc.AttachPoint) (fileDescriptor, int, error) {
+	fdCounter++
+	return mockFD(fdCounter), ap.LogFilterIdx, nil
 }
 
 type mockProgMapDP struct {
@@ -211,18 +204,21 @@ type mockProgMapDP struct {
 }
 
 func (m *mockProgMapDP) loadPolicyProgram(_ string, _ proto.IPVersion, _ polprog.Rules, _ maps.Map, _ ...polprog.Option) (
-	bpf.ProgFD, asm.Insns, error) {
+	fileDescriptor, asm.Insns, error) {
+	fdCounter++
 
-	file, err := os.CreateTemp("/tmp", "test_file")
-	if err != nil {
-		return 0, nil, err
-	}
+	return mockFD(fdCounter), []asm.Insn{{Comments: []string{"blah"}}}, nil
+}
 
-	if err := os.Remove(file.Name()); err != nil {
-		return 0, nil, err
-	}
+type mockFD uint32
 
-	return bpf.ProgFD(file.Fd()), []asm.Insn{{Comments: []string{"blah"}}}, nil
+func (f mockFD) Close() error {
+	log.WithField("fd", int(f)).Debug("Closing mockFD")
+	return nil
+}
+
+func (f mockFD) FD() uint32 {
+	return uint32(f)
 }
 
 var _ = Describe("BPF Endpoint Manager", func() {
@@ -1142,6 +1138,42 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 			Expect(jumpMap.Contents).To(HaveLen(0))
 			Expect(xdpJumpMap.Contents).To(HaveLen(0))
+		})
+
+		It("should not update the wep log filter if only policy changes", func() {
+			genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
+			genPolicy("default", "mypolicy")()
+			genWLUpdate("cali12345", "mypolicy")()
+
+			err := bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(jumpMap.Contents).To(HaveLen(4)) // 2x policy and 2x filter
+			Expect(xdpJumpMap.Contents).To(HaveLen(0))
+
+			jumpCopyContents := make(map[string]string, len(jumpMap.Contents))
+			for k, v := range jumpMap.Contents {
+				jumpCopyContents[k] = v
+			}
+
+			genPolicy("default", "anotherpolicy")()
+			genWLUpdate("cali12345", "anotherpolicy")()
+
+			err = bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(len(jumpCopyContents)).To(Equal(len(jumpMap.Contents)))
+			Expect(jumpCopyContents).NotTo(Equal(jumpMap.Contents))
+
+			changes := 0
+
+			for k, v := range jumpCopyContents {
+				if v != jumpMap.Contents[k] {
+					changes++
+				}
+			}
+
+			Expect(changes).To(Equal(2)) // only policies have changed
 		})
 	})
 })
