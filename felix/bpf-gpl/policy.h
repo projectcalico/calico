@@ -46,11 +46,9 @@ struct bpf_map_def_extended __attribute__((section("maps"))) cali_v4_ip_sets = {
 	.map_flags      = BPF_F_NO_PREALLOC,
 };
 
-#define RULE_START(id) \
-	CALI_DEBUG("Rule " #id " \n");
+#define RULE_START(id)
 
 #define RULE_END(id, action) \
-	CALI_DEBUG("  MATCH -> " #action "\n"); \
 	goto action; /* Reach here if the rule matched. */ \
 	rule_no_match_ ## id: do {;} while (false)
 

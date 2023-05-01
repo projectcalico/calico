@@ -27,7 +27,7 @@
 #define VXLAN_ENCAP_SIZE	(sizeof(struct ethhdr) + sizeof(struct iphdr) + \
 				sizeof(struct udphdr) + sizeof(struct vxlanhdr))
 
-static CALI_BPF_INLINE int skb_nat_l4_csum_ipv4(struct __sk_buff *skb, size_t off,
+static CALI_BPF_INLINE int skb_nat_l4_csum_ipv4(struct cali_tc_ctx *ctx, size_t off,
 						__be32 ip_src_from, __be32 ip_src_to,
 						__be32 ip_dst_from, __be32 ip_dst_to,
 						__u16 dport_from, __u16 dport_to,
@@ -35,6 +35,7 @@ static CALI_BPF_INLINE int skb_nat_l4_csum_ipv4(struct __sk_buff *skb, size_t of
 						__u64 flags)
 {
 	int ret = 0;
+	struct __sk_buff *skb = ctx->skb;
 
 	if (ip_src_from != ip_src_to) {
 		CALI_DEBUG("L4 checksum update src IP from %x to %x\n",
