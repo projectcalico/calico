@@ -26,13 +26,13 @@ import (
 //
 // Each policy must do one of the following:
 //
-//  	- Match the packet and apply an "allow" action; this immediately accepts the packet, skipping
-//        all further policies and profiles. This is not recommended in general, because it prevents
-//        further policy from being executed.
-// 	- Match the packet and apply a "deny" action; this drops the packet immediately, skipping all
-//        further policy and profiles.
-// 	- Fail to match the packet; in which case the packet proceeds to the next policy. If there
-// 	  are no more policies then the packet is dropped.
+//   - Match the packet and apply an "allow" action; this immediately accepts the packet, skipping
+//     all further policies and profiles. This is not recommended in general, because it prevents
+//     further policy from being executed.
+//   - Match the packet and apply a "deny" action; this drops the packet immediately, skipping all
+//     further policy and profiles.
+//   - Fail to match the packet; in which case the packet proceeds to the next policy. If there
+//     are no more policies then the packet is dropped.
 //
 // Calico implements the security policy for each endpoint individually and only the policies that
 // have matching selectors are implemented. This ensures that the number of rules that actually need
