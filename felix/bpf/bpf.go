@@ -1298,9 +1298,11 @@ func (b *BPFLib) GetXDPIfaces() ([]string, error) {
 // For example, for 8080/TCP:
 //
 // [
-//  06,     IPPROTO_TCP as defined by <linux/in.h>
-//  00,     padding
-//  90, 1F  LSB in little endian order
+//
+//	06,     IPPROTO_TCP as defined by <linux/in.h>
+//	00,     padding
+//	90, 1F  LSB in little endian order
+//
 // ]
 func failsafeToHex(proto uint8, port uint16) ([]string, error) {
 	portBytes := make([]byte, 2)
@@ -1362,8 +1364,10 @@ func hexToFailsafe(hexString []string) (proto uint8, port uint16, err error) {
 // For example, for "192.168.0.0/16":
 //
 // [
-//  10, 00, 00, 00,   mask in little endian order
-//  C0, A8, 00, 00    IP address
+//
+//	10, 00, 00, 00,   mask in little endian order
+//	C0, A8, 00, 00    IP address
+//
 // ]
 func CidrToHex(cidr string) ([]string, error) {
 	cidrParts := strings.Split(cidr, "/")

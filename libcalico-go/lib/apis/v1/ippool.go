@@ -24,11 +24,11 @@ import (
 
 // IPPool contains the details of a Calico IP pool resource.
 // A pool resource is used by Calico in two ways:
-// 	- to provide a set of IP addresses from which Calico IPAM assigns addresses
-// 	  for workloads.
-// 	- to provide configuration specific to IP address range, such as configuration
-// 	  for the BGP daemon (e.g. when to use a GRE tunnel to encapsulate packets
-// 	  between compute hosts).
+//   - to provide a set of IP addresses from which Calico IPAM assigns addresses
+//     for workloads.
+//   - to provide configuration specific to IP address range, such as configuration
+//     for the BGP daemon (e.g. when to use a GRE tunnel to encapsulate packets
+//     between compute hosts).
 type IPPool struct {
 	unversioned.TypeMetadata
 	Metadata IPPoolMetadata `json:"metadata,omitempty"`
