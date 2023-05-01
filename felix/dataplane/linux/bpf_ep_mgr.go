@@ -38,7 +38,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/google/gopacket/layers"
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
@@ -2591,13 +2590,7 @@ func (m *bpfEndpointManager) updatePolicyProgram(rules polprog.Rules, polDir str
 }
 
 func (m *bpfEndpointManager) loadTCLogFilter(ap *tc.AttachPoint) (bpf.ProgFD, int, error) {
-	linkType := layers.LinkTypeEthernet
-
-	if ap.Type == tcdefs.EpTypeL3Device {
-		linkType = layers.LinkTypeIPv4
-	}
-
-	logFilter, err := filter.New(linkType, 64, ap.LogFilter, m.bpfmaps.ProgramsMap.MapFD())
+	logFilter, err := filter.New(ap.Type, 64, ap.LogFilter, m.bpfmaps.ProgramsMap.MapFD())
 	if err != nil {
 		return 0, 0, err
 	}
