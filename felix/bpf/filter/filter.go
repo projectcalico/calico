@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//go:build cgo
+
 package filter
 
 import (
@@ -31,7 +33,13 @@ var (
 	skbCb1 = asm.FieldOffset{Offset: 12*4 + 1*4, Field: "skb->cb[1]"}
 )
 
-func New(linkType layers.LinkType, minLen int, expression string, jumpMapFD maps.FD) (asm.Insns, error) {
+func New(epType tcdefs.EndpointType, minLen int, expression string, jumpMapFD maps.FD) (asm.Insns, error) {
+	linkType := layers.LinkTypeEthernet
+
+	if epType == tcdefs.EpTypeL3Device {
+		linkType = layers.LinkTypeIPv4
+	}
+
 	return newFilter(linkType, minLen, expression, jumpMapFD, false)
 }
 
