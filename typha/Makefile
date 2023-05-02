@@ -36,6 +36,15 @@ SRC_FILES:=$(shell find . $(foreach dir,$(NON_TYPHA_DIRS),-path ./$(dir) -prune 
 
 # Touchfile created when we make the typha image.
 TYPHA_CONTAINER_CREATED=.calico_typha.created-$(ARCH)
+TYPHA_CONTAINER_FIPS_CREATED=.calico_typha.created-$(ARCH)-fips
+FIPS ?= false
+
+ifeq ($(FIPS), true)
+TYPHA_CONTAINER_MARKER=$(TYPHA_CONTAINER_FIPS_CREATED)
+VALIDARCHES=amd64
+else
+TYPHA_CONTAINER_MARKER=$(TYPHA_CONTAINER_CREATED)
+endif
 
 .PHONY: clean
 clean:
@@ -54,6 +63,7 @@ clean:
 	find . -name ".coverage" -type f -delete
 	find . -name "*.pyc" -type f -delete
 
+
 ###############################################################################
 # Building the binary
 ###############################################################################
@@ -70,14 +80,22 @@ bin/wrapper: bin/wrapper-$(ARCH)
 
 bin/wrapper-$(ARCH): $(SRC_FILES) $(LOCAL_BUILD_DEP)
 ifeq ($(ARCH), amd64)
+ifeq ($(FIPS), true)
 	$(call build_static_cgo_boring_binary, ./cmd/wrapper, $@)
+else
+	$(call build_binary, ./cmd/wrapper, $@)
+endif
 else
 	$(call build_binary, ./cmd/wrapper, $@)
 endif
 
 bin/calico-typha-$(ARCH): $(SRC_FILES)
 ifeq ($(ARCH), amd64)
+ifeq ($(FIPS), true)
 	$(call build_static_cgo_boring_binary, ./cmd/calico-typha, $@)
+else
+	$(call build_binary, ./cmd/calico-typha, $@)
+endif
 else
 	$(call build_binary, ./cmd/calico-typha, $@)
 endif
@@ -85,7 +103,11 @@ endif
 bin/typha-client-$(ARCH): $(SRC_FILES)
 ifeq ($(ARCH), amd64)
 	@echo Building typha client...
+ifeq ($(FIPS), true)
 	$(call build_static_cgo_boring_binary, ./cmd/typha-client, $@)
+else
+	$(call build_binary, ./cmd/typha-client, $@)
+endif
 else
 	$(call build_binary, ./cmd/typha-client, $@)
 endif
@@ -99,9 +121,11 @@ image: $(BUILD_IMAGES)
 
 # Build the image for the target architecture
 .PHONY: image-all
-image-all: $(addprefix sub-image-,$(VALIDARCHES))
+image-all: $(addprefix sub-image-,$(VALIDARCHES)) sub-image-fips-amd64
 sub-image-%:
 	$(MAKE) image ARCH=$*
+sub-image-fips-%:
+	$(MAKE) image FIPS=true ARCH=$*
 
 # Build the calico/typha docker image, which contains only Typha.
 .PHONY: image $(TYPHA_IMAGE)
@@ -121,12 +145,28 @@ $(TYPHA_CONTAINER_CREATED): bin/calico-typha-$(ARCH) \
 	mkdir -p docker-image/bin
 	cp bin/calico-typha-$(ARCH) docker-image/bin/
 	cp LICENSE docker-image/
-	$(DOCKER_BUILD) -t $(TYPHA_IMAGE_WITH_TAG) --file ./docker-image/Dockerfile.$(ARCH) docker-image --load
+	$(DOCKER_BUILD) -t $(TYPHA_IMAGE):latest-$(ARCH) --file ./docker-image/Dockerfile.$(ARCH) docker-image --load
+	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $(TYPHA_CONTAINER_CREATED)
 
+$(TYPHA_CONTAINER_FIPS_CREATED): bin/calico-typha-$(ARCH) \
+                            LICENSE docker-image/licenses/* \
+                            docker-image/Dockerfile* \
+                            docker-image/nsswitch.conf \
+                            docker-image/typha.cfg \
+                            $(shell test "$(TYPHA_IMAGE_ID)" || echo force-rebuild)
+	$(MAKE) register
+	rm -rf docker-image/bin
+	mkdir -p docker-image/bin
+	cp bin/calico-typha-$(ARCH) docker-image/bin/
+	cp LICENSE docker-image/
+	$(DOCKER_BUILD) -t $(TYPHA_IMAGE):latest-fips-$(ARCH) --file ./docker-image/Dockerfile.$(ARCH) docker-image --load
+	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
+	touch $(TYPHA_CONTAINER_FIPS_CREATED)
+
+
 # This target retags the already built image, deferring the build to the target above.
-$(TYPHA_IMAGE): $(TYPHA_CONTAINER_CREATED)
-	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
+$(TYPHA_IMAGE): $(TYPHA_CONTAINER_MARKER)
 
 ###############################################################################
 # Unit Tests
@@ -173,6 +213,8 @@ release-build: .release-$(VERSION).created
 	$(MAKE) clean image-all RELEASE=true
 	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=$(VERSION)
 	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=latest
+	$(MAKE) FIPS=true retag-build-images-with-registries RELEASE=true IMAGETAG=$(VERSION)-fips LATEST_IMAGE_TAG=latest-fips
+	$(MAKE) FIPS=true retag-build-images-with-registries RELEASE=true IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
 	touch $@
 
 ## Verifies the release artifacts produces by `make release-build` are correct.
