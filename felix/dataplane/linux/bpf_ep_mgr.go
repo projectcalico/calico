@@ -149,6 +149,7 @@ type bpfDataplane interface {
 	ruleMatchID(dir, action, owner, name string, idx int) polprog.RuleMatchID
 	loadDefaultPolicies() error
 	loadTCLogFilter(ap *tc.AttachPoint) (fileDescriptor, int, error)
+	interfaceByIndex(int) (*net.Interface, error)
 }
 
 type hasLoadPolicyProgram interface {
@@ -188,10 +189,20 @@ func (i bpfInterfaceInfo) ifaceIsUp() bool {
 	return i.isUP
 }
 
+type ifaceReadiness int
+
+const (
+	ifaceNotReady ifaceReadiness = iota
+	ifaceIsReady
+	// We know it was ready at some point in time and we
+	// assume it still is, but we need to reassure outselves.
+	ifaceIsReadyNotAssured
+)
+
 type bpfInterfaceState struct {
 	policyIdx [hook.Count]int
 	filterIdx [hook.Count]int
-	isReady   bool
+	readiness ifaceReadiness
 }
 
 type ctlbWorkaroundMode int
@@ -706,7 +717,7 @@ func (m *bpfEndpointManager) updateIfaceStateMap(name string, iface *bpfInterfac
 		if m.isWorkloadIface(name) {
 			flags |= ifstate.FlgWEP
 		}
-		if iface.dpState.isReady {
+		if iface.dpState.readiness != ifaceNotReady {
 			flags |= ifstate.FlgReady
 		}
 		v := ifstate.NewValue(flags, name,
@@ -874,7 +885,7 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceStateUpdate) {
 				delete(m.hostIfaceToEpMap, update.Name)
 			}
 			m.deleteIfaceCounters(update.Name, iface.info.ifIndex)
-			iface.dpState.isReady = false
+			iface.dpState.readiness = ifaceNotReady
 			iface.info.isUP = false
 			m.updateIfaceStateMap(update.Name, iface)
 			iface.info.ifIndex = 0
@@ -1036,6 +1047,10 @@ func jumpMapDeleteEntry(m maps.Map, idx int) error {
 	return nil
 }
 
+func (m *bpfEndpointManager) interfaceByIndex(ifindex int) (*net.Interface, error) {
+	return net.InterfaceByIndex(ifindex)
+}
+
 func (m *bpfEndpointManager) syncIfStateMap() {
 	palloc := set.New[int]()
 	xdpPalloc := set.New[int]()
@@ -1045,7 +1060,7 @@ func (m *bpfEndpointManager) syncIfStateMap() {
 
 	m.ifStateMap.IterDataplaneCache(func(k ifstate.Key, v ifstate.Value) {
 		ifindex := int(k.IfIndex())
-		netiface, err := net.InterfaceByIndex(ifindex)
+		netiface, err := m.dp.interfaceByIndex(ifindex)
 		if err != nil {
 			// "net" does not export the strings or err types :(
 			if strings.Contains(err.Error(), "no such network interface") {
@@ -1078,7 +1093,7 @@ func (m *bpfEndpointManager) syncIfStateMap() {
 					iface.info.ifIndex = netiface.Index
 					iface.info.isUP = true
 					if v.Flags()&ifstate.FlgReady != 0 {
-						iface.dpState.isReady = true
+						iface.dpState.readiness = ifaceIsReadyNotAssured
 					}
 				}
 
@@ -1215,6 +1230,10 @@ func (m *bpfEndpointManager) CompleteDeferredWork() error {
 	m.startupOnce.Do(func() {
 		m.dp.ensureStarted()
 
+		if err := m.ifStateMap.LoadCacheFromDataplane(); err != nil {
+			log.WithError(err).Fatal("Cannot load interface state map - essential for consistent operation.")
+		}
+
 		m.initUnknownIfaces.Iter(func(iface string) error {
 			if ai, ok := m.initAttaches[iface]; ok {
 				if err := m.cleanupOldAttach(iface, ai); err != nil {
@@ -1230,16 +1249,19 @@ func (m *bpfEndpointManager) CompleteDeferredWork() error {
 		// Makes sure that we delete entries for non-existing devices and preserve entries
 		// for those that exists until we can make sure that they did (not) change.
 		m.syncIfStateMap()
+		log.Info("BPF Interface state map synced.")
 
 		if err := m.dp.loadDefaultPolicies(); err != nil {
 			log.WithError(err).Warn("Failed to load default policies, some programs may default to DENY.")
 		}
+		log.Info("Default BPF policy programs loaded.")
 
 		m.initUnknownIfaces = nil
 
 		if err := m.syncIfaceCounters(); err != nil {
 			log.WithError(err).Warn("Failed to sync counters map with existing interfaces - some counters may have leaked.")
 		}
+		log.Info("BPF counters synced.")
 	})
 
 	m.applyProgramsToDirtyDataInterfaces()
@@ -1450,7 +1472,11 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 		}
 
 		m.withIface(iface, func(i *bpfInterface) bool {
-			i.dpState.isReady = isReady
+			if isReady {
+				i.dpState.readiness = ifaceIsReady
+			} else {
+				i.dpState.readiness = ifaceNotReady
+			}
 			m.updateIfaceStateMap(iface, i)
 			return false // no need to enforce dirty
 		})
@@ -1630,12 +1656,12 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		ingressErr = m.wepApplyPolicyToDirection(state.isReady, ifaceName,
+		ingressErr = m.wepApplyPolicyToDirection(state.readiness, ifaceName,
 			state.policyIdx[hook.Ingress], state.filterIdx[hook.Ingress], wep, PolDirnIngress)
 	}()
 	go func() {
 		defer wg.Done()
-		egressErr = m.wepApplyPolicyToDirection(state.isReady, ifaceName,
+		egressErr = m.wepApplyPolicyToDirection(state.readiness, ifaceName,
 			state.policyIdx[hook.Egress], state.filterIdx[hook.Egress], wep, PolDirnEgress)
 	}()
 	wg.Wait()
@@ -1651,7 +1677,7 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 	log.WithFields(log.Fields{"timeTaken": applyTime, "ifaceName": ifaceName}).
 		Info("Finished applying BPF programs for workload")
 
-	state.isReady = true
+	state.readiness = ifaceIsReady
 
 	return state, nil
 }
@@ -1698,8 +1724,8 @@ func (m *bpfEndpointManager) wepTCAttachPoint(ifaceName string, policyIdx, filte
 	return ap
 }
 
-func (m *bpfEndpointManager) wepApplyPolicyToDirection(isReady bool, ifaceName string, policyIdx, filterIdx int,
-	endpoint *proto.WorkloadEndpoint, polDirection PolDirection) error {
+func (m *bpfEndpointManager) wepApplyPolicyToDirection(readiness ifaceReadiness, ifaceName string, policyIdx,
+	filterIdx int, endpoint *proto.WorkloadEndpoint, polDirection PolDirection) error {
 
 	if m.hostIP == nil {
 		// Do not bother and wait
@@ -1708,10 +1734,12 @@ func (m *bpfEndpointManager) wepApplyPolicyToDirection(isReady bool, ifaceName s
 
 	ap := m.wepTCAttachPoint(ifaceName, policyIdx, filterIdx, polDirection)
 
-	if !isReady {
+	log.WithField("iface", ifaceName).Debugf("readiness: %d", readiness)
+	if readiness != ifaceIsReady {
 		if err := m.wepAttachProgram(ap); err != nil {
 			return fmt.Errorf("attaching program to wep: %w", err)
 		}
+		ap.Log().Info("Attached programs to the WEP")
 	}
 
 	if err := m.wepApplyPolicy(ap, endpoint, polDirection); err != nil {
@@ -2361,10 +2389,6 @@ func (m *bpfEndpointManager) ensureStarted() {
 	m.initAttaches, err = bpf.ListCalicoAttached()
 	if err != nil {
 		log.WithError(err).Warn("Failed to list previously attached programs. We may not clean up some.")
-	}
-
-	if err := m.ifStateMap.LoadCacheFromDataplane(); err != nil {
-		log.WithError(err).Fatal("Cannot load interface state map - essential for consistent operation.")
 	}
 }
 
