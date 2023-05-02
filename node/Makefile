@@ -455,7 +455,7 @@ st: $(REMOTE_DEPS) image dist/calicoctl busybox.tar calico-node.tar workload.tar
 # CI/CD
 ###############################################################################
 .PHONY: ci
-ci: static-checks ut image build-windows-upgrade-archive image-tar-windows-all st
+ci: static-checks ut image image-tar-windows-all st
 
 ## Deploys images to registry
 cd: cd-common cd-windows-all
@@ -484,7 +484,7 @@ release-build: .release-$(VERSION).created
 	touch $@
 
 ## Produces the Windows installation ZIP archive for the release.
-release-windows-archive $(WINDOWS_ARCHIVE): release-prereqs
+release-windows-archive: release-prereqs
 	$(MAKE) build-windows-archive WINDOWS_ARCHIVE_TAG=$(VERSION)
 
 ## Verifies the release artifacts produces by `make release-build` are correct.
@@ -597,7 +597,7 @@ release-windows-upgrade-archive: release-prereqs
 	$(MAKE) build-windows-upgrade-archive WINDOWS_ARCHIVE_TAG=$(VERSION)
 
 # Build the Windows upgrade zip archive, which also builds the windows archive.
-build-windows-upgrade-archive: clean-windows $(WINDOWS_UPGRADE_INSTALL_ZIP) $(WINDOWS_UPGRADE_INSTALL_FILE) $(WINDOWS_UPGRADE_SCRIPT) $(WINDOWS_UPGRADE_BUILD)
+build-windows-upgrade-archive: $(WINDOWS_UPGRADE_INSTALL_ZIP) $(WINDOWS_UPGRADE_INSTALL_FILE) $(WINDOWS_UPGRADE_SCRIPT) $(WINDOWS_UPGRADE_BUILD)
 	rm $(WINDOWS_UPGRADE_ARCHIVE) || true
 	cd $(WINDOWS_UPGRADE_DIST_STAGE) && zip -r "$(CURDIR)/$(WINDOWS_UPGRADE_ARCHIVE)" *.zip *.ps1
 
@@ -631,7 +631,7 @@ DOCKER_MANIFEST = echo [DRY RUN] $(DOCKER_MANIFEST_CMD)
 endif
 
 # Uses the docker builder to create a Windows image tarball for a single Windows version.
-sub-image-tar-windows-%:
+sub-image-tar-windows-%: build-windows-archive $(WINDOWS_ARCHIVE) $(WINDOWS_INSTALL_SCRIPT)
 	# ensure dir for windows image tars
 	-mkdir -p $(WINDOWS_DIST)
 	# ensure docker build dir exists
@@ -652,7 +652,7 @@ sub-image-tar-windows-%:
 		--build-arg=WINDOWS_VERSION=$* .
 
 # Uses the docker builder to create a Windows upgrade image tarball for a single Windows version.
-sub-image-tar-windows-upgrade-%:
+sub-image-tar-windows-upgrade-%: build-windows-upgrade-archive $(WINDOWS_UPGRADE_INSTALL_ZIP)
 	-mkdir -p $(WINDOWS_UPGRADE_DIST)
 	cd $(WINDOWS_UPGRADE_ROOT) && \
 		docker buildx build \
