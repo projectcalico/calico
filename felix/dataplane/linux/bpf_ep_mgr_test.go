@@ -18,6 +18,7 @@ package intdataplane
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"hash/fnv"
 	"net"
@@ -62,7 +63,8 @@ type mockDataplane struct {
 	policy     map[string]polprog.Rules
 	routes     map[ip.V4CIDR]struct{}
 
-	ensureStartedFn func()
+	ensureStartedFn    func()
+	interfaceByIndexFn func(ifindex int) (*net.Interface, error)
 }
 
 func newMockDataplane() *mockDataplane {
@@ -78,6 +80,14 @@ func (m *mockDataplane) ensureStarted() {
 	if m.ensureStartedFn != nil {
 		m.ensureStartedFn()
 	}
+}
+
+func (m *mockDataplane) interfaceByIndex(ifindex int) (*net.Interface, error) {
+	if m.interfaceByIndexFn != nil {
+		return m.interfaceByIndexFn(ifindex)
+	}
+
+	return nil, errors.New("no such network interface")
 }
 
 func (m *mockDataplane) ensureBPFDevices() error {
@@ -1174,6 +1184,54 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			}
 
 			Expect(changes).To(Equal(2)) // only policies have changed
+
+			// restart
+
+			jumpCopyContents = make(map[string]string, len(jumpMap.Contents))
+			for k, v := range jumpMap.Contents {
+				jumpCopyContents[k] = v
+			}
+
+			dp = newMockDataplane()
+			mockDP = &mockProgMapDP{
+				dp,
+			}
+			newBpfEpMgr()
+
+			bpfEpMgr.bpfLogLevel = "debug"
+			bpfEpMgr.logFilters = map[string]string{"all": "tcp"}
+
+			dp.interfaceByIndexFn = func(ifindex int) (*net.Interface, error) {
+				if ifindex == 15 {
+					return &net.Interface{
+						Index: 15,
+						Name:  "cali12345",
+						Flags: net.FlagUp,
+					}, nil
+				}
+				return nil, errors.New("no such network interface")
+			}
+			genPolicy("default", "anotherpolicy")()
+			genWLUpdate("cali12345", "anotherpolicy")()
+
+			err = bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(len(jumpCopyContents)).To(Equal(len(jumpMap.Contents)))
+			Expect(jumpCopyContents).NotTo(Equal(jumpMap.Contents))
+
+			changes = 0
+
+			for k, v := range jumpCopyContents {
+				if v != jumpMap.Contents[k] {
+					changes++
+				}
+			}
+
+			// After a restart, even devices that are in ready state get both
+			// programs reapplied as the configuration of logfilters coul dhave
+			// changed.
+			Expect(changes).To(Equal(4))
 		})
 	})
 })
