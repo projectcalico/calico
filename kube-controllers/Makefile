@@ -23,6 +23,17 @@ MAKE_REPO?=https://raw.githubusercontent.com/projectcalico/go-build/$(MAKE_BRANC
 include ../lib.Makefile
 
 SRC_FILES=$(shell find cmd -name '*.go') $(shell find pkg -name '*.go') $(shell find ../libcalico-go -name '*.go')
+KUBE_CONTROLLER_CONTAINER_CREATED=image.created-$(ARCH)
+KUBE_CONTROLLER_CONTAINER_FIPS_CREATED=image.created-$(ARCH)-fips
+
+FIPS ?= false
+
+ifeq ($(FIPS), true)
+KUBE_CONTROLLER_CONTAINER_MARKER=$(KUBE_CONTROLLER_CONTAINER_FIPS_CREATED)
+VALIDARCHES=amd64
+else
+KUBE_CONTROLLER_CONTAINER_MARKER=$(KUBE_CONTROLLER_CONTAINER_CREATED)
+endif
 
 ###############################################################################
 
@@ -51,7 +62,11 @@ sub-build-%:
 
 bin/kube-controllers-linux-$(ARCH): $(SRC_FILES)
 ifeq ($(ARCH), amd64)
+ifeq ($(FIPS), true)
 	$(call build_cgo_boring_binary, ./cmd/kube-controllers/, $@)
+else
+	$(call build_binary, ./cmd/kube-controllers/, $@)
+endif
 else
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c '\
 		$(GIT_CONFIG_SSH) go build -buildvcs=false -v -o $@ -ldflags "$(LDFLAGS)" ./cmd/kube-controllers/'
@@ -59,7 +74,11 @@ endif
 
 bin/wrapper-$(ARCH):
 ifeq ($(ARCH), amd64)
+ifeq ($(FIPS), true)
 	$(call build_cgo_boring_binary, ./cmd/wrapper, $@)
+else
+	$(call build_binary, ./cmd/wrapper, $@)
+endif
 else
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c '\
 		$(GIT_CONFIG_SSH) go build -buildvcs=false -v -o ./cmd/kube-controllers/ -ldflags "$(LDFLAGS)" ./cmd/wrapper'
@@ -79,15 +98,24 @@ bin/kubectl-$(ARCH):
 # Building the image
 ###############################################################################
 ## Builds the controller binary and docker image.
-image: image.created-$(ARCH)
-image-all: $(addprefix sub-image-,$(VALIDARCHES))
+image-all: $(addprefix sub-image-,$(VALIDARCHES)) sub-image-fips-amd64
 sub-image-%:
 	$(MAKE) image ARCH=$*
+sub-image-fips-%:
+	$(MAKE) image FIPS=true ARCH=$*
 
-image.created-$(ARCH): bin/kube-controllers-linux-$(ARCH) bin/check-status-linux-$(ARCH) bin/kubectl-$(ARCH) register
+image: $(KUBE_CONTROLLER_CONTAINER_MARKER)
+
+$(KUBE_CONTROLLER_CONTAINER_CREATED): bin/kube-controllers-linux-$(ARCH) bin/check-status-linux-$(ARCH) bin/kubectl-$(ARCH) register
 	$(DOCKER_BUILD) -t $(KUBE_CONTROLLERS_IMAGE):latest-$(ARCH) -f Dockerfile.$(ARCH) . --load
 	$(DOCKER_BUILD) -t $(FLANNEL_MIGRATION_IMAGE):latest-$(ARCH) -f docker-images/flannel-migration/Dockerfile.$(ARCH) . --load
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
+	touch $@
+
+$(KUBE_CONTROLLER_CONTAINER_FIPS_CREATED): bin/kube-controllers-linux-$(ARCH) bin/check-status-linux-$(ARCH) bin/kubectl-$(ARCH) register
+	$(DOCKER_BUILD) -t $(KUBE_CONTROLLERS_IMAGE):latest-fips-$(ARCH) -f Dockerfile.$(ARCH) . --load
+	$(DOCKER_BUILD) -t $(FLANNEL_MIGRATION_IMAGE):latest-fips-$(ARCH) -f docker-images/flannel-migration/Dockerfile.$(ARCH) . --load
+	$(MAKE) FIPS=true retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
 	touch $@
 
 ###############################################################################
@@ -167,6 +195,29 @@ release-build: .release-$(VERSION).created
 	$(MAKE) retag-build-images-with-registries IMAGETAG=$(VERSION) RELEASE=true
 	# Generate the `latest` images.
 	$(MAKE) retag-build-images-with-registries IMAGETAG=latest RELEASE=true
+	$(MAKE) FIPS=true retag-build-images-with-registries IMAGETAG=$(VERSION)-fips RELEASE=true LATEST_IMAGE_TAG=latest-fips
+	# Generate the `latest` images.
+	$(MAKE) FIPS=true retag-build-images-with-registries RELEASE=true IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
+	touch $@
+
+## Verifies the release artifacts produces by `make release-build` are correct.
+release-verify: release-prereqs
+	# Check the reported version is correct for each release artifact.
+	if ! docker run $(KUBE_CONTROLLERS_IMAGE):$(VERSION)-$(ARCH) --version | grep '^$(VERSION)$$'; then echo "Reported version:" `docker run $(KUBE_CONTROLLERS_IMAGE):$(VERSION)-$(ARCH) --version` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
+	if ! docker run quay.io/$(KUBE_CONTROLLERS_IMAGE):$(VERSION)-$(ARCH) --version | grep '^$(VERSION)$$'; then echo "Reported version:" `docker run quay.io/$(KUBE_CONTROLLERS_IMAGE):$(VERSION)-$(ARCH) --version` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
+
+## Pushes a github release and release artifacts produced by `make release-build`.
+release-publish: release-prereqs .release-$(VERSION).published
+.release-$(VERSION).published:
+	$(MAKE) push-images-to-registries push-manifests IMAGETAG=$(VERSION) RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
+	touch $@
+
+
+# WARNING: Only run this target if this release is the latest stable release. Do NOT
+# run this target for alpha / beta / release candidate builds, or patches to earlier Calico versions.
+## Pushes `latest` release images. WARNING: Only run this for latest stable releases.
+release-publish-latest: release-prereqs
+	# Check latest versions match.
 	touch $@
 
 ## Verifies the release artifacts produces by `make release-build` are correct.
