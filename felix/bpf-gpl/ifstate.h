@@ -8,9 +8,14 @@
 struct ifstate_val {
 	__u32 flags;
 	char  name[16];
+	__s32 xdp_policy;
+	__s32 ingress_policy;
+	__s32 egress_policy;
+	__s32 tc_filter_ingress;
+	__s32 tc_filter_egress;
 };
 
-CALI_MAP(cali_iface, 2,
+CALI_MAP(cali_iface, 3,
 		BPF_MAP_TYPE_HASH,
 		__u32, struct ifstate_val,
 		1000, BPF_F_NO_PREALLOC)
