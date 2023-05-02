@@ -18,6 +18,7 @@ package intdataplane
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"hash/fnv"
 	"net"
@@ -33,15 +34,20 @@ import (
 	"github.com/projectcalico/calico/felix/logutils"
 
 	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/bpf/asm"
 	"github.com/projectcalico/calico/felix/bpf/bpfmap"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	"github.com/projectcalico/calico/felix/bpf/counters"
+	"github.com/projectcalico/calico/felix/bpf/hook"
 	"github.com/projectcalico/calico/felix/bpf/ifstate"
 	bpfipsets "github.com/projectcalico/calico/felix/bpf/ipsets"
+	"github.com/projectcalico/calico/felix/bpf/maps"
 	bpfmaps "github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/mock"
 	"github.com/projectcalico/calico/felix/bpf/polprog"
 	"github.com/projectcalico/calico/felix/bpf/state"
+	"github.com/projectcalico/calico/felix/bpf/tc"
+	"github.com/projectcalico/calico/felix/bpf/xdp"
 	"github.com/projectcalico/calico/felix/idalloc"
 	"github.com/projectcalico/calico/felix/ifacemonitor"
 	"github.com/projectcalico/calico/felix/ip"
@@ -51,21 +57,22 @@ import (
 )
 
 type mockDataplane struct {
-	mutex  sync.Mutex
-	lastFD uint32
-	fds    map[string]uint32
-	state  map[uint32]polprog.Rules
-	routes map[ip.V4CIDR]struct{}
+	mutex      sync.Mutex
+	lastProgID int
+	progs      map[string]int
+	policy     map[string]polprog.Rules
+	routes     map[ip.V4CIDR]struct{}
 
-	ensureStartedFn func()
+	ensureStartedFn    func()
+	interfaceByIndexFn func(ifindex int) (*net.Interface, error)
 }
 
 func newMockDataplane() *mockDataplane {
 	return &mockDataplane{
-		lastFD: 5,
-		fds:    map[string]uint32{},
-		state:  map[uint32]polprog.Rules{},
-		routes: map[ip.V4CIDR]struct{}{},
+		lastProgID: 5,
+		progs:      map[string]int{},
+		policy:     map[string]polprog.Rules{},
+		routes:     map[ip.V4CIDR]struct{}{},
 	}
 }
 
@@ -75,29 +82,49 @@ func (m *mockDataplane) ensureStarted() {
 	}
 }
 
+func (m *mockDataplane) interfaceByIndex(ifindex int) (*net.Interface, error) {
+	if m.interfaceByIndexFn != nil {
+		return m.interfaceByIndexFn(ifindex)
+	}
+
+	return nil, errors.New("no such network interface")
+}
+
 func (m *mockDataplane) ensureBPFDevices() error {
 	return nil
 }
 
-func (m *mockDataplane) ensureProgramAttached(ap attachPoint) (bpfmaps.FD, error) {
+func (m *mockDataplane) loadDefaultPolicies() error {
+	return nil
+}
+
+func (m *mockDataplane) ensureProgramAttached(ap attachPoint) error {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
-	key := ap.IfaceName() + ":" + ap.JumpMapFDMapKey()
-	if fd, exists := m.fds[key]; exists {
-		return bpfmaps.FD(fd), nil
+
+	if apxdp, ok := ap.(*xdp.AttachPoint); ok {
+		apxdp.HookLayout = hook.Layout{
+			hook.SubProgXDPAllowed: 123,
+			hook.SubProgXDPDrop:    456,
+		}
 	}
-	m.lastFD += 1
-	m.fds[key] = m.lastFD
-	return bpfmaps.FD(m.lastFD), nil
+
+	key := ap.IfaceName() + ":" + ap.HookName().String()
+	if _, exists := m.progs[key]; exists {
+		return nil
+	}
+	m.lastProgID += 1
+	m.progs[key] = m.lastProgID
+	return nil
 }
 
 func (m *mockDataplane) ensureNoProgram(ap attachPoint) error {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
-	key := ap.IfaceName() + ":" + ap.JumpMapFDMapKey()
-	if fd, exists := m.fds[key]; exists {
-		delete(m.state, uint32(fd))
-		delete(m.fds, key)
+	key := ap.IfaceName() + ":" + ap.HookName().String()
+	if _, exists := m.progs[key]; exists {
+		delete(m.policy, key)
+		delete(m.progs, key)
 	}
 	return nil
 }
@@ -106,17 +133,19 @@ func (m *mockDataplane) ensureQdisc(iface string) error {
 	return nil
 }
 
-func (m *mockDataplane) updatePolicyProgram(jumpMapFD bpfmaps.FD, rules polprog.Rules, polDir string, ap attachPoint) error {
+func (m *mockDataplane) updatePolicyProgram(rules polprog.Rules, polDir string, ap attachPoint) error {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
-	m.state[uint32(jumpMapFD)] = rules
+	key := ap.IfaceName() + ":" + ap.HookName().String()
+	m.policy[key] = rules
 	return nil
 }
 
-func (m *mockDataplane) removePolicyProgram(jumpMapFD bpfmaps.FD, ap attachPoint) error {
+func (m *mockDataplane) removePolicyProgram(ap attachPoint) error {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
-	delete(m.state, uint32(jumpMapFD))
+	key := ap.IfaceName() + ":" + ap.HookName().String()
+	delete(m.policy, key)
 	return nil
 }
 
@@ -131,9 +160,8 @@ func (m *mockDataplane) setRPFilter(iface string, val int) error {
 func (m *mockDataplane) getRules(key string) *polprog.Rules {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
-	fd := m.fds[key]
-	if fd != 0 {
-		rules, exist := m.state[fd]
+	if _, ok := m.progs[key]; ok {
+		rules, exist := m.policy[key]
 		if exist {
 			return &rules
 		}
@@ -151,7 +179,7 @@ func (m *mockDataplane) setAndReturn(vari **polprog.Rules, key string) func() *p
 func (m *mockDataplane) programAttached(key string) bool {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
-	return m.fds[key] != 0
+	return m.progs[key] != 0
 }
 
 func (m *mockDataplane) setRoute(cidr ip.V4CIDR) {
@@ -174,11 +202,41 @@ func (m *mockDataplane) ruleMatchID(dir, action, owner, name string, idx int) po
 	return h.Sum64()
 }
 
+var fdCounter = uint32(1234)
+
+func (m *mockDataplane) loadTCLogFilter(ap *tc.AttachPoint) (fileDescriptor, int, error) {
+	fdCounter++
+	return mockFD(fdCounter), ap.LogFilterIdx, nil
+}
+
+type mockProgMapDP struct {
+	*mockDataplane
+}
+
+func (m *mockProgMapDP) loadPolicyProgram(_ string, _ proto.IPVersion, _ polprog.Rules, _ maps.Map, _ ...polprog.Option) (
+	fileDescriptor, asm.Insns, error) {
+	fdCounter++
+
+	return mockFD(fdCounter), []asm.Insn{{Comments: []string{"blah"}}}, nil
+}
+
+type mockFD uint32
+
+func (f mockFD) Close() error {
+	log.WithField("fd", int(f)).Debug("Closing mockFD")
+	return nil
+}
+
+func (f mockFD) FD() uint32 {
+	return uint32(f)
+}
+
 var _ = Describe("BPF Endpoint Manager", func() {
 
 	var (
 		bpfEpMgr             *bpfEndpointManager
 		dp                   *mockDataplane
+		mockDP               bpfDataplane
 		fibLookupEnabled     bool
 		endpointToHostAction string
 		dataIfacePattern     string
@@ -189,9 +247,11 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		maps                 *bpfmap.Maps
 		rrConfigNormal       rules.Config
 		ruleRenderer         rules.RuleRenderer
-		filterTableV4        iptablesTable
+		filterTableV4        IptablesTable
 		ifStateMap           *mock.Map
 		countersMap          *mock.Map
+		jumpMap              *mock.Map
+		xdpJumpMap           *mock.Map
 	)
 
 	BeforeEach(func() {
@@ -217,6 +277,23 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		countersMap = mock.NewMockMap(cparams)
 		maps.CountersMap = countersMap
 		maps.RuleCountersMap = mock.NewMockMap(counters.PolicyMapParameters)
+
+		progsParams := bpfmaps.MapParameters{
+			Type:       "prog_array",
+			KeySize:    4,
+			ValueSize:  4,
+			MaxEntries: 1000,
+			Name:       "cali_progs",
+			Version:    2,
+		}
+
+		maps.ProgramsMap = mock.NewMockMap(progsParams)
+		maps.XDPProgramsMap = mock.NewMockMap(progsParams)
+		jumpMap = mock.NewMockMap(progsParams)
+		maps.JumpMap = jumpMap
+		xdpJumpMap = mock.NewMockMap(progsParams)
+		maps.XDPJumpMap = xdpJumpMap
+
 		rrConfigNormal = rules.Config{
 			IPIPEnabled:                 true,
 			IPIPTunnelAddress:           nil,
@@ -242,8 +319,9 @@ var _ = Describe("BPF Endpoint Manager", func() {
 	})
 
 	newBpfEpMgr := func() {
-		bpfEpMgr, _ = newBPFEndpointManager(
-			dp,
+		var err error
+		bpfEpMgr, err = newBPFEndpointManager(
+			mockDP,
 			&Config{
 				Hostname:              "uthost",
 				BPFLogLevel:           "info",
@@ -270,6 +348,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			logutils.NewSummarizer("test"),
 			&environment.FakeFeatureDetector{},
 		)
+		Expect(err).NotTo(HaveOccurred())
 		bpfEpMgr.Features = environment.NewFeatureDetector(nil).GetFeatures()
 		bpfEpMgr.hostIP = net.ParseIP("1.2.3.4")
 	}
@@ -321,16 +400,24 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		}
 	}
 
-	genWLUpdate := func(name string) func() {
+	genWLUpdate := func(name string, policies ...string) func() {
 		return func() {
-			bpfEpMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
+			update := &proto.WorkloadEndpointUpdate{
 				Id: &proto.WorkloadEndpointID{
 					OrchestratorId: "k8s",
 					WorkloadId:     name,
 					EndpointId:     name,
 				},
 				Endpoint: &proto.WorkloadEndpoint{Name: name},
-			})
+			}
+			if len(policies) > 0 {
+				update.Endpoint.Tiers = []*proto.TierInfo{{
+					Name:            "default",
+					IngressPolicies: policies,
+					EgressPolicies:  policies,
+				}}
+			}
+			bpfEpMgr.OnUpdate(update)
 			err := bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
 		}
@@ -359,6 +446,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 	JustBeforeEach(func() {
 		dp = newMockDataplane()
+		mockDP = dp
 		newBpfEpMgr()
 	})
 
@@ -451,7 +539,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 				dp.ensureStartedFn = func() {
 					bpfEpMgr.initAttaches = map[string]bpf.EPAttachInfo{
-						"eth0": {TCId: 12345},
+						"eth0": {Ingress: 12345},
 					}
 				}
 
@@ -807,15 +895,15 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 	Describe("counters", func() {
 		It("should clean up after restart", func() {
-			err := counters.EnsureExists(countersMap, 12345, bpf.HookEgress)
+			err := counters.EnsureExists(countersMap, 12345, hook.Egress)
 			Expect(err).NotTo(HaveOccurred())
-			err = counters.EnsureExists(countersMap, 12345, bpf.HookIngress)
+			err = counters.EnsureExists(countersMap, 12345, hook.Ingress)
 			Expect(err).NotTo(HaveOccurred())
-			err = counters.EnsureExists(countersMap, 12345, bpf.HookXDP)
+			err = counters.EnsureExists(countersMap, 12345, hook.XDP)
 			Expect(err).NotTo(HaveOccurred())
-			err = counters.EnsureExists(countersMap, 54321, bpf.HookEgress)
+			err = counters.EnsureExists(countersMap, 54321, hook.Egress)
 			Expect(err).NotTo(HaveOccurred())
-			err = counters.EnsureExists(countersMap, 54321, bpf.HookIngress)
+			err = counters.EnsureExists(countersMap, 54321, hook.Ingress)
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(countersMap.Contents).To(HaveLen(5))
@@ -834,9 +922,9 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			genIfaceUpdate("cali12345", ifacemonitor.StateUp, 12345)()
 			genWLUpdate("cali12345")()
 
-			err := counters.EnsureExists(countersMap, 12345, bpf.HookEgress)
+			err := counters.EnsureExists(countersMap, 12345, hook.Egress)
 			Expect(err).NotTo(HaveOccurred())
-			err = counters.EnsureExists(countersMap, 12345, bpf.HookIngress)
+			err = counters.EnsureExists(countersMap, 12345, hook.Ingress)
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(countersMap.Contents).To(HaveLen(2))
@@ -852,33 +940,31 @@ var _ = Describe("BPF Endpoint Manager", func() {
 	Describe("ifstate", func() {
 		checkIfState := func(idx int, name string, flags uint32) {
 			k := ifstate.NewKey(uint32(idx))
-			v := ifstate.NewValue(flags, name)
 			vb, err := ifStateMap.Get(k.AsBytes())
 			if err != nil {
 				Fail(fmt.Sprintf("Ifstate does not have key %s", k), 1)
 			}
-			if string(v.AsBytes()) != string(vb) {
-				vv := ifstate.ValueFromBytes(vb)
-				Fail(fmt.Sprintf("Ifstate key %s value %s does not match expected %s", k, vv, v), 1)
-			}
+			vv := ifstate.ValueFromBytes(vb)
+			Expect(flags).To(Equal(vv.Flags()))
+			Expect(name).To(Equal(vv.IfName()))
 		}
 
 		It("should clean up", func() {
 			_ = ifStateMap.Update(
 				ifstate.NewKey(123).AsBytes(),
-				ifstate.NewValue(ifstate.FlgReady, "eth123").AsBytes(),
+				ifstate.NewValue(ifstate.FlgReady, "eth123", -1, -1, -1, -1, -1).AsBytes(),
 			)
 			_ = ifStateMap.Update(
 				ifstate.NewKey(124).AsBytes(),
-				ifstate.NewValue(0, "eth124").AsBytes(),
+				ifstate.NewValue(0, "eth124", -1, -1, -1, -1, -1).AsBytes(),
 			)
 			_ = ifStateMap.Update(
 				ifstate.NewKey(125).AsBytes(),
-				ifstate.NewValue(ifstate.FlgWEP|ifstate.FlgReady, "eth125").AsBytes(),
+				ifstate.NewValue(ifstate.FlgWEP|ifstate.FlgReady, "eth125", -1, -1, -1, -1, -1).AsBytes(),
 			)
 			_ = ifStateMap.Update(
 				ifstate.NewKey(126).AsBytes(),
-				ifstate.NewValue(ifstate.FlgWEP, "eth123").AsBytes(),
+				ifstate.NewValue(ifstate.FlgWEP, "eth123", -1, -1, -1, -1, -1).AsBytes(),
 			)
 
 			err := bpfEpMgr.CompleteDeferredWork()
@@ -890,7 +976,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		It("should clean up with update", func() {
 			_ = ifStateMap.Update(
 				ifstate.NewKey(123).AsBytes(),
-				ifstate.NewValue(ifstate.FlgReady, "eth123").AsBytes(),
+				ifstate.NewValue(ifstate.FlgReady, "eth123", -1, -1, -1, -1, -1).AsBytes(),
 			)
 
 			genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
@@ -1004,6 +1090,148 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			checkIfState(15, "cali12345", ifstate.FlgWEP|ifstate.FlgReady)
+		})
+	})
+
+	Describe("program map", func() {
+		JustBeforeEach(func() {
+			mockDP = &mockProgMapDP{
+				dp,
+			}
+			newBpfEpMgr()
+
+			bpfEpMgr.bpfLogLevel = "debug"
+			bpfEpMgr.logFilters = map[string]string{"all": "tcp"}
+		})
+
+		It("should clean up WL policies and log filters when iface down", func() {
+			genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
+			genPolicy("default", "mypolicy")()
+			genWLUpdate("cali12345", "mypolicy")()
+
+			err := bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(jumpMap.Contents).To(HaveLen(4)) // 2x policy and 2x filter
+			Expect(xdpJumpMap.Contents).To(HaveLen(0))
+
+			genIfaceUpdate("cali12345", ifacemonitor.StateDown, 15)()
+
+			err = bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(jumpMap.Contents).To(HaveLen(0))
+			Expect(xdpJumpMap.Contents).To(HaveLen(0))
+		})
+
+		It("should clean up HEP policies and log filters when iface down", func() {
+			genIfaceUpdate("eth0", ifacemonitor.StateUp, 10)()
+			genUntracked("default", "untracked1")()
+			genPolicy("default", "mypolicy")()
+			hostEp := hostEpNorm
+			hostEp.UntrackedTiers = []*proto.TierInfo{{
+				Name:            "default",
+				IngressPolicies: []string{"untracked1"},
+			}}
+			genHEPUpdate("eth0", hostEp)()
+
+			err := bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(jumpMap.Contents).To(HaveLen(4))    // 2x policy and 2x filter
+			Expect(xdpJumpMap.Contents).To(HaveLen(1)) // 1x policy
+
+			genIfaceUpdate("eth0", ifacemonitor.StateDown, 10)()
+
+			err = bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(jumpMap.Contents).To(HaveLen(0))
+			Expect(xdpJumpMap.Contents).To(HaveLen(0))
+		})
+
+		It("should not update the wep log filter if only policy changes", func() {
+			genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
+			genPolicy("default", "mypolicy")()
+			genWLUpdate("cali12345", "mypolicy")()
+
+			err := bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(jumpMap.Contents).To(HaveLen(4)) // 2x policy and 2x filter
+			Expect(xdpJumpMap.Contents).To(HaveLen(0))
+
+			jumpCopyContents := make(map[string]string, len(jumpMap.Contents))
+			for k, v := range jumpMap.Contents {
+				jumpCopyContents[k] = v
+			}
+
+			genPolicy("default", "anotherpolicy")()
+			genWLUpdate("cali12345", "anotherpolicy")()
+
+			err = bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(len(jumpCopyContents)).To(Equal(len(jumpMap.Contents)))
+			Expect(jumpCopyContents).NotTo(Equal(jumpMap.Contents))
+
+			changes := 0
+
+			for k, v := range jumpCopyContents {
+				if v != jumpMap.Contents[k] {
+					changes++
+				}
+			}
+
+			Expect(changes).To(Equal(2)) // only policies have changed
+
+			// restart
+
+			jumpCopyContents = make(map[string]string, len(jumpMap.Contents))
+			for k, v := range jumpMap.Contents {
+				jumpCopyContents[k] = v
+			}
+
+			dp = newMockDataplane()
+			mockDP = &mockProgMapDP{
+				dp,
+			}
+			newBpfEpMgr()
+
+			bpfEpMgr.bpfLogLevel = "debug"
+			bpfEpMgr.logFilters = map[string]string{"all": "tcp"}
+
+			dp.interfaceByIndexFn = func(ifindex int) (*net.Interface, error) {
+				if ifindex == 15 {
+					return &net.Interface{
+						Index: 15,
+						Name:  "cali12345",
+						Flags: net.FlagUp,
+					}, nil
+				}
+				return nil, errors.New("no such network interface")
+			}
+			genPolicy("default", "anotherpolicy")()
+			genWLUpdate("cali12345", "anotherpolicy")()
+
+			err = bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(len(jumpCopyContents)).To(Equal(len(jumpMap.Contents)))
+			Expect(jumpCopyContents).NotTo(Equal(jumpMap.Contents))
+
+			changes = 0
+
+			for k, v := range jumpCopyContents {
+				if v != jumpMap.Contents[k] {
+					changes++
+				}
+			}
+
+			// After a restart, even devices that are in ready state get both
+			// programs reapplied as the configuration of logfilters coul dhave
+			// changed.
+			Expect(changes).To(Equal(4))
 		})
 	})
 })
