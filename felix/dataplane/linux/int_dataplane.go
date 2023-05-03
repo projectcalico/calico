@@ -187,6 +187,7 @@ type Config struct {
 	BPFDisableUnprivileged             bool
 	BPFKubeProxyIptablesCleanupEnabled bool
 	BPFLogLevel                        string
+	BPFLogFilters                      map[string]string
 	BPFExtToServiceConnmark            int
 	BPFDataIfacePattern                *regexp.Regexp
 	BPFL3IfacePattern                  *regexp.Regexp
@@ -737,9 +738,16 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 					excludeUDP = true
 				}
 			}
+			logLevel := strings.ToLower(config.BPFLogLevel)
+			if config.BPFLogFilters != nil {
+				v, ok := config.BPFLogFilters["ctlb"]
+				if logLevel != "off" && (!ok || v != "on") {
+					logLevel = "off"
+				}
+			}
 			// Activate the connect-time load balancer.
 			err = bpfnat.InstallConnectTimeLoadBalancer(
-				config.BPFCgroupV2, config.BPFLogLevel, config.BPFConntrackTimeouts.UDPLastSeen, excludeUDP)
+				config.BPFCgroupV2, logLevel, config.BPFConntrackTimeouts.UDPLastSeen, excludeUDP)
 			if err != nil {
 				log.WithError(err).Panic("BPFConnTimeLBEnabled but failed to attach connect-time load balancer, bailing out.")
 			}
@@ -1300,6 +1308,14 @@ type ifaceStateUpdate struct {
 	Index int
 }
 
+func NewIfaceStateUpdate(name string, state ifacemonitor.State, index int) any {
+	return &ifaceStateUpdate{
+		Name:  name,
+		State: state,
+		Index: index,
+	}
+}
+
 // Check if current felix ipvs config is correct when felix gets a kube-ipvs0 interface update.
 // If KubeIPVSInterface is UP and felix ipvs support is disabled (kube-proxy switched from iptables to ipvs mode),
 // or if KubeIPVSInterface is DOWN and felix ipvs support is enabled (kube-proxy switched from ipvs to iptables mode),
@@ -1332,6 +1348,13 @@ func (d *InternalDataplane) onIfaceAddrsChange(ifaceName string, addrs set.Set[s
 type ifaceAddrsUpdate struct {
 	Name  string
 	Addrs set.Set[string]
+}
+
+func NewIfaceAddrsUpdate(name string, ips ...string) any {
+	return &ifaceAddrsUpdate{
+		Name:  name,
+		Addrs: set.FromArray[string](ips),
+	}
 }
 
 func (d *InternalDataplane) SendMessage(msg interface{}) error {
@@ -2210,8 +2233,8 @@ func (d *InternalDataplane) loopReportingStatus() {
 	}
 }
 
-// iptablesTable is a shim interface for iptables.Table.
-type iptablesTable interface {
+// IptablesTable is a shim interface for iptables.Table.
+type IptablesTable interface {
 	UpdateChain(chain *iptables.Chain)
 	UpdateChains([]*iptables.Chain)
 	RemoveChains([]*iptables.Chain)
