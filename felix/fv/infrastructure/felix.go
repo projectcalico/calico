@@ -232,6 +232,16 @@ func (f *Felix) Restart() {
 	Eventually(f.GetFelixPID, "10s", "100ms").ShouldNot(Equal(oldPID))
 }
 
+func (f *Felix) RestartWithDelayedStartup() func() {
+	oldPID := f.GetFelixPID()
+	f.Exec("touch", "/delay-felix-restart")
+	f.Exec("kill", "-HUP", fmt.Sprint(oldPID))
+	return func() {
+		f.Exec("rm", "/delay-felix-restart")
+		Eventually(f.GetFelixPID, "10s", "100ms").ShouldNot(Equal(oldPID))
+	}
+}
+
 func (f *Felix) SetEvn(env map[string]string) {
 	fn := "extra-env.sh"
 
