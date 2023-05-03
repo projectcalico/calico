@@ -196,7 +196,7 @@ type Config struct {
 	BPFHostConntrackBypass             bool             `config:"bool;true"`
 	BPFEnforceRPF                      string           `config:"oneof(Disabled,Strict,Loose);Loose;non-zero"`
 	BPFPolicyDebugEnabled              bool             `config:"bool;true"`
-	BPFForceTrackPacketsFromIfaces     []string         `config:"string-slice;docker+"`
+	BPFForceTrackPacketsFromIfaces     []string         `config:"interface-name-slice;docker+"`
 
 	// DebugBPFCgroupV2 controls the cgroup v2 path that we apply the connect-time load balancer to.  Most distros
 	// are configured for cgroup v1, which prevents all but the root cgroup v2 from working so this is only useful
@@ -965,6 +965,8 @@ func loadParams() {
 			param = &CIDRListParam{}
 		case "string-slice":
 			param = &StringSliceParam{}
+		case "interface-name-slice":
+			param = &StringSliceParam{ValidationRegex: IfaceParamRegexp}
 		case "route-table-range":
 			param = &RouteTableRangeParam{}
 		case "route-table-ranges":
