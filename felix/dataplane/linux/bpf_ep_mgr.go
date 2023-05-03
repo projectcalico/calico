@@ -1284,20 +1284,22 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 					return false
 				}
 			}
+			iface.dpState.policyIdx[hook.XDP] = xdpIdx
+
 			if ingressIdx = iface.dpState.policyIdx[hook.Ingress]; ingressIdx == -1 {
 				if ingressIdx, err = m.policyMapAlloc.Get(); err != nil {
 					return false
 				}
 			}
+			iface.dpState.policyIdx[hook.Ingress] = ingressIdx
+
 			if egressIdx = iface.dpState.policyIdx[hook.Egress]; egressIdx == -1 {
 				if egressIdx, err = m.policyMapAlloc.Get(); err != nil {
 					return false
 				}
 			}
-
-			iface.dpState.policyIdx[hook.XDP] = xdpIdx
-			iface.dpState.policyIdx[hook.Ingress] = ingressIdx
 			iface.dpState.policyIdx[hook.Egress] = egressIdx
+
 			return false
 		})
 
