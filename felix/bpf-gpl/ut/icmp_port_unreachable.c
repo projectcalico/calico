@@ -5,6 +5,7 @@
 #include "ut.h"
 #include "bpf.h"
 #include "nat.h"
+#include "icmp.h"
 
 const volatile struct cali_tc_globals __globals;
 
