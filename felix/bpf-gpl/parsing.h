@@ -5,6 +5,9 @@
 #ifndef __CALI_PARSING_H__
 #define __CALI_PARSING_H__
 
+#include "skb.h"
+#include "routes.h"
+
 #define PARSING_OK 0
 #define PARSING_OK_V6 1
 #define PARSING_ALLOW_WITHOUT_ENFORCING_POLICY 2

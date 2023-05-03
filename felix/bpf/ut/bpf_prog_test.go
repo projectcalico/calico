@@ -621,6 +621,54 @@ out:
 	return obj, nil
 }
 
+func objUTLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostConflictProg bool) (*libbpf.Obj, error) {
+	log.WithField("program", fname).Debug("Loading BPF UT program")
+
+	obj, err := libbpf.OpenObject(fname)
+	if err != nil {
+		return nil, fmt.Errorf("open object %s: %w", fname, err)
+	}
+
+	for m, err := obj.FirstMap(); m != nil && err == nil; m, err = m.NextMap() {
+		if m.IsMapInternal() {
+			ifaceLog := topts.progLog + "-" + bpfIfaceName
+			globals := libbpf.TcGlobalData{
+				HostIP:       ipToU32(hostIP),
+				IntfIP:       ipToU32(intfIP),
+				Tmtu:         natTunnelMTU,
+				VxlanPort:    testVxlanPort,
+				PSNatStart:   uint16(topts.psnaStart),
+				PSNatLen:     uint16(topts.psnatEnd-topts.psnaStart) + 1,
+				Flags:        libbpf.GlobalsIPv6Enabled | libbpf.GlobalsNoDSRCidrs,
+				HostTunnelIP: ipToU32(node1tunIP),
+			}
+			if err := tc.ConfigureProgram(m, ifaceLog, &globals); err != nil {
+				return nil, fmt.Errorf("failed to configure tc program: %w", err)
+			}
+			break
+		}
+	}
+
+	if err := obj.Load(); err != nil {
+		return nil, fmt.Errorf("load object: %w", err)
+	}
+
+	progDir := bpfFsDir
+
+	if ipFamily == "IPv6" {
+		progDir += "_v6"
+	}
+
+	err = obj.PinPrograms(progDir)
+	if err != nil {
+		obj.Close()
+		return nil, fmt.Errorf("pin %s programs to %s: %w", ipFamily, progDir, err)
+	}
+
+	log.WithField("program", fname).Debug("Loaded BPF UT program")
+	return obj, nil
+}
+
 type bpfRunResult struct {
 	Retval   int
 	Duration int
@@ -739,7 +787,7 @@ func runBpfUnitTest(t *testing.T, source string, testFn func(bpfProgRunFn), opts
 
 	objFname := "../../bpf-gpl/ut/" + strings.TrimSuffix(source, path.Ext(source)) + ".o"
 
-	obj, err := objLoad(objFname, bpfFsDir, "IPv4", topts, true, false)
+	obj, err := objUTLoad(objFname, bpfFsDir, "IPv4", topts, true, false)
 	Expect(err).NotTo(HaveOccurred())
 	defer func() { _ = obj.UnpinPrograms(bpfFsDir) }()
 	defer obj.Close()

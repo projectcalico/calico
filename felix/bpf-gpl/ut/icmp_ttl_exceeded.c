@@ -5,6 +5,7 @@
 #include "ut.h"
 #include "bpf.h"
 #include "nat.h"
+#include "icmp.h"
 
 static CALI_BPF_INLINE int calico_unittest_entry (struct __sk_buff *skb)
 {
