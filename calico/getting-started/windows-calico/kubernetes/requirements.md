@@ -64,8 +64,8 @@ calicoctl ipam configure --strictaffinity=true
 #### Windows platform requirements
 
 - Windows versions:
-  - Windows Server 1809 (build Build 17763.1432 or greater)
-  - Windows Server 20H2 (build 19042)
+  - Windows Server 1809 (build 17763.1432 or later)
+  - Windows Server 2022 (build 20348.169 or later)
 
   > **Note**: Windows Server version support differs for each Kubernetes version. Review the {% include open-new-window.html text='Windows OS Version Support' url='https://kubernetes.io/docs/setup/production-environment/windows/intro-windows-in-kubernetes/#windows-os-version-support' %} table for the Windows Server versions supported by each Kubernetes version.
   {: .alert .alert-info}
