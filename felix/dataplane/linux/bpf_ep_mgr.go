@@ -1304,7 +1304,8 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 		})
 
 		if err != nil {
-			return err
+			errs[iface] = err
+			return nil
 		}
 
 		if !up {
