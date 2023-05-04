@@ -672,14 +672,17 @@ blocks:
     agent:
       machine:
         type: e1-standard-4
-        os_image: ubuntu1804
+        os_image: ubuntu2004
     prologue:
       commands:
       - cd networking-calico
     jobs:
-      - name: 'Unit and FV tests (tox)'
+      - name: 'Unit and FV tests (tox) on Ussuri'
         commands:
-          - ../.semaphore/run-and-monitor tox.log make tox
+          - ../.semaphore/run-and-monitor tox.log make tox-ussuri
+      - name: 'Unit and FV tests (tox) on Yoga'
+        commands:
+          - ../.semaphore/run-and-monitor tox.log make tox-yoga
       - name: 'Mainline ST (DevStack + Tempest) on Ussuri'
         commands:
           - git checkout -b devstack-test
@@ -693,6 +696,14 @@ blocks:
           - export NC_PLUGIN_REPO=$(dirname $(pwd))
           - export NC_PLUGIN_REF=$(git rev-parse --abbrev-ref HEAD)
           - TEMPEST=true DEVSTACK_BRANCH=stable/ussuri ./devstack/bootstrap.sh
+      - name: 'Mainline ST (DevStack + Tempest) on Yoga'
+        commands:
+          - git checkout -b devstack-test
+          - export LIBVIRT_TYPE=qemu
+          - export UPPER_CONSTRAINTS_FILE=https://releases.openstack.org/constraints/upper/yoga
+          - export NC_PLUGIN_REPO=$(dirname $(pwd))
+          - export NC_PLUGIN_REF=$(git rev-parse --abbrev-ref HEAD)
+          - TEMPEST=true DEVSTACK_BRANCH=stable/yoga ./devstack/bootstrap.sh
     epilogue:
       on_fail:
         commands:
