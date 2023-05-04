@@ -5,6 +5,10 @@ PACKAGE_NAME = github.com/projectcalico/calico/node
 RELEASE_BRANCH_PREFIX ?=release
 DEV_TAG_SUFFIX        ?=0.dev
 
+ifeq ($(FIPS), true)
+LOCAL_CHECKS=check-boring-ssl
+endif
+
 # Name of the images.
 # e.g., <registry>/<name>:<tag>
 NODE_IMAGE            ?=node
@@ -24,8 +28,6 @@ BPFGPL_CONTAINER_PATH=/go/src/github.com/projectcalico/calico/felix/bpf-gpl/
 # Paths within the repository for BPF source.
 LIBBPF_A=../felix/bpf-gpl/include/libbpf/src/$(ARCH)/libbpf.a
 
-# Add in local static-checks
-LOCAL_CHECKS=check-boring-ssl
 
 # Complete list of files from other directories that we need to build calico/node.
 REMOTE_DEPS = $(LIBBPF_A) \

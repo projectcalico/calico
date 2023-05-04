@@ -8,7 +8,9 @@ TYPHA_IMAGE    ?=typha
 BUILD_IMAGES   ?=$(TYPHA_IMAGE)
 
 # Add in local static-checks
+ifeq ($(FIPS), true)
 LOCAL_CHECKS=check-boring-ssl
+endif
 
 ###############################################################################
 # Download and include ../lib.Makefile
@@ -42,8 +44,12 @@ FIPS ?= false
 ifeq ($(FIPS), true)
 TYPHA_CONTAINER_MARKER=$(TYPHA_CONTAINER_FIPS_CREATED)
 VALIDARCHES=amd64
+BINDIR=./bin/$(ARCH)-fips
+CGO_ENABLED=1
 else
 TYPHA_CONTAINER_MARKER=$(TYPHA_CONTAINER_CREATED)
+BINDIR=./bin
+CGO_ENABLED=0
 endif
 
 .PHONY: clean
@@ -72,13 +78,13 @@ build-all: $(addprefix sub-build-,$(VALIDARCHES))
 sub-build-%:
 	$(MAKE) build ARCH=$*
 
-bin/calico-typha: bin/calico-typha-$(ARCH)
-	ln -f bin/calico-typha-$(ARCH) bin/calico-typha
+$(BINDIR)/calico-typha: $(BINDIR)/calico-typha-$(ARCH)
+	ln -f $(BINDIR)/calico-typha-$(ARCH) $(BINDIR)/calico-typha
 
-bin/wrapper: bin/wrapper-$(ARCH)
-	ln -f bin/wrapper-$(ARCH) bin/wrapper
+$(BINDIR)/wrapper: $(BINDIR)/wrapper-$(ARCH)
+	ln -f $(BINDIR)/wrapper-$(ARCH) $(BINDIR)/wrapper
 
-bin/wrapper-$(ARCH): $(SRC_FILES) $(LOCAL_BUILD_DEP)
+$(BINDIR)/wrapper-$(ARCH): $(SRC_FILES) $(LOCAL_BUILD_DEP)
 ifeq ($(ARCH), amd64)
 ifeq ($(FIPS), true)
 	$(call build_static_cgo_boring_binary, ./cmd/wrapper, $@)
@@ -89,7 +95,7 @@ else
 	$(call build_binary, ./cmd/wrapper, $@)
 endif
 
-bin/calico-typha-$(ARCH): $(SRC_FILES)
+$(BINDIR)/calico-typha-$(ARCH): $(SRC_FILES)
 ifeq ($(ARCH), amd64)
 ifeq ($(FIPS), true)
 	$(call build_static_cgo_boring_binary, ./cmd/calico-typha, $@)
@@ -100,7 +106,7 @@ else
 	$(call build_binary, ./cmd/calico-typha, $@)
 endif
 
-bin/typha-client-$(ARCH): $(SRC_FILES)
+$(BINDIR)/typha-client-$(ARCH): $(SRC_FILES)
 ifeq ($(ARCH), amd64)
 	@echo Building typha client...
 ifeq ($(FIPS), true)
@@ -134,7 +140,7 @@ TYPHA_IMAGE_ID=$(shell docker images -q $(TYPHA_IMAGE_WITH_TAG))
 
 # This target actually builds the image if any of its dependencies have changed or if it's
 # missing from docker.
-$(TYPHA_CONTAINER_CREATED): bin/calico-typha-$(ARCH) \
+$(TYPHA_CONTAINER_CREATED): $(BINDIR)/calico-typha-$(ARCH) \
                             LICENSE docker-image/licenses/* \
                             docker-image/Dockerfile* \
                             docker-image/nsswitch.conf \
@@ -143,13 +149,13 @@ $(TYPHA_CONTAINER_CREATED): bin/calico-typha-$(ARCH) \
 	$(MAKE) register
 	rm -rf docker-image/bin
 	mkdir -p docker-image/bin
-	cp bin/calico-typha-$(ARCH) docker-image/bin/
+	cp $(BINDIR)/calico-typha-$(ARCH) docker-image/bin/
 	cp LICENSE docker-image/
-	$(DOCKER_BUILD) -t $(TYPHA_IMAGE):latest-$(ARCH) --file ./docker-image/Dockerfile.$(ARCH) docker-image --load
+	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(TYPHA_IMAGE):latest-$(ARCH) --file ./docker-image/Dockerfile.$(ARCH) docker-image --load
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $(TYPHA_CONTAINER_CREATED)
 
-$(TYPHA_CONTAINER_FIPS_CREATED): bin/calico-typha-$(ARCH) \
+$(TYPHA_CONTAINER_FIPS_CREATED): $(BINDIR)/calico-typha-$(ARCH) \
                             LICENSE docker-image/licenses/* \
                             docker-image/Dockerfile* \
                             docker-image/nsswitch.conf \
@@ -158,9 +164,9 @@ $(TYPHA_CONTAINER_FIPS_CREATED): bin/calico-typha-$(ARCH) \
 	$(MAKE) register
 	rm -rf docker-image/bin
 	mkdir -p docker-image/bin
-	cp bin/calico-typha-$(ARCH) docker-image/bin/
+	cp $(BINDIR)/calico-typha-$(ARCH) docker-image/bin/
 	cp LICENSE docker-image/
-	$(DOCKER_BUILD) -t $(TYPHA_IMAGE):latest-fips-$(ARCH) --file ./docker-image/Dockerfile.$(ARCH) docker-image --load
+	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(TYPHA_IMAGE):latest-fips-$(ARCH) --file ./docker-image/Dockerfile.$(ARCH) docker-image --load
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
 	touch $(TYPHA_CONTAINER_FIPS_CREATED)
 
@@ -176,9 +182,9 @@ ut combined.coverprofile: $(SRC_FILES)
 	@echo Running Go UTs.
 	$(DOCKER_RUN) $(CALICO_BUILD) ./utils/run-coverage
 
-check-boring-ssl: bin/calico-typha-amd64
+check-boring-ssl: $(BINDIR)/calico-typha-amd64
 	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) \
-		go tool nm bin/calico-typha-amd64 > bin/tags.txt && grep '_Cfunc__goboringcrypto_' bin/tags.txt 1> /dev/null
+		go tool nm $(BINDIR)/calico-typha-amd64 > $(BINDIR)/tags.txt && grep '_Cfunc__goboringcrypto_' $(BINDIR)/tags.txt 1> /dev/null
 	-rm -f bin/tags.txt
 
 ###############################################################################
@@ -229,6 +235,7 @@ release-verify: release-prereqs
 release-publish: release-prereqs .release-$(VERSION).published
 .release-$(VERSION).published:
 	$(MAKE) push-images-to-registries push-manifests IMAGETAG=$(VERSION) RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
+	$(MAKE) FIPS=true push-images-to-registries push-manifests IMAGETAG=$(VERSION)-fips RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
 	touch $@
 
 # WARNING: Only run this target if this release is the latest stable release. Do NOT
@@ -277,7 +284,7 @@ cover-report: combined.coverprofile
 				   column -t | \
 				   grep -v '100\.0%'"
 
-bin/calico-typha.transfer-url: bin/calico-typha-$(ARCH)
+$(BINDIR)/calico-typha.transfer-url: $(BINDIR)/calico-typha-$(ARCH)
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'curl --upload-file bin/calico-typha-$(ARCH) https://transfer.sh/calico-typha > $@'
 
 # Install or update the tools used by the build
