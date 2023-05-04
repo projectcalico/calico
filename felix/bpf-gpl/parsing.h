@@ -5,6 +5,9 @@
 #ifndef __CALI_PARSING_H__
 #define __CALI_PARSING_H__
 
+#include "skb.h"
+#include "routes.h"
+
 #define PARSING_OK 0
 #define PARSING_OK_V6 1
 #define PARSING_ALLOW_WITHOUT_ENFORCING_POLICY 2
@@ -74,7 +77,7 @@ static CALI_BPF_INLINE int parse_packet_ip(struct cali_tc_ctx *ctx) {
 	}
 
 	CALI_DEBUG("IP id=%d\n",bpf_ntohs(ip_hdr(ctx)->id)); 
-	CALI_DEBUG("IP id=%d s=%x d=%x\n", bpf_ntohl(ip_hdr(ctx)->saddr), bpf_ntohl(ip_hdr(ctx)->daddr));
+	CALI_DEBUG("IP s=%x d=%x\n", bpf_ntohl(ip_hdr(ctx)->saddr), bpf_ntohl(ip_hdr(ctx)->daddr));
 	// Drop malformed IP packets
 	if (ip_hdr(ctx)->ihl < 5) {
 		CALI_DEBUG("Drop malformed IP packets\n");

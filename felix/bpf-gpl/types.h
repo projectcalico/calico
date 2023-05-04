@@ -146,11 +146,38 @@ struct cali_tc_ctx {
   long ipheader_len;
 
   struct cali_tc_state *state;
+  const volatile struct cali_tc_globals *globals;
+  const volatile struct cali_xdp_globals *xdp_globals; /* XXX we must split the state between tc/xdp */
   struct calico_nat_dest *nat_dest;
   struct arp_key arpk;
   struct fwd fwd;
   void *counters;
 };
+
+#define DECLARE_TC_CTX(NAME, ...)						\
+	struct cali_tc_ctx NAME = ({						\
+			struct cali_tc_state *state = state_get();		\
+			if (!state) {						\
+				CALI_LOG_IF(CALI_LOG_LEVEL_DEBUG, "State map lookup failed: DROP\n");	\
+				bpf_exit(TC_ACT_SHOT);				\
+			}							\
+			void * counters = counters_get(skb->ifindex);		\
+			if (!counters) {					\
+				CALI_LOG_IF(CALI_LOG_LEVEL_DEBUG, "no counters: DROP\n");		\
+				bpf_exit(TC_ACT_SHOT);				\
+			}							\
+			struct cali_tc_globals *gl = state_get_globals_tc();	\
+			if (!gl) {						\
+				CALI_LOG_IF(CALI_LOG_LEVEL_DEBUG, "no globals: DROP\n");		\
+				bpf_exit(TC_ACT_SHOT);				\
+			}							\
+			(struct cali_tc_ctx) {					\
+				.state = state,					\
+				.counters = counters,				\
+				.globals = gl,					\
+				__VA_ARGS__					\
+			};							\
+	})									\
 
 static CALI_BPF_INLINE struct iphdr* ip_hdr(struct cali_tc_ctx *ctx)
 {

@@ -230,7 +230,7 @@ def check_bird_status(host, expected):
             raise AssertionError(msg)
 
 @debug_failures
-def update_bgp_config(host, nodeMesh=None, asNum=None):
+def update_bgp_config(host, nodeMesh=None, asNum=None, nodeMeshMaxRestartTime=None):
     response = host.calicoctl("get BGPConfiguration -o yaml")
     bgpcfg = yaml.safe_load(response)
 
@@ -255,6 +255,9 @@ def update_bgp_config(host, nodeMesh=None, asNum=None):
 
     if asNum is not None:
         bgpcfg['items'][0]['spec']['asNumber'] = asNum
+
+    if nodeMeshMaxRestartTime is not None:
+        bgpcfg['items'][0]['spec']['nodeMeshMaxRestartTime'] = nodeMeshMaxRestartTime
 
     host.writejson("bgpconfig", bgpcfg)
     host.calicoctl("apply -f bgpconfig")

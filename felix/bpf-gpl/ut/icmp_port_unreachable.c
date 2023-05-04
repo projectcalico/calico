@@ -5,17 +5,22 @@
 #include "ut.h"
 #include "bpf.h"
 #include "nat.h"
+#include "icmp.h"
+
+const volatile struct cali_tc_globals __globals;
 
 static CALI_BPF_INLINE int calico_unittest_entry (struct __sk_buff *skb)
 {
-	struct cali_tc_ctx ctx = {
+	struct cali_tc_ctx _ctx = {
 		.counters = counters_get(skb->ifindex),
+		.globals = &__globals,
 		.skb = skb,
 		.ipheader_len = IP_SIZE,
 	};
-	if (!ctx.counters) {
+	struct cali_tc_ctx *ctx = &_ctx;
+	if (!ctx->counters) {
 		CALI_DEBUG("Counters map lookup failed: DROP\n");
 		return TC_ACT_SHOT;
 	}
-	return icmp_v4_port_unreachable(&ctx);
+	return icmp_v4_port_unreachable(ctx);
 }

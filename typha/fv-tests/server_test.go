@@ -530,6 +530,37 @@ var _ = Describe("With an in-process Server", func() {
 	})
 })
 
+var _ = Describe("with no client connections", func() {
+	var h *ServerHarness
+
+	BeforeEach(func() {
+		log.SetLevel(log.InfoLevel) // Debug too verbose for tests with a few clients.
+		h = NewHarness()
+	})
+
+	AfterEach(func() {
+		h.Stop()
+	})
+
+	JustBeforeEach(func() {
+		h.Start()
+	})
+
+	Describe("300s shutdown timer and 1s max drop interval", func() {
+		It("should shut drop 1 client per second", func() {
+			Expect(h.Server.NumActiveConnections()).To(Equal(0))
+
+			h.Server.ShutDownGracefully()
+			finishedC := make(chan struct{})
+			go func() {
+				defer close(finishedC)
+				h.Server.Finished.Wait()
+			}()
+			Eventually(finishedC).Should(BeClosed())
+		})
+	})
+})
+
 var _ = Describe("with 5 client connections", func() {
 	const numClients = 5
 
