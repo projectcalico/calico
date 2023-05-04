@@ -15,11 +15,16 @@
 package linux
 
 import (
+	"bytes"
 	"context"
+	"encoding/hex"
 	"fmt"
 	"io"
+	"math/big"
 	"net"
+	"net/netip"
 	"os"
+	"regexp"
 	"syscall"
 	"time"
 
@@ -153,19 +158,10 @@ func (d *linuxDataplane) DoNetworking(
 		// Check if there is an annotation requesting a specific fixed MAC address for the container Veth, otherwise
 		// use kernel-assigned MAC.
 		if requestedContVethMac, found := annotations["cni.projectcalico.org/hwAddr"]; found {
-			tmpContVethMAC, err := net.ParseMAC(requestedContVethMac)
+			contVethMAC, err = resetHardwareAddr(contVeth, requestedContVethMac, result.IPs[0].String())
 			if err != nil {
-				return fmt.Errorf("failed to parse MAC address %v provided via cni.projectcalico.org/hwAddr: %v",
-					requestedContVethMac, err)
+				return err
 			}
-
-			err = netlink.LinkSetHardwareAddr(contVeth, tmpContVethMAC)
-			if err != nil {
-				return fmt.Errorf("failed to set container veth MAC to %v as requested via cni.projectcalico.org/hwAddr: %v",
-					requestedContVethMac, err)
-			}
-
-			contVethMAC = tmpContVethMAC.String()
 			d.logger.Infof("successfully configured container veth MAC to %v as requested via cni.projectcalico.org/hwAddr",
 				contVethMAC)
 		} else {
@@ -508,6 +504,79 @@ func writeProcSys(path, value string) error {
 		err = err1
 	}
 	return err
+}
+
+// resetHardwareAddr set specific fixed MAC address for the container Veth via the requested mac address
+// if requested mac address is valid, do set directly and return. if requested mac address is valid
+// prefix, convert the ip address to a mac address suffix, then splice a new mac address with the prefix
+func resetHardwareAddr(contVeth netlink.Link, requestedContVethMac, conVethIP string) (string, error) {
+	contVethMac, err := net.ParseMAC(requestedContVethMac)
+	if err == nil {
+		// if requestedContVethMac is a valid mac address, do set directly
+		if err = netlink.LinkSetHardwareAddr(contVeth, contVethMac); err != nil {
+			return "", fmt.Errorf("failed to set container veth MAC to %v as requested via cni.projectcalico.org/hwAddr: %v",
+				requestedContVethMac, err)
+		}
+		return contVethMac.String(), nil
+	}
+
+	// if requestedContVethMac is a valid mac address prefix (format like: 0a:1b)
+	// the new mac address is stitched together by prefix and decode(ip)
+	matchRegexp := regexp.MustCompile("^" + "(" + "[a-fA-F0-9]{2}[:-][a-fA-F0-9]{2}" + ")" + "$")
+	if matchRegexp != nil && !matchRegexp.MatchString(requestedContVethMac) {
+		return "", fmt.Errorf("incorrect format of container veth MAC: %s, the format is a vaild MAC or MAC prefix(like: 0a:1b)", requestedContVethMac)
+	}
+
+	var macSuffix string
+	macSuffix, err = inetAton(netip.MustParseAddr(conVethIP))
+	if err != nil {
+		return "", fmt.Errorf("converts ip: %s to MAC suffiex failure: %v", conVethIP, err)
+	}
+
+	contVethMacStr := spliceHardwareAddr(requestedContVethMac, macSuffix)
+	contVethMac, err = net.ParseMAC(contVethMacStr)
+	if err != nil {
+		return "", fmt.Errorf("parse mac address %s failure: %v", contVethMacStr, err)
+	}
+
+	if err = netlink.LinkSetHardwareAddr(contVeth, contVethMac); err != nil {
+		return "", fmt.Errorf("failed to set container veth MAC to %v with prefix %s as requested via cni.projectcalico.org/hwAddr: %v",
+			contVethMacStr, requestedContVethMac, err)
+	}
+
+	return contVethMacStr, nil
+}
+
+// inetAton converts an IP Address (IPv4 or IPv6) netip.addr object to a hexadecimal representation.
+func inetAton(ip netip.Addr) (string, error) {
+	if ip.AsSlice() == nil {
+		return "", fmt.Errorf("invalid ip address")
+	}
+
+	ipInt := big.NewInt(0)
+	macBytes := make([]byte, hex.EncodedLen(ip.BitLen()))
+	ipInt.SetBytes(ip.AsSlice()[:])
+	hex.Encode(macBytes, ipInt.Bytes())
+
+	return convertHex2Mac(macBytes, ip.Is6()), nil
+}
+
+// convertHex2Mac convert hexcode to 8 Byte hardware address
+// convert ip(hex) to "xx:xx:xx:xx"
+func convertHex2Mac(macBytes []byte, isV6 bool) string {
+	if isV6 {
+		// for ipv6: 128 bit = 32 hex
+		// take the last 8 hexcode(4 Byte) as the mac suffix
+		macBytes = macBytes[24:]
+	}
+
+	// spilt by length: 2
+	regexSpilt := regexp.MustCompile(".{2}")
+	return string(bytes.Join(regexSpilt.FindAll(macBytes, 4), []byte(":")))
+}
+
+func spliceHardwareAddr(prefix, suffix string) string {
+	return fmt.Sprintf("%s:%s", prefix, suffix)
 }
 
 func (d *linuxDataplane) CleanUpNamespace(args *skel.CmdArgs) error {
