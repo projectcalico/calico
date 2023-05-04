@@ -38,25 +38,25 @@ import (
 // indices to provide the relevant updates.
 //
 // Notes:
-// - this update processor only handles simple 1:1 conversions (i.e. a single v3 model mapping to
-//   a single v1 model).
-// - generally, validation processing would prevent the user from making configuration
-//   changes with conflicting (duplicate) information - but since that operation is not atomic,
-//   we need to handle gracefully these situations whether or not that validation processing is
-//   in place.
-// - since the relationship between the v1 and v3 indexes is not locked, the v1 index
-//   for a given v3 resource may be changed by an update.
+//   - this update processor only handles simple 1:1 conversions (i.e. a single v3 model mapping to
+//     a single v1 model).
+//   - generally, validation processing would prevent the user from making configuration
+//     changes with conflicting (duplicate) information - but since that operation is not atomic,
+//     we need to handle gracefully these situations whether or not that validation processing is
+//     in place.
+//   - since the relationship between the v1 and v3 indexes is not locked, the v1 index
+//     for a given v3 resource may be changed by an update.
 //
 // This cache handles conflicting entries by only syncing the v1 data for the v3 resource with
 // the lowest alphanumeric name.  This means:
-// -  Adding a conflicting resource with a higher alphanumeric name will not result in any
-//    syncer update.
-// -  Deleting the conflicting resource with the lowest alphanumeric name will result in
-//    an update using the configuration of the conflicting resource with the next lowest
-//    alphanumeric name.
-// -  Modifying an existing resource (that is already in our cache) is more complicated.
-//    It is possible that the modification may alter the v1 key - and in which case we need
-//    to effectively treat as a delete (for the old v1 key) and an add for the new v1 key.
+//   - Adding a conflicting resource with a higher alphanumeric name will not result in any
+//     syncer update.
+//   - Deleting the conflicting resource with the lowest alphanumeric name will result in
+//     an update using the configuration of the conflicting resource with the next lowest
+//     alphanumeric name.
+//   - Modifying an existing resource (that is already in our cache) is more complicated.
+//     It is possible that the modification may alter the v1 key - and in which case we need
+//     to effectively treat as a delete (for the old v1 key) and an add for the new v1 key.
 func NewConflictResolvingCacheUpdateProcessor(v3Kind string, converter ConvertV2ToV1) watchersyncer.SyncerUpdateProcessor {
 	return &conflictResolvingCache{
 		v3Kind:              v3Kind,
