@@ -10,7 +10,6 @@ import (
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/registry/generic/registry"
-	"k8s.io/apiserver/pkg/storage"
 	k8sStorage "k8s.io/apiserver/pkg/storage"
 	"k8s.io/apiserver/pkg/storage/storagebackend/factory"
 
@@ -118,7 +117,7 @@ func (rc NetworkPolicyConverter) convertToAAPI(libcalicoObject resourceObject, a
 	aapiPolicy.ObjectMeta = lcgPolicy.ObjectMeta
 }
 
-func (rc NetworkPolicyConverter) convertToAAPIList(libcalicoListObject resourceListObject, aapiListObj runtime.Object, pred storage.SelectionPredicate) {
+func (rc NetworkPolicyConverter) convertToAAPIList(libcalicoListObject resourceListObject, aapiListObj runtime.Object, pred k8sStorage.SelectionPredicate) {
 	lcgPolicyList := libcalicoListObject.(*api.NetworkPolicyList)
 	aapiPolicyList := aapiListObj.(*aapi.NetworkPolicyList)
 	if libcalicoListObject == nil {
