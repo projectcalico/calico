@@ -26,7 +26,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
 	"os/exec"
@@ -468,7 +467,7 @@ func (b *BPFLib) NewCIDRMap(ifName string, family IPFamily) (string, error) {
 
 func (b *BPFLib) ListCIDRMaps(family IPFamily) ([]string, error) {
 	var ifNames []string
-	maps, err := ioutil.ReadDir(b.xdpDir)
+	maps, err := os.ReadDir(b.xdpDir)
 	if err != nil {
 		return nil, err
 	}

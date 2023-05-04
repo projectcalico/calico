@@ -76,13 +76,13 @@ bin/calico-typha: bin/calico-typha-$(ARCH)
 bin/calico-typha-$(ARCH): $(SRC_FILES)
 	mkdir -p bin
 	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) \
-	    sh -c '$(GIT_CONFIG_SSH) go build -v -i -o $@ -v $(LDFLAGS) $(PACKAGE_NAME)/cmd/calico-typha'
+	    sh -c '$(GIT_CONFIG_SSH) go build -v -o $@ -v $(LDFLAGS) $(PACKAGE_NAME)/cmd/calico-typha'
 
 bin/typha-client-$(ARCH): $(SRC_FILES)
 	@echo Building typha client...
 	mkdir -p bin
 	$(DOCKER_RUN) $(CALICO_BUILD) \
-	    sh -c '$(GIT_CONFIG_SSH) go build -v -i -o $@ -v $(LDFLAGS) "$(PACKAGE_NAME)/cmd/typha-client" && \
+	    sh -c '$(GIT_CONFIG_SSH) go build -v -o $@ -v $(LDFLAGS) "$(PACKAGE_NAME)/cmd/typha-client" && \
 		( ldd $@ 2>&1 | grep -q -e "Not a valid dynamic program" \
 		-e "not a dynamic executable" || \
 		( echo "Error: bin/typha-client was not statically linked"; false ) )'
