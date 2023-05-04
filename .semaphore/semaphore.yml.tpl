@@ -718,6 +718,9 @@ blocks:
           - ../.semaphore/run-and-monitor tox.log make tox-yoga
       - name: 'Mainline ST (DevStack + Tempest) on Yoga'
         commands:
+          - dpkg -l "python*" || true
+          - sudo find / -name "*wrapt*" || true
+          - sudo apt-get remove -y python3-wrapt || true
           - git checkout -b devstack-test
           - export LIBVIRT_TYPE=qemu
           - export UPPER_CONSTRAINTS_FILE=https://releases.openstack.org/constraints/upper/yoga
