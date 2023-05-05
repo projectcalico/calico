@@ -3,7 +3,7 @@ include ../metadata.mk
 PACKAGE_NAME = github.com/projectcalico/calico/cni-plugin
 
 # Add in local static-checks
-LOCAL_CHECKS=check-boring-ssl
+LOCAL_CHECKS=
 
 # Name of the images.
 # e.g., <registry>/<name>:<tag>

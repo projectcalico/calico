@@ -20,7 +20,6 @@ import (
 	"encoding/gob"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
 	"path/filepath"
@@ -1238,8 +1237,9 @@ var certDir string
 var _ = BeforeSuite(func() {
 	// Create a temporary directory for certificates.
 	var err error
-	certDir, err = ioutil.TempDir("", "typhafv")
+	tmpdir, err := os.MkdirTemp("", "typhafv")
 	tlsutils.PanicIfErr(err)
+	certDir = tmpdir.Name()
 
 	// Trusted CA.
 	caCert, caKey := tlsutils.MakeCACert("trustedCA")

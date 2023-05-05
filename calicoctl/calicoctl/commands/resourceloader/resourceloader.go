@@ -82,8 +82,8 @@ func newResource(tm unversioned.TypeMetadata) (unversioned.Resource, error) {
 }
 
 // Create the resource from the specified byte array encapsulating the resource.
-// -  The byte array may be JSON or YAML encoding of either a single resource or list of
-//    resources as defined by the API objects in /api.
+//   - The byte array may be JSON or YAML encoding of either a single resource or list of
+//     resources as defined by the API objects in /api.
 //
 // The returned Resource will either be a single resource document or a List of documents.
 // If the file does not contain any valid Resources this function returns an error.
@@ -168,9 +168,9 @@ func unmarshalSliceOfResources(tml []unversioned.TypeMetadata, b []byte) ([]unve
 }
 
 // Create the Resource from the specified file f.
-// 	-  The file format may be JSON or YAML encoding of either a single resource or list of
-// 	   resources as defined by the API objects in /api.
-// 	-  A filename of "-" means "Read from stdin".
+//   - The file format may be JSON or YAML encoding of either a single resource or list of
+//     resources as defined by the API objects in /api.
+//   - A filename of "-" means "Read from stdin".
 //
 // The returned Resource will either be a single Resource or a List containing zero or more
 // Resources.  If the file does not contain any valid Resources this function returns an error.
