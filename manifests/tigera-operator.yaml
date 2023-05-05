@@ -960,6 +960,16 @@ spec:
                   node appears to use the IP of the ingress node; this requires a
                   permissive L2 network.  [Default: Tunnel]'
                 type: string
+              bpfForceTrackPacketsFromIfaces:
+                description: 'BPFForceTrackPacketsFromIfaces in BPF mode, forces traffic
+                  from these interfaces to skip Calico''s iptables NOTRACK rule, allowing
+                  traffic from those interfaces to be tracked by Linux conntrack.  Should
+                  only be used for interfaces that are not used for the Calico fabric.  For
+                  example, a docker bridge device for non-Calico-networked containers.
+                  [Default: docker+]'
+                items:
+                  type: string
+                type: array
               bpfHostConntrackBypass:
                 description: 'BPFHostConntrackBypass Controls whether to bypass Linux
                   conntrack in BPF mode for workloads and services. [Default: true
