@@ -16,7 +16,6 @@ package node_test
 
 import (
 	"context"
-	"io/ioutil"
 	"os"
 	"time"
 
@@ -62,7 +61,7 @@ var _ = Describe("kube-controllers IPAM FV tests (etcd mode)", func() {
 
 		// Write out a kubeconfig file we can mount into the container.
 		var err error
-		kconfigFile, err = ioutil.TempFile("", "ginkgo-nodecontroller")
+		kconfigFile, err = os.CreateTemp("", "ginkgo-nodecontroller")
 		Expect(err).NotTo(HaveOccurred())
 		data := testutils.BuildKubeconfig(apiserver.IP)
 		_, err = kconfigFile.Write([]byte(data))
