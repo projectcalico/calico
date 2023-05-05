@@ -1,3 +1,5 @@
+#!/bin/bash
+
 # Library of functions for Calico process and release automation.
 
 # Get the root directory of the Git repository that we are in.
