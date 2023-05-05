@@ -69,12 +69,12 @@ var _ = Context("SCTP: Source named ports: with initialized Felix, etcd datastor
 // If testSourcePorts is true then the direction of all the connectivity tests is flipped.
 // The set-up and policy generation is parametrised:
 //
-//     - If testSourcePorts is true then the workloads only open a single target port so that we
-//       can use the named ports as sources.  Otherwise, they open all the named ports as
-//       listeners.
+//   - If testSourcePorts is true then the workloads only open a single target port so that we
+//     can use the named ports as sources.  Otherwise, they open all the named ports as
+//     listeners.
 //
-//     - The policy generation is parametrised to move the match criteria from destination port
-//       to source port (and from ingress/egress to the opposite) if the flag is set.
+//   - The policy generation is parametrised to move the match criteria from destination port
+//     to source port (and from ingress/egress to the opposite) if the flag is set.
 func describeNamedPortTests(testSourcePorts bool, protocol string) {
 
 	var (

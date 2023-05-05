@@ -25,11 +25,11 @@ import (
 )
 
 // wireguardManager manages the dataplane resources that are used for wireguard encrypted traffic. This includes:
-// -  Routing rule to route to the wireguard routing table
-// -  Route table and rules specifically to handle routing to the wireguard interface, or to return to default routing
-//    (depending on whether the remote node supports wireguard)
-// -  Wireguard interface lifecycle
-// -  Wireguard peer configuration
+//   - Routing rule to route to the wireguard routing table
+//   - Route table and rules specifically to handle routing to the wireguard interface, or to return to default routing
+//     (depending on whether the remote node supports wireguard)
+//   - Wireguard interface lifecycle
+//   - Wireguard peer configuration
 //
 // The wireguard component implements the routetable interface and so dataplane programming is triggered through calls
 // to the Apply method, with periodic resyncs occurring after calls to QueueResync. Calls from the main OnUpdate method

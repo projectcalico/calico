@@ -16,7 +16,7 @@ package asm
 
 type Helper int32
 
-//noinspection GoUnusedConst
+// noinspection GoUnusedConst
 const (
 	HelperUnspec                 Helper = 0
 	HelperMapLookupElem          Helper = 1

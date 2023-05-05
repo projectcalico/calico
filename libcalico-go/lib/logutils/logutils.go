@@ -55,18 +55,19 @@ func FilterLevels(maxLevel log.Level) []log.Level {
 
 // Formatter is our custom log formatter designed to balance ease of machine processing
 // with human readability.  Logs include:
-//    - A sortable millisecond timestamp, for scanning and correlating logs
-//    - The log level, near the beginning of the line, to aid in visual scanning
-//    - The PID of the process to make it easier to spot log discontinuities (If
-//      you are looking at two disjoint chunks of log, were they written by the
-//      same process?  Was there a restart in-between?)
-//    - The file name and line number, as essential context
-//    - The message!
-//    - Log fields appended in sorted order
+//   - A sortable millisecond timestamp, for scanning and correlating logs
+//   - The log level, near the beginning of the line, to aid in visual scanning
+//   - The PID of the process to make it easier to spot log discontinuities (If
+//     you are looking at two disjoint chunks of log, were they written by the
+//     same process?  Was there a restart in-between?)
+//   - The file name and line number, as essential context
+//   - The message!
+//   - Log fields appended in sorted order
 //
 // Example:
-//    2017-01-05 09:17:48.238 [INFO][85386] endpoint_mgr.go 434: Skipping configuration of
-//    interface because it is oper down. ifaceName="cali1234"
+//
+//	2017-01-05 09:17:48.238 [INFO][85386] endpoint_mgr.go 434: Skipping configuration of
+//	interface because it is oper down. ifaceName="cali1234"
 type Formatter struct {
 	// If specified, prepends the component to the file name. This is useful for when
 	// multiple components are logging to the same file (e.g., calico/node) for distinguishing
@@ -97,8 +98,8 @@ func (f *Formatter) Format(entry *log.Entry) ([]byte, error) {
 // already included in the syslog metadata such as timestamp and PID.  The log level _is_ included
 // because syslog doesn't seem to output it by default and it's very useful.
 //
-//    INFO endpoint_mgr.go 434: Skipping configuration of interface because it is oper down.
-//    ifaceName="cali1234"
+//	INFO endpoint_mgr.go 434: Skipping configuration of interface because it is oper down.
+//	ifaceName="cali1234"
 func FormatForSyslog(entry *log.Entry) string {
 	levelStr := strings.ToUpper(entry.Level.String())
 	fileName := entry.Data[fieldFileName]

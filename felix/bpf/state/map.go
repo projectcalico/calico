@@ -31,24 +31,24 @@ const (
 	PolicyTailCallFailed = 10
 )
 
-// struct cali_tc_state {
-//    __be32 ip_src;
-//    __be32 ip_dst;
-//    __be32 pre_nat_ip_dst;
-//    __be32 post_nat_ip_dst;
-//    __be32 tun_ip;
-//    __s32 pol_rc;
-//    __u16 sport;
-//    __u16 dport;
-//    __u16 pre_nat_dport;
-//    __u16 post_nat_dport;
-//    __u8 ip_proto;
-//    __u8 flags;
-//    __be16 ip_size;
-//    struct calico_ct_result ct_result;
-//    struct calico_nat_dest nat_dest;
-//    __u64 prog_start_time;
-// };
+//	struct cali_tc_state {
+//	   __be32 ip_src;
+//	   __be32 ip_dst;
+//	   __be32 pre_nat_ip_dst;
+//	   __be32 post_nat_ip_dst;
+//	   __be32 tun_ip;
+//	   __s32 pol_rc;
+//	   __u16 sport;
+//	   __u16 dport;
+//	   __u16 pre_nat_dport;
+//	   __u16 post_nat_dport;
+//	   __u8 ip_proto;
+//	   __u8 flags;
+//	   __be16 ip_size;
+//	   struct calico_ct_result ct_result;
+//	   struct calico_nat_dest nat_dest;
+//	   __u64 prog_start_time;
+//	};
 type State struct {
 	SrcAddr             uint32
 	DstAddr             uint32

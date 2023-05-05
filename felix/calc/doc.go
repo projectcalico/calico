@@ -23,11 +23,11 @@
 // In addition, it converts the callbacks into structs from the felix/proto
 // package, which are ready to be marshaled directly to the felix front-end.
 //
-// 	// Using the async API.
-// 	asyncCalcGraph := calc.NewAsyncCalcGraph("hostname", outputChannel, nil)
-// 	syncer := fc.datastore.Syncer(asyncCalcGraph)
-// 	syncer.Start()
-// 	asyncCalcGraph.Start()
+//	// Using the async API.
+//	asyncCalcGraph := calc.NewAsyncCalcGraph("hostname", outputChannel, nil)
+//	syncer := fc.datastore.Syncer(asyncCalcGraph)
+//	syncer.Start()
+//	asyncCalcGraph.Start()
 //	for event := range outputChannel {
 //		switch event := event.(type) {
 //		case *proto.XYZ:

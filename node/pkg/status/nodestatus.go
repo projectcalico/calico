@@ -183,12 +183,12 @@ func (r *NodeStatusReporter) Stop() {
 
 // Run is the main reconciliation loop, it loops until done.
 // Here the logic for handling syncer updates is
-// - If we get a value update, cache it to pendingUpdates.
-// - If we get a inSync message, set inSync to true.
-//   We don't need to worry about any status message after inSync message,
-//   getting a non-in sync status after an in-sync isn't important here, there's no real impact.
-//   It'd just mean that we've got slightly old data.
-// - After handling syncer event, process pendingUpdates if we are in-sync.
+//   - If we get a value update, cache it to pendingUpdates.
+//   - If we get a inSync message, set inSync to true.
+//     We don't need to worry about any status message after inSync message,
+//     getting a non-in sync status after an in-sync isn't important here, there's no real impact.
+//     It'd just mean that we've got slightly old data.
+//   - After handling syncer event, process pendingUpdates if we are in-sync.
 func (r *NodeStatusReporter) Run() {
 	// Loop forever, updating whenever we get a kick. The first kick will happen as soon as the syncer is in sync.
 	for {
