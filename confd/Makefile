@@ -13,7 +13,7 @@ include ../lib.Makefile
 
 test: ut test-kdd test-etcd
 
-LDFLAGS=-ldflags "-X $(PACKAGE_NAME)/pkg/buildinfo.GitVersion=$(GIT_DESCRIPTION)"
+LDFLAGS=-ldflags "-X $(PACKAGE_NAME)/pkg/buildinfo.GitVersion=$(GIT_DESCRIPTION) -linkmode external -extldflags -static"
 
 # All go files.
 SRC_FILES:=$(shell find . -name '*.go' -not -path "./vendor/*" )
@@ -33,7 +33,7 @@ sub-build-%:
 	$(MAKE) build ARCH=$*
 
 bin/confd-$(ARCH): $(SRC_FILES)
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'go build -v -i -o $@ $(LDFLAGS) "$(PACKAGE_NAME)" && \
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'go build -v -o $@ $(LDFLAGS) "$(PACKAGE_NAME)" && \
 		( ldd bin/confd-$(ARCH) 2>&1 | grep -q -e "Not a valid dynamic program" \
 			-e "not a dynamic executable" || \
 		     ( echo "Error: bin/confd was not statically linked"; false ) )'

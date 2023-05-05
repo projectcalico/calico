@@ -10,7 +10,7 @@ FLANNEL_MIGRATION_IMAGE ?=flannel-migration-controller
 BUILD_IMAGES            ?=$(KUBE_CONTROLLERS_IMAGE) $(FLANNEL_MIGRATION_IMAGE)
 
 # Add in local static-checks
-LOCAL_CHECKS=check-boring-ssl
+LOCAL_CHECKS=
 
 ###############################################################################
 # Download and include ../lib.Makefile
@@ -58,13 +58,13 @@ bin/kube-controllers-linux-$(ARCH): $(SRC_FILES)
 	$(DOCKER_RUN) \
 	  -e CGO_ENABLED=$(CGO_ENABLED) \
 	  -v $(CURDIR)/bin:/go/src/$(PACKAGE_NAME)/bin \
-	  $(CALICO_BUILD) go build -v -o bin/kube-controllers-$(BUILDOS)-$(ARCH) -ldflags "-X main.VERSION=$(GIT_VERSION)" ./cmd/kube-controllers/
+	  $(CALICO_BUILD) go build -v -o bin/kube-controllers-$(BUILDOS)-$(ARCH) -ldflags "-X main.VERSION=$(GIT_VERSION) -linkmode external -extldflags -static" ./cmd/kube-controllers/
 
 bin/check-status-linux-$(ARCH): $(SRC_FILES)
 	$(DOCKER_RUN) \
 	  -e CGO_ENABLED=$(CGO_ENABLED) \
 	  -v $(CURDIR)/bin:/go/src/$(PACKAGE_NAME)/bin \
-	  $(CALICO_BUILD) go build -v -o bin/check-status-$(BUILDOS)-$(ARCH) -ldflags "-X main.VERSION=$(GIT_VERSION)" ./cmd/check-status/
+	  $(CALICO_BUILD) go build -v -o bin/check-status-$(BUILDOS)-$(ARCH) -ldflags "-X main.VERSION=$(GIT_VERSION) -linkmode external -extldflags -static" ./cmd/check-status/
 
 bin/kubectl-$(ARCH):
 	wget https://storage.googleapis.com/kubernetes-release/release/$(KUBECTL_VERSION)/bin/linux/$(subst armv7,arm,$(ARCH))/kubectl -O $@

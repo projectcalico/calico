@@ -18,7 +18,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
 	"strings"
@@ -108,7 +107,7 @@ func RetrieveConfig() (*ConfigurationOptions, error) {
 	config := ConfigurationOptions{}
 	if _, err := os.Stat(configFile); err == nil {
 		// Read the config from the file.
-		bytes, err := ioutil.ReadFile(configFile)
+		bytes, err := os.ReadFile(configFile)
 		if err != nil {
 			return nil, fmt.Errorf("Unable to read configuration at %s: %v", configFile, err)
 		}
