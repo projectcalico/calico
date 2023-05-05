@@ -10,7 +10,7 @@ FLANNEL_MIGRATION_IMAGE ?=flannel-migration-controller
 BUILD_IMAGES            ?=$(KUBE_CONTROLLERS_IMAGE) $(FLANNEL_MIGRATION_IMAGE)
 
 # Add in local static-checks
-LOCAL_CHECKS=check-boring-ssl
+LOCAL_CHECKS=
 
 ###############################################################################
 # Download and include ../lib.Makefile

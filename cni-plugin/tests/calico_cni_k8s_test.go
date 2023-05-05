@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math/rand"
 	"net"
 	"net/http"
@@ -545,7 +544,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 
 				err = os.MkdirAll("/var/lib/calico", os.ModePerm)
 				Expect(err).NotTo(HaveOccurred())
-				err = ioutil.WriteFile("/var/lib/calico/mtu", []byte("3000"), 0644)
+				err = os.WriteFile("/var/lib/calico/mtu", []byte("3000"), 0644)
 				Expect(err).NotTo(HaveOccurred())
 				defer os.Remove("/var/lib/calico/mtu")
 
