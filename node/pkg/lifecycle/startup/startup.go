@@ -4,7 +4,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//	http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -81,10 +81,10 @@ var (
 
 // This file contains the main startup processing for the calico/node.  This
 // includes:
-// -  Detecting IP address and Network to use for BGP
-// -  Configuring the node resource with IP/AS information provided in the
-//    environment, or autodetected.
-// -  Creating default IP Pools for quick-start use
+//   - Detecting IP address and Network to use for BGP
+//   - Configuring the node resource with IP/AS information provided in the
+//     environment, or autodetected.
+//   - Creating default IP Pools for quick-start use
 func Run() {
 	// Check $CALICO_STARTUP_LOGLEVEL to capture early log statements
 	ConfigureLogging()
