@@ -718,8 +718,10 @@ blocks:
           - ../.semaphore/run-and-monitor tox.log make tox-yoga
       - name: 'Mainline ST (DevStack + Tempest) on Yoga'
         commands:
-          - dpkg -l "python*" || true
-          - sudo find / -name "*wrapt*" || true
+          # For some reason python3-wrapt is pre-installed on a Semaphore ubuntu2004 node, but with
+          # a version (1.11.2) that is different from the version that OpenStack needs (1.13.3), and
+          # this was causing the DevStack setup to fail, because pip doesn't know how to uninstall
+          # or replace the existing version.  Happily we do know that, so let's do it upfront here.
           - sudo apt-get remove -y python3-wrapt || true
           - git checkout -b devstack-test
           - export LIBVIRT_TYPE=qemu
