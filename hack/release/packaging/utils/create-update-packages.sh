@@ -186,7 +186,7 @@ function docker_run_rm {
 function do_bld_images {
     # Build the docker images that we use for building for each target platform.
     pushd ${rootdir}/hack/release/packaging/docker-build-images
-    docker buildx bake
+    UID=$(id -u) GID=$(id -g) docker buildx bake
     popd
 }
 
