@@ -109,7 +109,7 @@ $(BIN_WIN)/calico.exe $(BIN_WIN)/calico-ipam.exe: $(SRC_FILES)
 # Building the image
 ###############################################################################
 image: $(DEPLOY_CONTAINER_MARKER)
-image-all: $(addprefix sub-image-,$(VALIDARCHES)) sub-image-fips-amd64
+image-all: $(addprefix sub-image-,$(VALIDARCHES))
 sub-image-%:
 	$(MAKE) image ARCH=$*
 sub-image-fips-%:
