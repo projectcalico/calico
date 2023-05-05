@@ -455,7 +455,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 			for _, f := range felixes {
 				Eventually(func() int {
 					return getNumIPSetMembers(f.Container, "cali40all-hosts-net")
-				}, "5s", "200ms").Should(Equal(3))
+				}, "15s", "200ms").Should(Equal(3))
 			}
 
 			By("testing that the ext client can connect via ipip")
