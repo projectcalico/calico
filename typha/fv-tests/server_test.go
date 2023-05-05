@@ -1237,9 +1237,8 @@ var certDir string
 var _ = BeforeSuite(func() {
 	// Create a temporary directory for certificates.
 	var err error
-	tmpdir, err := os.MkdirTemp("", "typhafv")
+	certDir, err = os.MkdirTemp("", "typhafv")
 	tlsutils.PanicIfErr(err)
-	certDir = tmpdir.Name()
 
 	// Trusted CA.
 	caCert, caKey := tlsutils.MakeCACert("trustedCA")
