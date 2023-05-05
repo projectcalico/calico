@@ -58,8 +58,10 @@ include ../lib.Makefile
 # We need CGO to leverage Boring SSL.  However, the cross-compile doesn't support CGO yet.
 ifeq ($(ARCH), $(filter $(ARCH),amd64))
 CGO_ENABLED=1
+LDFLAGS=$(VERSION_FLAGS) -linkmode external -extldflags -static
 else
 CGO_ENABLED=0
+LDFLAGS=$(VERSION_FLAGS)
 endif
 
 # Use ARCH specific build image.
@@ -89,11 +91,11 @@ cd: image-all cd-common
 $(BINDIR)/apiserver-$(ARCH): $(K8SAPISERVER_GO_FILES)
 	mkdir -p $(BINDIR)
 	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) \
-		sh -c '$(GIT_CONFIG_SSH) go build -v -o $@ -ldflags "$(VERSION_FLAGS) -linkmode external -extldflags -static" $(PACKAGE_NAME)/cmd/apiserver'
+		sh -c '$(GIT_CONFIG_SSH) go build -v -o $@ -ldflags "$(LDFLAGS)" $(PACKAGE_NAME)/cmd/apiserver'
 
 $(BINDIR)/filecheck-$(ARCH): $(K8SAPISERVER_GO_FILES)
 	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) \
-		sh -c '$(GIT_CONFIG_SSH) go build -v -o $@ -ldflags "$(VERSION_FLAGS) -linkmode external -extldflags -static" $(PACKAGE_NAME)/cmd/filecheck'
+		sh -c '$(GIT_CONFIG_SSH) go build -v -o $@ -ldflags "$(LDFLAGS)" $(PACKAGE_NAME)/cmd/filecheck'
 
 ###############################################################################
 # Building the image

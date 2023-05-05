@@ -27,8 +27,10 @@ SRC_FILES=$(shell find cmd -name '*.go') $(shell find pkg -name '*.go') $(shell 
 # We need CGO to leverage Boring SSL.  However, the cross-compile doesn't support CGO yet.
 ifeq ($(ARCH), $(filter $(ARCH),amd64))
 CGO_ENABLED=1
+LDFLAGS=-X main.VERSION=$(GIT_VERSION) -linkmode external -extldflags -static
 else
 CGO_ENABLED=0
+LDFLAGS=-X main.VERSION=$(GIT_VERSION)
 endif
 
 ###############################################################################
@@ -58,13 +60,13 @@ bin/kube-controllers-linux-$(ARCH): $(SRC_FILES)
 	$(DOCKER_RUN) \
 	  -e CGO_ENABLED=$(CGO_ENABLED) \
 	  -v $(CURDIR)/bin:/go/src/$(PACKAGE_NAME)/bin \
-	  $(CALICO_BUILD) go build -v -o bin/kube-controllers-$(BUILDOS)-$(ARCH) -ldflags "-X main.VERSION=$(GIT_VERSION) -linkmode external -extldflags -static" ./cmd/kube-controllers/
+	  $(CALICO_BUILD) go build -v -o bin/kube-controllers-$(BUILDOS)-$(ARCH) -ldflags "$(LDFLAGS)" ./cmd/kube-controllers/
 
 bin/check-status-linux-$(ARCH): $(SRC_FILES)
 	$(DOCKER_RUN) \
 	  -e CGO_ENABLED=$(CGO_ENABLED) \
 	  -v $(CURDIR)/bin:/go/src/$(PACKAGE_NAME)/bin \
-	  $(CALICO_BUILD) go build -v -o bin/check-status-$(BUILDOS)-$(ARCH) -ldflags "-X main.VERSION=$(GIT_VERSION) -linkmode external -extldflags -static" ./cmd/check-status/
+	  $(CALICO_BUILD) go build -v -o bin/check-status-$(BUILDOS)-$(ARCH) -ldflags "$(LDFLAGS)" ./cmd/check-status/
 
 bin/kubectl-$(ARCH):
 	wget https://storage.googleapis.com/kubernetes-release/release/$(KUBECTL_VERSION)/bin/linux/$(subst armv7,arm,$(ARCH))/kubectl -O $@
