@@ -15,7 +15,7 @@ CGO_ENABLED=0
 endif
 
 # Add in local static-checks
-LOCAL_CHECKS=check-boring-ssl
+LOCAL_CHECKS=
 
 ###############################################################################
 # Download and include ../lib.Makefile

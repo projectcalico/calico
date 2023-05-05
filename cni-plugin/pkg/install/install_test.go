@@ -1,4 +1,4 @@
-//  Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020 Tigera, Inc. All rights reserved.
 package install
 
 import (
