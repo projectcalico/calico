@@ -115,7 +115,7 @@ disable_service horizon
 LOGFILE=stack.log
 LOG_COLOR=False
 
-TEMPEST_BRANCH=29.0.0
+TEMPEST_BRANCH=29.1.0
 
 # We commonly hit GnuTLS errors when git cloning OpenStack repos, for example:
 # Cloning into 'devstack'...
