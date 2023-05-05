@@ -125,3 +125,27 @@ var _ = DescribeTable("IPv6 list parameter parsing",
 	Entry("IPv4 address", "10.1.1.2", "", false),
 	Entry("IPv6 address", "aabc::1111", "aabc::1111", true),
 )
+
+var _ = DescribeTable("String Slice parameter parsing",
+	func(raw string, expected interface{}, expectSuccess bool) {
+		p := config.StringSliceParam{config.Metadata{
+			Name: "StringSliceParam",
+		}, config.IfaceParamRegexp,
+		}
+		actual, err := p.Parse(raw)
+		if expectSuccess {
+			Expect(err).To(BeNil())
+			Expect(actual).To(Equal(expected))
+		} else {
+			Expect(err).NotTo(BeNil())
+		}
+	},
+
+	Entry("StringSliceParam Empty", "", []string{}, true),
+	Entry("StringSliceParam Single valid entry", "docker0", []string{"docker0"}, true),
+	Entry("StringSliceParam Single valid entry", "cali-123", []string{"cali-123"}, true),
+	Entry("StringSliceParam Single valid wildcard", "docker+", []string{"docker+"}, true),
+	Entry("StringSliceParam Multiple valid entries", "docker0,docker1", []string{"docker0", "docker1"}, true),
+	Entry("StringSliceParam Single invalid entry", "cali@123", []string{}, false),
+	Entry("StringSliceParam Multiple invalid entries", "cali-123,cali@123", []string{}, false),
+)

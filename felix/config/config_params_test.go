@@ -504,6 +504,14 @@ var _ = DescribeTable("Config parsing",
 		map[string]time.Duration{"a": 0}, false),
 	// Not a required parameter so a bad value is translated to nil:
 	Entry("HealthTimeoutOverrides non-duration", "HealthTimeoutOverrides", "foo=bar", map[string]time.Duration(nil), false),
+
+	Entry("BPFForceTrackPacketsFromIfaces Empty", "BPFForceTrackPacketsFromIfaces", "", []string{"docker+"}),
+	Entry("BPFForceTrackPacketsFromIfaces Single valid entry", "BPFForceTrackPacketsFromIfaces", "docker0", []string{"docker0"}),
+	Entry("BPFForceTrackPacketsFromIfaces Single valid entry", "BPFForceTrackPacketsFromIfaces", "cali-123", []string{"cali-123"}),
+	Entry("BPFForceTrackPacketsFromIfaces Single valid wildcard", "BPFForceTrackPacketsFromIfaces", "docker+", []string{"docker+"}),
+	Entry("BPFForceTrackPacketsFromIfaces Multiple valid entries", "BPFForceTrackPacketsFromIfaces", "docker0,docker1", []string{"docker0", "docker1"}),
+	Entry("BPFForceTrackPacketsFromIfaces Single invalid entry", "BPFForceTrackPacketsFromIfaces", "cali@123", []string{"docker+"}),
+	Entry("BPFForceTrackPacketsFromIfaces Multiple invalid entries", "BPFForceTrackPacketsFromIfaces", "cali-123,cali@123", []string{"docker+"}),
 )
 
 var _ = DescribeTable("OpenStack heuristic tests",
