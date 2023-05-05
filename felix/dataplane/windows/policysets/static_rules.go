@@ -18,7 +18,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 
@@ -114,7 +113,7 @@ func (f FileReader) ReadData() ([]byte, error) {
 	if _, err := os.Stat(ruleFile); os.IsNotExist(err) {
 		return []byte{}, ErrNoRuleSpecified
 	}
-	return ioutil.ReadFile(ruleFile)
+	return os.ReadFile(ruleFile)
 }
 
 // Read ACL policy rules from static rule file.

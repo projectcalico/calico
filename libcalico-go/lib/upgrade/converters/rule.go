@@ -223,20 +223,23 @@ func rulebackendToAPIv3(br model.Rule) apiv3.Rule {
 // Tags are deprecated in v3.0+, so we convert Tags to selectors.
 // For example:
 // A rule that looks like this with Calico v1 API:
-// apiv1.Rule{
-//	Action: "allow",
-//	Source: apiv1.EntityRule{
-//		Tag:      "tag1",
-//		Selector: "label1 == 'value1' || make == 'cake'",
-//	},
-//}
+//
+//	apiv1.Rule{
+//		Action: "allow",
+//		Source: apiv1.EntityRule{
+//			Tag:      "tag1",
+//			Selector: "label1 == 'value1' || make == 'cake'",
+//		},
+//	}
+//
 // That rule will be converted to the following for Calico v3 API:
-// apiv3.Rule{
-//	Action: "allow",
-//	Source: apiv3.EntityRule{
-//		Selector: "(label1 == 'value1' || make == 'cake') && tag1 == ''",
-//	},
-//}
+//
+//	apiv3.Rule{
+//		Action: "allow",
+//		Source: apiv3.EntityRule{
+//			Selector: "(label1 == 'value1' || make == 'cake') && tag1 == ''",
+//		},
+//	}
 func mergeTagsAndSelectors(sel, tag string) string {
 	if tag != "" {
 		if sel != "" {

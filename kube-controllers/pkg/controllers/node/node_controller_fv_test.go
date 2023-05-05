@@ -17,7 +17,6 @@ package node_test
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
 	"reflect"
@@ -68,7 +67,7 @@ var _ = Describe("Calico node controller FV tests (KDD mode)", func() {
 
 		// Write out a kubeconfig file
 		var err error
-		kconfigfile, err = ioutil.TempFile("", "ginkgo-policycontroller")
+		kconfigfile, err = os.CreateTemp("", "ginkgo-policycontroller")
 		Expect(err).NotTo(HaveOccurred())
 		defer os.Remove(kconfigfile.Name())
 		data := testutils.BuildKubeconfig(apiserver.IP)
@@ -436,7 +435,7 @@ var _ = Describe("Calico node controller FV tests (etcd mode)", func() {
 		apiserver = testutils.RunK8sApiserver(etcd.IP)
 
 		// Write out a kubeconfig file
-		kconfigfile, err := ioutil.TempFile("", "ginkgo-policycontroller")
+		kconfigfile, err := os.CreateTemp("", "ginkgo-policycontroller")
 		Expect(err).NotTo(HaveOccurred())
 		defer os.Remove(kconfigfile.Name())
 		data := testutils.BuildKubeconfig(apiserver.IP)

@@ -18,7 +18,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
@@ -102,7 +101,7 @@ func (ap *AttachPoint) AttachProgram() (int, error) {
 	sectionName := ap.SectionName()
 
 	// Patch the binary so that its log prefix is like "eth0------X".
-	tempDir, err := ioutil.TempDir("", "calico-xdp")
+	tempDir, err := os.MkdirTemp("", "calico-xdp")
 	if err != nil {
 		return -1, fmt.Errorf("failed to create temporary directory: %w", err)
 	}

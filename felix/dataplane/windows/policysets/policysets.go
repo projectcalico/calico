@@ -286,7 +286,6 @@ func (s *PolicySets) protoRulesToHnsRules(policyId string, protoRules []*proto.R
 //
 // The following types of rules are not supported in this release and will be logged+skipped:
 // Rules with: Negative match criteria, Actions other than 'allow' or 'deny'and ICMP type/codes.
-//
 func (s *PolicySets) protoRuleToHnsRules(policyId string, pRule *proto.Rule, isInbound bool, ipPortsPerRule int) ([]*hns.ACLPolicy, error) {
 	log.WithField("policyId", policyId).Debug("protoRuleToHnsRules")
 
