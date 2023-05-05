@@ -372,7 +372,7 @@ type FelixConfigurationSpec struct {
 	// debug. It is off by default.
 	// [Default: unset - means all debug logs are emitted]
 	// +optional
-	BPFLogFilters string `json:"bpfLogFilters,omitempty" validate:"omitempty,keyValueList"`
+	BPFLogFilters *map[string]string `json:"bpfLogFilters,omitempty" validate:"omitempty,bpfLogFilters"`
 	// BPFDataIfacePattern is a regular expression that controls which interfaces Felix should attach BPF programs to
 	// in order to catch traffic to/from the network.  This needs to match the interfaces that Calico workload traffic
 	// flows over as well as any interfaces that handle incoming traffic to nodeports and services from outside the

@@ -330,10 +330,16 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			options.ExtraEnvVars["FELIX_BPFDSROptoutCIDRs"] = "245.245.0.0/16"
 
 			if testOpts.protocol == "tcp" {
-				options.ExtraEnvVars["FELIX_BPFLogFilters"] = "all=tcp"
+				filters := map[string]string{"all": "tcp"}
 				if testOpts.connTimeEnabled {
-					options.ExtraEnvVars["FELIX_BPFLogFilters"] += ",ctlb=on"
+					filters["ctlb"] = "on"
 				}
+				felixConfig := api.NewFelixConfiguration()
+				felixConfig.SetName("default")
+				felixConfig.Spec = api.FelixConfigurationSpec{
+					BPFLogFilters: &filters,
+				}
+				options.InitialFelixConfiguration = felixConfig
 			}
 
 			if ctlbWorkaround {

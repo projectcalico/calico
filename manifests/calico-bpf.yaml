@@ -1084,6 +1084,8 @@ spec:
                   services from outside the cluster.
                 type: string
               bpfLogFilters:
+                additionalProperties:
+                  type: string
                 description: 'BPFLogFilters is a comma-separated list of key=values
                   where the value is a pcap filter expression and the key is an interface
                   name with ''all'' denoting all interfaces, ''weps'' all workload
@@ -1091,7 +1093,7 @@ spec:
                   of ''on'' or ''off'' to set whether connect time load balance debug
                   output is enabled when BPFLogLevel is debug. It is off by default.
                   [Default: unset - means all debug logs are emitted]'
-                type: string
+                type: object
               bpfLogLevel:
                 description: 'BPFLogLevel controls the log level of the BPF programs
                   when in BPF dataplane mode.  One of "Off", "Info", or "Debug".  The

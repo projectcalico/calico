@@ -2786,8 +2786,17 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					"bpfLogFilters": {
 						SchemaProps: spec.SchemaProps{
 							Description: "BPFLogFilters is a comma-separated list of key=values where the value is a pcap filter expression and the key is an interface name with 'all' denoting all interfaces, 'weps' all workload endpoints and 'heps' all host endpoints. 'ctlb' can take a value of 'on' or 'off' to set whether connect time load balance debug output is enabled when BPFLogLevel is debug. It is off by default. [Default: unset - means all debug logs are emitted]",
-							Type:        []string{"string"},
-							Format:      "",
+							Type:        []string{"object"},
+							AdditionalProperties: &spec.SchemaOrBool{
+								Allows: true,
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: "",
+										Type:    []string{"string"},
+										Format:  "",
+									},
+								},
+							},
 						},
 					},
 					"bpfDataIfacePattern": {
