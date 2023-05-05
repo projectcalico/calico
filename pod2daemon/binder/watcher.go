@@ -15,7 +15,6 @@
 package binder
 
 import (
-	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
@@ -90,7 +89,7 @@ func (p *pollWatcher) poll(events chan<- workloadEvent, stop <-chan bool) {
 		}
 
 		// list the contents of the directory
-		files, err := ioutil.ReadDir(credPath)
+		files, err := os.ReadDir(credPath)
 		if err != nil {
 			log.Printf("error reading %s: %v", p.path, err)
 			close(events)

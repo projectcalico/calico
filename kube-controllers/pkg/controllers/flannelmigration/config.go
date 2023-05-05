@@ -30,7 +30,7 @@ var (
 	FlannelEnvFile = "/host/run/flannel/subnet.env"
 )
 
-//Flannel migration controller configurations
+// Flannel migration controller configurations
 type Config struct {
 	// FlannelNetwork should has same value as Flannel "network" config.
 	// This is the IPv4 network in CIDR format used for the entire flannel network.

@@ -18,7 +18,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os/exec"
 	"reflect"
 	"regexp"
@@ -209,7 +208,7 @@ func (d *FeatureDetector) getDistributionName() string {
 		return DefaultDistro
 	}
 
-	kernVersion, err := ioutil.ReadAll(versionReader)
+	kernVersion, err := io.ReadAll(versionReader)
 	if err != nil {
 		log.WithError(err).Warn("Failed to read kernel version from reader")
 		return DefaultDistro
