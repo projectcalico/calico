@@ -43,10 +43,10 @@ func RulesAPIV2ToBackend(ars []apiv3.Rule, ns string) []model.Rule {
 
 // Form and return a single selector expression for all the endpoints that an EntityRule should
 // match.  The returned expression incorporates the semantics of:
-// - the EntityRule's Selector, NamespaceSelector and ServiceAccounts fields
-// - the namespace or global-ness of the policy that the EntityRule is part of
-// - endpoints for a namespaced policy being limited to the namespace (or to selected namespaces) as
-//   soon as _any_ of the selector fields are used, including NotSelector.
+//   - the EntityRule's Selector, NamespaceSelector and ServiceAccounts fields
+//   - the namespace or global-ness of the policy that the EntityRule is part of
+//   - endpoints for a namespaced policy being limited to the namespace (or to selected namespaces) as
+//     soon as _any_ of the selector fields are used, including NotSelector.
 func GetEntityRuleSelector(er *apiv3.EntityRule, ns string, direction string) string {
 	saSelector := ""
 	if er.ServiceAccounts != nil {
