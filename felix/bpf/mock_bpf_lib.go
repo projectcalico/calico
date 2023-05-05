@@ -4,7 +4,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//	http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -18,7 +18,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net"
 	"os"
 	"path"
@@ -480,7 +480,7 @@ func (b *MockBPFLib) loadXDPRaw(objPath, ifName string, mode XDPMode, mapArgs []
 		return err
 	}
 
-	bytez, err := ioutil.ReadAll(f)
+	bytez, err := io.ReadAll(f)
 	if err != nil {
 		return err
 	}

@@ -103,12 +103,12 @@ var (
 // each field, using either the name of the field or the value in the confignamev1 tag
 // as the name of the config key and the value of the field converted to the config value.
 // The struct field values are converted as follows:
-// -  if the field is nil, or an empty string - the converted value is nil indicating a
-//    deletion of the config key.
-// -  if a converter has been provided for the field then the value is converted using
-//    that converter.
-// -  if it is a string field, the value is used as is.
-// -  booleans and ints are stringified in the standard way
+//   - if the field is nil, or an empty string - the converted value is nil indicating a
+//     deletion of the config key.
+//   - if a converter has been provided for the field then the value is converted using
+//     that converter.
+//   - if it is a string field, the value is used as is.
+//   - booleans and ints are stringified in the standard way
 //
 // This converter caches a list of additional config names that it has seen defined in
 // annotations.  This is used as a simplistic mechanism for sending deletes for config

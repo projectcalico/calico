@@ -29,7 +29,7 @@ import (
 type OpCode uint8
 type Reg int
 
-//noinspection GoUnusedConst
+// noinspection GoUnusedConst
 const (
 	// Registers.
 
