@@ -17,6 +17,7 @@ package node_test
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"strings"
@@ -603,7 +604,7 @@ func getMetrics(metricsURL string) (string, error) {
 		return "", err
 	}
 	defer resp.Body.Close()
-	body, err := os.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", err
 	}
