@@ -329,6 +329,19 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			options.ExtraEnvVars["FELIX_BPFExtToServiceConnmark"] = "0x80"
 			options.ExtraEnvVars["FELIX_BPFDSROptoutCIDRs"] = "245.245.0.0/16"
 
+			if testOpts.protocol == "tcp" {
+				filters := map[string]string{"all": "tcp"}
+				if testOpts.connTimeEnabled {
+					filters["ctlb"] = "on"
+				}
+				felixConfig := api.NewFelixConfiguration()
+				felixConfig.SetName("default")
+				felixConfig.Spec = api.FelixConfigurationSpec{
+					BPFLogFilters: &filters,
+				}
+				options.InitialFelixConfiguration = felixConfig
+			}
+
 			if ctlbWorkaround {
 				if testOpts.protocol == "udp" {
 					options.ExtraEnvVars["FELIX_FeatureGates"] = "BPFConnectTimeLoadBalancingWorkaround=udp"
