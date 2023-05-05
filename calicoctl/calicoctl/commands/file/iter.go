@@ -23,9 +23,9 @@ import (
 )
 
 // Iter extracts the filename from the parsed args and
-// -  invokes the callback for each manifest files in the directory if the filename in the parsed arguments is a
-//    directory (updating the arguments to include the specific file)
-// -  otherwise just invoke the callback with the unmodified arguments.
+//   - invokes the callback for each manifest files in the directory if the filename in the parsed arguments is a
+//     directory (updating the arguments to include the specific file)
+//   - otherwise just invoke the callback with the unmodified arguments.
 func Iter(parsedArgs map[string]interface{}, cb func(map[string]interface{}) error) error {
 	// File name is specified.
 	f, ok := parsedArgs["--filename"].(string)

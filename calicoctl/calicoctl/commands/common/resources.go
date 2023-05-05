@@ -118,11 +118,11 @@ type fileError struct {
 // ExecuteConfigCommand is main function called by all of the resource management commands
 // in calicoctl (apply, create, replace, get, delete and patch).  This provides common function
 // for all these commands:
-// 	-  Load resources from file (or if not specified determine the resource from
-// 	   the command line options).
-// 	-  Convert the loaded resources into a list of resources (easier to handle)
-// 	-  Process each resource individually, fanning out to the appropriate methods on
-//	   the client interface, collate results and exit on the first error.
+//   - Load resources from file (or if not specified determine the resource from
+//     the command line options).
+//   - Convert the loaded resources into a list of resources (easier to handle)
+//   - Process each resource individually, fanning out to the appropriate methods on
+//     the client interface, collate results and exit on the first error.
 func ExecuteConfigCommand(args map[string]interface{}, action action) CommandResults {
 	var resources []resourcemgr.ResourceObject
 
