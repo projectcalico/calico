@@ -16,31 +16,31 @@
 // items (currently WorkloadEndpoints/HostEndpoint) it has been told about start (or stop) matching
 // the label selectors (which are extracted from the active policy rules) it has been told about.
 //
-// Label inheritance
+// # Label inheritance
 //
 // As the name suggests, the InheritIndex supports the notion of label inheritance.  In our
 // data-model:
 //
-//     - endpoints have their own labels; these take priority over any inherited labels
-//     - endpoints also inherit labels from any explicitly-named profiles in their data
-//     - profiles have explicit labels
+//   - endpoints have their own labels; these take priority over any inherited labels
+//   - endpoints also inherit labels from any explicitly-named profiles in their data
+//   - profiles have explicit labels
 //
 // For example, suppose an endpoint had labels
 //
-//     {"a": "ep-a", "b": "ep-b"}
+//	{"a": "ep-a", "b": "ep-b"}
 //
 // and it explicitly referenced profile "profile-A", which had these labels:
 //
-//     {"a": "prof-a", "c": "prof-c", "d": "prof-d"}
+//	{"a": "prof-a", "c": "prof-c", "d": "prof-d"}
 //
 // then the resulting labels for the endpoint after considering inheritance would be:
 //
-//     {
-//         "a": "ep-a",    // Explicit endpoint label "wins" over profile labels.
-//         "b": "ep-b",
-//         "c": "prof-c",  // Profile label gets inherited.
-//         "d": "prof-d",
-//     }
+//	{
+//	    "a": "ep-a",    // Explicit endpoint label "wins" over profile labels.
+//	    "b": "ep-b",
+//	    "c": "prof-c",  // Profile label gets inherited.
+//	    "d": "prof-d",
+//	}
 package labelindex
 
 import (

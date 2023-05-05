@@ -17,7 +17,6 @@ package apiconfig
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 
@@ -42,7 +41,7 @@ func LoadClientConfig(filename string) (*CalicoAPIConfig, error) {
 // LoadClientConfigFromFile loads the ClientConfig from the specified file, which must exist.
 // The datastore type is defaulted if not specified.
 func LoadClientConfigFromFile(filename string) (*CalicoAPIConfig, error) {
-	b, err := ioutil.ReadFile(filename)
+	b, err := os.ReadFile(filename)
 	if err != nil {
 		return nil, err
 	}

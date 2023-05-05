@@ -18,7 +18,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
 	"runtime"
@@ -77,7 +76,7 @@ func shutdownTimestampFileName() string {
 func RemoveShutdownTimestampFile() error {
 	dataOK := true
 	filename := shutdownTimestampFileName()
-	data, err := ioutil.ReadFile(filename)
+	data, err := os.ReadFile(filename)
 	if err != nil {
 		if os.IsNotExist(err) {
 			// File doesn't exist
@@ -104,7 +103,7 @@ func SaveShutdownTimestamp() error {
 	ts := time.Now().UTC().Format(time.RFC3339)
 	filename := shutdownTimestampFileName()
 	log.Infof("Writing shutdown timestamp %s to %s", ts, filename)
-	if err := ioutil.WriteFile(filename, []byte(ts), 0644); err != nil {
+	if err := os.WriteFile(filename, []byte(ts), 0644); err != nil {
 		log.WithError(err).Error("Unable to write to " + filename)
 		return err
 	}
@@ -157,7 +156,7 @@ func nodenameFileName() string {
 // returns the nodename within.
 func NodenameFromFile() string {
 	filename := nodenameFileName()
-	data, err := ioutil.ReadFile(filename)
+	data, err := os.ReadFile(filename)
 	if err != nil {
 		if os.IsNotExist(err) {
 			// File doesn't exist, return empty string.
@@ -176,7 +175,7 @@ func NodenameFromFile() string {
 func WriteNodeConfig(nodeName string) {
 	filename := nodenameFileName()
 	log.Debugf("Writing %s to "+filename, nodeName)
-	if err := ioutil.WriteFile(filename, []byte(nodeName), 0644); err != nil {
+	if err := os.WriteFile(filename, []byte(nodeName), 0644); err != nil {
 		log.WithError(err).Error("Unable to write to " + filename)
 		Terminate()
 	}

@@ -15,7 +15,6 @@
 package config
 
 import (
-	"io/ioutil"
 	"os"
 
 	"github.com/go-ini/ini"
@@ -27,7 +26,7 @@ func LoadConfigFile(filename string) (map[string]string, error) {
 		log.Infof("Ignoring absent config file: %v", filename)
 		return nil, nil
 	}
-	data, err := ioutil.ReadFile(filename)
+	data, err := os.ReadFile(filename)
 	if err != nil {
 		return nil, err
 	}
