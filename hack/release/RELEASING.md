@@ -43,8 +43,6 @@ To publish Calico, you need **the following permissions**:
 
 - You must be able to access binaries.projectcalico.org.
 
-- You must have admin access to projectcalico.docs.tigera.io site on netlify.
-
 - To publish the helm release to the repo, you’ll need an AWS helm profile:
   Add this to your ~/.aws/config
       ```
@@ -81,7 +79,7 @@ Check the status of each of these items daily in the week leading up to the rele
 
 When starting development on a new minor release, the first step is to create a release branch.
 
-**For patch releases, this section can be skipped and you can go directly to [Performing a release](#performing-a-release)**
+**For patch releases, this section can be skipped and you can go directly to [Performing a release](#4-performing-a-release)**
 
 ### Setting up the branch
 

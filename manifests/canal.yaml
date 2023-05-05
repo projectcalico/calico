@@ -29,6 +29,13 @@ metadata:
   name: canal
   namespace: kube-system
 ---
+# Source: calico/templates/calico-node.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: calico-cni-plugin
+  namespace: kube-system
+---
 # Source: calico/templates/calico-config.yaml
 # This ConfigMap is used to configure a self-hosted Canal installation.
 kind: ConfigMap
@@ -1030,7 +1037,7 @@ spec:
                 description: 'BPFEnforceRPF enforce strict RPF on all host interfaces
                   with BPF programs regardless of what is the per-interfaces or global
                   setting. Possible values are Disabled, Strict or Loose. [Default:
-                  Strict]'
+                  Loose]'
                 type: string
               bpfExtToServiceConnmark:
                 description: 'BPFExtToServiceConnmark in BPF mode, control a 32bit
@@ -1049,6 +1056,16 @@ spec:
                   node appears to use the IP of the ingress node; this requires a
                   permissive L2 network.  [Default: Tunnel]'
                 type: string
+              bpfForceTrackPacketsFromIfaces:
+                description: 'BPFForceTrackPacketsFromIfaces in BPF mode, forces traffic
+                  from these interfaces to skip Calico''s iptables NOTRACK rule, allowing
+                  traffic from those interfaces to be tracked by Linux conntrack.  Should
+                  only be used for interfaces that are not used for the Calico fabric.  For
+                  example, a docker bridge device for non-Calico-networked containers.
+                  [Default: docker+]'
+                items:
+                  type: string
+                type: array
               bpfHostConntrackBypass:
                 description: 'BPFHostConntrackBypass Controls whether to bypass Linux
                   conntrack in BPF mode for workloads and services. [Default: true
@@ -4372,6 +4389,7 @@ rules:
       - serviceaccounts/token
     resourceNames:
       - canal
+      - calico-cni-plugin
     verbs:
       - create
   # The CNI plugin needs to get pods, nodes, and namespaces.
@@ -4388,7 +4406,7 @@ rules:
     resources:
       - endpointslices
     verbs:
-      - watch 
+      - watch
       - list
   - apiGroups: [""]
     resources:
@@ -4494,6 +4512,26 @@ rules:
       - update
 ---
 # Source: calico/templates/calico-node-rbac.yaml
+# CNI cluster role
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: calico-cni-plugin
+rules:
+  - apiGroups: [""]
+    resources:
+      - pods
+      - nodes
+      - namespaces
+    verbs:
+      - get
+  - apiGroups: [""]
+    resources:
+      - pods/status
+    verbs:
+      - patch
+---
+# Source: calico/templates/calico-node-rbac.yaml
 # Flannel ClusterRole
 # Pulled from https://github.com/coreos/flannel/blob/master/Documentation/kube-flannel-rbac.yml
 kind: ClusterRole
@@ -4559,6 +4597,20 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: canal
+  namespace: kube-system
+---
+# Source: calico/templates/calico-node-rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: calico-cni-plugin
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: calico-cni-plugin
+subjects:
+- kind: ServiceAccount
+  name: calico-cni-plugin
   namespace: kube-system
 ---
 # Source: calico/templates/calico-node.yaml
@@ -4793,7 +4845,7 @@ spec:
         # This container runs flannel using the kube-subnet-mgr backend
         # for allocating subnets.
         - name: kube-flannel
-          image: docker.io/flannelcni/flannel:v0.16.3
+          image: docker.io/flannel/flannel:v0.21.3
           imagePullPolicy: IfNotPresent
           command: [ "/opt/bin/flanneld", "--ip-masq", "--kube-subnet-mgr" ]
           securityContext:

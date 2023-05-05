@@ -109,17 +109,17 @@ const (
 // BootstrapAndFilterTyphaAddresses performs wireguard bootstrap processing and filtering of typha addresses. This is
 // primarily to handle the fact that Host Encryption can cause routing asymmetry due to timing windows. This results in
 // felixes being locked out from typhas.
-// - If wireguard is disabled then just remove all wireguard configuration from the node (kernel and published key).
-//   We do this whether host encryption is enabled or not.
+//   - If wireguard is disabled then just remove all wireguard configuration from the node (kernel and published key).
+//     We do this whether host encryption is enabled or not.
 //
 // For host encryption only:
-// - If the published key and the kernel key don't match remove all wireguard configuration from the node.
-// - If the kernel has no programmed peers then remove all wireguard configuration from the node (since we can't
-//   be talking over wireguard yet anyways).
-// -  If a set of typha endpoints has been supplied, filter them to exclude endpoints that we know we cannot reach
-//    due to asymmetric routing.  This will be the case if this node currently has a published wireguard key and:
-//    - Typha node does not have a public key, but the typha IP address programmed in the kernel as a wireguard peer.
-//    - Typha node has a public key but the key does not match any of the peer keys programmed in the kernel.
+//   - If the published key and the kernel key don't match remove all wireguard configuration from the node.
+//   - If the kernel has no programmed peers then remove all wireguard configuration from the node (since we can't
+//     be talking over wireguard yet anyways).
+//   - If a set of typha endpoints has been supplied, filter them to exclude endpoints that we know we cannot reach
+//     due to asymmetric routing.  This will be the case if this node currently has a published wireguard key and:
+//   - Typha node does not have a public key, but the typha IP address programmed in the kernel as a wireguard peer.
+//   - Typha node has a public key but the key does not match any of the peer keys programmed in the kernel.
 //
 // -----
 //

@@ -51,9 +51,9 @@ const (
 // netsetsConfig is used to parametrise the whole suite of tests for IPv4 or IPv6, it provides
 // methods that return:
 //
-//     - the IP to use for a given workload, each from a separate subnet
-//     - a CIDR that encompasses each workload's IP (and only its IP)
-//     - a full-length CIDR (i.e. the IP address expressed as a /32 or /128).
+//   - the IP to use for a given workload, each from a separate subnet
+//   - a CIDR that encompasses each workload's IP (and only its IP)
+//   - a full-length CIDR (i.e. the IP address expressed as a /32 or /128).
 type netsetsConfig struct {
 	ipVersion int
 	zeroCIDR  string

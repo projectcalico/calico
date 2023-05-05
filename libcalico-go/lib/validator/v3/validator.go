@@ -179,6 +179,7 @@ func init() {
 	registerFieldValidator("mustBeNil", validateMustBeNil)
 	registerFieldValidator("mustBeFalse", validateMustBeFalse)
 	registerFieldValidator("ifaceFilter", validateIfaceFilter)
+	registerFieldValidator("ifaceFilterSlice", validateIfaceFilterSlice)
 	registerFieldValidator("mac", validateMAC)
 	registerFieldValidator("iptablesBackend", validateIptablesBackend)
 	registerFieldValidator("keyValueList", validateKeyValueList)
@@ -297,6 +298,22 @@ func validateIfaceFilter(fl validator.FieldLevel) bool {
 	return ifaceFilterRegex.MatchString(s)
 }
 
+func validateIfaceFilterSlice(fl validator.FieldLevel) bool {
+	slice := fl.Field().Interface().([]string)
+	log.Debugf("Validate Interface Filter Slice : %v", slice)
+
+	for _, val := range slice {
+		// Important: must use ifaceFilterRegex to allow interface wildcard match
+		// e.g. "docker+" which the standard interfaceRegex does not accommodate.
+		match := ifaceFilterRegex.MatchString(val)
+		if !match {
+			return false
+		}
+	}
+
+	return true
+}
+
 func validateDatastoreType(fl validator.FieldLevel) bool {
 	s := fl.Field().String()
 	log.Debugf("Validate Datastore Type: %s", s)
@@ -394,10 +411,15 @@ func validateMAC(fl validator.FieldLevel) bool {
 	s := fl.Field().String()
 	log.Debugf("Validate MAC Address: %s", s)
 
-	if _, err := net.ParseMAC(s); err != nil {
+	if err := ValidateMAC(s); err != nil {
 		return false
 	}
 	return true
+}
+
+func ValidateMAC(mac string) error {
+	_, err := net.ParseMAC(mac)
+	return err
 }
 
 func validateIptablesBackend(fl validator.FieldLevel) bool {
@@ -505,14 +527,24 @@ func validateProtocol(structLevel validator.StructLevel) {
 func validateIPv4Network(fl validator.FieldLevel) bool {
 	n := fl.Field().String()
 	log.Debugf("Validate IPv4 network: %s", n)
-	ipa, ipn, err := cnet.ParseCIDROrIP(n)
+	err := ValidateIPv4Network(n)
 	if err != nil {
 		return false
 	}
+	return true
+}
 
+func ValidateIPv4Network(addr string) error {
+	ipa, ipn, err := cnet.ParseCIDROrIP(addr)
+	if err != nil {
+		return err
+	}
 	// Check for the correct version and that the CIDR is correctly masked (by comparing the
 	// parsed IP against the IP in the parsed network).
-	return ipa.Version() == 4 && ipn.IP.String() == ipa.String()
+	if ipa.Version() == 4 && ipn.IP.String() == ipa.String() {
+		return nil
+	}
+	return fmt.Errorf("Invalid IPv4 network %s", addr)
 }
 
 // validateIPv4Network validates the field is a valid (strictly masked) IPv6 network.
@@ -520,17 +552,27 @@ func validateIPv4Network(fl validator.FieldLevel) bool {
 func validateIPv6Network(fl validator.FieldLevel) bool {
 	n := fl.Field().String()
 	log.Debugf("Validate IPv6 network: %s", n)
-	ipa, ipn, err := cnet.ParseCIDROrIP(n)
+	err := ValidateIPv6Network(n)
 	if err != nil {
 		return false
 	}
-
-	// Check for the correct version and that the CIDR is correctly masked (by comparing the
-	// parsed IP against the IP in the parsed network).
-	return ipa.Version() == 6 && ipn.IP.String() == ipa.String()
+	return true
 }
 
-// validateIPv4Network validates the field is a valid (strictly masked) IP network.
+func ValidateIPv6Network(addr string) error {
+	ipa, ipn, err := cnet.ParseCIDROrIP(addr)
+	if err != nil {
+		return err
+	}
+	// Check for the correct version and that the CIDR is correctly masked (by comparing the
+	// parsed IP against the IP in the parsed network).
+	if ipa.Version() == 6 && ipn.IP.String() == ipa.String() {
+		return nil
+	}
+	return fmt.Errorf("Invalid IPv6 network %s", addr)
+}
+
+// validateIPNetwork validates the field is a valid (strictly masked) IP network.
 // An IP address is valid, and assumed to be fully masked (i.e /32 or /128)
 func validateIPNetwork(fl validator.FieldLevel) bool {
 	n := fl.Field().String()
@@ -545,30 +587,48 @@ func validateIPNetwork(fl validator.FieldLevel) bool {
 	return ipn.IP.String() == ipa.String()
 }
 
-// validateIPv4Network validates the field is a valid (not strictly masked) IPv4 network.
-// An IP address is valid, and assumed to be fully masked (i.e /32)
+// validateCIDRv4 validates the field is a valid (not strictly masked) IPv4 network.
 func validateCIDRv4(fl validator.FieldLevel) bool {
 	n := fl.Field().String()
 	log.Debugf("Validate IPv4 network: %s", n)
-	ipa, _, err := cnet.ParseCIDROrIP(n)
+	err := ValidateCIDRv4(n)
 	if err != nil {
 		return false
 	}
-
-	return ipa.Version() == 4
+	return true
 }
 
-// validateIPv4Network validates the field is a valid (not strictly masked) IPv6 network.
-// An IP address is valid, and assumed to be fully masked (i.e /128)
+func ValidateCIDRv4(cidr string) error {
+	ipa, _, err := cnet.ParseCIDROrIP(cidr)
+	if err != nil {
+		return err
+	}
+	if ipa.Version() == 4 {
+		return nil
+	}
+	return fmt.Errorf("Invalid IPv4 CIDR: %s", cidr)
+}
+
+// validateCIDRv6 validates the field is a valid (not strictly masked) IPv6 network.
 func validateCIDRv6(fl validator.FieldLevel) bool {
 	n := fl.Field().String()
 	log.Debugf("Validate IPv6 network: %s", n)
-	ipa, _, err := cnet.ParseCIDROrIP(n)
+	err := ValidateCIDRv6(n)
 	if err != nil {
 		return false
 	}
+	return true
+}
 
-	return ipa.Version() == 6
+func ValidateCIDRv6(cidr string) error {
+	ipa, _, err := cnet.ParseCIDROrIP(cidr)
+	if err != nil {
+		return err
+	}
+	if ipa.Version() == 6 {
+		return nil
+	}
+	return fmt.Errorf("Invalid IPv6 CIDR: %s", cidr)
 }
 
 // validateCIDR validates the field is a valid (not strictly masked) IP network.

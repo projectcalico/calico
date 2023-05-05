@@ -1,4 +1,4 @@
-// Copyright (c) 2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2023 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,20 +16,20 @@ package node_test
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"regexp"
 	"strings"
 	"time"
+
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
 
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
@@ -42,6 +42,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
+	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 var _ = Describe("kube-controllers metrics FV tests", func() {
@@ -80,7 +81,7 @@ var _ = Describe("kube-controllers metrics FV tests", func() {
 		Eventually(func() error {
 			_, err := k8sClient.CoreV1().Namespaces().List(context.Background(), metav1.ListOptions{})
 			return err
-		}, 30*time.Second, 1*time.Second).Should(BeNil())
+		}, 30*time.Second, 3*time.Second).Should(BeNil())
 
 		// Apply the necessary CRDs. There can sometimes be a delay between starting
 		// the API server and when CRDs are apply-able, so retry here.
@@ -91,7 +92,7 @@ var _ = Describe("kube-controllers metrics FV tests", func() {
 			}
 			return nil
 		}
-		Eventually(apply, 10*time.Second).ShouldNot(HaveOccurred())
+		Eventually(apply, 10*time.Second, 1*time.Second).ShouldNot(HaveOccurred())
 
 		// Wait for the applied CRDs to become registered API resources.
 		Eventually(func() error {
@@ -104,12 +105,24 @@ var _ = Describe("kube-controllers metrics FV tests", func() {
 				return err
 			}
 
-			if len(serverResources.APIResources) != len(crdDirEntries) {
-				return errors.New("crd.projectcalico.org/v1 resources are not completely available")
-			} else {
-				return nil
+			re := regexp.MustCompile(`^crd.projectcalico.org_(\w+).yaml$`)
+			expected := set.New[string]()
+			for _, e := range crdDirEntries {
+				m := re.FindStringSubmatch(e.Name())
+				if len(m) == 2 {
+					expected.Add(m[1])
+				}
 			}
-		}, 10*time.Second).ShouldNot(HaveOccurred())
+			actual := set.New[string]()
+			for _, r := range serverResources.APIResources {
+				actual.Add(r.Name)
+			}
+
+			if !actual.ContainsAll(expected) {
+				return fmt.Errorf("crd.projectcalico.org/v1 resources are not completely available. expected=%s actual=%s", expected, actual)
+			}
+			return nil
+		}, 15*time.Second, 3*time.Second).ShouldNot(HaveOccurred())
 
 		// Make a Calico client and backend client.
 		type accessor interface {

@@ -26,6 +26,10 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/bpfutils"
 )
 
+// #cgo CFLAGS: -I${SRCDIR}/../../bpf-gpl/include/libbpf/src -I${SRCDIR}/../../bpf-gpl
+// #cgo amd64 LDFLAGS: -L${SRCDIR}/../../bpf-gpl/include/libbpf/src/amd64 -lbpf -lelf -lz
+// #cgo arm64 LDFLAGS: -L${SRCDIR}/../../bpf-gpl/include/libbpf/src/arm64 -lbpf -lelf -lz
+// #cgo armv7 LDFLAGS: -L${SRCDIR}/../../bpf-gpl/include/libbpf/src/armv7 -lbpf -lelf -lz
 // #include "libbpf_api.h"
 import "C"
 
@@ -133,6 +137,18 @@ func (m *Map) NextMap() (*Map, error) {
 		return nil, nil
 	}
 	return &Map{bpfMap: bpfMap, bpfObj: m.bpfObj}, nil
+}
+
+func (o *Obj) ProgramFD(secname string) (int, error) {
+	cSecName := C.CString(secname)
+	defer C.free(unsafe.Pointer(cSecName))
+
+	ret, err := C.bpf_program_fd(o.obj, cSecName)
+	if err != nil {
+		return -1, fmt.Errorf("error finding program %s: %w", secname, err)
+	}
+
+	return int(ret), nil
 }
 
 func (o *Obj) AttachClassifier(secName, ifName string, ingress bool) (int, error) {
@@ -278,7 +294,7 @@ func CreateQDisc(ifName string) error {
 	}
 	_, err = C.bpf_tc_create_qdisc(C.int(ifIndex))
 	if err != nil {
-		return fmt.Errorf("Error creating qdisc %w", err)
+		return fmt.Errorf("creating qdisc %w", err)
 	}
 	return nil
 }
@@ -292,7 +308,7 @@ func RemoveQDisc(ifName string) error {
 	}
 	_, err = C.bpf_tc_remove_qdisc(C.int(ifIndex))
 	if err != nil {
-		return fmt.Errorf("Error removing qdisc %w", err)
+		return fmt.Errorf("removing qdisc %w", err)
 	}
 	return nil
 }
@@ -304,7 +320,7 @@ func (o *Obj) UpdateJumpMap(mapName, progName string, mapIndex int) error {
 	defer C.free(unsafe.Pointer(cProgName))
 	_, err := C.bpf_update_jump_map(o.obj, cMapName, cProgName, C.int(mapIndex))
 	if err != nil {
-		return fmt.Errorf("Error updating %s at index %d: %w", mapName, mapIndex, err)
+		return fmt.Errorf("updating %s at index %d: %w", mapName, mapIndex, err)
 	}
 	return nil
 }
@@ -358,6 +374,12 @@ func TcSetGlobals(
 	cName := C.CString(globalData.IfaceName)
 	defer C.free(unsafe.Pointer(cName))
 
+	cJumps := make([]C.uint, len(globalData.Jumps))
+
+	for i, v := range globalData.Jumps {
+		cJumps[i] = C.uint(v)
+	}
+
 	_, err := C.bpf_tc_set_globals(m.bpfMap,
 		cName,
 		C.uint(globalData.HostIP),
@@ -372,6 +394,7 @@ func TcSetGlobals(
 		C.ushort(globalData.WgPort),
 		C.uint(globalData.NatIn),
 		C.uint(globalData.NatOut),
+		&cJumps[0], // it is safe because we hold the reference here until we return.
 	)
 
 	return err
@@ -392,7 +415,16 @@ func XDPSetGlobals(
 	cName := C.CString(globalData.IfaceName)
 	defer C.free(unsafe.Pointer(cName))
 
-	_, err := C.bpf_xdp_set_globals(m.bpfMap, cName)
+	cJumps := make([]C.uint, len(globalData.Jumps))
+
+	for i, v := range globalData.Jumps {
+		cJumps[i] = C.uint(v)
+	}
+
+	_, err := C.bpf_xdp_set_globals(m.bpfMap,
+		cName,
+		&cJumps[0],
+	)
 
 	return err
 }
@@ -403,4 +435,22 @@ func NumPossibleCPUs() (int, error) {
 		return ncpus, fmt.Errorf("Invalid number of CPUs: %d", ncpus)
 	}
 	return ncpus, nil
+}
+
+func ObjPin(fd int, path string) error {
+	cPath := C.CString(path)
+	defer C.free(unsafe.Pointer(cPath))
+
+	_, err := C.bpf_obj_pin(C.int(fd), cPath)
+
+	return err
+}
+
+func ObjGet(path string) (int, error) {
+	cPath := C.CString(path)
+	defer C.free(unsafe.Pointer(cPath))
+
+	fd, err := C.bpf_obj_get(cPath)
+
+	return int(fd), err
 }

@@ -24,6 +24,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 
 	"golang.org/x/sys/unix"
 
@@ -34,12 +35,6 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/libbpf"
 	"github.com/projectcalico/calico/felix/bpf/utils"
 )
-
-const jumpMapVersion = 2
-
-func JumpMapName() string {
-	return fmt.Sprintf("cali_jump%d", jumpMapVersion)
-}
 
 func IsNotExists(err error) bool {
 	return err == unix.ENOENT
@@ -149,6 +144,11 @@ type MapWithUpdateWithFlags interface {
 	UpdateWithFlags(k, v []byte, flags int) error
 }
 
+type MapWithDeleteIfExists interface {
+	Map
+	DeleteIfExists(k []byte) error
+}
+
 type MapParameters struct {
 	PinDir       string
 	Type         string
@@ -220,7 +220,7 @@ func ResetSizes() {
 	mapSizes = make(map[string]int)
 }
 
-func NewPinnedMap(params MapParameters) MapWithExistsCheck {
+func NewPinnedMap(params MapParameters) *PinnedMap {
 	if len(params.VersionedName()) >= unix.BPF_OBJ_NAME_LEN {
 		log.WithField("name", params.Name).Panic("Bug: BPF map name too long")
 	}
@@ -424,6 +424,15 @@ func (b *PinnedMap) Delete(k []byte) error {
 	return DeleteMapEntry(b.fd, k, valueSize)
 }
 
+func (b *PinnedMap) DeleteIfExists(k []byte) error {
+	valueSize := b.ValueSize
+	if b.perCPU {
+		valueSize = b.ValueSize * NumPossibleCPUs()
+		log.Debugf("Set value size to %v for deleting an entry from Per-CPU map", valueSize)
+	}
+	return DeleteMapEntryIfExists(b.fd, k, valueSize)
+}
+
 func (b *PinnedMap) updateDeltaEntries() error {
 	log.WithField("name", b.Name).Debug("updateDeltaEntries")
 
@@ -569,8 +578,8 @@ func (b *PinnedMap) Open() error {
 	return err
 }
 
-func (b *PinnedMap) repinAt(from, to string) error {
-	err := RepinMap(b.VersionedName(), to)
+func (b *PinnedMap) repinAt(fd int, from, to string) error {
+	err := libbpf.ObjPin(fd, to)
 	if err != nil {
 		return fmt.Errorf("error repinning %s to %s: %w", from, to, err)
 	}
@@ -605,7 +614,12 @@ func (b *PinnedMap) EnsureExists() error {
 		if _, err := os.Stat(b.Path()); err == nil {
 			os.Remove(b.Path())
 		}
-		err := b.repinAt(oldMapPath, b.Path())
+		fd, err := libbpf.ObjGet(oldMapPath)
+		if err != nil {
+			return fmt.Errorf("cannot get old map at %s: %w", oldMapPath, err)
+		}
+		err = b.repinAt(fd, oldMapPath, b.Path())
+		syscall.Close(fd)
 		if err != nil {
 			return fmt.Errorf("error repinning old map %s to %s, err=%w", oldMapPath, b.Path(), err)
 		}
@@ -627,7 +641,7 @@ func (b *PinnedMap) EnsureExists() error {
 		b.oldfd = b.MapFD()
 		b.oldSize = mapInfo.MaxEntries
 
-		err = b.repinAt(b.Path(), oldMapPath)
+		err = b.repinAt(int(b.MapFD()), b.Path(), oldMapPath)
 		if err != nil {
 			return fmt.Errorf("error migrating the old map %w", err)
 		}
@@ -711,11 +725,9 @@ func GetMapIdFromPin(pinPath string) (int, error) {
 	return mapData.ID, nil
 }
 
-func RepinMapFromId(id int, path string) error {
-	cmd := exec.Command("bpftool", "map", "pin", "id", fmt.Sprint(id), path)
-	return errors.Wrap(cmd.Run(), "bpftool failed to reping map from id")
-}
-
+// RepinMap finds a map by a given name and pins it to a path. Note that if
+// there are multiple maps of the same name in the system, it will use the first
+// one it finds.
 func RepinMap(name string, filename string) error {
 	cmd := exec.Command("bpftool", "map", "list", "-j")
 	out, err := cmd.Output()
@@ -828,14 +840,14 @@ func (b *PinnedMap) upgrade() error {
 	oldMapParams.MaxEntries = b.MaxEntries
 	oldBpfMap := NewPinnedMap(oldMapParams)
 	defer func() {
-		oldBpfMap.(*PinnedMap).Close()
-		oldBpfMap.(*PinnedMap).fd = 0
+		oldBpfMap.Close()
+		oldBpfMap.fd = 0
 	}()
 	err = oldBpfMap.EnsureExists()
 	if err != nil {
 		return err
 	}
-	return b.UpgradeFn(oldBpfMap.(*PinnedMap), b)
+	return b.UpgradeFn(oldBpfMap, b)
 }
 
 type Upgradable interface {

@@ -19,6 +19,7 @@ struct cali_tc_globals {
 	__u32 natin_idx;
 	__u32 natout_idx;
 	__u8 iface_name[16];
+	__u32 jumps[16];
 };
 
 enum cali_globals_flags {
@@ -29,7 +30,8 @@ enum cali_globals_flags {
 	CALI_GLOBALS_RESERVED3			= 0x00000008,
 	CALI_GLOBALS_RPF_OPTION_ENABLED		= 0x00000010,
 	CALI_GLOBALS_RPF_OPTION_STRICT		= 0x00000020,
-	CALI_GLOBALS_NO_DSR_CIDRS		= 0x00000040,
+	CALI_GLOBALS_RESERVED7			= 0x00000040,
+	CALI_GLOBALS_NO_DSR_CIDRS		= 0x00000080,
 };
 
 struct cali_ctlb_globals {
@@ -39,6 +41,7 @@ struct cali_ctlb_globals {
 
 struct cali_xdp_globals {
 	__u8 iface_name[16];
+	__u32 jumps[16];
 };
 
 #endif /* __CALI_GLOBALS_H__ */

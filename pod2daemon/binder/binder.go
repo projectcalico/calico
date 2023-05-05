@@ -115,7 +115,7 @@ func (b *binder) addListener(uid string) {
 	}
 	sockPath := filepath.Join(b.searchPath, MountSubdir, uid, SocketFilename)
 	_, err = os.Stat(sockPath)
-	if !os.IsNotExist(err) {
+	if err == nil {
 		// file exists, try to delete it.
 		err := os.Remove(sockPath)
 		if err != nil {

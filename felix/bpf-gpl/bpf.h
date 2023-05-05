@@ -214,7 +214,7 @@ enum calico_skb_mark {
  * functions in anger. */
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Winvalid-noreturn"
-static CALI_BPF_INLINE _Noreturn void bpf_exit(int rc) {
+static CALI_BPF_INLINE __attribute__((noreturn)) void bpf_exit(int rc) {
 	// Need volatile here because we don't use rc after this assembler fragment.
 	// The BPF assembler rejects an input-only operand so we make r0 an in/out operand.
 	asm volatile ( \
@@ -250,7 +250,7 @@ extern const volatile struct cali_xdp_globals __globals;
 #elif (!CALI_F_CGROUP) || defined(UNITTEST)
 
 extern const volatile struct cali_tc_globals __globals;
-#define CALI_CONFIGURABLE(name)  __globals.name
+#define CALI_CONFIGURABLE(name) ctx->globals->name
 
 #else
 

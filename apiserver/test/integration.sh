@@ -27,7 +27,7 @@ runTests() {
     # Run etcd only if the storage type is default for the apiserver.
     kube::etcd::start
   fi
-  go test -v ./test/integration/... -args -test.v 10 -logtostderr
+  GO111MODULE=on go test -v ./test/integration/... -args -test.v 10 -logtostderr
 }
 
 # Run cleanup to stop etcd on interrupt or other kill signal.

@@ -22,6 +22,7 @@ import (
 
 type Action interface {
 	ToFragment(features *environment.Features) string
+	String() string
 }
 
 type Referrer interface {

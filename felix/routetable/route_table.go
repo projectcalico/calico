@@ -35,6 +35,7 @@ import (
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/netlinkshim"
+	"github.com/projectcalico/calico/felix/netlinkshim/handlemgr"
 	"github.com/projectcalico/calico/felix/timeshim"
 	cprometheus "github.com/projectcalico/calico/libcalico-go/lib/prometheus"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
@@ -204,7 +205,7 @@ type RouteTable struct {
 	deviceRouteProtocol  netlink.RouteProtocol
 	removeExternalRoutes bool
 
-	nl *netlinkshim.HandleManager
+	nl *handlemgr.HandleManager
 
 	// The route table index. A value of 0 defaults to the main table.
 	tableIndex int
@@ -354,11 +355,11 @@ func NewWithShims(
 		tableIndex:                     tableIndex,
 		opReporter:                     opReporter,
 		livenessCallback:               func() {},
-		nl: netlinkshim.NewHandleManager(
+		nl: handlemgr.NewHandleManager(
 			family,
 			featureDetector,
-			netlinkshim.WithNewHandleOverride(newNetlinkHandle),
-			netlinkshim.WithSocketTimeout(netlinkTimeout),
+			handlemgr.WithNewHandleOverride(newNetlinkHandle),
+			handlemgr.WithSocketTimeout(netlinkTimeout),
 		),
 	}
 
@@ -1035,6 +1036,10 @@ func (r *RouteTable) syncL2RoutesForLink(ifaceName string) error {
 	var updatesFailed bool
 
 	for _, existing := range existingNeigh {
+		if existing.HardwareAddr == nil {
+			log.WithField("neighbor", existing).Debug("Ignoring existing ARP entry with no hardware addr")
+			continue
+		}
 		if _, ok := expected[existing.HardwareAddr.String()]; !ok {
 			logCxt.WithField("neighbor", existing).Debug("Neighbor should no longer be programmed")
 

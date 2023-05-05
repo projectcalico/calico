@@ -145,6 +145,8 @@ endif
 
 ifeq ($(ARCH), amd64)
 BUILD_TARGETS+=bin/calico-felix.exe
+GOEXPERIMENT=boringcrypto
+TAGS=fipsstrict
 endif
 
 build: $(BUILD_TARGETS)
@@ -168,16 +170,16 @@ bin/calico-felix-$(ARCH): $(LIBBPF_A) $(SRC_FILES)
 	@echo Building felix for $(ARCH) on $(BUILDARCH)
 	mkdir -p bin
 	if [ "$(SEMAPHORE)" != "true" -o ! -e $@ ] ; then \
-	  $(DOCKER_GO_BUILD_CGO) \
-	     sh -c 'go build -v -o $@ -v $(BUILD_FLAGS) $(LDFLAGS) "$(PACKAGE_NAME)/cmd/calico-felix"'; \
+	  $(DOCKER_GO_BUILD_CGO) sh -c '$(GIT_CONFIG_SSH) \
+	     go build -v -o $@ -v -buildvcs=false $(BUILD_FLAGS) $(LDFLAGS) "$(PACKAGE_NAME)/cmd/calico-felix"'; \
 	fi
 
-bin/calico-felix-race-$(ARCH): $(LIBBPF_A) $(SRC_FILES)
+bin/calico-felix-race-$(ARCH): $(LIBBPF_A) $(SRC_FILES) ../go.mod
 	@echo Building felix with race detector enabled for $(ARCH) on $(BUILDARCH)
 	mkdir -p bin
 	if [ "$(SEMAPHORE)" != "true" -o ! -e $@ ] ; then \
-	  $(DOCKER_GO_BUILD_CGO) \
-	     sh -c 'go build -v -race -o $@ -v $(BUILD_FLAGS) $(LDFLAGS) "$(PACKAGE_NAME)/cmd/calico-felix"'; \
+	  $(DOCKER_GO_BUILD_CGO) sh -c '$(GIT_CONFIG_SSH) \
+	     go build -v -race -o $@ -v -buildvcs=false $(BUILD_FLAGS) $(LDFLAGS) "$(PACKAGE_NAME)/cmd/calico-felix"'; \
 	fi
 
 # Generate the protobuf bindings for go. The proto/felixbackend.pb.go file is included in SRC_FILES
@@ -192,6 +194,7 @@ protobuf proto/felixbackend.pb.go: proto/felixbackend.proto
 
 # We pre-build lots of different variants of the TC programs, defer to the script.
 BPF_GPL_O_FILES:=$(addprefix bpf-gpl/,$(shell bpf-gpl/list-objs))
+BPF_GPL_O_FILES+=bpf-gpl/bin/tc_preamble.o bpf-gpl/bin/xdp_preamble.o bpf-gpl/bin/policy_default.o
 
 # There's a one-to-one mapping from UT C files to objects and the same for the apache programs..
 BPF_GPL_UT_O_FILES:=$(BPF_GPL_UT_C_FILES:.c=.o) $(addprefix bpf-gpl/,$(shell bpf-gpl/list-ut-objs))
@@ -254,7 +257,7 @@ $(FELIX_CONTAINER_CREATED): docker-image/calico-felix-wrapper \
                             docker-image/Dockerfile* \
                             $(shell test "$(FELIX_IMAGE_ID)" || echo force-rebuild)
 	$(MAKE) register
-	$(DOCKER_BUILD) -t $(FELIX_IMAGE_WITH_TAG) --file ./docker-image/Dockerfile docker-image --load;
+	$(DOCKER_BUILD) -t $(FELIX_IMAGE_WITH_TAG) --file ./docker-image/Dockerfile.$(ARCH) docker-image --load;
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $(FELIX_CONTAINER_CREATED)
 
@@ -427,33 +430,30 @@ stop-grafana:
 bin/calico-bpf: $(SRC_FILES)
 	@echo Building calico-bpf...
 	mkdir -p bin
-	$(DOCKER_GO_BUILD_CGO) \
-	    sh -c 'go build -v -o $@ -v $(BUILD_FLAGS) $(LDFLAGS) "$(PACKAGE_NAME)/cmd/calico-bpf"'
+	$(DOCKER_GO_BUILD_CGO) sh -c '$(GIT_CONFIG_SSH) \
+	    GOEXPERIMENT=$(GOEXPERIMENT) go build -v -o $@ -tags $(TAGS) -v -buildvcs=false $(BUILD_FLAGS) $(LDFLAGS) "$(PACKAGE_NAME)/cmd/calico-bpf"'
 
 bin/pktgen: $(SRC_FILES) $(FV_SRC_FILES)
 	@echo Building pktgen...
 	mkdir -p bin
-	$(DOCKER_GO_BUILD) \
-	    sh -c 'go build -v -o $@ -v $(BUILD_FLAGS) $(LDFLAGS) "$(PACKAGE_NAME)/fv/pktgen"'
+	$(DOCKER_GO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
+		GOEXPERIMENT=$(GOEXPERIMENT) go build -v -o $@ -tags $(TAGS) -v -buildvcs=false $(BUILD_FLAGS) $(LDFLAGS) "$(PACKAGE_NAME)/fv/pktgen"'
 
 bin/iptables-locker: ../go.mod $(shell find iptables -type f -name '*.go' -print)
 	@echo Building iptables-locker...
-	mkdir -p bin
-	$(DOCKER_GO_BUILD) \
-	    sh -c 'go build -v -o $@ -v $(BUILD_FLAGS) $(LDFLAGS) "$(PACKAGE_NAME)/fv/iptables-locker"'
+	$(DOCKER_GO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
+	    GOEXPERIMENT=$(GOEXPERIMENT) go build -v -o $@ -tags $(TAGS) -v -buildvcs=false $(BUILD_FLAGS) $(LDFLAGS) "$(PACKAGE_NAME)/fv/iptables-locker"'
 
 bin/test-workload: ../go.mod fv/cgroup/cgroup.go fv/utils/utils.go fv/connectivity/*.go fv/test-workload/*.go
 	@echo Building test-workload...
-	mkdir -p bin
-	$(DOCKER_GO_BUILD) \
-	    sh -c 'go build -v -o $@ -v $(BUILD_FLAGS) $(LDFLAGS) "$(PACKAGE_NAME)/fv/test-workload"'
+	$(DOCKER_GO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
+	    GOEXPERIMENT=$(GOEXPERIMENT) go build -v -o $@ -tags $(TAGS) -v -buildvcs=false $(BUILD_FLAGS) $(LDFLAGS) "$(PACKAGE_NAME)/fv/test-workload"'
 
 bin/test-connection: ../go.mod fv/cgroup/cgroup.go fv/utils/utils.go fv/connectivity/*.go fv/test-connection/*.go
 	@echo Building test-connection...
 	mkdir -p bin
-	$(DOCKER_GO_BUILD) \
-	    sh -c 'go build -v -o $@ -v $(BUILD_FLAGS) $(LDFLAGS) "$(PACKAGE_NAME)/fv/test-connection"'
-
+	$(DOCKER_GO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
+	    GOEXPERIMENT=$(GOEXPERIMENT) go build -v -o $@ -tags $(TAGS) -v -buildvcs=false $(BUILD_FLAGS) $(LDFLAGS) "$(PACKAGE_NAME)/fv/test-connection"'
 st:
 	@echo "No STs available"
 
@@ -483,7 +483,7 @@ cd: cd-common
 # Release
 ###############################################################################
 ## Produces a clean build of release artifacts at the specified version.
-release-build: .release-$(VERSION).created 
+release-build: .release-$(VERSION).created
 .release-$(VERSION).created:
 	$(MAKE) clean build bin/calico-bpf
 	touch $@
@@ -533,6 +533,18 @@ ut-bpf: $(LIBBPF_A) bin/bpf_ut.test bin/bpf.test build-bpf
 		cd /go/src/$(PACKAGE_NAME)/bpf/ut && \
 		../../bin/bpf_ut.test -test.v -test.run "$(FOCUS)"'
 
+.PHONY: bench-bpf
+bench-bpf: $(LIBBPF_A) bin/bpf_ut.test bin/bpf.test build-bpf
+	$(DOCKER_RUN) \
+		--privileged \
+		-e RUN_AS_ROOT=true \
+		-v `pwd`:/code \
+		-v `pwd`/bpf-gpl/bin:/usr/lib/calico/bpf \
+		$(CALICO_BUILD) sh -c ' \
+		mount bpffs /sys/fs/bpf -t bpf && \
+		cd /go/src/$(PACKAGE_NAME)/bpf/ut && \
+		../../bin/bpf_ut.test -test.v -test.bench="$(FOCUS)" -test.run "$(FOCUS)"'
+
 ## Launch a browser with Go coverage stats for the whole project.
 .PHONY: cover-browser
 cover-browser: combined.coverprofile
@@ -564,7 +576,7 @@ bin/calico-felix.exe: $(SRC_FILES)
 	@echo Building felix for Windows...
 	mkdir -p bin
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
-	   	GOOS=windows go build -v -o $@ -v $(LDFLAGS) "$(PACKAGE_NAME)/cmd/calico-felix" && \
+	   	GOOS=windows go build -buildvcs=false -v -o $@ -v $(LDFLAGS) "$(PACKAGE_NAME)/cmd/calico-felix" && \
 		( ldd $@ 2>&1 | grep -q "Not a valid dynamic program\|not a dynamic executable" || \
 		( echo "Error: $@ was not statically linked"; false ) )'
 

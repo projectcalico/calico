@@ -259,7 +259,7 @@ func (c *etcdV3Client) Update(ctx context.Context, d *model.KVPair) (*model.KVPa
 	return d, nil
 }
 
-//TODO Remove once we get rid of the v1 client.  Apply should no longer be supported
+// TODO Remove once we get rid of the v1 client.  Apply should no longer be supported
 // at least in it's current guise.  Apply will need to be handled further up the stack
 // by performing a Get/Create or Update to ensure we don't lose certain read-only Metadata.
 // It's possible that we will just perform that processing in the clients (e.g. calicoctl),

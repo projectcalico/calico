@@ -126,9 +126,9 @@ type endpointManager struct {
 	floatingIPsEnabled     bool
 
 	// Our dependencies.
-	rawTable     iptablesTable
-	mangleTable  iptablesTable
-	filterTable  iptablesTable
+	rawTable     IptablesTable
+	mangleTable  IptablesTable
+	filterTable  IptablesTable
 	ruleRenderer rules.RuleRenderer
 	routeTable   routetable.RouteTableInterface
 	writeProcSys procSysWriter
@@ -206,9 +206,9 @@ type EndpointStatusUpdateCallback func(ipVersion uint8, id interface{}, status s
 type procSysWriter func(path, value string) error
 
 func newEndpointManager(
-	rawTable iptablesTable,
-	mangleTable iptablesTable,
-	filterTable iptablesTable,
+	rawTable IptablesTable,
+	mangleTable IptablesTable,
+	filterTable IptablesTable,
 	ruleRenderer rules.RuleRenderer,
 	routeTable routetable.RouteTableInterface,
 	ipVersion uint8,
@@ -244,9 +244,9 @@ func newEndpointManager(
 }
 
 func newEndpointManagerWithShims(
-	rawTable iptablesTable,
-	mangleTable iptablesTable,
-	filterTable iptablesTable,
+	rawTable IptablesTable,
+	mangleTable IptablesTable,
+	filterTable IptablesTable,
 	ruleRenderer rules.RuleRenderer,
 	routeTable routetable.RouteTableInterface,
 	ipVersion uint8,
@@ -346,7 +346,7 @@ func (m *endpointManager) OnUpdate(protoBufMsg interface{}) {
 		delete(m.rawHostEndpoints, *msg.Id)
 		m.hostEndpointsDirty = true
 		m.epIDsToUpdateStatus.Add(*msg.Id)
-	case *ifaceUpdate:
+	case *ifaceStateUpdate:
 		log.WithField("update", msg).Debug("Interface state changed.")
 		m.pendingIfaceUpdates[msg.Name] = msg.State
 	case *ifaceAddrsUpdate:
@@ -1175,7 +1175,7 @@ func (m *endpointManager) updateHostEndpoints() {
 func (m *endpointManager) updateDispatchChains(
 	activeChains map[string]*iptables.Chain,
 	newChains []*iptables.Chain,
-	table iptablesTable,
+	table IptablesTable,
 ) {
 	seenChains := set.New[string]()
 	for _, newChain := range newChains {

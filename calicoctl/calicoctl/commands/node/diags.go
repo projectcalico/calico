@@ -113,7 +113,7 @@ func runDiags(logDir string) error {
 		return fmt.Errorf("Error changing directory to temp directory to dump logs: %v", err)
 	}
 
-	err = os.Mkdir("diagnostics", os.ModeDir)
+	err = os.MkdirAll("diagnostics", os.ModeDir)
 	if err != nil {
 		return fmt.Errorf("Error creating diagnostics directory: %v\n", err)
 	}
@@ -178,7 +178,7 @@ func runDiags(logDir string) error {
 
 // getNodeContainerLogs will attempt to grab logs for any "calico" named containers for hosted installs.
 func getNodeContainerLogs(logDir string) {
-	err := os.Mkdir(logDir, os.ModeDir)
+	err := os.MkdirAll(logDir, os.ModeDir)
 	if err != nil {
 		fmt.Printf("Error creating log directory: %v\n", err)
 		return

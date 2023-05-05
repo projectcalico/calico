@@ -58,28 +58,33 @@ bin/flexvol-armv7: ARCH=armv7
 bin/flexvol-ppc64le: ARCH=ppc64le
 bin/flexvol-s390x: ARCH=s390x
 bin/flexvol-%: $(SRC_FILES)
-	$(DOCKER_RUN) -e CGO_ENABLED=0 $(CALICO_BUILD) go build -v -o bin/flexvol-$(ARCH) flexvol/flexvoldriver.go
+	$(DOCKER_RUN) -e CGO_ENABLED=0 $(CALICO_BUILD) go build -buildvcs=false -v -o bin/flexvol-$(ARCH) flexvol/flexvoldriver.go
 
-bin/csi-driver-amd64: ARCH=amd64
 bin/csi-driver-arm64: ARCH=arm64
 bin/csi-driver-armv7: ARCH=armv7
 bin/csi-driver-ppc64le: ARCH=ppc64le
 bin/csi-driver-s390x: ARCH=s390x
 bin/csi-driver-%: $(SRC_FILES)
-	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) go build -v -o bin/csi-driver-$(ARCH) csidriver/main.go
+	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) go build -buildvcs=false -v -o bin/csi-driver-$(ARCH) csidriver/main.go
+
+bin/csi-driver-amd64: $(SRC_FILES)
+	$(call build_static_cgo_boring_binary, csidriver/main.go, $@)
 
 UPSTREAM_REGISTRAR_PROJECT ?= kubernetes-csi/$(REGISTRAR_IMAGE)
-UPSTREAM_REGISTRAR_TAG     ?= v2.5.1
+UPSTREAM_REGISTRAR_TAG     ?= v2.8.0
+
+REGISTRAR_TIGERA_BUILD_CMD_LDFLAGS = -ldflags '-extldflags "-static" -linkmode external'
 
 REGISTRAR_TIGERA_BUILD_CMD="cd /go/src/github.com/$(UPSTREAM_REGISTRAR_PROJECT) && \
-                    			  go build -v -o bin/csi-node-driver-registrar cmd/csi-node-driver-registrar/*.go"
+                    			  go build -buildvcs=false $(REGISTRAR_TIGERA_BUILD_CMD_LDFLAGS) -tags $(TAGS) -v -o bin/csi-node-driver-registrar cmd/csi-node-driver-registrar/*.go"
 REGISTRAR_UPSTREAM_BUILD_CMD="cd /go/src/github.com/$(UPSTREAM_REGISTRAR_PROJECT) && \
 							      make build BUILD_PLATFORMS=$(BUILD_PLATFORMS)"
 
 ifeq ($(ARCH), $(filter $(ARCH),amd64))
 # We need CGO to leverage Boring SSL.  However, the cross-compile doesn't support CGO yet.
 CGO_ENABLED=1
-
+TAGS=fipsstrict
+GOEXPERIMENT=boringcrypto
 REGISTRAR_BUILD_CMD=$(REGISTRAR_TIGERA_BUILD_CMD)
 else ifeq ($(ARCH), $(filter $(ARCH),arm64))
 CGO_ENABLED=0
@@ -89,18 +94,18 @@ CGO_ENABLED=0
 GOARCH=arm -e GOARM=7
 REGISTRAR_BUILD_CMD=$(REGISTRAR_TIGERA_BUILD_CMD)
 else ifeq ($(ARCH), $(filter $(ARCH),ppc64le))
-BUILD_PLATFORMS="linux ppc64le -ppc64le"
+BUILD_PLATFORMS="linux ppc64le ppc64le"
 REGISTRAR_BUILD_CMD=$(REGISTRAR_UPSTREAM_BUILD_CMD)
 else ifeq ($(ARCH), $(filter $(ARCH),s390x))
-BUILD_PLATFORMS="linux s390x -s390x"
+BUILD_PLATFORMS="linux s390x s390x"
 REGISTRAR_BUILD_CMD=$(REGISTRAR_UPSTREAM_BUILD_CMD)
 else ifeq ($(ARCH), $(filter $(ARCH),win64))
-BUILD_PLATFORMS="windows amd64 .exe"
+BUILD_PLATFORMS="windows amd64 amd64"
 REGISTRAR_BUILD_CMD=$(REGISTRAR_UPSTREAM_BUILD_CMD)
 endif
 
 bin/node-driver-registrar-%: clone-registrar-upstream
-	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) \
+	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) -e GOEXPERIMENT=$(GOEXPERIMENT) \
 			-v $(REPO_ROOT)/pod2daemon/$(REGISTRAR_IMAGE):/go/src/github.com/$(UPSTREAM_REGISTRAR_PROJECT):rw \
 			$(CALICO_BUILD) \
 			/bin/bash -c $(REGISTRAR_BUILD_CMD)
@@ -109,7 +114,7 @@ bin/node-driver-registrar-%: clone-registrar-upstream
 clone-registrar-upstream:
 ifeq ("$(wildcard ./$(REGISTRAR_IMAGE))", "")
 	@echo "Directory does not exist."
-	git clone --depth 1 --branch $(UPSTREAM_REGISTRAR_TAG) --single-branch git@github.com:$(UPSTREAM_REGISTRAR_PROJECT).git
+	git clone --depth 1 --branch $(UPSTREAM_REGISTRAR_TAG) --single-branch https://github.com/$(UPSTREAM_REGISTRAR_PROJECT).git
 else
 	@echo "Upstream repo already cloned."
 endif
