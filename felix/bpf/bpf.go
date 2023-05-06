@@ -81,6 +81,7 @@ const (
 
 var (
 	xdpFilename     = "filter.o"
+	xdpProgName     = "filter"
 	sockopsFilename = "sockops.o"
 	redirFilename   = "redir.o"
 
@@ -247,7 +248,7 @@ func getCIDRMapName(ifName string, family IPFamily) string {
 }
 
 func getProgName(ifName string) string {
-	return fmt.Sprintf("prefilter_%s_%s", xdpProgVersion, ifName)
+	return fmt.Sprintf("%s_%s_%s", xdpProgName, xdpProgVersion, ifName)
 }
 
 func newMap(name, path, kind string, entries, keySize, valueSize, flags int) (string, error) {
@@ -924,8 +925,11 @@ func (b *BPFLib) LoadXDPAuto(ifName string, mode XDPMode) error {
 }
 
 func (b *BPFLib) RemoveXDP(ifName string, mode XDPMode) error {
-	progName := getProgName(ifName)
-	progPath := filepath.Join(b.xdpDir, progName)
+	// Verify XDP program of interface is loaded by Calico.
+	err := b.verifyCalicoXDP(ifName)
+	if err != nil {
+		return err
+	}
 
 	prog := "ip"
 	args := []string{
@@ -935,6 +939,9 @@ func (b *BPFLib) RemoveXDP(ifName string, mode XDPMode) error {
 		ifName,
 		mode.String(),
 		"off"}
+
+	progName := getProgName(ifName)
+	progPath := filepath.Join(b.xdpDir, progName)
 
 	printCommand(prog, args...)
 	output, err := exec.Command(prog, args...).CombinedOutput()
@@ -1526,6 +1533,44 @@ func GetProgByID(id int) (ProgInfo, error) {
 	}
 
 	return prog, nil
+}
+
+func (b *BPFLib) getCalicoBPFProgIds(ifName string ) ([]int, error) {
+	// Get a list of ids of BPF programs that were loaded by Calico.
+	// Programs are identified by 'xdpProgName', which is inherited from the name
+	// of the entry function of the XDP program (taken from the BPF ELF header).
+	// The function name 'prefilter' is deferred from bpf/bpf-apache/filter.c.
+	progs, err := getAllProgs()
+	if err != nil {
+		return nil, fmt.Errorf("failed to progs: %s", err)
+	}
+	var ids = []int{}
+	for _, v := range progs {
+		if v.Name == xdpProgName {
+			ids = append(ids, v.Id)
+		}
+	}
+
+	return ids, nil
+}
+
+func (b *BPFLib) verifyCalicoXDP(ifName string) error {
+	ids, err := b.getCalicoBPFProgIds(ifName)
+	if err != nil {
+		return err
+	}
+	xdpID, err := b.GetXDPID(ifName)
+	if err != nil {
+		return err
+	}
+
+	for _, id := range ids {
+		if id == xdpID {
+			return nil
+		}
+	}
+
+	return fmt.Errorf("failed to detach XDP program from %s: program not loaded by Calico.", ifName)
 }
 
 func (b *BPFLib) getAttachedSockopsID() (int, error) {
