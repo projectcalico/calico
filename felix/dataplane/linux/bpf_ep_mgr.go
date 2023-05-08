@@ -2169,8 +2169,12 @@ func (m *bpfEndpointManager) setAcceptLocal(iface string, val bool) error {
 	path := fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/accept_local", iface)
 	err := writeProcSys(path, numval)
 	if err != nil {
-		log.WithField("err", err).Errorf("Failed to  set %s to %s", path, numval)
-		return err
+		if _, errif := net.InterfaceByName(iface); errif == nil {
+			log.WithField("err", err).Errorf("Failed to set %s to %s", path, numval)
+			return err
+		}
+		log.Debugf("%s not set to %s - iface does not exist.", path, numval)
+		return nil
 	}
 
 	log.Infof("%s set to %s", path, numval)
