@@ -20,17 +20,18 @@ Calico configuration.
 
 This client provides a typed interface for managing different resource types.  The
 definitions for each resource type are defined in the following package:
+
 	github.com/projectcalico/libcalico-go/lib/api
 
 The client has a number of methods that return interfaces for managing:
-    -  BGP Peer resources
-	-  Policy resources
-	-  IP Pool resources
-	-  Global network sets resources
-	-  Host endpoint resources
-	-  Workload endpoint resources
-	-  Profile resources
-	-  IP Address Management (IPAM)
+  - BGP Peer resources
+  - Policy resources
+  - IP Pool resources
+  - Global network sets resources
+  - Host endpoint resources
+  - Workload endpoint resources
+  - Profile resources
+  - IP Address Management (IPAM)
 
 See [resource definitions](http://docs.projectcalico.org/latest/reference/calicoctl/resources/) for details about the set of management commands for each
 resource type.

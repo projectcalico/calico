@@ -125,7 +125,10 @@ func NewNodeController(ctx context.Context,
 	}
 
 	// Set the handlers on the informers.
-	nc.nodeInformer.AddEventHandler(nodeHandlers)
+	if _, err := nc.nodeInformer.AddEventHandler(nodeHandlers); err != nil {
+		log.WithError(err).Error("failed to add event handler for node")
+		return nil
+	}
 
 	// Start the Calico data feed.
 	nc.dataFeed.Start()

@@ -14,8 +14,8 @@
 
 /*
 Package resourcemgr implements generic resource handling methods.  This includes:
-	- a mechanism for creating specific resources from a JSON or YAML input.
-	- an untyped resource management interface for each resource type
-	- table template data for each resource type
+  - a mechanism for creating specific resources from a JSON or YAML input.
+  - an untyped resource management interface for each resource type
+  - table template data for each resource type
 */
 package resourcemgr
