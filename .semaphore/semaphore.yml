@@ -133,9 +133,6 @@ blocks:
     - name: "make ci"
       commands:
       - ../.semaphore/run-and-monitor make-ci.log make ci
-    - name: FIPS=true "make ci"
-      commands:
-      - ../.semaphore/run-and-monitor make-ci.log FIPS=true make ci
 
 - name: "apiserver: build all architectures"
   run:
