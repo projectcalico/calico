@@ -32,13 +32,9 @@ TEST_CONTAINER_NAME ?= calico/test
 
 CALICOCTL_GIT_REVISION?=$(shell git rev-parse --short HEAD)
 
-LDFLAGS=-X $(PACKAGE_NAME)/calicoctl/commands.VERSION=$(GIT_VERSION) \
+LDFLAGS=-ldflags "-X $(PACKAGE_NAME)/calicoctl/commands.VERSION=$(GIT_VERSION) \
 	-X $(PACKAGE_NAME)/calicoctl/commands.GIT_REVISION=$(CALICOCTL_GIT_REVISION) \
-	-X $(PACKAGE_NAME)/calicoctl/commands/common.VERSION=$(GIT_VERSION)
-
-ifeq ($(ARCH), $(filter $(ARCH),amd64))
-LDFLAGS:=$(LDFLAGS) -linkmode external -extldflags -static
-endif
+	-X $(PACKAGE_NAME)/calicoctl/commands/common.VERSION=$(GIT_VERSION)"
 
 .PHONY: clean
 ## Clean enough that a new release build will be clean
@@ -80,8 +76,8 @@ bin/calicoctl-%: $(SRC_FILES)
 	$(MAKE) build-calicoctl BUILDOS=$(BUILDOS) ARCH=$(ARCH)
 build-calicoctl:
 	mkdir -p bin
-	$(DOCKER_RUN) $(CALICO_BUILD) \
-	  go build -v -o bin/calicoctl-$(BUILDOS)-$(ARCH) -ldflags "-$(LDFLAGS)" "./calicoctl/calicoctl.go"
+	$(DOCKER_RUN) CGO_ENABLED=0 $(CALICO_BUILD) \
+	  go build -v -o bin/calicoctl-$(BUILDOS)-$(ARCH) $(LDFLAGS) "./calicoctl/calicoctl.go"
 
 # Overrides for the binaries that need different output names
 bin/calicoctl: bin/calicoctl-linux-amd64
@@ -118,7 +114,7 @@ CALICO_VERSION_HELPER_SRC=$(CALICO_VERSION_HELPER_DIR)/calico_version_helper.go
 .PHONY: version-helper
 version-helper: $(CALICO_VERSION_HELPER_BIN)
 $(CALICO_VERSION_HELPER_BIN): $(CALICO_VERSION_HELPER_SRC)
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && \
+	$(DOCKER_RUN) CGO_ENABLED=0 $(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && \
 		go build -v -o $(CALICO_VERSION_HELPER_BIN) -ldflags "-X main.VERSION=$(GIT_VERSION)" $(CALICO_VERSION_HELPER_SRC)'
 
 ###############################################################################
