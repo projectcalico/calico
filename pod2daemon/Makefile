@@ -46,7 +46,7 @@ endif
 FIPS ?= false
 
 ifeq ($(FIPS), true)
-FLEXVOL_CONTAINER_MARKER=$(FLEXVOL_CONTAINER_CREATED)
+FLEXVOL_CONTAINER_MARKER=$(FLEXVOL_CONTAINER_FIPS_CREATED)
 CSI_CONTAINER_MARKER=$(CSI_CONTAINER_FIPS_CREATED)
 REGISTRAR_CONTAINER_MARKER=$(REGISTRAR_CONTAINER_FIPS_CREATED)
 VALIDARCHES=amd64
@@ -152,6 +152,7 @@ clean-registrar:
 # Building the image
 ###############################################################################
 FLEXVOL_CONTAINER_CREATED=.pod2daemon-flexvol.created-$(ARCH)
+FLEXVOL_CONTAINER_FIPS_CREATED=.pod2daemon-flexvol.created-$(ARCH)-fips
 CSI_CONTAINER_CREATED=.calico-csi.created-$(ARCH)
 REGISTRAR_CONTAINER_CREATED=.csi-registrar.created-$(ARCH)
 CSI_CONTAINER_FIPS_CREATED=.calico-csi.created-$(ARCH)-fips
@@ -171,6 +172,11 @@ $(FLEXVOL_CONTAINER_CREATED): Dockerfile.$(ARCH) $(BINDIR)/flexvol-$(ARCH)
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest BUILD_IMAGES=$(FLEXVOL_IMAGE)
 	touch $@
 
+$(FLEXVOL_CONTAINER_FIPS_CREATED): Dockerfile.$(ARCH) $(BINDIR)/flexvol-$(ARCH)
+	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(FLEXVOL_IMAGE):latest-fips-$(ARCH) -f Dockerfile.$(ARCH) . --load
+	$(MAKE) FIPS=true retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest-fips BUILD_IMAGES=$(FLEXVOL_IMAGE) LATEST_IMAGE_TAG=latest-fips
+	touch $@
+
 $(CSI_IMAGE): $(CSI_CONTAINER_MARKER)
 $(CSI_CONTAINER_CREATED): csidriver/Dockerfile.$(ARCH) $(BINDIR)/csi-driver-$(ARCH)
 	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(CSI_IMAGE):latest-$(ARCH) -f csidriver/Dockerfile.$(ARCH) . --load
@@ -179,7 +185,7 @@ $(CSI_CONTAINER_CREATED): csidriver/Dockerfile.$(ARCH) $(BINDIR)/csi-driver-$(AR
 
 $(CSI_CONTAINER_FIPS_CREATED): csidriver/Dockerfile.$(ARCH) $(BINDIR)/csi-driver-$(ARCH)
 	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(CSI_IMAGE):latest-fips-$(ARCH) -f csidriver/Dockerfile.$(ARCH) . --load
-	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest-fips BUILD_IMAGES=$(CSI_IMAGE) LATEST_IMAGE_TAG=latest-fips
+	$(MAKE) FIPS=true retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest-fips BUILD_IMAGES=$(CSI_IMAGE) LATEST_IMAGE_TAG=latest-fips
 	touch $@
 
 $(REGISTRAR_IMAGE): $(REGISTRAR_CONTAINER_MARKER)
@@ -190,7 +196,7 @@ $(REGISTRAR_CONTAINER_CREATED): node-driver-registrar-docker/Dockerfile.$(ARCH) 
 
 $(REGISTRAR_CONTAINER_FIPS_CREATED): node-driver-registrar-docker/Dockerfile.$(ARCH) $(BINDIR)/node-driver-registrar-$(ARCH)
 	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(REGISTRAR_IMAGE):latest-fips-$(ARCH) -f node-driver-registrar-docker/Dockerfile.$(ARCH) . --load
-	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest-fips BUILD_IMAGES=$(REGISTRAR_IMAGE) LATEST_IMAGE_TAG=latest-fips
+	$(MAKE) FIPS=true retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest-fips BUILD_IMAGES=$(REGISTRAR_IMAGE) LATEST_IMAGE_TAG=latest-fips
 	touch $@
 node-driver-registrar/release-tools/filter-junit.go:
 

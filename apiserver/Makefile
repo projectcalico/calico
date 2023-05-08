@@ -51,16 +51,6 @@ LDFLAGS = -X $(PACKAGE_NAME)/cmd/apiserver/server.VERSION=$(APISERVER_VERSION) \
 	-X $(PACKAGE_NAME)/cmd/apiserver/server.GIT_DESCRIPTION=$(APISERVER_GIT_DESCRIPTION) \
 	-X $(PACKAGE_NAME)/cmd/apiserver/server.GIT_REVISION=$(APISERVER_GIT_REVISION)
 
-FIPS ?= false
-
-ifeq ($(FIPS), true)
-CONTAINER_MARKER=$(CONTAINER_FIPS_CREATED)
-VALIDARCHES=amd64
-BINDIR=bin/$(ARCH)-fips
-else
-CONTAINER_MARKER=$(CONTAINER_CREATED)
-endif
-
 ##############################################################################
 # Download and include ../lib.Makefile before anything else
 #   Additions to EXTRA_DOCKER_ARGS need to happen before the include since
@@ -69,6 +59,17 @@ endif
 
 include ../lib.Makefile
 
+
+FIPS ?= false
+
+ifeq ($(FIPS), true)
+CONTAINER_MARKER=$(CONTAINER_FIPS_CREATED)
+VALIDARCHES=amd64
+BINDIR=bin/$(ARCH)-fips
+else
+CONTAINER_MARKER=$(CONTAINER_CREATED)
+BINDIR=bin
+endif
 
 # Use ARCH specific build image.
 CALICO_BUILD:=$(CALICO_BUILD)-$(ARCH)
@@ -133,7 +134,7 @@ $(CONTAINER_CREATED): docker-image/Dockerfile.$(ARCH) $(BINDIR)/apiserver-$(ARCH
 
 $(CONTAINER_FIPS_CREATED): docker-image/Dockerfile.$(ARCH) $(BINDIR)/apiserver-$(ARCH) $(BINDIR)/filecheck-$(ARCH)
 	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(API_SERVER_IMAGE):latest-fips-$(ARCH) -f docker-image/Dockerfile.$(ARCH) . --load
-	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
+	$(MAKE) FIPS=true retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
 	touch $@
 
 .PHONY: lint-cache-dir
