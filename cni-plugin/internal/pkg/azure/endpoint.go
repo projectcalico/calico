@@ -18,7 +18,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 
 	"github.com/natefinch/atomic"
@@ -50,7 +49,7 @@ func (ae *AzureEndpoint) Write() error {
 }
 
 func (ae *AzureEndpoint) Load() error {
-	bytes, err := ioutil.ReadFile(ae.filename())
+	bytes, err := os.ReadFile(ae.filename())
 	if err != nil {
 		return nil
 	}

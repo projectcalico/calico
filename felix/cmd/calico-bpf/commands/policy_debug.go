@@ -17,7 +17,7 @@ package commands
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 	"strings"
 
@@ -96,7 +96,7 @@ func dumpPolicyInfo(cmd *cobra.Command, iface, hook string) error {
 		return err
 	}
 
-	byteValue, _ := ioutil.ReadAll(jsonFile)
+	byteValue, _ := io.ReadAll(jsonFile)
 	dec := json.NewDecoder(strings.NewReader(string(byteValue)))
 	err = dec.Decode(&policyDbg)
 	if err != nil {
