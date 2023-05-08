@@ -32,10 +32,13 @@ TEST_CONTAINER_NAME ?= calico/test
 
 CALICOCTL_GIT_REVISION?=$(shell git rev-parse --short HEAD)
 
-LDFLAGS=-ldflags "-X $(PACKAGE_NAME)/calicoctl/commands.VERSION=$(GIT_VERSION) \
+LDFLAGS=-X $(PACKAGE_NAME)/calicoctl/commands.VERSION=$(GIT_VERSION) \
 	-X $(PACKAGE_NAME)/calicoctl/commands.GIT_REVISION=$(CALICOCTL_GIT_REVISION) \
-	-X $(PACKAGE_NAME)/calicoctl/commands/common.VERSION=$(GIT_VERSION) \
-	 -linkmode external -extldflags -static"
+	-X $(PACKAGE_NAME)/calicoctl/commands/common.VERSION=$(GIT_VERSION)
+
+ifeq ($(ARCH), $(filter $(ARCH),amd64))
+LDFLAGS:=$(LDFLAGS) -linkmode external -extldflags -static
+endif
 
 .PHONY: clean
 ## Clean enough that a new release build will be clean
@@ -78,7 +81,7 @@ bin/calicoctl-%: $(SRC_FILES)
 build-calicoctl:
 	mkdir -p bin
 	$(DOCKER_RUN) $(CALICO_BUILD) \
-	  go build -v -o bin/calicoctl-$(BUILDOS)-$(ARCH) $(LDFLAGS) "./calicoctl/calicoctl.go"
+	  go build -v -o bin/calicoctl-$(BUILDOS)-$(ARCH) -ldflags "-$(LDFLAGS)" "./calicoctl/calicoctl.go"
 
 # Overrides for the binaries that need different output names
 bin/calicoctl: bin/calicoctl-linux-amd64
