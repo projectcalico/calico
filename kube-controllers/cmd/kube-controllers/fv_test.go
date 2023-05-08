@@ -17,7 +17,6 @@ package main_test
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"strings"
@@ -57,7 +56,7 @@ var _ = Describe("[etcd] kube-controllers health check FV tests", func() {
 		apiserver = testutils.RunK8sApiserver(etcd.IP)
 
 		// Write out a kubeconfig file
-		kconfigfile, err := ioutil.TempFile("", "ginkgo-policycontroller")
+		kconfigfile, err := os.CreateTemp("", "ginkgo-policycontroller")
 		Expect(err).NotTo(HaveOccurred())
 		defer os.Remove(kconfigfile.Name())
 		data := testutils.BuildKubeconfig(apiserver.IP)
@@ -188,7 +187,7 @@ var _ = Describe("[kdd] kube-controllers health check FV tests", func() {
 
 		// Write out a kubeconfig file
 		var err error
-		kconfigfile, err := ioutil.TempFile("", "ginkgo-policycontroller")
+		kconfigfile, err := os.CreateTemp("", "ginkgo-policycontroller")
 		Expect(err).NotTo(HaveOccurred())
 		defer os.Remove(kconfigfile.Name())
 		data := testutils.BuildKubeconfig(apiserver.IP)

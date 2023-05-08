@@ -76,7 +76,7 @@ bin/calicoctl-%: $(SRC_FILES)
 	$(MAKE) build-calicoctl BUILDOS=$(BUILDOS) ARCH=$(ARCH)
 build-calicoctl:
 	mkdir -p bin
-	$(DOCKER_RUN) $(CALICO_BUILD) \
+	$(DOCKER_RUN) CGO_ENABLED=0 $(CALICO_BUILD) \
 	  go build -v -o bin/calicoctl-$(BUILDOS)-$(ARCH) $(LDFLAGS) "./calicoctl/calicoctl.go"
 
 # Overrides for the binaries that need different output names
@@ -114,7 +114,7 @@ CALICO_VERSION_HELPER_SRC=$(CALICO_VERSION_HELPER_DIR)/calico_version_helper.go
 .PHONY: version-helper
 version-helper: $(CALICO_VERSION_HELPER_BIN)
 $(CALICO_VERSION_HELPER_BIN): $(CALICO_VERSION_HELPER_SRC)
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && \
+	$(DOCKER_RUN) CGO_ENABLED=0 $(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && \
 		go build -v -o $(CALICO_VERSION_HELPER_BIN) -ldflags "-X main.VERSION=$(GIT_VERSION)" $(CALICO_VERSION_HELPER_SRC)'
 
 ###############################################################################

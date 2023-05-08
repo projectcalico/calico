@@ -27,13 +27,13 @@ import (
 //
 // Example:
 //
-//     buf.Reset() // Reset the buffer, if needed.
-//     buf.StartTransaction("filter")
-//     buf.WriteForwardReference("cali-chain-name")
-//     buf.WriteLine("-A cali-chain-name ...")
-//     buf.EndTransaction()
-//     bytes = buf.GetBytesAndReset()
-//     <write bytes to iptables-restore stdin>
+//	buf.Reset() // Reset the buffer, if needed.
+//	buf.StartTransaction("filter")
+//	buf.WriteForwardReference("cali-chain-name")
+//	buf.WriteLine("-A cali-chain-name ...")
+//	buf.EndTransaction()
+//	bytes = buf.GetBytesAndReset()
+//	<write bytes to iptables-restore stdin>
 //
 // Transactions are ignored completely if there are no writes between the StartTransaction()
 // and EndTransaction() calls.

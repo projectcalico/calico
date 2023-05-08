@@ -2,78 +2,80 @@
 // source: felixbackend.proto
 
 /*
-	Package proto is a generated protocol buffer package.
+Package proto is a generated protocol buffer package.
 
-	It is generated from these files:
-		felixbackend.proto
+It is generated from these files:
 
-	It has these top-level messages:
-		SyncRequest
-		ToDataplane
-		FromDataplane
-		ConfigUpdate
-		InSync
-		IPSetUpdate
-		IPSetDeltaUpdate
-		IPSetRemove
-		ActiveProfileUpdate
-		ActiveProfileRemove
-		ProfileID
-		Profile
-		ActivePolicyUpdate
-		ActivePolicyRemove
-		PolicyID
-		Policy
-		Rule
-		ServiceAccountMatch
-		HTTPMatch
-		RuleMetadata
-		IcmpTypeAndCode
-		Protocol
-		PortRange
-		WorkloadEndpointID
-		WorkloadEndpointUpdate
-		WorkloadEndpoint
-		WorkloadEndpointRemove
-		HostEndpointID
-		HostEndpointUpdate
-		HostEndpoint
-		HostEndpointRemove
-		TierInfo
-		NatInfo
-		ProcessStatusUpdate
-		HostEndpointStatusUpdate
-		EndpointStatus
-		HostEndpointStatusRemove
-		WorkloadEndpointStatusUpdate
-		WorkloadEndpointStatusRemove
-		WireguardStatusUpdate
-		HostMetadataUpdate
-		HostMetadataRemove
-		HostMetadataV6Update
-		HostMetadataV6Remove
-		IPAMPoolUpdate
-		IPAMPoolRemove
-		IPAMPool
-		Encapsulation
-		ServiceAccountUpdate
-		ServiceAccountRemove
-		ServiceAccountID
-		NamespaceUpdate
-		NamespaceRemove
-		NamespaceID
-		TunnelType
-		RouteUpdate
-		RouteRemove
-		VXLANTunnelEndpointUpdate
-		VXLANTunnelEndpointRemove
-		WireguardEndpointUpdate
-		WireguardEndpointRemove
-		WireguardEndpointV6Update
-		WireguardEndpointV6Remove
-		GlobalBGPConfigUpdate
-		ServiceUpdate
-		ServiceRemove
+	felixbackend.proto
+
+It has these top-level messages:
+
+	SyncRequest
+	ToDataplane
+	FromDataplane
+	ConfigUpdate
+	InSync
+	IPSetUpdate
+	IPSetDeltaUpdate
+	IPSetRemove
+	ActiveProfileUpdate
+	ActiveProfileRemove
+	ProfileID
+	Profile
+	ActivePolicyUpdate
+	ActivePolicyRemove
+	PolicyID
+	Policy
+	Rule
+	ServiceAccountMatch
+	HTTPMatch
+	RuleMetadata
+	IcmpTypeAndCode
+	Protocol
+	PortRange
+	WorkloadEndpointID
+	WorkloadEndpointUpdate
+	WorkloadEndpoint
+	WorkloadEndpointRemove
+	HostEndpointID
+	HostEndpointUpdate
+	HostEndpoint
+	HostEndpointRemove
+	TierInfo
+	NatInfo
+	ProcessStatusUpdate
+	HostEndpointStatusUpdate
+	EndpointStatus
+	HostEndpointStatusRemove
+	WorkloadEndpointStatusUpdate
+	WorkloadEndpointStatusRemove
+	WireguardStatusUpdate
+	HostMetadataUpdate
+	HostMetadataRemove
+	HostMetadataV6Update
+	HostMetadataV6Remove
+	IPAMPoolUpdate
+	IPAMPoolRemove
+	IPAMPool
+	Encapsulation
+	ServiceAccountUpdate
+	ServiceAccountRemove
+	ServiceAccountID
+	NamespaceUpdate
+	NamespaceRemove
+	NamespaceID
+	TunnelType
+	RouteUpdate
+	RouteRemove
+	VXLANTunnelEndpointUpdate
+	VXLANTunnelEndpointRemove
+	WireguardEndpointUpdate
+	WireguardEndpointRemove
+	WireguardEndpointV6Update
+	WireguardEndpointV6Remove
+	GlobalBGPConfigUpdate
+	ServiceUpdate
+	ServiceRemove
 */
 package proto
 
