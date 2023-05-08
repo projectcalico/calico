@@ -182,10 +182,9 @@ func Run() {
 		}
 	}
 
-	configureAndCheckIPAddressSubnets(ctx, cli, node, k8sNode)
-
 	// If Calico is running in policy only mode we don't need to write BGP related details to the Node.
 	if os.Getenv("CALICO_NETWORKING_BACKEND") != "none" {
+		configureAndCheckIPAddressSubnets(ctx, cli, node, k8sNode)
 		// Configure the node AS number.
 		configureASNumber(node)
 	}
@@ -310,6 +309,12 @@ func configureAndCheckIPAddressSubnets(ctx context.Context, cli client.Interface
 }
 
 func MonitorIPAddressSubnets() {
+	// If Calico is running in policy only mode we don't need to write BGP
+	// related details to the Node.
+	if os.Getenv("CALICO_NETWORKING_BACKEND") == "none" {
+		log.Info("Skipped monitoring node IP changes when CALICO_NETWORKING_BACKEND=none")
+		return
+	}
 	ctx := context.Background()
 	_, cli := calicoclient.CreateClient()
 	nodeName := utils.DetermineNodeName()
