@@ -188,6 +188,7 @@ type Config struct {
 	BPFKubeProxyIptablesCleanupEnabled bool
 	BPFLogLevel                        string
 	BPFLogFilters                      map[string]string
+	BPFCTLBLogFilter                   string
 	BPFExtToServiceConnmark            int
 	BPFDataIfacePattern                *regexp.Regexp
 	BPFL3IfacePattern                  *regexp.Regexp
@@ -740,8 +741,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			}
 			logLevel := strings.ToLower(config.BPFLogLevel)
 			if config.BPFLogFilters != nil {
-				v, ok := config.BPFLogFilters["ctlb"]
-				if logLevel != "off" && (!ok || v != "on") {
+				if logLevel != "off" && config.BPFCTLBLogFilter != "all" {
 					logLevel = "off"
 				}
 			}

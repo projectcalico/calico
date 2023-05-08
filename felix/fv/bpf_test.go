@@ -331,13 +331,13 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 			if testOpts.protocol == "tcp" {
 				filters := map[string]string{"all": "tcp"}
-				if testOpts.connTimeEnabled {
-					filters["ctlb"] = "on"
-				}
 				felixConfig := api.NewFelixConfiguration()
 				felixConfig.SetName("default")
 				felixConfig.Spec = api.FelixConfigurationSpec{
 					BPFLogFilters: &filters,
+				}
+				if testOpts.connTimeEnabled {
+					felixConfig.Spec.BPFCTLBLogFilter = "all"
 				}
 				options.InitialFelixConfiguration = felixConfig
 			}

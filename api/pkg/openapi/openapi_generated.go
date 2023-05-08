@@ -2785,7 +2785,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"bpfLogFilters": {
 						SchemaProps: spec.SchemaProps{
-							Description: "BPFLogFilters is a comma-separated list of key=values where the value is a pcap filter expression and the key is an interface name with 'all' denoting all interfaces, 'weps' all workload endpoints and 'heps' all host endpoints. 'ctlb' can take a value of 'on' or 'off' to set whether connect time load balance debug output is enabled when BPFLogLevel is debug. It is off by default. [Default: unset - means all debug logs are emitted]",
+							Description: "BPFLogFilters is a map of key=values where the value is a pcap filter expression and the key is an interface name with 'all' denoting all interfaces, 'weps' all workload endpoints and 'heps' all host endpoints.\n\nWhen specified as an env var, it accepts a comma-separated list of key=values. [Default: unset - means all debug logs are emitted]",
 							Type:        []string{"object"},
 							AdditionalProperties: &spec.SchemaOrBool{
 								Allows: true,
@@ -2797,6 +2797,13 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 									},
 								},
 							},
+						},
+					},
+					"bpfCTLBLogFilter": {
+						SchemaProps: spec.SchemaProps{
+							Description: "BPFCTLBLogFilter specifies, what is logged by connect time load balancer when BPFLogLevel is debug. Currently has to be specified as 'all' when BPFLogFilters is set to see CTLB logs. [Default: unset - means logs are emitted when BPFLogLevel id debug and BPFLogFilters not set.]",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 					"bpfDataIfacePattern": {
