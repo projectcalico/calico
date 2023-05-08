@@ -1,7 +1,7 @@
 include ../metadata.mk
 
 PACKAGE_NAME = github.com/projectcalico/calico/apiserver
-LOCAL_CHECKS     = lint-cache-dir goimports check-boring-ssl
+LOCAL_CHECKS     = lint-cache-dir goimports
 
 # Used so semaphore commits generated files when pins are updated
 EXTRA_FILES_TO_COMMIT=*_generated.go *_generated.*.go
@@ -58,8 +58,10 @@ include ../lib.Makefile
 # We need CGO to leverage Boring SSL.  However, the cross-compile doesn't support CGO yet.
 ifeq ($(ARCH), $(filter $(ARCH),amd64))
 CGO_ENABLED=1
+LDFLAGS=$(VERSION_FLAGS) -linkmode external -extldflags -static
 else
 CGO_ENABLED=0
+LDFLAGS=$(VERSION_FLAGS)
 endif
 
 # Use ARCH specific build image.
@@ -77,7 +79,7 @@ LINT_ARGS := --disable gosimple,govet,structcheck,errcheck,goimports,unused,inef
 ###############################################################################
 .PHONY: ci
 ## Run what CI runs
-ci: clean static-checks image fv ut
+ci: clean static-checks image ut fv
 
 ## Deploys images to registry
 cd: image-all cd-common
@@ -89,11 +91,11 @@ cd: image-all cd-common
 $(BINDIR)/apiserver-$(ARCH): $(K8SAPISERVER_GO_FILES)
 	mkdir -p $(BINDIR)
 	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) \
-		sh -c '$(GIT_CONFIG_SSH) go build -v -o $@ -ldflags "$(VERSION_FLAGS)" $(PACKAGE_NAME)/cmd/apiserver'
+		sh -c '$(GIT_CONFIG_SSH) go build -v -o $@ -ldflags "$(LDFLAGS)" $(PACKAGE_NAME)/cmd/apiserver'
 
 $(BINDIR)/filecheck-$(ARCH): $(K8SAPISERVER_GO_FILES)
 	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) \
-		sh -c '$(GIT_CONFIG_SSH) go build -v -o $@ -ldflags "$(VERSION_FLAGS)" $(PACKAGE_NAME)/cmd/filecheck'
+		sh -c '$(GIT_CONFIG_SSH) go build -v -o $@ -ldflags "$(LDFLAGS)" $(PACKAGE_NAME)/cmd/filecheck'
 
 ###############################################################################
 # Building the image

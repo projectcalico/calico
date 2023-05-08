@@ -25,7 +25,6 @@ import (
 
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 
 	. "github.com/onsi/ginkgo"
@@ -98,7 +97,7 @@ var _ = Describe("Daemon", func() {
 
 		BeforeEach(func() {
 			var err error
-			configFile, err = ioutil.TempFile("", "typha")
+			configFile, err = os.CreateTemp("", "typha")
 			Expect(err).NotTo(HaveOccurred())
 
 			_, err = configFile.Write(configContents)
