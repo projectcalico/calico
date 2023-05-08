@@ -46,6 +46,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/mock"
 	"github.com/projectcalico/calico/felix/bpf/polprog"
 	"github.com/projectcalico/calico/felix/bpf/state"
+	"github.com/projectcalico/calico/felix/bpf/tc"
 	"github.com/projectcalico/calico/felix/bpf/xdp"
 	"github.com/projectcalico/calico/felix/idalloc"
 	"github.com/projectcalico/calico/felix/ifacemonitor"
@@ -192,6 +193,19 @@ func (m *mockDataplane) ruleMatchID(dir, action, owner, name string, idx int) po
 	return h.Sum64()
 }
 
+func (m *mockDataplane) loadTCLogFilter(ap *tc.AttachPoint) (bpf.ProgFD, int, error) {
+	file, err := os.CreateTemp("/tmp", "test_file")
+	if err != nil {
+		return 0, 0, err
+	}
+
+	if err := os.Remove(file.Name()); err != nil {
+		return 0, 0, err
+	}
+
+	return bpf.ProgFD(file.Fd()), ap.LogFilterIdx, nil
+}
+
 type mockProgMapDP struct {
 	*mockDataplane
 }
@@ -230,8 +244,8 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		filterTableV4        IptablesTable
 		ifStateMap           *mock.Map
 		countersMap          *mock.Map
-		policyMap            *mock.Map
-		xdpPolicyMap         *mock.Map
+		jumpMap              *mock.Map
+		xdpJumpMap           *mock.Map
 	)
 
 	BeforeEach(func() {
@@ -269,10 +283,10 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 		maps.ProgramsMap = mock.NewMockMap(progsParams)
 		maps.XDPProgramsMap = mock.NewMockMap(progsParams)
-		policyMap = mock.NewMockMap(progsParams)
-		maps.PolicyMap = policyMap
-		xdpPolicyMap = mock.NewMockMap(progsParams)
-		maps.XDPPolicyMap = xdpPolicyMap
+		jumpMap = mock.NewMockMap(progsParams)
+		maps.JumpMap = jumpMap
+		xdpJumpMap = mock.NewMockMap(progsParams)
+		maps.XDPJumpMap = xdpJumpMap
 
 		rrConfigNormal = rules.Config{
 			IPIPEnabled:                 true,
@@ -932,19 +946,19 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		It("should clean up", func() {
 			_ = ifStateMap.Update(
 				ifstate.NewKey(123).AsBytes(),
-				ifstate.NewValue(ifstate.FlgReady, "eth123", -1, -1, -1).AsBytes(),
+				ifstate.NewValue(ifstate.FlgReady, "eth123", -1, -1, -1, -1, -1).AsBytes(),
 			)
 			_ = ifStateMap.Update(
 				ifstate.NewKey(124).AsBytes(),
-				ifstate.NewValue(0, "eth124", -1, -1, -1).AsBytes(),
+				ifstate.NewValue(0, "eth124", -1, -1, -1, -1, -1).AsBytes(),
 			)
 			_ = ifStateMap.Update(
 				ifstate.NewKey(125).AsBytes(),
-				ifstate.NewValue(ifstate.FlgWEP|ifstate.FlgReady, "eth125", -1, -1, -1).AsBytes(),
+				ifstate.NewValue(ifstate.FlgWEP|ifstate.FlgReady, "eth125", -1, -1, -1, -1, -1).AsBytes(),
 			)
 			_ = ifStateMap.Update(
 				ifstate.NewKey(126).AsBytes(),
-				ifstate.NewValue(ifstate.FlgWEP, "eth123", -1, -1, -1).AsBytes(),
+				ifstate.NewValue(ifstate.FlgWEP, "eth123", -1, -1, -1, -1, -1).AsBytes(),
 			)
 
 			err := bpfEpMgr.CompleteDeferredWork()
@@ -956,7 +970,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		It("should clean up with update", func() {
 			_ = ifStateMap.Update(
 				ifstate.NewKey(123).AsBytes(),
-				ifstate.NewValue(ifstate.FlgReady, "eth123", -1, -1, -1).AsBytes(),
+				ifstate.NewValue(ifstate.FlgReady, "eth123", -1, -1, -1, -1, -1).AsBytes(),
 			)
 
 			genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
@@ -1079,9 +1093,12 @@ var _ = Describe("BPF Endpoint Manager", func() {
 				dp,
 			}
 			newBpfEpMgr()
+
+			bpfEpMgr.bpfLogLevel = "debug"
+			bpfEpMgr.logFilters = map[string]string{"all": "tcp"}
 		})
 
-		It("should clean up WL policies when iface down", func() {
+		It("should clean up WL policies and log filters when iface down", func() {
 			genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
 			genPolicy("default", "mypolicy")()
 			genWLUpdate("cali12345", "mypolicy")()
@@ -1089,19 +1106,19 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			err := bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(policyMap.Contents).To(HaveLen(2))
-			Expect(xdpPolicyMap.Contents).To(HaveLen(0))
+			Expect(jumpMap.Contents).To(HaveLen(4)) // 2x policy and 2x filter
+			Expect(xdpJumpMap.Contents).To(HaveLen(0))
 
 			genIfaceUpdate("cali12345", ifacemonitor.StateDown, 15)()
 
 			err = bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(policyMap.Contents).To(HaveLen(0))
-			Expect(xdpPolicyMap.Contents).To(HaveLen(0))
+			Expect(jumpMap.Contents).To(HaveLen(0))
+			Expect(xdpJumpMap.Contents).To(HaveLen(0))
 		})
 
-		It("should clean up HEP policies when iface down", func() {
+		It("should clean up HEP policies and log filters when iface down", func() {
 			genIfaceUpdate("eth0", ifacemonitor.StateUp, 10)()
 			genUntracked("default", "untracked1")()
 			genPolicy("default", "mypolicy")()
@@ -1115,16 +1132,16 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			err := bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(policyMap.Contents).To(HaveLen(2))
-			Expect(xdpPolicyMap.Contents).To(HaveLen(1))
+			Expect(jumpMap.Contents).To(HaveLen(4))    // 2x policy and 2x filter
+			Expect(xdpJumpMap.Contents).To(HaveLen(1)) // 1x policy
 
 			genIfaceUpdate("eth0", ifacemonitor.StateDown, 10)()
 
 			err = bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(policyMap.Contents).To(HaveLen(0))
-			Expect(xdpPolicyMap.Contents).To(HaveLen(0))
+			Expect(jumpMap.Contents).To(HaveLen(0))
+			Expect(xdpJumpMap.Contents).To(HaveLen(0))
 		})
 	})
 })

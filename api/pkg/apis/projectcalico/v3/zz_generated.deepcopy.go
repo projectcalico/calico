@@ -1296,6 +1296,17 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(bool)
 		**out = **in
 	}
+	if in.BPFLogFilters != nil {
+		in, out := &in.BPFLogFilters, &out.BPFLogFilters
+		*out = new(map[string]string)
+		if **in != nil {
+			in, out := *in, *out
+			*out = make(map[string]string, len(*in))
+			for key, val := range *in {
+				(*out)[key] = val
+			}
+		}
+	}
 	if in.BPFConnectTimeLoadBalancingEnabled != nil {
 		in, out := &in.BPFConnectTimeLoadBalancingEnabled, &out.BPFConnectTimeLoadBalancingEnabled
 		*out = new(bool)
