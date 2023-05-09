@@ -19,8 +19,9 @@ package ethtool
 
 import (
 	"fmt"
-	"github.com/safchain/ethtool"
 	"unsafe"
+
+	"github.com/safchain/ethtool"
 
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
