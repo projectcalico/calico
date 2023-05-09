@@ -2943,6 +2943,21 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							},
 						},
 					},
+					"bpfDisableGROForIfaces": {
+						SchemaProps: spec.SchemaProps{
+							Description: "BPFDisableGROForIfaces in BPF mode, disables Generic Receive Offload [GRO] for the selected interfaces. By default the value is left blank which means that no interfaces will have GRO disabled initially.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: "",
+										Type:    []string{"string"},
+										Format:  "",
+									},
+								},
+							},
+						},
+					},
 					"routeSource": {
 						SchemaProps: spec.SchemaProps{
 							Description: "RouteSource configures where Felix gets its routing information. - WorkloadIPs: use workload endpoints to construct routes. - CalicoIPAM: the default - use IPAM data to construct routes.",
