@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/projectcalico/calico/felix/ethtool"
 	"hash/fnv"
 	"net"
 	"os"
@@ -1155,6 +1156,17 @@ func (m *bpfEndpointManager) syncIfaceCounters() error {
 	ifaces, err := net.Interfaces()
 	if err != nil {
 		return fmt.Errorf("cannot list interfaces: %w", err)
+	}
+
+	// Update Generic Receive Offload [GRO] if configured.
+	var config = map[string]bool{
+		ethtool.EthtoolRxGRO: false,
+	}
+	for _, iface := range m.bpfDisableGROForIfacesMap {
+		err = ethtool.EthtoolChangeImpl(iface, config)
+		if err == nil {
+			log.WithField(iface, config).Debug("ethtool.Change() succeeded")
+		}
 	}
 
 	exists := set.New[int]()

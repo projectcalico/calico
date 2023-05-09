@@ -122,7 +122,7 @@ func EthtoolChangeImpl(iface string, config map[string]bool) error {
 		logrus.WithError(err).Warn("ethtool.Close() failed")
 	}
 
-	logrus.WithField(iface, config).Infof("ethtool.Change()")
+	logrus.WithField(iface, config).Debug("ethtool.Change()")
 	err = ethHandle.Change(iface, config)
 	if err != nil {
 		logrus.WithError(err).Warnf("ethtool.Change('%s'=>'%v') failed", iface, config)
