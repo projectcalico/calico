@@ -1,4 +1,4 @@
-#!/bin/bash -ex
+#!/bin/bash -e
 
 # Do everything that's needed to create or update the Calico PPA and
 # RPM repo named ${REPO_NAME}, so that those provide packages for the
@@ -26,7 +26,7 @@ rootdir=`git_repo_root`
 # Directory to copy package build output to. Ensure it exists
 # and is empty before each build.
 outputDir=${rootdir}/hack/release/packaging/output/
-rm -rf ${outputdir} && mkdir -p ${outputDir}
+rm -rf ${outputDir} && mkdir -p ${outputDir}
 
 pub_steps=
 if "${PUBLISH:-false}"; then
@@ -43,6 +43,19 @@ else
     # packages but do not publish them.
     : ${STEPS:=bld_images net_cal felix etcd3gw dnsmasq nettle}
 fi
+
+function check_bin {
+    which $1 > /dev/null
+}
+
+function error_exit {
+    echo "[error] $*"
+    exit 1
+}
+
+function require_commands {
+    check_bin ts || error_exit "This script requires the 'ts' command from the 'moreutils' package."
+}
 
 function require_version {
     # VERSION must be specified.  It should be either "master" or
@@ -82,22 +95,28 @@ function require_repo_name {
 function require_rpm_host_vars {
     # HOST and GCLOUD_ARGS must be set to indicate the RPM host, and a
     # gcloud identity that permits logging into that host.
-    test -n "$GCLOUD_ARGS"
-    echo GCLOUD_ARGS is "$GCLOUD_ARGS"
-    test -n "$HOST"
-    echo HOST is $HOST
+    if [[ -z  "$GCLOUD_ARGS" ]]; then
+        echo "GCLOUD_ARGS must be set!"
+        exit 1
+    fi
+
+    if [[ -z "$HOST" ]]; then
+        echo "HOST must be set!"
+        exit 1
+    fi
 }
 
 function require_deb_secret_key {
     # SECRET_KEY must be a file containing the GPG secret key for a member
     # of the Project Calico team on Launchpad.
-    test -n "$SECRET_KEY"
-    echo SECRET_KEY is $SECRET_KEY
+    if [[ ! (-r "$SECRET_KEY") || ! (-s "$SECRET_KEY") ]] ; then
+        echo "Variable SECRET_KEY needs to be set to a valid GPG key"
+    fi
 }
 
 # Decide target arch; by default the same as the native arch here.  We
 # conventionally say "amd64", where uname says "x86_64".
-ARCH=${ARCH:-`uname -m`}
+ARCH=${ARCH:-$(uname -m)}
 if [ $ARCH = x86_64 ]; then
     ARCH=amd64
 fi
@@ -131,8 +150,9 @@ function precheck_nettle {
 function precheck_pub_debs {
     # Check the PPA exists.
     require_repo_name
-    wget -O - https://launchpad.net/~project-calico/+archive/ubuntu/${REPO_NAME} | grep -F "PPA description" || {
-	cat <<EOF
+    curl -fsSL -I https://launchpad.net/~project-calico/+archive/ubuntu/${REPO_NAME} > /dev/null
+    if [[ $? != 0 ]]; then
+    	cat <<EOF
 
 ERROR: PPA for ${REPO_NAME} does not exist.  Create it, then rerun this job.
 
@@ -145,8 +165,8 @@ ERROR: PPA for ${REPO_NAME} does not exist.  Create it, then rerun this job.
   series.)
 
 EOF
-	exit 1
-    }
+	    exit 1
+    fi
 
     # We'll need a secret key to upload new source packages.
     require_deb_secret_key
@@ -160,26 +180,14 @@ function precheck_pub_rpms {
 # Execution of the requested steps.
 
 function docker_run_rm {
-    docker run --rm --user `id -u`:`id -g` -v $(dirname `pwd`):/code -w /code/$(basename `pwd`) "$@"
+    docker run --rm --user $(id -u):$(id -g) -v $(dirname $(pwd)):/code -w /code/$(basename $(pwd)) "$@"
 }
 
 function do_bld_images {
     # Build the docker images that we use for building for each target platform.
     pushd ${rootdir}/hack/release/packaging/docker-build-images
-    docker build -f ubuntu-trusty-build.Dockerfile.${ARCH} -t calico-build/trusty .
-    docker build -f ubuntu-xenial-build.Dockerfile.${ARCH} -t calico-build/xenial .
-    docker build -f ubuntu-bionic-build.Dockerfile.${ARCH} -t calico-build/bionic .
-    docker build -f ubuntu-focal-build.Dockerfile.${ARCH} -t calico-build/focal .
-    docker build --build-arg=UID=`id -u` --build-arg=GID=`id -g` -f centos7-build.Dockerfile.${ARCH} -t calico-build/centos7 .
+    docker buildx bake --set centos7.args.UID=$(id -u) --set centos7.args.GID=$(id -g)
     popd
-    if [ $ARCH = ppc64le ]; then
-	# Some commands that would typically be run at container build
-	# time must be run in a privileged container.
-	docker rm -f centos7Tmp
-	docker run --privileged --name=centos7Tmp calico-build/centos7 \
-	       /bin/bash -c "/setup-user; /install-centos-build-deps"
-	docker commit centos7Tmp calico-build/centos7:latest
-    fi
 }
 
 function do_net_cal {
@@ -324,12 +332,17 @@ function do_pub_rpms {
     popd
 }
 
+# Check script requirements
+require_commands
+
 # Do prechecks for requested steps.
 for step in ${STEPS}; do
+    echo "Processing precheck_${step}"
     eval precheck_${step}
 done
 
 # Execute requested steps.
 for step in ${STEPS}; do
+    echo "Processing do_${step}"
     eval do_${step}
 done
