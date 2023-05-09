@@ -321,6 +321,7 @@ type ManagerWithHEPUpdate interface {
 func NewTestEpMgr(config *Config, bpfmaps *bpfmap.Maps, workloadIfaceRegex *regexp.Regexp) (ManagerWithHEPUpdate, error) {
 	return newBPFEndpointManager(nil, config, bpfmaps, true, workloadIfaceRegex, idalloc.New(),
 		rules.NewRenderer(rules.Config{
+			BPFEnabled:                  true,
 			IPIPEnabled:                 true,
 			IPIPTunnelAddress:           nil,
 			IPSetConfigV4:               ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
