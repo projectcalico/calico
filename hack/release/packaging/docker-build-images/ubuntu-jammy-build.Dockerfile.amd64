@@ -1,6 +1,6 @@
-FROM ppc64le/ubuntu:bionic
+FROM ubuntu:jammy
 MAINTAINER Daniel Fox <dan.fox@tigera.io>
-ENV STREAM bionic
+ENV STREAM jammy
 
 ADD install-ubuntu-build-deps install-ubuntu-build-deps
 RUN ./install-ubuntu-build-deps
