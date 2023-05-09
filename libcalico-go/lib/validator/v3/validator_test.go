@@ -2789,6 +2789,11 @@ func init() {
 		Entry("should accept a valid BPFForceTrackPacketsFromIfaces value 'docker+'", api.FelixConfigurationSpec{BPFForceTrackPacketsFromIfaces: &[]string{"docker+"}}, true),
 		Entry("should accept a valid BPFForceTrackPacketsFromIfaces value 'docker0,docker1'", api.FelixConfigurationSpec{BPFForceTrackPacketsFromIfaces: &[]string{"docker0", "docker1"}}, true),
 		Entry("should reject invalid BPFForceTrackPacketsFromIfaces value 'cali-123,cali@456'", api.FelixConfigurationSpec{BPFForceTrackPacketsFromIfaces: &[]string{"cali-123", "cali@456"}}, false),
+
+		Entry("should accept a valid BPFDisableGROForIfaces value 'docker+'", api.FelixConfigurationSpec{BPFDisableGROForIfaces: &[]string{"docker"}}, true),
+		Entry("should accept a valid BPFDisableGROForIfaces value 'docker0,docker1'", api.FelixConfigurationSpec{BPFDisableGROForIfaces: &[]string{"wlp0s20f3", "virbr0", "docker0", "br-7ec0145f6b33"}}, true),
+		Entry("should reject invalid BPFDisableGROForIfaces value 'docker+'", api.FelixConfigurationSpec{BPFDisableGROForIfaces: &[]string{"docker+"}}, false),
+		Entry("should reject invalid BPFDisableGROForIfaces value 'cali-123,cali@456'", api.FelixConfigurationSpec{BPFDisableGROForIfaces: &[]string{"cali-123", "cali@456"}}, false),
 	)
 }
 
