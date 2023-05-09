@@ -186,7 +186,7 @@ function docker_run_rm {
 function do_bld_images {
     # Build the docker images that we use for building for each target platform.
     pushd ${rootdir}/hack/release/packaging/docker-build-images
-    UID=$(id -u) GID=$(id -g) docker buildx bake
+    docker buildx bake --set centos7.args.UID=$(id -u) --set centos7.args.GID=$(id -g)
     popd
 }
 
