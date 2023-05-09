@@ -37,6 +37,7 @@ const (
 	SubProgTCIcmp
 	SubProgTCDrop
 	SubProgTCHostCtConflict
+	SubProgTCMainDebug
 
 	SubProgXDPMain    = SubProgTCMain
 	SubProgXDPPolicy  = SubProgTCPolicy
@@ -63,6 +64,18 @@ var xdpSubProgNames = []string{
 
 // Layout maps sub-programs of an object to their location in the ProgramsMap
 type Layout map[SubProg]int
+
+func MergeLayouts(layouts ...Layout) Layout {
+	ret := make(Layout)
+
+	for _, l := range layouts {
+		for k, v := range l {
+			ret[k] = v
+		}
+	}
+
+	return ret
+}
 
 type ProgramsMap struct {
 	lock sync.Mutex
@@ -113,7 +126,7 @@ func (pm *ProgramsMap) LoadObj(at AttachType) (Layout, error) {
 
 	if l, ok := pm.programs[at]; ok {
 		log.WithField("layout", l).Debugf("generic object file already loaded %s", file)
-		return l, nil
+		return MergeLayouts(l), nil // MergeLayouts triggers a copy
 	}
 
 	return pm.loadObj(at, path.Join(bpfdefs.ObjectDir, file))
@@ -143,7 +156,7 @@ func (pm *ProgramsMap) loadObj(at AttachType, file string) (Layout, error) {
 	layout, err := pm.newLayout(at, obj)
 	log.WithError(err).WithField("layout", layout).Debugf("load generic object file %s", file)
 
-	return layout, err
+	return MergeLayouts(layout), err // MergeLayouts triggers a copy
 }
 
 func (pm *ProgramsMap) setMapSize(m *libbpf.Map) error {
@@ -162,9 +175,12 @@ func (pm *ProgramsMap) newLayout(at AttachType, obj *libbpf.Obj) (Layout, error)
 
 	l := make(Layout)
 
+	offset := 0
 	subs := tcSubProgNames
 	if at.Hook == XDP {
 		subs = xdpSubProgNames
+	} else if at.LogLevel == "debug" {
+		offset = int(SubProgTCMainDebug)
 	}
 
 	for idx, subprog := range subs {
@@ -183,7 +199,11 @@ func (pm *ProgramsMap) newLayout(at AttachType, obj *libbpf.Obj) (Layout, error)
 		}
 		log.Debugf("generic file %s prog %s loaded at %d", objectFiles[at], subprog, pm.nextIdx)
 
-		l[SubProg(idx)] = pm.nextIdx
+		i := idx + offset
+		if SubProg(idx) == SubProgTCPolicy {
+			i = idx // Debug programs share the same policy
+		}
+		l[SubProg(i)] = pm.nextIdx
 		pm.nextIdx++
 	}
 

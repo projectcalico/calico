@@ -364,6 +364,22 @@ type FelixConfigurationSpec struct {
 	// [Default: Off].
 	// +optional
 	BPFLogLevel string `json:"bpfLogLevel" validate:"omitempty,bpfLogLevel"`
+	// BPFLogFilters is a map of key=values where the value is
+	// a pcap filter expression and the key is an interface name with 'all'
+	// denoting all interfaces, 'weps' all workload endpoints and 'heps' all host
+	// endpoints.
+	//
+	// When specified as an env var, it accepts a comma-separated list of
+	// key=values.
+	// [Default: unset - means all debug logs are emitted]
+	// +optional
+	BPFLogFilters *map[string]string `json:"bpfLogFilters,omitempty" validate:"omitempty,bpfLogFilters"`
+	// BPFCTLBLogFilter specifies, what is logged by connect time load balancer when BPFLogLevel is
+	// debug. Currently has to be specified as 'all' when BPFLogFilters is set
+	// to see CTLB logs.
+	// [Default: unset - means logs are emitted when BPFLogLevel id debug and BPFLogFilters not set.]
+	// +optional
+	BPFCTLBLogFilter string `json:"bpfCTLBLogFilter,omitempty" validate:"omitempty"`
 	// BPFDataIfacePattern is a regular expression that controls which interfaces Felix should attach BPF programs to
 	// in order to catch traffic to/from the network.  This needs to match the interfaces that Calico workload traffic
 	// flows over as well as any interfaces that handle incoming traffic to nodeports and services from outside the

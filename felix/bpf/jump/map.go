@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package polprog
+package jump
 
 import (
 	"encoding/binary"
@@ -31,7 +31,7 @@ var MapParameters = maps.MapParameters{
 	KeySize:    4,
 	ValueSize:  4,
 	MaxEntries: MaxEntries,
-	Name:       "cali_pols",
+	Name:       "cali_jump",
 	Version:    2,
 }
 
@@ -44,7 +44,7 @@ var XDPMapParameters = maps.MapParameters{
 	KeySize:    4,
 	ValueSize:  4,
 	MaxEntries: XDPMaxEntries,
-	Name:       "xdp_cali_pols",
+	Name:       "xdp_cali_jump",
 	Version:    2,
 }
 

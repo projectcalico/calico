@@ -982,6 +982,13 @@ spec:
                 - Enable
                 - Disable
                 type: string
+              bpfCTLBLogFilter:
+                description: 'BPFCTLBLogFilter specifies, what is logged by connect
+                  time load balancer when BPFLogLevel is debug. Currently has to be
+                  specified as ''all'' when BPFLogFilters is set to see CTLB logs.
+                  [Default: unset - means logs are emitted when BPFLogLevel id debug
+                  and BPFLogFilters not set.]'
+                type: string
               bpfConnectTimeLoadBalancingEnabled:
                 description: 'BPFConnectTimeLoadBalancingEnabled when in BPF mode,
                   controls whether Felix installs the connection-time load balancer.  The
@@ -1078,6 +1085,16 @@ spec:
                   as any interfaces that handle incoming traffic to nodeports and
                   services from outside the cluster.
                 type: string
+              bpfLogFilters:
+                additionalProperties:
+                  type: string
+                description: "BPFLogFilters is a map of key=values where the value
+                  is a pcap filter expression and the key is an interface name with
+                  'all' denoting all interfaces, 'weps' all workload endpoints and
+                  'heps' all host endpoints. \n When specified as an env var, it accepts
+                  a comma-separated list of key=values. [Default: unset - means all
+                  debug logs are emitted]"
+                type: object
               bpfLogLevel:
                 description: 'BPFLogLevel controls the log level of the BPF programs
                   when in BPF dataplane mode.  One of "Off", "Info", or "Debug".  The

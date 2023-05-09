@@ -27,9 +27,9 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/hook"
 	"github.com/projectcalico/calico/felix/bpf/ifstate"
 	"github.com/projectcalico/calico/felix/bpf/ipsets"
+	"github.com/projectcalico/calico/felix/bpf/jump"
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/nat"
-	"github.com/projectcalico/calico/felix/bpf/polprog"
 	"github.com/projectcalico/calico/felix/bpf/routes"
 	"github.com/projectcalico/calico/felix/bpf/state"
 )
@@ -50,9 +50,9 @@ type Maps struct {
 	RuleCountersMap maps.Map
 	CountersMap     maps.Map
 	ProgramsMap     maps.Map
-	PolicyMap       maps.MapWithDeleteIfExists
+	JumpMap         maps.MapWithDeleteIfExists
 	XDPProgramsMap  maps.Map
-	XDPPolicyMap    maps.MapWithDeleteIfExists
+	XDPJumpMap      maps.MapWithDeleteIfExists
 }
 
 func (m *Maps) Destroy() {
@@ -69,9 +69,9 @@ func (m *Maps) Destroy() {
 		m.SrMsgMap,
 		m.CtNatsMap,
 		m.ProgramsMap,
-		m.PolicyMap,
+		m.JumpMap,
 		m.XDPProgramsMap,
-		m.XDPPolicyMap,
+		m.XDPJumpMap,
 	}
 
 	for _, m := range mps {
@@ -129,14 +129,14 @@ func CreateBPFMaps() (*Maps, error) {
 	ret.ProgramsMap = hook.NewProgramsMap()
 	mps = append(mps, ret.ProgramsMap)
 
-	ret.PolicyMap = polprog.Map().(maps.MapWithDeleteIfExists)
-	mps = append(mps, ret.PolicyMap)
+	ret.JumpMap = jump.Map().(maps.MapWithDeleteIfExists)
+	mps = append(mps, ret.JumpMap)
 
 	ret.XDPProgramsMap = hook.NewXDPProgramsMap()
 	mps = append(mps, ret.XDPProgramsMap)
 
-	ret.XDPPolicyMap = polprog.XDPMap().(maps.MapWithDeleteIfExists)
-	mps = append(mps, ret.XDPPolicyMap)
+	ret.XDPJumpMap = jump.XDPMap().(maps.MapWithDeleteIfExists)
+	mps = append(mps, ret.XDPJumpMap)
 
 	for i, bpfMap := range mps {
 		err := bpfMap.EnsureExists()
