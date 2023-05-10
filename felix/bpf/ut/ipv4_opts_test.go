@@ -16,6 +16,9 @@ package ut_test
 
 import (
 	"fmt"
+	"os"
+	"path"
+	"strings"
 	"testing"
 
 	"github.com/google/gopacket"
@@ -50,4 +53,40 @@ func TestIPv4Opts(t *testing.T) {
 
 		checkVxlanEncap(pktR, true, ipv4, udp, payload)
 	})
+}
+
+func BenchmarkPktAccess(b *testing.B) {
+	RegisterTestingT(b)
+
+	ipHdr := *ipv4Default
+
+	_, _, _, _, pktBytes, err := testPacket(nil, &ipHdr, nil, nil)
+	Expect(err).NotTo(HaveOccurred())
+
+	source := "ipv4_opts_test.c"
+	objFname := "../../bpf-gpl/ut/" + strings.TrimSuffix(source, path.Ext(source)) + ".o"
+
+	tempDir, err := os.MkdirTemp("", "calico-bpf-")
+	Expect(err).NotTo(HaveOccurred())
+	defer os.RemoveAll(tempDir)
+
+	unique := path.Base(tempDir)
+	bpfFsDir := "/sys/fs/bpf/" + unique
+
+	err = os.Mkdir(bpfFsDir, os.ModePerm)
+	Expect(err).NotTo(HaveOccurred())
+	defer os.RemoveAll(bpfFsDir)
+	obj, err := objUTLoad(objFname, bpfFsDir, "IPv4", testOpts{}, true, false)
+	Expect(err).NotTo(HaveOccurred())
+	defer func() { _ = obj.UnpinPrograms(bpfFsDir) }()
+	defer obj.Close()
+
+	ctxIn := make([]byte, 18*4)
+
+	b.ResetTimer()
+	res, err := bpftoolProgRunN(bpfFsDir+"/classifier_calico_unittest", pktBytes, ctxIn, b.N)
+	b.StopTimer()
+	Expect(err).NotTo(HaveOccurred())
+	Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+	fmt.Printf("%7d iterations avg %d\n", b.N, res.Duration)
 }
