@@ -53,6 +53,10 @@ while true; do
   echo "calico-felix-wrapper: Process stopped, RC=$rc"
   if [ "$rc" == "129" ]; then
     echo "calico-felix-wrapper: Restarting calico-felix for config reload"
+    while [ -e /delay-felix-restart ]; do
+      echo "Waiting for felix restart to be triggered..."
+      sleep 1
+    done
     continue
   fi
   echo "calico-felix-wrapper: Exiting due to non-config shutdown RC=$rc"
