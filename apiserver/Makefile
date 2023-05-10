@@ -1,7 +1,7 @@
 include ../metadata.mk
 
 PACKAGE_NAME = github.com/projectcalico/calico/apiserver
-LOCAL_CHECKS     = lint-cache-dir goimports
+LOCAL_CHECKS     = lint-cache-dir goimports check-boring-ssl
 
 # Used so semaphore commits generated files when pins are updated
 EXTRA_FILES_TO_COMMIT=*_generated.go *_generated.*.go
@@ -42,7 +42,7 @@ APISERVER_BUILD_DATE?=$(shell date -u +'%FT%T%z')
 APISERVER_GIT_REVISION?=$(shell git rev-parse --short HEAD)
 APISERVER_GIT_DESCRIPTION?=$(shell git describe --tags)
 
-VERSION_FLAGS = -X $(PACKAGE_NAME)/cmd/apiserver/server.VERSION=$(APISERVER_VERSION) \
+LDFLAGS = -X $(PACKAGE_NAME)/cmd/apiserver/server.VERSION=$(APISERVER_VERSION) \
 	-X $(PACKAGE_NAME)/cmd/apiserver/server.BUILD_DATE=$(APISERVER_BUILD_DATE) \
 	-X $(PACKAGE_NAME)/cmd/apiserver/server.GIT_DESCRIPTION=$(APISERVER_GIT_DESCRIPTION) \
 	-X $(PACKAGE_NAME)/cmd/apiserver/server.GIT_REVISION=$(APISERVER_GIT_REVISION)
@@ -55,14 +55,6 @@ VERSION_FLAGS = -X $(PACKAGE_NAME)/cmd/apiserver/server.VERSION=$(APISERVER_VERS
 
 include ../lib.Makefile
 
-# We need CGO to leverage Boring SSL.  However, the cross-compile doesn't support CGO yet.
-ifeq ($(ARCH), $(filter $(ARCH),amd64))
-CGO_ENABLED=1
-LDFLAGS=$(VERSION_FLAGS) -linkmode external -extldflags -static
-else
-CGO_ENABLED=0
-LDFLAGS=$(VERSION_FLAGS)
-endif
 
 # Use ARCH specific build image.
 CALICO_BUILD:=$(CALICO_BUILD)-$(ARCH)
@@ -89,13 +81,15 @@ cd: image-all cd-common
 # "apiserver" instead of "$(BINDIR)/apiserver".
 #########################################################################
 $(BINDIR)/apiserver-$(ARCH): $(K8SAPISERVER_GO_FILES)
-	mkdir -p $(BINDIR)
+ifeq ($(ARCH),amd64)
+	$(call build_cgo_boring_binary, $(PACKAGE_NAME)/cmd/apiserver, $@)
+else
 	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) \
-		sh -c '$(GIT_CONFIG_SSH) go build -v -o $@ -ldflags "$(LDFLAGS)" $(PACKAGE_NAME)/cmd/apiserver'
+		sh -c '$(GIT_CONFIG_SSH) go build -v -o $@ -ldflags "$(VERSION_FLAGS)" $(PACKAGE_NAME)/cmd/apiserver'
+endif
 
 $(BINDIR)/filecheck-$(ARCH): $(K8SAPISERVER_GO_FILES)
-	$(DOCKER_RUN) -e CGO_ENABLED=0 $(CALICO_BUILD) \
-		sh -c '$(GIT_CONFIG_SSH) go build -v -o $@ -ldflags "$(VERSION_FLAGS)" $(PACKAGE_NAME)/cmd/filecheck'
+	$(call build_binary, $(PACKAGE_NAME)/cmd/filecheck, $@)
 
 ###############################################################################
 # Building the image
@@ -138,7 +132,7 @@ st:
 check-copyright:
 	@../hack/check-copyright.sh
 
-GITHUB_TEST_INTEGRATION_URI := https://raw.githubusercontent.com/kubernetes/kubernetes/v1.16.4/hack/lib
+GITHUB_TEST_INTEGRATION_URI := https://raw.githubusercontent.com/kubernetes/kubernetes/$(KUBECTL_VERSION)/hack/lib
 
 hack-lib:
 	mkdir -p hack/lib/
@@ -157,7 +151,7 @@ run-kubernetes-server: run-k8s-controller-manager
 		--rm \
 		-v  $(CURDIR):/manifests \
 		-v $(CERTS_PATH):/home/user/certs \
-		lachlanevenson/k8s-kubectl:${KUBECTL_VERSION} \
+		bitnami/kubectl:$(subst v,,$(KUBECTL_VERSION)) \
 		--kubeconfig=/home/user/certs/kubeconfig \
 		apply -f /manifests/test/mock-node.yaml
 
@@ -168,7 +162,7 @@ run-kubernetes-server: run-k8s-controller-manager
 		--rm \
 		-v  $(CURDIR):/manifests \
 		-v $(CERTS_PATH):/home/user/certs \
-		lachlanevenson/k8s-kubectl:${KUBECTL_VERSION} \
+		bitnami/kubectl:$(subst v,,$(KUBECTL_VERSION)) \
 		--kubeconfig=/home/user/certs/kubeconfig \
 		apply -f /manifests/test/namespaces.yaml
 

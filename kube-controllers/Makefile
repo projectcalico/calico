@@ -10,7 +10,7 @@ FLANNEL_MIGRATION_IMAGE ?=flannel-migration-controller
 BUILD_IMAGES            ?=$(KUBE_CONTROLLERS_IMAGE) $(FLANNEL_MIGRATION_IMAGE)
 
 # Add in local static-checks
-LOCAL_CHECKS=
+LOCAL_CHECKS=check-boring-ssl
 
 ###############################################################################
 # Download and include ../lib.Makefile
@@ -23,15 +23,6 @@ MAKE_REPO?=https://raw.githubusercontent.com/projectcalico/go-build/$(MAKE_BRANC
 include ../lib.Makefile
 
 SRC_FILES=$(shell find cmd -name '*.go') $(shell find pkg -name '*.go') $(shell find ../libcalico-go -name '*.go')
-
-# We need CGO to leverage Boring SSL.  However, the cross-compile doesn't support CGO yet.
-ifeq ($(ARCH), $(filter $(ARCH),amd64))
-CGO_ENABLED=1
-LDFLAGS=-X main.VERSION=$(GIT_VERSION) -linkmode external -extldflags -static
-else
-CGO_ENABLED=0
-LDFLAGS=-X main.VERSION=$(GIT_VERSION)
-endif
 
 ###############################################################################
 
@@ -51,22 +42,26 @@ clean:
 ###############################################################################
 # Building the binary
 ###############################################################################
+LDFLAGS = -X main.VERSION=$(GIT_VERSION)
+
 build: bin/kube-controllers-linux-$(ARCH) bin/check-status-linux-$(ARCH)
 build-all: $(addprefix sub-build-,$(VALIDARCHES))
 sub-build-%:
 	$(MAKE) build ARCH=$*
 
 bin/kube-controllers-linux-$(ARCH): $(SRC_FILES)
-	$(DOCKER_RUN) \
-	  -e CGO_ENABLED=$(CGO_ENABLED) \
-	  -v $(CURDIR)/bin:/go/src/$(PACKAGE_NAME)/bin \
-	  $(CALICO_BUILD) go build -v -o bin/kube-controllers-$(BUILDOS)-$(ARCH) -ldflags "$(LDFLAGS)" ./cmd/kube-controllers/
+ifeq ($(ARCH), amd64)
+	$(call build_cgo_boring_binary, ./cmd/kube-controllers/, $@)
+else
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -c '\
+		$(GIT_CONFIG_SSH) go build -buildvcs=false -v -o $@ -ldflags "$(LDFLAGS)" ./cmd/kube-controllers/'
+endif
 
 bin/check-status-linux-$(ARCH): $(SRC_FILES)
 	$(DOCKER_RUN) \
 	  -e CGO_ENABLED=$(CGO_ENABLED) \
 	  -v $(CURDIR)/bin:/go/src/$(PACKAGE_NAME)/bin \
-	  $(CALICO_BUILD) go build -v -o bin/check-status-$(BUILDOS)-$(ARCH) -ldflags "$(LDFLAGS)" ./cmd/check-status/
+	  $(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) go build $(BUILD_TAGS) -buildvcs=false -v -o $@ -ldflags "$(LDFLAGS)" ./cmd/check-status/'
 
 bin/kubectl-$(ARCH):
 	wget https://storage.googleapis.com/kubernetes-release/release/$(KUBECTL_VERSION)/bin/linux/$(subst armv7,arm,$(ARCH))/kubectl -O $@
@@ -81,7 +76,7 @@ image-all: $(addprefix sub-image-,$(VALIDARCHES))
 sub-image-%:
 	$(MAKE) image ARCH=$*
 
-image.created-$(ARCH): bin/kube-controllers-linux-$(ARCH) bin/check-status-linux-$(ARCH) bin/kubectl-$(ARCH)
+image.created-$(ARCH): bin/kube-controllers-linux-$(ARCH) bin/check-status-linux-$(ARCH) bin/kubectl-$(ARCH) register
 	$(DOCKER_BUILD) -t $(KUBE_CONTROLLERS_IMAGE):latest-$(ARCH) -f Dockerfile.$(ARCH) . --load
 	$(DOCKER_BUILD) -t $(FLANNEL_MIGRATION_IMAGE):latest-$(ARCH) -f docker-images/flannel-migration/Dockerfile.$(ARCH) . --load
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
@@ -104,10 +99,15 @@ check-boring-ssl: bin/kube-controllers-linux-amd64
 ###############################################################################
 ifeq ($(SEMAPHORE_GIT_REF_TYPE), pull-request)
 # Determine the tests to run using the test spider tool, which emits a list of impacted packages.
-WHAT=$(shell $(DOCKER_GO_BUILD) go run ../hack/test/spider -commit-range=${SEMAPHORE_GIT_COMMIT_RANGE} -filter-dir kube-controllers/)
+MAYBE_WHAT=$(shell $(DOCKER_GO_BUILD) sh -c 'go run ../hack/test/spider -commit-range=${SEMAPHORE_GIT_COMMIT_RANGE} -filter-dir kube-controllers/')
 else
 # By default, run all tests.
-WHAT=$(shell find . -name "*_test.go" | xargs dirname | sort -u)
+MAYBE_WHAT=.
+endif
+
+# Filter the list of directories to only those that have tests.
+ifneq ("$(MAYBE_WHAT)","")
+WHAT=$(shell find $(MAYBE_WHAT) -name "*_test.go" | xargs dirname | sort -u)
 endif
 
 # The list of test binaries to build.
@@ -153,7 +153,7 @@ cd: cd-common
 # Release
 ###############################################################################
 ## Produces a clean build of release artifacts at the specified version.
-release-build: .release-$(VERSION).created 
+release-build: .release-$(VERSION).created
 .release-$(VERSION).created:
 	$(MAKE) clean image-all RELEASE=true
 	$(MAKE) retag-build-images-with-registries IMAGETAG=$(VERSION) RELEASE=true
