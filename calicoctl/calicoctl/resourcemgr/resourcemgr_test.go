@@ -16,7 +16,6 @@ package resourcemgr_test
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"strings"
 
@@ -150,7 +149,7 @@ func createResources(specs ...string) ([]runtime.Object, error) {
 }
 
 func writeSpec(spec string) *os.File {
-	file, err := ioutil.TempFile("/tmp", "resource")
+	file, err := os.CreateTemp("/tmp", "resource")
 	Expect(err).NotTo(HaveOccurred())
 	_, err = file.WriteString(spec)
 	Expect(err).NotTo(HaveOccurred())
