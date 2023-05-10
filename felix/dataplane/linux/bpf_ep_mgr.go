@@ -23,7 +23,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/projectcalico/calico/felix/ethtool"
 	"hash/fnv"
 	"net"
 	"os"
@@ -38,6 +37,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/projectcalico/calico/felix/ethtool"
 
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
