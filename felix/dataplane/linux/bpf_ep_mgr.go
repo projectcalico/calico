@@ -1149,16 +1149,20 @@ func (m *bpfEndpointManager) syncIfaceProperties() error {
 
 	// Update Generic Receive Offload [GRO] if configured.
 	if m.bpfDisableGROForIfaces != nil {
-		var config = map[string]bool{
-			ethtool.EthtoolRxGRO: false,
-		}
+		expr := m.bpfDisableGROForIfaces.String()
+		if len(expr) > 0 {
+			var config = map[string]bool{
+				ethtool.EthtoolRxGRO: false,
+			}
 
-		for _, entry := range ifaces {
-			iface := entry.Name
-			if m.bpfDisableGROForIfaces.MatchString(iface) {
-				err = ethtool.EthtoolChangeImpl(iface, config)
-				if err == nil {
-					log.WithField(iface, config).Debug("ethtool.Change() succeeded")
+			for _, entry := range ifaces {
+				iface := entry.Name
+				if m.bpfDisableGROForIfaces.MatchString(iface) {
+					log.WithField(expr, iface).Debug("BPF Disable GRO iface match")
+					err = ethtool.EthtoolChangeImpl(iface, config)
+					if err == nil {
+						log.WithField(iface, config).Debug("ethtool.Change() succeeded")
+					}
 				}
 			}
 		}
