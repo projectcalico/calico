@@ -17,7 +17,7 @@ package k8s
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -3102,7 +3102,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Inline kubeconfig support", testuti
 
 	BeforeEach(func() {
 		// Load kubeconfig file that was mounted in to the test.
-		conf, err := ioutil.ReadFile("/kubeconfig.yaml")
+		conf, err := os.ReadFile("/kubeconfig.yaml")
 		Expect(err).NotTo(HaveOccurred())
 
 		// Override the provided config to use inline configuration.

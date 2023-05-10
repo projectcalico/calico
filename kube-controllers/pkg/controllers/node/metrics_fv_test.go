@@ -17,7 +17,7 @@ package node_test
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"strings"
@@ -62,7 +62,7 @@ var _ = Describe("kube-controllers metrics FV tests", func() {
 		apiserver = testutils.RunK8sApiserver(etcd.IP)
 
 		// Write out a kubeconfig file
-		kconfigfile, err := ioutil.TempFile("", "ginkgo-policycontroller")
+		kconfigfile, err := os.CreateTemp("", "ginkgo-policycontroller")
 		Expect(err).NotTo(HaveOccurred())
 		defer os.Remove(kconfigfile.Name())
 		data := testutils.BuildKubeconfig(apiserver.IP)
@@ -604,7 +604,7 @@ func getMetrics(metricsURL string) (string, error) {
 		return "", err
 	}
 	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", err
 	}
