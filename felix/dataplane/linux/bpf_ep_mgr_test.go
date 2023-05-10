@@ -330,8 +330,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 				FeatureGates: map[string]string{
 					"BPFConnectTimeLoadBalancingWorkaround": "enabled",
 				},
-				BPFPolicyDebugEnabled:  true,
-				BPFDisableGROForIfaces: []string{"fake-iface1", "fake-iface2"},
+				BPFPolicyDebugEnabled: true,
 			},
 			maps,
 			fibLookupEnabled,

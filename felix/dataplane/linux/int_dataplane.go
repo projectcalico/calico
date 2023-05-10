@@ -211,7 +211,7 @@ type Config struct {
 	BPFIpv6Enabled                     bool
 	BPFHostConntrackBypass             bool
 	BPFEnforceRPF                      string
-	BPFDisableGROForIfaces             []string
+	BPFDisableGROForIfaces             *regexp.Regexp
 	KubeProxyMinSyncPeriod             time.Duration
 	SidecarAccelerationEnabled         bool
 
