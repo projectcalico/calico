@@ -513,14 +513,6 @@ var _ = DescribeTable("Config parsing",
 	Entry("BPFForceTrackPacketsFromIfaces Multiple valid entries", "BPFForceTrackPacketsFromIfaces", "docker0,docker1", []string{"docker0", "docker1"}),
 	Entry("BPFForceTrackPacketsFromIfaces Single invalid entry", "BPFForceTrackPacketsFromIfaces", "cali@123", []string{"docker+"}),
 	Entry("BPFForceTrackPacketsFromIfaces Multiple invalid entries", "BPFForceTrackPacketsFromIfaces", "cali-123,cali@123", []string{"docker+"}),
-
-	Entry("BPFDisableGROForIfaces Empty", "BPFDisableGROForIfaces", "", nilEmptyArray),
-	Entry("BPFDisableGROForIfaces Single valid entry", "BPFDisableGROForIfaces", "docker0", []string{"docker0"}),
-	Entry("BPFDisableGROForIfaces Single valid entry", "BPFDisableGROForIfaces", "cali-123", []string{"cali-123"}),
-	Entry("BPFDisableGROForIfaces Multiple valid entries", "BPFDisableGROForIfaces", "docker0,docker1", []string{"docker0", "docker1"}),
-	Entry("BPFDisableGROForIfaces Single invalid entry", "BPFDisableGROForIfaces", "cali@123", nilEmptyArray),
-	Entry("BPFDisableGROForIfaces Single invalid wildcard", "BPFDisableGROForIfaces", "docker+", nilEmptyArray),
-	Entry("BPFDisableGROForIfaces Multiple invalid entries", "BPFDisableGROForIfaces", "cali-123,cali@123", nilEmptyArray),
 )
 
 var _ = DescribeTable("OpenStack heuristic tests",
