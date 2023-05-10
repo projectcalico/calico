@@ -41,17 +41,17 @@ const (
 //
 // Typical use might be as follows:
 //
-//   logger := NewRateLimitedLogger().WithField("key": "my-key")
-//   for {
-//     logger.Infof("Checking some stuff: %s", myStuff)
-//     complete = doSomeStuff()
-//     if complete {
-//       break
-//     }
-//   }
+//	logger := NewRateLimitedLogger().WithField("key": "my-key")
+//	for {
+//	  logger.Infof("Checking some stuff: %s", myStuff)
+//	  complete = doSomeStuff()
+//	  if complete {
+//	    break
+//	  }
+//	}
 //
-//   // Use force to ensure our final log is printed and it contains the summary info about the number of skipped logs.
-//   logger.Force().Info("Finished checking stuff")
+//	// Use force to ensure our final log is printed and it contains the summary info about the number of skipped logs.
+//	logger.Force().Info("Finished checking stuff")
 //
 // The config is an optional parameter. If not specified, default values are used (see RateLimitedLoggerConfig for
 // details about the default values).

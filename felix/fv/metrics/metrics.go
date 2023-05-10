@@ -20,9 +20,9 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -76,7 +76,7 @@ func GetMetric(ip string, port int, name, caFile, certFile, keyFile string) (met
 			// tlsConfig.ServerName, and we don't want that.  We will do certificate
 			// chain verification ourselves inside CertificateVerifier.
 			transport.TLSClientConfig.InsecureSkipVerify = true
-			caPEMBlock, err := ioutil.ReadFile(caFile)
+			caPEMBlock, err := os.ReadFile(caFile)
 			if err != nil {
 				log.WithError(err).Error("Failed to read CA data")
 				return "", err
