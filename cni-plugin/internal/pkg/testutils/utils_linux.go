@@ -4,7 +4,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//	http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -265,7 +265,10 @@ func RunCNIPluginWithId(
 	if version.Compare(nc.CNIVersion, "0.3.0", "<") {
 		// Special case for older CNI versions.
 		var out []byte
-		out, err = json.Marshal(r)
+		if out, err = json.Marshal(r); err != nil {
+			log.WithError(err).Errorf("failed to marshal result: %v", r)
+			return
+		}
 		r020 := types020.Result{}
 		if err = json.Unmarshal(out, &r020); err != nil {
 			log.WithField("out", out).Errorf("Error unmarshaling output to Result: %v\n", err)

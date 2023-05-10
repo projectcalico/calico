@@ -17,7 +17,6 @@ package node_test
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"time"
 
@@ -63,7 +62,7 @@ var _ = Describe("IPAM garbage collection FV tests with short leak grace period"
 
 		// Write out a kubeconfig file
 		var err error
-		kconfigfile, err = ioutil.TempFile("", "ginkgo-policycontroller")
+		kconfigfile, err = os.CreateTemp("", "ginkgo-policycontroller")
 		Expect(err).NotTo(HaveOccurred())
 		defer os.Remove(kconfigfile.Name())
 		data := testutils.BuildKubeconfig(apiserver.IP)
@@ -594,7 +593,7 @@ var _ = Describe("IPAM garbage collection FV tests with long leak grace period",
 
 		// Write out a kubeconfig file
 		var err error
-		kconfigfile, err = ioutil.TempFile("", "ginkgo-policycontroller")
+		kconfigfile, err = os.CreateTemp("", "ginkgo-policycontroller")
 		Expect(err).NotTo(HaveOccurred())
 		defer os.Remove(kconfigfile.Name())
 		data := testutils.BuildKubeconfig(apiserver.IP)
