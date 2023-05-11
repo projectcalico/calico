@@ -223,6 +223,8 @@ RUN chmod u+s /bin/mountns
 ADD clean-up-filesystem.sh /
 RUN /clean-up-filesystem.sh
 
+RUN ln -s /usr/lib64/libpcap.so.1 /usr/lib64/libpcap.so.0.8
+
 # Copy everything into a fresh scratch image so that naive CVE scanners don't pick up binaries and libraries
 # that have been removed in our later layers.
 FROM scratch
