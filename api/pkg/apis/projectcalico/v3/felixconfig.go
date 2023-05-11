@@ -464,9 +464,9 @@ type FelixConfigurationSpec struct {
 	// the Calico fabric.  For example, a docker bridge device for non-Calico-networked
 	// containers. [Default: docker+]
 	BPFForceTrackPacketsFromIfaces *[]string `json:"bpfForceTrackPacketsFromIfaces,omitempty" validate:"omitempty,ifaceFilterSlice"`
-	// BPFDisableGROForIfaces in BPF mode, disables Generic Receive Offload [GRO] for the selected interfaces.
-	// By default the value is left blank which means that no interfaces will have GRO disabled initially.
-	BPFDisableGROForIfaces *[]string `json:"bpfDisableGROForIfaces,omitempty" validate:"omitempty,interfaceSlice"`
+	// BPFDisableGROForIfaces is a regular expression that controls which interfaces Felix should disable the
+	// Generic Receive Offload [GRO] option.  It should not match the workload interfaces (usually named cali...).
+	BPFDisableGROForIfaces string `json:"bpfDisableGROForIfaces,omitempty" validate:"omitempty,regexp"`
 
 	// RouteSource configures where Felix gets its routing information.
 	// - WorkloadIPs: use workload endpoints to construct routes.
