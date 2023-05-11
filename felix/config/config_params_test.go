@@ -203,7 +203,6 @@ var _ = Describe("Config override empty", func() {
 })
 
 var t bool = true
-var nilEmptyArray []string = nil
 
 var _ = DescribeTable("Config parsing",
 	func(key, value string, expected interface{}, errorExpected ...bool) {
