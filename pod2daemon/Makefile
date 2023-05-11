@@ -73,10 +73,10 @@ bin/csi-driver-amd64: $(SRC_FILES)
 UPSTREAM_REGISTRAR_PROJECT ?= kubernetes-csi/$(REGISTRAR_IMAGE)
 UPSTREAM_REGISTRAR_TAG     ?= v2.8.0
 
-REGISTRAR_TIGERA_BUILD_CMD_LDFLAGS = -ldflags '-extldflags "-static" -linkmode external'
+LDFLAGS_CGO_STATIC = -ldflags '-extldflags "-static" -linkmode external'
 
 REGISTRAR_TIGERA_BUILD_CMD="cd /go/src/github.com/$(UPSTREAM_REGISTRAR_PROJECT) && \
-                    			  go build -buildvcs=false $(REGISTRAR_TIGERA_BUILD_CMD_LDFLAGS) -tags $(TAGS) -v -o bin/csi-node-driver-registrar cmd/csi-node-driver-registrar/*.go"
+                    			  go build -buildvcs=false -tags $(TAGS) -v -o bin/csi-node-driver-registrar cmd/csi-node-driver-registrar/*.go"
 REGISTRAR_UPSTREAM_BUILD_CMD="cd /go/src/github.com/$(UPSTREAM_REGISTRAR_PROJECT) && \
 							      make build BUILD_PLATFORMS=$(BUILD_PLATFORMS)"
 
@@ -85,7 +85,7 @@ ifeq ($(ARCH), $(filter $(ARCH),amd64))
 CGO_ENABLED=1
 TAGS=fipsstrict
 GOEXPERIMENT=boringcrypto
-REGISTRAR_BUILD_CMD=$(REGISTRAR_TIGERA_BUILD_CMD)
+REGISTRAR_BUILD_CMD=$(REGISTRAR_TIGERA_BUILD_CMD) $(LDFLAGS_CGO_STATIC)
 else ifeq ($(ARCH), $(filter $(ARCH),arm64))
 CGO_ENABLED=0
 REGISTRAR_BUILD_CMD=$(REGISTRAR_TIGERA_BUILD_CMD)
