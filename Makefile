@@ -34,11 +34,19 @@ clean:
 	$(MAKE) -C typha clean
 	rm -rf ./bin
 
+ci-preflight-checks:
+	$(MAKE) generate
+	$(MAKE) check-dirty
+
+check-language:
+	./hack/check-language.sh
+
 generate:
 	$(MAKE) gen-semaphore-yaml
 	$(MAKE) -C api gen-files
 	$(MAKE) -C libcalico-go gen-files
 	$(MAKE) -C felix gen-files
+	$(MAKE) -C calicoctl gen-crds
 	$(MAKE) -C app-policy protobuf
 	$(MAKE) gen-manifests
 
