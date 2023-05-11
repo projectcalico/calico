@@ -231,6 +231,10 @@ COPY --from=ubi / /
 # Add in top-level license file
 COPY LICENSE /licenses
 
+# Node is build on a debian image with pcap 1.8, but there is no 1.8 available so we copy 1.9 over. Ideally we should
+# should build node on a centos image so we can have correct pcap version alignment.
+RUN ln -s $(ls /usr/lib64/libpcap.so.1.9.* | tail -n 1) /usr/lib64/libpcap.so.0.8
+
 CMD ["start_runit"]
 
 # Required labels for certification
