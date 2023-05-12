@@ -219,6 +219,10 @@ func (m *InterfaceMonitor) handleNetlinkRouteUpdate(update netlink.RouteUpdate) 
 		return
 	}
 
+	if update.Dst == nil {
+		return
+	}
+
 	addr := update.Dst.IP.String()
 	exists := update.Type == unix.RTM_NEWROUTE
 	logCtx := log.WithFields(log.Fields{
