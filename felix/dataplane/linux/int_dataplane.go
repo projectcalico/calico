@@ -211,9 +211,9 @@ type Config struct {
 	BPFIpv6Enabled                     bool
 	BPFHostConntrackBypass             bool
 	BPFEnforceRPF                      string
+	BPFDisableGROForIfaces             *regexp.Regexp
 	KubeProxyMinSyncPeriod             time.Duration
-
-	SidecarAccelerationEnabled bool
+	SidecarAccelerationEnabled         bool
 
 	LookPathOverride func(file string) (string, error)
 
