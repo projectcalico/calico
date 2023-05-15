@@ -32,34 +32,26 @@
 # - eliminate most isolation, (--uts=host --pid=host --net=host --privileged)
 # - volume mount your ST source code
 # - run 'nosetests'
-
-# The Dockerfile.s390x.calico_test is copied from node/calico_test/Dockerfile.calico_test.
-# Modifications done includes:
-# 1) Base image has been changed from FROM docker:1.13.0 to FROM s390x/docker:18.03.0
-# 2) Maintainer is changed
-# 3) Updated ca-certificates
-# 4) Removed the "Install etcdctl" part and added steps to extract etcd from the copied tar file.
-
-FROM s390x/docker:18.03.0
-MAINTAINER LoZ Open Source Ecosystem (https://www.ibm.com/developerworks/community/groups/community/lozopensource)
+FROM docker:18.03.0
+MAINTAINER IBM Z Open Source Ecosystem (https://community.ibm.com/community/user/ibmz-and-linuxone/groups/topic-home?CommunityKey=64d1d1bd-66bc-4ecb-b9e8-0372b18c5bcb)
 
 # Running STs in this container requires that it has all dependencies installed
 # for executing the tests. Install these dependencies:
 RUN apk add --update python python-dev py2-pip py-setuptools openssl-dev libffi-dev tshark \
-        netcat-openbsd iptables ip6tables iproute2 iputils ipset curl && \
+        netcat-openbsd iptables ip6tables iproute2 iputils ipset curl gcc jq musl-dev \
+        ca-certificates wget && \
+        update-ca-certificates && \
         echo 'hosts: files mdns4_minimal [NOTFOUND=return] dns mdns4' >> /etc/nsswitch.conf && \
         rm -rf /var/cache/apk/*
 
 COPY requirements.txt /requirements.txt
 RUN pip install -r /requirements.txt
 
-RUN apk update \
-&&   apk add ca-certificates wget \
-&&   update-ca-certificates
-
 # Install etcdctl
-COPY pkg /pkg/
-RUN tar -xzf pkg/etcd-v3.3.7-linux-s390x.tar.gz -C /usr/local/bin/
+RUN wget https://github.com/etcd-io/etcd/releases/download/v3.5.7/etcd-v3.5.7-linux-s390x.tar.gz && \
+    tar -xzf etcd-v3.5.7-linux-s390x.tar.gz && \
+    cd etcd-v3.5.7-linux-s390x && \
+    ln -s etcdctl /usr/local/bin/
 
 # The container is used by mounting the code-under-test to /code
 WORKDIR /code/

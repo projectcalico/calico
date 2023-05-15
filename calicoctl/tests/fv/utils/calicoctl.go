@@ -19,12 +19,13 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"runtime"
 
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 )
 
-var calicoctl = "/go/src/github.com/projectcalico/calico/calicoctl/bin/calicoctl-linux-amd64"
+var calicoctl = "/go/src/github.com/projectcalico/calico/calicoctl/bin/calicoctl-linux-"+runtime.GOARCH
 var version_helper = "/go/src/github.com/projectcalico/calico/calicoctl/tests/fv/helper/bin/calico_version_helper"
 
 func getEnv(kdd bool) []string {
