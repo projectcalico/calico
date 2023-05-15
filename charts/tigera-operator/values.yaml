@@ -1,8 +1,12 @@
+# imagePullSecrets specified here will result in helm attempting to create a secret resource.
 imagePullSecrets: {}
 
 installation:
   enabled: true
   kubernetesProvider: ""
+  # imagePullSecrets specified here will not result in helm attempting to create a secret resource
+  # but instead reference an existing secret (in the same namespace as the tigera-operator).
+  imagePullSecrets: []
 
 apiServer:
   enabled: true
