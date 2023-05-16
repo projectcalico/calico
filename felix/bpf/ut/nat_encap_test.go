@@ -26,7 +26,15 @@ import (
 func TestNatEncap(t *testing.T) {
 	RegisterTestingT(t)
 
-	_, ipv4, l4, payload, pktBytes, err := testPacketUDPDefault()
+	ipHdr := *ipv4Default
+	ipHdr.Options = []layers.IPv4Option{{
+		OptionType:   123,
+		OptionLength: 6,
+		OptionData:   []byte{0xde, 0xad, 0xbe, 0xef},
+	}}
+	ipHdr.IHL += 2
+
+	_, ipv4, l4, payload, pktBytes, err := testPacket(nil, &ipHdr, nil, nil)
 	Expect(err).NotTo(HaveOccurred())
 	udp := l4.(*layers.UDP)
 
@@ -46,7 +54,8 @@ func TestNatEncap(t *testing.T) {
 
 		ipv4L := pktR.Layer(layers.LayerTypeIPv4)
 		ipv4R := ipv4L.(*layers.IPv4)
-		Expect(ipv4R).To(layersMatchFields(ipv4, "Length", "SrcIP", "Checksum"))
+		Expect(ipv4R.DstIP).To(Equal(ipv4.DstIP))
+		Expect(ipv4R.Protocol).To(Equal(layers.IPProtocolUDP))
 
 		encapedPkt = res.dataOut
 	})
@@ -174,9 +183,9 @@ func checkInnerIP(ip gopacket.Packet, NATed bool, ipv4 *layers.IPv4,
 	ipv4L := ip.Layer(layers.LayerTypeIPv4)
 	Expect(ipv4L).NotTo(BeNil())
 	if NATed {
-		Expect(ipv4L).To(layersMatchFields(ipv4, "Checksum", "TTL"))
+		Expect(ipv4L).To(layersMatchFields(ipv4, "Checksum", "TTL", "Options", "Padding"))
 	} else {
-		Expect(ipv4L).To(layersMatchFields(ipv4, "DstIP", "Checksum", "TTL"))
+		Expect(ipv4L).To(layersMatchFields(ipv4, "DstIP", "Checksum", "TTL", "Options", "Padding"))
 	}
 
 	Expect(ipv4L.(*layers.IPv4).TTL).To(Equal(ipv4.TTL - 1))
@@ -186,7 +195,7 @@ func checkInnerIP(ip gopacket.Packet, NATed bool, ipv4 *layers.IPv4,
 	if NATed {
 		Expect(transportL).To(layersMatchFields(transport))
 	} else {
-		Expect(transportL).To(layersMatchFields(transport, "DstPort", "Checksum"))
+		Expect(transportL).To(layersMatchFields(transport, "DstPort", "Checksum", "Options", "Padding"))
 	}
 
 	p := ip.ApplicationLayer()
