@@ -28,7 +28,8 @@ Depends:
  ipset,
  iproute2,
  net-tools,
- ${misc:Depends}
+ ${misc:Depends},
+ ${shlibs:Depends}
 Description: Project Calico virtual networking for cloud data centers.
  Project Calico is an open source solution for virtual networking in
  cloud data centers. Its IP-centric architecture offers numerous
