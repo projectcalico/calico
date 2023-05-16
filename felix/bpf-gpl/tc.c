@@ -126,7 +126,7 @@ int calico_tc_main(struct __sk_buff *skb)
 		},
 		.ipheader_len = IP_SIZE,
 	);
-	
+
 	struct cali_tc_ctx *ctx = &_ctx;
 
 	__builtin_memset(ctx->state, 0, sizeof(*ctx->state));
@@ -213,7 +213,7 @@ static CALI_BPF_INLINE int pre_policy_processing(struct cali_tc_ctx *ctx)
 	tc_state_fill_from_iphdr(ctx);
 
 	/* Parse out the source/dest ports (or type/code for ICMP). */
-	switch (tc_state_fill_from_nexthdr(ctx)) {
+	switch (tc_state_fill_from_nexthdr(ctx, dnat_should_decap())) {
 	case PARSING_ERROR:
 		goto deny;
 	case PARSING_ALLOW_WITHOUT_ENFORCING_POLICY:
@@ -1027,7 +1027,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 			break;
 		}
 
-		CALI_VERB("L3 csum at %d L4 csum at %d\n", l3_csum_off, l4_csum_off);
+		CALI_DEBUG("L3 csum at %d L4 csum at %d\n", l3_csum_off, l4_csum_off);
 
 		if (l4_csum_off) {
 			res = skb_nat_l4_csum_ipv4(ctx, l4_csum_off,
@@ -1130,7 +1130,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 			break;
 		}
 
-		CALI_VERB("L3 csum at %d L4 csum at %d\n", l3_csum_off, l4_csum_off);
+		CALI_DEBUG("L3 csum at %d L4 csum at %d\n", l3_csum_off, l4_csum_off);
 
 		if (l4_csum_off) {
 			res = skb_nat_l4_csum_ipv4(ctx, l4_csum_off,

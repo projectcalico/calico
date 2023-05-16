@@ -35,11 +35,9 @@ static CALI_BPF_INLINE int calico_unittest_entry (struct __sk_buff *skb)
 		return TC_ACT_UNSPEC;
 	}
 
-	if (tc_state_fill_from_iphdr(ctx)) {
-		return TC_ACT_SHOT;
-	}
+	tc_state_fill_from_iphdr(ctx);
 
-	switch (tc_state_fill_from_nexthdr(ctx)) {
+	switch (tc_state_fill_from_nexthdr(ctx, true)) {
 	case PARSING_ERROR:
 		goto deny;
 	case PARSING_ALLOW_WITHOUT_ENFORCING_POLICY:
