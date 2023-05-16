@@ -1290,7 +1290,7 @@ func (pkt *Packet) handleL3() error {
 	switch v := pkt.l3.(type) {
 	case *layers.IPv4:
 		pkt.ipv4 = v
-		pkt.length += 5 * 4
+		pkt.length += int(v.IHL * 4)
 		pkt.l3Protocol = layers.EthernetTypeIPv4
 		pkt.ipv4.Protocol = pkt.l4Protocol
 		pkt.ipv4.Length = uint16(pkt.length)
@@ -1381,6 +1381,12 @@ func testPacketUDPDefaultNP(destIP net.IP) (*layers.Ethernet, *layers.IPv4, gopa
 
 	ip := *ipv4Default
 	ip.DstIP = destIP
+	ip.Options = []layers.IPv4Option{{
+		OptionType:   123,
+		OptionLength: 6,
+		OptionData:   []byte{0xde, 0xad, 0xbe, 0xef},
+	}}
+	ip.IHL += 2
 
 	return testPacket(nil, &ip, nil, nil)
 }
