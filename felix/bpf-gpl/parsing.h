@@ -164,15 +164,17 @@ static CALI_BPF_INLINE int tc_state_fill_from_nexthdr(struct cali_tc_ctx *ctx, b
 					 * vxlan cheap later.
 					 */
 					len += sizeof(struct vxlanhdr);
-					if (skb_refresh_validate_ptrs(ctx, len)) {
-						if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
-							deny_reason(ctx, CALI_REASON_SHORT);
-							CALI_DEBUG("Too short\n");
-							goto deny;
-						}
+					if (skb_refresh_validate_ptrs(ctx, len) == 0) {
+						__builtin_memcpy(ctx->scratch->l4, ((void*)ip_hdr(ctx))+IP_SIZE, len);
+						break;
 					}
 				}
-				__builtin_memcpy(ctx->scratch->l4, ((void*)ip_hdr(ctx))+IP_SIZE, len);
+				if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
+					deny_reason(ctx, CALI_REASON_SHORT);
+					CALI_DEBUG("Too short\n");
+					goto deny;
+				}
+				__builtin_memcpy(ctx->scratch->l4, ((void*)ip_hdr(ctx))+IP_SIZE, UDP_SIZE);
 			}
 			break;
 		default:
@@ -180,10 +182,39 @@ static CALI_BPF_INLINE int tc_state_fill_from_nexthdr(struct cali_tc_ctx *ctx, b
 			break;
 		}
 	} else {
-		/* Load the L4 header in case there were ip options as we loaded the options instead. */
-		if (bpf_skb_load_bytes(ctx->skb, skb_l4hdr_offset(ctx), ctx->scratch->l4, sizeof(struct tcphdr))) {
-			CALI_DEBUG("Too short\n");
-			goto deny;
+		switch (ctx->state->ip_proto) {
+		case IPPROTO_TCP:
+			/* Load the L4 header in case there were ip options as we loaded the options instead. */
+			if (bpf_skb_load_bytes(ctx->skb, skb_l4hdr_offset(ctx), ctx->scratch->l4, TCP_SIZE)) {
+				CALI_DEBUG("Too short\n");
+				goto deny;
+			}
+			break;
+		case IPPROTO_UDP:
+			{
+				int len = UDP_SIZE;
+				if (decap) {
+					/* We try to opportunistically load the vxlan
+					 * header as well, small cost and makes reading
+					 * vxlan cheap later.
+					 */
+					len += sizeof(struct vxlanhdr);
+				}
+				int offset =  skb_l4hdr_offset(ctx);
+				if (bpf_skb_load_bytes(ctx->skb, offset, ctx->scratch->l4, len)) {
+					if (bpf_skb_load_bytes(ctx->skb, offset, ctx->scratch->l4, UDP_SIZE)) {
+						CALI_DEBUG("Too short\n");
+						goto deny;
+					}
+				}
+			}
+			break;
+		default:
+			if (bpf_skb_load_bytes(ctx->skb, skb_l4hdr_offset(ctx), ctx->scratch->l4, UDP_SIZE)) {
+				CALI_DEBUG("Too short\n");
+				goto deny;
+			}
+			break;
 		}
 	}
 
