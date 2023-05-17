@@ -14,7 +14,7 @@ CALICO_VERSION=${CALICO_VERSION:-$defaultCalicoVersion}
 defaultOperatorVersion=$(cat ../charts/tigera-operator/values.yaml | grep version: | cut -d" " -f4)
 OPERATOR_VERSION=${OPERATOR_VERSION:-$defaultOperatorVersion}
 
-NON_HELM_MANIFEST_IMAGES="calico/apiserver calico/windows calico/ctl calico/csi calico/node-driver-registrar"
+NON_HELM_MANIFEST_IMAGES="calico/apiserver calico/windows calico/ctl calico/csi calico/node-driver-registrar calico/dikastes"
 
 echo "Generating manifests for Calico=$CALICO_VERSION and tigera-operator=$OPERATOR_VERSION"
 
