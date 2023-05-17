@@ -37,4 +37,5 @@ for ep_type in $ep_types; do
 done
 
 echo "bin/test_from_hep_fib_no_log_skb0x0.o"
-echo "bin/test_xdp_debug.o"
+echo "bin/test_from_wep_fib_no_log.o"
+#echo "bin/test_xdp_debug.o"

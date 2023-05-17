@@ -16,14 +16,15 @@ package ut_test
 
 import (
 	"fmt"
-	"os"
-	"path"
-	"strings"
+	"net"
 	"testing"
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	. "github.com/onsi/gomega"
+	"github.com/projectcalico/calico/felix/bpf/conntrack"
+	"github.com/projectcalico/calico/felix/bpf/nat"
+	"github.com/projectcalico/calico/felix/bpf/routes"
 )
 
 func TestIPv4Opts(t *testing.T) {
@@ -58,35 +59,69 @@ func TestIPv4Opts(t *testing.T) {
 func BenchmarkPktAccess(b *testing.B) {
 	RegisterTestingT(b)
 
-	ipHdr := *ipv4Default
+	bpfIfaceName = "BENC"
+	defer func() { bpfIfaceName = "" }()
 
-	_, _, _, _, pktBytes, err := testPacket(nil, &ipHdr, nil, nil)
+	_, ipv4, l4, _, pktBytes, err := testPacketUDPDefaultNP(node1ip)
+	Expect(err).NotTo(HaveOccurred())
+	udp := l4.(*layers.UDP)
+
+	natMap := nat.FrontendMap()
+	err = natMap.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 
-	source := "ipv4_opts_test.c"
-	objFname := "../../bpf-gpl/ut/" + strings.TrimSuffix(source, path.Ext(source)) + ".o"
-
-	tempDir, err := os.MkdirTemp("", "calico-bpf-")
+	natBEMap := nat.BackendMap()
+	err = natBEMap.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
-	defer os.RemoveAll(tempDir)
 
-	unique := path.Base(tempDir)
-	bpfFsDir := "/sys/fs/bpf/" + unique
+	err = natMap.Update(
+		nat.NewNATKey(ipv4.DstIP, uint16(udp.DstPort), uint8(ipv4.Protocol)).AsBytes(),
+		nat.NewNATValue(0, 1, 0, 0).AsBytes(),
+	)
+	Expect(err).NotTo(HaveOccurred())
 
-	err = os.Mkdir(bpfFsDir, os.ModePerm)
+	natIP := net.IPv4(8, 8, 8, 8)
+	natPort := uint16(666)
+
+	err = natBEMap.Update(
+		nat.NewNATBackendKey(0, 0).AsBytes(),
+		nat.NewNATBackendValue(natIP, natPort).AsBytes(),
+	)
 	Expect(err).NotTo(HaveOccurred())
-	defer os.RemoveAll(bpfFsDir)
-	obj, err := objUTLoad(objFname, bpfFsDir, "IPv4", testOpts{}, true, false)
+
+	ctMap := conntrack.Map()
+	err = ctMap.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
-	defer func() { _ = obj.UnpinPrograms(bpfFsDir) }()
-	defer obj.Close()
+	resetCTMap(ctMap) // ensure it is clean
+
+	hostIP = node1ip
+
+	// Insert a reverse route for the source workload that is not in a calico
+	// poll, for example 3rd party CNI is used.
+	rtKey := routes.NewKey(srcV4CIDR).AsBytes()
+	rtVal := routes.NewValueWithIfIndex(routes.FlagsLocalWorkload, 1).AsBytes()
+	err = rtMap.Update(rtKey, rtVal)
+	Expect(err).NotTo(HaveOccurred())
+
+	skbMark = 0
 
 	ctxIn := make([]byte, 18*4)
 
-	b.ResetTimer()
-	res, err := bpftoolProgRunN(bpfFsDir+"/classifier_calico_unittest", pktBytes, ctxIn, b.N)
-	b.StopTimer()
-	Expect(err).NotTo(HaveOccurred())
-	Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
-	fmt.Printf("%7d iterations avg %d\n", b.N, res.Duration)
+	setupAndRun(b, "no_log", "calico_from_workload_ep", rulesDefaultAllow, func(progName string) {
+		res, err := bpftoolProgRun(progName, pktBytes, ctxIn)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		b.Log("BenchmarkPktAccess initialized")
+
+		b.ResetTimer()
+
+		res, err = bpftoolProgRunN(progName, pktBytes, ctxIn, b.N)
+
+		b.StopTimer()
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		fmt.Printf("%7d iterations avg %d\n", b.N, res.Duration)
+	})
+
 }

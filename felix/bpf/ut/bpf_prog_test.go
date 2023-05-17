@@ -654,6 +654,7 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 					PSNatLen:     uint16(topts.psnatEnd-topts.psnaStart) + 1,
 					Flags:        libbpf.GlobalsIPv6Enabled | libbpf.GlobalsNoDSRCidrs,
 					HostTunnelIP: ipToU32(node1tunIP),
+					LogFilterJmp: 0xffffffff,
 				}
 
 				for i := 0; i < tcdefs.ProgIndexEnd; i++ {
