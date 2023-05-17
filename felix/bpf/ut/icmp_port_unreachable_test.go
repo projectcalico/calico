@@ -45,7 +45,7 @@ func TestICMPPortUnreachable(t *testing.T) {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.Retval).To(Equal(0))
 
-		Expect(res.dataOut).To(HaveLen(142)) // eth + ip + 64 + udp + ip + ipopts(8) + icmp
+		Expect(res.dataOut).To(HaveLen(110)) // eth + ip(60) + udp + ip + ipopts(8) + icmp
 
 		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 		fmt.Printf("pktR = %+v\n", pktR)

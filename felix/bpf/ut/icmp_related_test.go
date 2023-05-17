@@ -83,6 +83,13 @@ func TestICMPRelatedPlain(t *testing.T) {
 
 	runBpfTest(t, "calico_to_workload_ep", rulesAllowUDP, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(icmpUNreachable)
+		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
+		fmt.Printf("pktR = %+v\n", pktR)
+		payloadL := pktR.ApplicationLayer()
+		Expect(payloadL).NotTo(BeNil())
+		inner := gopacket.NewPacket(payloadL.Payload(), layers.LayerTypeIPv4, gopacket.Default)
+		Expect(inner).NotTo(BeNil())
+		fmt.Printf("inner = %+v\n", inner)
 		Expect(err).NotTo(HaveOccurred())
 		// we have a normal ct record, it is related, must be allowed
 		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
