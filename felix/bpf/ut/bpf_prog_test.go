@@ -1373,7 +1373,14 @@ func generatePacket(layers []gopacket.SerializableLayer) ([]byte, error) {
 }
 
 func testPacketUDPDefault() (*layers.Ethernet, *layers.IPv4, gopacket.Layer, []byte, []byte, error) {
-	return testPacket(nil, nil, nil, nil)
+	ip := *ipv4Default
+	ip.Options = []layers.IPv4Option{{
+		OptionType:   123,
+		OptionLength: 6,
+		OptionData:   []byte{0xde, 0xad, 0xbe, 0xef},
+	}}
+	ip.IHL += 2
+	return testPacket(nil, &ip, nil, nil)
 }
 
 func testPacketUDPDefaultNP(destIP net.IP) (*layers.Ethernet, *layers.IPv4, gopacket.Layer, []byte, []byte, error) {
