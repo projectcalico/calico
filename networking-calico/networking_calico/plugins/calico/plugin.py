@@ -13,6 +13,7 @@
 #    under the License.
 
 from neutron.db import l3_db
+from neutron.db.models import l3
 from neutron.plugins.ml2.plugin import Ml2Plugin
 
 from networking_calico.compat import cfg
@@ -48,6 +49,14 @@ class CalicoPlugin(Ml2Plugin, l3_db.L3_NAT_db_mixin):
         cfg.CONF.set_override('type_drivers', ['local', 'flat'], group='ml2')
         LOG.info("Forcing ML2 tenant_network_types to 'local'")
         cfg.CONF.set_override('tenant_network_types', ['local'], group='ml2')
+
+        # This is a bit of a hack to get the models_v2.Port attributes setup in such
+        # a way as to avoid tracebacks in the neutron-server log. The side-effects within
+        # the Router setup that we care about likely have to do with the "orm.relationship"
+        # calls but rather than port those directly here and risk any changes that might
+        # occur in the future that could render this assumption false we can just rely
+        # on the maintainers of this class to keep things up-to-date on our behalf
+        _ = l3.Router()
 
         super(CalicoPlugin, self).__init__()
 
