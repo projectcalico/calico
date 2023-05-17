@@ -192,6 +192,17 @@ deny:
 
 static CALI_BPF_INLINE int pre_policy_processing(struct cali_tc_ctx *ctx)
 {
+	/* Copy fields that are needed by downstream programs from the packet to the state. */
+	tc_state_fill_from_iphdr(ctx);
+
+	/* Parse out the source/dest ports (or type/code for ICMP). */
+	switch (tc_state_fill_from_nexthdr(ctx, dnat_should_decap())) {
+	case PARSING_ERROR:
+		goto deny;
+	case PARSING_ALLOW_WITHOUT_ENFORCING_POLICY:
+		goto allow;
+	}
+
 	/* Now we've got as far as the UDP header, check if this is one of our VXLAN packets, which we
 	 * use to forward traffic for node ports. */
 	if (dnat_should_decap() /* Compile time: is this a BPF program that should decap packets? */ &&
@@ -207,17 +218,18 @@ static CALI_BPF_INLINE int pre_policy_processing(struct cali_tc_ctx *ctx)
 			fwd_fib_set(&(ctx->fwd), false);
 			goto allow;
 		}
-	}
 
-	/* Copy fields that are needed by downstream programs from the packet to the state. */
-	tc_state_fill_from_iphdr(ctx);
-
-	/* Parse out the source/dest ports (or type/code for ICMP). */
-	switch (tc_state_fill_from_nexthdr(ctx, dnat_should_decap())) {
-	case PARSING_ERROR:
-		goto deny;
-	case PARSING_ALLOW_WITHOUT_ENFORCING_POLICY:
-		goto allow;
+		/* Again, copy fields that are needed by downstream programs from the
+		 * packet to the state after we unpacked the inner packet.
+		 */
+		tc_state_fill_from_iphdr(ctx);
+		/* Parse out the source/dest ports (or type/code for ICMP). */
+		switch (tc_state_fill_from_nexthdr(ctx, dnat_should_decap())) {
+			case PARSING_ERROR:
+				goto deny;
+			case PARSING_ALLOW_WITHOUT_ENFORCING_POLICY:
+				goto allow;
+		}
 	}
 
 	ctx->state->pol_rc = CALI_POL_NO_MATCH;
@@ -838,9 +850,13 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 		 * CIDRs from DSR, we need to make a check if this client also opted out
 		 * and save the information in conntrack.
 		 */
+		CALI_DEBUG("CALI_F_DSR: %d\n", CALI_F_DSR);
+		CALI_DEBUG("GLOBAL_FLAGS: 0x%x\n", GLOBAL_FLAGS);
 		if (CALI_F_FROM_HEP && CALI_F_DSR && (GLOBAL_FLAGS & CALI_GLOBALS_NO_DSR_CIDRS)) {
+			CALI_DEBUG("state->tun_ip = 0x%x\n", state->tun_ip);
 			if (state->tun_ip && cali_rt_lookup_flags(state->ip_src) & CALI_RT_NO_DSR) {
 				ct_ctx_nat.flags |= CALI_CT_FLAG_NP_NO_DSR;
+				CALI_DEBUG("CALI_CT_FLAG_NP_NO_DSR\n");
 			}
 		}
 
