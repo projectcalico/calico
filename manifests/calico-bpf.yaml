@@ -1018,6 +1018,12 @@ spec:
                   the cluster.  It should not match the workload interfaces (usually
                   named cali...).
                 type: string
+              bpfDisableGROForIfaces:
+                description: BPFDisableGROForIfaces is a regular expression that controls
+                  which interfaces Felix should disable the Generic Receive Offload
+                  [GRO] option.  It should not match the workload interfaces (usually
+                  named cali...).
+                type: string
               bpfDisableUnprivileged:
                 description: 'BPFDisableUnprivileged, if enabled, Felix sets the kernel.unprivileged_bpf_disabled
                   sysctl to disable unprivileged use of BPF.  This ensures that unprivileged
