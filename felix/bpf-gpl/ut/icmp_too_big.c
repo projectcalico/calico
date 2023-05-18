@@ -30,7 +30,7 @@ static CALI_BPF_INLINE int calico_unittest_entry (struct __sk_buff *skb)
 		CALI_DEBUG("Counters map lookup failed: DROP\n");
 		return TC_ACT_SHOT;
 	}
-	
+
 	if (parse_packet_ip(ctx) != PARSING_OK) {
 		return TC_ACT_UNSPEC;
 	}
