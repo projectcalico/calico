@@ -100,7 +100,7 @@ ifeq ($(ARCH),amd64)
 ifeq ($(FIPS), true)
 	$(call build_cgo_boring_binary, $(PACKAGE_NAME)/cmd/apiserver, $@)
 else
-	$(call build_cgo_binary, $(PACKAGE_NAME)/cmd/apiserver, $@)
+	$(call build_cgo_boring_binary_no_fips, $(PACKAGE_NAME)/cmd/apiserver, $@)
 endif
 else
 	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) \

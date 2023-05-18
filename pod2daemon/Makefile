@@ -95,23 +95,18 @@ UPSTREAM_REGISTRAR_TAG     ?= v2.8.0
 
 REGISTRAR_TIGERA_BUILD_CMD_LDFLAGS = -ldflags '-extldflags "-static" -linkmode external'
 
-REGISTRAR_TIGERA_BUILD_CMD_FIPS="cd /go/src/github.com/$(UPSTREAM_REGISTRAR_PROJECT) && \
-                    			  go build -buildvcs=false $(REGISTRAR_TIGERA_BUILD_CMD_LDFLAGS) -tags $(TAGS) -v -o $(BINDIR)/csi-node-driver-registrar cmd/csi-node-driver-registrar/*.go"
 REGISTRAR_TIGERA_BUILD_CMD="cd /go/src/github.com/$(UPSTREAM_REGISTRAR_PROJECT) && \
-                    			  go build -buildvcs=false -o $(BINDIR)/csi-node-driver-registrar cmd/csi-node-driver-registrar/*.go"
+                    			  go build -buildvcs=false $(REGISTRAR_TIGERA_BUILD_CMD_LDFLAGS) -tags $(TAGS) -v -o $(BINDIR)/csi-node-driver-registrar cmd/csi-node-driver-registrar/*.go"
 REGISTRAR_UPSTREAM_BUILD_CMD="cd /go/src/github.com/$(UPSTREAM_REGISTRAR_PROJECT) && \
 							      make build BUILD_PLATFORMS=$(BUILD_PLATFORMS)"
 
 ifeq ($(ARCH), $(filter $(ARCH),amd64))
 # We need CGO to leverage Boring SSL.  However, the cross-compile doesn't support CGO yet.
-ifeq ($(FIPS), true)
 CGO_ENABLED=1
-TAGS=fipsstrict
-GOEXPERIMENT=boringcrypto
-REGISTRAR_BUILD_CMD=$(REGISTRAR_TIGERA_BUILD_CMD_FIPS)
-else
-CGO_ENABLED=0
 REGISTRAR_BUILD_CMD=$(REGISTRAR_TIGERA_BUILD_CMD)
+GOEXPERIMENT=boringcrypto
+ifeq ($(FIPS), true)
+TAGS=fipsstrict
 endif
 else ifeq ($(ARCH), $(filter $(ARCH),arm64))
 CGO_ENABLED=0

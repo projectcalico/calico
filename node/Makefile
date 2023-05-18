@@ -255,7 +255,7 @@ ifeq ($(ARCH),amd64)
 ifeq ($(FIPS), true)
 	$(call build_cgo_boring_binary, ./cmd/calico-node/main.go, $@)
 else
-	$(call build_cgo_binary, ./cmd/calico-node/main.go, $@)
+	$(call build_cgo_boring_binary_no_fips, ./cmd/calico-node/main.go, $@)
 endif
 else
 	$(DOCKER_GO_BUILD_CGO) sh -c '$(GIT_CONFIG_SSH) go build -buildvcs=false -v -o $@ $(BUILD_FLAGS) -ldflags "$(LDFLAGS)" ./cmd/calico-node/main.go'

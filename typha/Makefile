@@ -89,7 +89,7 @@ ifeq ($(ARCH), amd64)
 ifeq ($(FIPS), true)
 	$(call build_static_cgo_boring_binary, ./cmd/wrapper, $@)
 else
-	$(call build_binary, ./cmd/wrapper, $@)
+	$(call build_static_cgo_boring_binary_no_fips, ./cmd/wrapper, $@)
 endif
 else
 	$(call build_binary, ./cmd/wrapper, $@)
@@ -100,7 +100,7 @@ ifeq ($(ARCH), amd64)
 ifeq ($(FIPS), true)
 	$(call build_static_cgo_boring_binary, ./cmd/calico-typha, $@)
 else
-	$(call build_binary, ./cmd/calico-typha, $@)
+	$(call build_static_cgo_boring_binary_no_fips, ./cmd/calico-typha, $@)
 endif
 else
 	$(call build_binary, ./cmd/calico-typha, $@)
@@ -112,7 +112,7 @@ ifeq ($(ARCH), amd64)
 ifeq ($(FIPS), true)
 	$(call build_static_cgo_boring_binary, ./cmd/typha-client, $@)
 else
-	$(call build_binary, ./cmd/typha-client, $@)
+	$(call build_static_cgo_boring_binary_no_fips, ./cmd/typha-client, $@)
 endif
 else
 	$(call build_binary, ./cmd/typha-client, $@)

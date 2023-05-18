@@ -69,7 +69,7 @@ ifeq ($(ARCH), amd64)
 ifeq ($(FIPS), true)
 	$(call build_cgo_boring_binary, ./cmd/kube-controllers/, $@)
 else
-	$(call build_binary, ./cmd/kube-controllers/, $@)
+	$(call build_cgo_boring_binary_no_fips, ./cmd/kube-controllers/, $@)
 endif
 else
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c '\
@@ -81,7 +81,7 @@ ifeq ($(ARCH), amd64)
 ifeq ($(FIPS), true)
 	$(call build_cgo_boring_binary, ./cmd/wrapper, $@)
 else
-	$(call build_binary, ./cmd/wrapper, $@)
+	$(call build_cgo_boring_binary_no_fips, ./cmd/wrapper, $@)
 endif
 else
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c '\
