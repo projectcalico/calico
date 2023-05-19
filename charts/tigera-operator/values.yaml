@@ -1,8 +1,19 @@
+# imagePullSecrets is a special helm field which, when specified, creates a secret
+# containing the pull secret which is used to pull all images deployed by this helm chart and the resulting operator.
+# this field is a map where the key is the desired secret name and the value is the contents of the imagePullSecret.
+#
+# Example: --set-file imagePullSecrets.gcr=./pull-secret.json
 imagePullSecrets: {}
 
 installation:
   enabled: true
   kubernetesProvider: ""
+  # imagePullSecrets are configured on all images deployed by the tigera-operator.
+  # secrets specified here must exist in the tigera-operator namespace; they won't be created by the operator or helm.
+  # imagePullSecrets are a slice of LocalObjectReferences, which is the same format they appear as on deployments.
+  #
+  # Example: --set installation.imagePullSecrets[0].name=my-existing-secret
+  imagePullSecrets: []
 
 apiServer:
   enabled: true
