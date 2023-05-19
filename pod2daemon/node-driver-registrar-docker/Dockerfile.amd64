@@ -26,6 +26,11 @@ COPY --from=ubi /lib64/ld-linux-x86-64.so.2 /lib64/ld-linux-x86-64.so.2
 COPY --from=ubi /lib64/libpthread.so.0 /lib64/libpthread.so.0
 COPY --from=ubi /lib64/libc.so.6 /lib64/libc.so.6
 
+# The following dependencies do not show up when performing ldd on the binary, but are still necessary.
+COPY --from=ubi /lib64/libnss_dns.so.2 /lib64/libnss_dns.so.2
+COPY --from=ubi /lib64/libnss_files.so.2 /lib64/libnss_files.so.2
+COPY --from=ubi /lib64/libresolv.so.2 /lib64/libresolv.so.2
+
 ARG BIN_DIR
 ADD ${BIN_DIR}/node-driver-registrar-amd64 /usr/local/bin/node-driver-registrar
 

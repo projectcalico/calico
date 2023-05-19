@@ -3,9 +3,7 @@ include ../metadata.mk
 PACKAGE_NAME = github.com/projectcalico/calico/cni-plugin
 
 # Add in local static-checks
-ifeq ($(FIPS), true)
 LOCAL_CHECKS=check-boring-ssl
-endif
 
 # Name of the images.
 # e.g., <registry>/<name>:<tag>
@@ -151,8 +149,7 @@ ut: run-k8s-controller-manager $(BIN)/install $(BIN)/host-local $(BIN)/calico-ip
 	$(MAKE) ut-datastore DATASTORE_TYPE=kubernetes
 
 check-boring-ssl: $(BIN)/install
-	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD)
-	go tool nm $(BIN)/install > $(BIN)/tags.txt && grep '_Cfunc__goboringcrypto_' $(BIN)/tags.txt 1> /dev/null
+	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) $(CHECK_BORINGSSL)
 	-rm -f $(BIN)/tags.txt
 
 $(BIN)/calico-ipam $(BIN)/calico: $(BIN)/install

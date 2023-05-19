@@ -8,9 +8,7 @@ TYPHA_IMAGE    ?=typha
 BUILD_IMAGES   ?=$(TYPHA_IMAGE)
 
 # Add in local static-checks
-ifeq ($(FIPS), true)
 LOCAL_CHECKS=check-boring-ssl
-endif
 
 ###############################################################################
 # Download and include ../lib.Makefile

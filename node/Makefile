@@ -5,9 +5,7 @@ PACKAGE_NAME = github.com/projectcalico/calico/node
 RELEASE_BRANCH_PREFIX ?=release
 DEV_TAG_SUFFIX        ?=0.dev
 
-ifeq ($(FIPS), true)
 LOCAL_CHECKS=check-boring-ssl
-endif
 
 # Name of the images.
 # e.g., <registry>/<name>:<tag>

@@ -1,11 +1,7 @@
 include ../metadata.mk
 
 PACKAGE_NAME = github.com/projectcalico/calico/apiserver
-ifeq ($(FIPS), true)
 LOCAL_CHECKS     = lint-cache-dir goimports check-boring-ssl
-else
-LOCAL_CHECKS     = lint-cache-dir goimports
-endif
 
 # Used so semaphore commits generated files when pins are updated
 EXTRA_FILES_TO_COMMIT=*_generated.go *_generated.*.go
