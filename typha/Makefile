@@ -71,7 +71,7 @@ clean:
 ###############################################################################
 # Building the binary
 ###############################################################################
-build: bin/calico-typha
+build: $(BINDIR)/calico-typha
 build-all: $(addprefix sub-build-,$(VALIDARCHES))
 sub-build-%:
 	$(MAKE) build ARCH=$*
@@ -183,7 +183,7 @@ ut combined.coverprofile: $(SRC_FILES)
 check-boring-ssl: $(BINDIR)/calico-typha-amd64
 	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) \
 		go tool nm $(BINDIR)/calico-typha-amd64 > $(BINDIR)/tags.txt && grep '_Cfunc__goboringcrypto_' $(BINDIR)/tags.txt 1> /dev/null
-	-rm -f bin/tags.txt
+	-rm -f $(BINDIR)/tags.txt
 
 ###############################################################################
 # CI/CD
@@ -283,7 +283,7 @@ cover-report: combined.coverprofile
 				   grep -v '100\.0%'"
 
 $(BINDIR)/calico-typha.transfer-url: $(BINDIR)/calico-typha-$(ARCH)
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'curl --upload-file bin/calico-typha-$(ARCH) https://transfer.sh/calico-typha > $@'
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'curl --upload-file $(BINDIR)/calico-typha-$(ARCH) https://transfer.sh/calico-typha > $@'
 
 # Install or update the tools used by the build
 .PHONY: update-tools

@@ -59,7 +59,7 @@ endif
 
 .PHONY: build-all
 ## Build the binaries for all architectures and platforms
-build-all: $(addprefix bin/flexvol-,$(VALIDARCHES)) $(addprefix bin/csi-driver-,$(VALIDARCHES)) $(addprefix bin/node-driver-registrar-,$(VALIDARCHES))
+build-all: $(addprefix $(BINDIR)/flexvol-,$(VALIDARCHES)) $(addprefix $(BINDIR)/csi-driver-,$(VALIDARCHES)) $(addprefix $(BINDIR)/node-driver-registrar-,$(VALIDARCHES))
 
 .PHONY: build
 ## Build the binary for the current architecture and platform

@@ -164,8 +164,6 @@ SRC_FILES=$(shell find ./pkg -name '*.go') \
 	  $(shell find ../libcalico-go -name '*.go') \
 	  $(shell find ../confd -name '*.go')
 
-BINDIR?=bin
-
 ## Clean enough that a new release build will be clean
 clean: clean-windows
 	# Clean .created files which indicate images / releases have been built.

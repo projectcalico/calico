@@ -57,7 +57,7 @@ clean:
 ###############################################################################
 LDFLAGS = -X main.VERSION=$(GIT_VERSION)
 
-build: bin/kube-controllers-linux-$(ARCH) bin/check-status-linux-$(ARCH)
+build: $(BINDIR)/kube-controllers-linux-$(ARCH) $(BINDIR)/check-status-linux-$(ARCH)
 build-all: $(addprefix sub-build-,$(VALIDARCHES))
 sub-build-%:
 	$(MAKE) build ARCH=$*
