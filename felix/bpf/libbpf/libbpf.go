@@ -394,6 +394,7 @@ func TcSetGlobals(
 		C.ushort(globalData.WgPort),
 		C.uint(globalData.NatIn),
 		C.uint(globalData.NatOut),
+		C.uint(globalData.LogFilterJmp),
 		&cJumps[0], // it is safe because we hold the reference here until we return.
 	)
 

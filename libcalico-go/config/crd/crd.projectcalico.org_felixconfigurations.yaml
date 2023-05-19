@@ -51,6 +51,13 @@ spec:
                 - Enable
                 - Disable
                 type: string
+              bpfCTLBLogFilter:
+                description: 'BPFCTLBLogFilter specifies, what is logged by connect
+                  time load balancer when BPFLogLevel is debug. Currently has to be
+                  specified as ''all'' when BPFLogFilters is set to see CTLB logs.
+                  [Default: unset - means logs are emitted when BPFLogLevel id debug
+                  and BPFLogFilters not set.]'
+                type: string
               bpfConnectTimeLoadBalancingEnabled:
                 description: 'BPFConnectTimeLoadBalancingEnabled when in BPF mode,
                   controls whether Felix installs the connection-time load balancer.  The
@@ -73,6 +80,12 @@ spec:
                   that Calico workload traffic flows over as well as any interfaces
                   that handle incoming traffic to nodeports and services from outside
                   the cluster.  It should not match the workload interfaces (usually
+                  named cali...).
+                type: string
+              bpfDisableGROForIfaces:
+                description: BPFDisableGROForIfaces is a regular expression that controls
+                  which interfaces Felix should disable the Generic Receive Offload
+                  [GRO] option.  It should not match the workload interfaces (usually
                   named cali...).
                 type: string
               bpfDisableUnprivileged:
@@ -108,6 +121,16 @@ spec:
                   node appears to use the IP of the ingress node; this requires a
                   permissive L2 network.  [Default: Tunnel]'
                 type: string
+              bpfForceTrackPacketsFromIfaces:
+                description: 'BPFForceTrackPacketsFromIfaces in BPF mode, forces traffic
+                  from these interfaces to skip Calico''s iptables NOTRACK rule, allowing
+                  traffic from those interfaces to be tracked by Linux conntrack.  Should
+                  only be used for interfaces that are not used for the Calico fabric.  For
+                  example, a docker bridge device for non-Calico-networked containers.
+                  [Default: docker+]'
+                items:
+                  type: string
+                type: array
               bpfHostConntrackBypass:
                 description: 'BPFHostConntrackBypass Controls whether to bypass Linux
                   conntrack in BPF mode for workloads and services. [Default: true
@@ -137,6 +160,16 @@ spec:
                   as any interfaces that handle incoming traffic to nodeports and
                   services from outside the cluster.
                 type: string
+              bpfLogFilters:
+                additionalProperties:
+                  type: string
+                description: "BPFLogFilters is a map of key=values where the value
+                  is a pcap filter expression and the key is an interface name with
+                  'all' denoting all interfaces, 'weps' all workload endpoints and
+                  'heps' all host endpoints. \n When specified as an env var, it accepts
+                  a comma-separated list of key=values. [Default: unset - means all
+                  debug logs are emitted]"
+                type: object
               bpfLogLevel:
                 description: 'BPFLogLevel controls the log level of the BPF programs
                   when in BPF dataplane mode.  One of "Off", "Info", or "Debug".  The

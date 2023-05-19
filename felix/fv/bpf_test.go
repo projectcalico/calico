@@ -329,6 +329,19 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			options.ExtraEnvVars["FELIX_BPFExtToServiceConnmark"] = "0x80"
 			options.ExtraEnvVars["FELIX_BPFDSROptoutCIDRs"] = "245.245.0.0/16"
 
+			if testOpts.protocol == "tcp" {
+				filters := map[string]string{"all": "tcp"}
+				felixConfig := api.NewFelixConfiguration()
+				felixConfig.SetName("default")
+				felixConfig.Spec = api.FelixConfigurationSpec{
+					BPFLogFilters: &filters,
+				}
+				if testOpts.connTimeEnabled {
+					felixConfig.Spec.BPFCTLBLogFilter = "all"
+				}
+				options.InitialFelixConfiguration = felixConfig
+			}
+
 			if ctlbWorkaround {
 				if testOpts.protocol == "udp" {
 					options.ExtraEnvVars["FELIX_FeatureGates"] = "BPFConnectTimeLoadBalancingWorkaround=udp"
@@ -463,11 +476,19 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						felixPanicExpected = true
 						panicC := felixes[0].WatchStdoutFor(regexp.MustCompile("PANIC.*IptablesMarkMask doesn't cover bits that are used"))
 
-						fc := api.NewFelixConfiguration()
+						fc, err := calicoClient.FelixConfigurations().Get(context.Background(), "default", options2.GetOptions{})
+						felixConfigExists := err == nil
+						if !felixConfigExists {
+							fc = api.NewFelixConfiguration()
+						}
 						fc.Name = "default"
 						mark := uint32(0x0ffff000)
 						fc.Spec.IptablesMarkMask = &mark
-						fc, err := calicoClient.FelixConfigurations().Create(context.Background(), fc, options2.SetOptions{})
+						if felixConfigExists {
+							_, err = calicoClient.FelixConfigurations().Update(context.Background(), fc, options2.SetOptions{})
+						} else {
+							fc, err = calicoClient.FelixConfigurations().Create(context.Background(), fc, options2.SetOptions{})
+						}
 						Expect(err).NotTo(HaveOccurred())
 
 						Eventually(panicC, "5s", "100ms").Should(BeClosed())
@@ -476,11 +497,19 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					It("0xfff00000 only covering BPF bits should panic", func() {
 						panicC := felixes[0].WatchStdoutFor(regexp.MustCompile("PANIC.*Not enough mark bits available"))
 
-						fc := api.NewFelixConfiguration()
+						fc, err := calicoClient.FelixConfigurations().Get(context.Background(), "default", options2.GetOptions{})
+						felixConfigExists := err == nil
+						if !felixConfigExists {
+							fc = api.NewFelixConfiguration()
+						}
 						fc.Name = "default"
 						mark := uint32(0xfff00000)
 						fc.Spec.IptablesMarkMask = &mark
-						fc, err := calicoClient.FelixConfigurations().Create(context.Background(), fc, options2.SetOptions{})
+						if felixConfigExists {
+							_, err = calicoClient.FelixConfigurations().Update(context.Background(), fc, options2.SetOptions{})
+						} else {
+							fc, err = calicoClient.FelixConfigurations().Create(context.Background(), fc, options2.SetOptions{})
+						}
 						Expect(err).NotTo(HaveOccurred())
 
 						Eventually(panicC, "5s", "100ms").Should(BeClosed())

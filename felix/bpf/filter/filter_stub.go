@@ -1,4 +1,4 @@
-// Copyright (c) 2021-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2022 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,27 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package libbpf
+//go:build !cgo
 
-type TcGlobalData struct {
-	IfaceName    string
-	HostIP       uint32
-	IntfIP       uint32
-	ExtToSvcMark uint32
-	Tmtu         uint16
-	VxlanPort    uint16
-	PSNatStart   uint16
-	PSNatLen     uint16
-	HostTunnelIP uint32
-	Flags        uint32
-	WgPort       uint16
-	NatIn        uint32
-	NatOut       uint32
-	LogFilterJmp uint32
-	Jumps        [32]uint32
-}
+package filter
 
-type XDPGlobalData struct {
-	IfaceName string
-	Jumps     [32]uint32
+import (
+	"github.com/projectcalico/calico/felix/bpf/asm"
+	"github.com/projectcalico/calico/felix/bpf/maps"
+	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
+)
+
+func New(_ tcdefs.EndpointType, _ int, _ string, _ maps.FD) (asm.Insns, error) {
+	panic("this is stub only")
 }

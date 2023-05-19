@@ -171,6 +171,7 @@ func init() {
 	registerFieldValidator("policyType", validatePolicyType)
 	registerFieldValidator("logLevel", validateLogLevel)
 	registerFieldValidator("bpfLogLevel", validateBPFLogLevel)
+	registerFieldValidator("bpfLogFilters", validateBPFLogFilters)
 	registerFieldValidator("bpfServiceMode", validateBPFServiceMode)
 	registerFieldValidator("dropAcceptReturn", validateFelixEtoHAction)
 	registerFieldValidator("acceptReturn", validateAcceptReturn)
@@ -179,6 +180,8 @@ func init() {
 	registerFieldValidator("mustBeNil", validateMustBeNil)
 	registerFieldValidator("mustBeFalse", validateMustBeFalse)
 	registerFieldValidator("ifaceFilter", validateIfaceFilter)
+	registerFieldValidator("interfaceSlice", validateInterfaceSlice)
+	registerFieldValidator("ifaceFilterSlice", validateIfaceFilterSlice)
 	registerFieldValidator("mac", validateMAC)
 	registerFieldValidator("iptablesBackend", validateIptablesBackend)
 	registerFieldValidator("keyValueList", validateKeyValueList)
@@ -295,6 +298,36 @@ func validateIfaceFilter(fl validator.FieldLevel) bool {
 	s := fl.Field().String()
 	log.Debugf("Validate Interface Filter : %s", s)
 	return ifaceFilterRegex.MatchString(s)
+}
+
+func validateInterfaceSlice(fl validator.FieldLevel) bool {
+	slice := fl.Field().Interface().([]string)
+	log.Debugf("Validate Interface Slice : %v", slice)
+
+	for _, val := range slice {
+		match := interfaceRegex.MatchString(val)
+		if !match {
+			return false
+		}
+	}
+
+	return true
+}
+
+func validateIfaceFilterSlice(fl validator.FieldLevel) bool {
+	slice := fl.Field().Interface().([]string)
+	log.Debugf("Validate Interface Filter Slice : %v", slice)
+
+	for _, val := range slice {
+		// Important: must use ifaceFilterRegex to allow interface wildcard match
+		// e.g. "docker+" which the standard interfaceRegex does not accommodate.
+		match := ifaceFilterRegex.MatchString(val)
+		if !match {
+			return false
+		}
+	}
+
+	return true
 }
 
 func validateDatastoreType(fl validator.FieldLevel) bool {
@@ -415,6 +448,23 @@ func validateLogLevel(fl validator.FieldLevel) bool {
 	s := fl.Field().String()
 	log.Debugf("Validate Felix log level: %s", s)
 	return logLevelRegex.MatchString(s)
+}
+
+func validateBPFLogFilters(fl validator.FieldLevel) bool {
+	log.Debugf("Validate Felix BPF log level: %s", fl.Field().String())
+
+	m, ok := fl.Field().Interface().(map[string]string)
+	if !ok {
+		return false
+	}
+
+	for k := range m {
+		if !interfaceRegex.MatchString(k) {
+			return false
+		}
+	}
+
+	return true
 }
 
 func validateBPFLogLevel(fl validator.FieldLevel) bool {
