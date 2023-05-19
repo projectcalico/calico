@@ -35,8 +35,10 @@ LABEL name="Calico Dikastes" \
       maintainer="Laurence Man<laurence@tigera.io>"
 
 COPY --from=ubi /licenses /licenses
-ADD bin/dikastes-amd64 /dikastes
-ADD bin/healthz-amd64 /healthz
+
+ARG BIN_DIR
+ADD ${BIN_DIR}/dikastes-amd64 /dikastes
+ADD ${BIN_DIR}/healthz-amd64 /healthz
 
 # Include libraries from UBI for dynamic linking.
 COPY --from=ubi /lib64/libpthread.so.0 /lib64/libpthread.so.0
