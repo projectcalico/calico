@@ -1,6 +1,5 @@
-# imagePullSecrets are a special helm field which, when specified, creates a secret
-# containing the pull secret and configures operator's serviceaccount to use it to pull the operator image
-# as well as configuring the installation resource so that images launched by the operator will use it as well.
+# imagePullSecrets is a special helm field which, when specified, creates a secret
+# containing the pull secret which is used to pull all images deployed by this helm chart and the resulting operator.
 # this field is a map where the key is the desired secret name and the value is the contents of the imagePullSecret.
 #
 # Example: --set-file imagePullSecrets.gcr=./pull-secret.json
