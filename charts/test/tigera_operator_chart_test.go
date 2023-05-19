@@ -5,68 +5,72 @@ package charttest
 
 import (
 	"path/filepath"
+	"testing"
 
 	corev1 "k8s.io/api/core/v1"
 
 	"github.com/gruntwork-io/terratest/modules/helm"
 
-	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("Tigera Operator Helm Chart", func() {
-	Describe("image pull secrets", func() {
-		Context("using toplevel config field", func() {
+func TestTigeraOperatorHelmChart(t *testing.T) {
+	t.Run("image pull secrets", func(t *testing.T) {
+		t.Run("using toplevel config field", func(t *testing.T) {
 			opts := &helm.Options{
 				SetValues: map[string]string{
 					"imagePullSecrets.my-secret": "secret1",
 				},
 			}
 
-			It("sets imagePullSecrets on serviceaccount", func() {
+			t.Run("sets imagePullSecrets on serviceaccount", func(t *testing.T) {
+				g := NewWithT(t)
 				var serviceAccount corev1.ServiceAccount
-				err := renderChartResource(opts, "templates/tigera-operator/02-serviceaccount-tigera-operator.yaml", &serviceAccount)
-				Expect(err).ToNot(HaveOccurred())
-				Expect(serviceAccount.ImagePullSecrets).To(ConsistOf(
+				err := renderChartResource(t, opts, "templates/tigera-operator/02-serviceaccount-tigera-operator.yaml", &serviceAccount)
+				g.Expect(err).To(HaveOccurred())
+				g.Expect(serviceAccount.ImagePullSecrets).To(ConsistOf(
 					corev1.LocalObjectReference{Name: "my-secret"},
 				))
 			})
 
-			It("creates a secret", func() {
+			t.Run("creates a secret", func(t *testing.T) {
+				g := NewWithT(t)
 				var secret corev1.Secret
-				err := renderChartResource(opts, "templates/tigera-operator/01-imagepullsecret.yaml", &secret)
-				Expect(err).ToNot(HaveOccurred())
-				Expect(secret.Name).To(Equal("my-secret"))
-				Expect(secret.Data).To(Equal(map[string][]byte{
+				err := renderChartResource(t, opts, "templates/tigera-operator/01-imagepullsecret.yaml", &secret)
+				g.Expect(err).To(HaveOccurred())
+				g.Expect(secret.Name).To(Equal("my-secret"))
+				g.Expect(secret.Data).To(Equal(map[string][]byte{
 					".dockerconfigjson": []byte("secret1"),
 				}))
 			})
 		})
 
-		Context("using installation's config field", func() {
+		t.Run("using installation's config field", func(t *testing.T) {
 			opts := &helm.Options{
 				SetValues: map[string]string{
 					"installation.imagePullSecrets[0].name": "my-secret",
 				},
 			}
 
-			It("sets imagePullSecrets on serviceaccount", func() {
+			t.Run("sets imagePullSecrets on serviceaccount", func(t *testing.T) {
+				g := NewWithT(t)
 				var serviceAccount corev1.ServiceAccount
-				err := renderChartResource(opts, "templates/tigera-operator/02-serviceaccount-tigera-operator.yaml", &serviceAccount)
-				Expect(err).ToNot(HaveOccurred())
-				Expect(serviceAccount.ImagePullSecrets).To(ConsistOf(
+				err := renderChartResource(t, opts, "templates/tigera-operator/02-serviceaccount-tigera-operator.yaml", &serviceAccount)
+				g.Expect(err).To(HaveOccurred())
+				g.Expect(serviceAccount.ImagePullSecrets).To(ConsistOf(
 					corev1.LocalObjectReference{Name: "my-secret"},
 				))
 			})
 
-			It("does not create a secret", func() {
+			t.Run("does not create a secret", func(t *testing.T) {
+				g := NewWithT(t)
 				// assert an error occured. no other way to assert "file was not rendered"
-				err := renderChartResource(opts, "templates/tigera-operator/01-imagepullsecret.yaml", &corev1.Secret{})
-				Expect(err).To(HaveOccurred())
+				err := renderChartResource(t, opts, "templates/tigera-operator/01-imagepullsecret.yaml", &corev1.Secret{})
+				g.Expect(err).To(HaveOccurred())
 			})
 		})
 
-		Describe("using both toplevel and installation fields", func() {
+		t.Run("using both toplevel and installation fields", func(t *testing.T) {
 			opts := &helm.Options{
 				SetValues: map[string]string{
 					"imagePullSecrets.secret-1":             "secret1",
@@ -74,39 +78,39 @@ var _ = Describe("Tigera Operator Helm Chart", func() {
 				},
 			}
 
-			It("sets both imagePullSecrets on serviceaccount", func() {
+			t.Run("sets both imagePullSecrets on serviceaccount", func(t *testing.T) {
+				g := NewWithT(t)
 				var serviceAccount corev1.ServiceAccount
-				err := renderChartResource(opts, "templates/tigera-operator/02-serviceaccount-tigera-operator.yaml", &serviceAccount)
-				Expect(err).ToNot(HaveOccurred())
-				Expect(serviceAccount.ImagePullSecrets).To(ConsistOf(
+				err := renderChartResource(t, opts, "templates/tigera-operator/02-serviceaccount-tigera-operator.yaml", &serviceAccount)
+				g.Expect(err).ToNot(HaveOccurred())
+				g.Expect(serviceAccount.ImagePullSecrets).To(ConsistOf(
 					corev1.LocalObjectReference{Name: "secret-1"},
 					corev1.LocalObjectReference{Name: "secret-2"},
 				))
 			})
 
-			It("only creates a secret for the toplevel secret", func() {
+			t.Run("only creates a secret for the toplevel secret", func(t *testing.T) {
+				g := NewWithT(t)
 				var secret corev1.Secret
-				err := renderChartResource(opts, "templates/tigera-operator/01-imagepullsecret.yaml", &secret)
-				Expect(err).ToNot(HaveOccurred())
-				Expect(secret.Name).To(Equal("secret-1"))
-				Expect(secret.Data).To(Equal(map[string][]byte{
+				err := renderChartResource(t, opts, "templates/tigera-operator/01-imagepullsecret.yaml", &secret)
+				g.Expect(err).ToNot(HaveOccurred())
+				g.Expect(secret.Name).To(Equal("secret-1"))
+				g.Expect(secret.Data).To(Equal(map[string][]byte{
 					".dockerconfigjson": []byte("secret1"),
 				}))
 			})
 		})
 	})
-})
+}
 
-func renderChartResource(options *helm.Options, templatePath string, into any) error {
+func renderChartResource(t *testing.T, options *helm.Options, templatePath string, into any) error {
 	helmChartPath, err := filepath.Abs("../tigera-operator")
-	if err != nil {
-		return err
-	}
+	Expect(err).ToNot(HaveOccurred())
 
-	output, err := helm.RenderTemplateE(GinkgoT(), options, helmChartPath, "tigera-operator", []string{templatePath})
+	output, err := helm.RenderTemplateE(t, options, helmChartPath, "tigera-operator", []string{templatePath})
 	if err != nil {
 		return err
 	}
-	helm.UnmarshalK8SYaml(GinkgoT(), output, &into)
+	helm.UnmarshalK8SYaml(t, output, &into)
 	return nil
 }
