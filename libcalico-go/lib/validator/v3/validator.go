@@ -180,6 +180,7 @@ func init() {
 	registerFieldValidator("mustBeNil", validateMustBeNil)
 	registerFieldValidator("mustBeFalse", validateMustBeFalse)
 	registerFieldValidator("ifaceFilter", validateIfaceFilter)
+	registerFieldValidator("interfaceSlice", validateInterfaceSlice)
 	registerFieldValidator("ifaceFilterSlice", validateIfaceFilterSlice)
 	registerFieldValidator("mac", validateMAC)
 	registerFieldValidator("iptablesBackend", validateIptablesBackend)
@@ -297,6 +298,20 @@ func validateIfaceFilter(fl validator.FieldLevel) bool {
 	s := fl.Field().String()
 	log.Debugf("Validate Interface Filter : %s", s)
 	return ifaceFilterRegex.MatchString(s)
+}
+
+func validateInterfaceSlice(fl validator.FieldLevel) bool {
+	slice := fl.Field().Interface().([]string)
+	log.Debugf("Validate Interface Slice : %v", slice)
+
+	for _, val := range slice {
+		match := interfaceRegex.MatchString(val)
+		if !match {
+			return false
+		}
+	}
+
+	return true
 }
 
 func validateIfaceFilterSlice(fl validator.FieldLevel) bool {

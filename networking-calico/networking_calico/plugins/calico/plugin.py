@@ -13,6 +13,7 @@
 #    under the License.
 
 from neutron.db import l3_db
+from neutron.db.models import l3
 from neutron.plugins.ml2.plugin import Ml2Plugin
 
 from networking_calico.compat import cfg
@@ -48,6 +49,58 @@ class CalicoPlugin(Ml2Plugin, l3_db.L3_NAT_db_mixin):
         cfg.CONF.set_override('type_drivers', ['local', 'flat'], group='ml2')
         LOG.info("Forcing ML2 tenant_network_types to 'local'")
         cfg.CONF.set_override('tenant_network_types', ['local'], group='ml2')
+
+        # This is a bit of a hack to get the models_v2.Port attributes setup in such
+        # a way as to avoid tracebacks in the neutron-server log.
+        #
+        # The tracebacks are not purely cosmetic as they cause all tests run after TestFloatingIPs
+        # to fail, presumably as a result of the neutron-server being left in a bad state. The bad
+        # state is likely because the error occurs during a cleanup action ("_clean_garbage") which
+        # leaves important resources orphaned with no known way to recover.
+        #
+        # The side-effects within the Router setup that we care about likely have to do with the
+        # "orm.relationship" calls but rather than port those directly here and risk any changes that might
+        # occur in the future that could render this assumption false we can just rely
+        # on the maintainers of this class to keep things up-to-date on our behalf.
+        #
+        # An example of the traceback looks like this:
+        # Traceback (most recent call last):
+        #   File "/usr/lib/python3/dist-packages/oslo_service/loopingcall.py", line 150, in _run_loop
+        #     result = func(*self.args, **self.kw)
+        #   File "/usr/lib/python3/dist-packages/neutron/db/l3_db.py", line 163, in _clean_garbage
+        #     candidates = self._get_dead_floating_port_candidates(context)
+        #   File "/usr/lib/python3/dist-packages/neutron/db/l3_db.py", line 198, in _get_dead_floating_port_candidates
+        #     return {p['id'] for p in self._core_plugin.get_ports(context, filters)}
+        #   File "/usr/lib/python3/dist-packages/neutron_lib/db/api.py", line 218, in wrapped
+        #     return method(*args, **kwargs)
+        #   File "/usr/lib/python3/dist-packages/neutron_lib/db/api.py", line 139, in wrapped
+        #     setattr(e, '_RETRY_EXCEEDED', True)
+        #   File "/usr/lib/python3/dist-packages/oslo_utils/excutils.py", line 227, in __exit__
+        #     self.force_reraise()
+        #   File "/usr/lib/python3/dist-packages/oslo_utils/excutils.py", line 200, in force_reraise
+        #     raise self.value
+        #   File "/usr/lib/python3/dist-packages/neutron_lib/db/api.py", line 135, in wrapped
+        #     return f(*args, **kwargs)
+        #   File "/usr/lib/python3/dist-packages/oslo_db/api.py", line 154, in wrapper
+        #     ectxt.value = e.inner_exc
+        #   File "/usr/lib/python3/dist-packages/oslo_utils/excutils.py", line 227, in __exit__
+        #     self.force_reraise()
+        #   File "/usr/lib/python3/dist-packages/oslo_utils/excutils.py", line 200, in force_reraise
+        #     raise self.value
+        #   File "/usr/lib/python3/dist-packages/oslo_db/api.py", line 142, in wrapper
+        #     return f(*args, **kwargs)
+        #   File "/usr/lib/python3/dist-packages/neutron_lib/db/api.py", line 183, in wrapped
+        #     LOG.debug("Retry wrapper got retriable exception: %s", e)
+        #   File "/usr/lib/python3/dist-packages/oslo_utils/excutils.py", line 227, in __exit__
+        #     self.force_reraise()
+        #   File "/usr/lib/python3/dist-packages/oslo_utils/excutils.py", line 200, in force_reraise
+        #     raise self.value
+        #   File "/usr/lib/python3/dist-packages/neutron_lib/db/api.py", line 179, in wrapped
+        #     return f(*dup_args, **dup_kwargs)
+        #   File "/usr/lib/python3/dist-packages/neutron/db/db_base_plugin_v2.py", line 1601, in get_ports
+        #     lazy_fields = [models_v2.Port.port_forwardings,
+        # AttributeError: type object 'Port' has no attribute 'port_forwardings'
+        _ = l3.Router()
 
         super(CalicoPlugin, self).__init__()
 
