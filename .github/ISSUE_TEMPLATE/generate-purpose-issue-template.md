@@ -1,3 +1,12 @@
+---
+name: Generate Purpose Issue Template
+about: Generate Purpose Issue Template
+title: ''
+labels: ''
+assignees: ''
+
+---
+
 <!--- Provide a general summary of the issue in the Title above -->
 
 ## Expected Behavior
