@@ -59,7 +59,6 @@ $argList = @(`
 if (Get-IsContainerdRunning)
 {
     Write-Host "Detected containerd running, configuring kubelet for containerd"
-    $argList += "--container-runtime=remote"
     $argList += "--container-runtime-endpoint=npipe:////.//pipe//containerd-containerd"
 }
 else
