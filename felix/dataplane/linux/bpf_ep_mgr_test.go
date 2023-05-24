@@ -98,9 +98,11 @@ func (m *mockDataplane) loadDefaultPolicies() error {
 	return nil
 }
 
-func (m *mockDataplane) ensureProgramAttached(ap attachPoint) error {
+func (m *mockDataplane) ensureProgramAttached(ap attachPoint) (bpf.AttachResult, error) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
+
+	var res tc.AttachResult // we don't care about the values
 
 	if apxdp, ok := ap.(*xdp.AttachPoint); ok {
 		apxdp.HookLayout = hook.Layout{
@@ -111,11 +113,11 @@ func (m *mockDataplane) ensureProgramAttached(ap attachPoint) error {
 
 	key := ap.IfaceName() + ":" + ap.HookName().String()
 	if _, exists := m.progs[key]; exists {
-		return nil
+		return res, nil
 	}
 	m.lastProgID += 1
 	m.progs[key] = m.lastProgID
-	return nil
+	return res, nil
 }
 
 func (m *mockDataplane) ensureNoProgram(ap attachPoint) error {
@@ -129,8 +131,8 @@ func (m *mockDataplane) ensureNoProgram(ap attachPoint) error {
 	return nil
 }
 
-func (m *mockDataplane) ensureQdisc(iface string) error {
-	return nil
+func (m *mockDataplane) ensureQdisc(iface string) (bool, error) {
+	return false, nil
 }
 
 func (m *mockDataplane) updatePolicyProgram(rules polprog.Rules, polDir string, ap attachPoint) error {
