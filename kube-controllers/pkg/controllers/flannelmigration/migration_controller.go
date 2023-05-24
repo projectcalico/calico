@@ -298,7 +298,7 @@ func (c *flannelMigrationController) readAndUpdateFlannelEnvConfig() error {
 	// Convert subnet.env content to json string and update flannel-migration-config ConfigMap.
 	// So that it could be populated into migration controller pod next time it starts.
 	val := strings.Replace(data, "\n", ";", -1)
-	err = updateConfigMapValue(c.k8sClientset, c.config.FlannelDaemonsetNamespace, migrationConfigMapName, migrationConfigMapEnvKey, val)
+	err = updateConfigMapValue(c.k8sClientset, c.config.CalicoDaemonsetNamespace, migrationConfigMapName, migrationConfigMapEnvKey, val)
 	if err != nil {
 		return err
 	}
@@ -355,7 +355,7 @@ func (c *flannelMigrationController) CheckShouldMigrate() (bool, error) {
 
 	// Update calico-config ConfigMap veth_mtu.
 	// So that it could be populated into calico-node pods.
-	err = updateConfigMapValue(c.k8sClientset, c.config.FlannelDaemonsetNamespace, calicoConfigMapName, calicoConfigMapMtuKey, fmt.Sprintf("%d", c.config.FlannelMTU))
+	err = updateConfigMapValue(c.k8sClientset, c.config.CalicoDaemonsetNamespace, calicoConfigMapName, calicoConfigMapMtuKey, fmt.Sprintf("%d", c.config.FlannelMTU))
 	if err != nil {
 		return false, err
 	}
