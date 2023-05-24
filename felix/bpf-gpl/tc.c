@@ -583,7 +583,8 @@ static CALI_BPF_INLINE enum do_nat_res do_nat(struct cali_tc_ctx *ctx,
 					      int ct_rc,
 					      struct ct_create_ctx ct_ctx_nat,
 					      bool *is_dnat,
-					      __u32 *seen_mark)
+					      __u32 *seen_mark,
+					      bool in_place)
 {
 	int res = 0;
 	bool encap_needed = false;
@@ -740,6 +741,28 @@ static CALI_BPF_INLINE enum do_nat_res do_nat(struct cali_tc_ctx *ctx,
 					ip_hdr(ctx)->protocol == IPPROTO_UDP ? BPF_F_MARK_MANGLED_0 : 0);
 		}
 
+		if (!in_place) {
+			/* updating related icmp inner header. Because it can be anywhere
+			 * and we are not updating in-place, we need to write it back
+			 * before we update the csum.
+			 */
+			int offset = l3_csum_off - offsetof(struct iphdr, check);
+
+			if (bpf_skb_store_bytes(ctx->skb, offset, ip_hdr(ctx), ctx->ipheader_len, 0)) {
+				CALI_DEBUG("Too short\n");
+				deny_reason(ctx, CALI_REASON_SHORT);
+				goto deny;
+			}
+
+			offset += ctx->ipheader_len;
+
+			if (bpf_skb_store_bytes(ctx->skb, offset, ctx->scratch->l4, 8, 0)) {
+				CALI_DEBUG("Too short\n");
+				deny_reason(ctx, CALI_REASON_SHORT);
+				goto deny;
+			}
+		}
+
 		res |= bpf_l3_csum_replace(ctx->skb, l3_csum_off, state->ip_src, state->ct_result.nat_sip, 4);
 		res |= bpf_l3_csum_replace(ctx->skb, l3_csum_off, state->ip_dst, state->post_nat_ip_dst, 4);
 		/* From now on, the packet has a new source IP */
@@ -837,6 +860,28 @@ static CALI_BPF_INLINE enum do_nat_res do_nat(struct cali_tc_ctx *ctx,
 				bpf_htons(state->dport), bpf_htons(state->ct_result.nat_sport ? : state->dport),
 				bpf_htons(state->sport), bpf_htons(state->ct_result.nat_port),
 				ip_hdr(ctx)->protocol == IPPROTO_UDP ? BPF_F_MARK_MANGLED_0 : 0);
+		}
+
+		if (!in_place) {
+			/* updating related icmp inner header. Because it can be anywhere
+			 * and we are not updating in-place, we need to write it back
+			 * before we update the csum.
+			 */
+			int offset = l3_csum_off - offsetof(struct iphdr, check);
+
+			if (bpf_skb_store_bytes(ctx->skb, offset, ip_hdr(ctx), ctx->ipheader_len, 0)) {
+				CALI_DEBUG("Too short\n");
+				deny_reason(ctx, CALI_REASON_SHORT);
+				goto deny;
+			}
+
+			offset += ctx->ipheader_len;
+
+			if (bpf_skb_store_bytes(ctx->skb, offset, ctx->scratch->l4, 8, 0)) {
+				CALI_DEBUG("Too short\n");
+				deny_reason(ctx, CALI_REASON_SHORT);
+				goto deny;
+			}
 		}
 
 		CALI_VERB("L3 checksum update (csum is at %d) port from %x to %x\n",
@@ -1128,7 +1173,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 		}
 	}
 
-	l3_csum_off = skb_iphdr_offset(ctx) +  offsetof(struct iphdr, check);
+	l3_csum_off = skb_iphdr_offset(ctx) + offsetof(struct iphdr, check);
 
 	if (ct_related) {
 		if (ip_hdr(ctx)->protocol == IPPROTO_ICMP) {
@@ -1356,7 +1401,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 
 	case CALI_CT_ESTABLISHED_DNAT:
 	case CALI_CT_ESTABLISHED_SNAT:
-		nat_res = do_nat(ctx, l3_csum_off, l4_csum_off, false, ct_rc, ct_ctx_nat, &is_dnat, &seen_mark);
+		nat_res = do_nat(ctx, l3_csum_off, l4_csum_off, false, ct_rc, ct_ctx_nat, &is_dnat, &seen_mark, true);
 		if (nat_res == NAT_ICMP_TOO_BIG) {
 			goto icmp_send_reply;
 		}
@@ -1430,7 +1475,7 @@ int calico_tc_skb_icmp_inner_nat(struct __sk_buff *skb)
 	struct cali_tc_state *state = ctx->state;
 	bool ct_related = ct_result_is_related(state->ct_result.rc);
 	int ct_rc = ct_result_rc(state->ct_result.rc);
-
+	
 	CALI_DEBUG("Entering calico_tc_skb_icmp_inner_nat\n");
 
 	if (!ct_related) {
@@ -1453,6 +1498,7 @@ int calico_tc_skb_icmp_inner_nat(struct __sk_buff *skb)
 
 	__u8 pkt[60 /* max ip size */ + 8 /* what must be there */] = { /* zero it to shut up verifier */ };
 	int inner_ip_offset = skb_l4hdr_offset(ctx) + ICMP_SIZE;
+	size_t l3_csum_off = inner_ip_offset + offsetof(struct iphdr, check);
 
 	if (bpf_skb_load_bytes(ctx->skb, inner_ip_offset, pkt, IP_SIZE)) {
 		CALI_DEBUG("Too short\n");
@@ -1462,6 +1508,10 @@ int calico_tc_skb_icmp_inner_nat(struct __sk_buff *skb)
 	ctx->ip_header = (struct iphdr*)pkt;
 	ctx->ipheader_len = ip_hdr(ctx)->ihl * 4;
 	if (ctx->ipheader_len > 60) {
+		CALI_DEBUG("this cannot be!\n");
+		goto deny;
+	}
+	if (ctx->ipheader_len < 20) {
 		CALI_DEBUG("this cannot be!\n");
 		goto deny;
 	}
@@ -1496,6 +1546,15 @@ int calico_tc_skb_icmp_inner_nat(struct __sk_buff *skb)
 			ct_rc = CALI_CT_ESTABLISHED_SNAT;
 			break;
 	}
+
+	bool is_dnat = false;
+	enum do_nat_res nat_res = NAT_ALLOW;
+	__u32 seen_mark = ctx->fwd.mark;
+	bool fib = true;
+	struct ct_create_ctx ct_ctx_nat = {}; /* CT_NEW is not the option so pass an empty one. */
+
+	nat_res = do_nat(ctx, l3_csum_off, 0, false, ct_rc, ct_ctx_nat, &is_dnat, &seen_mark, false);
+	ctx->fwd = post_nat(ctx, nat_res, fib, seen_mark, is_dnat);
 
 allow:
 	fwd_fib_set(&ctx->fwd, true);

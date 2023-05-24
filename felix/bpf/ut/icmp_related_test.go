@@ -287,6 +287,8 @@ func makeICMPError(ipInner *layers.IPv4, l4 gopacket.SerializableLayer, icmpType
 	Expect(err).NotTo(HaveOccurred())
 	payload := payloadBuf.Bytes()
 
+	fmt.Printf("inner reply = %+v\n", gopacket.NewPacket(payload, layers.LayerTypeIPv4, gopacket.Default))
+
 	eth := &layers.Ethernet{
 		SrcMAC:       []byte{0xee, 0, 0, 0, 0, 1},
 		DstMAC:       []byte{0xfe, 0, 0, 0, 0, 2},
@@ -334,6 +336,7 @@ func checkICMP(bytes []byte, outSrc, outDst, innerSrc, innerDst net.IP,
 	Expect(payloadL).NotTo(BeNil())
 	origPkt := gopacket.NewPacket(payloadL.Payload(), layers.LayerTypeIPv4, gopacket.Default)
 	Expect(origPkt).NotTo(BeNil())
+	fmt.Printf("origPkt = %+v\n", origPkt)
 
 	ipv4L = origPkt.Layer(layers.LayerTypeIPv4)
 	Expect(ipv4L).NotTo(BeNil())
