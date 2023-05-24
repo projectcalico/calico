@@ -64,6 +64,7 @@ type mockDataplane struct {
 	routes     map[ip.V4CIDR]struct{}
 
 	ensureStartedFn    func()
+	ensureQdiscFn      func(string) (bool, error)
 	interfaceByIndexFn func(ifindex int) (*net.Interface, error)
 }
 
@@ -98,9 +99,11 @@ func (m *mockDataplane) loadDefaultPolicies() error {
 	return nil
 }
 
-func (m *mockDataplane) ensureProgramAttached(ap attachPoint) error {
+func (m *mockDataplane) ensureProgramAttached(ap attachPoint) (bpf.AttachResult, error) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
+
+	var res tc.AttachResult // we don't care about the values
 
 	if apxdp, ok := ap.(*xdp.AttachPoint); ok {
 		apxdp.HookLayout = hook.Layout{
@@ -111,11 +114,11 @@ func (m *mockDataplane) ensureProgramAttached(ap attachPoint) error {
 
 	key := ap.IfaceName() + ":" + ap.HookName().String()
 	if _, exists := m.progs[key]; exists {
-		return nil
+		return res, nil
 	}
 	m.lastProgID += 1
 	m.progs[key] = m.lastProgID
-	return nil
+	return res, nil
 }
 
 func (m *mockDataplane) ensureNoProgram(ap attachPoint) error {
@@ -129,8 +132,11 @@ func (m *mockDataplane) ensureNoProgram(ap attachPoint) error {
 	return nil
 }
 
-func (m *mockDataplane) ensureQdisc(iface string) error {
-	return nil
+func (m *mockDataplane) ensureQdisc(iface string) (bool, error) {
+	if m.ensureQdiscFn != nil {
+		return m.ensureQdiscFn(iface)
+	}
+	return false, nil
 }
 
 func (m *mockDataplane) updatePolicyProgram(rules polprog.Rules, polDir string, ap attachPoint) error {
@@ -200,6 +206,10 @@ func (m *mockDataplane) ruleMatchID(dir, action, owner, name string, idx int) po
 	h := fnv.New64a()
 	h.Write([]byte(action + owner + dir + strconv.Itoa(idx+1) + name))
 	return h.Sum64()
+}
+
+func (m *mockDataplane) queryClassifier(ifindex, handle, prio int, ingress bool) (int, error) {
+	return 0, nil
 }
 
 var fdCounter = uint32(1234)
@@ -1151,6 +1161,12 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		})
 
 		It("should not update the wep log filter if only policy changes", func() {
+			bpfEpMgr.ensureQdiscFn = func(iface string) (bool, error) {
+				if iface == "cali12345" {
+					return true, nil
+				}
+				return false, nil
+			}
 			genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
 			genPolicy("default", "mypolicy")()
 			genWLUpdate("cali12345", "mypolicy")()
