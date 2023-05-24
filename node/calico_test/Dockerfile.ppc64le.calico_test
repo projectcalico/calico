@@ -33,7 +33,7 @@
 # - eliminate most isolation, (--uts=host --pid=host --net=host --privileged)
 # - volume mount your ST source code
 # - run 'nosetests'
-FROM ppc64le/alpine:3.6
+FROM ppc64le/alpine:3.18
 MAINTAINER David Wilder <wilder@us.ibm.com>
 
 # Running STs in this container requires that it has all dependencies installed

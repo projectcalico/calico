@@ -1,7 +1,7 @@
 ARG QEMU_IMAGE
 FROM ${QEMU_IMAGE} as qemu
 
-FROM ppc64le/alpine:3.10
+FROM ppc64le/alpine:3.18
 # Enable non-native builds of this image on an amd64 hosts.
 # This must be the first RUN command in this file!
 MAINTAINER Tom Denham <tom@projectcalico.org>
