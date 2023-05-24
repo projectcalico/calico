@@ -104,8 +104,26 @@ func (ap *AttachPoint) loadObject(ipVer int, file string) (*libbpf.Obj, error) {
 	return obj, nil
 }
 
+type AttachResult struct {
+	progId int
+	prio   int
+	handle int
+}
+
+func (ar AttachResult) ProgID() int {
+	return ar.progId
+}
+
+func (ar AttachResult) Prio() int {
+	return ar.prio
+}
+
+func (ar AttachResult) Handle() int {
+	return ar.handle
+}
+
 // AttachProgram attaches a BPF program from a file to the TC attach point
-func (ap *AttachPoint) AttachProgram() (int, error) {
+func (ap *AttachPoint) AttachProgram() (bpf.AttachResult, error) {
 	logCxt := log.WithField("attachPoint", ap)
 
 	// By now the attach type specific generic set of programs is loaded and we
@@ -113,32 +131,34 @@ func (ap *AttachPoint) AttachProgram() (int, error) {
 	// configuration further to the selected set of programs.
 	binaryToLoad := path.Join(bpfdefs.ObjectDir, "tc_preamble.o")
 
+	var res AttachResult
+
 	/* XXX we should remember the tag of the program and skip the rest if the tag is
 	* still the same */
 	progsToClean, err := ap.listAttachedPrograms(true)
 	if err != nil {
-		return -1, err
+		return nil, err
 	}
 
 	obj, err := ap.loadObject(4, binaryToLoad)
 	if err != nil {
 		logCxt.Warn("Failed to load program")
-		return -1, fmt.Errorf("object v4: %w", err)
+		return nil, fmt.Errorf("object v4: %w", err)
 	}
 	defer obj.Close()
 
-	progId, err := obj.AttachClassifier("cali_tc_preamble", ap.Iface, ap.Hook == hook.Ingress)
+	res.progId, res.prio, res.handle, err = obj.AttachClassifier("cali_tc_preamble", ap.Iface, ap.Hook == hook.Ingress)
 	if err != nil {
 		logCxt.Warnf("Failed to attach to TC section cali_tc_preamble")
-		return -1, err
+		return nil, err
 	}
 	logCxt.Info("Program attached to TC.")
 
 	if err := ap.detachPrograms(progsToClean); err != nil {
-		return -1, err
+		return nil, err
 	}
 
-	return progId, nil
+	return res, nil
 }
 
 func (ap *AttachPoint) DetachProgram() error {
@@ -305,16 +325,16 @@ func (ap *AttachPoint) IsAttached() (bool, error) {
 }
 
 // EnsureQdisc makes sure that qdisc is attached to the given interface
-func EnsureQdisc(ifaceName string) error {
+func EnsureQdisc(ifaceName string) (bool, error) {
 	hasQdisc, err := HasQdisc(ifaceName)
 	if err != nil {
-		return err
+		return false, err
 	}
 	if hasQdisc {
 		log.WithField("iface", ifaceName).Debug("Already have a clsact qdisc on this interface")
-		return nil
+		return true, nil
 	}
-	return libbpf.CreateQDisc(ifaceName)
+	return false, libbpf.CreateQDisc(ifaceName)
 }
 
 func HasQdisc(ifaceName string) (bool, error) {
