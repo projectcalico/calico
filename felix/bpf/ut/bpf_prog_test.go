@@ -1224,7 +1224,24 @@ func testPacket(eth *layers.Ethernet, l3 gopacket.Layer, l4 gopacket.Layer, payl
 		payload: payload,
 	}
 	err := pkt.Generate()
-	return pkt.eth, pkt.ipv4, pkt.l4, pkt.payload, pkt.bytes, err
+
+	p := gopacket.NewPacket(pkt.bytes, layers.LayerTypeEthernet, gopacket.Default)
+
+	e := p.Layer(layers.LayerTypeEthernet).(*layers.Ethernet)
+	ip := p.Layer(layers.LayerTypeIPv4).(*layers.IPv4)
+
+	var l gopacket.Layer
+
+	switch ip.Protocol {
+	case layers.IPProtocolUDP:
+		l = p.Layer(layers.LayerTypeUDP)
+	case layers.IPProtocolTCP:
+		l = p.Layer(layers.LayerTypeTCP)
+	case layers.IPProtocolICMPv4:
+		l = p.Layer(layers.LayerTypeICMPv4)
+	}
+
+	return e, ip, l, pkt.payload, pkt.bytes, err
 }
 
 type Packet struct {
@@ -1351,6 +1368,7 @@ func (pkt *Packet) Generate() error {
 	pkt.handleEthernet()
 	pkt.setChecksum()
 	pkt.bytes, err = generatePacket(pkt.layers)
+
 	return err
 }
 
