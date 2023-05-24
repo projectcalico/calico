@@ -68,14 +68,14 @@ func NewNetworkMigrator(ctx context.Context, k8sClientset *kubernetes.Clientset,
 func (m *networkMigrator) Initialise() error {
 	// Set calico image
 	d := daemonset(m.config.CalicoDaemonsetName)
-	image, err := d.GetContainerImage(m.k8sClientset, namespaceKubeSystem, calicoNodeContainerName)
+	image, err := d.GetContainerImage(m.k8sClientset, m.config.CalicoDaemonsetNamespace, calicoNodeContainerName)
 	if err != nil {
 		return err
 	}
 	m.calicoImage = image
 
 	// Set calico CNI config file name
-	cniConf, err := d.GetContainerEnv(m.k8sClientset, namespaceKubeSystem, calicoCniContainerName, calicoCniConfigEnvName)
+	cniConf, err := d.GetContainerEnv(m.k8sClientset, m.config.CalicoDaemonsetNamespace, calicoCniContainerName, calicoCniConfigEnvName)
 	if err != nil {
 		return err
 	}
@@ -109,7 +109,7 @@ func (m *networkMigrator) removeFlannelNetworkAndInstallDummyCalicoCNI(node *v1.
 	// Run a remove-flannel pod with specified nodeName, this will bypass kube-scheduler.
 	// https://kubernetes.io/docs/concepts/configuration/assign-pod-node/#nodename
 	pod := k8spod("remove-flannel")
-	podLog, err := pod.RunPodOnNodeTillComplete(m.k8sClientset, namespaceKubeSystem, m.calicoImage, node.Name, cmd, m.config.CniConfigDir, true, true)
+	podLog, err := pod.RunPodOnNodeTillComplete(m.k8sClientset, m.config.CalicoDaemonsetNamespace, m.calicoImage, node.Name, cmd, m.config.CniConfigDir, true, true)
 	if podLog != "" {
 		log.Infof("remove-flannel pod logs: %s.", podLog)
 	}
@@ -127,7 +127,7 @@ func (m *networkMigrator) checkCalicoVxlan(node *v1.Node) error {
 	cmd := fmt.Sprintf("for i in $(seq 1 10); do ip link show %s && code=0 && break || code=$? && sleep 1; done; (exit $code)", calicoVxlanTunnelDeviceName)
 
 	pod := k8spod("check-calico")
-	podLog, err := pod.RunPodOnNodeTillComplete(m.k8sClientset, namespaceKubeSystem, m.calicoImage, node.Name, cmd, m.config.CniConfigDir, true, true)
+	podLog, err := pod.RunPodOnNodeTillComplete(m.k8sClientset, m.config.CalicoDaemonsetNamespace, m.calicoImage, node.Name, cmd, m.config.CniConfigDir, true, true)
 	if podLog != "" {
 		log.Infof("check-calico pod logs: %s.", podLog)
 	}
@@ -194,7 +194,7 @@ func (m *networkMigrator) setupCalicoNetworkForNode(node *v1.Node) error {
 
 	log.Infof("Wait up to 5 minutes for Calico daemonset pod to become Ready on %s.", node.Name)
 	// Calico daemonset pod should start running now.
-	err = n.waitPodReadyForNode(m.k8sClientset, namespaceKubeSystem, 1*time.Second, 5*time.Minute, calicoPodLabel)
+	err = n.waitPodReadyForNode(m.k8sClientset, m.config.CalicoDaemonsetNamespace, 1*time.Second, 5*time.Minute, calicoPodLabel)
 	if err != nil {
 		log.WithError(err).Errorf("Calico node pod failed on node %s", node.Name)
 		return err
