@@ -66,29 +66,51 @@ struct bpf_tc_opts bpf_tc_program_attach(struct bpf_object *obj, char *secName, 
 	return attach;
 }
 
-int bpf_tc_query_iface (int ifIndex, struct bpf_tc_opts opts, int isIngress) {
+void bpf_tc_program_detach(int ifindex, int handle, int pref, bool ingress)
+{
+	DECLARE_LIBBPF_OPTS(bpf_tc_hook, hook,
+			.ifindex = ifindex,
+			.attach_point = ingress ? BPF_TC_INGRESS : BPF_TC_EGRESS,
+			);
+	DECLARE_LIBBPF_OPTS(bpf_tc_opts, opts,
+			.handle = handle,
+			.priority = pref,
+			);
 
-	DECLARE_LIBBPF_OPTS(bpf_tc_hook, hook, .attach_point = BPF_TC_EGRESS);
-	if (isIngress) {
-		hook.attach_point = BPF_TC_INGRESS;
-	}
-	hook.ifindex = ifIndex;
-	opts.prog_fd = opts.prog_id = opts.flags = 0;
-	set_errno(bpf_tc_query(&hook, &opts));
-	return opts.prog_id;
+	set_errno(bpf_tc_detach(&hook, &opts));
 }
 
-void bpf_tc_create_qdisc (int ifIndex) {
+struct bpf_tc_opts bpf_tc_program_query(int ifindex, int handle, int pref, bool ingress)
+{
+	DECLARE_LIBBPF_OPTS(bpf_tc_hook, hook,
+			.ifindex = ifindex,
+			.attach_point = ingress ? BPF_TC_INGRESS : BPF_TC_EGRESS,
+			);
+	DECLARE_LIBBPF_OPTS(bpf_tc_opts, opts,
+			.handle = handle,
+			.priority = pref,
+			);
+
+	set_errno(bpf_tc_query(&hook, &opts));
+
+	return opts;
+}
+
+void bpf_tc_create_qdisc(int ifIndex)
+{
 	DECLARE_LIBBPF_OPTS(bpf_tc_hook, hook, .attach_point = BPF_TC_INGRESS);
 	hook.ifindex = ifIndex;
 	set_errno(bpf_tc_hook_create(&hook));
 }
 
-void bpf_tc_remove_qdisc (int ifIndex) {
-        DECLARE_LIBBPF_OPTS(bpf_tc_hook, hook, .attach_point = BPF_TC_EGRESS | BPF_TC_INGRESS);
-        hook.ifindex = ifIndex;
+void bpf_tc_remove_qdisc(int ifindex)
+{
+        DECLARE_LIBBPF_OPTS(bpf_tc_hook, hook,
+			.attach_point = BPF_TC_EGRESS | BPF_TC_INGRESS,
+			.ifindex = ifindex,
+			);
+
         set_errno(bpf_tc_hook_destroy(&hook));
-        return;
 }
 
 int bpf_update_jump_map(struct bpf_object *obj, char* mapName, char *progName, int progIndex) {

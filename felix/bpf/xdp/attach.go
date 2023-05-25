@@ -115,7 +115,13 @@ func ConfigureProgram(m *libbpf.Map, iface string, globalData *libbpf.XDPGlobalD
 	return nil
 }
 
-func (ap *AttachPoint) AttachProgram() (int, error) {
+type AttachResult int
+
+func (ar AttachResult) ProgID() int {
+	return int(ar)
+}
+
+func (ap *AttachPoint) AttachProgram() (bpf.AttachResult, error) {
 	// By now the attach type specific generic set of programs is loaded and we
 	// only need to load and configure the preamble that will pass the
 	// configuration further to the selected set of programs.
@@ -123,7 +129,7 @@ func (ap *AttachPoint) AttachProgram() (int, error) {
 
 	obj, err := libbpf.OpenObject(binaryToLoad)
 	if err != nil {
-		return -1, err
+		return nil, err
 	}
 	defer obj.Close()
 
@@ -137,14 +143,14 @@ func (ap *AttachPoint) AttachProgram() (int, error) {
 			globals.Jumps[tcdefs.ProgIndexPolicy] = uint32(ap.PolicyIdx(4))
 
 			if err := ConfigureProgram(m, ap.Iface, &globals); err != nil {
-				return -1, err
+				return nil, err
 			}
 			continue
 		}
 		// TODO: We need to set map size here like tc.
 		pinDir := bpf.MapPinDir(m.Type(), m.Name(), ap.Iface, hook.XDP)
 		if err := m.SetPinPath(path.Join(pinDir, m.Name())); err != nil {
-			return -1, fmt.Errorf("error pinning map %s: %w", m.Name(), err)
+			return nil, fmt.Errorf("error pinning map %s: %w", m.Name(), err)
 		}
 	}
 
@@ -152,18 +158,18 @@ func (ap *AttachPoint) AttachProgram() (int, error) {
 	progID, isAttached := ap.AlreadyAttached(binaryToLoad)
 	if isAttached {
 		ap.Log().Infof("Programs already attached, skip reattaching %s", binaryToLoad)
-		return progID, nil
+		return AttachResult(progID), nil
 	}
 	ap.Log().Infof("Continue with attaching BPF program %s", binaryToLoad)
 
 	if err := obj.Load(); err != nil {
 		ap.Log().Warn("Failed to load program")
-		return -1, fmt.Errorf("error loading program: %w", err)
+		return nil, fmt.Errorf("error loading program: %w", err)
 	}
 
 	oldID, err := ap.ProgramID()
 	if err != nil {
-		return -1, fmt.Errorf("failed to get the attached XDP program ID: %w", err)
+		return nil, fmt.Errorf("failed to get the attached XDP program ID: %w", err)
 	}
 
 	attachmentSucceeded := false
@@ -182,11 +188,11 @@ func (ap *AttachPoint) AttachProgram() (int, error) {
 	}
 
 	if !attachmentSucceeded {
-		return -1, fmt.Errorf("failed to attach XDP program with program name %v to interface %v",
+		return nil, fmt.Errorf("failed to attach XDP program with program name %v to interface %v",
 			ap.ProgramName(), ap.Iface)
 	}
 
-	return progID, nil
+	return AttachResult(progID), nil
 }
 
 func (ap *AttachPoint) DetachProgram() error {
