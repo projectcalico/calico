@@ -26,6 +26,8 @@ global_job_config:
     - export SECRET_KEY=$HOME/secrets/marvin.txt
     - export GCLOUD_ARGS='--zone us-east1-c --project tigera-wp-tcp-redirect'
     - export HOST=ubuntu@binaries-projectcalico-org
+    - sudo apt-get update -y
+    - sudo apt-get install -y moreutils
 
 blocks:
   - name: 'Publish openstack packages'
