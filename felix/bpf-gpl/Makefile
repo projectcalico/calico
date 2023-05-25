@@ -78,8 +78,8 @@ ut/%.ll: ut/%.c ut/ut.h tc.c tc.d
 tc_preamble.ll: tc_preamble.c tc_preamble.d
 	$(CC) $(CFLAGS) -c $< -o $@
 
-#xdp_preamble.ll: xdp_preamble.c xdp_preamble.d
-#	$(CC) $(CFLAGS) -DCALI_COMPILE_FLAGS=64 -c $< -o $@
+xdp_preamble.ll: xdp_preamble.c xdp_preamble.d
+	$(CC) $(CFLAGS) -DCALI_COMPILE_FLAGS=64 -c $< -o $@
 
 policy_default.ll: policy_default.c policy_default.d
 	$(CC) $(CFLAGS) -c $< -o $@
@@ -98,10 +98,10 @@ test%.ll: tc.c tc.d calculate-flags
 	$(COMPILE)
 #test%_v6.ll: tc6.c tc.d calculate-flags
 #	$(COMPILE)
-#xdp%.ll: xdp.c xdp.d calculate-flags
-#	$(COMPILE)
-#test_xdp%.ll: xdp.c xdp.d calculate-flags
-#	$(COMPILE)
+xdp%.ll: xdp.c xdp.d calculate-flags
+	$(COMPILE)
+test_xdp%.ll: xdp.c xdp.d calculate-flags
+	$(COMPILE)
 
 LINK=$(LD) -march=bpf -filetype=obj -o $@ $<
 bin/tc_preamble.o: tc_preamble.ll | bin
