@@ -83,6 +83,13 @@ func TestICMPRelatedPlain(t *testing.T) {
 
 	runBpfTest(t, "calico_to_workload_ep", rulesAllowUDP, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(icmpUNreachable)
+		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
+		fmt.Printf("pktR = %+v\n", pktR)
+		payloadL := pktR.ApplicationLayer()
+		Expect(payloadL).NotTo(BeNil())
+		inner := gopacket.NewPacket(payloadL.Payload(), layers.LayerTypeIPv4, gopacket.Default)
+		Expect(inner).NotTo(BeNil())
+		fmt.Printf("inner = %+v\n", inner)
 		Expect(err).NotTo(HaveOccurred())
 		// we have a normal ct record, it is related, must be allowed
 		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
@@ -280,6 +287,8 @@ func makeICMPError(ipInner *layers.IPv4, l4 gopacket.SerializableLayer, icmpType
 	Expect(err).NotTo(HaveOccurred())
 	payload := payloadBuf.Bytes()
 
+	fmt.Printf("inner reply = %+v\n", gopacket.NewPacket(payload, layers.LayerTypeIPv4, gopacket.Default))
+
 	eth := &layers.Ethernet{
 		SrcMAC:       []byte{0xee, 0, 0, 0, 0, 1},
 		DstMAC:       []byte{0xfe, 0, 0, 0, 0, 2},
@@ -327,6 +336,7 @@ func checkICMP(bytes []byte, outSrc, outDst, innerSrc, innerDst net.IP,
 	Expect(payloadL).NotTo(BeNil())
 	origPkt := gopacket.NewPacket(payloadL.Payload(), layers.LayerTypeIPv4, gopacket.Default)
 	Expect(origPkt).NotTo(BeNil())
+	fmt.Printf("origPkt = %+v\n", origPkt)
 
 	ipv4L = origPkt.Layer(layers.LayerTypeIPv4)
 	Expect(ipv4L).NotTo(BeNil())
