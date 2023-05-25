@@ -18,10 +18,10 @@ package intdataplane
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"hash/fnv"
 	"net"
-	"os"
 	"regexp"
 	"strconv"
 	"sync"
@@ -63,7 +63,9 @@ type mockDataplane struct {
 	policy     map[string]polprog.Rules
 	routes     map[ip.V4CIDR]struct{}
 
-	ensureStartedFn func()
+	ensureStartedFn    func()
+	ensureQdiscFn      func(string) (bool, error)
+	interfaceByIndexFn func(ifindex int) (*net.Interface, error)
 }
 
 func newMockDataplane() *mockDataplane {
@@ -81,6 +83,14 @@ func (m *mockDataplane) ensureStarted() {
 	}
 }
 
+func (m *mockDataplane) interfaceByIndex(ifindex int) (*net.Interface, error) {
+	if m.interfaceByIndexFn != nil {
+		return m.interfaceByIndexFn(ifindex)
+	}
+
+	return nil, errors.New("no such network interface")
+}
+
 func (m *mockDataplane) ensureBPFDevices() error {
 	return nil
 }
@@ -89,9 +99,11 @@ func (m *mockDataplane) loadDefaultPolicies() error {
 	return nil
 }
 
-func (m *mockDataplane) ensureProgramAttached(ap attachPoint) error {
+func (m *mockDataplane) ensureProgramAttached(ap attachPoint) (bpf.AttachResult, error) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
+
+	var res tc.AttachResult // we don't care about the values
 
 	if apxdp, ok := ap.(*xdp.AttachPoint); ok {
 		apxdp.HookLayout = hook.Layout{
@@ -102,11 +114,11 @@ func (m *mockDataplane) ensureProgramAttached(ap attachPoint) error {
 
 	key := ap.IfaceName() + ":" + ap.HookName().String()
 	if _, exists := m.progs[key]; exists {
-		return nil
+		return res, nil
 	}
 	m.lastProgID += 1
 	m.progs[key] = m.lastProgID
-	return nil
+	return res, nil
 }
 
 func (m *mockDataplane) ensureNoProgram(ap attachPoint) error {
@@ -120,8 +132,11 @@ func (m *mockDataplane) ensureNoProgram(ap attachPoint) error {
 	return nil
 }
 
-func (m *mockDataplane) ensureQdisc(iface string) error {
-	return nil
+func (m *mockDataplane) ensureQdisc(iface string) (bool, error) {
+	if m.ensureQdiscFn != nil {
+		return m.ensureQdiscFn(iface)
+	}
+	return false, nil
 }
 
 func (m *mockDataplane) updatePolicyProgram(rules polprog.Rules, polDir string, ap attachPoint) error {
@@ -193,17 +208,15 @@ func (m *mockDataplane) ruleMatchID(dir, action, owner, name string, idx int) po
 	return h.Sum64()
 }
 
-func (m *mockDataplane) loadTCLogFilter(ap *tc.AttachPoint) (bpf.ProgFD, int, error) {
-	file, err := os.CreateTemp("/tmp", "test_file")
-	if err != nil {
-		return 0, 0, err
-	}
+func (m *mockDataplane) queryClassifier(ifindex, handle, prio int, ingress bool) (int, error) {
+	return 0, nil
+}
 
-	if err := os.Remove(file.Name()); err != nil {
-		return 0, 0, err
-	}
+var fdCounter = uint32(1234)
 
-	return bpf.ProgFD(file.Fd()), ap.LogFilterIdx, nil
+func (m *mockDataplane) loadTCLogFilter(ap *tc.AttachPoint) (fileDescriptor, int, error) {
+	fdCounter++
+	return mockFD(fdCounter), ap.LogFilterIdx, nil
 }
 
 type mockProgMapDP struct {
@@ -211,18 +224,21 @@ type mockProgMapDP struct {
 }
 
 func (m *mockProgMapDP) loadPolicyProgram(_ string, _ proto.IPVersion, _ polprog.Rules, _ maps.Map, _ ...polprog.Option) (
-	bpf.ProgFD, asm.Insns, error) {
+	fileDescriptor, asm.Insns, error) {
+	fdCounter++
 
-	file, err := os.CreateTemp("/tmp", "test_file")
-	if err != nil {
-		return 0, nil, err
-	}
+	return mockFD(fdCounter), []asm.Insn{{Comments: []string{"blah"}}}, nil
+}
 
-	if err := os.Remove(file.Name()); err != nil {
-		return 0, nil, err
-	}
+type mockFD uint32
 
-	return bpf.ProgFD(file.Fd()), []asm.Insn{{Comments: []string{"blah"}}}, nil
+func (f mockFD) Close() error {
+	log.WithField("fd", int(f)).Debug("Closing mockFD")
+	return nil
+}
+
+func (f mockFD) FD() uint32 {
+	return uint32(f)
 }
 
 var _ = Describe("BPF Endpoint Manager", func() {
@@ -1142,6 +1158,96 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 			Expect(jumpMap.Contents).To(HaveLen(0))
 			Expect(xdpJumpMap.Contents).To(HaveLen(0))
+		})
+
+		It("should not update the wep log filter if only policy changes", func() {
+			dp.ensureQdiscFn = func(iface string) (bool, error) {
+				if iface == "cali12345" {
+					return true, nil
+				}
+				return false, nil
+			}
+			genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
+			genPolicy("default", "mypolicy")()
+			genWLUpdate("cali12345", "mypolicy")()
+
+			err := bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(jumpMap.Contents).To(HaveLen(4)) // 2x policy and 2x filter
+			Expect(xdpJumpMap.Contents).To(HaveLen(0))
+
+			jumpCopyContents := make(map[string]string, len(jumpMap.Contents))
+			for k, v := range jumpMap.Contents {
+				jumpCopyContents[k] = v
+			}
+
+			genPolicy("default", "anotherpolicy")()
+			genWLUpdate("cali12345", "anotherpolicy")()
+
+			err = bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(len(jumpCopyContents)).To(Equal(len(jumpMap.Contents)))
+			Expect(jumpCopyContents).NotTo(Equal(jumpMap.Contents))
+
+			changes := 0
+
+			for k, v := range jumpCopyContents {
+				if v != jumpMap.Contents[k] {
+					changes++
+				}
+			}
+
+			Expect(changes).To(Equal(2)) // only policies have changed
+
+			// restart
+
+			jumpCopyContents = make(map[string]string, len(jumpMap.Contents))
+			for k, v := range jumpMap.Contents {
+				jumpCopyContents[k] = v
+			}
+
+			dp = newMockDataplane()
+			mockDP = &mockProgMapDP{
+				dp,
+			}
+			newBpfEpMgr()
+
+			bpfEpMgr.bpfLogLevel = "debug"
+			bpfEpMgr.logFilters = map[string]string{"all": "tcp"}
+
+			dp.interfaceByIndexFn = func(ifindex int) (*net.Interface, error) {
+				if ifindex == 15 {
+					return &net.Interface{
+						Index: 15,
+						Name:  "cali12345",
+						Flags: net.FlagUp,
+					}, nil
+				}
+				return nil, errors.New("no such network interface")
+			}
+			genPolicy("default", "anotherpolicy")()
+			genWLUpdate("cali12345", "anotherpolicy")()
+
+			err = bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(len(jumpCopyContents)).To(Equal(len(jumpMap.Contents)))
+			Expect(jumpCopyContents).NotTo(Equal(jumpMap.Contents))
+
+			changes = 0
+
+			for k, v := range jumpCopyContents {
+				if v != jumpMap.Contents[k] {
+					changes++
+				}
+			}
+
+			// After a restart, even devices that are in ready state get both
+			// programs reapplied as the configuration of logfilters coul dhave
+			// changed.
+			Expect(changes).To(Equal(4))
 		})
 	})
 })
