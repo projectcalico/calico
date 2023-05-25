@@ -181,7 +181,7 @@ static CALI_BPF_INLINE int tc_state_fill_from_nexthdr(struct cali_tc_ctx *ctx, b
 			__builtin_memcpy(ctx->scratch->l4, ((void*)ip_hdr(ctx))+IP_SIZE, UDP_SIZE);
 			break;
 		}
-	} else {
+	} else if (!CALI_F_XDP) {
 		switch (ctx->state->ip_proto) {
 		case IPPROTO_TCP:
 			/* Load the L4 header in case there were ip options as we loaded the options instead. */
@@ -216,6 +216,9 @@ static CALI_BPF_INLINE int tc_state_fill_from_nexthdr(struct cali_tc_ctx *ctx, b
 			}
 			break;
 		}
+	} else {
+		CALI_DEBUG("IP options in XDP not supported\n");
+		goto deny;
 	}
 
 	switch (ctx->state->ip_proto) {
