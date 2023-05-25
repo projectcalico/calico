@@ -65,7 +65,7 @@ static CALI_BPF_INLINE int icmp_v4_reply(struct cali_tc_ctx *ctx,
 	CALI_DEBUG("Len after insert %d\n", len);
 
 	/* ICMP reply carries the IP header + at least 8 bytes of data. */
-	if (skb_refresh_validate_ptrs(ctx, len - IP_SIZE - (CALI_F_L3_DEV ? 0 : ETH_SIZE))) {
+	if (skb_refresh_validate_ptrs(ctx, len - IP_SIZE - (CALI_F_L3 ? 0 : ETH_SIZE))) {
 		deny_reason(ctx, CALI_REASON_SHORT);
 		CALI_DEBUG("ICMP v4 reply: too short after making room\n");
 		return -1;
