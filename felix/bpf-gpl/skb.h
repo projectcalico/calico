@@ -70,7 +70,8 @@ static CALI_BPF_INLINE long skb_iphdr_offset(struct cali_tc_ctx *ctx)
 	if (CALI_F_IPIP_ENCAPPED) {
 		// Ingress on an IPIP tunnel: skb is [ether|outer IP|inner IP|payload]
 		// TODO: we need to consider different types of IPIP tunnels like 4in6 or 6in4
-		return sizeof(struct ethhdr) + ctx->ipheader_len;
+		// XXX no support for ip options in ipip heder
+		return sizeof(struct ethhdr) + IP_SIZE;
 	} else if (CALI_F_L3) {
 		// Egress on an IPIP tunnel, or any other l3 devices (wireguard) both directions:
 		// skb is [inner IP|payload]
