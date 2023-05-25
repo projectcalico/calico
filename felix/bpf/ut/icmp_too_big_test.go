@@ -38,7 +38,7 @@ func TestICMPTooBig(t *testing.T) {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.Retval).To(Equal(0))
 
-		Expect(res.dataOut).To(HaveLen(134)) // eth + ip + 64 + udp + ip + icmp
+		Expect(res.dataOut).To(HaveLen(110)) // eth + ip (60) + udp + ip + icmp
 
 		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 		fmt.Printf("pktR = %+v\n", pktR)
@@ -55,16 +55,28 @@ func TestICMPTooBigIPOptions(t *testing.T) {
 		SrcIP:    net.IPv4(1, 1, 1, 1),
 		DstIP:    net.IPv4(2, 2, 2, 2),
 		Protocol: layers.IPProtocolUDP,
-		Options:  []layers.IPv4Option{{OptionType: 1, OptionLength: 0, OptionData: []byte{0, 0}}},
+		Options: []layers.IPv4Option{{
+			OptionType:   111,
+			OptionLength: 4,
+			OptionData:   []byte{1, 2},
+		}},
 	}
 
-	_, _, _, _, pktBytes, err := testPacket(nil, ipv4, nil, nil)
+	_, ipv4, l4, _, pktBytes, err := testPacket(nil, ipv4, nil, nil)
 	Expect(err).NotTo(HaveOccurred())
+	udp := l4.(*layers.UDP)
 
 	runBpfUnitTest(t, "icmp_too_big.c", func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(0xffffffff))
+		Expect(res.Retval).To(Equal(0))
+
+		Expect(res.dataOut).To(HaveLen(110)) // eth + ip (60) + udp + ip opts + icmp
+
+		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
+		fmt.Printf("pktR = %+v\n", pktR)
+
+		checkICMPTooBig(pktR, ipv4, udp, natTunnelMTU)
 	})
 }
 
@@ -104,12 +116,13 @@ func checkICMPTooBig(pktR gopacket.Packet, ipv4 *layers.IPv4, udp *layers.UDP, e
 	copy(toCSum[8:], icmpR.Payload)
 	toCSum[2] = 0
 	toCSum[3] = 0
-	fmt.Printf("toCSum = %+v\n", toCSum)
 
 	icmpCSum := header.Checksum(toCSum, 0)
+	fmt.Printf("icmpCSum 0x%x toCSum len(%d) = %+v\n", icmpCSum, len(toCSum), toCSum)
 	Expect(icmpR.Checksum).To(Equal(uint16(0xffff - icmpCSum)))
 
 	icmpData := gopacket.NewPacket(icmpR.Payload, layers.LayerTypeIPv4, gopacket.Default)
+	fmt.Printf("icmpData = %+v\n", icmpData)
 	Expect(icmpData.Layer(layers.LayerTypeIPv4)).To(layersMatchFields(ipv4))
 	// the extra 8 bytes will contain the entire UDP header
 	Expect(icmpData.Layer(layers.LayerTypeUDP)).To(layersMatchFields(udp))
