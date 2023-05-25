@@ -22,6 +22,7 @@ import (
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	. "github.com/onsi/gomega"
+
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	"github.com/projectcalico/calico/felix/bpf/nat"
 	"github.com/projectcalico/calico/felix/bpf/routes"
