@@ -499,6 +499,11 @@ func TestNATNodePort(t *testing.T) {
 
 		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 		fmt.Printf("pktR = %+v\n", pktR)
+		payloadL := pktR.ApplicationLayer()
+		Expect(payloadL).NotTo(BeNil())
+		vxlanL := gopacket.NewPacket(payloadL.Payload(), layers.LayerTypeVXLAN, gopacket.Default)
+		Expect(vxlanL).NotTo(BeNil())
+		fmt.Printf("vxlanL = %+v\n", vxlanL)
 
 		ipv4L := pktR.Layer(layers.LayerTypeIPv4)
 		ipv4R := ipv4L.(*layers.IPv4)
