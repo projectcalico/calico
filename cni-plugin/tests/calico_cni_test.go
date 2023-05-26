@@ -847,13 +847,17 @@ var _ = Describe("CalicoCni", func() {
 				containerID, result, _, _, _, contNs, err := testutils.CreateContainerWithId(netconf, "", testutils.TEST_DEFAULT_NS, "", "meep1337")
 				Expect(err).ShouldNot(HaveOccurred())
 
+				hostNlHandle, err := netlink.NewHandle()
+				Expect(err).ShouldNot(HaveOccurred())
+				defer hostNlHandle.Close()
+
 				// CNI plugin generates host side vEth name from containerID if used for "cni" orchestrator.
 				hostVethName := "cali" + containerID[:utils.Min(11, len(containerID))] //"cali" + containerID
 				hostVeth, err := netlink.LinkByName(hostVethName)
 				Expect(err).ToNot(HaveOccurred())
 
 				By("setting up the same route CNI plugin installed in the initial run for the hostVeth")
-				err = linux.SetupRoutes(hostVeth, result)
+				err = linux.SetupRoutes(hostNlHandle, hostVeth, result)
 				Expect(err).NotTo(HaveOccurred())
 
 				_, err = testutils.DeleteContainerWithId(netconf, contNs.Path(), "", testutils.TEST_DEFAULT_NS, containerID)
