@@ -1120,6 +1120,62 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						pol = createPolicy(pol)
 					})
 
+					// The next two policies are to make sure that applyOnForward of a
+					// global policy is applied correctly to a host endpoint. The deny
+					// policy is not applied to forwarded traffic!
+
+					By("global policy denies traffic to host 1 on host 0", func() {
+
+						nets := []string{felixes[1].IP + "/32"}
+						switch testOpts.tunnel {
+						case "ipip":
+							nets = append(nets, felixes[1].ExpectedIPIPTunnelAddr+"/32")
+						}
+
+						pol := api.NewGlobalNetworkPolicy()
+						pol.Namespace = "fv"
+						pol.Name = "host-0-1"
+						pol.Spec.Egress = []api.Rule{
+							{
+								Action: "Deny",
+								Destination: api.EntityRule{
+									Nets: nets,
+								},
+							},
+						}
+						pol.Spec.Selector = "node=='" + felixes[0].Name + "'"
+						pol.Spec.ApplyOnForward = false
+
+						pol = createPolicy(pol)
+					})
+
+					By("global policy allows forwarded traffic to host 1 on host 0", func() {
+
+						nets := []string{felixes[1].IP + "/32"}
+						switch testOpts.tunnel {
+						case "ipip":
+							nets = append(nets, felixes[1].ExpectedIPIPTunnelAddr+"/32")
+						}
+
+						pol := api.NewGlobalNetworkPolicy()
+						pol.Namespace = "fv"
+						pol.Name = "host-0-1-forward"
+						pol.Spec.Egress = []api.Rule{
+							{
+								Action: "Allow",
+								Destination: api.EntityRule{
+									Nets: nets,
+								},
+							},
+						}
+						pol.Spec.Selector = "node=='" + felixes[0].Name + "'"
+						pol.Spec.ApplyOnForward = true
+
+						pol = createPolicy(pol)
+					})
+
+					bpfWaitForPolicy(felixes[0], "eth0", "egress", "default.host-0-1")
+
 					k8sClient = infra.(*infrastructure.K8sDatastoreInfra).K8sClient
 					_ = k8sClient
 				})
