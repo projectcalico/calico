@@ -66,6 +66,8 @@ var ipTestCases = []ipv6Test{
 func TestIPv6Parsing(t *testing.T) {
 	RegisterTestingT(t)
 
+	t.Skip("ipv6 not supported")
+
 	defer resetBPFMaps()
 
 	for _, tc := range ipTestCases {
