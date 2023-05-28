@@ -332,7 +332,7 @@ func (r *ReleaseBuilder) collectGithubArtifacts(ver string) error {
 	if _, err := r.runner.Run("cp", []string{fmt.Sprintf("bin/tigera-operator-%s.tgz", ver), uploadDir}, nil); err != nil {
 		return err
 	}
-	if _, err := r.runner.Run("cp", []string{"manifests/ocp.tgz", ver, uploadDir}, nil); err != nil {
+	if _, err := r.runner.Run("cp", []string{"bin/ocp.tgz", uploadDir}, nil); err != nil {
 		return err
 	}
 
@@ -416,7 +416,7 @@ func (r *ReleaseBuilder) buildReleaseTar(ver string, targetDir string) error {
 	}
 
 	// Add in manifests directory generated from the docs.
-	if _, err := r.runner.Run("cp", []string{"-r", "/manifests", releaseBase}, nil); err != nil {
+	if _, err := r.runner.Run("cp", []string{"-r", "manifests", releaseBase}, nil); err != nil {
 		return err
 	}
 
