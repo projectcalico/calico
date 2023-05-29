@@ -121,11 +121,6 @@ static CALI_BPF_INLINE int skb_refresh_validate_ptrs(struct cali_tc_ctx *ctx, lo
 	// Success, refresh the ip_header/nh fields in the context.
 	ctx->ip_header =  ctx->data_start + skb_iphdr_offset(ctx);
 	ctx->ipheader_len = 4 * ip_hdr(ctx)->ihl;
-	if (ctx->ipheader_len == 20) {
-		ctx->nh = ctx->ip_header + IP_SIZE;
-	} else {
-		CALI_DEBUG("IP ihl=%d bytes\n", ctx->ipheader_len);
-	}
 	return 0;
 }
 

@@ -225,10 +225,10 @@ static CALI_BPF_INLINE int pre_policy_processing(struct cali_tc_ctx *ctx)
 		tc_state_fill_from_iphdr(ctx);
 		/* Parse out the source/dest ports (or type/code for ICMP). */
 		switch (tc_state_fill_from_nexthdr(ctx, dnat_should_decap())) {
-			case PARSING_ERROR:
-				goto deny;
-			case PARSING_ALLOW_WITHOUT_ENFORCING_POLICY:
-				goto allow;
+		case PARSING_ERROR:
+			goto deny;
+		case PARSING_ALLOW_WITHOUT_ENFORCING_POLICY:
+			goto allow;
 		}
 	}
 
@@ -591,22 +591,21 @@ static CALI_BPF_INLINE enum do_nat_res do_nat(struct cali_tc_ctx *ctx,
 	struct cali_tc_state *state = ctx->state;
 
 	switch (ct_rc){
-	case CALI_CT_NEW:
 	case CALI_CT_ESTABLISHED_DNAT:
-		/* align with CALI_CT_NEW */
-		if (ct_rc == CALI_CT_ESTABLISHED_DNAT) {
-			if (CALI_F_FROM_HEP && state->tun_ip && ct_result_np_node(state->ct_result)) {
-				/* Packet is returning from a NAT tunnel,
-				 * already SNATed, just forward it.
-				 */
-				*seen_mark = CALI_SKB_MARK_BYPASS_FWD;
-				CALI_DEBUG("returned from NAT tunnel\n");
-				goto allow;
-			}
-			state->post_nat_ip_dst = state->ct_result.nat_ip;
-			state->post_nat_dport = state->ct_result.nat_port;
+		if (CALI_F_FROM_HEP && state->tun_ip && ct_result_np_node(state->ct_result)) {
+			/* Packet is returning from a NAT tunnel,
+			 * already SNATed, just forward it.
+			 */
+			*seen_mark = CALI_SKB_MARK_BYPASS_FWD;
+			CALI_DEBUG("returned from NAT tunnel\n");
+			goto allow;
 		}
+		state->post_nat_ip_dst = state->ct_result.nat_ip;
+		state->post_nat_dport = state->ct_result.nat_port;
 
+		/* fall through */
+
+	case CALI_CT_NEW:
 		/* We may not do a true DNAT here if we are resolving service source port
 		 * conflict with host->pod w/o service. See calico_tc_host_ct_conflict().
 		 */
@@ -1210,45 +1209,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 				CALI_DEBUG("Failed to revalidate packet size\n");
 				goto deny;
 			}
-#if 0
 
-			/* Skip past the ICMP header and check the inner IP header.
-			 * WARNING: this modifies the ip_header pointer in the main context; need to
-			 * be careful in later code to avoid overwriting that. */
-			l3_csum_off += sizeof(struct iphdr) + sizeof(struct icmphdr);
-			ctx->ip_header = (void *)(icmp_hdr(ctx) + 1); /* skip to inner ip */
-			if (ip_hdr(ctx)->ihl != 5) {
-				CALI_INFO("ICMP inner IP header has options; unsupported\n");
-				deny_reason(ctx, CALI_REASON_IP_OPTIONS);
-				ctx->fwd.res = TC_ACT_SHOT;
-				goto deny;
-			}
-			ctx->nh = (ctx->ip_header + ctx->ipheader_len);
-
-			/* Flip the direction, we need to reverse the original packet. */
-			switch (ct_rc) {
-			case CALI_CT_ESTABLISHED_SNAT:
-				/* handle the DSR case, see CALI_CT_ESTABLISHED_SNAT where nat is done */
-				if (dnat_return_should_encap() && state->ct_result.tun_ip) {
-					if (CALI_F_DSR) {
-						/* SNAT will be done after routing, when leaving HEP */
-						CALI_DEBUG("DSR enabled, skipping SNAT + encap\n");
-						goto allow;
-					}
-				}
-				ct_rc = CALI_CT_ESTABLISHED_DNAT;
-				break;
-			case CALI_CT_ESTABLISHED_DNAT:
-				if (CALI_F_FROM_HEP && state->tun_ip && ct_result_np_node(state->ct_result)) {
-					/* Packet is returning from a NAT tunnel, just forward it. */
-					seen_mark = CALI_SKB_MARK_BYPASS_FWD;
-					CALI_DEBUG("ICMP related returned from NAT tunnel\n");
-					goto allow;
-				}
-				ct_rc = CALI_CT_ESTABLISHED_SNAT;
-				break;
-			}
-#endif
 			switch (ct_rc) {
 			case CALI_CT_ESTABLISHED_SNAT:
 			case CALI_CT_ESTABLISHED_DNAT:
