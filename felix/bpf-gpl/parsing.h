@@ -113,8 +113,6 @@ static CALI_BPF_INLINE int parse_packet_ip(struct cali_tc_ctx *ctx) {
 		 */
 		ctx->ipheader_len = 4 * ip_hdr(ctx)->ihl;
 	}
-	/* XXX */
-	ctx->nh = ctx->scratch->l4;
 	CALI_DEBUG("IP ihl=%d bytes\n", ctx->ipheader_len);
 
 	return PARSING_OK;
