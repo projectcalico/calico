@@ -172,4 +172,6 @@ static CALI_BPF_INLINE void skb_set_mark(struct __sk_buff *skb, __u32 mark)
 	);
 }
 
+#define skb_mark_equals(skb, mask, val) (((skb)->mark & (mask)) == (val))
+
 #endif /* __SKB_H__ */
