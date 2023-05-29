@@ -9,9 +9,6 @@ FLANNEL_MIGRATION_IMAGE ?=flannel-migration-controller
 
 BUILD_IMAGES            ?=$(KUBE_CONTROLLERS_IMAGE) $(FLANNEL_MIGRATION_IMAGE)
 
-# Add in local static-checks
-LOCAL_CHECKS=check-boring-ssl
-
 ###############################################################################
 # Download and include ../lib.Makefile
 #   Additions to EXTRA_DOCKER_ARGS need to happen before the include since
@@ -67,7 +64,7 @@ ifeq ($(ARCH), amd64)
 ifeq ($(FIPS), true)
 	$(call build_cgo_boring_binary, ./cmd/kube-controllers/, $@)
 else
-	$(call build_cgo_boring_binary_no_fips, ./cmd/kube-controllers/, $@)
+	$(call build_binary, ./cmd/kube-controllers/, $@)
 endif
 else
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c '\
@@ -79,7 +76,7 @@ ifeq ($(ARCH), amd64)
 ifeq ($(FIPS), true)
 	$(call build_cgo_boring_binary, ./cmd/wrapper, $@)
 else
-	$(call build_cgo_boring_binary_no_fips, ./cmd/wrapper, $@)
+	$(call build_binary, ./cmd/wrapper, $@)
 endif
 else
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c '\

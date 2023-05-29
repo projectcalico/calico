@@ -5,8 +5,6 @@ PACKAGE_NAME = github.com/projectcalico/calico/node
 RELEASE_BRANCH_PREFIX ?=release
 DEV_TAG_SUFFIX        ?=0.dev
 
-LOCAL_CHECKS=check-boring-ssl
-
 # Name of the images.
 # e.g., <registry>/<name>:<tag>
 NODE_IMAGE            ?=node
@@ -251,7 +249,7 @@ ifeq ($(ARCH),amd64)
 ifeq ($(FIPS), true)
 	$(call build_cgo_boring_binary, ./cmd/calico-node/main.go, $@)
 else
-	$(call build_cgo_boring_binary_no_fips, ./cmd/calico-node/main.go, $@)
+	$(call build_cgo_binary, ./cmd/calico-node/main.go, $@)
 endif
 else
 	$(DOCKER_GO_BUILD_CGO) sh -c '$(GIT_CONFIG_SSH) go build -buildvcs=false -v -o $@ $(BUILD_FLAGS) -ldflags "$(LDFLAGS)" ./cmd/calico-node/main.go'

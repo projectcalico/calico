@@ -7,9 +7,6 @@ PACKAGE_NAME = github.com/projectcalico/calico/typha
 TYPHA_IMAGE    ?=typha
 BUILD_IMAGES   ?=$(TYPHA_IMAGE)
 
-# Add in local static-checks
-LOCAL_CHECKS=check-boring-ssl
-
 ###############################################################################
 # Download and include ../lib.Makefile
 #   Additions to EXTRA_DOCKER_ARGS need to happen before the include since
@@ -87,7 +84,7 @@ ifeq ($(ARCH), amd64)
 ifeq ($(FIPS), true)
 	$(call build_static_cgo_boring_binary, ./cmd/wrapper, $@)
 else
-	$(call build_static_cgo_boring_binary_no_fips, ./cmd/wrapper, $@)
+	$(call build_static_binary, ./cmd/wrapper, $@)
 endif
 else
 	$(call build_binary, ./cmd/wrapper, $@)
@@ -98,7 +95,7 @@ ifeq ($(ARCH), amd64)
 ifeq ($(FIPS), true)
 	$(call build_static_cgo_boring_binary, ./cmd/calico-typha, $@)
 else
-	$(call build_static_cgo_boring_binary_no_fips, ./cmd/calico-typha, $@)
+	$(call build_static_binary, ./cmd/calico-typha, $@)
 endif
 else
 	$(call build_binary, ./cmd/calico-typha, $@)
@@ -110,7 +107,7 @@ ifeq ($(ARCH), amd64)
 ifeq ($(FIPS), true)
 	$(call build_static_cgo_boring_binary, ./cmd/typha-client, $@)
 else
-	$(call build_static_cgo_boring_binary_no_fips, ./cmd/typha-client, $@)
+	$(call build_static_binary, ./cmd/typha-client, $@)
 endif
 else
 	$(call build_binary, ./cmd/typha-client, $@)

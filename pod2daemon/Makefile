@@ -101,11 +101,13 @@ REGISTRAR_UPSTREAM_BUILD_CMD="cd /go/src/github.com/$(UPSTREAM_REGISTRAR_PROJECT
 
 ifeq ($(ARCH), $(filter $(ARCH),amd64))
 # We need CGO to leverage Boring SSL.  However, the cross-compile doesn't support CGO yet.
-CGO_ENABLED=1
 REGISTRAR_BUILD_CMD=$(REGISTRAR_TIGERA_BUILD_CMD)
-GOEXPERIMENT=boringcrypto
 ifeq ($(FIPS), true)
+CGO_ENABLED=1
 TAGS=fipsstrict
+GOEXPERIMENT=boringcrypto
+else
+CGO_ENABLED=0
 endif
 else ifeq ($(ARCH), $(filter $(ARCH),arm64))
 CGO_ENABLED=0

@@ -106,7 +106,7 @@ ifeq ($(ARCH),amd64)
 ifeq ($(FIPS),true)
 	$(call build_cgo_boring_binary, ./cmd/dikastes, $@)
 else
-	$(call build_cgo_boring_binary_no_fips, ./cmd/dikastes, $@)
+	$(call build_binary, ./cmd/dikastes, $@)
 endif
 else
 	$(DOCKER_RUN_RO) \
@@ -124,7 +124,7 @@ ifeq ($(ARCH),amd64)
 ifeq ($(FIPS), true)
 	$(call build_static_cgo_boring_binary, ./cmd/healthz, $@)
 else
-	$(call build_static_cgo_boring_binary_no_fips, ./cmd/healthz, $@)
+	$(call build_static_binary, ./cmd/healthz, $@)
 endif
 else
 	$(DOCKER_RUN_RO) \

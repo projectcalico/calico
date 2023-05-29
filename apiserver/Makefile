@@ -1,7 +1,7 @@
 include ../metadata.mk
 
 PACKAGE_NAME = github.com/projectcalico/calico/apiserver
-LOCAL_CHECKS     = lint-cache-dir goimports check-boring-ssl
+LOCAL_CHECKS     = lint-cache-dir goimports
 
 # Used so semaphore commits generated files when pins are updated
 EXTRA_FILES_TO_COMMIT=*_generated.go *_generated.*.go
@@ -96,7 +96,7 @@ ifeq ($(ARCH),amd64)
 ifeq ($(FIPS), true)
 	$(call build_cgo_boring_binary, $(PACKAGE_NAME)/cmd/apiserver, $@)
 else
-	$(call build_cgo_boring_binary_no_fips, $(PACKAGE_NAME)/cmd/apiserver, $@)
+	$(call build_binary, $(PACKAGE_NAME)/cmd/apiserver, $@)
 endif
 else
 	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) \
