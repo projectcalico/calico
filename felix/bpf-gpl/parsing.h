@@ -17,6 +17,26 @@
 #define PARSING_ALLOW_WITHOUT_ENFORCING_POLICY 2
 #define PARSING_ERROR -1
 
+static CALI_BPF_INLINE int bpf_load_bytes(struct cali_tc_ctx *ctx, __u32 offset, void *buf, __u32 len)
+{
+	int ret;
+
+	if (CALI_F_XDP) {
+#ifdef BPF_CORE_SUPPORTED
+		if (bpf_core_enum_value_exists(enum bpf_func_id, BPF_FUNC_xdp_load_bytes)) {
+			ret = bpf_xdp_load_bytes(ctx->xdp, offset, buf, len);
+		} else
+#endif
+		{
+			return -22 /* EINVAL */;
+		}
+	} else {
+		ret = bpf_skb_load_bytes(ctx->skb, offset, buf, len);
+	}
+
+	return ret;
+}
+
 static CALI_BPF_INLINE int parse_packet_ip(struct cali_tc_ctx *ctx) {
 	__u16 protocol = 0;
 
@@ -181,11 +201,11 @@ static CALI_BPF_INLINE int tc_state_fill_from_nexthdr(struct cali_tc_ctx *ctx, b
 			__builtin_memcpy(ctx->scratch->l4, ((void*)ip_hdr(ctx))+IP_SIZE, UDP_SIZE);
 			break;
 		}
-	} else if (!CALI_F_XDP) {
+	} else {
 		switch (ctx->state->ip_proto) {
 		case IPPROTO_TCP:
 			/* Load the L4 header in case there were ip options as we loaded the options instead. */
-			if (bpf_skb_load_bytes(ctx->skb, skb_l4hdr_offset(ctx), ctx->scratch->l4, TCP_SIZE)) {
+			if (bpf_load_bytes(ctx, skb_l4hdr_offset(ctx), ctx->scratch->l4, TCP_SIZE)) {
 				CALI_DEBUG("Too short\n");
 				goto deny;
 			}
@@ -201,8 +221,8 @@ static CALI_BPF_INLINE int tc_state_fill_from_nexthdr(struct cali_tc_ctx *ctx, b
 					len += sizeof(struct vxlanhdr);
 				}
 				int offset =  skb_l4hdr_offset(ctx);
-				if (bpf_skb_load_bytes(ctx->skb, offset, ctx->scratch->l4, len)) {
-					if (bpf_skb_load_bytes(ctx->skb, offset, ctx->scratch->l4, UDP_SIZE)) {
+				if (bpf_load_bytes(ctx, offset, ctx->scratch->l4, len)) {
+					if (bpf_load_bytes(ctx, offset, ctx->scratch->l4, UDP_SIZE)) {
 						CALI_DEBUG("Too short\n");
 						goto deny;
 					}
@@ -210,15 +230,12 @@ static CALI_BPF_INLINE int tc_state_fill_from_nexthdr(struct cali_tc_ctx *ctx, b
 			}
 			break;
 		default:
-			if (bpf_skb_load_bytes(ctx->skb, skb_l4hdr_offset(ctx), ctx->scratch->l4, UDP_SIZE)) {
+			if (bpf_load_bytes(ctx, skb_l4hdr_offset(ctx), ctx->scratch->l4, UDP_SIZE)) {
 				CALI_DEBUG("Too short\n");
 				goto deny;
 			}
 			break;
 		}
-	} else {
-		CALI_DEBUG("IP options in XDP not supported\n");
-		goto deny;
 	}
 
 	switch (ctx->state->ip_proto) {
