@@ -31,7 +31,7 @@ func CreateRule(ipv, icmpType, icmpCode int, proto, cidrStr, tag, selector, inAc
 
 	var protocol numorstring.Protocol
 
-	i, err := strconv.Atoi(proto)
+	i, err := strconv.ParseUInt(proto, 10, 8)
 	if err != nil {
 		protocol = numorstring.ProtocolFromString(proto)
 	} else {
