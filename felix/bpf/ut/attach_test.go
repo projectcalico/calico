@@ -86,7 +86,7 @@ func TestAttach(t *testing.T) {
 		err = bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
-		Expect(programs.Count()).To(Equal(9))
+		Expect(programs.Count()).To(Equal(11))
 		at := programs.Programs()
 		Expect(at).To(HaveKey(hook.AttachType{
 			Hook:       hook.Ingress,
@@ -183,7 +183,7 @@ func TestAttach(t *testing.T) {
 		err := bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
-		Expect(programs.Count()).To(Equal(9))
+		Expect(programs.Count()).To(Equal(11))
 
 		pm := jumpMapDump(bpfmaps.JumpMap)
 		Expect(len(pm)).To(Equal(2)) // no policy for hep2
@@ -198,7 +198,7 @@ func TestAttach(t *testing.T) {
 		err = bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
-		Expect(programs.Count()).To(Equal(17))
+		Expect(programs.Count()).To(Equal(21))
 
 		at := programs.Programs()
 		Expect(at).To(HaveKey(hook.AttachType{
@@ -238,7 +238,7 @@ func TestAttach(t *testing.T) {
 		err := bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
-		Expect(programs.Count()).To(Equal(17))
+		Expect(programs.Count()).To(Equal(21))
 
 		pm := jumpMapDump(bpfmaps.JumpMap)
 		Expect(len(pm)).To(Equal((2 /* wl 1+2 */ + 1 /* hep1 */) * 2))
@@ -394,7 +394,7 @@ func TestAttach(t *testing.T) {
 		err = oldProgs.Open()
 		Expect(err).NotTo(HaveOccurred())
 		pm := jumpMapDump(oldProgs)
-		Expect(pm).To(HaveLen(17))
+		Expect(pm).To(HaveLen(21))
 
 		oldPoliciesParams := jump.MapParameters
 		oldPoliciesParams.PinDir = tmp
@@ -427,9 +427,9 @@ func TestAttach(t *testing.T) {
 		err = bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
-		Expect(programs.Count()).To(Equal(17))
+		Expect(programs.Count()).To(Equal(21))
 		pm = jumpMapDump(bpfmaps.ProgramsMap)
-		Expect(pm).To(HaveLen(17))
+		Expect(pm).To(HaveLen(21))
 
 		pm = jumpMapDump(bpfmaps.JumpMap)
 		// We remember the state from above
