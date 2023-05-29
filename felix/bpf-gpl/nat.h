@@ -27,6 +27,8 @@
 #define VXLAN_ENCAP_SIZE	(sizeof(struct ethhdr) + sizeof(struct iphdr) + \
 				sizeof(struct udphdr) + sizeof(struct vxlanhdr))
 
+#define EFAULT	14
+
 static CALI_BPF_INLINE int skb_nat_l4_csum_ipv4(struct cali_tc_ctx *ctx, size_t off,
 						__be32 ip_src_from, __be32 ip_src_to,
 						__be32 ip_dst_from, __be32 ip_dst_to,
@@ -36,6 +38,38 @@ static CALI_BPF_INLINE int skb_nat_l4_csum_ipv4(struct cali_tc_ctx *ctx, size_t 
 {
 	int ret = 0;
 	struct __sk_buff *skb = ctx->skb;
+
+	/* Write back L4 header. */
+	if (ctx->ipheader_len == IP_SIZE) {
+		if (ctx->state->ip_proto == IPPROTO_TCP) {
+			if (skb_refresh_validate_ptrs(ctx, TCP_SIZE)) {
+				deny_reason(ctx, CALI_REASON_SHORT);
+				CALI_DEBUG("Too short\n");
+				return -EFAULT;
+			}
+			__builtin_memcpy(((void*)ip_hdr(ctx))+IP_SIZE, ctx->scratch->l4, TCP_SIZE);
+		} else {
+			if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
+				deny_reason(ctx, CALI_REASON_SHORT);
+				CALI_DEBUG("Too short\n");
+				return -EFAULT;
+			}
+			__builtin_memcpy(((void*)ip_hdr(ctx))+IP_SIZE, ctx->scratch->l4, UDP_SIZE);
+		}
+	} else {
+		int size = l4_hdr_len(ctx);
+		int offset = skb_l4hdr_offset(ctx);
+
+		if (size == 0) {
+			CALI_DEBUG("Bad L4 proto\n");
+			return -EFAULT;
+		}
+		if (bpf_skb_store_bytes(ctx->skb, offset, ctx->scratch->l4, size, 0)) {
+			CALI_DEBUG("Too short\n");
+			return -EFAULT;
+		}
+	}
+
 
 	if (ip_src_from != ip_src_to) {
 		CALI_DEBUG("L4 checksum update src IP from %x to %x\n",
@@ -93,7 +127,8 @@ static CALI_BPF_INLINE int vxlan_v4_encap(struct cali_tc_ctx *ctx,  __be32 ip_sr
 	}
 
 	// Note: assuming L2 packet here so this code can't be used on an L3 device.
-	struct vxlanhdr *vxlan = (void *)(udp_hdr(ctx) + 1);
+	struct udphdr *udp = (struct udphdr*) ((void *)ip_hdr(ctx) + IP_SIZE);
+	struct vxlanhdr *vxlan = (void *)(udp + 1);
 	struct ethhdr *eth_inner = (void *)(vxlan+1);
 	struct iphdr *ip_inner = (void*)(eth_inner+1);
 
@@ -112,8 +147,8 @@ static CALI_BPF_INLINE int vxlan_v4_encap(struct cali_tc_ctx *ctx,  __be32 ip_sr
 	ip_hdr(ctx)->check = 0;
 	ip_hdr(ctx)->protocol = IPPROTO_UDP;
 
-	udp_hdr(ctx)->source = udp_hdr(ctx)->dest = bpf_htons(VXLAN_PORT);
-	udp_hdr(ctx)->len = bpf_htons(bpf_ntohs(ip_hdr(ctx)->tot_len) - sizeof(struct iphdr));
+	udp->source = udp->dest = bpf_htons(VXLAN_PORT);
+	udp->len = bpf_htons(bpf_ntohs(ip_hdr(ctx)->tot_len) - sizeof(struct iphdr));
 
 	*((__u8*)&vxlan->flags) = 1 << 3; /* set the I flag to make the VNI valid */
 	vxlan->vni = bpf_htonl(CALI_VXLAN_VNI) >> 8; /* it is actually 24-bit, last 8 reserved */
@@ -202,7 +237,8 @@ static CALI_BPF_INLINE bool vxlan_v4_encap_too_big(struct cali_tc_ctx *ctx)
  * -1: if the packet was invalid (e.g. too short)
  * -2: if the packet is VXLAN from a Calico host, to this node, but it is not the right VNI.
  */
-static CALI_BPF_INLINE int vxlan_attempt_decap(struct cali_tc_ctx *ctx) {
+static CALI_BPF_INLINE int vxlan_attempt_decap(struct cali_tc_ctx *ctx)
+{
 	/* decap on host ep only if directly for the node */
 	CALI_DEBUG("VXLAN tunnel packet to %x (host IP=%x)\n",
 		bpf_ntohl(ip_hdr(ctx)->daddr),
@@ -218,14 +254,17 @@ static CALI_BPF_INLINE int vxlan_attempt_decap(struct cali_tc_ctx *ctx) {
 		goto deny;
 	}
 	if (!vxlan_vni_is_valid(ctx) ) {
+		CALI_DEBUG("VXLAN: Invalid VNI\n");
 		goto fall_through;
 	}
 	if (vxlan_vni(ctx) != CALI_VXLAN_VNI) {
 		if (rt_addr_is_remote_host(ip_hdr(ctx)->saddr)) {
 			/* Not BPF-generated VXLAN packet but it was from a Calico host to this node. */
+			CALI_DEBUG("VXLAN: non-tunnel calico\n");
 			goto auto_allow;
 		}
 		/* Not our VNI, not from Calico host. Fall through to policy. */
+		CALI_DEBUG("VXLAN: Not our VNI\n");
 		goto fall_through;
 	}
 	if (!rt_addr_is_remote_host(ip_hdr(ctx)->saddr)) {
