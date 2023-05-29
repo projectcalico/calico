@@ -227,6 +227,17 @@ define build_binary
 		$(1)'
 endef
 
+# For binaries that do not require boring crypto.
+define build_static_binary
+        $(DOCKER_RUN) $(GO_BUILD_IMAGE):$(GO_BUILD_VER) \
+                sh -c '$(GIT_CONFIG_SSH) \
+                go build -o $(2)  \
+                -v -buildvcs=false \
+                -ldflags "$(LDFLAGS) -linkmode external -extldflags -static" \
+                $(1)'
+endef
+
+
 # Images used in build / test across multiple directories.
 PROTOC_CONTAINER=calico/protoc:$(PROTOC_VER)-$(BUILDARCH)
 ETCD_IMAGE ?= quay.io/coreos/etcd:$(ETCD_VERSION)-$(ARCH)
