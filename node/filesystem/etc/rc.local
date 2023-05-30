@@ -36,8 +36,10 @@ if [ -z "$CALICO_DISABLE_FELIX" ]; then
   cp -a /etc/service/available/felix /etc/service/enabled/
 fi
 
-# Monitor change in node IP addresses and subnets.
-cp -a /etc/service/available/monitor-addresses  /etc/service/enabled/
+if [ "$CALICO_NETWORKING_BACKEND" != "none" ]; then
+  # Monitor change in node IP addresses and subnets.
+  cp -a /etc/service/available/monitor-addresses  /etc/service/enabled/
+fi
 
 # Enable the allocate tunnel IP service
 cp -a /etc/service/available/allocate-tunnel-addrs  /etc/service/enabled/
