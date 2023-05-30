@@ -116,6 +116,7 @@ clean:
 	$(DOCKER_GO_BUILD) make -C bpf-apache clean
 	$(DOCKER_GO_BUILD) make -C bpf-gpl clean
 	$(DOCKER_GO_BUILD) make -C $(LIBBPF_CONTAINER_PATH) clean
+	rm -rf bpf-gpl/include/libbpf/src/$(ARCH)
 
 .PHONY: clean-generated
 # Delete (checked-in) generated files.  Intentionally not part of the main clean target since these files are
