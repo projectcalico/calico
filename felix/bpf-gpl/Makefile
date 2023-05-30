@@ -53,7 +53,7 @@ OBJS:=$(shell ./list-objs)
 OBJS+=bin/tc_preamble.o
 OBJS+=bin/xdp_preamble.o
 OBJS+=bin/policy_default.o
-C_FILES:=tc_preamble.c tc.c tc6.c connect_balancer.c connect_balancer_v6.c xdp_preamble.c xdp.c policy_default.c
+C_FILES:=tc_preamble.c tc.c connect_balancer.c connect_balancer_v6.c xdp_preamble.c xdp.c policy_default.c
 
 all: $(OBJS)
 ut-objs: $(UT_OBJS)

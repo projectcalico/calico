@@ -133,28 +133,6 @@ static CALI_BPF_INLINE void tc_state_fill_from_iphdr(struct cali_tc_ctx *ctx)
 	CALI_DEBUG("IP ihl=%d bytes\n", ctx->ipheader_len);
 }
 
-static CALI_BPF_INLINE void tc_state_fill_from_ipv6hdr(struct cali_tc_ctx *ctx)
-{
-	// Fill in source ip
-	ctx->state->ip_src  = ipv6_hdr(ctx)->saddr.in6_u.u6_addr32[0];
-	ctx->state->ip_src1 = ipv6_hdr(ctx)->saddr.in6_u.u6_addr32[1];
-	ctx->state->ip_src2 = ipv6_hdr(ctx)->saddr.in6_u.u6_addr32[2];
-	ctx->state->ip_src3 = ipv6_hdr(ctx)->saddr.in6_u.u6_addr32[3];
-	// Fill in dst ip
-	ctx->state->ip_dst  = ipv6_hdr(ctx)->daddr.in6_u.u6_addr32[0];
-	ctx->state->ip_dst1 = ipv6_hdr(ctx)->daddr.in6_u.u6_addr32[1];
-	ctx->state->ip_dst2 = ipv6_hdr(ctx)->daddr.in6_u.u6_addr32[2];
-	ctx->state->ip_dst3 = ipv6_hdr(ctx)->daddr.in6_u.u6_addr32[3];
-	// Fill in pre nat ip
-	ctx->state->pre_nat_ip_dst  = ipv6_hdr(ctx)->daddr.in6_u.u6_addr32[0];
-	ctx->state->pre_nat_ip_dst1 = ipv6_hdr(ctx)->daddr.in6_u.u6_addr32[1];
-	ctx->state->pre_nat_ip_dst2 = ipv6_hdr(ctx)->daddr.in6_u.u6_addr32[2];
-	ctx->state->pre_nat_ip_dst3 = ipv6_hdr(ctx)->daddr.in6_u.u6_addr32[3];
-	// Fill in other information
-	ctx->state->ip_proto = ipv6_hdr(ctx)->nexthdr;
-	ctx->state->ip_size = ipv6_hdr(ctx)->payload_len;
-}
-
 /* Continue parsing packet based on the IP protocol and fill in relevant fields
  * in the state (struct cali_tc_state). */
 static CALI_BPF_INLINE int tc_state_fill_from_nexthdr(struct cali_tc_ctx *ctx, bool decap)
