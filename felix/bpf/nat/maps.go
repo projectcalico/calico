@@ -34,12 +34,22 @@ func init() {
 	maps.SetSize(AffinityMapParameters.VersionedName(), AffinityMapParameters.MaxEntries)
 	maps.SetSize(SendRecvMsgMapParameters.VersionedName(), SendRecvMsgMapParameters.MaxEntries)
 	maps.SetSize(CTNATsMapParameters.VersionedName(), CTNATsMapParameters.MaxEntries)
+
+	maps.SetSize(FrontendMapV6Parameters.VersionedName(), FrontendMapV6Parameters.MaxEntries)
+	maps.SetSize(BackendMapV6Parameters.VersionedName(), BackendMapV6Parameters.MaxEntries)
+	maps.SetSize(AffinityMapV6Parameters.VersionedName(), AffinityMapV6Parameters.MaxEntries)
+	maps.SetSize(SendRecvMsgMapV6Parameters.VersionedName(), SendRecvMsgMapV6Parameters.MaxEntries)
+	maps.SetSize(CTNATsMapV6Parameters.VersionedName(), CTNATsMapV6Parameters.MaxEntries)
 }
 
 func SetMapSizes(fsize, bsize, asize int) {
 	maps.SetSize(FrontendMapParameters.VersionedName(), fsize)
 	maps.SetSize(BackendMapParameters.VersionedName(), bsize)
 	maps.SetSize(AffinityMapParameters.VersionedName(), asize)
+
+	maps.SetSize(FrontendMapV6Parameters.VersionedName(), fsize)
+	maps.SetSize(BackendMapV6Parameters.VersionedName(), bsize)
+	maps.SetSize(AffinityMapV6Parameters.VersionedName(), asize)
 }
 
 //	struct calico_nat_v4_key {

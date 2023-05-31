@@ -10,7 +10,7 @@
 #include "bpf.h"
 #include "nat_lookup.h"
 
-static CALI_BPF_INLINE int do_nat_common(struct bpf_sock_addr *ctx, __u8 proto, __be32 *dst, bool connect)
+static CALI_BPF_INLINE int do_nat_common(struct bpf_sock_addr *ctx, __u8 proto, ipv46_addr_t *dst, bool connect)
 {
 	int err = 0;
 	/* We do not know what the source address is yet, we only know that it
@@ -24,7 +24,8 @@ static CALI_BPF_INLINE int do_nat_common(struct bpf_sock_addr *ctx, __u8 proto, 
 	nat_lookup_result res = NAT_LOOKUP_ALLOW;
 	__u16 dport_he = (__u16)(bpf_ntohl(ctx->user_port)>>16);
 	struct calico_nat_dest *nat_dest;
-	nat_dest = calico_v4_nat_lookup(0, *dst, proto, dport_he, false, &res,
+	ipv46_addr_t voidip = VOID_IP;
+	nat_dest = calico_nat_lookup(&voidip, dst, proto, dport_he, false, &res,
 			proto == IPPROTO_UDP && !connect ? CTLB_UDP_NOT_SEEN_TIMEO : 0, /* enforce affinity UDP */
 			proto == IPPROTO_UDP && !connect /* update affinity timer */);
 	if (!nat_dest) {
@@ -49,11 +50,11 @@ static CALI_BPF_INLINE int do_nat_common(struct bpf_sock_addr *ctx, __u8 proto, 
 		.port = dport_be,
 		.proto = proto,
 	};
-	struct sendrecv4_val val = {
+	struct sendrec_val val = {
 		.ip	= *dst,
 		.port	= ctx->user_port,
 	};
-	int rc = cali_v4_ct_nats_update_elem(&natk, &val, 0);
+	int rc = cali_ct_nats_update_elem(&natk, &val, 0);
 	if (rc) {
 		/* if this happens things are really bad! report */
 		CALI_INFO("Failed to update ct_nats map rc=%d\n", rc);
@@ -65,13 +66,13 @@ static CALI_BPF_INLINE int do_nat_common(struct bpf_sock_addr *ctx, __u8 proto, 
 		__u64 cookie = bpf_get_socket_cookie(ctx);
 		CALI_DEBUG("Store: ip=%x port=%d cookie=%x\n",
 				bpf_ntohl(nat_dest->addr), bpf_ntohs((__u16)dport_be), cookie);
-		struct sendrecv4_key key = {
+		struct sendrec_key key = {
 			.ip	= nat_dest->addr,
 			.port	= dport_be,
 			.cookie	= cookie,
 		};
 
-		if (cali_v4_srmsg_update_elem(&key, &val, 0)) {
+		if (cali_srmsg_update_elem(&key, &val, 0)) {
 			/* if this happens things are really bad! report */
 			CALI_INFO("Failed to update map\n");
 			goto out;
@@ -85,7 +86,7 @@ out:
 	return err;
 }
 
-static CALI_BPF_INLINE int connect_v4(struct bpf_sock_addr *ctx, __be32 *dst)
+static CALI_BPF_INLINE int connect_v4(struct bpf_sock_addr *ctx, ipv46_addr_t *dst)
 {
 	int ret = 1; /* OK value */
 

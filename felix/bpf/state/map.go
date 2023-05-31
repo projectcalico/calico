@@ -116,9 +116,10 @@ type State struct {
 	NATData             uint64
 	ProgStartTime       uint64
 	Flags               uint64
+	_                   [48]byte // ipv6 padding
 }
 
-const expectedSize = 416
+const expectedSize = 464
 
 func (s *State) AsBytes() []byte {
 	size := unsafe.Sizeof(State{})
@@ -144,7 +145,7 @@ var MapParameters = maps.MapParameters{
 	ValueSize:  expectedSize,
 	MaxEntries: 2,
 	Name:       "cali_state",
-	Version:    3,
+	Version:    4,
 }
 
 func Map() maps.Map {

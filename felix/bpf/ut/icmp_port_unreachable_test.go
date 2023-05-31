@@ -37,7 +37,7 @@ func TestICMPPortUnreachable(t *testing.T) {
 	}}
 	ipHdr.IHL += 2
 
-	_, ipv4, _, _, pktBytes, err := testPacket(nil, &ipHdr, nil, nil)
+	_, ipv4, _, _, pktBytes, err := testPacketV4(nil, &ipHdr, nil, nil)
 	Expect(err).NotTo(HaveOccurred())
 
 	runBpfUnitTest(t, "icmp_port_unreachable.c", func(bpfrun bpfProgRunFn) {
@@ -60,7 +60,7 @@ func TestNATNoBackendFromHEP(t *testing.T) {
 
 	iphdr := *ipv4Default
 
-	_, ipv4, l4, _, pktBytes, err := testPacket(nil, &iphdr, nil, nil)
+	_, ipv4, l4, _, pktBytes, err := testPacketV4(nil, &iphdr, nil, nil)
 	Expect(err).NotTo(HaveOccurred())
 
 	udp := l4.(*layers.UDP)

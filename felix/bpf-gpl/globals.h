@@ -5,29 +5,39 @@
 #ifndef __CALI_GLOBALS_H__
 #define __CALI_GLOBALS_H__
 
-struct cali_tc_globals {
-	__be32 host_ip;
-	__be16 tunnel_mtu;
-	__be16 vxlan_port;
-	__be32 intf_ip;
-	__be32 ext_to_svc_mark;
-	__be16 psnat_start;
-	__be16 psnat_len;
-	__be32 host_tunnel_ip;
-	__be32 flags;
-	__be16 wg_port;
-	__be16 __pad;
-	__u32 natin_idx;
-	__u32 natout_idx;
-	__u8 iface_name[16];
-	__u32 log_filter_jmp;
-	__u32 jumps[32];
-	/* Needs to be 32bit aligned as it is followed by scratch area for
-	 * building headers. We reuse the same slot in state map to save
-	 * ourselves a lookup.
-	 */
-	__u32 __scratch[]; /* N.B. this provides pointer to the location but does not add to the size */
-};
+#include "ip_addr.h"
+
+#define DECLARE_TC_GLOBALS(name, ip_t)	\
+struct name {				\
+	ip_t host_ip;			\
+	__be16 tunnel_mtu;		\
+	__be16 vxlan_port;		\
+	ip_t intf_ip;			\
+	__be32 ext_to_svc_mark;		\
+	__be16 psnat_start;		\
+	__be16 psnat_len;		\
+	ip_t host_tunnel_ip;		\
+	__be32 flags;			\
+	__be16 wg_port;			\
+	__be16 __pad;			\
+	__u32 natin_idx;		\
+	__u32 natout_idx;		\
+	__u8 iface_name[16];		\
+	__u32 log_filter_jmp;		\
+	__u32 jumps[32];		\
+	/* Needs to be 32bit aligned as it is followed by scratch area for 				\
+	 * building headers. We reuse the same slot in state map to save 				\
+	 * ourselves a lookup. 										\
+	 */												\
+	__u32 __scratch[]; /* N.B. this provides pointer to the location but does not add to the size */ \
+}
+
+DECLARE_TC_GLOBALS(cali_tc_globals, ipv46_addr_t);
+/* cali_tc_globals_v6 is for userspace as cali_tc_globals are used for ipv4 in
+ * userspace, but it has the exact same layout as cali_tc_globals in eBPF when
+ * compiled for ipv6.
+ */
+DECLARE_TC_GLOBALS(cali_tc_globals_v6, ipv6_addr_t);
 
 enum cali_globals_flags {
 	/* CALI_GLOBALS_IPV6_ENABLED is set when IPv6 is enabled by Felix */

@@ -65,13 +65,13 @@ int calico_recvmsg_v4(struct bpf_sock_addr *ctx)
 
 	__u64 cookie = bpf_get_socket_cookie(ctx);
 	CALI_DEBUG("Lookup: ip=%x port=%d(BE) cookie=%x\n",ctx->user_ip4, ctx->user_port, cookie);
-	struct sendrecv4_key key = {
+	struct sendrec_key key = {
 		.ip	= ctx->user_ip4,
 		.port	= ctx->user_port,
 		.cookie	= cookie,
 	};
 
-	struct sendrecv4_val *revnat = cali_v4_srmsg_lookup_elem(&key);
+	struct sendrec_val *revnat = cali_srmsg_lookup_elem(&key);
 
 	if (revnat == NULL) {
 		CALI_DEBUG("revnat miss for %x:%d\n",
