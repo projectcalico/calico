@@ -68,7 +68,8 @@ struct cali_tc_state {
 	__be32 tun_ip1;
 	__be32 tun_ip2;
 	__be32 tun_ip3;
-	__u32 unused;
+	__u16 ihl;
+	__u16 unused;
 	/* Return code from the policy program CALI_POL_DENY/ALLOW etc. */
 	__s32 pol_rc;
 	/* Source port of the packet; updated on the CALI_CT_ESTABLISHED_SNAT path or when doing encap.
@@ -186,13 +187,18 @@ struct cali_tc_ctx {
 				bpf_exit(TC_ACT_SHOT);				\
 			}							\
 			struct pkt_scratch *scratch = (void *)(gl->__scratch); 	\
-			(struct cali_tc_ctx) {					\
+			struct cali_tc_ctx x = {				\
 				.state = state,					\
 				.counters = counters,				\
 				.globals = gl,					\
 				.scratch = scratch,				\
 				__VA_ARGS__					\
 			};							\
+			if (x.ipheader_len == 0) {				\
+				x.ipheader_len = state->ihl;			\
+			}							\
+										\
+			x;							\
 	})									\
 
 static CALI_BPF_INLINE struct iphdr* ip_hdr(struct cali_tc_ctx *ctx)

@@ -94,7 +94,8 @@ type State struct {
 	TunIP1              uint32
 	TunIP2              uint32
 	TunIP3              uint32
-	_                   uint32
+	ihl                 uint16
+	_                   uint16
 	PolicyRC            PolicyResult
 	SrcPort             uint16
 	DstPort             uint16

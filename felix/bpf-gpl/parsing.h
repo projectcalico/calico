@@ -107,13 +107,7 @@ static CALI_BPF_INLINE int parse_packet_ip(struct cali_tc_ctx *ctx) {
 		CALI_DEBUG("Drop malformed IP packets\n");
 		deny_reason(ctx, CALI_REASON_IP_MALFORMED);
 		goto deny;
-	} else if (ip_hdr(ctx)->ihl > 5) {
-		/* Drop packets with IP options from/to WEP.
-		 * Also drop packets with IP options if the dest IP is not host IP
-		 */
-		ctx->ipheader_len = 4 * ip_hdr(ctx)->ihl;
 	}
-	CALI_DEBUG("IP ihl=%d bytes\n", ctx->ipheader_len);
 
 	return PARSING_OK;
 
@@ -135,6 +129,8 @@ static CALI_BPF_INLINE void tc_state_fill_from_iphdr(struct cali_tc_ctx *ctx)
 	ctx->state->pre_nat_ip_dst = ip_hdr(ctx)->daddr;
 	ctx->state->ip_proto = ip_hdr(ctx)->protocol;
 	ctx->state->ip_size = ip_hdr(ctx)->tot_len;
+	ctx->ipheader_len = ctx->state->ihl = ip_hdr(ctx)->ihl * 4;
+	CALI_DEBUG("IP ihl=%d bytes\n", ctx->ipheader_len);
 }
 
 static CALI_BPF_INLINE void tc_state_fill_from_ipv6hdr(struct cali_tc_ctx *ctx)
