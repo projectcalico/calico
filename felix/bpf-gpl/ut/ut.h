@@ -19,6 +19,7 @@
 #include "bpf.h"
 #include "types.h"
 #include "counters.h"
+#include "jump.h"
 
 const volatile struct cali_tc_globals __globals;
 

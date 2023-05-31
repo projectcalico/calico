@@ -10,12 +10,10 @@ const volatile struct cali_tc_globals __globals;
 
 static CALI_BPF_INLINE int calico_unittest_entry (struct __sk_buff *skb)
 {
-	struct cali_tc_ctx _ctx = {
-		.counters = counters_get(skb->ifindex),
-		.globals = &__globals,
+	DECLARE_TC_CTX(_ctx,
 		.skb = skb,
 		.ipheader_len = IP_SIZE,
-	};
+	);
 	struct cali_tc_ctx *ctx = &_ctx;
 	if (!ctx->counters) {
 		CALI_DEBUG("Counters map lookup failed: DROP\n");
