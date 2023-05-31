@@ -16,6 +16,7 @@ package mock
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
@@ -24,6 +25,7 @@ import (
 )
 
 type Map struct {
+	sync.Mutex
 	maps.MapParameters
 	logCxt *logrus.Entry
 
@@ -67,6 +69,9 @@ func (m *Map) Path() string {
 }
 
 func (m *Map) Iter(f maps.IterCallback) error {
+	m.Lock()
+	defer m.Unlock()
+
 	m.IterCount++
 
 	if m.IterErr != nil {
@@ -83,6 +88,13 @@ func (m *Map) Iter(f maps.IterCallback) error {
 }
 
 func (m *Map) Update(k, v []byte) error {
+	m.Lock()
+	defer m.Unlock()
+
+	return m.updateUnlocked(k, v)
+}
+
+func (m *Map) updateUnlocked(k, v []byte) error {
 	m.UpdateCount++
 	if m.UpdateErr != nil {
 		return m.UpdateErr
@@ -100,16 +112,22 @@ func (m *Map) Update(k, v []byte) error {
 }
 
 func (m *Map) UpdateWithFlags(k, v []byte, flags int) error {
+	m.Lock()
+	defer m.Unlock()
+
 	if (flags & unix.BPF_EXIST) != 0 {
 		if _, ok := m.Contents[string(k)]; ok {
 			return fmt.Errorf("key exists")
 		}
 	}
 
-	return m.Update(k, v)
+	return m.updateUnlocked(k, v)
 }
 
 func (m *Map) Get(k []byte) ([]byte, error) {
+	m.Lock()
+	defer m.Unlock()
+
 	m.GetCount++
 
 	vstr, ok := m.Contents[string(k)]
@@ -120,6 +138,9 @@ func (m *Map) Get(k []byte) ([]byte, error) {
 }
 
 func (m *Map) Delete(k []byte) error {
+	m.Lock()
+	defer m.Unlock()
+
 	m.DeleteCount++
 	if m.DeleteErr != nil {
 		return m.DeleteErr
@@ -145,6 +166,9 @@ func (m *Map) CopyDeltaFromOldMap() error {
 }
 
 func (m *Map) ContainsKey(k []byte) bool {
+	m.Lock()
+	defer m.Unlock()
+
 	_, ok := m.Contents[string(k)]
 	return ok
 }
