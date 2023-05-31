@@ -12,9 +12,13 @@
 #include <bpf_core_read.h>
 #include <stddef.h>
 #include <linux/ip.h>
-#include "globals.h"
 
+/* CALI_BPF_INLINE must be defined before we include any of our headers. They
+ * assume it exists!
+ */
 #define CALI_BPF_INLINE inline __attribute__((always_inline))
+
+#include "globals.h"
 
 #define BPF_REDIR_EGRESS 0
 #define BPF_REDIR_INGRESS 1
@@ -98,7 +102,12 @@
 #define CALI_FIB_LOOKUP_ENABLED true
 #endif
 
+#ifdef IPVER6
+#undef CALI_FIB_LOOKUP_ENABLED
+#define CALI_FIB_LOOKUP_ENABLED false
+#else
 #define CALI_FIB_ENABLED (!CALI_F_L3 && CALI_FIB_LOOKUP_ENABLED && (CALI_F_TO_HOST || CALI_F_TO_HEP))
+#endif
 
 #define COMPILE_TIME_ASSERT(expr) {typedef char array[(expr) ? 1 : -1];}
 static CALI_BPF_INLINE void __compile_asserts(void) {
@@ -215,8 +224,18 @@ static CALI_BPF_INLINE __attribute__((noreturn)) void bpf_exit(int rc) {
 }
 #pragma clang diagnostic pop
 
+#ifdef IPVER6
+
+#define debug_ip(ip) (bpf_htonl((ip).d))
+#define ip_is_dnf(ip) (true)
+
+#else
+
+#define debug_ip(ip) bpf_htonl(ip)
+
 #define ip_is_dnf(ip) ((ip)->frag_off & bpf_htons(0x4000))
 #define ip_frag_no(ip) ((ip)->frag_off & bpf_htons(0x1fff))
+#endif
 
 static CALI_BPF_INLINE void ip_dec_ttl(struct iphdr *ip)
 {
@@ -229,7 +248,11 @@ static CALI_BPF_INLINE void ip_dec_ttl(struct iphdr *ip)
 	ip->check = (__be16) (sum + (sum >> 16));
 }
 
+#ifdef IPVER6
+#define ip_ttl_exceeded(ip) (CALI_F_TO_HOST && !CALI_F_TUNNEL && (ip)->hop_limit <= 1)
+#else
 #define ip_ttl_exceeded(ip) (CALI_F_TO_HOST && !CALI_F_TUNNEL && (ip)->ttl <= 1)
+#endif
 
 #if CALI_F_XDP
 
@@ -275,25 +298,25 @@ CALI_PATCH_DEFINE(__skb_mark, 0x4d424b53) /* be 0x4d424b53 = ASCII(SKBM) */
 
 #define map_symbol(name, ver) name##ver
 
-#define MAP_LOOKUP_FN(name, ver) \
-static CALI_BPF_INLINE void * name##_lookup_elem(const void* key)	\
+#define MAP_LOOKUP_FN(fname, name, ver) \
+static CALI_BPF_INLINE void * fname##_lookup_elem(const void* key)	\
 {									\
 	return bpf_map_lookup_elem(&map_symbol(name, ver), key);	\
 }
 
-#define MAP_UPDATE_FN(name, ver) \
-static CALI_BPF_INLINE int name##_update_elem(const void* key, const void* value, __u64 flags)\
+#define MAP_UPDATE_FN(fname, name, ver) \
+static CALI_BPF_INLINE int fname##_update_elem(const void* key, const void* value, __u64 flags)\
 {										\
 	return bpf_map_update_elem(&map_symbol(name, ver), key, value, flags);	\
 }
 
-#define MAP_DELETE_FN(name, ver) \
-static CALI_BPF_INLINE int name##_delete_elem(const void* key)	\
+#define MAP_DELETE_FN(fname, name, ver) \
+static CALI_BPF_INLINE int fname##_delete_elem(const void* key)	\
 {									\
 	return bpf_map_delete_elem(&map_symbol(name, ver), key);	\
 }
 
-#define CALI_MAP(name, ver,  map_type, key_type, val_type, size, flags)			\
+#define CALI_MAP_NAMED(name, fname, ver,  map_type, key_type, val_type, size, flags)		\
 struct {										\
 	__uint(type, map_type);								\
 	__type(key, key_type);								\
@@ -301,9 +324,12 @@ struct {										\
 	__uint(max_entries, size);							\
 	__uint(map_flags, flags);							\
 }map_symbol(name, ver) SEC(".maps");							\
-	MAP_LOOKUP_FN(name, ver)							\
-	MAP_UPDATE_FN(name, ver)							\
-	MAP_DELETE_FN(name, ver)
+	MAP_LOOKUP_FN(fname, name, ver)							\
+	MAP_UPDATE_FN(fname, name, ver)							\
+	MAP_DELETE_FN(fname, name, ver)
+
+#define CALI_MAP(name, ver, map_type, key_type, val_type, size, flags)			\
+		CALI_MAP_NAMED(name, name, ver,  map_type, key_type, val_type, size, flags)
 
 #define CALI_MAP_V1(name, map_type, key_type, val_type, size, flags)			\
 		CALI_MAP(name,, map_type, key_type, val_type, size, flags)

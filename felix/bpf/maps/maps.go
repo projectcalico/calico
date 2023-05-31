@@ -645,7 +645,11 @@ func (b *PinnedMap) EnsureExists() error {
 		}
 	}
 
-	log.WithField("name", b.Name).Debug("Map didn't exist, creating it")
+	log.WithFields(log.Fields{
+		"name":      b.Name,
+		"keySize":   b.KeySize,
+		"valuesize": b.ValueSize,
+	}).Debug("Map didn't exist, creating it")
 	cmd := exec.Command("bpftool", "map", "create", b.VersionedFilename(),
 		"type", b.Type,
 		"key", fmt.Sprint(b.KeySize),

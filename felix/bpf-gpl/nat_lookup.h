@@ -14,46 +14,46 @@
 #include "routes.h"
 #include "nat_types.h"
 
-static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup(__be32 ip_src,
-								    __be32 ip_dst,
-								    __u8 ip_proto,
-								    __u16 dport,
-								    bool from_tun,
-								    nat_lookup_result *res,
-								    int affinity_always_timeo,
-								    bool affinity_tmr_update
+static CALI_BPF_INLINE struct calico_nat_dest* calico_nat_lookup(ipv46_addr_t *ip_src,
+								 ipv46_addr_t *ip_dst,
+								 __u8 ip_proto,
+								 __u16 dport,
+								 bool from_tun,
+								 nat_lookup_result *res,
+								 int affinity_always_timeo,
+								 bool affinity_tmr_update
 #if !(CALI_F_XDP) && !(CALI_F_CGROUP)
-								  , struct cali_tc_ctx *ctx
+							  	 , struct cali_tc_ctx *ctx
 #endif
-								    )
+								)
 {
-	struct calico_nat_v4_key nat_key = {
+	struct calico_nat_key nat_key = {
 		.prefixlen = NAT_PREFIX_LEN_WITH_SRC_MATCH_IN_BITS,
-		.addr = ip_dst,
+		.addr = *ip_dst,
 		.port = dport,
 		.protocol = ip_proto,
-		.saddr = ip_src,
+		.saddr = *ip_src,
 	};
-	struct calico_nat_v4_value *nat_lv1_val;
-	struct calico_nat_secondary_v4_key nat_lv2_key;
+	struct calico_nat_value *nat_lv1_val;
+	struct calico_nat_secondary_key nat_lv2_key;
 	struct calico_nat_dest *nat_lv2_val;
-	struct calico_nat_v4_affinity_key affkey = {};
+	struct calico_nat_affinity_key affkey = {};
 	__u64 now = 0;
 
-	nat_lv1_val = cali_v4_nat_fe_lookup_elem(&nat_key);
+	nat_lv1_val = cali_nat_fe_lookup_elem(&nat_key);
 
 	switch (nat_key.protocol) {
 	case IPPROTO_UDP:
-		CALI_DEBUG("NAT: 1st level lookup addr=%x port=%d udp\n", (int)bpf_ntohl(nat_key.addr), (int)dport);
+		CALI_DEBUG("NAT: 1st level lookup addr=%x port=%d udp\n", (int)debug_ip(nat_key.addr), (int)dport);
 		break;
 	case IPPROTO_TCP:
-		CALI_DEBUG("NAT: 1st level lookup addr=%x port=%d tcp\n", (int)bpf_ntohl(nat_key.addr), (int)dport);
+		CALI_DEBUG("NAT: 1st level lookup addr=%x port=%d tcp\n", (int)debug_ip(nat_key.addr), (int)dport);
 		break;
 	case IPPROTO_ICMP:
-		CALI_DEBUG("NAT: 1st level lookup addr=%x port=%d icmp\n", (int)bpf_ntohl(nat_key.addr), (int)dport);
+		CALI_DEBUG("NAT: 1st level lookup addr=%x port=%d icmp\n", (int)debug_ip(nat_key.addr), (int)dport);
 		break;
 	default:
-		CALI_DEBUG("NAT: 1st level lookup addr=%x port=%d other\n", (int)bpf_ntohl(nat_key.addr), (int)dport);
+		CALI_DEBUG("NAT: 1st level lookup addr=%x port=%d other\n", (int)debug_ip(nat_key.addr), (int)dport);
 		break;
 	}
 
@@ -66,7 +66,7 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup(__be32 ip_sr
 		 * straight NAT and avoid a possible extra hop.
 		 */
 		if (!(CALI_F_FROM_WEP || CALI_F_TO_HEP || CALI_F_CGROUP ||
-					(CALI_F_FROM_HEP && from_tun)) || ip_dst == 0xffffffff) {
+					(CALI_F_FROM_HEP && from_tun)) || ip_equal(*ip_dst, NP_SPECIAL_IP)) {
 			return NULL;
 		}
 
@@ -96,8 +96,8 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup(__be32 ip_sr
 			return NULL;
 		}
 
-		nat_key.addr = 0xffffffff;
-		nat_lv1_val = cali_v4_nat_fe_lookup_elem(&nat_key);
+		nat_key.addr = NP_SPECIAL_IP;
+		nat_lv1_val = cali_nat_fe_lookup_elem(&nat_key);
 		if (!nat_lv1_val) {
 			CALI_DEBUG("NAT: nodeport miss\n");
 			return NULL;
@@ -105,7 +105,7 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup(__be32 ip_sr
 		CALI_DEBUG("NAT: nodeport hit\n");
 	}
 	/* With LB source range, we install a drop entry in the NAT FE map
-	 * with count equal to 0xffffffff. If we hit this entry,
+	 * with count equal to all-ones for both ip4/6. If we hit this entry,
 	 * packet is dropped.
 	 */
 	if (nat_lv1_val->count == NAT_FE_DROP_COUNT) {
@@ -147,34 +147,34 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup(__be32 ip_sr
 		goto skip_affinity;
 	}
 
-	struct calico_nat_v4 nat_data = {
-		.addr = ip_dst,
+	struct calico_nat nat_data = {
+		.addr = *ip_dst,
 		.port = dport,
 		.protocol = ip_proto,
 	};
 	affkey.nat_key = nat_data;
-	affkey.client_ip = ip_src;
+	affkey.client_ip = *ip_src;
 
 	CALI_DEBUG("NAT: backend affinity %d seconds\n", nat_lv1_val->affinity_timeo ? : affinity_always_timeo);
 
-	struct calico_nat_v4_affinity_val *affval;
+	struct calico_nat_affinity_val *affval;
 
 	now = bpf_ktime_get_ns();
-	affval = cali_v4_nat_aff_lookup_elem(&affkey);
+	affval = cali_nat_aff_lookup_elem(&affkey);
 	if (affval) {
 		int timeo = (affinity_always_timeo ? : nat_lv1_val->affinity_timeo);
 		if (now - affval->ts <= timeo  * 1000000000ULL) {
 			CALI_DEBUG("NAT: using affinity backend %x:%d\n",
-					bpf_ntohl(affval->nat_dest.addr), affval->nat_dest.port);
+					debug_ip(affval->nat_dest.addr), affval->nat_dest.port);
 			if (affinity_tmr_update) {
 				affval->ts = now;
 			}
 
 			return &affval->nat_dest;
 		}
-		CALI_DEBUG("NAT: affinity expired for %x:%d\n", bpf_ntohl(ip_dst), dport);
+		CALI_DEBUG("NAT: affinity expired for %x:%d\n", debug_ip(*ip_dst), dport);
 	} else {
-		CALI_DEBUG("no previous affinity for %x:%d", bpf_ntohl(ip_dst), dport);
+		CALI_DEBUG("no previous affinity for %x:%d", debug_ip(*ip_dst), dport);
 	}
 	/* To be k8s conformant, fall through to pick a random backend. */
 
@@ -185,23 +185,23 @@ skip_affinity:
 
 	CALI_DEBUG("NAT: 1st level hit; id=%d ordinal=%d\n", nat_lv2_key.id, nat_lv2_key.ordinal);
 
-	if (!(nat_lv2_val = cali_v4_nat_be_lookup_elem(&nat_lv2_key))) {
+	if (!(nat_lv2_val = cali_nat_be_lookup_elem(&nat_lv2_key))) {
 		CALI_DEBUG("NAT: backend miss\n");
 		*res = NAT_NO_BACKEND;
 		return NULL;
 	}
 
-	CALI_DEBUG("NAT: backend selected %x:%d\n", bpf_ntohl(nat_lv2_val->addr), nat_lv2_val->port);
+	CALI_DEBUG("NAT: backend selected %x:%d\n", debug_ip(nat_lv2_val->addr), nat_lv2_val->port);
 
 	if (nat_lv1_val->affinity_timeo != 0 || affinity_always_timeo) {
 		int err;
-		struct calico_nat_v4_affinity_val val = {
+		struct calico_nat_affinity_val val = {
 			.ts = now,
 			.nat_dest = *nat_lv2_val,
 		};
 
-		CALI_DEBUG("NAT: updating affinity for client %x\n", bpf_ntohl(ip_src));
-		if ((err = cali_v4_nat_aff_update_elem(&affkey, &val, BPF_ANY))) {
+		CALI_DEBUG("NAT: updating affinity for client %x\n", debug_ip(*ip_src));
+		if ((err = cali_nat_aff_update_elem(&affkey, &val, BPF_ANY))) {
 			CALI_INFO("NAT: failed to update affinity table: %d\n", err);
 			/* we do carry on, we have a good nat_lv2_val */
 		}
@@ -211,13 +211,13 @@ skip_affinity:
 }
 
 #if !(CALI_F_XDP) && !(CALI_F_CGROUP)
-static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup_tc(struct cali_tc_ctx *ctx,
-								       __be32 ip_src, __be32 ip_dst,
-								       __u8 ip_proto, __u16 dport,
-								       bool from_tun,
-								       nat_lookup_result *res)
+static CALI_BPF_INLINE struct calico_nat_dest* calico_nat_lookup_tc(struct cali_tc_ctx *ctx,
+								    ipv46_addr_t *ip_src, ipv46_addr_t *ip_dst,
+								    __u8 ip_proto, __u16 dport,
+								    bool from_tun,
+								    nat_lookup_result *res)
 {
-	return calico_v4_nat_lookup(ip_src, ip_dst, ip_proto, dport, from_tun, res, 0, false, ctx);
+	return calico_nat_lookup(ip_src, ip_dst, ip_proto, dport, from_tun, res, 0, false, ctx);
 }
 #endif
 

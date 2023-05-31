@@ -66,6 +66,10 @@ func (m *Map) ValueSize() int {
 	return int(C.bpf_map__value_size(m.bpfMap))
 }
 
+func (m *Map) KeySize() int {
+	return int(C.bpf_map__key_size(m.bpfMap))
+}
+
 func (m *Map) SetPinPath(path string) error {
 	cPath := C.CString(path)
 	defer C.free(unsafe.Pointer(cPath))
@@ -404,6 +408,41 @@ func TcSetGlobals(
 		C.ushort(globalData.PSNatStart),
 		C.ushort(globalData.PSNatLen),
 		C.uint(globalData.HostTunnelIP),
+		C.uint(globalData.Flags),
+		C.ushort(globalData.WgPort),
+		C.uint(globalData.NatIn),
+		C.uint(globalData.NatOut),
+		C.uint(globalData.LogFilterJmp),
+		&cJumps[0], // it is safe because we hold the reference here until we return.
+	)
+
+	return err
+}
+
+func TcSetGlobals6(
+	m *Map,
+	globalData *TcGlobalData6,
+) error {
+
+	cName := C.CString(globalData.IfaceName)
+	defer C.free(unsafe.Pointer(cName))
+
+	cJumps := make([]C.uint, len(globalData.Jumps))
+
+	for i, v := range globalData.Jumps {
+		cJumps[i] = C.uint(v)
+	}
+
+	_, err := C.bpf_tc_set_globals_v6(m.bpfMap,
+		cName,
+		(*C.char)(unsafe.Pointer(&globalData.HostIP[0])),
+		(*C.char)(unsafe.Pointer(&globalData.IntfIP[0])),
+		C.uint(globalData.ExtToSvcMark),
+		C.ushort(globalData.Tmtu),
+		C.ushort(globalData.VxlanPort),
+		C.ushort(globalData.PSNatStart),
+		C.ushort(globalData.PSNatLen),
+		(*C.char)(unsafe.Pointer(&globalData.HostTunnelIP[0])),
 		C.uint(globalData.Flags),
 		C.ushort(globalData.WgPort),
 		C.uint(globalData.NatIn),
