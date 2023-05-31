@@ -60,16 +60,20 @@ const (
 	ProgIndexDropDebug
 	ProgIndexHostCtConflictDebug
 	ProgIndexIcmpInnerNatDebug
-	ProgIndexV6Prologue
+	ProgIndexV6Main
 	ProgIndexV6Policy
 	ProgIndexV6Allowed
 	ProgIndexV6Icmp
 	ProgIndexV6Drop
-	ProgIndexV6PrologueDebug
+	ProgIndexV6HostCtConflict
+	ProgIndexV6IcmpInnerNat
+	ProgIndexV6MainDebug
 	ProgIndexV6PolicyDebug
 	ProgIndexV6AllowedDebug
 	ProgIndexV6IcmpDebug
 	ProgIndexV6DropDebug
+	ProgIndexV6HostCtConflictDebug
+	ProgIndexV6IcmpInnerNatDebug
 	ProgIndexEndDebug
 	ProgIndexEnd
 
@@ -101,17 +105,21 @@ var ProgramNames = []string{
 	"calico_tc_host_ct_conflict",
 	"calico_tc_skb_icmp_inner_nat",
 	/* ipv6 */
-	"calico_tc6",
+	"calico_tc_main",
 	"calico_tc_norm_pol_tail",
 	"calico_tc_skb_accepted_entrypoint",
 	"calico_tc_skb_send_icmp_replies",
 	"calico_tc_skb_drop",
+	"calico_tc_host_ct_conflict",
+	"calico_tc_skb_icmp_inner_nat",
 	/* ipv6 - debug */
-	"calico_tc6",
+	"calico_tc_main",
 	"calico_tc_norm_pol_tail",
 	"calico_tc_skb_accepted_entrypoint",
 	"calico_tc_skb_send_icmp_replies",
 	"calico_tc_skb_drop",
+	"calico_tc_host_ct_conflict",
+	"calico_tc_skb_icmp_inner_nat",
 }
 
 type ToOrFromEp string
