@@ -14,6 +14,19 @@
 
 const volatile struct cali_tc_globals __globals;
 
+#ifdef IPVER6
+#define IPV " v6"
+#define JUMP_IDX(idx) (idx ## _V6)
+#define JUMP_IDX_DEBUG(idx) (idx ## _V6_DEBUG)
+#else
+#define IPV " v4"
+#define JUMP_IDX(idx) (idx)
+#define JUMP_IDX_DEBUG(idx) (idx ## _DEBUG)
+#endif
+
+#define JUMP(idx) globals->jumps[JUMP_IDX(idx)]
+#define JUMP_DEBUG(idx) globals->jumps[JUMP_IDX_DEBUG(idx)]
+
 SEC("tc")
 int  cali_tc_preamble(struct __sk_buff *skb)
 {
@@ -27,39 +40,39 @@ int  cali_tc_preamble(struct __sk_buff *skb)
 	*globals = __globals;
 
 #if EMIT_LOGS
-	CALI_LOG("tc_preamble iface %s\n", globals->iface_name);
+	CALI_LOG("tc_preamble" IPV " iface %s\n", globals->iface_name);
 #endif
 
 	/* If we have log filter installed, tell the filter where to jump next
 	 * and jump to the filter.
 	 */
 	if (globals->log_filter_jmp != (__u32)-1) {
-		skb->cb[0] = globals->jumps[PROG_INDEX_MAIN];
-		skb->cb[1] = globals->jumps[PROG_INDEX_MAIN_DEBUG];
+		skb->cb[0] = JUMP(PROG_INDEX_MAIN);
+		skb->cb[1] = JUMP_DEBUG(PROG_INDEX_MAIN);
 		bpf_tail_call(skb, &cali_jump_prog_map, globals->log_filter_jmp);
-		CALI_LOG("tc_preamble iface %s failed to call log filter %d\n",
+		CALI_LOG("tc_preamble" IPV " iface %s failed to call log filter %d\n",
 				globals->iface_name, globals->log_filter_jmp);
 		/* try to jump to the regular path */
 	}
 
 	/* Jump to the start of the prog chain. */
 #if EMIT_LOGS
-	CALI_LOG("tc_preamble iface %s jump to %d\n",
-			globals->iface_name, globals->jumps[PROG_INDEX_MAIN]);
+	CALI_LOG("tc_preamble" IPV " iface %s jump to %d\n",
+			globals->iface_name, JUMP(PROG_INDEX_MAIN));
 #endif
-	bpf_tail_call(skb, &cali_jump_map, globals->jumps[PROG_INDEX_MAIN]);
-	CALI_LOG("tc_preamble iface %s failed to call main %d\n",
-			globals->iface_name, globals->jumps[PROG_INDEX_MAIN]);
+	bpf_tail_call(skb, &cali_jump_map, JUMP(PROG_INDEX_MAIN));
+	CALI_LOG("tc_preamble" IPV " iface %s failed to call main %d\n",
+			globals->iface_name, JUMP(PROG_INDEX_MAIN));
 
 	/* Try debug path in the unexpected case of not being able to make the jump. */
-	CALI_LOG("tc_preamble iface %s jump to %d\n",
-			globals->iface_name, globals->jumps[PROG_INDEX_MAIN_DEBUG]);
-	bpf_tail_call(skb, &cali_jump_map, globals->jumps[PROG_INDEX_MAIN_DEBUG]);
-	CALI_LOG("tc_preamble iface %s failed to call debug main %d\n",
-			globals->iface_name, globals->jumps[PROG_INDEX_MAIN_DEBUG]);
+	CALI_LOG("tc_preamble" IPV " iface %s jump to %d\n",
+			globals->iface_name, JUMP_DEBUG(PROG_INDEX_MAIN));
+	bpf_tail_call(skb, &cali_jump_map, JUMP_DEBUG(PROG_INDEX_MAIN));
+	CALI_LOG("tc_preamble" IPV " iface %s failed to call debug main %d\n",
+			globals->iface_name, JUMP_DEBUG(PROG_INDEX_MAIN));
 
 	/* Drop the packet in the unexpected case of not being able to make the jump. */
-	CALI_LOG("tc_preamble iface %s failed to call main %d\n", globals->iface_name, globals->jumps[PROG_INDEX_MAIN]);
+	CALI_LOG("tc_preamble" IPV " iface %s failed to call main %d\n", globals->iface_name, JUMP(PROG_INDEX_MAIN));
 
 	return TC_ACT_SHOT;
 }

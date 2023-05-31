@@ -28,7 +28,7 @@ func TestMalformedIP(t *testing.T) {
 	iphdr := *ipv4Default
 	iphdr.IHL = 4
 
-	_, _, _, _, pktBytes, err := testPacket(nil, &iphdr, nil, nil)
+	_, _, _, _, pktBytes, err := testPacketV4(nil, &iphdr, nil, nil)
 	Expect(err).NotTo(HaveOccurred())
 
 	skbMark = 0
