@@ -28,6 +28,7 @@ metadata:
   name: tigera-operator
   labels:
     name: tigera-operator
+    pod-security.kubernetes.io/enforce: privileged
 EOF
 
 ${HELM} -n tigera-operator template \
