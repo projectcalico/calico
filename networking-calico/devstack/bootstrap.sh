@@ -117,19 +117,14 @@ LOG_COLOR=False
 
 TEMPEST_BRANCH=29.1.0
 
-# We commonly hit GnuTLS errors when git cloning OpenStack repos, for example:
+# We clone from GitHub because we commonly used to hit GnuTLS errors when git cloning OpenStack
+# repos from opendev.org (which is the default server), for example:
+#
 # Cloning into 'devstack'...
 # remote: Enumerating objects: 28788, done.
 # remote: Counting objects: 100% (28788/28788), done.
 # remote: Compressing objects: 100% (9847/9847), done.
 # error: RPC failed; curl 56 GnuTLS recv error (-9): A TLS packet with unexpected length was received.
-#
-# https://stackoverflow.com/questions/38378914/how-to-fix-git-error-rpc-failed-curl-56-gnutls
-# suggests that this can be mitigated by reducing the depth of the git clone.
-GIT_DEPTH=1
-
-# Unfortunately we still see GnuTLS errors with the above.  Let's try cloning from GitHub instead of
-# from opendev.org.
 GIT_BASE=https://github.com
 
 EOF
