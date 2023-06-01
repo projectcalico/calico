@@ -1,5 +1,7 @@
 #!/bin/bash
 
+#TODO: random change to test semaphore change detection
+
 KUBE_VERSION=$1
 BACKEND=$2
 FV_TYPE=$3
