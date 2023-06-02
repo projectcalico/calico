@@ -2,7 +2,7 @@ imagePullSecrets: {}
 
 installation:
   enabled: true
-  kubernetesProvider: ""
+  kubernetesProvider: ''
 
 apiServer:
   enabled: true
@@ -45,4 +45,4 @@ tigeraOperator:
   registry: quay.io
 calicoctl:
   image: docker.io/calico/ctl
-  tag: v3.26.0
+  tag: v3.26.1
