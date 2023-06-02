@@ -44,6 +44,7 @@ clean:
 	rm -rf .go-pkg-cache bin image.created-$(ARCH) build report/*.xml release-notes-*
 	-docker rmi $(KUBE_CONTROLLERS_IMAGE)
 	-docker rmi $(KUBE_CONTROLLERS_IMAGE):latest-amd64
+	-docker rmi $(KUBE_CONTROLLERS_IMAGE):latest-fips-amd64
 	-docker rmi $(FLANNEL_MIGRATION_IMAGE)
 	-docker rmi $(FLANNEL_MIGRATION_IMAGE):latest-amd64
 	rm -f tests/fv/fv.test

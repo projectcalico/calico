@@ -222,6 +222,8 @@ clean: clean-bin clean-hack-lib
 	find . -name '.*.created*' -type f -delete
 	find . -name '.*.published*' -type f -delete
 	rm -rf .lint-cache
+	docker rmi $(API_SERVER_IMAGE):latest-$(ARCH) || true
+	docker rmi $(API_SERVER_IMAGE):latest-fips-$(ARCH) || true
 
 clean-bin:
 	rm -rf $(BINDIR) \

@@ -34,6 +34,10 @@ clean:
 
 	docker rmi $(FLEXVOL_IMAGE):latest-$(ARCH) || true
 	docker rmi $(FLEXVOL_IMAGE):$(VERSION)-$(ARCH) || true
+	docker rmi $(CSI_IMAGE):latest-$(ARCH) || true
+	docker rmi $(REGISTRAR_IMAGE):latest-$(ARCH) || true
+	docker rmi $(CSI_IMAGE):latest-fips-$(ARCH) || true
+	docker rmi $(REGISTRAR_IMAGE):latest-fips-$(ARCH) || true
 	$(MAKE) clean-registrar
 ifeq ($(ARCH),amd64)
 	docker rmi $(FLEXVOL_IMAGE):latest || true
@@ -67,13 +71,13 @@ build: $(BINDIR)/node-driver-registrar-$(ARCH) $(BINDIR)/flexvol-$(ARCH) $(BINDI
 
 # We need CGO to leverage Boring SSL.  However, pod2daemon doesn't perform any crypto,
 # so we can disable it across the board.
-$(BINDIR)/flexvol-amd64: ARCH=amd64
-$(BINDIR)/flexvol-arm64: ARCH=arm64
-$(BINDIR)/flexvol-armv7: ARCH=armv7
-$(BINDIR)/flexvol-ppc64le: ARCH=ppc64le
-$(BINDIR)/flexvol-s390x: ARCH=s390x
-$(BINDIR)/flexvol-%: $(SRC_FILES)
-	$(DOCKER_RUN) -e CGO_ENABLED=0 $(CALICO_BUILD) go build -buildvcs=false -v -o $(BINDIR)/flexvol-$(ARCH) flexvol/flexvoldriver.go
+bin/flexvol-amd64: ARCH=amd64
+bin/flexvol-arm64: ARCH=arm64
+bin/flexvol-armv7: ARCH=armv7
+bin/flexvol-ppc64le: ARCH=ppc64le
+bin/flexvol-s390x: ARCH=s390x
+bin/flexvol-%: $(SRC_FILES)
+	$(DOCKER_RUN) -e CGO_ENABLED=0 $(CALICO_BUILD) go build -buildvcs=false -v -o bin/flexvol-$(ARCH) flexvol/flexvoldriver.go
 
 $(BINDIR)/csi-driver-arm64: ARCH=arm64
 $(BINDIR)/csi-driver-armv7: ARCH=armv7
@@ -92,7 +96,11 @@ endif
 UPSTREAM_REGISTRAR_PROJECT ?= kubernetes-csi/$(REGISTRAR_IMAGE)
 UPSTREAM_REGISTRAR_TAG     ?= v2.8.0
 
+ifeq ($(ARCH), $(filter $(ARCH),amd64))
 REGISTRAR_TIGERA_BUILD_CMD_LDFLAGS = -ldflags '-extldflags "-static" -linkmode external'
+else
+REGISTRAR_TIGERA_BUILD_CMD_LDFLAGS =
+endif
 
 REGISTRAR_TIGERA_BUILD_CMD="cd /go/src/github.com/$(UPSTREAM_REGISTRAR_PROJECT) && \
                     			  go build -buildvcs=false $(REGISTRAR_TIGERA_BUILD_CMD_LDFLAGS) -tags $(TAGS) -v -o $(BINDIR)/csi-node-driver-registrar cmd/csi-node-driver-registrar/*.go"
@@ -148,7 +156,6 @@ clean-registrar:
 # Building the image
 ###############################################################################
 FLEXVOL_CONTAINER_CREATED=.pod2daemon-flexvol.created-$(ARCH)
-FLEXVOL_CONTAINER_FIPS_CREATED=.pod2daemon-flexvol.created-$(ARCH)-fips
 CSI_CONTAINER_CREATED=.calico-csi.created-$(ARCH)
 REGISTRAR_CONTAINER_CREATED=.csi-registrar.created-$(ARCH)
 CSI_CONTAINER_FIPS_CREATED=.calico-csi.created-$(ARCH)-fips
@@ -163,14 +170,9 @@ sub-image-fips-%:
 	$(MAKE) image FIPS=true ARCH=$*
 
 $(FLEXVOL_IMAGE): $(FLEXVOL_CONTAINER_MARKER)
-$(FLEXVOL_CONTAINER_CREATED): Dockerfile.$(ARCH) $(BINDIR)/flexvol-$(ARCH)
-	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(FLEXVOL_IMAGE):latest-$(ARCH) -f Dockerfile.$(ARCH) . --load
+$(FLEXVOL_CONTAINER_CREATED): Dockerfile.$(ARCH) bin/flexvol-$(ARCH)
+	$(DOCKER_BUILD) --build-arg BIN_DIR=bin -t $(FLEXVOL_IMAGE):latest-$(ARCH) -f Dockerfile.$(ARCH) . --load
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest BUILD_IMAGES=$(FLEXVOL_IMAGE)
-	touch $@
-
-$(FLEXVOL_CONTAINER_FIPS_CREATED): Dockerfile.$(ARCH) $(BINDIR)/flexvol-$(ARCH)
-	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(FLEXVOL_IMAGE):latest-fips-$(ARCH) -f Dockerfile.$(ARCH) . --load
-	$(MAKE) FIPS=true retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest-fips BUILD_IMAGES=$(FLEXVOL_IMAGE) LATEST_IMAGE_TAG=latest-fips
 	touch $@
 
 $(CSI_IMAGE): $(CSI_CONTAINER_MARKER)

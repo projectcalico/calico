@@ -63,6 +63,8 @@ clean:
 	find . -name "coverage.xml" -type f -delete
 	find . -name ".coverage" -type f -delete
 	find . -name "*.pyc" -type f -delete
+	docker rmi $(TYPHA_IMAGE):latest-$(ARCH) || true
+	docker rmi $(TYPHA_IMAGE):latest-fips-$(ARCH) || true
 
 
 ###############################################################################

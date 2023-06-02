@@ -71,6 +71,7 @@ clean:
 	-docker rmi $(DIKASTES_IMAGE):$(VERSION)-$(ARCH)
 ifeq ($(ARCH),amd64)
 	-docker rmi $(DIKASTES_IMAGE):latest
+	-docker rmi $(DIKASTES_IMAGE):latest-fips-amd64
 	-docker rmi $(DIKASTES_IMAGE):$(VERSION)
 endif
 

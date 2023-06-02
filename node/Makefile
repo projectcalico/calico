@@ -38,6 +38,19 @@ REMOTE_DEPS = $(LIBBPF_A) \
 ###############################################################################
 include ../lib.Makefile
 
+FIPS ?= false
+
+ifeq ($(FIPS), true)
+NODE_CONTAINER_BIN_DIR=./dist/bin/$(ARCH)-fips
+NODE_CONTAINER_BINARY = $(NODE_CONTAINER_BIN_DIR)/calico-node-$(ARCH)
+NODE_CONTAINER_MARKER=$(NODE_CONTAINER_FIPS_CREATED)
+VALIDARCHES=amd64
+else
+NODE_CONTAINER_BIN_DIR=dist/bin
+NODE_CONTAINER_BINARY = $(NODE_CONTAINER_BIN_DIR)/calico-node-$(ARCH)
+NODE_CONTAINER_MARKER=$(NODE_CONTAINER_CREATED)
+endif
+
 # Set the platform correctly for building docker images.
 ifeq ($(ARCH),arm64)
 # Required for eBPF support in ARM64.
@@ -62,7 +75,6 @@ TEST_CONTAINER_FILES=$(shell find tests/ -type f ! -name '*.created')
 # Variables controlling the image
 NODE_CONTAINER_CREATED=.calico_node.created-$(ARCH)
 NODE_CONTAINER_FIPS_CREATED=.calico_node.created-$(ARCH)-fips
-NODE_CONTAINER_BIN_DIR=./dist/bin/
 WINDOWS_BINARY = $(NODE_CONTAINER_BIN_DIR)/calico-node.exe
 TOOLS_MOUNTNS_BINARY = $(NODE_CONTAINER_BIN_DIR)/mountns-$(ARCH)
 
@@ -216,8 +228,6 @@ filesystem/usr/lib/calico/bpf: $(shell find ../felix/bpf-gpl -type f) $(shell fi
 	cp -r ../felix/bpf-gpl/bin/* $@
 	cp -r ../felix/bpf-apache/bin/* $@
 
-FIPS ?= false
-
 # We need CGO when compiling in Felix for BPF support.
 # Currently CGO can be enabled in ARM64 and AMD64 builds.
 ifeq ($(ARCH), $(filter $(ARCH),amd64 arm64))
@@ -228,17 +238,6 @@ else
 CGO_ENABLED=0
 CGO_LDFLAGS=""
 CGO_CFLAGS=""
-endif
-
-ifeq ($(FIPS), true)
-NODE_CONTAINER_BIN_DIR=./dist/bin/$(ARCH)-fips
-NODE_CONTAINER_BINARY = $(NODE_CONTAINER_BIN_DIR)/calico-node-$(ARCH)
-NODE_CONTAINER_MARKER=$(NODE_CONTAINER_FIPS_CREATED)
-VALIDARCHES=amd64
-else
-NODE_CONTAINER_BIN_DIR=dist/bin
-NODE_CONTAINER_BINARY = $(NODE_CONTAINER_BIN_DIR)/calico-node-$(ARCH)
-NODE_CONTAINER_MARKER=$(NODE_CONTAINER_CREATED)
 endif
 
 DOCKER_GO_BUILD_CGO=$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) -e CGO_LDFLAGS=$(CGO_LDFLAGS) -e CGO_CFLAGS=$(CGO_CFLAGS) $(CALICO_BUILD)
