@@ -18,7 +18,7 @@ BUILD_IMAGES   ?=$(CNI_PLUGIN_IMAGE)
 include ../lib.Makefile
 
 ###############################################################################
-LDFLAGS = -X main.VERSION=$(GIT_VERSION)
+LDFLAGS = -X main.VERSION=$(GIT_VERSION) $(RELEASE_LDFLAGS)
 
 SRC_FILES=$(shell find pkg cmd internal -name '*.go')
 TEST_SRC_FILES=$(shell find tests -name '*.go')
