@@ -91,7 +91,7 @@ func makeK8sNode(ipv4 string, ipv6 string) *v1.Node {
 }
 
 var _ = DescribeTable("Node IP detection failure cases",
-	func(networkingBackend string, expectedExitCode int, rrCId string) {
+	func(networkingBackend string, expectedExitCode int, rrCId string, expectedUpdate bool) {
 		os.Setenv("CALICO_NETWORKING_BACKEND", networkingBackend)
 		os.Setenv("IP", "none")
 		os.Setenv("IP6", "")
@@ -113,16 +113,17 @@ var _ = DescribeTable("Node IP detection failure cases",
 			node.Spec.BGP = &libapi.NodeBGPSpec{RouteReflectorClusterID: rrCId}
 		}
 
-		_ = configureAndCheckIPAddressSubnets(context.Background(), c, &node, &v1.Node{})
+		updated := configureAndCheckIPAddressSubnets(context.Background(), c, &node, &v1.Node{})
+		Expect(updated).To(Equal(expectedUpdate))
 		Expect(my_ec).To(Equal(expectedExitCode))
 		if rrCId != "" {
 			Expect(node.Spec.BGP).NotTo(BeNil())
 		}
 	},
 
-	Entry("startup should terminate if IP is set to none and Calico is used for networking", "bird", 1, ""),
-	Entry("startup should NOT terminate if IP is set to none and Calico is policy-only", "none", 0, ""),
-	Entry("startup should NOT terminate and BGPSpec shouldn't be set to nil", "none", 0, "rrClusterID"),
+	Entry("startup should terminate if IP is set to none and Calico is used for networking", "bird", 1, "", false),
+	Entry("startup should NOT terminate if IP is set to none and Calico is policy-only", "none", 0, "", false),
+	Entry("startup should NOT terminate and BGPSpec shouldn't be set to nil", "none", 0, "rrClusterID", true),
 )
 
 var _ = Describe("Default IPv4 pool CIDR", func() {
@@ -876,7 +877,7 @@ var _ = Describe("FV tests against a real etcd", func() {
 					os.Setenv(env.key, env.value)
 				}
 
-				configureNodeRef(node)
+				Expect(configureNodeRef(node)).To(Equal(true))
 				// If we receive an invalid env var then none will be set.
 				if len(node.Spec.OrchRefs) > 0 {
 					ref := node.Spec.OrchRefs[0]
@@ -893,7 +894,7 @@ var _ = Describe("FV tests against a real etcd", func() {
 				os.Setenv("CALICO_UNKNOWN_NODE_REF", "node1")
 
 				node := &libapi.Node{}
-				configureNodeRef(node)
+				Expect(configureNodeRef(node)).To(Equal(false))
 
 				Expect(node.Spec.OrchRefs).To(HaveLen(0))
 			})
@@ -902,7 +903,7 @@ var _ = Describe("FV tests against a real etcd", func() {
 
 				node := &libapi.Node{}
 				node.Spec.OrchRefs = append(node.Spec.OrchRefs, libapi.OrchRef{"node1", "k8s"}) // nolint: vet
-				configureNodeRef(node)
+				Expect(configureNodeRef(node)).To(Equal(true))
 
 				Expect(node.Spec.OrchRefs).To(HaveLen(1))
 			})

@@ -182,24 +182,21 @@ func Run() {
 		}
 	}
 
-	// If Calico is running in policy only mode we don't need to write BGP related details to the Node.
-	if os.Getenv("CALICO_NETWORKING_BACKEND") != "none" {
-		configureAndCheckIPAddressSubnets(ctx, cli, node, k8sNode)
-		// Configure the node AS number.
-		configureASNumber(node)
-	}
-
+	needsNodeUpdate := configureAndCheckIPAddressSubnets(ctx, cli, node, k8sNode)
+	// Configure the node AS number.
+	needsNodeUpdate = configureASNumber(node) || needsNodeUpdate
 	// Populate a reference to the node based on orchestrator node identifiers.
-	configureNodeRef(node)
+	needsNodeUpdate = configureNodeRef(node) || needsNodeUpdate
+	if needsNodeUpdate {
+		// Apply the updated node resource.
+		if _, err := CreateOrUpdate(ctx, cli, node); err != nil {
+			log.WithError(err).Errorf("Unable to set node resource configuration")
+			utils.Terminate()
+		}
+	}
 
 	// Check expected filesystem
 	ensureFilesystemAsExpected()
-
-	// Apply the updated node resource.
-	if _, err := CreateOrUpdate(ctx, cli, node); err != nil {
-		log.WithError(err).Errorf("Unable to set node resource configuration")
-		utils.Terminate()
-	}
 
 	// Configure IP Pool configuration.
 	configureIPPools(ctx, cli, kubeadmConfig)
@@ -257,6 +254,11 @@ func getMonitorPollInterval() time.Duration {
 }
 
 func configureAndCheckIPAddressSubnets(ctx context.Context, cli client.Interface, node *libapi.Node, k8sNode *v1.Node) bool {
+	// If Calico is running in policy only mode we don't need to write BGP related
+	// details to the Node.
+	if os.Getenv("CALICO_NETWORKING_BACKEND") == "none" {
+		return false
+	}
 	// Configure and verify the node IP addresses and subnets.
 	checkConflicts, err := configureIPsAndSubnets(node, k8sNode, func(incl []string, excl []string, version int) ([]autodetection.Interface, error) {
 		return autodetection.GetInterfaces(net.Interfaces, incl, excl, version)
@@ -309,12 +311,6 @@ func configureAndCheckIPAddressSubnets(ctx context.Context, cli client.Interface
 }
 
 func MonitorIPAddressSubnets() {
-	// If Calico is running in policy only mode we don't need to write BGP
-	// related details to the Node.
-	if os.Getenv("CALICO_NETWORKING_BACKEND") == "none" {
-		log.Info("Skipped monitoring node IP changes when CALICO_NETWORKING_BACKEND=none")
-		return
-	}
 	ctx := context.Background()
 	_, cli := calicoclient.CreateClient()
 	nodeName := utils.DetermineNodeName()
@@ -369,16 +365,18 @@ func MonitorIPAddressSubnets() {
 
 // configureNodeRef will attempt to discover the cluster type it is running on, check to ensure we
 // have not already set it on this Node, and set it if need be.
-func configureNodeRef(node *libapi.Node) {
+// Returns true if the node object needs to updated.
+func configureNodeRef(node *libapi.Node) bool {
 	orchestrator := "k8s"
 	nodeRef := ""
 
 	// Sort out what type of cluster we're running on.
 	if nodeRef = os.Getenv("CALICO_K8S_NODE_REF"); nodeRef == "" {
-		return
+		return false
 	}
 
 	node.Spec.OrchRefs = []libapi.OrchRef{{NodeName: nodeRef, Orchestrator: orchestrator}}
+	return true
 }
 
 // CreateOrUpdate creates the Node if ResourceVersion is not specified,
@@ -690,7 +688,8 @@ func evaluateENVBool(envVar string, defaultValue bool) bool {
 
 // configureASNumber configures the Node resource with the AS number specified
 // in the environment, or is a no-op if not specified.
-func configureASNumber(node *libapi.Node) {
+// Returns true if the node object needs to be updated.
+func configureASNumber(node *libapi.Node) bool {
 	// Extract the AS number from the environment
 	asStr := os.Getenv("AS")
 	if asStr != "" {
@@ -700,6 +699,7 @@ func configureASNumber(node *libapi.Node) {
 		} else {
 			log.Infof("Using AS number specified in environment (AS=%s)", asNum)
 			node.Spec.BGP.ASNumber = &asNum
+			return true
 		}
 	} else {
 		if node.Spec.BGP.ASNumber == nil {
@@ -708,6 +708,7 @@ func configureASNumber(node *libapi.Node) {
 			log.Infof("Using AS number %s configured in node resource", node.Spec.BGP.ASNumber)
 		}
 	}
+	return false
 }
 
 // generateIPv6ULAPrefix return a random generated ULA IPv6 prefix as per RFC 4193.  The pool

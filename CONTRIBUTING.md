@@ -31,7 +31,7 @@ Once you've agreed on a design for your bugfix or new feature, development again
 1. [Create a personal fork][fork] of the repository.
 1. Pull the latest code from the **master** branch and create a feature branch off of this in your fork.
 1. Implement your feature. Commits are cheap in Git; try to split up your code into many. It makes reviewing easier as well as for saner merging.
-1. Make sure that existing tests are passing, and that you've written new tests for any new functionality. Each directory has its own suite of tests. 
+1. Make sure that existing tests are passing, and that you've written new tests for any new functionality. Each directory has its own suite of tests.
 1. Push your feature branch to your fork on GitHub.
 1. [Create a pull request][pulls] using GitHub, from your fork and branch to projectcalico `master`.
     1. If you haven't already done so, you will need to agree to our contributor agreement. See [below](#contributor-agreements).

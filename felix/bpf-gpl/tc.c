@@ -239,6 +239,19 @@ static CALI_BPF_INLINE void calico_tc_process_ct_lookup(struct cali_tc_ctx *ctx)
 {
 	CALI_DEBUG("conntrack entry flags 0x%x\n", ctx->state->ct_result.flags);
 
+	/* We are forwarding a packet if it has a seen mark (that is another
+	 * program has seen it already) and is either not routed through the
+	 * bpfnat iface (which may be true for host traffic) or has the specific
+	 * reasons set.
+	 */
+	bool forwarding = CALI_F_EGRESS &&
+		skb_mark_equals(ctx->skb, CALI_SKB_MARK_SEEN_MASK, CALI_SKB_MARK_SEEN) &&
+		(!skb_mark_equals(ctx->skb, CALI_SKB_MARK_FROM_NAT_IFACE_OUT, CALI_SKB_MARK_FROM_NAT_IFACE_OUT) ||
+		 (skb_mark_equals(ctx->skb, CALI_SKB_MARK_BYPASS_MASK, CALI_SKB_MARK_FALLTHROUGH) ||
+		  skb_mark_equals(ctx->skb, CALI_SKB_MARK_BYPASS_MASK, CALI_SKB_MARK_NAT_OUT) ||
+		  skb_mark_equals(ctx->skb, CALI_SKB_MARK_BYPASS_MASK, CALI_SKB_MARK_MASQ) ||
+		  skb_mark_equals(ctx->skb, CALI_SKB_MARK_BYPASS_MASK, CALI_SKB_MARK_SKIP_FIB)));
+
 	if (HAS_HOST_CONFLICT_PROG &&
 			(ctx->state->ct_result.flags & CALI_CT_FLAG_VIA_NAT_IF) &&
 			!(ctx->skb->mark & (CALI_SKB_MARK_FROM_NAT_IFACE_OUT | CALI_SKB_MARK_SEEN))) {
@@ -467,7 +480,7 @@ syn_force_policy:
 		}
 	}
 
-	if (rt_addr_is_local_host(ctx->state->ip_src)) {
+	if (!forwarding && rt_addr_is_local_host(ctx->state->ip_src)) {
 		CALI_DEBUG("Source IP is local host.\n");
 		if (CALI_F_TO_HEP && is_failsafe_out(ctx->state->ip_proto, ctx->state->post_nat_dport, ctx->state->post_nat_ip_dst)) {
 			CALI_DEBUG("Outbound failsafe port: %d. Skip policy.\n", ctx->state->post_nat_dport);

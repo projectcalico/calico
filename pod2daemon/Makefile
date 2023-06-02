@@ -97,7 +97,7 @@ UPSTREAM_REGISTRAR_PROJECT ?= kubernetes-csi/$(REGISTRAR_IMAGE)
 UPSTREAM_REGISTRAR_TAG     ?= v2.8.0
 
 ifeq ($(ARCH), $(filter $(ARCH),amd64))
-REGISTRAR_TIGERA_BUILD_CMD_LDFLAGS = -ldflags '-extldflags "-static" -linkmode external'
+REGISTRAR_TIGERA_BUILD_CMD_LDFLAGS = -ldflags '-linkmode external -extldflags -static'
 else
 REGISTRAR_TIGERA_BUILD_CMD_LDFLAGS =
 endif

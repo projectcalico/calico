@@ -1124,30 +1124,90 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					_ = k8sClient
 				})
 
-				It("should handle NAT outgoing", func() {
-					By("SNATting outgoing traffic with the flag set")
-					cc.ExpectSNAT(w[0][0], felixes[0].IP, hostW[1])
-					cc.CheckConnectivity(conntrackChecks(felixes)...)
+				Context("with both applyOnForward=true/false", func() {
+					BeforeEach(func() {
+						// The next two policies are to make sure that applyOnForward of a
+						// global policy is applied correctly to a host endpoint. The deny
+						// policy is not applied to forwarded traffic!
 
-					if testOpts.tunnel == "none" {
-						By("Leaving traffic alone with the flag clear")
-						pool, err := calicoClient.IPPools().Get(context.TODO(), "test-pool", options2.GetOptions{})
-						Expect(err).NotTo(HaveOccurred())
-						pool.Spec.NATOutgoing = false
-						pool, err = calicoClient.IPPools().Update(context.TODO(), pool, options2.SetOptions{})
-						Expect(err).NotTo(HaveOccurred())
-						cc.ResetExpectations()
-						cc.ExpectSNAT(w[0][0], w[0][0].IP, hostW[1])
-						cc.CheckConnectivity(conntrackChecks(felixes)...)
+						By("global policy denies traffic to host 1 on host 0", func() {
 
-						By("SNATting again with the flag set")
-						pool.Spec.NATOutgoing = true
-						pool, err = calicoClient.IPPools().Update(context.TODO(), pool, options2.SetOptions{})
-						Expect(err).NotTo(HaveOccurred())
-						cc.ResetExpectations()
+							nets := []string{felixes[1].IP + "/32"}
+							switch testOpts.tunnel {
+							case "ipip":
+								nets = append(nets, felixes[1].ExpectedIPIPTunnelAddr+"/32")
+							}
+
+							pol := api.NewGlobalNetworkPolicy()
+							pol.Namespace = "fv"
+							pol.Name = "host-0-1"
+							pol.Spec.Egress = []api.Rule{
+								{
+									Action: "Deny",
+									Destination: api.EntityRule{
+										Nets: nets,
+									},
+								},
+							}
+							pol.Spec.Selector = "node=='" + felixes[0].Name + "'"
+							pol.Spec.ApplyOnForward = false
+
+							pol = createPolicy(pol)
+						})
+
+						By("global policy allows forwarded traffic to host 1 on host 0", func() {
+
+							nets := []string{felixes[1].IP + "/32"}
+							switch testOpts.tunnel {
+							case "ipip":
+								nets = append(nets, felixes[1].ExpectedIPIPTunnelAddr+"/32")
+							}
+
+							pol := api.NewGlobalNetworkPolicy()
+							pol.Namespace = "fv"
+							pol.Name = "host-0-1-forward"
+							pol.Spec.Egress = []api.Rule{
+								{
+									Action: "Allow",
+									Destination: api.EntityRule{
+										Nets: nets,
+									},
+								},
+							}
+							pol.Spec.Selector = "node=='" + felixes[0].Name + "'"
+							pol.Spec.ApplyOnForward = true
+
+							pol = createPolicy(pol)
+						})
+
+						bpfWaitForPolicy(felixes[0], "eth0", "egress", "default.host-0-1")
+
+					})
+					It("should handle NAT outgoing", func() {
+						By("SNATting outgoing traffic with the flag set")
 						cc.ExpectSNAT(w[0][0], felixes[0].IP, hostW[1])
 						cc.CheckConnectivity(conntrackChecks(felixes)...)
-					}
+
+						if testOpts.tunnel == "none" {
+							By("Leaving traffic alone with the flag clear")
+							pool, err := calicoClient.IPPools().Get(context.TODO(), "test-pool", options2.GetOptions{})
+							Expect(err).NotTo(HaveOccurred())
+							pool.Spec.NATOutgoing = false
+							pool, err = calicoClient.IPPools().Update(context.TODO(), pool, options2.SetOptions{})
+							Expect(err).NotTo(HaveOccurred())
+							cc.ResetExpectations()
+							cc.ExpectSNAT(w[0][0], w[0][0].IP, hostW[1])
+							cc.CheckConnectivity(conntrackChecks(felixes)...)
+
+							By("SNATting again with the flag set")
+							pool.Spec.NATOutgoing = true
+							pool, err = calicoClient.IPPools().Update(context.TODO(), pool, options2.SetOptions{})
+							Expect(err).NotTo(HaveOccurred())
+							cc.ResetExpectations()
+							cc.ExpectSNAT(w[0][0], felixes[0].IP, hostW[1])
+							cc.CheckConnectivity(conntrackChecks(felixes)...)
+						}
+					})
 				})
 
 				It("connectivity from all workloads via workload 0's main IP", func() {

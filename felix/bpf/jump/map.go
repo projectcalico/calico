@@ -17,7 +17,6 @@ package jump
 import (
 	"encoding/binary"
 
-	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/maps"
 )
 
@@ -58,8 +57,8 @@ func Key(idx int) []byte {
 	return k[:]
 }
 
-func Value(fd bpf.ProgFD) []byte {
+func Value(fd uint32) []byte {
 	var v [4]byte
-	binary.LittleEndian.PutUint32(v[:], uint32(fd))
+	binary.LittleEndian.PutUint32(v[:], fd)
 	return v[:]
 }

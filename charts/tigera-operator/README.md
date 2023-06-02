@@ -87,9 +87,11 @@ ownership of the helm resources to the new chart location.
 The default values.yaml should be suitable for most basic deployments.
 
 ```
-# Image pull secrets to provision for pulling images from private registries.
-# This field is a map of desired Secret name to .dockerconfigjson formatted data to use for the secret.
-# Populates the `imagePullSecrets` property for all Pods controlled by the `Installation` resource.
+# imagePullSecrets is a special helm field which, when specified, creates a secret
+# containing the pull secret which is used to pull all images deployed by this helm chart and the resulting operator.
+# this field is a map where the key is the desired secret name and the value is the contents of the imagePullSecret.
+#
+# Example: --set-file imagePullSecrets.gcr=./pull-secret.json
 imagePullSecrets: {}
 
 # Configures general installation parameters for Calico. Schema is based
@@ -98,6 +100,13 @@ imagePullSecrets: {}
 installation:
   enabled: true
   kubernetesProvider: ""
+
+  # imagePullSecrets are configured on all images deployed by the tigera-operator.
+  # secrets specified here must exist in the tigera-operator namespace; they won't be created by the operator or helm.
+  # imagePullSecrets are a slice of LocalObjectReferences, which is the same format they appear as on deployments.
+  #
+  # Example: --set installation.imagePullSecrets[0].name=my-existing-secret
+  imagePullSecrets: []
 
 # Configures general installation parameters for Calico. Schema is based
 # on the operator.tigera.io/Installation API documented

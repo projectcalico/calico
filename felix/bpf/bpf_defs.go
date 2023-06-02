@@ -32,6 +32,10 @@ func (f ProgFD) Close() error {
 	return unix.Close(int(f))
 }
 
+func (f ProgFD) FD() uint32 {
+	return uint32(f)
+}
+
 type ProgResult struct {
 	RC       int32
 	Duration time.Duration
