@@ -37,6 +37,20 @@ else
 CGO_ENABLED=0
 endif
 
+CONTAINER_CREATED=image.created-$(ARCH)
+CONTAINER_FIPS_CREATED=image.created-$(ARCH)-fips
+
+FIPS ?= false
+
+ifeq ($(FIPS), true)
+CONTAINER_MARKER=$(CONTAINER_FIPS_CREATED)
+VALIDARCHES=amd64
+BINDIR=bin/$(ARCH)-fips
+else
+CONTAINER_MARKER=$(CONTAINER_CREATED)
+BINDIR=bin
+endif
+
 # Shortcut targets
 default: build
 
@@ -57,6 +71,7 @@ clean:
 	-docker rmi $(DIKASTES_IMAGE):$(VERSION)-$(ARCH)
 ifeq ($(ARCH),amd64)
 	-docker rmi $(DIKASTES_IMAGE):latest
+	-docker rmi $(DIKASTES_IMAGE):latest-fips-amd64
 	-docker rmi $(DIKASTES_IMAGE):$(VERSION)
 endif
 
@@ -80,35 +95,43 @@ build-all: $(VALIDARCHES)
 .PHONY: build
 ## Build the binary for the current architecture and platform
 build: 
-	$(MAKE) bin/dikastes-$(ARCH) ARCH=$(ARCH)
-	$(MAKE) bin/healthz-$(ARCH) ARCH=$(ARCH)
+	$(MAKE) $(BINDIR)/dikastes-$(ARCH) ARCH=$(ARCH)
+	$(MAKE) $(BINDIR)/healthz-$(ARCH) ARCH=$(ARCH)
 
-bin/dikastes-amd64: ARCH=amd64
-bin/dikastes-arm64: ARCH=arm64
-bin/dikastes-ppc64le: ARCH=ppc64le
-bin/dikastes-s390x: ARCH=s390x
-bin/dikastes-%: protobuf $(SRC_FILES)
+$(BINDIR)/dikastes-amd64: ARCH=amd64
+$(BINDIR)/dikastes-arm64: ARCH=arm64
+$(BINDIR)/dikastes-ppc64le: ARCH=ppc64le
+$(BINDIR)/dikastes-s390x: ARCH=s390x
+$(BINDIR)/dikastes-%: protobuf $(SRC_FILES)
 ifeq ($(ARCH),amd64)
+ifeq ($(FIPS),true)
 	$(call build_cgo_boring_binary, ./cmd/dikastes, $@)
 else
-	$(DOCKER_RUN_RO) \
-	  -e CGO_ENABLED=$(CGO_ENABLED) \
-	  -v $(CURDIR)/bin:/go/src/$(PACKAGE_NAME)/bin \
-	  $(CALICO_BUILD) go build -buildvcs=false -ldflags "-X main.VERSION=$(GIT_VERSION)" -v -o bin/dikastes-$(ARCH) ./cmd/dikastes
+	$(call build_binary, ./cmd/dikastes, $@)
 endif
-
-bin/healthz-amd64: ARCH=amd64
-bin/healthz-arm64: ARCH=arm64
-bin/healthz-ppc64le: ARCH=ppc64le
-bin/healthz-s390x: ARCH=s390x
-bin/healthz-%: protobuf $(SRC_FILES)
-ifeq ($(ARCH),amd64)
-	$(call build_static_cgo_boring_binary, ./cmd/healthz, $@)
 else
 	$(DOCKER_RUN_RO) \
 	  -e CGO_ENABLED=$(CGO_ENABLED) \
 	  -v $(CURDIR)/bin:/go/src/$(PACKAGE_NAME)/bin \
-	  $(CALICO_BUILD) go build -buildvcs=false -ldflags "-X main.VERSION=$(GIT_VERSION)" -v -o bin/healthz-$(ARCH) ./cmd/healthz
+	  $(CALICO_BUILD) go build -buildvcs=false -ldflags "-X main.VERSION=$(GIT_VERSION)" -v -o $(BINDIR)/dikastes-$(ARCH) ./cmd/dikastes
+endif
+
+$(BINDIR)/healthz-amd64: ARCH=amd64
+$(BINDIR)/healthz-arm64: ARCH=arm64
+$(BINDIR)/healthz-ppc64le: ARCH=ppc64le
+$(BINDIR)/healthz-s390x: ARCH=s390x
+$(BINDIR)/healthz-%: protobuf $(SRC_FILES)
+ifeq ($(ARCH),amd64)
+ifeq ($(FIPS), true)
+	$(call build_static_cgo_boring_binary, ./cmd/healthz, $@)
+else
+	$(call build_static_binary, ./cmd/healthz, $@)
+endif
+else
+	$(DOCKER_RUN_RO) \
+	  -e CGO_ENABLED=$(CGO_ENABLED) \
+	  -v $(CURDIR)/bin:/go/src/$(PACKAGE_NAME)/bin \
+	  $(CALICO_BUILD) go build -buildvcs=false -ldflags "-X main.VERSION=$(GIT_VERSION)" -v -o $(BINDIR)/healthz-$(ARCH) ./cmd/healthz
 endif
 
 # We use gogofast for protobuf compilation.  Regular gogo is incompatible with
@@ -142,19 +165,24 @@ proto/healthz.pb.go: proto/healthz.proto
 
 # Building the image
 ###############################################################################
-CONTAINER_CREATED=.dikastes.created-$(ARCH)
 .PHONY: image $(DIKASTES_IMAGE)
 image: $(DIKASTES_IMAGE)
-image-all: $(addprefix sub-image-,$(VALIDARCHES))
+image-all: $(addprefix sub-image-,$(VALIDARCHES)) sub-image-fips-amd64
 sub-image-%:
 	$(MAKE) image ARCH=$*
+sub-image-fips-%:
+	$(MAKE) image FIPS=true ARCH=$*
 
-$(DIKASTES_IMAGE): $(CONTAINER_CREATED)
-$(CONTAINER_CREATED): Dockerfile.$(ARCH) bin/dikastes-$(ARCH) bin/healthz-$(ARCH)
-	$(DOCKER_BUILD) -t $(DIKASTES_IMAGE):latest-$(ARCH) -f Dockerfile.$(ARCH) . --load
+$(DIKASTES_IMAGE): $(CONTAINER_MARKER)
+$(CONTAINER_CREATED): Dockerfile.$(ARCH) $(BINDIR)/dikastes-$(ARCH) $(BINDIR)/healthz-$(ARCH)
+	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(DIKASTES_IMAGE):latest-$(ARCH) -f Dockerfile.$(ARCH) . --load
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 
+$(CONTAINER_FIPS_CREATED): Dockerfile.$(ARCH) $(BINDIR)/dikastes-$(ARCH) $(BINDIR)/healthz-$(ARCH)
+	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(DIKASTES_IMAGE):latest-fips-$(ARCH) -f Dockerfile.$(ARCH) . --load
+	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
+	touch $@
 ###############################################################################
 # UTs
 ###############################################################################
@@ -205,6 +233,8 @@ release-build: .release-$(VERSION).created
 	$(MAKE) retag-build-images-with-registries IMAGETAG=$(VERSION) RELEASE=true
 	# Generate the `latest` images.
 	$(MAKE) retag-build-images-with-registries IMAGETAG=latest RELEASE=true
+	$(MAKE) FIPS=true retag-build-images-with-registries IMAGETAG=$(VERSION)-fips RELEASE=true LATEST_IMAGE_TAG=latest-fips
+	$(MAKE) FIPS=true retag-build-images-with-registries IMAGETAG=latest-fips RELEASE=true LATEST_IMAGE_TAG=latest-fips
 	touch $@
 
 ## Verifies the release artifacts produces by `make release-build` are correct.
@@ -221,6 +251,7 @@ release-verify: release-prereqs
 release-publish: release-prereqs .release-$(VERSION).published
 .release-$(VERSION).published:
 	$(MAKE) push-images-to-registries push-manifests IMAGETAG=$(VERSION) RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
+	$(MAKE) FIPS=true push-images-to-registries push-manifests IMAGETAG=$(VERSION)-fips RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
 	touch $@
 
 # WARNING: Only run this target if this release is the latest stable release. Do NOT
