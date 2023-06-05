@@ -63,11 +63,11 @@ endif
 
 .PHONY: build-all
 ## Build the binaries for all architectures and platforms
-build-all: $(addprefix $(BINDIR)/flexvol-,$(VALIDARCHES)) $(addprefix $(BINDIR)/csi-driver-,$(VALIDARCHES)) $(addprefix $(BINDIR)/node-driver-registrar-,$(VALIDARCHES))
+build-all: $(addprefix bin/flexvol-,$(VALIDARCHES)) $(addprefix $(BINDIR)/csi-driver-,$(VALIDARCHES)) $(addprefix $(BINDIR)/node-driver-registrar-,$(VALIDARCHES))
 
 .PHONY: build
 ## Build the binary for the current architecture and platform
-build: $(BINDIR)/node-driver-registrar-$(ARCH) $(BINDIR)/flexvol-$(ARCH) $(BINDIR)/csi-driver-$(ARCH)
+build: $(BINDIR)/node-driver-registrar-$(ARCH) bin/flexvol-$(ARCH) $(BINDIR)/csi-driver-$(ARCH)
 
 # We need CGO to leverage Boring SSL.  However, pod2daemon doesn't perform any crypto,
 # so we can disable it across the board.
@@ -90,7 +90,7 @@ $(BINDIR)/csi-driver-amd64: $(SRC_FILES)
 ifeq ($(FIPS), true)
 	$(call build_static_cgo_boring_binary, csidriver/main.go, $@)
 else
-	$(call build_binary, csidriver/main.go, $@)
+	$(call build_static_binary, csidriver/main.go, $@)
 endif
 
 UPSTREAM_REGISTRAR_PROJECT ?= kubernetes-csi/$(REGISTRAR_IMAGE)
@@ -110,12 +110,12 @@ REGISTRAR_UPSTREAM_BUILD_CMD="cd /go/src/github.com/$(UPSTREAM_REGISTRAR_PROJECT
 ifeq ($(ARCH), $(filter $(ARCH),amd64))
 # We need CGO to leverage Boring SSL.  However, the cross-compile doesn't support CGO yet.
 REGISTRAR_BUILD_CMD=$(REGISTRAR_TIGERA_BUILD_CMD)
-ifeq ($(FIPS), true)
 CGO_ENABLED=1
+ifeq ($(FIPS), true)
 TAGS=fipsstrict
 GOEXPERIMENT=boringcrypto
 else
-CGO_ENABLED=0
+GOEXPERIMENT=""
 endif
 else ifeq ($(ARCH), $(filter $(ARCH),arm64))
 CGO_ENABLED=0
