@@ -1015,7 +1015,6 @@ func (h *connection) sendMsg(msg interface{}) error {
 		// Optimisation, don't bother to send if we're being torn down.
 		return h.cxt.Err()
 	}
-	h.logCxt.WithField("msg", msg).Trace("Sending message to client")
 	envelope := syncproto.Envelope{
 		Message: msg,
 	}
