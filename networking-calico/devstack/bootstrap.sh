@@ -16,6 +16,7 @@
 
 set -ex
 
+sudo pip uninstall -y setuptools
 sudo find / -name "*setuptools*"
 sudo pip list || true
 
