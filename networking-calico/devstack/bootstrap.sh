@@ -16,6 +16,9 @@
 
 set -ex
 
+sudo find / -name "*setuptools*"
+sudo pip list || true
+
 #------------------------------------------------------------------------------
 # IMPORTANT - Review before use!
 #
