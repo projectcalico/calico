@@ -16,8 +16,6 @@
 
 set -ex
 
-sudo apt-get remove -y python3-setuptools
-
 #------------------------------------------------------------------------------
 # IMPORTANT - Review before use!
 #
