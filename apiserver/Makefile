@@ -1,7 +1,7 @@
 include ../metadata.mk
 
 PACKAGE_NAME = github.com/projectcalico/calico/apiserver
-LOCAL_CHECKS     = lint-cache-dir goimports check-boring-ssl
+LOCAL_CHECKS     = lint-cache-dir goimports
 
 # Used so semaphore commits generated files when pins are updated
 EXTRA_FILES_TO_COMMIT=*_generated.go *_generated.*.go
@@ -56,6 +56,17 @@ LDFLAGS = -X $(PACKAGE_NAME)/cmd/apiserver/server.VERSION=$(APISERVER_VERSION) \
 include ../lib.Makefile
 
 
+FIPS ?= false
+
+ifeq ($(FIPS), true)
+CONTAINER_MARKER=$(CONTAINER_FIPS_CREATED)
+VALIDARCHES=amd64
+BINDIR=bin/$(ARCH)-fips
+else
+CONTAINER_MARKER=$(CONTAINER_CREATED)
+BINDIR=bin
+endif
+
 # Use ARCH specific build image.
 CALICO_BUILD:=$(CALICO_BUILD)-$(ARCH)
 
@@ -82,7 +93,11 @@ cd: image-all cd-common
 #########################################################################
 $(BINDIR)/apiserver-$(ARCH): $(K8SAPISERVER_GO_FILES)
 ifeq ($(ARCH),amd64)
+ifeq ($(FIPS), true)
 	$(call build_cgo_boring_binary, $(PACKAGE_NAME)/cmd/apiserver, $@)
+else
+	$(call build_binary, $(PACKAGE_NAME)/cmd/apiserver, $@)
+endif
 else
 	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) \
 		sh -c '$(GIT_CONFIG_SSH) go build -v -o $@ -ldflags "$(VERSION_FLAGS)" $(PACKAGE_NAME)/cmd/apiserver'
@@ -97,16 +112,25 @@ $(BINDIR)/filecheck-$(ARCH): $(K8SAPISERVER_GO_FILES)
 build: image
 
 CONTAINER_CREATED=.apiserver.created-$(ARCH)
+CONTAINER_FIPS_CREATED=.apiserver.created-$(ARCH)-fips
+
 .PHONY: image $(API_SERVER_IMAGE)
 image: $(API_SERVER_IMAGE)
-image-all: $(addprefix sub-image-,$(VALIDARCHES))
+image-all: $(addprefix sub-image-,$(VALIDARCHES)) sub-image-fips-amd64
 sub-image-%:
 	$(MAKE) image ARCH=$*
+sub-image-fips-%:
+	$(MAKE) image FIPS=true ARCH=$*
 
-$(API_SERVER_IMAGE): register $(CONTAINER_CREATED)
+$(API_SERVER_IMAGE): register $(CONTAINER_MARKER)
 $(CONTAINER_CREATED): docker-image/Dockerfile.$(ARCH) $(BINDIR)/apiserver-$(ARCH) $(BINDIR)/filecheck-$(ARCH)
-	$(DOCKER_BUILD) -t $(API_SERVER_IMAGE):latest-$(ARCH) -f docker-image/Dockerfile.$(ARCH) . --load
+	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(API_SERVER_IMAGE):latest-$(ARCH) -f docker-image/Dockerfile.$(ARCH) . --load
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
+	touch $@
+
+$(CONTAINER_FIPS_CREATED): docker-image/Dockerfile.$(ARCH) $(BINDIR)/apiserver-$(ARCH) $(BINDIR)/filecheck-$(ARCH)
+	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(API_SERVER_IMAGE):latest-fips-$(ARCH) -f docker-image/Dockerfile.$(ARCH) . --load
+	$(MAKE) FIPS=true retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
 	touch $@
 
 .PHONY: lint-cache-dir
@@ -198,6 +222,8 @@ clean: clean-bin clean-hack-lib
 	find . -name '.*.created*' -type f -delete
 	find . -name '.*.published*' -type f -delete
 	rm -rf .lint-cache
+	docker rmi $(API_SERVER_IMAGE):latest-$(ARCH) || true
+	docker rmi $(API_SERVER_IMAGE):latest-fips-$(ARCH) || true
 
 clean-bin:
 	rm -rf $(BINDIR) \
@@ -216,6 +242,8 @@ release-build: .release-$(VERSION).created
 	$(MAKE) retag-build-images-with-registries IMAGETAG=$(VERSION) RELEASE=true
 	# Generate the `latest` images.
 	$(MAKE) retag-build-images-with-registries IMAGETAG=latest RELEASE=true
+	$(MAKE) FIPS=true retag-build-images-with-registries IMAGETAG=$(VERSION)-fips RELEASE=true LATEST_IMAGE_TAG=latest-fips
+	$(MAKE) FIPS=true retag-build-images-with-registries IMAGETAG=latest-fips RELEASE=true LATEST_IMAGE_TAG=latest-fips
 	touch $@
 
 ## Verifies the release artifacts produces by `make release-build` are correct.
@@ -232,6 +260,7 @@ release-verify: release-prereqs
 release-publish: release-prereqs .release-$(VERSION).published
 .release-$(VERSION).published:
 	$(MAKE) push-images-to-registries push-manifests IMAGETAG=$(VERSION) RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
+	$(MAKE) FIPS=true push-images-to-registries push-manifests IMAGETAG=$(VERSION)-fips RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
 	touch $@
 
 # WARNING: Only run this target if this release is the latest stable release. Do NOT
