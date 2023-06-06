@@ -116,6 +116,7 @@ LOGFILE=stack.log
 LOG_COLOR=False
 
 TEMPEST_BRANCH=29.1.0
+NEUTRON_BRANCH=0a590e57da
 
 # We clone from GitHub because we commonly used to hit GnuTLS errors when git cloning OpenStack
 # repos from opendev.org (which is the default server), for example:
