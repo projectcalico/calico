@@ -148,7 +148,7 @@ $(TYPHA_CONTAINER_CREATED): $(BINDIR)/calico-typha-$(ARCH) \
 	mkdir -p docker-image/bin
 	cp $(BINDIR)/calico-typha-$(ARCH) docker-image/bin/
 	cp LICENSE docker-image/
-	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(TYPHA_IMAGE):latest-$(ARCH) --file ./docker-image/Dockerfile.$(ARCH) docker-image --load
+	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(TYPHA_IMAGE_WITH_TAG) --file ./docker-image/Dockerfile.$(ARCH) docker-image --load
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $(TYPHA_CONTAINER_CREATED)
 

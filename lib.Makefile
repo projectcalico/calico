@@ -233,7 +233,7 @@ define build_static_binary
                 sh -c '$(GIT_CONFIG_SSH) \
                 go build -o $(2)  \
                 -v -buildvcs=false \
-                -ldflags "$(LDFLAGS) -linkmode external -extldflags -static" \
+                -ldflags "$(LDFLAGS) -extldflags -static" \
                 $(1)'
 endef
 
