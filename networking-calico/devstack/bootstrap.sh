@@ -16,6 +16,11 @@
 
 set -ex
 
+sudo pip uninstall -y setuptools
+sudo rm -rf /usr/local/lib/python3.8/dist-packages/setuptools-67.8.0.dist-info
+sudo find / -name "*setuptools*"
+sudo pip list || true
+
 #------------------------------------------------------------------------------
 # IMPORTANT - Review before use!
 #
@@ -116,6 +121,7 @@ LOGFILE=stack.log
 LOG_COLOR=False
 
 TEMPEST_BRANCH=29.1.0
+NEUTRON_BRANCH=0a590e57da
 
 # We clone from GitHub because we commonly used to hit GnuTLS errors when git cloning OpenStack
 # repos from opendev.org (which is the default server), for example:
