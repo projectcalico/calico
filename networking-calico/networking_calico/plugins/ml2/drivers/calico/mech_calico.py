@@ -88,6 +88,11 @@ from keystoneauth1.identity import v3
 from keystoneauth1 import session
 from keystoneclient.v3.client import Client as KeystoneClient
 
+# Register [AGENT] options, which we need in order to successfully use
+# PluginReportStateAPI.
+from neutron.conf.agent import common as config
+config.register_agent_state_opts_helper(cfg.CONF)
+
 LOG = log.getLogger(__name__)
 
 calico_opts = [
