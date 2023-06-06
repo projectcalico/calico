@@ -16,6 +16,11 @@
 
 set -ex
 
+sudo pip uninstall -y setuptools
+sudo rm -rf /usr/local/lib/python3.8/dist-packages/setuptools-67.8.0.dist-info
+sudo find / -name "*setuptools*"
+sudo pip list || true
+
 #------------------------------------------------------------------------------
 # IMPORTANT - Review before use!
 #
@@ -160,8 +165,13 @@ ls -la /opt/stack
 sudo -u stack -H -E bash -x <<'EOF'
 
 set
+set -x
 cd /opt/stack/devstack
 ./stack.sh
+echo Reached here 1
+
+set
+pwd
 
 if ! ${TEMPEST:-false}; then
     if [ x${SERVICE_HOST:-$HOSTNAME} = x$HOSTNAME ]; then
@@ -177,5 +187,7 @@ else
     cd /opt/stack/tempest
     tox -eall -- $DEVSTACK_GATE_TEMPEST_REGEX --concurrency=$TEMPEST_CONCURRENCY
 fi
+
+echo Reached here 2
 
 EOF
