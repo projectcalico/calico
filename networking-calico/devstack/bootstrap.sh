@@ -165,8 +165,18 @@ ls -la /opt/stack
 sudo -u stack -H -E bash -x <<'EOF'
 
 set
+set -x
 cd /opt/stack/devstack
-./stack.sh
+sed -i '/set +o xtrace/d' stack.sh
+grep xtrace stack.sh
+
+./stack.sh || true
+set -x
+set
+echo Reached here 1
+
+set
+pwd
 
 if ! ${TEMPEST:-false}; then
     if [ x${SERVICE_HOST:-$HOSTNAME} = x$HOSTNAME ]; then
@@ -182,5 +192,7 @@ else
     cd /opt/stack/tempest
     tox -eall -- $DEVSTACK_GATE_TEMPEST_REGEX --concurrency=$TEMPEST_CONCURRENCY
 fi
+
+echo Reached here 2
 
 EOF
