@@ -163,11 +163,12 @@ ls -la /opt/stack
 
 # Stack!
 sudo -u stack -H -E bash -x <<'EOF'
-
-set
 cd /opt/stack/devstack
 ./stack.sh
+EOF
 
+sudo -u stack -H -E bash -x <<'EOF'
+cd /opt/stack/devstack
 if ! ${TEMPEST:-false}; then
     if [ x${SERVICE_HOST:-$HOSTNAME} = x$HOSTNAME ]; then
         # We're not running Tempest tests, and we're on the controller node.
