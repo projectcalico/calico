@@ -167,7 +167,7 @@ sudo -u stack -H -E bash -x <<'EOF'
 set
 set -x
 cd /opt/stack/devstack
-sed -i '/set \+o xtrace/d' stack.sh
+sed -i '/set +o xtrace/d' stack.sh
 grep xtrace stack.sh
 
 ./stack.sh || true
