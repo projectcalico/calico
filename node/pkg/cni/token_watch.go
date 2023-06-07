@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -22,6 +23,7 @@ import (
 
 const (
 	defaultServiceAccountName      = "calico-cni-plugin"
+	defaultServiceAccountNameWin   = "calico-cni-plugin-windows"
 	serviceAccountNamespace        = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
 	tokenFile                      = "/var/run/secrets/kubernetes.io/serviceaccount/token"
 	defaultCNITokenValiditySeconds = 24 * 60 * 60
@@ -237,11 +239,14 @@ func Run() {
 }
 
 // CNIServiceAccountName returns the name of the serviceaccount to use for the CNI plugin token request.
-// This can be set via the CALICO_CNI_SERVICE_ACCOUNT environment variable, and defaults to "calico-cni-plugin" otherwise.
+// This can be set via the CALICO_CNI_SERVICE_ACCOUNT environment variable, and defaults to "calico-cni-plugin" (on Linux, "calico-cni-plugin-windows" on Windows) otherwise.
 func CNIServiceAccountName() string {
 	if sa := os.Getenv("CALICO_CNI_SERVICE_ACCOUNT"); sa != "" {
 		logrus.WithField("name", sa).Debug("Using service account from CALICO_CNI_SERVICE_ACCOUNT")
 		return sa
+	}
+	if runtime.GOOS == "windows" {
+		return defaultServiceAccountNameWin
 	}
 	return defaultServiceAccountName
 }
