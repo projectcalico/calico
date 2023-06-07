@@ -170,7 +170,6 @@ cd /opt/stack/devstack
 echo =======================
 tail -30 stack.sh
 echo =======================
-sed -i '/set \+o xtrace/d' stack.sh
 
 ./stack.sh || true
 echo Reached here 1
