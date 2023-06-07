@@ -167,11 +167,7 @@ sudo -u stack -H -E bash -x <<'EOF'
 set
 set -x
 cd /opt/stack/devstack
-echo =======================
-tail -30 stack.sh
-echo =======================
-
-./stack.sh || true
+./stack.sh
 echo Reached here 1
 
 set
