@@ -167,12 +167,12 @@ sudo -u stack -H -E bash -x <<'EOF'
 set
 set -x
 cd /opt/stack/devstack
-echo =======================
-tail -30 stack.sh
-echo =======================
 sed -i '/set \+o xtrace/d' stack.sh
+grep xtrace stack.sh
 
 ./stack.sh || true
+set -x
+set
 echo Reached here 1
 
 set
