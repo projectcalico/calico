@@ -45,4 +45,3 @@ if($env:CALICO_NETWORKING_BACKEND = "windows-bgp")
     Start-Sleep 10
   }
 }
-
