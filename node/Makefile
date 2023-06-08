@@ -24,8 +24,6 @@ BPFGPL_CONTAINER_PATH=/go/src/github.com/projectcalico/calico/felix/bpf-gpl/
 # Paths within the repository for BPF source.
 LIBBPF_A=../felix/bpf-gpl/include/libbpf/src/$(ARCH)/libbpf.a
 
-# Add in local static-checks
-LOCAL_CHECKS=check-boring-ssl
 
 # Complete list of files from other directories that we need to build calico/node.
 REMOTE_DEPS = $(LIBBPF_A) \
@@ -39,6 +37,19 @@ REMOTE_DEPS = $(LIBBPF_A) \
 #   that variable is evaluated when we declare DOCKER_RUN and siblings.
 ###############################################################################
 include ../lib.Makefile
+
+FIPS ?= false
+
+ifeq ($(FIPS), true)
+NODE_CONTAINER_BIN_DIR=./dist/bin/$(ARCH)-fips
+NODE_CONTAINER_BINARY = $(NODE_CONTAINER_BIN_DIR)/calico-node-$(ARCH)
+NODE_CONTAINER_MARKER=$(NODE_CONTAINER_FIPS_CREATED)
+VALIDARCHES=amd64
+else
+NODE_CONTAINER_BIN_DIR=dist/bin
+NODE_CONTAINER_BINARY = $(NODE_CONTAINER_BIN_DIR)/calico-node-$(ARCH)
+NODE_CONTAINER_MARKER=$(NODE_CONTAINER_CREATED)
+endif
 
 # Set the platform correctly for building docker images.
 ifeq ($(ARCH),arm64)
@@ -63,8 +74,7 @@ TEST_CONTAINER_FILES=$(shell find tests/ -type f ! -name '*.created')
 
 # Variables controlling the image
 NODE_CONTAINER_CREATED=.calico_node.created-$(ARCH)
-NODE_CONTAINER_BIN_DIR=./dist/bin/
-NODE_CONTAINER_BINARY = $(NODE_CONTAINER_BIN_DIR)/calico-node-$(ARCH)
+NODE_CONTAINER_FIPS_CREATED=.calico_node.created-$(ARCH)-fips
 WINDOWS_BINARY = $(NODE_CONTAINER_BIN_DIR)/calico-node.exe
 TOOLS_MOUNTNS_BINARY = $(NODE_CONTAINER_BIN_DIR)/mountns-$(ARCH)
 
@@ -164,8 +174,6 @@ SRC_FILES=$(shell find ./pkg -name '*.go') \
 	  $(shell find ../libcalico-go -name '*.go') \
 	  $(shell find ../confd -name '*.go')
 
-BINDIR?=bin
-
 ## Clean enough that a new release build will be clean
 clean: clean-windows
 	# Clean .created files which indicate images / releases have been built.
@@ -182,6 +190,7 @@ clean: clean-windows
 	make -C ../felix clean
 	# Delete images that we built in this repo
 	docker rmi $(NODE_IMAGE):latest-$(ARCH) || true
+	docker rmi $(NODE_IMAGE):latest-fips-$(ARCH) || true
 	docker rmi $(TEST_CONTAINER_NAME) || true
 	docker rmi $(addprefix $(WINDOWS_UPGRADE_IMAGE):latest-,$(WINDOWS_VERSIONS)) || true
 
@@ -199,7 +208,7 @@ clean-windows:
 ###############################################################################
 # Building the binary
 ###############################################################################
-build: $(NODE_CONTAINER_BINARY) $(TOOLS_MOUNTNS_BINARY)
+build: $(NODE_CONTAINER_MARKER) $(TOOLS_MOUNTNS_BINARY)
 
 # Pull in config from confd.
 filesystem/etc/calico/confd/conf.d: $(shell find ../confd/etc/calico/confd/conf.d -type f)
@@ -236,7 +245,11 @@ DOCKER_GO_BUILD_CGO_WINDOWS=$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO
 
 $(NODE_CONTAINER_BINARY): filesystem/usr/lib/calico/bpf $(LIBBPF_A) $(SRC_FILES) ../go.mod
 ifeq ($(ARCH),amd64)
+ifeq ($(FIPS), true)
 	$(call build_cgo_boring_binary, ./cmd/calico-node/main.go, $@)
+else
+	$(call build_cgo_binary, ./cmd/calico-node/main.go, $@)
+endif
 else
 	$(DOCKER_GO_BUILD_CGO) sh -c '$(GIT_CONFIG_SSH) go build -buildvcs=false -v -o $@ $(BUILD_FLAGS) -ldflags "$(LDFLAGS)" ./cmd/calico-node/main.go'
 endif
@@ -273,14 +286,21 @@ endif
 # Building the image
 ###############################################################################
 ## Create the images for all supported ARCHes
-image-all: $(addprefix sub-image-,$(VALIDARCHES))
+image-all: $(addprefix sub-image-,$(VALIDARCHES)) sub-image-fips-amd64
 sub-image-%:
 	$(MAKE) image ARCH=$*
+sub-image-fips-%:
+	$(MAKE) image FIPS=true ARCH=$*
 
-image $(NODE_IMAGE): register $(NODE_CONTAINER_CREATED)
+image $(NODE_IMAGE): register $(NODE_CONTAINER_MARKER)
 $(NODE_CONTAINER_CREATED): $(REMOTE_DEPS) ./Dockerfile.$(ARCH) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOURCE) $(NODE_CONTAINER_FILES) $(TOOLS_MOUNTNS_BINARY)
-	$(DOCKER_BUILD) --build-arg BIRD_IMAGE=$(BIRD_IMAGE) -t $(NODE_IMAGE):latest-$(ARCH) -f ./Dockerfile.$(ARCH) . --load
+	$(DOCKER_BUILD) --build-arg BIN_DIR=$(NODE_CONTAINER_BIN_DIR) --build-arg BIRD_IMAGE=$(BIRD_IMAGE) -t $(NODE_IMAGE):latest-$(ARCH) -f ./Dockerfile.$(ARCH) . --load
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
+	touch $@
+
+$(NODE_CONTAINER_FIPS_CREATED): $(REMOTE_DEPS) ./Dockerfile.$(ARCH) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOURCE) $(NODE_CONTAINER_FILES) $(TOOLS_MOUNTNS_BINARY)
+	$(DOCKER_BUILD) --build-arg BIN_DIR=$(NODE_CONTAINER_BIN_DIR) --build-arg BIRD_IMAGE=$(BIRD_IMAGE) -t $(NODE_IMAGE):latest-fips-$(ARCH) -f ./Dockerfile.$(ARCH) . --load
+	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
 	touch $@
 
 # download BIRD source to include in image.
@@ -475,6 +495,8 @@ release-build: .release-$(VERSION).created
 	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=$(VERSION)
 	# Generate the `latest` node images.
 	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=latest
+	$(MAKE) FIPS=true retag-build-images-with-registries RELEASE=true IMAGETAG=$(VERSION)-fips LATEST_IMAGE_TAG=latest-fips
+	$(MAKE) FIPS=true retag-build-images-with-registries RELEASE=true IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
 	# Generate the Windows zip archives.
 	$(MAKE) release-windows-archive
 	$(MAKE) release-windows-upgrade-archive
@@ -497,6 +519,7 @@ release-publish: release-prereqs .release-$(VERSION).published
 .release-$(VERSION).published:
 	# Push node images.
 	$(MAKE) push-images-to-registries push-manifests IMAGETAG=$(VERSION) RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
+	$(MAKE) FIPS=true push-images-to-registries push-manifests IMAGETAG=$(VERSION)-fips RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
 
 	# Push Windows images.
 	$(MAKE) cd-windows-all RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
