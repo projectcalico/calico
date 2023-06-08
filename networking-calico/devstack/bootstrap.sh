@@ -167,6 +167,10 @@ cd /opt/stack/devstack
 ./stack.sh
 EOF
 
+# We use a fresh `sudo -u stack -H -E bash ...` invocation here, because with
+# OpenStack Yoga it appears there is something in the stack.sh setup that
+# closes stdin, and that means that bash doesn't read any further commands from
+# stdin after the exit of the ./stack.sh line.
 sudo -u stack -H -E bash -x <<'EOF'
 cd /opt/stack/devstack
 if ! ${TEMPEST:-false}; then
