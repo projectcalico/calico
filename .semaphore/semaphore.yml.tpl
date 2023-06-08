@@ -107,7 +107,7 @@ blocks:
   task:
     prologue:
       commands:
-      - "curl -H 'Cache-Control: no-cache' https://raw.githubusercontent.com/fossas/fossa-cli/master/install-latest.sh | bash"
+      - "curl-fsSLH 'Cache-Control: no-cache' https://raw.githubusercontent.com/fossas/fossa-cli/master/install-latest.sh | bash"
     jobs:
     - name: "FOSSA scan"
       commands:
