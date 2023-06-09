@@ -69,17 +69,14 @@ function require_version {
     # Determine REPO_NAME.
     if [ $VERSION = master ]; then
 	: ${REPO_NAME:=master}
-	: ${CALICO_CHECKOUT:=master}
     elif [[ $VERSION =~ ^release-v ]]; then
 	: ${REPO_NAME:=testing}
-	: ${CALICO_CHECKOUT:=${VERSION}}
     elif [[ $VERSION =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)(-python2)?$ ]]; then
 	MAJOR=${BASH_REMATCH[1]}
 	MINOR=${BASH_REMATCH[2]}
 	PATCH=${BASH_REMATCH[3]}
 	PY2SUFFIX=${BASH_REMATCH[4]}
 	: ${REPO_NAME:=calico-${MAJOR}.${MINOR}${PY2SUFFIX}}
-	: ${CALICO_CHECKOUT:=v${MAJOR}.${MINOR}.${PATCH}${PY2SUFFIX}}
     else
 	echo "ERROR: Unhandled VERSION \"${VERSION}\""
 	exit 1
@@ -128,11 +125,11 @@ function precheck_bld_images {
 }
 
 function precheck_net_cal {
-    test -n "${CALICO_CHECKOUT}" || require_version
+    require_version
 }
 
 function precheck_felix {
-    test -n "${CALICO_CHECKOUT}" || require_version
+    require_version
 }
 
 function precheck_etcd3gw {
