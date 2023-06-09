@@ -33,16 +33,9 @@ if "${PUBLISH:-false}"; then
     pub_steps="pub_debs pub_rpms"
 fi
 
-if [ "${SEMAPHORE_GIT_PR_NUMBER}${SEMAPHORE_GIT_BRANCH}" = master -o -z "${SEMAPHORE_GIT_BRANCH}" ]; then
-    # Normally - if not Semaphore, or if this is Semaphore running on
-    # the master branch and not for a PR - do all the steps including
-    # publication.
-    : ${STEPS:=bld_images net_cal felix etcd3gw dnsmasq nettle ${pub_steps}}
-else
-    # For Semaphore building a PR or a branch other than master, build
-    # packages but do not publish them.
-    : ${STEPS:=bld_images net_cal felix etcd3gw dnsmasq nettle}
-fi
+# We used to have some Semaphore environment-dependent logic here, but we now
+# place that in the Semaphore YAML (which is a more appropriate place for it).
+: ${STEPS:=bld_images net_cal felix etcd3gw dnsmasq nettle ${pub_steps}}
 
 function check_bin {
     which $1 > /dev/null
