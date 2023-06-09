@@ -100,6 +100,23 @@ blocks:
       commands:
       - make ci-preflight-checks
 
+- name: "FOSSA scan"
+  run:
+    when: "branch =~ '^release-v' OR branch = 'master'"
+  execution_time_limit:
+    minutes: 30
+  dependencies: ["Prerequisites"]
+  task:
+    prologue:
+      commands:
+      - "curl -fsSLH 'Cache-Control: no-cache' https://raw.githubusercontent.com/fossas/fossa-cli/master/install-latest.sh | bash"
+    jobs:
+    - name: "FOSSA scan"
+      commands:
+      - "fossa analyze"
+    secrets:
+      - name: foss-api-key
+
 - name: "API"
   run:
     when: "true or change_in(['/*', '/api/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
