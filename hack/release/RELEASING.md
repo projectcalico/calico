@@ -155,11 +155,8 @@ Once a new branch is cut, we need to ensure a new milestone exists to represent 
    git checkout -b build-vX.Y.Z
    ```
 
-1. Add the new version to the top of `calico/_data/versions.yml`
-
 1. Update version information in the following files:
 
-   - `calico/_data/versions.yml`: Versions displayed in the documentation.
    - `charts/calico/values.yaml`: Calico version used in manifest generation.
    - `charts/tigera-operator/values.yaml`: Versions of operator and calicoctl used in the helm chart and manifests.
 
@@ -229,8 +226,6 @@ releases, the following steps can be skipped.
    ```
    git checkout release-vX.Y && git pull origin release-vX.Y
    ```
-
-1. Add the previous release to `calico/_data/archives.yaml`. Make this change in master as well.
 
 1. Update the AUTHORS.md file. This will require `GITHUB_TOKEN` be set in your environment.
 
