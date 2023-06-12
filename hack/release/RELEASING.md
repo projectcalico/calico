@@ -171,7 +171,7 @@ Once a new branch is cut, we need to ensure a new milestone exists to represent 
    Then, add the newly created release note file to git.
 
    ```
-   git add calico/_includes/release-notes/<VERSION>-release-notes.md
+   git add release-notes/<VERSION>-release-notes.md
    ```
 
 1. Commit your changes. For example:
