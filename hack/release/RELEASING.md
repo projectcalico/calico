@@ -99,78 +99,6 @@ When starting development on a new minor release, the first step is to create a 
    git checkout release-vX.Y
    ```
 
-1. Update versioning information in `github.com/projectcalico/calico/calico/_data/versions.yml`.
-
-   For example:
-
-   ```
-      - title: v4.1.0-pre-release
-        note: ""
-        components:
-          typha:
-            version: release-v4.1
-        ... etc ...
-   ```
-
-1. Update manifests (and other auto-generated code) by running the following command in the repository root.
-
-   ```
-   make generate
-   ```
-
-1. Create the the release notes file. This does not need to be populated now but does need to exist for the site to render. The file should match
-   the `title` field from `calico/_data/versions.yml` created in the previous step.
-
-   ```
-   touch calico/_includes/release-notes/<title>-release-notes.md
-   ```
-
-1. Update the `version` in the `defaults` section in `github.com/projectcalico/calico/calico/_config.yml` so that `page.version` will be set correctly:
-
-   ```
-   -
-     scope:
-       path: .
-     values:
-       version: vX.Y
-   ```
-
-1. In `github.com/projectcalico/calico/calico/netlify.toml`, set `RELEASE_VERSION` to `vX.Y`
-
-1. In `github.com/projectcalico/calico/calico/netlify/_redirects` add a new for the new release following the other examples.
-   This makes sure that requests coming to `/archive/vX.Y` (without a slash) don't fail with 404.
-
-1. In `calico/netlify/sitemap-index.xml` append a new sitemap location to the sitemap index for the release version.
-
-1. If appropriate, update the list of tested versions for different platforms in the appropriate documents.
-
-   - Kubernetes `calico/getting-started/kubernetes/requirements.md`
-   - OpenShift `calico/getting-started/openshift/requirements.md`
-   - OpenStack `calico/getting-started/openstack/requirements.md`
-   - Non-cluster hosts `calico/getting-started/bare-metal/requirements.md`
-
-1. Commit the changes you have made so far.
-
-   ```
-   git commit -a -m "Update docs for vX.Y"
-   ```
-
-1. In add the following redirect to the top of the redirects section in `github.com/projectcalico/calico/calico/netlify.toml`
-
-    ```
-    # proxy redirects for website and manifests for v3.21
-    [[redirects]]
-      from = "/archive/v3.21/*"
-      to = "https://calico-v3-21.netlify.app/archive/v3.21/:splat"
-      status = 200
-    ```
-
-1. Add another commit for the redirect.
-
-   ```
-   git commit -a -m "Add redirects for archive/vX.Y"
-   ```
-
 1. Update manifests to use the new release branch instead of master.  Update versions in the following files:
 
    - charts/calico/values.yaml
@@ -179,7 +107,7 @@ When starting development on a new minor release, the first step is to create a 
    Then, run manifest generation
 
    ```
-   make gen-manifests
+   make generate
    ```
 
    Commit your changes
