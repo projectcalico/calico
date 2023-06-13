@@ -450,12 +450,10 @@ func (r *ReleaseBuilder) buildContainerImages(ver string) error {
 	)
 
 	for _, dir := range releaseDirs {
-		out, err := r.makeInDirectoryWithOutput(dir, "release-build", env...)
+		err := r.makeInDirectoryNoOutput(dir, "release-build", env...)
 		if err != nil {
-			logrus.Error(out)
 			return fmt.Errorf("Failed to build %s: %s", dir, err)
 		}
-		logrus.Info(out)
 	}
 	return nil
 }
@@ -678,4 +676,8 @@ func (r *ReleaseBuilder) makeInDirectory(dir, target string, env ...string) erro
 
 func (r *ReleaseBuilder) makeInDirectoryWithOutput(dir, target string, env ...string) (string, error) {
 	return r.runner.Run("make", []string{"-C", dir, target}, env)
+}
+
+func (r *ReleaseBuilder) makeInDirectoryNoOutput(dir, target string, env ...string) error {
+	return r.runner.RunNoCapture("make", []string{"-C", dir, target}, env)
 }
