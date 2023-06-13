@@ -17,8 +17,6 @@ package state
 import (
 	"unsafe"
 
-	log "github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/felix/bpf/maps"
 )
 
@@ -121,10 +119,6 @@ type State struct {
 const expectedSize = 464
 
 func (s *State) AsBytes() []byte {
-	size := unsafe.Sizeof(State{})
-	if size != expectedSize {
-		log.WithField("size", size).Panic("Incorrect struct size")
-	}
 	bPtr := (*[expectedSize]byte)(unsafe.Pointer(s))
 	bytes := make([]byte, expectedSize)
 	copy(bytes, bPtr[:])
