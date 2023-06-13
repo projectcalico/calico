@@ -1311,8 +1311,10 @@ func CidrToHex(cidr string) ([]string, error) {
 		return nil, fmt.Errorf("IP %q is not IPv4", ip)
 	}
 
-	if mask > math.MaxUint32 || mask < 0 {
-		return nil, fmt.Errorf("mask %d should be between 0 and 4,294,967,295", mask)
+	// Check bounds on the mask against an int32 instead of uint32 since the mask value
+	// will be in subnet mask notation and should range between 0 and 32
+	if mask > math.MaxInt32 || mask < 0 {
+		return nil, fmt.Errorf("mask %d should be between 0 and 2,147,483,647", mask)
 	}
 
 	maskBytes := make([]byte, 4)
