@@ -39,3 +39,8 @@ bin/terraform: bin/terraform.zip
 bin/terraform.zip:
 	mkdir -p bin
 	wget https://releases.hashicorp.com/terraform/1.1.7/terraform_1.1.7_linux_amd64.zip -O $@
+
+archive_logs:
+	mkdir -p release_logs
+	mv *.log release_logs
+	artifact push job release_logs
