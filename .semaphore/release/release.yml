@@ -53,3 +53,4 @@ blocks:
         always:
           commands:
           - make VAR_FILE=/home/semaphore/secrets/release.tfvars -C hack/release destroy
+          - make -C hack/release archive_logs
