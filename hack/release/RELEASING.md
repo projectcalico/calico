@@ -216,37 +216,7 @@ Follow [the tigera/operator release instructions](https://github.com/tigera/oper
 
 1. Merge the PR branch created in step 4.a - `build-vX.Y.Z` and delete the branch from the repository.
 
-## 5. Promoting to be the latest release in the docs
-
-For major or minor (vX.Y.0) releases, the candidate release branch created above must also be promoted to the live documentation after publishing the release. For patch
-releases, the following steps can be skipped.
-
-1. Checkout the previously created release branch.
-
-   ```
-   git checkout release-vX.Y && git pull origin release-vX.Y
-   ```
-
-1. Update the AUTHORS.md file. This will require `GITHUB_TOKEN` be set in your environment.
-
-   ```
-   make update-authors
-   ```
-
-1. Commit your changes. For example:
-
-   ```
-   git commit -m "Promote vX.Y.Z to latest"
-   ```
-
-1. Push your branch and open a pull request to the upstream release-vX.Y branch. Get it reviewed and wait for it to pass CI before merging.
-
-1. On netlify locate the `projectcalico.docs.tigera.io` site and the update `Production branch` in `Settings -> Build & deploy -> Deploy contexts` to `release-vX.Y` in site settings and trigger the deployment.
-
-> (Note: This site contains the `LATEST_RELEASE` environment variable in the netlify UI, from which `netlify.toml` picks up the correct build for latest release.)
-> This will cause `projectcalico.docs.tigera.io` to be updated (after a few minutes). Validate that everything looks correct.
-
-## 6. Post-release
+## 5. Post-release
 
 ### Update milestones
 
