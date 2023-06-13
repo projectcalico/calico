@@ -228,12 +228,6 @@ Follow [the tigera/operator release instructions](https://github.com/tigera/oper
 
 ### Post-release verification
 
-Verify the release is working as expected. This is important, so please don't skip it.
-
-1. Ensure that the site is accessible by visiting `projectcalico.docs.tigera.io/archive/<version>/`.
-
-1. Checkout the relevant docs branch (i.e. the release-vX.Y branch)
-
 1. Run the post-release checks. The release validation checks will run - they check for the presence of all the required binaries tarballs, tags, etc.
    
    ```
