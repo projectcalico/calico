@@ -3,6 +3,8 @@ package builder
 import (
 	"bytes"
 	"fmt"
+	"io"
+	"os"
 	"os/exec"
 	"strings"
 
@@ -28,8 +30,8 @@ func (r *RealCommandRunner) RunInDir(dir, name string, args []string, env []stri
 	}
 	cmd.Dir = dir
 	var outb, errb bytes.Buffer
-	cmd.Stdout = &outb
-	cmd.Stderr = &errb
+	cmd.Stdout = io.MultiWriter(os.Stdout, &outb)
+	cmd.Stderr = io.MultiWriter(os.Stderr, &errb)
 	logrus.WithField("cmd", cmd.String()).Infof("Running %s command", name)
 	err := cmd.Run()
 	logrus.Debug(outb.String())
