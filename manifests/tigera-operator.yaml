@@ -21481,7 +21481,7 @@ spec:
       dnsPolicy: ClusterFirstWithHostNet
       containers:
         - name: tigera-operator
-          image: quay.io/tigera/operator:v1.30.3
+          image: quay.io/tigera/operator:v1.30.4
           imagePullPolicy: IfNotPresent
           command:
             - operator
@@ -21499,7 +21499,7 @@ spec:
             - name: OPERATOR_NAME
               value: "tigera-operator"
             - name: TIGERA_OPERATOR_INIT_IMAGE_VERSION
-              value: v1.30.3
+              value: v1.30.4
           envFrom:
             - configMapRef:
                 name: kubernetes-services-endpoint
