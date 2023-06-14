@@ -345,6 +345,13 @@ type Config struct {
 	FailsafeInboundHostPorts  []ProtoPort `config:"port-list;tcp:22,udp:68,tcp:179,tcp:2379,tcp:2380,tcp:5473,tcp:6443,tcp:6666,tcp:6667;die-on-fail"`
 	FailsafeOutboundHostPorts []ProtoPort `config:"port-list;udp:53,udp:67,tcp:179,tcp:2379,tcp:2380,tcp:5473,tcp:6443,tcp:6666,tcp:6667;die-on-fail"`
 
+	FlowLogsFileEnabled           bool   `config:"bool;false"`
+	FlowLogsFileDirectory         string `config:"string;/var/log/calico/flowlogs"`
+	FlowLogsFileMaxFiles          int    `config:"int;5"`
+	FlowLogsFileMaxFileSizeMB     int    `config:"int;100"`
+	FlowLogsFileEnabledForAllowed bool   `config:"bool;true"`
+	FlowLogsFileEnabledForDenied  bool   `config:"bool;true"`
+
 	KubeNodePortRanges []numorstring.Port `config:"portrange-list;30000:32767"`
 	NATPortRange       numorstring.Port   `config:"portrange;"`
 	NATOutgoingAddress net.IP             `config:"ipv4;"`
@@ -831,6 +838,14 @@ func (config *Config) Validate() (err error) {
 			err = errors.New("If any Felix-Typha TLS config parameters are specified," +
 				" they _all_ must be" +
 				" - except that either TyphaCN or TyphaURISAN may be left unset.")
+		}
+	}
+
+	if config.FlowLogsFileEnabled {
+		if !config.FlowLogsFileEnabledForAllowed && !config.FlowLogsFileEnabledForDenied {
+			err = errors.New("FlowLogsFileEnabled is set to true. " +
+				"Enable at least one of FlowLogsFileEnabledForAllowed or " +
+				"FlowLogsFileEnabledForDenied")
 		}
 	}
 
