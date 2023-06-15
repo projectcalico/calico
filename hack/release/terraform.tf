@@ -45,6 +45,12 @@ resource "google_compute_instance" "vm_instance" {
       // This empty field requests an Ephemeral IP
     }
   }
+
+  scheduling {
+    max_run_duration {
+      seconds = 11400
+    }
+  }
 }
 
 resource "null_resource" "configure_vm" {
