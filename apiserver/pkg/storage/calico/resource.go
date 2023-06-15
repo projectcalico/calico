@@ -5,6 +5,7 @@ package calico
 import (
 	"bytes"
 	"fmt"
+	"math"
 	"os"
 	"reflect"
 	"strconv"
@@ -430,6 +431,10 @@ func (rs *resourceStore) GuaranteedUpdate(
 		revInt, _ := strconv.Atoi(accessor.GetResourceVersion())
 		updatedRes := updatedObj.(resourceObject)
 		if !shouldCreateOnUpdate() {
+			if curState.rev < math.MinInt || curState.rev > math.MaxInt {
+				klog.Errorf("revision number %d overflows", curState.rev)
+				return fmt.Errorf("Revision is outside the range of an int32: %d", curState.rev)
+			}
 			if updatedRes.GetObjectMeta().GetResourceVersion() == "" || revInt < int(curState.rev) {
 				updatedRes.(resourceObject).GetObjectMeta().SetResourceVersion(strconv.FormatInt(curState.rev, 10))
 			}
