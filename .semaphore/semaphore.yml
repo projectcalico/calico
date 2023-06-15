@@ -18,7 +18,9 @@ auto_cancel:
     when: "branch != 'master'"
 
 promotions:
-# Manual promotion for publishing a release.
+# Manual promotions for testing or publishing a release.
+- name: Test build official release
+  pipeline_file: release/test-release-build.yml
 - name: Publish official release
   pipeline_file: release/release.yml
 # Cleanup after ourselves if we are stopped-short.
