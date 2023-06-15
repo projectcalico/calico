@@ -508,7 +508,9 @@ configRetry:
 			},
 		)
 	} else {
-		// Use the syncer locally.
+		// Use the syncer locally. If we are not including flow logs, or flow log services then
+		// there is no need to watch the services and service endpoints.
+		syncServices := configParams.FlowLogsFileEnabled
 		syncer = felixsyncer.New(backendClient, datastoreConfig.Spec, syncerToValidator, configParams.IsLeader())
 
 		log.Info("using resource updates where applicable")
