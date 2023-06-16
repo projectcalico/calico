@@ -1330,18 +1330,18 @@ func TestJumpMap(t *testing.T) {
 	err = bpf.UpdateMapEntry(jumpMapFD, k, v)
 	Expect(err).NotTo(HaveOccurred())
 
-	err = bpf.DeleteMapEntry(jumpMapFD, k, 4)
+	err = bpf.DeleteMapEntry(jumpMapFD, k)
 	Expect(err).NotTo(HaveOccurred())
 
 	err = bpf.UpdateMapEntry(jumpMapFD, k, v)
 	Expect(err).NotTo(HaveOccurred())
 
-	err = bpf.DeleteMapEntryIfExists(jumpMapFD, k, 4)
+	err = bpf.DeleteMapEntryIfExists(jumpMapFD, k)
 	Expect(err).NotTo(HaveOccurred())
 
-	err = bpf.DeleteMapEntryIfExists(jumpMapFD, k, 4)
+	err = bpf.DeleteMapEntryIfExists(jumpMapFD, k)
 	Expect(err).NotTo(HaveOccurred())
 
-	err = bpf.DeleteMapEntry(jumpMapFD, k, 4)
+	err = bpf.DeleteMapEntry(jumpMapFD, k)
 	Expect(err).To(HaveOccurred())
 }
