@@ -299,10 +299,8 @@ func GetMapInfo(fd MapFD) (*MapInfo, error) {
 	}, nil
 }
 
-func DeleteMapEntry(mapFD MapFD, k []byte, valueSize int) error {
-	log.Debugf("DeleteMapEntry(%v, %v, %v)", mapFD, k, valueSize)
-
-	err := checkMapIfDebug(mapFD, len(k), valueSize)
+func DeleteMapEntry(mapFD MapFD, k []byte) error {
+	err := checkMapIfDebug(mapFD, len(k), -1)
 	if err != nil {
 		return err
 	}
@@ -316,8 +314,8 @@ func DeleteMapEntry(mapFD MapFD, k []byte, valueSize int) error {
 	return nil
 }
 
-func DeleteMapEntryIfExists(mapFD MapFD, k []byte, valueSize int) error {
-	err := DeleteMapEntry(mapFD, k, valueSize)
+func DeleteMapEntryIfExists(mapFD MapFD, k []byte) error {
+	err := DeleteMapEntry(mapFD, k)
 	if err == unix.ENOENT {
 		// Delete failed because entry did not exist.
 		err = nil
