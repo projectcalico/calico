@@ -1510,7 +1510,7 @@ func TestJumpMap(t *testing.T) {
 	err = maps.UpdateMapEntry(jumpMapFD, k, v)
 	Expect(err).NotTo(HaveOccurred())
 
-	err = maps.DeleteMapEntry(jumpMapFD, k, 4)
+	err = maps.DeleteMapEntry(jumpMapFD, k)
 	Expect(err).NotTo(HaveOccurred())
 
 	err = maps.UpdateMapEntry(jumpMapFD, k, v)
@@ -1522,6 +1522,6 @@ func TestJumpMap(t *testing.T) {
 	err = maps.DeleteMapEntryIfExists(jumpMapFD, k, 4)
 	Expect(err).NotTo(HaveOccurred())
 
-	err = maps.DeleteMapEntry(jumpMapFD, k, 4)
+	err = maps.DeleteMapEntry(jumpMapFD, k)
 	Expect(err).To(HaveOccurred())
 }

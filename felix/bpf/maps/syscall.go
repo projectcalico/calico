@@ -125,11 +125,11 @@ func checkMapIfDebug(mapFD FD, keySize, valueSize int) error {
 	case unix.BPF_MAP_TYPE_PERCPU_HASH, unix.BPF_MAP_TYPE_PERCPU_ARRAY, unix.BPF_MAP_TYPE_LRU_PERCPU_HASH, unix.BPF_MAP_TYPE_PERCPU_CGROUP_STORAGE:
 		// The actual size of per cpu maps is equal to the value size * number of cpu
 		ncpus := NumPossibleCPUs()
-		if valueSize >= 0 && valueSize != mapInfo.ValueSize*ncpus {
+		if valueSize > 0 && valueSize != mapInfo.ValueSize*ncpus {
 			log.WithField("mapInfo", mapInfo).WithField("valueLen", valueSize).Panic("Incorrect value length for per-CPU map")
 		}
 	default:
-		if valueSize >= 0 && valueSize != mapInfo.ValueSize {
+		if valueSize > 0 && valueSize != mapInfo.ValueSize {
 			log.WithField("mapInfo", mapInfo).WithField("valueLen", valueSize).Panic("Incorrect value length")
 		}
 	}
@@ -156,10 +156,10 @@ func GetMapInfo(fd FD) (*MapInfo, error) {
 	}, nil
 }
 
-func DeleteMapEntry(mapFD FD, k []byte, valueSize int) error {
-	log.Debugf("DeleteMapEntry(%v, %v, %v)", mapFD, k, valueSize)
+func DeleteMapEntry(mapFD FD, k []byte) error {
+	log.Debugf("DeleteMapEntry(%v, %v)", mapFD, k)
 
-	err := checkMapIfDebug(mapFD, len(k), valueSize)
+	err := checkMapIfDebug(mapFD, len(k), 0)
 	if err != nil {
 		return err
 	}
@@ -174,7 +174,7 @@ func DeleteMapEntry(mapFD FD, k []byte, valueSize int) error {
 }
 
 func DeleteMapEntryIfExists(mapFD FD, k []byte, valueSize int) error {
-	err := DeleteMapEntry(mapFD, k, valueSize)
+	err := DeleteMapEntry(mapFD, k)
 	if err == unix.ENOENT {
 		// Delete failed because entry did not exist.
 		err = nil
