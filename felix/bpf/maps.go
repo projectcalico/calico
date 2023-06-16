@@ -324,7 +324,7 @@ func (b *PinnedMap) Iter(f IterCallback) error {
 		if action == IterDelete {
 			// The previous iteration asked us to delete its key; do that now before we check for the end of
 			// the iteration.
-			err := DeleteMapEntry(b.MapFD(), keyToDelete, valueSize)
+			err := DeleteMapEntry(b.MapFD(), keyToDelete)
 			if err != nil && !IsNotExists(err) {
 				return fmt.Errorf("failed to delete map entry: %w", err)
 			}
@@ -370,12 +370,8 @@ func (b *PinnedMap) Get(k []byte) ([]byte, error) {
 }
 
 func (b *PinnedMap) Delete(k []byte) error {
-	valueSize := b.ValueSize
-	if b.perCPU {
-		valueSize = b.ValueSize * NumPossibleCPUs()
-		logrus.Debugf("Set value size to %v for deleting an entry from Per-CPU map", valueSize)
-	}
-	return DeleteMapEntry(b.fd, k, valueSize)
+	return DeleteMapEntry(b.fd, k)
+
 }
 
 func (b *PinnedMap) updateDeltaEntries() error {
