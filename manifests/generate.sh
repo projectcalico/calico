@@ -7,11 +7,27 @@
 # Helm binary to use. Default to the one installed by the Makefile.
 HELM=${HELM:-../bin/helm}
 
+# yq binary to use for parsing component versions not found in charts. Default to the one installed by the Makefile.
+YQ=${YQ:-../bin/yq}
+
+if [[ ! -f $HELM ]]; then
+    echo "[ERROR] Helm binary ${HELM} not found."
+    exit 1
+fi
+if [[ ! -f $YQ ]]; then
+    echo "[ERROR] yq binary ${YQ} not found."
+    exit 1
+fi
+
 # Get versions to install.
-defaultCalicoVersion=$(cat ../charts/calico/values.yaml | grep version: | cut -d" " -f2)
+defaultCalicoVersion=$($YQ '.[0].title' ../calico/_data/versions.yml)
 CALICO_VERSION=${CALICO_VERSION:-$defaultCalicoVersion}
 
-defaultOperatorVersion=$(cat ../charts/tigera-operator/values.yaml | grep version: | cut -d" " -f4)
+defaultRegistry=quay.io
+REGISTRY=${REGISTRY:-$defaultRegistry}
+
+# Versions retrieved from charts.
+defaultOperatorVersion=$($YQ .tigeraOperator.version < ../charts/tigera-operator/values.yaml)
 OPERATOR_VERSION=${OPERATOR_VERSION:-$defaultOperatorVersion}
 
 NON_HELM_MANIFEST_IMAGES="calico/apiserver calico/windows calico/ctl calico/csi calico/node-driver-registrar calico/dikastes"
