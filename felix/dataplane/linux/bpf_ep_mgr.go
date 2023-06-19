@@ -2115,7 +2115,7 @@ func (m *bpfEndpointManager) removePolicyProgram(jumpMapFD bpf.MapFD, ap attachP
 }
 
 func (m *bpfEndpointManager) doRemovePolicyProgram(jumpMapFD bpf.MapFD, ipFamily proto.IPVersion) error {
-	err := bpf.DeleteMapEntryIfExists(jumpMapFD, jumpPolicyKey(ipFamily), 4)
+	err := bpf.DeleteMapEntryIfExists(jumpMapFD, jumpPolicyKey(ipFamily))
 	if err != nil {
 		return fmt.Errorf("failed to update jump map: %w", err)
 	}
