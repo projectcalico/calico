@@ -58,11 +58,11 @@ func GetMapInfo(fd MapFD) (*MapInfo, error) {
 	panic("BPF syscall stub")
 }
 
-func DeleteMapEntry(mapFD MapFD, k []byte, valueSize int) error {
+func DeleteMapEntry(mapFD MapFD, k []byte) error {
 	panic("BPF syscall stub")
 }
 
-func DeleteMapEntryIfExists(mapFD MapFD, k []byte, valueSize int) error {
+func DeleteMapEntryIfExists(mapFD MapFD, k []byte) error {
 	panic("BPF syscall stub")
 }
 
