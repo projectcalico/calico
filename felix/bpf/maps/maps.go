@@ -835,7 +835,7 @@ func (b *PinnedMap) upgrade() error {
 
 		// Remove old BPF map after upgrade completes without error.
 		if err == nil {
-			//	os.Remove(oldBpfMap.Path())
+			os.Remove(oldBpfMap.Path())
 			os.Remove(oldBpfMap.Path() + "_old")
 		}
 	}()
