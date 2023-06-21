@@ -837,7 +837,8 @@ func (b *PinnedMap) upgrade() error {
 	if err != nil {
 		return err
 	}
-	return b.UpgradeFn(oldBpfMap, b)
+	err = b.UpgradeFn(oldBpfMap, b)
+	return err
 }
 
 type Upgradable interface {
