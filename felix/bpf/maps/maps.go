@@ -832,12 +832,19 @@ func (b *PinnedMap) upgrade() error {
 	defer func() {
 		oldBpfMap.Close()
 		oldBpfMap.fd = 0
+
+		// Remove old BPF map after upgrade completes without error.
+		if err == nil {
+			os.Remove(oldBpfMap.Path())
+			os.Remove(oldBpfMap.Path() + "_old")
+		}
 	}()
 	err = oldBpfMap.EnsureExists()
 	if err != nil {
 		return err
 	}
-	return b.UpgradeFn(oldBpfMap, b)
+	err = b.UpgradeFn(oldBpfMap, b)
+	return err
 }
 
 type Upgradable interface {

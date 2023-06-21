@@ -86,6 +86,8 @@ var confdConfDir = flagSet.String("confd-confdir", "/etc/calico/confd", "Confd c
 var initHostpaths = flagSet.Bool("hostpath-init", false, "Initialize hostpaths for non-root access")
 
 func main() {
+	logrus.Info("steven testing Semaphore Felix UTs/FVs...")
+
 	// Make sure the RNG is seeded, we use it for backoffs and the like.
 	seedrng.EnsureSeeded()
 
