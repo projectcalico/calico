@@ -2,10 +2,10 @@ import requests
 import tarfile
 from nose.tools import with_setup
 
-from versions import RELEASE_VERSION
+import variables
 
 url = "https://github.com/projectcalico/calico/releases/download/{v}/release-{v}.tgz".format(
-    v=RELEASE_VERSION
+    v=variables.RELEASE_VERSION
 )
 
 manifest_list = [
@@ -45,7 +45,7 @@ def check_manifest_present(manifest):
     print("[INFO] checking {} is in archive".format(manifest))
     try:
         manifest_info = file.getmember(
-            "release-{v}/manifests/{m}".format(v=RELEASE_VERSION, m=manifest)
+            "release-{v}/manifests/{m}".format(v=variables.RELEASE_VERSION, m=manifest)
         )
         print(manifest_info.name, manifest_info.size)
         assert manifest_info.isfile()
