@@ -89,9 +89,8 @@ var failsafeTests = []failsafeTest{
 			SrcIP:   dstIP,
 			DstIP:   net.IPv4(4, 4, 4, 4),
 		},
-		Outbound:      false,
-		Allowed:       false,
-		FromLocalHost: true,
+		Outbound: false,
+		Allowed:  false,
 	},
 	{
 		Description: "Packets from outbound failsafes to inbound failsafes are denied",
