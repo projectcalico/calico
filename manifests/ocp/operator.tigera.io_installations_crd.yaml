@@ -1180,6 +1180,32 @@ spec:
                                         deprecated ComponentResources, then this value
                                         takes precedence.
                                       properties:
+                                        claims:
+                                          description: "Claims lists the names of
+                                            resources, defined in spec.resourceClaims,
+                                            that are used by this container. \n This
+                                            is an alpha field and requires enabling
+                                            the DynamicResourceAllocation feature
+                                            gate. \n This field is immutable. It can
+                                            only be set for containers."
+                                          items:
+                                            description: ResourceClaim references
+                                              one entry in PodSpec.ResourceClaims.
+                                            properties:
+                                              name:
+                                                description: Name must match the name
+                                                  of one entry in pod.spec.resourceClaims
+                                                  of the Pod where this field is used.
+                                                  It makes that resource available
+                                                  inside a container.
+                                                type: string
+                                            required:
+                                            - name
+                                            type: object
+                                          type: array
+                                          x-kubernetes-list-map-keys:
+                                          - name
+                                          x-kubernetes-list-type: map
                                         limits:
                                           additionalProperties:
                                             anyOf:
@@ -2595,6 +2621,32 @@ spec:
                                         with the deprecated ComponentResources, then
                                         this value takes precedence.
                                       properties:
+                                        claims:
+                                          description: "Claims lists the names of
+                                            resources, defined in spec.resourceClaims,
+                                            that are used by this container. \n This
+                                            is an alpha field and requires enabling
+                                            the DynamicResourceAllocation feature
+                                            gate. \n This field is immutable. It can
+                                            only be set for containers."
+                                          items:
+                                            description: ResourceClaim references
+                                              one entry in PodSpec.ResourceClaims.
+                                            properties:
+                                              name:
+                                                description: Name must match the name
+                                                  of one entry in pod.spec.resourceClaims
+                                                  of the Pod where this field is used.
+                                                  It makes that resource available
+                                                  inside a container.
+                                                type: string
+                                            required:
+                                            - name
+                                            type: object
+                                          type: array
+                                          x-kubernetes-list-map-keys:
+                                          - name
+                                          x-kubernetes-list-type: map
                                         limits:
                                           additionalProperties:
                                             anyOf:
@@ -2658,6 +2710,32 @@ spec:
                                         in conjunction with the deprecated ComponentResources,
                                         then this value takes precedence.
                                       properties:
+                                        claims:
+                                          description: "Claims lists the names of
+                                            resources, defined in spec.resourceClaims,
+                                            that are used by this container. \n This
+                                            is an alpha field and requires enabling
+                                            the DynamicResourceAllocation feature
+                                            gate. \n This field is immutable. It can
+                                            only be set for containers."
+                                          items:
+                                            description: ResourceClaim references
+                                              one entry in PodSpec.ResourceClaims.
+                                            properties:
+                                              name:
+                                                description: Name must match the name
+                                                  of one entry in pod.spec.resourceClaims
+                                                  of the Pod where this field is used.
+                                                  It makes that resource available
+                                                  inside a container.
+                                                type: string
+                                            required:
+                                            - name
+                                            type: object
+                                          type: array
+                                          x-kubernetes-list-map-keys:
+                                          - name
+                                          x-kubernetes-list-type: map
                                         limits:
                                           additionalProperties:
                                             anyOf:
@@ -3897,6 +3975,32 @@ spec:
                                         use its default value for this container's
                                         resources.
                                       properties:
+                                        claims:
+                                          description: "Claims lists the names of
+                                            resources, defined in spec.resourceClaims,
+                                            that are used by this container. \n This
+                                            is an alpha field and requires enabling
+                                            the DynamicResourceAllocation feature
+                                            gate. \n This field is immutable. It can
+                                            only be set for containers."
+                                          items:
+                                            description: ResourceClaim references
+                                              one entry in PodSpec.ResourceClaims.
+                                            properties:
+                                              name:
+                                                description: Name must match the name
+                                                  of one entry in pod.spec.resourceClaims
+                                                  of the Pod where this field is used.
+                                                  It makes that resource available
+                                                  inside a container.
+                                                type: string
+                                            required:
+                                            - name
+                                            type: object
+                                          type: array
+                                          x-kubernetes-list-map-keys:
+                                          - name
+                                          x-kubernetes-list-type: map
                                         limits:
                                           additionalProperties:
                                             anyOf:
@@ -4113,6 +4217,28 @@ spec:
                       description: ResourceRequirements allows customization of limits
                         and requests for compute resources such as cpu and memory.
                       properties:
+                        claims:
+                          description: "Claims lists the names of resources, defined
+                            in spec.resourceClaims, that are used by this container.
+                            \n This is an alpha field and requires enabling the DynamicResourceAllocation
+                            feature gate. \n This field is immutable. It can only
+                            be set for containers."
+                          items:
+                            description: ResourceClaim references one entry in PodSpec.ResourceClaims.
+                            properties:
+                              name:
+                                description: Name must match the name of one entry
+                                  in pod.spec.resourceClaims of the Pod where this
+                                  field is used. It makes that resource available
+                                  inside a container.
+                                type: string
+                            required:
+                            - name
+                            type: object
+                          type: array
+                          x-kubernetes-list-map-keys:
+                          - name
+                          x-kubernetes-list-type: map
                         limits:
                           additionalProperties:
                             anyOf:
@@ -5334,6 +5460,32 @@ spec:
                                         DaemonSet will use its default value for this
                                         container's resources.
                                       properties:
+                                        claims:
+                                          description: "Claims lists the names of
+                                            resources, defined in spec.resourceClaims,
+                                            that are used by this container. \n This
+                                            is an alpha field and requires enabling
+                                            the DynamicResourceAllocation feature
+                                            gate. \n This field is immutable. It can
+                                            only be set for containers."
+                                          items:
+                                            description: ResourceClaim references
+                                              one entry in PodSpec.ResourceClaims.
+                                            properties:
+                                              name:
+                                                description: Name must match the name
+                                                  of one entry in pod.spec.resourceClaims
+                                                  of the Pod where this field is used.
+                                                  It makes that resource available
+                                                  inside a container.
+                                                type: string
+                                            required:
+                                            - name
+                                            type: object
+                                          type: array
+                                          x-kubernetes-list-map-keys:
+                                          - name
+                                          x-kubernetes-list-type: map
                                         limits:
                                           additionalProperties:
                                             anyOf:
@@ -7021,6 +7173,32 @@ spec:
                                         deprecated ComponentResources, then this value
                                         takes precedence.
                                       properties:
+                                        claims:
+                                          description: "Claims lists the names of
+                                            resources, defined in spec.resourceClaims,
+                                            that are used by this container. \n This
+                                            is an alpha field and requires enabling
+                                            the DynamicResourceAllocation feature
+                                            gate. \n This field is immutable. It can
+                                            only be set for containers."
+                                          items:
+                                            description: ResourceClaim references
+                                              one entry in PodSpec.ResourceClaims.
+                                            properties:
+                                              name:
+                                                description: Name must match the name
+                                                  of one entry in pod.spec.resourceClaims
+                                                  of the Pod where this field is used.
+                                                  It makes that resource available
+                                                  inside a container.
+                                                type: string
+                                            required:
+                                            - name
+                                            type: object
+                                          type: array
+                                          x-kubernetes-list-map-keys:
+                                          - name
+                                          x-kubernetes-list-type: map
                                         limits:
                                           additionalProperties:
                                             anyOf:
@@ -7078,6 +7256,32 @@ spec:
                                         conjunction with the deprecated ComponentResources,
                                         then this value takes precedence.
                                       properties:
+                                        claims:
+                                          description: "Claims lists the names of
+                                            resources, defined in spec.resourceClaims,
+                                            that are used by this container. \n This
+                                            is an alpha field and requires enabling
+                                            the DynamicResourceAllocation feature
+                                            gate. \n This field is immutable. It can
+                                            only be set for containers."
+                                          items:
+                                            description: ResourceClaim references
+                                              one entry in PodSpec.ResourceClaims.
+                                            properties:
+                                              name:
+                                                description: Name must match the name
+                                                  of one entry in pod.spec.resourceClaims
+                                                  of the Pod where this field is used.
+                                                  It makes that resource available
+                                                  inside a container.
+                                                type: string
+                                            required:
+                                            - name
+                                            type: object
+                                          type: array
+                                          x-kubernetes-list-map-keys:
+                                          - name
+                                          x-kubernetes-list-type: map
                                         limits:
                                           additionalProperties:
                                             anyOf:
@@ -7335,9 +7539,9 @@ spec:
                                         are ignored. All nodes are included in the
                                         calculations. \n If this value is nil, the
                                         behavior is equivalent to the Honor policy.
-                                        This is a alpha-level feature enabled by the
-                                        NodeInclusionPolicyInPodTopologySpread feature
-                                        flag."
+                                        This is a beta-level feature default enabled
+                                        by the NodeInclusionPolicyInPodTopologySpread
+                                        feature flag."
                                       type: string
                                     nodeTaintsPolicy:
                                       description: "NodeTaintsPolicy indicates how
@@ -7348,8 +7552,8 @@ spec:
                                         are included. - Ignore: node taints are ignored.
                                         All nodes are included. \n If this value is
                                         nil, the behavior is equivalent to the Ignore
-                                        policy. This is a alpha-level feature enabled
-                                        by the NodeInclusionPolicyInPodTopologySpread
+                                        policy. This is a beta-level feature default
+                                        enabled by the NodeInclusionPolicyInPodTopologySpread
                                         feature flag."
                                       type: string
                                     topologyKey:
@@ -8665,6 +8869,32 @@ spec:
                                             the deprecated ComponentResources, then
                                             this value takes precedence.
                                           properties:
+                                            claims:
+                                              description: "Claims lists the names
+                                                of resources, defined in spec.resourceClaims,
+                                                that are used by this container. \n
+                                                This is an alpha field and requires
+                                                enabling the DynamicResourceAllocation
+                                                feature gate. \n This field is immutable.
+                                                It can only be set for containers."
+                                              items:
+                                                description: ResourceClaim references
+                                                  one entry in PodSpec.ResourceClaims.
+                                                properties:
+                                                  name:
+                                                    description: Name must match the
+                                                      name of one entry in pod.spec.resourceClaims
+                                                      of the Pod where this field
+                                                      is used. It makes that resource
+                                                      available inside a container.
+                                                    type: string
+                                                required:
+                                                - name
+                                                type: object
+                                              type: array
+                                              x-kubernetes-list-map-keys:
+                                              - name
+                                              x-kubernetes-list-type: map
                                             limits:
                                               additionalProperties:
                                                 anyOf:
@@ -10187,6 +10417,32 @@ spec:
                                             ComponentResources, then this value takes
                                             precedence.
                                           properties:
+                                            claims:
+                                              description: "Claims lists the names
+                                                of resources, defined in spec.resourceClaims,
+                                                that are used by this container. \n
+                                                This is an alpha field and requires
+                                                enabling the DynamicResourceAllocation
+                                                feature gate. \n This field is immutable.
+                                                It can only be set for containers."
+                                              items:
+                                                description: ResourceClaim references
+                                                  one entry in PodSpec.ResourceClaims.
+                                                properties:
+                                                  name:
+                                                    description: Name must match the
+                                                      name of one entry in pod.spec.resourceClaims
+                                                      of the Pod where this field
+                                                      is used. It makes that resource
+                                                      available inside a container.
+                                                    type: string
+                                                required:
+                                                - name
+                                                type: object
+                                              type: array
+                                              x-kubernetes-list-map-keys:
+                                              - name
+                                              x-kubernetes-list-type: map
                                             limits:
                                               additionalProperties:
                                                 anyOf:
@@ -10252,6 +10508,32 @@ spec:
                                             ComponentResources, then this value takes
                                             precedence.
                                           properties:
+                                            claims:
+                                              description: "Claims lists the names
+                                                of resources, defined in spec.resourceClaims,
+                                                that are used by this container. \n
+                                                This is an alpha field and requires
+                                                enabling the DynamicResourceAllocation
+                                                feature gate. \n This field is immutable.
+                                                It can only be set for containers."
+                                              items:
+                                                description: ResourceClaim references
+                                                  one entry in PodSpec.ResourceClaims.
+                                                properties:
+                                                  name:
+                                                    description: Name must match the
+                                                      name of one entry in pod.spec.resourceClaims
+                                                      of the Pod where this field
+                                                      is used. It makes that resource
+                                                      available inside a container.
+                                                    type: string
+                                                required:
+                                                - name
+                                                type: object
+                                              type: array
+                                              x-kubernetes-list-map-keys:
+                                              - name
+                                              x-kubernetes-list-type: map
                                             limits:
                                               additionalProperties:
                                                 anyOf:
@@ -11588,6 +11870,32 @@ spec:
                                             use its default value for this container's
                                             resources.
                                           properties:
+                                            claims:
+                                              description: "Claims lists the names
+                                                of resources, defined in spec.resourceClaims,
+                                                that are used by this container. \n
+                                                This is an alpha field and requires
+                                                enabling the DynamicResourceAllocation
+                                                feature gate. \n This field is immutable.
+                                                It can only be set for containers."
+                                              items:
+                                                description: ResourceClaim references
+                                                  one entry in PodSpec.ResourceClaims.
+                                                properties:
+                                                  name:
+                                                    description: Name must match the
+                                                      name of one entry in pod.spec.resourceClaims
+                                                      of the Pod where this field
+                                                      is used. It makes that resource
+                                                      available inside a container.
+                                                    type: string
+                                                required:
+                                                - name
+                                                type: object
+                                              type: array
+                                              x-kubernetes-list-map-keys:
+                                              - name
+                                              x-kubernetes-list-type: map
                                             limits:
                                               additionalProperties:
                                                 anyOf:
@@ -11814,6 +12122,29 @@ spec:
                             limits and requests for compute resources such as cpu
                             and memory.
                           properties:
+                            claims:
+                              description: "Claims lists the names of resources, defined
+                                in spec.resourceClaims, that are used by this container.
+                                \n This is an alpha field and requires enabling the
+                                DynamicResourceAllocation feature gate. \n This field
+                                is immutable. It can only be set for containers."
+                              items:
+                                description: ResourceClaim references one entry in
+                                  PodSpec.ResourceClaims.
+                                properties:
+                                  name:
+                                    description: Name must match the name of one entry
+                                      in pod.spec.resourceClaims of the Pod where
+                                      this field is used. It makes that resource available
+                                      inside a container.
+                                    type: string
+                                required:
+                                - name
+                                type: object
+                              type: array
+                              x-kubernetes-list-map-keys:
+                              - name
+                              x-kubernetes-list-type: map
                             limits:
                               additionalProperties:
                                 anyOf:
@@ -13131,6 +13462,32 @@ spec:
                                             its default value for this container's
                                             resources.
                                           properties:
+                                            claims:
+                                              description: "Claims lists the names
+                                                of resources, defined in spec.resourceClaims,
+                                                that are used by this container. \n
+                                                This is an alpha field and requires
+                                                enabling the DynamicResourceAllocation
+                                                feature gate. \n This field is immutable.
+                                                It can only be set for containers."
+                                              items:
+                                                description: ResourceClaim references
+                                                  one entry in PodSpec.ResourceClaims.
+                                                properties:
+                                                  name:
+                                                    description: Name must match the
+                                                      name of one entry in pod.spec.resourceClaims
+                                                      of the Pod where this field
+                                                      is used. It makes that resource
+                                                      available inside a container.
+                                                    type: string
+                                                required:
+                                                - name
+                                                type: object
+                                              type: array
+                                              x-kubernetes-list-map-keys:
+                                              - name
+                                              x-kubernetes-list-type: map
                                             limits:
                                               additionalProperties:
                                                 anyOf:
@@ -14934,6 +15291,32 @@ spec:
                                             ComponentResources, then this value takes
                                             precedence.
                                           properties:
+                                            claims:
+                                              description: "Claims lists the names
+                                                of resources, defined in spec.resourceClaims,
+                                                that are used by this container. \n
+                                                This is an alpha field and requires
+                                                enabling the DynamicResourceAllocation
+                                                feature gate. \n This field is immutable.
+                                                It can only be set for containers."
+                                              items:
+                                                description: ResourceClaim references
+                                                  one entry in PodSpec.ResourceClaims.
+                                                properties:
+                                                  name:
+                                                    description: Name must match the
+                                                      name of one entry in pod.spec.resourceClaims
+                                                      of the Pod where this field
+                                                      is used. It makes that resource
+                                                      available inside a container.
+                                                    type: string
+                                                required:
+                                                - name
+                                                type: object
+                                              type: array
+                                              x-kubernetes-list-map-keys:
+                                              - name
+                                              x-kubernetes-list-type: map
                                             limits:
                                               additionalProperties:
                                                 anyOf:
@@ -14994,6 +15377,32 @@ spec:
                                             ComponentResources, then this value takes
                                             precedence.
                                           properties:
+                                            claims:
+                                              description: "Claims lists the names
+                                                of resources, defined in spec.resourceClaims,
+                                                that are used by this container. \n
+                                                This is an alpha field and requires
+                                                enabling the DynamicResourceAllocation
+                                                feature gate. \n This field is immutable.
+                                                It can only be set for containers."
+                                              items:
+                                                description: ResourceClaim references
+                                                  one entry in PodSpec.ResourceClaims.
+                                                properties:
+                                                  name:
+                                                    description: Name must match the
+                                                      name of one entry in pod.spec.resourceClaims
+                                                      of the Pod where this field
+                                                      is used. It makes that resource
+                                                      available inside a container.
+                                                    type: string
+                                                required:
+                                                - name
+                                                type: object
+                                              type: array
+                                              x-kubernetes-list-map-keys:
+                                              - name
+                                              x-kubernetes-list-type: map
                                             limits:
                                               additionalProperties:
                                                 anyOf:
@@ -15268,8 +15677,8 @@ spec:
                                             are ignored. All nodes are included in
                                             the calculations. \n If this value is
                                             nil, the behavior is equivalent to the
-                                            Honor policy. This is a alpha-level feature
-                                            enabled by the NodeInclusionPolicyInPodTopologySpread
+                                            Honor policy. This is a beta-level feature
+                                            default enabled by the NodeInclusionPolicyInPodTopologySpread
                                             feature flag."
                                           type: string
                                         nodeTaintsPolicy:
@@ -15282,7 +15691,7 @@ spec:
                                             node taints are ignored. All nodes are
                                             included. \n If this value is nil, the
                                             behavior is equivalent to the Ignore policy.
-                                            This is a alpha-level feature enabled
+                                            This is a beta-level feature default enabled
                                             by the NodeInclusionPolicyInPodTopologySpread
                                             feature flag."
                                           type: string
