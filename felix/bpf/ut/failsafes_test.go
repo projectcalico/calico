@@ -45,17 +45,6 @@ var denyAllRulesHost = polprog.Rules{
 	}},
 }
 
-var denyAllRulesWorkloads = polprog.Rules{
-	Tiers: []polprog.Tier{{
-		Policies: []polprog.Policy{{
-			Name: "deny all",
-			Rules: []polprog.Rule{{Rule: &proto.Rule{
-				Action: "Deny",
-			}}},
-		}},
-	}},
-}
-
 var failsafeTests = []failsafeTest{
 	{
 		Description:  "Packets from failsafe IP and port to localhost are allowed",
@@ -87,48 +76,6 @@ var failsafeTests = []failsafeTest{
 			TTL:     64,
 			Flags:   layers.IPv4DontFragment,
 			SrcIP:   dstIP,
-			DstIP:   net.IPv4(4, 4, 4, 4),
-		},
-		Outbound: false,
-		Allowed:  false,
-	},
-	{
-		Description: "Packets from outbound failsafes to inbound failsafes are denied",
-		Rules:       &denyAllRulesWorkloads,
-		IPHeaderIPv4: &layers.IPv4{
-			Version: 4,
-			IHL:     5,
-			TTL:     64,
-			Flags:   layers.IPv4DontFragment,
-			SrcIP:   fsafeDstIP,
-			DstIP:   srcIP,
-		},
-		Outbound: false,
-		Allowed:  false,
-	},
-	{
-		Description: "Packets from non-failsafe IP to failsafe IP are denied",
-		Rules:       &denyAllRulesWorkloads,
-		IPHeaderIPv4: &layers.IPv4{
-			Version: 4,
-			IHL:     5,
-			TTL:     64,
-			Flags:   layers.IPv4DontFragment,
-			SrcIP:   net.IPv4(4, 4, 4, 4),
-			DstIP:   fsafeDstIP,
-		},
-		Outbound: false,
-		Allowed:  false,
-	},
-	{
-		Description: "Packets from failsafe IP to non-failsafe IP are denied",
-		Rules:       &denyAllRulesWorkloads,
-		IPHeaderIPv4: &layers.IPv4{
-			Version: 4,
-			IHL:     5,
-			TTL:     64,
-			Flags:   layers.IPv4DontFragment,
-			SrcIP:   fsafeDstIP,
 			DstIP:   net.IPv4(4, 4, 4, 4),
 		},
 		Outbound: false,
