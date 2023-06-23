@@ -19,7 +19,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 
 	"github.com/projectcalico/calico/node/pkg/lifecycle/utils"
 )
@@ -43,7 +43,7 @@ func Run() {
 	var clientset *kubernetes.Clientset
 
 	// If running under kubernetes with secrets to call k8s API
-	if config, err := rest.InClusterConfig(); err == nil {
+	if config, err := clientcmd.BuildConfigFromFlags("", os.Getenv("KUBECONFIG")); err == nil {
 		// default timeout is 30 seconds, which isn't appropriate for this kind of
 		// shutdown action because network services, like kube-proxy might not be
 		// running and we don't want to block the full 30 seconds if they are just
