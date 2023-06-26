@@ -597,7 +597,7 @@ var _ = Describe("BPF Syncer", func() {
 					logrus.WithError(err).Info("Syncer result")
 				}()
 			})
-			_ = rt.Update(
+			rt.Update(
 				routes.NewKey(ip.CIDRFromAddrAndPrefix(ip.FromString("10.2.1.0"), 24).(ip.V4CIDR)),
 				routes.NewValueWithNextHop(
 					routes.FlagsRemoteWorkload,
@@ -633,7 +633,7 @@ var _ = Describe("BPF Syncer", func() {
 		}))
 
 		By("adding an unrelated route does not change anything", makestep(func() {
-			_ = rt.Update(
+			rt.Update(
 				routes.NewKey(ip.CIDRFromAddrAndPrefix(ip.FromString("10.2.55.0"), 24).(ip.V4CIDR)),
 				routes.NewValueWithNextHop(
 					routes.FlagsRemoteWorkload,
@@ -651,7 +651,7 @@ var _ = Describe("BPF Syncer", func() {
 		}))
 
 		By("adding route should fix another missing expanded NP", makestep(func() {
-			_ = rt.Update(
+			rt.Update(
 				routes.NewKey(ip.CIDRFromAddrAndPrefix(ip.FromString("10.2.3.0"), 24).(ip.V4CIDR)),
 				routes.NewValueWithNextHop(
 					routes.FlagsRemoteWorkload,
@@ -727,13 +727,13 @@ var _ = Describe("BPF Syncer", func() {
 				&k8sp.BaseEndpointInfo{Ready: true, Endpoint: "10.2.3.1:2222"},
 			}
 
-			_ = rt.Update(
+			rt.Update(
 				routes.NewKey(ip.CIDRFromAddrAndPrefix(ip.FromString("10.2.2.0"), 24).(ip.V4CIDR)),
 				routes.NewValueWithNextHop(
 					routes.FlagsRemoteWorkload,
 					ip.FromString("10.123.0.112").(ip.V4Addr)),
 			)
-			_ = rt.Update(
+			rt.Update(
 				routes.NewKey(ip.CIDRFromAddrAndPrefix(ip.FromString("10.2.3.0"), 24).(ip.V4CIDR)),
 				routes.NewValueWithNextHop(
 					routes.FlagsRemoteWorkload,

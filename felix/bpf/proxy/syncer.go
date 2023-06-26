@@ -416,7 +416,7 @@ type expandMiss struct {
 }
 
 func (s *Syncer) expandAndApplyNodePorts(sname k8sp.ServicePortName, sinfo k8sp.ServicePort,
-	eps []k8sp.Endpoint, nport int, rtLookup func(addr ip.Addr) (routes.Value, bool)) *expandMiss {
+	eps []k8sp.Endpoint, nport int, rtLookup func(addr ip.Addr) (routes.ValueInterface, bool)) *expandMiss {
 
 	ipToEp, miss := s.expandNodePorts(sname, sinfo, eps, nport, rtLookup)
 
@@ -434,7 +434,7 @@ func (s *Syncer) expandNodePorts(
 	sinfo k8sp.ServicePort,
 	eps []k8sp.Endpoint,
 	nport int,
-	rtLookup func(addr ip.Addr) (routes.Value, bool),
+	rtLookup func(addr ip.Addr) (routes.ValueInterface, bool),
 ) (map[ip.V4Addr][]k8sp.Endpoint, *expandMiss) {
 	ipToEp := make(map[ip.V4Addr][]k8sp.Endpoint)
 	var miss *expandMiss
@@ -1051,7 +1051,7 @@ func (s *Syncer) runExpandNPFixup(misses []*expandMiss) {
 
 			// We do one pass rightaway since we cannot know whether there
 			// was an update or not before we got here
-			s.rt.WaitAfter(ctx, func(lookup func(addr ip.Addr) (routes.Value, bool)) bool {
+			s.rt.WaitAfter(ctx, func(lookup func(addr ip.Addr) (routes.ValueInterface, bool)) bool {
 				log.Debug("Woke up")
 				missesChanged := false
 				var again []*expandMiss

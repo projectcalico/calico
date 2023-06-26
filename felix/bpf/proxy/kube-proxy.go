@@ -215,17 +215,14 @@ func (kp *KubeProxy) OnHostIPsUpdate(IPs []net.IP) {
 }
 
 // OnRouteUpdate should be used to update the internal state of routing tables
-func (kp *KubeProxy) OnRouteUpdate(k routes.Key, v routes.Value) {
-	if err := kp.rt.Update(k, v); err != nil {
-		log.WithField("error", err).Error("kube-proxy: OnRouteUpdate")
-	} else {
-		log.WithFields(log.Fields{"key": k, "value": v}).Debug("kube-proxy: OnRouteUpdate")
-	}
+func (kp *KubeProxy) OnRouteUpdate(k routes.KeyInterface, v routes.ValueInterface) {
+	kp.rt.Update(k, v)
+	log.WithFields(log.Fields{"key": k, "value": v}).Debug("kube-proxy: OnRouteUpdate")
 }
 
 // OnRouteDelete should be used to update the internal state of routing tables
-func (kp *KubeProxy) OnRouteDelete(k routes.Key) {
-	_ = kp.rt.Delete(k)
+func (kp *KubeProxy) OnRouteDelete(k routes.KeyInterface) {
+	kp.rt.Delete(k)
 	log.WithField("key", k).Debug("kube-proxy: OnRouteDelete")
 }
 
