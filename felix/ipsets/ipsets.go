@@ -20,14 +20,22 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 
 	"github.com/projectcalico/calico/felix/logutils"
+)
+
+const (
+	MaxIPSetParallelUpdates       = 50
+	MaxIPSetDeletionsPerIteration = 20
+	RestoreChunkSize              = 1000
 )
 
 // IPSets manages a whole "plane" of IP sets, i.e. all the IPv4 sets, or all the IPv6 IP sets.
@@ -37,6 +45,7 @@ type IPSets struct {
 	ipSetIDToIPSet       map[string]*ipSet
 	mainIPSetNameToIPSet map[string]*ipSet
 
+	mutex              sync.Mutex
 	existingIPSetNames set.Set[string]
 	nextTempIPSetIdx   uint
 
@@ -60,15 +69,7 @@ type IPSets struct {
 
 	logCxt *log.Entry
 
-	// restoreInCopy holds a copy of the stdin that we send to ipset restore.  It is reset
-	// after each use.
-	restoreInCopy bytes.Buffer
-	// stdoutCopy holds a copy of the the stdout emitted by ipset restore. It is reset after
-	// each use.
-	stdoutCopy bytes.Buffer
-	// stderrCopy holds a copy of the the stderr emitted by ipset restore. It is reset after
-	// each use.
-	stderrCopy bytes.Buffer
+	bufPool sync.Pool
 
 	opReporter logutils.OpRecorder
 
@@ -113,6 +114,7 @@ func NewIPSetsWithShims(
 		logCxt: log.WithFields(log.Fields{
 			"family": ipVersionConfig.Family,
 		}),
+		bufPool:    sync.Pool{New: func() any { return &bytes.Buffer{} }},
 		opReporter: recorder,
 	}
 }
@@ -642,75 +644,24 @@ func (s *IPSets) tryUpdates() error {
 		s.logCxt.Debug("No dirty IP sets.")
 		return nil
 	}
-
 	s.opReporter.RecordOperation(fmt.Sprint("update-ipsets-", s.IPVersionConfig.Family.Version()))
 
-	// Set up an ipset restore session.
-	countNumIPSetCalls.Inc()
-	cmd := s.newCmd("ipset", "restore")
-	// Get the pipe for stdin.
-	rawStdin, err := cmd.StdinPipe()
-	if err != nil {
-		s.logCxt.WithError(err).Error("Failed to create pipe for ipset restore.")
-		return err
+	var errg errgroup.Group
+	errg.SetLimit(MaxIPSetParallelUpdates)
+
+	ipSetChunks := s.chunkUpDirtyIPSets()
+	for _, setIDs := range ipSetChunks {
+		setIDs := setIDs
+		errg.Go(func() error {
+			return s.writeIPSetChunk(setIDs)
+		})
 	}
-	// "Tee" the data that we write to stdin to a buffer so we can dump it to the log on
-	// failure.
-	stdin := io.MultiWriter(&s.restoreInCopy, rawStdin)
-	defer s.restoreInCopy.Reset()
 
-	// Channel stdout/err to buffers so we can include them in the log on failure.
-	cmd.SetStderr(&s.stderrCopy)
-	defer s.stderrCopy.Reset()
-	cmd.SetStdout(&s.stdoutCopy)
-	defer s.stdoutCopy.Reset()
-
-	// Actually start the child process.
-	startTime := time.Now()
-	err = cmd.Start()
+	log.Debug("Waiting for background IP set updates to finish...")
+	err := errg.Wait()
+	log.Debug("Background IP set updates finished.")
 	if err != nil {
-		s.logCxt.WithError(err).Error("Failed to start ipset restore.")
-		closeErr := rawStdin.Close()
-		if closeErr != nil {
-			s.logCxt.WithError(closeErr).Error(
-				"Error closing stdin while handling start error")
-		}
-		return err
-	}
-	summaryExecStart.Observe(float64(time.Since(startTime).Nanoseconds()) / 1000.0)
-
-	// Ask each dirty IP set to write its updates to the stream.
-	var writeErr error
-	s.dirtyIPSetIDs.Iter(func(setID string) error {
-		if !s.ipSetNeeded(setID) {
-			return nil
-		}
-		ipSet := s.ipSetIDToIPSet[setID]
-		writeErr = s.writeUpdates(ipSet, stdin)
-		if writeErr != nil {
-			return set.StopIteration
-		}
-		return nil
-	})
-	// Finish off the input, then flush and close the input, or the command won't terminate.
-	// We need to close and wait whether we hit a write error or not so we defer the error
-	// handling.
-	_, commitErr := stdin.Write([]byte("COMMIT\n"))
-	flushErr := rawStdin.Flush()
-	closeErr := rawStdin.Close()
-	processErr := cmd.Wait()
-	if err = firstNonNilErr(writeErr, commitErr, flushErr, closeErr, processErr); err != nil {
-		s.logCxt.WithFields(log.Fields{
-			"writeErr":   writeErr,
-			"commitErr":  commitErr,
-			"flushErr":   flushErr,
-			"closeErr":   closeErr,
-			"processErr": processErr,
-			"stdout":     s.stdoutCopy.String(),
-			"stderr":     s.stderrCopy.String(),
-			"input":      s.restoreInCopy.String(),
-		}).Warning("Failed to complete ipset restore, IP sets may be out-of-sync.")
-		return err
+		return fmt.Errorf("failed to write one or more IP set: %v", err)
 	}
 
 	// If we get here, the writes were successful, reset the IP sets delta tracking now the
@@ -743,8 +694,113 @@ func (s *IPSets) tryUpdates() error {
 	return nil
 }
 
+// chunkUpDirtyIPSets breaks up the dirtyIPSetIDs set into slices for processing in parallel.
+func (s *IPSets) chunkUpDirtyIPSets() (chunks [][]string) {
+	// We try to make sure that each chunk has a reasonable number of ipset input lines
+	// in it.  If we simply made each ipset into its own chunk then we'd pay the overhead of
+	// launching the ipset binary for every IP set, even if there was only 1 update per IP
+	// set.
+	var chunk []string
+	var estimatedNumLinesInChunk int
+	s.dirtyIPSetIDs.Iter(func(setID string) error {
+		chunk = append(chunk, setID)
+
+		ipSet := s.ipSetIDToIPSet[setID]
+		estimatedNumLinesInChunk += ipSet.EstimateNumUpdateLines()
+		if estimatedNumLinesInChunk >= RestoreChunkSize {
+			chunks = append(chunks, chunk)
+			chunk = nil
+			estimatedNumLinesInChunk = 0
+		}
+		return nil
+	})
+	if chunk != nil {
+		chunks = append(chunks, chunk)
+	}
+	return
+}
+
+func (s *IPSets) writeIPSetChunk(setIDs []string) error {
+	// Set up an ipset restore session.
+	countNumIPSetCalls.Inc()
+	cmd := s.newCmd("ipset", "restore")
+	// Get the pipe for stdin.
+	rawStdin, err := cmd.StdinPipe()
+	if err != nil {
+		s.logCxt.WithError(err).Error("Failed to create pipe for ipset restore.")
+		return err
+	}
+
+	restoreInCopy := s.bufPool.Get().(*bytes.Buffer)
+	stdoutCopy := s.bufPool.Get().(*bytes.Buffer)
+	stderrCopy := s.bufPool.Get().(*bytes.Buffer)
+
+	// "Tee" the data that we write to stdin to a buffer so we can dump it to the log on
+	// failure.
+	stdin := io.MultiWriter(restoreInCopy, rawStdin)
+
+	// Channel stdout/err to buffers so we can include them in the log on failure.
+	cmd.SetStderr(stderrCopy)
+	cmd.SetStdout(stdoutCopy)
+
+	// Actually start the child process.
+	startTime := time.Now()
+	err = cmd.Start()
+	if err != nil {
+		s.logCxt.WithError(err).Error("Failed to start ipset restore.")
+		closeErr := rawStdin.Close()
+		if closeErr != nil {
+			s.logCxt.WithError(closeErr).Error(
+				"Error closing stdin while handling start error")
+		}
+		return err
+	}
+	summaryExecStart.Observe(float64(time.Since(startTime).Nanoseconds()) / 1000.0)
+
+	var writeErr error
+	for _, setID := range setIDs {
+		// Ask IP set to write its updates to the stream.
+		if !s.ipSetNeeded(setID) {
+			return nil
+		}
+		ipSet := s.ipSetIDToIPSet[setID]
+		writeErr = s.writeUpdates(ipSet, stdin)
+	}
+
+	// Finish off the input, then flush and close the input, or the command won't terminate.
+	// We need to close and wait whether we hit a write error or not so we defer the error
+	// handling.
+	_, commitErr := stdin.Write([]byte("COMMIT\n"))
+	flushErr := rawStdin.Flush()
+	closeErr := rawStdin.Close()
+	processErr := cmd.Wait()
+	if err = firstNonNilErr(writeErr, commitErr, flushErr, closeErr, processErr); err != nil {
+		s.logCxt.WithFields(log.Fields{
+			"writeErr":   writeErr,
+			"commitErr":  commitErr,
+			"flushErr":   flushErr,
+			"closeErr":   closeErr,
+			"processErr": processErr,
+			"stdout":     stdoutCopy.String(),
+			"stderr":     stderrCopy.String(),
+			"input":      restoreInCopy.String(),
+		}).Warning("Failed to complete ipset restore, IP sets may be out-of-sync.")
+		return err
+	}
+
+	restoreInCopy.Reset()
+	s.bufPool.Put(restoreInCopy)
+	stdoutCopy.Reset()
+	s.bufPool.Put(stdoutCopy)
+	stderrCopy.Reset()
+	s.bufPool.Put(stderrCopy)
+
+	return nil
+}
+
 func (s *IPSets) writeUpdates(ipSet *ipSet, w io.Writer) error {
-	logCxt := s.logCxt.WithField("setID", ipSet.SetID)
+	setID := ipSet.SetID
+	logCxt := s.logCxt.WithField("setID", setID)
 	if ipSet.members != nil {
 		logCxt = logCxt.WithField("numMembersInDataplane", ipSet.members.Len())
 	}
@@ -834,6 +890,8 @@ func (s *IPSets) writeFullRewrite(ipSet *ipSet, out io.Writer, logCxt log.FieldL
 // Giving each temporary IP set a new name works around the fact that we sometimes see transient failures to
 // remove temporary IP sets.
 func (s *IPSets) nextFreeTempIPSetName() string {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
 	for {
 		candidateName := s.IPVersionConfig.NameForTempIPSet(s.nextTempIPSetIdx)
 		s.nextTempIPSetIdx++
@@ -876,8 +934,16 @@ func (s *IPSets) writeDeltas(ipSet *ipSet, out io.Writer, logCxt log.FieldLogger
 
 // ApplyDeletions tries to delete any IP sets that are no longer needed.
 // Failures are ignored, deletions will be retried the next time we do a resync.
-func (s *IPSets) ApplyDeletions() {
+func (s *IPSets) ApplyDeletions() bool {
+	numDeletions := 0
 	s.pendingIPSetDeletions.Iter(func(setName string) error {
+		if numDeletions >= MaxIPSetDeletionsPerIteration {
+			// Deleting IP sets is slow (40ms) and serialised in the kernel.  Avoid holding up the main loop
+			// for too long.  We'll leave the remaining sets pending deletion and mop them up next time.
+			log.Debug("Deleted batch of 20 IP sets, rate limiting further IP set deletions.")
+			// Leave the item in the set, so we'll do another batch of deletions next time around the loop.
+			return set.StopIteration
+		}
 		logCxt := s.logCxt.WithField("setName", setName)
 		if s.existingIPSetNames.Contains(setName) {
 			logCxt.Info("Deleting IP set.")
@@ -887,19 +953,22 @@ func (s *IPSets) ApplyDeletions() {
 				// our IP set).  Instead, wait for the next timed resync.
 				logCxt.WithError(err).Warning("Failed to delete IP set. Will retry on next resync.")
 			}
+			numDeletions++
 		}
-		// Always remove the item so we don't retry until the next timed resync.
+		// Remove the item, so we don't retry until the next timed resync.
 		return set.RemoveItem
 	})
 
 	// ApplyDeletions() marks the end of the two-phase "apply".  Piggy back on that to
 	// update the gauge that records how many IP sets we own.
 	s.gaugeNumIpsets.Set(float64(len(s.ipSetIDToIPSet)))
+	return s.pendingIPSetDeletions.Len() > 0
 }
 
 // tryTempIPSetDeletions tries to delete any temporary IP sets found by the last resync.
 func (s *IPSets) tryTempIPSetDeletions() {
 	s.pendingTempIPSetDeletions.Iter(func(setName string) error {
+
 		logCxt := s.logCxt.WithField("setName", setName)
 		if s.existingIPSetNames.Contains(setName) {
 			logCxt.Info("Deleting IP set.")
