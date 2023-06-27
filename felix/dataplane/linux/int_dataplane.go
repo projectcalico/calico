@@ -639,7 +639,11 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	if config.BPFEnabled {
 		log.Info("BPF enabled, starting BPF endpoint manager and map manager.")
 		var err error
-		bpfMaps, err = bpfmap.CreateBPFMaps()
+		ipFamily := 4
+		if config.BPFIpv6Enabled {
+			ipFamily = 6
+		}
+		bpfMaps, err = bpfmap.CreateBPFMaps(ipFamily)
 		if err != nil {
 			log.WithError(err).Panic("error creating bpf maps")
 		}
