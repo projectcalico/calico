@@ -46,11 +46,11 @@ func benchmarkProxyUpdates(b *testing.B, svcN, epsN int) {
 		eps := makeEps(svcN, epsN)
 		k8s := fake.NewSimpleClientset(append(svcs, eps...)...)
 
-		feCache := cachingmap.New[nat.FrontendKey, nat.FrontendValue](nat.FrontendMapParameters.Name,
-			maps.NewTypedMap[nat.FrontendKey, nat.FrontendValue](
+		feCache := cachingmap.New[nat.FrontendKeyInterface, nat.FrontendValue](nat.FrontendMapParameters.Name,
+			maps.NewTypedMap[nat.FrontendKeyInterface, nat.FrontendValue](
 				&mock.DummyMap{}, nat.FrontendKeyFromBytes, nat.FrontendValueFromBytes))
-		beCache := cachingmap.New[nat.BackendKey, nat.BackendValue](nat.BackendMapParameters.Name,
-			maps.NewTypedMap[nat.BackendKey, nat.BackendValue](
+		beCache := cachingmap.New[nat.BackendKey, nat.BackendValueInterface](nat.BackendMapParameters.Name,
+			maps.NewTypedMap[nat.BackendKey, nat.BackendValueInterface](
 				&mock.DummyMap{}, nat.BackendKeyFromBytes, nat.BackendValueFromBytes))
 
 		syncer, err := proxy.NewSyncer(
@@ -59,6 +59,11 @@ func benchmarkProxyUpdates(b *testing.B, svcN, epsN int) {
 			beCache,
 			&mock.DummyMap{},
 			proxy.NewRTCache(),
+			nat.NewNATKeyIntf,
+			nat.NewNATKeySrcIntf,
+			nat.NewNATBackendValueIntf,
+			nat.AffinityKeyIntfFromBytes,
+			nat.AffinityValueIntfFromBytes,
 		)
 		Expect(err).ShouldNot(HaveOccurred())
 
