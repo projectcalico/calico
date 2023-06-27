@@ -45,6 +45,8 @@ import (
 type Proxy interface {
 	// Stop stops the proxy and waits for its exit
 	Stop()
+
+	setIpFamily(int)
 }
 
 // DPSyncerState groups the information passed to the DPSyncer's Apply
@@ -71,6 +73,7 @@ type proxy struct {
 	hostname string
 	nodeZone string
 	k8s      kubernetes.Interface
+	ipFamily int
 
 	epsChanges *k8sp.EndpointChangeTracker
 	svcChanges *k8sp.ServiceChangeTracker
@@ -119,6 +122,7 @@ func New(k8s kubernetes.Interface, dp DPSyncer, hostname string, opts ...Option)
 		k8s:      k8s,
 		dpSyncer: dp,
 		hostname: hostname,
+		ipFamily: 4,
 		svcMap:   make(k8sp.ServicePortMap),
 		epsMap:   make(k8sp.EndpointsMap),
 
@@ -143,13 +147,18 @@ func New(k8s kubernetes.Interface, dp DPSyncer, hostname string, opts ...Option)
 
 	p.svcHealthServer = healthcheck.NewServiceHealthServer(p.hostname, p.recorder, []string{"0.0.0.0/0"})
 
+	ipVersion := v1.IPv4Protocol
+	if p.ipFamily != 4 {
+		ipVersion = v1.IPv6Protocol
+	}
+
 	p.epsChanges = k8sp.NewEndpointChangeTracker(p.hostname,
 		nil, // change if you want to provide more ctx
-		v1.IPv4Protocol,
+		ipVersion,
 		p.recorder,
 		nil,
 	)
-	p.svcChanges = k8sp.NewServiceChangeTracker(nil, v1.IPv4Protocol, p.recorder, nil)
+	p.svcChanges = k8sp.NewServiceChangeTracker(nil, ipVersion, p.recorder, nil)
 
 	noProxyName, err := labels.NewRequirement(apis.LabelServiceProxyName, selection.DoesNotExist, nil)
 	if err != nil {
@@ -187,6 +196,10 @@ func New(k8s kubernetes.Interface, dp DPSyncer, hostname string, opts ...Option)
 	p.startRoutine(func() { svcConfig.Run(p.stopCh) })
 
 	return p, nil
+}
+
+func (p *proxy) setIpFamily(ipFamily int) {
+	p.ipFamily = ipFamily
 }
 
 func (p *proxy) Stop() {

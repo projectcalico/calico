@@ -716,6 +716,10 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			bpfproxyOpts = append(bpfproxyOpts, bpfproxy.WithTopologyNodeZone(config.NodeZone))
 		}
 
+		if config.BPFIpv6Enabled {
+			bpfproxyOpts = append(bpfproxyOpts, bpfproxy.WithIPFamily(6))
+		}
+
 		if config.KubeClientSet != nil {
 			// We have a Kubernetes connection, start watching services and populating the NAT maps.
 			kp, err := bpfproxy.StartKubeProxy(

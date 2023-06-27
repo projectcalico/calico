@@ -2246,7 +2246,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								Expect(aff).To(HaveLen(1))
 								Expect(aff).To(HaveKey(mkey))
 
-								return aff[mkey].Backend()
+								return aff[mkey].Backend().(nat.BackendValue)
 							}, 60*time.Second, time.Second).ShouldNot(Equal(mVal.Backend()))
 						})
 					}
