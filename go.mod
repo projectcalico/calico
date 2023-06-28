@@ -17,7 +17,7 @@ require (
 	github.com/containernetworking/plugins v1.0.1
 	github.com/coreos/go-semver v0.3.0
 	github.com/davecgh/go-spew v1.1.1
-	github.com/distribution/distribution v2.8.1+incompatible
+	github.com/distribution/distribution v2.8.2+incompatible
 	github.com/docopt/docopt-go v0.0.0-20180111231733-ee0de3bc6815
 	github.com/envoyproxy/go-control-plane v0.10.2-0.20220325020618-49ff273808a1
 	github.com/fsnotify/fsnotify v1.6.0
@@ -62,6 +62,7 @@ require (
 	github.com/prometheus/client_model v0.3.0
 	github.com/prometheus/common v0.37.0
 	github.com/rakelkar/gonetsh v0.3.2
+	github.com/safchain/ethtool v0.0.0-20210803160452-9aa261dae9b1
 	github.com/satori/go.uuid v1.2.0
 	github.com/shirou/gopsutil v0.0.0-20190323131628-2cbc9195c892
 	github.com/sirupsen/logrus v1.9.0
@@ -146,7 +147,7 @@ require (
 	github.com/coreos/go-systemd/v22 v22.3.2 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.2 // indirect
 	github.com/cyphar/filepath-securejoin v0.2.3 // indirect
-	github.com/docker/distribution v2.8.1+incompatible // indirect
+	github.com/docker/distribution v2.8.2+incompatible // indirect
 	github.com/docker/go-units v0.5.0 // indirect
 	github.com/emicklei/go-restful/v3 v3.9.0 // indirect
 	github.com/envoyproxy/protoc-gen-validate v0.1.0 // indirect
@@ -154,6 +155,7 @@ require (
 	github.com/evanphx/json-patch v4.12.0+incompatible // indirect
 	github.com/evanphx/json-patch/v5 v5.2.0 // indirect
 	github.com/felixge/httpsnoop v1.0.3 // indirect
+	github.com/ghodss/yaml v1.0.0 // indirect
 	github.com/go-errors/errors v1.0.2-0.20180813162953-d98b870cc4e0 // indirect
 	github.com/go-logr/logr v1.2.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
@@ -223,7 +225,6 @@ require (
 	github.com/prometheus/procfs v0.8.0 // indirect
 	github.com/rubiojr/go-vhd v0.0.0-20200706105327-02e210299021 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
-	github.com/safchain/ethtool v0.0.0-20210803160452-9aa261dae9b1 // indirect
 	github.com/seccomp/libseccomp-golang v0.9.2-0.20220502022130-f33da4d89646 // indirect
 	github.com/shirou/w32 v0.0.0-20160930032740-bb4de0191aa4 // indirect
 	github.com/spf13/afero v1.9.3 // indirect
