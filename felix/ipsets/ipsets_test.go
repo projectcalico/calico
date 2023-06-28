@@ -15,10 +15,13 @@
 package ipsets_test
 
 import (
+	"encoding/binary"
+	"fmt"
+	"net"
+	"time"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-
-	"time"
 
 	"github.com/projectcalico/calico/felix/ip"
 	. "github.com/projectcalico/calico/felix/ipsets"
@@ -245,6 +248,9 @@ var _ = Describe("IP sets dataplane", func() {
 		dataplane.ExpectMembers(map[string][]string{
 			v4MainIPSetName: {"10.0.0.2", "10.0.0.3"},
 		})
+
+		// Check that batching is working as expected.
+		Expect(dataplane.NumRestoreCalls()).To(Equal(1))
 	})
 
 	It("mainline: should ignore IPs of wrong version", func() {
@@ -255,6 +261,59 @@ var _ = Describe("IP sets dataplane", func() {
 		dataplane.ExpectMembers(map[string][]string{
 			v4MainIPSetName: {"10.0.0.2", "10.0.0.3"},
 		})
+	})
+
+	It("with medium IP sets, should not use more than one chunk for initial resync", func() {
+		ips := generateIPs("10.0.0.0", RestoreChunkSize-1)
+		ipsets.AddOrReplaceIPSet(meta, ips)
+		ipsets.AddOrReplaceIPSet(meta2, ips)
+		ipsets.ApplyUpdates()
+		dataplane.ExpectMembers(map[string][]string{
+			v4MainIPSetName:  ips,
+			v4MainIPSetName2: ips,
+		})
+
+		// Check that batching is working as expected.
+		Expect(dataplane.NumRestoreCalls()).To(Equal(1))
+	})
+
+	It("with large IP sets, should use more than one chunk for initial resync", func() {
+		ips := generateIPs("10.0.0.0", RestoreChunkSize)
+		ipsets.AddOrReplaceIPSet(meta, ips)
+		ipsets.AddOrReplaceIPSet(meta2, ips)
+		ipsets.ApplyUpdates()
+		dataplane.ExpectMembers(map[string][]string{
+			v4MainIPSetName:  ips,
+			v4MainIPSetName2: ips,
+		})
+
+		// Check that batching is working as expected.
+		Expect(dataplane.NumRestoreCalls()).To(Equal(2))
+	})
+
+	It("with large deltas, should use more than one chunk", func() {
+		ips := generateIPs("10.0.0.0", 1)
+		ipsets.AddOrReplaceIPSet(meta, ips)
+		ipsets.AddOrReplaceIPSet(meta2, ips)
+		ipsets.ApplyUpdates()
+		dataplane.ExpectMembers(map[string][]string{
+			v4MainIPSetName:  ips,
+			v4MainIPSetName2: ips,
+		})
+		// Check that batching is working as expected.
+		Expect(dataplane.NumRestoreCalls()).To(Equal(1))
+
+		ips = generateIPs("11.0.0.0", RestoreChunkSize)
+		ipsets.AddOrReplaceIPSet(meta, ips)
+		ipsets.AddOrReplaceIPSet(meta2, ips)
+		ipsets.ApplyUpdates()
+		dataplane.ExpectMembers(map[string][]string{
+			v4MainIPSetName:  ips,
+			v4MainIPSetName2: ips,
+		})
+
+		// Check that batching is working as expected.
+		Expect(dataplane.NumRestoreCalls()).To(Equal(3))
 	})
 
 	It("should not mark set as dirty if all IPs of wrong version", func() {
@@ -295,6 +354,33 @@ var _ = Describe("IP sets dataplane", func() {
 			Expect(dataplane.IPSetMembers).To(Equal(map[string]set.Set[string]{
 				v4MainIPSetName: set.From("10.0.0.1", "10.0.0.2"),
 			}))
+			// It shouldn't try to double-delete the temp IP set.
+			Expect(dataplane.TriedToDeleteNonExistent).To(BeFalse())
+		})
+	})
+
+	Describe("with many left-over IP sets in place", func() {
+		BeforeEach(func() {
+			for i := 0; i < MaxIPSetDeletionsPerIteration*3; i++ {
+				setName := fmt.Sprintf("cali40s:%d", i)
+				dataplane.IPSetMembers[setName] = set.From("10.0.0.1")
+			}
+		})
+
+		It("should have limit on number of deletions per attempt", func() {
+			apply()
+			Expect(dataplane.IPSetMembers).To(HaveLen(MaxIPSetDeletionsPerIteration * 2))
+			apply()
+			Expect(dataplane.IPSetMembers).To(HaveLen(MaxIPSetDeletionsPerIteration))
+			apply()
+			Expect(dataplane.IPSetMembers).To(HaveLen(0))
+			Expect(dataplane.TriedToDeleteNonExistent).To(BeFalse())
+		})
+
+		It("should rewrite IP set correctly and clean up temp set", func() {
+			ipsets.AddOrReplaceIPSet(meta, []string{"10.0.0.1", "10.0.0.2"})
+			apply()
+			Expect(dataplane.IPSetMembers[v4MainIPSetName]).To(Equal(set.From("10.0.0.1", "10.0.0.2")))
 			// It shouldn't try to double-delete the temp IP set.
 			Expect(dataplane.TriedToDeleteNonExistent).To(BeFalse())
 		})
@@ -820,6 +906,17 @@ var _ = Describe("IP sets dataplane", func() {
 		dataplane.ExpectMembers(map[string][]string{"noncali": v4Members1And2})
 	})
 })
+
+func generateIPs(baseIP string, size int) []string {
+	var ips []string
+	scratchIP := net.ParseIP(baseIP).To4()
+	baseInt := binary.BigEndian.Uint32(scratchIP)
+	for i := 0; i < size; i++ {
+		binary.BigEndian.PutUint32(scratchIP, uint32(i)+baseInt)
+		ips = append(ips, scratchIP.String())
+	}
+	return ips
+}
 
 var _ = Describe("Standard IPv4 IPVersionConfig", func() {
 	v4VersionConf := NewIPVersionConfig(

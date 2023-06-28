@@ -249,6 +249,20 @@ type ipSet struct {
 	pendingDeletions set.Set[IPSetMember]
 }
 
+func (s ipSet) EstimateNumUpdateLines() int {
+	if s.pendingReplace != nil {
+		return s.pendingReplace.Len()
+	}
+	ops := 0
+	if s.pendingAdds != nil {
+		ops += s.pendingAdds.Len()
+	}
+	if s.pendingDeletions != nil {
+		ops += s.pendingDeletions.Len()
+	}
+	return ops
+}
+
 // IPVersionConfig wraps up the metadata for a particular IP version.  It can be used by
 // this and other components to calculate IP set names from IP set IDs, for example.
 type IPVersionConfig struct {
