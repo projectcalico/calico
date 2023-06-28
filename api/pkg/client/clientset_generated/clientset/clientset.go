@@ -19,8 +19,7 @@ type Interface interface {
 	ProjectcalicoV3() projectcalicov3.ProjectcalicoV3Interface
 }
 
-// Clientset contains the clients for groups. Each group has exactly one
-// version included in a Clientset.
+// Clientset contains the clients for groups.
 type Clientset struct {
 	*discovery.DiscoveryClient
 	projectcalicoV3 *projectcalicov3.ProjectcalicoV3Client
