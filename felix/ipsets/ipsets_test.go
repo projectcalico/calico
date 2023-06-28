@@ -34,6 +34,9 @@ import (
 const (
 	ipSetID  = "s:qMt7iLlGDhvLnCjM0l9nzxbabcd"
 	ipSetID2 = "t:qMt7iLlGDhvLnCjM0l9nzxbabcd"
+	ipSetID3 = "u:qMt7iLlGDhvLnCjM0l9nzxbabcd"
+	ipSetID4 = "v:qMt7iLlGDhvLnCjM0l9nzxbabcd"
+	ipSetID5 = "w:qMt7iLlGDhvLnCjM0l9nzxbabcd"
 
 	v4MainIPSetName  = "cali40s:qMt7iLlGDhvLnCjM0l9nzxb"
 	v4TempIPSetName0 = "cali4t0"
@@ -195,6 +198,21 @@ var _ = Describe("IP sets dataplane", func() {
 	meta2 := IPSetMetadata{
 		MaxSize: 1234,
 		SetID:   ipSetID2,
+		Type:    IPSetTypeHashIP,
+	}
+	meta3 := IPSetMetadata{
+		MaxSize: 1234,
+		SetID:   ipSetID3,
+		Type:    IPSetTypeHashIP,
+	}
+	meta4 := IPSetMetadata{
+		MaxSize: 1234,
+		SetID:   ipSetID4,
+		Type:    IPSetTypeHashIP,
+	}
+	meta5 := IPSetMetadata{
+		MaxSize: 1234,
+		SetID:   ipSetID5,
 		Type:    IPSetTypeHashIP,
 	}
 	metaCIDRs := IPSetMetadata{
@@ -510,6 +528,31 @@ var _ = Describe("IP sets dataplane", func() {
 				v4TempIPSetName1: set.From("10.0.0.2"),
 				v4MainIPSetName:  set.From("10.0.0.1", "10.0.0.2"),
 			}))
+		})
+	})
+
+	Context("with filtering to two IP sets", func() {
+		BeforeEach(func() {
+			ipsets.SetFilter(set.From(v4MainIPSetName2, v4MainIPSetName))
+			ipsets.QueueResync()
+			apply()
+		})
+
+		It("should create only those two", func() {
+			// Regression test for a bug hit during development; we were breaking out of
+			// the loop when we hit an ignored IP set.  Make sure we have a few IP sets
+			// so it's very unlikely to pass by chance.
+			ipsets.AddOrReplaceIPSet(meta, []string{"10.0.0.1", "10.0.0.2"})
+			ipsets.AddOrReplaceIPSet(meta2, []string{"10.0.0.2", "10.0.0.3"})
+			ipsets.AddOrReplaceIPSet(meta3, []string{"10.0.0.3", "10.0.0.4"})
+			ipsets.AddOrReplaceIPSet(meta4, []string{"10.0.0.4", "10.0.0.5"})
+			ipsets.AddOrReplaceIPSet(meta5, []string{"10.0.0.5", "10.0.0.6"})
+			apply()
+
+			dataplane.ExpectMembers(map[string][]string{
+				v4MainIPSetName:  {"10.0.0.1", "10.0.0.2"},
+				v4MainIPSetName2: {"10.0.0.2", "10.0.0.3"},
+			})
 		})
 	})
 

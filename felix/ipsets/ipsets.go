@@ -761,7 +761,7 @@ func (s *IPSets) writeIPSetChunk(setIDs []string) error {
 	for _, setID := range setIDs {
 		// Ask IP set to write its updates to the stream.
 		if !s.ipSetNeeded(setID) {
-			return nil
+			continue
 		}
 		ipSet := s.ipSetIDToIPSet[setID]
 		writeErr = s.writeUpdates(ipSet, stdin)
