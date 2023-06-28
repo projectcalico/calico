@@ -45,6 +45,8 @@ type IPSets struct {
 	ipSetIDToIPSet       map[string]*ipSet
 	mainIPSetNameToIPSet map[string]*ipSet
 
+	// mutex protects existingIPSetNames and nextTempIPSetIdx, which are accessed by parallel
+	// workers during the apply step.
 	mutex              sync.Mutex
 	existingIPSetNames set.Set[string]
 	nextTempIPSetIdx   uint
@@ -624,9 +626,9 @@ func (s *IPSets) tryResync() (numProblems int, err error) {
 	return
 }
 
-// tryUpdates attempts to create and/or update IP sets.  It attempts to do the updates as a single
-// 'ipset restore' session in order to minimise process forking overhead.  Note: unlike
-// 'iptables-restore', 'ipset restore' is not atomic, updates are applied individually.
+// tryUpdates attempts to create and/or update IP sets.  It starts background goroutines, each
+// running one "ipset restore" session.  Note: unlike 'iptables-restore', 'ipset restore' is
+// not atomic, updates are applied individually.
 func (s *IPSets) tryUpdates() error {
 	needUpdates := false
 	if s.neededIPSetNames == nil {
@@ -761,7 +763,7 @@ func (s *IPSets) writeIPSetChunk(setIDs []string) error {
 	for _, setID := range setIDs {
 		// Ask IP set to write its updates to the stream.
 		if !s.ipSetNeeded(setID) {
-			return nil
+			continue
 		}
 		ipSet := s.ipSetIDToIPSet[setID]
 		writeErr = s.writeUpdates(ipSet, stdin)
