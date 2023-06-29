@@ -691,6 +691,11 @@ func evaluateENVBool(envVar string, defaultValue bool) bool {
 // in the environment, or is a no-op if not specified.
 // Returns true if the node object needs to be updated.
 func configureASNumber(node *libapi.Node) bool {
+	// If Calico is running in policy only mode we don't need to write BGP related
+	// details to the Node.
+	if os.Getenv("CALICO_NETWORKING_BACKEND") == "none" {
+		return false
+	}
 	// Extract the AS number from the environment
 	asStr := os.Getenv("AS")
 	if asStr != "" {
