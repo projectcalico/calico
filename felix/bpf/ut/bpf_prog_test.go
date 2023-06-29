@@ -767,7 +767,18 @@ func objUTLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHos
 			if err := tc.ConfigureProgram(m, ifaceLog, &globals); err != nil {
 				return nil, fmt.Errorf("failed to configure tc program: %w", err)
 			}
-			break
+			continue
+		}
+		pin := "/sys/fs/bpf/tc/globals/" + m.Name()
+		log.WithField("pin", pin).Debug("Pinning map")
+		cmd := exec.Command("bpftool", "map", "show", "pinned", pin)
+		log.WithField("cmd", cmd.String()).Debugf("executing")
+		out, _ := cmd.Output()
+		log.WithField("output", string(out)).Debug("map")
+		log.WithField("size", m.MaxEntries()).Debug("libbpf map")
+		if err := m.SetPinPath(pin); err != nil {
+			obj.Close()
+			return nil, fmt.Errorf("error pinning map %s: %w", m.Name(), err)
 		}
 	}
 
