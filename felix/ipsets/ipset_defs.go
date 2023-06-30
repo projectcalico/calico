@@ -251,16 +251,18 @@ type ipSet struct {
 
 func (s ipSet) EstimateNumUpdateLines() int {
 	if s.pendingReplace != nil {
-		return s.pendingReplace.Len()
+		numMembers := s.pendingReplace.Len()
+		const staticLines = 3 // create temp IP set, swap it into place, delete it.
+		return numMembers + staticLines
 	}
-	ops := 0
+	lines := 0
 	if s.pendingAdds != nil {
-		ops += s.pendingAdds.Len()
+		lines += s.pendingAdds.Len()
 	}
 	if s.pendingDeletions != nil {
-		ops += s.pendingDeletions.Len()
+		lines += s.pendingDeletions.Len()
 	}
-	return ops
+	return lines
 }
 
 // IPVersionConfig wraps up the metadata for a particular IP version.  It can be used by

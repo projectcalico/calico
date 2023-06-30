@@ -859,31 +859,35 @@ func (s *IPSets) writeFullRewrite(ipSet *ipSet, out io.Writer, logCxt log.FieldL
 		countNumIPSetLinesExecuted.Inc()
 	}
 
-	// Our general approach is to create a temporary IP set with the right contents, then
-	// atomically swap it into place.
 	mainSetName := ipSet.MainIPSetName
+	var tempSetName string
+	var targetSet string
 	if !s.existingIPSetNames.Contains(mainSetName) {
-		// Create empty main IP set so we can share the atomic swap logic below.
-		// Note: we can't use the -exist flag (which should make the create idempotent)
-		// because it still fails if the IP set was previously created with different
-		// parameters.
+		// Main IP set doesn't exist, create it and then fill it in directly.
 		logCxt.WithField("setID", ipSet.SetID).Debug("Pre-creating main IP set")
 		writeLine("create %s %s family %s maxelem %d",
 			mainSetName, ipSet.Type, s.IPVersionConfig.Family, ipSet.MaxSize)
+		targetSet = mainSetName
+	} else {
+		// Main IP set does exist, create a temp IP set and then do an atomic swap into place.
+		// This allows us to change the IP set size, for example.
+		tempSetName = s.nextFreeTempIPSetName()
+		writeLine("create %s %s family %s maxelem %d",
+			tempSetName, ipSet.Type, s.IPVersionConfig.Family, ipSet.MaxSize)
+		targetSet = tempSetName
 	}
-	tempSetName := s.nextFreeTempIPSetName()
-	// Create the temporary IP set with the current parameters.
-	writeLine("create %s %s family %s maxelem %d",
-		tempSetName, ipSet.Type, s.IPVersionConfig.Family, ipSet.MaxSize)
-	// Write all the members into the temporary IP set.
+	// Write all the members into the target IP set.
 	ipSet.pendingReplace.Iter(func(member IPSetMember) error {
-		writeLine("add %s %s", tempSetName, member)
+		writeLine("add %s %s", targetSet, member)
 		return nil
 	})
-	// Atomically swap the temporary set into place.
-	writeLine("swap %s %s", mainSetName, tempSetName)
-	// Then remove the temporary set (which was the old main set).
-	writeLine("destroy %s", tempSetName)
+	if tempSetName != "" {
+		// Atomically swap the temporary set into place.
+		writeLine("swap %s %s", mainSetName, tempSetName)
+		// Then remove the temporary set (which was the old main set).
+		// TODO delete temp IP set lazily
+		writeLine("destroy %s", tempSetName)
+	}
 
 	return
 }
@@ -937,29 +941,7 @@ func (s *IPSets) writeDeltas(ipSet *ipSet, out io.Writer, logCxt log.FieldLogger
 // ApplyDeletions tries to delete any IP sets that are no longer needed.
 // Failures are ignored, deletions will be retried the next time we do a resync.
 func (s *IPSets) ApplyDeletions() bool {
-	numDeletions := 0
-	s.pendingIPSetDeletions.Iter(func(setName string) error {
-		if numDeletions >= MaxIPSetDeletionsPerIteration {
-			// Deleting IP sets is slow (40ms) and serialised in the kernel.  Avoid holding up the main loop
-			// for too long.  We'll leave the remaining sets pending deletion and mop them up next time.
-			log.Debug("Deleted batch of 20 IP sets, rate limiting further IP set deletions.")
-			// Leave the item in the set, so we'll do another batch of deletions next time around the loop.
-			return set.StopIteration
-		}
-		logCxt := s.logCxt.WithField("setName", setName)
-		if s.existingIPSetNames.Contains(setName) {
-			logCxt.Info("Deleting IP set.")
-			if err := s.deleteIPSet(setName); err != nil {
-				// Note: we used to set the resyncRequired flag on this path but that can lead to excessive retries if
-				// the problem isn't something that we can fix (for example an external app has made a reference to
-				// our IP set).  Instead, wait for the next timed resync.
-				logCxt.WithError(err).Warning("Failed to delete IP set. Will retry on next resync.")
-			}
-			numDeletions++
-		}
-		// Remove the item, so we don't retry until the next timed resync.
-		return set.RemoveItem
-	})
+	s.tryDeleteIPSets("main", s.pendingIPSetDeletions)
 
 	// ApplyDeletions() marks the end of the two-phase "apply".  Piggy back on that to
 	// update the gauge that records how many IP sets we own.
@@ -969,21 +951,31 @@ func (s *IPSets) ApplyDeletions() bool {
 
 // tryTempIPSetDeletions tries to delete any temporary IP sets found by the last resync.
 func (s *IPSets) tryTempIPSetDeletions() {
-	s.pendingTempIPSetDeletions.Iter(func(setName string) error {
+	s.tryDeleteIPSets("temporary", s.pendingTempIPSetDeletions)
+}
 
+func (s *IPSets) tryDeleteIPSets(setType string, setNames set.Set[string]) {
+	numDeletions := 0
+	setNames.Iter(func(setName string) error {
+		if numDeletions >= MaxIPSetDeletionsPerIteration {
+			// Deleting IP sets is slow (40ms) and serialised in the kernel.  Avoid holding up the main loop
+			// for too long.  We'll leave the remaining sets pending deletion and mop them up next time.
+			log.Debugf("Deleted batch of 20 %s IP sets, rate limiting further IP set deletions.", setType)
+			// Leave the item in the set, so we'll do another batch of deletions next time around the loop.
+			return set.StopIteration
+		}
 		logCxt := s.logCxt.WithField("setName", setName)
 		if s.existingIPSetNames.Contains(setName) {
-			logCxt.Info("Deleting IP set.")
+			logCxt.Infof("Deleting %s IP set.", setType)
 			if err := s.deleteIPSet(setName); err != nil {
-				// Log and carry on; we'll try again in ApplyDeletions().
-				logCxt.WithError(err).Warning("Failed to delete temporary IP set. Will retry...")
-			} else {
-				// Success! Remove from the main pending deletions set too.
-				logCxt.WithField("setName", setName).Info("Successfully removed left-over temporary IP set.")
-				s.pendingIPSetDeletions.Discard(setName)
+				// Note: we used to set the resyncRequired flag on this path but that can lead to excessive retries if
+				// the problem isn't something that we can fix (for example an external app has made a reference to
+				// our IP set).  Instead, wait for the next timed resync.
+				logCxt.WithError(err).Warningf("Failed to delete %s IP set. Will retry on next resync.", setType)
 			}
+			numDeletions++
 		}
-		// Always remove the item so we don't retry until the next timed resync.
+		// Remove the item, so we don't retry until the next timed resync.
 		return set.RemoveItem
 	})
 }
