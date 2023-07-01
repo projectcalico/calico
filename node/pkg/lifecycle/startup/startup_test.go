@@ -109,21 +109,24 @@ var _ = DescribeTable("Node IP detection failure cases",
 		Expect(err).NotTo(HaveOccurred())
 
 		node := libapi.Node{}
-		if rrCId != "" {
+		if networkingBackend != "none" && rrCId != "" {
 			node.Spec.BGP = &libapi.NodeBGPSpec{RouteReflectorClusterID: rrCId}
 		}
 
 		updated := configureAndCheckIPAddressSubnets(context.Background(), c, &node, &v1.Node{})
 		Expect(updated).To(Equal(expectedUpdate))
 		Expect(my_ec).To(Equal(expectedExitCode))
-		if rrCId != "" {
+		if networkingBackend != "none" && rrCId != "" {
 			Expect(node.Spec.BGP).NotTo(BeNil())
+		}
+		if networkingBackend == "none" {
+			Expect(node.Spec.BGP).To(BeNil())
 		}
 	},
 
 	Entry("startup should terminate if IP is set to none and Calico is used for networking", "bird", 1, "", false),
 	Entry("startup should NOT terminate if IP is set to none and Calico is policy-only", "none", 0, "", false),
-	Entry("startup should NOT terminate and BGPSpec shouldn't be set to nil", "none", 0, "rrClusterID", true),
+	Entry("startup should NOT terminate and BGPSpec shouldn't be set", "none", 0, "rrClusterID", false),
 )
 
 var _ = Describe("Default IPv4 pool CIDR", func() {
