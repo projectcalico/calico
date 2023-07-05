@@ -277,23 +277,23 @@ func (c *DeltaTracker[K, V]) GetDataplane(k K) (V, bool) {
 	return v, ok
 }
 
-type PendingKVAction int
+type PendingChangeAction int
 
 const (
-	PendingKVActionNoOp PendingKVAction = iota
-	PendingKVActionUpdateDataplane
+	PendingChangeActionNoOp PendingChangeAction = iota
+	PendingChangeActionUpdateDataplane
 )
 
 // IterPendingUpdates iterates over the pending updates. If the passed in function returns
-// PendingKVActionUpdateDataplane then the pending update is cleared, and, the KV is applied
+// PendingChangeActionUpdateDataplane then the pending update is cleared, and, the KV is applied
 // to the dataplane cache (as if the function had called SetDataplane(k, v)).
-func (c *DeltaTracker[K, V]) IterPendingUpdates(f func(k K, v V) PendingKVAction) {
+func (c *DeltaTracker[K, V]) IterPendingUpdates(f func(k K, v V) PendingChangeAction) {
 	for k, v := range c.desiredUpdates {
 		updateDataplane := f(k, v)
 		switch updateDataplane {
-		case PendingKVActionNoOp:
+		case PendingChangeActionNoOp:
 			// Ignore.
-		case PendingKVActionUpdateDataplane:
+		case PendingChangeActionUpdateDataplane:
 			delete(c.desiredUpdates, k)
 			c.inDataplaneAndDesired[k] = v
 		}
@@ -301,15 +301,15 @@ func (c *DeltaTracker[K, V]) IterPendingUpdates(f func(k K, v V) PendingKVAction
 }
 
 // IterPendingDeletions iterates over the pending deletion set. If the passed in function returns
-// PendingKVActionUpdateDataplane then the pending deletion is cleared, and, the KV is applied
+// PendingChangeActionUpdateDataplane then the pending deletion is cleared, and, the KV is applied
 // to the dataplane cache (as if the function had called DeleteDataplane(k)).
-func (c *DeltaTracker[K, V]) IterPendingDeletions(f func(k K) PendingKVAction) {
+func (c *DeltaTracker[K, V]) IterPendingDeletions(f func(k K) PendingChangeAction) {
 	for k := range c.inDataplaneNotDesired {
 		updateDataplane := f(k)
 		switch updateDataplane {
-		case PendingKVActionNoOp:
+		case PendingChangeActionNoOp:
 			// Ignore.
-		case PendingKVActionUpdateDataplane:
+		case PendingChangeActionUpdateDataplane:
 			delete(c.inDataplaneNotDesired, k)
 			delete(c.inDataplaneAndDesired, k)
 		}
