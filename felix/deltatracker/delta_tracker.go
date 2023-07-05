@@ -22,17 +22,42 @@ import (
 )
 
 type DeltaTracker[K comparable, V any] struct {
-	// desiredStateOfDataplane stores the complete set of key/value pairs that we _want_ to
-	// be in the dataplane.
+	// To reduce occupancy, we treat the set of KVs in the dataplane and in the
+	// desired state like a Venn diagram, and we only store each region once
+	// (with the caveat below[1]).
 	//
-	// For occupancy's sake we may want to drop this copy and instead maintain the invariant:
-	// desiredStateOfDataplane = cacheOfDataplane - pendingDeletions + pendingUpdates.
-	desiredStateOfDataplane map[K]V
+	//   Desired        In-dataplane
+	//         ____   ____
+	//        /    \ /    \
+	//       /      X      \
+	//      /      / \      \
+	//      |   o | o |   o---- inDataplaneNotDesired
+	//      \   |  \ X      /
+	//       \  |   X \    /
+	//        \_|__/ \_\__/
+	//         /        \
+	//   desiredUpdates  inDataplaneAndDesired
+	//
+	// We can then reconstruct the desired and dataplane states as follows:
+	//
+	//    desired state             = inDataplaneAndDesired + desiredUpdates
+	//    actual state of dataplane = inDataplaneAndDesired + inDataplaneNotDesired
+	//
+	// When we're told about an update to the dataplane (for example during a resync),
+	// we may need to shuffle KVs between the different sets.
+	//
+	// [1] A key can only appear in one of the inDataplaneXXX maps at a time.
+	// However, the desiredUpdates map may contain a key that also exists in one
+	// of the other maps if and only if the value in desiredUpdates differs from
+	// that in the other map.  This means that the KV is in the dataplane, but it
+	// has the wrong value, and it needs to be updated.
 
-	cacheOfDataplane map[K]V
-	pendingUpdates   map[K]V
-	pendingDeletions map[K]V
+	inDataplaneAndDesired map[K]V
+	inDataplaneNotDesired map[K]V
+	desiredUpdates        map[K]V
 
+	// valuesEqual is the comparison function for the value type, it defaults to
+	// reflect.DeepEqual.
 	valuesEqual func(a, b V) bool
 }
 
@@ -46,11 +71,10 @@ func WithValuesEqualFn[K comparable, V any](f func(a, b V) bool) Option[K, V] {
 
 func New[K comparable, V any](opts ...Option[K, V]) *DeltaTracker[K, V] {
 	cm := &DeltaTracker[K, V]{
-		desiredStateOfDataplane: make(map[K]V),
-		cacheOfDataplane:        make(map[K]V),
-		pendingUpdates:          make(map[K]V),
-		pendingDeletions:        make(map[K]V),
-		valuesEqual:             func(a, b V) bool { return reflect.DeepEqual(a, b) },
+		inDataplaneAndDesired: make(map[K]V),
+		inDataplaneNotDesired: make(map[K]V),
+		desiredUpdates:        make(map[K]V),
+		valuesEqual:           func(a, b V) bool { return reflect.DeepEqual(a, b) },
 	}
 	for _, o := range opts {
 		o(cm)
@@ -65,23 +89,28 @@ func (c *DeltaTracker[K, V]) SetDesired(k K, v V) {
 	if logrus.GetLevel() >= logrus.DebugLevel {
 		logrus.WithFields(logrus.Fields{"k": k, "v": v}).Debug("SetDesired")
 	}
-	c.desiredStateOfDataplane[k] = v
-	delete(c.pendingDeletions, k)
+	if v, ok := c.inDataplaneNotDesired[k]; ok {
+		c.inDataplaneAndDesired[k] = v
+	}
+	delete(c.inDataplaneNotDesired, k)
 
 	// Check if we think we need to update the dataplane as a result.
-	currentVal, ok := c.cacheOfDataplane[k]
+	currentVal, ok := c.inDataplaneAndDesired[k]
 	if ok && c.valuesEqual(currentVal, v) {
 		// Dataplane already agrees with the new value so clear any pending update.
 		logrus.Debug("SetDesired: Key in dataplane already, ignoring.")
-		delete(c.pendingUpdates, k)
+		delete(c.desiredUpdates, k)
 		return
 	}
-	c.pendingUpdates[k] = v
+	c.desiredUpdates[k] = v
 }
 
 // GetDesired gets a single value from the desired map.
 func (c *DeltaTracker[K, V]) GetDesired(k K) (V, bool) {
-	v, ok := c.desiredStateOfDataplane[k]
+	if v, ok := c.desiredUpdates[k]; ok {
+		return v, ok
+	}
+	v, ok := c.inDataplaneAndDesired[k]
 	return v, ok
 }
 
@@ -91,32 +120,37 @@ func (c *DeltaTracker[K, V]) DeleteDesired(k K) {
 	if logrus.GetLevel() >= logrus.DebugLevel {
 		logrus.WithFields(logrus.Fields{"k": k}).Debug("DeleteDesired")
 	}
-	delete(c.desiredStateOfDataplane, k)
-	delete(c.pendingUpdates, k)
+	delete(c.desiredUpdates, k)
 
 	// Check if we need to update the dataplane.
-	currentVal, ok := c.cacheOfDataplane[k]
-	if !ok {
-		// We don't think this value is in the dataplane so clear any pending delete.
-		logrus.Debug("DeleteDesired: Key not in dataplane, ignoring.")
-		delete(c.pendingDeletions, k)
-		return
+	if currentVal, ok := c.inDataplaneAndDesired[k]; ok {
+		// Value is in dataplane, move it to pending deletions.
+		c.inDataplaneNotDesired[k] = currentVal
+		delete(c.inDataplaneAndDesired, k)
 	}
-	c.pendingDeletions[k] = currentVal
 }
 
 // DeleteAllDesired deletes all entries from the in-memory desired state, updating pending updates/deletions
 // accordingly.
 func (c *DeltaTracker[K, V]) DeleteAllDesired() {
 	logrus.Debug("DeleteAll")
-	for k := range c.desiredStateOfDataplane {
+	c.IterDesired(func(k K, v V) {
 		c.DeleteDesired(k)
-	}
+	})
 }
 
 // IterDesired iterates over the desired KVs.
 func (c *DeltaTracker[K, V]) IterDesired(f func(k K, v V)) {
-	for k, v := range c.desiredStateOfDataplane {
+	for k, v := range c.desiredUpdates {
+		f(k, v)
+	}
+	for k, v := range c.inDataplaneAndDesired {
+		if _, ok := c.desiredUpdates[k]; ok {
+			continue
+		}
+		if _, ok := c.inDataplaneNotDesired[k]; ok {
+			continue
+		}
 		f(k, v)
 	}
 }
@@ -125,25 +159,69 @@ func (c *DeltaTracker[K, V]) IterDesired(f func(k K, v V)) {
 // by the iterator.  The pending update and deletion tracking is updated accordingly.
 func (c *DeltaTracker[K, V]) ReplaceDataplaneCacheFromIter(iter func(func(k K, v V)) error) error {
 	logrus.Debug("Loading cache of dataplane state.")
-	c.cacheOfDataplane = make(map[K]V)
-	c.pendingUpdates = make(map[K]V)
-	c.pendingDeletions = make(map[K]V)
-	err := iter(c.SetDataplane)
+
+	// To reduce occupancy and to do the update in one pass, we use the old maps as scratch space.
+	// As we iterate over the new values, we add them to the newXXX maps and delete them from the old.
+	// Then, at the end, the oldXXX maps will contain only the values that are now missing from the
+	// dataplane, we then handle those at the bottom.
+	oldInDPDesired := c.inDataplaneAndDesired
+	newInDPDesired := make(map[K]V)
+	oldInDPNotDesired := c.inDataplaneNotDesired
+	newInDPNotDesired := make(map[K]V)
+
+	err := iter(func(k K, v V) {
+		// Figure out if we _want_ it to exist and tee up update/deletion accordingly.
+		if desiredV, desired := c.GetDesired(k); desired {
+			// Record that this key exists in the new copy of the cache.
+			newInDPDesired[k] = v
+
+			// Check if the value is correct,
+			if c.valuesEqual(desiredV, v) {
+				// Value in dataplane is correct, clean up any pending update.
+				delete(c.desiredUpdates, k)
+			} else {
+				// Value in dataplane is incorrect.  Queue up an update (if there isn't one already).
+				c.desiredUpdates[k] = desiredV
+			}
+		} else {
+			// We don't want this key, but it's in the dataplane.  Queue up deletion.
+			newInDPNotDesired[k] = v
+		}
+
+		// Remove the key from the old cache, we'll then scan the old cache to find keys that are missing.
+		delete(oldInDPDesired, k)
+		delete(oldInDPNotDesired, k)
+	})
 	if err != nil {
+		// We may have failed mid-iteration, if we just returned an error here, we'd leave our internal
+		// state broken because we've removed all the keys that we've seen from oldInDPDesired and
+		// oldInDPNotDesired, and updated c.desiredUpdates to match the new KV's from the iterator.
+		// Fix that up by applying the new keys to the old in-DP maps:
+		for k, v := range newInDPDesired {
+			oldInDPDesired[k] = v
+		}
+		for k, v := range newInDPNotDesired {
+			oldInDPNotDesired[k] = v
+		}
 		return fmt.Errorf("failed to iterate over dataplane state: %w", err)
 	}
 
-	// Scan for any desired KVs that are missing from the dataplane.
-	for k, v := range c.desiredStateOfDataplane {
-		// Don't need to consider the case where the key exists, that is covered above.
-		if _, ok := c.cacheOfDataplane[k]; !ok {
-			c.pendingUpdates[k] = v
-		}
+	// oldInDPDesired now only contains KVs that we _thought_ were in the dataplane but are now gone.
+	for k := range oldInDPDesired {
+		if desiredV, desired := c.GetDesired(k); desired {
+			// We want this key, but it's missing, queue up an add.
+			c.desiredUpdates[k] = desiredV
+		} // else we don't want it, and it's gone; nothing to do.
+		delete(oldInDPDesired, k)
 	}
+
+	// Now done with oldInDPDesired, replace it.
+	c.inDataplaneAndDesired = newInDPDesired
+	c.inDataplaneNotDesired = newInDPNotDesired
 	logrus.WithFields(logrus.Fields{
-		"totalNumInDP":     len(c.cacheOfDataplane),
-		"pendingUpdates":   len(c.pendingUpdates),
-		"pendingDeletions": len(c.pendingDeletions),
+		"totalNumInDP":          len(c.inDataplaneAndDesired),
+		"desiredUpdates":        len(c.desiredUpdates),
+		"inDataplaneNotDesired": len(c.inDataplaneNotDesired),
 	}).Debug("Updated dataplane state.")
 
 	return nil
@@ -153,33 +231,38 @@ func (c *DeltaTracker[K, V]) ReplaceDataplaneCacheFromIter(iter func(func(k K, v
 // has the given KV.  Updated the pending update/deletion set if the new KV differs from what is
 // desired.
 func (c *DeltaTracker[K, V]) SetDataplane(k K, v V) {
-	c.cacheOfDataplane[k] = v
-	if desiredV, ok := c.desiredStateOfDataplane[k]; ok {
+	desiredV, desired := c.GetDesired(k)
+	c.inDataplaneAndDesired[k] = v
+	if desired {
 		// Dataplane key has a corresponding desired key.  Check if the values match.
 		if !c.valuesEqual(desiredV, v) {
 			// Desired value is different, queue up an update.
-			c.pendingUpdates[k] = desiredV
+			c.desiredUpdates[k] = desiredV
 		}
 	} else {
 		// Dataplane key has no corresponding desired key, queue up a deletion.
-		c.pendingDeletions[k] = v
+		c.inDataplaneNotDesired[k] = v
 	}
 }
 
 // DeleteDataplane deletes a key from the dataplane cache.  I.e. it tells this tracker that the key
 // no longer exists in the dataplane.
 func (c *DeltaTracker[K, V]) DeleteDataplane(k K) {
-	delete(c.cacheOfDataplane, k)
-	delete(c.pendingDeletions, k)
-	if desiredV, ok := c.desiredStateOfDataplane[k]; ok {
+	desiredV, desired := c.GetDesired(k)
+	delete(c.inDataplaneAndDesired, k)
+	delete(c.inDataplaneNotDesired, k)
+	if desired {
 		// We've now been told this KV is not in the dataplane but the desired state says it should be there.
-		c.pendingUpdates[k] = desiredV
+		c.desiredUpdates[k] = desiredV
 	}
 }
 
 // IterDataplane iterates over the cache of the dataplane.
 func (c *DeltaTracker[K, V]) IterDataplane(f func(k K, v V)) {
-	for k, v := range c.cacheOfDataplane {
+	for k, v := range c.inDataplaneAndDesired {
+		f(k, v)
+	}
+	for k, v := range c.inDataplaneNotDesired {
 		f(k, v)
 	}
 }
@@ -187,7 +270,10 @@ func (c *DeltaTracker[K, V]) IterDataplane(f func(k K, v V)) {
 // GetDataplane gets a single value from the cache of the dataplane. The cache must have previously been
 // loaded with a successful call to LoadCacheFromDataplane() or one of the ApplyXXX methods.
 func (c *DeltaTracker[K, V]) GetDataplane(k K) (V, bool) {
-	v, ok := c.cacheOfDataplane[k]
+	v, ok := c.inDataplaneAndDesired[k]
+	if !ok {
+		v, ok = c.inDataplaneNotDesired[k]
+	}
 	return v, ok
 }
 
@@ -202,14 +288,14 @@ const (
 // PendingKVActionUpdateDataplane then the pending update is cleared, and, the KV is applied
 // to the dataplane cache (as if the function had called SetDataplane(k, v)).
 func (c *DeltaTracker[K, V]) IterPendingUpdates(f func(k K, v V) PendingKVAction) {
-	for k, v := range c.pendingUpdates {
+	for k, v := range c.desiredUpdates {
 		updateDataplane := f(k, v)
 		switch updateDataplane {
 		case PendingKVActionNoOp:
 			// Ignore.
 		case PendingKVActionUpdateDataplane:
-			delete(c.pendingUpdates, k)
-			c.cacheOfDataplane[k] = v
+			delete(c.desiredUpdates, k)
+			c.inDataplaneAndDesired[k] = v
 		}
 	}
 }
@@ -218,14 +304,14 @@ func (c *DeltaTracker[K, V]) IterPendingUpdates(f func(k K, v V) PendingKVAction
 // PendingKVActionUpdateDataplane then the pending deletion is cleared, and, the KV is applied
 // to the dataplane cache (as if the function had called DeleteDataplane(k)).
 func (c *DeltaTracker[K, V]) IterPendingDeletions(f func(k K) PendingKVAction) {
-	for k := range c.pendingDeletions {
+	for k := range c.inDataplaneNotDesired {
 		updateDataplane := f(k)
 		switch updateDataplane {
 		case PendingKVActionNoOp:
 			// Ignore.
 		case PendingKVActionUpdateDataplane:
-			delete(c.pendingDeletions, k)
-			delete(c.cacheOfDataplane, k)
+			delete(c.inDataplaneNotDesired, k)
+			delete(c.inDataplaneAndDesired, k)
 		}
 	}
 }
