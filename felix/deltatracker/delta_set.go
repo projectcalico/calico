@@ -75,12 +75,12 @@ func (s *SetDeltaTracker[K]) IterDataplane(f func(k K)) {
 	})
 }
 
-func (s *SetDeltaTracker[K]) IterPendingUpdates(f func(k K) PendingChangeAction) {
-	s.dt.IterPendingUpdates(func(k K, v struct{}) PendingChangeAction {
+func (s *SetDeltaTracker[K]) IterPendingUpdates(f func(k K) IterAction) {
+	s.dt.IterPendingUpdates(func(k K, v struct{}) IterAction {
 		return f(k)
 	})
 }
 
-func (s *SetDeltaTracker[K]) IterPendingDeletions(f func(k K) PendingChangeAction) {
+func (s *SetDeltaTracker[K]) IterPendingDeletions(f func(k K) IterAction) {
 	s.dt.IterPendingDeletions(f)
 }

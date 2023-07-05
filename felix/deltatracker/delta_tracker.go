@@ -148,9 +148,6 @@ func (c *DeltaTracker[K, V]) IterDesired(f func(k K, v V)) {
 		if _, ok := c.desiredUpdates[k]; ok {
 			continue
 		}
-		if _, ok := c.inDataplaneNotDesired[k]; ok {
-			continue
-		}
 		f(k, v)
 	}
 }
@@ -232,12 +229,14 @@ func (c *DeltaTracker[K, V]) ReplaceDataplaneCacheFromIter(iter func(func(k K, v
 // desired.
 func (c *DeltaTracker[K, V]) SetDataplane(k K, v V) {
 	desiredV, desired := c.GetDesired(k)
-	c.inDataplaneAndDesired[k] = v
 	if desired {
 		// Dataplane key has a corresponding desired key.  Check if the values match.
+		c.inDataplaneAndDesired[k] = v
 		if !c.valuesEqual(desiredV, v) {
 			// Desired value is different, queue up an update.
 			c.desiredUpdates[k] = desiredV
+		} else {
+			delete(c.desiredUpdates, k)
 		}
 	} else {
 		// Dataplane key has no corresponding desired key, queue up a deletion.
@@ -277,23 +276,23 @@ func (c *DeltaTracker[K, V]) GetDataplane(k K) (V, bool) {
 	return v, ok
 }
 
-type PendingChangeAction int
+type IterAction int
 
 const (
-	PendingChangeActionNoOp PendingChangeAction = iota
-	PendingChangeActionUpdateDataplane
+	IterActionNoOp IterAction = iota
+	IterActionUpdateDataplane
 )
 
 // IterPendingUpdates iterates over the pending updates. If the passed in function returns
-// PendingChangeActionUpdateDataplane then the pending update is cleared, and, the KV is applied
+// IterActionUpdateDataplane then the pending update is cleared, and, the KV is applied
 // to the dataplane cache (as if the function had called SetDataplane(k, v)).
-func (c *DeltaTracker[K, V]) IterPendingUpdates(f func(k K, v V) PendingChangeAction) {
+func (c *DeltaTracker[K, V]) IterPendingUpdates(f func(k K, v V) IterAction) {
 	for k, v := range c.desiredUpdates {
 		updateDataplane := f(k, v)
 		switch updateDataplane {
-		case PendingChangeActionNoOp:
+		case IterActionNoOp:
 			// Ignore.
-		case PendingChangeActionUpdateDataplane:
+		case IterActionUpdateDataplane:
 			delete(c.desiredUpdates, k)
 			c.inDataplaneAndDesired[k] = v
 		}
@@ -301,17 +300,16 @@ func (c *DeltaTracker[K, V]) IterPendingUpdates(f func(k K, v V) PendingChangeAc
 }
 
 // IterPendingDeletions iterates over the pending deletion set. If the passed in function returns
-// PendingChangeActionUpdateDataplane then the pending deletion is cleared, and, the KV is applied
+// IterActionUpdateDataplane then the pending deletion is cleared, and, the KV is applied
 // to the dataplane cache (as if the function had called DeleteDataplane(k)).
-func (c *DeltaTracker[K, V]) IterPendingDeletions(f func(k K) PendingChangeAction) {
+func (c *DeltaTracker[K, V]) IterPendingDeletions(f func(k K) IterAction) {
 	for k := range c.inDataplaneNotDesired {
 		updateDataplane := f(k)
 		switch updateDataplane {
-		case PendingChangeActionNoOp:
+		case IterActionNoOp:
 			// Ignore.
-		case PendingChangeActionUpdateDataplane:
+		case IterActionUpdateDataplane:
 			delete(c.inDataplaneNotDesired, k)
-			delete(c.inDataplaneAndDesired, k)
 		}
 	}
 }

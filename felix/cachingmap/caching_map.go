@@ -149,14 +149,14 @@ func (c *CachingMap[K, V]) ApplyUpdatesOnly() error {
 		return err
 	}
 	var errs ErrSlice
-	c.deltaTracker.IterPendingUpdates(func(k K, v V) deltatracker.PendingChangeAction {
+	c.deltaTracker.IterPendingUpdates(func(k K, v V) deltatracker.IterAction {
 		err := c.dpMap.Update(k, v)
 		if err != nil {
 			logrus.WithError(err).Warn("Error while updating DP map")
 			errs = append(errs, err)
-			return deltatracker.PendingChangeActionNoOp
+			return deltatracker.IterActionNoOp
 		}
-		return deltatracker.PendingChangeActionUpdateDataplane
+		return deltatracker.IterActionUpdateDataplane
 	})
 	if len(errs) > 0 {
 		return errs
@@ -173,14 +173,14 @@ func (c *CachingMap[K, V]) ApplyDeletionsOnly() error {
 		return err
 	}
 	var errs ErrSlice
-	c.deltaTracker.IterPendingDeletions(func(k K) deltatracker.PendingChangeAction {
+	c.deltaTracker.IterPendingDeletions(func(k K) deltatracker.IterAction {
 		err := c.dpMap.Delete(k)
 		if err != nil && !c.dpMap.ErrIsNotExists(err) {
 			logrus.WithError(err).Warn("Error while deleting from DP map")
 			errs = append(errs, err)
-			return deltatracker.PendingChangeActionNoOp
+			return deltatracker.IterActionNoOp
 		}
-		return deltatracker.PendingChangeActionUpdateDataplane
+		return deltatracker.IterActionUpdateDataplane
 	})
 	if len(errs) > 0 {
 		return errs
