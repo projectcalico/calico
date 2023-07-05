@@ -15,6 +15,11 @@ installation:
   # Example: --set installation.imagePullSecrets[0].name=my-existing-secret
   imagePullSecrets: []
 
+# Enable customization of FelixConfiguration
+felixconfiguration:
+  enabled: true
+  awsSrcDstCheck: DoNothing
+
 apiServer:
   enabled: true
 

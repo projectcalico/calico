@@ -23,3 +23,17 @@ metadata:
 spec:
 {{ $apiServerSpec | toYaml | indent 2 }}
 {{ end }}
+
+
+{{ if .Values.felixconfiguration.enabled }}
+{{ $felixConfigSpec := omit .Values.felixconfiguration "enabled" }}
+---
+
+apiVersion: projectcalico.org/v3
+kind: FelixConfiguration
+metadata:
+  name: default
+spec:
+{{ $felixConfigSpec | toYaml | indent 2 }}
+
+{{ end }}
