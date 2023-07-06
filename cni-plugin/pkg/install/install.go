@@ -306,7 +306,7 @@ func isValidJSON(s string) error {
 
 func writeCNIConfig(c config) {
 	netconf := `{
-  "name": "k8s-pod-network",
+  "name": "calico",
   "cniVersion": "0.3.1",
   "plugins": [
     {
