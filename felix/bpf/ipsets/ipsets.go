@@ -354,8 +354,9 @@ func (m *bpfIPSets) ApplyUpdates() {
 
 // ApplyDeletions tries to delete any IP sets that are no longer needed.
 // Failures are ignored, deletions will be retried the next time we do a resync.
-func (m *bpfIPSets) ApplyDeletions() {
+func (m *bpfIPSets) ApplyDeletions() bool {
 	// No-op.
+	return false
 }
 
 func (m *bpfIPSets) markIPSetDirty(data *bpfIPSet) {
