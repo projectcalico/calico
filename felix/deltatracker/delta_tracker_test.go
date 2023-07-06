@@ -197,6 +197,61 @@ func TestDeltaTracker_DeleteAll(t *testing.T) {
 	Expect(pendingDeletions(dt, IterActionNoOp)).To(BeEmpty())
 }
 
+func ExampleDeltaTracker_resync() {
+	dt := New[string, int](WithValuesEqualFn[string, int](func(a, b int) bool {
+		return a == b // ints support simple comparison.
+	}))
+
+	// Set up our desired state.
+	desired := map[string]int{
+		"one": 1,
+		"two": 2,
+	}
+	for k, v := range desired {
+		dt.SetDesired(k, v)
+	}
+	fmt.Printf("Desired state: %v\n", desired)
+
+	// Resync with the dataplane
+	mockDataplane := map[string]int{
+		"one":   1,
+		"three": 3,
+	}
+	fmt.Printf("Initial dataplane state: %v\n", mockDataplane)
+	_ = dt.ReplaceDataplaneCacheFromIter(func(f func(k string, v int)) error {
+		// Replace this with the actual dataplane loading logic.
+		for k, v := range mockDataplane {
+			f(k, v)
+		}
+		return nil
+	})
+
+	// Check the deltas.
+	dt.IterPendingUpdates(func(k string, v int) IterAction {
+		fmt.Printf("Applying pending update: %s = %v\n", k, v)
+		mockDataplane[k] = v
+		// Tell the tracker that we updated the dataplane.
+		return IterActionUpdateDataplane
+	})
+
+	dt.IterPendingDeletions(func(k string) IterAction {
+		fmt.Printf("Applying pending deletion: %v\n", k)
+		delete(mockDataplane, k)
+		// Tell the tracker that we updated the dataplane.
+		return IterActionUpdateDataplane
+	})
+
+	// Dataplane should now be in sync.
+	fmt.Printf("Updated dataplane state: %v\n", mockDataplane)
+
+	// Output:
+	// Desired state: map[one:1 two:2]
+	// Initial dataplane state: map[one:1 three:3]
+	// Applying pending update: two = 2
+	// Applying pending deletion: three
+	// Updated dataplane state: map[one:1 two:2]
+}
+
 func TestDeltaTracker_UpdateThenReplaceDataplaneCacheFromIter(t *testing.T) {
 	dt := setupDeltaTrackerTest(t)
 
