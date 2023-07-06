@@ -32,7 +32,7 @@ type IPSetsDataplane interface {
 	GetMembers(setID string) (set.Set[string], error)
 	QueueResync()
 	ApplyUpdates()
-	ApplyDeletions()
+	ApplyDeletions() (reschedule bool)
 }
 
 // Except for domain IP sets, IPSetsManager simply passes through IP set updates from the datastore
