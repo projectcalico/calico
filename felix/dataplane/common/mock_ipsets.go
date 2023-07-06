@@ -95,8 +95,9 @@ func (s *MockIPSets) ApplyUpdates() {
 	// Not implemented for UT.
 }
 
-func (s *MockIPSets) ApplyDeletions() {
+func (s *MockIPSets) ApplyDeletions() bool {
 	// Not implemented for UT.
+	return false
 }
 
 func (s *MockIPSets) SetFilter(ipSetNames set.Set[string]) {
