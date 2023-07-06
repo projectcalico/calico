@@ -103,7 +103,7 @@ func New[K comparable, V any](opts ...Option[K, V]) *DeltaTracker[K, V] {
 }
 
 // SetDesired sets the desired state of the given key to the given value. If the value differs from what
-// the dataplane cache records as being in the dataplane, the update is added ot the pending updates set.
+// the dataplane cache records as being in the dataplane, the update is added to the pending updates set.
 // Removes the key from the pending deletions set.
 func (c *DeltaTracker[K, V]) SetDesired(k K, v V) {
 	if logrus.GetLevel() >= logrus.DebugLevel {
