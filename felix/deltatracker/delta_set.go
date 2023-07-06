@@ -14,6 +14,26 @@
 
 package deltatracker
 
+// SetDeltaTracker (conceptually) tracks the differences between two sets
+// the "desired" set contains the members that we _want_ to be in the
+// dataplane; the "dataplane" set contains the members that we think are
+// _actually_ in the dataplane. The name "dataplane" set is intended to hint at
+// its use but(!) this is a pure in-memory datastructure; it doesn't actually
+// interact with the dataplane directly.
+//
+// The desired and dataplane sets can be updated directly via their
+// SetXXX/DeleteXXX methods and they each have a corresponding IterXXX method to
+// iterate over them.  The dataplane set has an additional
+// ReplaceDataplaneCacheFromIter, which allows for the whole contents of the
+// dataplane set to be replaced via an iterator; this is more efficient than
+// doing an external iteration and Set/Delete calls.
+//
+// In addition to the desired and dataplane sets, the differences between them
+// are tracked in two other sets: the "pending updates" set and the "pending
+// deletions" set "Pending updates" contains all keys that are in the "desired"
+// set but not in the dataplane set (or that have a different value in the
+// desired set vs the dataplane set). "Pending deletions" contains keys that are
+// in the dataplane set but not in the desired set.
 type SetDeltaTracker[K comparable] struct {
 	dt *DeltaTracker[K, struct{}]
 }

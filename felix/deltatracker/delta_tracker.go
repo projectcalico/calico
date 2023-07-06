@@ -21,6 +21,26 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// DeltaTracker (conceptually) tracks the differences between two key/value maps
+// the "desired" map contains the KV-pairs that we _want_ to be in the
+// dataplane; the "dataplane" map contains the KV-pairs that we think are
+// _actually_ in the dataplane. The name "dataplane" map is intended to hint at
+// its use but(!) this is a pure in-memory datastructure; it doesn't actually
+// interact with the dataplane directly.
+//
+// The desired and dataplane maps can be updated directly via their
+// SetXXX/DeleteXXX methods and they each have a corresponding IterXXX method to
+// iterate over them.  The dataplane map has an additional
+// ReplaceDataplaneCacheFromIter, which allows for the whole contents of the
+// dataplane map to be replaced via an iterator; this is more efficient than
+// doing an external iteration and Set/Delete calls.
+//
+// In addition to the desired and dataplane maps, the differences between them
+// are tracked in two other maps: the "pending updates" map and the "pending
+// deletions" map "Pending updates" contains all keys that are in the "desired"
+// map but not in the dataplane map (or that have a different value in the
+// desired map vs the dataplane map). "Pending deletions" contains keys that are
+// in the dataplane map but not in the desired map.
 type DeltaTracker[K comparable, V any] struct {
 	// To reduce occupancy, we treat the set of KVs in the dataplane and in the
 	// desired state like a Venn diagram, and we only store each region once
