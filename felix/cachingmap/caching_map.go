@@ -17,8 +17,9 @@ package cachingmap
 import (
 	"fmt"
 
-	"github.com/projectcalico/calico/felix/deltatracker"
 	"github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/felix/deltatracker"
 )
 
 // DataplaneMap is an interface of the underlying map that is being cached by the

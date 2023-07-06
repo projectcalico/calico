@@ -21,6 +21,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	. "github.com/onsi/gomega"
+
 	"github.com/projectcalico/calico/felix/logutils"
 )
 
