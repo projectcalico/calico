@@ -1,0 +1,3 @@
+# TEMPORARY
+usdt/basic                               # failing verifier due to bounds check after LLVM update
+usdt/multispec                           # same as above

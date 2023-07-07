@@ -1,0 +1,32 @@
+name: libbpf-ci-coverity
+
+on:
+  schedule:
+    - cron:  '0 18 * * *'
+
+
+jobs:
+  coverity:
+    runs-on: ubuntu-latest
+    if: github.repository == 'libbpf/libbpf'
+    name: Coverity
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ./.github/actions/setup
+      - name: Run coverity
+        run: |
+          source "${GITHUB_WORKSPACE}"/ci/vmtest/helpers.sh
+          foldable start "Setup CI env"
+          source /tmp/ci_setup
+          export COVERITY_SCAN_NOTIFICATION_EMAIL="${AUTHOR_EMAIL}"
+          export COVERITY_SCAN_BRANCH_PATTERN=${GITHUB_REF##refs/*/}
+          export TRAVIS_BRANCH=${COVERITY_SCAN_BRANCH_PATTERN}
+          foldable end
+          scripts/coverity.sh
+        env:
+          COVERITY_SCAN_TOKEN: ${{ secrets.COVERITY_SCAN_TOKEN }}
+          COVERITY_SCAN_PROJECT_NAME: libbpf
+          COVERITY_SCAN_BUILD_COMMAND_PREPEND: 'cd src/'
+          COVERITY_SCAN_BUILD_COMMAND: 'make'
+      - name: SCM log
+        run: cat /home/runner/work/libbpf/libbpf/src/cov-int/scm_log.txt

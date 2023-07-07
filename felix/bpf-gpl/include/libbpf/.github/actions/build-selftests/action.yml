@@ -1,0 +1,31 @@
+name: 'build-selftests'
+description: 'Build BPF selftests'
+inputs:
+  repo-path:
+    description: 'where is the source code'
+    required: true
+  kernel:
+    description: 'kernel version or LATEST'
+    required: true
+    default: 'LATEST'
+  vmlinux:
+    description: 'where is vmlinux file'
+    required: true
+    default: '${{ github.workspace }}/vmlinux'
+
+runs:
+  using: "composite"
+  steps:
+    - shell: bash
+      run: |
+        source $GITHUB_ACTION_PATH/../../../ci/vmtest/helpers.sh
+        foldable start "Setup Env"
+        sudo apt-get install -y qemu-kvm zstd binutils-dev elfutils libcap-dev libelf-dev libdw-dev python3-docutils
+        foldable end
+    - shell: bash
+      run: |
+        export KERNEL=${{ inputs.kernel }}
+        export REPO_ROOT="${{ github.workspace }}"
+        export REPO_PATH="${{ inputs.repo-path }}"
+        export VMLINUX_BTF="${{ inputs.vmlinux }}"
+        ${{ github.action_path }}/build_selftests.sh

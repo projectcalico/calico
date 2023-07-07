@@ -1,0 +1,23 @@
+name: 'setup'
+description: 'setup env, create /tmp/ci_setup'
+runs:
+  using: "composite"
+  steps:
+    - id: variables
+      run: |
+        export REPO_ROOT=$GITHUB_WORKSPACE
+        export CI_ROOT=$REPO_ROOT/ci
+        # this is somewhat ugly, but that is the easiest way to share this code with
+        # arch specific docker
+        echo 'echo ::group::Env setup' > /tmp/ci_setup
+        echo export DEBIAN_FRONTEND=noninteractive >> /tmp/ci_setup
+        echo sudo apt-get update >> /tmp/ci_setup
+        echo sudo apt-get install -y aptitude qemu-kvm zstd binutils-dev elfutils libcap-dev libelf-dev libdw-dev libguestfs-tools >> /tmp/ci_setup
+        echo export PROJECT_NAME='libbpf' >> /tmp/ci_setup
+        echo export AUTHOR_EMAIL="$(git log -1 --pretty=\"%aE\")" >> /tmp/ci_setup
+        echo export REPO_ROOT=$GITHUB_WORKSPACE >> /tmp/ci_setup
+        echo export CI_ROOT=$REPO_ROOT/ci >> /tmp/ci_setup
+        echo export VMTEST_ROOT=$CI_ROOT/vmtest >> /tmp/ci_setup
+        echo 'echo ::endgroup::' >> /tmp/ci_setup
+      shell: bash
+

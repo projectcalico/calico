@@ -1,0 +1,20 @@
+name: pahole-staging
+
+on:
+  schedule:
+    - cron:  '0 18 * * *'
+
+
+jobs:
+  vmtest:
+    runs-on: ubuntu-20.04
+    name: Kernel LATEST + staging pahole
+    env:
+      STAGING: tmp.master
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ./.github/actions/setup
+      - uses: ./.github/actions/vmtest
+        with:
+          kernel: LATEST
+          pahole: $STAGING

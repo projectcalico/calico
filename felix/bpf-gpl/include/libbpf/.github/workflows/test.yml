@@ -1,0 +1,42 @@
+name: libbpf-ci
+
+on: 
+  pull_request:
+  push:
+  schedule:
+    - cron:  '0 18 * * *'
+
+concurrency: 
+  group: ci-test-${{ github.head_ref }}
+  cancel-in-progress: true
+
+jobs:
+  vmtest:
+    runs-on: ${{ matrix.runs_on }}
+    name: Kernel ${{ matrix.kernel }} on ${{ matrix.runs_on }} + selftests
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - kernel: 'LATEST'
+            runs_on: ubuntu-20.04
+            arch: 'x86_64'
+          - kernel: '5.5.0'
+            runs_on: ubuntu-20.04
+            arch: 'x86_64'
+          - kernel: '4.9.0'
+            runs_on: ubuntu-20.04
+            arch: 'x86_64'
+          - kernel: 'LATEST'
+            runs_on: s390x
+            arch: 's390x'
+    steps:
+      - uses: actions/checkout@v3
+        name: Checkout
+      - uses: ./.github/actions/setup
+        name: Setup
+      - uses: ./.github/actions/vmtest
+        name: vmtest
+        with:
+          kernel: ${{ matrix.kernel }}
+          arch: ${{ matrix.arch }}
