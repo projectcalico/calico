@@ -120,26 +120,24 @@ func (o *Obj) Load() error {
 // FirstMap returns first bpf map of the object.
 // Returns error if the map is nil.
 func (o *Obj) FirstMap() (*Map, error) {
-	//bpfMap, err := C.bpf_map__next(nil, o.obj)
-	//if bpfMap == nil || err != nil {
-	//	return nil, fmt.Errorf("error getting first map %w", err)
-	//}
-	//return &Map{bpfMap: bpfMap, bpfObj: o.obj}, nil
-	return nil, nil
+	bpfMap, err := C.bpf_object__next_map(o.obj, nil)
+	if bpfMap == nil || err != nil {
+		return nil, fmt.Errorf("error getting first map %w", err)
+	}
+	return &Map{bpfMap: bpfMap, bpfObj: o.obj}, nil
 }
 
 // NextMap returns the successive maps given the first map.
 // Returns nil, no error at the end of the list.
 func (m *Map) NextMap() (*Map, error) {
-	//bpfMap, err := C.bpf_map__next(m.bpfMap, m.bpfObj)
-	//if err != nil {
-	//	return nil, fmt.Errorf("error getting next map %w", err)
-	//}
-	//if bpfMap == nil {
-	//	return nil, nil
-	//}
-	//return &Map{bpfMap: bpfMap, bpfObj: m.bpfObj}, nil
-	return nil, nil
+	bpfMap, err := C.bpf_object__next_map(m.bpfObj, m.bpfMap)
+	if err != nil {
+		return nil, fmt.Errorf("error getting next map %w", err)
+	}
+	if bpfMap == nil {
+		return nil, nil
+	}
+	return &Map{bpfMap: bpfMap, bpfObj: m.bpfObj}, nil
 }
 
 func (o *Obj) ProgramFD(secname string) (int, error) {
