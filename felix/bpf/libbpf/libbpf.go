@@ -16,7 +16,6 @@ package libbpf
 
 import (
 	"fmt"
-	log "github.com/sirupsen/logrus"
 	"os"
 	"syscall"
 	"time"
@@ -254,19 +253,19 @@ func (o *Obj) PinMaps(path string) error {
 }
 
 func DetachXDP(ifName string, mode uint) error {
-	//cIfName := C.CString(ifName)
-	//defer C.free(unsafe.Pointer(cIfName))
-	//ifIndex, err := C.if_nametoindex(cIfName)
-	//if err != nil {
-	//	return err
-	//}
+	cIfName := C.CString(ifName)
+	defer C.free(unsafe.Pointer(cIfName))
+	ifIndex, err := C.if_nametoindex(cIfName)
+	if err != nil {
+		return err
+	}
 
-	//_, err = C.bpf_set_link_xdp_fd(C.int(ifIndex), -1, C.uint(mode))
-	//if err != nil {
-	//	return fmt.Errorf("failed to detach xdp program. interface %s: %w", ifName, err)
-	//}
+	//_, err = C.bpf_set_link_xdp_fd(C.int(ifIndex), -1, C.uint(mode))		// old
+	_, err = C.bpf_xdp_attach(C.int(ifIndex), -1, C.uint(mode), nil) // new
+	if err != nil {
+		return fmt.Errorf("failed to detach xdp program. interface %s: %w", ifName, err)
+	}
 
-	log.Infof("ifName:'%s'\n", ifName)
 	return nil
 }
 
