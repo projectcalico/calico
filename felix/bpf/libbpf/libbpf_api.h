@@ -298,7 +298,8 @@ void bpf_xdp_set_globals(struct bpf_map *map, char *iface_name, uint *jumps)
 
 void bpf_map_set_max_entries(struct bpf_map *map, uint max_entries)
 {
-//	set_errno(bpf_map__resize(map, max_entries));
+	//set_errno(bpf_map__resize(map, max_entries));             // old
+	set_errno(bpf_map__set_max_entries(map, max_entries));      // new
 }
 
 int num_possible_cpu()
