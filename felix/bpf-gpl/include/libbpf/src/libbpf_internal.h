@@ -11,6 +11,11 @@
 
 #include <stdlib.h>
 #include <limits.h>
+#include <errno.h>
+#include <linux/err.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include "relo_core.h"
 
 /* make sure libbpf doesn't use kernel-only integer typedefs */
 #pragma GCC poison u8 u16 u32 u64 s8 s16 s32 s64
@@ -48,8 +53,8 @@
 #endif
 
 /* Older libelf all end up in this expression, for both 32 and 64 bit */
-#ifndef GELF_ST_VISIBILITY
-#define GELF_ST_VISIBILITY(o) ((o) & 0x03)
+#ifndef ELF64_ST_VISIBILITY
+#define ELF64_ST_VISIBILITY(o) ((o) & 0x03)
 #endif
 
 #define BTF_INFO_ENC(kind, kind_flag, vlen) \
@@ -65,6 +70,10 @@
 #define BTF_VAR_SECINFO_ENC(type, offset, size) (type), (offset), (size)
 #define BTF_TYPE_FLOAT_ENC(name, sz) \
 	BTF_TYPE_ENC(name, BTF_INFO_ENC(BTF_KIND_FLOAT, 0, 0), sz)
+#define BTF_TYPE_DECL_TAG_ENC(value, type, component_idx) \
+	BTF_TYPE_ENC(value, BTF_INFO_ENC(BTF_KIND_DECL_TAG, 0, 0), type), (component_idx)
+#define BTF_TYPE_TYPE_TAG_ENC(value, type) \
+	BTF_TYPE_ENC(value, BTF_INFO_ENC(BTF_KIND_TYPE_TAG, 0, 0), type)
 
 #ifndef likely
 #define likely(x) __builtin_expect(!!(x), 1)
@@ -82,21 +91,55 @@
 # define offsetofend(TYPE, FIELD) \
 	(offsetof(TYPE, FIELD) + sizeof(((TYPE *)0)->FIELD))
 #endif
+#ifndef __alias
+#define __alias(symbol) __attribute__((alias(#symbol)))
+#endif
+
+/* Check whether a string `str` has prefix `pfx`, regardless if `pfx` is
+ * a string literal known at compilation time or char * pointer known only at
+ * runtime.
+ */
+#define str_has_pfx(str, pfx) \
+	(strncmp(str, pfx, __builtin_constant_p(pfx) ? sizeof(pfx) - 1 : strlen(pfx)) == 0)
+
+/* suffix check */
+static inline bool str_has_sfx(const char *str, const char *sfx)
+{
+	size_t str_len = strlen(str);
+	size_t sfx_len = strlen(sfx);
+
+	if (sfx_len > str_len)
+		return false;
+	return strcmp(str + str_len - sfx_len, sfx) == 0;
+}
 
 /* Symbol versioning is different between static and shared library.
  * Properly versioned symbols are needed for shared library, but
  * only the symbol of the new version is needed for static library.
+ * Starting with GNU C 10, use symver attribute instead of .symver assembler
+ * directive, which works better with GCC LTO builds.
  */
-#ifdef SHARED
-# define COMPAT_VERSION(internal_name, api_name, version) \
+#if defined(SHARED) && defined(__GNUC__) && __GNUC__ >= 10
+
+#define DEFAULT_VERSION(internal_name, api_name, version) \
+	__attribute__((symver(#api_name "@@" #version)))
+#define COMPAT_VERSION(internal_name, api_name, version) \
+	__attribute__((symver(#api_name "@" #version)))
+
+#elif defined(SHARED)
+
+#define COMPAT_VERSION(internal_name, api_name, version) \
 	asm(".symver " #internal_name "," #api_name "@" #version);
-# define DEFAULT_VERSION(internal_name, api_name, version) \
+#define DEFAULT_VERSION(internal_name, api_name, version) \
 	asm(".symver " #internal_name "," #api_name "@@" #version);
-#else
-# define COMPAT_VERSION(internal_name, api_name, version)
-# define DEFAULT_VERSION(internal_name, api_name, version) \
+
+#else /* !SHARED */
+
+#define COMPAT_VERSION(internal_name, api_name, version)
+#define DEFAULT_VERSION(internal_name, api_name, version) \
 	extern typeof(internal_name) api_name \
 	__attribute__((alias(#internal_name)));
+
 #endif
 
 extern void libbpf_print(enum libbpf_print_level level,
@@ -115,6 +158,15 @@ do {				\
 #ifndef __has_builtin
 #define __has_builtin(x) 0
 #endif
+
+struct bpf_link {
+	int (*detach)(struct bpf_link *link);
+	void (*dealloc)(struct bpf_link *link);
+	char *pin_path;		/* NULL, if not pinned */
+	int fd;			/* hook FD, -1 if not applicable */
+	bool disconnected;
+};
+
 /*
  * Re-implement glibc's reallocarray() for libbpf internal-only use.
  * reallocarray(), unfortunately, is not available in all versions of glibc,
@@ -139,10 +191,31 @@ static inline void *libbpf_reallocarray(void *ptr, size_t nmemb, size_t size)
 	return realloc(ptr, total);
 }
 
+/* Copy up to sz - 1 bytes from zero-terminated src string and ensure that dst
+ * is zero-terminated string no matter what (unless sz == 0, in which case
+ * it's a no-op). It's conceptually close to FreeBSD's strlcpy(), but differs
+ * in what is returned. Given this is internal helper, it's trivial to extend
+ * this, when necessary. Use this instead of strncpy inside libbpf source code.
+ */
+static inline void libbpf_strlcpy(char *dst, const char *src, size_t sz)
+{
+	size_t i;
+
+	if (sz == 0)
+		return;
+
+	sz--;
+	for (i = 0; i < sz && src[i]; i++)
+		dst[i] = src[i];
+	dst[i] = '\0';
+}
+
+__u32 get_kernel_version(void);
+
 struct btf;
 struct btf_type;
 
-struct btf_type *btf_type_by_id(struct btf *btf, __u32 type_id);
+struct btf_type *btf_type_by_id(const struct btf *btf, __u32 type_id);
 const char *btf_kind_str(const struct btf_type *t);
 const struct btf_type *skip_mods_and_typedefs(const struct btf *btf, __u32 id, __u32 *res_id);
 
@@ -167,8 +240,9 @@ enum map_def_parts {
 	MAP_DEF_NUMA_NODE	= 0x080,
 	MAP_DEF_PINNING		= 0x100,
 	MAP_DEF_INNER_MAP	= 0x200,
+	MAP_DEF_MAP_EXTRA	= 0x400,
 
-	MAP_DEF_ALL		= 0x3ff, /* combination of all above */
+	MAP_DEF_ALL		= 0x7ff, /* combination of all above */
 };
 
 struct btf_map_def {
@@ -182,6 +256,7 @@ struct btf_map_def {
 	__u32 map_flags;
 	__u32 numa_node;
 	__u32 pinning;
+	__u64 map_extra;
 };
 
 int parse_btf_map_def(const char *map_name, struct btf *btf,
@@ -192,6 +267,17 @@ void *libbpf_add_mem(void **data, size_t *cap_cnt, size_t elem_sz,
 		     size_t cur_cnt, size_t max_cnt, size_t add_cnt);
 int libbpf_ensure_mem(void **data, size_t *cap_cnt, size_t elem_sz, size_t need_cnt);
 
+static inline bool libbpf_is_mem_zeroed(const char *p, ssize_t len)
+{
+	while (len > 0) {
+		if (*p)
+			return false;
+		p++;
+		len--;
+	}
+	return true;
+}
+
 static inline bool libbpf_validate_opts(const char *opts,
 					size_t opts_sz, size_t user_sz,
 					const char *type_name)
@@ -200,16 +286,9 @@ static inline bool libbpf_validate_opts(const char *opts,
 		pr_warn("%s size (%zu) is too small\n", type_name, user_sz);
 		return false;
 	}
-	if (user_sz > opts_sz) {
-		size_t i;
-
-		for (i = opts_sz; i < user_sz; i++) {
-			if (opts[i]) {
-				pr_warn("%s has non-zero extra bytes\n",
-					type_name);
-				return false;
-			}
-		}
+	if (!libbpf_is_mem_zeroed(opts + opts_sz, (ssize_t)user_sz - opts_sz)) {
+		pr_warn("%s has non-zero extra bytes\n", type_name);
+		return false;
 	}
 	return true;
 }
@@ -229,46 +308,68 @@ static inline bool libbpf_validate_opts(const char *opts,
 			(opts)->field = value;	\
 	} while (0)
 
+#define OPTS_ZEROED(opts, last_nonzero_field)				      \
+({									      \
+	ssize_t __off = offsetofend(typeof(*(opts)), last_nonzero_field);     \
+	!(opts) || libbpf_is_mem_zeroed((const void *)opts + __off,	      \
+					(opts)->sz - __off);		      \
+})
+
+enum kern_feature_id {
+	/* v4.14: kernel support for program & map names. */
+	FEAT_PROG_NAME,
+	/* v5.2: kernel support for global data sections. */
+	FEAT_GLOBAL_DATA,
+	/* BTF support */
+	FEAT_BTF,
+	/* BTF_KIND_FUNC and BTF_KIND_FUNC_PROTO support */
+	FEAT_BTF_FUNC,
+	/* BTF_KIND_VAR and BTF_KIND_DATASEC support */
+	FEAT_BTF_DATASEC,
+	/* BTF_FUNC_GLOBAL is supported */
+	FEAT_BTF_GLOBAL_FUNC,
+	/* BPF_F_MMAPABLE is supported for arrays */
+	FEAT_ARRAY_MMAP,
+	/* kernel support for expected_attach_type in BPF_PROG_LOAD */
+	FEAT_EXP_ATTACH_TYPE,
+	/* bpf_probe_read_{kernel,user}[_str] helpers */
+	FEAT_PROBE_READ_KERN,
+	/* BPF_PROG_BIND_MAP is supported */
+	FEAT_PROG_BIND_MAP,
+	/* Kernel support for module BTFs */
+	FEAT_MODULE_BTF,
+	/* BTF_KIND_FLOAT support */
+	FEAT_BTF_FLOAT,
+	/* BPF perf link support */
+	FEAT_PERF_LINK,
+	/* BTF_KIND_DECL_TAG support */
+	FEAT_BTF_DECL_TAG,
+	/* BTF_KIND_TYPE_TAG support */
+	FEAT_BTF_TYPE_TAG,
+	/* memcg-based accounting for BPF maps and progs */
+	FEAT_MEMCG_ACCOUNT,
+	/* BPF cookie (bpf_get_attach_cookie() BPF helper) support */
+	FEAT_BPF_COOKIE,
+	/* BTF_KIND_ENUM64 support and BTF_KIND_ENUM kflag support */
+	FEAT_BTF_ENUM64,
+	/* Kernel uses syscall wrapper (CONFIG_ARCH_HAS_SYSCALL_WRAPPER) */
+	FEAT_SYSCALL_WRAPPER,
+	__FEAT_CNT,
+};
+
+int probe_memcg_account(void);
+bool kernel_supports(const struct bpf_object *obj, enum kern_feature_id feat_id);
+int bump_rlimit_memlock(void);
+
 int parse_cpu_mask_str(const char *s, bool **mask, int *mask_sz);
 int parse_cpu_mask_file(const char *fcpu, bool **mask, int *mask_sz);
 int libbpf__load_raw_btf(const char *raw_types, size_t types_len,
 			 const char *str_sec, size_t str_len);
+int btf_load_into_kernel(struct btf *btf, char *log_buf, size_t log_sz, __u32 log_level);
 
-struct bpf_prog_load_params {
-	enum bpf_prog_type prog_type;
-	enum bpf_attach_type expected_attach_type;
-	const char *name;
-	const struct bpf_insn *insns;
-	size_t insn_cnt;
-	const char *license;
-	__u32 kern_version;
-	__u32 attach_prog_fd;
-	__u32 attach_btf_obj_fd;
-	__u32 attach_btf_id;
-	__u32 prog_ifindex;
-	__u32 prog_btf_fd;
-	__u32 prog_flags;
-
-	__u32 func_info_rec_size;
-	const void *func_info;
-	__u32 func_info_cnt;
-
-	__u32 line_info_rec_size;
-	const void *line_info;
-	__u32 line_info_cnt;
-
-	__u32 log_level;
-	char *log_buf;
-	size_t log_buf_sz;
-};
-
-int libbpf__bpf_prog_load(const struct bpf_prog_load_params *load_attr);
-
-int bpf_object__section_size(const struct bpf_object *obj, const char *name,
-			     __u32 *size);
-int bpf_object__variable_offset(const struct bpf_object *obj, const char *name,
-				__u32 *off);
 struct btf *btf_get_from_fd(int btf_fd, struct btf *base_btf);
+void btf_get_kernel_prefix_kind(enum bpf_attach_type attach_type,
+				const char **prefix, int *kind);
 
 struct btf_ext_info {
 	/*
@@ -278,6 +379,13 @@ struct btf_ext_info {
 	void *info;
 	__u32 rec_size;
 	__u32 len;
+	/* optional (maintained internally by libbpf) mapping between .BTF.ext
+	 * section and corresponding ELF section. This is used to join
+	 * information like CO-RE relocation records with corresponding BPF
+	 * programs defined in ELF sections
+	 */
+	__u32 *sec_idxs;
+	int sec_cnt;
 };
 
 #define for_each_btf_ext_sec(seg, sec)					\
@@ -361,76 +469,6 @@ struct bpf_line_info_min {
 	__u32	line_col;
 };
 
-/* bpf_core_relo_kind encodes which aspect of captured field/type/enum value
- * has to be adjusted by relocations.
- */
-enum bpf_core_relo_kind {
-	BPF_FIELD_BYTE_OFFSET = 0,	/* field byte offset */
-	BPF_FIELD_BYTE_SIZE = 1,	/* field size in bytes */
-	BPF_FIELD_EXISTS = 2,		/* field existence in target kernel */
-	BPF_FIELD_SIGNED = 3,		/* field signedness (0 - unsigned, 1 - signed) */
-	BPF_FIELD_LSHIFT_U64 = 4,	/* bitfield-specific left bitshift */
-	BPF_FIELD_RSHIFT_U64 = 5,	/* bitfield-specific right bitshift */
-	BPF_TYPE_ID_LOCAL = 6,		/* type ID in local BPF object */
-	BPF_TYPE_ID_TARGET = 7,		/* type ID in target kernel */
-	BPF_TYPE_EXISTS = 8,		/* type existence in target kernel */
-	BPF_TYPE_SIZE = 9,		/* type size in bytes */
-	BPF_ENUMVAL_EXISTS = 10,	/* enum value existence in target kernel */
-	BPF_ENUMVAL_VALUE = 11,		/* enum value integer value */
-};
-
-/* The minimum bpf_core_relo checked by the loader
- *
- * CO-RE relocation captures the following data:
- * - insn_off - instruction offset (in bytes) within a BPF program that needs
- *   its insn->imm field to be relocated with actual field info;
- * - type_id - BTF type ID of the "root" (containing) entity of a relocatable
- *   type or field;
- * - access_str_off - offset into corresponding .BTF string section. String
- *   interpretation depends on specific relocation kind:
- *     - for field-based relocations, string encodes an accessed field using
- *     a sequence of field and array indices, separated by colon (:). It's
- *     conceptually very close to LLVM's getelementptr ([0]) instruction's
- *     arguments for identifying offset to a field.
- *     - for type-based relocations, strings is expected to be just "0";
- *     - for enum value-based relocations, string contains an index of enum
- *     value within its enum type;
- *
- * Example to provide a better feel.
- *
- *   struct sample {
- *       int a;
- *       struct {
- *           int b[10];
- *       };
- *   };
- *
- *   struct sample *s = ...;
- *   int x = &s->a;     // encoded as "0:0" (a is field #0)
- *   int y = &s->b[5];  // encoded as "0:1:0:5" (anon struct is field #1, 
- *                      // b is field #0 inside anon struct, accessing elem #5)
- *   int z = &s[10]->b; // encoded as "10:1" (ptr is used as an array)
- *
- * type_id for all relocs in this example  will capture BTF type id of
- * `struct sample`.
- *
- * Such relocation is emitted when using __builtin_preserve_access_index()
- * Clang built-in, passing expression that captures field address, e.g.:
- *
- * bpf_probe_read(&dst, sizeof(dst),
- *		  __builtin_preserve_access_index(&src->a.b.c));
- *
- * In this case Clang will emit field relocation recording necessary data to
- * be able to find offset of embedded `a.b.c` field within `src` struct.
- *
- *   [0] https://llvm.org/docs/LangRef.html#getelementptr-instruction
- */
-struct bpf_core_relo {
-	__u32   insn_off;
-	__u32   type_id;
-	__u32   access_str_off;
-	enum bpf_core_relo_kind kind;
-};
 
 typedef int (*type_id_visit_fn)(__u32 *type_id, void *ctx);
 typedef int (*str_off_visit_fn)(__u32 *str_off, void *ctx);
@@ -438,5 +476,105 @@ int btf_type_visit_type_ids(struct btf_type *t, type_id_visit_fn visit, void *ct
 int btf_type_visit_str_offs(struct btf_type *t, str_off_visit_fn visit, void *ctx);
 int btf_ext_visit_type_ids(struct btf_ext *btf_ext, type_id_visit_fn visit, void *ctx);
 int btf_ext_visit_str_offs(struct btf_ext *btf_ext, str_off_visit_fn visit, void *ctx);
+__s32 btf__find_by_name_kind_own(const struct btf *btf, const char *type_name,
+				 __u32 kind);
+
+typedef int (*kallsyms_cb_t)(unsigned long long sym_addr, char sym_type,
+			     const char *sym_name, void *ctx);
+
+int libbpf_kallsyms_parse(kallsyms_cb_t cb, void *arg);
+
+/* handle direct returned errors */
+static inline int libbpf_err(int ret)
+{
+	if (ret < 0)
+		errno = -ret;
+	return ret;
+}
+
+/* handle errno-based (e.g., syscall or libc) errors according to libbpf's
+ * strict mode settings
+ */
+static inline int libbpf_err_errno(int ret)
+{
+	/* errno is already assumed to be set on error */
+	return ret < 0 ? -errno : ret;
+}
+
+/* handle error for pointer-returning APIs, err is assumed to be < 0 always */
+static inline void *libbpf_err_ptr(int err)
+{
+	/* set errno on error, this doesn't break anything */
+	errno = -err;
+	return NULL;
+}
+
+/* handle pointer-returning APIs' error handling */
+static inline void *libbpf_ptr(void *ret)
+{
+	/* set errno on error, this doesn't break anything */
+	if (IS_ERR(ret))
+		errno = -PTR_ERR(ret);
+
+	return IS_ERR(ret) ? NULL : ret;
+}
+
+static inline bool str_is_empty(const char *s)
+{
+	return !s || !s[0];
+}
+
+static inline bool is_ldimm64_insn(struct bpf_insn *insn)
+{
+	return insn->code == (BPF_LD | BPF_IMM | BPF_DW);
+}
+
+/* if fd is stdin, stdout, or stderr, dup to a fd greater than 2
+ * Takes ownership of the fd passed in, and closes it if calling
+ * fcntl(fd, F_DUPFD_CLOEXEC, 3).
+ */
+static inline int ensure_good_fd(int fd)
+{
+	int old_fd = fd, saved_errno;
+
+	if (fd < 0)
+		return fd;
+	if (fd < 3) {
+		fd = fcntl(fd, F_DUPFD_CLOEXEC, 3);
+		saved_errno = errno;
+		close(old_fd);
+		errno = saved_errno;
+		if (fd < 0) {
+			pr_warn("failed to dup FD %d to FD > 2: %d\n", old_fd, -saved_errno);
+			errno = saved_errno;
+		}
+	}
+	return fd;
+}
+
+/* The following two functions are exposed to bpftool */
+int bpf_core_add_cands(struct bpf_core_cand *local_cand,
+		       size_t local_essent_len,
+		       const struct btf *targ_btf,
+		       const char *targ_btf_name,
+		       int targ_start_id,
+		       struct bpf_core_cand_list *cands);
+void bpf_core_free_cands(struct bpf_core_cand_list *cands);
+
+struct usdt_manager *usdt_manager_new(struct bpf_object *obj);
+void usdt_manager_free(struct usdt_manager *man);
+struct bpf_link * usdt_manager_attach_usdt(struct usdt_manager *man,
+					   const struct bpf_program *prog,
+					   pid_t pid, const char *path,
+					   const char *usdt_provider, const char *usdt_name,
+					   __u64 usdt_cookie);
+
+static inline bool is_pow_of_2(size_t x)
+{
+	return x && (x & (x - 1)) == 0;
+}
+
+#define PROG_LOAD_ATTEMPTS 5
+int sys_bpf_prog_load(union bpf_attr *attr, unsigned int size, int attempts);
 
 #endif /* __LIBBPF_LIBBPF_INTERNAL_H */
