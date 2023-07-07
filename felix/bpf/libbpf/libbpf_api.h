@@ -193,32 +193,35 @@ int bpf_xdp_program_id(int ifIndex) {
 
 int bpf_program_attach_xdp(struct bpf_object *obj, char *name, int ifIndex, int old_id, __u32 flags)
 {
-	// int err = 0;
-	// struct bpf_link *link = NULL;
-	// struct bpf_program *prog, *first_prog = NULL;
-	// DECLARE_LIBBPF_OPTS(bpf_xdp_set_link_opts, opts,
-	// 	.old_fd = bpf_prog_get_fd_by_id(old_id));
+	int err = 0;
+	struct bpf_link *link = NULL;
+	struct bpf_program *prog, *first_prog = NULL;
+//old
+//	DECLARE_LIBBPF_OPTS(bpf_xdp_set_link_opts, opts,
+//		.old_fd = bpf_prog_get_fd_by_id(old_id));
+//new
+	DECLARE_LIBBPF_OPTS(bpf_xdp_attach_opts, opts,
+		.old_prog_fd = bpf_prog_get_fd_by_id(old_id));
 
-	// if (!(prog = bpf_object__find_program_by_name(obj, name))) {
-	// 	err = ENOENT;
-	// 	goto out;
-	// }
+	if (!(prog = bpf_object__find_program_by_name(obj, name))) {
+		err = ENOENT;
+		goto out;
+	}
 
-	// int prog_fd = bpf_program__fd(prog);
-	// if (prog_fd < 0) {
-	// 	errno = -prog_fd;
-	// 	return prog_fd;
-	// }
+	int prog_fd = bpf_program__fd(prog);
+	if (prog_fd < 0) {
+		errno = -prog_fd;
+		return prog_fd;
+	}
 
-	// err = bpf_set_link_xdp_fd_opts(ifIndex, prog_fd, flags, &opts);
-	// set_errno(err);
-	// return err;
+	//err = bpf_set_link_xdp_fd_opts(ifIndex, prog_fd, flags, &opts);       // old
+	err = bpf_xdp_attach(ifIndex, prog_fd, flags, &opts);                   // new
+	set_errno(err);
+	return err;
 
-// out:
-// 	set_errno(err);
-// 	return err;
-
-	return ifIndex;
+out:
+	set_errno(err);
+	return err;
 }
 
 struct bpf_link *bpf_program_attach_cgroup(struct bpf_object *obj, int cgroup_fd, char *name)
