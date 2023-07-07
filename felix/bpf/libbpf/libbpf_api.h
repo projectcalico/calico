@@ -182,13 +182,13 @@ void bpf_tc_set_globals(struct bpf_map *map,
 }
 
 int bpf_xdp_program_id(int ifIndex) {
-	//__u32 prog_id = 0, flags = 0;
-	//int err;
+	__u32 prog_id = 0, flags = 0;
+	int err;
 
-	//err = bpf_get_link_xdp_id(ifIndex, &prog_id, flags);
-	//set_errno(err);
-	//return prog_id;
-	return ifIndex;
+	//err = bpf_get_link_xdp_id(ifIndex, &prog_id, flags);  // old
+	err = bpf_xdp_query_id(ifIndex, flags, &prog_id);       // new
+	set_errno(err);
+	return prog_id;
 }
 
 int bpf_program_attach_xdp(struct bpf_object *obj, char *name, int ifIndex, int old_id, __u32 flags)
