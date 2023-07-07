@@ -185,7 +185,8 @@ int bpf_xdp_program_id(int ifIndex) {
 	__u32 prog_id = 0, flags = 0;
 	int err;
 
-	err = bpf_get_link_xdp_id(ifIndex, &prog_id, flags);
+	//err = bpf_get_link_xdp_id(ifIndex, &prog_id, flags);  // old
+	err = bpf_xdp_query_id(ifIndex, flags, &prog_id);       // new
 	set_errno(err);
 	return prog_id;
 }
@@ -195,8 +196,12 @@ int bpf_program_attach_xdp(struct bpf_object *obj, char *name, int ifIndex, int 
 	int err = 0;
 	struct bpf_link *link = NULL;
 	struct bpf_program *prog, *first_prog = NULL;
-	DECLARE_LIBBPF_OPTS(bpf_xdp_set_link_opts, opts,
-		.old_fd = bpf_prog_get_fd_by_id(old_id));
+//old
+//	DECLARE_LIBBPF_OPTS(bpf_xdp_set_link_opts, opts,
+//		.old_fd = bpf_prog_get_fd_by_id(old_id));
+//new
+	DECLARE_LIBBPF_OPTS(bpf_xdp_attach_opts, opts,
+		.old_prog_fd = bpf_prog_get_fd_by_id(old_id));
 
 	if (!(prog = bpf_object__find_program_by_name(obj, name))) {
 		err = ENOENT;
@@ -209,7 +214,8 @@ int bpf_program_attach_xdp(struct bpf_object *obj, char *name, int ifIndex, int 
 		return prog_fd;
 	}
 
-	err = bpf_set_link_xdp_fd_opts(ifIndex, prog_fd, flags, &opts);
+	//err = bpf_set_link_xdp_fd_opts(ifIndex, prog_fd, flags, &opts);       // old
+	err = bpf_xdp_attach(ifIndex, prog_fd, flags, &opts);                   // new
 	set_errno(err);
 	return err;
 
@@ -293,8 +299,10 @@ void bpf_xdp_set_globals(struct bpf_map *map, char *iface_name, uint *jumps)
 	set_errno(bpf_map__set_initial_value(map, (void*)(&data), sizeof(data)));
 }
 
-void bpf_map_set_max_entries(struct bpf_map *map, uint max_entries) {
-	set_errno(bpf_map__resize(map, max_entries));
+void bpf_map_set_max_entries(struct bpf_map *map, uint max_entries)
+{
+	//set_errno(bpf_map__resize(map, max_entries));             // old
+	set_errno(bpf_map__set_max_entries(map, max_entries));      // new
 }
 
 int num_possible_cpu()
