@@ -94,9 +94,10 @@ const (
 
 var (
 	// Stack offsets.  These are defined locally.
-	offStateKey    = nextOffset(4, 4)
-	offSrcIPSetKey = nextOffset(ipsets.IPSetEntrySize, 8)
-	offDstIPSetKey = nextOffset(ipsets.IPSetEntrySize, 8)
+	offStateKey = nextOffset(4, 4)
+	// Even for v4 progrtams, we have the v6 layout
+	offSrcIPSetKey = nextOffset(ipsets.IPSetEntryV6Size, 8)
+	offDstIPSetKey = nextOffset(ipsets.IPSetEntryV6Size, 8)
 
 	// Offsets within the cal_tc_state struct.
 	// WARNING: must be kept in sync with the definitions in bpf-gpl/types.h.
@@ -127,7 +128,7 @@ var (
 	skbCb1 = FieldOffset{Offset: 12*4 + 1*4, Field: "skb->cb[1]"}
 
 	// Compile-time check that IPSetEntrySize hasn't changed; if it changes, the code will need to change.
-	_ = [1]struct{}{{}}[20-ipsets.IPSetEntrySize]
+	_ = [1]struct{}{{}}[32-ipsets.IPSetEntryV6Size]
 
 	// Offsets within struct ip4_set_key.
 	// WARNING: must be kept in sync with the definitions in bpf/ipsets/map.go.
@@ -202,10 +203,6 @@ const (
 	TierEndDeny  TierEndAction = "deny"
 	TierEndPass  TierEndAction = "pass"
 )
-
-func (p *Builder) EnableIPv6Mode() {
-	p.forIPv6 = true
-}
 
 func (p *Builder) Instructions(rules Rules) (Insns, error) {
 	p.b = NewBlock(p.policyDebugEnabled)
@@ -406,20 +403,39 @@ func (p *Builder) writeRecordRuleHit(r Rule, skipLabel string) {
 }
 
 func (p *Builder) setUpIPSetKey(ipsetID uint64, keyOffset int16, ipOffset, portOffset FieldOffset) {
+	v6Adjust := int16(0)
+	prefixLen := int32(128)
+
+	if p.forIPv6 {
+		v6Adjust = 12
+		prefixLen += 96
+	}
+
 	// TODO track whether we've already done an initialisation and skip the parts that don't change.
 	// Zero the padding.
 	p.b.MovImm64(R1, 0) // R1 = 0
-	p.b.StoreStack8(R1, keyOffset+ipsKeyPad)
-	p.b.MovImm64(R1, 128) // R1 = 128
+	p.b.StoreStack8(R1, keyOffset+ipsKeyPad+v6Adjust)
+	p.b.MovImm64(R1, prefixLen) // R1 = 128
 	p.b.StoreStack32(R1, keyOffset+ipsKeyPrefix)
 
 	// Store the IP address, port and protocol.
 	p.b.Load32(R1, R9, ipOffset)
 	p.b.StoreStack32(R1, keyOffset+ipsKeyAddr)
+	if p.forIPv6 {
+		ipOffset.Offset += 4
+		p.b.Load32(R1, R9, ipOffset)
+		p.b.StoreStack32(R1, keyOffset+ipsKeyAddr+4)
+		ipOffset.Offset += 4
+		p.b.Load32(R1, R9, ipOffset)
+		p.b.StoreStack32(R1, keyOffset+ipsKeyAddr+8)
+		ipOffset.Offset += 4
+		p.b.Load32(R1, R9, ipOffset)
+		p.b.StoreStack32(R1, keyOffset+ipsKeyAddr+12)
+	}
 	p.b.Load16(R1, R9, portOffset)
-	p.b.StoreStack16(R1, keyOffset+ipsKeyPort)
+	p.b.StoreStack16(R1, keyOffset+ipsKeyPort+v6Adjust)
 	p.b.Load8(R1, R9, stateOffIPProto)
-	p.b.StoreStack8(R1, keyOffset+ipsKeyProto)
+	p.b.StoreStack8(R1, keyOffset+ipsKeyProto+v6Adjust)
 
 	// Store the IP set ID.  It is 64-bit but, since it's a packed struct, we have to write it in two
 	// 32-bit chunks.
@@ -1059,6 +1075,12 @@ func WithAllowDenyJumps(allow, deny int) Option {
 		b.allowJmp = allow
 		b.denyJmp = deny
 		b.useJmps = true
+	}
+}
+
+func WithIPv6() Option {
+	return func(p *Builder) {
+		p.forIPv6 = true
 	}
 }
 
