@@ -113,6 +113,8 @@ func mapIter(m map[string]string) func(func(k string, v string)) error {
 
 func TestDeltaTracker_GetDesired(t *testing.T) {
 	dt := setupDeltaTrackerTest(t)
+
+	// Empty dataplane, set followed by get should return what we just set!
 	dt.SetDesired("1", "A1")
 	if v, ok := dt.GetDesired("1"); !ok {
 		t.Errorf("DeltaTracker failed to get desired key that we just set")
@@ -120,13 +122,13 @@ func TestDeltaTracker_GetDesired(t *testing.T) {
 		t.Errorf("DeltaTracker returned incorrect value: %q", v)
 	}
 
-	// Delete it again.
+	// Delete it again.  Should no longer be returned.
 	dt.DeleteDesired("1")
 	if _, ok := dt.GetDesired("1"); ok {
 		t.Fatal("DeleteDesired had no effect?")
 	}
 
-	// Recreate...
+	// Recreate, so we can test adding the value to the dataplane.
 	dt.SetDesired("1", "A1")
 	if v, ok := dt.GetDesired("1"); !ok {
 		t.Errorf("DeltaTracker failed to get desired key that we just set")
@@ -134,7 +136,7 @@ func TestDeltaTracker_GetDesired(t *testing.T) {
 		t.Errorf("DeltaTracker returned incorrect value: %q", v)
 	}
 
-	// Make sure we get the desired value even if the key is also in the dataplane.
+	// Adding to the dataplane shouldn't affect the desired state.
 	dt.SetDataplane("1", "A1")
 	if v, ok := dt.GetDesired("1"); !ok {
 		t.Errorf("DeltaTracker failed to get desired key once it was also in DP")
@@ -142,13 +144,14 @@ func TestDeltaTracker_GetDesired(t *testing.T) {
 		t.Errorf("DeltaTracker returned incorrect value once it was also in DP: %q", v)
 	}
 
-	// Delete it again.
+	// Delete the desired while the value is in the dataplane.  Again, should be independent
+	// of whether it's in the dataplane.
 	dt.DeleteDesired("1")
 	if _, ok := dt.GetDesired("1"); ok {
 		t.Fatal("DeleteDesired had no effect?")
 	}
 
-	// Recreate...
+	// Recreate the desired key while it is in the dataplane.
 	dt.SetDesired("1", "A1")
 	if v, ok := dt.GetDesired("1"); !ok {
 		t.Errorf("DeltaTracker failed to get desired key that we just recreated")
@@ -156,12 +159,20 @@ func TestDeltaTracker_GetDesired(t *testing.T) {
 		t.Errorf("DeltaTracker returned incorrect value: %q", v)
 	}
 
-	// Make sure we still get the value even if it agrees with dataplane.
-	dt.SetDataplane("1", "A1")
+	// Delete from dataplane while the key is in the desired map, should not impact desired.
+	dt.DeleteDataplane("1")
 	if v, ok := dt.GetDesired("1"); !ok {
-		t.Errorf("DeltaTracker failed to get desired key once it matched in DP")
+		t.Errorf("DeltaTracker failed to get desired after deleting from DP")
 	} else if v != "A1" {
-		t.Errorf("DeltaTracker returned incorrect value once it matched in DP: %q", v)
+		t.Errorf("DeltaTracker returned incorrect value after deleting from DP: %q", v)
+	}
+
+	// Adding a different value to the dataplane shouldn't affact desired.
+	dt.SetDataplane("1", "A2")
+	if v, ok := dt.GetDesired("1"); !ok {
+		t.Errorf("DeltaTracker failed to get desired key with different value in DP")
+	} else if v != "A1" {
+		t.Errorf("DeltaTracker returned incorrect value with different value in DP: %q", v)
 	}
 
 	// Delete it again.
@@ -169,8 +180,13 @@ func TestDeltaTracker_GetDesired(t *testing.T) {
 	if _, ok := dt.GetDesired("1"); ok {
 		t.Fatal("DeleteDesired had no effect?")
 	}
+	if v, ok := dt.GetDataplane("1"); !ok {
+		t.Fatal("DeleteDesired removed dataplane key")
+	} else if v != "A2" {
+		t.Fatal("DeleteDesired changed dataplane key")
+	}
 
-	// Recreate...
+	// Recreate while there's a different dataplane key...
 	dt.SetDesired("1", "A1")
 	if v, ok := dt.GetDesired("1"); !ok {
 		t.Errorf("DeltaTracker failed to get desired key that we just recreated")
