@@ -1074,7 +1074,7 @@ func (m *bpfEndpointManager) syncIfStateMap() {
 	m.ifacesLock.Lock()
 	defer m.ifacesLock.Unlock()
 
-	m.ifStateMap.IterDataplaneCache(func(k ifstate.Key, v ifstate.Value) {
+	m.ifStateMap.IterDataplane(func(k ifstate.Key, v ifstate.Value) {
 		ifindex := int(k.IfIndex())
 		netiface, err := m.dp.interfaceByIndex(ifindex)
 		if err != nil {

@@ -277,7 +277,7 @@ func (s *Syncer) startupBuildPrev(state DPSyncerState) error {
 
 	// Walk the frontend bpf map that was read into memory and match it against the
 	// references build from the state
-	s.bpfSvcs.IterDataplaneCache(func(svck nat.FrontendKey, svcv nat.FrontendValue) {
+	s.bpfSvcs.IterDataplane(func(svck nat.FrontendKey, svcv nat.FrontendValue) {
 		xref, ok := svcRef[svck]
 		if !ok {
 			return
@@ -313,7 +313,7 @@ func (s *Syncer) startupBuildPrev(state DPSyncerState) error {
 		}
 		for i := 0; i < count; i++ {
 			epk := nat.NewNATBackendKey(id, uint32(i))
-			ep, ok := s.bpfEps.GetDataplaneCache(epk)
+			ep, ok := s.bpfEps.GetDataplane(epk)
 			if !ok {
 				log.Warnf("inconsistent backed map, missing ep %s", epk)
 				inconsistent = true
