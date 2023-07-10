@@ -276,6 +276,12 @@ func (c *DeltaTracker[K, V]) DeleteDataplane(k K) {
 	}
 }
 
+func (c *DeltaTracker[K, V]) DeleteAllDataplane() {
+	c.IterDataplane(func(k K, _ V) {
+		c.DeleteDataplane(k)
+	})
+}
+
 // IterDataplane iterates over the cache of the dataplane.
 func (c *DeltaTracker[K, V]) IterDataplane(f func(k K, v V)) {
 	for k, v := range c.inDataplaneAndDesired {

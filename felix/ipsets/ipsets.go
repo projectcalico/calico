@@ -19,15 +19,16 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/projectcalico/calico/felix/deltatracker"
+	"github.com/projectcalico/calico/libcalico-go/lib/set"
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
-
-	"github.com/projectcalico/calico/libcalico-go/lib/set"
 
 	"github.com/projectcalico/calico/felix/logutils"
 )
@@ -42,8 +43,8 @@ const (
 type IPSets struct {
 	IPVersionConfig *IPVersionConfig
 
-	ipSetIDToIPSet       map[string]*ipSet
-	mainIPSetNameToIPSet map[string]*ipSet
+	ipSetIDToIPSet       map[string]*IPSet
+	mainIPSetNameToIPSet map[string]*IPSet
 
 	// mutex protects existingIPSetNames and nextTempIPSetIdx, which are accessed by parallel
 	// workers during the apply step.
@@ -100,8 +101,8 @@ func NewIPSetsWithShims(
 	return &IPSets{
 		IPVersionConfig: ipVersionConfig,
 
-		ipSetIDToIPSet:       map[string]*ipSet{},
-		mainIPSetNameToIPSet: map[string]*ipSet{},
+		ipSetIDToIPSet:       map[string]*IPSet{},
+		mainIPSetNameToIPSet: map[string]*IPSet{},
 
 		dirtyIPSetIDs:             set.New[string](),
 		pendingTempIPSetDeletions: set.New[string](),
@@ -134,15 +135,27 @@ func (s *IPSets) AddOrReplaceIPSet(setMetadata IPSetMetadata, members []string) 
 	}).Info("Queueing IP set for creation")
 	canonMembers := s.filterAndCanonicaliseMembers(setMetadata.Type, members)
 
-	// Create the IP set struct and store it off.
 	setID := setMetadata.SetID
-	ipSet := &ipSet{
-		IPSetMetadata:    setMetadata,
-		MainIPSetName:    s.IPVersionConfig.NameForMainIPSet(setID),
-		pendingReplace:   canonMembers,
-		pendingAdds:      set.NewBoxed[IPSetMember](),
-		pendingDeletions: set.NewBoxed[IPSetMember](),
+	var ipSet *IPSet
+	if ipSet = s.ipSetIDToIPSet[setID]; ipSet != nil {
+		// Doing a replace of this IP set
+		// FIXME Corner case: IP set exists but is not desired, we resync, ignore it, then try to create it; will fail to check metadata
+		if ipSet.IPSetMetadata != setMetadata {
+			ipSet.needsFullRewrite = true
+		}
+		ipSet.deltaTracker.DeleteAllDesired()
+	} else {
+		// Create the IP set struct and store it off.
+		ipSet = &IPSet{
+			IPSetMetadata: setMetadata,
+			MainIPSetName: s.IPVersionConfig.NameForMainIPSet(setID),
+			deltaTracker:  deltatracker.NewSetDeltaTracker[IPSetMember](),
+		}
 	}
+	canonMembers.Iter(func(item IPSetMember) error {
+		ipSet.deltaTracker.AddDesired(item)
+		return nil
+	})
 	s.ipSetIDToIPSet[setID] = ipSet
 	s.mainIPSetNameToIPSet[ipSet.MainIPSetName] = ipSet
 
@@ -177,25 +190,15 @@ func (s *IPSets) AddMembers(setID string, newMembers []string) {
 		"setID":           setID,
 		"filteredMembers": canonMembers,
 	}).Debug("Adding new members to IP set")
-	if ipSet.pendingReplace != nil {
-		canonMembers.Iter(func(m IPSetMember) error {
-			ipSet.pendingReplace.Add(m)
-			return nil
-		})
+	canonMembers.Iter(func(item IPSetMember) error {
+		ipSet.deltaTracker.AddDesired(item)
+		return nil
+	})
+	if !ipSet.deltaTracker.InSync() {
+		s.dirtyIPSetIDs.Add(setID)
 	} else {
-		// Do a delta update.
-		canonMembers.Iter(func(m IPSetMember) error {
-			ipSet.pendingDeletions.Discard(m)
-			if ipSet.members.Contains(m) {
-				// IP already in the set, this happens if the IP is removed and then
-				// re-added in between updates to the dataplane.
-				return nil
-			}
-			ipSet.pendingAdds.Add(m)
-			return nil
-		})
+		s.dirtyIPSetIDs.Discard(setID)
 	}
-	s.dirtyIPSetIDs.Add(setID)
 }
 
 // RemoveMembers queues up removal of the given members from an IP set.  Members of the wrong IP
@@ -212,25 +215,16 @@ func (s *IPSets) RemoveMembers(setID string, removedMembers []string) {
 		"setID":           setID,
 		"filteredMembers": canonMembers,
 	}).Debug("Removing members from IP set")
-	if ipSet.pendingReplace != nil {
-		canonMembers.Iter(func(m IPSetMember) error {
-			ipSet.pendingReplace.Discard(m)
-			return nil
-		})
+
+	canonMembers.Iter(func(item IPSetMember) error {
+		ipSet.deltaTracker.DeleteDesired(item)
+		return nil
+	})
+	if ipSet.Dirty() {
+		s.dirtyIPSetIDs.Add(setID)
 	} else {
-		// Do a delta update.
-		canonMembers.Iter(func(m IPSetMember) error {
-			ipSet.pendingAdds.Discard(m)
-			if !ipSet.members.Contains(m) {
-				// IP not in the dataplane, this occurs if the IP was added and
-				// then removed without any calls to ApplyUpdates().
-				return nil
-			}
-			ipSet.pendingDeletions.Add(m)
-			return nil
-		})
+		s.dirtyIPSetIDs.Discard(setID)
 	}
-	s.dirtyIPSetIDs.Add(setID)
 }
 
 // QueueResync forces a resync with the dataplane on the next ApplyUpdates() call.
@@ -281,24 +275,11 @@ func (s *IPSets) GetMembers(setID string) (set.Set[string], error) {
 	if !ok {
 		return nil, fmt.Errorf("ipset %s not found", setID)
 	}
-
-	if ipSet.pendingReplace != nil {
-		return ipSetMemberSetToStringSet(ipSet.pendingReplace), nil
-	}
-
-	realMembers := ipSet.members.Copy()
-
-	ipSet.pendingAdds.Iter(func(m IPSetMember) error {
-		realMembers.Add(m)
-		return nil
+	strs := set.New[string]()
+	ipSet.deltaTracker.IterDesired(func(k IPSetMember) {
+		strs.Add(k.String())
 	})
-
-	ipSet.pendingDeletions.Iter(func(m IPSetMember) error {
-		realMembers.Discard(m)
-		return nil
-	})
-
-	return ipSetMemberSetToStringSet(realMembers), nil
+	return strs, nil
 }
 
 func (s *IPSets) ApplyUpdates() {
@@ -318,15 +299,10 @@ func (s *IPSets) ApplyUpdates() {
 			s.logCxt.Debug("Resyncing ipsets with dataplane.")
 			s.opReporter.RecordOperation(fmt.Sprint("resync-ipsets-v", s.IPVersionConfig.Family.Version()))
 
-			numProblems, err := s.tryResync()
-			if err != nil {
+			if err := s.tryResync(); err != nil {
 				s.logCxt.WithError(err).Warning("Failed to resync with dataplane")
 				backOff()
 				continue
-			}
-			if numProblems > 0 {
-				s.logCxt.WithField("numProblems", numProblems).Warn(
-					"Found inconsistencies in IP sets in dataplane")
 			}
 			s.resyncRequired = false
 		}
@@ -360,13 +336,13 @@ func (s *IPSets) ApplyUpdates() {
 
 // tryResync attempts to bring our state into sync with the dataplane.  It scans the contents of the
 // IP sets in the dataplane and queues up updates to any IP sets that are out-of-sync.
-func (s *IPSets) tryResync() (numProblems int, err error) {
+func (s *IPSets) tryResync() (err error) {
 	// Log the time spent as we exit the function.
 	resyncStart := time.Now()
 	defer func() {
 		s.logCxt.WithFields(log.Fields{
-			"resyncDuration":          time.Since(resyncStart),
-			"numInconsistenciesFound": numProblems,
+			"resyncDuration": time.Since(resyncStart),
+			"numDirtyIPSets": s.dirtyIPSetIDs.Len(),
 		}).Debug("Finished IPSets resync")
 	}()
 
@@ -429,6 +405,29 @@ func (s *IPSets) tryResync() (numProblems int, err error) {
 			s.existingIPSetNames.Add(ipSetName)
 			s.logCxt.WithField("setName", ipSetName).Debug("Parsing IP set.")
 		}
+		if strings.HasPrefix(line, "Header:") {
+			ipSet, ok := s.mainIPSetNameToIPSet[ipSetName]
+			if !ok {
+				continue
+			}
+			parts := strings.Split(line, " ")
+			for idx, p := range parts {
+				if p == "maxelem" {
+					maxElem, err := strconv.Atoi(parts[idx+1])
+					if err != nil {
+						log.WithError(err).WithField("line", line).Error(
+							"Failed to parse ipset list Header line.")
+						break
+					}
+					if ok && maxElem != ipSet.MaxSize {
+						log.WithField("name", ipSetName).Info(
+							"Need to recreate IP set due to change in max size")
+						ipSet.needsFullRewrite = true
+					}
+					break
+				}
+			}
+		}
 		if strings.HasPrefix(line, "Members:") {
 			// Start of a Members entry, following this, there'll be one member per
 			// line then EOF or a blank line.
@@ -436,11 +435,8 @@ func (s *IPSets) tryResync() (numProblems int, err error) {
 			// Look up to see if this is one of our IP sets.
 			ipSet := s.mainIPSetNameToIPSet[ipSetName]
 			logCxt := s.logCxt.WithField("setName", ipSetName)
-			if ipSet == nil || ipSet.members == nil {
-				// Either this is not one of our IP sets, or it's one that we're
-				// about to rewrite.  Either way, we don't care about its members
-				// so simply scan past them.
-				logCxt.Debug("Skipping IP set, either not ours or about to rewrite")
+			if ipSet == nil {
+				logCxt.Debug("Skipping IP set, not one that we are tracking.")
 				for scanner.Scan() {
 					line := scanner.Bytes()
 					if len(line) == 0 {
@@ -452,112 +448,44 @@ func (s *IPSets) tryResync() (numProblems int, err error) {
 				continue
 			}
 
-			// One of our IP sets and we're not planning to rewrite it; we need to
-			// load its members and compare them.
+			// One of our IP sets; we need to load its members and compare them.
 			logCxt = s.logCxt.WithField("setID", ipSet.SetID)
-			dataplaneMembers := set.NewBoxed[IPSetMember]()
-			for scanner.Scan() {
-				line := scanner.Text()
-				if line == "" {
-					// End of members
-					break
+			err = ipSet.deltaTracker.ReplaceDataplaneCacheFromIter(func(f func(k IPSetMember)) error {
+				for scanner.Scan() {
+					line := scanner.Text()
+					if line == "" {
+						// End of members
+						break
+					}
+					canonMember := ipSet.Type.CanonicaliseMember(line)
+					if debug {
+						logCxt.WithFields(log.Fields{
+							"member": line,
+							"canon":  canonMember,
+						}).Debug("Found member in dataplane")
+					}
+					f(canonMember)
 				}
-				canonMember := ipSet.Type.CanonicaliseMember(line)
-				dataplaneMembers.Add(canonMember)
-				if debug {
-					logCxt.WithFields(log.Fields{
-						"member": line,
-						"canon":  canonMember,
-					}).Debug("Found member in dataplane")
-				}
-			}
+				return scanner.Err()
+			})
 			ipSetName = ""
-			if scanner.Err() != nil {
+			if err != nil {
 				logCxt.WithError(err).Error("Failed to read members from 'ipset list'.")
 				break
 			}
 
-			// If we get here, we've read all the members of the IP set.  Compare them
-			// with what we expect and queue up any fixes.
-			numMissing := 0
-			ipSet.members.Iter(func(m IPSetMember) error {
-				if dataplaneMembers.Contains(m) {
-					// Mainline (correct) case, member is in memory and in the
-					// dataplane.
-					dataplaneMembers.Discard(m)
-					return nil
-				}
-
-				logCxt := logCxt.WithField("member", m.String())
-				numProblems++
-				if ipSet.pendingDeletions.Contains(m) {
-					// We were trying to delete this item anyway, record that
-					// it's already gone.  We commonly hit this case when we're
-					// doing a retry after a failure and we're not sure which
-					// deltas got applied.
-					logCxt.Debug("Resync found member missing from " +
-						"dataplane. (Already queued for deletion.)")
-					ipSet.pendingDeletions.Discard(m)
-					return set.RemoveItem
-				}
-
-				// The item should be in the dataplane but it's not, queue up an
-				// add to add it back in.
-				if numMissing == 0 {
-					logCxt.Warning("Resync found member missing from " +
-						"dataplane. Queueing up an add to reinstate it. " +
-						"Further inconsistencies will be logged at DEBUG.")
-				} else {
-					logCxt.Debug("Found another member missing")
-				}
-				numMissing++
-				s.dirtyIPSetIDs.Add(ipSet.SetID)
-				ipSet.pendingAdds.Add(m)
-				return set.RemoveItem
-			})
-			if numMissing > 0 {
-				logCxt.WithField("numMissing", numMissing).Warn(
+			if numMissing := ipSet.deltaTracker.NumPendingUpdates(); numMissing > 0 {
+				logCxt.WithField("numMissing", numMissing).Info(
 					"Resync found members missing from dataplane.")
 			}
-
-			// Now look for any members which are in the dataplane but are not expected.
-			// We removed the members we were expecting above so dataplaneMembers now
-			// contains only unexpected members.
-			numExtras := 0
-			dataplaneMembers.Iter(func(m IPSetMember) error {
-				logCxt := logCxt.WithField("member", m.String())
-
-				// Record that this member really is in the dataplane.
-				ipSet.members.Add(m)
-				numProblems++
-
-				if ipSet.pendingAdds.Contains(m) {
-					// We were trying to add this item anyway, record that
-					// it's already there.  We commonly hit this case when we're
-					// doing a retry after a failure and we're not sure which
-					// deltas got applied.
-					logCxt.Debug("Resync found unexpected member in " +
-						"dataplane. (Was about to add it anyway.)")
-					ipSet.pendingAdds.Discard(m)
-					return nil
-				}
-
-				// We weren't planning on adding this member, queue up a deletion.
-				if numExtras == 0 {
-					logCxt.Warning("Resync found unexpected member in " +
-						"dataplane. Queueing it for removal.  Further " +
-						"inconsistencies will be logged at DEBUG.")
-				} else {
-					logCxt.Debug("Found another extra member.")
-				}
-				numExtras++
-				s.dirtyIPSetIDs.Add(ipSet.SetID)
-				ipSet.pendingDeletions.Add(m)
-				return nil
-			})
-			if numExtras > 0 {
-				logCxt.WithField("numExtras", numExtras).Warn(
+			if numExtras := ipSet.deltaTracker.NumPendingDeletions(); numExtras > 0 {
+				logCxt.WithField("numExtras", numExtras).Info(
 					"Resync found extra members in dataplane.")
+			}
+			if ipSet.Dirty() {
+				s.dirtyIPSetIDs.Add(ipSet.SetID)
+			} else {
+				s.dirtyIPSetIDs.Discard(ipSet.SetID)
 			}
 		}
 	}
@@ -674,22 +602,8 @@ func (s *IPSets) tryUpdates() error {
 			return nil
 		}
 		ipSet := s.ipSetIDToIPSet[setID]
-		if ipSet.pendingReplace != nil {
-			ipSet.members = ipSet.pendingReplace
-			ipSet.pendingReplace = nil
-
-			// Doing a rewrite creates the main IP set.
-			s.existingIPSetNames.Add(ipSet.MainIPSetName)
-		} else {
-			ipSet.pendingAdds.Iter(func(m IPSetMember) error {
-				ipSet.members.Add(m)
-				return set.RemoveItem
-			})
-			ipSet.pendingDeletions.Iter(func(m IPSetMember) error {
-				ipSet.members.Discard(m)
-				return set.RemoveItem
-			})
-		}
+		// On success, we know the IP set must exist.
+		s.existingIPSetNames.Add(ipSet.MainIPSetName)
 		return set.RemoveItem
 	})
 
@@ -724,6 +638,9 @@ func (s *IPSets) chunkUpDirtyIPSets() (chunks [][]string) {
 
 func (s *IPSets) writeIPSetChunk(setIDs []string) error {
 	// Set up an ipset restore session.
+	if log.IsLevelEnabled(log.DebugLevel) {
+		log.WithField("setIDs", setIDs).Debug("Started goroutine to update IP sets.")
+	}
 	countNumIPSetCalls.Inc()
 	cmd := s.newCmd("ipset", "restore")
 	// Get the pipe for stdin.
@@ -765,6 +682,9 @@ func (s *IPSets) writeIPSetChunk(setIDs []string) error {
 		if !s.ipSetNeeded(setID) {
 			continue
 		}
+		if log.IsLevelEnabled(log.DebugLevel) {
+			log.WithField("setID", setID).Debug("Writing updates to IP set.")
+		}
 		ipSet := s.ipSetIDToIPSet[setID]
 		writeErr = s.writeUpdates(ipSet, stdin)
 	}
@@ -800,46 +720,36 @@ func (s *IPSets) writeIPSetChunk(setIDs []string) error {
 	return nil
 }
 
-func (s *IPSets) writeUpdates(ipSet *ipSet, w io.Writer) error {
+func (s *IPSets) writeUpdates(ipSet *IPSet, w io.Writer) error {
 	setID := ipSet.SetID
 	logCxt := s.logCxt.WithField("setID", setID)
-	if ipSet.members != nil {
-		logCxt = logCxt.WithField("numMembersInDataplane", ipSet.members.Len())
-	}
-	if ipSet.pendingReplace != nil {
-		logCxt = logCxt.WithField("numMembersInPendingReplace", ipSet.pendingReplace.Len())
-	} else {
-		logCxt = logCxt.WithFields(log.Fields{
-			"numDeltaAdds":    ipSet.pendingAdds.Len(),
-			"numDeltaDeletes": ipSet.pendingDeletions.Len(),
-		})
-	}
+	// if ipSet.members != nil {
+	// 	logCxt = logCxt.WithField("numMembersInDataplane", ipSet.members.Len())
+	// }
+	// if ipSet.pendingReplace != nil {
+	// 	logCxt = logCxt.WithField("numMembersInPendingReplace", ipSet.pendingReplace.Len())
+	// } else {
+	// 	logCxt = logCxt.WithFields(log.Fields{
+	// 		"numDeltaAdds":    ipSet.pendingAdds.Len(),
+	// 		"numDeltaDeletes": ipSet.pendingDeletions.Len(),
+	// 	})
+	// }
 
-	if ipSet.pendingReplace == nil {
-		// In delta-writing mode:
-		// - pendingReplace is nil
-		// - membersInDataplane non-nil
-		// - pendingAdds/Deletions hold the deltas.
-		if ipSet.pendingAdds.Len() == 0 && ipSet.pendingDeletions.Len() == 0 {
-			// We hit this case if an IP is added, then removed before we actually
-			// write it, nothing to do.
-			logCxt.Debug("Skipping delta write, IP set not dirty.")
-			return nil
-		}
-		logCxt.Info("Calculating deltas to IP set")
-		return s.writeDeltas(ipSet, w, logCxt)
+	if !s.existingIPSetNames.Contains(ipSet.MainIPSetName) || ipSet.needsFullRewrite {
+		logCxt.Info("Doing full IP set rewrite")
+		return s.writeFullRewrite(ipSet, w, logCxt)
 	}
-	// In full-rewrite mode.
-	// - pendingReplace is non-nil
-	// - membersInDataplane nil
-	// - pendingAdds/Deletions empty.
-	logCxt.Info("Doing full IP set rewrite")
-	return s.writeFullRewrite(ipSet, w, logCxt)
+	if !ipSet.Dirty() {
+		logCxt.Debug("Skipping in-sync IP set.")
+		return nil
+	}
+	logCxt.Info("Calculating deltas to IP set")
+	return s.writeDeltas(ipSet, w, logCxt)
 }
 
 // writeFullRewrite calculates the ipset restore input required to do a full, atomic, idempotent
 // rewrite of the IP set and writes it to the given io.Writer.
-func (s *IPSets) writeFullRewrite(ipSet *ipSet, out io.Writer, logCxt log.FieldLogger) (err error) {
+func (s *IPSets) writeFullRewrite(ipSet *IPSet, out io.Writer, logCxt log.FieldLogger) (err error) {
 	// writeLine until an error occurs, writeLine writes a line to the output, after an error,
 	// it is a no-op.
 	writeLine := func(format string, a ...interface{}) {
@@ -877,9 +787,8 @@ func (s *IPSets) writeFullRewrite(ipSet *ipSet, out io.Writer, logCxt log.FieldL
 		targetSet = tempSetName
 	}
 	// Write all the members into the target IP set.
-	ipSet.pendingReplace.Iter(func(member IPSetMember) error {
+	ipSet.deltaTracker.IterDesired(func(member IPSetMember) {
 		writeLine("add %s %s", targetSet, member)
-		return nil
 	})
 	if tempSetName != "" {
 		// Atomically swap the temporary set into place.
@@ -889,6 +798,14 @@ func (s *IPSets) writeFullRewrite(ipSet *ipSet, out io.Writer, logCxt log.FieldL
 		writeLine("destroy %s", tempSetName)
 	}
 
+	// Optimistically record that the dataplane is now in sync.
+	ipSet.deltaTracker.IterPendingUpdates(func(k IPSetMember) deltatracker.IterAction {
+		return deltatracker.IterActionUpdateDataplane
+	})
+	ipSet.deltaTracker.IterPendingDeletions(func(k IPSetMember) deltatracker.IterAction {
+		return deltatracker.IterActionUpdateDataplane
+	})
+	ipSet.needsFullRewrite = false
 	return
 }
 
@@ -912,28 +829,28 @@ func (s *IPSets) nextFreeTempIPSetName() string {
 
 // writeDeltas calculates the ipset restore input required to apply the pending adds/deletes to the
 // main IP set.
-func (s *IPSets) writeDeltas(ipSet *ipSet, out io.Writer, logCxt log.FieldLogger) (err error) {
+func (s *IPSets) writeDeltas(ipSet *IPSet, out io.Writer, logCxt log.FieldLogger) (err error) {
 	mainSetName := ipSet.MainIPSetName
-	ipSet.pendingDeletions.Iter(func(member IPSetMember) error {
+	ipSet.deltaTracker.IterPendingDeletions(func(member IPSetMember) deltatracker.IterAction {
 		logCxt.WithField("member", member).Debug("Writing del")
 		_, err = fmt.Fprintf(out, "del %s %s --exist\n", mainSetName, member)
 		if err != nil {
-			return set.StopIteration
+			return deltatracker.IterActionNoOp // FIXME stop the iteration
 		}
 		countNumIPSetLinesExecuted.Inc()
-		return nil
+		return deltatracker.IterActionUpdateDataplane
 	})
 	if err != nil {
 		return
 	}
-	ipSet.pendingAdds.Iter(func(member IPSetMember) error {
+	ipSet.deltaTracker.IterPendingUpdates(func(member IPSetMember) deltatracker.IterAction {
 		logCxt.WithField("member", member).Debug("Writing add")
 		_, err = fmt.Fprintf(out, "add %s %s\n", mainSetName, member)
 		if err != nil {
-			return set.StopIteration
+			return deltatracker.IterActionNoOp // FIXME stop the iteration
 		}
 		countNumIPSetLinesExecuted.Inc()
-		return nil
+		return deltatracker.IterActionUpdateDataplane
 	})
 	return
 }
@@ -999,21 +916,9 @@ func (s *IPSets) deleteIPSet(setName string) error {
 		if s.ipSetNeeded(ipSet.SetID) {
 			s.logCxt.Errorf("Unexpected deletion of an IP set %v that is still needed", ipSet.SetID)
 		}
-		// If we don't already have a pending complete IP set membership...
-		if ipSet.pendingReplace == nil {
-			// Reconstruct what the IP set membership should be from what was
-			// programmed, plus any pending additions, minus any pending deletions.
-			ipSet.pendingReplace = ipSet.members
-			ipSet.members = nil
-			ipSet.pendingAdds.Iter(func(m IPSetMember) error {
-				ipSet.pendingReplace.Add(m)
-				return set.RemoveItem
-			})
-			ipSet.pendingDeletions.Iter(func(m IPSetMember) error {
-				ipSet.pendingReplace.Discard(m)
-				return set.RemoveItem
-			})
-		}
+
+		// Record that the dataplane is empty.
+		ipSet.deltaTracker.DeleteAllDataplane()
 	}
 	return nil
 }

@@ -406,8 +406,15 @@ var _ = Describe("IP sets dataplane", func() {
 
 	Describe("with a persistent failure to delete a new temporary IP set", func() {
 		BeforeEach(func() {
-			// writeFullRewrite will only use a temp IP set if the main IP set exists.
+			// writeFullRewrite will only use a temp IP set if the main IP set exists
+			// and it has the wrong maxelems.
 			dataplane.IPSetMembers[v4MainIPSetName] = set.New[string]()
+			dataplane.IPSetMetadata[v4MainIPSetName] = setMetadata{
+				Name:    "v4MainIPSetName",
+				Family:  "inet",
+				Type:    "hash:ip",
+				MaxSize: 5678,
+			}
 
 			// Lay the trap: this should be the first temp IP set to get used.
 			dataplane.FailDestroyNames.Add(v4TempIPSetName0)
@@ -434,8 +441,6 @@ var _ = Describe("IP sets dataplane", func() {
 				v4TempIPSetName0, // Failed "ipset restore" deletion after successful write/swap.
 				// Resync happens here.
 				v4TempIPSetName0, // Attempted pre-update deletion.
-				// Since initial write of ip set failed, we try a full rewrite, using a new temp IP set name...
-				v4TempIPSetName1, // Deletion of new temp IP set.
 				v4TempIPSetName0, // Attempted deletion in ApplyDeletions().
 			}))
 
@@ -868,7 +873,7 @@ var _ = Describe("IP sets dataplane", func() {
 		Describe("with a write failure to the pipe when writing an IP", describeRetryTests("write-ip"))
 		Describe("with an update failure before any updates succeed", describeRetryTests("pre-update"))
 		Describe("with an update failure after updates succeed", describeRetryTests("post-update"))
-		Describe("with a couple of failures", describeRetryTests("post-update", "pre-update"))
+		Describe("with a couple of failures", describeRetryTests("pre-update", "post-update"))
 	})
 
 	Describe("with an IP set using non-canon CIDRs", func() {

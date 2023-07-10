@@ -104,3 +104,19 @@ func (s *SetDeltaTracker[K]) IterPendingUpdates(f func(k K) IterAction) {
 func (s *SetDeltaTracker[K]) IterPendingDeletions(f func(k K) IterAction) {
 	s.dt.IterPendingDeletions(f)
 }
+
+func (s *SetDeltaTracker[K]) InSync() bool {
+	return s.NumPendingDeletions() == 0 && s.NumPendingUpdates() == 0
+}
+
+func (s *SetDeltaTracker[K]) NumPendingUpdates() int {
+	return len(s.dt.desiredUpdates)
+}
+
+func (s *SetDeltaTracker[K]) NumPendingDeletions() int {
+	return len(s.dt.inDataplaneNotDesired)
+}
+
+func (s *SetDeltaTracker[K]) DeleteAllDataplane() {
+	s.dt.DeleteAllDataplane()
+}

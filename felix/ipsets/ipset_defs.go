@@ -21,6 +21,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/projectcalico/calico/felix/deltatracker"
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 
@@ -28,7 +29,6 @@ import (
 
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/labelindex"
-	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 var (
@@ -226,43 +226,22 @@ type IPSetMetadata struct {
 	MaxSize int
 }
 
-// ipSet holds the state for a particular IP set.
-type ipSet struct {
+// IPSet holds the state for a particular IP set.
+type IPSet struct {
 	IPSetMetadata
 
 	MainIPSetName string
 
-	// members either contains the members that we've programmed or is nil, indicating that
-	// we're out of sync.
-	members set.Set[IPSetMember]
-
-	// pendingReplace is either nil to indicate that there is no pending replace or a set
-	// containing all the entries that we want to write.
-	pendingReplace set.Set[IPSetMember]
-	// pendingAdds contains members that are queued up to add to the IP set.  If pendingReplace
-	// is non-nil then pendingAdds is empty (and we add members directly to pendingReplace
-	// instead).
-	pendingAdds set.Set[IPSetMember]
-	// pendingDeletions contains members that are queued up for deletion.  If pendingReplace
-	// is non-nil then pendingDeletions is empty (and we delete members directly from
-	// pendingReplace instead).
-	pendingDeletions set.Set[IPSetMember]
+	needsFullRewrite bool
+	deltaTracker     *deltatracker.SetDeltaTracker[IPSetMember]
 }
 
-func (s ipSet) EstimateNumUpdateLines() int {
-	if s.pendingReplace != nil {
-		numMembers := s.pendingReplace.Len()
-		const staticLines = 3 // create temp IP set, swap it into place, delete it.
-		return numMembers + staticLines
-	}
-	lines := 0
-	if s.pendingAdds != nil {
-		lines += s.pendingAdds.Len()
-	}
-	if s.pendingDeletions != nil {
-		lines += s.pendingDeletions.Len()
-	}
-	return lines
+func (s *IPSet) EstimateNumUpdateLines() int {
+	return s.deltaTracker.NumPendingUpdates()
+}
+
+func (s *IPSet) Dirty() bool {
+	return s.needsFullRewrite || !s.deltaTracker.InSync()
 }
 
 // IPVersionConfig wraps up the metadata for a particular IP version.  It can be used by

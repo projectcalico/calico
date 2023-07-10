@@ -713,6 +713,9 @@ func (c *listCmd) main() {
 			fmt.Fprint(c.Stdout, "\n")
 		}
 		fmt.Fprintf(c.Stdout, "Name: %s\n", setName)
+		if meta, ok := c.Dataplane.IPSetMetadata[setName]; ok {
+			fmt.Fprintf(c.Stdout, "Header: family %s hashsize 1024 maxelem %d\n", meta.Type, meta.MaxSize)
+		}
 		fmt.Fprint(c.Stdout, "Field: foobar\n") // Dummy field, should get ignored.
 		fmt.Fprint(c.Stdout, "Members:\n")
 		members.Iter(func(member string) error {
