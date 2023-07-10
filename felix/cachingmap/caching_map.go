@@ -40,10 +40,12 @@ type DataplaneMap[K comparable, V comparable] interface {
 // with IterDataplane and GetDataplane.
 type CachingMap[K comparable, V comparable] struct {
 	// dpMap is the backing map in the dataplane
-	dpMap        DataplaneMap[K, V]
-	name         string
+	dpMap DataplaneMap[K, V]
+	name  string
+
 	deltaTracker *deltatracker.DeltaTracker[K, V]
-	cacheLoaded  bool
+
+	cacheLoaded bool
 }
 
 func New[K comparable, V comparable](name string, dpMap DataplaneMap[K, V]) *CachingMap[K, V] {
@@ -70,39 +72,31 @@ func (c *CachingMap[K, V]) LoadCacheFromDataplane() error {
 		logrus.WithError(err).WithField("name", c.name).Warn("Failed to load cache of dataplane map")
 		return err
 	}
-	c.deltaTracker.ReplaceDataplaneCacheFromMap(dp)
+	c.deltaTracker.Dataplane().ReplaceAllMap(dp)
 	c.cacheLoaded = true
 	return nil
 }
 
-// SetDesired sets the desired state of the given key to the given value. This is an in-memory operation,
-// it doesn't actually touch the dataplane.
-func (c *CachingMap[K, V]) SetDesired(k K, v V) {
-	c.deltaTracker.SetDesired(k, v)
+type ReadOnlyMap[K comparable, V any] interface {
+	Get(k K) (v V, exists bool)
+	Iter(func(k K, v V))
 }
 
-// DeleteDesired deletes the given key from the desired state of the dataplane. This is an in-memory operation,
-// it doesn't actually touch the dataplane.
-func (c *CachingMap[K, V]) DeleteDesired(k K) {
-	c.deltaTracker.DeleteDesired(k)
+type ReadWriteMap[K comparable, V any] interface {
+	ReadOnlyMap[K, V]
+	Set(k K, v V)
+	Delete(k K)
+	DeleteAll()
 }
 
-// DeleteAllDesired deletes all entries from the in-memory desired state of the map.  It doesn't actually touch
-// the dataplane.
-func (c *CachingMap[K, V]) DeleteAllDesired() {
-	c.deltaTracker.DeleteAllDesired()
+func (c *CachingMap[K, V]) Desired() ReadWriteMap[K, V] {
+	// Pass through to the delta tracker.
+	return c.deltaTracker.Desired()
 }
 
-// IterDataplane iterates over the cache of the dataplane. The cache must have previously been loaded with
-// a successful call to LoadCacheFromDataplane() or one of the ApplyXXX methods.
-func (c *CachingMap[K, V]) IterDataplane(f func(k K, v V)) {
-	c.deltaTracker.IterDataplane(f)
-}
-
-// GetDataplane gets a single value from the cache of the dataplane. The cache must have previously been
-// loaded with a successful call to LoadCacheFromDataplane() or one of the ApplyXXX methods.
-func (c *CachingMap[K, V]) GetDataplane(k K) (V, bool) {
-	return c.deltaTracker.GetDataplane(k)
+func (c *CachingMap[K, V]) Dataplane() ReadOnlyMap[K, V] {
+	// Pass through to the delta tracker.
+	return c.deltaTracker.Dataplane()
 }
 
 // ApplyAllChanges attempts to bring the dataplane map into sync with the desired state.

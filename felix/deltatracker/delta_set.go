@@ -34,73 +34,95 @@ package deltatracker
 // set but not in the dataplane set (or that have a different value in the
 // desired set vs the dataplane set). "Pending deletions" contains keys that are
 // in the dataplane set but not in the desired set.
-type SetDeltaTracker[K comparable] struct {
-	dt *DeltaTracker[K, struct{}]
-}
+type SetDeltaTracker[K comparable] DeltaTracker[K, struct{}]
 
 func NewSetDeltaTracker[K comparable]() *SetDeltaTracker[K] {
 	dt := New[K, struct{}](WithValuesEqualFn[K, struct{}](func(a, b struct{}) bool {
 		return true // empty struct always equals itself.
 	}))
-	return &SetDeltaTracker[K]{dt: dt}
+	return (*SetDeltaTracker[K])(dt)
 }
 
-func (s *SetDeltaTracker[K]) AddDesired(k K) {
-	s.dt.SetDesired(k, struct{}{})
+type DesiredSetView[K comparable] DesiredView[K, struct{}]
+
+func (s *SetDeltaTracker[K]) Desired() *DesiredSetView[K] {
+	mapDT := (*DeltaTracker[K, struct{}])(s)
+	return (*DesiredSetView[K])(mapDT.Desired())
 }
 
-func (s *SetDeltaTracker[K]) ContainsDesired(k K) bool {
-	_, exists := s.dt.GetDesired(k)
+func (s *DesiredSetView[K]) Add(k K) {
+	s.asMapView().Set(k, struct{}{})
+}
+
+func (s *DesiredSetView[K]) Contains(k K) bool {
+	_, exists := s.asMapView().Get(k)
 	return exists
 }
 
-func (s *SetDeltaTracker[K]) DeleteDesired(k K) {
-	s.dt.DeleteDesired(k)
+func (s *DesiredSetView[K]) Delete(k K) {
+	s.asMapView().Delete(k)
 }
 
-func (s *SetDeltaTracker[K]) DeleteAllDesired() {
-	s.dt.DeleteAllDesired()
+func (s *DesiredSetView[K]) DeleteAll() {
+	s.asMapView().DeleteAll()
 }
 
-func (s *SetDeltaTracker[K]) IterDesired(f func(k K)) {
-	s.dt.IterDesired(func(k K, _ struct{}) {
+func (s *DesiredSetView[K]) Iter(f func(k K)) {
+	s.asMapView().Iter(func(k K, _ struct{}) {
 		f(k)
 	})
 }
 
-func (s *SetDeltaTracker[K]) ReplaceDataplaneCacheFromIter(iter func(func(k K)) error) error {
-	return s.dt.ReplaceDataplaneCacheFromIter(func(f func(k K, v struct{})) error {
+func (s *DesiredSetView[K]) asMapView() *DesiredView[K, struct{}] {
+	return (*DesiredView[K, struct{}])(s)
+}
+
+type DataplaneSetView[K comparable] DesiredView[K, struct{}]
+
+func (s *SetDeltaTracker[K]) Dataplane() *DataplaneSetView[K] {
+	mapDT := (*DeltaTracker[K, struct{}])(s)
+	return (*DataplaneSetView[K])(mapDT.Dataplane())
+}
+
+func (s *DataplaneSetView[K]) ReplaceFromIter(iter func(func(k K)) error) error {
+	return s.asMapView().ReplaceAllIter(func(f func(k K, v struct{})) error {
 		return iter(func(k K) {
 			f(k, struct{}{})
 		})
 	})
 }
 
-func (s *SetDeltaTracker[K]) AddDataplane(k K) {
-	s.dt.SetDataplane(k, struct{}{})
+func (s *DataplaneSetView[K]) Add(k K) {
+	s.asMapView().Set(k, struct{}{})
 }
 
-func (s *SetDeltaTracker[K]) DeleteDataplane(k K) {
-	s.dt.DeleteDataplane(k)
+func (s *DataplaneSetView[K]) Delete(k K) {
+	s.asMapView().Delete(k)
 }
 
-func (s *SetDeltaTracker[K]) ContainsDataplane(k K) bool {
-	_, exists := s.dt.GetDataplane(k)
+func (s *DataplaneSetView[K]) Contains(k K) bool {
+	_, exists := s.asMapView().Get(k)
 	return exists
 }
 
-func (s *SetDeltaTracker[K]) IterDataplane(f func(k K)) {
-	s.dt.IterDataplane(func(k K, v struct{}) {
+func (s *DataplaneSetView[K]) Iter(f func(k K)) {
+	s.asMapView().Iter(func(k K, v struct{}) {
 		f(k)
 	})
 }
 
+func (s *DataplaneSetView[K]) asMapView() *DataplaneView[K, struct{}] {
+	return (*DataplaneView[K, struct{}])(s)
+}
+
 func (s *SetDeltaTracker[K]) IterPendingUpdates(f func(k K) IterAction) {
-	s.dt.IterPendingUpdates(func(k K, v struct{}) IterAction {
+	mapDT := (*DeltaTracker[K, struct{}])(s)
+	mapDT.IterPendingUpdates(func(k K, v struct{}) IterAction {
 		return f(k)
 	})
 }
 
 func (s *SetDeltaTracker[K]) IterPendingDeletions(f func(k K) IterAction) {
-	s.dt.IterPendingDeletions(f)
+	mapDT := (*DeltaTracker[K, struct{}])(s)
+	mapDT.IterPendingDeletions(f)
 }
