@@ -277,7 +277,7 @@ func (s *Syncer) startupBuildPrev(state DPSyncerState) error {
 
 	// Walk the frontend bpf map that was read into memory and match it against the
 	// references build from the state
-	s.bpfSvcs.IterDataplaneCache(func(svck nat.FrontendKey, svcv nat.FrontendValue) {
+	s.bpfSvcs.Dataplane().Iter(func(svck nat.FrontendKey, svcv nat.FrontendValue) {
 		xref, ok := svcRef[svck]
 		if !ok {
 			return
@@ -313,7 +313,7 @@ func (s *Syncer) startupBuildPrev(state DPSyncerState) error {
 		}
 		for i := 0; i < count; i++ {
 			epk := nat.NewNATBackendKey(id, uint32(i))
-			ep, ok := s.bpfEps.GetDataplaneCache(epk)
+			ep, ok := s.bpfEps.Dataplane().Get(epk)
 			if !ok {
 				log.Warnf("inconsistent backed map, missing ep %s", epk)
 				inconsistent = true
@@ -539,8 +539,8 @@ func (s *Syncer) apply(state DPSyncerState) error {
 
 	// Start with a completely empty slate (in memory).  We'll then repopulate both maps from scratch and
 	// let CachingMap calculate deltas...
-	s.bpfSvcs.DeleteAllDesired()
-	s.bpfEps.DeleteAllDesired()
+	s.bpfSvcs.Desired().DeleteAll()
+	s.bpfEps.Desired().DeleteAll()
 
 	// insert or update existing services
 	for sname, sinfo := range state.SvcMap {
@@ -772,7 +772,7 @@ func (s *Syncer) writeSvcBackend(svcID uint32, idx uint32, ep k8sp.Endpoint) err
 		return errors.Errorf("no port for endpoint %q: %s", ep, err)
 	}
 	val := nat.NewNATBackendValue(ip, uint16(tgtPort))
-	s.bpfEps.SetDesired(key, val)
+	s.bpfEps.Desired().Set(key, val)
 
 	if s.stickyEps[svcID] != nil {
 		s.stickyEps[svcID][val] = struct{}{}
@@ -837,14 +837,14 @@ func (s *Syncer) writeLBSrcRangeSvcNATKeys(svc k8sp.ServicePort, svcID uint32, c
 		if log.GetLevel() >= log.DebugLevel {
 			log.Debugf("bpf map writing %s:%s", key, val)
 		}
-		s.bpfSvcs.SetDesired(key, val)
+		s.bpfSvcs.Desired().Set(key, val)
 	}
 	key, err = getSvcNATKey(svc)
 	if err != nil {
 		return err
 	}
 	val = nat.NewNATValue(svcID, nat.BlackHoleCount, uint32(0), uint32(0))
-	s.bpfSvcs.SetDesired(key, val)
+	s.bpfSvcs.Desired().Set(key, val)
 	return nil
 }
 
@@ -864,7 +864,7 @@ func (s *Syncer) writeSvc(svc k8sp.ServicePort, svcID uint32, count, local int, 
 	if log.GetLevel() >= log.DebugLevel {
 		log.Debugf("bpf map writing %s:%s", key, val)
 	}
-	s.bpfSvcs.SetDesired(key, val)
+	s.bpfSvcs.Desired().Set(key, val)
 
 	var affkey nat.FrontEndAffinityKey
 	copy(affkey[:], key.Affinitykey())
