@@ -143,7 +143,7 @@ func (s *IPSets) AddOrReplaceIPSet(setMetadata IPSetMetadata, members []string) 
 		if ipSet.IPSetMetadata != setMetadata {
 			ipSet.needsFullRewrite = true
 		}
-		ipSet.deltaTracker.DeleteAllDesired()
+		ipSet.deltaTracker.Desired().DeleteAll()
 	} else {
 		// Create the IP set struct and store it off.
 		ipSet = &IPSet{
@@ -153,7 +153,7 @@ func (s *IPSets) AddOrReplaceIPSet(setMetadata IPSetMetadata, members []string) 
 		}
 	}
 	canonMembers.Iter(func(item IPSetMember) error {
-		ipSet.deltaTracker.AddDesired(item)
+		ipSet.deltaTracker.Desired().Add(item)
 		return nil
 	})
 	s.ipSetIDToIPSet[setID] = ipSet
@@ -191,7 +191,7 @@ func (s *IPSets) AddMembers(setID string, newMembers []string) {
 		"filteredMembers": canonMembers,
 	}).Debug("Adding new members to IP set")
 	canonMembers.Iter(func(item IPSetMember) error {
-		ipSet.deltaTracker.AddDesired(item)
+		ipSet.deltaTracker.Desired().Add(item)
 		return nil
 	})
 	if !ipSet.deltaTracker.InSync() {
@@ -217,7 +217,7 @@ func (s *IPSets) RemoveMembers(setID string, removedMembers []string) {
 	}).Debug("Removing members from IP set")
 
 	canonMembers.Iter(func(item IPSetMember) error {
-		ipSet.deltaTracker.DeleteDesired(item)
+		ipSet.deltaTracker.Desired().Delete(item)
 		return nil
 	})
 	if ipSet.Dirty() {
@@ -276,7 +276,7 @@ func (s *IPSets) GetMembers(setID string) (set.Set[string], error) {
 		return nil, fmt.Errorf("ipset %s not found", setID)
 	}
 	strs := set.New[string]()
-	ipSet.deltaTracker.IterDesired(func(k IPSetMember) {
+	ipSet.deltaTracker.Desired().Iter(func(k IPSetMember) {
 		strs.Add(k.String())
 	})
 	return strs, nil
@@ -450,7 +450,7 @@ func (s *IPSets) tryResync() (err error) {
 
 			// One of our IP sets; we need to load its members and compare them.
 			logCxt = s.logCxt.WithField("setID", ipSet.SetID)
-			err = ipSet.deltaTracker.ReplaceDataplaneCacheFromIter(func(f func(k IPSetMember)) error {
+			err = ipSet.deltaTracker.Dataplane().ReplaceFromIter(func(f func(k IPSetMember)) error {
 				for scanner.Scan() {
 					line := scanner.Text()
 					if line == "" {
@@ -787,7 +787,7 @@ func (s *IPSets) writeFullRewrite(ipSet *IPSet, out io.Writer, logCxt log.FieldL
 		targetSet = tempSetName
 	}
 	// Write all the members into the target IP set.
-	ipSet.deltaTracker.IterDesired(func(member IPSetMember) {
+	ipSet.deltaTracker.Desired().Iter(func(member IPSetMember) {
 		writeLine("add %s %s", targetSet, member)
 	})
 	if tempSetName != "" {
@@ -918,7 +918,7 @@ func (s *IPSets) deleteIPSet(setName string) error {
 		}
 
 		// Record that the dataplane is empty.
-		ipSet.deltaTracker.DeleteAllDataplane()
+		ipSet.deltaTracker.Dataplane().DeleteAll()
 	}
 	return nil
 }

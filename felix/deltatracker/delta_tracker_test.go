@@ -33,11 +33,11 @@ func init() {
 // TestDeltaTracker_Empty verifies loading of an empty map with no changes queued.
 func TestDeltaTracker_Empty(t *testing.T) {
 	dt := setupDeltaTrackerTest(t)
-	dt.IterDesired(func(k string, v string) {
-		t.Errorf("IterDesired unexpectedly called func with %v, %v", k, v)
+	dt.Desired().Iter(func(k string, v string) {
+		t.Errorf("Iter unexpectedly called func with %v, %v", k, v)
 	})
-	dt.IterDataplane(func(k string, v string) {
-		t.Errorf("IterDesired unexpectedly called func with %v, %v", k, v)
+	dt.Dataplane().Iter(func(k string, v string) {
+		t.Errorf("Iter unexpectedly called func with %v, %v", k, v)
 	})
 	dt.IterPendingUpdates(func(k string, v string) IterAction {
 		t.Errorf("IterPendingUpdates unexpectedly called func with %v, %v", k, v)
@@ -52,7 +52,7 @@ func TestDeltaTracker_Empty(t *testing.T) {
 // TestDeltaTracker_CleanUp verifies cleaning up of a whole map.
 func TestDeltaTracker_CleanUp(t *testing.T) {
 	dt := setupDeltaTrackerTest(t)
-	err := dt.ReplaceDataplaneCacheFromIter(mapIter(map[string]string{
+	err := dt.Dataplane().ReplaceAllIter(mapIter(map[string]string{
 		"1": "A1",
 		"2": "B1",
 	}))
@@ -67,9 +67,9 @@ func TestDeltaTracker_CleanUp(t *testing.T) {
 func pendingDeletions(dt *DeltaTracker[string, string], action IterAction) map[string]string {
 	result := map[string]string{}
 	dt.IterPendingDeletions(func(k string) IterAction {
-		v, ok := dt.GetDataplane(k)
+		v, ok := dt.Dataplane().Get(k)
 		if !ok {
-			panic(fmt.Sprintf("IterPendingDeletions iterated over key that wasn't returned by GetDataplane: %v", k))
+			panic(fmt.Sprintf("IterPendingDeletions iterated over key that wasn't returned by Get: %v", k))
 		}
 		result[k] = v
 		return action
@@ -88,7 +88,7 @@ func pendingUpdates(dt *DeltaTracker[string, string], action IterAction) map[str
 
 func allDesired(dt *DeltaTracker[string, string]) map[string]string {
 	result := map[string]string{}
-	dt.IterDesired(func(k string, v string) {
+	dt.Desired().Iter(func(k string, v string) {
 		result[k] = v
 	})
 	return result
@@ -96,7 +96,7 @@ func allDesired(dt *DeltaTracker[string, string]) map[string]string {
 
 func allDataplane(dt *DeltaTracker[string, string]) map[string]string {
 	result := map[string]string{}
-	dt.IterDataplane(func(k string, v string) {
+	dt.Dataplane().Iter(func(k string, v string) {
 		result[k] = v
 	})
 	return result
@@ -113,66 +113,82 @@ func mapIter(m map[string]string) func(func(k string, v string)) error {
 
 func TestDeltaTracker_GetDesired(t *testing.T) {
 	dt := setupDeltaTrackerTest(t)
-	dt.SetDesired("1", "A1")
-	if v, ok := dt.GetDesired("1"); !ok {
+
+	// Empty dataplane, set followed by get should return what we just set!
+	dt.Desired().Set("1", "A1")
+	if v, ok := dt.Desired().Get("1"); !ok {
 		t.Errorf("DeltaTracker failed to get desired key that we just set")
 	} else if v != "A1" {
 		t.Errorf("DeltaTracker returned incorrect value: %q", v)
 	}
 
-	// Delete it again.
-	dt.DeleteDesired("1")
-	if _, ok := dt.GetDesired("1"); ok {
-		t.Fatal("DeleteDesired had no effect?")
+	// Delete it again.  Should no longer be returned.
+	dt.Desired().Delete("1")
+	if _, ok := dt.Desired().Get("1"); ok {
+		t.Fatal("Delete had no effect?")
 	}
 
-	// Recreate...
-	dt.SetDesired("1", "A1")
-	if v, ok := dt.GetDesired("1"); !ok {
+	// Recreate, so we can test adding the value to the dataplane.
+	dt.Desired().Set("1", "A1")
+	if v, ok := dt.Desired().Get("1"); !ok {
 		t.Errorf("DeltaTracker failed to get desired key that we just set")
 	} else if v != "A1" {
 		t.Errorf("DeltaTracker returned incorrect value: %q", v)
 	}
 
-	// Make sure we get the desired value even if the key is also in the dataplane.
-	dt.SetDataplane("1", "A1")
-	if v, ok := dt.GetDesired("1"); !ok {
+	// Adding to the dataplane shouldn't affect the desired state.
+	dt.Dataplane().Set("1", "A1")
+	if v, ok := dt.Desired().Get("1"); !ok {
 		t.Errorf("DeltaTracker failed to get desired key once it was also in DP")
 	} else if v != "A1" {
 		t.Errorf("DeltaTracker returned incorrect value once it was also in DP: %q", v)
 	}
 
-	// Delete it again.
-	dt.DeleteDesired("1")
-	if _, ok := dt.GetDesired("1"); ok {
-		t.Fatal("DeleteDesired had no effect?")
+	// Delete the desired while the value is in the dataplane.  Again, should be independent
+	// of whether it's in the dataplane.
+	dt.Desired().Delete("1")
+	if _, ok := dt.Desired().Get("1"); ok {
+		t.Fatal("Delete had no effect?")
 	}
 
-	// Recreate...
-	dt.SetDesired("1", "A1")
-	if v, ok := dt.GetDesired("1"); !ok {
+	// Recreate the desired key while it is in the dataplane.
+	dt.Desired().Set("1", "A1")
+	if v, ok := dt.Desired().Get("1"); !ok {
 		t.Errorf("DeltaTracker failed to get desired key that we just recreated")
 	} else if v != "A1" {
 		t.Errorf("DeltaTracker returned incorrect value: %q", v)
 	}
 
-	// Make sure we still get the value even if it agrees with dataplane.
-	dt.SetDataplane("1", "A1")
-	if v, ok := dt.GetDesired("1"); !ok {
-		t.Errorf("DeltaTracker failed to get desired key once it matched in DP")
+	// Delete from dataplane while the key is in the desired map, should not impact desired.
+	dt.Dataplane().Delete("1")
+	if v, ok := dt.Desired().Get("1"); !ok {
+		t.Errorf("DeltaTracker failed to get desired after deleting from DP")
 	} else if v != "A1" {
-		t.Errorf("DeltaTracker returned incorrect value once it matched in DP: %q", v)
+		t.Errorf("DeltaTracker returned incorrect value after deleting from DP: %q", v)
+	}
+
+	// Adding a different value to the dataplane shouldn't affact desired.
+	dt.Dataplane().Set("1", "A2")
+	if v, ok := dt.Desired().Get("1"); !ok {
+		t.Errorf("DeltaTracker failed to get desired key with different value in DP")
+	} else if v != "A1" {
+		t.Errorf("DeltaTracker returned incorrect value with different value in DP: %q", v)
 	}
 
 	// Delete it again.
-	dt.DeleteDesired("1")
-	if _, ok := dt.GetDesired("1"); ok {
-		t.Fatal("DeleteDesired had no effect?")
+	dt.Desired().Delete("1")
+	if _, ok := dt.Desired().Get("1"); ok {
+		t.Fatal("Delete had no effect?")
+	}
+	if v, ok := dt.Dataplane().Get("1"); !ok {
+		t.Fatal("Delete removed dataplane key")
+	} else if v != "A2" {
+		t.Fatal("Delete changed dataplane key")
 	}
 
-	// Recreate...
-	dt.SetDesired("1", "A1")
-	if v, ok := dt.GetDesired("1"); !ok {
+	// Recreate while there's a different dataplane key...
+	dt.Desired().Set("1", "A1")
+	if v, ok := dt.Desired().Get("1"); !ok {
 		t.Errorf("DeltaTracker failed to get desired key that we just recreated")
 	} else if v != "A1" {
 		t.Errorf("DeltaTracker returned incorrect value: %q", v)
@@ -182,9 +198,9 @@ func TestDeltaTracker_GetDesired(t *testing.T) {
 func TestDeltaTracker_DeleteAll(t *testing.T) {
 	dt := setupDeltaTrackerTest(t)
 
-	dt.SetDesired("1", "A1") // Same value for existing key.
-	dt.SetDesired("2", "B1") // New value for existing key.
-	dt.SetDesired("4", "D1") // New K/V
+	dt.Desired().Set("1", "A1") // Same value for existing key.
+	dt.Desired().Set("2", "B1") // New value for existing key.
+	dt.Desired().Set("4", "D1") // New K/V
 	Expect(pendingUpdates(dt, IterActionNoOp)).To(Equal(map[string]string{
 		"1": "A1",
 		"2": "B1",
@@ -192,7 +208,7 @@ func TestDeltaTracker_DeleteAll(t *testing.T) {
 	}))
 	Expect(pendingDeletions(dt, IterActionNoOp)).To(BeEmpty())
 
-	dt.DeleteAllDesired()
+	dt.Desired().DeleteAll()
 
 	Expect(pendingUpdates(dt, IterActionNoOp)).To(BeEmpty())
 	Expect(pendingDeletions(dt, IterActionNoOp)).To(BeEmpty())
@@ -209,7 +225,7 @@ func ExampleDeltaTracker_resync() {
 		"two": 2,
 	}
 	for k, v := range desired {
-		dt.SetDesired(k, v)
+		dt.Desired().Set(k, v)
 	}
 	fmt.Printf("Desired state: %v\n", desired)
 
@@ -219,7 +235,7 @@ func ExampleDeltaTracker_resync() {
 		"three": 3,
 	}
 	fmt.Printf("Initial dataplane state: %v\n", mockDataplane)
-	_ = dt.ReplaceDataplaneCacheFromIter(func(f func(k string, v int)) error {
+	_ = dt.Dataplane().ReplaceAllIter(func(f func(k string, v int)) error {
 		// Replace this with the actual dataplane loading logic.
 		for k, v := range mockDataplane {
 			f(k, v)
@@ -256,9 +272,9 @@ func ExampleDeltaTracker_resync() {
 func TestDeltaTracker_UpdateThenReplaceDataplaneCacheFromIter(t *testing.T) {
 	dt := setupDeltaTrackerTest(t)
 
-	dt.SetDesired("1", "A1") // Same value for existing key.
-	dt.SetDesired("2", "B1") // New value for existing key.
-	dt.SetDesired("4", "D1") // New K/V
+	dt.Desired().Set("1", "A1") // Same value for existing key.
+	dt.Desired().Set("2", "B1") // New value for existing key.
+	dt.Desired().Set("4", "D1") // New K/V
 	Expect(pendingUpdates(dt, IterActionNoOp)).To(Equal(map[string]string{
 		"1": "A1",
 		"2": "B1",
@@ -272,7 +288,7 @@ func TestDeltaTracker_UpdateThenReplaceDataplaneCacheFromIter(t *testing.T) {
 		"2": "B2",
 		"3": "C1",
 	}
-	err := dt.ReplaceDataplaneCacheFromIter(mapIter(dpContents))
+	err := dt.Dataplane().ReplaceAllIter(mapIter(dpContents))
 	Expect(err).NotTo(HaveOccurred())
 	Expect(pendingUpdates(dt, IterActionNoOp)).To(Equal(map[string]string{
 		"2": "B1",
@@ -288,7 +304,7 @@ func TestDeltaTracker_UpdateThenReplaceDataplaneCacheFromIter(t *testing.T) {
 		"2": "B2",
 		"5": "E1",
 	}
-	err = dt.ReplaceDataplaneCacheFromIter(mapIter(dpContents))
+	err = dt.Dataplane().ReplaceAllIter(mapIter(dpContents))
 	Expect(err).NotTo(HaveOccurred())
 	Expect(pendingUpdates(dt, IterActionNoOp)).To(Equal(map[string]string{
 		"1": "A1",
@@ -308,12 +324,12 @@ func TestDeltaTracker_ReplaceDataplaneCacheFromIterThenUpdate(t *testing.T) {
 		"2": "B2",
 		"3": "C1",
 	}
-	err := dt.ReplaceDataplaneCacheFromIter(mapIter(dpContents))
+	err := dt.Dataplane().ReplaceAllIter(mapIter(dpContents))
 	Expect(err).NotTo(HaveOccurred())
 
-	dt.SetDesired("1", "A1") // Same value for existing key.
-	dt.SetDesired("2", "B1") // New value for existing key.
-	dt.SetDesired("4", "D1") // New K/V
+	dt.Desired().Set("1", "A1") // Same value for existing key.
+	dt.Desired().Set("2", "B1") // New value for existing key.
+	dt.Desired().Set("4", "D1") // New K/V
 
 	Expect(pendingUpdates(dt, IterActionNoOp)).To(Equal(map[string]string{
 		"2": "B1",
@@ -324,7 +340,7 @@ func TestDeltaTracker_ReplaceDataplaneCacheFromIterThenUpdate(t *testing.T) {
 	}))
 
 	// Make expected updates to dataplane, should update the pending sets accordingly.
-	dt.SetDataplane("2", "B1")
+	dt.Dataplane().Set("2", "B1")
 	Expect(pendingUpdates(dt, IterActionNoOp)).To(Equal(map[string]string{
 		"4": "D1",
 	}))
@@ -332,19 +348,19 @@ func TestDeltaTracker_ReplaceDataplaneCacheFromIterThenUpdate(t *testing.T) {
 		"3": "C1",
 	}))
 
-	dt.SetDataplane("4", "D1")
+	dt.Dataplane().Set("4", "D1")
 	Expect(pendingUpdates(dt, IterActionNoOp)).To(BeEmpty())
 	Expect(pendingDeletions(dt, IterActionNoOp)).To(Equal(map[string]string{
 		"3": "C1",
 	}))
 
-	dt.DeleteDataplane("3")
+	dt.Dataplane().Delete("3")
 	Expect(pendingUpdates(dt, IterActionNoOp)).To(BeEmpty())
 	Expect(pendingDeletions(dt, IterActionNoOp)).To(BeEmpty())
 
 	// Disrupt a desired key, add a key that shouldn't be there.
-	dt.SetDataplane("1", "A2")
-	dt.SetDataplane("3", "C3")
+	dt.Dataplane().Set("1", "A2")
+	dt.Dataplane().Set("3", "C3")
 	Expect(pendingUpdates(dt, IterActionNoOp)).To(Equal(map[string]string{
 		"1": "A1",
 	}))
@@ -353,7 +369,7 @@ func TestDeltaTracker_ReplaceDataplaneCacheFromIterThenUpdate(t *testing.T) {
 	}))
 
 	// Delete a key that was in sync.
-	dt.DeleteDataplane("2")
+	dt.Dataplane().Delete("2")
 	Expect(pendingUpdates(dt, IterActionNoOp)).To(Equal(map[string]string{
 		"1": "A1",
 		"2": "B1",
@@ -366,15 +382,15 @@ func TestDeltaTracker_ReplaceDataplaneCacheFromIterThenUpdate(t *testing.T) {
 func TestDeltaTracker_IterPendingActions(t *testing.T) {
 	dt := setupDeltaTrackerTest(t)
 
-	dt.SetDesired("1", "A1") // Same value for existing key.
-	dt.SetDesired("2", "B1") // New value for existing key.
-	dt.SetDesired("4", "D1") // New K/V
+	dt.Desired().Set("1", "A1") // Same value for existing key.
+	dt.Desired().Set("2", "B1") // New value for existing key.
+	dt.Desired().Set("4", "D1") // New K/V
 	dpContents := map[string]string{
 		"1": "A1",
 		"2": "B2",
 		"3": "C1",
 	}
-	err := dt.ReplaceDataplaneCacheFromIter(mapIter(dpContents))
+	err := dt.Dataplane().ReplaceAllIter(mapIter(dpContents))
 	Expect(err).NotTo(HaveOccurred())
 
 	// Loop to check IterActionNoOp really is a no-op
@@ -414,22 +430,22 @@ func TestDeltaTracker_IterPendingActions(t *testing.T) {
 }
 
 // TestDeltaTracker_ReplaceDataplaneCacheFromIterErrors tests error handling of
-// ReplaceDataplaneCacheFromIter.
+// ReplaceAllIter.
 func TestDeltaTracker_ReplaceDataplaneCacheFromIterErrors(t *testing.T) {
 	dt := setupDeltaTrackerTest(t)
 
 	// Set up our usual 3 keys...
-	dt.SetDesired("1", "A1") // Same value for existing key.
-	dt.SetDesired("2", "B1") // New value for existing key.
-	dt.SetDesired("4", "D1") // New K/V
+	dt.Desired().Set("1", "A1") // Same value for existing key.
+	dt.Desired().Set("2", "B1") // New value for existing key.
+	dt.Desired().Set("4", "D1") // New K/V
 
 	// Do a dataplane resync but fail after 2 keys have been produced.
-	err := dt.ReplaceDataplaneCacheFromIter(func(f func(k string, v string)) error {
+	err := dt.Dataplane().ReplaceAllIter(func(f func(k string, v string)) error {
 		f("3", "C1")
 		f("2", "B2")
 		return fmt.Errorf("dummy error")
 	})
-	Expect(err).To(HaveOccurred(), "ReplaceDataplaneCacheFromIter should propagate errors")
+	Expect(err).To(HaveOccurred(), "ReplaceAllIter should propagate errors")
 
 	Expect(allDesired(dt)).To(Equal(map[string]string{
 		"1": "A1",
@@ -451,12 +467,12 @@ func TestDeltaTracker_ReplaceDataplaneCacheFromIterErrors(t *testing.T) {
 
 	// Do another failed resync but this time we emit a key that matches the desired
 	// and one that is in the pending deletions.
-	err = dt.ReplaceDataplaneCacheFromIter(func(f func(k string, v string)) error {
+	err = dt.Dataplane().ReplaceAllIter(func(f func(k string, v string)) error {
 		f("1", "A1")
 		f("3", "C1")
 		return fmt.Errorf("dummy error")
 	})
-	Expect(err).To(HaveOccurred(), "ReplaceDataplaneCacheFromIter should propagate errors")
+	Expect(err).To(HaveOccurred(), "ReplaceAllIter should propagate errors")
 	Expect(allDesired(dt)).To(Equal(map[string]string{
 		"1": "A1",
 		"2": "B1",
@@ -481,7 +497,7 @@ func TestDeltaTracker_ReplaceDataplaneCacheFromIterErrors(t *testing.T) {
 		"2": "B2",
 		"3": "C1",
 	}
-	err = dt.ReplaceDataplaneCacheFromIter(mapIter(dpContents))
+	err = dt.Dataplane().ReplaceAllIter(mapIter(dpContents))
 	Expect(err).NotTo(HaveOccurred())
 	Expect(allDesired(dt)).To(Equal(map[string]string{
 		"1": "A1",
@@ -505,9 +521,9 @@ func TestDeltaTracker_ReplaceDataplaneCacheFromIterErrors(t *testing.T) {
 func TestDeltaTracker_IterDesired(t *testing.T) {
 	dt := setupDeltaTrackerTest(t)
 
-	dt.SetDesired("1", "A1") // Same value for existing key.
-	dt.SetDesired("2", "B1") // New value for existing key.
-	dt.SetDesired("4", "D1") // New K/V
+	dt.Desired().Set("1", "A1") // Same value for existing key.
+	dt.Desired().Set("2", "B1") // New value for existing key.
+	dt.Desired().Set("4", "D1") // New K/V
 	Expect(allDesired(dt)).To(Equal(map[string]string{
 		"1": "A1",
 		"2": "B1",
@@ -519,7 +535,7 @@ func TestDeltaTracker_IterDesired(t *testing.T) {
 		"2": "B2",
 		"3": "C1",
 	}
-	err := dt.ReplaceDataplaneCacheFromIter(mapIter(dpContents))
+	err := dt.Dataplane().ReplaceAllIter(mapIter(dpContents))
 	Expect(err).NotTo(HaveOccurred())
 
 	Expect(allDesired(dt)).To(Equal(map[string]string{

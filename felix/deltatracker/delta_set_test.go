@@ -28,60 +28,60 @@ import (
 
 func TestDeltaSet_DesiredSet(t *testing.T) {
 	ds := NewSetDeltaTracker[int]()
-	ds.AddDesired(1)
-	ds.AddDesired(2)
+	ds.Desired().Add(1)
+	ds.Desired().Add(2)
 
 	desired := set.New[int]()
-	ds.IterDesired(func(k int) {
+	ds.Desired().Iter(func(k int) {
 		if desired.Contains(k) {
-			t.Errorf("IterDesired returned duplicate key: %v", k)
+			t.Errorf("Iter returned duplicate key: %v", k)
 		}
 		desired.Add(k)
 	})
 
-	if !ds.ContainsDesired(1) {
+	if !ds.Desired().Contains(1) {
 		t.Errorf("ContainsDesired(1) should be true")
 	}
-	if ds.ContainsDesired(3) {
+	if ds.Desired().Contains(3) {
 		t.Errorf("ContainsDesired(3) should be false")
 	}
-	ds.DeleteDesired(1)
-	if ds.ContainsDesired(1) {
+	ds.Desired().Delete(1)
+	if ds.Desired().Contains(1) {
 		t.Errorf("ContainsDesired(1) should be false after removing that item")
 	}
-	if !ds.ContainsDesired(2) {
+	if !ds.Desired().Contains(2) {
 		t.Errorf("ContainsDesired(2) should be true")
 	}
-	ds.DeleteAllDesired()
-	if ds.ContainsDesired(2) {
-		t.Errorf("ContainsDesired(2) should be false after DeleteAllDesired")
+	ds.Desired().DeleteAll()
+	if ds.Desired().Contains(2) {
+		t.Errorf("ContainsDesired(2) should be false after DeleteAll")
 	}
 }
 
 func TestDeltaSet_DataplaneSet(t *testing.T) {
 	ds := NewSetDeltaTracker[int]()
-	ds.AddDataplane(1)
-	ds.AddDataplane(2)
+	ds.Dataplane().Add(1)
+	ds.Dataplane().Add(2)
 
 	dp := set.New[int]()
-	ds.IterDataplane(func(k int) {
+	ds.Dataplane().Iter(func(k int) {
 		if dp.Contains(k) {
-			t.Errorf("IterDataplane returned duplicate key: %v", k)
+			t.Errorf("Iter returned duplicate key: %v", k)
 		}
 		dp.Add(k)
 	})
 
-	if !ds.ContainsDataplane(1) {
+	if !ds.Dataplane().Contains(1) {
 		t.Errorf("ContainsDataplane(1) should be true")
 	}
-	if ds.ContainsDataplane(3) {
+	if ds.Dataplane().Contains(3) {
 		t.Errorf("ContainsDataplane(3) should be false")
 	}
-	ds.DeleteDataplane(1)
-	if ds.ContainsDataplane(1) {
+	ds.Dataplane().Delete(1)
+	if ds.Dataplane().Contains(1) {
 		t.Errorf("ContainsDataplane(1) should be false after removing that item")
 	}
-	if !ds.ContainsDataplane(2) {
+	if !ds.Dataplane().Contains(2) {
 		t.Errorf("ContainsDataplane(2) should be true")
 	}
 }
@@ -89,16 +89,16 @@ func TestDeltaSet_DataplaneSet(t *testing.T) {
 func TestDeltaSet_Resync(t *testing.T) {
 	RegisterTestingT(t)
 	ds := NewSetDeltaTracker[int]()
-	ds.AddDesired(1)
-	ds.AddDesired(2)
+	ds.Desired().Add(1)
+	ds.Desired().Add(2)
 
-	err := ds.ReplaceDataplaneCacheFromIter(func(f func(k int)) error {
+	err := ds.Dataplane().ReplaceFromIter(func(f func(k int)) error {
 		f(1)
 		f(3)
 		return nil
 	})
 	if err != nil {
-		t.Errorf("Unexpected error from ReplaceDataplaneCacheFromIter: %v", err)
+		t.Errorf("Unexpected error from ReplaceAllIter: %v", err)
 	}
 
 	updates := set.New[int]()
@@ -126,12 +126,12 @@ func TestDeltaSet_ResyncError(t *testing.T) {
 	RegisterTestingT(t)
 	ds := NewSetDeltaTracker[int]()
 
-	err := ds.ReplaceDataplaneCacheFromIter(func(f func(k int)) error {
+	err := ds.Dataplane().ReplaceFromIter(func(f func(k int)) error {
 		f(1)
 		f(3)
 		return fmt.Errorf("dummy error")
 	})
 	if err == nil {
-		t.Errorf("Missing error from ReplaceDataplaneCacheFromIter")
+		t.Errorf("Missing error from ReplaceAllIter")
 	}
 }
