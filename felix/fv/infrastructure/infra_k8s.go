@@ -156,9 +156,9 @@ func createK8sDatastoreInfra(opts ...CreateOption) DatastoreInfra {
 }
 
 func GetK8sDatastoreInfra(index K8sInfraIndex, opts ...CreateOption) (*K8sDatastoreInfra, error) {
-	if K8sInfra != nil {
-		if K8sInfra.runningTest != "" {
-			ginkgo.Fail(fmt.Sprintf("Previous test didn't clean up the infra: %s", K8sInfra.runningTest))
+	if K8sInfra[index] != nil {
+		if K8sInfra[index].runningTest != "" {
+			ginkgo.Fail(fmt.Sprintf("Previous test didn't clean up the infra: %s", K8sInfra[index].runningTest))
 		}
 		K8sInfra[index].EnsureReady()
 		K8sInfra[index].PerTestSetup(index)

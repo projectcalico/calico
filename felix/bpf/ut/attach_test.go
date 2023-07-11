@@ -27,6 +27,7 @@ import (
 
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
+	"github.com/vishvananda/netlink"
 
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/bpfdefs"
@@ -43,7 +44,7 @@ import (
 	"github.com/projectcalico/calico/felix/rules"
 )
 
-func TestAttach(t *testing.T) {
+func TestAttachV4(t *testing.T) {
 	RegisterTestingT(t)
 
 	bpfmaps, err := bpfmap.CreateBPFMaps(4)
@@ -194,7 +195,6 @@ func TestAttach(t *testing.T) {
 
 	t.Run("create a workload", func(t *testing.T) {
 		bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep1", ifacemonitor.StateUp, workload1.Attrs().Index))
-		bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("workloadep1", "1.6.6.6"))
 		err = bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
@@ -234,7 +234,6 @@ func TestAttach(t *testing.T) {
 
 	t.Run("create another workload, should not load more than the preable", func(t *testing.T) {
 		bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep2", ifacemonitor.StateUp, workload2.Attrs().Index))
-		bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("workloadep2", "1.6.6.1"))
 		err := bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
@@ -325,7 +324,6 @@ func TestAttach(t *testing.T) {
 
 		workload3 := createVethName("workloadep3")
 		bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep3", ifacemonitor.StateUp, workload3.Attrs().Index))
-		bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("workloadep3", "1.6.6.8"))
 		err = bpfEpMgr.CompleteDeferredWork()
 
 		if err != nil {
@@ -421,7 +419,6 @@ func TestAttach(t *testing.T) {
 
 		bpfEpMgr.OnUpdate(&proto.HostMetadataUpdate{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
 		bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep2", ifacemonitor.StateUp, workload2.Attrs().Index))
-		bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("workloadep2", "1.6.6.1"))
 		bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("hostep2", ifacemonitor.StateUp, host2.Attrs().Index))
 		bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("hostep2", "4.3.2.1"))
 		err = bpfEpMgr.CompleteDeferredWork()
@@ -456,7 +453,6 @@ func TestAttach(t *testing.T) {
 
 		workload3 := createVethName("workloadep3")
 		bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep3", ifacemonitor.StateUp, workload3.Attrs().Index))
-		bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("workloadep3", "1.6.6.8"))
 		err = bpfEpMgr.CompleteDeferredWork()
 
 		if err != nil {
@@ -499,7 +495,6 @@ func TestAttach(t *testing.T) {
 
 		bpfEpMgr.OnUpdate(&proto.HostMetadataUpdate{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
 		bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep2", ifacemonitor.StateUp, workload2.Attrs().Index))
-		bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("workloadep2", "1.6.6.1"))
 		bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("hostep2", ifacemonitor.StateUp, host2.Attrs().Index))
 		bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("hostep2", "4.3.2.1"))
 		err = bpfEpMgr.CompleteDeferredWork()
@@ -511,6 +506,124 @@ func TestAttach(t *testing.T) {
 		Expect(pm).To(HaveKey(wl2State.IngressPolicy()))
 		Expect(pm).To(HaveKey(wl2State.EgressPolicy()))
 	})
+}
+
+func TestAttachV6(t *testing.T) {
+	RegisterTestingT(t)
+
+	bpfmaps, err := bpfmap.CreateBPFMaps(6)
+	Expect(err).NotTo(HaveOccurred())
+
+	programs := bpfmaps.ProgramsMap.(*hook.ProgramsMap)
+	loglevel := "off"
+
+	bpfEpMgr, err := linux.NewTestEpMgr(
+		&linux.Config{
+			Hostname:              "uthost",
+			BPFLogLevel:           loglevel,
+			BPFDataIfacePattern:   regexp.MustCompile("^hostep[12]"),
+			VXLANMTU:              1000,
+			VXLANPort:             1234,
+			BPFNodePortDSREnabled: false,
+			RulesConfig: rules.Config{
+				EndpointToHostAction: "RETURN",
+			},
+			BPFExtToServiceConnmark: 0,
+			FeatureGates: map[string]string{
+				"BPFConnectTimeLoadBalancingWorkaround": "disabled",
+			},
+			BPFPolicyDebugEnabled: true,
+			BPFIpv6Enabled:        true,
+		},
+		bpfmaps,
+		regexp.MustCompile("^workloadep[123]"),
+	)
+	Expect(err).NotTo(HaveOccurred())
+
+	bpfEpMgr.OnUpdate(&proto.HostMetadataV6Update{Hostname: "uthost", Ipv6Addr: "abcd::0102:0304"})
+	err = bpfEpMgr.CompleteDeferredWork()
+	Expect(err).NotTo(HaveOccurred())
+
+	host1 := createVethName("hostep1")
+	defer deleteLink(host1)
+
+	t.Run("create host insterface without a host endpoint (no policy)", func(t *testing.T) {
+		bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("hostep1", ifacemonitor.StateUp, host1.Attrs().Index))
+		bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("hostep1", "abcd::0102:0304"))
+		err := bpfEpMgr.CompleteDeferredWork()
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(programs.Count()).To(Equal(11))
+
+		at := programs.Programs()
+		Expect(at).To(HaveKey(hook.AttachType{
+			Hook:       hook.Ingress,
+			Family:     6,
+			Type:       tcdefs.EpTypeHost,
+			LogLevel:   loglevel,
+			FIB:        true,
+			ToHostDrop: false,
+			DSR:        false}))
+		Expect(at).To(HaveKey(hook.AttachType{
+			Hook:       hook.Egress,
+			Family:     6,
+			Type:       tcdefs.EpTypeHost,
+			LogLevel:   loglevel,
+			FIB:        true,
+			ToHostDrop: false,
+			DSR:        false}))
+
+		pm := jumpMapDump(bpfmaps.JumpMap)
+		Expect(len(pm)).To(Equal(0))
+	})
+
+	workload1 := createVethName("workloadep1")
+	defer deleteLink(workload1)
+	err = netlink.AddrAdd(workload1, &netlink.Addr{
+		IPNet: &net.IPNet{
+			IP:   net.ParseIP("fe80::abcd:6666"),
+			Mask: net.CIDRMask(120, 128),
+		},
+		Scope: int(netlink.SCOPE_LINK),
+	})
+	Expect(err).NotTo(HaveOccurred())
+
+	t.Run("create a workload", func(t *testing.T) {
+		bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep1", ifacemonitor.StateUp, workload1.Attrs().Index))
+		err = bpfEpMgr.CompleteDeferredWork()
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(programs.Count()).To(Equal(21))
+
+		at := programs.Programs()
+		Expect(at).To(HaveKey(hook.AttachType{
+			Hook:       hook.Ingress,
+			Family:     6,
+			Type:       tcdefs.EpTypeWorkload,
+			LogLevel:   loglevel,
+			FIB:        true,
+			ToHostDrop: false,
+			DSR:        false}))
+		Expect(at).To(HaveKey(hook.AttachType{
+			Hook:       hook.Egress,
+			Family:     6,
+			Type:       tcdefs.EpTypeWorkload,
+			LogLevel:   loglevel,
+			FIB:        true,
+			ToHostDrop: false,
+			DSR:        false}))
+
+		ifstateMap := ifstateMapDump(bpfmaps.IfStateMap)
+		wl1State := ifstateMap[ifstate.NewKey(uint32(workload1.Attrs().Index))]
+		Expect(wl1State.IngressPolicy()).NotTo(Equal(-1))
+		Expect(wl1State.EgressPolicy()).NotTo(Equal(-1))
+		Expect(wl1State.XDPPolicy()).To(Equal(-1))
+
+		pm := jumpMapDump(bpfmaps.JumpMap)
+		Expect(pm).To(HaveKey(wl1State.IngressPolicy()))
+		Expect(pm).To(HaveKey(wl1State.EgressPolicy()))
+	})
+
 }
 
 func ifstateMapDump(m maps.Map) ifstate.MapMem {

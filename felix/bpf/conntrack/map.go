@@ -44,6 +44,7 @@ const MaxEntries = curVer.MaxEntries
 
 type Key = curVer.Key
 type KeyV6 = curVer.KeyV6
+type KeyInterface = curVer.KeyInterface
 
 func NewKey(proto uint8, ipA net.IP, portA uint16, ipB net.IP, portB uint16) Key {
 	return curVer.NewKey(proto, ipA, portA, ipB, portB)
@@ -139,7 +140,7 @@ const (
 	ProtoUDP  = 17
 )
 
-func KeyFromBytes(k []byte) Key {
+func KeyFromBytes(k []byte) KeyInterface {
 	var ctKey Key
 	if len(k) != len(ctKey) {
 		log.Panic("Key has unexpected length")
