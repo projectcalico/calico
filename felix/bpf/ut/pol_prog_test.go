@@ -1576,6 +1576,28 @@ var polProgramTests = []polProgramTest{
 		},
 	},
 	{
+		PolicyName: "allow from IP set - v6",
+		Policy: makeRulesSingleTier([]*proto.Rule{{
+			Action:      "Allow",
+			SrcIpSetIds: []string{"setA"},
+		}}),
+		AllowedPackets: []packet{
+			packetNoPorts(253, "10::2", "10::1"),
+			tcpPkt("[10::2]:80", "[10::1]:31245"),
+			udpPkt("[10::2]:12345", "[123::1]:1024"),
+			udpPkt("[10::2]:80", "[10::1]:31245"),
+			udpPkt("[10::1]:31245", "[10::2]:80"),
+			//			icmpPkt("10::1", "10::2"),
+		},
+		DroppedPackets: []packet{
+			packetNoPorts(253, "11::2", "10::1"),
+			tcpPkt("[11::1]:12345", "[10::2]:8080")},
+		IPSets: map[string][]string{
+			"setA": {"10::0/16"},
+		},
+		ForIPv6: true,
+	},
+	{
 		PolicyName: "allow to IP set",
 		Policy: makeRulesSingleTier([]*proto.Rule{{
 			Action:      "Allow",
@@ -2571,7 +2593,7 @@ func setUpIPSets(ipSets map[string][]string, alloc *idalloc.IDAllocator, ipsMap 
 		id := alloc.GetOrAlloc(name)
 		for _, m := range members {
 			entry := ipsets.ProtoIPSetMemberToBPFEntry(id, m)
-			err := ipsMap.Update(entry[:], ipsets.DummyValue)
+			err := ipsMap.Update(entry.AsBytes(), ipsets.DummyValue)
 			Expect(err).NotTo(HaveOccurred())
 		}
 	}
@@ -2582,7 +2604,7 @@ func setUpIPSetsV6(ipSets map[string][]string, alloc *idalloc.IDAllocator, ipsMa
 		id := alloc.GetOrAlloc(name)
 		for _, m := range members {
 			entry := ipsets.ProtoIPSetMemberToBPFEntryV6(id, m)
-			err := ipsMapV6.Update(entry[:], ipsets.DummyValue)
+			err := ipsMapV6.Update(entry.AsBytes(), ipsets.DummyValue)
 			Expect(err).NotTo(HaveOccurred())
 		}
 	}

@@ -580,7 +580,9 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		// bpffs so there's nothing to clean up
 	}
 
-	ipsetsManager := common.NewIPSetsManager(ipSetsV4, config.MaxIPSetSize)
+	ipsetsManager := common.NewIPSetsManager("ipv4", ipSetsV4, config.MaxIPSetSize)
+	ipsetsManagerV6 := common.NewIPSetsManager("ipv6", nil, config.MaxIPSetSize)
+
 	dp.RegisterManager(ipsetsManager)
 
 	if !config.BPFEnabled {
@@ -651,25 +653,49 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		// Important that we create the maps before we load a BPF program with TC since we make sure the map
 		// metadata name is set whereas TC doesn't set that field.
 		ipSetIDAllocator := idalloc.New()
-		ipSetsV4 := bpfipsets.NewBPFIPSets(
-			ipSetsConfigV4,
-			ipSetIDAllocator,
-			bpfMaps.IpsetsMap,
-			dp.loopSummarizer,
-		)
-		dp.ipSets = append(dp.ipSets, ipSetsV4)
-		ipsetsManager.AddDataplane(ipSetsV4)
+
+		if config.BPFIpv6Enabled {
+			ipSetsV6 := bpfipsets.NewBPFIPSets(
+				config.RulesConfig.IPSetConfigV6,
+				ipSetIDAllocator,
+				bpfMaps.IpsetsMap,
+				bpfipsets.IPSetEntryV6FromBytes,
+				bpfipsets.ProtoIPSetMemberToBPFEntryV6,
+				dp.loopSummarizer,
+			)
+			dp.ipSets = append(dp.ipSets, ipSetsV6)
+			ipsetsManagerV6.AddDataplane(ipSetsV6)
+		} else {
+			ipSetsV4 := bpfipsets.NewBPFIPSets(
+				ipSetsConfigV4,
+				ipSetIDAllocator,
+				bpfMaps.IpsetsMap,
+				bpfipsets.IPSetEntryFromBytes,
+				bpfipsets.ProtoIPSetMemberToBPFEntry,
+				dp.loopSummarizer,
+			)
+			dp.ipSets = append(dp.ipSets, ipSetsV4)
+			ipsetsManager.AddDataplane(ipSetsV4)
+		}
 		bpfRTMgr := newBPFRouteManager(&config, bpfMaps, dp.loopSummarizer)
 		dp.RegisterManager(bpfRTMgr)
 
 		// Forwarding into an IPIP tunnel fails silently because IPIP tunnels are L3 devices and support for
 		// L3 devices in BPF is not available yet.  Disable the FIB lookup in that case.
 		fibLookupEnabled := !config.RulesConfig.IPIPEnabled
+		keyFromSlice := failsafes.KeyFromSlice
+		makeKey := failsafes.MakeKey
+		if config.BPFIpv6Enabled {
+			keyFromSlice = failsafes.KeyV6FromSlice
+			makeKey = failsafes.MakeKeyV6
+		}
 		failsafeMgr := failsafes.NewManager(
 			bpfMaps.FailsafesMap,
 			config.RulesConfig.FailsafeInboundHostPorts,
 			config.RulesConfig.FailsafeOutboundHostPorts,
 			dp.loopSummarizer,
+			keyFromSlice,
+			makeKey,
 		)
 		dp.RegisterManager(failsafeMgr)
 
@@ -702,7 +728,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		// Before we start, scan for all finished / timed out connections to
 		// free up the conntrack table asap as it may take time to sync up the
 		// proxy and kick off the first full cleaner scan.
-		conntrackScanner.Scan()
+		//		conntrackScanner.Scan()
 
 		bpfproxyOpts := []bpfproxy.Option{
 			bpfproxy.WithMinSyncPeriod(config.KubeProxyMinSyncPeriod),
@@ -734,7 +760,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			bpfRTMgr.setHostIPUpdatesCallBack(kp.OnHostIPsUpdate)
 			bpfRTMgr.setRoutesCallBacks(kp.OnRouteUpdate, kp.OnRouteDelete)
 			conntrackScanner.AddUnlocked(bpfconntrack.NewStaleNATScanner(kp))
-			conntrackScanner.Start()
+			//		conntrackScanner.Start()
 		} else {
 			log.Info("BPF enabled but no Kubernetes client available, unable to run kube-proxy module.")
 		}
@@ -916,8 +942,9 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			routeTableV6 = &routetable.DummyTable{}
 		}
 
+		ipsetsManagerV6.AddDataplane(ipSetsV6)
+		dp.RegisterManager(ipsetsManagerV6)
 		if !config.BPFEnabled {
-			dp.RegisterManager(common.NewIPSetsManager(ipSetsV6, config.MaxIPSetSize))
 			dp.RegisterManager(newHostIPManager(
 				config.RulesConfig.WorkloadIfacePrefixes,
 				rules.IPSetIDThisHostIPs,
@@ -925,6 +952,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 				config.MaxIPSetSize))
 			dp.RegisterManager(newPolicyManager(rawTableV6, mangleTableV6, filterTableV6, ruleRenderer, 6))
 		}
+
 		dp.RegisterManager(newEndpointManager(
 			rawTableV6,
 			mangleTableV6,

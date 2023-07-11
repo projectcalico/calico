@@ -104,6 +104,7 @@ type bpfTestOptions struct {
 	dsr             bool
 	udpConnRecvMsg  bool
 	nonProtoTests   bool
+	ipv6            bool
 }
 
 type bpfTestOpt func(opts *bpfTestOptions)
@@ -219,7 +220,7 @@ func BPFMode() bool {
 }
 
 func BPFIPv6Support() bool {
-	return false
+	return true
 }
 
 func describeBPFTests(opts ...bpfTestOpt) bool {
@@ -231,6 +232,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 	testOpts := bpfTestOptions{
 		bpfLogLevel: "debug",
 		tunnel:      "none",
+		ipv6:        true,
 	}
 	for _, o := range opts {
 		o(&testOpts)
@@ -264,7 +266,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			felixPanicExpected bool
 		)
 
-		ctlbWorkaround := !testOpts.connTimeEnabled
+		ctlbWorkaround := !testOpts.connTimeEnabled && !testOpts.ipv6
 
 		switch testOpts.protocol {
 		case "tcp":
@@ -277,7 +279,17 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 		BeforeEach(func() {
 			felixPanicExpected = false
-			infra = getInfra()
+
+			iOpts := []infrastructure.CreateOption{}
+			if testOpts.ipv6 {
+				iOpts = append(iOpts,
+					infrastructure.K8sWithIPv6(),
+					infrastructure.K8sWithAPIServerBindAddress("::"),
+					infrastructure.K8sWithServiceClusterIPRange("dead:beef::abcd:0:0:0/112"),
+				)
+			}
+
+			infra = getInfra(iOpts...)
 
 			cc = &Checker{
 				CheckSNAT: true,
@@ -297,8 +309,10 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			// override IPIP being enabled by default
 			options.IPIPEnabled = false
 			options.IPIPRoutesEnabled = false
+			/* XXX
 			// BPF doesn't support IPv6, disable it.
 			options.EnableIPv6 = false
+			*/
 			switch testOpts.tunnel {
 			case "none":
 				// nothing
@@ -327,7 +341,12 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			}
 			options.ExternalIPs = true
 			options.ExtraEnvVars["FELIX_BPFExtToServiceConnmark"] = "0x80"
-			options.ExtraEnvVars["FELIX_BPFDSROptoutCIDRs"] = "245.245.0.0/16"
+			if !testOpts.ipv6 {
+				options.ExtraEnvVars["FELIX_BPFDSROptoutCIDRs"] = "245.245.0.0/16"
+			} else {
+				options.ExtraEnvVars["FELIX_BPFIPV6SUPPORT"] = "true"
+				options.ExtraEnvVars["FELIX_IPV6SUPPORT"] = "true"
+			}
 
 			if testOpts.protocol == "tcp" {
 				filters := map[string]string{"all": "tcp"}
@@ -353,28 +372,60 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 		JustAfterEach(func() {
 			if CurrentGinkgoTestDescription().Failed {
-				currBpfsvcs, currBpfeps := dumpNATmaps(tc.Felixes)
+				var (
+					currBpfsvcs   []nat.MapMem
+					currBpfeps    []nat.BackendMapMem
+					currBpfsvcsV6 []nat.MapMemV6
+					currBpfepsV6  []nat.BackendMapMemV6
+				)
+
+				if testOpts.ipv6 {
+					currBpfsvcsV6, currBpfepsV6 = dumpNATmapsV6(tc.Felixes)
+				} else {
+					currBpfsvcs, currBpfeps = dumpNATmaps(tc.Felixes)
+				}
 
 				for i, felix := range tc.Felixes {
 					felix.Exec("iptables-save", "-c")
 					felix.Exec("conntrack", "-L")
-					felix.Exec("ip", "link")
-					felix.Exec("ip", "addr")
-					felix.Exec("ip", "rule")
-					felix.Exec("ip", "route")
-					felix.Exec("ip", "neigh")
-					felix.Exec("arp")
-					felix.Exec("calico-bpf", "ipsets", "dump")
-					felix.Exec("calico-bpf", "routes", "dump")
-					felix.Exec("calico-bpf", "nat", "dump")
-					felix.Exec("calico-bpf", "nat", "aff")
-					felix.Exec("calico-bpf", "conntrack", "dump")
-					felix.Exec("calico-bpf", "arp", "dump")
+					felix.Exec("calico-bpf", "policy", "dump", "cali57946200c58", "all")
+					if testOpts.ipv6 {
+						felix.Exec("ip", "-6", "link")
+						felix.Exec("ip", "-6", "addr")
+						felix.Exec("ip", "-6", "rule")
+						felix.Exec("ip", "-6", "route")
+						felix.Exec("ip", "-6", "neigh")
+						felix.Exec("calico-bpf", "-6", "ipsets", "dump")
+						felix.Exec("calico-bpf", "-6", "routes", "dump")
+						felix.Exec("calico-bpf", "-6", "nat", "dump")
+						felix.Exec("calico-bpf", "-6", "nat", "aff")
+						felix.Exec("calico-bpf", "-6", "conntrack", "dump")
+						felix.Exec("calico-bpf", "-6", "arp", "dump")
+					} else {
+						felix.Exec("ip", "link")
+						felix.Exec("ip", "addr")
+						felix.Exec("ip", "rule")
+						felix.Exec("ip", "route")
+						felix.Exec("ip", "neigh")
+						felix.Exec("arp")
+						felix.Exec("calico-bpf", "ipsets", "dump")
+						felix.Exec("calico-bpf", "routes", "dump")
+						felix.Exec("calico-bpf", "nat", "dump")
+						felix.Exec("calico-bpf", "nat", "aff")
+						felix.Exec("calico-bpf", "conntrack", "dump")
+						felix.Exec("calico-bpf", "arp", "dump")
+					}
 					felix.Exec("calico-bpf", "counters", "dump")
 					felix.Exec("calico-bpf", "ifstate", "dump")
-					log.Infof("[%d]FrontendMap: %+v", i, currBpfsvcs[i])
-					log.Infof("[%d]NATBackend: %+v", i, currBpfeps[i])
-					log.Infof("[%d]SendRecvMap: %+v", i, dumpSendRecvMap(felix))
+					if testOpts.ipv6 {
+						log.Infof("[%d]FrontendMapV6: %+v", i, currBpfsvcsV6[i])
+						log.Infof("[%d]NATBackendV6: %+v", i, currBpfepsV6[i])
+						log.Infof("[%d]SendRecvMapV6: %+v", i, dumpSendRecvMapV6(felix))
+					} else {
+						log.Infof("[%d]FrontendMap: %+v", i, currBpfsvcs[i])
+						log.Infof("[%d]NATBackend: %+v", i, currBpfeps[i])
+						log.Infof("[%d]SendRecvMap: %+v", i, dumpSendRecvMap(felix))
+					}
 				}
 				externalClient.Exec("ip", "route", "show", "cached")
 			}
@@ -442,6 +493,10 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				// Start a couple of workloads so we can check workload-to-workload and workload-to-host.
 				for i := 0; i < 2; i++ {
 					wIP := fmt.Sprintf("10.65.0.%d", i+2)
+					w[i] = workload.Run(tc.Felixes[0], fmt.Sprintf("w%d", i), "default", wIP, "8055", testOpts.protocol)
+					if testOpts.ipv6 {
+						wIP = fmt.Sprintf("dead:beef::100:0:0:%d", i+2)
+					}
 					w[i] = workload.Run(tc.Felixes[0], fmt.Sprintf("w%d", i), "default", wIP, "8055", testOpts.protocol)
 					w[i].WorkloadEndpoint.Labels = map[string]string{"name": w[i].Name}
 					// WEP gets clobbered when we add it to the datastore, take a copy so we can re-create the WEP.
@@ -841,6 +896,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				}
 
 				wIP := fmt.Sprintf("10.65.%d.%d", ii, wi+2)
+				if testOpts.ipv6 {
+					wIP = fmt.Sprintf("dead:beef::100:%d:%d", ii, wi)
+				}
 				wName := fmt.Sprintf("w%d%d", ii, wi)
 
 				w := workload.New(tc.Felixes[ii], wName, "default",
@@ -1098,10 +1156,16 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 					By("allowing to self via MASQ", func() {
 
-						nets := []string{tc.Felixes[0].IP + "/32"}
-						switch testOpts.tunnel {
-						case "ipip":
-							nets = []string{tc.Felixes[0].ExpectedIPIPTunnelAddr + "/32"}
+						nets := []string{}
+
+						if testOpts.ipv6 {
+							nets = []string{tc.Felixes[0].IPv6 + "/128"}
+						} else {
+							nets = []string{tc.Felixes[0].IP + "/32"}
+							switch testOpts.tunnel {
+							case "ipip":
+								nets = []string{tc.Felixes[0].ExpectedIPIPTunnelAddr + "/32"}
+							}
 						}
 
 						pol := api.NewGlobalNetworkPolicy()
@@ -1852,7 +1916,12 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					})
 				})
 
-				Context("with test-service configured 10.101.0.10:80 -> w[0][0].IP:8055", func() {
+				serviceIP := "10.101.0.10"
+				if testOpts.ipv6 {
+					serviceIP = "dead:beef::abcd:0:0:10"
+				}
+
+				Context("with test-service configured "+serviceIP+":80 -> w[0][0].IP:8055", func() {
 					var (
 						testSvc          *v1.Service
 						testSvcNamespace string
@@ -1862,7 +1931,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					tgtPort := 8055
 
 					BeforeEach(func() {
-						testSvc = k8sService(testSvcName, "10.101.0.10", w[0][0], 80, tgtPort, 0, testOpts.protocol)
+						testSvc = k8sService(testSvcName, serviceIP, w[0][0], 80, tgtPort, 0, testOpts.protocol)
 						testSvcNamespace = testSvc.ObjectMeta.Namespace
 						_, err := k8sClient.CoreV1().Services(testSvcNamespace).Create(context.Background(), testSvc, metav1.CreateOptions{})
 						Expect(err).NotTo(HaveOccurred())
@@ -3885,8 +3954,33 @@ func dumpNATmaps(felixes []*infrastructure.Felix) ([]nat.MapMem, []nat.BackendMa
 	return bpfsvcs, bpfeps
 }
 
+func dumpNATmapsV6(felixes []*infrastructure.Felix) ([]nat.MapMemV6, []nat.BackendMapMemV6) {
+	bpfsvcs := make([]nat.MapMemV6, len(felixes))
+	bpfeps := make([]nat.BackendMapMemV6, len(felixes))
+
+	// Felixes are independent, we can dump the maps  concurrently
+	var wg sync.WaitGroup
+
+	for i := range felixes {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			defer GinkgoRecover()
+			bpfsvcs[i], bpfeps[i] = dumpNATMapsV6(felixes[i])
+		}(i)
+	}
+
+	wg.Wait()
+
+	return bpfsvcs, bpfeps
+}
+
 func dumpNATMaps(felix *infrastructure.Felix) (nat.MapMem, nat.BackendMapMem) {
 	return dumpNATMap(felix), dumpEPMap(felix)
+}
+
+func dumpNATMapsV6(felix *infrastructure.Felix) (nat.MapMemV6, nat.BackendMapMemV6) {
+	return dumpNATMapV6(felix), dumpEPMapV6(felix)
 }
 
 func dumpBPFMap(felix *infrastructure.Felix, m maps.Map, iter func(k, v []byte)) {
@@ -3922,6 +4016,20 @@ func dumpEPMap(felix *infrastructure.Felix) nat.BackendMapMem {
 	return m
 }
 
+func dumpNATMapV6(felix *infrastructure.Felix) nat.MapMemV6 {
+	bm := nat.FrontendMapV6()
+	m := make(nat.MapMemV6)
+	dumpBPFMap(felix, bm, nat.MapMemV6Iter(m))
+	return m
+}
+
+func dumpEPMapV6(felix *infrastructure.Felix) nat.BackendMapMemV6 {
+	bm := nat.BackendMapV6()
+	m := make(nat.BackendMapMemV6)
+	dumpBPFMap(felix, bm, nat.BackendMapMemV6Iter(m))
+	return m
+}
+
 func dumpAffMap(felix *infrastructure.Felix) nat.AffinityMapMem {
 	bm := nat.AffinityMap()
 	m := make(nat.AffinityMapMem)
@@ -3940,6 +4048,13 @@ func dumpSendRecvMap(felix *infrastructure.Felix) nat.SendRecvMsgMapMem {
 	bm := nat.SendRecvMsgMap()
 	m := make(nat.SendRecvMsgMapMem)
 	dumpBPFMap(felix, bm, nat.SendRecvMsgMapMemIter(m))
+	return m
+}
+
+func dumpSendRecvMapV6(felix *infrastructure.Felix) nat.SendRecvMsgMapMemV6 {
+	bm := nat.SendRecvMsgMapV6()
+	m := make(nat.SendRecvMsgMapMemV6)
+	dumpBPFMap(felix, bm, nat.SendRecvMsgMapMemV6Iter(m))
 	return m
 }
 
