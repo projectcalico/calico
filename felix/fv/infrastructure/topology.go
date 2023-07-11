@@ -91,7 +91,7 @@ func DefaultTopologyOptions() TopologyOptions {
 	}
 	return TopologyOptions{
 		FelixLogSeverity:  felixLogLevel,
-		EnableIPv6:        os.Getenv("FELIX_FV_ENABLE_BPF") != "true",
+		EnableIPv6:        true,
 		BPFEnableIPv6:     false,
 		ExtraEnvVars:      map[string]string{},
 		ExtraVolumes:      map[string]string{},
@@ -194,6 +194,12 @@ func StartNNodeTopology(n int, opts TopologyOptions, infra DatastoreInfra) (tc T
 	log.WithField("options", opts).Infof("Starting a %d-node topology", n)
 	success := false
 	var err error
+
+	if opts.EnableIPv6 && opts.IPIPEnabled {
+		log.Errorf("IPIP not supported with ipv6!")
+		return
+	}
+
 	startTime := time.Now()
 	defer func() {
 		if !success {
