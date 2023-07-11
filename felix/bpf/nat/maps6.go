@@ -201,7 +201,7 @@ func (k BackendValueV6) Addr() net.IP {
 }
 
 func (k BackendValueV6) Port() uint16 {
-	return binary.LittleEndian.Uint16(k[4:6])
+	return binary.LittleEndian.Uint16(k[16:18])
 }
 
 func (k BackendValueV6) String() string {
@@ -557,8 +557,8 @@ func AffinityMapMemV6Iter(m AffinityMapMemV6) func(k, v []byte) {
 // 	uint32_t port;
 // };
 
-const sendRecvMsgKeyV6Size = 28
-const ctNATsMsgKeyV6Size = 38
+const sendRecvMsgKeyV6Size = 32 // 28 + 4B padding
+const ctNATsMsgKeyV6Size = 40
 
 // SendRecvMsgKeyV6 is the key for SendRecvMsgMap
 type SendRecvMsgKeyV6 [sendRecvMsgKeyV6Size]byte

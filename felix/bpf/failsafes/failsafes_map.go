@@ -28,6 +28,7 @@ import (
 
 func init() {
 	maps.SetSize(MapParams.VersionedName(), MapParams.MaxEntries)
+	maps.SetSize(MapV6Params.VersionedName(), MapV6Params.MaxEntries)
 }
 
 const (
@@ -42,21 +43,26 @@ const (
 )
 
 type Key struct {
-	Port    uint16
-	IPProto uint8
-	Flags   uint8
-	IP      string
-	IPMask  int
+	port  uint16
+	proto uint8
+	flags uint8
+	addr  string
+	mask  int
+}
+
+type KeyInterface interface {
+	String() string
+	ToSlice() []byte
 }
 
 func (k Key) String() string {
 	flags := "inbound"
-	if k.Flags&FlagOutbound != 0 {
+	if k.flags&FlagOutbound != 0 {
 		flags = "outbound"
 	}
 
 	return fmt.Sprintf("Key{Port: %d, Proto: %d, Flags: %s, Net: %s/%d",
-		k.Port, k.IPProto, flags, k.IP, k.IPMask)
+		k.port, k.proto, flags, k.addr, k.mask)
 }
 
 var MapParams = maps.MapParameters{
@@ -73,47 +79,41 @@ func Map() maps.Map {
 	return maps.NewPinnedMap(MapParams)
 }
 
-func MakeKey(ipProto uint8, port uint16, outbound bool, ip string, mask int) Key {
+func MakeKey(ipProto uint8, port uint16, outbound bool, ip string, mask int) KeyInterface {
 	var flags uint8
 	if outbound {
 		flags |= FlagOutbound
 	}
 	return Key{
-		Port:    port,
-		IPProto: ipProto,
-		Flags:   flags,
-		IP:      ip,
-		IPMask:  mask,
+		port:  port,
+		proto: ipProto,
+		flags: flags,
+		addr:  ip,
+		mask:  mask,
 	}
 }
 
 func (k Key) ToSlice() []byte {
 	key := make([]byte, KeySize)
-	binary.LittleEndian.PutUint32(key[:4], uint32(ZeroCIDRPrefixLen)+uint32(k.IPMask))
-	binary.LittleEndian.PutUint16(key[4:6], k.Port)
-	key[6] = k.IPProto
-	key[7] = k.Flags
-	ip := net.ParseIP(k.IP).To4()
-	maskedIP := ip.Mask(net.CIDRMask(k.IPMask, 32))
-	for i := 0; i < 4; i++ {
-		key[8+i] = maskedIP.To4()[i]
-	}
+	binary.LittleEndian.PutUint32(key[:4], uint32(ZeroCIDRPrefixLen)+uint32(k.mask))
+	binary.LittleEndian.PutUint16(key[4:6], k.port)
+	key[6] = k.proto
+	key[7] = k.flags
+	ip := net.ParseIP(k.addr).To4()
+	maskedIP := ip.Mask(net.CIDRMask(k.mask, 32))
+	copy(key[8:8+4], maskedIP)
 	return key
 }
 
-func KeyFromSlice(data []byte) Key {
+func KeyFromSlice(data []byte) KeyInterface {
 	var k Key
-	k.Port = binary.LittleEndian.Uint16(data[4:6])
-	k.IPProto = data[6]
-	k.Flags = data[7]
+	k.port = binary.LittleEndian.Uint16(data[4:6])
+	k.proto = data[6]
+	k.flags = data[7]
 
 	prefixLen := binary.LittleEndian.Uint32(data[:4])
-	k.IPMask = int(prefixLen) - ZeroCIDRPrefixLen
-	ipBytes := make([]byte, 4)
-	for i := 8; i < len(data); i++ {
-		ipBytes[i-8] = data[i]
-	}
-	k.IP = net.IPv4(ipBytes[0], ipBytes[1], ipBytes[2], ipBytes[3]).String()
+	k.mask = int(prefixLen) - ZeroCIDRPrefixLen
+	k.addr = net.IPv4(data[8], data[8+1], data[8+2], data[8+3]).String()
 
 	return k
 }

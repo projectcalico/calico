@@ -127,7 +127,7 @@ var (
 	skbCb0 = FieldOffset{Offset: 12*4 + 0*4, Field: "skb->cb[0]"}
 	skbCb1 = FieldOffset{Offset: 12*4 + 1*4, Field: "skb->cb[1]"}
 
-	// Compile-time check that IPSetEntrySize hasn't changed; if it changes, the code will need to change.
+	// Compile-time check that IPSetEntryV6Size hasn't changed; if it changes, the code will need to change.
 	_ = [1]struct{}{{}}[32-ipsets.IPSetEntryV6Size]
 
 	// Offsets within struct ip4_set_key.

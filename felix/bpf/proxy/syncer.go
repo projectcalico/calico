@@ -38,7 +38,10 @@ import (
 	"github.com/projectcalico/calico/felix/ip"
 )
 
-var podNPIP = net.IPv4(255, 255, 255, 255)
+var podNPIPStr = "255.255.255.255"
+var podNPIP = net.ParseIP(podNPIPStr)
+var podNPIPV6Str = "ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff"
+var podNPIPV6 = net.ParseIP(podNPIPV6Str)
 
 type svcInfo struct {
 	id         uint32
@@ -105,6 +108,8 @@ type stickyFrontend struct {
 // Syncer is an implementation of DPSyncer interface. It is not thread safe and
 // should be called only once at a time
 type Syncer struct {
+	ipFamily int
+
 	bpfSvcs *cachingmap.CachingMap[nat.FrontendKeyInterface, nat.FrontendValue]
 	bpfEps  *cachingmap.CachingMap[nat.BackendKey, nat.BackendValueInterface]
 	bpfAff  maps.Map
@@ -205,6 +210,7 @@ func NewSyncer(family int, nodePortIPs []net.IP,
 ) (*Syncer, error) {
 
 	s := &Syncer{
+		ipFamily:    family,
 		bpfAff:      affmap,
 		rt:          rt,
 		nodePortIPs: uniqueIPs(nodePortIPs),
@@ -215,11 +221,11 @@ func NewSyncer(family int, nodePortIPs []net.IP,
 
 	switch family {
 	case 4:
-		s.bpfSvcs = cachingmap.New[nat.FrontendKeyInterface, nat.FrontendValue](nat.FrontendMapParameters.Name,
+		s.bpfSvcs = cachingmap.New[nat.FrontendKeyInterface, nat.FrontendValue](frontendMap.GetName(),
 			maps.NewTypedMap[nat.FrontendKeyInterface, nat.FrontendValue](
 				frontendMap, nat.FrontendKeyFromBytes, nat.FrontendValueFromBytes,
 			))
-		s.bpfEps = cachingmap.New[nat.BackendKey, nat.BackendValueInterface](nat.BackendMapParameters.Name,
+		s.bpfEps = cachingmap.New[nat.BackendKey, nat.BackendValueInterface](backendMap.GetName(),
 			maps.NewTypedMap[nat.BackendKey, nat.BackendValueInterface](
 				backendMap, nat.BackendKeyFromBytes, nat.BackendValueFromBytes,
 			))
@@ -229,11 +235,11 @@ func NewSyncer(family int, nodePortIPs []net.IP,
 		s.affinityKeyFromBytes = nat.AffinityKeyIntfFromBytes
 		s.affinityValueFromBytes = nat.AffinityValueIntfFromBytes
 	case 6:
-		s.bpfSvcs = cachingmap.New[nat.FrontendKeyInterface, nat.FrontendValue](nat.FrontendMapParameters.Name,
+		s.bpfSvcs = cachingmap.New[nat.FrontendKeyInterface, nat.FrontendValue](frontendMap.GetName(),
 			maps.NewTypedMap[nat.FrontendKeyInterface, nat.FrontendValue](
 				frontendMap, nat.FrontendKeyV6FromBytes, nat.FrontendValueFromBytes,
 			))
-		s.bpfEps = cachingmap.New[nat.BackendKey, nat.BackendValueInterface](nat.BackendMapParameters.Name,
+		s.bpfEps = cachingmap.New[nat.BackendKey, nat.BackendValueInterface](backendMap.GetName(),
 			maps.NewTypedMap[nat.BackendKey, nat.BackendValueInterface](
 				backendMap, nat.BackendKeyFromBytes, nat.BackendValueV6FromBytes,
 			))
@@ -635,7 +641,8 @@ func (s *Syncer) apply(state DPSyncerState) error {
 				npInfo := serviceInfoFromK8sServicePort(sinfo)
 				npInfo.clusterIP = npip
 				npInfo.port = nport
-				if npip.Equal(podNPIP) && sinfo.InternalPolicyLocal() {
+				if sinfo.InternalPolicyLocal() &&
+					((s.ipFamily == 4 && npip.Equal(podNPIP)) || (s.ipFamily == 6 && npip.Equal(podNPIPV6))) {
 					// do not program the meta entry, program each node
 					// separately
 					continue
@@ -1200,7 +1207,11 @@ func (s *Syncer) ConntrackFrontendHasBackend(ip net.IP, port uint16,
 		// Double check if it is a nodeport as if we are on the node that has
 		// the backing pod for a nodeport and the nodeport was forwarded here,
 		// the frontend is different.
-		id, ok = s.activeSvcsMap[ipPortProto{ipPort{"255.255.255.255", int(port)}, proto}]
+		npIP := podNPIPStr
+		if s.ipFamily == 6 {
+			npIP = podNPIPV6Str
+		}
+		id, ok = s.activeSvcsMap[ipPortProto{ipPort{npIP, int(port)}, proto}]
 		if !ok {
 			return false
 		}

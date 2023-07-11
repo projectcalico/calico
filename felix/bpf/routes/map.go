@@ -47,6 +47,7 @@ type KeyInterface interface {
 	Addr() ip.Addr
 	Dest() ip.CIDR
 	PrefixLen() int
+	AsBytes() []byte
 }
 
 func (k Key) Addr() ip.Addr {
@@ -106,6 +107,8 @@ type ValueInterface interface {
 	Flags() Flags
 	NextHop() ip.Addr
 	IfaceIndex() uint32
+	AsBytes() []byte
+	Equal(ValueInterface) bool
 }
 
 func (v Value) Flags() Flags {
@@ -178,7 +181,12 @@ func (v Value) String() string {
 	return strings.Join(parts, " ")
 }
 
-func NewKey(cidr ip.V4CIDR) Key {
+func (v Value) Equal(x ValueInterface) bool {
+	X, ok := x.(Value)
+	return ok && v == X
+}
+
+func NewKey(cidr ip.CIDR) Key {
 	var k Key
 
 	binary.LittleEndian.PutUint32(k[:4], uint32(cidr.Prefix()))
@@ -193,7 +201,7 @@ func NewValue(flags Flags) Value {
 	return v
 }
 
-func NewValueWithNextHop(flags Flags, nextHop ip.V4Addr) Value {
+func NewValueWithNextHop(flags Flags, nextHop ip.Addr) Value {
 	var v Value
 	binary.LittleEndian.PutUint32(v[:4], uint32(flags))
 	copy(v[4:8], nextHop.AsNetIP().To4())
@@ -204,6 +212,34 @@ func NewValueWithIfIndex(flags Flags, ifIndex int) Value {
 	var v Value
 	binary.LittleEndian.PutUint32(v[:4], uint32(flags))
 	binary.LittleEndian.PutUint32(v[4:8], uint32(ifIndex))
+	return v
+}
+
+func NewKeyIntf(cidr ip.CIDR) KeyInterface {
+	return NewKey(cidr)
+}
+
+func NewValueIntf(flags Flags) ValueInterface {
+	return NewValue(flags)
+}
+
+func NewValueIntfWithNextHop(flags Flags, nextHop ip.Addr) ValueInterface {
+	return NewValueWithNextHop(flags, nextHop)
+}
+
+func NewValueIntfWithIfIndex(flags Flags, ifIndex int) ValueInterface {
+	return NewValueWithIfIndex(flags, ifIndex)
+}
+
+func KeyInftFromBytes(b []byte) KeyInterface {
+	var k Key
+	copy(k[:], b)
+	return k
+}
+
+func ValueInftFromBytes(b []byte) ValueInterface {
+	var v Value
+	copy(v[:], b)
 	return v
 }
 
