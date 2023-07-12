@@ -153,6 +153,11 @@ type ValueInterface interface {
 	OrigSPort() uint16
 	NATSPort() uint16
 	OrigSrcIP() net.IP
+	ReverseNATKey() KeyInterface
+	AsBytes() []byte
+	Data() EntryData
+	IsForwardDSR() bool
+	String() string
 }
 
 func (e Value) Created() int64 {
@@ -218,7 +223,7 @@ const (
 	FlagNoDSR     uint16 = (1 << 13)
 )
 
-func (e Value) ReverseNATKey() Key {
+func (e Value) ReverseNATKey() KeyInterface {
 	var ret Key
 
 	l := len(Key{})
