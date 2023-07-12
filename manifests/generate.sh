@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # This script updates the manifsts in this directory using helm.
-# Values files for the manifests in this directory can be found in 
+# Values files for the manifests in this directory can be found in
 # ../calico/charts/values.
 
 # Helm binary to use. Default to the one installed by the Makefile.
@@ -19,7 +19,7 @@ NON_HELM_MANIFEST_IMAGES="calico/apiserver calico/windows calico/ctl calico/csi 
 echo "Generating manifests for Calico=$CALICO_VERSION and tigera-operator=$OPERATOR_VERSION"
 
 ##########################################################################
-# Build the operator manifest. 
+# Build the operator manifest.
 ##########################################################################
 cat <<EOF > tigera-operator.yaml
 apiVersion: v1
@@ -33,6 +33,7 @@ EOF
 
 ${HELM} -n tigera-operator template \
 	--include-crds \
+	--no-hooks \
 	--set installation.enabled=false \
 	--set apiServer.enabled=false \
 	--set tigeraOperator.version=$OPERATOR_VERSION \
@@ -99,6 +100,7 @@ ${HELM} template --include-crds \
 	-n tigera-operator \
 	../charts/tigera-operator/ \
 	--output-dir ocp \
+	--no-hooks \
 	--set installation.kubernetesProvider=openshift \
 	--set installation.enabled=false \
 	--set apiServer.enabled=false \
@@ -109,7 +111,7 @@ find ocp/tigera-operator -name "*.yaml" | xargs sed -i -e 1,2d
 mv $(find ocp/tigera-operator -name "*.yaml") ocp/ && rm -r ocp/tigera-operator
 
 ##########################################################################
-# Build Calico manifest used for in-repo testing. This is largely the same as the 
+# Build Calico manifest used for in-repo testing. This is largely the same as the
 # one we ship, but with tweaked values.
 ##########################################################################
 echo "Generating manifest from charts/values/$FILE"
