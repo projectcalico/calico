@@ -39,28 +39,29 @@ const (
 	RestoreChunkSize              = 1000
 )
 
+type dataplaneMetadata struct {
+	Type    IPSetType
+	MaxSize int
+}
+
 // IPSets manages a whole "plane" of IP sets, i.e. all the IPv4 sets, or all the IPv6 IP sets.
 type IPSets struct {
 	IPVersionConfig *IPVersionConfig
 
+	setNameToDPMetadata *deltatracker.DeltaTracker[string, dataplaneMetadata]
+	setNameToMembers    map[string]*deltatracker.SetDeltaTracker[IPSetMember]
+
 	ipSetIDToIPSet       map[string]*IPSet
 	mainIPSetNameToIPSet map[string]*IPSet
 
-	// mutex protects existingIPSetNames and nextTempIPSetIdx, which are accessed by parallel
+	// FIXME mutex protects existingIPSetNames and nextTempIPSetIdx, which are accessed by parallel
 	// workers during the apply step.
-	mutex              sync.Mutex
-	existingIPSetNames set.Set[string]
-	nextTempIPSetIdx   uint
+	mutex            sync.Mutex
+	nextTempIPSetIdx uint
 
 	// dirtyIPSetIDs contains IDs of IP sets that need updating.
 	dirtyIPSetIDs  set.Set[string]
 	resyncRequired bool
-
-	// pendingTempIPSetDeletions contains names of temporary IP sets that need to be deleted.  We use it to
-	// attempt an early deletion of temporary IP sets, if possible.
-	pendingTempIPSetDeletions set.Set[string]
-	// pendingIPSetDeletions contains names of IP sets that need to be deleted (including temporary ones).
-	pendingIPSetDeletions set.Set[string]
 
 	// Factory for command objects; shimmed for UT mocking.
 	newCmd cmdFactory
@@ -101,16 +102,24 @@ func NewIPSetsWithShims(
 	return &IPSets{
 		IPVersionConfig: ipVersionConfig,
 
+		setNameToDPMetadata: deltatracker.New[string, dataplaneMetadata](
+			deltatracker.WithValuesEqualFn[string, dataplaneMetadata](func(a, b dataplaneMetadata) bool {
+				return a == b
+			}),
+			deltatracker.WithLogCtx[string, dataplaneMetadata](log.WithFields(log.Fields{
+				"ipsetFamily": ipVersionConfig.Family,
+			})),
+		),
+		setNameToMembers: map[string]*deltatracker.SetDeltaTracker[IPSetMember]{},
+
 		ipSetIDToIPSet:       map[string]*IPSet{},
 		mainIPSetNameToIPSet: map[string]*IPSet{},
 
-		dirtyIPSetIDs:             set.New[string](),
-		pendingTempIPSetDeletions: set.New[string](),
-		pendingIPSetDeletions:     set.New[string](),
-		newCmd:                    cmdFactory,
-		sleep:                     sleep,
-		existingIPSetNames:        set.New[string](),
-		resyncRequired:            true,
+		dirtyIPSetIDs:  set.New[string](),
+		resyncRequired: true,
+
+		newCmd: cmdFactory,
+		sleep:  sleep,
 
 		gaugeNumIpsets: gaugeVecNumCalicoIpsets.WithLabelValues(familyStr),
 
@@ -137,18 +146,18 @@ func (s *IPSets) AddOrReplaceIPSet(setMetadata IPSetMetadata, members []string) 
 
 	setID := setMetadata.SetID
 	var ipSet *IPSet
+	mainIPSetName := s.IPVersionConfig.NameForMainIPSet(setID)
 	if ipSet = s.ipSetIDToIPSet[setID]; ipSet != nil {
-		// Doing a replace of this IP set
-		// FIXME Corner case: IP set exists but is not desired, we resync, ignore it, then try to create it; will fail to check metadata
-		if ipSet.IPSetMetadata != setMetadata {
+		if s.existingIPSetNames.Contains(mainIPSetName) || ipSet.IPSetMetadata != setMetadata {
 			ipSet.needsFullRewrite = true
 		}
 		ipSet.deltaTracker.Desired().DeleteAll()
+		// FIXME, if we're not tracking the IP set then we don't know what's in its dataplane members.
 	} else {
 		// Create the IP set struct and store it off.
 		ipSet = &IPSet{
 			IPSetMetadata: setMetadata,
-			MainIPSetName: s.IPVersionConfig.NameForMainIPSet(setID),
+			MainIPSetName: mainIPSetName,
 			deltaTracker:  deltatracker.NewSetDeltaTracker[IPSetMember](),
 		}
 	}
