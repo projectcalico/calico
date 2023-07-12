@@ -8,7 +8,7 @@ DEV_TAG_SUFFIX        ?=0.dev
 # Name of the images.
 # e.g., <registry>/<name>:<tag>
 NODE_IMAGE            ?=node
-WINDOWS_IMAGE         ?=windows
+WINDOWS_IMAGE         ?=node-windows
 WINDOWS_UPGRADE_IMAGE ?=windows-upgrade
 
 WINDOWS_VERSIONS?=1809 2004 20H2 ltsc2022
@@ -75,6 +75,7 @@ TEST_CONTAINER_FILES=$(shell find tests/ -type f ! -name '*.created')
 # Variables controlling the image
 NODE_CONTAINER_CREATED=.calico_node.created-$(ARCH)
 NODE_CONTAINER_FIPS_CREATED=.calico_node.created-$(ARCH)-fips
+NODE_CONTAINER_WINDOWS_CREATED=.calico_node-windows.created
 WINDOWS_BINARY = $(NODE_CONTAINER_BIN_DIR)/calico-node.exe
 TOOLS_MOUNTNS_BINARY = $(NODE_CONTAINER_BIN_DIR)/mountns-$(ARCH)
 
@@ -192,9 +193,10 @@ clean: clean-windows
 	docker rmi $(NODE_IMAGE):latest-$(ARCH) || true
 	docker rmi $(NODE_IMAGE):latest-fips-$(ARCH) || true
 	docker rmi $(TEST_CONTAINER_NAME) || true
+	docker rmi $(addprefix $(WINDOWS_IMAGE):latest-,$(WINDOWS_VERSIONS)) || true
 	docker rmi $(addprefix $(WINDOWS_UPGRADE_IMAGE):latest-,$(WINDOWS_VERSIONS)) || true
 
-clean-windows:
+clean-windows: clean-windows-builder
 	-rm -f $(WINDOWS_ARCHIVE) $(WINDOWS_ARCHIVE_BINARY) $(WINDOWS_BINARY)
 	-rm -f $(WINDOWS_ARCHIVE_ROOT)/libs/hns/hns.psm1
 	-rm -f $(WINDOWS_ARCHIVE_ROOT)/libs/hns/License.txt
@@ -286,7 +288,7 @@ endif
 # Building the image
 ###############################################################################
 ## Create the images for all supported ARCHes
-image-all: $(addprefix sub-image-,$(VALIDARCHES)) sub-image-fips-amd64
+image-all: $(addprefix sub-image-,$(VALIDARCHES)) sub-image-fips-amd64 image-tar-windows
 sub-image-%:
 	$(MAKE) image ARCH=$*
 sub-image-fips-%:
@@ -302,6 +304,21 @@ $(NODE_CONTAINER_FIPS_CREATED): $(REMOTE_DEPS) ./Dockerfile.$(ARCH) $(NODE_CONTA
 	$(DOCKER_BUILD) --build-arg BIN_DIR=$(NODE_CONTAINER_BIN_DIR) --build-arg BIRD_IMAGE=$(BIRD_IMAGE) -t $(NODE_IMAGE):latest-fips-$(ARCH) -f ./Dockerfile.$(ARCH) . --load
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
 	touch $@
+
+$(NODE_CONTAINER_WINDOWS_CREATED): clean-windows setup-windows-builder Dockerfile-windows $(WINDOWS_BINARY) $(WINDOWS_ARCHIVE_ROOT)/libs/hns/hns.psm1 $(WINDOWS_ARCHIVE_ROOT)/libs/calico/calico.psm1 $(WINDOWS_ARCHIVE_ROOT)/config-hpc.ps1 $(WINDOWS_ARCHIVE_ROOT)/felix/felix-service.ps1 $(WINDOWS_ARCHIVE_ROOT)/node/node-service.ps1
+	# ensure dir for windows image tars exits
+	-mkdir -p $(WINDOWS_DIST)
+	docker buildx build \
+		--platform windows/amd64 \
+		--output=type=docker,dest=$(CURDIR)/$(WINDOWS_DIST)/$(WINDOWS_IMAGE)-$(GIT_VERSION).tar \
+		--pull \
+		-t $(WINDOWS_IMAGE):latest \
+		--build-arg GIT_VERSION=$(GIT_VERSION) \
+		--build-arg=WINDOWS_VERSION=$(WINDOWS_VERSION) \
+		-f Dockerfile-windows .
+
+.PHONY: image-tar-windows
+image-tar-windows: $(NODE_CONTAINER_WINDOWS_CREATED)
 
 # download BIRD source to include in image.
 $(BIRD_SOURCE): .bird-source.created
@@ -506,7 +523,7 @@ release-build: .release-$(VERSION).created
 	touch $@
 
 ## Produces the Windows installation ZIP archive for the release.
-release-windows-archive $(WINDOWS_ARCHIVE): release-prereqs
+release-windows-archive: release-prereqs
 	$(MAKE) build-windows-archive WINDOWS_ARCHIVE_TAG=$(VERSION)
 
 ## Verifies the release artifacts produces by `make release-build` are correct.
@@ -566,7 +583,10 @@ $(WINDOWS_ARCHIVE_ROOT)/libs/hns/License.txt:
 windows-packaging/nssm.zip:
 	wget -O windows-packaging/nssm.zip https://nssm.cc/ci/nssm-$(WINDOWS_NSSM_VERSION).zip
 
-build-windows-archive: $(WINDOWS_ARCHIVE_FILES) windows-packaging/nssm.zip
+$(WINDOWS_ARCHIVE): build-windows-archive
+
+.PHONY: build-windows-archive
+build-windows-archive: build $(WINDOWS_ARCHIVE_FILES) windows-packaging/nssm.zip
 	# To be as atomic as possible, we re-do work like unpacking NSSM here.
 	-rm -f "$(WINDOWS_ARCHIVE)"
 	-rm -rf $(WINDOWS_ARCHIVE_ROOT)/nssm
@@ -624,37 +644,11 @@ build-windows-upgrade-archive: clean-windows $(WINDOWS_UPGRADE_INSTALL_ZIP) $(WI
 	rm $(WINDOWS_UPGRADE_ARCHIVE) || true
 	cd $(WINDOWS_UPGRADE_DIST_STAGE) && zip -r "$(CURDIR)/$(WINDOWS_UPGRADE_ARCHIVE)" *.zip *.ps1
 
-# Sets up the docker builder used to create Windows image tarballs.
-setup-windows-builder:
-	-docker buildx rm calico-windows-builder
-	docker buildx create --name=calico-windows-builder --use --platform windows/amd64
-
 # Builds all the Windows image tarballs for each version in WINDOWS_VERSIONS
 image-tar-windows-all: setup-windows-builder $(addprefix sub-image-tar-windows-,$(WINDOWS_VERSIONS)) $(addprefix sub-image-tar-windows-upgrade-,$(WINDOWS_VERSIONS))
 
-CRANE_BINDMOUNT_CMD := \
-	docker run --rm \
-		--net=host \
-		--init \
-		--entrypoint /bin/sh \
-		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
-		-v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
-		-v $(DOCKER_CONFIG):/root/.docker/config.json \
-		-w /go/src/$(PACKAGE_NAME) \
-		$(CALICO_BUILD) -c $(double_quote)crane
-
-DOCKER_MANIFEST_CMD := docker manifest
-
-ifdef CONFIRM
-CRANE_BINDMOUNT = $(CRANE_BINDMOUNT_CMD)
-DOCKER_MANIFEST = $(DOCKER_MANIFEST_CMD)
-else
-CRANE_BINDMOUNT = echo [DRY RUN] $(CRANE_BINDMOUNT_CMD)
-DOCKER_MANIFEST = echo [DRY RUN] $(DOCKER_MANIFEST_CMD)
-endif
-
 # Uses the docker builder to create a Windows image tarball for a single Windows version.
-sub-image-tar-windows-%:
+sub-image-tar-windows-%: $(WINDOWS_ARCHIVE_BINARY) dist/calico-windows-$(GIT_VERSION).zip $(WINDOWS_INSTALL_SCRIPT)
 	# ensure dir for windows image tars
 	-mkdir -p $(WINDOWS_DIST)
 	# ensure docker build dir exists
@@ -731,5 +725,17 @@ endif
 			image="$${registry}/$*:$(GIT_VERSION)-windows-$${win_ver}"; \
 			$(DOCKER_MANIFEST) annotate --os windows --arch amd64 --os-version $${version} $${manifest_image} $${image}; \
 		done; \
+		$(DOCKER_MANIFEST) push --purge $${manifest_image}; \
+	done ;
+
+release-windows: release-prereqs clean-windows $(NODE_CONTAINER_WINDOWS_CREATED)
+	for registry in $(DEV_REGISTRIES); do \
+		echo Pushing Windows image to $${registry}; \
+		manifest_image="$${registry}/$(WINDOWS_IMAGE):$(VERSION)"; \
+		image_tar="$(WINDOWS_DIST)/$(WINDOWS_IMAGE)-$(GIT_VERSION).tar"; \
+		image="$${registry}/$(WINDOWS_IMAGE):$(VERSION)"; \
+		$(CRANE_BINDMOUNT) push $${image_tar} $${image}$(double_quote); \
+		$(DOCKER_MANIFEST) create --amend $${manifest_image} $${image}; \
+		$(DOCKER_MANIFEST) annotate --os windows --arch amd64 $${manifest_image} $${image}; \
 		$(DOCKER_MANIFEST) push --purge $${manifest_image}; \
 	done ;

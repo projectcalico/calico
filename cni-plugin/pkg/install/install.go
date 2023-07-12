@@ -22,6 +22,8 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -118,6 +120,20 @@ func loadConfig() config {
 	return c
 }
 
+// getServiceAccountFilePaths returns the mount paths for a container
+// In the case of Windows HostProcess containers this prepends the CONTAINER_SANDBOX_MOUNT_POINT env variable
+// for other operating systems or if the sandbox env variable is not set it returns the standard mount points
+// see https://kubernetes.io/docs/tasks/configure-pod-container/create-hostprocess-pod/#volume-mounts
+func getHostPath(path string) string {
+	if runtime.GOOS == "windows" {
+		sandbox := os.Getenv("CONTAINER_SANDBOX_MOUNT_POINT")
+		// join them and return with forward slashes so it can be serialized properly in json later if required
+		path := filepath.Join(sandbox, path)
+		return filepath.ToSlash(path)
+	}
+	return path
+}
+
 func Install() error {
 	// Make sure the RNG is seeded.
 	seedrng.EnsureSeeded()
@@ -126,7 +142,7 @@ func Install() error {
 	logrus.SetFormatter(&logutils.Formatter{Component: "cni-installer"})
 
 	// Clean up any existing binaries / config / assets.
-	if err := os.RemoveAll("/host/etc/cni/net.d/calico-tls"); err != nil && !os.IsNotExist(err) {
+	if err := os.RemoveAll(getHostPath("/host/etc/cni/net.d/calico-tls")); err != nil && !os.IsNotExist(err) {
 		logrus.WithError(err).Warnf("Error removing old TLS directory")
 	}
 
@@ -136,7 +152,7 @@ func Install() error {
 	// Determine if we're running as a Kubernetes pod.
 	var kubecfg *rest.Config
 
-	serviceAccountTokenFile := "/var/run/secrets/kubernetes.io/serviceaccount/token"
+	serviceAccountTokenFile := getHostPath("/var/run/secrets/kubernetes.io/serviceaccount/token")
 	c.ServiceAccountToken = make([]byte, 0)
 	var err error
 	if fileExists(serviceAccountTokenFile) {
@@ -160,35 +176,35 @@ func Install() error {
 	// First check if the dir exists and has anything in it.
 	if directoryExists(c.TLSAssetsDir) {
 		logrus.Info("Installing any TLS assets")
-		mkdir("/host/etc/cni/net.d/calico-tls")
-		if err := copyFileAndPermissions(fmt.Sprintf("%s/%s", c.TLSAssetsDir, "etcd-ca"), "/host/etc/cni/net.d/calico-tls/etcd-ca"); err != nil {
+		mkdir(getHostPath("/host/etc/cni/net.d/calico-tls"))
+		if err := copyFileAndPermissions(fmt.Sprintf("%s/%s", c.TLSAssetsDir, "etcd-ca"), getHostPath("/host/etc/cni/net.d/calico-tls/etcd-ca")); err != nil {
 			logrus.Warnf("Missing etcd-ca")
 		}
-		if err := copyFileAndPermissions(fmt.Sprintf("%s/%s", c.TLSAssetsDir, "etcd-cert"), "/host/etc/cni/net.d/calico-tls/etcd-cert"); err != nil {
+		if err := copyFileAndPermissions(fmt.Sprintf("%s/%s", c.TLSAssetsDir, "etcd-cert"), getHostPath("/host/etc/cni/net.d/calico-tls/etcd-cert")); err != nil {
 			logrus.Warnf("Missing etcd-cert")
 		}
-		if err := copyFileAndPermissions(fmt.Sprintf("%s/%s", c.TLSAssetsDir, "etcd-key"), "/host/etc/cni/net.d/calico-tls/etcd-key"); err != nil {
+		if err := copyFileAndPermissions(fmt.Sprintf("%s/%s", c.TLSAssetsDir, "etcd-key"), getHostPath("/host/etc/cni/net.d/calico-tls/etcd-key")); err != nil {
 			logrus.Warnf("Missing etcd-key")
 		}
 	}
 
 	// Set the suid bit on the binaries to allow them to run as non-root users.
-	if err := setSuidBit("/opt/cni/bin/install"); err != nil {
+	if err := setSuidBit(getHostPath("/opt/cni/bin/install")); err != nil {
 		logrus.WithError(err).Fatalf("Failed to set the suid bit on the install binary")
 	}
 
 	// TODO: Remove the setSUID code here on calico and calico-ipam when they eventually
 	// get refactored to all use install as the source.
-	if err := setSuidBit("/opt/cni/bin/calico"); err != nil {
+	if err := setSuidBit(getHostPath("/opt/cni/bin/calico")); err != nil {
 		logrus.WithError(err).Fatalf("Failed to set the suid bit on the calico binary")
 	}
 
-	if err := setSuidBit("/opt/cni/bin/calico-ipam"); err != nil {
+	if err := setSuidBit(getHostPath("/opt/cni/bin/calico-ipam")); err != nil {
 		logrus.WithError(err).Fatalf("Failed to set the suid bit on the calico-ipam")
 	}
 
 	// Place the new binaries if the directory is writeable.
-	dirs := []string{"/host/opt/cni/bin", "/host/secondary-bin-dir"}
+	dirs := []string{getHostPath("/host/opt/cni/bin"), getHostPath("/host/secondary-bin-dir")}
 	binsWritten := false
 	for _, d := range dirs {
 		if err := fileutil.IsDirWriteable(d); err != nil {
@@ -197,13 +213,13 @@ func Install() error {
 		}
 
 		// Iterate through each binary we might want to install.
-		files, err := os.ReadDir("/opt/cni/bin/")
+		files, err := os.ReadDir(getHostPath("/opt/cni/bin/"))
 		if err != nil {
 			logrus.Fatal(err)
 		}
 		for _, binary := range files {
 			target := fmt.Sprintf("%s/%s", d, binary.Name())
-			source := fmt.Sprintf("/opt/cni/bin/%s", binary.Name())
+			source := getHostPath(fmt.Sprintf("/opt/cni/bin/%s", binary.Name()))
 			if c.skipBinary(binary.Name()) {
 				continue
 			}
@@ -276,7 +292,7 @@ func Install() error {
 						logrus.Warn(err)
 					}
 					for _, f := range files {
-						if err = copyFileAndPermissions(c.TLSAssetsDir+"/"+f.Name(), "/host/etc/cni/net.d/calico-tls/"+f.Name()); err != nil {
+						if err = copyFileAndPermissions(c.TLSAssetsDir+"/"+f.Name(), getHostPath("/host/etc/cni/net.d/calico-tls/"+f.Name())); err != nil {
 							logrus.Warn(err)
 							continue
 						}
@@ -305,28 +321,7 @@ func isValidJSON(s string) error {
 }
 
 func writeCNIConfig(c config) {
-	netconf := `{
-  "name": "k8s-pod-network",
-  "cniVersion": "0.3.1",
-  "plugins": [
-    {
-      "type": "calico",
-      "log_level": "__LOG_LEVEL__",
-      "log_file_path": "__LOG_FILE_PATH__",
-      "datastore_type": "__DATASTORE_TYPE__",
-      "nodename": "__KUBERNETES_NODE_NAME__",
-      "mtu": __CNI_MTU__,
-      "ipam": {"type": "calico-ipam"},
-      "policy": {"type": "k8s"},
-      "kubernetes": {"kubeconfig": "__KUBECONFIG_FILEPATH__"}
-    },
-    {
-      "type": "portmap",
-      "snat": true,
-      "capabilities": {"portMappings": true}
-    }
-  ]
-}`
+	netconf := defaultNetConf()
 
 	// Pick the config template to use. This can either be through an env var,
 	// or a file mounted into the container.
@@ -346,11 +341,15 @@ func writeCNIConfig(c config) {
 
 	kubeconfigPath := c.CNINetDir + "/calico-kubeconfig"
 
-	// Perform replacements of variables.
 	nodename, err := names.Hostname()
 	if err != nil {
 		logrus.Fatal(err)
 	}
+
+	// Perform replacement of platform specific variables
+	netconf = replacePlatformSpecificVars(c, netconf)
+
+	// Perform replacements of variables.
 	netconf = strings.Replace(netconf, "__LOG_LEVEL__", getEnv("LOG_LEVEL", "info"), -1)
 	netconf = strings.Replace(netconf, "__LOG_FILE_PATH__", getEnv("LOG_FILE_PATH", "/var/log/calico/cni/cni.log"), -1)
 	netconf = strings.Replace(netconf, "__LOG_FILE_MAX_SIZE__", getEnv("LOG_FILE_MAX_SIZE", "100"), -1)
@@ -368,21 +367,21 @@ func writeCNIConfig(c config) {
 
 	// Replace etcd datastore variables.
 	hostSecretsDir := c.CNINetDir + "/calico-tls"
-	if fileExists("/host/etc/cni/net.d/calico-tls/etcd-cert") {
+	if fileExists(getHostPath("/host/etc/cni/net.d/calico-tls/etcd-cert")) {
 		etcdCertFile := fmt.Sprintf("%s/etcd-cert", hostSecretsDir)
 		netconf = strings.Replace(netconf, "__ETCD_CERT_FILE__", etcdCertFile, -1)
 	} else {
 		netconf = strings.Replace(netconf, "__ETCD_CERT_FILE__", "", -1)
 	}
 
-	if fileExists("/host/etc/cni/net.d/calico-tls/etcd-ca") {
+	if fileExists(getHostPath("/host/etc/cni/net.d/calico-tls/etcd-ca")) {
 		etcdCACertFile := fmt.Sprintf("%s/etcd-ca", hostSecretsDir)
 		netconf = strings.Replace(netconf, "__ETCD_CA_CERT_FILE__", etcdCACertFile, -1)
 	} else {
 		netconf = strings.Replace(netconf, "__ETCD_CA_CERT_FILE__", "", -1)
 	}
 
-	if fileExists("/host/etc/cni/net.d/calico-tls/etcd-key") {
+	if fileExists(getHostPath("/host/etc/cni/net.d/calico-tls/etcd-key")) {
 		etcdKeyFile := fmt.Sprintf("%s/etcd-key", hostSecretsDir)
 		netconf = strings.Replace(netconf, "__ETCD_KEY_FILE__", etcdKeyFile, -1)
 	} else {
@@ -398,7 +397,7 @@ func writeCNIConfig(c config) {
 
 	// Write out the file.
 	name := getEnv("CNI_CONF_NAME", "10-calico.conflist")
-	path := fmt.Sprintf("/host/etc/cni/net.d/%s", name)
+	path := getHostPath(fmt.Sprintf("/host/etc/cni/net.d/%s", name))
 	err = os.WriteFile(path, []byte(netconf), 0644)
 	if err != nil {
 		logrus.Fatal(err)
@@ -408,15 +407,15 @@ func writeCNIConfig(c config) {
 	if err != nil {
 		logrus.Fatal(err)
 	}
-	logrus.Infof("Created /host/etc/cni/net.d/%s", name)
+	logrus.Infof("Created %s", getHostPath(fmt.Sprintf("/host/etc/cni/net.d/%s", name)))
 	text := string(content)
 	fmt.Println(text)
 
 	// Remove any old config file, if one exists.
 	oldName := getEnv("CNI_OLD_CONF_NAME", "10-calico.conflist")
 	if name != oldName {
-		logrus.Infof("Removing /host/etc/cni/net.d/%s", oldName)
-		if err := os.Remove(fmt.Sprintf("/host/etc/cni/net.d/%s", oldName)); err != nil {
+		logrus.Infof("Removing %s", getHostPath(fmt.Sprintf("/host/etc/cni/net.d/%s", oldName)))
+		if err := os.Remove(getHostPath(fmt.Sprintf("/host/etc/cni/net.d/%s", oldName))); err != nil {
 			logrus.WithError(err).Warnf("Failed to remove %s", oldName)
 		}
 	}
@@ -445,6 +444,11 @@ func copyFileAndPermissions(src, dst string) (err error) {
 	err = os.Rename(dstTmp, dst)
 	if err != nil {
 		return fmt.Errorf("failed to rename file: %s", err)
+	}
+
+	if runtime.GOOS == "windows" {
+		// chmod doesn't work on windows
+		return
 	}
 
 	// chmod the dst file to match the original permissions.
@@ -502,12 +506,16 @@ current-context: calico-context`
 		data = strings.Replace(data, "__TLS_CFG__", ca, -1)
 	}
 
-	if err := os.WriteFile("/host/etc/cni/net.d/calico-kubeconfig", []byte(data), 0600); err != nil {
+	if err := os.WriteFile(getHostPath("/host/etc/cni/net.d/calico-kubeconfig"), []byte(data), 0600); err != nil {
 		logrus.Fatal(err)
 	}
 }
 
 func setSuidBit(file string) error {
+	if runtime.GOOS == "windows" {
+		// chmod doesn't work on windows
+		return nil
+	}
 	fi, err := os.Stat(file)
 	if err != nil {
 		return fmt.Errorf("failed to stat file: %s", err)
