@@ -34,6 +34,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/projectcalico/calico/felix/bpf/bpfmap"
+	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	"github.com/projectcalico/calico/felix/bpf/failsafes"
 	bpfmaps "github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/nat"
@@ -723,13 +724,20 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 		bpfEndpointManager.Features = dataplaneFeatures
 
-		conntrackScanner := bpfconntrack.NewScanner(bpfMaps.CtMap,
+		kfb := conntrack.KeyFromBytes
+		vfb := conntrack.ValueFromBytes
+		if config.BPFIpv6Enabled {
+			kfb = conntrack.KeyV6FromBytes
+			vfb = conntrack.ValueV6FromBytes
+		}
+
+		conntrackScanner := bpfconntrack.NewScanner(bpfMaps.CtMap, kfb, vfb,
 			bpfconntrack.NewLivenessScanner(config.BPFConntrackTimeouts, config.BPFNodePortDSREnabled))
 
 		// Before we start, scan for all finished / timed out connections to
 		// free up the conntrack table asap as it may take time to sync up the
 		// proxy and kick off the first full cleaner scan.
-		//		conntrackScanner.Scan()
+		conntrackScanner.Scan()
 
 		bpfproxyOpts := []bpfproxy.Option{
 			bpfproxy.WithMinSyncPeriod(config.KubeProxyMinSyncPeriod),
@@ -761,7 +769,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			bpfRTMgr.setHostIPUpdatesCallBack(kp.OnHostIPsUpdate)
 			bpfRTMgr.setRoutesCallBacks(kp.OnRouteUpdate, kp.OnRouteDelete)
 			conntrackScanner.AddUnlocked(bpfconntrack.NewStaleNATScanner(kp))
-			//		conntrackScanner.Start()
+			conntrackScanner.Start()
 		} else {
 			log.Info("BPF enabled but no Kubernetes client available, unable to run kube-proxy module.")
 		}
