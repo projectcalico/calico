@@ -1,11 +1,10 @@
-import os
 import re
 import requests
-import yaml
 from parameterized import parameterized
-from versions import RELEASE_STREAM, RELEASE_VERSION
 
-PPA_VER = RELEASE_STREAM.replace("v", "calico-")
+import variables
+
+PPA_VER = variables.RELEASE_STREAM.replace("v", "calico-")
 UBUNTU_VERSIONS = ["bionic", "focal", "trusty", "xenial"]
 PPA_IMAGE_URL_TEMPL = (
     # e.g. http://ppa.launchpad.net/project-calico/calico-3.19/ubuntu/pool/main/f/felix/calico-felix_3.19.2-focal_amd64.deb
@@ -26,7 +25,7 @@ for component in ["felix"]:
         RPM_URL_TEMPL.format(
             ppa_ver=PPA_VER,
             component=component,
-            component_version=RELEASE_VERSION.replace("v", ""),
+            component_version=variables.RELEASE_VERSION.replace("v", ""),
         )
     )
 
@@ -35,7 +34,7 @@ for component in ["felix"]:
             PPA_IMAGE_URL_TEMPL.format(
                 ppa_ver=PPA_VER,
                 component=component,
-                component_version=RELEASE_VERSION.replace("v", ""),
+                component_version=variables.RELEASE_VERSION.replace("v", ""),
                 ubuntu_version=UBUNTU_VERSION,
             )
         )
@@ -54,9 +53,9 @@ def test_rpm_repo_avail():
 
 
 def test_networking_calico_version():
-    assert re.match("v", RELEASE_VERSION) is not None
+    assert re.match("v", variables.RELEASE_VERSION) is not None
 
 
 def test_deb_rpm_versions_match():
-    regex = re.compile(".*%s" % RELEASE_VERSION[1:4])
-    assert regex.match(PPA_VER), "%s did not match %s" % (PPA_VER, RELEASE_VERSION[1:4])
+    regex = re.compile(".*%s" % variables.RELEASE_VERSION[1:4])
+    assert regex.match(PPA_VER), "%s did not match %s" % (PPA_VER, variables.RELEASE_VERSION[1:4])

@@ -1,8 +1,7 @@
-import os
 import requests
-import yaml
 from parameterized import parameterized
-from versions import RELEASE_VERSION, FLANNEL_VERSION
+
+import variables
 
 # Expected calicoctl binaries.
 calicoctl_binaries = [
@@ -17,26 +16,26 @@ calicoctl_binaries = [
 calico = {
     "name": "calico",
     "urls": [
-        "https://github.com/projectcalico/calico/releases/tag/{v}".format(v=RELEASE_VERSION),
-        "https://github.com/projectcalico/calico/archive/{v}.zip".format(v=RELEASE_VERSION),
-        "https://github.com/projectcalico/calico/archive/{v}.tar.gz".format(v=RELEASE_VERSION),
-        "https://github.com/projectcalico/calico/releases/download/{v}/release-{v}.tgz".format(v=RELEASE_VERSION),
+        "https://github.com/projectcalico/calico/releases/tag/{v}".format(v=variables.RELEASE_VERSION),
+        "https://github.com/projectcalico/calico/archive/{v}.zip".format(v=variables.RELEASE_VERSION),
+        "https://github.com/projectcalico/calico/archive/{v}.tar.gz".format(v=variables.RELEASE_VERSION),
+        "https://github.com/projectcalico/calico/releases/download/{v}/release-{v}.tgz".format(v=variables.RELEASE_VERSION),
     ]
 }
 
 # Add in calicoctl URLs.
 CTL_URL_TEMPL = "https://github.com/projectcalico/calico/releases/download/{v}/{binary}"
 for binary in calicoctl_binaries:
-    calico["urls"].append(CTL_URL_TEMPL.format(v=RELEASE_VERSION, binary=binary))
+    calico["urls"].append(CTL_URL_TEMPL.format(v=variables.RELEASE_VERSION, binary=binary))
 
 
 # Build out expected URLs for flannel.
 flannel = {
     "name": "flannel", 
     "urls": [
-        "https://github.com/coreos/flannel/releases/tag/{v}".format(v=FLANNEL_VERSION),
-        "https://github.com/coreos/flannel/archive/{v}.zip".format(v=FLANNEL_VERSION),
-        "https://github.com/coreos/flannel/archive/{v}.tar.gz".format(v=FLANNEL_VERSION),
+        "https://github.com/coreos/flannel/releases/tag/{v}".format(v=variables.FLANNEL_VERSION),
+        "https://github.com/coreos/flannel/archive/{v}.zip".format(v=variables.FLANNEL_VERSION),
+        "https://github.com/coreos/flannel/archive/{v}.tar.gz".format(v=variables.FLANNEL_VERSION),
     ],
 }
 
@@ -47,6 +46,7 @@ unrolled_urls = []
 for component in [flannel, calico]:
     for url in component["urls"]:
         unrolled_urls.append(url)
+        print(url)
 
 @parameterized(unrolled_urls)
 def test_artifact_url(url):
