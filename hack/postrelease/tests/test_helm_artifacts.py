@@ -1,7 +1,7 @@
 import os
 import yaml
 import requests
-from versions import RELEASE_VERSION
+from variables import RELEASE_VERSION
 
 
 def test_calico_release_has_helm_chart():
