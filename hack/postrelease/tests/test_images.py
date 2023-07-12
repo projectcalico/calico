@@ -49,6 +49,7 @@ OPERATOR_EXCLUDED_IMAGES = EXCLUDED_IMAGES + [
     "calico/csi",
 ]
 
+CHECK_IMAGES = [img for img in EXPECTED_IMAGES if img not in EXCLUDED_IMAGES]
 
 # Images that we expect to be published to GCR.
 GCR_IMAGES = [
@@ -127,7 +128,7 @@ def test_gcr_release_tag_present(image_name):
     assert EXPECTED_ARCHS.sort() == found_archs.sort()
 
 
-@parameterized(EXPECTED_IMAGES)
+@parameterized(CHECK_IMAGES)
 def test_docker_release_tag_present(image_name):
     """
     Verify docker image manifest is correct
@@ -147,7 +148,7 @@ def test_docker_release_tag_present(image_name):
         if "toomanyrequests" in docker_error:
             raise RuntimeError("Rate limited by docker hub")
         elif "authentication required" in docker_error:
-            raise RuntimeError("Docker request requires authentication")
+            raise RuntimeError("Docker request requires authentication (image {image_name})".format(image_name=image_name))
         else:
             raise AssertionError("Docker command failed: {}".format(docker_error))
     metadata = json.loads(docker_output)
