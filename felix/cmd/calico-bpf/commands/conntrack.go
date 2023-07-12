@@ -114,7 +114,11 @@ func (cmd *conntrackDumpCmd) Run(c *cobra.Command, _ []string) {
 	case "2":
 		ctMap = conntrack.MapV2()
 	default:
-		ctMap = conntrack.Map()
+		if ipv6 != nil {
+			ctMap = conntrack.MapV6()
+		} else {
+			ctMap = conntrack.Map()
+		}
 	}
 	if err := ctMap.Open(); err != nil {
 		log.WithError(err).Fatal("Failed to access ConntrackMap")
@@ -126,18 +130,17 @@ func (cmd *conntrackDumpCmd) Run(c *cobra.Command, _ []string) {
 		}
 		return
 	}
-	err := ctMap.Iter(func(k, v []byte) maps.IteratorAction {
-		var ctKey conntrack.Key
-		if len(k) != len(ctKey) {
-			log.Panic("Key has unexpected length")
-		}
-		copy(ctKey[:], k[:])
 
-		var ctVal conntrack.Value
-		if len(v) != len(ctVal) {
-			log.Panic("Value has unexpected length")
-		}
-		copy(ctVal[:], v[:])
+	keyFromBytes := conntrack.KeyFromBytes
+	valFromBytes := conntrack.ValueFromBytes
+	if ipv6 != nil {
+		keyFromBytes = conntrack.KeyV6FromBytes
+		valFromBytes = conntrack.ValueV6FromBytes
+	}
+
+	err := ctMap.Iter(func(k, v []byte) maps.IteratorAction {
+		ctKey := keyFromBytes(k)
+		ctVal := valFromBytes(v)
 
 		fmt.Printf("%v -> %v", ctKey, ctVal)
 		dumpExtra(ctKey, ctVal)
@@ -178,7 +181,7 @@ func dumpExtrav2(k v2.Key, v v2.Value) {
 	fmt.Printf(" SYN-SENT")
 }
 
-func dumpExtra(k conntrack.Key, v conntrack.Value) {
+func dumpExtra(k conntrack.KeyInterface, v conntrack.ValueInterface) {
 	now := bpf.KTimeNanos()
 
 	fmt.Printf(" Age: %s Active ago %s",
