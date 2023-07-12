@@ -256,7 +256,13 @@ func config(client client.Interface) func(string) string {
 						asValue = "64512"
 					}
 				} else {
-					asValue = bgpConfig.Spec.ASNumber.String()
+					if bgpConfig.Spec.ASNumber != nil {
+						asValue = bgpConfig.Spec.ASNumber.String()
+					} else {
+						// Use the default ASNumber of 64512 when there is none configured (first ASN reserved for private use).
+						// https://en.m.wikipedia.org/wiki/Autonomous_system_(Internet)#ASN_Table
+						asValue = "64512"
+					}
 				}
 			}
 			return asValue
