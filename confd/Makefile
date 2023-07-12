@@ -39,6 +39,9 @@ bin/confd: bin/confd-$(ARCH)
 ifeq ($(ARCH),amd64)
 	ln -f bin/confd-$(ARCH) bin/confd
 endif
+ifeq ($(ARCH),s390x)
+	ln -f bin/confd-$(ARCH) bin/confd
+endif
 
 ###############################################################################
 # Unit Tests
