@@ -1,12 +1,13 @@
-import requests
+import os
 import tarfile
-from nose.tools import with_setup
+
+import pytest
 
 import variables
+import utilities
 
-url = "https://github.com/projectcalico/calico/releases/download/{v}/release-{v}.tgz".format(
-    v=variables.RELEASE_VERSION
-)
+release_filename = f"release-{variables.RELEASE_VERSION}.tgz"
+url = f"https://github.com/projectcalico/calico/releases/download/{variables.RELEASE_VERSION}/{release_filename}"
 
 manifest_list = [
     "calico.yaml",
@@ -24,31 +25,33 @@ manifest_list = [
     "custom-resources.yaml",
 ]
 
+OVERRIDE_FILE = os.getenv("OVERRIDE_FILE")
 
-def setup_archive():
-    response = requests.get(url, stream=True)
-    global file
-    file = tarfile.open(fileobj=response.raw, mode="r|gz")
+@pytest.fixture(scope="session")
+def image_file_members(tmpdir_factory):
+    if OVERRIDE_FILE:
+        tf = tarfile.open(OVERRIDE_FILE, "r|gz")
+    else:
+        tmpfile_name = tmpdir_factory.mktemp("data").join(release_filename)
+        utilities.download_url_to_file(url, tmpfile_name)
+        tf = tarfile.open(tmpfile_name, "r|gz")
+    tarfile_members = utilities.tarfile_members_to_map(tf)
+    return tarfile_members
 
-
-def teardown_archive():
-    file.close()
-
-
-@with_setup(setup=setup_archive, teardown=teardown_archive)
-def test_manifest_present():
-    for manifest in manifest_list:
-        yield check_manifest_present, manifest
-
-
-def check_manifest_present(manifest):
-    print("[INFO] checking {} is in archive".format(manifest))
+@pytest.mark.slow
+@pytest.mark.github
+@pytest.mark.tryfirst
+@pytest.mark.parametrize("manifest", manifest_list)
+def test_manifest_present(image_file_members, manifest):
+    """
+    Validate that the given manifest is in the given archive
+    """
     try:
-        manifest_info = file.getmember(
-            "release-{v}/manifests/{m}".format(v=variables.RELEASE_VERSION, m=manifest)
-        )
-        print(manifest_info.name, manifest_info.size)
-        assert manifest_info.isfile()
-        assert manifest_info.size > 100
+        manifest_path = f"release-{variables.RELEASE_VERSION}/manifests/{manifest}"
+        manifest_info = image_file_members[manifest_path]
+        if not manifest_info.isfile():
+            raise AssertionError(f"Manifest entry {manifest_path} is not a file")
+        if manifest_info.size < 100:
+            raise AssertionError(f"Manifest entry {manifest_path} size is < 100 bytes ({manifest_info.size} bytes found)")
     except KeyError:
-        assert False, "{m} not found in archive: {url}".format(m=manifest, url=url)
+        raise AssertionError(f"{manifest} not found in archive: {url}")
