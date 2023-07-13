@@ -14,7 +14,7 @@ KUBECTL_VERSION = v1.24.8
 COREDNS_VERSION=1.5.2
 ETCD_VERSION=v3.5.1
 PROTOC_VER=v0.1
-UBI_VERSION=8.7
+UBI_VERSION=8.8
 
 # Configuration for Semaphore integration.
 ORGANIZATION = projectcalico
