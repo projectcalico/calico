@@ -439,7 +439,11 @@ type Response struct {
 }
 
 func (r *Response) SourceIP() string {
-	return strings.Split(r.SourceAddr, ":")[0]
+	if r.SourceAddr[0] != '[' {
+		return strings.Split(r.SourceAddr, ":")[0]
+	}
+
+	return strings.Split(r.SourceAddr[1:], "]")[0]
 }
 
 type ConnectionTarget interface {
