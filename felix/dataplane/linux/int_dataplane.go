@@ -583,6 +583,14 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 	ipsetsManager := common.NewIPSetsManager("ipv4", ipSetsV4, config.MaxIPSetSize)
 	ipsetsManagerV6 := common.NewIPSetsManager("ipv6", nil, config.MaxIPSetSize)
+	filterTableV6 := iptables.NewTable(
+		"filter",
+		6,
+		rules.RuleHashPrefix,
+		iptablesLock,
+		featureDetector,
+		iptablesOptions,
+	)
 
 	dp.RegisterManager(ipsetsManager)
 
@@ -700,6 +708,11 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		)
 		dp.RegisterManager(failsafeMgr)
 
+		filterTbl := filterTableV4
+		if config.BPFIpv6Enabled {
+			filterTbl = filterTableV6
+		}
+
 		workloadIfaceRegex := regexp.MustCompile(strings.Join(interfaceRegexes, "|"))
 		bpfEndpointManager, err = newBPFEndpointManager(
 			nil,
@@ -709,7 +722,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			workloadIfaceRegex,
 			ipSetIDAllocator,
 			ruleRenderer,
-			filterTableV4,
+			filterTbl,
 			dp.reportHealth,
 			dp.loopSummarizer,
 			featureDetector,
@@ -886,14 +899,6 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		)
 		rawTableV6 := iptables.NewTable(
 			"raw",
-			6,
-			rules.RuleHashPrefix,
-			iptablesLock,
-			featureDetector,
-			iptablesOptions,
-		)
-		filterTableV6 := iptables.NewTable(
-			"filter",
 			6,
 			rules.RuleHashPrefix,
 			iptablesLock,
@@ -1533,7 +1538,7 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 			Action: iptables.AcceptAction{},
 		})
 
-		if t.IPVersion == 6 {
+		if t.IPVersion == 6 && !d.config.BPFIpv6Enabled {
 			for _, prefix := range rulesConfig.WorkloadIfacePrefixes {
 				// In BPF mode, we don't support IPv6 yet.  Drop it.
 				fwdRules = append(fwdRules, iptables.Rule{
@@ -1542,7 +1547,7 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 					Comment: []string{"To workload, drop IPv6."},
 				})
 			}
-		} else {
+		} else if (t.IPVersion == 6) == (d.config.BPFIpv6Enabled) /* XXX remove condition for dual stack */ {
 			// Let the BPF programs know if Linux conntrack knows about the flow.
 			fwdRules = append(fwdRules, bpfMarkPreestablishedFlowsRules()...)
 			// The packet may be about to go to a local workload.  However, the local workload may not have a BPF

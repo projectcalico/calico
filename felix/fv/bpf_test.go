@@ -386,10 +386,10 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				}
 
 				for i, felix := range tc.Felixes {
-					felix.Exec("iptables-save", "-c")
 					felix.Exec("conntrack", "-L")
 					felix.Exec("calico-bpf", "policy", "dump", "cali57946200c58", "all")
 					if testOpts.ipv6 {
+						felix.Exec("ip6tables-save", "-c")
 						felix.Exec("ip", "-6", "link")
 						felix.Exec("ip", "-6", "addr")
 						felix.Exec("ip", "-6", "rule")
@@ -402,6 +402,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						felix.Exec("calico-bpf", "-6", "conntrack", "dump")
 						felix.Exec("calico-bpf", "-6", "arp", "dump")
 					} else {
+						felix.Exec("iptables-save", "-c")
 						felix.Exec("ip", "link")
 						felix.Exec("ip", "addr")
 						felix.Exec("ip", "rule")
@@ -1945,6 +1946,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 						w00Expects := []ExpectationOption{ExpectWithPorts(port)}
 						hostW0SrcIP := ExpectWithSrcIPs(tc.Felixes[0].IP)
+						if testOpts.ipv6 {
+							hostW0SrcIP = ExpectWithSrcIPs(tc.Felixes[0].IPv6)
+						}
 						switch testOpts.tunnel {
 						case "ipip":
 							hostW0SrcIP = ExpectWithSrcIPs(tc.Felixes[0].ExpectedIPIPTunnelAddr)
