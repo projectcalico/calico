@@ -65,7 +65,7 @@ func testfn(makeIPs func(ips []string) proxy.K8sServicePortOption) {
 	}
 
 	state := proxy.DPSyncerState{
-		SvcMap: k8sp.ServiceMap{
+		SvcMap: k8sp.ServicePortMap{
 			svcKey: proxy.NewK8sServicePort(
 				net.IPv4(10, 0, 0, 2),
 				2222,
