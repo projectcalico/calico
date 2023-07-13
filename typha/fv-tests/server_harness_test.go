@@ -16,9 +16,9 @@ package fvtests_test
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/binary"
 	"fmt"
-	"math/rand"
 	"net"
 	"sync"
 	"time"
@@ -310,7 +310,10 @@ func (h *ServerHarness) SendConfigUpdates(n int) map[string]api.Update {
 func generatePod(n int) *corev1.Pod {
 	namespace := fmt.Sprintf("a-namespace-name-%x", n/100)
 	var buf [8]byte
-	rand.Read(buf[:])
+	_, err := rand.Read(buf[:])
+	if err != nil {
+		Expect(err).NotTo(HaveOccurred())
+	}
 	name := fmt.Sprintf("some-app-name-%d-%x", n, buf[:])
 	hostname := fmt.Sprintf("hostname%d", n/20)
 	ip := net.IP{0, 0, 0, 0}
@@ -354,7 +357,10 @@ func generatePod(n int) *corev1.Pod {
 
 func randomHex(length int) string {
 	buf := make([]byte, length/2)
-	rand.Read(buf)
+	_, err := rand.Read(buf)
+	if err != nil {
+		Expect(err).NotTo(HaveOccurred())
+	}
 	return fmt.Sprintf("%x", buf)
 }
 
