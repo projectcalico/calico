@@ -63,7 +63,7 @@ func makeSvcKey(svcIdx int) k8sp.ServicePortName {
 
 func makeState(svcCnt, epCnt int, opts ...K8sServicePortOption) DPSyncerState {
 	state := DPSyncerState{
-		SvcMap: make(k8sp.ServiceMap, svcCnt),
+		SvcMap: make(k8sp.ServicePortMap, svcCnt),
 		EpsMap: make(k8sp.EndpointsMap, epCnt),
 	}
 
