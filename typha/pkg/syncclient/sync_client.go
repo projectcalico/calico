@@ -27,11 +27,8 @@ import (
 	"sync"
 	"time"
 
-	log "github.com/sirupsen/logrus"
-
-	"github.com/projectcalico/calico/libcalico-go/lib/backend/syncersv1/dedupebuffer"
-
 	"github.com/golang/snappy"
+	log "github.com/sirupsen/logrus"
 
 	calicotls "github.com/projectcalico/calico/crypto/pkg/tls"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
@@ -126,14 +123,17 @@ func New(
 	if options == nil {
 		options = &Options{}
 	}
+	cbskn, ok := cbs.(callbacksWithKeysKnown)
+	if !ok {
+		cbskn = callbacksWithKeysKnownAdapter{cbs}
+	}
 	return &SyncerClient{
 		ID: id,
 		logCxt: log.WithFields(log.Fields{
 			"myID": id,
 			"type": options.SyncerType,
 		}),
-		dedupeBuf:  dedupebuffer.New(),
-		callbacks:  cbs,
+		callbacks:  cbskn,
 		discoverer: discoverer,
 
 		myVersion:  myVersion,
@@ -162,9 +162,21 @@ type SyncerClient struct {
 	handshakeStatus             *handshakeStatus
 	supportsNodeResourceUpdates bool
 
-	dedupeBuf *dedupebuffer.DeduplicatingBuffer
-	callbacks api.SyncerCallbacks
+	callbacks callbacksWithKeysKnown
 	Finished  sync.WaitGroup
+}
+
+type callbacksWithKeysKnown interface {
+	api.SyncerCallbacks
+	OnUpdatesKeysKnown(updates []api.Update, keys []string)
+}
+
+type callbacksWithKeysKnownAdapter struct {
+	api.SyncerCallbacks
+}
+
+func (c callbacksWithKeysKnownAdapter) OnUpdatesKeysKnown(updates []api.Update, keys []string) {
+	c.OnUpdates(updates)
 }
 
 type handshakeStatus struct {
@@ -206,11 +218,6 @@ func (s *SyncerClient) Start(cxt context.Context) error {
 	cxt, cancelFn := context.WithCancel(cxt)
 	s.Finished.Add(1)
 	go s.loop(cxt, cancelFn)
-	go s.dedupeBuf.SendToSinkForever(s.callbacks)
-	go func() {
-		<-cxt.Done()
-		s.dedupeBuf.Stop() // Can't easily wait for it to finish, it may be blocked on downstream.
-	}()
 
 	s.Finished.Add(1)
 	go func() {
@@ -477,7 +484,7 @@ func (s *SyncerClient) loop(cxt context.Context, cancelFn context.CancelFunc) {
 		switch msg := msg.(type) {
 		case syncproto.MsgSyncStatus:
 			logCxt.WithField("newStatus", msg.SyncStatus).Info("Status update from Typha.")
-			s.dedupeBuf.OnStatusUpdated(msg.SyncStatus)
+			s.callbacks.OnStatusUpdated(msg.SyncStatus)
 		case syncproto.MsgPing:
 			logCxt.Debug("Ping received from Typha")
 			err := s.sendMessageToServer(cxt, logCxt, "write pong to server",
@@ -511,7 +518,7 @@ func (s *SyncerClient) loop(cxt context.Context, cancelFn context.CancelFunc) {
 				updates = append(updates, update)
 				keys = append(keys, kv.Key)
 			}
-			s.dedupeBuf.OnUpdatesKeysKnown(updates, keys)
+			s.callbacks.OnUpdatesKeysKnown(updates, keys)
 		case syncproto.MsgDecoderRestart:
 			if s.options.DisableDecoderRestart {
 				log.Error("Server sent MsgDecoderRestart but we signalled no support.")
