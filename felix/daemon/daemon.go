@@ -28,6 +28,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/syncersv1/dedupebuffer"
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
@@ -485,7 +486,7 @@ configRetry:
 	// which will feed the calculation graph with updates, bringing Felix into sync.
 	var syncer Startable
 	var typhaConnection *syncclient.SyncerClient
-	syncerToValidator := calc.NewSyncerCallbacksDecoupler()
+	syncerToValidator := dedupebuffer.New()
 
 	if typhaDiscoverer.TyphaEnabled() {
 		// Use a remote Syncer, via the Typha server.
@@ -629,7 +630,7 @@ configRetry:
 	// calculation graph.
 	validator := calc.NewValidationFilter(asyncCalcGraph, configParams)
 
-	go syncerToValidator.SendTo(validator)
+	go syncerToValidator.SendToSinkForever(validator)
 	asyncCalcGraph.Start()
 	log.Infof("Started the processing graph")
 	var stopSignalChans []chan<- *sync.WaitGroup
