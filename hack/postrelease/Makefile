@@ -30,7 +30,7 @@ run_nosetests_docker: create_docker_container
 		-v /run/docker.sock:/run/docker.sock \
 		-e QUAY_API_TOKEN                    \
 		$(CALICO_POSTRELEASE_TEST_IMAGE)     \
-		pytest -v tests
+		pytest -v --junitxml=xunit.xml tests
 
 ## Cleanup
 
