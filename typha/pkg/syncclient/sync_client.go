@@ -29,6 +29,8 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/syncersv1/dedupebuffer"
+
 	"github.com/golang/snappy"
 
 	calicotls "github.com/projectcalico/calico/crypto/pkg/tls"
@@ -130,6 +132,7 @@ func New(
 			"myID": id,
 			"type": options.SyncerType,
 		}),
+		dedupeBuf:  dedupebuffer.New(),
 		callbacks:  cbs,
 		discoverer: discoverer,
 
@@ -159,6 +162,7 @@ type SyncerClient struct {
 	handshakeStatus             *handshakeStatus
 	supportsNodeResourceUpdates bool
 
+	dedupeBuf *dedupebuffer.DeduplicatingBuffer
 	callbacks api.SyncerCallbacks
 	Finished  sync.WaitGroup
 }
@@ -202,6 +206,11 @@ func (s *SyncerClient) Start(cxt context.Context) error {
 	cxt, cancelFn := context.WithCancel(cxt)
 	s.Finished.Add(1)
 	go s.loop(cxt, cancelFn)
+	go s.dedupeBuf.SendToSinkForever(s.callbacks)
+	go func() {
+		<-cxt.Done()
+		s.dedupeBuf.Stop() // Can't easily wait for it to finish, it may be blocked on downstream.
+	}()
 
 	s.Finished.Add(1)
 	go func() {
@@ -468,7 +477,7 @@ func (s *SyncerClient) loop(cxt context.Context, cancelFn context.CancelFunc) {
 		switch msg := msg.(type) {
 		case syncproto.MsgSyncStatus:
 			logCxt.WithField("newStatus", msg.SyncStatus).Info("Status update from Typha.")
-			s.callbacks.OnStatusUpdated(msg.SyncStatus)
+			s.dedupeBuf.OnStatusUpdated(msg.SyncStatus)
 		case syncproto.MsgPing:
 			logCxt.Debug("Ping received from Typha")
 			err := s.sendMessageToServer(cxt, logCxt, "write pong to server",
@@ -482,6 +491,7 @@ func (s *SyncerClient) loop(cxt context.Context, cancelFn context.CancelFunc) {
 			logCxt.Debug("Pong sent to Typha")
 		case syncproto.MsgKVs:
 			updates := make([]api.Update, 0, len(msg.KVs))
+			keys := make([]string, 0, len(msg.KVs))
 			if s.options.DebugDiscardKVUpdates {
 				// For simulating lots of clients in tests, just throw away the data.
 				continue
@@ -499,8 +509,9 @@ func (s *SyncerClient) loop(cxt context.Context, cancelFn context.CancelFunc) {
 					}).Debug("Decoded update from Typha")
 				}
 				updates = append(updates, update)
+				keys = append(keys, kv.Key)
 			}
-			s.callbacks.OnUpdates(updates)
+			s.dedupeBuf.OnUpdatesKeysKnown(updates, keys)
 		case syncproto.MsgDecoderRestart:
 			if s.options.DisableDecoderRestart {
 				log.Error("Server sent MsgDecoderRestart but we signalled no support.")
