@@ -22279,6 +22279,8 @@ spec:
             - name: var-lib-calico
               readOnly: true
               mountPath: /var/lib/calico
+          securityContext:
+            privileged: true
           env:
             - name: WATCH_NAMESPACE
               value: ""
