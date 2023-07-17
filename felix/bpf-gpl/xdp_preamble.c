@@ -14,7 +14,7 @@
 
 const volatile struct cali_xdp_globals __globals;
 
-SEC("xdp/preamble")
+SEC("xdp")
 int  cali_xdp_preamble(struct __sk_buff *skb)
 {
 	struct cali_xdp_globals *globals = state_get_globals_xdp();

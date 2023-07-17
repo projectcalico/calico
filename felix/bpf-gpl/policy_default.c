@@ -23,7 +23,7 @@
  * we can compile it with allow all
  */
 static CALI_BPF_INLINE enum calico_policy_result policy_allow(struct __sk_buff *skb,
-				__u8 ip_proto, __u32 saddr, __u32 daddr, __u16 sport, __u16 dport)
+															  __u8 ip_proto, __u32 saddr, __u32 daddr, __u16 sport, __u16 dport)
 {
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunused-label"
@@ -40,7 +40,7 @@ allow:
 }
 
 static CALI_BPF_INLINE enum calico_policy_result policy_deny(struct __sk_buff *skb,
-				__u8 ip_proto, __u32 saddr, __u32 daddr, __u16 sport, __u16 dport)
+															 __u8 ip_proto, __u32 saddr, __u32 daddr, __u16 sport, __u16 dport)
 {
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunused-label"
@@ -56,7 +56,7 @@ allow:
 #pragma clang diagnostic pop
 }
 
-SEC("classifier/tc/policy_allow")
+SEC("classifier")
 int calico_tc_allow(struct __sk_buff *skb)
 {
 	struct cali_tc_ctx _ctx = {
@@ -65,7 +65,8 @@ int calico_tc_allow(struct __sk_buff *skb)
 	};
 	struct cali_tc_ctx *ctx = &_ctx;
 
-	if (!ctx->globals) {
+	if (!ctx->globals)
+	{
 		CALI_LOG_IF(CALI_LOG_LEVEL_DEBUG, "State map globals lookup failed: DROP\n");
 		return TC_ACT_SHOT;
 	}
@@ -74,13 +75,14 @@ int calico_tc_allow(struct __sk_buff *skb)
 
 #ifndef IPVER6
 	struct cali_tc_state *state = state_get();
-	if (!state) {
-	        CALI_DEBUG("State map lookup failed: DROP\n");
-	        goto deny;
+	if (!state)
+	{
+		CALI_DEBUG("State map lookup failed: DROP\n");
+		goto deny;
 	}
 
 	state->pol_rc = policy_allow(skb, state->ip_proto, state->ip_src,
-				     state->ip_dst, state->sport, state->dport);
+								 state->ip_dst, state->sport, state->dport);
 
 	CALI_DEBUG("jumping to allowed\n");
 	CALI_JUMP_TO(ctx, PROG_INDEX_ALLOWED);
@@ -93,7 +95,7 @@ deny:
 	return TC_ACT_SHOT;
 }
 
-SEC("classifier/tc/policy_deny")
+SEC("classifier")
 int calico_tc_deny(struct __sk_buff *skb)
 {
 	struct cali_tc_ctx _ctx = {
@@ -102,7 +104,8 @@ int calico_tc_deny(struct __sk_buff *skb)
 	};
 	struct cali_tc_ctx *ctx = &_ctx;
 
-	if (!ctx->globals) {
+	if (!ctx->globals)
+	{
 		CALI_LOG_IF(CALI_LOG_LEVEL_DEBUG, "State map globals lookup failed: DROP\n");
 		return TC_ACT_SHOT;
 	}
@@ -111,13 +114,14 @@ int calico_tc_deny(struct __sk_buff *skb)
 
 #ifndef IPVER6
 	struct cali_tc_state *state = state_get();
-	if (!state) {
-	        CALI_DEBUG("State map lookup failed: DROP\n");
-	        goto deny;
+	if (!state)
+	{
+		CALI_DEBUG("State map lookup failed: DROP\n");
+		goto deny;
 	}
 
 	state->pol_rc = policy_deny(skb, state->ip_proto, state->ip_src,
-				    state->ip_dst, state->sport, state->dport);
+								state->ip_dst, state->sport, state->dport);
 
 	CALI_DEBUG("jumping to allowed\n");
 	CALI_JUMP_TO(ctx, PROG_INDEX_ALLOWED);
