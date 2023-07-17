@@ -95,6 +95,11 @@ func createVethName(name string) netlink.Link {
 	return veth
 }
 
+func getVethName(name string) netlink.Link {
+	link, _ := netlink.LinkByName(name)
+	return link
+}
+
 func deleteLink(veth netlink.Link) {
 	err := netlink.LinkDel(veth)
 	Expect(err).NotTo(HaveOccurred(), "failed to delete test veth")

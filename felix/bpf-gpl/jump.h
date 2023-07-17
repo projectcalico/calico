@@ -33,39 +33,58 @@ static CALI_BPF_INLINE struct cali_xdp_globals *state_get_globals_xdp(void)
 	return cali_state_lookup_elem(&key);
 }
 
-#define PROG_PATH(idx) ((CALI_LOG_LEVEL < CALI_LOG_LEVEL_DEBUG) ? idx : idx ## _DEBUG)
+#define PROG_PATH(idx) ((CALI_LOG_LEVEL < CALI_LOG_LEVEL_DEBUG) ? idx : idx##_DEBUG)
 
 #if CALI_F_XDP
 
 #define cali_jump_map map_symbol(xdp_cali_progs, 2)
 
-struct bpf_map_def_extended __attribute__((section("maps"))) cali_jump_map = {
-	.type = BPF_MAP_TYPE_PROG_ARRAY,
-	.key_size = 4,
-	.value_size = 4,
-	.max_entries = 200,
-};
+// struct bpf_map_def_extended __attribute__((section("maps"))) cali_jump_map = {
+// 	.type = BPF_MAP_TYPE_PROG_ARRAY,
+// 	.key_size = 4,
+// 	.value_size = 4,
+// 	.max_entries = 200,
+// };
+
+struct
+{
+	__uint(type, BPF_MAP_TYPE_PROG_ARRAY);
+	__uint(key_size, 4);
+	__uint(value_size, 4);
+	__uint(max_entries, 200);
+} cali_jump_map SEC(".maps");
 
 #define CALI_JUMP_TO(ctx, index) bpf_tail_call((ctx)->xdp, &cali_jump_map, (ctx)->xdp_globals->jumps[PROG_PATH(index)])
 #else
 
 #define cali_jump_map map_symbol(cali_progs, 2)
 
-struct bpf_map_def_extended __attribute__((section("maps"))) cali_jump_map = {
-	.type = BPF_MAP_TYPE_PROG_ARRAY,
-	.key_size = 4,
-	.value_size = 4,
-	.max_entries = 200,
-};
+// struct bpf_map_def_extended __attribute__((section("maps"))) cali_jump_map = {
+// 	.type = BPF_MAP_TYPE_PROG_ARRAY,
+// 	.key_size = 4,
+// 	.value_size = 4,
+// 	.max_entries = 200,
+// };
 
-#define CALI_JUMP_TO(ctx, index) do {	\
-	CALI_DEBUG("jump to idx %d prog at %d\n", index, (ctx)->globals->jumps[PROG_PATH(index)]);	\
-	bpf_tail_call((ctx)->skb, &cali_jump_map, (ctx)->globals->jumps[PROG_PATH(index)]);	\
-} while (0)
+struct
+{
+	__uint(type, BPF_MAP_TYPE_PROG_ARRAY);
+	__uint(key_size, 4);
+	__uint(value_size, 4);
+	__uint(max_entries, 200);
+} cali_jump_map SEC(".maps");
+
+#define CALI_JUMP_TO(ctx, index)                                                                   \
+	do                                                                                             \
+	{                                                                                              \
+		CALI_DEBUG("jump to idx %d prog at %d\n", index, (ctx)->globals->jumps[PROG_PATH(index)]); \
+		bpf_tail_call((ctx)->skb, &cali_jump_map, (ctx)->globals->jumps[PROG_PATH(index)]);        \
+	} while (0)
 #endif
 
 /* Add new values to the end as these are program indices */
-enum cali_jump_index {
+enum cali_jump_index
+{
 	PROG_INDEX_MAIN,
 	PROG_INDEX_POLICY,
 	PROG_INDEX_ALLOWED,
@@ -97,12 +116,20 @@ enum cali_jump_index {
 
 #define cali_jump_prog_map map_symbol(xdp_cali_jump, 2)
 
-struct bpf_map_def_extended __attribute__((section("maps"))) cali_jump_prog_map = {
-	.type = BPF_MAP_TYPE_PROG_ARRAY,
-	.key_size = 4,
-	.value_size = 4,
-	.max_entries = 100,
-};
+// struct bpf_map_def_extended __attribute__((section("maps"))) cali_jump_prog_map = {
+// 	.type = BPF_MAP_TYPE_PROG_ARRAY,
+// 	.key_size = 4,
+// 	.value_size = 4,
+// 	.max_entries = 100,
+// };
+
+struct
+{
+	__uint(type, BPF_MAP_TYPE_PROG_ARRAY);
+	__uint(key_size, 4);
+	__uint(value_size, 4);
+	__uint(max_entries, 100);
+} cali_jump_prog_map SEC(".maps");
 
 /* We on any path, we always jump to the PROG_INDEX_POLICY for policy, that one
  * is shared!
@@ -113,21 +140,31 @@ struct bpf_map_def_extended __attribute__((section("maps"))) cali_jump_prog_map 
 
 #define cali_jump_prog_map map_symbol(cali_jump, 2)
 
-struct bpf_map_def_extended __attribute__((section("maps"))) cali_jump_prog_map = {
-	.type = BPF_MAP_TYPE_PROG_ARRAY,
-	.key_size = 4,
-	.value_size = 4,
-	.max_entries = 10000,
-};
+// struct bpf_map_def_extended __attribute__((section("maps"))) cali_jump_prog_map = {
+// 	.type = BPF_MAP_TYPE_PROG_ARRAY,
+// 	.key_size = 4,
+// 	.value_size = 4,
+// 	.max_entries = 10000,
+// };
 
-#define CALI_JUMP_TO_POLICY(ctx) do {	\
-	(ctx)->skb->cb[0] = (ctx)->globals->jumps[PROG_PATH(PROG_INDEX_ALLOWED)];			\
-	(ctx)->skb->cb[1] = (ctx)->globals->jumps[PROG_PATH(PROG_INDEX_DROP)];				\
-	CALI_DEBUG("policy allow prog at %d\n", (ctx)->globals->jumps[PROG_PATH(PROG_INDEX_ALLOWED)]);	\
-	CALI_DEBUG("policy deny prog at %d\n", (ctx)->globals->jumps[PROG_PATH(PROG_INDEX_DROP)]);	\
-	CALI_DEBUG("jump to policy prog at %d\n", (ctx)->globals->jumps[PROG_INDEX_POLICY]);		\
-	bpf_tail_call((ctx)->skb, &cali_jump_prog_map, (ctx)->globals->jumps[PROG_INDEX_POLICY]);	\
-} while (0)
+struct
+{
+	__uint(type, BPF_MAP_TYPE_PROG_ARRAY);
+	__uint(key_size, 4);
+	__uint(value_size, 4);
+	__uint(max_entries, 10000);
+} cali_jump_prog_map SEC(".maps");
+
+#define CALI_JUMP_TO_POLICY(ctx)                                                                       \
+	do                                                                                                 \
+	{                                                                                                  \
+		(ctx)->skb->cb[0] = (ctx)->globals->jumps[PROG_PATH(PROG_INDEX_ALLOWED)];                      \
+		(ctx)->skb->cb[1] = (ctx)->globals->jumps[PROG_PATH(PROG_INDEX_DROP)];                         \
+		CALI_DEBUG("policy allow prog at %d\n", (ctx)->globals->jumps[PROG_PATH(PROG_INDEX_ALLOWED)]); \
+		CALI_DEBUG("policy deny prog at %d\n", (ctx)->globals->jumps[PROG_PATH(PROG_INDEX_DROP)]);     \
+		CALI_DEBUG("jump to policy prog at %d\n", (ctx)->globals->jumps[PROG_INDEX_POLICY]);           \
+		bpf_tail_call((ctx)->skb, &cali_jump_prog_map, (ctx)->globals->jumps[PROG_INDEX_POLICY]);      \
+	} while (0)
 
 #endif
 

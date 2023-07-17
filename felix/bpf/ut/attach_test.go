@@ -74,7 +74,11 @@ func TestAttach(t *testing.T) {
 	)
 	Expect(err).NotTo(HaveOccurred())
 
-	host1 := createVethName("hostep1")
+	host1 := getVethName("hostep1")
+	if host1 != nil {
+		deleteLink(host1)
+	}
+	host1 = createVethName("hostep1")
 	defer deleteLink(host1)
 
 	var hostep1State ifstate.Value
@@ -174,7 +178,11 @@ func TestAttach(t *testing.T) {
 		Expect(xdpProgs).To(HaveLen(0))
 	})
 
-	host2 := createVethName("hostep2")
+	host2 := getVethName("hostep2")
+	if host2 != nil {
+		deleteLink(host2)
+	}
+	host2 = createVethName("hostep2")
 	defer deleteLink(host2)
 
 	t.Run("create another host insterface without a host endpoint (no policy)", func(t *testing.T) {
@@ -189,7 +197,11 @@ func TestAttach(t *testing.T) {
 		Expect(len(pm)).To(Equal(2)) // no policy for hep2
 	})
 
-	workload1 := createVethName("workloadep1")
+	workload1 := getVethName("workloadep1")
+	if workload1 != nil {
+		deleteLink(workload1)
+	}
+	workload1 = createVethName("workloadep1")
 	defer deleteLink(workload1)
 
 	t.Run("create a workload", func(t *testing.T) {
@@ -229,7 +241,11 @@ func TestAttach(t *testing.T) {
 		Expect(pm).To(HaveKey(wl1State.EgressPolicy()))
 	})
 
-	workload2 := createVethName("workloadep2")
+	workload2 := getVethName("workloadep2")
+	if workload2 != nil {
+		deleteLink(workload2)
+	}
+	workload2 = createVethName("workloadep2")
 	defer deleteLink(workload2)
 
 	t.Run("create another workload, should not load more than the preable", func(t *testing.T) {
