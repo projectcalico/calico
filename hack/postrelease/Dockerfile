@@ -1,4 +1,4 @@
-FROM docker:18.09
+FROM docker:24
 
 ARG VERSION
 ARG FLANNEL_VERSION
@@ -9,7 +9,7 @@ ENV FLANNEL_VERSION     ${FLANNEL_VERSION}
 ENV NOSE_PROCESSES      ${NOSE_PROCESSES}
 ENV OPERATOR_VERSION    ${OPERATOR_VERSION}
 
-RUN --mount=type=tmpfs,target=/var/cache/apk apk add --update bash python python-dev py2-pip py-setuptools openssl-dev curl jq
+RUN --mount=type=tmpfs,target=/var/cache/apk apk add --update bash python3 python3-dev py3-pip py-setuptools openssl-dev curl jq
 
 RUN mkdir -p /root/.docker /code
 COPY config.json /root/.docker/
