@@ -147,6 +147,16 @@ def test_docker_release_tag_present(image_name):
 
     assert EXPECTED_ARCHS.sort() == found_archs.sort()
 
+def test_operator_image_present():
+    """
+    Validate operator image exists
+    """
+    print(f"[INFO] checking {OPERATOR_IMAGE}")
+    resp = request_quay_image("tigera/operator", variables.OPERATOR_VERSION)
+    if resp.status_code != 200:
+        raise AssertionError(f"Got status code {resp.status_code} from API URL {resp.request.url}")
+    assert resp.status_code == 200
+
 def test_operator_images():
     """
     Validate operator images match expected versions
@@ -158,9 +168,6 @@ def test_operator_images():
     req = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     output = req.stdout.read()
 
-    print(output)
-
-    print(f"[INFO] Pulling operator image {output}")
 
     cmd = f"docker run --rm -t {OPERATOR_IMAGE} -print-images list"
     req = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -176,13 +183,3 @@ def test_operator_images():
             print(f"[INFO] checking {this_image} is in the operator image list")
             if this_image not in image_list:
                 raise AssertionError(f"{this_image} not found in operator image list")
-
-def test_operator_image_present():
-    """
-    Validate operator image exists
-    """
-    print(f"[INFO] checking {OPERATOR_IMAGE}")
-    resp = request_quay_image("tigera/operator", variables.OPERATOR_VERSION)
-    if resp.status_code != 200:
-        raise AssertionError(f"Got status code {resp.status_code} from API URL {resp.request.url}")
-    assert resp.status_code == 200
