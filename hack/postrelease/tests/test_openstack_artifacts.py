@@ -1,7 +1,7 @@
 import re
-import requests
 
 import pytest
+import requests
 
 import variables
 

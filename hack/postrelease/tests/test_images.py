@@ -1,9 +1,8 @@
 import json
 import subprocess
 
-import requests
-
 import pytest
+import requests
 
 import variables
 

@@ -3,8 +3,8 @@ import tarfile
 
 import pytest
 
-import variables
 import utilities
+import variables
 
 release_filename = f"release-{variables.RELEASE_VERSION}.tgz"
 url = f"https://github.com/projectcalico/calico/releases/download/{variables.RELEASE_VERSION}/{release_filename}"

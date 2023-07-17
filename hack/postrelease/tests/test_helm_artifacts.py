@@ -1,8 +1,8 @@
 import pytest
 import requests
 
-import variables
 import utilities
+import variables
 
 CHART_URL = (
     "https://github.com/projectcalico/calico/releases/download/"

@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 
 import shutil
-
 from functools import cache
 
-import yaml
 import requests
 import rich.progress
+import yaml
 
 import variables
 
