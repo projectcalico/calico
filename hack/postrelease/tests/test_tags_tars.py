@@ -31,8 +31,9 @@ calicoctl_binaries = [
 # Build out the expected URLs for a Calico release.
 project_tags = (
     ("projectcalico/calico", variables.RELEASE_VERSION),
-    ("coreos/flannel", variables.FLANNEL_VERSION)
+    ("coreos/flannel", variables.FLANNEL_VERSION),
 )
+
 
 @pytest.mark.github
 @pytest.mark.parametrize("artifact", calicoctl_binaries)
@@ -41,13 +42,15 @@ def test_calico_release_downloads(artifact):
     resp = requests.head(url, allow_redirects=True)
     assert resp.status_code == 200
 
+
 @pytest.mark.github
 @pytest.mark.parametrize("project,release", project_tags)
 def test_release_archives(project, release):
-    for format in ('zip', 'tar.gz'):
+    for format in ("zip", "tar.gz"):
         url = f"https://github.com/{project}/archive/{release}.{format}"
         resp = requests.head(url, allow_redirects=True)
         assert resp.status_code == 200
+
 
 @pytest.mark.github
 @pytest.mark.parametrize("project,tagname", project_tags)
@@ -56,10 +59,11 @@ def test_project_tag(project, tagname):
     resp = requests.head(url, allow_redirects=True)
     assert resp.status_code == 200
 
+
 @pytest.mark.github
 @pytest.mark.windows
 def test_windows_install_release():
-    url = f'https://github.com/projectcalico/calico/releases/download/{variables.RELEASE_VERSION}/install-calico-windows.ps1'
+    url = f"https://github.com/projectcalico/calico/releases/download/{variables.RELEASE_VERSION}/install-calico-windows.ps1"
     resp = requests.get(url)
     base_url = re.search(r'\$ReleaseBaseURL="(.*)",', resp.text).group(1)
     release_file = re.search(r'\$ReleaseFile="(.*)",', resp.text).group(1)

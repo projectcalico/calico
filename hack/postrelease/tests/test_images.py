@@ -12,22 +12,22 @@ OPERATOR_IMAGE = f"quay.io/tigera/operator:{variables.OPERATOR_VERSION}"
 # Architectures we expect to be present in multi-arch image manifests.
 EXPECTED_ARCHS = ["amd64", "arm64", "armv7", "ppc64le", "s390x"]
 
-# Images we expect to exist as part of a Calico release, without 
+# Images we expect to exist as part of a Calico release, without
 # a registry assigned.
 EXPECTED_IMAGES = [
-  "calico/node",
-  "calico/ctl", 
-  "calico/apiserver",
-  "calico/typha",
-  "calico/cni",
-  "calico/kube-controllers",
-  "calico/upgrade",
-  "calico/windows",
-  "calico/flannel-migration-controller",
-  "calico/dikastes",
-  "calico/pilot-webhook",
-  "calico/pod2daemon-flexvol",
-  "calico/csi",
+    "calico/node",
+    "calico/ctl",
+    "calico/apiserver",
+    "calico/typha",
+    "calico/cni",
+    "calico/kube-controllers",
+    "calico/upgrade",
+    "calico/windows",
+    "calico/flannel-migration-controller",
+    "calico/dikastes",
+    "calico/pilot-webhook",
+    "calico/pod2daemon-flexvol",
+    "calico/csi",
 ]
 
 TAG_SUFFIXES = [
@@ -54,8 +54,8 @@ CHECK_IMAGES = [img for img in EXPECTED_IMAGES if img not in EXCLUDED_IMAGES]
 
 # Images that we expect to be published to GCR.
 GCR_IMAGES = [
-    "calico/node", 
-    "calico/cni", 
+    "calico/node",
+    "calico/cni",
     "calico/typha",
 ]
 
@@ -65,17 +65,19 @@ for image in EXPECTED_IMAGES:
         tag_suffixed = f"{variables.RELEASE_VERSION}-{tag_suffix}"
         ALL_IMAGES.append((image, tag_suffixed))
 
-print(("Found {} separate image tags to test".format(len(ALL_IMAGES))))
+print("Found {} separate image tags to test".format(len(ALL_IMAGES)))
+
 
 def request_quay_image(image_name, image_version):
     headers = {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer {}'.format(variables.QUAY_API_TOKEN)
-        }
-    params = {'specificTag': image_version}
+        "Content-Type": "application/json",
+        "Authorization": "Bearer {}".format(variables.QUAY_API_TOKEN),
+    }
+    params = {"specificTag": image_version}
     api_url = f"https://quay.io/api/v1/repository/{image_name}/tag"
     resp = requests.get(api_url, headers=headers, params=params)
     return resp
+
 
 @pytest.mark.parametrize("image_name,image_version", ALL_IMAGES)
 def test_quay_arch_tags_present(image_name, image_version):
@@ -85,7 +87,10 @@ def test_quay_arch_tags_present(image_name, image_version):
     print(f"[INFO] checking quay.io/{image_name}:{image_version}")
     resp = request_quay_image(image_name, image_version)
     if resp.status_code != 200:
-        raise AssertionError(f"Got status code {resp.status_code} from API URL {resp.request.url}")
+        raise AssertionError(
+            f"Got status code {resp.status_code} from API URL {resp.request.url}"
+        )
+
 
 @pytest.mark.parametrize("image_name", EXPECTED_IMAGES)
 def test_quay_release_tags_present(image_name):
@@ -95,7 +100,10 @@ def test_quay_release_tags_present(image_name):
     print(f"[INFO] checking quay.io/{image_name}:{variables.RELEASE_VERSION}")
     resp = request_quay_image(image_name, variables.RELEASE_VERSION)
     if resp.status_code != 200:
-        raise AssertionError(f"Got status code {resp.status_code} from API URL {resp.request.url}")
+        raise AssertionError(
+            f"Got status code {resp.status_code} from API URL {resp.request.url}"
+        )
+
 
 @pytest.mark.parametrize("image_name", GCR_IMAGES)
 def test_gcr_release_tag_present(image_name):
@@ -103,19 +111,23 @@ def test_gcr_release_tag_present(image_name):
     Verify GCR images
     """
     gcr_name = image_name.replace("calico/", "")
-    print(f"[INFO] checking gcr.io/projectcalico-org/{gcr_name}:{variables.RELEASE_VERSION}")
+    print(
+        f"[INFO] checking gcr.io/projectcalico-org/{gcr_name}:{variables.RELEASE_VERSION}"
+    )
     cmd = f'docker manifest inspect gcr.io/projectcalico-org/{gcr_name}:{variables.RELEASE_VERSION} | jq -r "."'
-    
+
     req = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE)
     try:
         metadata = json.loads(req.stdout.read())
     except ValueError:
-        print("[ERROR] Didn't get json back from docker manifest inspect.  Does image exist?")
+        print(
+            "[ERROR] Didn't get json back from docker manifest inspect.  Does image exist?"
+        )
         assert False
     found_archs = []
     for platform in metadata["manifests"]:
         found_archs.append(platform["platform"]["architecture"])
-    
+
     assert EXPECTED_ARCHS.sort() == found_archs.sort()
 
 
@@ -124,9 +136,13 @@ def test_docker_release_tag_present(image_name):
     """
     Verify docker image manifest is correct
     """
-    cmd = f'docker manifest inspect {image_name}:{variables.RELEASE_VERSION} | jq -r "."'
+    cmd = (
+        f'docker manifest inspect {image_name}:{variables.RELEASE_VERSION} | jq -r "."'
+    )
 
-    prog = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    prog = subprocess.Popen(
+        cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+    )
     returncode = prog.wait()
 
     docker_output = prog.stdout.read()
@@ -136,7 +152,9 @@ def test_docker_release_tag_present(image_name):
         if "toomanyrequests" in docker_error:
             raise RuntimeError("Rate limited by docker hub")
         elif "authentication required" in docker_error:
-            raise RuntimeError(f"Docker request requires authentication (image {image_name})")
+            raise RuntimeError(
+                f"Docker request requires authentication (image {image_name})"
+            )
         else:
             raise AssertionError(f"Docker command failed: {docker_error}")
     metadata = json.loads(docker_output)
@@ -147,6 +165,7 @@ def test_docker_release_tag_present(image_name):
 
     assert EXPECTED_ARCHS.sort() == found_archs.sort()
 
+
 def test_operator_image_present():
     """
     Validate operator image exists
@@ -154,8 +173,11 @@ def test_operator_image_present():
     print(f"[INFO] checking {OPERATOR_IMAGE}")
     resp = request_quay_image("tigera/operator", variables.OPERATOR_VERSION)
     if resp.status_code != 200:
-        raise AssertionError(f"Got status code {resp.status_code} from API URL {resp.request.url}")
+        raise AssertionError(
+            f"Got status code {resp.status_code} from API URL {resp.request.url}"
+        )
     assert resp.status_code == 200
+
 
 def test_operator_images():
     """
@@ -165,12 +187,15 @@ def test_operator_images():
     print(f"[INFO] getting image list from {OPERATOR_IMAGE}")
 
     cmd = f"docker pull {OPERATOR_IMAGE}"
-    req = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    req = subprocess.Popen(
+        cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+    )
     output = req.stdout.read()
 
-
     cmd = f"docker run --rm -t {OPERATOR_IMAGE} -print-images list"
-    req = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    req = subprocess.Popen(
+        cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+    )
     output = req.stdout.read()
     image_list = output.decode().splitlines()
     print(f"[INFO] got image list:")

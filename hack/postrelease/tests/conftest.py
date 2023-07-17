@@ -4,6 +4,7 @@ import pytest
 
 import variables
 
+
 @pytest.fixture(scope="session", autouse=True)
 def log_global_env_facts(record_testsuite_property):
     record_testsuite_property("Release Stream", variables.RELEASE_STREAM)

@@ -27,6 +27,7 @@ manifest_list = [
 
 OVERRIDE_FILE = os.getenv("OVERRIDE_FILE")
 
+
 @pytest.fixture(scope="session")
 def image_file_members(tmpdir_factory):
     if OVERRIDE_FILE:
@@ -37,6 +38,7 @@ def image_file_members(tmpdir_factory):
         tf = tarfile.open(tmpfile_name, "r|gz")
     tarfile_members = utilities.tarfile_members_to_map(tf)
     return tarfile_members
+
 
 @pytest.mark.slow
 @pytest.mark.github
@@ -52,6 +54,8 @@ def test_manifest_present(image_file_members, manifest):
         if not manifest_info.isfile():
             raise AssertionError(f"Manifest entry {manifest_path} is not a file")
         if manifest_info.size < 100:
-            raise AssertionError(f"Manifest entry {manifest_path} size is < 100 bytes ({manifest_info.size} bytes found)")
+            raise AssertionError(
+                f"Manifest entry {manifest_path} size is < 100 bytes ({manifest_info.size} bytes found)"
+            )
     except KeyError:
         raise AssertionError(f"{manifest} not found in archive: {url}")
