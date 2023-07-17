@@ -134,7 +134,14 @@ func (ap *AttachPoint) AttachProgram() (bpf.AttachResult, error) {
 	defer obj.Close()
 
 	for m, err := obj.FirstMap(); m != nil && err == nil; m, err = m.NextMap() {
+		mapName := m.Name()
+
 		if m.IsMapInternal() {
+			log.Infof("map name:'%s'\n", mapName)
+			// adriana - XDP attempt to skip .rodata
+			if strings.HasPrefix(mapName, ".rodata") {
+				continue
+			}
 			var globals libbpf.XDPGlobalData
 
 			for p, i := range ap.HookLayout {
