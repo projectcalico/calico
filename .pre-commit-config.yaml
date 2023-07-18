@@ -7,10 +7,14 @@
 #
 #       See: https://pre-commit.com/index.html#regular-expressions
 
-
+# Tell our tools which version of Python they should assume we're using
 default_language_version:
   python: python3.11
 
+# Only operate on files matching this regular expression
+files: hack/postrelease/.*
+
+# Add the various checks we want
 repos:
     # Generic tests that are always nice
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -39,4 +43,3 @@ repos:
     rev: v2.12.0
     hooks:
     -   id: hadolint-docker
-files: hack/postrelease/.*
