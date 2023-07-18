@@ -2,7 +2,6 @@ import re
 
 import pytest
 import requests
-
 import variables
 
 DOWNLOAD_BASE = "https://github.com/projectcalico/calico/releases/download"

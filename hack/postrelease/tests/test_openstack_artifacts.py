@@ -2,7 +2,6 @@ import re
 
 import pytest
 import requests
-
 import variables
 
 PPA_VER = variables.RELEASE_STREAM.replace("v", "calico-")

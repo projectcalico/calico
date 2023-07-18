@@ -3,7 +3,6 @@ import subprocess
 
 import pytest
 import requests
-
 import variables
 
 OPERATOR_IMAGE = f"quay.io/tigera/operator:{variables.OPERATOR_VERSION}"

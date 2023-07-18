@@ -5,9 +5,8 @@ from functools import cache
 
 import requests
 import rich.progress
-import yaml
-
 import variables
+import yaml
 
 HELM_CHART = "https://projectcalico.docs.tigera.io/charts/index.yaml"
 

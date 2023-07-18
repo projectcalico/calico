@@ -2,7 +2,6 @@ import os
 import tarfile
 
 import pytest
-
 import utilities
 import variables
 

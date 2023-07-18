@@ -1,6 +1,5 @@
 import pytest
 import requests
-
 import utilities
 import variables
 
