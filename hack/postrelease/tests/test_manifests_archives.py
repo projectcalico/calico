@@ -30,12 +30,13 @@ OVERRIDE_FILE = os.getenv("OVERRIDE_FILE")
 @pytest.fixture(scope="session")
 def image_file_members(tmpdir_factory):
     if OVERRIDE_FILE:
-        tf = tarfile.open(OVERRIDE_FILE, "r|gz")
+        tf_filename = OVERRIDE_FILE
     else:
         tmpfile_name = tmpdir_factory.mktemp("data").join(release_filename)
         utilities.download_url_to_file(url, tmpfile_name)
-        tf = tarfile.open(tmpfile_name, "r|gz")
-    tarfile_members = utilities.tarfile_members_to_map(tf)
+        tf_filename = tmpfile_name
+    with tarfile.open(tf_filename, "r|gz") as manifest_tarfile:
+        tarfile_members = utilities.tarfile_members_to_map(manifest_tarfile)
     return tarfile_members
 
 
