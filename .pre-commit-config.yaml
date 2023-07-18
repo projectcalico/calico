@@ -1,0 +1,42 @@
+# See https://pre-commit.com for more information
+# See https://pre-commit.com/hooks.html for more hooks
+
+# NOTE: this pre-commit file is currently only configured to run on
+#       files in hack/postrelease. If you want to add additional
+#       paths to test, update the value for files:, which is a regex.
+#
+#       See: https://pre-commit.com/index.html#regular-expressions
+
+
+default_language_version:
+  python: python3.11
+
+repos:
+    # Generic tests that are always nice
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.4.0
+    hooks:
+    -   id: trailing-whitespace
+    -   id: end-of-file-fixer
+    -   id: check-yaml
+    -   id: check-added-large-files
+    -   id: check-ast
+    -   id: check-merge-conflict
+    -   id: requirements-txt-fixer
+    # Black, for reformatting python code consistently
+  - repo: https://github.com/psf/black
+    rev: 22.10.0
+    hooks:
+    -   id: black
+    # isort, for sorting Python imports
+  - repo: https://github.com/pycqa/isort
+    rev: 5.12.0
+    hooks:
+      - id: isort
+        name: isort (python)
+    # Linting docker files
+  - repo: https://github.com/hadolint/hadolint
+    rev: v2.12.0
+    hooks:
+    -   id: hadolint-docker
+files: hack/postrelease/.*
