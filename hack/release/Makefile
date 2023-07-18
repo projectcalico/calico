@@ -10,6 +10,9 @@ release: .vm.created
 	./remote-execute.sh "cd calico && git fetch --tags && git checkout $(GIT_BRANCH)"
 	./remote-execute.sh "cd calico && make release"
 
+update-versions-remote: .vm.created
+	./remote-execute.sh "cd calico && make update-versions"
+
 # Expects that a release has already been created on the remote VM via the "release" target.
 release-publish: .vm.created
 	./remote-execute.sh "cd calico && make release-publish"
