@@ -26,12 +26,11 @@ create_docker_container: .docker_container.stamp
 run_nosetests_docker: create_docker_container
 	$(info +++ Running nose tests)
 	@docker run -it --rm                     \
-		-v ./tests:/code                     \
+		-v .:/code                     \
 		-v /run/docker.sock:/run/docker.sock \
-		-e NOSE_PROCESSES=$(NOSE_PROCESSES)  \
 		-e QUAY_API_TOKEN                    \
 		$(CALICO_POSTRELEASE_TEST_IMAGE)     \
-		nosetests -vv 
+		pytest -v tests
 
 ## Cleanup
 
@@ -41,3 +40,4 @@ clean_docker_container:
 	$(info +++ Cleaning docker container)
 	@docker rmi $(CALICO_POSTRELEASE_TEST_IMAGE) 2> /dev/null || true
 	@rm -f .docker_container.stamp
+
