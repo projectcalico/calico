@@ -6,7 +6,7 @@ agent:
     os_image: ubuntu2004
 
 execution_time_limit:
-  minutes: 180
+  minutes: 600
 
 blocks:
   - name: "Test build official release"
@@ -40,6 +40,8 @@ blocks:
         - gcloud auth activate-service-account --key-file=${GOOGLE_APPLICATION_CREDENTIALS}
       jobs:
       - name: "Release on GCP VM"
+        execution_time_limit:
+          minutes: 180
         env_vars:
         - name: VAR_FILE
           value: /home/semaphore/secrets/release-test.tfvars
