@@ -1,33 +1,49 @@
-import os
-import yaml
+import pytest
 import requests
-from versions import RELEASE_VERSION
+import utilities
+import variables
+
+CHART_URL = (
+    "https://github.com/projectcalico/calico/releases/download/"
+    f"{variables.RELEASE_VERSION}/tigera-operator-{variables.RELEASE_VERSION}.tgz"
+)
 
 
-def test_calico_release_has_helm_chart():
-    chart_url = (
-        "https://github.com/projectcalico/calico/releases/download/%s/tigera-operator-%s.tgz"
-        % (RELEASE_VERSION, RELEASE_VERSION)
-    )
+@pytest.fixture(scope="session")
+def operator_helm_chart_entry():
+    index = utilities.get_helm_chart()
+    entries = [
+        e
+        for e in index["entries"]["tigera-operator"]
+        if e["appVersion"] == variables.RELEASE_VERSION
+    ]
+    assert entries, "Could not find this release in helm index"
+    return entries[0]
 
-    req = requests.head(chart_url)
-    assert req.status_code == 302
+
+@pytest.mark.helm
+def test_calico_helm_version(operator_helm_chart_entry):
+    # Ensure the version that we found is correct (each entry has 'version' and 'appVersion')
+    entry_version = operator_helm_chart_entry["version"]
+    assert (
+        entry_version == variables.RELEASE_VERSION
+    ), f"Chart version ({entry_version}) incorrect in helm index"
 
 
-def test_calico_release_in_helm_index():
-    chart_url = (
-        "https://github.com/projectcalico/calico/releases/download/%s/tigera-operator-%s.tgz"
-        % (RELEASE_VERSION, RELEASE_VERSION)
-    )
+@pytest.mark.helm
+def test_calico_chart_url(operator_helm_chart_entry):
+    # Validate that the URL we got is the URL we expect
+    entry_chart_url = operator_helm_chart_entry["urls"][0]
+    assert (
+        entry_chart_url == CHART_URL
+    ), f"Chart URL (entry_chart_url) incorrect in helm index"
 
-    req = requests.get("https://projectcalico.docs.tigera.io/charts/index.yaml")
-    assert req.status_code == 200, "Could not get helm index"
-    index = yaml.safe_load(req.text)
-    # Find entry
-    entry = None
-    for entry in index["entries"]["tigera-operator"]:
-        if entry["appVersion"] == RELEASE_VERSION:
-            break
-    assert entry is not None, "Could not find this release in helm index"
-    assert entry["version"] == RELEASE_VERSION, "Chart version (%s) incorrect in helm index" % (entry["version"])
-    assert entry["urls"][0] == chart_url, "Chart URL (%s) incorrect in helm index" % (entry["urls"][0])
+
+@pytest.mark.helm
+@pytest.mark.github
+def test_calico_operator_url_exists(operator_helm_chart_entry):
+    # Validate that the URL is actually active
+    response = requests.head(operator_helm_chart_entry["urls"][0], allow_redirects=True)
+    assert (
+        response.status_code == 200
+    ), f"Chart URL returned HTTP {response.status_code}"
