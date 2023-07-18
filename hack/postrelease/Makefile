@@ -21,7 +21,7 @@ create_docker_container: .docker_container.stamp
 		.
 	@touch .docker_container.stamp
 
-## Execution 
+## Execution
 
 run_nosetests_docker: create_docker_container
 	$(info +++ Running nose tests)
@@ -40,4 +40,3 @@ clean_docker_container:
 	$(info +++ Cleaning docker container)
 	@docker rmi $(CALICO_POSTRELEASE_TEST_IMAGE) 2> /dev/null || true
 	@rm -f .docker_container.stamp
-
