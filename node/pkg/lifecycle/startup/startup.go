@@ -31,6 +31,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
@@ -129,7 +130,7 @@ func Run() {
 	}
 
 	// If running under kubernetes with secrets to call k8s API
-	if config, err := rest.InClusterConfig(); err == nil {
+	if config, err := clientcmd.BuildConfigFromFlags("", os.Getenv("KUBECONFIG")); err == nil {
 		// default timeout is 30 seconds, which isn't appropriate for this kind of
 		// startup action because network services, like kube-proxy might not be
 		// running and we don't want to block the full 30 seconds if they are just
@@ -329,7 +330,7 @@ func MonitorIPAddressSubnets() {
 	if nodeRef := os.Getenv("CALICO_K8S_NODE_REF"); nodeRef != "" {
 		k8sNodeName = nodeRef
 	}
-	if config, err = rest.InClusterConfig(); err == nil {
+	if config, err = clientcmd.BuildConfigFromFlags("", os.Getenv("KUBECONFIG")); err == nil {
 		// Create the k8s clientset.
 		clientset, err = kubernetes.NewForConfig(config)
 		if err != nil {
@@ -690,6 +691,11 @@ func evaluateENVBool(envVar string, defaultValue bool) bool {
 // in the environment, or is a no-op if not specified.
 // Returns true if the node object needs to be updated.
 func configureASNumber(node *libapi.Node) bool {
+	// If Calico is running in policy only mode we don't need to write BGP related
+	// details to the Node.
+	if os.Getenv("CALICO_NETWORKING_BACKEND") == "none" {
+		return false
+	}
 	// Extract the AS number from the environment
 	asStr := os.Getenv("AS")
 	if asStr != "" {
