@@ -39,7 +39,6 @@ CNI_SPEC_VERSION?=0.3.1
 # Markers for various images we produce.
 DEPLOY_CONTAINER_STATIC_MARKER=cni_deploy_container-$(ARCH).created
 DEPLOY_CONTAINER_FIPS_MARKER=cni_deploy_container-$(ARCH)-fips.created
-DEPLOY_CONTAINER_MARKER_WINDOWS=cni_deploy_container-windows.created
 
 # Set FIPS to true to enable a FIPS compliant build using BoringSSL and CGO.
 # Note that this produces binaries that are dynamically linked, and so have dependencies
@@ -57,9 +56,6 @@ BIN=bin/$(ARCH)
 DEPLOY_CONTAINER_MARKER=$(DEPLOY_CONTAINER_STATIC_MARKER)
 endif
 
-# The directory for windows image tarball
-WINDOWS_DIST = dist/windows
-
 .PHONY: clean clean-windows
 clean: clean-windows
 	# Clean .created files which indicate images / releases have been built.
@@ -71,7 +67,7 @@ clean: clean-windows
 	rm -rf dist/
 
 clean-windows: clean-windows-builder
-	rm -rf $(WINDOWS_BIN) $(WINDOWS_DIST) $(DEPLOY_CONTAINER_MARKER_WINDOWS)
+	rm -rf $(WINDOWS_BIN)
 
 ###############################################################################
 # Building the binary
@@ -123,8 +119,7 @@ $(WINDOWS_BIN)/calico-ipam.exe $(WINDOWS_BIN)/calico.exe: $(WINDOWS_BIN)/install
 # Building the image
 ###############################################################################
 image: $(DEPLOY_CONTAINER_MARKER)
-image-tar-windows: $(DEPLOY_CONTAINER_MARKER_WINDOWS)
-image-all: $(addprefix sub-image-,$(VALIDARCHES)) sub-image-fips-amd64 image-tar-windows
+image-all: $(addprefix sub-image-,$(VALIDARCHES)) sub-image-fips-amd64 image-windows
 sub-image-%:
 	$(MAKE) image ARCH=$*
 sub-image-fips-%:
@@ -141,18 +136,6 @@ $(DEPLOY_CONTAINER_FIPS_MARKER): Dockerfile.$(ARCH) build fetch-cni-bins
 	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BIN) -t $(CNI_PLUGIN_IMAGE):latest-fips-$(ARCH) -f Dockerfile.$(ARCH) . --load
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
 	touch $@
-
-$(DEPLOY_CONTAINER_MARKER_WINDOWS): setup-windows-builder Dockerfile-windows build fetch-win-cni-bins
-	-mkdir -p $(WINDOWS_DIST)
-	docker buildx build \
-		--platform windows/amd64 \
-		--output=type=docker,dest=$(WINDOWS_DIST)/calico-cni-plugin-windows-$(GIT_VERSION).tar \
-		-t $(CNI_PLUGIN_IMAGE_WINDOWS):latest \
-		--pull \
-		--no-cache \
-		--build-arg GIT_VERSION=$(GIT_VERSION) \
-		--build-arg WINDOWS_VERSION=$(WINDOWS_VERSION) \
-		-f Dockerfile-windows .
 
 .PHONY: fetch-cni-bins fetch-win-cni-bins
 fetch-cni-bins: $(BIN)/flannel $(BIN)/loopback $(BIN)/host-local $(BIN)/portmap $(BIN)/tuning $(BIN)/bandwidth
@@ -310,17 +293,28 @@ release-publish-latest: release-prereqs
 
 	$(MAKE) push-images-to-registries push-manifests RELEASE=true IMAGETAG=latest RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
 
-release-windows: release-prereqs clean-windows $(DEPLOY_CONTAINER_MARKER_WINDOWS)
+.PHONY: image-windows release-windows
+# Build Windows image and possibly push it to $DEV_REGISTRIES
+image-windows: setup-windows-builder Dockerfile-windows build fetch-win-cni-bins
+	push="$${PUSH:-false}"; \
+	image_version="$${VERSION:-latest}"; \
 	for registry in $(DEV_REGISTRIES); do \
-		echo Pushing Windows image to $${registry}; \
-		manifest_image="$${registry}/$(CNI_PLUGIN_IMAGE_WINDOWS):$(VERSION)"; \
-		image_tar="$(WINDOWS_DIST)/calico-cni-plugin-windows-$(GIT_VERSION).tar"; \
-		image="$${registry}/$(CNI_PLUGIN_IMAGE_WINDOWS):$(VERSION)"; \
-		$(CRANE_BINDMOUNT) push $${image_tar} $${image}$(double_quote); \
-		$(DOCKER_MANIFEST) create --amend $${manifest_image} $${image}; \
-		$(DOCKER_MANIFEST) annotate --os windows --arch amd64 $${manifest_image} $${image}; \
-		$(DOCKER_MANIFEST) push --purge $${manifest_image}; \
+		echo Building and pushing Windows image to $${registry}; \
+		image="$${registry}/$(CNI_PLUGIN_IMAGE_WINDOWS):$${image_version}"; \
+		docker buildx build \
+			--platform windows/amd64 \
+			--output=type=image,push=$* \
+			-t $${image} \
+			--pull \
+			--no-cache \
+			--build-arg GIT_VERSION=$(GIT_VERSION) \
+			--build-arg WINDOWS_HPC_VERSION=$(WINDOWS_HPC_VERSION) \
+			-f Dockerfile-windows .; \
 	done ;
+
+# Build and push Windows image
+release-windows: release-prereqs clean-windows
+	$(MAKE) image-windows PUSH=true
 
 ###############################################################################
 # Developer helper scripts (not used by build or test)

@@ -12,8 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG WINDOWS_VERSION
-FROM mcr.microsoft.com/windows/nanoserver:${WINDOWS_VERSION}
+ARG WINDOWS_HPC_VERSION
+
+FROM mcr.microsoft.com/oss/kubernetes/windows-host-process-containers-base-image:${WINDOWS_HPC_VERSION}
 
 ARG GIT_VERSION=unknown
 

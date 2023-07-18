@@ -202,6 +202,7 @@ clean-windows: clean-windows-builder
 	-rm -f $(WINDOWS_ARCHIVE_ROOT)/libs/hns/License.txt
 	-rm -f $(WINDOWS_ARCHIVE_ROOT)/cni/*.exe
 	-rm -f $(WINDOWS_ARCHIVE_ROOT)/../nssm.zip
+	-rm -f $(WINDOWS_ARCHIVE_ROOT)/../nssm.exe
 	-rm -f $(WINDOWS_INSTALL_SCRIPT)
 	-rm -rf "$(WINDOWS_DIST)"
 	-rm -rf "$(WINDOWS_UPGRADE_DIST)"
@@ -288,7 +289,7 @@ endif
 # Building the image
 ###############################################################################
 ## Create the images for all supported ARCHes
-image-all: $(addprefix sub-image-,$(VALIDARCHES)) sub-image-fips-amd64 image-tar-windows
+image-all: $(addprefix sub-image-,$(VALIDARCHES)) sub-image-fips-amd64 image-windows
 sub-image-%:
 	$(MAKE) image ARCH=$*
 sub-image-fips-%:
@@ -304,21 +305,6 @@ $(NODE_CONTAINER_FIPS_CREATED): $(REMOTE_DEPS) ./Dockerfile.$(ARCH) $(NODE_CONTA
 	$(DOCKER_BUILD) --build-arg BIN_DIR=$(NODE_CONTAINER_BIN_DIR) --build-arg BIRD_IMAGE=$(BIRD_IMAGE) -t $(NODE_IMAGE):latest-fips-$(ARCH) -f ./Dockerfile.$(ARCH) . --load
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
 	touch $@
-
-$(NODE_CONTAINER_WINDOWS_CREATED): clean-windows setup-windows-builder Dockerfile-windows $(WINDOWS_BINARY) $(WINDOWS_ARCHIVE_ROOT)/libs/hns/hns.psm1 $(WINDOWS_ARCHIVE_ROOT)/libs/calico/calico.psm1 $(WINDOWS_ARCHIVE_ROOT)/config-hpc.ps1 $(WINDOWS_ARCHIVE_ROOT)/felix/felix-service.ps1 $(WINDOWS_ARCHIVE_ROOT)/node/node-service.ps1
-	# ensure dir for windows image tars exits
-	-mkdir -p $(WINDOWS_DIST)
-	docker buildx build \
-		--platform windows/amd64 \
-		--output=type=docker,dest=$(CURDIR)/$(WINDOWS_DIST)/$(WINDOWS_IMAGE)-$(GIT_VERSION).tar \
-		--pull \
-		-t $(WINDOWS_IMAGE):latest \
-		--build-arg GIT_VERSION=$(GIT_VERSION) \
-		--build-arg=WINDOWS_VERSION=$(WINDOWS_VERSION) \
-		-f Dockerfile-windows .
-
-.PHONY: image-tar-windows
-image-tar-windows: $(NODE_CONTAINER_WINDOWS_CREATED)
 
 # download BIRD source to include in image.
 $(BIRD_SOURCE): .bird-source.created
@@ -492,10 +478,10 @@ st: $(REMOTE_DEPS) image dist/calicoctl busybox.tar calico-node.tar workload.tar
 # CI/CD
 ###############################################################################
 .PHONY: ci
-ci: static-checks ut image build-windows-upgrade-archive image-tar-windows-all st
+ci: static-checks ut image image-windows st
 
 ## Deploys images to registry
-cd: cd-common cd-windows-all
+cd: cd-common release-windows
 
 check-boring-ssl: $(NODE_CONTAINER_BIN_DIR)/calico-node-amd64
 	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) \
@@ -582,6 +568,13 @@ $(WINDOWS_ARCHIVE_ROOT)/libs/hns/License.txt:
 ## Download NSSM.
 windows-packaging/nssm.zip:
 	wget -O windows-packaging/nssm.zip https://nssm.cc/ci/nssm-$(WINDOWS_NSSM_VERSION).zip
+
+windows-packaging/nssm.exe: windows-packaging/nssm.zip
+	cd windows-packaging && \
+	sha256sum --check nssm.sha256sum && \
+	unzip -o nssm.zip 'nssm-$(WINDOWS_NSSM_VERSION)/win64/nssm.exe'&& \
+	mv nssm-$(WINDOWS_NSSM_VERSION)/win64/nssm.exe nssm.exe && \
+	rm -rf nssm-$(WINDOWS_NSSM_VERSION)/
 
 $(WINDOWS_ARCHIVE): build-windows-archive
 
@@ -728,14 +721,25 @@ endif
 		$(DOCKER_MANIFEST) push --purge $${manifest_image}; \
 	done ;
 
-release-windows: release-prereqs clean-windows $(NODE_CONTAINER_WINDOWS_CREATED)
+.PHONY: image-windows release-windows
+# Build Windows image and possibly push it to $DEV_REGISTRIES
+image-windows: setup-windows-builder Dockerfile-windows $(WINDOWS_BINARY) $(WINDOWS_ARCHIVE_ROOT)/libs/hns/hns.psm1 $(WINDOWS_ARCHIVE_ROOT)/libs/calico/calico.psm1 $(WINDOWS_ARCHIVE_ROOT)/config-hpc.ps1 $(WINDOWS_ARCHIVE_ROOT)/felix/felix-service.ps1 $(WINDOWS_ARCHIVE_ROOT)/node/node-service.ps1 $(WINDOWS_ARCHIVE_ROOT)/uninstall-calico-hpc.ps1 windows-packaging/nssm.exe
+	push="$${PUSH:-false}"; \
+	image_version="$${VERSION:-latest}"; \
 	for registry in $(DEV_REGISTRIES); do \
-		echo Pushing Windows image to $${registry}; \
-		manifest_image="$${registry}/$(WINDOWS_IMAGE):$(VERSION)"; \
-		image_tar="$(WINDOWS_DIST)/$(WINDOWS_IMAGE)-$(GIT_VERSION).tar"; \
-		image="$${registry}/$(WINDOWS_IMAGE):$(VERSION)"; \
-		$(CRANE_BINDMOUNT) push $${image_tar} $${image}$(double_quote); \
-		$(DOCKER_MANIFEST) create --amend $${manifest_image} $${image}; \
-		$(DOCKER_MANIFEST) annotate --os windows --arch amd64 $${manifest_image} $${image}; \
-		$(DOCKER_MANIFEST) push --purge $${manifest_image}; \
+		echo Building and pushing Windows image to $${registry}; \
+		image="$${registry}/$(WINDOWS_IMAGE):$${image_version}"; \
+		docker buildx build \
+			--platform windows/amd64 \
+			--output=type=image,push=$${push} \
+			-t $${image} \
+			--pull \
+			--no-cache \
+			--build-arg GIT_VERSION=$(GIT_VERSION) \
+			--build-arg WINDOWS_HPC_VERSION=$(WINDOWS_HPC_VERSION) \
+			-f Dockerfile-windows .; \
 	done ;
+
+# Build and push Windows image
+release-windows: release-prereqs clean-windows
+	$(MAKE) image-windows PUSH=true
