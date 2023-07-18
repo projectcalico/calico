@@ -14,3 +14,5 @@
 !windows-packaging/CalicoWindows/felix
 !windows-packaging/CalicoWindows/confd
 !windows-packaging/CalicoWindows/config-hpc.ps1
+!windows-packaging/CalicoWindows/uninstall-calico-hpc.ps1
+!windows-packaging/nssm.exe
