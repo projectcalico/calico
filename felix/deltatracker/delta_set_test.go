@@ -89,8 +89,11 @@ func TestDeltaSet_DataplaneSet(t *testing.T) {
 func TestDeltaSet_Resync(t *testing.T) {
 	RegisterTestingT(t)
 	ds := NewSetDeltaTracker[int]()
+	Expect(ds.InSync()).To(BeTrue())
+
 	ds.Desired().Add(1)
 	ds.Desired().Add(2)
+	Expect(ds.InSync()).To(BeFalse())
 
 	err := ds.Dataplane().ReplaceFromIter(func(f func(k int)) error {
 		f(1)
@@ -100,26 +103,38 @@ func TestDeltaSet_Resync(t *testing.T) {
 	if err != nil {
 		t.Errorf("Unexpected error from ReplaceAllIter: %v", err)
 	}
+	Expect(ds.InSync()).To(BeFalse())
 
 	updates := set.New[int]()
-	ds.IterPendingUpdates(func(k int) IterAction {
+	Expect(ds.PendingUpdates().Len()).To(Equal(1))
+	ds.PendingUpdates().Iter(func(k int) IterAction {
 		if updates.Contains(k) {
 			t.Errorf("IterPendingUpdates returned duplicate key: %v", k)
 		}
+		Expect(ds.PendingUpdates().Contains(k)).To(BeTrue())
+		Expect(ds.PendingDeletions().Contains(k)).To(BeFalse())
 		updates.Add(k)
 		return IterActionUpdateDataplane
 	})
 	Expect(updates).To(Equal(set.From(2)))
+	Expect(ds.PendingUpdates().Len()).To(Equal(0))
+	Expect(ds.InSync()).To(BeFalse())
 
 	deletions := set.New[int]()
-	ds.IterPendingDeletions(func(k int) IterAction {
+	Expect(ds.PendingDeletions().Len()).To(Equal(1))
+	ds.PendingDeletions().Iter(func(k int) IterAction {
 		if deletions.Contains(k) {
 			t.Errorf("IterPendingDeletions returned duplicate key: %v", k)
 		}
 		deletions.Add(k)
+		Expect(ds.PendingDeletions().Contains(k)).To(BeTrue())
+		Expect(ds.PendingUpdates().Contains(k)).To(BeFalse())
 		return IterActionUpdateDataplane
 	})
 	Expect(deletions).To(Equal(set.From(3)))
+	Expect(ds.PendingDeletions().Len()).To(Equal(0))
+
+	Expect(ds.InSync()).To(BeTrue())
 }
 
 func TestDeltaSet_ResyncError(t *testing.T) {
