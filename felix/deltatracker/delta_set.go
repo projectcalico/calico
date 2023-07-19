@@ -121,14 +121,60 @@ func (s *DataplaneSetView[K]) asMapView() *DataplaneView[K, struct{}] {
 	return (*DataplaneView[K, struct{}])(s)
 }
 
-func (s *SetDeltaTracker[K]) IterPendingUpdates(f func(k K) IterAction) {
-	s.asMapTracker().IterPendingUpdates(func(k K, v struct{}) IterAction {
+type PendingUpdatesSetView[K comparable] PendingUpdatesView[K, struct{}]
+
+func (s *SetDeltaTracker[K]) PendingUpdates() *PendingUpdatesSetView[K] {
+	return (*PendingUpdatesSetView[K])(s.asMapTracker().PendingUpdates())
+}
+
+func (v *PendingUpdatesSetView[K]) Contains(k K) bool {
+	_, ok := v.desiredUpdates[k]
+	return ok
+}
+
+func (v *PendingUpdatesSetView[K]) asMapView() *PendingUpdatesView[K, struct{}] {
+	return (*PendingUpdatesView[K, struct{}])(v)
+}
+
+// Iter iterates over the pending updates. If the passed in function returns
+// IterActionUpdateDataplane then the pending update is cleared, and, the KV is applied
+// to the dataplane cache (as if the function had called Dataplane().Set(k, v)).
+func (v *PendingUpdatesSetView[K]) Iter(f func(k K) IterAction) {
+	v.asMapView().Iter(func(k K, _ struct{}) IterAction {
 		return f(k)
 	})
 }
 
-func (s *SetDeltaTracker[K]) IterPendingDeletions(f func(k K) IterAction) {
-	s.asMapTracker().IterPendingDeletions(f)
+func (v *PendingUpdatesSetView[K]) Len() int {
+	return v.asMapView().Len()
+}
+
+type PendingDeletionsSetView[K comparable] PendingDeletionsView[K, struct{}]
+
+func (s *SetDeltaTracker[K]) PendingDeletions() *PendingDeletionsSetView[K] {
+	return (*PendingDeletionsSetView[K])(s.asMapTracker().PendingDeletions())
+}
+
+func (v *PendingDeletionsSetView[K]) Contains(k K) bool {
+	_, ok := v.asMapView().Get(k)
+	return ok
+}
+
+func (v *PendingDeletionsSetView[K]) asMapView() *PendingDeletionsView[K, struct{}] {
+	return (*PendingDeletionsView[K, struct{}])(v)
+}
+
+// Iter iterates over the pending deletion set. If the passed in function returns
+// IterActionUpdateDataplane then the pending deletion is cleared, and, the KV is applied
+// to the dataplane cache (as if the function had called Dataplane().Delete(k)).
+func (v *PendingDeletionsSetView[K]) Iter(f func(k K) IterAction) {
+	v.asMapView().Iter(func(k K) IterAction {
+		return f(k)
+	})
+}
+
+func (v *PendingDeletionsSetView[K]) Len() int {
+	return v.asMapView().Len()
 }
 
 func (s *SetDeltaTracker[K]) asMapTracker() *DeltaTracker[K, struct{}] {
@@ -136,13 +182,5 @@ func (s *SetDeltaTracker[K]) asMapTracker() *DeltaTracker[K, struct{}] {
 }
 
 func (s *SetDeltaTracker[K]) InSync() bool {
-	return s.NumPendingDeletions() == 0 && s.NumPendingUpdates() == 0
-}
-
-func (s *SetDeltaTracker[K]) NumPendingUpdates() int {
-	return len(s.desiredUpdates)
-}
-
-func (s *SetDeltaTracker[K]) NumPendingDeletions() int {
-	return len(s.inDataplaneNotDesired)
+	return s.asMapTracker().InSync()
 }
