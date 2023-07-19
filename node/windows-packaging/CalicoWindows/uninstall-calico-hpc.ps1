@@ -76,5 +76,9 @@ Remove-CalicoService CalicoFelix
 Remove-CalicoService CalicoNode
 Remove-CalicoService CalicoUpgrade
 
+Write-Host "Stopping and removing kube-proxy service if it is present..."
+Write-Host "It is recommended to run kube-proxy as kubernetes daemonset instead"
+Remove-CalicoService kube-proxy
+
 Get-Module 'calico' | Remove-Module -Force
 Write-Host "Done."
