@@ -21,17 +21,16 @@ create_docker_container: .docker_container.stamp
 		.
 	@touch .docker_container.stamp
 
-## Execution 
+## Execution
 
 run_nosetests_docker: create_docker_container
 	$(info +++ Running nose tests)
 	@docker run -it --rm                     \
-		-v ./tests:/code                     \
+		-v .:/code                     \
 		-v /run/docker.sock:/run/docker.sock \
-		-e NOSE_PROCESSES=$(NOSE_PROCESSES)  \
 		-e QUAY_API_TOKEN                    \
 		$(CALICO_POSTRELEASE_TEST_IMAGE)     \
-		nosetests -vv 
+		pytest -v --junitxml=xunit.xml tests
 
 ## Cleanup
 
