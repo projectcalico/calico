@@ -1208,6 +1208,13 @@ check-dirty:
 	@if [ "$$(git --no-pager diff --stat)" != "" ]; then \
 	echo "The following files are dirty"; git --no-pager diff --stat; exit 1; fi
 
+bin/yq:
+	mkdir -p bin
+	$(eval TMP := $(shell mktemp -d))
+	wget https://github.com/mikefarah/yq/releases/download/v4.34.2/yq_linux_$(BUILDARCH).tar.gz -O $(TMP)/yq4.tar.gz
+	tar -zxvf $(TMP)/yq4.tar.gz -C $(TMP)
+	mv $(TMP)/yq_linux_$(BUILDARCH) bin/yq
+
 ###############################################################################
 # Common functions for launching a local Kubernetes control plane.
 ###############################################################################
