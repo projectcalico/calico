@@ -22,6 +22,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"runtime"
 	"strings"
 	"time"
 
@@ -196,14 +197,20 @@ func Install() error {
 			continue
 		}
 
+		containerBinDir := "/opt/cni/bin/"
+		// The binaries dir in the container needs to be prepended by the CONTAINER_SANDBOX_MOUNT_POINT env var on Windows Host Process Containers
+		// see https://kubernetes.io/docs/tasks/configure-pod-container/create-hostprocess-pod/#containerd-v1-7-and-greater
+		if runtime.GOOS == "windows" {
+			containerBinDir = os.Getenv("CONTAINER_SANDBOX_MOUNT_POINT") + "/" + containerBinDir
+		}
 		// Iterate through each binary we might want to install.
-		files, err := os.ReadDir("/opt/cni/bin/")
+		files, err := os.ReadDir(containerBinDir)
 		if err != nil {
 			logrus.Fatal(err)
 		}
 		for _, binary := range files {
 			target := fmt.Sprintf("%s/%s", d, binary.Name())
-			source := fmt.Sprintf("/opt/cni/bin/%s", binary.Name())
+			source := fmt.Sprintf("%s/%s", containerBinDir, binary.Name())
 			if c.skipBinary(binary.Name()) {
 				continue
 			}
@@ -305,28 +312,7 @@ func isValidJSON(s string) error {
 }
 
 func writeCNIConfig(c config) {
-	netconf := `{
-  "name": "k8s-pod-network",
-  "cniVersion": "0.3.1",
-  "plugins": [
-    {
-      "type": "calico",
-      "log_level": "__LOG_LEVEL__",
-      "log_file_path": "__LOG_FILE_PATH__",
-      "datastore_type": "__DATASTORE_TYPE__",
-      "nodename": "__KUBERNETES_NODE_NAME__",
-      "mtu": __CNI_MTU__,
-      "ipam": {"type": "calico-ipam"},
-      "policy": {"type": "k8s"},
-      "kubernetes": {"kubeconfig": "__KUBECONFIG_FILEPATH__"}
-    },
-    {
-      "type": "portmap",
-      "snat": true,
-      "capabilities": {"portMappings": true}
-    }
-  ]
-}`
+	netconf := defaultNetConf()
 
 	// Pick the config template to use. This can either be through an env var,
 	// or a file mounted into the container.
@@ -346,11 +332,15 @@ func writeCNIConfig(c config) {
 
 	kubeconfigPath := c.CNINetDir + "/calico-kubeconfig"
 
-	// Perform replacements of variables.
 	nodename, err := names.Hostname()
 	if err != nil {
 		logrus.Fatal(err)
 	}
+
+	// Perform replacement of platform specific variables
+	netconf = replacePlatformSpecificVars(c, netconf)
+
+	// Perform replacements of variables.
 	netconf = strings.Replace(netconf, "__LOG_LEVEL__", getEnv("LOG_LEVEL", "info"), -1)
 	netconf = strings.Replace(netconf, "__LOG_FILE_PATH__", getEnv("LOG_FILE_PATH", "/var/log/calico/cni/cni.log"), -1)
 	netconf = strings.Replace(netconf, "__LOG_FILE_MAX_SIZE__", getEnv("LOG_FILE_MAX_SIZE", "100"), -1)
@@ -408,14 +398,14 @@ func writeCNIConfig(c config) {
 	if err != nil {
 		logrus.Fatal(err)
 	}
-	logrus.Infof("Created /host/etc/cni/net.d/%s", name)
+	logrus.Infof("Created %s", fmt.Sprintf("/host/etc/cni/net.d/%s", name))
 	text := string(content)
 	fmt.Println(text)
 
 	// Remove any old config file, if one exists.
 	oldName := getEnv("CNI_OLD_CONF_NAME", "10-calico.conflist")
 	if name != oldName {
-		logrus.Infof("Removing /host/etc/cni/net.d/%s", oldName)
+		logrus.Infof("Removing %s", fmt.Sprintf("/host/etc/cni/net.d/%s", oldName))
 		if err := os.Remove(fmt.Sprintf("/host/etc/cni/net.d/%s", oldName)); err != nil {
 			logrus.WithError(err).Warnf("Failed to remove %s", oldName)
 		}
@@ -445,6 +435,11 @@ func copyFileAndPermissions(src, dst string) (err error) {
 	err = os.Rename(dstTmp, dst)
 	if err != nil {
 		return fmt.Errorf("failed to rename file: %s", err)
+	}
+
+	if runtime.GOOS == "windows" {
+		// chmod doesn't work on windows
+		return
 	}
 
 	// chmod the dst file to match the original permissions.
@@ -508,6 +503,10 @@ current-context: calico-context`
 }
 
 func setSuidBit(file string) error {
+	if runtime.GOOS == "windows" {
+		// chmod doesn't work on windows
+		return nil
+	}
 	fi, err := os.Stat(file)
 	if err != nil {
 		return fmt.Errorf("failed to stat file: %s", err)
