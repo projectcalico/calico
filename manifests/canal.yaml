@@ -1051,6 +1051,7 @@ spec:
                   with BPF programs regardless of what is the per-interfaces or global
                   setting. Possible values are Disabled, Strict or Loose. [Default:
                   Loose]'
+                pattern: ^(?i)(Disabled|Strict|Loose)?$
                 type: string
               bpfExtToServiceConnmark:
                 description: 'BPFExtToServiceConnmark in BPF mode, control a 32bit
@@ -1068,6 +1069,7 @@ spec:
                   is sent directly from the remote node.  In "DSR" mode, the remote
                   node appears to use the IP of the ingress node; this requires a
                   permissive L2 network.  [Default: Tunnel]'
+                pattern: ^(?i)(Tunnel|DSR)?$
                 type: string
               bpfForceTrackPacketsFromIfaces:
                 description: 'BPFForceTrackPacketsFromIfaces in BPF mode, forces traffic
@@ -1099,6 +1101,7 @@ spec:
                   minimum time between updates to the dataplane for Felix''s embedded
                   kube-proxy.  Lower values give reduced set-up latency.  Higher values
                   reduce Felix CPU usage by batching up more work.  [Default: 1s]'
+                pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                 type: string
               bpfL3IfacePattern:
                 description: BPFL3IfacePattern is a regular expression that allows
@@ -1123,6 +1126,7 @@ spec:
                   when in BPF dataplane mode.  One of "Off", "Info", or "Debug".  The
                   logs are emitted to the BPF trace pipe, accessible with the command
                   `tc exec bpf debug`. [Default: Off].'
+                pattern: ^(?i)(Off|Info|Debug)?$
                 type: string
               bpfMapSizeConntrack:
                 description: 'BPFMapSizeConntrack sets the size for the conntrack
@@ -1187,6 +1191,7 @@ spec:
                   to append mode, be sure that the other rules in the chains signal
                   acceptance by falling through to the Calico rules, otherwise the
                   Calico policy will be bypassed. [Default: insert]'
+                pattern: ^(?i)(insert|append)?$
                 type: string
               dataplaneDriver:
                 description: DataplaneDriver filename of the external dataplane driver
@@ -1205,8 +1210,10 @@ spec:
               debugMemoryProfilePath:
                 type: string
               debugSimulateCalcGraphHangAfter:
+                pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                 type: string
               debugSimulateDataplaneHangAfter:
+                pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                 type: string
               defaultEndpointToHostAction:
                 description: 'DefaultEndpointToHostAction controls what happens to
@@ -1221,6 +1228,7 @@ spec:
                   endpoint egress policy. Use ACCEPT to unconditionally accept packets
                   from workloads after processing workload endpoint egress policy.
                   [Default: Drop]'
+                pattern: ^(?i)(Drop|Accept|Return)?$
                 type: string
               deviceRouteProtocol:
                 description: This defines the route protocol added to programmed device
@@ -1239,6 +1247,7 @@ spec:
               disableConntrackInvalidCheck:
                 type: boolean
               endpointReportingDelay:
+                pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                 type: string
               endpointReportingEnabled:
                 type: boolean
@@ -1306,12 +1315,14 @@ spec:
                   based on auto-detected platform capabilities.  Values are specified
                   in a comma separated list with no spaces, example; "SNATFullyRandom=true,MASQFullyRandom=false,RestoreSupportsLock=".  "true"
                   or "false" will force the feature, empty or omitted values are auto-detected.
+                pattern: ^([a-zA-Z0-9-_]+=(true|false|),)*([a-zA-Z0-9-_]+=(true|false|))?$
                 type: string
               featureGates:
                 description: FeatureGates is used to enable or disable tech-preview
                   Calico features. Values are specified in a comma separated list
                   with no spaces, example; "BPFConnectTimeLoadBalancingWorkaround=enabled,XyZ=false".
                   This is used to enable features that are not fully production ready.
+                pattern: ^([a-zA-Z0-9-_]+=([^=]+),)*([a-zA-Z0-9-_]+=([^=]+))?$
                 type: string
               floatingIPs:
                 description: FloatingIPs configures whether or not Felix will program
@@ -1373,6 +1384,7 @@ spec:
                 description: InterfaceRefreshInterval is the period at which Felix
                   rescans local interfaces to verify their state. The rescan can be
                   disabled by setting the interval to 0.
+                pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                 type: string
               ipipEnabled:
                 description: 'IPIPEnabled overrides whether Felix should configure
@@ -1388,18 +1400,22 @@ spec:
                   all iptables state to ensure that no other process has accidentally
                   broken Calico''s rules. Set to 0 to disable iptables refresh. [Default:
                   90s]'
+                pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                 type: string
               iptablesBackend:
                 description: IptablesBackend specifies which backend of iptables will
                   be used. The default is Auto.
+                pattern: ^(?i)(Auto|FelixConfiguration|FelixConfigurationList|Legacy|NFT)?$
                 type: string
               iptablesFilterAllowAction:
+                pattern: ^(?i)(Accept|Return)?$
                 type: string
               iptablesFilterDenyAction:
                 description: IptablesFilterDenyAction controls what happens to traffic
                   that is denied by network policy. By default Calico blocks traffic
                   with an iptables "DROP" action. If you want to use "REJECT" action
                   instead you can configure it in here.
+                pattern: ^(?i)(Drop|Reject)?$
                 type: string
               iptablesLockFilePath:
                 description: 'IptablesLockFilePath is the location of the iptables
@@ -1412,6 +1428,7 @@ spec:
                   wait between attempts to acquire the iptables lock if it is not
                   available. Lower values make Felix more responsive when the lock
                   is contended, but use more CPU. [Default: 50ms]'
+                pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                 type: string
               iptablesLockTimeout:
                 description: 'IptablesLockTimeout is the time that Felix will wait
@@ -1420,8 +1437,10 @@ spec:
                   also take the lock. When running Felix inside a container, this
                   requires the /run directory of the host to be mounted into the calico/node
                   or calico/felix container. [Default: 0s disabled]'
+                pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                 type: string
               iptablesMangleAllowAction:
+                pattern: ^(?i)(Accept|Return)?$
                 type: string
               iptablesMarkMask:
                 description: 'IptablesMarkMask is the mask that Felix selects its
@@ -1438,6 +1457,7 @@ spec:
                   back in order to check the write was not clobbered by another process.
                   This should only occur if another application on the system doesn''t
                   respect the iptables lock. [Default: 1s]'
+                pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                 type: string
               iptablesRefreshInterval:
                 description: 'IptablesRefreshInterval is the period at which Felix
@@ -1448,6 +1468,7 @@ spec:
                   was fixed in kernel version 4.11. If you are using v4.11 or greater
                   you may want to set this to, a higher value to reduce Felix CPU
                   usage. [Default: 10s]'
+                pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                 type: string
               ipv6Support:
                 description: IPv6Support controls whether Felix enables support for
@@ -1481,16 +1502,16 @@ spec:
                 type: string
               logSeverityFile:
                 description: 'LogSeverityFile is the log severity above which logs
-                  are sent to the log file. [Default: Info]'
+                  are sent to the log file. [Default: Info] kubebuilder:validation:Pattern=`^(?i)(Debug|Info|Warning|Error|Fatal)?$`'
                 type: string
               logSeverityScreen:
                 description: 'LogSeverityScreen is the log severity above which logs
-                  are sent to the stdout. [Default: Info]'
+                  are sent to the stdout. [Default: Info] kubebuilder:validation:Pattern=`^(?i)(Debug|Info|Warning|Error|Fatal)?$`'
                 type: string
               logSeveritySys:
                 description: 'LogSeveritySys is the log severity above which logs
                   are sent to the syslog. Set to None for no logging to syslog. [Default:
-                  Info]'
+                  Info] kubebuilder:validation:Pattern=`^(?i)(Debug|Info|Warning|Error|Fatal)?$`'
                 type: string
               maxIpsetSize:
                 type: integer
@@ -1529,6 +1550,7 @@ spec:
                 pattern: ^.*
                 x-kubernetes-int-or-string: true
               netlinkTimeout:
+                pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                 type: string
               openstackRegion:
                 description: 'OpenstackRegion is the name of the region that a particular
@@ -1583,21 +1605,25 @@ spec:
                 description: 'ReportingInterval is the interval at which Felix reports
                   its status into the datastore or 0 to disable. Must be non-zero
                   in OpenStack deployments. [Default: 30s]'
+                pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                 type: string
               reportingTTL:
                 description: 'ReportingTTL is the time-to-live setting for process-wide
                   status reports. [Default: 90s]'
+                pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                 type: string
               routeRefreshInterval:
                 description: 'RouteRefreshInterval is the period at which Felix re-checks
                   the routes in the dataplane to ensure that no other process has
                   accidentally broken Calico''s rules. Set to 0 to disable route refresh.
                   [Default: 90s]'
+                pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                 type: string
               routeSource:
                 description: 'RouteSource configures where Felix gets its routing
                   information. - WorkloadIPs: use workload endpoints to construct
                   routes. - CalicoIPAM: the default - use IPAM data to construct routes.'
+                pattern: ^(?i)(WorkloadIPs|CalicoIPAM)?$
                 type: string
               routeSyncDisabled:
                 description: RouteSyncDisabled will disable all operations performed
@@ -1637,6 +1663,7 @@ spec:
                   packets that do not get DNAT''d by kube-proxy. Unless set to "Disabled",
                   in which case such routing loops continue to be allowed. [Default:
                   Drop]'
+                pattern: ^(?i)(Drop|Reject|Disabled)?$
                 type: string
               sidecarAccelerationEnabled:
                 description: 'SidecarAccelerationEnabled enables experimental sidecar
@@ -1652,10 +1679,12 @@ spec:
               usageReportingInitialDelay:
                 description: 'UsageReportingInitialDelay controls the minimum delay
                   before Felix makes a report. [Default: 300s]'
+                pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                 type: string
               usageReportingInterval:
                 description: 'UsageReportingInterval controls the interval at which
                   Felix makes reports. [Default: 86400s]'
+                pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                 type: string
               useInternalDataplaneDriver:
                 description: UseInternalDataplaneDriver, if true, Felix will use its
@@ -1704,6 +1733,7 @@ spec:
               wireguardKeepAlive:
                 description: 'WireguardKeepAlive controls Wireguard PersistentKeepalive
                   option. Set 0 to disable. [Default: 0]'
+                pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                 type: string
               wireguardListeningPort:
                 description: 'WireguardListeningPort controls the listening port used
@@ -1730,6 +1760,7 @@ spec:
                   the allowedSourcePrefixes annotation to send traffic with a source
                   IP address that is not theirs. This is disabled by default. When
                   set to "Any", pods can request any prefix.
+                pattern: ^(?i)(Disabled|Any)?$
                 type: string
               xdpEnabled:
                 description: 'XDPEnabled enables XDP acceleration for suitable untracked
@@ -1740,6 +1771,7 @@ spec:
                   all XDP state to ensure that no other process has accidentally broken
                   Calico''s BPF maps or attached programs. Set to 0 to disable XDP
                   refresh. [Default: 90s]'
+                pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                 type: string
             type: object
         type: object
