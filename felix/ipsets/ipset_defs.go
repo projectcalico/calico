@@ -21,7 +21,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/projectcalico/calico/felix/deltatracker"
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 
@@ -182,6 +181,12 @@ func (t IPSetType) CanonicaliseMember(member string) IPSetMember {
 	return nil
 }
 
+type rawIPSetMember string
+
+func (r rawIPSetMember) String() string {
+	return string(r)
+}
+
 type IPSetMember interface {
 	String() string
 }
@@ -194,7 +199,7 @@ func (t IPSetType) IsValid() bool {
 	return false
 }
 
-// IPSetType constants for the names that the ipset command uses for the IP versions.
+// IPFamily constants for the names that the ipset command uses for the IP versions.
 type IPFamily string
 
 const (
@@ -224,24 +229,6 @@ type IPSetMetadata struct {
 	SetID   string
 	Type    IPSetType
 	MaxSize int
-}
-
-// IPSet holds the state for a particular IP set.
-type IPSet struct {
-	IPSetMetadata
-
-	MainIPSetName string
-
-	needsFullRewrite bool
-	deltaTracker     *deltatracker.SetDeltaTracker[IPSetMember]
-}
-
-func (s *IPSet) EstimateNumUpdateLines() int {
-	return s.deltaTracker.NumPendingUpdates()
-}
-
-func (s *IPSet) Dirty() bool {
-	return s.needsFullRewrite || !s.deltaTracker.InSync()
 }
 
 // IPVersionConfig wraps up the metadata for a particular IP version.  It can be used by
