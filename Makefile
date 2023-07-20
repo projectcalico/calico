@@ -1,6 +1,6 @@
 PACKAGE_NAME = github.com/projectcalico/calico
 
-include metadata.mk 
+include metadata.mk
 include lib.Makefile
 
 DOCKER_RUN := mkdir -p ./.go-pkg-cache bin $(GOMOD_CACHE) && \
@@ -80,7 +80,7 @@ image:
 	$(MAKE) -C node image IMAGETAG=$(GIT_VERSION) VALIDARCHES=$(ARCH)
 
 ###############################################################################
-# Run local e2e smoke test against the checked-out code 
+# Run local e2e smoke test against the checked-out code
 # using a local kind cluster.
 ###############################################################################
 E2E_FOCUS ?= "sig-network.*Conformance"
@@ -97,11 +97,11 @@ hack/release/release: $(shell find ./hack/release -type f -name '*.go')
 	$(DOCKER_RUN) $(CALICO_BUILD) go build -v -o $@ ./hack/release/cmd
 
 # Install ghr for publishing to github.
-hack/release/ghr: 
+hack/release/ghr:
 	$(DOCKER_RUN) -e GOBIN=/go/src/$(PACKAGE_NAME)/hack/release/ $(CALICO_BUILD) go install github.com/tcnksm/ghr@v0.14.0
 
 # Build a release.
-release: hack/release/release 
+release: hack/release/release
 	@hack/release/release -create
 
 # Test the release code
@@ -126,9 +126,15 @@ helm-index:
 			     $(MAKE) semaphore-run-workflow
 
 # Creates the tar file used for installing Calico on OpenShift.
-bin/ocp.tgz: manifests/ocp/
-	mkdir -p bin
-	tar czvf $@ -C manifests/ ocp
+bin/ocp.tgz: manifests/ocp/ bin/yq
+	mkdir -p bin/tmp
+	cp -r manifests/ocp bin/tmp/
+	$(DOCKER_RUN) $(CALICO_BUILD) /bin/bash -c "                                        \
+		for file in bin/tmp/ocp/*crd* ;                                                 \
+        	do bin/yq -i 'del(.. | select(has(\"description\")).description)' \$$file ; \
+        done"
+	tar czvf $@ -C bin/tmp ocp
+	rm -rf bin/tmp
 
 ## Generates release notes for the given version.
 .PHONY: release-notes
