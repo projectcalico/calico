@@ -219,8 +219,8 @@ func (m *bpfIPSets) GetTypeOf(setID string) (ipsets.IPSetType, error) {
 	return ipSet.Type, nil
 }
 
-func (m *bpfIPSets) GetMembers(setID string) (set.Set[string], error) {
-	// GetMembers is only called from XDPState, and XDPState does not coexist with
+func (m *bpfIPSets) GetDesiredMembers(setID string) (set.Set[string], error) {
+	// GetDesiredMembers is only called from XDPState, and XDPState does not coexist with
 	// config.BPFEnabled.
 	panic("Not implemented")
 }

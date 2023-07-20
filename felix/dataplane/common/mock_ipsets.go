@@ -79,7 +79,7 @@ func (s *MockIPSets) GetIPFamily() ipsets.IPFamily {
 	return ipsets.IPFamilyV4
 }
 
-func (s *MockIPSets) GetMembers(setID string) (set.Set[string], error) {
+func (s *MockIPSets) GetDesiredMembers(setID string) (set.Set[string], error) {
 	return s.Members[setID], nil
 }
 

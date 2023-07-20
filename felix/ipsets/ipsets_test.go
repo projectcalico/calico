@@ -438,9 +438,6 @@ var _ = Describe("IP sets dataplane", func() {
 
 			By("Using the correct sequence of destroys")
 			Expect(dataplane.AttemptedDestroys).To(Equal([]string{
-				v4TempIPSetName0, // Failed "ipset restore" deletion after successful write/swap.
-				// Resync happens here.
-				v4TempIPSetName0, // Attempted pre-update deletion.
 				v4TempIPSetName0, // Attempted deletion in ApplyDeletions().
 			}))
 
@@ -643,7 +640,6 @@ var _ = Describe("IP sets dataplane", func() {
 			Context("with filtering to single IP set", func() {
 				BeforeEach(func() {
 					ipsets.SetFilter(set.From(v4MainIPSetName2))
-					ipsets.QueueResync()
 					apply()
 				})
 
