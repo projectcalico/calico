@@ -15,7 +15,6 @@
 package labelindex
 
 import (
-	"fmt"
 	"reflect"
 	"strings"
 	"time"
@@ -205,7 +204,7 @@ type npParentData struct {
 	endpointIDs set.Set[any]
 }
 
-func (d *npParentData) DiscardEndpointID(id interface{}) {
+func (d *npParentData) DiscardEndpointID(id any) {
 	if d.endpointIDs == nil {
 		panic("discard of unknown ID")
 	}
@@ -215,14 +214,14 @@ func (d *npParentData) DiscardEndpointID(id interface{}) {
 	}
 }
 
-func (d *npParentData) AddEndpointID(id interface{}) {
+func (d *npParentData) AddEndpointID(id any) {
 	if d.endpointIDs == nil {
 		d.endpointIDs = set.NewBoxed[any]()
 	}
 	d.endpointIDs.Add(id)
 }
 
-func (d *npParentData) IterEndpointIDs(f func(id interface{}) error) {
+func (d *npParentData) IterEndpointIDs(f func(id any) error) {
 	if d.endpointIDs == nil {
 		return
 	}
@@ -396,14 +395,22 @@ func extractCIDRsFromNetworkSet(netSet *model.NetworkSet) []ip.CIDR {
 	return combined
 }
 
+var defaultLogCtx = log.WithField("fieldsSuppressedAtThisLogLevel", "true")
+
+var EvalLabelsFalse uint
+var EvalLabelsTrue uint
+
 func (idx *SelectorAndNamedPortIndex) UpdateIPSet(ipSetID string, sel selector.Selector, namedPortProtocol IPSetPortProtocol, namedPort string) {
-	logCxt := log.WithFields(log.Fields{
-		"ipSetID":           ipSetID,
-		"selector":          sel,
-		"namedPort":         namedPort,
-		"namedPortProtocol": namedPortProtocol,
-	})
-	logCxt.Debug("Updating IP set")
+	logCxt := defaultLogCtx
+	if log.IsLevelEnabled(log.DebugLevel) {
+		logCxt := log.WithFields(log.Fields{
+			"ipSetID":           ipSetID,
+			"selector":          sel,
+			"namedPort":         namedPort,
+			"namedPortProtocol": namedPortProtocol,
+		})
+		logCxt.Debug("Updating IP set")
+	}
 	if sel == nil {
 		log.WithField("id", ipSetID).Panic("Selector should not be nil")
 	}
@@ -441,8 +448,10 @@ func (idx *SelectorAndNamedPortIndex) UpdateIPSet(ipSetID string, sel selector.S
 
 		if !sel.EvaluateLabels(epData) {
 			// Endpoint doesn't match.
+			EvalLabelsFalse++
 			continue
 		}
+		EvalLabelsTrue++
 		contrib := idx.CalculateEndpointContribution(epData, newIPSetData)
 		if len(contrib) == 0 {
 			continue
@@ -493,24 +502,21 @@ func (idx *SelectorAndNamedPortIndex) DeleteIPSet(id string) {
 }
 
 func (idx *SelectorAndNamedPortIndex) UpdateEndpointOrSet(
-	id interface{},
+	id any,
 	labels map[string]string,
 	nets []ip.CIDR,
 	ports []model.EndpointPort,
 	parentIDs []string,
 ) {
-	var cidrsToLog interface{} = nets
-	if log.GetLevel() < log.DebugLevel && len(nets) > 20 {
-		cidrsToLog = fmt.Sprintf("<too many to log (%d)>", len(nets))
+	if log.IsLevelEnabled(log.DebugLevel) {
+		log.WithFields(log.Fields{
+			"endpointOrSetID": id,
+			"newLabels":       labels,
+			"CIDRs":           nets,
+			"ports":           ports,
+			"parentIDs":       parentIDs,
+		}).Debug("Updating endpoint/network set")
 	}
-	logCxt := log.WithFields(log.Fields{
-		"endpointOrSetID": id,
-		"newLabels":       labels,
-		"CIDRs":           cidrsToLog,
-		"ports":           ports,
-		"parentIDs":       parentIDs,
-	})
-	logCxt.Debug("Updating endpoint/network set")
 
 	// Calculate the new endpoint data.
 	newEndpointData := &endpointData{}
@@ -623,7 +629,7 @@ func (idx *SelectorAndNamedPortIndex) scanEndpointAgainstAllIPSets(
 	}
 }
 
-func (idx *SelectorAndNamedPortIndex) DeleteEndpoint(id interface{}) {
+func (idx *SelectorAndNamedPortIndex) DeleteEndpoint(id any) {
 	log.Debug("SelectorAndNamedPortIndex deleting endpoint", id)
 	oldEndpointData := idx.endpointDataByID[id]
 	if oldEndpointData == nil {
