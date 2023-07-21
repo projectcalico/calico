@@ -73,7 +73,7 @@ var _ = Context("_IPSets_ Tests for IPset rendering", func() {
 		// Make 1000 network sets
 		sizes := []int{100, 1, 1, 1, 2, 3, 4, 5, 10, 10, 100, 200, 1000}
 		const numSets = 10000
-		for i := 0; i < 1; i++ {
+		for i := 0; i < numSets; i++ {
 			ns := api.NewGlobalNetworkSet()
 			ns.Name = fmt.Sprintf("netset-%d", i)
 			ns.Labels = map[string]string{
