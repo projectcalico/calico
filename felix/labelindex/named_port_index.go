@@ -15,6 +15,7 @@
 package labelindex
 
 import (
+	"math"
 	"reflect"
 	"strings"
 	"time"
@@ -230,9 +231,14 @@ func (d *npParentData) IterEndpointIDs(f func(id any) error) {
 
 type NamedPortMatchCallback func(ipSetID string, member IPSetMember)
 
+type values struct {
+	m     map[string]set.Set[any]
+	count int
+}
+
 type SelectorAndNamedPortIndex struct {
 	endpointDataByID      map[any]*endpointData
-	labelKeyToValueToEPID map[string]map[string]set.Set[any]
+	labelKeyToValueToEPID map[string]values
 
 	parentDataByParentID map[string]*npParentData
 	ipSetDataByID        map[string]*ipSetData
@@ -248,7 +254,7 @@ type SelectorAndNamedPortIndex struct {
 func NewSelectorAndNamedPortIndex() *SelectorAndNamedPortIndex {
 	inheritIdx := SelectorAndNamedPortIndex{
 		endpointDataByID:      map[interface{}]*endpointData{},
-		labelKeyToValueToEPID: map[string]map[string]set.Set[any]{},
+		labelKeyToValueToEPID: map[string]values{},
 		parentDataByParentID:  map[string]*npParentData{},
 		ipSetDataByID:         map[string]*ipSetData{},
 
@@ -783,41 +789,50 @@ func (idx *SelectorAndNamedPortIndex) iterEndpointCandidates(ipsetID string, f f
 	sel := idx.ipSetDataByID[ipsetID].selector
 	restrictions := sel.LabelRestrictions()
 
-	bestScore := -1
+	bestNumToScan := math.MaxInt
 	bestK := ""
+	numLeft := len(restrictions)
 	for k, r := range restrictions {
-		score := 0
-		if r.MustBePresent {
-			score += 1
-		}
+		numToScan := 0
 		if r.MustHaveValue != "" {
-			score += 10
+			s := idx.labelKeyToValueToEPID[k].m[r.MustHaveValue]
+			if s == nil {
+				// Short circuit. Selector requires label=='some value'
+				// but there are no matching endpoints!
+				log.Debug("Index says selector cannot match, abort scan")
+				return
+			} else {
+				numToScan = s.Len()
+			}
+		} else if r.MustBePresent {
+			numToScan = idx.labelKeyToValueToEPID[k].count
 		}
-		if score > bestScore {
+		if numToScan < bestNumToScan {
 			bestK = k
-			bestScore = score
+			bestNumToScan = numToScan
 		}
-	}
-
-	if bestK == "" {
-		// Naive algorithm, just scan all.
-		for id, epData := range idx.endpointDataByID {
-			// Make sure we don't appear non-live if there are a lot of endpoints to get through.
-			idx.maybeReportLive()
-			f(id, epData)
+		numLeft--
+		if numToScan <= numLeft {
+			// No point in doing more work to find a better option,
+			// there are fewer endpoints to scan than there are options left.
+			break
 		}
-		return
 	}
 
 	bestR := restrictions[bestK]
 	if bestR.MustHaveValue != "" {
-		idx.labelKeyToValueToEPID[bestK][bestR.MustHaveValue].Iter(func(epID any) error {
+		// Best case, we have a precise match on key and value, only
+		// need to scan endpoints with exactly that key/value.
+		s := idx.labelKeyToValueToEPID[bestK].m[bestR.MustHaveValue]
+		s.Iter(func(epID any) error {
 			idx.maybeReportLive()
 			f(epID, idx.endpointDataByID[epID])
 			return nil
 		})
 	} else if bestR.MustBePresent {
-		for _, epIDs := range idx.labelKeyToValueToEPID[bestK] {
+		// We know the selector needs a particular key but not a particular
+		// value, for example has(labelName).
+		for _, epIDs := range idx.labelKeyToValueToEPID[bestK].m {
 			epIDs.Iter(func(epID any) error {
 				idx.maybeReportLive()
 				f(epID, idx.endpointDataByID[epID])
@@ -825,36 +840,48 @@ func (idx *SelectorAndNamedPortIndex) iterEndpointCandidates(ipsetID string, f f
 			})
 		}
 	} else {
-		log.Panicf("Wrong score for restriction? %s=%v %d", bestK, bestR, bestScore)
+		// Can't optimise this selector, just scan all.
+		for id, epData := range idx.endpointDataByID {
+			// Make sure we don't appear non-live if there are a lot of endpoints to get through.
+			idx.maybeReportLive()
+			f(id, epData)
+		}
 	}
 }
 
 func (idx *SelectorAndNamedPortIndex) removeLabelsFromLVIndex(labels map[string]string, id any) {
 	for k, v := range labels {
-		valToSet := idx.labelKeyToValueToEPID[k]
-		setOfIDs := valToSet[v]
+		vals := idx.labelKeyToValueToEPID[k]
+		setOfIDs := vals.m[v]
 		setOfIDs.Discard(id)
 		if setOfIDs.Len() == 0 {
-			delete(valToSet, v)
-			if len(valToSet) == 0 {
+			delete(vals.m, v)
+			if len(vals.m) == 0 {
 				delete(idx.labelKeyToValueToEPID, k)
+				continue
 			}
 		}
+		vals.count--
+		idx.labelKeyToValueToEPID[k] = vals
 	}
 }
 
 func (idx *SelectorAndNamedPortIndex) addLabelsToLVIndex(labels map[string]string, id any) {
 	for k, v := range labels {
-		valToSet := idx.labelKeyToValueToEPID[k]
-		if valToSet == nil {
-			valToSet = map[string]set.Set[any]{}
-			idx.labelKeyToValueToEPID[k] = valToSet
+		vals, ok := idx.labelKeyToValueToEPID[k]
+		if !ok {
+			vals = values{
+				m: map[string]set.Set[any]{},
+			}
+			idx.labelKeyToValueToEPID[k] = vals
 		}
-		setOfIDs := valToSet[v]
+		setOfIDs := vals.m[v]
 		if setOfIDs == nil {
 			setOfIDs = set.NewBoxed[any]()
-			valToSet[v] = setOfIDs
+			vals.m[v] = setOfIDs
 		}
 		setOfIDs.Add(id)
+		vals.count++
+		idx.labelKeyToValueToEPID[k] = vals
 	}
 }

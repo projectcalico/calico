@@ -46,6 +46,11 @@ func BenchmarkInitialSnapshot200Local10kTotal10000NetsetPols(b *testing.B) {
 	benchInitialSnap(b, 10000, 200, 0, 10000)
 }
 
+var (
+	keepAlive any
+	_         = keepAlive
+)
+
 func benchInitialSnap(b *testing.B, numEndpoints int, numLocalEndpoints int, numTagPols int, netSetsAndPols int) {
 	RegisterTestingT(b)
 	defer logrus.SetLevel(logrus.GetLevel())
@@ -66,7 +71,12 @@ func benchInitialSnap(b *testing.B, numEndpoints int, numLocalEndpoints int, num
 		conf := config.New()
 		conf.FelixHostname = "localhost"
 		es := NewEventSequencer(conf)
+		numMessages := 0
+		es.Callback = func(message interface{}) {
+			numMessages++
+		}
 		cg := NewCalculationGraph(es, conf, func() {})
+		keepAlive = cg // Keep CG alive after run so that memory profile shows its usage
 
 		logrus.SetLevel(logrus.WarnLevel)
 		b.StartTimer()
@@ -80,9 +90,11 @@ func benchInitialSnap(b *testing.B, numEndpoints int, numLocalEndpoints int, num
 		cg.AllUpdDispatcher.OnDatamodelStatus(api.InSync)
 
 		Expect(es.pendingEndpointTierUpdates).To(HaveLen(numLocalEndpoints))
+		es.Flush()
 		b.ReportMetric(float64(time.Since(startTime).Seconds()), "s")
 		b.ReportMetric(float64(len(es.pendingAddedIPSets)), "IPSets")
 		b.ReportMetric(float64(len(es.pendingPolicyUpdates)), "Policies")
+		b.ReportMetric(float64(numMessages), "Msgs")
 	}
 }
 
