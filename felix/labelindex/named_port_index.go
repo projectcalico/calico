@@ -788,6 +788,7 @@ func (idx *SelectorAndNamedPortIndex) maybeReportLive() {
 func (idx *SelectorAndNamedPortIndex) iterEndpointCandidates(ipsetID string, f func(epID any, epData *endpointData)) {
 	sel := idx.ipSetDataByID[ipsetID].selector
 	restrictions := sel.LabelRestrictions()
+	log.Debugf("Selector %s restrictions: %v", sel.String(), restrictions)
 
 	bestNumToScan := math.MaxInt
 	bestK := ""
@@ -799,7 +800,7 @@ func (idx *SelectorAndNamedPortIndex) iterEndpointCandidates(ipsetID string, f f
 			if s == nil {
 				// Short circuit. Selector requires label=='some value'
 				// but there are no matching endpoints!
-				log.Debug("Index says selector cannot match, abort scan")
+				log.Debugf("iterEndpointCandidates: Index says selector cannot match, abort scan %s:%q", k, r.MustHaveValue)
 				return
 			} else {
 				numToScan = s.Len()
@@ -823,6 +824,7 @@ func (idx *SelectorAndNamedPortIndex) iterEndpointCandidates(ipsetID string, f f
 	if bestR.MustHaveValue != "" {
 		// Best case, we have a precise match on key and value, only
 		// need to scan endpoints with exactly that key/value.
+		log.Debug("iterEndpointCandidates: MustHaveValue match on: ", bestR.MustHaveValue)
 		s := idx.labelKeyToValueToEPID[bestK].m[bestR.MustHaveValue]
 		s.Iter(func(epID any) error {
 			idx.maybeReportLive()
@@ -832,6 +834,7 @@ func (idx *SelectorAndNamedPortIndex) iterEndpointCandidates(ipsetID string, f f
 	} else if bestR.MustBePresent {
 		// We know the selector needs a particular key but not a particular
 		// value, for example has(labelName).
+		log.Debug("iterEndpointCandidates: MustBePresent match on: ", bestK)
 		for _, epIDs := range idx.labelKeyToValueToEPID[bestK].m {
 			epIDs.Iter(func(epID any) error {
 				idx.maybeReportLive()
@@ -841,6 +844,7 @@ func (idx *SelectorAndNamedPortIndex) iterEndpointCandidates(ipsetID string, f f
 		}
 	} else {
 		// Can't optimise this selector, just scan all.
+		log.Debug("iterEndpointCandidates: Full scan")
 		for id, epData := range idx.endpointDataByID {
 			// Make sure we don't appear non-live if there are a lot of endpoints to get through.
 			idx.maybeReportLive()
