@@ -63,6 +63,7 @@ type Selector interface {
 type LabelRestriction struct {
 	MustBePresent bool
 	MustBeAbsent  bool
+	MustHaveValue string
 }
 
 type Visitor interface {
@@ -164,6 +165,7 @@ func (node *LabelEqValueNode) LabelRestrictions() map[string]LabelRestriction {
 	return map[string]LabelRestriction{
 		node.LabelName: {
 			MustBePresent: true,
+			MustHaveValue: node.Value,
 		},
 	}
 }
@@ -450,6 +452,9 @@ func (node *AndNode) LabelRestrictions() map[string]LabelRestriction {
 			base := lr[ln]
 			base.MustBePresent = base.MustBePresent || r.MustBePresent
 			base.MustBeAbsent = base.MustBeAbsent || r.MustBeAbsent
+			if base.MustHaveValue == "" {
+				base.MustHaveValue = r.MustHaveValue
+			}
 			lr[ln] = base
 		}
 	}
@@ -494,6 +499,9 @@ func (node *OrNode) LabelRestrictions() map[string]LabelRestriction {
 		for ln, r := range lr {
 			opr := opLR[ln]
 			r.MustBePresent = r.MustBePresent && opr.MustBePresent
+			if !r.MustBePresent || r.MustHaveValue != opr.MustHaveValue {
+				r.MustHaveValue = ""
+			}
 			r.MustBeAbsent = r.MustBeAbsent && opr.MustBeAbsent
 			if r.MustBePresent || r.MustBeAbsent {
 				lr[ln] = r

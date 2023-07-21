@@ -231,7 +231,9 @@ func (d *npParentData) IterEndpointIDs(f func(id any) error) {
 type NamedPortMatchCallback func(ipSetID string, member IPSetMember)
 
 type SelectorAndNamedPortIndex struct {
-	endpointDataByID     map[any]*endpointData
+	endpointDataByID      map[any]*endpointData
+	labelKeyToValueToEPID map[string]map[string]set.Set[any]
+
 	parentDataByParentID map[string]*npParentData
 	ipSetDataByID        map[string]*ipSetData
 
@@ -245,9 +247,10 @@ type SelectorAndNamedPortIndex struct {
 
 func NewSelectorAndNamedPortIndex() *SelectorAndNamedPortIndex {
 	inheritIdx := SelectorAndNamedPortIndex{
-		endpointDataByID:     map[interface{}]*endpointData{},
-		parentDataByParentID: map[string]*npParentData{},
-		ipSetDataByID:        map[string]*ipSetData{},
+		endpointDataByID:      map[interface{}]*endpointData{},
+		labelKeyToValueToEPID: map[string]map[string]set.Set[any]{},
+		parentDataByParentID:  map[string]*npParentData{},
+		ipSetDataByID:         map[string]*ipSetData{},
 
 		// Callback functions
 		OnMemberAdded:   func(ipSetID string, member IPSetMember) {},
@@ -442,7 +445,7 @@ func (idx *SelectorAndNamedPortIndex) UpdateIPSet(ipSetID string, sel selector.S
 	idx.ipSetDataByID[ipSetID] = newIPSetData
 
 	// Then scan all endpoints.
-	idx.iterEndpointCandidates(newIPSetData, func(epID any, epData *endpointData) {
+	idx.iterEndpointCandidates(ipSetID, func(epID any, epData *endpointData) {
 		idx.maybeReportLive()
 
 		if !sel.EvaluateLabels(epData) {
@@ -482,7 +485,7 @@ func (idx *SelectorAndNamedPortIndex) DeleteIPSet(setID string) {
 		return
 	}
 
-	idx.iterEndpointCandidates(ipSetData, func(epID any, epData *endpointData) {
+	idx.iterEndpointCandidates(setID, func(epID any, epData *endpointData) {
 		// Make sure we don't appear non-live if there are a lot of endpoints to get through.
 		idx.maybeReportLive()
 		epData.RemoveMatchingIPSetID(setID)
@@ -541,7 +544,10 @@ func (idx *SelectorAndNamedPortIndex) UpdateEndpointOrSet(
 		// If we get here, something about the endpoint has changed.  Calculate the old endpoint's
 		// contribution to the IP sets that it matched.
 		oldIPSetContributions = idx.RecalcCachedContributions(oldEndpointData)
+		idx.removeLabelsFromLVIndex(oldEndpointData.labels, id)
 	}
+	// FIXME Completely ignoring parents for now.
+	idx.addLabelsToLVIndex(newEndpointData.labels, id)
 
 	// Calculate and compare the contribution of the new endpoint to IP sets.  Emit events for
 	// new contributions and then mop up deletions.
@@ -646,6 +652,7 @@ func (idx *SelectorAndNamedPortIndex) DeleteEndpoint(id any) {
 	}
 
 	// Record the new endpoint data.
+	idx.removeLabelsFromLVIndex(oldEndpointData.labels, id)
 	delete(idx.endpointDataByID, id)
 	for _, parent := range oldEndpointData.parents {
 		parent.DiscardEndpointID(id)
@@ -772,11 +779,82 @@ func (idx *SelectorAndNamedPortIndex) maybeReportLive() {
 	idx.lastLiveReport = time.Now()
 }
 
-func (idx *SelectorAndNamedPortIndex) iterEndpointCandidates(ipsetID any, f func(epID any, epData *endpointData)) {
-	// Naive algorithm, just scan all.
-	for id, epData := range idx.endpointDataByID {
-		// Make sure we don't appear non-live if there are a lot of endpoints to get through.
-		idx.maybeReportLive()
-		f(id, epData)
+func (idx *SelectorAndNamedPortIndex) iterEndpointCandidates(ipsetID string, f func(epID any, epData *endpointData)) {
+	sel := idx.ipSetDataByID[ipsetID].selector
+	restrictions := sel.LabelRestrictions()
+
+	bestScore := -1
+	bestK := ""
+	for k, r := range restrictions {
+		score := 0
+		if r.MustBePresent {
+			score += 1
+		}
+		if r.MustHaveValue != "" {
+			score += 10
+		}
+		if score > bestScore {
+			bestK = k
+			bestScore = score
+		}
+	}
+
+	if bestK == "" {
+		// Naive algorithm, just scan all.
+		for id, epData := range idx.endpointDataByID {
+			// Make sure we don't appear non-live if there are a lot of endpoints to get through.
+			idx.maybeReportLive()
+			f(id, epData)
+		}
+		return
+	}
+
+	bestR := restrictions[bestK]
+	if bestR.MustHaveValue != "" {
+		idx.labelKeyToValueToEPID[bestK][bestR.MustHaveValue].Iter(func(epID any) error {
+			idx.maybeReportLive()
+			f(epID, idx.endpointDataByID[epID])
+			return nil
+		})
+	} else if bestR.MustBePresent {
+		for _, epIDs := range idx.labelKeyToValueToEPID[bestK] {
+			epIDs.Iter(func(epID any) error {
+				idx.maybeReportLive()
+				f(epID, idx.endpointDataByID[epID])
+				return nil
+			})
+		}
+	} else {
+		log.Panicf("Wrong score for restriction? %s=%v %d", bestK, bestR, bestScore)
+	}
+}
+
+func (idx *SelectorAndNamedPortIndex) removeLabelsFromLVIndex(labels map[string]string, id any) {
+	for k, v := range labels {
+		valToSet := idx.labelKeyToValueToEPID[k]
+		setOfIDs := valToSet[v]
+		setOfIDs.Discard(id)
+		if setOfIDs.Len() == 0 {
+			delete(valToSet, v)
+			if len(valToSet) == 0 {
+				delete(idx.labelKeyToValueToEPID, k)
+			}
+		}
+	}
+}
+
+func (idx *SelectorAndNamedPortIndex) addLabelsToLVIndex(labels map[string]string, id any) {
+	for k, v := range labels {
+		valToSet := idx.labelKeyToValueToEPID[k]
+		if valToSet == nil {
+			valToSet = map[string]set.Set[any]{}
+			idx.labelKeyToValueToEPID[k] = valToSet
+		}
+		setOfIDs := valToSet[v]
+		if setOfIDs == nil {
+			setOfIDs = set.NewBoxed[any]()
+			valToSet[v] = setOfIDs
+		}
+		setOfIDs.Add(id)
 	}
 }
