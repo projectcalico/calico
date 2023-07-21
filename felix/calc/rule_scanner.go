@@ -15,6 +15,7 @@ package calc
 
 import (
 	"fmt"
+	"strings"
 
 	log "github.com/sirupsen/logrus"
 
@@ -102,6 +103,24 @@ type IPSetData struct {
 	// cachedUID holds the calculated unique ID of this IP set, or "" if it hasn't been calculated
 	// yet.
 	cachedUID string
+}
+
+func (d *IPSetData) String() string {
+	var parts []string
+	if d.Selector != nil {
+		parts = append(parts, fmt.Sprintf("selector:%q", d.Selector.String()))
+	}
+	if d.NamedPort != "" {
+		parts = append(parts, fmt.Sprintf("namedPort:%s(%s)", d.NamedPort, d.NamedPortProtocol.String()))
+	}
+	if d.Service != "" {
+		parts = append(parts, fmt.Sprintf("service:%q", d.Service))
+	}
+	if d.ServiceIncludePorts {
+		parts = append(parts, "serviceIncludePorts=true")
+	}
+	parts = append(parts, fmt.Sprintf("uniqueID:%q", d.UniqueID()))
+	return "IPSetData{" + strings.Join(parts, ", ") + "}"
 }
 
 func (d *IPSetData) UniqueID() string {

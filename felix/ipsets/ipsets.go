@@ -33,7 +33,7 @@ import (
 )
 
 const (
-	MaxIPSetParallelUpdates       = 50
+	MaxIPSetParallelUpdates       = 10
 	MaxIPSetDeletionsPerIteration = 20
 	RestoreChunkSize              = 1000
 )
@@ -504,6 +504,7 @@ func (s *IPSets) tryResync() (err error) {
 			// One of our IP sets; we need to parse its members.
 			logCxt := s.logCxt.WithField("setName", ipSetName)
 			memberTracker := s.getOrCreateMemberTracker(ipSetName)
+			numExtrasExpected := memberTracker.PendingDeletions().Len()
 			err = memberTracker.Dataplane().ReplaceFromIter(func(f func(k IPSetMember)) error {
 				for scanner.Scan() {
 					line := scanner.Text()
@@ -539,7 +540,7 @@ func (s *IPSets) tryResync() (err error) {
 				logCxt.WithField("numMissing", numMissing).Info(
 					"Resync found members missing from dataplane.")
 			}
-			if numExtras := memberTracker.PendingDeletions().Len(); numExtras > 0 {
+			if numExtras := memberTracker.PendingDeletions().Len() - numExtrasExpected; numExtras > 0 {
 				logCxt.WithField("numExtras", numExtras).Info(
 					"Resync found extra members in dataplane.")
 			}
@@ -591,7 +592,8 @@ func (s *IPSets) tryResync() (err error) {
 // running one "ipset restore" session.  Note: unlike 'iptables-restore', 'ipset restore' is
 // not atomic, updates are applied individually.
 func (s *IPSets) tryUpdates() error {
-	if s.setNameToProgrammedMetadata.PendingUpdates().Len() == 0 && s.ipSetsWithDirtyMembers.Len() == 0 {
+	ipSetChunks, total := s.chunkUpDirtyIPSets()
+	if total == 0 {
 		s.logCxt.Debug("No dirty IP sets.")
 		return nil
 	}
@@ -600,7 +602,7 @@ func (s *IPSets) tryUpdates() error {
 	var errg errgroup.Group
 	errg.SetLimit(MaxIPSetParallelUpdates)
 
-	ipSetChunks := s.chunkUpDirtyIPSets()
+	log.Infof("Updating %d IPSets in %d chunks", total, len(ipSetChunks))
 	for _, setIDs := range ipSetChunks {
 		setIDs := setIDs
 		errg.Go(func() error {
@@ -623,7 +625,7 @@ func (s *IPSets) tryUpdates() error {
 }
 
 // chunkUpDirtyIPSets breaks up the dirtyIPSetIDs set into slices for processing in parallel.
-func (s *IPSets) chunkUpDirtyIPSets() (chunks [][]string) {
+func (s *IPSets) chunkUpDirtyIPSets() (chunks [][]string, numIPSets int) {
 	// We try to make sure that each chunk has a reasonable number of ipset input lines
 	// in it.  If we simply made each ipset into its own chunk then we'd pay the overhead of
 	// launching the ipset binary for every IP set, even if there was only 1 update per IP
@@ -636,6 +638,7 @@ func (s *IPSets) chunkUpDirtyIPSets() (chunks [][]string) {
 			return nil
 		}
 		chunk = append(chunk, setName)
+		numIPSets++
 		estimatedNumLinesInChunk += s.estimateUpdateSize(setName)
 		if estimatedNumLinesInChunk >= RestoreChunkSize {
 			chunks = append(chunks, chunk)
@@ -647,6 +650,7 @@ func (s *IPSets) chunkUpDirtyIPSets() (chunks [][]string) {
 	s.setNameToProgrammedMetadata.PendingUpdates().Iter(func(setName string, v dataplaneMetadata) deltatracker.IterAction {
 		if !s.ipSetsWithDirtyMembers.Contains(setName) {
 			chunk = append(chunk, setName)
+			numIPSets++
 			estimatedNumLinesInChunk += s.estimateUpdateSize(setName)
 			if estimatedNumLinesInChunk >= RestoreChunkSize {
 				chunks = append(chunks, chunk)
@@ -658,6 +662,14 @@ func (s *IPSets) chunkUpDirtyIPSets() (chunks [][]string) {
 	})
 	if chunk != nil {
 		chunks = append(chunks, chunk)
+	}
+
+	if len(chunks) > MaxIPSetParallelUpdates {
+		chunks2 := make([][]string, MaxIPSetParallelUpdates)
+		for i, c := range chunks {
+			chunks2[i%len(chunks2)] = append(chunks2[i%len(chunks2)], c...)
+		}
+		return chunks2, numIPSets
 	}
 	return
 }

@@ -474,13 +474,13 @@ func (idx *SelectorAndNamedPortIndex) DeleteIPSet(id string) {
 		return
 	}
 
-	// Emit events for all the removed CIDRs.
-	for member := range ipSetData.memberToRefCount {
-		if log.GetLevel() >= log.DebugLevel {
-			log.WithField("member", member).Debug("Emitting deletion event.")
-		}
-		idx.OnMemberRemoved(id, member)
-	}
+	// // Emit events for all the removed CIDRs.
+	// for member := range ipSetData.memberToRefCount {
+	// 	if log.GetLevel() >= log.DebugLevel {
+	// 		log.WithField("member", member).Debug("Emitting deletion event.")
+	// 	}
+	// 	idx.OnMemberRemoved(id, member)
+	// }
 
 	// Then scan all endpoints and fix up their indexes to remove the match.
 	for _, epData := range idx.endpointDataByID {
