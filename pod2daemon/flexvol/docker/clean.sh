@@ -116,7 +116,7 @@ done
 paths=( "/bin" "/usr/bin" )
 for i in  "${paths[@]}"; do
     for entry in "$i"/*; do
-      remove=1
+        remove=1
         for i in "${basicNeed[@]}"; do
             if [[ "$entry" == *"$i" ]]; then
                 remove=0

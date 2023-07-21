@@ -34,7 +34,7 @@ func SetMapSize(size int) {
 
 const (
 	KeySize    = 4
-	ValueSize  = 4 + 16
+	ValueSize  = 4 + 16 + 3*4 + 2*4
 	MaxEntries = 1000
 )
 
@@ -55,7 +55,7 @@ var MapParams = maps.MapParameters{
 	MaxEntries:   MaxEntries,
 	Name:         "cali_iface",
 	Flags:        unix.BPF_F_NO_PREALLOC,
-	Version:      2,
+	Version:      3,
 	UpdatedByBPF: false,
 }
 
@@ -81,19 +81,28 @@ func (k Key) IfIndex() uint32 {
 	return binary.LittleEndian.Uint32(k[:])
 }
 
+func (k Key) String() string {
+	return fmt.Sprintf("{ifIndex: %d}", k.IfIndex())
+}
+
 func KeyFromBytes(b []byte) Key {
 	var k Key
 	copy(k[:], b)
 	return k
 }
 
-type Value [4 + 16]byte
+type Value [ValueSize]byte
 
-func NewValue(flags uint32, name string) Value {
+func NewValue(flags uint32, name string, xdpPol, ingressPol, egressPol, tcIngressFilter, tcEgressFilter int) Value {
 	var v Value
 
 	binary.LittleEndian.PutUint32(v[:], flags)
 	copy(v[4:4+15], []byte(name))
+	binary.LittleEndian.PutUint32(v[4+16+0:4+16+4], uint32(xdpPol))
+	binary.LittleEndian.PutUint32(v[4+16+4:4+16+8], uint32(ingressPol))
+	binary.LittleEndian.PutUint32(v[4+16+8:4+16+12], uint32(egressPol))
+	binary.LittleEndian.PutUint32(v[4+16+12:4+16+16], uint32(tcIngressFilter))
+	binary.LittleEndian.PutUint32(v[4+16+16:4+16+20], uint32(tcEgressFilter))
 
 	return v
 }
@@ -107,7 +116,27 @@ func (v Value) Flags() uint32 {
 }
 
 func (v Value) IfName() string {
-	return strings.TrimRight(string(v[4:]), "\x00")
+	return strings.TrimRight(string(v[4:4+16]), "\x00")
+}
+
+func (v Value) XDPPolicy() int {
+	return int(int32(binary.LittleEndian.Uint32(v[4+16 : 4+16+4])))
+}
+
+func (v Value) IngressPolicy() int {
+	return int(int32(binary.LittleEndian.Uint32(v[4+16+4 : 4+16+8])))
+}
+
+func (v Value) EgressPolicy() int {
+	return int(int32(binary.LittleEndian.Uint32(v[4+16+8 : 4+16+12])))
+}
+
+func (v Value) TcIngressFilter() int {
+	return int(int32(binary.LittleEndian.Uint32(v[4+16+12 : 4+16+16])))
+}
+
+func (v Value) TcEgressFilter() int {
+	return int(int32(binary.LittleEndian.Uint32(v[4+16+16 : 4+16+20])))
 }
 
 func (v Value) String() string {
@@ -124,7 +153,8 @@ func (v Value) String() string {
 		fstr = "host,"
 	}
 
-	return fmt.Sprintf("{flags: %s name: %s}", fstr, v.IfName())
+	return fmt.Sprintf("{flags: %s XDPPolicy: %d, IngressPolicy: %d, EgressPolicy: %d, name: %s}",
+		fstr, v.XDPPolicy(), v.IngressPolicy(), v.EgressPolicy(), v.IfName())
 }
 
 func ValueFromBytes(b []byte) Value {

@@ -206,14 +206,15 @@ RUN chgrp -R 0 /etc/calico && \
 
 COPY --from=bpftool /bpftool /bin
 
+ARG BIN_DIR
 # Copy in the calico-node binary
-COPY dist/bin/calico-node-amd64 /bin/calico-node
+COPY ${BIN_DIR}/calico-node-amd64 /bin/calico-node
 
 # Set the suid bit on calico-node
 RUN chmod u+s /bin/calico-node
 
 # Copy in the moutnns binary
-COPY dist/bin/mountns-amd64 /bin/mountns
+COPY $BIN_DIR/mountns-amd64 /bin/mountns
 
 # Set the suid bit on mountns
 RUN chmod u+s /bin/mountns
@@ -230,6 +231,10 @@ COPY --from=ubi / /
 
 # Add in top-level license file
 COPY LICENSE /licenses
+
+# Node is build on a debian image with pcap 1.8, but there is no 1.8 available so we copy 1.9 over. Ideally we should
+# should build node on a centos image so we can have correct pcap version alignment.
+RUN ln -s $(ls /usr/lib64/libpcap.so.1.9.* | tail -n 1) /usr/lib64/libpcap.so.0.8
 
 CMD ["start_runit"]
 

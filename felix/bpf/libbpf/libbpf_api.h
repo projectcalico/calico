@@ -39,6 +39,16 @@ void bpf_obj_load(struct bpf_object *obj) {
 	set_errno(bpf_object__load(obj));
 }
 
+int bpf_program_fd(struct bpf_object *obj, char *secname)
+{
+	int fd = bpf_program__fd(bpf_object__find_program_by_name(obj, secname));
+	if (fd < 0) {
+		errno = -fd;
+	}
+
+	return fd;
+}
+
 struct bpf_tc_opts bpf_tc_program_attach(struct bpf_object *obj, char *secName, int ifIndex, bool ingress)
 {
 	DECLARE_LIBBPF_OPTS(bpf_tc_hook, hook,
@@ -56,29 +66,51 @@ struct bpf_tc_opts bpf_tc_program_attach(struct bpf_object *obj, char *secName, 
 	return attach;
 }
 
-int bpf_tc_query_iface (int ifIndex, struct bpf_tc_opts opts, int isIngress) {
+void bpf_tc_program_detach(int ifindex, int handle, int pref, bool ingress)
+{
+	DECLARE_LIBBPF_OPTS(bpf_tc_hook, hook,
+			.ifindex = ifindex,
+			.attach_point = ingress ? BPF_TC_INGRESS : BPF_TC_EGRESS,
+			);
+	DECLARE_LIBBPF_OPTS(bpf_tc_opts, opts,
+			.handle = handle,
+			.priority = pref,
+			);
 
-	DECLARE_LIBBPF_OPTS(bpf_tc_hook, hook, .attach_point = BPF_TC_EGRESS);
-	if (isIngress) {
-		hook.attach_point = BPF_TC_INGRESS;
-	}
-	hook.ifindex = ifIndex;
-	opts.prog_fd = opts.prog_id = opts.flags = 0;
-	set_errno(bpf_tc_query(&hook, &opts));
-	return opts.prog_id;
+	set_errno(bpf_tc_detach(&hook, &opts));
 }
 
-void bpf_tc_create_qdisc (int ifIndex) {
+struct bpf_tc_opts bpf_tc_program_query(int ifindex, int handle, int pref, bool ingress)
+{
+	DECLARE_LIBBPF_OPTS(bpf_tc_hook, hook,
+			.ifindex = ifindex,
+			.attach_point = ingress ? BPF_TC_INGRESS : BPF_TC_EGRESS,
+			);
+	DECLARE_LIBBPF_OPTS(bpf_tc_opts, opts,
+			.handle = handle,
+			.priority = pref,
+			);
+
+	set_errno(bpf_tc_query(&hook, &opts));
+
+	return opts;
+}
+
+void bpf_tc_create_qdisc(int ifIndex)
+{
 	DECLARE_LIBBPF_OPTS(bpf_tc_hook, hook, .attach_point = BPF_TC_INGRESS);
 	hook.ifindex = ifIndex;
 	set_errno(bpf_tc_hook_create(&hook));
 }
 
-void bpf_tc_remove_qdisc (int ifIndex) {
-        DECLARE_LIBBPF_OPTS(bpf_tc_hook, hook, .attach_point = BPF_TC_EGRESS | BPF_TC_INGRESS);
-        hook.ifindex = ifIndex;
+void bpf_tc_remove_qdisc(int ifindex)
+{
+        DECLARE_LIBBPF_OPTS(bpf_tc_hook, hook,
+			.attach_point = BPF_TC_EGRESS | BPF_TC_INGRESS,
+			.ifindex = ifindex,
+			);
+
         set_errno(bpf_tc_hook_destroy(&hook));
-        return;
 }
 
 int bpf_update_jump_map(struct bpf_object *obj, char* mapName, char *progName, int progIndex) {
@@ -117,7 +149,9 @@ void bpf_tc_set_globals(struct bpf_map *map,
 			uint flags,
 			ushort wg_port,
 			uint natin,
-			uint natout)
+			uint natout,
+			uint log_filter_jmp,
+			uint *jumps)
 {
 	struct cali_tc_globals data = {
 		.host_ip = host_ip,
@@ -132,10 +166,17 @@ void bpf_tc_set_globals(struct bpf_map *map,
 		.wg_port = wg_port,
 		.natin_idx = natin,
 		.natout_idx = natout,
+		.log_filter_jmp = log_filter_jmp,
 	};
 
 	strncpy(data.iface_name, iface_name, sizeof(data.iface_name));
 	data.iface_name[sizeof(data.iface_name)-1] = '\0';
+
+	int i;
+
+	for (i = 0; i < sizeof(data.jumps)/sizeof(uint); i++) {
+		data.jumps[i] = jumps[i];
+	}
 
 	set_errno(bpf_map__set_initial_value(map, (void*)(&data), sizeof(data)));
 }
@@ -235,13 +276,19 @@ void bpf_ctlb_set_globals(struct bpf_map *map, uint udp_not_seen_timeo, bool exc
 	set_errno(bpf_map__set_initial_value(map, (void*)(&data), sizeof(data)));
 }
 
-void bpf_xdp_set_globals(struct bpf_map *map, char *iface_name)
+void bpf_xdp_set_globals(struct bpf_map *map, char *iface_name, uint *jumps)
 {
 	struct cali_xdp_globals data = {
 	};
 
 	strncpy(data.iface_name, iface_name, sizeof(data.iface_name));
 	data.iface_name[sizeof(data.iface_name)-1] = '\0';
+	
+	int i;
+
+	for (i = 0; i < sizeof(data.jumps)/sizeof(__u32); i++) {
+		data.jumps[i] = jumps[i];
+	}
 
 	set_errno(bpf_map__set_initial_value(map, (void*)(&data), sizeof(data)));
 }

@@ -1,4 +1,4 @@
-#!/bin/bash -ex
+#!/bin/bash -e
 
 # Build Debian and RPM packages for the current Git HEAD.
 #
@@ -49,32 +49,25 @@ for package_type in "$@"; do
 	    # Current time in Debian changelog format; e.g. Wed, 02
 	    # Mar 2016 14:08:51 +0000.
 	    timestamp=`date "+%a, %d %b %Y %H:%M:%S %z"`
-	    for series in trusty xenial bionic focal; do
+	    for series in trusty xenial bionic focal jammy; do
 		{
+			if ${release}; then
+				changelog_message="* ${NAME} v${version} (from Git commit ${sha})."
+			else
+				changelog_message="* Development snapshot (from Git commit ${sha})."
+			fi
 		    cat <<EOF
 ${PKG_NAME} (${DEB_EPOCH}${debver}-$series) $series; urgency=low
 
-EOF
-		    if ${release}; then
-			cat <<EOF
-  * ${NAME} v${version} (from Git commit ${sha}).
-EOF
-		    else
-			cat <<EOF
-  * Development snapshot (from Git commit ${sha}).
-EOF
-		    fi
+  ${changelog_message}
 
-		    cat <<EOF
-
- -- Neil Jerram <neil@tigera.io>  ${timestamp}
-
+ -- Daniel Fox <dan.fox@tigera.io>  ${timestamp}
 EOF
 		} > debian/changelog
 
 		excludes="${DPKG_EXCL:--I}"
 
-		${DOCKER_RUN_RM} calico-build/${series} dpkg-buildpackage ${excludes} -S -d
+		${DOCKER_RUN_RM} calico-build/${series} dpkg-buildpackage ${excludes} -S -d | ts "[build $series]"
 	    done
 
 	    cat <<EOF
@@ -148,7 +141,7 @@ EOF
 
 	* )
 	    echo "ERROR: unknown package type \"${package_type}\""
-	    exit -1
+	    exit 255
 
     esac
 

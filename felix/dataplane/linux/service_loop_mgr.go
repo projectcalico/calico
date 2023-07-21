@@ -35,7 +35,7 @@ type serviceLoopManager struct {
 	ipVersion uint8
 
 	// Our dependencies.
-	filterTable  iptablesTable
+	filterTable  IptablesTable
 	ruleRenderer rules.RuleRenderer
 
 	// Internal state.
@@ -44,7 +44,7 @@ type serviceLoopManager struct {
 }
 
 func newServiceLoopManager(
-	filterTable iptablesTable,
+	filterTable IptablesTable,
 	ruleRenderer rules.RuleRenderer,
 	ipVersion uint8,
 ) *serviceLoopManager {

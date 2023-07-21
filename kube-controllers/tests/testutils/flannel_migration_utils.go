@@ -43,6 +43,7 @@ func RunFlannelMigrationController(kconfigfile string, nodeName, subnetEnv strin
 		"-e", "DATASTORE_TYPE=kubernetes",
 		"-e", "ENABLED_CONTROLLERS=flannelmigration",
 		"-e", "LOG_LEVEL=debug",
+		"-e", "FLANNEL_DAEMONSET_NAMESPACE=kube-system",
 		"-e", fmt.Sprintf("POD_NODE_NAME=%s", nodeName),
 		"-e", fmt.Sprintf("FLANNEL_SUBNET_ENV=%s", subnetEnv),
 		"-e", fmt.Sprintf("DEBUG_WAIT_BEFORE_START=%d", waitBeforeStart),

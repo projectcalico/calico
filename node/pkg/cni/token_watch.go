@@ -222,7 +222,7 @@ func Run() {
 
 	for tu := range tokenChan {
 		logrus.Info("Update of CNI kubeconfig triggered based on elapsed time.")
-		cfg, err := rest.InClusterConfig()
+		cfg, err := clientcmd.BuildConfigFromFlags("", os.Getenv("KUBECONFIG"))
 		if err != nil {
 			logrus.WithError(err).Error("Error generating kube config.")
 			continue

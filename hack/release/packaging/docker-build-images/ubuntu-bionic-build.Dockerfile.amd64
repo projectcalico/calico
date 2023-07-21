@@ -1,5 +1,5 @@
 FROM ubuntu:bionic
-MAINTAINER Shaun Crampton <shaun@tigera.io>
+MAINTAINER Daniel Fox <dan.fox@tigera.io>
 ENV STREAM bionic
 
 ADD install-ubuntu-build-deps install-ubuntu-build-deps

@@ -21,9 +21,15 @@ import (
 	"fmt"
 	"unsafe"
 
+	"github.com/safchain/ethtool"
+
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 	"modernc.org/memory"
+)
+
+const (
+	EthtoolRxGRO = "rx-gro"
 )
 
 // IFReqData represents linux/if.h 'struct ifreq'
@@ -105,4 +111,23 @@ func EthtoolTXOff(name string) error {
 	// Set the value.
 	*value = EthtoolValue{Cmd: unix.ETHTOOL_STXCSUM, Data: 0 /* off */}
 	return ioctlEthtool(socket, &request)
+}
+
+func EthtoolChangeImpl(iface string, config map[string]bool) error {
+	ethHandle, err := ethtool.NewEthtool()
+	if err != nil {
+		logrus.WithError(err).Warn("ethtool.NewEthtool() failed")
+	}
+	defer ethHandle.Close()
+	if err != nil {
+		logrus.WithError(err).Warn("ethtool.Close() failed")
+	}
+
+	logrus.WithField(iface, config).Debug("ethtool.Change()")
+	err = ethHandle.Change(iface, config)
+	if err != nil {
+		logrus.WithError(err).Warnf("ethtool.Change('%s'=>'%v') failed", iface, config)
+	}
+
+	return err
 }

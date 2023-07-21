@@ -243,6 +243,13 @@ func (c *configUpdateProcessor) processAddOrModified(kvp *model.KVPair) ([]*mode
 				case []string:
 					// Make a list of strings comma delimited
 					value = strings.Join(vt, ",")
+				case map[string]string:
+					// Make it a comma separate list of key value pairs
+					var kvp string
+					for k, v := range vt {
+						kvp += k + "=" + v + ","
+					}
+					value = kvp
 				default:
 					value = fmt.Sprintf("%v", vt)
 				}

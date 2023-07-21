@@ -27,7 +27,6 @@ import (
 
 	. "github.com/projectcalico/calico/felix/bpf/asm"
 	"github.com/projectcalico/calico/felix/bpf/state"
-	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/rules"
@@ -46,6 +45,9 @@ type Builder struct {
 	jumpMapFD          maps.FD
 	policyDebugEnabled bool
 	forIPv6            bool
+	allowJmp           int
+	denyJmp            int
+	useJmps            bool
 }
 
 type ipSetIDProvider interface {
@@ -55,7 +57,10 @@ type ipSetIDProvider interface {
 // Option is an additional option that can change default behaviour
 type Option func(b *Builder)
 
-func NewBuilder(ipSetIDProvider ipSetIDProvider, ipsetMapFD, stateMapFD, jumpMapFD maps.FD, opts ...Option) *Builder {
+func NewBuilder(
+	ipSetIDProvider ipSetIDProvider,
+	ipsetMapFD, stateMapFD, jumpMapFD maps.FD,
+	opts ...Option) *Builder {
 	b := &Builder{
 		ipSetIDProvider: ipSetIDProvider,
 		ipSetMapFD:      ipsetMapFD,
@@ -117,6 +122,9 @@ var (
 	stateOffRuleIDs  = FieldOffset{Offset: stateEventHdrSize + 104, Field: "state->rule_ids"}
 
 	stateOffFlags = FieldOffset{Offset: stateEventHdrSize + 408, Field: "state->flags"}
+
+	skbCb0 = FieldOffset{Offset: 12*4 + 0*4, Field: "skb->cb[0]"}
+	skbCb1 = FieldOffset{Offset: 12*4 + 1*4, Field: "skb->cb[1]"}
 
 	// Compile-time check that IPSetEntrySize hasn't changed; if it changes, the code will need to change.
 	_ = [1]struct{}{{}}[20-ipsets.IPSetEntrySize]
@@ -307,22 +315,6 @@ func (p *Builder) writeJumpIfToOrFromHost(label string) {
 	p.b.JumpNEImm64(R1, 0, label)
 }
 
-func (p *Builder) indexOfDropProgram() int32 {
-	if p.forIPv6 {
-		return int32(tcdefs.ProgIndexV6Drop)
-	} else {
-		return int32(tcdefs.ProgIndexDrop)
-	}
-}
-
-func (p *Builder) indexOfAllowesProgram() int32 {
-	if p.forIPv6 {
-		return int32(tcdefs.ProgIndexV6Allowed)
-	} else {
-		return int32(tcdefs.ProgIndexAllowed)
-	}
-}
-
 // writeProgramFooter emits the program exit jump targets.
 func (p *Builder) writeProgramFooter(forXDP bool) {
 	// Fall through here if there's no match.  Also used when we hit an error or if policy rejects packet.
@@ -333,9 +325,14 @@ func (p *Builder) writeProgramFooter(forXDP bool) {
 	p.b.Store32(R9, R1, stateOffPolResult)
 
 	// Execute the tail call to drop program
-	p.b.Mov64(R1, R6)                        // First arg is the context.
-	p.b.LoadMapFD(R2, uint32(p.jumpMapFD))   // Second arg is the map.
-	p.b.MovImm32(R3, p.indexOfDropProgram()) // Third arg is the index (rather than a pointer to the index).
+	p.b.Mov64(R1, R6)                      // First arg is the context.
+	p.b.LoadMapFD(R2, uint32(p.jumpMapFD)) // Second arg is the map.
+	if p.useJmps {
+		p.b.AddComment(fmt.Sprintf("Deny jump to %d", p.denyJmp))
+		p.b.MovImm32(R3, int32(p.denyJmp)) // Third arg is the index (rather than a pointer to the index).
+	} else {
+		p.b.Load32(R3, R6, skbCb1) // Third arg is the index from skb->cb[1]).
+	}
 	p.b.Call(HelperTailCall)
 
 	// Fall through if tail call fails.
@@ -359,9 +356,14 @@ func (p *Builder) writeProgramFooter(forXDP bool) {
 		p.b.MovImm32(R1, int32(state.PolicyAllow))
 		p.b.Store32(R9, R1, stateOffPolResult)
 		// Execute the tail call.
-		p.b.Mov64(R1, R6)                           // First arg is the context.
-		p.b.LoadMapFD(R2, uint32(p.jumpMapFD))      // Second arg is the map.
-		p.b.MovImm32(R3, p.indexOfAllowesProgram()) // Third arg is the index (rather than a pointer to the index).
+		p.b.Mov64(R1, R6)                      // First arg is the context.
+		p.b.LoadMapFD(R2, uint32(p.jumpMapFD)) // Second arg is the map.
+		if p.useJmps {
+			p.b.AddComment(fmt.Sprintf("Allow jump to %d", p.allowJmp))
+			p.b.MovImm32(R3, int32(p.allowJmp)) // Third arg is the index (rather than a pointer to the index).
+		} else {
+			p.b.Load32(R3, R6, skbCb0) // Third arg is the index from skb->cb[0]).
+		}
 		p.b.Call(HelperTailCall)
 
 		// Fall through if tail call fails.
@@ -1049,6 +1051,14 @@ func protocolToNumber(protocol *proto.Protocol) uint8 {
 func WithPolicyDebugEnabled() Option {
 	return func(b *Builder) {
 		b.policyDebugEnabled = true
+	}
+}
+
+func WithAllowDenyJumps(allow, deny int) Option {
+	return func(b *Builder) {
+		b.allowJmp = allow
+		b.denyJmp = deny
+		b.useJmps = true
 	}
 }
 

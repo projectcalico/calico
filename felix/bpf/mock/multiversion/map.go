@@ -78,9 +78,9 @@ func MapV2(maxEntries int) maps.Map {
 		mockParams.MaxEntries = maxEntries
 	}
 	b := maps.NewPinnedMap(mockParams)
-	b.(*maps.PinnedMap).UpgradeFn = maps.Upgrade
-	b.(*maps.PinnedMap).GetMapParams = GetMapParams
-	b.(*maps.PinnedMap).KVasUpgradable = GetKeyValueTypeFromVersion
+	b.UpgradeFn = maps.Upgrade
+	b.GetMapParams = GetMapParams
+	b.KVasUpgradable = GetKeyValueTypeFromVersion
 	return b
 }
 
@@ -90,9 +90,9 @@ func MapV3(maxEntries int) maps.Map {
 		mockParams.MaxEntries = maxEntries
 	}
 	b := maps.NewPinnedMap(mockParams)
-	b.(*maps.PinnedMap).UpgradeFn = maps.Upgrade
-	b.(*maps.PinnedMap).GetMapParams = GetMapParams
-	b.(*maps.PinnedMap).KVasUpgradable = GetKeyValueTypeFromVersion
+	b.UpgradeFn = maps.Upgrade
+	b.GetMapParams = GetMapParams
+	b.KVasUpgradable = GetKeyValueTypeFromVersion
 	return b
 }
 
@@ -102,9 +102,9 @@ func MapV4(maxEntries int) maps.Map {
 		mockParams.MaxEntries = maxEntries
 	}
 	b := maps.NewPinnedMap(mockParams)
-	b.(*maps.PinnedMap).UpgradeFn = maps.Upgrade
-	b.(*maps.PinnedMap).GetMapParams = GetMapParams
-	b.(*maps.PinnedMap).KVasUpgradable = GetKeyValueTypeFromVersion
+	b.UpgradeFn = maps.Upgrade
+	b.GetMapParams = GetMapParams
+	b.KVasUpgradable = GetKeyValueTypeFromVersion
 	return b
 }
 
@@ -114,8 +114,8 @@ func MapV5(maxEntries int) maps.Map {
 		mockParams.MaxEntries = maxEntries
 	}
 	b := maps.NewPinnedMap(mockParams)
-	b.(*maps.PinnedMap).UpgradeFn = maps.Upgrade
-	b.(*maps.PinnedMap).GetMapParams = GetMapParams
-	b.(*maps.PinnedMap).KVasUpgradable = GetKeyValueTypeFromVersion
+	b.UpgradeFn = maps.Upgrade
+	b.GetMapParams = GetMapParams
+	b.KVasUpgradable = GetKeyValueTypeFromVersion
 	return b
 }

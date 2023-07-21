@@ -36,12 +36,6 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/utils"
 )
 
-const jumpMapVersion = 3
-
-func JumpMapName() string {
-	return fmt.Sprintf("cali_jump%d", jumpMapVersion)
-}
-
 func IsNotExists(err error) bool {
 	return err == unix.ENOENT
 }
@@ -150,6 +144,11 @@ type MapWithUpdateWithFlags interface {
 	UpdateWithFlags(k, v []byte, flags int) error
 }
 
+type MapWithDeleteIfExists interface {
+	Map
+	DeleteIfExists(k []byte) error
+}
+
 type MapParameters struct {
 	PinDir       string
 	Type         string
@@ -221,7 +220,7 @@ func ResetSizes() {
 	mapSizes = make(map[string]int)
 }
 
-func NewPinnedMap(params MapParameters) MapWithExistsCheck {
+func NewPinnedMap(params MapParameters) *PinnedMap {
 	if len(params.VersionedName()) >= unix.BPF_OBJ_NAME_LEN {
 		log.WithField("name", params.Name).Panic("Bug: BPF map name too long")
 	}
@@ -361,7 +360,7 @@ func (b *PinnedMap) Iter(f IterCallback) error {
 		if action == IterDelete {
 			// The previous iteration asked us to delete its key; do that now before we check for the end of
 			// the iteration.
-			err := DeleteMapEntry(b.MapFD(), keyToDelete, valueSize)
+			err := DeleteMapEntry(b.MapFD(), keyToDelete)
 			if err != nil && !IsNotExists(err) {
 				return fmt.Errorf("failed to delete map entry: %w", err)
 			}
@@ -417,12 +416,11 @@ func (b *PinnedMap) Get(k []byte) ([]byte, error) {
 }
 
 func (b *PinnedMap) Delete(k []byte) error {
-	valueSize := b.ValueSize
-	if b.perCPU {
-		valueSize = b.ValueSize * NumPossibleCPUs()
-		log.Debugf("Set value size to %v for deleting an entry from Per-CPU map", valueSize)
-	}
-	return DeleteMapEntry(b.fd, k, valueSize)
+	return DeleteMapEntry(b.fd, k)
+}
+
+func (b *PinnedMap) DeleteIfExists(k []byte) error {
+	return DeleteMapEntryIfExists(b.fd, k)
 }
 
 func (b *PinnedMap) updateDeltaEntries() error {
@@ -832,14 +830,14 @@ func (b *PinnedMap) upgrade() error {
 	oldMapParams.MaxEntries = b.MaxEntries
 	oldBpfMap := NewPinnedMap(oldMapParams)
 	defer func() {
-		oldBpfMap.(*PinnedMap).Close()
-		oldBpfMap.(*PinnedMap).fd = 0
+		oldBpfMap.Close()
+		oldBpfMap.fd = 0
 	}()
 	err = oldBpfMap.EnsureExists()
 	if err != nil {
 		return err
 	}
-	return b.UpgradeFn(oldBpfMap.(*PinnedMap), b)
+	return b.UpgradeFn(oldBpfMap, b)
 }
 
 type Upgradable interface {
@@ -848,19 +846,23 @@ type Upgradable interface {
 }
 
 type TypedMap[K Key, V Value] struct {
-	MapWithExistsCheck
+	untypedMap   MapWithExistsCheck
 	kConstructor func([]byte) K
 	vConstructor func([]byte) V
 }
 
+func (m *TypedMap[K, V]) ErrIsNotExists(err error) bool {
+	return m.untypedMap.ErrIsNotExists(err)
+}
+
 func (m *TypedMap[K, V]) Update(k K, v V) error {
-	return m.MapWithExistsCheck.Update(k.AsBytes(), v.AsBytes())
+	return m.untypedMap.Update(k.AsBytes(), v.AsBytes())
 }
 
 func (m *TypedMap[K, V]) Get(k K) (V, error) {
 	var res V
 
-	vb, err := m.MapWithExistsCheck.Get(k.AsBytes())
+	vb, err := m.untypedMap.Get(k.AsBytes())
 	if err != nil {
 		goto exit
 	}
@@ -872,14 +874,14 @@ exit:
 }
 
 func (m *TypedMap[K, V]) Delete(k K) error {
-	return m.MapWithExistsCheck.Delete(k.AsBytes())
+	return m.untypedMap.Delete(k.AsBytes())
 }
 
 func (m *TypedMap[K, V]) Load() (map[K]V, error) {
 
 	memMap := make(map[K]V)
 
-	err := m.MapWithExistsCheck.Iter(func(kb, vb []byte) IteratorAction {
+	err := m.untypedMap.Iter(func(kb, vb []byte) IteratorAction {
 		memMap[m.kConstructor(kb)] = m.vConstructor(vb)
 		return IterNone
 	})
@@ -889,8 +891,8 @@ func (m *TypedMap[K, V]) Load() (map[K]V, error) {
 
 func NewTypedMap[K Key, V Value](m MapWithExistsCheck, kConstructor func([]byte) K, vConstructor func([]byte) V) *TypedMap[K, V] {
 	return &TypedMap[K, V]{
-		MapWithExistsCheck: m,
-		kConstructor:       kConstructor,
-		vConstructor:       vConstructor,
+		untypedMap:   m,
+		kConstructor: kConstructor,
+		vConstructor: vConstructor,
 	}
 }

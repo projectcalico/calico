@@ -91,8 +91,9 @@ var failsafeTests = []failsafeTest{
 			DstIP:    fsafeDstIP,
 			Protocol: layers.IPProtocolUDP,
 		},
-		Outbound: true,
-		Allowed:  true,
+		Outbound:      true,
+		Allowed:       true,
+		FromLocalHost: true,
 	},
 	{
 		Description: "Packets from localhost to non-failsafe IP are denied",
@@ -106,8 +107,9 @@ var failsafeTests = []failsafeTest{
 			DstIP:    net.IPv4(4, 4, 4, 4),
 			Protocol: layers.IPProtocolUDP,
 		},
-		Outbound: false,
-		Allowed:  false,
+		Outbound:      false,
+		Allowed:       false,
+		FromLocalHost: true,
 	},
 	{
 		Description: "Packets from outbound failsafes to inbound failsafes are denied",
@@ -179,8 +181,9 @@ var failsafeTests = []failsafeTest{
 		IPHeaderUDP: &layers.UDP{
 			DstPort: 161,
 		},
-		Outbound: true,
-		Allowed:  false,
+		Outbound:      true,
+		Allowed:       false,
+		FromLocalHost: true,
 	},
 }
 
@@ -213,37 +216,47 @@ func TestFailsafes(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 
 	for _, test := range failsafeTests {
-		_, _, _, _, pktBytes, err := testPacket(nil, test.IPHeaderIPv4, test.IPHeaderUDP, nil)
-		Expect(err).NotTo(HaveOccurred())
-
-		prog := "calico_from_host_ep"
-		skbMark = 0
-		if test.Outbound {
-			skbMark = tcdefs.MarkSeen
-			prog = "calico_to_host_ep"
-		}
-
-		result := "TC_ACT_SHOT"
-		if test.Allowed {
-			result = "TC_ACT_UNSPEC"
-		}
-
-		runBpfTest(t, prog, test.Rules, func(bpfrun bpfProgRunFn) {
-			res, err := bpfrun(pktBytes)
+		t.Run(test.Description, func(t *testing.T) {
+			_, _, _, _, pktBytes, err := testPacket(nil, test.IPHeaderIPv4, test.IPHeaderUDP, nil)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(res.RetvalStr()).To(Equal(result), fmt.Sprintf("expected program to return %s", result))
+
+			prog := "calico_from_host_ep"
+			skbMark = 0
+
+			var opts []testOption
+
+			if test.Outbound {
+				if !test.FromLocalHost {
+					skbMark = tcdefs.MarkSeen
+				} else {
+					opts = append(opts, withHostNetworked())
+				}
+				prog = "calico_to_host_ep"
+			}
+
+			result := "TC_ACT_SHOT"
+			if test.Allowed {
+				result = "TC_ACT_UNSPEC"
+			}
+
+			runBpfTest(t, prog, test.Rules, func(bpfrun bpfProgRunFn) {
+				res, err := bpfrun(pktBytes)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(res.RetvalStr()).To(Equal(result), fmt.Sprintf("expected program to return %s", result))
+			}, opts...)
+			if !test.Outbound && test.Allowed {
+				expectMark(tcdefs.MarkSeen)
+			}
 		})
-		if !test.Outbound && test.Allowed {
-			expectMark(tcdefs.MarkSeen)
-		}
 	}
 }
 
 type failsafeTest struct {
-	Description  string
-	Rules        *polprog.Rules
-	IPHeaderIPv4 *layers.IPv4
-	IPHeaderUDP  gopacket.Layer
-	Outbound     bool
-	Allowed      bool
+	Description   string
+	Rules         *polprog.Rules
+	IPHeaderIPv4  *layers.IPv4
+	IPHeaderUDP   gopacket.Layer
+	Outbound      bool
+	Allowed       bool
+	FromLocalHost bool
 }

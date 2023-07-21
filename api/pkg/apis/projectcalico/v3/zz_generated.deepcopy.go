@@ -1296,6 +1296,17 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(bool)
 		**out = **in
 	}
+	if in.BPFLogFilters != nil {
+		in, out := &in.BPFLogFilters, &out.BPFLogFilters
+		*out = new(map[string]string)
+		if **in != nil {
+			in, out := *in, *out
+			*out = make(map[string]string, len(*in))
+			for key, val := range *in {
+				(*out)[key] = val
+			}
+		}
+	}
 	if in.BPFConnectTimeLoadBalancingEnabled != nil {
 		in, out := &in.BPFConnectTimeLoadBalancingEnabled, &out.BPFConnectTimeLoadBalancingEnabled
 		*out = new(bool)
@@ -1379,6 +1390,15 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		in, out := &in.BPFPolicyDebugEnabled, &out.BPFPolicyDebugEnabled
 		*out = new(bool)
 		**out = **in
+	}
+	if in.BPFForceTrackPacketsFromIfaces != nil {
+		in, out := &in.BPFForceTrackPacketsFromIfaces, &out.BPFForceTrackPacketsFromIfaces
+		*out = new([]string)
+		if **in != nil {
+			in, out := *in, *out
+			*out = make([]string, len(*in))
+			copy(*out, *in)
+		}
 	}
 	if in.RouteTableRanges != nil {
 		in, out := &in.RouteTableRanges, &out.RouteTableRanges

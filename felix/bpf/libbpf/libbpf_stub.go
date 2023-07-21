@@ -58,7 +58,15 @@ func (m *Map) NextMap() (*Map, error) {
 	panic("LIBBPF syscall stub")
 }
 
-func (o *Obj) AttachClassifier(secName, ifName string, ingress bool) (int, error) {
+func QueryClassifier(ifindex, handle, pref int, ingress bool) (int, error) {
+	panic("LIBBPF syscall stub")
+}
+
+func DetachClassifier(ifindex, handle, pref int, ingress bool) error {
+	panic("LIBBPF syscall stub")
+}
+
+func (o *Obj) AttachClassifier(secName, ifName string, ingress bool) (int, int, int, error) {
 	panic("LIBBPF syscall stub")
 }
 
@@ -75,6 +83,22 @@ func GetXDPProgramID(ifName string) (int, error) {
 }
 
 func (o *Obj) AttachCGroup(_, _ string) (*Link, error) {
+	panic("LIBBPF syscall stub")
+}
+
+func (o *Obj) PinPrograms(_ string) error {
+	panic("LIBBPF syscall stub")
+}
+
+func (o *Obj) UnpinPrograms(_ string) error {
+	panic("LIBBPF syscall stub")
+}
+
+func (o *Obj) PinMaps(_ string) error {
+	panic("LIBBPF syscall stub")
+}
+
+func (o *Obj) ProgramFD(_ string) (int, error) {
 	panic("LIBBPF syscall stub")
 }
 

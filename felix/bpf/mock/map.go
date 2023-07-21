@@ -132,6 +132,10 @@ func (m *Map) Delete(k []byte) error {
 	return nil
 }
 
+func (m *Map) DeleteIfExists(k []byte) error {
+	return m.Delete(k)
+}
+
 func (m *Map) OpCount() int {
 	return m.UpdateCount + m.IterCount + m.GetCount + m.DeleteCount
 }

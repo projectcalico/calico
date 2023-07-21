@@ -24,8 +24,10 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	"github.com/projectcalico/calico/felix/bpf/counters"
 	"github.com/projectcalico/calico/felix/bpf/failsafes"
+	"github.com/projectcalico/calico/felix/bpf/hook"
 	"github.com/projectcalico/calico/felix/bpf/ifstate"
 	"github.com/projectcalico/calico/felix/bpf/ipsets"
+	"github.com/projectcalico/calico/felix/bpf/jump"
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/nat"
 	"github.com/projectcalico/calico/felix/bpf/routes"
@@ -47,6 +49,10 @@ type Maps struct {
 	IfStateMap      maps.Map
 	RuleCountersMap maps.Map
 	CountersMap     maps.Map
+	ProgramsMap     maps.Map
+	JumpMap         maps.MapWithDeleteIfExists
+	XDPProgramsMap  maps.Map
+	XDPJumpMap      maps.MapWithDeleteIfExists
 }
 
 func (m *Maps) Destroy() {
@@ -62,11 +68,15 @@ func (m *Maps) Destroy() {
 		m.CtMap,
 		m.SrMsgMap,
 		m.CtNatsMap,
+		m.ProgramsMap,
+		m.JumpMap,
+		m.XDPProgramsMap,
+		m.XDPJumpMap,
 	}
 
 	for _, m := range mps {
-		os.Remove(m.(*maps.PinnedMap).Path())
-		m.(*maps.PinnedMap).Close()
+		os.Remove(m.(pinnedMap).Path())
+		m.(pinnedMap).Close()
 	}
 }
 
@@ -116,14 +126,26 @@ func CreateBPFMaps() (*Maps, error) {
 	ret.CountersMap = counters.Map()
 	mps = append(mps, ret.CountersMap)
 
+	ret.ProgramsMap = hook.NewProgramsMap()
+	mps = append(mps, ret.ProgramsMap)
+
+	ret.JumpMap = jump.Map().(maps.MapWithDeleteIfExists)
+	mps = append(mps, ret.JumpMap)
+
+	ret.XDPProgramsMap = hook.NewXDPProgramsMap()
+	mps = append(mps, ret.XDPProgramsMap)
+
+	ret.XDPJumpMap = jump.XDPMap().(maps.MapWithDeleteIfExists)
+	mps = append(mps, ret.XDPJumpMap)
+
 	for i, bpfMap := range mps {
 		err := bpfMap.EnsureExists()
 		if err != nil {
 
 			for j := 0; j < i; j++ {
 				m := mps[j]
-				os.Remove(m.(*maps.PinnedMap).Path())
-				m.(*maps.PinnedMap).Close()
+				os.Remove(m.(pinnedMap).Path())
+				m.(pinnedMap).Close()
 			}
 
 			return nil, fmt.Errorf("failed to create %s map, err=%w", bpfMap.GetName(), err)
@@ -131,4 +153,9 @@ func CreateBPFMaps() (*Maps, error) {
 	}
 
 	return ret, nil
+}
+
+type pinnedMap interface {
+	Path() string
+	Close() error
 }

@@ -250,7 +250,7 @@ extern const volatile struct cali_xdp_globals __globals;
 #elif (!CALI_F_CGROUP) || defined(UNITTEST)
 
 extern const volatile struct cali_tc_globals __globals;
-#define CALI_CONFIGURABLE(name)  __globals.name
+#define CALI_CONFIGURABLE(name) ctx->globals->name
 
 #else
 

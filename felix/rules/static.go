@@ -1144,40 +1144,51 @@ func (r *DefaultRuleRenderer) StaticBPFModeRawChains(ipVersion uint8,
 		Rules: rawRules,
 	}
 
+	// BPF Untracked Flow Rules:
+	var bpfUntrackedFlowRules []Rule
+	if bypassHostConntrack {
+		// Iterate all BPF interfaces forced to track packets and append rule.
+		for _, interfaceName := range r.BPFForceTrackPacketsFromIfaces {
+			if len(interfaceName) > 0 {
+				bpfUntrackedFlowRules = append(bpfUntrackedFlowRules,
+					Rule{
+						Match:   Match().InInterface(interfaceName),
+						Action:  ReturnAction{},
+						Comment: []string{"Track interface " + interfaceName},
+					},
+				)
+			}
+		}
+
+		bpfUntrackedFlowRules = append(bpfUntrackedFlowRules,
+			Rule{
+				Match:   Match().MarkMatchesWithMask(tcdefs.MarkSeenSkipFIB, tcdefs.MarkSeenSkipFIB),
+				Action:  ReturnAction{},
+				Comment: []string{"MarkSeenSkipFIB Mark"},
+			},
+			Rule{
+				Match:   Match().MarkMatchesWithMask(tcdefs.MarkSeenFallThrough, tcdefs.MarkSeenFallThroughMask),
+				Action:  ReturnAction{},
+				Comment: []string{"MarkSeenFallThrough Mark"},
+			},
+			Rule{
+				Match:   Match().MarkMatchesWithMask(tcdefs.MarkSeenMASQ, tcdefs.MarkSeenMASQMask),
+				Action:  ReturnAction{},
+				Comment: []string{"MarkSeenMASQ Mark"},
+			},
+			Rule{
+				Match:   Match().MarkMatchesWithMask(tcdefs.MarkSeenNATOutgoing, tcdefs.MarkSeenNATOutgoingMask),
+				Action:  ReturnAction{},
+				Comment: []string{"MarkSeenNATOutgoing Mark"},
+			},
+			Rule{
+				Action: NoTrackAction{},
+			},
+		)
+	}
 	bpfUntrackedFlowChain := &Chain{
 		Name:  ChainRawUntrackedFlows,
-		Rules: []Rule{},
-	}
-
-	if bypassHostConntrack {
-		bpfUntrackedFlowChain = &Chain{
-			Name: ChainRawUntrackedFlows,
-			Rules: []Rule{
-				Rule{
-					Match:   Match().MarkMatchesWithMask(tcdefs.MarkSeenSkipFIB, tcdefs.MarkSeenSkipFIB),
-					Action:  ReturnAction{},
-					Comment: []string{"MarkSeenSkipFIB Mark"},
-				},
-				Rule{
-					Match:   Match().MarkMatchesWithMask(tcdefs.MarkSeenFallThrough, tcdefs.MarkSeenFallThroughMask),
-					Action:  ReturnAction{},
-					Comment: []string{"MarkSeenFallThrough Mark"},
-				},
-				Rule{
-					Match:   Match().MarkMatchesWithMask(tcdefs.MarkSeenMASQ, tcdefs.MarkSeenMASQMask),
-					Action:  ReturnAction{},
-					Comment: []string{"MarkSeenMASQ Mark"},
-				},
-				Rule{
-					Match:   Match().MarkMatchesWithMask(tcdefs.MarkSeenNATOutgoing, tcdefs.MarkSeenNATOutgoingMask),
-					Action:  ReturnAction{},
-					Comment: []string{"MarkSeenNATOutgoing Mark"},
-				},
-				Rule{
-					Action: NoTrackAction{},
-				},
-			},
-		}
+		Rules: bpfUntrackedFlowRules,
 	}
 
 	xdpUntrakedPoliciesChain := &Chain{

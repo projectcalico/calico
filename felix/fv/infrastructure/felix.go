@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2023 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,7 +22,9 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
+	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 
@@ -61,6 +63,7 @@ type Felix struct {
 	ExternalIP string
 
 	startupDelayed bool
+	restartDelayed bool
 	Workloads      []workload
 }
 
@@ -75,12 +78,18 @@ func (f *Felix) GetFelixPID() int {
 	if f.startupDelayed {
 		log.Panic("GetFelixPID() called but startup is delayed")
 	}
+	if f.restartDelayed {
+		log.Panic("GetFelixPID() called but restart is delayed")
+	}
 	return f.GetSinglePID("calico-felix")
 }
 
 func (f *Felix) GetFelixPIDs() []int {
 	if f.startupDelayed {
 		log.Panic("GetFelixPIDs() called but startup is delayed")
+	}
+	if f.restartDelayed {
+		log.Panic("GetFelixPIDs() called but restart is delayed")
 	}
 	return f.GetPIDs("calico-felix")
 }
@@ -230,6 +239,34 @@ func (f *Felix) Restart() {
 	oldPID := f.GetFelixPID()
 	f.Exec("kill", "-HUP", fmt.Sprint(oldPID))
 	Eventually(f.GetFelixPID, "10s", "100ms").ShouldNot(Equal(oldPID))
+}
+
+func (f *Felix) RestartWithDelayedStartup() func() {
+	if f.restartDelayed {
+		log.Panic("RestartWithDelayedStartup() called but restart was delayed already")
+	}
+	oldPID := f.GetFelixPID()
+	f.restartDelayed = true
+	f.Exec("touch", "/delay-felix-restart")
+	f.Exec("kill", "-HUP", fmt.Sprint(oldPID))
+	triggerChan := make(chan struct{})
+
+	go func() {
+		defer GinkgoRecover()
+		select {
+		case <-time.After(time.Second * 30):
+			log.Panic("Restart with delayed startup timed out after 30s")
+		case <-triggerChan:
+			return
+		}
+	}()
+
+	return func() {
+		close(triggerChan)
+		f.Exec("rm", "/delay-felix-restart")
+		f.restartDelayed = false
+		Eventually(f.GetFelixPID, "10s", "100ms").ShouldNot(Equal(oldPID))
+	}
 }
 
 func (f *Felix) SetEvn(env map[string]string) {

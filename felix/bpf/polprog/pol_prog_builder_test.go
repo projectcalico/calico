@@ -34,7 +34,7 @@ func TestPolicySanityCheck(t *testing.T) {
 		alloc.GetOrAlloc(id)
 		return id
 	}
-	pg := NewBuilder(alloc, 1, 2, 3)
+	pg := NewBuilder(alloc, 1, 2, 3, WithAllowDenyJumps(666, 777))
 	insns, err := pg.Instructions(Rules{
 		Tiers: []Tier{{
 			Policies: []Policy{{
@@ -79,7 +79,7 @@ func TestLogActionIgnored(t *testing.T) {
 	RegisterTestingT(t)
 	alloc := idalloc.New()
 
-	pg := NewBuilder(alloc, 1, 2, 3)
+	pg := NewBuilder(alloc, 1, 2, 3, WithAllowDenyJumps(666, 777))
 	insns, err := pg.Instructions(Rules{
 		Tiers: []Tier{{
 			Name: "default",
@@ -92,7 +92,7 @@ func TestLogActionIgnored(t *testing.T) {
 		}}})
 	Expect(err).NotTo(HaveOccurred())
 
-	pg = NewBuilder(alloc, 1, 2, 3)
+	pg = NewBuilder(alloc, 1, 2, 3, WithAllowDenyJumps(666, 777))
 	noOpInsns, err := pg.Instructions(Rules{
 		Tiers: []Tier{{
 			Name:     "default",
@@ -112,7 +112,7 @@ func TestPolicyDump(t *testing.T) {
 
 	checkLabelsAndComments := func(rule proto.Rule, expectedString string, matchLabelOrComment string) {
 
-		pg := NewBuilder(alloc, 1, 2, 3, WithPolicyDebugEnabled())
+		pg := NewBuilder(alloc, 1, 2, 3, WithAllowDenyJumps(666, 777), WithPolicyDebugEnabled())
 		rule.Action = "Allow"
 		rule.IpVersion = 4
 		insns, err := pg.Instructions(Rules{

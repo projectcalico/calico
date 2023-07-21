@@ -1,5 +1,5 @@
 FROM ubuntu:focal
-MAINTAINER Shaun Crampton <shaun@tigera.io>
+MAINTAINER Daniel Fox <dan.fox@tigera.io>
 ENV STREAM focal
 
 ADD install-ubuntu-build-deps install-ubuntu-build-deps

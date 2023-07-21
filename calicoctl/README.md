@@ -25,8 +25,12 @@ If you want to use a package manager:
 
 - [Homebrew] users can use `brew install calicoctl`.
 
+More detailed installation instructions, including are available in the
+[online documentation][detailed install instructions].
+
 [Releases page]: https://github.com/projectcalico/calicoctl/releases
 [Homebrew]: https://brew.sh/
+[detailed install instructions]: https://docs.tigera.io/calico/latest/operations/calicoctl/install
 
 ### Developing
 

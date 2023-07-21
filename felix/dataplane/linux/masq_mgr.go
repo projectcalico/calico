@@ -40,7 +40,7 @@ import (
 type masqManager struct {
 	ipVersion       uint8
 	ipsetsDataplane common.IPSetsDataplane
-	natTable        iptablesTable
+	natTable        IptablesTable
 	activePools     map[string]*proto.IPAMPool
 	masqPools       set.Set[string]
 	dirty           bool
@@ -51,7 +51,7 @@ type masqManager struct {
 
 func newMasqManager(
 	ipsetsDataplane common.IPSetsDataplane,
-	natTable iptablesTable,
+	natTable IptablesTable,
 	ruleRenderer rules.RuleRenderer,
 	maxIPSetSize int,
 	ipVersion uint8,

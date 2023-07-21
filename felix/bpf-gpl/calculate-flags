@@ -57,22 +57,18 @@ flags=0
 if [[ "${filename}" =~ .*hep.* ]]; then
   # Host endpoint.
   ((flags |= CALI_TC_HOST_EP))
-  args+=("-DCALI_NO_DEFAULT_POLICY_PROG")
   ep_type="host"
 elif [[ "${filename}" =~ .*tnl.* ]]; then
   # Tunnel.
   ((flags |= CALI_TC_TUNNEL | CALI_TC_HOST_EP))
-  args+=("-DCALI_DEBUG_ALLOW_ALL")
   ep_type="tunnel"
 elif [[ "${filename}" =~ .*l3.* ]]; then
   # Any l3 device.
   ((flags |= CALI_TC_L3_DEV | CALI_TC_HOST_EP))
-  args+=("-DCALI_DEBUG_ALLOW_ALL")
   ep_type="l3dev"
 elif [[ "${filename}" =~ .*connect.* ]]; then
   # Connect-time load balancer (CGROUP attached).
   ((flags |= CALI_CGROUP))
-  args+=("-DCALI_DEBUG_ALLOW_ALL")
 elif [[ "${filename}" =~ .*wep.* ]]; then
   # Workload endpoint; recognised by CALI_TC_HOST_EP bit being 0.
   ep_type="workload"
@@ -80,18 +76,15 @@ elif [[ "${filename}" =~ .*xdp.* ]]; then
   # XDP, so host endpoint.
   ((flags |= CALI_TC_HOST_EP))
   ((flags |= CALI_XDP_PROG))
-  args+=("-DCALI_NO_DEFAULT_POLICY_PROG")
   ep_type="host"
 elif [[ "${filename}" =~ .*nat.* ]]; then
   ((flags |= CALI_TC_HOST_EP))
   ((flags |= CALI_TC_NAT_IF))
-  args+=("-DCALI_NO_DEFAULT_POLICY_PROG")
   ep_type="nat"
 elif [[ "${filename}" =~ .*lo.* ]]; then
   # loopback, so host endpoint.
   ((flags |= CALI_TC_HOST_EP))
   ((flags |= CALI_TC_LO))
-  args+=("-DCALI_NO_DEFAULT_POLICY_PROG")
   ep_type="lo"
 else
   echo "Can't recognise endpoint type"
@@ -117,7 +110,6 @@ if [[ "${filename}" =~ _dsr.* ]]; then
 fi
 
 args+=("-DCALI_COMPILE_FLAGS=${flags}")
-args+=("-DCALI_ENTRYPOINT_NAME=calico_${from_or_to}_${ep_type}_ep")
 
 echo "Flags: ${args[*]}" 1>&2
 echo "${args[*]}"

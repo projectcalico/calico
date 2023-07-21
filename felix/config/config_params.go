@@ -41,6 +41,7 @@ var (
 	// assumes the value represents a regular expression and is marked by '/' at the start
 	// and end and cannot have spaces
 	RegexpIfaceElemRegexp = regexp.MustCompile(`^\/[^\s]+\/$`)
+	InterfaceRegex        = regexp.MustCompile("^[a-zA-Z0-9_.-]{1,15}$")
 	// NonRegexpIfaceElemRegexp matches an individual element in the overall interface list;
 	// assumes the value is between 1-15 chars long and only be alphanumeric or - or _
 	NonRegexpIfaceElemRegexp = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,15}$`)
@@ -173,29 +174,33 @@ type Config struct {
 	WireguardHostEncryptionEnabled bool          `config:"bool;false"`
 	WireguardPersistentKeepAlive   time.Duration `config:"seconds;0"`
 
-	BPFEnabled                         bool             `config:"bool;false"`
-	BPFDisableUnprivileged             bool             `config:"bool;true"`
-	BPFLogLevel                        string           `config:"oneof(off,info,debug);off;non-zero"`
-	BPFDataIfacePattern                *regexp.Regexp   `config:"regexp;^((en|wl|ww|sl|ib)[Popsx].*|(eth|wlan|wwan).*|tunl0$|vxlan.calico$|wireguard.cali$|wg-v6.cali$)"`
-	BPFL3IfacePattern                  *regexp.Regexp   `config:"regexp;"`
-	BPFConnectTimeLoadBalancingEnabled bool             `config:"bool;true"`
-	BPFExternalServiceMode             string           `config:"oneof(tunnel,dsr);tunnel;non-zero"`
-	BPFDSROptoutCIDRs                  []string         `config:"cidr-list;;"`
-	BPFKubeProxyIptablesCleanupEnabled bool             `config:"bool;true"`
-	BPFKubeProxyMinSyncPeriod          time.Duration    `config:"seconds;1"`
-	BPFKubeProxyEndpointSlicesEnabled  bool             `config:"bool;true"`
-	BPFExtToServiceConnmark            int              `config:"int;0"`
-	BPFPSNATPorts                      numorstring.Port `config:"portrange;20000:29999"`
-	BPFMapSizeNATFrontend              int              `config:"int;65536;non-zero"`
-	BPFMapSizeNATBackend               int              `config:"int;262144;non-zero"`
-	BPFMapSizeNATAffinity              int              `config:"int;65536;non-zero"`
-	BPFMapSizeRoute                    int              `config:"int;262144;non-zero"`
-	BPFMapSizeConntrack                int              `config:"int;512000;non-zero"`
-	BPFMapSizeIPSets                   int              `config:"int;1048576;non-zero"`
-	BPFMapSizeIfState                  int              `config:"int;1000;non-zero"`
-	BPFHostConntrackBypass             bool             `config:"bool;true"`
-	BPFEnforceRPF                      string           `config:"oneof(Disabled,Strict,Loose);Loose;non-zero"`
-	BPFPolicyDebugEnabled              bool             `config:"bool;true"`
+	BPFEnabled                         bool              `config:"bool;false"`
+	BPFDisableUnprivileged             bool              `config:"bool;true"`
+	BPFLogLevel                        string            `config:"oneof(off,info,debug);off;non-zero"`
+	BPFLogFilters                      map[string]string `config:"keyvaluelist;;"`
+	BPFCTLBLogFilter                   string            `config:"oneof(all);;"`
+	BPFDataIfacePattern                *regexp.Regexp    `config:"regexp;^((en|wl|ww|sl|ib)[Popsx].*|(eth|wlan|wwan).*|tunl0$|vxlan.calico$|wireguard.cali$|wg-v6.cali$)"`
+	BPFL3IfacePattern                  *regexp.Regexp    `config:"regexp;"`
+	BPFConnectTimeLoadBalancingEnabled bool              `config:"bool;true"`
+	BPFExternalServiceMode             string            `config:"oneof(tunnel,dsr);tunnel;non-zero"`
+	BPFDSROptoutCIDRs                  []string          `config:"cidr-list;;"`
+	BPFKubeProxyIptablesCleanupEnabled bool              `config:"bool;true"`
+	BPFKubeProxyMinSyncPeriod          time.Duration     `config:"seconds;1"`
+	BPFKubeProxyEndpointSlicesEnabled  bool              `config:"bool;true"`
+	BPFExtToServiceConnmark            int               `config:"int;0"`
+	BPFPSNATPorts                      numorstring.Port  `config:"portrange;20000:29999"`
+	BPFMapSizeNATFrontend              int               `config:"int;65536;non-zero"`
+	BPFMapSizeNATBackend               int               `config:"int;262144;non-zero"`
+	BPFMapSizeNATAffinity              int               `config:"int;65536;non-zero"`
+	BPFMapSizeRoute                    int               `config:"int;262144;non-zero"`
+	BPFMapSizeConntrack                int               `config:"int;512000;non-zero"`
+	BPFMapSizeIPSets                   int               `config:"int;1048576;non-zero"`
+	BPFMapSizeIfState                  int               `config:"int;1000;non-zero"`
+	BPFHostConntrackBypass             bool              `config:"bool;true"`
+	BPFEnforceRPF                      string            `config:"oneof(Disabled,Strict,Loose);Loose;non-zero"`
+	BPFPolicyDebugEnabled              bool              `config:"bool;true"`
+	BPFForceTrackPacketsFromIfaces     []string          `config:"iface-filter-slice;docker+"`
+	BPFDisableGROForIfaces             *regexp.Regexp    `config:"regexp;"`
 
 	// DebugBPFCgroupV2 controls the cgroup v2 path that we apply the connect-time load balancer to.  Most distros
 	// are configured for cgroup v1, which prevents all but the root cgroup v2 from working so this is only useful
@@ -962,6 +967,12 @@ func loadParams() {
 			}
 		case "cidr-list":
 			param = &CIDRListParam{}
+		case "string-slice":
+			param = &StringSliceParam{}
+		case "interface-name-slice":
+			param = &StringSliceParam{ValidationRegex: InterfaceRegex}
+		case "iface-filter-slice":
+			param = &StringSliceParam{ValidationRegex: IfaceParamRegexp}
 		case "route-table-range":
 			param = &RouteTableRangeParam{}
 		case "route-table-ranges":

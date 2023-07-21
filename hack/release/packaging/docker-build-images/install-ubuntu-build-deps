@@ -1,12 +1,35 @@
 #!/usr/bin/env bash
-set -x
-set -e
-apt-get update
+
+# shellcheck disable=SC1091
+
+set -x      # Print commands as they're run
+set -e      # Exit immediately if a command returns non-zero
+
+source /etc/os-release
+
+# Ubuntu 14.04 doesn't have UBUNTU_CODENAME in /etc/os-release
+if [[ $VERSION_ID == "14.04" ]]; then
+    UBUNTU_CODENAME=trusty
+fi
+
+# We need to detect which Ubuntu version we're on, because trusty/xenial/bionic
+# require dh-systemd, focal doesn't require it but has a transitional package,
+# and jammy and later no longer have the package.
+case $UBUNTU_CODENAME in
+    trusty|xenial|bionic)
+        echo "Detected release ${UBUNTU_CODENAME}, adding dh-systemd to depends"
+        dh_systemd_pkg=dh-systemd
+        ;;
+    *)
+        ;;
+esac
+
+apt-get -q update
 DEBIAN_FRONTEND=noninteractive \
-apt-get install -y build-essential  \
+apt-get install -y -q build-essential  \
                    devscripts \
                    debhelper \
-                   dh-systemd \
+                   "${dh_systemd_pkg}" \
                    dh-python \
                    python-all \
                    python-setuptools \

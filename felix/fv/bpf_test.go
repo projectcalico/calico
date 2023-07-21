@@ -329,6 +329,19 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			options.ExtraEnvVars["FELIX_BPFExtToServiceConnmark"] = "0x80"
 			options.ExtraEnvVars["FELIX_BPFDSROptoutCIDRs"] = "245.245.0.0/16"
 
+			if testOpts.protocol == "tcp" {
+				filters := map[string]string{"all": "tcp"}
+				felixConfig := api.NewFelixConfiguration()
+				felixConfig.SetName("default")
+				felixConfig.Spec = api.FelixConfigurationSpec{
+					BPFLogFilters: &filters,
+				}
+				if testOpts.connTimeEnabled {
+					felixConfig.Spec.BPFCTLBLogFilter = "all"
+				}
+				options.InitialFelixConfiguration = felixConfig
+			}
+
 			if ctlbWorkaround {
 				if testOpts.protocol == "udp" {
 					options.ExtraEnvVars["FELIX_FeatureGates"] = "BPFConnectTimeLoadBalancingWorkaround=udp"
@@ -463,11 +476,19 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						felixPanicExpected = true
 						panicC := felixes[0].WatchStdoutFor(regexp.MustCompile("PANIC.*IptablesMarkMask doesn't cover bits that are used"))
 
-						fc := api.NewFelixConfiguration()
+						fc, err := calicoClient.FelixConfigurations().Get(context.Background(), "default", options2.GetOptions{})
+						felixConfigExists := err == nil
+						if !felixConfigExists {
+							fc = api.NewFelixConfiguration()
+						}
 						fc.Name = "default"
 						mark := uint32(0x0ffff000)
 						fc.Spec.IptablesMarkMask = &mark
-						fc, err := calicoClient.FelixConfigurations().Create(context.Background(), fc, options2.SetOptions{})
+						if felixConfigExists {
+							_, err = calicoClient.FelixConfigurations().Update(context.Background(), fc, options2.SetOptions{})
+						} else {
+							fc, err = calicoClient.FelixConfigurations().Create(context.Background(), fc, options2.SetOptions{})
+						}
 						Expect(err).NotTo(HaveOccurred())
 
 						Eventually(panicC, "5s", "100ms").Should(BeClosed())
@@ -476,11 +497,19 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					It("0xfff00000 only covering BPF bits should panic", func() {
 						panicC := felixes[0].WatchStdoutFor(regexp.MustCompile("PANIC.*Not enough mark bits available"))
 
-						fc := api.NewFelixConfiguration()
+						fc, err := calicoClient.FelixConfigurations().Get(context.Background(), "default", options2.GetOptions{})
+						felixConfigExists := err == nil
+						if !felixConfigExists {
+							fc = api.NewFelixConfiguration()
+						}
 						fc.Name = "default"
 						mark := uint32(0xfff00000)
 						fc.Spec.IptablesMarkMask = &mark
-						fc, err := calicoClient.FelixConfigurations().Create(context.Background(), fc, options2.SetOptions{})
+						if felixConfigExists {
+							_, err = calicoClient.FelixConfigurations().Update(context.Background(), fc, options2.SetOptions{})
+						} else {
+							fc, err = calicoClient.FelixConfigurations().Create(context.Background(), fc, options2.SetOptions{})
+						}
 						Expect(err).NotTo(HaveOccurred())
 
 						Eventually(panicC, "5s", "100ms").Should(BeClosed())
@@ -680,39 +709,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					})
 				})
 
-				It("should clean up jump maps", func() {
-					numJumpMaps := func() int {
-						command := fmt.Sprintf("find /sys/fs/bpf/tc -name %s", maps.JumpMapName())
-						output, err := felixes[0].ExecOutput("sh", "-c", command)
-						Expect(err).NotTo(HaveOccurred())
-						return strings.Count(output, maps.JumpMapName())
-					}
-
-					expJumpMaps := func(numWorkloads int) int {
-						numHostIfaces := 1
-						specialIfaces := 0
-						if ctlbWorkaround {
-							specialIfaces = 2 /* nat + lo */
-						}
-						expectedNumMaps := 2*numWorkloads + 2*numHostIfaces + 2*specialIfaces
-						return expectedNumMaps
-					}
-
-					// Check start-of-day number of interfaces.
-					Eventually(numJumpMaps, "15s", "200ms").Should(
-						BeNumerically("==", expJumpMaps(len(w))),
-						"Unexpected number of jump maps at start of day")
-
-					// Remove a workload.
-					w[0].RemoveFromInfra(infra)
-					w[0].Stop()
-
-					// Need a long timeout here because felix throttles cleanups.
-					Eventually(numJumpMaps, "15s", "200ms").Should(
-						BeNumerically("==", expJumpMaps(len(w)-1)),
-						"Unexpected number of jump maps after removing workload")
-				})
-
 				It("should recover if the BPF programs are removed", func() {
 					flapInterface := func() {
 						By("Flapping interface")
@@ -750,7 +746,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						Eventually(func() string {
 							out, _ := felixes[0].ExecOutput("tc", "filter", "show", "ingress", "dev", w[0].InterfaceName)
 							return out
-						}, "5s", "200ms").Should(ContainSubstring("calico_from_wor"),
+						}, "5s", "200ms").Should(ContainSubstring("cali_tc_preambl"),
 							fmt.Sprintf("from wep not loaded for %s", w[0].InterfaceName))
 
 						By("handling egress program removal")
@@ -764,7 +760,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						Eventually(func() string {
 							out, _ := felixes[0].ExecOutput("tc", "filter", "show", "egress", "dev", w[0].InterfaceName)
 							return out
-						}, "5s", "200ms").Should(ContainSubstring("calico_to_wor"),
+						}, "5s", "200ms").Should(ContainSubstring("cali_tc_preambl"),
 							fmt.Sprintf("to wep not loaded for %s", w[0].InterfaceName))
 						cc.CheckConnectivity()
 
@@ -778,12 +774,12 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						Eventually(func() string {
 							out, _ := felixes[0].ExecOutput("tc", "filter", "show", "ingress", "dev", w[0].InterfaceName)
 							return out
-						}, "5s", "200ms").Should(ContainSubstring("calico_from_wor"),
+						}, "5s", "200ms").Should(ContainSubstring("cali_tc_preambl"),
 							fmt.Sprintf("from wep not loaded for %s", w[0].InterfaceName))
 						Eventually(func() string {
 							out, _ := felixes[0].ExecOutput("tc", "filter", "show", "egress", "dev", w[0].InterfaceName)
 							return out
-						}, "5s", "200ms").Should(ContainSubstring("calico_to_wor"),
+						}, "5s", "200ms").Should(ContainSubstring("cali_tc_preambl"),
 							fmt.Sprintf("to wep not loaded for %s", w[0].InterfaceName))
 						cc.CheckConnectivity()
 						cc.ResetExpectations()
@@ -1128,30 +1124,90 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					_ = k8sClient
 				})
 
-				It("should handle NAT outgoing", func() {
-					By("SNATting outgoing traffic with the flag set")
-					cc.ExpectSNAT(w[0][0], felixes[0].IP, hostW[1])
-					cc.CheckConnectivity(conntrackChecks(felixes)...)
+				Context("with both applyOnForward=true/false", func() {
+					BeforeEach(func() {
+						// The next two policies are to make sure that applyOnForward of a
+						// global policy is applied correctly to a host endpoint. The deny
+						// policy is not applied to forwarded traffic!
 
-					if testOpts.tunnel == "none" {
-						By("Leaving traffic alone with the flag clear")
-						pool, err := calicoClient.IPPools().Get(context.TODO(), "test-pool", options2.GetOptions{})
-						Expect(err).NotTo(HaveOccurred())
-						pool.Spec.NATOutgoing = false
-						pool, err = calicoClient.IPPools().Update(context.TODO(), pool, options2.SetOptions{})
-						Expect(err).NotTo(HaveOccurred())
-						cc.ResetExpectations()
-						cc.ExpectSNAT(w[0][0], w[0][0].IP, hostW[1])
-						cc.CheckConnectivity(conntrackChecks(felixes)...)
+						By("global policy denies traffic to host 1 on host 0", func() {
 
-						By("SNATting again with the flag set")
-						pool.Spec.NATOutgoing = true
-						pool, err = calicoClient.IPPools().Update(context.TODO(), pool, options2.SetOptions{})
-						Expect(err).NotTo(HaveOccurred())
-						cc.ResetExpectations()
+							nets := []string{felixes[1].IP + "/32"}
+							switch testOpts.tunnel {
+							case "ipip":
+								nets = append(nets, felixes[1].ExpectedIPIPTunnelAddr+"/32")
+							}
+
+							pol := api.NewGlobalNetworkPolicy()
+							pol.Namespace = "fv"
+							pol.Name = "host-0-1"
+							pol.Spec.Egress = []api.Rule{
+								{
+									Action: "Deny",
+									Destination: api.EntityRule{
+										Nets: nets,
+									},
+								},
+							}
+							pol.Spec.Selector = "node=='" + felixes[0].Name + "'"
+							pol.Spec.ApplyOnForward = false
+
+							pol = createPolicy(pol)
+						})
+
+						By("global policy allows forwarded traffic to host 1 on host 0", func() {
+
+							nets := []string{felixes[1].IP + "/32"}
+							switch testOpts.tunnel {
+							case "ipip":
+								nets = append(nets, felixes[1].ExpectedIPIPTunnelAddr+"/32")
+							}
+
+							pol := api.NewGlobalNetworkPolicy()
+							pol.Namespace = "fv"
+							pol.Name = "host-0-1-forward"
+							pol.Spec.Egress = []api.Rule{
+								{
+									Action: "Allow",
+									Destination: api.EntityRule{
+										Nets: nets,
+									},
+								},
+							}
+							pol.Spec.Selector = "node=='" + felixes[0].Name + "'"
+							pol.Spec.ApplyOnForward = true
+
+							pol = createPolicy(pol)
+						})
+
+						bpfWaitForPolicy(felixes[0], "eth0", "egress", "default.host-0-1")
+
+					})
+					It("should handle NAT outgoing", func() {
+						By("SNATting outgoing traffic with the flag set")
 						cc.ExpectSNAT(w[0][0], felixes[0].IP, hostW[1])
 						cc.CheckConnectivity(conntrackChecks(felixes)...)
-					}
+
+						if testOpts.tunnel == "none" {
+							By("Leaving traffic alone with the flag clear")
+							pool, err := calicoClient.IPPools().Get(context.TODO(), "test-pool", options2.GetOptions{})
+							Expect(err).NotTo(HaveOccurred())
+							pool.Spec.NATOutgoing = false
+							pool, err = calicoClient.IPPools().Update(context.TODO(), pool, options2.SetOptions{})
+							Expect(err).NotTo(HaveOccurred())
+							cc.ResetExpectations()
+							cc.ExpectSNAT(w[0][0], w[0][0].IP, hostW[1])
+							cc.CheckConnectivity(conntrackChecks(felixes)...)
+
+							By("SNATting again with the flag set")
+							pool.Spec.NATOutgoing = true
+							pool, err = calicoClient.IPPools().Update(context.TODO(), pool, options2.SetOptions{})
+							Expect(err).NotTo(HaveOccurred())
+							cc.ResetExpectations()
+							cc.ExpectSNAT(w[0][0], felixes[0].IP, hostW[1])
+							cc.CheckConnectivity(conntrackChecks(felixes)...)
+						}
+					})
 				})
 
 				It("connectivity from all workloads via workload 0's main IP", func() {

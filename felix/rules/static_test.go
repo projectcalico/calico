@@ -1553,6 +1553,108 @@ var _ = Describe("Static", func() {
 			})
 		}
 	})
+
+	Describe("with BPF mode raw chains", func() {
+		staticBPFModeRawRules := []Rule{
+			{
+				Match:   Match().MarkMatchesWithMask(0x1100000, 0x1100000),
+				Action:  ReturnAction{},
+				Comment: []string{"MarkSeenSkipFIB Mark"},
+			},
+			{
+				Match:   Match().MarkMatchesWithMask(0x5000000, 0x5000000),
+				Action:  ReturnAction{},
+				Comment: []string{"MarkSeenFallThrough Mark"},
+			},
+			{
+				Match:   Match().MarkMatchesWithMask(0x3600000, 0x3f00000),
+				Action:  ReturnAction{},
+				Comment: []string{"MarkSeenMASQ Mark"},
+			},
+			{
+				Match:   Match().MarkMatchesWithMask(0x3800000, 0x3f00000),
+				Action:  ReturnAction{},
+				Comment: []string{"MarkSeenNATOutgoing Mark"},
+			},
+			{
+				Action: NoTrackAction{},
+			},
+		}
+
+		BeforeEach(func() {
+			conf = Config{
+				IptablesMarkAccept:   0x10,
+				IptablesMarkPass:     0x20,
+				IptablesMarkScratch0: 0x40,
+				BPFEnabled:           true,
+			}
+		})
+
+		Context("with default BPF config", func() {
+			It("should return no BPF untracked rules when bypassHostConntrack is false", func() {
+				outputBPFModeRawChains := rr.StaticBPFModeRawChains(4, false, false)
+				actualBPFModeRawChains := findChain(outputBPFModeRawChains, "cali-untracked-flows")
+				expectBPFModeRawChains := &Chain{Name: "cali-untracked-flows", Rules: nil}
+				Expect(actualBPFModeRawChains).To(Equal(expectBPFModeRawChains))
+			})
+
+			It("should return default static BPF untracked rules when bypassHostConntrack is true", func() {
+				outputBPFModeRawChains := rr.StaticBPFModeRawChains(4, false, true)
+				actualBPFModeRawChains := findChain(outputBPFModeRawChains, "cali-untracked-flows")
+				expectBPFModeRawChains := &Chain{Name: "cali-untracked-flows", Rules: staticBPFModeRawRules}
+				Expect(actualBPFModeRawChains).To(Equal(expectBPFModeRawChains))
+			})
+		})
+
+		Context("with default BPF Force Track Packets From Ifaces config", func() {
+			BeforeEach(func() {
+				conf.BPFForceTrackPacketsFromIfaces = []string{"docker+"}
+			})
+
+			It("should return single BPF force track interface rule plus default static BPF untracked rules", func() {
+				expectBPFModeRawRules := []Rule{
+					{
+						Match:   Match().InInterface("docker+"),
+						Action:  ReturnAction{},
+						Comment: []string{"Track interface docker+"},
+					},
+				}
+				expectBPFModeRawRules = append(expectBPFModeRawRules, staticBPFModeRawRules...)
+
+				outputBPFModeRawChains := rr.StaticBPFModeRawChains(4, false, true)
+				actualBPFModeRawChains := findChain(outputBPFModeRawChains, "cali-untracked-flows")
+				expectBPFModeRawChains := &Chain{Name: "cali-untracked-flows", Rules: expectBPFModeRawRules}
+				Expect(actualBPFModeRawChains).To(Equal(expectBPFModeRawChains))
+			})
+		})
+
+		Context("with custom BPF Force Track Packets From Ifaces config", func() {
+			BeforeEach(func() {
+				conf.BPFForceTrackPacketsFromIfaces = []string{"docker0", "docker1"}
+			})
+
+			It("should return single BPF force track interface rule plus default static BPF untracked rules", func() {
+				expectBPFModeRawRules := []Rule{
+					{
+						Match:   Match().InInterface("docker0"),
+						Action:  ReturnAction{},
+						Comment: []string{"Track interface docker0"},
+					},
+					{
+						Match:   Match().InInterface("docker1"),
+						Action:  ReturnAction{},
+						Comment: []string{"Track interface docker1"},
+					},
+				}
+				expectBPFModeRawRules = append(expectBPFModeRawRules, staticBPFModeRawRules...)
+
+				outputBPFModeRawChains := rr.StaticBPFModeRawChains(4, false, true)
+				actualBPFModeRawChains := findChain(outputBPFModeRawChains, "cali-untracked-flows")
+				expectBPFModeRawChains := &Chain{Name: "cali-untracked-flows", Rules: expectBPFModeRawRules}
+				Expect(actualBPFModeRawChains).To(Equal(expectBPFModeRawChains))
+			})
+		})
+	})
 })
 
 func findChain(chains []*Chain, name string) *Chain {

@@ -97,9 +97,9 @@ func installProgram(name, ipver, bpfMount, cgroupPath, logLevel string, udpNotSe
 
 	var filename string
 	if ipver == "6" {
-		filename = path.Join(bpf.ObjectDir, ProgFileName(logLevel, 6))
+		filename = path.Join(bpfdefs.ObjectDir, ProgFileName(logLevel, 6))
 	} else {
-		filename = path.Join(bpf.ObjectDir, ProgFileName(logLevel, 4))
+		filename = path.Join(bpfdefs.ObjectDir, ProgFileName(logLevel, 4))
 	}
 
 	progName := "calico_" + name + "_v" + ipver

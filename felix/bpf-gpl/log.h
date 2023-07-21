@@ -28,10 +28,9 @@
 } while (0)
 
 #if !(CALI_F_XDP) && !(CALI_F_CGROUP)
-#define CALI_IFACE_LOG(fmt, ...) CALI_LOG("%s" fmt, __globals.iface_name, ## __VA_ARGS__)
+#define CALI_IFACE_LOG(fmt, ...) CALI_LOG("%s" fmt, ctx->globals->iface_name, ## __VA_ARGS__)
 #elif CALI_F_XDP
-extern const volatile struct cali_xdp_globals __globals;
-#define CALI_IFACE_LOG(fmt, ...) CALI_LOG("%s" fmt, __globals.iface_name, ## __VA_ARGS__)
+#define CALI_IFACE_LOG(fmt, ...) CALI_LOG("%s" fmt, ctx->xdp_globals->iface_name, ## __VA_ARGS__)
 #else
 #define CALI_IFACE_LOG(fmt, ...) /* just for cases like ctlb whenit is not used */
 #endif

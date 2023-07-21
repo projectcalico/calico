@@ -6,10 +6,13 @@
 #include "bpf.h"
 #include "nat.h"
 
+const volatile struct cali_tc_globals __globals;
+
 static CALI_BPF_INLINE int calico_unittest_entry (struct __sk_buff *skb)
 {
-	struct cali_tc_ctx ctx = {
+	struct cali_tc_ctx _ctx = {
 		.counters = counters_get(skb->ifindex),
+		.globals = &__globals,
 		.skb = skb,
 		.fwd = {
 			.res = TC_ACT_UNSPEC,
@@ -17,9 +20,10 @@ static CALI_BPF_INLINE int calico_unittest_entry (struct __sk_buff *skb)
 		},
 		.ipheader_len = IP_SIZE,
 	};
-	if (!ctx.counters) {
+	struct cali_tc_ctx *ctx = &_ctx;
+	if (!ctx->counters) {
 		CALI_DEBUG("Counters map lookup failed: DROP\n");
 		return TC_ACT_SHOT;
 	}
-	return vxlan_v4_encap(&ctx, HOST_IP, 0x02020202);
+	return vxlan_v4_encap(ctx, HOST_IP, 0x02020202);
 }

@@ -22,7 +22,7 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/bpf/hook"
 	"github.com/projectcalico/calico/felix/bpf/maps"
 )
 
@@ -42,7 +42,7 @@ func (k Key) AsBytes() []byte {
 	return k[:]
 }
 
-func NewKey(ifindex int, hook bpf.Hook) Key {
+func NewKey(ifindex int, hook hook.Hook) Key {
 	var k Key
 
 	binary.LittleEndian.PutUint32(k[:4], uint32(ifindex))
@@ -157,7 +157,7 @@ func Descriptions() DescList {
 	return descriptions
 }
 
-func Read(m maps.Map, ifindex int, hook bpf.Hook) ([]uint64, error) {
+func Read(m maps.Map, ifindex int, hook hook.Hook) ([]uint64, error) {
 	values, err := m.Get(NewKey(ifindex, hook).AsBytes())
 	if err != nil {
 		return []uint64{}, fmt.Errorf("failed to read counters map. err=%w", err)
@@ -174,7 +174,7 @@ func Read(m maps.Map, ifindex int, hook bpf.Hook) ([]uint64, error) {
 	return bpfCounters, nil
 }
 
-func Flush(m maps.Map, ifindex int, hook bpf.Hook) error {
+func Flush(m maps.Map, ifindex int, hook hook.Hook) error {
 	if err := m.(maps.MapWithUpdateWithFlags).
 		UpdateWithFlags(NewKey(ifindex, hook).AsBytes(), zeroVal, unix.BPF_EXIST); err != nil {
 		return fmt.Errorf("failed to update counters map. err=%v", err)
@@ -182,7 +182,7 @@ func Flush(m maps.Map, ifindex int, hook bpf.Hook) error {
 	return nil
 }
 
-func EnsureExists(m maps.Map, ifindex int, hook bpf.Hook) error {
+func EnsureExists(m maps.Map, ifindex int, hook hook.Hook) error {
 	err := m.(maps.MapWithUpdateWithFlags).
 		UpdateWithFlags(NewKey(ifindex, hook).AsBytes(), zeroVal, unix.BPF_NOEXIST)
 	if err != nil && !os.IsExist(err) {

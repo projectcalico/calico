@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//go:build cgo
+
 package filter
 
 import (
@@ -26,7 +28,18 @@ import (
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 )
 
-func New(linkType layers.LinkType, minLen int, expression string, jumpMapFD maps.FD) (asm.Insns, error) {
+var (
+	skbCb0 = asm.FieldOffset{Offset: 12*4 + 0*4, Field: "skb->cb[0]"}
+	skbCb1 = asm.FieldOffset{Offset: 12*4 + 1*4, Field: "skb->cb[1]"}
+)
+
+func New(epType tcdefs.EndpointType, minLen int, expression string, jumpMapFD maps.FD) (asm.Insns, error) {
+	linkType := layers.LinkTypeEthernet
+
+	if epType == tcdefs.EpTypeL3Device {
+		linkType = layers.LinkTypeIPv4
+	}
+
 	return newFilter(linkType, minLen, expression, jumpMapFD, false)
 }
 
@@ -138,6 +151,7 @@ func programFooter(b *asm.Block, fd maps.FD, expression string) {
 	b.Mov64(asm.R1, asm.R6)                   // First arg is the context.
 	b.LoadMapFD(asm.R2, uint32(fd))           // Second arg is the map.
 	b.MovImm32(asm.R3, tcdefs.ProgIndexDebug) // Third arg is the index (rather than a pointer to the index).
+	b.Load32(asm.R3, asm.R6, skbCb1)          // Third arg is the index from skb->cb[0]).
 	b.Call(asm.HelperTailCall)
 
 	// If we do not have a program for logging, fall through to no logs.
@@ -146,9 +160,9 @@ func programFooter(b *asm.Block, fd maps.FD, expression string) {
 	b.LabelNextInsn("exit")
 
 	// Execute the tail call to no-log program
-	b.Mov64(asm.R1, asm.R6)                     // First arg is the context.
-	b.LoadMapFD(asm.R2, uint32(fd))             // Second arg is the map.
-	b.MovImm32(asm.R3, tcdefs.ProgIndexNoDebug) // Third arg is the index (rather than a pointer to the index).
+	b.Mov64(asm.R1, asm.R6)          // First arg is the context.
+	b.LoadMapFD(asm.R2, uint32(fd))  // Second arg is the map.
+	b.Load32(asm.R3, asm.R6, skbCb0) // Third arg is the index from skb->cb[0]).
 	b.Call(asm.HelperTailCall)
 
 	// Fall through after not being able to make a call, let the packet through.

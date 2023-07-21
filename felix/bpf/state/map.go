@@ -141,9 +141,9 @@ var MapParameters = maps.MapParameters{
 	Type:       "percpu_array",
 	KeySize:    4,
 	ValueSize:  expectedSize,
-	MaxEntries: 1,
+	MaxEntries: 2,
 	Name:       "cali_state",
-	Version:    2,
+	Version:    3,
 }
 
 func Map() maps.Map {
@@ -155,7 +155,7 @@ func MapForTest() maps.Map {
 		Type:       "array",
 		KeySize:    4,
 		ValueSize:  expectedSize,
-		MaxEntries: 1,
+		MaxEntries: 2,
 		Name:       "test_state",
 	})
 }
