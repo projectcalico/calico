@@ -231,7 +231,7 @@ func (d *npParentData) IterEndpointIDs(f func(id any) error) {
 type NamedPortMatchCallback func(ipSetID string, member IPSetMember)
 
 type SelectorAndNamedPortIndex struct {
-	endpointDataByID     map[interface{}]*endpointData
+	endpointDataByID     map[any]*endpointData
 	parentDataByParentID map[string]*npParentData
 	ipSetDataByID        map[string]*ipSetData
 
@@ -442,19 +442,18 @@ func (idx *SelectorAndNamedPortIndex) UpdateIPSet(ipSetID string, sel selector.S
 	idx.ipSetDataByID[ipSetID] = newIPSetData
 
 	// Then scan all endpoints.
-	for epID, epData := range idx.endpointDataByID {
-		// Make sure we don't appear non-live if there are a lot of endpoints to get through.
+	idx.iterEndpointCandidates(newIPSetData, func(epID any, epData *endpointData) {
 		idx.maybeReportLive()
 
 		if !sel.EvaluateLabels(epData) {
 			// Endpoint doesn't match.
 			EvalLabelsFalse++
-			continue
+			return
 		}
 		EvalLabelsTrue++
 		contrib := idx.CalculateEndpointContribution(epData, newIPSetData)
 		if len(contrib) == 0 {
-			continue
+			return
 		}
 		if log.GetLevel() >= log.DebugLevel {
 			logCxt = logCxt.WithField("epID", epID)
@@ -471,34 +470,25 @@ func (idx *SelectorAndNamedPortIndex) UpdateIPSet(ipSetID string, sel selector.S
 			}
 			newIPSetData.memberToRefCount[member] = refCount + 1
 		}
-	}
+	})
 }
 
-func (idx *SelectorAndNamedPortIndex) DeleteIPSet(id string) {
-	log.WithField("ipSetID", id).Info("Deleting IP set")
+func (idx *SelectorAndNamedPortIndex) DeleteIPSet(setID string) {
+	log.WithField("ipSetID", setID).Info("Deleting IP set")
 
-	ipSetData := idx.ipSetDataByID[id]
+	ipSetData := idx.ipSetDataByID[setID]
 	if ipSetData == nil {
-		log.WithField("id", id).Warning("Delete of unknown IP set, ignoring")
+		log.WithField("id", setID).Warning("Delete of unknown IP set, ignoring")
 		return
 	}
 
-	// Emit events for all the removed CIDRs.
-	for member := range ipSetData.memberToRefCount {
-		if log.GetLevel() >= log.DebugLevel {
-			log.WithField("member", member).Debug("Emitting deletion event.")
-		}
-		idx.OnMemberRemoved(id, member)
-	}
-
-	// Then scan all endpoints and fix up their indexes to remove the match.
-	for _, epData := range idx.endpointDataByID {
+	idx.iterEndpointCandidates(ipSetData, func(epID any, epData *endpointData) {
 		// Make sure we don't appear non-live if there are a lot of endpoints to get through.
 		idx.maybeReportLive()
-		epData.RemoveMatchingIPSetID(id)
-	}
+		epData.RemoveMatchingIPSetID(setID)
+	})
 
-	delete(idx.ipSetDataByID, id)
+	delete(idx.ipSetDataByID, setID)
 }
 
 func (idx *SelectorAndNamedPortIndex) UpdateEndpointOrSet(
@@ -780,4 +770,13 @@ func (idx *SelectorAndNamedPortIndex) maybeReportLive() {
 	}
 	idx.OnAlive()
 	idx.lastLiveReport = time.Now()
+}
+
+func (idx *SelectorAndNamedPortIndex) iterEndpointCandidates(ipsetID any, f func(epID any, epData *endpointData)) {
+	// Naive algorithm, just scan all.
+	for id, epData := range idx.endpointDataByID {
+		// Make sure we don't appear non-live if there are a lot of endpoints to get through.
+		idx.maybeReportLive()
+		f(id, epData)
+	}
 }
