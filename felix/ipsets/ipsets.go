@@ -34,7 +34,7 @@ import (
 
 const (
 	MaxIPSetParallelUpdates       = 10
-	MaxIPSetDeletionsPerIteration = 20
+	MaxIPSetDeletionsPerIteration = 1
 	RestoreChunkSize              = 1000
 )
 
