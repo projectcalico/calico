@@ -78,14 +78,10 @@ type DeltaTracker[K comparable, V any] struct {
 	inDataplaneNotDesired map[K]V
 	desiredUpdates        map[K]V
 
-	desiredView   *DesiredView[K, V]
-	dataplaneView *DataplaneView[K, V]
-
 	// valuesEqual is the comparison function for the value type, it defaults to
 	// reflect.DeepEqual.
 	valuesEqual func(a, b V) bool
-
-	logCtx *logrus.Entry
+	logCtx      *logrus.Entry
 }
 
 type Option[K comparable, V any] func(tracker *DeltaTracker[K, V])
@@ -109,8 +105,6 @@ func New[K comparable, V any](opts ...Option[K, V]) *DeltaTracker[K, V] {
 		valuesEqual:           func(a, b V) bool { return reflect.DeepEqual(a, b) },
 		logCtx:                logrus.WithFields(nil),
 	}
-	cm.desiredView = (*DesiredView[K, V])(cm)
-	cm.dataplaneView = (*DataplaneView[K, V])(cm)
 	for _, o := range opts {
 		o(cm)
 	}
@@ -120,7 +114,7 @@ func New[K comparable, V any](opts ...Option[K, V]) *DeltaTracker[K, V] {
 type DesiredView[K comparable, V any] DeltaTracker[K, V]
 
 func (c *DeltaTracker[K, V]) Desired() *DesiredView[K, V] {
-	return c.desiredView
+	return (*DesiredView[K, V])(c)
 }
 
 // Set sets the desired state of the given key to the given value. If the value differs from what
@@ -204,7 +198,7 @@ func (c *DesiredView[K, V]) Iter(f func(k K, v V)) {
 type DataplaneView[K comparable, V any] DeltaTracker[K, V]
 
 func (c *DeltaTracker[K, V]) Dataplane() *DataplaneView[K, V] {
-	return c.dataplaneView
+	return (*DataplaneView[K, V])(c)
 }
 
 // ReplaceAllMap replaces the state of the dataplane map with the KVs from
@@ -243,7 +237,7 @@ func (c *DataplaneView[K, V]) ReplaceAllIter(iter func(func(k K, v V)) error) er
 
 	err := iter(func(k K, v V) {
 		// Figure out if we _want_ it to exist and tee up update/deletion accordingly.
-		if desiredV, desired := c.desiredView.Get(k); desired {
+		if desiredV, desired := c.asDesiredView().Get(k); desired {
 			// Record that this key exists in the new copy of the cache.
 			newInDPDesired[k] = v
 
@@ -280,7 +274,7 @@ func (c *DataplaneView[K, V]) ReplaceAllIter(iter func(func(k K, v V)) error) er
 
 	// oldInDPDesired now only contains KVs that we _thought_ were in the dataplane but are now gone.
 	for k := range oldInDPDesired {
-		if desiredV, desired := c.desiredView.Get(k); desired {
+		if desiredV, desired := c.asDesiredView().Get(k); desired {
 			// We want this key, but it's missing, queue up an add.
 			c.desiredUpdates[k] = desiredV
 		} // else we don't want it, and it's gone; nothing to do.
@@ -303,7 +297,7 @@ func (c *DataplaneView[K, V]) ReplaceAllIter(iter func(func(k K, v V)) error) er
 // has the given KV.  Updated the pending update/deletion set if the new KV differs from what is
 // desired.
 func (c *DataplaneView[K, V]) Set(k K, v V) {
-	desiredV, desired := c.desiredView.Get(k)
+	desiredV, desired := c.asDesiredView().Get(k)
 	if desired {
 		// Dataplane key has a corresponding desired key.  Check if the values match.
 		c.inDataplaneAndDesired[k] = v
@@ -322,13 +316,17 @@ func (c *DataplaneView[K, V]) Set(k K, v V) {
 // Delete deletes a key from the dataplane cache.  I.e. it tells this tracker that the key
 // no longer exists in the dataplane.
 func (c *DataplaneView[K, V]) Delete(k K) {
-	desiredV, desired := c.desiredView.Get(k)
+	desiredV, desired := c.asDesiredView().Get(k)
 	delete(c.inDataplaneAndDesired, k)
 	delete(c.inDataplaneNotDesired, k)
 	if desired {
 		// We've now been told this KV is not in the dataplane but the desired state says it should be there.
 		c.desiredUpdates[k] = desiredV
 	}
+}
+
+func (c *DataplaneView[K, V]) DeleteAll() {
+	c.ReplaceAllMap(nil)
 }
 
 // Iter iterates over the cache of the dataplane.
@@ -341,6 +339,10 @@ func (c *DataplaneView[K, V]) Iter(f func(k K, v V)) {
 	}
 }
 
+func (c *DataplaneView[K, V]) Len() int {
+	return len(c.inDataplaneNotDesired) + len(c.inDataplaneAndDesired)
+}
+
 // Get gets a single value from the cache of the dataplane. The cache must have previously been
 // loaded with a successful call to LoadCacheFromDataplane() or one of the ApplyXXX methods.
 func (c *DataplaneView[K, V]) Get(k K) (V, bool) {
@@ -351,6 +353,10 @@ func (c *DataplaneView[K, V]) Get(k K) (V, bool) {
 	return v, ok
 }
 
+func (c *DataplaneView[K, V]) asDesiredView() *DesiredView[K, V] {
+	return (*DesiredView[K, V])(c)
+}
+
 type IterAction int
 
 const (
@@ -358,10 +364,21 @@ const (
 	IterActionUpdateDataplane
 )
 
-// IterPendingUpdates iterates over the pending updates. If the passed in function returns
+type PendingUpdatesView[K comparable, V any] DeltaTracker[K, V]
+
+func (c *DeltaTracker[K, V]) PendingUpdates() *PendingUpdatesView[K, V] {
+	return (*PendingUpdatesView[K, V])(c)
+}
+
+func (c *PendingUpdatesView[K, V]) Get(k K) (V, bool) {
+	v, ok := c.desiredUpdates[k]
+	return v, ok
+}
+
+// Iter iterates over the pending updates. If the passed in function returns
 // IterActionUpdateDataplane then the pending update is cleared, and, the KV is applied
-// to the dataplane cache (as if the function had called Set(k, v)).
-func (c *DeltaTracker[K, V]) IterPendingUpdates(f func(k K, v V) IterAction) {
+// to the dataplane cache (as if the function had called Dataplane().Set(k, v)).
+func (c *PendingUpdatesView[K, V]) Iter(f func(k K, v V) IterAction) {
 	for k, v := range c.desiredUpdates {
 		updateDataplane := f(k, v)
 		switch updateDataplane {
@@ -374,10 +391,29 @@ func (c *DeltaTracker[K, V]) IterPendingUpdates(f func(k K, v V) IterAction) {
 	}
 }
 
-// IterPendingDeletions iterates over the pending deletion set. If the passed in function returns
+func (c *PendingUpdatesView[K, V]) Len() int {
+	return len(c.desiredUpdates)
+}
+
+func (c *DeltaTracker[K, V]) InSync() bool {
+	return c.PendingDeletions().Len() == 0 && c.PendingUpdates().Len() == 0
+}
+
+type PendingDeletionsView[K comparable, V any] DeltaTracker[K, V]
+
+func (c *DeltaTracker[K, V]) PendingDeletions() *PendingDeletionsView[K, V] {
+	return (*PendingDeletionsView[K, V])(c)
+}
+
+func (c *PendingDeletionsView[K, V]) Get(k K) (V, bool) {
+	v, ok := c.inDataplaneNotDesired[k]
+	return v, ok
+}
+
+// Iter iterates over the pending deletion set. If the passed in function returns
 // IterActionUpdateDataplane then the pending deletion is cleared, and, the KV is applied
-// to the dataplane cache (as if the function had called Delete(k)).
-func (c *DeltaTracker[K, V]) IterPendingDeletions(f func(k K) IterAction) {
+// to the dataplane cache (as if the function had called Dataplane().Delete(k)).
+func (c *PendingDeletionsView[K, V]) Iter(f func(k K) IterAction) {
 	for k := range c.inDataplaneNotDesired {
 		updateDataplane := f(k)
 		switch updateDataplane {
@@ -387,4 +423,8 @@ func (c *DeltaTracker[K, V]) IterPendingDeletions(f func(k K) IterAction) {
 			delete(c.inDataplaneNotDesired, k)
 		}
 	}
+}
+
+func (c *PendingDeletionsView[K, V]) Len() int {
+	return len(c.inDataplaneNotDesired)
 }
