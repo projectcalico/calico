@@ -1500,16 +1500,19 @@ spec:
                 type: string
               logSeverityFile:
                 description: 'LogSeverityFile is the log severity above which logs
-                  are sent to the log file. [Default: Info] kubebuilder:validation:Pattern=`^(?i)(Debug|Info|Warning|Error|Fatal)?$`'
+                  are sent to the log file. [Default: Info]'
+                pattern: ^(?i)(Debug|Info|Warning|Error|Fatal)?$
                 type: string
               logSeverityScreen:
                 description: 'LogSeverityScreen is the log severity above which logs
-                  are sent to the stdout. [Default: Info] kubebuilder:validation:Pattern=`^(?i)(Debug|Info|Warning|Error|Fatal)?$`'
+                  are sent to the stdout. [Default: Info]'
+                pattern: ^(?i)(Debug|Info|Warning|Error|Fatal)?$
                 type: string
               logSeveritySys:
                 description: 'LogSeveritySys is the log severity above which logs
                   are sent to the syslog. Set to None for no logging to syslog. [Default:
-                  Info] kubebuilder:validation:Pattern=`^(?i)(Debug|Info|Warning|Error|Fatal)?$`'
+                  Info]'
+                pattern: ^(?i)(Debug|Info|Warning|Error|Fatal)?$
                 type: string
               maxIpsetSize:
                 type: integer
