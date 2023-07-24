@@ -58,6 +58,7 @@ func benchInitialSnap(b *testing.B, numEndpoints int, numLocalEndpoints int, num
 
 	epUpdates := makeEndpointUpdates(numEndpoints, "remotehost")
 	localUpdates := makeEndpointUpdates(numLocalEndpoints, "localhost")
+	localDeletes := makeEndpointDeletes(numLocalEndpoints, "localhost")
 	polUpdates := makeTagPolicies(numTagPols)
 	profUpdates := makeNamespaceUpdates(numNamespaces)
 	netSetUpdates := makeNetSetAndPolUpdates(netSetsAndPols)
@@ -86,16 +87,30 @@ func benchInitialSnap(b *testing.B, numEndpoints int, numLocalEndpoints int, num
 		cg.AllUpdDispatcher.OnUpdates(profUpdates)
 		cg.AllUpdDispatcher.OnUpdates(epUpdates)
 		cg.AllUpdDispatcher.OnUpdates(netSetUpdates)
-		cg.AllUpdDispatcher.OnUpdates(localUpdates)
+		sendLocalUpdates(cg, localUpdates)
 		cg.AllUpdDispatcher.OnDatamodelStatus(api.InSync)
 
+		cg.PolicyResolver.maybeFlush()
 		Expect(es.pendingEndpointTierUpdates).To(HaveLen(numLocalEndpoints))
 		es.Flush()
+
+		sendDeletions(cg, localDeletes)
+		cg.PolicyResolver.maybeFlush()
+		es.Flush()
+
 		b.ReportMetric(float64(time.Since(startTime).Seconds()), "s")
 		b.ReportMetric(float64(len(es.pendingAddedIPSets)), "IPSets")
 		b.ReportMetric(float64(len(es.pendingPolicyUpdates)), "Policies")
 		b.ReportMetric(float64(numMessages), "Msgs")
 	}
+}
+
+func sendLocalUpdates(cg *CalcGraph, localUpdates []api.Update) {
+	cg.AllUpdDispatcher.OnUpdates(localUpdates)
+}
+
+func sendDeletions(cg *CalcGraph, localDeletes []api.Update) {
+	cg.AllUpdDispatcher.OnUpdates(localDeletes)
 }
 
 func makeNetSetAndPolUpdates(num int) []api.Update {
@@ -232,6 +247,24 @@ func makeEndpointUpdates(num int, host string) []api.Update {
 					IPv4Nets:   []calinet.IPNet{ipNet},
 					ProfileIDs: []string{fmt.Sprintf(conversion.NamespaceProfileNamePrefix+"namespace-%d", n%numNamespaces)},
 				},
+			},
+		}
+	}
+	return updates
+}
+func makeEndpointDeletes(num int, host string) []api.Update {
+	updates := make([]api.Update, num)
+	for n := 0; n < num; n++ {
+		key := model.WorkloadEndpointKey{
+			Hostname:       host,
+			OrchestratorID: "k8s",
+			WorkloadID:     fmt.Sprintf("wep-%d", n),
+			EndpointID:     "eth0",
+		}
+		updates[n] = api.Update{
+			KVPair: model.KVPair{
+				Key:   key,
+				Value: nil,
 			},
 		}
 	}
