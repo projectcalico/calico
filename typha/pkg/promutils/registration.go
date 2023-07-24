@@ -27,8 +27,8 @@ import (
 func GetOrRegister[T prometheus.Collector](collector T) T {
 	err := prometheus.DefaultRegisterer.Register(collector)
 	if err != nil {
-		if err, ok := err.(prometheus.AlreadyRegisteredError); ok {
-			return err.ExistingCollector.(T)
+		if registeredErr, ok := err.(prometheus.AlreadyRegisteredError); ok {
+			return registeredErr.ExistingCollector.(T)
 		} else {
 			logrus.WithError(err).WithField("collector", collector).Panic("Failed to register prometheus collector.")
 		}
