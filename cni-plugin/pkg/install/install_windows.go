@@ -44,7 +44,7 @@ func defaultNetConf() string {
       },
       "log_level": "__LOG_LEVEL__",
       "log_file_path": "__LOG_FILE_PATH__",
-      "windows_loopback_DSR": __DSR_SUPPORT__,
+      "windows_loopback_DSR": "__DSR_SUPPORT__",
       "capabilities": {"dns": true},
       "DNS":  {
         "Nameservers":  [__KUBERNETES_DNS_SERVERS__],
@@ -154,9 +154,9 @@ func replacePlatformSpecificVars(c config, netconf string) string {
 	}
 	supportsDSR := (winVerInt == 1809 && buildNumInt >= 17763 && halVerInt >= 1432) || (winVerInt >= 1903 && buildNumInt >= 18317)
 	if supportsDSR {
-		netconf = strings.Replace(netconf, "__DSR_SUPPORT__", "true", -1)
+		netconf = strings.Replace(netconf, `"__DSR_SUPPORT__"`, "true", -1)
 	} else {
-		netconf = strings.Replace(netconf, "__DSR_SUPPORT__", "false", -1)
+		netconf = strings.Replace(netconf, `"__DSR_SUPPORT__"`, "false", -1)
 	}
 
 	return netconf
