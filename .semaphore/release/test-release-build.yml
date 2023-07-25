@@ -10,9 +10,6 @@ execution_time_limit:
 
 blocks:
   - name: "Test build official release"
-    skip:
-      # Only run on branches, not PRs.
-      when: "branch !~ '.+'"
     task:
       secrets:
       - name: quay-robot-calico+semaphoreci
@@ -47,6 +44,7 @@ blocks:
           value: /home/semaphore/secrets/release-test.tfvars
         commands:
         - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make GIT_BRANCH=${SEMAPHORE_GIT_BRANCH} -C hack/release apply; fi
+        - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make GIT_BRANCH=${SEMAPHORE_GIT_BRANCH} -C hack/release update-versions-remote; fi
         - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make GIT_BRANCH=${SEMAPHORE_GIT_BRANCH} -C hack/release release; fi
       epilogue:
         always:

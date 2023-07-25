@@ -39,6 +39,9 @@ ci-preflight-checks:
 	$(MAKE) generate
 	$(MAKE) check-dirty
 
+update-versions:
+	$(MAKE) -C hack/versions update-versions
+
 check-language:
 	./hack/check-language.sh
 
