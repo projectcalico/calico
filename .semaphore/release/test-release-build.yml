@@ -36,16 +36,17 @@ blocks:
         - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/secret.google-service-account-key.json
         - gcloud auth activate-service-account --key-file=${GOOGLE_APPLICATION_CREDENTIALS}
       jobs:
-      - name: "Release on GCP VM"
+      - name: "Test release on GCP VM"
         execution_time_limit:
           minutes: 180
         env_vars:
         - name: VAR_FILE
           value: /home/semaphore/secrets/release-test.tfvars
         commands:
-        - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make GIT_BRANCH=${SEMAPHORE_GIT_BRANCH} -C hack/release apply; fi
-        - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make GIT_BRANCH=${SEMAPHORE_GIT_BRANCH} -C hack/release update-versions-remote; fi
-        - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make GIT_BRANCH=${SEMAPHORE_GIT_BRANCH} -C hack/release release; fi
+        - make GIT_BRANCH=${SEMAPHORE_GIT_BRANCH} -C hack/release apply
+        - make GIT_BRANCH=${SEMAPHORE_GIT_BRANCH} -C hack/release test-remote-fetch
+        - make GIT_BRANCH=${SEMAPHORE_GIT_BRANCH} -C hack/release update-versions-remote
+        - make GIT_BRANCH=${SEMAPHORE_GIT_BRANCH} -C hack/release test-remote-build-release
       epilogue:
         always:
           commands:
