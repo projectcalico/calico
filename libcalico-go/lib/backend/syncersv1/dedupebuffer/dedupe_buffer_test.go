@@ -56,10 +56,10 @@ func TestDedupeBuffer_SyncNoDupes(t *testing.T) {
 			Expect(rec.FinalSyncState()).To(Equal(api.InSync))
 			Expect(rec.UpdatesSeen()).To(Equal([]string{
 				// WaitForDatastore gets skipped since it's in the same batch.
-				string(api.ResyncInProgress),
+				api.ResyncInProgress.String(),
 				"foo=bar",
 				"foo2=bar2",
-				string(api.InSync),
+				api.InSync.String(),
 			}))
 
 			// Now send in a deletion.
@@ -135,10 +135,95 @@ func TestDedupeBuffer_SyncWithDupes(t *testing.T) {
 			Expect(rec.FinalSyncState()).To(Equal(api.InSync))
 			Expect(rec.UpdatesSeen()).To(Equal([]string{
 				// WaitForDatastore skipped.
-				string(api.ResyncInProgress),
+				api.ResyncInProgress.String(),
 				"foo=bar3", // Update leap-frogs the original value.
 				"foo3=bar3",
-				string(api.InSync),
+				api.InSync.String(),
+			}))
+		})
+	}
+}
+
+func TestDedupeBuffer_Async(t *testing.T) {
+	for _, onUpdatesVersion := range []string{"KeysKnown", "KeysNotKnown"} {
+		t.Run(onUpdatesVersion, func(t *testing.T) {
+			RegisterTestingT(t)
+			d := New()
+			onUpdates := wrapOnUpdates(d, onUpdatesVersion)
+			rec := NewReceiver()
+			go d.SendToSinkForever(rec)
+			defer d.Stop()
+
+			rec.BlockAfterNextUpdate()
+			defer rec.Unblock()
+
+			// Send updates and wait for them to show up.
+			onUpdates([]api.Update{
+				KVUpdate("key1", "1a"),
+				KVUpdate("key2", "2a"),
+				KVUpdate("key3", "3a"),
+				KVUpdate("key4", "4a"),
+			})
+			Eventually(rec.FinalValues).Should(Equal(map[string]string{
+				"key1": "1a",
+				"key2": "2a",
+				"key3": "3a",
+				"key4": "4a",
+			}))
+			rec.ResetUpdatesSeen()
+
+			// Receiver should now be blocked.  Send in a series of updates,
+			// some of which replace earlier updates.
+			onUpdates([]api.Update{
+				KVUpdate("key1", "1a"), // No-op update
+				KVUpdate("key2", "2b"), // Genuine change
+				KVUpdate("key3", "3b"), // Genuine change x2
+				KVUpdate("key4", ""),   // delete
+				KVUpdate("key5", "5a"), // add
+				KVUpdate("key6", "6a"), // add
+				KVUpdate("key7", "7a"), // add
+			})
+			d.OnStatusUpdated(api.InSync)
+			d.OnStatusUpdated(api.ResyncInProgress)
+			d.OnStatusUpdated(api.ResyncInProgress)
+			onUpdates([]api.Update{
+				KVUpdate("key1", "1a"), // No-op update
+				KVUpdate("key3", "3c"), // Genuine change; should replace earlier change
+				KVUpdate("key5", ""),   // Delete before ever being sent
+				KVUpdate("key7", "7b"), // Update before ever being sent
+				KVUpdate("key8", "8a"), // add
+			})
+			d.OnStatusUpdated(api.InSync)
+			d.OnStatusUpdated(api.ResyncInProgress)
+			d.OnStatusUpdated(api.InSync)
+			rec.Unblock()
+
+			Eventually(rec.FinalValues).Should(Equal(
+				map[string]string{
+					"key1": "1a",
+					"key2": "2b",
+					"key3": "3c",
+					"key6": "6a",
+					"key7": "7b",
+					"key8": "8a",
+				}),
+				"After sending various updates should get correct final result.",
+			)
+
+			// The updates come out in the same order that we sent them
+			// but a key that gets updated twice between flushes of the queue
+			// is only sent once with its most recent value.
+			Expect(rec.UpdatesSeen()).To(Equal([]string{
+				"key1=1a", // Only dedupe things that are on the queue so this dupe does get sent.
+				"key2=2b",
+				"key3=3c", // The 3b update gets suppressed
+				"key4=",   // key4 was sent before so the deletion is sent
+				// key5 should never be sent.
+				"key6=6a",
+				"key7=7b",
+				"resync",
+				"key8=8a",
+				"in-sync",
 			}))
 		})
 	}
@@ -181,10 +266,21 @@ func KVUpdate(key, value string) api.Update {
 
 type Receiver struct {
 	mutex sync.Mutex
+	cond  *sync.Cond
 
 	finalValues    map[string]string
 	updatesSeen    []string
 	finalSyncState api.SyncStatus
+
+	block bool
+}
+
+func NewReceiver() *Receiver {
+	r := &Receiver{
+		finalValues: map[string]string{},
+	}
+	r.cond = sync.NewCond(&r.mutex)
+	return r
 }
 
 func (r *Receiver) FinalValues() map[string]string {
@@ -216,7 +312,7 @@ func (r *Receiver) FinalSyncState() api.SyncStatus {
 func (r *Receiver) OnStatusUpdated(status api.SyncStatus) {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
-	r.updatesSeen = append(r.updatesSeen, string(status))
+	r.updatesSeen = append(r.updatesSeen, status.String())
 	r.finalSyncState = status
 }
 
@@ -234,6 +330,9 @@ func (r *Receiver) OnUpdates(updates []api.Update) {
 		}
 		r.updatesSeen = append(r.updatesSeen, fmt.Sprintf("%s=%s", k, v))
 	}
+	for r.block {
+		r.cond.Wait()
+	}
 }
 
 func (r *Receiver) ResetUpdatesSeen() {
@@ -242,8 +341,15 @@ func (r *Receiver) ResetUpdatesSeen() {
 	r.updatesSeen = nil
 }
 
-func NewReceiver() *Receiver {
-	return &Receiver{
-		finalValues: map[string]string{},
-	}
+func (r *Receiver) BlockAfterNextUpdate() {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+	r.block = true
+}
+
+func (r *Receiver) Unblock() {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+	r.block = false
+	r.cond.Signal()
 }
