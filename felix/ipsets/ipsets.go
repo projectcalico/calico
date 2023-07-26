@@ -35,7 +35,7 @@ import (
 const (
 	MaxIPSetParallelUpdates       = 10
 	MaxIPSetDeletionsPerIteration = 1
-	RestoreChunkSize              = 1000
+	RestoreChunkSize              = 5000
 )
 
 type dataplaneMetadata struct {
@@ -592,7 +592,7 @@ func (s *IPSets) tryResync() (err error) {
 // running one "ipset restore" session.  Note: unlike 'iptables-restore', 'ipset restore' is
 // not atomic, updates are applied individually.
 func (s *IPSets) tryUpdates() error {
-	ipSetChunks, total := s.chunkUpDirtyIPSets()
+	ipSetChunks, total, totalLines := s.chunkUpDirtyIPSets()
 	if total == 0 {
 		s.logCxt.Debug("No dirty IP sets.")
 		return nil
@@ -601,8 +601,7 @@ func (s *IPSets) tryUpdates() error {
 
 	var errg errgroup.Group
 	errg.SetLimit(MaxIPSetParallelUpdates)
-
-	log.Infof("Updating %d IPSets in %d chunks", total, len(ipSetChunks))
+	start := time.Now()
 	for _, setIDs := range ipSetChunks {
 		setIDs := setIDs
 		errg.Go(func() error {
@@ -616,6 +615,7 @@ func (s *IPSets) tryUpdates() error {
 	if err != nil {
 		return fmt.Errorf("failed to write one or more IP set: %v", err)
 	}
+	log.Infof("Updated %d IPSets in %d chunks (%d lines) in %v", total, len(ipSetChunks), totalLines, time.Since(start))
 
 	// If we get here, the writes were successful, reset the IP sets delta tracking now the
 	// dataplane should be in sync.
@@ -625,7 +625,7 @@ func (s *IPSets) tryUpdates() error {
 }
 
 // chunkUpDirtyIPSets breaks up the dirtyIPSetIDs set into slices for processing in parallel.
-func (s *IPSets) chunkUpDirtyIPSets() (chunks [][]string, numIPSets int) {
+func (s *IPSets) chunkUpDirtyIPSets() (chunks [][]string, numIPSets, numLines int) {
 	// We try to make sure that each chunk has a reasonable number of ipset input lines
 	// in it.  If we simply made each ipset into its own chunk then we'd pay the overhead of
 	// launching the ipset binary for every IP set, even if there was only 1 update per IP
@@ -639,7 +639,9 @@ func (s *IPSets) chunkUpDirtyIPSets() (chunks [][]string, numIPSets int) {
 		}
 		chunk = append(chunk, setName)
 		numIPSets++
-		estimatedNumLinesInChunk += s.estimateUpdateSize(setName)
+		numLinesForIPSet := s.estimateUpdateSize(setName)
+		estimatedNumLinesInChunk += numLinesForIPSet
+		numLines += numLinesForIPSet
 		if estimatedNumLinesInChunk >= RestoreChunkSize {
 			chunks = append(chunks, chunk)
 			chunk = nil
@@ -669,7 +671,7 @@ func (s *IPSets) chunkUpDirtyIPSets() (chunks [][]string, numIPSets int) {
 		for i, c := range chunks {
 			chunks2[i%len(chunks2)] = append(chunks2[i%len(chunks2)], c...)
 		}
-		return chunks2, numIPSets
+		return chunks2, numIPSets, numLines
 	}
 	return
 }
