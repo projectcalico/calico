@@ -16,6 +16,7 @@ package dedupebuffer
 
 import (
 	"container/list"
+	"fmt"
 	"sync"
 
 	log "github.com/sirupsen/logrus"
@@ -33,11 +34,11 @@ import (
 // If an update comes in for a key that already has a value in the queue then
 // the value in the queue is replaced with the updated KV.
 //
-// This can cause reordering (which is allowed by the syncer API) but it
-// ensures that the amount of KVs in flight is bounded to the total size of
-// the datastore even under substantial overload. The effect is that the
-// client will periodically "skip ahead" to the more recent state of the
-// datatstore without seeing intermediate states.
+// This can cause reordering between different resources (which is allowed
+// by the syncer API) but it ensures that the amount of KVs in flight is
+// bounded to the total size of the datastore even under substantial overload.
+// The effect is that the client will periodically "skip ahead" to the more
+// recent state of the datastore without seeing intermediate states.
 type DedupeBuffer struct {
 	lock sync.Mutex
 	cond *sync.Cond
@@ -48,8 +49,8 @@ type DedupeBuffer struct {
 	sentKeys           set.Set[string]
 	pendingUpdates     list.List // Mix of api.SyncStatus and updateWithStringKey.
 
-	mostRecentStatus api.SyncStatus
-	stopped          bool
+	mostRecentStatusReceived api.SyncStatus
+	stopped                  bool
 }
 
 func New() *DedupeBuffer {
@@ -68,9 +69,10 @@ func (d *DedupeBuffer) OnStatusUpdated(status api.SyncStatus) {
 
 	// Statuses are idempotent so skip sending if the latest one in the queue
 	// was the same.
-	if d.mostRecentStatus == status {
+	if d.mostRecentStatusReceived == status {
 		return
 	}
+	d.mostRecentStatusReceived = status
 
 	// If the last message on the queue was a status message then replace it.
 	// this prevents us from growing the queue without bound if status is
@@ -80,7 +82,6 @@ func (d *DedupeBuffer) OnStatusUpdated(status api.SyncStatus) {
 	if back := d.pendingUpdates.Back(); back != nil {
 		if _, ok := back.Value.(api.SyncStatus); ok {
 			back.Value = status
-			d.mostRecentStatus = status
 			return
 		}
 	}
@@ -88,7 +89,6 @@ func (d *DedupeBuffer) OnStatusUpdated(status api.SyncStatus) {
 	// Add the status to the queue.
 	queueWasEmpty := d.pendingUpdates.Len() == 0
 	d.pendingUpdates.PushBack(status)
-	d.mostRecentStatus = status
 	if queueWasEmpty {
 		// Only need to signal when the first item goes on the queue.
 		d.cond.Signal()
@@ -184,8 +184,10 @@ func (d *DedupeBuffer) OnUpdatesKeysKnown(updates []api.Update, keys []string) {
 }
 
 func (d *DedupeBuffer) SendToSinkForever(sink api.SyncerCallbacks) {
+	d.lock.Lock()
+	defer d.lock.Unlock()
 	for !d.stopped {
-		d.sendNextBatchToSink(sink)
+		d.sendNextBatchToSinkLockHeld(sink)
 	}
 }
 
@@ -201,9 +203,22 @@ type updateWithStringKey struct {
 	update api.Update
 }
 
-func (d *DedupeBuffer) sendNextBatchToSink(sink api.SyncerCallbacks) {
+var ErrEmptyQueue = fmt.Errorf("queue is empty")
+
+// sendNextBatchToSinkNoBlock is intended for use in tests, to allow one
+// batch of updates to be processed synchronously.  It returns ErrEmptyQueue
+// if there's nothing to process.
+func (d *DedupeBuffer) sendNextBatchToSinkNoBlock(sink api.SyncerCallbacks) error {
 	d.lock.Lock()
 	defer d.lock.Unlock()
+	if d.pendingUpdates.Len() == 0 {
+		return ErrEmptyQueue
+	}
+	d.sendNextBatchToSinkLockHeld(sink)
+	return nil
+}
+
+func (d *DedupeBuffer) sendNextBatchToSinkLockHeld(sink api.SyncerCallbacks) {
 	for d.pendingUpdates.Len() == 0 {
 		if d.stopped {
 			return
@@ -245,7 +260,10 @@ func (d *DedupeBuffer) pullNextBatch(buf []any, batchSize int) []any {
 }
 
 func (d *DedupeBuffer) dropLockAndSendBatch(sink api.SyncerCallbacks, buf []any) {
-	// RELEASE(!) lock while we send updates downstream.
+	// RELEASE(!) lock while we send updates downstream.  We may block in this
+	// method for a long time if downstream is slow.  Meanwhile, we want the
+	// sender to be able to be able to add more items to the queue and to
+	// be able to do the dedupe work if needed.
 	d.lock.Unlock()
 	defer d.lock.Lock()
 

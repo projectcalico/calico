@@ -47,7 +47,7 @@ func TestDedupeBuffer_SyncNoDupes(t *testing.T) {
 			onUpdates([]api.Update{KVUpdate("foo2", "bar2")})
 			d.OnStatusUpdated(api.InSync)
 
-			applyNextBatchSync(d, rec)
+			sendNextBatchSync(d, rec)
 
 			Expect(rec.FinalValues()).To(Equal(map[string]string{
 				"foo":  "bar",
@@ -65,7 +65,7 @@ func TestDedupeBuffer_SyncNoDupes(t *testing.T) {
 			// Now send in a deletion.
 			rec.ResetUpdatesSeen()
 			onUpdates([]api.Update{KVUpdate("foo", "")})
-			applyNextBatchSync(d, rec)
+			sendNextBatchSync(d, rec)
 			Expect(rec.FinalValues()).To(Equal(map[string]string{
 				"foo2": "bar2",
 			}))
@@ -78,7 +78,7 @@ func TestDedupeBuffer_SyncNoDupes(t *testing.T) {
 			rec.ResetUpdatesSeen()
 			onUpdates([]api.Update{KVUpdate("foo2", "")})
 			onUpdates([]api.Update{KVUpdate("foo2", "bar3")})
-			applyNextBatchSync(d, rec)
+			sendNextBatchSync(d, rec)
 			Expect(rec.FinalValues()).To(Equal(map[string]string{
 				"foo2": "bar3",
 			}))
@@ -91,7 +91,7 @@ func TestDedupeBuffer_SyncNoDupes(t *testing.T) {
 			rec.ResetUpdatesSeen()
 			onUpdates([]api.Update{KVUpdate("foo", "bar")})
 			onUpdates([]api.Update{KVUpdate("foo2", "bar2")})
-			applyNextBatchSync(d, rec)
+			sendNextBatchSync(d, rec)
 			Expect(rec.FinalValues()).To(Equal(map[string]string{
 				"foo":  "bar",
 				"foo2": "bar2",
@@ -126,7 +126,7 @@ func TestDedupeBuffer_SyncWithDupes(t *testing.T) {
 			d.OnStatusUpdated(api.ResyncInProgress)
 			d.OnStatusUpdated(api.InSync)
 
-			applyNextBatchSync(d, rec)
+			sendNextBatchSync(d, rec)
 
 			Expect(rec.FinalValues()).To(Equal(map[string]string{
 				"foo":  "bar3",
@@ -144,9 +144,8 @@ func TestDedupeBuffer_SyncWithDupes(t *testing.T) {
 	}
 }
 
-func applyNextBatchSync(d *DedupeBuffer, r *Receiver) {
-	Expect(d.pendingUpdates.Len()).NotTo(BeZero(), "Nothing on queue, sendNextBatchToSink would block")
-	d.sendNextBatchToSink(r)
+func sendNextBatchSync(d *DedupeBuffer, r *Receiver) {
+	ExpectWithOffset(1, d.sendNextBatchToSinkNoBlock(r)).NotTo(HaveOccurred())
 }
 
 func wrapOnUpdates(d *DedupeBuffer, onUpdatesVersion string) func(updates []api.Update) {
