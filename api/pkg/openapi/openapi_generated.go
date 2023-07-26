@@ -2391,21 +2391,21 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"logSeverityFile": {
 						SchemaProps: spec.SchemaProps{
-							Description: "LogSeverityFile is the log severity above which logs are sent to the log file. [Default: Info] kubebuilder:validation:Pattern=`^(?i)(Debug|Info|Warning|Error|Fatal)?$`",
+							Description: "LogSeverityFile is the log severity above which logs are sent to the log file. [Default: Info]",
 							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
 					"logSeverityScreen": {
 						SchemaProps: spec.SchemaProps{
-							Description: "LogSeverityScreen is the log severity above which logs are sent to the stdout. [Default: Info] kubebuilder:validation:Pattern=`^(?i)(Debug|Info|Warning|Error|Fatal)?$`",
+							Description: "LogSeverityScreen is the log severity above which logs are sent to the stdout. [Default: Info]",
 							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
 					"logSeveritySys": {
 						SchemaProps: spec.SchemaProps{
-							Description: "LogSeveritySys is the log severity above which logs are sent to the syslog. Set to None for no logging to syslog. [Default: Info] kubebuilder:validation:Pattern=`^(?i)(Debug|Info|Warning|Error|Fatal)?$`",
+							Description: "LogSeveritySys is the log severity above which logs are sent to the syslog. Set to None for no logging to syslog. [Default: Info]",
 							Type:        []string{"string"},
 							Format:      "",
 						},
