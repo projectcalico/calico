@@ -40,7 +40,11 @@ ci-preflight-checks:
 	$(MAKE) check-dirty
 
 update-versions:
-	$(MAKE) -C hack/versions update-versions
+	@$(MAKE) -C hack/versions update-versions
+
+commit-versions-manifests: bin/yq
+	@hack/versions/commit_update_versions.sh
+	$(MAKE) check-dirty
 
 check-language:
 	./hack/check-language.sh
