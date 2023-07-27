@@ -14,11 +14,9 @@
 package winupgrade
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"strings"
@@ -34,6 +32,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 
+	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 	"github.com/projectcalico/calico/node/pkg/lifecycle/utils"
 
 	log "github.com/sirupsen/logrus"
@@ -83,7 +82,7 @@ func Run() {
 		log.WithError(err).Fatal("Failed to create Kubernetes client")
 	}
 
-	stdout, stderr, err := powershell("Get-ComputerInfo | select WindowsVersion, OsBuildNumber, OsHardwareAbstractionLayer")
+	stdout, stderr, err := winutils.Powershell("Get-ComputerInfo | select WindowsVersion, OsBuildNumber, OsHardwareAbstractionLayer")
 	fmt.Println(stdout, stderr)
 	if err != nil {
 		log.WithError(err).Fatal("Failed to interact with powershell")
@@ -208,7 +207,7 @@ func kubeConfigFile() string {
 func uninstall() error {
 	path := filepath.Join(baseDir(), "uninstall-calico.ps1")
 	log.Infof("Start uninstall script %s\n", path)
-	stdout, stderr, err := powershell(path + " -ExceptUpgradeService $true")
+	stdout, stderr, err := winutils.Powershell(path + " -ExceptUpgradeService $true")
 	fmt.Println(stdout, stderr)
 	if err != nil {
 		return err
@@ -216,7 +215,7 @@ func uninstall() error {
 	// After the uninstall completes, move the existing calico-node.exe to
 	// a temporary file. The calico-upgrade service is still running so not
 	// doing this means we cannot replace calico-node.exe with the upgrade.
-	stdout, stderr, err = powershell(fmt.Sprintf(`mv %v\calico-node.exe %v\calico-node.exe.to-be-replaced`, baseDir(), baseDir()))
+	stdout, stderr, err = winutils.Powershell(fmt.Sprintf(`mv %v\calico-node.exe %v\calico-node.exe.to-be-replaced`, baseDir(), baseDir()))
 	fmt.Println(stdout, stderr)
 	if err != nil {
 		return err
@@ -234,7 +233,7 @@ func execScript(script string) error {
 	// process running the upgrade script is killed and the installation is left
 	// incomplete.
 	cmd := fmt.Sprintf(`Start-Process powershell -argument %q -WindowStyle hidden`, script)
-	stdout, stderr, err := powershell(cmd)
+	stdout, stderr, err := winutils.Powershell(cmd)
 
 	if err != nil {
 		return err
@@ -386,26 +385,4 @@ func verifyPodImageWithHostPathVolume(cs kubernetes.Interface, nodeName string, 
 		return err
 	}
 	return nil
-}
-
-func powershell(args ...string) (string, string, error) {
-	ps, err := exec.LookPath("powershell.exe")
-	if err != nil {
-		return "", "", err
-	}
-
-	args = append([]string{"-NoProfile", "-NonInteractive"}, args...)
-	cmd := exec.Command(ps, args...)
-
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	err = cmd.Run()
-	if err != nil {
-		return "", "", err
-	}
-
-	return stdout.String(), stderr.String(), err
 }
