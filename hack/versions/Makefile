@@ -7,4 +7,4 @@ PYTHON_DOCKER_IMAGE?=python:3.11
 
 # Meant to be run on the remote VM
 update-versions:
-	@docker run -it --rm -v $(GIT_TOPLEVEL):/work -w /work $(PYTHON_DOCKER_IMAGE) /work/hack/versions/prepare_update_versions.sh
+	@docker run --rm -v $(GIT_TOPLEVEL):/work -w /work $(PYTHON_DOCKER_IMAGE) /work/hack/versions/prepare_update_versions.sh
