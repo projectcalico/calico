@@ -303,7 +303,7 @@ image-windows: setup-windows-builder Dockerfile-windows build fetch-win-cni-bins
 		image="$${registry}/$(CNI_PLUGIN_IMAGE_WINDOWS):$${image_version}"; \
 		docker buildx build \
 			--platform windows/amd64 \
-			--output=type=image,push=$* \
+			--output=type=image,push=$${push} \
 			-t $${image} \
 			--pull \
 			--no-cache \
