@@ -20,7 +20,7 @@ if [[ ! -f $YQ ]]; then
 fi
 
 # Get versions to install.
-defaultCalicoVersion=$($YQ '.[0].title' ../calico/_data/versions.yml)
+defaultCalicoVersion=$($YQ '.version' ../charts/calico/values.yaml)
 CALICO_VERSION=${CALICO_VERSION:-$defaultCalicoVersion}
 
 defaultRegistry=quay.io
