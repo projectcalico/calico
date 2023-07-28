@@ -17,6 +17,7 @@ package infrastructure
 import (
 	"context"
 	"fmt"
+	"net"
 	"os"
 	"regexp"
 	"sync"
@@ -62,6 +63,8 @@ type TopologyOptions struct {
 	FelixStopGraceful         bool
 	ExternalIPs               bool
 	UseIPPools                bool
+	IPPoolCIDR                string
+	IPv6PoolCIDR              string
 	NeedNodeIP                bool
 }
 
@@ -82,6 +85,8 @@ func DefaultTopologyOptions() TopologyOptions {
 		TyphaLogSeverity:  "info",
 		IPIPEnabled:       true,
 		IPIPRoutesEnabled: true,
+		IPPoolCIDR:        DefaultIPPoolCIDR,
+		IPv6PoolCIDR:      DefaultIPv6PoolCIDR,
 		UseIPPools:        true,
 	}
 }
@@ -99,7 +104,7 @@ func CreateDefaultIPPoolFromOpts(ctx context.Context, client client.Interface, o
 	switch ipVersion {
 	case 4:
 		ipPool.Name = DefaultIPPoolName
-		ipPool.Spec.CIDR = DefaultIPPoolCIDR
+		ipPool.Spec.CIDR = opts.IPPoolCIDR
 
 		// IPIP is only supported on IPv4
 		if opts.IPIPEnabled {
@@ -109,7 +114,7 @@ func CreateDefaultIPPoolFromOpts(ctx context.Context, client client.Interface, o
 		}
 	case 6:
 		ipPool.Name = DefaultIPv6PoolName
-		ipPool.Spec.CIDR = DefaultIPv6PoolCIDR
+		ipPool.Spec.CIDR = opts.IPv6PoolCIDR
 	default:
 		log.WithField("ipVersion", ipVersion).Panic("Unknown IP version")
 	}
@@ -282,6 +287,10 @@ func StartNNodeTopology(n int, opts TopologyOptions, infra DatastoreInfra) (feli
 	}
 	wg.Wait()
 
+	_, IPv4CIDR, err := net.ParseCIDR(opts.IPPoolCIDR)
+	Expect(err).To(BeNil())
+	_, IPv6CIDR, err := net.ParseCIDR(opts.IPv6PoolCIDR)
+	Expect(err).To(BeNil())
 	for i := 0; i < n; i++ {
 		opts.ExtraEnvVars["BPF_LOG_PFX"] = ""
 		felix := felixes[i]
@@ -291,31 +300,31 @@ func StartNNodeTopology(n int, opts TopologyOptions, infra DatastoreInfra) (feli
 			Expect(felix.IPv6).ToNot(BeEmpty(), "IPv6 enabled but Felix didn't get an IPv6 address, is docker configured for IPv6?")
 		}
 		expectedIPs := []string{felix.IP}
-
 		if kdd, ok := infra.(*K8sDatastoreInfra); ok && opts.ExternalIPs {
 			kdd.SetExternalIP(felix, i)
 			expectedIPs = append(expectedIPs, felix.ExternalIP)
 		}
+
 		setUpBGPNodeIPAndIPIPTunnelIP := n > 1 || opts.NeedNodeIP
 		if opts.IPIPEnabled {
-			infra.SetExpectedIPIPTunnelAddr(felix, i, setUpBGPNodeIPAndIPIPTunnelIP)
+			infra.SetExpectedIPIPTunnelAddr(felix, IPv4CIDR, i, setUpBGPNodeIPAndIPIPTunnelIP)
 			expectedIPs = append(expectedIPs, felix.ExpectedIPIPTunnelAddr)
 		}
 		if opts.VXLANMode != api.VXLANModeNever {
-			infra.SetExpectedVXLANTunnelAddr(felix, i, n > 1)
+			infra.SetExpectedVXLANTunnelAddr(felix, IPv4CIDR, i, n > 1)
 			expectedIPs = append(expectedIPs, felix.ExpectedVXLANTunnelAddr)
 			if opts.EnableIPv6 {
 				expectedIPs = append(expectedIPs, felix.IPv6)
-				infra.SetExpectedVXLANV6TunnelAddr(felix, i, n > 1)
+				infra.SetExpectedVXLANV6TunnelAddr(felix, IPv6CIDR, i, n > 1)
 				expectedIPs = append(expectedIPs, felix.ExpectedVXLANV6TunnelAddr)
 			}
 		}
 		if opts.WireguardEnabled {
-			infra.SetExpectedWireguardTunnelAddr(felix, i, n > 1)
+			infra.SetExpectedWireguardTunnelAddr(felix, IPv4CIDR, i, n > 1)
 			expectedIPs = append(expectedIPs, felix.ExpectedWireguardTunnelAddr)
 		}
 		if opts.WireguardEnabledV6 {
-			infra.SetExpectedWireguardV6TunnelAddr(felix, i, n > 1)
+			infra.SetExpectedWireguardV6TunnelAddr(felix, IPv6CIDR, i, n > 1)
 			expectedIPs = append(expectedIPs, felix.ExpectedWireguardV6TunnelAddr)
 		}
 
@@ -333,7 +342,7 @@ func StartNNodeTopology(n int, opts TopologyOptions, infra DatastoreInfra) (feli
 			// infra isn't doing what we expect.
 			log.Panic("NeedNodeIP set but infra didn't set ExpectedIPIPTunnelAddr.")
 		}
-		infra.AddNode(felix, i, setUpBGPNodeIPAndIPIPTunnelIP)
+		infra.AddNode(felix, IPv4CIDR, IPv6CIDR, i, setUpBGPNodeIPAndIPIPTunnelIP)
 		if w != nil {
 			// Wait for any expected Felix restart...
 			log.Info("Wait for Felix to restart")
@@ -379,7 +388,7 @@ func StartNNodeTopology(n int, opts TopologyOptions, infra DatastoreInfra) (feli
 			go func(i, j int, iFelix, jFelix *Felix) {
 				defer wg.Done()
 				defer ginkgo.GinkgoRecover()
-				jBlock := fmt.Sprintf("10.65.%d.0/24", j)
+				jBlock := fmt.Sprintf("%d.%d.%d.0/24", IPv4CIDR.IP[0], IPv4CIDR.IP[1], j)
 				if opts.IPIPEnabled && opts.IPIPRoutesEnabled {
 					// Can get "Nexthop device is not up" error here if tunl0 device is
 					// not ready yet, which can happen especially if Felix start was
@@ -393,7 +402,7 @@ func StartNNodeTopology(n int, opts TopologyOptions, infra DatastoreInfra) (feli
 					Expect(err).ToNot(HaveOccurred())
 				}
 				if opts.EnableIPv6 {
-					jBlockV6 := fmt.Sprintf("dead:beef::100:%d:0/96", j)
+					jBlockV6 := fmt.Sprintf("%x%x:%x%x:%x%x:%x%x:%x%x:100:%d:0/96", IPv6CIDR.IP[0], IPv6CIDR.IP[1], IPv6CIDR.IP[2], IPv6CIDR.IP[3], IPv6CIDR.IP[4], IPv6CIDR.IP[5], IPv6CIDR.IP[6], IPv6CIDR.IP[7], IPv6CIDR.IP[8], IPv6CIDR.IP[9], j)
 					if opts.VXLANMode == api.VXLANModeNever && !opts.IPIPRoutesEnabled {
 						// If VXLAN is enabled, Felix will program these routes itself.
 						// If IPIP routes are enabled, these routes will conflict with configured ones and a 'RTNETLINK answers: File exists' error would occur.
