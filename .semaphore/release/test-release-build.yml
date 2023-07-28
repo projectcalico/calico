@@ -1,0 +1,53 @@
+version: v1.0
+name: Test build official release
+agent:
+  machine:
+    type: e1-standard-4
+    os_image: ubuntu2004
+
+execution_time_limit:
+  minutes: 600
+
+blocks:
+  - name: "Test build official release"
+    task:
+      secrets:
+      - name: quay-robot-calico+semaphoreci
+      - name: docker
+      - name: oss-release-secrets
+      - name: google-service-account-for-gce
+      prologue:
+        commands:
+        # Load the github access secrets.  First fix the permissions.
+        - chmod 0600 /home/semaphore/.keys/git_ssh_rsa
+        - ssh-add /home/semaphore/.keys/git_ssh_rsa
+        # Checkout the code and unshallow it.
+        - checkout
+        - retry git fetch --unshallow
+        # Semaphore mounts a copy-on-write FS as /var/lib/docker in order to provide a pre-loaded cache of
+        # some images. However, the cache is not useful to us and the copy-on-write FS is a big problem given
+        # how much we churn docker containers during the build.  Disable it.
+        - sudo systemctl stop docker
+        - sudo umount /var/lib/docker && sudo killall qemu-nbd || true
+        - sudo systemctl start docker
+        # Free up space on the build machine.
+        - sudo rm -rf ~/.kiex ~/.phpbrew ~/.rbenv ~/.nvm ~/.kerl ~/.sbt ~/.npm /usr/lib/jvm /opt/firefox* /opt/apache-maven* /opt/scala /usr/local/golang
+        # Credentials for accessing gcloud, needed to create a GCP VM.
+        - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/secret.google-service-account-key.json
+        - gcloud auth activate-service-account --key-file=${GOOGLE_APPLICATION_CREDENTIALS}
+      jobs:
+      - name: "Test release on GCP VM"
+        execution_time_limit:
+          minutes: 180
+        env_vars:
+        - name: VAR_FILE
+          value: /home/semaphore/secrets/release-test.tfvars
+        commands:
+        - make GIT_BRANCH=${SEMAPHORE_GIT_BRANCH} -C hack/release apply
+        - make GIT_BRANCH=${SEMAPHORE_GIT_BRANCH} -C hack/release test-remote-fetch
+        - make GIT_BRANCH=${SEMAPHORE_GIT_BRANCH} -C hack/release update-versions-remote
+        - make GIT_BRANCH=${SEMAPHORE_GIT_BRANCH} -C hack/release test-remote-build-release
+      epilogue:
+        always:
+          commands:
+          - make -C hack/release destroy
