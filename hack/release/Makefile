@@ -18,6 +18,9 @@ test-remote-fetch: .vm.created
 update-versions-remote: .vm.created
 	./remote-execute.sh "cd calico && make update-versions generate"
 
+commit-versions-remote: .vm.created
+	./remote-execute.sh "cd calico && make commit-versions-manifests"
+
 test-remote-build-release: .vm.created
 	./remote-execute.sh "cd calico && make release"
 
