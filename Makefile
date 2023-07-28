@@ -40,7 +40,11 @@ ci-preflight-checks:
 	$(MAKE) check-dirty
 
 update-versions:
-	$(MAKE) -C hack/versions update-versions
+	@$(MAKE) -C hack/versions update-versions
+
+commit-versions-manifests: bin/yq
+	@hack/versions/commit_update_versions.sh
+	$(MAKE) check-dirty
 
 check-language:
 	./hack/check-language.sh
@@ -54,7 +58,7 @@ generate:
 	$(MAKE) -C app-policy protobuf
 	$(MAKE) gen-manifests
 
-gen-manifests: bin/helm
+gen-manifests: bin/helm bin/yq
 	cd ./manifests && \
 		OPERATOR_VERSION=$(OPERATOR_VERSION) \
 		CALICO_VERSION=$(CALICO_VERSION) \
