@@ -44,9 +44,11 @@ blocks:
           value: /home/semaphore/secrets/release-test.tfvars
         commands:
         - make GIT_BRANCH=${SEMAPHORE_GIT_BRANCH} -C hack/release apply
-        - make GIT_BRANCH=${SEMAPHORE_GIT_BRANCH} -C hack/release test-remote-fetch
+        - make GIT_BRANCH=${SEMAPHORE_GIT_BRANCH} -C hack/release git-fetch-remote
         - make GIT_BRANCH=${SEMAPHORE_GIT_BRANCH} -C hack/release update-versions-remote
-        - make GIT_BRANCH=${SEMAPHORE_GIT_BRANCH} -C hack/release test-remote-build-release
+        - make GIT_BRANCH=${SEMAPHORE_GIT_BRANCH} -C hack/release generate-manifests-remote
+        - make GIT_BRANCH=${SEMAPHORE_GIT_BRANCH} -C hack/release commit-versions-remote
+        - make GIT_BRANCH=${SEMAPHORE_GIT_BRANCH} -C hack/release build-release-remote
       epilogue:
         always:
           commands:
