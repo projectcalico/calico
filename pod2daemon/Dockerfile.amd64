@@ -23,7 +23,7 @@ RUN touch /in-the-container
 RUN mkdir /licenses
 COPY LICENSE /licenses
 
-RUN microdnf update
+RUN microdnf upgrade
 
 SHELL ["/bin/bash", "-c"]
 RUN  /usr/local/bin/clean.sh "/usr/local/bin/flexvol.sh" "/bin/cp" "/bin/chmod" "/bin/mv" "/bin/mount" "/bin/umount"
