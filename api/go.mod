@@ -5,8 +5,8 @@ go 1.16
 require (
 	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/imdario/mergo v0.3.8 // indirect
-	github.com/onsi/ginkgo v1.16.4
-	github.com/onsi/gomega v1.20.1
+	github.com/onsi/ginkgo v1.16.5
+	github.com/onsi/gomega v1.27.8
 	k8s.io/api v0.25.6
 	k8s.io/apimachinery v0.25.6
 	k8s.io/client-go v0.25.6
