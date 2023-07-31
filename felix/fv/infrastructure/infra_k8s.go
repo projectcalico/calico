@@ -94,7 +94,14 @@ var (
 		Transport: insecureTransport,
 	}
 
-	K8sInfra *K8sDatastoreInfra
+	// Currently only require a single instance.
+	K8sInfra [1]*K8sDatastoreInfra
+)
+
+type K8sInfraIndex int
+
+const (
+	K8SInfraLocalCluster K8sInfraIndex = 0
 )
 
 func TearDownK8sInfra(kds *K8sDatastoreInfra) {
@@ -137,31 +144,31 @@ func TearDownK8sInfra(kds *K8sDatastoreInfra) {
 }
 
 func createK8sDatastoreInfra() DatastoreInfra {
-	infra, err := GetK8sDatastoreInfra()
+	infra, err := GetK8sDatastoreInfra(K8SInfraLocalCluster)
 	Expect(err).NotTo(HaveOccurred())
 	return infra
 }
 
-func GetK8sDatastoreInfra() (*K8sDatastoreInfra, error) {
-	if K8sInfra != nil {
-		if K8sInfra.runningTest != "" {
-			ginkgo.Fail(fmt.Sprintf("Previous test didn't clean up the infra: %s", K8sInfra.runningTest))
+func GetK8sDatastoreInfra(index K8sInfraIndex) (*K8sDatastoreInfra, error) {
+	if K8sInfra[index] != nil {
+		if K8sInfra[index].runningTest != "" {
+			ginkgo.Fail(fmt.Sprintf("Previous test didn't clean up the infra: %s", K8sInfra[index].runningTest))
 		}
-		K8sInfra.EnsureReady()
-		K8sInfra.PerTestSetup()
-		return K8sInfra, nil
+		K8sInfra[index].EnsureReady()
+		K8sInfra[index].PerTestSetup(index)
+		return K8sInfra[index], nil
 	}
 
 	var err error
-	K8sInfra, err = setupK8sDatastoreInfra()
+	K8sInfra[index], err = setupK8sDatastoreInfra()
 	if err == nil {
-		K8sInfra.PerTestSetup()
+		K8sInfra[index].PerTestSetup(index)
 	}
 
-	return K8sInfra, err
+	return K8sInfra[index], err
 }
 
-func (kds *K8sDatastoreInfra) PerTestSetup() {
+func (kds *K8sDatastoreInfra) PerTestSetup(index K8sInfraIndex) {
 	// In BPF mode, start BPF logging.
 	arch := utils.GetSysArch()
 
@@ -173,7 +180,7 @@ func (kds *K8sDatastoreInfra) PerTestSetup() {
 			}, "--privileged",
 			"calico/bpftool:v5.3-"+arch, "/bpftool", "prog", "tracelog")
 	}
-	K8sInfra.runningTest = ginkgo.CurrentGinkgoTestDescription().FullTestText
+	K8sInfra[index].runningTest = ginkgo.CurrentGinkgoTestDescription().FullTestText
 }
 
 func runK8sApiserver(etcdIp string) *containers.Container {
