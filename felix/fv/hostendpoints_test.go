@@ -133,7 +133,17 @@ func describeHostEndpointTests(getInfra infrastructure.InfraFactory, allInterfac
 			serviceIP := fmt.Sprintf("10.101.0.%v", i+20)
 			svcName := fmt.Sprintf("test-svc-%v", i+20)
 
-			createK8sServiceWithoutKubeProxy(infra, tc.Felixes[i], w[i], svcName, serviceIP, w[i].IP, port, tgtPort, "OUTPUT")
+			createK8sServiceWithoutKubeProxy(createK8sServiceWithoutKubeProxyArgs{
+				infra:     infra,
+				felix:     tc.Felixes[i],
+				w:         w[i],
+				svcName:   svcName,
+				serviceIP: serviceIP,
+				targetIP:  w[i].IP,
+				port:      port,
+				tgtPort:   tgtPort,
+				chain:     "OUTPUT",
+			})
 
 			// Expect connectivity to the service IP.
 			cc.ExpectSome(tc.Felixes[i], connectivity.TargetIP(serviceIP), uint16(port))
@@ -149,7 +159,17 @@ func describeHostEndpointTests(getInfra infrastructure.InfraFactory, allInterfac
 			serviceIP := fmt.Sprintf("10.101.10.%v", i+10)
 			svcName := fmt.Sprintf("test-svc-%v", i+10)
 
-			createK8sServiceWithoutKubeProxy(infra, tc.Felixes[i], w[1-i], svcName, serviceIP, w[1-i].IP, port, tgtPort, "OUTPUT")
+			createK8sServiceWithoutKubeProxy(createK8sServiceWithoutKubeProxyArgs{
+				infra:     infra,
+				felix:     tc.Felixes[i],
+				w:         w[1-i],
+				svcName:   svcName,
+				serviceIP: serviceIP,
+				targetIP:  w[1-i].IP,
+				port:      port,
+				tgtPort:   tgtPort,
+				chain:     "OUTPUT",
+			})
 
 			// Expect not to be able to connect to the service IP.
 			cc.ExpectNone(tc.Felixes[i], connectivity.TargetIP(serviceIP), uint16(port))
@@ -168,7 +188,17 @@ func describeHostEndpointTests(getInfra infrastructure.InfraFactory, allInterfac
 			// Allocate a service IP.
 			serviceIP := fmt.Sprintf("10.101.10.%v", i)
 			svcName := fmt.Sprintf("test-svc-%v", i)
-			createK8sServiceWithoutKubeProxy(infra, tc.Felixes[i], w[1-i], svcName, serviceIP, w[1-i].IP, port, tgtPort, "PREROUTING")
+			createK8sServiceWithoutKubeProxy(createK8sServiceWithoutKubeProxyArgs{
+				infra:     infra,
+				felix:     tc.Felixes[i],
+				w:         w[1-i],
+				svcName:   svcName,
+				serviceIP: serviceIP,
+				targetIP:  w[1-i].IP,
+				port:      port,
+				tgtPort:   tgtPort,
+				chain:     "PREROUTING",
+			})
 
 			// Expect to connect from local pod to the service IP.
 			cc.ExpectSome(w[i], connectivity.TargetIP(serviceIP), uint16(port))

@@ -320,7 +320,17 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 				port := 8055
 				tgtPort := 8055
 
-				createK8sServiceWithoutKubeProxy(infra, tc.Felixes[0], w[1], "test-svc", serviceIP, w[1].IP, port, tgtPort, "OUTPUT")
+				createK8sServiceWithoutKubeProxy(createK8sServiceWithoutKubeProxyArgs{
+					infra:     infra,
+					felix:     tc.Felixes[0],
+					w:         w[1],
+					svcName:   "test-svc",
+					serviceIP: serviceIP,
+					targetIP:  w[1].IP,
+					port:      port,
+					tgtPort:   tgtPort,
+					chain:     "OUTPUT",
+				})
 				// Expect to connect to the service IP.
 				cc.ExpectSome(tc.Felixes[0], connectivity.TargetIP(serviceIP), uint16(port))
 				cc.CheckConnectivity()
@@ -491,17 +501,30 @@ func getIPSetCounts(c *containers.Container) map[string]int {
 	return numMembers
 }
 
-func createK8sServiceWithoutKubeProxy(infra infrastructure.DatastoreInfra, felix *infrastructure.Felix, w *workload.Workload, svcName, serviceIP, targetIP string, port, tgtPort int, chain string) {
+type createK8sServiceWithoutKubeProxyArgs struct {
+	infra     infrastructure.DatastoreInfra
+	felix     *infrastructure.Felix
+	w         *workload.Workload
+	svcName   string
+	serviceIP string
+	targetIP  string
+	port      int
+	tgtPort   int
+	chain     string
+	ipv6      bool
+}
+
+func createK8sServiceWithoutKubeProxy(args createK8sServiceWithoutKubeProxyArgs) {
 	if BPFMode() {
-		k8sClient := infra.(*infrastructure.K8sDatastoreInfra).K8sClient
-		testSvc := k8sService(svcName, serviceIP, w, port, tgtPort, 0, "tcp")
+		k8sClient := args.infra.(*infrastructure.K8sDatastoreInfra).K8sClient
+		testSvc := k8sService(args.svcName, args.serviceIP, args.w, args.port, args.tgtPort, 0, "tcp")
 		testSvcNamespace := testSvc.ObjectMeta.Namespace
 		_, err := k8sClient.CoreV1().Services(testSvcNamespace).Create(context.Background(), testSvc, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(1),
 			"Service endpoints didn't get created? Is controller-manager happy?")
 	}
-	felix.ProgramIptablesDNAT(serviceIP, targetIP, chain)
+	args.felix.ProgramIptablesDNAT(args.serviceIP, args.targetIP, args.chain)
 }
 
 func getDataStoreType(infra infrastructure.DatastoreInfra) string {
