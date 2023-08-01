@@ -55,7 +55,7 @@ var _ = Context("_POL-SYNC_ _BPF-SAFE_ policy sync API tests", func() {
 
 	var (
 		etcd              *containers.Container
-		felix             *infrastructure.Felix
+		tc                infrastructure.TopologyContainers
 		calicoClient      client.Interface
 		infra             infrastructure.DatastoreInfra
 		w                 [3]*workload.Workload
@@ -78,13 +78,13 @@ var _ = Context("_POL-SYNC_ _BPF-SAFE_ policy sync API tests", func() {
 		// options.ExtraEnvVars["FELIX_DebugDisableLogDropping"] = "true"
 		// options.FelixLogSeverity = "debug"
 		options.ExtraVolumes[tempDir] = "/var/run/calico/policysync"
-		felix, etcd, calicoClient, infra = infrastructure.StartSingleNodeEtcdTopology(options)
+		tc, etcd, calicoClient, infra = infrastructure.StartSingleNodeEtcdTopology(options)
 		infrastructure.CreateDefaultProfile(calicoClient, "default", map[string]string{"default": ""}, "default == ''")
 
 		// Create three workloads, using that profile.
 		for ii := range w {
 			iiStr := strconv.Itoa(ii)
-			w[ii] = workload.Run(felix, "w"+iiStr, "default", "10.65.0.1"+iiStr, "8055", "tcp")
+			w[ii] = workload.Run(tc.Felixes[0], "w"+iiStr, "default", "10.65.0.1"+iiStr, "8055", "tcp")
 			w[ii].WorkloadEndpoint.Spec.Endpoint = "eth0"
 			w[ii].WorkloadEndpoint.Spec.Orchestrator = "k8s"
 			w[ii].WorkloadEndpoint.Spec.Pod = "fv-pod-" + iiStr
@@ -98,7 +98,7 @@ var _ = Context("_POL-SYNC_ _BPF-SAFE_ policy sync API tests", func() {
 		for ii := range w {
 			w[ii].Stop()
 		}
-		felix.Stop()
+		tc.Stop()
 
 		if CurrentGinkgoTestDescription().Failed {
 			etcd.Exec("etcdctl", "get", "/", "--prefix", "--keys-only")
@@ -225,7 +225,7 @@ var _ = Context("_POL-SYNC_ _BPF-SAFE_ policy sync API tests", func() {
 						// Use the fact that anything we exec inside the Felix container runs as root to fix the
 						// permissions on the socket so the test process can connect.
 						Eventually(hostWlSocketPath[i], "3s").Should(BeAnExistingFile())
-						felix.Exec("chmod", "a+rw", containerWlSocketPath[i])
+						tc.Felixes[0].Exec("chmod", "a+rw", containerWlSocketPath[i])
 						wlConn[i], wlClient[i] = createWorkloadConn(i)
 					}
 				})

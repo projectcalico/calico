@@ -68,6 +68,21 @@ type TopologyOptions struct {
 	NeedNodeIP                bool
 }
 
+// Calico containers created during topology creation.
+type TopologyContainers struct {
+	Felixes []*Felix
+	Typha   *Typha
+}
+
+func (c *TopologyContainers) Stop() {
+	for _, felix := range c.Felixes {
+		felix.Stop()
+	}
+	if c.Typha != nil {
+		c.Typha.Stop()
+	}
+}
+
 func DefaultTopologyOptions() TopologyOptions {
 	felixLogLevel := "Info"
 	if envLogLevel := os.Getenv("FV_FELIX_LOG_LEVEL"); envLogLevel != "" {
@@ -134,9 +149,8 @@ func DeleteDefaultIPPool(ctx context.Context, client client.Interface) (*api.IPP
 
 // StartSingleNodeEtcdTopology starts an etcd container and a single Felix container; it initialises
 // the datastore and installs a Node resource for the Felix node.
-func StartSingleNodeEtcdTopology(options TopologyOptions) (felix *Felix, etcd *containers.Container, calicoClient client.Interface, infra DatastoreInfra) {
-	felixes, etcd, calicoClient, infra := StartNNodeEtcdTopology(1, options)
-	felix = felixes[0]
+func StartSingleNodeEtcdTopology(options TopologyOptions) (tc TopologyContainers, etcd *containers.Container, calicoClient client.Interface, infra DatastoreInfra) {
+	tc, etcd, calicoClient, infra = StartNNodeEtcdTopology(1, options)
 	return
 }
 
@@ -148,7 +162,7 @@ func StartSingleNodeEtcdTopology(options TopologyOptions) (felix *Felix, etcd *c
 //   - Configures routes between the hosts, giving each host 10.65.x.0/24, where x is the
 //     index in the returned array.  When creating workloads, use IPs from the relevant block.
 //   - Configures the Tunnel IP for each host as 10.65.x.1.
-func StartNNodeEtcdTopology(n int, opts TopologyOptions) (felixes []*Felix, etcd *containers.Container, client client.Interface, infra DatastoreInfra) {
+func StartNNodeEtcdTopology(n int, opts TopologyOptions) (tc TopologyContainers, etcd *containers.Container, client client.Interface, infra DatastoreInfra) {
 	log.Infof("Starting a %d-node etcd topology.", n)
 
 	eds, err := GetEtcdDatastoreInfra()
@@ -156,20 +170,19 @@ func StartNNodeEtcdTopology(n int, opts TopologyOptions) (felixes []*Felix, etcd
 	etcd = eds.etcdContainer
 	infra = eds
 
-	felixes, client = StartNNodeTopology(n, opts, eds)
+	tc, client = StartNNodeTopology(n, opts, eds)
 
 	return
 }
 
-// StartSingleNodeEtcdTopology starts an etcd container and a single Felix container; it initialises
+// StartSingleNodeTopology starts an etcd container and a single Felix container; it initialises
 // the datastore and installs a Node resource for the Felix node.
-func StartSingleNodeTopology(options TopologyOptions, infra DatastoreInfra) (felix *Felix, calicoClient client.Interface) {
-	felixes, calicoClient := StartNNodeTopology(1, options, infra)
-	felix = felixes[0]
+func StartSingleNodeTopology(options TopologyOptions, infra DatastoreInfra) (tc TopologyContainers, calicoClient client.Interface) {
+	tc, calicoClient = StartNNodeTopology(1, options, infra)
 	return
 }
 
-// StartNNodeEtcdTopology starts an etcd container and a set of Felix hosts.  If n > 1, sets
+// StartNNodeTopology starts an etcd container and a set of Felix hosts.  If n > 1, sets
 // up IPIP, otherwise this is skipped.
 //
 //   - Configures an IPAM pool for 10.65.0.0/16 (so that Felix programs the all-IPAM blocks IP set)
@@ -177,7 +190,7 @@ func StartSingleNodeTopology(options TopologyOptions, infra DatastoreInfra) (fel
 //   - Configures routes between the hosts, giving each host 10.65.x.0/24, where x is the
 //     index in the returned array.  When creating workloads, use IPs from the relevant block.
 //   - Configures the Tunnel IP for each host as 10.65.x.1.
-func StartNNodeTopology(n int, opts TopologyOptions, infra DatastoreInfra) (felixes []*Felix, client client.Interface) {
+func StartNNodeTopology(n int, opts TopologyOptions, infra DatastoreInfra) (tc TopologyContainers, client client.Interface) {
 	log.WithField("options", opts).Infof("Starting a %d-node topology", n)
 	success := false
 	var err error
@@ -185,9 +198,7 @@ func StartNNodeTopology(n int, opts TopologyOptions, infra DatastoreInfra) (feli
 	defer func() {
 		if !success {
 			log.WithError(err).Error("Failed to start topology, tearing down containers")
-			for _, felix := range felixes {
-				felix.Stop()
-			}
+			tc.Stop()
 			infra.Stop()
 			return
 		}
@@ -244,12 +255,12 @@ func StartNNodeTopology(n int, opts TopologyOptions, infra DatastoreInfra) (feli
 
 	typhaIP := ""
 	if opts.WithTypha {
-		typha := RunTypha(infra, opts)
-		opts.ExtraEnvVars["FELIX_TYPHAADDR"] = typha.IP + ":5473"
-		typhaIP = typha.IP
+		tc.Typha = RunTypha(infra, opts)
+		opts.ExtraEnvVars["FELIX_TYPHAADDR"] = tc.Typha.IP + ":5473"
+		typhaIP = tc.Typha.IP
 	}
 
-	felixes = make([]*Felix, n)
+	tc.Felixes = make([]*Felix, n)
 	var wg sync.WaitGroup
 
 	// Make a separate copy of TopologyOptions for each Felix that we will run.  This
@@ -282,7 +293,7 @@ func StartNNodeTopology(n int, opts TopologyOptions, infra DatastoreInfra) (feli
 		go func(i int) {
 			defer wg.Done()
 			defer ginkgo.GinkgoRecover()
-			felixes[i] = RunFelix(infra, i, optsPerFelix[i])
+			tc.Felixes[i] = RunFelix(infra, i, optsPerFelix[i])
 		}(i)
 	}
 	wg.Wait()
@@ -293,7 +304,7 @@ func StartNNodeTopology(n int, opts TopologyOptions, infra DatastoreInfra) (feli
 	Expect(err).To(BeNil())
 	for i := 0; i < n; i++ {
 		opts.ExtraEnvVars["BPF_LOG_PFX"] = ""
-		felix := felixes[i]
+		felix := tc.Felixes[i]
 		felix.TyphaIP = typhaIP
 
 		if opts.EnableIPv6 {
@@ -379,8 +390,8 @@ func StartNNodeTopology(n int, opts TopologyOptions, infra DatastoreInfra) (feli
 
 	// Set up routes between the hosts, note: we're not using BGP here but we set up similar
 	// CIDR-based routes.
-	for i, iFelix := range felixes {
-		for j, jFelix := range felixes {
+	for i, iFelix := range tc.Felixes {
+		for j, jFelix := range tc.Felixes {
 			if i == j {
 				continue
 			}

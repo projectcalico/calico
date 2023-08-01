@@ -37,9 +37,9 @@ import (
 var _ = infrastructure.DatastoreDescribe("service loop prevention; with 2 nodes", []apiconfig.DatastoreType{apiconfig.EtcdV3, apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
 
 	var (
-		infra   infrastructure.DatastoreInfra
-		felixes []*infrastructure.Felix
-		client  client.Interface
+		infra  infrastructure.DatastoreInfra
+		tc     infrastructure.TopologyContainers
+		client client.Interface
 	)
 
 	BeforeEach(func() {
@@ -47,21 +47,19 @@ var _ = infrastructure.DatastoreDescribe("service loop prevention; with 2 nodes"
 
 		options := infrastructure.DefaultTopologyOptions()
 		options.IPIPEnabled = false
-		felixes, client = infrastructure.StartNNodeTopology(2, options, infra)
+		tc, client = infrastructure.StartNNodeTopology(2, options, infra)
 	})
 
 	AfterEach(func() {
 		if CurrentGinkgoTestDescription().Failed {
-			for _, felix := range felixes {
+			for _, felix := range tc.Felixes {
 				felix.Exec("iptables-save", "-c")
 				felix.Exec("ipset", "list")
 				felix.Exec("ip", "r")
 				felix.Exec("ip", "a")
 			}
 		}
-		for _, felix := range felixes {
-			felix.Stop()
-		}
+		tc.Stop()
 		if CurrentGinkgoTestDescription().Failed {
 			infra.DumpErrorData()
 		}
@@ -133,7 +131,7 @@ var _ = infrastructure.DatastoreDescribe("service loop prevention; with 2 nodes"
 		// an ECMP route to both Felixes, but busybox's ip can't program ECMP routes, and a
 		// non-ECMP route is sufficient to demonstrate the looping issue.)
 		externalClient.Exec("ip", "r", "a", "10.96.0.0/17", "via", externalGW.IP)
-		externalGW.Exec("ip", "r", "a", "10.96.0.0/17", "via", felixes[0].IP)
+		externalGW.Exec("ip", "r", "a", "10.96.0.0/17", "via", tc.Felixes[0].IP)
 
 		// Configure the external gateway client to forward, in order to create the
 		// conditions for looping.
@@ -141,13 +139,13 @@ var _ = infrastructure.DatastoreDescribe("service loop prevention; with 2 nodes"
 		externalGW.Exec("sysctl", "-w", "net.ipv4.ip_forward=1")
 
 		// Also tell Felix to route that CIDR to the external gateway.
-		felixes[0].ExecMayFail("ip", "r", "d", "10.96.0.0/17")
-		felixes[0].Exec("ip", "r", "a", "10.96.0.0/17", "via", externalGW.IP)
-		felixes[0].Exec("iptables", "-P", "FORWARD", "ACCEPT")
+		tc.Felixes[0].ExecMayFail("ip", "r", "d", "10.96.0.0/17")
+		tc.Felixes[0].Exec("ip", "r", "a", "10.96.0.0/17", "via", externalGW.IP)
+		tc.Felixes[0].Exec("iptables", "-P", "FORWARD", "ACCEPT")
 
 		// Start monitoring all packets, on the Felix, to or from a specific (but
 		// unused) service IP.
-		tcpdumpF := felixes[0].AttachTCPDump("eth0")
+		tcpdumpF := tc.Felixes[0].AttachTCPDump("eth0")
 		tcpdumpF.AddMatcher("serviceIPPackets", regexp.MustCompile("10\\.96\\.0\\.19"))
 		tcpdumpF.Start()
 		defer tcpdumpF.Stop()
@@ -191,7 +189,7 @@ var _ = infrastructure.DatastoreDescribe("service loop prevention; with 2 nodes"
 		// Default ServiceLoopPrevention is Drop, so expect to see rules in cali-cidr-block
 		// chains with DROP.  (Felix handles BGPConfiguration without restarting, so this
 		// should be quick.)
-		for _, felix := range felixes {
+		for _, felix := range tc.Felixes {
 			Eventually(getCIDRBlockRules(felix, "iptables-save")).Should(ConsistOf(
 				MatchRegexp("-A cali-cidr-block -d 10\\.96\\.0\\.0/17 .* -j DROP"),
 			))
@@ -210,7 +208,7 @@ var _ = infrastructure.DatastoreDescribe("service loop prevention; with 2 nodes"
 
 		// Expect to see rules in cali-cidr-block chains with REJECT.  (Allowing time for a
 		// Felix restart.)
-		for _, felix := range felixes {
+		for _, felix := range tc.Felixes {
 			Eventually(getCIDRBlockRules(felix, "iptables-save"), "8s", "0.5s").Should(ConsistOf(
 				MatchRegexp("-A cali-cidr-block -d 10\\.96\\.0\\.0/17 .* -j REJECT"),
 			))
@@ -225,7 +223,7 @@ var _ = infrastructure.DatastoreDescribe("service loop prevention; with 2 nodes"
 		})
 
 		// Expect to see empty cali-cidr-block chains.  (Allowing time for a Felix restart.)
-		for _, felix := range felixes {
+		for _, felix := range tc.Felixes {
 			Eventually(getCIDRBlockRules(felix, "iptables-save"), "8s", "0.5s").Should(BeEmpty())
 			Eventually(getCIDRBlockRules(felix, "ip6tables-save"), "8s", "0.5s").Should(BeEmpty())
 		}
@@ -241,7 +239,7 @@ var _ = infrastructure.DatastoreDescribe("service loop prevention; with 2 nodes"
 
 		// Expect to see rules in cali-cidr-block chains with DROP.  (Allowing time for a
 		// Felix restart.)
-		for _, felix := range felixes {
+		for _, felix := range tc.Felixes {
 			Eventually(getCIDRBlockRules(felix, "iptables-save"), "8s", "0.5s").Should(ConsistOf(
 				MatchRegexp("-A cali-cidr-block -d 10\\.96\\.0\\.0/17 .* -j DROP"),
 			))
@@ -264,7 +262,7 @@ var _ = infrastructure.DatastoreDescribe("service loop prevention; with 2 nodes"
 
 		// Expect to see rules in cali-cidr-block chains with DROP and the updated CIDRs.
 		// (BGPConfiguration change is handled without needing a restart.)
-		for _, felix := range felixes {
+		for _, felix := range tc.Felixes {
 			Eventually(getCIDRBlockRules(felix, "iptables-save")).Should(ConsistOf(
 				MatchRegexp("-A cali-cidr-block -d 1\\.1\\.0\\.0/16 .* -j DROP"),
 			))
@@ -300,7 +298,7 @@ var _ = infrastructure.DatastoreDescribe("service loop prevention; with 2 nodes"
 		// Expect to see empty cali-cidr-block chains.  (Allowing time for a Felix
 		// restart.)  This ensures that the cali-cidr-block chain has been cleared
 		// before we try a test ping.
-		for _, felix := range felixes {
+		for _, felix := range tc.Felixes {
 			Eventually(getCIDRBlockRules(felix, "iptables-save"), "8s", "0.5s").Should(BeEmpty())
 		}
 
@@ -335,7 +333,7 @@ var _ = infrastructure.DatastoreDescribe("service loop prevention; with 2 nodes"
 		// Expect to see empty cali-cidr-block chains.  (Allowing time for a Felix
 		// restart.)  This ensures that the cali-cidr-block chain has been cleared
 		// before we try a test ping.
-		for _, felix := range felixes {
+		for _, felix := range tc.Felixes {
 			Eventually(getCIDRBlockRules(felix, "iptables-save"), "8s", "0.5s").Should(BeEmpty())
 		}
 

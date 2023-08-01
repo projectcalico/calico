@@ -34,9 +34,9 @@ import (
 
 var _ = infrastructure.DatastoreDescribe("VXLAN topology before adding host IPs to IP sets", []apiconfig.DatastoreType{apiconfig.EtcdV3, apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
 	var (
-		infra   infrastructure.DatastoreInfra
-		felixes []*infrastructure.Felix
-		client  client.Interface
+		infra  infrastructure.DatastoreInfra
+		tc     infrastructure.TopologyContainers
+		client client.Interface
 	)
 
 	for _, ipv6 := range []bool{true, false} {
@@ -53,11 +53,11 @@ var _ = infrastructure.DatastoreDescribe("VXLAN topology before adding host IPs 
 					// Configure the interface pattern so that it doesn't match any host interfaces.
 					topologyOptions.ExtraEnvVars["FELIX_MTUIFACEPATTERN"] = "foo"
 
-					felixes, client = infrastructure.StartNNodeTopology(3, topologyOptions, infra)
+					tc, client = infrastructure.StartNNodeTopology(3, topologyOptions, infra)
 
 					// Wait until the vxlan device appears.
 					Eventually(func() error {
-						for i, f := range felixes {
+						for i, f := range tc.Felixes {
 							out, err := f.ExecOutput("ip", "link")
 							if err != nil {
 								return err
@@ -73,7 +73,7 @@ var _ = infrastructure.DatastoreDescribe("VXLAN topology before adding host IPs 
 
 				AfterEach(func() {
 					if CurrentGinkgoTestDescription().Failed {
-						for _, felix := range felixes {
+						for _, felix := range tc.Felixes {
 							felix.Exec("iptables-save", "-c")
 							felix.Exec("ipset", "list")
 							felix.Exec("ip", "r")
@@ -81,9 +81,7 @@ var _ = infrastructure.DatastoreDescribe("VXLAN topology before adding host IPs 
 						}
 					}
 
-					for _, felix := range felixes {
-						felix.Stop()
-					}
+					tc.Stop()
 
 					if CurrentGinkgoTestDescription().Failed {
 						infra.DumpErrorData()
@@ -100,7 +98,7 @@ var _ = infrastructure.DatastoreDescribe("VXLAN topology before adding host IPs 
 					if enableIPv6 {
 						vxlanEnabledMtu = "1390"
 					}
-					for _, felix := range felixes {
+					for _, felix := range tc.Felixes {
 						Eventually(func() string {
 							out, _ := felix.ExecOutput("cat", "/var/lib/calico/mtu")
 							return out
@@ -125,7 +123,7 @@ var _ = infrastructure.DatastoreDescribe("VXLAN topology before adding host IPs 
 					}
 
 					// It should now have an MTU of 1460 since there is no encap.
-					for _, felix := range felixes {
+					for _, felix := range tc.Felixes {
 						Eventually(func() string {
 							out, _ := felix.ExecOutput("cat", "/var/lib/calico/mtu")
 							return out
@@ -142,7 +140,7 @@ var _ = infrastructure.DatastoreDescribe("VXLAN topology before adding host IPs 
 					if enableIPv6 {
 						vxlanEnabledMtu = "1390"
 					}
-					for _, felix := range felixes {
+					for _, felix := range tc.Felixes {
 						Eventually(func() string {
 							out, _ := felix.ExecOutput("cat", "/var/lib/calico/mtu")
 							return out
@@ -157,7 +155,7 @@ var _ = infrastructure.DatastoreDescribe("VXLAN topology before adding host IPs 
 					Expect(err).NotTo(HaveOccurred())
 
 					// It should still have an MTU of 1410 (or 1390 for IPv6) since the VXLAN encap is set in the default IPPool.
-					for _, felix := range felixes {
+					for _, felix := range tc.Felixes {
 						Eventually(func() string {
 							out, _ := felix.ExecOutput("cat", "/var/lib/calico/mtu")
 							return out
@@ -179,7 +177,7 @@ var _ = infrastructure.DatastoreDescribe("VXLAN topology before adding host IPs 
 					}
 
 					// It should now have an MTU of 1460 since there is no encap.
-					for _, felix := range felixes {
+					for _, felix := range tc.Felixes {
 						Eventually(func() string {
 							out, _ := felix.ExecOutput("cat", "/var/lib/calico/mtu")
 							return out

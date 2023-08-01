@@ -65,6 +65,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 		Describe(fmt.Sprintf("VXLAN mode set to %s, routeSource %s, brokenXSum: %v, enableIPv6: %v", vxlanMode, routeSource, brokenXSum, enableIPv6), func() {
 			var (
 				infra           infrastructure.DatastoreInfra
+				tc              infrastructure.TopologyContainers
 				felixes         []*infrastructure.Felix
 				client          client.Interface
 				w               [3]*workload.Workload
@@ -88,7 +89,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 				if getDataStoreType(infra) == "etcdv3" && BPFMode() {
 					Skip("Skipping BPF tests for etcdv3 backend.")
 				}
-				felixes, client = infrastructure.StartNNodeTopology(3, topologyOptions, infra)
+
+				tc, client = infrastructure.StartNNodeTopology(3, topologyOptions, infra)
+				felixes = tc.Felixes
 
 				// Install a default profile that allows all ingress and egress, in the absence of any Policy.
 				infra.AddDefaultAllow()
@@ -167,9 +170,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 				for _, wl := range hostW {
 					wl.Stop()
 				}
-				for _, felix := range felixes {
-					felix.Stop()
-				}
+				tc.Stop()
 
 				if CurrentGinkgoTestDescription().Failed {
 					infra.DumpErrorData()

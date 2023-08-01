@@ -48,7 +48,7 @@ var _ = infrastructure.DatastoreDescribe(
 
 		var (
 			infra        infrastructure.DatastoreInfra
-			felixes      []*infrastructure.Felix
+			tc           infrastructure.TopologyContainers
 			options      infrastructure.TopologyOptions
 			calicoClient client.Interface
 			w            *workload.Workload
@@ -62,10 +62,10 @@ var _ = infrastructure.DatastoreDescribe(
 		})
 
 		JustBeforeEach(func() {
-			felixes, calicoClient = infrastructure.StartNNodeTopology(1, options, infra)
+			tc, calicoClient = infrastructure.StartNNodeTopology(1, options, infra)
 
 			wIP := "10.65.0.2"
-			w = workload.Run(felixes[0], "w0", "default", wIP, "8055", "udp")
+			w = workload.Run(tc.Felixes[0], "w0", "default", wIP, "8055", "udp")
 			w.WorkloadEndpoint.Labels = map[string]string{"name": w.Name}
 			w.ConfigureInInfra(infra)
 
@@ -86,9 +86,9 @@ var _ = infrastructure.DatastoreDescribe(
 			}
 
 			By("turning off RPF per device", func() {
-				felixes[0].Exec("sysctl", "-w", "net.ipv4.conf.all.rp_filter=0")
-				felixes[0].Exec("sysctl", "-w", "net.ipv4.conf.default.rp_filter=0")
-				felixes[0].Exec("sysctl", "-w", "net.ipv4.conf.eth0.rp_filter=0")
+				tc.Felixes[0].Exec("sysctl", "-w", "net.ipv4.conf.all.rp_filter=0")
+				tc.Felixes[0].Exec("sysctl", "-w", "net.ipv4.conf.default.rp_filter=0")
+				tc.Felixes[0].Exec("sysctl", "-w", "net.ipv4.conf.eth0.rp_filter=0")
 			})
 
 			By("setting up node's fake external ifaces", func() {
@@ -100,7 +100,7 @@ var _ = infrastructure.DatastoreDescribe(
 
 				external = &workload.Workload{
 					Name:          "eth20",
-					C:             felixes[0].Container,
+					C:             tc.Felixes[0].Container,
 					IP:            "192.168.20.1",
 					Ports:         "57005", // 0xdead
 					Protocol:      "udp",
@@ -111,8 +111,8 @@ var _ = infrastructure.DatastoreDescribe(
 				Expect(err).NotTo(HaveOccurred())
 
 				// assign address to eth20 and add route to the .20 network
-				felixes[0].Exec("ip", "route", "add", "192.168.20.0/24", "dev", "eth20")
-				felixes[0].Exec("ip", "addr", "add", "10.0.0.20/32", "dev", "eth20")
+				tc.Felixes[0].Exec("ip", "route", "add", "192.168.20.0/24", "dev", "eth20")
+				tc.Felixes[0].Exec("ip", "addr", "add", "10.0.0.20/32", "dev", "eth20")
 				_, err = external.RunCmd("ip", "route", "add", "10.0.0.20/32", "dev", "eth0")
 				Expect(err).NotTo(HaveOccurred())
 				// Add a route to the test workload to the fake external
@@ -131,7 +131,7 @@ var _ = infrastructure.DatastoreDescribe(
 
 		JustAfterEach(func() {
 			if CurrentGinkgoTestDescription().Failed {
-				for _, felix := range felixes {
+				for _, felix := range tc.Felixes {
 					felix.Exec("iptables-save", "-c")
 					felix.Exec("ip", "link")
 					felix.Exec("ip", "addr")
@@ -143,7 +143,7 @@ var _ = infrastructure.DatastoreDescribe(
 
 		AfterEach(func() {
 			log.Info("AfterEach starting")
-			for _, f := range felixes {
+			for _, f := range tc.Felixes {
 				f.Exec("calico-bpf", "connect-time", "clean")
 				f.Stop()
 			}
@@ -159,7 +159,7 @@ var _ = infrastructure.DatastoreDescribe(
 			It("should allow packets from wrong direction with disabled RPF on main device", func() {
 				fakeWorkloadIP := "10.65.15.15"
 
-				tcpdumpHEP := felixes[0].AttachTCPDump("eth20")
+				tcpdumpHEP := tc.Felixes[0].AttachTCPDump("eth20")
 				tcpdumpHEP.SetLogEnabled(true)
 				matcherHEP := fmt.Sprintf("IP %s\\.30446 > %s\\.30446: UDP", fakeWorkloadIP, w.IP)
 				tcpdumpHEP.AddMatcher("UDP-30446", regexp.MustCompile(matcherHEP))
@@ -195,7 +195,7 @@ var _ = infrastructure.DatastoreDescribe(
 			It("should not allow packets from wrong direction with strict RPF on main device", func() {
 				fakeWorkloadIP := "10.65.15.15"
 
-				tcpdumpHEP := felixes[0].AttachTCPDump("eth20")
+				tcpdumpHEP := tc.Felixes[0].AttachTCPDump("eth20")
 				tcpdumpHEP.SetLogEnabled(true)
 				matcherHEP := fmt.Sprintf("IP %s\\.30446 > %s\\.30446: UDP", fakeWorkloadIP, w.IP)
 				tcpdumpHEP.AddMatcher("UDP-30446", regexp.MustCompile(matcherHEP))
@@ -229,7 +229,7 @@ var _ = infrastructure.DatastoreDescribe(
 			It("should allow packets from wrong direction with loose RPF on main device", func() {
 				fakeWorkloadIP := "10.65.15.15"
 
-				tcpdumpHEP := felixes[0].AttachTCPDump("eth20")
+				tcpdumpHEP := tc.Felixes[0].AttachTCPDump("eth20")
 				tcpdumpHEP.SetLogEnabled(true)
 				matcherHEP := fmt.Sprintf("IP %s\\.30446 > %s\\.30446: UDP", fakeWorkloadIP, w.IP)
 				tcpdumpHEP.AddMatcher("UDP-30446", regexp.MustCompile(matcherHEP))
@@ -260,10 +260,10 @@ var _ = infrastructure.DatastoreDescribe(
 				tcpdumpWl.ResetCount("UDP-30446")
 
 				// Flush conntrack table thus next packet will not be able to "re-use".
-				felixes[0].Exec("calico-bpf", "conntrack", "clean")
+				tc.Felixes[0].Exec("calico-bpf", "conntrack", "clean")
 
 				// Remove default route from Felix and test scenario again
-				felixes[0].Exec("ip", "route", "del", "default", "dev", "eth0")
+				tc.Felixes[0].Exec("ip", "route", "del", "default", "dev", "eth0")
 
 				//  Generate another packet...
 				_, err = external.RunCmd("pktgen", fakeWorkloadIP, w.IP, "udp",

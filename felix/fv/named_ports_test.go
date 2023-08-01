@@ -79,7 +79,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 
 	var (
 		etcd   *containers.Container
-		felix  *infrastructure.Felix
+		tc     infrastructure.TopologyContainers
 		client client.Interface
 		infra  infrastructure.DatastoreInfra
 		w      [4]*workload.Workload
@@ -98,7 +98,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 	)
 
 	BeforeEach(func() {
-		felix, etcd, client, infra = infrastructure.StartSingleNodeEtcdTopology(infrastructure.DefaultTopologyOptions())
+		tc, etcd, client, infra = infrastructure.StartSingleNodeEtcdTopology(infrastructure.DefaultTopologyOptions())
 		infrastructure.CreateDefaultProfile(client, "default", map[string]string{"default": ""}, "default == ''")
 		// Create some workloads, using that profile.
 		for ii := range w {
@@ -112,7 +112,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 				ports = fmt.Sprintf("3000,4000,%d,%d", sharedPort, workloadPort)
 			}
 			w[ii] = workload.Run(
-				felix,
+				tc.Felixes[0],
 				"w"+iiStr,
 				"default",
 				"10.65.0.1"+iiStr,
@@ -152,10 +152,10 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 	AfterEach(func() {
 		if CurrentGinkgoTestDescription().Failed {
 			log.Warn("Test failed, dumping diags...")
-			utils.Run("docker", "logs", felix.Name)
-			utils.Run("docker", "exec", felix.Name, "iptables-save", "-c")
-			utils.Run("docker", "exec", felix.Name, "ipset", "list")
-			utils.Run("docker", "exec", felix.Name, "ip", "r")
+			utils.Run("docker", "logs", tc.Felixes[0].Name)
+			utils.Run("docker", "exec", tc.Felixes[0].Name, "iptables-save", "-c")
+			utils.Run("docker", "exec", tc.Felixes[0].Name, "ipset", "list")
+			utils.Run("docker", "exec", tc.Felixes[0].Name, "ip", "r")
 
 			profiles, err := client.Profiles().List(context.Background(), options.ListOptions{})
 			if err == nil {
@@ -193,15 +193,15 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 				}
 			}
 
-			felix.Exec("calico-bpf", "ipsets", "dump")
-			felix.Exec("bpftool", "map")
-			felix.Exec("bpftool", "prog")
+			tc.Felixes[0].Exec("calico-bpf", "ipsets", "dump")
+			tc.Felixes[0].Exec("bpftool", "map")
+			tc.Felixes[0].Exec("bpftool", "prog")
 		}
 
 		for ii := range w {
 			w[ii].Stop()
 		}
-		felix.Stop()
+		tc.Stop()
 
 		if CurrentGinkgoTestDescription().Failed {
 			utils.Run("docker", "exec", etcd.Name, "etcdctl", "get", "/", "--prefix", "--keys-only")
@@ -223,7 +223,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 
 	cleanConntrack := func() {
 		if bpfEnabled && protocol == "udp" {
-			felix.Exec("calico-bpf", "conntrack", "clean")
+			tc.Felixes[0].Exec("calico-bpf", "conntrack", "clean")
 		}
 	}
 
@@ -723,7 +723,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 var _ = Describe("TCP: named port with a simulated kubernetes nginx and client", func() {
 	var (
 		etcd              *containers.Container
-		felix             *infrastructure.Felix
+		tc                infrastructure.TopologyContainers
 		client            client.Interface
 		infra             infrastructure.DatastoreInfra
 		nginx             *workload.Workload
@@ -734,12 +734,12 @@ var _ = Describe("TCP: named port with a simulated kubernetes nginx and client",
 	)
 
 	BeforeEach(func() {
-		felix, etcd, client, infra = infrastructure.StartSingleNodeEtcdTopology(infrastructure.DefaultTopologyOptions())
+		tc, etcd, client, infra = infrastructure.StartSingleNodeEtcdTopology(infrastructure.DefaultTopologyOptions())
 		// Create a namespace profile and write to the datastore.
 		infrastructure.CreateDefaultProfile(client, "kns.test", map[string]string{"name": "test"}, "")
 		// Create nginx workload.
 		nginx = workload.Run(
-			felix,
+			tc.Felixes[0],
 			"nginx",
 			"kns.test",
 			"10.65.0.1",
@@ -762,7 +762,7 @@ var _ = Describe("TCP: named port with a simulated kubernetes nginx and client",
 
 		// Create client workload.
 		nginxClient = workload.Run(
-			felix,
+			tc.Felixes[0],
 			"client",
 			"kns.test",
 			"10.65.0.2",
@@ -809,15 +809,15 @@ var _ = Describe("TCP: named port with a simulated kubernetes nginx and client",
 	AfterEach(func() {
 		if CurrentGinkgoTestDescription().Failed {
 			log.Warn("Test failed, dumping diags...")
-			utils.Run("docker", "logs", felix.Name)
-			utils.Run("docker", "exec", felix.Name, "iptables-save", "-c")
-			utils.Run("docker", "exec", felix.Name, "ipset", "list")
-			utils.Run("docker", "exec", felix.Name, "ip", "r")
+			utils.Run("docker", "logs", tc.Felixes[0].Name)
+			utils.Run("docker", "exec", tc.Felixes[0].Name, "iptables-save", "-c")
+			utils.Run("docker", "exec", tc.Felixes[0].Name, "ipset", "list")
+			utils.Run("docker", "exec", tc.Felixes[0].Name, "ip", "r")
 		}
 
 		nginx.Stop()
 		nginxClient.Stop()
-		felix.Stop()
+		tc.Stop()
 
 		if CurrentGinkgoTestDescription().Failed {
 			utils.Run("docker", "exec", etcd.Name, "etcdctl", "get", "/", "--prefix", "--keys-only")
@@ -857,11 +857,11 @@ var _ = Describe("TCP: named port with a simulated kubernetes nginx and client",
 // created for the felixes.
 func describeNamedPortHostEndpointTests(getInfra infrastructure.InfraFactory, namedHostEndpoint bool) {
 	var (
-		infra   infrastructure.DatastoreInfra
-		felixes []*infrastructure.Felix
-		client  client.Interface
-		hostW   [2]*workload.Workload
-		cc      *connectivity.Checker
+		infra  infrastructure.DatastoreInfra
+		tc     infrastructure.TopologyContainers
+		client client.Interface
+		hostW  [2]*workload.Workload
+		cc     *connectivity.Checker
 	)
 
 	tcp := numorstring.ProtocolFromString("TCP")
@@ -869,18 +869,18 @@ func describeNamedPortHostEndpointTests(getInfra infrastructure.InfraFactory, na
 	BeforeEach(func() {
 		infra = getInfra()
 
-		felixes, client = infrastructure.StartNNodeTopology(2, infrastructure.DefaultTopologyOptions(), infra)
+		tc, client = infrastructure.StartNNodeTopology(2, infrastructure.DefaultTopologyOptions(), infra)
 
 		err := infra.AddAllowToDatastore("host-endpoint=='true'")
 		Expect(err).NotTo(HaveOccurred())
 
 		// Start a host-networked workload on each host so we have something to connect to.
-		for ii, felix := range felixes {
+		for ii, felix := range tc.Felixes {
 			hostW[ii] = workload.Run(
-				felixes[ii],
+				tc.Felixes[ii],
 				fmt.Sprintf("host%d", ii),
 				"",
-				felixes[ii].IP,
+				tc.Felixes[ii].IP,
 				"8055,8056",
 				"tcp")
 
@@ -915,7 +915,7 @@ func describeNamedPortHostEndpointTests(getInfra infrastructure.InfraFactory, na
 
 	AfterEach(func() {
 		if CurrentGinkgoTestDescription().Failed {
-			for _, felix := range felixes {
+			for _, felix := range tc.Felixes {
 				felix.Exec("iptables-save", "-c")
 				felix.Exec("ipset", "list")
 				felix.Exec("ip", "r")
@@ -926,27 +926,25 @@ func describeNamedPortHostEndpointTests(getInfra infrastructure.InfraFactory, na
 		for _, wl := range hostW {
 			wl.Stop()
 		}
-		for _, felix := range felixes {
-			felix.Stop()
-		}
+		tc.Stop()
 
 		infra.Stop()
 	})
 
 	expectNoConnectivity := func() {
-		cc.ExpectNone(felixes[0], hostW[1].Port(8055))
-		cc.ExpectNone(felixes[1], hostW[0].Port(8055))
-		cc.ExpectNone(felixes[0], hostW[1].Port(8056))
-		cc.ExpectNone(felixes[1], hostW[0].Port(8056))
+		cc.ExpectNone(tc.Felixes[0], hostW[1].Port(8055))
+		cc.ExpectNone(tc.Felixes[1], hostW[0].Port(8055))
+		cc.ExpectNone(tc.Felixes[0], hostW[1].Port(8056))
+		cc.ExpectNone(tc.Felixes[1], hostW[0].Port(8056))
 		cc.CheckConnectivityOffset(1)
 		cc.ResetExpectations()
 	}
 
 	expectNamedPortOpen := func() {
-		cc.ExpectSome(felixes[0], hostW[1].Port(8055))
-		cc.ExpectSome(felixes[1], hostW[0].Port(8055))
-		cc.ExpectNone(felixes[0], hostW[1].Port(8056))
-		cc.ExpectNone(felixes[1], hostW[0].Port(8056))
+		cc.ExpectSome(tc.Felixes[0], hostW[1].Port(8055))
+		cc.ExpectSome(tc.Felixes[1], hostW[0].Port(8055))
+		cc.ExpectNone(tc.Felixes[0], hostW[1].Port(8056))
+		cc.ExpectNone(tc.Felixes[1], hostW[0].Port(8056))
 		cc.CheckConnectivityOffset(1)
 		cc.ResetExpectations()
 	}
@@ -1031,7 +1029,7 @@ var _ = infrastructure.DatastoreDescribe("named port, all-interfaces host endpoi
 var _ = Describe("tests with mixed TCP/UDP", func() {
 	var (
 		etcd                        *containers.Container
-		felix                       *infrastructure.Felix
+		tc                          infrastructure.TopologyContainers
 		client                      client.Interface
 		infra                       infrastructure.DatastoreInfra
 		targetTCPWorkload           *workload.Workload
@@ -1043,13 +1041,13 @@ var _ = Describe("tests with mixed TCP/UDP", func() {
 	)
 
 	BeforeEach(func() {
-		felix, etcd, client, infra = infrastructure.StartSingleNodeEtcdTopology(infrastructure.DefaultTopologyOptions())
+		tc, etcd, client, infra = infrastructure.StartSingleNodeEtcdTopology(infrastructure.DefaultTopologyOptions())
 		infrastructure.CreateDefaultProfile(client, "open", map[string]string{"default": ""}, "")
 
 		createTarget := func(ip, protocol string) *workload.Workload {
 			// Create target workloads.
 			w := workload.Run(
-				felix,
+				tc.Felixes[0],
 				"target-"+protocol,
 				"open",
 				ip,
@@ -1081,7 +1079,7 @@ var _ = Describe("tests with mixed TCP/UDP", func() {
 
 		// Create client workload.
 		clientWorkload = workload.Run(
-			felix,
+			tc.Felixes[0],
 			"client",
 			"open",
 			"10.65.0.1",
@@ -1127,16 +1125,16 @@ var _ = Describe("tests with mixed TCP/UDP", func() {
 	AfterEach(func() {
 		if CurrentGinkgoTestDescription().Failed {
 			log.Warn("Test failed, dumping diags...")
-			utils.Run("docker", "logs", felix.Name)
-			utils.Run("docker", "exec", felix.Name, "iptables-save", "-c")
-			utils.Run("docker", "exec", felix.Name, "ipset", "list")
-			utils.Run("docker", "exec", felix.Name, "ip", "r")
+			utils.Run("docker", "logs", tc.Felixes[0].Name)
+			utils.Run("docker", "exec", tc.Felixes[0].Name, "iptables-save", "-c")
+			utils.Run("docker", "exec", tc.Felixes[0].Name, "ipset", "list")
+			utils.Run("docker", "exec", tc.Felixes[0].Name, "ip", "r")
 		}
 
 		targetTCPWorkload.Stop()
 		targetUDPWorkload.Stop()
 		clientWorkload.Stop()
-		felix.Stop()
+		tc.Stop()
 
 		if CurrentGinkgoTestDescription().Failed {
 			utils.Run("docker", "exec", etcd.Name, "etcdctl", "get", "/", "--prefix", "--keys-only")
