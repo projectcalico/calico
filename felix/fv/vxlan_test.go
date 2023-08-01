@@ -76,80 +76,16 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 
 			BeforeEach(func() {
 				infra = getInfra()
-				topologyOptions = infrastructure.DefaultTopologyOptions()
-				topologyOptions.VXLANMode = vxlanMode
-				topologyOptions.IPIPEnabled = false
-				topologyOptions.EnableIPv6 = enableIPv6
-				topologyOptions.ExtraEnvVars["FELIX_ROUTESOURCE"] = routeSource
-				// We force the broken checksum handling on or off so that we're not dependent on kernel version
-				// for these tests.  Since we're testing in containers anyway, checksum offload can't really be
-				// tested but we can verify the state with ethtool.
-				topologyOptions.ExtraEnvVars["FELIX_FeatureDetectOverride"] = fmt.Sprintf("ChecksumOffloadBroken=%t", brokenXSum)
 
 				if getDataStoreType(infra) == "etcdv3" && BPFMode() {
 					Skip("Skipping BPF tests for etcdv3 backend.")
 				}
 
+				topologyOptions = createBaseTopologyOptions(vxlanMode, enableIPv6, routeSource, brokenXSum)
 				tc, client = infrastructure.StartNNodeTopology(3, topologyOptions, infra)
+
+				w, hostW = setupWorkloads(infra, tc, topologyOptions, client, enableIPv6)
 				felixes = tc.Felixes
-
-				// Install a default profile that allows all ingress and egress, in the absence of any Policy.
-				infra.AddDefaultAllow()
-
-				// Wait until the vxlan device appears.
-				Eventually(func() error {
-					for i, f := range felixes {
-						out, err := f.ExecOutput("ip", "link")
-						if err != nil {
-							return err
-						}
-						if strings.Contains(out, "vxlan.calico") {
-							continue
-						}
-						return fmt.Errorf("felix %d has no vxlan device", i)
-					}
-					return nil
-				}, "10s", "100ms").ShouldNot(HaveOccurred())
-
-				if enableIPv6 {
-					Eventually(func() error {
-						for i, f := range felixes {
-							out, err := f.ExecOutput("ip", "link")
-							if err != nil {
-								return err
-							}
-							if strings.Contains(out, "vxlan-v6.calico") {
-								continue
-							}
-							return fmt.Errorf("felix %d has no IPv6 vxlan device", i)
-						}
-						return nil
-					}, "10s", "100ms").ShouldNot(HaveOccurred())
-				}
-
-				// Create workloads, using that profile.  One on each "host".
-				for ii := range w {
-					wIP := fmt.Sprintf("10.65.%d.2", ii)
-					wName := fmt.Sprintf("w%d", ii)
-					err := client.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
-						IP:       net.MustParseIP(wIP),
-						HandleID: &wName,
-						Attrs: map[string]string{
-							ipam.AttributeNode: felixes[ii].Hostname,
-						},
-						Hostname: felixes[ii].Hostname,
-					})
-					Expect(err).NotTo(HaveOccurred())
-
-					w[ii] = workload.Run(felixes[ii], wName, "default", wIP, "8055", "tcp")
-					w[ii].ConfigureInInfra(infra)
-
-					hostW[ii] = workload.Run(felixes[ii], fmt.Sprintf("host%d", ii), "", felixes[ii].IP, "8055", "tcp")
-				}
-
-				if BPFMode() {
-					ensureAllNodesBPFProgramsAttached(felixes)
-				}
 
 				cc = &connectivity.Checker{}
 			})
@@ -703,3 +639,82 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 		})
 	}
 })
+
+func createBaseTopologyOptions(vxlanMode api.VXLANMode, enableIPv6 bool, routeSource string, brokenXSum bool) infrastructure.TopologyOptions {
+	topologyOptions := infrastructure.DefaultTopologyOptions()
+	topologyOptions.VXLANMode = vxlanMode
+	topologyOptions.IPIPEnabled = false
+	topologyOptions.EnableIPv6 = enableIPv6
+	topologyOptions.ExtraEnvVars["FELIX_ROUTESOURCE"] = routeSource
+	// We force the broken checksum handling on or off so that we're not dependent on kernel version
+	// for these tests.  Since we're testing in containers anyway, checksum offload can't really be
+	// tested but we can verify the state with ethtool.
+	topologyOptions.ExtraEnvVars["FELIX_FeatureDetectOverride"] = fmt.Sprintf("ChecksumOffloadBroken=%t", brokenXSum)
+
+	return topologyOptions
+}
+
+func setupWorkloads(infra infrastructure.DatastoreInfra, tc infrastructure.TopologyContainers, to infrastructure.TopologyOptions, client client.Interface, enableIPv6 bool) (w, hostW [3]*workload.Workload) {
+	// Install a default profile that allows all ingress and egress, in the absence of any Policy.
+	infra.AddDefaultAllow()
+
+	// Wait until the vxlan device appears.
+	Eventually(func() error {
+		for i, f := range tc.Felixes {
+			out, err := f.ExecOutput("ip", "link")
+			if err != nil {
+				return err
+			}
+			if strings.Contains(out, "vxlan.calico") {
+				continue
+			}
+			return fmt.Errorf("felix %d has no vxlan device", i)
+		}
+		return nil
+	}, "10s", "100ms").ShouldNot(HaveOccurred())
+
+	if enableIPv6 {
+		Eventually(func() error {
+			for i, f := range tc.Felixes {
+				out, err := f.ExecOutput("ip", "link")
+				if err != nil {
+					return err
+				}
+				if strings.Contains(out, "vxlan-v6.calico") {
+					continue
+				}
+				return fmt.Errorf("felix %d has no IPv6 vxlan device", i)
+			}
+			return nil
+		}, "10s", "100ms").ShouldNot(HaveOccurred())
+	}
+
+	// Create workloads, using that profile.  One on each "host".
+	_, IPv4CIDR, err := net.ParseCIDR(to.IPPoolCIDR)
+
+	Expect(err).To(BeNil())
+	for ii := range w {
+		wIP := fmt.Sprintf("%d.%d.%d.2", IPv4CIDR.IP[0], IPv4CIDR.IP[1], ii)
+		wName := fmt.Sprintf("w%d", ii)
+		err := client.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
+			IP:       net.MustParseIP(wIP),
+			HandleID: &wName,
+			Attrs: map[string]string{
+				ipam.AttributeNode: tc.Felixes[ii].Hostname,
+			},
+			Hostname: tc.Felixes[ii].Hostname,
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		w[ii] = workload.Run(tc.Felixes[ii], wName, "default", wIP, "8055", "tcp")
+		w[ii].ConfigureInInfra(infra)
+
+		hostW[ii] = workload.Run(tc.Felixes[ii], fmt.Sprintf("host%d", ii), "", tc.Felixes[ii].IP, "8055", "tcp")
+	}
+
+	if BPFMode() {
+		ensureAllNodesBPFProgramsAttached(tc.Felixes)
+	}
+
+	return
+}
