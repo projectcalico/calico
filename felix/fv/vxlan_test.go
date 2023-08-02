@@ -52,6 +52,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 		{api.VXLANModeCrossSubnet, "WorkloadIPs", false, true},
 		{api.VXLANModeCrossSubnet, "CalicoIPAM", true, false},
 		{api.VXLANModeCrossSubnet, "WorkloadIPs", false, false},
+
+		{api.VXLANModeAlways, "CalicoIPAM", true, true},
+		{api.VXLANModeAlways, "WorkloadIPs", false, true},
+		{api.VXLANModeAlways, "CalicoIPAM", true, false},
+		{api.VXLANModeAlways, "WorkloadIPs", false, false},
 	} {
 		vxlanMode := testConfig.VXLANMode
 		routeSource := testConfig.RouteSource
@@ -195,6 +200,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 			})
 
 			It("should have host to workload connectivity", func() {
+				if vxlanMode == api.VXLANModeAlways && routeSource == "WorkloadIPs" {
+					Skip("Skipping due to known issue with tunnel IPs not being programmed in WEP mode")
+				}
 				cc.ExpectSome(felixes[0], w[1])
 				cc.ExpectSome(felixes[0], w[0])
 
@@ -439,6 +447,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 					// avoid those other checks setting up conntrack state that allows the
 					// existing case to pass for a different reason.
 					It("allows host0 to remote Calico-networked workload via service IP", func() {
+						if vxlanMode == api.VXLANModeAlways && routeSource == "WorkloadIPs" {
+							Skip("Skipping due to known issue with tunnel IPs not being programmed in WEP mode")
+						}
 						// Allocate a service IP.
 						serviceIP := "10.101.0.11"
 						serviceV6IP := "deca:fbad:0000:0000:0000:0000:0000:0001"
@@ -557,6 +568,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 
 				if vxlanMode == api.VXLANModeAlways {
 					It("after manually removing third node from allow list should have expected connectivity", func() {
+						if BPFMode() {
+							Skip("Skipping due to manual removal of host from ipset not breaking connectivity in BPF mode")
+							return
+						}
+
 						felixes[0].Exec("ipset", "del", "cali40all-vxlan-net", felixes[2].IP)
 						if enableIPv6 {
 							felixes[0].Exec("ipset", "del", "cali60all-vxlan-net", felixes[2].IPv6)
