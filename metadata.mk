@@ -35,5 +35,8 @@ DEV_REGISTRIES ?= calico
 # This variable is unused. Registries for releases are defined in hack/release/pkg/builder/builder.go
 # RELEASE_REGISTRIES = quay.io/calico docker.io/calico gcr.io/projectcalico-org eu.gcr.io/projectcalico-org asia.gcr.io/projectcalico-org us.gcr.io/projectcalico-org
 
+# FIXME: Use WINDOWS_HPC_VERSION and remove WINDOWS_VERSIONS when containerd v1.6 is EOL'd
 # The Windows HPC container version used as base for Calico Windows images
 WINDOWS_HPC_VERSION ?= v1.0.0
+# The Windows versions used as base for Calico Windows images
+WINDOWS_VERSIONS ?= 1809 ltsc2022

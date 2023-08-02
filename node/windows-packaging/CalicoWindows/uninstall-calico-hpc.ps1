@@ -38,7 +38,7 @@ function Remove-CalicoService($ServiceName)
     }
 }
 
-if (-not (Test-Path "env:$CNI_NET_DIR"))
+if (-not (Test-Path "$env:CNI_NET_DIR"))
 {
     Write-Host "CNI_NET_DIR env var not set, skipping Calico CNI config cleanup"
 } else
@@ -49,7 +49,7 @@ if (-not (Test-Path "env:$CNI_NET_DIR"))
                 rm $cniConfFile
         }
 
-    if (Test-Path "env:$CNI_CONF_NAME") {
+    if (Test-Path "$env:CNI_CONF_NAME") {
         $cniConfListFile = "$env:CONTAINER_SANDBOX_MOUNT_POINT/host/$env:CNI_NET_DIR/$env:CNI_CONF_NAME"
             if (Test-Path $cniConfListFile) {
                 Write-Host "Removing Calico CNI conf file at $cniConfListFile ..."
@@ -58,7 +58,7 @@ if (-not (Test-Path "env:$CNI_NET_DIR"))
     }
 }
 
-if (-not (Test-Path "env:$CNI_BIN_DIR"))
+if (-not (Test-Path "$env:CNI_BIN_DIR"))
 {
     Write-Host "CNI_BIN_DIR env var not set, skipping Calico CNI binary cleanup"
 } else

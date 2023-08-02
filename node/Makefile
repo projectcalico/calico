@@ -721,25 +721,69 @@ endif
 		$(DOCKER_MANIFEST) push --purge $${manifest_image}; \
 	done ;
 
+# FIXME: Use WINDOWS_HPC_VERSION and image instead of nanoserver and WINDOWS_VERSIONS when containerd v1.6 is EOL'd
+# .PHONY: image-windows release-windows
+# # Build Windows image and possibly push it to $DEV_REGISTRIES
+# image-windows: setup-windows-builder Dockerfile-windows $(WINDOWS_BINARY) $(WINDOWS_ARCHIVE_ROOT)/libs/hns/hns.psm1 $(WINDOWS_ARCHIVE_ROOT)/libs/calico/calico.psm1 $(WINDOWS_ARCHIVE_ROOT)/config-hpc.ps1 $(WINDOWS_ARCHIVE_ROOT)/felix/felix-service.ps1 $(WINDOWS_ARCHIVE_ROOT)/node/node-service.ps1 $(WINDOWS_ARCHIVE_ROOT)/uninstall-calico-hpc.ps1 windows-packaging/nssm.exe
+# 	push="$${PUSH:-false}"; \
+# 	image_version="$${VERSION:-latest}"; \
+# 	for registry in $(DEV_REGISTRIES); do \
+# 		echo Building and pushing Windows image to $${registry}; \
+# 		image="$${registry}/$(WINDOWS_IMAGE):$${image_version}"; \
+# 		docker buildx build \
+# 			--platform windows/amd64 \
+# 			--output=type=image,push=$${push} \
+# 			-t $${image} \
+# 			--pull \
+# 			--no-cache \
+# 			--build-arg GIT_VERSION=$(GIT_VERSION) \
+# 			--build-arg WINDOWS_HPC_VERSION=$(WINDOWS_HPC_VERSION) \
+# 			-f Dockerfile-windows .; \
+# 	done ;
+
+# # Build and push Windows image
+# release-windows: release-prereqs clean-windows
+# 	$(MAKE) image-windows PUSH=true
+
+$(WINDOWS_DIST)/$(WINDOWS_IMAGE)-$(GIT_VERSION)-%.tar: sub-image-windows-$*
+
+sub-image-windows-%: Dockerfile-windows $(WINDOWS_BINARY) $(WINDOWS_ARCHIVE_ROOT)/libs/hns/hns.psm1 $(WINDOWS_ARCHIVE_ROOT)/libs/calico/calico.psm1 $(WINDOWS_ARCHIVE_ROOT)/config-hpc.ps1 $(WINDOWS_ARCHIVE_ROOT)/felix/felix-service.ps1 $(WINDOWS_ARCHIVE_ROOT)/node/node-service.ps1 $(WINDOWS_ARCHIVE_ROOT)/uninstall-calico-hpc.ps1 windows-packaging/nssm.exe
+	# ensure dir for windows image tars exits
+	-mkdir -p $(WINDOWS_DIST)
+	docker buildx build \
+		--platform windows/amd64 \
+		--output=type=docker,dest=$(CURDIR)/$(WINDOWS_DIST)/$(WINDOWS_IMAGE)-$(GIT_VERSION)-$*.tar \
+		--pull \
+		-t $(WINDOWS_IMAGE):latest \
+		--build-arg GIT_VERSION=$(GIT_VERSION) \
+		--build-arg=WINDOWS_VERSION=$* \
+		-f Dockerfile-windows .
+
 .PHONY: image-windows release-windows
-# Build Windows image and possibly push it to $DEV_REGISTRIES
-image-windows: setup-windows-builder Dockerfile-windows $(WINDOWS_BINARY) $(WINDOWS_ARCHIVE_ROOT)/libs/hns/hns.psm1 $(WINDOWS_ARCHIVE_ROOT)/libs/calico/calico.psm1 $(WINDOWS_ARCHIVE_ROOT)/config-hpc.ps1 $(WINDOWS_ARCHIVE_ROOT)/felix/felix-service.ps1 $(WINDOWS_ARCHIVE_ROOT)/node/node-service.ps1 $(WINDOWS_ARCHIVE_ROOT)/uninstall-calico-hpc.ps1 windows-packaging/nssm.exe
-	push="$${PUSH:-false}"; \
+image-windows: setup-windows-builder
+	for version in $(WINDOWS_VERSIONS); do \
+	$(MAKE) sub-image-windows-$${version}; \
+	done;
+
+release-windows: clean-windows image-windows
 	image_version="$${VERSION:-latest}"; \
 	for registry in $(DEV_REGISTRIES); do \
-		echo Building and pushing Windows image to $${registry}; \
-		image="$${registry}/$(WINDOWS_IMAGE):$${image_version}"; \
-		docker buildx build \
-			--platform windows/amd64 \
-			--output=type=image,push=$${push} \
-			-t $${image} \
-			--pull \
-			--no-cache \
-			--build-arg GIT_VERSION=$(GIT_VERSION) \
-			--build-arg WINDOWS_HPC_VERSION=$(WINDOWS_HPC_VERSION) \
-			-f Dockerfile-windows .; \
+		echo Pushing Windows images to $${registry}; \
+		all_images=""; \
+		manifest_image="$${registry}/$(WINDOWS_IMAGE):$${image_version}"; \
+		for win_ver in $(WINDOWS_VERSIONS); do \
+			image_tar="$(WINDOWS_DIST)/$(WINDOWS_IMAGE)-$(GIT_VERSION)-$${win_ver}.tar"; \
+			image="$${registry}/$(WINDOWS_IMAGE):$${image_version}-windows-$${win_ver}"; \
+			echo Pushing image $${image} ...; \
+			$(CRANE_BINDMOUNT) push $${image_tar} $${image}$(double_quote) & \
+			all_images="$${all_images} $${image}"; \
+		done; \
+		wait; \
+		$(DOCKER_MANIFEST) create --amend $${manifest_image} $${all_images}; \
+		for win_ver in $(WINDOWS_VERSIONS); do \
+			version=$$(docker manifest inspect mcr.microsoft.com/windows/nanoserver:$${win_ver} | grep "os.version" | head -n 1 | awk -F\" '{print $$4}'); \
+			image="$${registry}/$(WINDOWS_IMAGE):$${image_version}-windows-$${win_ver}"; \
+			$(DOCKER_MANIFEST) annotate --os windows --arch amd64 --os-version $${version} $${manifest_image} $${image}; \
+		done; \
+		$(DOCKER_MANIFEST) push --purge $${manifest_image}; \
 	done ;
-
-# Build and push Windows image
-release-windows: release-prereqs clean-windows
-	$(MAKE) image-windows PUSH=true

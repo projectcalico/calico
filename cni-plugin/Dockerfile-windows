@@ -12,9 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG WINDOWS_HPC_VERSION
+# FIXME: Use WINDOWS_HPC_VERSION and image instead of nanoserver and WINDOWS_VERSIONS when containerd v1.6 is EOL'd
+# ARG WINDOWS_HPC_VERSION
+ARG WINDOWS_VERSION
 
-FROM mcr.microsoft.com/oss/kubernetes/windows-host-process-containers-base-image:${WINDOWS_HPC_VERSION}
+# FROM mcr.microsoft.com/oss/kubernetes/windows-host-process-containers-base-image:${WINDOWS_HPC_VERSION}
+FROM mcr.microsoft.com/windows/nanoserver:${WINDOWS_VERSION}
 
 ARG GIT_VERSION=unknown
 

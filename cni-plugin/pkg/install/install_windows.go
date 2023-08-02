@@ -21,9 +21,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
+	"github.com/sirupsen/logrus"
 )
 
 func defaultNetConf() string {

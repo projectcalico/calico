@@ -15,10 +15,18 @@ package winutils
 
 import (
 	"bytes"
+	"os"
 	"os/exec"
 )
 
 func Powershell(args ...string) (string, string, error) {
+	// Add default powershell to PATH
+	path := os.Getenv("PATH")
+	err := os.Setenv("PATH", path+";C:/Windows/System32/WindowsPowerShell/v1.0/")
+	if err != nil {
+		return "", "", err
+	}
+
 	ps, err := exec.LookPath("powershell.exe")
 	if err != nil {
 		return "", "", err
