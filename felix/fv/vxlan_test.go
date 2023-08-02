@@ -69,7 +69,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 				felixes         []*infrastructure.Felix
 				client          client.Interface
 				w               [3]*workload.Workload
+				w6              [3]*workload.Workload
 				hostW           [3]*workload.Workload
+				hostW6          [3]*workload.Workload
 				cc              *connectivity.Checker
 				topologyOptions infrastructure.TopologyOptions
 			)
@@ -84,7 +86,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 				topologyOptions = createBaseTopologyOptions(vxlanMode, enableIPv6, routeSource, brokenXSum)
 				tc, client = infrastructure.StartNNodeTopology(3, topologyOptions, infra)
 
-				w, hostW = setupWorkloads(infra, tc, topologyOptions, client, enableIPv6)
+				w, w6, hostW, hostW6 = setupWorkloads(infra, tc, topologyOptions, client, enableIPv6)
 				felixes = tc.Felixes
 
 				cc = &connectivity.Checker{}
@@ -145,6 +147,12 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 			It("should have workload to workload connectivity", func() {
 				cc.ExpectSome(w[0], w[1])
 				cc.ExpectSome(w[1], w[0])
+
+				if enableIPv6 {
+					cc.ExpectSome(w6[0], w6[1])
+					cc.ExpectSome(w6[1], w6[0])
+				}
+
 				cc.CheckConnectivity()
 			})
 
@@ -170,6 +178,12 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 					err := client.IPAM().ReleaseByHandle(context.TODO(), wName)
 					Expect(err).NotTo(HaveOccurred())
 
+					if enableIPv6 {
+						w6Name := fmt.Sprintf("w6-%d", n)
+						err := client.IPAM().ReleaseByHandle(context.TODO(), w6Name)
+						Expect(err).NotTo(HaveOccurred())
+					}
+
 					err = client.IPAM().ReleaseHostAffinities(context.TODO(), felixes[n].Hostname, true)
 					Expect(err).NotTo(HaveOccurred())
 
@@ -183,17 +197,33 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 			It("should have host to workload connectivity", func() {
 				cc.ExpectSome(felixes[0], w[1])
 				cc.ExpectSome(felixes[0], w[0])
+
+				if enableIPv6 {
+					cc.ExpectSome(felixes[0], w6[1])
+					cc.ExpectSome(felixes[0], w6[0])
+				}
+
 				cc.CheckConnectivity()
 			})
 
 			It("should have host to host connectivity", func() {
 				cc.ExpectSome(felixes[0], hostW[1])
 				cc.ExpectSome(felixes[1], hostW[0])
+
+				if enableIPv6 {
+					cc.ExpectSome(felixes[0], hostW6[1])
+					cc.ExpectSome(felixes[1], hostW6[0])
+				}
+
 				cc.CheckConnectivity()
 			})
 
 			Context("with host protection policy in place", func() {
 				BeforeEach(func() {
+					if enableIPv6 {
+						Skip("Skipping due to known issue with ICMPv6 NDP being dropped with host endpoints")
+					}
+
 					// Make sure our new host endpoints don't cut felix off from the datastore.
 					err := infra.AddAllowToDatastore("host-endpoint=='true'")
 					Expect(err).NotTo(HaveOccurred())
@@ -218,15 +248,28 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 					// Host endpoints (with no policies) block host-host traffic due to default drop.
 					cc.ExpectNone(felixes[0], hostW[1])
 					cc.ExpectNone(felixes[1], hostW[0])
+					if enableIPv6 {
+						cc.ExpectNone(felixes[0], hostW6[1])
+						cc.ExpectNone(felixes[1], hostW6[0])
+					}
+
 					// But the rules to allow VXLAN between our hosts let the workload traffic through.
 					cc.ExpectSome(w[0], w[1])
 					cc.ExpectSome(w[1], w[0])
+					if enableIPv6 {
+						cc.ExpectSome(w6[0], w6[1])
+						cc.ExpectSome(w6[1], w6[0])
+					}
 					cc.CheckConnectivity()
 				})
 			})
 
 			Context("with all-interfaces host protection policy in place", func() {
 				BeforeEach(func() {
+					if enableIPv6 {
+						Skip("Skipping due to known issue with ICMPv6 NDP being dropped with host endpoints")
+					}
+
 					// Make sure our new host endpoints don't cut felix off from the datastore.
 					err := infra.AddAllowToDatastore("host-endpoint=='true'")
 					Expect(err).NotTo(HaveOccurred())
@@ -253,18 +296,35 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 					// Host endpoints (with no policies) block host-host traffic due to default drop.
 					cc.ExpectNone(felixes[0], hostW[1])
 					cc.ExpectNone(felixes[1], hostW[0])
+					if enableIPv6 {
+						cc.ExpectNone(felixes[0], hostW6[1])
+						cc.ExpectNone(felixes[1], hostW6[0])
+					}
 
 					// Host => workload is not allowed
 					cc.ExpectNone(felixes[0], w[1])
 					cc.ExpectNone(felixes[1], w[0])
+					if enableIPv6 {
+						cc.ExpectNone(felixes[0], w6[1])
+						cc.ExpectNone(felixes[1], w6[0])
+					}
 
 					// But host => own-workload is allowed
 					cc.ExpectSome(felixes[0], w[0])
 					cc.ExpectSome(felixes[1], w[1])
+					if enableIPv6 {
+						cc.ExpectSome(felixes[0], w6[0])
+						cc.ExpectSome(felixes[1], w6[1])
+					}
 
 					// But the rules to allow VXLAN between our hosts let the workload traffic through.
 					cc.ExpectSome(w[0], w[1])
 					cc.ExpectSome(w[1], w[0])
+					if enableIPv6 {
+						cc.ExpectSome(w6[0], w6[1])
+						cc.ExpectSome(w6[1], w6[0])
+					}
+
 					cc.CheckConnectivity()
 				})
 
@@ -279,13 +339,23 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 
 					// But there is no policy allowing ingress into felix[1].
 					cc.ExpectNone(felixes[0], hostW[1])
+					if enableIPv6 {
+						cc.ExpectNone(felixes[0], hostW6[1])
+					}
 
 					// felixes[1] can't reach felixes[0].
 					cc.ExpectNone(felixes[1], hostW[0])
+					if enableIPv6 {
+						cc.ExpectNone(felixes[1], hostW6[0])
+					}
 
 					// Workload connectivity is unchanged.
 					cc.ExpectSome(w[0], w[1])
 					cc.ExpectSome(w[1], w[0])
+					if enableIPv6 {
+						cc.ExpectSome(w6[0], w6[1])
+						cc.ExpectSome(w6[1], w6[0])
+					}
 					cc.CheckConnectivity()
 
 					cc.ResetExpectations()
@@ -300,13 +370,24 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 
 					// Now felixes[0] can reach felixes[1].
 					cc.ExpectSome(felixes[0], hostW[1])
+					if enableIPv6 {
+						cc.ExpectSome(felixes[0], hostW6[1])
+					}
 
 					// felixes[1] still can't reach felixes[0].
 					cc.ExpectNone(felixes[1], hostW[0])
+					if enableIPv6 {
+						cc.ExpectNone(felixes[1], hostW6[0])
+					}
 
 					// Workload connectivity is unchanged.
 					cc.ExpectSome(w[0], w[1])
 					cc.ExpectSome(w[1], w[0])
+					if enableIPv6 {
+						cc.ExpectSome(w6[0], w6[1])
+						cc.ExpectSome(w6[1], w6[0])
+					}
+
 					cc.CheckConnectivity()
 				})
 
@@ -360,6 +441,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 					It("allows host0 to remote Calico-networked workload via service IP", func() {
 						// Allocate a service IP.
 						serviceIP := "10.101.0.11"
+						serviceV6IP := "deca:fbad:0000:0000:0000:0000:0000:0001"
 						port := 8055
 						tgtPort := 8055
 
@@ -375,8 +457,26 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 							chain:     "OUTPUT",
 							ipv6:      false,
 						})
+						if enableIPv6 {
+							createK8sServiceWithoutKubeProxy(createK8sServiceWithoutKubeProxyArgs{
+								infra:     infra,
+								felix:     felixes[0],
+								w:         w6[1],
+								svcName:   "test-v6-svc",
+								serviceIP: serviceV6IP,
+								targetIP:  w6[1].IP,
+								port:      port,
+								tgtPort:   tgtPort,
+								chain:     "OUTPUT",
+								ipv6:      true,
+							})
+						}
+
 						// Expect to connect to the service IP.
 						cc.ExpectSome(felixes[0], connectivity.TargetIP(serviceIP), uint16(port))
+						if enableIPv6 {
+							cc.ExpectSome(felixes[0], connectivity.TargetIP(serviceV6IP), uint16(port))
+						}
 						cc.CheckConnectivity()
 					})
 				})
@@ -414,6 +514,15 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 					cc.ExpectNone(w[1], w[2])
 					cc.ExpectNone(w[2], w[0])
 					cc.ExpectNone(w[2], w[1])
+
+					if enableIPv6 {
+						cc.ExpectSome(w6[0], w6[1])
+						cc.ExpectSome(w6[1], w6[0])
+						cc.ExpectNone(w6[0], w6[2])
+						cc.ExpectNone(w6[2], w6[0])
+						cc.ExpectNone(w6[1], w6[2])
+						cc.ExpectNone(w6[2], w6[1])
+					}
 					cc.CheckConnectivity()
 				})
 			})
@@ -449,11 +558,22 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 				if vxlanMode == api.VXLANModeAlways {
 					It("after manually removing third node from allow list should have expected connectivity", func() {
 						felixes[0].Exec("ipset", "del", "cali40all-vxlan-net", felixes[2].IP)
+						if enableIPv6 {
+							felixes[0].Exec("ipset", "del", "cali60all-vxlan-net", felixes[2].IPv6)
+						}
 
 						cc.ExpectSome(w[0], w[1])
 						cc.ExpectSome(w[1], w[0])
 						cc.ExpectSome(w[1], w[2])
 						cc.ExpectNone(w[2], w[0])
+
+						if enableIPv6 {
+							cc.ExpectSome(w6[0], w6[1])
+							cc.ExpectSome(w6[1], w6[0])
+							cc.ExpectSome(w6[1], w6[2])
+							cc.ExpectNone(w6[2], w6[0])
+						}
+
 						cc.CheckConnectivity()
 					})
 				}
@@ -654,7 +774,7 @@ func createBaseTopologyOptions(vxlanMode api.VXLANMode, enableIPv6 bool, routeSo
 	return topologyOptions
 }
 
-func setupWorkloads(infra infrastructure.DatastoreInfra, tc infrastructure.TopologyContainers, to infrastructure.TopologyOptions, client client.Interface, enableIPv6 bool) (w, hostW [3]*workload.Workload) {
+func setupWorkloads(infra infrastructure.DatastoreInfra, tc infrastructure.TopologyContainers, to infrastructure.TopologyOptions, client client.Interface, enableIPv6 bool) (w, w6, hostW, hostW6 [3]*workload.Workload) {
 	// Install a default profile that allows all ingress and egress, in the absence of any Policy.
 	infra.AddDefaultAllow()
 
@@ -691,7 +811,8 @@ func setupWorkloads(infra infrastructure.DatastoreInfra, tc infrastructure.Topol
 
 	// Create workloads, using that profile.  One on each "host".
 	_, IPv4CIDR, err := net.ParseCIDR(to.IPPoolCIDR)
-
+	Expect(err).To(BeNil())
+	_, IPv6CIDR, err := net.ParseCIDR(to.IPv6PoolCIDR)
 	Expect(err).To(BeNil())
 	for ii := range w {
 		wIP := fmt.Sprintf("%d.%d.%d.2", IPv4CIDR.IP[0], IPv4CIDR.IP[1], ii)
@@ -709,7 +830,27 @@ func setupWorkloads(infra infrastructure.DatastoreInfra, tc infrastructure.Topol
 		w[ii] = workload.Run(tc.Felixes[ii], wName, "default", wIP, "8055", "tcp")
 		w[ii].ConfigureInInfra(infra)
 
+		if enableIPv6 {
+			w6IP := fmt.Sprintf("%x%x:%x%x:%x%x:%x%x:%x%x:%x%x:%d:3", IPv6CIDR.IP[0], IPv6CIDR.IP[1], IPv6CIDR.IP[2], IPv6CIDR.IP[3], IPv6CIDR.IP[4], IPv6CIDR.IP[5], IPv6CIDR.IP[6], IPv6CIDR.IP[7], IPv6CIDR.IP[8], IPv6CIDR.IP[9], IPv6CIDR.IP[10], IPv6CIDR.IP[11], ii)
+			w6Name := fmt.Sprintf("w6-%d", ii)
+			err := client.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
+				IP:       net.MustParseIP(w6IP),
+				HandleID: &w6Name,
+				Attrs: map[string]string{
+					ipam.AttributeNode: tc.Felixes[ii].Hostname,
+				},
+				Hostname: tc.Felixes[ii].Hostname,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			w6[ii] = workload.Run(tc.Felixes[ii], w6Name, "default", w6IP, "8055", "tcp")
+			w6[ii].ConfigureInInfra(infra)
+		}
+
 		hostW[ii] = workload.Run(tc.Felixes[ii], fmt.Sprintf("host%d", ii), "", tc.Felixes[ii].IP, "8055", "tcp")
+		if enableIPv6 {
+			hostW6[ii] = workload.Run(tc.Felixes[ii], fmt.Sprintf("host%d-v6", ii), "", tc.Felixes[ii].IPv6, "8055", "tcp")
+		}
 	}
 
 	if BPFMode() {

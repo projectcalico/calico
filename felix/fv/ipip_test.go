@@ -524,7 +524,7 @@ func createK8sServiceWithoutKubeProxy(args createK8sServiceWithoutKubeProxyArgs)
 		Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(1),
 			"Service endpoints didn't get created? Is controller-manager happy?")
 	}
-	args.felix.ProgramIptablesDNAT(args.serviceIP, args.targetIP, args.chain)
+	args.felix.ProgramIptablesDNAT(args.serviceIP, args.targetIP, args.chain, args.ipv6)
 }
 
 func getDataStoreType(infra infrastructure.DatastoreInfra) string {
