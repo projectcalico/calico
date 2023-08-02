@@ -50,6 +50,9 @@ endif
 ifeq ($(BUILDARCH),armv7l)
         BUILDARCH=armv7
 endif
+ifeq ($(BUILDARCH),loongarch64)
+        BUILDARCH=loong64
+endif
 
 # unless otherwise set, I am building for my own architecture, i.e. not cross-compiling
 ARCH ?= $(BUILDARCH)
@@ -66,6 +69,9 @@ ifeq ($(ARCH),armv7l)
 endif
 ifeq ($(ARCH),armhfv7)
         override ARCH=armv7
+endif
+ifeq ($(ARCH),loongarch64)
+        override ARCH=loong64
 endif
 
 # If ARCH is arm based, find the requested version/variant
@@ -173,7 +179,7 @@ define build_static_cgo_boring_binary
         -e CGO_ENABLED=1 \
         -e CGO_LDFLAGS=$(CGO_LDFLAGS) \
         -e CGO_CFLAGS=$(CGO_CFLAGS) \
-        $(GO_BUILD_IMAGE):$(GO_BUILD_VER) \
+        $(CALICO_BUILD) \
         sh -c '$(GIT_CONFIG_SSH) \
             GOEXPERIMENT=boringcrypto go build -o $(2)  \
             -tags fipsstrict,osusergo,netgo -v -buildvcs=false \
@@ -194,7 +200,7 @@ define build_cgo_boring_binary
         -e CGO_ENABLED=1 \
         -e CGO_LDFLAGS=$(CGO_LDFLAGS) \
         -e CGO_CFLAGS=$(CGO_CFLAGS) \
-        $(GO_BUILD_IMAGE):$(GO_BUILD_VER) \
+        $(CALICO_BUILD) \
         sh -c '$(GIT_CONFIG_SSH) \
             GOEXPERIMENT=boringcrypto go build -o $(2)  \
             -tags fipsstrict -v -buildvcs=false \
@@ -209,7 +215,7 @@ define build_cgo_binary
         -e CGO_ENABLED=1 \
         -e CGO_LDFLAGS=$(CGO_LDFLAGS) \
         -e CGO_CFLAGS=$(CGO_CFLAGS) \
-        $(GO_BUILD_IMAGE):$(GO_BUILD_VER) \
+        $(CALICO_BUILD) \
         sh -c '$(GIT_CONFIG_SSH) \
             go build -o $(2)  \
             -v -buildvcs=false \
@@ -219,7 +225,7 @@ endef
 
 # For binaries that do not require boring crypto.
 define build_binary
-	$(DOCKER_RUN) $(GO_BUILD_IMAGE):$(GO_BUILD_VER) \
+	$(DOCKER_RUN) $(CALICO_BUILD) \
 		sh -c '$(GIT_CONFIG_SSH) \
 		go build -o $(2)  \
 		-v -buildvcs=false \
@@ -229,7 +235,7 @@ endef
 
 # For binaries that do not require boring crypto.
 define build_static_binary
-        $(DOCKER_RUN) $(GO_BUILD_IMAGE):$(GO_BUILD_VER) \
+        $(DOCKER_RUN) $(CALICO_BUILD) \
                 sh -c '$(GIT_CONFIG_SSH) \
                 go build -o $(2)  \
                 -v -buildvcs=false \
