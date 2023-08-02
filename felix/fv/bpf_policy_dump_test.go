@@ -44,7 +44,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test policy dump"
 
 	var (
 		infra        infrastructure.DatastoreInfra
-		felixes      []*infrastructure.Felix
+		tc           infrastructure.TopologyContainers
 		calicoClient client.Interface
 		w            [2]*workload.Workload
 	)
@@ -53,10 +53,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test policy dump"
 		infra = getInfra()
 		opts := infrastructure.DefaultTopologyOptions()
 		opts.ExtraEnvVars["FELIX_BPFPolicyDebugEnabled"] = "true"
-		felixes, calicoClient = infrastructure.StartNNodeTopology(1, opts, infra)
+		tc, calicoClient = infrastructure.StartNNodeTopology(1, opts, infra)
 		for i := 0; i < 2; i++ {
 			wIP := fmt.Sprintf("10.65.0.%d", i+2)
-			w[i] = workload.Run(felixes[0], fmt.Sprintf("w%d", i), "default", wIP, "8055", "tcp")
+			w[i] = workload.Run(tc.Felixes[0], fmt.Sprintf("w%d", i), "default", wIP, "8055", "tcp")
 			w[i].WorkloadEndpoint.Labels = map[string]string{"name": w[i].Name}
 			w[i].ConfigureInInfra(infra)
 		}
@@ -71,7 +71,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test policy dump"
 		for i := 0; i < 2; i++ {
 			w[i].Stop()
 		}
-		felixes[0].Stop()
+		tc.Stop()
 		infra.Stop()
 	})
 
@@ -114,7 +114,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test policy dump"
 		ifaceStr := fmt.Sprintf("IfaceName: %s", w[0].InterfaceName)
 		// check ingress policy dump
 		Eventually(func() string {
-			out, err = felixes[0].ExecOutput("calico-bpf", "policy", "dump", w[0].InterfaceName, "ingress")
+			out, err = tc.Felixes[0].ExecOutput("calico-bpf", "policy", "dump", w[0].InterfaceName, "ingress")
 			Expect(err).NotTo(HaveOccurred())
 			return out
 		}, "5s", "200ms").Should(ContainSubstring("Start of tier default"))
@@ -132,7 +132,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test policy dump"
 		// check egress policy dump
 		out = ""
 		Eventually(func() string {
-			out, err = felixes[0].ExecOutput("calico-bpf", "policy", "dump", w[0].InterfaceName, "egress")
+			out, err = tc.Felixes[0].ExecOutput("calico-bpf", "policy", "dump", w[0].InterfaceName, "egress")
 			Expect(err).NotTo(HaveOccurred())
 			return out
 		}, "5s", "200ms").Should(ContainSubstring("Start of tier default"))
@@ -150,7 +150,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test policy dump"
 		// Test calico-bpf policy dump all
 		out = ""
 		Eventually(func() string {
-			out, err = felixes[0].ExecOutput("calico-bpf", "policy", "dump", w[0].InterfaceName, "all")
+			out, err = tc.Felixes[0].ExecOutput("calico-bpf", "policy", "dump", w[0].InterfaceName, "all")
 			Expect(err).NotTo(HaveOccurred())
 			return out
 		}, "5s", "200ms").Should(ContainSubstring("Start of tier default"))
@@ -191,7 +191,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test policy dump"
 		ifaceStr := fmt.Sprintf("IfaceName: %s", w[1].InterfaceName)
 		// check ingress policy dump
 		Eventually(func() string {
-			out, err = felixes[0].ExecOutput("calico-bpf", "policy", "dump", w[1].InterfaceName, "ingress")
+			out, err = tc.Felixes[0].ExecOutput("calico-bpf", "policy", "dump", w[1].InterfaceName, "ingress")
 			Expect(err).NotTo(HaveOccurred())
 			return out
 		}, "5s", "200ms").Should(ContainSubstring("Start of tier default"))
@@ -208,7 +208,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test policy dump"
 		// check egress policy dump
 		out = ""
 		Eventually(func() string {
-			out, err = felixes[0].ExecOutput("calico-bpf", "policy", "dump", w[1].InterfaceName, "egress")
+			out, err = tc.Felixes[0].ExecOutput("calico-bpf", "policy", "dump", w[1].InterfaceName, "egress")
 			Expect(err).NotTo(HaveOccurred())
 			return out
 		}, "5s", "200ms").Should(ContainSubstring("Start of tier default"))

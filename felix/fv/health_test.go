@@ -63,7 +63,7 @@ var _ = Describe("_HEALTH_ _BPF-SAFE_ health tests", func() {
 
 	BeforeEach(func() {
 		var err error
-		k8sInfra, err = infrastructure.GetK8sDatastoreInfra()
+		k8sInfra, err = infrastructure.GetK8sDatastoreInfra(infrastructure.K8SInfraLocalCluster)
 		Expect(err).NotTo(HaveOccurred())
 	})
 

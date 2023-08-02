@@ -70,7 +70,130 @@ type ipamBlockClient struct {
 	rc customK8sResourceClient
 }
 
-func (c ipamBlockClient) toV1(kvpv3 *model.KVPair) (*model.KVPair, error) {
+func (c *ipamBlockClient) Create(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
+	nkvp := IPAMBlockV1toV3(kvp)
+	b, err := c.rc.Create(ctx, nkvp)
+	if err != nil {
+		return nil, err
+	}
+	v1kvp, err := IPAMBlockV3toV1(b)
+	if err != nil {
+		return nil, err
+	}
+	return v1kvp, nil
+}
+
+func (c *ipamBlockClient) Update(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
+	nkvp := IPAMBlockV1toV3(kvp)
+	b, err := c.rc.Update(ctx, nkvp)
+	if err != nil {
+		return nil, err
+	}
+	v1kvp, err := IPAMBlockV3toV1(b)
+	if err != nil {
+		return nil, err
+	}
+	return v1kvp, nil
+}
+
+func (c *ipamBlockClient) DeleteKVP(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
+	// We need to mark as deleted first, since the Kubernetes API doesn't support
+	// compare-and-delete. This update operation allows us to eliminate races with other clients.
+	name, _ := parseKey(kvp.Key)
+	kvp.Value.(*model.AllocationBlock).Deleted = true
+	v1kvp, err := c.Update(ctx, kvp)
+	if err != nil {
+		return nil, err
+	}
+
+	// Now actually delete the object.
+	k := model.ResourceKey{Name: name, Kind: libapiv3.KindIPAMBlock}
+	kvp, err = c.rc.Delete(ctx, k, v1kvp.Revision, kvp.UID)
+	if err != nil {
+		return nil, err
+	}
+	return IPAMBlockV3toV1(kvp)
+}
+
+func (c *ipamBlockClient) Delete(ctx context.Context, key model.Key, revision string, uid *types.UID) (*model.KVPair, error) {
+	// Delete should not be used for blocks, since we need the object UID for correctness.
+	log.Warn("Operation Delete is not supported on IPAMBlock type - use DeleteKVP")
+	return nil, cerrors.ErrorOperationNotSupported{
+		Identifier: key,
+		Operation:  "Delete",
+	}
+}
+
+func (c *ipamBlockClient) Get(ctx context.Context, key model.Key, revision string) (*model.KVPair, error) {
+	// Get the object.
+	name, _ := parseKey(key)
+	k := model.ResourceKey{Name: name, Kind: libapiv3.KindIPAMBlock}
+	kvp, err := c.rc.Get(ctx, k, revision)
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert it back to V1 format.
+	v1kvp, err := IPAMBlockV3toV1(kvp)
+	if err != nil {
+		return nil, err
+	}
+
+	// If this object has been marked as deleted, then we need to clean it up and
+	// return not found.
+	if v1kvp.Value.(*model.AllocationBlock).Deleted {
+		if _, err := c.DeleteKVP(ctx, v1kvp); err != nil {
+			return nil, err
+		}
+		return nil, cerrors.ErrorResourceDoesNotExist{Err: fmt.Errorf("Resource was deleted"), Identifier: key}
+	}
+
+	return v1kvp, nil
+}
+
+func (c *ipamBlockClient) List(ctx context.Context, list model.ListInterface, revision string) (*model.KVPairList, error) {
+	l := model.ResourceListOptions{Kind: libapiv3.KindIPAMBlock}
+	v3list, err := c.rc.List(ctx, l, revision)
+	if err != nil {
+		return nil, err
+	}
+
+	kvpl := &model.KVPairList{KVPairs: []*model.KVPair{}}
+	for _, i := range v3list.KVPairs {
+		v1kvp, err := IPAMBlockV3toV1(i)
+		if err != nil {
+			return nil, err
+		}
+		kvpl.KVPairs = append(kvpl.KVPairs, v1kvp)
+	}
+	return kvpl, nil
+}
+
+func (c *ipamBlockClient) Watch(ctx context.Context, list model.ListInterface, revision string) (api.WatchInterface, error) {
+	resl := model.ResourceListOptions{Kind: libapiv3.KindIPAMBlock}
+	k8sWatchClient := cache.NewListWatchFromClient(c.rc.restClient, c.rc.resource, "", fields.Everything())
+	k8sWatch, err := k8sWatchClient.WatchFunc(metav1.ListOptions{ResourceVersion: revision, AllowWatchBookmarks: false})
+	if err != nil {
+		return nil, K8sErrorToCalico(err, list)
+	}
+	toKVPair := func(r Resource) (*model.KVPair, error) {
+		conv, err := c.rc.convertResourceToKVPair(r)
+		if err != nil {
+			return nil, err
+		}
+		return IPAMBlockV3toV1(conv)
+	}
+
+	return newK8sWatcherConverter(ctx, resl.Kind+" (custom)", toKVPair, k8sWatch), nil
+}
+
+// EnsureInitialized is a no-op since the CRD should be
+// initialized in advance.
+func (c *ipamBlockClient) EnsureInitialized() error {
+	return nil
+}
+
+func IPAMBlockV3toV1(kvpv3 *model.KVPair) (*model.KVPair, error) {
 	cidrStr := kvpv3.Value.(*libapiv3.IPAMBlock).Spec.CIDR
 	_, cidr, err := net.ParseCIDR(cidrStr)
 	if err != nil {
@@ -107,14 +230,8 @@ func (c ipamBlockClient) toV1(kvpv3 *model.KVPair) (*model.KVPair, error) {
 	}, nil
 }
 
-func (c ipamBlockClient) parseKey(k model.Key) (name, cidr string) {
-	cidr = fmt.Sprintf("%s", k.(model.BlockKey).CIDR)
-	name = names.CIDRToName(k.(model.BlockKey).CIDR)
-	return
-}
-
-func (c ipamBlockClient) toV3(kvpv1 *model.KVPair) *model.KVPair {
-	name, cidr := c.parseKey(kvpv1.Key)
+func IPAMBlockV1toV3(kvpv1 *model.KVPair) *model.KVPair {
+	name, cidr := parseKey(kvpv1.Key)
 
 	ab := kvpv1.Value.(*model.AllocationBlock)
 
@@ -156,125 +273,8 @@ func (c ipamBlockClient) toV3(kvpv1 *model.KVPair) *model.KVPair {
 	}
 }
 
-func (c *ipamBlockClient) Create(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
-	nkvp := c.toV3(kvp)
-	b, err := c.rc.Create(ctx, nkvp)
-	if err != nil {
-		return nil, err
-	}
-	v1kvp, err := c.toV1(b)
-	if err != nil {
-		return nil, err
-	}
-	return v1kvp, nil
-}
-
-func (c *ipamBlockClient) Update(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
-	nkvp := c.toV3(kvp)
-	b, err := c.rc.Update(ctx, nkvp)
-	if err != nil {
-		return nil, err
-	}
-	v1kvp, err := c.toV1(b)
-	if err != nil {
-		return nil, err
-	}
-	return v1kvp, nil
-}
-
-func (c *ipamBlockClient) DeleteKVP(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
-	// We need to mark as deleted first, since the Kubernetes API doesn't support
-	// compare-and-delete. This update operation allows us to eliminate races with other clients.
-	name, _ := c.parseKey(kvp.Key)
-	kvp.Value.(*model.AllocationBlock).Deleted = true
-	v1kvp, err := c.Update(ctx, kvp)
-	if err != nil {
-		return nil, err
-	}
-
-	// Now actually delete the object.
-	k := model.ResourceKey{Name: name, Kind: libapiv3.KindIPAMBlock}
-	kvp, err = c.rc.Delete(ctx, k, v1kvp.Revision, kvp.UID)
-	if err != nil {
-		return nil, err
-	}
-	return c.toV1(kvp)
-}
-
-func (c *ipamBlockClient) Delete(ctx context.Context, key model.Key, revision string, uid *types.UID) (*model.KVPair, error) {
-	// Delete should not be used for blocks, since we need the object UID for correctness.
-	log.Warn("Operation Delete is not supported on IPAMBlock type - use DeleteKVP")
-	return nil, cerrors.ErrorOperationNotSupported{
-		Identifier: key,
-		Operation:  "Delete",
-	}
-}
-
-func (c *ipamBlockClient) Get(ctx context.Context, key model.Key, revision string) (*model.KVPair, error) {
-	// Get the object.
-	name, _ := c.parseKey(key)
-	k := model.ResourceKey{Name: name, Kind: libapiv3.KindIPAMBlock}
-	kvp, err := c.rc.Get(ctx, k, revision)
-	if err != nil {
-		return nil, err
-	}
-
-	// Convert it back to V1 format.
-	v1kvp, err := c.toV1(kvp)
-	if err != nil {
-		return nil, err
-	}
-
-	// If this object has been marked as deleted, then we need to clean it up and
-	// return not found.
-	if v1kvp.Value.(*model.AllocationBlock).Deleted {
-		if _, err := c.DeleteKVP(ctx, v1kvp); err != nil {
-			return nil, err
-		}
-		return nil, cerrors.ErrorResourceDoesNotExist{Err: fmt.Errorf("Resource was deleted"), Identifier: key}
-	}
-
-	return v1kvp, nil
-}
-
-func (c *ipamBlockClient) List(ctx context.Context, list model.ListInterface, revision string) (*model.KVPairList, error) {
-	l := model.ResourceListOptions{Kind: libapiv3.KindIPAMBlock}
-	v3list, err := c.rc.List(ctx, l, revision)
-	if err != nil {
-		return nil, err
-	}
-
-	kvpl := &model.KVPairList{KVPairs: []*model.KVPair{}}
-	for _, i := range v3list.KVPairs {
-		v1kvp, err := c.toV1(i)
-		if err != nil {
-			return nil, err
-		}
-		kvpl.KVPairs = append(kvpl.KVPairs, v1kvp)
-	}
-	return kvpl, nil
-}
-
-func (c *ipamBlockClient) Watch(ctx context.Context, list model.ListInterface, revision string) (api.WatchInterface, error) {
-	resl := model.ResourceListOptions{Kind: libapiv3.KindIPAMBlock}
-	k8sWatchClient := cache.NewListWatchFromClient(c.rc.restClient, c.rc.resource, "", fields.Everything())
-	k8sWatch, err := k8sWatchClient.WatchFunc(metav1.ListOptions{ResourceVersion: revision, AllowWatchBookmarks: false})
-	if err != nil {
-		return nil, K8sErrorToCalico(err, list)
-	}
-	toKVPair := func(r Resource) (*model.KVPair, error) {
-		conv, err := c.rc.convertResourceToKVPair(r)
-		if err != nil {
-			return nil, err
-		}
-		return c.toV1(conv)
-	}
-
-	return newK8sWatcherConverter(ctx, resl.Kind+" (custom)", toKVPair, k8sWatch), nil
-}
-
-// EnsureInitialized is a no-op since the CRD should be
-// initialized in advance.
-func (c *ipamBlockClient) EnsureInitialized() error {
-	return nil
+func parseKey(k model.Key) (name, cidr string) {
+	cidr = fmt.Sprintf("%s", k.(model.BlockKey).CIDR)
+	name = names.CIDRToName(k.(model.BlockKey).CIDR)
+	return
 }

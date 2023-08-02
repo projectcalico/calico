@@ -217,7 +217,7 @@ func unlockSockmapTest() {
 var _ = infrastructure.DatastoreDescribe("[SOCKMAP] with Felix using sockmap", []apiconfig.DatastoreType{apiconfig.EtcdV3 /*, apiconfig.Kubernetes*/}, func(getInfra infrastructure.InfraFactory) {
 	var (
 		infra   infrastructure.DatastoreInfra
-		felix   *infrastructure.Felix
+		tc      infrastructure.TopologyContainers
 		host    *workload.Workload
 		ip      string
 		port    int
@@ -243,12 +243,12 @@ var _ = infrastructure.DatastoreDescribe("[SOCKMAP] with Felix using sockmap", [
 		}()
 		infra = getInfra()
 		opts := getSockmapOpts()
-		felix, _ = infrastructure.StartSingleNodeTopology(opts, infra)
+		tc, _ = infrastructure.StartSingleNodeTopology(opts, infra)
 		ip = "10.65.0.2"
 		port = 8055
 		srcPort = 8056
 		host = workload.Run(
-			felix,
+			tc.Felixes[0],
 			"service",
 			"default",
 			ip,
@@ -261,7 +261,7 @@ var _ = infrastructure.DatastoreDescribe("[SOCKMAP] with Felix using sockmap", [
 	AfterEach(func() {
 		defer unlockSockmapTest()
 		host.Stop()
-		felix.Stop()
+		tc.Stop()
 		// Clean up the sockmap state. We do this by starting
 		// a new felix instance (after stopping the old one),
 		// so it cleans up the whatever state we ended up
@@ -273,9 +273,9 @@ var _ = infrastructure.DatastoreDescribe("[SOCKMAP] with Felix using sockmap", [
 		// them. That way we will have no leftovers.
 		func() {
 			opts := getSockmapOpts()
-			felix, _ = infrastructure.StartSingleNodeTopology(opts, infra)
-			defer felix.Stop()
-			output, err := felix.Container.ExecOutput(
+			tc, _ = infrastructure.StartSingleNodeTopology(opts, infra)
+			defer tc.Stop()
+			output, err := tc.Felixes[0].Container.ExecOutput(
 				"bpftool",
 				"--json",
 				"--pretty",
@@ -286,20 +286,20 @@ var _ = infrastructure.DatastoreDescribe("[SOCKMAP] with Felix using sockmap", [
 			)
 			if err != nil {
 				log.WithFields(log.Fields{
-					"containerID": felix.Container.Name,
+					"containerID": tc.Felixes[0].Container.Name,
 					"output":      output,
 				}).WithError(err).Info("Failed to dump the contents of the sock map, skipping cleanup")
 				return
 			}
 			if strings.TrimSpace(output) != "[]" {
 				log.WithFields(log.Fields{
-					"containerID": felix.Container.Name,
+					"containerID": tc.Felixes[0].Container.Name,
 					"output":      output,
 				}).Info("Sock map is not empty, skipping cleanup")
 				return
 			}
 			fullCgroupDir := "/run/calico/cgroup"
-			output, err = felix.Container.ExecOutput(
+			output, err = tc.Felixes[0].Container.ExecOutput(
 				"bpftool",
 				"cgroup",
 				"detach",
@@ -311,7 +311,7 @@ var _ = infrastructure.DatastoreDescribe("[SOCKMAP] with Felix using sockmap", [
 			if err != nil {
 				log.WithFields(log.Fields{
 					"cgroupdir":   fullCgroupDir,
-					"containerID": felix.Container.Name,
+					"containerID": tc.Felixes[0].Container.Name,
 					"output":      output,
 				}).WithError(err).Info("Failed to detach sockops program from cgroup, skipping cleanup")
 				return
@@ -328,7 +328,7 @@ var _ = infrastructure.DatastoreDescribe("[SOCKMAP] with Felix using sockmap", [
 			"hexen": hexen,
 		}).Info("Looking for IP.")
 		Eventually(func() [][]string {
-			return getEndpointsMapContents(felix)
+			return getEndpointsMapContents(tc.Felixes[0])
 		}, 5*time.Second, 500*time.Millisecond).Should(ContainElement(hexen))
 	})
 
@@ -343,7 +343,7 @@ var _ = infrastructure.DatastoreDescribe("[SOCKMAP] with Felix using sockmap", [
 		{
 			hexen := testIPToHex(ip)
 			Eventually(func() [][]string {
-				return getEndpointsMapContents(felix)
+				return getEndpointsMapContents(tc.Felixes[0])
 			}, 5*time.Second, 500*time.Millisecond).Should(ContainElement(hexen))
 		}
 		side := host.StartSideService()
@@ -354,7 +354,7 @@ var _ = infrastructure.DatastoreDescribe("[SOCKMAP] with Felix using sockmap", [
 		defer pc.Stop()
 		expectedKeys := getExpectedSockmapKeys(ip, srcPort)
 		Eventually(func() [][]string {
-			output, err := felix.Container.ExecOutput(
+			output, err := tc.Felixes[0].Container.ExecOutput(
 				"bpftool",
 				"map",
 				"dump",

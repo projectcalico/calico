@@ -46,7 +46,7 @@ var _ = Context("Config update tests, after starting felix", func() {
 
 	var (
 		etcd          *containers.Container
-		felix         *infrastructure.Felix
+		tc            infrastructure.TopologyContainers
 		felixPID      int
 		client        client.Interface
 		infra         infrastructure.DatastoreInfra
@@ -55,21 +55,21 @@ var _ = Context("Config update tests, after starting felix", func() {
 	)
 
 	BeforeEach(func() {
-		felix, etcd, client, infra = infrastructure.StartSingleNodeEtcdTopology(infrastructure.DefaultTopologyOptions())
-		felixPID = felix.GetSinglePID("calico-felix")
+		tc, etcd, client, infra = infrastructure.StartSingleNodeEtcdTopology(infrastructure.DefaultTopologyOptions())
+		felixPID = tc.Felixes[0].GetSinglePID("calico-felix")
 	})
 
 	AfterEach(func() {
 
 		if CurrentGinkgoTestDescription().Failed {
-			felix.Exec("iptables-save", "-c")
-			felix.Exec("ip", "r")
+			tc.Felixes[0].Exec("iptables-save", "-c")
+			tc.Felixes[0].Exec("ip", "r")
 		}
 
 		for ii := range w {
 			w[ii].Stop()
 		}
-		felix.Stop()
+		tc.Stop()
 
 		if CurrentGinkgoTestDescription().Failed {
 			etcd.Exec("etcdctl", "get", "/", "--prefix", "--keys-only")
@@ -82,10 +82,10 @@ var _ = Context("Config update tests, after starting felix", func() {
 		// Felix has a 2s timer before it restarts so need to monitor for > 2s.
 		// We use ContainElement because Felix regularly forks off subprocesses and those
 		// subprocesses initially have name "calico-felix".
-		Consistently(felix.GetFelixPIDs, "3s", "200ms").Should(ContainElement(felixPID))
+		Consistently(tc.Felixes[0].GetFelixPIDs, "3s", "200ms").Should(ContainElement(felixPID))
 		// We know the initial PID has continued to be active, check that none of the extra
 		// transientPIDs we see are long-lived.
-		Eventually(felix.GetFelixPIDs).Should(ConsistOf(felixPID))
+		Eventually(tc.Felixes[0].GetFelixPIDs).Should(ConsistOf(felixPID))
 	}
 
 	It("should stay up >2s", shouldStayUp)
@@ -133,7 +133,7 @@ var _ = Context("Config update tests, after starting felix", func() {
 
 	Context("after waiting for felix to come into sync and then updating config", func() {
 		BeforeEach(func() {
-			waitForFelixInSync(felix)
+			waitForFelixInSync(tc.Felixes[0])
 			updateConfig()
 		})
 
@@ -145,12 +145,12 @@ var _ = Context("Config update tests, after starting felix", func() {
 		// 1s since the time of the config change.
 		monitorTime := time.Second - time.Since(cfgChangeTime)
 		if monitorTime > 0 {
-			Consistently(felix.GetFelixPIDs, monitorTime, "100ms").Should(ContainElement(felixPID))
+			Consistently(tc.Felixes[0].GetFelixPIDs, monitorTime, "100ms").Should(ContainElement(felixPID))
 		}
-		Eventually(felix.GetFelixPIDs, "10s", "100ms").ShouldNot(ContainElement(felixPID))
+		Eventually(tc.Felixes[0].GetFelixPIDs, "10s", "100ms").ShouldNot(ContainElement(felixPID))
 
 		// Update felix pid after restart.
-		felixPID = felix.GetSinglePID("calico-felix")
+		felixPID = tc.Felixes[0].GetSinglePID("calico-felix")
 	}
 
 	Context("after updating config that should trigger a restart", func() {
@@ -174,12 +174,12 @@ var _ = Context("Config update tests, after starting felix", func() {
 		Context("after deleting config that should trigger a restart", func() {
 			BeforeEach(func() {
 				// Wait for the add to register and cause a restart.
-				Eventually(felix.GetFelixPIDs, "5s", "100ms").ShouldNot(ContainElement(felixPID))
-				felixPID = felix.GetSinglePID("calico-felix")
+				Eventually(tc.Felixes[0].GetFelixPIDs, "5s", "100ms").ShouldNot(ContainElement(felixPID))
+				felixPID = tc.Felixes[0].GetSinglePID("calico-felix")
 
 				// Wait for felix to come in to sync; otherwise we may manage to remove the config before
 				// felix loads it.
-				waitForFelixInSync(felix)
+				waitForFelixInSync(tc.Felixes[0])
 
 				// Then remove the config that we added.
 				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -202,8 +202,8 @@ var _ = Context("Config update tests, after starting felix", func() {
 		var proxy *kubeProxy
 
 		BeforeEach(func() {
-			waitForFelixInSync(felix)
-			proxy = newKubeProxy(felix)
+			waitForFelixInSync(tc.Felixes[0])
+			proxy = newKubeProxy(tc.Felixes[0])
 		})
 
 		Context("after switch to ipvs mode that should trigger a restart", func() {
@@ -226,7 +226,7 @@ var _ = Context("Config update tests, after starting felix", func() {
 
 				// Wait felix in sync again.
 				shouldExitAfterADelay()
-				waitForFelixInSync(felix)
+				waitForFelixInSync(tc.Felixes[0])
 
 				// Track the current time and then make the config change back to iptables mode.
 				cfgChangeTime = time.Now()
