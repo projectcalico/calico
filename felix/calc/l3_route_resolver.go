@@ -620,7 +620,7 @@ func (c *L3RouteResolver) OnPoolUpdate(update api.Update) (_ bool) {
 
 	k := update.Key.(model.IPPoolKey)
 	poolKey := k.String()
-	oldPool := c.allPools[poolKey]
+	oldPool, oldPoolExists := c.allPools[poolKey]
 	var newPool *l3rrPoolInfo
 	if update.Value != nil {
 		newPool = c.getPoolInfo(update)
@@ -633,7 +633,7 @@ func (c *L3RouteResolver) OnPoolUpdate(update api.Update) (_ bool) {
 		}).Info("Pool is active")
 		c.allPools[poolKey] = *newPool
 		c.trie.UpdatePool(newPool.CIDR, newPool.PoolType, newPool.NATOutgoing, newPool.CrossSubnet)
-	} else {
+	} else if oldPoolExists {
 		delete(c.allPools, poolKey)
 		c.trie.RemovePool(oldPool.CIDR)
 	}
