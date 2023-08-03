@@ -15,6 +15,8 @@
 package infrastructure
 
 import (
+	"net"
+
 	. "github.com/onsi/gomega"
 
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -44,20 +46,20 @@ type DatastoreInfra interface {
 	// SetExpectedIPIPTunnelAddr will set the Felix object's
 	// ExpectedIPIPTunnelAddr field, if we expect Felix to see that field being
 	// set after it has started up for the first time.
-	SetExpectedIPIPTunnelAddr(felix *Felix, idx int, needBGP bool)
+	SetExpectedIPIPTunnelAddr(felix *Felix, cidr *net.IPNet, idx int, needBGP bool)
 	// SetExpectedVXLANTunnelAddr will set the Felix object's
 	// ExpectedVXLANTunnelAddr field, if we expect Felix to see that field being
 	// set after it has started up for the first time.
-	SetExpectedVXLANTunnelAddr(felix *Felix, idx int, needVXLAN bool)
-	SetExpectedVXLANV6TunnelAddr(felix *Felix, idx int, needVXLAN bool)
+	SetExpectedVXLANTunnelAddr(felix *Felix, cidr *net.IPNet, idx int, needVXLAN bool)
+	SetExpectedVXLANV6TunnelAddr(felix *Felix, cidr *net.IPNet, idx int, needVXLAN bool)
 	// SetExpectedWireguardTunnelAddr will set the Felix object's
 	// ExpectedWireguardTunnelAddr field, if we expect Felix to see that field being
 	// set after it has started up for the first time.
-	SetExpectedWireguardTunnelAddr(felix *Felix, idx int, needWireguard bool)
+	SetExpectedWireguardTunnelAddr(felix *Felix, cidr *net.IPNet, idx int, needWireguard bool)
 	// SetExpectedWireguardV6TunnelAddr will set the Felix object's
 	// ExpectedWireguardV6TunnelAddr field, if we expect Felix to see that field being
 	// set after it has started up for the first time.
-	SetExpectedWireguardV6TunnelAddr(felix *Felix, idx int, needWireguard bool)
+	SetExpectedWireguardV6TunnelAddr(felix *Felix, cidr *net.IPNet, idx int, needWireguard bool)
 	// RemoveNodeAddresses will remove all the addresses (InternalIP, ExternalIP)
 	RemoveNodeAddresses(felix *Felix)
 	// AddNode will take the appropriate steps to add a node to the datastore.
@@ -66,7 +68,7 @@ type DatastoreInfra interface {
 	// The passed in idx will be used to setup the Tunnel or PodCIDR (from
 	// which the tunnel is created). needBGP is used (only in etcd) to
 	// add a NodeBGPSpec if true or otherwise not.
-	AddNode(felix *Felix, idx int, needBGP bool)
+	AddNode(felix *Felix, v4CIDR *net.IPNet, v6CIDR *net.IPNet, idx int, needBGP bool)
 	// AddWorkload will take the appropriate steps to create a workload in the
 	// datastore with the passed in wep values. If this succeeds then the
 	// *libapi.WorkloadEndpoint will be returned, otherwise an error will be

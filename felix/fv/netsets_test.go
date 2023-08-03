@@ -100,7 +100,7 @@ var _ = Context("_NET_SETS_ Network sets tests with initialized Felix and etcd d
 
 	var (
 		etcd     *containers.Container
-		felix    *infrastructure.Felix
+		tc       infrastructure.TopologyContainers
 		felixPID int
 		client   client.Interface
 		infra    infrastructure.DatastoreInfra
@@ -108,15 +108,15 @@ var _ = Context("_NET_SETS_ Network sets tests with initialized Felix and etcd d
 
 	BeforeEach(func() {
 		topologyOptions := infrastructure.DefaultTopologyOptions()
-		felix, etcd, client, infra = infrastructure.StartSingleNodeEtcdTopology(topologyOptions)
-		felixPID = felix.GetFelixPID()
+		tc, etcd, client, infra = infrastructure.StartSingleNodeEtcdTopology(topologyOptions)
+		felixPID = tc.Felixes[0].GetFelixPID()
 	})
 
 	AfterEach(func() {
 		if CurrentGinkgoTestDescription().Failed {
-			felix.Exec("iptables-save", "-c")
+			tc.Felixes[0].Exec("iptables-save", "-c")
 		}
-		felix.Stop()
+		tc.Stop()
 
 		if CurrentGinkgoTestDescription().Failed {
 			etcd.Exec("etcdctl", "get", "/", "--prefix", "--keys-only")
@@ -153,7 +153,7 @@ var _ = Context("_NET_SETS_ Network sets tests with initialized Felix and etcd d
 
 				ports = "3000"
 				w[ii] = workload.Run(
-					felix,
+					tc.Felixes[0],
 					"w"+iiStr,
 					"fv",
 					c.workloadIP(ii, false),
@@ -165,7 +165,7 @@ var _ = Context("_NET_SETS_ Network sets tests with initialized Felix and etcd d
 				w[ii].Configure(client)
 
 				nw[ii] = workload.Run(
-					felix,
+					tc.Felixes[0],
 					"nw"+iiStr,
 					"fv",
 					c.workloadIP(ii, true),
@@ -1087,7 +1087,7 @@ var _ = Context("_NET_SETS_ Network sets tests with initialized Felix and etcd d
 		BeforeEach(func() {
 			// Start a workload so we have something to add policy to
 			w := workload.Run(
-				felix,
+				tc.Felixes[0],
 				"w",
 				"default",
 				"10.65.0.2",
@@ -1097,7 +1097,7 @@ var _ = Context("_NET_SETS_ Network sets tests with initialized Felix and etcd d
 			w.Configure(client)
 
 			nw := workload.Run(
-				felix,
+				tc.Felixes[0],
 				"w",
 				"default",
 				"10.64.0.2",
@@ -1218,7 +1218,7 @@ var _ = Context("_NET_SETS_ Network sets tests with initialized Felix and etcd d
 			wg.Wait()
 
 			// getFelixPIDs may return more than one PID, transiently due to Felix calling fork().
-			Expect(felix.GetFelixPID()).To(Equal(felixPID))
+			Expect(tc.Felixes[0].GetFelixPID()).To(Equal(felixPID))
 		})
 	})
 })

@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"os"
 
 	. "github.com/onsi/gomega"
@@ -109,35 +110,35 @@ func (eds *EtcdDatastoreInfra) GetClusterGUID() string {
 	return ci.Spec.ClusterGUID
 }
 
-func (eds *EtcdDatastoreInfra) SetExpectedIPIPTunnelAddr(felix *Felix, idx int, needBGP bool) {
+func (eds *EtcdDatastoreInfra) SetExpectedIPIPTunnelAddr(felix *Felix, cidr *net.IPNet, idx int, needBGP bool) {
 	if needBGP {
-		felix.ExpectedIPIPTunnelAddr = fmt.Sprintf("10.65.%d.1", idx)
+		felix.ExpectedIPIPTunnelAddr = fmt.Sprintf("%d.%d.%d.1", cidr.IP[0], cidr.IP[1], idx)
 		felix.ExtraSourceIPs = append(felix.ExtraSourceIPs, felix.ExpectedIPIPTunnelAddr)
 	}
 }
 
-func (eds *EtcdDatastoreInfra) SetExpectedVXLANTunnelAddr(felix *Felix, idx int, needBGP bool) {
+func (eds *EtcdDatastoreInfra) SetExpectedVXLANTunnelAddr(felix *Felix, cidr *net.IPNet, idx int, needBGP bool) {
 	if needBGP {
-		felix.ExpectedVXLANTunnelAddr = fmt.Sprintf("10.65.%d.0", idx)
+		felix.ExpectedVXLANTunnelAddr = fmt.Sprintf("%d.%d.%d.0", cidr.IP[0], cidr.IP[1], idx)
 	}
 }
 
-func (eds *EtcdDatastoreInfra) SetExpectedVXLANV6TunnelAddr(felix *Felix, idx int, needBGP bool) {
+func (eds *EtcdDatastoreInfra) SetExpectedVXLANV6TunnelAddr(felix *Felix, cidr *net.IPNet, idx int, needBGP bool) {
 	if needBGP {
-		felix.ExpectedVXLANV6TunnelAddr = fmt.Sprintf("dead:beef::%d:0", idx)
+		felix.ExpectedVXLANV6TunnelAddr = fmt.Sprintf("%x%x:%x%x:%x%x:%x%x:%x%x:%x%x:%d:0", cidr.IP[0], cidr.IP[1], cidr.IP[2], cidr.IP[3], cidr.IP[4], cidr.IP[5], cidr.IP[6], cidr.IP[7], cidr.IP[8], cidr.IP[9], cidr.IP[10], cidr.IP[11], idx)
 	}
 }
 
-func (eds *EtcdDatastoreInfra) SetExpectedWireguardTunnelAddr(felix *Felix, idx int, needWireguard bool) {
+func (eds *EtcdDatastoreInfra) SetExpectedWireguardTunnelAddr(felix *Felix, cidr *net.IPNet, idx int, needWireguard bool) {
 	if needWireguard {
 		// Set to be the same as IPIP.
-		felix.ExpectedWireguardTunnelAddr = fmt.Sprintf("10.65.%d.1", idx)
+		felix.ExpectedWireguardTunnelAddr = fmt.Sprintf("%d.%d.%d.1", cidr.IP[0], cidr.IP[1], idx)
 	}
 }
 
-func (eds *EtcdDatastoreInfra) SetExpectedWireguardV6TunnelAddr(felix *Felix, idx int, needWireguard bool) {
+func (eds *EtcdDatastoreInfra) SetExpectedWireguardV6TunnelAddr(felix *Felix, cidr *net.IPNet, idx int, needWireguard bool) {
 	if needWireguard {
-		felix.ExpectedWireguardV6TunnelAddr = fmt.Sprintf("dead:beef::%d:0", idx)
+		felix.ExpectedWireguardV6TunnelAddr = fmt.Sprintf("%x%x:%x%x:%x%x:%x%x:%x%x:%x%x:%d:0", cidr.IP[0], cidr.IP[1], cidr.IP[2], cidr.IP[3], cidr.IP[4], cidr.IP[5], cidr.IP[6], cidr.IP[7], cidr.IP[8], cidr.IP[9], cidr.IP[10], cidr.IP[11], idx)
 	}
 }
 
@@ -153,7 +154,7 @@ func (eds *EtcdDatastoreInfra) RemoveNodeAddresses(felix *Felix) {
 	}
 }
 
-func (eds *EtcdDatastoreInfra) AddNode(felix *Felix, idx int, needBGP bool) {
+func (eds *EtcdDatastoreInfra) AddNode(felix *Felix, v4CIDR *net.IPNet, v6CIDR *net.IPNet, idx int, needBGP bool) {
 	felixNode := libapi.NewNode()
 	felixNode.Name = felix.Hostname
 	felixNode.Spec.IPv4VXLANTunnelAddr = felix.ExpectedVXLANTunnelAddr

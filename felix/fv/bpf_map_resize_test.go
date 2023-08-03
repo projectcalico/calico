@@ -52,15 +52,15 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test configurable
 	}
 
 	var (
-		infra   infrastructure.DatastoreInfra
-		felixes []*infrastructure.Felix
-		client  client.Interface
+		infra  infrastructure.DatastoreInfra
+		tc     infrastructure.TopologyContainers
+		client client.Interface
 	)
 
 	BeforeEach(func() {
 		infra = getInfra()
 		opts := infrastructure.DefaultTopologyOptions()
-		felixes, client = infrastructure.StartNNodeTopology(1, opts, infra)
+		tc, client = infrastructure.StartNNodeTopology(1, opts, infra)
 	})
 
 	AfterEach(func() {
@@ -68,7 +68,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test configurable
 			infra.DumpErrorData()
 		}
 
-		felixes[0].Stop()
+		tc.Stop()
 		infra.Stop()
 	})
 
@@ -102,8 +102,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test configurable
 		key := conntrack.NewKey(6 /* TCP */, srcIP, 0, dstIP, 0)
 		key64 := base64.StdEncoding.EncodeToString(key[:])
 
-		felixes[0].Exec("calico-bpf", "conntrack", "write", key64, val64)
-		out, err := felixes[0].ExecOutput("calico-bpf", "conntrack", "dump")
+		tc.Felixes[0].Exec("calico-bpf", "conntrack", "write", key64, val64)
+		out, err := tc.Felixes[0].ExecOutput("calico-bpf", "conntrack", "dump")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(strings.Count(out, srcIP.String())).To(Equal(1), "entry not found in conntrack map")
 		newCtMapSize := 6000
@@ -112,8 +112,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test configurable
 		})
 
 		ctMap := conntrack.Map()
-		Eventually(func() int { return getMapSize(felixes[0], ctMap) }, "10s", "200ms").Should(Equal(newCtMapSize))
-		out, err = felixes[0].ExecOutput("calico-bpf", "conntrack", "dump")
+		Eventually(func() int { return getMapSize(tc.Felixes[0], ctMap) }, "10s", "200ms").Should(Equal(newCtMapSize))
+		out, err = tc.Felixes[0].ExecOutput("calico-bpf", "conntrack", "dump")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(strings.Count(out, srcIP.String())).To(Equal(1), "entry not found in conntrack map")
 
@@ -127,7 +127,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test configurable
 		ipsMap := ipsets.Map()
 		ctMap := conntrack.Map()
 
-		felix := felixes[0]
+		felix := tc.Felixes[0]
 		Eventually(func() int { return getMapSize(felix, rtMap) }, "10s", "200ms").Should(Equal((rtMap.(*maps.PinnedMap)).MaxEntries))
 		Eventually(func() int { return getMapSize(felix, feMap) }, "10s", "200ms").Should(Equal((feMap.(*maps.PinnedMap)).MaxEntries))
 		Eventually(func() int { return getMapSize(felix, beMap) }, "10s", "200ms").Should(Equal((beMap.(*maps.PinnedMap)).MaxEntries))

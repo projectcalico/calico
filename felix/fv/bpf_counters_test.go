@@ -45,7 +45,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test counters", [
 
 	var (
 		infra        infrastructure.DatastoreInfra
-		felixes      []*infrastructure.Felix
+		tc           infrastructure.TopologyContainers
 		calicoClient client.Interface
 		w            [2]*workload.Workload
 	)
@@ -54,20 +54,20 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test counters", [
 		infra = getInfra()
 		opts := infrastructure.DefaultTopologyOptions()
 		opts.ExtraEnvVars["FELIX_BPFPolicyDebugEnabled"] = "true"
-		felixes, calicoClient = infrastructure.StartNNodeTopology(1, opts, infra)
+		tc, calicoClient = infrastructure.StartNNodeTopology(1, opts, infra)
 		for i := 0; i < 2; i++ {
 			wIP := fmt.Sprintf("10.65.0.%d", i+2)
-			w[i] = workload.Run(felixes[0], fmt.Sprintf("w%d", i), "default", wIP, "8055", "tcp")
+			w[i] = workload.Run(tc.Felixes[0], fmt.Sprintf("w%d", i), "default", wIP, "8055", "tcp")
 			w[i].WorkloadEndpoint.Labels = map[string]string{"name": w[i].Name}
 			w[i].ConfigureInInfra(infra)
 		}
-		ensureBPFProgramsAttached(felixes[0])
+		ensureBPFProgramsAttached(tc.Felixes[0])
 	})
 
 	AfterEach(func() {
 		if CurrentGinkgoTestDescription().Failed {
 			infra.DumpErrorData()
-			for _, felix := range felixes {
+			for _, felix := range tc.Felixes {
 				felix.Exec("calico-bpf", "counters", "dump")
 			}
 		}
@@ -75,7 +75,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test counters", [
 		for i := 0; i < 2; i++ {
 			w[i].Stop()
 		}
-		felixes[0].Stop()
+		tc.Stop()
 		infra.Stop()
 	})
 
@@ -114,18 +114,18 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test counters", [
 		pol.Spec.Egress = []api.Rule{{Action: api.Allow}}
 		pol = createPolicy(pol)
 
-		bpfWaitForPolicy(felixes[0], w[1].InterfaceName, "ingress", "default.drop-workload0-to-workload1")
+		bpfWaitForPolicy(tc.Felixes[0], w[1].InterfaceName, "ingress", "default.drop-workload0-to-workload1")
 
 		By("generating packets and checking the counter")
 		numberOfpackets := 10
 		for i := 0; i < numberOfpackets; i++ {
 			_, err := w[0].RunCmd("pktgen", w[0].IP, w[1].IP, "udp", "--port-dst", "8055", "--ip-id", strconv.Itoa(i+1))
 			Expect(err).NotTo(HaveOccurred())
-			_, err = w[0].RunCmd("pktgen", w[0].IP, felixes[0].IP, "udp", "--port-dst", "8055")
+			_, err = w[0].RunCmd("pktgen", w[0].IP, tc.Felixes[0].IP, "udp", "--port-dst", "8055")
 			Expect(err).NotTo(HaveOccurred())
 		}
 		Eventually(func(g Gomega) {
-			checkDroppedByPolicyCounters(g, felixes[0], w[1].InterfaceName, 0, numberOfpackets)
+			checkDroppedByPolicyCounters(g, tc.Felixes[0], w[1].InterfaceName, 0, numberOfpackets)
 		}, "5s", "500ms").Should(Succeed())
 	})
 
@@ -140,51 +140,51 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test counters", [
 		pol = createPolicy(pol)
 
 		Eventually(func() bool {
-			return bpfCheckIfPolicyProgrammed(felixes[0], w[0].InterfaceName, "ingress", "default.policy-test", "deny", true)
+			return bpfCheckIfPolicyProgrammed(tc.Felixes[0], w[0].InterfaceName, "ingress", "default.policy-test", "deny", true)
 		}, "2s", "200ms").Should(BeTrue())
 
 		Eventually(func() bool {
-			return bpfCheckIfPolicyProgrammed(felixes[0], w[0].InterfaceName, "egress", "default.policy-test", "deny", true)
+			return bpfCheckIfPolicyProgrammed(tc.Felixes[0], w[0].InterfaceName, "egress", "default.policy-test", "deny", true)
 		}, "2s", "200ms").Should(BeTrue())
 
 		Eventually(func() bool {
-			return bpfCheckIfPolicyProgrammed(felixes[0], w[1].InterfaceName, "ingress", "default.policy-test", "deny", true)
+			return bpfCheckIfPolicyProgrammed(tc.Felixes[0], w[1].InterfaceName, "ingress", "default.policy-test", "deny", true)
 		}, "2s", "200ms").Should(BeTrue())
 
 		Eventually(func() bool {
-			return bpfCheckIfPolicyProgrammed(felixes[0], w[1].InterfaceName, "egress", "default.policy-test", "deny", true)
+			return bpfCheckIfPolicyProgrammed(tc.Felixes[0], w[1].InterfaceName, "egress", "default.policy-test", "deny", true)
 		}, "2s", "200ms").Should(BeTrue())
 
 		for i := 0; i < 10; i++ {
 			_, err := w[1].RunCmd("pktgen", w[1].IP, w[0].IP, "udp", "--port-src", "8055", "--port-dst", "8055")
 			Expect(err).NotTo(HaveOccurred())
 		}
-		m := dumpRuleCounterMap(felixes[0])
+		m := dumpRuleCounterMap(tc.Felixes[0])
 		Expect(len(m)).To(Equal(1))
 		for _, v := range m {
 			Expect(v).To(Equal(uint64(10)))
 		}
 
-		checkRuleCounters(felixes[0], w[1].InterfaceName, "egress", "default.policy-test", 10)
+		checkRuleCounters(tc.Felixes[0], w[1].InterfaceName, "egress", "default.policy-test", 10)
 
 		pol.Spec.Ingress = []api.Rule{{Action: "Allow"}}
 		pol.Spec.Egress = []api.Rule{{Action: "Allow"}}
 
 		pol = updatePolicy(pol)
 		Eventually(func() bool {
-			return bpfCheckIfPolicyProgrammed(felixes[0], w[0].InterfaceName, "ingress", "default.policy-test", "allow", true)
+			return bpfCheckIfPolicyProgrammed(tc.Felixes[0], w[0].InterfaceName, "ingress", "default.policy-test", "allow", true)
 		}, "2s", "200ms").Should(BeTrue())
 
 		Eventually(func() bool {
-			return bpfCheckIfPolicyProgrammed(felixes[0], w[0].InterfaceName, "egress", "default.policy-test", "allow", true)
+			return bpfCheckIfPolicyProgrammed(tc.Felixes[0], w[0].InterfaceName, "egress", "default.policy-test", "allow", true)
 		}, "2s", "200ms").Should(BeTrue())
 
 		Eventually(func() bool {
-			return bpfCheckIfPolicyProgrammed(felixes[0], w[1].InterfaceName, "ingress", "default.policy-test", "allow", true)
+			return bpfCheckIfPolicyProgrammed(tc.Felixes[0], w[1].InterfaceName, "ingress", "default.policy-test", "allow", true)
 		}, "2s", "200ms").Should(BeTrue())
 
 		Eventually(func() bool {
-			return bpfCheckIfPolicyProgrammed(felixes[0], w[1].InterfaceName, "egress", "default.policy-test", "allow", true)
+			return bpfCheckIfPolicyProgrammed(tc.Felixes[0], w[1].InterfaceName, "egress", "default.policy-test", "allow", true)
 		}, "2s", "200ms").Should(BeTrue())
 
 		for i := 0; i < 10; i++ {
@@ -193,37 +193,37 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test counters", [
 		}
 
 		Eventually(func() int {
-			m = dumpRuleCounterMap(felixes[0])
+			m = dumpRuleCounterMap(tc.Felixes[0])
 			return len(m)
 		}, "2s", "200ms").Should(Equal(2))
 		for _, v := range m {
 			Expect(v).To(Equal(uint64(1)))
 		}
 
-		checkRuleCounters(felixes[0], w[1].InterfaceName, "egress", "default.policy-test", 1)
-		checkRuleCounters(felixes[0], w[0].InterfaceName, "ingress", "default.policy-test", 1)
+		checkRuleCounters(tc.Felixes[0], w[1].InterfaceName, "egress", "default.policy-test", 1)
+		checkRuleCounters(tc.Felixes[0], w[0].InterfaceName, "ingress", "default.policy-test", 1)
 
 		_, err := calicoClient.GlobalNetworkPolicies().Delete(context.Background(), "policy-test", options2.DeleteOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		Eventually(func() bool {
-			return bpfCheckIfPolicyProgrammed(felixes[0], w[0].InterfaceName, "ingress", "default.policy-test", "allow", true)
+			return bpfCheckIfPolicyProgrammed(tc.Felixes[0], w[0].InterfaceName, "ingress", "default.policy-test", "allow", true)
 		}, "2s", "200ms").ShouldNot(BeTrue())
 
 		Eventually(func() bool {
-			return bpfCheckIfPolicyProgrammed(felixes[0], w[0].InterfaceName, "egress", "default.policy-test", "allow", true)
+			return bpfCheckIfPolicyProgrammed(tc.Felixes[0], w[0].InterfaceName, "egress", "default.policy-test", "allow", true)
 		}, "2s", "200ms").ShouldNot(BeTrue())
 
 		Eventually(func() bool {
-			return bpfCheckIfPolicyProgrammed(felixes[0], w[1].InterfaceName, "ingress", "default.policy-test", "allow", true)
+			return bpfCheckIfPolicyProgrammed(tc.Felixes[0], w[1].InterfaceName, "ingress", "default.policy-test", "allow", true)
 		}, "2s", "200ms").ShouldNot(BeTrue())
 
 		Eventually(func() bool {
-			return bpfCheckIfPolicyProgrammed(felixes[0], w[1].InterfaceName, "egress", "default.policy-test", "allow", true)
+			return bpfCheckIfPolicyProgrammed(tc.Felixes[0], w[1].InterfaceName, "egress", "default.policy-test", "allow", true)
 		}, "2s", "200ms").ShouldNot(BeTrue())
 
 		Eventually(func() int {
-			m = dumpRuleCounterMap(felixes[0])
+			m = dumpRuleCounterMap(tc.Felixes[0])
 			return len(m)
 		}, "5s", "200ms").Should(Equal(0))
 	})
