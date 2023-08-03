@@ -18,6 +18,7 @@ package install
 
 import (
 	"fmt"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -27,7 +28,7 @@ import (
 
 func defaultNetConf() string {
 	netconf := `{
-  "name": "k8s-pod-network",
+  "name": "Calico",
   "cniVersion": "0.3.1",
   "plugins": [
     {
@@ -96,8 +97,8 @@ func defaultNetConf() string {
 
 // Perform replacement of windows variables
 func replacePlatformSpecificVars(c config, netconf string) string {
-
-	kubeconfigPath := "c:/" + c.CNINetDir + "/calico-kubeconfig"
+	kubeconfigPath := filepath.Join("c:", strings.TrimLeft(c.CNINetDir, "c:"), "/calico-kubeconfig")
+	kubeconfigPath = filepath.ToSlash(kubeconfigPath)
 	netconf = strings.Replace(netconf, "__KUBECONFIG_FILEPATH__", kubeconfigPath, -1)
 
 	netconf = strings.Replace(netconf, "__LOG_FILE_PATH__", getEnv("LOG_FILE_PATH", "c:/var/log/calico/cni/cni.log"), -1)
@@ -152,6 +153,7 @@ func replacePlatformSpecificVars(c config, netconf string) string {
 		logrus.Fatalf("Error converting halVer to int\nerror: %s", err)
 	}
 	supportsDSR := (winVerInt == 1809 && buildNumInt >= 17763 && halVerInt >= 1432) || (winVerInt >= 1903 && buildNumInt >= 18317)
+	// Remove the quotes when replacing with boolean values (the quotes are in so that the template if valid JSON even before replacing)
 	if supportsDSR {
 		netconf = strings.Replace(netconf, `"__DSR_SUPPORT__"`, "true", -1)
 	} else {

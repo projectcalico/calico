@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 	"github.com/sirupsen/logrus"
 	authenticationv1 "k8s.io/api/authentication/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -29,9 +30,8 @@ const (
 	defaultCNITokenValiditySeconds = 24 * 60 * 60
 	minTokenRetryDuration          = 5 * time.Second
 	defaultRefreshFraction         = 4
+	kubeconfigPath                 = "/host/etc/cni/net.d/calico-kubeconfig"
 )
-
-var kubeconfigPath string = "/host/etc/cni/net.d/calico-kubeconfig"
 
 type TokenRefresher struct {
 	tokenSupported bool
@@ -56,7 +56,7 @@ type TokenUpdate struct {
 }
 
 func NamespaceOfUsedServiceAccount() string {
-	namespace, err := os.ReadFile(serviceAccountNamespace)
+	namespace, err := os.ReadFile(winutils.GetHostPath(serviceAccountNamespace))
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to read service account namespace file")
 	}
@@ -179,7 +179,7 @@ func (t *TokenRefresher) tokenRequestSupported(clientset *kubernetes.Clientset) 
 }
 
 func tokenUpdateFromFile() (TokenUpdate, error) {
-	tokenBytes, err := os.ReadFile(tokenFile)
+	tokenBytes, err := os.ReadFile(winutils.GetHostPath(tokenFile))
 	if err != nil {
 		logrus.WithError(err).Error("Failed to read service account token file")
 		return TokenUpdate{}, err
@@ -276,9 +276,10 @@ current-context: calico-context`
 	data := fmt.Sprintf(template, cfg.Host, base64.StdEncoding.EncodeToString(cfg.CAData), token)
 
 	// Write the filled out config to disk.
-	if err := os.WriteFile(kubeconfigPath, []byte(data), 0600); err != nil {
+	if err := os.WriteFile(winutils.GetHostPath(kubeconfigPath), []byte(data), 0600); err != nil {
 		logrus.WithError(err).Error("Failed to write CNI plugin kubeconfig file")
 		return
 	}
-	logrus.WithField("path", kubeconfigPath).Info("Wrote updated CNI kubeconfig file.")
+	// logrus.WithField("path", kubeconfigPath).Info("Wrote updated CNI kubeconfig file.")
+	logrus.WithField("path", winutils.GetHostPath(kubeconfigPath)).Info("Wrote updated CNI kubeconfig file.")
 }

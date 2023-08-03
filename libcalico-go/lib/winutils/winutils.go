@@ -17,6 +17,9 @@ import (
 	"bytes"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"runtime"
+	"strings"
 )
 
 func Powershell(args ...string) (string, string, error) {
@@ -46,4 +49,21 @@ func Powershell(args ...string) (string, string, error) {
 	}
 
 	return stdout.String(), stderr.String(), err
+}
+
+// GetHostPath returns the mount paths for a container
+// In the case of Windows HostProcess containers this prepends the CONTAINER_SANDBOX_MOUNT_POINT env variable
+// for other operating systems or if the sandbox env variable is not set it returns the standard mount points
+// see https://kubernetes.io/docs/tasks/configure-pod-container/create-hostprocess-pod/#volume-mounts
+// FIXME: this will no longer be needed when containerd v1.6 is EOL'd
+func GetHostPath(path string) string {
+	if runtime.GOOS == "windows" {
+		sandbox := os.Getenv("CONTAINER_SANDBOX_MOUNT_POINT")
+		// join them and return with forward slashes so it can be serialized properly in json later if required
+		path := strings.TrimLeft(path, "c:")
+		path = strings.TrimLeft(path, "C:")
+		path = filepath.Join(sandbox, path, "c:")
+		return filepath.ToSlash(path)
+	}
+	return path
 }
