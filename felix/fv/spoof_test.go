@@ -29,15 +29,15 @@ import (
 
 var _ = Describe("Spoof tests", func() {
 	var (
-		infra   infrastructure.DatastoreInfra
-		felixes []*infrastructure.Felix
-		w       [3]*workload.Workload
-		cc      *connectivity.Checker
+		infra infrastructure.DatastoreInfra
+		tc    infrastructure.TopologyContainers
+		w     [3]*workload.Workload
+		cc    *connectivity.Checker
 	)
 
 	teardownInfra := func() {
 		if CurrentGinkgoTestDescription().Failed {
-			for _, felix := range felixes {
+			for _, felix := range tc.Felixes {
 				felix.Exec("iptables-save", "-c")
 				felix.Exec("ip6tables-save", "-c")
 				felix.Exec("ipset", "list")
@@ -50,9 +50,7 @@ var _ = Describe("Spoof tests", func() {
 		for _, wl := range w {
 			wl.Stop()
 		}
-		for _, felix := range felixes {
-			felix.Stop()
-		}
+		tc.Stop()
 		if CurrentGinkgoTestDescription().Failed {
 			infra.DumpErrorData()
 		}
@@ -99,7 +97,7 @@ var _ = Describe("Spoof tests", func() {
 			infra, err = infrastructure.GetEtcdDatastoreInfra()
 			Expect(err).NotTo(HaveOccurred())
 			opts := infrastructure.DefaultTopologyOptions()
-			felixes, _ = infrastructure.StartNNodeTopology(3, opts, infra)
+			tc, _ = infrastructure.StartNNodeTopology(3, opts, infra)
 			// Install a default profile allowing all ingress and egress,
 			// in the absence of policy.
 			infra.AddDefaultAllow()
@@ -108,12 +106,12 @@ var _ = Describe("Spoof tests", func() {
 			for ii := range w {
 				wIP := fmt.Sprintf("10.65.%d.2", ii)
 				wName := fmt.Sprintf("w%d", ii)
-				w[ii] = workload.Run(felixes[ii], wName, "default", wIP, "8055", "tcp")
+				w[ii] = workload.Run(tc.Felixes[ii], wName, "default", wIP, "8055", "tcp")
 				w[ii].ConfigureInInfra(infra)
 			}
 
 			if BPFMode() {
-				ensureAllNodesBPFProgramsAttached(felixes)
+				ensureAllNodesBPFProgramsAttached(tc.Felixes)
 			}
 		})
 
@@ -139,7 +137,7 @@ var _ = Describe("Spoof tests", func() {
 			// felix, but our current topology setup tooling doesn't yet
 			// support that for IPv6. So for these tests, we'll run the
 			// workloads on a single felix.
-			felixes, _ = infrastructure.StartNNodeTopology(1, opts, infra)
+			tc, _ = infrastructure.StartNNodeTopology(1, opts, infra)
 
 			// Install a default profile allowing all ingress and egress,
 			// in the absence of policy.
@@ -149,7 +147,7 @@ var _ = Describe("Spoof tests", func() {
 			for ii := range w {
 				wIP := fmt.Sprintf("fdc6:3dbc:e983:cbc%x::1", ii)
 				wName := fmt.Sprintf("w%d", ii)
-				w[ii] = workload.Run(felixes[0], wName, "default", wIP, "8055", "tcp")
+				w[ii] = workload.Run(tc.Felixes[0], wName, "default", wIP, "8055", "tcp")
 				w[ii].ConfigureInInfra(infra)
 			}
 		})

@@ -45,7 +45,7 @@ import (
 var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Service network policy tests", []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
 	var (
 		infra           infrastructure.DatastoreInfra
-		felixes         []*infrastructure.Felix
+		tc              infrastructure.TopologyContainers
 		client          client.Interface
 		w               [3]*workload.Workload
 		hostW           [3]*workload.Workload
@@ -56,7 +56,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Service network policy test
 	BeforeEach(func() {
 		infra = getInfra()
 		topologyOptions = infrastructure.DefaultTopologyOptions()
-		felixes, client = infrastructure.StartNNodeTopology(3, topologyOptions, infra)
+		tc, client = infrastructure.StartNNodeTopology(3, topologyOptions, infra)
 
 		// Install a default profile that allows all ingress and egress, in the absence of any Policy.
 		infra.AddDefaultAllow()
@@ -69,16 +69,16 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Service network policy test
 				IP:       net.MustParseIP(wIP),
 				HandleID: &wName,
 				Attrs: map[string]string{
-					ipam.AttributeNode: felixes[ii].Hostname,
+					ipam.AttributeNode: tc.Felixes[ii].Hostname,
 				},
-				Hostname: felixes[ii].Hostname,
+				Hostname: tc.Felixes[ii].Hostname,
 			})
 			Expect(err).NotTo(HaveOccurred())
 
-			w[ii] = workload.Run(felixes[ii], wName, "default", wIP, "80,81", "tcp")
+			w[ii] = workload.Run(tc.Felixes[ii], wName, "default", wIP, "80,81", "tcp")
 			w[ii].ConfigureInInfra(infra)
 
-			hostW[ii] = workload.Run(felixes[ii], fmt.Sprintf("host%d", ii), "", felixes[ii].IP, "8055", "tcp")
+			hostW[ii] = workload.Run(tc.Felixes[ii], fmt.Sprintf("host%d", ii), "", tc.Felixes[ii].IP, "8055", "tcp")
 		}
 
 		cc = &connectivity.Checker{}
@@ -86,7 +86,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Service network policy test
 
 	AfterEach(func() {
 		if CurrentGinkgoTestDescription().Failed {
-			for _, felix := range felixes {
+			for _, felix := range tc.Felixes {
 				felix.Exec("iptables-save", "-c")
 				felix.Exec("ipset", "list")
 				felix.Exec("ip", "r")
@@ -100,9 +100,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Service network policy test
 		for _, wl := range hostW {
 			wl.Stop()
 		}
-		for _, felix := range felixes {
-			felix.Stop()
-		}
+		tc.Stop()
 
 		if CurrentGinkgoTestDescription().Failed {
 			infra.DumpErrorData()

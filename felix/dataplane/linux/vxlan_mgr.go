@@ -226,6 +226,7 @@ func (m *vxlanManager) OnUpdate(protoBufMsg interface{}) {
 		// In case the route changes type to one we no longer care about...
 		m.deleteRoute(msg.Dst)
 
+		// Process remote IPAM blocks.
 		if msg.Type == proto.RouteType_REMOTE_WORKLOAD && msg.IpPoolType == proto.IPPoolType_VXLAN {
 			m.logCtx.WithField("msg", msg).Debug("VXLAN data plane received route update")
 			m.routesByDest[msg.Dst] = msg
@@ -420,7 +421,7 @@ func (m *vxlanManager) CompleteDeferredWork() error {
 		// known VTEPs.
 		var l2routes []routetable.L2Target
 		for _, u := range m.vtepsByNode {
-			mac, err := m.parseMacForIPVersion(u)
+			mac, err := parseMacForIPVersion(u, m.ipVersion)
 			if err != nil {
 				// Don't block programming of other VTEPs if somehow we receive one with a bad mac.
 				m.logCtx.WithError(err).Warn("Failed to parse VTEP mac address")
@@ -604,17 +605,6 @@ func (m *vxlanManager) getParentInterface(localVTEP *proto.VXLANTunnelEndpointUp
 	return nil, fmt.Errorf("Unable to find parent interface with address %s", parentDeviceIP)
 }
 
-func (m *vxlanManager) parseMacForIPVersion(vtep *proto.VXLANTunnelEndpointUpdate) (net.HardwareAddr, error) {
-	switch m.ipVersion {
-	case 4:
-		return net.ParseMAC(vtep.Mac)
-	case 6:
-		return net.ParseMAC(vtep.MacV6)
-	default:
-		return nil, fmt.Errorf("Invalid IP version")
-	}
-}
-
 // configureVXLANDevice ensures the VXLAN tunnel device is up and configured correctly.
 func (m *vxlanManager) configureVXLANDevice(mtu int, localVTEP *proto.VXLANTunnelEndpointUpdate, xsumBroken bool) error {
 	logCtx := m.logCtx.WithFields(logrus.Fields{"device": m.vxlanDevice})
@@ -623,7 +613,7 @@ func (m *vxlanManager) configureVXLANDevice(mtu int, localVTEP *proto.VXLANTunne
 	if err != nil {
 		return err
 	}
-	mac, err := m.parseMacForIPVersion(localVTEP)
+	mac, err := parseMacForIPVersion(localVTEP, m.ipVersion)
 	if err != nil {
 		return err
 	}
@@ -796,4 +786,15 @@ func vxlanLinksIncompat(l1, l2 netlink.Link) string {
 	}
 
 	return ""
+}
+
+func parseMacForIPVersion(vtep *proto.VXLANTunnelEndpointUpdate, ipVersion uint8) (net.HardwareAddr, error) {
+	switch ipVersion {
+	case 4:
+		return net.ParseMAC(vtep.Mac)
+	case 6:
+		return net.ParseMAC(vtep.MacV6)
+	default:
+		return nil, fmt.Errorf("Invalid IP version")
+	}
 }

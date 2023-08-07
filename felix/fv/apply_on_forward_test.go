@@ -43,7 +43,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ apply on forward tests; wit
 	var (
 		bpfEnabled = os.Getenv("FELIX_FV_ENABLE_BPF") == "true"
 		infra      infrastructure.DatastoreInfra
-		felixes    []*infrastructure.Felix
+		tc         infrastructure.TopologyContainers
 		client     client.Interface
 		w          [2]*workload.Workload
 		hostW      [2]*workload.Workload
@@ -55,7 +55,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ apply on forward tests; wit
 
 		options := infrastructure.DefaultTopologyOptions()
 		options.IPIPEnabled = false
-		felixes, client = infrastructure.StartNNodeTopology(2, options, infra)
+		tc, client = infrastructure.StartNNodeTopology(2, options, infra)
 
 		// Install a default profile that allows all ingress and egress, in the absence of any Policy.
 		infra.AddDefaultAllow()
@@ -64,10 +64,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ apply on forward tests; wit
 		for ii := range w {
 			wIP := fmt.Sprintf("10.65.%d.2", ii)
 			wName := fmt.Sprintf("w%d", ii)
-			w[ii] = workload.Run(felixes[ii], wName, "default", wIP, "8055", "tcp")
+			w[ii] = workload.Run(tc.Felixes[ii], wName, "default", wIP, "8055", "tcp")
 			w[ii].ConfigureInInfra(infra)
 
-			hostW[ii] = workload.Run(felixes[ii], fmt.Sprintf("host%d", ii), "", felixes[ii].IP, "8055", "tcp")
+			hostW[ii] = workload.Run(tc.Felixes[ii], fmt.Sprintf("host%d", ii), "", tc.Felixes[ii].IP, "8055", "tcp")
 		}
 
 		cc = &connectivity.Checker{}
@@ -75,7 +75,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ apply on forward tests; wit
 
 	AfterEach(func() {
 		if CurrentGinkgoTestDescription().Failed {
-			for _, felix := range felixes {
+			for _, felix := range tc.Felixes {
 				felix.Exec("iptables-save", "-c")
 				felix.Exec("ipset", "list")
 				felix.Exec("ip", "r")
@@ -89,10 +89,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ apply on forward tests; wit
 		for _, wl := range hostW {
 			wl.Stop()
 		}
-		for _, felix := range felixes {
-			felix.Stop()
-		}
 
+		tc.Stop()
 		if CurrentGinkgoTestDescription().Failed {
 			infra.DumpErrorData()
 		}
@@ -149,7 +147,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ apply on forward tests; wit
 				ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
 				defer cancel()
 
-				for _, f := range felixes {
+				for _, f := range tc.Felixes {
 					hep := api.NewHostEndpoint()
 					hep.Name = "eth0-" + f.Name
 					hep.Labels = map[string]string{
@@ -186,7 +184,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ apply on forward tests; wit
 				ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
 				defer cancel()
 
-				for _, f := range felixes {
+				for _, f := range tc.Felixes {
 					hep := api.NewHostEndpoint()
 					hep.Name = "all-interfaces-" + f.Name
 					hep.Labels = map[string]string{

@@ -31,7 +31,7 @@ var _ = infrastructure.DatastoreDescribe("Base FORWARD behaviour", []apiconfig.D
 
 	var (
 		infra infrastructure.DatastoreInfra
-		felix *infrastructure.Felix
+		tc    infrastructure.TopologyContainers
 		w     [2]*workload.Workload
 		cc    *connectivity.Checker
 	)
@@ -41,40 +41,40 @@ var _ = infrastructure.DatastoreDescribe("Base FORWARD behaviour", []apiconfig.D
 		opts := infrastructure.DefaultTopologyOptions()
 		opts.ExtraEnvVars["FELIX_REMOVEEXTERNALROUTES"] = "false"
 		opts.ExtraEnvVars["FELIX_INTERFACEPREFIX"] = "wibbly"
-		felix, _ = infrastructure.StartSingleNodeTopology(opts, infra)
+		tc, _ = infrastructure.StartSingleNodeTopology(opts, infra)
 
 		// Create two non-Calico-managed namespaces, so we can test the root namespace's
 		// forwarding ability in the absence of any Calico policy.
 		for ii := range w {
 			wIP := fmt.Sprintf("10.65.%d.2", ii)
 			wName := fmt.Sprintf("w%d", ii)
-			w[ii] = workload.Run(felix, wName, "default", wIP, "8055", "tcp")
+			w[ii] = workload.Run(tc.Felixes[0], wName, "default", wIP, "8055", "tcp")
 		}
 
 		// Manually add routing between them.  We need FELIX_REMOVEEXTERNALROUTES and
 		// FELIX_INTERFACEPREFIX other than "cali" (above) so that these manual routes
 		// aren't removed again by Felix.
-		felix.Exec("ip", "route", "add", w[0].IP+"/32", "dev", w[0].InterfaceName)
-		felix.Exec("ip", "route", "add", w[1].IP+"/32", "dev", w[1].InterfaceName)
+		tc.Felixes[0].Exec("ip", "route", "add", w[0].IP+"/32", "dev", w[0].InterfaceName)
+		tc.Felixes[0].Exec("ip", "route", "add", w[1].IP+"/32", "dev", w[1].InterfaceName)
 
 		// Also manually set up proxy ARP.
-		felix.Exec("sysctl", "-w", "net.ipv4.conf."+w[0].InterfaceName+".proxy_arp=1")
-		felix.Exec("sysctl", "-w", "net.ipv4.conf."+w[1].InterfaceName+".proxy_arp=1")
-		felix.Exec("sysctl", "-w", "net.ipv4.neigh."+w[0].InterfaceName+".proxy_delay=0")
-		felix.Exec("sysctl", "-w", "net.ipv4.neigh."+w[1].InterfaceName+".proxy_delay=0")
+		tc.Felixes[0].Exec("sysctl", "-w", "net.ipv4.conf."+w[0].InterfaceName+".proxy_arp=1")
+		tc.Felixes[0].Exec("sysctl", "-w", "net.ipv4.conf."+w[1].InterfaceName+".proxy_arp=1")
+		tc.Felixes[0].Exec("sysctl", "-w", "net.ipv4.neigh."+w[0].InterfaceName+".proxy_delay=0")
+		tc.Felixes[0].Exec("sysctl", "-w", "net.ipv4.neigh."+w[1].InterfaceName+".proxy_delay=0")
 
 		cc = &connectivity.Checker{}
 	})
 
 	AfterEach(func() {
-		felix.Stop()
 		if CurrentGinkgoTestDescription().Failed {
 			infra.DumpErrorData()
-			felix.Exec("iptables-save", "-c")
-			felix.Exec("ipset", "list")
-			felix.Exec("ip", "r")
-			felix.Exec("ip", "a")
+			tc.Felixes[0].Exec("iptables-save", "-c")
+			tc.Felixes[0].Exec("ipset", "list")
+			tc.Felixes[0].Exec("ip", "r")
+			tc.Felixes[0].Exec("ip", "a")
 		}
+		tc.Stop()
 		infra.Stop()
 	})
 
@@ -86,7 +86,7 @@ var _ = infrastructure.DatastoreDescribe("Base FORWARD behaviour", []apiconfig.D
 
 	Context("with FORWARD ACCEPT policy", func() {
 		BeforeEach(func() {
-			felix.Exec("iptables", "-P", "FORWARD", "ACCEPT")
+			tc.Felixes[0].Exec("iptables", "-P", "FORWARD", "ACCEPT")
 		})
 
 		It("should now forward", func() {

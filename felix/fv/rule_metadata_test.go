@@ -35,7 +35,7 @@ import (
 var _ = Describe("Rule Metadata tests", func() {
 
 	var (
-		felix  *infrastructure.Felix
+		tc     infrastructure.TopologyContainers
 		client client.Interface
 		infra  infrastructure.DatastoreInfra
 		etcd   *containers.Container
@@ -44,19 +44,19 @@ var _ = Describe("Rule Metadata tests", func() {
 	)
 
 	BeforeEach(func() {
-		felix, etcd, client, infra = infrastructure.StartSingleNodeEtcdTopology(infrastructure.DefaultTopologyOptions())
+		tc, etcd, client, infra = infrastructure.StartSingleNodeEtcdTopology(infrastructure.DefaultTopologyOptions())
 
-		wl0 = workload.Run(felix, "test0", "default", "10.65.0.1", "80", "tcp")
+		wl0 = workload.Run(tc.Felixes[0], "test0", "default", "10.65.0.1", "80", "tcp")
 		wl0.Configure(client)
 
-		wl1 = workload.Run(felix, "test1", "default", "10.65.0.2", "80", "tcp")
+		wl1 = workload.Run(tc.Felixes[0], "test1", "default", "10.65.0.2", "80", "tcp")
 		wl1.Configure(client)
 	})
 
 	AfterEach(func() {
 		wl0.Stop()
 		wl1.Stop()
-		felix.Stop()
+		tc.Stop()
 		etcd.Stop()
 		infra.Stop()
 	})
@@ -78,7 +78,7 @@ var _ = Describe("Rule Metadata tests", func() {
 		})
 
 		It("should add comments to iptables", func() {
-			Eventually(getIPTables(felix.Name)).Should(ContainSubstring("-m comment --comment \"fvtest=gnp\""))
+			Eventually(getIPTables(tc.Felixes[0].Name)).Should(ContainSubstring("-m comment --comment \"fvtest=gnp\""))
 		})
 	})
 
@@ -98,7 +98,7 @@ var _ = Describe("Rule Metadata tests", func() {
 		})
 
 		It("should add comments to iptables", func() {
-			Eventually(getIPTables(felix.Name)).Should(ContainSubstring("-m comment --comment \"fvtest=profile\""))
+			Eventually(getIPTables(tc.Felixes[0].Name)).Should(ContainSubstring("-m comment --comment \"fvtest=profile\""))
 		})
 	})
 
@@ -120,7 +120,7 @@ var _ = Describe("Rule Metadata tests", func() {
 		})
 
 		It("should add comments to iptables", func() {
-			Eventually(getIPTables(felix.Name)).Should(ContainSubstring("-m comment --comment \"fvtest=networkpolicy\""))
+			Eventually(getIPTables(tc.Felixes[0].Name)).Should(ContainSubstring("-m comment --comment \"fvtest=networkpolicy\""))
 		})
 
 	})
@@ -153,9 +153,9 @@ var _ = Describe("Rule Metadata tests", func() {
 
 		It("should add comments to iptables", func() {
 			// Felix replaces anything other than "safe" shell characters with _
-			Eventually(getIPTables(felix.Name)).Should(ContainSubstring("-m comment --comment \"foo=hello_world\""))
-			Eventually(getIPTables(felix.Name)).Should(ContainSubstring("-m comment --comment \"hometown=Sm_land\""))
-			Eventually(getIPTables(felix.Name)).Should(ContainSubstring("-m comment --comment \"random="))
+			Eventually(getIPTables(tc.Felixes[0].Name)).Should(ContainSubstring("-m comment --comment \"foo=hello_world\""))
+			Eventually(getIPTables(tc.Felixes[0].Name)).Should(ContainSubstring("-m comment --comment \"hometown=Sm_land\""))
+			Eventually(getIPTables(tc.Felixes[0].Name)).Should(ContainSubstring("-m comment --comment \"random="))
 		})
 
 		// This test case verifies that "interesting" annotations like newlines and unicode don't break
