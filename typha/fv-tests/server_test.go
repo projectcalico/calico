@@ -20,6 +20,7 @@ import (
 	"encoding/gob"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"path/filepath"
@@ -1611,6 +1612,19 @@ var _ = Describe("with server requiring TLS", func() {
 		}
 	}
 
+	testTcpHalfOpen := func() {
+		deadline := time.Now().Add(9 * time.Second)
+		serverAddr := fmt.Sprintf("127.0.0.1:%d", server.Port())
+		tcpConn, err := net.Dial("tcp", serverAddr)
+		Expect(err).NotTo(HaveOccurred())
+		err = tcpConn.SetDeadline(time.Now().Add(30 * time.Second))
+		Expect(err).NotTo(HaveOccurred())
+		received := make([]byte, 1024)
+		_, err = tcpConn.Read(received)
+		Expect(err).Should(Equal(io.EOF))
+		Expect(time.Now().Unix()).Should(BeNumerically(">=", deadline.Unix()))
+	}
+
 	Describe("and CN or URI SAN", func() {
 		BeforeEach(func() {
 			requiredClientCN = clientCN
@@ -1685,5 +1699,15 @@ var _ = Describe("with server requiring TLS", func() {
 		It("TLS connection with good URI should fail", testTLSGoodURI(false))
 
 		It("TLS connection with good CN and URI should fail", testTLSGoodCNURI(false))
+	})
+
+	Describe("handshake", func() {
+		BeforeEach(func() {
+			requiredClientCN = clientCN
+			requiredClientURISAN = clientURISAN
+			serverCertName = "server"
+		})
+
+		It("should timeout after 10 seconds for TCP half open connections", testTcpHalfOpen)
 	})
 })
