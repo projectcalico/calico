@@ -51,7 +51,7 @@ var _ = infrastructure.DatastoreDescribe("pre-dnat with initialized Felix, 2 wor
 
 	var (
 		infra          infrastructure.DatastoreInfra
-		felix          *infrastructure.Felix
+		tc             infrastructure.TopologyContainers
 		client         client.Interface
 		w              [2]*workload.Workload
 		externalClient *containers.Container
@@ -63,7 +63,7 @@ var _ = infrastructure.DatastoreDescribe("pre-dnat with initialized Felix, 2 wor
 		options := infrastructure.DefaultTopologyOptions()
 		// For variety, run this test with IPv6 disabled.
 		options.EnableIPv6 = false
-		felix, client = infrastructure.StartSingleNodeTopology(options, infra)
+		tc, client = infrastructure.StartSingleNodeTopology(options, infra)
 
 		// Install a default profile that allows all ingress and egress, in the absence of any Policy.
 		infra.AddDefaultAllow()
@@ -71,29 +71,29 @@ var _ = infrastructure.DatastoreDescribe("pre-dnat with initialized Felix, 2 wor
 		// Create workloads, using that profile.
 		for ii := range w {
 			iiStr := strconv.Itoa(ii)
-			w[ii] = workload.Run(felix, "w"+iiStr, "default", "10.65.0.1"+iiStr, "8055", "tcp")
+			w[ii] = workload.Run(tc.Felixes[0], "w"+iiStr, "default", "10.65.0.1"+iiStr, "8055", "tcp")
 			w[ii].ConfigureInInfra(infra)
 		}
 
 		// We will use this container to model an external client trying to connect into
 		// workloads on a host.  Create a route in the container for the workload CIDR.
 		externalClient = infrastructure.RunExtClient("ext-client")
-		externalClient.Exec("ip", "r", "add", "10.65.0.0/24", "via", felix.IP)
+		externalClient.Exec("ip", "r", "add", "10.65.0.0/24", "via", tc.Felixes[0].IP)
 	})
 
 	AfterEach(func() {
 
 		if CurrentGinkgoTestDescription().Failed {
 			infra.DumpErrorData()
-			felix.Exec("iptables-save", "-c")
-			felix.Exec("ip", "r")
-			felix.Exec("ip", "a")
+			tc.Felixes[0].Exec("iptables-save", "-c")
+			tc.Felixes[0].Exec("ip", "r")
+			tc.Felixes[0].Exec("ip", "a")
 		}
 
 		for ii := range w {
 			w[ii].Stop()
 		}
-		felix.Stop()
+		tc.Stop()
 
 		infra.Stop()
 		externalClient.Stop()
@@ -102,7 +102,7 @@ var _ = infrastructure.DatastoreDescribe("pre-dnat with initialized Felix, 2 wor
 	Context("with node port DNATs", func() {
 
 		BeforeEach(func() {
-			felix.Exec(
+			tc.Felixes[0].Exec(
 				"iptables", "-t", "nat",
 				"-w", "10", // Retry this for 10 seconds, e.g. if something else is holding the lock
 				"-W", "100000", // How often to probe the lock in microsecs.
@@ -111,7 +111,7 @@ var _ = infrastructure.DatastoreDescribe("pre-dnat with initialized Felix, 2 wor
 				"-d", "10.65.0.10", "--dport", "32010",
 				"-j", "DNAT", "--to", "10.65.0.10:8055",
 			)
-			felix.Exec(
+			tc.Felixes[0].Exec(
 				"iptables", "-t", "nat",
 				"-w", "10", // Retry this for 10 seconds, e.g. if something else is holding the lock
 				"-W", "100000", // How often to probe the lock in microsecs.
@@ -155,7 +155,7 @@ var _ = infrastructure.DatastoreDescribe("pre-dnat with initialized Felix, 2 wor
 				BeforeEach(func() {
 					hostEp := api.NewHostEndpoint()
 					hostEp.Name = "felix-eth0"
-					hostEp.Spec.Node = felix.Hostname
+					hostEp.Spec.Node = tc.Felixes[0].Hostname
 					hostEp.Labels = map[string]string{"host-endpoint": "true"}
 					hostEp.Spec.InterfaceName = "eth0"
 					_, err := client.HostEndpoints().Create(utils.Ctx, hostEp, utils.NoOptions)
@@ -243,7 +243,7 @@ var _ = infrastructure.DatastoreDescribe("pre-dnat with initialized Felix, 2 wor
 				BeforeEach(func() {
 					hostEp := api.NewHostEndpoint()
 					hostEp.Name = "felix-all"
-					hostEp.Spec.Node = felix.Hostname
+					hostEp.Spec.Node = tc.Felixes[0].Hostname
 					hostEp.Labels = map[string]string{"host-endpoint": "true"}
 					hostEp.Spec.InterfaceName = "*"
 					_, err := client.HostEndpoints().Create(utils.Ctx, hostEp, utils.NoOptions)

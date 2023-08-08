@@ -40,15 +40,15 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test conntrack ma
 	}
 
 	var (
-		infra   infrastructure.DatastoreInfra
-		felixes []*infrastructure.Felix
+		infra infrastructure.DatastoreInfra
+		tc    infrastructure.TopologyContainers
 		//client  client.Interface
 	)
 
 	BeforeEach(func() {
 		infra = getInfra()
 		opts := infrastructure.DefaultTopologyOptions()
-		felixes, _ = infrastructure.StartNNodeTopology(1, opts, infra)
+		tc, _ = infrastructure.StartNNodeTopology(1, opts, infra)
 	})
 
 	AfterEach(func() {
@@ -56,13 +56,13 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test conntrack ma
 			infra.DumpErrorData()
 		}
 
-		felixes[0].Stop()
+		tc.Stop()
 		infra.Stop()
 	})
 
 	It("should upgrade conntrack entries from v2 to v3", func() {
 		// create conntrack v2 map
-		felixes[0].Exec("calico-bpf", "conntrack", "create", "--ver=2")
+		tc.Felixes[0].Exec("calico-bpf", "conntrack", "create", "--ver=2")
 		srcIP := net.IPv4(123, 123, 123, 123)
 		dstIP := net.IPv4(121, 121, 121, 121)
 
@@ -75,7 +75,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test conntrack ma
 		key64 := base64.StdEncoding.EncodeToString(key[:])
 
 		// write a normal key
-		felixes[0].Exec("calico-bpf", "conntrack", "write", "--ver=2", key64, val64)
+		tc.Felixes[0].Exec("calico-bpf", "conntrack", "write", "--ver=2", key64, val64)
 
 		k3Normal := conntrack.NewKey(6, srcIP, 0, dstIP, 0)
 		leg3Normal := conntrack.Leg{SynSeen: true, AckSeen: true, Opener: true}
@@ -89,7 +89,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test conntrack ma
 		val.SetNATSport(4321)
 		val64 = base64.StdEncoding.EncodeToString(val[:])
 
-		felixes[0].Exec("calico-bpf", "conntrack", "write", "--ver=2", key64, val64)
+		tc.Felixes[0].Exec("calico-bpf", "conntrack", "write", "--ver=2", key64, val64)
 		k3NatFwd := conntrack.NewKey(11, srcIP, 0, dstIP, 0)
 		val3NatFwd := conntrack.NewValueNATForward(now, now, 0, k3NatFwd)
 		val3NatFwd.SetNATSport(4321)
@@ -103,7 +103,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test conntrack ma
 		val = v2.NewValueNATReverse(now, now, 0, leg, leg, tunIP, origIP, 1234)
 		val64 = base64.StdEncoding.EncodeToString(val[:])
 
-		felixes[0].Exec("calico-bpf", "conntrack", "write", "--ver=2", key64, val64)
+		tc.Felixes[0].Exec("calico-bpf", "conntrack", "write", "--ver=2", key64, val64)
 		k3NatRev := conntrack.NewKey(11, srcIP, 0, dstIP, 0)
 		val3NatRev := conntrack.NewValueNATReverse(now, now, 0, leg3Normal, leg3Normal, tunIP, origIP, 1234)
 
@@ -118,14 +118,14 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test conntrack ma
 		val = v2.NewValueNATReverseSNAT(now, now, 0, leg, leg, tunIP, origIP, origSIP, 1234)
 		val64 = base64.StdEncoding.EncodeToString(val[:])
 
-		felixes[0].Exec("calico-bpf", "conntrack", "write", "--ver=2", key64, val64)
+		tc.Felixes[0].Exec("calico-bpf", "conntrack", "write", "--ver=2", key64, val64)
 		k3NatRevSnat := conntrack.NewKey(11, srcIP, 0, dstIP, 0)
 		val3NatRevSnat := conntrack.NewValueNATReverseSNAT(now, now, 0, leg3Normal, leg3Normal, tunIP, origIP, origSIP, 1234)
 
-		felixes[0].Restart()
-		Eventually(func() conntrack.MapMem { return dumpCTMap(felixes[0]) }, "10s", "100ms").Should(HaveKeyWithValue(k3Normal, val3Normal))
-		Eventually(func() conntrack.MapMem { return dumpCTMap(felixes[0]) }, "10s", "100ms").Should(HaveKeyWithValue(k3NatFwd, val3NatFwd))
-		Eventually(func() conntrack.MapMem { return dumpCTMap(felixes[0]) }, "10s", "100ms").Should(HaveKeyWithValue(k3NatRev, val3NatRev))
-		Eventually(func() conntrack.MapMem { return dumpCTMap(felixes[0]) }, "10s", "100ms").Should(HaveKeyWithValue(k3NatRevSnat, val3NatRevSnat))
+		tc.Felixes[0].Restart()
+		Eventually(func() conntrack.MapMem { return dumpCTMap(tc.Felixes[0]) }, "10s", "100ms").Should(HaveKeyWithValue(k3Normal, val3Normal))
+		Eventually(func() conntrack.MapMem { return dumpCTMap(tc.Felixes[0]) }, "10s", "100ms").Should(HaveKeyWithValue(k3NatFwd, val3NatFwd))
+		Eventually(func() conntrack.MapMem { return dumpCTMap(tc.Felixes[0]) }, "10s", "100ms").Should(HaveKeyWithValue(k3NatRev, val3NatRev))
+		Eventually(func() conntrack.MapMem { return dumpCTMap(tc.Felixes[0]) }, "10s", "100ms").Should(HaveKeyWithValue(k3NatRevSnat, val3NatRevSnat))
 	})
 })

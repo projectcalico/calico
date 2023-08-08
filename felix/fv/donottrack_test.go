@@ -40,7 +40,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ do-not-track policy tests; 
 
 	var (
 		infra          infrastructure.DatastoreInfra
-		felixes        []*infrastructure.Felix
+		tc             infrastructure.TopologyContainers
 		hostW          [2]*workload.Workload
 		client         client.Interface
 		cc             *connectivity.Checker
@@ -52,11 +52,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ do-not-track policy tests; 
 		infra = getInfra()
 
 		options := infrastructure.DefaultTopologyOptions()
-		felixes, client = infrastructure.StartNNodeTopology(2, options, infra)
+		tc, client = infrastructure.StartNNodeTopology(2, options, infra)
 		cc = &connectivity.Checker{}
 
 		// Start a host networked workload on each host for connectivity checks.
-		for ii := range felixes {
+		for ii := range tc.Felixes {
 			// We tell each workload to open:
 			// - its normal (uninteresting) port, 8055
 			// - port 2379, which is both an inbound and an outbound failsafe port
@@ -65,10 +65,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ do-not-track policy tests; 
 			// ports.
 			const portsToOpen = "8055,2379,22"
 			hostW[ii] = workload.Run(
-				felixes[ii],
+				tc.Felixes[ii],
 				fmt.Sprintf("host%d", ii),
 				"default",
-				felixes[ii].IP, // Same IP as felix means "run in the host's namespace"
+				tc.Felixes[ii].IP, // Same IP as felix means "run in the host's namespace"
 				portsToOpen,
 				"tcp")
 		}
@@ -82,7 +82,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ do-not-track policy tests; 
 
 	JustAfterEach(func() {
 		if CurrentGinkgoTestDescription().Failed {
-			for _, felix := range felixes {
+			for _, felix := range tc.Felixes {
 				felix.Exec("iptables-save", "-c")
 				felix.Exec("ip", "r")
 				felix.Exec("calico-bpf", "policy", "dump", "eth0", "all")
@@ -91,21 +91,19 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ do-not-track policy tests; 
 	})
 
 	AfterEach(func() {
-		for _, f := range felixes {
-			f.Stop()
-		}
+		tc.Stop()
 		infra.Stop()
 		externalClient.Stop()
 	})
 
 	expectFullConnectivity := func() {
 		cc.ResetExpectations()
-		cc.ExpectSome(felixes[0], hostW[1].Port(8055))
-		cc.ExpectSome(felixes[1], hostW[0].Port(8055))
-		cc.ExpectSome(felixes[0], hostW[1].Port(2379))
-		cc.ExpectSome(felixes[1], hostW[0].Port(2379))
-		cc.ExpectSome(felixes[0], hostW[1].Port(22))
-		cc.ExpectSome(felixes[1], hostW[0].Port(22))
+		cc.ExpectSome(tc.Felixes[0], hostW[1].Port(8055))
+		cc.ExpectSome(tc.Felixes[1], hostW[0].Port(8055))
+		cc.ExpectSome(tc.Felixes[0], hostW[1].Port(2379))
+		cc.ExpectSome(tc.Felixes[1], hostW[0].Port(2379))
+		cc.ExpectSome(tc.Felixes[0], hostW[1].Port(22))
+		cc.ExpectSome(tc.Felixes[1], hostW[0].Port(22))
 		cc.ExpectSome(externalClient, hostW[1].Port(22))
 		cc.ExpectSome(externalClient, hostW[0].Port(22))
 		cc.CheckConnectivityOffset(1)
@@ -128,7 +126,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ do-not-track policy tests; 
 
 			ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
 
-			for _, f := range felixes {
+			for _, f := range tc.Felixes {
 				hep := api.NewHostEndpoint()
 				hep.Name = "eth0-" + f.Name
 				hep.Labels = map[string]string{
@@ -152,20 +150,20 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ do-not-track policy tests; 
 			// that the policy has actually flowed through to the dataplane.
 
 			By("having only failsafe connectivity to start with")
-			cc.ExpectNone(felixes[0], hostW[1].Port(8055))
-			cc.ExpectNone(felixes[1], hostW[0].Port(8055))
-			cc.ExpectSome(felixes[0], hostW[1].Port(2379))
-			cc.ExpectSome(felixes[1], hostW[0].Port(2379))
+			cc.ExpectNone(tc.Felixes[0], hostW[1].Port(8055))
+			cc.ExpectNone(tc.Felixes[1], hostW[0].Port(8055))
+			cc.ExpectSome(tc.Felixes[0], hostW[1].Port(2379))
+			cc.ExpectSome(tc.Felixes[1], hostW[0].Port(2379))
 			// Port 22 is inbound-only so it'll be blocked by the (lack of egress policy).
-			cc.ExpectNone(felixes[0], hostW[1].Port(22))
-			cc.ExpectNone(felixes[1], hostW[0].Port(22))
+			cc.ExpectNone(tc.Felixes[0], hostW[1].Port(22))
+			cc.ExpectNone(tc.Felixes[1], hostW[0].Port(22))
 			// But external client should still be able to access it...
 			cc.ExpectSome(externalClient, hostW[1].Port(22))
 			cc.ExpectSome(externalClient, hostW[0].Port(22))
 			cc.CheckConnectivity()
 
-			host0Selector := fmt.Sprintf("name == 'eth0-%s'", felixes[0].Name)
-			host1Selector := fmt.Sprintf("name == 'eth0-%s'", felixes[1].Name)
+			host0Selector := fmt.Sprintf("name == 'eth0-%s'", tc.Felixes[0].Name)
+			host1Selector := fmt.Sprintf("name == 'eth0-%s'", tc.Felixes[1].Name)
 
 			By("Having connectivity after installing bidirectional policies")
 			host0Pol := api.NewGlobalNetworkPolicy()
@@ -233,12 +231,12 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ do-not-track policy tests; 
 			Expect(err).NotTo(HaveOccurred())
 
 			cc.ResetExpectations()
-			cc.ExpectNone(felixes[0], hostW[1].Port(8055))
-			cc.ExpectNone(felixes[1], hostW[0].Port(8055))
-			cc.ExpectSome(felixes[0], hostW[1].Port(2379))
-			cc.ExpectSome(felixes[1], hostW[0].Port(2379))
-			cc.ExpectNone(felixes[0], hostW[1].Port(22))     // Now blocked (lack of egress).
-			cc.ExpectSome(felixes[1], hostW[0].Port(22))     // Still open due to failsafe.
+			cc.ExpectNone(tc.Felixes[0], hostW[1].Port(8055))
+			cc.ExpectNone(tc.Felixes[1], hostW[0].Port(8055))
+			cc.ExpectSome(tc.Felixes[0], hostW[1].Port(2379))
+			cc.ExpectSome(tc.Felixes[1], hostW[0].Port(2379))
+			cc.ExpectNone(tc.Felixes[0], hostW[1].Port(22))  // Now blocked (lack of egress).
+			cc.ExpectSome(tc.Felixes[1], hostW[0].Port(22))  // Still open due to failsafe.
 			cc.ExpectSome(externalClient, hostW[1].Port(22)) // Allowed by failsafe
 			cc.ExpectSome(externalClient, hostW[0].Port(22)) // Allowed by failsafe
 			cc.CheckConnectivity()
@@ -270,12 +268,12 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ do-not-track policy tests; 
 			Expect(err).NotTo(HaveOccurred())
 
 			cc.ResetExpectations()
-			cc.ExpectNone(felixes[0], hostW[1].Port(8055))
-			cc.ExpectNone(felixes[1], hostW[0].Port(8055))
-			cc.ExpectSome(felixes[0], hostW[1].Port(2379))
-			cc.ExpectSome(felixes[1], hostW[0].Port(2379))
-			cc.ExpectNone(felixes[0], hostW[1].Port(22))     // Response traffic blocked by policy
-			cc.ExpectSome(felixes[1], hostW[0].Port(22))     // Allowed by failsafe
+			cc.ExpectNone(tc.Felixes[0], hostW[1].Port(8055))
+			cc.ExpectNone(tc.Felixes[1], hostW[0].Port(8055))
+			cc.ExpectSome(tc.Felixes[0], hostW[1].Port(2379))
+			cc.ExpectSome(tc.Felixes[1], hostW[0].Port(2379))
+			cc.ExpectNone(tc.Felixes[0], hostW[1].Port(22))  // Response traffic blocked by policy
+			cc.ExpectSome(tc.Felixes[1], hostW[0].Port(22))  // Allowed by failsafe
 			cc.ExpectSome(externalClient, hostW[1].Port(22)) // Allowed by failsafe
 			cc.ExpectSome(externalClient, hostW[0].Port(22)) // Allowed by failsafe
 			cc.CheckConnectivity()

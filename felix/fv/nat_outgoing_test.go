@@ -37,7 +37,7 @@ var _ = infrastructure.DatastoreDescribe("NATOutgoing rule rendering test", []ap
 
 	var (
 		infra          infrastructure.DatastoreInfra
-		felix          *infrastructure.Felix
+		tc             infrastructure.TopologyContainers
 		client         client.Interface
 		dumpedDiags    bool
 		externalClient *containers.Container
@@ -52,7 +52,7 @@ var _ = infrastructure.DatastoreDescribe("NATOutgoing rule rendering test", []ap
 		opts.ExtraEnvVars = map[string]string{
 			"FELIX_IptablesNATOutgoingInterfaceFilter": "eth+",
 		}
-		felix, client = infrastructure.StartSingleNodeTopology(opts, infra)
+		tc, client = infrastructure.StartSingleNodeTopology(opts, infra)
 
 		ctx := context.Background()
 		ippool := api.NewIPPool()
@@ -70,7 +70,7 @@ var _ = infrastructure.DatastoreDescribe("NATOutgoing rule rendering test", []ap
 		if !CurrentGinkgoTestDescription().Failed || dumpedDiags {
 			return
 		}
-		iptSave, err := felix.ExecOutput("iptables-save", "-c")
+		iptSave, err := tc.Felixes[0].ExecOutput("iptables-save", "-c")
 		if err == nil {
 			log.Info("iptables-save:\n" + iptSave)
 		}
@@ -80,14 +80,14 @@ var _ = infrastructure.DatastoreDescribe("NATOutgoing rule rendering test", []ap
 
 	AfterEach(func() {
 		dumpDiags()
-		felix.Stop()
+		tc.Stop()
 		infra.Stop()
 		externalClient.Stop()
 	})
 
 	It("should have expected restriction on the nat outgoing rule", func() {
 		Eventually(func() string {
-			output, _ := felix.ExecOutput("iptables-save", "-t", "nat")
+			output, _ := tc.Felixes[0].ExecOutput("iptables-save", "-t", "nat")
 			return output
 		}, 5*time.Second, 100*time.Millisecond).Should(MatchRegexp("-A cali-nat-outgoing .*-o eth\\+ "))
 	})
