@@ -424,7 +424,9 @@ func (s *Server) serve(cxt context.Context) {
 			// Doing TLS, we must do the handshake...
 			tlsConn := conn.(*tls.Conn)
 			logCxt.Debug("TLS connection")
-			err = tlsConn.Handshake()
+			handshakeCxt, handshakeCancel := context.WithTimeout(cxt, s.config.PingInterval)
+			defer handshakeCancel()
+			err = tlsConn.HandshakeContext(handshakeCxt)
 			if err != nil {
 				logCxt.WithError(err).Error("TLS handshake error")
 				err = conn.Close()
