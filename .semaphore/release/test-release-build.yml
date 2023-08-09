@@ -61,6 +61,8 @@ blocks:
         - name: HOST
           value: ubuntu@binaries-projectcalico-org
         commands:
+        - apt update
+        - apt install -y moreutils
         - make build-openstack
       epilogue:
         always:
