@@ -128,11 +128,13 @@ create-release-branch: hack/release/release
 build-openstack: bin/yq
 	$(eval VERSION=$(shell bin/yq '.version' charts/calico/values.yaml))
 	$(info Building openstack packages for version $(VERSION))
+	$(MAKE) -C hack/release/packaging set-git-identity
 	$(MAKE) -C hack/release/packaging release VERSION=$(VERSION)
 
 publish-openstack: bin/yq
 	$(eval VERSION=$(shell bin/yq '.version' charts/calico/values.yaml))
 	$(info Publishing openstack packages for version $(VERSION))
+	$(MAKE) -C hack/release/packaging set-git-identity
 	$(MAKE) -C hack/release/packaging release-publish VERSION=$(VERSION)
 
 ## Kicks semaphore job which syncs github released helm charts with helm index file
