@@ -8,6 +8,15 @@ function reject_disabled_pools ()
 {{- end}}
 }
 
+function reject_third_party_routes ()
+{
+  if (defined(bgp_path)) then {
+    if (bgp_path.len > 1) then {
+      reject;
+    }
+  }
+}
+
 filter calico_export_to_bgp_peers {
   # filter code terminates when it calls `accept;` or `reject;`, call reject_disabled_pools() first, then apply_communities() and then calico_aggr()
   reject_disabled_pools();
@@ -23,6 +32,7 @@ filter calico_export_to_bgp_peers {
   if ( net ~ {{$cidr}} ) then { accept; }
   {{- end}}
 {{- end}}
+  reject_third_party_routes();
 {{range ls "/v1/ipam/v4/pool"}}{{$data := json (getv (printf "/v1/ipam/v4/pool/%s" .))}}
 {{- if $data.disableBGPExport}}
   # Skip {{$data.cidr}} as BGP export is disabled for it
