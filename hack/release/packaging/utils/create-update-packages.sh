@@ -254,6 +254,8 @@ function do_dnsmasq {
     # Ubuntu Xenial
     git checkout 2.79test1calico1-2-xenial
     sed -i s/trusty/xenial/g debian/changelog
+    git config user.name "Marvin"
+    git config user.email "marvin@tigera.io"
     git commit -a -m "switch trusty to xenial in debian/changelog" --author="Marvin <marvin@tigera.io>"
     docker_run_rm calico-build/xenial dpkg-buildpackage -I -S
 
