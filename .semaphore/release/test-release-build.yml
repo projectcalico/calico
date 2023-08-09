@@ -16,6 +16,7 @@ blocks:
       - name: docker
       - name: oss-release-secrets
       - name: google-service-account-for-gce
+      - name: openstack-signing-publishing
       prologue:
         commands:
         # Load the github access secrets.  First fix the permissions.
@@ -49,6 +50,18 @@ blocks:
         - make GIT_BRANCH=${SEMAPHORE_GIT_BRANCH} -C hack/release generate-manifests-remote
         - make GIT_BRANCH=${SEMAPHORE_GIT_BRANCH} -C hack/release commit-versions-remote
         - make GIT_BRANCH=${SEMAPHORE_GIT_BRANCH} -C hack/release build-release-remote
+      - name: "Build Openstack Packages"
+        execution_time_limit:
+          minutes: 60
+        env_vars:
+        - name: SECRET_KEY
+          value: ~/secrets/launchpad-gpg-key-dfox.key
+        - name: GCLOUD_ARGS
+          value: --zone us-east1-c --project tigera-wp-tcp-redirect
+        - name: HOST
+          value: ubuntu@binaries-projectcalico-org
+        commands:
+        - make build-openstack
       epilogue:
         always:
           commands:
