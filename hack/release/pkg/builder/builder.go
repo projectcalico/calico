@@ -28,16 +28,11 @@ import (
 var (
 	// Registries to which all release images are pushed.
 	registries = []string{
-		"docker.io/calico",
-		"quay.io/calico",
-		"gcr.io/projectcalico-org",
-		"eu.gcr.io/projectcalico-org",
-		"asia.gcr.io/projectcalico-org",
-		"us.gcr.io/projectcalico-org",
+		"ghcr.io/powerhome/calico",
 	}
 
 	// Git configuration for publishing to GitHub.
-	organization = "projectcalico"
+	organization = "powerhome"
 	repo         = "calico"
 	origin       = "origin"
 )

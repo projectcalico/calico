@@ -6,8 +6,8 @@
 GO_BUILD_VER = v0.65.1
 
 # Version of Kubernetes to use for tests.
-K8S_VERSION     = v1.23.0
-KUBECTL_VERSION = v1.23.0
+K8S_VERSION     = v1.20.5
+KUBECTL_VERSION = v1.20.5
 
 # Version of various tools used in the build and tests.
 COREDNS_VERSION=1.5.2
@@ -16,7 +16,7 @@ PROTOC_VER=v0.1
 UBI_VERSION=8.6
 
 # Configuration for Semaphore integration.
-ORGANIZATION = projectcalico
+ORGANIZATION = powerhome
 
 # Configure git to access repositories using SSH.
 GIT_USE_SSH = true
@@ -27,7 +27,7 @@ BIRD_VERSION=v0.3.3-202-g7a77fb73
 # DEV_REGISTRIES configures the container image registries which are built from this
 # repository. By default, just build images with calico/. Allow this variable to be overridden,
 # as both CI/CD and the release tooling will override this to build publishable images.
-DEV_REGISTRIES ?= calico
+DEV_REGISTRIES ?= powerhome/calico
 
 # RELEASE_REGISTIRES configures the container images registries which are published to 
 # as part of an official release.
