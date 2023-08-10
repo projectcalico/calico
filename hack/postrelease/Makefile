@@ -24,10 +24,10 @@ create_docker_container: .docker_container.stamp
 
 run_nosetests_docker: create_docker_container
 	$(info +++ Running postrelease tests)
-	@docker run -it --rm                     \
+	@docker run -it --rm                         \
 		-v .:/code                           \
 		-v /run/docker.sock:/run/docker.sock \
-		-e QUAY_API_TOKEN                    \
+		-e QUAY_TOKEN                        \
 		$(CALICO_POSTRELEASE_TEST_IMAGE)     \
 		pytest -v --junitxml=xunit.xml tests
 
