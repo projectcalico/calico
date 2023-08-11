@@ -143,7 +143,7 @@ type ipSetData struct {
 }
 
 // Get implements the Labels interface for endpointData.  Combines the endpoint's own labels with
-// those of its parents on the fly.  This reduces the number of allocations we need to do and
+// those of its parents on the fly.  This reduces the number of allocations we need to do, and
 // it's fast in the mainline case (where there are 0-1 parents).
 func (d *endpointData) Get(labelName string) (value string, present bool) {
 	if value, present = d.labels[labelName]; present {
@@ -155,6 +155,27 @@ func (d *endpointData) Get(labelName string) (value string, present bool) {
 		}
 	}
 	return
+}
+
+func (d *endpointData) IterKVs(f func(k, v string)) {
+	seenKeys := set.New[string]()
+	for k, v := range d.labels {
+		f(k, v)
+		seenKeys.Add(k)
+	}
+
+	for _, parent := range d.parents {
+		for k, v := range parent.labels {
+			if seenKeys.Contains(k) {
+				// label is shadowed.
+				continue
+			}
+			// Non-shadowed parent label. Emit.
+			f(k, v)
+			seenKeys.Add(k)
+		}
+	}
+	seenKeys.Clear()
 }
 
 func (d *endpointData) Equals(other *endpointData) bool {
@@ -242,6 +263,7 @@ type SelectorAndNamedPortIndex struct {
 
 	parentDataByParentID map[string]*npParentData
 	ipSetDataByID        map[string]*ipSetData
+	fuzzySelectorIdx     *FuzzySelectorIndex[string]
 
 	// Callback functions
 	OnMemberAdded   NamedPortMatchCallback
@@ -257,6 +279,7 @@ func NewSelectorAndNamedPortIndex() *SelectorAndNamedPortIndex {
 		labelKeyToValueToEPID: map[string]values{},
 		parentDataByParentID:  map[string]*npParentData{},
 		ipSetDataByID:         map[string]*ipSetData{},
+		fuzzySelectorIdx:      NewFuzzySelectorIndex[string](),
 
 		// Callback functions
 		OnMemberAdded:   func(ipSetID string, member IPSetMember) {},
@@ -378,7 +401,7 @@ func extractCIDRsFromNetworkSet(netSet *model.NetworkSet) []ip.CIDR {
 	for _, addr := range a {
 		cidr := ip.CIDRFromCalicoNet(addr)
 		if cidr.Prefix() == 0 {
-			// Special case: the linux dataplane can't handle 0-length CIDRs so we split it into
+			// Special case: the linux dataplane can't handle 0-length CIDRs, so we split it into
 			// multiple CIDRs.  Note: if the /1s were also in the network set, the deduplication is
 			// handled by reference counting in the ipSetData struct.
 			log.Debug("Converting 0 length CIDR to pair of /1s")
@@ -441,7 +464,7 @@ func (idx *SelectorAndNamedPortIndex) UpdateIPSet(ipSetID string, sel selector.S
 		idx.DeleteIPSet(ipSetID)
 	}
 
-	// If we get here, we have a new IP set and we need to do a full scan of all endpoints.
+	// If we get here, we have a new IP set, and we need to do a full scan of all endpoints.
 	newIPSetData := &ipSetData{
 		selector:          sel,
 		namedPort:         namedPort,
@@ -449,6 +472,7 @@ func (idx *SelectorAndNamedPortIndex) UpdateIPSet(ipSetID string, sel selector.S
 		memberToRefCount:  map[IPSetMember]uint64{},
 	}
 	idx.ipSetDataByID[ipSetID] = newIPSetData
+	idx.fuzzySelectorIdx.AddSelector(ipSetID, sel)
 
 	// Then scan all endpoints.
 	idx.iterEndpointCandidates(ipSetID, func(epID any, epData *endpointData) {
@@ -498,6 +522,7 @@ func (idx *SelectorAndNamedPortIndex) DeleteIPSet(setID string) {
 	})
 
 	delete(idx.ipSetDataByID, setID)
+	idx.fuzzySelectorIdx.RemoveSelector(setID)
 }
 
 func (idx *SelectorAndNamedPortIndex) UpdateEndpointOrSet(
@@ -536,7 +561,7 @@ func (idx *SelectorAndNamedPortIndex) UpdateEndpointOrSet(
 		newEndpointData.ports = ports
 	}
 
-	// Get the old endpoint data so we can compare it.
+	// Get the old endpoint data, so we can compare it.
 	oldEndpointData := idx.endpointDataByID[id]
 	var oldIPSetContributions map[string][]IPSetMember
 	if oldEndpointData != nil {
@@ -557,7 +582,7 @@ func (idx *SelectorAndNamedPortIndex) UpdateEndpointOrSet(
 
 	// Calculate and compare the contribution of the new endpoint to IP sets.  Emit events for
 	// new contributions and then mop up deletions.
-	idx.scanEndpointAgainstAllIPSets(newEndpointData, oldIPSetContributions)
+	idx.scanEndpointAgainstIPSets(newEndpointData, oldIPSetContributions)
 
 	// Record the new endpoint data.
 	idx.endpointDataByID[id] = newEndpointData
@@ -578,19 +603,21 @@ func (idx *SelectorAndNamedPortIndex) UpdateEndpointOrSet(
 	}
 }
 
-func (idx *SelectorAndNamedPortIndex) scanEndpointAgainstAllIPSets(
+func (idx *SelectorAndNamedPortIndex) scanEndpointAgainstIPSets(
 	epData *endpointData,
 	oldIPSetContributions map[string][]IPSetMember,
 ) {
-	for ipSetID, ipSetData := range idx.ipSetDataByID {
+	// Remove any previous match from the endpoint's cache.  We'll re-add it
+	// below if the match is still correct.
+	epData.cachedMatchingIPSetIDs = nil
+
+	// Iterator over potential new matches and incref any members that
+	// that produces.  (This may temporarily overcount.)
+	idx.fuzzySelectorIdx.IterPotentialMatchingSelectors(epData, func(ipSetID string, _ selector.Selector) {
 		// Make sure we don't appear non-live if there are a lot of IP sets to get through.
 		idx.maybeReportLive()
 
-		// Remove any previous match from the endpoint's cache.  We'll re-add it below if the match
-		// is still correct.  (This is a no-op when we're called from UpdateEndpointOrSet(), which always
-		// creates a new endpointData struct.)
-		epData.RemoveMatchingIPSetID(ipSetID)
-
+		ipSetData := idx.ipSetDataByID[ipSetID]
 		if ipSetData.selector.EvaluateLabels(epData) {
 			newIPSetContribution := idx.CalculateEndpointContribution(epData, ipSetData)
 			if len(newIPSetContribution) > 0 {
@@ -614,10 +641,14 @@ func (idx *SelectorAndNamedPortIndex) scanEndpointAgainstAllIPSets(
 				}
 			}
 		}
+	})
 
+	// Decref all the old matches, emitting events if we drop to zero.
+	for ipSetID, oldMembers := range oldIPSetContributions {
 		// Decref all the old members.  If they hit 0 references, then the member has been
 		// removed so we emit an event.
-		for _, oldMember := range oldIPSetContributions[ipSetID] {
+		ipSetData := idx.ipSetDataByID[ipSetID]
+		for _, oldMember := range oldMembers {
 			newRefCount := ipSetData.memberToRefCount[oldMember] - 1
 			if newRefCount == 0 {
 				// Member no longer in the IP set.  Emit event and clean up the old reference
@@ -697,7 +728,7 @@ func (idx *SelectorAndNamedPortIndex) updateParent(parentData *npParentData, app
 
 		// Apply the update to the parent while we calculate this endpoint's new contribution.
 		applyUpdate()
-		idx.scanEndpointAgainstAllIPSets(epData, oldIPSetContributions)
+		idx.scanEndpointAgainstIPSets(epData, oldIPSetContributions)
 
 		return nil
 	})
@@ -749,6 +780,9 @@ func (idx *SelectorAndNamedPortIndex) RecalcCachedContributions(epData *endpoint
 	contrib := map[string][]IPSetMember{}
 	epData.cachedMatchingIPSetIDs.Iter(func(ipSetID string) error {
 		ipSetData := idx.ipSetDataByID[ipSetID]
+		if ipSetData == nil {
+			log.WithField("ipSetID", ipSetID).Panic("Endpoint cachedMatchingIPSetIDs refers to non-existent IP set.")
+		}
 		contrib[ipSetID] = idx.CalculateEndpointContribution(epData, ipSetData)
 		return nil
 	})

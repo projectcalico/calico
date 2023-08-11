@@ -211,7 +211,7 @@ func (acg *AsyncCalcGraph) maybeFlush() {
 		log.Debug("Not throttled: flushing event buffer")
 		acg.flushLeakyBucket--
 		flushStart := time.Now()
-		acg.CalcGraph.PolicyResolver.maybeFlush()
+		acg.CalcGraph.PolicyResolver.MaybeFlush()
 		acg.eventSequencer.Flush()
 		flushDuration := time.Since(flushStart)
 		if flushDuration > time.Second {
