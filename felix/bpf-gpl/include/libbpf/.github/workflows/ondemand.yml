@@ -1,0 +1,36 @@
+name: ondemand
+
+on:
+  workflow_dispatch:
+    inputs:
+      kernel-origin:
+        description: 'git repo for linux kernel'
+        default: 'https://git.kernel.org/pub/scm/linux/kernel/git/bpf/bpf-next.git'
+        required: true
+      kernel-rev:
+        description: 'rev/tag/branch for linux kernel'
+        default: "master"
+        required: true
+      pahole-origin:
+        description: 'git repo for pahole'
+        default: 'https://git.kernel.org/pub/scm/devel/pahole/pahole.git'
+        required: true
+      pahole-rev:
+        description: 'ref/tag/branch for pahole'
+        default: "master"
+        required: true
+
+jobs:
+  vmtest:
+    runs-on: ubuntu-latest
+    name: vmtest with customized pahole/Kernel
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ./.github/actions/setup
+      - uses: ./.github/actions/vmtest
+        with:
+          kernel: 'LATEST'
+          kernel-rev: ${{ github.event.inputs.kernel-rev }}
+          kernel-origin: ${{ github.event.inputs.kernel-origin }}
+          pahole: ${{ github.event.inputs.pahole-rev }}
+          pahole-origin: ${{ github.event.inputs.pahole-origin }}

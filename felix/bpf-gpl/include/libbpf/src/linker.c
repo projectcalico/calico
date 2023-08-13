@@ -15,7 +15,6 @@
 #include <linux/btf.h>
 #include <elf.h>
 #include <libelf.h>
-#include <gelf.h>
 #include <fcntl.h>
 #include "libbpf.h"
 #include "btf.h"
@@ -211,6 +210,7 @@ void bpf_linker__free(struct bpf_linker *linker)
 	}
 	free(linker->secs);
 
+	free(linker->glob_syms);
 	free(linker);
 }
 
@@ -220,16 +220,16 @@ struct bpf_linker *bpf_linker__new(const char *filename, struct bpf_linker_opts 
 	int err;
 
 	if (!OPTS_VALID(opts, bpf_linker_opts))
-		return NULL;
+		return errno = EINVAL, NULL;
 
 	if (elf_version(EV_CURRENT) == EV_NONE) {
 		pr_warn_elf("libelf initialization failed");
-		return NULL;
+		return errno = EINVAL, NULL;
 	}
 
 	linker = calloc(1, sizeof(*linker));
 	if (!linker)
-		return NULL;
+		return errno = ENOMEM, NULL;
 
 	linker->fd = -1;
 
@@ -241,7 +241,7 @@ struct bpf_linker *bpf_linker__new(const char *filename, struct bpf_linker_opts 
 
 err_out:
 	bpf_linker__free(linker);
-	return NULL;
+	return errno = -err, NULL;
 }
 
 static struct dst_sec *add_dst_sec(struct bpf_linker *linker, const char *sec_name)
@@ -302,7 +302,7 @@ static int init_output_elf(struct bpf_linker *linker, const char *file)
 	if (!linker->filename)
 		return -ENOMEM;
 
-	linker->fd = open(file, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+	linker->fd = open(file, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
 	if (linker->fd < 0) {
 		err = -errno;
 		pr_warn("failed to create '%s': %d\n", file, err);
@@ -324,12 +324,12 @@ static int init_output_elf(struct bpf_linker *linker, const char *file)
 
 	linker->elf_hdr->e_machine = EM_BPF;
 	linker->elf_hdr->e_type = ET_REL;
-#if __BYTE_ORDER == __LITTLE_ENDIAN
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
 	linker->elf_hdr->e_ident[EI_DATA] = ELFDATA2LSB;
-#elif __BYTE_ORDER == __BIG_ENDIAN
+#elif __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
 	linker->elf_hdr->e_ident[EI_DATA] = ELFDATA2MSB;
 #else
-#error "Unknown __BYTE_ORDER"
+#error "Unknown __BYTE_ORDER__"
 #endif
 
 	/* STRTAB */
@@ -444,10 +444,10 @@ int bpf_linker__add_file(struct bpf_linker *linker, const char *filename,
 	int err = 0;
 
 	if (!OPTS_VALID(opts, bpf_linker_file_opts))
-		return -EINVAL;
+		return libbpf_err(-EINVAL);
 
 	if (!linker->elf)
-		return -EINVAL;
+		return libbpf_err(-EINVAL);
 
 	err = err ?: linker_load_obj_file(linker, filename, opts, &obj);
 	err = err ?: linker_append_sec_data(linker, &obj);
@@ -467,7 +467,7 @@ int bpf_linker__add_file(struct bpf_linker *linker, const char *filename,
 	if (obj.fd >= 0)
 		close(obj.fd);
 
-	return err;
+	return libbpf_err(err);
 }
 
 static bool is_dwarf_sec_name(const char *name)
@@ -539,12 +539,12 @@ static int linker_load_obj_file(struct bpf_linker *linker, const char *filename,
 				const struct bpf_linker_file_opts *opts,
 				struct src_obj *obj)
 {
-#if __BYTE_ORDER == __LITTLE_ENDIAN
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
 	const int host_endianness = ELFDATA2LSB;
-#elif __BYTE_ORDER == __BIG_ENDIAN
+#elif __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
 	const int host_endianness = ELFDATA2MSB;
 #else
-#error "Unknown __BYTE_ORDER"
+#error "Unknown __BYTE_ORDER__"
 #endif
 	int err = 0;
 	Elf_Scn *scn;
@@ -557,7 +557,7 @@ static int linker_load_obj_file(struct bpf_linker *linker, const char *filename,
 
 	obj->filename = filename;
 
-	obj->fd = open(filename, O_RDONLY);
+	obj->fd = open(filename, O_RDONLY | O_CLOEXEC);
 	if (obj->fd < 0) {
 		err = -errno;
 		pr_warn("failed to open file '%s': %d\n", filename, err);
@@ -695,11 +695,6 @@ static int linker_load_obj_file(struct bpf_linker *linker, const char *filename,
 	err = err ?: linker_fixup_btf(obj);
 
 	return err;
-}
-
-static bool is_pow_of_2(size_t x)
-{
-	return x && (x & (x - 1)) == 0;
 }
 
 static int linker_sanity_check_elf(struct src_obj *obj)
@@ -921,7 +916,7 @@ static int check_btf_type_id(__u32 *type_id, void *ctx)
 {
 	struct btf *btf = ctx;
 
-	if (*type_id > btf__get_nr_types(btf))
+	if (*type_id >= btf__type_cnt(btf))
 		return -EINVAL;
 
 	return 0;
@@ -948,8 +943,8 @@ static int linker_sanity_check_btf(struct src_obj *obj)
 	if (!obj->btf)
 		return 0;
 
-	n = btf__get_nr_types(obj->btf);
-	for (i = 1; i <= n; i++) {
+	n = btf__type_cnt(obj->btf);
+	for (i = 1; i < n; i++) {
 		t = btf_type_by_id(obj->btf, i);
 
 		err = err ?: btf_type_visit_type_ids(t, check_btf_type_id, obj->btf);
@@ -1120,7 +1115,19 @@ static int extend_sec(struct bpf_linker *linker, struct dst_sec *dst, struct src
 
 	if (src->shdr->sh_type != SHT_NOBITS) {
 		tmp = realloc(dst->raw_data, dst_final_sz);
-		if (!tmp)
+		/* If dst_align_sz == 0, realloc() behaves in a special way:
+		 * 1. When dst->raw_data is NULL it returns:
+		 *    "either NULL or a pointer suitable to be passed to free()" [1].
+		 * 2. When dst->raw_data is not-NULL it frees dst->raw_data and returns NULL,
+		 *    thus invalidating any "pointer suitable to be passed to free()" obtained
+		 *    at step (1).
+		 *
+		 * The dst_align_sz > 0 check avoids error exit after (2), otherwise
+		 * dst->raw_data would be freed again in bpf_linker__free().
+		 *
+		 * [1] man 3 realloc
+		 */
+		if (!tmp && dst_align_sz > 0)
 			return -ENOMEM;
 		dst->raw_data = tmp;
 
@@ -1340,6 +1347,7 @@ recur:
 	case BTF_KIND_STRUCT:
 	case BTF_KIND_UNION:
 	case BTF_KIND_ENUM:
+	case BTF_KIND_ENUM64:
 	case BTF_KIND_FWD:
 	case BTF_KIND_FUNC:
 	case BTF_KIND_VAR:
@@ -1362,6 +1370,7 @@ recur:
 	case BTF_KIND_INT:
 	case BTF_KIND_FLOAT:
 	case BTF_KIND_ENUM:
+	case BTF_KIND_ENUM64:
 		/* ignore encoding for int and enum values for enum */
 		if (t1->size != t2->size) {
 			pr_warn("global '%s': incompatible %s '%s' size %u and %u\n",
@@ -1649,12 +1658,18 @@ static bool btf_is_non_static(const struct btf_type *t)
 static int find_glob_sym_btf(struct src_obj *obj, Elf64_Sym *sym, const char *sym_name,
 			     int *out_btf_sec_id, int *out_btf_id)
 {
-	int i, j, n = btf__get_nr_types(obj->btf), m, btf_id = 0;
+	int i, j, n, m, btf_id = 0;
 	const struct btf_type *t;
 	const struct btf_var_secinfo *vi;
 	const char *name;
 
-	for (i = 1; i <= n; i++) {
+	if (!obj->btf) {
+		pr_warn("failed to find BTF info for object '%s'\n", obj->filename);
+		return -EINVAL;
+	}
+
+	n = btf__type_cnt(obj->btf);
+	for (i = 1; i < n; i++) {
 		t = btf__type_by_id(obj->btf, i);
 
 		/* some global and extern FUNCs and VARs might not be associated with any
@@ -1994,7 +2009,6 @@ add_sym:
 static int linker_append_elf_relos(struct bpf_linker *linker, struct src_obj *obj)
 {
 	struct src_sec *src_symtab = &obj->secs[obj->symtab_sec_idx];
-	struct dst_sec *dst_symtab = &linker->secs[linker->symtab_sec_idx];
 	int i, err;
 
 	for (i = 1; i < obj->sec_cnt; i++) {
@@ -2043,16 +2057,13 @@ static int linker_append_elf_relos(struct bpf_linker *linker, struct src_obj *ob
 		dst_rel = dst_sec->raw_data + src_sec->dst_off;
 		n = src_sec->shdr->sh_size / src_sec->shdr->sh_entsize;
 		for (j = 0; j < n; j++, src_rel++, dst_rel++) {
-			size_t src_sym_idx = ELF64_R_SYM(src_rel->r_info);
-			size_t sym_type = ELF64_R_TYPE(src_rel->r_info);
-			Elf64_Sym *src_sym, *dst_sym;
-			size_t dst_sym_idx;
+			size_t src_sym_idx, dst_sym_idx, sym_type;
+			Elf64_Sym *src_sym;
 
 			src_sym_idx = ELF64_R_SYM(src_rel->r_info);
 			src_sym = src_symtab->data->d_buf + sizeof(*src_sym) * src_sym_idx;
 
 			dst_sym_idx = obj->sym_map[src_sym_idx];
-			dst_sym = dst_symtab->raw_data + sizeof(*dst_sym) * dst_sym_idx;
 			dst_rel->r_offset += src_linked_sec->dst_off;
 			sym_type = ELF64_R_TYPE(src_rel->r_info);
 			dst_rel->r_info = ELF64_R_INFO(dst_sym_idx, sym_type);
@@ -2125,8 +2136,8 @@ static int linker_fixup_btf(struct src_obj *obj)
 	if (!obj->btf)
 		return 0;
 
-	n = btf__get_nr_types(obj->btf);
-	for (i = 1; i <= n; i++) {
+	n = btf__type_cnt(obj->btf);
+	for (i = 1; i < n; i++) {
 		struct btf_var_secinfo *vi;
 		struct btf_type *t;
 
@@ -2229,14 +2240,14 @@ static int linker_append_btf(struct bpf_linker *linker, struct src_obj *obj)
 	if (!obj->btf)
 		return 0;
 
-	start_id = btf__get_nr_types(linker->btf) + 1;
-	n = btf__get_nr_types(obj->btf);
+	start_id = btf__type_cnt(linker->btf);
+	n = btf__type_cnt(obj->btf);
 
 	obj->btf_type_map = calloc(n + 1, sizeof(int));
 	if (!obj->btf_type_map)
 		return -ENOMEM;
 
-	for (i = 1; i <= n; i++) {
+	for (i = 1; i < n; i++) {
 		struct glob_sym *glob_sym = NULL;
 
 		t = btf__type_by_id(obj->btf, i);
@@ -2291,8 +2302,8 @@ static int linker_append_btf(struct bpf_linker *linker, struct src_obj *obj)
 	}
 
 	/* remap all the types except DATASECs */
-	n = btf__get_nr_types(linker->btf);
-	for (i = start_id; i <= n; i++) {
+	n = btf__type_cnt(linker->btf);
+	for (i = start_id; i < n; i++) {
 		struct btf_type *dst_t = btf_type_by_id(linker->btf, i);
 
 		if (btf_type_visit_type_ids(dst_t, remap_type_id, obj->btf_type_map))
@@ -2548,11 +2559,11 @@ int bpf_linker__finalize(struct bpf_linker *linker)
 	int err, i;
 
 	if (!linker->elf)
-		return -EINVAL;
+		return libbpf_err(-EINVAL);
 
 	err = finalize_btf(linker);
 	if (err)
-		return err;
+		return libbpf_err(err);
 
 	/* Finalize strings */
 	strs_sz = strset__data_size(linker->strtab_strs);
@@ -2584,14 +2595,14 @@ int bpf_linker__finalize(struct bpf_linker *linker)
 	if (elf_update(linker->elf, ELF_C_NULL) < 0) {
 		err = -errno;
 		pr_warn_elf("failed to finalize ELF layout");
-		return err;
+		return libbpf_err(err);
 	}
 
 	/* Write out final ELF contents */
 	if (elf_update(linker->elf, ELF_C_WRITE) < 0) {
 		err = -errno;
 		pr_warn_elf("failed to write ELF contents");
-		return err;
+		return libbpf_err(err);
 	}
 
 	elf_end(linker->elf);
@@ -2645,13 +2656,14 @@ static int emit_elf_data_sec(struct bpf_linker *linker, const char *sec_name,
 
 static int finalize_btf(struct bpf_linker *linker)
 {
+	LIBBPF_OPTS(btf_dedup_opts, opts);
 	struct btf *btf = linker->btf;
 	const void *raw_data;
 	int i, j, id, err;
 	__u32 raw_sz;
 
 	/* bail out if no BTF data was produced */
-	if (btf__get_nr_types(linker->btf) == 0)
+	if (btf__type_cnt(linker->btf) == 1)
 		return 0;
 
 	for (i = 1; i < linker->sec_cnt; i++) {
@@ -2681,14 +2693,15 @@ static int finalize_btf(struct bpf_linker *linker)
 		return err;
 	}
 
-	err = btf__dedup(linker->btf, linker->btf_ext, NULL);
+	opts.btf_ext = linker->btf_ext;
+	err = btf__dedup(linker->btf, &opts);
 	if (err) {
 		pr_warn("BTF dedup failed: %d\n", err);
 		return err;
 	}
 
 	/* Emit .BTF section */
-	raw_data = btf__get_raw_data(linker->btf, &raw_sz);
+	raw_data = btf__raw_data(linker->btf, &raw_sz);
 	if (!raw_data)
 		return -ENOMEM;
 
