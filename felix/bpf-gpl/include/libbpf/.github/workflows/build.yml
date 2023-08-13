@@ -1,0 +1,91 @@
+name: libbpf-build
+
+on:
+  pull_request:
+  push:
+  schedule:
+    - cron:  '0 18 * * *'
+
+concurrency:
+  group: ci-build-${{ github.head_ref }}
+  cancel-in-progress: true
+
+jobs:
+
+  debian:
+    runs-on: ubuntu-latest
+    name: Debian Build (${{ matrix.name }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: default
+            target: RUN
+          - name: ASan+UBSan
+            target: RUN_ASAN
+          - name: clang ASan+UBSan
+            target: RUN_CLANG_ASAN
+          - name: gcc-10 ASan+UBSan
+            target: RUN_GCC10_ASAN
+          - name: clang
+            target: RUN_CLANG
+          - name: clang-14
+            target: RUN_CLANG14
+          - name: clang-15
+            target: RUN_CLANG15
+          - name: clang-16
+            target: RUN_CLANG16
+          - name: gcc-10
+            target: RUN_GCC10
+          - name: gcc-11
+            target: RUN_GCC11
+          - name: gcc-12
+            target: RUN_GCC12
+    steps:
+      - uses: actions/checkout@v3
+        name: Checkout
+      - uses: ./.github/actions/setup
+        name: Setup
+      - uses: ./.github/actions/debian
+        name: Build
+        with:
+          target: ${{ matrix.target }}
+
+  ubuntu:
+    runs-on: ubuntu-latest
+    name: Ubuntu Focal Build (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: aarch64
+          - arch: ppc64le
+          - arch: s390x
+          - arch: x86
+    steps:
+      - uses: actions/checkout@v3
+        name: Checkout
+      - uses: ./.github/actions/setup
+        name: Pre-Setup
+      - run: source /tmp/ci_setup && sudo -E $CI_ROOT/managers/ubuntu.sh
+        if: matrix.arch == 'x86'
+        name: Setup
+      - uses: uraimo/run-on-arch-action@v2.0.5
+        name: Build in docker
+        if: matrix.arch != 'x86'
+        with:
+          distro:
+            ubuntu20.04
+          arch:
+            ${{ matrix.arch }}
+          setup:
+            cp /tmp/ci_setup $GITHUB_WORKSPACE
+          dockerRunArgs: |
+            --volume "${GITHUB_WORKSPACE}:${GITHUB_WORKSPACE}"
+          shell: /bin/bash
+          install: |
+            export DEBIAN_FRONTEND=noninteractive
+            export TZ="America/Los_Angeles"
+            apt-get update -y
+            apt-get install -y tzdata build-essential sudo
+          run: source ${GITHUB_WORKSPACE}/ci_setup && $CI_ROOT/managers/ubuntu.sh

@@ -1227,13 +1227,17 @@ func (m *bpfEndpointManager) loadDefaultPolicies() error {
 	}
 
 	for m, err := obj.FirstMap(); m != nil && err == nil; m, err = m.NextMap() {
-		if size := maps.Size(m.Name()); size != 0 {
+		mapName := m.Name()
+		if strings.HasPrefix(mapName, ".rodata") {
+			continue
+		}
+		if size := maps.Size(mapName); size != 0 {
 			if err := m.SetSize(size); err != nil {
-				return fmt.Errorf("error resizing map %s: %w", m.Name(), err)
+				return fmt.Errorf("error resizing map %s: %w", mapName, err)
 			}
 		}
-		if err := m.SetPinPath(path.Join(bpfdefs.GlobalPinDir, m.Name())); err != nil {
-			return fmt.Errorf("error pinning map %s: %w", m.Name(), err)
+		if err := m.SetPinPath(path.Join(bpfdefs.GlobalPinDir, mapName)); err != nil {
+			return fmt.Errorf("error pinning map %s: %w", mapName, err)
 		}
 	}
 

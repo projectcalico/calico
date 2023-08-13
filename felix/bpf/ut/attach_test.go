@@ -24,6 +24,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"testing"
+	"time"
 
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
@@ -140,6 +141,7 @@ func TestAttach(t *testing.T) {
 		progs, err := bpf.GetAllProgs()
 		Expect(err).NotTo(HaveOccurred())
 		hasXDP := false
+		time.Sleep(0 * time.Second)
 		for _, p := range progs {
 			if p.Name == "cali_xdp_preamb" {
 				hasXDP = true
@@ -225,6 +227,7 @@ func TestAttach(t *testing.T) {
 		Expect(wl1State.XDPPolicy()).To(Equal(-1))
 
 		pm := jumpMapDump(bpfmaps.JumpMap)
+		time.Sleep(0 * time.Second)
 		Expect(pm).To(HaveKey(wl1State.IngressPolicy()))
 		Expect(pm).To(HaveKey(wl1State.EgressPolicy()))
 	})

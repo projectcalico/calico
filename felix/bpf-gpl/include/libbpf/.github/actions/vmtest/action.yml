@@ -1,0 +1,99 @@
+name: 'vmtest'
+description: 'Build + run vmtest'
+inputs:
+  kernel:
+    description: 'kernel version or LATEST'
+    required: true
+    default: 'LATEST'
+  arch:
+    description: 'what arch to test'
+    required: true
+    default: 'x86_64'
+  pahole:
+    description: 'pahole rev or master'
+    required: true
+    default: 'master'
+runs:
+  using: "composite"
+  steps:
+    # setup environment
+    - name: Setup environment
+      uses: libbpf/ci/setup-build-env@main
+      with:
+        pahole: ${{ inputs.pahole }}
+    # 1. download CHECKPOINT kernel source
+    - name: Get checkpoint commit
+      shell: bash
+      run: |
+        cat CHECKPOINT-COMMIT
+        echo "CHECKPOINT=$(cat CHECKPOINT-COMMIT)" >> $GITHUB_ENV
+    - name: Get kernel source at checkpoint
+      uses: libbpf/ci/get-linux-source@main
+      with:
+        repo: 'https://git.kernel.org/pub/scm/linux/kernel/git/bpf/bpf-next.git'
+        rev: ${{ env.CHECKPOINT }}
+        dest: '${{ github.workspace }}/.kernel'
+    - name: Patch kernel source
+      uses: libbpf/ci/patch-kernel@main
+      with:
+        patches-root: '${{ github.workspace }}/ci/diffs'
+        repo-root: '.kernel'
+    - name: Prepare to build BPF selftests
+      shell: bash
+      run: |
+        source $GITHUB_ACTION_PATH/../../../ci/vmtest/helpers.sh
+        foldable start "Prepare building selftest"
+        cd .kernel
+        cat tools/testing/selftests/bpf/config \
+            tools/testing/selftests/bpf/config.${{ inputs.arch }} > .config
+        make olddefconfig && make prepare
+        cd -
+        foldable end
+    # 2. if kernel == LATEST, build kernel image from tree
+    - name: Build kernel image
+      if: ${{ inputs.kernel == 'LATEST' }}
+      shell: bash
+      run: |
+        source $GITHUB_ACTION_PATH/../../../ci/vmtest/helpers.sh
+        foldable start "Build Kernel Image"
+        cd .kernel
+        make -j $((4*$(nproc))) all > /dev/null
+        cp vmlinux ${{ github.workspace }}
+        cd -
+        foldable end
+    # else, just download prebuilt kernel image
+    - name: Download prebuilt kernel
+      if: ${{ inputs.kernel != 'LATEST' }}
+      uses: libbpf/ci/download-vmlinux@main
+      with:
+        kernel: ${{ inputs.kernel }}
+        arch: ${{ inputs.arch }}
+    # 3. build selftests
+    - name: Build BPF selftests
+      uses: ./.github/actions/build-selftests
+      with:
+        repo-path: '.kernel'
+        kernel: ${{ inputs.kernel }}
+    # 4. prepare rootfs
+    - name: prepare rootfs
+      uses: libbpf/ci/prepare-rootfs@main
+      env:
+        KBUILD_OUTPUT: '.kernel'
+      with:
+        project-name: 'libbpf'
+        arch: ${{ inputs.arch }}
+        kernel: ${{ inputs.kernel }}
+        kernel-root: '.kernel'
+        kbuild-output: ${{ env.KBUILD_OUTPUT }}
+        image-output: '/tmp/root.img'
+    # 5. run selftest in QEMU
+    - name: Run selftests
+      env:
+        KERNEL: ${{ inputs.kernel }}
+        REPO_ROOT: ${{ github.workspace }}
+      uses: libbpf/ci/run-qemu@main
+      with:
+        arch: ${{ inputs.arch }}
+        img: '/tmp/root.img'
+        vmlinuz: 'vmlinuz'
+        kernel-root: '.kernel'
