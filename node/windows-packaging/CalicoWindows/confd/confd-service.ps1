@@ -24,7 +24,7 @@ if ($env:CNI_IPAM_TYPE -EQ "host-local") {
   $env:USE_POD_CIDR = "false"
 }
 
-if($env:CALICO_NETWORKING_BACKEND = "windows-bgp")
+if($env:CALICO_NETWORKING_BACKEND -EQ "windows-bgp")
 {
   Wait-ForCalicoInit
   Write-Host "Windows BGP is enabled, running confd..."
@@ -45,4 +45,3 @@ if($env:CALICO_NETWORKING_BACKEND = "windows-bgp")
     Start-Sleep 10
   }
 }
-
