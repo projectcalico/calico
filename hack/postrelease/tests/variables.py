@@ -32,7 +32,7 @@ FLANNEL_VERSION = get_var_or_error("FLANNEL_VERSION")
 OPERATOR_VERSION = get_var_or_error("OPERATOR_VERSION")
 
 # Quay.io API token
-QUAY_API_TOKEN = get_var_or_error("QUAY_API_TOKEN")
+QUAY_TOKEN = get_var_or_error("QUAY_TOKEN")
 
 
 def test_variables_provided():
@@ -40,7 +40,7 @@ def test_variables_provided():
     assert RELEASE_STREAM
     assert FLANNEL_VERSION
     assert OPERATOR_VERSION
-    assert QUAY_API_TOKEN
+    assert QUAY_TOKEN
 
 
 test_variables_provided()
