@@ -180,7 +180,7 @@ func (s *FuzzySelectorIndex[T]) IterPotentialMatchingSelectors(labels kvSource, 
 		return nil
 	}
 
-	labels.IterKVs(func(k, v string) {
+	labels.IterOwnAndParentKVs(func(k, v string) {
 		values, ok := s.labelToValueToIDs[k]
 		if !ok {
 			return
@@ -197,5 +197,5 @@ func (s *FuzzySelectorIndex[T]) IterPotentialMatchingSelectors(labels kvSource, 
 
 type kvSource interface {
 	Get(labelName string) (value string, present bool)
-	IterKVs(func(k, v string))
+	IterOwnAndParentKVs(func(k, v string))
 }

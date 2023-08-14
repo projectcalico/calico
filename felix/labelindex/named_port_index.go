@@ -20,6 +20,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/projectcalico/calico/felix/labelindex/kvindex"
 	log "github.com/sirupsen/logrus"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -157,7 +158,11 @@ func (d *endpointData) Get(labelName string) (value string, present bool) {
 	return
 }
 
-func (d *endpointData) IterKVs(f func(k, v string)) {
+func (d *endpointData) OwnLabels() map[string]string {
+	return d.labels
+}
+
+func (d *endpointData) IterOwnAndParentKVs(f func(k, v string)) {
 	seenKeys := set.New[string]()
 	for k, v := range d.labels {
 		f(k, v)
@@ -226,6 +231,10 @@ type npParentData struct {
 	endpointIDs set.Set[any]
 }
 
+func (d *npParentData) OwnLabels() map[string]string {
+	return d.labels
+}
+
 func (d *npParentData) DiscardEndpointID(id any) {
 	if d.endpointIDs == nil {
 		panic("discard of unknown ID")
@@ -252,18 +261,12 @@ func (d *npParentData) IterEndpointIDs(f func(id any) error) {
 
 type NamedPortMatchCallback func(ipSetID string, member IPSetMember)
 
-type values struct {
-	m     map[string]set.Set[any]
-	count int
-}
-
 type SelectorAndNamedPortIndex struct {
-	endpointDataByID      map[any]*endpointData
-	labelKeyToValueToEPID map[string]values
+	endpointKVIdx *kvindex.KeyValueIndex[any /*endpoint IDs*/, *endpointData]
 
-	parentDataByParentID map[string]*npParentData
-	ipSetDataByID        map[string]*ipSetData
-	fuzzySelectorIdx     *FuzzySelectorIndex[string]
+	parentKVIdx      *kvindex.KeyValueIndex[string, *npParentData]
+	ipSetDataByID    map[string]*ipSetData
+	fuzzySelectorIdx *FuzzySelectorIndex[string]
 
 	// Callback functions
 	OnMemberAdded   NamedPortMatchCallback
@@ -275,11 +278,10 @@ type SelectorAndNamedPortIndex struct {
 
 func NewSelectorAndNamedPortIndex() *SelectorAndNamedPortIndex {
 	inheritIdx := SelectorAndNamedPortIndex{
-		endpointDataByID:      map[interface{}]*endpointData{},
-		labelKeyToValueToEPID: map[string]values{},
-		parentDataByParentID:  map[string]*npParentData{},
-		ipSetDataByID:         map[string]*ipSetData{},
-		fuzzySelectorIdx:      NewFuzzySelectorIndex[string](),
+		endpointKVIdx:    kvindex.New[any, *endpointData]("endpoints"),
+		parentKVIdx:      kvindex.New[string, *npParentData]("parents"),
+		ipSetDataByID:    map[string]*ipSetData{},
+		fuzzySelectorIdx: NewFuzzySelectorIndex[string](),
 
 		// Callback functions
 		OnMemberAdded:   func(ipSetID string, member IPSetMember) {},
@@ -352,8 +354,8 @@ func (idx *SelectorAndNamedPortIndex) OnUpdate(update api.Update) (_ bool) {
 			return
 		}
 		if update.Value != nil {
-			log.Debugf("Updating NamedPortIndex for profile labels %v", key)
 			labels := update.Value.(*v3.Profile).Spec.LabelsToApply
+			log.Debugf("Updating NamedPortIndex for profile labels %v: %v", key, labels)
 			idx.UpdateParentLabels(key.Name, labels)
 		} else {
 			log.Debugf("Removing profile labels %v from NamedPortIndex", key)
@@ -435,7 +437,7 @@ var EvalLabelsTrue uint
 func (idx *SelectorAndNamedPortIndex) UpdateIPSet(ipSetID string, sel selector.Selector, namedPortProtocol IPSetPortProtocol, namedPort string) {
 	logCxt := defaultLogCtx
 	if log.IsLevelEnabled(log.DebugLevel) {
-		logCxt := log.WithFields(log.Fields{
+		logCxt = log.WithFields(log.Fields{
 			"ipSetID":           ipSetID,
 			"selector":          sel,
 			"namedPort":         namedPort,
@@ -507,12 +509,16 @@ func (idx *SelectorAndNamedPortIndex) UpdateIPSet(ipSetID string, sel selector.S
 }
 
 func (idx *SelectorAndNamedPortIndex) DeleteIPSet(setID string) {
-	log.WithField("ipSetID", setID).Info("Deleting IP set")
-
 	ipSetData := idx.ipSetDataByID[setID]
+
 	if ipSetData == nil {
 		log.WithField("id", setID).Warning("Delete of unknown IP set, ignoring")
 		return
+	} else {
+		log.WithFields(log.Fields{
+			"ipSetID":  setID,
+			"selector": ipSetData.selector.String(),
+		}).Info("Deleting IP set")
 	}
 
 	idx.iterEndpointCandidates(setID, func(epID any, epData *endpointData) {
@@ -562,7 +568,7 @@ func (idx *SelectorAndNamedPortIndex) UpdateEndpointOrSet(
 	}
 
 	// Get the old endpoint data, so we can compare it.
-	oldEndpointData := idx.endpointDataByID[id]
+	oldEndpointData, _ := idx.endpointKVIdx.Get(id)
 	var oldIPSetContributions map[string][]IPSetMember
 	if oldEndpointData != nil {
 		// Before we do the (potentially expensive) selector scan, check if there can possibly be a
@@ -575,17 +581,15 @@ func (idx *SelectorAndNamedPortIndex) UpdateEndpointOrSet(
 		// If we get here, something about the endpoint has changed.  Calculate the old endpoint's
 		// contribution to the IP sets that it matched.
 		oldIPSetContributions = idx.RecalcCachedContributions(oldEndpointData)
-		idx.removeLabelsFromLVIndex(oldEndpointData.labels, id)
+		idx.endpointKVIdx.Remove(id)
 	}
-	// FIXME Completely ignoring parents for now.
-	idx.addLabelsToLVIndex(newEndpointData.labels, id)
 
 	// Calculate and compare the contribution of the new endpoint to IP sets.  Emit events for
 	// new contributions and then mop up deletions.
 	idx.scanEndpointAgainstIPSets(newEndpointData, oldIPSetContributions)
 
 	// Record the new endpoint data.
-	idx.endpointDataByID[id] = newEndpointData
+	idx.endpointKVIdx.Add(id, newEndpointData)
 
 	newParentIDs := set.NewBoxed[any]()
 	for _, parent := range newEndpointData.parents {
@@ -611,34 +615,34 @@ func (idx *SelectorAndNamedPortIndex) scanEndpointAgainstIPSets(
 	// below if the match is still correct.
 	epData.cachedMatchingIPSetIDs = nil
 
-	// Iterator over potential new matches and incref any members that
-	// that produces.  (This may temporarily overcount.)
+	// Iterate over potential new matches and incref any members that
+	// that produces.  (This may temporarily over count.)
 	idx.fuzzySelectorIdx.IterPotentialMatchingSelectors(epData, func(ipSetID string, _ selector.Selector) {
 		// Make sure we don't appear non-live if there are a lot of IP sets to get through.
 		idx.maybeReportLive()
 
 		ipSetData := idx.ipSetDataByID[ipSetID]
-		if ipSetData.selector.EvaluateLabels(epData) {
-			newIPSetContribution := idx.CalculateEndpointContribution(epData, ipSetData)
-			if len(newIPSetContribution) > 0 {
-				// Record the match in the index.  This allows us to quickly recalculate the
-				// contribution of this endpoint later.
-				epData.AddMatchingIPSetID(ipSetID)
+		matches := ipSetData.selector.EvaluateLabels(epData)
+		log.Debugf("Selector %s matches endpoint? %v", ipSetData.selector.String(), matches)
+		if matches {
+			// Record the match in the index.  This allows us to quickly recalculate the
+			// contribution of this endpoint later.
+			epData.AddMatchingIPSetID(ipSetID)
 
-				// Incref all the new members.  If any of them go from 0 to 1 reference then we
-				// know that they're new.  We'll temporarily double-count members that were already
-				// present, then decref them below.
-				//
-				// This reference counting also allows us to tolerate duplicate members in the
-				// input data.
-				for _, newMember := range newIPSetContribution {
-					newRefCount := ipSetData.memberToRefCount[newMember] + 1
-					if newRefCount == 1 {
-						// New member in the IP set.
-						idx.OnMemberAdded(ipSetID, newMember)
-					}
-					ipSetData.memberToRefCount[newMember] = newRefCount
+			// Incref all the new members.  If any of them go from 0 to 1 reference then we
+			// know that they're new.  We'll temporarily double-count members that were already
+			// present, then decref them below.
+			//
+			// This reference counting also allows us to tolerate duplicate members in the
+			// input data.
+			newIPSetContribution := idx.CalculateEndpointContribution(epData, ipSetData)
+			for _, newMember := range newIPSetContribution {
+				newRefCount := ipSetData.memberToRefCount[newMember] + 1
+				if newRefCount == 1 {
+					// New member in the IP set.
+					idx.OnMemberAdded(ipSetID, newMember)
 				}
+				ipSetData.memberToRefCount[newMember] = newRefCount
 			}
 		}
 	})
@@ -664,11 +668,12 @@ func (idx *SelectorAndNamedPortIndex) scanEndpointAgainstIPSets(
 
 func (idx *SelectorAndNamedPortIndex) DeleteEndpoint(id any) {
 	log.Debug("SelectorAndNamedPortIndex deleting endpoint", id)
-	oldEndpointData := idx.endpointDataByID[id]
-	if oldEndpointData == nil {
+	oldEndpointData, ok := idx.endpointKVIdx.Get(id)
+	if !ok {
 		return
 	}
 
+	log.WithField("oldContrib", oldEndpointData.cachedMatchingIPSetIDs).Debug("Old matching IP sets")
 	oldIPSetContributions := idx.RecalcCachedContributions(oldEndpointData)
 	for ipSetID, contributions := range oldIPSetContributions {
 		// Decref all the old members.  If they hit 0 references, then the member has been
@@ -689,8 +694,7 @@ func (idx *SelectorAndNamedPortIndex) DeleteEndpoint(id any) {
 	}
 
 	// Record the new endpoint data.
-	idx.removeLabelsFromLVIndex(oldEndpointData.labels, id)
-	delete(idx.endpointDataByID, id)
+	idx.endpointKVIdx.Remove(id)
 	for _, parent := range oldEndpointData.parents {
 		parent.DiscardEndpointID(id)
 		idx.discardParentIfEmpty(parent.id)
@@ -703,6 +707,7 @@ func (idx *SelectorAndNamedPortIndex) UpdateParentLabels(parentID string, labels
 		log.WithField("parentID", parentID).Debug("Skipping no-op update to parent labels")
 		return
 	}
+	idx.parentKVIdx.Remove(parentID)
 	oldLabels := parentData.labels
 	idx.updateParent(
 		parentData,
@@ -715,11 +720,12 @@ func (idx *SelectorAndNamedPortIndex) UpdateParentLabels(parentID string, labels
 			parentData.labels = oldLabels
 		},
 	)
+	idx.parentKVIdx.Add(parentID, parentData) // FIXME need to remove/re-add for correctness
 }
 
 func (idx *SelectorAndNamedPortIndex) updateParent(parentData *npParentData, applyUpdate, revertUpdate func()) {
 	parentData.IterEndpointIDs(func(id interface{}) error {
-		epData := idx.endpointDataByID[id]
+		epData, _ := idx.endpointKVIdx.Get(id)
 		// This endpoint matches this parent, calculate its old contribution.  (The revert function
 		// is a no-op on the first loop but keeping it here, rather than at the bottom of the loop
 		// makes it harder to accidentally skip it with a well-intentioned "continue".)
@@ -739,6 +745,7 @@ func (idx *SelectorAndNamedPortIndex) updateParent(parentData *npParentData, app
 
 func (idx *SelectorAndNamedPortIndex) DeleteParentLabels(parentID string) {
 	// Defer to the update function, which implements the endpoint scanning logic.
+	log.Debugf("Deleting parent labels: %v", parentID)
 	idx.UpdateParentLabels(parentID, nil)
 	idx.discardParentIfEmpty(parentID)
 }
@@ -790,23 +797,23 @@ func (idx *SelectorAndNamedPortIndex) RecalcCachedContributions(epData *endpoint
 }
 
 func (idx *SelectorAndNamedPortIndex) getOrCreateParent(id string) *npParentData {
-	parent := idx.parentDataByParentID[id]
-	if parent == nil {
+	parent, ok := idx.parentKVIdx.Get(id)
+	if !ok {
 		parent = &npParentData{
 			id: id,
 		}
-		idx.parentDataByParentID[id] = parent
+		idx.parentKVIdx.Add(id, parent)
 	}
 	return parent
 }
 
 func (idx *SelectorAndNamedPortIndex) discardParentIfEmpty(id string) {
-	parent := idx.parentDataByParentID[id]
-	if parent == nil {
+	parent, ok := idx.parentKVIdx.Get(id)
+	if !ok {
 		return
 	}
 	if parent.endpointIDs == nil && parent.labels == nil {
-		delete(idx.parentDataByParentID, id)
+		idx.parentKVIdx.Remove(id)
 	}
 }
 
@@ -824,102 +831,90 @@ func (idx *SelectorAndNamedPortIndex) iterEndpointCandidates(ipsetID string, f f
 	restrictions := sel.LabelRestrictions()
 	log.Debugf("Selector %s restrictions: %v", sel.String(), restrictions)
 
-	bestNumToScan := math.MaxInt
-	bestK := ""
-	numLeft := len(restrictions)
+	bestEPStrategy := idx.endpointKVIdx.FullScanStrategy()
+	var bestParentStrategy kvindex.ScanStrategy[string]
+	bestParentEndpointEstimate := math.MaxInt
+
 	for k, r := range restrictions {
-		numToScan := 0
-		if r.MustHaveValue != "" {
-			s := idx.labelKeyToValueToEPID[k].m[r.MustHaveValue]
-			if s == nil {
-				// Short circuit. Selector requires label=='some value'
-				// but there are no matching endpoints!
-				log.Debugf("iterEndpointCandidates: Index says selector cannot match, abort scan %s:%q", k, r.MustHaveValue)
-				return
-			} else {
-				numToScan = s.Len()
+		epStrat := idx.endpointKVIdx.StrategyFor(k, r)
+		parentStrat := idx.parentKVIdx.StrategyFor(k, r)
+		epsToScan := epStrat.EstimatedItemsToScan()
+		parentsToScan := parentStrat.EstimatedItemsToScan()
+
+		if epsToScan == 0 && parentsToScan == 0 {
+			// This restriction rules out both a match on parent and a match
+			// on endpoint.
+			log.Debugf("Label restriction on label %s rules out both parent and endpoint match.", k)
+			return
+		} else if epsToScan == 0 {
+			// Label matches no endpoints but it does match some parents.
+			// (e.g. a Kubernetes namespace selector).
+			if bestParentStrategy == nil ||
+				idx.estimateParentEndpointScanCount(parentStrat) < bestParentEndpointEstimate {
+				log.Debugf("New best parent strategy: %s", parentStrat)
+				bestParentStrategy = parentStrat
 			}
-		} else if r.MustBePresent {
-			numToScan = idx.labelKeyToValueToEPID[k].count
-		}
-		if numToScan < bestNumToScan {
-			bestK = k
-			bestNumToScan = numToScan
-		}
-		numLeft--
-		if numToScan <= numLeft {
-			// No point in doing more work to find a better option,
-			// there are fewer endpoints to scan than there are options left.
-			break
+		} else if parentsToScan == 0 {
+			// Label matches no parents, but it does match some endpoints.
+			if epsToScan < bestEPStrategy.EstimatedItemsToScan() {
+				bestEPStrategy = epStrat
+				log.Debugf("New best endpoint strategy: %s (%d)", bestEPStrategy, bestEPStrategy.EstimatedItemsToScan())
+			}
+		} else {
+			// Label matches both endpoints and parents.  This shouldn't
+			// happen in Kubernetes datastore mode since we prefix all
+			// namespace labels and disallow endpoint labels from shadowing
+			// them.  However, in etcd mode (e.g. for OpenStack or raw
+			// CNI) it could happen.
+			//
+			// For now, don't try to optimise this case.
+			log.WithField("label", k).Debug(
+				"Label applies to both endpoints and parents, cannot do optimised scan.")
 		}
 	}
 
-	bestR := restrictions[bestK]
-	if bestR.MustHaveValue != "" {
-		// Best case, we have a precise match on key and value, only
-		// need to scan endpoints with exactly that key/value.
-		log.Debug("iterEndpointCandidates: MustHaveValue match on: ", bestR.MustHaveValue)
-		s := idx.labelKeyToValueToEPID[bestK].m[bestR.MustHaveValue]
-		s.Iter(func(epID any) error {
-			idx.maybeReportLive()
-			f(epID, idx.endpointDataByID[epID])
-			return nil
+	if bestEPStrategy.EstimatedItemsToScan() < bestParentEndpointEstimate {
+		log.Debugf("Selector %s using endpoint scan strategy: %s", sel.String(), bestEPStrategy.String())
+		bestEPStrategy.Scan(func(id any) bool {
+			ep, _ := idx.endpointKVIdx.Get(id)
+			f(id, ep)
+			return true
 		})
-	} else if bestR.MustBePresent {
-		// We know the selector needs a particular key but not a particular
-		// value, for example has(labelName).
-		log.Debug("iterEndpointCandidates: MustBePresent match on: ", bestK)
-		for _, epIDs := range idx.labelKeyToValueToEPID[bestK].m {
-			epIDs.Iter(func(epID any) error {
-				idx.maybeReportLive()
-				f(epID, idx.endpointDataByID[epID])
+	} else {
+		log.Debugf("Selector %s using parent scan strategy: %s", sel.String(), bestParentStrategy.String())
+		seenEPIDs := set.New[any]()
+		bestParentStrategy.Scan(func(parentID string) bool {
+			parent, _ := idx.parentKVIdx.Get(parentID)
+			parent.endpointIDs.Iter(func(id any) error {
+				if seenEPIDs.Contains(id) {
+					return nil
+				}
+				seenEPIDs.Add(id)
+				ep, _ := idx.endpointKVIdx.Get(id)
+				f(id, ep)
 				return nil
 			})
-		}
-	} else {
-		// Can't optimise this selector, just scan all.
-		log.Debug("iterEndpointCandidates: Full scan")
-		for id, epData := range idx.endpointDataByID {
-			// Make sure we don't appear non-live if there are a lot of endpoints to get through.
-			idx.maybeReportLive()
-			f(id, epData)
-		}
+			return true
+		})
 	}
 }
 
-func (idx *SelectorAndNamedPortIndex) removeLabelsFromLVIndex(labels map[string]string, id any) {
-	for k, v := range labels {
-		vals := idx.labelKeyToValueToEPID[k]
-		setOfIDs := vals.m[v]
-		setOfIDs.Discard(id)
-		if setOfIDs.Len() == 0 {
-			delete(vals.m, v)
-			if len(vals.m) == 0 {
-				delete(idx.labelKeyToValueToEPID, k)
-				continue
-			}
+func (idx *SelectorAndNamedPortIndex) estimateParentEndpointScanCount(s kvindex.ScanStrategy[string]) int {
+	numScanned := 0
+	total := 0
+	const maxNumToScan = 10
+	s.Scan(func(id string) bool {
+		parent, _ := idx.parentKVIdx.Get(id)
+		if parent.endpointIDs != nil {
+			parentSize := parent.endpointIDs.Len()
+			total += parentSize
 		}
-		vals.count--
-		idx.labelKeyToValueToEPID[k] = vals
+		numScanned++
+		return numScanned < maxNumToScan
+	})
+	if numScanned <= maxNumToScan {
+		// Exact answer.
+		return total
 	}
-}
-
-func (idx *SelectorAndNamedPortIndex) addLabelsToLVIndex(labels map[string]string, id any) {
-	for k, v := range labels {
-		vals, ok := idx.labelKeyToValueToEPID[k]
-		if !ok {
-			vals = values{
-				m: map[string]set.Set[any]{},
-			}
-			idx.labelKeyToValueToEPID[k] = vals
-		}
-		setOfIDs := vals.m[v]
-		if setOfIDs == nil {
-			setOfIDs = set.NewBoxed[any]()
-			vals.m[v] = setOfIDs
-		}
-		setOfIDs.Add(id)
-		vals.count++
-		idx.labelKeyToValueToEPID[k] = vals
-	}
+	return (total*s.EstimatedItemsToScan() + maxNumToScan - 1) / maxNumToScan
 }
