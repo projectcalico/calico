@@ -24,12 +24,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/projectcalico/calico/felix/deltatracker"
-	"github.com/projectcalico/calico/felix/logutils"
-	"github.com/projectcalico/calico/libcalico-go/lib/set"
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
+
+	"github.com/projectcalico/calico/felix/deltatracker"
+	"github.com/projectcalico/calico/felix/logutils"
+	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 const (

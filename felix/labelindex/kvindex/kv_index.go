@@ -17,9 +17,10 @@ package kvindex
 import (
 	"fmt"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/projectcalico/calico/libcalico-go/lib/selector/parser"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
-	"github.com/sirupsen/logrus"
 )
 
 type KeyValueIndex[T comparable, V Labeled] struct {

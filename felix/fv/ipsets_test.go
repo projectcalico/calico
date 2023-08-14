@@ -25,19 +25,20 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/sirupsen/logrus"
+
 	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/workload"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
-	"github.com/sirupsen/logrus"
 )
 
 var _ = Context("_IPSets_ Tests for IPset rendering", func() {
 
 	var (
 		etcd     *containers.Container
-		felix    *infrastructure.Felix
+		tc       infrastructure.TopologyContainers
 		felixPID int
 		client   client.Interface
 		infra    infrastructure.DatastoreInfra
@@ -49,18 +50,15 @@ var _ = Context("_IPSets_ Tests for IPset rendering", func() {
 		topologyOptions.FelixLogSeverity = "Info"
 		topologyOptions.EnableIPv6 = false
 		logrus.SetLevel(logrus.InfoLevel)
-		felix, etcd, client, infra = infrastructure.StartSingleNodeEtcdTopology(topologyOptions)
-		felixPID = felix.GetFelixPID()
+		tc, etcd, client, infra = infrastructure.StartSingleNodeEtcdTopology(topologyOptions)
+		felixPID = tc.Felixes[0].GetFelixPID()
 		_ = felixPID
-		w = workload.Run(felix, "w", "default", "10.65.0.2", "8085", "tcp")
+		w = workload.Run(tc.Felixes[0], "w", "default", "10.65.0.2", "8085", "tcp")
 	})
 
 	AfterEach(func() {
 		w.Stop()
-		if CurrentGinkgoTestDescription().Failed {
-			felix.Exec("iptables-save", "-c")
-		}
-		felix.Stop()
+		tc.Stop()
 
 		if CurrentGinkgoTestDescription().Failed {
 			etcd.Exec("etcdctl", "get", "/", "--prefix", "--keys-only")
@@ -102,23 +100,23 @@ var _ = Context("_IPSets_ Tests for IPset rendering", func() {
 		}
 		logrus.Info(">>> CREATED NetworkPolicies")
 		// Create a workload that uses the policy.
-		baseNumSets := getNumIPSets(felix.Container)
+		baseNumSets := getNumIPSets(tc.Felixes[0].Container)
 		wep := w.WorkloadEndpoint.DeepCopy()
 		w.ConfigureInInfra(infra)
 		startTime := time.Now()
 		logrus.Info(">>> CREATED Workload")
-		Eventually(func() int { return getNumIPSets(felix.Container) }, "240s", "1s").Should(BeNumerically(">", baseNumSets))
+		Eventually(func() int { return getNumIPSets(tc.Felixes[0].Container) }, "240s", "1s").Should(BeNumerically(">", baseNumSets))
 		logrus.Info(">>> First IP set programmed at ", time.Since(startTime))
-		Eventually(func() int { return getNumIPSets(felix.Container) }, "240s", "1s").Should(BeNumerically(">=", numSets+baseNumSets))
+		Eventually(func() int { return getNumIPSets(tc.Felixes[0].Container) }, "240s", "1s").Should(BeNumerically(">=", numSets+baseNumSets))
 		logrus.Info(">>> All IP sets programmed at ", time.Since(startTime))
 		w.RemoveFromInfra(infra)
 		logrus.Info(">>> DELETED Workload")
-		Eventually(func() int { return getNumIPSets(felix.Container) }, "240s", "1s").Should(BeNumerically("<", numSets+baseNumSets))
+		Eventually(func() int { return getNumIPSets(tc.Felixes[0].Container) }, "240s", "1s").Should(BeNumerically("<", numSets+baseNumSets))
 		logrus.Info(">>> IP sets started being deleted at ", time.Since(startTime))
 		w.WorkloadEndpoint = wep
 		w.ConfigureInInfra(infra)
 		logrus.Info(">>> RECREATED Workload")
-		Eventually(func() int { return getNumIPSets(felix.Container) }, "240s", "1s").Should(BeNumerically(">=", numSets+baseNumSets))
+		Eventually(func() int { return getNumIPSets(tc.Felixes[0].Container) }, "240s", "1s").Should(BeNumerically(">=", numSets+baseNumSets))
 		logrus.Info(">>> All IP sets programmed at ", time.Since(startTime))
 		time.Sleep(10 * time.Second)
 	})

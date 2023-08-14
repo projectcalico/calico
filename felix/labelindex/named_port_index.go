@@ -20,8 +20,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/projectcalico/calico/felix/labelindex/kvindex"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/felix/labelindex/kvindex"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
