@@ -497,24 +497,12 @@ function lookup_win_cf_ami() {
   local WIN_AMI=`cat ${CF_WIN_JSON_FILE} | jq --arg region "${REGION}" --arg windows_os "${WINDOWS_OS}" -r '.Mappings.AWSRegion2AMI[$region][$windows_os]'`
 
   # windows AMI name filter strings
-  local AMI_1809_NAME="Windows_Server-2019-English-Core-ContainersLatest-*"
-  local AMI_1903_NAME="Windows_Server-1903-English-Core-ContainersLatest-*"
-  local AMI_1909_NAME="Windows_Server-1909-English-Core-ContainersLatest-*"
-  local AMI_2004_NAME="Windows_Server-2004-English-Core-ContainersLatest-*"
-  local AMI_20H2_NAME="Windows_Server-20H2-English-Core-ContainersLatest-*"
-  local AMI_2022_NAME="Windows_Server-2022-English-Core-ContainersLatest-*"
+  local AMI_1809_NAME="Windows_Server-2019-English-Core-Base-*"
+  local AMI_2022_NAME="Windows_Server-2022-English-Core-Base-*"
 
   AMI_NAME=""
   if [ $WINDOWS_OS == "Windows1809container" ];then
     AMI_NAME="${AMI_1809_NAME}"
-  elif [ $WINDOWS_OS == "Windows1903container" ];then
-    AMI_NAME="${AMI_1903_NAME}"
-  elif [ $WINDOWS_OS == "Windows1909container" ];then
-    AMI_NAME="${AMI_1909_NAME}"
-  elif [ $WINDOWS_OS == "Windows2004container" ];then
-    AMI_NAME="${AMI_2004_NAME}"
-  elif [ $WINDOWS_OS == "Windows20H2container" ];then
-    AMI_NAME="${AMI_20H2_NAME}"
   elif [ $WINDOWS_OS == "Windows2022container" ];then
     AMI_NAME="${AMI_2022_NAME}"
   fi
