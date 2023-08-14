@@ -113,6 +113,8 @@ type CalcGraph struct {
 	// AllUpdDispatcher is the input node to the calculation graph.
 	AllUpdDispatcher      *dispatcher.Dispatcher
 	activeRulesCalculator *ActiveRulesCalculator
+	ipsetMemberIndex      *labelindex.SelectorAndNamedPortIndex
+	PolicyResolver        *PolicyResolver
 }
 
 func NewCalculationGraph(callbacks PipelineCallbacks, conf *config.Config, liveCallback func()) *CalcGraph {
@@ -425,6 +427,8 @@ func NewCalculationGraph(callbacks PipelineCallbacks, conf *config.Config, liveC
 	return &CalcGraph{
 		AllUpdDispatcher:      allUpdDispatcher,
 		activeRulesCalculator: activeRulesCalc,
+		ipsetMemberIndex:      ipsetMemberIndex,
+		PolicyResolver:        polResolver,
 	}
 }
 

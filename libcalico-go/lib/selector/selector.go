@@ -30,6 +30,8 @@ type Selector interface {
 
 	// UniqueID returns the unique ID that represents this selector.
 	UniqueID() string
+
+	LabelRestrictions() map[string]parser.LabelRestriction
 }
 
 // Parse a string representation of a selector expression into a Selector.
