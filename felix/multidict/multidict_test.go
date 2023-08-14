@@ -22,9 +22,9 @@ import (
 )
 
 var _ = Describe("StringToString", func() {
-	var s2s StringToString
+	var s2s Multidict[string, string]
 	BeforeEach(func() {
-		s2s = NewStringToString()
+		s2s = New[string, string]()
 		s2s.Put("a", "b")
 		s2s.Put("a", "c")
 		s2s.Put("b", "d")
@@ -55,7 +55,7 @@ var _ = Describe("StringToString", func() {
 		s2s.Discard("e", "f")
 		Expect(s2s.Contains("a", "b")).To(BeTrue())
 	})
-	It("should have idempotent insett", func() {
+	It("should have idempotent insert", func() {
 		s2s.Put("a", "b")
 		Expect(s2s.Contains("a", "b")).To(BeTrue())
 	})

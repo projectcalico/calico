@@ -14,244 +14,67 @@
 
 package multidict
 
-type StringToString interface {
-	Put(key, value string)
-	Discard(key, value string)
-	DiscardKey(key string)
-	Contains(key, value string) bool
-	ContainsKey(key string) bool
-	Iter(key string, f func(value string))
+import (
+	"github.com/projectcalico/calico/libcalico-go/lib/set"
+)
+
+type Multidict[K comparable, V comparable] map[K]set.Set[V]
+
+func New[K comparable, V comparable]() Multidict[K, V] {
+	return make(Multidict[K, V])
 }
 
-type stringToString map[string]map[string]bool
-
-func NewStringToString() StringToString {
-	sToS := make(stringToString)
-	return sToS
-}
-
-func (md stringToString) Put(key, value string) {
-	set, ok := md[key]
-	if !ok {
-		set = make(map[string]bool)
-		md[key] = set
-	}
-	set[value] = true
-}
-
-func (md stringToString) Discard(key, value string) {
-	set, ok := md[key]
-	if !ok {
-		return
-	}
-	delete(set, value)
-	if len(set) == 0 {
-		delete(md, key)
-	}
-}
-
-func (md stringToString) DiscardKey(key string) {
-	delete(md, key)
-}
-
-func (md stringToString) Contains(key, value string) bool {
-	set, ok := md[key]
-	return ok && set[value]
-}
-
-func (md stringToString) ContainsKey(key string) bool {
-	_, ok := md[key]
-	return ok
-}
-
-func (md stringToString) Iter(key string, f func(value string)) {
-	for value := range md[key] {
-		f(value)
-	}
-}
-
-type IfaceToIface interface {
-	Len() int
-	Put(key, value interface{})
-	Discard(key, value interface{})
-	Contains(key, value interface{}) bool
-	ContainsKey(key interface{}) bool
-	IterKeys(f func(key interface{}))
-	Iter(key interface{}, f func(value interface{}))
-}
-
-type ifaceToIfaceMap map[interface{}]map[interface{}]bool
-
-func NewIfaceToIface() IfaceToIface {
-	iToI := make(ifaceToIfaceMap)
-	return iToI
-}
-
-func (md ifaceToIfaceMap) Len() int {
+func (md Multidict[K, V]) Len() int {
 	return len(md)
 }
 
-func (md ifaceToIfaceMap) Put(key, value interface{}) {
-	set, ok := md[key]
+func (md Multidict[K, V]) Put(key K, value V) {
+	s, ok := md[key]
 	if !ok {
-		set = make(map[interface{}]bool)
-		md[key] = set
+		s = set.New[V]()
+		md[key] = s
 	}
-	set[value] = true
+	s.Add(value)
 }
 
-func (md ifaceToIfaceMap) Discard(key, value interface{}) {
-	set, ok := md[key]
+func (md Multidict[K, V]) Discard(key K, value V) {
+	s, ok := md[key]
 	if !ok {
 		return
 	}
-	delete(set, value)
-	if len(set) == 0 {
+	s.Discard(value)
+	if s.Len() == 0 {
 		delete(md, key)
 	}
 }
 
-func (md ifaceToIfaceMap) Contains(key, value interface{}) bool {
-	set, ok := md[key]
-	return ok && set[value]
+func (md Multidict[K, V]) Contains(key K, value V) bool {
+	s, ok := md[key]
+	return ok && s != nil && s.Contains(value)
 }
 
-func (md ifaceToIfaceMap) ContainsKey(key interface{}) bool {
+func (md Multidict[K, V]) ContainsKey(key K) bool {
 	_, ok := md[key]
 	return ok
 }
 
-func (md ifaceToIfaceMap) IterKeys(f func(value interface{})) {
+func (md Multidict[K, V]) IterKeys(f func(key K)) {
 	for k := range md {
 		f(k)
 	}
 }
 
-func (md ifaceToIfaceMap) Iter(key interface{}, f func(value interface{})) {
-	for value := range md[key] {
-		f(value)
-	}
-}
-
-type IfaceToString interface {
-	Put(key interface{}, value string)
-	Discard(key interface{}, value string)
-	Contains(key interface{}, value string) bool
-	ContainsKey(key interface{}) bool
-	Iter(key interface{}, f func(value string))
-	Empty() bool
-}
-
-type ifaceToStringMap map[interface{}]map[string]bool
-
-func NewIfaceToString() IfaceToString {
-	iToI := make(ifaceToStringMap)
-	return iToI
-}
-
-func (md ifaceToStringMap) Put(key interface{}, value string) {
-	set, ok := md[key]
-	if !ok {
-		set = make(map[string]bool)
-		md[key] = set
-	}
-	set[value] = true
-}
-func (md ifaceToStringMap) Empty() bool {
-	return len(md) == 0
-}
-
-func (md ifaceToStringMap) Discard(key interface{}, value string) {
-	set, ok := md[key]
-	if !ok {
+func (md Multidict[K, V]) Iter(key K, f func(value V)) {
+	s := md[key]
+	if s == nil {
 		return
 	}
-	delete(set, value)
-	if len(set) == 0 {
-		delete(md, key)
-	}
+	s.Iter(func(v V) error {
+		f(v)
+		return nil
+	})
 }
 
-func (md ifaceToStringMap) Contains(key interface{}, value string) bool {
-	set, ok := md[key]
-	return ok && set[value]
-}
-
-func (md ifaceToStringMap) ContainsKey(key interface{}) bool {
-	_, ok := md[key]
-	return ok
-}
-
-func (md ifaceToStringMap) Iter(key interface{}, f func(value string)) {
-	for value := range md[key] {
-		f(value)
-	}
-}
-
-type StringToIface interface {
-	Len() int
-	Put(key string, value interface{})
-	Discard(key string, value interface{})
-	DiscardKey(key string)
-	Contains(key string, value interface{}) bool
-	ContainsKey(key string) bool
-	Iter(key string, f func(value interface{}))
-	IterKeys(f func(key string))
-}
-
-type stringToIfaceMap map[string]map[interface{}]bool
-
-func NewStringToIface() StringToIface {
-	iToI := make(stringToIfaceMap)
-	return iToI
-}
-
-func (md stringToIfaceMap) Len() int {
-	return len(md)
-}
-
-func (md stringToIfaceMap) Put(key string, value interface{}) {
-	set, ok := md[key]
-	if !ok {
-		set = make(map[interface{}]bool)
-		md[key] = set
-	}
-	set[value] = true
-}
-
-func (md stringToIfaceMap) Discard(key string, value interface{}) {
-	set, ok := md[key]
-	if !ok {
-		return
-	}
-	delete(set, value)
-	if len(set) == 0 {
-		delete(md, key)
-	}
-}
-
-func (md stringToIfaceMap) DiscardKey(key string) {
-	delete(md, key)
-}
-
-func (md stringToIfaceMap) Contains(key string, value interface{}) bool {
-	set, ok := md[key]
-	return ok && set[value]
-}
-
-func (md stringToIfaceMap) ContainsKey(key string) bool {
-	_, ok := md[key]
-	return ok
-}
-
-func (md stringToIfaceMap) Iter(key string, f func(value interface{})) {
-	for value := range md[key] {
-		f(value)
-	}
-}
-
-func (md stringToIfaceMap) IterKeys(f func(key string)) {
-	for k := range md {
-		f(k)
-	}
+func (md Multidict[K, V]) DiscardKey(k K) {
+	delete(md, k)
 }

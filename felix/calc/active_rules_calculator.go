@@ -65,8 +65,8 @@ type ActiveRulesCalculator struct {
 	allALPPolicies set.Set[model.PolicyKey]
 
 	// Policy/profile ID to matching endpoint sets.
-	policyIDToEndpointKeys  multidict.IfaceToIface
-	profileIDToEndpointKeys multidict.IfaceToIface
+	policyIDToEndpointKeys  multidict.Multidict[any, any]
+	profileIDToEndpointKeys multidict.Multidict[string, any]
 
 	// Label index, matching policy selectors against local endpoints.
 	labelIndex *labelindex.InheritIndex
@@ -96,8 +96,8 @@ func NewActiveRulesCalculator() *ActiveRulesCalculator {
 		allALPPolicies: set.New[model.PolicyKey](),
 
 		// Policy/profile ID to matching endpoint sets.
-		policyIDToEndpointKeys:  multidict.NewIfaceToIface(),
-		profileIDToEndpointKeys: multidict.NewIfaceToIface(),
+		policyIDToEndpointKeys:  multidict.New[any, any](),
+		profileIDToEndpointKeys: multidict.New[string, any](),
 		missingProfiles:         set.New[string](),
 
 		// Cache of profile IDs by local endpoint.

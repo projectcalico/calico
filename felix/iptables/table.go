@@ -280,6 +280,7 @@ type Table struct {
 
 	onStillAlive func()
 	opReporter   logutils.OpRecorder
+	reason       string
 }
 
 type TableOptions struct {
@@ -505,7 +506,7 @@ func (t *Table) UpdateChains(chains []*Chain) {
 }
 
 func (t *Table) UpdateChain(chain *Chain) {
-	t.logCxt.WithField("chainName", chain.Name).Info("Queueing update of chain.")
+	// t.logCxt.WithField("chainName", chain.Name).Info("Queueing update of chain.")
 	oldNumRules := 0
 
 	// Incref any newly-referenced chains, then decref the old ones.  By incrementing first we
@@ -536,7 +537,7 @@ func (t *Table) RemoveChains(chains []*Chain) {
 }
 
 func (t *Table) RemoveChainByName(name string) {
-	t.logCxt.WithField("chainName", name).Info("Queuing deletion of chain.")
+	// t.logCxt.WithField("chainName", name).Info("Queuing deletion of chain.")
 	if oldChain, known := t.chainNameToChain[name]; known {
 		t.gaugeNumRules.Sub(float64(len(oldChain.Rules)))
 		delete(t.chainNameToChain, name)
@@ -943,10 +944,17 @@ func (t *Table) InvalidateDataplaneCache(reason string) {
 	}
 	logCxt.Debug("Invalidating dataplane cache")
 	t.inSyncWithDataPlane = false
+	t.reason = reason
 }
 
 func (t *Table) Apply() (rescheduleAfter time.Duration) {
 	now := t.timeNow()
+	defer func() {
+		if time.Since(now) > time.Second {
+			log.WithField("applyTime", time.Since(now)).
+				WithField("reason", t.reason).Info(">>> table.Apply() took >1s")
+		}
+	}()
 	// We _think_ we're in sync, check if there are any reasons to think we might
 	// not be in sync.
 	lastReadToNow := now.Sub(t.lastReadTime)

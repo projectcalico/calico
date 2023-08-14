@@ -362,6 +362,7 @@ type IterAction int
 const (
 	IterActionNoOp IterAction = iota
 	IterActionUpdateDataplane
+	IterActionNoOpStopIteration
 )
 
 type PendingUpdatesView[K comparable, V any] DeltaTracker[K, V]
@@ -421,6 +422,8 @@ func (c *PendingDeletionsView[K, V]) Iter(f func(k K) IterAction) {
 			// Ignore.
 		case IterActionUpdateDataplane:
 			delete(c.inDataplaneNotDesired, k)
+		case IterActionNoOpStopIteration:
+			break
 		}
 	}
 }
