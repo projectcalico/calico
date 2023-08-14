@@ -19,17 +19,6 @@
 #define BPF_REDIR_EGRESS 0
 #define BPF_REDIR_INGRESS 1
 
-struct bpf_map_def_extended {
-	__u32 type;
-	__u32 key_size;
-	__u32 value_size;
-	__u32 max_entries;
-	__u32 map_flags;
-#if defined(__BPFTOOL_LOADER__)
-	__u32 map_id;
-#endif
-};
-
 /* These constants must be kept in sync with the calculate-flags script. */
 
 // CALI_TC_HOST_EP is set for all host interfaces including tunnels.

@@ -36,6 +36,7 @@ PACKAGE_NAME = github.com/projectcalico/calico/felix
 FELIX_IMAGE    ?=felix
 BUILD_IMAGES   ?=$(FELIX_IMAGE)
 
+LIBBPF_SRC=bpf-gpl/include/libbpf
 LIBBPF_A=bpf-gpl/include/libbpf/src/$(ARCH)/libbpf.a
 LIBBPF_CONTAINER_PATH=/go/src/github.com/projectcalico/calico/felix/bpf-gpl/include/libbpf/src
 BPFGPL_CONTAINER_PATH=/go/src/github.com/projectcalico/calico/felix/bpf-gpl
@@ -158,7 +159,12 @@ bin/calico-felix: bin/calico-felix-$(ARCH)
 	ln -f bin/calico-felix-$(ARCH) bin/calico-felix
 
 libbpf: $(LIBBPF_A)
-$(LIBBPF_A): $(shell find bpf-gpl/include/libbpf -type f ! -name "*.a")
+$(LIBBPF_SRC):
+	rm -rf bpf-gpl/include/libbpf
+	mkdir -p bpf-gpl/include/libbpf
+	git clone --depth 1 --branch $(LIBBPF_VERSION) https://github.com/libbpf/libbpf.git bpf-gpl/include/libbpf
+
+$(LIBBPF_A): $(LIBBPF_SRC) $(shell find bpf-gpl/include/libbpf -type f ! -name "*.a")
 	mkdir -p bpf-gpl/include/libbpf/src/$(ARCH)
 	$(MAKE) register ARCH=$(ARCH)
 	$(DOCKER_GO_BUILD) sh -c "make -j 16 -C bpf-gpl/include/libbpf/src BUILD_STATIC_ONLY=1 OBJDIR=$(ARCH)"
@@ -208,7 +214,7 @@ ALL_BPF_PROGS=$(BPF_GPL_O_FILES) $(BPF_APACHE_O_FILES)
 # we're only depending on the BPF programs from other phony targets.  (Otherwise, we'd do
 # unnecessary rebuilds of anything that depends on the BPF prgrams.)
 .PHONY: build-bpf clean-bpf
-build-bpf:
+build-bpf: $(LIBBPF_SRC)
 	$(MAKE) register ARCH=$(ARCH)
 	$(DOCKER_GO_BUILD) sh -c "make -j 16 -C bpf-apache all && \
 	                          make -j 16 -C bpf-gpl all ut-objs"

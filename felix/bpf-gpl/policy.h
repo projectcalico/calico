@@ -37,14 +37,7 @@ union ip4_set_lpm_key {
 	struct bpf_lpm_trie_key lpm;
 	struct ip4_set_key ip;
 };
-
-struct bpf_map_def_extended __attribute__((section("maps"))) cali_v4_ip_sets = {
-	.type           = BPF_MAP_TYPE_LPM_TRIE,
-	.key_size       = sizeof(union ip4_set_lpm_key),
-	.value_size     = sizeof(__u32),
-	.max_entries    = 1024*1024,
-	.map_flags      = BPF_F_NO_PREALLOC,
-};
+CALI_MAP_V1(cali_v4_ip_sets, BPF_MAP_TYPE_LPM_TRIE, union ip4_set_lpm_key, __u32, 1024*1024, BPF_F_NO_PREALLOC)
 
 #define RULE_START(id)
 
