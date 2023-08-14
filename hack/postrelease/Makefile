@@ -4,7 +4,7 @@ include variables.mk
 
 .PHONY: create_docker_container clean
 
-all: create_docker_container run_nosetests_docker clean_docker_container
+all: create_docker_container run_pytests_docker clean_docker_container
 
 ## Setting up
 
@@ -22,7 +22,7 @@ create_docker_container: .docker_container.stamp
 
 ## Execution
 
-run_nosetests_docker: create_docker_container
+run_pytests_docker: create_docker_container
 	$(info +++ Running postrelease tests)
 	@docker run -it --rm                         \
 		-v .:/code                           \
@@ -38,9 +38,9 @@ run_nosetests_docker: create_docker_container
 clean: clean_docker_container clean_xunit
 
 clean_xunit:
-	@rm -f xunit.xml
+	$(RM) xunit.xml
 
 clean_docker_container:
 	$(info +++ Cleaning docker container)
 	@docker rmi $(CALICO_POSTRELEASE_TEST_IMAGE) 2> /dev/null || true
-	@rm -f .docker_container.stamp
+	$(RM) .docker_container.stamp

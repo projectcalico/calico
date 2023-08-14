@@ -1,3 +1,9 @@
+# Paths to override
+YQ ?= yq
+
+# Override implicit RM command quietly
+RM := @$(RM)
+
 # Manifests and charts files (for getting versions from)
 CHARTS_TIGERAOPERATOR_VALUES = ../../charts/tigera-operator/values.yaml
 CHART_CALICO_VALUES  = ../../charts/calico/values.yaml
