@@ -232,7 +232,19 @@
                 "test" : "findstr calico-bgp c:\\k\\backend",
                 "waitAfterCompletion": "0"
               },
-              "2-run-fv" : {
+              "2-install-docker1-enable-containers" : {
+                "command": "powershell.exe -Command \"Install-WindowsFeature -Name Containers\"",
+                "waitAfterCompletion": "3"
+              },
+              "2-install-docker2-Restart-Computer" : {
+                "command": "powershell.exe -Command \"Restart-Computer -Force\"",
+                "waitAfterCompletion": "forever"
+              },
+              "2-install-docker3" : {
+                "command": "powershell.exe -Command \"Invoke-WebRequest -UseBasicParsing 'https://raw.githubusercontent.com/microsoft/Windows-Containers/Main/helpful_tools/Install-DockerCE/install-docker-ce.ps1' -o install-docker-ce.ps1; ./install-docker-ce.ps1\"",
+                "waitAfterCompletion": "3"
+              },
+              "3-run-fv" : {
                 "command": "powershell.exe -Command \"start-process powershell -argument 'C:\\k\\run-fv.ps1' -WindowStyle hidden -RedirectStandardOutput c:\\k\\cf-fv-log.txt\" ",
                 "waitAfterCompletion": "0"
               }
