@@ -84,16 +84,20 @@ func (ap *AttachPoint) loadObject(ipVer int, file string) (*libbpf.Obj, error) {
 		// In case of global variables, libbpf creates an internal map <prog_name>.rodata
 		// The values are read only for the BPF programs, but can be set to a value from
 		// userspace before the program is loaded.
+		mapName := m.Name()
 		if m.IsMapInternal() {
+			if strings.HasPrefix(mapName, ".rodata") {
+				continue
+			}
 			if err := ap.ConfigureProgram(m); err != nil {
 				return nil, fmt.Errorf("failed to configure %s: %w", file, err)
 			}
 			continue
 		}
 
-		pinDir := bpf.MapPinDir(m.Type(), m.Name(), ap.Iface, ap.Hook)
-		if err := m.SetPinPath(path.Join(pinDir, m.Name())); err != nil {
-			return nil, fmt.Errorf("error pinning map %s: %w", m.Name(), err)
+		pinDir := bpf.MapPinDir(m.Type(), mapName, ap.Iface, ap.Hook)
+		if err := m.SetPinPath(path.Join(pinDir, mapName)); err != nil {
+			return nil, fmt.Errorf("error pinning map %s: %w", mapName, err)
 		}
 	}
 

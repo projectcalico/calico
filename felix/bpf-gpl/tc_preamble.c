@@ -14,7 +14,7 @@
 
 const volatile struct cali_tc_globals __globals;
 
-SEC("classifier/tc/preamble")
+SEC("classifier")
 int  cali_tc_preamble(struct __sk_buff *skb)
 {
 	volatile struct cali_tc_globals *globals = state_get_globals_tc();

@@ -23,6 +23,8 @@ BPFGPL_CONTAINER_PATH=/go/src/github.com/projectcalico/calico/felix/bpf-gpl/
 
 # Paths within the repository for BPF source.
 LIBBPF_A=../felix/bpf-gpl/include/libbpf/src/$(ARCH)/libbpf.a
+LIBBPF_VERSION=v1.2.2
+LIBBPF_SRC=../felix/bpf-gpl/include/libbpf/src
 
 
 # Complete list of files from other directories that we need to build calico/node.
@@ -218,6 +220,11 @@ filesystem/etc/calico/confd/conf.d: $(shell find ../confd/etc/calico/confd/conf.
 filesystem/etc/calico/confd/templates: $(shell find ../confd/etc/calico/confd/templates -type f)
 	rm -rf $@ && cp -r ../confd/etc/calico/confd/templates $@
 	chmod +w $@
+
+$(LIBBPF_SRC):
+	rm -rf ../felix/bpf-gpl/include/libbpf
+	mkdir -p ../felix/bpf-gpl/include/libbpf
+	git clone --depth 1 --branch $(LIBBPF_VERSION) https://github.com/libbpf/libbpf.git ../felix/bpf-gpl/include/libbpf
 
 $(LIBBPF_A): $(shell find ../felix/bpf-gpl/include/libbpf -type f -name '*.[ch]')
 	make -C ../felix libbpf ARCH=$(ARCH)
@@ -475,7 +482,7 @@ st: $(REMOTE_DEPS) image dist/calicoctl busybox.tar calico-node.tar workload.tar
 # CI/CD
 ###############################################################################
 .PHONY: ci
-ci: static-checks ut image build-windows-upgrade-archive image-tar-windows-all st
+ci: $(LIBBPF_SRC) static-checks ut image build-windows-upgrade-archive image-tar-windows-all st
 
 ## Deploys images to registry
 cd: cd-common cd-windows-all
