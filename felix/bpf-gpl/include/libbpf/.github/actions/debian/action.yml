@@ -1,0 +1,16 @@
+name: 'debian'
+description: 'Build'
+inputs:
+  target:
+    description: 'Run target'
+    required: true
+runs:
+  using: "composite"
+  steps:
+    - run: |
+        source /tmp/ci_setup
+        bash -x $CI_ROOT/managers/debian.sh SETUP
+        bash -x $CI_ROOT/managers/debian.sh ${{ inputs.target }}
+        bash -x $CI_ROOT/managers/debian.sh CLEANUP
+      shell: bash
+
