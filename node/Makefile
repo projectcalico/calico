@@ -23,8 +23,7 @@ BPFGPL_CONTAINER_PATH=/go/src/github.com/projectcalico/calico/felix/bpf-gpl/
 
 # Paths within the repository for BPF source.
 LIBBPF_A=../felix/bpf-gpl/include/libbpf/src/$(ARCH)/libbpf.a
-LIBBPF_VERSION=v1.2.2
-LIBBPF_SRC=../felix/bpf-gpl/include/libbpf/src
+LIBBPF_SRC=../felix/bpf-gpl/include/libbpf
 
 
 # Complete list of files from other directories that we need to build calico/node.
