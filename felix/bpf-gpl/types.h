@@ -185,7 +185,7 @@ struct cali_tc_ctx {
 				CALI_LOG_IF(CALI_LOG_LEVEL_DEBUG, "no globals: DROP\n");		\
 				bpf_exit(TC_ACT_SHOT);				\
 			}							\
-			struct pkt_scratch *scratch = (void *)(gl + 1); 	\
+			struct pkt_scratch *scratch = (void *)(gl->__scratch); 	\
 			(struct cali_tc_ctx) {					\
 				.state = state,					\
 				.counters = counters,				\
