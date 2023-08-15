@@ -9,9 +9,9 @@ CHARTS_TIGERAOPERATOR_VALUES = ../../charts/tigera-operator/values.yaml
 CHART_CALICO_VALUES  = ../../charts/calico/values.yaml
 
 # Versions (extracted from the charts files)
-CALICO_VERSION  := $(shell yq '.calicoctl.tag'  < $(CHARTS_TIGERAOPERATOR_VALUES))
-OPERATOR_VERSION := $(shell yq '.tigeraOperator.version' < $(CHARTS_TIGERAOPERATOR_VALUES))
-FLANNEL_VERSION := $(shell yq '.flannel.tag' < $(CHART_CALICO_VALUES))
+CALICO_VERSION  := $(shell $(YQ) '.calicoctl.tag'  < $(CHARTS_TIGERAOPERATOR_VALUES))
+OPERATOR_VERSION := $(shell $(YQ) '.tigeraOperator.version' < $(CHARTS_TIGERAOPERATOR_VALUES))
+FLANNEL_VERSION := $(shell $(YQ) '.flannel.tag' < $(CHART_CALICO_VALUES))
 
 # The docker image that we build to run the tests in
 CALICO_POSTRELEASE_TEST_IMAGE = calico_postrelease_tests:$(CALICO_VERSION)
