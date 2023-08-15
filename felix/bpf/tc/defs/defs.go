@@ -52,12 +52,14 @@ const (
 	ProgIndexIcmp
 	ProgIndexDrop
 	ProgIndexHostCtConflict
+	ProgIndexIcmpInnerNat
 	ProgIndexMainDebug
 	ProgIndexPolicyDebug
 	ProgIndexAllowedDebug
 	ProgIndexIcmpDebug
 	ProgIndexDropDebug
 	ProgIndexHostCtConflictDebug
+	ProgIndexIcmpInnerNatDebug
 	ProgIndexV6Prologue
 	ProgIndexV6Policy
 	ProgIndexV6Allowed
@@ -89,6 +91,7 @@ var ProgramNames = []string{
 	"calico_tc_skb_send_icmp_replies",
 	"calico_tc_skb_drop",
 	"calico_tc_host_ct_conflict",
+	"calico_tc_skb_icmp_inner_nat",
 	/* ipv4 - debug */
 	"calico_tc_main",
 	"calico_tc_norm_pol_tail",
@@ -96,6 +99,7 @@ var ProgramNames = []string{
 	"calico_tc_skb_send_icmp_replies",
 	"calico_tc_skb_drop",
 	"calico_tc_host_ct_conflict",
+	"calico_tc_skb_icmp_inner_nat",
 	/* ipv6 */
 	"calico_tc6",
 	"calico_tc_norm_pol_tail",

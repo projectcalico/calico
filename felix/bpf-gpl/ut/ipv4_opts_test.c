@@ -1,11 +1,11 @@
 // Project Calico BPF dataplane programs.
-// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2023 Tigera, Inc. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
 #include "ut.h"
-#include "bpf.h"
+#include "parsing.h"
+#include "jump.h"
 #include "nat.h"
-#include "icmp.h"
 
 const volatile struct cali_tc_globals __globals;
 
@@ -24,9 +24,35 @@ static CALI_BPF_INLINE int calico_unittest_entry (struct __sk_buff *skb)
 		.ipheader_len = IP_SIZE,
 	);
 	struct cali_tc_ctx *ctx = &_ctx;
+
 	if (!ctx->counters) {
 		CALI_DEBUG("Counters map lookup failed: DROP\n");
 		return TC_ACT_SHOT;
 	}
-	return icmp_v4_port_unreachable(ctx);
+
+
+	if (parse_packet_ip(ctx) != PARSING_OK) {
+		return TC_ACT_UNSPEC;
+	}
+
+	tc_state_fill_from_iphdr(ctx);
+
+	switch (tc_state_fill_from_nexthdr(ctx, true)) {
+	case PARSING_ERROR:
+		goto deny;
+	case PARSING_ALLOW_WITHOUT_ENFORCING_POLICY:
+		goto allow;
+	}
+
+	if (vxlan_v4_encap(ctx, 0x06060606, 0x10101010)) {
+		CALI_DEBUG("vxlan: encap failed!\n");
+		deny_reason(ctx, CALI_REASON_ENCAP_FAIL);
+		goto  deny;
+	}
+
+allow:
+	return TC_ACT_UNSPEC;
+
+deny:
+	return TC_ACT_SHOT;
 }

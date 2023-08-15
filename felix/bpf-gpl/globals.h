@@ -16,11 +16,17 @@ struct cali_tc_globals {
 	__be32 host_tunnel_ip;
 	__be32 flags;
 	__be16 wg_port;
+	__be16 __pad;
 	__u32 natin_idx;
 	__u32 natout_idx;
 	__u8 iface_name[16];
 	__u32 log_filter_jmp;
 	__u32 jumps[32];
+	/* Needs to be 32bit aligned as it is followed by scratch area for
+	 * building headers. We reuse the same slot in state map to save
+	 * ourselves a lookup.
+	 */
+	__u32 __scratch[]; /* N.B. this provides pointer to the location but does not add to the size */
 };
 
 enum cali_globals_flags {

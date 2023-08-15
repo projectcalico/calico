@@ -5,6 +5,10 @@
 #ifndef __CALI_PARSING_H__
 #define __CALI_PARSING_H__
 
+#include <linux/tcp.h>
+#include <linux/udp.h>
+#include <linux/icmp.h>
+
 #include "skb.h"
 #include "routes.h"
 
@@ -12,6 +16,26 @@
 #define PARSING_OK_V6 1
 #define PARSING_ALLOW_WITHOUT_ENFORCING_POLICY 2
 #define PARSING_ERROR -1
+
+static CALI_BPF_INLINE int bpf_load_bytes(struct cali_tc_ctx *ctx, __u32 offset, void *buf, __u32 len)
+{
+	int ret;
+
+	if (CALI_F_XDP) {
+#ifdef BPF_CORE_SUPPORTED
+		if (bpf_core_enum_value_exists(enum bpf_func_id, BPF_FUNC_xdp_load_bytes)) {
+			ret = bpf_xdp_load_bytes(ctx->xdp, offset, buf, len);
+		} else
+#endif
+		{
+			return -22 /* EINVAL */;
+		}
+	} else {
+		ret = bpf_skb_load_bytes(ctx->skb, offset, buf, len);
+	}
+
+	return ret;
+}
 
 static CALI_BPF_INLINE int parse_packet_ip(struct cali_tc_ctx *ctx) {
 	__u16 protocol = 0;
@@ -76,7 +100,7 @@ static CALI_BPF_INLINE int parse_packet_ip(struct cali_tc_ctx *ctx) {
 		}
 	}
 
-	CALI_DEBUG("IP id=%d\n",bpf_ntohs(ip_hdr(ctx)->id)); 
+	CALI_DEBUG("IP id=%d\n",bpf_ntohs(ip_hdr(ctx)->id));
 	CALI_DEBUG("IP s=%x d=%x\n", bpf_ntohl(ip_hdr(ctx)->saddr), bpf_ntohl(ip_hdr(ctx)->daddr));
 	// Drop malformed IP packets
 	if (ip_hdr(ctx)->ihl < 5) {
@@ -87,14 +111,9 @@ static CALI_BPF_INLINE int parse_packet_ip(struct cali_tc_ctx *ctx) {
 		/* Drop packets with IP options from/to WEP.
 		 * Also drop packets with IP options if the dest IP is not host IP
 		 */
-		if (CALI_F_WEP || (CALI_F_FROM_HEP && !rt_addr_is_local_host(ip_hdr(ctx)->daddr))) {
-			deny_reason(ctx, CALI_REASON_IP_OPTIONS);
-			CALI_DEBUG("Drop packets with IP options\n");
-			goto deny;
-		}
-		CALI_DEBUG("Allow packets with IP options and dst IP = hostIP\n");
-		goto allow_no_fib;
+		ctx->ipheader_len = 4 * ip_hdr(ctx)->ihl;
 	}
+	CALI_DEBUG("IP ihl=%d bytes\n", ctx->ipheader_len);
 
 	return PARSING_OK;
 
@@ -142,16 +161,83 @@ static CALI_BPF_INLINE void tc_state_fill_from_ipv6hdr(struct cali_tc_ctx *ctx)
 
 /* Continue parsing packet based on the IP protocol and fill in relevant fields
  * in the state (struct cali_tc_state). */
-static CALI_BPF_INLINE int tc_state_fill_from_nexthdr(struct cali_tc_ctx *ctx)
+static CALI_BPF_INLINE int tc_state_fill_from_nexthdr(struct cali_tc_ctx *ctx, bool decap)
 {
+	if (ip_hdr(ctx)->ihl == 5) {
+		switch (ctx->state->ip_proto) {
+		case IPPROTO_TCP:
+			if (skb_refresh_validate_ptrs(ctx, TCP_SIZE)) {
+				deny_reason(ctx, CALI_REASON_SHORT);
+				CALI_DEBUG("Too short\n");
+				goto deny;
+			}
+			__builtin_memcpy(ctx->scratch->l4, ((void*)ip_hdr(ctx))+IP_SIZE, TCP_SIZE);
+			break;
+		case IPPROTO_UDP:
+			{
+				int len = UDP_SIZE;
+				if (decap) {
+					/* We try to opportunistically load the vxlan
+					 * header as well, small cost and makes reading
+					 * vxlan cheap later.
+					 */
+					len += sizeof(struct vxlanhdr);
+					if (skb_refresh_validate_ptrs(ctx, len) == 0) {
+						__builtin_memcpy(ctx->scratch->l4, ((void*)ip_hdr(ctx))+IP_SIZE, len);
+						break;
+					}
+				}
+				if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
+					deny_reason(ctx, CALI_REASON_SHORT);
+					CALI_DEBUG("Too short\n");
+					goto deny;
+				}
+				__builtin_memcpy(ctx->scratch->l4, ((void*)ip_hdr(ctx))+IP_SIZE, UDP_SIZE);
+			}
+			break;
+		default:
+			__builtin_memcpy(ctx->scratch->l4, ((void*)ip_hdr(ctx))+IP_SIZE, UDP_SIZE);
+			break;
+		}
+	} else {
+		switch (ctx->state->ip_proto) {
+		case IPPROTO_TCP:
+			/* Load the L4 header in case there were ip options as we loaded the options instead. */
+			if (bpf_load_bytes(ctx, skb_l4hdr_offset(ctx), ctx->scratch->l4, TCP_SIZE)) {
+				CALI_DEBUG("Too short\n");
+				goto deny;
+			}
+			break;
+		case IPPROTO_UDP:
+			{
+				int len = UDP_SIZE;
+				if (decap) {
+					/* We try to opportunistically load the vxlan
+					 * header as well, small cost and makes reading
+					 * vxlan cheap later.
+					 */
+					len += sizeof(struct vxlanhdr);
+				}
+				int offset =  skb_l4hdr_offset(ctx);
+				if (bpf_load_bytes(ctx, offset, ctx->scratch->l4, len)) {
+					if (bpf_load_bytes(ctx, offset, ctx->scratch->l4, UDP_SIZE)) {
+						CALI_DEBUG("Too short\n");
+						goto deny;
+					}
+				}
+			}
+			break;
+		default:
+			if (bpf_load_bytes(ctx, skb_l4hdr_offset(ctx), ctx->scratch->l4, UDP_SIZE)) {
+				CALI_DEBUG("Too short\n");
+				goto deny;
+			}
+			break;
+		}
+	}
+
 	switch (ctx->state->ip_proto) {
 	case IPPROTO_TCP:
-		// Re-check buffer space for TCP (has larger headers than UDP).
-		if (skb_refresh_validate_ptrs(ctx, TCP_SIZE)) {
-			deny_reason(ctx, CALI_REASON_SHORT);
-			CALI_DEBUG("Too short\n");
-			goto deny;
-		}
 		ctx->state->sport = bpf_ntohs(tcp_hdr(ctx)->source);
 		ctx->state->dport = bpf_ntohs(tcp_hdr(ctx)->dest);
 		ctx->state->pre_nat_dport = ctx->state->dport;
