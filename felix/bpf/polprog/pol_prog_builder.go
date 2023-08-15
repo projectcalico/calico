@@ -96,8 +96,12 @@ var (
 	// Stack offsets.  These are defined locally.
 	offStateKey = nextOffset(4, 4)
 	// Even for v4 progrtams, we have the v6 layout
-	offSrcIPSetKey = nextOffset(ipsets.IPSetEntryV6Size, 8)
-	offDstIPSetKey = nextOffset(ipsets.IPSetEntryV6Size, 8)
+	// N.B. we can use 64bit stack stores in ipv6 because of the 4 byte alignment
+	// preceded by the 4 bytes of StateKey. That makes the ip within the src key
+	// 8 bytes aligned. And since the ip is followed by 4 bytes of
+	// port+proto+pad, the dst key is also aligned in the same way. <sweat :-)>
+	offSrcIPSetKey = nextOffset(ipsets.IPSetEntryV6Size, 4)
+	offDstIPSetKey = nextOffset(ipsets.IPSetEntryV6Size, 4)
 
 	// Offsets within the cal_tc_state struct.
 	// WARNING: must be kept in sync with the definitions in bpf-gpl/types.h.
@@ -419,18 +423,15 @@ func (p *Builder) setUpIPSetKey(ipsetID uint64, keyOffset int16, ipOffset, portO
 	p.b.StoreStack32(R1, keyOffset+ipsKeyPrefix)
 
 	// Store the IP address, port and protocol.
-	p.b.Load32(R1, R9, ipOffset)
-	p.b.StoreStack32(R1, keyOffset+ipsKeyAddr)
-	if p.forIPv6 {
-		ipOffset.Offset += 4
+	if !p.forIPv6 {
 		p.b.Load32(R1, R9, ipOffset)
-		p.b.StoreStack32(R1, keyOffset+ipsKeyAddr+4)
-		ipOffset.Offset += 4
-		p.b.Load32(R1, R9, ipOffset)
-		p.b.StoreStack32(R1, keyOffset+ipsKeyAddr+8)
-		ipOffset.Offset += 4
-		p.b.Load32(R1, R9, ipOffset)
-		p.b.StoreStack32(R1, keyOffset+ipsKeyAddr+12)
+		p.b.StoreStack32(R1, keyOffset+ipsKeyAddr)
+	} else {
+		p.b.Load64(R1, R9, ipOffset)
+		p.b.StoreStack64(R1, keyOffset+ipsKeyAddr)
+		ipOffset.Offset += 8
+		p.b.Load64(R1, R9, ipOffset)
+		p.b.StoreStack64(R1, keyOffset+ipsKeyAddr+8)
 	}
 	p.b.Load16(R1, R9, portOffset)
 	p.b.StoreStack16(R1, keyOffset+ipsKeyPort+v6Adjust)
