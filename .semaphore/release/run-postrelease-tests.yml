@@ -40,7 +40,7 @@ blocks:
         execution_time_limit:
           minutes: 180
         commands:
-        - make -C hack/postrelease all
+        - make postrelease-checks
       epilogue:
         always:
           commands:
