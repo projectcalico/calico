@@ -69,7 +69,7 @@ print("Found {} separate image tags to test".format(len(ALL_IMAGES)))
 def request_quay_image(image_name, image_version):
     headers = {
         "Content-Type": "application/json",
-        "Authorization": "Bearer {}".format(variables.QUAY_API_TOKEN),
+        "Authorization": "Bearer {}".format(variables.QUAY_TOKEN),
     }
     params = {"specificTag": image_version}
     api_url = f"https://quay.io/api/v1/repository/{image_name}/tag"
