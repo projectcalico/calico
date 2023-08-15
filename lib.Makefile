@@ -73,8 +73,6 @@ ifeq ($(word 1,$(subst v, ,$(ARCH))),arm)
 ARM_VERSION := $(word 2,$(subst v, ,$(ARCH)))
 endif
 
-LIBBPF_VERSION=v1.2.2
-
 # detect the local outbound ip address
 LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | awk '{print $$7}')
 

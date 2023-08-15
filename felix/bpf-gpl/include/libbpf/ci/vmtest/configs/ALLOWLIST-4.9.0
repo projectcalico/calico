@@ -1,0 +1,8 @@
+# btf_dump -- need to disable data dump sub-tests
+core_retro
+cpu_mask
+hashmap
+legacy_printk
+perf_buffer
+section_names
+
