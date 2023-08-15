@@ -26,6 +26,7 @@ struct cali_tc_globals {
 	 * building headers. We reuse the same slot in state map to save
 	 * ourselves a lookup.
 	 */
+	__u32 __scratch[]; /* N.B. this provides pointer to the location but does not add to the size */
 };
 
 enum cali_globals_flags {
