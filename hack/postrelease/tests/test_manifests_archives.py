@@ -43,8 +43,13 @@ def image_file_members(tmpdir_factory):
 @pytest.mark.slow
 @pytest.mark.github
 @pytest.mark.tryfirst
+def test_release_tarball_exists(image_file_members):
+    pass
+
+
+@pytest.mark.github
 @pytest.mark.parametrize("manifest", manifest_list)
-def test_manifest_present(image_file_members, manifest):
+def test_release_tarball_manifest_present(image_file_members, manifest):
     """
     Validate that the given manifest is in the given archive
     """
