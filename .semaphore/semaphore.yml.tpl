@@ -23,11 +23,13 @@ promotions:
   pipeline_file: release/release.yml
 - name: Run postrelease tests
   pipeline_file: release/run-postrelease-tests.yml
+
 # Cleanup after ourselves if we are stopped-short.
 - name: Cleanup
   pipeline_file: cleanup.yml
   auto_promote:
     when: "result = 'stopped'"
+
 # Have separate promotions for publishing images so we can re-run
 # them individually if they fail, and so we can run them in parallel.
 - name: Push apiserver images
