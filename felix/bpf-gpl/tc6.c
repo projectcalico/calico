@@ -24,7 +24,7 @@
 const volatile struct cali_tc_globals __globals;
 
 
-SEC("classifier/tc/prologue")
+SEC("tc")
 int calico_tc6(struct __sk_buff *skb)
 {
 	struct cali_tc_ctx _ctx = {
@@ -104,7 +104,7 @@ allow:
 	return TC_ACT_UNSPEC;
 }
 
-SEC("classifier/tc/accept")
+SEC("tc")
 int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 {
 	CALI_LOG_IF(CALI_LOG_LEVEL_DEBUG, "Entering IPv6 accepted program\n");
@@ -114,7 +114,7 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 	return TC_ACT_UNSPEC;
 }
 
-SEC("classifier/tc/icmp")
+SEC("tc")
 int calico_tc_skb_send_icmp_replies(struct __sk_buff *skb)
 {
 	CALI_LOG_IF(CALI_LOG_LEVEL_DEBUG, "Entering IPv6 icmp program\n");
@@ -123,7 +123,7 @@ int calico_tc_skb_send_icmp_replies(struct __sk_buff *skb)
 	return TC_ACT_SHOT;
 }
 
-SEC("classifier/tc/drop")
+SEC("tc")
 int calico_tc_skb_drop(struct __sk_buff *skb)
 {
 	CALI_LOG_IF(CALI_LOG_LEVEL_DEBUG, "Entering IPv6 drop program\n");

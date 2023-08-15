@@ -7,6 +7,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include <linux/stddef.h>
+
 #include <asm/types.h>
 #include <asm/posix_types.h>
 

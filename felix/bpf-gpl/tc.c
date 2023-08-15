@@ -49,7 +49,7 @@
 /* calico_tc_main is the main function used in all of the tc programs.  It is specialised
  * for particular hook at build time based on the CALI_F build flags.
  */
-SEC("classifier/tc/main")
+SEC("tc")
 int calico_tc_main(struct __sk_buff *skb)
 {
 #ifdef UNITTEST
@@ -570,7 +570,7 @@ deny:
 	ctx->fwd.res = TC_ACT_SHOT;
 }
 
-SEC("classifier/tc/accept")
+SEC("tc")
 int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 {
 	/* Initialise the context, which is stored on the stack, and the state, which
@@ -1342,7 +1342,7 @@ deny:
 	}
 }
 
-SEC("classifier/tc/icmp")
+SEC("tc")
 int calico_tc_skb_send_icmp_replies(struct __sk_buff *skb)
 {
 	__u32 fib_flags = 0;
@@ -1393,7 +1393,7 @@ deny:
 }
 
 #if HAS_HOST_CONFLICT_PROG
-SEC("classifier/tc/host_ct_conflict")
+SEC("tc")
 int calico_tc_host_ct_conflict(struct __sk_buff *skb)
 {
 	/* Initialise the context, which is stored on the stack, and the state, which
@@ -1459,7 +1459,7 @@ deny:
 }
 #endif /* HAS_HOST_CONFLICT_PROG */
 
-SEC("classifier/tc/drop")
+SEC("tc")
 int calico_tc_skb_drop(struct __sk_buff *skb)
 {
 	DECLARE_TC_CTX(_ctx,
