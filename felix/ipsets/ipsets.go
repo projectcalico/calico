@@ -136,8 +136,8 @@ func (s *IPSets) AddOrReplaceIPSet(setMetadata IPSetMetadata, members []string) 
 		IPSetMetadata:    setMetadata,
 		MainIPSetName:    s.IPVersionConfig.NameForMainIPSet(setID),
 		pendingReplace:   canonMembers,
-		pendingAdds:      set.NewBoxed[IPSetMember](),
-		pendingDeletions: set.NewBoxed[IPSetMember](),
+		pendingAdds:      set.New[IPSetMember](),
+		pendingDeletions: set.New[IPSetMember](),
 	}
 	s.ipSetIDToIPSet[setID] = ipSet
 	s.mainIPSetNameToIPSet[ipSet.MainIPSetName] = ipSet
@@ -260,7 +260,7 @@ func ipSetMemberSetToStringSet(ipsetMembers set.Set[IPSetMember]) set.Set[string
 }
 
 func (s *IPSets) filterAndCanonicaliseMembers(ipSetType IPSetType, members []string) set.Set[IPSetMember] {
-	filtered := set.NewBoxed[IPSetMember]()
+	filtered := set.New[IPSetMember]()
 	wantIPV6 := s.IPVersionConfig.Family == IPFamilyV6
 	for _, member := range members {
 		isIPV6 := ipSetType.IsMemberIPV6(member)
@@ -451,7 +451,7 @@ func (s *IPSets) tryResync() (numProblems int, err error) {
 			// One of our IP sets and we're not planning to rewrite it; we need to
 			// load its members and compare them.
 			logCxt = s.logCxt.WithField("setID", ipSet.SetID)
-			dataplaneMembers := set.NewBoxed[IPSetMember]()
+			dataplaneMembers := set.New[IPSetMember]()
 			for scanner.Scan() {
 				line := scanner.Text()
 				if line == "" {
@@ -576,7 +576,7 @@ func (s *IPSets) tryResync() (numProblems int, err error) {
 	}
 
 	// Scan for IP sets that need to be cleaned up.  Create list containing the IP sets that we expect to be there.
-	expectedIPSets := set.NewBoxed[string]()
+	expectedIPSets := set.New[string]()
 	for _, ipSet := range s.ipSetIDToIPSet {
 		if !s.ipSetNeeded(ipSet.SetID) {
 			continue

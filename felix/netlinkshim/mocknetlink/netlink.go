@@ -288,7 +288,7 @@ func (d *MockNetlinkDataplane) ResetDeltas() {
 	d.AddedRules = nil
 	d.DeletedRules = nil
 	d.WireguardConfigUpdated = false
-	d.deletedConntrackEntries = set.NewBoxed[ip.Addr]()
+	d.deletedConntrackEntries = set.New[ip.Addr]()
 }
 
 // ----- Mock dataplane management functions for test code -----

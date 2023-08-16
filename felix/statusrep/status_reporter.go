@@ -92,8 +92,8 @@ func newEndpointStatusReporterWithTickerChans(hostname string,
 		inSync:             inSync,
 		stop:               make(chan bool),
 		epStatusIDToStatus: make(map[model.Key]string),
-		queuedDirtyIDs:     set.NewBoxed[model.Key](),
-		activeDirtyIDs:     set.NewBoxed[model.Key](),
+		queuedDirtyIDs:     set.New[model.Key](),
+		activeDirtyIDs:     set.New[model.Key](),
 		resyncTicker:       resyncTicker,
 		resyncTickerC:      resyncTickerChan,
 		rateLimitTicker:    rateLimitTicker,
@@ -248,7 +248,7 @@ loop:
 					esr.activeDirtyIDs.Add(item)
 					return nil
 				})
-				esr.queuedDirtyIDs = set.NewBoxed[model.Key]()
+				esr.queuedDirtyIDs = set.New[model.Key]()
 			}
 		}
 	}
