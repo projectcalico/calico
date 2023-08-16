@@ -57,7 +57,7 @@ allow:
 
 #endif /* CALI_DEBUG_ALLOW_ALL */
 
-SEC("classifier/tc/policy")
+SEC("tc")
 int calico_tc_norm_pol_tail(struct __sk_buff *skb)
 {
 	CALI_DEBUG("Entering normal policy program\n");

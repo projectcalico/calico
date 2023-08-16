@@ -117,14 +117,14 @@ deny:
  * which ip will load for us when we're attaching a program to a xdp hook.
  * This allows us to control the behaviour in the window before Felix replaces
  * the policy program with its generated version.*/
-SEC("xdp/policy")
+SEC("xdp")
 int calico_xdp_norm_pol_tail(struct xdp_md *xdp)
 {
 	CALI_DEBUG("Entering normal policy tail call: PASS\n");
 	return XDP_PASS;
 }
 
-SEC("xdp/accept")
+SEC("xdp")
 int calico_xdp_accepted_entrypoint(struct xdp_md *xdp)
 {
 	CALI_DEBUG("Entering calico_xdp_accepted_entrypoint\n");
@@ -155,7 +155,7 @@ int calico_xdp_accepted_entrypoint(struct xdp_md *xdp)
 	return XDP_PASS;
 }
 
-SEC("xdp/drop")
+SEC("xdp")
 int calico_xdp_drop(struct xdp_md *xdp)
 {
 	CALI_DEBUG("Entering calico_xdp_drop\n");
@@ -198,7 +198,7 @@ int calico_xdp_drop(struct xdp_md *xdp)
 
 // Entrypoint with definable name.  It's useful to redefine the name for each entrypoint
 // because the name is exposed by bpftool et al.
-SEC("xdp/"XSTR(CALI_ENTRYPOINT_NAME_XDP))
+SEC("xdp")
 int xdp_calico_entry(struct xdp_md *xdp)
 {
 	return calico_xdp(xdp);
