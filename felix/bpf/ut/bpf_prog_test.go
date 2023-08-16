@@ -408,9 +408,7 @@ func caller(skip int) string {
 func runBpfTest(t *testing.T, section string, rules *polprog.Rules, testFn func(bpfProgRunFn), opts ...testOption) {
 	RegisterTestingT(t)
 	xdp := false
-	if strings.Contains(section, "xdp") == false {
-		section = "classifier_" + section
-	} else {
+	if strings.Contains(section, "xdp") {
 		xdp = true
 	}
 
