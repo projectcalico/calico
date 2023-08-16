@@ -115,23 +115,27 @@ func installProgram(name, ipver, bpfMount, cgroupPath, logLevel string, udpNotSe
 		// In case of global variables, libbpf creates an internal map <prog_name>.rodata
 		// The values are read only for the BPF programs, but can be set to a value from
 		// userspace before the program is loaded.
+		mapName := m.Name()
 		if m.IsMapInternal() {
+			if strings.HasPrefix(mapName, ".rodata") {
+				continue
+			}
 			if err := libbpf.CTLBSetGlobals(m, udpNotSeen, excludeUDP); err != nil {
 				return fmt.Errorf("error setting globals: %w", err)
 			}
 			continue
 		}
 
-		if size := maps.Size(m.Name()); size != 0 {
+		if size := maps.Size(mapName); size != 0 {
 			err := m.SetSize(size)
 			if err != nil {
 				return fmt.Errorf("error set map size %s: %w", m.Name(), err)
 			}
 		}
-		if err := m.SetPinPath(path.Join(bpfdefs.GlobalPinDir, m.Name())); err != nil {
-			return fmt.Errorf("error pinning map %s: %w", m.Name(), err)
+		if err := m.SetPinPath(path.Join(bpfdefs.GlobalPinDir, mapName)); err != nil {
+			return fmt.Errorf("error pinning map %s: %w", mapName, err)
 		}
-		log.WithFields(log.Fields{"program": progName, "map": m.Name()}).Debug("Pinned map")
+		log.WithFields(log.Fields{"program": progName, "map": mapName}).Debug("Pinned map")
 	}
 
 	if err := obj.Load(); err != nil {
