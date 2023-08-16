@@ -260,7 +260,7 @@ func DetachXDP(ifName string, mode uint) error {
 		return err
 	}
 
-	errno := C.bpf_xdp_detach(C.int(ifIndex), 0, nil)
+	errno := C.bpf_xdp_detach(C.int(ifIndex), C.uint(mode), nil)
 	if errno != 0 {
 		err := syscall.Errno(errno)
 		return fmt.Errorf("failed to detach xdp program. interface %s: %w", ifName, err)
