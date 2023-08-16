@@ -38,6 +38,7 @@ const (
 	SubProgTCIcmp
 	SubProgTCDrop
 	SubProgTCHostCtConflict
+	SubProgIcmpInnerNat
 	SubProgTCMainDebug
 
 	SubProgXDPMain    = SubProgTCMain
@@ -53,6 +54,7 @@ var tcSubProgNames = []string{
 	"calico_tc_skb_send_icmp_replies",
 	"calico_tc_skb_drop",
 	"calico_tc_host_ct_conflict",
+	"calico_tc_skb_icmp_inner_nat",
 }
 
 var xdpSubProgNames = []string{

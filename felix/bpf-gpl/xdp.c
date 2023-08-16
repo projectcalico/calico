@@ -61,6 +61,7 @@ int calico_xdp_main(struct xdp_md *xdp)
 		return XDP_DROP;
 	}
 	__builtin_memset(ctx->state, 0, sizeof(*ctx->state));
+	ctx->scratch = (void *)(ctx->xdp_globals + 1); /* needs to be set to something, not used, there is space */
 
 	counter_inc(ctx, COUNTER_TOTAL_PACKETS);
 
@@ -78,7 +79,7 @@ int calico_xdp_main(struct xdp_md *xdp)
 
 	tc_state_fill_from_iphdr(ctx);
 
-	switch(tc_state_fill_from_nexthdr(ctx)) {
+	switch(tc_state_fill_from_nexthdr(ctx, false)) {
 	case PARSING_ERROR:
 		goto deny;
 	case PARSING_ALLOW_WITHOUT_ENFORCING_POLICY:
@@ -155,6 +156,8 @@ int calico_xdp_accepted_entrypoint(struct xdp_md *xdp)
 		return XDP_DROP;
 	}
 
+	ctx->scratch = (void *)(ctx->xdp_globals + 1);
+
 	CALI_DEBUG("Entering calico_xdp_accepted_entrypoint\n");
 
 	// Share with TC the packet is already accepted and accept it there too.
@@ -193,6 +196,8 @@ int calico_xdp_drop(struct xdp_md *xdp)
 		CALI_DEBUG("No counters: DROP\n");
 		return XDP_DROP;
 	}
+
+	ctx->scratch = (void *)(ctx->xdp_globals + 1);
 
 	counter_inc(ctx, CALI_REASON_DROPPED_BY_POLICY);
 

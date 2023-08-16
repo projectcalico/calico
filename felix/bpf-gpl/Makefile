@@ -90,14 +90,14 @@ to%.ll: tc.c tc.d calculate-flags
 	$(COMPILE)
 from%.ll: tc.c tc.d calculate-flags
 	$(COMPILE)
-to%_v6.ll: tc6.c tc.d calculate-flags
-	$(COMPILE)
-from%_v6.ll: tc6.c tc.d calculate-flags
-	$(COMPILE)
+#to%_v6.ll: tc6.c tc.d calculate-flags
+#	$(COMPILE)
+#from%_v6.ll: tc6.c tc.d calculate-flags
+#	$(COMPILE)
 test%.ll: tc.c tc.d calculate-flags
 	$(COMPILE)
-test%_v6.ll: tc6.c tc.d calculate-flags
-	$(COMPILE)
+#test%_v6.ll: tc6.c tc.d calculate-flags
+#	$(COMPILE)
 xdp%.ll: xdp.c xdp.d calculate-flags
 	$(COMPILE)
 test_xdp%.ll: xdp.c xdp.d calculate-flags

@@ -19,6 +19,16 @@
 #include "nat_types.h"
 #include "reasons.h"
 
+#define IPV4_UDP_SIZE		(sizeof(struct iphdr) + sizeof(struct udphdr))
+#define ETH_IPV4_UDP_SIZE	(sizeof(struct ethhdr) + IPV4_UDP_SIZE)
+
+#define ETH_SIZE (sizeof(struct ethhdr))
+#define IP_SIZE (sizeof(struct iphdr))
+#define IPv6_SIZE (sizeof(struct ipv6hdr))
+#define UDP_SIZE (sizeof(struct udphdr))
+#define TCP_SIZE (sizeof(struct tcphdr))
+#define ICMP_SIZE (sizeof(struct icmphdr))
+
 #define MAX_RULE_IDS    32
 
 // struct cali_tc_state holds state that is passed between the BPF programs.
@@ -98,6 +108,10 @@ struct cali_tc_state {
 	__u64 flags;
 };
 
+struct pkt_scratch {
+	__u8 l4[20]; /* 20 bytes to fit udp, icmp, tcp w/o options */
+};
+
 enum cali_state_flags {
 	/* CALI_ST_NAT_OUTGOING is set if this packet is from a NAT-outgoing IP pool and is leaving the
 	 * Calico network. Such packets are dropped through to iptables for SNAT. */
@@ -142,7 +156,6 @@ struct cali_tc_ctx {
   void *data_start;
   void *data_end;
   void *ip_header;
-  void *nh;
   long ipheader_len;
 
   struct cali_tc_state *state;
@@ -152,6 +165,7 @@ struct cali_tc_ctx {
   struct arp_key arpk;
   struct fwd fwd;
   void *counters;
+  struct pkt_scratch *scratch;
 };
 
 #define DECLARE_TC_CTX(NAME, ...)						\
@@ -171,10 +185,12 @@ struct cali_tc_ctx {
 				CALI_LOG_IF(CALI_LOG_LEVEL_DEBUG, "no globals: DROP\n");		\
 				bpf_exit(TC_ACT_SHOT);				\
 			}							\
+			struct pkt_scratch *scratch = (void *)(gl->__scratch); 	\
 			(struct cali_tc_ctx) {					\
 				.state = state,					\
 				.counters = counters,				\
 				.globals = gl,					\
+				.scratch = scratch,				\
 				__VA_ARGS__					\
 			};							\
 	})									\
@@ -196,22 +212,22 @@ static CALI_BPF_INLINE struct ethhdr* eth_hdr(struct cali_tc_ctx *ctx)
 
 static CALI_BPF_INLINE struct tcphdr* tcp_hdr(struct cali_tc_ctx *ctx)
 {
-	return (struct tcphdr *)ctx->nh;
+	return (struct tcphdr *)ctx->scratch->l4;
 }
 
 static CALI_BPF_INLINE struct udphdr* udp_hdr(struct cali_tc_ctx *ctx)
 {
-	return (struct udphdr *)ctx->nh;
+	return (struct udphdr *)ctx->scratch->l4;
 }
 
 static CALI_BPF_INLINE struct icmphdr* icmp_hdr(struct cali_tc_ctx *ctx)
 {
-	return (struct icmphdr *)ctx->nh;
+	return (struct icmphdr *)ctx->scratch->l4;
 }
 
 static CALI_BPF_INLINE struct ipv6_opt_hdr* ipv6ext_hdr(struct cali_tc_ctx *ctx)
 {
-	return (struct ipv6_opt_hdr *)ctx->nh;
+	return (struct ipv6_opt_hdr *)ctx->scratch->l4;
 }
 
 static CALI_BPF_INLINE __u32 ctx_ifindex(struct cali_tc_ctx *ctx)
@@ -222,5 +238,20 @@ static CALI_BPF_INLINE __u32 ctx_ifindex(struct cali_tc_ctx *ctx)
 	return ctx->skb->ifindex;
 #endif
 }
+
+static CALI_BPF_INLINE int l4_hdr_len(struct cali_tc_ctx *ctx)
+{
+	switch (ctx->state->ip_proto) {
+	case IPPROTO_TCP:
+		return TCP_SIZE;
+	case IPPROTO_UDP:
+		return UDP_SIZE;
+	case IPPROTO_ICMP:
+		ICMP_SIZE;
+	}
+
+	return 0;
+}
+
 
 #endif /* __CALI_BPF_TYPES_H__ */
