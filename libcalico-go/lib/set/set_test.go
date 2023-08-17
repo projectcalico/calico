@@ -21,51 +21,10 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-type factory interface {
-	New() set.Set[int]
-	From(...int) set.Set[int]
-	FromArray([]int) set.Set[int]
-}
-
-type typedFactory struct{}
-
-func (t typedFactory) New() set.Set[int] {
-	return set.New[int]()
-}
-
-func (t typedFactory) From(i ...int) set.Set[int] {
-	return set.From(i...)
-}
-
-func (t typedFactory) FromArray(i []int) set.Set[int] {
-	return set.FromArray(i)
-}
-
-type boxedFactory struct{}
-
-func (t boxedFactory) New() set.Set[int] {
-	return set.NewBoxed[int]()
-}
-
-func (t boxedFactory) From(i ...int) set.Set[int] {
-	return set.FromBoxed(i...)
-}
-
-func (t boxedFactory) FromArray(i []int) set.Set[int] {
-	return set.FromArrayBoxed(i)
-}
-
 var _ = Describe("Typed set", func() {
-	describeSetTests(typedFactory{})
-})
-var _ = Describe("Boxed set", func() {
-	describeSetTests(boxedFactory{})
-})
-
-func describeSetTests(factory factory) {
 	var s set.Set[int]
 	BeforeEach(func() {
-		s = factory.New()
+		s = set.New[int]()
 	})
 
 	It("should be empty", func() {
@@ -89,7 +48,7 @@ func describeSetTests(factory factory) {
 
 	Describe("Set created by FromArray", func() {
 		BeforeEach(func() {
-			s = factory.FromArray([]int{1, 2})
+			s = set.FromArray([]int{1, 2})
 		})
 		It("should contain 1", func() {
 			Expect(s.Contains(1)).To(BeTrue())
@@ -109,7 +68,7 @@ func describeSetTests(factory factory) {
 
 	Describe("Set created by From", func() {
 		BeforeEach(func() {
-			s = factory.From(1, 2)
+			s = set.From([]int{1, 2}...)
 		})
 		It("should contain 1", func() {
 			Expect(s.Contains(1)).To(BeTrue())
@@ -246,7 +205,7 @@ func describeSetTests(factory factory) {
 			})
 		})
 	})
-}
+})
 
 var _ = Describe("EmptySet", func() {
 	var empty set.Set[any]

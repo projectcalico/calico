@@ -25,6 +25,11 @@ func New[T comparable]() Typed[T] {
 	return make(Typed[T])
 }
 
+// Empty returns a read-only set with no members.  Calls to Add etc. panic.
+func Empty[T comparable]() Typed[T] {
+	return (Typed[T])(nil)
+}
+
 func From[T comparable](members ...T) Typed[T] {
 	s := New[T]()
 	s.AddAll(members)

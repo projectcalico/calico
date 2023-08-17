@@ -119,7 +119,7 @@ func (o *Obj) Load() error {
 // FirstMap returns first bpf map of the object.
 // Returns error if the map is nil.
 func (o *Obj) FirstMap() (*Map, error) {
-	bpfMap, err := C.bpf_map__next(nil, o.obj)
+	bpfMap, err := C.bpf_object__next_map(o.obj, nil)
 	if bpfMap == nil || err != nil {
 		return nil, fmt.Errorf("error getting first map %w", err)
 	}
@@ -129,7 +129,7 @@ func (o *Obj) FirstMap() (*Map, error) {
 // NextMap returns the successive maps given the first map.
 // Returns nil, no error at the end of the list.
 func (m *Map) NextMap() (*Map, error) {
-	bpfMap, err := C.bpf_map__next(m.bpfMap, m.bpfObj)
+	bpfMap, err := C.bpf_object__next_map(m.bpfObj, m.bpfMap)
 	if err != nil {
 		return nil, fmt.Errorf("error getting next map %w", err)
 	}
@@ -260,8 +260,9 @@ func DetachXDP(ifName string, mode uint) error {
 		return err
 	}
 
-	_, err = C.bpf_set_link_xdp_fd(C.int(ifIndex), -1, C.uint(mode))
-	if err != nil {
+	errno := C.bpf_xdp_detach(C.int(ifIndex), C.uint(mode), nil)
+	if errno != 0 {
+		err := syscall.Errno(errno)
 		return fmt.Errorf("failed to detach xdp program. interface %s: %w", ifName, err)
 	}
 

@@ -248,7 +248,7 @@ func (d *npParentData) DiscardEndpointID(id any) {
 
 func (d *npParentData) AddEndpointID(id any) {
 	if d.endpointIDs == nil {
-		d.endpointIDs = set.NewBoxed[any]()
+		d.endpointIDs = set.New[any]()
 	}
 	d.endpointIDs.Add(id)
 }
@@ -592,7 +592,7 @@ func (idx *SelectorAndNamedPortIndex) UpdateEndpointOrSet(
 	// Record the new endpoint data.
 	idx.endpointKVIdx.Add(id, newEndpointData)
 
-	newParentIDs := set.NewBoxed[any]()
+	newParentIDs := set.New[any]()
 	for _, parent := range newEndpointData.parents {
 		parent.AddEndpointID(id)
 		newParentIDs.Add(parent.id)

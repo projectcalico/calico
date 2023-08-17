@@ -72,7 +72,7 @@ func NewPolicyResolver() *PolicyResolver {
 		allPolicies:           map[model.PolicyKey]*model.Policy{},
 		sortedTierData:        NewTierInfo("default"),
 		endpoints:             make(map[model.Key]interface{}),
-		dirtyEndpoints:        set.NewBoxed[any](),
+		dirtyEndpoints:        set.New[any](),
 		policySorter:          NewPolicySorter(),
 	}
 }
@@ -164,7 +164,7 @@ func (pr *PolicyResolver) MaybeFlush() {
 	}
 	pr.sortedTierData = pr.policySorter.Sorted()
 	pr.dirtyEndpoints.Iter(pr.sendEndpointUpdate)
-	pr.dirtyEndpoints = set.NewBoxed[any]()
+	pr.dirtyEndpoints = set.New[any]()
 }
 
 func (pr *PolicyResolver) sendEndpointUpdate(endpointID interface{}) error {

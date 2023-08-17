@@ -39,24 +39,14 @@ static CALI_BPF_INLINE struct cali_xdp_globals *state_get_globals_xdp(void)
 
 #define cali_jump_map map_symbol(xdp_cali_progs, 2)
 
-struct bpf_map_def_extended __attribute__((section("maps"))) cali_jump_map = {
-	.type = BPF_MAP_TYPE_PROG_ARRAY,
-	.key_size = 4,
-	.value_size = 4,
-	.max_entries = 200,
-};
+CALI_MAP_V1(cali_jump_map, BPF_MAP_TYPE_PROG_ARRAY, __u32, __u32, 200, 0)
 
 #define CALI_JUMP_TO(ctx, index) bpf_tail_call((ctx)->xdp, &cali_jump_map, (ctx)->xdp_globals->jumps[PROG_PATH(index)])
 #else
 
 #define cali_jump_map map_symbol(cali_progs, 2)
 
-struct bpf_map_def_extended __attribute__((section("maps"))) cali_jump_map = {
-	.type = BPF_MAP_TYPE_PROG_ARRAY,
-	.key_size = 4,
-	.value_size = 4,
-	.max_entries = 200,
-};
+CALI_MAP_V1(cali_jump_map, BPF_MAP_TYPE_PROG_ARRAY, __u32, __u32, 200, 0)
 
 #define CALI_JUMP_TO(ctx, index) do {	\
 	CALI_DEBUG("jump to idx %d prog at %d\n", index, (ctx)->globals->jumps[PROG_PATH(index)]);	\
@@ -97,12 +87,7 @@ enum cali_jump_index {
 
 #define cali_jump_prog_map map_symbol(xdp_cali_jump, 2)
 
-struct bpf_map_def_extended __attribute__((section("maps"))) cali_jump_prog_map = {
-	.type = BPF_MAP_TYPE_PROG_ARRAY,
-	.key_size = 4,
-	.value_size = 4,
-	.max_entries = 100,
-};
+CALI_MAP_V1(cali_jump_prog_map, BPF_MAP_TYPE_PROG_ARRAY, __u32, __u32, 100, 0)
 
 /* We on any path, we always jump to the PROG_INDEX_POLICY for policy, that one
  * is shared!
@@ -113,12 +98,7 @@ struct bpf_map_def_extended __attribute__((section("maps"))) cali_jump_prog_map 
 
 #define cali_jump_prog_map map_symbol(cali_jump, 2)
 
-struct bpf_map_def_extended __attribute__((section("maps"))) cali_jump_prog_map = {
-	.type = BPF_MAP_TYPE_PROG_ARRAY,
-	.key_size = 4,
-	.value_size = 4,
-	.max_entries = 10000,
-};
+CALI_MAP_V1(cali_jump_prog_map, BPF_MAP_TYPE_PROG_ARRAY, __u32, __u32, 10000, 0)
 
 #define CALI_JUMP_TO_POLICY(ctx) do {	\
 	(ctx)->skb->cb[0] = (ctx)->globals->jumps[PROG_PATH(PROG_INDEX_ALLOWED)];			\

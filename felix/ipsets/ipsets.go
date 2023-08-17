@@ -282,7 +282,7 @@ func (s *IPSets) GetTypeOf(setID string) (IPSetType, error) {
 }
 
 func (s *IPSets) filterAndCanonicaliseMembers(ipSetType IPSetType, members []string) set.Set[IPSetMember] {
-	filtered := set.NewBoxed[IPSetMember]()
+	filtered := set.New[IPSetMember]()
 	wantIPV6 := s.IPVersionConfig.Family == IPFamilyV6
 	for _, member := range members {
 		isIPV6 := ipSetType.IsMemberIPV6(member)
