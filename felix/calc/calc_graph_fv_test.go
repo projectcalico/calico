@@ -776,14 +776,14 @@ func doStateSequenceTest(expandedTest StateList, flushStrategy flushStrategy) {
 			return nil
 		})
 		statsCollector.RegisterWith(calcGraph)
-		validationFilter = NewValidationFilter(calcGraph.AllUpdDispatcher, conf)
+		validationFilter = NewValidationFilter(calcGraph, conf)
 		sentInSync = false
 		lastState = empty
 		state = empty
 	})
 
 	flush := func() {
-		calcGraph.PolicyResolver.MaybeFlush()
+		calcGraph.Flush()
 		eventBuf.Flush()
 	}
 

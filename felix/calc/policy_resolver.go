@@ -111,7 +111,6 @@ func (pr *PolicyResolver) OnUpdate(update api.Update) (filterOut bool) {
 			pr.markEndpointsMatchingPolicyDirty(key)
 		}
 	}
-	// pr.MaybeFlush()
 	gaugeNumActivePolicies.Set(float64(pr.policyIDToEndpointIDs.Len()))
 	return
 }
@@ -119,7 +118,6 @@ func (pr *PolicyResolver) OnUpdate(update api.Update) (filterOut bool) {
 func (pr *PolicyResolver) OnDatamodelStatus(status api.SyncStatus) {
 	if status == api.InSync {
 		pr.InSync = true
-		// pr.MaybeFlush()
 	}
 }
 
@@ -140,7 +138,6 @@ func (pr *PolicyResolver) OnPolicyMatch(policyKey model.PolicyKey, endpointKey i
 	pr.policyIDToEndpointIDs.Put(policyKey, endpointKey)
 	pr.endpointIDToPolicyIDs.Put(endpointKey, policyKey)
 	pr.dirtyEndpoints.Add(endpointKey)
-	// pr.MaybeFlush()
 }
 
 func (pr *PolicyResolver) OnPolicyMatchStopped(policyKey model.PolicyKey, endpointKey interface{}) {
@@ -154,10 +151,9 @@ func (pr *PolicyResolver) OnPolicyMatchStopped(policyKey model.PolicyKey, endpoi
 	}
 
 	pr.dirtyEndpoints.Add(endpointKey)
-	// pr.MaybeFlush()
 }
 
-func (pr *PolicyResolver) MaybeFlush() {
+func (pr *PolicyResolver) Flush() {
 	if !pr.InSync {
 		log.Debugf("Not in sync, skipping flush")
 		return
@@ -183,7 +179,6 @@ func (pr *PolicyResolver) sendEndpointUpdate(endpointID interface{}) error {
 		Name:  tier.Name,
 		Order: tier.Order,
 	}
-	filteredTier.OrderedPolicies = make([]PolKV, 0, len(tier.OrderedPolicies))
 	for _, polKV := range tier.OrderedPolicies {
 		log.Debugf("Checking if policy %v matches %v", polKV.Key, endpointID)
 		if pr.endpointIDToPolicyIDs.Contains(endpointID, polKV.Key) {
