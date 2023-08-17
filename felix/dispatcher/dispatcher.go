@@ -90,15 +90,18 @@ func (d *Dispatcher) OnStatusUpdated(status api.SyncStatus) {
 // Dispatcher callbacks.
 
 func (d *Dispatcher) OnUpdate(update api.Update) (filterOut bool) {
-	log.Debugf("Dispatching %v", update)
 	keyType := reflect.TypeOf(update.Key)
-	log.Debug("Type: ", keyType)
+	if log.IsLevelEnabled(log.DebugLevel) {
+		log.Debugf("Dispatching %v of type %v", update, keyType)
+	}
 	if update.Value != nil && reflect.TypeOf(update.Value).Kind() == reflect.Struct {
 		log.Panicf("KVPair contained a struct instead of expected pointer: %#v", update)
 	}
 	typeSpecificHandlers := d.typeToHandler[keyType]
-	log.WithField("typeSpecificHandlers", typeSpecificHandlers).Debug(
-		"Looked up type-specific handlers")
+	if log.IsLevelEnabled(log.DebugLevel) {
+		log.WithField("typeSpecificHandlers", typeSpecificHandlers).Debug(
+			"Looked up type-specific handlers")
+	}
 	typeSpecificHandlers.DispatchToAll(update)
 	return
 }

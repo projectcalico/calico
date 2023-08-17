@@ -776,11 +776,16 @@ func doStateSequenceTest(expandedTest StateList, flushStrategy flushStrategy) {
 			return nil
 		})
 		statsCollector.RegisterWith(calcGraph)
-		validationFilter = NewValidationFilter(calcGraph.AllUpdDispatcher, conf)
+		validationFilter = NewValidationFilter(calcGraph, conf)
 		sentInSync = false
 		lastState = empty
 		state = empty
 	})
+
+	flush := func() {
+		calcGraph.Flush()
+		eventBuf.Flush()
+	}
 
 	// iterStates iterates through the states in turn,
 	// executing the expectation function after each
@@ -800,11 +805,11 @@ func doStateSequenceTest(expandedTest StateList, flushStrategy flushStrategy) {
 							validationFilter.OnStatusUpdated(api.InSync)
 							sentInSync = true
 						}
-						eventBuf.Flush()
+						flush()
 					}
 					if flushStrategy == afterEachKVAndDupe {
 						validationFilter.OnUpdates([]api.Update{kv})
-						eventBuf.Flush()
+						flush()
 					}
 				}
 				_, _ = fmt.Fprintln(GinkgoWriter, "       -- <<FLUSH>>")
@@ -813,7 +818,7 @@ func doStateSequenceTest(expandedTest StateList, flushStrategy flushStrategy) {
 						validationFilter.OnStatusUpdated(api.InSync)
 						sentInSync = true
 					}
-					eventBuf.Flush()
+					flush()
 				}
 				if flushStrategy == afterEachState ||
 					flushStrategy == afterEachKV ||
@@ -824,7 +829,7 @@ func doStateSequenceTest(expandedTest StateList, flushStrategy flushStrategy) {
 			}
 			if flushStrategy == atEnd {
 				validationFilter.OnStatusUpdated(api.InSync)
-				eventBuf.Flush()
+				flush()
 				expectation()
 			}
 		}
