@@ -179,7 +179,7 @@ blocks:
       commands:
       - cd libcalico-go
       - ../.semaphore/run-and-monitor make-ci.log make ci
-      parallelism: 5
+      parallelism: 10
 
 - name: "libcalico-go-until-fail"
   dependencies: []
@@ -189,7 +189,7 @@ blocks:
       parallelism: 5
       commands:
       - cd libcalico-go
-      - ../.semaphore/run-and-monitor make-ci.log make fv-setup
+      - ../.semaphore/run-and-monitor make-ci.log make mod-download fv-setup
       - ../.semaphore/run-and-monitor make-ci-2.log make fv-fast GINKGO_FOCUS="should be able to allocate a single address quickly" WHAT="-untilItFails ./lib/ipam"
 
 #- name: "Typha"
