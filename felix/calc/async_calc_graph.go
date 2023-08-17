@@ -71,7 +71,7 @@ func init() {
 }
 
 type AsyncCalcGraph struct {
-	*CalcGraph
+	CalcGraph        *CalcGraph
 	inputEvents      chan interface{}
 	outputChannels   []chan<- interface{}
 	eventSequencer   *EventSequencer
@@ -148,7 +148,7 @@ func (acg *AsyncCalcGraph) loop() {
 					// each update.  (The dispatcher sends individual updates anyway so this makes
 					// no difference.)
 					updStartTime := time.Now()
-					acg.AllUpdDispatcher.OnUpdates(update[i : i+1])
+					acg.CalcGraph.OnUpdates(update[i : i+1])
 					summaryUpdateTime.Observe(time.Since(updStartTime).Seconds())
 					// Record stats for the number of messages processed.
 					typeName := reflect.TypeOf(upd.Key).Name()
@@ -161,7 +161,7 @@ func (acg *AsyncCalcGraph) loop() {
 				log.WithField("status", update).Debug(
 					"Pulled status update off channel")
 				acg.syncStatusNow = update
-				acg.AllUpdDispatcher.OnStatusUpdated(update)
+				acg.CalcGraph.OnStatusUpdated(update)
 				if update == api.InSync && !acg.beenInSync {
 					log.Info("First time we've been in sync")
 					acg.beenInSync = true
@@ -211,6 +211,7 @@ func (acg *AsyncCalcGraph) maybeFlush() {
 		log.Debug("Not throttled: flushing event buffer")
 		acg.flushLeakyBucket--
 		flushStart := time.Now()
+		acg.CalcGraph.Flush()
 		acg.eventSequencer.Flush()
 		flushDuration := time.Since(flushStart)
 		if flushDuration > time.Second {
