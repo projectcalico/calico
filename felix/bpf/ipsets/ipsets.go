@@ -219,8 +219,8 @@ func (m *bpfIPSets) GetTypeOf(setID string) (ipsets.IPSetType, error) {
 	return ipSet.Type, nil
 }
 
-func (m *bpfIPSets) GetMembers(setID string) (set.Set[string], error) {
-	// GetMembers is only called from XDPState, and XDPState does not coexist with
+func (m *bpfIPSets) GetDesiredMembers(setID string) (set.Set[string], error) {
+	// GetDesiredMembers is only called from XDPState, and XDPState does not coexist with
 	// config.BPFEnabled.
 	panic("Not implemented")
 }
@@ -354,8 +354,9 @@ func (m *bpfIPSets) ApplyUpdates() {
 
 // ApplyDeletions tries to delete any IP sets that are no longer needed.
 // Failures are ignored, deletions will be retried the next time we do a resync.
-func (m *bpfIPSets) ApplyDeletions() {
+func (m *bpfIPSets) ApplyDeletions() bool {
 	// No-op.
+	return false
 }
 
 func (m *bpfIPSets) markIPSetDirty(data *bpfIPSet) {

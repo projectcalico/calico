@@ -78,7 +78,7 @@ type nodeData struct {
 
 func newNodeData() *nodeData {
 	return &nodeData{
-		cidrs: set.NewBoxed[ip.CIDR](),
+		cidrs: set.New[ip.CIDR](),
 	}
 }
 
@@ -104,8 +104,8 @@ type nodeUpdateData struct {
 
 func newNodeUpdateData() *nodeUpdateData {
 	return &nodeUpdateData{
-		cidrsDeleted: set.NewBoxed[ip.CIDR](),
-		cidrsAdded:   set.NewBoxed[ip.CIDR](),
+		cidrsDeleted: set.New[ip.CIDR](),
+		cidrsAdded:   set.New[ip.CIDR](),
 	}
 }
 
@@ -283,8 +283,8 @@ func NewWithShims(
 		routetable:           rt,
 		routerule:            rr,
 		statusCallback:       statusCallback,
-		localIPs:             set.NewBoxed[ip.Addr](),
-		localCIDRs:           set.NewBoxed[ip.CIDR](),
+		localIPs:             set.New[ip.Addr](),
+		localCIDRs:           set.New[ip.CIDR](),
 		writeProcSys:         writeProcSys,
 		opRecorder:           opRecorder,
 		logCtx:               logCtx,
@@ -1336,7 +1336,7 @@ func (w *Wireguard) constructWireguardDeltaForResync(wireguardClient netlinkshim
 		// Need to check programmed CIDRs against expected to see if any need deleting.
 		logCtx.Debug("Check programmed CIDRs for required deletions")
 		expectedAllowedCidrs := node.allowedCidrsForWireguard()
-		configuredCidrsAsSet := set.NewBoxed[ip.CIDR]()
+		configuredCidrsAsSet := set.New[ip.CIDR]()
 		var allowedCidrsForUpdateMsg []net.IPNet
 		for _, netCidr := range configuredCidrs {
 			cidr := ip.CIDRFromIPNet(&netCidr)

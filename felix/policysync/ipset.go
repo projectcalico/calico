@@ -50,7 +50,7 @@ func newIPSet(update *proto.IPSetUpdate) *ipSetInfo {
 }
 
 func (s *ipSetInfo) replaceMembers(update *proto.IPSetUpdate) {
-	s.members = set.NewBoxed[ipsets.IPSetMember]()
+	s.members = set.New[ipsets.IPSetMember]()
 	for _, ms := range update.GetMembers() {
 		s.members.Add(s.Type.CanonicaliseMember(ms))
 	}
