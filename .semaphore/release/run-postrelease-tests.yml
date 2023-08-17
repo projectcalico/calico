@@ -1,5 +1,5 @@
 version: v1.0
-name: Test build official release
+name: Postrelease tests
 agent:
   machine:
     type: e1-standard-4
