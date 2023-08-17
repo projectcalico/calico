@@ -70,7 +70,8 @@ static CALI_BPF_INLINE long skb_iphdr_offset(struct cali_tc_ctx *ctx)
 	if (CALI_F_IPIP_ENCAPPED) {
 		// Ingress on an IPIP tunnel: skb is [ether|outer IP|inner IP|payload]
 		// TODO: we need to consider different types of IPIP tunnels like 4in6 or 6in4
-		return sizeof(struct ethhdr) + ctx->ipheader_len;
+		// XXX no support for ip options in ipip header
+		return sizeof(struct ethhdr) + IP_SIZE;
 	} else if (CALI_F_L3) {
 		// Egress on an IPIP tunnel, or any other l3 devices (wireguard) both directions:
 		// skb is [inner IP|payload]
@@ -80,16 +81,6 @@ static CALI_BPF_INLINE long skb_iphdr_offset(struct cali_tc_ctx *ctx)
 		return sizeof(struct ethhdr);
 	}
 }
-
-#define IPV4_UDP_SIZE		(sizeof(struct iphdr) + sizeof(struct udphdr))
-#define ETH_IPV4_UDP_SIZE	(sizeof(struct ethhdr) + IPV4_UDP_SIZE)
-
-#define ETH_SIZE (sizeof(struct ethhdr))
-#define IP_SIZE (sizeof(struct iphdr))
-#define IPv6_SIZE (sizeof(struct ipv6hdr))
-#define UDP_SIZE (sizeof(struct udphdr))
-#define TCP_SIZE (sizeof(struct tcphdr))
-#define ICMP_SIZE (sizeof(struct icmphdr))
 
 /* skb_refresh_validate_ptrs refreshes the packet pointers in the context and validates access
  * to the IP header + nh_len (next header length) bytes.  If the skb is non-linear; attempts to
@@ -102,7 +93,7 @@ static CALI_BPF_INLINE long skb_iphdr_offset(struct cali_tc_ctx *ctx)
  * - ctx->nh/tcp_header/udp_header/icmp_header.
  */
 static CALI_BPF_INLINE int skb_refresh_validate_ptrs(struct cali_tc_ctx *ctx, long nh_len) {
-	int min_size = skb_iphdr_offset(ctx) + ctx->ipheader_len;
+	int min_size = skb_iphdr_offset(ctx) + IP_SIZE;
 	skb_refresh_start_end(ctx);
 	if (ctx->data_start + (min_size + nh_len) > ctx->data_end) {
 		// This is an XDP program and there is not enough data for next header.
@@ -129,7 +120,7 @@ static CALI_BPF_INLINE int skb_refresh_validate_ptrs(struct cali_tc_ctx *ctx, lo
 	}
 	// Success, refresh the ip_header/nh fields in the context.
 	ctx->ip_header =  ctx->data_start + skb_iphdr_offset(ctx);
-	ctx->nh = ctx->ip_header + ctx->ipheader_len;
+	ctx->ipheader_len = 4 * ip_hdr(ctx)->ihl;
 	return 0;
 }
 

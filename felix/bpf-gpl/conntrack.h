@@ -305,36 +305,74 @@ static CALI_BPF_INLINE bool skb_icmp_err_unpack(struct cali_tc_ctx *ctx, struct 
 	/* ICMP packet is an error, its payload should contain the full IP header and
 	 * at least the first 8 bytes of the next header. */
 
-	if (skb_refresh_validate_ptrs(ctx, ICMP_SIZE + sizeof(struct iphdr) + 8)) {
-		deny_reason(ctx, CALI_REASON_SHORT);
-		ctx->fwd.res = TC_ACT_SHOT;
-		CALI_DEBUG("ICMP v4 reply: too short getting hdr\n");
+	int inner_ip_size;
+
+	if (ctx->ipheader_len == 20) {
+		if (skb_refresh_validate_ptrs(ctx, ICMP_SIZE + sizeof(struct iphdr) + 8)) {
+			deny_reason(ctx, CALI_REASON_SHORT);
+			ctx->fwd.res = TC_ACT_SHOT;
+			CALI_DEBUG("ICMP v4 reply: too short getting hdr\n");
+			return false;
+		}
+
+		struct iphdr *ip_inner;
+		ip_inner = (struct iphdr *)(ctx->data_start + skb_iphdr_offset(ctx) + IP_SIZE + ICMP_SIZE);
+		CALI_DEBUG("CT-ICMP: proto %d\n", ip_inner->protocol);
+
+		ct_ctx->proto = ip_inner->protocol;
+		ct_ctx->src = ip_inner->saddr;
+		ct_ctx->dst = ip_inner->daddr;
+
+		if (ip_inner->ihl == 5) {
+			switch (ip_inner->protocol) {
+			case IPPROTO_TCP:
+				{
+					struct tcphdr *tcp = (struct tcphdr *)(ip_inner + 1);
+					ct_ctx->sport = bpf_ntohs(tcp->source);
+					ct_ctx->dport = bpf_ntohs(tcp->dest);
+				}
+				break;
+			case IPPROTO_UDP:
+				{
+					struct udphdr *udp = (struct udphdr *)(ip_inner + 1);
+					ct_ctx->sport = bpf_ntohs(udp->source);
+					ct_ctx->dport = bpf_ntohs(udp->dest);
+				}
+				break;
+			};
+
+			return true;
+		} else {
+			inner_ip_size = ip_inner->ihl * 4;
+			/* fall through to obtaining l4 using bpf_skb_load_bytes */
+		}
+	} else {
+		__u8 buf[IP_SIZE];
+		if (bpf_skb_load_bytes(ctx->skb, skb_l4hdr_offset(ctx) + ICMP_SIZE, buf, IP_SIZE)) {
+			CALI_DEBUG("ICMP v4 reply: too short getting ip hdr w/ options\n");
+			return false;
+		}
+		ct_ctx->proto = ((struct iphdr*)buf)->protocol;
+		ct_ctx->src = ((struct iphdr*)buf)->saddr;
+		ct_ctx->dst = ((struct iphdr*)buf)->daddr;
+		inner_ip_size = ((struct iphdr*)buf)->ihl * 4;
+	}
+
+	__u8 buf[8];
+
+	if (bpf_skb_load_bytes(ctx->skb, skb_l4hdr_offset(ctx) + ICMP_SIZE + inner_ip_size, buf, 8)) {
+		CALI_DEBUG("ICMP v4 reply: too short getting l4 hdr w/ options\n");
 		return false;
 	}
 
-	struct iphdr *ip_inner;
-	ip_inner = (struct iphdr *)(icmp_hdr(ctx) + 1); /* skip to inner ip */
-	CALI_DEBUG("CT-ICMP: proto %d\n", ip_inner->protocol);
-
-	ct_ctx->proto = ip_inner->protocol;
-	ct_ctx->src = ip_inner->saddr;
-	ct_ctx->dst = ip_inner->daddr;
-
-	switch (ip_inner->protocol) {
+	switch (ct_ctx->proto) {
 	case IPPROTO_TCP:
-		{
-			struct tcphdr *tcp = (struct tcphdr *)(ip_inner + 1);
-			ct_ctx->sport = bpf_ntohs(tcp->source);
-			ct_ctx->dport = bpf_ntohs(tcp->dest);
-			ct_ctx->tcp = tcp;
-		}
+		ct_ctx->sport = bpf_ntohs(((struct tcphdr *)buf)->source);
+		ct_ctx->dport = bpf_ntohs(((struct tcphdr *)buf)->dest);
 		break;
 	case IPPROTO_UDP:
-		{
-			struct udphdr *udp = (struct udphdr *)(ip_inner + 1);
-			ct_ctx->sport = bpf_ntohs(udp->source);
-			ct_ctx->dport = bpf_ntohs(udp->dest);
-		}
+		ct_ctx->sport = bpf_ntohs(((struct udphdr *)buf)->source);
+		ct_ctx->dport = bpf_ntohs(((struct udphdr *)buf)->dest);
 		break;
 	};
 
