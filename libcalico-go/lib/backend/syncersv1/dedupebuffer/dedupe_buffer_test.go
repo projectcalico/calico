@@ -209,6 +209,7 @@ func TestDedupeBuffer_Async(t *testing.T) {
 				}),
 				"After sending various updates should get correct final result.",
 			)
+			Eventually(rec.FinalSyncState).Should(Equal(api.InSync))
 
 			// The updates come out in the same order that we sent them
 			// but a key that gets updated twice between flushes of the queue
