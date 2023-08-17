@@ -342,7 +342,7 @@ func (s State) NumALPPolicies() int {
 func (s State) ActiveKeys(keyTypeExample interface{}) set.Set[model.Key] {
 	// Need to be a little careful here, the DatastoreState can contain an ordered sequence of updates and deletions
 	// We need to track which keys are actually still live at the end of it.
-	keys := set.NewBoxed[model.Key]()
+	keys := set.New[model.Key]()
 	for _, u := range s.DatastoreState {
 		if reflect.TypeOf(u.Key) != reflect.TypeOf(keyTypeExample) {
 			continue

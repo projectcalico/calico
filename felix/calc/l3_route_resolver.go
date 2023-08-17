@@ -268,8 +268,8 @@ func (c *L3RouteResolver) OnBlockUpdate(update api.Update) (_ bool) {
 	// Update the routes map based on the provided block update.
 	key := update.Key.String()
 
-	deletes := set.NewBoxed[nodenameRoute]()
-	adds := set.NewBoxed[nodenameRoute]()
+	deletes := set.New[nodenameRoute]()
+	adds := set.New[nodenameRoute]()
 	if update.Value != nil {
 		// Block has been created or updated.
 		// We don't allow multiple blocks with the same CIDR, so no need to check
@@ -279,7 +279,7 @@ func (c *L3RouteResolver) OnBlockUpdate(update api.Update) (_ bool) {
 		logrus.WithField("numRoutes", len(newRoutes)).Debug("IPAM block update")
 		cachedRoutes, ok := c.blockToRoutes[key]
 		if !ok {
-			cachedRoutes = set.NewBoxed[nodenameRoute]()
+			cachedRoutes = set.New[nodenameRoute]()
 			c.blockToRoutes[key] = cachedRoutes
 		}
 
@@ -940,7 +940,7 @@ func NewRouteTrie() *RouteTrie {
 	return &RouteTrie{
 		v4T:        ip.NewCIDRTrie(),
 		v6T:        ip.NewCIDRTrie(),
-		dirtyCIDRs: set.NewBoxed[ip.CIDR](),
+		dirtyCIDRs: set.New[ip.CIDR](),
 
 		OnAlive: func() {},
 	}
@@ -1168,7 +1168,7 @@ type RouteInfo struct {
 	Pools []Pool
 
 	// Blocks contains route information extracted from local and remote IPAM blocks.
-	//Since the datastore guarantees that blocks have unique CIDRs within the cluster, we only expect one entry.
+	// Since the datastore guarantees that blocks have unique CIDRs within the cluster, we only expect one entry.
 	Blocks []Block
 
 	// Host contains information extracted from the node/host config updates.

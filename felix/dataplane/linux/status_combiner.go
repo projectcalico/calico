@@ -32,7 +32,7 @@ type endpointStatusCombiner struct {
 func newEndpointStatusCombiner(fromDataplane chan interface{}, ipv6Enabled bool) *endpointStatusCombiner {
 	e := &endpointStatusCombiner{
 		ipVersionToStatuses: map[uint8]map[interface{}]string{},
-		dirtyIDs:            set.NewBoxed[any](),
+		dirtyIDs:            set.New[any](),
 		fromDataplane:       fromDataplane,
 	}
 
