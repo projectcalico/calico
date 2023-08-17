@@ -108,7 +108,9 @@ func (i *ipPoolAccessor) getPools(sorted []string, ipVersion int, caller string)
 		}
 	}
 
+	log.Info("HERE0")
 	log.Infof("%v returns: %v", caller, poolsToPrint)
+	log.Info("HERE1")
 
 	return pools
 }
