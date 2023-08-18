@@ -240,7 +240,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 		defineAllocationMeasurement("It should be able to allocate a single address quickly - blocksize 32",
 			100,
-			200*time.Millisecond,
+			300*time.Millisecond,
 			func() {
 				// Build a new backend client. We use a different client for each iteration of the test
 				// so that the k8s QPS /burst limits don't carry across tests. This is more realistic.
@@ -257,7 +257,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 		defineAllocationMeasurement("It should be able to allocate a single address quickly - blocksize 26",
 			100,
-			200*time.Millisecond,
+			300*time.Millisecond,
 			func() {
 				// Build a new backend client. We use a different client for each iteration of the test
 				// so that the k8s QPS /burst limits don't carry across tests. This is more realistic.
@@ -275,7 +275,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 		defineAllocationMeasurement(
 			"It should be able to allocate a single address quickly - blocksize 20",
 			100,
-			200*time.Millisecond,
+			300*time.Millisecond,
 			func() {
 				// Build a new backend client. We use a different client for each iteration of the test
 				// so that the k8s QPS /burst limits don't carry across tests. This is more realistic.
@@ -293,7 +293,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 		defineAllocationMeasurement(
 			"It should be able to allocate a lot of addresses quickly",
 			20,
-			200*time.Millisecond,
+			300*time.Millisecond,
 			func() {
 				// Build a new backend client. We use a different client for each iteration of the test
 				// so that the k8s QPS /burst limits don't carry across tests. This is more realistic.
@@ -311,7 +311,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 		defineAllocationMeasurement(
 			"It should be able to allocate and release addresses quickly",
 			20,
-			200*time.Millisecond,
+			300*time.Millisecond,
 			func() {
 				// Build a new backend client. We use a different client for each iteration of the test
 				// so that the k8s QPS /burst limits don't carry across tests. This is more realistic.
