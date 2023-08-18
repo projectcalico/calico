@@ -1,6 +1,6 @@
-PACKAGE_NAME = github.com/projectcalico/calico
+PACKAGE_NAME = github.com/powerhome/calico
 
-include metadata.mk 
+include metadata.mk
 include lib.Makefile
 
 DOCKER_RUN := mkdir -p ./.go-pkg-cache bin $(GOMOD_CACHE) && \
@@ -15,7 +15,7 @@ DOCKER_RUN := mkdir -p ./.go-pkg-cache bin $(GOMOD_CACHE) && \
 		-e OS=$(BUILDOS) \
 		-e GOOS=$(BUILDOS) \
 		-e GOFLAGS=$(GOFLAGS) \
-		-v $(CURDIR):/go/src/github.com/projectcalico/calico:rw \
+		-v $(CURDIR):/go/src/github.com/powerhome/calico:rw \
 		-v $(CURDIR)/.go-pkg-cache:/go-cache:rw \
 		-w /go/src/$(PACKAGE_NAME)
 
@@ -61,11 +61,11 @@ hack/release/release: $(shell find ./hack/release -type f -name '*.go')
 	$(DOCKER_RUN) $(CALICO_BUILD) go build -v -o $@ ./hack/release/cmd
 
 # Install ghr for publishing to github.
-hack/release/ghr: 
+hack/release/ghr:
 	$(DOCKER_RUN) -e GOBIN=/go/src/$(PACKAGE_NAME)/hack/release/ $(CALICO_BUILD) go install github.com/tcnksm/ghr@v0.14.0
 
 # Build a release.
-release: hack/release/release 
+release: hack/release/release
 	@hack/release/release -create
 
 # test the release code
