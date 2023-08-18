@@ -191,8 +191,6 @@ blocks:
       - cd libcalico-go
       - ../.semaphore/run-and-monitor make-ci.log make mod-download fv-setup
       - ../.semaphore/run-and-monitor make-ci-2.log make fv-fast GINKGO_FOCUS="should be able to allocate a single address quickly" WHAT="-untilItFails ./lib/ipam"
-      - echo "Sleeping for investigation...."
-      - sleep 7200
 
 #- name: "Typha"
 #  run:
