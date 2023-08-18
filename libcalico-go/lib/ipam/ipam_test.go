@@ -224,8 +224,22 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			log.SetLevel(origLogLevel)
 		})
 
-		Measure("It should be able to allocate a single address quickly - blocksize 32", func(b Benchmarker) {
-			runtime := b.Time("runtime", func() {
+		defineAllocationMeasurement := func(name string, samples int, requiredP90 time.Duration, fn func()) {
+			var runtimes orderStat
+			Measure(name, func(b Benchmarker) {
+				runtime := b.Time("runtime", fn)
+				runtimes = append(runtimes, runtime.Seconds())
+				if len(runtimes) == samples {
+					Expect(runtimes.NinetiethPercentile()).Should(BeNumerically("<", requiredP90.Seconds()),
+						"90th percentile time was too high.")
+				}
+			}, samples)
+		}
+
+		defineAllocationMeasurement("It should be able to allocate a single address quickly - blocksize 32",
+			100,
+			200*time.Millisecond,
+			func() {
 				// Build a new backend client. We use a different client for each iteration of the test
 				// so that the k8s QPS /burst limits don't carry across tests. This is more realistic.
 				bc, err = backend.NewClient(config)
@@ -236,13 +250,13 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 				Expect(outErr).NotTo(HaveOccurred())
 				Expect(v4ia).ToNot(BeNil())
 				Expect(len(v4ia.IPs)).To(Equal(1))
-			})
+			},
+		)
 
-			Expect(runtime.Seconds()).Should(BeNumerically("<", 1))
-		}, 100)
-
-		Measure("It should be able to allocate a single address quickly - blocksize 26", func(b Benchmarker) {
-			runtime := b.Time("runtime", func() {
+		defineAllocationMeasurement("It should be able to allocate a single address quickly - blocksize 26",
+			100,
+			200*time.Millisecond,
+			func() {
 				// Build a new backend client. We use a different client for each iteration of the test
 				// so that the k8s QPS /burst limits don't carry across tests. This is more realistic.
 				bc, err = backend.NewClient(config)
@@ -253,13 +267,14 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 				Expect(outErr).NotTo(HaveOccurred())
 				Expect(v4ia).ToNot(BeNil())
 				Expect(len(v4ia.IPs)).To(Equal(1))
-			})
+			},
+		)
 
-			Expect(runtime.Seconds()).Should(BeNumerically("<", 1))
-		}, 100)
-
-		Measure("It should be able to allocate a single address quickly - blocksize 20", func(b Benchmarker) {
-			runtime := b.Time("runtime", func() {
+		defineAllocationMeasurement(
+			"It should be able to allocate a single address quickly - blocksize 20",
+			100,
+			200*time.Millisecond,
+			func() {
 				// Build a new backend client. We use a different client for each iteration of the test
 				// so that the k8s QPS /burst limits don't carry across tests. This is more realistic.
 				bc, err = backend.NewClient(config)
@@ -270,13 +285,14 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 				Expect(outErr).NotTo(HaveOccurred())
 				Expect(v4ia).ToNot(BeNil())
 				Expect(len(v4ia.IPs)).To(Equal(1))
-			})
+			},
+		)
 
-			Expect(runtime.Seconds()).Should(BeNumerically("<", 1))
-		}, 100)
-
-		Measure("It should be able to allocate a lot of addresses quickly", func(b Benchmarker) {
-			runtime := b.Time("runtime", func() {
+		defineAllocationMeasurement(
+			"It should be able to allocate a lot of addresses quickly",
+			20,
+			200*time.Millisecond,
+			func() {
 				// Build a new backend client. We use a different client for each iteration of the test
 				// so that the k8s QPS /burst limits don't carry across tests. This is more realistic.
 				bc, err = backend.NewClient(config)
@@ -287,13 +303,14 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 				Expect(outErr).NotTo(HaveOccurred())
 				Expect(v4ia).ToNot(BeNil())
 				Expect(len(v4ia.IPs)).To(Equal(64))
-			})
+			},
+		)
 
-			Expect(runtime.Seconds()).Should(BeNumerically("<", 1))
-		}, 20)
-
-		Measure("It should be able to allocate and release addresses quickly", func(b Benchmarker) {
-			runtime := b.Time("runtime", func() {
+		defineAllocationMeasurement(
+			"It should be able to allocate and release addresses quickly",
+			20,
+			200*time.Millisecond,
+			func() {
 				// Build a new backend client. We use a different client for each iteration of the test
 				// so that the k8s QPS /burst limits don't carry across tests. This is more realistic.
 				bc, err = backend.NewClient(config)
@@ -311,10 +328,8 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 				out, err := ic.ReleaseIPs(context.Background(), v4IP...)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(len(out)).To(Equal(0))
-			})
-
-			Expect(runtime.Seconds()).Should(BeNumerically("<", 1))
-		}, 20)
+			},
+		)
 	})
 
 	Describe("ReleaseIPs test", func() {
@@ -3540,3 +3555,10 @@ var _ = DescribeTable("IPAMAssignmentInfo.String() tests", func(ia *IPAMAssignme
 		},
 		errors.New("Assigned 0 out of 1 requested IPv4 addresses; Need to allocate an IPAM block but could not - limit of 20 blocks reached for this node; No IPs available in pools: [192.168.0.0/24 192.168.1.0/24]; HostReservedAttr: windows-reserved-ipam-handle")),
 )
+
+type orderStat []float64
+
+func (s orderStat) NinetiethPercentile() float64 {
+	sort.Float64s(s)
+	return s[len(s)*90/100]
+}
