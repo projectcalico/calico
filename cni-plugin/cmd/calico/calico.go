@@ -36,7 +36,7 @@ func main() {
 		plugin.Main(VERSION)
 	case "calico-ipam", "calico-ipam.exe":
 		ipamplugin.Main(VERSION)
-	case "install":
+	case "install", "install.exe":
 		err := install.Install()
 		if err != nil {
 			logrus.WithError(err).Fatal("Error installing CNI plugin")

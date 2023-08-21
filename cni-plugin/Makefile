@@ -8,6 +8,7 @@ LOCAL_CHECKS=check-boring-ssl
 # Name of the images.
 # e.g., <registry>/<name>:<tag>
 CNI_PLUGIN_IMAGE ?=cni
+CNI_PLUGIN_IMAGE_WINDOWS ?=cni-windows
 BUILD_IMAGES   ?=$(CNI_PLUGIN_IMAGE)
 
 ###############################################################################
@@ -55,23 +56,28 @@ BIN=bin/$(ARCH)
 DEPLOY_CONTAINER_MARKER=$(DEPLOY_CONTAINER_STATIC_MARKER)
 endif
 
-.PHONY: clean
-clean:
+.PHONY: clean clean-windows
+clean: clean-windows
 	# Clean .created files which indicate images / releases have been built.
 	find . -name '.*.created*' -type f -delete
 	find . -name '.*.published*' -type f -delete
-	rm -rf $(BIN) bin $(DEPLOY_CONTAINER_MARKER) .go-pkg-cache pkg/install/install.test 
+	rm -rf $(BIN) bin $(DEPLOY_CONTAINER_MARKER) .go-pkg-cache pkg/install/install.test
 	rm -f *.created
 	rm -rf config/
+	rm -rf dist/
+
+clean-windows: clean-windows-builder
+	rm -rf $(WINDOWS_BIN) $(WINDOWS_DIST)
 
 ###############################################################################
 # Building the binary
 ###############################################################################
+.PHONY: build
 build: $(BIN)/install $(BIN)/calico $(BIN)/calico-ipam
 ifeq ($(ARCH),amd64)
 # Go only supports amd64 for Windows builds.
-BIN_WIN=bin/windows
-build: $(BIN_WIN)/calico.exe $(BIN_WIN)/calico-ipam.exe
+WINDOWS_BIN=bin/windows
+build: $(WINDOWS_BIN)/install.exe $(WINDOWS_BIN)/calico.exe $(WINDOWS_BIN)/calico-ipam.exe
 endif
 # If ARCH is arm based, find the requested version/variant
 ifeq ($(word 1,$(subst v, ,$(ARCH))),arm)
@@ -97,20 +103,23 @@ else
 endif
 
 ## Build the Calico network plugin and ipam plugins for Windows
-$(BIN_WIN)/calico.exe $(BIN_WIN)/calico-ipam.exe: $(SRC_FILES)
+$(WINDOWS_BIN)/install.exe: $(SRC_FILES)
+	-mkdir -p $(WINDOWS_BIN)
 	$(DOCKER_RUN) \
 	-e GOOS=windows \
+	-e GOARCH=amd64 \
 	-e CGO_ENABLED=1 \
-	    $(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
-		go build -v -buildvcs=false -o $(BIN_WIN)/calico.exe -ldflags "$(LDFLAGS)" $(PACKAGE_NAME)/cmd/calico && \
-		go build -v -buildvcs=false -o $(BIN_WIN)/calico-ipam.exe -ldflags "$(LDFLAGS)" $(PACKAGE_NAME)/cmd/calico'
+		$(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
+		go build -v -buildvcs=false -o $(WINDOWS_BIN)/install.exe -ldflags "$(LDFLAGS)" $(PACKAGE_NAME)/cmd/calico'
 
+$(WINDOWS_BIN)/calico-ipam.exe $(WINDOWS_BIN)/calico.exe: $(WINDOWS_BIN)/install.exe
+	cp "$<" "$@"
 
 ###############################################################################
 # Building the image
 ###############################################################################
 image: $(DEPLOY_CONTAINER_MARKER)
-image-all: $(addprefix sub-image-,$(VALIDARCHES)) sub-image-fips-amd64
+image-all: $(addprefix sub-image-,$(VALIDARCHES)) sub-image-fips-amd64 image-windows
 sub-image-%:
 	$(MAKE) image ARCH=$*
 sub-image-fips-%:
@@ -128,17 +137,23 @@ $(DEPLOY_CONTAINER_FIPS_MARKER): Dockerfile.$(ARCH) build fetch-cni-bins
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
 	touch $@
 
-.PHONY: fetch-cni-bins
+.PHONY: fetch-cni-bins fetch-win-cni-bins
 fetch-cni-bins: $(BIN)/flannel $(BIN)/loopback $(BIN)/host-local $(BIN)/portmap $(BIN)/tuning $(BIN)/bandwidth
+fetch-win-cni-bins: $(WINDOWS_BIN)/flannel.exe
 
 $(BIN)/loopback $(BIN)/host-local $(BIN)/portmap $(BIN)/tuning $(BIN)/bandwidth:
-	mkdir -p $(BIN)
+	-mkdir -p $(BIN)
 	$(CURL) -L --retry 5 $(CNI_ARTIFACTS_URL)/$(CNI_VERSION)/cni-plugins-linux-$(subst v7,,$(ARCH))-$(CNI_VERSION).tgz | tar -xz -C $(BIN) ./loopback ./host-local ./portmap ./tuning ./bandwidth
 
 $(BIN)/flannel:
-	mkdir -p $(BIN)
+	-mkdir -p $(BIN)
 	$(CURL) -L --retry 5 https://github.com/flannel-io/cni-plugin/releases/download/$(FLANNEL_VERSION)/cni-plugin-flannel-linux-$(subst v7,,$(ARCH))-$(FLANNEL_VERSION).tgz | tar -xz -C $(BIN) ./flannel-$(subst v7,,$(ARCH))
-	mv $(BIN)/flannel-$(subst v7,,$(ARCH)) $(BIN)/flannel
+	mv $(BIN)/flannel-$(subst v7,,$(ARCH)) $@
+
+$(WINDOWS_BIN)/flannel.exe:
+	-mkdir -p $(WINDOWS_BIN)
+	$(CURL) -L --retry 5 https://github.com/flannel-io/cni-plugin/releases/download/$(FLANNEL_VERSION)/cni-plugin-flannel-windows-amd64-$(FLANNEL_VERSION).tgz | tar -xz -C $(WINDOWS_BIN) ./flannel-amd64.exe
+	mv $(WINDOWS_BIN)/flannel-amd64.exe $@
 
 ###############################################################################
 # Unit Tests
@@ -223,8 +238,8 @@ ci: clean mod-download build static-checks test-cni-versions image-all test-inst
 cd: image-all cd-common
 
 ## Build fv binary for Windows
-$(BIN_WIN)/win-fv.exe: $(WINFV_SRCFILES)
-	$(DOCKER_RUN) -e GOOS=windows $(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) go test ./win_tests -c -o $(BIN_WIN)/win-fv.exe'
+$(WINDOWS_BIN)/win-fv.exe: $(WINFV_SRCFILES)
+	$(DOCKER_RUN) -e GOOS=windows $(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) go test ./win_tests -c -o $(WINDOWS_BIN)/win-fv.exe'
 
 ###############################################################################
 # Release
@@ -277,6 +292,75 @@ release-publish-latest: release-prereqs
 	if ! docker run quay.io/$(CNI_PLUGIN_IMAGE):latest-$(ARCH) calico -v | grep '^$(VERSION)$$'; then echo "Reported version:" `docker run quay.io/$(CNI_PLUGIN_IMAGE):latest-$(ARCH) calico -v` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
 
 	$(MAKE) push-images-to-registries push-manifests RELEASE=true IMAGETAG=latest RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
+
+# FIXME: Use WINDOWS_HPC_VERSION and image instead of nanoserver and WINDOWS_VERSIONS when containerd v1.6 is EOL'd
+# .PHONY: image-windows release-windows
+# # Build Windows image and possibly push it to $DEV_REGISTRIES
+# image-windows: setup-windows-builder Dockerfile-windows build fetch-win-cni-bins
+# 	push="$${PUSH:-false}"; \
+# 	image_version="$${VERSION:-latest}"; \
+# 	for registry in $(DEV_REGISTRIES); do \
+# 		echo Building and pushing Windows image to $${registry}; \
+# 		image="$${registry}/$(CNI_PLUGIN_IMAGE_WINDOWS):$${image_version}"; \
+# 		docker buildx build \
+# 			--platform windows/amd64 \
+# 			--output=type=image,push=$${push} \
+# 			-t $${image} \
+# 			--pull \
+# 			--no-cache \
+# 			--build-arg GIT_VERSION=$(GIT_VERSION) \
+# 			--build-arg WINDOWS_HPC_VERSION=$(WINDOWS_HPC_VERSION) \
+# 			-f Dockerfile-windows .; \
+# 	done ;
+
+# # Build and push Windows image
+# release-windows: release-prereqs clean-windows
+# 	$(MAKE) image-windows PUSH=true
+
+WINDOWS_DIST = dist/windows
+
+$(WINDOWS_DIST)/$(CNI_PLUGIN_IMAGE_WINDOWS)-$(GIT_VERSION)-%.tar: sub-image-windows-$*
+
+sub-image-windows-%: setup-windows-builder Dockerfile-windows build fetch-win-cni-bins
+	# ensure dir for windows image tars exits
+	-mkdir -p $(WINDOWS_DIST)
+	docker buildx build \
+		--platform windows/amd64 \
+		--output=type=docker,dest=$(CURDIR)/$(WINDOWS_DIST)/$(CNI_PLUGIN_IMAGE_WINDOWS)-$(GIT_VERSION)-$*.tar \
+		--pull \
+		-t $(CNI_PLUGIN_IMAGE_WINDOWS):latest \
+		--build-arg GIT_VERSION=$(GIT_VERSION) \
+		--build-arg=WINDOWS_VERSION=$* \
+		-f Dockerfile-windows .
+
+.PHONY: image-windows release-windows
+image-windows: setup-windows-builder
+	for version in $(WINDOWS_VERSIONS); do \
+	$(MAKE) sub-image-windows-$${version}; \
+	done;
+
+release-windows: clean-windows image-windows
+	image_version="$${VERSION:-latest}"; \
+	for registry in $(DEV_REGISTRIES); do \
+		echo Pushing Windows images to $${registry}; \
+		all_images=""; \
+		manifest_image="$${registry}/$(CNI_PLUGIN_IMAGE_WINDOWS):$${image_version}"; \
+		for win_ver in $(WINDOWS_VERSIONS); do \
+			image_tar="$(WINDOWS_DIST)/$(CNI_PLUGIN_IMAGE_WINDOWS)-$(GIT_VERSION)-$${win_ver}.tar"; \
+			image="$${registry}/$(CNI_PLUGIN_IMAGE_WINDOWS):$${image_version}-windows-$${win_ver}"; \
+			echo Pushing image $${image} ...; \
+			$(CRANE_BINDMOUNT) push $${image_tar} $${image}$(double_quote) & \
+			all_images="$${all_images} $${image}"; \
+		done; \
+		wait; \
+		$(DOCKER_MANIFEST) create --amend $${manifest_image} $${all_images}; \
+		for win_ver in $(WINDOWS_VERSIONS); do \
+			version=$$(docker manifest inspect mcr.microsoft.com/windows/nanoserver:$${win_ver} | grep "os.version" | head -n 1 | awk -F\" '{print $$4}'); \
+			image="$${registry}/$(CNI_PLUGIN_IMAGE_WINDOWS):$${image_version}-windows-$${win_ver}"; \
+			$(DOCKER_MANIFEST) annotate --os windows --arch amd64 --os-version $${version} $${manifest_image} $${image}; \
+		done; \
+		$(DOCKER_MANIFEST) push --purge $${manifest_image}; \
+	done ;
 
 ###############################################################################
 # Developer helper scripts (not used by build or test)
