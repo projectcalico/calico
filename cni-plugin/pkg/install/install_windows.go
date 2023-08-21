@@ -75,19 +75,10 @@ func defaultNetConf() string {
           "Name":  "EndpointPolicy",
           "Value":  {
             "Type":  "OutBoundNAT",
-            "ExceptionList":  [
-              "__KUBERNETES_SERVICE_CIDR__"
-            ]
+            "ExceptionList":  [__KUBERNETES_SERVICE_CIDRS__]
           }
         },
-        {
-          "Name":  "EndpointPolicy",
-          "Value":  {
-            "Type":  "__ROUTE_TYPE__",
-            "DestinationPrefix":  "__KUBERNETES_SERVICE_CIDR__",
-            "NeedEncap":  true
-          }
-        }
+__KUBERNETES_ROUTE_POLICIES__
       ]
     }
   ]
@@ -102,8 +93,34 @@ func replacePlatformSpecificVars(c config, netconf string) string {
 	netconf = strings.Replace(netconf, "__KUBECONFIG_FILEPATH__", kubeconfigPath, -1)
 
 	netconf = strings.Replace(netconf, "__LOG_FILE_PATH__", getEnv("LOG_FILE_PATH", "c:/var/log/calico/cni/cni.log"), -1)
+
+	// Support multiple KUBERNETES_SERVICE_CIDRS
+	serviceCIDRIPs := getEnv("KUBERNETES_SERVICE_CIDRS", "10.96.0.10")
+	serviceCIDRIPList := []string{}
+	for _, ip := range strings.Split(serviceCIDRIPs, ",") {
+		serviceCIDRIPList = append(serviceCIDRIPList, fmt.Sprintf("\"%s\"", strings.TrimSpace(ip)))
+	}
+	quotedServiceCIDRIPs := strings.Join(serviceCIDRIPList, ",")
+	netconf = strings.Replace(netconf, "__KUBERNETES_SERVICE_CIDRS__", quotedServiceCIDRIPs, -1)
+
+	routePolicyList := []string{}
+	for _, ip := range serviceCIDRIPList {
+		routePolicy := fmt.Sprintf(`        {
+          "Name":  "EndpointPolicy",
+          "Value":  {
+            "Type":  "__ROUTE_TYPE__",
+            "DestinationPrefix":  %s,
+            "NeedEncap":  true
+          }
+        }`, ip)
+		routePolicyList = append(routePolicyList, routePolicy)
+	}
+	routePolicyListStr := strings.Join(routePolicyList, ",\n")
+	netconf = strings.Replace(netconf, "__KUBERNETES_ROUTE_POLICIES__", routePolicyListStr, -1)
+
+	// __ROUTE_TYPE__ substitution must be done after __KUBERNETES_ROUTE_POLICIES__ because the latter contains the former.
 	netconf = strings.Replace(netconf, "__ROUTE_TYPE__", getEnv("ROUTE_TYPE", "SDNROUTE"), -1)
-	netconf = strings.Replace(netconf, "__KUBERNETES_SERVICE_CIDR__", getEnv("KUBERNETES_SERVICE_CIDR", "10.96.0.0/12"), -1)
+
 	netconf = strings.Replace(netconf, "__VNI__", getEnv("VXLAN_VNI", "4096"), -1)
 	netconf = strings.Replace(netconf, "__MAC_PREFIX__", getEnv("MAC_PREFIX", "0E-2A"), -1)
 
@@ -153,7 +170,7 @@ func replacePlatformSpecificVars(c config, netconf string) string {
 		logrus.Fatalf("Error converting halVer to int\nerror: %s", err)
 	}
 	supportsDSR := (winVerInt == 1809 && buildNumInt >= 17763 && halVerInt >= 1432) || (winVerInt >= 1903 && buildNumInt >= 18317)
-	// Remove the quotes when replacing with boolean values (the quotes are in so that the template if valid JSON even before replacing)
+	// Remove the quotes when replacing with boolean values (the quotes are in so that the template is valid JSON even before replacing)
 	if supportsDSR {
 		netconf = strings.Replace(netconf, `"__DSR_SUPPORT__"`, "true", -1)
 	} else {

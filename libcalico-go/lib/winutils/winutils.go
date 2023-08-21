@@ -62,7 +62,7 @@ func GetHostPath(path string) string {
 		// join them and return with forward slashes so it can be serialized properly in json later if required
 		path := strings.TrimLeft(path, "c:")
 		path = strings.TrimLeft(path, "C:")
-		path = filepath.Join(sandbox, path, "c:")
+		path = filepath.Join(sandbox, path)
 		return filepath.ToSlash(path)
 	}
 	return path
