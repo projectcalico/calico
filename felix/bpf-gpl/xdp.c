@@ -62,6 +62,7 @@ int calico_xdp_main(struct xdp_md *xdp)
 	}
 	__builtin_memset(ctx->state, 0, sizeof(*ctx->state));
 	ctx->scratch = (void *)(ctx->xdp_globals + 1); /* needs to be set to something, not used, there is space */
+	ctx->nh = &ctx->scratch->l4;
 
 	counter_inc(ctx, COUNTER_TOTAL_PACKETS);
 

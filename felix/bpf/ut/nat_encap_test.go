@@ -34,7 +34,7 @@ func TestNatEncap(t *testing.T) {
 	}}
 	ipHdr.IHL += 2
 
-	_, ipv4, l4, payload, pktBytes, err := testPacket(nil, &ipHdr, nil, nil)
+	_, ipv4, l4, payload, pktBytes, err := testPacketV4(nil, &ipHdr, nil, nil)
 	Expect(err).NotTo(HaveOccurred())
 	udp := l4.(*layers.UDP)
 
@@ -76,23 +76,32 @@ func TestNatEncap(t *testing.T) {
 	})
 }
 
-func checkVxlanEncap(pktR gopacket.Packet, NATed bool, ipv4 *layers.IPv4,
+func checkVxlanEncap(pktR gopacket.Packet, NATed bool, iphdr gopacket.Layer,
 	transport gopacket.Layer, payload []byte) {
 
 	inner := checkVxlan(pktR)
-	checkInnerIP(inner, NATed, ipv4, transport, payload)
+	checkInnerIP(inner, NATed, iphdr, transport, payload)
 }
 
 func checkVxlan(pktR gopacket.Packet) gopacket.Packet {
-	ipv4L := pktR.Layer(layers.LayerTypeIPv4)
-	Expect(ipv4L).NotTo(BeNil())
-	ipv4R := ipv4L.(*layers.IPv4)
+	ipType := layers.LayerTypeIPv4
+	ethType := layers.EthernetTypeIPv4
 
-	ipv4CSum := ipv4R.Checksum
-	iptmp := gopacket.NewSerializeBuffer()
-	err := ipv4R.SerializeTo(iptmp, gopacket.SerializeOptions{ComputeChecksums: true}) // recompute csum
-	Expect(err).NotTo(HaveOccurred())
-	Expect(ipv4CSum).To(Equal(ipv4R.Checksum))
+	ipv4L := pktR.Layer(layers.LayerTypeIPv4)
+	if ipv4L != nil {
+		ipv4R := ipv4L.(*layers.IPv4)
+
+		ipv4CSum := ipv4R.Checksum
+		iptmp := gopacket.NewSerializeBuffer()
+		err := ipv4R.SerializeTo(iptmp, gopacket.SerializeOptions{ComputeChecksums: true}) // recompute csum
+		Expect(err).NotTo(HaveOccurred())
+		Expect(ipv4CSum).To(Equal(ipv4R.Checksum))
+	} else {
+		ipv6L := pktR.Layer(layers.LayerTypeIPv6)
+		Expect(ipv6L).NotTo(BeNil())
+		ipType = layers.LayerTypeIPv6
+		ethType = layers.EthernetTypeIPv6
+	}
 
 	udpL := pktR.Layer(layers.LayerTypeUDP)
 	Expect(udpL).NotTo(BeNil())
@@ -115,10 +124,10 @@ func checkVxlan(pktR gopacket.Packet) gopacket.Packet {
 		&layers.Ethernet{
 			SrcMAC:       []byte{0, 0, 0, 0, 0, 0},
 			DstMAC:       []byte{0, 0, 0, 0, 0, 0},
-			EthernetType: layers.EthernetTypeIPv4,
+			EthernetType: ethType,
 		}))
 
-	return gopacket.NewPacket(ethL.LayerPayload(), layers.LayerTypeIPv4, gopacket.Default)
+	return gopacket.NewPacket(ethL.LayerPayload(), ipType, gopacket.Default)
 }
 
 func encapedResponse(pktR gopacket.Packet) []byte {
@@ -158,7 +167,10 @@ func encapedResponse(pktR gopacket.Packet) []byte {
 
 func getVxlanVNI(pktR gopacket.Packet) uint32 {
 	ipv4L := pktR.Layer(layers.LayerTypeIPv4)
-	Expect(ipv4L).NotTo(BeNil())
+	if ipv4L == nil {
+		ipv6L := pktR.Layer(layers.LayerTypeIPv6)
+		Expect(ipv6L).NotTo(BeNil())
+	}
 
 	udpL := pktR.Layer(layers.LayerTypeUDP)
 	Expect(udpL).NotTo(BeNil())
@@ -178,17 +190,32 @@ func getVxlanVNI(pktR gopacket.Packet) uint32 {
 	return vxlanL.(*layers.VXLAN).VNI
 }
 
-func checkInnerIP(ip gopacket.Packet, NATed bool, ipv4 *layers.IPv4,
+func checkInnerIP(ip gopacket.Packet, NATed bool, iphdr gopacket.Layer,
 	transport gopacket.Layer, payload []byte) {
-	ipv4L := ip.Layer(layers.LayerTypeIPv4)
-	Expect(ipv4L).NotTo(BeNil())
-	if NATed {
-		Expect(ipv4L).To(layersMatchFields(ipv4, "Checksum", "TTL", "Options", "Padding"))
-	} else {
-		Expect(ipv4L).To(layersMatchFields(ipv4, "DstIP", "Checksum", "TTL", "Options", "Padding"))
-	}
 
-	Expect(ipv4L.(*layers.IPv4).TTL).To(Equal(ipv4.TTL - 1))
+	switch t := iphdr.(type) {
+	case *layers.IPv4:
+		ipv4L := ip.Layer(layers.LayerTypeIPv4)
+		Expect(ipv4L).NotTo(BeNil())
+		if NATed {
+			Expect(ipv4L).To(layersMatchFields(iphdr, "Checksum", "TTL", "Options", "Padding"))
+		} else {
+			Expect(ipv4L).To(layersMatchFields(iphdr, "DstIP", "Checksum", "TTL", "Options", "Padding"))
+		}
+
+		Expect(ipv4L.(*layers.IPv4).TTL).To(Equal(t.TTL - 1))
+	case *layers.IPv6:
+		ipv6L := ip.Layer(layers.LayerTypeIPv6)
+		Expect(ipv6L).NotTo(BeNil())
+		if NATed {
+			Expect(ipv6L).To(layersMatchFields(iphdr, "HopLimit", "HopByHop"))
+		} else {
+			Expect(ipv6L).To(layersMatchFields(iphdr, "DstIP", "HopLimit", "HopByHop"))
+		}
+		Expect(ipv6L.(*layers.IPv6).HopLimit).To(Equal(t.HopLimit - 1))
+	default:
+		panic("xxx")
+	}
 
 	transportL := ip.Layer(transport.LayerType())
 	Expect(transportL).NotTo(BeNil())

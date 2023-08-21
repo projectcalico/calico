@@ -459,6 +459,14 @@ func ConfigureProgram(m *libbpf.Map, iface string, globalData *libbpf.TcGlobalDa
 	return libbpf.TcSetGlobals(m, globalData)
 }
 
+func ConfigureProgramV6(m *libbpf.Map, iface string, globalData *libbpf.TcGlobalData6) error {
+	in := []byte("---------------")
+	copy(in, iface)
+	globalData.IfaceName = string(in)
+
+	return libbpf.TcSetGlobals6(m, globalData)
+}
+
 func convertIPToUint32(ip net.IP) (uint32, error) {
 	ipv4 := ip.To4()
 	if ipv4 == nil {

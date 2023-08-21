@@ -38,7 +38,7 @@ func TestSNATHostServiceRemotePod(t *testing.T) {
 
 	ipHdr := ipv4Default
 	ipHdr.Id = 1
-	eth, ipv4, l4, payload, pktBytes, err := testPacket(nil, ipHdr, nil, nil)
+	eth, ipv4, l4, payload, pktBytes, err := testPacketV4(nil, ipHdr, nil, nil)
 	Expect(err).NotTo(HaveOccurred())
 	udp := l4.(*layers.UDP)
 
@@ -113,7 +113,7 @@ func TestSNATHostServiceRemotePod(t *testing.T) {
 		udpNat.DstPort = layers.UDPPort(natPort)
 
 		// created the expected packet after NAT, with recalculated csums
-		_, _, _, _, resPktBytes, err := testPacket(eth, &ipv4Nat, &udpNat, payload)
+		_, _, _, _, resPktBytes, err := testPacketV4(eth, &ipv4Nat, &udpNat, payload)
 		Expect(err).NotTo(HaveOccurred())
 
 		// expect them to be the same
@@ -141,7 +141,7 @@ func TestSNATHostServiceRemotePod(t *testing.T) {
 	// Second packet - conntrack hit
 
 	ipHdr.Id = 2
-	eth, ipv4, _, payload, pktBytes, err = testPacket(nil, ipHdr, nil, nil)
+	eth, ipv4, _, payload, pktBytes, err = testPacketV4(nil, ipHdr, nil, nil)
 	Expect(err).NotTo(HaveOccurred())
 
 	skbMark = 0
@@ -162,7 +162,7 @@ func TestSNATHostServiceRemotePod(t *testing.T) {
 		udpNat.DstPort = layers.UDPPort(natPort)
 
 		// created the expected packet after NAT, with recalculated csums
-		_, _, _, _, resPktBytes, err := testPacket(eth, &ipv4Nat, &udpNat, payload)
+		_, _, _, _, resPktBytes, err := testPacketV4(eth, &ipv4Nat, &udpNat, payload)
 		Expect(err).NotTo(HaveOccurred())
 
 		// expect them to be the same
@@ -209,7 +209,7 @@ func TestSNATHostServiceRemotePod(t *testing.T) {
 		ethResp.SrcMAC, ethResp.DstMAC = ethResp.DstMAC, ethResp.SrcMAC
 
 		// created the expected packet after NAT, with recalculated csums
-		_, _, _, _, resPktBytes, err := testPacket(&ethResp, &ipResp, &udpResp, payload)
+		_, _, _, _, resPktBytes, err := testPacketV4(&ethResp, &ipResp, &udpResp, payload)
 		Expect(err).NotTo(HaveOccurred())
 
 		// expect them to be the same
