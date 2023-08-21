@@ -177,7 +177,7 @@ template bgp bgp_template {
   {{if gt $onode_ip $node_ip}}
   passive on; # Mesh is unidirectional, peer will connect to us.
   {{- end}}
-  bfd on;
+  bfd graceful;
 }{{end}}{{end}}{{end}}
 {{else}}
 # Node-to-node mesh disabled
@@ -203,7 +203,7 @@ protocol bgp Global_{{$id}} from bgp_template {
 {{- end}}
 {{- if ne $data.restart_time ""}}
   graceful restart time {{$data.restart_time}};
-  bfd on;
+  bfd graceful;
 {{- end}}
 {{- if and (eq $data.as_num $node_as_num) (ne "" ($node_cluster_id)) (ne $data.rr_cluster_id ($node_cluster_id))}}
   rr client;
@@ -240,7 +240,7 @@ protocol bgp Node_{{$id}} from bgp_template {
 {{- end}}
 {{- if ne $data.restart_time ""}}
   graceful restart time {{$data.restart_time}};
-  bfd on;
+  bfd graceful;
 {{- end}}
 {{- if and (eq $data.as_num $node_as_num) (ne "" ($node_cluster_id)) (ne $data.rr_cluster_id ($node_cluster_id))}}
   rr client;
