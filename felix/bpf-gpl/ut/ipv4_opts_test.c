@@ -44,7 +44,10 @@ static CALI_BPF_INLINE int calico_unittest_entry (struct __sk_buff *skb)
 		goto allow;
 	}
 
-	if (vxlan_v4_encap(ctx, 0x06060606, 0x10101010)) {
+	__u32 a = 0x06060606;
+	__u32 b = 0x10101010;
+
+	if (vxlan_encap(ctx, &a, &b)) {
 		CALI_DEBUG("vxlan: encap failed!\n");
 		deny_reason(ctx, CALI_REASON_ENCAP_FAIL);
 		goto  deny;

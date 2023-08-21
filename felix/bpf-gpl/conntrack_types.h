@@ -9,7 +9,8 @@
 
 struct calico_ct_key {
 	__u32 protocol;
-	__be32 addr_a, addr_b; // NBO
+	ipv46_addr_t addr_a; // NBO
+	ipv46_addr_t addr_b; // NBO
 	__u16 port_a, port_b; // HBO
 };
 
@@ -79,18 +80,22 @@ struct calico_ct_value {
 			struct calico_ct_leg b_to_a; // 48
 
 			// CALI_CT_TYPE_NAT_REV
-			__u32 tun_ip;                      // 72
-			__u32 orig_ip;                     // 76
+			ipv46_addr_t tun_ip;                      // 72
+			ipv46_addr_t orig_ip;                     // 76
 			__u16 orig_port;                   // 80
 			__u16 orig_sport;                  // 82
-			__u32 orig_sip;                    // 84
+			ipv46_addr_t orig_sip;                    // 84
 		};
 
 		// CALI_CT_TYPE_NAT_FWD; key for the CALI_CT_TYPE_NAT_REV entry.
 		struct {
 			struct calico_ct_key nat_rev_key;  // 24
 			__u16 nat_sport;
+#ifdef IPVER6
+			__u8 pad2[60];
+#else
 			__u8 pad2[46];
+#endif
 		};
 	};
 
@@ -100,7 +105,11 @@ struct calico_ct_value {
 static CALI_BPF_INLINE void __xxx_compile_asserts(void) {
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunused-local-typedef"
+#ifdef IPVER6
+	COMPILE_TIME_ASSERT((sizeof(struct calico_ct_value) == 128))
+#else
 	COMPILE_TIME_ASSERT((sizeof(struct calico_ct_value) == 88))
+#endif
 #pragma clang diagnostic pop
 }
 
@@ -117,34 +126,38 @@ static CALI_BPF_INLINE void __xxx_compile_asserts(void) {
 
 struct ct_lookup_ctx {
 	__u8 proto;
-	__be32 src;
-	__be32 dst;
+	DECLARE_IP_ADDR(src);
+	DECLARE_IP_ADDR(dst);
 	__u16 sport;
 	__u16 dport;
 	struct tcphdr *tcp;
 };
 
 struct ct_create_ctx {
-	struct __sk_buff *skb;
-	__u8 proto;
-	__be32 orig_src;
-	__be32 src;
-	__be32 orig_dst;
-	__be32 dst;
+	ipv46_addr_t orig_src;
+	ipv46_addr_t src;
+	ipv46_addr_t orig_dst;
+	ipv46_addr_t dst;
 	__u16 sport;
 	__u16 dport;
 	__u16 orig_dport;
 	__u16 orig_sport;
 	struct tcphdr *tcp;
-	__be32 tun_ip; /* is set when the packet arrive through the NP tunnel.
+	ipv46_addr_t tun_ip; /* is set when the packet arrive through the NP tunnel.
 			* It is also set on the first node when we create the
 			* initial CT entry for the tunneled traffic. */
 	__u16 flags;
+	__u8 proto;
+	__u8 __pad;
 	enum cali_ct_type type;
 	bool allow_return;
 };
 
-CALI_MAP(cali_v4_ct, 3,
+#ifdef IPVER6
+CALI_MAP_NAMED(cali_v6_ct, cali_ct, 3,
+#else
+CALI_MAP_NAMED(cali_v4_ct, cali_ct, 3,
+#endif
 		BPF_MAP_TYPE_HASH,
 		struct calico_ct_key, struct calico_ct_value,
 		512000, BPF_F_NO_PREALLOC)
@@ -205,11 +218,11 @@ enum calico_ct_result_type {
 struct calico_ct_result {
 	__s16 rc;
 	__u16 flags;
-	__be32 nat_ip;
-	__be32 nat_sip;
+	ipv46_addr_t nat_ip;
+	ipv46_addr_t nat_sip;
 	__u16 nat_port;
 	__u16 nat_sport;
-	__be32 tun_ip;
+	ipv46_addr_t tun_ip;
 	__u32 ifindex_fwd; /* if set, the ifindex where the packet should be forwarded */
 	__u32 ifindex_created; /* For a CT state that was created by a packet ingressing
 				* through an interface towards the host, this is the

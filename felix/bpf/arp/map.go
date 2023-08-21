@@ -26,6 +26,7 @@ import (
 
 func init() {
 	maps.SetSize(MapParams.VersionedName(), MapParams.MaxEntries)
+	maps.SetSize(MapV6Params.VersionedName(), MapParams.MaxEntries)
 }
 
 var MapParams = maps.MapParameters{
@@ -110,10 +111,10 @@ type MapMem map[Key]Value
 func LoadMapMem(m maps.Map) (MapMem, error) {
 	ret := make(MapMem)
 
-	err := m.Iter(func(k, v []byte) maps.IteratorAction {
-		ks := len(Key{})
-		vs := len(Value{})
+	ks := len(Key{})
+	vs := len(Value{})
 
+	err := m.Iter(func(k, v []byte) maps.IteratorAction {
 		var key Key
 		copy(key[:ks], k[:ks])
 

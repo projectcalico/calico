@@ -8,5 +8,5 @@
 
 static CALI_BPF_INLINE int calico_unittest_entry (struct __sk_buff *skb)
 {
-	return vxlan_v4_decap(skb);
+	return vxlan_decap(skb);
 }
