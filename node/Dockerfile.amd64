@@ -206,14 +206,15 @@ RUN chgrp -R 0 /etc/calico && \
 
 COPY --from=bpftool /bpftool /bin
 
+ARG BIN_DIR
 # Copy in the calico-node binary
-COPY dist/bin/calico-node-amd64 /bin/calico-node
+COPY ${BIN_DIR}/calico-node-amd64 /bin/calico-node
 
 # Set the suid bit on calico-node
 RUN chmod u+s /bin/calico-node
 
 # Copy in the moutnns binary
-COPY dist/bin/mountns-amd64 /bin/mountns
+COPY $BIN_DIR/mountns-amd64 /bin/mountns
 
 # Set the suid bit on mountns
 RUN chmod u+s /bin/mountns

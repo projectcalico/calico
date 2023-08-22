@@ -29,7 +29,7 @@
 #include "globals.h"
 
 /* calico_xdp is the main function used in all of the xdp programs */
-SEC("xdp/main")
+SEC("xdp")
 int calico_xdp_main(struct xdp_md *xdp)
 {
 	/* Initialise the context, which is stored on the stack, and the state, which
@@ -61,6 +61,7 @@ int calico_xdp_main(struct xdp_md *xdp)
 		return XDP_DROP;
 	}
 	__builtin_memset(ctx->state, 0, sizeof(*ctx->state));
+	ctx->scratch = (void *)(ctx->xdp_globals + 1); /* needs to be set to something, not used, there is space */
 
 	counter_inc(ctx, COUNTER_TOTAL_PACKETS);
 
@@ -78,7 +79,7 @@ int calico_xdp_main(struct xdp_md *xdp)
 
 	tc_state_fill_from_iphdr(ctx);
 
-	switch(tc_state_fill_from_nexthdr(ctx)) {
+	switch(tc_state_fill_from_nexthdr(ctx, false)) {
 	case PARSING_ERROR:
 		goto deny;
 	case PARSING_ALLOW_WITHOUT_ENFORCING_POLICY:
@@ -124,14 +125,14 @@ deny:
  * which ip will load for us when we're attaching a program to a xdp hook.
  * This allows us to control the behaviour in the window before Felix replaces
  * the policy program with its generated version.*/
-SEC("xdp/policy")
+SEC("xdp")
 int calico_xdp_norm_pol_tail(struct xdp_md *xdp)
 {
 	CALI_LOG_IF(CALI_LOG_LEVEL_DEBUG, "Entering normal policy tail call: PASS\n");
 	return XDP_PASS;
 }
 
-SEC("xdp/accept")
+SEC("xdp")
 int calico_xdp_accepted_entrypoint(struct xdp_md *xdp)
 {
 	struct cali_tc_ctx _ctx = {
@@ -155,6 +156,8 @@ int calico_xdp_accepted_entrypoint(struct xdp_md *xdp)
 		return XDP_DROP;
 	}
 
+	ctx->scratch = (void *)(ctx->xdp_globals + 1);
+
 	CALI_DEBUG("Entering calico_xdp_accepted_entrypoint\n");
 
 	// Share with TC the packet is already accepted and accept it there too.
@@ -166,7 +169,7 @@ int calico_xdp_accepted_entrypoint(struct xdp_md *xdp)
 	return XDP_PASS;
 }
 
-SEC("xdp/drop")
+SEC("xdp")
 int calico_xdp_drop(struct xdp_md *xdp)
 {
 	struct cali_tc_ctx _ctx = {
@@ -193,6 +196,8 @@ int calico_xdp_drop(struct xdp_md *xdp)
 		CALI_DEBUG("No counters: DROP\n");
 		return XDP_DROP;
 	}
+
+	ctx->scratch = (void *)(ctx->xdp_globals + 1);
 
 	counter_inc(ctx, CALI_REASON_DROPPED_BY_POLICY);
 

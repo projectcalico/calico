@@ -41,6 +41,7 @@ var (
 	// assumes the value represents a regular expression and is marked by '/' at the start
 	// and end and cannot have spaces
 	RegexpIfaceElemRegexp = regexp.MustCompile(`^\/[^\s]+\/$`)
+	InterfaceRegex        = regexp.MustCompile("^[a-zA-Z0-9_.-]{1,15}$")
 	// NonRegexpIfaceElemRegexp matches an individual element in the overall interface list;
 	// assumes the value is between 1-15 chars long and only be alphanumeric or - or _
 	NonRegexpIfaceElemRegexp = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,15}$`)
@@ -198,7 +199,8 @@ type Config struct {
 	BPFHostConntrackBypass             bool              `config:"bool;true"`
 	BPFEnforceRPF                      string            `config:"oneof(Disabled,Strict,Loose);Loose;non-zero"`
 	BPFPolicyDebugEnabled              bool              `config:"bool;true"`
-	BPFForceTrackPacketsFromIfaces     []string          `config:"interface-name-slice;docker+"`
+	BPFForceTrackPacketsFromIfaces     []string          `config:"iface-filter-slice;docker+"`
+	BPFDisableGROForIfaces             *regexp.Regexp    `config:"regexp;"`
 
 	// DebugBPFCgroupV2 controls the cgroup v2 path that we apply the connect-time load balancer to.  Most distros
 	// are configured for cgroup v1, which prevents all but the root cgroup v2 from working so this is only useful
@@ -968,6 +970,8 @@ func loadParams() {
 		case "string-slice":
 			param = &StringSliceParam{}
 		case "interface-name-slice":
+			param = &StringSliceParam{ValidationRegex: InterfaceRegex}
+		case "iface-filter-slice":
 			param = &StringSliceParam{ValidationRegex: IfaceParamRegexp}
 		case "route-table-range":
 			param = &RouteTableRangeParam{}

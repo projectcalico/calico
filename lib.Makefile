@@ -173,7 +173,7 @@ define build_static_cgo_boring_binary
         -e CGO_ENABLED=1 \
         -e CGO_LDFLAGS=$(CGO_LDFLAGS) \
         -e CGO_CFLAGS=$(CGO_CFLAGS) \
-        $(GO_BUILD_IMAGE):$(GO_BUILD_VER) \
+        $(CALICO_BUILD) \
         sh -c '$(GIT_CONFIG_SSH) \
             GOEXPERIMENT=boringcrypto go build -o $(2)  \
             -tags fipsstrict,osusergo,netgo -v -buildvcs=false \
@@ -194,7 +194,7 @@ define build_cgo_boring_binary
         -e CGO_ENABLED=1 \
         -e CGO_LDFLAGS=$(CGO_LDFLAGS) \
         -e CGO_CFLAGS=$(CGO_CFLAGS) \
-        $(GO_BUILD_IMAGE):$(GO_BUILD_VER) \
+        $(CALICO_BUILD) \
         sh -c '$(GIT_CONFIG_SSH) \
             GOEXPERIMENT=boringcrypto go build -o $(2)  \
             -tags fipsstrict -v -buildvcs=false \
@@ -209,7 +209,7 @@ define build_cgo_binary
         -e CGO_ENABLED=1 \
         -e CGO_LDFLAGS=$(CGO_LDFLAGS) \
         -e CGO_CFLAGS=$(CGO_CFLAGS) \
-        $(GO_BUILD_IMAGE):$(GO_BUILD_VER) \
+        $(CALICO_BUILD) \
         sh -c '$(GIT_CONFIG_SSH) \
             go build -o $(2)  \
             -v -buildvcs=false \
@@ -219,13 +219,24 @@ endef
 
 # For binaries that do not require boring crypto.
 define build_binary
-	$(DOCKER_RUN) $(GO_BUILD_IMAGE):$(GO_BUILD_VER) \
+	$(DOCKER_RUN) $(CALICO_BUILD) \
 		sh -c '$(GIT_CONFIG_SSH) \
 		go build -o $(2)  \
 		-v -buildvcs=false \
 		-ldflags "$(LDFLAGS)" \
 		$(1)'
 endef
+
+# For binaries that do not require boring crypto.
+define build_static_binary
+        $(DOCKER_RUN) $(CALICO_BUILD) \
+                sh -c '$(GIT_CONFIG_SSH) \
+                go build -o $(2)  \
+                -v -buildvcs=false \
+                -ldflags "$(LDFLAGS) -linkmode external -extldflags -static" \
+                $(1)'
+endef
+
 
 # Images used in build / test across multiple directories.
 PROTOC_CONTAINER=calico/protoc:$(PROTOC_VER)-$(BUILDARCH)
@@ -1196,6 +1207,13 @@ endif
 check-dirty:
 	@if [ "$$(git --no-pager diff --stat)" != "" ]; then \
 	echo "The following files are dirty"; git --no-pager diff --stat; exit 1; fi
+
+bin/yq:
+	mkdir -p bin
+	$(eval TMP := $(shell mktemp -d))
+	wget https://github.com/mikefarah/yq/releases/download/v4.34.2/yq_linux_$(BUILDARCH).tar.gz -O $(TMP)/yq4.tar.gz
+	tar -zxvf $(TMP)/yq4.tar.gz -C $(TMP)
+	mv $(TMP)/yq_linux_$(BUILDARCH) bin/yq
 
 ###############################################################################
 # Common functions for launching a local Kubernetes control plane.

@@ -73,9 +73,9 @@ type RuleScanner struct {
 	ipSetsByUID map[string]*IPSetData
 	// rulesIDToUIDs maps from policy/profile ID to the set of IP set UIDs that are
 	// referenced by that policy/profile.
-	rulesIDToUIDs multidict.IfaceToString
+	rulesIDToUIDs multidict.Multidict[any, string]
 	// uidsToRulesIDs maps from IP set UID to the set of policy/profile IDs that use it.
-	uidsToRulesIDs multidict.StringToIface
+	uidsToRulesIDs multidict.Multidict[string, any]
 
 	OnIPSetActive   func(ipSet *IPSetData)
 	OnIPSetInactive func(ipSet *IPSetData)
@@ -146,8 +146,8 @@ func (d *IPSetData) DataplaneProtocolType() proto.IPSetUpdate_IPSetType {
 func NewRuleScanner() *RuleScanner {
 	calc := &RuleScanner{
 		ipSetsByUID:    make(map[string]*IPSetData),
-		rulesIDToUIDs:  multidict.NewIfaceToString(),
-		uidsToRulesIDs: multidict.NewStringToIface(),
+		rulesIDToUIDs:  multidict.New[any, string](),
+		uidsToRulesIDs: multidict.New[string, any](),
 	}
 	return calc
 }

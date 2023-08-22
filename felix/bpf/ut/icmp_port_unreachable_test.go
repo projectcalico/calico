@@ -29,7 +29,15 @@ import (
 func TestICMPPortUnreachable(t *testing.T) {
 	RegisterTestingT(t)
 
-	_, ipv4, _, _, pktBytes, err := testPacketUDPDefault()
+	ipHdr := *ipv4Default
+	ipHdr.Options = []layers.IPv4Option{{
+		OptionType:   123,
+		OptionLength: 6,
+		OptionData:   []byte{0xde, 0xad, 0xbe, 0xef},
+	}}
+	ipHdr.IHL += 2
+
+	_, ipv4, _, _, pktBytes, err := testPacket(nil, &ipHdr, nil, nil)
 	Expect(err).NotTo(HaveOccurred())
 
 	runBpfUnitTest(t, "icmp_port_unreachable.c", func(bpfrun bpfProgRunFn) {
@@ -37,7 +45,7 @@ func TestICMPPortUnreachable(t *testing.T) {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.Retval).To(Equal(0))
 
-		Expect(res.dataOut).To(HaveLen(134)) // eth + ip + 64 + udp + ip + icmp
+		Expect(res.dataOut).To(HaveLen(110)) // eth + ip(60) + udp + ip + ipopts(8) + icmp
 
 		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 		fmt.Printf("pktR = %+v\n", pktR)

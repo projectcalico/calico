@@ -98,6 +98,23 @@ blocks:
       commands:
       - make ci-preflight-checks
 
+- name: "FOSSA scan"
+  run:
+    when: "branch =~ '^release-v' OR branch = 'master'"
+  execution_time_limit:
+    minutes: 30
+  dependencies: ["Prerequisites"]
+  task:
+    prologue:
+      commands:
+      - "curl -fsSLH 'Cache-Control: no-cache' https://raw.githubusercontent.com/fossas/fossa-cli/master/install-latest.sh | bash"
+    jobs:
+    - name: "FOSSA scan"
+      commands:
+      - "fossa analyze"
+    secrets:
+      - name: foss-api-key
+
 - name: "API"
   run:
     when: "${FORCE_RUN} or change_in(['/*', '/api/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
@@ -268,7 +285,7 @@ blocks:
 
 - name: "Felix: Windows FV"
   run:
-    when: "${FORCE_RUN} or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/node', '/hack/test/certs/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+    when: "${FORCE_RUN} or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/node', '/hack/test/certs/', '/process/testing/winfv/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
   dependencies: ["Felix: Build Windows binaries"]
   task:
     secrets:
@@ -576,7 +593,7 @@ blocks:
 
 - name: "cni-plugin: Windows"
   run:
-    when: "${FORCE_RUN} or change_in(['/*', '/cni-plugin/', '/libcalico-go/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+    when: "${FORCE_RUN} or change_in(['/*', '/cni-plugin/', '/libcalico-go/', '/process/testing/winfv/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
   dependencies: ["Prerequisites"]
   task:
     secrets:

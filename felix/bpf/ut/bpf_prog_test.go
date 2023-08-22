@@ -183,6 +183,7 @@ var tcJumpMapIndexes = map[string][]int{
 		tcdefs.ProgIndexIcmp,
 		tcdefs.ProgIndexDrop,
 		tcdefs.ProgIndexHostCtConflict,
+		tcdefs.ProgIndexIcmpInnerNat,
 	},
 	"IPv4 debug": []int{
 		tcdefs.ProgIndexMainDebug,
@@ -191,6 +192,7 @@ var tcJumpMapIndexes = map[string][]int{
 		tcdefs.ProgIndexIcmpDebug,
 		tcdefs.ProgIndexDropDebug,
 		tcdefs.ProgIndexHostCtConflictDebug,
+		tcdefs.ProgIndexIcmpInnerNatDebug,
 	},
 	"IPv6": []int{
 		tcdefs.ProgIndexV6PrologueDebug,
@@ -389,9 +391,9 @@ func setupAndRun(logger testLogger, loglevel, section string, rules *polprog.Rul
 	}
 
 	if !topts.xdp {
-		runFn(bpfFsDir + "/classifier_tc_preamble")
+		runFn(bpfFsDir + "/cali_tc_preamble")
 	} else {
-		runFn(bpfFsDir + "/xdp_preamble")
+		runFn(bpfFsDir + "/cali_xdp_preamble")
 	}
 }
 
@@ -408,9 +410,7 @@ func caller(skip int) string {
 func runBpfTest(t *testing.T, section string, rules *polprog.Rules, testFn func(bpfProgRunFn), opts ...testOption) {
 	RegisterTestingT(t)
 	xdp := false
-	if strings.Contains(section, "xdp") == false {
-		section = "classifier_" + section
-	} else {
+	if strings.Contains(section, "xdp") {
 		xdp = true
 	}
 
@@ -634,6 +634,9 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 
 	for m, err := obj.FirstMap(); m != nil && err == nil; m, err = m.NextMap() {
 		if m.IsMapInternal() {
+			if strings.HasPrefix(m.Name(), ".rodata") {
+				continue
+			}
 			if forXDP {
 				var globals libbpf.XDPGlobalData
 				for i := 0; i < tcdefs.ProgIndexEnd; i++ {
@@ -654,11 +657,14 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 					PSNatLen:     uint16(topts.psnatEnd-topts.psnaStart) + 1,
 					Flags:        libbpf.GlobalsIPv6Enabled | libbpf.GlobalsNoDSRCidrs,
 					HostTunnelIP: ipToU32(node1tunIP),
+					LogFilterJmp: 0xffffffff,
 				}
 
 				for i := 0; i < tcdefs.ProgIndexEnd; i++ {
 					globals.Jumps[i] = uint32(i)
 				}
+
+				log.WithField("globals", globals).Debugf("configure program")
 
 				if err := tc.ConfigureProgram(m, ifaceLog, &globals); err != nil {
 					return nil, fmt.Errorf("failed to configure tc program: %w", err)
@@ -930,7 +936,7 @@ func runBpfUnitTest(t *testing.T, source string, testFn func(bpfProgRunFn), opts
 
 	runTest := func() {
 		testFn(func(dataIn []byte) (bpfRunResult, error) {
-			res, err := bpftoolProgRun(bpfFsDir+"/classifier_calico_unittest", dataIn, ctxIn)
+			res, err := bpftoolProgRun(bpfFsDir+"/unittest", dataIn, ctxIn)
 			log.Debugf("dataIn  = %+v", dataIn)
 			if err == nil {
 				log.Debugf("dataOut = %+v", res.dataOut)
@@ -1219,7 +1225,24 @@ func testPacket(eth *layers.Ethernet, l3 gopacket.Layer, l4 gopacket.Layer, payl
 		payload: payload,
 	}
 	err := pkt.Generate()
-	return pkt.eth, pkt.ipv4, pkt.l4, pkt.payload, pkt.bytes, err
+
+	p := gopacket.NewPacket(pkt.bytes, layers.LayerTypeEthernet, gopacket.Default)
+
+	e := p.Layer(layers.LayerTypeEthernet).(*layers.Ethernet)
+	ip := p.Layer(layers.LayerTypeIPv4).(*layers.IPv4)
+
+	var l gopacket.Layer
+
+	switch ip.Protocol {
+	case layers.IPProtocolUDP:
+		l = p.Layer(layers.LayerTypeUDP)
+	case layers.IPProtocolTCP:
+		l = p.Layer(layers.LayerTypeTCP)
+	case layers.IPProtocolICMPv4:
+		l = p.Layer(layers.LayerTypeICMPv4)
+	}
+
+	return e, ip, l, pkt.payload, pkt.bytes, err
 }
 
 type Packet struct {
@@ -1289,7 +1312,7 @@ func (pkt *Packet) handleL3() error {
 	switch v := pkt.l3.(type) {
 	case *layers.IPv4:
 		pkt.ipv4 = v
-		pkt.length += 5 * 4
+		pkt.length += int(v.IHL * 4)
 		pkt.l3Protocol = layers.EthernetTypeIPv4
 		pkt.ipv4.Protocol = pkt.l4Protocol
 		pkt.ipv4.Length = uint16(pkt.length)
@@ -1346,6 +1369,7 @@ func (pkt *Packet) Generate() error {
 	pkt.handleEthernet()
 	pkt.setChecksum()
 	pkt.bytes, err = generatePacket(pkt.layers)
+
 	return err
 }
 
@@ -1370,7 +1394,14 @@ func generatePacket(layers []gopacket.SerializableLayer) ([]byte, error) {
 }
 
 func testPacketUDPDefault() (*layers.Ethernet, *layers.IPv4, gopacket.Layer, []byte, []byte, error) {
-	return testPacket(nil, nil, nil, nil)
+	ip := *ipv4Default
+	ip.Options = []layers.IPv4Option{{
+		OptionType:   123,
+		OptionLength: 6,
+		OptionData:   []byte{0xde, 0xad, 0xbe, 0xef},
+	}}
+	ip.IHL += 2
+	return testPacket(nil, &ip, nil, nil)
 }
 
 func testPacketUDPDefaultNP(destIP net.IP) (*layers.Ethernet, *layers.IPv4, gopacket.Layer, []byte, []byte, error) {
@@ -1380,6 +1411,12 @@ func testPacketUDPDefaultNP(destIP net.IP) (*layers.Ethernet, *layers.IPv4, gopa
 
 	ip := *ipv4Default
 	ip.DstIP = destIP
+	ip.Options = []layers.IPv4Option{{
+		OptionType:   123,
+		OptionLength: 6,
+		OptionData:   []byte{0xde, 0xad, 0xbe, 0xef},
+	}}
+	ip.IHL += 2
 
 	return testPacket(nil, &ip, nil, nil)
 }
@@ -1510,18 +1547,18 @@ func TestJumpMap(t *testing.T) {
 	err = maps.UpdateMapEntry(jumpMapFD, k, v)
 	Expect(err).NotTo(HaveOccurred())
 
-	err = maps.DeleteMapEntry(jumpMapFD, k, 4)
+	err = maps.DeleteMapEntry(jumpMapFD, k)
 	Expect(err).NotTo(HaveOccurred())
 
 	err = maps.UpdateMapEntry(jumpMapFD, k, v)
 	Expect(err).NotTo(HaveOccurred())
 
-	err = maps.DeleteMapEntryIfExists(jumpMapFD, k, 4)
+	err = maps.DeleteMapEntryIfExists(jumpMapFD, k)
 	Expect(err).NotTo(HaveOccurred())
 
-	err = maps.DeleteMapEntryIfExists(jumpMapFD, k, 4)
+	err = maps.DeleteMapEntryIfExists(jumpMapFD, k)
 	Expect(err).NotTo(HaveOccurred())
 
-	err = maps.DeleteMapEntry(jumpMapFD, k, 4)
+	err = maps.DeleteMapEntry(jumpMapFD, k)
 	Expect(err).To(HaveOccurred())
 }

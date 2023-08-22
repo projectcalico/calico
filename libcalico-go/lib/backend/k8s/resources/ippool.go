@@ -18,6 +18,9 @@ import (
 	"fmt"
 	"reflect"
 
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
+	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -82,4 +85,53 @@ func (c IPPoolv1v3Converter) ConvertFromK8s(inRes Resource) (Resource, error) {
 	ipp.Spec.NATOutgoingV1 = false
 
 	return ipp, nil
+}
+
+func IPPoolV3ToV1(kvp *model.KVPair) (*model.KVPair, error) {
+	v3res := kvp.Value.(*apiv3.IPPool)
+	_, cidr, err := cnet.ParseCIDR(v3res.Spec.CIDR)
+	if err != nil {
+		return nil, err
+	}
+	v1key := model.IPPoolKey{
+		CIDR: *cidr,
+	}
+	var ipipInterface string
+	var ipipMode encap.Mode
+	switch v3res.Spec.IPIPMode {
+	case apiv3.IPIPModeAlways:
+		ipipInterface = "tunl0"
+		ipipMode = encap.Always
+	case apiv3.IPIPModeCrossSubnet:
+		ipipInterface = "tunl0"
+		ipipMode = encap.CrossSubnet
+	default:
+		ipipInterface = ""
+		ipipMode = encap.Undefined
+	}
+
+	var vxlanMode encap.Mode
+	switch v3res.Spec.VXLANMode {
+	case apiv3.VXLANModeAlways:
+		vxlanMode = encap.Always
+	case apiv3.VXLANModeCrossSubnet:
+		vxlanMode = encap.CrossSubnet
+	default:
+		vxlanMode = encap.Undefined
+	}
+
+	return &model.KVPair{
+		Key: v1key,
+		Value: &model.IPPool{
+			CIDR:             *cidr,
+			IPIPInterface:    ipipInterface,
+			IPIPMode:         ipipMode,
+			VXLANMode:        vxlanMode,
+			Masquerade:       v3res.Spec.NATOutgoing,
+			IPAM:             !v3res.Spec.Disabled,
+			Disabled:         v3res.Spec.Disabled,
+			DisableBGPExport: v3res.Spec.DisableBGPExport,
+		},
+		Revision: kvp.Revision,
+	}, nil
 }

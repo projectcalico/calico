@@ -38,6 +38,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/projectcalico/calico/felix/ethtool"
+
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
@@ -117,7 +119,7 @@ type attachPoint interface {
 	IfaceName() string
 	HookName() hook.Hook
 	IsAttached() (bool, error)
-	AttachProgram() (int, error)
+	AttachProgram() (bpf.AttachResult, error)
 	DetachProgram() error
 	Log() *log.Entry
 	PolicyIdx(int) int
@@ -129,11 +131,16 @@ type attachPointWithPolicyJumps interface {
 	PolicyDenyJumpIdx(int) int
 }
 
+type fileDescriptor interface {
+	FD() uint32
+	Close() error
+}
+
 type bpfDataplane interface {
 	ensureStarted()
-	ensureProgramAttached(ap attachPoint) error
+	ensureProgramAttached(ap attachPoint) (bpf.AttachResult, error)
 	ensureNoProgram(ap attachPoint) error
-	ensureQdisc(iface string) error
+	ensureQdisc(iface string) (bool, error)
 	ensureBPFDevices() error
 	updatePolicyProgram(rules polprog.Rules, polDir string, ap attachPoint) error
 	removePolicyProgram(ap attachPoint) error
@@ -143,13 +150,15 @@ type bpfDataplane interface {
 	delRoute(ip.V4CIDR)
 	ruleMatchID(dir, action, owner, name string, idx int) polprog.RuleMatchID
 	loadDefaultPolicies() error
-	loadTCLogFilter(ap *tc.AttachPoint) (bpf.ProgFD, int, error)
+	loadTCLogFilter(ap *tc.AttachPoint) (fileDescriptor, int, error)
+	interfaceByIndex(int) (*net.Interface, error)
+	queryClassifier(int, int, int, bool) (int, error)
 }
 
 type hasLoadPolicyProgram interface {
 	loadPolicyProgram(progName string,
 		ipFamily proto.IPVersion, rules polprog.Rules, progsMap maps.Map, opts ...polprog.Option) (
-		bpf.ProgFD, asm.Insns, error)
+		fileDescriptor, asm.Insns, error)
 }
 
 type bpfInterface struct {
@@ -183,10 +192,27 @@ func (i bpfInterfaceInfo) ifaceIsUp() bool {
 	return i.isUP
 }
 
+type ifaceReadiness int
+
+const (
+	ifaceNotReady ifaceReadiness = iota
+	ifaceIsReady
+	// We know it was ready at some point in time and we
+	// assume it still is, but we need to reassure outselves.
+	ifaceIsReadyNotAssured
+)
+
 type bpfInterfaceState struct {
 	policyIdx [hook.Count]int
 	filterIdx [hook.Count]int
-	isReady   bool
+	readiness ifaceReadiness
+	qdisc     qDiscInfo
+}
+
+type qDiscInfo struct {
+	valid  bool
+	prio   int
+	handle int
 }
 
 type ctlbWorkaroundMode int
@@ -256,7 +282,7 @@ type bpfEndpointManager struct {
 
 	loadPolicyProgramFn func(progName string,
 		ipFamily proto.IPVersion, rules polprog.Rules, progsMap maps.Map, opts ...polprog.Option) (
-		bpf.ProgFD, asm.Insns, error)
+		fileDescriptor, asm.Insns, error)
 	updatePolicyProgramFn func(rules polprog.Rules, polDir string, ap attachPoint) error
 
 	// HEP processing.
@@ -284,6 +310,9 @@ type bpfEndpointManager struct {
 
 	// RPF mode
 	rpfEnforceOption string
+
+	// BPF Disable GRO ifaces map
+	bpfDisableGROForIfaces *regexp.Regexp
 
 	// Service routes
 	ctlbWorkaroundMode ctlbWorkaroundMode
@@ -360,6 +389,7 @@ func newBPFEndpointManager(
 	if livenessCallback == nil {
 		livenessCallback = func() {}
 	}
+
 	m := &bpfEndpointManager{
 		initUnknownIfaces:       set.New[string](),
 		dp:                      dp,
@@ -410,12 +440,13 @@ func newBPFEndpointManager(
 		// ipv6Enabled Should be set to config.Ipv6Enabled, but for now it is better
 		// to set it to BPFIpv6Enabled which is a dedicated flag for development of IPv6.
 		// TODO: set ipv6Enabled to config.Ipv6Enabled when IPv6 support is complete
-		ipv6Enabled:           config.BPFIpv6Enabled,
-		rpfEnforceOption:      config.BPFEnforceRPF,
-		bpfPolicyDebugEnabled: config.BPFPolicyDebugEnabled,
-		polNameToMatchIDs:     map[string]set.Set[polprog.RuleMatchID]{},
-		dirtyRules:            set.New[polprog.RuleMatchID](),
-		arpMap:                bpfmaps.ArpMap,
+		ipv6Enabled:            config.BPFIpv6Enabled,
+		rpfEnforceOption:       config.BPFEnforceRPF,
+		bpfDisableGROForIfaces: config.BPFDisableGROForIfaces,
+		bpfPolicyDebugEnabled:  config.BPFPolicyDebugEnabled,
+		polNameToMatchIDs:      map[string]set.Set[polprog.RuleMatchID]{},
+		dirtyRules:             set.New[polprog.RuleMatchID](),
+		arpMap:                 bpfmaps.ArpMap,
 	}
 
 	// Calculate allowed XDP attachment modes.  Note, in BPF mode untracked ingress policy is
@@ -702,7 +733,7 @@ func (m *bpfEndpointManager) updateIfaceStateMap(name string, iface *bpfInterfac
 		if m.isWorkloadIface(name) {
 			flags |= ifstate.FlgWEP
 		}
-		if iface.dpState.isReady {
+		if iface.dpState.readiness != ifaceNotReady {
 			flags |= ifstate.FlgReady
 		}
 		v := ifstate.NewValue(flags, name,
@@ -712,7 +743,7 @@ func (m *bpfEndpointManager) updateIfaceStateMap(name string, iface *bpfInterfac
 			iface.dpState.filterIdx[hook.Ingress],
 			iface.dpState.filterIdx[hook.Egress],
 		)
-		m.ifStateMap.SetDesired(k, v)
+		m.ifStateMap.Desired().Set(k, v)
 	} else {
 		if err := m.jumpMapDelete(hook.XDP, iface.dpState.policyIdx[hook.XDP]); err != nil {
 			log.WithError(err).Warn("Policy program may leak.")
@@ -749,7 +780,7 @@ func (m *bpfEndpointManager) updateIfaceStateMap(name string, iface *bpfInterfac
 			log.WithError(err).Error("Ingress")
 		}
 
-		m.ifStateMap.DeleteDesired(k)
+		m.ifStateMap.Desired().Delete(k)
 		iface.dpState.clearJumps()
 	}
 }
@@ -870,7 +901,7 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceStateUpdate) {
 				delete(m.hostIfaceToEpMap, update.Name)
 			}
 			m.deleteIfaceCounters(update.Name, iface.info.ifIndex)
-			iface.dpState.isReady = false
+			iface.dpState.readiness = ifaceNotReady
 			iface.info.isUP = false
 			m.updateIfaceStateMap(update.Name, iface)
 			iface.info.ifIndex = 0
@@ -1032,6 +1063,10 @@ func jumpMapDeleteEntry(m maps.Map, idx int) error {
 	return nil
 }
 
+func (m *bpfEndpointManager) interfaceByIndex(ifindex int) (*net.Interface, error) {
+	return net.InterfaceByIndex(ifindex)
+}
+
 func (m *bpfEndpointManager) syncIfStateMap() {
 	palloc := set.New[int]()
 	xdpPalloc := set.New[int]()
@@ -1039,13 +1074,13 @@ func (m *bpfEndpointManager) syncIfStateMap() {
 	m.ifacesLock.Lock()
 	defer m.ifacesLock.Unlock()
 
-	m.ifStateMap.IterDataplaneCache(func(k ifstate.Key, v ifstate.Value) {
+	m.ifStateMap.Dataplane().Iter(func(k ifstate.Key, v ifstate.Value) {
 		ifindex := int(k.IfIndex())
-		netiface, err := net.InterfaceByIndex(ifindex)
+		netiface, err := m.dp.interfaceByIndex(ifindex)
 		if err != nil {
 			// "net" does not export the strings or err types :(
 			if strings.Contains(err.Error(), "no such network interface") {
-				m.ifStateMap.DeleteDesired(k)
+				m.ifStateMap.Desired().Delete(k)
 				// Device does not exist anymore so delete all associated policies we know
 				// about as we will not hear about that device again.
 				for _, fn := range []func() int{
@@ -1067,14 +1102,14 @@ func (m *bpfEndpointManager) syncIfStateMap() {
 		} else if m.isDataIface(netiface.Name) || m.isWorkloadIface(netiface.Name) || m.isL3Iface(netiface.Name) {
 			// We only add iface that we still manage as configuration could have changed.
 
-			m.ifStateMap.SetDesired(k, v)
+			m.ifStateMap.Desired().Set(k, v)
 
 			m.withIface(netiface.Name, func(iface *bpfInterface) bool {
 				if netiface.Flags&net.FlagUp != 0 {
 					iface.info.ifIndex = netiface.Index
 					iface.info.isUP = true
 					if v.Flags()&ifstate.FlgReady != 0 {
-						iface.dpState.isReady = true
+						iface.dpState.readiness = ifaceIsReadyNotAssured
 					}
 				}
 
@@ -1117,7 +1152,7 @@ func (m *bpfEndpointManager) syncIfStateMap() {
 			})
 		} else {
 			// We no longer manage this device
-			m.ifStateMap.DeleteDesired(k)
+			m.ifStateMap.Desired().Delete(k)
 		}
 	})
 
@@ -1134,10 +1169,31 @@ func (m *bpfEndpointManager) syncIfStateMap() {
 	}
 }
 
-func (m *bpfEndpointManager) syncIfaceCounters() error {
+func (m *bpfEndpointManager) syncIfaceProperties() error {
 	ifaces, err := net.Interfaces()
 	if err != nil {
 		return fmt.Errorf("cannot list interfaces: %w", err)
+	}
+
+	// Update Generic Receive Offload [GRO] if configured.
+	if m.bpfDisableGROForIfaces != nil {
+		expr := m.bpfDisableGROForIfaces.String()
+		if len(expr) > 0 {
+			var config = map[string]bool{
+				ethtool.EthtoolRxGRO: false,
+			}
+
+			for _, entry := range ifaces {
+				iface := entry.Name
+				if m.bpfDisableGROForIfaces.MatchString(iface) {
+					log.WithField(expr, iface).Debug("BPF Disable GRO iface match")
+					err = ethtool.EthtoolChangeImpl(iface, config)
+					if err == nil {
+						log.WithField(iface, config).Debug("ethtool.Change() succeeded")
+					}
+				}
+			}
+		}
 	}
 
 	exists := set.New[int]()
@@ -1171,13 +1227,17 @@ func (m *bpfEndpointManager) loadDefaultPolicies() error {
 	}
 
 	for m, err := obj.FirstMap(); m != nil && err == nil; m, err = m.NextMap() {
-		if size := maps.Size(m.Name()); size != 0 {
+		mapName := m.Name()
+		if strings.HasPrefix(mapName, ".rodata") {
+			continue
+		}
+		if size := maps.Size(mapName); size != 0 {
 			if err := m.SetSize(size); err != nil {
-				return fmt.Errorf("error resizing map %s: %w", m.Name(), err)
+				return fmt.Errorf("error resizing map %s: %w", mapName, err)
 			}
 		}
-		if err := m.SetPinPath(path.Join(bpfdefs.GlobalPinDir, m.Name())); err != nil {
-			return fmt.Errorf("error pinning map %s: %w", m.Name(), err)
+		if err := m.SetPinPath(path.Join(bpfdefs.GlobalPinDir, mapName)); err != nil {
+			return fmt.Errorf("error pinning map %s: %w", mapName, err)
 		}
 	}
 
@@ -1211,6 +1271,10 @@ func (m *bpfEndpointManager) CompleteDeferredWork() error {
 	m.startupOnce.Do(func() {
 		m.dp.ensureStarted()
 
+		if err := m.ifStateMap.LoadCacheFromDataplane(); err != nil {
+			log.WithError(err).Fatal("Cannot load interface state map - essential for consistent operation.")
+		}
+
 		m.initUnknownIfaces.Iter(func(iface string) error {
 			if ai, ok := m.initAttaches[iface]; ok {
 				if err := m.cleanupOldAttach(iface, ai); err != nil {
@@ -1226,16 +1290,19 @@ func (m *bpfEndpointManager) CompleteDeferredWork() error {
 		// Makes sure that we delete entries for non-existing devices and preserve entries
 		// for those that exists until we can make sure that they did (not) change.
 		m.syncIfStateMap()
+		log.Info("BPF Interface state map synced.")
 
 		if err := m.dp.loadDefaultPolicies(); err != nil {
 			log.WithError(err).Warn("Failed to load default policies, some programs may default to DENY.")
 		}
+		log.Info("Default BPF policy programs loaded.")
 
 		m.initUnknownIfaces = nil
 
-		if err := m.syncIfaceCounters(); err != nil {
+		if err := m.syncIfaceProperties(); err != nil {
 			log.WithError(err).Warn("Failed to sync counters map with existing interfaces - some counters may have leaked.")
 		}
+		log.Info("BPF counters synced.")
 	})
 
 	m.applyProgramsToDirtyDataInterfaces()
@@ -1376,7 +1443,7 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 			defer wg.Done()
 
 			// Attach the qdisc first; it is shared between the directions.
-			err := m.dp.ensureQdisc(iface)
+			_, err := m.dp.ensureQdisc(iface)
 			if err != nil {
 				mutex.Lock()
 				errs[iface] = err
@@ -1446,7 +1513,11 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 		}
 
 		m.withIface(iface, func(i *bpfInterface) bool {
-			i.dpState.isReady = isReady
+			if isReady {
+				i.dpState.readiness = ifaceIsReady
+			} else {
+				i.dpState.readiness = ifaceNotReady
+			}
 			m.updateIfaceStateMap(iface, i)
 			return false // no need to enforce dirty
 		})
@@ -1536,17 +1607,61 @@ func (m *bpfEndpointManager) updateWEPsInDataplane() {
 	}
 }
 
+func (m *bpfEndpointManager) wepStateFillJumps(state *bpfInterfaceState) error {
+	var err error
+
+	if state.policyIdx[hook.Ingress] == -1 {
+		state.policyIdx[hook.Ingress], err = m.jumpMapAlloc.Get()
+		if err != nil {
+			return err
+		}
+	}
+
+	if state.policyIdx[hook.Egress] == -1 {
+		state.policyIdx[hook.Egress], err = m.jumpMapAlloc.Get()
+		if err != nil {
+			return err
+		}
+	}
+
+	if m.bpfLogLevel == "debug" {
+		if state.filterIdx[hook.Ingress] == -1 {
+			state.filterIdx[hook.Ingress], err = m.jumpMapAlloc.Get()
+			if err != nil {
+				return err
+			}
+		}
+
+		if state.filterIdx[hook.Egress] == -1 {
+			state.filterIdx[hook.Egress], err = m.jumpMapAlloc.Get()
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func (m *bpfEndpointManager) queryClassifier(ifindex, handle, prio int, ingress bool) (int, error) {
+	return libbpf.QueryClassifier(ifindex, handle, prio, ingress)
+}
+
 func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState, error) {
 	startTime := time.Now()
 
-	var state bpfInterfaceState
+	var (
+		state      bpfInterfaceState
+		endpointID *proto.WorkloadEndpointID
+		ifaceUp    bool
+		ifindex    int
+	)
 
 	// Other threads might be filling in jump map FDs in the map so take the lock.
 	m.ifacesLock.Lock()
-	var endpointID *proto.WorkloadEndpointID
-	var ifaceUp bool
 	m.withIface(ifaceName, func(iface *bpfInterface) (forceDirty bool) {
 		ifaceUp = iface.info.ifaceIsUp()
+		ifindex = iface.info.ifIndex
 		endpointID = iface.info.endpointID
 		state = iface.dpState
 		return false
@@ -1560,36 +1675,8 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 		return state, nil
 	}
 
-	var err error
-
-	if state.policyIdx[hook.Ingress] == -1 {
-		state.policyIdx[hook.Ingress], err = m.jumpMapAlloc.Get()
-		if err != nil {
-			return state, err
-		}
-	}
-
-	if state.policyIdx[hook.Egress] == -1 {
-		state.policyIdx[hook.Egress], err = m.jumpMapAlloc.Get()
-		if err != nil {
-			return state, err
-		}
-	}
-
-	if m.bpfLogLevel == "debug" {
-		if state.filterIdx[hook.Ingress] == -1 {
-			state.filterIdx[hook.Ingress], err = m.jumpMapAlloc.Get()
-			if err != nil {
-				return state, err
-			}
-		}
-
-		if state.filterIdx[hook.Egress] == -1 {
-			state.filterIdx[hook.Egress], err = m.jumpMapAlloc.Get()
-			if err != nil {
-				return state, err
-			}
-		}
+	if err := m.wepStateFillJumps(&state); err != nil {
+		return state, err
 	}
 
 	// Otherwise, the interface appears to be present but we may or may not have an endpoint from the
@@ -1597,7 +1684,7 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 	// get the jump map ready to insert the policy if the endpoint shows up.
 
 	// Attach the qdisc first; it is shared between the directions.
-	err = m.dp.ensureQdisc(ifaceName)
+	existed, err := m.dp.ensureQdisc(ifaceName)
 	if err != nil {
 		if isLinkNotFoundError(err) {
 			// Interface is gone, nothing to do.
@@ -1607,10 +1694,19 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 		}
 		return state, err
 	}
+	if !existed {
+		// Cannot be ready if the qdisc is not there so no program can be
+		// attached. Do the full attach!
+		state.readiness = ifaceNotReady
+	}
 
-	var ingressErr, egressErr error
-	var wg sync.WaitGroup
-	var wep *proto.WorkloadEndpoint
+	var (
+		ingressErr, egressErr     error
+		ingressQdisc, egressQdisc qDiscInfo
+		wg                        sync.WaitGroup
+		wep                       *proto.WorkloadEndpoint
+	)
+
 	if endpointID != nil {
 		wep = m.allWEPs[*endpointID]
 	}
@@ -1618,12 +1714,24 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		ingressErr = m.attachWorkloadProgram(ifaceName,
+		readiness := state.readiness
+		if readiness == ifaceIsReady {
+			if _, err := m.dp.queryClassifier(ifindex, state.qdisc.handle, state.qdisc.prio, true); err != nil {
+				readiness = ifaceNotReady
+			}
+		}
+		ingressQdisc, ingressErr = m.wepApplyPolicyToDirection(readiness, ifaceName,
 			state.policyIdx[hook.Ingress], state.filterIdx[hook.Ingress], wep, PolDirnIngress)
 	}()
 	go func() {
 		defer wg.Done()
-		egressErr = m.attachWorkloadProgram(ifaceName,
+		readiness := state.readiness
+		if readiness == ifaceIsReady {
+			if _, err := m.dp.queryClassifier(ifindex, state.qdisc.handle, state.qdisc.prio, false); err != nil {
+				readiness = ifaceNotReady
+			}
+		}
+		egressQdisc, egressErr = m.wepApplyPolicyToDirection(readiness, ifaceName,
 			state.policyIdx[hook.Egress], state.filterIdx[hook.Egress], wep, PolDirnEgress)
 	}()
 	wg.Wait()
@@ -1635,11 +1743,17 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 		return state, egressErr
 	}
 
+	if egressQdisc != ingressQdisc {
+		return state, fmt.Errorf("ingress qdisc info (%v) does not equal egress qdist info (%v)",
+			ingressQdisc, egressQdisc)
+	}
+
 	applyTime := time.Since(startTime)
 	log.WithFields(log.Fields{"timeTaken": applyTime, "ifaceName": ifaceName}).
 		Info("Finished applying BPF programs for workload")
 
-	state.isReady = true
+	state.qdisc = ingressQdisc
+	state.readiness = ifaceIsReady
 
 	return state, nil
 }
@@ -1670,13 +1784,8 @@ func isLinkNotFoundError(err error) bool {
 
 var calicoRouterIP = net.IPv4(169, 254, 1, 1).To4()
 
-func (m *bpfEndpointManager) attachWorkloadProgram(ifaceName string, policyIdx, filterIdx int,
-	endpoint *proto.WorkloadEndpoint, polDirection PolDirection) error {
-
-	if m.hostIP == nil {
-		// Do not bother and wait
-		return fmt.Errorf("unknown host IP")
-	}
+func (m *bpfEndpointManager) wepTCAttachPoint(ifaceName string, policyIdx, filterIdx int,
+	polDirection PolDirection) *tc.AttachPoint {
 
 	ap := m.calculateTCAttachPoint(polDirection, ifaceName)
 	ap.HostIP = m.hostIP
@@ -1688,9 +1797,44 @@ func (m *bpfEndpointManager) attachWorkloadProgram(ifaceName string, policyIdx, 
 	ap.PolicyIdx4 = policyIdx
 	ap.LogFilterIdx = filterIdx
 
-	err := m.dp.ensureProgramAttached(ap)
+	return ap
+}
+
+func (m *bpfEndpointManager) wepApplyPolicyToDirection(readiness ifaceReadiness, ifaceName string, policyIdx,
+	filterIdx int, endpoint *proto.WorkloadEndpoint, polDirection PolDirection) (qDiscInfo, error) {
+
+	var qdisc qDiscInfo
+
+	if m.hostIP == nil {
+		// Do not bother and wait
+		return qdisc, fmt.Errorf("unknown host IP")
+	}
+
+	ap := m.wepTCAttachPoint(ifaceName, policyIdx, filterIdx, polDirection)
+
+	log.WithField("iface", ifaceName).Debugf("readiness: %d", readiness)
+	if readiness != ifaceIsReady {
+		res, err := m.wepAttachProgram(ap)
+		if err != nil {
+			return qdisc, fmt.Errorf("attaching program to wep: %w", err)
+		}
+		qdisc.valid = true
+		qdisc.prio = res.(tc.AttachResult).Prio()
+		qdisc.handle = res.(tc.AttachResult).Handle()
+		ap.Log().Info("Attached programs to the WEP")
+	}
+
+	if err := m.wepApplyPolicy(ap, endpoint, polDirection); err != nil {
+		return qdisc, fmt.Errorf("applying policy to wep: %w", err)
+	}
+
+	return qdisc, nil
+}
+
+func (m *bpfEndpointManager) wepAttachProgram(ap *tc.AttachPoint) (bpf.AttachResult, error) {
+	res, err := m.dp.ensureProgramAttached(ap)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if ap.LogLevel == "debug" {
@@ -1698,6 +1842,12 @@ func (m *bpfEndpointManager) attachWorkloadProgram(ifaceName string, policyIdx, 
 			ap.Log().WithError(err).Warn("Failed to update logging filter, logging may be incorrect.")
 		}
 	}
+
+	return res, nil
+}
+
+func (m *bpfEndpointManager) wepApplyPolicy(ap *tc.AttachPoint,
+	endpoint *proto.WorkloadEndpoint, polDirection PolDirection) error {
 
 	var profileIDs []string
 	var tier *proto.TierInfo
@@ -1707,7 +1857,7 @@ func (m *bpfEndpointManager) attachWorkloadProgram(ifaceName string, policyIdx, 
 			tier = endpoint.Tiers[0]
 		}
 	} else {
-		log.WithField("name", ifaceName).Debug(
+		log.WithField("name", ap.IfaceName()).Debug(
 			"Workload interface with no endpoint in datastore, installing default-drop program.")
 	}
 
@@ -1780,7 +1930,7 @@ func (m *bpfEndpointManager) attachDataIfaceProgram(ifaceName string, ep *proto.
 	ap.PolicyIdx4 = policyIdx
 	ap.LogFilterIdx = filterIdx
 
-	if err := m.dp.ensureProgramAttached(ap); err != nil {
+	if _, err := m.dp.ensureProgramAttached(ap); err != nil {
 		return err
 	}
 
@@ -1816,7 +1966,7 @@ func (m *bpfEndpointManager) attachXDPProgram(ifaceName string, ep *proto.HostEn
 	}
 
 	if ep != nil && len(ep.UntrackedTiers) == 1 {
-		err := m.dp.ensureProgramAttached(ap)
+		_, err := m.dp.ensureProgramAttached(ap)
 		if err != nil {
 			return err
 		}
@@ -1828,7 +1978,10 @@ func (m *bpfEndpointManager) attachXDPProgram(ifaceName string, ep *proto.HostEn
 			ForXDP:           true,
 		}
 		ap.Log().Debugf("Rules: %v", rules)
-		return m.updatePolicyProgramFn(rules, "xdp", ap)
+		err = m.updatePolicyProgramFn(rules, "xdp", ap)
+		ap.Log().WithError(err).Debugf("Applied untracked policy hep=%v", ep.Name)
+
+		return err
 	} else {
 		return m.dp.ensureNoProgram(ap)
 	}
@@ -2100,7 +2253,7 @@ func (m *bpfEndpointManager) addPolicyToEPMappings(polNames []string, id interfa
 			Name: pol,
 		}
 		if m.policiesToWorkloads[polID] == nil {
-			m.policiesToWorkloads[polID] = set.NewBoxed[any]()
+			m.policiesToWorkloads[polID] = set.New[any]()
 		}
 		m.policiesToWorkloads[polID].Add(id)
 	}
@@ -2111,7 +2264,7 @@ func (m *bpfEndpointManager) addProfileToEPMappings(profileIds []string, id inte
 		profID := proto.ProfileID{Name: profName}
 		profSet := m.profilesToWorkloads[profID]
 		if profSet == nil {
-			profSet = set.NewBoxed[any]()
+			profSet = set.New[any]()
 			m.profilesToWorkloads[profID] = profSet
 		}
 		profSet.Add(id)
@@ -2319,10 +2472,6 @@ func (m *bpfEndpointManager) ensureStarted() {
 	if err != nil {
 		log.WithError(err).Warn("Failed to list previously attached programs. We may not clean up some.")
 	}
-
-	if err := m.ifStateMap.LoadCacheFromDataplane(); err != nil {
-		log.WithError(err).Fatal("Cannot load interface state map - essential for consistent operation.")
-	}
 }
 
 func (m *bpfEndpointManager) ensureBPFDevices() error {
@@ -2393,12 +2542,12 @@ func (m *bpfEndpointManager) ensureBPFDevices() error {
 		return fmt.Errorf("failed to configure %s parameters: %w", bpfOutDev, err)
 	}
 
-	err = m.ensureQdisc(bpfInDev)
+	_, err = m.ensureQdisc(bpfInDev)
 	if err != nil {
 		return fmt.Errorf("failed to set qdisc on %s: %w", bpfOutDev, err)
 	}
 
-	err = m.ensureQdisc("lo")
+	_, err = m.ensureQdisc("lo")
 	if err != nil {
 		log.WithError(err).Fatalf("Failed to set qdisc on lo.")
 	}
@@ -2416,7 +2565,7 @@ func (m *bpfEndpointManager) ensureBPFDevices() error {
 	return nil
 }
 
-func (m *bpfEndpointManager) ensureQdisc(iface string) error {
+func (m *bpfEndpointManager) ensureQdisc(iface string) (bool, error) {
 	return tc.EnsureQdisc(iface)
 }
 
@@ -2442,7 +2591,7 @@ func (m *bpfEndpointManager) loadTCObj(at hook.AttachType) (hook.Layout, error) 
 }
 
 // Ensure TC/XDP program is attached to the specified interface.
-func (m *bpfEndpointManager) ensureProgramAttached(ap attachPoint) error {
+func (m *bpfEndpointManager) ensureProgramAttached(ap attachPoint) (bpf.AttachResult, error) {
 	var err error
 
 	if aptc, ok := ap.(*tc.AttachPoint); ok {
@@ -2457,27 +2606,27 @@ func (m *bpfEndpointManager) ensureProgramAttached(ap attachPoint) error {
 
 		at.Family = 4
 		if aptc.HookLayout4, err = m.loadTCObj(at); err != nil {
-			return fmt.Errorf("loading generic v4 tc hook program: %w", err)
+			return nil, fmt.Errorf("loading generic v4 tc hook program: %w", err)
 		}
 
 		// Load deafault policy before the real policy is created and loaded.
 		switch at.DefaultPolicy() {
 		case hook.DefPolicyAllow:
 			err = maps.UpdateMapEntry(m.bpfmaps.JumpMap.MapFD(),
-				jump.Key(ap.PolicyIdx(4)), jump.Value(m.policyTcAllowFD))
+				jump.Key(ap.PolicyIdx(4)), jump.Value(m.policyTcAllowFD.FD()))
 		case hook.DefPolicyDeny:
 			err = maps.UpdateMapEntry(m.bpfmaps.JumpMap.MapFD(),
-				jump.Key(ap.PolicyIdx(4)), jump.Value(m.policyTcDenyFD))
+				jump.Key(ap.PolicyIdx(4)), jump.Value(m.policyTcDenyFD.FD()))
 		}
 
 		if err != nil {
-			return fmt.Errorf("failed to set default policy: %w", err)
+			return nil, fmt.Errorf("failed to set default policy: %w", err)
 		}
 
 		if aptc.IPv6Enabled {
 			at.Family = 6
 			if aptc.HookLayout6, err = m.loadTCObj(at); err != nil {
-				return fmt.Errorf("loading generic v6 tc hook program: %w", err)
+				return nil, fmt.Errorf("loading generic v6 tc hook program: %w", err)
 			}
 		}
 
@@ -2489,15 +2638,13 @@ func (m *bpfEndpointManager) ensureProgramAttached(ap attachPoint) error {
 
 		pm := m.bpfmaps.XDPProgramsMap.(*hook.ProgramsMap)
 		if apxdp.HookLayout, err = pm.LoadObj(at); err != nil {
-			return fmt.Errorf("loading generic xdp hook program: %w", err)
+			return nil, fmt.Errorf("loading generic xdp hook program: %w", err)
 		}
 	} else {
-		return fmt.Errorf("unknown attach type")
+		return nil, fmt.Errorf("unknown attach type")
 	}
 
-	_, err = ap.AttachProgram()
-
-	return err
+	return ap.AttachProgram()
 }
 
 // Ensure that the specified attach point does not have our program.
@@ -2582,7 +2729,22 @@ func (m *bpfEndpointManager) updatePolicyProgram(rules polprog.Rules, polDir str
 
 	for _, ipFamily := range ipVersions {
 		progName := policyProgramName(ap.IfaceName(), polDir, ipFamily)
-		insns, err := m.doUpdatePolicyProgram(ap, progName, rules, ipFamily)
+
+		var opts []polprog.Option
+		if apj, ok := ap.(attachPointWithPolicyJumps); ok {
+			allow := apj.PolicyAllowJumpIdx(int(ipFamily))
+			if allow == -1 {
+				return fmt.Errorf("no allow jump index")
+			}
+
+			deny := apj.PolicyDenyJumpIdx(int(ipFamily))
+			if deny == -1 {
+				return fmt.Errorf("no deny jump index")
+			}
+			opts = append(opts, polprog.WithAllowDenyJumps(allow, deny))
+		}
+		insns, err := m.doUpdatePolicyProgram(ap.HookName(), progName,
+			ap.PolicyIdx(int(ipFamily)), rules, ipFamily, opts...)
 		perr := m.writePolicyDebugInfo(insns, ap.IfaceName(), ipFamily, polDir, ap.HookName(), err)
 		if perr != nil {
 			log.WithError(perr).Warn("error writing policy debug information")
@@ -2594,17 +2756,17 @@ func (m *bpfEndpointManager) updatePolicyProgram(rules polprog.Rules, polDir str
 	return nil
 }
 
-func (m *bpfEndpointManager) loadTCLogFilter(ap *tc.AttachPoint) (bpf.ProgFD, int, error) {
+func (m *bpfEndpointManager) loadTCLogFilter(ap *tc.AttachPoint) (fileDescriptor, int, error) {
 	logFilter, err := filter.New(ap.Type, 64, ap.LogFilter, m.bpfmaps.ProgramsMap.MapFD())
 	if err != nil {
-		return 0, 0, err
+		return nil, 0, err
 	}
 
 	fd, err := bpf.LoadBPFProgramFromInsns(logFilter, "calico_log_filter",
 		"Apache-2.0", uint32(unix.BPF_PROG_TYPE_SCHED_CLS))
 
 	if err != nil {
-		return 0, 0, fmt.Errorf("failed to load BPF log filter program: %w", err)
+		return nil, 0, fmt.Errorf("failed to load BPF log filter program: %w", err)
 	}
 
 	return fd, ap.LogFilterIdx, nil
@@ -2618,8 +2780,8 @@ func (m *bpfEndpointManager) updateLogFilter(ap attachPoint) error {
 			return err
 		}
 		defer fd.Close()
-		if err := m.bpfmaps.JumpMap.Update(jump.Key(idx), jump.Value(fd)); err != nil {
-			return fmt.Errorf("failed to update %s policy jump map [%d]=%d: %w", ap.HookName(), idx, fd, err)
+		if err := m.bpfmaps.JumpMap.Update(jump.Key(idx), jump.Value(fd.FD())); err != nil {
+			return fmt.Errorf("failed to update %s policy jump map [%d]=%d: %w", ap.HookName(), idx, fd.FD(), err)
 		}
 
 		ap.Log().Debugf("Loaded filter at %d", idx)
@@ -2641,7 +2803,7 @@ func policyProgramName(iface, polDir string, ipFamily proto.IPVersion) string {
 
 func (m *bpfEndpointManager) loadPolicyProgram(progName string,
 	ipFamily proto.IPVersion, rules polprog.Rules, progsMap maps.Map, opts ...polprog.Option) (
-	bpf.ProgFD, asm.Insns, error) {
+	fileDescriptor, asm.Insns, error) {
 
 	pg := polprog.NewBuilder(m.ipSetIDAlloc, m.bpfmaps.IpsetsMap.MapFD(),
 		m.bpfmaps.StateMap.MapFD(), progsMap.MapFD(), opts...)
@@ -2650,7 +2812,7 @@ func (m *bpfEndpointManager) loadPolicyProgram(progName string,
 	}
 	insns, err := pg.Instructions(rules)
 	if err != nil {
-		return 0, nil, fmt.Errorf("failed to generate policy bytecode v%v: %w", ipFamily, err)
+		return nil, nil, fmt.Errorf("failed to generate policy bytecode v%v: %w", ipFamily, err)
 	}
 	progType := unix.BPF_PROG_TYPE_SCHED_CLS
 	if rules.ForXDP {
@@ -2658,37 +2820,22 @@ func (m *bpfEndpointManager) loadPolicyProgram(progName string,
 	}
 	progFD, err := bpf.LoadBPFProgramFromInsns(insns, progName, "Apache-2.0", uint32(progType))
 	if err != nil {
-		return 0, nil, fmt.Errorf("failed to load BPF policy program v%v: %w", ipFamily, err)
+		return nil, nil, fmt.Errorf("failed to load BPF policy program v%v: %w", ipFamily, err)
 	}
 
 	return progFD, insns, nil
 }
 
-func (m *bpfEndpointManager) doUpdatePolicyProgram(ap attachPoint, progName string, rules polprog.Rules,
-	ipFamily proto.IPVersion) (asm.Insns, error) {
+func (m *bpfEndpointManager) doUpdatePolicyProgram(hk hook.Hook, progName string, jmp int, rules polprog.Rules,
+	ipFamily proto.IPVersion, opts ...polprog.Option) (asm.Insns, error) {
 
-	opts := []polprog.Option{}
 	if m.bpfPolicyDebugEnabled {
 		opts = append(opts, polprog.WithPolicyDebugEnabled())
 	}
 
 	progsMap := m.bpfmaps.ProgramsMap
-	if ap.HookName() == hook.XDP {
+	if hk == hook.XDP {
 		progsMap = m.bpfmaps.XDPProgramsMap
-	}
-
-	if apj, ok := ap.(attachPointWithPolicyJumps); ok {
-		allow := apj.PolicyAllowJumpIdx(int(ipFamily))
-		if allow == -1 {
-			return nil, fmt.Errorf("no allow jump index")
-		}
-
-		deny := apj.PolicyDenyJumpIdx(int(ipFamily))
-		if deny == -1 {
-			return nil, fmt.Errorf("no deny jump index")
-		}
-
-		opts = append(opts, polprog.WithAllowDenyJumps(allow, deny))
 	}
 
 	progFD, insns, err := m.loadPolicyProgramFn(progName, ipFamily, rules, progsMap, opts...)
@@ -2704,25 +2851,16 @@ func (m *bpfEndpointManager) doUpdatePolicyProgram(ap attachPoint, progName stri
 		}
 	}()
 
-	if err := m.jumpMapUpdate(ap, int(ipFamily), progFD); err != nil {
-		return nil, err
-	}
-
-	return insns, nil
-}
-
-func (m *bpfEndpointManager) jumpMapUpdate(ap attachPoint, family int, fd bpf.ProgFD) error {
 	jumpMap := m.bpfmaps.JumpMap
-	if ap.HookName() == hook.XDP {
+	if hk == hook.XDP {
 		jumpMap = m.bpfmaps.XDPJumpMap
 	}
 
-	jumpIdx := ap.PolicyIdx(int(family))
-	if err := jumpMap.Update(jump.Key(jumpIdx), jump.Value(fd)); err != nil {
-		return fmt.Errorf("failed to update %s policy jump map [%d]=%d: %w", ap.HookName(), jumpIdx, fd, err)
+	if err := jumpMap.Update(jump.Key(jmp), jump.Value(progFD.FD())); err != nil {
+		return nil, fmt.Errorf("failed to update %s policy jump map [%d]=%d: %w", hk, jmp, progFD, err)
 	}
 
-	return nil
+	return insns, nil
 }
 
 func (m *bpfEndpointManager) jumpMapDelete(h hook.Hook, idx int) error {

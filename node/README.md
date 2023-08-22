@@ -25,7 +25,7 @@ The code in this repository can be built and tested using the Makefile.
 
 For more information, see `make help`.
 
-[contrib]: https://github.com/projectcalico/calico/blob/master/CONTRIBUTING_CODE.md
+[contrib]: https://github.com/projectcalico/calico/blob/master/CONTRIBUTING.md
 
 ## How can I run tests?
 

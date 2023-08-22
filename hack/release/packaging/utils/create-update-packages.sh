@@ -33,16 +33,9 @@ if "${PUBLISH:-false}"; then
     pub_steps="pub_debs pub_rpms"
 fi
 
-if [ "${SEMAPHORE_GIT_PR_NUMBER}${SEMAPHORE_GIT_BRANCH}" = master -o -z "${SEMAPHORE_GIT_BRANCH}" ]; then
-    # Normally - if not Semaphore, or if this is Semaphore running on
-    # the master branch and not for a PR - do all the steps including
-    # publication.
-    : ${STEPS:=bld_images net_cal felix etcd3gw dnsmasq nettle ${pub_steps}}
-else
-    # For Semaphore building a PR or a branch other than master, build
-    # packages but do not publish them.
-    : ${STEPS:=bld_images net_cal felix etcd3gw dnsmasq nettle}
-fi
+# We used to have some Semaphore environment-dependent logic here, but we now
+# place that in the Semaphore YAML (which is a more appropriate place for it).
+: ${STEPS:=bld_images net_cal felix etcd3gw dnsmasq nettle ${pub_steps}}
 
 function check_bin {
     which $1 > /dev/null
@@ -69,17 +62,14 @@ function require_version {
     # Determine REPO_NAME.
     if [ $VERSION = master ]; then
 	: ${REPO_NAME:=master}
-	: ${CALICO_CHECKOUT:=master}
     elif [[ $VERSION =~ ^release-v ]]; then
 	: ${REPO_NAME:=testing}
-	: ${CALICO_CHECKOUT:=${VERSION}}
     elif [[ $VERSION =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)(-python2)?$ ]]; then
 	MAJOR=${BASH_REMATCH[1]}
 	MINOR=${BASH_REMATCH[2]}
 	PATCH=${BASH_REMATCH[3]}
 	PY2SUFFIX=${BASH_REMATCH[4]}
 	: ${REPO_NAME:=calico-${MAJOR}.${MINOR}${PY2SUFFIX}}
-	: ${CALICO_CHECKOUT:=v${MAJOR}.${MINOR}.${PATCH}${PY2SUFFIX}}
     else
 	echo "ERROR: Unhandled VERSION \"${VERSION}\""
 	exit 1
@@ -128,11 +118,11 @@ function precheck_bld_images {
 }
 
 function precheck_net_cal {
-    test -n "${CALICO_CHECKOUT}" || require_version
+    require_version
 }
 
 function precheck_felix {
-    test -n "${CALICO_CHECKOUT}" || require_version
+    require_version
 }
 
 function precheck_etcd3gw {

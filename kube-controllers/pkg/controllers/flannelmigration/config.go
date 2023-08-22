@@ -26,9 +26,7 @@ import (
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
-var (
-	FlannelEnvFile = "/host/run/flannel/subnet.env"
-)
+var FlannelEnvFile = "/host/run/flannel/subnet.env"
 
 // Flannel migration controller configurations
 type Config struct {
@@ -42,10 +40,13 @@ type Config struct {
 	// This config item is auto detected from /run/flannel/subnet.env.
 	FlannelIpv6Network string `default:"" split_words:"true"`
 
-	// Name of Flannel daemonset in kube-system namespace.
+	// Name of Flannel daemonset in flannel namespace.
 	// This could be a Canal daemonset where the controller will autodetect.
 	// Default is kube-flannel-ds
 	FlannelDaemonsetName string `default:"kube-flannel-ds" split_words:"true"`
+
+	// Namespace that contains the flannel DaemonSet.
+	FlannelDaemonsetNamespace string `default:"kube-flannel" split_words:"true"`
 
 	// FlannelMTU is the mtu used by flannel vxlan tunnel interface.
 	// This config item is auto detected from /run/flannel/subnet.env.
@@ -76,8 +77,11 @@ type Config struct {
 	// FlannelPort is the port number used by Flannel vxlan network.
 	FlannelPort int `default:"8472" split_words:"true"`
 
-	// Name of Calico daemonset in kube-system namespace. Default is "calico-node".
+	// Name of Calico daemonset in calico namespace. Default is "calico-node".
 	CalicoDaemonsetName string `default:"calico-node" split_words:"true"`
+
+	// Calico namespace.
+	CalicoDaemonsetNamespace string `default:"kube-system" split_words:"true"`
 
 	// CNI config directory. The full path of the directory in which to search for CNI config files. Default: /etc/cni/net.d
 	CniConfigDir string `default:"/etc/cni/net.d" split_words:"true"`
