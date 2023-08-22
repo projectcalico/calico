@@ -48,12 +48,14 @@ LD := llc-12
 
 UT_C_FILES:=$(shell find ut -name '*.c')
 UT_OBJS:=$(UT_C_FILES:.c=.o) $(shell ./list-ut-objs)
+UT_OBJS+=ut/ip_parse_test_v6.o
 
 OBJS:=$(shell ./list-objs)
 OBJS+=bin/tc_preamble.o
+OBJS+=bin/tc_preamble_v6.o
 OBJS+=bin/xdp_preamble.o
 OBJS+=bin/policy_default.o
-C_FILES:=tc_preamble.c tc.c tc6.c connect_balancer.c connect_balancer_v6.c xdp_preamble.c xdp.c policy_default.c
+C_FILES:=tc_preamble.c tc.c connect_balancer.c connect_balancer_v6.c xdp_preamble.c xdp.c policy_default.c
 
 all: $(OBJS)
 ut-objs: $(UT_OBJS)
@@ -72,11 +74,14 @@ UT_CFLAGS=\
 	-I .
 
 # Mini-UT programs that test one or two functions.  These are each in their own files.
-ut/%.ll: ut/%.c ut/ut.h tc.c tc.d
+ut/%.ll: ut/%.c ut/ut.h
 	$(CC) $(UT_CFLAGS) $(CFLAGS) -c $< -o $@
 
 tc_preamble.ll: tc_preamble.c tc_preamble.d
 	$(CC) $(CFLAGS) -c $< -o $@
+
+tc_preamble_v6.ll: tc_preamble.c tc_preamble.d
+	$(CC) $(CFLAGS) -DIPVER6 -c $< -o $@
 
 xdp_preamble.ll: xdp_preamble.c xdp_preamble.d
 	$(CC) $(CFLAGS) -DCALI_COMPILE_FLAGS=64 -c $< -o $@
@@ -90,14 +95,14 @@ to%.ll: tc.c tc.d calculate-flags
 	$(COMPILE)
 from%.ll: tc.c tc.d calculate-flags
 	$(COMPILE)
-#to%_v6.ll: tc6.c tc.d calculate-flags
-#	$(COMPILE)
-#from%_v6.ll: tc6.c tc.d calculate-flags
-#	$(COMPILE)
+to%_v6.ll: tc.c tc.d calculate-flags
+	$(COMPILE)
+from%_v6.ll: tc.c tc.d calculate-flags
+	$(COMPILE)
 test%.ll: tc.c tc.d calculate-flags
 	$(COMPILE)
-#test%_v6.ll: tc6.c tc.d calculate-flags
-#	$(COMPILE)
+test%_v6.ll: tc.c tc.d calculate-flags
+	$(COMPILE)
 xdp%.ll: xdp.c xdp.d calculate-flags
 	$(COMPILE)
 test_xdp%.ll: xdp.c xdp.d calculate-flags
@@ -105,6 +110,8 @@ test_xdp%.ll: xdp.c xdp.d calculate-flags
 
 LINK=$(LD) -march=bpf -filetype=obj -o $@ $<
 bin/tc_preamble.o: tc_preamble.ll | bin
+	$(LINK)
+bin/tc_preamble_v6.o: tc_preamble_v6.ll | bin
 	$(LINK)
 bin/xdp_preamble.o: xdp_preamble.ll | bin
 	$(LINK)
@@ -127,6 +134,10 @@ bin/connect_time_%v4_co-re.o: connect_time_%v4.ll | bin
 bin/connect_time_%v6_co-re.o: connect_time_%v6.ll | bin
 	$(LINK)
 ut/%.o: ut/%.ll
+	$(LINK)
+ut/ip_parse_test_v6.ll: ut/ip_parse_test.c
+	$(CC) $(UT_CFLAGS) $(CFLAGS) -DIPVER6 -c $< -o $@
+ut/ip_parse_test_v6.o: ut/ip_parse_test_v6.ll
 	$(LINK)
 
 bin:

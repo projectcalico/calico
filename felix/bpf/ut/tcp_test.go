@@ -44,7 +44,7 @@ func TestTCPRecycleClosedConn(t *testing.T) {
 		DataOffset: 5,
 	}
 
-	_, _, _, _, synPkt, err := testPacket(nil, nil, tcpSyn, nil)
+	_, _, _, _, synPkt, err := testPacketV4(nil, nil, tcpSyn, nil)
 	Expect(err).NotTo(HaveOccurred())
 
 	// Insert a reverse route for the source workload.
@@ -130,7 +130,7 @@ func TestTCPRecycleClosedConnNAT(t *testing.T) {
 		DataOffset: 5,
 	}
 
-	_, ipv4, l4, _, synPkt, err := testPacket(nil, nil, tcpSyn, nil)
+	_, ipv4, l4, _, synPkt, err := testPacketV4(nil, nil, tcpSyn, nil)
 	Expect(err).NotTo(HaveOccurred())
 	tcp := l4.(*layers.TCP)
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2023 Tigera, Inc. All rights reserved.
+// Copyright (c) 2023 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,95 +27,52 @@ import (
 	"github.com/projectcalico/calico/felix/ip"
 )
 
-func init() {
-	SetMapSize(MapParameters.MaxEntries)
-}
+const KeyV6Size = 20
 
-func SetMapSize(size int) {
-	maps.SetSize(MapParameters.VersionedName(), size)
-	maps.SetSize(MapV6Parameters.VersionedName(), size)
-}
+type KeyV6 [KeyV6Size]byte
 
-// struct cali_rt_key {
-// __u32 mask;
-// __be32 addr; // NBO
-// };
-const KeySize = 8
-
-type Key [KeySize]byte
-
-func (k Key) Addr() ip.Addr {
-	var addr ip.V4Addr
-	copy(addr[:], k[4:8])
+func (k KeyV6) Addr() ip.Addr {
+	var addr ip.V6Addr
+	copy(addr[:], k[4:20])
 	return addr
 }
 
-func (k Key) Dest() ip.CIDR {
+func (k KeyV6) Dest() ip.CIDR {
 	addr := k.Addr()
 	return ip.CIDRFromAddrAndPrefix(addr, k.PrefixLen())
 }
 
-func (k Key) PrefixLen() int {
+func (k KeyV6) PrefixLen() int {
 	return int(binary.LittleEndian.Uint32(k[:4]))
 }
 
-func (k Key) AsBytes() []byte {
+func (k KeyV6) AsBytes() []byte {
 	return k[:]
 }
 
-type Flags uint32
+const ValueV6Size = 20
 
-const (
-	FlagInIPAMPool  Flags = 0x01
-	FlagNATOutgoing Flags = 0x02
-	FlagWorkload    Flags = 0x04
-	FlagLocal       Flags = 0x08
-	FlagHost        Flags = 0x10
-	FlagSameSubnet  Flags = 0x20
-	FlagTunneled    Flags = 0x40
-	FlagNoDSR       Flags = 0x80
+type ValueV6 [ValueV6Size]byte
 
-	FlagsUnknown            Flags = 0
-	FlagsRemoteWorkload           = FlagWorkload
-	FlagsRemoteHost               = FlagHost
-	FlagsLocalHost                = FlagLocal | FlagHost
-	FlagsLocalWorkload            = FlagLocal | FlagWorkload
-	FlagsRemoteTunneledHost       = FlagsRemoteHost | FlagTunneled
-	FlagsLocalTunneledHost        = FlagsLocalHost | FlagTunneled
-
-	_ = FlagsUnknown
-)
-
-//	struct cali_rt_value {
-//	  __u32 flags;
-//	  union {
-//	    __u32 next_hop;
-//	    __u32 ifIndex;
-//	  };
-//	};
-const ValueSize = 8
-
-type Value [ValueSize]byte
-
-func (v Value) Flags() Flags {
+func (v ValueV6) Flags() Flags {
 	return Flags(binary.LittleEndian.Uint32(v[:4]))
 }
 
-func (v Value) NextHop() ip.Addr {
-	var addr ip.V4Addr
-	copy(addr[:], v[4:8])
+func (v ValueV6) NextHop() ip.Addr {
+	var addr ip.V6Addr
+	copy(addr[:], v[4:20])
 	return addr
 }
 
-func (v Value) IfaceIndex() uint32 {
+func (v ValueV6) IfaceIndex() uint32 {
 	return binary.LittleEndian.Uint32(v[4:8])
 }
 
-func (v Value) AsBytes() []byte {
+func (v ValueV6) AsBytes() []byte {
 	return v[:]
 }
 
-func (v Value) String() string {
+func (v ValueV6) String() string {
 	var parts []string
 
 	typeFlags := v.Flags()
@@ -167,57 +124,57 @@ func (v Value) String() string {
 	return strings.Join(parts, " ")
 }
 
-func NewKey(cidr ip.V4CIDR) Key {
-	var k Key
+func NewKeyV6(cidr ip.V6CIDR) KeyV6 {
+	var k KeyV6
 
 	binary.LittleEndian.PutUint32(k[:4], uint32(cidr.Prefix()))
-	copy(k[4:8], cidr.Addr().AsNetIP().To4())
+	copy(k[4:20], cidr.Addr().AsNetIP().To16())
 
 	return k
 }
 
-func NewValue(flags Flags) Value {
-	var v Value
+func NewValueV6(flags Flags) ValueV6 {
+	var v ValueV6
 	binary.LittleEndian.PutUint32(v[:4], uint32(flags))
 	return v
 }
 
-func NewValueWithNextHop(flags Flags, nextHop ip.V4Addr) Value {
-	var v Value
+func NewValueV6WithNextHop(flags Flags, nextHop ip.V6Addr) ValueV6 {
+	var v ValueV6
 	binary.LittleEndian.PutUint32(v[:4], uint32(flags))
-	copy(v[4:8], nextHop.AsNetIP().To4())
+	copy(v[4:20], nextHop.AsNetIP().To16())
 	return v
 }
 
-func NewValueWithIfIndex(flags Flags, ifIndex int) Value {
-	var v Value
+func NewValueV6WithIfIndex(flags Flags, ifIndex int) ValueV6 {
+	var v ValueV6
 	binary.LittleEndian.PutUint32(v[:4], uint32(flags))
 	binary.LittleEndian.PutUint32(v[4:8], uint32(ifIndex))
 	return v
 }
 
-var MapParameters = maps.MapParameters{
+var MapV6Parameters = maps.MapParameters{
 	Type:       "lpm_trie",
-	KeySize:    KeySize,
-	ValueSize:  ValueSize,
+	KeySize:    KeyV6Size,
+	ValueSize:  ValueV6Size,
 	MaxEntries: 256 * 1024,
-	Name:       "cali_v4_routes",
+	Name:       "cali_v6_routes",
 	Flags:      unix.BPF_F_NO_PREALLOC,
 }
 
-func Map() maps.Map {
-	return maps.NewPinnedMap(MapParameters)
+func MapV6() maps.Map {
+	return maps.NewPinnedMap(MapV6Parameters)
 }
 
-type MapMem map[Key]Value
+type MapMemV6 map[KeyV6]ValueV6
 
 // LoadMap loads a routes.Map into memory
-func LoadMap(rtm maps.Map) (MapMem, error) {
-	m := make(MapMem)
+func LoadMapV6(rtm maps.Map) (MapMemV6, error) {
+	m := make(MapMemV6)
 
 	err := rtm.Iter(func(k, v []byte) maps.IteratorAction {
-		var key Key
-		var value Value
+		var key KeyV6
+		var value ValueV6
 		copy(key[:], k)
 		copy(value[:], v)
 
@@ -228,39 +185,39 @@ func LoadMap(rtm maps.Map) (MapMem, error) {
 	return m, err
 }
 
-type LPMv4 struct {
+type LPMv6 struct {
 	sync.RWMutex
 	t *ip.CIDRTrie
 }
 
-func NewLPMv4() *LPMv4 {
-	return &LPMv4{
+func NewLPMv6() *LPMv6 {
+	return &LPMv6{
 		t: ip.NewCIDRTrie(),
 	}
 }
 
-func (lpm *LPMv4) Update(k Key, v Value) error {
-	if cidrv4, ok := k.Dest().(ip.V4CIDR); ok {
-		lpm.t.Update(cidrv4, v)
+func (lpm *LPMv6) Update(k KeyV6, v ValueV6) error {
+	if cidrv6, ok := k.Dest().(ip.V6CIDR); ok {
+		lpm.t.Update(cidrv6, v)
 		return nil
 	}
 
 	return errors.Errorf("k.Dest() %+v type %T is not ip.V4CIDR", k.Dest(), k.Dest())
 }
 
-func (lpm *LPMv4) Delete(k Key) error {
-	if cidrv4, ok := k.Dest().(ip.V4CIDR); ok {
-		lpm.t.Delete(cidrv4)
+func (lpm *LPMv6) Delete(k KeyV6) error {
+	if cidrv6, ok := k.Dest().(ip.V6CIDR); ok {
+		lpm.t.Delete(cidrv6)
 		return nil
 	}
 
 	return errors.Errorf("k.Dest() %+v type %T is not ip.V4CIDR", k.Dest(), k.Dest())
 }
 
-func (lpm *LPMv4) Lookup(addr ip.V4Addr) (Value, bool) {
-	_, v := lpm.t.LPM(addr.AsCIDR().(ip.V4CIDR))
+func (lpm *LPMv6) Lookup(addr ip.V6Addr) (ValueV6, bool) {
+	_, v := lpm.t.LPM(addr.AsCIDR().(ip.V6CIDR))
 	if v == nil {
-		return Value{}, false
+		return ValueV6{}, false
 	}
-	return v.(Value), true
+	return v.(ValueV6), true
 }

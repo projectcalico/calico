@@ -29,7 +29,7 @@ func TestIpDecTTL(t *testing.T) {
 	runBpfUnitTest(t, "ip_dec_ttl.c", func(bpfrun bpfProgRunFn) {
 		ip36 := *ipv4Default
 		ip36.TTL = 36
-		_, _, _, _, pktBytes, err := testPacket(nil, &ip36, nil, nil)
+		_, _, _, _, pktBytes, err := testPacketV4(nil, &ip36, nil, nil)
 		Expect(err).NotTo(HaveOccurred())
 
 		res, err := bpfrun(pktBytes)
@@ -43,7 +43,7 @@ func TestIpDecTTL(t *testing.T) {
 
 		ip35 := *ipv4Default
 		ip35.TTL = 35
-		_, _, _, _, pktBytes, err = testPacket(nil, &ip35, nil, nil)
+		_, _, _, _, pktBytes, err = testPacketV4(nil, &ip35, nil, nil)
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(res.dataOut).To(Equal(pktBytes))

@@ -37,7 +37,7 @@ if [[ "${filename}" =~ test_.* ]]; then
   args+=("-DUNITTEST")
 fi
 
-if [[ "${filename}" =~ .*_v6.o ]]; then
+if [[ "${filename}" =~ .*_v6.ll ]]; then
   args+=("-DIPVER6")
 fi
 
