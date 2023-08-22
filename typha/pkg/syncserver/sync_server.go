@@ -101,6 +101,7 @@ const (
 	defaultBatchingAgeThreshold           = 100 * time.Millisecond
 	defaultPingInterval                   = 10 * time.Second
 	defaultWriteTimeout                   = 120 * time.Second
+	defaultHandshakeTimeout               = 10 * time.Second
 	defaultDropInterval                   = 1 * time.Second
 	defaultShutdownTimeout                = 300 * time.Second
 	defaultMaxConns                       = math.MaxInt32
@@ -140,6 +141,7 @@ type Config struct {
 	MinBatchingAgeThreshold        time.Duration
 	PingInterval                   time.Duration
 	PongTimeout                    time.Duration
+	HandshakeTimeout               time.Duration
 	WriteTimeout                   time.Duration
 	DropInterval                   time.Duration
 	ShutdownTimeout                time.Duration
@@ -216,6 +218,13 @@ func (c *Config) ApplyDefaults() {
 			"default": defaultTimeout,
 		}).Info("PongTimeout < PingInterval * 2; Defaulting PongTimeout.")
 		c.PongTimeout = defaultTimeout
+	}
+	if c.HandshakeTimeout <= 0 {
+		log.WithFields(log.Fields{
+			"value":   c.HandshakeTimeout,
+			"default": defaultHandshakeTimeout,
+		}).Info("Defaulting HandshakeTimeout.")
+		c.HandshakeTimeout = defaultHandshakeTimeout
 	}
 	if c.WriteTimeout <= 0 {
 		log.WithField("default", defaultWriteTimeout).Info("Defaulting write timeout.")
@@ -424,7 +433,11 @@ func (s *Server) serve(cxt context.Context) {
 			// Doing TLS, we must do the handshake...
 			tlsConn := conn.(*tls.Conn)
 			logCxt.Debug("TLS connection")
-			err = tlsConn.Handshake()
+			err = func() error {
+				handshakeCxt, handshakeCancel := context.WithTimeout(cxt, s.config.HandshakeTimeout)
+				defer handshakeCancel()
+				return tlsConn.HandshakeContext(handshakeCxt)
+			}()
 			if err != nil {
 				logCxt.WithError(err).Error("TLS handshake error")
 				err = conn.Close()
