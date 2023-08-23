@@ -234,7 +234,11 @@ endif
 DOCKER_BUILD=docker buildx build --pull \
 	     --build-arg QEMU_IMAGE=$(CALICO_BUILD) \
 	     --build-arg UBI_IMAGE=$(UBI_IMAGE) \
-	     --build-arg GIT_VERSION=$(GIT_VERSION) $(TARGET_PLATFORM)
+	     --build-arg GIT_VERSION=$(GIT_VERSION) $(TARGET_PLATFORM) \
+	     --label org.opencontainers.image.source="https://github.com/powerhome/calico" \
+	     --label org.opencontainers.image.version=$(GIT_VERSION) \
+	     --label org.opencontainers.image.revision=$(GIT_COMMIT) \
+	     --label org.opencontainers.image.licenses="Apache-2.0"
 
 DOCKER_RUN := mkdir -p ../.go-pkg-cache bin $(GOMOD_CACHE) && \
 	docker run --rm \
@@ -1149,4 +1153,3 @@ help:
 	@echo "BUILDARCH (host):	$(BUILDARCH)"
 	@echo "CALICO_BUILD:		$(CALICO_BUILD)"
 	@echo "-----------------------------------------------------------"
-
