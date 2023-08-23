@@ -40,8 +40,8 @@ var policyCmd = &cobra.Command{
 
 func init() {
 	policyCmd.AddCommand(policyDumpCmd)
+	policyDumpCmd.Flags().BoolP("verbose", "v", false, "verbose output")
 	rootCmd.AddCommand(policyCmd)
-
 }
 
 var policyDumpCmd = &cobra.Command{
@@ -83,13 +83,23 @@ var policyDumpCmd = &cobra.Command{
 }
 
 func parseArgs(args []string) (string, string, error) {
-	if len(args) != 2 {
-		return "", "", fmt.Errorf("Insufficient arguments")
+	lenArgs := len(args)
+	if lenArgs != 2 {
+		return "", "", fmt.Errorf("Invalid number of arguments: %d", lenArgs)
 	}
-	if hook.StringToHook(args[1]) == hook.Bad && args[1] != "all" {
-		return "", "", fmt.Errorf("Invalid argument")
+	hookArg := args[1]
+	if hook.StringToHook(hookArg) == hook.Bad && hookArg != "all" {
+		return "", "", fmt.Errorf("Invalid argument: '%s'", hookArg)
 	}
 	return args[0], args[1], nil
+}
+
+func getRuleIdentfier(comment string) string {
+	lastColon := strings.LastIndex(comment, ":")
+	rule_id := comment[lastColon+1:]
+	rule_id = strings.Replace(rule_id, "\"", "", -1)
+	rule_id = strings.TrimSpace(rule_id)
+	return rule_id
 }
 
 func printInsn(cmd *cobra.Command, insn asm.Insn) {
@@ -115,6 +125,9 @@ func getRuleMatchID(comment string) uint64 {
 }
 
 func dumpPolicyInfo(cmd *cobra.Command, iface string, h hook.Hook, m counters.PolicyMapMem) error {
+	verboseFlag := cmd.Flag("verbose").Value.String()
+	verboseFlagSet, _ := strconv.ParseBool(verboseFlag)
+
 	var policyDbg bpf.PolicyDebugInfo
 	filename := bpf.PolicyDebugJSONFileName(iface, h.String(), proto.IPVersion_IPV4)
 	_, err := os.Stat(filename)
@@ -138,19 +151,34 @@ func dumpPolicyInfo(cmd *cobra.Command, iface string, h hook.Hook, m counters.Po
 	cmd.Printf("Hook: %s\n", policyDbg.Hook)
 	cmd.Printf("Error: %s\n", policyDbg.Error)
 	cmd.Println("Policy Info:")
+
+	var rule_id string
 	for _, insn := range policyDbg.PolicyInfo {
 		for _, comment := range insn.Comments {
+			if strings.Contains(comment, "rule_id") {
+				rule_id = getRuleIdentfier(comment)
+			}
 			if strings.Contains(comment, "Rule MatchID") {
 				matchId := getRuleMatchID(comment)
-				cmd.Printf("// count = %d\n", m[matchId])
+				if verboseFlagSet {
+					cmd.Printf("// count = %d\n", m[matchId])
+				} else {
+					cmd.Printf("RuleID['%s'] => count = %d\n", rule_id, m[matchId])
+				}
 			} else {
-				cmd.Printf("// %s\n", comment)
+				if verboseFlagSet {
+					cmd.Printf("// %s\n", comment)
+				}
 			}
 		}
 		for _, label := range insn.Labels {
-			cmd.Printf("%s:\n", label)
+			if verboseFlagSet {
+				cmd.Printf("%s:\n", label)
+			}
 		}
-		printInsn(cmd, insn)
+		if verboseFlagSet {
+			printInsn(cmd, insn)
+		}
 	}
 	return nil
 }
