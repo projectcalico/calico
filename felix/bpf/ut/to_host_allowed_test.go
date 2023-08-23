@@ -83,7 +83,7 @@ func TestToHostAllowedCTFull(t *testing.T) {
 		DataOffset: 5,
 	}
 
-	_, ipv4, _, _, synPkt, err := testPacket(nil, nil, tcpSyn, nil)
+	_, ipv4, _, _, synPkt, err := testPacketV4(nil, nil, tcpSyn, nil)
 	Expect(err).NotTo(HaveOccurred())
 
 	destCIDR := net.IPNet{
@@ -178,7 +178,7 @@ func TestToHostAllowedCTFull(t *testing.T) {
 	ipv4Ret := *ipv4
 	ipv4Ret.SrcIP, ipv4Ret.DstIP = ipv4Ret.DstIP, ipv4Ret.SrcIP
 
-	_, _, _, _, synAckPkt, err := testPacket(nil, &ipv4Ret, tcpSynAck, nil)
+	_, _, _, _, synAckPkt, err := testPacketV4(nil, &ipv4Ret, tcpSynAck, nil)
 	Expect(err).NotTo(HaveOccurred())
 
 	skbMark = tcdefs.MarkSeen
@@ -196,7 +196,7 @@ func TestToHostAllowedCTFull(t *testing.T) {
 		DataOffset: 5,
 	}
 
-	_, _, _, _, ackPkt, err := testPacket(nil, nil, tcpAck, nil)
+	_, _, _, _, ackPkt, err := testPacketV4(nil, nil, tcpAck, nil)
 	Expect(err).NotTo(HaveOccurred())
 
 	skbMark = 0

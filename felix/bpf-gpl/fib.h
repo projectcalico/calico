@@ -104,14 +104,14 @@ static CALI_BPF_INLINE int forward_or_drop(struct cali_tc_ctx *ctx)
 		struct arp_value *arpv;
 
 		struct arp_key arpk = {
-			.ip = iface != NATIN_IFACE ? state->ip_dst : 0 /* 0.0.0.0 */,
+			.ip = iface != NATIN_IFACE ? state->ip_dst : VOID_IP,
 			.ifindex = iface,
 		};
 
-		arpv = cali_v4_arp_lookup_elem(&arpk);
+		arpv = cali_arp_lookup_elem(&arpk);
 		if (!arpv) {
 			CALI_DEBUG("ARP lookup failed for %x dev %d\n",
-					bpf_ntohl(state->ip_dst), iface);
+					debug_ip(state->ip_dst), iface);
 			goto skip_redir_ifindex;
 		}
 
@@ -261,15 +261,16 @@ cancel_fib:
 			__u32 iface = NATIN_IFACE;
 
 			struct arp_key arpk = {
-				.ip = 0 /* 0.0.0.0 */,
 				.ifindex = iface,
 			};
 
-			struct arp_value *arpv = cali_v4_arp_lookup_elem(&arpk);
+			ip_set_void(arpk.ip);
+
+			struct arp_value *arpv = cali_arp_lookup_elem(&arpk);
 			if (!arpv) {
 				ctx->fwd.reason = CALI_REASON_NATIFACE;
 				CALI_DEBUG("ARP lookup failed for %x dev %d\n",
-						bpf_ntohl(state->ip_dst), iface);
+						debug_ip(state->ip_dst), iface);
 				goto deny;
 			}
 

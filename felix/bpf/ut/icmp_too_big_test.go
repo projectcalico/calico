@@ -62,7 +62,7 @@ func TestICMPTooBigIPOptions(t *testing.T) {
 		}},
 	}
 
-	_, ipv4, l4, _, pktBytes, err := testPacket(nil, ipv4, nil, nil)
+	_, ipv4, l4, _, pktBytes, err := testPacketV4(nil, ipv4, nil, nil)
 	Expect(err).NotTo(HaveOccurred())
 	udp := l4.(*layers.UDP)
 

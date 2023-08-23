@@ -506,12 +506,6 @@ var MapParams = maps.MapParameters{
 	UpdatedByBPF: true,
 }
 
-const (
-	ProtoICMP = 1
-	ProtoTCP  = 6
-	ProtoUDP  = 17
-)
-
 func KeyFromBytes(k []byte) Key {
 	var ctKey Key
 	if len(k) != len(ctKey) {

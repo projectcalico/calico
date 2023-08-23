@@ -2,6 +2,8 @@
 // Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
+#undef IPVER6 /* XXX */
+
 #include <linux/bpf.h>
 
 // socket_type.h contains the definition of SOCK_XXX constants that we need
@@ -98,13 +100,13 @@ v4:
 		goto out;
 	}
 
-	struct sendrecv4_key key = {
+	struct sendrec_key key = {
 		.ip	= ipv4,
 		.port	= ctx->user_port,
 		.cookie	= bpf_get_socket_cookie(ctx),
 	};
 
-	struct sendrecv4_val *revnat = cali_v4_srmsg_lookup_elem(&key);
+	struct sendrec_val *revnat = cali_srmsg_lookup_elem(&key);
 
 	if (revnat == NULL) {
 		CALI_DEBUG("revnat miss for %x:%d\n",
