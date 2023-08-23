@@ -235,10 +235,8 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 					Expect(runtimes.NinetiethPercentile()).Should(BeNumerically("<", requiredP90.Seconds()),
 						fmt.Sprintf("90th percentile time was too high. All runtimes: %v", runtimes))
 				}
-				if runtime < 100*time.Millisecond {
-					time.Sleep(100*time.Millisecond - runtime)
-				}
 			}, samples)
+			time.Sleep(500 * time.Millisecond)
 		}
 
 		defineAllocationMeasurement("It should be able to allocate a single address quickly - blocksize 32",
