@@ -52,16 +52,16 @@ listen bgp port {{getv "/global/listen_port"}};
 {{- end}}
 
 {{- define "LOGGING"}}
-{{- $node_logging_key := printf "/host/%s/loglevel" (getenv "NODENAME")}}
+{{- $node_logging_key := "debug"}}
 {{- if exists $node_logging_key}}
-{{- $logging := getv $node_logging_key}}
+{{- $logging := "debug"}}
 {{- if eq $logging "debug"}}
   debug all;
 {{- else if ne $logging "none"}}
   debug { states };
 {{- end}}
 {{- else if exists "/global/loglevel"}}
-{{- $logging := getv "/global/loglevel"}}
+{{- $logging := "debug"}}
 {{- if eq $logging "debug"}}
   debug all;
 {{- else if ne $logging "none"}}
@@ -90,7 +90,6 @@ protocol kernel {
 
 # Watch interface up/down events.
 protocol device {
-{{- template "LOGGING"}}
   scan time 2;    # Scan interfaces every 2 seconds
 }
 
@@ -108,6 +107,7 @@ protocol direct {
 }
 
 protocol bfd bfd_global {
+{{- template "LOGGING"}}
   interface -"cali*", -"kube-ipvs*", "*" {
     interval 100ms;
     idle tx interval 1000ms;
