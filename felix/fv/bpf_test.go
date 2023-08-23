@@ -4337,7 +4337,7 @@ func bpfCheckIfPolicyProgrammed(felix *infrastructure.Felix, iface, hook, polNam
 }
 
 func bpfDumpPolicy(felix *infrastructure.Felix, iface, hook string) string {
-	out, err := felix.ExecOutput("calico-bpf", "policy", "dump", iface, hook)
+	out, err := felix.ExecOutput("calico-bpf", "policy", "dump", iface, hook, "--asm")
 	Expect(err).NotTo(HaveOccurred())
 	return out
 }
