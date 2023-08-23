@@ -107,7 +107,7 @@ protocol direct {
 }
 
 protocol bfd bfd_global {
-{{- template "LOGGING"}}
+  debug { states };
   interface -"cali*", -"kube-ipvs*", "*" {
     interval 100ms;
     idle tx interval 1000ms;
