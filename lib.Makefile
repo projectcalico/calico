@@ -497,8 +497,13 @@ git-commit:
 # different implementation.
 ###############################################################################
 
+ifdef LOCAL_CRANE
+CRANE_CMD         = bash -c $(double_quote)crane
+else
 CRANE_CMD         = docker run -t --entrypoint /bin/sh -v $(DOCKER_CONFIG):/root/.docker/config.json $(CALICO_BUILD) -c \
                     $(double_quote)crane
+endif
+
 GIT_CMD           = git
 DOCKER_CMD        = docker
 
