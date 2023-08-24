@@ -26,8 +26,6 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/asm"
 	"github.com/projectcalico/calico/felix/bpf/counters"
 	"github.com/projectcalico/calico/felix/bpf/hook"
-	"github.com/projectcalico/calico/felix/proto"
-
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
@@ -94,14 +92,6 @@ func parseArgs(args []string) (string, string, error) {
 	return args[0], args[1], nil
 }
 
-func getRuleIdentfier(comment string) string {
-	lastColon := strings.LastIndex(comment, ":")
-	rule_id := comment[lastColon+1:]
-	rule_id = strings.Replace(rule_id, "\"", "", -1)
-	rule_id = strings.TrimSpace(rule_id)
-	return rule_id
-}
-
 func printInsn(cmd *cobra.Command, insn asm.Insn) {
 	cmd.Printf("%-6s", "")
 	for _, value := range insn.Instruction {
@@ -152,23 +142,13 @@ func dumpPolicyInfo(cmd *cobra.Command, iface string, h hook.Hook, m counters.Po
 	cmd.Printf("Error: %s\n", policyDbg.Error)
 	cmd.Println("Policy Info:")
 
-	var rule_id string
 	for _, insn := range policyDbg.PolicyInfo {
 		for _, comment := range insn.Comments {
-			if strings.Contains(comment, "rule_id") {
-				rule_id = getRuleIdentfier(comment)
-			}
 			if strings.Contains(comment, "Rule MatchID") {
 				matchId := getRuleMatchID(comment)
-				if verboseFlagSet {
-					cmd.Printf("// count = %d\n", m[matchId])
-				} else {
-					cmd.Printf("RuleID['%s'] => count = %d\n", rule_id, m[matchId])
-				}
-			} else {
-				if verboseFlagSet {
-					cmd.Printf("// %s\n", comment)
-				}
+				cmd.Printf("// count = %d\n", m[matchId])
+			} else if verboseFlagSet || strings.Contains(comment, "Start of policy") || strings.Contains(comment, "Start of rule") {
+				cmd.Printf("// %s\n", comment)
 			}
 		}
 		for _, label := range insn.Labels {
