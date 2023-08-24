@@ -139,7 +139,6 @@ template bgp bgp_template {
   connect delay time 2;
   connect retry time 5;
   error wait time 5,30;
-  startup hold time 45;
 }
 
 # ------------- Node-to-node mesh -------------
