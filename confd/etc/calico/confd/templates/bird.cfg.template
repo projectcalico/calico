@@ -106,16 +106,13 @@ protocol direct {
                                           # export cluster IPs.
 }
 
-protocol bfd bfd_global {
+protocol bfd {
   debug { states };
   interface -"cali*", -"kube-ipvs*", "*" {
-    interval 100ms;
-    idle tx interval 1000ms;
     multiplier 5;
   };
   multihop {
-    interval 100ms;
-    multiplier 5;
+    multiplier 7;
   };
 }
 
@@ -135,7 +132,6 @@ template bgp bgp_template {
   export filter calico_export_to_bgp_peers;  # Only want to export routes for workloads.
   add paths on;
   graceful restart;  # See comment in kernel section about graceful restart.
-  hold time 30;
   connect delay time 2;
   connect retry time 5;
   error wait time 5,30;
@@ -176,12 +172,8 @@ template bgp bgp_template {
   */ -}}
   {{if gt $onode_ip $node_ip}}
   passive on; # Mesh is unidirectional, peer will connect to us.
-  bfd peer {{$onode_ip}} {
-    passive on;
-  };
-  {{else}}
-  bfd;
   {{- end}}
+  bfd on;
 }{{end}}{{end}}{{end}}
 {{else}}
 # Node-to-node mesh disabled
@@ -207,7 +199,7 @@ protocol bgp Global_{{$id}} from bgp_template {
 {{- end}}
 {{- if ne $data.restart_time ""}}
   graceful restart time {{$data.restart_time}};
-  bfd graceful;
+  bfd on;
 {{- end}}
 {{- if and (eq $data.as_num $node_as_num) (ne "" ($node_cluster_id)) (ne $data.rr_cluster_id ($node_cluster_id))}}
   rr client;
@@ -244,7 +236,7 @@ protocol bgp Node_{{$id}} from bgp_template {
 {{- end}}
 {{- if ne $data.restart_time ""}}
   graceful restart time {{$data.restart_time}};
-  bfd graceful;
+  bfd on;
 {{- end}}
 {{- if and (eq $data.as_num $node_as_num) (ne "" ($node_cluster_id)) (ne $data.rr_cluster_id ($node_cluster_id))}}
   rr client;
