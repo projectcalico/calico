@@ -128,7 +128,7 @@ func (pr *PolicyResolver) markEndpointsMatchingPolicyDirty(polKey model.PolicyKe
 	})
 }
 
-func (pr *PolicyResolver) OnPolicyMatch(policyKey model.PolicyKey, endpointKey interface{}) {
+func (pr *PolicyResolver) OnPolicyMatch(policyKey model.PolicyKey, endpointKey model.Key) {
 	log.Debugf("Storing policy match %v -> %v", policyKey, endpointKey)
 	// If it's first time the policy become matched, add it to the tier
 	if !pr.policySorter.HasPolicy(policyKey) {
@@ -140,7 +140,7 @@ func (pr *PolicyResolver) OnPolicyMatch(policyKey model.PolicyKey, endpointKey i
 	pr.dirtyEndpoints.Add(endpointKey)
 }
 
-func (pr *PolicyResolver) OnPolicyMatchStopped(policyKey model.PolicyKey, endpointKey interface{}) {
+func (pr *PolicyResolver) OnPolicyMatchStopped(policyKey model.PolicyKey, endpointKey model.Key) {
 	log.Debugf("Deleting policy match %v -> %v", policyKey, endpointKey)
 	pr.policyIDToEndpointIDs.Discard(policyKey, endpointKey)
 	pr.endpointIDToPolicyIDs.Discard(endpointKey, policyKey)
