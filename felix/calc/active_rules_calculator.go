@@ -193,6 +193,7 @@ func (arc *ActiveRulesCalculator) OnUpdate(update api.Update) (_ bool) {
 			// a match with a dummy endpoint key.
 			newPolicyForceProgrammed := policy.ProgramIntoDataplane == "Always"
 			if !oldPolicyWasForceProgrammed && newPolicyForceProgrammed {
+				log.Debugf("Policy %v force-programmed.", key)
 				arc.onMatchStarted(key, forceProgrammedDummyKey)
 			}
 
@@ -210,6 +211,7 @@ func (arc *ActiveRulesCalculator) OnUpdate(update api.Update) (_ bool) {
 			// remove the dummy match.  We do this after adding the
 			// selector into the index to avoid flapping.
 			if oldPolicyWasForceProgrammed && !newPolicyForceProgrammed {
+				log.Debugf("Policy %v no longer force-programmed.", key)
 				arc.onMatchStopped(key, forceProgrammedDummyKey)
 			}
 
@@ -230,6 +232,7 @@ func (arc *ActiveRulesCalculator) OnUpdate(update api.Update) (_ bool) {
 			log.Debugf("Removing policy %v from ARC", key)
 			delete(arc.allPolicies, key)
 			if oldPolicyWasForceProgrammed {
+				log.Debugf("Policy %v being deleted, was force-programmed.", key)
 				arc.onMatchStopped(key, forceProgrammedDummyKey)
 			}
 			arc.labelIndex.DeleteSelector(key)
