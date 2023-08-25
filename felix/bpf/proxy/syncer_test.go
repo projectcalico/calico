@@ -57,14 +57,20 @@ var _ = Describe("BPF Syncer", func() {
 	nodeIPs := []net.IP{net.IPv4(192, 168, 0, 1), net.IPv4(10, 123, 0, 1)}
 	rt := proxy.NewRTCache()
 
-	feCache := cachingmap.New[nat.FrontendKey, nat.FrontendValue](nat.FrontendMapParameters.Name,
-		maps.NewTypedMap[nat.FrontendKey, nat.FrontendValue](
+	feCache := cachingmap.New[nat.FrontendKeyInterface, nat.FrontendValue](nat.FrontendMapParameters.Name,
+		maps.NewTypedMap[nat.FrontendKeyInterface, nat.FrontendValue](
 			svcs, nat.FrontendKeyFromBytes, nat.FrontendValueFromBytes))
-	beCache := cachingmap.New[nat.BackendKey, nat.BackendValue](nat.BackendMapParameters.Name,
-		maps.NewTypedMap[nat.BackendKey, nat.BackendValue](
+	beCache := cachingmap.New[nat.BackendKey, nat.BackendValueInterface](nat.BackendMapParameters.Name,
+		maps.NewTypedMap[nat.BackendKey, nat.BackendValueInterface](
 			eps, nat.BackendKeyFromBytes, nat.BackendValueFromBytes))
 
-	s, _ := proxy.NewSyncer(nodeIPs, feCache, beCache, aff, rt)
+	s, _ := proxy.NewSyncer(nodeIPs, feCache, beCache, aff, rt,
+		nat.NewNATKeyIntf,
+		nat.NewNATKeySrcIntf,
+		nat.NewNATBackendValueIntf,
+		nat.AffinityKeyIntfFromBytes,
+		nat.AffinityValueIntfFromBytes,
+	)
 
 	svcKey := k8sp.ServicePortName{
 		NamespacedName: types.NamespacedName{
@@ -402,7 +408,13 @@ var _ = Describe("BPF Syncer", func() {
 		}))
 
 		By("resyncing after creating a new syncer with the same result", makestep(func() {
-			s, _ = proxy.NewSyncer(nodeIPs, feCache, beCache, aff, rt)
+			s, _ = proxy.NewSyncer(nodeIPs, feCache, beCache, aff, rt,
+				nat.NewNATKeyIntf,
+				nat.NewNATKeySrcIntf,
+				nat.NewNATBackendValueIntf,
+				nat.AffinityKeyIntfFromBytes,
+				nat.AffinityValueIntfFromBytes,
+			)
 			checkAfterResync()
 		}))
 
@@ -410,7 +422,13 @@ var _ = Describe("BPF Syncer", func() {
 			svcs.m[nat.NewNATKey(net.IPv4(5, 5, 5, 5), 1111, 6)] = nat.NewNATValue(0xdeadbeef, 2, 2, 0)
 			eps.m[nat.NewNATBackendKey(0xdeadbeef, 0)] = nat.NewNATBackendValue(net.IPv4(6, 6, 6, 6), 666)
 			eps.m[nat.NewNATBackendKey(0xdeadbeef, 1)] = nat.NewNATBackendValue(net.IPv4(7, 7, 7, 7), 777)
-			s, _ = proxy.NewSyncer(nodeIPs, feCache, beCache, aff, rt)
+			s, _ = proxy.NewSyncer(nodeIPs, feCache, beCache, aff, rt,
+				nat.NewNATKeyIntf,
+				nat.NewNATKeySrcIntf,
+				nat.NewNATBackendValueIntf,
+				nat.AffinityKeyIntfFromBytes,
+				nat.AffinityValueIntfFromBytes,
+			)
 			checkAfterResync()
 		}))
 
@@ -558,7 +576,13 @@ var _ = Describe("BPF Syncer", func() {
 
 		By("inserting non-local eps for a NodePort - no route", makestep(func() {
 			// use the meta node IP for nodeports as well
-			s, _ = proxy.NewSyncer(append(nodeIPs, net.IPv4(255, 255, 255, 255)), feCache, beCache, aff, rt)
+			s, _ = proxy.NewSyncer(append(nodeIPs, net.IPv4(255, 255, 255, 255)), feCache, beCache, aff, rt,
+				nat.NewNATKeyIntf,
+				nat.NewNATKeySrcIntf,
+				nat.NewNATBackendValueIntf,
+				nat.AffinityKeyIntfFromBytes,
+				nat.AffinityValueIntfFromBytes,
+			)
 			state.SvcMap[svcKey2] = proxy.NewK8sServicePort(
 				net.IPv4(10, 0, 0, 2),
 				2222,
@@ -597,7 +621,7 @@ var _ = Describe("BPF Syncer", func() {
 					logrus.WithError(err).Info("Syncer result")
 				}()
 			})
-			_ = rt.Update(
+			rt.Update(
 				routes.NewKey(ip.CIDRFromAddrAndPrefix(ip.FromString("10.2.1.0"), 24).(ip.V4CIDR)),
 				routes.NewValueWithNextHop(
 					routes.FlagsRemoteWorkload,
@@ -633,7 +657,7 @@ var _ = Describe("BPF Syncer", func() {
 		}))
 
 		By("adding an unrelated route does not change anything", makestep(func() {
-			_ = rt.Update(
+			rt.Update(
 				routes.NewKey(ip.CIDRFromAddrAndPrefix(ip.FromString("10.2.55.0"), 24).(ip.V4CIDR)),
 				routes.NewValueWithNextHop(
 					routes.FlagsRemoteWorkload,
@@ -651,7 +675,7 @@ var _ = Describe("BPF Syncer", func() {
 		}))
 
 		By("adding route should fix another missing expanded NP", makestep(func() {
-			_ = rt.Update(
+			rt.Update(
 				routes.NewKey(ip.CIDRFromAddrAndPrefix(ip.FromString("10.2.3.0"), 24).(ip.V4CIDR)),
 				routes.NewValueWithNextHop(
 					routes.FlagsRemoteWorkload,
@@ -711,7 +735,13 @@ var _ = Describe("BPF Syncer", func() {
 
 		By("inserting only non-local eps for a NodePort - multiple nodes & pods/node", makestep(func() {
 			// use the meta node IP for nodeports as well
-			s, _ = proxy.NewSyncer(append(nodeIPs, net.IPv4(255, 255, 255, 255)), feCache, beCache, aff, rt)
+			s, _ = proxy.NewSyncer(append(nodeIPs, net.IPv4(255, 255, 255, 255)), feCache, beCache, aff, rt,
+				nat.NewNATKeyIntf,
+				nat.NewNATKeySrcIntf,
+				nat.NewNATBackendValueIntf,
+				nat.AffinityKeyIntfFromBytes,
+				nat.AffinityValueIntfFromBytes,
+			)
 			state.SvcMap[svcKey2] = proxy.NewK8sServicePort(
 				net.IPv4(10, 0, 0, 2),
 				2222,
@@ -727,13 +757,13 @@ var _ = Describe("BPF Syncer", func() {
 				&k8sp.BaseEndpointInfo{Ready: true, Endpoint: "10.2.3.1:2222"},
 			}
 
-			_ = rt.Update(
+			rt.Update(
 				routes.NewKey(ip.CIDRFromAddrAndPrefix(ip.FromString("10.2.2.0"), 24).(ip.V4CIDR)),
 				routes.NewValueWithNextHop(
 					routes.FlagsRemoteWorkload,
 					ip.FromString("10.123.0.112").(ip.V4Addr)),
 			)
-			_ = rt.Update(
+			rt.Update(
 				routes.NewKey(ip.CIDRFromAddrAndPrefix(ip.FromString("10.2.3.0"), 24).(ip.V4CIDR)),
 				routes.NewValueWithNextHop(
 					routes.FlagsRemoteWorkload,
@@ -791,7 +821,13 @@ var _ = Describe("BPF Syncer", func() {
 
 		By("restarting Syncer to check if NodePortRemotes are picked up correctly", makestep(func() {
 			// use the meta node IP for nodeports as well
-			s, _ = proxy.NewSyncer(append(nodeIPs, net.IPv4(255, 255, 255, 255)), feCache, beCache, aff, rt)
+			s, _ = proxy.NewSyncer(append(nodeIPs, net.IPv4(255, 255, 255, 255)), feCache, beCache, aff, rt,
+				nat.NewNATKeyIntf,
+				nat.NewNATKeySrcIntf,
+				nat.NewNATBackendValueIntf,
+				nat.AffinityKeyIntfFromBytes,
+				nat.AffinityValueIntfFromBytes,
+			)
 			err := s.Apply(state)
 			Expect(err).NotTo(HaveOccurred())
 
