@@ -19,6 +19,7 @@
 #include <stdlib.h>
 #include <errno.h>
 #include "globals.h"
+#include "ip_addr.h"
 
 static void set_errno(int ret) {
 	errno = ret >= 0 ? ret : -ret;
@@ -168,6 +169,52 @@ void bpf_tc_set_globals(struct bpf_map *map,
 		.natout_idx = natout,
 		.log_filter_jmp = log_filter_jmp,
 	};
+
+	strncpy(data.iface_name, iface_name, sizeof(data.iface_name));
+	data.iface_name[sizeof(data.iface_name)-1] = '\0';
+
+	int i;
+
+	for (i = 0; i < sizeof(data.jumps)/sizeof(uint); i++) {
+		data.jumps[i] = jumps[i];
+	}
+
+	set_errno(bpf_map__set_initial_value(map, (void*)(&data), sizeof(data)));
+}
+
+void bpf_tc_set_globals_v6(struct bpf_map *map,
+			   char *iface_name,
+			   char* host_ip,
+			   char* intf_ip,
+			   uint ext_to_svc_mark,
+			   ushort tmtu,
+			   ushort vxlanPort,
+			   ushort psnat_start,
+			   ushort psnat_len,
+			   char* host_tunnel_ip,
+			   uint flags,
+			   ushort wg_port,
+			   uint natin,
+			   uint natout,
+			   uint log_filter_jmp,
+			   uint *jumps)
+{
+	struct cali_tc_globals_v6 data = {
+		.tunnel_mtu = tmtu,
+		.vxlan_port = vxlanPort,
+		.ext_to_svc_mark = ext_to_svc_mark,
+		.psnat_start = psnat_start,
+		.psnat_len = psnat_len,
+		.flags = flags,
+		.wg_port = wg_port,
+		.natin_idx = natin,
+		.natout_idx = natout,
+		.log_filter_jmp = log_filter_jmp,
+	};
+
+	memcpy(&data.host_ip, host_ip, 16);
+	memcpy(&data.intf_ip, intf_ip, 16);
+	memcpy(&data.host_tunnel_ip, host_tunnel_ip, 16);
 
 	strncpy(data.iface_name, iface_name, sizeof(data.iface_name));
 	data.iface_name[sizeof(data.iface_name)-1] = '\0';

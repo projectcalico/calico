@@ -39,7 +39,7 @@ func TestIPv4Opts(t *testing.T) {
 	}}
 	ipHdr.IHL += 2
 
-	_, ipv4, l4, payload, pktBytes, err := testPacket(nil, &ipHdr, nil, nil)
+	_, ipv4, l4, payload, pktBytes, err := testPacketV4(nil, &ipHdr, nil, nil)
 	Expect(err).NotTo(HaveOccurred())
 	udp := l4.(*layers.UDP)
 

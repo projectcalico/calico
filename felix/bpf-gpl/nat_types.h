@@ -14,8 +14,8 @@ typedef enum calico_nat_lookup_result {
 } nat_lookup_result;
 
 
-struct calico_nat_v4 {
-        __u32 addr; // NBO
+struct calico_nat {
+        ipv46_addr_t addr; // NBO
         __u16 port; // HBO
         __u8 protocol;
 };
@@ -24,31 +24,31 @@ struct calico_nat_v4 {
  * Modified the map from HASH to LPM_TRIE. This is to drop packets outside
  * src IP range specified for Load Balancer
  */
-struct __attribute__((__packed__)) calico_nat_v4_key {
+struct __attribute__((__packed__)) calico_nat_key {
 	__u32 prefixlen;
-	__u32 addr; // NBO
+	ipv46_addr_t addr; // NBO
 	__u16 port; // HBO
 	__u8 protocol;
-	__u32 saddr;
+	ipv46_addr_t saddr;
 	__u8 pad;
 };
 
 /* Prefix len = (dst_addr + port + protocol + src_addr) in bits. */
-#define NAT_PREFIX_LEN_WITH_SRC_MATCH  (sizeof(struct calico_nat_v4_key) - \
-					sizeof(((struct calico_nat_v4_key*)0)->prefixlen) - \
-					sizeof(((struct calico_nat_v4_key*)0)->pad))
+#define NAT_PREFIX_LEN_WITH_SRC_MATCH  (sizeof(struct calico_nat_key) - \
+					sizeof(((struct calico_nat_key*)0)->prefixlen) - \
+					sizeof(((struct calico_nat_key*)0)->pad))
 
 #define NAT_PREFIX_LEN_WITH_SRC_MATCH_IN_BITS (NAT_PREFIX_LEN_WITH_SRC_MATCH * 8)
 
 // This is used as a special ID along with count=0 to drop a packet at nat level1 lookup
 #define NAT_FE_DROP_COUNT  0xffffffff
 
-union calico_nat_v4_lpm_key {
+union calico_nat_lpm_key {
         struct bpf_lpm_trie_key lpm;
-        struct calico_nat_v4_key key;
+        struct calico_nat_key key;
 };
 
-struct calico_nat_v4_value {
+struct calico_nat_value {
 	__u32 id;
 	__u32 count;
 	__u32 local;
@@ -59,45 +59,60 @@ struct calico_nat_v4_value {
 #define NAT_FLG_EXTERNAL_LOCAL	0x1
 #define NAT_FLG_INTERNAL_LOCAL	0x2
 
-CALI_MAP(cali_v4_nat_fe, 3,
+#ifdef IPVER6
+CALI_MAP_NAMED(cali_v6_nat_fe, cali_nat_fe, 3,
+#else
+CALI_MAP_NAMED(cali_v4_nat_fe, cali_nat_fe, 3,
+#endif
 		BPF_MAP_TYPE_LPM_TRIE,
-		union calico_nat_v4_lpm_key, struct calico_nat_v4_value,
+		union calico_nat_lpm_key, struct calico_nat_value,
 		64*1024, BPF_F_NO_PREALLOC)
 
 
 // Map: NAT level two.  ID and ordinal -> new dest and port.
 
-struct calico_nat_secondary_v4_key {
+struct calico_nat_secondary_key {
 	__u32 id;
 	__u32 ordinal;
 };
 
 struct calico_nat_dest {
-	__u32 addr;
+	ipv46_addr_t addr;
 	__u16 port;
 	__u8 pad[2];
 };
 
-CALI_MAP_V1(cali_v4_nat_be,
+#ifdef IPVER6
+CALI_MAP_NAMED(cali_v6_nat_be, cali_nat_be,,
+#else
+CALI_MAP_NAMED(cali_v4_nat_be, cali_nat_be,,
+#endif
 		BPF_MAP_TYPE_HASH,
-		struct calico_nat_secondary_v4_key, struct calico_nat_dest,
+		struct calico_nat_secondary_key, struct calico_nat_dest,
 		256*1024, BPF_F_NO_PREALLOC)
 
-struct calico_nat_v4_affinity_key {
-	struct calico_nat_v4 nat_key;
-	__u32 client_ip;
+struct calico_nat_affinity_key {
+	struct calico_nat nat_key;
+	ipv46_addr_t client_ip;
 	__u32 padding;
 };
 
-struct calico_nat_v4_affinity_val {
+struct calico_nat_affinity_val {
 	struct calico_nat_dest nat_dest;
+#ifdef IPVER6
+	__u32 __pad;
+#endif
 	__u64 ts;
 };
 
 
-CALI_MAP_V1(cali_v4_nat_aff,
+#ifdef IPVER6
+CALI_MAP_NAMED(cali_v6_nat_aff, cali_nat_aff,,
+#else
+CALI_MAP_NAMED(cali_v4_nat_aff, cali_nat_aff,,
+#endif
 		BPF_MAP_TYPE_LRU_HASH,
-		struct calico_nat_v4_affinity_key, struct calico_nat_v4_affinity_val,
+		struct calico_nat_affinity_key, struct calico_nat_affinity_val,
 		64*1024, 0)
 
 struct vxlanhdr {
