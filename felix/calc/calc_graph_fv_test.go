@@ -261,6 +261,7 @@ var baseTests = []StateList{
 		withPolicy,
 		localEp1WithPolicyAlways,
 		withPolicyAlways,
+		localEp1WithPolicyOnDemand,
 	},
 
 	// VXLAN tests.

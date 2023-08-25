@@ -17,6 +17,7 @@ package calc
 import (
 	"reflect"
 
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/dispatcher"
@@ -178,7 +179,7 @@ func (arc *ActiveRulesCalculator) OnUpdate(update api.Update) (_ bool) {
 		oldPolicy := arc.allPolicies[key]
 		var oldPolicyWasForceProgrammed bool
 		if oldPolicy != nil {
-			oldPolicyWasForceProgrammed = oldPolicy.ProgramIntoDataplane == "Always"
+			oldPolicyWasForceProgrammed = oldPolicy.ProgramIntoDataplane == v3.ProgramIntoDataplaneAlways
 		}
 		if update.Value != nil {
 			log.Debugf("Updating ARC for policy %v", key)
@@ -191,7 +192,7 @@ func (arc *ActiveRulesCalculator) OnUpdate(update api.Update) (_ bool) {
 
 			// If the policy transitions to be force-programmed, simulate
 			// a match with a dummy endpoint key.
-			newPolicyForceProgrammed := policy.ProgramIntoDataplane == "Always"
+			newPolicyForceProgrammed := policy.ProgramIntoDataplane == v3.ProgramIntoDataplaneAlways
 			if !oldPolicyWasForceProgrammed && newPolicyForceProgrammed {
 				log.Debugf("Policy %v force-programmed.", key)
 				arc.onMatchStarted(key, forceProgrammedDummyKey)

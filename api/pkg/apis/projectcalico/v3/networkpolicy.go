@@ -116,6 +116,11 @@ type NetworkPolicySpec struct {
 	ProgramIntoDataplane string `json:"programIntoDataplane,omitempty" validate:"omitempty,oneof=OnDemand Always"`
 }
 
+const (
+	ProgramIntoDataplaneOnDemand = "OnDemand"
+	ProgramIntoDataplaneAlways   = "Always"
+)
+
 // NewNetworkPolicy creates a new (zeroed) NetworkPolicy struct with the TypeMetadata initialised to the current
 // version.
 func NewNetworkPolicy() *NetworkPolicy {

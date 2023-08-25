@@ -309,7 +309,20 @@ var policy1_order20_always = Policy{
 		{SrcSelector: bEpBSelector},
 	},
 	Types:                []string{"ingress", "egress"},
-	ProgramIntoDataplane: "Always",
+	ProgramIntoDataplane: v3.ProgramIntoDataplaneAlways,
+}
+
+var policy1_order20_ondemand = Policy{
+	Order:    &order20,
+	Selector: "a == 'a'",
+	InboundRules: []Rule{
+		{SrcSelector: allSelector},
+	},
+	OutboundRules: []Rule{
+		{SrcSelector: bEpBSelector},
+	},
+	Types:                []string{"ingress", "egress"},
+	ProgramIntoDataplane: v3.ProgramIntoDataplaneOnDemand,
 }
 
 var protoTCP = numorstring.ProtocolFromStringV1("tcp")
