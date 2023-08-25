@@ -55,7 +55,7 @@ func TestICMPttlExceededFromHEP(t *testing.T) {
 	iphdr := *ipv4Default
 	iphdr.TTL = 1
 
-	_, ipv4, l4, _, pktBytes, err := testPacket(nil, &iphdr, nil, nil)
+	_, ipv4, l4, _, pktBytes, err := testPacketV4(nil, &iphdr, nil, nil)
 	Expect(err).NotTo(HaveOccurred())
 
 	udp := l4.(*layers.UDP)

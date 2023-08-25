@@ -11,7 +11,7 @@
 
 emit_filename() {
   echo "bin/test_${from_or_to}_${ep_type}_fib_${log_level}${dsr}.o"
-#  echo "bin/test_${from_or_to}_${ep_type}_fib_${log_level}${dsr}_v6.o"
+  echo "bin/test_${from_or_to}_${ep_type}_fib_${log_level}${dsr}_v6.o"
 }
 
 log_level=debug

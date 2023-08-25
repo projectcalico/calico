@@ -5,33 +5,41 @@
 #ifndef __SENDRECV_H__
 #define __SENDRECV_H__
 
-struct sendrecv4_key {
+struct sendrec_key {
 	__u64 cookie;
-	__u32 ip;
+	ipv46_addr_t ip;
 	__u32 port; /* because bpf_sock_addr uses 32bit and we would need padding */
 };
 
-struct sendrecv4_val {
-	__u32 ip;
+struct sendrec_val {
+	ipv46_addr_t ip;
 	__u32 port; /* because bpf_sock_addr uses 32bit and we would need padding */
 };
 
-CALI_MAP_V1(cali_v4_srmsg,
+#ifdef IPVER6
+CALI_MAP_NAMED(cali_v6_srmsg, cali_srmsg,,
+#else
+CALI_MAP_NAMED(cali_v4_srmsg, cali_srmsg,,
+#endif
 		BPF_MAP_TYPE_LRU_HASH,
-		struct sendrecv4_key, struct sendrecv4_val,
+		struct sendrec_key, struct sendrec_val,
 		510000, 0)
 
 struct ct_nats_key {
 	__u64 cookie;
-	__u32 ip;
+	ipv46_addr_t ip;
 	__u32 port; /* because bpf_sock_addr uses 32bit */
 	__u8 proto;
 	__u8 pad[7];
 };
 
-CALI_MAP_V1(cali_v4_ct_nats,
+#ifdef IPVER6
+CALI_MAP_NAMED(cali_v6_ct_nats, cali_ct_nats ,,
+#else
+CALI_MAP_NAMED(cali_v4_ct_nats, cali_ct_nats ,,
+#endif
 		BPF_MAP_TYPE_LRU_HASH,
-		struct ct_nats_key, struct sendrecv4_val,
+		struct ct_nats_key, struct sendrec_val,
 		10000, 0)
 
 static CALI_BPF_INLINE __u16 ctx_port_to_host(__u32 port)
