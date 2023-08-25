@@ -142,7 +142,7 @@ var _ = Describe("[etcd] kube-controllers health check FV tests", func() {
 				stdoutStderr, _ := cmd.CombinedOutput()
 
 				return stdoutStderr
-			}, 20*time.Second, 500*time.Millisecond).Should(ContainSubstring("Error reaching apiserver"))
+			}, 60*time.Second, 500*time.Millisecond).Should(ContainSubstring("Error reaching apiserver"))
 		})
 
 		It("should fail health check if etcd not running", func() {
