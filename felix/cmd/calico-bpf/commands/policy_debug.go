@@ -22,12 +22,14 @@ import (
 	"strconv"
 	"strings"
 
+	log "github.com/sirupsen/logrus"
+	"github.com/spf13/cobra"
+
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/asm"
 	"github.com/projectcalico/calico/felix/bpf/counters"
 	"github.com/projectcalico/calico/felix/bpf/hook"
-	log "github.com/sirupsen/logrus"
-	"github.com/spf13/cobra"
+	"github.com/projectcalico/calico/felix/proto"
 )
 
 // policyCmd represents the counters command
