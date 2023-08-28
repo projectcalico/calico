@@ -40,7 +40,7 @@ var policyCmd = &cobra.Command{
 
 func init() {
 	policyCmd.AddCommand(policyDumpCmd)
-	policyDumpCmd.Flags().BoolP("verbose", "v", false, "verbose output")
+	policyDumpCmd.Flags().BoolP("asm", "a", false, "Includes eBPF assembler code of the policy program")
 	rootCmd.AddCommand(policyCmd)
 }
 
@@ -117,7 +117,7 @@ func getRuleMatchID(comment string) uint64 {
 }
 
 func dumpPolicyInfo(cmd *cobra.Command, iface string, h hook.Hook, m counters.PolicyMapMem) error {
-	verboseFlag := cmd.Flag("verbose").Value.String()
+	verboseFlag := cmd.Flag("asm").Value.String()
 	verboseFlagSet, _ := strconv.ParseBool(verboseFlag)
 
 	var policyDbg bpf.PolicyDebugInfo
