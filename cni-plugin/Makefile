@@ -137,7 +137,7 @@ $(BIN)/loopback $(BIN)/host-local $(BIN)/portmap $(BIN)/tuning $(BIN)/bandwidth:
 
 $(BIN)/flannel:
 	mkdir -p $(BIN)
-	$(CURL) -L --retry 5 https://github.com/flannel-io/cni-plugin/releases/download/$(FLANNEL_VERSION)/cni-plugin-flannel-linux-$(subst v7,,$(ARCH))-$(FLANNEL_VERSION).tgz | tar -xz -C $(BIN) ./flannel-$(subst v7,,$(ARCH))
+	$(CURL) -L --retry 5 https://github.com/flannel-io/cni-plugin/releases/download/$(FLANNEL_VERSION)/cni-plugin-flannel-linux-$(subst v7,,$(ARCH))-$(FLANNEL_VERSION).tgz | tar -xz -C $(BIN) ./cni-plugin-flannel-linux-$(subst v7,,$(ARCH))
 	mv $(BIN)/flannel-$(subst v7,,$(ARCH)) $(BIN)/flannel
 
 ###############################################################################
