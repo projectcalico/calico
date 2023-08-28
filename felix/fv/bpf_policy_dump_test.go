@@ -112,9 +112,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test policy dump"
 		pol = createPolicy(pol)
 		out := ""
 		ifaceStr := fmt.Sprintf("IfaceName: %s", w[0].InterfaceName)
-		// check ingress policy dump
+		// check ingress policy dump with eBPF assembler code
 		Eventually(func() string {
-			out, err = tc.Felixes[0].ExecOutput("calico-bpf", "policy", "dump", w[0].InterfaceName, "ingress")
+			out, err = tc.Felixes[0].ExecOutput("calico-bpf", "policy", "dump", w[0].InterfaceName, "ingress", "-a")
 			Expect(err).NotTo(HaveOccurred())
 			return out
 		}, "5s", "200ms").Should(ContainSubstring("Start of tier default"))
@@ -129,10 +129,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test policy dump"
 		Expect(string(out)).To(ContainSubstring("If source port is not within any of {8055,100-105}, skip to next rule"))
 		Expect(string(out)).To(ContainSubstring("If dest port is not within any of {9055,200-205}, skip to next rule"))
 
-		// check egress policy dump
+		// check egress policy dump with eBPF assembler code
 		out = ""
 		Eventually(func() string {
-			out, err = tc.Felixes[0].ExecOutput("calico-bpf", "policy", "dump", w[0].InterfaceName, "egress")
+			out, err = tc.Felixes[0].ExecOutput("calico-bpf", "policy", "dump", w[0].InterfaceName, "egress", "-a")
 			Expect(err).NotTo(HaveOccurred())
 			return out
 		}, "5s", "200ms").Should(ContainSubstring("Start of tier default"))
@@ -147,10 +147,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test policy dump"
 		Expect(string(out)).To(ContainSubstring("If source port is within any of {8055,100-105}, skip to next rule"))
 		Expect(string(out)).To(ContainSubstring("If dest port is within any of {9055,200-205}, skip to next rule"))
 
-		// Test calico-bpf policy dump all
+		// Test calico-bpf policy dump all with eBPF assembler code
 		out = ""
 		Eventually(func() string {
-			out, err = tc.Felixes[0].ExecOutput("calico-bpf", "policy", "dump", w[0].InterfaceName, "all")
+			out, err = tc.Felixes[0].ExecOutput("calico-bpf", "policy", "dump", w[0].InterfaceName, "all", "-a")
 			Expect(err).NotTo(HaveOccurred())
 			return out
 		}, "5s", "200ms").Should(ContainSubstring("Start of tier default"))
@@ -189,9 +189,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test policy dump"
 		pol = createPolicy(pol)
 		out := ""
 		ifaceStr := fmt.Sprintf("IfaceName: %s", w[1].InterfaceName)
-		// check ingress policy dump
+		// check ingress policy dump with eBPF assembler code
 		Eventually(func() string {
-			out, err = tc.Felixes[0].ExecOutput("calico-bpf", "policy", "dump", w[1].InterfaceName, "ingress")
+			out, err = tc.Felixes[0].ExecOutput("calico-bpf", "policy", "dump", w[1].InterfaceName, "ingress", "-a")
 			Expect(err).NotTo(HaveOccurred())
 			return out
 		}, "5s", "200ms").Should(ContainSubstring("Start of tier default"))
@@ -205,10 +205,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test policy dump"
 		Expect(string(out)).To(ContainSubstring("If source not in {11.0.0.8/32,10.0.0.8/32}, skip to next rule"))
 		Expect(string(out)).To(ContainSubstring("If dest not in {12.0.0.8/32,13.0.0.8/32}, skip to next rule"))
 
-		// check egress policy dump
+		// check egress policy dump with eBPF assembler code
 		out = ""
 		Eventually(func() string {
-			out, err = tc.Felixes[0].ExecOutput("calico-bpf", "policy", "dump", w[1].InterfaceName, "egress")
+			out, err = tc.Felixes[0].ExecOutput("calico-bpf", "policy", "dump", w[1].InterfaceName, "egress", "-a")
 			Expect(err).NotTo(HaveOccurred())
 			return out
 		}, "5s", "200ms").Should(ContainSubstring("Start of tier default"))

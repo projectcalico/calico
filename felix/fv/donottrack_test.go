@@ -85,7 +85,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ do-not-track policy tests; 
 			for _, felix := range tc.Felixes {
 				felix.Exec("iptables-save", "-c")
 				felix.Exec("ip", "r")
-				felix.Exec("calico-bpf", "policy", "dump", "eth0", "all")
+				felix.Exec("calico-bpf", "policy", "dump", "eth0", "all", "--asm")
 			}
 		}
 	})
