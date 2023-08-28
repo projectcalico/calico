@@ -237,7 +237,7 @@ func dumpRuleCounterMap(felix *infrastructure.Felix) counters.PolicyMapMem {
 }
 
 func checkRuleCounters(felix *infrastructure.Felix, ifName, hook, polName string, count int) {
-	out, err := felix.ExecOutput("calico-bpf", "policy", "dump", ifName, hook)
+	out, err := felix.ExecOutput("calico-bpf", "policy", "dump", ifName, hook, "--asm")
 	Expect(err).NotTo(HaveOccurred())
 	strOut := strings.Split(out, "\n")
 
