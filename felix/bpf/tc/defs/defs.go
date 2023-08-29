@@ -53,6 +53,7 @@ const (
 	ProgIndexDrop
 	ProgIndexHostCtConflict
 	ProgIndexIcmpInnerNat
+	ProgIndexNewFlow
 	ProgIndexMainDebug
 	ProgIndexPolicyDebug
 	ProgIndexAllowedDebug
@@ -60,6 +61,7 @@ const (
 	ProgIndexDropDebug
 	ProgIndexHostCtConflictDebug
 	ProgIndexIcmpInnerNatDebug
+	ProgIndexNewFlowDebug
 	ProgIndexV6Main
 	ProgIndexV6Policy
 	ProgIndexV6Allowed
@@ -67,6 +69,7 @@ const (
 	ProgIndexV6Drop
 	ProgIndexV6HostCtConflict
 	ProgIndexV6IcmpInnerNat
+	ProgIndexV6NewFlow
 	ProgIndexV6MainDebug
 	ProgIndexV6PolicyDebug
 	ProgIndexV6AllowedDebug
@@ -74,6 +77,7 @@ const (
 	ProgIndexV6DropDebug
 	ProgIndexV6HostCtConflictDebug
 	ProgIndexV6IcmpInnerNatDebug
+	ProgIndexV6NewFlowDebug
 	ProgIndexEndDebug
 	ProgIndexEnd
 
@@ -96,6 +100,7 @@ var ProgramNames = []string{
 	"calico_tc_skb_drop",
 	"calico_tc_host_ct_conflict",
 	"calico_tc_skb_icmp_inner_nat",
+	"calico_tc_skb_new_flow_entrypoint",
 	/* ipv4 - debug */
 	"calico_tc_main",
 	"calico_tc_norm_pol_tail",
@@ -104,6 +109,7 @@ var ProgramNames = []string{
 	"calico_tc_skb_drop",
 	"calico_tc_host_ct_conflict",
 	"calico_tc_skb_icmp_inner_nat",
+	"calico_tc_skb_new_flow_entrypoint",
 	/* ipv6 */
 	"calico_tc_main",
 	"calico_tc_norm_pol_tail",
@@ -112,6 +118,7 @@ var ProgramNames = []string{
 	"calico_tc_skb_drop",
 	"calico_tc_host_ct_conflict",
 	"calico_tc_skb_icmp_inner_nat",
+	"calico_tc_skb_new_flow_entrypoint",
 	/* ipv6 - debug */
 	"calico_tc_main",
 	"calico_tc_norm_pol_tail",
@@ -120,6 +127,7 @@ var ProgramNames = []string{
 	"calico_tc_skb_drop",
 	"calico_tc_host_ct_conflict",
 	"calico_tc_skb_icmp_inner_nat",
+	"calico_tc_skb_new_flow_entrypoint",
 }
 
 type ToOrFromEp string
