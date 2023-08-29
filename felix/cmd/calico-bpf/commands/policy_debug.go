@@ -22,14 +22,14 @@ import (
 	"strconv"
 	"strings"
 
+	log "github.com/sirupsen/logrus"
+	"github.com/spf13/cobra"
+
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/asm"
 	"github.com/projectcalico/calico/felix/bpf/counters"
 	"github.com/projectcalico/calico/felix/bpf/hook"
 	"github.com/projectcalico/calico/felix/proto"
-
-	log "github.com/sirupsen/logrus"
-	"github.com/spf13/cobra"
 )
 
 // policyCmd represents the counters command
@@ -40,8 +40,8 @@ var policyCmd = &cobra.Command{
 
 func init() {
 	policyCmd.AddCommand(policyDumpCmd)
+	policyDumpCmd.Flags().BoolP("asm", "a", false, "Includes eBPF assembler code of the policy program")
 	rootCmd.AddCommand(policyCmd)
-
 }
 
 var policyDumpCmd = &cobra.Command{
@@ -83,11 +83,13 @@ var policyDumpCmd = &cobra.Command{
 }
 
 func parseArgs(args []string) (string, string, error) {
-	if len(args) != 2 {
-		return "", "", fmt.Errorf("Insufficient arguments")
+	lenArgs := len(args)
+	if lenArgs != 2 {
+		return "", "", fmt.Errorf("Invalid number of arguments: %d", lenArgs)
 	}
-	if hook.StringToHook(args[1]) == hook.Bad && args[1] != "all" {
-		return "", "", fmt.Errorf("Invalid argument")
+	hookArg := args[1]
+	if hook.StringToHook(hookArg) == hook.Bad && hookArg != "all" {
+		return "", "", fmt.Errorf("Invalid argument: '%s'", hookArg)
 	}
 	return args[0], args[1], nil
 }
@@ -115,6 +117,9 @@ func getRuleMatchID(comment string) uint64 {
 }
 
 func dumpPolicyInfo(cmd *cobra.Command, iface string, h hook.Hook, m counters.PolicyMapMem) error {
+	verboseFlag := cmd.Flag("asm").Value.String()
+	verboseFlagSet, _ := strconv.ParseBool(verboseFlag)
+
 	var policyDbg bpf.PolicyDebugInfo
 	filename := bpf.PolicyDebugJSONFileName(iface, h.String(), proto.IPVersion_IPV4)
 	_, err := os.Stat(filename)
@@ -138,19 +143,24 @@ func dumpPolicyInfo(cmd *cobra.Command, iface string, h hook.Hook, m counters.Po
 	cmd.Printf("Hook: %s\n", policyDbg.Hook)
 	cmd.Printf("Error: %s\n", policyDbg.Error)
 	cmd.Println("Policy Info:")
+
 	for _, insn := range policyDbg.PolicyInfo {
 		for _, comment := range insn.Comments {
 			if strings.Contains(comment, "Rule MatchID") {
 				matchId := getRuleMatchID(comment)
 				cmd.Printf("// count = %d\n", m[matchId])
-			} else {
+			} else if verboseFlagSet || strings.Contains(comment, "Start of policy") || strings.Contains(comment, "Start of rule") {
 				cmd.Printf("// %s\n", comment)
 			}
 		}
 		for _, label := range insn.Labels {
-			cmd.Printf("%s:\n", label)
+			if verboseFlagSet {
+				cmd.Printf("%s:\n", label)
+			}
 		}
-		printInsn(cmd, insn)
+		if verboseFlagSet {
+			printInsn(cmd, insn)
+		}
 	}
 	return nil
 }
