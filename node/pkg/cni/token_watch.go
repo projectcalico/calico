@@ -18,7 +18,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 )
@@ -65,7 +64,7 @@ func NamespaceOfUsedServiceAccount() string {
 }
 
 func BuildClientSet() (*kubernetes.Clientset, error) {
-	cfg, err := clientcmd.BuildConfigFromFlags("", os.Getenv("KUBECONFIG"))
+	cfg, err := winutils.BuildConfigFromFlags("", os.Getenv("KUBECONFIG"))
 	if err != nil {
 		return nil, err
 	}
@@ -225,7 +224,7 @@ func Run() {
 
 	for tu := range tokenChan {
 		logrus.Info("Update of CNI kubeconfig triggered based on elapsed time.")
-		cfg, err := clientcmd.BuildConfigFromFlags("", os.Getenv("KUBECONFIG"))
+		cfg, err := winutils.BuildConfigFromFlags("", os.Getenv("KUBECONFIG"))
 		if err != nil {
 			logrus.WithError(err).Error("Error generating kube config.")
 			continue
@@ -281,6 +280,5 @@ current-context: calico-context`
 		logrus.WithError(err).Error("Failed to write CNI plugin kubeconfig file")
 		return
 	}
-	// logrus.WithField("path", kubeconfigPath).Info("Wrote updated CNI kubeconfig file.")
 	logrus.WithField("path", winutils.GetHostPath(kubeconfigPath)).Info("Wrote updated CNI kubeconfig file.")
 }

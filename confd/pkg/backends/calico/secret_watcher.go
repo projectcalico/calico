@@ -19,13 +19,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
-	"k8s.io/client-go/tools/clientcmd"
 )
 
 type secretWatchData struct {
@@ -63,11 +62,11 @@ func NewSecretWatcher(c *client) (*secretWatcher, error) {
 	// set up k8s client
 	// attempt 1: KUBECONFIG env var
 	cfgFile := os.Getenv("KUBECONFIG")
-	cfg, err := clientcmd.BuildConfigFromFlags("", cfgFile)
+	cfg, err := winutils.BuildConfigFromFlags("", cfgFile)
 	if err != nil {
 		log.WithError(err).Info("KUBECONFIG environment variable not found, attempting in-cluster")
 		// attempt 2: in cluster config
-		if cfg, err = rest.InClusterConfig(); err != nil {
+		if cfg, err = winutils.GetInClusterConfig(); err != nil {
 			return nil, err
 		}
 	}

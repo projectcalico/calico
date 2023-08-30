@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net"
 	"os"
 	"os/exec"
 	"runtime"
@@ -34,7 +33,6 @@ import (
 	"go.etcd.io/etcd/client/pkg/v3/fileutil"
 
 	"k8s.io/client-go/rest"
-	certutil "k8s.io/client-go/util/cert"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
@@ -146,7 +144,7 @@ func Install() error {
 	if fileExists(serviceAccountTokenFile) {
 		logrus.Info("Running as a Kubernetes pod")
 		// FIXME: get rid of this and call rest.InClusterConfig() directly when containerd v1.6 is EOL'd
-		kubecfg, err = getInClusterConfig()
+		kubecfg, err = winutils.GetInClusterConfig()
 		if err != nil {
 			return err
 		}
@@ -610,41 +608,4 @@ func destinationUptoDate(src, dst string) (bool, error) {
 		// The slice of bytes we read from each file are equal. Loop again, checking the next
 		// slice of bytes.
 	}
-}
-
-// FIXME: get rid of this and call rest.InClusterConfig() directly when containerd v1.6 is EOL'd
-// getInClusterConfig returns a config object which uses the service account
-// kubernetes gives to pods. It's intended for clients that expect to be
-// running inside a pod running on kubernetes. It will return ErrNotInCluster
-// if called from a process not running in a kubernetes environment.
-// It is a copy of InClusterConfig() from k8s.io/client-go/rest but using
-// winutils.GetHostPath() for the file paths, so that Windows hostprocess
-// containers on containerd v1.6 can work with the in-cluster config.
-func getInClusterConfig() (*rest.Config, error) {
-	tokenFile := winutils.GetHostPath("/var/run/secrets/kubernetes.io/serviceaccount/token")
-	rootCAFile := winutils.GetHostPath("/var/run/secrets/kubernetes.io/serviceaccount/ca.crt")
-	host, port := os.Getenv("KUBERNETES_SERVICE_HOST"), os.Getenv("KUBERNETES_SERVICE_PORT")
-	if len(host) == 0 || len(port) == 0 {
-		return nil, rest.ErrNotInCluster
-	}
-
-	token, err := os.ReadFile(tokenFile)
-	if err != nil {
-		return nil, err
-	}
-
-	tlsClientConfig := rest.TLSClientConfig{}
-
-	if _, err := certutil.NewPool(rootCAFile); err != nil {
-		logrus.Errorf("Expected to load root CA config from %s, but got err: %v", rootCAFile, err)
-	} else {
-		tlsClientConfig.CAFile = rootCAFile
-	}
-
-	return &rest.Config{
-		Host:            "https://" + net.JoinHostPort(host, port),
-		TLSClientConfig: tlsClientConfig,
-		BearerToken:     string(token),
-		BearerTokenFile: tokenFile,
-	}, nil
 }

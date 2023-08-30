@@ -19,9 +19,9 @@ import (
 	"strings"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
+	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/clientcmd"
 
 	"github.com/projectcalico/calico/node/pkg/lifecycle/utils"
 
@@ -37,7 +37,7 @@ func ShouldInstallUpgradeService() {
 	nodeName := determineNodeName()
 	log.Debugf("Check if Calico upgrade service should be installed on node: %s. Version: %s, Variant: %s, baseDir: %s", nodeName, version, variant, baseDir())
 
-	config, err := clientcmd.BuildConfigFromFlags("", kubeConfigFile())
+	config, err := winutils.BuildConfigFromFlags("", kubeConfigFile())
 	if err != nil {
 		log.WithError(err).Fatal("Failed to build Kubernetes client config")
 		os.Exit(2)
