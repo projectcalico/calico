@@ -35,6 +35,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/upgrade/migrator/clients/v1/k8s/custom"
 	"github.com/projectcalico/calico/libcalico-go/lib/upgrade/migrator/clients/v1/k8s/resources"
+	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 )
 
 type KubeClient struct {
@@ -84,8 +85,17 @@ func NewKubeClient(kc *capi.KubeConfig) (*KubeClient, error) {
 
 	// A kubeconfig file was provided.  Use it to load a config, passing through
 	// any overrides.
-	config, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
-		&loadingRules, configOverrides).ClientConfig()
+	var config *rest.Config
+	var err error
+	if winutils.InHostProcessContainer() {
+		// ClientConfig() calls InClusterConfig() at some point, which doesn't work
+		// on Windows HPC. Use winutils.GetInClusterConfig() instead in this case.
+		// FIXME: this will no longer be needed when containerd v1.6 is EOL'd
+		config, err = winutils.GetInClusterConfig()
+	} else {
+		config, err = clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
+			&loadingRules, configOverrides).ClientConfig()
+	}
 	if err != nil {
 		return nil, resources.K8sErrorToCalico(err, nil)
 	}
