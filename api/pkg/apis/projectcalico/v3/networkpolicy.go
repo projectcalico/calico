@@ -100,7 +100,26 @@ type NetworkPolicySpec struct {
 
 	// ServiceAccountSelector is an optional field for an expression used to select a pod based on service accounts.
 	ServiceAccountSelector string `json:"serviceAccountSelector,omitempty" validate:"selector"`
+
+	// ProgramIntoDataplane, if set to OnDemand (the default), Felix will
+	// determine whether the policy is active on the local node automatically
+	// (i.e. when it applies to a local endpoint).  If set to Always, Felix
+	// will treat the policy as active (and program it into the dataplane) even
+	// if it is not used on the local node.
+	//
+	// In almost all cases, OnDemand is the best setting.  Always should only
+	// be used for static/baseline policies that are very likely to apply on
+	// every node (and it is only worthwhile if you have thousands of rules in such
+	// policies).  Using it on those policies prevents Felix from doing work
+	// to add/remove the policies when the first/last endpoint is added/removed.
+	// This reduces latency to add/remove that first/last endpoint.
+	ProgramIntoDataplane string `json:"programIntoDataplane,omitempty" validate:"omitempty,oneof=OnDemand Always"`
 }
+
+const (
+	ProgramIntoDataplaneOnDemand = "OnDemand"
+	ProgramIntoDataplaneAlways   = "Always"
+)
 
 // NewNetworkPolicy creates a new (zeroed) NetworkPolicy struct with the TypeMetadata initialised to the current
 // version.
