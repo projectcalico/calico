@@ -3313,6 +3313,13 @@ func schema_pkg_apis_projectcalico_v3_GlobalNetworkPolicySpec(ref common.Referen
 							Format:      "",
 						},
 					},
+					"programIntoDataplane": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ProgramIntoDataplane, if set to OnDemand (the default), Felix will determine whether the policy is active on the local node automatically (i.e. when it applies to a local endpoint).  If set to Always, Felix will treat the policy as active (and program it into the dataplane) even if it is not used on the local node.\n\nIn almost all cases, OnDemand is the best setting.  Always should only be used for static/baseline policies that are very likely to apply on every node (and it is only worthwhile if you have thousands of rules in such policies).  Using it on those policies prevents Felix from doing work to add/remove the policies when the first/last endpoint is added/removed. This reduces latency to add/remove that first/last endpoint.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 				},
 			},
 		},
@@ -4543,6 +4550,13 @@ func schema_pkg_apis_projectcalico_v3_NetworkPolicySpec(ref common.ReferenceCall
 					"serviceAccountSelector": {
 						SchemaProps: spec.SchemaProps{
 							Description: "ServiceAccountSelector is an optional field for an expression used to select a pod based on service accounts.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"programIntoDataplane": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ProgramIntoDataplane, if set to OnDemand (the default), Felix will determine whether the policy is active on the local node automatically (i.e. when it applies to a local endpoint).  If set to Always, Felix will treat the policy as active (and program it into the dataplane) even if it is not used on the local node.\n\nIn almost all cases, OnDemand is the best setting.  Always should only be used for static/baseline policies that are very likely to apply on every node (and it is only worthwhile if you have thousands of rules in such policies).  Using it on those policies prevents Felix from doing work to add/remove the policies when the first/last endpoint is added/removed. This reduces latency to add/remove that first/last endpoint.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
