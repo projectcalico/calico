@@ -20,7 +20,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/pkg/errors"
 	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/calico/felix/bpf/maps"
@@ -43,6 +42,12 @@ func SetMapSize(size int) {
 const KeySize = 8
 
 type Key [KeySize]byte
+
+type KeyInterface interface {
+	Addr() ip.Addr
+	Dest() ip.CIDR
+	PrefixLen() int
+}
 
 func (k Key) Addr() ip.Addr {
 	var addr ip.V4Addr
@@ -96,6 +101,12 @@ const (
 const ValueSize = 8
 
 type Value [ValueSize]byte
+
+type ValueInterface interface {
+	Flags() Flags
+	NextHop() ip.Addr
+	IfaceIndex() uint32
+}
 
 func (v Value) Flags() Flags {
 	return Flags(binary.LittleEndian.Uint32(v[:4]))
@@ -228,39 +239,29 @@ func LoadMap(rtm maps.Map) (MapMem, error) {
 	return m, err
 }
 
-type LPMv4 struct {
+type LPM struct {
 	sync.RWMutex
 	t *ip.CIDRTrie
 }
 
-func NewLPMv4() *LPMv4 {
-	return &LPMv4{
+func NewLPM() *LPM {
+	return &LPM{
 		t: ip.NewCIDRTrie(),
 	}
 }
 
-func (lpm *LPMv4) Update(k Key, v Value) error {
-	if cidrv4, ok := k.Dest().(ip.V4CIDR); ok {
-		lpm.t.Update(cidrv4, v)
-		return nil
-	}
-
-	return errors.Errorf("k.Dest() %+v type %T is not ip.V4CIDR", k.Dest(), k.Dest())
+func (lpm *LPM) Update(k KeyInterface, v ValueInterface) {
+	lpm.t.Update(k.Dest(), v)
 }
 
-func (lpm *LPMv4) Delete(k Key) error {
-	if cidrv4, ok := k.Dest().(ip.V4CIDR); ok {
-		lpm.t.Delete(cidrv4)
-		return nil
-	}
-
-	return errors.Errorf("k.Dest() %+v type %T is not ip.V4CIDR", k.Dest(), k.Dest())
+func (lpm *LPM) Delete(k KeyInterface) {
+	lpm.t.Delete(k.Dest())
 }
 
-func (lpm *LPMv4) Lookup(addr ip.V4Addr) (Value, bool) {
-	_, v := lpm.t.LPM(addr.AsCIDR().(ip.V4CIDR))
+func (lpm *LPM) Lookup(addr ip.Addr) (ValueInterface, bool) {
+	_, v := lpm.t.LPM(addr.AsCIDR())
 	if v == nil {
-		return Value{}, false
+		return nil, false
 	}
-	return v.(Value), true
+	return v.(ValueInterface), true
 }

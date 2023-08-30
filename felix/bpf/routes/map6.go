@@ -18,9 +18,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"strings"
-	"sync"
 
-	"github.com/pkg/errors"
 	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/calico/felix/bpf/maps"
@@ -183,41 +181,4 @@ func LoadMapV6(rtm maps.Map) (MapMemV6, error) {
 	})
 
 	return m, err
-}
-
-type LPMv6 struct {
-	sync.RWMutex
-	t *ip.CIDRTrie
-}
-
-func NewLPMv6() *LPMv6 {
-	return &LPMv6{
-		t: ip.NewCIDRTrie(),
-	}
-}
-
-func (lpm *LPMv6) Update(k KeyV6, v ValueV6) error {
-	if cidrv6, ok := k.Dest().(ip.V6CIDR); ok {
-		lpm.t.Update(cidrv6, v)
-		return nil
-	}
-
-	return errors.Errorf("k.Dest() %+v type %T is not ip.V4CIDR", k.Dest(), k.Dest())
-}
-
-func (lpm *LPMv6) Delete(k KeyV6) error {
-	if cidrv6, ok := k.Dest().(ip.V6CIDR); ok {
-		lpm.t.Delete(cidrv6)
-		return nil
-	}
-
-	return errors.Errorf("k.Dest() %+v type %T is not ip.V4CIDR", k.Dest(), k.Dest())
-}
-
-func (lpm *LPMv6) Lookup(addr ip.V6Addr) (ValueV6, bool) {
-	_, v := lpm.t.LPM(addr.AsCIDR().(ip.V6CIDR))
-	if v == nil {
-		return ValueV6{}, false
-	}
-	return v.(ValueV6), true
 }
