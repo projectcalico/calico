@@ -95,12 +95,7 @@ func installProgram(name, ipver, bpfMount, cgroupPath, logLevel string, udpNotSe
 	progPinDir := path.Join(bpfMount, "calico_connect4")
 	_ = os.RemoveAll(progPinDir)
 
-	var filename string
-	if ipver == "6" {
-		filename = path.Join(bpfdefs.ObjectDir, ProgFileName(logLevel, 6))
-	} else {
-		filename = path.Join(bpfdefs.ObjectDir, ProgFileName(logLevel, 4))
-	}
+	filename := path.Join(bpfdefs.ObjectDir, ProgFileName(logLevel, ipver))
 
 	progName := "calico_" + name + "_v" + ipver
 
@@ -171,7 +166,7 @@ func InstallConnectTimeLoadBalancer(cgroupv2 string, logLevel string, udpNotSeen
 		return err
 	}
 
-	err = installProgram("connect", "6", bpfMount, cgroupPath, logLevel, udpNotSeen, excludeUDP)
+	err = installProgram("connect", "46", bpfMount, cgroupPath, logLevel, udpNotSeen, excludeUDP)
 	if err != nil {
 		return err
 	}
@@ -187,12 +182,12 @@ func InstallConnectTimeLoadBalancer(cgroupv2 string, logLevel string, udpNotSeen
 			return err
 		}
 
-		err = installProgram("sendmsg", "6", bpfMount, cgroupPath, logLevel, udpNotSeen, false)
+		err = installProgram("sendmsg", "46", bpfMount, cgroupPath, logLevel, udpNotSeen, false)
 		if err != nil {
 			return err
 		}
 
-		err = installProgram("recvmsg", "6", bpfMount, cgroupPath, logLevel, udpNotSeen, false)
+		err = installProgram("recvmsg", "46", bpfMount, cgroupPath, logLevel, udpNotSeen, false)
 		if err != nil {
 			return err
 		}
@@ -201,7 +196,7 @@ func InstallConnectTimeLoadBalancer(cgroupv2 string, logLevel string, udpNotSeen
 	return nil
 }
 
-func ProgFileName(logLevel string, ipver int) string {
+func ProgFileName(logLevel string, ipver string) string {
 	logLevel = strings.ToLower(logLevel)
 	if logLevel == "off" {
 		logLevel = "no_log"
@@ -212,15 +207,7 @@ func ProgFileName(logLevel string, ipver int) string {
 		btf = "_co-re"
 	}
 
-	switch ipver {
-	case 4:
-		return fmt.Sprintf("connect_time_%s_v4%s.o", logLevel, btf)
-	case 6:
-		return fmt.Sprintf("connect_time_%s_v6%s.o", logLevel, btf)
-	}
-
-	log.WithField("ipver", ipver).Fatal("Invalid IP version")
-	return ""
+	return fmt.Sprintf("connect_time_%s_v%s%s.o", logLevel, ipver, btf)
 }
 
 func ensureCgroupPath(cgroupv2 string) (string, error) {
