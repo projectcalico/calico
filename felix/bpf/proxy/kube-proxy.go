@@ -25,9 +25,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/bpf/bpfmap"
 	"github.com/projectcalico/calico/felix/bpf/maps"
-	"github.com/projectcalico/calico/felix/bpf/nat"
 	"github.com/projectcalico/calico/felix/bpf/routes"
-	"github.com/projectcalico/calico/felix/cachingmap"
 )
 
 func init() {
@@ -41,6 +39,7 @@ type KubeProxy struct {
 	proxy  Proxy
 	syncer DPSyncer
 
+	ipFamily      int
 	hostIPUpdates chan []net.IP
 	stopOnce      sync.Once
 	lock          sync.RWMutex
@@ -65,6 +64,7 @@ func StartKubeProxy(k8s kubernetes.Interface, hostname string,
 
 	kp := &KubeProxy{
 		k8s:         k8s,
+		ipFamily:    4,
 		hostname:    hostname,
 		frontendMap: bpfMaps.FrontendMap.(maps.MapWithExistsCheck),
 		backendMap:  bpfMaps.BackendMap.(maps.MapWithExistsCheck),
@@ -93,6 +93,10 @@ func StartKubeProxy(k8s kubernetes.Interface, hostname string,
 	return kp, nil
 }
 
+func (kp *KubeProxy) setIpFamily(ipFamily int) {
+	kp.ipFamily = ipFamily
+}
+
 // Stop stops KubeProxy and waits for it to exit
 func (kp *KubeProxy) Stop() {
 	kp.stopOnce.Do(func() {
@@ -115,16 +119,7 @@ func (kp *KubeProxy) run(hostIPs []net.IP) error {
 	copy(withLocalNP, hostIPs)
 	withLocalNP = append(withLocalNP, podNPIP)
 
-	feCache := cachingmap.New[nat.FrontendKey, nat.FrontendValue](nat.FrontendMapParameters.Name,
-		maps.NewTypedMap[nat.FrontendKey, nat.FrontendValue](
-			kp.frontendMap, nat.FrontendKeyFromBytes, nat.FrontendValueFromBytes,
-		))
-	beCache := cachingmap.New[nat.BackendKey, nat.BackendValue](nat.BackendMapParameters.Name,
-		maps.NewTypedMap[nat.BackendKey, nat.BackendValue](
-			kp.backendMap, nat.BackendKeyFromBytes, nat.BackendValueFromBytes,
-		))
-
-	syncer, err := NewSyncer(withLocalNP, feCache, beCache, kp.affinityMap, kp.rt)
+	syncer, err := NewSyncer(kp.ipFamily, withLocalNP, kp.frontendMap, kp.backendMap, kp.affinityMap, kp.rt)
 	if err != nil {
 		return errors.WithMessage(err, "new bpf syncer")
 	}
@@ -215,17 +210,14 @@ func (kp *KubeProxy) OnHostIPsUpdate(IPs []net.IP) {
 }
 
 // OnRouteUpdate should be used to update the internal state of routing tables
-func (kp *KubeProxy) OnRouteUpdate(k routes.Key, v routes.Value) {
-	if err := kp.rt.Update(k, v); err != nil {
-		log.WithField("error", err).Error("kube-proxy: OnRouteUpdate")
-	} else {
-		log.WithFields(log.Fields{"key": k, "value": v}).Debug("kube-proxy: OnRouteUpdate")
-	}
+func (kp *KubeProxy) OnRouteUpdate(k routes.KeyInterface, v routes.ValueInterface) {
+	kp.rt.Update(k, v)
+	log.WithFields(log.Fields{"key": k, "value": v}).Debug("kube-proxy: OnRouteUpdate")
 }
 
 // OnRouteDelete should be used to update the internal state of routing tables
-func (kp *KubeProxy) OnRouteDelete(k routes.Key) {
-	_ = kp.rt.Delete(k)
+func (kp *KubeProxy) OnRouteDelete(k routes.KeyInterface) {
+	kp.rt.Delete(k)
 	log.WithField("key", k).Debug("kube-proxy: OnRouteDelete")
 }
 

@@ -79,8 +79,8 @@ type bpfRouteManager struct {
 	// Callbacks used to tell kube-proxy about the relevant routes.
 	cbLck           sync.RWMutex
 	hostIPsUpdateCB func([]net.IP)
-	routesUpdateCB  func(routes.Key, routes.Value)
-	routesDeleteCB  func(routes.Key)
+	routesUpdateCB  func(routes.KeyInterface, routes.ValueInterface)
+	routesDeleteCB  func(routes.KeyInterface)
 
 	opReporter logutils.OpRecorder
 
@@ -639,7 +639,7 @@ func (m *bpfRouteManager) setHostIPUpdatesCallBack(cb func([]net.IP)) {
 	m.hostIPsUpdateCB = cb
 }
 
-func (m *bpfRouteManager) setRoutesCallBacks(update func(routes.Key, routes.Value), del func(routes.Key)) {
+func (m *bpfRouteManager) setRoutesCallBacks(update func(routes.KeyInterface, routes.ValueInterface), del func(routes.KeyInterface)) {
 	m.cbLck.Lock()
 	defer m.cbLck.Unlock()
 
@@ -647,7 +647,7 @@ func (m *bpfRouteManager) setRoutesCallBacks(update func(routes.Key, routes.Valu
 	m.routesDeleteCB = del
 }
 
-func (m *bpfRouteManager) onRouteUpdateCB(k routes.Key, v routes.Value) {
+func (m *bpfRouteManager) onRouteUpdateCB(k routes.KeyInterface, v routes.ValueInterface) {
 	m.cbLck.RLock()
 	defer m.cbLck.RUnlock()
 	if m.routesUpdateCB != nil {
@@ -655,7 +655,7 @@ func (m *bpfRouteManager) onRouteUpdateCB(k routes.Key, v routes.Value) {
 	}
 }
 
-func (m *bpfRouteManager) onRouteDeleteCB(k routes.Key) {
+func (m *bpfRouteManager) onRouteDeleteCB(k routes.KeyInterface) {
 	m.cbLck.RLock()
 	defer m.cbLck.RUnlock()
 	if m.routesDeleteCB != nil {
