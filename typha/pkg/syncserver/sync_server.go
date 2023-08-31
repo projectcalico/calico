@@ -428,43 +428,10 @@ func (s *Server) serve(cxt context.Context) {
 		}
 
 		logCxt.Infof("Accepted from %s", conn.RemoteAddr())
-		var tcpConn *net.TCPConn
-		if s.config.requiringTLS() {
-			// Doing TLS, we must do the handshake...
-			tlsConn := conn.(*tls.Conn)
-			logCxt.Debug("TLS connection")
-			err = func() error {
-				handshakeCxt, handshakeCancel := context.WithTimeout(cxt, s.config.HandshakeTimeout)
-				defer handshakeCancel()
-				return tlsConn.HandshakeContext(handshakeCxt)
-			}()
-			if err != nil {
-				logCxt.WithError(err).Error("TLS handshake error")
-				err = conn.Close()
-				if err != nil {
-					logCxt.WithError(err).Warning("Error closing failed TLS connection")
-				}
-				continue
-			}
-			state := tlsConn.ConnectionState()
-			for _, v := range state.PeerCertificates {
-				bytes, _ := x509.MarshalPKIXPublicKey(v.PublicKey)
-				logCxt.Debugf("%#v", bytes)
-				logCxt.Debugf("%#v", v.Subject)
-				logCxt.Debugf("%#v", v.URIs)
-			}
-			tcpConn, _ = tlsConn.NetConn().(*net.TCPConn)
-		} else {
-			tcpConn, _ = conn.(*net.TCPConn)
-		}
 
 		if s.config.WriteBufferSize != 0 {
-			if err := tcpConn.SetWriteBuffer(s.config.WriteBufferSize); err != nil { // Covers the nil case.
-				// Only logging for now, we only use this option in tests.
-				logCxt.WithError(err).Warn("Failed to set write buffer size.")
-			} else {
-				logCxt.WithField("size", s.config.WriteBufferSize).Info("Set connection write buffer size.")
-			}
+			// Try to set the write buffer size.  Only used in tests for now.
+			setWriteBufferSizeBestEffort(conn, s.config.WriteBufferSize)
 		}
 
 		connID := s.nextConnID
@@ -515,6 +482,26 @@ func (s *Server) serve(cxt context.Context) {
 			s.discardConnection(connection)
 			s.Finished.Done()
 		}()
+	}
+}
+
+func setWriteBufferSizeBestEffort(conn net.Conn, size int) {
+	if tlsConn, ok := conn.(*tls.Conn); ok {
+		// TLS connection: need to get the underlying socket to adjust the
+		// write buffer size.
+		conn = tlsConn.NetConn()
+	}
+
+	tcpConn, ok := conn.(interface{ SetWriteBuffer(bytes int) error })
+	if !ok {
+		log.WithField("conn", conn).Warn(
+			"Failed to get underlying TCP connection to set write buffer size.")
+		return
+	}
+
+	if err := tcpConn.SetWriteBuffer(size); err != nil {
+		log.WithError(err).Warn("Failed to set write buffer size.")
+		return
 	}
 }
 
@@ -891,10 +878,9 @@ func (h *connection) readFromClient(logCxt *log.Entry) {
 }
 
 // waitForMessage blocks, waiting for a message on the h.readC channel.  It imposes a timeout.
-func (h *connection) waitForMessage(logCxt *log.Entry) (interface{}, error) {
-	// Read the hello message from the client.
-	cxt, cancel := context.WithDeadline(h.cxt, time.Now().Add(60*time.Second))
-	defer cancel()
+func (h *connection) waitForMessage(logCxt *log.Entry, timeout time.Duration) (interface{}, error) {
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
 	select {
 	case msg := <-h.readC:
 		if msg == nil {
@@ -903,15 +889,19 @@ func (h *connection) waitForMessage(logCxt *log.Entry) (interface{}, error) {
 		}
 		logCxt.WithField("msg", msg).Debug("Received message from client.")
 		return msg, nil
-	case <-cxt.Done():
-		logCxt.Info("Asked to stop by context.")
+	case <-timer.C:
+		// Error gets logged by caller.
+		return nil, fmt.Errorf("timed out waiting for message from client")
+	case <-h.cxt.Done():
+		// Error gets logged by caller.
 		return nil, h.cxt.Err()
 	}
 }
 
 func (h *connection) doHandshake() error {
-	// Read the client's hello message.
-	msg, err := h.waitForMessage(h.logCxt)
+	// Read the client's hello message.  Note: for TLS connections this
+	// first read is where the TLS handshake happens.
+	msg, err := h.waitForMessage(h.logCxt, h.config.HandshakeTimeout)
 	if err != nil {
 		h.logCxt.WithError(err).Warn("Failed to read client hello.")
 		return err
@@ -988,9 +978,11 @@ func (h *connection) restartEncodingIfSupported(message string) error {
 }
 
 func (h *connection) waitForAckAndRestartEncoder() error {
-	// Wait until the client ACKs.  This avoids sending compressed data that might get misinterpreted
-	// by the gob decoder.
-	msg, err := h.waitForMessage(h.logCxt)
+	// Wait until the client ACKs.  This avoids sending compressed data that
+	// might get misinterpreted by the gob decoder.  We use the pong timeout
+	// here because it has a very similar purpose; we sent something, and
+	// we're waiting for the response.
+	msg, err := h.waitForMessage(h.logCxt, h.config.PongTimeout)
 	if err != nil {
 		h.logCxt.WithError(err).Warn("Failed to read client ACK.")
 		return err
