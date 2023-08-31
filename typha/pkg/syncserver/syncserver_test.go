@@ -41,6 +41,7 @@ var _ = Describe("With zero config", func() {
 			MinBatchingAgeThreshold:        100 * time.Millisecond,
 			PingInterval:                   10 * time.Second,
 			PongTimeout:                    60 * time.Second,
+			HandshakeTimeout:               10 * time.Second,
 			DropInterval:                   time.Second,
 			ShutdownTimeout:                300 * time.Second,
 			ShutdownMaxDropInterval:        time.Second,
