@@ -419,6 +419,33 @@ func (b *PinnedMap) Delete(k []byte) error {
 	return DeleteMapEntry(b.fd, k)
 }
 
+func (b *PinnedMap) deletePreviousVersion() error {
+	log.WithField("name", b.Name).Debug("delete previous version")
+	oldVersion, err := b.getOldMapVersion()
+	log.WithError(err).Debugf("Upgrading from %d", oldVersion)
+	if err != nil {
+		return err
+	}
+	// fresh install
+	if oldVersion == 0 {
+		return nil
+	}
+
+	// Get a pinnedMap handle for the old map
+	oldMapParams := b.GetMapParams(oldVersion)
+	oldBpfMap := NewPinnedMap(oldMapParams)
+
+	defer func() {
+		oldBpfMap.Close()
+		oldBpfMap.fd = 0
+
+		os.Remove(oldBpfMap.Path())
+		os.Remove(oldBpfMap.Path() + "_old")
+	}()
+
+	return nil
+}
+
 func (b *PinnedMap) DeleteIfExists(k []byte) error {
 	return DeleteMapEntryIfExists(b.fd, k)
 }
@@ -757,6 +784,12 @@ func (b *PinnedMap) CopyDeltaFromOldMap() error {
 	if err != nil {
 		return fmt.Errorf("error upgrading data from old map %s, err=%w", b.GetName(), err)
 	}
+
+	err = b.deletePreviousVersion()
+	if err != nil && !IsNotExists(err) {
+		return fmt.Errorf("failed to delete previous %s map, err=%w", b.Name, err)
+	}
+
 	if b.oldfd == 0 {
 		log.WithField("name", b.Name).Debug("CopyDeltaFromOldMap - no old map, done.")
 		return nil
