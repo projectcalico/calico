@@ -28,10 +28,10 @@ int calico_connect_v46(struct bpf_sock_addr *ctx)
 	int ret = 1;
 	__be32 ipv4;
 
-	CALI_DEBUG("connect_v6 ip[0-1] %x%x\n",
+	CALI_DEBUG("connect_v46 ip[0-1] %x%x\n",
 			ctx->user_ip6[0],
 			ctx->user_ip6[1]);
-	CALI_DEBUG("connect_v6 ip[2-3] %x%x\n",
+	CALI_DEBUG("connect_v46 ip[2-3] %x%x\n",
 			ctx->user_ip6[2],
 			ctx->user_ip6[3]);
 
@@ -47,7 +47,7 @@ int calico_connect_v46(struct bpf_sock_addr *ctx)
 v4:
 	ipv4 = ctx->user_ip6[3];
 
- 	if ((ret = connect_v4(ctx, &ipv4)) != 1) {
+ 	if ((ret = connect(ctx, &ipv4)) != 1) {
 		goto out;
 	}
 
