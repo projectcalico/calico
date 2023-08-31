@@ -23,9 +23,15 @@
 SEC("cgroup/connect6")
 int calico_connect_v6(struct bpf_sock_addr *ctx)
 {
-	CALI_DEBUG("calico_connect_v4\n");
+	CALI_DEBUG("calico_connect_v6\n");
 
-	return connect(ctx, (ipv46_addr_t *)ctx->user_ip6);
+	ipv46_addr_t dst = {};
+	be32_4_ip_to_ipv6_addr_t(&dst, ctx->user_ip6);
+
+	int ret = connect(ctx, &dst);
+	ipv6_addr_t_to_be32_4_ip(ctx->user_ip6, &dst);
+
+	return ret;
 }
 
 SEC("cgroup/sendmsg6")
@@ -36,14 +42,17 @@ int calico_sendmsg_v6(struct bpf_sock_addr *ctx)
 	}
 
 	CALI_DEBUG("sendmsg_v6 %x:%d\n",
-			bpf_ntohl(ctx->user_ip4), bpf_ntohl(ctx->user_port)>>16);
+			bpf_ntohl(ctx->user_ip6[3]), bpf_ntohl(ctx->user_port)>>16);
 
 	if (ctx->type != SOCK_DGRAM) {
 		CALI_INFO("unexpected sock type %d\n", ctx->type);
 		goto out;
 	}
 
-	do_nat_common(ctx, IPPROTO_UDP, (ipv46_addr_t *)ctx->user_ip6, false);
+	ipv46_addr_t dst = {};
+	be32_4_ip_to_ipv6_addr_t(&dst, ctx->user_ip6);
+
+	do_nat_common(ctx, IPPROTO_UDP, &dst, false);
 
 out:
 	return 1;

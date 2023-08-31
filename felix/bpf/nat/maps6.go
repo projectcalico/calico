@@ -558,7 +558,7 @@ func AffinityMapMemV6Iter(m AffinityMapMemV6) func(k, v []byte) {
 // };
 
 const sendRecvMsgKeyV6Size = 32 // 28 + 4B padding
-const ctNATsMsgKeyV6Size = 40
+const ctNATsMsgKeyV6Size = 32
 
 // SendRecvMsgKeyV6 is the key for SendRecvMsgMap
 type SendRecvMsgKeyV6 [sendRecvMsgKeyV6Size]byte
