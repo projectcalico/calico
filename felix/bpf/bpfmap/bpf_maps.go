@@ -149,15 +149,15 @@ func CreateBPFMaps() (*Maps, error) {
 			return nil, fmt.Errorf("failed to create %s map, err=%w", bpfMap.GetName(), err)
 		}
 
-		//err = bpfMap.DeletePreviousVersion()
-		//if err != nil {
-		//	for j := 0; j < i; j++ {
-		//		m := mps[j]
-		//		os.Remove(m.(*maps.PinnedMap).Path())
-		//		m.(*maps.PinnedMap).Close()
-		//	}
-		//	return nil, fmt.Errorf("failed to delete %s map, err=%w", bpfMap.GetName(), err)
-		//}
+		err = bpfMap.DeletePreviousVersion()
+		if err != nil {
+			for j := 0; j < i; j++ {
+				m := mps[j]
+				os.Remove(m.(*maps.PinnedMap).Path())
+				m.(*maps.PinnedMap).Close()
+			}
+			return nil, fmt.Errorf("failed to delete %s map, err=%w", bpfMap.GetName(), err)
+		}
 	}
 
 	return ret, nil
