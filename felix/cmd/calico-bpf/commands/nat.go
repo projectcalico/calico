@@ -96,7 +96,7 @@ func dumpAff(cmd *cobra.Command) (err error) {
 }
 
 func dump(cmd *cobra.Command) error {
-	if ipv6 != nil {
+	if ipv6 != nil && *ipv6 {
 		natMap, err := nat.LoadFrontendMapV6(nat.FrontendMapV6())
 		if err != nil {
 			return err
