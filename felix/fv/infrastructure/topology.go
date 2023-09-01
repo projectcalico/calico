@@ -316,7 +316,11 @@ func StartNNodeTopology(n int, opts TopologyOptions, infra DatastoreInfra) (tc T
 		if opts.EnableIPv6 {
 			Expect(felix.IPv6).ToNot(BeEmpty(), "IPv6 enabled but Felix didn't get an IPv6 address, is docker configured for IPv6?")
 		}
+
 		expectedIPs := []string{felix.IP}
+		if felix.IPv6 != "" {
+			expectedIPs = append(expectedIPs, felix.IPv6)
+		}
 		if kdd, ok := infra.(*K8sDatastoreInfra); ok && opts.ExternalIPs {
 			kdd.SetExternalIP(felix, i)
 			expectedIPs = append(expectedIPs, felix.ExternalIP)
