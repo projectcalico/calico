@@ -698,6 +698,9 @@ func (c *Container) SourceName() string {
 
 func (c *Container) SourceIPs() []string {
 	ips := []string{c.IP}
+	if c.IPv6 != "" {
+		ips = append(ips, c.IPv6)
+	}
 	ips = append(ips, c.ExtraSourceIPs...)
 	return ips
 }
