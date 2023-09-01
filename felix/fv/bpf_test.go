@@ -2013,7 +2013,16 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						By("Checking timestamps on conntrack entries are sane")
 						// This test verifies that we correctly interpret conntrack entry timestamps by reading them back
 						// and checking that they're (a) in the past and (b) sensibly recent.
-						ctDump, err := tc.Felixes[0].ExecOutput("calico-bpf", "conntrack", "dump")
+						var (
+							err    error
+							ctDump string
+						)
+
+						if testOpts.ipv6 {
+							ctDump, err = tc.Felixes[0].ExecOutput("calico-bpf", "conntrack", "-6", "dump")
+						} else {
+							ctDump, err = tc.Felixes[0].ExecOutput("calico-bpf", "conntrack", "dump")
+						}
 						Expect(err).NotTo(HaveOccurred())
 						re := regexp.MustCompile(`LastSeen:\s*(\d+)`)
 						matches := re.FindAllStringSubmatch(ctDump, -1)
@@ -2032,7 +2041,11 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						// test is mainly to check that the cleanup code actually runs and is able to actually delete
 						// entries.
 						numWl0ConntrackEntries := func() int {
-							ctDump, err := tc.Felixes[0].ExecOutput("calico-bpf", "conntrack", "dump")
+							if testOpts.ipv6 {
+								ctDump, err = tc.Felixes[0].ExecOutput("calico-bpf", "conntrack", "-6", "dump")
+							} else {
+								ctDump, err = tc.Felixes[0].ExecOutput("calico-bpf", "conntrack", "dump")
+							}
 							Expect(err).NotTo(HaveOccurred())
 							return strings.Count(ctDump, w[0][0].IP)
 						}
@@ -2048,15 +2061,26 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 						var (
 							testSvcUpdated      *v1.Service
-							natBackBeforeUpdate []nat.BackendMapMem
-							natBeforeUpdate     []nat.MapMem
+							natBackBeforeUpdate []map[nat.BackendKey]nat.BackendValueInterface
+							natBeforeUpdate     []map[nat.FrontendKeyInterface]nat.FrontendValue
 						)
 
 						BeforeEach(func() {
+							family := 4
+
+							var oldK nat.FrontendKeyInterface
+
 							ip := testSvc.Spec.ClusterIP
 							portOld := uint16(testSvc.Spec.Ports[0].Port)
-							ipv4 := net.ParseIP(ip)
-							oldK := nat.NewNATKey(ipv4, portOld, numericProto)
+
+							if testOpts.ipv6 {
+								family = 6
+								ipv6 := net.ParseIP(ip)
+								oldK = nat.NewNATKeyV6(ipv6, portOld, numericProto)
+							} else {
+								ipv4 := net.ParseIP(ip)
+								oldK = nat.NewNATKey(ipv4, portOld, numericProto)
+							}
 
 							// Wait for the NAT maps to converge...
 							log.Info("Waiting for NAT maps to converge...")
@@ -2065,7 +2089,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								if time.Since(startTime) > 5*time.Second {
 									Fail("NAT maps failed to converge")
 								}
-								natBeforeUpdate, natBackBeforeUpdate = dumpNATmaps(tc.Felixes)
+								natBeforeUpdate, natBackBeforeUpdate = dumpNATmapsAny(family, tc.Felixes)
 								for i, m := range natBeforeUpdate {
 									if natV, ok := m[oldK]; !ok {
 										goto retry
@@ -2092,7 +2116,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							}
 							log.Info("NAT maps converged.")
 
-							testSvcUpdated = k8sService(testSvcName, "10.101.0.10", w[0][0], 88, 8055, 0, testOpts.protocol)
+							testSvcUpdated = k8sService(testSvcName, serviceIP, w[0][0], 88, 8055, 0, testOpts.protocol)
 
 							svc, err := k8sClient.CoreV1().
 								Services(testSvcNamespace).
@@ -2117,6 +2141,12 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						})
 
 						It("should not have connectivity from all workloads via the old port", func() {
+							family := 4
+
+							var (
+								oldK, natK nat.FrontendKeyInterface
+							)
+
 							ip := testSvc.Spec.ClusterIP
 							port := uint16(testSvc.Spec.Ports[0].Port)
 
@@ -2125,16 +2155,25 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							cc.ExpectNone(w[1][1], TargetIP(ip), port)
 							cc.CheckConnectivity()
 
-							natmaps, natbacks := dumpNATmaps(tc.Felixes)
-							ipv4 := net.ParseIP(ip)
 							portOld := uint16(testSvc.Spec.Ports[0].Port)
-							oldK := nat.NewNATKey(ipv4, portOld, numericProto)
 							portNew := uint16(testSvcUpdated.Spec.Ports[0].Port)
-							natK := nat.NewNATKey(ipv4, portNew, numericProto)
+
+							if testOpts.ipv6 {
+								family = 6
+								ipv6 := net.ParseIP(ip)
+								oldK = nat.NewNATKeyV6(ipv6, portOld, numericProto)
+								natK = nat.NewNATKeyV6(ipv6, portNew, numericProto)
+							} else {
+								ipv4 := net.ParseIP(ip)
+								oldK = nat.NewNATKey(ipv4, portOld, numericProto)
+								natK = nat.NewNATKey(ipv4, portNew, numericProto)
+							}
+
+							natmaps, natbacks := dumpNATmapsAny(family, tc.Felixes)
 
 							for i := range tc.Felixes {
 								Expect(natmaps[i]).To(HaveKey(natK))
-								Expect(natmaps[i]).NotTo(HaveKey(nat.NewNATKey(ipv4, portOld, numericProto)))
+								Expect(natmaps[i]).NotTo(HaveKey(oldK))
 
 								Expect(natBeforeUpdate[i]).To(HaveKey(oldK))
 								oldV := natBeforeUpdate[i][oldK]
@@ -2156,12 +2195,23 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						})
 
 						It("after removing service, should not have connectivity from workloads via a service to workload 0", func() {
+							var natK nat.FrontendKeyInterface
+
 							ip := testSvcUpdated.Spec.ClusterIP
 							port := uint16(testSvcUpdated.Spec.Ports[0].Port)
-							natK := nat.NewNATKey(net.ParseIP(ip), port, numericProto)
-							var prevBpfsvcs []nat.MapMem
+
+							family := 4
+							if testOpts.ipv6 {
+								family = 6
+								natK = nat.NewNATKeyV6(net.ParseIP(ip), port, numericProto)
+							} else {
+								natK = nat.NewNATKey(net.ParseIP(ip), port, numericProto)
+							}
+
+							var prevBpfsvcs []map[nat.FrontendKeyInterface]nat.FrontendValue
+
 							Eventually(func() bool {
-								prevBpfsvcs, _ = dumpNATmaps(tc.Felixes)
+								prevBpfsvcs, _ = dumpNATmapsAny(family, tc.Felixes)
 								for _, m := range prevBpfsvcs {
 									if _, ok := m[natK]; !ok {
 										return false
@@ -2187,8 +2237,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								bckID := natV.ID()
 
 								Eventually(func() bool {
-									svcs := dumpNATMap(f)
-									eps := dumpEPMap(f)
+									svcs, eps := dumpNATMapsAny(family, f)
 
 									if _, ok := svcs[natK]; ok {
 										return false
@@ -3958,6 +4007,29 @@ func dumpNATmaps(felixes []*infrastructure.Felix) ([]nat.MapMem, []nat.BackendMa
 	return bpfsvcs, bpfeps
 }
 
+func dumpNATmapsAny(family int, felixes []*infrastructure.Felix) (
+	[]map[nat.FrontendKeyInterface]nat.FrontendValue, []map[nat.BackendKey]nat.BackendValueInterface) {
+
+	bpfsvcs := make([]map[nat.FrontendKeyInterface]nat.FrontendValue, len(felixes))
+	bpfeps := make([]map[nat.BackendKey]nat.BackendValueInterface, len(felixes))
+
+	// Felixes are independent, we can dump the maps  concurrently
+	var wg sync.WaitGroup
+
+	for i := range felixes {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			defer GinkgoRecover()
+			bpfsvcs[i], bpfeps[i] = dumpNATMapsAny(family, felixes[i])
+		}(i)
+	}
+
+	wg.Wait()
+
+	return bpfsvcs, bpfeps
+}
+
 func dumpNATmapsV6(felixes []*infrastructure.Felix) ([]nat.MapMemV6, []nat.BackendMapMemV6) {
 	bpfsvcs := make([]nat.MapMemV6, len(felixes))
 	bpfeps := make([]nat.BackendMapMemV6, len(felixes))
@@ -3985,6 +4057,34 @@ func dumpNATMaps(felix *infrastructure.Felix) (nat.MapMem, nat.BackendMapMem) {
 
 func dumpNATMapsV6(felix *infrastructure.Felix) (nat.MapMemV6, nat.BackendMapMemV6) {
 	return dumpNATMapV6(felix), dumpEPMapV6(felix)
+}
+
+func dumpNATMapsAny(family int, felix *infrastructure.Felix) (
+	map[nat.FrontendKeyInterface]nat.FrontendValue,
+	map[nat.BackendKey]nat.BackendValueInterface) {
+
+	f := make(map[nat.FrontendKeyInterface]nat.FrontendValue)
+	b := make(map[nat.BackendKey]nat.BackendValueInterface)
+
+	if family == 6 {
+		f6, b6 := dumpNATMapsV6(felix)
+		for k, v := range f6 {
+			f[k] = v
+		}
+		for k, v := range b6 {
+			b[k] = v
+		}
+	} else {
+		f4, b4 := dumpNATMaps(felix)
+		for k, v := range f4 {
+			f[k] = v
+		}
+		for k, v := range b4 {
+			b[k] = v
+		}
+	}
+
+	return f, b
 }
 
 func dumpBPFMap(felix *infrastructure.Felix, m maps.Map, iter func(k, v []byte)) {
@@ -4281,6 +4381,9 @@ func checkNodeConntrack(felixes []*infrastructure.Felix) error {
 				// Whether traffic is generated in host namespace, or involves NAT, each
 				// contrack entry should be related to node's address
 				if strings.Contains(line, felix.IP) {
+					continue lineLoop
+				}
+				if strings.Contains(line, felix.IPv6) {
 					continue lineLoop
 				}
 				if felix.ExpectedIPIPTunnelAddr != "" && strings.Contains(line, felix.ExpectedIPIPTunnelAddr) {
