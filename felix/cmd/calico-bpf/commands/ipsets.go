@@ -51,7 +51,7 @@ func dumpIPSets() error {
 	ipsetMap := ipsets.Map()
 	fromBytes := ipsets.IPSetEntryFromBytes
 
-	if ipv6 != nil {
+	if ipv6 != nil && *ipv6 {
 		ipsetMap = ipsets.MapV6()
 		fromBytes = ipsets.IPSetEntryV6FromBytes
 	}

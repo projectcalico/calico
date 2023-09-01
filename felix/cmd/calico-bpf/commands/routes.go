@@ -51,7 +51,7 @@ var routesCmd = &cobra.Command{
 func dumpRoutes() error {
 	var routesMap maps.Map
 
-	if ipv6 != nil {
+	if ipv6 != nil && *ipv6 {
 		routesMap = routes.MapV6()
 	} else {
 		routesMap = routes.Map()
@@ -68,7 +68,7 @@ func dumpRoutes() error {
 		var key routes.KeyInterface
 		var value routes.ValueInterface
 
-		if ipv6 != nil {
+		if ipv6 != nil && *ipv6 {
 			var kk routes.KeyV6
 			var vv routes.ValueV6
 			copy(kk[:], k)
@@ -95,7 +95,7 @@ func dumpRoutes() error {
 		return err
 	}
 
-	if ipv6 != nil {
+	if ipv6 != nil && *ipv6 {
 		sortCIDRsV6(dests)
 	} else {
 		sortCIDRs(dests)

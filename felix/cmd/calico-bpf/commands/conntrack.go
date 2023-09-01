@@ -114,7 +114,7 @@ func (cmd *conntrackDumpCmd) Run(c *cobra.Command, _ []string) {
 	case "2":
 		ctMap = conntrack.MapV2()
 	default:
-		if ipv6 != nil {
+		if ipv6 != nil && *ipv6 {
 			ctMap = conntrack.MapV6()
 		} else {
 			ctMap = conntrack.Map()
@@ -133,7 +133,7 @@ func (cmd *conntrackDumpCmd) Run(c *cobra.Command, _ []string) {
 
 	keyFromBytes := conntrack.KeyFromBytes
 	valFromBytes := conntrack.ValueFromBytes
-	if ipv6 != nil {
+	if ipv6 != nil && *ipv6 {
 		keyFromBytes = conntrack.KeyV6FromBytes
 		valFromBytes = conntrack.ValueV6FromBytes
 	}
