@@ -876,7 +876,7 @@ func (b *PinnedMap) upgrade() error {
 	if err != nil {
 		return err
 	}
-	log.Infof("adriana oldbpfmap '%s'", oldBpfMap)
+	//log.Infof("adriana oldbpfmap '%s'", oldBpfMap)
 	return b.UpgradeFn(oldBpfMap, b)
 }
 
