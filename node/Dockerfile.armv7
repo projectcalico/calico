@@ -17,7 +17,7 @@ ARG BIRD_IMAGE=calico/bird:latest
 FROM ${QEMU_IMAGE} as qemu
 FROM ${BIRD_IMAGE} as bird
 
-FROM arm32v7/alpine:3.12 as base
+FROM arm32v7/alpine:3.18 as base
 MAINTAINER Marc Crébassa <aalaesar@gmail.com>
 
 ARG ARCH=armv7
@@ -29,7 +29,7 @@ ARG ARCH=armv7
 COPY --from=qemu /usr/bin/qemu-arm-static /usr/bin/
 
 # Install remaining runtime deps required for felix from the global repository
-RUN apk add --no-cache ip6tables ipset iputils iproute2 conntrack-tools runit ca-certificates
+RUN apk add --no-cache bash ip6tables ipset iputils iproute2 conntrack-tools runit ca-certificates
 
 # Copy our bird binaries in
 COPY --from=bird /bird* /bin/
