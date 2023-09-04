@@ -785,6 +785,12 @@ func (b *PinnedMap) CopyDeltaFromOldMap() error {
 	if err != nil {
 		return fmt.Errorf("error upgrading data from old map %s, err=%w", b.GetName(), err)
 	}
+
+	err = b.DeletePreviousVersion()
+	if err != nil {
+		return fmt.Errorf("failed to delete previous %s map, err=%w", b.Name, err)
+	}
+
 	if b.oldfd == 0 {
 		log.WithField("name", b.Name).Debug("CopyDeltaFromOldMap - no old map, done.")
 		return nil
