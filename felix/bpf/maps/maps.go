@@ -483,7 +483,7 @@ func (b *PinnedMap) updateDeltaEntries() error {
 			return errors.Errorf("iterating the old map failed: %s", err)
 		}
 		if numEntriesCopied == b.MaxEntries {
-			return fmt.Errorf("adriananew map cannot hold all the data from the old map %s.", b.GetName())
+			return fmt.Errorf("new map cannot hold all the data from the old map %s.", b.GetName())
 		}
 
 		if _, ok := mapMem[string(k)]; ok {
@@ -846,21 +846,18 @@ func (b *PinnedMap) getOldMapVersion() (int, error) {
 // If there is a resized version of v2, which is v2_old, data is upgraded from
 // v2_old as well to v3.
 func (b *PinnedMap) upgrade() error {
-	log.Infof("adriana upgrade '%s'", b.Name)
-	log.WithField("adriananame", b.Name).Debug("upgrade")
+	log.WithField("name", b.Name).Debug("upgrade")
 	if b.UpgradeFn == nil {
 		return nil
 	}
 	if b.GetMapParams == nil || b.KVasUpgradable == nil {
-		return fmt.Errorf("adrianaupgrade callbacks not registered %s", b.Name)
+		return fmt.Errorf("upgrade callbacks not registered %s", b.Name)
 	}
 	oldVersion, err := b.getOldMapVersion()
-	log.Infof("adriana oldversion '%d'", oldVersion)
-	log.WithError(err).Debugf("adrianaUpgrading from %d", oldVersion)
+	log.WithError(err).Debugf("Upgrading from %d", oldVersion)
 	if err != nil {
 		return err
 	}
-	log.WithField("adrianaoldVersion", oldVersion).Debug("oldVersion")
 	// fresh install
 	if oldVersion == 0 {
 		return nil
@@ -878,7 +875,6 @@ func (b *PinnedMap) upgrade() error {
 	if err != nil {
 		return err
 	}
-	//log.Infof("adriana oldbpfmap '%s'", oldBpfMap)
 	return b.UpgradeFn(oldBpfMap, b)
 }
 
