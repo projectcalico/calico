@@ -122,10 +122,34 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test conntrack ma
 		k3NatRevSnat := conntrack.NewKey(11, srcIP, 0, dstIP, 0)
 		val3NatRevSnat := conntrack.NewValueNATReverseSNAT(now, now, 0, leg3Normal, leg3Normal, tunIP, origIP, origSIP, 1234)
 
+		// Before Felix restart: both cali_v4_ct V2 and V3 maps exist.
+		Eventually(func() string {
+			out, err := tc.Felixes[0].ExecOutput("bpftool", "map", "show")
+			Expect(err).NotTo(HaveOccurred())
+			return out
+		}, "5s", "200ms").Should(ContainSubstring("cali_v4_ct2"))
+		Eventually(func() string {
+			out, err := tc.Felixes[0].ExecOutput("bpftool", "map", "show")
+			Expect(err).NotTo(HaveOccurred())
+			return out
+		}, "5s", "200ms").Should(ContainSubstring("cali_v4_ct3"))
+
 		tc.Felixes[0].Restart()
 		Eventually(func() conntrack.MapMem { return dumpCTMap(tc.Felixes[0]) }, "10s", "100ms").Should(HaveKeyWithValue(k3Normal, val3Normal))
 		Eventually(func() conntrack.MapMem { return dumpCTMap(tc.Felixes[0]) }, "10s", "100ms").Should(HaveKeyWithValue(k3NatFwd, val3NatFwd))
 		Eventually(func() conntrack.MapMem { return dumpCTMap(tc.Felixes[0]) }, "10s", "100ms").Should(HaveKeyWithValue(k3NatRev, val3NatRev))
 		Eventually(func() conntrack.MapMem { return dumpCTMap(tc.Felixes[0]) }, "10s", "100ms").Should(HaveKeyWithValue(k3NatRevSnat, val3NatRevSnat))
+
+		// After Felix restart: only cali_v4_ct V3 map exists.
+		Eventually(func() string {
+			out, err := tc.Felixes[0].ExecOutput("bpftool", "map", "show")
+			Expect(err).NotTo(HaveOccurred())
+			return out
+		}, "5s", "200ms").Should(ContainSubstring("cali_v4_ct3"))
+		Eventually(func() string {
+			out, err := tc.Felixes[0].ExecOutput("bpftool", "map", "show")
+			Expect(err).NotTo(HaveOccurred())
+			return out
+		}, "60s", "200ms").ShouldNot(ContainSubstring("cali_v4_ct2"))
 	})
 })
