@@ -435,10 +435,6 @@ func (b *PinnedMap) DeletePreviousVersion() error {
 	// Get a pinnedMap handle for the old map
 	oldMapParams := b.GetMapParams(oldVersion)
 	oldBpfMap := NewPinnedMap(oldMapParams)
-	//oldBpfMap := &PinnedMap{
-	//	MapParameters: oldMapParams,
-	//	perCPU:        strings.Contains(oldMapParams.Type, "percpu"),
-	//l}
 
 	defer func() {
 		oldBpfMap.Close()
