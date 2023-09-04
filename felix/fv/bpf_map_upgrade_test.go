@@ -140,16 +140,16 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test conntrack ma
 		Eventually(func() conntrack.MapMem { return dumpCTMap(tc.Felixes[0]) }, "10s", "100ms").Should(HaveKeyWithValue(k3NatRev, val3NatRev))
 		Eventually(func() conntrack.MapMem { return dumpCTMap(tc.Felixes[0]) }, "10s", "100ms").Should(HaveKeyWithValue(k3NatRevSnat, val3NatRevSnat))
 
-		// AFter Felix restart: only cali_v4_ct V3 map exists.
-		Eventually(func() string {
-			out, err := tc.Felixes[0].ExecOutput("bpftool", "map", "show")
-			Expect(err).NotTo(HaveOccurred())
-			return out
-		}, "5s", "200ms").ShouldNot(ContainSubstring("cali_v4_ct2"))
+		// After Felix restart: only cali_v4_ct V3 map exists.
 		Eventually(func() string {
 			out, err := tc.Felixes[0].ExecOutput("bpftool", "map", "show")
 			Expect(err).NotTo(HaveOccurred())
 			return out
 		}, "5s", "200ms").Should(ContainSubstring("cali_v4_ct3"))
+		Eventually(func() string {
+			out, err := tc.Felixes[0].ExecOutput("bpftool", "map", "show")
+			Expect(err).NotTo(HaveOccurred())
+			return out
+		}, "60s", "200ms").ShouldNot(ContainSubstring("cali_v4_ct2"))
 	})
 })

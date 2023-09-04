@@ -434,10 +434,7 @@ func (b *PinnedMap) DeletePreviousVersion() error {
 
 	// Get a pinnedMap handle for the old map
 	oldMapParams := b.GetMapParams(oldVersion)
-	oldBpfMap := &PinnedMap{
-		MapParameters: oldMapParams,
-		perCPU:        strings.Contains(oldMapParams.Type, "percpu"),
-	}
+	oldBpfMap := NewPinnedMap(oldMapParams)
 
 	defer func() {
 		oldBpfMap.Close()
@@ -788,6 +785,12 @@ func (b *PinnedMap) CopyDeltaFromOldMap() error {
 	if err != nil {
 		return fmt.Errorf("error upgrading data from old map %s, err=%w", b.GetName(), err)
 	}
+
+	err = b.DeletePreviousVersion()
+	if err != nil {
+		return fmt.Errorf("failed to delete previous %s map, err=%w", b.Name, err)
+	}
+
 	if b.oldfd == 0 {
 		log.WithField("name", b.Name).Debug("CopyDeltaFromOldMap - no old map, done.")
 		return nil
