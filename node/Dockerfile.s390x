@@ -20,14 +20,14 @@ FROM ${BIRD_IMAGE} as bird
 
 FROM calico/bpftool:v5.3-s390x as bpftool
 
-FROM s390x/alpine:3.8 as base
+FROM s390x/alpine:3.18 as base
 # Enable non-native builds of this image on an amd64 hosts.
 # This must be the first RUN command in this file!
 COPY --from=qemu /usr/bin/qemu-*-static /usr/bin/
 ARG ARCH=s390x
 
 # Install remaining runtime deps required for felix from the global repository
-RUN apk add --no-cache ip6tables ipset iputils iproute2 conntrack-tools runit file ca-certificates
+RUN apk add --no-cache bash ip6tables ipset iputils iproute2 conntrack-tools runit file ca-certificates
 
 # Copy our bird binaries in
 COPY --from=bird /bird* /bin/
