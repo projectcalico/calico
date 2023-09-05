@@ -29,7 +29,7 @@ variable "disk_type" {
 variable "image" {
   type        = string
   description = "Select which image family to use."
-  default     = "ubuntu-1804-lts"
+  default     = "ubuntu-2004-lts"
 }
 
 variable "google_network" {
