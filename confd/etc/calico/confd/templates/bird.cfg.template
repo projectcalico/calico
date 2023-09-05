@@ -109,10 +109,14 @@ protocol direct {
 protocol bfd {
   debug { states };
   interface -"cali*", -"kube-ipvs*", "*" {
-    multiplier 5;
+    interval 300 ms;
+    idle tx interval 2000 ms;
+    multiplier 10;
   };
   multihop {
-    multiplier 7;
+    interval 300 ms;
+    idle tx interval 2000 ms;
+    multiplier 20;
   };
 }
 
