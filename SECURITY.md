@@ -10,23 +10,13 @@ automatic support for v3.25.x is dropped.
 
 ## Reporting a Vulnerability
 
-Please follow responsible disclosure best practices when submitting
+Please follow responsible disclosure best practices and [Tigera's Vulnerability Disclosure Policy](https://www.tigera.io/vulnerability-disclosure/) when submitting
 security vulnerabilities.  **Do not** create a Github issue or pull 
-request because those are immediately public.  Instead, either:
+request because those are immediately public. Instead:
 
-* Email sirt@tigera.io.
-* Create a private [security advisory](https://github.com/projectcalico/calico/security/advisories)
+*  Email psirt@tigera.io.
+*  Report a private [security advisory](https://github.com/projectcalico/calico/security/advisories)
   through the Github interface.
 
 Please include as much information as possible, including the
 affected version(s) and steps to reproduce.
-
-## Dependencies CVE policy
-
-For releases of supported minor versions, the Calico team aim to ship
-with no "High" level CVEs in libraries at the point of release.
-
-For any ad hoc releases of earlier minor versions, this is done
-on a best-effort basis.  (It is often impossible to update some
-dependencies such as the Go compiler, or the Kubernetes API client 
-library, due to external compatibility requirements.)
