@@ -30,7 +30,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
-var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ policy programming tests", []apiconfig.DatastoreType{apiconfig.Kubernetes, apiconfig.EtcdV3}, func(getInfra infrastructure.InfraFactory) {
+var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ policy performance hints tests", []apiconfig.DatastoreType{apiconfig.Kubernetes, apiconfig.EtcdV3}, func(getInfra infrastructure.InfraFactory) {
 	var (
 		tc     infrastructure.TopologyContainers
 		infra  infrastructure.DatastoreInfra
@@ -54,7 +54,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ policy programming tests", 
 		w.ConfigureInInfra(infra)
 	})
 
-	It("should program IP sets for policies with programIntoDataplane:Always", func() {
+	It("should program IP sets for policies with AssumeNeededOnEveryNode", func() {
 		// Create a policy with the flag set.
 		pol := v3.NewGlobalNetworkPolicy()
 		pol.Name = "test"
@@ -67,7 +67,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ policy programming tests", 
 				},
 			},
 		}
-		pol.Spec.ProgramIntoDataplane = "Always"
+		pol.Spec.PerformanceHints = []v3.PolicyPerformanceHint{v3.PerfHintAssumeNeededOnEveryNode}
 		pol, err := client.GlobalNetworkPolicies().Create(context.TODO(), pol, options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
@@ -86,14 +86,14 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ policy programming tests", 
 			ContainSubstring("10.65.0.1"),
 			"Expected felix to create an IP set containing the workload's IP")
 
-		// Cross-check that the ProgramIntoDataplane field is the only thing
+		// Cross-check that the PerformanceHints field is the only thing
 		// that's making the IP set get created.
-		pol.Spec.ProgramIntoDataplane = "OnDemand"
+		pol.Spec.PerformanceHints = nil
 		pol, err = client.GlobalNetworkPolicies().Update(context.TODO(), pol, options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		Eventually(tc.Felixes[0].ExecOutputFn(ipsetListCommand...), "10s").ShouldNot(
 			ContainSubstring("10.65.0.1"),
-			"Expected IP set to be cleaned up when policy no longer has ProgramIntoDataplane=Always",
+			"Expected IP set to be cleaned up when policy no longer has AssumeNeededOnEveryNode",
 		)
 	})
 

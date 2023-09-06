@@ -2172,35 +2172,57 @@ func init() {
 				},
 			}, false,
 		),
-		Entry("NetworkPolicy: disallow junk in ProgramIntoDataplane field",
+		Entry("NetworkPolicy: disallow junk in PerformanceHints field",
 			&api.NetworkPolicy{
 				ObjectMeta: v1.ObjectMeta{Name: "thing"},
 				Spec: api.NetworkPolicySpec{
-					ProgramIntoDataplane: "junk",
+					PerformanceHints: []api.PolicyPerformanceHint{"junk"},
 				},
 			}, false,
 		),
-		Entry("GlobalNetworkPolicy: disallow junk in ProgramIntoDataplane field",
-			&api.GlobalNetworkPolicy{
-				ObjectMeta: v1.ObjectMeta{Name: "thing"},
-				Spec: api.GlobalNetworkPolicySpec{
-					ProgramIntoDataplane: "junk",
-				},
-			}, false,
-		),
-		Entry("NetworkPolicy: allow OnDemand in ProgramIntoDataplane field",
+		Entry("NetworkPolicy: allow PerfHintAssumeNeededOnEveryNode in PerformanceHints field",
 			&api.NetworkPolicy{
 				ObjectMeta: v1.ObjectMeta{Name: "thing"},
 				Spec: api.NetworkPolicySpec{
-					ProgramIntoDataplane: "OnDemand",
+					PerformanceHints: []api.PolicyPerformanceHint{api.PerfHintAssumeNeededOnEveryNode},
 				},
 			}, true,
 		),
-		Entry("GlobalNetworkPolicy: allow Always in ProgramIntoDataplane field",
+		Entry("NetworkPolicy: disallow dupes in PerformanceHints field",
+			&api.NetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.NetworkPolicySpec{
+					PerformanceHints: []api.PolicyPerformanceHint{
+						api.PerfHintAssumeNeededOnEveryNode,
+						api.PerfHintAssumeNeededOnEveryNode,
+					},
+				},
+			}, true,
+		),
+		Entry("GlobalNetworkPolicy: disallow junk in PerformanceHints field",
 			&api.GlobalNetworkPolicy{
 				ObjectMeta: v1.ObjectMeta{Name: "thing"},
 				Spec: api.GlobalNetworkPolicySpec{
-					ProgramIntoDataplane: "Always",
+					PerformanceHints: []api.PolicyPerformanceHint{"junk"},
+				},
+			}, false,
+		),
+		Entry("GlobalNetworkPolicy: allow PerfHintAssumeNeededOnEveryNode in PerformanceHints field",
+			&api.GlobalNetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.GlobalNetworkPolicySpec{
+					PerformanceHints: []api.PolicyPerformanceHint{api.PerfHintAssumeNeededOnEveryNode},
+				},
+			}, true,
+		),
+		Entry("GlobalNetworkPolicy: disallow dupes in PerformanceHints field",
+			&api.GlobalNetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.GlobalNetworkPolicySpec{
+					PerformanceHints: []api.PolicyPerformanceHint{
+						api.PerfHintAssumeNeededOnEveryNode,
+						api.PerfHintAssumeNeededOnEveryNode,
+					},
 				},
 			}, true,
 		),
