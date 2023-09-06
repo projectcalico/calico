@@ -1708,6 +1708,63 @@ var _ = Describe("with server requiring TLS", func() {
 			serverCertName = "server"
 		})
 
-		It("should timeout after 10 seconds for TCP half open connections", testTcpHalfOpen)
+		It("should timeout after 10 seconds for TCP half open connections", func() {
+			serverAddr := fmt.Sprintf("127.0.0.1:%d", server.Port())
+			expectedDisconnectTime := time.Now().Add(10 * time.Second)
+			tcpConn, err := net.Dial("tcp", serverAddr)
+			Expect(err).NotTo(HaveOccurred())
+			defer func() {
+				_ = tcpConn.Close()
+			}()
+			err = tcpConn.SetDeadline(time.Now().Add(15 * time.Second))
+			Expect(err).NotTo(HaveOccurred())
+
+			// Client sends a few valid bytes of a Client hello but then stops...
+			_, err = tcpConn.Write([]byte{16, 3, 01})
+			Expect(err).NotTo(HaveOccurred())
+
+			// Start a read that we don't expect to complete.
+			received := make([]byte, 1024)
+			_, err = tcpConn.Read(received)
+
+			// io.EOF means the server closed the connection (we'd get
+			// a timeout error if the deadline we set was reached.
+			Expect(err).Should(Equal(io.EOF))
+			// Should get disconnected at approximately the right time.
+			Expect(time.Now()).Should(
+				BeTemporally("~", expectedDisconnectTime, 2*time.Second),
+				"Expected to be disconnected at approx 10s")
+		})
+
+		It("should allow connections while another connection is half-open", func() {
+			// Set up a raw connection that just blocks at the handshake.
+			log.Info("Sending blocking connection")
+			serverAddr := fmt.Sprintf("127.0.0.1:%d", server.Port())
+			conn, err := net.Dial("tcp", serverAddr)
+			Expect(err).NotTo(HaveOccurred())
+			tcpConn := conn.(*net.TCPConn)
+			defer func() {
+				_ = tcpConn.Close()
+			}()
+			log.Info("Blocking connection source:", tcpConn.LocalAddr())
+			_, err = tcpConn.Write([]byte{16, 3, 01})
+			Expect(err).NotTo(HaveOccurred())
+			Eventually(server.NumActiveConnections).Should(Equal(1))
+
+			// Set up a normal, valid connection.
+			log.Info("Sending valid connection")
+			startTime := time.Now()
+			testConnection("gooduri", true)
+			Expect(time.Now()).To(BeTemporally("<", startTime.Add(time.Second)))
+			log.Info("Done")
+
+			// The normal client closes its own connection.
+			Eventually(server.NumActiveConnections).Should(Equal(1))
+
+			// Closing the blocked one should get through to the server.
+			_ = tcpConn.Close()
+			Eventually(server.NumActiveConnections).Should(Equal(0))
+		})
 	})
+
 })
