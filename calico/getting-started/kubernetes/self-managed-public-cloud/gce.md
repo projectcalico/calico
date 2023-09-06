@@ -72,7 +72,7 @@ gcloud compute instances create controller \
     --async \
     --boot-disk-size 200GB \
     --can-ip-forward \
-    --image-family ubuntu-1804-lts \
+    --image-family ubuntu-2004-lts \
     --image-project ubuntu-os-cloud \
     --machine-type n1-standard-2 \
     --private-network-ip 10.240.0.11 \
@@ -90,7 +90,7 @@ for i in 0 1 2; do
     --async \
     --boot-disk-size 200GB \
     --can-ip-forward \
-    --image-family ubuntu-1804-lts \
+    --image-family ubuntu-2004-lts \
     --image-project ubuntu-os-cloud \
     --machine-type n1-standard-2 \
     --private-network-ip 10.240.0.2${i} \
