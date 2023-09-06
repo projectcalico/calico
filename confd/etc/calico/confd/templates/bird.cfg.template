@@ -113,11 +113,6 @@ protocol bfd {
     idle tx interval 2000 ms;
     multiplier 10;
   };
-  multihop {
-    interval 300 ms;
-    idle tx interval 2000 ms;
-    multiplier 20;
-  };
 }
 
 {{if eq "" ($node_ip)}}# IPv4 disabled on this node.
