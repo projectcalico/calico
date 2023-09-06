@@ -1016,6 +1016,12 @@ var _ = Describe("With an in-process Server with short grace period", func() {
 			log.SetLevel(log.InfoLevel)
 			logStats("Start of test")
 			h.SendInitialSnapshotConfigs(initialSnapshotSize)
+
+			// Make sure we don't start a client until the initial snapshot
+			// flows through to the cache.
+			Eventually(func() int {
+				return h.FelixCache.CurrentBreadcrumb().KVs.Len()
+			}).Should(Equal(initialSnapshotSize))
 		})
 
 		AfterEach(func() {
@@ -1125,23 +1131,31 @@ var _ = Describe("With an in-process Server with short grace period", func() {
 			// Wait until the snapshot is read.
 			Eventually(recorder.Len, time.Second).Should(BeNumerically("==", initialSnapshotSize))
 
-			log.SetLevel(log.DebugLevel)
-			// Make a breadcrumb.
+			// Send a lot of updates.
+
+			log.Info("Sleeping 1s")
 			time.Sleep(time.Second)
+			log.Info("Send many updates...")
 			h.SendConfigUpdates(initialSnapshotSize)
 
 			// Client should read the first update from the above and then block.
 
 			// Make a breadcrumb 1s later.
+			log.Info("Sleeping 1s")
 			time.Sleep(time.Second)
+			log.SetLevel(log.DebugLevel)
+			log.Info("Sending one update")
 			h.SendConfigUpdates(1)
 
 			// Make a breadcrumb 1s later.
+			log.Info("Sleeping 1s")
 			time.Sleep(time.Second)
+			log.Info("Sending one update")
 			h.SendConfigUpdates(1)
 
 			// Client should wake up around now but be too far behind and get disconnected.
 
+			log.Info("Waiting for client to be killed...")
 			finishedC := make(chan struct{})
 			go func() {
 				client.Finished.Wait()
