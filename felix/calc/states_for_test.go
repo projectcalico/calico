@@ -48,10 +48,18 @@ var initialisedStore = empty.withKVUpdates(
 
 // withPolicy adds a tier and policy containing selectors for all and b=="b"
 var pol1KVPair = KVPair{Key: PolicyKey{Name: "pol-1"}, Value: &policy1_order20}
+var pol1KVPairAlways = KVPair{Key: PolicyKey{Name: "pol-1"}, Value: &policy1_order20_always}
+var pol1KVPairOnDemand = KVPair{Key: PolicyKey{Name: "pol-1"}, Value: &policy1_order20_ondemand}
 
 var withPolicy = initialisedStore.withKVUpdates(
 	pol1KVPair,
 ).withName("with policy")
+
+var withPolicyAlways = initialisedStore.withKVUpdates(
+	pol1KVPairAlways,
+).withActivePolicies(
+	proto.PolicyID{Tier: "default", Name: "pol-1"},
+).withIPSet(allSelectorId, []string{}).withIPSet(bEqBSelectorId, []string{}).withName("with always-programmed policy")
 
 // withPolicyIngressOnly adds a tier and ingress policy containing selectors for all
 var withPolicyIngressOnly = initialisedStore.withKVUpdates(
@@ -168,6 +176,14 @@ var localEp1WithPolicy = withPolicy.withKVUpdates(
 	routelocalWlV6ColonOne,
 	routelocalWlV6ColonTwo,
 ).withName("ep1 local, policy")
+
+var localEp1WithPolicyAlways = localEp1WithPolicy.withKVUpdates(
+	pol1KVPairAlways,
+).withName("ep1 local, always policy")
+
+var localEp1WithPolicyOnDemand = localEp1WithPolicy.withKVUpdates(
+	pol1KVPairOnDemand,
+).withName("ep1 local, on-demand explicit policy")
 
 // localEp1WithNamedPortPolicy as above but with named port in the policy.
 var localEp1WithNamedPortPolicy = localEp1WithPolicy.withKVUpdates(

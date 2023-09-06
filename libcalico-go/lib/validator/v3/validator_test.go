@@ -2172,6 +2172,38 @@ func init() {
 				},
 			}, false,
 		),
+		Entry("NetworkPolicy: disallow junk in ProgramIntoDataplane field",
+			&api.NetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.NetworkPolicySpec{
+					ProgramIntoDataplane: "junk",
+				},
+			}, false,
+		),
+		Entry("GlobalNetworkPolicy: disallow junk in ProgramIntoDataplane field",
+			&api.GlobalNetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.GlobalNetworkPolicySpec{
+					ProgramIntoDataplane: "junk",
+				},
+			}, false,
+		),
+		Entry("NetworkPolicy: allow OnDemand in ProgramIntoDataplane field",
+			&api.NetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.NetworkPolicySpec{
+					ProgramIntoDataplane: "OnDemand",
+				},
+			}, true,
+		),
+		Entry("GlobalNetworkPolicy: allow Always in ProgramIntoDataplane field",
+			&api.GlobalNetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.GlobalNetworkPolicySpec{
+					ProgramIntoDataplane: "Always",
+				},
+			}, true,
+		),
 		Entry("allow global() and projectcalico.org/name in EntityRule namespaceSelector field",
 			&api.NetworkPolicy{
 				ObjectMeta: v1.ObjectMeta{Name: "thing"},
