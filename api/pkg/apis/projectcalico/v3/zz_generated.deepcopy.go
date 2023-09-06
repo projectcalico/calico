@@ -1574,6 +1574,11 @@ func (in *GlobalNetworkPolicySpec) DeepCopyInto(out *GlobalNetworkPolicySpec) {
 		*out = make([]PolicyType, len(*in))
 		copy(*out, *in)
 	}
+	if in.PerformanceHints != nil {
+		in, out := &in.PerformanceHints, &out.PerformanceHints
+		*out = make([]PolicyPerformanceHint, len(*in))
+		copy(*out, *in)
+	}
 	return
 }
 
@@ -2326,6 +2331,11 @@ func (in *NetworkPolicySpec) DeepCopyInto(out *NetworkPolicySpec) {
 	if in.Types != nil {
 		in, out := &in.Types, &out.Types
 		*out = make([]PolicyType, len(*in))
+		copy(*out, *in)
+	}
+	if in.PerformanceHints != nil {
+		in, out := &in.PerformanceHints, &out.PerformanceHints
+		*out = make([]PolicyPerformanceHint, len(*in))
 		copy(*out, *in)
 	}
 	return

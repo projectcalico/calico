@@ -177,10 +177,7 @@ func (arc *ActiveRulesCalculator) OnUpdate(update api.Update) (_ bool) {
 		arc.updateStats()
 	case model.PolicyKey:
 		oldPolicy := arc.allPolicies[key]
-		var oldPolicyWasForceProgrammed bool
-		if oldPolicy != nil {
-			oldPolicyWasForceProgrammed = oldPolicy.ProgramIntoDataplane == v3.ProgramIntoDataplaneAlways
-		}
+		oldPolicyWasForceProgrammed := policyForceProgrammed(oldPolicy)
 		if update.Value != nil {
 			log.Debugf("Updating ARC for policy %v", key)
 			policy := update.Value.(*model.Policy)
@@ -192,7 +189,7 @@ func (arc *ActiveRulesCalculator) OnUpdate(update api.Update) (_ bool) {
 
 			// If the policy transitions to be force-programmed, simulate
 			// a match with a dummy endpoint key.
-			newPolicyForceProgrammed := policy.ProgramIntoDataplane == v3.ProgramIntoDataplaneAlways
+			newPolicyForceProgrammed := policyForceProgrammed(policy)
 			if !oldPolicyWasForceProgrammed && newPolicyForceProgrammed {
 				log.Debugf("Policy %v force-programmed.", key)
 				arc.onMatchStarted(key, forceProgrammedDummyKey)
@@ -253,6 +250,18 @@ func (arc *ActiveRulesCalculator) OnUpdate(update api.Update) (_ bool) {
 	}
 
 	return
+}
+
+func policyForceProgrammed(policy *model.Policy) bool {
+	if policy == nil {
+		return false
+	}
+	for _, v := range policy.PerformanceHints {
+		if v == v3.PerfHintAssumeNeededOnEveryNode {
+			return true
+		}
+	}
+	return false
 }
 
 func (arc *ActiveRulesCalculator) updateStats() {

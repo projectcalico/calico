@@ -20,6 +20,7 @@ import (
 	"regexp"
 	"strings"
 
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
@@ -88,17 +89,17 @@ func (options PolicyListOptions) KeyFromDefaultPath(path string) Key {
 }
 
 type Policy struct {
-	Namespace            string            `json:"namespace,omitempty" validate:"omitempty"`
-	Order                *float64          `json:"order,omitempty" validate:"omitempty"`
-	InboundRules         []Rule            `json:"inbound_rules,omitempty" validate:"omitempty,dive"`
-	OutboundRules        []Rule            `json:"outbound_rules,omitempty" validate:"omitempty,dive"`
-	Selector             string            `json:"selector" validate:"selector"`
-	DoNotTrack           bool              `json:"untracked,omitempty"`
-	Annotations          map[string]string `json:"annotations,omitempty"`
-	PreDNAT              bool              `json:"pre_dnat,omitempty"`
-	ApplyOnForward       bool              `json:"apply_on_forward,omitempty"`
-	Types                []string          `json:"types,omitempty"`
-	ProgramIntoDataplane string            `json:"program_into_dataplane,omitempty" validate:"omitempty,oneof=OnDemand Always"`
+	Namespace        string                        `json:"namespace,omitempty" validate:"omitempty"`
+	Order            *float64                      `json:"order,omitempty" validate:"omitempty"`
+	InboundRules     []Rule                        `json:"inbound_rules,omitempty" validate:"omitempty,dive"`
+	OutboundRules    []Rule                        `json:"outbound_rules,omitempty" validate:"omitempty,dive"`
+	Selector         string                        `json:"selector" validate:"selector"`
+	DoNotTrack       bool                          `json:"untracked,omitempty"`
+	Annotations      map[string]string             `json:"annotations,omitempty"`
+	PreDNAT          bool                          `json:"pre_dnat,omitempty"`
+	ApplyOnForward   bool                          `json:"apply_on_forward,omitempty"`
+	Types            []string                      `json:"types,omitempty"`
+	PerformanceHints []apiv3.PolicyPerformanceHint `json:"performance_hints,omitempty" validate:"omitempty,unique,dive,oneof=AssumeNeededOnEveryNode"`
 }
 
 func (p Policy) String() string {
@@ -121,6 +122,8 @@ func (p Policy) String() string {
 	parts = append(parts, fmt.Sprintf("pre_dnat:%v", p.PreDNAT))
 	parts = append(parts, fmt.Sprintf("apply_on_forward:%v", p.ApplyOnForward))
 	parts = append(parts, fmt.Sprintf("types:%v", strings.Join(p.Types, ";")))
-	parts = append(parts, fmt.Sprintf("program_into_dataplane:%v", p.ProgramIntoDataplane))
+	if len(p.PerformanceHints) > 0 {
+		parts = append(parts, fmt.Sprintf("performance_hints:%v", p.PerformanceHints))
+	}
 	return strings.Join(parts, ",")
 }
