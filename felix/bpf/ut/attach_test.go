@@ -553,7 +553,7 @@ func TestAttachV6(t *testing.T) {
 		err := bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
-		Expect(programs.Count()).To(Equal(11))
+		Expect(programs.Count()).To(Equal(13))
 
 		at := programs.Programs()
 		Expect(at).To(HaveKey(hook.AttachType{
@@ -593,7 +593,7 @@ func TestAttachV6(t *testing.T) {
 		err = bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
-		Expect(programs.Count()).To(Equal(21))
+		Expect(programs.Count()).To(Equal(25))
 
 		at := programs.Programs()
 		Expect(at).To(HaveKey(hook.AttachType{

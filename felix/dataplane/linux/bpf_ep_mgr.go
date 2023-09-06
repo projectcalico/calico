@@ -2559,11 +2559,23 @@ func (m *bpfEndpointManager) ensureBPFDevices() error {
 	m.natInIdx = bpfin.Attrs().Index
 	m.natOutIdx = bpfout.Attrs().Index
 
-	anyV4, _ := ip.CIDRFromString("0.0.0.0/0")
-	_ = m.arpMap.Update(
-		bpfarp.NewKey(anyV4.Addr().AsNetIP(), uint32(m.natInIdx)).AsBytes(),
-		bpfarp.NewValue(bpfin.Attrs().HardwareAddr, bpfout.Attrs().HardwareAddr).AsBytes(),
-	)
+	if m.ipv6Enabled {
+		anyV6, _ := ip.CIDRFromString("::/128")
+		err = m.arpMap.Update(
+			bpfarp.NewKeyV6(anyV6.Addr().AsNetIP(), uint32(m.natInIdx)).AsBytes(),
+			bpfarp.NewValue(bpfin.Attrs().HardwareAddr, bpfout.Attrs().HardwareAddr).AsBytes(),
+		)
+	} else {
+		anyV4, _ := ip.CIDRFromString("0.0.0.0/0")
+		err = m.arpMap.Update(
+			bpfarp.NewKey(anyV4.Addr().AsNetIP(), uint32(m.natInIdx)).AsBytes(),
+			bpfarp.NewValue(bpfin.Attrs().HardwareAddr, bpfout.Attrs().HardwareAddr).AsBytes(),
+		)
+	}
+
+	if err != nil {
+		return fmt.Errorf("failed to program arp for natif: %w", err)
+	}
 
 	// XXX not sure if we need this in IPv6, certainly will not fly
 

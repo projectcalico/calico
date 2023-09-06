@@ -266,7 +266,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			felixPanicExpected bool
 		)
 
-		ctlbWorkaround := !testOpts.connTimeEnabled && !testOpts.ipv6
+		ctlbWorkaround := !testOpts.connTimeEnabled
 
 		switch testOpts.protocol {
 		case "tcp":
