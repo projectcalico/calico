@@ -109,9 +109,14 @@ protocol direct {
 protocol bfd {
   debug { states };
   interface -"cali*", -"kube-ipvs*", "*" {
-    interval 300 ms;
+    interval 1000 ms;
     idle tx interval 2000 ms;
-    multiplier 10;
+    multiplier 3;
+  };
+  multihop {
+    interval 1000 ms;
+    idle tx interval 2000 ms;
+    multiplier 3;
   };
 }
 
@@ -124,6 +129,7 @@ template bgp bgp_template {
 {{- template "LOGGING"}}
   description "Connection to BGP peer";
   local as {{$node_as_num}};
+  multihop;
   gateway recursive; # This should be the default, but just in case.
   import all;        # Import all routes, since we don't know what the upstream
                      # topology is and therefore have to trust the ToR/RR.
@@ -192,7 +198,6 @@ template bgp bgp_template {
 {{- else}}
 protocol bgp Global_{{$id}} from bgp_template {
   neighbor {{$data.ip}} {{if $data.port }}port {{ $data.port }} {{end}}as {{$data.as_num}};
-  multihop;
 {{- if eq $data.source_addr "UseNodeIP"}}
   source address {{$node_ip}};  # The local address we use for the TCP connection
 {{- end}}
@@ -230,7 +235,6 @@ protocol bgp Global_{{$id}} from bgp_template {
 {{- else}}
 protocol bgp Node_{{$id}} from bgp_template {
   neighbor {{$data.ip}} {{if $data.port }}port {{ $data.port }} {{end}}as {{$data.as_num}};
-  multihop;
 {{- if eq $data.source_addr "UseNodeIP"}}
   source address {{$node_ip}};  # The local address we use for the TCP connection
 {{- end}}
