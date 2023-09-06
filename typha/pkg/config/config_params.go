@@ -120,6 +120,7 @@ type Config struct {
 	ServerMinBatchingAgeThresholdSecs    time.Duration `config:"seconds;0.01"`
 	ServerPingIntervalSecs               time.Duration `config:"seconds;10"`
 	ServerPongTimeoutSecs                time.Duration `config:"seconds;60"`
+	ServerHandshakeTimeoutSecs           time.Duration `config:"seconds;10"`
 	ServerPort                           int           `config:"port;0"`
 
 	// Server-side TLS config for Typha's communication with Felix.  If any of these are
