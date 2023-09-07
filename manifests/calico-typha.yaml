@@ -4619,6 +4619,14 @@ rules:
       - pods/status
     verbs:
       - patch
+  - apiGroups: [""]
+    resources:
+      - nodes/status
+    verbs:
+      # Needed for clearing NodeNetworkUnavailable flag.
+      - patch
+      # Calico stores some configuration information in node annotations.
+      - update
   - apiGroups: ["crd.projectcalico.org"]
     resources:
       - blockaffinities
