@@ -112,7 +112,7 @@ func init() {
 	prometheus.MustRegister(bpfHappyEndpointsGauge)
 
 	binary.LittleEndian.PutUint32(jumpMapV4PolicyKey, uint32(tcdefs.ProgIndexPolicy))
-	binary.LittleEndian.PutUint32(jumpMapV6PolicyKey, uint32(tcdefs.ProgIndexV6Policy))
+	binary.LittleEndian.PutUint32(jumpMapV6PolicyKey, uint32(tcdefs.ProgIndexPolicy))
 }
 
 type attachPoint interface {
@@ -122,7 +122,7 @@ type attachPoint interface {
 	AttachProgram() (bpf.AttachResult, error)
 	DetachProgram() error
 	Log() *log.Entry
-	PolicyIdx(int) int
+	PolicyJmp() int
 }
 
 type attachPointWithPolicyJumps interface {
@@ -499,8 +499,10 @@ func newBPFEndpointManager(
 		// Anything else would prevent packets being accepted from the special
 		// service veth. It does not create a security hole since BPF does the RPF
 		// on its own.
-		if err := m.dp.setRPFilter("all", 0); err != nil {
-			return nil, fmt.Errorf("setting rp_filter for all: %w", err)
+		if !m.ipv6Enabled {
+			if err := m.dp.setRPFilter("all", 0); err != nil {
+				return nil, fmt.Errorf("setting rp_filter for all: %w", err)
+			}
 		}
 
 		if err := m.dp.ensureBPFDevices(); err != nil {
@@ -654,7 +656,7 @@ func (m *bpfEndpointManager) OnUpdate(msg interface{}) {
 		m.onProfileRemove(msg)
 
 	case *proto.HostMetadataUpdate:
-		if msg.Hostname == m.hostname {
+		if !m.ipv6Enabled && msg.Hostname == m.hostname {
 			log.WithField("HostMetadataUpdate", msg).Info("Host IP changed")
 			ip := net.ParseIP(msg.Ipv4Addr)
 			if ip != nil {
@@ -667,7 +669,24 @@ func (m *bpfEndpointManager) OnUpdate(msg interface{}) {
 				}
 				m.ifacesLock.Unlock()
 			} else {
-				log.WithField("HostMetadataUpdate", msg).Warn("Cannot parse IP, no change applied")
+				log.WithField("HostMetadataUpdate", msg).Warn("Cannot parse IPv4, no change applied")
+			}
+		}
+	case *proto.HostMetadataV6Update:
+		if m.ipv6Enabled && msg.Hostname == m.hostname {
+			log.WithField("HostMetadataV6Update", msg).Info("Host IPv6 changed")
+			ip := net.ParseIP(msg.Ipv6Addr)
+			if ip != nil {
+				m.hostIP = ip
+				// Should be safe without the lock since there shouldn't be any active background threads
+				// but taking it now makes us robust to refactoring.
+				m.ifacesLock.Lock()
+				for ifaceName := range m.nameToIface {
+					m.dirtyIfaceNames.Add(ifaceName)
+				}
+				m.ifacesLock.Unlock()
+			} else {
+				log.WithField("HostMetadataV6Update", msg).Warn("Cannot parse IP, no change applied")
 			}
 		}
 	case *proto.ServiceUpdate:
@@ -881,11 +900,17 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceStateUpdate) {
 			case bpfInDev, bpfOutDev:
 				// do nothing
 			default:
-				if err := m.dp.setRPFilter(update.Name, 2); err != nil {
-					log.WithError(err).Warnf("Failed to set rp_filter for %s.", update.Name)
+				if !m.ipv6Enabled {
+					if err := m.dp.setRPFilter(update.Name, 2); err != nil {
+						log.WithError(err).Warnf("Failed to set rp_filter for %s.", update.Name)
+					}
 				}
 			}
-			_ = m.dp.setAcceptLocal(update.Name, true)
+
+			if !m.ipv6Enabled {
+				_ = m.dp.setAcceptLocal(update.Name, true)
+			}
+
 			if _, hostEpConfigured := m.hostIfaceToEpMap[update.Name]; m.wildcardExists && !hostEpConfigured {
 				log.Debugf("Map host-* endpoint for %v", update.Name)
 				m.addHEPToIndexes(update.Name, &m.wildcardHostEndpoint)
@@ -1463,11 +1488,14 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 				defer parallelWG.Done()
 				ingressErr = m.attachDataIfaceProgram(iface, hepPtr, PolDirnIngress, ingressIdx, ingressFilterIdx)
 			}()
-			parallelWG.Add(1)
-			go func() {
-				defer parallelWG.Done()
-				xdpErr = m.attachXDPProgram(iface, hepPtr, xdpIdx)
-			}()
+
+			if !m.ipv6Enabled {
+				parallelWG.Add(1)
+				go func() {
+					defer parallelWG.Done()
+					xdpErr = m.attachXDPProgram(iface, hepPtr, xdpIdx)
+				}()
+			}
 
 			err = m.attachDataIfaceProgram(iface, hepPtr, PolDirnEgress, egressIdx, egressFilterIdx)
 			parallelWG.Wait()
@@ -1480,7 +1508,9 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 			if err == nil {
 				// This is required to allow NodePort forwarding with
 				// encapsulation with the host's IP as the source address
-				_ = m.dp.setAcceptLocal(iface, true)
+				if !m.ipv6Enabled {
+					_ = m.dp.setAcceptLocal(iface, true)
+				}
 			}
 			mutex.Lock()
 			errs[iface] = err
@@ -1553,7 +1583,9 @@ func (m *bpfEndpointManager) updateWEPsInDataplane() {
 			defer sem.Release(1)
 			err := m.applyPolicy(ifaceName)
 			if err == nil {
-				_ = m.dp.setAcceptLocal(ifaceName, true)
+				if !m.ipv6Enabled {
+					_ = m.dp.setAcceptLocal(ifaceName, true)
+				}
 			}
 			mutex.Lock()
 			errs[ifaceName] = err
@@ -1792,9 +1824,19 @@ func (m *bpfEndpointManager) wepTCAttachPoint(ifaceName string, policyIdx, filte
 	// * Since we don't pass packet length when doing fib lookup, MTU check is skipped.
 	// * Hence it is safe to set the tunnel mtu same as veth mtu
 	ap.TunnelMTU = uint16(m.vxlanMTU)
-	ap.IntfIP = calicoRouterIP
+	if m.ipv6Enabled {
+		ip, err := m.getInterfaceIP(ifaceName)
+		if err != nil {
+			log.Debugf("Error getting IP for interface %+v: %+v", ifaceName, err)
+			ap.IntfIP = m.hostIP
+		} else {
+			ap.IntfIP = *ip
+		}
+	} else {
+		ap.IntfIP = calicoRouterIP
+	}
 	ap.ExtToServiceConnmark = uint32(m.bpfExtToServiceConnmark)
-	ap.PolicyIdx4 = policyIdx
+	ap.PolicyIdx = policyIdx
 	ap.LogFilterIdx = filterIdx
 
 	return ap
@@ -1927,7 +1969,7 @@ func (m *bpfEndpointManager) attachDataIfaceProgram(ifaceName string, ep *proto.
 	}
 	ap.NATin = uint32(m.natInIdx)
 	ap.NATout = uint32(m.natOutIdx)
-	ap.PolicyIdx4 = policyIdx
+	ap.PolicyIdx = policyIdx
 	ap.LogFilterIdx = filterIdx
 
 	if _, err := m.dp.ensureProgramAttached(ap); err != nil {
@@ -1957,10 +1999,10 @@ func (m *bpfEndpointManager) attachDataIfaceProgram(ifaceName string, ep *proto.
 func (m *bpfEndpointManager) attachXDPProgram(ifaceName string, ep *proto.HostEndpoint, jumpIdx int) error {
 	ap := &xdp.AttachPoint{
 		AttachPoint: bpf.AttachPoint{
-			Hook:       hook.XDP,
-			Iface:      ifaceName,
-			LogLevel:   m.bpfLogLevel,
-			PolicyIdx4: jumpIdx,
+			Hook:      hook.XDP,
+			Iface:     ifaceName,
+			LogLevel:  m.bpfLogLevel,
+			PolicyIdx: jumpIdx,
 		},
 		Modes: m.xdpModes,
 	}
@@ -2517,11 +2559,25 @@ func (m *bpfEndpointManager) ensureBPFDevices() error {
 	m.natInIdx = bpfin.Attrs().Index
 	m.natOutIdx = bpfout.Attrs().Index
 
-	anyV4, _ := ip.CIDRFromString("0.0.0.0/0")
-	_ = m.arpMap.Update(
-		bpfarp.NewKey(anyV4.Addr().AsNetIP(), uint32(m.natInIdx)).AsBytes(),
-		bpfarp.NewValue(bpfin.Attrs().HardwareAddr, bpfout.Attrs().HardwareAddr).AsBytes(),
-	)
+	if m.ipv6Enabled {
+		anyV6, _ := ip.CIDRFromString("::/128")
+		err = m.arpMap.Update(
+			bpfarp.NewKeyV6(anyV6.Addr().AsNetIP(), uint32(m.natInIdx)).AsBytes(),
+			bpfarp.NewValue(bpfin.Attrs().HardwareAddr, bpfout.Attrs().HardwareAddr).AsBytes(),
+		)
+	} else {
+		anyV4, _ := ip.CIDRFromString("0.0.0.0/0")
+		err = m.arpMap.Update(
+			bpfarp.NewKey(anyV4.Addr().AsNetIP(), uint32(m.natInIdx)).AsBytes(),
+			bpfarp.NewValue(bpfin.Attrs().HardwareAddr, bpfout.Attrs().HardwareAddr).AsBytes(),
+		)
+	}
+
+	if err != nil {
+		return fmt.Errorf("failed to program arp for natif: %w", err)
+	}
+
+	// XXX not sure if we need this in IPv6, certainly will not fly
 
 	// Add a permanent ARP entry to point to the other side of the veth to avoid
 	// ARP requests that would not be proxied if .all.rp_filter == 1
@@ -2604,32 +2660,30 @@ func (m *bpfEndpointManager) ensureProgramAttached(ap attachPoint) (bpf.AttachRe
 			DSR:        aptc.DSR,
 		}
 
-		at.Family = 4
-		if aptc.HookLayout4, err = m.loadTCObj(at); err != nil {
-			return nil, fmt.Errorf("loading generic v4 tc hook program: %w", err)
+		ipFamily := 4
+		if m.ipv6Enabled {
+			ipFamily = 6
+		}
+
+		at.Family = ipFamily
+		ap.Log().Debugf("ensureProgramAttached %d", ipFamily)
+		if aptc.HookLayout, err = m.loadTCObj(at); err != nil {
+			return nil, fmt.Errorf("loading generic v%d tc hook program: %w", ipFamily, err)
 		}
 
 		// Load deafault policy before the real policy is created and loaded.
 		switch at.DefaultPolicy() {
 		case hook.DefPolicyAllow:
 			err = maps.UpdateMapEntry(m.bpfmaps.JumpMap.MapFD(),
-				jump.Key(ap.PolicyIdx(4)), jump.Value(m.policyTcAllowFD.FD()))
+				jump.Key(aptc.PolicyIdx), jump.Value(m.policyTcAllowFD.FD()))
 		case hook.DefPolicyDeny:
 			err = maps.UpdateMapEntry(m.bpfmaps.JumpMap.MapFD(),
-				jump.Key(ap.PolicyIdx(4)), jump.Value(m.policyTcDenyFD.FD()))
+				jump.Key(aptc.PolicyIdx), jump.Value(m.policyTcDenyFD.FD()))
 		}
 
 		if err != nil {
 			return nil, fmt.Errorf("failed to set default policy: %w", err)
 		}
-
-		if aptc.IPv6Enabled {
-			at.Family = 6
-			if aptc.HookLayout6, err = m.loadTCObj(at); err != nil {
-				return nil, fmt.Errorf("loading generic v6 tc hook program: %w", err)
-			}
-		}
-
 	} else if apxdp, ok := ap.(*xdp.AttachPoint); ok {
 		at := hook.AttachType{
 			Hook:     hook.XDP,
@@ -2652,7 +2706,7 @@ func (m *bpfEndpointManager) ensureNoProgram(ap attachPoint) error {
 	// Ensure interface does not have our program attached.
 	err := ap.DetachProgram()
 
-	if err := m.jumpMapDelete(ap.HookName(), ap.PolicyIdx(4)); err != nil {
+	if err := m.jumpMapDelete(ap.HookName(), ap.PolicyJmp()); err != nil {
 		log.WithError(err).Warn("Policy program may leak.")
 	}
 
@@ -2722,37 +2776,36 @@ func (m *bpfEndpointManager) writePolicyDebugInfo(insns asm.Insns, ifaceName str
 }
 
 func (m *bpfEndpointManager) updatePolicyProgram(rules polprog.Rules, polDir string, ap attachPoint) error {
-	ipVersions := []proto.IPVersion{proto.IPVersion_IPV4}
+	ipFamily := proto.IPVersion_IPV4
 	if m.ipv6Enabled {
-		ipVersions = append(ipVersions, proto.IPVersion_IPV6)
+		ipFamily = proto.IPVersion_IPV6
 	}
 
-	for _, ipFamily := range ipVersions {
-		progName := policyProgramName(ap.IfaceName(), polDir, ipFamily)
+	progName := policyProgramName(ap.IfaceName(), polDir, ipFamily)
 
-		var opts []polprog.Option
-		if apj, ok := ap.(attachPointWithPolicyJumps); ok {
-			allow := apj.PolicyAllowJumpIdx(int(ipFamily))
-			if allow == -1 {
-				return fmt.Errorf("no allow jump index")
-			}
+	var opts []polprog.Option
+	if apj, ok := ap.(attachPointWithPolicyJumps); ok {
+		allow := apj.PolicyAllowJumpIdx(int(ipFamily))
+		if allow == -1 {
+			return fmt.Errorf("no allow jump index")
+		}
 
-			deny := apj.PolicyDenyJumpIdx(int(ipFamily))
-			if deny == -1 {
-				return fmt.Errorf("no deny jump index")
-			}
-			opts = append(opts, polprog.WithAllowDenyJumps(allow, deny))
+		deny := apj.PolicyDenyJumpIdx(int(ipFamily))
+		if deny == -1 {
+			return fmt.Errorf("no deny jump index")
 		}
-		insns, err := m.doUpdatePolicyProgram(ap.HookName(), progName,
-			ap.PolicyIdx(int(ipFamily)), rules, ipFamily, opts...)
-		perr := m.writePolicyDebugInfo(insns, ap.IfaceName(), ipFamily, polDir, ap.HookName(), err)
-		if perr != nil {
-			log.WithError(perr).Warn("error writing policy debug information")
-		}
-		if err != nil {
-			return fmt.Errorf("failed to update policy program v%d: %w", ipFamily, err)
-		}
+		opts = append(opts, polprog.WithAllowDenyJumps(allow, deny))
 	}
+	insns, err := m.doUpdatePolicyProgram(ap.HookName(), progName,
+		ap.PolicyJmp(), rules, ipFamily, opts...)
+	perr := m.writePolicyDebugInfo(insns, ap.IfaceName(), ipFamily, polDir, ap.HookName(), err)
+	if perr != nil {
+		log.WithError(perr).Warn("error writing policy debug information")
+	}
+	if err != nil {
+		return fmt.Errorf("failed to update policy program v%d: %w", ipFamily, err)
+	}
+
 	return nil
 }
 
@@ -2805,11 +2858,12 @@ func (m *bpfEndpointManager) loadPolicyProgram(progName string,
 	ipFamily proto.IPVersion, rules polprog.Rules, progsMap maps.Map, opts ...polprog.Option) (
 	fileDescriptor, asm.Insns, error) {
 
+	if ipFamily == proto.IPVersion_IPV6 {
+		opts = append(opts, polprog.WithIPv6())
+	}
+
 	pg := polprog.NewBuilder(m.ipSetIDAlloc, m.bpfmaps.IpsetsMap.MapFD(),
 		m.bpfmaps.StateMap.MapFD(), progsMap.MapFD(), opts...)
-	if ipFamily == proto.IPVersion_IPV6 {
-		pg.EnableIPv6Mode()
-	}
 	insns, err := pg.Instructions(rules)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to generate policy bytecode v%v: %w", ipFamily, err)
@@ -2820,7 +2874,7 @@ func (m *bpfEndpointManager) loadPolicyProgram(progName string,
 	}
 	progFD, err := bpf.LoadBPFProgramFromInsns(insns, progName, "Apache-2.0", uint32(progType))
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to load BPF policy program v%v: %w", ipFamily, err)
+		return nil, nil, fmt.Errorf("failed to load BPF policy program %v: %w", ipFamily, err)
 	}
 
 	return progFD, insns, nil
@@ -2883,7 +2937,7 @@ func (m *bpfEndpointManager) removePolicyProgram(ap attachPoint) error {
 	}
 
 	for _, ipFamily := range ipVersions {
-		idx := ap.PolicyIdx(int(ipFamily))
+		idx := ap.PolicyJmp()
 		if idx == -1 {
 			continue
 		}
@@ -2966,10 +3020,13 @@ func (m *bpfEndpointManager) getInterfaceIP(ifaceName string) (*net.IP, error) {
 	if err != nil {
 		return nil, err
 	}
+	log.Debugf("Addrs for dev %s : %v", ifaceName, addrs)
 	for _, addr := range addrs {
 		switch t := addr.(type) {
 		case *net.IPNet:
-			if t.IP.To4() != nil {
+			if !m.ipv6Enabled && t.IP.To4() != nil {
+				ipAddrs = append(ipAddrs, t.IP)
+			} else if m.ipv6Enabled && t.IP.To4() == nil {
 				ipAddrs = append(ipAddrs, t.IP)
 			}
 		}
