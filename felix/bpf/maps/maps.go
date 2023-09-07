@@ -786,7 +786,7 @@ func (b *PinnedMap) CopyDeltaFromOldMap() error {
 	}
 
 	err = b.deletePreviousVersion()
-	if err != nil {
+	if err != nil && !IsNotExists(err) {
 		return fmt.Errorf("failed to delete previous %s map, err=%w", b.Name, err)
 	}
 
