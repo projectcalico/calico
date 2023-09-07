@@ -639,7 +639,11 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	if config.BPFEnabled {
 		log.Info("BPF enabled, starting BPF endpoint manager and map manager.")
 		var err error
-		bpfMaps, err = bpfmap.CreateBPFMaps()
+		ipFamily := 4
+		if config.BPFIpv6Enabled {
+			ipFamily = 6
+		}
+		bpfMaps, err = bpfmap.CreateBPFMaps(ipFamily)
 		if err != nil {
 			log.WithError(err).Panic("error creating bpf maps")
 		}
@@ -710,6 +714,10 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 		if len(config.NodeZone) != 0 {
 			bpfproxyOpts = append(bpfproxyOpts, bpfproxy.WithTopologyNodeZone(config.NodeZone))
+		}
+
+		if config.BPFIpv6Enabled {
+			bpfproxyOpts = append(bpfproxyOpts, bpfproxy.WithIPFamily(6))
 		}
 
 		if config.KubeClientSet != nil {
