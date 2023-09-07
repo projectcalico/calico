@@ -165,10 +165,6 @@ func (m *Map) CopyDeltaFromOldMap() error {
 	return nil
 }
 
-func (m *Map) DeletePreviousVersion() error {
-	return nil
-}
-
 func (m *Map) ContainsKey(k []byte) bool {
 	m.Lock()
 	defer m.Unlock()
@@ -256,10 +252,6 @@ func (*DummyMap) Get(k []byte) ([]byte, error) {
 }
 
 func (*DummyMap) Delete(k []byte) error {
-	return nil
-}
-
-func (*DummyMap) DeletePreviousVersion() error {
 	return nil
 }
 
