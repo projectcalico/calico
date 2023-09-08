@@ -561,7 +561,7 @@ deny:
 	ctx->fwd.res = TC_ACT_SHOT;
 }
 
-SEC("classifier/tc/accept")
+SEC("tc")
 int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 {
 	CALI_DEBUG("Entering calico_tc_skb_accepted_entrypoint\n");
@@ -1331,7 +1331,7 @@ deny:
 	}
 }
 
-SEC("classifier/tc/icmp")
+SEC("tc")
 int calico_tc_skb_send_icmp_replies(struct __sk_buff *skb)
 {
 	__u32 fib_flags = 0;
@@ -1382,7 +1382,7 @@ deny:
 }
 
 #if HAS_HOST_CONFLICT_PROG
-SEC("classifier/tc/host_ct_conflict")
+SEC("tc")
 int calico_tc_host_ct_conflict(struct __sk_buff *skb)
 {
 	CALI_DEBUG("Entering calico_tc_host_ct_conflict_entrypoint\n");
@@ -1445,7 +1445,7 @@ deny:
 }
 #endif /* HAS_HOST_CONFLICT_PROG */
 
-SEC("classifier/tc/drop")
+SEC("tc")
 int calico_tc_skb_drop(struct __sk_buff *skb)
 {
 	CALI_DEBUG("Entering calico_tc_skb_drop\n");
@@ -1518,7 +1518,7 @@ deny:
 #endif
 
 #define ENTRY_FUNC(x)				\
-	SEC("classifier/"XSTR(x))		\
+	SEC("tc")		\
 	int  x(struct __sk_buff *skb)		\
 	{					\
 		return calico_tc(skb);		\
