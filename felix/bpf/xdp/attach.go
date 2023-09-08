@@ -139,7 +139,11 @@ func (ap *AttachPoint) AttachProgram() (int, error) {
 	defer obj.Close()
 
 	for m, err := obj.FirstMap(); m != nil && err == nil; m, err = m.NextMap() {
+		mapName := m.Name()
 		if m.IsMapInternal() {
+			if strings.HasPrefix(mapName, ".rodata") {
+				continue
+			}
 			if err := ConfigureProgram(m, ap.Iface); err != nil {
 				return -1, err
 			}
