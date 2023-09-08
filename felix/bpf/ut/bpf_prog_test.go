@@ -584,7 +584,7 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 	}
 
 	if polProg {
-		polProgPath := "xdp_policy"
+		polProgPath := "calico_xdp_norm_pol_tail"
 		if !forXDP {
 			polProgPath = "classifier_tc_policy"
 		}
