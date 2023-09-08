@@ -3261,10 +3261,102 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			Expect(podMac.String()).To(Equal(expectedMac))
 		})
 
+		It("annotation containing a valid MAC address prefix in ipv4 or dual-stack ip family", func() {
+			clientset := getKubernetesClient()
+
+			expectedMacPrefix := "0a:1b"
+			podIp := "10.10.10.10"
+			expectMac := expectedMacPrefix + "0a:0a:0a:0a"
+
+			ensurePodCreated(clientset, testutils.K8S_TEST_NS, &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: name,
+					Annotations: map[string]string{
+						"cni.projectcalico.org/hwAddr": expectedMacPrefix,
+					},
+				},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{{
+						Name:  name,
+						Image: "ignore",
+					}},
+					NodeName: hostname,
+				},
+			})
+			defer ensurePodDeleted(clientset, testutils.K8S_TEST_NS, name)
+
+			_, _, contVeth, _, _, _, err := testutils.CreateContainer(netconf, name, testutils.K8S_TEST_NS, podIp)
+
+			Expect(err).NotTo(HaveOccurred())
+
+			podMac := contVeth.Attrs().HardwareAddr
+
+			Expect(podMac.String()).To(Equal(expectMac))
+		})
+
+		It("annotation containing a valid MAC address prefix in ipv6-only", func() {
+			clientset := getKubernetesClient()
+
+			expectedMacPrefix := "0a:1b"
+			podIp := "fd00::1:1"
+			expectMac := expectedMacPrefix + "00:01:00:01"
+
+			ensurePodCreated(clientset, testutils.K8S_TEST_NS, &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: name,
+					Annotations: map[string]string{
+						"cni.projectcalico.org/hwAddr": expectedMacPrefix,
+					},
+				},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{{
+						Name:  name,
+						Image: "ignore",
+					}},
+					NodeName: hostname,
+				},
+			})
+			defer ensurePodDeleted(clientset, testutils.K8S_TEST_NS, name)
+
+			_, _, contVeth, _, _, _, err := testutils.CreateContainer(netconf, name, testutils.K8S_TEST_NS, podIp)
+
+			Expect(err).NotTo(HaveOccurred())
+
+			podMac := contVeth.Attrs().HardwareAddr
+
+			Expect(podMac.String()).To(Equal(expectMac))
+		})
+
 		It("annotation containing an invalid MAC address", func() {
 			clientset := getKubernetesClient()
 
 			invalidMac := "invalid MAC address"
+
+			ensurePodCreated(clientset, testutils.K8S_TEST_NS, &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: name,
+					Annotations: map[string]string{
+						"cni.projectcalico.org/hwAddr": invalidMac,
+					},
+				},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{{
+						Name:  name,
+						Image: "ignore",
+					}},
+					NodeName: hostname,
+				},
+			})
+			defer ensurePodDeleted(clientset, testutils.K8S_TEST_NS, name)
+
+			_, _, _, _, _, _, err := testutils.CreateContainer(netconf, name, testutils.K8S_TEST_NS, "")
+			Expect(err).To(HaveOccurred())
+		})
+
+		It("annotation containing an invalid MAC address prefix", func() {
+			clientset := getKubernetesClient()
+
+			invalidMac := "invalid MAC address prefix"
 
 			ensurePodCreated(clientset, testutils.K8S_TEST_NS, &v1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
