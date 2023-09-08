@@ -9,15 +9,15 @@ COPY --from=qemu /usr/bin/qemu-*-static /usr/bin/
 
 RUN microdnf upgrade
 
-# At runtime, apiserver generate certificates in /code directory
-# hence, provide RW permission for user 1001
-RUN mkdir /code
-RUN rm -rf /tmp
-RUN mkdir /tmp
-
 FROM scratch
-COPY  --from=ubi /code /code
-COPY  --from=ubi /tmp /tmp
+# At runtime, the API server generates certificates in the /code directory,
+# and it also requires write access to the /tmp directory. We need to grant suitable
+# permissions so that this image can be run as non-root too.
+# The .tar file is a workaround method for adding both /tmp and /code with the
+# correct permissions, since the scratch image neither has chmod, nor does
+# `COPY --chmod` work for directories.
+ADD docker-image/root.tar .
+
 # copies the shared linux libs required by apiserver
 COPY --from=ubi /lib64/libpthread.so.0 /lib64/libpthread.so.0
 COPY --from=ubi /lib64/libc.so.6 /lib64/libc.so.6
