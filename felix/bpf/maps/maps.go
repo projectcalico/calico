@@ -132,6 +132,7 @@ type Map interface {
 	Update(k, v []byte) error
 	Get(k []byte) ([]byte, error)
 	Delete(k []byte) error
+	DeletePreviousVersion() error
 }
 
 type MapWithExistsCheck interface {
@@ -419,11 +420,11 @@ func (b *PinnedMap) Delete(k []byte) error {
 	return DeleteMapEntry(b.fd, k)
 }
 
-func (b *PinnedMap) deletePreviousVersion() error {
+func (b *PinnedMap) DeletePreviousVersion() error {
 	log.WithField("name", b.Name).Debug("delete previous version")
 	oldVersion, err := b.getOldMapVersion()
 	log.WithError(err).Debugf("Upgrading from %d", oldVersion)
-	if err != nil {
+	if err != nil && !IsNotExists(err) {
 		return err
 	}
 	// fresh install
@@ -784,12 +785,6 @@ func (b *PinnedMap) CopyDeltaFromOldMap() error {
 	if err != nil {
 		return fmt.Errorf("error upgrading data from old map %s, err=%w", b.GetName(), err)
 	}
-
-	err = b.deletePreviousVersion()
-	if err != nil && !IsNotExists(err) {
-		return fmt.Errorf("failed to delete previous %s map, err=%w", b.Name, err)
-	}
-
 	if b.oldfd == 0 {
 		log.WithField("name", b.Name).Debug("CopyDeltaFromOldMap - no old map, done.")
 		return nil
