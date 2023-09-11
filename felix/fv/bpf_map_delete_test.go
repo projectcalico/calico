@@ -20,10 +20,11 @@ import (
 	"fmt"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/projectcalico/calico/felix/bpf/arp"
 	"github.com/projectcalico/calico/felix/bpf/bpfdefs"
 	"github.com/projectcalico/calico/felix/bpf/failsafes"
 	"github.com/projectcalico/calico/felix/bpf/maps"
-	log "github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/felix/bpf/state"
 	"os"
 
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
@@ -63,79 +64,59 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test delete previ
 
 	It("should delete previous maps after Felix restart", func() {
 
-		//arpMap := arp.Map()
-		//arpMap.(*maps.PinnedMap).Version = 9
-		//arpMap.EnsureExists()
-		////oldMapParams := arpMap.(*maps.PinnedMap).GetMapParams(8)
-		////oldBpfMap := maps.NewPinnedMap(oldMapParams)
-		////oldBpfMap.EnsureExists()
-		//
-		//Eventually(func() string {
-		//	out, err := tc.Felixes[0].ExecOutput("bpftool", "map", "show")
-		//	Expect(err).NotTo(HaveOccurred())
-		//	return out
-		//}, "5s", "200ms").Should(ContainSubstring("cali_v4_arp9"))
-		//
-		//Expect(7).To(Equal(6))
-		//arpOldVersionedName := arpMap.(*maps.PinnedMap).VersionedName()
-		//arpNewVersionedName := fmt.Sprintf("%s%d", arpMap.(*maps.PinnedMap).Name, MaxMapNumber)
-		//log.Infof("%s", arpOldVersionedName)
-		//log.Infof("%s", arpNewVersionedName)
-		//arpCmd := getMapCmd(arpNewVersionedName, "lru_hash", "8", "12", "10000", "0")
-		//tc.Felixes[0].Exec(arpCmd...)
-		//
+		arpMap := arp.Map()
+		arpOldVersionedName := arpMap.(*maps.PinnedMap).VersionedName()
+		arpNewVersionedName := fmt.Sprintf("%s%d", arpMap.(*maps.PinnedMap).Name, MaxMapNumber)
+		arpCmd := getMapCmd(arpNewVersionedName, "lru_hash", "8", "12", "10000", "0")
+		tc.Felixes[0].Exec(arpCmd...)
+
 		failsafesMap := failsafes.Map()
 		failsafesOldVersionedName := failsafesMap.(*maps.PinnedMap).VersionedName()
 		failsafesNewVersionedName := fmt.Sprintf("%s%d", failsafesMap.(*maps.PinnedMap).Name, MaxMapNumber)
-		log.Infof("%s", failsafesOldVersionedName)
-		log.Infof("%s", failsafesNewVersionedName)
 		failsafesCmd := getMapCmd(failsafesNewVersionedName, "lpm_trie", "12", "4", "65536", "1")
 		tc.Felixes[0].Exec(failsafesCmd...)
-		Expect(7).To(Equal(2))
-		//
-		//stateMap := state.Map()
-		//stateOldVersionedName := arpMap.(*maps.PinnedMap).VersionedName()
-		//stateNewVersionedName := fmt.Sprintf("%s%d", stateMap.(*maps.PinnedMap).Name, MaxMapNumber)
-		//log.Infof("%s", stateOldVersionedName)
-		//log.Infof("%s", stateNewVersionedName)
-		//stateCmd := getMapCmd(stateNewVersionedName, "percpu_array", "4", "464", "2", "0")
-		//tc.Felixes[0].Exec(stateCmd...)
-		//
-		//// Before Felix restart: both old and new maps exists.
-		//Eventually(func() string {
-		//	out, err := tc.Felixes[0].ExecOutput("bpftool", "map", "show")
-		//	Expect(err).NotTo(HaveOccurred())
-		//	return out
-		//}, "5s", "200ms").Should(ContainSubstring(arpOldVersionedName))
-		//Eventually(func() string {
-		//	out, err := tc.Felixes[0].ExecOutput("bpftool", "map", "show")
-		//	Expect(err).NotTo(HaveOccurred())
-		//	return out
-		//}, "5s", "200ms").Should(ContainSubstring(failsafesOldVersionedName))
-		//Eventually(func() string {
-		//	out, err := tc.Felixes[0].ExecOutput("bpftool", "map", "show")
-		//	Expect(err).NotTo(HaveOccurred())
-		//	return out
-		//}, "5s", "200ms").Should(ContainSubstring(stateOldVersionedName))
-		//
-		//tc.Felixes[0].Restart()
-		//
-		//// After Felix restart: only the new maps now exists.
-		//Eventually(func() string {
-		//	out, err := tc.Felixes[0].ExecOutput("bpftool", "map", "show")
-		//	Expect(err).NotTo(HaveOccurred())
-		//	return out
-		//}, "5s", "200ms").ShouldNot(ContainSubstring(arpNewVersionedName))
-		//Eventually(func() string {
-		//	out, err := tc.Felixes[0].ExecOutput("bpftool", "map", "show")
-		//	Expect(err).NotTo(HaveOccurred())
-		//	return out
-		//}, "5s", "200ms").ShouldNot(ContainSubstring(failsafesNewVersionedName))
-		//Eventually(func() string {
-		//	out, err := tc.Felixes[0].ExecOutput("bpftool", "map", "show")
-		//	Expect(err).NotTo(HaveOccurred())
-		//	return out
-		//}, "5s", "200ms").ShouldNot(ContainSubstring(stateNewVersionedName))
+
+		stateMap := state.Map()
+		stateOldVersionedName := arpMap.(*maps.PinnedMap).VersionedName()
+		stateNewVersionedName := fmt.Sprintf("%s%d", stateMap.(*maps.PinnedMap).Name, MaxMapNumber)
+		stateCmd := getMapCmd(stateNewVersionedName, "percpu_array", "4", "464", "2", "0")
+		tc.Felixes[0].Exec(stateCmd...)
+
+		// Before Felix restart: both old and new maps exists.
+		Eventually(func() string {
+			out, err := tc.Felixes[0].ExecOutput("bpftool", "map", "show")
+			Expect(err).NotTo(HaveOccurred())
+			return out
+		}, "5s", "200ms").Should(ContainSubstring(arpOldVersionedName))
+		Eventually(func() string {
+			out, err := tc.Felixes[0].ExecOutput("bpftool", "map", "show")
+			Expect(err).NotTo(HaveOccurred())
+			return out
+		}, "5s", "200ms").Should(ContainSubstring(failsafesOldVersionedName))
+		Eventually(func() string {
+			out, err := tc.Felixes[0].ExecOutput("bpftool", "map", "show")
+			Expect(err).NotTo(HaveOccurred())
+			return out
+		}, "5s", "200ms").Should(ContainSubstring(stateOldVersionedName))
+
+		tc.Felixes[0].Restart()
+
+		// After Felix restart: only the new maps now exists.
+		Eventually(func() string {
+			out, err := tc.Felixes[0].ExecOutput("bpftool", "map", "show")
+			Expect(err).NotTo(HaveOccurred())
+			return out
+		}, "5s", "200ms").ShouldNot(ContainSubstring(arpOldVersionedName))
+		Eventually(func() string {
+			out, err := tc.Felixes[0].ExecOutput("bpftool", "map", "show")
+			Expect(err).NotTo(HaveOccurred())
+			return out
+		}, "5s", "200ms").ShouldNot(ContainSubstring(failsafesOldVersionedName))
+		Eventually(func() string {
+			out, err := tc.Felixes[0].ExecOutput("bpftool", "map", "show")
+			Expect(err).NotTo(HaveOccurred())
+			return out
+		}, "5s", "200ms").ShouldNot(ContainSubstring(stateOldVersionedName))
 	})
 
 })
