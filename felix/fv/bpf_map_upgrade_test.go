@@ -42,7 +42,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test conntrack ma
 	var (
 		infra infrastructure.DatastoreInfra
 		tc    infrastructure.TopologyContainers
-		//client  client.Interface
 	)
 
 	BeforeEach(func() {
