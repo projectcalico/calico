@@ -2172,6 +2172,60 @@ func init() {
 				},
 			}, false,
 		),
+		Entry("NetworkPolicy: disallow junk in PerformanceHints field",
+			&api.NetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.NetworkPolicySpec{
+					PerformanceHints: []api.PolicyPerformanceHint{"junk"},
+				},
+			}, false,
+		),
+		Entry("NetworkPolicy: allow PerfHintAssumeNeededOnEveryNode in PerformanceHints field",
+			&api.NetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.NetworkPolicySpec{
+					PerformanceHints: []api.PolicyPerformanceHint{api.PerfHintAssumeNeededOnEveryNode},
+				},
+			}, true,
+		),
+		Entry("NetworkPolicy: disallow dupes in PerformanceHints field",
+			&api.NetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.NetworkPolicySpec{
+					PerformanceHints: []api.PolicyPerformanceHint{
+						api.PerfHintAssumeNeededOnEveryNode,
+						api.PerfHintAssumeNeededOnEveryNode,
+					},
+				},
+			}, false,
+		),
+		Entry("GlobalNetworkPolicy: disallow junk in PerformanceHints field",
+			&api.GlobalNetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.GlobalNetworkPolicySpec{
+					PerformanceHints: []api.PolicyPerformanceHint{"junk"},
+				},
+			}, false,
+		),
+		Entry("GlobalNetworkPolicy: allow PerfHintAssumeNeededOnEveryNode in PerformanceHints field",
+			&api.GlobalNetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.GlobalNetworkPolicySpec{
+					PerformanceHints: []api.PolicyPerformanceHint{api.PerfHintAssumeNeededOnEveryNode},
+				},
+			}, true,
+		),
+		Entry("GlobalNetworkPolicy: disallow dupes in PerformanceHints field",
+			&api.GlobalNetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.GlobalNetworkPolicySpec{
+					PerformanceHints: []api.PolicyPerformanceHint{
+						api.PerfHintAssumeNeededOnEveryNode,
+						api.PerfHintAssumeNeededOnEveryNode,
+					},
+				},
+			}, false,
+		),
 		Entry("allow global() and projectcalico.org/name in EntityRule namespaceSelector field",
 			&api.NetworkPolicy{
 				ObjectMeta: v1.ObjectMeta{Name: "thing"},
