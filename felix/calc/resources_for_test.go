@@ -299,6 +299,32 @@ var policy1_order20 = Policy{
 	Types: []string{"ingress", "egress"},
 }
 
+var policy1_order20_always = Policy{
+	Order:    &order20,
+	Selector: "a == 'a'",
+	InboundRules: []Rule{
+		{SrcSelector: allSelector},
+	},
+	OutboundRules: []Rule{
+		{SrcSelector: bEpBSelector},
+	},
+	Types:            []string{"ingress", "egress"},
+	PerformanceHints: []v3.PolicyPerformanceHint{v3.PerfHintAssumeNeededOnEveryNode},
+}
+
+var policy1_order20_ondemand = Policy{
+	Order:    &order20,
+	Selector: "a == 'a'",
+	InboundRules: []Rule{
+		{SrcSelector: allSelector},
+	},
+	OutboundRules: []Rule{
+		{SrcSelector: bEpBSelector},
+	},
+	Types:            []string{"ingress", "egress"},
+	PerformanceHints: []v3.PolicyPerformanceHint{v3.PerfHintAssumeNeededOnEveryNode},
+}
+
 var protoTCP = numorstring.ProtocolFromStringV1("tcp")
 var protoUDP = numorstring.ProtocolFromStringV1("udp")
 var policy1_order20_with_named_port_tcpport = Policy{
