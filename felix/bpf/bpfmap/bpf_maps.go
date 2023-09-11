@@ -55,25 +55,20 @@ type Maps struct {
 	XDPJumpMap      maps.MapWithDeleteIfExists
 }
 
-func (m *Maps) Destroy() {
-	mps := []maps.Map{
-		m.IpsetsMap,
-		m.StateMap,
-		m.ArpMap,
-		m.FailsafesMap,
-		m.FrontendMap,
-		m.BackendMap,
-		m.AffinityMap,
-		m.RouteMap,
-		m.CtMap,
-		m.SrMsgMap,
-		m.CtNatsMap,
-		m.ProgramsMap,
-		m.JumpMap,
-		m.XDPProgramsMap,
-		m.XDPJumpMap,
+func (m *Maps) DeletePreviousVersion() error {
+	mps := m.extractMapSlice()
+	for _, m := range mps {
+		err := m.(pinnedMap).DeletePreviousVersion()
+		if err != nil {
+			return err
+		}
 	}
 
+	return nil
+}
+
+func (m *Maps) Destroy() {
+	mps := m.extractMapSlice()
 	for _, m := range mps {
 		os.Remove(m.(pinnedMap).Path())
 		m.(pinnedMap).Close()
@@ -169,7 +164,28 @@ func CreateBPFMaps(ipFamily int) (*Maps, error) {
 	return ret, nil
 }
 
+func (m *Maps) extractMapSlice() []maps.Map {
+	return []maps.Map{
+		m.IpsetsMap,
+		m.StateMap,
+		m.ArpMap,
+		m.FailsafesMap,
+		m.FrontendMap,
+		m.BackendMap,
+		m.AffinityMap,
+		m.RouteMap,
+		m.CtMap,
+		m.SrMsgMap,
+		m.CtNatsMap,
+		m.ProgramsMap,
+		m.JumpMap,
+		m.XDPProgramsMap,
+		m.XDPJumpMap,
+	}
+}
+
 type pinnedMap interface {
 	Path() string
 	Close() error
+	DeletePreviousVersion() error
 }
