@@ -2197,7 +2197,7 @@ func init() {
 						api.PerfHintAssumeNeededOnEveryNode,
 					},
 				},
-			}, true,
+			}, false,
 		),
 		Entry("GlobalNetworkPolicy: disallow junk in PerformanceHints field",
 			&api.GlobalNetworkPolicy{
@@ -2224,7 +2224,7 @@ func init() {
 						api.PerfHintAssumeNeededOnEveryNode,
 					},
 				},
-			}, true,
+			}, false,
 		),
 		Entry("allow global() and projectcalico.org/name in EntityRule namespaceSelector field",
 			&api.NetworkPolicy{

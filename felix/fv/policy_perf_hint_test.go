@@ -78,13 +78,13 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ policy performance hints te
 			ipsetListCommand = []string{"ipset", "list"}
 		}
 
-		tc.Felixes[0].BPFNATDump()
 		// That should result in programming the IP set the implements the
 		// "foo == 'bar'" selector.  The iptables rules won't get created
 		// because the iptables driver squashes them if they're not referenced.
 		Eventually(tc.Felixes[0].ExecOutputFn(ipsetListCommand...), "10s").Should(
 			ContainSubstring("10.65.0.1"),
-			"Expected felix to create an IP set containing the workload's IP")
+			"Expected felix to create an IP set containing the workload's IP",
+		)
 
 		// Cross-check that the PerformanceHints field is the only thing
 		// that's making the IP set get created.
