@@ -63,6 +63,12 @@ func NewSecretWatcher(c *client) (*secretWatcher, error) {
 	// set up k8s client
 	// attempt 1: KUBECONFIG env var
 	cfgFile := os.Getenv("KUBECONFIG")
+	// Host env vars bleed through to the container on Windows HPC, so if cannot
+	// be trusted in this case
+	// FIXME: this will no longer be needed when containerd v1.6 is EOL'd
+	if winutils.InHostProcessContainer() {
+		cfgFile = ""
+	}
 	cfg, err := winutils.BuildConfigFromFlags("", cfgFile)
 	if err != nil {
 		log.WithError(err).Info("KUBECONFIG environment variable not found, attempting in-cluster")

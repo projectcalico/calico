@@ -39,6 +39,7 @@ import (
 	"github.com/projectcalico/calico/felix/idalloc"
 	"github.com/projectcalico/calico/felix/stringutils"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
+	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 )
 
 const (
@@ -265,6 +266,11 @@ type FileParam struct {
 }
 
 func (p *FileParam) Parse(raw string) (interface{}, error) {
+	// Use GetHostPath to use/resolve the CONTAINER_SANDBOX_MOUNT_POINT env var
+	// if running on Windows HPC.
+	// FIXME: this will no longer be needed when containerd v1.6 is EOL'd
+	raw = winutils.GetHostPath(raw)
+
 	if p.Executable {
 		// Special case: for executable files, we search our directory
 		// and the system path.

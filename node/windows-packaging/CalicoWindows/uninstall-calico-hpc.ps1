@@ -87,5 +87,9 @@ Write-Host "Stopping and removing kube-proxy service if it is present..."
 Write-Host "It is recommended to run kube-proxy as kubernetes daemonset instead"
 Remove-CalicoService kube-proxy
 
+Write-Host "Logging containerd CNI bin and conf dir paths:"
+Get-Content "$env:ProgramFiles/containerd/config.toml" | Select-String -Pattern "^(\s)*bin_dir = (.)*$"
+Get-Content "$env:ProgramFiles/containerd/config.toml" | Select-String -Pattern "^(\s)*conf_dir = (.)*$"
+
 Get-Module 'calico' | Remove-Module -Force
 Write-Host "Done."

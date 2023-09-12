@@ -77,9 +77,12 @@ func InHostProcessContainer() bool {
 func GetHostPath(path string) string {
 	if InHostProcessContainer() {
 		sandbox := os.Getenv("CONTAINER_SANDBOX_MOUNT_POINT")
+		// Remove drive letter prefixs as the CONTAINER_SANDBOX_MOUNT_POINT env var will contain it
+		path := strings.TrimPrefix(path, "c:")
+		path = strings.TrimPrefix(path, "C:")
+		// Remove literal unresolved CONTAINER_SANDBOX_MOUNT_POINT env var
+		path = strings.TrimPrefix(path, "$env:CONTAINER_SANDBOX_MOUNT_POINT")
 		// join them and return with forward slashes so it can be serialized properly in json later if required
-		path := strings.TrimLeft(path, "c:")
-		path = strings.TrimLeft(path, "C:")
 		path = filepath.Join(sandbox, path)
 		return filepath.ToSlash(path)
 	}

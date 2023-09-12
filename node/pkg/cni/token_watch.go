@@ -64,7 +64,15 @@ func NamespaceOfUsedServiceAccount() string {
 }
 
 func BuildClientSet() (*kubernetes.Clientset, error) {
-	cfg, err := winutils.BuildConfigFromFlags("", os.Getenv("KUBECONFIG"))
+	kubeconfig := os.Getenv("KUBECONFIG")
+	// Host env vars bleed through to the container on Windows HPC, so if cannot
+	// be trusted in this case
+	// FIXME: this will no longer be needed when containerd v1.6 is EOL'd
+	if winutils.InHostProcessContainer() {
+		kubeconfig = ""
+	}
+	cfg, err := winutils.BuildConfigFromFlags("", kubeconfig)
+	logrus.WithFields(logrus.Fields{"KUBECONFIG": kubeconfig, "cfg": cfg}).Debug("running cni.BuildClientSet")
 	if err != nil {
 		return nil, err
 	}
@@ -224,7 +232,14 @@ func Run() {
 
 	for tu := range tokenChan {
 		logrus.Info("Update of CNI kubeconfig triggered based on elapsed time.")
-		cfg, err := winutils.BuildConfigFromFlags("", os.Getenv("KUBECONFIG"))
+		kubeconfig := os.Getenv("KUBECONFIG")
+		// Host env vars bleed through to the container on Windows HPC, so if cannot
+		// be trusted in this case
+		// FIXME: this will no longer be needed when containerd v1.6 is EOL'd
+		if winutils.InHostProcessContainer() {
+			kubeconfig = ""
+		}
+		cfg, err := winutils.BuildConfigFromFlags("", kubeconfig)
 		if err != nil {
 			logrus.WithError(err).Error("Error generating kube config.")
 			continue
