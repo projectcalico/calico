@@ -81,7 +81,7 @@ func LoadBPFProgramFromInsns(insns asm.Insns, name, license string, progType uin
 }
 
 func tryLoadBPFProgramFromInsns(insns asm.Insns, name, license string, logSize uint, progType uint32) (ProgFD, error) {
-	log.Debugf("tryLoadBPFProgramFromInsns(..., %v, %v, %v)", license, logSize, progType)
+	log.Debugf("tryLoadBPFProgramFromInsns(..., %s, %v, %v, %v)", name, license, logSize, progType)
 	bpfAttr := C.bpf_attr_alloc()
 	defer C.free(unsafe.Pointer(bpfAttr))
 
