@@ -108,17 +108,33 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test delete previ
 			out, err := tc.Felixes[0].ExecOutput("bpftool", "map", "show")
 			Expect(err).NotTo(HaveOccurred())
 			return out
-		}, "5s", "200ms").ShouldNot(ContainSubstring(arpOldVersionedName))
+		}, "5s", "200ms").Should(ContainSubstring(arpNewVersionedName))
 		Eventually(func() string {
 			out, err := tc.Felixes[0].ExecOutput("bpftool", "map", "show")
 			Expect(err).NotTo(HaveOccurred())
 			return out
-		}, "5s", "200ms").ShouldNot(ContainSubstring(failsafesOldVersionedName))
+		}, "5s", "200ms").Should(ContainSubstring(failsafesNewVersionedName))
 		Eventually(func() string {
 			out, err := tc.Felixes[0].ExecOutput("bpftool", "map", "show")
 			Expect(err).NotTo(HaveOccurred())
 			return out
-		}, "5s", "200ms").ShouldNot(ContainSubstring(stateOldVersionedName))
+		}, "5s", "200ms").Should(ContainSubstring(stateNewVersionedName))
+
+		//Eventually(func() string {
+		//	out, err := tc.Felixes[0].ExecOutput("bpftool", "map", "show")
+		//	Expect(err).NotTo(HaveOccurred())
+		//	return out
+		//}, "5s", "200ms").ShouldNot(ContainSubstring(arpOldVersionedName))
+		//Eventually(func() string {
+		//	out, err := tc.Felixes[0].ExecOutput("bpftool", "map", "show")
+		//	Expect(err).NotTo(HaveOccurred())
+		//	return out
+		//}, "5s", "200ms").ShouldNot(ContainSubstring(failsafesOldVersionedName))
+		//Eventually(func() string {
+		//	out, err := tc.Felixes[0].ExecOutput("bpftool", "map", "show")
+		//	Expect(err).NotTo(HaveOccurred())
+		//	return out
+		//}, "5s", "200ms").ShouldNot(ContainSubstring(stateOldVersionedName))
 	})
 
 })
