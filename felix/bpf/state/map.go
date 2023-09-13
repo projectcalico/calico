@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2023 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,11 +17,15 @@ package state
 import (
 	"unsafe"
 
+	v3 "github.com/projectcalico/calico/felix/bpf/state/v3"
+	// When adding a new ct version, change curVer to point to the new version
+	curVer "github.com/projectcalico/calico/felix/bpf/state/v4"
+
 	"github.com/projectcalico/calico/felix/bpf/maps"
 )
 
 func init() {
-	maps.SetSize(MapParameters.VersionedName(), MapParameters.MaxEntries)
+	maps.SetSize(curVer.MapParams.VersionedName(), curVer.MapParams.MaxEntries)
 }
 
 type PolicyResult int32
@@ -133,17 +137,12 @@ func StateFromBytes(bytes []byte) State {
 	return s
 }
 
-var MapParameters = maps.MapParameters{
-	Type:       "percpu_array",
-	KeySize:    4,
-	ValueSize:  expectedSize,
-	MaxEntries: 2,
-	Name:       "cali_state",
-	Version:    4,
-}
+var MapParams = curVer.MapParams
 
 func Map() maps.Map {
-	return maps.NewPinnedMap(MapParameters)
+	b := maps.NewPinnedMap(MapParams)
+	b.GetMapParams = GetMapParams
+	return b
 }
 
 func MapForTest() maps.Map {
@@ -154,4 +153,15 @@ func MapForTest() maps.Map {
 		MaxEntries: 2,
 		Name:       "test_state",
 	})
+}
+
+func GetMapParams(version int) maps.MapParameters {
+	switch version {
+	case 3:
+		return v3.MapParams
+	case 4:
+		return curVer.MapParams
+	default:
+		return curVer.MapParams
+	}
 }

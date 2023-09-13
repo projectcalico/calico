@@ -132,6 +132,7 @@ type Map interface {
 	Update(k, v []byte) error
 	Get(k []byte) ([]byte, error)
 	Delete(k []byte) error
+	DeletePreviousVersion() error
 }
 
 type MapWithExistsCheck interface {
@@ -417,6 +418,48 @@ func (b *PinnedMap) Get(k []byte) ([]byte, error) {
 
 func (b *PinnedMap) Delete(k []byte) error {
 	return DeleteMapEntry(b.fd, k)
+}
+
+func (b *PinnedMap) DeletePreviousVersion() error {
+	log.WithField("name", b.Name).Debug("delete previous version")
+	oldVersion, err := b.getOldMapVersion()
+	log.WithError(err).Debugf("Upgrading from %d", oldVersion)
+	if err != nil && !IsNotExists(err) {
+		return err
+	}
+	// fresh install
+	if oldVersion == 0 {
+		return nil
+	}
+
+	// Code defensively against potential nil function pointer
+	if b.GetMapParams == nil {
+		log.WithField("name", b.Name).Warn("GetMapParams is nil cannot delete previous version of map")
+		return nil
+	}
+
+	// Get a pinnedMap handle for the old map
+	oldMapParams := b.GetMapParams(oldVersion)
+	oldBpfMap := NewPinnedMap(oldMapParams)
+
+	// Reconcile the GetMapParams() function is correct
+	if oldVersion != oldBpfMap.Version {
+		err = fmt.Errorf("Attempt to delete map %s previous version %d but old map params version %d", b.Name, oldVersion, oldBpfMap.Version)
+		log.WithError(err).Warn("Delete previous version")
+		return err
+	}
+
+	defer func() {
+		oldBpfMap.Close()
+		oldBpfMap.fd = 0
+		os.Remove(oldBpfMap.Path())
+		os.Remove(oldBpfMap.Path() + "_old")
+
+		// Inform user previous map version was deleted as in theory this would not have that frequently.
+		log.WithField("name", oldBpfMap.Name).Infof("delete previous version %d", oldBpfMap.Version)
+	}()
+
+	return nil
 }
 
 func (b *PinnedMap) DeleteIfExists(k []byte) error {
