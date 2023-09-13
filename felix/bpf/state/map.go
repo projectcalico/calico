@@ -15,13 +15,15 @@
 package state
 
 import (
+	v3 "github.com/projectcalico/calico/felix/bpf/state/v3"
+	curVer "github.com/projectcalico/calico/felix/bpf/state/v4"
 	"unsafe"
 
 	"github.com/projectcalico/calico/felix/bpf/maps"
 )
 
 func init() {
-	maps.SetSize(MapParameters.VersionedName(), MapParameters.MaxEntries)
+	maps.SetSize(curVer.MapParameters.VersionedName(), curVer.MapParameters.MaxEntries)
 }
 
 type PolicyResult int32
@@ -133,17 +135,12 @@ func StateFromBytes(bytes []byte) State {
 	return s
 }
 
-var MapParameters = maps.MapParameters{
-	Type:       "percpu_array",
-	KeySize:    4,
-	ValueSize:  expectedSize,
-	MaxEntries: 2,
-	Name:       "cali_state",
-	Version:    4,
-}
+var MapParams = curVer.MapParameters
 
 func Map() maps.Map {
-	return maps.NewPinnedMap(MapParameters)
+	b := maps.NewPinnedMap(MapParams)
+	b.GetMapParams = GetMapParams
+	return b
 }
 
 func MapForTest() maps.Map {
@@ -154,4 +151,15 @@ func MapForTest() maps.Map {
 		MaxEntries: 2,
 		Name:       "test_state",
 	})
+}
+
+func GetMapParams(version int) maps.MapParameters {
+	switch version {
+	case 3:
+		return v3.MapParameters
+	case 4:
+		return curVer.MapParameters
+	default:
+		return curVer.MapParameters
+	}
 }
