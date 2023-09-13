@@ -156,13 +156,29 @@ func createK8sDatastoreInfra(opts ...CreateOption) DatastoreInfra {
 }
 
 func GetK8sDatastoreInfra(index K8sInfraIndex, opts ...CreateOption) (*K8sDatastoreInfra, error) {
-	if K8sInfra[index] != nil {
-		if K8sInfra[index].runningTest != "" {
+	var temp K8sDatastoreInfra
+
+	for _, o := range opts {
+		o(&temp)
+	}
+
+	kds := K8sInfra[index]
+
+	if kds != nil {
+		if kds.runningTest != "" {
 			ginkgo.Fail(fmt.Sprintf("Previous test didn't clean up the infra: %s", K8sInfra[index].runningTest))
 		}
-		K8sInfra[index].EnsureReady()
-		K8sInfra[index].PerTestSetup(index)
-		return K8sInfra[index], nil
+
+		resetAll := temp.ipv6 != kds.ipv6
+
+		if !resetAll {
+			kds.EnsureReady()
+			kds.PerTestSetup(index)
+			return kds, nil
+		}
+
+		TearDownK8sInfra(kds)
+		K8sInfra[index] = nil
 	}
 
 	var err error
@@ -534,7 +550,7 @@ type cleanupFunc func(clientset *kubernetes.Clientset, calicoClient client.Inter
 func (kds *K8sDatastoreInfra) CleanUp() {
 	log.Info("Cleaning up kubernetes datastore")
 	startTime := time.Now()
-	for _, f := range []cleanupFunc{
+	cleanupFuncs := []cleanupFunc{
 		cleanupAllPods,
 		cleanupAllNodes,
 		cleanupAllNamespaces,
@@ -545,9 +561,12 @@ func (kds *K8sDatastoreInfra) CleanUp() {
 		cleanupAllHostEndpoints,
 		cleanupAllFelixConfigurations,
 		cleanupAllServices,
-	} {
+	}
+
+	for _, f := range cleanupFuncs {
 		f(kds.K8sClient, kds.calicoClient)
 	}
+
 	kds.needsCleanup = false
 	log.WithField("time", time.Since(startTime)).Info("Cleaned up kubernetes datastore")
 }
