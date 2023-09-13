@@ -15,9 +15,10 @@
 package state
 
 import (
+	"unsafe"
+
 	v3 "github.com/projectcalico/calico/felix/bpf/state/v3"
 	curVer "github.com/projectcalico/calico/felix/bpf/state/v4"
-	"unsafe"
 
 	"github.com/projectcalico/calico/felix/bpf/maps"
 )
