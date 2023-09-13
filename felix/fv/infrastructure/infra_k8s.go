@@ -620,7 +620,9 @@ func (kds *K8sDatastoreInfra) SetExpectedVXLANTunnelAddr(felix *Felix, cidr *net
 }
 
 func (kds *K8sDatastoreInfra) SetExpectedVXLANV6TunnelAddr(felix *Felix, cidr *net.IPNet, idx int, needBGP bool) {
-	felix.ExpectedVXLANV6TunnelAddr = fmt.Sprintf("%x%x:%x%x:%x%x:%x%x:%x%x:%x%x:%d:0", cidr.IP[0], cidr.IP[1], cidr.IP[2], cidr.IP[3], cidr.IP[4], cidr.IP[5], cidr.IP[6], cidr.IP[7], cidr.IP[8], cidr.IP[9], cidr.IP[10], cidr.IP[11], idx)
+	felix.ExpectedVXLANV6TunnelAddr = net.ParseIP(fmt.Sprintf("%x%x:%x%x:%x%x:%x%x:%x%x:%x%x:%d:0",
+		cidr.IP[0], cidr.IP[1], cidr.IP[2], cidr.IP[3], cidr.IP[4], cidr.IP[5], cidr.IP[6],
+		cidr.IP[7], cidr.IP[8], cidr.IP[9], cidr.IP[10], cidr.IP[11], idx)).String()
 	felix.ExtraSourceIPs = append(felix.ExtraSourceIPs, felix.ExpectedVXLANV6TunnelAddr)
 }
 
@@ -632,7 +634,9 @@ func (kds *K8sDatastoreInfra) SetExpectedWireguardTunnelAddr(felix *Felix, cidr 
 
 func (kds *K8sDatastoreInfra) SetExpectedWireguardV6TunnelAddr(felix *Felix, cidr *net.IPNet, idx int, needWg bool) {
 	// Set to be the same as IPIP tunnel address.
-	felix.ExpectedWireguardV6TunnelAddr = fmt.Sprintf("%x%x:%x%x:%x%x:%x%x:%x%x:%x%x:%d:0", cidr.IP[0], cidr.IP[1], cidr.IP[2], cidr.IP[3], cidr.IP[4], cidr.IP[5], cidr.IP[6], cidr.IP[7], cidr.IP[8], cidr.IP[9], cidr.IP[10], cidr.IP[11], idx)
+	felix.ExpectedWireguardV6TunnelAddr = net.ParseIP(fmt.Sprintf("%x%x:%x%x:%x%x:%x%x:%x%x:%x%x:%d:0",
+		cidr.IP[0], cidr.IP[1], cidr.IP[2], cidr.IP[3], cidr.IP[4], cidr.IP[5], cidr.IP[6],
+		cidr.IP[7], cidr.IP[8], cidr.IP[9], cidr.IP[10], cidr.IP[11], idx)).String()
 	felix.ExtraSourceIPs = append(felix.ExtraSourceIPs, felix.ExpectedWireguardV6TunnelAddr)
 }
 
@@ -695,6 +699,9 @@ func (kds *K8sDatastoreInfra) AddNode(felix *Felix, v4CIDR *net.IPNet, v6CIDR *n
 	}
 	if felix.ExpectedWireguardTunnelAddr != "" {
 		nodeIn.Annotations["projectcalico.org/IPv4WireguardInterfaceAddr"] = felix.ExpectedWireguardTunnelAddr
+	}
+	if felix.ExpectedWireguardV6TunnelAddr != "" {
+		nodeIn.Annotations["projectcalico.org/IPv6WireguardInterfaceAddr"] = felix.ExpectedWireguardV6TunnelAddr
 	}
 	log.WithField("nodeIn", nodeIn).Debug("Node defined")
 	nodeOut, err := kds.K8sClient.CoreV1().Nodes().Create(context.Background(), nodeIn, metav1.CreateOptions{})
