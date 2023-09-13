@@ -146,8 +146,8 @@ type bpfDataplane interface {
 	removePolicyProgram(ap attachPoint) error
 	setAcceptLocal(iface string, val bool) error
 	setRPFilter(iface string, val int) error
-	setRoute(ip.V4CIDR)
-	delRoute(ip.V4CIDR)
+	setRoute(ip.CIDR)
+	delRoute(ip.CIDR)
 	ruleMatchID(dir, action, owner, name string, idx int) polprog.RuleMatchID
 	loadDefaultPolicies() error
 	loadTCLogFilter(ap *tc.AttachPoint) (fileDescriptor, int, error)
@@ -320,7 +320,7 @@ type bpfEndpointManager struct {
 	bpfPolicyDebugEnabled bool
 
 	routeTable    routetable.RouteTableInterface
-	services      map[serviceKey][]ip.V4CIDR
+	services      map[serviceKey][]ip.CIDR
 	dirtyServices set.Set[serviceKey]
 
 	// Maps for policy rule counters
@@ -481,9 +481,13 @@ func newBPFEndpointManager(
 
 	if m.ctlbWorkaroundMode != ctlbWorkaroundDisabled {
 		log.Infof("BPFConnectTimeLoadBalancingWorkaround is %d", m.ctlbWorkaroundMode)
+		family := uint8(4)
+		if m.ipv6Enabled {
+			family = 6
+		}
 		m.routeTable = routetable.New(
 			[]string{bpfInDev},
-			4,
+			family,
 			false, // vxlan
 			config.NetlinkTimeout,
 			nil, // deviceRouteSourceAddress
@@ -493,7 +497,7 @@ func newBPFEndpointManager(
 			opReporter,
 			featureDetector,
 		)
-		m.services = make(map[serviceKey][]ip.V4CIDR)
+		m.services = make(map[serviceKey][]ip.CIDR)
 		m.dirtyServices = set.New[serviceKey]()
 
 		// Anything else would prevent packets being accepted from the special
@@ -704,6 +708,15 @@ func (m *bpfEndpointManager) onRouteUpdate(update *proto.RouteUpdate) {
 		if err != nil {
 			log.WithField("local tunnel cird", update.Dst).WithError(err).Warn("not parsable")
 			return
+		}
+		if m.ipv6Enabled {
+			if ip.To4() != nil {
+				return // skip ipv4 in ipv6 mode
+			}
+		} else {
+			if ip.To4() == nil {
+				return // skip ipv6 in ipv4 mode
+			}
 		}
 		m.tunnelIP = ip
 		log.WithField("ip", update.Dst).Info("host tunnel")
@@ -2101,7 +2114,7 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(policyDirection PolDirection
 		} else {
 			endpointType = tcdefs.EpTypeTunnel
 		}
-	} else if ifaceName == "wireguard.cali" || m.isL3Iface(ifaceName) {
+	} else if ifaceName == "wireguard.cali" || ifaceName == "wg-v6.cali" || m.isL3Iface(ifaceName) {
 		endpointType = tcdefs.EpTypeL3Device
 	} else if ifaceName == bpfInDev || ifaceName == bpfOutDev {
 		endpointType = tcdefs.EpTypeNAT
@@ -2583,19 +2596,47 @@ func (m *bpfEndpointManager) ensureBPFDevices() error {
 	// ARP requests that would not be proxied if .all.rp_filter == 1
 	arp := &netlink.Neigh{
 		State:        netlink.NUD_PERMANENT,
-		IP:           net.IPv4(169, 254, 1, 1),
 		HardwareAddr: bpfout.Attrs().HardwareAddr,
 		LinkIndex:    bpfin.Attrs().Index,
 	}
-	if err := netlink.NeighAdd(arp); err != nil && err != syscall.EEXIST {
-		return fmt.Errorf("failed to update neight for %s: %w", bpfOutDev, err)
+
+	var cidr ip.CIDR
+
+	if m.ipv6Enabled {
+		arp.Family = netlink.FAMILY_V6
+		arp.IP = bpfnatGWv6
+		cidr = bpfnatGWCIDRv6
+	} else {
+		arp.Family = netlink.FAMILY_V4
+		arp.IP = bpfnatGW
+		cidr = bpfnatGWCIDR
 	}
 
-	if err := configureInterface(bpfInDev, 4, "0", writeProcSys); err != nil {
-		return fmt.Errorf("failed to configure %s parameters: %w", bpfInDev, err)
+	retries := 5
+	i := retries
+	for {
+		if err := netlink.NeighAdd(arp); err != nil && err != syscall.EEXIST {
+			log.WithError(err).Warnf("Failed to update neight for %s (arp %#v), retrying.", bpfOutDev, arp)
+			i--
+			if i > 0 {
+				time.Sleep(250 * time.Millisecond)
+				continue
+			} else {
+				return fmt.Errorf("failed to update neight for %s (arp %#v) after %d tries: %w",
+					bpfOutDev, arp, retries, err)
+			}
+		}
+		break
 	}
-	if err := configureInterface(bpfOutDev, 4, "0", writeProcSys); err != nil {
-		return fmt.Errorf("failed to configure %s parameters: %w", bpfOutDev, err)
+	log.Infof("Updated neight for %s (arp %v)", bpfOutDev, arp)
+
+	if !m.ipv6Enabled {
+		if err := configureInterface(bpfInDev, 4, "0", writeProcSys); err != nil {
+			return fmt.Errorf("failed to configure %s parameters: %w", bpfOutDev, err)
+		}
+		if err := configureInterface(bpfOutDev, 4, "0", writeProcSys); err != nil {
+			return fmt.Errorf("failed to configure %s parameters: %w", bpfOutDev, err)
+		}
 	}
 
 	_, err = m.ensureQdisc(bpfInDev)
@@ -2611,8 +2652,6 @@ func (m *bpfEndpointManager) ensureBPFDevices() error {
 	// Setup a link local route to a non-existent link local address that would
 	// serve as a gateway to route services via bpfnat veth rather than having
 	// link local routes for each service that would trigger ARP querries.
-	cidr, _ := ip.CIDRFromString("169.254.1.1/32")
-
 	m.routeTable.RouteUpdate(bpfInDev, routetable.Target{
 		Type: routetable.TargetTypeLinkLocalUnicast,
 		CIDR: cidr,
@@ -3065,32 +3104,38 @@ func (m *bpfEndpointManager) onServiceUpdate(update *proto.ServiceUpdate) {
 		"Namespace": update.Namespace,
 	}).Info("Service Update")
 
-	ips := make([]string, 0, 2)
+	ipstr := make([]string, 0, 2)
 	if update.ClusterIp != "" {
-		ips = append(ips, update.ClusterIp)
+		ipstr = append(ipstr, update.ClusterIp)
 	}
 	if update.LoadbalancerIp != "" {
-		ips = append(ips, update.LoadbalancerIp)
+		ipstr = append(ipstr, update.LoadbalancerIp)
 	}
 
 	key := serviceKey{name: update.Name, namespace: update.Namespace}
 
-	ips4 := make([]ip.V4CIDR, 0, len(ips))
-	for _, i := range ips {
+	ips := make([]ip.CIDR, 0, len(ipstr))
+	for _, i := range ipstr {
 		cidr, err := ip.ParseCIDROrIP(i)
 		if err != nil {
 			log.WithFields(log.Fields{"service": key, "ip": i}).Warn("Not a valid CIDR.")
-		} else if cidrv4, ok := cidr.(ip.V4CIDR); !ok {
-			log.WithFields(log.Fields{"service": key, "ip": i}).Debug("Not a valid V4 CIDR.")
 		} else {
-			ips4 = append(ips4, cidrv4)
+			if m.ipv6Enabled {
+				if _, ok := cidr.(ip.V6CIDR); ok {
+					ips = append(ips, cidr)
+				}
+			} else {
+				if _, ok := cidr.(ip.V4CIDR); ok {
+					ips = append(ips, cidr)
+				}
+			}
 		}
 	}
 
 	// Check which IPs have been removed (no-op if we haven't seen it yet)
 	for _, old := range m.services[key] {
 		exists := false
-		for _, svcIP := range ips4 {
+		for _, svcIP := range ips {
 			if old == svcIP {
 				exists = true
 				break
@@ -3101,7 +3146,7 @@ func (m *bpfEndpointManager) onServiceUpdate(update *proto.ServiceUpdate) {
 		}
 	}
 
-	m.services[key] = ips4
+	m.services[key] = ips
 	m.dirtyServices.Add(key)
 }
 
@@ -3124,20 +3169,33 @@ func (m *bpfEndpointManager) onServiceRemove(update *proto.ServiceRemove) {
 	delete(m.services, key)
 }
 
-var bpfnatGW = ip.FromNetIP(net.IPv4(169, 254, 1, 1))
+var (
+	bpfnatGW       = net.ParseIP("169.254.1.1")
+	bpfnatGWIP     = ip.FromNetIP(bpfnatGW)
+	bpfnatGWCIDR   = ip.CIDRFromAddrAndPrefix(bpfnatGWIP, 32)
+	bpfnatGWv6     = net.ParseIP("2001:db8::1")
+	bpfnatGWIPv6   = ip.FromNetIP(bpfnatGWv6)
+	bpfnatGWCIDRv6 = ip.CIDRFromAddrAndPrefix(bpfnatGWIPv6, 128)
+)
 
-func (m *bpfEndpointManager) setRoute(cidr ip.V4CIDR) {
+func (m *bpfEndpointManager) setRoute(cidr ip.CIDR) {
+	var gw ip.Addr
+	if m.ipv6Enabled {
+		gw = bpfnatGWIPv6
+	} else {
+		gw = bpfnatGWIP
+	}
 	m.routeTable.RouteUpdate(bpfInDev, routetable.Target{
 		Type: routetable.TargetTypeGlobalUnicast,
 		CIDR: cidr,
-		GW:   bpfnatGW,
+		GW:   gw,
 	})
 	log.WithFields(log.Fields{
 		"cidr": cidr,
 	}).Debug("setRoute")
 }
 
-func (m *bpfEndpointManager) delRoute(cidr ip.V4CIDR) {
+func (m *bpfEndpointManager) delRoute(cidr ip.CIDR) {
 	m.routeTable.RouteRemove(bpfInDev, cidr)
 	log.WithFields(log.Fields{
 		"cidr": cidr,
