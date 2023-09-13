@@ -1,0 +1,64 @@
+// Copyright (c) 2022 Tigera, Inc. All rights reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+//go:build fvtests
+
+package fv_test
+
+import (
+	"os"
+
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
+
+	"github.com/projectcalico/calico/felix/fv/infrastructure"
+	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
+)
+
+var (
+	tc infrastructure.TopologyContainers
+)
+
+var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test delete previous map", []apiconfig.DatastoreType{apiconfig.EtcdV3}, func(getInfra infrastructure.InfraFactory) {
+
+	if os.Getenv("FELIX_FV_ENABLE_BPF") != "true" {
+		// Non-BPF run.
+		return
+	}
+
+	var (
+		infra infrastructure.DatastoreInfra
+	)
+
+	BeforeEach(func() {
+		infra = getInfra()
+		opts := infrastructure.DefaultTopologyOptions()
+		tc, _ = infrastructure.StartNNodeTopology(1, opts, infra)
+	})
+
+	AfterEach(func() {
+		if CurrentGinkgoTestDescription().Failed {
+			infra.DumpErrorData()
+		}
+
+		tc.Stop()
+		infra.Stop()
+	})
+
+	It("should delete previous maps after Felix restart", func() {
+
+		Expect(4).To(Equal(1))
+	})
+
+})
