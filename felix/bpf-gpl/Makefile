@@ -55,7 +55,7 @@ OBJS+=bin/tc_preamble.o
 OBJS+=bin/tc_preamble_v6.o
 OBJS+=bin/xdp_preamble.o
 OBJS+=bin/policy_default.o
-C_FILES:=tc_preamble.c tc.c connect_balancer.c connect_balancer_v6.c xdp_preamble.c xdp.c policy_default.c
+C_FILES:=tc_preamble.c tc.c connect_balancer.c connect_balancer_v46.c connect_balancer_v6.c xdp_preamble.c xdp.c policy_default.c
 
 all: $(OBJS)
 ut-objs: $(UT_OBJS)
@@ -63,8 +63,10 @@ ut-objs: $(UT_OBJS)
 COMPILE=$(CC) $(CFLAGS) `./calculate-flags $@` -c $< -o $@
 connect_time_%v4.ll: connect_balancer.c connect_balancer.d calculate-flags
 	$(COMPILE)
-connect_time_%v6.ll: connect_balancer_v6.c connect_balancer_v6.d calculate-flags
+connect_time_%v46.ll: connect_balancer_v46.c connect_balancer_v46.d calculate-flags
 	$(COMPILE)
+connect_time_%v6.ll: connect_balancer_v6.c connect_balancer_v6.d calculate-flags
+	$(COMPILE) -DIPVER6
 
 UT_CFLAGS=\
 	-D__BPFTOOL_LOADER__ \
@@ -127,9 +129,13 @@ bin/xdp%.o: xdp%.ll | bin
 	$(LINK)
 bin/connect_time_%v4.o: connect_time_%v4.ll | bin
 	$(LINK)
+bin/connect_time_%v46.o: connect_time_%v46.ll | bin
+	$(LINK)
 bin/connect_time_%v6.o: connect_time_%v6.ll | bin
 	$(LINK)
 bin/connect_time_%v4_co-re.o: connect_time_%v4.ll | bin
+	$(LINK)
+bin/connect_time_%v46_co-re.o: connect_time_%v46.ll | bin
 	$(LINK)
 bin/connect_time_%v6_co-re.o: connect_time_%v6.ll | bin
 	$(LINK)
