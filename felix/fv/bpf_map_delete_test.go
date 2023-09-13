@@ -17,6 +17,10 @@
 package fv_test
 
 import (
+	"fmt"
+	"github.com/projectcalico/calico/felix/bpf/bpfdefs"
+	"github.com/projectcalico/calico/felix/bpf/maps"
+	"github.com/projectcalico/calico/felix/bpf/state"
 	"os"
 
 	. "github.com/onsi/ginkgo"
@@ -58,7 +62,60 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test delete previ
 
 	It("should delete previous maps after Felix restart", func() {
 
-		Expect(5).To(Equal(1))
+		stateMap := state.Map()
+		stateCurrVersionedName := stateMap.(*maps.PinnedMap).VersionedName()
+		statePrevVersionedName := fmt.Sprintf("%s%d", stateMap.(*maps.PinnedMap).Name, stateMap.(*maps.PinnedMap).Version-1)
+		stateCmd := getMapCmd(statePrevVersionedName, "percpu_array", "4", "464", "2", "0")
+		tc.Felixes[0].Exec(stateCmd...)
+
+		// Before Felix restart: both curr and prev maps exists.
+		eventuallyMapVersionShouldExist(stateCurrVersionedName)
+		eventuallyMapVersionShouldExist(statePrevVersionedName)
+
+		tc.Felixes[0].Restart()
+
+		// After Felix restart: only the curr maps now exists.
+		eventuallyMapVersionShouldExist(stateCurrVersionedName)
+		eventuallyMapVersionShouldNotExist(statePrevVersionedName)
+
+		Expect(2).To(Equal(1))
 	})
 
 })
+
+func eventuallyMapVersionShouldExist(version string) {
+	Eventually(func() string {
+		out, err := tc.Felixes[0].ExecOutput("bpftool", "map", "show")
+		Expect(err).NotTo(HaveOccurred())
+		return out
+	}, "5s", "200ms").Should(ContainSubstring(version))
+}
+
+func eventuallyMapVersionShouldNotExist(version string) {
+	Eventually(func() string {
+		out, err := tc.Felixes[0].ExecOutput("bpftool", "map", "show")
+		Expect(err).NotTo(HaveOccurred())
+		return out
+	}, "5s", "200ms").ShouldNot(ContainSubstring(version))
+}
+
+func getMapCmd(mapVersionedName, mapType, mapKey, mapValue, mapEntries, mapFlags string) []string {
+	return []string{
+		"bpftool",
+		"map",
+		"create",
+		bpfdefs.GlobalPinDir + mapVersionedName,
+		"type",
+		mapType,
+		"key",
+		mapKey,
+		"value",
+		mapValue,
+		"entries",
+		mapEntries,
+		"name",
+		mapVersionedName,
+		"flags",
+		mapFlags,
+	}
+}
