@@ -58,7 +58,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test delete previ
 
 	It("should delete previous maps after Felix restart", func() {
 
-		Expect(4).To(Equal(1))
+		Expect(5).To(Equal(1))
 	})
 
 })
