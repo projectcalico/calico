@@ -53,6 +53,7 @@ int calico_sendmsg_v6(struct bpf_sock_addr *ctx)
 	be32_4_ip_to_ipv6_addr_t(&dst, ctx->user_ip6);
 
 	do_nat_common(ctx, IPPROTO_UDP, &dst, false);
+	ipv6_addr_t_to_be32_4_ip(ctx->user_ip6, &dst);
 
 out:
 	return 1;
