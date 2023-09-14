@@ -153,6 +153,10 @@ func (m *Map) Delete(k []byte) error {
 	return nil
 }
 
+func (*Map) DeletePreviousVersion() error {
+	return nil
+}
+
 func (m *Map) DeleteIfExists(k []byte) error {
 	return m.Delete(k)
 }
@@ -252,6 +256,10 @@ func (*DummyMap) Get(k []byte) ([]byte, error) {
 }
 
 func (*DummyMap) Delete(k []byte) error {
+	return nil
+}
+
+func (*DummyMap) DeletePreviousVersion() error {
 	return nil
 }
 
