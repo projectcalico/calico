@@ -125,7 +125,7 @@ func Map() maps.Map {
 
 func MapV6() maps.Map {
 	b := maps.NewPinnedMap(MapParamsV6)
-	b.GetMapParams = GetMapParams
+	b.GetMapParams = GetMapParamsV6
 	return b
 }
 
@@ -266,6 +266,10 @@ func GetMapParams(version int) maps.MapParameters {
 	default:
 		return curVer.MapParams
 	}
+}
+
+func GetMapParamsV6(_ int) maps.MapParameters {
+	return curVer.MapParamsV6
 }
 
 func GetKeyValueTypeFromVersion(version int, k, v []byte) (maps.Upgradable, maps.Upgradable) {
