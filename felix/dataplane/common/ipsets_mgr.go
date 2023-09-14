@@ -41,13 +41,20 @@ type IPSetsDataplane interface {
 type IPSetsManager struct {
 	dataplanes []IPSetsDataplane
 	maxSize    int
+	lg         *log.Entry
 }
 
-func NewIPSetsManager(ipsets_ IPSetsDataplane, maxIPSetSize int) *IPSetsManager {
-	return &IPSetsManager{
-		dataplanes: []IPSetsDataplane{ipsets_},
-		maxSize:    maxIPSetSize,
+func NewIPSetsManager(name string, ipsets_ IPSetsDataplane, maxIPSetSize int) *IPSetsManager {
+	m := &IPSetsManager{
+		maxSize: maxIPSetSize,
+		lg:      log.WithField("name", name),
 	}
+
+	if ipsets_ != nil {
+		m.dataplanes = append(m.dataplanes, ipsets_)
+	}
+
+	return m
 }
 
 func (m *IPSetsManager) AddDataplane(dp IPSetsDataplane) {
@@ -78,13 +85,13 @@ func (m *IPSetsManager) OnUpdate(msg interface{}) {
 	switch msg := msg.(type) {
 	// IP set-related messages, these are extremely common.
 	case *proto.IPSetDeltaUpdate:
-		log.WithField("ipSetId", msg.Id).Debug("IP set delta update")
+		m.lg.WithField("ipSetId", msg.Id).Debug("IP set delta update")
 		for _, dp := range m.dataplanes {
 			dp.AddMembers(msg.Id, msg.AddedMembers)
 			dp.RemoveMembers(msg.Id, msg.RemovedMembers)
 		}
 	case *proto.IPSetUpdate:
-		log.WithField("ipSetId", msg.Id).Debug("IP set update")
+		m.lg.WithField("ipSetId", msg.Id).Debug("IP set update")
 		var setType ipsets.IPSetType
 		switch msg.Type {
 		case proto.IPSetUpdate_IP:
@@ -94,7 +101,7 @@ func (m *IPSetsManager) OnUpdate(msg interface{}) {
 		case proto.IPSetUpdate_IP_AND_PORT:
 			setType = ipsets.IPSetTypeHashIPPort
 		default:
-			log.WithField("type", msg.Type).Panic("Unknown IP set type")
+			m.lg.WithField("type", msg.Type).Panic("Unknown IP set type")
 		}
 		metadata := ipsets.IPSetMetadata{
 			Type:    setType,
@@ -105,7 +112,7 @@ func (m *IPSetsManager) OnUpdate(msg interface{}) {
 			dp.AddOrReplaceIPSet(metadata, msg.Members)
 		}
 	case *proto.IPSetRemove:
-		log.WithField("ipSetId", msg.Id).Debug("IP set remove")
+		m.lg.WithField("ipSetId", msg.Id).Debug("IP set remove")
 		for _, dp := range m.dataplanes {
 			dp.RemoveIPSet(msg.Id)
 		}

@@ -44,6 +44,7 @@ const MaxEntries = curVer.MaxEntries
 
 type Key = curVer.Key
 type KeyV6 = curVer.KeyV6
+type KeyInterface = curVer.KeyInterface
 
 func NewKey(proto uint8, ipA net.IP, portA uint16, ipB net.IP, portB uint16) Key {
 	return curVer.NewKey(proto, ipA, portA, ipB, portB)
@@ -55,6 +56,7 @@ func NewKeyV6(proto uint8, ipA net.IP, portA uint16, ipB net.IP, portB uint16) K
 
 type Value = curVer.Value
 type ValueV6 = curVer.ValueV6
+type ValueInterface = curVer.ValueInterface
 
 const (
 	TypeNormal uint8 = iota
@@ -139,7 +141,7 @@ const (
 	ProtoUDP  = 17
 )
 
-func KeyFromBytes(k []byte) Key {
+func KeyFromBytes(k []byte) KeyInterface {
 	var ctKey Key
 	if len(k) != len(ctKey) {
 		log.Panic("Key has unexpected length")
@@ -148,7 +150,7 @@ func KeyFromBytes(k []byte) Key {
 	return ctKey
 }
 
-func ValueFromBytes(v []byte) Value {
+func ValueFromBytes(v []byte) ValueInterface {
 	var ctVal Value
 	if len(v) != len(ctVal) {
 		log.Panic("Value has unexpected length")
@@ -198,7 +200,7 @@ func StringToValue(str string) Value {
 	return BytesToValue([]byte(str))
 }
 
-func KeyV6FromBytes(k []byte) KeyV6 {
+func KeyV6FromBytes(k []byte) KeyInterface {
 	var ctKeyV6 KeyV6
 	if len(k) != len(ctKeyV6) {
 		log.Panic("KeyV6 has unexpected length")
@@ -207,7 +209,7 @@ func KeyV6FromBytes(k []byte) KeyV6 {
 	return ctKeyV6
 }
 
-func ValueV6FromBytes(v []byte) ValueV6 {
+func ValueV6FromBytes(v []byte) ValueInterface {
 	var ctVal ValueV6
 	if len(v) != len(ctVal) {
 		log.Panic("ValueV6 has unexpected length")

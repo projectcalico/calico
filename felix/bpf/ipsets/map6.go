@@ -32,95 +32,80 @@ import (
 // WARNING: must be kept in sync with the definitions in bpf/include/policy.h.
 // uint32 prefixLen HE  4
 // uint64 set_id BE     +8 = 12
-// uint32 addr BE       +4 = 16
-// uint16 port HE       +2 = 18
-// uint8 proto          +1 = 19
-// uint8 pad            +1 = 20
-const IPSetEntrySize = 20
+// 4*uint32 addr BE     +16 = 28
+// uint16 port HE       +2 = 30
+// uint8 proto          +1 = 31
+// uint8 pad            +1 = 32
+const IPSetEntryV6Size = 32
 
-type IPSetEntry [IPSetEntrySize]byte
+type IPSetEntryV6 [IPSetEntryV6Size]byte
 
-var MapParameters = maps.MapParameters{
+var MapV6Parameters = maps.MapParameters{
 	Type:       "lpm_trie",
-	KeySize:    IPSetEntrySize,
+	KeySize:    IPSetEntryV6Size,
 	ValueSize:  4,
 	MaxEntries: 1024 * 1024,
-	Name:       "cali_v4_ip_sets",
+	Name:       "cali_v6_ip_sets",
 	Flags:      unix.BPF_F_NO_PREALLOC,
 }
 
-func init() {
-	SetMapSize(MapParameters.MaxEntries)
-	SetMapSize(MapV6Parameters.MaxEntries)
+func SetMapV6Size(size int) {
+	maps.SetSize(MapV6Parameters.VersionedName(), size)
 }
 
-func SetMapSize(size int) {
-	maps.SetSize(MapParameters.VersionedName(), size)
+func MapV6() maps.Map {
+	return maps.NewPinnedMap(MapV6Parameters)
 }
 
-func Map() maps.Map {
-	return maps.NewPinnedMap(MapParameters)
-}
-
-type IPSetEntryInterface interface {
-	SetID() uint64
-	Addr() net.IP
-	PrefixLen() uint32
-	Protocol() uint8
-	Port() uint16
-	AsBytes() []byte
-}
-
-func (e IPSetEntry) AsBytes() []byte {
+func (e IPSetEntryV6) AsBytes() []byte {
 	return e[:]
 }
 
-func (e IPSetEntry) SetID() uint64 {
+func (e IPSetEntryV6) SetID() uint64 {
 	return binary.BigEndian.Uint64(e[4:12])
 }
 
-func (e IPSetEntry) Addr() net.IP {
-	return e[12:16]
+func (e IPSetEntryV6) Addr() net.IP {
+	return e[12:28]
 }
 
-func (e IPSetEntry) PrefixLen() uint32 {
+func (e IPSetEntryV6) PrefixLen() uint32 {
 	return binary.LittleEndian.Uint32(e[:4])
 }
 
-func (e IPSetEntry) Protocol() uint8 {
-	return e[18]
+func (e IPSetEntryV6) Protocol() uint8 {
+	return e[20]
 }
 
-func (e IPSetEntry) Port() uint16 {
-	return binary.LittleEndian.Uint16(e[16:18])
+func (e IPSetEntryV6) Port() uint16 {
+	return binary.LittleEndian.Uint16(e[28:30])
 }
 
-func IPSetEntryFromBytes(b []byte) IPSetEntryInterface {
-	var e IPSetEntry
+func IPSetEntryV6FromBytes(b []byte) IPSetEntryInterface {
+	var e IPSetEntryV6
 	copy(e[:], b)
 	return e
 }
 
-func MakeBPFIPSetEntry(setID uint64, cidr ip.V4CIDR, port uint16, proto uint8) IPSetEntryInterface {
-	var entry IPSetEntry
+func MakeBPFIPSetEntryV6(setID uint64, cidr ip.V6CIDR, port uint16, proto uint8) IPSetEntryInterface {
+	var entry IPSetEntryV6
 	// TODO Detect endianness
 	if proto == 0 {
 		// Normal CIDR-based lookup.
 		binary.LittleEndian.PutUint32(entry[0:4], uint32(64 /* ID */ +cidr.Prefix()))
 	} else {
 		// Named port lookup, use full length of key.
-		binary.LittleEndian.PutUint32(entry[0:4], 64 /* ID */ +32 /* IP */ +16 /* Port */ +8 /* protocol */)
+		binary.LittleEndian.PutUint32(entry[0:4], 64 /* ID */ +128 /* IP */ +16 /* Port */ +8 /* protocol */)
 	}
 	binary.BigEndian.PutUint64(entry[4:12], setID)
-	binary.BigEndian.PutUint32(entry[12:16], cidr.Addr().(ip.V4Addr).AsUint32())
-	binary.LittleEndian.PutUint16(entry[16:18], port)
-	entry[18] = proto
+	ipv6 := cidr.Addr().(ip.V6Addr)
+	copy(entry[12:28], ipv6[:])
+	binary.LittleEndian.PutUint16(entry[28:30], port)
+	entry[31] = proto
 	return entry
 }
 
-var DummyValue = []byte{1, 0, 0, 0}
-
-func ProtoIPSetMemberToBPFEntry(id uint64, member string) IPSetEntryInterface {
+func ProtoIPSetMemberToBPFEntryV6(id uint64, member string) IPSetEntryInterface {
 	var cidrStr string
 	var port uint16
 	var protocol uint8
@@ -146,10 +131,10 @@ func ProtoIPSetMemberToBPFEntry(id uint64, member string) IPSetEntryInterface {
 	} else {
 		cidrStr = member
 	}
-	cidr, v4 := ip.MustParseCIDROrIP(cidrStr).(ip.V4CIDR)
-	if !v4 {
+	cidr, v6 := ip.MustParseCIDROrIP(cidrStr).(ip.V6CIDR)
+	if !v6 {
 		return nil
 	}
-	entry := MakeBPFIPSetEntry(id, cidr, port, protocol)
+	entry := MakeBPFIPSetEntryV6(id, cidr, port, protocol)
 	return entry
 }
