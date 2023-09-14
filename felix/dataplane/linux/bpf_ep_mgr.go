@@ -274,8 +274,9 @@ type bpfEndpointManager struct {
 	ruleRenderer        bpfAllowChainRenderer
 	iptablesFilterTable IptablesTable
 
-	startupOnce   sync.Once
-	copyDeltaOnce sync.Once
+	startupOnce    sync.Once
+	copyDeltaOnce  sync.Once
+	deleteMapsOnce sync.Once
 
 	// onStillAlive is called from loops to reset the watchdog.
 	onStillAlive func()
@@ -1357,6 +1358,14 @@ func (m *bpfEndpointManager) CompleteDeferredWork() error {
 			m.legacyCleanUp = false
 		}
 	}
+
+	m.deleteMapsOnce.Do(func() {
+		log.Info("Delete previous version of each map")
+		err := m.bpfmaps.DeletePreviousVersion()
+		if err != nil {
+			log.WithError(err).Debugf("Failed to delete previous version of each map %s", err)
+		}
+	})
 
 	return nil
 }
