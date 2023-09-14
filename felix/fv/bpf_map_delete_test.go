@@ -75,7 +75,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test delete previ
 		frontendMap := nat.FrontendMap()
 		frontendCurrVersionedName := frontendMap.(*maps.PinnedMap).VersionedName()
 		frontendPrevVersionedName := fmt.Sprintf("%s%d", frontendMap.(*maps.PinnedMap).Name, frontendMap.(*maps.PinnedMap).Version-1)
-		frontendCmd := getMapCmd(statePrevVersionedName, "lpm_trie", "16", "20", "65536", "1")
+		frontendCmd := getMapCmd(frontendPrevVersionedName, "lpm_trie", "16", "20", "65536", "1")
 		tc.Felixes[0].Exec(frontendCmd...)
 
 		conntrackMap := conntrack.Map()
@@ -105,16 +105,14 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test delete previ
 
 		// After Felix restart: only the curr maps now exists.
 		eventuallyMapVersionShouldExist(stateCurrVersionedName)
-		//eventuallyMapVersionShouldNotExist(statePrevVersionedName)
+		eventuallyMapVersionShouldNotExist(statePrevVersionedName)
 		eventuallyMapVersionShouldExist(frontendCurrVersionedName)
-		//eventuallyMapVersionShouldExist(frontendPrevVersionedName)
+		eventuallyMapVersionShouldNotExist(frontendPrevVersionedName)
 
 		eventuallyMapVersionShouldExist(conntrackCurrVersionedName)
-		//eventuallyMapVersionShouldExist(conntrackPrevVersionedName)
+		eventuallyMapVersionShouldNotExist(conntrackPrevVersionedName)
 		eventuallyMapVersionShouldExist(ifstateCurrVersionedName)
-		//eventuallyMapVersionShouldNotExist(ifstatePrevVersionedName)
-
-		Expect(6).To(Equal(3))
+		eventuallyMapVersionShouldNotExist(ifstatePrevVersionedName)
 	})
 
 })
