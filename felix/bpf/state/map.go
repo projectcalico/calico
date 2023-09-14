@@ -24,7 +24,7 @@ import (
 )
 
 func init() {
-	maps.SetSize(curVer.MapParameters.VersionedName(), curVer.MapParameters.MaxEntries)
+	maps.SetSize(curVer.MapParams.VersionedName(), curVer.MapParams.MaxEntries)
 }
 
 type PolicyResult int32
@@ -136,7 +136,7 @@ func StateFromBytes(bytes []byte) State {
 	return s
 }
 
-var MapParams = curVer.MapParameters
+var MapParams = curVer.MapParams
 
 func Map() maps.Map {
 	b := maps.NewPinnedMap(MapParams)
@@ -157,10 +157,10 @@ func MapForTest() maps.Map {
 func GetMapParams(version int) maps.MapParameters {
 	switch version {
 	case 3:
-		return v3.MapParameters
+		return v3.MapParams
 	case 4:
-		return curVer.MapParameters
+		return curVer.MapParams
 	default:
-		return curVer.MapParameters
+		return curVer.MapParams
 	}
 }

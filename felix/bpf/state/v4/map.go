@@ -18,7 +18,7 @@ import "github.com/projectcalico/calico/felix/bpf/maps"
 
 const expectedSize = 464
 
-var MapParameters = maps.MapParameters{
+var MapParams = maps.MapParameters{
 	Type:       "percpu_array",
 	KeySize:    4,
 	ValueSize:  expectedSize,
