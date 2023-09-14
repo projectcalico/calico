@@ -78,7 +78,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test delete previ
 		eventuallyMapVersionShouldExist(stateCurrVersionedName)
 		eventuallyMapVersionShouldNotExist(statePrevVersionedName)
 
-		Expect(2).To(Equal(1))
+		//Expect(2).To(Equal(1))
 	})
 
 })
