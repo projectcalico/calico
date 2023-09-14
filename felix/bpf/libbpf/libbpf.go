@@ -26,7 +26,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/bpfutils"
 )
 
-// #cgo CFLAGS: -I${SRCDIR}/../../bpf-gpl/include/libbpf/src -I${SRCDIR}/../../bpf-gpl
+// #cgo CFLAGS: -I${SRCDIR}/../../bpf-gpl/include/libbpf/src -I${SRCDIR}/../../bpf-gpl/include/libbpf/include/uapi -I${SRCDIR}/../../bpf-gpl -Werror
 // #cgo amd64 LDFLAGS: -L${SRCDIR}/../../bpf-gpl/include/libbpf/src/amd64 -lbpf -lelf -lz
 // #cgo arm64 LDFLAGS: -L${SRCDIR}/../../bpf-gpl/include/libbpf/src/arm64 -lbpf -lelf -lz
 // #cgo armv7 LDFLAGS: -L${SRCDIR}/../../bpf-gpl/include/libbpf/src/armv7 -lbpf -lelf -lz
@@ -64,6 +64,10 @@ func (m *Map) Type() int {
 
 func (m *Map) ValueSize() int {
 	return int(C.bpf_map__value_size(m.bpfMap))
+}
+
+func (m *Map) KeySize() int {
+	return int(C.bpf_map__key_size(m.bpfMap))
 }
 
 func (m *Map) SetPinPath(path string) error {
@@ -404,6 +408,41 @@ func TcSetGlobals(
 		C.ushort(globalData.PSNatStart),
 		C.ushort(globalData.PSNatLen),
 		C.uint(globalData.HostTunnelIP),
+		C.uint(globalData.Flags),
+		C.ushort(globalData.WgPort),
+		C.uint(globalData.NatIn),
+		C.uint(globalData.NatOut),
+		C.uint(globalData.LogFilterJmp),
+		&cJumps[0], // it is safe because we hold the reference here until we return.
+	)
+
+	return err
+}
+
+func TcSetGlobals6(
+	m *Map,
+	globalData *TcGlobalData6,
+) error {
+
+	cName := C.CString(globalData.IfaceName)
+	defer C.free(unsafe.Pointer(cName))
+
+	cJumps := make([]C.uint, len(globalData.Jumps))
+
+	for i, v := range globalData.Jumps {
+		cJumps[i] = C.uint(v)
+	}
+
+	_, err := C.bpf_tc_set_globals_v6(m.bpfMap,
+		cName,
+		(*C.char)(unsafe.Pointer(&globalData.HostIP[0])),
+		(*C.char)(unsafe.Pointer(&globalData.IntfIP[0])),
+		C.uint(globalData.ExtToSvcMark),
+		C.ushort(globalData.Tmtu),
+		C.ushort(globalData.VxlanPort),
+		C.ushort(globalData.PSNatStart),
+		C.ushort(globalData.PSNatLen),
+		(*C.char)(unsafe.Pointer(&globalData.HostTunnelIP[0])),
 		C.uint(globalData.Flags),
 		C.ushort(globalData.WgPort),
 		C.uint(globalData.NatIn),

@@ -173,7 +173,7 @@ define build_static_cgo_boring_binary
         -e CGO_ENABLED=1 \
         -e CGO_LDFLAGS=$(CGO_LDFLAGS) \
         -e CGO_CFLAGS=$(CGO_CFLAGS) \
-        $(GO_BUILD_IMAGE):$(GO_BUILD_VER) \
+        $(CALICO_BUILD) \
         sh -c '$(GIT_CONFIG_SSH) \
             GOEXPERIMENT=boringcrypto go build -o $(2)  \
             -tags fipsstrict,osusergo,netgo -v -buildvcs=false \
@@ -194,7 +194,7 @@ define build_cgo_boring_binary
         -e CGO_ENABLED=1 \
         -e CGO_LDFLAGS=$(CGO_LDFLAGS) \
         -e CGO_CFLAGS=$(CGO_CFLAGS) \
-        $(GO_BUILD_IMAGE):$(GO_BUILD_VER) \
+        $(CALICO_BUILD) \
         sh -c '$(GIT_CONFIG_SSH) \
             GOEXPERIMENT=boringcrypto go build -o $(2)  \
             -tags fipsstrict -v -buildvcs=false \
@@ -209,7 +209,7 @@ define build_cgo_binary
         -e CGO_ENABLED=1 \
         -e CGO_LDFLAGS=$(CGO_LDFLAGS) \
         -e CGO_CFLAGS=$(CGO_CFLAGS) \
-        $(GO_BUILD_IMAGE):$(GO_BUILD_VER) \
+        $(CALICO_BUILD) \
         sh -c '$(GIT_CONFIG_SSH) \
             go build -o $(2)  \
             -v -buildvcs=false \
@@ -219,7 +219,7 @@ endef
 
 # For binaries that do not require boring crypto.
 define build_binary
-	$(DOCKER_RUN) $(GO_BUILD_IMAGE):$(GO_BUILD_VER) \
+	$(DOCKER_RUN) $(CALICO_BUILD) \
 		sh -c '$(GIT_CONFIG_SSH) \
 		go build -o $(2)  \
 		-v -buildvcs=false \
@@ -229,7 +229,7 @@ endef
 
 # For binaries that do not require boring crypto.
 define build_static_binary
-        $(DOCKER_RUN) $(GO_BUILD_IMAGE):$(GO_BUILD_VER) \
+        $(DOCKER_RUN) $(CALICO_BUILD) \
                 sh -c '$(GIT_CONFIG_SSH) \
                 go build -o $(2)  \
                 -v -buildvcs=false \
@@ -497,8 +497,13 @@ git-commit:
 # different implementation.
 ###############################################################################
 
+ifdef LOCAL_CRANE
+CRANE_CMD         = bash -c $(double_quote)crane
+else
 CRANE_CMD         = docker run -t --entrypoint /bin/sh -v $(DOCKER_CONFIG):/root/.docker/config.json $(CALICO_BUILD) -c \
                     $(double_quote)crane
+endif
+
 GIT_CMD           = git
 DOCKER_CMD        = docker
 

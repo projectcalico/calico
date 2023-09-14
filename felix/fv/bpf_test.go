@@ -2246,7 +2246,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								Expect(aff).To(HaveLen(1))
 								Expect(aff).To(HaveKey(mkey))
 
-								return aff[mkey].Backend()
+								return aff[mkey].Backend().(nat.BackendValue)
 							}, 60*time.Second, time.Second).ShouldNot(Equal(mVal.Backend()))
 						})
 					}
@@ -4337,7 +4337,7 @@ func bpfCheckIfPolicyProgrammed(felix *infrastructure.Felix, iface, hook, polNam
 }
 
 func bpfDumpPolicy(felix *infrastructure.Felix, iface, hook string) string {
-	out, err := felix.ExecOutput("calico-bpf", "policy", "dump", iface, hook)
+	out, err := felix.ExecOutput("calico-bpf", "policy", "dump", iface, hook, "--asm")
 	Expect(err).NotTo(HaveOccurred())
 	return out
 }

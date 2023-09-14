@@ -105,8 +105,8 @@ type stickyFrontend struct {
 // Syncer is an implementation of DPSyncer interface. It is not thread safe and
 // should be called only once at a time
 type Syncer struct {
-	bpfSvcs *cachingmap.CachingMap[nat.FrontendKey, nat.FrontendValue]
-	bpfEps  *cachingmap.CachingMap[nat.BackendKey, nat.BackendValue]
+	bpfSvcs *cachingmap.CachingMap[nat.FrontendKeyInterface, nat.FrontendValue]
+	bpfEps  *cachingmap.CachingMap[nat.BackendKey, nat.BackendValueInterface]
 	bpfAff  maps.Map
 
 	nextSvcID uint32
@@ -137,12 +137,18 @@ type Syncer struct {
 	stop     chan struct{}
 	stopOnce sync.Once
 
-	stickySvcs map[nat.FrontEndAffinityKey]stickyFrontend
-	stickyEps  map[uint32]map[nat.BackendValue]struct{}
+	stickySvcs map[nat.FrontEndAffinityKeyInterface]stickyFrontend
+	stickyEps  map[uint32]map[nat.BackendValueInterface]struct{}
 
 	// triggerFn is called when one of the syncer's background threads needs to trigger an Apply().
 	// The proxy sets this to the runner's Run() method.  We assume that the method doesn't block.
 	triggerFn func()
+
+	newFrontendKey         func(addr net.IP, port uint16, protocol uint8) nat.FrontendKeyInterface
+	newFrontendKeySrc      func(addr net.IP, port uint16, protocol uint8, cidr ip.CIDR) nat.FrontendKeyInterface
+	newBackendValue        func(addr net.IP, port uint16) nat.BackendValueInterface
+	affinityKeyFromBytes   func([]byte) nat.AffinityKeyInterface
+	affinityValueFromBytes func([]byte) nat.AffinityValueInterface
 }
 
 type ipPort struct {
@@ -193,20 +199,51 @@ func uniqueIPs(ips []net.IP) []net.IP {
 }
 
 // NewSyncer returns a new Syncer
-func NewSyncer(nodePortIPs []net.IP,
-	svcsmap *cachingmap.CachingMap[nat.FrontendKey, nat.FrontendValue],
-	epsmap *cachingmap.CachingMap[nat.BackendKey, nat.BackendValue],
-	affmap maps.Map, rt Routes) (*Syncer, error) {
+func NewSyncer(family int, nodePortIPs []net.IP,
+	frontendMap maps.MapWithExistsCheck, backendMap maps.MapWithExistsCheck,
+	affmap maps.Map, rt Routes,
+) (*Syncer, error) {
 
 	s := &Syncer{
-		bpfSvcs:     svcsmap,
-		bpfEps:      epsmap,
 		bpfAff:      affmap,
 		rt:          rt,
 		nodePortIPs: uniqueIPs(nodePortIPs),
 		prevSvcMap:  make(map[svcKey]svcInfo),
 		prevEpsMap:  make(k8sp.EndpointsMap),
 		stop:        make(chan struct{}),
+	}
+
+	switch family {
+	case 4:
+		s.bpfSvcs = cachingmap.New[nat.FrontendKeyInterface, nat.FrontendValue](nat.FrontendMapParameters.Name,
+			maps.NewTypedMap[nat.FrontendKeyInterface, nat.FrontendValue](
+				frontendMap, nat.FrontendKeyFromBytes, nat.FrontendValueFromBytes,
+			))
+		s.bpfEps = cachingmap.New[nat.BackendKey, nat.BackendValueInterface](nat.BackendMapParameters.Name,
+			maps.NewTypedMap[nat.BackendKey, nat.BackendValueInterface](
+				backendMap, nat.BackendKeyFromBytes, nat.BackendValueFromBytes,
+			))
+		s.newFrontendKey = nat.NewNATKeyIntf
+		s.newFrontendKeySrc = nat.NewNATKeySrcIntf
+		s.newBackendValue = nat.NewNATBackendValueIntf
+		s.affinityKeyFromBytes = nat.AffinityKeyIntfFromBytes
+		s.affinityValueFromBytes = nat.AffinityValueIntfFromBytes
+	case 6:
+		s.bpfSvcs = cachingmap.New[nat.FrontendKeyInterface, nat.FrontendValue](nat.FrontendMapParameters.Name,
+			maps.NewTypedMap[nat.FrontendKeyInterface, nat.FrontendValue](
+				frontendMap, nat.FrontendKeyV6FromBytes, nat.FrontendValueFromBytes,
+			))
+		s.bpfEps = cachingmap.New[nat.BackendKey, nat.BackendValueInterface](nat.BackendMapParameters.Name,
+			maps.NewTypedMap[nat.BackendKey, nat.BackendValueInterface](
+				backendMap, nat.BackendKeyFromBytes, nat.BackendValueV6FromBytes,
+			))
+		s.newFrontendKey = nat.NewNATKeyV6Intf
+		s.newFrontendKeySrc = nat.NewNATKeyV6SrcIntf
+		s.newBackendValue = nat.NewNATBackendValueV6Intf
+		s.affinityKeyFromBytes = nat.AffinityKeyV6IntfFromBytes
+		s.affinityValueFromBytes = nat.AffinityValueV6IntfFromBytes
+	default:
+		return nil, fmt.Errorf("unknwn family %d", family)
 	}
 
 	if err := s.loadOrigs(); err != nil {
@@ -235,8 +272,8 @@ type syncRef struct {
 
 // svcMapToIPPortProtoMap takes the kubernetes service representation and makes an index
 // so we can cross reference with the values we learn from the dataplane.
-func (s *Syncer) svcMapToIPPortProtoMap(svcs k8sp.ServicePortMap) map[nat.FrontendKey]syncRef {
-	ref := make(map[nat.FrontendKey]syncRef, len(svcs))
+func (s *Syncer) svcMapToIPPortProtoMap(svcs k8sp.ServicePortMap) map[nat.FrontendKeyInterface]syncRef {
+	ref := make(map[nat.FrontendKeyInterface]syncRef, len(svcs))
 
 	for key, svc := range svcs {
 		clusterIP := svc.ClusterIP()
@@ -245,22 +282,22 @@ func (s *Syncer) svcMapToIPPortProtoMap(svcs k8sp.ServicePortMap) map[nat.Fronte
 
 		xref := syncRef{key, svc}
 
-		ref[nat.NewNATKey(clusterIP, port, proto)] = xref
+		ref[s.newFrontendKey(clusterIP, port, proto)] = xref
 
 		np := uint16(0)
 
 		if svc.NodePort() != 0 {
 			np = uint16(svc.NodePort())
 
-			ref[nat.NewNATKey(clusterIP, np, proto)] = xref
+			ref[s.newFrontendKey(clusterIP, np, proto)] = xref
 
 			for _, npIP := range s.nodePortIPs {
-				ref[nat.NewNATKey(npIP, np, proto)] = xref
+				ref[s.newFrontendKey(npIP, np, proto)] = xref
 			}
 		}
 
 		for _, extIP := range svc.ExternalIPStrings() {
-			ref[nat.NewNATKey(net.ParseIP(extIP), port, proto)] = xref
+			ref[s.newFrontendKey(net.ParseIP(extIP), port, proto)] = xref
 		}
 	}
 
@@ -277,7 +314,7 @@ func (s *Syncer) startupBuildPrev(state DPSyncerState) error {
 
 	// Walk the frontend bpf map that was read into memory and match it against the
 	// references build from the state
-	s.bpfSvcs.Dataplane().Iter(func(svck nat.FrontendKey, svcv nat.FrontendValue) {
+	s.bpfSvcs.Dataplane().Iter(func(svck nat.FrontendKeyInterface, svcv nat.FrontendValue) {
 		xref, ok := svcRef[svck]
 		if !ok {
 			return
@@ -416,7 +453,7 @@ type expandMiss struct {
 }
 
 func (s *Syncer) expandAndApplyNodePorts(sname k8sp.ServicePortName, sinfo k8sp.ServicePort,
-	eps []k8sp.Endpoint, nport int, rtLookup func(addr ip.Addr) (routes.Value, bool)) *expandMiss {
+	eps []k8sp.Endpoint, nport int, rtLookup func(addr ip.Addr) (routes.ValueInterface, bool)) *expandMiss {
 
 	ipToEp, miss := s.expandNodePorts(sname, sinfo, eps, nport, rtLookup)
 
@@ -434,7 +471,7 @@ func (s *Syncer) expandNodePorts(
 	sinfo k8sp.ServicePort,
 	eps []k8sp.Endpoint,
 	nport int,
-	rtLookup func(addr ip.Addr) (routes.Value, bool),
+	rtLookup func(addr ip.Addr) (routes.ValueInterface, bool),
 ) (map[ip.V4Addr][]k8sp.Endpoint, *expandMiss) {
 	ipToEp := make(map[ip.V4Addr][]k8sp.Endpoint)
 	var miss *expandMiss
@@ -666,8 +703,8 @@ func (s *Syncer) Apply(state DPSyncerState) error {
 	defer s.mapsLck.Unlock()
 
 	// preallocate maps to track sticky services for cleanup
-	s.stickySvcs = make(map[nat.FrontEndAffinityKey]stickyFrontend)
-	s.stickyEps = make(map[uint32]map[nat.BackendValue]struct{})
+	s.stickySvcs = make(map[nat.FrontEndAffinityKeyInterface]stickyFrontend)
+	s.stickyEps = make(map[uint32]map[nat.BackendValueInterface]struct{})
 
 	defer func() {
 		// not needed anymore
@@ -700,7 +737,7 @@ func (s *Syncer) updateService(skey svcKey, sinfo k8sp.ServicePort, id uint32, e
 	if sinfo.SessionAffinityType() == v1.ServiceAffinityClientIP {
 		// since we write the backend before we write the frontend, we need to
 		// preallocate the map for it
-		s.stickyEps[id] = make(map[nat.BackendValue]struct{})
+		s.stickyEps[id] = make(map[nat.BackendValueInterface]struct{})
 	}
 
 	for _, ep := range eps {
@@ -771,7 +808,7 @@ func (s *Syncer) writeSvcBackend(svcID uint32, idx uint32, ep k8sp.Endpoint) err
 	if err != nil {
 		return errors.Errorf("no port for endpoint %q: %s", ep, err)
 	}
-	val := nat.NewNATBackendValue(ip, uint16(tgtPort))
+	val := s.newBackendValue(ip, uint16(tgtPort))
 	s.bpfEps.Desired().Set(key, val)
 
 	if s.stickyEps[svcID] != nil {
@@ -781,19 +818,19 @@ func (s *Syncer) writeSvcBackend(svcID uint32, idx uint32, ep k8sp.Endpoint) err
 	return nil
 }
 
-func getSvcNATKey(svc k8sp.ServicePort) (nat.FrontendKey, error) {
+func (s *Syncer) getSvcNATKey(svc k8sp.ServicePort) (nat.FrontendKeyInterface, error) {
 	ip := svc.ClusterIP()
 	port := svc.Port()
 	proto, err := ProtoV1ToInt(svc.Protocol())
 	if err != nil {
-		return nat.FrontendKey{}, err
+		return s.newFrontendKey(ip, uint16(port), proto), err
 	}
 
-	key := nat.NewNATKey(ip, uint16(port), proto)
+	key := s.newFrontendKey(ip, uint16(port), proto)
 	return key, nil
 }
 
-func getSvcNATKeyLBSrcRange(svc k8sp.ServicePort) ([]nat.FrontendKey, error) {
+func (s *Syncer) getSvcNATKeyLBSrcRange(svc k8sp.ServicePort) ([]nat.FrontendKeyInterface, error) {
 	ipaddr := svc.ClusterIP()
 	port := svc.Port()
 	loadBalancerSourceRanges := svc.LoadBalancerSourceRanges()
@@ -805,21 +842,21 @@ func getSvcNATKeyLBSrcRange(svc k8sp.ServicePort) ([]nat.FrontendKey, error) {
 		return nil, err
 	}
 
-	keys := make([]nat.FrontendKey, 0, len(loadBalancerSourceRanges))
+	keys := make([]nat.FrontendKeyInterface, 0, len(loadBalancerSourceRanges))
 
 	for _, src := range loadBalancerSourceRanges {
 		// Ignore IPv6 addresses
 		if strings.Contains(src, ":") {
 			continue
 		}
-		key := nat.NewNATKeySrc(ipaddr, uint16(port), proto, ip.MustParseCIDROrIP(src).(ip.V4CIDR))
+		key := s.newFrontendKeySrc(ipaddr, uint16(port), proto, ip.MustParseCIDROrIP(src).(ip.V4CIDR))
 		keys = append(keys, key)
 	}
 	return keys, nil
 }
 
 func (s *Syncer) writeLBSrcRangeSvcNATKeys(svc k8sp.ServicePort, svcID uint32, count, local int, flags uint32) error {
-	var key nat.FrontendKey
+	var key nat.FrontendKeyInterface
 	affinityTimeo := uint32(0)
 	if svc.SessionAffinityType() == v1.ServiceAffinityClientIP {
 		affinityTimeo = uint32(svc.StickyMaxAgeSeconds())
@@ -828,7 +865,7 @@ func (s *Syncer) writeLBSrcRangeSvcNATKeys(svc k8sp.ServicePort, svcID uint32, c
 	if len(svc.LoadBalancerSourceRanges()) == 0 {
 		return nil
 	}
-	keys, err := getSvcNATKeyLBSrcRange(svc)
+	keys, err := s.getSvcNATKeyLBSrcRange(svc)
 	if err != nil {
 		return err
 	}
@@ -839,7 +876,7 @@ func (s *Syncer) writeLBSrcRangeSvcNATKeys(svc k8sp.ServicePort, svcID uint32, c
 		}
 		s.bpfSvcs.Desired().Set(key, val)
 	}
-	key, err = getSvcNATKey(svc)
+	key, err = s.getSvcNATKey(svc)
 	if err != nil {
 		return err
 	}
@@ -849,7 +886,7 @@ func (s *Syncer) writeLBSrcRangeSvcNATKeys(svc k8sp.ServicePort, svcID uint32, c
 }
 
 func (s *Syncer) writeSvc(svc k8sp.ServicePort, svcID uint32, count, local int, flags uint32) error {
-	key, err := getSvcNATKey(svc)
+	key, err := s.getSvcNATKey(svc)
 	if err != nil {
 		return err
 	}
@@ -866,10 +903,9 @@ func (s *Syncer) writeSvc(svc k8sp.ServicePort, svcID uint32, count, local int, 
 	}
 	s.bpfSvcs.Desired().Set(key, val)
 
-	var affkey nat.FrontEndAffinityKey
-	copy(affkey[:], key.Affinitykey())
 	// we must have written the backends by now so the map exists
 	if s.stickyEps[svcID] != nil {
+		affkey := key.AffinityKeyCopy()
 		s.stickySvcs[affkey] = stickyFrontend{
 			id:    svcID,
 			timeo: time.Duration(affinityTimeo) * time.Second,
@@ -911,7 +947,7 @@ func (s *Syncer) newSvcID() uint32 {
 	return id
 }
 
-func (s *Syncer) matchBpfSvc(bpfSvc nat.FrontendKey, k8sSvc k8sp.ServicePortName, k8sInfo k8sp.ServicePort) *svcKey {
+func (s *Syncer) matchBpfSvc(bpfSvc nat.FrontendKeyInterface, k8sSvc k8sp.ServicePortName, k8sInfo k8sp.ServicePort) *svcKey {
 	matchNP := func() *svcKey {
 		if bpfSvc.Port() == uint16(k8sInfo.NodePort()) {
 			for _, nip := range s.nodePortIPs {
@@ -1051,7 +1087,7 @@ func (s *Syncer) runExpandNPFixup(misses []*expandMiss) {
 
 			// We do one pass rightaway since we cannot know whether there
 			// was an update or not before we got here
-			s.rt.WaitAfter(ctx, func(lookup func(addr ip.Addr) (routes.Value, bool)) bool {
+			s.rt.WaitAfter(ctx, func(lookup func(addr ip.Addr) (routes.ValueInterface, bool)) bool {
 				log.Debug("Woke up")
 				missesChanged := false
 				var again []*expandMiss
@@ -1111,19 +1147,11 @@ func (s *Syncer) cleanupSticky() error {
 	debug := log.GetLevel() >= log.DebugLevel
 	_ = debug // Work around linter false-positive.
 
-	var (
-		key nat.AffinityKey
-		val nat.AffinityValue
-	)
-
-	ks := len(nat.AffinityKey{})
-	vs := len(nat.AffinityValue{})
-
 	now := time.Duration(bpf.KTimeNanos())
 
 	err := s.bpfAff.Iter(func(k, v []byte) maps.IteratorAction {
-		copy(key[:], k[:ks])
-		copy(val[:], v[:vs])
+		key := s.affinityKeyFromBytes(k)
+		val := s.affinityValueFromBytes(v)
 
 		fend, ok := s.stickySvcs[key.FrontendAffinityKey()]
 		if !ok {

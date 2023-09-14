@@ -11,9 +11,35 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+ARG UBI_IMAGE
+ARG QEMU_IMAGE
+
+FROM ${QEMU_IMAGE} as qemu
+FROM --platform=linux/s390x ${UBI_IMAGE} as ubi
+
+# Enable non-native builds of this image on an amd64 hosts.
+# This must be the first RUN command in this file!
+COPY --from=qemu /usr/bin/qemu-s390x-static /usr/bin/
+
+# Add in top-level license file
+RUN mkdir /licenses
+COPY LICENSE /licenses
+
+# Make sure the status and pprof files are owned by our user.
+RUN mkdir /status /profiles
+RUN touch /status/status.json && chown 999 /status/status.json
+RUN touch /profiles/mem.pprof && chown 999 /profiles/mem.pprof
+RUN touch /profiles/cpu.pprof && chown 999 /profiles/cpu.pprof
+
 FROM scratch
 LABEL maintainer "LoZ Open Source Ecosystem (https://www.ibm.com/developerworks/community/groups/community/lozopensource)"
 
+COPY --from=ubi /licenses /licenses
+COPY --from=ubi /profiles /profiles
+COPY --from=ubi /status /status
+
 ADD bin/kube-controllers-linux-s390x /usr/bin/kube-controllers
 ADD bin/check-status-linux-s390x /usr/bin/check-status
+USER 999
 ENTRYPOINT ["/usr/bin/kube-controllers"]

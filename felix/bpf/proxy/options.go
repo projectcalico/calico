@@ -75,3 +75,10 @@ func WithTopologyNodeZone(nodeZone string) Option {
 		return nil
 	})
 }
+
+func WithIPFamily(ipFamily int) Option {
+	return func(p Proxy) error {
+		p.setIpFamily(ipFamily)
+		return nil
+	}
+}

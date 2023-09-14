@@ -100,7 +100,25 @@ type NetworkPolicySpec struct {
 
 	// ServiceAccountSelector is an optional field for an expression used to select a pod based on service accounts.
 	ServiceAccountSelector string `json:"serviceAccountSelector,omitempty" validate:"selector"`
+
+	// PerformanceHints contains a list of hints to Calico's policy engine to
+	// help process the policy more efficiently.  Hints never change the
+	// enforcement behaviour of the policy.
+	//
+	// Currently, the only available hint is "AssumeNeededOnEveryNode".  When
+	// that hint is set on a policy, Felix will act as if the policy matches
+	// a local endpoint even if it does not. This is useful for "preloading"
+	// any large static policies that are known to be used on every node.
+	// If the policy is _not_ used on a particular node then the work
+	// done to preload the policy (and to maintain it) is wasted.
+	PerformanceHints []PolicyPerformanceHint `json:"performanceHints,omitempty" validate:"omitempty,unique,dive,oneof=AssumeNeededOnEveryNode"`
 }
+
+type PolicyPerformanceHint string
+
+const (
+	PerfHintAssumeNeededOnEveryNode PolicyPerformanceHint = "AssumeNeededOnEveryNode"
+)
 
 // NewNetworkPolicy creates a new (zeroed) NetworkPolicy struct with the TypeMetadata initialised to the current
 // version.

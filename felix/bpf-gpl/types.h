@@ -8,7 +8,11 @@
 #include <linux/types.h>
 #include <linux/bpf.h>
 #include <linux/pkt_cls.h>
+#ifdef IPVER6
+#include <linux/ipv6.h>
+#else
 #include <linux/ip.h>
+#endif
 #include <linux/tcp.h>
 #include <linux/icmp.h>
 #include <linux/in.h>
@@ -19,6 +23,19 @@
 #include "nat_types.h"
 #include "reasons.h"
 
+#define IPV4_UDP_SIZE		(sizeof(struct iphdr) + sizeof(struct udphdr))
+#define ETH_IPV4_UDP_SIZE	(sizeof(struct ethhdr) + IPV4_UDP_SIZE)
+
+#define ETH_SIZE (sizeof(struct ethhdr))
+#ifdef IPVER6
+#define IP_SIZE (sizeof(struct ipv6hdr))
+#else
+#define IP_SIZE (sizeof(struct iphdr))
+#endif
+#define UDP_SIZE (sizeof(struct udphdr))
+#define TCP_SIZE (sizeof(struct tcphdr))
+#define ICMP_SIZE (sizeof(struct icmphdr))
+
 #define MAX_RULE_IDS    32
 
 // struct cali_tc_state holds state that is passed between the BPF programs.
@@ -28,37 +45,23 @@
 struct cali_tc_state {
 	/* Initial IP read from the packet, updated to host's IP when doing NAT encap/ICMP error.
 	 * updated when doing CALI_CT_ESTABLISHED_SNAT handling. Used for FIB lookup. */
-	__be32 ip_src;
-	__be32 ip_src1;
-	__be32 ip_src2;
-	__be32 ip_src3;
+	DECLARE_IP_ADDR(ip_src);
 	/* Initial IP read from packet. Updated when doing encap and ICMP errors or CALI_CT_ESTABLISHED_DNAT.
 	 * If connect-time load balancing is enabled, this will be the post-NAT IP because the connect-time
 	 * load balancer gets in before TC. */
-	__be32 ip_dst;
-	__be32 ip_dst1;
-	__be32 ip_dst2;
-	__be32 ip_dst3;
+	DECLARE_IP_ADDR(ip_dst);
 	/* Set when invoking the policy program; if no NAT, ip_dst; otherwise, the pre-DNAT IP.  If the connect
 	 * time load balancer is enabled, this may be different from ip_dst. */
-	__be32 pre_nat_ip_dst;
-	__be32 pre_nat_ip_dst1;
-	__be32 pre_nat_ip_dst2;
-	__be32 pre_nat_ip_dst3;
+	DECLARE_IP_ADDR(pre_nat_ip_dst);
 	/* If no NAT, ip_dst.  Otherwise the NAT dest that we look up from the NAT maps or the conntrack entry
 	 * for CALI_CT_ESTABLISHED_DNAT. */
-	__be32 post_nat_ip_dst;
-	__be32 post_nat_ip_dst1;
-	__be32 post_nat_ip_dst2;
-	__be32 post_nat_ip_dst3;
+	DECLARE_IP_ADDR(post_nat_ip_dst);
 	/* For packets that arrived over our VXLAN tunnel, the source IP of the tunnel packet.
 	 * Zeroed out when we decide to respond with an ICMP error.
 	 * Also used to stash the ICMP MTU when calling the ICMP response program. */
-	__be32 tun_ip;
-	__be32 tun_ip1;
-	__be32 tun_ip2;
-	__be32 tun_ip3;
-	__u32 unused;
+	DECLARE_IP_ADDR(tun_ip);
+	__u16 ihl;
+	__u16 unused;
 	/* Return code from the policy program CALI_POL_DENY/ALLOW etc. */
 	__s32 pol_rc;
 	/* Source port of the packet; updated on the CALI_CT_ESTABLISHED_SNAT path or when doing encap.
@@ -96,6 +99,15 @@ struct cali_tc_state {
 	struct calico_nat_dest nat_dest; /* 8 bytes */
 	__u64 prog_start_time;
 	__u64 flags;
+#ifndef IPVER6
+	__u8 __pad_ipv4[48];
+#endif
+};
+
+struct pkt_scratch {
+	__u8 l4[24]; /* 20 bytes to fit udp, icmp, tcp w/o options and 24 to make 8-aligned */
+	struct ct_create_ctx ct_ctx_nat;
+	struct calico_ct_key ct_key;
 };
 
 enum cali_state_flags {
@@ -135,23 +147,29 @@ struct fwd {
 };
 
 struct cali_tc_ctx {
+#if !CALI_F_XDP
   struct __sk_buff *skb;
+#else
   struct xdp_md *xdp;
+#endif
 
   /* Our single copies of the data start/end pointers loaded from the skb. */
   void *data_start;
   void *data_end;
   void *ip_header;
-  void *nh;
   long ipheader_len;
+  void *nh;
 
   struct cali_tc_state *state;
+#if !CALI_F_XDP
   const volatile struct cali_tc_globals *globals;
+#else
   const volatile struct cali_xdp_globals *xdp_globals; /* XXX we must split the state between tc/xdp */
+#endif
   struct calico_nat_dest *nat_dest;
-  struct arp_key arpk;
   struct fwd fwd;
   void *counters;
+  struct pkt_scratch *scratch;
 };
 
 #define DECLARE_TC_CTX(NAME, ...)						\
@@ -171,23 +189,48 @@ struct cali_tc_ctx {
 				CALI_LOG_IF(CALI_LOG_LEVEL_DEBUG, "no globals: DROP\n");		\
 				bpf_exit(TC_ACT_SHOT);				\
 			}							\
-			(struct cali_tc_ctx) {					\
+			struct pkt_scratch *scratch = (void *)(gl->__scratch); 	\
+			struct cali_tc_ctx x = {				\
 				.state = state,					\
 				.counters = counters,				\
 				.globals = gl,					\
+				.scratch = scratch,				\
+				.nh = &scratch->l4,				\
 				__VA_ARGS__					\
 			};							\
+			if (x.ipheader_len == 0) {				\
+				x.ipheader_len = state->ihl;			\
+			}							\
+										\
+			x;							\
 	})									\
+
+#ifdef IPVER6
+static CALI_BPF_INLINE struct ipv6hdr* ip_hdr(struct cali_tc_ctx *ctx)
+{
+	return (struct ipv6hdr *)ctx->ip_header;
+}
+
+#define ip_hdr_set_ip(ctx, field, ip)	do {					\
+	struct in6_addr *addr = &(ip_hdr(ctx)->field);				\
+	addr->in6_u.u6_addr32[0] = ip.a;					\
+	addr->in6_u.u6_addr32[1] = ip.b;					\
+	addr->in6_u.u6_addr32[2] = ip.c;					\
+	addr->in6_u.u6_addr32[3] = ip.d;					\
+} while(0)
+
+#else
 
 static CALI_BPF_INLINE struct iphdr* ip_hdr(struct cali_tc_ctx *ctx)
 {
 	return (struct iphdr *)ctx->ip_header;
 }
 
-static CALI_BPF_INLINE struct ipv6hdr* ipv6_hdr(struct cali_tc_ctx *ctx)
-{
-	return (struct ipv6hdr *)ctx->ip_header;
-}
+#define ip_hdr_set_ip(ctx, field, ip)	do {					\
+	ip_hdr(ctx)->field = ip;						\
+} while (0)
+
+#endif
 
 static CALI_BPF_INLINE struct ethhdr* eth_hdr(struct cali_tc_ctx *ctx)
 {
@@ -209,11 +252,6 @@ static CALI_BPF_INLINE struct icmphdr* icmp_hdr(struct cali_tc_ctx *ctx)
 	return (struct icmphdr *)ctx->nh;
 }
 
-static CALI_BPF_INLINE struct ipv6_opt_hdr* ipv6ext_hdr(struct cali_tc_ctx *ctx)
-{
-	return (struct ipv6_opt_hdr *)ctx->nh;
-}
-
 static CALI_BPF_INLINE __u32 ctx_ifindex(struct cali_tc_ctx *ctx)
 {
 #if CALI_F_XDP
@@ -222,5 +260,24 @@ static CALI_BPF_INLINE __u32 ctx_ifindex(struct cali_tc_ctx *ctx)
 	return ctx->skb->ifindex;
 #endif
 }
+
+static CALI_BPF_INLINE int l4_hdr_len(struct cali_tc_ctx *ctx)
+{
+	switch (ctx->state->ip_proto) {
+	case IPPROTO_TCP:
+		return TCP_SIZE;
+	case IPPROTO_UDP:
+		return UDP_SIZE;
+	case IPPROTO_ICMP:
+		ICMP_SIZE;
+	}
+
+	return 0;
+}
+
+#define IP_VOID 0
+#define IP_EQ(ip1, ip2) ((ip1) == (ip2))
+#define IP_SET(var, val) ((var) = (val))
+
 
 #endif /* __CALI_BPF_TYPES_H__ */

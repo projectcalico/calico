@@ -20,7 +20,7 @@ FROM ${BIRD_IMAGE} as bird
 
 FROM calico/bpftool:v5.0-ppc64le as bpftool
 
-FROM ppc64le/alpine:3.8
+FROM ppc64le/alpine:3.18
 MAINTAINER David Wilder <wilder@us.ibm.com>
 
 ARG ARCH=ppc64le
@@ -35,7 +35,7 @@ ENV DOCKER_API_VERSION 1.21
 COPY --from=qemu /usr/bin/qemu-${ARCH}-static /usr/bin/
 
 # Install remaining runtime deps required for felix from the global repository
-RUN apk add --no-cache ip6tables ipset iputils iproute2 conntrack-tools runit file ca-certificates
+RUN apk add --no-cache bash ip6tables ipset iputils iproute2 conntrack-tools runit file ca-certificates
 
 # Copy our bird binaries in
 COPY --from=bird /bird* /bin/

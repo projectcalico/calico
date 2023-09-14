@@ -241,7 +241,7 @@ func TestXDPPrograms(t *testing.T) {
 	for i, tc := range xdpTestCases {
 		bpfIfaceName = fmt.Sprintf("XDP-%d", i)
 		runBpfTest(t, "xdp_calico_entrypoint", tc.Rules, func(bpfrun bpfProgRunFn) {
-			_, _, _, _, pktBytes, err := testPacket(nil, tc.IPv4Header, tc.NextHeader, nil)
+			_, _, _, _, pktBytes, err := testPacketV4(nil, tc.IPv4Header, tc.NextHeader, nil)
 			Expect(err).NotTo(HaveOccurred())
 			res, err := bpfrun(pktBytes)
 			Expect(err).NotTo(HaveOccurred())

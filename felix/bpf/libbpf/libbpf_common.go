@@ -29,10 +29,28 @@ type TcGlobalData struct {
 	NatIn        uint32
 	NatOut       uint32
 	LogFilterJmp uint32
-	Jumps        [32]uint32
+	Jumps        [40]uint32
+}
+
+type TcGlobalData6 struct {
+	IfaceName    string
+	HostIP       [16]byte
+	IntfIP       [16]byte
+	ExtToSvcMark uint32
+	Tmtu         uint16
+	VxlanPort    uint16
+	PSNatStart   uint16
+	PSNatLen     uint16
+	HostTunnelIP [16]byte
+	Flags        uint32
+	WgPort       uint16
+	NatIn        uint32
+	NatOut       uint32
+	LogFilterJmp uint32
+	Jumps        [40]uint32
 }
 
 type XDPGlobalData struct {
 	IfaceName string
-	Jumps     [32]uint32
+	Jumps     [16]uint32
 }
