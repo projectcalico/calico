@@ -22,8 +22,8 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/felix/labelindex/kvindex"
-	"github.com/projectcalico/calico/felix/labelindex/selectorindex"
+	"github.com/projectcalico/calico/felix/labelindex/labelnamevalueindex"
+	"github.com/projectcalico/calico/felix/labelindex/labelrestrictionindex"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
@@ -264,11 +264,11 @@ func (d *npParentData) IterEndpointIDs(f func(id any) error) {
 type NamedPortMatchCallback func(ipSetID string, member IPSetMember)
 
 type SelectorAndNamedPortIndex struct {
-	endpointKVIdx *kvindex.KeyValueIndex[any /*endpoint IDs*/, *endpointData]
+	endpointKVIdx *labelnamevalueindex.LabelNameValueIndex[any /*endpoint IDs*/, *endpointData]
 
-	parentKVIdx           *kvindex.KeyValueIndex[string, *npParentData]
+	parentKVIdx           *labelnamevalueindex.LabelNameValueIndex[string, *npParentData]
 	ipSetDataByID         map[string]*ipSetData
-	selectorCandidatesIdx *selectorindex.SelectorIndex[string]
+	selectorCandidatesIdx *labelrestrictionindex.LabelRestrictionIndex[string]
 
 	// Callback functions
 	OnMemberAdded   NamedPortMatchCallback
@@ -280,10 +280,10 @@ type SelectorAndNamedPortIndex struct {
 
 func NewSelectorAndNamedPortIndex() *SelectorAndNamedPortIndex {
 	inheritIdx := SelectorAndNamedPortIndex{
-		endpointKVIdx:         kvindex.New[any, *endpointData]("endpoints"),
-		parentKVIdx:           kvindex.New[string, *npParentData]("parents"),
+		endpointKVIdx:         labelnamevalueindex.New[any, *endpointData]("endpoints"),
+		parentKVIdx:           labelnamevalueindex.New[string, *npParentData]("parents"),
 		ipSetDataByID:         map[string]*ipSetData{},
-		selectorCandidatesIdx: selectorindex.New[string](),
+		selectorCandidatesIdx: labelrestrictionindex.New[string](),
 
 		// Callback functions
 		OnMemberAdded:   func(ipSetID string, member IPSetMember) {},
@@ -834,7 +834,7 @@ func (idx *SelectorAndNamedPortIndex) iterEndpointCandidates(ipsetID string, f f
 	log.Debugf("Selector %s restrictions: %v", sel.String(), restrictions)
 
 	bestEPStrategy := idx.endpointKVIdx.FullScanStrategy()
-	var bestParentStrategy kvindex.ScanStrategy[string]
+	var bestParentStrategy labelnamevalueindex.ScanStrategy[string]
 	bestParentEndpointEstimate := math.MaxInt
 
 	for k, r := range restrictions {
@@ -896,7 +896,7 @@ func (idx *SelectorAndNamedPortIndex) iterEndpointCandidates(ipsetID string, f f
 	}
 }
 
-func (idx *SelectorAndNamedPortIndex) estimateParentEndpointScanCount(s kvindex.ScanStrategy[string]) int {
+func (idx *SelectorAndNamedPortIndex) estimateParentEndpointScanCount(s labelnamevalueindex.ScanStrategy[string]) int {
 	numScanned := 0
 	total := 0
 	const maxNumToScan = 10

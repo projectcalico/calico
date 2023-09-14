@@ -12,19 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package selectorindex
+package labelrestrictionindex
 
 import (
+	"github.com/sirupsen/logrus"
+
 	"github.com/projectcalico/calico/libcalico-go/lib/selector"
 	"github.com/projectcalico/calico/libcalico-go/lib/selector/parser"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
-	"github.com/sirupsen/logrus"
 )
 
-// SelectorIndex indexes Selectors themselves, based on their label
+// LabelRestrictionIndex indexes Selectors themselves, based on their label
 // restrictions such that, given a Labeled resource, it can (hopefully)
 // find a small subset of selectors that are candidate matches.
-type SelectorIndex[SelID comparable] struct {
+type LabelRestrictionIndex[SelID comparable] struct {
 	// selectorsByID stores all selectors that we know about by their ID.
 	selectorsByID map[SelID]selector.Selector
 	// labelRestrictions stores a copy of the calculated LabelRestrictions
@@ -50,10 +51,10 @@ type SelectorIndex[SelID comparable] struct {
 	gaugeUnoptimizedSelectors Gauge
 }
 
-type Option[SelID comparable] func(index *SelectorIndex[SelID])
+type Option[SelID comparable] func(index *LabelRestrictionIndex[SelID])
 
 func WithGauges[SelID comparable](totalSelectors, unoptimisedSelectors Gauge) Option[SelID] {
-	return func(index *SelectorIndex[SelID]) {
+	return func(index *LabelRestrictionIndex[SelID]) {
 		index.gaugeTotalSelectors = totalSelectors
 		index.gaugeUnoptimizedSelectors = unoptimisedSelectors
 	}
@@ -66,8 +67,8 @@ type Gauge interface {
 	Set(float64)
 }
 
-func New[SelID comparable](opts ...Option[SelID]) *SelectorIndex[SelID] {
-	return &SelectorIndex[SelID]{
+func New[SelID comparable](opts ...Option[SelID]) *LabelRestrictionIndex[SelID] {
+	return &LabelRestrictionIndex[SelID]{
 		selectorsByID:     map[SelID]selector.Selector{},
 		labelRestrictions: map[SelID]map[string]parser.LabelRestriction{},
 		labelToValueToIDs: map[string]*valuesSubIndex[SelID]{},
@@ -76,7 +77,7 @@ func New[SelID comparable](opts ...Option[SelID]) *SelectorIndex[SelID] {
 	}
 }
 
-func (s *SelectorIndex[SelID]) AddSelector(id SelID, selector selector.Selector) {
+func (s *LabelRestrictionIndex[SelID]) AddSelector(id SelID, selector selector.Selector) {
 	// In case of changes with the same ID, delete it first to clean up the
 	// index.
 	s.DeleteSelector(id)
@@ -120,7 +121,7 @@ func (s *SelectorIndex[SelID]) AddSelector(id SelID, selector selector.Selector)
 	s.updateGauges()
 }
 
-func (s *SelectorIndex[SelID]) DeleteSelector(id SelID) {
+func (s *LabelRestrictionIndex[SelID]) DeleteSelector(id SelID) {
 	sel := s.selectorsByID[id]
 	if sel == nil {
 		return
@@ -165,7 +166,7 @@ type Labeled interface {
 	IterOwnAndParentLabels(func(k, v string))
 }
 
-func (s *SelectorIndex[SelID]) IterPotentialMatches(labels Labeled, f func(SelID, selector.Selector)) {
+func (s *LabelRestrictionIndex[SelID]) IterPotentialMatches(labels Labeled, f func(SelID, selector.Selector)) {
 	seenIDs := s.scratchSet
 	defer seenIDs.Clear()
 
@@ -199,7 +200,7 @@ func (s *SelectorIndex[SelID]) IterPotentialMatches(labels Labeled, f func(SelID
 	})
 }
 
-func (s *SelectorIndex[SelID]) updateGauges() {
+func (s *LabelRestrictionIndex[SelID]) updateGauges() {
 	if s.gaugeTotalSelectors != nil {
 		s.gaugeTotalSelectors.Set(float64(len(s.selectorsByID)))
 	}
