@@ -22,20 +22,24 @@ import (
 
 	"golang.org/x/sys/unix"
 
+	v2 "github.com/projectcalico/calico/felix/bpf/nat/v2"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/ip"
+
+	// When adding a new ct version, change curVer to point to the new version
+	curVer "github.com/projectcalico/calico/felix/bpf/nat/v3"
 )
 
 func init() {
-	maps.SetSize(FrontendMapParameters.VersionedName(), FrontendMapParameters.MaxEntries)
+	maps.SetSize(curVer.FrontendMapParameters.VersionedName(), curVer.FrontendMapParameters.MaxEntries)
 	maps.SetSize(BackendMapParameters.VersionedName(), BackendMapParameters.MaxEntries)
 	maps.SetSize(AffinityMapParameters.VersionedName(), AffinityMapParameters.MaxEntries)
 	maps.SetSize(SendRecvMsgMapParameters.VersionedName(), SendRecvMsgMapParameters.MaxEntries)
 	maps.SetSize(CTNATsMapParameters.VersionedName(), CTNATsMapParameters.MaxEntries)
 
-	maps.SetSize(FrontendMapV6Parameters.VersionedName(), FrontendMapV6Parameters.MaxEntries)
+	maps.SetSize(curVer.FrontendMapV6Parameters.VersionedName(), curVer.FrontendMapV6Parameters.MaxEntries)
 	maps.SetSize(BackendMapV6Parameters.VersionedName(), BackendMapV6Parameters.MaxEntries)
 	maps.SetSize(AffinityMapV6Parameters.VersionedName(), AffinityMapV6Parameters.MaxEntries)
 	maps.SetSize(SendRecvMsgMapV6Parameters.VersionedName(), SendRecvMsgMapV6Parameters.MaxEntries)
@@ -43,24 +47,14 @@ func init() {
 }
 
 func SetMapSizes(fsize, bsize, asize int) {
-	maps.SetSize(FrontendMapParameters.VersionedName(), fsize)
+	maps.SetSize(curVer.FrontendMapParameters.VersionedName(), fsize)
 	maps.SetSize(BackendMapParameters.VersionedName(), bsize)
 	maps.SetSize(AffinityMapParameters.VersionedName(), asize)
 
-	maps.SetSize(FrontendMapV6Parameters.VersionedName(), fsize)
+	maps.SetSize(curVer.FrontendMapV6Parameters.VersionedName(), fsize)
 	maps.SetSize(BackendMapV6Parameters.VersionedName(), bsize)
 	maps.SetSize(AffinityMapV6Parameters.VersionedName(), asize)
 }
-
-//	struct calico_nat_v4_key {
-//	   uint32_t prefixLen;
-//	   uint32_t addr; // NBO
-//	   uint16_t port; // HBO
-//	   uint8_t protocol;
-//	   uint32_t saddr;
-//	   uint8_t pad;
-//	};
-const frontendKeySize = 16
 
 //	struct calico_nat {
 //		uint32_t addr;
@@ -69,15 +63,6 @@ const frontendKeySize = 16
 //		uint8_t  pad;
 //	};
 const frontendAffKeySize = 8
-
-//	struct calico_nat_v4_value {
-//	   uint32_t id;
-//	   uint32_t count;
-//	   uint32_t local;
-//	   uint32_t affinity_timeo;
-//	   uint32_t flags;
-//	};
-const frontendValueSize = 20
 
 //	struct calico_nat_secondary_v4_key {
 //	  uint32_t id;
@@ -99,7 +84,7 @@ const ZeroCIDRPrefixLen = 56
 
 var ZeroCIDR = ip.MustParseCIDROrIP("0.0.0.0/0").(ip.V4CIDR)
 
-type FrontendKey [frontendKeySize]byte
+type FrontendKey [curVer.FrontendKeySize]byte
 
 type FrontendKeyInterface interface {
 	Proto() uint8
@@ -204,7 +189,7 @@ var flgTostr = map[int]string{
 	NATFlgInternalLocal: "internal-local",
 }
 
-type FrontendValue [frontendValueSize]byte
+type FrontendValue [curVer.FrontendValueSize]byte
 
 func NewNATValue(id uint32, count, local, affinityTimeo uint32) FrontendValue {
 	var v FrontendValue
@@ -353,18 +338,10 @@ func BackendValueFromBytes(b []byte) BackendValueInterface {
 	return v
 }
 
-var FrontendMapParameters = maps.MapParameters{
-	Type:       "lpm_trie",
-	KeySize:    frontendKeySize,
-	ValueSize:  frontendValueSize,
-	MaxEntries: 64 * 1024,
-	Name:       "cali_v4_nat_fe",
-	Flags:      unix.BPF_F_NO_PREALLOC,
-	Version:    3,
-}
-
 func FrontendMap() maps.MapWithExistsCheck {
-	return maps.NewPinnedMap(FrontendMapParameters)
+	b := maps.NewPinnedMap(curVer.FrontendMapParameters)
+	b.GetMapParams = GetMapParams
+	return b
 }
 
 var BackendMapParameters = maps.MapParameters{
@@ -820,5 +797,16 @@ func SendRecvMsgMapMemIter(m SendRecvMsgMapMem) func(k, v []byte) {
 		copy(val[:vs], v[:vs])
 
 		m[key] = val
+	}
+}
+
+func GetMapParams(version int) maps.MapParameters {
+	switch version {
+	case 2:
+		return v2.FrontendMapParameters
+	case 3:
+		return curVer.FrontendMapParameters
+	default:
+		return curVer.FrontendMapParameters
 	}
 }
