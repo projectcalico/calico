@@ -86,11 +86,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test delete previ
 
 		// After Felix restart: only the curr maps now exists.
 		eventuallyMapVersionShouldExist(stateCurrVersionedName)
-		//eventuallyMapVersionShouldNotExist(statePrevVersionedName)
+		eventuallyMapVersionShouldNotExist(statePrevVersionedName)
 		eventuallyMapVersionShouldExist(ifstateCurrVersionedName)
-		//eventuallyMapVersionShouldNotExist(ifstatePrevVersionedName)
+		eventuallyMapVersionShouldNotExist(ifstatePrevVersionedName)
 
-		Expect(4).To(Equal(2))
+		//Expect(4).To(Equal(2))
 	})
 
 })
