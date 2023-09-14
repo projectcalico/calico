@@ -18,8 +18,9 @@ package fv_test
 
 import (
 	"fmt"
-	"github.com/projectcalico/calico/felix/bpf/ifstate"
 	"os"
+
+	"github.com/projectcalico/calico/felix/bpf/ifstate"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"

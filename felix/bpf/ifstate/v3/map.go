@@ -15,8 +15,9 @@
 package v3
 
 import (
-	"github.com/projectcalico/calico/felix/bpf/maps"
 	"golang.org/x/sys/unix"
+
+	"github.com/projectcalico/calico/felix/bpf/maps"
 )
 
 const (
