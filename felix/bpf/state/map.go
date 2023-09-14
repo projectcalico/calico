@@ -18,6 +18,7 @@ import (
 	"unsafe"
 
 	v3 "github.com/projectcalico/calico/felix/bpf/state/v3"
+	// When adding a new ct version, change curVer to point to the new version
 	curVer "github.com/projectcalico/calico/felix/bpf/state/v4"
 
 	"github.com/projectcalico/calico/felix/bpf/maps"
