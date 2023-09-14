@@ -19,6 +19,7 @@ package fv_test
 import (
 	"fmt"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
+	"github.com/projectcalico/calico/felix/bpf/nat"
 	"os"
 
 	"github.com/projectcalico/calico/felix/bpf/ifstate"
@@ -71,11 +72,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test delete previ
 		stateCmd := getMapCmd(statePrevVersionedName, "percpu_array", "4", "464", "2", "0")
 		tc.Felixes[0].Exec(stateCmd...)
 
-		ifstateMap := ifstate.Map()
-		ifstateCurrVersionedName := ifstateMap.(*maps.PinnedMap).VersionedName()
-		ifstatePrevVersionedName := fmt.Sprintf("%s%d", ifstateMap.(*maps.PinnedMap).Name, ifstateMap.(*maps.PinnedMap).Version-1)
-		ifstateCmd := getMapCmd(ifstatePrevVersionedName, "hash", "4", "40", "1000", "1")
-		tc.Felixes[0].Exec(ifstateCmd...)
+		frontendMap := nat.FrontendMap()
+		frontendCurrVersionedName := frontendMap.(*maps.PinnedMap).VersionedName()
+		frontendPrevVersionedName := fmt.Sprintf("%s%d", frontendMap.(*maps.PinnedMap).Name, frontendMap.(*maps.PinnedMap).Version-1)
+		frontendCmd := getMapCmd(statePrevVersionedName, "lpm_trie", "16", "20", "65536", "1")
+		tc.Felixes[0].Exec(frontendCmd...)
 
 		conntrackMap := conntrack.Map()
 		conntrackCurrVersionedName := conntrackMap.(*maps.PinnedMap).VersionedName()
@@ -83,25 +84,37 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test delete previ
 		conntrackCmd := getMapCmd(conntrackPrevVersionedName, "hash", "16", "88", "512000", "1")
 		tc.Felixes[0].Exec(conntrackCmd...)
 
+		ifstateMap := ifstate.Map()
+		ifstateCurrVersionedName := ifstateMap.(*maps.PinnedMap).VersionedName()
+		ifstatePrevVersionedName := fmt.Sprintf("%s%d", ifstateMap.(*maps.PinnedMap).Name, ifstateMap.(*maps.PinnedMap).Version-1)
+		ifstateCmd := getMapCmd(ifstatePrevVersionedName, "hash", "4", "40", "1000", "1")
+		tc.Felixes[0].Exec(ifstateCmd...)
+
 		// Before Felix restart: both curr and prev maps exists.
 		eventuallyMapVersionShouldExist(stateCurrVersionedName)
 		eventuallyMapVersionShouldExist(statePrevVersionedName)
-		eventuallyMapVersionShouldExist(ifstateCurrVersionedName)
-		eventuallyMapVersionShouldExist(ifstatePrevVersionedName)
+		eventuallyMapVersionShouldExist(frontendCurrVersionedName)
+		eventuallyMapVersionShouldExist(frontendPrevVersionedName)
+
 		eventuallyMapVersionShouldExist(conntrackCurrVersionedName)
 		eventuallyMapVersionShouldExist(conntrackPrevVersionedName)
+		eventuallyMapVersionShouldExist(ifstateCurrVersionedName)
+		eventuallyMapVersionShouldExist(ifstatePrevVersionedName)
 
 		tc.Felixes[0].Restart()
 
 		// After Felix restart: only the curr maps now exists.
 		eventuallyMapVersionShouldExist(stateCurrVersionedName)
-		eventuallyMapVersionShouldNotExist(statePrevVersionedName)
-		eventuallyMapVersionShouldExist(ifstateCurrVersionedName)
-		eventuallyMapVersionShouldNotExist(ifstatePrevVersionedName)
-		eventuallyMapVersionShouldExist(conntrackCurrVersionedName)
-		eventuallyMapVersionShouldExist(conntrackPrevVersionedName)
+		//eventuallyMapVersionShouldNotExist(statePrevVersionedName)
+		eventuallyMapVersionShouldExist(frontendCurrVersionedName)
+		//eventuallyMapVersionShouldExist(frontendPrevVersionedName)
 
-		//Expect(5).To(Equal(2))
+		eventuallyMapVersionShouldExist(conntrackCurrVersionedName)
+		//eventuallyMapVersionShouldExist(conntrackPrevVersionedName)
+		eventuallyMapVersionShouldExist(ifstateCurrVersionedName)
+		//eventuallyMapVersionShouldNotExist(ifstatePrevVersionedName)
+
+		Expect(6).To(Equal(3))
 	})
 
 })
