@@ -91,12 +91,12 @@ func benchInitialSnap(b *testing.B, numEndpoints int, numLocalEndpoints int, num
 		sendLocalUpdates(cg, localUpdates)
 		cg.AllUpdDispatcher.OnDatamodelStatus(api.InSync)
 
-		cg.PolicyResolver.MaybeFlush()
+		cg.Flush()
 		Expect(es.pendingEndpointTierUpdates).To(HaveLen(numLocalEndpoints))
 		es.Flush()
 
 		sendDeletions(cg, localDeletes)
-		cg.PolicyResolver.MaybeFlush()
+		cg.Flush()
 		es.Flush()
 
 		b.ReportMetric(float64(time.Since(startTime).Seconds()), "s")
