@@ -93,6 +93,9 @@ func CreateBPFMaps(ipFamily int) (*Maps, error) {
 		return v6()
 	}
 
+	ret.IfStateMap = ifstate.Map()
+	mps = append(mps, ret.IfStateMap)
+
 	ret.IpsetsMap = ipsets.Map()
 	mps = append(mps, ret.IpsetsMap)
 
