@@ -17,9 +17,10 @@ package nat
 import (
 	"encoding/binary"
 	"fmt"
-	curVer "github.com/projectcalico/calico/felix/bpf/nat/v3"
 	"net"
 	"time"
+
+	curVer "github.com/projectcalico/calico/felix/bpf/nat/v3"
 
 	"golang.org/x/sys/unix"
 

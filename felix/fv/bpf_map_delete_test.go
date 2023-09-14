@@ -18,9 +18,10 @@ package fv_test
 
 import (
 	"fmt"
+	"os"
+
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	"github.com/projectcalico/calico/felix/bpf/nat"
-	"os"
 
 	"github.com/projectcalico/calico/felix/bpf/ifstate"
 

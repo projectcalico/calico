@@ -22,8 +22,9 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	v2 "github.com/projectcalico/calico/felix/bpf/nat/v2"
 	log "github.com/sirupsen/logrus"
+
+	v2 "github.com/projectcalico/calico/felix/bpf/nat/v2"
 
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/ip"

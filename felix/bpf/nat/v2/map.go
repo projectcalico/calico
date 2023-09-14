@@ -1,8 +1,9 @@
 package v2
 
 import (
-	"github.com/projectcalico/calico/felix/bpf/maps"
 	"golang.org/x/sys/unix"
+
+	"github.com/projectcalico/calico/felix/bpf/maps"
 )
 
 //	struct calico_nat_v4_key {
