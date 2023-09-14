@@ -112,6 +112,11 @@ type FrontendKeyInterface interface {
 	AsBytes() []byte
 }
 
+type FrontendKeyComparable interface {
+	comparable
+	FrontendKeyInterface
+}
+
 func NewNATKey(addr net.IP, port uint16, protocol uint8) FrontendKey {
 	return NewNATKeySrc(addr, port, protocol, ZeroCIDR)
 }

@@ -74,6 +74,30 @@ static CALI_BPF_INLINE void ipv6_addr_t_to_ipv6hdr_ip(struct in6_addr *lnx, ipv6
 	lnx->in6_u.u6_addr32[3] = us->d;
 }
 
+static CALI_BPF_INLINE void ipv6hdr_ip_to_be32_4_ip(__be32 *bpf, struct in6_addr *lnx)
+{
+	bpf[0] = lnx->in6_u.u6_addr32[0];
+	bpf[1] = lnx->in6_u.u6_addr32[1];
+	bpf[2] = lnx->in6_u.u6_addr32[2];
+	bpf[3] = lnx->in6_u.u6_addr32[3];
+}
+
+static CALI_BPF_INLINE void ipv6_addr_t_to_be32_4_ip(__be32 *bpf, ipv6_addr_t *us)
+{
+	bpf[0] = us->a;
+	bpf[1] = us->b;
+	bpf[2] = us->c;
+	bpf[3] = us->d;
+}
+
+static CALI_BPF_INLINE void be32_4_ip_to_ipv6_addr_t(ipv6_addr_t *us, __be32 *bpf)
+{
+	us->a = bpf[0];
+	us->b = bpf[1];
+	us->c = bpf[2];
+	us->d = bpf[3];
+}
+
 typedef ipv6_addr_t ipv46_addr_t;
 
 #define DECLARE_IP_ADDR(name)	ipv6_addr_t name

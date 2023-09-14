@@ -21,7 +21,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 )
 
-type InfraFactory func() DatastoreInfra
+type InfraFactory func(...CreateOption) DatastoreInfra
 
 // DatastoreDescribe is a replacement for ginkgo.Describe which invokes Describe
 // multiple times for one or more different datastore drivers - passing in the
