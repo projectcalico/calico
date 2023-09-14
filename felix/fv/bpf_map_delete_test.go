@@ -18,6 +18,7 @@ package fv_test
 
 import (
 	"fmt"
+	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	"os"
 
 	"github.com/projectcalico/calico/felix/bpf/ifstate"
@@ -76,11 +77,19 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test delete previ
 		ifstateCmd := getMapCmd(ifstatePrevVersionedName, "hash", "4", "40", "1000", "1")
 		tc.Felixes[0].Exec(ifstateCmd...)
 
+		conntrackMap := conntrack.Map()
+		conntrackCurrVersionedName := conntrackMap.(*maps.PinnedMap).VersionedName()
+		conntrackPrevVersionedName := fmt.Sprintf("%s%d", conntrackMap.(*maps.PinnedMap).Name, conntrackMap.(*maps.PinnedMap).Version-1)
+		conntrackCmd := getMapCmd(conntrackPrevVersionedName, "hash", "16", "88", "512000", "1")
+		tc.Felixes[0].Exec(conntrackCmd...)
+
 		// Before Felix restart: both curr and prev maps exists.
 		eventuallyMapVersionShouldExist(stateCurrVersionedName)
 		eventuallyMapVersionShouldExist(statePrevVersionedName)
 		eventuallyMapVersionShouldExist(ifstateCurrVersionedName)
 		eventuallyMapVersionShouldExist(ifstatePrevVersionedName)
+		eventuallyMapVersionShouldExist(conntrackCurrVersionedName)
+		eventuallyMapVersionShouldExist(conntrackPrevVersionedName)
 
 		tc.Felixes[0].Restart()
 
@@ -89,8 +98,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test delete previ
 		eventuallyMapVersionShouldNotExist(statePrevVersionedName)
 		eventuallyMapVersionShouldExist(ifstateCurrVersionedName)
 		eventuallyMapVersionShouldNotExist(ifstatePrevVersionedName)
+		eventuallyMapVersionShouldExist(conntrackCurrVersionedName)
+		eventuallyMapVersionShouldExist(conntrackPrevVersionedName)
 
-		//Expect(4).To(Equal(2))
+		//Expect(5).To(Equal(2))
 	})
 
 })
