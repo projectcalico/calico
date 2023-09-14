@@ -67,7 +67,7 @@ func benchmarkWorkloadUpdates(b *testing.B, numSels int) {
 		if err != nil {
 			b.Fatal(err)
 		}
-		sel.String()
+		_ = sel.String() // So it caches the string.
 		idx.UpdateIPSet(fmt.Sprintf("ipset-%d", i), sel, ProtocolNone, "")
 	}
 

@@ -61,9 +61,30 @@ type Selector interface {
 }
 
 type LabelRestriction struct {
+	// MustBePresent is true if this label must be present for the selector to
+	// match. For example "has(labelName)" or "labelName == 'foo'"
 	MustBePresent bool
-	MustBeAbsent  bool
-	MustHaveValue string
+	// MustBeAbsent is true if this label must be absent for this selector to
+	// match. For example "!has(labelName)".
+	MustBeAbsent bool
+	// MustHaveOneOfValues if non-nil, indicates that the label must have one
+	// of the listed values in order to match the selector.
+	//
+	// If nil, no such restriction is known.  For example "has(labelName)"
+	//
+	// Note: non-nil empty slice means "selector cannot match anything". For
+	// example an inconsistent selector such as: "a == 'B' && a == 'C'"
+	MustHaveOneOfValues []string
+}
+
+func (r LabelRestriction) PossibleToSatisfy() bool {
+	if r.MustBePresent && r.MustBeAbsent {
+		return false
+	}
+	if r.MustHaveOneOfValues != nil && len(r.MustHaveOneOfValues) == 0 {
+		return false
+	}
+	return true
 }
 
 type Visitor interface {
@@ -164,8 +185,8 @@ func (node *LabelEqValueNode) Evaluate(labels Labels) bool {
 func (node *LabelEqValueNode) LabelRestrictions() map[string]LabelRestriction {
 	return map[string]LabelRestriction{
 		node.LabelName: {
-			MustBePresent: true,
-			MustHaveValue: node.Value,
+			MustBePresent:       true,
+			MustHaveOneOfValues: []string{node.Value},
 		},
 	}
 }
@@ -281,7 +302,8 @@ func (node *LabelInSetNode) Evaluate(labels Labels) bool {
 func (node *LabelInSetNode) LabelRestrictions() map[string]LabelRestriction {
 	return map[string]LabelRestriction{
 		node.LabelName: {
-			MustBePresent: true,
+			MustBePresent:       true,
+			MustHaveOneOfValues: node.Value.SliceCopy(),
 		},
 	}
 }
@@ -452,13 +474,29 @@ func (node *AndNode) LabelRestrictions() map[string]LabelRestriction {
 			base := lr[ln]
 			base.MustBePresent = base.MustBePresent || r.MustBePresent
 			base.MustBeAbsent = base.MustBeAbsent || r.MustBeAbsent
-			if base.MustHaveValue == "" {
-				base.MustHaveValue = r.MustHaveValue
+			if base.MustHaveOneOfValues == nil {
+				base.MustHaveOneOfValues = r.MustHaveOneOfValues
+			} else if r.MustHaveOneOfValues != nil {
+				base.MustHaveOneOfValues = intersectStringSlicesInPlace(base.MustHaveOneOfValues, r.MustHaveOneOfValues)
 			}
 			lr[ln] = base
 		}
 	}
+	if len(lr) == 0 {
+		return nil
+	}
 	return lr
+}
+
+func intersectStringSlicesInPlace(a []string, b []string) []string {
+	out := a[:0]
+	bSet := ConvertToStringSetInPlace(b)
+	for _, v1 := range a {
+		if bSet.Contains(v1) {
+			out = append(out, v1)
+		}
+	}
+	return out
 }
 
 func (node *AndNode) AcceptVisitor(v Visitor) {
@@ -499,8 +537,16 @@ func (node *OrNode) LabelRestrictions() map[string]LabelRestriction {
 		for ln, r := range lr {
 			opr := opLR[ln]
 			r.MustBePresent = r.MustBePresent && opr.MustBePresent
-			if !r.MustBePresent || r.MustHaveValue != opr.MustHaveValue {
-				r.MustHaveValue = ""
+			if !r.MustBePresent {
+				r.MustHaveOneOfValues = nil
+			} else {
+				if r.MustHaveOneOfValues == nil || opr.MustHaveOneOfValues == nil {
+					// At least one side is has(label) so we can't limit on value.
+					r.MustHaveOneOfValues = nil
+				} else {
+					// Both sides place limits on the value, add them together since either is good enough.
+					r.MustHaveOneOfValues = unionStringSlicesInPlace(r.MustHaveOneOfValues, opr.MustHaveOneOfValues)
+				}
 			}
 			r.MustBeAbsent = r.MustBeAbsent && opr.MustBeAbsent
 			if r.MustBePresent || r.MustBeAbsent {
@@ -510,7 +556,22 @@ func (node *OrNode) LabelRestrictions() map[string]LabelRestriction {
 			}
 		}
 	}
+	if len(lr) == 0 {
+		return nil
+	}
 	return lr
+}
+
+func unionStringSlicesInPlace(a []string, b []string) []string {
+	// aSet will share storage with a, but when we append to a, it doesn't
+	// affect aSet.
+	aSet := ConvertToStringSetInPlace(a)
+	for _, v := range b {
+		if !aSet.Contains(v) {
+			a = append(a, v)
+		}
+	}
+	return a
 }
 
 func (node *OrNode) AcceptVisitor(v Visitor) {

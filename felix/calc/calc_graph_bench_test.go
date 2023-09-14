@@ -191,7 +191,7 @@ func makeNamespaceUpdates(num int) []api.Update {
 		updates = append(updates, api.Update{
 			KVPair: model.KVPair{
 				Key: model.ProfileRulesKey{
-					model.ProfileKey{Name: conversion.NamespaceProfileNamePrefix + name},
+					ProfileKey: model.ProfileKey{Name: conversion.NamespaceProfileNamePrefix + name},
 				},
 				Value: &model.ProfileRules{
 					InboundRules:  nil,
