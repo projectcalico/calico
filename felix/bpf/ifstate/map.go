@@ -22,6 +22,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/maps"
 
 	v2 "github.com/projectcalico/calico/felix/bpf/ifstate/v2"
+	// When adding a new ct version, change curVer to point to the new version
 	curVer "github.com/projectcalico/calico/felix/bpf/ifstate/v3"
 )
 
