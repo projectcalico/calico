@@ -23,6 +23,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/labelindex/kvindex"
+	"github.com/projectcalico/calico/felix/labelindex/selectorindex"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
@@ -163,7 +164,7 @@ func (d *endpointData) OwnLabels() map[string]string {
 	return d.labels
 }
 
-func (d *endpointData) IterOwnAndParentKVs(f func(k, v string)) {
+func (d *endpointData) IterOwnAndParentLabels(f func(k, v string)) {
 	seenKeys := set.New[string]()
 	for k, v := range d.labels {
 		f(k, v)
@@ -265,9 +266,9 @@ type NamedPortMatchCallback func(ipSetID string, member IPSetMember)
 type SelectorAndNamedPortIndex struct {
 	endpointKVIdx *kvindex.KeyValueIndex[any /*endpoint IDs*/, *endpointData]
 
-	parentKVIdx      *kvindex.KeyValueIndex[string, *npParentData]
-	ipSetDataByID    map[string]*ipSetData
-	fuzzySelectorIdx *FuzzySelectorIndex[string]
+	parentKVIdx           *kvindex.KeyValueIndex[string, *npParentData]
+	ipSetDataByID         map[string]*ipSetData
+	selectorCandidatesIdx *selectorindex.SelectorIndex[string]
 
 	// Callback functions
 	OnMemberAdded   NamedPortMatchCallback
@@ -279,10 +280,10 @@ type SelectorAndNamedPortIndex struct {
 
 func NewSelectorAndNamedPortIndex() *SelectorAndNamedPortIndex {
 	inheritIdx := SelectorAndNamedPortIndex{
-		endpointKVIdx:    kvindex.New[any, *endpointData]("endpoints"),
-		parentKVIdx:      kvindex.New[string, *npParentData]("parents"),
-		ipSetDataByID:    map[string]*ipSetData{},
-		fuzzySelectorIdx: NewFuzzySelectorIndex[string](),
+		endpointKVIdx:         kvindex.New[any, *endpointData]("endpoints"),
+		parentKVIdx:           kvindex.New[string, *npParentData]("parents"),
+		ipSetDataByID:         map[string]*ipSetData{},
+		selectorCandidatesIdx: selectorindex.New[string](),
 
 		// Callback functions
 		OnMemberAdded:   func(ipSetID string, member IPSetMember) {},
@@ -475,7 +476,7 @@ func (idx *SelectorAndNamedPortIndex) UpdateIPSet(ipSetID string, sel selector.S
 		memberToRefCount:  map[IPSetMember]uint64{},
 	}
 	idx.ipSetDataByID[ipSetID] = newIPSetData
-	idx.fuzzySelectorIdx.AddSelector(ipSetID, sel)
+	idx.selectorCandidatesIdx.AddSelector(ipSetID, sel)
 
 	// Then scan all endpoints.
 	idx.iterEndpointCandidates(ipSetID, func(epID any, epData *endpointData) {
@@ -529,7 +530,7 @@ func (idx *SelectorAndNamedPortIndex) DeleteIPSet(setID string) {
 	})
 
 	delete(idx.ipSetDataByID, setID)
-	idx.fuzzySelectorIdx.RemoveSelector(setID)
+	idx.selectorCandidatesIdx.DeleteSelector(setID)
 }
 
 func (idx *SelectorAndNamedPortIndex) UpdateEndpointOrSet(
@@ -618,7 +619,7 @@ func (idx *SelectorAndNamedPortIndex) scanEndpointAgainstIPSets(
 
 	// Iterate over potential new matches and incref any members that
 	// that produces.  (This may temporarily over count.)
-	idx.fuzzySelectorIdx.IterPotentialMatchingSelectors(epData, func(ipSetID string, _ selector.Selector) {
+	idx.selectorCandidatesIdx.IterPotentialMatches(epData, func(ipSetID string, _ selector.Selector) {
 		// Make sure we don't appear non-live if there are a lot of IP sets to get through.
 		idx.maybeReportLive()
 
