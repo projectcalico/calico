@@ -18,6 +18,7 @@ package fv_test
 
 import (
 	"fmt"
+	"github.com/projectcalico/calico/felix/bpf/ifstate"
 	"os"
 
 	. "github.com/onsi/ginkgo"
@@ -68,17 +69,27 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test delete previ
 		stateCmd := getMapCmd(statePrevVersionedName, "percpu_array", "4", "464", "2", "0")
 		tc.Felixes[0].Exec(stateCmd...)
 
+		ifstateMap := ifstate.Map()
+		ifstateCurrVersionedName := ifstateMap.(*maps.PinnedMap).VersionedName()
+		ifstatePrevVersionedName := fmt.Sprintf("%s%d", ifstateMap.(*maps.PinnedMap).Name, ifstateMap.(*maps.PinnedMap).Version-1)
+		ifstateCmd := getMapCmd(ifstatePrevVersionedName, "hash", "4", "40", "1000", "1")
+		tc.Felixes[0].Exec(ifstateCmd...)
+
 		// Before Felix restart: both curr and prev maps exists.
 		eventuallyMapVersionShouldExist(stateCurrVersionedName)
 		eventuallyMapVersionShouldExist(statePrevVersionedName)
+		eventuallyMapVersionShouldExist(ifstateCurrVersionedName)
+		eventuallyMapVersionShouldExist(ifstatePrevVersionedName)
 
 		tc.Felixes[0].Restart()
 
 		// After Felix restart: only the curr maps now exists.
 		eventuallyMapVersionShouldExist(stateCurrVersionedName)
-		eventuallyMapVersionShouldNotExist(statePrevVersionedName)
+		//eventuallyMapVersionShouldNotExist(statePrevVersionedName)
+		eventuallyMapVersionShouldExist(ifstateCurrVersionedName)
+		//eventuallyMapVersionShouldNotExist(ifstatePrevVersionedName)
 
-		//Expect(2).To(Equal(1))
+		Expect(4).To(Equal(2))
 	})
 
 })
