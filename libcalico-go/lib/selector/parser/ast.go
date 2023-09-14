@@ -61,9 +61,9 @@ type Selector interface {
 }
 
 type LabelRestriction struct {
-	MustBePresent bool
-	MustBeAbsent  bool
-	MustHaveValue string
+	MustBePresent       bool
+	MustBeAbsent        bool
+	MustHaveOneOfValues []string
 }
 
 type Visitor interface {
@@ -164,8 +164,8 @@ func (node *LabelEqValueNode) Evaluate(labels Labels) bool {
 func (node *LabelEqValueNode) LabelRestrictions() map[string]LabelRestriction {
 	return map[string]LabelRestriction{
 		node.LabelName: {
-			MustBePresent: true,
-			MustHaveValue: node.Value,
+			MustBePresent:       true,
+			MustHaveOneOfValues: []string{node.Value},
 		},
 	}
 }
@@ -452,13 +452,27 @@ func (node *AndNode) LabelRestrictions() map[string]LabelRestriction {
 			base := lr[ln]
 			base.MustBePresent = base.MustBePresent || r.MustBePresent
 			base.MustBeAbsent = base.MustBeAbsent || r.MustBeAbsent
-			if base.MustHaveValue == "" {
-				base.MustHaveValue = r.MustHaveValue
+			if base.MustHaveOneOfValues == nil {
+				base.MustHaveOneOfValues = r.MustHaveOneOfValues
+			} else if r.MustHaveOneOfValues != nil {
+				base.MustHaveOneOfValues = intersectStringSlicesInPlace(base.MustHaveOneOfValues, r.MustHaveOneOfValues)
 			}
 			lr[ln] = base
 		}
 	}
 	return lr
+}
+
+func intersectStringSlicesInPlace(a []string, b []string) []string {
+	out := a[:0]
+	for _, v1 := range a {
+		for _, v2 := range b {
+			if v1 == v2 {
+				out = append(out, v1)
+			}
+		}
+	}
+	return out
 }
 
 func (node *AndNode) AcceptVisitor(v Visitor) {
@@ -499,8 +513,16 @@ func (node *OrNode) LabelRestrictions() map[string]LabelRestriction {
 		for ln, r := range lr {
 			opr := opLR[ln]
 			r.MustBePresent = r.MustBePresent && opr.MustBePresent
-			if !r.MustBePresent || r.MustHaveValue != opr.MustHaveValue {
-				r.MustHaveValue = ""
+			if !r.MustBePresent {
+				r.MustHaveOneOfValues = nil
+			} else {
+				if r.MustHaveOneOfValues == nil || opr.MustHaveOneOfValues == nil {
+					// At least one side is has(label) so we can't limit on value.
+					r.MustHaveOneOfValues = nil
+				} else {
+					// Both sides place limits on the value, add them together since either is good enough.
+					r.MustHaveOneOfValues = unionStringSlicesInPlace(r.MustHaveOneOfValues, opr.MustHaveOneOfValues)
+				}
 			}
 			r.MustBeAbsent = r.MustBeAbsent && opr.MustBeAbsent
 			if r.MustBePresent || r.MustBeAbsent {
@@ -511,6 +533,19 @@ func (node *OrNode) LabelRestrictions() map[string]LabelRestriction {
 		}
 	}
 	return lr
+}
+
+func unionStringSlicesInPlace(a []string, b []string) []string {
+outer:
+	for _, v := range b {
+		for _, v2 := range a {
+			if v == v2 {
+				continue outer
+			}
+		}
+		a = append(a, v)
+	}
+	return a
 }
 
 func (node *OrNode) AcceptVisitor(v Visitor) {

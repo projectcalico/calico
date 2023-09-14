@@ -843,35 +843,30 @@ func (idx *SelectorAndNamedPortIndex) iterEndpointCandidates(ipsetID string, f f
 		epsToScan := epStrat.EstimatedItemsToScan()
 		parentsToScan := parentStrat.EstimatedItemsToScan()
 
-		if epsToScan == 0 && parentsToScan == 0 {
-			// This restriction rules out both a match on parent and a match
-			// on endpoint.
-			log.Debugf("Label restriction on label %s rules out both parent and endpoint match.", k)
-			return
-		} else if epsToScan == 0 {
-			// Label matches no endpoints but it does match some parents.
-			// (e.g. a Kubernetes namespace selector).
-			if bestParentStrategy == nil ||
-				idx.estimateParentEndpointScanCount(parentStrat) < bestParentEndpointEstimate {
-				log.Debugf("New best parent strategy: %s", parentStrat)
-				bestParentStrategy = parentStrat
-			}
-		} else if parentsToScan == 0 {
+		if epsToScan > 0 && parentsToScan == 0 {
 			// Label matches no parents, but it does match some endpoints.
 			if epsToScan < bestEPStrategy.EstimatedItemsToScan() {
 				bestEPStrategy = epStrat
 				log.Debugf("New best endpoint strategy: %s (%d)", bestEPStrategy, bestEPStrategy.EstimatedItemsToScan())
 			}
-		} else {
-			// Label matches both endpoints and parents.  This shouldn't
-			// happen in Kubernetes datastore mode since we prefix all
-			// namespace labels and disallow endpoint labels from shadowing
-			// them.  However, in etcd mode (e.g. for OpenStack or raw
-			// CNI) it could happen.
-			//
-			// For now, don't try to optimise this case.
+		} else if epsToScan == 0 && parentsToScan > 0 {
+			// Label matches no endpoints but it does match some parents.
+			// (e.g. a Kubernetes namespace selector).
+			if bestParentStrategy == nil || idx.estimateParentEndpointScanCount(parentStrat) < bestParentEndpointEstimate {
+				log.Debugf("New best parent strategy: %s", parentStrat)
+				bestParentStrategy = parentStrat
+			}
+		} else if parentsToScan > 0 && epsToScan > 0 {
+			// Label matches both endpoints and parents.  This should be rare
+			// in the wild since it's not possible in Kubernetes due to label
+			// prefixing.  For now, don't try to optimise this case.
 			log.WithField("label", k).Debug(
 				"Label applies to both endpoints and parents, cannot do optimised scan.")
+		} else {
+			// This restriction rules out both a match on parent and a match
+			// on endpoint.
+			log.Debugf("Label restriction on label %s rules out both parent and endpoint match.", k)
+			return
 		}
 	}
 

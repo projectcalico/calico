@@ -89,14 +89,16 @@ func (s *SelectorIndex[SelID]) AddSelector(id SelID, selector selector.Selector)
 	// Add it to the main "optimized" index, if possible.
 	optimized := false
 	for label, res := range lr {
-		if res.MustHaveValue != "" {
+		if res.MustHaveOneOfValues != nil {
 			optimized = true
-			values, ok := s.labelToValueToIDs[label]
-			if !ok {
-				values = &valuesSubIndex[SelID]{}
-				s.labelToValueToIDs[label] = values
+			for _, v := range res.MustHaveOneOfValues {
+				values, ok := s.labelToValueToIDs[label]
+				if !ok {
+					values = &valuesSubIndex[SelID]{}
+					s.labelToValueToIDs[label] = values
+				}
+				values.Add(v, id)
 			}
-			values.Add(res.MustHaveValue, id)
 		} else if res.MustBePresent {
 			optimized = true
 			values, ok := s.labelToValueToIDs[label]
@@ -106,6 +108,9 @@ func (s *SelectorIndex[SelID]) AddSelector(id SelID, selector selector.Selector)
 			}
 			values.AddWildcard(id)
 		}
+		// TODO instead of adding all KVs to the index we could just pick one
+		//  using some heuristic (e.g. one with the highest specificity).
+		//  Would need a refactor to handle DeleteSelector too.
 	}
 	if !optimized {
 		// We weren't able to optimise the selector
@@ -123,12 +128,14 @@ func (s *SelectorIndex[SelID]) DeleteSelector(id SelID) {
 	lr := s.labelRestrictions[id]
 	optimized := false
 	for label, res := range lr {
-		if res.MustHaveValue != "" {
+		if res.MustHaveOneOfValues != nil {
 			optimized = true
 			values := s.labelToValueToIDs[label]
-			values.Remove(res.MustHaveValue, id)
-			if values.Empty() {
-				delete(s.labelToValueToIDs, label)
+			for _, v := range res.MustHaveOneOfValues {
+				values.Remove(v, id)
+				if values.Empty() {
+					delete(s.labelToValueToIDs, label)
+				}
 			}
 		} else if res.MustBePresent {
 			optimized = true
