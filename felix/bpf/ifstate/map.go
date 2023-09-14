@@ -26,11 +26,11 @@ import (
 )
 
 func init() {
-	SetMapSize(curVer.MapParameters.MaxEntries)
+	SetMapSize(curVer.MapParams.MaxEntries)
 }
 
 func SetMapSize(size int) {
-	maps.SetSize(curVer.MapParameters.VersionedName(), size)
+	maps.SetSize(curVer.MapParams.VersionedName(), size)
 }
 
 const (
@@ -43,7 +43,7 @@ var flagsToStr = map[uint32]string{
 	FlgReady: "ready",
 }
 
-var MapParams = curVer.MapParameters
+var MapParams = curVer.MapParams
 
 func Map() maps.Map {
 	b := maps.NewPinnedMap(MapParams)
@@ -171,10 +171,10 @@ func MapMemIter(m MapMem) func(k, v []byte) {
 func GetMapParams(version int) maps.MapParameters {
 	switch version {
 	case 2:
-		return v2.MapParameters
+		return v2.MapParams
 	case 3:
-		return curVer.MapParameters
+		return curVer.MapParams
 	default:
-		return curVer.MapParameters
+		return curVer.MapParams
 	}
 }

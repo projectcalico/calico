@@ -25,7 +25,7 @@ const (
 	MaxEntries = 1000
 )
 
-var MapParameters = maps.MapParameters{
+var MapParams = maps.MapParameters{
 	Type:         "hash",
 	KeySize:      KeySize,
 	ValueSize:    ValueSize,
