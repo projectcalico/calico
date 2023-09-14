@@ -78,13 +78,14 @@ void bpf_attr_setup_load_prog(union bpf_attr *attr,
 
 	   int i;
 	   for (i = 0; i < sz; i++) {
+		   if (name[i] == '\0') {
+			   attr->prog_name[i] = '\0';
+			   break;
+		   }
 		   if (isalnum(name[i]) || name[i] == '_' || name[i] == '.')
 			   attr->prog_name[i] = name[i];
 		   else {
 			   attr->prog_name[i] = '_';
-		   }
-		   if (name[i] == '\0') {
-			   break;
 		   }
 	   }
 
