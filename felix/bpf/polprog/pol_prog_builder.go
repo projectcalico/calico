@@ -911,9 +911,9 @@ func (p *Builder) writeIPSetOrMatch(leg matchLeg, ipSets []string) {
 
 		comment := ""
 		if len(ipSets) == 1 {
-			comment = fmt.Sprintf("If %s doesn't match ipset %s, skip to next rule", leg, ipSetID)
+			comment = fmt.Sprintf("If %s doesn't match ipset %s (0x%x), skip to next rule", leg, ipSetID, id)
 		} else {
-			comment = fmt.Sprintf("If %s doesn't match ipset %s, jump to next ipset", leg, ipSetID)
+			comment = fmt.Sprintf("If %s doesn't match ipset %s (0x%x), jump to next ipset", leg, ipSetID, id)
 		}
 		p.b.AddComment(comment)
 
