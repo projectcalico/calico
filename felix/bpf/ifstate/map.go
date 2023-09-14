@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2023 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,24 +19,20 @@ import (
 	"fmt"
 	"strings"
 
-	"golang.org/x/sys/unix"
-
 	"github.com/projectcalico/calico/felix/bpf/maps"
+
+	v2 "github.com/projectcalico/calico/felix/bpf/ifstate/v2"
+	// When adding a new ct version, change curVer to point to the new version
+	curVer "github.com/projectcalico/calico/felix/bpf/ifstate/v3"
 )
 
 func init() {
-	SetMapSize(MapParams.MaxEntries)
+	SetMapSize(curVer.MapParams.MaxEntries)
 }
 
 func SetMapSize(size int) {
-	maps.SetSize(MapParams.VersionedName(), size)
+	maps.SetSize(curVer.MapParams.VersionedName(), size)
 }
-
-const (
-	KeySize    = 4
-	ValueSize  = 4 + 16 + 3*4 + 2*4
-	MaxEntries = 1000
-)
 
 const (
 	FlgWEP   = uint32(0x1)
@@ -48,19 +44,12 @@ var flagsToStr = map[uint32]string{
 	FlgReady: "ready",
 }
 
-var MapParams = maps.MapParameters{
-	Type:         "hash",
-	KeySize:      KeySize,
-	ValueSize:    ValueSize,
-	MaxEntries:   MaxEntries,
-	Name:         "cali_iface",
-	Flags:        unix.BPF_F_NO_PREALLOC,
-	Version:      3,
-	UpdatedByBPF: false,
-}
+var MapParams = curVer.MapParams
 
 func Map() maps.Map {
-	return maps.NewPinnedMap(MapParams)
+	b := maps.NewPinnedMap(MapParams)
+	b.GetMapParams = GetMapParams
+	return b
 }
 
 type Key [4]byte
@@ -91,7 +80,7 @@ func KeyFromBytes(b []byte) Key {
 	return k
 }
 
-type Value [ValueSize]byte
+type Value [curVer.ValueSize]byte
 
 func NewValue(flags uint32, name string, xdpPol, ingressPol, egressPol, tcIngressFilter, tcEgressFilter int) Value {
 	var v Value
@@ -177,5 +166,16 @@ func MapMemIter(m MapMem) func(k, v []byte) {
 		copy(val[:vs], v[:vs])
 
 		m[key] = val
+	}
+}
+
+func GetMapParams(version int) maps.MapParameters {
+	switch version {
+	case 2:
+		return v2.MapParams
+	case 3:
+		return curVer.MapParams
+	default:
+		return curVer.MapParams
 	}
 }
