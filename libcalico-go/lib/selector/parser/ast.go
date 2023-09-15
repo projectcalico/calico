@@ -556,6 +556,9 @@ func (node *OrNode) LabelRestrictions() map[string]LabelRestriction {
 			}
 		}
 	}
+	if len(lr) == 0 {
+		return nil
+	}
 	return lr
 }
 
