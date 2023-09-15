@@ -24,20 +24,30 @@ struct cidr {
 
 // WARNING: must be kept in sync with the definitions in bpf/polprog/pol_prog_builder.go.
 // WARNING: must be kept in sync with the definitions in bpf/ipsets/map.go.
-struct ip4_set_key {
+struct ip_set_key {
 	__u32 mask;
 	__be64 set_id;
-	__be32 addr;
+	ipv46_addr_t addr;
 	__u16 port;
 	__u8 protocol;
 	__u8 pad;
 } __attribute__((packed));
 
-union ip4_set_lpm_key {
+union ip_set_lpm_key {
 	struct bpf_lpm_trie_key lpm;
-	struct ip4_set_key ip;
+	struct ip_set_key ip;
 };
-CALI_MAP_V1(cali_v4_ip_sets, BPF_MAP_TYPE_LPM_TRIE, union ip4_set_lpm_key, __u32, 1024*1024, BPF_F_NO_PREALLOC)
+
+#ifdef IPVER6
+CALI_MAP_NAMED(cali_v6_ip_sets, cali_ip_sets,,
+#else
+CALI_MAP_NAMED(cali_v4_ip_sets, cali_ip_sets,,
+#endif
+	BPF_MAP_TYPE_LPM_TRIE,
+	union ip_set_lpm_key,
+	__u32,
+	1024*1024,
+	BPF_F_NO_PREALLOC)
 
 #define RULE_START(id)
 

@@ -2,8 +2,8 @@
 // Copyright (c) 2020-2023 Tigera, Inc. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
-#ifndef __CALI_NAT4_H__
-#define __CALI_NAT4_H__
+#ifndef __CALI_NAT6_H__
+#define __CALI_NAT6_H__
 
 #include <stddef.h>
 
@@ -110,4 +110,4 @@ static CALI_BPF_INLINE bool vxlan_vni_is_valid(struct cali_tc_ctx *ctx)
 	return *((__u8*)&vxlan->flags) & (1 << 3);
 }
 
-#endif /* __CALI_NAT4_H__ */
+#endif /* __CALI_NAT6_H__ */

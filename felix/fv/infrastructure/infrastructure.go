@@ -109,3 +109,5 @@ func CreateDefaultProfile(c client.Interface, name string, labels map[string]str
 	_, err := c.Profiles().Create(utils.Ctx, d, utils.NoOptions)
 	Expect(err).NotTo(HaveOccurred())
 }
+
+type CreateOption func(DatastoreInfra)

@@ -58,7 +58,13 @@ var arpCmd = &cobra.Command{
 }
 
 func dumpARP() error {
-	arpMap := arp.Map()
+	var arpMap maps.Map
+
+	if ipv6 != nil && *ipv6 {
+		arpMap = arp.MapV6()
+	} else {
+		arpMap = arp.Map()
+	}
 
 	if err := arpMap.Open(); err != nil {
 		return errors.WithMessage(err, "failed to open map")

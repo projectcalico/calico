@@ -25,7 +25,7 @@ int calico_connect_v4(struct bpf_sock_addr *ctx)
 {
 	CALI_DEBUG("calico_connect_v4\n");
 
-	return connect_v4(ctx, &ctx->user_ip4);
+	return connect(ctx, &ctx->user_ip4);
 }
 
 SEC("cgroup/sendmsg4")
