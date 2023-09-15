@@ -15,6 +15,8 @@
 package labelrestrictionindex
 
 import (
+	"math"
+
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/selector"
@@ -88,35 +90,39 @@ func (s *LabelRestrictionIndex[SelID]) AddSelector(id SelID, selector selector.S
 
 	// Store off the selector itself.
 	s.selectorsByID[id] = selector
-	lr := selector.LabelRestrictions()
-	s.labelRestrictions[id] = lr
+	lrs := selector.LabelRestrictions()
+	s.labelRestrictions[id] = lrs
 
-	// Add it to the main "optimized" index, if possible.
+	// Add it to the main "optimized" index, if possible.  We only need to
+	// add one label since _all_ LabelRestrictions must be satisfied.  Try
+	// to pick the most restrictive.
+	labelName := findMostRestrictedLabel(lrs)
 	optimized := false
-	for label, res := range lr {
-		if res.MustHaveOneOfValues != nil {
+	if labelName != "" {
+		res := lrs[labelName]
+		if !res.PossibleToSatisfy() {
+			optimized = true
+		} else if res.MustHaveOneOfValues != nil {
 			optimized = true
 			for _, v := range res.MustHaveOneOfValues {
-				values, ok := s.labelToValueToIDs[label]
+				values, ok := s.labelToValueToIDs[labelName]
 				if !ok {
 					values = &valuesSubIndex[SelID]{}
-					s.labelToValueToIDs[label] = values
+					s.labelToValueToIDs[labelName] = values
 				}
 				values.Add(v, id)
 			}
 		} else if res.MustBePresent {
 			optimized = true
-			values, ok := s.labelToValueToIDs[label]
+			values, ok := s.labelToValueToIDs[labelName]
 			if !ok {
 				values = &valuesSubIndex[SelID]{}
-				s.labelToValueToIDs[label] = values
+				s.labelToValueToIDs[labelName] = values
 			}
 			values.AddWildcard(id)
 		}
-		// TODO instead of adding all KVs to the index we could just pick one
-		//  using some heuristic (e.g. one with the highest specificity).
-		//  Would need a refactor to handle DeleteSelector too.
 	}
+
 	if !optimized {
 		// We weren't able to optimise the selector
 		logrus.Debugf("Unable to optimise selector: %q", selector)
@@ -130,27 +136,33 @@ func (s *LabelRestrictionIndex[SelID]) DeleteSelector(id SelID) {
 	if sel == nil {
 		return
 	}
-	lr := s.labelRestrictions[id]
+	lrs := s.labelRestrictions[id]
+
+	labelName := findMostRestrictedLabel(lrs)
 	optimized := false
-	for label, res := range lr {
-		if res.MustHaveOneOfValues != nil {
+	if labelName != "" {
+		res := lrs[labelName]
+		if !res.PossibleToSatisfy() {
 			optimized = true
-			values := s.labelToValueToIDs[label]
+		} else if res.MustHaveOneOfValues != nil {
+			optimized = true
+			values := s.labelToValueToIDs[labelName]
 			for _, v := range res.MustHaveOneOfValues {
 				values.Remove(v, id)
 				if values.Empty() {
-					delete(s.labelToValueToIDs, label)
+					delete(s.labelToValueToIDs, labelName)
 				}
 			}
 		} else if res.MustBePresent {
 			optimized = true
-			values := s.labelToValueToIDs[label]
+			values := s.labelToValueToIDs[labelName]
 			values.RemoveWildcard(id)
 			if values.Empty() {
-				delete(s.labelToValueToIDs, label)
+				delete(s.labelToValueToIDs, labelName)
 			}
 		}
 	}
+
 	if !optimized {
 		s.unoptimizedIDs.Discard(id)
 	}
@@ -158,6 +170,42 @@ func (s *LabelRestrictionIndex[SelID]) DeleteSelector(id SelID) {
 	delete(s.selectorsByID, id)
 	delete(s.labelRestrictions, id)
 	s.updateGauges()
+}
+
+func findMostRestrictedLabel(lrs map[string]parser.LabelRestriction) string {
+	var bestLabel string
+	var bestScore int = -1
+	for label, res := range lrs {
+		score := scoreLabelRestriction(res)
+		if bestLabel == "" ||
+			score > bestScore ||
+			score == score && label > bestLabel {
+			bestLabel = label
+			bestScore = score
+		}
+	}
+	return bestLabel
+}
+
+func scoreLabelRestriction(lr parser.LabelRestriction) int {
+	if !lr.PossibleToSatisfy() {
+		return math.MaxInt
+	}
+	score := 0
+	if lr.MustBeAbsent {
+		score += 1
+	}
+	if lr.MustBePresent {
+		score += 10
+	}
+	if lr.MustHaveOneOfValues != nil {
+		s := 10000 - len(lr.MustHaveOneOfValues)
+		if s < 100 {
+			s = 100
+		}
+		score += s
+	}
+	return score
 }
 
 // Labeled provides an interface for iterating over a resource's labels

@@ -77,6 +77,16 @@ type LabelRestriction struct {
 	MustHaveOneOfValues []string
 }
 
+func (r LabelRestriction) PossibleToSatisfy() bool {
+	if r.MustBePresent && r.MustBeAbsent {
+		return false
+	}
+	if r.MustHaveOneOfValues != nil && len(r.MustHaveOneOfValues) == 0 {
+		return false
+	}
+	return true
+}
+
 type Visitor interface {
 	Visit(n interface{})
 }
@@ -471,6 +481,9 @@ func (node *AndNode) LabelRestrictions() map[string]LabelRestriction {
 			}
 			lr[ln] = base
 		}
+	}
+	if len(lr) == 0 {
+		return nil
 	}
 	return lr
 }
