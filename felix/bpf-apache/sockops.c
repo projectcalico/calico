@@ -29,7 +29,6 @@ enum bpf_ret_code calico_sockops(struct bpf_sock_ops *skops)
 	struct sock_key key = {};
 	union ip4_bpf_lpm_trie_key sip, dip;
 	__u32 sport, dport;
-	int err;
 
 	switch (skops->op) {
 		case BPF_SOCK_OPS_ACTIVE_ESTABLISHED_CB:
@@ -80,7 +79,7 @@ enum bpf_ret_code calico_sockops(struct bpf_sock_ops *skops)
 		key.envoy_side = 0;
 	}
 
-	err = bpf_sock_hash_update(skops, &calico_sock_map, &key, BPF_ANY);
+	bpf_sock_hash_update(skops, &calico_sock_map, &key, BPF_ANY);
 
 	return BPF_OK;
 }
