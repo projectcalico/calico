@@ -60,7 +60,16 @@ type values[T comparable] struct {
 // Add an item to the index.  Note: its labels will be captured at this
 // time, so if the objects labels are mutated, it is important to remove the
 // item before changing its labels and then re-Add the updated item.
+//
+// To avoid the above bug, panics if the same ID is added twice.
 func (idx *LabelNameValueIndex[ItemID, Item]) Add(id ItemID, item Item) {
+	if _, ok := idx.allValues[id]; ok {
+		logrus.WithFields(logrus.Fields{
+			"id":    id,
+			"item":  item,
+			"index": idx.nameOfTrackedItems,
+		}).Panic("Add called for ID that is already in the index.")
+	}
 	idx.allValues[id] = item
 	for k, v := range item.OwnLabels() {
 		vals, ok := idx.labelNameToValueToIDs[k]
@@ -207,7 +216,7 @@ func (n NoMatchStrategy[T]) EstimatedItemsToScan() int {
 	return 0
 }
 
-func (n NoMatchStrategy[T]) Scan(f func(id T) bool) {
+func (n NoMatchStrategy[T]) Scan(func(id T) bool) {
 }
 
 func (n NoMatchStrategy[T]) Name() string {

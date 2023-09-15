@@ -622,6 +622,8 @@ func (idx *SelectorAndNamedPortIndex) UpdateEndpointOrSet(
 		// If we get here, something about the endpoint has changed.  Calculate the old endpoint's
 		// contribution to the IP sets that it matched.
 		oldIPSetContributions = idx.RecalcCachedContributions(oldEndpointData)
+		// Must remove from the index and then re-add in case the labels
+		// or parents have changed.
 		idx.endpointKVIdx.Remove(id)
 	}
 
@@ -751,6 +753,7 @@ func (idx *SelectorAndNamedPortIndex) UpdateParentLabels(parentID string, labels
 		log.WithField("parentID", parentID).Debug("Skipping no-op update to parent labels")
 		return
 	}
+	// Must remove the parent from the index while we mutate its labels.
 	idx.parentKVIdx.Remove(parentID)
 	oldLabels := parentData.labels
 	idx.updateParent(
@@ -764,7 +767,7 @@ func (idx *SelectorAndNamedPortIndex) UpdateParentLabels(parentID string, labels
 			parentData.labels = oldLabels
 		},
 	)
-	idx.parentKVIdx.Add(parentID, parentData) // FIXME need to remove/re-add for correctness
+	idx.parentKVIdx.Add(parentID, parentData)
 }
 
 func (idx *SelectorAndNamedPortIndex) updateParent(parentData *npParentData, applyUpdate, revertUpdate func()) {
