@@ -112,6 +112,17 @@ func (kp *KubeProxy) Stop() {
 
 func (kp *KubeProxy) run(hostIPs []net.IP) error {
 
+	ips := make([]net.IP, 0, len(hostIPs))
+	for _, ip := range hostIPs {
+		if kp.ipFamily == 4 && ip.To4() != nil {
+			ips = append(ips, ip)
+		} else if kp.ipFamily == 6 && ip.To4() == nil {
+			ips = append(ips, ip)
+		}
+	}
+
+	hostIPs = ips
+
 	kp.lock.Lock()
 	defer kp.lock.Unlock()
 

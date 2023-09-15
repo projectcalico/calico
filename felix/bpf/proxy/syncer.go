@@ -438,7 +438,7 @@ func (s *Syncer) addActiveEps(id uint32, svc k8sp.ServicePort, eps []k8sp.Endpoi
 }
 
 func (s *Syncer) applyExpandedNP(sname k8sp.ServicePortName, sinfo k8sp.ServicePort,
-	eps []k8sp.Endpoint, node ip.V4Addr, nport int) error {
+	eps []k8sp.Endpoint, node ip.Addr, nport int) error {
 	skey := getSvcKey(sname, getSvcKeyExtra(svcTypeNodePortRemote, node.String()))
 	si := serviceInfoFromK8sServicePort(sinfo)
 	si.clusterIP = node.AsNetIP()
@@ -478,15 +478,15 @@ func (s *Syncer) expandNodePorts(
 	eps []k8sp.Endpoint,
 	nport int,
 	rtLookup func(addr ip.Addr) (routes.ValueInterface, bool),
-) (map[ip.V4Addr][]k8sp.Endpoint, *expandMiss) {
-	ipToEp := make(map[ip.V4Addr][]k8sp.Endpoint)
+) (map[ip.Addr][]k8sp.Endpoint, *expandMiss) {
+	ipToEp := make(map[ip.Addr][]k8sp.Endpoint)
 	var miss *expandMiss
 	for _, ep := range eps {
-		ipv4 := ip.FromString(ep.IP()).(ip.V4Addr)
+		ipa := ip.FromString(ep.IP())
 
-		rt, ok := rtLookup(ipv4)
+		rt, ok := rtLookup(ipa)
 		if !ok {
-			log.Errorf("No route for %s", ipv4)
+			log.Errorf("No route for %s", ipa)
 			if miss == nil {
 				miss = &expandMiss{
 					sname: sname,
@@ -501,11 +501,11 @@ func (s *Syncer) expandNodePorts(
 		flags := rt.Flags()
 		// Include only remote workloads.
 		if flags&routes.FlagWorkload != 0 && flags&routes.FlagLocal == 0 {
-			nodeIP := rt.NextHop().(ip.V4Addr)
+			nodeIP := rt.NextHop()
 
 			ipToEp[nodeIP] = append(ipToEp[nodeIP], ep)
 			if log.GetLevel() >= log.DebugLevel {
-				log.Debugf("found rt %s for remote dest %s", nodeIP, ipv4)
+				log.Debugf("found rt %s for remote dest %s", nodeIP, ipa)
 			}
 		}
 	}
