@@ -25,11 +25,10 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
-	"k8s.io/client-go/tools/clientcmd"
 
 	"github.com/projectcalico/calico/confd/pkg/resource/template"
+	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 )
 
 const (
@@ -73,11 +72,17 @@ func NewRouteGenerator(c *client) (rg *routeGenerator, err error) {
 	// set up k8s client
 	// attempt 1: KUBECONFIG env var
 	cfgFile := os.Getenv("KUBECONFIG")
-	cfg, err := clientcmd.BuildConfigFromFlags("", cfgFile)
+	// Host env vars may override the container on Windows HPC, so $env:KUBECONFIG cannot
+	// be trusted in this case
+	// FIXME: this will no longer be needed when containerd v1.6 is EOL'd
+	if winutils.InHostProcessContainer() {
+		cfgFile = ""
+	}
+	cfg, err := winutils.BuildConfigFromFlags("", cfgFile)
 	if err != nil {
 		log.WithError(err).Info("KUBECONFIG environment variable not found, attempting in-cluster")
 		// attempt 2: in cluster config
-		if cfg, err = rest.InClusterConfig(); err != nil {
+		if cfg, err = winutils.GetInClusterConfig(); err != nil {
 			return
 		}
 	}

@@ -1203,6 +1203,7 @@ release-dev-image-arch-to-registry-%:
 	$(CRANE) cp $(DEV_REGISTRY)/$(BUILD_IMAGE):$(DEV_TAG)-$* $(RELEASE_REGISTRY)/$(BUILD_IMAGE):$(RELEASE_TAG)-$*$(double_quote)
 
 # release-prereqs checks that the environment is configured properly to create a release.
+.PHONY: release-prereqs
 release-prereqs:
 ifndef VERSION
 	$(error VERSION is undefined - run using make release VERSION=vX.Y.Z)
@@ -1389,3 +1390,37 @@ help:
 	@echo "CALICO_BUILD:		$(CALICO_BUILD)"
 	@echo "-----------------------------------------------------------"
 
+###############################################################################
+# Common functions for building windows images.
+###############################################################################
+
+CRANE_BINDMOUNT_CMD := \
+	docker run --rm \
+		--net=host \
+		--init \
+		--entrypoint /bin/sh \
+		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
+		-v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
+		-v $(DOCKER_CONFIG):/root/.docker/config.json \
+		-w /go/src/$(PACKAGE_NAME) \
+		$(CALICO_BUILD) -c $(double_quote)crane
+
+DOCKER_MANIFEST_CMD := docker manifest
+
+ifdef CONFIRM
+CRANE_BINDMOUNT = $(CRANE_BINDMOUNT_CMD)
+DOCKER_MANIFEST = $(DOCKER_MANIFEST_CMD)
+else
+CRANE_BINDMOUNT = echo [DRY RUN] $(CRANE_BINDMOUNT_CMD)
+DOCKER_MANIFEST = echo [DRY RUN] $(DOCKER_MANIFEST_CMD)
+endif
+
+# Clean up the docker builder used to create Windows image tarballs.
+.PHONY: clean-windows-builder
+clean-windows-builder:
+	-docker buildx rm calico-windows-builder
+
+# Set up the docker builder used to create Windows image tarballs.
+.PHONY: setup-windows-builder
+setup-windows-builder: clean-windows-builder
+	docker buildx create --name=calico-windows-builder --use --platform windows/amd64
