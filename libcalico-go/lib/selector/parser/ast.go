@@ -61,8 +61,19 @@ type Selector interface {
 }
 
 type LabelRestriction struct {
-	MustBePresent       bool
-	MustBeAbsent        bool
+	// MustBePresent is true if this label must be present for the selector to
+	// match. For example "has(labelName)" or "labelName == 'foo'"
+	MustBePresent bool
+	// MustBeAbsent is true if this label must be absent for this selector to
+	// match. For example "!has(labelName)".
+	MustBeAbsent bool
+	// MustHaveOneOfValues if non-nil, indicates that the label must have one
+	// of the listed values in order to match the selector.
+	//
+	// If nil, no such restriction is known.  For example "has(labelName)"
+	//
+	// Note: non-nil empty slice means "selector cannot match anything". For
+	// example an inconsistent selector such as: "a == 'B' && a == 'C'"
 	MustHaveOneOfValues []string
 }
 
