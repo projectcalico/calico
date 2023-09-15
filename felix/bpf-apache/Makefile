@@ -19,9 +19,6 @@ CFLAGS +=  \
 	-x c \
 	-D__KERNEL__ \
 	-D__ASM_SYSREG_H \
-	-Wno-unused-value \
-	-Wno-pointer-sign \
-	-Wno-compare-distinct-pointer-types \
 	-Wunused \
 	-Wall \
 	-Werror \
@@ -34,8 +31,8 @@ CFLAGS +=  \
 TRIPLET := $(shell gcc -dumpmachine)
 CFLAGS += -I/usr/include/$(TRIPLET)
 
-CC := clang-12
-LD := llc-12
+CC := clang-15
+LD := llc-15
 
 C_FILES:=filter.c redir.c sockops.c
 OBJS:=$(addprefix bin/,$(C_FILES:.c=.o))
