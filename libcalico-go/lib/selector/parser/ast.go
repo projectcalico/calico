@@ -466,11 +466,10 @@ func (node *AndNode) LabelRestrictions() map[string]LabelRestriction {
 
 func intersectStringSlicesInPlace(a []string, b []string) []string {
 	out := a[:0]
+	bSet := ConvertToStringSetInPlace(b)
 	for _, v1 := range a {
-		for _, v2 := range b {
-			if v1 == v2 {
-				out = append(out, v1)
-			}
+		if bSet.Contains(v1) {
+			out = append(out, v1)
 		}
 	}
 	return out
@@ -537,14 +536,13 @@ func (node *OrNode) LabelRestrictions() map[string]LabelRestriction {
 }
 
 func unionStringSlicesInPlace(a []string, b []string) []string {
-outer:
+	// aSet will share storage with a, but when we append to a, it doesn't
+	// affect aSet.
+	aSet := ConvertToStringSetInPlace(a)
 	for _, v := range b {
-		for _, v2 := range a {
-			if v == v2 {
-				continue outer
-			}
+		if !aSet.Contains(v) {
+			a = append(a, v)
 		}
-		a = append(a, v)
 	}
 	return a
 }
