@@ -19,8 +19,8 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/clientcmd"
 
+	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 	"github.com/projectcalico/calico/node/pkg/lifecycle/utils"
 )
 
@@ -43,7 +43,14 @@ func Run() {
 	var clientset *kubernetes.Clientset
 
 	// If running under kubernetes with secrets to call k8s API
-	if config, err := clientcmd.BuildConfigFromFlags("", os.Getenv("KUBECONFIG")); err == nil {
+	kubeconfig := os.Getenv("KUBECONFIG")
+	// Host env vars may override the container on Windows HPC, so $env:KUBECONFIG cannot
+	// be trusted in this case
+	// FIXME: this will no longer be needed when containerd v1.6 is EOL'd
+	if winutils.InHostProcessContainer() {
+		kubeconfig = ""
+	}
+	if config, err := winutils.BuildConfigFromFlags("", kubeconfig); err == nil {
 		// default timeout is 30 seconds, which isn't appropriate for this kind of
 		// shutdown action because network services, like kube-proxy might not be
 		// running and we don't want to block the full 30 seconds if they are just
