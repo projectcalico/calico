@@ -16,7 +16,6 @@ package labelnamevalueindex
 
 import (
 	"fmt"
-	"sort"
 
 	"github.com/sirupsen/logrus"
 
@@ -181,7 +180,8 @@ type ScanStrategy[T any] interface {
 
 	// Scan executes the scan. It calls the given func once with each ID
 	// produced by the scan.  Each ID is only emitted once (the strategy is
-	// responsible for any deduplication).
+	// responsible for any deduplication).  Scanning continues while the func
+	// returns true.
 	Scan(func(id T) bool)
 
 	fmt.Stringer
@@ -223,7 +223,9 @@ func (k LabelNameSingleValueStrategy[T]) EstimatedItemsToScan() int {
 func (k LabelNameSingleValueStrategy[T]) Scan(f func(id T) bool) {
 	// Ideal case, we have one set to scan.
 	k.idSet.Iter(func(id T) error {
-		f(id)
+		if !f(id) {
+			return set.StopIteration
+		}
 		return nil
 	})
 }
@@ -251,42 +253,7 @@ func (k LabelNameMultiValueStrategy[T]) EstimatedItemsToScan() int {
 }
 
 func (k LabelNameMultiValueStrategy[T]) Scan(f func(id T) bool) {
-	if len(k.idSets) < 5 {
-		// We only have a few sets, avoid allocating a "seen" set, which
-		// could end up being large if the largest set is large.
-		sort.Slice(k.idSets, func(i, j int) bool {
-			// Sort biggest set first so that we have fewer callbacks from the
-			// later sets.
-			return k.idSets[j].Len() < k.idSets[i].Len()
-		})
-		for i, s1 := range k.idSets {
-			s1.Iter(func(item T) error {
-				// To check if we've seen this item before, look for it in
-				// the sets we've already scanned.
-				for j := 0; j < i; j++ {
-					if k.idSets[j].Contains(item) {
-						return nil
-					}
-				}
-				f(item)
-				return nil
-			})
-		}
-		return
-	}
-
-	// We have a lot of sets, allocate a set to keep track of what we've seen.
-	seen := set.New[T]()
-	for i, s := range k.idSets {
-		s.Iter(func(item T) error {
-			if i != 0 && seen.Contains(item) {
-				return nil
-			}
-			f(item)
-			seen.Add(item)
-			return nil
-		})
-	}
+	set.IterUnion(k.idSets, f)
 }
 
 // LabelNameStrategy is a ScanStrategy that scans all object that have a
@@ -307,10 +274,17 @@ func (k LabelNameStrategy[T]) EstimatedItemsToScan() int {
 
 func (k LabelNameStrategy[T]) Scan(f func(id T) bool) {
 	for _, epIDs := range k.values.m {
+		stop := false
 		epIDs.Iter(func(id T) error {
-			f(id)
+			if !f(id) {
+				stop = true
+				return set.StopIteration
+			}
 			return nil
 		})
+		if stop {
+			return
+		}
 	}
 }
 
@@ -330,6 +304,8 @@ func (a AllStrategy[T, V]) EstimatedItemsToScan() int {
 
 func (a AllStrategy[T, V]) Scan(f func(id T) bool) {
 	for id := range a.allValues {
-		f(id)
+		if !f(id) {
+			return
+		}
 	}
 }
