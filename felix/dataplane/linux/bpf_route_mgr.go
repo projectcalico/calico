@@ -169,7 +169,7 @@ func newBPFRouteManager(config *Config, maps *bpfmap.Maps,
 
 		opReporter: opReporter,
 
-		wgEnabled:   config.Wireguard.Enabled,
+		wgEnabled:   config.Wireguard.Enabled || config.Wireguard.EnabledV6,
 		ipv6Enabled: config.BPFIpv6Enabled,
 	}
 
