@@ -21,7 +21,6 @@ enum sk_action calico_sk_msg(struct sk_msg_md *msg)
 {
 	struct sock_key key = {};
 	__u32 sip, sport, dip, dport;
-	int err;
 
 	dip = msg->remote_ip4;
 	sip = msg->local_ip4;
@@ -52,7 +51,7 @@ enum sk_action calico_sk_msg(struct sk_msg_md *msg)
 		key.envoy_side = 1;
 	}
 
-	err = bpf_msg_redirect_hash(msg, &calico_sock_map, &key, BPF_REDIR_INGRESS);
+	bpf_msg_redirect_hash(msg, &calico_sock_map, &key, BPF_REDIR_INGRESS);
 
 	// If the packet couldn't be redirected, pass it to the rest of the
 	// stack.
