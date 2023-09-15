@@ -89,7 +89,11 @@ __KUBERNETES_ROUTE_POLICIES__
 
 // Perform replacement of windows variables
 func replacePlatformSpecificVars(c config, netconf string) string {
-	kubeconfigPath := filepath.Join("c:", strings.TrimLeft(c.CNINetDir, "c:"), "/calico-kubeconfig")
+	cniNetDir := c.CNINetDir
+	if !(strings.HasPrefix(cniNetDir, "c:") || strings.HasPrefix(cniNetDir, "C:")) {
+		cniNetDir = filepath.Join("c:", cniNetDir)
+	}
+	kubeconfigPath := filepath.Join(cniNetDir, "/calico-kubeconfig")
 	kubeconfigPath = filepath.ToSlash(kubeconfigPath)
 	netconf = strings.Replace(netconf, "__KUBECONFIG_FILEPATH__", kubeconfigPath, -1)
 

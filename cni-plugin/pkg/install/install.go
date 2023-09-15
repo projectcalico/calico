@@ -440,6 +440,7 @@ func copyFileAndPermissions(src, dst string) (err error) {
 	}
 
 	if runtime.GOOS == "windows" {
+		logrus.Debug("chmod doesn't work on windows, skipping setting permissions")
 		// chmod doesn't work on windows
 		return
 	}
@@ -507,6 +508,7 @@ current-context: calico-context`
 func setSuidBit(file string) error {
 	if runtime.GOOS == "windows" {
 		// chmod doesn't work on windows
+		logrus.Debug("chmod doesn't work on windows, skipping setSuidBit()")
 		return nil
 	}
 	fi, err := os.Stat(file)

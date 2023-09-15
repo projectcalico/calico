@@ -29,7 +29,7 @@ func WatchExtensionAuth(stopChan chan struct{}) (bool, error) {
 	// set up k8s client
 	// attempt 1: KUBECONFIG env var
 	cfgFile := os.Getenv("KUBECONFIG")
-	// Host env vars bleed through to the container on Windows HPC, so if cannot
+	// Host env vars may override the container on Windows HPC, so $env:KUBECONFIG cannot
 	// be trusted in this case
 	// FIXME: this will no longer be needed when containerd v1.6 is EOL'd
 	if winutils.InHostProcessContainer() {

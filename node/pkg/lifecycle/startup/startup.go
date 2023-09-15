@@ -131,7 +131,7 @@ func Run() {
 
 	// If running under kubernetes with secrets to call k8s API
 	kubeconfig := os.Getenv("KUBECONFIG")
-	// Host env vars bleed through to the container on Windows HPC, so if cannot
+	// Host env vars may override the container on Windows HPC, so $env:KUBECONFIG cannot
 	// be trusted in this case
 	// FIXME: this will no longer be needed when containerd v1.6 is EOL'd
 	if winutils.InHostProcessContainer() {
@@ -338,7 +338,7 @@ func MonitorIPAddressSubnets() {
 		k8sNodeName = nodeRef
 	}
 	kubeconfig := os.Getenv("KUBECONFIG")
-	// Host env vars bleed through to the container on Windows HPC, so if cannot
+	// Host env vars may override the container on Windows HPC, so $env:KUBECONFIG cannot
 	// be trusted in this case
 	// FIXME: this will no longer be needed when containerd v1.6 is EOL'd
 	if winutils.InHostProcessContainer() {
