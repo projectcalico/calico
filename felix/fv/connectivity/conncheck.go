@@ -234,7 +234,12 @@ func (c *Checker) ActualConnectivity(isARetry bool) ([]*Result, []string) {
 
 			if res != nil {
 				if c.CheckSNAT {
-					srcIP := strings.Split(res.LastResponse.SourceAddr, ":")[0]
+					var srcIP string
+					if res.LastResponse.SourceAddr != "" && res.LastResponse.SourceAddr[0] == '[' {
+						srcIP = strings.Split(res.LastResponse.SourceAddr[1:], "]")[0]
+					} else {
+						srcIP = strings.Split(res.LastResponse.SourceAddr, ":")[0]
+					}
 					pretty[i] += " (from " + srcIP + ")"
 				}
 				if res.ClientMTU.Start != 0 {
@@ -439,7 +444,11 @@ type Response struct {
 }
 
 func (r *Response) SourceIP() string {
-	return strings.Split(r.SourceAddr, ":")[0]
+	if r.SourceAddr[0] != '[' {
+		return strings.Split(r.SourceAddr, ":")[0]
+	}
+
+	return strings.Split(r.SourceAddr[1:], "]")[0]
 }
 
 type ConnectionTarget interface {
