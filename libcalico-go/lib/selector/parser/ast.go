@@ -281,7 +281,8 @@ func (node *LabelInSetNode) Evaluate(labels Labels) bool {
 func (node *LabelInSetNode) LabelRestrictions() map[string]LabelRestriction {
 	return map[string]LabelRestriction{
 		node.LabelName: {
-			MustBePresent: true,
+			MustBePresent:       true,
+			MustHaveOneOfValues: node.Value.SliceCopy(),
 		},
 	}
 }

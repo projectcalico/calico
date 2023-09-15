@@ -50,6 +50,12 @@ func (ss StringSet) Contains(s string) bool {
 	return ss[minIdx] == s
 }
 
+func (ss StringSet) SliceCopy() []string {
+	cp := make([]string, len(ss), len(ss))
+	copy(cp, ss)
+	return cp
+}
+
 func ConvertToStringSetInPlace(s []string) StringSet {
 	if s != nil {
 		sort.Strings(s)
