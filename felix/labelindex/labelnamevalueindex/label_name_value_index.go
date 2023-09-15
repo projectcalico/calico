@@ -140,8 +140,17 @@ func (idx *LabelNameValueIndex[ItemID, Item]) StrategyFor(labelName string, r pa
 		return NoMatchStrategy[ItemID]{}
 	}
 
-	// We have some potential matches on label and value.
-	return LabelNameValueStrategy[ItemID]{
+	if len(filteredMustHaves) == 1 {
+		// Best case: we got exactly one label value.
+		return LabelNameSingleValueStrategy[ItemID]{
+			label: labelName,
+			value: filteredMustHaves[0],
+			idSet: idSets[0],
+		}
+	}
+
+	// We have matches on label and more than one value.
+	return LabelNameMultiValueStrategy[ItemID]{
 		label:  labelName,
 		values: filteredMustHaves,
 		idSets: idSets,
@@ -194,20 +203,44 @@ func (n NoMatchStrategy[T]) EstimatedItemsToScan() int {
 func (n NoMatchStrategy[T]) Scan(f func(id T) bool) {
 }
 
-// LabelNameValueStrategy is a ScanStrategy that scans over items that have
-// specific, values for a certain label.  It is the narrowest, most optimized
+// LabelNameSingleValueStrategy is a ScanStrategy that scans over items that have
+// a specific value for a certain label.  It is the narrowest, most optimized
 // strategy.
-type LabelNameValueStrategy[T comparable] struct {
+type LabelNameSingleValueStrategy[T comparable] struct {
+	label string
+	value string
+	idSet set.Set[T]
+}
+
+func (k LabelNameSingleValueStrategy[T]) String() string {
+	return fmt.Sprintf("scan single label %s=%v", k.label, k.value)
+}
+
+func (k LabelNameSingleValueStrategy[T]) EstimatedItemsToScan() int {
+	return k.idSet.Len()
+}
+
+func (k LabelNameSingleValueStrategy[T]) Scan(f func(id T) bool) {
+	// Ideal case, we have one set to scan.
+	k.idSet.Iter(func(id T) error {
+		f(id)
+		return nil
+	})
+}
+
+// LabelNameMultiValueStrategy is a ScanStrategy that scans over items that have
+// specific, values for a certain label.
+type LabelNameMultiValueStrategy[T comparable] struct {
 	label  string
 	values []string
 	idSets []set.Set[T]
 }
 
-func (k LabelNameValueStrategy[T]) String() string {
+func (k LabelNameMultiValueStrategy[T]) String() string {
 	return fmt.Sprintf("scan multi label %s=%v", k.label, k.values)
 }
 
-func (k LabelNameValueStrategy[T]) EstimatedItemsToScan() int {
+func (k LabelNameMultiValueStrategy[T]) EstimatedItemsToScan() int {
 	count := 0
 	for _, s := range k.idSets {
 		// Over counts if one object is in multiple sets, but Scan() needs
@@ -217,16 +250,7 @@ func (k LabelNameValueStrategy[T]) EstimatedItemsToScan() int {
 	return count
 }
 
-func (k LabelNameValueStrategy[T]) Scan(f func(id T) bool) {
-	if len(k.idSets) == 1 {
-		// Ideal case, we have one set to scan.
-		k.idSets[0].Iter(func(id T) error {
-			f(id)
-			return nil
-		})
-		return
-	}
-
+func (k LabelNameMultiValueStrategy[T]) Scan(f func(id T) bool) {
 	if len(k.idSets) < 5 {
 		// We only have a few sets, avoid allocating a "seen" set, which
 		// could end up being large if the largest set is large.
