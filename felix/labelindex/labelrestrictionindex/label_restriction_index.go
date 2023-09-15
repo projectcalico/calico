@@ -47,15 +47,15 @@ type LabelRestrictionIndex[SelID comparable] struct {
 	// to avoid allocation.
 	scratchSet set.Set[SelID]
 
-	gaugeTotalSelectors       Gauge
+	gaugeOptimizedSelectors   Gauge
 	gaugeUnoptimizedSelectors Gauge
 }
 
 type Option[SelID comparable] func(index *LabelRestrictionIndex[SelID])
 
-func WithGauges[SelID comparable](totalSelectors, unoptimisedSelectors Gauge) Option[SelID] {
+func WithGauges[SelID comparable](optimizedSelectors, unoptimisedSelectors Gauge) Option[SelID] {
 	return func(index *LabelRestrictionIndex[SelID]) {
-		index.gaugeTotalSelectors = totalSelectors
+		index.gaugeOptimizedSelectors = optimizedSelectors
 		index.gaugeUnoptimizedSelectors = unoptimisedSelectors
 	}
 }
@@ -68,13 +68,17 @@ type Gauge interface {
 }
 
 func New[SelID comparable](opts ...Option[SelID]) *LabelRestrictionIndex[SelID] {
-	return &LabelRestrictionIndex[SelID]{
+	idx := &LabelRestrictionIndex[SelID]{
 		selectorsByID:     map[SelID]selector.Selector{},
 		labelRestrictions: map[SelID]map[string]parser.LabelRestriction{},
 		labelToValueToIDs: map[string]*valuesSubIndex[SelID]{},
 		unoptimizedIDs:    set.New[SelID](),
 		scratchSet:        set.New[SelID](),
 	}
+	for _, o := range opts {
+		o(idx)
+	}
+	return idx
 }
 
 func (s *LabelRestrictionIndex[SelID]) AddSelector(id SelID, selector selector.Selector) {
@@ -201,8 +205,8 @@ func (s *LabelRestrictionIndex[SelID]) IterPotentialMatches(labels Labeled, f fu
 }
 
 func (s *LabelRestrictionIndex[SelID]) updateGauges() {
-	if s.gaugeTotalSelectors != nil {
-		s.gaugeTotalSelectors.Set(float64(len(s.selectorsByID)))
+	if s.gaugeOptimizedSelectors != nil {
+		s.gaugeOptimizedSelectors.Set(float64(len(s.selectorsByID) - s.unoptimizedIDs.Len()))
 	}
 	if s.gaugeUnoptimizedSelectors != nil {
 		s.gaugeUnoptimizedSelectors.Set(float64(s.unoptimizedIDs.Len()))
