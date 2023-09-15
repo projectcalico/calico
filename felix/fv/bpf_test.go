@@ -1521,10 +1521,10 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								Action: "Allow",
 								Source: api.EntityRule{
 									Nets: []string{
-										externalClient.IP + "/32",
-										w[0][1].IP + "/32",
-										w[1][0].IP + "/32",
-										w[1][1].IP + "/32",
+										containerIP(externalClient) + "/" + ipMask(),
+										w[0][1].IP + "/" + ipMask(),
+										w[1][0].IP + "/" + ipMask(),
+										w[1][1].IP + "/" + ipMask(),
 									},
 								},
 							},
@@ -2626,6 +2626,10 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					testSvcName := "test-service"
 					testSvcExtIP0 := "10.123.0.0"
 					testSvcExtIP1 := "10.123.0.1"
+					if testOpts.ipv6 {
+						testSvcExtIP0 = net.ParseIP("dead:beef::123:0:0:0").String()
+						testSvcExtIP1 = net.ParseIP("dead:beef::123:0:0:1").String()
+					}
 
 					BeforeEach(func() {
 						k8sClient := infra.(*infrastructure.K8sDatastoreInfra).K8sClient
@@ -2751,7 +2755,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 									{
 										Action: "Allow",
 										Source: api.EntityRule{
-											Nets: []string{testSvcExtIP0 + "/32", testSvcExtIP1 + "/32"},
+											Nets: []string{testSvcExtIP0 + "/" + ipMask(), testSvcExtIP1 + "/" + ipMask()},
 										},
 									},
 								}
@@ -2768,16 +2772,25 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								hostW0SrcIP := ExpectWithSrcIPs(node0IP)
 								hostW1SrcIP := ExpectWithSrcIPs(node1IP)
 
-								switch testOpts.tunnel {
-								case "ipip":
-									if testOpts.connTimeEnabled {
-										hostW0SrcIP = ExpectWithSrcIPs(tc.Felixes[0].ExpectedIPIPTunnelAddr)
+								if testOpts.ipv6 {
+									switch testOpts.tunnel {
+									case "wireguard":
+										hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedWireguardV6TunnelAddr)
+									case "vxlan":
+										hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedVXLANV6TunnelAddr)
 									}
-									hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedIPIPTunnelAddr)
-								case "wireguard":
-									hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedWireguardTunnelAddr)
-								case "vxlan":
-									hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedVXLANTunnelAddr)
+								} else {
+									switch testOpts.tunnel {
+									case "ipip":
+										if testOpts.connTimeEnabled {
+											hostW0SrcIP = ExpectWithSrcIPs(tc.Felixes[0].ExpectedIPIPTunnelAddr)
+										}
+										hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedIPIPTunnelAddr)
+									case "wireguard":
+										hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedWireguardTunnelAddr)
+									case "vxlan":
+										hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedVXLANTunnelAddr)
+									}
 								}
 
 								ports := ExpectWithPorts(npPort)
@@ -2799,15 +2812,28 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								// IPs do not interfere with the workaround and vise
 								// versa.
 								By("Setting ExternalIPs")
-								tc.Felixes[0].Exec("ip", "addr", "add", testSvcExtIP0+"/32", "dev", "eth0")
-								tc.Felixes[1].Exec("ip", "addr", "add", testSvcExtIP1+"/32", "dev", "eth0")
+								tc.Felixes[0].Exec("ip", "addr", "add", testSvcExtIP0+"/"+ipMask(), "dev", "eth0")
+								tc.Felixes[1].Exec("ip", "addr", "add", testSvcExtIP1+"/"+ipMask(), "dev", "eth0")
+
+								ipRoute := []string{"ip"}
+								if testOpts.ipv6 {
+									ipRoute = append(ipRoute, "-6")
+								}
 
 								// The external IPs must be routable
 								By("Setting routes for the ExternalIPs")
-								tc.Felixes[0].Exec("ip", "route", "add", testSvcExtIP1+"/32", "via", felixIP(1))
-								tc.Felixes[1].Exec("ip", "route", "add", testSvcExtIP0+"/32", "via", felixIP(0))
-								externalClient.Exec("ip", "route", "add", testSvcExtIP1+"/32", "via", felixIP(1))
-								externalClient.Exec("ip", "route", "add", testSvcExtIP0+"/32", "via", felixIP(0))
+								cmd := append(ipRoute[:len(ipRoute):len(ipRoute)],
+									"route", "add", testSvcExtIP1+"/"+ipMask(), "via", felixIP(1))
+								tc.Felixes[0].Exec(cmd...)
+								cmd = append(ipRoute[:len(ipRoute):len(ipRoute)],
+									"route", "add", testSvcExtIP0+"/"+ipMask(), "via", felixIP(0))
+								tc.Felixes[1].Exec(cmd...)
+								cmd = append(ipRoute[:len(ipRoute):len(ipRoute)],
+									"route", "add", testSvcExtIP1+"/"+ipMask(), "via", felixIP(1))
+								externalClient.Exec(cmd...)
+								cmd = append(ipRoute[:len(ipRoute):len(ipRoute)],
+									"route", "add", testSvcExtIP0+"/"+ipMask(), "via", felixIP(0))
+								externalClient.Exec(cmd...)
 
 								By("Allow ingress from external client", func() {
 									pol = api.NewGlobalNetworkPolicy()
@@ -2817,7 +2843,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 										{
 											Action: "Allow",
 											Source: api.EntityRule{
-												Nets: []string{externalClient.IP + "/32"},
+												Nets: []string{containerIP(externalClient) + "/" + ipMask()},
 											},
 										},
 									}
@@ -2834,16 +2860,32 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								hostW1SrcIP := ExpectWithSrcIPs(node1IP)
 								hostW11SrcIP := ExpectWithSrcIPs(testSvcExtIP1)
 
-								switch testOpts.tunnel {
-								case "ipip":
-									hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedIPIPTunnelAddr)
-									hostW11SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedIPIPTunnelAddr)
-								case "wireguard":
-									hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedWireguardTunnelAddr)
-									hostW11SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedWireguardTunnelAddr)
-								case "vxlan":
-									hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedVXLANTunnelAddr)
-									hostW11SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedVXLANTunnelAddr)
+								if testOpts.ipv6 {
+									switch testOpts.tunnel {
+									case "none":
+										hostW0SrcIP = ExpectWithSrcIPs(testSvcExtIP0)
+										hostW1SrcIP = ExpectWithSrcIPs(testSvcExtIP1)
+									case "wireguard":
+										hostW0SrcIP = ExpectWithSrcIPs(testSvcExtIP0)
+										hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedWireguardV6TunnelAddr)
+										hostW11SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedWireguardV6TunnelAddr)
+									case "vxlan":
+										hostW0SrcIP = ExpectWithSrcIPs(testSvcExtIP0)
+										hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedVXLANV6TunnelAddr)
+										hostW11SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedVXLANV6TunnelAddr)
+									}
+								} else {
+									switch testOpts.tunnel {
+									case "ipip":
+										hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedIPIPTunnelAddr)
+										hostW11SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedIPIPTunnelAddr)
+									case "wireguard":
+										hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedWireguardTunnelAddr)
+										hostW11SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedWireguardTunnelAddr)
+									case "vxlan":
+										hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedVXLANTunnelAddr)
+										hostW11SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedVXLANTunnelAddr)
+									}
 								}
 
 								ports := ExpectWithPorts(80)
