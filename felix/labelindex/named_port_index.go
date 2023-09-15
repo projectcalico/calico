@@ -165,6 +165,28 @@ func (d *endpointData) OwnLabels() map[string]string {
 }
 
 func (d *endpointData) IterOwnAndParentLabels(f func(k, v string)) {
+	if len(d.parents) < 3 {
+		for k, v := range d.labels {
+			f(k, v)
+		}
+		for i, parent := range d.parents {
+		outer:
+			for k, v := range parent.labels {
+				if _, ok := d.labels[k]; ok {
+					continue
+				}
+				for _, p := range d.parents[:i] {
+					if _, ok := p.labels[k]; ok {
+						continue outer
+					}
+				}
+				// Non-shadowed parent label. Emit.
+				f(k, v)
+			}
+		}
+		return
+	}
+
 	seenKeys := set.New[string]()
 	for k, v := range d.labels {
 		f(k, v)
