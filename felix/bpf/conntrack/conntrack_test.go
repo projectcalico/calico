@@ -82,7 +82,7 @@ var _ = Describe("BPF Conntrack LivenessCalculator", func() {
 		Expect(mockTime.KTimeNanos()).To(BeNumerically("==", now))
 		ctMap = mock.NewMockMap(conntrack.MapParams)
 		lc = conntrack.NewLivenessScanner(timeouts, false, conntrack.WithTimeShim(mockTime))
-		scanner = conntrack.NewScanner(ctMap, lc)
+		scanner = conntrack.NewScanner(ctMap, conntrack.KeyFromBytes, conntrack.ValueFromBytes, lc)
 	})
 
 	DescribeTable(
