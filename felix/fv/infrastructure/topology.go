@@ -91,7 +91,7 @@ func DefaultTopologyOptions() TopologyOptions {
 	}
 	return TopologyOptions{
 		FelixLogSeverity:  felixLogLevel,
-		EnableIPv6:        true,
+		EnableIPv6:        false,
 		BPFEnableIPv6:     false,
 		ExtraEnvVars:      map[string]string{},
 		ExtraVolumes:      map[string]string{},
