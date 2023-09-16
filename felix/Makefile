@@ -128,7 +128,7 @@ clean-generated:
 ###############################################################################
 # Building the binary
 ###############################################################################
-BUILD_TARGETS:=bin/calico-felix
+BUILD_TARGETS:=bin/calico-felix-$(ARCH)
 
 ifeq ($(ARCH), $(filter $(ARCH),amd64 arm64))
 # Currently CGO can be enabled in ARM64 and AMD64 builds.
@@ -154,9 +154,6 @@ build: $(BUILD_TARGETS)
 build-all: $(addprefix sub-build-,$(VALIDARCHES))
 sub-build-%:
 	$(MAKE) build ARCH=$*
-
-bin/calico-felix: bin/calico-felix-$(ARCH)
-	ln -f bin/calico-felix-$(ARCH) bin/calico-felix
 
 libbpf: $(LIBBPF_A)
 $(LIBBPF_A): $(shell find bpf-gpl/include/libbpf -type f ! -name "*.a")
@@ -569,9 +566,6 @@ cover-report: combined.coverprofile
 				   column -t | \
 				   grep -v '100\.0%'"
 
-bin/calico-felix.transfer-url: bin/calico-felix
-	$(DOCKER_GO_BUILD) sh -c 'curl --upload-file bin/calico-felix https://transfer.sh/calico-felix > $@'
-
 # Cross-compile Felix for Windows
 bin/calico-felix.exe: $(SRC_FILES)
 	@echo Building felix for Windows...
@@ -580,10 +574,6 @@ bin/calico-felix.exe: $(SRC_FILES)
 	   	GOOS=windows go build -buildvcs=false -v -o $@ -v $(LDFLAGS) "$(PACKAGE_NAME)/cmd/calico-felix" && \
 		( ldd $@ 2>&1 | grep -q "Not a valid dynamic program\|not a dynamic executable" || \
 		( echo "Error: $@ was not statically linked"; false ) )'
-
-.PHONY: patch-script
-patch-script: bin/calico-felix.transfer-url
-	$(DOCKER_GO_BUILD) bash -c 'utils/make-patch-script.sh $$(cat bin/calico-felix.transfer-url)'
 
 ## Generate a diagram of Felix's internal calculation graph.
 docs/calc.pdf: docs/calc.dot

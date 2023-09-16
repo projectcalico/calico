@@ -70,16 +70,10 @@ clean:
 ###############################################################################
 # Building the binary
 ###############################################################################
-build: $(BINDIR)/calico-typha
+build: $(BINDIR)/calico-typha-$(ARCH)
 build-all: $(addprefix sub-build-,$(VALIDARCHES))
 sub-build-%:
 	$(MAKE) build ARCH=$*
-
-$(BINDIR)/calico-typha: $(BINDIR)/calico-typha-$(ARCH)
-	ln -f $(BINDIR)/calico-typha-$(ARCH) $(BINDIR)/calico-typha
-
-$(BINDIR)/wrapper: $(BINDIR)/wrapper-$(ARCH)
-	ln -f $(BINDIR)/wrapper-$(ARCH) $(BINDIR)/wrapper
 
 $(BINDIR)/wrapper-$(ARCH): $(SRC_FILES) $(LOCAL_BUILD_DEP)
 ifeq ($(ARCH), amd64)
