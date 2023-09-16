@@ -179,7 +179,7 @@ func findMostRestrictedLabel(lrs map[string]parser.LabelRestriction) string {
 		score := scoreLabelRestriction(res)
 		if bestLabel == "" ||
 			score > bestScore ||
-			score == score && label > bestLabel {
+			score == bestScore && label > bestLabel {
 			bestLabel = label
 			bestScore = score
 		}
