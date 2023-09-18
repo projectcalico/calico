@@ -17,7 +17,7 @@
 set -ex
 
 sudo pip uninstall -y setuptools
-sudo rm -rf /usr/local/lib/python3.8/dist-packages/setuptools-67.8.0.dist-info
+sudo rm -rf /usr/local/lib/python3.8/dist-packages/setuptools-*.dist-info
 sudo find / -name "*setuptools*" || true
 sudo pip list || true
 

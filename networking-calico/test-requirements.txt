@@ -16,6 +16,7 @@ testrepository>=0.0.18 # Apache-2.0/BSD
 testscenarios>=0.4 # Apache-2.0/BSD
 testtools>=2.2.0 # MIT
 
+etcd3gw==1.0.1 # Apache-2.0
 neutron
 neutron-lib
 mock>=3.0.0 # BSD
