@@ -281,6 +281,9 @@ release-publish: release-prereqs .release-$(VERSION).published
 .release-$(VERSION).published:
 	$(MAKE) push-images-to-registries push-manifests IMAGETAG=$(VERSION) RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
 	$(MAKE) FIPS=true push-images-to-registries push-manifests IMAGETAG=$(VERSION)-fips RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
+
+	# Push Windows images.
+	$(MAKE) release-windows RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
 	touch $@
 
 # WARNING: Only run this target if this release is the latest stable release. Do NOT
@@ -314,7 +317,7 @@ release-publish-latest: release-prereqs
 # 	done ;
 
 # # Build and push Windows image
-# release-windows: release-prereqs clean-windows
+# release-windows: var-require-one-of-CONFIRM-DRYRUN release-prereqs clean-windows
 # 	$(MAKE) image-windows PUSH=true
 
 WINDOWS_DIST = dist/windows
@@ -339,7 +342,7 @@ image-windows: setup-windows-builder
 	$(MAKE) sub-image-windows-$${version}; \
 	done;
 
-release-windows: clean-windows image-windows
+release-windows: var-require-one-of-CONFIRM-DRYRUN clean-windows image-windows
 	image_version="$${VERSION:-latest}"; \
 	for registry in $(DEV_REGISTRIES); do \
 		echo Pushing Windows images to $${registry}; \
