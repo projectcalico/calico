@@ -281,6 +281,9 @@ release-publish: release-prereqs .release-$(VERSION).published
 .release-$(VERSION).published:
 	$(MAKE) push-images-to-registries push-manifests IMAGETAG=$(VERSION) RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
 	$(MAKE) FIPS=true push-images-to-registries push-manifests IMAGETAG=$(VERSION)-fips RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
+
+	# Push Windows images.
+	$(MAKE) release-windows RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
 	touch $@
 
 # WARNING: Only run this target if this release is the latest stable release. Do NOT
@@ -314,9 +317,28 @@ release-publish-latest: release-prereqs
 # 	done ;
 
 # # Build and push Windows image
-# release-windows: release-prereqs clean-windows
+# release-windows: var-require-one-of-CONFIRM-DRYRUN release-prereqs clean-windows
 # 	$(MAKE) image-windows PUSH=true
 
+# Windows image pushing is different because we do not build docker images directly.
+# Since the build machine is linux, we output the images to a tarball. (We can
+# produce images but there will be no output because docker images
+# built for Windows cannot be loaded on linux.)
+#
+# The resulting image tarball is then pushed to registries during cd/release.
+# The image tarballs are located in WINDOWS_DIST and have files names
+# with the format 'cni-windows-v3.21.0-2-abcdef-20H2.tar'.
+#
+# In addition to pushing the individual images, we also create the manifest
+# directly using 'docker manifest'. This is possible because Semaphore is using
+# a recent enough docker CLI version (20.10.0)
+#
+# - Create the manifest with 'docker manifest create' using the list of all images.
+# - For each windows version, 'docker manifest annotate' its image with "os.image: <windows_version>".
+#   <windows_version> is the version string that looks like, e.g. 10.0.19041.1288.
+#   Setting os.image in the manifest is required for Windows hosts to load the
+#   correct image in manifest.
+# - Finally we push the manifest, "purging" the local manifest.
 WINDOWS_DIST = dist/windows
 
 $(WINDOWS_DIST)/$(CNI_PLUGIN_IMAGE_WINDOWS)-$(GIT_VERSION)-%.tar: sub-image-windows-$*
@@ -339,7 +361,7 @@ image-windows: setup-windows-builder
 	$(MAKE) sub-image-windows-$${version}; \
 	done;
 
-release-windows: clean-windows image-windows
+release-windows: var-require-one-of-CONFIRM-DRYRUN clean-windows image-windows
 	image_version="$${VERSION:-latest}"; \
 	for registry in $(DEV_REGISTRIES); do \
 		echo Pushing Windows images to $${registry}; \
