@@ -209,15 +209,17 @@ def _neutron_rule_to_etcd_rule(rule):
         entity_rule['nets'] = [rule['remote_ip_prefix']]
     LOG.debug("=> Entity rule %s" % entity_rule)
 
+    if port_spec is not None:
+        if rule['direction'] == 'ingress':
+            etcd_rule['destination'] = {'ports': port_spec}
+        else:
+            entity_rule['ports'] = port_spec
+
     # Store in source or destination field of the overall rule.
     if entity_rule:
         if rule['direction'] == 'ingress':
             etcd_rule['source'] = entity_rule
-            if port_spec is not None:
-                etcd_rule['destination'] = {'ports': port_spec}
         else:
-            if port_spec is not None:
-                entity_rule['ports'] = port_spec
             etcd_rule['destination'] = entity_rule
 
     LOG.debug("=> %s Calico rule %s" % (rule['direction'], etcd_rule))
