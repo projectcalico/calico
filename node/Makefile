@@ -10,8 +10,6 @@ DEV_TAG_SUFFIX        ?=0.dev
 NODE_IMAGE            ?=node
 WINDOWS_IMAGE         ?=node-windows
 
-WINDOWS_VERSIONS?=1809 ltsc2022
-
 # We don't include the windows images here because we build them differently
 # using targets within this makefile.
 BUILD_IMAGES ?=$(NODE_IMAGE)
