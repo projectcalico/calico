@@ -1312,7 +1312,7 @@ $(REPO_ROOT)/.$(KIND_NAME).created: $(KUBECTL) $(KIND)
 		--config $(KIND_CONFIG) \
 		--kubeconfig $(KIND_KUBECONFIG) \
 		--name $(KIND_NAME) \
-		--image kindest/node:$(K8S_VERSION)
+		--image kindest/node:$(KINDEST_NODE_VERSION)
 
 	# Wait for controller manager to be running and healthy, then create Calico CRDs.
 	while ! KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) get serviceaccount default; do echo "Waiting for default serviceaccount to be created..."; sleep 2; done
