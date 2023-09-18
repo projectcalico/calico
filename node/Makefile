@@ -611,8 +611,8 @@ $(WINDOWS_INSTALL_SCRIPT):
 # built for Windows cannot be loaded on linux.)
 #
 # The resulting image tarball is then pushed to registries during cd/release.
-# The image tarballs are located in WINDOWS_IMAGE_TAR_ROOT and have files names
-# with the format 'image-v3.21.0-2-abcdef-20H2.tar'.
+# The image tarballs are located in WINDOWS_DIST and have files names
+# with the format 'node-windows-v3.21.0-2-abcdef-20H2.tar'.
 #
 # In addition to pushing the individual images, we also create the manifest
 # directly using 'docker manifest'. This is possible because Semaphore is using
