@@ -16,6 +16,11 @@
 
 set -ex
 
+sudo pip uninstall -y setuptools
+sudo rm -rf /usr/local/lib/python3.8/dist-packages/setuptools-*.dist-info
+sudo find / -name "*setuptools*" || true
+sudo pip list || true
+
 #------------------------------------------------------------------------------
 # IMPORTANT - Review before use!
 #
@@ -96,14 +101,8 @@ sudo sysctl -w net.ipv6.conf.all.forwarding=1
 
 # Clone the DevStack repository (if not already present).
 test -e devstack || \
-    git clone ${DEVSTACK_REPO:-https://opendev.org/openstack/devstack}
+    git clone -b ${DEVSTACK_BRANCH:-master} ${DEVSTACK_REPO:-https://github.com/openstack/devstack} --depth=1
 cd devstack
-
-# If DEVSTACK_BRANCH has been specified, check out that branch.  (Otherwise we
-# use DevStack's master branch.)
-if [ -n "$DEVSTACK_BRANCH" ]; then
-    git checkout ${DEVSTACK_BRANCH}
-fi
 
 # Prepare DevStack config.
 cat > local.conf <<EOF
@@ -121,7 +120,17 @@ disable_service horizon
 LOGFILE=stack.log
 LOG_COLOR=False
 
-TEMPEST_BRANCH=29.0.0
+TEMPEST_BRANCH=29.1.0
+
+# We clone from GitHub because we commonly used to hit GnuTLS errors when git cloning OpenStack
+# repos from opendev.org (which is the default server), for example:
+#
+# Cloning into 'devstack'...
+# remote: Enumerating objects: 28788, done.
+# remote: Counting objects: 100% (28788/28788), done.
+# remote: Compressing objects: 100% (9847/9847), done.
+# error: RPC failed; curl 56 GnuTLS recv error (-9): A TLS packet with unexpected length was received.
+GIT_BASE=https://github.com
 
 EOF
 
@@ -154,11 +163,16 @@ ls -la /opt/stack
 
 # Stack!
 sudo -u stack -H -E bash -x <<'EOF'
-
-set
 cd /opt/stack/devstack
 ./stack.sh
+EOF
 
+# We use a fresh `sudo -u stack -H -E bash ...` invocation here, because with
+# OpenStack Yoga it appears there is something in the stack.sh setup that
+# closes stdin, and that means that bash doesn't read any further commands from
+# stdin after the exit of the ./stack.sh line.
+sudo -u stack -H -E bash -x <<'EOF'
+cd /opt/stack/devstack
 if ! ${TEMPEST:-false}; then
     if [ x${SERVICE_HOST:-$HOSTNAME} = x$HOSTNAME ]; then
         # We're not running Tempest tests, and we're on the controller node.
