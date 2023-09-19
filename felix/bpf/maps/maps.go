@@ -132,6 +132,7 @@ type Map interface {
 	Update(k, v []byte) error
 	Get(k []byte) ([]byte, error)
 	Delete(k []byte) error
+	DeletePreviousVersion() error
 }
 
 type MapWithExistsCheck interface {
@@ -417,6 +418,32 @@ func (b *PinnedMap) Get(k []byte) ([]byte, error) {
 
 func (b *PinnedMap) Delete(k []byte) error {
 	return DeleteMapEntry(b.fd, k)
+}
+
+func (b *PinnedMap) DeletePreviousVersion() error {
+	log.WithField("name", b.Name).Debug("delete previous version")
+	oldVersion, err := b.getOldMapVersion()
+	log.WithError(err).Debugf("Upgrading from %d", oldVersion)
+	if err != nil && !IsNotExists(err) {
+		return err
+	}
+	// fresh install
+	if oldVersion == 0 {
+		return nil
+	}
+
+	versionedFilename := fmt.Sprintf("%s%d", b.Name, oldVersion)
+	oldBpfMapPath := path.Join(bpfdefs.GlobalPinDir, versionedFilename)
+
+	defer func() {
+		os.Remove(oldBpfMapPath)
+		os.Remove(oldBpfMapPath + "_old")
+
+		// Inform user previous map version was deleted as in theory this would not have that frequently.
+		log.WithField("name", b.Name).Infof("delete previous version %d", oldVersion)
+	}()
+
+	return nil
 }
 
 func (b *PinnedMap) DeleteIfExists(k []byte) error {
