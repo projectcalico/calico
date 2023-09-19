@@ -1203,6 +1203,63 @@ class TestPluginEtcd(TestPluginEtcdBase):
                 'ipVersion': 4,
             })
 
+    def test_sg_rule_ingress_no_remote_ip_prefix(self):
+        # SG ingress rule with ports but no remote IP prefix
+        self.assertNeutronToEtcd(_neutron_rule_from_dict({
+            "protocol": "tcp",
+            "port_range_min": 25,
+            "port_range_max": 34,
+        }), {
+            'action': 'Allow',
+            'destination': {'ports': ['25:34']},
+            'ipVersion': 4,
+            'protocol': 'TCP',
+        })
+
+    def test_sg_rule_egress_no_remote_ip_prefix(self):
+        # SG egress rule with ports but no remote IP prefix
+        self.assertNeutronToEtcd(_neutron_rule_from_dict({
+            "direction": "egress",
+            "protocol": "tcp",
+            "port_range_min": 25,
+            "port_range_max": 34,
+        }), {
+            'action': 'Allow',
+            'destination': {'ports': ['25:34']},
+            'ipVersion': 4,
+            'protocol': 'TCP',
+        })
+
+    def test_sg_rule_ingress_with_remote_ip_prefix(self):
+        # SG ingress rule with ports and remote IP prefix
+        self.assertNeutronToEtcd(_neutron_rule_from_dict({
+            "protocol": "tcp",
+            "remote_ip_prefix": "1.2.3.0/24",
+            "port_range_min": 25,
+            "port_range_max": 34,
+        }), {
+            'action': 'Allow',
+            'destination': {'ports': ['25:34']},
+            'ipVersion': 4,
+            'protocol': 'TCP',
+            'source': {'nets': ['1.2.3.0/24']},
+        })
+
+    def test_sg_rule_egress_with_remote_ip_prefix(self):
+        # SG egress rule with ports and remote IP prefix
+        self.assertNeutronToEtcd(_neutron_rule_from_dict({
+            "direction": "egress",
+            "protocol": "tcp",
+            "remote_ip_prefix": "1.2.3.0/24",
+            "port_range_min": 25,
+            "port_range_max": 34,
+        }), {
+            'action': 'Allow',
+            'destination': {'nets': ['1.2.3.0/24'], 'ports': ['25:34']},
+            'ipVersion': 4,
+            'protocol': 'TCP',
+        })
+
     def test_not_master_does_not_resync(self):
         """Test that a driver that is not master does not resync."""
         # Initialize the state early to put the elector in place, then override
@@ -1783,8 +1840,8 @@ class TestStatusWatcher(TestStatusWatcherBase):
             mock.call("hostname", "ep1", {"status": "up"}, priority="low"),
         ], any_order=True)
 
-        # Resync after deleting the Felix status.  We should see the other
-        # endpoint reported with status None.
+        # Resync after deleting the Felix status.  This does not affect the
+        # status of ep1.
         del self.etcd_data[felix_status_key]
         self.driver.on_felix_alive.reset_mock()
         self.driver.on_port_status_changed.reset_mock()
@@ -1792,7 +1849,7 @@ class TestStatusWatcher(TestStatusWatcherBase):
         self.watcher.start()
         self.driver.on_felix_alive.assert_not_called()
         self.driver.on_port_status_changed.assert_has_calls([
-            mock.call("hostname", "ep1", None, priority="low"),
+            mock.call("hostname", "ep1", {"status": "up"}, priority="low"),
         ], any_order=True)
 
         # Resync with some follow-on events; checks that the priority goes
