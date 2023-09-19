@@ -660,7 +660,11 @@ func (kds *K8sDatastoreInfra) SetExpectedWireguardV6TunnelAddr(felix *Felix, cid
 }
 
 func (kds *K8sDatastoreInfra) SetExternalIP(felix *Felix, idx int) {
-	felix.ExternalIP = fmt.Sprintf("111.222.%d.1", idx)
+	if felix.TopologyOptions.EnableIPv6 {
+		felix.ExternalIP = fmt.Sprintf("111:222::%d:1", idx)
+	} else {
+		felix.ExternalIP = fmt.Sprintf("111.222.%d.1", idx)
+	}
 	felix.ExtraSourceIPs = append(felix.ExtraSourceIPs, felix.ExternalIP)
 }
 
