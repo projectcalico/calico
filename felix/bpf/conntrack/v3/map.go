@@ -37,6 +37,16 @@ const MaxEntries = 512000
 
 type Key [KeySize]byte
 
+type KeyInterface interface {
+	Proto() uint8
+	AddrA() net.IP
+	PortA() uint16
+	AddrB() net.IP
+	PortB() uint16
+	String() string
+	AsBytes() []byte
+}
+
 func (k Key) AsBytes() []byte {
 	return k[:]
 }
@@ -133,6 +143,23 @@ const (
 
 type Value [ValueSize]byte
 
+type ValueInterface interface {
+	Created() int64
+	LastSeen() int64
+	Type() uint8
+	Flags() uint16
+	OrigIP() net.IP
+	OrigPort() uint16
+	OrigSPort() uint16
+	NATSPort() uint16
+	OrigSrcIP() net.IP
+	ReverseNATKey() KeyInterface
+	AsBytes() []byte
+	Data() EntryData
+	IsForwardDSR() bool
+	String() string
+}
+
 func (e Value) Created() int64 {
 	return int64(binary.LittleEndian.Uint64(e[VoCreated : VoCreated+8]))
 }
@@ -196,7 +223,7 @@ const (
 	FlagNoDSR     uint16 = (1 << 13)
 )
 
-func (e Value) ReverseNATKey() Key {
+func (e Value) ReverseNATKey() KeyInterface {
 	var ret Key
 
 	l := len(Key{})
@@ -506,7 +533,7 @@ var MapParams = maps.MapParameters{
 	UpdatedByBPF: true,
 }
 
-func KeyFromBytes(k []byte) Key {
+func KeyFromBytes(k []byte) KeyInterface {
 	var ctKey Key
 	if len(k) != len(ctKey) {
 		log.Panic("Key has unexpected length")
@@ -515,7 +542,7 @@ func KeyFromBytes(k []byte) Key {
 	return ctKey
 }
 
-func ValueFromBytes(v []byte) Value {
+func ValueFromBytes(v []byte) ValueInterface {
 	var ctVal Value
 	if len(v) != len(ctVal) {
 		log.Panic("Value has unexpected length")
