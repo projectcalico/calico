@@ -302,7 +302,16 @@ func (cmd *conntrackRemoveCmd) Run(c *cobra.Command, _ []string) {
 }
 
 func runClean(c *cobra.Command, _ []string) {
-	ctMap := conntrack.Map()
+	var (
+		ctMap maps.Map
+	)
+
+	if ipv6 != nil && *ipv6 {
+		ctMap = conntrack.MapV6()
+	} else {
+		ctMap = conntrack.Map()
+	}
+
 	if err := ctMap.Open(); err != nil {
 		log.WithError(err).Error("Failed to access ConntrackMap")
 	}
@@ -462,7 +471,7 @@ func newConntrackFillCmd() *cobra.Command {
 			Command: &cobra.Command{
 				Use: "fill <key> <value>",
 				Short: "fill the table with a key-value pair, each encoded in base64. " +
-					"They prot-ip1-ip2 in the key are used as a start, ports are generated.",
+					"The prot-ip1-ip2 in the key are used as a start, ports are generated.",
 			},
 		},
 	}
@@ -474,10 +483,24 @@ func newConntrackFillCmd() *cobra.Command {
 }
 
 func (cmd *conntrackFillCmd) Run(c *cobra.Command, _ []string) {
-	ctMap := conntrack.Map()
+	var (
+		key   conntrack.KeyInterface
+		ctMap maps.Map
+	)
 
-	var key conntrack.Key
-	copy(key[:], cmd.key)
+	if ipv6 != nil && *ipv6 {
+		var k conntrack.KeyV6
+		copy(k[:], cmd.key)
+		key = k
+
+		ctMap = conntrack.MapV6()
+	} else {
+		var k conntrack.KeyV6
+		copy(k[:], cmd.key)
+		key = k
+
+		ctMap = conntrack.Map()
+	}
 
 	ipA := key.AddrA()
 	ipB := key.AddrB()
