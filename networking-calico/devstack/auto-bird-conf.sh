@@ -5,6 +5,7 @@ set -x
 HOST_IP=$1
 ETCDCTL=${2:-etcdctl}
 export ETCDCTL_ENDPOINTS=${3-http://${HOST_IP}:2379}
+export ETCDCTL_API=3
 
 # Automatically generate full mesh BIRD config for a multi-node
 # Calico/DevStack deployment.
