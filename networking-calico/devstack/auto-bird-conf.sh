@@ -23,9 +23,9 @@ HOST_IPV6=$1
 # In a sub-shell, periodically write our own IP into etcd.
 (
     while true; do
-        $ETCDCTL set ${MY_ETCD_DIR}/$HOST_IP $HOST_IP --ttl 600
+        $ETCDCTL put ${MY_ETCD_DIR}/$HOST_IP $HOST_IP
         if test -n "$HOST_IPV6"; then
-            $ETCDCTL set ${MY_ETCD_DIR}/$HOST_IPV6 $HOST_IPV6 --ttl 600
+            $ETCDCTL put ${MY_ETCD_DIR}/$HOST_IPV6 $HOST_IPV6
         fi
         sleep 300
     done
@@ -69,6 +69,6 @@ while true; do
     fi
 
     # Wait for the next change.
-    $ETCDCTL watch ${MY_ETCD_DIR} --recursive
+    $ETCDCTL watch --prefix ${MY_ETCD_DIR}
 
 done
