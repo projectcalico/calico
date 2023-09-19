@@ -205,6 +205,8 @@ struct cali_tc_ctx {
 			x;							\
 	})									\
 
+#define fib_params(x) ((struct bpf_fib_lookup *)((x)->scratch))
+
 #ifdef IPVER6
 static CALI_BPF_INLINE struct ipv6hdr* ip_hdr(struct cali_tc_ctx *ctx)
 {

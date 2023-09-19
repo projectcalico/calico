@@ -102,12 +102,7 @@
 #define CALI_FIB_LOOKUP_ENABLED true
 #endif
 
-#ifdef IPVER6
-#undef CALI_FIB_LOOKUP_ENABLED
-#define CALI_FIB_LOOKUP_ENABLED false
-#else
 #define CALI_FIB_ENABLED (!CALI_F_L3 && CALI_FIB_LOOKUP_ENABLED && (CALI_F_TO_HOST || CALI_F_TO_HEP))
-#endif
 
 #define COMPILE_TIME_ASSERT(expr) {typedef char array[(expr) ? 1 : -1];}
 static CALI_BPF_INLINE void __compile_asserts(void) {
