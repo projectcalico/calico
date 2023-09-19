@@ -1262,7 +1262,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 						By("global policy denies traffic to host 1 on host 0", func() {
 
-							nets := []string{felixIP(1) + "/32"}
+							nets := []string{felixIP(1) + "/" + ipMask()}
 							switch testOpts.tunnel {
 							case "ipip":
 								nets = append(nets, tc.Felixes[1].ExpectedIPIPTunnelAddr+"/32")
@@ -1287,7 +1287,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 						By("global policy allows forwarded traffic to host 1 on host 0", func() {
 
-							nets := []string{felixIP(1) + "/32"}
+							nets := []string{felixIP(1) + "/" + ipMask()}
 							switch testOpts.tunnel {
 							case "ipip":
 								nets = append(nets, tc.Felixes[1].ExpectedIPIPTunnelAddr+"/32")
@@ -1320,7 +1320,11 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 						if testOpts.tunnel == "none" {
 							By("Leaving traffic alone with the flag clear")
-							pool, err := calicoClient.IPPools().Get(context.TODO(), "test-pool", options2.GetOptions{})
+							poolName := infrastructure.DefaultIPPoolName
+							if testOpts.ipv6 {
+								poolName = infrastructure.DefaultIPv6PoolName
+							}
+							pool, err := calicoClient.IPPools().Get(context.TODO(), poolName, options2.GetOptions{})
 							Expect(err).NotTo(HaveOccurred())
 							pool.Spec.NATOutgoing = false
 							pool, err = calicoClient.IPPools().Update(context.TODO(), pool, options2.SetOptions{})
@@ -1546,7 +1550,12 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						cc.CheckConnectivity()
 
 						By("Adding second service with same external IP")
-						testSvc = k8sCreateLBServiceWithEndPoints(k8sClient, testSvcName+"-2", "10.101.0.11", w[0][0], 80, tgtPort,
+						clusterIP2 := "10.101.0.11"
+
+						if testOpts.ipv6 {
+							clusterIP2 = "dead:beef::abcd:0:0:11"
+						}
+						testSvc = k8sCreateLBServiceWithEndPoints(k8sClient, testSvcName+"-2", clusterIP2, w[0][0], 80, tgtPort,
 							testOpts.protocol, externalIP, srcIPRange)
 
 						By("Deleting first service")
@@ -4684,7 +4693,7 @@ func bpfDumpPolicy(felix *infrastructure.Felix, iface, hook string) string {
 		err error
 	)
 
-	if felix.IPv6 != "" {
+	if felix.TopologyOptions.EnableIPv6 {
 		out, err = felix.ExecOutput("calico-bpf", "-6", "policy", "dump", iface, hook, "--asm")
 	} else {
 		out, err = felix.ExecOutput("calico-bpf", "policy", "dump", iface, hook, "--asm")
