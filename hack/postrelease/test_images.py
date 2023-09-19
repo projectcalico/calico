@@ -44,8 +44,6 @@ GCR_IMAGES = [
     "calico/node",
     "calico/cni",
     "calico/typha",
-    "calico/node-windows",
-    "calico/cni-windows",
 ]
 
 

@@ -466,7 +466,7 @@ func (r *ReleaseBuilder) buildContainerImages(ver string) error {
 	}
 
 	for _, dir := range windowsReleaseDirs {
-		out, err := r.makeInDirectoryWithOutput(dir, "release-windows", env...)
+		out, err := r.makeInDirectoryWithOutput(dir, "image-windows", env...)
 		if err != nil {
 			logrus.Error(out)
 			return fmt.Errorf("Failed to build %s: %s", dir, err)
