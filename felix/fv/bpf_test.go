@@ -77,10 +77,10 @@ var _ = describeBPFTests(withProto("tcp"))
 var _ = describeBPFTests(withProto("udp"))
 var _ = describeBPFTests(withProto("udp"), withUDPUnConnected())
 var _ = describeBPFTests(withProto("udp"), withUDPConnectedRecvMsg(), withConnTimeLoadBalancingEnabled())
-var _ = describeBPFTests(withTunnel("ipip"), withProto("tcp"), withConnTimeLoadBalancingEnabled())
-var _ = describeBPFTests(withTunnel("ipip"), withProto("udp"), withConnTimeLoadBalancingEnabled())
-var _ = describeBPFTests(withTunnel("ipip"), withProto("tcp"))
-var _ = describeBPFTests(withTunnel("ipip"), withProto("udp"))
+var _ = describeBPFTests(withTunnel("ipip"), withProto("tcp"), withConnTimeLoadBalancingEnabled(), withIPFamily(4))
+var _ = describeBPFTests(withTunnel("ipip"), withProto("udp"), withConnTimeLoadBalancingEnabled(), withIPFamily(4))
+var _ = describeBPFTests(withTunnel("ipip"), withProto("tcp"), withIPFamily(4))
+var _ = describeBPFTests(withTunnel("ipip"), withProto("udp"), withIPFamily(4))
 var _ = describeBPFTests(withProto("tcp"), withDSR())
 var _ = describeBPFTests(withProto("udp"), withDSR())
 var _ = describeBPFTests(withTunnel("ipip"), withProto("tcp"), withDSR(), withIPFamily(4))
@@ -424,7 +424,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 				for i, felix := range tc.Felixes {
 					felix.Exec("conntrack", "-L")
-					felix.Exec("calico-bpf", "-6", "policy", "dump", "cali1ab524b60b9", "all")
+					felix.Exec("calico-bpf", "-6", "policy", "dump", "cali1ab524b60b9", "all", "--asm")
 					if testOpts.ipv6 {
 						felix.Exec("ip6tables-save", "-c")
 						felix.Exec("ip", "-6", "link")
@@ -1225,6 +1225,8 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							switch testOpts.tunnel {
 							case "vxlan":
 								nets = []string{tc.Felixes[0].ExpectedVXLANV6TunnelAddr + "/128"}
+							case "wireguard":
+								nets = []string{tc.Felixes[0].ExpectedWireguardV6TunnelAddr + "/128"}
 							}
 						} else {
 							nets = []string{felixIP(0) + "/32"}
@@ -1329,6 +1331,12 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							pool.Spec.NATOutgoing = false
 							pool, err = calicoClient.IPPools().Update(context.TODO(), pool, options2.SetOptions{})
 							Expect(err).NotTo(HaveOccurred())
+
+							// Wait for the pool change to take effect
+							Eventually(func() string {
+								return bpfDumpRoutes(tc.Felixes[1])
+							}, "30s", "1s").ShouldNot(ContainSubstring("workload in-pool nat-out"))
+
 							cc.ResetExpectations()
 							cc.ExpectSNAT(w[0][0], w[0][0].IP, hostW[1])
 							cc.CheckConnectivity(conntrackChecks(tc.Felixes)...)
@@ -1337,6 +1345,12 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							pool.Spec.NATOutgoing = true
 							pool, err = calicoClient.IPPools().Update(context.TODO(), pool, options2.SetOptions{})
 							Expect(err).NotTo(HaveOccurred())
+
+							// Wait for the pool change to take effect
+							Eventually(func() string {
+								return bpfDumpRoutes(tc.Felixes[1])
+							}, "30s", "1s").Should(ContainSubstring("workload in-pool nat-out"))
+
 							cc.ResetExpectations()
 							cc.ExpectSNAT(w[0][0], felixIP(0), hostW[1])
 							cc.CheckConnectivity(conntrackChecks(tc.Felixes)...)
@@ -1655,21 +1669,31 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					var port uint16
 					var srcIPRange []string
 					BeforeEach(func() {
-						externalClient.Exec("ip", "route", "add", extIP, "via", felixIP(0))
+						ipRoute := []string{"ip"}
+						srcIPRange = []string{"10.65.1.3/24"}
+						if testOpts.ipv6 {
+							ipRoute = append(ipRoute, "-6")
+							srcIPRange = []string{"dead:beef::1:3/120"}
+						}
+
+						cmd := append(ipRoute[:len(ipRoute):len(ipRoute)],
+							"route", "add", extIP, "via", felixIP(0))
+						externalClient.Exec(cmd...)
 						pol.Spec.Ingress = []api.Rule{
 							{
 								Action: "Allow",
 								Source: api.EntityRule{
 									Nets: []string{
-										externalClient.IP + "/32",
+										containerIP(externalClient) + "/" + ipMask(),
 									},
 								},
 							},
 						}
 						pol = updatePolicy(pol)
-						tc.Felixes[1].Exec("ip", "route", "add", "local", extIP, "dev", "eth0")
-						tc.Felixes[0].Exec("ip", "route", "add", "local", extIP, "dev", "eth0")
-						srcIPRange = []string{"10.65.1.3/24"}
+						cmd = append(ipRoute[:len(ipRoute):len(ipRoute)],
+							"route", "add", "local", extIP, "dev", "eth0")
+						tc.Felixes[1].Exec(cmd...)
+						tc.Felixes[0].Exec(cmd...)
 					})
 					Context("Test LB-service with external Client's IP not in src range", func() {
 						BeforeEach(func() {
@@ -2784,8 +2808,14 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								if testOpts.ipv6 {
 									switch testOpts.tunnel {
 									case "wireguard":
+										if testOpts.connTimeEnabled {
+											hostW0SrcIP = ExpectWithSrcIPs(tc.Felixes[0].ExpectedWireguardV6TunnelAddr)
+										}
 										hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedWireguardV6TunnelAddr)
 									case "vxlan":
+										if testOpts.connTimeEnabled {
+											hostW0SrcIP = ExpectWithSrcIPs(tc.Felixes[0].ExpectedVXLANV6TunnelAddr)
+										}
 										hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedVXLANV6TunnelAddr)
 									}
 								} else {
@@ -3078,9 +3108,18 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						It("workload should have connectivity to self via local/remote node", func() {
 							w00Expects := []ExpectationOption{ExpectWithPorts(npPort)}
 							hostW0SrcIP := ExpectWithSrcIPs(felixIP(0))
-							switch testOpts.tunnel {
-							case "ipip":
-								hostW0SrcIP = ExpectWithSrcIPs(tc.Felixes[0].ExpectedIPIPTunnelAddr)
+							if testOpts.ipv6 {
+								switch testOpts.tunnel {
+								case "wireguard":
+									hostW0SrcIP = ExpectWithSrcIPs(tc.Felixes[0].ExpectedWireguardV6TunnelAddr)
+								case "vxlan":
+									hostW0SrcIP = ExpectWithSrcIPs(tc.Felixes[0].ExpectedVXLANV6TunnelAddr)
+								}
+							} else {
+								switch testOpts.tunnel {
+								case "ipip":
+									hostW0SrcIP = ExpectWithSrcIPs(tc.Felixes[0].ExpectedIPIPTunnelAddr)
+								}
 							}
 
 							if !testOpts.connTimeEnabled {
@@ -3612,19 +3651,34 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						})
 
 						By("filling up the CT tables", func() {
-							srcIP := net.IPv4(123, 123, 123, 123)
-							dstIP := net.IPv4(121, 121, 121, 121)
-
 							now := time.Duration(timeshim.RealTime().KTimeNanos())
 							leg := conntrack.Leg{SynSeen: true, AckSeen: true, Opener: true}
-							val := conntrack.NewValueNormal(now, now, 0, leg, leg)
-							val64 := base64.StdEncoding.EncodeToString(val[:])
 
-							key := conntrack.NewKey(6 /* TCP */, srcIP, 0, dstIP, 0)
-							key64 := base64.StdEncoding.EncodeToString(key[:])
+							if testOpts.ipv6 {
+								srcIP := net.ParseIP("dead:beef::123:123:123:123")
+								dstIP := net.ParseIP("dead:beef::121:121:121:121")
 
-							_, err := tc.Felixes[0].ExecCombinedOutput("calico-bpf", "conntrack", "fill", key64, val64)
-							Expect(err).NotTo(HaveOccurred())
+								val := conntrack.NewValueV6Normal(now, now, 0, leg, leg)
+								val64 := base64.StdEncoding.EncodeToString(val[:])
+
+								key := conntrack.NewKeyV6(6 /* TCP */, srcIP, 0, dstIP, 0)
+								key64 := base64.StdEncoding.EncodeToString(key[:])
+
+								_, err := tc.Felixes[0].ExecCombinedOutput("calico-bpf", "-6", "conntrack", "fill", key64, val64)
+								Expect(err).NotTo(HaveOccurred())
+							} else {
+								srcIP := net.IPv4(123, 123, 123, 123)
+								dstIP := net.IPv4(121, 121, 121, 121)
+
+								val := conntrack.NewValueNormal(now, now, 0, leg, leg)
+								val64 := base64.StdEncoding.EncodeToString(val[:])
+
+								key := conntrack.NewKey(6 /* TCP */, srcIP, 0, dstIP, 0)
+								key64 := base64.StdEncoding.EncodeToString(key[:])
+
+								_, err := tc.Felixes[0].ExecCombinedOutput("calico-bpf", "conntrack", "fill", key64, val64)
+								Expect(err).NotTo(HaveOccurred())
+							}
 						})
 
 						By("checking host-host connectivity works", func() {
@@ -3643,8 +3697,13 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						})
 
 						By("cleaning up the CT maps", func() {
-							_, err := tc.Felixes[0].ExecOutput("calico-bpf", "conntrack", "clean")
-							Expect(err).NotTo(HaveOccurred())
+							if testOpts.ipv6 {
+								_, err := tc.Felixes[0].ExecOutput("calico-bpf", "-6", "conntrack", "clean")
+								Expect(err).NotTo(HaveOccurred())
+							} else {
+								_, err := tc.Felixes[0].ExecOutput("calico-bpf", "conntrack", "clean")
+								Expect(err).NotTo(HaveOccurred())
+							}
 						})
 
 						By("checking pod-pod connectivity works again", func() {
@@ -4710,5 +4769,20 @@ func bpfWaitForPolicy(felix *infrastructure.Felix, iface, hook, policy string) s
 		return out
 	}, "5s", "200ms").Should(ContainSubstring(search))
 
+	return out
+}
+
+func bpfDumpRoutes(felix *infrastructure.Felix) string {
+	var (
+		out string
+		err error
+	)
+
+	if felix.TopologyOptions.EnableIPv6 {
+		out, err = felix.ExecOutput("calico-bpf", "-6", "routes", "dump")
+	} else {
+		out, err = felix.ExecOutput("calico-bpf", "routes", "dump")
+	}
+	Expect(err).NotTo(HaveOccurred())
 	return out
 }
