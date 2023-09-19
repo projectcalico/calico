@@ -23,20 +23,20 @@ static CALI_BPF_INLINE bool ipv6_addr_t_eq(ipv6_addr_t x, ipv6_addr_t y)
 	return x.a == y.a && x.b == y.b && x.c == y.c && x.d == y.d;
 }
 
-static CALI_BPF_INLINE int ipv6_addr_t_cmp(ipv6_addr_t x, ipv6_addr_t y)
+static CALI_BPF_INLINE int ipv6_addr_t_cmp(ipv6_addr_t *x, ipv6_addr_t *y)
 {
-	if (x.a < y.a) {
+	if (x->a < y->a) {
 		return -1;
-	} else if (x.a == y.a) {
-		if (x.b < y.b) {
+	} else if (x->a == y->a) {
+		if (x->b < y->b) {
 			return -1;
-		} else if (x.b == y.b) {
-			if (x.c < y.c) {
+		} else if (x->b == y->b) {
+			if (x->c < y->c) {
 				return -1;
-			} else if (x.c == y.c) {
-				if (x.d < y.d) {
+			} else if (x->c == y->c) {
+				if (x->d < y->d) {
 					return -1;
-				} else if (x.d == y.d) {
+				} else if (x->d == y->d) {
 					return 0;
 				}
 			}
@@ -109,7 +109,7 @@ typedef ipv6_addr_t ipv46_addr_t;
 #define ip_set_void(ip)	((ip) = 0)
 #define NP_SPECIAL_IP	0xffffffff
 #define ip_equal(a, b)	((a) == (b))
-#define ip_lt(a, b)	((a) < (b))
+#define ip_lt(a, b)	(*(a) < *(b))
 
 typedef ipv4_addr_t ipv46_addr_t;
 
