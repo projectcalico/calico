@@ -65,11 +65,12 @@ func releaseImages(version, operatorVersion string) []string {
 		fmt.Sprintf("calico/cni:%s", version),
 		fmt.Sprintf("calico/apiserver:%s", version),
 		fmt.Sprintf("calico/kube-controllers:%s", version),
-		fmt.Sprintf("calico/windows:%s", version),
 		fmt.Sprintf("calico/dikastes:%s", version),
 		fmt.Sprintf("calico/pod2daemon-flexvol:%s", version),
 		fmt.Sprintf("calico/csi:%s", version),
 		fmt.Sprintf("calico/node-driver-registrar:%s", version),
+		fmt.Sprintf("calico/cni-windows:%s", version),
+		fmt.Sprintf("calico/node-windows:%s", version),
 	}
 }
 
@@ -287,7 +288,7 @@ func (r *ReleaseBuilder) publishPrereqs(ver string) error {
 //
 // - release-vX.Y.Z.tgz: contains images, manifests, and binaries.
 // - tigera-operator-vX.Y.Z.tgz: contains the helm v3 chart.
-// - calico-windows-vX.Y.Z.zip: Calico for Windows.
+// - calico-windows-vX.Y.Z.zip: Calico for Windows zip archive for non-HPC installation.
 // - calicoctl/bin: All calicoctl binaries.
 //
 // This function also generates checksums for each artifact that is uploaded to the release.
@@ -366,6 +367,7 @@ func (r *ReleaseBuilder) uploadDir(ver string) string {
 // Builds the complete release tar for upload to github.
 // - release-vX.Y.Z.tgz: contains images, manifests, and binaries.
 // TODO: We should produce a tar per architecture that we ship.
+// TODO: We should produce windows tars
 func (r *ReleaseBuilder) buildReleaseTar(ver string, targetDir string) error {
 	// Create tar files for container image that are shipped.
 	releaseBase := fmt.Sprintf("_output/release-%s", ver)
@@ -443,6 +445,11 @@ func (r *ReleaseBuilder) buildContainerImages(ver string) error {
 		"felix",
 	}
 
+	windowsReleaseDirs := []string{
+		"node",
+		"cni-plugin"
+	}
+
 	// Build env.
 	env := append(os.Environ(),
 		fmt.Sprintf("VERSION=%s", ver),
@@ -451,6 +458,15 @@ func (r *ReleaseBuilder) buildContainerImages(ver string) error {
 
 	for _, dir := range releaseDirs {
 		out, err := r.makeInDirectoryWithOutput(dir, "release-build", env...)
+		if err != nil {
+			logrus.Error(out)
+			return fmt.Errorf("Failed to build %s: %s", dir, err)
+		}
+		logrus.Info(out)
+	}
+
+	for _, dir := range windowsReleaseDirs {
+		out, err := r.makeInDirectoryWithOutput(dir, "image-windows", env...)
 		if err != nil {
 			logrus.Error(out)
 			return fmt.Errorf("Failed to build %s: %s", dir, err)
@@ -517,6 +533,11 @@ func (r *ReleaseBuilder) publishContainerImages(ver string) error {
 		"node",
 	}
 
+	windowsReleaseDirs := []string{
+		"node",
+		"cni-plugin"
+	}
+
 	env := append(os.Environ(),
 		fmt.Sprintf("IMAGETAG=%s", ver),
 		fmt.Sprintf("VERSION=%s", ver),
@@ -532,6 +553,25 @@ func (r *ReleaseBuilder) publishContainerImages(ver string) error {
 		attempt := 0
 		for {
 			out, err := r.makeInDirectoryWithOutput(dir, "release-publish", env...)
+			if err != nil {
+				if attempt < maxRetries {
+					logrus.WithField("attempt", attempt).WithError(err).Warn("Publish failed, retrying")
+					attempt++
+					continue
+				}
+				logrus.Error(out)
+				return fmt.Errorf("Failed to publish %s: %s", dir, err)
+			}
+
+			// Success - move on to the next directory.
+			logrus.Info(out)
+			break
+		}
+	}
+	for _, dir := range windowsReleaseDirs {
+		attempt := 0
+		for {
+			out, err := r.makeInDirectoryWithOutput(dir, "release-windows", env...)
 			if err != nil {
 				if attempt < maxRetries {
 					logrus.WithField("attempt", attempt).WithError(err).Warn("Publish failed, retrying")
