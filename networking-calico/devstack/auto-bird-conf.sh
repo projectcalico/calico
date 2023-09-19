@@ -4,6 +4,8 @@ set -x
 
 HOST_IP=$1
 ETCDCTL=${2:-etcdctl}
+export ETCDCTL_ENDPOINTS=${3-http://${HOST_IP}:2379}
+export ETCDCTL_API=3
 
 # Automatically generate full mesh BIRD config for a multi-node
 # Calico/DevStack deployment.
@@ -37,7 +39,10 @@ while true; do
     # IPs that are in etcd now.
     peer_ips=
     peer_ipv6s=
-    for key in `$ETCDCTL get ${MY_ETCD_DIR} --prefix --keys-only`; do
+    cmd="$ETCDCTL get --prefix --keys-only ${MY_ETCD_DIR}"
+    echo "Running: $cmd"
+    $cmd
+    for key in `$cmd`; do
         key=`basename $key`
         case $key in
             *:* )
