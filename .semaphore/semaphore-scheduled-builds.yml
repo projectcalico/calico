@@ -519,6 +519,9 @@ blocks:
     - name: "Build Windows archive"
       commands:
       - ../.semaphore/run-and-monitor build-windows-archive.log make build-windows-archive
+    - name: "Build Windows image"
+      commands:
+      - ../.semaphore/run-and-monitor build-windows-image.log make image-windows
 
 - name: "e2e tests"
   run:

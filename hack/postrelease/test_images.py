@@ -20,12 +20,13 @@ EXPECTED_IMAGES = [
   "calico/cni",
   "calico/kube-controllers",
   "calico/upgrade",
-  "calico/windows",
   "calico/flannel-migration-controller",
   "calico/dikastes",
   "calico/pilot-webhook",
   "calico/pod2daemon-flexvol",
   "calico/csi",
+  "calico/cni-windows",
+  "calico/node-windows",
 ]
 
 # Images that we exclude from the assertions below.
@@ -34,15 +35,14 @@ OPERATOR_EXCLUDED_IMAGES = EXCLUDED_IMAGES + [
     "calico/dikastes",
     "calico/flannel-migration-controller",
     "calico/ctl",
-    "calico/windows",
     "calico/csi",
 ]
 
 
 # Images that we expect to be published to GCR.
 GCR_IMAGES = [
-    "calico/node", 
-    "calico/cni", 
+    "calico/node",
+    "calico/cni",
     "calico/typha",
 ]
 
