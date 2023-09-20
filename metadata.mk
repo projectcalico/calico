@@ -8,7 +8,7 @@ GO_BUILD_VER = v0.88
 # Version of Kubernetes to use for tests.
 K8S_VERSION     = v1.26.6
 # This is used for bitnami/kubectl and kubectl binary release.
-KUBECTL_VERSION = v1.24.14
+KUBECTL_VERSION = v1.26.8
 
 # Version of various tools used in the build and tests.
 COREDNS_VERSION=1.5.2
