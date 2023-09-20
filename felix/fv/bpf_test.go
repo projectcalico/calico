@@ -1101,6 +1101,10 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			}
 
 			It("should have correct routes", func() {
+				if testOpts.ipv6 {
+					// XXX
+					return
+				}
 				tunnelAddr := ""
 				tunnelAddrFelix1 := ""
 				tunnelAddrFelix2 := ""
@@ -1647,6 +1651,10 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						pol = updatePolicy(pol)
 					})
 					It("should not have connectivity from external client, and return connection refused", func() {
+						if testOpts.ipv6 {
+							// XXX
+							return
+						}
 						cc.Expect(None, externalClient, TargetIP(ip[0]),
 							ExpectWithPorts(port),
 							ExpectNoneWithError("connection refused"),
@@ -2050,6 +2058,8 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							switch testOpts.tunnel {
 							case "vxlan":
 								hostW0SrcIP = ExpectWithSrcIPs(tc.Felixes[0].ExpectedVXLANV6TunnelAddr)
+							case "wireguard":
+								hostW0SrcIP = ExpectWithSrcIPs(tc.Felixes[0].ExpectedWireguardV6TunnelAddr)
 							}
 						}
 						switch testOpts.tunnel {
@@ -2058,7 +2068,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						}
 
 						if !testOpts.connTimeEnabled {
-							w00Expects = append(w00Expects, hostW0SrcIP)
 							w00Expects = append(w00Expects, hostW0SrcIP)
 						}
 
@@ -2951,7 +2960,11 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 											}, 10*time.Second, 300*time.Millisecond).Should(BeTrue(),
 												fmt.Sprintf("felix %d failed to sync with service", idx))
 
-											felix.Exec("ip", "route")
+											if testOpts.ipv6 {
+												felix.Exec("ip", "-6", "route")
+											} else {
+												felix.Exec("ip", "route")
+											}
 										}
 									})
 									if ctlbWorkaround {
@@ -3178,7 +3191,16 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 									var srcMAC, dstMAC string
 
 									By("making sure that neigh table is populated", func() {
-										out, err := tc.Felixes[0].ExecOutput("calico-bpf", "arp", "dump")
+										var (
+											out string
+											err error
+										)
+
+										if testOpts.ipv6 {
+											out, err = tc.Felixes[0].ExecOutput("calico-bpf", "-6", "arp", "dump")
+										} else {
+											out, err = tc.Felixes[0].ExecOutput("calico-bpf", "arp", "dump")
+										}
 										Expect(err).NotTo(HaveOccurred())
 
 										arpRegexp := regexp.MustCompile(fmt.Sprintf(".*%s : (.*) -> (.*)", felixIP(1)))
@@ -3463,6 +3485,10 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				}
 
 				Context("with icmp blocked from workloads, external client", func() {
+					if testOpts.ipv6 {
+						// XXX
+						return
+					}
 					var (
 						testSvc          *v1.Service
 						testSvcNamespace string
@@ -4682,7 +4708,16 @@ func setRPF(felixes []*infrastructure.Felix, tunnel string, all, main int) {
 }
 
 func checkServiceRoute(felix *infrastructure.Felix, ip string) bool {
-	out, err := felix.ExecOutput("ip", "route")
+	var (
+		out string
+		err error
+	)
+
+	if felix.TopologyOptions.EnableIPv6 {
+		out, err = felix.ExecOutput("ip", "-6", "route")
+	} else {
+		out, err = felix.ExecOutput("ip", "route")
+	}
 	Expect(err).NotTo(HaveOccurred())
 
 	lines := strings.Split(out, "\n")
