@@ -41,6 +41,9 @@ static CALI_BPF_INLINE int parse_packet_ip_v6(struct cali_tc_ctx *ctx) {
 	switch (protocol) {
 	case ETH_P_IPV6:
 		break;
+	case ETH_P_IP:
+		CALI_DEBUG("Unexpected ipv4 packet, drop\n");
+		goto deny;
 	default:
 		if (CALI_F_WEP) {
 			CALI_DEBUG("Unknown ethertype (%x), drop\n", protocol);
@@ -162,7 +165,7 @@ static CALI_BPF_INLINE void tc_state_fill_from_iphdr_v6(struct cali_tc_ctx *ctx)
 	}
 
 out:
-	CALI_DEBUG("IP ihl=%d bytes\n", ctx->ipheader_len);
+	CALI_DEBUG("IP ihl=%d bytes ip nexthdr %d\n", ctx->ipheader_len, ctx->state->ip_proto);
 	return;
 
 deny:

@@ -54,11 +54,7 @@ CALI_MAP_V1(cali_jump_map, BPF_MAP_TYPE_PROG_ARRAY, __u32, __u32, 200, 0)
 	bpf_tail_call((ctx)->skb, &cali_jump_map, (ctx)->globals->jumps[PROG_PATH(index)]);	\
 } while (0)
 
-#ifdef IPVER6
-#define CALI_JUMP_TO(ctx, index) __CALI_JUMP_TO(ctx, index ## _V6)
-#else
 #define CALI_JUMP_TO(ctx, index) __CALI_JUMP_TO(ctx, index)
-#endif
 
 #endif
 
@@ -81,24 +77,6 @@ enum cali_jump_index {
 	PROG_INDEX_HOST_CT_CONFLICT_DEBUG,
 	PROG_INDEX_ICMP_INNER_NAT_DEBUG,
 	PROG_INDEX_NEW_FLOW_DEBUG,
-
-	PROG_INDEX_MAIN_V6,
-	PROG_INDEX_POLICY_V6,
-	PROG_INDEX_ALLOWED_V6,
-	PROG_INDEX_ICMP_V6,
-	PROG_INDEX_DROP_V6,
-	PROG_INDEX_HOST_CT_CONFLICT_V6,
-	PROG_INDEX_ICMP_INNER_NAT_V6,
-	PROG_INDEX_NEW_FLOW_V6,
-
-	PROG_INDEX_MAIN_V6_DEBUG,
-	PROG_INDEX_POLICY_V6_DEBUG,
-	PROG_INDEX_ALLOWED_V6_DEBUG,
-	PROG_INDEX_ICMP_V6_DEBUG,
-	PROG_INDEX_DROP_V6_DEBUG,
-	PROG_INDEX_HOST_CT_CONFLICT_V6_DEBUG,
-	PROG_INDEX_ICMP_INNER_NAT_V6_DEBUG,
-	PROG_INDEX_NEW_FLOW_V6_DEBUG,
 };
 
 #if CALI_F_XDP
@@ -127,14 +105,8 @@ CALI_MAP_V1(cali_jump_prog_map, BPF_MAP_TYPE_PROG_ARRAY, __u32, __u32, 10000, 0)
 	bpf_tail_call((ctx)->skb, &cali_jump_prog_map, (ctx)->globals->jumps[pol]);	\
 } while (0)
 
-#ifdef IPVER6
-#define CALI_JUMP_TO_POLICY(ctx) \
-	__CALI_JUMP_TO_POLICY(ctx, PROG_INDEX_ALLOWED_V6, PROG_INDEX_DROP_V6, PROG_INDEX_POLICY_V6)
-#else
 #define CALI_JUMP_TO_POLICY(ctx) \
 	__CALI_JUMP_TO_POLICY(ctx, PROG_INDEX_ALLOWED, PROG_INDEX_DROP, PROG_INDEX_POLICY)
-#endif
-
 #endif
 
 #endif /* __CALI_BPF_JUMP_H__ */

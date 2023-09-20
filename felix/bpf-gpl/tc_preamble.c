@@ -16,13 +16,12 @@ const volatile struct cali_tc_globals __globals;
 
 #ifdef IPVER6
 #define IPV " v6"
-#define JUMP_IDX(idx) (idx ## _V6)
-#define JUMP_IDX_DEBUG(idx) (idx ## _V6_DEBUG)
 #else
 #define IPV " v4"
+#endif
+
 #define JUMP_IDX(idx) (idx)
 #define JUMP_IDX_DEBUG(idx) (idx ## _DEBUG)
-#endif
 
 #define JUMP(idx) globals->jumps[JUMP_IDX(idx)]
 #define JUMP_DEBUG(idx) globals->jumps[JUMP_IDX_DEBUG(idx)]
