@@ -16,9 +16,9 @@ package fvtests_test
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/binary"
 	"fmt"
-	"math/rand"
 	"net"
 	"sync"
 	"time"
