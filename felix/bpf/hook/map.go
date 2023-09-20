@@ -155,8 +155,8 @@ func (pm *ProgramsMap) loadObj(at AttachType, file string) (Layout, error) {
 		if err := m.SetPinPath(path.Join(bpfdefs.GlobalPinDir, mapName)); err != nil {
 			return nil, fmt.Errorf("error pinning map %s: %w", mapName, err)
 		}
-		log.Debugf("map %s pinned to %s for generic object file %s",
-			m.Name(), path.Join(bpfdefs.GlobalPinDir, mapName), file)
+		log.Debugf("map %s k %d v %d pinned to %s for generic object file %s",
+			mapName, m.KeySize(), m.ValueSize(), path.Join(bpfdefs.GlobalPinDir, mapName), file)
 	}
 
 	if err := obj.Load(); err != nil {
@@ -177,10 +177,6 @@ func (pm *ProgramsMap) setMapSize(m *libbpf.Map) error {
 }
 
 func (pm *ProgramsMap) newLayout(at AttachType, obj *libbpf.Obj) (Layout, error) {
-	if at.Family == 6 {
-		return nil, fmt.Errorf("IPv6 is not supported")
-	}
-
 	mapName := pm.GetName()
 
 	l := make(Layout)

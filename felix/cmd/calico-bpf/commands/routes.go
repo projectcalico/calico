@@ -49,20 +49,42 @@ var routesCmd = &cobra.Command{
 }
 
 func dumpRoutes() error {
-	routesMap := routes.Map()
+	var routesMap maps.Map
+
+	if ipv6 != nil && *ipv6 {
+		routesMap = routes.MapV6()
+	} else {
+		routesMap = routes.Map()
+	}
 
 	if err := routesMap.Open(); err != nil {
 		return errors.WithMessage(err, "failed to open map")
 	}
 
 	var dests []ip.CIDR
-	valueByDest := map[ip.CIDR]routes.Value{}
+	valueByDest := map[ip.CIDR]routes.ValueInterface{}
 
 	err := routesMap.Iter(func(k, v []byte) maps.IteratorAction {
-		var key routes.Key
-		var value routes.Value
-		copy(key[:], k)
-		copy(value[:], v)
+		var key routes.KeyInterface
+		var value routes.ValueInterface
+
+		if ipv6 != nil && *ipv6 {
+			var kk routes.KeyV6
+			var vv routes.ValueV6
+			copy(kk[:], k)
+			copy(vv[:], v)
+
+			key = kk
+			value = vv
+		} else {
+			var kk routes.Key
+			var vv routes.Value
+			copy(kk[:], k)
+			copy(vv[:], v)
+
+			key = kk
+			value = vv
+		}
 
 		dest := key.Dest()
 		valueByDest[dest] = value
@@ -73,7 +95,11 @@ func dumpRoutes() error {
 		return err
 	}
 
-	sortCIDRs(dests)
+	if ipv6 != nil && *ipv6 {
+		sortCIDRsV6(dests)
+	} else {
+		sortCIDRs(dests)
+	}
 
 	for _, dest := range dests {
 		v := valueByDest[dest]
@@ -85,9 +111,25 @@ func dumpRoutes() error {
 
 func sortCIDRs(cidrs []ip.CIDR) {
 	sort.Slice(cidrs, func(i, j int) bool {
-		addrA := cidrs[i].Addr().(ip.V4Addr) // FIXME IPv6
+		addrA := cidrs[i].Addr().(ip.V4Addr)
 		addrB := cidrs[j].Addr().(ip.V4Addr)
 		for byteIdx := 0; byteIdx < 4; byteIdx++ {
+			if addrA[byteIdx] < addrB[byteIdx] {
+				return true
+			}
+			if addrA[byteIdx] > addrB[byteIdx] {
+				return false
+			}
+		}
+		return cidrs[i].Prefix() < cidrs[j].Prefix()
+	})
+}
+
+func sortCIDRsV6(cidrs []ip.CIDR) {
+	sort.Slice(cidrs, func(i, j int) bool {
+		addrA := cidrs[i].Addr().(ip.V6Addr)
+		addrB := cidrs[j].Addr().(ip.V6Addr)
+		for byteIdx := 0; byteIdx < 16; byteIdx++ {
 			if addrA[byteIdx] < addrB[byteIdx] {
 				return true
 			}
