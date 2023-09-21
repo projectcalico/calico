@@ -65,6 +65,8 @@ type Felix struct {
 	startupDelayed bool
 	restartDelayed bool
 	Workloads      []workload
+
+	TopologyOptions TopologyOptions
 }
 
 type workload interface {
@@ -223,8 +225,9 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 		"-P", "FORWARD", "DROP")
 
 	return &Felix{
-		Container:      c,
-		startupDelayed: options.DelayFelixStart,
+		Container:       c,
+		startupDelayed:  options.DelayFelixStart,
+		TopologyOptions: options,
 	}
 }
 
