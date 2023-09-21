@@ -129,7 +129,10 @@ type printfFn func(format string, i ...interface{})
 func dumpNice[FK nat.FrontendKeyComparable, BV nat.BackendValueInterface](printf printfFn,
 	natMap map[FK]nat.FrontendValue, back map[nat.BackendKey]BV) {
 	for nk, nv := range natMap {
-		count := nv.Count()
+		count := int(nv.Count())
+		if count == int(nat.BlackHoleCount) {
+			count = -1
+		}
 		local := nv.LocalCount()
 		id := nv.ID()
 		flags := nv.FlagsAsString()
@@ -138,7 +141,7 @@ func dumpNice[FK nat.FrontendKeyComparable, BV nat.BackendValueInterface](printf
 		}
 		printf("%s port %d proto %d id %d count %d local %d%s\n",
 			nk.Addr(), nk.Port(), nk.Proto(), id, count, local, flags)
-		for i := uint32(0); i < count; i++ {
+		for i := 0; i < count; i++ {
 			bk := nat.NewNATBackendKey(id, uint32(i))
 			bv, ok := back[bk]
 			printf("\t%d:%d\t ", id, i)
