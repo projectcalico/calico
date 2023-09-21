@@ -1424,3 +1424,104 @@ clean-windows-builder:
 .PHONY: setup-windows-builder
 setup-windows-builder: clean-windows-builder
 	docker buildx create --name=calico-windows-builder --use --platform windows/amd64
+
+# FIXME: Use WINDOWS_HPC_VERSION and image instead of nanoserver and WINDOWS_VERSIONS when containerd v1.6 is EOL'd
+# .PHONY: image-windows release-windows
+# NOTE: WINDOWS_IMAGE_REQS must be defined with the requirements to build the windows
+# image. These must be added as reqs to 'image-windows' (originally defined in
+# lib.Makefile) on the specific package Makefile otherwise they are not correctly
+# recognized.
+# # Build Windows image with tag and possibly push it to $DEV_REGISTRIES
+# image-windows-with-tag: var-require-all-WINDOWS_IMAGE-WINDOWS_DIST-WINDOWS_IMAGE_REQS-IMAGETAG
+# 	push="$${PUSH:-false}"; \
+# 	for registry in $(DEV_REGISTRIES); do \
+# 		echo Building and pushing Windows image to $${registry}; \
+# 		image="$${registry}/$(WINDOWS_IMAGE):$(IMAGETAG)"; \
+# 		docker buildx build \
+# 			--platform windows/amd64 \
+# 			--output=type=image,push=$${push} \
+# 			-t $${image} \
+# 			--pull \
+# 			--no-cache \
+# 			--build-arg GIT_VERSION=$(GIT_VERSION) \
+# 			--build-arg WINDOWS_HPC_VERSION=$(WINDOWS_HPC_VERSION) \
+# 			-f Dockerfile-windows .; \
+# 	done ;
+
+# image-windows: var-require-all-BRANCH_NAME
+# 	$(MAKE) image-windows-with-tag PUSH=$(PUSH) IMAGETAG=$(if $(IMAGETAG_PREFIX),$(IMAGETAG_PREFIX)-)$(BRANCH_NAME)
+# 	$(MAKE) image-windows-with-tag PUSH=$(PUSH) IMAGETAG=$(if $(IMAGETAG_PREFIX),$(IMAGETAG_PREFIX)-)$(shell git describe --tags --dirty --long --always --abbrev=12)
+
+# # Build and push Windows image
+# release-windows: var-require-one-of-CONFIRM-DRYRUN release-prereqs clean-windows
+# 	$(MAKE) image-windows PUSH=true
+
+# Windows image pushing is different because we do not build docker images directly.
+# Since the build machine is linux, we output the images to a tarball. (We can
+# produce images but there will be no output because docker images
+# built for Windows cannot be loaded on linux.)
+#
+# The resulting image tarball is then pushed to registries during cd/release.
+# The image tarballs are located in WINDOWS_DIST and have files names
+# with the format 'node-windows-v3.21.0-2-abcdef-20H2.tar'.
+#
+# In addition to pushing the individual images, we also create the manifest
+# directly using 'docker manifest'. This is possible because Semaphore is using
+# a recent enough docker CLI version (20.10.0)
+#
+# - Create the manifest with 'docker manifest create' using the list of all images.
+# - For each windows version, 'docker manifest annotate' its image with "os.image: <windows_version>".
+#   <windows_version> is the version string that looks like, e.g. 10.0.19041.1288.
+#   Setting os.image in the manifest is required for Windows hosts to load the
+#   correct image in manifest.
+# - Finally we push the manifest, "purging" the local manifest.
+
+$(WINDOWS_DIST)/$(WINDOWS_IMAGE)-$(GIT_VERSION)-%.tar: windows-sub-image-$*
+
+# NOTE: WINDOWS_IMAGE_REQS must be defined with the requirements to build the windows
+# image. These must be added as reqs to 'image-windows' (originally defined in
+# lib.Makefile) on the specific package Makefile otherwise they are not correctly
+# recognized.
+windows-sub-image-%: var-require-all-WINDOWS_IMAGE-WINDOWS_DIST-WINDOWS_IMAGE_REQS
+	# ensure dir for windows image tars exits
+	-mkdir -p $(WINDOWS_DIST)
+	docker buildx build \
+		--platform windows/amd64 \
+		--output=type=docker,dest=$(CURDIR)/$(WINDOWS_DIST)/$(WINDOWS_IMAGE)-$(GIT_VERSION)-$*.tar \
+		--pull \
+		-t $(WINDOWS_IMAGE):latest \
+		--build-arg GIT_VERSION=$(GIT_VERSION) \
+		--build-arg=WINDOWS_VERSION=$* \
+		-f Dockerfile-windows .
+
+.PHONY: image-windows release-windows
+image-windows: setup-windows-builder
+	for version in $(WINDOWS_VERSIONS); do \
+	$(MAKE) windows-sub-image-$${version}; \
+	done;
+
+release-windows-with-tag: var-require-one-of-CONFIRM-DRYRUN var-require-all-IMAGETAG image-windows
+	for registry in $(DEV_REGISTRIES); do \
+		echo Pushing Windows images to $${registry}; \
+		all_images=""; \
+		manifest_image="$${registry}/$(WINDOWS_IMAGE):$(IMAGETAG)"; \
+		for win_ver in $(WINDOWS_VERSIONS); do \
+			image_tar="$(WINDOWS_DIST)/$(WINDOWS_IMAGE)-$(GIT_VERSION)-$${win_ver}.tar"; \
+			image="$${registry}/$(WINDOWS_IMAGE):$(IMAGETAG)-windows-$${win_ver}"; \
+			echo Pushing image $${image} ...; \
+			$(CRANE_BINDMOUNT) push $${image_tar} $${image}$(double_quote) & \
+			all_images="$${all_images} $${image}"; \
+		done; \
+		wait; \
+		$(DOCKER_MANIFEST) create --amend $${manifest_image} $${all_images}; \
+		for win_ver in $(WINDOWS_VERSIONS); do \
+			version=$$(docker manifest inspect mcr.microsoft.com/windows/nanoserver:$${win_ver} | grep "os.version" | head -n 1 | awk -F\" '{print $$4}'); \
+			image="$${registry}/$(WINDOWS_IMAGE):$(IMAGETAG)-windows-$${win_ver}"; \
+			$(DOCKER_MANIFEST) annotate --os windows --arch amd64 --os-version $${version} $${manifest_image} $${image}; \
+		done; \
+		$(DOCKER_MANIFEST) push --purge $${manifest_image}; \
+	done ;
+
+release-windows: var-require-one-of-CONFIRM-DRYRUN var-require-all-BRANCH_NAME
+	$(MAKE) release-windows-with-tag IMAGETAG=$(if $(IMAGETAG_PREFIX),$(IMAGETAG_PREFIX)-)$(BRANCH_NAME)
+	$(MAKE) release-windows-with-tag IMAGETAG=$(if $(IMAGETAG_PREFIX),$(IMAGETAG_PREFIX)-)$(shell git describe --tags --dirty --long --always --abbrev=12)
