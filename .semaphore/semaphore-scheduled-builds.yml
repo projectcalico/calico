@@ -672,6 +672,9 @@ blocks:
     - name: "cni-plugin tests"
       commands:
       - ../.semaphore/run-and-monitor ci.log make ci
+    - name: "build windows cni-plugin images"
+      commands:
+      - ../.semaphore/run-and-monitor ci.log make image-windows
 
 - name: 'crypto'
   run:

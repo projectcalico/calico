@@ -8,7 +8,7 @@ LOCAL_CHECKS=check-boring-ssl
 # Name of the images.
 # e.g., <registry>/<name>:<tag>
 CNI_PLUGIN_IMAGE ?=cni
-CNI_PLUGIN_IMAGE_WINDOWS ?=cni-windows
+WINDOWS_IMAGE ?=cni-windows
 BUILD_IMAGES   ?=$(CNI_PLUGIN_IMAGE)
 
 ###############################################################################
@@ -115,11 +115,18 @@ $(WINDOWS_BIN)/install.exe: $(SRC_FILES)
 $(WINDOWS_BIN)/calico-ipam.exe $(WINDOWS_BIN)/calico.exe: $(WINDOWS_BIN)/install.exe
 	cp "$<" "$@"
 
+# NOTE: WINDOWS_IMAGE_REQS must be defined with the requirements to build the windows
+# image. These must be added as reqs to 'image-windows' (originally defined in
+# lib.Makefile) on the specific package Makefile otherwise they are not correctly
+# recognized.
+WINDOWS_IMAGE_REQS := Dockerfile-windows build fetch-win-cni-bins
+image-windows: $(WINDOWS_IMAGE_REQS)
+
 ###############################################################################
 # Building the image
 ###############################################################################
 image: $(DEPLOY_CONTAINER_MARKER)
-image-all: $(addprefix sub-image-,$(VALIDARCHES)) sub-image-fips-amd64 image-windows
+image-all: $(addprefix sub-image-,$(VALIDARCHES)) sub-image-fips-amd64
 sub-image-%:
 	$(MAKE) image ARCH=$*
 sub-image-fips-%:
@@ -245,7 +252,7 @@ $(WINDOWS_BIN)/win-fv.exe: $(WINFV_SRCFILES)
 # Release
 ###############################################################################
 ## Produces a clean build of release artifacts at the specified version.
-release-build: .release-$(VERSION).created 
+release-build: .release-$(VERSION).created
 .release-$(VERSION).created:
 	$(MAKE) clean image-all RELEASE=true
 	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=$(VERSION)
@@ -283,7 +290,7 @@ release-publish: release-prereqs .release-$(VERSION).published
 	$(MAKE) FIPS=true push-images-to-registries push-manifests IMAGETAG=$(VERSION)-fips RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
 
 	# Push Windows images.
-	$(MAKE) release-windows RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
+	$(MAKE) release-windows IMAGETAG=$(VERSION) CONFIRM=$(CONFIRM)
 	touch $@
 
 # WARNING: Only run this target if this release is the latest stable release. Do NOT
@@ -296,93 +303,8 @@ release-publish-latest: release-prereqs
 
 	$(MAKE) push-images-to-registries push-manifests RELEASE=true IMAGETAG=latest RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
 
-# FIXME: Use WINDOWS_HPC_VERSION and image instead of nanoserver and WINDOWS_VERSIONS when containerd v1.6 is EOL'd
-# .PHONY: image-windows release-windows
-# # Build Windows image and possibly push it to $DEV_REGISTRIES
-# image-windows: setup-windows-builder Dockerfile-windows build fetch-win-cni-bins
-# 	push="$${PUSH:-false}"; \
-# 	image_version="$${VERSION:-latest}"; \
-# 	for registry in $(DEV_REGISTRIES); do \
-# 		echo Building and pushing Windows image to $${registry}; \
-# 		image="$${registry}/$(CNI_PLUGIN_IMAGE_WINDOWS):$${image_version}"; \
-# 		docker buildx build \
-# 			--platform windows/amd64 \
-# 			--output=type=image,push=$${push} \
-# 			-t $${image} \
-# 			--pull \
-# 			--no-cache \
-# 			--build-arg GIT_VERSION=$(GIT_VERSION) \
-# 			--build-arg WINDOWS_HPC_VERSION=$(WINDOWS_HPC_VERSION) \
-# 			-f Dockerfile-windows .; \
-# 	done ;
-
-# # Build and push Windows image
-# release-windows: var-require-one-of-CONFIRM-DRYRUN release-prereqs clean-windows
-# 	$(MAKE) image-windows PUSH=true
-
-# Windows image pushing is different because we do not build docker images directly.
-# Since the build machine is linux, we output the images to a tarball. (We can
-# produce images but there will be no output because docker images
-# built for Windows cannot be loaded on linux.)
-#
-# The resulting image tarball is then pushed to registries during cd/release.
-# The image tarballs are located in WINDOWS_DIST and have files names
-# with the format 'cni-windows-v3.21.0-2-abcdef-20H2.tar'.
-#
-# In addition to pushing the individual images, we also create the manifest
-# directly using 'docker manifest'. This is possible because Semaphore is using
-# a recent enough docker CLI version (20.10.0)
-#
-# - Create the manifest with 'docker manifest create' using the list of all images.
-# - For each windows version, 'docker manifest annotate' its image with "os.image: <windows_version>".
-#   <windows_version> is the version string that looks like, e.g. 10.0.19041.1288.
-#   Setting os.image in the manifest is required for Windows hosts to load the
-#   correct image in manifest.
-# - Finally we push the manifest, "purging" the local manifest.
-WINDOWS_DIST = dist/windows
-
-$(WINDOWS_DIST)/$(CNI_PLUGIN_IMAGE_WINDOWS)-$(GIT_VERSION)-%.tar: sub-image-windows-$*
-
-sub-image-windows-%: setup-windows-builder Dockerfile-windows build fetch-win-cni-bins
-	# ensure dir for windows image tars exits
-	-mkdir -p $(WINDOWS_DIST)
-	docker buildx build \
-		--platform windows/amd64 \
-		--output=type=docker,dest=$(CURDIR)/$(WINDOWS_DIST)/$(CNI_PLUGIN_IMAGE_WINDOWS)-$(GIT_VERSION)-$*.tar \
-		--pull \
-		-t $(CNI_PLUGIN_IMAGE_WINDOWS):latest \
-		--build-arg GIT_VERSION=$(GIT_VERSION) \
-		--build-arg=WINDOWS_VERSION=$* \
-		-f Dockerfile-windows .
-
-.PHONY: image-windows release-windows
-image-windows: setup-windows-builder
-	for version in $(WINDOWS_VERSIONS); do \
-	$(MAKE) sub-image-windows-$${version}; \
-	done;
-
-release-windows: var-require-one-of-CONFIRM-DRYRUN clean-windows image-windows
-	image_version="$${VERSION:-latest}"; \
-	for registry in $(DEV_REGISTRIES); do \
-		echo Pushing Windows images to $${registry}; \
-		all_images=""; \
-		manifest_image="$${registry}/$(CNI_PLUGIN_IMAGE_WINDOWS):$${image_version}"; \
-		for win_ver in $(WINDOWS_VERSIONS); do \
-			image_tar="$(WINDOWS_DIST)/$(CNI_PLUGIN_IMAGE_WINDOWS)-$(GIT_VERSION)-$${win_ver}.tar"; \
-			image="$${registry}/$(CNI_PLUGIN_IMAGE_WINDOWS):$${image_version}-windows-$${win_ver}"; \
-			echo Pushing image $${image} ...; \
-			$(CRANE_BINDMOUNT) push $${image_tar} $${image}$(double_quote) & \
-			all_images="$${all_images} $${image}"; \
-		done; \
-		wait; \
-		$(DOCKER_MANIFEST) create --amend $${manifest_image} $${all_images}; \
-		for win_ver in $(WINDOWS_VERSIONS); do \
-			version=$$(docker manifest inspect mcr.microsoft.com/windows/nanoserver:$${win_ver} | grep "os.version" | head -n 1 | awk -F\" '{print $$4}'); \
-			image="$${registry}/$(CNI_PLUGIN_IMAGE_WINDOWS):$${image_version}-windows-$${win_ver}"; \
-			$(DOCKER_MANIFEST) annotate --os windows --arch amd64 --os-version $${version} $${manifest_image} $${image}; \
-		done; \
-		$(DOCKER_MANIFEST) push --purge $${manifest_image}; \
-	done ;
+	# Push Windows images.
+	$(MAKE) release-windows IMAGETAG=latest CONFIRM=$(CONFIRM)
 
 ###############################################################################
 # Developer helper scripts (not used by build or test)
