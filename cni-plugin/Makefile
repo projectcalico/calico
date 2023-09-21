@@ -126,7 +126,7 @@ image-windows: $(WINDOWS_IMAGE_REQS)
 # Building the image
 ###############################################################################
 image: $(DEPLOY_CONTAINER_MARKER)
-image-all: $(addprefix sub-image-,$(VALIDARCHES)) sub-image-fips-amd64 image-windows
+image-all: $(addprefix sub-image-,$(VALIDARCHES)) sub-image-fips-amd64
 sub-image-%:
 	$(MAKE) image ARCH=$*
 sub-image-fips-%:
@@ -239,7 +239,7 @@ test-install-cni: run-k8s-apiserver image pkg/install/install.test
 # CI/CD
 ###############################################################################
 .PHONY: ci
-ci: clean mod-download build static-checks test-cni-versions image-all clean test-install-cni
+ci: clean mod-download build static-checks test-cni-versions image-all test-install-cni
 
 ## Deploys images to registry
 cd: image-all cd-common
@@ -252,7 +252,7 @@ $(WINDOWS_BIN)/win-fv.exe: $(WINFV_SRCFILES)
 # Release
 ###############################################################################
 ## Produces a clean build of release artifacts at the specified version.
-release-build: .release-$(VERSION).created 
+release-build: .release-$(VERSION).created
 .release-$(VERSION).created:
 	$(MAKE) clean image-all RELEASE=true
 	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=$(VERSION)
