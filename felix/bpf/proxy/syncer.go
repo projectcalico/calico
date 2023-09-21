@@ -852,11 +852,14 @@ func (s *Syncer) getSvcNATKeyLBSrcRange(svc k8sp.ServicePort) ([]nat.FrontendKey
 	keys := make([]nat.FrontendKeyInterface, 0, len(loadBalancerSourceRanges))
 
 	for _, src := range loadBalancerSourceRanges {
-		// Ignore IPv6 addresses
 		if strings.Contains(src, ":") {
+			if s.ipFamily != 6 {
+				continue
+			}
+		} else if s.ipFamily == 6 {
 			continue
 		}
-		key := s.newFrontendKeySrc(ipaddr, uint16(port), proto, ip.MustParseCIDROrIP(src).(ip.V4CIDR))
+		key := s.newFrontendKeySrc(ipaddr, uint16(port), proto, ip.MustParseCIDROrIP(src))
 		keys = append(keys, key)
 	}
 	return keys, nil
