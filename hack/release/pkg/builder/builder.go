@@ -447,7 +447,7 @@ func (r *ReleaseBuilder) buildContainerImages(ver string) error {
 
 	windowsReleaseDirs := []string{
 		"node",
-		"cni-plugin"
+		"cni-plugin",
 	}
 
 	// Build env.
@@ -535,7 +535,7 @@ func (r *ReleaseBuilder) publishContainerImages(ver string) error {
 
 	windowsReleaseDirs := []string{
 		"node",
-		"cni-plugin"
+		"cni-plugin",
 	}
 
 	env := append(os.Environ(),
