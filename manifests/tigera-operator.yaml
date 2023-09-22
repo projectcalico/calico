@@ -25077,6 +25077,14 @@ rules:
     - list
     - watch
   - apiGroups:
+    - projectcalico.org
+    resources:
+    - ipamconfigurations
+    verbs:
+    - get
+    - list
+    - watch
+  - apiGroups:
       - scheduling.k8s.io
     resources:
       - priorityclasses
