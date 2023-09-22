@@ -415,7 +415,7 @@ func TestNATNodePort(t *testing.T) {
 		ctr := ct[ctKey]
 		Expect(ctr.Type()).To(Equal(conntrack.TypeNATForward))
 
-		ctKey = ctr.ReverseNATKey()
+		ctKey = ctr.ReverseNATKey().(conntrack.Key)
 		Expect(ct).Should(HaveKey(ctKey))
 		ctr = ct[ctKey]
 		Expect(ctr.Type()).To(Equal(conntrack.TypeNATReverse))
@@ -528,7 +528,7 @@ func TestNATNodePort(t *testing.T) {
 		Expect(ctr.Type()).To(Equal(conntrack.TypeNATForward))
 		Expect(ctr.NATSPort()).To(Equal(uint16(0)))
 
-		ctKey = ctr.ReverseNATKey()
+		ctKey = ctr.ReverseNATKey().(conntrack.Key)
 		Expect(ct).Should(HaveKey(ctKey))
 		ctr = ct[ctKey]
 		Expect(ctr.Type()).To(Equal(conntrack.TypeNATReverse))
@@ -602,7 +602,7 @@ func TestNATNodePort(t *testing.T) {
 		ctr := ct[ctKey]
 		Expect(ctr.Type()).To(Equal(conntrack.TypeNATForward))
 
-		ctKey = ctr.ReverseNATKey()
+		ctKey = ctr.ReverseNATKey().(conntrack.Key)
 		Expect(ct).Should(HaveKey(ctKey))
 		ctr = ct[ctKey]
 		Expect(ctr.Type()).To(Equal(conntrack.TypeNATReverse),
@@ -755,7 +755,7 @@ func TestNATNodePort(t *testing.T) {
 		ctr := ct[ctKey]
 		Expect(ctr.Type()).To(Equal(conntrack.TypeNATForward))
 
-		ctKey = ctr.ReverseNATKey()
+		ctKey = ctr.ReverseNATKey().(conntrack.Key)
 		Expect(ct).Should(HaveKey(ctKey))
 		ctr = ct[ctKey]
 		Expect(ctr.Type()).To(Equal(conntrack.TypeNATReverse))
@@ -863,7 +863,7 @@ func TestNATNodePort(t *testing.T) {
 			ctr := ct[ctKey]
 			Expect(ctr.Type()).To(Equal(conntrack.TypeNATForward))
 
-			ctKey = ctr.ReverseNATKey()
+			ctKey = ctr.ReverseNATKey().(conntrack.Key)
 			Expect(ct).Should(HaveKey(ctKey))
 			ctr = ct[ctKey]
 			Expect(ctr.Type()).To(Equal(conntrack.TypeNATReverse))
@@ -1174,7 +1174,7 @@ func TestNATNodePortMultiNIC(t *testing.T) {
 		ctr := ct[ctKey]
 		Expect(ctr.Type()).To(Equal(conntrack.TypeNATForward))
 
-		ctKey = ctr.ReverseNATKey()
+		ctKey = ctr.ReverseNATKey().(conntrack.Key)
 		Expect(ct).Should(HaveKey(ctKey))
 		ctr = ct[ctKey]
 		Expect(ctr.Type()).To(Equal(conntrack.TypeNATReverse))
@@ -1282,7 +1282,7 @@ func TestNATNodePortMultiNIC(t *testing.T) {
 		ctr := ct[ctKey]
 		Expect(ctr.Type()).To(Equal(conntrack.TypeNATForward))
 
-		ctKey = ctr.ReverseNATKey()
+		ctKey = ctr.ReverseNATKey().(conntrack.Key)
 		Expect(ct).Should(HaveKey(ctKey))
 		ctr = ct[ctKey]
 		Expect(ctr.Type()).To(Equal(conntrack.TypeNATReverse))
@@ -2101,7 +2101,7 @@ func TestNATNodePortDSROptout(t *testing.T) {
 		Expect(ctr.Type()).To(Equal(conntrack.TypeNATForward))
 		Expect(ctr.NATSPort()).To(Equal(uint16(0)))
 
-		ctKey = ctr.ReverseNATKey()
+		ctKey = ctr.ReverseNATKey().(conntrack.Key)
 		Expect(ct).Should(HaveKey(ctKey))
 		ctr = ct[ctKey]
 		Expect(ctr.Type()).To(Equal(conntrack.TypeNATReverse))
@@ -2311,7 +2311,7 @@ func TestNATSourceCollision(t *testing.T) {
 		Expect(ctr.Type()).To(Equal(conntrack.TypeNATForward))
 		Expect(ctr.NATSPort()).To(Equal(newSPort))
 
-		revKey = ctr.ReverseNATKey()
+		revKey = ctr.ReverseNATKey().(conntrack.Key)
 		Expect(revKey.AsBytes()).To(Equal(
 			conntrack.NewKey(uint8(6 /* TCP */), clientIP, newSPort, podIP, podPort).AsBytes()))
 
@@ -2979,7 +2979,7 @@ func TestNATNodePortV6(t *testing.T) {
 		ctr := ct[ctKey]
 		Expect(ctr.Type()).To(Equal(conntrack.TypeNATForward))
 
-		ctKey = ctr.ReverseNATKey()
+		ctKey = ctr.ReverseNATKey().(conntrack.KeyV6)
 		Expect(ct).Should(HaveKey(ctKey))
 		ctr = ct[ctKey]
 		Expect(ctr.Type()).To(Equal(conntrack.TypeNATReverse))
@@ -3092,7 +3092,7 @@ func TestNATNodePortV6(t *testing.T) {
 		Expect(ctr.Type()).To(Equal(conntrack.TypeNATForward))
 		Expect(ctr.NATSPort()).To(Equal(uint16(0)))
 
-		ctKey = ctr.ReverseNATKey()
+		ctKey = ctr.ReverseNATKey().(conntrack.KeyV6)
 		Expect(ct).Should(HaveKey(ctKey))
 		ctr = ct[ctKey]
 		Expect(ctr.Type()).To(Equal(conntrack.TypeNATReverse))
@@ -3166,7 +3166,7 @@ func TestNATNodePortV6(t *testing.T) {
 		ctr := ct[ctKey]
 		Expect(ctr.Type()).To(Equal(conntrack.TypeNATForward))
 
-		ctKey = ctr.ReverseNATKey()
+		ctKey = ctr.ReverseNATKey().(conntrack.KeyV6)
 		Expect(ct).Should(HaveKey(ctKey))
 		ctr = ct[ctKey]
 		Expect(ctr.Type()).To(Equal(conntrack.TypeNATReverse),
@@ -3319,7 +3319,7 @@ func TestNATNodePortV6(t *testing.T) {
 		ctr := ct[ctKey]
 		Expect(ctr.Type()).To(Equal(conntrack.TypeNATForward))
 
-		ctKey = ctr.ReverseNATKey()
+		ctKey = ctr.ReverseNATKey().(conntrack.KeyV6)
 		Expect(ct).Should(HaveKey(ctKey))
 		ctr = ct[ctKey]
 		Expect(ctr.Type()).To(Equal(conntrack.TypeNATReverse))
@@ -3428,7 +3428,7 @@ func TestNATNodePortV6(t *testing.T) {
 			ctr := ct[ctKey]
 			Expect(ctr.Type()).To(Equal(conntrack.TypeNATForward))
 
-			ctKey = ctr.ReverseNATKey()
+			ctKey = ctr.ReverseNATKey().(conntrack.KeyV6)
 			Expect(ct).Should(HaveKey(ctKey))
 			ctr = ct[ctKey]
 			Expect(ctr.Type()).To(Equal(conntrack.TypeNATReverse))
