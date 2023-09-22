@@ -513,6 +513,7 @@ type AffinityKeyInterface interface {
 	ClientIP() net.IP
 	FrontendAffinityKey() FrontEndAffinityKeyInterface
 	String() string
+	AsBytes() []byte
 }
 
 type FrontEndAffinityKey [frontendAffKeySize]byte

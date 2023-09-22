@@ -2397,17 +2397,27 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						// single node for the experiments.
 						It("should have connectivity from a workload to a service with multiple backends", func() {
 
-							affKV := func() (nat.AffinityKey, nat.AffinityValue) {
-								aff := dumpAffMap(tc.Felixes[0])
-								ExpectWithOffset(1, aff).To(HaveLen(1))
+							affKV := func() (nat.AffinityKeyInterface, nat.AffinityValueInterface) {
+								if testOpts.ipv6 {
+									aff := dumpAffMapV6(tc.Felixes[0])
+									ExpectWithOffset(1, aff).To(HaveLen(1))
 
-								// get the only key
-								for k, v := range aff {
-									return k, v
+									// get the only key
+									for k, v := range aff {
+										return k, v
+									}
+								} else {
+									aff := dumpAffMap(tc.Felixes[0])
+									ExpectWithOffset(1, aff).To(HaveLen(1))
+
+									// get the only key
+									for k, v := range aff {
+										return k, v
+									}
 								}
 
 								Fail("no value in aff map")
-								return nat.AffinityKey{}, nat.AffinityValue{}
+								return nil, nil
 							}
 
 							ip := testSvc.Spec.ClusterIP
@@ -2417,9 +2427,22 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								// Sync with NAT tables to prevent creating extra entry when
 								// CTLB misses but regular DNAT hits, but connection fails and
 								// then CTLB succeeds.
-								natFtKey := nat.NewNATKey(net.ParseIP(ip), port, numericProto)
+								var (
+									family   int
+									natFtKey nat.FrontendKeyInterface
+								)
+
+								if testOpts.ipv6 {
+									natFtKey = nat.NewNATKeyV6Intf(net.ParseIP(ip), port, numericProto)
+									family = 6
+								} else {
+									natFtKey = nat.NewNATKeyIntf(net.ParseIP(ip), port, numericProto)
+									family = 4
+								}
+
 								Eventually(func() bool {
-									m := dumpNATMap(tc.Felixes[0])
+									m, be := dumpNATMapsAny(family, tc.Felixes[0])
+
 									v, ok := m[natFtKey]
 									if !ok || v.Count() == 0 {
 										return false
@@ -2427,7 +2450,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 									beKey := nat.NewNATBackendKey(v.ID(), 0)
 
-									be := dumpEPMap(tc.Felixes[0])
 									_, ok = be[beKey]
 									return ok
 								}, 5*time.Second).Should(BeTrue())
@@ -2457,10 +2479,15 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							Expect(val1.Backend()).To(Equal(mVal.Backend()))
 
 							netIP := net.ParseIP(ip)
-							Expect(mkey.FrontendAffinityKey().AsBytes()).
-								To(Equal(nat.NewNATKey(netIP, port, numericProto).AsBytes()[4:12]))
+							if testOpts.ipv6 {
+								Expect(mkey.FrontendAffinityKey().AsBytes()).
+									To(Equal(nat.NewNATKeyV6(netIP, port, numericProto).AsBytes()[4:12]))
+							} else {
+								Expect(mkey.FrontendAffinityKey().AsBytes()).
+									To(Equal(nat.NewNATKey(netIP, port, numericProto).AsBytes()[4:12]))
+							}
 
-							Eventually(func() nat.BackendValue {
+							Eventually(func() nat.BackendValueInterface {
 								// Remove the affinity entry to emulate timer
 								// expiring / no prior affinity.
 								m := nat.AffinityMap()
@@ -2471,6 +2498,18 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 									Expect(err.Error()).To(ContainSubstring("No such file or directory"))
 								}
 
+								if testOpts.ipv6 {
+									aff := dumpAffMapV6(tc.Felixes[0])
+									Expect(aff).To(HaveLen(0))
+
+									cc.CheckConnectivity()
+
+									aff = dumpAffMapV6(tc.Felixes[0])
+									Expect(aff).To(HaveLen(1))
+									Expect(aff).To(HaveKey(mkey.(nat.AffinityKeyV6)))
+
+									return aff[mkey.(nat.AffinityKeyV6)].Backend()
+								}
 								aff := dumpAffMap(tc.Felixes[0])
 								Expect(aff).To(HaveLen(0))
 
@@ -2478,9 +2517,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 								aff = dumpAffMap(tc.Felixes[0])
 								Expect(aff).To(HaveLen(1))
-								Expect(aff).To(HaveKey(mkey))
+								Expect(aff).To(HaveKey(mkey.(nat.AffinityKey)))
 
-								return aff[mkey].Backend().(nat.BackendValue)
+								return aff[mkey.(nat.AffinityKey)].Backend()
 							}, 60*time.Second, time.Second).ShouldNot(Equal(mVal.Backend()))
 						})
 					}
@@ -3751,7 +3790,18 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 				hostIP0 := TargetIP(felixIP(0))
 				hostPort := uint16(8080)
-				target := fmt.Sprintf("%s:8055", w[0][0].IP)
+				var (
+					target string
+					tool   string
+				)
+
+				if testOpts.ipv6 {
+					target = fmt.Sprintf("[%s]:8055", w[0][0].IP)
+					tool = "ip6tables"
+				} else {
+					target = fmt.Sprintf("%s:8055", w[0][0].IP)
+					tool = "iptables"
+				}
 
 				policy := api.NewNetworkPolicy()
 				policy.Name = "allow-all"
@@ -3780,7 +3830,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				By("installing 3rd party DNAT rules", func() {
 					// Install a DNAT in first felix
 					tc.Felixes[0].Exec(
-						"iptables", "-w", "10", "-W", "100000", "-t", "nat", "-A", "PREROUTING", "-p", protocol, "-m", protocol,
+						tool, "-w", "10", "-W", "100000", "-t", "nat", "-A", "PREROUTING", "-p", protocol, "-m", protocol,
 						"--dport", fmt.Sprintf("%d", hostPort), "-j", "DNAT", "--to-destination", target)
 
 					cc.ResetExpectations()
@@ -3793,7 +3843,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 				By("removing 3rd party rules and check connectivity is back to normal again", func() {
 					tc.Felixes[0].Exec(
-						"iptables", "-w", "10", "-W", "100000", "-t", "nat", "-D", "PREROUTING", "-p", protocol, "-m", protocol,
+						tool, "-w", "10", "-W", "100000", "-t", "nat", "-D", "PREROUTING", "-p", protocol, "-m", protocol,
 						"--dport", fmt.Sprintf("%d", hostPort), "-j", "DNAT", "--to-destination", target)
 
 					expectNormalConnectivity()
@@ -3918,8 +3968,13 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					err := extWorkload.Start()
 					Expect(err).NotTo(HaveOccurred())
 
+					tool := "iptables"
+					if testOpts.ipv6 {
+						tool = "ip6tables"
+					}
+
 					for _, felix := range tc.Felixes {
-						felix.Exec("iptables", "-t", "nat", "-A", "POSTROUTING", "-d", extWorkload.IP, "-j", "MASQUERADE")
+						felix.Exec(tool, "-t", "nat", "-A", "POSTROUTING", "-d", extWorkload.IP, "-j", "MASQUERADE")
 					}
 				})
 
@@ -4346,6 +4401,13 @@ func dumpAffMap(felix *infrastructure.Felix) nat.AffinityMapMem {
 	bm := nat.AffinityMap()
 	m := make(nat.AffinityMapMem)
 	dumpBPFMap(felix, bm, nat.AffinityMapMemIter(m))
+	return m
+}
+
+func dumpAffMapV6(felix *infrastructure.Felix) nat.AffinityMapMemV6 {
+	bm := nat.AffinityMapV6()
+	m := make(nat.AffinityMapMemV6)
+	dumpBPFMap(felix, bm, nat.AffinityMapMemV6Iter(m))
 	return m
 }
 
