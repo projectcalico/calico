@@ -23,20 +23,20 @@ static CALI_BPF_INLINE bool ipv6_addr_t_eq(ipv6_addr_t x, ipv6_addr_t y)
 	return x.a == y.a && x.b == y.b && x.c == y.c && x.d == y.d;
 }
 
-static CALI_BPF_INLINE int ipv6_addr_t_cmp(ipv6_addr_t x, ipv6_addr_t y)
+static CALI_BPF_INLINE int ipv6_addr_t_cmp(ipv6_addr_t *x, ipv6_addr_t *y)
 {
-	if (x.a < y.a) {
+	if (x->a < y->a) {
 		return -1;
-	} else if (x.a == y.a) {
-		if (x.b < y.b) {
+	} else if (x->a == y->a) {
+		if (x->b < y->b) {
 			return -1;
-		} else if (x.b == y.b) {
-			if (x.c < y.c) {
+		} else if (x->b == y->b) {
+			if (x->c < y->c) {
 				return -1;
-			} else if (x.c == y.c) {
-				if (x.d < y.d) {
+			} else if (x->c == y->c) {
+				if (x->d < y->d) {
 					return -1;
-				} else if (x.d == y.d) {
+				} else if (x->d == y->d) {
 					return 0;
 				}
 			}
@@ -74,6 +74,30 @@ static CALI_BPF_INLINE void ipv6_addr_t_to_ipv6hdr_ip(struct in6_addr *lnx, ipv6
 	lnx->in6_u.u6_addr32[3] = us->d;
 }
 
+static CALI_BPF_INLINE void ipv6hdr_ip_to_be32_4_ip(__be32 *bpf, struct in6_addr *lnx)
+{
+	bpf[0] = lnx->in6_u.u6_addr32[0];
+	bpf[1] = lnx->in6_u.u6_addr32[1];
+	bpf[2] = lnx->in6_u.u6_addr32[2];
+	bpf[3] = lnx->in6_u.u6_addr32[3];
+}
+
+static CALI_BPF_INLINE void ipv6_addr_t_to_be32_4_ip(__be32 *bpf, ipv6_addr_t *us)
+{
+	bpf[0] = us->a;
+	bpf[1] = us->b;
+	bpf[2] = us->c;
+	bpf[3] = us->d;
+}
+
+static CALI_BPF_INLINE void be32_4_ip_to_ipv6_addr_t(ipv6_addr_t *us, __be32 *bpf)
+{
+	us->a = bpf[0];
+	us->b = bpf[1];
+	us->c = bpf[2];
+	us->d = bpf[3];
+}
+
 typedef ipv6_addr_t ipv46_addr_t;
 
 #define DECLARE_IP_ADDR(name)	ipv6_addr_t name
@@ -85,7 +109,7 @@ typedef ipv6_addr_t ipv46_addr_t;
 #define ip_set_void(ip)	((ip) = 0)
 #define NP_SPECIAL_IP	0xffffffff
 #define ip_equal(a, b)	((a) == (b))
-#define ip_lt(a, b)	((a) < (b))
+#define ip_lt(a, b)	(*(a) < *(b))
 
 typedef ipv4_addr_t ipv46_addr_t;
 

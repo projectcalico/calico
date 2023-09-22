@@ -26,23 +26,13 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/maps"
 )
 
-func init() {
-	maps.SetSize(MapParams.VersionedName(), MapParams.MaxEntries)
-	maps.SetSize(MapV6Params.VersionedName(), MapV6Params.MaxEntries)
-}
-
 const (
-	// PrefixLen (4) + Port (2) + Proto (1) + Flags (1) + IP (4)
-	KeySize   = 12
-	ValueSize = 4
-
-	FlagOutbound = 1
-
-	// sizeof(port) + sizeof(proto) + sizeof(flags)
-	ZeroCIDRPrefixLen = 32
+	// PrefixLen (4) + Port (2) + Proto (1) + Flags (1) + IP (16)
+	KeyV6Size   = 24
+	ValueV6Size = 4
 )
 
-type Key struct {
+type KeyV6 struct {
 	port  uint16
 	proto uint8
 	flags uint8
@@ -50,12 +40,7 @@ type Key struct {
 	mask  int
 }
 
-type KeyInterface interface {
-	String() string
-	ToSlice() []byte
-}
-
-func (k Key) String() string {
+func (k KeyV6) String() string {
 	flags := "inbound"
 	if k.flags&FlagOutbound != 0 {
 		flags = "outbound"
@@ -65,26 +50,26 @@ func (k Key) String() string {
 		k.port, k.proto, flags, k.addr, k.mask)
 }
 
-var MapParams = maps.MapParameters{
+var MapV6Params = maps.MapParameters{
 	Type:       "lpm_trie",
-	KeySize:    KeySize,
-	ValueSize:  ValueSize,
+	KeySize:    KeyV6Size,
+	ValueSize:  ValueV6Size,
 	MaxEntries: 65536,
-	Name:       "cali_v4_fsafes",
+	Name:       "cali_v6_fsafes",
 	Flags:      unix.BPF_F_NO_PREALLOC,
 	Version:    2,
 }
 
-func Map() maps.Map {
-	return maps.NewPinnedMap(MapParams)
+func MapV6() maps.Map {
+	return maps.NewPinnedMap(MapV6Params)
 }
 
-func MakeKey(ipProto uint8, port uint16, outbound bool, ip string, mask int) KeyInterface {
+func MakeKeyV6(ipProto uint8, port uint16, outbound bool, ip string, mask int) KeyInterface {
 	var flags uint8
 	if outbound {
 		flags |= FlagOutbound
 	}
-	return Key{
+	return KeyV6{
 		port:  port,
 		proto: ipProto,
 		flags: flags,
@@ -93,31 +78,31 @@ func MakeKey(ipProto uint8, port uint16, outbound bool, ip string, mask int) Key
 	}
 }
 
-func (k Key) ToSlice() []byte {
-	key := make([]byte, KeySize)
+func (k KeyV6) ToSlice() []byte {
+	key := make([]byte, KeyV6Size)
 	binary.LittleEndian.PutUint32(key[:4], uint32(ZeroCIDRPrefixLen)+uint32(k.mask))
 	binary.LittleEndian.PutUint16(key[4:6], k.port)
 	key[6] = k.proto
 	key[7] = k.flags
-	ip := net.ParseIP(k.addr).To4()
-	maskedIP := ip.Mask(net.CIDRMask(k.mask, 32))
-	copy(key[8:8+4], maskedIP)
+	ip := net.ParseIP(k.addr).To16()
+	maskedIP := ip.Mask(net.CIDRMask(k.mask, 128))
+	copy(key[8:8+16], maskedIP)
 	return key
 }
 
-func KeyFromSlice(data []byte) KeyInterface {
-	var k Key
+func KeyV6FromSlice(data []byte) KeyInterface {
+	var k KeyV6
 	k.port = binary.LittleEndian.Uint16(data[4:6])
 	k.proto = data[6]
 	k.flags = data[7]
 
 	prefixLen := binary.LittleEndian.Uint32(data[:4])
 	k.mask = int(prefixLen) - ZeroCIDRPrefixLen
-	k.addr = net.IPv4(data[8], data[8+1], data[8+2], data[8+3]).String()
+	k.addr = net.IP(data[8 : 8+16]).String()
 
 	return k
 }
 
-func Value() []byte {
-	return make([]byte, ValueSize) // value is unused for now.
+func ValueV6() []byte {
+	return make([]byte, ValueV6Size) // value is unused for now.
 }
