@@ -1422,8 +1422,10 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				// Test doesn't use services so ignore the runs with those turned on.
 				if testOpts.protocol == "tcp" && !testOpts.connTimeEnabled && !testOpts.dsr {
 					It("should not be able to spoof TCP", func() {
-						By("Disabling dev RPF")
-						setRPF(tc.Felixes, testOpts.tunnel, 0, 0)
+						if !testOpts.ipv6 {
+							By("Disabling dev RPF")
+							setRPF(tc.Felixes, testOpts.tunnel, 0, 0)
+						}
 						// Make sure the workload is up and has configured its routes.
 						By("Having basic connectivity")
 						cc.Expect(Some, w[0][0], w[1][0])
@@ -4017,8 +4019,10 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			// Test doesn't use services so ignore the runs with those turned on.
 			if testOpts.protocol == "udp" && !testOpts.connTimeEnabled && !testOpts.dsr {
 				It("should not be able to spoof UDP", func() {
-					By("Disabling dev RPF")
-					setRPF(tc.Felixes, testOpts.tunnel, 0, 0)
+					if !testOpts.ipv6 {
+						By("Disabling dev RPF")
+						setRPF(tc.Felixes, testOpts.tunnel, 0, 0)
+					}
 					tc.Felixes[1].Exec("sysctl", "-w", "net.ipv4.conf."+w[1][0].InterfaceName+".rp_filter=0")
 					tc.Felixes[1].Exec("sysctl", "-w", "net.ipv4.conf."+w[1][1].InterfaceName+".rp_filter=0")
 
