@@ -182,7 +182,7 @@ func NewWinDataplaneDriver(hns hns.API, config Config) *WindowsDataplane {
 	}
 	dp.policySets = policysets.NewPolicySets(hns, ipsc, policysets.FileReader(policysets.StaticFileName))
 
-	dp.RegisterManager(common.NewIPSetsManager(ipSetsV4, config.MaxIPSetSize))
+	dp.RegisterManager(common.NewIPSetsManager("ipv4", ipSetsV4, config.MaxIPSetSize))
 	dp.RegisterManager(newPolicyManager(dp.policySets))
 	dp.endpointMgr = newEndpointManager(hns, dp.policySets)
 	dp.RegisterManager(dp.endpointMgr)

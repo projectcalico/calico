@@ -49,7 +49,7 @@ var _ = Describe("IP Sets manager", func() {
 
 	BeforeEach(func() {
 		ipSets = NewMockIPSets()
-		ipsetsMgr = NewIPSetsManager(ipSets, 1024)
+		ipsetsMgr = NewIPSetsManager("ipv4", ipSets, 1024)
 	})
 
 	// Generic assumptions used during tests. Having them here reduces code duplication and improves readability.
