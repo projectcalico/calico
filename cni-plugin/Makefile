@@ -31,7 +31,7 @@ CURL=curl -C - -sSf
 # Use forked CNI plugin URL and corresponding tagged artifacts.
 CNI_VERSION=v1.1.1-calico+go-1.20.7
 CNI_ARTIFACTS_URL=https://github.com/projectcalico/containernetworking-plugins/releases/download
-FLANNEL_VERSION=v1.1.2
+FLANNEL_VERSION=v1.2.0
 
 # By default set the CNI_SPEC_VERSION to 0.3.1 for tests.
 CNI_SPEC_VERSION?=0.3.1
@@ -154,7 +154,7 @@ $(BIN)/loopback $(BIN)/host-local $(BIN)/portmap $(BIN)/tuning $(BIN)/bandwidth:
 
 $(BIN)/flannel:
 	-mkdir -p $(BIN)
-	$(CURL) -L --retry 5 https://github.com/flannel-io/cni-plugin/releases/download/$(FLANNEL_VERSION)/cni-plugin-flannel-linux-$(subst v7,,$(ARCH))-$(FLANNEL_VERSION).tgz | tar -xz -C $(BIN) ./flannel-$(subst v7,,$(ARCH))
+	$(CURL) -L --retry 5 https://github.com/flannel-io/cni-plugin/releases/download/$(FLANNEL_VERSION)/cni-plugin-flannel-linux-$(subst v7,,$(ARCH))-$(FLANNEL_VERSION).tgz | tar -xz -C $(BIN) flannel-$(subst v7,,$(ARCH))
 	mv $(BIN)/flannel-$(subst v7,,$(ARCH)) $@
 
 $(WINDOWS_BIN)/flannel.exe:
