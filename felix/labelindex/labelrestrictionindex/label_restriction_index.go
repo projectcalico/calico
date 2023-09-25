@@ -45,10 +45,6 @@ type LabelRestrictionIndex[SelID comparable] struct {
 	// valid label restrictions (and hence no entries in labelToValueToIDs).
 	unoptimizedIDs set.Set[SelID]
 
-	// scratchSet provides a scratch area for IterPotentialMatches to use
-	// to avoid allocation.
-	scratchSet set.Set[SelID]
-
 	gaugeOptimizedSelectors   Gauge
 	gaugeUnoptimizedSelectors Gauge
 }
@@ -75,7 +71,6 @@ func New[SelID comparable](opts ...Option[SelID]) *LabelRestrictionIndex[SelID] 
 		labelRestrictions: map[SelID]map[string]parser.LabelRestriction{},
 		labelToValueToIDs: map[string]*valuesSubIndex[SelID]{},
 		unoptimizedIDs:    set.New[SelID](),
-		scratchSet:        set.New[SelID](),
 	}
 	for _, o := range opts {
 		o(idx)
@@ -84,6 +79,8 @@ func New[SelID comparable](opts ...Option[SelID]) *LabelRestrictionIndex[SelID] 
 }
 
 func (s *LabelRestrictionIndex[SelID]) AddSelector(id SelID, selector selector.Selector) {
+	defer s.updateGauges()
+
 	// In case of changes with the same ID, delete it first to clean up the
 	// index.
 	s.DeleteSelector(id)
@@ -98,11 +95,27 @@ func (s *LabelRestrictionIndex[SelID]) AddSelector(id SelID, selector selector.S
 	// to pick the most restrictive.
 	labelName := findMostRestrictedLabel(lrs)
 	optimized := false
+	debug := logrus.IsLevelEnabled(logrus.DebugLevel)
 	if labelName != "" {
 		res := lrs[labelName]
 		if !res.PossibleToSatisfy() {
+			// Selector is impossible to satisfy, we don't even need to
+			// add it to the index(!)
+			if debug {
+				logrus.WithField("selector", selector.String()).Debug(
+					"Selector is not possible to satisfy.")
+			}
 			optimized = true
 		} else if res.MustHaveOneOfValues != nil {
+			// Selector requires one of a few specific values for this
+			// label, add it to the individual values index.
+			if debug {
+				logrus.WithFields(logrus.Fields{
+					"selector": selector.String(),
+					"label":    labelName,
+					"values":   res.MustHaveOneOfValues,
+				}).Debug("Optimising selector on must-have values.")
+			}
 			optimized = true
 			for _, v := range res.MustHaveOneOfValues {
 				values, ok := s.labelToValueToIDs[labelName]
@@ -113,6 +126,14 @@ func (s *LabelRestrictionIndex[SelID]) AddSelector(id SelID, selector selector.S
 				values.Add(v, id)
 			}
 		} else if res.MustBePresent {
+			// Selector requires that this label is present, add it to the
+			// wildcards.
+			if debug {
+				logrus.WithFields(logrus.Fields{
+					"selector": selector.String(),
+					"label":    labelName,
+				}).Debug("Optimising selector on wildcard.")
+			}
 			optimized = true
 			values, ok := s.labelToValueToIDs[labelName]
 			if !ok {
@@ -128,10 +149,11 @@ func (s *LabelRestrictionIndex[SelID]) AddSelector(id SelID, selector selector.S
 		logrus.Debugf("Unable to optimise selector: %q", selector)
 		s.unoptimizedIDs.Add(id)
 	}
-	s.updateGauges()
 }
 
 func (s *LabelRestrictionIndex[SelID]) DeleteSelector(id SelID) {
+	defer s.updateGauges()
+
 	sel := s.selectorsByID[id]
 	if sel == nil {
 		return
@@ -169,7 +191,6 @@ func (s *LabelRestrictionIndex[SelID]) DeleteSelector(id SelID) {
 
 	delete(s.selectorsByID, id)
 	delete(s.labelRestrictions, id)
-	s.updateGauges()
 }
 
 func findMostRestrictedLabel(lrs map[string]parser.LabelRestriction) string {
@@ -189,12 +210,11 @@ func findMostRestrictedLabel(lrs map[string]parser.LabelRestriction) string {
 
 func scoreLabelRestriction(lr parser.LabelRestriction) int {
 	if !lr.PossibleToSatisfy() {
+		// Best possible case, we've proven that this selector can't match
+		// anything at all (so we don't even need to index it).
 		return math.MaxInt
 	}
 	score := 0
-	if lr.MustBeAbsent {
-		score += 1
-	}
 	if lr.MustBePresent {
 		score += 10
 	}
@@ -219,14 +239,7 @@ type Labeled interface {
 }
 
 func (s *LabelRestrictionIndex[SelID]) IterPotentialMatches(labels Labeled, f func(SelID, selector.Selector)) {
-	seenIDs := s.scratchSet
-	defer seenIDs.Clear()
-
-	maybeEmit := func(id SelID) error {
-		if seenIDs.Contains(id) {
-			return nil
-		}
-		seenIDs.Add(id)
+	emit := func(id SelID) error {
 		f(id, s.selectorsByID[id])
 		return nil
 	}
@@ -237,19 +250,15 @@ func (s *LabelRestrictionIndex[SelID]) IterPotentialMatches(labels Labeled, f fu
 			return
 		}
 		if values.selsMatchingWildcard != nil {
-			values.selsMatchingWildcard.Iter(maybeEmit)
+			values.selsMatchingWildcard.Iter(emit)
 		}
 		if ids := values.selsMatchingSpecificValues[v]; ids != nil {
-			ids.Iter(maybeEmit)
+			ids.Iter(emit)
 		}
 	})
 
-	// Finally, emit the unoptimized selectors.  We don't need to go through
-	// maybeEmit because these cannot overlap with optimized selectors.
-	s.unoptimizedIDs.Iter(func(id SelID) error {
-		f(id, s.selectorsByID[id])
-		return nil
-	})
+	// Finally, emit the unoptimized selectors.
+	s.unoptimizedIDs.Iter(emit)
 }
 
 func (s *LabelRestrictionIndex[SelID]) updateGauges() {
@@ -267,8 +276,6 @@ func (s *LabelRestrictionIndex[SelID]) updateGauges() {
 type valuesSubIndex[SelID comparable] struct {
 	selsMatchingSpecificValues map[string]set.Set[SelID]
 	selsMatchingWildcard       set.Set[SelID]
-
-	count int
 }
 
 func (t *valuesSubIndex[SelID]) Add(value string, id SelID) {
@@ -280,17 +287,13 @@ func (t *valuesSubIndex[SelID]) Add(value string, id SelID) {
 		// Not tracking this value yet, create the set.
 		values = set.New[SelID]()
 		t.selsMatchingSpecificValues[value] = values
-	} else if values.Contains(id) {
-		return // Defensive, shouldn't be adding the same ID twice.
 	}
 	values.Add(id)
-	t.count++
-
 }
 
 func (t *valuesSubIndex[SelID]) Remove(value string, id SelID) {
 	values, ok := t.selsMatchingSpecificValues[value]
-	if !ok || !values.Contains(id) {
+	if !ok {
 		return
 	}
 	values.Discard(id)
@@ -301,21 +304,17 @@ func (t *valuesSubIndex[SelID]) Remove(value string, id SelID) {
 			t.selsMatchingSpecificValues = nil
 		}
 	}
-	t.count--
 }
 
 func (t *valuesSubIndex[SelID]) AddWildcard(id SelID) {
 	if t.selsMatchingWildcard == nil {
 		t.selsMatchingWildcard = set.New[SelID]()
-	} else if t.selsMatchingWildcard.Contains(id) {
-		return
 	}
 	t.selsMatchingWildcard.Add(id)
-	t.count++
 }
 
 func (t *valuesSubIndex[SelID]) RemoveWildcard(id SelID) {
-	if t.selsMatchingWildcard == nil || !t.selsMatchingWildcard.Contains(id) {
+	if t.selsMatchingWildcard == nil {
 		return
 	}
 	t.selsMatchingWildcard.Discard(id)
