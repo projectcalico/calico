@@ -505,7 +505,8 @@ func (idx *SelectorAndNamedPortIndex) UpdateIPSet(ipSetID string, sel selector.S
 		idx.DeleteIPSet(ipSetID)
 	}
 
-	// If we get here, we have a new IP set, and we need to do a full scan of all endpoints.
+	// If we get here, we have a new IP set, and we need to scan endpoints
+	// against its selector.
 	newIPSetData := &ipSetData{
 		selector:          sel,
 		namedPort:         namedPort,
@@ -515,7 +516,6 @@ func (idx *SelectorAndNamedPortIndex) UpdateIPSet(ipSetID string, sel selector.S
 	idx.ipSetDataByID[ipSetID] = newIPSetData
 	idx.selectorCandidatesIdx.AddSelector(ipSetID, sel)
 
-	// Then scan all endpoints.
 	idx.iterEndpointCandidates(ipSetID, func(epID any, epData *endpointData) {
 		idx.maybeReportLive()
 
@@ -874,12 +874,18 @@ func (idx *SelectorAndNamedPortIndex) maybeReportLive() {
 }
 
 // iterEndpointCandidates iterates over the subset of endpoints that the
-// index says may match the given IP set's selector.  It may emit additional
+// index says _may_ match the given IP set's selector.  It may produce additional
 // non-matching endpoints (or all endpoints if no optimization is available).
 func (idx *SelectorAndNamedPortIndex) iterEndpointCandidates(ipsetID string, f func(epID any, epData *endpointData)) {
 	sel := idx.ipSetDataByID[ipsetID].selector
 	restrictions := sel.LabelRestrictions()
 	log.Debugf("Selector %s restrictions: %v", sel.String(), restrictions)
+
+	// Implementation: endpoint labels and parent labels are each indexed
+	// separately.  We consult the endpoint and parent indexes for each
+	// "label restriction" extracted from the selector and keep track of the
+	// best available scan strategy for endpoints and parents.  Then, compare
+	// the best endpoint strategy vs the best parent strategy.
 
 	bestEPStrategy := idx.endpointKVIdx.FullScanStrategy()
 	var bestParentStrategy labelnamevalueindex.ScanStrategy[string]
@@ -900,9 +906,11 @@ func (idx *SelectorAndNamedPortIndex) iterEndpointCandidates(ipsetID string, f f
 		} else if epsToScan == 0 && parentsToScan > 0 {
 			// Label matches no endpoints but it does match some parents.
 			// (e.g. a Kubernetes namespace selector).
-			if bestParentStrategy == nil || idx.estimateParentEndpointScanCount(parentStrat) < bestParentEndpointEstimate {
+			parentEstimate := idx.estimateParentEndpointScanCount(parentStrat)
+			if bestParentStrategy == nil || parentEstimate < bestParentEndpointEstimate {
 				log.Debugf("New best parent strategy: %s", parentStrat)
 				bestParentStrategy = parentStrat
+				bestParentEndpointEstimate = parentEstimate
 			}
 		} else if parentsToScan > 0 && epsToScan > 0 {
 			// Label matches both endpoints and parents.  This should be rare
