@@ -33,7 +33,7 @@ func init() {
 	logrus.SetFormatter(&logutils.Formatter{})
 }
 
-func TestCalculationGraph(t *testing.T) {
+func TestIPSets(t *testing.T) {
 	RegisterFailHandler(Fail)
 	junitReporter := reporters.NewJUnitReporter("../report/ipsets_suite.xml")
 	RunSpecsWithDefaultAndCustomReporters(t, "IP sets Suite", []Reporter{junitReporter})
