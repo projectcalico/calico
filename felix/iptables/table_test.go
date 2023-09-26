@@ -1006,6 +1006,57 @@ func describePostUpdateCheckTests(enableRefresh bool, dataplaneMode string) {
 		Expect(dataplane.CmdNames).To(BeEmpty())
 	}
 
+	Describe("with slow dataplane", func() {
+		const saveTime = 200 * time.Millisecond
+		const restoreTime = 800 * time.Millisecond
+
+		BeforeEach(func() {
+			dataplane.OnPreSave = func() {
+				dataplane.AdvanceTimeBy(saveTime)
+			}
+			dataplane.OnPreRestore = func() {
+				dataplane.AdvanceTimeBy(restoreTime)
+			}
+
+			// Just a random change to trigger a save/restore.
+			table.InsertOrAppendRules("FORWARD", []Rule{
+				{Action: AcceptAction{}},
+			})
+			table.Apply()
+		})
+
+		// Recheck will be delayed to at least (save time + restore time) * 2.
+		Describe("after advancing time 1995ms", func() {
+			BeforeEach(resetAndAdvance(1995 * time.Millisecond))
+			It("should not recheck", assertNoCheck)
+			It("should request correct delay", assertDelayMillis(5))
+
+			Describe("after advancing time to 2s", func() {
+				BeforeEach(resetAndAdvance(5 * time.Millisecond))
+				It("should recheck", assertRecheck)
+				It("should request correct delay", assertDelayMillis(2000))
+
+				Describe("after dataplane speeds up again", func() {
+					BeforeEach(func() {
+						table.InsertOrAppendRules("FORWARD", []Rule{
+							{Action: DropAction{}},
+						})
+					})
+					BeforeEach(resetAndAdvance(0))
+
+					It("should request correct delay", func() {
+						// After the first call, time won't advance any more so
+						// the peak values will start to decay with each call.
+						const decayedSaveTime = saveTime * 99 / 100 * 99 / 100
+						const decayedRestoreTime = restoreTime * 99 / 100
+						const expectedDelay = 2 * (decayedSaveTime + decayedRestoreTime)
+						Expect(requestedDelay).To(Equal(expectedDelay))
+					})
+				})
+			})
+		})
+	})
+
 	Describe("after advancing time 49ms", func() {
 		BeforeEach(resetAndAdvance(49 * time.Millisecond))
 		It("should not recheck", assertNoCheck)
