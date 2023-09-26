@@ -1687,6 +1687,7 @@ int calico_tc_skb_send_icmp_replies(struct __sk_buff *skb)
 	ctx->state->sport = ctx->state->dport = 0;
 	return forward_or_drop(ctx);
 deny:
+	(void)fib_flags;
 	return TC_ACT_SHOT;
 #endif /* IPVER6 */
 }

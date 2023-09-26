@@ -31,9 +31,9 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/syncersv1/dedupebuffer"
+	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/seedrng"
 
@@ -309,7 +309,7 @@ configRetry:
 		} else {
 			// Not using KDD, fall back on trying to get a Kubernetes client from the environment.
 			log.Info("Not using Kubernetes datastore driver, trying to get a Kubernetes client...")
-			k8sconf, err := rest.InClusterConfig()
+			k8sconf, err := winutils.GetInClusterConfig()
 			if err != nil {
 				log.WithError(err).Info("Kubernetes in-cluster config not available. " +
 					"Assuming we're not in a Kubernetes deployment.")

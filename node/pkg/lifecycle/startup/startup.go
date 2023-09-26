@@ -31,7 +31,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
 
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
@@ -45,6 +44,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/selector"
 	"github.com/projectcalico/calico/libcalico-go/lib/upgrade/migrator"
 	"github.com/projectcalico/calico/libcalico-go/lib/upgrade/migrator/clients"
+	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 
 	"github.com/projectcalico/calico/node/pkg/calicoclient"
 	"github.com/projectcalico/calico/node/pkg/lifecycle/startup/autodetection"
@@ -130,7 +130,14 @@ func Run() {
 	}
 
 	// If running under kubernetes with secrets to call k8s API
-	if config, err := clientcmd.BuildConfigFromFlags("", os.Getenv("KUBECONFIG")); err == nil {
+	kubeconfig := os.Getenv("KUBECONFIG")
+	// Host env vars may override the container on Windows HPC, so $env:KUBECONFIG cannot
+	// be trusted in this case
+	// FIXME: this will no longer be needed when containerd v1.6 is EOL'd
+	if winutils.InHostProcessContainer() {
+		kubeconfig = ""
+	}
+	if config, err := winutils.BuildConfigFromFlags("", kubeconfig); err == nil {
 		// default timeout is 30 seconds, which isn't appropriate for this kind of
 		// startup action because network services, like kube-proxy might not be
 		// running and we don't want to block the full 30 seconds if they are just
@@ -330,7 +337,14 @@ func MonitorIPAddressSubnets() {
 	if nodeRef := os.Getenv("CALICO_K8S_NODE_REF"); nodeRef != "" {
 		k8sNodeName = nodeRef
 	}
-	if config, err = clientcmd.BuildConfigFromFlags("", os.Getenv("KUBECONFIG")); err == nil {
+	kubeconfig := os.Getenv("KUBECONFIG")
+	// Host env vars may override the container on Windows HPC, so $env:KUBECONFIG cannot
+	// be trusted in this case
+	// FIXME: this will no longer be needed when containerd v1.6 is EOL'd
+	if winutils.InHostProcessContainer() {
+		kubeconfig = ""
+	}
+	if config, err = winutils.BuildConfigFromFlags("", kubeconfig); err == nil {
 		// Create the k8s clientset.
 		clientset, err = kubernetes.NewForConfig(config)
 		if err != nil {

@@ -7,12 +7,11 @@ import (
 	"os"
 	"time"
 
+	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
-	"k8s.io/client-go/tools/clientcmd"
 )
 
 const (
@@ -30,10 +29,16 @@ func WatchExtensionAuth(stopChan chan struct{}) (bool, error) {
 	// set up k8s client
 	// attempt 1: KUBECONFIG env var
 	cfgFile := os.Getenv("KUBECONFIG")
-	cfg, err := clientcmd.BuildConfigFromFlags("", cfgFile)
+	// Host env vars may override the container on Windows HPC, so $env:KUBECONFIG cannot
+	// be trusted in this case
+	// FIXME: this will no longer be needed when containerd v1.6 is EOL'd
+	if winutils.InHostProcessContainer() {
+		cfgFile = ""
+	}
+	cfg, err := winutils.BuildConfigFromFlags("", cfgFile)
 	if err != nil {
 		// attempt 2: in cluster config
-		if cfg, err = rest.InClusterConfig(); err != nil {
+		if cfg, err = winutils.GetInClusterConfig(); err != nil {
 			return false, err
 		}
 	}
