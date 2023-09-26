@@ -30,11 +30,11 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/libcalico-go/lib/set"
-
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/iptables/cmdshim"
 	"github.com/projectcalico/calico/felix/logutils"
+	logutilslc "github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 const (
@@ -261,7 +261,8 @@ type Table struct {
 	// implementation.
 	lockProbeInterval time.Duration
 
-	logCxt *log.Entry
+	logCxt               *log.Entry
+	updateRateLimitedLog *logutilslc.RateLimitedLogger
 
 	gaugeNumChains        prometheus.Gauge
 	gaugeNumRules         prometheus.Gauge
@@ -280,6 +281,7 @@ type Table struct {
 
 	onStillAlive func()
 	opReporter   logutils.OpRecorder
+	reason       string
 }
 
 type TableOptions struct {
@@ -386,6 +388,10 @@ func NewTable(
 		lookPath = options.LookPathOverride
 	}
 
+	logFields := log.Fields{
+		"ipVersion": ipVersion,
+		"table":     name,
+	}
 	table := &Table{
 		Name:                   name,
 		IPVersion:              ipVersion,
@@ -398,10 +404,11 @@ func NewTable(
 		dirtyChains:            set.New[string](),
 		chainToDataplaneHashes: map[string][]string{},
 		chainToFullRules:       map[string][]string{},
-		logCxt: log.WithFields(log.Fields{
-			"ipVersion": ipVersion,
-			"table":     name,
-		}),
+		logCxt:                 log.WithFields(logFields),
+		updateRateLimitedLog: logutilslc.NewRateLimitedLogger(
+			logutilslc.OptInterval(30*time.Second),
+			logutilslc.OptBurst(100),
+		).WithFields(logFields),
 		hashCommentPrefix: hashPrefix,
 		hashCommentRegexp: hashCommentRegexp,
 		ourChainsRegexp:   ourChainsRegexp,
@@ -505,7 +512,7 @@ func (t *Table) UpdateChains(chains []*Chain) {
 }
 
 func (t *Table) UpdateChain(chain *Chain) {
-	t.logCxt.WithField("chainName", chain.Name).Info("Queueing update of chain.")
+	t.updateRateLimitedLog.WithField("chainName", chain.Name).Info("Queueing update of chain.")
 	oldNumRules := 0
 
 	// Incref any newly-referenced chains, then decref the old ones.  By incrementing first we
@@ -536,7 +543,7 @@ func (t *Table) RemoveChains(chains []*Chain) {
 }
 
 func (t *Table) RemoveChainByName(name string) {
-	t.logCxt.WithField("chainName", name).Info("Queuing deletion of chain.")
+	t.updateRateLimitedLog.WithField("chainName", name).Debug("Queuing deletion of chain.")
 	if oldChain, known := t.chainNameToChain[name]; known {
 		t.gaugeNumRules.Sub(float64(len(oldChain.Rules)))
 		delete(t.chainNameToChain, name)
@@ -579,7 +586,7 @@ func (t *Table) increfChain(chainName string) {
 	log.WithField("chainName", chainName).Debug("Incref chain")
 	t.chainRefCounts[chainName] += 1
 	if t.chainRefCounts[chainName] == 1 {
-		log.WithField("chainName", chainName).Info("Chain became referenced, marking it for programming")
+		t.updateRateLimitedLog.WithField("chainName", chainName).Info("Chain became referenced, marking it for programming")
 		t.dirtyChains.Add(chainName)
 	}
 }
@@ -590,7 +597,7 @@ func (t *Table) decrefChain(chainName string) {
 	log.WithField("chainName", chainName).Debug("Decref chain")
 	t.chainRefCounts[chainName] -= 1
 	if t.chainRefCounts[chainName] == 0 {
-		log.WithField("chainName", chainName).Info("Chain no longer referenced, marking it for removal")
+		t.updateRateLimitedLog.WithField("chainName", chainName).Info("Chain no longer referenced, marking it for removal")
 		delete(t.chainRefCounts, chainName)
 		t.dirtyChains.Add(chainName)
 	}
@@ -943,10 +950,19 @@ func (t *Table) InvalidateDataplaneCache(reason string) {
 	}
 	logCxt.Debug("Invalidating dataplane cache")
 	t.inSyncWithDataPlane = false
+	t.reason = reason
 }
 
 func (t *Table) Apply() (rescheduleAfter time.Duration) {
 	now := t.timeNow()
+	defer func() {
+		if time.Since(now) > time.Second {
+			log.WithFields(log.Fields{
+				"applyTime":      time.Since(now),
+				"reasonForApply": t.reason,
+			}).Info("Updating iptables took >1s")
+		}
+	}()
 	// We _think_ we're in sync, check if there are any reasons to think we might
 	// not be in sync.
 	lastReadToNow := now.Sub(t.lastReadTime)
