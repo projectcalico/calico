@@ -882,12 +882,14 @@ func (s *IPSets) ApplyDeletions() bool {
 		if numDeletions >= MaxIPSetDeletionsPerIteration {
 			// Deleting IP sets is slow (40ms) and serialised in the kernel.  Avoid holding up the main loop
 			// for too long.  We'll leave the remaining sets pending deletion and mop them up next time.
-			log.Debugf("Deleted batch of 20 IP sets, rate limiting further IP set deletions.")
+			log.Debugf("Deleted batch of %d IP sets, rate limiting further IP set deletions.", MaxIPSetDeletionsPerIteration)
 			// Leave the item in the set, so we'll do another batch of deletions next time around the loop.
 			return deltatracker.IterActionNoOpStopIteration
 		}
 		meta, _ := s.setNameToProgrammedMetadata.Dataplane().Get(setName)
 		if meta.DeleteFailed {
+			// We previously failed to delete this IP set, skip it until
+			// the next resync.
 			return deltatracker.IterActionNoOp
 		}
 		logCxt := s.logCxt.WithField("setName", setName)
@@ -916,7 +918,7 @@ func (s *IPSets) ApplyDeletions() bool {
 	// update the gauge that records how many IP sets we own.
 	numDeletionsPending := s.setNameToProgrammedMetadata.Dataplane().Len()
 	s.gaugeNumIpsets.Set(float64(numDeletionsPending))
-	return numDeletionsPending > 0
+	return numDeletionsPending > 0 && numDeletions > 0
 }
 
 func (s *IPSets) tryTempIPSetDeletions() {
