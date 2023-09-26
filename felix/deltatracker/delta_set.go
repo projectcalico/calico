@@ -79,6 +79,10 @@ func (s *DesiredSetView[K]) asMapView() *DesiredView[K, struct{}] {
 	return (*DesiredView[K, struct{}])(s)
 }
 
+func (s *DesiredSetView[K]) LenUpperBound() int {
+	return len(s.inDataplaneAndDesired) + len(s.desiredUpdates)
+}
+
 type DataplaneSetView[K comparable] DesiredView[K, struct{}]
 
 func (s *SetDeltaTracker[K]) Dataplane() *DataplaneSetView[K] {
