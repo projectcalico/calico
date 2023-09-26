@@ -85,6 +85,57 @@ var (
 		},
 
 		{
+			Name:      "no endpoints or parents a==A",
+			Endpoints: map[string]mockEndpoint{},
+			Parents:   map[string]mockParent{},
+			IPSets: map[string]ipSet{
+				"aEqualsA": {
+					Selector: "a == 'A'",
+				},
+			},
+
+			ExpectedIPSetOutputs: map[string][]string{
+				"aEqualsA": {},
+			},
+		},
+
+		{
+			Name:      "no endpoints single parent",
+			Endpoints: map[string]mockEndpoint{},
+			Parents: map[string]mockParent{
+				"parent": {
+					Labels: map[string]string{
+						"parentLabelA": "A",
+					},
+				},
+			},
+			IPSets: map[string]ipSet{},
+
+			ExpectedIPSetOutputs: map[string][]string{},
+		},
+
+		{
+			Name:      "no endpoints single parent a==A",
+			Endpoints: map[string]mockEndpoint{},
+			Parents: map[string]mockParent{
+				"parent": {
+					Labels: map[string]string{
+						"parentLabelA": "A",
+					},
+				},
+			},
+			IPSets: map[string]ipSet{
+				"aEqualsA": {
+					Selector: "a == 'A'",
+				},
+			},
+
+			ExpectedIPSetOutputs: map[string][]string{
+				"aEqualsA": {},
+			},
+		},
+
+		{
 			Name: "single endpoint single parent has(A)",
 			Endpoints: map[string]mockEndpoint{
 				"endpoint1": {
@@ -170,7 +221,7 @@ var (
 		},
 
 		{
-			Name: "three endpoints two parents each multiple selectors",
+			Name: "multiple endpoints two parents each multiple selectors",
 			Endpoints: map[string]mockEndpoint{
 				"endpoint1": {
 					Labels: map[string]string{
@@ -390,6 +441,50 @@ var (
 				"hasAAndB":       {"10.0.0.1/32", "10.0.0.2/32"},
 				"hasB":           {"10.0.0.1/32", "10.0.0.2/32", "10.0.0.3/32"},
 				"hasBAndParentA": {"10.0.0.1/32", "10.0.0.2/32", "10.0.0.3/32"},
+			},
+		},
+
+		{
+			Name: "two endpoints overlapping IPs selectors changed with same ID",
+			Endpoints: map[string]mockEndpoint{
+				"endpoint1": {
+					Labels: map[string]string{
+						"a": "A",
+						"b": "B",
+					},
+					RawCIDRs: []string{"10.0.0.1/32", "10.0.0.2/32"},
+					Ports:    nil,
+					Parents:  []string{"parent"},
+				},
+				"endpoint2": {
+					Labels: map[string]string{
+						"b": "B",
+						"c": "C",
+					},
+					RawCIDRs: []string{"10.0.0.2/32", "10.0.0.3/32"},
+					Ports:    nil,
+					Parents:  []string{"parent"},
+				},
+			},
+			Parents: map[string]mockParent{
+				"parent": {
+					Labels: map[string]string{
+						"parentLabelA": "A",
+					},
+				},
+			},
+			IPSets: map[string]ipSet{
+				"hasA": {
+					Selector: "has(b)", // Selector swapped with hasB!
+				},
+				"hasB": {
+					Selector: "has(a)",
+				},
+			},
+
+			ExpectedIPSetOutputs: map[string][]string{
+				"hasA": {"10.0.0.1/32", "10.0.0.2/32", "10.0.0.3/32"},
+				"hasB": {"10.0.0.1/32", "10.0.0.2/32"},
 			},
 		},
 
@@ -817,8 +912,6 @@ var (
 func TestNamedPortIndex(t *testing.T) {
 	log.SetLevel(log.DebugLevel)
 
-	var successfulBaseTests []namedPortState
-
 	for _, state := range baseTests {
 		// First run each base test as-is: just apply its inputs and
 		// check that we get the right output.
@@ -830,18 +923,12 @@ func TestNamedPortIndex(t *testing.T) {
 			idx.OnMemberRemoved = rec.OnMemberRemoved
 			applyStateTransition(idx, rec, emptyState, state, "normal")
 			state.CheckRecordedState(t, rec)
-
-			successfulBaseTests = append(successfulBaseTests, state)
 		})
 	}
 
-	if len(successfulBaseTests) != len(baseTests) {
-		t.Fatal("Base tests failed, skipping generated tests.")
-	}
-
 	var generatedTests [][]namedPortState
-	for i, s1 := range successfulBaseTests {
-		for j, s2 := range successfulBaseTests {
+	for i, s1 := range baseTests {
+		for j, s2 := range baseTests {
 			if i == j {
 				continue
 			}
@@ -893,8 +980,6 @@ func (s namedPortState) CheckRecordedState(t *testing.T, rec *testRecorder) {
 	t.Helper()
 	for setName, expected := range s.ExpectedIPSetOutputs {
 		memberStrings := set.New[string]()
-		ExpectWithOffset(1, rec.ipsets[setName]).To(HaveLen(len(expected)),
-			fmt.Sprintf("%s: expected IP set %s to have entries: %v, not %v", s.Name, setName, expected, memberStrings.Slice()))
 		for m := range rec.ipsets[setName] {
 			memberStrings.Add(memberToProto(m))
 		}
