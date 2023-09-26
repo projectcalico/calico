@@ -502,6 +502,11 @@ func (idx *SelectorAndNamedPortIndex) UpdateIPSet(ipSetID string, sel selector.S
 		// which isn't currently possible in Felix, since the ID is formed by hashing the other
 		// values.  For completeness, handle (inefficiently) by simulating a deletion.
 		log.WithField("ipSetID", ipSetID).Warn("IP set selector or named port changed for existing ID.")
+		for m := range oldIPSetData.memberToRefCount {
+			// Emit deletion events for the members.  We don't need to do that
+			// for a real IP set deletion because it's handled en-masse.
+			idx.OnMemberRemoved(ipSetID, m)
+		}
 		idx.DeleteIPSet(ipSetID)
 	}
 
@@ -940,7 +945,7 @@ func (idx *SelectorAndNamedPortIndex) iterEndpointCandidates(ipsetID string, f f
 		counterVecScanStrat.WithLabelValues("parent-" + bestParentStrategy.Name())
 		bestParentStrategy.Scan(func(parentID string) bool {
 			parent, _ := idx.parentKVIdx.Get(parentID)
-			parent.endpointIDs.Iter(func(id any) error {
+			parent.IterEndpointIDs(func(id any) error {
 				if seenEPIDs.Contains(id) {
 					return nil
 				}
