@@ -405,12 +405,15 @@ func NewTable(
 		chainToDataplaneHashes: map[string][]string{},
 		chainToFullRules:       map[string][]string{},
 		logCxt:                 log.WithFields(logFields),
-		updateRateLimitedLog:   logutilslc.NewRateLimitedLogger().WithFields(logFields),
-		hashCommentPrefix:      hashPrefix,
-		hashCommentRegexp:      hashCommentRegexp,
-		ourChainsRegexp:        ourChainsRegexp,
-		oldInsertRegexp:        oldInsertRegexp,
-		insertMode:             insertMode,
+		updateRateLimitedLog: logutilslc.NewRateLimitedLogger(
+			logutilslc.OptInterval(30*time.Second),
+			logutilslc.OptBurst(100),
+		).WithFields(logFields),
+		hashCommentPrefix: hashPrefix,
+		hashCommentRegexp: hashCommentRegexp,
+		ourChainsRegexp:   ourChainsRegexp,
+		oldInsertRegexp:   oldInsertRegexp,
+		insertMode:        insertMode,
 
 		// Initialise the write tracking as if we'd just done a write, this will trigger
 		// us to recheck the dataplane at exponentially increasing intervals at startup.
