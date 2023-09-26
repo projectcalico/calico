@@ -248,8 +248,8 @@ type Config struct {
 	DeviceRouteSourceAddressIPv6       net.IP            `config:"ipv6;"`
 	DeviceRouteProtocol                int               `config:"int;3"`
 	RemoveExternalRoutes               bool              `config:"bool;true"`
-	IptablesRefreshInterval            time.Duration     `config:"seconds;90"`
-	IptablesPostWriteCheckIntervalSecs time.Duration     `config:"seconds;1"`
+	IptablesRefreshInterval            time.Duration     `config:"seconds;180"`
+	IptablesPostWriteCheckIntervalSecs time.Duration     `config:"seconds;5"`
 	IptablesLockFilePath               string            `config:"file;/run/xtables.lock"`
 	IptablesLockTimeoutSecs            time.Duration     `config:"seconds;0"`
 	IptablesLockProbeIntervalMillis    time.Duration     `config:"millis;50"`
