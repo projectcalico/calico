@@ -23,8 +23,8 @@ import (
 )
 
 const (
-	fieldLogSkipped = "logs-skipped"
-	fieldLogNextLog = "next-log"
+	fieldLogSkipped = "logsSkipped"
+	fieldLogNextLog = "nextLog"
 	defaultInterval = 5 * time.Minute
 )
 
@@ -77,6 +77,13 @@ func OptInterval(d time.Duration) RateLimitedLoggerOpt {
 	}
 }
 
+func OptBurst(n int) RateLimitedLoggerOpt {
+	return func(r *RateLimitedLogger) {
+		r.data.burst = n
+		r.data.remainingBurst = n
+	}
+}
+
 func OptLogger(l *logrus.Logger) RateLimitedLoggerOpt {
 	return func(r *RateLimitedLogger) {
 		r.entry = logrus.NewEntry(l)
@@ -88,12 +95,15 @@ type intervalData struct {
 
 	// Interval for logging.
 	interval time.Duration
+	// Burst per interval before we start throttling.
+	burst int
 
 	// The number skipped since the last processed log.
 	skipped int
 
 	// Lock used to access to this data. This lock is never held while writing a log.
-	lock sync.Mutex
+	lock           sync.Mutex
+	remainingBurst int
 }
 
 type RateLimitedLogger struct {
@@ -111,15 +121,41 @@ func (logger *RateLimitedLogger) logEntry() *logrus.Entry {
 	now := time.Now()
 	logger.data.lock.Lock()
 	defer logger.data.lock.Unlock()
-	if logger.force || now.Sub(logger.data.nextLog) >= 0 {
-		nextLog := now.Add(logger.data.interval)
-		entry := logger.entry.WithFields(logrus.Fields{
-			fieldLogSkipped: logger.data.skipped,
-			fieldLogNextLog: nextLog,
-		})
-		logger.force = false
-		logger.data.nextLog = nextLog
-		logger.data.skipped = 0
+
+	var shouldLog, shouldReset bool
+
+	if logger.force || now.After(logger.data.nextLog) {
+		shouldLog = true
+		shouldReset = true
+	}
+
+	if logger.data.remainingBurst > 0 {
+		shouldLog = true
+		logger.data.remainingBurst--
+	}
+
+	if shouldLog {
+		skipped := logger.data.skipped
+		if shouldReset {
+			logger.force = false
+			nextLog := now.Add(logger.data.interval)
+			logger.data.nextLog = nextLog
+			logger.data.remainingBurst = logger.data.burst
+			logger.data.skipped = 0
+		}
+
+		entry := logger.entry
+		if skipped > 0 || logger.data.remainingBurst == 0 {
+			fields := logrus.Fields{}
+			if skipped > 0 {
+				fields[fieldLogSkipped] = skipped
+			}
+			if logger.data.remainingBurst == 0 {
+				fields[fieldLogNextLog] = logger.data.nextLog
+			}
+			entry = logger.entry.WithFields(fields)
+		}
+
 		return entry
 	}
 	logger.data.skipped++
