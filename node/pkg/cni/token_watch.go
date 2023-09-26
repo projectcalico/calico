@@ -17,7 +17,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
+
+	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 )
 
 const (
@@ -27,9 +28,8 @@ const (
 	defaultCNITokenValiditySeconds = 24 * 60 * 60
 	minTokenRetryDuration          = 5 * time.Second
 	defaultRefreshFraction         = 4
+	kubeconfigPath                 = "/host/etc/cni/net.d/calico-kubeconfig"
 )
-
-var kubeconfigPath string = "/host/etc/cni/net.d/calico-kubeconfig"
 
 type TokenRefresher struct {
 	tokenSupported bool
@@ -54,7 +54,7 @@ type TokenUpdate struct {
 }
 
 func NamespaceOfUsedServiceAccount() string {
-	namespace, err := os.ReadFile(serviceAccountNamespace)
+	namespace, err := os.ReadFile(winutils.GetHostPath(serviceAccountNamespace))
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to read service account namespace file")
 	}
@@ -62,7 +62,15 @@ func NamespaceOfUsedServiceAccount() string {
 }
 
 func BuildClientSet() (*kubernetes.Clientset, error) {
-	cfg, err := clientcmd.BuildConfigFromFlags("", os.Getenv("KUBECONFIG"))
+	kubeconfig := os.Getenv("KUBECONFIG")
+	// Host env vars may override the container on Windows HPC, so $env:KUBECONFIG cannot
+	// be trusted in this case
+	// FIXME: this will no longer be needed when containerd v1.6 is EOL'd
+	if winutils.InHostProcessContainer() {
+		kubeconfig = ""
+	}
+	cfg, err := winutils.BuildConfigFromFlags("", kubeconfig)
+	logrus.WithFields(logrus.Fields{"KUBECONFIG": kubeconfig, "cfg": cfg}).Debug("running cni.BuildClientSet")
 	if err != nil {
 		return nil, err
 	}
@@ -177,7 +185,7 @@ func (t *TokenRefresher) tokenRequestSupported(clientset *kubernetes.Clientset) 
 }
 
 func tokenUpdateFromFile() (TokenUpdate, error) {
-	tokenBytes, err := os.ReadFile(tokenFile)
+	tokenBytes, err := os.ReadFile(winutils.GetHostPath(tokenFile))
 	if err != nil {
 		logrus.WithError(err).Error("Failed to read service account token file")
 		return TokenUpdate{}, err
@@ -222,7 +230,14 @@ func Run() {
 
 	for tu := range tokenChan {
 		logrus.Info("Update of CNI kubeconfig triggered based on elapsed time.")
-		cfg, err := clientcmd.BuildConfigFromFlags("", os.Getenv("KUBECONFIG"))
+		kubeconfig := os.Getenv("KUBECONFIG")
+		// Host env vars may override the container on Windows HPC, so $env:KUBECONFIG cannot
+		// be trusted in this case
+		// FIXME: this will no longer be needed when containerd v1.6 is EOL'd
+		if winutils.InHostProcessContainer() {
+			kubeconfig = ""
+		}
+		cfg, err := winutils.BuildConfigFromFlags("", kubeconfig)
 		if err != nil {
 			logrus.WithError(err).Error("Error generating kube config.")
 			continue
@@ -237,7 +252,7 @@ func Run() {
 }
 
 // CNIServiceAccountName returns the name of the serviceaccount to use for the CNI plugin token request.
-// This can be set via the CALICO_CNI_SERVICE_ACCOUNT environment variable, and defaults to "calico-cni-plugin" otherwise.
+// This can be set via the CALICO_CNI_SERVICE_ACCOUNT environment variable, and defaults to "calico-cni-plugin" (on Linux, "calico-cni-plugin-windows" on Windows) otherwise.
 func CNIServiceAccountName() string {
 	if sa := os.Getenv("CALICO_CNI_SERVICE_ACCOUNT"); sa != "" {
 		logrus.WithField("name", sa).Debug("Using service account from CALICO_CNI_SERVICE_ACCOUNT")
@@ -271,9 +286,9 @@ current-context: calico-context`
 	data := fmt.Sprintf(template, cfg.Host, base64.StdEncoding.EncodeToString(cfg.CAData), token)
 
 	// Write the filled out config to disk.
-	if err := os.WriteFile(kubeconfigPath, []byte(data), 0600); err != nil {
+	if err := os.WriteFile(winutils.GetHostPath(kubeconfigPath), []byte(data), 0600); err != nil {
 		logrus.WithError(err).Error("Failed to write CNI plugin kubeconfig file")
 		return
 	}
-	logrus.WithField("path", kubeconfigPath).Info("Wrote updated CNI kubeconfig file.")
+	logrus.WithField("path", winutils.GetHostPath(kubeconfigPath)).Info("Wrote updated CNI kubeconfig file.")
 }
