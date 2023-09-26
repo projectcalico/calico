@@ -49,6 +49,12 @@ var ipsetsCmd = &cobra.Command{
 
 func dumpIPSets() error {
 	ipsetMap := ipsets.Map()
+	fromBytes := ipsets.IPSetEntryFromBytes
+
+	if ipv6 != nil && *ipv6 {
+		ipsetMap = ipsets.MapV6()
+		fromBytes = ipsets.IPSetEntryV6FromBytes
+	}
 
 	if err := ipsetMap.Open(); err != nil {
 		return errors.WithMessage(err, "failed to open map")
@@ -56,8 +62,8 @@ func dumpIPSets() error {
 
 	membersBySet := map[uint64][]string{}
 	err := ipsetMap.Iter(func(k, v []byte) maps.IteratorAction {
-		var entry ipsets.IPSetEntry
-		copy(entry[:], k[:])
+		entry := fromBytes(k)
+
 		var member string
 		if entry.Protocol() == 0 {
 			member = fmt.Sprintf("%s/%d", entry.Addr(), entry.PrefixLen()-64)
