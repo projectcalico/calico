@@ -24,6 +24,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -50,6 +51,7 @@ func newMockDataplane() *mockDataplane {
 }
 
 type mockDataplane struct {
+	mutex             sync.Mutex
 	IPSetMembers      map[string]set.Set[string]
 	IPSetMetadata     map[string]setMetadata
 	Cmds              []CmdIface
@@ -72,6 +74,8 @@ type mockDataplane struct {
 }
 
 func (d *mockDataplane) ExpectMembers(expected map[string][]string) {
+	d.mutex.Lock()
+	defer d.mutex.Unlock()
 	// Input has a slice for each set, convert to a set for comparison.
 	membersToCompare := map[string]set.Set[string]{}
 	for name, members := range expected {
@@ -85,6 +89,8 @@ func (d *mockDataplane) ExpectMembers(expected map[string][]string) {
 }
 
 func (d *mockDataplane) newCmd(name string, arg ...string) CmdIface {
+	d.mutex.Lock()
+	defer d.mutex.Unlock()
 	if name != "ipset" {
 		Fail("Unknown command: " + name)
 	}
@@ -123,14 +129,20 @@ func (d *mockDataplane) newCmd(name string, arg ...string) CmdIface {
 }
 
 func (d *mockDataplane) NumRestoreCalls() int {
+	d.mutex.Lock()
+	defer d.mutex.Unlock()
 	return d.numRestoreCalls
 }
 
 func (d *mockDataplane) sleep(t time.Duration) {
+	d.mutex.Lock()
+	defer d.mutex.Unlock()
 	d.CumulativeSleep += t
 }
 
 func (d *mockDataplane) popListOpFailure(failType string) bool {
+	d.mutex.Lock()
+	defer d.mutex.Unlock()
 	if len(d.ListOpFailures) > 0 && d.ListOpFailures[0] == failType {
 		log.WithField("failureType", failType).Warn("About to simulate list failure")
 		d.ListOpFailures = d.ListOpFailures[1:]
@@ -140,12 +152,20 @@ func (d *mockDataplane) popListOpFailure(failType string) bool {
 }
 
 func (d *mockDataplane) popRestoreFailure(failType string) bool {
+	d.mutex.Lock()
+	defer d.mutex.Unlock()
 	if len(d.RestoreOpFailures) > 0 && d.RestoreOpFailures[0] == failType {
 		log.WithField("failureType", failType).Warn("About to simulate restore failure")
 		d.RestoreOpFailures = d.RestoreOpFailures[1:]
 		return true
 	}
 	return false
+}
+
+func (d *mockDataplane) shouldFailAllRestores() bool {
+	d.mutex.Lock()
+	defer d.mutex.Unlock()
+	return d.FailAllRestores
 }
 
 type restoreCmd struct {
@@ -236,7 +256,7 @@ func (c *restoreCmd) main() {
 		c.resultC <- result
 	}()
 
-	if c.Dataplane.FailAllRestores {
+	if c.Dataplane.shouldFailAllRestores() {
 		log.Warn("Restore command permanent failure")
 		result = permanentFailure
 		return
@@ -301,38 +321,47 @@ func (c *restoreCmd) main() {
 			}
 			log.WithField("setMetadata", setMetadata).Info("Set created")
 
+			c.Dataplane.mutex.Lock()
 			if _, ok := c.Dataplane.IPSetMembers[name]; ok {
 				_, _ = c.Stderr.Write([]byte("set exists"))
 				result = &exec.ExitError{}
+				c.Dataplane.mutex.Unlock()
 				return
 			}
 
 			c.Dataplane.IPSetMembers[name] = set.New[string]()
 			c.Dataplane.IPSetMetadata[name] = setMetadata
+			c.Dataplane.mutex.Unlock()
 		case "destroy":
 			Expect(len(parts)).To(Equal(2))
 			name := parts[1]
+			c.Dataplane.mutex.Lock()
 			c.Dataplane.AttemptedDestroys = append(c.Dataplane.AttemptedDestroys, name)
 			if _, ok := c.Dataplane.IPSetMembers[name]; !ok {
 				_, _ = c.Stderr.Write([]byte("set doesn't exist"))
 				result = &exec.ExitError{}
+				c.Dataplane.mutex.Unlock()
 				return
 			}
 			if c.Dataplane.FailDestroyNames.Contains(name) {
 				_, _ = c.Stderr.Write([]byte("set is in use"))
 				result = &exec.ExitError{}
+				c.Dataplane.mutex.Unlock()
 				return
 			}
 			delete(c.Dataplane.IPSetMembers, name)
 			log.WithField("setName", name).Info("Set destroyed")
+			c.Dataplane.mutex.Unlock()
 		case "add":
 			Expect(len(parts)).To(Equal(3))
 			name := parts[1]
 			newMember := parts[2]
 			logCxt := log.WithField("setName", name)
+			c.Dataplane.mutex.Lock()
 			if currentMembers, ok := c.Dataplane.IPSetMembers[name]; !ok {
 				_, _ = c.Stderr.Write([]byte("set doesn't exist"))
 				result = &exec.ExitError{}
+				c.Dataplane.mutex.Unlock()
 				return
 			} else {
 				if currentMembers.Contains(newMember) {
@@ -340,20 +369,24 @@ func (c *restoreCmd) main() {
 					logCxt.Warn("Add of existing member")
 					_, _ = c.Stderr.Write([]byte("member already exists"))
 					result = &exec.ExitError{}
+					c.Dataplane.mutex.Unlock()
 					return
 				}
 				currentMembers.Add(newMember)
 				logCxt.WithField("member", newMember).Info("Member added")
 			}
+			c.Dataplane.mutex.Unlock()
 		case "del":
 			Expect(len(parts)).To(Equal(4))
 			name := parts[1]
 			newMember := parts[2]
 			Expect(parts[3]).To(Equal("--exist"))
 			logCxt := log.WithField("setName", name)
+			c.Dataplane.mutex.Lock()
 			if currentMembers, ok := c.Dataplane.IPSetMembers[name]; !ok {
 				_, _ = c.Stderr.Write([]byte("set doesn't exist"))
 				result = &exec.ExitError{}
+				c.Dataplane.mutex.Unlock()
 				return
 			} else {
 				existing := currentMembers.Contains(newMember)
@@ -366,6 +399,7 @@ func (c *restoreCmd) main() {
 					"existedBefore": existing},
 				).Info("Member deleted")
 			}
+			c.Dataplane.mutex.Unlock()
 			if c.Dataplane.popRestoreFailure("post-del") {
 				log.Warn("Simulating a failure after first deletion.")
 				result = transientFailure
@@ -381,15 +415,18 @@ func (c *restoreCmd) main() {
 				"name2": name2,
 			}).Info("Swapping IP sets")
 
+			c.Dataplane.mutex.Lock()
 			if set1, ok := c.Dataplane.IPSetMembers[name1]; !ok {
 				log.WithField("name", name1).Warn("IP set doesn't exist")
 				_, _ = c.Stderr.Write([]byte("set doesn't exist"))
 				result = &exec.ExitError{}
+				c.Dataplane.mutex.Unlock()
 				return
 			} else if set2, ok := c.Dataplane.IPSetMembers[name2]; !ok {
 				log.WithField("name", name2).Warn("IP set doesn't exist")
 				_, _ = c.Stderr.Write([]byte("set doesn't exist"))
 				result = &exec.ExitError{}
+				c.Dataplane.mutex.Unlock()
 				return
 			} else {
 				c.Dataplane.IPSetMembers[name1] = set2
@@ -400,6 +437,7 @@ func (c *restoreCmd) main() {
 				c.Dataplane.IPSetMetadata[name1] = meta2
 				c.Dataplane.IPSetMetadata[name2] = meta1
 			}
+			c.Dataplane.mutex.Unlock()
 		case "COMMIT":
 			commitSeen = true
 		default:
@@ -467,6 +505,8 @@ func (d *destroyCmd) Output() ([]byte, error) {
 }
 
 func (d *destroyCmd) CombinedOutput() ([]byte, error) {
+	d.Dataplane.mutex.Lock()
+	defer d.Dataplane.mutex.Unlock()
 	d.Dataplane.AttemptedDestroys = append(d.Dataplane.AttemptedDestroys, d.SetName)
 
 	if d.Dataplane.FailDestroyNames.Contains(d.SetName) {
@@ -639,11 +679,14 @@ func (c *listCmd) main() {
 		c.resultC <- result
 	}()
 
+	c.Dataplane.mutex.Lock()
 	if c.Dataplane.FailAllLists {
 		log.Info("Simulating persistent failure of ipset list")
 		result = permanentFailure
+		c.Dataplane.mutex.Unlock()
 		return
 	}
+	c.Dataplane.mutex.Unlock()
 
 	if c.Dataplane.popListOpFailure("force-good-rc") {
 		log.Info("Forcing a good RC")
@@ -662,6 +705,8 @@ func (c *listCmd) main() {
 		return
 	}
 
+	c.Dataplane.mutex.Lock()
+	defer c.Dataplane.mutex.Unlock()
 	first := true
 	for setName, members := range c.Dataplane.IPSetMembers {
 		if !first {
