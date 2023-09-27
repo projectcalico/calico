@@ -5,16 +5,7 @@
 #ifndef __CALI_PARSING6_H__
 #define __CALI_PARSING6_H__
 
-#define NEXTHDR_HOP		0
-#define NEXTHDR_ROUTING		43
-#define NEXTHDR_FRAGMENT	44
-#define NEXTHDR_GRE		47
-#define NEXTHDR_ESP		50
-#define NEXTHDR_AUTH		51
-#define NEXTHDR_NONE		59
-#define NEXTHDR_DEST		60
-#define NEXTHDR_MOBILITY	135
-
+#include "bpf.h"
 
 static CALI_BPF_INLINE int parse_packet_ip_v6(struct cali_tc_ctx *ctx) {
 	__u16 protocol = 0;
@@ -92,7 +83,7 @@ static CALI_BPF_INLINE bool ipv6_hexthdr_is_opt(int nexthdr)
 	return false;
 }
 
-static CALI_BPF_INLINE void tc_state_fill_from_iphdr_v6(struct cali_tc_ctx *ctx)
+static CALI_BPF_INLINE void tc_state_fill_from_iphdr_v6_offset(struct cali_tc_ctx *ctx, int ipoff)
 {
 	// Fill in source ip
 	ipv6hdr_ip_to_ipv6_addr_t(&ctx->state->ip_src, &ip_hdr(ctx)->saddr);
@@ -121,7 +112,6 @@ static CALI_BPF_INLINE void tc_state_fill_from_iphdr_v6(struct cali_tc_ctx *ctx)
 	CALI_DEBUG("ip->nexthdr %d IPv6 options!\n", ip_hdr(ctx)->nexthdr);
 
 	int i;
-	int ipoff = skb_iphdr_offset(ctx);
 	int len = IP_SIZE;
 
 	for (i = 0; i < 8; i++) {
@@ -174,6 +164,10 @@ deny:
 	} else {
 		bpf_exit(TC_ACT_SHOT);
 	}
+}
+
+static CALI_BPF_INLINE void tc_state_fill_from_iphdr_v6(struct cali_tc_ctx *ctx) {
+	tc_state_fill_from_iphdr_v6_offset(ctx, skb_iphdr_offset(ctx));
 }
 
 #endif /* __CALI_PARSING6_H__ */

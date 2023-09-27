@@ -314,6 +314,7 @@ static CALI_BPF_INLINE int calico_ct_create_nat_fwd(struct cali_tc_ctx *ctx,
 	return err;
 }
 
+#ifndef IPVER6
 /* skb_icmp_err_unpack tries to unpack the inner IP and TCP/UDP header from an ICMP error message.
  * It updates the ct_ctx with the protocol/src/dst/ports of the inner packet.  If the unpack fails
  * (due to packet too short, for example), it returns false and sets the RC in the cali_tc_ctx to
@@ -321,9 +322,6 @@ static CALI_BPF_INLINE int calico_ct_create_nat_fwd(struct cali_tc_ctx *ctx,
  */
 static CALI_BPF_INLINE bool skb_icmp_err_unpack(struct cali_tc_ctx *ctx, struct ct_lookup_ctx *ct_ctx)
 {
-#ifdef IPVER6
-	return false;
-#else
 	/* ICMP packet is an error, its payload should contain the full IP header and
 	 * at least the first 8 bytes of the next header. */
 
@@ -399,8 +397,99 @@ static CALI_BPF_INLINE bool skb_icmp_err_unpack(struct cali_tc_ctx *ctx, struct 
 	};
 
 	return true;
-#endif /* IPVER6 */
 }
+
+#else /* IPVER6 */
+
+static CALI_BPF_INLINE bool skb_icmp6_err_unpack(struct cali_tc_ctx *ctx, struct ct_lookup_ctx *ct_ctx)
+{
+	__u8 buf[IP_SIZE];
+	CALI_DEBUG("reading inner ipv6 at %d\n", skb_l4hdr_offset(ctx) + ICMP_SIZE);
+	if (bpf_skb_load_bytes(ctx->skb, skb_l4hdr_offset(ctx) + ICMP_SIZE, buf, IP_SIZE)) {
+		CALI_DEBUG("ICMP v6 reply: too short getting ip hdr w/ options\n");
+		return false;
+	}
+
+	ipv6hdr_ip_to_ipv6_addr_t(&ct_ctx->src, &((struct ipv6hdr*)buf)->saddr);
+	ipv6hdr_ip_to_ipv6_addr_t(&ct_ctx->dst, &((struct ipv6hdr*)buf)->daddr);
+
+	int hdr = ((struct ipv6hdr*)buf)->nexthdr;
+	int ipoff = skb_l4hdr_offset(ctx) + ICMP_SIZE;
+	int len = IP_SIZE;
+
+	CALI_DEBUG("ipv6 next hdr: %d\n", hdr);
+
+	switch (hdr) {
+	case IPPROTO_TCP:
+	case IPPROTO_UDP:
+		ct_ctx->proto = hdr;
+		goto get_ports;
+	case NEXTHDR_NONE:
+		return false;
+	}
+
+	int i;
+
+	for (i = 0; i < 8; i++) {
+		struct ipv6_opt_hdr opt;
+
+		CALI_DEBUG("loading extension at offset %d\n", ipoff + len);
+		if (bpf_skb_load_bytes(ctx->skb, ipoff + len, &opt, sizeof(opt))) {
+			CALI_DEBUG("Too short\n");
+			return false;
+		}
+
+		CALI_DEBUG("ext nexthdr %d hdrlen %d\n", opt.nexthdr, opt.hdrlen);
+
+		switch(hdr) {
+		case NEXTHDR_FRAGMENT:
+			len += 16;
+			break;
+		case NEXTHDR_HOP:
+		case NEXTHDR_ROUTING:
+		case NEXTHDR_DEST:
+		case NEXTHDR_GRE:
+		case NEXTHDR_ESP:
+		case NEXTHDR_AUTH:
+		case NEXTHDR_MOBILITY:
+			len += (opt.hdrlen + 1) * 8;
+			break;
+		}
+
+		switch(opt.nexthdr) {
+			case IPPROTO_TCP:
+			case IPPROTO_UDP:
+				ct_ctx->proto = opt.nexthdr;
+				goto get_ports;
+			case NEXTHDR_NONE:
+				return false;
+		}
+
+
+	}
+
+get_ports:
+
+	if (bpf_skb_load_bytes(ctx->skb, ipoff + len, buf, 8)) {
+		CALI_DEBUG("ICMP v6 reply: too short getting l4 hdr w/ options\n");
+		return false;
+	}
+
+	switch (ct_ctx->proto) {
+	case IPPROTO_TCP:
+		ct_ctx->sport = bpf_ntohs(((struct tcphdr *)buf)->source);
+		ct_ctx->dport = bpf_ntohs(((struct tcphdr *)buf)->dest);
+		break;
+	case IPPROTO_UDP:
+		ct_ctx->sport = bpf_ntohs(((struct udphdr *)buf)->source);
+		ct_ctx->dport = bpf_ntohs(((struct udphdr *)buf)->dest);
+		break;
+	};
+
+	return true;
+}
+
+#endif /* IPVER6 */
 
 #define CALI_CT_LOG(level, fmt, ...) \
 	CALI_LOG_IF_FLAG(level, CALI_COMPILE_FLAGS, "CT: "fmt, ## __VA_ARGS__)
@@ -531,7 +620,11 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 			/* ICMP error packets are a response to a failed UDP/TCP/etc packet.  Try to extract the
 			 * details of the inner packet.
 			 */
+#ifdef IPVER6
+			if (!skb_icmp6_err_unpack(ctx, ct_ctx)) {
+#else
 			if (!skb_icmp_err_unpack(ctx, ct_ctx)) {
+#endif
 					CALI_CT_DEBUG("Failed to parse ICMP error packet.\n");
 					goto out_invalid;
 			}
