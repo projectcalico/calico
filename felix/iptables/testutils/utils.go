@@ -66,6 +66,7 @@ type MockDataplane struct {
 	CmdNames                       []string
 	FailNextRestore                bool
 	FailAllRestores                bool
+	OnPreSave                      func()
 	OnPreRestore                   func()
 	FailNextSaveRead               bool
 	FailNextSaveStdoutPipe         bool
@@ -431,6 +432,11 @@ func (d *saveCmd) Start() error {
 	if d.Dataplane.FailNextStart {
 		d.Dataplane.FailNextStart = false
 		return errors.New("dummy start failure")
+	}
+	if d.Dataplane.OnPreSave != nil {
+		log.Warn("OnPreSave set, calling it")
+		d.Dataplane.OnPreSave()
+		d.Dataplane.OnPreSave = nil
 	}
 	return nil
 }
