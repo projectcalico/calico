@@ -68,6 +68,7 @@ type mockDataplane struct {
 	AttemptedDestroys []string
 
 	CumulativeSleep time.Duration
+	numRestoreCalls int
 }
 
 func (d *mockDataplane) ExpectMembers(expected map[string][]string) {
@@ -80,7 +81,7 @@ func (d *mockDataplane) ExpectMembers(expected map[string][]string) {
 		}
 		membersToCompare[name] = memberSet
 	}
-	Expect(d.IPSetMembers).To(Equal(membersToCompare))
+	ExpectWithOffset(1, d.IPSetMembers).To(Equal(membersToCompare))
 }
 
 func (d *mockDataplane) newCmd(name string, arg ...string) CmdIface {
@@ -92,6 +93,7 @@ func (d *mockDataplane) newCmd(name string, arg ...string) CmdIface {
 
 	switch arg[0] {
 	case "restore":
+		d.numRestoreCalls++
 		Expect(len(arg)).To(Equal(1))
 		cmd = &restoreCmd{
 			Dataplane: d,
@@ -118,6 +120,10 @@ func (d *mockDataplane) newCmd(name string, arg ...string) CmdIface {
 	d.CmdNames = append(d.CmdNames, arg[0])
 
 	return cmd
+}
+
+func (d *mockDataplane) NumRestoreCalls() int {
+	return d.numRestoreCalls
 }
 
 func (d *mockDataplane) sleep(t time.Duration) {
@@ -662,6 +668,18 @@ func (c *listCmd) main() {
 			fmt.Fprint(c.Stdout, "\n")
 		}
 		fmt.Fprintf(c.Stdout, "Name: %s\n", setName)
+		meta, ok := c.Dataplane.IPSetMetadata[setName]
+		if !ok {
+			// Default metadata for IP sets created by tests.
+			meta = setMetadata{
+				Name:    v4MainIPSetName,
+				Family:  IPFamilyV4,
+				Type:    IPSetTypeHashIP,
+				MaxSize: 1234,
+			}
+		}
+		fmt.Fprintf(c.Stdout, "Type: %s\n", meta.Type)
+		fmt.Fprintf(c.Stdout, "Header: family %s hashsize 1024 maxelem %d\n", meta.Family, meta.MaxSize)
 		fmt.Fprint(c.Stdout, "Field: foobar\n") // Dummy field, should get ignored.
 		fmt.Fprint(c.Stdout, "Members:\n")
 		members.Iter(func(member string) error {
