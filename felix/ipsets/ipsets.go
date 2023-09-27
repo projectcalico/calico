@@ -59,7 +59,7 @@ type IPSets struct {
 	// setNameToProgrammedMetadata tracks the IP sets that we want to program and
 	// those that are actually in the dataplane.  It's Desired() map is the
 	// subset of setNameToAllMetadata that matches the neededIPSetNames filter.
-	// Its Dataplane() map contains all IP sets matching the IPVersionConfid
+	// Its Dataplane() map contains all IP sets matching the IPVersionConfig
 	// that we think are in the dataplane.  This includes any temporary IP
 	// sets and IP sets that we discovered on a resync (neither of which will
 	// have entries in the Desired() map).
@@ -208,9 +208,14 @@ func (s *IPSets) RemoveIPSet(setID string) {
 	delete(s.setNameToAllMetadata, setName)
 	s.setNameToProgrammedMetadata.Desired().Delete(setName)
 	if _, ok := s.setNameToProgrammedMetadata.Dataplane().Get(setName); ok {
+		// Set is currently in the dataplane, clear its desired members but
+		// we keep the member tracker until we actually delete the IP set
+		// from the dataplane later.
+		log.Debug("IP set to remove is in the dataplane.")
 		s.mainSetNameToMembers[setName].Desired().DeleteAll()
 	} else {
-		// If it's not in the dataplane, clean it up.
+		// If it's not in the dataplane, clean it up immediately.
+		log.Debug("IP set to remove not in the dataplane.")
 		delete(s.mainSetNameToMembers, setName)
 	}
 	s.updateDirtiness(setName)
@@ -369,9 +374,10 @@ func (s *IPSets) tryResync() (err error) {
 	resyncStart := time.Now()
 	defer func() {
 		s.logCxt.WithFields(log.Fields{
-			"resyncDuration": time.Since(resyncStart),
-			// FIXME Correct count
-			// "numDirtyIPSets": s.dirtyIPSetNames.Len(),
+			"resyncDuration":           time.Since(resyncStart),
+			"ipSetsWithDirtyMembers":   s.ipSetsWithDirtyMembers.Len(),
+			"ipSetsToCreateOrRecreate": s.setNameToProgrammedMetadata.PendingUpdates().Len(),
+			"ipSetsToDelete":           s.setNameToProgrammedMetadata.PendingDeletions().Len(),
 		}).Debug("Finished IPSets resync")
 	}()
 
@@ -429,9 +435,9 @@ func (s *IPSets) tryResync() (err error) {
 	// by a factor of 3-4x!
 	debug := log.GetLevel() >= log.DebugLevel
 
-	// TODO more efficient loop?
+	// Clear the dataplane metadata view, we'll build it back up again as we
+	// scan.
 	s.setNameToProgrammedMetadata.Dataplane().DeleteAll()
-
 	for scanner.Scan() {
 		line := scanner.Text()
 		if debug {
@@ -579,10 +585,13 @@ func (s *IPSets) tryResync() (err error) {
 		if _, ok := s.setNameToAllMetadata[name]; !ok {
 			// Defensive: this IP set is not in the dataplane, and it's not
 			// one we are tracking, clean up its member tracker.
-			log.WithField("name", name).Warn("Cleaning up leaked(?) IP set member tracker.")
+			log.WithField("name", name).Warn(
+				"Cleaning up leaked(?) IP set member tracker.")
 			delete(s.mainSetNameToMembers, name)
 			continue
 		}
+		// We're tracking this IP set, but we didn't find it in the dataplane;
+		// reset the members set to empty.
 		members.Dataplane().DeleteAll()
 	}
 
@@ -882,12 +891,14 @@ func (s *IPSets) ApplyDeletions() bool {
 		if numDeletions >= MaxIPSetDeletionsPerIteration {
 			// Deleting IP sets is slow (40ms) and serialised in the kernel.  Avoid holding up the main loop
 			// for too long.  We'll leave the remaining sets pending deletion and mop them up next time.
-			log.Debugf("Deleted batch of 20 IP sets, rate limiting further IP set deletions.")
+			log.Debugf("Deleted batch of %d IP sets, rate limiting further IP set deletions.", MaxIPSetDeletionsPerIteration)
 			// Leave the item in the set, so we'll do another batch of deletions next time around the loop.
 			return deltatracker.IterActionNoOpStopIteration
 		}
 		meta, _ := s.setNameToProgrammedMetadata.Dataplane().Get(setName)
 		if meta.DeleteFailed {
+			// We previously failed to delete this IP set, skip it until
+			// the next resync.
 			return deltatracker.IterActionNoOp
 		}
 		logCxt := s.logCxt.WithField("setName", setName)
@@ -904,10 +915,13 @@ func (s *IPSets) ApplyDeletions() bool {
 		numDeletions++
 		if _, ok := s.setNameToAllMetadata[setName]; !ok {
 			// IP set is not just filtered out, clean up the members cache.
+			logCxt.Debug("IP set now gone from dataplane, removing from members tracker.")
 			delete(s.mainSetNameToMembers, setName)
 		} else {
 			// We're still tracking this IP set in case it needs to be recreated.
 			// Record that the dataplane is now empty.
+			logCxt.Debug("IP set now gone from dataplane but still " +
+				"tracking its members (it is filtered out).")
 			s.mainSetNameToMembers[setName].Dataplane().DeleteAll()
 		}
 		return deltatracker.IterActionUpdateDataplane
@@ -916,7 +930,12 @@ func (s *IPSets) ApplyDeletions() bool {
 	// update the gauge that records how many IP sets we own.
 	numDeletionsPending := s.setNameToProgrammedMetadata.Dataplane().Len()
 	s.gaugeNumIpsets.Set(float64(numDeletionsPending))
-	return numDeletionsPending > 0
+	if numDeletions == 0 {
+		// We had nothing to delete, or we only encountered errors, don't
+		// ask to be rescheduled.
+		return false
+	}
+	return numDeletionsPending > 0 // Reschedule if we have sets left to delete.
 }
 
 func (s *IPSets) tryTempIPSetDeletions() {

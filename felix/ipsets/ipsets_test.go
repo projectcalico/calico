@@ -228,9 +228,10 @@ var _ = Describe("IP sets dataplane", func() {
 	)
 	// v6VersionConf := NewIPVersionConfig(IPFamilyV6, "cali", nil, nil)
 
+	reschedRequested := false
 	apply := func() {
 		ipsets.ApplyUpdates()
-		ipsets.ApplyDeletions()
+		reschedRequested = ipsets.ApplyDeletions()
 	}
 
 	resyncAndApply := func() {
@@ -361,9 +362,18 @@ var _ = Describe("IP sets dataplane", func() {
 			}
 		})
 
-		It("should clean everything up on first apply()", func() {
+		It("should rate limit clean up", func() {
 			apply()
+			// MaxIPSetDeletionsPerIteration defaults to 1, so it should
+			// delete one temp and one normal IP set.
+			Expect(dataplane.IPSetMembers).To(HaveLen(1))
+			Expect(reschedRequested).To(BeTrue(),
+				"should reschedule if there are some IP sets still to delete")
+			apply()
+			// Should delete one temp and one normal IP set.
 			Expect(dataplane.IPSetMembers).To(BeEmpty())
+			Expect(reschedRequested).To(BeFalse(),
+				"should not reschedule if there are no IP sets to delete")
 		})
 
 		It("should rewrite IP set correctly and clean up temp set", func() {
@@ -468,17 +478,9 @@ var _ = Describe("IP sets dataplane", func() {
 		Describe("after first apply()", func() {
 			BeforeEach(apply)
 
-			It("should clean up what it can on the first apply()", func() {
-				Expect(dataplane.IPSetMembers).To(Equal(map[string]set.Set[string]{
-					v4TempIPSetName1: set.From("10.0.0.2"),
-				}))
-				Expect(dataplane.AttemptedDestroys).To(ConsistOf(
-					v4TempIPSetName2,
-					v4TempIPSetName1,
-					v4MainIPSetName,
-					v4MainIPSetName2,
-					v4TempIPSetName1, // Temp IP set will get a second try at deletion
-				))
+			It("should clean up one IP set of each kind on first apply()", func() {
+				Expect(dataplane.IPSetMembers).To(HaveLen(2))
+				Expect(dataplane.IPSetMembers).To(HaveKey(v4TempIPSetName1))
 			})
 
 			It("second apply shouldn't retry deletions", func() {
@@ -488,29 +490,17 @@ var _ = Describe("IP sets dataplane", func() {
 				Expect(dataplane.IPSetMembers).To(Equal(map[string]set.Set[string]{
 					v4TempIPSetName1: set.From("10.0.0.2"),
 				}))
-				Expect(dataplane.AttemptedDestroys).To(BeEmpty())
-			})
 
-			It("second apply after resync should retry deletions", func() {
 				dataplane.AttemptedDestroys = nil
 				ipsets.QueueResync()
 				apply()
 
-				Expect(dataplane.IPSetMembers).To(Equal(map[string]set.Set[string]{
-					v4TempIPSetName1: set.From("10.0.0.2"),
-				}))
 				Expect(dataplane.AttemptedDestroys).To(ConsistOf(
 					v4TempIPSetName1,
 					v4TempIPSetName1,
 				))
 
-				By("And should be idempotent")
-				dataplane.AttemptedDestroys = nil
-				apply()
-				Expect(dataplane.AttemptedDestroys).To(BeEmpty())
-			})
-
-			It("successful temp set deletion retry should clean up", func() {
+				By("should succeed once error is cleared")
 				dataplane.FailDestroyNames.Clear()
 				dataplane.AttemptedDestroys = nil
 				ipsets.QueueResync()
