@@ -180,8 +180,8 @@ func (m *IPSets) GetTypeOf(setID string) (IPSetType, error) {
 	panic("Not implemented")
 }
 
-func (m *IPSets) GetMembers(setID string) (set.Set[string], error) {
-	// GetMembers is only called from XDPState, and XDPState does not coexist with
+func (m *IPSets) GetDesiredMembers(setID string) (set.Set[string], error) {
+	// GetDesiredMembers is only called from XDPState, and XDPState does not coexist with
 	// config.BPFEnabled.
 	panic("Not implemented")
 }
@@ -189,7 +189,8 @@ func (m *IPSets) GetMembers(setID string) (set.Set[string], error) {
 func (m *IPSets) ApplyUpdates() {
 }
 
-func (m *IPSets) ApplyDeletions() {
+func (m *IPSets) ApplyDeletions() bool {
+	return false
 }
 
 func (s *IPSets) SetFilter(ipSetNames set.Set[string]) {
