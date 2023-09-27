@@ -309,7 +309,8 @@ var _ = Describe("IP sets dataplane", func() {
 
 		It("should rate limit clean up", func() {
 			apply()
-			// Should delete one temp and one normal IP set.
+			// MaxIPSetDeletionsPerIteration defaults to 1, so it should
+			// delete one temp and one normal IP set.
 			Expect(dataplane.IPSetMembers).To(HaveLen(1))
 			Expect(reschedRequested).To(BeTrue(),
 				"should reschedule if there are some IP sets still to delete")
