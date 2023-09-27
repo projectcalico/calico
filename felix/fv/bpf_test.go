@@ -75,6 +75,7 @@ var _ = describeBPFTests(withProto("tcp"), withConnTimeLoadBalancingEnabled(), w
 var _ = describeBPFTests(withProto("udp"), withConnTimeLoadBalancingEnabled(), withIPFamily(6))
 var _ = describeBPFTests(withProto("udp"), withConnTimeLoadBalancingEnabled(), withUDPUnConnected())
 var _ = describeBPFTests(withProto("tcp"))
+var _ = describeBPFTests(withProto("tcp"), withIPFamily(6))
 var _ = describeBPFTests(withProto("udp"))
 var _ = describeBPFTests(withProto("udp"), withUDPUnConnected())
 var _ = describeBPFTests(withProto("udp"), withUDPConnectedRecvMsg(), withConnTimeLoadBalancingEnabled())
@@ -3677,16 +3678,16 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				}
 
 				Context("with icmp blocked from workloads, external client", func() {
-					if testOpts.ipv6 {
-						// XXX
-						return
-					}
 					var (
 						testSvc          *v1.Service
 						testSvcNamespace string
 					)
 
 					testSvcName := "test-service"
+					nets := []string{"0.0.0.0/0"}
+					if testOpts.ipv6 {
+						nets = []string{"::/0"}
+					}
 
 					BeforeEach(func() {
 						icmpProto := numorstring.ProtocolFromString("icmp")
@@ -3694,7 +3695,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							{
 								Action: "Allow",
 								Source: api.EntityRule{
-									Nets: []string{"0.0.0.0/0"},
+									Nets: nets,
 								},
 							},
 						}
@@ -3702,7 +3703,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							{
 								Action: "Allow",
 								Source: api.EntityRule{
-									Nets: []string{"0.0.0.0/0"},
+									Nets: nets,
 								},
 							},
 							{
@@ -3731,9 +3732,20 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						// retry when there is no connectivity.
 						Eventually(func() bool {
 							for _, flx := range tc.Felixes {
-								natFtKey := nat.NewNATKey(net.ParseIP(containerIP(flx.Container)), npPort, numericProto)
+								var (
+									family   int
+									natFtKey nat.FrontendKeyInterface
+								)
 
-								m := dumpNATMap(flx)
+								if testOpts.ipv6 {
+									natFtKey = nat.NewNATKeyV6Intf(net.ParseIP(containerIP(flx.Container)), npPort, numericProto)
+									family = 6
+								} else {
+									natFtKey = nat.NewNATKeyIntf(net.ParseIP(containerIP(flx.Container)), npPort, numericProto)
+									family = 4
+								}
+
+								m, be := dumpNATMapsAny(family, flx)
 								v, ok := m[natFtKey]
 								if !ok || v.Count() == 0 {
 									return false
@@ -3741,7 +3753,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 								beKey := nat.NewNATBackendKey(v.ID(), 0)
 
-								be := dumpEPMap(flx)
 								if _, ok := be[beKey]; !ok {
 									return false
 								}
@@ -3772,10 +3783,20 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 							tcpdump := externalClient.AttachTCPDump("any")
 							tcpdump.SetLogEnabled(true)
-							matcher := fmt.Sprintf("IP %s > %s: ICMP host %s unreachable",
-								felixIP(1), externalClient.IP, felixIP(1))
+							var matcher string
+							if testOpts.ipv6 {
+								matcher = fmt.Sprintf("IP6 %s > %s: ICMP6, destination unreachable, unreachable route %s",
+									felixIP(1), containerIP(externalClient), felixIP(1))
+							} else {
+								matcher = fmt.Sprintf("IP %s > %s: ICMP host %s unreachable",
+									felixIP(1), containerIP(externalClient), felixIP(1))
+							}
 							tcpdump.AddMatcher("ICMP", regexp.MustCompile(matcher))
-							tcpdump.Start(testOpts.protocol, "port", strconv.Itoa(int(npPort)), "or", "icmp")
+							if testOpts.ipv6 {
+								tcpdump.Start(testOpts.protocol, "port", strconv.Itoa(int(npPort)), "or", "icmp6")
+							} else {
+								tcpdump.Start(testOpts.protocol, "port", strconv.Itoa(int(npPort)), "or", "icmp")
+							}
 							defer tcpdump.Stop()
 
 							cc.ExpectNone(externalClient, TargetIP(felixIP(1)), npPort)
@@ -3803,7 +3824,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								tcpdump := externalClient.AttachTCPDump("any")
 								tcpdump.SetLogEnabled(true)
 								matcher := fmt.Sprintf("IP %s > %s: ICMP %s udp port %d unreachable",
-									felixIP(1), externalClient.IP, felixIP(1), npPort)
+									felixIP(1), containerIP(externalClient), felixIP(1), npPort)
 								tcpdump.AddMatcher("ICMP", regexp.MustCompile(matcher))
 								tcpdump.Start(testOpts.protocol, "port", strconv.Itoa(int(npPort)), "or", "icmp")
 								defer tcpdump.Stop()
