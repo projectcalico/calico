@@ -2612,7 +2612,7 @@ func (m *bpfEndpointManager) ensureBPFDevices() error {
 		cidr = bpfnatGWCIDR
 	}
 
-	retries := 5
+	retries := 10
 	i := retries
 	for {
 		if err := netlink.NeighAdd(arp); err != nil && err != syscall.EEXIST {
