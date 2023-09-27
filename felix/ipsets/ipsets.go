@@ -208,9 +208,14 @@ func (s *IPSets) RemoveIPSet(setID string) {
 	delete(s.setNameToAllMetadata, setName)
 	s.setNameToProgrammedMetadata.Desired().Delete(setName)
 	if _, ok := s.setNameToProgrammedMetadata.Dataplane().Get(setName); ok {
+		// Set is currently in the dataplane, clear its desired members but
+		// we keep the member tracker until we actually delete the IP set
+		// from the dataplane later.
+		log.Debug("IP set to remove is in the dataplane.")
 		s.mainSetNameToMembers[setName].Desired().DeleteAll()
 	} else {
-		// If it's not in the dataplane, clean it up.
+		// If it's not in the dataplane, clean it up immediately.
+		log.Debug("IP set to remove not in the dataplane.")
 		delete(s.mainSetNameToMembers, setName)
 	}
 	s.updateDirtiness(setName)
@@ -910,10 +915,13 @@ func (s *IPSets) ApplyDeletions() bool {
 		numDeletions++
 		if _, ok := s.setNameToAllMetadata[setName]; !ok {
 			// IP set is not just filtered out, clean up the members cache.
+			logCxt.Debug("IP set now gone from dataplane, removing from members tracker.")
 			delete(s.mainSetNameToMembers, setName)
 		} else {
 			// We're still tracking this IP set in case it needs to be recreated.
 			// Record that the dataplane is now empty.
+			logCxt.Debug("IP set now gone from dataplane but still " +
+				"tracking its members (it is filtered out).")
 			s.mainSetNameToMembers[setName].Dataplane().DeleteAll()
 		}
 		return deltatracker.IterActionUpdateDataplane
@@ -922,7 +930,12 @@ func (s *IPSets) ApplyDeletions() bool {
 	// update the gauge that records how many IP sets we own.
 	numDeletionsPending := s.setNameToProgrammedMetadata.Dataplane().Len()
 	s.gaugeNumIpsets.Set(float64(numDeletionsPending))
-	return numDeletionsPending > 0 && numDeletions > 0
+	if numDeletions == 0 {
+		// We had nothing to delete, or we only encountered errors, don't
+		// ask to be rescheduled.
+		return false
+	}
+	return numDeletionsPending > 0 // Reschedule if we have sets left to delete.
 }
 
 func (s *IPSets) tryTempIPSetDeletions() {

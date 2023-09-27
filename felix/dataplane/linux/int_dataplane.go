@@ -2167,12 +2167,12 @@ func (d *InternalDataplane) apply() {
 	for _, ipSets := range d.ipSets {
 		ipSetsWG.Add(1)
 		go func(s common.IPSetsDataplane) {
+			defer ipSetsWG.Done()
 			reschedule := s.ApplyDeletions()
 			if reschedule {
 				ipSetsNeedsReschedule.Store(true)
 			}
 			d.reportHealth()
-			ipSetsWG.Done()
 		}(ipSets)
 	}
 	ipSetsWG.Wait()
