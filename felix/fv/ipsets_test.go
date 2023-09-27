@@ -67,10 +67,20 @@ var _ = Context("_IPSets_ Tests for IPset rendering", func() {
 		infra.Stop()
 	})
 
-	It("should render 10000 IP sets quickly", func() {
-		// Make 1000 network sets
+	It("should handle thousands of IP sets flapping", func() {
+		// This test activates thousands of selectors all at once, simulating
+		// a very large policy set that applies to all pods.
+		//
+		// Then it deactivates the whole policy set, simulating the last
+		// endpoint being removed before re-adding it again.
+		//
+		// Overall, it verifies that we rate limit deletions of IP sets
+		// and that we're able to cope with such a flap without blocking
+		// all processing.
+
+		By("Creating network sets")
 		sizes := []int{100, 1, 1, 1, 2, 3, 4, 5, 10, 10, 100, 200, 1000}
-		const numSets = 10000
+		const numSets = 2000
 		for i := 0; i < numSets; i++ {
 			ns := api.NewGlobalNetworkSet()
 			ns.Name = fmt.Sprintf("netset-%d", i)
@@ -81,7 +91,8 @@ var _ = Context("_IPSets_ Tests for IPset rendering", func() {
 			_, err := client.GlobalNetworkSets().Create(context.TODO(), ns, options.SetOptions{})
 			Expect(err).NotTo(HaveOccurred())
 		}
-		logrus.Info(">>> CREATED NetworkSets")
+
+		By("Creating policies with selectors")
 		// Make a policy that activates them
 		for i := 0; i < numSets; i++ {
 			pol := api.NewGlobalNetworkPolicy()
@@ -98,27 +109,36 @@ var _ = Context("_IPSets_ Tests for IPset rendering", func() {
 			_, err := client.GlobalNetworkPolicies().Create(context.TODO(), pol, options.SetOptions{})
 			Expect(err).NotTo(HaveOccurred())
 		}
-		logrus.Info(">>> CREATED NetworkPolicies")
+
+		By("Creating a workload, activating the policies")
 		// Create a workload that uses the policy.
 		baseNumSets := getNumIPSets(tc.Felixes[0].Container)
 		wep := w.WorkloadEndpoint.DeepCopy()
 		w.ConfigureInInfra(infra)
 		startTime := time.Now()
-		logrus.Info(">>> CREATED Workload")
-		Eventually(func() int { return getNumIPSets(tc.Felixes[0].Container) }, "240s", "1s").Should(BeNumerically(">", baseNumSets))
-		logrus.Info(">>> First IP set programmed at ", time.Since(startTime))
-		Eventually(func() int { return getNumIPSets(tc.Felixes[0].Container) }, "240s", "1s").Should(BeNumerically(">=", numSets+baseNumSets))
-		logrus.Info(">>> All IP sets programmed at ", time.Since(startTime))
+
+		By("Waiting for the first IP set to be programmed...")
+		numIPSets := func() int { return getNumIPSets(tc.Felixes[0].Container) }
+		Eventually(numIPSets, "10s", "1s").Should(BeNumerically(">", baseNumSets))
+		By(fmt.Sprint("First IP set programmed after ", time.Since(startTime)))
+		Eventually(numIPSets, "20s", "1s").Should(BeNumerically(">=", numSets+baseNumSets))
+		By(fmt.Sprint("All IP sets programmed after ", time.Since(startTime)))
+
+		By("Deleting workload, deactivating the policies")
 		w.RemoveFromInfra(infra)
-		logrus.Info(">>> DELETED Workload")
-		Eventually(func() int { return getNumIPSets(tc.Felixes[0].Container) }, "240s", "1s").Should(BeNumerically("<", numSets+baseNumSets))
-		logrus.Info(">>> IP sets started being deleted at ", time.Since(startTime))
+		startTime = time.Now()
+		By("Waiting for first IP set to be deleted...")
+		Eventually(numIPSets, "20s", "1s").Should(BeNumerically("<", numSets+baseNumSets))
+		By(fmt.Sprint("First IP set deleted after ", time.Since(startTime)))
+
+		By("Recreating workload... ")
 		w.WorkloadEndpoint = wep
 		w.ConfigureInInfra(infra)
-		logrus.Info(">>> RECREATED Workload")
-		Eventually(func() int { return getNumIPSets(tc.Felixes[0].Container) }, "240s", "1s").Should(BeNumerically(">=", numSets+baseNumSets))
-		logrus.Info(">>> All IP sets programmed at ", time.Since(startTime))
-		time.Sleep(10 * time.Second)
+		startTime = time.Now()
+
+		By("Waiting for all IP sets to be recreated")
+		Eventually(numIPSets, "20s", "1s").Should(BeNumerically(">=", numSets+baseNumSets))
+		By(fmt.Sprint("All IP sets programmed after ", time.Since(startTime)))
 	})
 })
 
