@@ -22,6 +22,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -2162,15 +2163,24 @@ func (d *InternalDataplane) apply() {
 	iptablesWG.Wait()
 
 	// Now clean up any left-over IP sets.
+	var ipSetsNeedsReschedule atomic.Bool
 	for _, ipSets := range d.ipSets {
 		ipSetsWG.Add(1)
 		go func(s common.IPSetsDataplane) {
-			s.ApplyDeletions()
+			defer ipSetsWG.Done()
+			reschedule := s.ApplyDeletions()
+			if reschedule {
+				ipSetsNeedsReschedule.Store(true)
+			}
 			d.reportHealth()
-			ipSetsWG.Done()
 		}(ipSets)
 	}
 	ipSetsWG.Wait()
+	if ipSetsNeedsReschedule.Load() {
+		if reschedDelay == 0 || reschedDelay > 100*time.Millisecond {
+			reschedDelay = 100 * time.Millisecond
+		}
+	}
 
 	// Wait for the route updates to finish.
 	routesWG.Wait()
