@@ -133,7 +133,7 @@ func (k FrontendKeyV6) AsBytes() []byte {
 }
 
 func (k FrontendKeyV6) Affinitykey() []byte {
-	return k[4:12]
+	return k[4:24]
 }
 
 func (k FrontendKeyV6) AffinityKeyCopy() FrontEndAffinityKeyInterface {
@@ -201,7 +201,7 @@ func (k BackendValueV6) Addr() net.IP {
 }
 
 func (k BackendValueV6) Port() uint16 {
-	return binary.LittleEndian.Uint16(k[4:6])
+	return binary.LittleEndian.Uint16(k[16:18])
 }
 
 func (k BackendValueV6) String() string {
@@ -404,13 +404,13 @@ func NewAffinityKeyV6(clientIP net.IP, fEndKey FrontendKeyV6) AffinityKeyV6 {
 
 // ClientIP returns the ClientIP part of the key
 func (k AffinityKeyV6) ClientIP() net.IP {
-	return k[frontendAffKeySize : frontendAffKeySize+4]
+	return k[frontendAffKeyV6Size : frontendAffKeyV6Size+4]
 }
 
 // FrontendKeyV6 returns the FrontendKeyV6 part of the key
 func (k AffinityKeyV6) FrontendAffinityKey() FrontEndAffinityKeyInterface {
 	var f FrontEndAffinityKeyV6
-	copy(f[:], k[:frontendAffKeySize])
+	copy(f[:], k[:frontendAffKeyV6Size])
 
 	return f
 }
@@ -460,7 +460,7 @@ func NewAffinityValueV6(ts uint64, backend BackendValueV6) AffinityValueV6 {
 // - it is the monotonic clock reading, which is compatible with time operations
 // in time package.
 func (v AffinityValueV6) Timestamp() time.Duration {
-	nano := binary.LittleEndian.Uint64(v[backendValueSize : backendValueSize+8])
+	nano := binary.LittleEndian.Uint64(v[backendValueV6Size : backendValueV6Size+8])
 	return time.Duration(nano) * time.Nanosecond
 }
 
@@ -468,7 +468,7 @@ func (v AffinityValueV6) Timestamp() time.Duration {
 func (v AffinityValueV6) Backend() BackendValueInterface {
 	var b BackendValueV6
 
-	copy(b[:], v[:backendValueSize])
+	copy(b[:], v[:backendValueV6Size])
 
 	return b
 }
@@ -557,8 +557,8 @@ func AffinityMapMemV6Iter(m AffinityMapMemV6) func(k, v []byte) {
 // 	uint32_t port;
 // };
 
-const sendRecvMsgKeyV6Size = 28
-const ctNATsMsgKeyV6Size = 38
+const sendRecvMsgKeyV6Size = 32 // 28 + 4B padding
+const ctNATsMsgKeyV6Size = 32
 
 // SendRecvMsgKeyV6 is the key for SendRecvMsgMap
 type SendRecvMsgKeyV6 [sendRecvMsgKeyV6Size]byte

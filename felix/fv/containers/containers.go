@@ -698,6 +698,9 @@ func (c *Container) SourceName() string {
 
 func (c *Container) SourceIPs() []string {
 	ips := []string{c.IP}
+	if c.IPv6 != "" {
+		ips = append(ips, c.IPv6)
+	}
 	ips = append(ips, c.ExtraSourceIPs...)
 	return ips
 }
@@ -830,4 +833,12 @@ func (c *Container) BPFNATHasBackendForService(svcIP string, svcPort, proto int,
 	}
 
 	return true
+}
+
+func GetIPv4(c *Container) string {
+	return c.IP
+}
+
+func GetIPv6(c *Container) string {
+	return c.IPv6
 }
