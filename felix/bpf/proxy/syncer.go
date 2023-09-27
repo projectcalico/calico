@@ -38,7 +38,10 @@ import (
 	"github.com/projectcalico/calico/felix/ip"
 )
 
-var podNPIP = net.IPv4(255, 255, 255, 255)
+var podNPIPStr = "255.255.255.255"
+var podNPIP = net.ParseIP(podNPIPStr)
+var podNPIPV6Str = "ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff"
+var podNPIPV6 = net.ParseIP(podNPIPV6Str)
 
 type svcInfo struct {
 	id         uint32
@@ -105,6 +108,8 @@ type stickyFrontend struct {
 // Syncer is an implementation of DPSyncer interface. It is not thread safe and
 // should be called only once at a time
 type Syncer struct {
+	ipFamily int
+
 	bpfSvcs *cachingmap.CachingMap[nat.FrontendKeyInterface, nat.FrontendValue]
 	bpfEps  *cachingmap.CachingMap[nat.BackendKey, nat.BackendValueInterface]
 	bpfAff  maps.Map
@@ -205,6 +210,7 @@ func NewSyncer(family int, nodePortIPs []net.IP,
 ) (*Syncer, error) {
 
 	s := &Syncer{
+		ipFamily:    family,
 		bpfAff:      affmap,
 		rt:          rt,
 		nodePortIPs: uniqueIPs(nodePortIPs),
@@ -215,11 +221,11 @@ func NewSyncer(family int, nodePortIPs []net.IP,
 
 	switch family {
 	case 4:
-		s.bpfSvcs = cachingmap.New[nat.FrontendKeyInterface, nat.FrontendValue](nat.FrontendMapParameters.Name,
+		s.bpfSvcs = cachingmap.New[nat.FrontendKeyInterface, nat.FrontendValue](frontendMap.GetName(),
 			maps.NewTypedMap[nat.FrontendKeyInterface, nat.FrontendValue](
 				frontendMap, nat.FrontendKeyFromBytes, nat.FrontendValueFromBytes,
 			))
-		s.bpfEps = cachingmap.New[nat.BackendKey, nat.BackendValueInterface](nat.BackendMapParameters.Name,
+		s.bpfEps = cachingmap.New[nat.BackendKey, nat.BackendValueInterface](backendMap.GetName(),
 			maps.NewTypedMap[nat.BackendKey, nat.BackendValueInterface](
 				backendMap, nat.BackendKeyFromBytes, nat.BackendValueFromBytes,
 			))
@@ -229,11 +235,11 @@ func NewSyncer(family int, nodePortIPs []net.IP,
 		s.affinityKeyFromBytes = nat.AffinityKeyIntfFromBytes
 		s.affinityValueFromBytes = nat.AffinityValueIntfFromBytes
 	case 6:
-		s.bpfSvcs = cachingmap.New[nat.FrontendKeyInterface, nat.FrontendValue](nat.FrontendMapParameters.Name,
+		s.bpfSvcs = cachingmap.New[nat.FrontendKeyInterface, nat.FrontendValue](frontendMap.GetName(),
 			maps.NewTypedMap[nat.FrontendKeyInterface, nat.FrontendValue](
 				frontendMap, nat.FrontendKeyV6FromBytes, nat.FrontendValueFromBytes,
 			))
-		s.bpfEps = cachingmap.New[nat.BackendKey, nat.BackendValueInterface](nat.BackendMapParameters.Name,
+		s.bpfEps = cachingmap.New[nat.BackendKey, nat.BackendValueInterface](backendMap.GetName(),
 			maps.NewTypedMap[nat.BackendKey, nat.BackendValueInterface](
 				backendMap, nat.BackendKeyFromBytes, nat.BackendValueV6FromBytes,
 			))
@@ -432,7 +438,7 @@ func (s *Syncer) addActiveEps(id uint32, svc k8sp.ServicePort, eps []k8sp.Endpoi
 }
 
 func (s *Syncer) applyExpandedNP(sname k8sp.ServicePortName, sinfo k8sp.ServicePort,
-	eps []k8sp.Endpoint, node ip.V4Addr, nport int) error {
+	eps []k8sp.Endpoint, node ip.Addr, nport int) error {
 	skey := getSvcKey(sname, getSvcKeyExtra(svcTypeNodePortRemote, node.String()))
 	si := serviceInfoFromK8sServicePort(sinfo)
 	si.clusterIP = node.AsNetIP()
@@ -472,15 +478,15 @@ func (s *Syncer) expandNodePorts(
 	eps []k8sp.Endpoint,
 	nport int,
 	rtLookup func(addr ip.Addr) (routes.ValueInterface, bool),
-) (map[ip.V4Addr][]k8sp.Endpoint, *expandMiss) {
-	ipToEp := make(map[ip.V4Addr][]k8sp.Endpoint)
+) (map[ip.Addr][]k8sp.Endpoint, *expandMiss) {
+	ipToEp := make(map[ip.Addr][]k8sp.Endpoint)
 	var miss *expandMiss
 	for _, ep := range eps {
-		ipv4 := ip.FromString(ep.IP()).(ip.V4Addr)
+		ipa := ip.FromString(ep.IP())
 
-		rt, ok := rtLookup(ipv4)
+		rt, ok := rtLookup(ipa)
 		if !ok {
-			log.Errorf("No route for %s", ipv4)
+			log.Errorf("No route for %s", ipa)
 			if miss == nil {
 				miss = &expandMiss{
 					sname: sname,
@@ -495,11 +501,11 @@ func (s *Syncer) expandNodePorts(
 		flags := rt.Flags()
 		// Include only remote workloads.
 		if flags&routes.FlagWorkload != 0 && flags&routes.FlagLocal == 0 {
-			nodeIP := rt.NextHop().(ip.V4Addr)
+			nodeIP := rt.NextHop()
 
 			ipToEp[nodeIP] = append(ipToEp[nodeIP], ep)
 			if log.GetLevel() >= log.DebugLevel {
-				log.Debugf("found rt %s for remote dest %s", nodeIP, ipv4)
+				log.Debugf("found rt %s for remote dest %s", nodeIP, ipa)
 			}
 		}
 	}
@@ -635,7 +641,8 @@ func (s *Syncer) apply(state DPSyncerState) error {
 				npInfo := serviceInfoFromK8sServicePort(sinfo)
 				npInfo.clusterIP = npip
 				npInfo.port = nport
-				if npip.Equal(podNPIP) && sinfo.InternalPolicyLocal() {
+				if sinfo.InternalPolicyLocal() &&
+					((s.ipFamily == 4 && npip.Equal(podNPIP)) || (s.ipFamily == 6 && npip.Equal(podNPIPV6))) {
 					// do not program the meta entry, program each node
 					// separately
 					continue
@@ -845,11 +852,14 @@ func (s *Syncer) getSvcNATKeyLBSrcRange(svc k8sp.ServicePort) ([]nat.FrontendKey
 	keys := make([]nat.FrontendKeyInterface, 0, len(loadBalancerSourceRanges))
 
 	for _, src := range loadBalancerSourceRanges {
-		// Ignore IPv6 addresses
 		if strings.Contains(src, ":") {
+			if s.ipFamily != 6 {
+				continue
+			}
+		} else if s.ipFamily == 6 {
 			continue
 		}
-		key := s.newFrontendKeySrc(ipaddr, uint16(port), proto, ip.MustParseCIDROrIP(src).(ip.V4CIDR))
+		key := s.newFrontendKeySrc(ipaddr, uint16(port), proto, ip.MustParseCIDROrIP(src))
 		keys = append(keys, key)
 	}
 	return keys, nil
@@ -1200,7 +1210,11 @@ func (s *Syncer) ConntrackFrontendHasBackend(ip net.IP, port uint16,
 		// Double check if it is a nodeport as if we are on the node that has
 		// the backing pod for a nodeport and the nodeport was forwarded here,
 		// the frontend is different.
-		id, ok = s.activeSvcsMap[ipPortProto{ipPort{"255.255.255.255", int(port)}, proto}]
+		npIP := podNPIPStr
+		if s.ipFamily == 6 {
+			npIP = podNPIPV6Str
+		}
+		id, ok = s.activeSvcsMap[ipPortProto{ipPort{npIP, int(port)}, proto}]
 		if !ok {
 			return false
 		}

@@ -40,7 +40,9 @@ type Manager struct {
 	// failsafesOut the outbound failsafe ports, from configuration.
 	failsafesOut []config.ProtoPort
 
-	opReporter logutils.OpRecorder
+	opReporter   logutils.OpRecorder
+	keyFromSlice func([]byte) KeyInterface
+	makeKey      func(ipProto uint8, port uint16, outbound bool, ip string, mask int) KeyInterface
 }
 
 func (m *Manager) OnUpdate(_ interface{}) {
@@ -50,12 +52,16 @@ func NewManager(
 	failsafesMap maps.Map,
 	failsafesIn, failsafesOut []config.ProtoPort,
 	opReporter logutils.OpRecorder,
+	keyFromSlice func([]byte) KeyInterface,
+	makeKey func(ipProto uint8, port uint16, outbound bool, ip string, mask int) KeyInterface,
 ) *Manager {
 	return &Manager{
 		failsafesMap: failsafesMap,
 		failsafesIn:  failsafesIn,
 		failsafesOut: failsafesOut,
 		opReporter:   opReporter,
+		keyFromSlice: keyFromSlice,
+		makeKey:      makeKey,
 	}
 }
 
@@ -70,9 +76,9 @@ func (m *Manager) ResyncFailsafes() error {
 	m.opReporter.RecordOperation("resync-failsafes")
 
 	syncFailed := false
-	unknownKeys := set.New[Key]()
+	unknownKeys := set.New[KeyInterface]()
 	err := m.failsafesMap.Iter(func(rawKey, _ []byte) maps.IteratorAction {
-		key := KeyFromSlice(rawKey)
+		key := m.keyFromSlice(rawKey)
 		unknownKeys.Add(key)
 		return maps.IterNone
 	})
@@ -122,7 +128,7 @@ func (m *Manager) ResyncFailsafes() error {
 		// Mask the IP
 		maskedIP := ipv4.Mask(ipnet.Mask)
 
-		k := MakeKey(ipProto, p.Port, outbound, maskedIP.String(), mask)
+		k := m.makeKey(ipProto, p.Port, outbound, maskedIP.String(), mask)
 		unknownKeys.Discard(k)
 		err = m.failsafesMap.Update(k.ToSlice(), Value())
 		if err != nil {
@@ -140,7 +146,7 @@ func (m *Manager) ResyncFailsafes() error {
 		addPort(p, true)
 	}
 
-	unknownKeys.Iter(func(k Key) error {
+	unknownKeys.Iter(func(k KeyInterface) error {
 		err := m.failsafesMap.Delete(k.ToSlice())
 		if err != nil {
 			log.WithError(err).WithField("key", k).Warn("Failed to remove failsafe port from map.")
