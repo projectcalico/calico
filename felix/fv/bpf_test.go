@@ -778,6 +778,10 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 				mapPath := conntrack.Map().Path()
 
+				if testOpts.ipv6 {
+					mapPath = conntrack.MapV6().Path()
+				}
+
 				Describe("with map repinning enabled", func() {
 					BeforeEach(func() {
 						options.ExtraEnvVars["FELIX_DebugBPFMapRepinEnabled"] = "true"
