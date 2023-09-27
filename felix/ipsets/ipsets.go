@@ -679,7 +679,7 @@ func (s *IPSets) chunkUpDirtyIPSets() (chunks [][]string, numIPSets, numLines in
 	if len(chunks) > MaxIPSetParallelUpdates {
 		chunks2 := make([][]string, MaxIPSetParallelUpdates)
 		for i, c := range chunks {
-			chunks2[i%len(chunks2)] = append(chunks2[i%len(chunks2)], c...)
+			chunks2[i%MaxIPSetParallelUpdates] = append(chunks2[i%MaxIPSetParallelUpdates], c...)
 		}
 		return chunks2, numIPSets, numLines
 	}
@@ -851,16 +851,16 @@ func (s *IPSets) writeUpdates(setName string, w io.Writer) (err error) {
 		return
 	}
 
-	s.mutex.Lock()
 	if needCreate || needTempIPSet {
+		s.mutex.Lock()
 		if needTempIPSet {
 			// After the swap, the temp IP set has the _old_ dataplane metadata.
 			s.setNameToProgrammedMetadata.Dataplane().Set(tempSet, dpMeta)
 		}
 		// The main IP set now has the correct metadata.
 		s.setNameToProgrammedMetadata.Dataplane().Set(setName, desiredMeta)
+		s.mutex.Unlock()
 	}
-	s.mutex.Unlock()
 	return
 }
 
