@@ -6,8 +6,7 @@
 #define __CALI_ICMP6_H__
 
 static CALI_BPF_INLINE bool icmp_type_is_err(__u8 type) {
-	/* XXX not implemented yet */
-	return false;
+	return type < 128;
 }
 
 #endif /* __CALI_ICMP6_H__ */
