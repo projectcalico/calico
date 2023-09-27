@@ -219,6 +219,9 @@ COPY filesystem/licenses/ /licenses
 COPY filesystem/usr/ /usr
 COPY filesystem/sbin/* /usr/sbin/
 
+# Ensure non-root user (for nonPrivileged=Enabled) has group write access to /etc/service
+RUN chmod 0775 /etc/service
+
 # Change permissions to make confd templates and output available in /etc/calico
 # to all container users.
 RUN chgrp -R 0 /etc/calico && \
