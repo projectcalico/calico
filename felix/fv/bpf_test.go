@@ -3498,13 +3498,30 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 									//                                      |
 									//                node1                 |      node0
 
-									var eth20 *workload.Workload
+									var (
+										eth20                     *workload.Workload
+										eth20IP, mask, eth20Route string
+										eth20ExtIP                string
+										versionArg                string
+									)
 
 									defer func() {
 										if eth20 != nil {
 											eth20.Stop()
 										}
 									}()
+									if testOpts.ipv6 {
+										eth20IP = "fd00::2001"
+										eth20Route = "fd00::2000/120"
+										eth20ExtIP = "1000::0020"
+										mask = "128"
+										versionArg = "-6"
+									} else {
+										eth20IP = "192.168.20.1"
+										eth20Route = "192.168.20.0/24"
+										eth20ExtIP = "10.0.0.20"
+										mask = "32"
+									}
 
 									By("setting up node's fake external iface", func() {
 										// We name the iface eth20 since such ifaces are
@@ -3512,12 +3529,10 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 										//
 										// Using a test-workload creates the namespaces and the
 										// interfaces to emulate the host NICs
-
-										ip := "192.168.20.1"
 										eth20 = &workload.Workload{
 											Name:          "eth20",
 											C:             tc.Felixes[1].Container,
-											IP:            ip,
+											IP:            eth20IP,
 											Ports:         "57005", // 0xdead
 											Protocol:      testOpts.protocol,
 											InterfaceName: "eth20",
@@ -3527,35 +3542,39 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 										Expect(err).NotTo(HaveOccurred())
 
 										// assign address to eth20 and add route to the .20 network
-										tc.Felixes[1].Exec("ip", "route", "add", "192.168.20.0/24", "dev", "eth20")
-										tc.Felixes[1].Exec("ip", "addr", "add", "10.0.0.20/32", "dev", "eth20")
-										_, err = eth20.RunCmd("ip", "route", "add", "10.0.0.20/32", "dev", "eth0")
+										tc.Felixes[1].Exec("ip", versionArg, "route", "add", eth20Route, "dev", "eth20")
+										tc.Felixes[1].Exec("ip", versionArg, "addr", "add", eth20ExtIP+"/"+mask, "dev", "eth20")
+										_, err = eth20.RunCmd("ip", versionArg, "route", "add", eth20ExtIP+"/"+mask, "dev", "eth0")
 										Expect(err).NotTo(HaveOccurred())
 										// Add a route to felix[1] to be able to reach the nodeport
-										_, err = eth20.RunCmd("ip", "route", "add", felixIP(1)+"/32", "via", "10.0.0.20")
+										_, err = eth20.RunCmd("ip", versionArg, "route", "add", felixIP(1)+"/"+mask, "via", eth20ExtIP)
 										Expect(err).NotTo(HaveOccurred())
 										// This multi-NIC scenario works only if the kernel's RPF check
 										// is not strict so we need to override it for the test and must
 										// be set properly when product is deployed. We reply on
 										// iptables to do require check for us.
-										tc.Felixes[1].Exec("sysctl", "-w", "net.ipv4.conf.eth0.rp_filter=2")
-										tc.Felixes[1].Exec("sysctl", "-w", "net.ipv4.conf.eth20.rp_filter=2")
+										if !testOpts.ipv6 {
+											tc.Felixes[1].Exec("sysctl", "-w", "net.ipv4.conf.eth0.rp_filter=2")
+											tc.Felixes[1].Exec("sysctl", "-w", "net.ipv4.conf.eth20.rp_filter=2")
+										}
 									})
 
 									By("setting up routes to .20 net on dest node to trigger RPF check", func() {
 										// set up a dummy interface just for the routing purpose
-										tc.Felixes[0].Exec("ip", "link", "add", "dummy1", "type", "dummy")
-										tc.Felixes[0].Exec("ip", "link", "set", "dummy1", "up")
+										tc.Felixes[0].Exec("ip", versionArg, "link", "add", "dummy1", "type", "dummy")
+										tc.Felixes[0].Exec("ip", versionArg, "link", "set", "dummy1", "up")
 										// set up route to the .20 net through the dummy iface. This
 										// makes the .20 a universally reachable external world from the
 										// internal/private eth0 network
-										tc.Felixes[0].Exec("ip", "route", "add", "192.168.20.0/24", "dev", "dummy1")
+										tc.Felixes[0].Exec("ip", versionArg, "route", "add", eth20Route, "dev", "dummy1")
 										// This multi-NIC scenario works only if the kernel's RPF check
 										// is not strict so we need to override it for the test and must
 										// be set properly when product is deployed. We reply on
 										// iptables to do require check for us.
-										tc.Felixes[0].Exec("sysctl", "-w", "net.ipv4.conf.eth0.rp_filter=2")
-										tc.Felixes[0].Exec("sysctl", "-w", "net.ipv4.conf.dummy1.rp_filter=2")
+										if !testOpts.ipv6 {
+											tc.Felixes[0].Exec("sysctl", "-w", "net.ipv4.conf.eth0.rp_filter=2")
+											tc.Felixes[0].Exec("sysctl", "-w", "net.ipv4.conf.dummy1.rp_filter=2")
+										}
 									})
 
 									By("Allowing traffic from the eth20 network", func() {
