@@ -252,6 +252,12 @@ type Table struct {
 	postWriteInterval        time.Duration
 	refreshInterval          time.Duration
 
+	// Estimates for the time taken to do an iptables save and restore.
+	// When a save/restore exceeds the one of these we update them immediately.
+	// When a save/restore takes less time we decay them exponentially.
+	peakIptablesSaveTime    time.Duration
+	peakIptablesRestoreTime time.Duration
+
 	// calicoXtablesLock, if enabled, our implementation of the xtables lock.
 	calicoXtablesLock sync.Locker
 
@@ -787,6 +793,17 @@ func (t *Table) getHashesAndRulesFromDataplane() (hashes map[string][]string, ru
 // attemptToGetHashesAndRulesFromDataplane starts an iptables-save subprocess and feeds its output to
 // readHashesAndRulesFrom() via a pipe.  It handles the various error cases.
 func (t *Table) attemptToGetHashesAndRulesFromDataplane() (hashes map[string][]string, rules map[string][]string, err error) {
+	startTime := t.timeNow()
+	defer func() {
+		saveDuration := t.timeNow().Sub(startTime)
+		t.peakIptablesSaveTime = t.peakIptablesSaveTime * 99 / 100
+		if saveDuration > t.peakIptablesSaveTime {
+			log.WithField("duration", saveDuration).Debug("Updating iptables-save peak duration.")
+			t.peakIptablesSaveTime = saveDuration
+		}
+	}()
+
+	t.logCxt.Debugf("Starting %s", t.iptablesSaveCmd)
 	cmd := t.newCmd(t.iptablesSaveCmd, "-t", t.Name)
 	countNumSaveCalls.Inc()
 
@@ -860,7 +877,7 @@ func (t *Table) readHashesAndRulesFrom(r io.ReadCloser) (hashes map[string][]str
 
 		// Special-case, if iptables-nft can't handle a ruleset then it writes an error
 		// but then returns an RC of 0.  Detect this case.
-		if nftErrorRegexp.Match(line) {
+		if bytes.HasPrefix(line, []byte("#")) && nftErrorRegexp.Match(line) {
 			logCxt.Error("iptables-save failed because there are incompatible nft rules in the table.  " +
 				"Remove the nft rules to continue.")
 			return nil, nil, errors.New(
@@ -869,33 +886,42 @@ func (t *Table) readHashesAndRulesFrom(r io.ReadCloser) (hashes map[string][]str
 
 		// Look for lines of the form ":chain-name - [0:0]", which are forward declarations
 		// for (possibly empty) chains.
-		captures := chainCreateRegexp.FindSubmatch(line)
-		if captures != nil {
-			// Chain forward-reference, make sure the chain exists.
-			chainName := string(captures[1])
-			if debug {
-				logCxt.WithField("chainName", chainName).Debug("Found forward-reference")
+		if bytes.HasPrefix(line, []byte(":")) {
+			captures := chainCreateRegexp.FindSubmatch(line)
+			if captures != nil {
+				// Chain forward-reference, make sure the chain exists.
+				chainName := string(captures[1])
+				if debug {
+					logCxt.WithField("chainName", chainName).Debug("Found forward-reference")
+				}
+				hashes[chainName] = []string{}
+				continue
 			}
-			hashes[chainName] = []string{}
-			continue
 		}
 
 		// Look for append lines, such as "-A chain-name -m foo --foo bar"; these are the
 		// actual rules.
-		captures = appendRegexp.FindSubmatch(line)
-		if captures == nil {
-			// Skip any non-append lines.
-			logCxt.Debug("Not an append, skipping")
+		var chainName string
+		if bytes.HasPrefix(line, []byte("-A ")) {
+			chainNameToEnd := line[3:]
+			chainNameEndIdx := bytes.Index(chainNameToEnd, []byte(" "))
+			if chainNameEndIdx == -1 {
+				chainName = string(chainNameToEnd)
+			} else {
+				chainName = string(chainNameToEnd[:chainNameEndIdx])
+			}
+		}
+		if chainName == "" {
+			// Skip non-append lines.
 			continue
 		}
-		chainName := string(captures[1])
 
 		// Look for one of our hashes on the rule.  We record a zero hash for unknown rules
 		// so that they get cleaned up.  Note: we're implicitly capturing the first match
 		// of the regex.  When writing the rules, we ensure that the hash is written as the
 		// first comment.
 		hash := ""
-		captures = t.hashCommentRegexp.FindSubmatch(line)
+		captures := t.hashCommentRegexp.FindSubmatch(line)
 		if captures != nil {
 			hash = string(captures[1])
 			if debug {
@@ -1290,6 +1316,22 @@ func (t *Table) applyUpdates() error {
 		t.postWriteInterval = t.initialPostWriteInterval
 	}
 
+	if t.postWriteInterval != 0 {
+		// If iptables-save/restore is taking a long time (as measured by
+		// the peakIptablesX fields), make sure that we don't try to
+		// recheck the iptables state too soon.
+		dynamicMinPostWriteInterval := (t.peakIptablesSaveTime + t.peakIptablesRestoreTime) * 2
+		if t.postWriteInterval < dynamicMinPostWriteInterval {
+			log.WithFields(log.Fields{
+				"dynamicMin":  dynamicMinPostWriteInterval,
+				"peakSave":    t.peakIptablesSaveTime,
+				"peakRestore": t.peakIptablesRestoreTime,
+			}).Debug(
+				"Post write interval shorter than time to read/write iptables, applying dynamic minimum.")
+			t.postWriteInterval = dynamicMinPostWriteInterval
+		}
+	}
+
 	// Now we've successfully updated iptables, clear the dirty sets.  We do this even if we
 	// found there was nothing to do above, since we may have found out that a dirty chain
 	// was actually a no-op update.
@@ -1310,6 +1352,16 @@ func (t *Table) applyUpdates() error {
 }
 
 func (t *Table) execIptablesRestore(buf *RestoreInputBuilder) error {
+	startTime := t.timeNow()
+	defer func() {
+		restoreDuration := t.timeNow().Sub(startTime)
+		t.peakIptablesRestoreTime = t.peakIptablesRestoreTime * 99 / 100
+		if restoreDuration > t.peakIptablesRestoreTime {
+			log.WithField("duration", restoreDuration).Debug("Updating iptables-restore peak duration.")
+			t.peakIptablesRestoreTime = restoreDuration
+		}
+	}()
+
 	features := t.featureDetector.GetFeatures()
 	inputBytes := buf.GetBytesAndReset()
 
