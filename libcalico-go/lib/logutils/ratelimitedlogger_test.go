@@ -69,8 +69,8 @@ var _ = DescribeTable("First and Interval logging",
 		Expect(counter.entry.Data).To(HaveKeyWithValue("a", 1))
 		Expect(counter.entry.Data).To(HaveKeyWithValue("b", 2))
 		Expect(counter.entry.Data).To(HaveKeyWithValue("c", "3"))
-		Expect(counter.entry.Data).To(HaveKeyWithValue("logs-skipped", 0))
-		Expect(counter.entry.Data).To(HaveKey("next-log"))
+		Expect(counter.entry.Data).NotTo(HaveKey("logsSkipped"))
+		Expect(counter.entry.Data).To(HaveKey("nextLog"))
 		Expect(counter.entry.Data).To(HaveKey("error"))
 
 		// Next two log will be skipped.
@@ -87,8 +87,8 @@ var _ = DescribeTable("First and Interval logging",
 		Expect(counter.entry.Data).To(HaveKeyWithValue("a", 1))
 		Expect(counter.entry.Data).To(HaveKeyWithValue("b", 2))
 		Expect(counter.entry.Data).To(HaveKeyWithValue("c", "3"))
-		Expect(counter.entry.Data).To(HaveKeyWithValue("logs-skipped", 2))
-		Expect(counter.entry.Data).To(HaveKey("next-log"))
+		Expect(counter.entry.Data).To(HaveKeyWithValue("logsSkipped", 2))
+		Expect(counter.entry.Data).To(HaveKey("nextLog"))
 		Expect(counter.entry.Data).To(HaveKey("error"))
 
 		// Force, so next log will also be written.
@@ -98,9 +98,42 @@ var _ = DescribeTable("First and Interval logging",
 		Expect(counter.entry.Data).To(HaveKeyWithValue("a", 1))
 		Expect(counter.entry.Data).To(HaveKeyWithValue("b", 2))
 		Expect(counter.entry.Data).To(HaveKeyWithValue("c", "3"))
-		Expect(counter.entry.Data).To(HaveKeyWithValue("logs-skipped", 0))
-		Expect(counter.entry.Data).To(HaveKey("next-log"))
+		Expect(counter.entry.Data).NotTo(HaveKey("logsSkipped"))
+		Expect(counter.entry.Data).To(HaveKey("nextLog"))
 		Expect(counter.entry.Data).To(HaveKey("error"))
+
+		// Check burst.
+		logger = NewRateLimitedLogger(
+			OptInterval(200*time.Millisecond),
+			OptLogger(logrusLogger),
+			OptBurst(2),
+		)
+		logfn(logger) // First log, resets logging interval and burst count
+		Expect(counter.entry.Data).NotTo(HaveKey("nextLog"))
+		Expect(counter.entry.Data).NotTo(HaveKey("logsSkipped"))
+		logfn(logger) // First burst
+		Expect(counter.entry.Data).NotTo(HaveKey("nextLog"))
+		Expect(counter.entry.Data).NotTo(HaveKey("logsSkipped"))
+		logfn(logger) // Second burst
+		Expect(counter.entry.Data).To(HaveKey("nextLog"))
+		Expect(counter.entry.Data).NotTo(HaveKey("logsSkipped"))
+		logfn(logger) // Skipped
+		logfn(logger) // Skipped
+		Expect(counter.count).To(Equal(6))
+		// Wait for logging interval.
+		time.Sleep(200 * time.Millisecond)
+		logfn(logger) // First log, resets logging interval and burst count
+		Expect(counter.entry.Data).NotTo(HaveKey("nextLog"))
+		Expect(counter.entry.Data).To(HaveKeyWithValue("logsSkipped", 2))
+		logfn(logger) // First burst
+		Expect(counter.entry.Data).NotTo(HaveKey("nextLog"))
+		Expect(counter.entry.Data).NotTo(HaveKey("logsSkipped"))
+		logfn(logger) // Second burst
+		Expect(counter.entry.Data).To(HaveKey("nextLog"))
+		Expect(counter.entry.Data).NotTo(HaveKey("logsSkipped"))
+		logfn(logger) // Skipped
+		logfn(logger) // Skipped
+		Expect(counter.count).To(Equal(9))
 	},
 	Entry("Debug", log.DebugLevel, true, func(l *RateLimitedLogger) { l.Debug("log", "now") }),
 	Entry("Print", log.InfoLevel, false, func(l *RateLimitedLogger) { l.Print("log", "now") }),
