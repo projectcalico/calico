@@ -41,8 +41,7 @@ type AttachPoint struct {
 	LogFilterIdx         int
 	Type                 tcdefs.EndpointType
 	ToOrFrom             tcdefs.ToOrFromEp
-	HookLayout4          hook.Layout
-	HookLayout6          hook.Layout
+	HookLayout           hook.Layout
 	HostIP               net.IP
 	HostTunnelIP         net.IP
 	IntfIP               net.IP
@@ -89,15 +88,22 @@ func (ap *AttachPoint) loadObject(ipVer int, file string) (*libbpf.Obj, error) {
 			if strings.HasPrefix(mapName, ".rodata") {
 				continue
 			}
-			if err := ap.ConfigureProgram(m); err != nil {
-				return nil, fmt.Errorf("failed to configure %s: %w", file, err)
+			if ipVer == 4 {
+				if err := ap.ConfigureProgram(m); err != nil {
+					return nil, fmt.Errorf("failed to configure %s: %w", file, err)
+				}
+			} else {
+				if err := ap.ConfigureProgramV6(m); err != nil {
+					return nil, fmt.Errorf("failed to configure %s: %w", file, err)
+				}
 			}
 			continue
 		}
 
+		log.Debugf("Pinning map %s k %d v %d", mapName, m.KeySize(), m.ValueSize())
 		pinDir := bpf.MapPinDir(m.Type(), mapName, ap.Iface, ap.Hook)
 		if err := m.SetPinPath(path.Join(pinDir, mapName)); err != nil {
-			return nil, fmt.Errorf("error pinning map %s: %w", mapName, err)
+			return nil, fmt.Errorf("error pinning map %s k %d v %d: %w", mapName, m.KeySize(), m.ValueSize(), err)
 		}
 	}
 
@@ -133,7 +139,15 @@ func (ap *AttachPoint) AttachProgram() (bpf.AttachResult, error) {
 	// By now the attach type specific generic set of programs is loaded and we
 	// only need to load and configure the preamble that will pass the
 	// configuration further to the selected set of programs.
-	binaryToLoad := path.Join(bpfdefs.ObjectDir, "tc_preamble.o")
+	var binaryToLoad string
+	var ipFamily int
+	if ap.IPv6Enabled {
+		binaryToLoad = path.Join(bpfdefs.ObjectDir, "tc_preamble_v6.o")
+		ipFamily = 6
+	} else {
+		binaryToLoad = path.Join(bpfdefs.ObjectDir, "tc_preamble.o")
+		ipFamily = 4
+	}
 
 	var res AttachResult
 
@@ -144,10 +158,10 @@ func (ap *AttachPoint) AttachProgram() (bpf.AttachResult, error) {
 		return nil, err
 	}
 
-	obj, err := ap.loadObject(4, binaryToLoad)
+	obj, err := ap.loadObject(ipFamily, binaryToLoad)
 	if err != nil {
 		logCxt.Warn("Failed to load program")
-		return nil, fmt.Errorf("object v4: %w", err)
+		return nil, fmt.Errorf("object v%d: %w", ipFamily, err)
 	}
 	defer obj.Close()
 
@@ -404,10 +418,6 @@ func (ap *AttachPoint) ConfigureProgram(m *libbpf.Map) error {
 		return err
 	}
 
-	if ap.IPv6Enabled {
-		globalData.Flags |= libbpf.GlobalsIPv6Enabled
-	}
-
 	if ap.DSROptoutCIDRs {
 		globalData.Flags |= libbpf.GlobalsNoDSRCidrs
 	}
@@ -433,22 +443,70 @@ func (ap *AttachPoint) ConfigureProgram(m *libbpf.Map) error {
 		globalData.Jumps[i] = 0xffffffff /* uint32(-1) */
 	}
 
-	if ap.HookLayout4 != nil {
-		log.WithField("HookLayout4", ap.HookLayout4).Debugf("ConfigureProgram")
-		for p, i := range ap.HookLayout4 {
+	if ap.HookLayout != nil {
+		log.WithField("HookLayout", ap.HookLayout).Debugf("ConfigureProgram")
+		for p, i := range ap.HookLayout {
 			globalData.Jumps[p] = uint32(i)
 		}
-		globalData.Jumps[tcdefs.ProgIndexPolicy] = uint32(ap.PolicyIdx(4))
-	}
-
-	if ap.HookLayout6 != nil {
-		for p, i := range ap.HookLayout6 {
-			globalData.Jumps[p] = uint32(i)
-		}
-		globalData.Jumps[tcdefs.ProgIndexV6Policy] = uint32(ap.PolicyIdx(6))
+		globalData.Jumps[tcdefs.ProgIndexPolicy] = uint32(ap.PolicyIdx)
 	}
 
 	return ConfigureProgram(m, ap.Iface, &globalData)
+}
+
+func (ap *AttachPoint) ConfigureProgramV6(m *libbpf.Map) error {
+	globalData := libbpf.TcGlobalData6{
+		ExtToSvcMark: ap.ExtToServiceConnmark,
+		VxlanPort:    ap.VXLANPort,
+		Tmtu:         ap.TunnelMTU,
+		PSNatStart:   ap.PSNATStart,
+		PSNatLen:     ap.PSNATEnd,
+		WgPort:       ap.WgPort,
+		NatIn:        ap.NATin,
+		NatOut:       ap.NATout,
+
+		LogFilterJmp: uint32(ap.LogFilterIdx),
+	}
+
+	copy(globalData.HostIP[:], ap.HostIP.To16())
+
+	if globalData.VxlanPort == 0 {
+		globalData.VxlanPort = 4789
+	}
+
+	copy(globalData.IntfIP[:], ap.IntfIP.To16())
+
+	if ap.DSROptoutCIDRs {
+		globalData.Flags |= libbpf.GlobalsNoDSRCidrs
+	}
+
+	switch ap.RPFEnforceOption {
+	case tcdefs.RPFEnforceOptionStrict:
+		globalData.Flags |= libbpf.GlobalsRPFOptionEnabled
+		globalData.Flags |= libbpf.GlobalsRPFOptionStrict
+	case tcdefs.RPFEnforceOptionLoose:
+		globalData.Flags |= libbpf.GlobalsRPFOptionEnabled
+	}
+
+	copy(globalData.HostTunnelIP[:], globalData.HostIP[:])
+
+	if ap.HostTunnelIP != nil {
+		copy(globalData.HostTunnelIP[:], ap.HostTunnelIP.To16())
+	}
+
+	for i := 0; i < len(globalData.Jumps); i++ {
+		globalData.Jumps[i] = 0xffffffff /* uint32(-1) */
+	}
+
+	if ap.HookLayout != nil {
+		log.WithField("HookLayout", ap.HookLayout).Debugf("ConfigureProgram")
+		for p, i := range ap.HookLayout {
+			globalData.Jumps[p] = uint32(i)
+		}
+		globalData.Jumps[tcdefs.ProgIndexPolicy] = uint32(ap.PolicyIdx)
+	}
+
+	return ConfigureProgramV6(m, ap.Iface, &globalData)
 }
 
 func ConfigureProgram(m *libbpf.Map, iface string, globalData *libbpf.TcGlobalData) error {

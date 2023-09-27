@@ -30,6 +30,8 @@ import (
 var (
 	cfgFile  string
 	logLevel string
+
+	ipv6 *bool
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -56,12 +58,11 @@ func init() {
 	// Cobra supports persistent flags, which, if defined here,
 	// will be global for your application.
 
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.calico-bpf.yaml)")
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "",
+		"config file (default is $HOME/.calico-bpf.yaml)")
 	rootCmd.PersistentFlags().StringVar(&logLevel, "log-level", "warn", "Set log level")
 
-	// Cobra also supports local flags, which will only run
-	// when this action is called directly.
-	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	ipv6 = rootCmd.PersistentFlags().BoolP("ipv6", "6", false, "Use IPv6 insted of IPv4")
 	rootCmd.SetOut(os.Stdout)
 }
 
