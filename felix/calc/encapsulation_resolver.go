@@ -19,7 +19,6 @@ import (
 	"net"
 
 	"github.com/sirupsen/logrus"
-	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/config"
 	"github.com/projectcalico/calico/felix/dispatcher"
@@ -56,11 +55,11 @@ func (r *EncapsulationResolver) RegisterWith(dispatcher *dispatcher.Dispatcher) 
 }
 
 func (r *EncapsulationResolver) OnPoolUpdate(update api.Update) (filterOut bool) {
-	log.WithField("update", update).Debug("EncapsulationResolver: OnPoolUpdate")
+	logrus.WithField("update", update).Debug("EncapsulationResolver: OnPoolUpdate")
 
 	err := r.encapCalc.handlePool(update.KVPair)
 	if err != nil {
-		log.Infof("error handling update %+v: %v. Ignoring.", update, err)
+		logrus.Infof("error handling update %+v: %v. Ignoring.", update, err)
 		return
 	}
 
@@ -70,7 +69,7 @@ func (r *EncapsulationResolver) OnPoolUpdate(update api.Update) (filterOut bool)
 }
 
 func (r *EncapsulationResolver) OnStatusUpdate(status api.SyncStatus) {
-	log.WithField("status", status).Debug("EncapsulationResolver: SyncStatus update")
+	logrus.WithField("status", status).Debug("EncapsulationResolver: SyncStatus update")
 
 	if !r.inSync && status == api.InSync {
 		r.inSync = true
@@ -81,7 +80,7 @@ func (r *EncapsulationResolver) OnStatusUpdate(status api.SyncStatus) {
 func (r *EncapsulationResolver) triggerCalculation() {
 	if !r.inSync {
 		// Do nothing if EncapsulationResolver hasn't sync'ed all updates yet
-		log.Debug("EncapsulationResolver: skip calculation because inSync is false")
+		logrus.Debug("EncapsulationResolver: skip calculation because inSync is false")
 		return
 	}
 
@@ -94,7 +93,7 @@ func (r *EncapsulationResolver) triggerCalculation() {
 	if r.config.Encapsulation.IPIPEnabled != newEncap.IPIPEnabled ||
 		r.config.Encapsulation.VXLANEnabled != newEncap.VXLANEnabled ||
 		r.config.Encapsulation.VXLANEnabledV6 != newEncap.VXLANEnabledV6 {
-		log.WithFields(log.Fields{
+		logrus.WithFields(logrus.Fields{
 			"oldIPIPEnabled":    r.config.Encapsulation.IPIPEnabled,
 			"newIPIPEnabled":    newEncap.IPIPEnabled,
 			"oldVXLANEnabled":   r.config.Encapsulation.VXLANEnabled,
@@ -121,7 +120,7 @@ type EncapsulationCalculator struct {
 
 func NewEncapsulationCalculator(config *config.Config, ippoolKVPList *model.KVPairList) *EncapsulationCalculator {
 	if config == nil {
-		log.Panic("Starting EncapsulationResolver with config==nil.")
+		logrus.Panic("Starting EncapsulationResolver with config==nil.")
 	}
 
 	encapCalc := &EncapsulationCalculator{
@@ -142,7 +141,7 @@ func (c *EncapsulationCalculator) initPools(ippoolKVPList *model.KVPairList) {
 	for _, kvp := range ippoolKVPList.KVPairs {
 		err := c.handlePool(*kvp)
 		if err != nil {
-			log.Infof("error handling update %+v: %v. Ignoring.", *kvp, err)
+			logrus.Infof("error handling update %+v: %v. Ignoring.", *kvp, err)
 		}
 	}
 }
