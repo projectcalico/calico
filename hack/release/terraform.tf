@@ -4,11 +4,18 @@ provider "google" {
   zone    = var.google_zone
 }
 
+provider "google-beta" {
+  project = var.google_project
+  region  = var.google_region
+  zone    = var.google_zone
+}
+
 resource "tls_private_key" "ssh" {
   algorithm = "RSA"
 }
 
 resource "google_compute_instance" "vm_instance" {
+  provider     = google-beta
   name         = "${var.prefix}-calico-release-executor"
   machine_type = var.machine_type
   zone         = var.google_zone
