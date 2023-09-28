@@ -152,10 +152,10 @@ func TestPolicyDump(t *testing.T) {
 	checkLabelsAndComments(proto.Rule{NotSrcNamedPortIpSetIds: []string{setID("n:abcdef1234567890")}}, "If source port is within any of the named ports {n:abcdef1234567890}, skip to next rule", "comment")
 	checkLabelsAndComments(proto.Rule{NotDstNamedPortIpSetIds: []string{setID("n:foo1234567890")}}, "If dest port is within any of the named ports {n:foo1234567890}, skip to next rule", "comment")
 
-	checkLabelsAndComments(proto.Rule{SrcIpSetIds: []string{setID("s:sbcdef1234567890")}}, "If source doesn't match ipset s:sbcdef1234567890, skip to next rule", "comment")
-	checkLabelsAndComments(proto.Rule{NotSrcIpSetIds: []string{setID("s:sbcdef1234567890")}}, "If source matches ipset s:sbcdef1234567890, skip to next rule", "comment")
-	checkLabelsAndComments(proto.Rule{DstIpSetIds: []string{setID("d:sbcdef1234567890")}}, "If dest doesn't match ipset d:sbcdef1234567890, skip to next rule", "comment")
-	checkLabelsAndComments(proto.Rule{NotDstIpSetIds: []string{setID("d:sbcdef1234567890")}}, "If dest matches ipset d:sbcdef1234567890, skip to next rule", "comment")
+	checkLabelsAndComments(proto.Rule{SrcIpSetIds: []string{setID("s:sbcdef1234567890")}}, "If source doesn't match ipset s:sbcdef1234567890 (0xc9e0b8362d2ae7aa), skip to next rule", "comment")
+	checkLabelsAndComments(proto.Rule{NotSrcIpSetIds: []string{setID("s:sbcdef1234567890")}}, "If source matches ipset s:sbcdef1234567890 (0xc9e0b8362d2ae7aa), skip to next rule", "comment")
+	checkLabelsAndComments(proto.Rule{DstIpSetIds: []string{setID("d:sbcdef1234567890")}}, "If dest doesn't match ipset d:sbcdef1234567890 (0x8cc518c2047a26bb), skip to next rule", "comment")
+	checkLabelsAndComments(proto.Rule{NotDstIpSetIds: []string{setID("d:sbcdef1234567890")}}, "If dest matches ipset d:sbcdef1234567890 (0x8cc518c2047a26bb), skip to next rule", "comment")
 
 	checkLabelsAndComments(proto.Rule{Icmp: &proto.Rule_IcmpTypeCode{IcmpTypeCode: &proto.IcmpTypeAndCode{Type: 10, Code: 12}}}, "If ICMP type != 10 or code != 12, skip to next rule", "comment")
 	checkLabelsAndComments(proto.Rule{NotIcmp: &proto.Rule_NotIcmpTypeCode{NotIcmpTypeCode: &proto.IcmpTypeAndCode{Type: 10, Code: 12}}}, "If ICMP type == 10 and code == 12, skip to next rule", "comment")

@@ -122,7 +122,12 @@ func (v ValueV6) String() string {
 	return strings.Join(parts, " ")
 }
 
-func NewKeyV6(cidr ip.V6CIDR) KeyV6 {
+func (v ValueV6) Equal(x ValueInterface) bool {
+	X, ok := x.(ValueV6)
+	return ok && v == X
+}
+
+func NewKeyV6(cidr ip.CIDR) KeyV6 {
 	var k KeyV6
 
 	binary.LittleEndian.PutUint32(k[:4], uint32(cidr.Prefix()))
@@ -137,7 +142,7 @@ func NewValueV6(flags Flags) ValueV6 {
 	return v
 }
 
-func NewValueV6WithNextHop(flags Flags, nextHop ip.V6Addr) ValueV6 {
+func NewValueV6WithNextHop(flags Flags, nextHop ip.Addr) ValueV6 {
 	var v ValueV6
 	binary.LittleEndian.PutUint32(v[:4], uint32(flags))
 	copy(v[4:20], nextHop.AsNetIP().To16())
@@ -148,6 +153,34 @@ func NewValueV6WithIfIndex(flags Flags, ifIndex int) ValueV6 {
 	var v ValueV6
 	binary.LittleEndian.PutUint32(v[:4], uint32(flags))
 	binary.LittleEndian.PutUint32(v[4:8], uint32(ifIndex))
+	return v
+}
+
+func NewKeyV6Intf(cidr ip.CIDR) KeyInterface {
+	return NewKeyV6(cidr)
+}
+
+func NewValueV6Intf(flags Flags) ValueInterface {
+	return NewValueV6(flags)
+}
+
+func NewValueV6IntfWithNextHop(flags Flags, nextHop ip.Addr) ValueInterface {
+	return NewValueV6WithNextHop(flags, nextHop)
+}
+
+func NewValueV6IntfWithIfIndex(flags Flags, ifIndex int) ValueInterface {
+	return NewValueV6WithIfIndex(flags, ifIndex)
+}
+
+func KeyV6InftFromBytes(b []byte) KeyInterface {
+	var k KeyV6
+	copy(k[:], b)
+	return k
+}
+
+func ValueV6InftFromBytes(b []byte) ValueInterface {
+	var v ValueV6
+	copy(v[:], b)
 	return v
 }
 
