@@ -38,6 +38,14 @@ func (m *Map) Type() int {
 	panic("LIBBPF syscall stub")
 }
 
+func (m *Map) ValueSize() int {
+	panic("LIBBPF syscall stub")
+}
+
+func (m *Map) KeySize() int {
+	panic("LIBBPF syscall stub")
+}
+
 func (m *Map) SetPinPath(path string) error {
 	panic("LIBBPF syscall stub")
 }
