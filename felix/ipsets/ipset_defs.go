@@ -81,6 +81,14 @@ const (
 	IPSetTypeHashNetNet IPSetType = "hash:net,net"
 )
 
+var AllIPSetTypes = []IPSetType{
+	IPSetTypeHashIP,
+	IPSetTypeHashIPPort,
+	IPSetTypeHashNet,
+	IPSetTypeBitmapPort,
+	IPSetTypeHashNetNet,
+}
+
 func (t IPSetType) SetType() string {
 	return string(t)
 }
@@ -241,7 +249,7 @@ func (nn netNet) String() string {
 
 func (t IPSetType) IsValid() bool {
 	switch t {
-	case IPSetTypeHashIP, IPSetTypeHashNet, IPSetTypeHashIPPort, IPSetTypeHashNetNet:
+	case IPSetTypeHashIP, IPSetTypeHashNet, IPSetTypeHashIPPort, IPSetTypeHashNetNet, IPSetTypeBitmapPort:
 		return true
 	}
 	return false
