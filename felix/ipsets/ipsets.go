@@ -667,6 +667,9 @@ func (s *IPSets) tryUpdates() error {
 			log.WithField("setName", setName).Debug("Writing updates to IP set.")
 		}
 		writeErr = s.writeUpdates(setName, stdin)
+		if writeErr != nil {
+			break
+		}
 	}
 
 	// Finish off the input, then flush and close the input, or the command won't terminate.
