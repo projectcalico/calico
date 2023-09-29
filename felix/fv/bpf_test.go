@@ -1345,7 +1345,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 							// Wait for the pool change to take effect
 							Eventually(func() string {
-								return bpfDumpRoutes(tc.Felixes[1])
+								return bpfDumpRoutes(tc.Felixes[0])
 							}, "30s", "1s").ShouldNot(ContainSubstring("workload in-pool nat-out"))
 
 							cc.ResetExpectations()
@@ -1359,7 +1359,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 							// Wait for the pool change to take effect
 							Eventually(func() string {
-								return bpfDumpRoutes(tc.Felixes[1])
+								return bpfDumpRoutes(tc.Felixes[0])
 							}, "30s", "1s").Should(ContainSubstring("workload in-pool nat-out"))
 
 							cc.ResetExpectations()
@@ -4919,6 +4919,12 @@ func checkNodeConntrack(felixes []*infrastructure.Felix) error {
 					continue lineLoop
 				}
 				if felix.ExpectedWireguardTunnelAddr != "" && strings.Contains(line, felix.ExpectedWireguardTunnelAddr) {
+					continue lineLoop
+				}
+				if felix.ExpectedVXLANV6TunnelAddr != "" && strings.Contains(line, felix.ExpectedVXLANV6TunnelAddr) {
+					continue lineLoop
+				}
+				if felix.ExpectedWireguardV6TunnelAddr != "" && strings.Contains(line, felix.ExpectedWireguardV6TunnelAddr) {
 					continue lineLoop
 				}
 				// Ignore DHCP
