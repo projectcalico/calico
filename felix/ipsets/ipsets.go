@@ -473,6 +473,9 @@ func (s *IPSets) tryResync() (err error) {
 				continue
 			}
 			parts := strings.Split(line, " ")
+			meta := dataplaneMetadata{
+				Type: ipSetType,
+			}
 			for idx, p := range parts {
 				if p == "maxelem" {
 					if idx+1 >= len(parts) {
@@ -486,11 +489,7 @@ func (s *IPSets) tryResync() (err error) {
 							"Failed to parse ipset list Header line.")
 						break
 					}
-					meta := dataplaneMetadata{
-						Type:    ipSetType,
-						MaxSize: maxElem,
-					}
-					s.setNameToProgrammedMetadata.Dataplane().Set(ipSetName, meta)
+					meta.MaxSize = maxElem
 					break
 				}
 				if p == "range" {
@@ -500,21 +499,18 @@ func (s *IPSets) tryResync() (err error) {
 						break
 					}
 					// For bitmaps, we see "range 123-456"
-					rMin, rMAx, err := parseRange(parts[idx+1])
+					rMin, rMAx, err := ParseRange(parts[idx+1])
 					if err != nil {
 						log.WithError(err).WithField("line", line).Error(
 							"Failed to parse ipset list Header line.")
 						break
 					}
-					meta := dataplaneMetadata{
-						Type:     ipSetType,
-						RangeMin: rMin,
-						RangeMax: rMAx,
-					}
-					s.setNameToProgrammedMetadata.Dataplane().Set(ipSetName, meta)
+					meta.RangeMin = rMin
+					meta.RangeMax = rMAx
 					break
 				}
 			}
+			s.setNameToProgrammedMetadata.Dataplane().Set(ipSetName, meta)
 		}
 		if strings.HasPrefix(line, "Members:") {
 			// Start of a Members entry, following this, there'll be one member per
