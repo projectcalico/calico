@@ -41,6 +41,7 @@ const (
 	v4TempIPSetName1 = "cali4t1"
 	v4TempIPSetName2 = "cali4t2"
 	v4MainIPSetName2 = "cali40t:qMt7iLlGDhvLnCjM0l9nzxb"
+	v4MainIPSetName3 = "cali40u:qMt7iLlGDhvLnCjM0l9nzxb"
 )
 
 var (
@@ -762,11 +763,13 @@ var _ = Describe("IP sets dataplane", func() {
 
 				It("a create should be retried until it succeeds", func() {
 					ipsets.AddOrReplaceIPSet(meta2, []string{"10.0.0.3", "10.0.0.4"})
+					ipsets.AddOrReplaceIPSet(meta3, []string{"10.0.0.5", "10.0.0.6"})
 					apply()
 					Expect(dataplane.CumulativeSleep).To(BeNumerically(">", 0))
 					dataplane.ExpectMembers(map[string][]string{
 						v4MainIPSetName:  {"10.0.0.1", "10.0.0.2"},
 						v4MainIPSetName2: {"10.0.0.3", "10.0.0.4"},
+						v4MainIPSetName3: {"10.0.0.5", "10.0.0.6"},
 					})
 					Expect(dataplane.TriedToAddExistent).To(BeFalse())
 					Expect(dataplane.TriedToDeleteNonExistent).To(BeFalse())
@@ -801,6 +804,7 @@ var _ = Describe("IP sets dataplane", func() {
 		Describe("with a failure to start ipset restore and a close failure", describeRetryTests(
 			"close" /* needs to be queued up before the start */, "start"))
 		Describe("with a write failure to the pipe (immediately)", describeRetryTests("write"))
+		Describe("with a write failure to the pipe when writing an IP (single write only)", describeRetryTests("write-ip-only"))
 		Describe("with a write failure to the pipe when writing an IP", describeRetryTests("write-ip"))
 		Describe("with an update failure before any updates succeed", describeRetryTests("pre-update"))
 		Describe("with an update failure after updates succeed", describeRetryTests("post-update"))
