@@ -630,7 +630,7 @@ func (s *IPSets) tryResync() (err error) {
 	return
 }
 
-func parseRange(s string) (min int, max int, err error) {
+func ParseRange(s string) (min int, max int, err error) {
 	parts := strings.Split(s, "-")
 	if len(parts) != 2 {
 		err = fmt.Errorf("failed to parse range %q", s)
