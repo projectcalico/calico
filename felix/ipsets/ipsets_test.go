@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2023 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -133,6 +133,21 @@ var _ = Describe("IPSetTypeHashIP", func() {
 	})
 })
 
+var _ = Describe("IPSetTypeHashIP", func() {
+	It("should canonicalise a raw port", func() {
+		Expect(IPSetTypeBitmapPort.CanonicaliseMember("10")).
+			To(Equal(Port(10)))
+	})
+	It("should canonicalise an IPv4 port", func() {
+		Expect(IPSetTypeBitmapPort.CanonicaliseMember("v4,10")).
+			To(Equal(Port(10)))
+	})
+	It("should canonicalise an IPv6 port", func() {
+		Expect(IPSetTypeBitmapPort.CanonicaliseMember("v6,10")).
+			To(Equal(Port(10)))
+	})
+})
+
 var _ = Describe("IPSetTypeHashNet", func() {
 	It("should canonicalise an IPv4 CIDR", func() {
 		Expect(IPSetTypeHashNet.CanonicaliseMember("10.0.0.1/24")).
@@ -228,7 +243,7 @@ var _ = Describe("IP sets dataplane", func() {
 
 	reschedRequested := false
 	apply := func() {
-		ipsets.ApplyUpdates()
+		ipsets.ApplyUpdates(nil)
 		reschedRequested = ipsets.ApplyDeletions()
 	}
 
@@ -261,7 +276,7 @@ var _ = Describe("IP sets dataplane", func() {
 		// Apply updates.
 		ipsets.ApplyDeletions() // No-op
 		dataplane.ExpectMembers(map[string][]string{})
-		ipsets.ApplyUpdates()
+		ipsets.ApplyUpdates(nil)
 		dataplane.ExpectMembers(map[string][]string{
 			v4MainIPSetName: {"10.0.0.2", "10.0.0.3"},
 		})
@@ -679,7 +694,7 @@ var _ = Describe("IP sets dataplane", func() {
 			})
 			It("should panic eventually", func() {
 				ipsets.AddMembers(ipSetID, []string{"10.0.0.5"})
-				Expect(ipsets.ApplyUpdates).To(Panic())
+				Expect(func() { ipsets.ApplyUpdates(nil) }).To(Panic())
 				Expect(dataplane.CumulativeSleep).To(BeNumerically(">", time.Second))
 			})
 		})
@@ -689,7 +704,7 @@ var _ = Describe("IP sets dataplane", func() {
 			})
 			It("should panic eventually", func() {
 				ipsets.QueueResync()
-				Expect(ipsets.ApplyUpdates).To(Panic())
+				Expect(func() { ipsets.ApplyUpdates(nil) }).To(Panic())
 				Expect(dataplane.CumulativeSleep).To(BeNumerically(">", time.Second))
 			})
 		})
@@ -700,7 +715,7 @@ var _ = Describe("IP sets dataplane", func() {
 			})
 			It("should panic eventually", func() {
 				ipsets.QueueResync()
-				Expect(ipsets.ApplyUpdates).To(Panic())
+				Expect(func() { ipsets.ApplyUpdates(nil) }).To(Panic())
 				Expect(dataplane.CumulativeSleep).To(BeNumerically(">", time.Second))
 			})
 		})
@@ -916,5 +931,8 @@ var _ = Describe("Standard IPv4 IPVersionConfig", func() {
 	It("should not own other chains", func() {
 		Expect(v4VersionConf.OwnsIPSet("foobar")).To(BeFalse())
 		Expect(v4VersionConf.OwnsIPSet("noncali")).To(BeFalse())
+	})
+	It("should work with StripPrefix", func() {
+		Expect(StripIPSetNamePrefix(v4VersionConf.NameForMainIPSet(ipSetID))).To(HavePrefix(ipSetID[:20]))
 	})
 })

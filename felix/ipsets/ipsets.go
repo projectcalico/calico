@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2023 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -38,6 +38,8 @@ const (
 type dataplaneMetadata struct {
 	Type         IPSetType
 	MaxSize      int
+	RangeMin     int
+	RangeMax     int
 	DeleteFailed bool
 }
 
@@ -161,8 +163,10 @@ func (s *IPSets) AddOrReplaceIPSet(setMetadata IPSetMetadata, members []string) 
 	// DeltaTracker will catch that and mark it for recreation.
 	mainIPSetName := s.IPVersionConfig.NameForMainIPSet(setID)
 	dpMeta := dataplaneMetadata{
-		Type:    setMetadata.Type,
-		MaxSize: setMetadata.MaxSize,
+		Type:     setMetadata.Type,
+		MaxSize:  setMetadata.MaxSize,
+		RangeMin: setMetadata.RangeMin,
+		RangeMax: setMetadata.RangeMax,
 	}
 	s.setNameToAllMetadata[mainIPSetName] = dpMeta
 	if s.ipSetNeeded(mainIPSetName) {
@@ -318,13 +322,17 @@ func (s *IPSets) GetDesiredMembers(setID string) (set.Set[string], error) {
 	return strs, nil
 }
 
-func (s *IPSets) ApplyUpdates() {
+// ApplyUpdates applies the updates to the dataplane.  Returns a set of programmed IPs in the IPSets included by the
+// ipsetFilter.
+func (s *IPSets) ApplyUpdates(ipsetFilter func(ipSetName string) bool) (programmedIPs set.Set[string]) {
 	success := false
 	retryDelay := 1 * time.Millisecond
 	backOff := func() {
 		s.sleep(retryDelay)
 		retryDelay *= 2
 	}
+
+	programmedIPs = set.New[string]()
 	for attempt := 0; attempt < 10; attempt++ {
 		if attempt > 0 {
 			s.logCxt.Info("Retrying after an ipsets update failure...")
@@ -348,7 +356,7 @@ func (s *IPSets) ApplyUpdates() {
 		// and deleting some temp sets might free up some room.
 		s.tryTempIPSetDeletions()
 
-		if err := s.tryUpdates(); err != nil {
+		if err := s.tryUpdates(ipsetFilter, programmedIPs); err != nil {
 			// Update failures may mean that our iptables updates fail.  We need to do an immediate resync.
 			s.logCxt.WithError(err).Warning("Failed to update IP sets. Marking dataplane for resync.")
 			s.resyncRequired = true
@@ -365,6 +373,8 @@ func (s *IPSets) ApplyUpdates() {
 		s.logCxt.Panic("Failed to update IP sets after multiple retries.")
 	}
 	gaugeNumTotalIpsets.Set(float64(s.setNameToProgrammedMetadata.Dataplane().Len()))
+
+	return programmedIPs
 }
 
 // tryResync attempts to bring our state into sync with the dataplane.  It scans the contents of the
@@ -465,6 +475,11 @@ func (s *IPSets) tryResync() (err error) {
 			parts := strings.Split(line, " ")
 			for idx, p := range parts {
 				if p == "maxelem" {
+					if idx+1 >= len(parts) {
+						log.WithField("line", line).Error(
+							"Failed to parse ipset list Header line, nothing after 'maxelem'.")
+						break
+					}
 					maxElem, err := strconv.Atoi(parts[idx+1])
 					if err != nil {
 						log.WithError(err).WithField("line", line).Error(
@@ -474,6 +489,27 @@ func (s *IPSets) tryResync() (err error) {
 					meta := dataplaneMetadata{
 						Type:    ipSetType,
 						MaxSize: maxElem,
+					}
+					s.setNameToProgrammedMetadata.Dataplane().Set(ipSetName, meta)
+					break
+				}
+				if p == "range" {
+					if idx+1 >= len(parts) {
+						log.WithField("line", line).Error(
+							"Failed to parse ipset list Header line, nothing after 'range'.")
+						break
+					}
+					// For bitmaps, we see "range 123-456"
+					rMin, rMAx, err := parseRange(parts[idx+1])
+					if err != nil {
+						log.WithError(err).WithField("line", line).Error(
+							"Failed to parse ipset list Header line.")
+						break
+					}
+					meta := dataplaneMetadata{
+						Type:     ipSetType,
+						RangeMin: rMin,
+						RangeMax: rMAx,
 					}
 					s.setNameToProgrammedMetadata.Dataplane().Set(ipSetName, meta)
 					break
@@ -598,10 +634,28 @@ func (s *IPSets) tryResync() (err error) {
 	return
 }
 
+func parseRange(s string) (min int, max int, err error) {
+	parts := strings.Split(s, "-")
+	if len(parts) != 2 {
+		err = fmt.Errorf("failed to parse range %q", s)
+	}
+	if min, err = strconv.Atoi(parts[0]); err != nil {
+		err = fmt.Errorf("failed to parse range %q (%w)", s, err)
+		return
+	}
+	if max, err = strconv.Atoi(parts[1]); err != nil {
+		err = fmt.Errorf("failed to parse range %q (%w)", s, err)
+		return
+	}
+	return
+}
+
 // tryUpdates attempts to create and/or update IP sets.  It attempts to do the updates as a single
 // 'ipset restore' session in order to minimise process forking overhead.  Note: unlike
 // 'iptables-restore', 'ipset restore' is not atomic, updates are applied individually.
-func (s *IPSets) tryUpdates() error {
+// This function updates the set of programmed IPs - that is the IPs that were added or replaced in the IPSets
+// included by the ipsetFilter.
+func (s *IPSets) tryUpdates(ipsetFilter func(ipSetName string) bool, programmedIPs set.Set[string]) error {
 	var dirtyIPSets []string
 	s.ipSetsWithDirtyMembers.Iter(func(setName string) error {
 		if _, ok := s.setNameToProgrammedMetadata.Desired().Get(setName); !ok {
@@ -666,7 +720,15 @@ func (s *IPSets) tryUpdates() error {
 		if log.IsLevelEnabled(log.DebugLevel) {
 			log.WithField("setName", setName).Debug("Writing updates to IP set.")
 		}
-		writeErr = s.writeUpdates(setName, stdin)
+		var progIPs set.Set[string]
+		if ipsetFilter != nil && ipsetFilter(setName) {
+			// We want to include the IPs from this set.
+			progIPs = programmedIPs
+		}
+		writeErr = s.writeUpdates(setName, stdin, progIPs)
+		if writeErr != nil {
+			break
+		}
 	}
 
 	// Finish off the input, then flush and close the input, or the command won't terminate.
@@ -698,7 +760,7 @@ func (s *IPSets) tryUpdates() error {
 	return nil
 }
 
-func (s *IPSets) writeUpdates(setName string, w io.Writer) (err error) {
+func (s *IPSets) writeUpdates(setName string, w io.Writer, programmedIPs set.Set[string]) (err error) {
 	logCxt := s.logCxt.WithField("setName", setName)
 
 	desiredMeta, desiredExists := s.setNameToProgrammedMetadata.Desired().Get(setName)
@@ -749,8 +811,16 @@ func (s *IPSets) writeUpdates(setName string, w io.Writer) (err error) {
 	}
 	if needCreate || needTempIPSet {
 		logCxt.WithField("ipSetToCreate", targetSet).Debug("Creating IP set")
-		writeLine("create %s %s family %s maxelem %d",
-			targetSet, desiredMeta.Type, s.IPVersionConfig.Family, desiredMeta.MaxSize)
+
+		switch desiredMeta.Type {
+		case IPSetTypeBitmapPort:
+			writeLine("create %s %s range %d-%d",
+				targetSet, desiredMeta.Type, desiredMeta.RangeMin, desiredMeta.RangeMax)
+		default:
+			writeLine("create %s %s family %s maxelem %d",
+				targetSet, desiredMeta.Type, s.IPVersionConfig.Family, desiredMeta.MaxSize)
+		}
+
 	}
 	if err != nil {
 		return
@@ -765,11 +835,15 @@ func (s *IPSets) writeUpdates(setName string, w io.Writer) (err error) {
 		return deltatracker.IterActionUpdateDataplane
 	})
 	members.PendingUpdates().Iter(func(member IPSetMember) deltatracker.IterAction {
-		writeLine("add %s %s", targetSet, member)
+		memberStr := member.String()
+		writeLine("add %s %s", targetSet, memberStr)
 		if err != nil {
 			// Note, just exiting early here to save a load of no-ops.
 			// If we exit with an error, the dataplane state will be resynced.
 			return deltatracker.IterActionNoOpStopIteration
+		}
+		if programmedIPs != nil {
+			programmedIPs.Add(memberStr)
 		}
 		return deltatracker.IterActionUpdateDataplane
 	})
