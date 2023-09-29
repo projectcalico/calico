@@ -15,6 +15,8 @@
 package ip_test
 
 import (
+	"fmt"
+
 	calinet "github.com/projectcalico/calico/libcalico-go/lib/net"
 
 	. "github.com/projectcalico/calico/felix/ip"
@@ -24,47 +26,71 @@ import (
 )
 
 var _ = DescribeTable("IpAddr",
-	func(version int, inputIP, canonical string, bytes []byte) {
+	func(version int, inputIP, canonical string, bytes []byte, binvalue string) {
 		ip := FromString(inputIP)
 		Expect([]byte(ip.AsNetIP())).To(Equal(bytes))
 		Expect(ip.String()).To(Equal(canonical))
 		Expect(int(ip.Version())).To(Equal(version))
 		Expect(MustParseCIDROrIP(inputIP).Addr().String()).To(Equal(canonical))
+		Expect(ip.AsBinary()).To(Equal(binvalue))
 
 		caliIP := calinet.ParseIP(inputIP)
 		Expect([]byte(FromCalicoIP(*caliIP).AsNetIP())).To(Equal(bytes))
 	},
-	Entry("IPv4", 4, "10.0.0.1", "10.0.0.1", []byte{0xa, 0, 0, 1}),
+	Entry("IPv4", 4, "10.0.0.1", "10.0.0.1", []byte{0xa, 0, 0, 1}, "010000001010000000000000000000000001"),
 	Entry("IPv6", 6, "dead::beef", "dead::beef", []byte{
 		0xde, 0xad, 0, 0,
 		0, 0, 0, 0,
 		0, 0, 0, 0,
 		0, 0, 0xbe, 0xef},
+		"011011011110101011010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001011111011101111",
 	),
-	Entry("IPv6 non-canon", 6, "dead:0:0::beef", "dead::beef", []byte{
-		0xde, 0xad, 0, 0,
+	Entry("IPv6 non-canon", 6, "deaf:0:0::beef", "deaf::beef", []byte{
+		0xde, 0xaf, 0, 0,
 		0, 0, 0, 0,
 		0, 0, 0, 0,
 		0, 0, 0xbe, 0xef},
+		"011011011110101011110000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001011111011101111",
 	),
 )
 
+var _ = DescribeTable("Addr addition",
+	func(addrStr string, n int, expected string) {
+		addr := FromString(addrStr)
+		out := addr.Add(n)
+		exp := FromString(expected)
+		Expect(out).To(Equal(exp), fmt.Sprintf("%s + %v should equal %s", addrStr, n, expected))
+		sub := out.Add(-n)
+		Expect(sub).To(Equal(addr), fmt.Sprintf("%s - %v should equal %s", expected, n, addrStr))
+	},
+	Entry("IPv4 + 0", "10.0.0.1", 0, "10.0.0.1"),
+	Entry("IPv4 + 1", "10.0.0.1", 1, "10.0.0.2"),
+	Entry("IPv4 + 256", "10.0.0.1", 256, "10.0.1.1"),
+	Entry("IPv4 + 255", "10.0.0.1", 255, "10.0.1.0"),
+	Entry("IPv6 + 0", "::1", 0, "::1"),
+	Entry("IPv6 + 1", "::1", 1, "::2"),
+	Entry("IPv6 + 255", "::1", 255, "::100"),
+	Entry("IPv6 ::1:ffff:ffff:ffff + 1", "::1:ffff:ffff:ffff", 1, "::2:0:0:0"),
+)
+
 var _ = DescribeTable("CIDR",
-	func(version int, inputCIDR, canonical string, bytes []byte, len int) {
+	func(version int, inputCIDR, canonical string, bytes []byte, len int, binvalue string) {
 		cidr := MustParseCIDROrIP(inputCIDR)
 		Expect([]byte(cidr.Addr().AsNetIP())).To(Equal(bytes))
 		Expect(int(cidr.Prefix())).To(Equal(len))
 		Expect(cidr.String()).To(Equal(canonical))
 		Expect(int(cidr.Version())).To(Equal(version))
+		Expect(cidr.AsBinary()).To(Equal(binvalue))
 	},
-	Entry("IPv4", 4, "10.0.0.0/16", "10.0.0.0/16", []byte{0xa, 0, 0, 0}, 16),
-	Entry("IPv4 should be masked", 4, "10.0.0.1/16", "10.0.0.0/16", []byte{0xa, 0, 0, 0}, 16),
+	Entry("IPv4", 4, "10.0.0.0/16", "10.0.0.0/16", []byte{0xa, 0, 0, 0}, 16, "01000000101000000000"),
+	Entry("IPv4 should be masked", 4, "10.0.0.1/16", "10.0.0.0/16", []byte{0xa, 0, 0, 0}, 16, "01000000101000000000"),
 	Entry("IPv6", 6, "dead::/16", "dead::/16", []byte{
 		0xde, 0xad, 0, 0,
 		0, 0, 0, 0,
 		0, 0, 0, 0,
 		0, 0, 0, 0},
 		16,
+		"01101101111010101101",
 	),
 	Entry("IPv6 non-canon", 6, "dead:0:0::beef/16", "dead::/16", []byte{
 		0xde, 0xad, 0, 0,
@@ -72,6 +98,7 @@ var _ = DescribeTable("CIDR",
 		0, 0, 0, 0,
 		0, 0, 0, 00},
 		16,
+		"01101101111010101101",
 	),
 )
 
