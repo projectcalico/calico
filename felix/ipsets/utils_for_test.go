@@ -65,6 +65,7 @@ type mockDataplane struct {
 	TriedToDeleteNonExistent bool
 	TriedToAddExistent       bool
 
+	LinesExecuted     []string
 	AttemptedDestroys []string
 
 	CumulativeSleep time.Duration
@@ -281,35 +282,50 @@ func (c *restoreCmd) main() {
 			"line":    line,
 			"subCmd":  subCmd,
 		}).Info("Mock dataplane, analysing ipset restore line")
+		c.Dataplane.LinesExecuted = append(c.Dataplane.LinesExecuted, line)
 		if subCmd != "COMMIT" {
 			Expect(commitSeen).To(BeFalse())
 		}
 		switch subCmd {
 		case "create":
-			Expect(len(parts)).To(Equal(7))
-
 			name := parts[1]
 			Expect(len(name)).To(BeNumerically("<=", MaxIPSetNameLength))
 			Expect(name).To(HavePrefix("cali"))
 
 			ipSetType := IPSetType(parts[2])
-			Expect(ipSetType.IsValid()).To(BeTrue())
+			Expect(ipSetType.IsValid()).To(BeTrue(), "Invalid IP set type: "+parts[2])
 
-			Expect(parts[3]).To(Equal("family"))
-			ipFamily := IPFamily(parts[4])
-			Expect(ipFamily.IsValid()).To(BeTrue())
+			var meta setMetadata
+			if ipSetType == IPSetTypeBitmapPort {
+				// Has no "family".
+				// create cali4t0 bitmap:port range 10-1024
+				Expect(parts).To(HaveLen(5))
+				Expect(parts[3]).To(Equal("range"))
+				rMin, rMax, err := ParseRange(parts[4])
+				Expect(err).NotTo(HaveOccurred())
+				meta = setMetadata{
+					Name:     name,
+					RangeMin: rMin,
+					RangeMax: rMax,
+					Type:     ipSetType,
+				}
+			} else {
+				Expect(parts).To(HaveLen(7))
+				Expect(parts[3]).To(Equal("family"))
+				ipFamily := IPFamily(parts[4])
+				Expect(ipFamily.IsValid()).To(BeTrue())
 
-			Expect(parts[5]).To(Equal("maxelem"))
-			maxElem, err := strconv.Atoi(parts[6])
-			Expect(err).NotTo(HaveOccurred())
-
-			setMetadata := setMetadata{
-				Name:    name,
-				Family:  ipFamily,
-				MaxSize: maxElem,
-				Type:    ipSetType,
+				Expect(parts[5]).To(Equal("maxelem"))
+				maxElem, err := strconv.Atoi(parts[6])
+				Expect(err).NotTo(HaveOccurred())
+				meta = setMetadata{
+					Name:    name,
+					Family:  ipFamily,
+					MaxSize: maxElem,
+					Type:    ipSetType,
+				}
 			}
-			log.WithField("setMetadata", setMetadata).Info("Set created")
+			log.WithField("setMetadata", meta).Info("Set created")
 
 			if _, ok := c.Dataplane.IPSetMembers[name]; ok {
 				_, _ = c.Stderr.Write([]byte("set exists"))
@@ -318,7 +334,7 @@ func (c *restoreCmd) main() {
 			}
 
 			c.Dataplane.IPSetMembers[name] = set.New[string]()
-			c.Dataplane.IPSetMetadata[name] = setMetadata
+			c.Dataplane.IPSetMetadata[name] = meta
 		case "destroy":
 			Expect(len(parts)).To(Equal(2))
 			name := parts[1]
@@ -430,10 +446,12 @@ func (d *restoreCmd) CombinedOutput() ([]byte, error) {
 }
 
 type setMetadata struct {
-	Name    string
-	Family  IPFamily
-	Type    IPSetType
-	MaxSize int
+	Name     string
+	Family   IPFamily
+	Type     IPSetType
+	MaxSize  int
+	RangeMin int
+	RangeMax int
 }
 
 type destroyCmd struct {
@@ -696,7 +714,13 @@ func (c *listCmd) main() {
 			}
 		}
 		fmt.Fprintf(c.Stdout, "Type: %s\n", meta.Type)
-		fmt.Fprintf(c.Stdout, "Header: family %s hashsize 1024 maxelem %d\n", meta.Family, meta.MaxSize)
+		if meta.Type == IPSetTypeBitmapPort {
+			fmt.Fprintf(c.Stdout, "Header: family %s range %d-%d\n", meta.Family, meta.RangeMin, meta.RangeMax)
+		} else if meta.Type == "unknown:type" {
+			fmt.Fprintf(c.Stdout, "Header: floop\n")
+		} else {
+			fmt.Fprintf(c.Stdout, "Header: family %s hashsize 1024 maxelem %d\n", meta.Family, meta.MaxSize)
+		}
 		fmt.Fprint(c.Stdout, "Field: foobar\n") // Dummy field, should get ignored.
 		fmt.Fprint(c.Stdout, "Members:\n")
 		members.Iter(func(member string) error {
