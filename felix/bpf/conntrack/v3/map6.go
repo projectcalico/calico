@@ -174,7 +174,7 @@ func (e ValueV6) OrigSrcIP() net.IP {
 	return e[VoOrigSIPV6 : VoOrigSIPV6+16]
 }
 
-func (e ValueV6) ReverseNATKey() KeyV6 {
+func (e ValueV6) ReverseNATKey() KeyInterface {
 	var ret KeyV6
 
 	l := len(KeyV6{})
@@ -386,7 +386,7 @@ var MapParamsV6 = maps.MapParameters{
 	UpdatedByBPF: true,
 }
 
-func KeyV6FromBytes(k []byte) KeyV6 {
+func KeyV6FromBytes(k []byte) KeyInterface {
 	var ctKey KeyV6
 	if len(k) != len(ctKey) {
 		log.Panic("KeyV6 has unexpected length")
@@ -395,7 +395,7 @@ func KeyV6FromBytes(k []byte) KeyV6 {
 	return ctKey
 }
 
-func ValueV6FromBytes(v []byte) ValueV6 {
+func ValueV6FromBytes(v []byte) ValueInterface {
 	var ctVal ValueV6
 	if len(v) != len(ctVal) {
 		log.Panic("ValueV6 has unexpected length")

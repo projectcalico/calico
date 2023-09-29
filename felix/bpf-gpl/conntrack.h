@@ -23,7 +23,7 @@ static CALI_BPF_INLINE int psnat_get_port(struct cali_tc_ctx *ctx)
 
 #ifdef IPVER6
 
-static CALI_BPF_INLINE bool  src_lt_dest(ipv6_addr_t ip_src, ipv6_addr_t ip_dst, __u16 sport, __u16 dport)
+static CALI_BPF_INLINE bool  src_lt_dest(ipv6_addr_t *ip_src, ipv6_addr_t *ip_dst, __u16 sport, __u16 dport)
 {
 	int ret = ipv6_addr_t_cmp(ip_src, ip_dst);
 
@@ -37,7 +37,7 @@ static CALI_BPF_INLINE bool  src_lt_dest(ipv6_addr_t ip_src, ipv6_addr_t ip_dst,
 #else
 
 #define src_lt_dest(ip_src, ip_dst, sport, dport) \
-	((ip_src) < (ip_dst)) || (((ip_src) == (ip_dst)) && (sport) < (dport))
+	(*(ip_src) < *(ip_dst)) || ((*(ip_src) == *(ip_dst)) && (sport) < (dport))
 
 #endif /* IPVER6 */
 
@@ -94,7 +94,7 @@ static CALI_BPF_INLINE int calico_ct_v4_create_tracking(struct cali_tc_ctx *ctx,
 		 */
 		CALI_VERB("CT-ALL Asked to create entry but packet is marked as "
 				"from another endpoint, doing lookup\n");
-		bool srcLTDest = src_lt_dest(ct_ctx->src, ct_ctx->dst, sport, dport);
+		bool srcLTDest = src_lt_dest(&ct_ctx->src, &ct_ctx->dst, sport, dport);
 		fill_ct_key(k, srcLTDest, ct_ctx->proto, &ct_ctx->src, &ct_ctx->dst, sport, dport);
 		struct calico_ct_value *ct_value = cali_ct_lookup_elem(k);
 		if (!ct_value) {
@@ -161,7 +161,7 @@ create:
 	}
 
 	struct calico_ct_leg *src_to_dst, *dst_to_src;
-	bool srcLTDest = src_lt_dest(ct_ctx->src, ct_ctx->dst, sport, dport);
+	bool srcLTDest = src_lt_dest(&ct_ctx->src, &ct_ctx->dst, sport, dport);
 
 	fill_ct_key(k, srcLTDest, ct_ctx->proto, &ct_ctx->src, &ct_ctx->dst, sport, dport);
 	if (srcLTDest) {
@@ -230,7 +230,7 @@ create:
 
 		ct_value.orig_sport = sport;
 
-		bool src_lt_dst = ip_lt(ct_ctx->src, ct_ctx->dst);
+		bool src_lt_dst = ip_lt(&ct_ctx->src, &ct_ctx->dst);
 
 		for (i = 0; i < PSNAT_RETRIES; i++) {
 			sport = psnat_get_port(ctx);
@@ -297,7 +297,7 @@ static CALI_BPF_INLINE int calico_ct_create_nat_fwd(struct cali_tc_ctx *ctx,
 	 * which also uses the rk!
 	 */
 	struct calico_ct_key *k = rk;
-	bool srcLTDest = src_lt_dest(ip_src, ip_dst, sport, dport);
+	bool srcLTDest = src_lt_dest(&ip_src, &ip_dst, sport, dport);
 	fill_ct_key(k, srcLTDest, ct_ctx->proto, &ip_src, &ip_dst, sport, dport);
 
 	if (ct_ctx->orig_sport != ct_ctx->sport) {
@@ -527,7 +527,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 		.ifindex_created = CT_INVALID_IFINDEX,
 	};
 
-	bool srcLTDest = src_lt_dest(ip_src, ip_dst, sport, dport);
+	bool srcLTDest = src_lt_dest(&ip_src, &ip_dst, sport, dport);
 	struct calico_ct_key k;
 	bool syn = tcp_header && tcp_header->syn && !tcp_header->ack;
 
@@ -587,7 +587,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 		CALI_CT_DEBUG("related lookup from %x:%d\n", debug_ip(ct_ctx->src), ct_ctx->sport);
 		CALI_CT_DEBUG("related lookup to   %x:%d\n", debug_ip(ct_ctx->dst), ct_ctx->dport);
 
-		srcLTDest = src_lt_dest(ct_ctx->src, ct_ctx->dst, ct_ctx->sport, ct_ctx->dport);
+		srcLTDest = src_lt_dest(&ct_ctx->src, &ct_ctx->dst, ct_ctx->sport, ct_ctx->dport);
 		fill_ct_key(&k, srcLTDest, ct_ctx->proto, &ct_ctx->src, &ct_ctx->dst, ct_ctx->sport, ct_ctx->dport);
 		v = cali_ct_lookup_elem(&k);
 		if (!v) {
