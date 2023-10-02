@@ -93,6 +93,8 @@ func benchInitialSnap(b *testing.B, numEndpoints int, numLocalEndpoints int, num
 
 		cg.Flush()
 		Expect(es.pendingEndpointTierUpdates).To(HaveLen(numLocalEndpoints))
+		b.ReportMetric(float64(len(es.pendingAddedIPSets)), "IPSets")
+		b.ReportMetric(float64(len(es.pendingPolicyUpdates)), "Policies")
 		es.Flush()
 
 		sendDeletions(cg, localDeletes)
@@ -100,8 +102,6 @@ func benchInitialSnap(b *testing.B, numEndpoints int, numLocalEndpoints int, num
 		es.Flush()
 
 		b.ReportMetric(float64(time.Since(startTime).Seconds()), "s")
-		b.ReportMetric(float64(len(es.pendingAddedIPSets)), "IPSets")
-		b.ReportMetric(float64(len(es.pendingPolicyUpdates)), "Policies")
 		b.ReportMetric(float64(numMessages), "Msgs")
 	}
 }
