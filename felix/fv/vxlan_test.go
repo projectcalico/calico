@@ -63,7 +63,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 		brokenXSum := testConfig.BrokenXSum
 		enableIPv6 := testConfig.EnableIPv6
 
-		if BPFMode() && enableIPv6 && !BPFIPv6Support() {
+		if BPFMode() && enableIPv6 {
 			continue
 		}
 

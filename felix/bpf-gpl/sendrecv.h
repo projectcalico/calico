@@ -9,6 +9,9 @@ struct sendrec_key {
 	__u64 cookie;
 	ipv46_addr_t ip;
 	__u32 port; /* because bpf_sock_addr uses 32bit and we would need padding */
+#ifdef IPVER6
+	__u8 pad[4];
+#endif
 };
 
 struct sendrec_val {
@@ -30,7 +33,11 @@ struct ct_nats_key {
 	ipv46_addr_t ip;
 	__u32 port; /* because bpf_sock_addr uses 32bit */
 	__u8 proto;
+#ifdef IPVER6
+	__u8 pad[3];
+#else
 	__u8 pad[7];
+#endif
 };
 
 #ifdef IPVER6

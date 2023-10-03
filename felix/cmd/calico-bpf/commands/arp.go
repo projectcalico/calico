@@ -58,22 +58,43 @@ var arpCmd = &cobra.Command{
 }
 
 func dumpARP() error {
-	arpMap := arp.Map()
+	var arpMap maps.Map
+
+	v6 := false
+
+	if ipv6 != nil && *ipv6 {
+		v6 = true
+		arpMap = arp.MapV6()
+	} else {
+		arpMap = arp.Map()
+	}
 
 	if err := arpMap.Open(); err != nil {
 		return errors.WithMessage(err, "failed to open map")
 	}
 
 	err := arpMap.Iter(func(k, v []byte) maps.IteratorAction {
-		var (
-			key arp.Key
-			val arp.Value
-		)
+		if v6 {
+			var (
+				key arp.KeyV6
+				val arp.ValueV6
+			)
 
-		copy(key[:], k[:arp.KeySize])
-		copy(val[:], v[:arp.ValueSize])
+			copy(key[:], k[:arp.KeyV6Size])
+			copy(val[:], v[:arp.ValueV6Size])
 
-		fmt.Printf("dev %4d: %15s : %s -> %s\n", key.IfIndex(), key.IP(), val.SrcMAC(), val.DstMAC())
+			fmt.Printf("dev %4d: %15s : %s -> %s\n", key.IfIndex(), key.IP(), val.SrcMAC(), val.DstMAC())
+		} else {
+			var (
+				key arp.Key
+				val arp.Value
+			)
+
+			copy(key[:], k[:arp.KeySize])
+			copy(val[:], v[:arp.ValueSize])
+
+			fmt.Printf("dev %4d: %15s : %s -> %s\n", key.IfIndex(), key.IP(), val.SrcMAC(), val.DstMAC())
+		}
 
 		return maps.IterNone
 	})

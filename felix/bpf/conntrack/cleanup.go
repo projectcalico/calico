@@ -85,7 +85,7 @@ func WithTimeShim(shim timeshim.Interface) LivenessScannerOpt {
 	}
 }
 
-func (l *LivenessScanner) Check(ctKey Key, ctVal Value, get EntryGet) ScanVerdict {
+func (l *LivenessScanner) Check(ctKey KeyInterface, ctVal ValueInterface, get EntryGet) ScanVerdict {
 	if l.cachedKTime == 0 || l.time.Since(l.goTimeOfLastKTimeLookup) > time.Second {
 		l.cachedKTime = l.time.KTimeNanos()
 		l.goTimeOfLastKTimeLookup = l.time.Now()
@@ -144,7 +144,7 @@ func (l *LivenessScanner) Check(ctKey Key, ctVal Value, get EntryGet) ScanVerdic
 
 // EntryExpired checks whether a given conntrack table entry for a given
 // protocol and time, is expired.
-func (t *Timeouts) EntryExpired(nowNanos int64, proto uint8, entry Value) (reason string, expired bool) {
+func (t *Timeouts) EntryExpired(nowNanos int64, proto uint8, entry ValueInterface) (reason string, expired bool) {
 	sinceCreation := time.Duration(nowNanos - entry.Created())
 	if sinceCreation < t.CreationGracePeriod {
 		log.Debug("Conntrack entry in creation grace period. Ignoring.")
@@ -212,7 +212,7 @@ func NewStaleNATScanner(frontendHasBackend NATChecker) *StaleNATScanner {
 }
 
 // Check checks the conntrack entry
-func (sns *StaleNATScanner) Check(k Key, v Value, _ EntryGet) ScanVerdict {
+func (sns *StaleNATScanner) Check(k KeyInterface, v ValueInterface, _ EntryGet) ScanVerdict {
 	debug := log.GetLevel() >= log.DebugLevel
 
 	switch v.Type() {
