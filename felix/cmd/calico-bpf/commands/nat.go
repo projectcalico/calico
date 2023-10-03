@@ -129,8 +129,9 @@ type printfFn func(format string, i ...interface{})
 func dumpNice[FK nat.FrontendKeyComparable, BV nat.BackendValueInterface](printf printfFn,
 	natMap map[FK]nat.FrontendValue, back map[nat.BackendKey]BV) {
 	for nk, nv := range natMap {
-		count := int(nv.Count())
-		if count == int(nat.BlackHoleCount) {
+		valCount := nv.Count()
+		count := int(valCount)
+		if valCount == nat.BlackHoleCount {
 			count = -1
 		}
 		local := nv.LocalCount()
