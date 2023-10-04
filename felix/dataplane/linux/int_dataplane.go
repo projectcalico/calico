@@ -74,10 +74,7 @@ import (
 )
 
 const (
-	// msgPeekLimit is the maximum number of messages we'll try to grab from our channels
-	// before we apply the changes.  Higher values allow us to batch up more work on
-	// the channel for greater throughput when we're under load (at cost of higher latency).
-	msgPeekLimit = 100
+	msgPeekTimeLimit = 100 * time.Millisecond
 
 	// Interface name used by kube-proxy to bind service ips.
 	KubeIPVSInterface = "kube-ipvs0"
@@ -377,7 +374,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 	featureDetector := environment.NewFeatureDetector(config.FeatureDetectOverrides)
 	dp := &InternalDataplane{
-		toDataplane:    make(chan interface{}, msgPeekLimit),
+		toDataplane:    make(chan interface{}, 10000),
 		fromDataplane:  make(chan interface{}, 100),
 		ruleRenderer:   ruleRenderer,
 		ifaceMonitor:   ifacemonitor.New(config.IfaceMonitorConfig, featureDetector, config.FatalErrorRestartCallback),
@@ -1951,7 +1948,8 @@ func (d *InternalDataplane) processIfaceAddrsUpdate(ifaceAddrsUpdate *ifaceAddrs
 }
 
 func drainChan[T any](c <-chan T, f func(T)) {
-	for i := 0; i < msgPeekLimit; i++ {
+	start := time.Now()
+	for time.Since(start) < msgPeekTimeLimit {
 		select {
 		case v := <-c:
 			f(v)
