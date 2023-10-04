@@ -77,6 +77,12 @@ var labelRestrictionsTests = []struct {
 		"a": {MustBePresent: true, MustHaveOneOfValues: []string{"v1"}},
 		"b": {MustBePresent: true, MustHaveOneOfValues: []string{"v2"}},
 	}},
+	{"a == 'v1' && all()", map[string]LabelRestriction{
+		"a": {MustBePresent: true, MustHaveOneOfValues: []string{"v1"}},
+	}},
+	{"all() && a == 'v1'", map[string]LabelRestriction{
+		"a": {MustBePresent: true, MustHaveOneOfValues: []string{"v1"}},
+	}},
 
 	// OR
 	{"a == 'v1' || a == 'v2'", map[string]LabelRestriction{
@@ -93,6 +99,8 @@ var labelRestrictionsTests = []struct {
 		"a": {MustBePresent: true},
 	}},
 	{"a == 'v1' || b == 'v2'", nil},
+	{"a == 'v1' || all()", nil},
+	{"all() || b == 'v2'", nil},
 
 	// NOT
 	{"!(a == 'value')", nil},
@@ -112,6 +120,9 @@ func TestLabelRestrictions(t *testing.T) {
 			Expect(err).NotTo(HaveOccurred())
 			lrs := sel.LabelRestrictions()
 			Expect(lrs).To(Equal(test.Res), fmt.Sprintf("Selector %s should produce restrictions: %v", test.Sel, test.Res))
+			lrs = sel.LabelRestrictions()
+			Expect(lrs).To(Equal(test.Res), fmt.Sprintf("Selector %s should produce same restrictions on second call: %v",
+				test.Sel, test.Res))
 
 			if test.Sel == "" {
 				return

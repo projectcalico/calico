@@ -49,7 +49,7 @@ var (
 
 	// baseTests is the "table" for the table-driven tests below.
 	// Each entry wraps up a complete set of inputs and expected outputs
-	// For the SelectorAndNamedPortIndex.
+	// for the SelectorAndNamedPortIndex.
 	baseTests = []namedPortState{
 		emptyState,
 

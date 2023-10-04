@@ -30,9 +30,6 @@ import (
 type LabelRestrictionIndex[SelID comparable] struct {
 	// selectorsByID stores all selectors that we know about by their ID.
 	selectorsByID map[SelID]selector.Selector
-	// labelRestrictions stores a copy of the calculated LabelRestrictions
-	// for each selector.
-	labelRestrictions map[SelID]map[string]parser.LabelRestriction
 
 	// labelToValueToIDs stores a sub-index for each label name that occurs in
 	// a selector.  This is the main lookup datastructure.  The valuesSubIndex
@@ -58,8 +55,6 @@ func WithGauges[SelID comparable](optimizedSelectors, unoptimisedSelectors Gauge
 	}
 }
 
-var _ = WithGauges[any]
-
 // Gauge is the sub-interface of prometheus.Gauge that we use.
 type Gauge interface {
 	Set(float64)
@@ -68,7 +63,6 @@ type Gauge interface {
 func New[SelID comparable](opts ...Option[SelID]) *LabelRestrictionIndex[SelID] {
 	idx := &LabelRestrictionIndex[SelID]{
 		selectorsByID:     map[SelID]selector.Selector{},
-		labelRestrictions: map[SelID]map[string]parser.LabelRestriction{},
 		labelToValueToIDs: map[string]*valuesSubIndex[SelID]{},
 		unoptimizedIDs:    set.New[SelID](),
 	}
@@ -88,7 +82,6 @@ func (s *LabelRestrictionIndex[SelID]) AddSelector(id SelID, selector selector.S
 	// Store off the selector itself.
 	s.selectorsByID[id] = selector
 	lrs := selector.LabelRestrictions()
-	s.labelRestrictions[id] = lrs
 
 	// Add it to the main "optimized" index, if possible.  We only need to
 	// add one label since _all_ LabelRestrictions must be satisfied.  Try
@@ -158,7 +151,7 @@ func (s *LabelRestrictionIndex[SelID]) DeleteSelector(id SelID) {
 	if sel == nil {
 		return
 	}
-	lrs := s.labelRestrictions[id]
+	lrs := sel.LabelRestrictions()
 
 	labelName := findMostRestrictedLabel(lrs)
 	optimized := false
@@ -190,7 +183,6 @@ func (s *LabelRestrictionIndex[SelID]) DeleteSelector(id SelID) {
 	}
 
 	delete(s.selectorsByID, id)
-	delete(s.labelRestrictions, id)
 }
 
 func findMostRestrictedLabel(lrs map[string]parser.LabelRestriction) string {
@@ -238,13 +230,13 @@ type Labeled interface {
 	IterOwnAndParentLabels(func(k, v string))
 }
 
-func (s *LabelRestrictionIndex[SelID]) IterPotentialMatches(labels Labeled, f func(SelID, selector.Selector)) {
+func (s *LabelRestrictionIndex[SelID]) IterPotentialMatches(item Labeled, f func(SelID, selector.Selector)) {
 	emit := func(id SelID) error {
 		f(id, s.selectorsByID[id])
 		return nil
 	}
 
-	labels.IterOwnAndParentLabels(func(k, v string) {
+	item.IterOwnAndParentLabels(func(k, v string) {
 		values, ok := s.labelToValueToIDs[k]
 		if !ok {
 			return

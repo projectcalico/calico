@@ -101,7 +101,7 @@ func TestLabelRestrictionIndex(t *testing.T) {
 		"b:B2 should match expected selectors")
 
 	Expect(potentialMatches(map[string]string{"a": "A", "b": "B"})).To(ConsistOf("hasA", "aEqualsA", "aAndB", "all"),
-		"a:A1, b:B1 should match a and b selectors")
+		"a:A, b:B should match a and b selectors")
 	Expect(potentialMatches(map[string]string{"a": "A1", "b": "B1"})).To(ConsistOf("hasA", "aIn", "bIn", "all"),
 		"a:A1, b:B1 should match a and b selectors")
 	Expect(potentialMatches(map[string]string{"a": "A1", "b": "B1", "c": "C"})).To(ConsistOf("hasA", "aIn", "bIn", "all"),
@@ -220,6 +220,12 @@ func TestFindMostRestrictedLabel(t *testing.T) {
 		"c": {},
 	})).To(Equal("b"),
 		"findMostRestrictedLabel should handle >10k values (edge case)")
+	Expect(findMostRestrictedLabel(map[string]parser.LabelRestriction{
+		"a": {MustBePresent: true},
+		"b": {MustBePresent: true, MustHaveOneOfValues: manyVals},
+		"c": {},
+	})).To(Equal("b"),
+		"findMostRestrictedLabel should handle >10k values when comparing to MustBePresent (edge case)")
 }
 
 func mustParseSelector(s string) selector.Selector {

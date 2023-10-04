@@ -84,10 +84,10 @@ func benchInitialSnap(b *testing.B, numEndpoints int, numLocalEndpoints int, num
 		b.StartTimer()
 		b.ReportAllocs()
 		startTime := time.Now()
-		cg.AllUpdDispatcher.OnUpdates(polUpdates)
-		cg.AllUpdDispatcher.OnUpdates(profUpdates)
-		cg.AllUpdDispatcher.OnUpdates(epUpdates)
-		cg.AllUpdDispatcher.OnUpdates(netSetUpdates)
+		sendPolicyUpdates(cg, polUpdates)
+		sendProfileUpdates(cg, profUpdates)
+		sendEndpointUpdates(cg, epUpdates)
+		sendNetSetUpdates(cg, netSetUpdates)
 		sendLocalUpdates(cg, localUpdates)
 		cg.AllUpdDispatcher.OnDatamodelStatus(api.InSync)
 
@@ -106,6 +106,25 @@ func benchInitialSnap(b *testing.B, numEndpoints int, numLocalEndpoints int, num
 	}
 }
 
+// These trivial functions are broken out so that, when CPU profiling, each
+// operation can be seen separately in the profile.
+
+func sendPolicyUpdates(cg *CalcGraph, polUpdates []api.Update) {
+	cg.AllUpdDispatcher.OnUpdates(polUpdates)
+}
+
+func sendProfileUpdates(cg *CalcGraph, profUpdates []api.Update) {
+	cg.AllUpdDispatcher.OnUpdates(profUpdates)
+}
+
+func sendEndpointUpdates(cg *CalcGraph, epUpdates []api.Update) {
+	cg.AllUpdDispatcher.OnUpdates(epUpdates)
+}
+
+func sendNetSetUpdates(cg *CalcGraph, netSetUpdates []api.Update) {
+	cg.AllUpdDispatcher.OnUpdates(netSetUpdates)
+}
+
 func sendLocalUpdates(cg *CalcGraph, localUpdates []api.Update) {
 	cg.AllUpdDispatcher.OnUpdates(localUpdates)
 }
@@ -115,7 +134,7 @@ func sendDeletions(cg *CalcGraph, localDeletes []api.Update) {
 }
 
 func makeNetSetAndPolUpdates(num int) []api.Update {
-	updates := make([]api.Update, 0, num)
+	updates := make([]api.Update, 0, num*2)
 	for i := 0; i < num; i++ {
 		// Make one netset and a matching policy.
 		name := fmt.Sprintf("network-set-%d", i)
@@ -170,8 +189,7 @@ func generateNetSetIPs() (ips []calinet.IPNet) {
 }
 
 func makeNamespaceUpdates(num int) []api.Update {
-	const rulesPerPol = 5
-	updates := make([]api.Update, 0, num)
+	updates := make([]api.Update, 0, 2*num)
 	for i := 0; i < num; i++ {
 		name := fmt.Sprintf("namespace-%d", i)
 		prof := &v3.Profile{

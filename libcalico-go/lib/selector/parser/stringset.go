@@ -20,7 +20,7 @@ type StringSet []string
 
 // Contains returns true if a given string in current set
 func (ss StringSet) Contains(s string) bool {
-	// Sever to the binary search impl in the stdlib.  Note: it returns
+	// Defer to the binary search impl in the stdlib.  Note: it returns
 	// the "insertion point" for inserting the given string, so we need to
 	// check that the string really is there.
 	idx := sort.SearchStrings(ss, s)
