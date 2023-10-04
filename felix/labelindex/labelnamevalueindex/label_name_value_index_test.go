@@ -58,6 +58,7 @@ func TestLabelValueIndexCRUD(t *testing.T) {
 	Expect(idx.Len()).To(Equal(0), "Len should return to 0")
 
 	Expect(idx.labelNameToValueToIDs).To(HaveLen(0), "labelNameToValueToIDs should be cleaned up")
+	Expect(idx.Len()).To(BeZero())
 }
 
 func TestLabelValueIndexStrategies(t *testing.T) {
@@ -78,7 +79,7 @@ func TestLabelValueIndexStrategies(t *testing.T) {
 
 	t.Log("All strategy...")
 	strat := idx.StrategyFor("a", parser.LabelRestriction{})
-	Expect(strat).To(BeAssignableToTypeOf(AllStrategy[string, labels]{}))
+	Expect(strat).To(BeAssignableToTypeOf(FullScanStrategy[string, labels]{}))
 	Expect(scan(strat)).To(ConsistOf("a1", "a2", "a3", "b1", "b2", "b3", "c1", "c2", "c3"))
 	Expect(strat.EstimatedItemsToScan()).To(Equal(9))
 	Expect(strat.Name()).To(Equal("all"))
@@ -89,6 +90,13 @@ func TestLabelValueIndexStrategies(t *testing.T) {
 	Expect(scan(strat)).To(ConsistOf("a1", "a2", "a3", "c1", "c2", "c3"))
 	Expect(strat.EstimatedItemsToScan()).To(Equal(6))
 	Expect(strat.Name()).To(Equal("label-name"))
+
+	t.Log("Label name with no matches...")
+	strat = idx.StrategyFor("nomatch", parser.LabelRestriction{MustBePresent: true})
+	Expect(strat).To(BeAssignableToTypeOf(NoMatchStrategy[string]{}))
+	Expect(scan(strat)).To(BeEmpty())
+	Expect(strat.EstimatedItemsToScan()).To(Equal(0))
+	Expect(strat.Name()).To(Equal("no-match"))
 
 	t.Log("Label name and value (single)")
 	strat = idx.StrategyFor("a", parser.LabelRestriction{
@@ -129,10 +137,6 @@ func TestLabelValueIndexStrategies(t *testing.T) {
 	Expect(scan(strat)).To(ConsistOf())
 	Expect(strat.EstimatedItemsToScan()).To(Equal(0))
 	Expect(strat.Name()).To(Equal("no-match"))
-
-	strat = idx.StrategyFor("a", parser.LabelRestriction{
-		MustBePresent: true,
-	})
 }
 
 func scan(s ScanStrategy[string]) []string {

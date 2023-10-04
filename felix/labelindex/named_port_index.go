@@ -52,7 +52,7 @@ var (
 
 	gaugeVecSelectors = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "felix_label_index_num_active_selectors",
-		Help: "Total number of selector evaluations.",
+		Help: "Total number of active selectors in the policy rule label index.",
 	}, []string{"optimized"})
 	gaugeSelectorsOpt    = gaugeVecSelectors.WithLabelValues("true")
 	gaugeSelectorsNonOpt = gaugeVecSelectors.WithLabelValues("false")
@@ -504,7 +504,8 @@ func (idx *SelectorAndNamedPortIndex) UpdateIPSet(ipSetID string, sel selector.S
 		log.WithField("ipSetID", ipSetID).Warn("IP set selector or named port changed for existing ID.")
 		for m := range oldIPSetData.memberToRefCount {
 			// Emit deletion events for the members.  We don't need to do that
-			// for a real IP set deletion because it's handled en-masse.
+			// for the expected, non-test code path because it's handled
+			// en-masse.
 			idx.OnMemberRemoved(ipSetID, m)
 		}
 		idx.DeleteIPSet(ipSetID)
@@ -893,7 +894,7 @@ func (idx *SelectorAndNamedPortIndex) iterEndpointCandidates(ipsetID string, f f
 	// the best endpoint strategy vs the best parent strategy.
 
 	bestEPStrategy := idx.endpointKVIdx.FullScanStrategy()
-	var bestParentStrategy labelnamevalueindex.ScanStrategy[string]
+	bestParentStrategy := labelnamevalueindex.ScanStrategy[string](nil)
 	bestParentEndpointEstimate := math.MaxInt
 
 	for k, r := range restrictions {
@@ -918,9 +919,9 @@ func (idx *SelectorAndNamedPortIndex) iterEndpointCandidates(ipsetID string, f f
 				bestParentEndpointEstimate = parentEstimate
 			}
 		} else if parentsToScan > 0 && epsToScan > 0 {
-			// Label matches both endpoints and parents.  This should be rare
-			// in the wild since it's not possible in Kubernetes due to label
-			// prefixing.  For now, don't try to optimise this case.
+			// Label matches both endpoints and parents.  This is impossible in
+			// Kubernetes but it may be possible in OpenStack (or something
+			// home-grown using raw etcd data).  For now don't try to optimize.
 			log.WithField("label", k).Debug(
 				"Label applies to both endpoints and parents, cannot do optimised scan.")
 		} else {
@@ -931,7 +932,7 @@ func (idx *SelectorAndNamedPortIndex) iterEndpointCandidates(ipsetID string, f f
 		}
 	}
 
-	if bestEPStrategy.EstimatedItemsToScan() < bestParentEndpointEstimate {
+	if bestEPStrategy.EstimatedItemsToScan() <= bestParentEndpointEstimate {
 		log.Debugf("Selector %s using endpoint scan strategy: %s", sel.String(), bestEPStrategy.String())
 		counterVecScanStrat.WithLabelValues("endpoint-" + bestEPStrategy.Name())
 		bestEPStrategy.Scan(func(id any) bool {

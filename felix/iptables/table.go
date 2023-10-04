@@ -252,6 +252,12 @@ type Table struct {
 	postWriteInterval        time.Duration
 	refreshInterval          time.Duration
 
+	// Estimates for the time taken to do an iptables save and restore.
+	// When a save/restore exceeds the one of these we update them immediately.
+	// When a save/restore takes less time we decay them exponentially.
+	peakIptablesSaveTime    time.Duration
+	peakIptablesRestoreTime time.Duration
+
 	// calicoXtablesLock, if enabled, our implementation of the xtables lock.
 	calicoXtablesLock sync.Locker
 
@@ -787,6 +793,17 @@ func (t *Table) getHashesAndRulesFromDataplane() (hashes map[string][]string, ru
 // attemptToGetHashesAndRulesFromDataplane starts an iptables-save subprocess and feeds its output to
 // readHashesAndRulesFrom() via a pipe.  It handles the various error cases.
 func (t *Table) attemptToGetHashesAndRulesFromDataplane() (hashes map[string][]string, rules map[string][]string, err error) {
+	startTime := t.timeNow()
+	defer func() {
+		saveDuration := t.timeNow().Sub(startTime)
+		t.peakIptablesSaveTime = t.peakIptablesSaveTime * 99 / 100
+		if saveDuration > t.peakIptablesSaveTime {
+			log.WithField("duration", saveDuration).Debug("Updating iptables-save peak duration.")
+			t.peakIptablesSaveTime = saveDuration
+		}
+	}()
+
+	t.logCxt.Debugf("Starting %s", t.iptablesSaveCmd)
 	cmd := t.newCmd(t.iptablesSaveCmd, "-t", t.Name)
 	countNumSaveCalls.Inc()
 
@@ -1290,6 +1307,22 @@ func (t *Table) applyUpdates() error {
 		t.postWriteInterval = t.initialPostWriteInterval
 	}
 
+	if t.postWriteInterval != 0 {
+		// If iptables-save/restore is taking a long time (as measured by
+		// the peakIptablesX fields), make sure that we don't try to
+		// recheck the iptables state too soon.
+		dynamicMinPostWriteInterval := (t.peakIptablesSaveTime + t.peakIptablesRestoreTime) * 2
+		if t.postWriteInterval < dynamicMinPostWriteInterval {
+			log.WithFields(log.Fields{
+				"dynamicMin":  dynamicMinPostWriteInterval,
+				"peakSave":    t.peakIptablesSaveTime,
+				"peakRestore": t.peakIptablesRestoreTime,
+			}).Debug(
+				"Post write interval shorter than time to read/write iptables, applying dynamic minimum.")
+			t.postWriteInterval = dynamicMinPostWriteInterval
+		}
+	}
+
 	// Now we've successfully updated iptables, clear the dirty sets.  We do this even if we
 	// found there was nothing to do above, since we may have found out that a dirty chain
 	// was actually a no-op update.
@@ -1310,6 +1343,16 @@ func (t *Table) applyUpdates() error {
 }
 
 func (t *Table) execIptablesRestore(buf *RestoreInputBuilder) error {
+	startTime := t.timeNow()
+	defer func() {
+		restoreDuration := t.timeNow().Sub(startTime)
+		t.peakIptablesRestoreTime = t.peakIptablesRestoreTime * 99 / 100
+		if restoreDuration > t.peakIptablesRestoreTime {
+			log.WithField("duration", restoreDuration).Debug("Updating iptables-restore peak duration.")
+			t.peakIptablesRestoreTime = restoreDuration
+		}
+	}()
+
 	features := t.featureDetector.GetFeatures()
 	inputBytes := buf.GetBytesAndReset()
 

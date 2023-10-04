@@ -15,7 +15,7 @@ ETCD_VERSION=v3.5.1
 # tests to timeout or fail.
 KINDEST_NODE_VERSION=v1.24.7
 PROTOC_VER=v0.1
-UBI_VERSION=8.7
+UBI_VERSION=8.8
 
 # Configuration for Semaphore integration.
 ORGANIZATION = projectcalico
@@ -24,7 +24,7 @@ ORGANIZATION = projectcalico
 GIT_USE_SSH = true
 
 # The version of BIRD to use for calico/node builds and confd tests.
-BIRD_VERSION=v0.3.3-202-g7a77fb73
+BIRD_VERSION=v0.3.3-206-g0f4d6086
 
 # DEV_REGISTRIES configures the container image registries which are built from this
 # repository. By default, just build images with calico/. Allow this variable to be overridden,

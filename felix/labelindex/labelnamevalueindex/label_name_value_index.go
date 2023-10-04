@@ -36,7 +36,7 @@ import (
 // handled more efficiently at the layer above.
 type LabelNameValueIndex[ItemID comparable, Item Labeled] struct {
 	nameOfTrackedItems    string
-	allValues             map[ItemID]Item
+	allItems              map[ItemID]Item
 	labelNameToValueToIDs map[string]values[ItemID]
 }
 
@@ -47,13 +47,13 @@ type Labeled interface {
 func New[ItemID comparable, Item Labeled](nameOfTrackedItems string) *LabelNameValueIndex[ItemID, Item] {
 	return &LabelNameValueIndex[ItemID, Item]{
 		nameOfTrackedItems:    nameOfTrackedItems,
-		allValues:             map[ItemID]Item{},
+		allItems:              map[ItemID]Item{},
 		labelNameToValueToIDs: map[string]values[ItemID]{},
 	}
 }
 
-type values[T comparable] struct {
-	m     map[string]set.Set[T]
+type values[ItemID comparable] struct {
+	m     map[string]set.Set[ItemID]
 	count int
 }
 
@@ -63,14 +63,14 @@ type values[T comparable] struct {
 //
 // To avoid the above bug, panics if the same ID is added twice.
 func (idx *LabelNameValueIndex[ItemID, Item]) Add(id ItemID, item Item) {
-	if _, ok := idx.allValues[id]; ok {
+	if _, ok := idx.allItems[id]; ok {
 		logrus.WithFields(logrus.Fields{
 			"id":    id,
 			"item":  item,
 			"index": idx.nameOfTrackedItems,
 		}).Panic("Add called for ID that is already in the index.")
 	}
-	idx.allValues[id] = item
+	idx.allItems[id] = item
 	for k, v := range item.OwnLabels() {
 		vals, ok := idx.labelNameToValueToIDs[k]
 		if !ok {
@@ -86,6 +86,7 @@ func (idx *LabelNameValueIndex[ItemID, Item]) Add(id ItemID, item Item) {
 		}
 		setOfIDs.Add(id)
 		vals.count++
+		// Map stores the value type (not pointer); write back the update.
 		idx.labelNameToValueToIDs[k] = vals
 	}
 }
@@ -93,7 +94,7 @@ func (idx *LabelNameValueIndex[ItemID, Item]) Add(id ItemID, item Item) {
 // Remove an item from the index.  Note that it is important that the labels
 // are not mutated between Add and Remove calls.
 func (idx *LabelNameValueIndex[ItemID, Item]) Remove(id ItemID) {
-	v := idx.allValues[id]
+	v := idx.allItems[id]
 	for k, v := range v.OwnLabels() {
 		vals := idx.labelNameToValueToIDs[k]
 		setOfIDs := vals.m[v]
@@ -108,7 +109,7 @@ func (idx *LabelNameValueIndex[ItemID, Item]) Remove(id ItemID) {
 		vals.count--
 		idx.labelNameToValueToIDs[k] = vals
 	}
-	delete(idx.allValues, id)
+	delete(idx.allItems, id)
 }
 
 // StrategyFor returns the best available ScanStrategy for the given
@@ -118,17 +119,22 @@ func (idx *LabelNameValueIndex[ItemID, Item]) Remove(id ItemID) {
 func (idx *LabelNameValueIndex[ItemID, Item]) StrategyFor(labelName string, r parser.LabelRestriction) ScanStrategy[ItemID] {
 	if !r.MustBePresent {
 		// Not much we can do if the selector doesn't match on this label.
-		return idx.FullScanStrategy()
+		return FullScanStrategy[ItemID, Item]{allItems: idx.allItems}
 	}
 
 	if r.MustHaveOneOfValues == nil {
 		// A selector such as "has(labelName)", which matches the label but
 		// not any particular value.
-		logrus.Debugf("Found %d %s with %s=<any>", idx.labelNameToValueToIDs[labelName].count, idx.nameOfTrackedItems, labelName)
-		return LabelNameStrategy[ItemID]{label: labelName, values: idx.labelNameToValueToIDs[labelName]}
+		if vals, ok := idx.labelNameToValueToIDs[labelName]; !ok {
+			logrus.Debugf("Found no matches for %s with %s=<any>", idx.nameOfTrackedItems, labelName)
+			return NoMatchStrategy[ItemID]{}
+		} else {
+			logrus.Debugf("Found %d %s with %s=<any>", vals.count, idx.nameOfTrackedItems, labelName)
+			return LabelNameStrategy[ItemID]{label: labelName, values: vals}
+		}
 	}
 
-	// If we get here, then the selector does match on this label and it cares
+	// If we get here, then the selector does match on this label, and it cares
 	// about specific values. Whittle down the list of values to the ones that
 	// match objects that we're tracking.
 	var filteredMustHaves []string
@@ -167,24 +173,24 @@ func (idx *LabelNameValueIndex[ItemID, Item]) StrategyFor(labelName string, r pa
 
 // FullScanStrategy returns a scan strategy that scans all items.
 func (idx *LabelNameValueIndex[ItemID, Item]) FullScanStrategy() ScanStrategy[ItemID] {
-	return AllStrategy[ItemID, Item]{allValues: idx.allValues}
+	return FullScanStrategy[ItemID, Item]{allItems: idx.allItems}
 }
 
 // Get looks up an item by its ID.  (Allows this object to be the primary
 // map datastructure for storing the items.)
 func (idx *LabelNameValueIndex[ItemID, Item]) Get(id ItemID) (Item, bool) {
-	v, ok := idx.allValues[id]
+	v, ok := idx.allItems[id]
 	return v, ok
 }
 
 func (idx *LabelNameValueIndex[ItemID, Item]) Len() int {
-	return len(idx.allValues)
+	return len(idx.allItems)
 }
 
 // ScanStrategy abstracts over particular types of scans of the index, allowing
 // them to be compared/scored without actually executing the scan until ready
 // to do so.
-type ScanStrategy[T any] interface {
+type ScanStrategy[ItemID any] interface {
 	// EstimatedItemsToScan returns an estimate for how many items this scan
 	// strategy would produce if Scan() was called.  Some strategies return
 	// an approximate value because calculating the real value would require
@@ -195,7 +201,7 @@ type ScanStrategy[T any] interface {
 	// produced by the scan.  Each ID is only emitted once (the strategy is
 	// responsible for any deduplication).  Scanning continues while the func
 	// returns true.
-	Scan(func(id T) bool)
+	Scan(func(id ItemID) bool)
 
 	// Name of the strategy (used in prometheus metrics).
 	Name() string
@@ -205,44 +211,44 @@ type ScanStrategy[T any] interface {
 
 // NoMatchStrategy is a ScanStrategy that produces no items, it is returned
 // when the index can prove that there are no matching items.
-type NoMatchStrategy[T any] struct {
+type NoMatchStrategy[ItemID any] struct {
 }
 
-func (n NoMatchStrategy[T]) String() string {
+func (n NoMatchStrategy[ItemID]) String() string {
 	return "no match"
 }
 
-func (n NoMatchStrategy[T]) EstimatedItemsToScan() int {
+func (n NoMatchStrategy[ItemID]) EstimatedItemsToScan() int {
 	return 0
 }
 
-func (n NoMatchStrategy[T]) Scan(func(id T) bool) {
+func (n NoMatchStrategy[ItemID]) Scan(func(id ItemID) bool) {
 }
 
-func (n NoMatchStrategy[T]) Name() string {
+func (n NoMatchStrategy[ItemID]) Name() string {
 	return "no-match"
 }
 
 // LabelNameSingleValueStrategy is a ScanStrategy that scans over items that have
 // a specific value for a certain label.  It is the narrowest, most optimized
 // strategy.
-type LabelNameSingleValueStrategy[T comparable] struct {
+type LabelNameSingleValueStrategy[ItemID comparable] struct {
 	label string
 	value string
-	idSet set.Set[T]
+	idSet set.Set[ItemID]
 }
 
-func (s LabelNameSingleValueStrategy[T]) String() string {
+func (s LabelNameSingleValueStrategy[ItemID]) String() string {
 	return fmt.Sprintf("scan single label %s=%v", s.label, s.value)
 }
 
-func (s LabelNameSingleValueStrategy[T]) EstimatedItemsToScan() int {
+func (s LabelNameSingleValueStrategy[ItemID]) EstimatedItemsToScan() int {
 	return s.idSet.Len()
 }
 
-func (s LabelNameSingleValueStrategy[T]) Scan(f func(id T) bool) {
+func (s LabelNameSingleValueStrategy[ItemID]) Scan(f func(id ItemID) bool) {
 	// Ideal case, we have one set to scan.
-	s.idSet.Iter(func(id T) error {
+	s.idSet.Iter(func(id ItemID) error {
 		if !f(id) {
 			return set.StopIteration
 		}
@@ -250,23 +256,23 @@ func (s LabelNameSingleValueStrategy[T]) Scan(f func(id T) bool) {
 	})
 }
 
-func (s LabelNameSingleValueStrategy[T]) Name() string {
+func (s LabelNameSingleValueStrategy[ItemID]) Name() string {
 	return "single-value"
 }
 
 // LabelNameMultiValueStrategy is a ScanStrategy that scans over items that have
 // specific, values for a certain label.
-type LabelNameMultiValueStrategy[T comparable] struct {
+type LabelNameMultiValueStrategy[ItemID comparable] struct {
 	label  string
 	values []string
-	idSets []set.Set[T]
+	idSets []set.Set[ItemID]
 }
 
-func (s LabelNameMultiValueStrategy[T]) String() string {
+func (s LabelNameMultiValueStrategy[ItemID]) String() string {
 	return fmt.Sprintf("scan multi label %s=%v", s.label, s.values)
 }
 
-func (s LabelNameMultiValueStrategy[T]) EstimatedItemsToScan() int {
+func (s LabelNameMultiValueStrategy[ItemID]) EstimatedItemsToScan() int {
 	count := 0
 	for _, s := range s.idSets {
 		// Over counts if one object is in multiple sets, but Scan() needs
@@ -276,34 +282,34 @@ func (s LabelNameMultiValueStrategy[T]) EstimatedItemsToScan() int {
 	return count
 }
 
-func (s LabelNameMultiValueStrategy[T]) Scan(f func(id T) bool) {
+func (s LabelNameMultiValueStrategy[ItemID]) Scan(f func(id ItemID) bool) {
 	set.IterUnion(s.idSets, f)
 }
 
-func (s LabelNameMultiValueStrategy[T]) Name() string {
+func (s LabelNameMultiValueStrategy[ItemID]) Name() string {
 	return "multi-value"
 }
 
 // LabelNameStrategy is a ScanStrategy that scans all object that have a
 // particular label, no matter the value of that label.  It is used for
 // selectors such as "has(labelName)".
-type LabelNameStrategy[T comparable] struct {
+type LabelNameStrategy[ItemID comparable] struct {
 	label  string
-	values values[T]
+	values values[ItemID]
 }
 
-func (s LabelNameStrategy[T]) String() string {
+func (s LabelNameStrategy[ItemID]) String() string {
 	return fmt.Sprintf("scan all values of label %s", s.label)
 }
 
-func (s LabelNameStrategy[T]) EstimatedItemsToScan() int {
+func (s LabelNameStrategy[ItemID]) EstimatedItemsToScan() int {
 	return s.values.count
 }
 
-func (s LabelNameStrategy[T]) Scan(f func(id T) bool) {
+func (s LabelNameStrategy[ItemID]) Scan(f func(id ItemID) bool) {
 	for _, epIDs := range s.values.m {
 		stop := false
-		epIDs.Iter(func(id T) error {
+		epIDs.Iter(func(id ItemID) error {
 			if !f(id) {
 				stop = true
 				return set.StopIteration
@@ -316,32 +322,32 @@ func (s LabelNameStrategy[T]) Scan(f func(id T) bool) {
 	}
 }
 
-func (s LabelNameStrategy[T]) Name() string {
+func (s LabelNameStrategy[ItemID]) Name() string {
 	return "label-name"
 }
 
-// AllStrategy is a ScanStrategy that scans all items in a completely
+// FullScanStrategy is a ScanStrategy that scans all items in a completely
 // unoptimized way.  It is returned if the selector cannot be optimized.
-type AllStrategy[T comparable, V Labeled] struct {
-	allValues map[T]V
+type FullScanStrategy[ItemID comparable, Item Labeled] struct {
+	allItems map[ItemID]Item
 }
 
-func (s AllStrategy[T, V]) String() string {
-	return "full scan"
+func (s FullScanStrategy[ItemID, Item]) String() string {
+	return "full-scan"
 }
 
-func (s AllStrategy[T, V]) EstimatedItemsToScan() int {
-	return len(s.allValues)
+func (s FullScanStrategy[ItemID, Item]) EstimatedItemsToScan() int {
+	return len(s.allItems)
 }
 
-func (s AllStrategy[T, V]) Scan(f func(id T) bool) {
-	for id := range s.allValues {
+func (s FullScanStrategy[ItemID, Item]) Scan(f func(id ItemID) bool) {
+	for id := range s.allItems {
 		if !f(id) {
 			return
 		}
 	}
 }
 
-func (s AllStrategy[T, V]) Name() string {
+func (s FullScanStrategy[ItemID, Item]) Name() string {
 	return "all"
 }

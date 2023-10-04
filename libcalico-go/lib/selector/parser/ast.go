@@ -122,9 +122,10 @@ func (v PrefixVisitor) Visit(n interface{}) {
 }
 
 type selectorRoot struct {
-	root         node
-	cachedString *string
-	cachedHash   *string
+	root                    node
+	cachedString            *string
+	cachedHash              *string
+	cachedLabelRestrictions *map[string]LabelRestriction
 }
 
 func (sel *selectorRoot) Evaluate(labels map[string]string) bool {
@@ -157,7 +158,12 @@ func (sel *selectorRoot) UniqueID() string {
 }
 
 func (sel *selectorRoot) LabelRestrictions() map[string]LabelRestriction {
-	return sel.root.LabelRestrictions()
+	if sel.cachedLabelRestrictions != nil {
+		return *sel.cachedLabelRestrictions
+	}
+	lrs := sel.root.LabelRestrictions()
+	sel.cachedLabelRestrictions = &lrs
+	return lrs
 }
 
 var _ Selector = (*selectorRoot)(nil)

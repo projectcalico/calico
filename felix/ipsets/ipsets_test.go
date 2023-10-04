@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2023 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@ import (
 	"time"
 
 	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/felix/ip"
@@ -43,11 +44,20 @@ const (
 	v4TempIPSetName1 = "cali4t1"
 	v4TempIPSetName2 = "cali4t2"
 	v4MainIPSetName2 = "cali40t:qMt7iLlGDhvLnCjM0l9nzxb"
+	v4MainIPSetName3 = "cali40u:qMt7iLlGDhvLnCjM0l9nzxb"
 )
 
 var (
 	v4Members1And2 = []string{"10.0.0.1", "10.0.0.2"}
 )
+
+var exampleMembersByType = map[IPSetType][]string{
+	IPSetTypeHashIP:     {"10.0.0.1", "10.0.0.2", "10.0.1.0"},
+	IPSetTypeHashIPPort: {"10.0.0.1,tcp:8080", "10.0.0.1,tcp:8081", "10.0.0.2,udp:1234"},
+	IPSetTypeHashNet:    {"10.0.0.0/24", "10.0.1.0/24", "10.0.2.0/25"},
+	IPSetTypeBitmapPort: {"8080", "80", "443"},
+	IPSetTypeHashNetNet: {"10.0.0.0/24,10.0.0.1/32", "10.0.1.0/24,10.0.0.2/32", "10.0.2.0/25,10.0.0.3/32"},
+}
 
 var _ = Describe("IPSetType", func() {
 	It("should treat invalid strings as invalid", func() {
@@ -132,6 +142,21 @@ var _ = Describe("IPSetTypeHashIP", func() {
 	})
 	It("should panic on bad IP", func() {
 		Expect(func() { IPSetTypeHashIP.CanonicaliseMember("foobar") }).To(Panic())
+	})
+})
+
+var _ = Describe("IPSetTypeHashIP", func() {
+	It("should canonicalise a raw port", func() {
+		Expect(IPSetTypeBitmapPort.CanonicaliseMember("10")).
+			To(Equal(Port(10)))
+	})
+	It("should canonicalise an IPv4 port", func() {
+		Expect(IPSetTypeBitmapPort.CanonicaliseMember("v4,10")).
+			To(Equal(Port(10)))
+	})
+	It("should canonicalise an IPv6 port", func() {
+		Expect(IPSetTypeBitmapPort.CanonicaliseMember("v6,10")).
+			To(Equal(Port(10)))
 	})
 })
 
@@ -384,6 +409,111 @@ var _ = Describe("IP sets dataplane", func() {
 			}))
 			// It shouldn't try to double-delete the temp IP set.
 			Expect(dataplane.TriedToDeleteNonExistent).To(BeFalse())
+		})
+	})
+
+	for _, ipSetType := range AllIPSetTypes {
+		dataplaneMeta := setMetadata{
+			Name:   v4MainIPSetName,
+			Family: "inet",
+			Type:   ipSetType,
+		}
+		if ipSetType == IPSetTypeBitmapPort {
+			dataplaneMeta.RangeMin = 10
+			dataplaneMeta.RangeMax = 1024
+		} else {
+			dataplaneMeta.MaxSize = 1024
+		}
+
+		ipSetType := ipSetType
+		Describe("Resync re-use tests for "+ipSetType.SetType(), func() {
+			members := exampleMembersByType[ipSetType]
+
+			BeforeEach(func() {
+				Expect(len(members)).To(BeNumerically(">=", 3),
+					"Need at least 3 example members of type "+ipSetType)
+				dataplane.IPSetMembers = map[string]set.Set[string]{
+					v4MainIPSetName: set.FromArray(members[0:2]),
+				}
+				dataplane.IPSetMetadata = map[string]setMetadata{
+					v4MainIPSetName: dataplaneMeta,
+				}
+			})
+
+			It("should be a valid IP set type", func() {
+				Expect(ipSetType.IsValid()).To(BeTrue(), "IP set type didn't this it was valid")
+			})
+
+			It("IP set should get reused if metadata is compatible", func() {
+				ipsets.AddOrReplaceIPSet(IPSetMetadata{
+					// Copy the dataplane metadata.  Only MaxSize or the Range values will be non-0.
+					MaxSize:  dataplaneMeta.MaxSize,
+					RangeMin: dataplaneMeta.RangeMin,
+					RangeMax: dataplaneMeta.RangeMax,
+
+					SetID: ipSetID,
+					Type:  ipSetType,
+				}, []string{members[0], members[2]})
+				apply()
+				dataplane.ExpectMembers(map[string][]string{
+					v4MainIPSetName: {members[0], members[2]},
+				})
+				Expect(dataplane.LinesExecuted).To(Equal([]string{
+					"del " + v4MainIPSetName + " " + members[1] + " --exist",
+					"add " + v4MainIPSetName + " " + members[2],
+					"COMMIT",
+				}), "Expected a minimal update to add/del one entry")
+			})
+
+			It("should get rewritten if metadata is not compatible", func() {
+				metadata := IPSetMetadata{
+					SetID: ipSetID,
+					Type:  ipSetType,
+				}
+				var headerStr string
+				if dataplaneMeta.MaxSize > 0 {
+					// Hash-based IP set.
+					metadata.MaxSize = dataplaneMeta.MaxSize + 1
+					headerStr = fmt.Sprintf("family inet maxelem %d", metadata.MaxSize)
+				} else {
+					// Bitmap-based IP set ahs a range, not a maxelems.
+					metadata.RangeMin = dataplaneMeta.RangeMin + 1
+					metadata.RangeMax = dataplaneMeta.RangeMax + 1
+					headerStr = fmt.Sprintf("range %d-%d", metadata.RangeMin, metadata.RangeMax)
+				}
+				ipsets.AddOrReplaceIPSet(metadata, []string{members[0]})
+				apply()
+				dataplane.ExpectMembers(map[string][]string{
+					v4MainIPSetName: {members[0]},
+				})
+				Expect(dataplane.LinesExecuted).To(Equal([]string{
+					"create cali4t0 " + ipSetType.SetType() + " " + headerStr,
+					"add cali4t0 " + members[0],
+					"swap " + v4MainIPSetName + " cali4t0",
+					"COMMIT",
+				}), "Expected a full rewrite")
+			})
+		})
+	}
+
+	Describe("with an unsupported calico IP set type in the dataplane", func() {
+		BeforeEach(func() {
+			dataplane.IPSetMembers = map[string]set.Set[string]{
+				v4MainIPSetName: set.From("unsupported-member"),
+			}
+			dataplane.IPSetMetadata = map[string]setMetadata{
+				v4MainIPSetName: {
+					Name:    v4MainIPSetName,
+					Family:  "inet",
+					Type:    "unknown:type",
+					MaxSize: 1234,
+				},
+			}
+		})
+
+		It("IP set should get cleaned up", func() {
+			apply()
+			dataplane.ExpectMembers(map[string][]string{})
 		})
 	})
 
@@ -734,7 +864,7 @@ var _ = Describe("IP sets dataplane", func() {
 			})
 			It("should panic eventually", func() {
 				ipsets.AddMembers(ipSetID, []string{"10.0.0.5"})
-				Expect(ipsets.ApplyUpdates).To(Panic())
+				Expect(func() { ipsets.ApplyUpdates() }).To(Panic())
 				Expect(dataplane.CumulativeSleep).To(BeNumerically(">", time.Second))
 			})
 		})
@@ -744,7 +874,7 @@ var _ = Describe("IP sets dataplane", func() {
 			})
 			It("should panic eventually", func() {
 				ipsets.QueueResync()
-				Expect(ipsets.ApplyUpdates).To(Panic())
+				Expect(func() { ipsets.ApplyUpdates() }).To(Panic())
 				Expect(dataplane.CumulativeSleep).To(BeNumerically(">", time.Second))
 			})
 		})
@@ -755,7 +885,7 @@ var _ = Describe("IP sets dataplane", func() {
 			})
 			It("should panic eventually", func() {
 				ipsets.QueueResync()
-				Expect(ipsets.ApplyUpdates).To(Panic())
+				Expect(func() { ipsets.ApplyUpdates() }).To(Panic())
 				Expect(dataplane.CumulativeSleep).To(BeNumerically(">", time.Second))
 			})
 		})
@@ -817,11 +947,13 @@ var _ = Describe("IP sets dataplane", func() {
 
 				It("a create should be retried until it succeeds", func() {
 					ipsets.AddOrReplaceIPSet(meta2, []string{"10.0.0.3", "10.0.0.4"})
+					ipsets.AddOrReplaceIPSet(meta3, []string{"10.0.0.5", "10.0.0.6"})
 					apply()
 					Expect(dataplane.CumulativeSleep).To(BeNumerically(">", 0))
 					dataplane.ExpectMembers(map[string][]string{
 						v4MainIPSetName:  {"10.0.0.1", "10.0.0.2"},
 						v4MainIPSetName2: {"10.0.0.3", "10.0.0.4"},
+						v4MainIPSetName3: {"10.0.0.5", "10.0.0.6"},
 					})
 					Expect(dataplane.TriedToAddExistent).To(BeFalse())
 					Expect(dataplane.TriedToDeleteNonExistent).To(BeFalse())
@@ -856,6 +988,7 @@ var _ = Describe("IP sets dataplane", func() {
 		Describe("with a failure to start ipset restore and a close failure", describeRetryTests(
 			"close" /* needs to be queued up before the start */, "start"))
 		Describe("with a write failure to the pipe (immediately)", describeRetryTests("write"))
+		Describe("with a write failure to the pipe when writing an IP (single write only)", describeRetryTests("write-ip-only"))
 		Describe("with a write failure to the pipe when writing an IP", describeRetryTests("write-ip"))
 		Describe("with an update failure before any updates succeed", describeRetryTests("pre-update"))
 		Describe("with an update failure after updates succeed", describeRetryTests("post-update"))
@@ -983,4 +1116,27 @@ var _ = Describe("Standard IPv4 IPVersionConfig", func() {
 		Expect(v4VersionConf.OwnsIPSet("foobar")).To(BeFalse())
 		Expect(v4VersionConf.OwnsIPSet("noncali")).To(BeFalse())
 	})
+	It("should work with StripPrefix", func() {
+		Expect(StripIPSetNamePrefix(v4VersionConf.NameForMainIPSet(ipSetID))).To(HavePrefix(ipSetID[:20]))
+	})
 })
+
+var _ = DescribeTable("ParseRange tests",
+	func(input string, expMin, expMax int, errorExpected bool) {
+		rMin, rMax, err := ParseRange(input)
+		if errorExpected {
+			Expect(err).To(HaveOccurred())
+			return
+		} else {
+			Expect(err).NotTo(HaveOccurred())
+		}
+
+		Expect(rMin).To(Equal(expMin))
+		Expect(rMax).To(Equal(expMax))
+	},
+	Entry("0-20", "0-20", 0, 20, false),
+	Entry("1-20", "1-20", 1, 20, false),
+	Entry("1-FOO", "1-FOO", 0, 0, true),
+	Entry("FOO-1", "FOO-1", 0, 0, true),
+	Entry("FOO", "FOO", 0, 0, true),
+)
