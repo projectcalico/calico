@@ -2807,9 +2807,6 @@ func (m *bpfEndpointManager) loadPolicyProgram(progName string,
 
 	pg := polprog.NewBuilder(m.ipSetIDAlloc, m.bpfmaps.IpsetsMap.MapFD(),
 		m.bpfmaps.StateMap.MapFD(), progsMap.MapFD(), opts...)
-	if ipFamily == proto.IPVersion_IPV6 {
-		pg.EnableIPv6Mode()
-	}
 	insns, err := pg.Instructions(rules)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to generate policy bytecode v%v: %w", ipFamily, err)
