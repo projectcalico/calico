@@ -2555,7 +2555,7 @@ func setUpIPSets(ipSets map[string][]string, alloc *idalloc.IDAllocator, ipsMap 
 		id := alloc.GetOrAlloc(name)
 		for _, m := range members {
 			entry := ipsets.ProtoIPSetMemberToBPFEntry(id, m)
-			err := ipsMap.Update(entry[:], ipsets.DummyValue)
+			err := ipsMap.Update(entry.AsBytes(), ipsets.DummyValue)
 			Expect(err).NotTo(HaveOccurred())
 		}
 	}
