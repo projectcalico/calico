@@ -1062,6 +1062,12 @@ func WithAllowDenyJumps(allow, deny int) Option {
 	}
 }
 
+func WithIPv6() Option {
+	return func(p *Builder) {
+		p.forIPv6 = true
+	}
+}
+
 func protocolToName(protocol *proto.Protocol) string {
 	var pcol string
 	switch p := protocol.NumberOrName.(type) {

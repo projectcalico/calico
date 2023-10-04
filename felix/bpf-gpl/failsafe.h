@@ -13,14 +13,18 @@ struct failsafe_key {
 	__u16 port;
 	__u8 ip_proto;
 	__u8 flags;
-	__u32 addr;
+	ipv46_addr_t addr;
 };
 
 struct failsafe_val {
 	__u32 unused;
 };
 
-CALI_MAP(cali_v4_fsafes, 2,
+#ifdef IPVER6
+CALI_MAP_NAMED(cali_v6_fsafes, cali_fsafes, 2,
+#else
+CALI_MAP_NAMED(cali_v4_fsafes, cali_fsafes, 2,
+#endif
 		BPF_MAP_TYPE_LPM_TRIE,
 		struct failsafe_key, struct failsafe_val,
 		65536,
@@ -44,7 +48,7 @@ static CALI_BPF_INLINE bool is_failsafe_in(__u8 ip_proto, __u16 dport, ipv46_add
 		.flags = 0,
 		.addr = ip,
 	};
-	if (cali_v4_fsafes_lookup_elem(&key)) {
+	if (cali_fsafes_lookup_elem(&key)) {
 		return true;
 	}
 #else
@@ -62,7 +66,7 @@ static CALI_BPF_INLINE bool is_failsafe_out(__u8 ip_proto, __u16 dport, ipv46_ad
 		.flags = CALI_FSAFE_OUT,
 		.addr = ip,
 	};
-	if (cali_v4_fsafes_lookup_elem(&key)) {
+	if (cali_fsafes_lookup_elem(&key)) {
 		return true;
 	}
 #else
