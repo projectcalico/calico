@@ -270,7 +270,7 @@ func testDelDuringIterN(numEntries int) {
 		Expect(err).NotTo(HaveOccurred())
 	}
 	// First pass, no deletions.
-	seenKeys := map[conntrack.Key]bool{}
+	seenKeys := map[conntrack.KeyInterface]bool{}
 	err := ctMap.Iter(func(k, v []byte) bpfmaps.IteratorAction {
 		key := conntrack.KeyFromBytes(k)
 		Expect(seenKeys[key]).To(BeFalse(), "Saw a duplicate key")
@@ -281,9 +281,9 @@ func testDelDuringIterN(numEntries int) {
 	Expect(seenKeys).To(HaveLen(numEntries), "Should have seen expected num entries on first iteration")
 
 	// Second pass, delete alternate keys.
-	seenKeys = map[conntrack.Key]bool{}
+	seenKeys = map[conntrack.KeyInterface]bool{}
 	deleteNextKey := false
-	expectedKeys := map[conntrack.Key]bool{}
+	expectedKeys := map[conntrack.KeyInterface]bool{}
 	err = ctMap.Iter(func(k, v []byte) bpfmaps.IteratorAction {
 		defer func() {
 			deleteNextKey = !deleteNextKey
@@ -303,7 +303,7 @@ func testDelDuringIterN(numEntries int) {
 
 	// Third pass, insert key on each iteration an delete on alternate iterations.
 	numLeftAfterSecondPass := len(expectedKeys)
-	seenKeys = map[conntrack.Key]bool{}
+	seenKeys = map[conntrack.KeyInterface]bool{}
 	deleteNextKey = false
 	insertClock := 0
 	insertIdx := numEntries
