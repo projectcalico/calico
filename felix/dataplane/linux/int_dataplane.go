@@ -34,6 +34,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/projectcalico/calico/felix/bpf/bpfmap"
+	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	"github.com/projectcalico/calico/felix/bpf/failsafes"
 	bpfmaps "github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/nat"
@@ -656,6 +657,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			ipSetsConfigV4,
 			ipSetIDAllocator,
 			bpfMaps.IpsetsMap,
+			bpfipsets.IPSetEntryFromBytes,
+			bpfipsets.ProtoIPSetMemberToBPFEntry,
 			dp.loopSummarizer,
 		)
 		dp.ipSets = append(dp.ipSets, ipSetsV4)
@@ -666,11 +669,15 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		// Forwarding into an IPIP tunnel fails silently because IPIP tunnels are L3 devices and support for
 		// L3 devices in BPF is not available yet.  Disable the FIB lookup in that case.
 		fibLookupEnabled := !config.RulesConfig.IPIPEnabled
+		keyFromSlice := failsafes.KeyFromSlice
+		makeKey := failsafes.MakeKey
 		failsafeMgr := failsafes.NewManager(
 			bpfMaps.FailsafesMap,
 			config.RulesConfig.FailsafeInboundHostPorts,
 			config.RulesConfig.FailsafeOutboundHostPorts,
 			dp.loopSummarizer,
+			keyFromSlice,
+			makeKey,
 		)
 		dp.RegisterManager(failsafeMgr)
 
@@ -697,7 +704,10 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 		bpfEndpointManager.Features = dataplaneFeatures
 
-		conntrackScanner := bpfconntrack.NewScanner(bpfMaps.CtMap,
+		kfb := conntrack.KeyFromBytes
+		vfb := conntrack.ValueFromBytes
+
+		conntrackScanner := bpfconntrack.NewScanner(bpfMaps.CtMap, kfb, vfb,
 			bpfconntrack.NewLivenessScanner(config.BPFConntrackTimeouts, config.BPFNodePortDSREnabled))
 
 		// Before we start, scan for all finished / timed out connections to
