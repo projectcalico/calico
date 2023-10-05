@@ -96,25 +96,44 @@ func dumpAff(cmd *cobra.Command) (err error) {
 }
 
 func dump(cmd *cobra.Command) error {
-	natMap, err := nat.LoadFrontendMap(nat.FrontendMap())
-	if err != nil {
-		return err
-	}
+	if ipv6 != nil && *ipv6 {
+		natMap, err := nat.LoadFrontendMapV6(nat.FrontendMapV6())
+		if err != nil {
+			return err
+		}
 
-	back, err := nat.LoadBackendMap(nat.BackendMap())
-	if err != nil {
-		return err
-	}
+		back, err := nat.LoadBackendMapV6(nat.BackendMapV6())
+		if err != nil {
+			return err
+		}
 
-	dumpNice(cmd.Printf, natMap, back)
+		dumpNice[nat.FrontendKeyV6, nat.BackendValueV6](cmd.Printf, natMap, back)
+	} else {
+		natMap, err := nat.LoadFrontendMap(nat.FrontendMap())
+		if err != nil {
+			return err
+		}
+
+		back, err := nat.LoadBackendMap(nat.BackendMap())
+		if err != nil {
+			return err
+		}
+
+		dumpNice[nat.FrontendKey, nat.BackendValue](cmd.Printf, natMap, back)
+	}
 	return nil
 }
 
 type printfFn func(format string, i ...interface{})
 
-func dumpNice(printf printfFn, natMap nat.MapMem, back nat.BackendMapMem) {
+func dumpNice[FK nat.FrontendKeyComparable, BV nat.BackendValueInterface](printf printfFn,
+	natMap map[FK]nat.FrontendValue, back map[nat.BackendKey]BV) {
 	for nk, nv := range natMap {
-		count := nv.Count()
+		valCount := nv.Count()
+		count := int(valCount)
+		if valCount == nat.BlackHoleCount {
+			count = -1
+		}
 		local := nv.LocalCount()
 		id := nv.ID()
 		flags := nv.FlagsAsString()
@@ -123,14 +142,14 @@ func dumpNice(printf printfFn, natMap nat.MapMem, back nat.BackendMapMem) {
 		}
 		printf("%s port %d proto %d id %d count %d local %d%s\n",
 			nk.Addr(), nk.Port(), nk.Proto(), id, count, local, flags)
-		for i := uint32(0); i < count; i++ {
+		for i := 0; i < count; i++ {
 			bk := nat.NewNATBackendKey(id, uint32(i))
 			bv, ok := back[bk]
 			printf("\t%d:%d\t ", id, i)
 			if !ok {
 				printf("is missing\n")
 			} else {
-				printf("%s:%d\n", bv.Addr(), bv.Port())
+				printf("%s : %d\n", bv.Addr(), bv.Port())
 			}
 		}
 	}
