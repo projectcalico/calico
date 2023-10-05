@@ -121,7 +121,11 @@ func dumpPolicyInfo(cmd *cobra.Command, iface string, h hook.Hook, m counters.Po
 	verboseFlagSet, _ := strconv.ParseBool(verboseFlag)
 
 	var policyDbg bpf.PolicyDebugInfo
-	filename := bpf.PolicyDebugJSONFileName(iface, h.String(), proto.IPVersion_IPV4)
+	family := proto.IPVersion_IPV4
+	if ipv6 != nil && *ipv6 {
+		family = proto.IPVersion_IPV6
+	}
+	filename := bpf.PolicyDebugJSONFileName(iface, h.String(), family)
 	_, err := os.Stat(filename)
 	if err != nil {
 		return err
