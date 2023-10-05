@@ -16,10 +16,12 @@ package metrics
 
 import (
 	"bufio"
+	"bytes"
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -42,7 +44,7 @@ func PortString() string {
 	return strconv.Itoa(Port)
 }
 
-func GetMetric(ip string, port int, name, caFile, certFile, keyFile string) (metric string, err error) {
+func GetRawMetrics(ip string, port int, name, caFile, certFile, keyFile string) (out string, err error) {
 	httpClient := http.Client{Timeout: time.Second}
 	defer httpClient.CloseIdleConnections()
 	method := "http"
@@ -116,17 +118,34 @@ func GetMetric(ip string, port int, name, caFile, certFile, keyFile string) (met
 		return
 	}
 
-	scanner := bufio.NewScanner(resp.Body)
+	all, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+	return string(all), nil
+}
+
+func GetMetric(ip string, port int, name, caFile, certFile, keyFile string) (metric string, err error) {
+	metrics, err := GetRawMetrics(ip, port, name, caFile, certFile, keyFile)
+	if err != nil {
+		return "", fmt.Errorf("failed to load metrics: %w", err)
+	}
+	scanner := bufio.NewScanner(bytes.NewBufferString(metrics))
+	found := false
 	for scanner.Scan() {
 		line := scanner.Text()
 		log.WithField("line", line).Debug("Line")
 		if strings.HasPrefix(line, name) {
 			log.WithField("line", line).Info("Line")
 			metric = strings.TrimSpace(strings.TrimPrefix(line, name))
+			found = true
 			break
 		}
 	}
 	err = scanner.Err()
+	if !found {
+		return "", fmt.Errorf("metric %q not found in\n%s", name, metrics)
+	}
 	return
 }
 
@@ -141,6 +160,12 @@ func GetFelixMetricInt(felixIP, name string) (metric int, err error) {
 		return 0, err
 	}
 	return strconv.Atoi(s)
+}
+
+func GetFelixMetricIntFn(felixIP, name string) func() (metric int, err error) {
+	return func() (metric int, err error) {
+		return GetFelixMetricInt(felixIP, name)
+	}
 }
 
 func GetFelixMetricFloat(felixIP, name string) (metric float64, err error) {
