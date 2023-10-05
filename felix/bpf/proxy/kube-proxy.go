@@ -112,12 +112,27 @@ func (kp *KubeProxy) Stop() {
 
 func (kp *KubeProxy) run(hostIPs []net.IP) error {
 
+	ips := make([]net.IP, 0, len(hostIPs))
+	for _, ip := range hostIPs {
+		if kp.ipFamily == 4 && ip.To4() != nil {
+			ips = append(ips, ip)
+		} else if kp.ipFamily == 6 && ip.To4() == nil {
+			ips = append(ips, ip)
+		}
+	}
+
+	hostIPs = ips
+
 	kp.lock.Lock()
 	defer kp.lock.Unlock()
 
 	withLocalNP := make([]net.IP, len(hostIPs), len(hostIPs)+1)
 	copy(withLocalNP, hostIPs)
-	withLocalNP = append(withLocalNP, podNPIP)
+	if kp.ipFamily == 4 {
+		withLocalNP = append(withLocalNP, podNPIP)
+	} else {
+		withLocalNP = append(withLocalNP, podNPIPV6)
+	}
 
 	syncer, err := NewSyncer(kp.ipFamily, withLocalNP, kp.frontendMap, kp.backendMap, kp.affinityMap, kp.rt)
 	if err != nil {
@@ -129,7 +144,7 @@ func (kp *KubeProxy) run(hostIPs []net.IP) error {
 		return errors.WithMessage(err, "new proxy")
 	}
 
-	log.Infof("kube-proxy started, hostname=%q hostIPs=%+v", kp.hostname, hostIPs)
+	log.Infof("kube-proxy v%d started, hostname=%q hostIPs=%+v", kp.ipFamily, kp.hostname, hostIPs)
 
 	kp.proxy = proxy
 	kp.syncer = syncer
@@ -211,8 +226,8 @@ func (kp *KubeProxy) OnHostIPsUpdate(IPs []net.IP) {
 
 // OnRouteUpdate should be used to update the internal state of routing tables
 func (kp *KubeProxy) OnRouteUpdate(k routes.KeyInterface, v routes.ValueInterface) {
-	kp.rt.Update(k, v)
 	log.WithFields(log.Fields{"key": k, "value": v}).Debug("kube-proxy: OnRouteUpdate")
+	kp.rt.Update(k, v)
 }
 
 // OnRouteDelete should be used to update the internal state of routing tables
