@@ -157,12 +157,16 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 							&infra,
 							&topologyOptions,
 							&client,
-							fmt.Sprintf("dead:beef::100:%d:2", i),
+							fmt.Sprintf("dead:beef::0:%d:2", i),
 							fmt.Sprintf("wlv6-%d", i),
 							topologyContainers.Felixes[i])
 
 						// Prepare route entry.
-						routeEntriesV6[i] = fmt.Sprintf("dead:beef::100:%d:0/122 dev %s metric 1024 pref medium", i, wireguardInterfaceNameV6Default)
+						if i == 0 {
+							routeEntriesV6[i] = fmt.Sprintf("dead:beef::/122 dev %s metric 1024 pref medium", wireguardInterfaceNameV6Default)
+						} else {
+							routeEntriesV6[i] = fmt.Sprintf("dead:beef::%d:0/122 dev %s metric 1024 pref medium", i, wireguardInterfaceNameV6Default)
+						}
 					}
 					// Swap route entry to match between workloads.
 					routeEntriesV6[0], routeEntriesV6[1] = routeEntriesV6[1], routeEntriesV6[0]
