@@ -934,7 +934,7 @@ func (idx *SelectorAndNamedPortIndex) iterEndpointCandidates(ipsetID string, f f
 
 	if bestEPStrategy.EstimatedItemsToScan() <= bestParentEndpointEstimate {
 		log.Debugf("Selector %s using endpoint scan strategy: %s", sel.String(), bestEPStrategy.String())
-		counterVecScanStrat.WithLabelValues("endpoint-" + bestEPStrategy.Name())
+		counterVecScanStrat.WithLabelValues("endpoint-" + bestEPStrategy.Name()).Inc()
 		bestEPStrategy.Scan(func(id any) bool {
 			ep, _ := idx.endpointKVIdx.Get(id)
 			f(id, ep)
@@ -943,7 +943,7 @@ func (idx *SelectorAndNamedPortIndex) iterEndpointCandidates(ipsetID string, f f
 	} else {
 		log.Debugf("Selector %s using parent scan strategy: %s", sel.String(), bestParentStrategy.String())
 		seenEPIDs := set.New[any]()
-		counterVecScanStrat.WithLabelValues("parent-" + bestParentStrategy.Name())
+		counterVecScanStrat.WithLabelValues("parent-" + bestParentStrategy.Name()).Inc()
 		bestParentStrategy.Scan(func(parentID string) bool {
 			parent, _ := idx.parentKVIdx.Get(parentID)
 			parent.IterEndpointIDs(func(id any) error {

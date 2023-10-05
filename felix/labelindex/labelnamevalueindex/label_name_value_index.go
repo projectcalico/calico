@@ -349,5 +349,5 @@ func (s FullScanStrategy[ItemID, Item]) Scan(f func(id ItemID) bool) {
 }
 
 func (s FullScanStrategy[ItemID, Item]) Name() string {
-	return "all"
+	return "full-scan"
 }
