@@ -36,6 +36,8 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/nat"
 	"github.com/projectcalico/calico/felix/bpf/routes"
 	"github.com/projectcalico/calico/felix/ip"
+
+	natV3 "github.com/projectcalico/calico/felix/bpf/nat/v3"
 )
 
 var podNPIP = net.IPv4(255, 255, 255, 255)
@@ -215,7 +217,7 @@ func NewSyncer(family int, nodePortIPs []net.IP,
 
 	switch family {
 	case 4:
-		s.bpfSvcs = cachingmap.New[nat.FrontendKeyInterface, nat.FrontendValue](nat.FrontendMapParameters.Name,
+		s.bpfSvcs = cachingmap.New[nat.FrontendKeyInterface, nat.FrontendValue](natV3.FrontendMapParameters.Name,
 			maps.NewTypedMap[nat.FrontendKeyInterface, nat.FrontendValue](
 				frontendMap, nat.FrontendKeyFromBytes, nat.FrontendValueFromBytes,
 			))
@@ -229,7 +231,7 @@ func NewSyncer(family int, nodePortIPs []net.IP,
 		s.affinityKeyFromBytes = nat.AffinityKeyIntfFromBytes
 		s.affinityValueFromBytes = nat.AffinityValueIntfFromBytes
 	case 6:
-		s.bpfSvcs = cachingmap.New[nat.FrontendKeyInterface, nat.FrontendValue](nat.FrontendMapParameters.Name,
+		s.bpfSvcs = cachingmap.New[nat.FrontendKeyInterface, nat.FrontendValue](natV3.FrontendMapParameters.Name,
 			maps.NewTypedMap[nat.FrontendKeyInterface, nat.FrontendValue](
 				frontendMap, nat.FrontendKeyV6FromBytes, nat.FrontendValueFromBytes,
 			))

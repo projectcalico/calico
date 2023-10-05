@@ -20,21 +20,13 @@ import (
 	"net"
 	"time"
 
+	curVer "github.com/projectcalico/calico/felix/bpf/nat/v3"
+
 	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/ip"
 )
-
-//	struct calico_nat_v4_key {
-//	   uint32_t prefixLen;
-//	   uint32_t addr; // NBO
-//	   uint16_t port; // HBO
-//	   uint8_t protocol;
-//	   uint32_t saddr;
-//	   uint8_t pad;
-//	};
-const frontendKeyV6Size = 40
 
 //	struct calico_nat {
 //		uint32_t addr;
@@ -43,15 +35,6 @@ const frontendKeyV6Size = 40
 //		uint8_t  pad;
 //	};
 const frontendAffKeyV6Size = 20
-
-//	struct calico_nat_v4_value {
-//	   uint32_t id;
-//	   uint32_t count;
-//	   uint32_t local;
-//	   uint32_t affinity_timeo;
-//	   uint32_t flags;
-//	};
-const frontendValueV6Size = 20
 
 //	struct calico_nat_secondary_v4_key {
 //	  uint32_t id;
@@ -71,7 +54,7 @@ const ZeroCIDRV6PrefixLen = (16 + 2 + 1) * 8
 
 var ZeroCIDRV6 = ip.MustParseCIDROrIP("::/0").(ip.V6CIDR)
 
-type FrontendKeyV6 [frontendKeyV6Size]byte
+type FrontendKeyV6 [curVer.FrontendKeyV6Size]byte
 
 func NewNATKeyV6(addr net.IP, port uint16, protocol uint8) FrontendKeyV6 {
 	return NewNATKeyV6Src(addr, port, protocol, ZeroCIDRV6)
@@ -218,18 +201,10 @@ func BackendValueV6FromBytes(b []byte) BackendValueInterface {
 	return v
 }
 
-var FrontendMapV6Parameters = maps.MapParameters{
-	Type:       "lpm_trie",
-	KeySize:    frontendKeyV6Size,
-	ValueSize:  frontendValueV6Size,
-	MaxEntries: 64 * 1024,
-	Name:       "cali_v6_nat_fe",
-	Flags:      unix.BPF_F_NO_PREALLOC,
-	Version:    3,
-}
-
 func FrontendMapV6() maps.MapWithExistsCheck {
-	return maps.NewPinnedMap(FrontendMapV6Parameters)
+	b := maps.NewPinnedMap(curVer.FrontendMapV6Parameters)
+	b.GetMapParams = GetMapParamsV6
+	return b
 }
 
 var BackendMapV6Parameters = maps.MapParameters{
@@ -665,4 +640,8 @@ func SendRecvMsgMapMemV6Iter(m SendRecvMsgMapMemV6) func(k, v []byte) {
 
 		m[key] = val
 	}
+}
+
+func GetMapParamsV6(_ int) maps.MapParameters {
+	return curVer.FrontendMapV6Parameters
 }
