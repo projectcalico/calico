@@ -56,6 +56,35 @@ type Selector interface {
 
 	// AcceptVisitor allows an external visitor to modify this selector.
 	AcceptVisitor(v Visitor)
+
+	LabelRestrictions() map[string]LabelRestriction
+}
+
+type LabelRestriction struct {
+	// MustBePresent is true if this label must be present for the selector to
+	// match. For example "has(labelName)" or "labelName == 'foo'"
+	MustBePresent bool
+	// MustBeAbsent is true if this label must be absent for this selector to
+	// match. For example "!has(labelName)".
+	MustBeAbsent bool
+	// MustHaveOneOfValues if non-nil, indicates that the label must have one
+	// of the listed values in order to match the selector.
+	//
+	// If nil, no such restriction is known.  For example "has(labelName)"
+	//
+	// Note: non-nil empty slice means "selector cannot match anything". For
+	// example an inconsistent selector such as: "a == 'B' && a == 'C'"
+	MustHaveOneOfValues []string
+}
+
+func (r LabelRestriction) PossibleToSatisfy() bool {
+	if r.MustBePresent && r.MustBeAbsent {
+		return false
+	}
+	if r.MustHaveOneOfValues != nil && len(r.MustHaveOneOfValues) == 0 {
+		return false
+	}
+	return true
 }
 
 type Visitor interface {
@@ -93,9 +122,10 @@ func (v PrefixVisitor) Visit(n interface{}) {
 }
 
 type selectorRoot struct {
-	root         node
-	cachedString *string
-	cachedHash   *string
+	root                    node
+	cachedString            *string
+	cachedHash              *string
+	cachedLabelRestrictions *map[string]LabelRestriction
 }
 
 func (sel *selectorRoot) Evaluate(labels map[string]string) bool {
@@ -127,12 +157,22 @@ func (sel *selectorRoot) UniqueID() string {
 	return *sel.cachedHash
 }
 
+func (sel *selectorRoot) LabelRestrictions() map[string]LabelRestriction {
+	if sel.cachedLabelRestrictions != nil {
+		return *sel.cachedLabelRestrictions
+	}
+	lrs := sel.root.LabelRestrictions()
+	sel.cachedLabelRestrictions = &lrs
+	return lrs
+}
+
 var _ Selector = (*selectorRoot)(nil)
 
 type node interface {
 	Evaluate(labels Labels) bool
 	AcceptVisitor(v Visitor)
 	collectFragments(fragments []string) []string
+	LabelRestrictions() map[string]LabelRestriction
 }
 
 type LabelEqValueNode struct {
@@ -146,6 +186,15 @@ func (node *LabelEqValueNode) Evaluate(labels Labels) bool {
 		return val == node.Value
 	}
 	return false
+}
+
+func (node *LabelEqValueNode) LabelRestrictions() map[string]LabelRestriction {
+	return map[string]LabelRestriction{
+		node.LabelName: {
+			MustBePresent:       true,
+			MustHaveOneOfValues: []string{node.Value},
+		},
+	}
 }
 
 func (node *LabelEqValueNode) AcceptVisitor(v Visitor) {
@@ -169,6 +218,14 @@ func (node *LabelContainsValueNode) Evaluate(labels Labels) bool {
 	return false
 }
 
+func (node *LabelContainsValueNode) LabelRestrictions() map[string]LabelRestriction {
+	return map[string]LabelRestriction{
+		node.LabelName: {
+			MustBePresent: true,
+		},
+	}
+}
+
 func (node *LabelContainsValueNode) AcceptVisitor(v Visitor) {
 	v.Visit(node)
 }
@@ -188,6 +245,14 @@ func (node *LabelStartsWithValueNode) Evaluate(labels Labels) bool {
 		return strings.HasPrefix(val, node.Value)
 	}
 	return false
+}
+
+func (node *LabelStartsWithValueNode) LabelRestrictions() map[string]LabelRestriction {
+	return map[string]LabelRestriction{
+		node.LabelName: {
+			MustBePresent: true,
+		},
+	}
 }
 
 func (node *LabelStartsWithValueNode) AcceptVisitor(v Visitor) {
@@ -211,6 +276,14 @@ func (node *LabelEndsWithValueNode) Evaluate(labels Labels) bool {
 	return false
 }
 
+func (node *LabelEndsWithValueNode) LabelRestrictions() map[string]LabelRestriction {
+	return map[string]LabelRestriction{
+		node.LabelName: {
+			MustBePresent: true,
+		},
+	}
+}
+
 func (node *LabelEndsWithValueNode) AcceptVisitor(v Visitor) {
 	v.Visit(node)
 }
@@ -230,6 +303,15 @@ func (node *LabelInSetNode) Evaluate(labels Labels) bool {
 		return node.Value.Contains(val)
 	}
 	return false
+}
+
+func (node *LabelInSetNode) LabelRestrictions() map[string]LabelRestriction {
+	return map[string]LabelRestriction{
+		node.LabelName: {
+			MustBePresent:       true,
+			MustHaveOneOfValues: node.Value.SliceCopy(),
+		},
+	}
 }
 
 func (node *LabelInSetNode) AcceptVisitor(v Visitor) {
@@ -255,6 +337,10 @@ func (node *LabelNotInSetNode) Evaluate(labels Labels) bool {
 		return !node.Value.Contains(val)
 	}
 	return true
+}
+
+func (node *LabelNotInSetNode) LabelRestrictions() map[string]LabelRestriction {
+	return nil
 }
 
 func (node *LabelNotInSetNode) collectFragments(fragments []string) []string {
@@ -297,6 +383,10 @@ func (node *LabelNeValueNode) Evaluate(labels Labels) bool {
 	return true
 }
 
+func (node *LabelNeValueNode) LabelRestrictions() map[string]LabelRestriction {
+	return nil
+}
+
 func (node *LabelNeValueNode) AcceptVisitor(v Visitor) {
 	v.Visit(node)
 }
@@ -317,6 +407,14 @@ func (node *HasNode) Evaluate(labels Labels) bool {
 	return false
 }
 
+func (node *HasNode) LabelRestrictions() map[string]LabelRestriction {
+	return map[string]LabelRestriction{
+		node.LabelName: {
+			MustBePresent: true,
+		},
+	}
+}
+
 func (node *HasNode) AcceptVisitor(v Visitor) {
 	v.Visit(node)
 }
@@ -325,12 +423,30 @@ func (node *HasNode) collectFragments(fragments []string) []string {
 	return append(fragments, "has(", node.LabelName, ")")
 }
 
+var _ node = (*HasNode)(nil)
+
 type NotNode struct {
 	Operand node
 }
 
 func (node *NotNode) Evaluate(labels Labels) bool {
 	return !node.Operand.Evaluate(labels)
+}
+
+func (node *NotNode) LabelRestrictions() map[string]LabelRestriction {
+	if hasNode, ok := node.Operand.(*HasNode); ok {
+		// !has() explicitly forbids the labels.
+		lr := hasNode.LabelRestrictions()
+		for k := range lr {
+			lr[k] = LabelRestriction{MustBeAbsent: true}
+		}
+		return lr
+	}
+	// Can't invert most types of match;
+	// a == 'b' requires label "a"
+	// but
+	// !(a == 'b') does *not* require the absence of label "a"
+	return nil
 }
 
 func (node *NotNode) AcceptVisitor(v Visitor) {
@@ -354,6 +470,39 @@ func (node *AndNode) Evaluate(labels Labels) bool {
 		}
 	}
 	return true
+}
+
+func (node *AndNode) LabelRestrictions() map[string]LabelRestriction {
+	lr := map[string]LabelRestriction{}
+	for _, op := range node.Operands {
+		opLR := op.LabelRestrictions()
+		for ln, r := range opLR {
+			base := lr[ln]
+			base.MustBePresent = base.MustBePresent || r.MustBePresent
+			base.MustBeAbsent = base.MustBeAbsent || r.MustBeAbsent
+			if base.MustHaveOneOfValues == nil {
+				base.MustHaveOneOfValues = r.MustHaveOneOfValues
+			} else if r.MustHaveOneOfValues != nil {
+				base.MustHaveOneOfValues = intersectStringSlicesInPlace(base.MustHaveOneOfValues, r.MustHaveOneOfValues)
+			}
+			lr[ln] = base
+		}
+	}
+	if len(lr) == 0 {
+		return nil
+	}
+	return lr
+}
+
+func intersectStringSlicesInPlace(a []string, b []string) []string {
+	out := a[:0]
+	bSet := ConvertToStringSetInPlace(b)
+	for _, v1 := range a {
+		if bSet.Contains(v1) {
+			out = append(out, v1)
+		}
+	}
+	return out
 }
 
 func (node *AndNode) AcceptVisitor(v Visitor) {
@@ -387,6 +536,50 @@ func (node *OrNode) Evaluate(labels Labels) bool {
 	return false
 }
 
+func (node *OrNode) LabelRestrictions() map[string]LabelRestriction {
+	lr := node.Operands[0].LabelRestrictions()
+	for _, op := range node.Operands[1:] {
+		opLR := op.LabelRestrictions()
+		for ln, r := range lr {
+			opr := opLR[ln]
+			r.MustBePresent = r.MustBePresent && opr.MustBePresent
+			if !r.MustBePresent {
+				r.MustHaveOneOfValues = nil
+			} else {
+				if r.MustHaveOneOfValues == nil || opr.MustHaveOneOfValues == nil {
+					// At least one side is has(label) so we can't limit on value.
+					r.MustHaveOneOfValues = nil
+				} else {
+					// Both sides place limits on the value, add them together since either is good enough.
+					r.MustHaveOneOfValues = unionStringSlicesInPlace(r.MustHaveOneOfValues, opr.MustHaveOneOfValues)
+				}
+			}
+			r.MustBeAbsent = r.MustBeAbsent && opr.MustBeAbsent
+			if r.MustBePresent || r.MustBeAbsent {
+				lr[ln] = r
+			} else {
+				delete(lr, ln)
+			}
+		}
+	}
+	if len(lr) == 0 {
+		return nil
+	}
+	return lr
+}
+
+func unionStringSlicesInPlace(a []string, b []string) []string {
+	// aSet will share storage with a, but when we append to a, it doesn't
+	// affect aSet.
+	aSet := ConvertToStringSetInPlace(a)
+	for _, v := range b {
+		if !aSet.Contains(v) {
+			a = append(a, v)
+		}
+	}
+	return a
+}
+
 func (node *OrNode) AcceptVisitor(v Visitor) {
 	v.Visit(node)
 	for _, op := range node.Operands {
@@ -406,6 +599,10 @@ func (node *OrNode) collectFragments(fragments []string) []string {
 }
 
 type AllNode struct {
+}
+
+func (node *AllNode) LabelRestrictions() map[string]LabelRestriction {
+	return nil
 }
 
 func (node *AllNode) Evaluate(labels Labels) bool {
@@ -433,8 +630,11 @@ func appendLabelOpAndQuotedString(fragments []string, label, op, s string) []str
 type GlobalNode struct {
 }
 
-func (node *GlobalNode) Evaluate(labels Labels) bool {
+func (node *GlobalNode) LabelRestrictions() map[string]LabelRestriction {
+	return nil
+}
 
+func (node *GlobalNode) Evaluate(labels Labels) bool {
 	return true
 }
 

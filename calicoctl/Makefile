@@ -125,7 +125,7 @@ $(CALICO_VERSION_HELPER_BIN): $(CALICO_VERSION_HELPER_SRC)
 ###############################################################################
 .PHONY: ut
 ## Run the tests in a container. Useful for CI, Mac dev.
-ut: bin/calicoctl-linux-amd64
+ut: bin/calicoctl-linux-$(ARCH)
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -cover -r $(GINKGO_ARGS) calicoctl/*'
 
 ###############################################################################
@@ -133,7 +133,7 @@ ut: bin/calicoctl-linux-amd64
 ###############################################################################
 .PHONY: fv
 ## Run the tests in a container. Useful for CI, Mac dev.
-fv: bin/calicoctl-linux-amd64 version-helper
+fv: bin/calicoctl-linux-$(ARCH) version-helper
 	$(MAKE) run-etcd
 
 	# We start two API servers in order to test multiple kubeconfig support
@@ -161,7 +161,7 @@ ST_OPTIONS?=
 
 .PHONY: st
 ## Run the STs in a container
-st: bin/calicoctl-linux-amd64 version-helper
+st: bin/calicoctl-linux-$(ARCH) version-helper
 	$(MAKE) run-etcd
 	$(MAKE) run-kubernetes-master
 	# Use the host, PID and network namespaces from the host.
