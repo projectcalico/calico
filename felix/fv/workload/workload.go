@@ -332,7 +332,9 @@ func (w *Workload) RemoveFromDatastore(client client.Interface) {
 // ConfigureInInfra creates the workload endpoint for this Workload.
 func (w *Workload) ConfigureInInfra(infra infrastructure.DatastoreInfra) {
 	wep := w.WorkloadEndpoint
-	wep.Namespace = "default"
+	if wep.Namespace == "" {
+		wep.Namespace = "default"
+	}
 	wep.Spec.Workload = w.Name
 	wep.Spec.Endpoint = w.Name
 	wep.Spec.InterfaceName = w.InterfaceName
