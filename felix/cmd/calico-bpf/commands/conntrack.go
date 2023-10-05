@@ -495,7 +495,7 @@ func (cmd *conntrackFillCmd) Run(c *cobra.Command, _ []string) {
 
 		ctMap = conntrack.MapV6()
 	} else {
-		var k conntrack.KeyV6
+		var k conntrack.Key
 		copy(k[:], cmd.key)
 		key = k
 
