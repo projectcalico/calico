@@ -140,7 +140,7 @@ func New(c *infrastructure.Felix, name, profile, ip, ports, protocol string, opt
 	interfaceName := conversion.NewConverter().VethNameForWorkload(profile, n)
 	spoofN := fmt.Sprintf("%s-spoof%v", name, workloadIdx)
 	spoofIfaceName := conversion.NewConverter().VethNameForWorkload(profile, spoofN)
-	if c.IP == ip {
+	if c.IP == ip || c.IPv6 == ip {
 		interfaceName = ""
 		spoofIfaceName = ""
 	}
