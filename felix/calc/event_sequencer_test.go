@@ -91,8 +91,9 @@ var _ = Describe("ParsedRulesToActivePolicyUpdate", func() {
 			InboundRules: []*calc.ParsedRule{
 				{Action: "Deny"},
 			},
-			PreDNAT:   true,
-			Untracked: true,
+			PreDNAT:          true,
+			Untracked:        true,
+			OriginalSelector: "all()",
 		}
 		fullyLoadedProtoRules = proto.ActivePolicyUpdate{
 			Id: &proto.PolicyID{
@@ -100,11 +101,12 @@ var _ = Describe("ParsedRulesToActivePolicyUpdate", func() {
 				Name: "a-policy",
 			},
 			Policy: &proto.Policy{
-				Namespace:     "namespace",
-				InboundRules:  []*proto.Rule{{Action: "Deny"}},
-				OutboundRules: []*proto.Rule{{Action: "Allow"}},
-				Untracked:     true,
-				PreDnat:       true,
+				Namespace:        "namespace",
+				InboundRules:     []*proto.Rule{{Action: "Deny"}},
+				OutboundRules:    []*proto.Rule{{Action: "Allow"}},
+				Untracked:        true,
+				PreDnat:          true,
+				OriginalSelector: "all()",
 			},
 		}
 	)

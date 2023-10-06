@@ -75,6 +75,9 @@ const (
 	ProfileInboundPfx  ProfileChainNamePrefix = ChainNamePrefix + "pri-"
 	ProfileOutboundPfx ProfileChainNamePrefix = ChainNamePrefix + "pro-"
 
+	PolicyGroupInboundPrefix  string = ChainNamePrefix + "gi-"
+	PolicyGroupOutboundPrefix string = ChainNamePrefix + "go-"
+
 	ChainWorkloadToHost       = ChainNamePrefix + "wl-to-host"
 	ChainFromWorkloadDispatch = ChainNamePrefix + "from-wl-dispatch"
 	ChainToWorkloadDispatch   = ChainNamePrefix + "to-wl-dispatch"
@@ -180,14 +183,8 @@ type RuleRenderer interface {
 	StaticFilterForwardAppendRules() []iptables.Rule
 
 	WorkloadDispatchChains(map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint) []*iptables.Chain
-	WorkloadEndpointToIptablesChains(
-		ifaceName string,
-		epMarkMapper EndpointMarkMapper,
-		adminUp bool,
-		ingressPolicies []string,
-		egressPolicies []string,
-		profileIDs []string,
-	) []*iptables.Chain
+	WorkloadEndpointToIptablesChains(ifaceName string, epMarkMapper EndpointMarkMapper, adminUp bool, ingressPolicies []*PolicyGroup, egressPolicies []*PolicyGroup, profileIDs []string) []*iptables.Chain
+	PolicyGroupToIptablesChains(group *PolicyGroup) []*iptables.Chain
 
 	WorkloadInterfaceAllowChains(endpoints map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint) []*iptables.Chain
 
