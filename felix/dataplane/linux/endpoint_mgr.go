@@ -23,9 +23,8 @@ import (
 	"regexp"
 	"strings"
 
-	log "github.com/sirupsen/logrus"
-
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/dataplane/common"
 	"github.com/projectcalico/calico/felix/ifacemonitor"
@@ -147,6 +146,9 @@ type endpointManager struct {
 	activeWlIDToChains         map[proto.WorkloadEndpointID][]*iptables.Chain
 	activeWlDispatchChains     map[string]*iptables.Chain
 	activeEPMarkDispatchChains map[string]*iptables.Chain
+
+	activePolicySelectors map[proto.PolicyID]string
+	policyGroupRefCounts  map[string]int
 
 	// Workload endpoints that would be locally active but are 'shadowed' by other endpoints
 	// with the same interface name.
@@ -293,6 +295,9 @@ func newEndpointManagerWithShims(
 		activeWlIfaceNameToID: map[string]proto.WorkloadEndpointID{},
 		activeWlIDToChains:    map[proto.WorkloadEndpointID][]*iptables.Chain{},
 
+		activePolicySelectors: map[proto.PolicyID]string{},
+		policyGroupRefCounts:  map[string]int{},
+
 		shadowedWlEndpoints: map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
 
 		wlIfaceNamesToReconfigure: set.New[string](),
@@ -361,6 +366,12 @@ func (m *endpointManager) OnUpdate(protoBufMsg interface{}) {
 			delete(m.hostIfaceToAddrs, msg.Name)
 		}
 		m.hostEndpointsDirty = true
+	case *proto.ActivePolicyUpdate:
+		// TODO Not sure if we need to mark anything dirty here; we should get an endpoint update if the policy list changes
+		//      And if it doesn't change, do we need to do anything?
+		m.activePolicySelectors[*msg.Id] = msg.Policy.OriginalSelector
+	case *proto.ActivePolicyRemove:
+		delete(m.activePolicySelectors, *msg.Id)
 	}
 }
 
@@ -622,16 +633,7 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 				}
 				adminUp := workload.State == "active"
 				if !m.bpfEnabled {
-					chains := m.ruleRenderer.WorkloadEndpointToIptablesChains(
-						workload.Name,
-						m.epMarkMapper,
-						adminUp,
-						ingressPolicyNames,
-						egressPolicyNames,
-						workload.ProfileIds,
-					)
-					m.filterTable.UpdateChains(chains)
-					m.activeWlIDToChains[id] = chains
+					m.updateWorkloadEndpointChains(id, workload, ingressPolicyNames, egressPolicyNames, adminUp)
 
 					if len(workload.AllowSpoofedSourcePrefixes) > 0 && !m.hasSourceSpoofingConfiguration(workload.Name) {
 						logCxt.Infof("Disabling RPF check for workload %s", workload.Name)
@@ -753,6 +755,33 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 		}
 		return set.RemoveItem
 	})
+}
+
+func (m *endpointManager) updateWorkloadEndpointChains(
+	id proto.WorkloadEndpointID,
+	workload *proto.WorkloadEndpoint,
+	ingressPolicyNames []string,
+	egressPolicyNames []string,
+	adminUp bool,
+) {
+	ingressGroups := m.groupPolicies("default", ingressPolicyNames)
+	log.WithField("groups", ingressGroups).WithField("pols", ingressPolicyNames).Info("Groups")
+	m.increfGroups(ingressGroups)
+	egressGroups := m.groupPolicies("default", egressPolicyNames)
+	m.increfGroups(egressGroups)
+
+	// FIXME: need to decref the old existing groups!
+
+	chains := m.ruleRenderer.WorkloadEndpointToIptablesChains(
+		workload.Name,
+		m.epMarkMapper,
+		adminUp,
+		ingressGroups,
+		egressGroups,
+		workload.ProfileIds,
+	)
+	m.filterTable.UpdateChains(chains)
+	m.activeWlIDToChains[id] = chains
 }
 
 func wlIdsAscending(id1, id2 *proto.WorkloadEndpointID) bool {
@@ -1335,4 +1364,50 @@ func forAllInterfaces(hep *proto.HostEndpoint) bool {
 // for implementing the endpointsSource interface
 func (m *endpointManager) GetRawHostEndpoints() map[proto.HostEndpointID]*proto.HostEndpoint {
 	return m.rawHostEndpoints
+}
+
+func (m *endpointManager) groupPolicies(tierName string, names []string) []*rules.PolicyGroup {
+	if len(names) == 0 {
+		return nil
+	}
+	group := rules.PolicyGroup{
+		Tier:        tierName,
+		PolicyNames: []string{names[0]},
+		Selector: m.activePolicySelectors[proto.PolicyID{
+			Tier: tierName,
+			Name: names[0],
+		}],
+	}
+	groups := []*rules.PolicyGroup{&group}
+	for _, name := range names[1:] {
+		sel := m.activePolicySelectors[proto.PolicyID{
+			Tier: tierName,
+			Name: names[0],
+		}]
+		if sel != group.Selector {
+			group = rules.PolicyGroup{
+				Tier:     tierName,
+				Selector: sel,
+			}
+			groups = append(groups, &group)
+		}
+		group.PolicyNames = append(group.PolicyNames, name)
+	}
+	return groups
+}
+
+func (m *endpointManager) increfGroups(groups []*rules.PolicyGroup) {
+	for _, group := range groups {
+		if len(group.PolicyNames) <= 1 {
+			continue // We inline single-entry groups.
+		}
+		refcnt := m.policyGroupRefCounts[group.UniqueID()]
+		if refcnt == 0 {
+			// This group just became active.
+			m.filterTable.UpdateChains(m.ruleRenderer.PolicyGroupToIptablesChains(
+				group,
+			))
+		}
+		m.policyGroupRefCounts[group.UniqueID()] = refcnt + 1
+	}
 }
