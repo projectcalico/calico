@@ -1576,6 +1576,28 @@ var polProgramTests = []polProgramTest{
 		},
 	},
 	{
+		PolicyName: "allow from IP set - v6",
+		Policy: makeRulesSingleTier([]*proto.Rule{{
+			Action:      "Allow",
+			SrcIpSetIds: []string{"setA"},
+		}}),
+		AllowedPackets: []packet{
+			packetNoPorts(253, "10::2", "10::1"),
+			tcpPkt("[10::2]:80", "[10::1]:31245"),
+			udpPkt("[10::2]:12345", "[123::1]:1024"),
+			udpPkt("[10::2]:80", "[10::1]:31245"),
+			udpPkt("[10::1]:31245", "[10::2]:80"),
+			//			icmpPkt("10::1", "10::2"),
+		},
+		DroppedPackets: []packet{
+			packetNoPorts(253, "11::2", "10::1"),
+			tcpPkt("[11::1]:12345", "[10::2]:8080")},
+		IPSets: map[string][]string{
+			"setA": {"10::0/16"},
+		},
+		ForIPv6: true,
+	},
+	{
 		PolicyName: "allow to IP set",
 		Policy: makeRulesSingleTier([]*proto.Rule{{
 			Action:      "Allow",
@@ -1591,6 +1613,24 @@ var polProgramTests = []polProgramTest{
 		IPSets: map[string][]string{
 			"setA": {"11.0.0.0/8", "123.0.0.1/32"},
 		},
+	},
+	{
+		PolicyName: "allow to IP set - v6",
+		Policy: makeRulesSingleTier([]*proto.Rule{{
+			Action:      "Allow",
+			DstIpSetIds: []string{"setA"},
+		}}),
+		AllowedPackets: []packet{
+			packetNoPorts(253, "11::2", "11::1"),
+			udpPkt("[10::2]:12345", "[123::1]:1024")},
+		DroppedPackets: []packet{
+			packetNoPorts(253, "11::2", "10::1"),
+			tcpPkt("[11::1]:12345", "[10::2]:8080"),
+			udpPkt("[10::1]:31245", "[10::2]:80")},
+		IPSets: map[string][]string{
+			"setA": {"11::0/16", "123::1/128"},
+		},
+		ForIPv6: true,
 	},
 	{
 		PolicyName: "allow from !IP set",
@@ -2400,10 +2440,14 @@ func runTest(t *testing.T, tp testPolicy) {
 	forceAlloc := &forceAllocator{alloc: realAlloc}
 
 	// Make sure the maps are available.
-	cleanIPSetMap()
 	// FIXME should clean up the maps at the end of each test but recreating the maps seems to be racy
-
-	setUpIPSets(tp.IPSets(), realAlloc, ipsMap)
+	if tp.ForIPv6() {
+		cleanIPSetMapV6()
+		setUpIPSetsV6(tp.IPSets(), realAlloc, ipsMapV6)
+	} else {
+		cleanIPSetMap()
+		setUpIPSets(tp.IPSets(), realAlloc, ipsMap)
+	}
 
 	jumpMap = jump.Map()
 	_ = unix.Unlink(jumpMap.Path())
@@ -2413,16 +2457,16 @@ func runTest(t *testing.T, tp testPolicy) {
 	// Build the program.
 	allowIdx := tcdefs.ProgIndexAllowed
 	denyIdx := tcdefs.ProgIndexDrop
+
+	ipsfd := ipsMap.MapFD()
+
+	opts := []polprog.Option{polprog.WithAllowDenyJumps(allowIdx, denyIdx)}
 	if tp.ForIPv6() {
-		allowIdx = tcdefs.ProgIndexV6Allowed
-		denyIdx = tcdefs.ProgIndexV6Drop
+		opts = append(opts, polprog.WithIPv6())
+		ipsfd = ipsMapV6.MapFD()
 	}
 
-	pg := polprog.NewBuilder(forceAlloc, ipsMap.MapFD(), testStateMap.MapFD(), jumpMap.MapFD(),
-		polprog.WithAllowDenyJumps(allowIdx, denyIdx))
-	if tp.ForIPv6() {
-		pg.EnableIPv6Mode()
-	}
+	pg := polprog.NewBuilder(forceAlloc, ipsfd, testStateMap.MapFD(), jumpMap.MapFD(), opts...)
 	insns, err := pg.Instructions(tp.Policy())
 	Expect(err).NotTo(HaveOccurred(), "failed to assemble program")
 
@@ -2438,9 +2482,6 @@ func runTest(t *testing.T, tp testPolicy) {
 
 	// Give the policy program somewhere to jump to.
 	jumpMapIndex := tcdefs.ProgIndexAllowed
-	if tp.ForIPv6() {
-		jumpMapIndex = tcdefs.ProgIndexV6Allowed
-	}
 	epiFD := installAllowedProgram(jumpMap, jumpMapIndex)
 	defer func() {
 		err := epiFD.Close()
@@ -2448,9 +2489,6 @@ func runTest(t *testing.T, tp testPolicy) {
 	}()
 
 	jumpMapIndex = tcdefs.ProgIndexDrop
-	if tp.ForIPv6() {
-		jumpMapIndex = tcdefs.ProgIndexV6Drop
-	}
 	dropFD := installDropProgram(jumpMap, jumpMapIndex)
 	defer func() {
 		err := dropFD.Close()
@@ -2561,6 +2599,17 @@ func setUpIPSets(ipSets map[string][]string, alloc *idalloc.IDAllocator, ipsMap 
 	}
 }
 
+func setUpIPSetsV6(ipSets map[string][]string, alloc *idalloc.IDAllocator, ipsMap maps.Map) {
+	for name, members := range ipSets {
+		id := alloc.GetOrAlloc(name)
+		for _, m := range members {
+			entry := ipsets.ProtoIPSetMemberToBPFEntryV6(id, m)
+			err := ipsMapV6.Update(entry.AsBytes(), ipsets.DummyValue)
+			Expect(err).NotTo(HaveOccurred())
+		}
+	}
+}
+
 func cleanIPSetMap() {
 	// Clean out any existing IP sets.  (The other maps have a fixed number of keys that
 	// we set as needed.)
@@ -2574,6 +2623,23 @@ func cleanIPSetMap() {
 	Expect(err).NotTo(HaveOccurred(), "failed to clean out map before test")
 	for _, k := range keys {
 		err = ipsMap.Delete(k)
+		Expect(err).NotTo(HaveOccurred(), "failed to clean out map before test")
+	}
+}
+
+func cleanIPSetMapV6() {
+	// Clean out any existing IP sets.  (The other maps have a fixed number of keys that
+	// we set as needed.)
+	var keys [][]byte
+	err := ipsMapV6.Iter(func(k, v []byte) maps.IteratorAction {
+		kCopy := make([]byte, len(k))
+		copy(kCopy, k)
+		keys = append(keys, kCopy)
+		return maps.IterNone
+	})
+	Expect(err).NotTo(HaveOccurred(), "failed to clean out map before test")
+	for _, k := range keys {
+		err = ipsMapV6.Delete(k)
 		Expect(err).NotTo(HaveOccurred(), "failed to clean out map before test")
 	}
 }
