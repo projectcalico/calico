@@ -165,8 +165,12 @@ skip_redir_ifindex:
 			goto cancel_fib;
 		}
 
-		struct bpf_fib_lookup fib_params = {
+		*fib_params(ctx) = (struct bpf_fib_lookup) {
+#ifdef IPVER6
+			.family = 10, /* AF_INET6 */
+#else
 			.family = 2, /* AF_INET */
+#endif
 			.tot_len = 0,
 			.ifindex = CALI_F_TO_HOST ? ctx->skb->ingress_ifindex : ctx->skb->ifindex,
 			.l4_protocol = state->ip_proto,
@@ -177,61 +181,78 @@ skip_redir_ifindex:
 		/* set the ipv4 here, otherwise the ipv4/6 unions do not get
 		 * zeroed properly
 		 */
-		fib_params.ipv4_src = state->ip_src;
-		fib_params.ipv4_dst = state->ip_dst;
 
-		CALI_DEBUG("FIB family=%d\n", fib_params.family);
-		CALI_DEBUG("FIB tot_len=%d\n", fib_params.tot_len);
-		CALI_DEBUG("FIB ifindex=%d\n", fib_params.ifindex);
-		CALI_DEBUG("FIB l4_protocol=%d\n", fib_params.l4_protocol);
-		CALI_DEBUG("FIB sport=%d\n", bpf_ntohs(fib_params.sport));
-		CALI_DEBUG("FIB dport=%d\n", bpf_ntohs(fib_params.dport));
-		CALI_DEBUG("FIB ipv4_src=%x\n", bpf_ntohl(fib_params.ipv4_src));
-		CALI_DEBUG("FIB ipv4_dst=%x\n", bpf_ntohl(fib_params.ipv4_dst));
+#ifdef IPVER6
+		ipv6_addr_t_to_be32_4_ip(fib_params(ctx)->ipv6_src, &state->ip_src);
+		ipv6_addr_t_to_be32_4_ip(fib_params(ctx)->ipv6_dst, &state->ip_dst);
+#else
+		fib_params(ctx)->ipv4_src = state->ip_src;
+		fib_params(ctx)->ipv4_dst = state->ip_dst;
+#endif
+
+		CALI_DEBUG("FIB family=%d\n", fib_params(ctx)->family);
+		CALI_DEBUG("FIB tot_len=%d\n", fib_params(ctx)->tot_len);
+		CALI_DEBUG("FIB ifindex=%d\n", fib_params(ctx)->ifindex);
+		CALI_DEBUG("FIB l4_protocol=%d\n", fib_params(ctx)->l4_protocol);
+		CALI_DEBUG("FIB sport=%d\n", bpf_ntohs(fib_params(ctx)->sport));
+		CALI_DEBUG("FIB dport=%d\n", bpf_ntohs(fib_params(ctx)->dport));
+#ifdef IPVER6
+#else
+		CALI_DEBUG("FIB ipv4_src=%x\n", bpf_ntohl(fib_params(ctx)->ipv4_src));
+		CALI_DEBUG("FIB ipv4_dst=%x\n", bpf_ntohl(fib_params(ctx)->ipv4_dst));
+#endif
 
 		CALI_DEBUG("Traffic is towards the host namespace, doing Linux FIB lookup\n");
-		rc = bpf_fib_lookup(ctx->skb, &fib_params, sizeof(fib_params), ctx->fwd.fib_flags);
+		rc = bpf_fib_lookup(ctx->skb, fib_params(ctx), sizeof(struct bpf_fib_lookup), ctx->fwd.fib_flags);
 		switch (rc) {
 		case 0:
 			CALI_DEBUG("FIB lookup succeeded - with neigh\n");
-			if (!fib_approve(ctx, fib_params.ifindex)) {
+			if (!fib_approve(ctx, fib_params(ctx)->ifindex)) {
 				reason = CALI_REASON_WEP_NOT_READY;
 				goto deny;
 			}
 
 			// Update the MACs.
 			struct ethhdr *eth_hdr = ctx->data_start;
-			__builtin_memcpy(&eth_hdr->h_source, fib_params.smac, sizeof(eth_hdr->h_source));
-			__builtin_memcpy(&eth_hdr->h_dest, fib_params.dmac, sizeof(eth_hdr->h_dest));
+			__builtin_memcpy(&eth_hdr->h_source, fib_params(ctx)->smac, sizeof(eth_hdr->h_source));
+			__builtin_memcpy(&eth_hdr->h_dest, fib_params(ctx)->dmac, sizeof(eth_hdr->h_dest));
 
 			// Redirect the packet.
-			CALI_DEBUG("Got Linux FIB hit, redirecting to iface %d.\n", fib_params.ifindex);
-			rc = bpf_redirect(fib_params.ifindex, 0);
+			CALI_DEBUG("Got Linux FIB hit, redirecting to iface %d.\n", fib_params(ctx)->ifindex);
+			rc = bpf_redirect(fib_params(ctx)->ifindex, 0);
 
 			break;
 
 #ifdef BPF_CORE_SUPPORTED
 		case BPF_FIB_LKUP_RET_NO_NEIGH:
 			if (bpf_core_enum_value_exists(enum bpf_func_id, BPF_FUNC_redirect_neigh)) {
-				CALI_DEBUG("FIB lookup succeeded - not neigh - gw %x\n", bpf_ntohl(fib_params.ipv4_dst));
+#ifdef IPVER6
+				CALI_DEBUG("FIB lookup succeeded - no neigh - gw\n");
+#else
+				CALI_DEBUG("FIB lookup succeeded - no neigh - gw %x\n", bpf_ntohl(fib_params(ctx)->ipv4_dst));
+#endif
 
-				if (!fib_approve(ctx, fib_params.ifindex)) {
+				if (!fib_approve(ctx, fib_params(ctx)->ifindex)) {
 					reason = CALI_REASON_WEP_NOT_READY;
 					goto deny;
 				}
 
 				struct bpf_redir_neigh nh_params = {};
 
-				nh_params.nh_family = fib_params.family;
-				nh_params.ipv4_nh = fib_params.ipv4_dst;
+				nh_params.nh_family = fib_params(ctx)->family;
+#ifdef IPVER6
+				__builtin_memcpy(nh_params.ipv6_nh, fib_params(ctx)->ipv6_dst, sizeof(nh_params.ipv6_nh));
+#else
+				nh_params.ipv4_nh = fib_params(ctx)->ipv4_dst;
+#endif
 
-				CALI_DEBUG("Got Linux FIB hit, redirecting to iface %d.\n", fib_params.ifindex);
-				rc = bpf_redirect_neigh(fib_params.ifindex, &nh_params, sizeof(nh_params), 0);
+				CALI_DEBUG("Got Linux FIB hit, redirecting to iface %d.\n", fib_params(ctx)->ifindex);
+				rc = bpf_redirect_neigh(fib_params(ctx)->ifindex, &nh_params, sizeof(nh_params), 0);
 				break;
 			} else {
 				/* fallthrough to handling error */
 			}
-#endif
+#endif /* BPF_CORE_SUPPORTED */
 
 		default:
 			if (rc < 0) {
@@ -247,7 +268,11 @@ skip_redir_ifindex:
 
 		/* now we know we will bypass IP stack and ip->ttl > 1, decrement it! */
 		if (rc == TC_ACT_REDIRECT) {
+#ifdef IPVER6
+			ip_hdr(ctx)->hop_limit--;
+#else
 			ip_dec_ttl(ip_hdr(ctx));
+#endif
 		}
 	}
 

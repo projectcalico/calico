@@ -32,9 +32,6 @@ static CALI_BPF_INLINE bool wep_rpf_check(struct cali_tc_ctx *ctx, struct cali_r
 
 static CALI_BPF_INLINE bool hep_rpf_check(struct cali_tc_ctx *ctx)
 {
-#ifdef IPVER6
-	return true;
-#else
 	bool ret = false;
 	bool strict;
 
@@ -45,7 +42,11 @@ static CALI_BPF_INLINE bool hep_rpf_check(struct cali_tc_ctx *ctx)
 
 	strict = GLOBAL_FLAGS & CALI_GLOBALS_RPF_OPTION_STRICT;
 	struct bpf_fib_lookup fib_params = {
+#ifdef IPVER6
+		.family = 10, /* AF_INET6 */
+#else
 		.family = 2, /* AF_INET */
+#endif
 		.tot_len = 0,
 		.ifindex = ctx->skb->ingress_ifindex,
 		.l4_protocol = ctx->state->ip_proto,
@@ -56,8 +57,13 @@ static CALI_BPF_INLINE bool hep_rpf_check(struct cali_tc_ctx *ctx)
 	/* set the ipv4 here, otherwise the ipv4/6 unions do not get
 	 * zeroed properly
 	 */
+#ifdef IPVER6
+	ipv6_addr_t_to_be32_4_ip(fib_params.ipv6_src, &ctx->state->ip_dst);
+	ipv6_addr_t_to_be32_4_ip(fib_params.ipv6_dst, &ctx->state->ip_src);
+#else
 	fib_params.ipv4_src = ctx->state->ip_dst;
 	fib_params.ipv4_dst = ctx->state->ip_src;
+#endif
 
 	int rc = bpf_fib_lookup(ctx->skb, &fib_params, sizeof(fib_params), 0);
 	switch(rc) {
@@ -65,20 +71,30 @@ static CALI_BPF_INLINE bool hep_rpf_check(struct cali_tc_ctx *ctx)
 		case BPF_FIB_LKUP_RET_NO_NEIGH:
 			if (strict) {
 				ret = ctx->skb->ingress_ifindex == fib_params.ifindex;
+#ifdef IPVER6
+				CALI_DEBUG("Host RPF check skb strict if %d\n", fib_params.ifindex);
+#else
 				CALI_DEBUG("Host RPF check src=%x skb strict if %d\n",
 						debug_ip(ctx->state->ip_src), fib_params.ifindex);
+#endif
 			} else {
 				ret = fib_params.ifindex != CT_INVALID_IFINDEX;
+#ifdef IPVER6
+				CALI_DEBUG("Host RPF check skb loose if %d\n", fib_params.ifindex);
+#else
 				CALI_DEBUG("Host RPF check src=%x skb loose if %d\n",
 						debug_ip(ctx->state->ip_src), fib_params.ifindex);
+#endif
 			}
 	}
 
+#ifdef IPVER6
+	CALI_DEBUG("Host RPF check skb iface=%d\n", ctx->skb->ifindex);
+#else
 	CALI_DEBUG("Host RPF check src=%x skb iface=%d\n",
 			debug_ip(ctx->state->ip_src), ctx->skb->ifindex);
-	CALI_DEBUG("Host RPF check rc %d result %d\n", rc, ret);
-
-	return ret;
 #endif
+	CALI_DEBUG("Host RPF check rc %d result %d\n", rc, ret);
+	return ret;
 }
 #endif /* __CALI_FIB_H__ */
