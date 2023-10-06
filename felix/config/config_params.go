@@ -365,6 +365,8 @@ type Config struct {
 	DebugSimulateDataplaneHangAfter time.Duration `config:"seconds;0"`
 	DebugPanicAfter                 time.Duration `config:"seconds;0"`
 	DebugSimulateDataRace           bool          `config:"bool;false"`
+	DebugHost                       string        `config:"host-address;localhost"`
+	DebugPort                       int           `config:"int(0,65535);"`
 
 	// Configure where Felix gets its routing information.
 	// - workloadIPs: use workload endpoints to construct routes.

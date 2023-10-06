@@ -569,9 +569,10 @@ func servePrometheusMetrics(configParams *config.Config) {
 				prometheus.Unregister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
 			}
 		}
-		http.Handle("/metrics", promhttp.Handler())
+		mux := http.NewServeMux()
+		mux.Handle("/metrics", promhttp.Handler())
 		err := http.ListenAndServe(fmt.Sprintf("[%v]:%v",
-			configParams.PrometheusMetricsHost, configParams.PrometheusMetricsPort), nil)
+			configParams.PrometheusMetricsHost, configParams.PrometheusMetricsPort), mux)
 		log.WithError(err).Error(
 			"Prometheus metrics endpoint failed, trying to restart it...")
 		time.Sleep(1 * time.Second)
