@@ -1271,6 +1271,16 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(v1.Duration)
 		**out = **in
 	}
+	if in.DebugHost != nil {
+		in, out := &in.DebugHost, &out.DebugHost
+		*out = new(string)
+		**out = **in
+	}
+	if in.DebugPort != nil {
+		in, out := &in.DebugPort, &out.DebugPort
+		*out = new(int)
+		**out = **in
+	}
 	if in.SidecarAccelerationEnabled != nil {
 		in, out := &in.SidecarAccelerationEnabled, &out.SidecarAccelerationEnabled
 		*out = new(bool)
