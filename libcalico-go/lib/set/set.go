@@ -88,9 +88,7 @@ func (set Typed[T]) Discard(item T) {
 }
 
 func (set Typed[T]) Clear() {
-	for item := range set {
-		delete(set, item)
-	}
+	clear(set)
 }
 
 func (set Typed[T]) Contains(item T) bool {

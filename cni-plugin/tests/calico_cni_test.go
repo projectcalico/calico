@@ -133,7 +133,7 @@ var _ = Describe("CalicoCni", func() {
 			}))
 
 			// Routes and interface on host - there's is nothing to assert on the routes since felix adds those.
-			hostVethName := "cali" + containerID[:utils.Min(11, len(containerID))] //"cali" + containerID
+			hostVethName := "cali" + containerID[:min(11, len(containerID))] // "cali" + containerID
 
 			hostVeth, err := netlink.LinkByName(hostVethName)
 			Expect(err).ToNot(HaveOccurred())
@@ -852,7 +852,7 @@ var _ = Describe("CalicoCni", func() {
 				defer hostNlHandle.Close()
 
 				// CNI plugin generates host side vEth name from containerID if used for "cni" orchestrator.
-				hostVethName := "cali" + containerID[:utils.Min(11, len(containerID))] //"cali" + containerID
+				hostVethName := "cali" + containerID[:min(11, len(containerID))] // "cali" + containerID
 				hostVeth, err := netlink.LinkByName(hostVethName)
 				Expect(err).ToNot(HaveOccurred())
 
