@@ -464,7 +464,7 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 
 			// Select the first 11 characters of the containerID for the host veth.
 			var hostVethName, contVethMac string
-			desiredVethName := "cali" + args.ContainerID[:utils.Min(11, len(args.ContainerID))]
+			desiredVethName := "cali" + args.ContainerID[:min(11, len(args.ContainerID))]
 			hostVethName, contVethMac, err = d.DoNetworking(
 				ctx, calicoClient, args, result, desiredVethName, utils.DefaultRoutes, endpoint, map[string]string{})
 			if err != nil {
