@@ -834,11 +834,3 @@ func (c *Container) BPFNATHasBackendForService(svcIP string, svcPort, proto int,
 
 	return true
 }
-
-func GetIPv4(c *Container) string {
-	return c.IP
-}
-
-func GetIPv6(c *Container) string {
-	return c.IPv6
-}

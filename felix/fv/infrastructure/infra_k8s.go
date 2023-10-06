@@ -75,7 +75,6 @@ type K8sDatastoreInfra struct {
 	ipv6                  bool
 	serviceClusterIPRange string
 	apiServerBindIP       string
-	containerGetIP        func(*containers.Container) string
 	ipMask                string
 }
 
@@ -284,7 +283,6 @@ func setupK8sDatastoreInfra(opts ...CreateOption) (*K8sDatastoreInfra, error) {
 	log.Info("Starting etcd")
 	kds := &K8sDatastoreInfra{
 		serviceClusterIPRange: "10.101.0.0/16",
-		containerGetIP:        containers.GetIPv4,
 		ipMask:                "/32",
 	}
 
@@ -923,6 +921,14 @@ func (kds *K8sDatastoreInfra) containerGetIPWithMask(c *containers.Container) st
 	return kds.containerGetIP(c) + kds.ipMask
 }
 
+func (kds *K8sDatastoreInfra) containerGetIP(c *containers.Container) string {
+	if kds.ipv6 {
+		return c.IPv6
+	}
+
+	return c.IP
+}
+
 var (
 	zeroGracePeriod   int64 = 0
 	DeleteImmediately       = metav1.DeleteOptions{
@@ -1152,7 +1158,6 @@ func K8sWithIPv6() CreateOption {
 	return func(ds DatastoreInfra) {
 		if kds, ok := ds.(*K8sDatastoreInfra); ok {
 			kds.ipv6 = true
-			kds.containerGetIP = containers.GetIPv6
 			kds.ipMask = "/128"
 		}
 	}
