@@ -245,7 +245,7 @@ message Policy {
   bool untracked = 3;
   bool pre_dnat = 4;
 
-  string selector_id = 6;
+  string original_selector = 6;
 }
 
 enum IPVersion {
