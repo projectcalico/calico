@@ -160,7 +160,7 @@ func (pr *PolicyResolver) Flush() {
 	}
 	pr.sortedTierData = pr.policySorter.Sorted()
 	pr.dirtyEndpoints.Iter(pr.sendEndpointUpdate)
-	pr.dirtyEndpoints = set.New[any]()
+	pr.dirtyEndpoints.Clear()
 }
 
 func (pr *PolicyResolver) sendEndpointUpdate(endpointID interface{}) error {
