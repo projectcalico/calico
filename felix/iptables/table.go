@@ -877,7 +877,7 @@ func (t *Table) readHashesAndRulesFrom(r io.ReadCloser) (hashes map[string][]str
 
 		// Special-case, if iptables-nft can't handle a ruleset then it writes an error
 		// but then returns an RC of 0.  Detect this case.
-		if nftErrorRegexp.Match(line) {
+		if bytes.HasPrefix(line, []byte("#")) && nftErrorRegexp.Match(line) {
 			logCxt.Error("iptables-save failed because there are incompatible nft rules in the table.  " +
 				"Remove the nft rules to continue.")
 			return nil, nil, errors.New(
@@ -886,33 +886,42 @@ func (t *Table) readHashesAndRulesFrom(r io.ReadCloser) (hashes map[string][]str
 
 		// Look for lines of the form ":chain-name - [0:0]", which are forward declarations
 		// for (possibly empty) chains.
-		captures := chainCreateRegexp.FindSubmatch(line)
-		if captures != nil {
-			// Chain forward-reference, make sure the chain exists.
-			chainName := string(captures[1])
-			if debug {
-				logCxt.WithField("chainName", chainName).Debug("Found forward-reference")
+		if bytes.HasPrefix(line, []byte(":")) {
+			captures := chainCreateRegexp.FindSubmatch(line)
+			if captures != nil {
+				// Chain forward-reference, make sure the chain exists.
+				chainName := string(captures[1])
+				if debug {
+					logCxt.WithField("chainName", chainName).Debug("Found forward-reference")
+				}
+				hashes[chainName] = []string{}
+				continue
 			}
-			hashes[chainName] = []string{}
-			continue
 		}
 
 		// Look for append lines, such as "-A chain-name -m foo --foo bar"; these are the
 		// actual rules.
-		captures = appendRegexp.FindSubmatch(line)
-		if captures == nil {
-			// Skip any non-append lines.
-			logCxt.Debug("Not an append, skipping")
+		var chainName string
+		if bytes.HasPrefix(line, []byte("-A ")) {
+			chainNameToEnd := line[3:]
+			chainNameEndIdx := bytes.Index(chainNameToEnd, []byte(" "))
+			if chainNameEndIdx == -1 {
+				chainName = string(chainNameToEnd)
+			} else {
+				chainName = string(chainNameToEnd[:chainNameEndIdx])
+			}
+		}
+		if chainName == "" {
+			// Skip non-append lines.
 			continue
 		}
-		chainName := string(captures[1])
 
 		// Look for one of our hashes on the rule.  We record a zero hash for unknown rules
 		// so that they get cleaned up.  Note: we're implicitly capturing the first match
 		// of the regex.  When writing the rules, we ensure that the hash is written as the
 		// first comment.
 		hash := ""
-		captures = t.hashCommentRegexp.FindSubmatch(line)
+		captures := t.hashCommentRegexp.FindSubmatch(line)
 		if captures != nil {
 			hash = string(captures[1])
 			if debug {
