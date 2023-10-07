@@ -43,6 +43,9 @@ tolerations:
 nodeSelector:
   kubernetes.io/os: linux
 
+# affinity for the tigera/operator pod.
+affinity: {}
+
 # Custom annotations for the tigera/operator pod.
 podAnnotations: {}
 
