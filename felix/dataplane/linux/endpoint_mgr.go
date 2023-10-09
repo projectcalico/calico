@@ -765,7 +765,6 @@ func (m *endpointManager) updateWorkloadEndpointChains(
 	adminUp bool,
 ) {
 	ingressGroups := m.groupPolicies("default", ingressPolicyNames)
-	log.WithField("groups", ingressGroups).WithField("pols", ingressPolicyNames).Info("Groups")
 	m.increfGroups(ingressGroups)
 	egressGroups := m.groupPolicies("default", egressPolicyNames)
 	m.increfGroups(egressGroups)
