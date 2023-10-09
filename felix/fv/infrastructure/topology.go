@@ -194,6 +194,12 @@ func StartNNodeTopology(n int, opts TopologyOptions, infra DatastoreInfra) (tc T
 	log.WithField("options", opts).Infof("Starting a %d-node topology", n)
 	success := false
 	var err error
+
+	if opts.EnableIPv6 && opts.IPIPEnabled && os.Getenv("FELIX_FV_ENABLE_BPF") == "true" {
+		log.Errorf("IPIP not supported in BPF with ipv6!")
+		return
+	}
+
 	startTime := time.Now()
 	defer func() {
 		if !success {
@@ -310,7 +316,11 @@ func StartNNodeTopology(n int, opts TopologyOptions, infra DatastoreInfra) (tc T
 		if opts.EnableIPv6 {
 			Expect(felix.IPv6).ToNot(BeEmpty(), "IPv6 enabled but Felix didn't get an IPv6 address, is docker configured for IPv6?")
 		}
+
 		expectedIPs := []string{felix.IP}
+		if felix.IPv6 != "" {
+			expectedIPs = append(expectedIPs, felix.IPv6)
+		}
 		if kdd, ok := infra.(*K8sDatastoreInfra); ok && opts.ExternalIPs {
 			kdd.SetExternalIP(felix, i)
 			expectedIPs = append(expectedIPs, felix.ExternalIP)
@@ -413,8 +423,8 @@ func StartNNodeTopology(n int, opts TopologyOptions, infra DatastoreInfra) (tc T
 					Expect(err).ToNot(HaveOccurred())
 				}
 				if opts.EnableIPv6 {
-					jBlockV6 := fmt.Sprintf("%x%x:%x%x:%x%x:%x%x:%x%x:100:%d:0/96", IPv6CIDR.IP[0], IPv6CIDR.IP[1], IPv6CIDR.IP[2], IPv6CIDR.IP[3], IPv6CIDR.IP[4], IPv6CIDR.IP[5], IPv6CIDR.IP[6], IPv6CIDR.IP[7], IPv6CIDR.IP[8], IPv6CIDR.IP[9], j)
-					if opts.VXLANMode == api.VXLANModeNever && !opts.IPIPRoutesEnabled {
+					jBlockV6 := fmt.Sprintf("%x%x:%x%x:%x%x:%x%x:%x%x:0:%d:0/112", IPv6CIDR.IP[0], IPv6CIDR.IP[1], IPv6CIDR.IP[2], IPv6CIDR.IP[3], IPv6CIDR.IP[4], IPv6CIDR.IP[5], IPv6CIDR.IP[6], IPv6CIDR.IP[7], IPv6CIDR.IP[8], IPv6CIDR.IP[9], j)
+					if opts.VXLANMode == api.VXLANModeNever {
 						// If VXLAN is enabled, Felix will program these routes itself.
 						// If IPIP routes are enabled, these routes will conflict with configured ones and a 'RTNETLINK answers: File exists' error would occur.
 						err := iFelix.ExecMayFail("ip", "-6", "route", "add", jBlockV6, "via", jFelix.IPv6, "dev", "eth0")

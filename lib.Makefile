@@ -1394,6 +1394,19 @@ help:
 # Common functions for building windows images.
 ###############################################################################
 
+# When running on semaphore, just copy the docker config, otherwise run
+# 'docker-credential-gcr configure-docker' as well.
+ifdef SEMAPHORE
+DOCKER_CREDENTIAL_CMD = cp /root/.docker/config.json_host /root/.docker/config.json
+else
+DOCKER_CREDENTIAL_CMD = cp /root/.docker/config.json_host /root/.docker/config.json && \
+						docker-credential-gcr configure-docker
+endif
+
+# This needs the $(WINDOWS_DIST)/bin/docker-credential-gcr binary in $PATH and
+# also the local ~/.config/gcloud dir to be able to push to gcr.io.  It mounts
+# $(DOCKER_CONFIG) and copies it so that it can be written to on the container,
+# but not have any effect on the host config.
 CRANE_BINDMOUNT_CMD := \
 	docker run --rm \
 		--net=host \
@@ -1401,9 +1414,11 @@ CRANE_BINDMOUNT_CMD := \
 		--entrypoint /bin/sh \
 		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 		-v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
-		-v $(DOCKER_CONFIG):/root/.docker/config.json \
+		-v $(DOCKER_CONFIG):/root/.docker/config.json_host:ro \
+		-e PATH=$${PATH}:/go/src/$(PACKAGE_NAME)/$(WINDOWS_DIST)/bin \
+		-v $(HOME)/.config/gcloud:/root/.config/gcloud \
 		-w /go/src/$(PACKAGE_NAME) \
-		$(CALICO_BUILD) -c $(double_quote)crane
+		$(CALICO_BUILD) -c $(double_quote)$(DOCKER_CREDENTIAL_CMD) && crane
 
 DOCKER_MANIFEST_CMD := docker manifest
 
@@ -1477,6 +1492,18 @@ setup-windows-builder: clean-windows-builder
 # - Finally we push the manifest, "purging" the local manifest.
 
 $(WINDOWS_DIST)/$(WINDOWS_IMAGE)-$(GIT_VERSION)-%.tar: windows-sub-image-$*
+
+DOCKER_CREDENTIAL_VERSION="2.1.18"
+DOCKER_CREDENTIAL_OS="linux"
+DOCKER_CREDENTIAL_ARCH="amd64"
+$(WINDOWS_DIST)/bin/docker-credential-gcr:
+	-mkdir -p $(WINDOWS_DIST)/bin
+	curl -fsSL "https://github.com/GoogleCloudPlatform/docker-credential-gcr/releases/download/v$(DOCKER_CREDENTIAL_VERSION)/docker-credential-gcr_$(DOCKER_CREDENTIAL_OS)_$(DOCKER_CREDENTIAL_ARCH)-$(DOCKER_CREDENTIAL_VERSION).tar.gz" \
+	| tar xz --to-stdout docker-credential-gcr \
+	| tee $(WINDOWS_DIST)/bin/docker-credential-gcr > /dev/null && chmod +x $(WINDOWS_DIST)/bin/docker-credential-gcr
+
+.PHONY: docker-credential-gcr-binary
+docker-credential-gcr-binary: var-require-all-WINDOWS_DIST-DOCKER_CREDENTIAL_VERSION-DOCKER_CREDENTIAL_OS-DOCKER_CREDENTIAL_ARCH $(WINDOWS_DIST)/bin/docker-credential-gcr
 
 # NOTE: WINDOWS_IMAGE_REQS must be defined with the requirements to build the windows
 # image. These must be added as reqs to 'image-windows' (originally defined in
