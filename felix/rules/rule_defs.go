@@ -126,6 +126,13 @@ const (
 	KubeProxyInsertRuleRegex = `-j KUBE-[a-zA-Z0-9-]*SERVICES|-j KUBE-FORWARD`
 )
 
+type PolicyDirection string
+
+const (
+	PolicyDirectionIngress PolicyDirection = "ingress"
+	PolicyDirectionEgress  PolicyDirection = "egress"
+)
+
 // Typedefs to prevent accidentally passing the wrong prefix to the Policy/ProfileChainName()
 type (
 	PolicyChainNamePrefix  string
