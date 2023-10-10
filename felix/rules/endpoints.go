@@ -18,7 +18,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"strconv"
-	"strings"
 
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/crypto/sha3"
@@ -315,55 +314,50 @@ func (r *DefaultRuleRenderer) endpointSetMarkChain(
 	}
 }
 func (r *DefaultRuleRenderer) PolicyGroupToIptablesChains(group *PolicyGroup) []*Chain {
-	var chains []*Chain
-	// FIXME we shouldn't need to generate both ingress and egress chains for every group.
-	for _, grpPrefix := range []string{PolicyGroupInboundPrefix, PolicyGroupOutboundPrefix} {
-		rules := make([]Rule, 0, len(group.PolicyNames)*2-1)
-		policyPrefix := PolicyInboundPfx
-		if grpPrefix == PolicyGroupOutboundPrefix {
-			policyPrefix = PolicyOutboundPfx
-		}
-		const returnStride = 5
-		for i, polName := range group.PolicyNames {
-			var chainToJumpTo string
-			chainToJumpTo = PolicyChainName(
-				policyPrefix,
-				&proto.PolicyID{Name: polName},
-			)
-
-			// If a previous policy didn't set the "pass" mark, jump to the policy.
-			var match MatchCriteria
-			if i%returnStride != 0 {
-				match = Match().MarkMatchesWithMask(0, r.IptablesMarkPass|r.IptablesMarkAccept)
-			}
-			rules = append(rules, Rule{
-				Match:  match,
-				Action: JumpAction{Target: chainToJumpTo},
-			})
-
-			if i == len(group.PolicyNames)-1 {
-				break // Return rule is not needed, we automatically return.
-			}
-
-			if i%returnStride == returnStride-1 {
-				// If policy makes a verdict (i.e. the pass or accept bit is
-				// non-zero) return to the parent chain.  We can't do this in
-				// the endpoint chain because there we need to fall through to
-				// later rules in the pass case.  We know that all the rules in
-				// one group are from the same "tier".
-				rules = append(rules, Rule{
-					Match:   Match().NotMarkMatchesWithMask(0, r.IptablesMarkPass|r.IptablesMarkAccept),
-					Action:  ReturnAction{},
-					Comment: []string{"Return on verdict"},
-				})
-			}
-		}
-		chains = append(chains, &Chain{
-			Name:  PolicyGroupChainName(policyPrefix, group),
-			Rules: rules,
-		})
+	rules := make([]Rule, 0, len(group.PolicyNames)*2-1)
+	polChainPrefix := PolicyInboundPfx
+	if group.Direction == PolicyDirectionEgress {
+		polChainPrefix = PolicyOutboundPfx
 	}
-	return chains
+	const returnStride = 5
+	for i, polName := range group.PolicyNames {
+		var chainToJumpTo string
+		chainToJumpTo = PolicyChainName(
+			polChainPrefix,
+			&proto.PolicyID{Name: polName},
+		)
+
+		// If a previous policy didn't set the "pass" mark, jump to the policy.
+		var match MatchCriteria
+		if i%returnStride != 0 {
+			match = Match().MarkMatchesWithMask(0, r.IptablesMarkPass|r.IptablesMarkAccept)
+		}
+		rules = append(rules, Rule{
+			Match:  match,
+			Action: JumpAction{Target: chainToJumpTo},
+		})
+
+		if i == len(group.PolicyNames)-1 {
+			break // Return rule is not needed, we automatically return.
+		}
+
+		if i%returnStride == returnStride-1 {
+			// If policy makes a verdict (i.e. the pass or accept bit is
+			// non-zero) return to the parent chain.  We can't do this in
+			// the endpoint chain because there we need to fall through to
+			// later rules in the pass case.  We know that all the rules in
+			// one group are from the same "tier".
+			rules = append(rules, Rule{
+				Match:   Match().NotMarkMatchesWithMask(0, r.IptablesMarkPass|r.IptablesMarkAccept),
+				Action:  ReturnAction{},
+				Comment: []string{"Return on verdict"},
+			})
+		}
+	}
+	return []*Chain{{
+		Name:  group.ChainName(),
+		Rules: rules,
+	}}
 }
 
 func (r *DefaultRuleRenderer) endpointIptablesChain(policyGroups []*PolicyGroup, profileIds []string, name string, policyPrefix PolicyChainNamePrefix, profilePrefix ProfileChainNamePrefix, endpointPrefix string, failsafeChain string, chainType endpointChainType, adminUp bool, allowAction Action, allowVXLANEncap bool, allowIPIPEncap bool) *Chain {
@@ -433,17 +427,15 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(policyGroups []*PolicyGroup,
 		// Then, jump to each policy in turn.
 		for _, polGroup := range policyGroups {
 			var chainToJumpTo string
-			if len(polGroup.PolicyNames) == 1 {
+			if polGroup.ShouldBeInlined() {
+				// Group is too small to have its own chain.
 				chainToJumpTo = PolicyChainName(
 					policyPrefix,
 					&proto.PolicyID{Name: polGroup.PolicyNames[0]},
 				)
 			} else {
-				// Got a group.
-				chainToJumpTo = PolicyGroupChainName(
-					policyPrefix, // FIXME feels wrong to pass in the policy chain prefix!
-					polGroup,
-				)
+				// Group needs its own chain.
+				chainToJumpTo = polGroup.ChainName()
 			}
 
 			// If a previous policy didn't set the "pass" mark, jump to the policy.
@@ -530,16 +522,6 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(policyGroups []*PolicyGroup,
 	}
 }
 
-func PolicyGroupChainName(prefix PolicyChainNamePrefix, group *PolicyGroup) string {
-	ourPrefix := ""
-	if strings.HasSuffix(string(prefix), "i-") {
-		ourPrefix = PolicyGroupInboundPrefix
-	} else {
-		ourPrefix = PolicyGroupOutboundPrefix
-	}
-	return ourPrefix + group.UniqueID()
-}
-
 func (r *DefaultRuleRenderer) appendConntrackRules(rules []Rule, allowAction Action) []Rule {
 	// Allow return packets for established connections.
 	if allowAction != (AcceptAction{}) {
@@ -580,8 +562,12 @@ func EndpointChainName(prefix string, ifaceName string) string {
 // MaxPolicyGroupUIDLength is sized for UIDs to fit into their chain names.
 const MaxPolicyGroupUIDLength = MaxChainNameLength - len(PolicyGroupInboundPrefix)
 
+// PolicyGroup represents a sequence of one or more policies extracted from
+// a list of policies.  If large enough it may be programmed into its own
+// chain.
 type PolicyGroup struct {
 	Tier        string
+	Direction   PolicyDirection
 	PolicyNames []string
 	Selector    string
 	cachedUID   string
@@ -605,10 +591,22 @@ func (g *PolicyGroup) UniqueID() string {
 	}
 	write(g.Tier)
 	write(g.Selector)
+	write(fmt.Sprint(g.Direction))
 	write(strconv.Itoa(len(g.PolicyNames)))
 	for _, name := range g.PolicyNames {
 		write(name)
 	}
 	hashBytes := hash.Sum(make([]byte, 0, hash.Size()))
 	return base64.RawURLEncoding.EncodeToString(hashBytes)[:MaxPolicyGroupUIDLength]
+}
+
+func (g *PolicyGroup) ChainName() string {
+	if g.Direction == PolicyDirectionIngress {
+		return PolicyGroupInboundPrefix + g.UniqueID()
+	}
+	return PolicyGroupOutboundPrefix + g.UniqueID()
+}
+
+func (g *PolicyGroup) ShouldBeInlined() bool {
+	return len(g.PolicyNames) <= 1
 }
