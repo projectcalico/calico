@@ -56,7 +56,7 @@ allow:
 #pragma clang diagnostic pop
 }
 
-SEC("classifier/tc/policy_allow")
+SEC("tc")
 int calico_tc_allow(struct __sk_buff *skb)
 {
 	struct cali_tc_ctx _ctx = {
@@ -93,7 +93,7 @@ deny:
 	return TC_ACT_SHOT;
 }
 
-SEC("classifier/tc/policy_deny")
+SEC("tc")
 int calico_tc_deny(struct __sk_buff *skb)
 {
 	struct cali_tc_ctx _ctx = {

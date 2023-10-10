@@ -17,6 +17,7 @@ package hook
 import (
 	"fmt"
 	"path"
+	"strings"
 	"sync"
 
 	log "github.com/sirupsen/logrus"
@@ -37,6 +38,8 @@ const (
 	SubProgTCIcmp
 	SubProgTCDrop
 	SubProgTCHostCtConflict
+	SubProgIcmpInnerNat
+	SubProgNewFlow
 	SubProgTCMainDebug
 
 	SubProgXDPMain    = SubProgTCMain
@@ -52,6 +55,8 @@ var tcSubProgNames = []string{
 	"calico_tc_skb_send_icmp_replies",
 	"calico_tc_skb_drop",
 	"calico_tc_host_ct_conflict",
+	"calico_tc_skb_icmp_inner_nat",
+	"calico_tc_skb_new_flow_entrypoint",
 }
 
 var xdpSubProgNames = []string{
@@ -139,14 +144,19 @@ func (pm *ProgramsMap) loadObj(at AttachType, file string) (Layout, error) {
 	}
 
 	for m, err := obj.FirstMap(); m != nil && err == nil; m, err = m.NextMap() {
+		mapName := m.Name()
+		if strings.HasPrefix(mapName, ".rodata") {
+			continue
+		}
+
 		if err := pm.setMapSize(m); err != nil {
-			return nil, fmt.Errorf("error setting map size %s : %w", m.Name(), err)
+			return nil, fmt.Errorf("error setting map size %s : %w", mapName, err)
 		}
-		if err := m.SetPinPath(path.Join(bpfdefs.GlobalPinDir, m.Name())); err != nil {
-			return nil, fmt.Errorf("error pinning map %s: %w", m.Name(), err)
+		if err := m.SetPinPath(path.Join(bpfdefs.GlobalPinDir, mapName)); err != nil {
+			return nil, fmt.Errorf("error pinning map %s: %w", mapName, err)
 		}
-		log.Debugf("map %s pinned to %s for generic object file %s",
-			m.Name(), path.Join(bpfdefs.GlobalPinDir, m.Name()), file)
+		log.Debugf("map %s k %d v %d pinned to %s for generic object file %s",
+			mapName, m.KeySize(), m.ValueSize(), path.Join(bpfdefs.GlobalPinDir, mapName), file)
 	}
 
 	if err := obj.Load(); err != nil {
@@ -167,10 +177,6 @@ func (pm *ProgramsMap) setMapSize(m *libbpf.Map) error {
 }
 
 func (pm *ProgramsMap) newLayout(at AttachType, obj *libbpf.Obj) (Layout, error) {
-	if at.Family == 6 {
-		return nil, fmt.Errorf("IPv6 is not supported")
-	}
-
 	mapName := pm.GetName()
 
 	l := make(Layout)

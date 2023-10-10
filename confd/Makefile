@@ -39,6 +39,9 @@ bin/confd: bin/confd-$(ARCH)
 ifeq ($(ARCH),amd64)
 	ln -f bin/confd-$(ARCH) bin/confd
 endif
+ifeq ($(ARCH),s390x)
+	ln -f bin/confd-$(ARCH) bin/confd
+endif
 
 ###############################################################################
 # Unit Tests
@@ -104,7 +107,7 @@ ut:
 
 
 bin/kubectl:
-	curl -sSf -L --retry 5 https://storage.googleapis.com/kubernetes-release/release/$(KUBECTL_VERSION)/bin/linux/$(ARCH)/kubectl -o $@
+	curl -sSf -L --retry 5 https://storage.googleapis.com/kubernetes-release/release/$(K8S_VERSION)/bin/linux/$(ARCH)/kubectl -o $@
 	chmod +x $@
 
 bin/bird bin/bird6:

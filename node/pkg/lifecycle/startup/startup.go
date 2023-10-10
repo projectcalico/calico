@@ -44,6 +44,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/selector"
 	"github.com/projectcalico/calico/libcalico-go/lib/upgrade/migrator"
 	"github.com/projectcalico/calico/libcalico-go/lib/upgrade/migrator/clients"
+	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 
 	"github.com/projectcalico/calico/node/pkg/calicoclient"
 	"github.com/projectcalico/calico/node/pkg/lifecycle/startup/autodetection"
@@ -129,7 +130,14 @@ func Run() {
 	}
 
 	// If running under kubernetes with secrets to call k8s API
-	if config, err := rest.InClusterConfig(); err == nil {
+	kubeconfig := os.Getenv("KUBECONFIG")
+	// Host env vars may override the container on Windows HPC, so $env:KUBECONFIG cannot
+	// be trusted in this case
+	// FIXME: this will no longer be needed when containerd v1.6 is EOL'd
+	if winutils.InHostProcessContainer() {
+		kubeconfig = ""
+	}
+	if config, err := winutils.BuildConfigFromFlags("", kubeconfig); err == nil {
 		// default timeout is 30 seconds, which isn't appropriate for this kind of
 		// startup action because network services, like kube-proxy might not be
 		// running and we don't want to block the full 30 seconds if they are just
@@ -329,7 +337,14 @@ func MonitorIPAddressSubnets() {
 	if nodeRef := os.Getenv("CALICO_K8S_NODE_REF"); nodeRef != "" {
 		k8sNodeName = nodeRef
 	}
-	if config, err = rest.InClusterConfig(); err == nil {
+	kubeconfig := os.Getenv("KUBECONFIG")
+	// Host env vars may override the container on Windows HPC, so $env:KUBECONFIG cannot
+	// be trusted in this case
+	// FIXME: this will no longer be needed when containerd v1.6 is EOL'd
+	if winutils.InHostProcessContainer() {
+		kubeconfig = ""
+	}
+	if config, err = winutils.BuildConfigFromFlags("", kubeconfig); err == nil {
 		// Create the k8s clientset.
 		clientset, err = kubernetes.NewForConfig(config)
 		if err != nil {
@@ -690,6 +705,11 @@ func evaluateENVBool(envVar string, defaultValue bool) bool {
 // in the environment, or is a no-op if not specified.
 // Returns true if the node object needs to be updated.
 func configureASNumber(node *libapi.Node) bool {
+	// If Calico is running in policy only mode we don't need to write BGP related
+	// details to the Node.
+	if os.Getenv("CALICO_NETWORKING_BACKEND") == "none" {
+		return false
+	}
 	// Extract the AS number from the environment
 	asStr := os.Getenv("AS")
 	if asStr != "" {

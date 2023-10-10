@@ -48,24 +48,24 @@ func describeConnCheckTests(protocol string) bool {
 		func(getInfra infrastructure.InfraFactory) {
 
 			var (
-				infra   infrastructure.DatastoreInfra
-				felixes []*infrastructure.Felix
-				hostW   [2]*workload.Workload
-				cc      *connectivity.Checker
+				infra infrastructure.DatastoreInfra
+				tc    infrastructure.TopologyContainers
+				hostW [2]*workload.Workload
+				cc    *connectivity.Checker
 			)
 
 			BeforeEach(func() {
 				infra = getInfra()
-				felixes, _ = infrastructure.StartNNodeTopology(2, infrastructure.DefaultTopologyOptions(), infra)
+				tc, _ = infrastructure.StartNNodeTopology(2, infrastructure.DefaultTopologyOptions(), infra)
 
 				// Create host-networked "workloads", one on each "host".
-				for ii := range felixes {
+				for ii := range tc.Felixes {
 					// Workload doesn't understand the extra connectivity types that test-connection tries.
 					wlProto := protocol
 					if strings.Contains(protocol, "-") {
 						wlProto = strings.Split(protocol, "-")[0]
 					}
-					hostW[ii] = workload.Run(felixes[ii], fmt.Sprintf("host%d", ii), "", felixes[ii].IP, "8055", wlProto)
+					hostW[ii] = workload.Run(tc.Felixes[ii], fmt.Sprintf("host%d", ii), "", tc.Felixes[ii].IP, "8055", wlProto)
 				}
 
 				cc = &connectivity.Checker{}
@@ -76,9 +76,7 @@ func describeConnCheckTests(protocol string) bool {
 				for _, wl := range hostW {
 					wl.Stop()
 				}
-				for _, felix := range felixes {
-					felix.Stop()
-				}
+				tc.Stop()
 
 				if CurrentGinkgoTestDescription().Failed {
 					infra.DumpErrorData()
@@ -87,9 +85,9 @@ func describeConnCheckTests(protocol string) bool {
 			})
 
 			It("should have host-to-host on right port only", func() {
-				cc.ExpectSome(felixes[0], hostW[1])
+				cc.ExpectSome(tc.Felixes[0], hostW[1])
 				if !strings.HasPrefix(protocol, "ip") {
-					cc.ExpectNone(felixes[0], hostW[1], 8066)
+					cc.ExpectNone(tc.Felixes[0], hostW[1], 8066)
 				}
 				cc.CheckConnectivity()
 			})
@@ -98,11 +96,11 @@ func describeConnCheckTests(protocol string) bool {
 				Describe("with tc configured to drop 5% of packets", func() {
 					BeforeEach(func() {
 						// Make sure we have connectivity before we start packet loss measurements.
-						cc.ExpectSome(felixes[0], hostW[1])
+						cc.ExpectSome(tc.Felixes[0], hostW[1])
 						cc.CheckConnectivity()
 						cc.ResetExpectations()
 
-						felixes[0].Exec("tc", "qdisc", "add", "dev", "eth0", "root", "netem", "loss", "5%")
+						tc.Felixes[0].Exec("tc", "qdisc", "add", "dev", "eth0", "root", "netem", "loss", "5%")
 					})
 
 					It("and a 1% threshold, should see packet loss", func() {
@@ -111,19 +109,19 @@ func describeConnCheckTests(protocol string) bool {
 							log.WithField("msg", msg).Info("Connectivity checker failed (as expected)")
 							failed = true
 						}
-						cc.ExpectLoss(felixes[0], hostW[1], 2*time.Second, 1, -1)
+						cc.ExpectLoss(tc.Felixes[0], hostW[1], 2*time.Second, 1, -1)
 						cc.CheckConnectivityPacketLoss()
 
 						Expect(failed).To(BeTrue(), "Expected the connection checker to detect packet loss")
 					})
 
 					It("and a 20% threshold, should tolerate packet loss", func() {
-						cc.ExpectLoss(felixes[0], hostW[1], 2*time.Second, 20, -1)
+						cc.ExpectLoss(tc.Felixes[0], hostW[1], 2*time.Second, 20, -1)
 						cc.CheckConnectivityPacketLoss()
 					})
 
 					It("with tcpdump", func() {
-						tcpdF := felixes[0].AttachTCPDump("eth0")
+						tcpdF := tc.Felixes[0].AttachTCPDump("eth0")
 						tcpdF.SetLogEnabled(true)
 						tcpdF.AddMatcher("UDP", regexp.MustCompile(`.*UDP.*`))
 						tcpdF.Start()
@@ -133,7 +131,7 @@ func describeConnCheckTests(protocol string) bool {
 						tcpdW.AddMatcher("UDP", regexp.MustCompile(`.*UDP.*`))
 						tcpdW.Start()
 
-						cc.ExpectLoss(felixes[0], hostW[1], 2*time.Second, 20, -1)
+						cc.ExpectLoss(tc.Felixes[0], hostW[1], 2*time.Second, 20, -1)
 						cc.CheckConnectivityPacketLoss()
 						Eventually(func() int { return tcpdF.MatchCount("UDP") }).Should(BeNumerically(">", 0))
 						Eventually(func() int { return tcpdW.MatchCount("UDP") }).Should(BeNumerically(">", 0))
@@ -150,7 +148,7 @@ var _ = infrastructure.DatastoreDescribe("Container self tests",
 
 		var (
 			infra   infrastructure.DatastoreInfra
-			felixes []*infrastructure.Felix
+			tc      infrastructure.TopologyContainers
 			options infrastructure.TopologyOptions
 		)
 
@@ -160,13 +158,11 @@ var _ = infrastructure.DatastoreDescribe("Container self tests",
 
 		JustBeforeEach(func() {
 			infra = getInfra()
-			felixes, _ = infrastructure.StartNNodeTopology(1, options, infra)
+			tc, _ = infrastructure.StartNNodeTopology(1, options, infra)
 		})
 
 		AfterEach(func() {
-			for _, felix := range felixes {
-				felix.Stop()
-			}
+			tc.Stop()
 			if CurrentGinkgoTestDescription().Failed {
 				infra.DumpErrorData()
 			}
@@ -174,8 +170,8 @@ var _ = infrastructure.DatastoreDescribe("Container self tests",
 		})
 
 		It("should only report that existing files actually exist", func() {
-			Expect(felixes[0].FileExists("/usr/local/bin/calico-felix")).To(BeTrue())
-			Expect(felixes[0].FileExists("/garbage")).To(BeFalse())
+			Expect(tc.Felixes[0].FileExists("/usr/local/bin/calico-felix")).To(BeTrue())
+			Expect(tc.Felixes[0].FileExists("/garbage")).To(BeFalse())
 		})
 
 		Describe("with DebugPanicAfter set to 2s", func() {
@@ -184,12 +180,12 @@ var _ = infrastructure.DatastoreDescribe("Container self tests",
 			})
 
 			It("should panic and drop a core file", func() {
-				felixes[0].WaitNotRunning(5 * time.Second)
+				tc.Felixes[0].WaitNotRunning(5 * time.Second)
 				dir, err := os.ReadDir("/tmp")
 				Expect(err).NotTo(HaveOccurred())
 				name := ""
 				for _, f := range dir {
-					if strings.Contains(f.Name(), "core_"+felixes[0].Hostname) {
+					if strings.Contains(f.Name(), "core_"+tc.Felixes[0].Hostname) {
 						name = f.Name()
 					}
 				}
@@ -207,11 +203,11 @@ var _ = infrastructure.DatastoreDescribe("Container self tests",
 
 			if os.Getenv("FV_RACE_DETECTOR_ENABLED") == "true" {
 				It("should detect a race", func() {
-					Eventually(felixes[0].DataRaces).ShouldNot(BeEmpty())
+					Eventually(tc.Felixes[0].DataRaces).ShouldNot(BeEmpty())
 				})
 			} else {
 				It("should not detect a race because race detector is disabled", func() {
-					Consistently(felixes[0].DataRaces).Should(BeEmpty())
+					Consistently(tc.Felixes[0].DataRaces).Should(BeEmpty())
 				})
 			}
 		})

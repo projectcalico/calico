@@ -71,6 +71,11 @@ type K8sDatastoreInfra struct {
 	needsCleanup bool
 
 	runningTest string
+
+	ipv6                  bool
+	serviceClusterIPRange string
+	apiServerBindIP       string
+	ipMask                string
 }
 
 var (
@@ -94,7 +99,14 @@ var (
 		Transport: insecureTransport,
 	}
 
-	K8sInfra *K8sDatastoreInfra
+	// Currently only require a single instance.
+	K8sInfra [1]*K8sDatastoreInfra
+)
+
+type K8sInfraIndex int
+
+const (
+	K8SInfraLocalCluster K8sInfraIndex = 0
 )
 
 func TearDownK8sInfra(kds *K8sDatastoreInfra) {
@@ -136,32 +148,48 @@ func TearDownK8sInfra(kds *K8sDatastoreInfra) {
 	log.Info("TearDownK8sInfra done")
 }
 
-func createK8sDatastoreInfra() DatastoreInfra {
-	infra, err := GetK8sDatastoreInfra()
+func createK8sDatastoreInfra(opts ...CreateOption) DatastoreInfra {
+	infra, err := GetK8sDatastoreInfra(K8SInfraLocalCluster, opts...)
 	Expect(err).NotTo(HaveOccurred())
 	return infra
 }
 
-func GetK8sDatastoreInfra() (*K8sDatastoreInfra, error) {
-	if K8sInfra != nil {
-		if K8sInfra.runningTest != "" {
-			ginkgo.Fail(fmt.Sprintf("Previous test didn't clean up the infra: %s", K8sInfra.runningTest))
+func GetK8sDatastoreInfra(index K8sInfraIndex, opts ...CreateOption) (*K8sDatastoreInfra, error) {
+	var temp K8sDatastoreInfra
+
+	for _, o := range opts {
+		o(&temp)
+	}
+
+	kds := K8sInfra[index]
+
+	if kds != nil {
+		if kds.runningTest != "" {
+			ginkgo.Fail(fmt.Sprintf("Previous test didn't clean up the infra: %s", K8sInfra[index].runningTest))
 		}
-		K8sInfra.EnsureReady()
-		K8sInfra.PerTestSetup()
-		return K8sInfra, nil
+
+		resetAll := temp.ipv6 != kds.ipv6
+
+		if !resetAll {
+			kds.EnsureReady()
+			kds.PerTestSetup(index)
+			return kds, nil
+		}
+
+		TearDownK8sInfra(kds)
+		K8sInfra[index] = nil
 	}
 
 	var err error
-	K8sInfra, err = setupK8sDatastoreInfra()
+	K8sInfra[index], err = setupK8sDatastoreInfra(opts...)
 	if err == nil {
-		K8sInfra.PerTestSetup()
+		K8sInfra[index].PerTestSetup(index)
 	}
 
-	return K8sInfra, err
+	return K8sInfra[index], err
 }
 
-func (kds *K8sDatastoreInfra) PerTestSetup() {
+func (kds *K8sDatastoreInfra) PerTestSetup(index K8sInfraIndex) {
 	// In BPF mode, start BPF logging.
 	arch := utils.GetSysArch()
 
@@ -173,22 +201,18 @@ func (kds *K8sDatastoreInfra) PerTestSetup() {
 			}, "--privileged",
 			"calico/bpftool:v5.3-"+arch, "/bpftool", "prog", "tracelog")
 	}
-	K8sInfra.runningTest = ginkgo.CurrentGinkgoTestDescription().FullTestText
+	K8sInfra[index].runningTest = ginkgo.CurrentGinkgoTestDescription().FullTestText
 }
 
-func runK8sApiserver(etcdIp string) *containers.Container {
-	return containers.Run("apiserver",
-		containers.RunOpts{
-			AutoRemove: true,
-			StopSignal: "SIGKILL",
-		},
-		"-v", os.Getenv("CERTS_PATH")+":/home/user/certs", // Mount in location of certificates.
+func (kds *K8sDatastoreInfra) runK8sApiserver() {
+	args := []string{
+		"-v", os.Getenv("CERTS_PATH") + ":/home/user/certs", // Mount in location of certificates.
 		utils.Config.K8sImage,
 		"kube-apiserver",
 		"--v=0",
-		"--service-cluster-ip-range=10.101.0.0/16",
+		"--service-cluster-ip-range=" + kds.serviceClusterIPRange,
 		"--authorization-mode=RBAC",
-		fmt.Sprintf("--etcd-servers=http://%s:2379", etcdIp),
+		fmt.Sprintf("--etcd-servers=http://%s:2379", kds.containerGetIPForURL(kds.etcdContainer)),
 		"--service-account-key-file=/home/user/certs/service-account.pem",
 		"--service-account-signing-key-file=/home/user/certs/service-account-key.pem",
 		"--service-account-issuer=https://localhost:443",
@@ -199,19 +223,29 @@ func runK8sApiserver(etcdIp string) *containers.Container {
 		"--enable-priority-and-fairness=false",
 		"--max-mutating-requests-inflight=0",
 		"--max-requests-inflight=0",
-	)
-}
+	}
 
-func runK8sControllerManager(apiserverIp string) *containers.Container {
-	c := containers.Run("controller-manager",
+	if kds.apiServerBindIP != "" {
+		args = append(args, "--bind-address="+kds.apiServerBindIP)
+	}
+
+	apiserver := containers.Run("apiserver",
 		containers.RunOpts{
 			AutoRemove: true,
 			StopSignal: "SIGKILL",
 		},
-		"-v", os.Getenv("CERTS_PATH")+"/:/home/user/certs", // Mount in location of certificates.
+		args...,
+	)
+
+	kds.k8sApiContainer = apiserver
+}
+
+func (kds *K8sDatastoreInfra) runK8sControllerManager() {
+	args := []string{
+		"-v", os.Getenv("CERTS_PATH") + "/:/home/user/certs", // Mount in location of certificates.
 		utils.Config.K8sImage,
 		"kube-controller-manager",
-		fmt.Sprintf("--master=https://%v:6443", apiserverIp),
+		fmt.Sprintf("--master=https://%v:6443", kds.containerGetIPForURL(kds.k8sApiContainer)),
 		"--kubeconfig=/home/user/certs/kube-controller-manager.kubeconfig",
 		// We run trivially small clusters, so increase the QPS to get the
 		// cluster to start up as fast as possible.
@@ -226,15 +260,35 @@ func runK8sControllerManager(apiserverIp string) *containers.Container {
 		"--service-account-private-key-file=/home/user/certs/service-account-key.pem",
 		"--root-ca-file=/home/user/certs/ca.pem",
 		"--concurrent-gc-syncs=50",
+	}
+
+	if kds.serviceClusterIPRange != "" {
+		args = append(args, "--service-cluster-ip-range="+kds.serviceClusterIPRange)
+	}
+
+	c := containers.Run("controller-manager",
+		containers.RunOpts{
+			AutoRemove: true,
+			StopSignal: "SIGKILL",
+		},
+		args...,
 	)
-	return c
+
+	kds.k8sControllerManager = c
 }
 
-func setupK8sDatastoreInfra() (*K8sDatastoreInfra, error) {
+func setupK8sDatastoreInfra(opts ...CreateOption) (*K8sDatastoreInfra, error) {
 	log.Info("Starting Kubernetes infrastructure")
 
 	log.Info("Starting etcd")
-	kds := &K8sDatastoreInfra{}
+	kds := &K8sDatastoreInfra{
+		serviceClusterIPRange: "10.101.0.0/16",
+		ipMask:                "/32",
+	}
+
+	for _, o := range opts {
+		o(kds)
+	}
 
 	// Start etcd, which will back the k8s API server.
 	kds.etcdContainer = RunEtcd()
@@ -254,7 +308,7 @@ func setupK8sDatastoreInfra() (*K8sDatastoreInfra, error) {
 	// ClusterRoleBinding that gives the "system:anonymous" user unlimited power (aka the
 	// "cluster-admin" role).
 	log.Info("Starting API server")
-	kds.k8sApiContainer = runK8sApiserver(kds.etcdContainer.IP)
+	kds.runK8sApiserver()
 
 	if kds.k8sApiContainer == nil {
 		TearDownK8sInfra(kds)
@@ -268,7 +322,7 @@ func setupK8sDatastoreInfra() (*K8sDatastoreInfra, error) {
 		var err error
 		kds.K8sClient, err = kubernetes.NewForConfig(&rest.Config{
 			Transport: insecureTransport,
-			Host:      "https://" + kds.k8sApiContainer.IP + ":6443",
+			Host:      "https://" + kds.containerGetIPForURL(kds.k8sApiContainer) + ":6443",
 			QPS:       100,
 			Burst:     100,
 		})
@@ -294,7 +348,7 @@ func setupK8sDatastoreInfra() (*K8sDatastoreInfra, error) {
 			"--insecure-skip-tls-verify=true",
 			"--client-key=/home/user/certs/admin-key.pem",
 			"--client-certificate=/home/user/certs/admin.pem",
-			fmt.Sprintf("--server=https://%s:6443", kds.k8sApiContainer.IP),
+			fmt.Sprintf("--server=https://%s:6443", kds.containerGetIPForURL(kds.k8sApiContainer)),
 			"--clusterrole=cluster-admin",
 			"--user=system:anonymous",
 		)
@@ -331,7 +385,7 @@ func setupK8sDatastoreInfra() (*K8sDatastoreInfra, error) {
 	log.Info("List namespaces successfully.")
 
 	log.Info("Starting controller manager.")
-	kds.k8sControllerManager = runK8sControllerManager(kds.k8sApiContainer.IP)
+	kds.runK8sControllerManager()
 	if kds.k8sApiContainer == nil {
 		TearDownK8sInfra(kds)
 		return nil, errors.New("failed to create k8s controller manager container")
@@ -352,9 +406,9 @@ func setupK8sDatastoreInfra() (*K8sDatastoreInfra, error) {
 		return nil, err
 	}
 
-	kds.EndpointIP = kds.k8sApiContainer.IP
-	kds.Endpoint = fmt.Sprintf("https://%s:6443", kds.k8sApiContainer.IP)
-	kds.BadEndpoint = fmt.Sprintf("https://%s:1234", kds.k8sApiContainer.IP)
+	kds.EndpointIP = kds.containerGetIP(kds.k8sApiContainer)
+	kds.Endpoint = fmt.Sprintf("https://%s:6443", kds.containerGetIPForURL(kds.k8sApiContainer))
+	kds.BadEndpoint = fmt.Sprintf("https://%s:1234", kds.containerGetIPForURL(kds.k8sApiContainer))
 
 	start = time.Now()
 	for {
@@ -494,7 +548,7 @@ type cleanupFunc func(clientset *kubernetes.Clientset, calicoClient client.Inter
 func (kds *K8sDatastoreInfra) CleanUp() {
 	log.Info("Cleaning up kubernetes datastore")
 	startTime := time.Now()
-	for _, f := range []cleanupFunc{
+	cleanupFuncs := []cleanupFunc{
 		cleanupAllPods,
 		cleanupAllNodes,
 		cleanupAllNamespaces,
@@ -505,9 +559,12 @@ func (kds *K8sDatastoreInfra) CleanUp() {
 		cleanupAllHostEndpoints,
 		cleanupAllFelixConfigurations,
 		cleanupAllServices,
-	} {
+	}
+
+	for _, f := range cleanupFuncs {
 		f(kds.K8sClient, kds.calicoClient)
 	}
+
 	kds.needsCleanup = false
 	log.WithField("time", time.Since(startTime)).Info("Cleaned up kubernetes datastore")
 }
@@ -569,35 +626,43 @@ func (kds *K8sDatastoreInfra) GetClusterGUID() string {
 	return ci.Spec.ClusterGUID
 }
 
-func (kds *K8sDatastoreInfra) SetExpectedIPIPTunnelAddr(felix *Felix, idx int, needBGP bool) {
-	felix.ExpectedIPIPTunnelAddr = fmt.Sprintf("10.65.%d.1", idx)
+func (kds *K8sDatastoreInfra) SetExpectedIPIPTunnelAddr(felix *Felix, cidr *net.IPNet, idx int, needBGP bool) {
+	felix.ExpectedIPIPTunnelAddr = fmt.Sprintf("%d.%d.%d.1", cidr.IP[0], cidr.IP[1], idx)
 	felix.ExtraSourceIPs = append(felix.ExtraSourceIPs, felix.ExpectedIPIPTunnelAddr)
 }
 
-func (kds *K8sDatastoreInfra) SetExpectedVXLANTunnelAddr(felix *Felix, idx int, needBGP bool) {
-	felix.ExpectedVXLANTunnelAddr = fmt.Sprintf("10.65.%d.0", idx)
+func (kds *K8sDatastoreInfra) SetExpectedVXLANTunnelAddr(felix *Felix, cidr *net.IPNet, idx int, needBGP bool) {
+	felix.ExpectedVXLANTunnelAddr = fmt.Sprintf("%d.%d.%d.0", cidr.IP[0], cidr.IP[1], idx)
 	felix.ExtraSourceIPs = append(felix.ExtraSourceIPs, felix.ExpectedVXLANTunnelAddr)
 }
 
-func (kds *K8sDatastoreInfra) SetExpectedVXLANV6TunnelAddr(felix *Felix, idx int, needBGP bool) {
-	felix.ExpectedVXLANV6TunnelAddr = fmt.Sprintf("dead:beef::%d:0", idx)
+func (kds *K8sDatastoreInfra) SetExpectedVXLANV6TunnelAddr(felix *Felix, cidr *net.IPNet, idx int, needBGP bool) {
+	felix.ExpectedVXLANV6TunnelAddr = net.ParseIP(fmt.Sprintf("%x%x:%x%x:%x%x:%x%x:%x%x:%x%x:%d:0",
+		cidr.IP[0], cidr.IP[1], cidr.IP[2], cidr.IP[3], cidr.IP[4], cidr.IP[5], cidr.IP[6],
+		cidr.IP[7], cidr.IP[8], cidr.IP[9], cidr.IP[10], cidr.IP[11], idx)).String()
 	felix.ExtraSourceIPs = append(felix.ExtraSourceIPs, felix.ExpectedVXLANV6TunnelAddr)
 }
 
-func (kds *K8sDatastoreInfra) SetExpectedWireguardTunnelAddr(felix *Felix, idx int, needWg bool) {
+func (kds *K8sDatastoreInfra) SetExpectedWireguardTunnelAddr(felix *Felix, cidr *net.IPNet, idx int, needWg bool) {
 	// Set to be the same as IPIP tunnel address.
-	felix.ExpectedWireguardTunnelAddr = fmt.Sprintf("10.65.%d.1", idx)
+	felix.ExpectedWireguardTunnelAddr = fmt.Sprintf("%d.%d.%d.1", cidr.IP[0], cidr.IP[1], idx)
 	felix.ExtraSourceIPs = append(felix.ExtraSourceIPs, felix.ExpectedWireguardTunnelAddr)
 }
 
-func (kds *K8sDatastoreInfra) SetExpectedWireguardV6TunnelAddr(felix *Felix, idx int, needWg bool) {
+func (kds *K8sDatastoreInfra) SetExpectedWireguardV6TunnelAddr(felix *Felix, cidr *net.IPNet, idx int, needWg bool) {
 	// Set to be the same as IPIP tunnel address.
-	felix.ExpectedWireguardV6TunnelAddr = fmt.Sprintf("dead:beef::%d:0", idx)
+	felix.ExpectedWireguardV6TunnelAddr = net.ParseIP(fmt.Sprintf("%x%x:%x%x:%x%x:%x%x:%x%x:%x%x:%d:0",
+		cidr.IP[0], cidr.IP[1], cidr.IP[2], cidr.IP[3], cidr.IP[4], cidr.IP[5], cidr.IP[6],
+		cidr.IP[7], cidr.IP[8], cidr.IP[9], cidr.IP[10], cidr.IP[11], idx)).String()
 	felix.ExtraSourceIPs = append(felix.ExtraSourceIPs, felix.ExpectedWireguardV6TunnelAddr)
 }
 
 func (kds *K8sDatastoreInfra) SetExternalIP(felix *Felix, idx int) {
-	felix.ExternalIP = fmt.Sprintf("111.222.%d.1", idx)
+	if felix.TopologyOptions.EnableIPv6 {
+		felix.ExternalIP = fmt.Sprintf("111:222::%d:1", idx)
+	} else {
+		felix.ExternalIP = fmt.Sprintf("111.222.%d.1", idx)
+	}
 	felix.ExtraSourceIPs = append(felix.ExtraSourceIPs, felix.ExternalIP)
 }
 
@@ -613,7 +678,7 @@ func (kds *K8sDatastoreInfra) RemoveNodeAddresses(felix *Felix) {
 	}
 }
 
-func (kds *K8sDatastoreInfra) AddNode(felix *Felix, idx int, needBGP bool) {
+func (kds *K8sDatastoreInfra) AddNode(felix *Felix, v4CIDR *net.IPNet, v6CIDR *net.IPNet, idx int, needBGP bool) {
 	nodeIn := &v1.Node{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: felix.Hostname,
@@ -621,7 +686,7 @@ func (kds *K8sDatastoreInfra) AddNode(felix *Felix, idx int, needBGP bool) {
 				"projectcalico.org/IPv4Address": fmt.Sprintf("%s/%s", felix.IP, felix.IPPrefix),
 			},
 		},
-		Spec: v1.NodeSpec{PodCIDRs: []string{fmt.Sprintf("10.65.%d.0/24", idx)}},
+		Spec: v1.NodeSpec{PodCIDRs: []string{fmt.Sprintf("%d.%d.%d.0/24", v4CIDR.IP[0], v4CIDR.IP[1], idx)}},
 		Status: v1.NodeStatus{
 			Addresses: []v1.NodeAddress{{
 				Address: felix.IP,
@@ -631,7 +696,7 @@ func (kds *K8sDatastoreInfra) AddNode(felix *Felix, idx int, needBGP bool) {
 	}
 	if len(felix.IPv6) > 0 {
 		nodeIn.ObjectMeta.Annotations["projectcalico.org/IPv6Address"] = fmt.Sprintf("%s/%s", felix.IPv6, felix.IPv6Prefix)
-		nodeIn.Spec.PodCIDRs = append(nodeIn.Spec.PodCIDRs, fmt.Sprintf("dead:beef::%d:0/96", idx))
+		nodeIn.Spec.PodCIDRs = append(nodeIn.Spec.PodCIDRs, fmt.Sprintf("%x%x:%x%x:%x%x:%x%x:%x%x:%x%x:%d:0/96", v6CIDR.IP[0], v6CIDR.IP[1], v6CIDR.IP[2], v6CIDR.IP[3], v6CIDR.IP[4], v6CIDR.IP[5], v6CIDR.IP[6], v6CIDR.IP[7], v6CIDR.IP[8], v6CIDR.IP[9], v6CIDR.IP[10], v6CIDR.IP[11], idx))
 		nodeIn.Status.Addresses = append(nodeIn.Status.Addresses, v1.NodeAddress{
 			Address: felix.IPv6,
 			Type:    v1.NodeInternalIP,
@@ -655,6 +720,9 @@ func (kds *K8sDatastoreInfra) AddNode(felix *Felix, idx int, needBGP bool) {
 	}
 	if felix.ExpectedWireguardTunnelAddr != "" {
 		nodeIn.Annotations["projectcalico.org/IPv4WireguardInterfaceAddr"] = felix.ExpectedWireguardTunnelAddr
+	}
+	if felix.ExpectedWireguardV6TunnelAddr != "" {
+		nodeIn.Annotations["projectcalico.org/IPv6WireguardInterfaceAddr"] = felix.ExpectedWireguardV6TunnelAddr
 	}
 	log.WithField("nodeIn", nodeIn).Debug("Node defined")
 	nodeOut, err := kds.K8sClient.CoreV1().Nodes().Create(context.Background(), nodeIn, metav1.CreateOptions{})
@@ -766,7 +834,7 @@ func (kds *K8sDatastoreInfra) AddAllowToDatastore(selector string) error {
 	policy.Spec.Egress = []api.Rule{{
 		Action: api.Allow,
 		Destination: api.EntityRule{
-			Nets: []string{kds.k8sApiContainer.IP + "/32"},
+			Nets: []string{kds.containerGetIPWithMask(kds.k8sApiContainer)},
 		},
 	}}
 	_, err := kds.calicoClient.GlobalNetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
@@ -839,6 +907,26 @@ func (kds *K8sDatastoreInfra) DumpErrorData() {
 			log.Info(spew.Sdump(hep))
 		}
 	}
+}
+
+func (kds *K8sDatastoreInfra) containerGetIPForURL(c *containers.Container) string {
+	if kds.ipv6 {
+		return "[" + kds.containerGetIP(c) + "]"
+	}
+
+	return kds.containerGetIP(c)
+}
+
+func (kds *K8sDatastoreInfra) containerGetIPWithMask(c *containers.Container) string {
+	return kds.containerGetIP(c) + kds.ipMask
+}
+
+func (kds *K8sDatastoreInfra) containerGetIP(c *containers.Container) string {
+	if kds.ipv6 {
+		return c.IPv6
+	}
+
+	return c.IP
 }
 
 var (
@@ -1048,4 +1136,29 @@ func cleanupAllServices(clientset *kubernetes.Clientset, calicoClient client.Int
 		}
 	}
 	log.Info("Cleaned up services")
+}
+
+func K8sWithServiceClusterIPRange(cidr string) CreateOption {
+	return func(ds DatastoreInfra) {
+		if kds, ok := ds.(*K8sDatastoreInfra); ok {
+			kds.serviceClusterIPRange = cidr
+		}
+	}
+}
+
+func K8sWithAPIServerBindAddress(ip string) CreateOption {
+	return func(ds DatastoreInfra) {
+		if kds, ok := ds.(*K8sDatastoreInfra); ok {
+			kds.apiServerBindIP = ip
+		}
+	}
+}
+
+func K8sWithIPv6() CreateOption {
+	return func(ds DatastoreInfra) {
+		if kds, ok := ds.(*K8sDatastoreInfra); ok {
+			kds.ipv6 = true
+			kds.ipMask = "/128"
+		}
+	}
 }

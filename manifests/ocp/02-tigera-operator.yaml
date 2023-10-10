@@ -24,6 +24,9 @@ spec:
         - effect: NoSchedule
           operator: Exists
       serviceAccountName: tigera-operator
+      # Set the termination grace period to match how long the operator will wait for
+      # resources to terminate when being uninstalled.
+      terminationGracePeriodSeconds: 60
       hostNetwork: true
       # This must be set when hostNetwork is true or else the cluster services won't resolve
       dnsPolicy: ClusterFirstWithHostNet

@@ -15,6 +15,7 @@ package calc
 
 import (
 	"fmt"
+	"strings"
 
 	log "github.com/sirupsen/logrus"
 
@@ -73,9 +74,9 @@ type RuleScanner struct {
 	ipSetsByUID map[string]*IPSetData
 	// rulesIDToUIDs maps from policy/profile ID to the set of IP set UIDs that are
 	// referenced by that policy/profile.
-	rulesIDToUIDs multidict.IfaceToString
+	rulesIDToUIDs multidict.Multidict[any, string]
 	// uidsToRulesIDs maps from IP set UID to the set of policy/profile IDs that use it.
-	uidsToRulesIDs multidict.StringToIface
+	uidsToRulesIDs multidict.Multidict[string, any]
 
 	OnIPSetActive   func(ipSet *IPSetData)
 	OnIPSetInactive func(ipSet *IPSetData)
@@ -102,6 +103,24 @@ type IPSetData struct {
 	// cachedUID holds the calculated unique ID of this IP set, or "" if it hasn't been calculated
 	// yet.
 	cachedUID string
+}
+
+func (d *IPSetData) String() string {
+	var parts []string
+	if d.Selector != nil {
+		parts = append(parts, fmt.Sprintf("selector:%q", d.Selector.String()))
+	}
+	if d.NamedPort != "" {
+		parts = append(parts, fmt.Sprintf("namedPort:%s(%s)", d.NamedPort, d.NamedPortProtocol.String()))
+	}
+	if d.Service != "" {
+		parts = append(parts, fmt.Sprintf("service:%q", d.Service))
+	}
+	if d.ServiceIncludePorts {
+		parts = append(parts, "serviceIncludePorts=true")
+	}
+	parts = append(parts, fmt.Sprintf("uniqueID:%q", d.UniqueID()))
+	return "IPSetData{" + strings.Join(parts, ", ") + "}"
 }
 
 func (d *IPSetData) UniqueID() string {
@@ -146,8 +165,8 @@ func (d *IPSetData) DataplaneProtocolType() proto.IPSetUpdate_IPSetType {
 func NewRuleScanner() *RuleScanner {
 	calc := &RuleScanner{
 		ipSetsByUID:    make(map[string]*IPSetData),
-		rulesIDToUIDs:  multidict.NewIfaceToString(),
-		uidsToRulesIDs: multidict.NewStringToIface(),
+		rulesIDToUIDs:  multidict.New[any, string](),
+		uidsToRulesIDs: multidict.New[string, any](),
 	}
 	return calc
 }

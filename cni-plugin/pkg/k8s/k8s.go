@@ -30,10 +30,12 @@ import (
 	"github.com/containernetworking/plugins/pkg/ipam"
 
 	libipam "github.com/projectcalico/calico/libcalico-go/lib/ipam"
+	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 
 	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 
 	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
@@ -868,9 +870,18 @@ func NewK8sClient(conf types.NetConf, logger *logrus.Entry) (*kubernetes.Clients
 	}
 
 	// Use the kubernetes client code to load the kubeconfig file and combine it with the overrides.
-	config, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
-		&clientcmd.ClientConfigLoadingRules{ExplicitPath: kubeconfig},
-		configOverrides).ClientConfig()
+	var config *rest.Config
+	var err error
+	if winutils.InHostProcessContainer() {
+		// ClientConfig() calls InClusterConfig() at some point, which doesn't work
+		// on Windows HPC. Use winutils.GetInClusterConfig() instead in this case.
+		// FIXME: this will no longer be needed when containerd v1.6 is EOL'd
+		config, err = winutils.GetInClusterConfig()
+	} else {
+		config, err = clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
+			&clientcmd.ClientConfigLoadingRules{ExplicitPath: kubeconfig},
+			configOverrides).ClientConfig()
+	}
 	if err != nil {
 		return nil, err
 	}

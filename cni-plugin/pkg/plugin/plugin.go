@@ -37,9 +37,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/clientcmd"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/seedrng"
+	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
@@ -92,7 +92,7 @@ func testConnection() error {
 
 	// If we have a kubeconfig, test connection to the APIServer
 	if conf.Kubernetes.Kubeconfig != "" {
-		k8sconfig, err := clientcmd.BuildConfigFromFlags("", conf.Kubernetes.Kubeconfig)
+		k8sconfig, err := winutils.BuildConfigFromFlags("", conf.Kubernetes.Kubeconfig)
 		if err != nil {
 			return fmt.Errorf("error building K8s client config: %s", err)
 		}
@@ -464,7 +464,7 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 
 			// Select the first 11 characters of the containerID for the host veth.
 			var hostVethName, contVethMac string
-			desiredVethName := "cali" + args.ContainerID[:utils.Min(11, len(args.ContainerID))]
+			desiredVethName := "cali" + args.ContainerID[:min(11, len(args.ContainerID))]
 			hostVethName, contVethMac, err = d.DoNetworking(
 				ctx, calicoClient, args, result, desiredVethName, utils.DefaultRoutes, endpoint, map[string]string{})
 			if err != nil {

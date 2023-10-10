@@ -51,4 +51,4 @@ blocks:
         - name: DEV_REGISTRIES
           value: quay.io/calico docker.io/calico
         commands:
-        - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C node build-windows-upgrade-archive image-tar-windows-all cd-windows-all CONFIRM=true; fi
+        - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C node release-windows CONFIRM=true; fi

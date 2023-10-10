@@ -38,6 +38,14 @@ func (m *Map) Type() int {
 	panic("LIBBPF syscall stub")
 }
 
+func (m *Map) ValueSize() int {
+	panic("LIBBPF syscall stub")
+}
+
+func (m *Map) KeySize() int {
+	panic("LIBBPF syscall stub")
+}
+
 func (m *Map) SetPinPath(path string) error {
 	panic("LIBBPF syscall stub")
 }
@@ -130,6 +138,10 @@ const (
 )
 
 func TcSetGlobals(_ *Map, globalData *TcGlobalData) error {
+	panic("LIBBPF syscall stub")
+}
+
+func TcSetGlobals6(_ *Map, globalData *TcGlobalData6) error {
 	panic("LIBBPF syscall stub")
 }
 

@@ -18,98 +18,61 @@ import (
 	"context"
 	"sync"
 
-	"github.com/pkg/errors"
-
 	"github.com/projectcalico/calico/felix/bpf/routes"
 	"github.com/projectcalico/calico/felix/ip"
 )
 
 // Routes is an interface to query routes
 type Routes interface {
-	Lookup(ip.Addr) (routes.Value, bool)
-	WaitAfter(ctx context.Context, fn func(lookup func(addr ip.Addr) (routes.Value, bool)) bool)
+	Lookup(ip.Addr) (routes.ValueInterface, bool)
+	WaitAfter(ctx context.Context, fn func(lookup func(addr ip.Addr) (routes.ValueInterface, bool)) bool)
 }
 
 // RTCache is a lookup data structure that allow inserting and deleting routes
 // and to do a LPM prefix match for IP addresses
 type RTCache struct {
 	cond4 *sync.Cond
-	v4    *routes.LPMv4
+	rts   *routes.LPM
 }
 
 // NewRTCache creates an empty routing cache
 func NewRTCache() *RTCache {
 	rt := &RTCache{
-		v4: routes.NewLPMv4(),
+		rts: routes.NewLPM(),
 	}
 
-	rt.cond4 = sync.NewCond(rt.v4.RLocker())
+	rt.cond4 = sync.NewCond(rt.rts.RLocker())
 
 	return rt
 }
 
-// UpdateV4 makes an update with V4 CIDR or errors
-func (rt *RTCache) UpdateV4(k routes.Key, v routes.Value) error {
-	rt.v4.Lock()
-	defer rt.v4.Unlock()
-	defer rt.cond4.Broadcast()
-	return rt.v4.Update(k, v)
-}
-
 // Update either creates an entry or updates an existing one
-func (rt *RTCache) Update(k routes.Key, v routes.Value) error {
-	switch k.Dest().(type) {
-	case ip.V4CIDR:
-		return rt.UpdateV4(k, v)
-	default:
-		return errors.Errorf("unsupported CIDR type %T", k.Dest())
-	}
-}
-
-// DeleteV4 deletes an entry and errors if the key is not V4
-func (rt *RTCache) DeleteV4(k routes.Key) error {
-	rt.v4.Lock()
-	defer rt.v4.Unlock()
-	// no need to broadcast, lookup will not succeed
-	return rt.v4.Delete(k)
+func (rt *RTCache) Update(k routes.KeyInterface, v routes.ValueInterface) {
+	rt.rts.Lock()
+	defer rt.rts.Unlock()
+	defer rt.cond4.Broadcast()
+	rt.rts.Update(k, v)
 }
 
 // Delete deletes and entry if it exists, does not return error if not
-func (rt *RTCache) Delete(k routes.Key) error {
-	switch k.Dest().(type) {
-	case ip.V4CIDR:
-		return rt.DeleteV4(k)
-	default:
-		return errors.Errorf("unsupported CIDR type %T", k.Dest())
-	}
-}
-
-// LookupV4 is the same as Lookup for V4 only
-func (rt *RTCache) LookupV4(addr ip.V4Addr) (routes.Value, bool) {
-	rt.v4.RLock()
-	defer rt.v4.RUnlock()
-
-	v, ok := rt.v4.Lookup(addr)
-	return v, ok
+func (rt *RTCache) Delete(k routes.KeyInterface) {
+	rt.rts.Lock()
+	defer rt.rts.Unlock()
+	// no need to broadcast, lookup will not succeed
+	rt.rts.Delete(k)
 }
 
 // Lookup looks LPM match for an address and returns the associated data.
-func (rt *RTCache) Lookup(addr ip.Addr) (routes.Value, bool) {
-	switch a := addr.(type) {
-	case ip.V4Addr:
-		return rt.LookupV4(a)
-	default:
-		return routes.Value{}, false
-	}
+func (rt *RTCache) Lookup(addr ip.Addr) (routes.ValueInterface, bool) {
+	rt.rts.RLock()
+	defer rt.rts.RUnlock()
+
+	v, ok := rt.rts.Lookup(addr)
+	return v, ok
 }
 
-func (rt *RTCache) lookupUnlocked(addr ip.Addr) (routes.Value, bool) {
-	switch a := addr.(type) {
-	case ip.V4Addr:
-		return rt.v4.Lookup(a)
-	default:
-		return routes.Value{}, false
-	}
+func (rt *RTCache) lookupUnlocked(addr ip.Addr) (routes.ValueInterface, bool) {
+	return rt.rts.Lookup(addr)
 }
 
 // WaitAfter executes a function and if it returns false, it blocks until
@@ -117,7 +80,7 @@ func (rt *RTCache) lookupUnlocked(addr ip.Addr) (routes.Value, bool) {
 // only lookups as the state of the cache is read-locked. It must use the
 // provided lookup function.
 func (rt *RTCache) WaitAfter(ctx context.Context,
-	fn func(lookup func(addr ip.Addr) (routes.Value, bool)) bool) {
+	fn func(lookup func(addr ip.Addr) (routes.ValueInterface, bool)) bool) {
 
 	ctx, cancel := context.WithCancel(ctx)
 
@@ -127,16 +90,16 @@ func (rt *RTCache) WaitAfter(ctx context.Context,
 		// Wait until the ctx is either canceled from outside or by fn completing
 		<-ctx.Done()
 		// Take the lock to sync with fn deciding to Wait
-		rt.v4.Lock()
+		rt.rts.Lock()
 		exit = true
-		rt.v4.Unlock()
+		rt.rts.Unlock()
 		rt.cond4.Broadcast()
 	}()
 
-	rt.v4.RLock()
+	rt.rts.RLock()
 	if !fn(rt.lookupUnlocked) && !exit {
 		rt.cond4.Wait()
 	}
-	rt.v4.RUnlock()
+	rt.rts.RUnlock()
 	cancel()
 }

@@ -104,6 +104,20 @@ var (
 		IP:   node2ip,
 		Mask: net.IPv4Mask(255, 255, 255, 255),
 	}
+
+	node1ipV6    = net.ParseIP("abcd::ffff:0a0a:0001").To16()
+	node1ip2V6   = net.ParseIP("abcd::ffff:0a0a:0201").To16()
+	node1tunIPV6 = net.ParseIP("abcd::ffff:0b0b:0001").To16()
+	node2ipV6    = net.ParseIP("abcd::ffff:0a0a:0002").To16()
+	intfIPV6     = net.ParseIP("abcd::ffff:0a0a:0003").To16()
+	node1CIDRV6  = net.IPNet{
+		IP:   node1ipV6,
+		Mask: net.CIDRMask(128, 128),
+	}
+	node2CIDRV6 = net.IPNet{
+		IP:   node2ipV6,
+		Mask: net.CIDRMask(128, 128),
+	}
 )
 
 // Globals that we use to configure the next test run.
@@ -183,6 +197,8 @@ var tcJumpMapIndexes = map[string][]int{
 		tcdefs.ProgIndexIcmp,
 		tcdefs.ProgIndexDrop,
 		tcdefs.ProgIndexHostCtConflict,
+		tcdefs.ProgIndexIcmpInnerNat,
+		tcdefs.ProgIndexNewFlow,
 	},
 	"IPv4 debug": []int{
 		tcdefs.ProgIndexMainDebug,
@@ -191,13 +207,28 @@ var tcJumpMapIndexes = map[string][]int{
 		tcdefs.ProgIndexIcmpDebug,
 		tcdefs.ProgIndexDropDebug,
 		tcdefs.ProgIndexHostCtConflictDebug,
+		tcdefs.ProgIndexIcmpInnerNatDebug,
+		tcdefs.ProgIndexNewFlowDebug,
 	},
 	"IPv6": []int{
-		tcdefs.ProgIndexV6PrologueDebug,
+		tcdefs.ProgIndexV6Main,
+		tcdefs.ProgIndexV6Policy,
+		tcdefs.ProgIndexV6Allowed,
+		tcdefs.ProgIndexV6Icmp,
+		tcdefs.ProgIndexV6Drop,
+		tcdefs.ProgIndexV6HostCtConflict,
+		tcdefs.ProgIndexV6IcmpInnerNat,
+		tcdefs.ProgIndexV6NewFlow,
+	},
+	"IPv6 debug": []int{
+		tcdefs.ProgIndexV6MainDebug,
 		tcdefs.ProgIndexV6PolicyDebug,
 		tcdefs.ProgIndexV6AllowedDebug,
 		tcdefs.ProgIndexV6IcmpDebug,
 		tcdefs.ProgIndexV6DropDebug,
+		tcdefs.ProgIndexV6HostCtConflictDebug,
+		tcdefs.ProgIndexV6IcmpInnerNatDebug,
+		tcdefs.ProgIndexV6NewFlowDebug,
 	},
 }
 
@@ -307,8 +338,13 @@ func setupAndRun(logger testLogger, loglevel, section string, rules *polprog.Rul
 			topts.progLog = "WEP"
 		}
 
-		log.WithField("hostIP", hostIP).Info("Host IP")
-		log.WithField("intfIP", intfIP).Info("Intf IP")
+		if topts.ipv6 {
+			log.WithField("hostIP", hostIP).Info("Host IP")
+			log.WithField("intfIP", intfIPV6).Info("Intf IP")
+		} else {
+			log.WithField("hostIP", hostIP).Info("Host IP")
+			log.WithField("intfIP", intfIP).Info("Intf IP")
+		}
 		obj += fmt.Sprintf("fib_%s", loglevel)
 
 		if strings.Contains(section, "_dsr") {
@@ -316,12 +352,24 @@ func setupAndRun(logger testLogger, loglevel, section string, rules *polprog.Rul
 		}
 	}
 
-	if !topts.xdp {
-		o, err := objLoad("../../bpf-gpl/bin/tc_preamble.o", bpfFsDir, "preamble", topts, false, false)
+	ipFamily := "IPv4"
+	policyIdx := tcdefs.ProgIndexPolicy
+	if topts.ipv6 {
+		ipFamily = "IPv6"
+		obj += "_v6"
+		policyIdx = tcdefs.ProgIndexV6Policy
+	}
+
+	if topts.xdp {
+		o, err := objLoad("../../bpf-gpl/bin/xdp_preamble.o", bpfFsDir, "preamble", topts, false, false)
+		Expect(err).NotTo(HaveOccurred())
+		defer o.Close()
+	} else if topts.ipv6 {
+		o, err := objLoad("../../bpf-gpl/bin/tc_preamble_v6.o", bpfFsDir, "preamble", topts, false, false)
 		Expect(err).NotTo(HaveOccurred())
 		defer o.Close()
 	} else {
-		o, err := objLoad("../../bpf-gpl/bin/xdp_preamble.o", bpfFsDir, "preamble", topts, false, false)
+		o, err := objLoad("../../bpf-gpl/bin/tc_preamble.o", bpfFsDir, "preamble", topts, false, false)
 		Expect(err).NotTo(HaveOccurred())
 		defer o.Close()
 	}
@@ -338,25 +386,15 @@ func setupAndRun(logger testLogger, loglevel, section string, rules *polprog.Rul
 	err = bin.WriteToFile(tempObj)
 	Expect(err).NotTo(HaveOccurred())
 
-	ipFamily := "IPv4"
 	if loglevel == "debug" {
 		ipFamily += " debug"
 	}
 
-	o, err := objLoad(tempObj, bpfFsDir, ipFamily, topts, rules != nil, true)
+	var o *libbpf.Obj
+
+	o, err = objLoad(tempObj, bpfFsDir, ipFamily, topts, rules != nil, true)
 	Expect(err).NotTo(HaveOccurred())
 	defer o.Close()
-
-	if topts.ipv6 {
-		o, err := objLoad(obj+"_v6.o", bpfFsDir, "IPv6", topts, rules != nil, false)
-		Expect(err).NotTo(HaveOccurred())
-		defer o.Close()
-	}
-
-	if err != nil {
-		logger.Log("Error:", string(err.(*exec.ExitError).Stderr))
-	}
-	Expect(err).NotTo(HaveOccurred())
 
 	if rules != nil {
 		jmpMap := progMap
@@ -383,15 +421,15 @@ func setupAndRun(logger testLogger, loglevel, section string, rules *polprog.Rul
 		}
 		Expect(err).NotTo(HaveOccurred(), "Failed to load rules program.")
 		defer func() { _ = polProgFD.Close() }()
-		err = jumpMapUpdate(polMap, tcdefs.ProgIndexPolicy, int(polProgFD))
+		err = jumpMapUpdate(polMap, policyIdx, int(polProgFD))
 		Expect(err).NotTo(HaveOccurred())
 		log.WithField("rules", rules).Debug("set policy")
 	}
 
 	if !topts.xdp {
-		runFn(bpfFsDir + "/classifier_tc_preamble")
+		runFn(bpfFsDir + "/cali_tc_preamble")
 	} else {
-		runFn(bpfFsDir + "/xdp_preamble")
+		runFn(bpfFsDir + "/cali_xdp_preamble")
 	}
 }
 
@@ -408,9 +446,7 @@ func caller(skip int) string {
 func runBpfTest(t *testing.T, section string, rules *polprog.Rules, testFn func(bpfProgRunFn), opts ...testOption) {
 	RegisterTestingT(t)
 	xdp := false
-	if strings.Contains(section, "xdp") == false {
-		section = "classifier_" + section
-	} else {
+	if strings.Contains(section, "xdp") {
 		xdp = true
 	}
 
@@ -491,27 +527,35 @@ func bpftool(args ...string) ([]byte, error) {
 var (
 	mapInitOnce sync.Once
 
-	natMap, natBEMap, ctMap, rtMap, ipsMap, stateMap, testStateMap, progMap, progMapXDP, affinityMap, arpMap, fsafeMap, countersMap, ifstateMap, jumpMap, jumpMapXDP maps.Map
-	allMaps                                                                                                                                                          []maps.Map
+	natMap, natBEMap, ctMap, rtMap, ipsMap, testStateMap, affinityMap, arpMap, fsafeMap maps.Map
+	natMapV6, natBEMapV6, ctMapV6, rtMapV6, affinityMapV6, arpMapV6                     maps.Map
+	stateMap, countersMap, ifstateMap, progMap, progMapXDP, jumpMap, jumpMapXDP         maps.Map
+	allMaps                                                                             []maps.Map
 )
 
 func initMapsOnce() {
 	mapInitOnce.Do(func() {
 		natMap = nat.FrontendMap()
 		natBEMap = nat.BackendMap()
+		natMapV6 = nat.FrontendMapV6()
+		natBEMapV6 = nat.BackendMapV6()
 		ctMap = conntrack.Map()
+		ctMapV6 = conntrack.MapV6()
 		rtMap = routes.Map()
+		rtMapV6 = routes.MapV6()
 		ipsMap = ipsets.Map()
 		stateMap = state.Map()
 		testStateMap = state.MapForTest()
 		affinityMap = nat.AffinityMap()
+		affinityMapV6 = nat.AffinityMapV6()
 		arpMap = arp.Map()
+		arpMapV6 = arp.MapV6()
 		fsafeMap = failsafes.Map()
 		countersMap = counters.Map()
 		ifstateMap = ifstate.Map()
 
-		allMaps = []maps.Map{natMap, natBEMap, ctMap, rtMap, ipsMap, stateMap, testStateMap,
-			affinityMap, arpMap, fsafeMap, countersMap, ifstateMap}
+		allMaps = []maps.Map{natMap, natBEMap, natMapV6, natBEMapV6, ctMap, ctMapV6, rtMap, rtMapV6, ipsMap,
+			stateMap, testStateMap, affinityMap, affinityMapV6, arpMap, arpMapV6, fsafeMap, countersMap, ifstateMap}
 		for _, m := range allMaps {
 			err := m.EnsureExists()
 			if err != nil {
@@ -588,9 +632,18 @@ func tcUpdateJumpMap(obj *libbpf.Obj, progs []int, hasPolicyProg, hasHostConflic
 			if !hasPolicyProg {
 				continue
 			}
-		}
-		if (idx == tcdefs.ProgIndexHostCtConflict || idx == tcdefs.ProgIndexHostCtConflictDebug) && !hasHostConflictProg {
-			continue
+		case
+			tcdefs.ProgIndexV6Icmp,
+			tcdefs.ProgIndexV6IcmpDebug:
+			continue // XXX not implemented
+		case
+			tcdefs.ProgIndexHostCtConflict,
+			tcdefs.ProgIndexHostCtConflictDebug,
+			tcdefs.ProgIndexV6HostCtConflict,
+			tcdefs.ProgIndexV6HostCtConflictDebug:
+			if !hasHostConflictProg {
+				continue
+			}
 		}
 		log.WithField("prog", tcdefs.ProgramNames[idx]).WithField("idx", idx).Debug("UpdateJumpMap")
 		err := obj.UpdateJumpMap(progMap.GetName(), tcdefs.ProgramNames[idx], idx)
@@ -634,15 +687,43 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 
 	for m, err := obj.FirstMap(); m != nil && err == nil; m, err = m.NextMap() {
 		if m.IsMapInternal() {
+			if strings.HasPrefix(m.Name(), ".rodata") {
+				continue
+			}
 			if forXDP {
 				var globals libbpf.XDPGlobalData
-				for i := 0; i < tcdefs.ProgIndexEnd; i++ {
+				for i := 0; i < 16; i++ {
 					globals.Jumps[i] = uint32(i)
 				}
 
 				if err := xdp.ConfigureProgram(m, bpfIfaceName, &globals); err != nil {
 					return nil, err
 				}
+			} else if topts.ipv6 {
+				ifaceLog := topts.progLog + "-" + bpfIfaceName
+				globals := libbpf.TcGlobalData6{
+					Tmtu:         natTunnelMTU,
+					VxlanPort:    testVxlanPort,
+					PSNatStart:   uint16(topts.psnaStart),
+					PSNatLen:     uint16(topts.psnatEnd-topts.psnaStart) + 1,
+					Flags:        libbpf.GlobalsIPv6Enabled | libbpf.GlobalsNoDSRCidrs,
+					LogFilterJmp: 0xffffffff,
+				}
+
+				copy(globals.HostTunnelIP[:], node1tunIPV6.To16())
+				copy(globals.HostIP[:], hostIP.To16())
+				copy(globals.IntfIP[:], intfIPV6.To16())
+
+				for i := 0; i < tcdefs.ProgIndexEnd; i++ {
+					globals.Jumps[i] = uint32(i)
+				}
+
+				log.WithField("globals", globals).Debugf("configure program")
+
+				if err := tc.ConfigureProgramV6(m, ifaceLog, &globals); err != nil {
+					return nil, fmt.Errorf("failed to configure tc program: %w", err)
+				}
+				log.WithField("program", fname).Debugf("Configured BPF program iface \"%s\"", ifaceLog)
 			} else {
 				ifaceLog := topts.progLog + "-" + bpfIfaceName
 				globals := libbpf.TcGlobalData{
@@ -654,11 +735,14 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 					PSNatLen:     uint16(topts.psnatEnd-topts.psnaStart) + 1,
 					Flags:        libbpf.GlobalsIPv6Enabled | libbpf.GlobalsNoDSRCidrs,
 					HostTunnelIP: ipToU32(node1tunIP),
+					LogFilterJmp: 0xffffffff,
 				}
 
 				for i := 0; i < tcdefs.ProgIndexEnd; i++ {
 					globals.Jumps[i] = uint32(i)
 				}
+
+				log.WithField("globals", globals).Debugf("configure program")
 
 				if err := tc.ConfigureProgram(m, ifaceLog, &globals); err != nil {
 					return nil, fmt.Errorf("failed to configure tc program: %w", err)
@@ -668,7 +752,11 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 			continue
 		}
 		pin := "/sys/fs/bpf/tc/globals/" + m.Name()
-		log.WithField("pin", pin).Debug("Pinning map")
+		log.WithFields(log.Fields{
+			"pin":        pin,
+			"key size":   m.KeySize(),
+			"value size": m.ValueSize(),
+		}).Debug("Pinning map")
 		cmd := exec.Command("bpftool", "map", "show", "pinned", pin)
 		log.WithField("cmd", cmd.String()).Debugf("executing")
 		out, _ := cmd.Output()
@@ -688,7 +776,6 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 	policyIdx := tcdefs.ProgIndexPolicy
 
 	if strings.HasPrefix(ipFamily, "IPv6") {
-		progDir += "_v6"
 		policyIdx = tcdefs.ProgIndexV6Policy
 	}
 
@@ -720,7 +807,7 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 	}
 
 	if !forXDP {
-		log.WithField("ipFamily", ipFamily).Debug("Udating jump map")
+		log.WithField("ipFamily", ipFamily).Debug("Updating jump map")
 		err = tcUpdateJumpMap(obj, tcJumpMapIndexes[ipFamily], false, hasHostConflictProg)
 		if err != nil && !strings.Contains(err.Error(), "error updating calico_tc_host_ct_conflict program") {
 			goto out
@@ -754,18 +841,36 @@ func objUTLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHos
 	for m, err := obj.FirstMap(); m != nil && err == nil; m, err = m.NextMap() {
 		if m.IsMapInternal() {
 			ifaceLog := topts.progLog + "-" + bpfIfaceName
-			globals := libbpf.TcGlobalData{
-				HostIP:       ipToU32(hostIP),
-				IntfIP:       ipToU32(intfIP),
-				Tmtu:         natTunnelMTU,
-				VxlanPort:    testVxlanPort,
-				PSNatStart:   uint16(topts.psnaStart),
-				PSNatLen:     uint16(topts.psnatEnd-topts.psnaStart) + 1,
-				Flags:        libbpf.GlobalsIPv6Enabled | libbpf.GlobalsNoDSRCidrs,
-				HostTunnelIP: ipToU32(node1tunIP),
-			}
-			if err := tc.ConfigureProgram(m, ifaceLog, &globals); err != nil {
-				return nil, fmt.Errorf("failed to configure tc program: %w", err)
+			if topts.ipv6 {
+				globals := libbpf.TcGlobalData6{
+					Tmtu:       natTunnelMTU,
+					VxlanPort:  testVxlanPort,
+					PSNatStart: uint16(topts.psnaStart),
+					PSNatLen:   uint16(topts.psnatEnd-topts.psnaStart) + 1,
+					Flags:      libbpf.GlobalsIPv6Enabled | libbpf.GlobalsNoDSRCidrs,
+				}
+
+				copy(globals.HostTunnelIP[:], node1tunIPV6.To16())
+				copy(globals.HostIP[:], hostIP.To16())
+				copy(globals.IntfIP[:], intfIPV6.To16())
+
+				if err := tc.ConfigureProgramV6(m, ifaceLog, &globals); err != nil {
+					return nil, fmt.Errorf("failed to configure v6 tc program: %w", err)
+				}
+			} else {
+				globals := libbpf.TcGlobalData{
+					HostIP:       ipToU32(hostIP),
+					IntfIP:       ipToU32(intfIP),
+					Tmtu:         natTunnelMTU,
+					VxlanPort:    testVxlanPort,
+					PSNatStart:   uint16(topts.psnaStart),
+					PSNatLen:     uint16(topts.psnatEnd-topts.psnaStart) + 1,
+					Flags:        libbpf.GlobalsIPv6Enabled | libbpf.GlobalsNoDSRCidrs,
+					HostTunnelIP: ipToU32(node1tunIP),
+				}
+				if err := tc.ConfigureProgram(m, ifaceLog, &globals); err != nil {
+					return nil, fmt.Errorf("failed to configure tc program: %w", err)
+				}
 			}
 			break
 		}
@@ -776,10 +881,6 @@ func objUTLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHos
 	}
 
 	progDir := bpfFsDir
-
-	if ipFamily == "IPv6" {
-		progDir += "_v6"
-	}
 
 	err = obj.PinPrograms(progDir)
 	if err != nil {
@@ -919,7 +1020,12 @@ func runBpfUnitTest(t *testing.T, source string, testFn func(bpfProgRunFn), opts
 	Expect(err).NotTo(HaveOccurred())
 	defer os.RemoveAll(bpfFsDir)
 
-	objFname := "../../bpf-gpl/ut/" + strings.TrimSuffix(source, path.Ext(source)) + ".o"
+	vExt := ""
+	if topts.ipv6 {
+		vExt = "_v6"
+	}
+
+	objFname := "../../bpf-gpl/ut/" + strings.TrimSuffix(source, path.Ext(source)) + vExt + ".o"
 
 	obj, err := objUTLoad(objFname, bpfFsDir, "IPv4", topts, true, false)
 	Expect(err).NotTo(HaveOccurred())
@@ -930,7 +1036,7 @@ func runBpfUnitTest(t *testing.T, source string, testFn func(bpfProgRunFn), opts
 
 	runTest := func() {
 		testFn(func(dataIn []byte) (bpfRunResult, error) {
-			res, err := bpftoolProgRun(bpfFsDir+"/classifier_calico_unittest", dataIn, ctxIn)
+			res, err := bpftoolProgRun(bpfFsDir+"/unittest", dataIn, ctxIn)
 			log.Debugf("dataIn  = %+v", dataIn)
 			if err == nil {
 				log.Debugf("dataOut = %+v", res.dataOut)
@@ -1060,6 +1166,38 @@ func udpResponseRaw(in []byte) []byte {
 	return out.Bytes()
 }
 
+func udpResponseRawV6(in []byte) []byte {
+	pkt := gopacket.NewPacket(in, layers.LayerTypeEthernet, gopacket.Default)
+	ethL := pkt.Layer(layers.LayerTypeEthernet)
+	ethR := ethL.(*layers.Ethernet)
+	ethR.SrcMAC, ethR.DstMAC = ethR.DstMAC, ethR.SrcMAC
+
+	ipv6L := pkt.Layer(layers.LayerTypeIPv6)
+	ipv6R := ipv6L.(*layers.IPv6)
+	ipv6R.SrcIP, ipv6R.DstIP = ipv6R.DstIP, ipv6R.SrcIP
+
+	lrs := []gopacket.SerializableLayer{ethR, ipv6R}
+
+	if ipv6R.NextHeader == layers.IPProtocolIPv6HopByHop {
+		l := pkt.Layer(layers.LayerTypeIPv6HopByHop)
+		lrs = append(lrs, l.(*layers.IPv6HopByHop))
+	}
+
+	udpL := pkt.Layer(layers.LayerTypeUDP)
+	udpR := udpL.(*layers.UDP)
+	udpR.SrcPort, udpR.DstPort = udpR.DstPort, udpR.SrcPort
+
+	_ = udpR.SetNetworkLayerForChecksum(ipv6R)
+
+	lrs = append(lrs, udpR, gopacket.Payload(pkt.ApplicationLayer().Payload()))
+
+	out := gopacket.NewSerializeBuffer()
+	err := gopacket.SerializeLayers(out, gopacket.SerializeOptions{ComputeChecksums: true}, lrs...)
+	Expect(err).NotTo(HaveOccurred())
+
+	return out.Bytes()
+}
+
 func tcpResponseRaw(in []byte) []byte {
 	pkt := gopacket.NewPacket(in, layers.LayerTypeEthernet, gopacket.Default)
 	ethL := pkt.Layer(layers.LayerTypeEthernet)
@@ -1096,6 +1234,14 @@ func dumpNATMap(natMap maps.Map) {
 	}
 }
 
+func dumpNATMapV6(natMap maps.Map) {
+	nt, err := nat.LoadFrontendMapV6(natMap)
+	Expect(err).NotTo(HaveOccurred())
+	for k, v := range nt {
+		fmt.Printf("%s : %s\n", k, v)
+	}
+}
+
 func resetMap(m maps.Map) {
 	err := m.Iter(func(_, _ []byte) maps.IteratorAction {
 		return maps.IterDelete
@@ -1113,7 +1259,21 @@ func dumpCTMap(ctMap maps.Map) {
 	fmt.Printf("\n")
 }
 
+func dumpCTMapV6(ctMap maps.Map) {
+	ct, err := conntrack.LoadMapMemV6(ctMap)
+	Expect(err).NotTo(HaveOccurred())
+	fmt.Printf("Conntrack dump:\n")
+	for k, v := range ct {
+		fmt.Printf("- %s : %s\n", k, v)
+	}
+	fmt.Printf("\n")
+}
+
 func resetCTMap(ctMap maps.Map) {
+	resetMap(ctMap)
+}
+
+func resetCTMapV6(ctMap maps.Map) {
 	resetMap(ctMap)
 }
 
@@ -1123,7 +1283,20 @@ func saveCTMap(ctMap maps.Map) conntrack.MapMem {
 	return ct
 }
 
+func saveCTMapV6(ctMap maps.Map) conntrack.MapMemV6 {
+	ct, err := conntrack.LoadMapMemV6(ctMap)
+	Expect(err).NotTo(HaveOccurred())
+	return ct
+}
+
 func restoreCTMap(ctMap maps.Map, m conntrack.MapMem) {
+	for k, v := range m {
+		err := ctMap.Update(k[:], v[:])
+		Expect(err).NotTo(HaveOccurred())
+	}
+}
+
+func restoreCTMapV6(ctMap maps.Map, m conntrack.MapMemV6) {
 	for k, v := range m {
 		err := ctMap.Update(k[:], v[:])
 		Expect(err).NotTo(HaveOccurred())
@@ -1138,7 +1311,19 @@ func dumpRTMap(rtMap maps.Map) {
 	}
 }
 
+func dumpRTMapV6(rtMap maps.Map) {
+	rt, err := routes.LoadMapV6(rtMap)
+	Expect(err).NotTo(HaveOccurred())
+	for k, v := range rt {
+		fmt.Printf("%15s: %s\n", k.Dest(), v)
+	}
+}
+
 func resetRTMap(rtMap maps.Map) {
+	resetMap(rtMap)
+}
+
+func resetRTMapV6(rtMap maps.Map) {
 	resetMap(rtMap)
 }
 
@@ -1148,7 +1333,20 @@ func saveRTMap(rtMap maps.Map) routes.MapMem {
 	return rt
 }
 
+func saveRTMapV6(rtMap maps.Map) routes.MapMemV6 {
+	rt, err := routes.LoadMapV6(rtMap)
+	Expect(err).NotTo(HaveOccurred())
+	return rt
+}
+
 func restoreRTMap(rtMap maps.Map, m routes.MapMem) {
+	for k, v := range m {
+		err := rtMap.Update(k[:], v[:])
+		Expect(err).NotTo(HaveOccurred())
+	}
+}
+
+func restoreRTMapV6(rtMap maps.Map, m routes.MapMemV6) {
 	for k, v := range m {
 		err := rtMap.Update(k[:], v[:])
 		Expect(err).NotTo(HaveOccurred())
@@ -1165,8 +1363,24 @@ func dumpARPMap(arpMap maps.Map) {
 	fmt.Printf("\n")
 }
 
-func saveARPMap(ctMap maps.Map) arp.MapMem {
-	m, err := arp.LoadMapMem(arpMap)
+func dumpARPMapV6(arpMap maps.Map) {
+	ct, err := arp.LoadMapMemV6(arpMap)
+	Expect(err).NotTo(HaveOccurred())
+	fmt.Printf("ARP dump:\n")
+	for k, v := range ct {
+		fmt.Printf("- %s : %s\n", k, v)
+	}
+	fmt.Printf("\n")
+}
+
+func saveARPMap(am maps.Map) arp.MapMem {
+	m, err := arp.LoadMapMem(am)
+	Expect(err).NotTo(HaveOccurred())
+	return m
+}
+
+func saveARPMapV6(am maps.Map) arp.MapMemV6 {
+	m, err := arp.LoadMapMemV6(am)
 	Expect(err).NotTo(HaveOccurred())
 	return m
 }
@@ -1196,6 +1410,8 @@ var ipv4Default = &layers.IPv4{
 
 var srcIPv6 = net.IP([]byte{0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1})
 var dstIPv6 = net.IP([]byte{0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2})
+var srcV6CIDR = ip.CIDRFromNetIP(srcIPv6).(ip.V6CIDR)
+var dstV6CIDR = ip.CIDRFromNetIP(dstIPv6).(ip.V6CIDR)
 
 var ipv6Default = &layers.IPv6{
 	Version:    6,
@@ -1210,19 +1426,78 @@ var udpDefault = &layers.UDP{
 	DstPort: 5678,
 }
 
-func testPacket(eth *layers.Ethernet, l3 gopacket.Layer, l4 gopacket.Layer, payload []byte) (
-	*layers.Ethernet, *layers.IPv4, gopacket.Layer, []byte, []byte, error) {
+func testPacket(family int, eth *layers.Ethernet, l3 gopacket.Layer, l4 gopacket.Layer,
+	payload []byte, ipv6ext ...gopacket.SerializableLayer) (
+	*layers.Ethernet, gopacket.Layer, gopacket.Layer, []byte, []byte, error) {
 	pkt := Packet{
+		family:  family,
 		eth:     eth,
 		l3:      l3,
 		l4:      l4,
 		payload: payload,
+		ipv6ext: ipv6ext,
 	}
 	err := pkt.Generate()
-	return pkt.eth, pkt.ipv4, pkt.l4, pkt.payload, pkt.bytes, err
+	if err != nil {
+		return nil, nil, nil, nil, nil, err
+	}
+
+	p := gopacket.NewPacket(pkt.bytes, layers.LayerTypeEthernet, gopacket.Default)
+	fmt.Printf("p = %+v\n", p)
+
+	e := p.Layer(layers.LayerTypeEthernet).(*layers.Ethernet)
+
+	var (
+		ipl   gopacket.Layer
+		proto layers.IPProtocol
+	)
+
+	ipv4L := p.Layer(layers.LayerTypeIPv4)
+	if ipv4L != nil {
+		ipv4 := ipv4L.(*layers.IPv4)
+		proto = ipv4.Protocol
+		ipl = ipv4L
+	} else {
+		ipv6L := p.Layer(layers.LayerTypeIPv6)
+		if ipv6L != nil {
+			ipv6 := ipv6L.(*layers.IPv6)
+			proto = ipv6.NextHeader
+		}
+		if proto == layers.IPProtocolIPv6HopByHop {
+			l := p.Layer(layers.LayerTypeIPv6HopByHop)
+			proto = l.(*layers.IPv6HopByHop).NextHeader
+		}
+		ipl = ipv6L
+	}
+
+	var l gopacket.Layer
+
+	switch proto {
+	case layers.IPProtocolUDP:
+		l = p.Layer(layers.LayerTypeUDP)
+	case layers.IPProtocolTCP:
+		l = p.Layer(layers.LayerTypeTCP)
+	case layers.IPProtocolICMPv4:
+		l = p.Layer(layers.LayerTypeICMPv4)
+	}
+
+	return e, ipl, l, pkt.payload, pkt.bytes, err
+}
+
+func testPacketV4(eth *layers.Ethernet, ipv4 *layers.IPv4, l4 gopacket.Layer, payload []byte) (
+	*layers.Ethernet, *layers.IPv4, gopacket.Layer, []byte, []byte, error) {
+	e, ip4, l4, p, b, err := testPacket(4, eth, ipv4, l4, payload)
+	return e, ip4.(*layers.IPv4), l4, p, b, err
+}
+
+func testPacketV6(eth *layers.Ethernet, ipv6 *layers.IPv6, l4 gopacket.Layer, payload []byte, ipv6ext ...gopacket.SerializableLayer) (
+	*layers.Ethernet, *layers.IPv6, gopacket.Layer, []byte, []byte, error) {
+	e, ip6, l4, p, b, err := testPacket(6, eth, ipv6, l4, payload, ipv6ext...)
+	return e, ip6.(*layers.IPv6), l4, p, b, err
 }
 
 type Packet struct {
+	family     int
 	eth        *layers.Ethernet
 	l3         gopacket.Layer
 	ipv4       *layers.IPv4
@@ -1238,6 +1513,7 @@ type Packet struct {
 	length     int
 	l4Protocol layers.IPProtocol
 	l3Protocol layers.EthernetType
+	ipv6ext    []gopacket.SerializableLayer
 }
 
 func (pkt *Packet) handlePayload() {
@@ -1281,15 +1557,70 @@ func (pkt *Packet) handleL4() error {
 	return nil
 }
 
+func (pkt *Packet) handleIPv6Ext() error {
+	exts := gopacket.NewSerializeBuffer()
+	err := gopacket.SerializeLayers(exts, gopacket.SerializeOptions{FixLengths: true}, pkt.ipv6ext...)
+	if err != nil {
+		return err
+	}
+
+	pkt.length += len(exts.Bytes())
+
+	return nil
+}
+
+func nextHdrIPProto(nh gopacket.Layer) layers.IPProtocol {
+	switch nh.(type) {
+	case *layers.IPv6HopByHop:
+		return layers.IPProtocolIPv6HopByHop
+	case *layers.ICMPv4:
+		return layers.IPProtocolICMPv4
+	case *layers.IGMP:
+		return layers.IPProtocolIGMP
+	case *layers.IPv4:
+		return layers.IPProtocolIPv4
+	case *layers.TCP:
+		return layers.IPProtocolTCP
+	case *layers.UDP:
+		return layers.IPProtocolUDP
+	case *layers.RUDP:
+		return layers.IPProtocolRUDP
+	case *layers.IPv6:
+		return layers.IPProtocolIPv6
+	case *layers.IPv6Routing:
+		return layers.IPProtocolIPv6Routing
+	case *layers.IPv6Fragment:
+		return layers.IPProtocolIPv6Fragment
+	case *layers.GRE:
+		return layers.IPProtocolGRE
+	case *layers.ICMPv6:
+		return layers.IPProtocolICMPv6
+	case *layers.IPv6Destination:
+		return layers.IPProtocolIPv6Destination
+	case *layers.EtherIP:
+		return layers.IPProtocolEtherIP
+	case *layers.SCTP:
+		return layers.IPProtocolSCTP
+	case *layers.UDPLite:
+		return layers.IPProtocolUDPLite
+	}
+
+	panic("unknown next layer")
+}
+
 func (pkt *Packet) handleL3() error {
-	if pkt.l3 == nil {
-		pkt.l3 = ipv4Default
+	if reflect.ValueOf(pkt.l3).IsNil() {
+		if pkt.family == 4 {
+			pkt.l3 = ipv4Default
+		} else {
+			pkt.l3 = ipv6Default
+		}
 	}
 
 	switch v := pkt.l3.(type) {
 	case *layers.IPv4:
 		pkt.ipv4 = v
-		pkt.length += 5 * 4
+		pkt.length += int(v.IHL * 4)
 		pkt.l3Protocol = layers.EthernetTypeIPv4
 		pkt.ipv4.Protocol = pkt.l4Protocol
 		pkt.ipv4.Length = uint16(pkt.length)
@@ -1297,7 +1628,18 @@ func (pkt *Packet) handleL3() error {
 	case *layers.IPv6:
 		pkt.ipv6 = v
 		pkt.l3Protocol = layers.EthernetTypeIPv6
-		pkt.ipv6.NextHeader = pkt.l4Protocol
+		if len(pkt.ipv6ext) > 0 {
+			if err := pkt.handleIPv6Ext(); err != nil {
+				return fmt.Errorf("handling ipv6 extensions: %w", err)
+			}
+			pkt.ipv6.NextHeader = nextHdrIPProto(pkt.ipv6ext[0].(gopacket.Layer))
+			for i := len(pkt.ipv6ext); i > 0; i-- {
+				pkt.layers = append(pkt.layers, pkt.ipv6ext[i-1])
+			}
+		} else {
+			pkt.ipv6.NextHeader = pkt.l4Protocol
+		}
+		pkt.length += 40
 		pkt.ipv6.Length = uint16(pkt.length)
 		pkt.layers = append(pkt.layers, pkt.ipv6)
 	default:
@@ -1346,6 +1688,7 @@ func (pkt *Packet) Generate() error {
 	pkt.handleEthernet()
 	pkt.setChecksum()
 	pkt.bytes, err = generatePacket(pkt.layers)
+
 	return err
 }
 
@@ -1370,7 +1713,16 @@ func generatePacket(layers []gopacket.SerializableLayer) ([]byte, error) {
 }
 
 func testPacketUDPDefault() (*layers.Ethernet, *layers.IPv4, gopacket.Layer, []byte, []byte, error) {
-	return testPacket(nil, nil, nil, nil)
+	ip := *ipv4Default
+	ip.Options = []layers.IPv4Option{{
+		OptionType:   123,
+		OptionLength: 6,
+		OptionData:   []byte{0xde, 0xad, 0xbe, 0xef},
+	}}
+	ip.IHL += 2
+
+	e, ip4, l4, p, b, err := testPacket(4, nil, &ip, nil, nil)
+	return e, ip4.(*layers.IPv4), l4, p, b, err
 }
 
 func testPacketUDPDefaultNP(destIP net.IP) (*layers.Ethernet, *layers.IPv4, gopacket.Layer, []byte, []byte, error) {
@@ -1380,8 +1732,49 @@ func testPacketUDPDefaultNP(destIP net.IP) (*layers.Ethernet, *layers.IPv4, gopa
 
 	ip := *ipv4Default
 	ip.DstIP = destIP
+	ip.Options = []layers.IPv4Option{{
+		OptionType:   123,
+		OptionLength: 6,
+		OptionData:   []byte{0xde, 0xad, 0xbe, 0xef},
+	}}
+	ip.IHL += 2
 
-	return testPacket(nil, &ip, nil, nil)
+	e, ip4, l4, p, b, err := testPacket(4, nil, &ip, nil, nil)
+	return e, ip4.(*layers.IPv4), l4, p, b, err
+}
+
+func ipv6HopByHopExt() gopacket.SerializableLayer {
+	hop := &layers.IPv6HopByHop{}
+	hop.NextHeader = layers.IPProtocolUDP
+
+	/* from gopacket ip6_test.go */
+	tlv := &layers.IPv6HopByHopOption{}
+	tlv.OptionType = 0x01 //PadN
+	tlv.OptionData = []byte{0x00, 0x00, 0x00, 0x00}
+	hop.Options = append(hop.Options, tlv)
+
+	return hop
+}
+
+func testPacketUDPDefaultNPV6(destIP net.IP) (*layers.Ethernet, *layers.IPv6, gopacket.Layer, []byte, []byte, error) {
+	if destIP == nil {
+		return testPacketV6(nil, nil, nil, nil)
+	}
+
+	ip := *ipv6Default
+	ip.DstIP = destIP
+
+	hop := &layers.IPv6HopByHop{}
+	hop.NextHeader = layers.IPProtocolUDP
+
+	/* from gopacket ip6_test.go */
+	tlv := &layers.IPv6HopByHopOption{}
+	tlv.OptionType = 0x01 //PadN
+	tlv.OptionData = []byte{0x00, 0x00, 0x00, 0x00}
+	hop.Options = append(hop.Options, tlv)
+
+	e, ip6, l4, p, b, err := testPacketV6(nil, &ip, nil, nil, hop)
+	return e, ip6, l4, p, b, err
 }
 
 func resetBPFMaps() {
@@ -1510,18 +1903,18 @@ func TestJumpMap(t *testing.T) {
 	err = maps.UpdateMapEntry(jumpMapFD, k, v)
 	Expect(err).NotTo(HaveOccurred())
 
-	err = maps.DeleteMapEntry(jumpMapFD, k, 4)
+	err = maps.DeleteMapEntry(jumpMapFD, k)
 	Expect(err).NotTo(HaveOccurred())
 
 	err = maps.UpdateMapEntry(jumpMapFD, k, v)
 	Expect(err).NotTo(HaveOccurred())
 
-	err = maps.DeleteMapEntryIfExists(jumpMapFD, k, 4)
+	err = maps.DeleteMapEntryIfExists(jumpMapFD, k)
 	Expect(err).NotTo(HaveOccurred())
 
-	err = maps.DeleteMapEntryIfExists(jumpMapFD, k, 4)
+	err = maps.DeleteMapEntryIfExists(jumpMapFD, k)
 	Expect(err).NotTo(HaveOccurred())
 
-	err = maps.DeleteMapEntry(jumpMapFD, k, 4)
+	err = maps.DeleteMapEntry(jumpMapFD, k)
 	Expect(err).To(HaveOccurred())
 }

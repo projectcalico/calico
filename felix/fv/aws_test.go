@@ -36,7 +36,7 @@ const (
 var _ = infrastructure.DatastoreDescribe("AWS-ec2-srcdstcheck", []apiconfig.DatastoreType{apiconfig.EtcdV3, apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
 	var (
 		infra                                     infrastructure.DatastoreInfra
-		felix                                     *infrastructure.Felix
+		tc                                        infrastructure.TopologyContainers
 		startEC2ContactLogC, failedEC2ContactLogC chan struct{}
 	)
 
@@ -47,18 +47,18 @@ var _ = infrastructure.DatastoreDescribe("AWS-ec2-srcdstcheck", []apiconfig.Data
 		opts.ExtraEnvVars["FELIX_HEALTHENABLED"] = "true"
 		opts.ExtraEnvVars["FELIX_HEALTHHOST"] = "127.0.0.1"
 		opts.DelayFelixStart = true
-		felix, _ = infrastructure.StartSingleNodeTopology(opts, infra)
+		tc, _ = infrastructure.StartSingleNodeTopology(opts, infra)
 		// Install a default profile that allows all ingress and egress, in the absence of any Policy.
 		infra.AddDefaultAllow()
 
-		startEC2ContactLogC = felix.WatchStdoutFor(regexp.MustCompile(startLog))
-		failedEC2ContactLogC = felix.WatchStdoutFor(regexp.MustCompile(failedLog))
+		startEC2ContactLogC = tc.Felixes[0].WatchStdoutFor(regexp.MustCompile(startLog))
+		failedEC2ContactLogC = tc.Felixes[0].WatchStdoutFor(regexp.MustCompile(failedLog))
 
-		felix.TriggerDelayedStart()
+		tc.Felixes[0].TriggerDelayedStart()
 	})
 
 	AfterEach(func() {
-		felix.Stop()
+		tc.Stop()
 		if CurrentGinkgoTestDescription().Failed {
 			infra.DumpErrorData()
 		}
@@ -66,7 +66,7 @@ var _ = infrastructure.DatastoreDescribe("AWS-ec2-srcdstcheck", []apiconfig.Data
 	})
 
 	getHTTPStatus := func(url string) (string, error) {
-		op, err := felix.Container.ExecOutput("wget", "-S", "-T", "2", "-O", "-", "-o", "/dev/stdout", url)
+		op, err := tc.Felixes[0].Container.ExecOutput("wget", "-S", "-T", "2", "-O", "-", "-o", "/dev/stdout", url)
 		// Return output even when the error is set.
 		// this is useful when wget sets err, in case of bad health status.
 		return op, err

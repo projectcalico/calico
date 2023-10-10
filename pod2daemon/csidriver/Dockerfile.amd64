@@ -38,6 +38,7 @@ COPY --from=ubi /lib64/libc.so.6 /lib64/libc.so.6
 COPY --from=ubi /etc/host.conf /etc/host.conf
 COPY --from=ubi /etc/nsswitch.conf /etc/nsswitch.conf
 
-ADD bin/csi-driver-amd64 /usr/local/bin/csi-driver
+ARG BIN_DIR
+ADD ${BIN_DIR}/csi-driver-amd64 /usr/local/bin/csi-driver
 
 ENTRYPOINT ["/usr/local/bin/csi-driver"]

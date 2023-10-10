@@ -20,51 +20,36 @@ type StringSet []string
 
 // Contains returns true if a given string in current set
 func (ss StringSet) Contains(s string) bool {
-	if len(ss) == 0 {
-		// Empty set or nil.
-		return false
+	// Defer to the binary search impl in the stdlib.  Note: it returns
+	// the "insertion point" for inserting the given string, so we need to
+	// check that the string really is there.
+	idx := sort.SearchStrings(ss, s)
+	return idx < len(ss) && ss[idx] == s
+}
+
+// SliceCopy returns a new slice that contains the elements of the set in
+// sorted order.
+func (ss StringSet) SliceCopy() []string {
+	if ss == nil {
+		return nil
 	}
-	// There's at least one item, do a binary chop to find the correct
-	// entry.  [minIdx, maxIdx) defines the (half-open) search interval.
-	minIdx := 0
-	maxIdx := len(ss)
-	for minIdx < (maxIdx - 1) {
-		// Select the partition index. The loop condition ensures that
-		// minIdx < partitionIdx < maxIdx so we'll always shrink the
-		// search interval on each iteration.
-		partitionIdx := (minIdx + maxIdx) / 2
-		partition := ss[partitionIdx]
-		if s < partition {
-			// target is strictly less than the partition, we can
-			// move maxIdx down.
-			maxIdx = partitionIdx
-		} else {
-			// Target is >= the partition, move minIdx up.
-			minIdx = partitionIdx
-		}
-	}
-	// When we exit the loop, minIdx == (maxIdx - 1).  Since the interval
-	// is half-open that means that, if the value is present, it must be at
-	// minIdx.  (minIdx cannot equal maxIdx due to the empty list check
-	// above and the loop condition.)
-	return ss[minIdx] == s
+	cp := make([]string, len(ss), len(ss))
+	copy(cp, ss)
+	return cp
 }
 
 func ConvertToStringSetInPlace(s []string) StringSet {
-	if s != nil {
-		sort.Strings(s)
+	if len(s) <= 1 {
+		// Nothing to do for nil, zero or a single-entry slice.
+		return s
 	}
-	j := 0
-	var last string
-	for _, v := range s {
-		if j != 0 && last == v {
-			// Same as last value, skip.
+	sort.Strings(s)
+	out := s[:1]
+	for _, v := range s[1:] {
+		if v == out[len(out)-1] {
 			continue
 		}
-		s[j] = v
-		j++
-		last = v
+		out = append(out, v)
 	}
-	s = s[:j]
-	return StringSet(s)
+	return out
 }

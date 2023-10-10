@@ -50,8 +50,8 @@ func init() {
 // expects to be told via its OnPolicyMatch(Stopped) methods which policies match
 // which endpoints.  The ActiveRulesCalculator does that calculation.
 type PolicyResolver struct {
-	policyIDToEndpointIDs multidict.IfaceToIface
-	endpointIDToPolicyIDs multidict.IfaceToIface
+	policyIDToEndpointIDs multidict.Multidict[model.PolicyKey, any]
+	endpointIDToPolicyIDs multidict.Multidict[any, model.PolicyKey]
 	allPolicies           map[model.PolicyKey]*model.Policy
 	sortedTierData        *TierInfo
 	endpoints             map[model.Key]interface{}
@@ -67,12 +67,12 @@ type PolicyResolverCallbacks interface {
 
 func NewPolicyResolver() *PolicyResolver {
 	return &PolicyResolver{
-		policyIDToEndpointIDs: multidict.NewIfaceToIface(),
-		endpointIDToPolicyIDs: multidict.NewIfaceToIface(),
+		policyIDToEndpointIDs: multidict.New[model.PolicyKey, any](),
+		endpointIDToPolicyIDs: multidict.New[any, model.PolicyKey](),
 		allPolicies:           map[model.PolicyKey]*model.Policy{},
 		sortedTierData:        NewTierInfo("default"),
 		endpoints:             make(map[model.Key]interface{}),
-		dirtyEndpoints:        set.NewBoxed[any](),
+		dirtyEndpoints:        set.New[any](),
 		policySorter:          NewPolicySorter(),
 	}
 }
@@ -111,7 +111,6 @@ func (pr *PolicyResolver) OnUpdate(update api.Update) (filterOut bool) {
 			pr.markEndpointsMatchingPolicyDirty(key)
 		}
 	}
-	pr.maybeFlush()
 	gaugeNumActivePolicies.Set(float64(pr.policyIDToEndpointIDs.Len()))
 	return
 }
@@ -119,7 +118,6 @@ func (pr *PolicyResolver) OnUpdate(update api.Update) (filterOut bool) {
 func (pr *PolicyResolver) OnDatamodelStatus(status api.SyncStatus) {
 	if status == api.InSync {
 		pr.InSync = true
-		pr.maybeFlush()
 	}
 }
 
@@ -130,7 +128,7 @@ func (pr *PolicyResolver) markEndpointsMatchingPolicyDirty(polKey model.PolicyKe
 	})
 }
 
-func (pr *PolicyResolver) OnPolicyMatch(policyKey model.PolicyKey, endpointKey interface{}) {
+func (pr *PolicyResolver) OnPolicyMatch(policyKey model.PolicyKey, endpointKey model.Key) {
 	log.Debugf("Storing policy match %v -> %v", policyKey, endpointKey)
 	// If it's first time the policy become matched, add it to the tier
 	if !pr.policySorter.HasPolicy(policyKey) {
@@ -140,10 +138,9 @@ func (pr *PolicyResolver) OnPolicyMatch(policyKey model.PolicyKey, endpointKey i
 	pr.policyIDToEndpointIDs.Put(policyKey, endpointKey)
 	pr.endpointIDToPolicyIDs.Put(endpointKey, policyKey)
 	pr.dirtyEndpoints.Add(endpointKey)
-	pr.maybeFlush()
 }
 
-func (pr *PolicyResolver) OnPolicyMatchStopped(policyKey model.PolicyKey, endpointKey interface{}) {
+func (pr *PolicyResolver) OnPolicyMatchStopped(policyKey model.PolicyKey, endpointKey model.Key) {
 	log.Debugf("Deleting policy match %v -> %v", policyKey, endpointKey)
 	pr.policyIDToEndpointIDs.Discard(policyKey, endpointKey)
 	pr.endpointIDToPolicyIDs.Discard(endpointKey, policyKey)
@@ -154,17 +151,16 @@ func (pr *PolicyResolver) OnPolicyMatchStopped(policyKey model.PolicyKey, endpoi
 	}
 
 	pr.dirtyEndpoints.Add(endpointKey)
-	pr.maybeFlush()
 }
 
-func (pr *PolicyResolver) maybeFlush() {
+func (pr *PolicyResolver) Flush() {
 	if !pr.InSync {
 		log.Debugf("Not in sync, skipping flush")
 		return
 	}
 	pr.sortedTierData = pr.policySorter.Sorted()
 	pr.dirtyEndpoints.Iter(pr.sendEndpointUpdate)
-	pr.dirtyEndpoints = set.NewBoxed[any]()
+	pr.dirtyEndpoints.Clear()
 }
 
 func (pr *PolicyResolver) sendEndpointUpdate(endpointID interface{}) error {

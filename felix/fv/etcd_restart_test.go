@@ -44,16 +44,16 @@ import (
 var _ = Context("etcd connection interruption", func() {
 
 	var (
-		etcd    *containers.Container
-		felixes []*infrastructure.Felix
-		client  client.Interface
-		infra   infrastructure.DatastoreInfra
-		w       [2]*workload.Workload
-		cc      *connectivity.Checker
+		etcd   *containers.Container
+		tc     infrastructure.TopologyContainers
+		client client.Interface
+		infra  infrastructure.DatastoreInfra
+		w      [2]*workload.Workload
+		cc     *connectivity.Checker
 	)
 
 	BeforeEach(func() {
-		felixes, etcd, client, infra = infrastructure.StartNNodeEtcdTopology(2, infrastructure.DefaultTopologyOptions())
+		tc, etcd, client, infra = infrastructure.StartNNodeEtcdTopology(2, infrastructure.DefaultTopologyOptions())
 		infrastructure.CreateDefaultProfile(client, "default", map[string]string{"default": ""}, "")
 		// Wait until the tunl0 device appears; it is created when felix inserts the ipip module
 		// into the kernel.
@@ -74,7 +74,7 @@ var _ = Context("etcd connection interruption", func() {
 		for ii := range w {
 			wIP := fmt.Sprintf("10.65.%d.2", ii)
 			wName := fmt.Sprintf("w%d", ii)
-			w[ii] = workload.Run(felixes[ii], wName, "default", wIP, "8055", "tcp")
+			w[ii] = workload.Run(tc.Felixes[ii], wName, "default", wIP, "8055", "tcp")
 			w[ii].Configure(client)
 		}
 
@@ -83,7 +83,7 @@ var _ = Context("etcd connection interruption", func() {
 
 	AfterEach(func() {
 		if CurrentGinkgoTestDescription().Failed {
-			for _, felix := range felixes {
+			for _, felix := range tc.Felixes {
 				felix.Exec("iptables-save", "-c")
 				felix.Exec("ipset", "list")
 				felix.Exec("ip", "r")
@@ -93,9 +93,7 @@ var _ = Context("etcd connection interruption", func() {
 		for _, wl := range w {
 			wl.Stop()
 		}
-		for _, felix := range felixes {
-			felix.Stop()
-		}
+		tc.Stop()
 
 		if CurrentGinkgoTestDescription().Failed {
 			etcd.Exec("etcdctl", "get", "/", "--prefix", "--keys-only")
@@ -114,10 +112,10 @@ var _ = Context("etcd connection interruption", func() {
 		etcd.Stop()
 
 		delay := 10 * time.Second
-		startCPU, err := metrics.GetFelixMetricFloat(felixes[0].IP, "process_cpu_seconds_total")
+		startCPU, err := metrics.GetFelixMetricFloat(tc.Felixes[0].IP, "process_cpu_seconds_total")
 		Expect(err).NotTo(HaveOccurred())
 		time.Sleep(delay)
-		endCPU, err := metrics.GetFelixMetricFloat(felixes[0].IP, "process_cpu_seconds_total")
+		endCPU, err := metrics.GetFelixMetricFloat(tc.Felixes[0].IP, "process_cpu_seconds_total")
 		Expect(err).NotTo(HaveOccurred())
 
 		cpuPct := (endCPU - startCPU) / delay.Seconds() * 100
@@ -138,7 +136,7 @@ var _ = Context("etcd connection interruption", func() {
 			// to test the GRPC-level keep-alive, we want to simulate a network or NAT change that
 			// starts to black-hole the TCP connection so that there are no responses of any kind.
 			var portRegexp = regexp.MustCompile(`sport=(\d+).*dport=2379`)
-			for _, felix := range felixes {
+			for _, felix := range tc.Felixes {
 				// Use conntrack to identify the source port that Felix is using.
 				out, err := felix.ExecOutput("conntrack", "-L")
 				Expect(err).NotTo(HaveOccurred())

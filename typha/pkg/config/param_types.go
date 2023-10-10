@@ -81,7 +81,7 @@ type IntParam struct {
 }
 
 func (p *IntParam) Parse(raw string) (interface{}, error) {
-	value, err := strconv.ParseInt(raw, 0, 64)
+	value, err := strconv.ParseInt(raw, 0, 32)
 	if err != nil {
 		err = p.parseFailed(raw, "invalid int")
 		return nil, err

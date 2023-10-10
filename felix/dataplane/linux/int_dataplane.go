@@ -22,6 +22,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -33,6 +34,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/projectcalico/calico/felix/bpf/bpfmap"
+	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	"github.com/projectcalico/calico/felix/bpf/failsafes"
 	bpfmaps "github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/nat"
@@ -639,7 +641,11 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	if config.BPFEnabled {
 		log.Info("BPF enabled, starting BPF endpoint manager and map manager.")
 		var err error
-		bpfMaps, err = bpfmap.CreateBPFMaps()
+		ipFamily := 4
+		if config.BPFIpv6Enabled {
+			ipFamily = 6
+		}
+		bpfMaps, err = bpfmap.CreateBPFMaps(ipFamily)
 		if err != nil {
 			log.WithError(err).Panic("error creating bpf maps")
 		}
@@ -651,6 +657,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			ipSetsConfigV4,
 			ipSetIDAllocator,
 			bpfMaps.IpsetsMap,
+			bpfipsets.IPSetEntryFromBytes,
+			bpfipsets.ProtoIPSetMemberToBPFEntry,
 			dp.loopSummarizer,
 		)
 		dp.ipSets = append(dp.ipSets, ipSetsV4)
@@ -661,11 +669,15 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		// Forwarding into an IPIP tunnel fails silently because IPIP tunnels are L3 devices and support for
 		// L3 devices in BPF is not available yet.  Disable the FIB lookup in that case.
 		fibLookupEnabled := !config.RulesConfig.IPIPEnabled
+		keyFromSlice := failsafes.KeyFromSlice
+		makeKey := failsafes.MakeKey
 		failsafeMgr := failsafes.NewManager(
 			bpfMaps.FailsafesMap,
 			config.RulesConfig.FailsafeInboundHostPorts,
 			config.RulesConfig.FailsafeOutboundHostPorts,
 			dp.loopSummarizer,
+			keyFromSlice,
+			makeKey,
 		)
 		dp.RegisterManager(failsafeMgr)
 
@@ -692,7 +704,10 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 		bpfEndpointManager.Features = dataplaneFeatures
 
-		conntrackScanner := bpfconntrack.NewScanner(bpfMaps.CtMap,
+		kfb := conntrack.KeyFromBytes
+		vfb := conntrack.ValueFromBytes
+
+		conntrackScanner := bpfconntrack.NewScanner(bpfMaps.CtMap, kfb, vfb,
 			bpfconntrack.NewLivenessScanner(config.BPFConntrackTimeouts, config.BPFNodePortDSREnabled))
 
 		// Before we start, scan for all finished / timed out connections to
@@ -710,6 +725,10 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 		if len(config.NodeZone) != 0 {
 			bpfproxyOpts = append(bpfproxyOpts, bpfproxy.WithTopologyNodeZone(config.NodeZone))
+		}
+
+		if config.BPFIpv6Enabled {
+			bpfproxyOpts = append(bpfproxyOpts, bpfproxy.WithIPFamily(6))
 		}
 
 		if config.KubeClientSet != nil {
@@ -2154,15 +2173,24 @@ func (d *InternalDataplane) apply() {
 	iptablesWG.Wait()
 
 	// Now clean up any left-over IP sets.
+	var ipSetsNeedsReschedule atomic.Bool
 	for _, ipSets := range d.ipSets {
 		ipSetsWG.Add(1)
 		go func(s common.IPSetsDataplane) {
-			s.ApplyDeletions()
+			defer ipSetsWG.Done()
+			reschedule := s.ApplyDeletions()
+			if reschedule {
+				ipSetsNeedsReschedule.Store(true)
+			}
 			d.reportHealth()
-			ipSetsWG.Done()
 		}(ipSets)
 	}
 	ipSetsWG.Wait()
+	if ipSetsNeedsReschedule.Load() {
+		if reschedDelay == 0 || reschedDelay > 100*time.Millisecond {
+			reschedDelay = 100 * time.Millisecond
+		}
+	}
 
 	// Wait for the route updates to finish.
 	routesWG.Wait()

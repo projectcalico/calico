@@ -100,6 +100,23 @@ blocks:
       commands:
       - make ci-preflight-checks
 
+- name: "FOSSA scan"
+  run:
+    when: "branch =~ '^release-v' OR branch = 'master'"
+  execution_time_limit:
+    minutes: 30
+  dependencies: ["Prerequisites"]
+  task:
+    prologue:
+      commands:
+      - "curl -fsSLH 'Cache-Control: no-cache' https://raw.githubusercontent.com/fossas/fossa-cli/master/install-latest.sh | bash"
+    jobs:
+    - name: "FOSSA scan"
+      commands:
+      - "fossa analyze"
+    secrets:
+      - name: foss-api-key
+
 - name: "API"
   run:
     when: "false or change_in(['/*', '/api/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
@@ -270,7 +287,7 @@ blocks:
 
 - name: "Felix: Windows FV"
   run:
-    when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/node', '/hack/test/certs/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+    when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/node', '/hack/test/certs/', '/process/testing/winfv/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
   dependencies: ["Felix: Build Windows binaries"]
   task:
     secrets:
@@ -502,6 +519,9 @@ blocks:
     - name: "Build Windows archive"
       commands:
       - ../.semaphore/run-and-monitor build-windows-archive.log make build-windows-archive
+    - name: "Build Windows image"
+      commands:
+      - ../.semaphore/run-and-monitor build-windows-image.log make image-windows
 
 - name: "e2e tests"
   run:
@@ -578,7 +598,7 @@ blocks:
 
 - name: "cni-plugin: Windows"
   run:
-    when: "false or change_in(['/*', '/cni-plugin/', '/libcalico-go/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+    when: "false or change_in(['/*', '/cni-plugin/', '/libcalico-go/', '/process/testing/winfv/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
   dependencies: ["Prerequisites"]
   task:
     secrets:
@@ -652,6 +672,9 @@ blocks:
     - name: "cni-plugin tests"
       commands:
       - ../.semaphore/run-and-monitor ci.log make ci
+    - name: "build windows cni-plugin images"
+      commands:
+      - ../.semaphore/run-and-monitor ci.log make image-windows
 
 - name: 'crypto'
   run:

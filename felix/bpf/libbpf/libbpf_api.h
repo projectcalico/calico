@@ -19,6 +19,7 @@
 #include <stdlib.h>
 #include <errno.h>
 #include "globals.h"
+#include "ip_addr.h"
 
 static void set_errno(int ret) {
 	errno = ret >= 0 ? ret : -ret;
@@ -181,11 +182,57 @@ void bpf_tc_set_globals(struct bpf_map *map,
 	set_errno(bpf_map__set_initial_value(map, (void*)(&data), sizeof(data)));
 }
 
+void bpf_tc_set_globals_v6(struct bpf_map *map,
+			   char *iface_name,
+			   char* host_ip,
+			   char* intf_ip,
+			   uint ext_to_svc_mark,
+			   ushort tmtu,
+			   ushort vxlanPort,
+			   ushort psnat_start,
+			   ushort psnat_len,
+			   char* host_tunnel_ip,
+			   uint flags,
+			   ushort wg_port,
+			   uint natin,
+			   uint natout,
+			   uint log_filter_jmp,
+			   uint *jumps)
+{
+	struct cali_tc_globals_v6 data = {
+		.tunnel_mtu = tmtu,
+		.vxlan_port = vxlanPort,
+		.ext_to_svc_mark = ext_to_svc_mark,
+		.psnat_start = psnat_start,
+		.psnat_len = psnat_len,
+		.flags = flags,
+		.wg_port = wg_port,
+		.natin_idx = natin,
+		.natout_idx = natout,
+		.log_filter_jmp = log_filter_jmp,
+	};
+
+	memcpy(&data.host_ip, host_ip, 16);
+	memcpy(&data.intf_ip, intf_ip, 16);
+	memcpy(&data.host_tunnel_ip, host_tunnel_ip, 16);
+
+	strncpy(data.iface_name, iface_name, sizeof(data.iface_name));
+	data.iface_name[sizeof(data.iface_name)-1] = '\0';
+
+	int i;
+
+	for (i = 0; i < sizeof(data.jumps)/sizeof(uint); i++) {
+		data.jumps[i] = jumps[i];
+	}
+
+	set_errno(bpf_map__set_initial_value(map, (void*)(&data), sizeof(data)));
+}
+
 int bpf_xdp_program_id(int ifIndex) {
 	__u32 prog_id = 0, flags = 0;
 	int err;
 
-	err = bpf_get_link_xdp_id(ifIndex, &prog_id, flags);
+	err = bpf_xdp_query_id(ifIndex, flags, &prog_id);
 	set_errno(err);
 	return prog_id;
 }
@@ -195,8 +242,8 @@ int bpf_program_attach_xdp(struct bpf_object *obj, char *name, int ifIndex, int 
 	int err = 0;
 	struct bpf_link *link = NULL;
 	struct bpf_program *prog, *first_prog = NULL;
-	DECLARE_LIBBPF_OPTS(bpf_xdp_set_link_opts, opts,
-		.old_fd = bpf_prog_get_fd_by_id(old_id));
+	DECLARE_LIBBPF_OPTS(bpf_xdp_attach_opts, opts,
+		.old_prog_fd = bpf_prog_get_fd_by_id(old_id));
 
 	if (!(prog = bpf_object__find_program_by_name(obj, name))) {
 		err = ENOENT;
@@ -209,7 +256,7 @@ int bpf_program_attach_xdp(struct bpf_object *obj, char *name, int ifIndex, int 
 		return prog_fd;
 	}
 
-	err = bpf_set_link_xdp_fd_opts(ifIndex, prog_fd, flags, &opts);
+	err = bpf_xdp_attach(ifIndex, prog_fd, flags, &opts);
 	set_errno(err);
 	return err;
 
@@ -294,7 +341,7 @@ void bpf_xdp_set_globals(struct bpf_map *map, char *iface_name, uint *jumps)
 }
 
 void bpf_map_set_max_entries(struct bpf_map *map, uint max_entries) {
-	set_errno(bpf_map__resize(map, max_entries));
+	set_errno(bpf_map__set_max_entries(map, max_entries));
 }
 
 int num_possible_cpu()

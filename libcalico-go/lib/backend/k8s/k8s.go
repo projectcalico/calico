@@ -36,6 +36,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
+	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -335,6 +336,11 @@ func CreateKubernetesClientset(ca *apiconfig.CalicoAPIConfigSpec) (*rest.Config,
 			return nil, nil, resources.K8sErrorToCalico(err, nil)
 		}
 		config, err = clientConfig.ClientConfig()
+	} else if winutils.InHostProcessContainer() {
+		// ClientConfig() calls InClusterConfig() at some point, which doesn't work
+		// on Windows HPC. Use winutils.GetInClusterConfig() instead in this case.
+		// FIXME: this will no longer be needed when containerd v1.6 is EOL'd
+		config, err = winutils.GetInClusterConfig()
 	} else {
 		config, err = clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
 			&loadingRules, configOverrides).ClientConfig()

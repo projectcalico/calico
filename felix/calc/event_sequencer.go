@@ -49,8 +49,8 @@ type EventSequencer struct {
 	// updates and generate updates in dependency order.
 	pendingAddedIPSets           map[string]proto.IPSetUpdate_IPSetType
 	pendingRemovedIPSets         set.Set[string]
-	pendingAddedIPSetMembers     multidict.StringToIface
-	pendingRemovedIPSetMembers   multidict.StringToIface
+	pendingAddedIPSetMembers     multidict.Multidict[string, labelindex.IPSetMember]
+	pendingRemovedIPSetMembers   multidict.Multidict[string, labelindex.IPSetMember]
 	pendingPolicyUpdates         map[model.PolicyKey]*ParsedRules
 	pendingPolicyDeletes         set.Set[model.PolicyKey]
 	pendingProfileUpdates        map[model.ProfileRulesKey]*ParsedRules
@@ -131,8 +131,8 @@ func NewEventSequencer(conf configInterface) *EventSequencer {
 		config:                     conf,
 		pendingAddedIPSets:         map[string]proto.IPSetUpdate_IPSetType{},
 		pendingRemovedIPSets:       set.New[string](),
-		pendingAddedIPSetMembers:   multidict.NewStringToIface(),
-		pendingRemovedIPSetMembers: multidict.NewStringToIface(),
+		pendingAddedIPSetMembers:   multidict.New[string, labelindex.IPSetMember](),
+		pendingRemovedIPSetMembers: multidict.New[string, labelindex.IPSetMember](),
 
 		pendingPolicyUpdates:         map[model.PolicyKey]*ParsedRules{},
 		pendingPolicyDeletes:         set.New[model.PolicyKey](),
@@ -140,7 +140,7 @@ func NewEventSequencer(conf configInterface) *EventSequencer {
 		pendingProfileDeletes:        set.New[model.ProfileRulesKey](),
 		pendingEndpointUpdates:       map[model.Key]interface{}{},
 		pendingEndpointTierUpdates:   map[model.Key][]TierInfo{},
-		pendingEndpointDeletes:       set.NewBoxed[model.Key](),
+		pendingEndpointDeletes:       set.New[model.Key](),
 		pendingHostIPUpdates:         map[string]*net.IP{},
 		pendingHostIPDeletes:         set.New[string](),
 		pendingHostIPv6Updates:       map[string]*net.IP{},
@@ -148,7 +148,7 @@ func NewEventSequencer(conf configInterface) *EventSequencer {
 		pendingHostMetadataUpdates:   map[string]*hostInfo{},
 		pendingHostMetadataDeletes:   set.New[string](),
 		pendingIPPoolUpdates:         map[ip.CIDR]*model.IPPool{},
-		pendingIPPoolDeletes:         set.NewBoxed[ip.CIDR](),
+		pendingIPPoolDeletes:         set.New[ip.CIDR](),
 		pendingServiceAccountUpdates: map[proto.ServiceAccountID]*proto.ServiceAccountUpdate{},
 		pendingServiceAccountDeletes: set.New[proto.ServiceAccountID](),
 		pendingNamespaceUpdates:      map[proto.NamespaceID]*proto.NamespaceUpdate{},
@@ -166,11 +166,11 @@ func NewEventSequencer(conf configInterface) *EventSequencer {
 		sentIPSets:          set.New[string](),
 		sentPolicies:        set.New[model.PolicyKey](),
 		sentProfiles:        set.New[model.ProfileRulesKey](),
-		sentEndpoints:       set.NewBoxed[model.Key](),
+		sentEndpoints:       set.New[model.Key](),
 		sentHostIPs:         set.New[string](),
 		sentHostIPv6s:       set.New[string](),
 		sentHosts:           set.New[string](),
-		sentIPPools:         set.NewBoxed[ip.CIDR](),
+		sentIPPools:         set.New[ip.CIDR](),
 		sentServiceAccounts: set.New[proto.ServiceAccountID](),
 		sentNamespaces:      set.New[proto.NamespaceID](),
 		sentRoutes:          set.New[routeID](),
@@ -763,8 +763,7 @@ func (buf *EventSequencer) flushAddedIPSets() {
 	for setID, setType := range buf.pendingAddedIPSets {
 		log.WithField("setID", setID).Debug("Flushing added IP set")
 		members := make([]string, 0)
-		buf.pendingAddedIPSetMembers.Iter(setID, func(value interface{}) {
-			member := value.(labelindex.IPSetMember)
+		buf.pendingAddedIPSetMembers.Iter(setID, func(member labelindex.IPSetMember) {
 			members = append(members, memberToProto(member))
 		})
 		buf.pendingAddedIPSetMembers.DiscardKey(setID)
@@ -874,12 +873,10 @@ func (buf *EventSequencer) flushAddsOrRemoves(setID string) {
 	deltaUpdate := proto.IPSetDeltaUpdate{
 		Id: setID,
 	}
-	buf.pendingAddedIPSetMembers.Iter(setID, func(item interface{}) {
-		member := item.(labelindex.IPSetMember)
+	buf.pendingAddedIPSetMembers.Iter(setID, func(member labelindex.IPSetMember) {
 		deltaUpdate.AddedMembers = append(deltaUpdate.AddedMembers, memberToProto(member))
 	})
-	buf.pendingRemovedIPSetMembers.Iter(setID, func(item interface{}) {
-		member := item.(labelindex.IPSetMember)
+	buf.pendingRemovedIPSetMembers.Iter(setID, func(member labelindex.IPSetMember) {
 		deltaUpdate.RemovedMembers = append(deltaUpdate.RemovedMembers, memberToProto(member))
 	})
 	buf.pendingAddedIPSetMembers.DiscardKey(setID)

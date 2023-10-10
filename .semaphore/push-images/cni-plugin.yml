@@ -37,9 +37,15 @@ blocks:
       - name: quay-robot-calico+semaphoreci
       - name: docker
       jobs:
-      - name: "cni-plugin"
+      - name: "linux"
         env_vars:
         - name: DEV_REGISTRIES
           value: quay.io/calico docker.io/calico
         commands:
         - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C cni-plugin image-all cd CONFIRM=true; fi
+      - name: "windows"
+        env_vars:
+        - name: DEV_REGISTRIES
+          value: quay.io/calico docker.io/calico
+        commands:
+        - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C cni-plugin release-windows CONFIRM=true; fi

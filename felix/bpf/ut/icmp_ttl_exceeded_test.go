@@ -39,7 +39,7 @@ func TestICMPttlExceeded(t *testing.T) {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.Retval).To(Equal(0))
 
-		Expect(res.dataOut).To(HaveLen(134)) // eth + ip + 64 + udp + ip + icmp
+		Expect(res.dataOut).To(HaveLen(110)) // eth + ip(60) + udp + ip + icmp
 
 		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 		fmt.Printf("pktR = %+v\n", pktR)
@@ -55,7 +55,7 @@ func TestICMPttlExceededFromHEP(t *testing.T) {
 	iphdr := *ipv4Default
 	iphdr.TTL = 1
 
-	_, ipv4, l4, _, pktBytes, err := testPacket(nil, &iphdr, nil, nil)
+	_, ipv4, l4, _, pktBytes, err := testPacketV4(nil, &iphdr, nil, nil)
 	Expect(err).NotTo(HaveOccurred())
 
 	udp := l4.(*layers.UDP)

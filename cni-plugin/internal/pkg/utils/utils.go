@@ -44,13 +44,6 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
-func Min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
 // DetermineNodename gets the node name, in order of priority:
 // 1. Nodename field in NetConf
 // 2. Nodename from the file /var/lib/calico/nodename
@@ -373,18 +366,18 @@ func UpdateHostLocalIPAMDataForWindows(subnet string, ipamData map[string]interf
 	if len(subnet) == 0 {
 		return nil
 	}
-	//Checks whether the ip is valid or not
+	// Checks whether the ip is valid or not
 	logrus.Info("Updating host-local IPAM configuration to reserve IPs for Windows bridge.")
 	ip, ipnet, err := net.ParseCIDR(subnet)
 	if err != nil {
 		return err
 	}
-	//process only if we have ipv4 subnet
-	//VXLAN networks on Windows do not support dual-stack https://kubernetes.io/docs/setup/production-environment/windows/intro-windows-in-kubernetes/#ipv6-networking
+	// process only if we have ipv4 subnet
+	// VXLAN networks on Windows do not support dual-stack https://kubernetes.io/docs/setup/production-environment/windows/intro-windows-in-kubernetes/#ipv6-networking
 	if ip.To4() != nil {
-		//get Expected start and end range for given CIDR
+		// get Expected start and end range for given CIDR
 		expStartRange, expEndRange := getIPRanges(ip, ipnet)
-		//validate ranges given in cni.conf
+		// validate ranges given in cni.conf
 		rangeStart, _ := ipamData["rangeStart"].(string)
 		startRange, err := validateRangeOrSetDefault(rangeStart, expStartRange, ipnet, true)
 		if err != nil {
@@ -421,14 +414,14 @@ func getIPRanges(ip net.IP, ipnet *net.IPNet) (string, string) {
 }
 
 func validateStartRange(startRange net.IP, expStartRange net.IP) (net.IP, error) {
-	//check if we have ipv4 ip address
+	// check if we have ipv4 ip address
 	startRange = startRange.To4()
 	expStartRange = expStartRange.To4()
 	if startRange == nil || expStartRange == nil {
 		return nil, fmt.Errorf("Invalid ip address")
 	}
 	if bytes.Compare([]byte(startRange), []byte(expStartRange)) < 0 {
-		//if ip is not in given range,return default
+		// if ip is not in given range,return default
 		return expStartRange, nil
 	}
 	return startRange, nil
@@ -436,14 +429,14 @@ func validateStartRange(startRange net.IP, expStartRange net.IP) (net.IP, error)
 }
 
 func validateEndRange(endRange net.IP, expEndRange net.IP) (net.IP, error) {
-	//check if we have ipv4 ip address
+	// check if we have ipv4 ip address
 	endRange = endRange.To4()
 	expEndRange = expEndRange.To4()
 	if endRange == nil || expEndRange == nil {
 		return nil, fmt.Errorf("Invalid ip address")
 	}
 	if bytes.Compare([]byte(endRange), []byte(expEndRange)) > 0 {
-		//if ip is not in given range,return default
+		// if ip is not in given range,return default
 		return expEndRange, nil
 	}
 	return endRange, nil
@@ -454,26 +447,26 @@ func validateRangeOrSetDefault(rangeData string, expRange string, ipnet *net.IPN
 	var parsedIP *cnet.IP
 	var expRangeIP *cnet.IP
 	var ip net.IP
-	//Parse IP and convert into 4 bytes address
+	// Parse IP and convert into 4 bytes address
 	if expRangeIP = cnet.ParseIP(expRange); expRangeIP == nil {
 		return "", fmt.Errorf("expRange contains invalid ip")
 	}
 	if len(rangeData) > 0 {
-		//Checks whether the ip is valid or not
+		// Checks whether the ip is valid or not
 		if parsedIP = cnet.ParseIP(rangeData); parsedIP == nil {
 			return "", fmt.Errorf("range contains invalid ip")
-		} else if ipnet.Contains(parsedIP.IP) { //Checks whether the ip belongs to subnet
+		} else if ipnet.Contains(parsedIP.IP) { // Checks whether the ip belongs to subnet
 			if isRangeStart {
-				//check if Startrange should be in expected limit
+				// check if Startrange should be in expected limit
 				ip, _ = validateStartRange(parsedIP.IP, expRangeIP.IP)
 			} else {
-				//check if Endrange exceeds expected limit
+				// check if Endrange exceeds expected limit
 				ip, _ = validateEndRange(parsedIP.IP, expRangeIP.IP)
 			}
 			return ip.String(), nil
 		}
 	}
-	//return default range
+	// return default range
 	return expRangeIP.IP.String(), nil
 
 }

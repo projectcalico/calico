@@ -17,7 +17,6 @@
 package maps
 
 import (
-	"reflect"
 	"runtime"
 	"unsafe"
 
@@ -156,10 +155,10 @@ func GetMapInfo(fd FD) (*MapInfo, error) {
 	}, nil
 }
 
-func DeleteMapEntry(mapFD FD, k []byte, valueSize int) error {
-	log.Debugf("DeleteMapEntry(%v, %v, %v)", mapFD, k, valueSize)
+func DeleteMapEntry(mapFD FD, k []byte) error {
+	log.Debugf("DeleteMapEntry(%v, %v)", mapFD, k)
 
-	err := checkMapIfDebug(mapFD, len(k), valueSize)
+	err := checkMapIfDebug(mapFD, len(k), -1)
 	if err != nil {
 		return err
 	}
@@ -173,8 +172,8 @@ func DeleteMapEntry(mapFD FD, k []byte, valueSize int) error {
 	return nil
 }
 
-func DeleteMapEntryIfExists(mapFD FD, k []byte, valueSize int) error {
-	err := DeleteMapEntry(mapFD, k, valueSize)
+func DeleteMapEntryIfExists(mapFD FD, k []byte) error {
+	err := DeleteMapEntry(mapFD, k)
 	if err == unix.ENOENT {
 		// Delete failed because entry did not exist.
 		err = nil
@@ -260,11 +259,11 @@ func (m *Iterator) Next() (k, v []byte, err error) {
 			unsafe.Pointer(uintptr(m.keys)+uintptr(m.keyStride*(m.numEntriesLoaded-1))), (C.size_t)(m.keySize))
 	}
 
-	currentKeyPtr := unsafe.Pointer(uintptr(m.keys) + uintptr(m.keyStride*(m.entryIdx)))
-	currentValPtr := unsafe.Pointer(uintptr(m.values) + uintptr(m.valueStride*(m.entryIdx)))
+	currentKeyPtr := (*byte)(unsafe.Pointer(uintptr(m.keys) + uintptr(m.keyStride*(m.entryIdx))))
+	currentValPtr := (*byte)(unsafe.Pointer(uintptr(m.values) + uintptr(m.valueStride*(m.entryIdx))))
 
-	k = ptrToSlice(currentKeyPtr, m.keySize)
-	v = ptrToSlice(currentValPtr, m.valueSize)
+	k = unsafe.Slice(currentKeyPtr, m.keySize)
+	v = unsafe.Slice(currentValPtr, m.valueSize)
 
 	m.entryIdx++
 	m.numEntriesVisited++
@@ -275,14 +274,6 @@ func (m *Iterator) Next() (k, v []byte, err error) {
 		return
 	}
 
-	return
-}
-
-func ptrToSlice(ptr unsafe.Pointer, size int) (b []byte) {
-	keySliceHdr := (*reflect.SliceHeader)(unsafe.Pointer(&b))
-	keySliceHdr.Data = uintptr(ptr)
-	keySliceHdr.Cap = size
-	keySliceHdr.Len = size
 	return
 }
 

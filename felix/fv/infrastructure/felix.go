@@ -65,6 +65,8 @@ type Felix struct {
 	startupDelayed bool
 	restartDelayed bool
 	Workloads      []workload
+
+	TopologyOptions TopologyOptions
 }
 
 type workload interface {
@@ -223,8 +225,9 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 		"-P", "FORWARD", "DROP")
 
 	return &Felix{
-		Container:      c,
-		startupDelayed: options.DelayFelixStart,
+		Container:       c,
+		startupDelayed:  options.DelayFelixStart,
+		TopologyOptions: options,
 	}
 }
 
@@ -293,15 +296,26 @@ func (f *Felix) AttachTCPDump(iface string) *tcpdump.TCPDump {
 	return tcpdump.Attach(f.Container.Name, "", iface)
 }
 
-func (f *Felix) ProgramIptablesDNAT(serviceIP, targetIP, chain string) {
-	f.Exec(
-		"iptables",
-		"-w", "10", // Retry this for 10 seconds, e.g. if something else is holding the lock
-		"-W", "100000", // How often to probe the lock in microsecs.
-		"-t", "nat", "-A", chain,
-		"--destination", serviceIP,
-		"-j", "DNAT", "--to-destination", targetIP,
-	)
+func (f *Felix) ProgramIptablesDNAT(serviceIP, targetIP, chain string, ipv6 bool) {
+	if !ipv6 {
+		f.Exec(
+			"iptables",
+			"-w", "10", // Retry this for 10 seconds, e.g. if something else is holding the lock
+			"-W", "100000", // How often to probe the lock in microsecs.
+			"-t", "nat", "-A", chain,
+			"--destination", serviceIP,
+			"-j", "DNAT", "--to-destination", targetIP,
+		)
+	} else {
+		f.Exec(
+			"ip6tables",
+			"-w", "10", // Retry this for 10 seconds, e.g. if something else is holding the lock
+			"-W", "100000", // How often to probe the lock in microsecs.
+			"-t", "nat", "-A", chain,
+			"-d", serviceIP,
+			"-j", "DNAT", "--to-destination", targetIP,
+		)
+	}
 }
 
 type BPFIfState struct {

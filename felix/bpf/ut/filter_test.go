@@ -29,7 +29,7 @@ import (
 func TestFilter(t *testing.T) {
 	RegisterTestingT(t)
 
-	_, _, _, _, bytes, _ := testPacket(
+	_, _, _, _, bytes, _ := testPacketV4(
 		&layers.Ethernet{
 			SrcMAC:       []byte{0, 0, 0, 0, 0, 1},
 			DstMAC:       []byte{0, 0, 0, 0, 0, 2},
