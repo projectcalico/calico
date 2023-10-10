@@ -22,6 +22,7 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/time/rate"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 
@@ -114,6 +115,11 @@ func init() {
 	prometheus.MustRegister(legacyBlocksGauge)
 }
 
+type rateLimiterItemKey struct {
+	Type string
+	Name string
+}
+
 func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs kubernetes.Interface, pi, ni cache.Indexer) *ipamController {
 	var leakGracePeriod *time.Duration
 	if cfg.LeakGracePeriod != nil {
@@ -123,7 +129,11 @@ func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs k
 		client:    c,
 		clientset: cs,
 		config:    cfg,
-		rl:        workqueue.DefaultControllerRateLimiter(),
+		rl: workqueue.NewMaxOfRateLimiter(
+			workqueue.NewItemExponentialFailureRateLimiter(5*time.Millisecond, 30*time.Second),
+			// 10 qps, 100 bucket size.  This is only for retry speed and its only the overall factor (not per item)
+			&workqueue.BucketRateLimiter{Limiter: rate.NewLimiter(rate.Limit(10), 100)},
+		),
 
 		syncChan: make(chan interface{}, 1),
 
@@ -992,7 +1002,8 @@ func (c *ipamController) syncIPAM() error {
 		logc := log.WithField("node", cnode)
 
 		// Potentially rate limit node cleanup.
-		time.Sleep(c.rl.When(RateLimitCalicoDelete))
+		rlKey := rateLimiterItemKey{Type: RateLimitCalicoDelete, Name: cnode}
+		time.Sleep(c.rl.When(rlKey))
 		logc.Info("Cleaning up IPAM affinities for deleted node")
 		if err := c.cleanupNode(cnode); err != nil {
 			// Store the error, but continue. Storing the error ensures we'll retry.
@@ -1000,7 +1011,7 @@ func (c *ipamController) syncIPAM() error {
 			storedErr = err
 			continue
 		}
-		c.rl.Forget(RateLimitCalicoDelete)
+		c.rl.Forget(rlKey)
 	}
 	if storedErr != nil {
 		return storedErr
