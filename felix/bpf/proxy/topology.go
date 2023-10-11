@@ -35,7 +35,7 @@ func ShouldAppendTopologyAwareEndpoint(nodeZone string, hintsAnnotation string, 
 	// If hints annotation is not recognized or empty then ignore Topology Aware Hints.
 	if hintsAnnotation != "Auto" && hintsAnnotation != "auto" {
 		if hintsAnnotation != "" && hintsAnnotation != "Disabled" && hintsAnnotation != "disabled" {
-			log.Debugf("Skipping topology aware endpoint filtering since Service has unexpected value '%s' for key '%s'\n", hintsAnnotation, v1.AnnotationTopologyAwareHints)
+			log.Debugf("Skipping topology aware endpoint filtering since Service has unexpected value '%s' for key '%s'\n", hintsAnnotation, v1.DeprecatedAnnotationTopologyAwareHints)
 		}
 
 		return true
