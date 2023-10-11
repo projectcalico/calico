@@ -1716,6 +1716,28 @@ var polProgramTests = []polProgramTest{
 		},
 	},
 	{
+		PolicyName: "allow to named ports - v6",
+		Policy: makeRulesSingleTier([]*proto.Rule{{
+			Action:               "Allow",
+			DstNamedPortIpSetIds: []string{"setA", "setB"},
+		}}),
+		AllowedPackets: []packet{
+			udpPkt("[10::2]:12345", "[123::1]:1024"),
+			tcpPkt("[10::1]:31245", "[10::2]:80")},
+		DroppedPackets: []packet{
+			packetNoPorts(253, "11::2", "10::2"),    // Wrong proto, no ports
+			tcpPkt("[11::1]:12345", "[10::2]:8080"), // Wrong port
+			udpPkt("[10::1]:31245", "[10::2]:80"),   // Wrong proto
+			tcpPkt("[10::2]:80", "[10::1]:31245"),   // Src/dest confusion
+			tcpPkt("[10::2]:31245", "[10::1]:80"),   // Wrong dest
+		},
+		IPSets: map[string][]string{
+			"setA": {"10::2/128,tcp:80"},
+			"setB": {"123::1/128,udp:1024"},
+		},
+		ForIPv6: true,
+	},
+	{
 		PolicyName: "allow to mixed ports",
 		Policy: makeRulesSingleTier([]*proto.Rule{{
 			Action: "Allow",
