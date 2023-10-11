@@ -30,10 +30,10 @@ endif
 # that its package is github.com/projectcalico/api for easier mirroring.
 DOCKER_RUN := mkdir -p ../.go-pkg-cache bin $(GOMOD_CACHE) && \
 	docker run --rm \
-		--net=host \
 		--init \
+		--net=host \
+		--user=$(shell id -u):$(shell id -g) \
 		$(EXTRA_DOCKER_ARGS) \
-		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 		-e GOCACHE=/go-cache \
 		$(GOARCH_FLAGS) \
 		-e GOPATH=/go \
