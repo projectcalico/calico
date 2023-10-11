@@ -88,7 +88,7 @@ func (d daemonset) getContainerSpec(k8sClientset *kubernetes.Clientset, namespac
 			return &c, nil
 		}
 	}
-	return nil, fmt.Errorf("No container with name %s found in daemonset", containerName)
+	return nil, fmt.Errorf("no container with name %s found in daemonset", containerName)
 }
 
 // Get container image from a container spec.
@@ -115,13 +115,13 @@ func (d daemonset) GetContainerEnv(k8sClientset *kubernetes.Clientset, namespace
 		}
 	}
 
-	return "", fmt.Errorf("No Env with name %s found in container %s", envName, containerName)
+	return "", fmt.Errorf("no Env with name %s found in container %s", envName, containerName)
 }
 
 // Wait for daemonset to disappear.
 func (d daemonset) WaitForDaemonsetNotFound(k8sClientset *kubernetes.Clientset, namespace string, interval, timeout time.Duration) error {
-	return wait.PollImmediate(interval, timeout, func() (bool, error) {
-		_, err := k8sClientset.AppsV1().DaemonSets(namespace).Get(context.Background(), string(d), metav1.GetOptions{})
+	return wait.PollUntilContextTimeout(context.Background(), interval, timeout, true, func(ctx context.Context) (bool, error) {
+		_, err := k8sClientset.AppsV1().DaemonSets(namespace).Get(ctx, string(d), metav1.GetOptions{})
 		if apierrs.IsNotFound(err) {
 			return true, nil
 		}
@@ -288,8 +288,8 @@ func getPodContainerLog(k8sClientSet *kubernetes.Clientset, namespace, podName, 
 
 // waitForPodSuccessTimeout returns nil if the pod reached state success, or an error if it reached failure or ran too long.
 func waitForPodSuccessTimeout(k8sClientset *kubernetes.Clientset, podName, namespace string, interval, timeout time.Duration) error {
-	return wait.PollImmediate(interval, timeout, func() (bool, error) {
-		pod, err := k8sClientset.CoreV1().Pods(namespace).Get(context.Background(), podName, metav1.GetOptions{})
+	return wait.PollUntilContextTimeout(context.Background(), interval, timeout, true, func(ctx context.Context) (bool, error) {
+		pod, err := k8sClientset.CoreV1().Pods(namespace).Get(ctx, podName, metav1.GetOptions{})
 		if err != nil {
 			// Cannot get pod yet, retry.
 			return false, err
@@ -312,8 +312,8 @@ type k8snode string
 // If node labels has been set already, do nothing.
 func (n k8snode) addNodeLabels(k8sClientset *kubernetes.Clientset, labelMaps ...map[string]string) error {
 	nodeName := string(n)
-	return wait.PollImmediate(1*time.Second, 1*time.Minute, func() (bool, error) {
-		node, err := k8sClientset.CoreV1().Nodes().Get(context.Background(), nodeName, metav1.GetOptions{})
+	return wait.PollUntilContextTimeout(context.Background(), 1*time.Second, 1*time.Minute, true, func(ctx context.Context) (bool, error) {
+		node, err := k8sClientset.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
 		if err != nil {
 			return false, err
 		}
@@ -330,7 +330,7 @@ func (n k8snode) addNodeLabels(k8sClientset *kubernetes.Clientset, labelMaps ...
 		}
 
 		if needUpdate {
-			_, err := k8sClientset.CoreV1().Nodes().Update(context.Background(), node, metav1.UpdateOptions{})
+			_, err := k8sClientset.CoreV1().Nodes().Update(ctx, node, metav1.UpdateOptions{})
 			if err == nil {
 				return true, nil
 			}
@@ -351,8 +351,8 @@ func (n k8snode) addNodeLabels(k8sClientset *kubernetes.Clientset, labelMaps ...
 // If node labels do not exist, do nothing.
 func (n k8snode) removeNodeLabels(k8sClientset *kubernetes.Clientset, labelMaps ...map[string]string) error {
 	nodeName := string(n)
-	return wait.PollImmediate(1*time.Second, 1*time.Minute, func() (bool, error) {
-		node, err := k8sClientset.CoreV1().Nodes().Get(context.Background(), nodeName, metav1.GetOptions{})
+	return wait.PollUntilContextTimeout(context.Background(), 1*time.Second, 1*time.Minute, true, func(ctx context.Context) (bool, error) {
+		node, err := k8sClientset.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
 		if err != nil {
 			return false, err
 		}
@@ -368,7 +368,7 @@ func (n k8snode) removeNodeLabels(k8sClientset *kubernetes.Clientset, labelMaps 
 		}
 
 		if needUpdate {
-			_, err := k8sClientset.CoreV1().Nodes().Update(context.Background(), node, metav1.UpdateOptions{})
+			_, err := k8sClientset.CoreV1().Nodes().Update(ctx, node, metav1.UpdateOptions{})
 			if err == nil {
 				return true, nil
 			}
@@ -425,7 +425,7 @@ func isPodRunningAndReady(pod *v1.Pod) bool {
 
 // Wait for a pod becoming ready on a node.
 func (n k8snode) waitPodReadyForNode(k8sClientset *kubernetes.Clientset, namespace string, interval, timeout time.Duration, label map[string]string) error {
-	return wait.PollImmediate(interval, timeout, func() (bool, error) {
+	return wait.PollUntilContextTimeout(context.Background(), interval, timeout, true, func(context.Context) (bool, error) {
 		nodeName := string(n)
 		podList, err := k8sClientset.CoreV1().Pods(namespace).List(
 			context.Background(),
@@ -446,7 +446,7 @@ func (n k8snode) waitPodReadyForNode(k8sClientset *kubernetes.Clientset, namespa
 
 		if len(podList.Items) > 1 {
 			// Multiple pods, stop waiting
-			return true, fmt.Errorf("Getting multiple pod with label %v on node %s", label, nodeName)
+			return true, fmt.Errorf("getting multiple pod with label %v on node %s", label, nodeName)
 		}
 
 		pod := podList.Items[0]
@@ -486,12 +486,12 @@ func (n k8snode) execCommandInPod(k8sClientset *kubernetes.Clientset, namespace,
 
 	if !found {
 		// Can not find pod.
-		return "", fmt.Errorf("Failed to execute command in pod. Can not find pod with label in %v on node %s", label, nodeName)
+		return "", fmt.Errorf("failed to execute command in pod. Can not find pod with label in %v on node %s", label, nodeName)
 	}
 
 	if !isPodRunningAndReady(&pod) {
 		// Pod is not running and ready.
-		return "", fmt.Errorf("Failed to execute command in pod. Pod %s is not ready.", pod.Name)
+		return "", fmt.Errorf("failed to execute command in pod. Pod %s is not ready.", pod.Name)
 	}
 
 	cmdArgs := []string{"exec", pod.Name, fmt.Sprintf("--namespace=%s", namespace), fmt.Sprintf("-c=%s", containerName), "--"}
@@ -585,8 +585,8 @@ func (n k8snode) waitForNodeLabelDisappear(k8sClientset *kubernetes.Clientset, k
 	nodeName := string(n)
 	log.Infof("Waiting for node %s label %s to disappear.", nodeName, key)
 
-	return wait.PollImmediate(interval, timeout, func() (bool, error) {
-		node, err := k8sClientset.CoreV1().Nodes().Get(context.Background(), nodeName, metav1.GetOptions{})
+	return wait.PollUntilContextTimeout(context.Background(), interval, timeout, true, func(ctx context.Context) (bool, error) {
+		node, err := k8sClientset.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
 		if err != nil {
 			// Cannot get node, something wrong, stop waiting.
 			return true, err

@@ -263,6 +263,14 @@ $(FELIX_CONTAINER_CREATED): docker-image/calico-felix-wrapper \
 	touch $(FELIX_CONTAINER_CREATED)
 
 ###############################################################################
+# Static checks
+###############################################################################
+# k8s/apimachinery wait.NewExponentialBackoffManager is deprecated since v1.27 but the replacement
+# wait.BackoffUntil still reference BackoffManager so disable lint staticcheck.
+# FIXME remove once k8s dependency is updated.
+LINT_ARGS = --disable staticcheck --max-issues-per-linter 0 --max-same-issues 0 --timeout 8m
+
+###############################################################################
 # Unit Tests
 ###############################################################################
 
