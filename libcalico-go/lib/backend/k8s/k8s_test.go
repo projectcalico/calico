@@ -205,7 +205,7 @@ func (c cb) ExpectExists(updates []api.Update) {
 		log.Infof("[TEST] Expecting key: %v", update.Key)
 		matches := false
 
-		_ = wait.PollImmediate(1*time.Second, 60*time.Second, func() (bool, error) {
+		_ = wait.PollUntilContextTimeout(context.Background(), 1*time.Second, 60*time.Second, true, func(ctx context.Context) (bool, error) {
 			// Get the update.
 			c.Lock.Lock()
 			u, ok := c.State[update.Key.String()]
@@ -237,7 +237,7 @@ func (c cb) ExpectDeleted(kvps []model.KVPair) {
 		log.Infof("[TEST] Not expecting key: %v", kvp.Key)
 		exists := true
 
-		_ = wait.PollImmediate(1*time.Second, 60*time.Second, func() (bool, error) {
+		_ = wait.PollUntilContextTimeout(context.Background(), 1*time.Second, 60*time.Second, true, func(ctx context.Context) (bool, error) {
 			// Get the update.
 			c.Lock.Lock()
 			update, ok := c.State[kvp.Key.String()]
