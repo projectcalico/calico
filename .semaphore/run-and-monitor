@@ -59,9 +59,13 @@ END
 pid=$!
 
 grep_args=("--line-buffered" "-B2" "-A15" "--perl")
+# Combine the regexps; in Perl mode, grep only supports one
+# pattern so we combine them with '|'.
+pattern=""
 for r in "${log_monitor_regexps[@]}"; do
-  grep_args+=("-e" "$(printf "%q" "$r")")
+  pattern="${pattern}|$r"
 done
+grep_args+=( "-e" "${pattern:1}" )
 
 tail --pid $pid -n 1000000 -F "$log_file" | {
   # Always output the first n lines.
