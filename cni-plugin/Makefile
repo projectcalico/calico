@@ -167,7 +167,6 @@ ut-datastore:
 	docker run --rm -t --privileged --net=host \
 	$(EXTRA_DOCKER_ARGS) \
 	-e ETCD_IP=$(LOCAL_IP_ENV) \
-	-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 	-e RUN_AS_ROOT=true \
 	-e ARCH=$(ARCH) \
 	-e PLUGIN=calico \
