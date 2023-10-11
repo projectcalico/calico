@@ -211,24 +211,24 @@ var tcJumpMapIndexes = map[string][]int{
 		tcdefs.ProgIndexNewFlowDebug,
 	},
 	"IPv6": []int{
-		tcdefs.ProgIndexV6Main,
-		tcdefs.ProgIndexV6Policy,
-		tcdefs.ProgIndexV6Allowed,
-		tcdefs.ProgIndexV6Icmp,
-		tcdefs.ProgIndexV6Drop,
-		tcdefs.ProgIndexV6HostCtConflict,
-		tcdefs.ProgIndexV6IcmpInnerNat,
-		tcdefs.ProgIndexV6NewFlow,
+		tcdefs.ProgIndexMain,
+		tcdefs.ProgIndexPolicy,
+		tcdefs.ProgIndexAllowed,
+		tcdefs.ProgIndexIcmp,
+		tcdefs.ProgIndexDrop,
+		tcdefs.ProgIndexHostCtConflict,
+		tcdefs.ProgIndexIcmpInnerNat,
+		tcdefs.ProgIndexNewFlow,
 	},
 	"IPv6 debug": []int{
-		tcdefs.ProgIndexV6MainDebug,
-		tcdefs.ProgIndexV6PolicyDebug,
-		tcdefs.ProgIndexV6AllowedDebug,
-		tcdefs.ProgIndexV6IcmpDebug,
-		tcdefs.ProgIndexV6DropDebug,
-		tcdefs.ProgIndexV6HostCtConflictDebug,
-		tcdefs.ProgIndexV6IcmpInnerNatDebug,
-		tcdefs.ProgIndexV6NewFlowDebug,
+		tcdefs.ProgIndexMainDebug,
+		tcdefs.ProgIndexPolicyDebug,
+		tcdefs.ProgIndexAllowedDebug,
+		tcdefs.ProgIndexIcmpDebug,
+		tcdefs.ProgIndexDropDebug,
+		tcdefs.ProgIndexHostCtConflictDebug,
+		tcdefs.ProgIndexIcmpInnerNatDebug,
+		tcdefs.ProgIndexNewFlowDebug,
 	},
 }
 
@@ -357,7 +357,6 @@ func setupAndRun(logger testLogger, loglevel, section string, rules *polprog.Rul
 	if topts.ipv6 {
 		ipFamily = "IPv6"
 		obj += "_v6"
-		policyIdx = tcdefs.ProgIndexV6Policy
 	}
 
 	if topts.xdp {
@@ -527,10 +526,10 @@ func bpftool(args ...string) ([]byte, error) {
 var (
 	mapInitOnce sync.Once
 
-	natMap, natBEMap, ctMap, rtMap, ipsMap, testStateMap, affinityMap, arpMap, fsafeMap maps.Map
-	natMapV6, natBEMapV6, ctMapV6, rtMapV6, affinityMapV6, arpMapV6                     maps.Map
-	stateMap, countersMap, ifstateMap, progMap, progMapXDP, jumpMap, jumpMapXDP         maps.Map
-	allMaps                                                                             []maps.Map
+	natMap, natBEMap, ctMap, rtMap, ipsMap, testStateMap, affinityMap, arpMap, fsafeMap   maps.Map
+	natMapV6, natBEMapV6, ctMapV6, rtMapV6, ipsMapV6, affinityMapV6, arpMapV6, fsafeMapV6 maps.Map
+	stateMap, countersMap, ifstateMap, progMap, progMapXDP, jumpMap, jumpMapXDP           maps.Map
+	allMaps                                                                               []maps.Map
 )
 
 func initMapsOnce() {
@@ -544,6 +543,7 @@ func initMapsOnce() {
 		rtMap = routes.Map()
 		rtMapV6 = routes.MapV6()
 		ipsMap = ipsets.Map()
+		ipsMapV6 = ipsets.MapV6()
 		stateMap = state.Map()
 		testStateMap = state.MapForTest()
 		affinityMap = nat.AffinityMap()
@@ -551,11 +551,13 @@ func initMapsOnce() {
 		arpMap = arp.Map()
 		arpMapV6 = arp.MapV6()
 		fsafeMap = failsafes.Map()
+		fsafeMapV6 = failsafes.MapV6()
 		countersMap = counters.Map()
 		ifstateMap = ifstate.Map()
 
-		allMaps = []maps.Map{natMap, natBEMap, natMapV6, natBEMapV6, ctMap, ctMapV6, rtMap, rtMapV6, ipsMap,
-			stateMap, testStateMap, affinityMap, affinityMapV6, arpMap, arpMapV6, fsafeMap, countersMap, ifstateMap}
+		allMaps = []maps.Map{natMap, natBEMap, natMapV6, natBEMapV6, ctMap, ctMapV6, rtMap, rtMapV6, ipsMap, ipsMapV6,
+			stateMap, testStateMap, affinityMap, affinityMapV6, arpMap, arpMapV6, fsafeMap, fsafeMapV6,
+			countersMap, ifstateMap}
 		for _, m := range allMaps {
 			err := m.EnsureExists()
 			if err != nil {
@@ -625,22 +627,14 @@ func tcUpdateJumpMap(obj *libbpf.Obj, progs []int, hasPolicyProg, hasHostConflic
 		switch idx {
 		case
 			tcdefs.ProgIndexPolicy,
-			tcdefs.ProgIndexPolicyDebug,
-			tcdefs.ProgIndexV6Policy,
-			tcdefs.ProgIndexV6PolicyDebug:
+			tcdefs.ProgIndexPolicyDebug:
 
 			if !hasPolicyProg {
 				continue
 			}
 		case
-			tcdefs.ProgIndexV6Icmp,
-			tcdefs.ProgIndexV6IcmpDebug:
-			continue // XXX not implemented
-		case
 			tcdefs.ProgIndexHostCtConflict,
-			tcdefs.ProgIndexHostCtConflictDebug,
-			tcdefs.ProgIndexV6HostCtConflict,
-			tcdefs.ProgIndexV6HostCtConflictDebug:
+			tcdefs.ProgIndexHostCtConflictDebug:
 			if !hasHostConflictProg {
 				continue
 			}
@@ -774,10 +768,6 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 
 	progDir := bpfFsDir
 	policyIdx := tcdefs.ProgIndexPolicy
-
-	if strings.HasPrefix(ipFamily, "IPv6") {
-		policyIdx = tcdefs.ProgIndexV6Policy
-	}
 
 	err = obj.PinPrograms(progDir)
 	if err != nil {
