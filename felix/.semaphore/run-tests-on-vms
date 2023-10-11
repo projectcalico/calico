@@ -49,13 +49,13 @@ for batch in "${batches[@]}"; do
   prefix="[batch=${batch} pid=${pid}]"
   echo "$prefix Started test batch in background; monitoring its log ($log_file)."
   (
-    tail -F $log_file | grep --line-buffered \
-      -e "Failure" \
+    tail -F $log_file | grep --line-buffered --perl \
+      -e "(?<!Decode)Failure" \
       -e "SUCCESS" \
       -e "Parallel test node" \
       -e "Test batch" \
       -e "FV-TEST-START" \
-      -C10 | sed 's/.*/'"${prefix}"' &/';
+      -B2 -A 15 | sed 's/.*/'"${prefix}"' &/';
   ) &
   mon_pid=$!
   monitor_pids+=( $mon_pid )
