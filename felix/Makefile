@@ -204,17 +204,19 @@ BPF_APACHE_O_FILES:=$(addprefix bpf-apache/bin/,$(notdir $(BPF_APACHE_C_FILES:.c
 
 ALL_BPF_PROGS=$(BPF_GPL_O_FILES) $(BPF_APACHE_O_FILES)
 
-
-# Mark the BPF programs phony so we'll always defer to their own makefile.  This is OK as long as
-# we're only depending on the BPF programs from other phony targets.  (Otherwise, we'd do
-# unnecessary rebuilds of anything that depends on the BPF prgrams.)
 .PHONY: build-bpf clean-bpf
-build-bpf:
+build-bpf: $(ALL_BPF_PROGS)
+
+# Mainly defer to the BPF Makefiles but try to guess a superset of the dependencies
+# to avoid unnecessary rebuilds. Note '&:' means "run this target once to produce
+# all target files".
+$(ALL_BPF_PROGS) &: $(shell find bpf-gpl bpf-apache -name '*.[ch]') bpf-gpl/Makefile bpf-apache/Makefile
 	$(MAKE) register ARCH=$(ARCH)
 	$(DOCKER_GO_BUILD) sh -c "make -j 16 -C bpf-apache all && \
 	                          make -j 16 -C bpf-gpl all ut-objs"
 	rm -rf bin/bpf
 	mkdir -p bin/bpf
+	touch -c $(ALL_BPF_PROGS)
 	cp $(ALL_BPF_PROGS) bin/bpf
 
 clean-bpf:
