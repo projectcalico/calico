@@ -370,9 +370,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 					// Removing the BGP config triggers a Felix restart and Felix has a 2s timer during
 					// a config restart to ensure that it doesn't tight loop.  Wait for the ipset to be
 					// updated as a signal that Felix has restarted.
-					Eventually(func() int {
-						return getNumIPSetMembers(f.Container, "cali40all-hosts-net")
-					}, "5s", "200ms").Should(BeZero())
+					Eventually(f.IPSetSizeFn("cali40all-hosts-net"), "5s", "200ms").Should(BeZero())
 				}
 			}
 		})
@@ -430,9 +428,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 					Consistently(f.BPFRoutes).ShouldNot(ContainSubstring(externalClient.IP))
 				} else {
 					// Make sure that only the internal nodes are present in the ipset
-					Eventually(func() int {
-						return getNumIPSetMembers(f.Container, "cali40all-hosts-net")
-					}, "5s", "200ms").Should(Equal(2))
+					Eventually(f.IPSetSizeFn("cali40all-hosts-net"), "5s", "200ms").Should(Equal(2))
 				}
 			}
 
@@ -468,12 +464,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 			for _, f := range tc.Felixes {
 				if BPFMode() {
 					Eventually(f.BPFRoutes, "10s").Should(ContainSubstring(externalClient.IP))
-					Expect(getNumIPSetMembers(f.Container, "cali40all-hosts-net")).To(BeZero(),
+					Expect(f.IPSetSize("cali40all-hosts-net")).To(BeZero(),
 						"BPF mode shouldn't program IP sets")
 				} else {
-					Eventually(func() int {
-						return getNumIPSetMembers(f.Container, "cali40all-hosts-net")
-					}, "15s", "200ms").Should(Equal(3))
+					Eventually(f.IPSetSizeFn("cali40all-hosts-net"), "15s", "200ms").Should(Equal(3))
 				}
 			}
 
@@ -484,32 +478,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 		})
 	})
 })
-
-func getNumIPSetMembers(c *containers.Container, ipSetName string) int {
-	return getIPSetCounts(c)[ipSetName]
-}
-
-func getIPSetCounts(c *containers.Container) map[string]int {
-	ipsetsOutput, err := c.ExecOutput("ipset", "list")
-	Expect(err).NotTo(HaveOccurred())
-	numMembers := map[string]int{}
-	currentName := ""
-	membersSeen := false
-	log.WithField("ipsets", ipsetsOutput).Info("IP sets state")
-	for _, line := range strings.Split(ipsetsOutput, "\n") {
-		log.WithField("line", line).Debug("Parsing line")
-		if strings.HasPrefix(line, "Name:") {
-			currentName = strings.Split(line, " ")[1]
-			membersSeen = false
-		} else if strings.HasPrefix(line, "Members:") {
-			membersSeen = true
-		} else if membersSeen && len(strings.TrimSpace(line)) > 0 {
-			log.Debugf("IP set %s has member %s", currentName, line)
-			numMembers[currentName]++
-		}
-	}
-	return numMembers
-}
 
 type createK8sServiceWithoutKubeProxyArgs struct {
 	infra     infrastructure.DatastoreInfra
