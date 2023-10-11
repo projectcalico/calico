@@ -121,6 +121,11 @@ func TestPolicyLoadKitchenSinkPolicy(t *testing.T) {
 		return id
 	}
 
+	jumpMap = jump.Map()
+	_ = unix.Unlink(jumpMap.Path())
+	err := jumpMap.EnsureExists()
+	Expect(err).NotTo(HaveOccurred())
+
 	cleanIPSetMap()
 
 	pg := polprog.NewBuilder(alloc, ipsMap.MapFD(), stateMap.MapFD(), jumpMap.MapFD(),
