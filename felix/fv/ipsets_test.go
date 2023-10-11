@@ -19,7 +19,6 @@ package fv_test
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -112,16 +111,15 @@ var _ = Context("_IPSets_ Tests for IPset rendering", func() {
 
 		By("Creating a workload, activating the policies")
 		// Create a workload that uses the policy.
-		baseNumSets := getNumIPSets(tc.Felixes[0].Container)
+		baseNumSets := tc.Felixes[0].Container.NumIPSets()
 		wep := w.WorkloadEndpoint.DeepCopy()
 		w.ConfigureInInfra(infra)
 		startTime := time.Now()
 
 		By("Waiting for the first IP set to be programmed...")
-		numIPSets := func() int { return getNumIPSets(tc.Felixes[0].Container) }
-		Eventually(numIPSets, "240s", "1s").Should(BeNumerically(">", baseNumSets))
+		Eventually(tc.Felixes[0].NumIPSets, "240s", "1s").Should(BeNumerically(">", baseNumSets))
 		By(fmt.Sprint("First IP set programmed after ", time.Since(startTime)))
-		Eventually(numIPSets, "240s", "1s").Should(BeNumerically(">=", numSets+baseNumSets))
+		Eventually(tc.Felixes[0].NumIPSets, "240s", "1s").Should(BeNumerically(">=", numSets+baseNumSets))
 		timeToCreateAll := time.Since(startTime)
 		By(fmt.Sprint("All IP sets programmed after ", timeToCreateAll))
 
@@ -134,7 +132,7 @@ var _ = Context("_IPSets_ Tests for IPset rendering", func() {
 		// deletions would happen in one cycle of the internal dataplane.
 		// Since deletions are (weirdly) slow in the kernel, we'd then block
 		// for a long time, preventing recreation of the IP sets.
-		Eventually(numIPSets, "240s", "1s").Should(BeNumerically("<", numSets+baseNumSets))
+		Eventually(tc.Felixes[0].NumIPSets, "240s", "1s").Should(BeNumerically("<", numSets+baseNumSets))
 		timeToDeleteFirst := time.Since(startTime)
 		By(fmt.Sprint("First IP set deleted after ", timeToDeleteFirst))
 
@@ -145,7 +143,7 @@ var _ = Context("_IPSets_ Tests for IPset rendering", func() {
 		startTime = time.Now()
 
 		By("Waiting for all IP sets to be recreated")
-		Eventually(numIPSets, "240s", "1s").Should(BeNumerically(">=", numSets+baseNumSets))
+		Eventually(tc.Felixes[0].NumIPSets, "240s", "1s").Should(BeNumerically(">=", numSets+baseNumSets))
 		timeToRecreateAll := time.Since(startTime)
 		By(fmt.Sprint("All IP sets programmed after ", timeToRecreateAll))
 
@@ -158,9 +156,3 @@ var _ = Context("_IPSets_ Tests for IPset rendering", func() {
 			"Recreating IP sets succeeded but slower than expected")
 	})
 })
-
-func getNumIPSets(c *containers.Container) int {
-	ipsetsOutput, err := c.ExecOutput("ipset", "list", "-name")
-	Expect(err).NotTo(HaveOccurred())
-	return strings.Count(ipsetsOutput, "\n")
-}

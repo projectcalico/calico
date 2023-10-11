@@ -18,7 +18,7 @@ set -e
 
 num_unfiltered_lines=2000
 log_monitor_regexps=(
-  "Failure"
+  "(?<!Decode)Failure"
   "FAIL"
   "SUCCESS"
   "Test batch"
@@ -58,7 +58,7 @@ END
 # Capture the PID of the expect process so we can wait on it below.
 pid=$!
 
-grep_args=("--line-buffered" "-C10")
+grep_args=("--line-buffered" "-B2" "-A15" "--perl")
 for r in "${log_monitor_regexps[@]}"; do
   grep_args+=("-e" "$(printf "%q" "$r")")
 done

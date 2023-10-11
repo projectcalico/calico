@@ -496,9 +496,21 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 			Context("after removing BGP address from third node", func() {
 				// Simulate having a host send VXLAN traffic from an unknown source, should get blocked.
 				BeforeEach(func() {
-					Eventually(func() int {
-						return getNumIPSetMembers(felixes[0].Container, "cali40all-vxlan-net")
-					}, "10s", "200ms").Should(Equal(len(felixes) - 1))
+					for _, f := range felixes {
+						if BPFMode() {
+							Eventually(func() int {
+								return strings.Count(f.BPFRoutes(), "host")
+							}).Should(Equal(len(felixes)*2),
+								"Expected one host and one host tunneled route per node")
+						} else {
+							Eventually(f.IPSetSizeFn("cali40all-vxlan-net"), "10s", "200ms").Should(Equal(len(felixes) - 1))
+						}
+					}
+
+					// Pause felix[2], so it can't touch the dataplane; we want to
+					// test that felix[0] blocks the traffic.
+					pid := felixes[2].GetFelixPID()
+					felixes[2].Exec("kill", "-STOP", fmt.Sprint(pid))
 
 					ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 					defer cancel()
@@ -506,18 +518,19 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 					node, err := client.Nodes().Get(ctx, felixes[2].Hostname, options.GetOptions{})
 					Expect(err).NotTo(HaveOccurred())
 
-					// Pause felix so it can't touch the dataplane!
-					pid := felixes[2].GetFelixPID()
-					felixes[2].Exec("kill", "-STOP", fmt.Sprint(pid))
-
 					node.Spec.BGP = nil
 					_, err = client.Nodes().Update(ctx, node, options.SetOptions{})
 				})
 
 				It("should have no connectivity from third felix and expected number of IPs in allow list", func() {
-					Eventually(func() int {
-						return getNumIPSetMembers(felixes[0].Container, "cali40all-vxlan-net")
-					}, "5s", "200ms").Should(Equal(len(felixes) - 2))
+					if BPFMode() {
+						Eventually(func() int {
+							return strings.Count(felixes[0].BPFRoutes(), "host")
+						}).Should(Equal((len(felixes)-1)*2),
+							"Expected one host and one host tunneled route per node, not: "+felixes[0].BPFRoutes())
+					} else {
+						Eventually(felixes[0].IPSetSizeFn("cali40all-vxlan-net"), "5s", "200ms").Should(Equal(len(felixes) - 2))
+					}
 
 					cc.ExpectSome(w[0], w[1])
 					cc.ExpectSome(w[1], w[0])
@@ -544,12 +557,15 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 			Context("after removing BGP address from third node, all felixes paused", func() {
 				// Simulate having a host send VXLAN traffic from an unknown source, should get blocked.
 				BeforeEach(func() {
+					if BPFMode() {
+						Skip("Skipping due to manual removal of host from ipset not breaking connectivity in BPF mode")
+						return
+					}
+
 					// Check we initially have the expected number of entries.
 					for _, f := range felixes {
 						// Wait for Felix to set up the allow list.
-						Eventually(func() int {
-							return getNumIPSetMembers(f.Container, "cali40all-vxlan-net")
-						}, "5s", "200ms").Should(Equal(len(felixes) - 1))
+						Eventually(f.IPSetSizeFn("cali40all-vxlan-net"), "5s", "200ms").Should(Equal(len(felixes) - 1))
 					}
 
 					// Wait until dataplane has settled.
@@ -566,13 +582,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 					}
 				})
 
-				if vxlanMode == api.VXLANModeAlways {
+				// BPF mode doesn't use the IP set.
+				if vxlanMode == api.VXLANModeAlways && !BPFMode() {
 					It("after manually removing third node from allow list should have expected connectivity", func() {
-						if BPFMode() {
-							Skip("Skipping due to manual removal of host from ipset not breaking connectivity in BPF mode")
-							return
-						}
-
 						felixes[0].Exec("ipset", "del", "cali40all-vxlan-net", felixes[2].IP)
 						if enableIPv6 {
 							felixes[0].Exec("ipset", "del", "cali60all-vxlan-net", felixes[2].IPv6)
