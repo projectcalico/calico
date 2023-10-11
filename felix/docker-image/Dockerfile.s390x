@@ -50,8 +50,12 @@ COPY --from=wgtool /usr/bin/wg /usr/bin/wg
 RUN update-alternatives --set iptables /usr/sbin/iptables-legacy
 RUN update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy
 
-ADD felix.cfg /etc/calico/felix.cfg
-ADD calico-felix-wrapper /usr/bin
+# Felix is built with RHEL/UBI and links against libpcap.so.1. We need this symbolic link
+# until Debian changes the soname from .0.8 to .1.
+RUN ln -s libpcap.so.1.8.1 /usr/lib/x86_64-linux-gnu/libpcap.so.1
+
+COPY felix.cfg /etc/calico/felix.cfg
+COPY calico-felix-wrapper /usr/bin
 
 COPY --from=bpftool /bpftool /usr/bin
 WORKDIR /code
