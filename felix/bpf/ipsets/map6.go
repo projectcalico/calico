@@ -74,7 +74,7 @@ func (e IPSetEntryV6) PrefixLen() uint32 {
 }
 
 func (e IPSetEntryV6) Protocol() uint8 {
-	return e[20]
+	return e[30]
 }
 
 func (e IPSetEntryV6) Port() uint16 {
@@ -101,7 +101,7 @@ func MakeBPFIPSetEntryV6(setID uint64, cidr ip.V6CIDR, port uint16, proto uint8)
 	ipv6 := cidr.Addr().(ip.V6Addr)
 	copy(entry[12:28], ipv6[:])
 	binary.LittleEndian.PutUint16(entry[28:30], port)
-	entry[31] = proto
+	entry[30] = proto
 	return entry
 }
 
