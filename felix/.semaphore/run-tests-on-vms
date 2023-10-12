@@ -32,7 +32,7 @@ monitor_pattern=""
 for r in "${log_monitor_regexps[@]}"; do
   monitor_pattern="${monitor_pattern}|$r"
 done
-monitor_pattern="${pattern:1}" # Strip leading '|'
+monitor_pattern="${monitor_pattern:1}" # Strip leading '|'
 
 vm_name_prefix=$1
 project=unique-caldron-775
@@ -65,9 +65,9 @@ for batch in "${batches[@]}"; do
   prefix="[batch=${batch} pid=${pid}]"
   echo "$prefix Started test batch in background; monitoring its log ($log_file)."
   (
-    tail -F $log_file | grep --line-buffered --perl \
-      -e "${monitor_pattern}" \
-      -B2 -A 15 | sed 's/.*/'"${prefix}"' &/';
+    tail -F $log_file | \
+      grep --line-buffered --perl "${monitor_pattern}" -B 2 -A 15 | \
+      sed 's/.*/'"${prefix}"' &/';
   ) &
   mon_pid=$!
   monitor_pids+=( $mon_pid )
