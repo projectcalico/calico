@@ -65,7 +65,7 @@ func newRawEgressPolicyManager(rawTable IptablesTable, ruleRenderer policyRender
 		ruleRenderer:  ruleRenderer,
 		ipVersion:     ipVersion,
 		rawEgressOnly: true,
-		// Nake sure we set the filter at start-of-day, even if there are no policies.
+		// Make sure we set the filter at start-of-day, even if there are no policies.
 		ipSetFilterDirty: true,
 		neededIPSets:     make(map[proto.PolicyID]set.Set[string]),
 		ipSetsCallback:   ipSetsCallback,
