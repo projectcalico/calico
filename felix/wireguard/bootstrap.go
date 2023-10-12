@@ -413,6 +413,7 @@ func removeWireguardForBootstrapping(
 
 // getPublicKeyForNode returns the configured wireguard public key for a given node.
 func getPublicKeyForNode(logCtx *log.Entry, nodeName string, calicoClient clientv3.NodesClient, maxRetries int, ipVersion uint8) (string, error) {
+	//nolint:staticcheck // Ignore SA1019 deprecated
 	expBackoffMgr := wait.NewExponentialBackoffManager(
 		bootstrapBackoffDuration,
 		bootstrapBackoffMax,
@@ -522,6 +523,7 @@ func removeWireguardDevice(
 
 	logCtx.Debug("Removing wireguard device")
 
+	//nolint:staticcheck // Ignore SA1019 deprecated
 	expBackoffMgr := wait.NewExponentialBackoffManager(
 		bootstrapBackoffDuration,
 		bootstrapBackoffMax,
@@ -570,6 +572,7 @@ func removeWireguardPublicKey(
 		return fmt.Errorf("unknown IP version: %d", ipVersion)
 	}
 
+	//nolint:staticcheck // Ignore SA1019 deprecated
 	expBackoffMgr := wait.NewExponentialBackoffManager(
 		bootstrapBackoffDuration,
 		bootstrapBackoffMax,
