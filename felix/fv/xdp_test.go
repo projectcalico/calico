@@ -206,15 +206,16 @@ func xdpTest(getInfra infrastructure.InfraFactory, proto string) {
 	}
 
 	Context("with no untracked policy", func() {
-
 		It("should not have XDP program attached", func() {
 			Eventually(xdpProgramAttachedServerEth0, "10s", "1s").Should(BeFalse())
 			Consistently(xdpProgramAttachedServerEth0, "2s", "1s").Should(BeFalse())
 		})
 
-		It("should not program Linux IP sets", func() {
-			Consistently(tc.Felixes[0].NumIPSets, "5s", "1s").Should(BeZero())
-		})
+		if BPFMode() {
+			It("should not program Linux IP sets", func() {
+				Consistently(tc.Felixes[0].NumIPSets, "5s", "1s").Should(BeZero())
+			})
+		}
 	})
 
 	Context("with XDP blocklist on felix[srvr] blocking felixes[clnt]", func() {
