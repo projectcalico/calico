@@ -57,7 +57,6 @@ func newPolicyManager(rawTable, mangleTable, filterTable IptablesTable, ruleRend
 
 func newRawEgressPolicyManager(rawTable IptablesTable, ruleRenderer policyRenderer, ipVersion uint8,
 	ipSetsCallback func(neededIPSets set.Set[string])) *policyManager {
-	ipSetsCallback(set.New[string]())
 	return &policyManager{
 		rawTable:      rawTable,
 		mangleTable:   iptables.NewNoopTable(),
@@ -65,7 +64,7 @@ func newRawEgressPolicyManager(rawTable IptablesTable, ruleRenderer policyRender
 		ruleRenderer:  ruleRenderer,
 		ipVersion:     ipVersion,
 		rawEgressOnly: true,
-		// Nake sure we set the filter at start-of-day, even if there are no policies.
+		// Make sure we set the filter at start-of-day, even if there are no policies.
 		ipSetFilterDirty: true,
 		neededIPSets:     make(map[proto.PolicyID]set.Set[string]),
 		ipSetsCallback:   ipSetsCallback,
