@@ -159,7 +159,7 @@ $(BIN)/flannel:
 
 $(WINDOWS_BIN)/flannel.exe:
 	-mkdir -p $(WINDOWS_BIN)
-	$(CURL) -L --retry 5 https://github.com/flannel-io/cni-plugin/releases/download/$(FLANNEL_VERSION)/cni-plugin-flannel-windows-amd64-$(FLANNEL_VERSION).tgz | tar -xz -C $(WINDOWS_BIN) ./flannel-amd64.exe
+	$(CURL) -L --retry 5 https://github.com/flannel-io/cni-plugin/releases/download/$(FLANNEL_VERSION)/cni-plugin-flannel-windows-amd64-$(FLANNEL_VERSION).tgz | tar -xz -C $(WINDOWS_BIN) flannel-amd64.exe
 	mv $(WINDOWS_BIN)/flannel-amd64.exe $@
 
 ###############################################################################
