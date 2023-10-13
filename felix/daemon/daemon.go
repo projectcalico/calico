@@ -18,21 +18,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net"
-	"net/http"
-	_ "net/http/pprof" // Registers pprof handler on the default mux.
 	"os"
 	"os/exec"
 	"os/signal"
 	"reflect"
 	"runtime"
 	"runtime/debug"
-	"strconv"
 	"sync"
 	"syscall"
 	"time"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/debugserver"
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
@@ -427,7 +424,7 @@ configRetry:
 	}
 
 	if configParams.DebugPort != 0 {
-		startDebugPortServer(configParams.DebugHost, configParams.DebugPort)
+		debugserver.StartDebugPortServer(configParams.DebugHost, configParams.DebugPort)
 	}
 
 	// Start up the dataplane driver.  This may be the internal go-based driver or an external
@@ -707,21 +704,6 @@ configRetry:
 	// Now monitor the worker process and our worker threads and shut
 	// down the process gracefully if they fail.
 	monitorAndManageShutdown(failureReportChan, dpDriverCmd, stopSignalChans)
-}
-
-func startDebugPortServer(host string, port int) {
-	log.Infof("Insecure debug port is enabled on %s:%d.", host, port)
-	go func() {
-		addr := net.JoinHostPort(host, strconv.Itoa(port))
-		for {
-			log.Infof("Attempting to open debug port %s:%d", host, port)
-			err := http.ListenAndServe(addr, nil)
-			if err != nil {
-				log.WithError(err).Error("Debug port HTTP server failed.  Will retry...")
-				time.Sleep(time.Second)
-			}
-		}
-	}()
 }
 
 func monitorAndManageShutdown(failureReportChan <-chan string, driverCmd *exec.Cmd, stopSignalChans []chan<- *sync.WaitGroup) {

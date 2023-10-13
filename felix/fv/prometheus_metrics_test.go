@@ -39,10 +39,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Prometheus metrics tests", 
 
 	BeforeEach(func() {
 		infra = getInfra()
-		topologyOptions := infrastructure.DefaultTopologyOptions()
-		topologyOptions.ExtraEnvVars["FELIX_PrometheusMetricsEnabled"] = "true"
-		topologyOptions.ExtraEnvVars["FELIX_DebugPort"] = "6061"
-		topologyOptions.ExtraEnvVars["FELIX_DebugHost"] = "0.0.0.0"
+		topologyOptions = infrastructure.DefaultTopologyOptions()
 	})
 
 	JustBeforeEach(func() {
