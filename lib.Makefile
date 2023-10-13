@@ -507,21 +507,14 @@ endif
 GIT_CMD           = git
 DOCKER_CMD        = docker
 
-MANIFEST_TOOL_EXTRA_DOCKER_ARGS ?=
-# note that when using the MANIFEST_TOOL command you need to close the command with $(double_quote).
-MANIFEST_TOOL_CMD = docker run -t --entrypoint /bin/sh -v $(DOCKER_CONFIG):/root/.docker/config.json $(MANIFEST_TOOL_EXTRA_DOCKER_ARGS) $(CALICO_BUILD) -c \
-					  $(double_quote)/usr/bin/manifest-tool
-
 ifdef CONFIRM
 CRANE         = $(CRANE_CMD)
 GIT           = $(GIT_CMD)
 DOCKER        = $(DOCKER_CMD)
-MANIFEST_TOOL = $(MANIFEST_TOOL_CMD)
 else
 CRANE         = echo [DRY RUN] $(CRANE_CMD)
 GIT           = echo [DRY RUN] $(GIT_CMD)
 DOCKER        = echo [DRY RUN] $(DOCKER_CMD)
-MANIFEST_TOOL = echo [DRY RUN] $(MANIFEST_TOOL_CMD)
 endif
 
 commit-and-push-pr:
@@ -938,21 +931,6 @@ push-image-arch-to-registry-%:
 		$(DOCKER) push $(REGISTRY)/$(BUILD_IMAGE):$(IMAGETAG),\
 		$(NOECHO) $(NOOP)\
 	)
-
-manifest-tool-generate-spec: var-require-all-BUILD_IMAGE-IMAGETAG-MANIFEST_TOOL_SPEC_TEMPLATE-OUTPUT_FILE
-	bash $(MANIFEST_TOOL_SPEC_TEMPLATE) $(OUTPUT_FILE) $(BUILD_IMAGE) $(IMAGETAG)
-
-## push multi-arch manifest where supported. If the MANIFEST_TOOL_SPEC_TEMPLATE variable is specified this will include
-## the `from-spec` version of the tool.
-push-manifests: var-require-all-IMAGETAG  $(addprefix sub-manifest-,$(call escapefs,$(PUSH_MANIFEST_IMAGES)))
-ifdef MANIFEST_TOOL_SPEC_TEMPLATE
-sub-manifest-%: var-require-all-OUTPUT_DIR
-	$(MAKE) manifest-tool-generate-spec BUILD_IMAGE=$(call unescapefs,$*) OUTPUT_FILE=$(OUTPUT_DIR)$*.yaml
-	$(MANIFEST_TOOL) push from-spec $(OUTPUT_DIR)$*.yaml$(double_quote)
-else
-sub-manifest-%:
-	$(MANIFEST_TOOL) push from-args --platforms $(call join_platforms,$(VALIDARCHES)) --template $(call unescapefs,$*):$(IMAGETAG)-ARCHVARIANT --target $(call unescapefs,$*):$(IMAGETAG)$(double_quote)
-endif
 
 # cd-common tags and pushes images with the branch name and git version. This target uses PUSH_IMAGES, BUILD_IMAGE,
 # and BRANCH_NAME env variables to figure out what to tag and where to push it to.
