@@ -26,8 +26,9 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/projectcalico/calico/felix/fv/metrics"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/felix/fv/metrics"
 
 	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/felix/fv/tcpdump"
