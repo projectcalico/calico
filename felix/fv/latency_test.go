@@ -201,12 +201,7 @@ var _ = Context("_BPF-SAFE_ Latency tests with initialized Felix and etcd datast
 						}, "10s", "1000ms").Should(Equal(10002))
 					} else {
 						ipSetName := utils.IPSetNameForSelector(c.ipVersion, sourceSelector)
-						Eventually(func() int {
-							return getNumIPSetMembers(
-								tc.Felixes[0].Container,
-								ipSetName,
-							)
-						}, "100s", "1000ms").Should(Equal(10002))
+						Eventually(tc.Felixes[0].IPSetSizeFn(ipSetName), "100s", "1000ms").Should(Equal(10002))
 					}
 				})
 

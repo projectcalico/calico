@@ -197,20 +197,25 @@ func xdpTest(getInfra infrastructure.InfraFactory, proto string) {
 		return xdpProgramID(felix, iface) != 0
 	}
 
-	xdpProgramAttached_server_eth0 := func() bool {
+	xdpProgramAttachedServerEth0 := func() bool {
 		return xdpProgramAttached(tc.Felixes[srvr], "eth0")
 	}
 
-	xdpProgramID_server_eth0 := func() int {
+	xdpProgramIDServerEth0 := func() int {
 		return xdpProgramID(tc.Felixes[srvr], "eth0")
 	}
 
 	Context("with no untracked policy", func() {
-
 		It("should not have XDP program attached", func() {
-			Eventually(xdpProgramAttached_server_eth0, "10s", "1s").Should(BeFalse())
-			Consistently(xdpProgramAttached_server_eth0, "2s", "1s").Should(BeFalse())
+			Eventually(xdpProgramAttachedServerEth0, "10s", "1s").Should(BeFalse())
+			Consistently(xdpProgramAttachedServerEth0, "2s", "1s").Should(BeFalse())
 		})
+
+		if BPFMode() {
+			It("should not program Linux IP sets", func() {
+				Consistently(tc.Felixes[0].NumIPSets, "5s", "1s").Should(BeZero())
+			})
+		}
 	})
 
 	Context("with XDP blocklist on felix[srvr] blocking felixes[clnt]", func() {
@@ -252,7 +257,7 @@ func xdpTest(getInfra infrastructure.InfraFactory, proto string) {
 			_, err = client.GlobalNetworkPolicies().Create(utils.Ctx, xdpPolicy, utils.NoOptions)
 			Expect(err).NotTo(HaveOccurred())
 
-			Eventually(xdpProgramAttached_server_eth0, "10s", "1s").Should(BeTrue())
+			Eventually(xdpProgramAttachedServerEth0, "10s", "1s").Should(BeTrue())
 		})
 
 		AfterEach(func() {
@@ -263,7 +268,7 @@ func xdpTest(getInfra infrastructure.InfraFactory, proto string) {
 
 		It("should have consistent XDP program attached", func() {
 			id := xdpProgramID(tc.Felixes[srvr], "eth0")
-			Consistently(xdpProgramID_server_eth0(), "2s", "100ms").Should(Equal(id))
+			Consistently(xdpProgramIDServerEth0(), "2s", "100ms").Should(Equal(id))
 		})
 
 		Context("with untracked policies deleted again", func() {
@@ -272,8 +277,8 @@ func xdpTest(getInfra infrastructure.InfraFactory, proto string) {
 			})
 
 			It("should not have XDP program attached", func() {
-				Eventually(xdpProgramAttached_server_eth0, "10s", "1s").Should(BeFalse())
-				Consistently(xdpProgramAttached_server_eth0, "2s", "1s").Should(BeFalse())
+				Eventually(xdpProgramAttachedServerEth0, "10s", "1s").Should(BeFalse())
+				Consistently(xdpProgramAttachedServerEth0, "2s", "1s").Should(BeFalse())
 			})
 		})
 
@@ -480,7 +485,7 @@ func xdpTest(getInfra infrastructure.InfraFactory, proto string) {
 			BeforeEach(func() {
 				hostHexCIDR = applyGlobalNetworkSets("xdpblocklist", hostW[clnt].IP+"/8", "", false)
 
-				Eventually(xdpProgramAttached_server_eth0, "10s").Should(BeTrue())
+				Eventually(xdpProgramAttachedServerEth0, "10s").Should(BeTrue())
 			})
 
 			if !BPFMode() {

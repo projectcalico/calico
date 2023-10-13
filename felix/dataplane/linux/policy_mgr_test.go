@@ -250,12 +250,15 @@ var _ = Describe("Policy manager", func() {
 
 var _ = Describe("Raw egress policy manager", func() {
 	var (
-		policyMgr    *policyManager
-		rawTable     *mockTable
-		neededIPSets set.Set[string]
+		policyMgr        *policyManager
+		rawTable         *mockTable
+		neededIPSets     set.Set[string]
+		numCallbackCalls int
 	)
 
 	BeforeEach(func() {
+		neededIPSets = nil
+		numCallbackCalls = 0
 		rawTable = newMockTable("raw")
 		ruleRenderer := rules.NewRenderer(rules.Config{
 			IPSetConfigV4:               ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
@@ -267,7 +270,27 @@ var _ = Describe("Raw egress policy manager", func() {
 			IptablesMarkEndpoint:        0xff00,
 			IptablesMarkNonCaliEndpoint: 0x0100,
 		})
-		policyMgr = newRawEgressPolicyManager(rawTable, ruleRenderer, 4, func(ipSets set.Set[string]) { neededIPSets = ipSets })
+		policyMgr = newRawEgressPolicyManager(
+			rawTable,
+			ruleRenderer,
+			4,
+			func(ipSets set.Set[string]) {
+				neededIPSets = ipSets
+				numCallbackCalls++
+			})
+	})
+
+	It("correctly reports no IP sets at start of day", func() {
+		err := policyMgr.CompleteDeferredWork()
+		Expect(err).NotTo(HaveOccurred())
+		Expect(neededIPSets).ToNot(BeNil())
+		Expect(neededIPSets.Len()).To(BeZero())
+		Expect(numCallbackCalls).To(Equal(1))
+
+		By("Not repeating the callback.")
+		err = policyMgr.CompleteDeferredWork()
+		Expect(err).NotTo(HaveOccurred())
+		Expect(numCallbackCalls).To(Equal(1))
 	})
 
 	It("correctly reports needed IP sets", func() {
