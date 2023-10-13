@@ -37,6 +37,10 @@ LABEL name="Calico Typha" \
       description="Calico Typha is a fan-out datastore proxy" \
       maintainer="Shaun Crampton <shaun@tigera.io>"
 
+# Copy OS release and package metadata
+COPY --from=ubi /var/lib/rpm/* var/lib/rpm
+COPY --from=ubi /etc/redhat-release /etc/redhat-release
+
 COPY --from=ubi /sbin/tini /sbin/tini
 COPY --from=ubi /licenses /licenses
 
