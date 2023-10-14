@@ -18,6 +18,22 @@ set -e
 
 source .semaphore/new-kernel-common.sh
 
+log_monitor_regexps=(
+  "(?<!Decode)Failure"
+  "SUCCESS"
+  "Parallel test node"
+  "Test batch"
+  "FV-TEST-START"
+)
+
+# Combine the regexps; in Perl mode, grep only supports one
+# pattern so we combine them with '|'.
+monitor_pattern=""
+for r in "${log_monitor_regexps[@]}"; do
+  monitor_pattern="${monitor_pattern}|$r"
+done
+monitor_pattern="${monitor_pattern:1}" # Strip leading '|'
+
 vm_name_prefix=$1
 project=unique-caldron-775
 zone=${ZONE:-europe-west3-c}
@@ -49,13 +65,9 @@ for batch in "${batches[@]}"; do
   prefix="[batch=${batch} pid=${pid}]"
   echo "$prefix Started test batch in background; monitoring its log ($log_file)."
   (
-    tail -F $log_file | grep --line-buffered \
-      -e "Failure" \
-      -e "SUCCESS" \
-      -e "Parallel test node" \
-      -e "Test batch" \
-      -e "FV-TEST-START" \
-      -C10 | sed 's/.*/'"${prefix}"' &/';
+    tail -F $log_file | \
+      grep --line-buffered --perl "${monitor_pattern}" -B 2 -A 15 | \
+      sed 's/.*/'"${prefix}"' &/';
   ) &
   mon_pid=$!
   monitor_pids+=( $mon_pid )
