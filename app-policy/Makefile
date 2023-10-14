@@ -104,7 +104,7 @@ else
 	$(call build_binary, ./cmd/dikastes, $@)
 endif
 else
-	$(DOCKER_RUN_RO) \
+	$(DOCKER_RUN) \
 	  -e CGO_ENABLED=$(CGO_ENABLED) \
 	  -v $(CURDIR)/bin:/go/src/$(PACKAGE_NAME)/bin \
 	  $(CALICO_BUILD) go build -buildvcs=false -ldflags "-X main.VERSION=$(GIT_VERSION)" -v -o $(BINDIR)/dikastes-$(ARCH) ./cmd/dikastes
@@ -122,7 +122,7 @@ else
 	$(call build_static_binary, ./cmd/healthz, $@)
 endif
 else
-	$(DOCKER_RUN_RO) \
+	$(DOCKER_RUN) \
 	  -e CGO_ENABLED=$(CGO_ENABLED) \
 	  -v $(CURDIR)/bin:/go/src/$(PACKAGE_NAME)/bin \
 	  $(CALICO_BUILD) go build -buildvcs=false -ldflags "-X main.VERSION=$(GIT_VERSION)" -v -o $(BINDIR)/healthz-$(ARCH) ./cmd/healthz

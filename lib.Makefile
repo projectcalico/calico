@@ -294,11 +294,10 @@ DOCKER_BUILD=docker buildx build --pull \
 	     --build-arg UBI_IMAGE=$(UBI_IMAGE) \
 	     --build-arg GIT_VERSION=$(GIT_VERSION) $(TARGET_PLATFORM)
 
-DOCKER_RUN := mkdir -p ../.go-pkg-cache bin $(GOMOD_CACHE) && \
+DOCKER_RUN_AS_ROOT := mkdir -p ../.go-pkg-cache bin $(GOMOD_CACHE) && \
 	docker run --rm \
 		--init \
 		--net=host \
-		--user=$(shell id -u):$(shell id -g) \
 		$(EXTRA_DOCKER_ARGS) \
 		-e GOCACHE=/go-cache \
 		$(GOARCH_FLAGS) \
@@ -310,21 +309,7 @@ DOCKER_RUN := mkdir -p ../.go-pkg-cache bin $(GOMOD_CACHE) && \
 		-v $(REPO_ROOT)/.go-pkg-cache:/go-cache:rw \
 		-w /go/src/$(PACKAGE_NAME)
 
-DOCKER_RUN_RO := mkdir -p .go-pkg-cache bin $(GOMOD_CACHE) && \
-	docker run --rm \
-		--init \
-		--net=host \
-		--user=$(shell id -u):$(shell id -g) \
-		$(EXTRA_DOCKER_ARGS) \
-		-e GOCACHE=/go-cache \
-		$(GOARCH_FLAGS) \
-		-e GOPATH=/go \
-		-e OS=$(BUILDOS) \
-		-e GOOS=$(BUILDOS) \
-		-e GOFLAGS=$(GOFLAGS) \
-		-v $(REPO_ROOT):/go/src/github.com/projectcalico/calico:ro \
-		-v $(REPO_ROOT)/.go-pkg-cache:/go-cache:rw \
-		-w /go/src/$(PACKAGE_NAME)
+DOCKER_RUN := $(DOCKER_RUN_AS_ROOT) --user=$(shell id -u):$(shell id -g)
 
 DOCKER_GO_BUILD := $(DOCKER_RUN) $(CALICO_BUILD)
 
