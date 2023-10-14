@@ -47,9 +47,6 @@ endif
 ifeq ($(BUILDARCH),x86_64)
 	BUILDARCH=amd64
 endif
-ifeq ($(BUILDARCH),armv7l)
-        BUILDARCH=armv7
-endif
 
 # unless otherwise set, I am building for my own architecture, i.e. not cross-compiling
 ARCH ?= $(BUILDARCH)
@@ -60,12 +57,6 @@ ifeq ($(ARCH),aarch64)
 endif
 ifeq ($(ARCH),x86_64)
 	override ARCH=amd64
-endif
-ifeq ($(ARCH),armv7l)
-        override ARCH=armv7
-endif
-ifeq ($(ARCH),armhfv7)
-        override ARCH=armv7
 endif
 
 # If ARCH is arm based, find the requested version/variant
@@ -301,9 +292,6 @@ CERTS_PATH := $(REPO_ROOT)/hack/test/certs
 # cross-builds get the correct architecture set in the produced images.
 ifeq ($(ARCH),arm64)
 TARGET_PLATFORM=--platform=linux/arm64/v8
-endif
-ifeq ($(ARCH),armv7)
-TARGET_PLATFORM=--platform=linux/arm/v7
 endif
 ifeq ($(ARCH),ppc64le)
 TARGET_PLATFORM=--platform=linux/ppc64le
