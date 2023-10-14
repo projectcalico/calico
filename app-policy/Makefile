@@ -4,12 +4,6 @@ PACKAGE_NAME = github.com/projectcalico/calico/app-policy
 
 ###############################################################################
 
-# Figure out the users UID/GID.  These are needed to run docker containers
-# as the current user and ensure that files built inside containers are
-# owned by the current user.
-LOCAL_USER_ID:=$(shell id -u)
-MY_GID:=$(shell id -g)
-
 GENERATED_FILES=proto/felixbackend.pb.go proto/healthz.pb.go
 SRC_FILES=$(shell find . -name '*.go' |grep -v vendor) $(GENERATED_FILES)
 
@@ -110,7 +104,7 @@ else
 	$(call build_binary, ./cmd/dikastes, $@)
 endif
 else
-	$(DOCKER_RUN_RO) \
+	$(DOCKER_RUN) \
 	  -e CGO_ENABLED=$(CGO_ENABLED) \
 	  -v $(CURDIR)/bin:/go/src/$(PACKAGE_NAME)/bin \
 	  $(CALICO_BUILD) go build -buildvcs=false -ldflags "-X main.VERSION=$(GIT_VERSION)" -v -o $(BINDIR)/dikastes-$(ARCH) ./cmd/dikastes
@@ -128,7 +122,7 @@ else
 	$(call build_static_binary, ./cmd/healthz, $@)
 endif
 else
-	$(DOCKER_RUN_RO) \
+	$(DOCKER_RUN) \
 	  -e CGO_ENABLED=$(CGO_ENABLED) \
 	  -v $(CURDIR)/bin:/go/src/$(PACKAGE_NAME)/bin \
 	  $(CALICO_BUILD) go build -buildvcs=false -ldflags "-X main.VERSION=$(GIT_VERSION)" -v -o $(BINDIR)/healthz-$(ARCH) ./cmd/healthz
@@ -147,7 +141,7 @@ PROTOC_IMPORTS =  -I proto\
 protobuf: proto/felixbackend.pb.go proto/healthz.pb.go
 
 proto/felixbackend.pb.go: proto/felixbackend.proto
-	$(DOCKER_RUN) -v $(CURDIR):/src:rw --user $(LOCAL_USER_ID):$(LOCAL_USER_ID) \
+	$(DOCKER_RUN) -v $(CURDIR):/src:rw --user $(shell id -u):$(shell id -g) \
 		      $(PROTOC_CONTAINER) \
 		      $(PROTOC_IMPORTS) \
 		      proto/*.proto \
@@ -155,7 +149,7 @@ proto/felixbackend.pb.go: proto/felixbackend.proto
 	$(MAKE) fix
 
 proto/healthz.pb.go: proto/healthz.proto
-	$(DOCKER_RUN) -v $(CURDIR):/src:rw --user $(LOCAL_USER_ID):$(LOCAL_USER_ID) \
+	$(DOCKER_RUN) -v $(CURDIR):/src:rw --user $(shell id -u):$(shell id -g) \
 		      $(PROTOC_CONTAINER) \
 		      $(PROTOC_IMPORTS) \
 		      proto/*.proto \

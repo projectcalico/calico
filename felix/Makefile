@@ -67,7 +67,7 @@ endif
 
 FV_ETCDIMAGE?=$(ETCD_IMAGE)
 FV_TYPHAIMAGE?=felix-test/typha:latest-$(BUILDARCH)
-FV_K8SIMAGE=calico/go-build:$(GO_BUILD_VER)
+FV_K8SIMAGE=jha48/go-build:$(GO_BUILD_VER)
 FV_FELIXIMAGE?=$(FELIX_IMAGE):latest-$(ARCH)
 
 # Total number of batches to split the tests into.  In CI we set this to say 5 batches,
@@ -185,7 +185,7 @@ bin/calico-felix-race-$(ARCH): $(LIBBPF_A) $(SRC_FILES) ../go.mod
 
 # Generate the protobuf bindings for go. The proto/felixbackend.pb.go file is included in SRC_FILES
 protobuf proto/felixbackend.pb.go: proto/felixbackend.proto
-	docker run --rm --user $(LOCAL_USER_ID):$(LOCAL_GROUP_ID) \
+	docker run --rm --user=$(shell id -u):$(shell id -g) \
 		  -v $(CURDIR):/code -v $(CURDIR)/proto:/src:rw \
 		      $(PROTOC_CONTAINER) \
 		      --gogofaster_out=plugins=grpc:. \
@@ -520,18 +520,16 @@ bin/bpf_debug.test: $(GENERATED_FILES) $(shell find bpf/ -name '*.go')
 
 .PHONY: ut-bpf
 ut-bpf: $(LIBBPF_A) bin/bpf_ut.test bin/bpf.test build-bpf
-	$(DOCKER_RUN) \
+	$(DOCKER_RUN_AS_ROOT) \
 		--privileged \
-		-e RUN_AS_ROOT=true \
 		-e $(ACK_GINKGO) \
 		$(CALICO_BUILD) sh -c ' \
 		mount bpffs /sys/fs/bpf -t bpf && \
 		cd /go/src/$(PACKAGE_NAME)/bpf/ && \
 		BPF_FORCE_REAL_LIB=true ../bin/bpf.test -test.v -test.run "$(FOCUS)"'
-	$(DOCKER_RUN) \
+	$(DOCKER_RUN_AS_ROOT) \
 		--privileged \
 		-e $(ACK_GINKGO) \
-		-e RUN_AS_ROOT=true \
 		-v `pwd`:/code \
 		-v `pwd`/bpf-gpl/bin:/usr/lib/calico/bpf \
 		$(CALICO_BUILD) sh -c ' \
@@ -541,10 +539,9 @@ ut-bpf: $(LIBBPF_A) bin/bpf_ut.test bin/bpf.test build-bpf
 
 .PHONY: bench-bpf
 bench-bpf: $(LIBBPF_A) bin/bpf_ut.test bin/bpf.test build-bpf
-	$(DOCKER_RUN) \
+	$(DOCKER_RUN_AS_ROOT) \
 		--privileged \
 		-e $(ACK_GINKGO) \
-		-e RUN_AS_ROOT=true \
 		-v `pwd`:/code \
 		-v `pwd`/bpf-gpl/bin:/usr/lib/calico/bpf \
 		$(CALICO_BUILD) sh -c ' \

@@ -47,9 +47,6 @@ endif
 ifeq ($(BUILDARCH),x86_64)
 	BUILDARCH=amd64
 endif
-ifeq ($(BUILDARCH),armv7l)
-        BUILDARCH=armv7
-endif
 
 # unless otherwise set, I am building for my own architecture, i.e. not cross-compiling
 ARCH ?= $(BUILDARCH)
@@ -61,17 +58,6 @@ endif
 ifeq ($(ARCH),x86_64)
 	override ARCH=amd64
 endif
-ifeq ($(ARCH),armv7l)
-        override ARCH=armv7
-endif
-ifeq ($(ARCH),armhfv7)
-        override ARCH=armv7
-endif
-
-# If ARCH is arm based, find the requested version/variant
-ifeq ($(word 1,$(subst v, ,$(ARCH))),arm)
-ARM_VERSION := $(word 2,$(subst v, ,$(ARCH)))
-endif
 
 # detect the local outbound ip address
 LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | awk '{print $$7}')
@@ -79,12 +65,8 @@ LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | awk '{print $$7}')
 LATEST_IMAGE_TAG?=latest
 
 # these macros create a list of valid architectures for pushing manifests
-space :=
-space +=
 comma := ,
 double_quote := $(shell echo '"')
-prefix_linux = $(addprefix linux/,$(strip $(subst armv,arm/v,$1)))
-join_platforms = $(subst $(space),$(comma),$(call prefix_linux,$(strip $1)))
 
 ## Targets used when cross building.
 .PHONY: native register
@@ -148,7 +130,7 @@ endif
 # For building, we use the go-build image for the *host* architecture, even if the target is different
 # the one for the host should contain all the necessary cross-compilation tools
 # we do not need to use the arch since go-build:v0.15 now is multi-arch manifest
-GO_BUILD_IMAGE ?= calico/go-build
+GO_BUILD_IMAGE ?= jha48/go-build
 CALICO_BUILD    = $(GO_BUILD_IMAGE):$(GO_BUILD_VER)
 
 
@@ -269,19 +251,6 @@ ifneq ($(OS),Windows_NT)
 DATE:=$(shell date -u +'%FT%T%z')
 endif
 
-# Figure out the users UID/GID.  These are needed to run docker containers
-# as the current user and ensure that files built inside containers are
-# owned by the current user.
-ifneq ($(OS),Windows_NT)
-LOCAL_USER_ID:=$(shell id -u)
-LOCAL_GROUP_ID:=$(shell id -g)
-endif
-
-ifeq ("$(LOCAL_USER_ID)", "0")
-# The build needs to run as root.
-EXTRA_DOCKER_ARGS+=-e RUN_AS_ROOT='true'
-endif
-
 # Allow the ssh auth sock to be mapped into the build container.
 ifdef SSH_AUTH_SOCK
 	EXTRA_DOCKER_ARGS += -v $(SSH_AUTH_SOCK):/ssh-agent --env SSH_AUTH_SOCK=/ssh-agent
@@ -302,9 +271,6 @@ EXTRA_DOCKER_ARGS += -v $(GOMOD_CACHE):/go/pkg/mod:rw
 
 # Define go architecture flags to support arm variants
 GOARCH_FLAGS :=-e GOARCH=$(ARCH)
-ifdef ARM_VERSION
-GOARCH_FLAGS :=-e GOARCH=arm -e GOARM=$(ARM_VERSION)
-endif
 
 # Location of certificates used in UTs.
 REPO_ROOT := $(shell git rev-parse --show-toplevel)
@@ -314,9 +280,6 @@ CERTS_PATH := $(REPO_ROOT)/hack/test/certs
 # cross-builds get the correct architecture set in the produced images.
 ifeq ($(ARCH),arm64)
 TARGET_PLATFORM=--platform=linux/arm64/v8
-endif
-ifeq ($(ARCH),armv7)
-TARGET_PLATFORM=--platform=linux/arm/v7
 endif
 ifeq ($(ARCH),ppc64le)
 TARGET_PLATFORM=--platform=linux/ppc64le
@@ -331,12 +294,11 @@ DOCKER_BUILD=docker buildx build --pull \
 	     --build-arg UBI_IMAGE=$(UBI_IMAGE) \
 	     --build-arg GIT_VERSION=$(GIT_VERSION) $(TARGET_PLATFORM)
 
-DOCKER_RUN := mkdir -p ../.go-pkg-cache bin $(GOMOD_CACHE) && \
+DOCKER_RUN_AS_ROOT := mkdir -p ../.go-pkg-cache bin $(GOMOD_CACHE) && \
 	docker run --rm \
-		--net=host \
 		--init \
+		--net=host \
 		$(EXTRA_DOCKER_ARGS) \
-		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 		-e GOCACHE=/go-cache \
 		$(GOARCH_FLAGS) \
 		-e GOPATH=/go \
@@ -347,21 +309,7 @@ DOCKER_RUN := mkdir -p ../.go-pkg-cache bin $(GOMOD_CACHE) && \
 		-v $(REPO_ROOT)/.go-pkg-cache:/go-cache:rw \
 		-w /go/src/$(PACKAGE_NAME)
 
-DOCKER_RUN_RO := mkdir -p .go-pkg-cache bin $(GOMOD_CACHE) && \
-	docker run --rm \
-		--net=host \
-		--init \
-		$(EXTRA_DOCKER_ARGS) \
-		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
-		-e GOCACHE=/go-cache \
-		$(GOARCH_FLAGS) \
-		-e GOPATH=/go \
-		-e OS=$(BUILDOS) \
-		-e GOOS=$(BUILDOS) \
-		-e GOFLAGS=$(GOFLAGS) \
-		-v $(REPO_ROOT):/go/src/github.com/projectcalico/calico:ro \
-		-v $(REPO_ROOT)/.go-pkg-cache:/go-cache:rw \
-		-w /go/src/$(PACKAGE_NAME)
+DOCKER_RUN := $(DOCKER_RUN_AS_ROOT) --user=$(shell id -u):$(shell id -g)
 
 DOCKER_GO_BUILD := $(DOCKER_RUN) $(CALICO_BUILD)
 
@@ -507,21 +455,14 @@ endif
 GIT_CMD           = git
 DOCKER_CMD        = docker
 
-MANIFEST_TOOL_EXTRA_DOCKER_ARGS ?=
-# note that when using the MANIFEST_TOOL command you need to close the command with $(double_quote).
-MANIFEST_TOOL_CMD = docker run -t --entrypoint /bin/sh -v $(DOCKER_CONFIG):/root/.docker/config.json $(MANIFEST_TOOL_EXTRA_DOCKER_ARGS) $(CALICO_BUILD) -c \
-					  $(double_quote)/usr/bin/manifest-tool
-
 ifdef CONFIRM
 CRANE         = $(CRANE_CMD)
 GIT           = $(GIT_CMD)
 DOCKER        = $(DOCKER_CMD)
-MANIFEST_TOOL = $(MANIFEST_TOOL_CMD)
 else
 CRANE         = echo [DRY RUN] $(CRANE_CMD)
 GIT           = echo [DRY RUN] $(GIT_CMD)
 DOCKER        = echo [DRY RUN] $(DOCKER_CMD)
-MANIFEST_TOOL = echo [DRY RUN] $(MANIFEST_TOOL_CMD)
 endif
 
 commit-and-push-pr:
@@ -938,21 +879,6 @@ push-image-arch-to-registry-%:
 		$(DOCKER) push $(REGISTRY)/$(BUILD_IMAGE):$(IMAGETAG),\
 		$(NOECHO) $(NOOP)\
 	)
-
-manifest-tool-generate-spec: var-require-all-BUILD_IMAGE-IMAGETAG-MANIFEST_TOOL_SPEC_TEMPLATE-OUTPUT_FILE
-	bash $(MANIFEST_TOOL_SPEC_TEMPLATE) $(OUTPUT_FILE) $(BUILD_IMAGE) $(IMAGETAG)
-
-## push multi-arch manifest where supported. If the MANIFEST_TOOL_SPEC_TEMPLATE variable is specified this will include
-## the `from-spec` version of the tool.
-push-manifests: var-require-all-IMAGETAG  $(addprefix sub-manifest-,$(call escapefs,$(PUSH_MANIFEST_IMAGES)))
-ifdef MANIFEST_TOOL_SPEC_TEMPLATE
-sub-manifest-%: var-require-all-OUTPUT_DIR
-	$(MAKE) manifest-tool-generate-spec BUILD_IMAGE=$(call unescapefs,$*) OUTPUT_FILE=$(OUTPUT_DIR)$*.yaml
-	$(MANIFEST_TOOL) push from-spec $(OUTPUT_DIR)$*.yaml$(double_quote)
-else
-sub-manifest-%:
-	$(MANIFEST_TOOL) push from-args --platforms $(call join_platforms,$(VALIDARCHES)) --template $(call unescapefs,$*):$(IMAGETAG)-ARCHVARIANT --target $(call unescapefs,$*):$(IMAGETAG)$(double_quote)
-endif
 
 # cd-common tags and pushes images with the branch name and git version. This target uses PUSH_IMAGES, BUILD_IMAGE,
 # and BRANCH_NAME env variables to figure out what to tag and where to push it to.
@@ -1409,10 +1335,10 @@ endif
 # but not have any effect on the host config.
 CRANE_BINDMOUNT_CMD := \
 	docker run --rm \
-		--net=host \
 		--init \
+		--net=host \
+		--user=$(shell id -u):$(shell id -g) \
 		--entrypoint /bin/sh \
-		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 		-v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
 		-v $(DOCKER_CONFIG):/root/.docker/config.json_host:ro \
 		-e PATH=$${PATH}:/go/src/$(PACKAGE_NAME)/$(WINDOWS_DIST)/bin \
