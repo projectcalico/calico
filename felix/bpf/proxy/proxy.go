@@ -30,6 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/selection"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/events"
@@ -37,6 +38,7 @@ import (
 	"k8s.io/kubernetes/pkg/proxy/apis"
 	"k8s.io/kubernetes/pkg/proxy/config"
 	"k8s.io/kubernetes/pkg/proxy/healthcheck"
+	"k8s.io/kubernetes/pkg/proxy/util"
 	"k8s.io/kubernetes/pkg/util/async"
 )
 
@@ -145,7 +147,14 @@ func New(k8s kubernetes.Interface, dp DPSyncer, hostname string, opts ...Option)
 		p.invokeDPSyncer, p.minDPSyncPeriod, time.Hour /* XXX might be infinite? */, 1)
 	dp.SetTriggerFn(p.runner.Run)
 
-	p.svcHealthServer = healthcheck.NewServiceHealthServer(p.hostname, p.recorder, []string{"0.0.0.0/0"})
+	nodeRef := &v1.ObjectReference{
+		Kind:      "Node",
+		Name:      p.hostname,
+		UID:       types.UID(p.hostname),
+		Namespace: "",
+	}
+	p.healthzServer = healthcheck.NewProxierHealthServer("0.0.0.0:10256", p.minDPSyncPeriod, p.recorder, nodeRef)
+	p.svcHealthServer = healthcheck.NewServiceHealthServer(p.hostname, p.recorder, util.NewNodePortAddresses([]string{"0.0.0.0/0"}), p.healthzServer)
 
 	ipVersion := v1.IPv4Protocol
 	if p.ipFamily != 4 {
@@ -236,13 +245,13 @@ func (p *proxy) invokeDPSyncer() {
 	p.runnerLck.Lock()
 	defer p.runnerLck.Unlock()
 
-	svcUpdateResult := p.svcMap.Update(p.svcChanges)
-	epsUpdateResult := p.epsMap.Update(p.epsChanges)
+	_ = p.svcMap.Update(p.svcChanges)
+	_ = p.epsMap.Update(p.epsChanges)
 
-	if err := p.svcHealthServer.SyncServices(svcUpdateResult.HCServiceNodePorts); err != nil {
+	if err := p.svcHealthServer.SyncServices(p.svcMap.HealthCheckNodePorts()); err != nil {
 		log.WithError(err).Error("Error syncing healthcheck services")
 	}
-	if err := p.svcHealthServer.SyncEndpoints(epsUpdateResult.HCEndpointsLocalIPSize); err != nil {
+	if err := p.svcHealthServer.SyncEndpoints(p.epsMap.LocalReadyEndpoints()); err != nil {
 		log.WithError(err).Error("Error syncing healthcheck endpoints")
 	}
 
@@ -279,25 +288,6 @@ func (p *proxy) OnServiceDelete(svc *v1.Service) {
 
 func (p *proxy) OnServiceSynced() {
 	p.setSvcsSynced()
-	p.forceSyncDP()
-}
-
-func (p *proxy) OnEndpointsAdd(eps *v1.Endpoints) {
-	p.OnEndpointsUpdate(nil, eps)
-}
-
-func (p *proxy) OnEndpointsUpdate(old, curr *v1.Endpoints) {
-	if p.epsChanges.Update(old, curr) && p.isInitialized() {
-		p.syncDP()
-	}
-}
-
-func (p *proxy) OnEndpointsDelete(eps *v1.Endpoints) {
-	p.OnEndpointsUpdate(eps, nil)
-}
-
-func (p *proxy) OnEndpointsSynced() {
-	p.setEpsSynced()
 	p.forceSyncDP()
 }
 
