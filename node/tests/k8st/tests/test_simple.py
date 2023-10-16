@@ -19,7 +19,7 @@ import time
 from kubernetes import client
 
 from tests.k8st.test_base import TestBase
-from tests.k8st.utils.utils import retry_until_success, DiagsCollector, kubectl, node_info, run
+from tests.k8st.utils.utils import retry_until_success, DiagsCollector, kubectl, node_info, run, NGINX_IMAGE
 
 _log = logging.getLogger(__name__)
 
@@ -129,7 +129,7 @@ class TestSimplePolicy(TestBase):
     def setUp(self):
         TestBase.setUp(self)
         self.create_namespace("policy-demo")
-        self.deploy("nginx:1.7.9", "nginx", "policy-demo", 80)
+        self.deploy(NGINX_IMAGE, "nginx", "policy-demo", 80)
 
         # Create two client pods that live for the duration of the
         # test.  We will use 'kubectl exec' to try wgets from these at
