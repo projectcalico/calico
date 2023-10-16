@@ -246,9 +246,22 @@ BUILD_ID:=$(shell git rev-parse HEAD || uuidgen | sed 's/-//g')
 # Variables elsewhere that depend on this (such as LDFLAGS) must also be lazy.
 GIT_DESCRIPTION=$(shell git describe --tags --dirty --always --abbrev=12 || echo '<unknown>')
 
-# Calculate a timestamp for any build artefacts.
+# Calculate a timestamp for any build artifacts.
 ifneq ($(OS),Windows_NT)
 DATE:=$(shell date -u +'%FT%T%z')
+endif
+
+# Figure out the users UID/GID.  These are needed to run docker containers
+# as the current user and ensure that files built inside containers are
+# owned by the current user.
+ifneq ($(OS),Windows_NT)
+LOCAL_USER_ID:=$(shell id -u)
+LOCAL_GROUP_ID:=$(shell id -g)
+endif
+
+ifeq ("$(LOCAL_USER_ID)", "0")
+# The build needs to run as root.
+EXTRA_DOCKER_ARGS+=-e RUN_AS_ROOT='true'
 endif
 
 # Allow the ssh auth sock to be mapped into the build container.
@@ -296,10 +309,10 @@ DOCKER_BUILD=docker buildx build --pull \
 
 DOCKER_RUN := mkdir -p ../.go-pkg-cache bin $(GOMOD_CACHE) && \
 	docker run --rm \
-		--init \
 		--net=host \
-		--user=$(shell id -u):$(shell id -g) \
+		--init \
 		$(EXTRA_DOCKER_ARGS) \
+		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 		-e GOCACHE=/go-cache \
 		$(GOARCH_FLAGS) \
 		-e GOPATH=/go \
@@ -312,10 +325,10 @@ DOCKER_RUN := mkdir -p ../.go-pkg-cache bin $(GOMOD_CACHE) && \
 
 DOCKER_RUN_RO := mkdir -p .go-pkg-cache bin $(GOMOD_CACHE) && \
 	docker run --rm \
-		--init \
 		--net=host \
-		--user=$(shell id -u):$(shell id -g) \
+		--init \
 		$(EXTRA_DOCKER_ARGS) \
+		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 		-e GOCACHE=/go-cache \
 		$(GOARCH_FLAGS) \
 		-e GOPATH=/go \
@@ -1350,10 +1363,10 @@ endif
 # but not have any effect on the host config.
 CRANE_BINDMOUNT_CMD := \
 	docker run --rm \
-		--init \
 		--net=host \
-		--user=$(shell id -u):$(shell id -g) \
+		--init \
 		--entrypoint /bin/sh \
+		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 		-v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
 		-v $(DOCKER_CONFIG):/root/.docker/config.json_host:ro \
 		-e PATH=$${PATH}:/go/src/$(PACKAGE_NAME)/$(WINDOWS_DIST)/bin \

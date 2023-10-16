@@ -141,7 +141,7 @@ PROTOC_IMPORTS =  -I proto\
 protobuf: proto/felixbackend.pb.go proto/healthz.pb.go
 
 proto/felixbackend.pb.go: proto/felixbackend.proto
-	$(DOCKER_RUN) -v $(CURDIR):/src:rw --user $(shell id -u):$(shell id -g) \
+	$(DOCKER_RUN) -v $(CURDIR):/src:rw --user $(LOCAL_USER_ID):$(LOCAL_GROUP_ID) \
 		      $(PROTOC_CONTAINER) \
 		      $(PROTOC_IMPORTS) \
 		      proto/*.proto \
@@ -149,7 +149,7 @@ proto/felixbackend.pb.go: proto/felixbackend.proto
 	$(MAKE) fix
 
 proto/healthz.pb.go: proto/healthz.proto
-	$(DOCKER_RUN) -v $(CURDIR):/src:rw --user $(shell id -u):$(shell id -g) \
+	$(DOCKER_RUN) -v $(CURDIR):/src:rw --user $(LOCAL_USER_ID):$(LOCAL_GROUP_ID) \
 		      $(PROTOC_CONTAINER) \
 		      $(PROTOC_IMPORTS) \
 		      proto/*.proto \
