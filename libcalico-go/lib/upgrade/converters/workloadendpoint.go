@@ -74,9 +74,7 @@ func (_ WorkloadEndpoint) APIV1ToBackendV1(rIn unversioned.Resource) (*model.KVP
 	}
 
 	var allowedSources []net.IPNet
-	for _, prefix := range ah.Spec.AllowSpoofedSourcePrefixes {
-		allowedSources = append(allowedSources, prefix)
-	}
+	allowedSources = append(allowedSources, ah.Spec.AllowSpoofedSourcePrefixes...)
 
 	d := model.KVPair{
 		Key: k,
