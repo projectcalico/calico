@@ -40,7 +40,7 @@ static CALI_BPF_INLINE int do_nat_common(struct bpf_sock_addr *ctx, __u8 proto, 
 
 	__u64 cookie = bpf_get_socket_cookie(ctx);
 	CALI_DEBUG("Store: ip=%x port=%d cookie=%x\n",
-			bpf_ntohl(nat_dest->addr), bpf_ntohs((__u16)dport_be), cookie);
+			debug_ip(nat_dest->addr), bpf_ntohs((__u16)dport_be), cookie);
 
 	/* For all protocols, record recent NAT operations in an LRU map; other BPF programs use this
 	 * cache to reverse our DNAT so they can do pre-DNAT policy. */
@@ -65,7 +65,7 @@ static CALI_BPF_INLINE int do_nat_common(struct bpf_sock_addr *ctx, __u8 proto, 
 		 * check the source on the return packets. */
 		__u64 cookie = bpf_get_socket_cookie(ctx);
 		CALI_DEBUG("Store: ip=%x port=%d cookie=%x\n",
-				bpf_ntohl(nat_dest->addr), bpf_ntohs((__u16)dport_be), cookie);
+				debug_ip(nat_dest->addr), bpf_ntohs((__u16)dport_be), cookie);
 		struct sendrec_key key = {
 			.ip	= nat_dest->addr,
 			.port	= dport_be,
@@ -86,7 +86,7 @@ out:
 	return err;
 }
 
-static CALI_BPF_INLINE int connect_v4(struct bpf_sock_addr *ctx, ipv46_addr_t *dst)
+static CALI_BPF_INLINE int connect(struct bpf_sock_addr *ctx, ipv46_addr_t *dst)
 {
 	int ret = 1; /* OK value */
 
