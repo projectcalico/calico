@@ -411,6 +411,8 @@ func (p *Builder) setUpIPSetKey(ipsetID uint64, keyOffset int16, ipOffset, portO
 	prefixLen := int32(128)
 
 	if p.forIPv6 {
+		// IPv6 addresses are 12 bytes longer and so everything beyond the
+		// address is shifted by 12 bytes.
 		v6Adjust = 12
 		prefixLen += 96
 	}
