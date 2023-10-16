@@ -185,7 +185,7 @@ bin/calico-felix-race-$(ARCH): $(LIBBPF_A) $(SRC_FILES) ../go.mod
 
 # Generate the protobuf bindings for go. The proto/felixbackend.pb.go file is included in SRC_FILES
 protobuf proto/felixbackend.pb.go: proto/felixbackend.proto
-	docker run --rm --user=$(shell id -u):$(shell id -g) \
+	docker run --rm --user $(LOCAL_USER_ID):$(LOCAL_GROUP_ID) \
 		  -v $(CURDIR):/code -v $(CURDIR)/proto:/src:rw \
 		      $(PROTOC_CONTAINER) \
 		      --gogofaster_out=plugins=grpc:. \

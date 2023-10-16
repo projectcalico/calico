@@ -9,4 +9,4 @@ The build requires
 
 The calico/go-build container image provides a suitable environment:
 
-    docker run --user=$UID --rm -v `pwd`:/bpf-apache -w /bpf-apache calico/go-build:v0.35-deb-cgo make clean all
+    docker run -e LOCAL_USER_ID=$UID --rm -v `pwd`:/bpf-apache -w /bpf-apache calico/go-build:v0.35-deb-cgo make clean all
