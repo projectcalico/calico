@@ -26,9 +26,11 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/aws/smithy-go"
-	log "github.com/sirupsen/logrus"
+
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/utils/clock"
+
+	log "github.com/sirupsen/logrus"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
@@ -71,10 +73,10 @@ func retriable(err error) bool {
 }
 
 type SrcDstCheckUpdater interface {
-	Update(option string) error
+	Update(option apiv3.AWSSrcDstCheckOption) error
 }
 
-func WaitForEC2SrcDstCheckUpdate(check string, healthAgg *health.HealthAggregator, updater SrcDstCheckUpdater, c clock.Clock) {
+func WaitForEC2SrcDstCheckUpdate(check apiv3.AWSSrcDstCheckOption, healthAgg *health.HealthAggregator, updater SrcDstCheckUpdater, c clock.Clock) {
 	log.Infof("Setting AWS EC2 source-destination-check to %s", check)
 
 	const (
@@ -114,7 +116,7 @@ func NewEC2SrcDstCheckUpdater() *EC2SrcDstCheckUpdater {
 	return &EC2SrcDstCheckUpdater{}
 }
 
-func (updater *EC2SrcDstCheckUpdater) Update(caliCheckOption string) error {
+func (updater *EC2SrcDstCheckUpdater) Update(caliCheckOption apiv3.AWSSrcDstCheckOption) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
