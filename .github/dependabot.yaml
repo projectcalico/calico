@@ -1,7 +1,7 @@
 version: 2 
 updates:
 - package-ecosystem: docker
-  directory: /typha
+  directory: /typha/docker-image
   schedule:
     interval: weekly
 - package-ecosystem: docker
