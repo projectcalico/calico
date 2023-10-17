@@ -82,16 +82,16 @@ type BGPFilterMatchOperator string
 
 const (
 	Equal    BGPFilterMatchOperator = "Equal"
-	NotEqual                        = "NotEqual"
-	In                              = "In"
-	NotIn                           = "NotIn"
+	NotEqual BGPFilterMatchOperator = "NotEqual"
+	In       BGPFilterMatchOperator = "In"
+	NotIn    BGPFilterMatchOperator = "NotIn"
 )
 
 type BGPFilterAction string
 
 const (
 	Accept BGPFilterAction = "Accept"
-	Reject                 = "Reject"
+	Reject BGPFilterAction = "Reject"
 )
 
 // New BGPFilter creates a new (zeroed) BGPFilter struct with the TypeMetadata

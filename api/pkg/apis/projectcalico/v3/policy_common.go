@@ -203,9 +203,9 @@ type Action string
 
 const (
 	Allow Action = "Allow"
-	Deny         = "Deny"
-	Log          = "Log"
-	Pass         = "Pass"
+	Deny  Action = "Deny"
+	Log   Action = "Log"
+	Pass  Action = "Pass"
 )
 
 type RuleMetadata struct {
