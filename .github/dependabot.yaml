@@ -1,7 +1,23 @@
-version: 2 
+version: 2
 updates:
 - package-ecosystem: docker
-  directory: /typha/docker-image
+  directory: /node/calico_test
+  schedule:
+    interval: weekly
+- package-ecosystem: docker
+  directory: /pod2daemon
+  schedule:
+    interval: weekly
+- package-ecosystem: docker
+  directory: /kube-controllers/docker-images/flannel-migration
+  schedule:
+    interval: weekly
+- package-ecosystem: docker
+  directory: /node/windows-packaging
+  schedule:
+    interval: weekly
+- package-ecosystem: docker
+  directory: /networking-calico
   schedule:
     interval: weekly
 - package-ecosystem: docker
@@ -12,7 +28,55 @@ updates:
   directory: /cni-plugin
   schedule:
     interval: weekly
+- package-ecosystem: docker
+  directory: /calicoctl
+  schedule:
+    interval: weekly
+- package-ecosystem: docker
+  directory: /pod2daemon/node-driver-registrar-docker
+  schedule:
+    interval: weekly
+- package-ecosystem: docker
+  directory: /typha/docker-image
+  schedule:
+    interval: weekly
+- package-ecosystem: docker
+  directory: /node/workload
+  schedule:
+    interval: weekly
+- package-ecosystem: docker
+  directory: /apiserver/docker-image
+  schedule:
+    interval: weekly
+- package-ecosystem: docker
+  directory: /kube-controllers
+  schedule:
+    interval: weekly
+- package-ecosystem: docker
+  directory: /hack/postrelease
+  schedule:
+    interval: weekly
+- package-ecosystem: docker
+  directory: /app-policy
+  schedule:
+    interval: weekly
+- package-ecosystem: docker
+  directory: /pod2daemon/csidriver
+  schedule:
+    interval: weekly
+- package-ecosystem: docker
+  directory: /felix/docker-image
+  schedule:
+    interval: weekly
+- package-ecosystem: docker
+  directory: /pod2daemon/nodeagent/docker
+  schedule:
+    interval: weekly
 - package-ecosystem: gomod
   directory: /
+  schedule:
+    interval: weekly
+- package-ecosystem: gomod
+  directory: /api
   schedule:
     interval: weekly
