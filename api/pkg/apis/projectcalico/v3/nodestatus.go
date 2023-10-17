@@ -175,7 +175,7 @@ type CalicoNodeRouteLearnedFrom struct {
 	SourceType CalicoNodeRouteSourceType `json:"sourceType,omitempty"`
 
 	// If sourceType is NodeMesh or BGPPeer, IP address of the router that sent us this route.
-	PeerIP string `json:"peerIP,omitempty, validate:"omitempty,ip"`
+	PeerIP string `json:"peerIP,omitempty" validate:"omitempty,ip"`
 }
 
 // NewCalicoNodeStatus creates a new (zeroed) CalicoNodeStatus struct with the TypeMetadata initialised to the current
@@ -193,50 +193,50 @@ type CalicoNodeRouteType string
 
 const (
 	RouteTypeFIB CalicoNodeRouteType = "FIB"
-	RouteTypeRIB                     = "RIB"
+	RouteTypeRIB CalicoNodeRouteType = "RIB"
 )
 
 type CalicoNodeRouteSourceType string
 
 const (
 	RouteSourceTypeKernel   CalicoNodeRouteSourceType = "Kernel"
-	RouteSourceTypeStatic                             = "Static"
-	RouteSourceTypeDirect                             = "Direct"
-	RouteSourceTypeNodeMesh                           = "NodeMesh"
-	RouteSourceTypeBGPPeer                            = "BGPPeer"
+	RouteSourceTypeStatic   CalicoNodeRouteSourceType = "Static"
+	RouteSourceTypeDirect   CalicoNodeRouteSourceType = "Direct"
+	RouteSourceTypeNodeMesh CalicoNodeRouteSourceType = "NodeMesh"
+	RouteSourceTypeBGPPeer  CalicoNodeRouteSourceType = "BGPPeer"
 )
 
 type NodeStatusClassType string
 
 const (
 	NodeStatusClassTypeAgent  NodeStatusClassType = "Agent"
-	NodeStatusClassTypeBGP                        = "BGP"
-	NodeStatusClassTypeRoutes                     = "Routes"
+	NodeStatusClassTypeBGP    NodeStatusClassType = "BGP"
+	NodeStatusClassTypeRoutes NodeStatusClassType = "Routes"
 )
 
 type BGPPeerType string
 
 const (
 	BGPPeerTypeNodeMesh   BGPPeerType = "NodeMesh"
-	BGPPeerTypeNodePeer               = "NodePeer"
-	BGPPeerTypeGlobalPeer             = "GlobalPeer"
+	BGPPeerTypeNodePeer   BGPPeerType = "NodePeer"
+	BGPPeerTypeGlobalPeer BGPPeerType = "GlobalPeer"
 )
 
 type BGPDaemonState string
 
 const (
 	BGPDaemonStateReady    BGPDaemonState = "Ready"
-	BGPDaemonStateNotReady                = "NotReady"
+	BGPDaemonStateNotReady BGPDaemonState = "NotReady"
 )
 
 type BGPSessionState string
 
 const (
 	BGPSessionStateIdle        BGPSessionState = "Idle"
-	BGPSessionStateConnect                     = "Connect"
-	BGPSessionStateActive                      = "Active"
-	BGPSessionStateOpenSent                    = "OpenSent"
-	BGPSessionStateOpenConfirm                 = "OpenConfirm"
-	BGPSessionStateEstablished                 = "Established"
-	BGPSessionStateClose                       = "Close"
+	BGPSessionStateConnect     BGPSessionState = "Connect"
+	BGPSessionStateActive      BGPSessionState = "Active"
+	BGPSessionStateOpenSent    BGPSessionState = "OpenSent"
+	BGPSessionStateOpenConfirm BGPSessionState = "OpenConfirm"
+	BGPSessionStateEstablished BGPSessionState = "Established"
+	BGPSessionStateClose       BGPSessionState = "Close"
 )
