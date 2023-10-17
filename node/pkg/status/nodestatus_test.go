@@ -19,25 +19,23 @@ import (
 	"errors"
 	"time"
 
-	"github.com/projectcalico/calico/libcalico-go/lib/backend/syncersv1/nodestatussyncer"
-
-	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-	"github.com/projectcalico/calico/libcalico-go/lib/options"
-	"github.com/projectcalico/calico/node/pkg/lifecycle/utils"
-	populator "github.com/projectcalico/calico/node/pkg/status/populators"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	"github.com/projectcalico/calico/node/pkg/status"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	log "github.com/sirupsen/logrus"
 
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/syncersv1/nodestatussyncer"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
+	"github.com/projectcalico/calico/libcalico-go/lib/options"
+	"github.com/projectcalico/calico/node/pkg/lifecycle/utils"
+	"github.com/projectcalico/calico/node/pkg/status"
+	populator "github.com/projectcalico/calico/node/pkg/status/populators"
 )
 
 const (
@@ -86,14 +84,14 @@ var _ = Describe("Node status FV tests", func() {
 
 	v4Peer := &apiv3.CalicoNodePeer{
 		PeerIP: "172.17.8.104",
-		Type:   apiv3.RouteSourceTypeNodeMesh,
+		Type:   apiv3.BGPPeerTypeNodeMesh,
 		State:  apiv3.BGPSessionStateEstablished,
 		Since:  "2016-11-21",
 	}
 
 	v6Peer := &apiv3.CalicoNodePeer{
 		PeerIP: "2001:20::8",
-		Type:   apiv3.RouteSourceTypeNodeMesh,
+		Type:   apiv3.BGPPeerTypeNodeMesh,
 		State:  apiv3.BGPSessionStateEstablished,
 		Since:  "2016-11-21",
 	}

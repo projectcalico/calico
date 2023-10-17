@@ -120,7 +120,7 @@ type SourceAddress string
 
 const (
 	SourceAddressUseNodeIP SourceAddress = "UseNodeIP"
-	SourceAddressNone                    = "None"
+	SourceAddressNone      SourceAddress = "None"
 )
 
 // BGPPassword contains ways to specify a BGP password.
