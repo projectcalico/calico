@@ -1,0 +1,18 @@
+version: 2 
+updates:
+- package-ecosystem: docker
+  directory: /typha
+  schedule:
+    interval: weekly
+- package-ecosystem: docker
+  directory: /node
+  schedule:
+    interval: weekly
+- package-ecosystem: docker
+  directory: /cni-plugin
+  schedule:
+    interval: weekly
+- package-ecosystem: gomod
+  directory: /
+  schedule:
+    interval: weekly
