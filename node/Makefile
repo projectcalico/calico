@@ -143,6 +143,7 @@ LDFLAGS= -X $(PACKAGE_NAME)/pkg/lifecycle/startup.VERSION=$(GIT_VERSION) \
 
 # Source golang files on which compiling the calico-node binary depends.
 SRC_FILES=$(shell find ./pkg -name '*.go') \
+	  $(shell find ./cmd -name '*.go') \
 	  $(shell find ../felix -name '*.go') \
 	  $(shell find ../felix -name '*.[ch]') \
 	  $(shell find ../libcalico-go -name '*.go') \
@@ -228,7 +229,7 @@ else
 endif
 
 
-$(WINDOWS_BINARY):
+$(WINDOWS_BINARY): $(SRC_FILES)
 	$(DOCKER_GO_BUILD_CGO_WINDOWS) sh -c '$(GIT_CONFIG_SSH) \
 		GOOS=windows CC=x86_64-w64-mingw32-gcc \
 		go build -buildvcs=false --buildmode=exe -v -o $@ -ldflags "$(LDFLAGS)" ./cmd/calico-node/main.go'
