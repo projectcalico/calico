@@ -36,5 +36,15 @@ if ($env:CNI_IPAM_TYPE -EQ "host-local") {
     $env:USE_POD_CIDR = "false"
 }
 
-# Run the calico-felix binary.
-.\calico-node.exe -felix
+# Run the calico-felix binary. Wrap it in a loop and restart when felix exits due
+# to a config change (return code 129).
+while ($true) {
+    Write-Host "[felix-service.ps1] Starting calico felix process"
+    .\calico-node.exe -felix
+    Write-Host "[felix-service.ps1] calico felix process stopped, RC=$LASTEXITCODE"
+    if ($LASTEXITCODE -eq 129) {
+        Write-Host "[felix-service.ps1] Restarting calico felix process for config reload"
+        continue
+    }
+    Write-Host "[felix-service.ps1] Exiting due to non-config shutdown, RC=$LASTEXITCODE"
+}
