@@ -22,7 +22,9 @@ emit_filename() {
 for log_level in debug info no_log; do
   echo "bin/connect_time_${log_level}_v4.o"
   echo "bin/connect_time_${log_level}_v6.o"
+  echo "bin/connect_time_${log_level}_v46.o"
   echo "bin/connect_time_${log_level}_v4_co-re.o"
+  echo "bin/connect_time_${log_level}_v46_co-re.o"
   echo "bin/connect_time_${log_level}_v6_co-re.o"
   echo "bin/xdp_${log_level}.o"
 
