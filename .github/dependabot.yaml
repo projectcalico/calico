@@ -1,0 +1,22 @@
+version: 2
+updates:
+- package-ecosystem: docker
+  directory: /node/windows-packaging
+  schedule:
+    interval: weekly
+- package-ecosystem: docker
+  directory: /networking-calico
+  schedule:
+    interval: weekly
+- package-ecosystem: docker
+  directory: /hack/postrelease
+  schedule:
+    interval: weekly
+- package-ecosystem: gomod
+  directory: /
+  schedule:
+    interval: weekly
+- package-ecosystem: gomod
+  directory: /api
+  schedule:
+    interval: weekly
