@@ -199,6 +199,8 @@ type Config struct {
 	BPFConntrackTimeouts               bpfconntrack.Timeouts
 	BPFCgroupV2                        string
 	BPFConnTimeLBEnabled               bool
+	BPFConnTimeLB                      string
+	BPFHostNetworkedNAT                string
 	BPFMapRepin                        bool
 	BPFNodePortDSREnabled              bool
 	BPFDSROptoutCIDRs                  []string
@@ -750,13 +752,16 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			log.Info("BPF enabled but no Kubernetes client available, unable to run kube-proxy module.")
 		}
 
-		if config.BPFConnTimeLBEnabled {
+		if (config.BPFHostNetworkedNAT == "enabled" && (config.BPFConnTimeLBEnabled || config.BPFConnTimeLB == "enabled")) ||
+			(config.BPFHostNetworkedNAT == "disabled" && (!config.BPFConnTimeLBEnabled || config.BPFConnTimeLB != "disabled")) {
+			log.Warn("Access to services may not work properly, reverting to default CTLB configuration")
+			config.BPFHostNetworkedNAT = "disabled"
+			config.BPFConnTimeLB = "enabled"
+		}
+		if config.BPFConnTimeLBEnabled || config.BPFConnTimeLB != "disabled" {
 			excludeUDP := false
-			if config.FeatureGates != nil {
-				switch config.FeatureGates["BPFConnectTimeLoadBalancingWorkaround"] {
-				case "udp":
-					excludeUDP = true
-				}
+			if config.BPFConnTimeLB == "tcp" && config.BPFHostNetworkedNAT == "enabled" {
+				excludeUDP = true
 			}
 			logLevel := strings.ToLower(config.BPFLogLevel)
 			if config.BPFLogFilters != nil {

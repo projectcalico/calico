@@ -343,9 +343,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 					EndpointToHostAction: endpointToHostAction,
 				},
 				BPFExtToServiceConnmark: 0,
-				FeatureGates: map[string]string{
-					"BPFConnectTimeLoadBalancingWorkaround": "enabled",
-				},
+				BPFHostNetworkedNAT: "enabled",
 				BPFPolicyDebugEnabled: true,
 			},
 			maps,
