@@ -50,6 +50,8 @@ import (
 )
 
 var (
+	lastSyncTimestampGauges *prometheus.GaugeVec
+
 	// Multidimensional metrics, with a vector for each pool to allow resets by pool when handling pool deletion and
 	// refreshing metrics. See https://github.com/prometheus/client_golang/issues/834, option 3.
 	inUseAllocationGauges    map[string]*prometheus.GaugeVec
@@ -76,6 +78,12 @@ const (
 )
 
 func init() {
+	lastSyncTimestampGauges = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "ipam_last_sync_timestamp",
+		Help: "Timestamp of the last IPAM sync",
+	}, []string{"status"})
+	prometheus.MustRegister(lastSyncTimestampGauges)
+
 	// Pool vectors will be registered and unregistered dynamically as pools are managed.
 	inUseAllocationGauges = make(map[string]*prometheus.GaugeVec)
 	borrowedAllocationGauges = make(map[string]*prometheus.GaugeVec)
@@ -278,6 +286,9 @@ func (c *ipamController) acceptScheduleRequests(stopCh <-chan struct{}) {
 				// built in to the cleanup code.
 				log.WithError(err).Warn("error syncing IPAM data")
 				kick(c.syncChan)
+				lastSyncTimestampGauges.WithLabelValues("failure").SetToCurrentTime()
+			} else {
+				lastSyncTimestampGauges.WithLabelValues("success").SetToCurrentTime()
 			}
 
 			// Update prometheus metrics.
