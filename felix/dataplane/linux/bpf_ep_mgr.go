@@ -46,6 +46,8 @@ import (
 	"golang.org/x/sync/semaphore"
 	"golang.org/x/sys/unix"
 
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/logutils"
@@ -470,9 +472,9 @@ func newBPFEndpointManager(
 		m.dp = m
 	}
 
-	if config.BPFHostNetworkedNAT == "enabled" {
+	if config.BPFHostNetworkedNAT == string(apiv3.BPFHostNetworkedNATEnabled) {
 		m.hostNetworkedNATMode = hostNetworkedNATEnabled
-		if config.BPFConnTimeLB == "tcp" {
+		if config.BPFConnTimeLB == string(apiv3.BPFConnectTimeLBTCP) {
 			m.hostNetworkedNATMode = hostNetworkedNATUDPOnly
 		}
 	}

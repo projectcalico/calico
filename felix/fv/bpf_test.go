@@ -340,14 +340,14 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			}
 
 			if !testOpts.connTimeEnabled {
-				options.ExtraEnvVars["FELIX_BPFHostNetworkedNATWithoutCTLB"] = "enabled"
-				options.ExtraEnvVars["FELIX_BPFConnectTimeLoadBalancing"] = "disabled"
+				options.ExtraEnvVars["FELIX_BPFHostNetworkedNATWithoutCTLB"] = string(api.BPFHostNetworkedNATEnabled)
+				options.ExtraEnvVars["FELIX_BPFConnectTimeLoadBalancing"] = string(api.BPFConnectTimeLBDisabled)
 				if testOpts.protocol == "udp" {
-					options.ExtraEnvVars["FELIX_BPFConnectTimeLoadBalancing"] = "tcp"
+					options.ExtraEnvVars["FELIX_BPFConnectTimeLoadBalancing"] = string(api.BPFConnectTimeLBTCP)
 				}
 			} else {
-				options.ExtraEnvVars["FELIX_BPFConnectTimeLoadBalancing"] = "enabled"
-				options.ExtraEnvVars["FELIX_BPFHostNetworkedNATWithoutCTLB"] = "disabled"
+				options.ExtraEnvVars["FELIX_BPFConnectTimeLoadBalancing"] = string(api.BPFConnectTimeLBEnabled)
+				options.ExtraEnvVars["FELIX_BPFHostNetworkedNATWithoutCTLB"] = string(api.BPFHostNetworkedNATDisabled)
 			}
 
 		})
@@ -576,8 +576,8 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			if testOpts.protocol == "udp" && testOpts.connTimeEnabled {
 				Describe("with BPFHostNetworkedNAT enabled", func() {
 					BeforeEach(func() {
-						options.ExtraEnvVars["FELIX_BPFHostNetworkedNATWithoutCTLB"] = "enabled"
-						options.ExtraEnvVars["FELIX_BPFConnectTimeLoadBalancing"] = "tcp"
+						options.ExtraEnvVars["FELIX_BPFHostNetworkedNATWithoutCTLB"] = string(api.BPFHostNetworkedNATEnabled)
+						options.ExtraEnvVars["FELIX_BPFConnectTimeLoadBalancing"] = string(api.BPFConnectTimeLBTCP)
 					})
 					It("should not program non-udp services", func() {
 						udpsvc := &v1.Service{

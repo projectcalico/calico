@@ -463,7 +463,7 @@ type FelixConfigurationSpec struct {
 	BPFConnectTimeLoadBalancing *BPFConnectTimeLBType `json:"bpfConnectTimeLoadBalancing,omitempty" validate:"omitempty,oneof=TCP Enabled Disabled"`
 	// BPFHostNetworkedNATWithoutCTLB when in BPF mode, controls whether Felix does a NAT without CTLB. This along with BPFConnectTimeLoadBalancing
 	// determines the CTLB behavior. [Default: Disabled]
-	BPFHostNetworkedNATWithoutCTLB *BPFHostNetworkedNATType `json:"bpfHostNetworkedNATWithoutCTLB,omitempty" validate:"omitempty,oneof=Enabled Disabled`
+	BPFHostNetworkedNATWithoutCTLB *BPFHostNetworkedNATType `json:"bpfHostNetworkedNATWithoutCTLB,omitempty" validate:"omitempty,oneof=Enabled Disabled"`
 	// BPFExternalServiceMode in BPF mode, controls how connections from outside the cluster to services (node ports
 	// and cluster IPs) are forwarded to remote workloads.  If set to "Tunnel" then both request and response traffic
 	// is tunneled to the remote node.  If set to "DSR", the request traffic is tunneled but the response traffic

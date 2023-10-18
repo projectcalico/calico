@@ -25,6 +25,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
@@ -758,9 +759,9 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			config.BPFHostNetworkedNAT = "disabled"
 			config.BPFConnTimeLB = "enabled"
 		}
-		if config.BPFConnTimeLBEnabled || config.BPFConnTimeLB != "disabled" {
+		if config.BPFConnTimeLBEnabled || config.BPFConnTimeLB != string(apiv3.BPFConnectTimeLBDisabled) {
 			excludeUDP := false
-			if config.BPFConnTimeLB == "tcp" && config.BPFHostNetworkedNAT == "enabled" {
+			if config.BPFConnTimeLB == string(apiv3.BPFConnectTimeLBTCP) && config.BPFHostNetworkedNAT == string(apiv3.BPFHostNetworkedNATEnabled) {
 				excludeUDP = true
 			}
 			logLevel := strings.ToLower(config.BPFLogLevel)
