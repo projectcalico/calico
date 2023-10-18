@@ -79,7 +79,7 @@ const (
 
 func init() {
 	lastSyncTimestampGauges = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "ipam_last_sync_timestamp",
+		Name: "ipam_last_sync_timestamp_seconds",
 		Help: "Timestamp of the last IPAM sync",
 	}, []string{"status"})
 	prometheus.MustRegister(lastSyncTimestampGauges)
