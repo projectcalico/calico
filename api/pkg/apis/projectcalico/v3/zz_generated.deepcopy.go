@@ -1312,6 +1312,16 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(bool)
 		**out = **in
 	}
+	if in.BPFConnectTimeLoadBalancing != nil {
+		in, out := &in.BPFConnectTimeLoadBalancing, &out.BPFConnectTimeLoadBalancing
+		*out = new(BPFConnectTimeLBType)
+		**out = **in
+	}
+	if in.BPFHostNetworkedNATWithoutCTLB != nil {
+		in, out := &in.BPFHostNetworkedNATWithoutCTLB, &out.BPFHostNetworkedNATWithoutCTLB
+		*out = new(BPFHostNetworkedNATType)
+		**out = **in
+	}
 	if in.BPFDSROptoutCIDRs != nil {
 		in, out := &in.BPFDSROptoutCIDRs, &out.BPFDSROptoutCIDRs
 		*out = new([]string)
