@@ -48,11 +48,10 @@ type AttachPointInfo interface {
 }
 
 type AttachPoint struct {
-	Hook       hook.Hook
-	PolicyIdx4 int
-	PolicyIdx6 int
-	Iface      string
-	LogLevel   string
+	Hook      hook.Hook
+	PolicyIdx int
+	Iface     string
+	LogLevel  string
 }
 
 func (ap *AttachPoint) IfaceName() string {
@@ -63,15 +62,8 @@ func (ap *AttachPoint) HookName() hook.Hook {
 	return ap.Hook
 }
 
-func (ap *AttachPoint) PolicyIdx(family int) int {
-	switch family {
-	case 4:
-		return ap.PolicyIdx4
-	case 6:
-		return ap.PolicyIdx6
-	}
-
-	return -1
+func (ap *AttachPoint) PolicyJmp() int {
+	return ap.PolicyIdx
 }
 
 type AttachResult interface {
