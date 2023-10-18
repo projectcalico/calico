@@ -113,4 +113,12 @@ func setDefaults(fc *apiv3.FelixConfiguration) {
 		disabled := apiv3.FloatingIPsDisabled
 		fc.Spec.FloatingIPs = &disabled
 	}
+	if fc.Spec.BPFConnectTimeLoadBalancing == nil {
+		enabled := apiv3.BPFConnectTimeLBEnabled
+		fc.Spec.BPFConnectTimeLoadBalancing = &enabled
+	}
+	if fc.Spec.BPFHostNetworkedNATWithoutCTLB == nil {
+		disabled := apiv3.BPFHostNetworkedNATDisabled
+		fc.Spec.BPFHostNetworkedNATWithoutCTLB = &disabled
+	}
 }

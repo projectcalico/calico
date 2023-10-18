@@ -86,6 +86,20 @@ func init() {
 	awsCheckbadVal = api.AWSSrcDstCheckOption("badVal")
 	awsCheckenable = api.AWSSrcDstCheckOption("enable")
 
+	var bpfHostNetworkedNatEnabled, bpfHostNetworkedNatDisabled,
+		bpfHostNetworkedNatenabled, bpfHostNetworkedNatBadVal api.BPFHostNetworkedNATType
+	var bpfConnectTimeLBTCP, bpfConnectTimeLBEnabled,
+		bpfConnectTimeLBDisabled, bpfConnectTimeLBBadVal api.BPFConnectTimeLBType
+
+	bpfHostNetworkedNatEnabled = api.BPFHostNetworkedNATEnabled
+	bpfHostNetworkedNatDisabled = api.BPFHostNetworkedNATDisabled
+	bpfHostNetworkedNatenabled = api.BPFHostNetworkedNATType("enabled")
+	bpfHostNetworkedNatBadVal = api.BPFHostNetworkedNATType("badVal")
+	bpfConnectTimeLBTCP = api.BPFConnectTimeLBTCP
+	bpfConnectTimeLBEnabled = api.BPFConnectTimeLBEnabled
+	bpfConnectTimeLBDisabled = api.BPFConnectTimeLBDisabled
+	bpfConnectTimeLBBadVal = api.BPFConnectTimeLBType("badVal")
+
 	iptablesBackendLegacy := api.IptablesBackend(api.IptablesBackendLegacy)
 	iptablesBackendNFTables := api.IptablesBackend(api.IptablesBackendNFTables)
 	iptablesBackendAuto := api.IptablesBackend(api.IptablesBackendAuto)
@@ -1696,6 +1710,16 @@ func init() {
 		Entry("should accept a valid AWSSrcDstCheck value 'Disable'", api.FelixConfigurationSpec{AWSSrcDstCheck: &awsCheckDisable}, true),
 		Entry("should reject an invalid AWSSrcDstCheck value 'enable'", api.FelixConfigurationSpec{AWSSrcDstCheck: &awsCheckenable}, false),
 		Entry("should reject an invalid AWSSrcDstCheck value 'badVal'", api.FelixConfigurationSpec{AWSSrcDstCheck: &awsCheckbadVal}, false),
+
+		// BPF CTLB config check
+		Entry("should accept a valid BPFHostNetworkedNATWithoutCTLB value 'Disabled'", api.FelixConfigurationSpec{BPFHostNetworkedNATWithoutCTLB: &bpfHostNetworkedNatDisabled}, true),
+		Entry("should accept a valid BPFHostNetworkedNATWithoutCTLB value 'Enabled'", api.FelixConfigurationSpec{BPFHostNetworkedNATWithoutCTLB: &bpfHostNetworkedNatEnabled}, true),
+		Entry("should accept a valid BPFConnectTimeLoadBalancing value 'Enabled'", api.FelixConfigurationSpec{BPFConnectTimeLoadBalancing: &bpfConnectTimeLBEnabled}, true),
+		Entry("should accept a valid BPFConnectTimeLoadBalancing value 'Disabled'", api.FelixConfigurationSpec{BPFConnectTimeLoadBalancing: &bpfConnectTimeLBDisabled}, true),
+		Entry("should accept a valid BPFConnectTimeLoadBalancing value 'TCP'", api.FelixConfigurationSpec{BPFConnectTimeLoadBalancing: &bpfConnectTimeLBTCP}, true),
+		Entry("should reject an invalid BPFHostNetworkedNATWithoutCTLB value 'enabled'", api.FelixConfigurationSpec{BPFHostNetworkedNATWithoutCTLB: &bpfHostNetworkedNatenabled}, false),
+		Entry("should reject an invalid BPFHostNetworkedNATWithoutCTLB value 'BadVal'", api.FelixConfigurationSpec{BPFHostNetworkedNATWithoutCTLB: &bpfHostNetworkedNatBadVal}, false),
+		Entry("should reject an invalid BPFConnectTimeLoadBalancing value 'BadVal'", api.FelixConfigurationSpec{BPFConnectTimeLoadBalancing: &bpfConnectTimeLBBadVal}, false),
 
 		// GlobalNetworkPolicy validation.
 		Entry("disallow name with invalid character", &api.GlobalNetworkPolicy{ObjectMeta: v1.ObjectMeta{Name: "t~!s.h.i.ng"}}, false),
