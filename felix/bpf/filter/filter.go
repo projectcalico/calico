@@ -148,10 +148,9 @@ func programFooter(b *asm.Block, fd maps.FD, expression string) {
 	b.LabelNextInsn("hit")
 
 	// Execute the tail call to log program
-	b.Mov64(asm.R1, asm.R6)                   // First arg is the context.
-	b.LoadMapFD(asm.R2, uint32(fd))           // Second arg is the map.
-	b.MovImm32(asm.R3, tcdefs.ProgIndexDebug) // Third arg is the index (rather than a pointer to the index).
-	b.Load32(asm.R3, asm.R6, skbCb1)          // Third arg is the index from skb->cb[0]).
+	b.Mov64(asm.R1, asm.R6)          // First arg is the context.
+	b.LoadMapFD(asm.R2, uint32(fd))  // Second arg is the map.
+	b.Load32(asm.R3, asm.R6, skbCb1) // Third arg is the index from skb->cb[1]).
 	b.Call(asm.HelperTailCall)
 
 	// If we do not have a program for logging, fall through to no logs.
