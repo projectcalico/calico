@@ -555,7 +555,7 @@ syn_force_policy:
 
 do_policy:
 #ifdef IPVER6
-	if (ctx->state->ip_proto == IPPROTO_ICMPV6) {
+	if (ctx->state->ip_proto == IPPROTO_ICMPV6 && !icmp_type_is_err(icmp_hdr(ctx)->type)) {
 		/* XXX */
 		CALI_DEBUG("allow ICMPv6\n");
 		goto skip_policy;
