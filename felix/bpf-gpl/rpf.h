@@ -83,7 +83,9 @@ static CALI_BPF_INLINE bool hep_rpf_check(struct cali_tc_ctx *ctx)
 			if (strict) {
 				ret = ctx->skb->ingress_ifindex == fib_params.ifindex;
 #ifdef IPVER6
+#ifdef VERIFIER_IS_COOL
 				CALI_DEBUG("Host RPF check skb strict if %d\n", fib_params.ifindex);
+#endif
 #else
 				CALI_DEBUG("Host RPF check src=%x skb strict if %d\n",
 						debug_ip(ctx->state->ip_src), fib_params.ifindex);
@@ -91,7 +93,9 @@ static CALI_BPF_INLINE bool hep_rpf_check(struct cali_tc_ctx *ctx)
 			} else {
 				ret = fib_params.ifindex != CT_INVALID_IFINDEX;
 #ifdef IPVER6
+#ifdef VERIFIER_IS_COOL
 				CALI_DEBUG("Host RPF check skb loose if %d\n", fib_params.ifindex);
+#endif
 #else
 				CALI_DEBUG("Host RPF check src=%x skb loose if %d\n",
 						debug_ip(ctx->state->ip_src), fib_params.ifindex);
@@ -100,7 +104,9 @@ static CALI_BPF_INLINE bool hep_rpf_check(struct cali_tc_ctx *ctx)
 	}
 
 #ifdef IPVER6
+#ifdef VERIFIER_IS_COOL
 	CALI_DEBUG("Host RPF check skb iface=%d\n", ctx->skb->ifindex);
+#endif
 #else
 	CALI_DEBUG("Host RPF check src=%x skb iface=%d\n",
 			debug_ip(ctx->state->ip_src), ctx->skb->ifindex);
