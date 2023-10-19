@@ -14,7 +14,7 @@ Please follow responsible disclosure best practices and [Tigera's Vulnerability 
 security vulnerabilities.  **Do not** create a Github issue or pull 
 request because those are immediately public. Instead:
 
-*  Email psirt@tigera.io.
+*  Email [psirt@projectcalico.org](psirt@projectcalico.org).
 *  Report a private [security advisory](https://github.com/projectcalico/calico/security/advisories)
   through the Github interface.
 

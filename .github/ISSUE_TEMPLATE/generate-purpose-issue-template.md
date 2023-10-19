@@ -8,6 +8,8 @@ assignees: ''
 ---
 
 <!--- Provide a general summary of the issue in the Title above -->
+<!--- If you believe the issue may have security implications, please report it as a vulnerability -->
+<!--- Report a vulnerability: https://github.com/projectcalico/calico/security -->
 
 ## Expected Behavior
 <!--- If you're describing a bug, tell us what should happen -->
