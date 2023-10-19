@@ -424,7 +424,11 @@ syn_force_policy:
 		goto skip_policy;
 	}
 
-	if (CALI_F_FROM_WEP) {
+	if (CALI_F_FROM_WEP
+#ifdef IPVER6
+			&& ctx->state->ip_proto != IPPROTO_ICMPV6
+#endif
+		) {
 		struct cali_rt *r = cali_rt_lookup(&ctx->state->ip_src);
 		/* Do RPF check since it's our responsibility to police that. */
 		if (!wep_rpf_check(ctx, r)) {
@@ -551,6 +555,25 @@ syn_force_policy:
 	}
 
 do_policy:
+#ifdef IPVER6
+	if (ctx->state->ip_proto == IPPROTO_ICMPV6) {
+		switch (icmp_hdr(ctx)->type) {
+		case 130: /* multicast listener query */
+		case 131: /* multicast listener report */
+		case 132: /* multicast listener done */
+		case 133: /* router solicitation */
+		case 135: /* neighbor solicitation */
+		case 136: /* neighbor advertisement */
+			CALI_DEBUG("allow ICMPv6 type %d\n", icmp_hdr(ctx)->type);
+			/* We use iptables to allow it only to the host. */
+			if (CALI_F_TO_HOST) {
+				ctx->state->flags |= CALI_ST_SKIP_FIB;
+			}
+			goto skip_policy;
+		}
+	}
+#endif
+
 	CALI_DEBUG("About to jump to policy program.\n");
 	CALI_JUMP_TO_POLICY(ctx);
 	if (CALI_F_HEP) {
