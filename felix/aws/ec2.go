@@ -85,6 +85,7 @@ func WaitForEC2SrcDstCheckUpdate(check string, healthAgg *health.HealthAggregato
 		jitter        = 0.1
 	)
 
+	//nolint:staticcheck // Ignore SA1019 deprecated
 	backoffMgr := wait.NewExponentialBackoffManager(initBackoff, maxBackoff, resetDuration, backoffFactor, jitter, c)
 	defer backoffMgr.Backoff().Stop()
 
