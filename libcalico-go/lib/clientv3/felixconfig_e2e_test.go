@@ -44,18 +44,24 @@ var _ = testutils.E2eDatastoreDescribe("FelixConfiguration tests", testutils.Dat
 	hostString := "localhost"
 	fipDisabled := apiv3.FloatingIPsDisabled
 	fipEnabled := apiv3.FloatingIPsEnabled
+	ctlbEnabled := apiv3.BPFConnectTimeLBEnabled
+	hostNetworkedNATDisabled := apiv3.BPFHostNetworkedNATDisabled
 	spec1 := apiv3.FelixConfigurationSpec{
-		UseInternalDataplaneDriver: &ptrTrue,
-		DataplaneDriver:            "test-dataplane-driver1",
-		MetadataPort:               &ptrInt1,
-		FloatingIPs:                &fipDisabled,
+		UseInternalDataplaneDriver:     &ptrTrue,
+		DataplaneDriver:                "test-dataplane-driver1",
+		MetadataPort:                   &ptrInt1,
+		FloatingIPs:                    &fipDisabled,
+		BPFConnectTimeLoadBalancing:    &ctlbEnabled,
+		BPFHostNetworkedNATWithoutCTLB: &hostNetworkedNATDisabled,
 	}
 	spec2 := apiv3.FelixConfigurationSpec{
-		UseInternalDataplaneDriver: &ptrFalse,
-		DataplaneDriver:            "test-dataplane-driver2",
-		HealthHost:                 &hostString,
-		HealthPort:                 &ptrInt2,
-		FloatingIPs:                &fipEnabled,
+		UseInternalDataplaneDriver:     &ptrFalse,
+		DataplaneDriver:                "test-dataplane-driver2",
+		HealthHost:                     &hostString,
+		HealthPort:                     &ptrInt2,
+		FloatingIPs:                    &fipEnabled,
+		BPFConnectTimeLoadBalancing:    &ctlbEnabled,
+		BPFHostNetworkedNATWithoutCTLB: &hostNetworkedNATDisabled,
 	}
 
 	DescribeTable("FelixConfiguration e2e CRUD tests",
