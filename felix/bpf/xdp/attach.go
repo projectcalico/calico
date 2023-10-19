@@ -144,7 +144,7 @@ func (ap *AttachPoint) AttachProgram() (bpf.AttachResult, error) {
 			for p, i := range ap.HookLayout {
 				globals.Jumps[p] = uint32(i)
 			}
-			globals.Jumps[tcdefs.ProgIndexPolicy] = uint32(ap.PolicyIdx(4))
+			globals.Jumps[tcdefs.ProgIndexPolicy] = uint32(ap.PolicyIdx)
 
 			if err := ConfigureProgram(m, ap.Iface, &globals); err != nil {
 				return nil, err
