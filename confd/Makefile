@@ -27,7 +27,7 @@ clean:
 ###############################################################################
 # Building the binary
 ###############################################################################
-build: bin/confd
+build: bin/confd-$(ARCH)
 build-all: $(addprefix sub-build-,$(VALIDARCHES))
 sub-build-%:
 	$(MAKE) build ARCH=$*
@@ -37,10 +37,10 @@ bin/confd-$(ARCH): $(SRC_FILES)
 
 bin/confd: bin/confd-$(ARCH)
 ifeq ($(ARCH),amd64)
-	ln -f bin/confd-$(ARCH) bin/confd
+	ln -sf confd-$(ARCH) bin/confd
 endif
 ifeq ($(ARCH),s390x)
-	ln -f bin/confd-$(ARCH) bin/confd
+	ln -sf confd-$(ARCH) bin/confd
 endif
 
 ###############################################################################
@@ -52,7 +52,7 @@ UPDATE_EXPECTED_DATA?=false
 
 .PHONY: test-kdd
 ## Run template tests against KDD
-test-kdd: bin/confd bin/kubectl bin/bird bin/bird6 bin/calico-node bin/calicoctl bin/typha run-k8s-apiserver
+test-kdd: bin/confd-$(ARCH) bin/kubectl bin/bird bin/bird6 bin/calico-node bin/calicoctl bin/typha run-k8s-apiserver
 	-git clean -fx etc/calico/confd
 	mkdir -p tests/logs
 	docker run --rm --net=host \
@@ -85,7 +85,7 @@ test-kdd: bin/confd bin/kubectl bin/bird bin/bird6 bin/calico-node bin/calicoctl
 
 .PHONY: test-etcd
 ## Run template tests against etcd
-test-etcd: bin/confd bin/etcdctl bin/bird bin/bird6 bin/calico-node bin/kubectl bin/calicoctl run-etcd run-k8s-apiserver
+test-etcd: bin/confd-$(ARCH) bin/etcdctl bin/bird bin/bird6 bin/calico-node bin/kubectl bin/calicoctl run-etcd run-k8s-apiserver
 	-git clean -fx etc/calico/confd
 	mkdir -p tests/logs
 	docker run --rm --net=host \
