@@ -1,10 +1,6 @@
 version: 2
 updates:
 - package-ecosystem: docker
-  directory: /node/calico_test
-  schedule:
-    interval: weekly
-- package-ecosystem: docker
   directory: /pod2daemon
   schedule:
     interval: weekly
@@ -76,7 +72,15 @@ updates:
   directory: /
   schedule:
     interval: weekly
+  groups:
+    gomod-dependencies:
+      patterns:
+        - "*"
 - package-ecosystem: gomod
   directory: /api
   schedule:
     interval: weekly
+  groups:
+    gomod-dependencies:
+      patterns:
+        - "*"
