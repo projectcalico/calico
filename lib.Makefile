@@ -1337,9 +1337,9 @@ kubectl $(KUBECTL):
 bin/helm:
 	mkdir -p bin
 	$(eval TMP := $(shell mktemp -d))
-	wget -q https://get.helm.sh/helm-v3.11.0-linux-amd64.tar.gz -O $(TMP)/helm3.tar.gz
+	wget -q https://get.helm.sh/helm-v3.11.0-linux-$(ARCH).tar.gz -O $(TMP)/helm3.tar.gz
 	tar -zxvf $(TMP)/helm3.tar.gz -C $(TMP)
-	mv $(TMP)/linux-amd64/helm bin/helm
+	mv $(TMP)/linux-$(ARCH)/helm bin/helm
 
 ###############################################################################
 # Common functions for launching a local etcd instance.
