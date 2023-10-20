@@ -234,6 +234,8 @@ func init() {
 	registerStructValidator(validate, validateRule, api.Rule{})
 	registerStructValidator(validate, validateEntityRule, api.EntityRule{})
 	registerStructValidator(validate, validateBGPPeerSpec, api.BGPPeerSpec{})
+	registerStructValidator(validate, validateBGPFilterRuleV4, api.BGPFilterRuleV4{})
+	registerStructValidator(validate, validateBGPFilterRuleV6, api.BGPFilterRuleV6{})
 	registerStructValidator(validate, validateNetworkPolicy, api.NetworkPolicy{})
 	registerStructValidator(validate, validateGlobalNetworkPolicy, api.GlobalNetworkPolicy{})
 	registerStructValidator(validate, validateGlobalNetworkSet, api.GlobalNetworkSet{})
@@ -1365,6 +1367,27 @@ func validateReachableByField(fl validator.FieldLevel) bool {
 		}
 	}
 	return true
+}
+
+func validateBGPFilterRuleV4(structLevel validator.StructLevel) {
+	fs := structLevel.Current().Interface().(api.BGPFilterRuleV4)
+	validateBGPFilterRule(structLevel, fs.CIDR, fs.MatchOperator)
+}
+
+func validateBGPFilterRuleV6(structLevel validator.StructLevel) {
+	fs := structLevel.Current().Interface().(api.BGPFilterRuleV6)
+	validateBGPFilterRule(structLevel, fs.CIDR, fs.MatchOperator)
+}
+
+func validateBGPFilterRule(structLevel validator.StructLevel, cidr string, op api.BGPFilterMatchOperator) {
+	if cidr != "" && op == "" {
+		structLevel.ReportError(cidr, "CIDR", "",
+			reason("MatchOperator cannot be empty when CIDR is not"), "")
+	}
+	if cidr == "" && op != "" {
+		structLevel.ReportError(op, "MatchOperator", "",
+			reason("CIDR cannot be empty when MatchOperator is not"), "")
+	}
 }
 
 func validateEndpointPort(structLevel validator.StructLevel) {

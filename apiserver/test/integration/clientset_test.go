@@ -1514,12 +1514,11 @@ func testBGPFilterClient(client calicoclient.Interface, name string) error {
 	acceptRuleV4 := v3.BGPFilterRuleV4{
 		CIDR:          "10.10.10.0/24",
 		MatchOperator: v3.In,
+		Source:        v3.BGPFilterSourceRemotePeers,
 		Action:        v3.Accept,
 	}
 	rejectRuleV4 := v3.BGPFilterRuleV4{
-		CIDR:          "11.11.11.0/24",
-		MatchOperator: v3.NotIn,
-		Action:        v3.Reject,
+		Action: v3.Reject,
 	}
 	acceptRuleV6 := v3.BGPFilterRuleV6{
 		CIDR:          "dead:beef:1::/64",
@@ -1527,9 +1526,8 @@ func testBGPFilterClient(client calicoclient.Interface, name string) error {
 		Action:        v3.Accept,
 	}
 	rejectRuleV6 := v3.BGPFilterRuleV6{
-		CIDR:          "dead:beef:2::/64",
-		MatchOperator: v3.NotEqual,
-		Action:        v3.Reject,
+		Source: v3.BGPFilterSourceRemotePeers,
+		Action: v3.Reject,
 	}
 	bgpFilter := &v3.BGPFilter{
 		ObjectMeta: metav1.ObjectMeta{Name: name},
