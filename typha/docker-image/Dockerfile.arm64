@@ -33,6 +33,12 @@ RUN chmod +x /sbin/tini
 FROM scratch
 COPY --from=base /sbin/tini /sbin/tini
 
+# Copy OS release and package metadata
+COPY --from=base /var/lib/dpkg/status /var/lib/dpkg/status
+COPY --from=base /var/lib/dpkg/available /var/lib/dpkg/available
+COPY --from=base /var/lib/apt/lists /var/lib/apt/lists
+COPY --from=base /etc/debian_version /etc/debian_version
+
 # Put our binary in /code rather than directly in /usr/bin.  This allows the downstream builds
 # to more easily extract the build artefacts from the container.
 ADD bin/calico-typha-arm64 /code/calico-typha
