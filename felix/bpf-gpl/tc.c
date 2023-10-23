@@ -235,7 +235,7 @@ static CALI_BPF_INLINE int pre_policy_processing(struct cali_tc_ctx *ctx)
 	ctx->state->pol_rc = CALI_POL_NO_MATCH;
 
 	/* Do conntrack lookup before anything else */
-	ctx->state->ct_result = calico_ct_v4_lookup(ctx);
+	ctx->state->ct_result = calico_ct_lookup(ctx);
 
 	calico_tc_process_ct_lookup(ctx);
 
@@ -1743,7 +1743,7 @@ int calico_tc_host_ct_conflict(struct __sk_buff *skb)
 
 	__u16 sport = ctx->state->sport;
 	ctx->state->sport = 0;
-	ctx->state->ct_result = calico_ct_v4_lookup(ctx);
+	ctx->state->ct_result = calico_ct_lookup(ctx);
 	ctx->state->sport = sport;
 	ctx->state->flags |= CALI_ST_HOST_PSNAT;
 
