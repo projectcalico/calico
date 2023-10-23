@@ -585,11 +585,6 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 		}
 		ct_lookup_ctx.tcp = tcp_hdr(ctx);
 		break;
-	case IPPROTO_ICMP_46:
-		// There are no port in ICMP and the fields in state are overloaded
-		// for other use like type and code.
-		ct_lookup_ctx.dport = ct_lookup_ctx.sport = 0;
-		break;
 	}
 
 	__u8 proto_orig = STATE->ip_proto;
