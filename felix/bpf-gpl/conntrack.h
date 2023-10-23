@@ -607,11 +607,39 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 		.ifindex_created = CT_INVALID_IFINDEX,
 	};
 
-	bool srcLTDest = src_lt_dest(&STATE->ip_src, &STATE->ip_dst, STATE->sport, STATE->dport);
 	struct calico_ct_key k;
 	bool syn = tcp_header && tcp_header->syn && !tcp_header->ack;
 
-	fill_ct_key(&k, srcLTDest, STATE->ip_proto, &STATE->ip_src, &STATE->ip_dst, STATE->sport, STATE->dport);
+	if (ct_ctx->proto == IPPROTO_ICMP_46 && icmp_type_is_err(icmp_hdr(ctx)->type)) {
+		// ICMP error packets are a response to a failed UDP/TCP/etc packet.  Try to extract the
+		// details of the inner packet.
+#ifdef IPVER6
+		if (!skb_icmp6_err_unpack(ctx, ct_ctx)) {
+#else
+		if (!skb_icmp_err_unpack(ctx, ct_ctx)) {
+#endif
+			CALI_CT_DEBUG("Failed to parse ICMP error packet.\n");
+			goto out_invalid;
+		}
+
+		// skb_icmp_err_unpack updates the ct_ctx with the details of the inner packet;
+		// look for a conntrack entry for the inner packet...
+		CALI_CT_DEBUG("related lookup from %x:%d\n", debug_ip(ct_ctx->src), ct_ctx->sport);
+		CALI_CT_DEBUG("related lookup to   %x:%d\n", debug_ip(ct_ctx->dst), ct_ctx->dport);
+		related = true;
+		tcp_header = STATE->ip_proto == IPPROTO_TCP ? tcp_hdr(ctx) : NULL;
+
+
+		// We failed to look up the original flow, but it is an ICMP error and we
+		// _do_ have a CT entry for the packet inside the error.  ct_ctx has been
+		// updated to describe the inner packet.
+
+		ctx->state->sport = ct_ctx->sport;
+		ctx->state->dport = ct_ctx->dport;
+	}
+
+	bool srcLTDest = src_lt_dest(&ct_ctx->src, &ct_ctx->dst, ct_ctx->sport, ct_ctx->dport);
+	fill_ct_key(&k, srcLTDest, ct_ctx->proto, &ct_ctx->src, &ct_ctx->dst, ct_ctx->sport, ct_ctx->dport);
 
 	struct calico_ct_value *v = cali_ct_lookup_elem(&k);
 	if (!v) {
@@ -642,72 +670,12 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 			result.rc = CALI_CT_MID_FLOW_MISS;
 			return result;
 		}
-		if (ct_ctx->proto != IPPROTO_ICMP_46) {
-			// Not ICMP so can't be a "related" packet.
-			CALI_CT_DEBUG("Miss.\n");
-			goto out_lookup_fail;
-		}
-
-		if (!icmp_type_is_err(icmp_hdr(ctx)->type)) {
-			// ICMP but not an error response packet.
-			CALI_DEBUG("CT-ICMP: type %d not an error\n",
-					icmp_hdr(ctx)->type);
-			goto out_lookup_fail;
-		}
-
-		// ICMP error packets are a response to a failed UDP/TCP/etc packet.  Try to extract the
-		// details of the inner packet.
-#ifdef IPVER6
-		if (!skb_icmp6_err_unpack(ctx, ct_ctx)) {
-#else
-		if (!skb_icmp_err_unpack(ctx, ct_ctx)) {
-#endif
-			CALI_CT_DEBUG("Failed to parse ICMP error packet.\n");
+		CALI_CT_DEBUG("Miss.\n");
+		if (related) {
 			goto out_invalid;
-		}
-
-		// skb_icmp_err_unpack updates the ct_ctx with the details of the inner packet;
-		// look for a conntrack entry for the inner packet...
-		CALI_CT_DEBUG("related lookup from %x:%d\n", debug_ip(ct_ctx->src), ct_ctx->sport);
-		CALI_CT_DEBUG("related lookup to   %x:%d\n", debug_ip(ct_ctx->dst), ct_ctx->dport);
-
-		srcLTDest = src_lt_dest(&ct_ctx->src, &ct_ctx->dst, ct_ctx->sport, ct_ctx->dport);
-		fill_ct_key(&k, srcLTDest, ct_ctx->proto, &ct_ctx->src, &ct_ctx->dst, ct_ctx->sport, ct_ctx->dport);
-		v = cali_ct_lookup_elem(&k);
-		if (!v) {
-			if (CALI_F_FROM_HOST &&
-				ct_ctx->proto == IPPROTO_TCP &&
-				(ctx->skb->mark & CALI_SKB_MARK_CT_ESTABLISHED_MASK) == CALI_SKB_MARK_CT_ESTABLISHED) {
-				// Linux Conntrack has marked the packet as part of a known flow.
-				// TODO-HEP Create a tracking entry for uplifted flow so that we handle the reverse traffic more efficiently.
-				CALI_DEBUG("BPF CT related miss but have Linux CT entry: established\n");
-				result.rc = CALI_CT_ESTABLISHED;
-				return result;
-			}
-
-			if (CALI_F_TO_HOST && ct_ctx->proto == IPPROTO_TCP) {
-				// Miss for a related packet towards the host.  This may be part of a
-				// connection that predates the BPF program so we need to let it fall through
-				// to iptables.
-				CALI_DEBUG("BPF CT related miss for mid-flow TCP\n");
-				result.rc = CALI_CT_MID_FLOW_MISS;
-				return result;
-			}
-
-			CALI_CT_DEBUG("Miss on ICMP related\n");
+		} else {
 			goto out_lookup_fail;
 		}
-
-		tcp_header = STATE->ip_proto == IPPROTO_TCP ? tcp_hdr(ctx) : NULL;
-
-		related = true;
-
-		// We failed to look up the original flow, but it is an ICMP error and we
-		// _do_ have a CT entry for the packet inside the error.  ct_ctx has been
-		// updated to describe the inner packet.
-
-		ctx->state->sport = ct_ctx->sport;
-		ctx->state->dport = ct_ctx->dport;
 	}
 
 	__u64 now = bpf_ktime_get_ns();
