@@ -98,7 +98,7 @@ func CreateBPFMaps(ipFamily int) (*Maps, error) {
 		return v6()
 	}
 
-	ret.IpsetsMap = ipsets.Map()
+	ret.IpsetsMap = getmap(ipsets.Map, ipsets.MapV6)
 	mps = append(mps, ret.IpsetsMap)
 
 	ret.StateMap = state.Map()
@@ -107,7 +107,7 @@ func CreateBPFMaps(ipFamily int) (*Maps, error) {
 	ret.ArpMap = getmap(arp.Map, arp.MapV6)
 	mps = append(mps, ret.ArpMap)
 
-	ret.FailsafesMap = failsafes.Map()
+	ret.FailsafesMap = getmap(failsafes.Map, failsafes.MapV6)
 	mps = append(mps, ret.FailsafesMap)
 
 	ret.FrontendMap = getmapWithExistsCheck(nat.FrontendMap, nat.FrontendMapV6)
