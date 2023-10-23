@@ -75,6 +75,9 @@ struct cali_tc_state {
 		__u16 dport;
 		struct
 		{
+			/* Only used to pass type/code to the program that generates and
+			 * send and ICMP error respose.
+			 */
 			__u8 icmp_type;
 			__u8 icmp_code;
 		};
