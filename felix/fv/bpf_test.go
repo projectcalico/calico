@@ -318,6 +318,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				options.DelayFelixStart = true
 				options.TriggerDelayedFelixStart = true
 			}
+			options.ExtraEnvVars["FELIX_BPFConnectTimeLoadBalancingEnabled"] = fmt.Sprint(testOpts.connTimeEnabled)
 			options.ExtraEnvVars["FELIX_BPFLogLevel"] = fmt.Sprint(testOpts.bpfLogLevel)
 			if testOpts.dsr {
 				options.ExtraEnvVars["FELIX_BPFExternalServiceMode"] = "dsr"
