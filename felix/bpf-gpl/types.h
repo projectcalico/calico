@@ -206,7 +206,9 @@ struct cali_tc_ctx {
 			}							\
 										\
 			x;							\
-	})									\
+	})
+
+#define STATE (ctx->state)
 
 #define fib_params(x) ((struct bpf_fib_lookup *)((x)->scratch))
 
