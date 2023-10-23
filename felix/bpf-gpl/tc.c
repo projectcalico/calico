@@ -1363,7 +1363,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 
 	// Set the dport to 0, to make sure conntrack entries for icmp is proper as we use
 	// dport to hold icmp type and code
-	if (state->ip_proto == IPPROTO_ICMP) {
+	if (state->ip_proto == IPPROTO_ICMP_46) {
 		state->dport = 0;
 		state->post_nat_dport = 0;
 	}
