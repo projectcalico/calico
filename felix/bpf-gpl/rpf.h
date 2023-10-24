@@ -17,6 +17,11 @@ static CALI_BPF_INLINE bool wep_rpf_check(struct cali_tc_ctx *ctx, struct cali_r
                 CALI_INFO("Workload RPF fail: missing route.\n");
                 return false;
         }
+#ifdef IPVER6
+	if (ctx->state->ip_proto == IPPROTO_ICMPV6) {
+		return true;
+	}
+#endif
         if (!cali_rt_flags_local_workload(r->flags)) {
                 CALI_INFO("Workload RPF fail: not a local workload.\n");
                 return false;
@@ -39,6 +44,12 @@ static CALI_BPF_INLINE bool hep_rpf_check(struct cali_tc_ctx *ctx)
 		CALI_DEBUG("Host RPF check disabled\n");
 		return true;
 	}
+
+#ifdef IPVER6
+	if (ctx->state->ip_proto == IPPROTO_ICMPV6) {
+		return true;
+	}
+#endif
 
 	strict = GLOBAL_FLAGS & CALI_GLOBALS_RPF_OPTION_STRICT;
 	struct bpf_fib_lookup fib_params = {
