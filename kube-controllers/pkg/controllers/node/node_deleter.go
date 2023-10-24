@@ -94,7 +94,8 @@ func (c *nodeDeleter) deleteStaleNodes() error {
 		}
 		if k8sNodeName != "" && !kNodeIdx[k8sNodeName] {
 			// No matching Kubernetes node with that name.
-			time.Sleep(c.rl.When(RateLimitCalicoDelete))
+			rlKey := rateLimiterItemKey{Type: RateLimitCalicoDelete, Name: k8sNodeName}
+			time.Sleep(c.rl.When(rlKey))
 
 			// Re-confirm that the node is actually missing. This minimizes the potential that the node was
 			// deleted and then re-created between the initial List() call above, and the decision to delete the
@@ -108,7 +109,7 @@ func (c *nodeDeleter) deleteStaleNodes() error {
 					return err
 				}
 			}
-			c.rl.Forget(RateLimitCalicoDelete)
+			c.rl.Forget(rlKey)
 		}
 	}
 	return nil
