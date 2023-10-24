@@ -378,7 +378,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			if !testOpts.ipv6 {
 				options.ExtraEnvVars["FELIX_BPFDSROptoutCIDRs"] = "245.245.0.0/16"
 			} else {
-				options.ExtraEnvVars["FELIX_BPFIPV6SUPPORT"] = "true"
 				options.ExtraEnvVars["FELIX_IPV6SUPPORT"] = "true"
 			}
 

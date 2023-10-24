@@ -240,8 +240,7 @@ type Config struct {
 	TyphaCN       string `config:"string;;local"`
 	TyphaURISAN   string `config:"string;;local"`
 
-	Ipv6Support    bool `config:"bool;true"`
-	BpfIpv6Support bool `config:"bool;false"`
+	Ipv6Support bool `config:"bool;true"`
 
 	IptablesBackend                    string            `config:"oneof(legacy,nft,auto);auto"`
 	RouteRefreshInterval               time.Duration     `config:"seconds;90"`
