@@ -331,4 +331,14 @@ struct {										\
 
 char ____license[] __attribute__((section("license"), used)) = "GPL";
 
+#define NEXTHDR_HOP		0
+#define NEXTHDR_ROUTING		43
+#define NEXTHDR_FRAGMENT	44
+#define NEXTHDR_GRE		47
+#define NEXTHDR_ESP		50
+#define NEXTHDR_AUTH		51
+#define NEXTHDR_NONE		59
+#define NEXTHDR_DEST		60
+#define NEXTHDR_MOBILITY	135
+
 #endif /* __CALI_BPF_H__ */

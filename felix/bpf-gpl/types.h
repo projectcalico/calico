@@ -10,11 +10,12 @@
 #include <linux/pkt_cls.h>
 #ifdef IPVER6
 #include <linux/ipv6.h>
+#include <linux/icmpv6.h>
 #else
 #include <linux/ip.h>
+#include <linux/icmp.h>
 #endif
 #include <linux/tcp.h>
-#include <linux/icmp.h>
 #include <linux/in.h>
 #include <linux/udp.h>
 #include "bpf.h"
@@ -29,12 +30,13 @@
 #define ETH_SIZE (sizeof(struct ethhdr))
 #ifdef IPVER6
 #define IP_SIZE (sizeof(struct ipv6hdr))
+#define ICMP_SIZE (sizeof(struct icmp6hdr))
 #else
 #define IP_SIZE (sizeof(struct iphdr))
+#define ICMP_SIZE (sizeof(struct icmphdr))
 #endif
 #define UDP_SIZE (sizeof(struct udphdr))
 #define TCP_SIZE (sizeof(struct tcphdr))
-#define ICMP_SIZE (sizeof(struct icmphdr))
 
 #define MAX_RULE_IDS    32
 
@@ -73,6 +75,9 @@ struct cali_tc_state {
 		__u16 dport;
 		struct
 		{
+			/* Only used to pass type/code to the program that generates and
+			 * send and ICMP error respose.
+			 */
 			__u8 icmp_type;
 			__u8 icmp_code;
 		};
@@ -203,7 +208,10 @@ struct cali_tc_ctx {
 			}							\
 										\
 			x;							\
-	})									\
+	})
+
+#define STATE (ctx->state)
+
 
 #define fib_params(x) ((struct bpf_fib_lookup *)((x)->scratch))
 

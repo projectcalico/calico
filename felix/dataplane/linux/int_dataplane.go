@@ -582,7 +582,17 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		// bpffs so there's nothing to clean up
 	}
 
-	ipsetsManager := common.NewIPSetsManager(ipSetsV4, config.MaxIPSetSize)
+	ipsetsManager := common.NewIPSetsManager("ipv4", ipSetsV4, config.MaxIPSetSize)
+	ipsetsManagerV6 := common.NewIPSetsManager("ipv6", nil, config.MaxIPSetSize)
+	filterTableV6 := iptables.NewTable(
+		"filter",
+		6,
+		rules.RuleHashPrefix,
+		iptablesLock,
+		featureDetector,
+		iptablesOptions,
+	)
+
 	dp.RegisterManager(ipsetsManager)
 
 	if !config.BPFEnabled {
@@ -650,16 +660,30 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		// Important that we create the maps before we load a BPF program with TC since we make sure the map
 		// metadata name is set whereas TC doesn't set that field.
 		ipSetIDAllocator := idalloc.New()
-		ipSetsV4 := bpfipsets.NewBPFIPSets(
-			ipSetsConfigV4,
-			ipSetIDAllocator,
-			bpfMaps.IpsetsMap,
-			bpfipsets.IPSetEntryFromBytes,
-			bpfipsets.ProtoIPSetMemberToBPFEntry,
-			dp.loopSummarizer,
-		)
-		dp.ipSets = append(dp.ipSets, ipSetsV4)
-		ipsetsManager.AddDataplane(ipSetsV4)
+
+		if config.BPFIpv6Enabled {
+			ipSetsV6 := bpfipsets.NewBPFIPSets(
+				config.RulesConfig.IPSetConfigV6,
+				ipSetIDAllocator,
+				bpfMaps.IpsetsMap,
+				bpfipsets.IPSetEntryV6FromBytes,
+				bpfipsets.ProtoIPSetMemberToBPFEntryV6,
+				dp.loopSummarizer,
+			)
+			dp.ipSets = append(dp.ipSets, ipSetsV6)
+			ipsetsManagerV6.AddDataplane(ipSetsV6)
+		} else {
+			ipSetsV4 := bpfipsets.NewBPFIPSets(
+				ipSetsConfigV4,
+				ipSetIDAllocator,
+				bpfMaps.IpsetsMap,
+				bpfipsets.IPSetEntryFromBytes,
+				bpfipsets.ProtoIPSetMemberToBPFEntry,
+				dp.loopSummarizer,
+			)
+			dp.ipSets = append(dp.ipSets, ipSetsV4)
+			ipsetsManager.AddDataplane(ipSetsV4)
+		}
 		bpfRTMgr := newBPFRouteManager(&config, bpfMaps, dp.loopSummarizer)
 		dp.RegisterManager(bpfRTMgr)
 
@@ -668,6 +692,10 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		fibLookupEnabled := !config.RulesConfig.IPIPEnabled
 		keyFromSlice := failsafes.KeyFromSlice
 		makeKey := failsafes.MakeKey
+		if config.BPFIpv6Enabled {
+			keyFromSlice = failsafes.KeyV6FromSlice
+			makeKey = failsafes.MakeKeyV6
+		}
 		failsafeMgr := failsafes.NewManager(
 			bpfMaps.FailsafesMap,
 			config.RulesConfig.FailsafeInboundHostPorts,
@@ -678,6 +706,11 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		)
 		dp.RegisterManager(failsafeMgr)
 
+		filterTbl := filterTableV4
+		if config.BPFIpv6Enabled {
+			filterTbl = filterTableV6
+		}
+
 		workloadIfaceRegex := regexp.MustCompile(strings.Join(interfaceRegexes, "|"))
 		bpfEndpointManager, err = newBPFEndpointManager(
 			nil,
@@ -687,7 +720,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			workloadIfaceRegex,
 			ipSetIDAllocator,
 			ruleRenderer,
-			filterTableV4,
+			filterTbl,
 			dp.reportHealth,
 			dp.loopSummarizer,
 			featureDetector,
@@ -703,6 +736,10 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 		kfb := conntrack.KeyFromBytes
 		vfb := conntrack.ValueFromBytes
+		if config.BPFIpv6Enabled {
+			kfb = conntrack.KeyV6FromBytes
+			vfb = conntrack.ValueV6FromBytes
+		}
 
 		conntrackScanner := bpfconntrack.NewScanner(bpfMaps.CtMap, kfb, vfb,
 			bpfconntrack.NewLivenessScanner(config.BPFConntrackTimeouts, config.BPFNodePortDSREnabled))
@@ -761,8 +798,13 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 					logLevel = "off"
 				}
 			}
+
+			ipFamily := 4
+			if config.BPFIpv6Enabled {
+				ipFamily = 6
+			}
 			// Activate the connect-time load balancer.
-			err = bpfnat.InstallConnectTimeLoadBalancer(4,
+			err = bpfnat.InstallConnectTimeLoadBalancer(ipFamily,
 				config.BPFCgroupV2, logLevel, config.BPFConntrackTimeouts.UDPLastSeen, excludeUDP)
 			if err != nil {
 				log.WithError(err).Panic("BPFConnTimeLBEnabled but failed to attach connect-time load balancer, bailing out.")
@@ -866,14 +908,6 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			featureDetector,
 			iptablesOptions,
 		)
-		filterTableV6 := iptables.NewTable(
-			"filter",
-			6,
-			rules.RuleHashPrefix,
-			iptablesLock,
-			featureDetector,
-			iptablesOptions,
-		)
 
 		ipSetsConfigV6 := config.RulesConfig.IPSetConfigV6
 		ipSetsV6 := ipsets.NewIPSets(ipSetsConfigV6, dp.loopSummarizer)
@@ -924,8 +958,9 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			routeTableV6 = &routetable.DummyTable{}
 		}
 
+		ipsetsManagerV6.AddDataplane(ipSetsV6)
+		dp.RegisterManager(ipsetsManagerV6)
 		if !config.BPFEnabled {
-			dp.RegisterManager(common.NewIPSetsManager(ipSetsV6, config.MaxIPSetSize))
 			dp.RegisterManager(newHostIPManager(
 				config.RulesConfig.WorkloadIfacePrefixes,
 				rules.IPSetIDThisHostIPs,
@@ -933,6 +968,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 				config.MaxIPSetSize))
 			dp.RegisterManager(newPolicyManager(rawTableV6, mangleTableV6, filterTableV6, ruleRenderer, 6))
 		}
+
 		dp.RegisterManager(newEndpointManager(
 			rawTableV6,
 			mangleTableV6,
@@ -1506,15 +1542,22 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 		})
 
 		if t.IPVersion == 6 {
-			for _, prefix := range rulesConfig.WorkloadIfacePrefixes {
-				// In BPF mode, we don't support IPv6 yet.  Drop it.
-				fwdRules = append(fwdRules, iptables.Rule{
-					Match:   iptables.Match().OutInterface(prefix + "+"),
-					Action:  d.ruleRenderer.IptablesFilterDenyAction(),
-					Comment: []string{"To workload, drop IPv6."},
-				})
+			if !d.config.BPFIpv6Enabled {
+				for _, prefix := range rulesConfig.WorkloadIfacePrefixes {
+					// In BPF mode, we don't support IPv6 yet.  Drop it.
+					fwdRules = append(fwdRules, iptables.Rule{
+						Match:   iptables.Match().OutInterface(prefix + "+"),
+						Action:  d.ruleRenderer.IptablesFilterDenyAction(),
+						Comment: []string{"To workload, drop IPv6."},
+					})
+				}
+			} else {
+				// ICMPv6 for router/neighbor soliciting are allowed towards the
+				// host, but the bpf programs cannot easily make sure that they
+				// only go to the host. Make sure that they are not forwarded.
+				fwdRules = append(fwdRules, rules.Icmpv6Filter(d.ruleRenderer.IptablesFilterDenyAction())...)
 			}
-		} else {
+		} else if (t.IPVersion == 6) == (d.config.BPFIpv6Enabled) /* XXX remove condition for dual stack */ {
 			// Let the BPF programs know if Linux conntrack knows about the flow.
 			fwdRules = append(fwdRules, bpfMarkPreestablishedFlowsRules()...)
 			// The packet may be about to go to a local workload.  However, the local workload may not have a BPF
