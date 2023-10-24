@@ -181,7 +181,9 @@ type Config struct {
 	BPFCTLBLogFilter                   string            `config:"oneof(all);;"`
 	BPFDataIfacePattern                *regexp.Regexp    `config:"regexp;^((en|wl|ww|sl|ib)[Popsx].*|(eth|wlan|wwan).*|tunl0$|vxlan.calico$|wireguard.cali$|wg-v6.cali$)"`
 	BPFL3IfacePattern                  *regexp.Regexp    `config:"regexp;"`
-	BPFConnectTimeLoadBalancingEnabled bool              `config:"bool;true"`
+	BPFConnectTimeLoadBalancingEnabled bool              `config:"bool;;"`
+	BPFConnectTimeLoadBalancing        string            `config:"oneof(TCP,Enabled,Disabled);TCP;non-zero"`
+	BPFHostNetworkedNATWithoutCTLB     string            `config:"oneof(Enabled,Disabled);Enabled;non-zero"`
 	BPFExternalServiceMode             string            `config:"oneof(tunnel,dsr);tunnel;non-zero"`
 	BPFDSROptoutCIDRs                  []string          `config:"cidr-list;;"`
 	BPFKubeProxyIptablesCleanupEnabled bool              `config:"bool;true"`

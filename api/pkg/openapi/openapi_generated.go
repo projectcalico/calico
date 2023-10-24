@@ -2823,8 +2823,22 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"bpfConnectTimeLoadBalancingEnabled": {
 						SchemaProps: spec.SchemaProps{
-							Description: "BPFConnectTimeLoadBalancingEnabled when in BPF mode, controls whether Felix installs the connection-time load balancer.  The connect-time load balancer is required for the host to be able to reach Kubernetes services and it improves the performance of pod-to-service connections.  The only reason to disable it is for debugging purposes.  [Default: true]",
+							Description: "BPFConnectTimeLoadBalancingEnabled when in BPF mode, controls whether Felix installs the connection-time load balancer.  The connect-time load balancer is required for the host to be able to reach Kubernetes services and it improves the performance of pod-to-service connections.  The only reason to disable it is for debugging purposes. This will be deprecated. Use BPFConnectTimeLoadBalancing [Default: true]",
 							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
+					"bpfConnectTimeLoadBalancing": {
+						SchemaProps: spec.SchemaProps{
+							Description: "BPFConnectTimeLoadBalancing when in BPF mode, controls whether Felix installs the connect-time load balancer. The connect-time load balancer is required for the host to be able to reach Kubernetes services and it improves the performance of pod-to-service connections.When set to TCP, connect time load balancing is available only for services with TCP ports. [Default: TCP]",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"bpfHostNetworkedNATWithoutCTLB": {
+						SchemaProps: spec.SchemaProps{
+							Description: "BPFHostNetworkedNATWithoutCTLB when in BPF mode, controls whether Felix does a NAT without CTLB. This along with BPFConnectTimeLoadBalancing determines the CTLB behavior. [Default: Enabled]",
+							Type:        []string{"string"},
 							Format:      "",
 						},
 					},

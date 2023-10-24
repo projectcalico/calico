@@ -46,6 +46,8 @@ import (
 	"golang.org/x/sync/semaphore"
 	"golang.org/x/sys/unix"
 
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/logutils"
@@ -215,12 +217,12 @@ type qDiscInfo struct {
 	handle int
 }
 
-type ctlbWorkaroundMode int
+type hostNetworkedNATMode int
 
 const (
-	ctlbWorkaroundDisabled = iota
-	ctlbWorkaroundEnabled
-	ctlbWorkaroundUDPOnly
+	hostNetworkedNATDisabled = iota
+	hostNetworkedNATEnabled
+	hostNetworkedNATUDPOnly
 )
 
 type bpfEndpointManager struct {
@@ -315,7 +317,7 @@ type bpfEndpointManager struct {
 	bpfDisableGROForIfaces *regexp.Regexp
 
 	// Service routes
-	ctlbWorkaroundMode ctlbWorkaroundMode
+	hostNetworkedNATMode hostNetworkedNATMode
 
 	bpfPolicyDebugEnabled bool
 
@@ -470,17 +472,15 @@ func newBPFEndpointManager(
 		m.dp = m
 	}
 
-	if config.FeatureGates != nil {
-		switch config.FeatureGates["BPFConnectTimeLoadBalancingWorkaround"] {
-		case "enabled":
-			m.ctlbWorkaroundMode = ctlbWorkaroundEnabled
-		case "udp":
-			m.ctlbWorkaroundMode = ctlbWorkaroundUDPOnly
+	if config.BPFHostNetworkedNAT == string(apiv3.BPFHostNetworkedNATEnabled) {
+		m.hostNetworkedNATMode = hostNetworkedNATEnabled
+		if config.BPFConnTimeLB == string(apiv3.BPFConnectTimeLBTCP) {
+			m.hostNetworkedNATMode = hostNetworkedNATUDPOnly
 		}
 	}
 
-	if m.ctlbWorkaroundMode != ctlbWorkaroundDisabled {
-		log.Infof("BPFConnectTimeLoadBalancingWorkaround is %d", m.ctlbWorkaroundMode)
+	if m.hostNetworkedNATMode != hostNetworkedNATDisabled {
+		log.Infof("HostNetworkedNATMode is %d", m.hostNetworkedNATMode)
 		m.routeTable = routetable.New(
 			[]string{bpfInDev},
 			4,
@@ -1314,7 +1314,7 @@ func (m *bpfEndpointManager) CompleteDeferredWork() error {
 	bpfEndpointsGauge.Set(float64(len(m.nameToIface)))
 	bpfDirtyEndpointsGauge.Set(float64(m.dirtyIfaceNames.Len()))
 
-	if m.ctlbWorkaroundMode != ctlbWorkaroundDisabled {
+	if m.hostNetworkedNATMode != hostNetworkedNATDisabled {
 		// Update all existing IPs of dirty services
 		m.dirtyServices.Iter(func(svc serviceKey) error {
 			for _, ip := range m.services[svc] {
@@ -2228,7 +2228,7 @@ func (m *bpfEndpointManager) isWorkloadIface(iface string) bool {
 
 func (m *bpfEndpointManager) isDataIface(iface string) bool {
 	return m.dataIfaceRegex.MatchString(iface) ||
-		(m.ctlbWorkaroundMode != ctlbWorkaroundDisabled && (iface == bpfOutDev || iface == "lo"))
+		(m.hostNetworkedNATMode != hostNetworkedNATDisabled && (iface == bpfOutDev || iface == "lo"))
 }
 
 func (m *bpfEndpointManager) isL3Iface(iface string) bool {
@@ -2475,7 +2475,7 @@ func (m *bpfEndpointManager) ensureStarted() {
 }
 
 func (m *bpfEndpointManager) ensureBPFDevices() error {
-	if m.ctlbWorkaroundMode == ctlbWorkaroundDisabled {
+	if m.hostNetworkedNATMode == hostNetworkedNATDisabled {
 		return nil
 	}
 
@@ -2981,11 +2981,11 @@ func (m *bpfEndpointManager) getInterfaceIP(ifaceName string) (*net.IP, error) {
 }
 
 func (m *bpfEndpointManager) onServiceUpdate(update *proto.ServiceUpdate) {
-	if m.ctlbWorkaroundMode == ctlbWorkaroundDisabled {
+	if m.hostNetworkedNATMode == hostNetworkedNATDisabled {
 		return
 	}
 
-	if m.ctlbWorkaroundMode == ctlbWorkaroundUDPOnly {
+	if m.hostNetworkedNATMode == hostNetworkedNATUDPOnly {
 		hasUDP := false
 
 		for _, port := range update.Ports {
@@ -3046,7 +3046,7 @@ func (m *bpfEndpointManager) onServiceUpdate(update *proto.ServiceUpdate) {
 }
 
 func (m *bpfEndpointManager) onServiceRemove(update *proto.ServiceRemove) {
-	if m.ctlbWorkaroundMode == ctlbWorkaroundDisabled {
+	if m.hostNetworkedNATMode == hostNetworkedNATDisabled {
 		return
 	}
 
@@ -3085,7 +3085,7 @@ func (m *bpfEndpointManager) delRoute(cidr ip.V4CIDR) {
 }
 
 func (m *bpfEndpointManager) GetRouteTableSyncers() []routetable.RouteTableSyncer {
-	if m.ctlbWorkaroundMode == ctlbWorkaroundDisabled {
+	if m.hostNetworkedNATMode == hostNetworkedNATDisabled {
 		return nil
 	}
 
