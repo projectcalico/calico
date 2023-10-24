@@ -685,6 +685,13 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.RegisterManager(failsafeMgr)
 
 		workloadIfaceRegex := regexp.MustCompile(strings.Join(interfaceRegexes, "|"))
+
+		if config.BPFConnTimeLB == string(apiv3.BPFConnectTimeLBDisabled) &&
+			config.BPFHostNetworkedNAT == string(apiv3.BPFHostNetworkedNATDisabled) {
+			log.Warn("Access to services from host networked process wont work, forcing hostnetworked NAT to Enabled")
+			config.BPFHostNetworkedNAT = string(apiv3.BPFHostNetworkedNATEnabled)
+		}
+
 		bpfEndpointManager, err = newBPFEndpointManager(
 			nil,
 			&config,
@@ -753,11 +760,6 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			log.Info("BPF enabled but no Kubernetes client available, unable to run kube-proxy module.")
 		}
 
-		if config.BPFConnTimeLB == string(apiv3.BPFConnectTimeLBDisabled) &&
-			config.BPFHostNetworkedNAT == string(apiv3.BPFHostNetworkedNATDisabled) {
-			log.Warn("Access to services from host networked process wont work, forcing hostnetworked NAT to Enabled")
-			config.BPFHostNetworkedNAT = string(apiv3.BPFHostNetworkedNATEnabled)
-		}
 		// HostNetworkedNAT is Enabled and CTLB enabled.
 		// HostNetworkedNAT is Disabled and CTLB is either disabled/TCP.
 		// The above cases are invalid configuration. Revert to CTLB enabled.
