@@ -132,6 +132,12 @@ TEMPEST_BRANCH=29.1.0
 # error: RPC failed; curl 56 GnuTLS recv error (-9): A TLS packet with unexpected length was received.
 GIT_BASE=https://github.com
 
+# We normally want to test with the latest Calico master code (i.e. for Felix
+# and networking-calico), but allow this to be overridden because (for example)
+# we recently lost support for Ubuntu Bionic, so for Ubuntu Bionic we would
+# need to use a previous Calico release (v3.25).
+CALICO_PPA=${CALICO_PPA:-master}
+
 EOF
 
 if ! ${TEMPEST:-false}; then
@@ -149,12 +155,6 @@ disable_service tempest
 # and instead create a provider network with the 'neutron net-create' and
 # 'neutron subnet-create' invocations below.
 NEUTRON_CREATE_INITIAL_NETWORKS=False
-
-# We normally want to test with the latest Calico master code (i.e. for Felix
-# and networking-calico), but allow this to be overridden because (for example)
-# we recently lost support for Ubuntu Bionic, so for Ubuntu Bionic we would
-# need to use a previous Calico release (v3.26).
-CALICO_PPA=${CALICO_PPA:-master}
 
 EOF
 fi
