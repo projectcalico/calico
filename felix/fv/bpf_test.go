@@ -264,8 +264,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			felixPanicExpected bool
 		)
 
-		ctlbWorkaround := !testOpts.connTimeEnabled
-
 		switch testOpts.protocol {
 		case "tcp":
 			numericProto = 6
@@ -342,13 +340,17 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				options.InitialFelixConfiguration = felixConfig
 			}
 
-			if ctlbWorkaround {
+			if !testOpts.connTimeEnabled {
+				options.ExtraEnvVars["FELIX_BPFHostNetworkedNATWithoutCTLB"] = string(api.BPFHostNetworkedNATEnabled)
+				options.ExtraEnvVars["FELIX_BPFConnectTimeLoadBalancing"] = string(api.BPFConnectTimeLBDisabled)
 				if testOpts.protocol == "udp" {
-					options.ExtraEnvVars["FELIX_FeatureGates"] = "BPFConnectTimeLoadBalancingWorkaround=udp"
-				} else {
-					options.ExtraEnvVars["FELIX_FeatureGates"] = "BPFConnectTimeLoadBalancingWorkaround=enabled"
+					options.ExtraEnvVars["FELIX_BPFConnectTimeLoadBalancing"] = string(api.BPFConnectTimeLBTCP)
 				}
+			} else {
+				options.ExtraEnvVars["FELIX_BPFConnectTimeLoadBalancing"] = string(api.BPFConnectTimeLBEnabled)
+				options.ExtraEnvVars["FELIX_BPFHostNetworkedNATWithoutCTLB"] = string(api.BPFHostNetworkedNATDisabled)
 			}
+
 		})
 
 		JustAfterEach(func() {
@@ -573,9 +575,10 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			})
 
 			if testOpts.protocol == "udp" && testOpts.connTimeEnabled {
-				Describe("with BPFConnectTimeLoadBalancingWorkaround=udp", func() {
+				Describe("with BPFHostNetworkedNAT enabled", func() {
 					BeforeEach(func() {
-						options.ExtraEnvVars["FELIX_FeatureGates"] = "BPFConnectTimeLoadBalancingWorkaround=udp"
+						options.ExtraEnvVars["FELIX_BPFHostNetworkedNATWithoutCTLB"] = string(api.BPFHostNetworkedNATEnabled)
+						options.ExtraEnvVars["FELIX_BPFConnectTimeLoadBalancing"] = string(api.BPFConnectTimeLBTCP)
 					})
 					It("should not program non-udp services", func() {
 						udpsvc := &v1.Service{
@@ -2681,7 +2684,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 											felix.Exec("ip", "route")
 										}
 									})
-									if ctlbWorkaround {
+									if !testOpts.connTimeEnabled {
 										It("should have connection when via clusterIP starts first", func() {
 											node1IP := tc.Felixes[1].IP
 
