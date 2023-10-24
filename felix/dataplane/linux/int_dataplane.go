@@ -753,22 +753,28 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			log.Info("BPF enabled but no Kubernetes client available, unable to run kube-proxy module.")
 		}
 
+		if config.BPFConnTimeLB == string(apiv3.BPFConnectTimeLBDisabled) &&
+			config.BPFHostNetworkedNAT == string(apiv3.BPFHostNetworkedNATDisabled) {
+			log.Warn("Access to services from host networked process wont work, forcing hostnetworked NAT to Enabled")
+			config.BPFHostNetworkedNAT = string(apiv3.BPFHostNetworkedNATEnabled)
+		}
 		// HostNetworkedNAT is Enabled and CTLB enabled.
 		// HostNetworkedNAT is Disabled and CTLB is either disabled/TCP.
 		// The above cases are invalid configuration. Revert to CTLB enabled.
 		if config.BPFHostNetworkedNAT == string(apiv3.BPFHostNetworkedNATEnabled) {
-			if config.BPFConnTimeLBEnabled || config.BPFConnTimeLB == string(apiv3.BPFConnectTimeLBEnabled) {
+			if config.BPFConnTimeLB == string(apiv3.BPFConnectTimeLBEnabled) {
 				log.Warn("Access to services may not work properly, reverting to default CTLB configuration")
-				config.BPFHostNetworkedNAT = string(apiv3.BPFHostNetworkedNATDisabled)
+				config.BPFConnTimeLB = string(apiv3.BPFConnectTimeLBTCP)
 			}
 		} else {
-			if !config.BPFConnTimeLBEnabled || config.BPFConnTimeLB != string(apiv3.BPFConnectTimeLBEnabled) {
+			if config.BPFConnTimeLB != string(apiv3.BPFConnectTimeLBEnabled) {
 				log.Warn("Access to services may not work properly, reverting to default CTLB configuration")
-				config.BPFConnTimeLB = string(apiv3.BPFConnectTimeLBEnabled)
+				config.BPFConnTimeLB = string(apiv3.BPFConnectTimeLBTCP)
+				config.BPFHostNetworkedNAT = string(apiv3.BPFHostNetworkedNATEnabled)
 			}
 		}
 
-		if config.BPFConnTimeLBEnabled || config.BPFConnTimeLB != string(apiv3.BPFConnectTimeLBDisabled) {
+		if config.BPFConnTimeLB != string(apiv3.BPFConnectTimeLBDisabled) {
 			excludeUDP := false
 			if config.BPFConnTimeLB == string(apiv3.BPFConnectTimeLBTCP) && config.BPFHostNetworkedNAT == string(apiv3.BPFHostNetworkedNATEnabled) {
 				excludeUDP = true
