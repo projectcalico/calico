@@ -717,6 +717,12 @@ blocks:
           - export REQUIREMENTS_BRANCH=refs/changes/59/810859/1
           - export NC_PLUGIN_REPO=$(dirname $(pwd))
           - export NC_PLUGIN_REF=$(git rev-parse --abbrev-ref HEAD)
+          # We would normally want to test with the latest Calico master code (i.e. for Felix and
+          # networking-calico), but we recently lost support for Ubuntu Bionic, so for Ubuntu Bionic
+          # we need to use a previous Calico release (v3.26).  Does that mean that this testing
+          # doesn't belong on the master branch of the Calico repo?  Yes.  I'm just doing this here
+          # for now in order to validate the theory.
+          - export CALICO_PPA=calico-3.26
           - TEMPEST=true DEVSTACK_BRANCH=stable/ussuri ./devstack/bootstrap.sh
     epilogue:
       on_fail:

@@ -150,6 +150,12 @@ disable_service tempest
 # 'neutron subnet-create' invocations below.
 NEUTRON_CREATE_INITIAL_NETWORKS=False
 
+# We normally want to test with the latest Calico master code (i.e. for Felix
+# and networking-calico), but allow this to be overridden because (for example)
+# we recently lost support for Ubuntu Bionic, so for Ubuntu Bionic we would
+# need to use a previous Calico release (v3.26).
+CALICO_PPA=${CALICO_PPA:-master}
+
 EOF
 fi
 
