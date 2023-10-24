@@ -44,7 +44,14 @@ static CALI_BPF_INLINE int calico_unittest_entry (struct __sk_buff *skb)
 		goto allow;
 	}
 
-	return icmp_v4_too_big(ctx);
+	struct {
+		__be16  unused;
+		__be16  mtu;
+	} frag = {
+		.mtu = bpf_htons(TUNNEL_MTU),
+	};
+
+	return icmp_v4_reply(ctx, ICMP_DEST_UNREACH, ICMP_FRAG_NEEDED, *(__be32 *)&frag);
 
 allow:
 	return TC_ACT_UNSPEC;
