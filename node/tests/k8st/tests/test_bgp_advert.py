@@ -19,7 +19,7 @@ import time
 
 from tests.k8st.test_base import TestBase
 from tests.k8st.utils.utils import start_external_node_with_bgp, \
-        retry_until_success, run, curl, DiagsCollector, calicoctl, kubectl, node_info
+        retry_until_success, run, curl, DiagsCollector, calicoctl, kubectl, node_info, NGINX_IMAGE
 
 _log = logging.getLogger(__name__)
 
@@ -259,8 +259,8 @@ EOF
             # Create both a Local and a Cluster type NodePort service with a single replica.
             local_svc = "nginx-local"
             cluster_svc = "nginx-cluster"
-            self.deploy("nginx:1.7.9", local_svc, self.ns, 80)
-            self.deploy("nginx:1.7.9", cluster_svc, self.ns, 80, traffic_policy="Cluster")
+            self.deploy(NGINX_IMAGE, local_svc, self.ns, 80)
+            self.deploy(NGINX_IMAGE, cluster_svc, self.ns, 80, traffic_policy="Cluster")
             self.wait_until_exists(local_svc, "svc", self.ns)
             self.wait_until_exists(cluster_svc, "svc", self.ns)
 
@@ -364,8 +364,8 @@ EOF
             # Create both a Local and a Cluster type NodePort service with a single replica.
             local_svc = "nginx-local"
             cluster_svc = "nginx-cluster"
-            self.deploy("nginx:1.7.9", local_svc, self.ns, 80)
-            self.deploy("nginx:1.7.9", cluster_svc, self.ns, 80, traffic_policy="Cluster")
+            self.deploy(NGINX_IMAGE, local_svc, self.ns, 80)
+            self.deploy(NGINX_IMAGE, cluster_svc, self.ns, 80, traffic_policy="Cluster")
             self.wait_until_exists(local_svc, "svc", self.ns)
             self.wait_until_exists(cluster_svc, "svc", self.ns)
 
@@ -479,8 +479,8 @@ EOF
             # Create both a Local and a Cluster type NodePort service with a single replica.
             local_svc = "nginx-local"
             cluster_svc = "nginx-cluster"
-            self.deploy("nginx:1.7.9", local_svc, self.ns, 80)
-            self.deploy("nginx:1.7.9", cluster_svc, self.ns, 80, traffic_policy="Cluster")
+            self.deploy(NGINX_IMAGE, local_svc, self.ns, 80)
+            self.deploy(NGINX_IMAGE, cluster_svc, self.ns, 80, traffic_policy="Cluster")
             self.wait_until_exists(local_svc, "svc", self.ns)
             self.wait_until_exists(cluster_svc, "svc", self.ns)
 
@@ -574,8 +574,8 @@ EOF
             # Create both a Local and a Cluster type NodePort service with a single replica.
             local_svc = "nginx-local"
             cluster_svc = "nginx-cluster"
-            self.deploy("nginx:1.7.9", cluster_svc, self.ns, 80, traffic_policy="Cluster", svc_type="LoadBalancer")
-            self.deploy("nginx:1.7.9", local_svc, self.ns, 80, svc_type="LoadBalancer")
+            self.deploy(NGINX_IMAGE, cluster_svc, self.ns, 80, traffic_policy="Cluster", svc_type="LoadBalancer")
+            self.deploy(NGINX_IMAGE, local_svc, self.ns, 80, svc_type="LoadBalancer")
             self.wait_until_exists(local_svc, "svc", self.ns)
             self.wait_until_exists(cluster_svc, "svc", self.ns)
 
@@ -686,7 +686,7 @@ EOF
 
             # Create a local service and deployment.
             local_svc = "nginx-local"
-            self.deploy("nginx:1.7.9", local_svc, self.ns, 80)
+            self.deploy(NGINX_IMAGE, local_svc, self.ns, 80)
             self.wait_for_deployment(local_svc, self.ns)
 
             # Get clusterIPs.
@@ -740,7 +740,7 @@ EOF
 
             # Create a Local type NodePort service with a single replica.
             local_svc = "nginx-local"
-            self.deploy("nginx:1.7.9", local_svc, self.ns, 80)
+            self.deploy(NGINX_IMAGE, local_svc, self.ns, 80)
             self.wait_until_exists(local_svc, "svc", self.ns)
 
             # Get clusterIPs.
@@ -828,7 +828,7 @@ spec:
     spec:
       containers:
       - name: nginx-rr
-        image: nginx:1.7.9
+        image: %s
         ports:
         - containerPort: 80
       nodeSelector:
@@ -855,7 +855,7 @@ spec:
   type: NodePort
   externalTrafficPolicy: Local
 EOF
-""" % self.nodes[1])
+""" % (NGINX_IMAGE, self.nodes[1]))
 
         calicoctl("get nodes -o yaml")
         calicoctl("get bgppeers -o yaml")
