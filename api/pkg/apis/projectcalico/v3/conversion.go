@@ -11,7 +11,7 @@ import (
 
 func addConversionFuncs(scheme *runtime.Scheme) error {
 	// Add non-generated conversion functions
-	err := scheme.AddFieldLabelConversionFunc(schema.GroupVersionKind{"projectcalico.org", "v3", "NetworkPolicy"},
+	err := scheme.AddFieldLabelConversionFunc(schema.GroupVersionKind{Group: "projectcalico.org", Version: "v3", Kind: "NetworkPolicy"},
 		func(label, value string) (string, string, error) {
 			switch label {
 			case "metadata.name", "metadata.namespace":
@@ -25,7 +25,7 @@ func addConversionFuncs(scheme *runtime.Scheme) error {
 		return err
 	}
 
-	err = scheme.AddFieldLabelConversionFunc(schema.GroupVersionKind{"projectcalico.org", "v3", "GlobalNetworkPolicy"},
+	err = scheme.AddFieldLabelConversionFunc(schema.GroupVersionKind{Group: "projectcalico.org", Version: "v3", Kind: "GlobalNetworkPolicy"},
 		func(label, value string) (string, string, error) {
 			switch label {
 			case "metadata.name":
@@ -39,7 +39,7 @@ func addConversionFuncs(scheme *runtime.Scheme) error {
 		return err
 	}
 
-	err = scheme.AddFieldLabelConversionFunc(schema.GroupVersionKind{"projectcalico.org", "v3", "GlobalNetworkSet"},
+	err = scheme.AddFieldLabelConversionFunc(schema.GroupVersionKind{Group: "projectcalico.org", Version: "v3", Kind: "GlobalNetworkSet"},
 		func(label, value string) (string, string, error) {
 			switch label {
 			case "metadata.name":
@@ -53,7 +53,7 @@ func addConversionFuncs(scheme *runtime.Scheme) error {
 		return err
 	}
 
-	err = scheme.AddFieldLabelConversionFunc(schema.GroupVersionKind{"projectcalico.org", "v3", "NetworkSet"},
+	err = scheme.AddFieldLabelConversionFunc(schema.GroupVersionKind{Group: "projectcalico.org", Version: "v3", Kind: "NetworkSet"},
 		func(label, value string) (string, string, error) {
 			switch label {
 			case "metadata.name", "metadata.namespace":
@@ -67,7 +67,7 @@ func addConversionFuncs(scheme *runtime.Scheme) error {
 		return err
 	}
 
-	err = scheme.AddFieldLabelConversionFunc(schema.GroupVersionKind{"projectcalico.org", "v3", "HostEndpoint"},
+	err = scheme.AddFieldLabelConversionFunc(schema.GroupVersionKind{Group: "projectcalico.org", Version: "v3", Kind: "HostEndpoint"},
 		func(label, value string) (string, string, error) {
 			switch label {
 			case "metadata.name":
@@ -81,7 +81,7 @@ func addConversionFuncs(scheme *runtime.Scheme) error {
 		return err
 	}
 
-	err = scheme.AddFieldLabelConversionFunc(schema.GroupVersionKind{"projectcalico.org", "v3", "IPPool"},
+	err = scheme.AddFieldLabelConversionFunc(schema.GroupVersionKind{Group: "projectcalico.org", Version: "v3", Kind: "IPPool"},
 		func(label, value string) (string, string, error) {
 			switch label {
 			case "metadata.name":
@@ -95,7 +95,7 @@ func addConversionFuncs(scheme *runtime.Scheme) error {
 		return err
 	}
 
-	err = scheme.AddFieldLabelConversionFunc(schema.GroupVersionKind{"projectcalico.org", "v3", "BGPConfiguration"},
+	err = scheme.AddFieldLabelConversionFunc(schema.GroupVersionKind{Group: "projectcalico.org", Version: "v3", Kind: "BGPConfiguration"},
 		func(label, value string) (string, string, error) {
 			switch label {
 			case "metadata.name":
@@ -109,7 +109,7 @@ func addConversionFuncs(scheme *runtime.Scheme) error {
 		return err
 	}
 
-	err = scheme.AddFieldLabelConversionFunc(schema.GroupVersionKind{"projectcalico.org", "v3", "BGPPeer"},
+	err = scheme.AddFieldLabelConversionFunc(schema.GroupVersionKind{Group: "projectcalico.org", Version: "v3", Kind: "BGPPeer"},
 		func(label, value string) (string, string, error) {
 			switch label {
 			case "metadata.name":
@@ -123,7 +123,7 @@ func addConversionFuncs(scheme *runtime.Scheme) error {
 		return err
 	}
 
-	err = scheme.AddFieldLabelConversionFunc(schema.GroupVersionKind{"projectcalico.org", "v3", "Profile"},
+	err = scheme.AddFieldLabelConversionFunc(schema.GroupVersionKind{Group: "projectcalico.org", Version: "v3", Kind: "Profile"},
 		func(label, value string) (string, string, error) {
 			switch label {
 			case "metadata.name":
@@ -137,7 +137,7 @@ func addConversionFuncs(scheme *runtime.Scheme) error {
 		return err
 	}
 
-	err = scheme.AddFieldLabelConversionFunc(schema.GroupVersionKind{"projectcalico.org", "v3", "FelixConfiguration"},
+	err = scheme.AddFieldLabelConversionFunc(schema.GroupVersionKind{Group: "projectcalico.org", Version: "v3", Kind: "FelixConfiguration"},
 		func(label, value string) (string, string, error) {
 			switch label {
 			case "metadata.name":
@@ -151,7 +151,7 @@ func addConversionFuncs(scheme *runtime.Scheme) error {
 		return err
 	}
 
-	err = scheme.AddFieldLabelConversionFunc(schema.GroupVersionKind{"projectcalico.org", "v3", "KubeControllersConfiguration"},
+	err = scheme.AddFieldLabelConversionFunc(schema.GroupVersionKind{Group: "projectcalico.org", Version: "v3", Kind: "KubeControllersConfiguration"},
 		func(label, value string) (string, string, error) {
 			switch label {
 			case "metadata.name":
@@ -165,7 +165,7 @@ func addConversionFuncs(scheme *runtime.Scheme) error {
 		return err
 	}
 
-	err = scheme.AddFieldLabelConversionFunc(schema.GroupVersionKind{"projectcalico.org", "v3", "ClusterInformation"},
+	err = scheme.AddFieldLabelConversionFunc(schema.GroupVersionKind{Group: "projectcalico.org", Version: "v3", Kind: "ClusterInformation"},
 		func(label, value string) (string, string, error) {
 			switch label {
 			case "metadata.name":
