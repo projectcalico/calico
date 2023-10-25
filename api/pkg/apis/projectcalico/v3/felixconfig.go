@@ -69,6 +69,23 @@ const (
 	FloatingIPsDisabled FloatingIPType = "Disabled"
 )
 
+// +kubebuilder:validation:Enum=Enabled;Disabled
+type BPFHostNetworkedNATType string
+
+const (
+	BPFHostNetworkedNATEnabled  BPFHostNetworkedNATType = "Enabled"
+	BPFHostNetworkedNATDisabled BPFHostNetworkedNATType = "Disabled"
+)
+
+// +kubebuilder:validation:Enum=TCP;Enabled;Disabled
+type BPFConnectTimeLBType string
+
+const (
+	BPFConnectTimeLBTCP      BPFConnectTimeLBType = "TCP"
+	BPFConnectTimeLBEnabled  BPFConnectTimeLBType = "Enabled"
+	BPFConnectTimeLBDisabled BPFConnectTimeLBType = "Disabled"
+)
+
 // FelixConfigurationSpec contains the values of the Felix configuration.
 type FelixConfigurationSpec struct {
 	// UseInternalDataplaneDriver, if true, Felix will use its internal dataplane programming logic.  If false, it
@@ -437,8 +454,16 @@ type FelixConfigurationSpec struct {
 	// BPFConnectTimeLoadBalancingEnabled when in BPF mode, controls whether Felix installs the connection-time load
 	// balancer.  The connect-time load balancer is required for the host to be able to reach Kubernetes services
 	// and it improves the performance of pod-to-service connections.  The only reason to disable it is for debugging
-	// purposes.  [Default: true]
+	// purposes. This will be deprecated. Use BPFConnectTimeLoadBalancing [Default: true]
 	BPFConnectTimeLoadBalancingEnabled *bool `json:"bpfConnectTimeLoadBalancingEnabled,omitempty" validate:"omitempty"`
+	// BPFConnectTimeLoadBalancing when in BPF mode, controls whether Felix installs the connect-time load
+	// balancer. The connect-time load balancer is required for the host to be able to reach Kubernetes services
+	// and it improves the performance of pod-to-service connections.When set to TCP, connect time load balancing
+	// is available only for services with TCP ports. [Default: TCP]
+	BPFConnectTimeLoadBalancing *BPFConnectTimeLBType `json:"bpfConnectTimeLoadBalancing,omitempty" validate:"omitempty,oneof=TCP Enabled Disabled"`
+	// BPFHostNetworkedNATWithoutCTLB when in BPF mode, controls whether Felix does a NAT without CTLB. This along with BPFConnectTimeLoadBalancing
+	// determines the CTLB behavior. [Default: Enabled]
+	BPFHostNetworkedNATWithoutCTLB *BPFHostNetworkedNATType `json:"bpfHostNetworkedNATWithoutCTLB,omitempty" validate:"omitempty,oneof=Enabled Disabled"`
 	// BPFExternalServiceMode in BPF mode, controls how connections from outside the cluster to services (node ports
 	// and cluster IPs) are forwarded to remote workloads.  If set to "Tunnel" then both request and response traffic
 	// is tunneled to the remote node.  If set to "DSR", the request traffic is tunneled but the response traffic
