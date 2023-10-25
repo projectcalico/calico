@@ -12,6 +12,12 @@
 #include "types.h"
 #include "rpf.h"
 
+#ifdef IPVER6
+#define IPPROTO_ICMP_46	IPPROTO_ICMPV6
+#else
+#define IPPROTO_ICMP_46	IPPROTO_ICMP
+#endif
+
 // Connection tracking.
 
 #define PSNAT_RETRIES	3
@@ -308,6 +314,7 @@ static CALI_BPF_INLINE int calico_ct_create_nat_fwd(struct cali_tc_ctx *ctx,
 	return err;
 }
 
+#ifndef IPVER6
 /* skb_icmp_err_unpack tries to unpack the inner IP and TCP/UDP header from an ICMP error message.
  * It updates the ct_ctx with the protocol/src/dst/ports of the inner packet.  If the unpack fails
  * (due to packet too short, for example), it returns false and sets the RC in the cali_tc_ctx to
@@ -315,9 +322,6 @@ static CALI_BPF_INLINE int calico_ct_create_nat_fwd(struct cali_tc_ctx *ctx,
  */
 static CALI_BPF_INLINE bool skb_icmp_err_unpack(struct cali_tc_ctx *ctx, struct ct_lookup_ctx *ct_ctx)
 {
-#ifdef IPVER6
-	return false;
-#else
 	/* ICMP packet is an error, its payload should contain the full IP header and
 	 * at least the first 8 bytes of the next header. */
 
@@ -393,8 +397,99 @@ static CALI_BPF_INLINE bool skb_icmp_err_unpack(struct cali_tc_ctx *ctx, struct 
 	};
 
 	return true;
-#endif /* IPVER6 */
 }
+
+#else /* IPVER6 */
+
+static CALI_BPF_INLINE bool skb_icmp6_err_unpack(struct cali_tc_ctx *ctx, struct ct_lookup_ctx *ct_ctx)
+{
+	__u8 buf[IP_SIZE];
+	CALI_DEBUG("reading inner ipv6 at %d\n", skb_l4hdr_offset(ctx) + ICMP_SIZE);
+	if (bpf_skb_load_bytes(ctx->skb, skb_l4hdr_offset(ctx) + ICMP_SIZE, buf, IP_SIZE)) {
+		CALI_DEBUG("ICMP v6 reply: too short getting ip hdr w/ options\n");
+		return false;
+	}
+
+	ipv6hdr_ip_to_ipv6_addr_t(&ct_ctx->src, &((struct ipv6hdr*)buf)->saddr);
+	ipv6hdr_ip_to_ipv6_addr_t(&ct_ctx->dst, &((struct ipv6hdr*)buf)->daddr);
+
+	int hdr = ((struct ipv6hdr*)buf)->nexthdr;
+	int ipoff = skb_l4hdr_offset(ctx) + ICMP_SIZE;
+	int len = IP_SIZE;
+
+	CALI_DEBUG("ipv6 next hdr: %d\n", hdr);
+
+	switch (hdr) {
+	case IPPROTO_TCP:
+	case IPPROTO_UDP:
+		ct_ctx->proto = hdr;
+		goto get_ports;
+	case NEXTHDR_NONE:
+		return false;
+	}
+
+	int i;
+
+	for (i = 0; i < 8; i++) {
+		struct ipv6_opt_hdr opt;
+
+		CALI_DEBUG("loading extension at offset %d\n", ipoff + len);
+		if (bpf_skb_load_bytes(ctx->skb, ipoff + len, &opt, sizeof(opt))) {
+			CALI_DEBUG("Too short\n");
+			return false;
+		}
+
+		CALI_DEBUG("ext nexthdr %d hdrlen %d\n", opt.nexthdr, opt.hdrlen);
+
+		switch(hdr) {
+		case NEXTHDR_FRAGMENT:
+			len += 16;
+			break;
+		case NEXTHDR_HOP:
+		case NEXTHDR_ROUTING:
+		case NEXTHDR_DEST:
+		case NEXTHDR_GRE:
+		case NEXTHDR_ESP:
+		case NEXTHDR_AUTH:
+		case NEXTHDR_MOBILITY:
+			len += (opt.hdrlen + 1) * 8;
+			break;
+		}
+
+		switch(opt.nexthdr) {
+			case IPPROTO_TCP:
+			case IPPROTO_UDP:
+				ct_ctx->proto = opt.nexthdr;
+				goto get_ports;
+			case NEXTHDR_NONE:
+				return false;
+		}
+
+
+	}
+
+get_ports:
+
+	if (bpf_skb_load_bytes(ctx->skb, ipoff + len, buf, 8)) {
+		CALI_DEBUG("ICMP v6 reply: too short getting l4 hdr w/ options\n");
+		return false;
+	}
+
+	switch (ct_ctx->proto) {
+	case IPPROTO_TCP:
+		ct_ctx->sport = bpf_ntohs(((struct tcphdr *)buf)->source);
+		ct_ctx->dport = bpf_ntohs(((struct tcphdr *)buf)->dest);
+		break;
+	case IPPROTO_UDP:
+		ct_ctx->sport = bpf_ntohs(((struct udphdr *)buf)->source);
+		ct_ctx->dport = bpf_ntohs(((struct udphdr *)buf)->dest);
+		break;
+	};
+
+	return true;
+}
+
+#endif /* IPVER6 */
 
 #define CALI_CT_LOG(level, fmt, ...) \
 	CALI_LOG_IF_FLAG(level, CALI_COMPILE_FLAGS, "CT: "fmt, ## __VA_ARGS__)
@@ -470,24 +565,18 @@ static CALI_BPF_INLINE bool tcp_recycled(bool syn, struct calico_ct_value *v)
 	return syn && (a->fin_seen || a->rst_seen) && (b->fin_seen || b->rst_seen);
 }
 
-static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_tc_ctx *ctx)
+static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_ctx *ctx)
 {
-	__u8 proto = ctx->state->ip_proto;
-
-	// TODO: refactor the conntrack code to simply use the ctx instead of its own.  This
-	// code is a direct translation of the pre-ctx code so it has some duplication (but it
-	// needs a bit more analysis to sort out because the ct_ctx gets modified in place in
-	// ways that might not make sense to expose through the ctx.
 	struct ct_lookup_ctx ct_lookup_ctx = {
-		.proto	= proto,
-		.src	= ctx->state->ip_src,
-		.sport	= ctx->state->sport,
-		.dst	= ctx->state->ip_dst,
-		.dport	= ctx->state->dport,
+		.proto	= STATE->ip_proto,
+		.src	= STATE->ip_src,
+		.sport	= STATE->sport,
+		.dst	= STATE->ip_dst,
+		.dport	= STATE->dport,
 	};
 	struct ct_lookup_ctx *ct_ctx = &ct_lookup_ctx;
 
-	switch (proto) {
+	switch (STATE->ip_proto) {
 	case IPPROTO_TCP:
 		if (skb_refresh_validate_ptrs(ctx, TCP_SIZE)) {
 			deny_reason(ctx, CALI_REASON_SHORT);
@@ -496,23 +585,14 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 		}
 		ct_lookup_ctx.tcp = tcp_hdr(ctx);
 		break;
-	case IPPROTO_ICMP:
-		// There are no port in ICMP and the fields in state are overloaded
-		// for other use like type and code.
-		ct_lookup_ctx.dport = ct_lookup_ctx.sport = 0;
-		break;
 	}
 
-	__u8 proto_orig = ct_ctx->proto;
-	ipv46_addr_t ip_src = ct_ctx->src;
-	ipv46_addr_t ip_dst = ct_ctx->dst;
-	__u16 sport = ct_ctx->sport;
-	__u16 dport = ct_ctx->dport;
-	struct tcphdr *tcp_header = proto == IPPROTO_TCP ? tcp_hdr(ctx) : NULL;
+	__u8 proto_orig = STATE->ip_proto;
+	struct tcphdr *tcp_header = STATE->ip_proto == IPPROTO_TCP ? tcp_hdr(ctx) : NULL;
 	bool related = false;
 
-	CALI_CT_DEBUG("lookup from %x:%d\n", debug_ip(ip_src), sport);
-	CALI_CT_DEBUG("lookup to   %x:%d\n", debug_ip(ip_dst), dport);
+	CALI_CT_DEBUG("lookup from %x:%d\n", debug_ip(STATE->ip_src), STATE->sport);
+	CALI_CT_DEBUG("lookup to   %x:%d\n", debug_ip(STATE->ip_dst), STATE->dport);
 	if (tcp_header) {
 		CALI_CT_VERB("packet seq = %u\n", bpf_ntohl(tcp_header->seq));
 		CALI_CT_VERB("packet ack_seq = %u\n", bpf_ntohl(tcp_header->ack_seq));
@@ -527,11 +607,39 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 		.ifindex_created = CT_INVALID_IFINDEX,
 	};
 
-	bool srcLTDest = src_lt_dest(&ip_src, &ip_dst, sport, dport);
 	struct calico_ct_key k;
 	bool syn = tcp_header && tcp_header->syn && !tcp_header->ack;
 
-	fill_ct_key(&k, srcLTDest, ct_ctx->proto, &ip_src, &ip_dst, sport, dport);
+	if (ct_ctx->proto == IPPROTO_ICMP_46 && icmp_type_is_err(icmp_hdr(ctx)->type)) {
+		// ICMP error packets are a response to a failed UDP/TCP/etc packet.  Try to extract the
+		// details of the inner packet.
+#ifdef IPVER6
+		if (!skb_icmp6_err_unpack(ctx, ct_ctx)) {
+#else
+		if (!skb_icmp_err_unpack(ctx, ct_ctx)) {
+#endif
+			CALI_CT_DEBUG("Failed to parse ICMP error packet.\n");
+			goto out_invalid;
+		}
+
+		// skb_icmp_err_unpack updates the ct_ctx with the details of the inner packet;
+		// look for a conntrack entry for the inner packet...
+		CALI_CT_DEBUG("related lookup from %x:%d\n", debug_ip(ct_ctx->src), ct_ctx->sport);
+		CALI_CT_DEBUG("related lookup to   %x:%d\n", debug_ip(ct_ctx->dst), ct_ctx->dport);
+		related = true;
+		tcp_header = STATE->ip_proto == IPPROTO_TCP ? tcp_hdr(ctx) : NULL;
+
+
+		// We failed to look up the original flow, but it is an ICMP error and we
+		// _do_ have a CT entry for the packet inside the error.  ct_ctx has been
+		// updated to describe the inner packet.
+
+		ctx->state->sport = ct_ctx->sport;
+		ctx->state->dport = ct_ctx->dport;
+	}
+
+	bool srcLTDest = src_lt_dest(&ct_ctx->src, &ct_ctx->dst, ct_ctx->sport, ct_ctx->dport);
+	fill_ct_key(&k, srcLTDest, ct_ctx->proto, &ct_ctx->src, &ct_ctx->dst, ct_ctx->sport, ct_ctx->dport);
 
 	struct calico_ct_value *v = cali_ct_lookup_elem(&k);
 	if (!v) {
@@ -562,69 +670,12 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 			result.rc = CALI_CT_MID_FLOW_MISS;
 			return result;
 		}
-		if (ct_ctx->proto != IPPROTO_ICMP) {
-			// Not ICMP so can't be a "related" packet.
-			CALI_CT_DEBUG("Miss.\n");
-			goto out_lookup_fail;
-		}
-
-		if (!icmp_type_is_err(icmp_hdr(ctx)->type)) {
-			// ICMP but not an error response packet.
-			CALI_DEBUG("CT-ICMP: type %d not an error\n",
-					icmp_hdr(ctx)->type);
-			goto out_lookup_fail;
-		}
-
-		// ICMP error packets are a response to a failed UDP/TCP/etc packet.  Try to extract the
-		// details of the inner packet.
-		if (!skb_icmp_err_unpack(ctx, ct_ctx)) {
-			CALI_CT_DEBUG("Failed to parse ICMP error packet.\n");
+		CALI_CT_DEBUG("Miss.\n");
+		if (related) {
 			goto out_invalid;
-		}
-
-		// skb_icmp_err_unpack updates the ct_ctx with the details of the inner packet;
-		// look for a conntrack entry for the inner packet...
-		CALI_CT_DEBUG("related lookup from %x:%d\n", debug_ip(ct_ctx->src), ct_ctx->sport);
-		CALI_CT_DEBUG("related lookup to   %x:%d\n", debug_ip(ct_ctx->dst), ct_ctx->dport);
-
-		srcLTDest = src_lt_dest(&ct_ctx->src, &ct_ctx->dst, ct_ctx->sport, ct_ctx->dport);
-		fill_ct_key(&k, srcLTDest, ct_ctx->proto, &ct_ctx->src, &ct_ctx->dst, ct_ctx->sport, ct_ctx->dport);
-		v = cali_ct_lookup_elem(&k);
-		if (!v) {
-			if (CALI_F_FROM_HOST &&
-				ct_ctx->proto == IPPROTO_TCP &&
-				(ctx->skb->mark & CALI_SKB_MARK_CT_ESTABLISHED_MASK) == CALI_SKB_MARK_CT_ESTABLISHED) {
-				// Linux Conntrack has marked the packet as part of a known flow.
-				// TODO-HEP Create a tracking entry for uplifted flow so that we handle the reverse traffic more efficiently.
-				CALI_DEBUG("BPF CT related miss but have Linux CT entry: established\n");
-				result.rc = CALI_CT_ESTABLISHED;
-				return result;
-			}
-
-			if (CALI_F_TO_HOST && ct_ctx->proto == IPPROTO_TCP) {
-				// Miss for a related packet towards the host.  This may be part of a
-				// connection that predates the BPF program so we need to let it fall through
-				// to iptables.
-				CALI_DEBUG("BPF CT related miss for mid-flow TCP\n");
-				result.rc = CALI_CT_MID_FLOW_MISS;
-				return result;
-			}
-
-			CALI_CT_DEBUG("Miss on ICMP related\n");
+		} else {
 			goto out_lookup_fail;
 		}
-
-		ip_src = ct_ctx->src;
-		ip_dst = ct_ctx->dst;
-		sport = ct_ctx->sport;
-		dport = ct_ctx->dport;
-		tcp_header = proto == IPPROTO_TCP ? tcp_hdr(ctx) : NULL;
-
-		related = true;
-
-		// We failed to look up the original flow, but it is an ICMP error and we
-		// _do_ have a CT entry for the packet inside the error.  ct_ctx has been
-		// updated to describe the inner packet.
 	}
 
 	__u64 now = bpf_ktime_get_ns();
@@ -694,7 +745,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 		result.flags = ct_value_get_flags(tracking_v);
 		CALI_CT_DEBUG("result.flags 0x%x\n", result.flags);
 
-		if (ct_ctx->proto == IPPROTO_ICMP) {
+		if (ct_ctx->proto == IPPROTO_ICMP_46) {
 			result.rc =	CALI_CT_ESTABLISHED_DNAT;
 			result.nat_ip = tracking_v->orig_ip;
 		} else if (CALI_F_TO_HOST ||
@@ -741,7 +792,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 
 		result.flags = ct_value_get_flags(v);
 
-		if (ct_ctx->proto == IPPROTO_ICMP || (related && proto_orig == IPPROTO_ICMP)) {
+		if (ct_ctx->proto == IPPROTO_ICMP_46 || (related && proto_orig == IPPROTO_ICMP_46)) {
 			result.rc =	CALI_CT_ESTABLISHED_SNAT;
 			result.nat_ip = v->orig_ip;
 			result.nat_port = v->orig_port;
@@ -843,7 +894,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 				result.flags & CALI_CT_FLAG_NP_FWD;
 
 	if (related) {
-		if (proto_orig == IPPROTO_ICMP) {
+		if (proto_orig == IPPROTO_ICMP_46) {
 			/* flip src/dst as ICMP related carries the original ip/l4 headers in
 			 * opposite direction - it is a reaction on the original packet.
 			 */
