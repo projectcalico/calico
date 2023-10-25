@@ -152,7 +152,7 @@ template bgp bgp_template {
 }
 
 # -------------- BGP Filters ------------------
-{{- range $line := emitBIRDBGPFilterFuncs (gets "/resources/v3/projectcalico.org/bgpfilters/*") 4 }}
+{{- range $line := bgpFilterBIRDFuncs (gets "/resources/v3/projectcalico.org/bgpfilters/*") 4 }}
 {{ $line }}
 {{- end }}
 
@@ -242,7 +242,7 @@ protocol bgp Global_{{$id}} from bgp_template {
     {{- if exists $filterKey }}
     {{- $filterVal := json (getv $filterKey) }}
     {{- if $filterVal.spec.importV4 }}
-    {{ emitFunctionName $filter "import" "4" }}();
+    {{ bgpFilterFunctionName $filter "import" "4" }}();
     {{- end }}
     {{- end }}
     {{- end }}
@@ -254,7 +254,7 @@ protocol bgp Global_{{$id}} from bgp_template {
     {{- if exists $filterKey }}
     {{- $filterVal := json (getv $filterKey) }}
     {{- if $filterVal.spec.exportV4 }}
-    {{ emitFunctionName $filter "export" "4" }}();
+    {{ bgpFilterFunctionName $filter "export" "4" }}();
     {{- end }}
     {{- end }}
     {{- end }}
@@ -317,7 +317,7 @@ protocol bgp Node_{{$id}} from bgp_template {
     {{- if exists $filterKey }}
     {{- $filterVal := json (getv $filterKey) }}
     {{- if $filterVal.spec.importV4 }}
-    {{ emitFunctionName $filter "import" "4" }}();
+    {{ bgpFilterFunctionName $filter "import" "4" }}();
     {{- end }}
     {{- end }}
     {{- end }}
@@ -329,7 +329,7 @@ protocol bgp Node_{{$id}} from bgp_template {
     {{- if exists $filterKey }}
     {{- $filterVal := json (getv $filterKey) }}
     {{- if $filterVal.spec.exportV4 }}
-    {{ emitFunctionName $filter "export" "4" }}();
+    {{ bgpFilterFunctionName $filter "export" "4" }}();
     {{- end }}
     {{- end }}
     {{- end }}

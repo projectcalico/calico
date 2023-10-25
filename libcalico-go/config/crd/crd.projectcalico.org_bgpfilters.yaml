@@ -47,10 +47,10 @@ spec:
                       type: string
                     matchOperator:
                       type: string
+                    source:
+                      type: string
                   required:
                   - action
-                  - cidr
-                  - matchOperator
                   type: object
                 type: array
               exportV6:
@@ -66,10 +66,10 @@ spec:
                       type: string
                     matchOperator:
                       type: string
+                    source:
+                      type: string
                   required:
                   - action
-                  - cidr
-                  - matchOperator
                   type: object
                 type: array
               importV4:
@@ -85,10 +85,10 @@ spec:
                       type: string
                     matchOperator:
                       type: string
+                    source:
+                      type: string
                   required:
                   - action
-                  - cidr
-                  - matchOperator
                   type: object
                 type: array
               importV6:
@@ -104,10 +104,10 @@ spec:
                       type: string
                     matchOperator:
                       type: string
+                    source:
+                      type: string
                   required:
                   - action
-                  - cidr
-                  - matchOperator
                   type: object
                 type: array
             type: object
