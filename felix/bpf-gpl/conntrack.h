@@ -616,9 +616,13 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 		 */
 		ct_lookup_ctx.dport = 0;
 
+#ifdef IPVER6
+		if (icmp_type_is_err(icmp_hdr(ctx)->icmp6_type)) {
+#else
 		if (icmp_type_is_err(icmp_hdr(ctx)->type)) {
-			/* ICMP error packets are a response to a failed UDP/TCP/etc packet.  Try to extract the
-			 * details of the inner packet.
+#endif
+			/* ICMP error packets are a response to a failed UDP/TCP/etc
+			 * packet.  Try to extract the details of the inner packet.
 			 */
 #ifdef IPVER6
 			if (!skb_icmp6_err_unpack(ctx, ct_ctx)) {
