@@ -1,16 +1,4 @@
-[![Build Status](https://semaphoreci.com/api/v1/calico/typha/branches/master/shields_badge.svg)](https://semaphoreci.com/calico/typha)
-[![Coverage Status](https://coveralls.io/repos/github/projectcalico/typha/badge.svg?branch=master&cachebreaker=1)](https://coveralls.io/github/projectcalico/typha?branch=master)
-[![Slack Status](https://slack.projectcalico.org/badge.svg)](https://slack.projectcalico.org)
-[![IRC Channel](https://img.shields.io/badge/irc-%23calico-blue.svg)](https://kiwiirc.com/client/irc.freenode.net/#calico)
-[![Go Report Card](https://goreportcard.com/badge/github.com/projectcalico/typha)](https://goreportcard.com/report/github.com/projectcalico/typha)
-# Project Calico
-
-<!--
-<blockquote>
-Note that the documentation in this repo is targeted at Calico contributors.
-<h1>Documentation for Calico users is here:<br><a href="http://docs.projectcalico.org">http://docs.projectcalico.org</a></h1>
-</blockquote>
--->
+# Typha
 
 This repository contains the source code for Project Calico's optional Typha daemon.  An instance of Typha sits
 between the datastore (such as the Kubernetes API server) and many instances of Felix.
@@ -74,38 +62,48 @@ To build Typha, you will need:
 - GNU make.
 
 Then, as a one-off, run
-```
+
+```bash
 make update-tools
 ```
-which will install a couple more go tools that we haven't yet containerised.
+
+which will install a couple more go tools that we haven't yet containerized.
 
 Then, to build the calico-typha binary:
+
+```bash
+make build
 ```
-make bin/calico-typha
-```
+
 or, the `calico/typha` docker image:
-```
+
+```bash
 make image
 ```
 
 ## How can I run Typha's unit tests?
 
 To run all the UTs:
-```
+
+```bash
 make ut
 ```
 
 To start a `ginkgo watch`, which will re-run the relevant UTs as you update files:
-```
+
+```bash
 make ut-watch
 ```
 
 To get coverage stats:
-```
+
+```bash
 make cover-report
 ```
+
 or
-```
+
+```bash
 make cover-browser
 ```
 
@@ -123,10 +121,12 @@ run Typha's unit tests.
 There are several ways to run ginkgo.  One option is to change directory to the
 package you want to test, then run `ginkgo`.  Another is to use ginkgo's
 watch feature to monitor files for changes:
-```
+
+```bash
 cd go
 ginkgo watch -r
 ```
+
 Ginkgo will re-run tests as files are modified and saved.
 
 ## How do I build packages/run Typha?
@@ -135,11 +135,14 @@ Ginkgo will re-run tests as files are modified and saved.
 
 After building the docker image (see above), you can run Typha and log to screen
 with, for example:
-`docker run --privileged --net=host -e TYPHA_LOGSEVERITYSCREEN=INFO calico/typha`
+
+```bash
+docker run --privileged --net=host -e TYPHA_LOGSEVERITYSCREEN=INFO calico/typha
+```
 
 ## License
 
 Calico binaries are licensed under the [Apache v2.0 license](LICENSE), with the exception of some [GPL licensed eBPF programs](https://github.com/projectcalico/felix/tree/master/bpf-gpl).
 
-Calico imports packages with a number of apache-compatible licenses. For more information, see [filesystem/licenses](./filesystem/licenses). In addition, the base container image contains
-pre-packaged software with a variety of licenses.
+Calico imports packages with a number of apache-compatible licenses. For more information, see [filesystem/licenses](./filesystem/licenses).
+In addition, the base container image contains pre-packaged software with a variety of licenses.
