@@ -58,10 +58,13 @@ struct cali_tc_state {
 	/* If no NAT, ip_dst.  Otherwise the NAT dest that we look up from the NAT maps or the conntrack entry
 	 * for CALI_CT_ESTABLISHED_DNAT. */
 	DECLARE_IP_ADDR(post_nat_ip_dst);
-	/* For packets that arrived over our VXLAN tunnel, the source IP of the tunnel packet.
-	 * Zeroed out when we decide to respond with an ICMP error.
-	 * Also used to stash the ICMP MTU when calling the ICMP response program. */
-	DECLARE_IP_ADDR(tun_ip);
+	union {
+		/* For packets that arrived over our VXLAN tunnel, the source IP of the tunnel packet.
+		 * Zeroed out when we decide to respond with an ICMP error.
+		 * Also used to stash the ICMP MTU when calling the ICMP response program. */
+		DECLARE_IP_ADDR(tun_ip);
+		__u32 icmp_un;
+	};
 	__u16 ihl;
 	__u16 unused;
 	/* Return code from the policy program CALI_POL_DENY/ALLOW etc. */
@@ -220,6 +223,11 @@ static CALI_BPF_INLINE struct ipv6hdr* ip_hdr(struct cali_tc_ctx *ctx)
 	return (struct ipv6hdr *)ctx->ip_header;
 }
 
+static CALI_BPF_INLINE struct icmp6hdr* icmp_hdr(struct cali_tc_ctx *ctx)
+{
+	return (struct icmp6hdr *)ctx->nh;
+}
+
 #define ip_hdr_set_ip(ctx, field, ip)	do {					\
 	struct in6_addr *addr = &(ip_hdr(ctx)->field);				\
 	addr->in6_u.u6_addr32[0] = ip.a;					\
@@ -239,6 +247,11 @@ static CALI_BPF_INLINE struct iphdr* ip_hdr(struct cali_tc_ctx *ctx)
 	ip_hdr(ctx)->field = ip;						\
 } while (0)
 
+static CALI_BPF_INLINE struct icmphdr* icmp_hdr(struct cali_tc_ctx *ctx)
+{
+	return (struct icmphdr *)ctx->nh;
+}
+
 #endif
 
 static CALI_BPF_INLINE struct ethhdr* eth_hdr(struct cali_tc_ctx *ctx)
@@ -254,11 +267,6 @@ static CALI_BPF_INLINE struct tcphdr* tcp_hdr(struct cali_tc_ctx *ctx)
 static CALI_BPF_INLINE struct udphdr* udp_hdr(struct cali_tc_ctx *ctx)
 {
 	return (struct udphdr *)ctx->nh;
-}
-
-static CALI_BPF_INLINE struct icmphdr* icmp_hdr(struct cali_tc_ctx *ctx)
-{
-	return (struct icmphdr *)ctx->nh;
 }
 
 static CALI_BPF_INLINE __u32 ctx_ifindex(struct cali_tc_ctx *ctx)
