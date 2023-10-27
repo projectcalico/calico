@@ -77,7 +77,7 @@ bin/calicoctl-%: $(SRC_FILES)
 	$(MAKE) build-calicoctl BUILDOS=$(BUILDOS) ARCH=$(ARCH)
 build-calicoctl:
 ifeq ($(BUILDOS)/$(ARCH), linux/amd64)
-	$(call build_static_cgo_boring_binary, ./calicoctl/calicoctl.go, bin/calicoctl-$(BUILDOS)-$(ARCH))
+	$(call build_cgo_boring_binary, ./calicoctl/calicoctl.go, bin/calicoctl-$(BUILDOS)-$(ARCH))
 else
 	$(call build_binary, ./calicoctl/calicoctl.go, bin/calicoctl-$(BUILDOS)-$(ARCH))
 endif
@@ -118,7 +118,7 @@ CALICO_VERSION_HELPER_SRC=$(CALICO_VERSION_HELPER_DIR)/calico_version_helper.go
 .PHONY: version-helper
 version-helper: $(CALICO_VERSION_HELPER_BIN)
 $(CALICO_VERSION_HELPER_BIN): $(CALICO_VERSION_HELPER_SRC)
-	$(call build_static_cgo_boring_binary, $(CALICO_VERSION_HELPER_SRC), $(CALICO_VERSION_HELPER_BIN))
+	$(call build_cgo_boring_binary, $(CALICO_VERSION_HELPER_SRC), $(CALICO_VERSION_HELPER_BIN))
 
 ###############################################################################
 # UTs
