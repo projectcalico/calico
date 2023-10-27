@@ -4733,7 +4733,7 @@ func ensureBPFProgramsAttachedOffset(offset int, felix *infrastructure.Felix, if
 		prog := []string{}
 		m := dumpIfStateMap(felix)
 		for _, v := range m {
-			if (v.Flags() | ifstate.FlgReady) > 0 {
+			if (v.Flags() & ifstate.FlgReady) > 0 {
 				prog = append(prog, v.IfName())
 			}
 		}
