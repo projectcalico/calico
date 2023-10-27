@@ -2590,8 +2590,6 @@ func (m *bpfEndpointManager) ensureBPFDevices() error {
 		return fmt.Errorf("failed to program arp for natif: %w", err)
 	}
 
-	// XXX not sure if we need this in IPv6, certainly will not fly
-
 	// Add a permanent ARP entry to point to the other side of the veth to avoid
 	// ARP requests that would not be proxied if .all.rp_filter == 1
 	arp := &netlink.Neigh{
