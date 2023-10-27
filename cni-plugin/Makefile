@@ -92,23 +92,18 @@ sub-build-%:
 $(BIN)/install binary: $(SRC_FILES)
 ifeq ($(ARCH), amd64)
 ifeq ($(FIPS), true)
-	$(call build_cgo_boring_binary, $(PACKAGE_NAME)/cmd/calico, $(BIN)/install)
+	$(call build_cgo_boring_binary, $(PACKAGE_NAME)/cmd/calico, $@)
 else
-	$(call build_binary, $(PACKAGE_NAME)/cmd/calico, $(BIN)/install)
+	$(call build_binary, $(PACKAGE_NAME)/cmd/calico, $@)
 endif
 else
-	$(call build_binary, $(PACKAGE_NAME)/cmd/calico, $(BIN)/install)
+	$(call build_binary, $(PACKAGE_NAME)/cmd/calico, $@)
 endif
 
 ## Build the Calico network plugin and ipam plugins for Windows
 $(WINDOWS_BIN)/install.exe: $(SRC_FILES)
-	-mkdir -p $(WINDOWS_BIN)
-	$(DOCKER_RUN) \
-	-e GOOS=windows \
-	-e GOARCH=amd64 \
-	-e CGO_ENABLED=1 \
-		$(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
-		go build -v -buildvcs=false -o $(WINDOWS_BIN)/install.exe -ldflags "$(LDFLAGS)" $(PACKAGE_NAME)/cmd/calico'
+	mkdir -p $(WINDOWS_BIN)
+	$(call build_windows_binary, $(PACKAGE_NAME)/cmd/calico, $@)
 
 $(WINDOWS_BIN)/calico-ipam.exe $(WINDOWS_BIN)/calico.exe: $(WINDOWS_BIN)/install.exe
 	cp "$<" "$@"
