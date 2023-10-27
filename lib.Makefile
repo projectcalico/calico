@@ -196,6 +196,16 @@ define build_binary
 		sh -c '$(GIT_CONFIG_SSH) go build -o $(2) -v -buildvcs=false -ldflags "$(LDFLAGS)" $(1)'
 endef
 
+# For windows builds that do not require cgo.
+define build_windows_binary
+	$(DOCKER_RUN) \
+		-e CGO_ENABLED=0 \
+		-e GOARCH=amd64 \
+		-e GOOS=windows \
+		$(CALICO_BUILD) \
+		sh -c '$(GIT_CONFIG_SSH) go build -o $(2) -v -buildvcs=false -ldflags "$(LDFLAGS)" $(1)'
+endef
+
 # Images used in build / test across multiple directories.
 PROTOC_CONTAINER=calico/protoc:$(PROTOC_VER)-$(BUILDARCH)
 ETCD_IMAGE ?= quay.io/coreos/etcd:$(ETCD_VERSION)-$(ARCH)
