@@ -33,7 +33,7 @@ sub-build-%:
 	$(MAKE) build ARCH=$*
 
 bin/confd-$(ARCH): $(SRC_FILES)
-	$(call build_static_cgo_boring_binary, $(PACKAGE_NAME), $@)
+	$(call build_cgo_boring_binary, $(PACKAGE_NAME), $@)
 
 bin/confd: bin/confd-$(ARCH)
 ifeq ($(ARCH),amd64)
