@@ -82,6 +82,10 @@ void bpf_attr_setup_load_prog(union bpf_attr *attr,
 			   attr->prog_name[i] = '\0';
 			   break;
 		   }
+		   /* Kernel only accepts alphnum chars and '_' and '.'. In bpf program
+		    * names. So we sanitize any other characters like the '-' in
+		    * wg-v6.cali.
+		    */
 		   if (isalnum(name[i]) || name[i] == '_' || name[i] == '.')
 			   attr->prog_name[i] = name[i];
 		   else {
