@@ -61,7 +61,7 @@ type mockDataplane struct {
 	lastProgID int
 	progs      map[string]int
 	policy     map[string]polprog.Rules
-	routes     map[ip.V4CIDR]struct{}
+	routes     map[ip.CIDR]struct{}
 
 	ensureStartedFn    func()
 	ensureQdiscFn      func(string) (bool, error)
@@ -73,7 +73,7 @@ func newMockDataplane() *mockDataplane {
 		lastProgID: 5,
 		progs:      map[string]int{},
 		policy:     map[string]polprog.Rules{},
-		routes:     map[ip.V4CIDR]struct{}{},
+		routes:     map[ip.CIDR]struct{}{},
 	}
 }
 
@@ -188,14 +188,14 @@ func (m *mockDataplane) programAttached(key string) bool {
 	return m.progs[key] != 0
 }
 
-func (m *mockDataplane) setRoute(cidr ip.V4CIDR) {
+func (m *mockDataplane) setRoute(cidr ip.CIDR) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
 	m.routes[cidr] = struct{}{}
 }
 
-func (m *mockDataplane) delRoute(cidr ip.V4CIDR) {
+func (m *mockDataplane) delRoute(cidr ip.CIDR) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 

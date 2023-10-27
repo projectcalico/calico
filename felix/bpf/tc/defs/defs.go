@@ -62,22 +62,6 @@ const (
 	ProgIndexHostCtConflictDebug
 	ProgIndexIcmpInnerNatDebug
 	ProgIndexNewFlowDebug
-	ProgIndexV6Main
-	ProgIndexV6Policy
-	ProgIndexV6Allowed
-	ProgIndexV6Icmp
-	ProgIndexV6Drop
-	ProgIndexV6HostCtConflict
-	ProgIndexV6IcmpInnerNat
-	ProgIndexV6NewFlow
-	ProgIndexV6MainDebug
-	ProgIndexV6PolicyDebug
-	ProgIndexV6AllowedDebug
-	ProgIndexV6IcmpDebug
-	ProgIndexV6DropDebug
-	ProgIndexV6HostCtConflictDebug
-	ProgIndexV6IcmpInnerNatDebug
-	ProgIndexV6NewFlowDebug
 	ProgIndexEndDebug
 	ProgIndexEnd
 
