@@ -175,15 +175,21 @@ static CALI_BPF_INLINE int tc_state_fill_from_nexthdr(struct cali_tc_ctx *ctx, b
 		break;
 #ifdef IPVER6
 	case IPPROTO_ICMPV6:
-		ctx->state->sport = ctx->state->dport = 0;
 		CALI_DEBUG("ICMP; type=%d code=%d\n",
 				icmp_hdr(ctx)->type, icmp_hdr(ctx)->code);
+		ctx->state->sport = 0;
+		/* icmp_type/code are in dport */
+		ctx->state->icmp_type = icmp_hdr(ctx)->type;
+		ctx->state->icmp_code = icmp_hdr(ctx)->code;
 		break;
 #else
 	case IPPROTO_ICMP:
-		ctx->state->sport = ctx->state->dport = 0;
 		CALI_DEBUG("ICMP; type=%d code=%d\n",
 				icmp_hdr(ctx)->type, icmp_hdr(ctx)->code);
+		ctx->state->sport = 0;
+		/* icmp_type/code are in dport */
+		ctx->state->icmp_type = icmp_hdr(ctx)->type;
+		ctx->state->icmp_code = icmp_hdr(ctx)->code;
 		break;
 #endif
 	case IPPROTO_IPIP:
