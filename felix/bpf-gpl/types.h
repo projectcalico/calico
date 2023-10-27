@@ -74,7 +74,7 @@ struct cali_tc_state {
 		struct
 		{
 			/* Only used to pass type/code to the program that generates and
-			 * send and ICMP error respose.
+			 * send and ICMP error respose and to the policy program.
 			 */
 			__u8 icmp_type;
 			__u8 icmp_code;
