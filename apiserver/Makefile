@@ -99,8 +99,7 @@ else
 	$(call build_binary, $(PACKAGE_NAME)/cmd/apiserver, $@)
 endif
 else
-	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) \
-		sh -c '$(GIT_CONFIG_SSH) go build -v -o $@ -ldflags "$(VERSION_FLAGS)" $(PACKAGE_NAME)/cmd/apiserver'
+	$(call build_binary, $(PACKAGE_NAME)/cmd/apiserver, $@)
 endif
 
 $(BINDIR)/filecheck-$(ARCH): $(K8SAPISERVER_GO_FILES)
@@ -136,11 +135,6 @@ $(CONTAINER_FIPS_CREATED): docker-image/Dockerfile.$(ARCH) $(BINDIR)/apiserver-$
 .PHONY: lint-cache-dir
 lint-cache-dir:
 	mkdir -p $(CURDIR)/.lint-cache
-
-check-boring-ssl: $(BINDIR)/apiserver-$(ARCH)
-	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) \
-		go tool nm $(BINDIR)/apiserver-$(ARCH) > $(BINDIR)/tags.txt && grep '_Cfunc__goboringcrypto_' $(BINDIR)/tags.txt 1> /dev/null
-	-rm -f $(BINDIR)/tags.txt
 
 .PHONY: ut
 ut: lint-cache-dir run-etcd
