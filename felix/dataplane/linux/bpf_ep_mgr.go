@@ -632,6 +632,21 @@ func (m *bpfEndpointManager) withIface(ifaceName string, fn func(iface *bpfInter
 	m.dirtyIfaceNames.Add(ifaceName)
 }
 
+func (m *bpfEndpointManager) updateHostIP(ip net.IP) {
+	if ip != nil {
+		m.hostIP = ip
+		// Should be safe without the lock since there shouldn't be any active background threads
+		// but taking it now makes us robust to refactoring.
+		m.ifacesLock.Lock()
+		for ifaceName := range m.nameToIface {
+			m.dirtyIfaceNames.Add(ifaceName)
+		}
+		m.ifacesLock.Unlock()
+	} else {
+		log.Warn("Cannot parse hostip, no change applied")
+	}
+}
+
 func (m *bpfEndpointManager) OnUpdate(msg interface{}) {
 	switch msg := msg.(type) {
 	// Updates from the dataplane:
@@ -662,36 +677,23 @@ func (m *bpfEndpointManager) OnUpdate(msg interface{}) {
 	case *proto.HostMetadataUpdate:
 		if !m.ipv6Enabled && msg.Hostname == m.hostname {
 			log.WithField("HostMetadataUpdate", msg).Info("Host IP changed")
-			ip := net.ParseIP(msg.Ipv4Addr)
-			if ip != nil {
-				m.hostIP = ip
-				// Should be safe without the lock since there shouldn't be any active background threads
-				// but taking it now makes us robust to refactoring.
-				m.ifacesLock.Lock()
-				for ifaceName := range m.nameToIface {
-					m.dirtyIfaceNames.Add(ifaceName)
-				}
-				m.ifacesLock.Unlock()
-			} else {
-				log.WithField("HostMetadataUpdate", msg).Warn("Cannot parse IPv4, no change applied")
-			}
+			m.updateHostIP(net.ParseIP(msg.Ipv4Addr))
 		}
 	case *proto.HostMetadataV6Update:
 		if m.ipv6Enabled && msg.Hostname == m.hostname {
 			log.WithField("HostMetadataV6Update", msg).Info("Host IPv6 changed")
-			ip := net.ParseIP(msg.Ipv6Addr)
-			if ip != nil {
-				m.hostIP = ip
-				// Should be safe without the lock since there shouldn't be any active background threads
-				// but taking it now makes us robust to refactoring.
-				m.ifacesLock.Lock()
-				for ifaceName := range m.nameToIface {
-					m.dirtyIfaceNames.Add(ifaceName)
-				}
-				m.ifacesLock.Unlock()
-			} else {
-				log.WithField("HostMetadataV6Update", msg).Warn("Cannot parse IP, no change applied")
-			}
+			m.updateHostIP(net.ParseIP(msg.Ipv6Addr))
+		}
+	case *proto.HostMetadataV4V6Update:
+		if msg.Hostname != m.hostname {
+			break
+		}
+		if m.ipv6Enabled {
+			log.WithField("HostMetadataV4V6Update", msg).Info("Host IPv6 changed")
+			m.updateHostIP(net.ParseIP(msg.Ipv6Addr))
+		} else {
+			log.WithField("HostMetadataV4V6Update", msg).Info("Host IP changed")
+			m.updateHostIP(net.ParseIP(msg.Ipv4Addr))
 		}
 	case *proto.ServiceUpdate:
 		m.onServiceUpdate(msg)
