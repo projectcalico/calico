@@ -101,7 +101,7 @@ e2e-test:
 ###############################################################################
 # Build the release tool.
 hack/release/release: $(shell find ./hack/release -type f -name '*.go')
-	$(DOCKER_RUN) $(CALICO_BUILD) go build -v -o $@ ./hack/release/cmd
+	$(call build_binary, ./hack/release/cmd, $@)
 
 # Install ghr for publishing to github.
 hack/release/ghr:
