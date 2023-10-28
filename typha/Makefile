@@ -84,9 +84,9 @@ $(BINDIR)/wrapper: $(BINDIR)/wrapper-$(ARCH)
 $(BINDIR)/wrapper-$(ARCH): $(SRC_FILES) $(LOCAL_BUILD_DEP)
 ifeq ($(ARCH), amd64)
 ifeq ($(FIPS), true)
-	$(call build_static_cgo_boring_binary, ./cmd/wrapper, $@)
+	$(call build_cgo_boring_binary, ./cmd/wrapper, $@)
 else
-	$(call build_static_binary, ./cmd/wrapper, $@)
+	$(call build_binary, ./cmd/wrapper, $@)
 endif
 else
 	$(call build_binary, ./cmd/wrapper, $@)
@@ -95,9 +95,9 @@ endif
 $(BINDIR)/calico-typha-$(ARCH): $(SRC_FILES)
 ifeq ($(ARCH), amd64)
 ifeq ($(FIPS), true)
-	$(call build_static_cgo_boring_binary, ./cmd/calico-typha, $@)
+	$(call build_cgo_boring_binary, ./cmd/calico-typha, $@)
 else
-	$(call build_static_binary, ./cmd/calico-typha, $@)
+	$(call build_binary, ./cmd/calico-typha, $@)
 endif
 else
 	$(call build_binary, ./cmd/calico-typha, $@)
@@ -107,9 +107,9 @@ $(BINDIR)/typha-client-$(ARCH): $(SRC_FILES)
 ifeq ($(ARCH), amd64)
 	@echo Building typha client...
 ifeq ($(FIPS), true)
-	$(call build_static_cgo_boring_binary, ./cmd/typha-client, $@)
+	$(call build_cgo_boring_binary, ./cmd/typha-client, $@)
 else
-	$(call build_static_binary, ./cmd/typha-client, $@)
+	$(call build_binary, ./cmd/typha-client, $@)
 endif
 else
 	$(call build_binary, ./cmd/typha-client, $@)
@@ -178,11 +178,6 @@ $(TYPHA_IMAGE): $(TYPHA_CONTAINER_MARKER)
 ut combined.coverprofile: $(SRC_FILES)
 	@echo Running Go UTs.
 	$(DOCKER_RUN) $(CALICO_BUILD) ./utils/run-coverage
-
-check-boring-ssl: $(BINDIR)/calico-typha-amd64
-	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) \
-		go tool nm $(BINDIR)/calico-typha-amd64 > $(BINDIR)/tags.txt && grep '_Cfunc__goboringcrypto_' $(BINDIR)/tags.txt 1> /dev/null
-	-rm -f $(BINDIR)/tags.txt
 
 ###############################################################################
 # CI/CD
