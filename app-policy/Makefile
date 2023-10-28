@@ -30,13 +30,6 @@ LDFLAGS = -X $(PACKAGE_NAME)/buildinfo.GitVersion=$(GIT_DESCRIPTION) \
 ##############################################################################
 include ../lib.Makefile
 
-# We need CGO to leverage Boring SSL.  However, the cross-compile doesn't support CGO yet.
-ifeq ($(ARCH), $(filter $(ARCH),amd64))
-CGO_ENABLED=1
-else
-CGO_ENABLED=0
-endif
-
 CONTAINER_CREATED=image.created-$(ARCH)
 CONTAINER_FIPS_CREATED=image.created-$(ARCH)-fips
 
