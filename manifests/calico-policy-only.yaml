@@ -1730,6 +1730,14 @@ spec:
                 type: integer
               vxlanVNI:
                 type: integer
+              windowsManageFirewallRules:
+                description: 'WindowsManageFirewallRules configures whether or not
+                  Felix will program Windows Firewall rules. (to allow inbound access
+                  to its own metrics ports) [Default: Disabled]'
+                enum:
+                - Enabled
+                - Disabled
+                type: string
               wireguardEnabled:
                 description: 'WireguardEnabled controls whether Wireguard is enabled
                   for IPv4 (encapsulating IPv4 traffic over an IPv4 underlay network).

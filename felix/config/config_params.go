@@ -310,6 +310,9 @@ type Config struct {
 	// IPs are always programmed, regardless of this setting.
 	FloatingIPs string `config:"oneof(Enabled,Disabled);Disabled"`
 
+	// WindowsManageFirewallRules configures whether or not Felix will program Windows Firewall rules. [Default: Disabled]
+	WindowsManageFirewallRules string `config:"oneof(Enabled,Disabled);Disabled"`
+
 	// Knobs provided to explicitly control whether we add rules to drop encap traffic
 	// from workloads. We always add them unless explicitly requested not to add them.
 	AllowVXLANPacketsFromWorkloads bool `config:"bool;false"`

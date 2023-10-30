@@ -15,6 +15,7 @@ package winutils
 
 import (
 	"bytes"
+	"fmt"
 	"net"
 	"os"
 	"os/exec"
@@ -22,7 +23,7 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -113,7 +114,7 @@ func GetInClusterConfig() (*rest.Config, error) {
 	tlsClientConfig := rest.TLSClientConfig{}
 
 	if _, err := certutil.NewPool(rootCAFile); err != nil {
-		logrus.Errorf("Expected to load root CA config from %s, but got err: %v", rootCAFile, err)
+		log.Errorf("Expected to load root CA config from %s, but got err: %v", rootCAFile, err)
 	} else {
 		tlsClientConfig.CAFile = rootCAFile
 	}
@@ -137,14 +138,54 @@ func GetInClusterConfig() (*rest.Config, error) {
 // Windows hostprocess containers on containerd v1.6 can work with the in-cluster config.
 func BuildConfigFromFlags(masterUrl, kubeconfigPath string) (*rest.Config, error) {
 	if kubeconfigPath == "" && masterUrl == "" {
-		logrus.Warning("Neither --kubeconfig nor --master was specified.  Using the inClusterConfig.  This might not work.")
+		log.Warning("Neither --kubeconfig nor --master was specified.  Using the inClusterConfig.  This might not work.")
 		kubeconfig, err := GetInClusterConfig()
 		if err == nil {
 			return kubeconfig, nil
 		}
-		logrus.Warning("error creating inClusterConfig, falling back to default config: ", err)
+		log.Warning("error creating inClusterConfig, falling back to default config: ", err)
 	}
 	return clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
 		&clientcmd.ClientConfigLoadingRules{ExplicitPath: kubeconfigPath},
 		&clientcmd.ConfigOverrides{ClusterInfo: clientcmdapi.Cluster{Server: masterUrl}}).ClientConfig()
+}
+
+// When running in a Windows hostprocess container (HPC), add Calico Prometheus metrics
+// port rules to the Windows firewall. Invoke Windows Powershell to possibly remove an
+// existing rule and add the new rule. Since Felix is restarted when these configs change,
+// changes to PrometheusMetricsPort will always result in an updated firewall rule.
+func MaybeConfigureWindowsFirewallRules(windowsManageFirewallRules string, prometheusMetricsEnabled bool, prometheusMetricsPort int) {
+	if !InHostProcessContainer() {
+		log.Debug("Not running in a Windows hostprocess container (HPC), skipping Windows firewall rule setup")
+		return
+	}
+
+	// Don't touch firewall rules if WindowsManageFirewallRules is disabled in FelixConfiguration
+	if windowsManageFirewallRules != "Enabled" {
+		log.Debug("WindowsManageFirewallRules is not enabled, skipping Windows firewall rule setup")
+		return
+	}
+
+	const winFirewallRuleName = "Calico Prometheus Ports (calico-managed rule)"
+
+	// If prometheus metrics are enabled, add rule, otherwise only clean up any possibly existing rule
+	var commands []string
+
+	log.Infof("Cleaning any previously existing '%s' Windows firewall rule.", winFirewallRuleName)
+
+	commands = append(commands, fmt.Sprintf("Remove-NetFirewallRule -DisplayName '%s' -erroraction 'silentlycontinue'", winFirewallRuleName))
+
+	if prometheusMetricsEnabled {
+		log.Infof("Prometheus metrics are enabled, adding '%s' Windows firewall rule.", winFirewallRuleName)
+
+		// addFirewallRuleCmd := fmt.Sprintf("New-NetFirewallRule -DisplayName '%s' -Direction inbound -Profile Any -Action Allow -LocalPort %d -Protocol TCP -Program '%s'", winFirewallRuleName, prometheusMetricsPort, os.Args[0])
+		commands = append(commands, fmt.Sprintf("New-NetFirewallRule -DisplayName '%s' -Direction inbound -Profile Any -Action Allow -LocalPort %d -Protocol TCP", winFirewallRuleName, prometheusMetricsPort))
+	}
+
+	stdout, stderr, err := Powershell(strings.Join(commands, ";"))
+	if err != nil {
+		log.Warnf("Error interacting with powershell to configure Windows Firewall metrics ports rule\nstdout:%s\nerror: %s\nstderr: %s", stdout, err, stderr)
+	} else {
+		log.Debugf("Configured '%s' Windows firewall rule.\nstdout: %s\nstderr: %s", winFirewallRuleName, stdout, stderr)
+	}
 }
