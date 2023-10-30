@@ -28,6 +28,8 @@ import (
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/felix/fv/metrics"
+
 	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/felix/fv/tcpdump"
 	"github.com/projectcalico/calico/felix/fv/utils"
@@ -352,4 +354,36 @@ func (f *Felix) BPFIfState() map[string]BPFIfState {
 	}
 
 	return states
+}
+
+func (f *Felix) PromMetric(name string) PrometheusMetric {
+	return PrometheusMetric{
+		f:    f,
+		Name: name,
+	}
+}
+
+type PrometheusMetric struct {
+	f    *Felix
+	Name string
+}
+
+func (p PrometheusMetric) Raw() (string, error) {
+	return metrics.GetFelixMetric(p.f.IP, p.Name)
+}
+
+func (p PrometheusMetric) Int() (int, error) {
+	raw, err := p.Raw()
+	if err != nil {
+		return 0, err
+	}
+	return strconv.Atoi(raw)
+}
+
+func (p PrometheusMetric) Float() (float64, error) {
+	raw, err := p.Raw()
+	if err != nil {
+		return 0, err
+	}
+	return strconv.ParseFloat(raw, 64)
 }
