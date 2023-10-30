@@ -360,7 +360,7 @@ func (r *DefaultRuleRenderer) filterInputChain(ipVersion uint8) *Chain {
 	}
 }
 
-func Icmpv6Filter(action iptables.Action) []Rule {
+func ICMPv6Filter(action iptables.Action) []Rule {
 	var rules []Rule
 
 	// For IPv6, we need to allow certain ICMP traffic from workloads in order to act
@@ -393,7 +393,7 @@ func (r *DefaultRuleRenderer) filterWorkloadToHostChain(ipVersion uint8) *Chain 
 	var rules []Rule
 
 	if ipVersion == 6 {
-		rules = Icmpv6Filter(r.filterAllowAction)
+		rules = ICMPv6Filter(r.filterAllowAction)
 	}
 
 	if r.OpenStackSpecialCasesEnabled {

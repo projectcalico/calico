@@ -1567,7 +1567,7 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 		if t.IPVersion == 6 {
 			if !d.config.BPFIpv6Enabled {
 				for _, prefix := range rulesConfig.WorkloadIfacePrefixes {
-					// In BPF mode, we don't support IPv6 yet.  Drop it.
+					// In BPF ipv4 mode, drop ipv6 packets to pods.
 					fwdRules = append(fwdRules, iptables.Rule{
 						Match:   iptables.Match().OutInterface(prefix + "+"),
 						Action:  d.ruleRenderer.IptablesFilterDenyAction(),
@@ -1578,7 +1578,7 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 				// ICMPv6 for router/neighbor soliciting are allowed towards the
 				// host, but the bpf programs cannot easily make sure that they
 				// only go to the host. Make sure that they are not forwarded.
-				fwdRules = append(fwdRules, rules.Icmpv6Filter(d.ruleRenderer.IptablesFilterDenyAction())...)
+				fwdRules = append(fwdRules, rules.ICMPv6Filter(d.ruleRenderer.IptablesFilterDenyAction())...)
 			}
 		} else if (t.IPVersion == 6) == (d.config.BPFIpv6Enabled) /* XXX remove condition for dual stack */ {
 			// Let the BPF programs know if Linux conntrack knows about the flow.
