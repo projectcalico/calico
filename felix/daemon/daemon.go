@@ -58,6 +58,7 @@ import (
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
 	lclogutils "github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/libcalico-go/lib/metricsserver"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 	"github.com/projectcalico/calico/libcalico-go/lib/seedrng"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
@@ -409,7 +410,7 @@ configRetry:
 	}
 
 	if configParams.DebugPort != 0 {
-		debugserver.StartDebugPortServer(configParams.DebugHost, configParams.DebugPort)
+		debugserver.StartDebugPprofServer(configParams.DebugHost, configParams.DebugPort)
 	}
 
 	// Start up the dataplane driver.  This may be the internal go-based driver or an external
@@ -680,7 +681,11 @@ configRetry:
 		})
 		gaugeHost.Set(1)
 		prometheus.MustRegister(gaugeHost)
-		go dp.ServePrometheusMetrics(configParams)
+		dp.ConfigurePrometheusMetrics(configParams)
+		go metricsserver.ServePrometheusMetricsForever(
+			configParams.PrometheusMetricsHost,
+			configParams.PrometheusMetricsPort,
+		)
 	}
 
 	// Register signal handlers to dump memory/CPU profiles.
