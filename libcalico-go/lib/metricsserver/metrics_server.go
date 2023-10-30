@@ -12,30 +12,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package debugserver
+package metricsserver
 
 import (
-	"net"
+	"fmt"
 	"net/http"
-	httppprof "net/http/pprof"
-	"strconv"
 	"time"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/sirupsen/logrus"
 )
 
-func StartDebugPprofServer(host string, port int) {
-	log.Infof("Insecure debug port is enabled on %s:%d.", host, port)
-	_ = httppprof.Profile // Make sure we don't accidentally lose the import.
-	go func() {
-		addr := net.JoinHostPort(host, strconv.Itoa(port))
-		for {
-			log.Infof("Attempting to open debug port %s:%d", host, port)
-			err := http.ListenAndServe(addr, nil)
-			if err != nil {
-				log.WithError(err).Error("Debug port HTTP server failed.  Will retry...")
-				time.Sleep(time.Second)
-			}
-		}
-	}()
+func ServePrometheusMetricsForever(host string, port int) {
+	mux := http.NewServeMux()
+	mux.Handle("/metrics", promhttp.Handler())
+	addr := fmt.Sprintf("[%v]:%v", host, port)
+
+	for {
+		logrus.WithFields(logrus.Fields{
+			"host": host,
+			"port": port,
+		}).Info("Starting prometheus metrics endpoint")
+		err := http.ListenAndServe(addr, mux)
+		logrus.WithError(err).Error(
+			"Prometheus metrics endpoint failed, trying to restart it...")
+		time.Sleep(1 * time.Second)
+	}
 }
