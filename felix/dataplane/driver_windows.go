@@ -16,15 +16,10 @@ package dataplane
 
 import (
 	"fmt"
-	"net"
-	"net/http"
 	"os/exec"
-	"strconv"
-	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
 
@@ -61,11 +56,7 @@ func SupportsBPF() error {
 	return fmt.Errorf("BPF dataplane is not supported on Windows")
 }
 
-func ServePrometheusMetrics(configParams *config.Config) {
-	log.WithFields(log.Fields{
-		"host": configParams.PrometheusMetricsHost,
-		"port": configParams.PrometheusMetricsPort,
-	}).Info("Starting prometheus metrics endpoint")
+func ConfigurePrometheusMetrics(configParams *config.Config) {
 	if configParams.PrometheusGoMetricsEnabled && configParams.PrometheusProcessMetricsEnabled {
 		log.Info("Including Golang, and Process metrics")
 	} else {
@@ -77,14 +68,5 @@ func ServePrometheusMetrics(configParams *config.Config) {
 			log.Info("Discarding process metrics")
 			prometheus.Unregister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
 		}
-	}
-	mux := http.NewServeMux()
-	mux.Handle("/metrics", promhttp.Handler())
-	addr := net.JoinHostPort(configParams.PrometheusMetricsHost, strconv.Itoa(configParams.PrometheusMetricsPort))
-	for {
-		err := http.ListenAndServe(addr, mux)
-		log.WithError(err).Error(
-			"Prometheus metrics endpoint failed, trying to restart it...")
-		time.Sleep(1 * time.Second)
 	}
 }
