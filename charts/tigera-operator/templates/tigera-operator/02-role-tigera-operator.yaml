@@ -96,8 +96,7 @@ rules:
       - update
   - apiGroups:
       - operator.tigera.io
-    resources:
-      - '*'
+    resources: {{ toYaml .Values.clusterrole.operatorResources | nindent 4 }}
     verbs:
       - create
       - get
