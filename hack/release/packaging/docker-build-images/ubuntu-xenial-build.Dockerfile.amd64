@@ -1,8 +1,0 @@
-FROM ubuntu:xenial
-MAINTAINER Daniel Fox <dan.fox@tigera.io>
-ENV STREAM xenial
-
-ADD install-ubuntu-build-deps install-ubuntu-build-deps
-RUN ./install-ubuntu-build-deps
-
-WORKDIR /code
