@@ -3689,6 +3689,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 					BeforeEach(func() {
 						icmpProto := numorstring.ProtocolFromString("icmp")
+						if testOpts.ipv6 {
+							icmpProto = numorstring.ProtocolFromString("icmpv6")
+						}
 						pol.Spec.Ingress = []api.Rule{
 							{
 								Action: "Allow",
