@@ -1511,32 +1511,95 @@ func TestBGPFilterClient(t *testing.T) {
 
 func testBGPFilterClient(client calicoclient.Interface, name string) error {
 	bgpFilterClient := client.ProjectcalicoV3().BGPFilters()
-	acceptRuleV4 := v3.BGPFilterRuleV4{
+	r1v4 := v3.BGPFilterRuleV4{
+		CIDR:          "10.10.10.0/24",
+		MatchOperator: v3.In,
+		Source:        v3.BGPFilterSourceRemotePeers,
+		Interface:     "*.calico",
+		Action:        v3.Accept,
+	}
+	r1v6 := v3.BGPFilterRuleV6{
+		CIDR:          "dead:beef:1::/64",
+		MatchOperator: v3.Equal,
+		Source:        v3.BGPFilterSourceRemotePeers,
+		Interface:     "*.calico",
+		Action:        v3.Accept,
+	}
+	r2v4 := v3.BGPFilterRuleV4{
 		CIDR:          "10.10.10.0/24",
 		MatchOperator: v3.In,
 		Source:        v3.BGPFilterSourceRemotePeers,
 		Action:        v3.Accept,
 	}
-	rejectRuleV4 := v3.BGPFilterRuleV4{
-		Action: v3.Reject,
+	r2v6 := v3.BGPFilterRuleV6{
+		CIDR:          "dead:beef:1::/64",
+		MatchOperator: v3.Equal,
+		Source:        v3.BGPFilterSourceRemotePeers,
+		Action:        v3.Accept,
 	}
-	acceptRuleV6 := v3.BGPFilterRuleV6{
+	r3v4 := v3.BGPFilterRuleV4{
+		CIDR:          "10.10.10.0/24",
+		MatchOperator: v3.In,
+		Interface:     "*.calico",
+		Action:        v3.Accept,
+	}
+	r3v6 := v3.BGPFilterRuleV6{
+		CIDR:          "dead:beef:1::/64",
+		MatchOperator: v3.Equal,
+		Interface:     "*.calico",
+		Action:        v3.Accept,
+	}
+	r4v4 := v3.BGPFilterRuleV4{
+		Source:    v3.BGPFilterSourceRemotePeers,
+		Interface: "*.calico",
+		Action:    v3.Accept,
+	}
+	r4v6 := v3.BGPFilterRuleV6{
+		Source:    v3.BGPFilterSourceRemotePeers,
+		Interface: "*.calico",
+		Action:    v3.Accept,
+	}
+	r5v4 := v3.BGPFilterRuleV4{
+		CIDR:          "10.10.10.0/24",
+		MatchOperator: v3.In,
+		Action:        v3.Accept,
+	}
+	r5v6 := v3.BGPFilterRuleV6{
 		CIDR:          "dead:beef:1::/64",
 		MatchOperator: v3.Equal,
 		Action:        v3.Accept,
 	}
-	rejectRuleV6 := v3.BGPFilterRuleV6{
+	r6v4 := v3.BGPFilterRuleV4{
 		Source: v3.BGPFilterSourceRemotePeers,
-		Action: v3.Reject,
+		Action: v3.Accept,
 	}
+	r6v6 := v3.BGPFilterRuleV6{
+		Source: v3.BGPFilterSourceRemotePeers,
+		Action: v3.Accept,
+	}
+	r7v4 := v3.BGPFilterRuleV4{
+		Interface: "*.calico",
+		Action:    v3.Accept,
+	}
+	r7v6 := v3.BGPFilterRuleV6{
+		Interface: "*.calico",
+		Action:    v3.Accept,
+	}
+	r8v4 := v3.BGPFilterRuleV4{
+		Action: v3.Accept,
+	}
+	r8v6 := v3.BGPFilterRuleV6{
+		Action: v3.Accept,
+	}
+
+	// This test expect equal number of rules in each of ExportV4, ImportV4, ExportV6 and ImportV6.
 	bgpFilter := &v3.BGPFilter{
 		ObjectMeta: metav1.ObjectMeta{Name: name},
-
 		Spec: v3.BGPFilterSpec{
-			ExportV4: []v3.BGPFilterRuleV4{acceptRuleV4},
-			ImportV4: []v3.BGPFilterRuleV4{rejectRuleV4},
-			ExportV6: []v3.BGPFilterRuleV6{acceptRuleV6},
-			ImportV6: []v3.BGPFilterRuleV6{rejectRuleV6},
+			ExportV4: []v3.BGPFilterRuleV4{r1v4, r7v4, r6v4, r5v4, r2v4, r8v4},
+			ImportV4: []v3.BGPFilterRuleV4{r2v4, r3v4, r4v4, r7v4, r8v4, r1v4},
+			ExportV6: []v3.BGPFilterRuleV6{r5v6, r1v6, r6v6, r4v6, r8v6, r2v6},
+			ImportV6: []v3.BGPFilterRuleV6{r6v6, r1v6, r3v6, r7v6, r2v6, r4v6},
 		},
 	}
 	ctx := context.Background()
@@ -1555,8 +1618,29 @@ func testBGPFilterClient(client calicoclient.Interface, name string) error {
 		return fmt.Errorf("didn't get the same object back from the server \n%+v\n%+v", bgpFilter, bgpFilterNew)
 	}
 
-	if len(bgpFilterNew.Spec.ExportV4) != 1 || bgpFilterNew.Spec.ExportV4[0] != bgpFilter.Spec.ExportV4[0] || len(bgpFilterNew.Spec.ImportV4) != 1 || bgpFilterNew.Spec.ImportV4[0] != bgpFilter.Spec.ImportV4[0] || len(bgpFilterNew.Spec.ExportV6) != 1 || bgpFilterNew.Spec.ExportV6[0] != bgpFilter.Spec.ExportV6[0] || len(bgpFilterNew.Spec.ImportV6) != 1 || bgpFilterNew.Spec.ImportV6[0] != bgpFilter.Spec.ImportV6[0] {
+	size := len(bgpFilter.Spec.ExportV4)
+	if len(bgpFilterNew.Spec.ExportV4) != size || len(bgpFilterNew.Spec.ImportV4) != size ||
+		len(bgpFilterNew.Spec.ExportV6) != size || len(bgpFilterNew.Spec.ImportV6) != size {
 		return fmt.Errorf("didn't get the correct object back from the server \n%+v\n%+v", bgpFilter, bgpFilterNew)
+	}
+
+	for i := 0; i < size; i++ {
+		if bgpFilterNew.Spec.ExportV4[i] != bgpFilter.Spec.ExportV4[i] {
+			return fmt.Errorf("didn't get the correct object back from the server. Incorrect ExportV4: \n%+v\n%+v",
+				bgpFilter.Spec.ExportV4, bgpFilterNew.Spec.ExportV4)
+		}
+		if bgpFilterNew.Spec.ImportV4[i] != bgpFilter.Spec.ImportV4[i] {
+			return fmt.Errorf("didn't get the correct object back from the server. Incorrect ImportV4: \n%+v\n%+v",
+				bgpFilter.Spec.ImportV4, bgpFilterNew.Spec.ImportV4)
+		}
+		if bgpFilterNew.Spec.ExportV6[i] != bgpFilter.Spec.ExportV6[i] {
+			return fmt.Errorf("didn't get the correct object back from the server. Incorrect ExportV6: \n%+v\n%+v",
+				bgpFilter.Spec.ExportV6, bgpFilterNew.Spec.ExportV6)
+		}
+		if bgpFilterNew.Spec.ImportV6[i] != bgpFilter.Spec.ImportV6[i] {
+			return fmt.Errorf("didn't get the correct object back from the server. Incorrect ImportV6: \n%+v\n%+v",
+				bgpFilter.Spec.ImportV6, bgpFilterNew.Spec.ImportV6)
+		}
 	}
 
 	bgpFilterNew, err = bgpFilterClient.Get(ctx, bgpFilter.Name, metav1.GetOptions{})
