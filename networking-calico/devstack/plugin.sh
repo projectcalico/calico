@@ -21,8 +21,8 @@ if [ "${Q_AGENT}" = calico-felix ]; then
 		    # before project source is installed.
 		    echo Calico plugin: pre-install
 
-		    # Add Calico PPA as a package source.
-		    sudo apt-add-repository -y ppa:project-calico/${CALICO_PPA}
+		    # Add Calico master PPA as a package source.
+		    sudo apt-add-repository -y ppa:project-calico/master
 		    REPOS_UPDATED=False
 
 		    # Also add BIRD project PPA as a package source.
