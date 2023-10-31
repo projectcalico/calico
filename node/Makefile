@@ -236,11 +236,7 @@ $(WINDOWS_ARCHIVE_ROOT)/cni/calico-ipam.exe:
 	$(call build_windows_binary, ./cmd/calico-ipam, $@)
 
 $(TOOLS_MOUNTNS_BINARY):
-ifeq ($(CGO_ENABLED),1)
 	$(call build_cgo_binary, ./cmd/mountns, $@)
-else
-	$(call build_binary, ./cmd/mountns, $@)
-endif
 
 
 ###############################################################################
