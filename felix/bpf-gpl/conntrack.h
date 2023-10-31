@@ -521,28 +521,20 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 	struct calico_ct_key k;
 	bool syn = tcp_header && tcp_header->syn && !tcp_header->ack;
 
-	if (ct_ctx->proto == IPPROTO_ICMP_46 && icmp_type_is_err(icmp_hdr(ctx)->type)) {
-		// ICMP error packets are a response to a failed UDP/TCP/etc packet.  Try to extract the
-		// details of the inner packet.
-		if (!skb_icmp_err_unpack(ctx, ct_ctx)) {
-			CALI_CT_DEBUG("Failed to parse ICMP error packet.\n");
-			goto out_invalid;
+	if (ct_ctx->proto == IPPROTO_ICMP_46) {
+		/* There are no ports in ICMP and the fields in state are overloaded
+		 * for other use like type and code.
+		 */
+		ct_lookup_ctx.dport = 0;
+
+		if (icmp_type_is_err(icmp_hdr(ctx)->type)) {
+			// ICMP error packets are a response to a failed UDP/TCP/etc packet.  Try to extract the
+			// details of the inner packet.
+			if (!skb_icmp_err_unpack(ctx, ct_ctx)) {
+				CALI_CT_DEBUG("Failed to parse ICMP error packet.\n");
+				goto out_invalid;
+			}
 		}
-
-		// skb_icmp_err_unpack updates the ct_ctx with the details of the inner packet;
-		// look for a conntrack entry for the inner packet...
-		CALI_CT_DEBUG("related lookup from %x:%d\n", debug_ip(ct_ctx->src), ct_ctx->sport);
-		CALI_CT_DEBUG("related lookup to   %x:%d\n", debug_ip(ct_ctx->dst), ct_ctx->dport);
-		related = true;
-		tcp_header = STATE->ip_proto == IPPROTO_TCP ? tcp_hdr(ctx) : NULL;
-
-
-		// We failed to look up the original flow, but it is an ICMP error and we
-		// _do_ have a CT entry for the packet inside the error.  ct_ctx has been
-		// updated to describe the inner packet.
-
-		ctx->state->sport = ct_ctx->sport;
-		ctx->state->dport = ct_ctx->dport;
 	}
 
 	bool srcLTDest = src_lt_dest(&ct_ctx->src, &ct_ctx->dst, ct_ctx->sport, ct_ctx->dport);
@@ -936,6 +928,10 @@ static CALI_BPF_INLINE int conntrack_create(struct cali_tc_ctx *ctx, struct ct_c
 {
 	struct calico_ct_key *k = &ctx->scratch->ct_key;
 	int err;
+
+	if (ct_ctx->proto == IPPROTO_ICMP_46) {
+		ct_ctx->dport = 0;
+	}
 
 	if (ctx->state->flags & CALI_ST_SUPPRESS_CT_STATE) {
 		// CT state creation is suppressed.
