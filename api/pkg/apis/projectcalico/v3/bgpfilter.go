@@ -66,6 +66,8 @@ type BGPFilterRuleV4 struct {
 
 	Source BGPFilterMatchSource `json:"source,omitempty" validate:"omitempty,oneof=RemotePeers"`
 
+	Interface string `json:"interface,omitempty" validate:"omitempty,bgpFilterInterface"`
+
 	MatchOperator BGPFilterMatchOperator `json:"matchOperator,omitempty" validate:"omitempty,matchOperator"`
 
 	Action BGPFilterAction `json:"action" validate:"required,filterAction"`
@@ -76,6 +78,8 @@ type BGPFilterRuleV6 struct {
 	CIDR string `json:"cidr,omitempty" validate:"omitempty,netv6"`
 
 	Source BGPFilterMatchSource `json:"source,omitempty" validate:"omitempty,oneof=RemotePeers"`
+
+	Interface string `json:"interface,omitempty" validate:"omitempty,bgpFilterInterface"`
 
 	MatchOperator BGPFilterMatchOperator `json:"matchOperator,omitempty" validate:"omitempty,matchOperator"`
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2023 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -78,38 +78,39 @@ var (
 	andOr               = `(&&|\|\|)`
 	globalSelectorRegex = regexp.MustCompile(fmt.Sprintf(`%v global\(\)|global\(\) %v`, andOr, andOr))
 
-	interfaceRegex        = regexp.MustCompile("^[a-zA-Z0-9_.-]{1,15}$")
-	ignoredInterfaceRegex = regexp.MustCompile("^[a-zA-Z0-9_.*-]{1,15}$")
-	ifaceFilterRegex      = regexp.MustCompile("^[a-zA-Z0-9:._+-]{1,15}$")
-	actionRegex           = regexp.MustCompile("^(Allow|Deny|Log|Pass)$")
-	protocolRegex         = regexp.MustCompile("^(TCP|UDP|ICMP|ICMPv6|SCTP|UDPLite)$")
-	ipipModeRegex         = regexp.MustCompile("^(Always|CrossSubnet|Never)$")
-	vxlanModeRegex        = regexp.MustCompile("^(Always|CrossSubnet|Never)$")
-	logLevelRegex         = regexp.MustCompile("^(Debug|Info|Warning|Error|Fatal)$")
-	bpfLogLevelRegex      = regexp.MustCompile("^(Debug|Info|Off)$")
-	bpfServiceModeRegex   = regexp.MustCompile("^(Tunnel|DSR)$")
-	bpfCTLBRegex          = regexp.MustCompile("^(Disabled|Enabled|TCP)$")
-	bpfHostNatRegex       = regexp.MustCompile("^(Disabled|Enabled)$")
-	datastoreType         = regexp.MustCompile("^(etcdv3|kubernetes)$")
-	routeSource           = regexp.MustCompile("^(WorkloadIPs|CalicoIPAM)$")
-	dropAcceptReturnRegex = regexp.MustCompile("^(Drop|Accept|Return)$")
-	acceptReturnRegex     = regexp.MustCompile("^(Accept|Return)$")
-	dropRejectRegex       = regexp.MustCompile("^(Drop|Reject)$")
-	ipTypeRegex           = regexp.MustCompile("^(CalicoNodeIP|InternalIP|ExternalIP)$")
-	standardCommunity     = regexp.MustCompile(`^(\d+):(\d+)$`)
-	largeCommunity        = regexp.MustCompile(`^(\d+):(\d+):(\d+)$`)
-	number                = regexp.MustCompile(`(\d+)`)
-	IPv4PortFormat        = regexp.MustCompile(`^(\d+).(\d+).(\d+).(\d+):(\d+)$`)
-	IPv6PortFormat        = regexp.MustCompile(`^\[[0-9a-fA-F:.]+\]:(\d+)$`)
-	reasonString          = "Reason: "
-	poolUnstictCIDR       = "IP pool CIDR is not strictly masked"
-	overlapsV4LinkLocal   = "IP pool range overlaps with IPv4 Link Local range 169.254.0.0/16"
-	overlapsV6LinkLocal   = "IP pool range overlaps with IPv6 Link Local range fe80::/10"
-	protocolPortsMsg      = "rules that specify ports must set protocol to TCP or UDP or SCTP"
-	protocolIcmpMsg       = "rules that specify ICMP fields must set protocol to ICMP"
-	protocolAndHTTPMsg    = "rules that specify HTTP fields must set protocol to TCP or empty"
-	globalSelectorEntRule = fmt.Sprintf("%v can only be used in an EntityRule namespaceSelector", globalSelector)
-	globalSelectorOnly    = fmt.Sprintf("%v cannot be combined with other selectors", globalSelector)
+	interfaceRegex          = regexp.MustCompile("^[a-zA-Z0-9_.-]{1,15}$")
+	bgpFilterInterfaceRegex = regexp.MustCompile("^[a-zA-Z0-9_.*-]{1,15}$")
+	ignoredInterfaceRegex   = regexp.MustCompile("^[a-zA-Z0-9_.*-]{1,15}$")
+	ifaceFilterRegex        = regexp.MustCompile("^[a-zA-Z0-9:._+-]{1,15}$")
+	actionRegex             = regexp.MustCompile("^(Allow|Deny|Log|Pass)$")
+	protocolRegex           = regexp.MustCompile("^(TCP|UDP|ICMP|ICMPv6|SCTP|UDPLite)$")
+	ipipModeRegex           = regexp.MustCompile("^(Always|CrossSubnet|Never)$")
+	vxlanModeRegex          = regexp.MustCompile("^(Always|CrossSubnet|Never)$")
+	logLevelRegex           = regexp.MustCompile("^(Debug|Info|Warning|Error|Fatal)$")
+	bpfLogLevelRegex        = regexp.MustCompile("^(Debug|Info|Off)$")
+	bpfServiceModeRegex     = regexp.MustCompile("^(Tunnel|DSR)$")
+	bpfCTLBRegex            = regexp.MustCompile("^(Disabled|Enabled|TCP)$")
+	bpfHostNatRegex         = regexp.MustCompile("^(Disabled|Enabled)$")
+	datastoreType           = regexp.MustCompile("^(etcdv3|kubernetes)$")
+	routeSource             = regexp.MustCompile("^(WorkloadIPs|CalicoIPAM)$")
+	dropAcceptReturnRegex   = regexp.MustCompile("^(Drop|Accept|Return)$")
+	acceptReturnRegex       = regexp.MustCompile("^(Accept|Return)$")
+	dropRejectRegex         = regexp.MustCompile("^(Drop|Reject)$")
+	ipTypeRegex             = regexp.MustCompile("^(CalicoNodeIP|InternalIP|ExternalIP)$")
+	standardCommunity       = regexp.MustCompile(`^(\d+):(\d+)$`)
+	largeCommunity          = regexp.MustCompile(`^(\d+):(\d+):(\d+)$`)
+	number                  = regexp.MustCompile(`(\d+)`)
+	IPv4PortFormat          = regexp.MustCompile(`^(\d+).(\d+).(\d+).(\d+):(\d+)$`)
+	IPv6PortFormat          = regexp.MustCompile(`^\[[0-9a-fA-F:.]+\]:(\d+)$`)
+	reasonString            = "Reason: "
+	poolUnstictCIDR         = "IP pool CIDR is not strictly masked"
+	overlapsV4LinkLocal     = "IP pool range overlaps with IPv4 Link Local range 169.254.0.0/16"
+	overlapsV6LinkLocal     = "IP pool range overlaps with IPv6 Link Local range fe80::/10"
+	protocolPortsMsg        = "rules that specify ports must set protocol to TCP or UDP or SCTP"
+	protocolIcmpMsg         = "rules that specify ICMP fields must set protocol to ICMP"
+	protocolAndHTTPMsg      = "rules that specify HTTP fields must set protocol to TCP or empty"
+	globalSelectorEntRule   = fmt.Sprintf("%v can only be used in an EntityRule namespaceSelector", globalSelector)
+	globalSelectorOnly      = fmt.Sprintf("%v cannot be combined with other selectors", globalSelector)
 
 	SourceAddressRegex = regexp.MustCompile("^(UseNodeIP|None)$")
 
@@ -161,6 +162,7 @@ func init() {
 	// Register field validators.
 	registerFieldValidator("action", validateAction)
 	registerFieldValidator("interface", validateInterface)
+	registerFieldValidator("bgpFilterInterface", validateBGPFilterInterface)
 	registerFieldValidator("ignoredInterface", validateIgnoredInterface)
 	registerFieldValidator("datastoreType", validateDatastoreType)
 	registerFieldValidator("name", validateName)
@@ -292,6 +294,12 @@ func validateInterface(fl validator.FieldLevel) bool {
 	s := fl.Field().String()
 	log.Debugf("Validate interface: %s", s)
 	return s == "*" || interfaceRegex.MatchString(s)
+}
+
+func validateBGPFilterInterface(fl validator.FieldLevel) bool {
+	s := fl.Field().String()
+	log.Debugf("Validate BGPFilter rule interface: %s", s)
+	return s == "*" || bgpFilterInterfaceRegex.MatchString(s)
 }
 
 func validateIgnoredInterface(fl validator.FieldLevel) bool {
