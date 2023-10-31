@@ -342,6 +342,8 @@ spec:
                       type: string
                     cidr:
                       type: string
+                    interface:
+                      type: string
                     matchOperator:
                       type: string
                     source:
@@ -360,6 +362,8 @@ spec:
                     action:
                       type: string
                     cidr:
+                      type: string
+                    interface:
                       type: string
                     matchOperator:
                       type: string
@@ -380,6 +384,8 @@ spec:
                       type: string
                     cidr:
                       type: string
+                    interface:
+                      type: string
                     matchOperator:
                       type: string
                     source:
@@ -398,6 +404,8 @@ spec:
                     action:
                       type: string
                     cidr:
+                      type: string
+                    interface:
                       type: string
                     matchOperator:
                       type: string
