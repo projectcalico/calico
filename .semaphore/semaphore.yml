@@ -689,42 +689,6 @@ blocks:
         commands:
           - ../.semaphore/run-and-monitor ci.log make ci
 
-- name: 'OpenStack integration (Ussuri)'
-  run:
-    when: "false or change_in(['/networking-calico/'])"
-  dependencies: ["Prerequisites"]
-  task:
-    agent:
-      machine:
-        type: e1-standard-4
-        os_image: ubuntu1804
-    prologue:
-      commands:
-      - cd networking-calico
-    jobs:
-      - name: 'Unit and FV tests (tox) on Ussuri'
-        commands:
-          - ../.semaphore/run-and-monitor tox.log make tox-ussuri
-      - name: 'Mainline ST (DevStack + Tempest) on Ussuri'
-        commands:
-          - git checkout -b devstack-test
-          - export LIBVIRT_TYPE=qemu
-          - export UPPER_CONSTRAINTS_FILE=https://releases.openstack.org/constraints/upper/ussuri
-          # Use proposed fix at
-          # https://review.opendev.org/c/openstack/requirements/+/810859.  See commit
-          # message for more context.
-          - export REQUIREMENTS_REPO=https://review.opendev.org/openstack/requirements
-          - export REQUIREMENTS_BRANCH=refs/changes/59/810859/1
-          - export NC_PLUGIN_REPO=$(dirname $(pwd))
-          - export NC_PLUGIN_REF=$(git rev-parse --abbrev-ref HEAD)
-          - TEMPEST=true DEVSTACK_BRANCH=stable/ussuri ./devstack/bootstrap.sh
-    epilogue:
-      on_fail:
-        commands:
-          - mkdir logs
-          - sudo journalctl > logs/journalctl.txt
-          - artifact push job --expire-in 1d logs
-
 - name: 'OpenStack integration (Yoga)'
   run:
     when: "false or change_in(['/networking-calico/'])"
