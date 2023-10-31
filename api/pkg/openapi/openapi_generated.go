@@ -3141,6 +3141,13 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Format:      "",
 						},
 					},
+					"windowsManageFirewallRules": {
+						SchemaProps: spec.SchemaProps{
+							Description: "WindowsManageFirewallRules configures whether or not Felix will program Windows Firewall rules. (to allow inbound access to its own metrics ports) [Default: Disabled]",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 				},
 			},
 		},
