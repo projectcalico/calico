@@ -30,13 +30,6 @@ LDFLAGS = -X $(PACKAGE_NAME)/buildinfo.GitVersion=$(GIT_DESCRIPTION) \
 ##############################################################################
 include ../lib.Makefile
 
-# We need CGO to leverage Boring SSL.  However, the cross-compile doesn't support CGO yet.
-ifeq ($(ARCH), $(filter $(ARCH),amd64))
-CGO_ENABLED=1
-else
-CGO_ENABLED=0
-endif
-
 CONTAINER_CREATED=image.created-$(ARCH)
 CONTAINER_FIPS_CREATED=image.created-$(ARCH)-fips
 
@@ -110,10 +103,7 @@ else
 	$(call build_binary, ./cmd/dikastes, $@)
 endif
 else
-	$(DOCKER_RUN_RO) \
-	  -e CGO_ENABLED=$(CGO_ENABLED) \
-	  -v $(CURDIR)/bin:/go/src/$(PACKAGE_NAME)/bin \
-	  $(CALICO_BUILD) go build -buildvcs=false -ldflags "-X main.VERSION=$(GIT_VERSION)" -v -o $(BINDIR)/dikastes-$(ARCH) ./cmd/dikastes
+	$(call build_binary, ./cmd/dikastes, $@)
 endif
 
 $(BINDIR)/healthz-amd64: ARCH=amd64
@@ -123,15 +113,12 @@ $(BINDIR)/healthz-s390x: ARCH=s390x
 $(BINDIR)/healthz-%: protobuf $(SRC_FILES)
 ifeq ($(ARCH),amd64)
 ifeq ($(FIPS), true)
-	$(call build_static_cgo_boring_binary, ./cmd/healthz, $@)
+	$(call build_cgo_boring_binary, ./cmd/healthz, $@)
 else
-	$(call build_static_binary, ./cmd/healthz, $@)
+	$(call build_binary, ./cmd/healthz, $@)
 endif
 else
-	$(DOCKER_RUN_RO) \
-	  -e CGO_ENABLED=$(CGO_ENABLED) \
-	  -v $(CURDIR)/bin:/go/src/$(PACKAGE_NAME)/bin \
-	  $(CALICO_BUILD) go build -buildvcs=false -ldflags "-X main.VERSION=$(GIT_VERSION)" -v -o $(BINDIR)/healthz-$(ARCH) ./cmd/healthz
+	$(call build_binary, ./cmd/healthz, $@)
 endif
 
 # We use gogofast for protobuf compilation.  Regular gogo is incompatible with
@@ -198,11 +185,6 @@ ut: protobuf
 
 .PHONY: ci
 ci: mod-download build-all check-generated-files static-checks ut
-
-check-boring-ssl: bin/dikastes-amd64
-	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) \
-		go tool nm bin/dikastes-amd64 > bin/tags.txt && grep '_Cfunc__goboringcrypto_' bin/tags.txt 1> /dev/null
-	-rm -f bin/tags.txt
 
 ## Check if generated files are out of date
 .PHONY: check-generated-files
