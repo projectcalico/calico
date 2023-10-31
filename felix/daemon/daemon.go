@@ -398,22 +398,8 @@ configRetry:
 	buildInfoLogCxt.WithField("config", configParams).Info(
 		"Successfully loaded configuration.")
 
-	// When running in a Windows hostprocess container (HPC), add Calico Prometheus metrics
-	// port rules to the Windows firewall. Invoke Windows Powershell to possibly remove an existing rule and add the new rule. Since Felix is restarted when these configs change, changes to PrometheusMetricsPort will always result in an updated firewall rule.
-	if winutils.InHostProcessContainer() {
-		winFirewallRuleName := "Calico Prometheus Ports"
-		log.Infof("Running in a Windows hostprocess container. Adding '%s' firewall rule.", winFirewallRuleName)
-
-		removeFirewallRuleCmd := fmt.Sprintf("Remove-NetFirewallRule -DisplayName '%s' -erroraction 'silentlycontinue'", winFirewallRuleName)
-		addFirewallRuleCmd := fmt.Sprintf("New-NetFirewallRule -DisplayName '%s' -Direction inbound -Profile Any -Action Allow -LocalPort %d -Protocol TCP", winFirewallRuleName, configParams.PrometheusMetricsPort)
-
-		stdout, stderr, err := winutils.Powershell(removeFirewallRuleCmd + ";" + addFirewallRuleCmd)
-		if err != nil {
-			log.Warnf("Error interacting with powershell to add Windows Firewall metrics ports rule\nstdout:%s\nerror: %s\nstderr: %s", stdout, err, stderr)
-		} else {
-			log.Debugf("Added '%s' firewall rule.\nstdout: %s\nstderr: %s", winFirewallRuleName, stdout, stderr)
-		}
-	}
+	// Configure Windows firewall rules if appropriate
+	winutils.MaybeConfigureWindowsFirewallRules(configParams.WindowsManageFirewallRules, configParams.PrometheusMetricsEnabled, configParams.PrometheusMetricsPort)
 
 	if configParams.DebugPanicAfter > 0 {
 		log.WithField("delay", configParams.DebugPanicAfter).Warn("DebugPanicAfter is set, will panic after delay!")

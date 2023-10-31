@@ -1484,6 +1484,11 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(FloatingIPType)
 		**out = **in
 	}
+	if in.WindowsManageFirewallRules != nil {
+		in, out := &in.WindowsManageFirewallRules, &out.WindowsManageFirewallRules
+		*out = new(WindowsManageFirewallRulesMode)
+		**out = **in
+	}
 	return
 }
 

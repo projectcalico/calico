@@ -117,6 +117,10 @@ func init() {
 	// Max name length
 	maxNameLength := 253
 
+	windowsManageFirewallRulesEnabled := api.WindowsManageFirewallRulesEnabled
+	windowsManageFirewallRulesDisabled := api.WindowsManageFirewallRulesDisabled
+	var windowsManageFirewallRulesBlah api.WindowsManageFirewallRulesMode = "blah"
+
 	// Perform validation on error messages from validator
 	DescribeTable("Validator errors",
 		func(input interface{}, e string) {
@@ -2891,6 +2895,10 @@ func init() {
 		Entry("should accept ServiceLoopPrevention Reject", api.FelixConfigurationSpec{ServiceLoopPrevention: "Reject"}, true),
 		Entry("should accept ServiceLoopPrevention Disabled", api.FelixConfigurationSpec{ServiceLoopPrevention: "Disabled"}, true),
 		Entry("should reject ServiceLoopPrevention Wibbly", api.FelixConfigurationSpec{ServiceLoopPrevention: "Wibbly"}, false),
+
+		Entry("should accept WindowsManageFirewallRules value Disabled", api.FelixConfigurationSpec{WindowsManageFirewallRules: &windowsManageFirewallRulesDisabled}, true),
+		Entry("should accept WindowsManageFirewallRules value Enabled", api.FelixConfigurationSpec{WindowsManageFirewallRules: &windowsManageFirewallRulesEnabled}, true),
+		Entry("should reject WindowsManageFirewallRules value blah", api.FelixConfigurationSpec{WindowsManageFirewallRules: &windowsManageFirewallRulesBlah}, false),
 
 		// KubeControllersConfiguration validation
 		Entry("should not accept invalid HealthChecks",
