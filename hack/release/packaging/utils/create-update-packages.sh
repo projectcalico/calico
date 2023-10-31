@@ -35,7 +35,7 @@ fi
 
 # We used to have some Semaphore environment-dependent logic here, but we now
 # place that in the Semaphore YAML (which is a more appropriate place for it).
-: ${STEPS:=bld_images net_cal felix etcd3gw dnsmasq nettle ${pub_steps}}
+: ${STEPS:=bld_images net_cal felix etcd3gw dnsmasq ${pub_steps}}
 
 function check_bin {
     which $1 > /dev/null
@@ -130,10 +130,6 @@ function precheck_etcd3gw {
 }
 
 function precheck_dnsmasq {
-    :
-}
-
-function precheck_nettle {
     :
 }
 
@@ -247,16 +243,6 @@ function do_dnsmasq {
     git clone https://github.com/projectcalico/calico-dnsmasq.git dnsmasq
     cd dnsmasq
 
-    # Ubuntu Trusty
-    git checkout 2.79test1calico1-3-trusty
-    docker_run_rm calico-build/trusty dpkg-buildpackage -I -S
-
-    # Ubuntu Xenial
-    git checkout 2.79test1calico1-2-xenial
-    sed -i s/trusty/xenial/g debian/changelog
-    git commit -a -m "switch trusty to xenial in debian/changelog" --author="Marvin <marvin@tigera.io>"
-    docker_run_rm calico-build/xenial dpkg-buildpackage -I -S
-
     # CentOS/RHEL 7
     git checkout origin/rpm_2.79
     docker_run_rm -e EL_VERSION=el7 calico-build/centos7 /code/hack/release/packaging/rpm/build-rpms
@@ -268,40 +254,6 @@ function do_dnsmasq {
 
     # Clean up unneeded repo.
     rm -rf ${rootdir}/dnsmasq
-}
-
-function do_nettle {
-    # nettle-3.3 for Ubuntu Xenial - At the point checked out, the
-    # Dnsmasq code had this content in debian/shlibs.local:
-    #
-    # libnettle 6 libnettle6 (>= 3.3)
-    #
-    # This causes the built binary package to depend on libnettle6 >=
-    # 3.3, which is problematic because that version is not available
-    # in Xenial.  So we also build and upload nettle 3.3 to our PPA.
-    pushd ${rootdir}
-    rm -rf nettle
-    mkdir nettle
-    cd nettle
-    wget https://launchpad.net/ubuntu/+archive/primary/+sourcefiles/nettle/3.3-1/nettle_3.3-1.dsc
-    wget https://launchpad.net/ubuntu/+archive/primary/+sourcefiles/nettle/3.3-1/nettle_3.3.orig.tar.gz
-    wget https://launchpad.net/ubuntu/+archive/primary/+sourcefiles/nettle/3.3-1/nettle_3.3-1.debian.tar.xz
-    docker_run_rm calico-build/xenial dpkg-source -x nettle_3.3-1.dsc
-    rm -rf ../nettle-3.3
-    mv nettle-3.3 ../
-    cp -a nettle_3.3.orig.tar.gz ../
-    cp -a nettle_3.3.orig.tar.gz $outputDir
-    cd ../nettle-3.3
-    sed -i '1 s/unstable/xenial/' debian/changelog
-    docker_run_rm calico-build/xenial dpkg-buildpackage -S
-
-    # Packages are produced in rootDir/ - move them to the output dir.
-    find ../ -type f -name 'nettle_*-*' -exec mv '{}' $outputDir \;
-
-    popd
-
-    # Clean up nettle build files.
-    rm -rf ${rootdir}/nettle ${rootdir}/nettle-3.3 ${rootdir}/nettle_3.3.orig.tar.gz
 }
 
 function do_pub_debs {
