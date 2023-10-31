@@ -88,6 +88,8 @@ var (
 	logLevelRegex         = regexp.MustCompile("^(Debug|Info|Warning|Error|Fatal)$")
 	bpfLogLevelRegex      = regexp.MustCompile("^(Debug|Info|Off)$")
 	bpfServiceModeRegex   = regexp.MustCompile("^(Tunnel|DSR)$")
+	bpfCTLBRegex          = regexp.MustCompile("^(Disabled|Enabled|TCP)$")
+	bpfHostNatRegex       = regexp.MustCompile("^(Disabled|Enabled)$")
 	datastoreType         = regexp.MustCompile("^(etcdv3|kubernetes)$")
 	routeSource           = regexp.MustCompile("^(WorkloadIPs|CalicoIPAM)$")
 	dropAcceptReturnRegex = regexp.MustCompile("^(Drop|Accept|Return)$")
@@ -173,6 +175,8 @@ func init() {
 	registerFieldValidator("bpfLogLevel", validateBPFLogLevel)
 	registerFieldValidator("bpfLogFilters", validateBPFLogFilters)
 	registerFieldValidator("bpfServiceMode", validateBPFServiceMode)
+	registerFieldValidator("bpfConnectTimeLoadBalancing", validateBPFConnectTimeLoadBalancing)
+	registerFieldValidator("bpfHostNetworkedNATWithoutCTLB", validateBPFHostNetworkedNat)
 	registerFieldValidator("dropAcceptReturn", validateFelixEtoHAction)
 	registerFieldValidator("acceptReturn", validateAcceptReturn)
 	registerFieldValidator("dropReject", validateDropReject)
@@ -234,6 +238,8 @@ func init() {
 	registerStructValidator(validate, validateRule, api.Rule{})
 	registerStructValidator(validate, validateEntityRule, api.EntityRule{})
 	registerStructValidator(validate, validateBGPPeerSpec, api.BGPPeerSpec{})
+	registerStructValidator(validate, validateBGPFilterRuleV4, api.BGPFilterRuleV4{})
+	registerStructValidator(validate, validateBGPFilterRuleV6, api.BGPFilterRuleV6{})
 	registerStructValidator(validate, validateNetworkPolicy, api.NetworkPolicy{})
 	registerStructValidator(validate, validateGlobalNetworkPolicy, api.GlobalNetworkPolicy{})
 	registerStructValidator(validate, validateGlobalNetworkSet, api.GlobalNetworkSet{})
@@ -477,6 +483,18 @@ func validateBPFServiceMode(fl validator.FieldLevel) bool {
 	s := fl.Field().String()
 	log.Debugf("Validate Felix BPF service mode: %s", s)
 	return bpfServiceModeRegex.MatchString(s)
+}
+
+func validateBPFConnectTimeLoadBalancing(fl validator.FieldLevel) bool {
+	s := fl.Field().String()
+	log.Debugf("Validate Felix BPF ConnectTimeLoadBalancing: %s", s)
+	return bpfCTLBRegex.MatchString(s)
+}
+
+func validateBPFHostNetworkedNat(fl validator.FieldLevel) bool {
+	s := fl.Field().String()
+	log.Debugf("Validate Felix BPF HostNetworked NAT: %s", s)
+	return bpfHostNatRegex.MatchString(s)
 }
 
 func validateFelixEtoHAction(fl validator.FieldLevel) bool {
@@ -1365,6 +1383,27 @@ func validateReachableByField(fl validator.FieldLevel) bool {
 		}
 	}
 	return true
+}
+
+func validateBGPFilterRuleV4(structLevel validator.StructLevel) {
+	fs := structLevel.Current().Interface().(api.BGPFilterRuleV4)
+	validateBGPFilterRule(structLevel, fs.CIDR, fs.MatchOperator)
+}
+
+func validateBGPFilterRuleV6(structLevel validator.StructLevel) {
+	fs := structLevel.Current().Interface().(api.BGPFilterRuleV6)
+	validateBGPFilterRule(structLevel, fs.CIDR, fs.MatchOperator)
+}
+
+func validateBGPFilterRule(structLevel validator.StructLevel, cidr string, op api.BGPFilterMatchOperator) {
+	if cidr != "" && op == "" {
+		structLevel.ReportError(cidr, "CIDR", "",
+			reason("MatchOperator cannot be empty when CIDR is not"), "")
+	}
+	if cidr == "" && op != "" {
+		structLevel.ReportError(op, "MatchOperator", "",
+			reason("CIDR cannot be empty when MatchOperator is not"), "")
+	}
 }
 
 func validateEndpointPort(structLevel validator.StructLevel) {

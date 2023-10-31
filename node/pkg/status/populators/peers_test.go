@@ -252,7 +252,7 @@ BGP state:          Established
 			},
 			v3.CalicoNodePeer{
 				PeerIP: "2001:20::8",
-				Type:   v3.RouteSourceTypeNodeMesh,
+				Type:   v3.BGPPeerTypeNodeMesh,
 				State:  v3.BGPSessionStateEstablished,
 				Since:  "2016-11-21",
 			},
