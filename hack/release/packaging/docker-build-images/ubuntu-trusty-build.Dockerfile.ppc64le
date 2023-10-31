@@ -1,8 +1,0 @@
-FROM ppc64le/ubuntu:trusty
-MAINTAINER Daniel Fox <dan.fox@tigera.io>
-ENV STREAM trusty
-
-ADD install-ubuntu-build-deps install-ubuntu-build-deps
-RUN ./install-ubuntu-build-deps
-
-WORKDIR /code

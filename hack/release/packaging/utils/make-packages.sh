@@ -49,7 +49,7 @@ for package_type in "$@"; do
 	    # Current time in Debian changelog format; e.g. Wed, 02
 	    # Mar 2016 14:08:51 +0000.
 	    timestamp=`date "+%a, %d %b %Y %H:%M:%S %z"`
-	    for series in trusty xenial bionic focal jammy; do
+	    for series in focal jammy; do
 		{
 			if ${release}; then
 				changelog_message="* ${NAME} v${version} (from Git commit ${sha})."

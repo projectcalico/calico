@@ -17,9 +17,9 @@ else
     # -ti to docker-run, and $SECRET_KEY must not require a pass phrase.
     interactive=
 fi
-docker run --rm ${interactive} -v ${rootdir}:/code -v ${keydir}:/keydir -w /code/hack/release/packaging/output calico-build/bionic /bin/sh -c "gpg --import --batch < /keydir/key && debsign -k'*@' --re-sign *_*_source.changes"
+docker run --rm ${interactive} -v ${rootdir}:/code -v ${keydir}:/keydir -w /code/hack/release/packaging/output calico-build/focal /bin/sh -c "gpg --import --batch < /keydir/key && debsign -k'*@' --re-sign *_*_source.changes"
 
-for series in trusty xenial bionic focal jammy; do
+for series in focal jammy; do
     # Get the packages and versions that already exist in the PPA, so we can avoid
     # uploading the same package and version as already exist.  (As they would be rejected
     # anyway by Launchpad.)
