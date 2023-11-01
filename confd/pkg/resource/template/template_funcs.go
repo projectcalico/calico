@@ -80,6 +80,14 @@ func filterStatement(fields filterArgs) (string, error) {
 		conditions = append(conditions, sourceCondition)
 	}
 
+	if fields.iface != "" {
+		ifaceCondition, err := filterMatchInterface(fields.iface)
+		if err != nil {
+			return "", nil
+		}
+		conditions = append(conditions, ifaceCondition)
+	}
+
 	conditionExpr := strings.Join(conditions, "&&")
 	if conditionExpr != "" {
 		return fmt.Sprintf("if (%s) then { %s }", conditionExpr, actionStatement), nil
@@ -120,6 +128,13 @@ func filterMatchSource(source v3.BGPFilterMatchSource) (string, error) {
 	}
 }
 
+func filterMatchInterface(iface string) (string, error) {
+	if iface == "" {
+		return "", fmt.Errorf("Empty interface found in BGPFilter")
+	}
+	return fmt.Sprintf("((defined(ifname))&&(ifname ~ \"%s\"))", iface), nil
+}
+
 // BGPFilterFunctionName returns a formatted name for use as a BIRD function, truncating and hashing if the provided
 // name would result in a function name longer than the max allowable length of 64 chars.
 // e.g. input of ("my-bgp-filter", "import", "4") would result in output of "'bgp_my-bpg-filter_importFilterV4'"
@@ -143,6 +158,7 @@ type filterArgs struct {
 	operator v3.BGPFilterMatchOperator
 	cidr     string
 	source   v3.BGPFilterMatchSource
+	iface    string
 	action   v3.BGPFilterAction
 }
 
@@ -248,6 +264,7 @@ func BGPFilterBIRDFuncs(pairs memkv.KVPairs, version int) ([]string, error) {
 						operator: importV4.MatchOperator,
 						cidr:     importV4.CIDR,
 						source:   importV4.Source,
+						iface:    importV4.Interface,
 						action:   importV4.Action,
 					})
 				}
@@ -257,6 +274,7 @@ func BGPFilterBIRDFuncs(pairs memkv.KVPairs, version int) ([]string, error) {
 						operator: importV6.MatchOperator,
 						cidr:     importV6.CIDR,
 						source:   importV6.Source,
+						iface:    importV6.Interface,
 						action:   importV6.Action,
 					})
 				}
@@ -291,6 +309,7 @@ func BGPFilterBIRDFuncs(pairs memkv.KVPairs, version int) ([]string, error) {
 						operator: exportV4.MatchOperator,
 						cidr:     exportV4.CIDR,
 						source:   exportV4.Source,
+						iface:    exportV4.Interface,
 						action:   exportV4.Action,
 					})
 				}
@@ -300,6 +319,7 @@ func BGPFilterBIRDFuncs(pairs memkv.KVPairs, version int) ([]string, error) {
 						operator: exportV6.MatchOperator,
 						cidr:     exportV6.CIDR,
 						source:   exportV6.Source,
+						iface:    exportV6.Interface,
 						action:   exportV6.Action,
 					})
 				}

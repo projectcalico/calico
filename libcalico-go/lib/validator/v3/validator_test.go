@@ -1545,27 +1545,109 @@ func init() {
 			}, false),
 
 		// (API) BGPFilterSpec
-		Entry("should reject invalid BGPFilter rule-v4 type", api.BGPFilterRuleV4{
-			Source:        "xyz",
-			MatchOperator: "In",
-			Action:        "Reject",
+		Entry("should reject invalid BGPFilter rule-v4 interface - 1", api.BGPFilterRuleV4{
+			Interface: "eth&",
+			Action:    "Reject",
 		}, false),
-		Entry("should reject invalid BGPFilter rule-v6 type", api.BGPFilterRuleV6{
-			Source:        "xyz",
-			MatchOperator: "In",
-			Action:        "Reject",
+		Entry("should reject invalid BGPFilter rule-v4 interface - 2", api.BGPFilterRuleV4{
+			Interface: "%face",
+			Action:    "Reject",
 		}, false),
-		Entry("should accept valid BGPFilter rule-v4 type", api.BGPFilterRuleV4{
+		Entry("should reject invalid BGPFilter rule-v4 interface - 3", api.BGPFilterRuleV4{
+			Interface: "\"ace",
+			Action:    "Reject",
+		}, false),
+		Entry("should reject invalid BGPFilter rule-v6 interface - 1", api.BGPFilterRuleV6{
+			Interface: "$cali",
+			Action:    "Reject",
+		}, false),
+		Entry("should reject invalid BGPFilter rule-v6 interface - 2", api.BGPFilterRuleV6{
+			Interface: "eth#",
+			Action:    "Reject",
+		}, false),
+		Entry("should reject invalid BGPFilter rule-v6 interface - 3", api.BGPFilterRuleV6{
+			Interface: "\"face",
+			Action:    "Reject",
+		}, false),
+		Entry("should accept valid BGPFilter rule-v4 interface - 1 ", api.BGPFilterRuleV4{
+			Interface:     "ethx",
+			Source:        "RemotePeers",
+			CIDR:          "192.168.0.0/26",
+			MatchOperator: "In",
+			Action:        "Accept",
+		}, true),
+		Entry("should accept valid BGPFilter rule-v4 interface - 2", api.BGPFilterRuleV4{
+			Interface:     "*.calico",
+			CIDR:          "192.168.0.0/26",
+			MatchOperator: "In",
+			Action:        "Accept",
+		}, true),
+		Entry("should accept valid BGPFilter rule-v4 interface - 3", api.BGPFilterRuleV4{
+			Interface: "eth*",
+			Source:    "RemotePeers",
+			Action:    "Accept",
+		}, true),
+		Entry("should accept valid BGPFilter rule-v6 interface - 1", api.BGPFilterRuleV6{
+			Interface:     "ethx",
+			Source:        "RemotePeers",
+			CIDR:          "ffee::/64",
+			MatchOperator: "In",
+			Action:        "Accept",
+		}, true),
+		Entry("should accept valid BGPFilter rule-v6 interface - 2", api.BGPFilterRuleV6{
+			Interface:     "*.calico",
+			CIDR:          "ee2::dddd/128",
+			MatchOperator: "In",
+			Action:        "Accept",
+		}, true),
+		Entry("should accept valid BGPFilter rule-v6 interface - 3", api.BGPFilterRuleV6{
+			Interface: "*.calico",
+			Source:    "RemotePeers",
+			Action:    "Accept",
+		}, true),
+		Entry("should accept BGPFilter with only rule-v4 interface - 1 ", api.BGPFilterRuleV4{
+			Interface: "ethx",
+			Action:    "Accept",
+		}, true),
+		Entry("should accept BGPFilter with only rule-v4 interface - 2", api.BGPFilterRuleV4{
+			Interface: "eth*",
+			Action:    "Accept",
+		}, true),
+		Entry("should accept BGPFilter with only rule-v6 interface - 1", api.BGPFilterRuleV6{
+			Interface: "ethx.",
+			Action:    "Accept",
+		}, true),
+		Entry("should accept BGPFilter with only rule-v6 interface - 2", api.BGPFilterRuleV6{
+			Interface: "*.calico",
+			Action:    "Accept",
+		}, true),
+		Entry("should reject invalid BGPFilter rule-v4 source", api.BGPFilterRuleV4{
+			Source: "xyz",
+			Action: "Reject",
+		}, false),
+		Entry("should reject invalid BGPFilter rule-v6 source", api.BGPFilterRuleV6{
+			Source: "xyz",
+			Action: "Reject",
+		}, false),
+		Entry("should accept valid BGPFilter rule-v4 source", api.BGPFilterRuleV4{
 			Source:        "RemotePeers",
 			CIDR:          "192.168.0.0/26",
 			MatchOperator: "In",
 			Action:        "Reject",
 		}, true),
-		Entry("should accept valid BGPFilter rule-v6 type", api.BGPFilterRuleV6{
+		Entry("should accept valid BGPFilter rule-v6 source", api.BGPFilterRuleV6{
 			Source:        "RemotePeers",
 			CIDR:          "ffee::/64",
 			MatchOperator: "In",
 			Action:        "Reject",
+		}, true),
+		Entry("should accept BGPFilter rule with only source set - 1", api.BGPFilterRuleV4{
+			Source: "RemotePeers",
+			Action: "Reject",
+		}, true),
+		Entry("should accept BGPFilter rule with only source set - 2", api.BGPFilterRuleV6{
+			Source: "RemotePeers",
+			Action: "Reject",
 		}, true),
 		Entry("should accept BGPFilter rule with valid IPv4 CIDR", api.BGPFilterRuleV4{
 			CIDR:          "192.168.0.0/26",
@@ -1647,36 +1729,6 @@ func init() {
 			MatchOperator: "NotEqual",
 			Action:        "Accept",
 		}, true),
-		Entry("should reject BGPFilter rule with invalid Action - 1", api.BGPFilterRuleV4{
-			CIDR:          "10.0.10.0/32",
-			MatchOperator: "NotEqual",
-			Action:        "ActionX",
-		}, false),
-		Entry("should reject BGPFilter rule with invalid action - 2", api.BGPFilterRuleV6{
-			CIDR:          "ffff::/128",
-			MatchOperator: "NotEqual",
-			Action:        "ActionX",
-		}, false),
-		Entry("should accept BGPFilter rule with Accept Action - 1", api.BGPFilterRuleV4{
-			CIDR:          "10.0.10.0/32",
-			MatchOperator: "NotEqual",
-			Action:        "Accept",
-		}, true),
-		Entry("should accept BGPFilter rule with Accept action - 2", api.BGPFilterRuleV6{
-			CIDR:          "ffff::/128",
-			MatchOperator: "NotEqual",
-			Action:        "Accept",
-		}, true),
-		Entry("should accept BGPFilter rule with Reject Action - 1", api.BGPFilterRuleV4{
-			CIDR:          "10.0.10.0/32",
-			MatchOperator: "NotEqual",
-			Action:        "Reject",
-		}, true),
-		Entry("should accept BGPFilter rule with Reject action - 2", api.BGPFilterRuleV6{
-			CIDR:          "ffff::/128",
-			MatchOperator: "NotEqual",
-			Action:        "Reject",
-		}, true),
 		Entry("should reject BGPFilter rule with no CIDR when MatchOperator is set - 1", api.BGPFilterRuleV4{
 			MatchOperator: "NotEqual",
 			Action:        "Reject",
@@ -1693,6 +1745,36 @@ func init() {
 			CIDR:   "ffff::/128",
 			Action: "Reject",
 		}, false),
+		Entry("should reject BGPFilter rule with invalid Action - 1", api.BGPFilterRuleV4{
+			CIDR:          "10.0.10.0/32",
+			MatchOperator: "NotEqual",
+			Action:        "ActionX",
+		}, false),
+		Entry("should reject BGPFilter rule with invalid action - 2", api.BGPFilterRuleV6{
+			CIDR:          "ffff::/128",
+			MatchOperator: "NotEqual",
+			Action:        "ActionX",
+		}, false),
+		Entry("should accept BGPFilter rule with Accept action - 1", api.BGPFilterRuleV4{
+			CIDR:          "10.0.10.0/32",
+			MatchOperator: "NotEqual",
+			Action:        "Accept",
+		}, true),
+		Entry("should accept BGPFilter rule with Accept action - 2", api.BGPFilterRuleV6{
+			CIDR:          "ffff::/128",
+			MatchOperator: "NotEqual",
+			Action:        "Accept",
+		}, true),
+		Entry("should accept BGPFilter rule with Reject action - 1", api.BGPFilterRuleV4{
+			CIDR:          "10.0.10.0/32",
+			MatchOperator: "NotEqual",
+			Action:        "Reject",
+		}, true),
+		Entry("should accept BGPFilter rule with Reject action - 2", api.BGPFilterRuleV6{
+			CIDR:          "ffff::/128",
+			MatchOperator: "NotEqual",
+			Action:        "Reject",
+		}, true),
 		Entry("should reject BGPFilter rule with no action - 1", api.BGPFilterRuleV4{
 			MatchOperator: "NotEqual",
 			CIDR:          "10.0.10.0/32",
@@ -1701,14 +1783,6 @@ func init() {
 			MatchOperator: "NotEqual",
 			CIDR:          "ffff::/128",
 		}, false),
-		Entry("should accept BGPFilter rule with only source set - 1", api.BGPFilterRuleV4{
-			Source: "RemotePeers",
-			Action: "Reject",
-		}, true),
-		Entry("should accept BGPFilter rule with only source set - 2", api.BGPFilterRuleV6{
-			Source: "RemotePeers",
-			Action: "Reject",
-		}, true),
 		Entry("should accept BGPFilter rule with just an action - 1", api.BGPFilterRuleV4{
 			Action: "Reject",
 		}, true),
