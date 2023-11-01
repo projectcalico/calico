@@ -19,6 +19,7 @@ package asm
 import (
 	"encoding/binary"
 	"fmt"
+	"math"
 	"strings"
 
 	log "github.com/sirupsen/logrus"
@@ -676,6 +677,9 @@ func (b *Block) Assemble() (Insns, error) {
 		}
 		// Offset is relative to the next instruction since the PC is auto-incremented.
 		offset := labelIdx - f.origInsnIdx - 1
+		if offset > math.MaxInt16 || offset < math.MinInt16 {
+			return nil, fmt.Errorf("calculated jump offset (%d) to label %s would exceed jump range", offset, f.label)
+		}
 		binary.LittleEndian.PutUint16(b.insns[f.origInsnIdx].Instruction[2:4], uint16(offset))
 	}
 

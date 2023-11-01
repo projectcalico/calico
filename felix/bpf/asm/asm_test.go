@@ -15,6 +15,7 @@
 package asm
 
 import (
+	"math"
 	"testing"
 
 	. "github.com/onsi/gomega"
@@ -93,4 +94,61 @@ func TestBlock_Mainline(t *testing.T) {
 		Insn{Instruction: [insnSize]uint8{0xb7, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00}},
 		Insn{Instruction: [insnSize]uint8{0x95, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}},
 	}))
+}
+
+func TestJumpTooFar(t *testing.T) {
+	RegisterTestingT(t)
+
+	// Jump exactly MaxInt16 should be OK.
+	b := NewBlock(false)
+	b.JumpEq32(R0, R1, "label")
+	for i := 0; i < math.MaxInt16; i++ {
+		b.MovImm32(R3, int32(i))
+	}
+	b.LabelNextInsn("label")
+	b.MovImm32(R3, 42)
+	_, err := b.Assemble()
+	Expect(err).NotTo(HaveOccurred())
+
+	// But one more should fail.
+	b = NewBlock(false)
+	b.JumpEq32(R0, R1, "label")
+	for i := 0; i <= math.MaxInt16; i++ {
+		b.MovImm32(R3, int32(i))
+	}
+	b.LabelNextInsn("label")
+	b.MovImm32(R3, 42)
+	_, err = b.Assemble()
+	Expect(err).To(HaveOccurred())
+}
+
+func TestJumpBackwardsTooFar(t *testing.T) {
+	RegisterTestingT(t)
+
+	// Jump backwards exactly MinInt16 should be OK.
+	b := NewBlock(false)
+	b.LabelNextInsn("label")
+	// Subtract one because the jump is relative to the instruction
+	// after the jump itself.
+	safeNumInsns := -math.MinInt16 - 1
+	for i := 0; i < safeNumInsns; i++ {
+		b.MovImm32(R3, int32(i))
+	}
+	b.JumpEq32(R0, R1, "label")
+	b.MovImm32(R3, 42)
+	_, err := b.Assemble()
+	Expect(err).NotTo(HaveOccurred())
+
+	// Jump backwards on eextra should fail.
+	b = NewBlock(false)
+	b.LabelNextInsn("label")
+	// Subtract one because the jump is relative to the instruction
+	// after the jump itself.
+	for i := 0; i <= safeNumInsns; i++ {
+		b.MovImm32(R3, int32(i))
+	}
+	b.JumpEq32(R0, R1, "label")
+	b.MovImm32(R3, 42)
+	_, err = b.Assemble()
+	Expect(err).To(HaveOccurred())
 }
