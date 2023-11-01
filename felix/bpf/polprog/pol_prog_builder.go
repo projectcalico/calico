@@ -569,7 +569,7 @@ func (leg matchLeg) stackOffsetToIPSetKey() (keyOffset int16) {
 	return
 }
 
-func (p Builder) ipVersion() uint8 {
+func (p *Builder) ipVersion() uint8 {
 	if p.forIPv6 {
 		return uint8(proto.IPVersion_IPV6)
 	} else {
