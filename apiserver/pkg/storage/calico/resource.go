@@ -5,7 +5,6 @@ package calico
 import (
 	"bytes"
 	"fmt"
-	"math"
 	"os"
 	"reflect"
 	"strconv"
@@ -291,7 +290,7 @@ func (rs *resourceStore) List(ctx context.Context, key string, optsK8s storage.L
 type objState struct {
 	obj  runtime.Object
 	meta *storage.ResponseMeta
-	rev  int64
+	rev  uint64
 	data []byte
 }
 
@@ -305,8 +304,8 @@ func (rs *resourceStore) getStateFromObject(obj runtime.Object) (*objState, erro
 	if err != nil {
 		return nil, fmt.Errorf("couldn't get resource version: %v", err)
 	}
-	state.rev = int64(rv)
-	state.meta.ResourceVersion = uint64(state.rev)
+	state.rev = rv
+	state.meta.ResourceVersion = rv
 
 	state.data, err = runtime.Encode(rs.codec, obj)
 	if err != nil {
@@ -331,7 +330,7 @@ func decode(
 	return nil
 }
 
-// GuaranteedUpdate keers calling 'tryUpdate()' to update key 'key' (of type 'ptrToType')
+// GuaranteedUpdate keeps calling 'tryUpdate()' to update key 'key' (of type 'ptrToType')
 // retrying the update until success if there is index conflict.
 // Note that object passed to tryUpdate may change across invocations of tryUpdate() if
 // other writers are simultaneously updating it, so tryUpdate() needs to take into account
@@ -351,7 +350,7 @@ func decode(
 //
 //	    "myKey", &MyType{}, true,
 //	    func(input runtime.Object, res ResponseMeta) (runtime.Object, *uint64, error) {
-//	      // Before each incovation of the user defined function, "input" is reset to
+//	      // Before each invocation of the user defined function, "input" is reset to
 //	      // current contents for "myKey" in database.
 //	      curr := input.(*MyType)  // Guaranteed to succeed.
 //
@@ -428,15 +427,18 @@ func (rs *resourceStore) GuaranteedUpdate(
 		if err != nil {
 			return err
 		}
-		revInt, _ := strconv.Atoi(accessor.GetResourceVersion())
+		versionStr := accessor.GetResourceVersion()
+		var revInt uint64
+		if versionStr != "" {
+			revInt, err = strconv.ParseUint(versionStr, 10, 64)
+			if err != nil {
+				return fmt.Errorf("failed to parse non-empty resource version %q key=%q: %w", versionStr, key, err)
+			}
+		}
 		updatedRes := updatedObj.(resourceObject)
 		if !shouldCreateOnUpdate() {
-			if curState.rev < math.MinInt || curState.rev > math.MaxInt {
-				klog.Errorf("revision number %d overflows", curState.rev)
-				return fmt.Errorf("Revision is outside the range of an int32: %d", curState.rev)
-			}
-			if updatedRes.GetObjectMeta().GetResourceVersion() == "" || revInt < int(curState.rev) {
-				updatedRes.(resourceObject).GetObjectMeta().SetResourceVersion(strconv.FormatInt(curState.rev, 10))
+			if updatedRes.GetObjectMeta().GetResourceVersion() == "" || revInt < curState.rev {
+				updatedRes.(resourceObject).GetObjectMeta().SetResourceVersion(strconv.FormatUint(curState.rev, 10))
 			}
 		}
 		libcalicoObj := rs.converter.convertToLibcalico(updatedRes)
