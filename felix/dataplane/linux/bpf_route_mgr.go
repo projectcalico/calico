@@ -246,6 +246,11 @@ func (m *bpfRouteManager) CompleteDeferredWork() error {
 
 func (m *bpfRouteManager) recalculateRoutesForDirtyCIDRs() {
 	m.dirtyCIDRs.Iter(func(cidr ip.CIDR) error {
+		if m.ipv6Enabled {
+			if _, ok := cidr.(ip.V4CIDR); ok {
+				return set.RemoveItem
+			}
+		}
 		dataplaneKey := m.bpfOps.NewKey(cidr)
 		newValue := m.calculateRoute(cidr)
 
