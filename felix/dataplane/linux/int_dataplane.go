@@ -716,6 +716,12 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 		workloadIfaceRegex := regexp.MustCompile(strings.Join(interfaceRegexes, "|"))
 
+		//Revert this, once ctlb hostnetworked nat is fixed.
+		if config.BPFConnTimeLBEnabled {
+			config.BPFConnTimeLB = string(apiv3.BPFConnectTimeLBEnabled)
+			config.BPFHostNetworkedNAT = string(apiv3.BPFHostNetworkedNATDisabled)
+		}
+
 		if config.BPFConnTimeLB == string(apiv3.BPFConnectTimeLBDisabled) &&
 			config.BPFHostNetworkedNAT == string(apiv3.BPFHostNetworkedNATDisabled) {
 			log.Warn("Access to services from host networked process wont work, forcing hostnetworked NAT to Enabled")
