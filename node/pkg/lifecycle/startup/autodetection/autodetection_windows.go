@@ -19,4 +19,5 @@ var DEFAULT_INTERFACES_TO_EXCLUDE = []string{
 	".*\\(nat\\).*",
 	".*Calico.*_ep", // Exclude our management endpoint.
 	"Loopback.*",
+	".*Tailscale.*",
 }

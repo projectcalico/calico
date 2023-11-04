@@ -95,4 +95,9 @@ var _ = DescribeTable("GetInterfaces",
 			return []net.Interface{{Index: 0, Name: "br-1234deadbeaf"}}, nil
 		},
 	}),
+	Entry("should skip tailscale", getInterfacesTestCase{
+		getInterfaces: func() ([]net.Interface, error) {
+			return []net.Interface{{Index: 0, Name: "tailscale"}}, nil
+		},
+	}),
 )
