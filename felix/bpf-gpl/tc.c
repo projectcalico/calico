@@ -1432,6 +1432,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 				 (CALI_F_TO_HEP &&
 				  ((CALI_F_DSR && skb_seen(ctx->skb)) || !skb_seen(ctx->skb))));
 
+			/* ... then fix the outer header IP first */
 			if (outer_ip_snat) {
 				ip_hdr_set_ip(ctx, saddr, state->ct_result.nat_ip);
 #ifdef IPVER6
@@ -1451,7 +1452,6 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 					goto deny;
 				}
 #else
-				/* ... then fix the outer header IP first */
 				int res = bpf_l3_csum_replace(ctx->skb, l3_csum_off,
 						state->ip_src, state->ct_result.nat_ip, 4);
 				if (res) {
