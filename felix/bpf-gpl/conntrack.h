@@ -188,6 +188,11 @@ create:
 	src_to_dst->opener = 1;
 	if (CALI_F_TO_HOST) {
 		src_to_dst->ifindex = skb_ingress_ifindex(ctx->skb);
+	} else if (CALI_F_TO_HEP && CALI_F_LO) {
+		/* skb_ingress_ifindex(ctx->skb) has CT_INVALID_IFINDEX value on
+		 * lo as the packet did not enter the system via any other dev.
+		 */
+		src_to_dst->ifindex = ctx->skb->ifindex;
 	} else {
 		src_to_dst->ifindex = CT_INVALID_IFINDEX;
 	}
