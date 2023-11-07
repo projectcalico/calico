@@ -205,6 +205,11 @@ static CALI_BPF_INLINE int pre_policy_processing(struct cali_tc_ctx *ctx)
 	/* Copy fields that are needed by downstream programs from the packet to the state. */
 	tc_state_fill_from_iphdr(ctx);
 
+	if (CALI_F_LO && (GLOBAL_FLAGS & CALI_GLOBALS_LO_UDP_ONLY) && ctx->state->ip_proto != IPPROTO_UDP) {
+		CALI_DEBUG("Allowing because it is not UDP\n");
+		goto allow;
+	}
+
 	/* Parse out the source/dest ports (or type/code for ICMP). */
 	switch (tc_state_fill_from_nexthdr(ctx)) {
 	case PARSING_ERROR:
