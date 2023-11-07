@@ -2,9 +2,6 @@ include ../metadata.mk
 
 PACKAGE_NAME = github.com/projectcalico/calico/cni-plugin
 
-# Add in local static-checks
-LOCAL_CHECKS=check-boring-ssl
-
 # Name of the images.
 # e.g., <registry>/<name>:<tag>
 CNI_PLUGIN_IMAGE ?=cni
@@ -45,13 +42,11 @@ DEPLOY_CONTAINER_FIPS_MARKER=cni_deploy_container-$(ARCH)-fips.created
 # on the host machine.
 FIPS ?= false
 
-ifeq ($(FIPS), true)
-CGO_ENABLED=1
+ifeq ($(FIPS),true)
 BIN=bin/$(ARCH)-fips
 DEPLOY_CONTAINER_MARKER=$(DEPLOY_CONTAINER_FIPS_MARKER)
 VALIDARCHES=amd64
 else
-CGO_ENABLED=0
 BIN=bin/$(ARCH)
 DEPLOY_CONTAINER_MARKER=$(DEPLOY_CONTAINER_STATIC_MARKER)
 endif
@@ -95,22 +90,16 @@ sub-build-%:
 
 ## Build the Calico network plugin and ipam plugins
 $(BIN)/install binary: $(SRC_FILES)
-ifeq ($(FIPS), true)
-	$(call build_cgo_boring_binary, $(PACKAGE_NAME)/cmd/calico, $(BIN)/install)
+ifeq ($(FIPS),true)
+	$(call build_cgo_boring_binary, $(PACKAGE_NAME)/cmd/calico, $@)
 else
-	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) sh -c '\
-		$(GIT_CONFIG_SSH) go build -buildvcs=false -v -o $(BIN)/install -ldflags "$(LDFLAGS)" $(PACKAGE_NAME)/cmd/calico'
+	$(call build_binary, $(PACKAGE_NAME)/cmd/calico, $@)
 endif
 
 ## Build the Calico network plugin and ipam plugins for Windows
 $(WINDOWS_BIN)/install.exe: $(SRC_FILES)
-	-mkdir -p $(WINDOWS_BIN)
-	$(DOCKER_RUN) \
-	-e GOOS=windows \
-	-e GOARCH=amd64 \
-	-e CGO_ENABLED=1 \
-		$(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
-		go build -v -buildvcs=false -o $(WINDOWS_BIN)/install.exe -ldflags "$(LDFLAGS)" $(PACKAGE_NAME)/cmd/calico'
+	mkdir -p $(WINDOWS_BIN)
+	$(call build_windows_binary, $(PACKAGE_NAME)/cmd/calico, $@)
 
 $(WINDOWS_BIN)/calico-ipam.exe $(WINDOWS_BIN)/calico.exe: $(WINDOWS_BIN)/install.exe
 	cp "$<" "$@"
@@ -169,10 +158,6 @@ $(WINDOWS_BIN)/flannel.exe:
 ut: run-k8s-controller-manager $(BIN)/install $(BIN)/host-local $(BIN)/calico-ipam $(BIN)/calico
 	$(MAKE) ut-datastore DATASTORE_TYPE=etcdv3
 	$(MAKE) ut-datastore DATASTORE_TYPE=kubernetes
-
-check-boring-ssl: $(BIN)/install
-	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) $(CHECK_BORINGSSL)
-	-rm -f $(BIN)/tags.txt
 
 $(BIN)/calico-ipam $(BIN)/calico: $(BIN)/install
 	cp "$<" "$@"

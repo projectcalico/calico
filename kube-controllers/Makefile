@@ -25,7 +25,7 @@ KUBE_CONTROLLER_CONTAINER_FIPS_CREATED=image.created-$(ARCH)-fips
 
 FIPS ?= false
 
-ifeq ($(FIPS), true)
+ifeq ($(FIPS),true)
 KUBE_CONTROLLER_CONTAINER_MARKER=$(KUBE_CONTROLLER_CONTAINER_FIPS_CREATED)
 VALIDARCHES=amd64
 BINDIR=bin/$(ARCH)-fips
@@ -61,34 +61,21 @@ sub-build-%:
 	$(MAKE) build ARCH=$*
 
 $(BINDIR)/kube-controllers-linux-$(ARCH): $(SRC_FILES)
-ifeq ($(ARCH), amd64)
-ifeq ($(FIPS), true)
+ifeq ($(FIPS),true)
 	$(call build_cgo_boring_binary, ./cmd/kube-controllers/, $@)
 else
 	$(call build_binary, ./cmd/kube-controllers/, $@)
 endif
-else
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -c '\
-		$(GIT_CONFIG_SSH) go build -buildvcs=false -v -o $@ -ldflags "$(LDFLAGS)" ./cmd/kube-controllers/'
-endif
 
 $(BINDIR)/wrapper-$(ARCH):
-ifeq ($(ARCH), amd64)
-ifeq ($(FIPS), true)
+ifeq ($(FIPS),true)
 	$(call build_cgo_boring_binary, ./cmd/wrapper, $@)
 else
 	$(call build_binary, ./cmd/wrapper, $@)
 endif
-else
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -c '\
-		$(GIT_CONFIG_SSH) go build -buildvcs=false -v -o ./cmd/kube-controllers/ -ldflags "$(LDFLAGS)" ./cmd/wrapper'
-endif
 
 $(BINDIR)/check-status-linux-$(ARCH): $(SRC_FILES)
-	$(DOCKER_RUN) \
-	  -e CGO_ENABLED=$(CGO_ENABLED) \
-	  -v $(CURDIR)/bin:/go/src/$(PACKAGE_NAME)/bin \
-	  $(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) go build $(BUILD_TAGS) -buildvcs=false -v -o $@ -ldflags "$(LDFLAGS)" ./cmd/check-status/'
+	$(call build_binary, ./cmd/check-status, $@)
 
 $(BINDIR)/kubectl-$(ARCH):
 	wget https://storage.googleapis.com/kubernetes-release/release/$(K8S_VERSION)/bin/linux/$(subst armv7,arm,$(ARCH))/kubectl -O $@
@@ -124,11 +111,6 @@ $(KUBE_CONTROLLER_CONTAINER_FIPS_CREATED): $(BINDIR)/kube-controllers-linux-$(AR
 # Make sure that a copyright statement exists on all go files.
 check-copyright:
 	./check-copyrights.sh
-
-check-boring-ssl: $(BINDIR)/kube-controllers-linux-amd64
-	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) \
-		go tool nm $(BINDIR)/kube-controllers-linux-amd64 > $(BINDIR)/tags.txt && grep '_Cfunc__goboringcrypto_' $(BINDIR)/tags.txt 1> /dev/null
-	-rm -f $(BINDIR)/tags.txt
 
 ###############################################################################
 # Tests

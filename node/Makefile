@@ -37,7 +37,7 @@ include ../lib.Makefile
 
 FIPS ?= false
 
-ifeq ($(FIPS), true)
+ifeq ($(FIPS),true)
 NODE_CONTAINER_BIN_DIR=./dist/bin/$(ARCH)-fips
 NODE_CONTAINER_BINARY = $(NODE_CONTAINER_BIN_DIR)/calico-node-$(ARCH)
 NODE_CONTAINER_MARKER=$(NODE_CONTAINER_FIPS_CREATED)
@@ -214,43 +214,30 @@ CGO_LDFLAGS=""
 CGO_CFLAGS=""
 endif
 
-DOCKER_GO_BUILD_CGO=$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) -e CGO_LDFLAGS=$(CGO_LDFLAGS) -e CGO_CFLAGS=$(CGO_CFLAGS) $(CALICO_BUILD)
-DOCKER_GO_BUILD_CGO_WINDOWS=$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD)
-
 $(NODE_CONTAINER_BINARY): filesystem/usr/lib/calico/bpf $(LIBBPF_A) $(SRC_FILES) ../go.mod
-ifeq ($(ARCH),amd64)
-ifeq ($(FIPS), true)
+ifeq ($(FIPS),true)
 	$(call build_cgo_boring_binary, ./cmd/calico-node/main.go, $@)
 else
+ifeq ($(ARCH),amd64)
 	$(call build_cgo_binary, ./cmd/calico-node/main.go, $@)
-endif
 else
-	$(DOCKER_GO_BUILD_CGO) sh -c '$(GIT_CONFIG_SSH) go build -buildvcs=false -v -o $@ $(BUILD_FLAGS) -ldflags "$(LDFLAGS)" ./cmd/calico-node/main.go'
+	$(call build_binary, ./cmd/calico-node/main.go, $@)
+endif
 endif
 
 
 $(WINDOWS_BINARY): $(SRC_FILES)
-	$(DOCKER_GO_BUILD_CGO_WINDOWS) sh -c '$(GIT_CONFIG_SSH) \
-		GOOS=windows CC=x86_64-w64-mingw32-gcc \
-		go build -buildvcs=false --buildmode=exe -v -o $@ -ldflags "$(LDFLAGS)" ./cmd/calico-node/main.go'
+	$(call build_windows_binary, ./cmd/calico-node/main.go, $@)
 
 $(WINDOWS_ARCHIVE_ROOT)/cni/calico.exe:
-	$(DOCKER_RUN) \
-		-e GOOS=windows \
-		$(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
-		go build -buildvcs=false -v -o $@ -ldflags "$(LDFLAGS)" ./cmd/calico'
+	$(call build_windows_binary, ./cmd/calico, $@)
 
 $(WINDOWS_ARCHIVE_ROOT)/cni/calico-ipam.exe:
-	$(DOCKER_RUN) \
-		-e GOOS=windows \
-		$(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
-		go build -buildvcs=false -v -o $@ -ldflags "$(LDFLAGS)" ./cmd/calico-ipam'
+	$(call build_windows_binary, ./cmd/calico-ipam, $@)
 
 $(TOOLS_MOUNTNS_BINARY):
-ifeq ($(ARCH),amd64)
+ifeq ($(CGO_ENABLED),1)
 	$(call build_cgo_binary, ./cmd/mountns, $@)
-else ifeq ($(CGO_ENABLED),1)
-	$(DOCKER_GO_BUILD_CGO) sh -c '$(GIT_CONFIG_SSH) go build -buildvcs=false -v -o $@ $(BUILD_FLAGS)  ./cmd/mountns'
 else
 	$(call build_binary, ./cmd/mountns, $@)
 endif
@@ -453,11 +440,6 @@ ci: static-checks ut image image-windows st
 
 ## Deploys images to registry
 cd: cd-common release-windows
-
-check-boring-ssl: $(NODE_CONTAINER_BIN_DIR)/calico-node-amd64
-	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) \
-		go tool nm $(NODE_CONTAINER_BIN_DIR)/calico-node-amd64 > $(NODE_CONTAINER_BIN_DIR)/tags.txt && grep '_Cfunc__goboringcrypto_' $(NODE_CONTAINER_BIN_DIR)/tags.txt 1> /dev/null
-	-rm -f $(NODE_CONTAINER_BIN_DIR)/tags.txt
 
 ###############################################################################
 # Release
