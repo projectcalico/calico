@@ -774,7 +774,7 @@ func configureIPPools(ctx context.Context, client client.Interface, kubeadmConfi
 	}
 
 	if ipv6Pool == "none" {
-		log.Info("Skipping IPv4 pool configuration")
+		log.Info("Skipping IPv6 pool configuration")
 
 		ipv6PoolEnabled = false
 	}
