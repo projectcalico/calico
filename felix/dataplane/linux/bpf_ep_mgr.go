@@ -472,11 +472,10 @@ func newBPFEndpointManager(
 		m.dp = m
 	}
 
-	if config.BPFHostNetworkedNAT == string(apiv3.BPFHostNetworkedNATEnabled) {
+	if config.BPFConnTimeLB == string(apiv3.BPFConnectTimeLBTCP) {
+		m.hostNetworkedNATMode = hostNetworkedNATUDPOnly
+	} else if config.BPFHostNetworkedNAT == string(apiv3.BPFHostNetworkedNATEnabled) {
 		m.hostNetworkedNATMode = hostNetworkedNATEnabled
-		if config.BPFConnTimeLB == string(apiv3.BPFConnectTimeLBTCP) {
-			m.hostNetworkedNATMode = hostNetworkedNATUDPOnly
-		}
 	}
 
 	if m.hostNetworkedNATMode != hostNetworkedNATDisabled {
