@@ -188,6 +188,11 @@ create:
 	src_to_dst->opener = 1;
 	if (CALI_F_TO_HOST) {
 		src_to_dst->ifindex = skb_ingress_ifindex(ctx->skb);
+	} else if (CALI_F_TO_HEP && CALI_F_LO) {
+		/* skb_ingress_ifindex(ctx->skb) has CT_INVALID_IFINDEX value on
+		 * lo as the packet did not enter the system via any other dev.
+		 */
+		src_to_dst->ifindex = ctx->skb->ifindex;
 	} else {
 		src_to_dst->ifindex = CT_INVALID_IFINDEX;
 	}
@@ -827,7 +832,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 		CALI_DEBUG("Packet returned from tunnel %x\n", debug_ip(ctx->state->tun_ip));
 	} else if (CALI_F_TO_HOST || (skb_from_host(ctx->skb) && result.flags & CALI_CT_FLAG_HOST_PSNAT)) {
 		/* Source of the packet is the endpoint, so check the src approval flag. */
-		if (src_to_dst->approved) {
+		if (CALI_F_LO || src_to_dst->approved) {
 			CALI_CT_VERB("Packet approved by this workload's policy.\n");
 		} else {
 			/* Only approved by the other side (so far)?  Unlike
@@ -840,7 +845,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 		}
 	} else if (CALI_F_FROM_HOST) {
 		/* Dest of the packet is the endpoint, so check the dest approval flag. */
-		if (dst_to_src->approved) {
+		if (CALI_F_LO || dst_to_src->approved) {
 			// Packet was approved by the policy attached to this endpoint.
 			CALI_CT_VERB("Packet approved by this workload's policy.\n");
 		} else {

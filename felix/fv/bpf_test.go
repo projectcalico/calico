@@ -403,6 +403,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			} else {
 				options.ExtraEnvVars["FELIX_BPFConnectTimeLoadBalancing"] = string(api.BPFConnectTimeLBEnabled)
 				options.ExtraEnvVars["FELIX_BPFHostNetworkedNATWithoutCTLB"] = string(api.BPFHostNetworkedNATDisabled)
+				if testOpts.protocol == "tcp" {
+					options.ExtraEnvVars["FELIX_BPFConnectTimeLoadBalancing"] = string(api.BPFConnectTimeLBTCP)
+				}
 			}
 
 		})
@@ -1193,6 +1196,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			It("should allow host -> host", func() {
 				// XXX as long as there is no HEP policy
 				// using hostW as a sink
+				cc.Expect(Some, tc.Felixes[0], hostW[0])
 				cc.Expect(Some, tc.Felixes[0], hostW[1])
 				cc.Expect(Some, tc.Felixes[1], hostW[0])
 				cc.CheckConnectivity()
