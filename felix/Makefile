@@ -143,7 +143,7 @@ CGO_LDFLAGS=""
 FV_RACE_DETECTOR_ENABLED?=false
 endif
 
-ifeq ($(ARCH), amd64)
+ifeq ($(ARCH),amd64)
 BUILD_TARGETS+=bin/calico-felix.exe
 endif
 
@@ -165,14 +165,14 @@ DOCKER_GO_BUILD_CGO=$(DOCKER_RUN) $(TARGET_PLATFORM) -e CGO_ENABLED=$(CGO_ENABLE
 
 bin/calico-felix-$(ARCH): $(LIBBPF_A) $(SRC_FILES)
 	@echo Building felix for $(ARCH) on $(BUILDARCH)
-ifeq ($(ARCH),amd64)
-ifeq ($(FIPS), true)
+ifeq ($(FIPS),true)
 	$(call build_cgo_boring_binary, $(PACKAGE_NAME)/cmd/calico-felix, $@)
 else
+ifeq ($(ARCH),amd64)
 	$(call build_cgo_binary, $(PACKAGE_NAME)/cmd/calico-felix, $@)
-endif
 else
 	$(call build_binary, $(PACKAGE_NAME)/cmd/calico-felix, $@)
+endif
 endif
 
 bin/calico-felix-race-$(ARCH): $(LIBBPF_A) $(SRC_FILES) ../go.mod

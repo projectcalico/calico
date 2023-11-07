@@ -35,7 +35,7 @@ CONTAINER_FIPS_CREATED=image.created-$(ARCH)-fips
 
 FIPS ?= false
 
-ifeq ($(FIPS), true)
+ifeq ($(FIPS),true)
 CONTAINER_MARKER=$(CONTAINER_FIPS_CREATED)
 VALIDARCHES=amd64
 BINDIR=bin/$(ARCH)-fips
@@ -96,12 +96,8 @@ $(BINDIR)/dikastes-arm64: ARCH=arm64
 $(BINDIR)/dikastes-ppc64le: ARCH=ppc64le
 $(BINDIR)/dikastes-s390x: ARCH=s390x
 $(BINDIR)/dikastes-%: protobuf $(SRC_FILES)
-ifeq ($(ARCH),amd64)
 ifeq ($(FIPS),true)
 	$(call build_cgo_boring_binary, ./cmd/dikastes, $@)
-else
-	$(call build_binary, ./cmd/dikastes, $@)
-endif
 else
 	$(call build_binary, ./cmd/dikastes, $@)
 endif
@@ -111,12 +107,8 @@ $(BINDIR)/healthz-arm64: ARCH=arm64
 $(BINDIR)/healthz-ppc64le: ARCH=ppc64le
 $(BINDIR)/healthz-s390x: ARCH=s390x
 $(BINDIR)/healthz-%: protobuf $(SRC_FILES)
-ifeq ($(ARCH),amd64)
-ifeq ($(FIPS), true)
+ifeq ($(FIPS),true)
 	$(call build_cgo_boring_binary, ./cmd/healthz, $@)
-else
-	$(call build_binary, ./cmd/healthz, $@)
-endif
 else
 	$(call build_binary, ./cmd/healthz, $@)
 endif

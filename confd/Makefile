@@ -31,12 +31,8 @@ sub-build-%:
 	$(MAKE) build ARCH=$*
 
 bin/confd-$(ARCH): $(SRC_FILES)
-ifeq ($(ARCH),amd64)
-ifeq ($(FIPS), true)
+ifeq ($(FIPS),true)
 	$(call build_cgo_boring_binary, $(PACKAGE_NAME), $@)
-else
-	$(call build_binary, $(PACKAGE_NAME), $@)
-endif
 else
 	$(call build_binary, $(PACKAGE_NAME), $@)
 endif

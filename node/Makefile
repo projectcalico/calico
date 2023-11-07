@@ -37,7 +37,7 @@ include ../lib.Makefile
 
 FIPS ?= false
 
-ifeq ($(FIPS), true)
+ifeq ($(FIPS),true)
 NODE_CONTAINER_BIN_DIR=./dist/bin/$(ARCH)-fips
 NODE_CONTAINER_BINARY = $(NODE_CONTAINER_BIN_DIR)/calico-node-$(ARCH)
 NODE_CONTAINER_MARKER=$(NODE_CONTAINER_FIPS_CREATED)
@@ -215,14 +215,14 @@ CGO_CFLAGS=""
 endif
 
 $(NODE_CONTAINER_BINARY): filesystem/usr/lib/calico/bpf $(LIBBPF_A) $(SRC_FILES) ../go.mod
-ifeq ($(ARCH),amd64)
-ifeq ($(FIPS), true)
+ifeq ($(FIPS),true)
 	$(call build_cgo_boring_binary, ./cmd/calico-node/main.go, $@)
 else
+ifeq ($(ARCH),amd64)
 	$(call build_cgo_binary, ./cmd/calico-node/main.go, $@)
-endif
 else
 	$(call build_binary, ./cmd/calico-node/main.go, $@)
+endif
 endif
 
 

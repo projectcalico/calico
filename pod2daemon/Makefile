@@ -50,7 +50,7 @@ endif
 FIPS ?= false
 
 FLEXVOL_CONTAINER_MARKER=$(FLEXVOL_CONTAINER_CREATED)
-ifeq ($(FIPS), true)
+ifeq ($(FIPS),true)
 CSI_CONTAINER_MARKER=$(CSI_CONTAINER_FIPS_CREATED)
 REGISTRAR_CONTAINER_MARKER=$(REGISTRAR_CONTAINER_FIPS_CREATED)
 VALIDARCHES=amd64
@@ -98,7 +98,7 @@ ifeq ($(ARCH), $(filter $(ARCH),amd64))
 # We need CGO to leverage Boring SSL.  However, the cross-compile doesn't support CGO yet.
 REGISTRAR_BUILD_CMD=$(REGISTRAR_TIGERA_BUILD_CMD)
 CGO_ENABLED=1
-ifeq ($(FIPS), true)
+ifeq ($(FIPS),true)
 TAGS=fipsstrict
 GOEXPERIMENT=boringcrypto
 else

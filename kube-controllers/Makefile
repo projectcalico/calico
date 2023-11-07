@@ -25,7 +25,7 @@ KUBE_CONTROLLER_CONTAINER_FIPS_CREATED=image.created-$(ARCH)-fips
 
 FIPS ?= false
 
-ifeq ($(FIPS), true)
+ifeq ($(FIPS),true)
 KUBE_CONTROLLER_CONTAINER_MARKER=$(KUBE_CONTROLLER_CONTAINER_FIPS_CREATED)
 VALIDARCHES=amd64
 BINDIR=bin/$(ARCH)-fips
@@ -61,23 +61,15 @@ sub-build-%:
 	$(MAKE) build ARCH=$*
 
 $(BINDIR)/kube-controllers-linux-$(ARCH): $(SRC_FILES)
-ifeq ($(ARCH), amd64)
-ifeq ($(FIPS), true)
+ifeq ($(FIPS),true)
 	$(call build_cgo_boring_binary, ./cmd/kube-controllers/, $@)
-else
-	$(call build_binary, ./cmd/kube-controllers/, $@)
-endif
 else
 	$(call build_binary, ./cmd/kube-controllers/, $@)
 endif
 
 $(BINDIR)/wrapper-$(ARCH):
-ifeq ($(ARCH), amd64)
-ifeq ($(FIPS), true)
+ifeq ($(FIPS),true)
 	$(call build_cgo_boring_binary, ./cmd/wrapper, $@)
-else
-	$(call build_binary, ./cmd/wrapper, $@)
-endif
 else
 	$(call build_binary, ./cmd/wrapper, $@)
 endif
