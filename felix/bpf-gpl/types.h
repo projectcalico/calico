@@ -10,11 +10,12 @@
 #include <linux/pkt_cls.h>
 #ifdef IPVER6
 #include <linux/ipv6.h>
+#include <linux/icmpv6.h>
 #else
 #include <linux/ip.h>
+#include <linux/icmp.h>
 #endif
 #include <linux/tcp.h>
-#include <linux/icmp.h>
 #include <linux/in.h>
 #include <linux/udp.h>
 #include "bpf.h"
@@ -29,12 +30,13 @@
 #define ETH_SIZE (sizeof(struct ethhdr))
 #ifdef IPVER6
 #define IP_SIZE (sizeof(struct ipv6hdr))
+#define ICMP_SIZE (sizeof(struct icmp6hdr))
 #else
 #define IP_SIZE (sizeof(struct iphdr))
+#define ICMP_SIZE (sizeof(struct icmphdr))
 #endif
 #define UDP_SIZE (sizeof(struct udphdr))
 #define TCP_SIZE (sizeof(struct tcphdr))
-#define ICMP_SIZE (sizeof(struct icmphdr))
 
 #define MAX_RULE_IDS    32
 

@@ -50,39 +50,42 @@ static CALI_BPF_INLINE int skb_nat_l4_csum(struct cali_tc_ctx *ctx, size_t off,
 					   ipv46_addr_t ip_dst_from, ipv46_addr_t ip_dst_to,
 					   __u16 dport_from, __u16 dport_to,
 					   __u16 sport_from, __u16 sport_to,
-					   __u64 flags)
+					   __u64 flags,
+					   bool inner_icmp)
 {
 	int ret = 0;
 	struct __sk_buff *skb = ctx->skb;
 
-	/* Write back L4 header. */
-	if (ctx->ipheader_len == IP_SIZE) {
-		if (ctx->state->ip_proto == IPPROTO_TCP) {
-			if (skb_refresh_validate_ptrs(ctx, TCP_SIZE)) {
-				deny_reason(ctx, CALI_REASON_SHORT);
-				CALI_DEBUG("Too short\n");
-				return -EFAULT;
+	if (!inner_icmp) {
+		/* Write back L4 header. */
+		if (ctx->ipheader_len == IP_SIZE) {
+			if (ctx->state->ip_proto == IPPROTO_TCP) {
+				if (skb_refresh_validate_ptrs(ctx, TCP_SIZE)) {
+					deny_reason(ctx, CALI_REASON_SHORT);
+					CALI_DEBUG("Too short\n");
+					return -EFAULT;
+				}
+				__builtin_memcpy(((void*)ip_hdr(ctx))+IP_SIZE, ctx->scratch->l4, TCP_SIZE);
+			} else {
+				if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
+					deny_reason(ctx, CALI_REASON_SHORT);
+					CALI_DEBUG("Too short\n");
+					return -EFAULT;
+				}
+				__builtin_memcpy(((void*)ip_hdr(ctx))+IP_SIZE, ctx->scratch->l4, UDP_SIZE);
 			}
-			__builtin_memcpy(((void*)ip_hdr(ctx))+IP_SIZE, ctx->scratch->l4, TCP_SIZE);
 		} else {
-			if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
-				deny_reason(ctx, CALI_REASON_SHORT);
+			int size = l4_hdr_len(ctx);
+			int offset = skb_l4hdr_offset(ctx);
+
+			if (size == 0) {
+				CALI_DEBUG("Bad L4 proto\n");
+				return -EFAULT;
+			}
+			if (bpf_skb_store_bytes(ctx->skb, offset, ctx->scratch->l4, size, 0)) {
 				CALI_DEBUG("Too short\n");
 				return -EFAULT;
 			}
-			__builtin_memcpy(((void*)ip_hdr(ctx))+IP_SIZE, ctx->scratch->l4, UDP_SIZE);
-		}
-	} else {
-		int size = l4_hdr_len(ctx);
-		int offset = skb_l4hdr_offset(ctx);
-
-		if (size == 0) {
-			CALI_DEBUG("Bad L4 proto\n");
-			return -EFAULT;
-		}
-		if (bpf_skb_store_bytes(ctx->skb, offset, ctx->scratch->l4, size, 0)) {
-			CALI_DEBUG("Too short\n");
-			return -EFAULT;
 		}
 	}
 
@@ -118,7 +121,7 @@ static CALI_BPF_INLINE int skb_nat_l4_csum(struct cali_tc_ctx *ctx, size_t off,
 	 * used to calculate L4 csum.
 	 */
 	if (csum_update) {
-		ret = bpf_l4_csum_replace(skb, off, 0, csum, flags | BPF_F_PSEUDO_HDR);
+		ret = bpf_l4_csum_replace(skb, off, 0, csum, flags | (inner_icmp ? 0 : BPF_F_PSEUDO_HDR));
 	}
 
 	/* We can use replace for ports in both v4/6 as they are the same size of 2 bytes. */
