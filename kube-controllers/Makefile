@@ -61,23 +61,15 @@ sub-build-%:
 	$(MAKE) build ARCH=$*
 
 $(BINDIR)/kube-controllers-linux-$(ARCH): $(SRC_FILES)
-ifeq ($(ARCH), amd64)
 ifeq ($(FIPS), true)
 	$(call build_cgo_boring_binary, ./cmd/kube-controllers/, $@)
 else
 	$(call build_binary, ./cmd/kube-controllers/, $@)
 endif
-else
-	$(call build_binary, ./cmd/kube-controllers/, $@)
-endif
 
 $(BINDIR)/wrapper-$(ARCH):
-ifeq ($(ARCH), amd64)
 ifeq ($(FIPS), true)
 	$(call build_cgo_boring_binary, ./cmd/wrapper, $@)
-else
-	$(call build_binary, ./cmd/wrapper, $@)
-endif
 else
 	$(call build_binary, ./cmd/wrapper, $@)
 endif

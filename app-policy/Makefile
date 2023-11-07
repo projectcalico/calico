@@ -111,12 +111,8 @@ $(BINDIR)/healthz-arm64: ARCH=arm64
 $(BINDIR)/healthz-ppc64le: ARCH=ppc64le
 $(BINDIR)/healthz-s390x: ARCH=s390x
 $(BINDIR)/healthz-%: protobuf $(SRC_FILES)
-ifeq ($(ARCH),amd64)
 ifeq ($(FIPS), true)
 	$(call build_cgo_boring_binary, ./cmd/healthz, $@)
-else
-	$(call build_binary, ./cmd/healthz, $@)
-endif
 else
 	$(call build_binary, ./cmd/healthz, $@)
 endif

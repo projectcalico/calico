@@ -90,12 +90,8 @@ sub-build-%:
 
 ## Build the Calico network plugin and ipam plugins
 $(BIN)/install binary: $(SRC_FILES)
-ifeq ($(ARCH), amd64)
 ifeq ($(FIPS), true)
 	$(call build_cgo_boring_binary, $(PACKAGE_NAME)/cmd/calico, $@)
-else
-	$(call build_binary, $(PACKAGE_NAME)/cmd/calico, $@)
-endif
 else
 	$(call build_binary, $(PACKAGE_NAME)/cmd/calico, $@)
 endif

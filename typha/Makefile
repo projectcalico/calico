@@ -80,35 +80,23 @@ $(BINDIR)/wrapper: $(BINDIR)/wrapper-$(ARCH)
 	ln -f $(BINDIR)/wrapper-$(ARCH) $(BINDIR)/wrapper
 
 $(BINDIR)/wrapper-$(ARCH): $(SRC_FILES) $(LOCAL_BUILD_DEP)
-ifeq ($(ARCH), amd64)
 ifeq ($(FIPS), true)
 	$(call build_cgo_boring_binary, ./cmd/wrapper, $@)
 else
 	$(call build_binary, ./cmd/wrapper, $@)
 endif
-else
-	$(call build_binary, ./cmd/wrapper, $@)
-endif
 
 $(BINDIR)/calico-typha-$(ARCH): $(SRC_FILES)
-ifeq ($(ARCH), amd64)
 ifeq ($(FIPS), true)
 	$(call build_cgo_boring_binary, ./cmd/calico-typha, $@)
 else
 	$(call build_binary, ./cmd/calico-typha, $@)
 endif
-else
-	$(call build_binary, ./cmd/calico-typha, $@)
-endif
 
 $(BINDIR)/typha-client-$(ARCH): $(SRC_FILES)
-ifeq ($(ARCH), amd64)
 	@echo Building typha client...
 ifeq ($(FIPS), true)
 	$(call build_cgo_boring_binary, ./cmd/typha-client, $@)
-else
-	$(call build_binary, ./cmd/typha-client, $@)
-endif
 else
 	$(call build_binary, ./cmd/typha-client, $@)
 endif
