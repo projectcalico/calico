@@ -763,42 +763,32 @@ func configureIPPools(ctx context.Context, client client.Interface, kubeadmConfi
 	}
 
 	var (
-		ipv4PoolDisabled bool
-		ipv6PoolDisabled bool
+		ipv4PoolEnabled = true
+		ipv6PoolEnabled = true
 	)
 
-	if strings.ToLower(os.Getenv("NO_DEFAULT_IPV4_POOL")) == "true" {
-		if len(ipv4Pool) > 0 {
-			log.Error("Invalid configuration with NO_DEFAULT_IPV4_POOL defined and CALICO_IPV4POOL_CIDR defined.")
-			utils.Terminate()
-		}
-
+	if ipv4Pool == "none" {
 		log.Info("Skipping IPv4 pool configuration")
 
-		ipv4PoolDisabled = true
+		ipv4PoolEnabled = false
 	}
 
-	if strings.ToLower(os.Getenv("NO_DEFAULT_IPV6_POOL")) == "true" {
-		if len(ipv4Pool) > 0 {
-			log.Error("Invalid configuration with NO_DEFAULT_IPV6_POOL defined and CALICO_IPV6POOL_CIDR defined.")
-			utils.Terminate()
-		}
-
+	if ipv6Pool == "none" {
 		log.Info("Skipping IPv4 pool configuration")
 
-		ipv6PoolDisabled = true
+		ipv6PoolEnabled = false
 	}
 
 	// If CIDRs weren't specified through the environment variables, check if they're present in kubeadm's
 	// config map.
-	if (len(ipv4Pool) == 0 || len(ipv6Pool) == 0) && kubeadmConfig != nil {
+	if ((ipv4PoolEnabled && len(ipv4Pool) == 0) || (ipv6PoolEnabled && len(ipv6Pool) == 0)) && kubeadmConfig != nil {
 		v4, v6, err := extractKubeadmCIDRs(kubeadmConfig)
 		if err == nil {
-			if len(ipv4Pool) == 0 {
+			if ipv4PoolEnabled && len(ipv4Pool) == 0 {
 				ipv4Pool = v4
 				log.Infof("found v4=%s in the kubeadm config map", ipv4Pool)
 			}
-			if len(ipv6Pool) == 0 {
+			if ipv6PoolEnabled && len(ipv6Pool) == 0 {
 				ipv6Pool = v6
 				log.Infof("found v6=%s in the kubeadm config map", ipv6Pool)
 			}
@@ -823,7 +813,7 @@ func configureIPPools(ctx context.Context, client client.Interface, kubeadmConfi
 		err error
 	)
 
-	if !ipv4PoolDisabled {
+	if ipv4PoolEnabled {
 		ipv4IpipModeEnvVar = strings.ToLower(os.Getenv("CALICO_IPV4POOL_IPIP"))
 		ipv4VXLANModeEnvVar = strings.ToLower(os.Getenv("CALICO_IPV4POOL_VXLAN"))
 		ipv6VXLANModeEnvVar = strings.ToLower(os.Getenv("CALICO_IPV6POOL_VXLAN"))
@@ -859,7 +849,7 @@ func configureIPPools(ctx context.Context, client client.Interface, kubeadmConfi
 		}
 	}
 
-	if !ipv6PoolDisabled {
+	if ipv6PoolEnabled {
 		ipv6BlockSizeEnvVar = os.Getenv("CALICO_IPV6POOL_BLOCK_SIZE")
 		if ipv6BlockSizeEnvVar != "" {
 			ipv6BlockSize = parseBlockSizeEnvironment(ipv6BlockSizeEnvVar)
@@ -914,21 +904,21 @@ func configureIPPools(ctx context.Context, client client.Interface, kubeadmConfi
 	}
 
 	// Ensure there are pools created for each IP version.
-	if !ipv4Present && !ipv4PoolDisabled {
+	if ipv4PoolEnabled && !ipv4Present {
 		log.Debug("Create default IPv4 IP pool")
 		outgoingNATEnabled := evaluateENVBool("CALICO_IPV4POOL_NAT_OUTGOING", true)
 		bgpExportDisabled := evaluateENVBool("CALICO_IPV4POOL_DISABLE_BGP_EXPORT", false)
 
 		createIPPool(ctx, client, ipv4Cidr, DEFAULT_IPV4_POOL_NAME, ipv4IpipModeEnvVar, ipv4VXLANModeEnvVar, outgoingNATEnabled, ipv4BlockSize, ipv4NodeSelector, bgpExportDisabled)
 	}
-	if !ipv6Present && ipv6Supported() && !ipv6PoolDisabled {
+
+	if ipv6PoolEnabled && !ipv6Present && ipv6Supported() {
 		log.Debug("Create default IPv6 IP pool")
 		outgoingNATEnabled := evaluateENVBool("CALICO_IPV6POOL_NAT_OUTGOING", false)
 		bgpExportDisabled := evaluateENVBool("CALICO_IPV6POOL_DISABLE_BGP_EXPORT", false)
 
 		createIPPool(ctx, client, ipv6Cidr, DEFAULT_IPV6_POOL_NAME, string(api.IPIPModeNever), ipv6VXLANModeEnvVar, outgoingNATEnabled, ipv6BlockSize, ipv6NodeSelector, bgpExportDisabled)
 	}
-
 }
 
 // createIPPool creates an IP pool using the specified CIDR.  This
