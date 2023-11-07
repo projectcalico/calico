@@ -42,6 +42,10 @@ static CALI_BPF_INLINE int parse_packet_ip_v6(struct cali_tc_ctx *ctx) {
 	case ETH_P_IPV6:
 		break;
 	case ETH_P_IP:
+		if (CALI_F_HEP) {
+			CALI_DEBUG("IPv4 on host interface: allow\n");
+			goto allow_no_fib;
+		}
 		CALI_DEBUG("Unexpected ipv4 packet, drop\n");
 		goto deny;
 	default:
