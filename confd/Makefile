@@ -11,8 +11,6 @@ include ../lib.Makefile
 
 ###############################################################################
 
-test: ut test-kdd test-etcd
-
 LDFLAGS=-X $(PACKAGE_NAME)/pkg/buildinfo.GitVersion=$(GIT_DESCRIPTION)
 
 # All go files.
@@ -33,15 +31,14 @@ sub-build-%:
 	$(MAKE) build ARCH=$*
 
 bin/confd-$(ARCH): $(SRC_FILES)
-	$(call build_static_cgo_boring_binary, $(PACKAGE_NAME), $@)
+ifeq ($(FIPS),true)
+	$(call build_cgo_boring_binary, $(PACKAGE_NAME), $@)
+else
+	$(call build_binary, $(PACKAGE_NAME), $@)
+endif
 
 bin/confd: bin/confd-$(ARCH)
-ifeq ($(ARCH),amd64)
 	ln -f bin/confd-$(ARCH) bin/confd
-endif
-ifeq ($(ARCH),s390x)
-	ln -f bin/confd-$(ARCH) bin/confd
-endif
 
 ###############################################################################
 # Unit Tests
@@ -49,6 +46,8 @@ endif
 # Set to true when calling test-xxx to update the rendered templates instead of
 # checking them.
 UPDATE_EXPECTED_DATA?=false
+
+test: ut test-kdd test-etcd
 
 .PHONY: test-kdd
 ## Run template tests against KDD
