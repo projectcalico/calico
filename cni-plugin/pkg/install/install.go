@@ -176,9 +176,9 @@ func Install() error {
 	}
 
 	// Set the suid bit on the binaries to allow them to run as non-root users.
-	if err := setSuidBit("/opt/cni/bin/install"); err != nil {
-		logrus.WithError(err).Fatalf("Failed to set the suid bit on the install binary")
-	}
+	//if err := setSuidBit("/opt/cni/bin/install"); err != nil {
+	//	logrus.WithError(err).Fatalf("Failed to set the suid bit on the install binary")
+	//}
 
 	// TODO: Remove the setSUID code here on calico and calico-ipam when they eventually
 	// get refactored to all use install as the source.
