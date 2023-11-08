@@ -893,7 +893,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 			 *
 			 * Do not check if packets are returning from the NP vxlan tunnel.
 			 */
-			if (!same_if && !ret_from_tun && !hep_rpf_check(ctx) && !CALI_F_NAT_IF) {
+			if (!same_if && !ret_from_tun && !hep_rpf_check(ctx) && !CALI_F_NAT_IF && !CALI_F_LO) {
 				ct_result_set_flag(result.rc, CT_RES_RPF_FAILED);
 			} else {
 				src_to_dst->ifindex = ifindex;
