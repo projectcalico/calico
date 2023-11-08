@@ -290,7 +290,9 @@ func StartNNodeTopology(n int, opts TopologyOptions, infra DatastoreInfra) (tc T
 		if i > 0 {
 			optsPerFelix[i].ExtraEnvVars["FELIX_BPFConnectTimeLoadBalancingEnabled"] = "false"
 			optsPerFelix[i].ExtraEnvVars["FELIX_BPFConnectTimeLoadBalancing"] = string(api.BPFConnectTimeLBDisabled)
-			optsPerFelix[i].ExtraEnvVars["FELIX_BPFHostNetworkedNATWithoutCTLB"] = string(api.BPFHostNetworkedNATDisabled)
+			if optsPerFelix[i].ExtraEnvVars["FELIX_BPFHostNetworkedNATWithoutCTLB"] == "" {
+				optsPerFelix[i].ExtraEnvVars["FELIX_BPFHostNetworkedNATWithoutCTLB"] = string(api.BPFHostNetworkedNATDisabled)
+			}
 			optsPerFelix[i].ExtraEnvVars["FELIX_DebugSkipCTLBCleanup"] = "true"
 		}
 	}
