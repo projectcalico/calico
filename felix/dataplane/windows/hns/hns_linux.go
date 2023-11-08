@@ -46,18 +46,19 @@ type PolicyType string
 
 // RequestType const
 const (
-	Nat                  PolicyType = "Nat"
+	Nat                  PolicyType = "NAT"
 	ACL                  PolicyType = "ACL"
 	PA                   PolicyType = "PA"
 	VLAN                 PolicyType = "VLAN"
 	VSID                 PolicyType = "VSID"
-	VNet                 PolicyType = "VNet"
+	VNet                 PolicyType = "VNET"
 	L2Driver             PolicyType = "L2Driver"
 	Isolation            PolicyType = "Isolation"
 	QOS                  PolicyType = "QOS"
-	OutboundNat          PolicyType = "OutboundNat"
-	ExternalLoadBalancer PolicyType = "ExternalLoadBalancer"
-	Route                PolicyType = "Route"
+	OutboundNat          PolicyType = "OutBoundNAT"
+	ExternalLoadBalancer PolicyType = "ELB"
+	Route                PolicyType = "ROUTE"
+	Proxy                PolicyType = "PROXY"
 )
 
 // Not currently used on Linux...
@@ -75,6 +76,8 @@ const (
 //type PaPolicy = hcsshim.PaPolicy
 //
 //type OutboundNatPolicy = hcsshim.OutboundNatPolicy
+//
+//type ProxyPolicy = hcsshim.ProxyPolicy
 
 type ActionType string
 type DirectionType string
@@ -111,6 +114,7 @@ type ACLPolicy struct {
 }
 
 type Policy struct {
+	Type PolicyType `json:"Type"`
 }
 
 // Types from hnsendpoint.go.
@@ -174,9 +178,5 @@ func (a API) GetHNSSupportedFeatures() HNSSupportedFeatures {
 }
 
 func (a API) HNSListEndpointRequest() ([]HNSEndpoint, error) {
-	return nil, nil
-}
-
-func (_ API) GetAttachedContainerIDs(endpoint *HNSEndpoint) ([]string, error) {
 	return nil, nil
 }

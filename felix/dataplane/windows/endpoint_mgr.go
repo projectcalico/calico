@@ -84,7 +84,6 @@ type endpointManager struct {
 type hnsInterface interface {
 	GetHNSSupportedFeatures() hns.HNSSupportedFeatures
 	HNSListEndpointRequest() ([]hns.HNSEndpoint, error)
-	GetAttachedContainerIDs(endpoint *hns.HNSEndpoint) ([]string, error)
 }
 
 func newEndpointManager(hns hnsInterface, policysets policysets.PolicySetsDataplane) *endpointManager {
