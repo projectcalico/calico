@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// This package re-exports the HCN API as a struct sot that it can be shimmed and UTs can run on Linux.
+// This package re-exports the HCN API as a struct so that it can be shimmed and UTs can run on Linux.
 package hcn
 
 import realhcn "github.com/Microsoft/hcsshim/hcn"

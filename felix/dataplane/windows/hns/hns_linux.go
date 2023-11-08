@@ -46,18 +46,19 @@ type PolicyType string
 
 // RequestType const
 const (
-	Nat                  PolicyType = "Nat"
+	Nat                  PolicyType = "NAT"
 	ACL                  PolicyType = "ACL"
 	PA                   PolicyType = "PA"
 	VLAN                 PolicyType = "VLAN"
 	VSID                 PolicyType = "VSID"
-	VNet                 PolicyType = "VNet"
+	VNet                 PolicyType = "VNET"
 	L2Driver             PolicyType = "L2Driver"
 	Isolation            PolicyType = "Isolation"
 	QOS                  PolicyType = "QOS"
-	OutboundNat          PolicyType = "OutboundNat"
-	ExternalLoadBalancer PolicyType = "ExternalLoadBalancer"
-	Route                PolicyType = "Route"
+	OutboundNat          PolicyType = "OutBoundNAT"
+	ExternalLoadBalancer PolicyType = "ELB"
+	Route                PolicyType = "ROUTE"
+	Proxy                PolicyType = "PROXY"
 )
 
 // Not currently used on Linux...
@@ -75,6 +76,8 @@ const (
 //type PaPolicy = hcsshim.PaPolicy
 //
 //type OutboundNatPolicy = hcsshim.OutboundNatPolicy
+//
+//type ProxyPolicy = hcsshim.ProxyPolicy
 
 type ActionType string
 type DirectionType string
@@ -111,27 +114,35 @@ type ACLPolicy struct {
 }
 
 type Policy struct {
+	Type PolicyType `json:"Type"`
 }
 
 // Types from hnsendpoint.go.
 
 // HNSEndpoint represents a network endpoint in HNS
 type HNSEndpoint struct {
-	Id                 string
-	Name               string
-	VirtualNetwork     string
-	VirtualNetworkName string
-	Policies           []json.RawMessage
-	MacAddress         string
-	IPAddress          net.IP
-	DNSSuffix          string
-	DNSServerList      string
-	GatewayAddress     string
-	EnableInternalDNS  bool
-	DisableICC         bool
-	PrefixLength       uint8
-	IsRemoteEndpoint   bool
-	// Namespace          *Namespace
+	Id                 string            `json:"ID,omitempty"`
+	Name               string            `json:",omitempty"`
+	VirtualNetwork     string            `json:",omitempty"`
+	VirtualNetworkName string            `json:",omitempty"`
+	Policies           []json.RawMessage `json:",omitempty"`
+	MacAddress         string            `json:",omitempty"`
+	IPAddress          net.IP            `json:",omitempty"`
+	IPv6Address        net.IP            `json:",omitempty"`
+	DNSSuffix          string            `json:",omitempty"`
+	DNSServerList      string            `json:",omitempty"`
+	DNSDomain          string            `json:",omitempty"`
+	GatewayAddress     string            `json:",omitempty"`
+	GatewayAddressV6   string            `json:",omitempty"`
+	EnableInternalDNS  bool              `json:",omitempty"`
+	DisableICC         bool              `json:",omitempty"`
+	PrefixLength       uint8             `json:",omitempty"`
+	IPv6PrefixLength   uint8             `json:",omitempty"`
+	IsRemoteEndpoint   bool              `json:",omitempty"`
+	EnableLowMetric    bool              `json:",omitempty"`
+	//Namespace          *Namespace        `json:",omitempty"`
+	EncapOverhead    uint16   `json:",omitempty"`
+	SharedContainers []string `json:",omitempty"`
 }
 
 // ApplyACLPolicy applies a set of ACL Policies on the Endpoint
@@ -146,9 +157,5 @@ func (a API) GetHNSSupportedFeatures() HNSSupportedFeatures {
 }
 
 func (a API) HNSListEndpointRequest() ([]HNSEndpoint, error) {
-	return nil, nil
-}
-
-func (_ API) GetAttachedContainerIDs(endpoint *HNSEndpoint) ([]string, error) {
 	return nil, nil
 }
