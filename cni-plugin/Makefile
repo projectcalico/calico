@@ -88,13 +88,25 @@ build-all: $(addprefix sub-build-,$(VALIDARCHES))
 sub-build-%:
 	$(MAKE) build ARCH=$*
 
-## Build the Calico network plugin and ipam plugins
+## Build the Calico installation binary for the network plugin and ipam plugins
 $(BIN)/install binary: $(SRC_FILES)
 ifeq ($(FIPS),true)
 	$(call build_cgo_boring_binary, $(PACKAGE_NAME)/cmd/calico, $@)
 else
 	$(call build_binary, $(PACKAGE_NAME)/cmd/calico, $@)
 endif
+
+## Build the Calico network plugin and ipam plugins
+$(BIN)/calico:
+ifeq ($(FIPS), true)
+	$(call build_cgo_boring_binary, $(PACKAGE_NAME)/cmd/calico, $(BIN)/calico)
+else
+	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) sh -c '\
+		$(GIT_CONFIG_SSH) go build -buildvcs=false -v -o $(BIN)/calico -ldflags "$(LDFLAGS)" $(PACKAGE_NAME)/cmd/calico'
+endif
+
+$(BIN)/calico-ipam: $(BIN)/calico
+	cp "$<" "$@"
 
 ## Build the Calico network plugin and ipam plugins for Windows
 $(WINDOWS_BIN)/install.exe: $(SRC_FILES)

@@ -25,6 +25,7 @@ FROM s390x/alpine:3.18 as base
 # This must be the first RUN command in this file!
 COPY --from=qemu /usr/bin/qemu-*-static /usr/bin/
 ARG ARCH=s390x
+ARG GIT_VERSION
 
 # Install remaining runtime deps required for felix from the global repository
 RUN apk add --no-cache bash ip6tables ipset iputils iproute2 conntrack-tools runit file ca-certificates
@@ -58,7 +59,7 @@ LABEL name="Calico node" \
       release="1" \
       summary="Calico node handles networking and policy for Calico" \
       description="Calico node handles networking and policy for Calico" \
-      maintainer="laurence@tigera.io"
+      maintainer="maintainers@tigera.io"
 
 # Tell sv where to find the services.
 ENV SVDIR=/etc/service/enabled

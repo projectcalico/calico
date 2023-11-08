@@ -24,6 +24,7 @@ FROM ppc64le/alpine:3.18
 MAINTAINER David Wilder <wilder@us.ibm.com>
 
 ARG ARCH=ppc64le
+ARG GIT_VERSION
 
 # Set the minimum required Docker API version.
 ENV DOCKER_API_VERSION 1.21
@@ -57,6 +58,15 @@ COPY --from=bpftool /bpftool /bin
 RUN rm /usr/bin/qemu-${ARCH}-static
 
 CMD ["start_runit"]
+
+# Required labels for certification
+LABEL name="Calico node" \
+      vendor="Project Calico" \
+      version=$GIT_VERSION \
+      release="1" \
+      summary="Calico node handles networking and policy for Calico" \
+      description="Calico node handles networking and policy for Calico" \
+      maintainer="maintainers@tigera.io"
 
 # Tell sv where to find the services.
 ENV SVDIR=/etc/service/enabled

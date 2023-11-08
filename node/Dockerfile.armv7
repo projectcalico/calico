@@ -21,6 +21,7 @@ FROM arm32v7/alpine:3.18 as base
 MAINTAINER Marc Crébassa <aalaesar@gmail.com>
 
 ARG ARCH=armv7
+ARG GIT_VERSION
 
 # Enable non-native builds of this image on an amd64 hosts.
 # This must be the first RUN command in this file!
@@ -49,6 +50,16 @@ RUN chmod u+s /bin/mountns
 RUN rm /usr/bin/qemu-arm-static
 
 CMD ["start_runit"]
+
+# Required labels for certification
+LABEL name="Calico node" \
+      vendor="Project Calico" \
+      version=$GIT_VERSION \
+      release="1" \
+      summary="Calico node handles networking and policy for Calico" \
+      description="Calico node handles networking and policy for Calico" \
+      maintainer="maintainers@tigera.io"
+
 
 # Tell sv where to find the services.
 ENV SVDIR=/etc/service/enabled
