@@ -72,11 +72,7 @@ int calico_tc_main(struct __sk_buff *skb)
 			struct cali_tc_ctx *ctx = &_ctx;
 
 			CALI_DEBUG("New packet at ifindex=%d; mark=%x\n", skb->ifindex, skb->mark);
-#ifdef IPVER6
-			parse_packet_ip_v6(ctx);
-#else
 			parse_packet_ip(ctx);
-#endif
 			CALI_DEBUG("Final result=ALLOW (%d). Bypass mark set.\n", CALI_REASON_BYPASS);
 		}
 		return TC_ACT_UNSPEC;
@@ -192,6 +188,11 @@ static CALI_BPF_INLINE int pre_policy_processing(struct cali_tc_ctx *ctx)
 {
 	/* Copy fields that are needed by downstream programs from the packet to the state. */
 	tc_state_fill_from_iphdr(ctx);
+
+	if (CALI_F_LO && (GLOBAL_FLAGS & CALI_GLOBALS_LO_UDP_ONLY) && ctx->state->ip_proto != IPPROTO_UDP) {
+		CALI_DEBUG("Allowing because it is not UDP\n");
+		goto allow;
+	}
 
 	/* Parse out the source/dest ports (or type/code for ICMP). */
 	switch (tc_state_fill_from_nexthdr(ctx, dnat_should_decap())) {

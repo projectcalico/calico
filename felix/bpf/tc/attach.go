@@ -59,6 +59,7 @@ type AttachPoint struct {
 	RPFEnforceOption     uint8
 	NATin                uint32
 	NATout               uint32
+	UDPOnly              bool
 }
 
 var ErrDeviceNotFound = errors.New("device not found")
@@ -428,6 +429,10 @@ func (ap *AttachPoint) ConfigureProgram(m *libbpf.Map) error {
 		globalData.Flags |= libbpf.GlobalsRPFOptionStrict
 	case tcdefs.RPFEnforceOptionLoose:
 		globalData.Flags |= libbpf.GlobalsRPFOptionEnabled
+	}
+
+	if ap.UDPOnly {
+		globalData.Flags |= libbpf.GlobalsLoUDPOnly
 	}
 
 	globalData.HostTunnelIP = globalData.HostIP
