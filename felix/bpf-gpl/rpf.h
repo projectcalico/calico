@@ -101,6 +101,16 @@ static CALI_BPF_INLINE bool hep_rpf_check(struct cali_tc_ctx *ctx)
 						debug_ip(ctx->state->ip_src), fib_params.ifindex);
 #endif
 			}
+			break;
+		case BPF_FIB_LKUP_RET_NOT_FWDED:
+#ifdef IPVER6
+			if (ip_link_local(ctx->state->ip_dst) && ip_link_local(ctx->state->ip_src)) {
+				ret = true;
+				CALI_DEBUG("Host RPF check disabled if src and dst are link local\n");
+			}
+#endif
+			break;
+
 	}
 
 #ifdef IPVER6
