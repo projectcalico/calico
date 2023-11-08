@@ -91,11 +91,10 @@ FV_SLOW_SPEC_THRESH=90
 #
 # We use -B to insert a build ID note into the executable, without which, the
 # RPM build tools complain.
-LDFLAGS=-ldflags "\
-	-X $(PACKAGE_NAME)/buildinfo.GitVersion=$(GIT_DESCRIPTION) \
+LDFLAGS= -X $(PACKAGE_NAME)/buildinfo.GitVersion=$(GIT_DESCRIPTION) \
 	-X $(PACKAGE_NAME)/buildinfo.BuildDate=$(DATE) \
 	-X $(PACKAGE_NAME)/buildinfo.GitRevision=$(GIT_COMMIT) \
-	-B 0x$(BUILD_ID)"
+	-B 0x$(BUILD_ID)
 
 .PHONY: clean
 clean:
@@ -144,10 +143,8 @@ CGO_LDFLAGS=""
 FV_RACE_DETECTOR_ENABLED?=false
 endif
 
-ifeq ($(ARCH), amd64)
+ifeq ($(ARCH),amd64)
 BUILD_TARGETS+=bin/calico-felix.exe
-GOEXPERIMENT=boringcrypto
-TAGS=fipsstrict
 endif
 
 build: $(BUILD_TARGETS)
@@ -165,22 +162,25 @@ $(LIBBPF_A): $(shell find bpf-gpl/include/libbpf -type f ! -name "*.a")
 	$(DOCKER_GO_BUILD) sh -c "make -j 16 -C bpf-gpl/include/libbpf/src BUILD_STATIC_ONLY=1 OBJDIR=$(ARCH)"
 
 DOCKER_GO_BUILD_CGO=$(DOCKER_RUN) $(TARGET_PLATFORM) -e CGO_ENABLED=$(CGO_ENABLED) -e CGO_LDFLAGS=$(CGO_LDFLAGS) -e CGO_CFLAGS=$(CGO_CFLAGS) $(CALICO_BUILD)
-DOCKER_GO_BUILD_CGO_WINDOWS=$(DOCKER_RUN) $(TARGET_PLATFORM) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD)
 
 bin/calico-felix-$(ARCH): $(LIBBPF_A) $(SRC_FILES)
 	@echo Building felix for $(ARCH) on $(BUILDARCH)
-	mkdir -p bin
-	if [ "$(SEMAPHORE)" != "true" -o ! -e $@ ] ; then \
-	  $(DOCKER_GO_BUILD_CGO) sh -c '$(GIT_CONFIG_SSH) \
-	     go build -v -o $@ -v -buildvcs=false $(BUILD_FLAGS) $(LDFLAGS) "$(PACKAGE_NAME)/cmd/calico-felix"'; \
-	fi
+ifeq ($(FIPS),true)
+	$(call build_cgo_boring_binary, $(PACKAGE_NAME)/cmd/calico-felix, $@)
+else
+ifeq ($(ARCH),amd64)
+	$(call build_cgo_binary, $(PACKAGE_NAME)/cmd/calico-felix, $@)
+else
+	$(call build_binary, $(PACKAGE_NAME)/cmd/calico-felix, $@)
+endif
+endif
 
 bin/calico-felix-race-$(ARCH): $(LIBBPF_A) $(SRC_FILES) ../go.mod
 	@echo Building felix with race detector enabled for $(ARCH) on $(BUILDARCH)
 	mkdir -p bin
 	if [ "$(SEMAPHORE)" != "true" -o ! -e $@ ] ; then \
 	  $(DOCKER_GO_BUILD_CGO) sh -c '$(GIT_CONFIG_SSH) \
-	     go build -v -race -o $@ -v -buildvcs=false $(BUILD_FLAGS) $(LDFLAGS) "$(PACKAGE_NAME)/cmd/calico-felix"'; \
+	     go build -v -race -o $@ -v -buildvcs=false -ldflags "$(LDFLAGS)" "$(PACKAGE_NAME)/cmd/calico-felix"'; \
 	fi
 
 # Generate the protobuf bindings for go. The proto/felixbackend.pb.go file is included in SRC_FILES
@@ -282,7 +282,7 @@ ut combined.coverprofile: $(SRC_FILES) $(LIBBPF_A) build-bpf
 fv/fv.test: $(LIBBPF_A) $(SRC_FILES) $(FV_SRC_FILES)
 	# We pre-build the FV test binaries so that we can run them
 	# outside a container and allow them to interact with docker.
-	$(DOCKER_GO_BUILD_CGO) go test $(BUILD_FLAGS) ./$(shell dirname $@) -c --tags fvtests -o $@
+	$(DOCKER_GO_BUILD_CGO) go test ./fv -c --tags fvtests -o $@
 
 REMOTE_DEPS=build-typha
 
@@ -358,7 +358,7 @@ check-wireguard:
 fv/win-fv.exe: $(REMOTE_DEPS)
 	mkdir -p bin
 	$(DOCKER_GO_BUILD_CGO) sh -c '$(GIT_CONFIG_SSH) \
-		GOOS=windows CC=x86_64-w64-mingw32-gcc go test --buildmode=exe -mod=mod ./$(shell dirname $@)/winfv -c -o $@'
+		GOOS=windows go test ./fv/winfv -c -o $@'
 
 ###############################################################################
 # K8SFV Tests
@@ -398,7 +398,7 @@ k8sfv-test: $(REMOTE_DEPS) $(FELIX_CONTAINER_CREATED) $(FV_BINARY) bin/k8sfv.tes
 bin/k8sfv.test: $(K8SFV_GO_FILES)
 	@echo Building $@...
 	$(DOCKER_GO_BUILD) \
-	    sh -c 'go test -c $(BUILD_FLAGS) -o $@ ./k8sfv'
+	    sh -c 'go test -c -o $@ ./k8sfv'
 
 .PHONY: run-prometheus run-grafana stop-prometheus stop-grafana
 run-prometheus: stop-prometheus $(K8SFV_PROMETHEUS_DATA_DIR)
@@ -434,31 +434,24 @@ stop-grafana:
 
 bin/calico-bpf: $(SRC_FILES)
 	@echo Building calico-bpf...
-	mkdir -p bin
-	$(DOCKER_GO_BUILD_CGO) sh -c '$(GIT_CONFIG_SSH) \
-	    GOEXPERIMENT=$(GOEXPERIMENT) go build -v -o $@ -tags $(TAGS) -v -buildvcs=false $(BUILD_FLAGS) $(LDFLAGS) "$(PACKAGE_NAME)/cmd/calico-bpf"'
+	$(call build_cgo_binary, "$(PACKAGE_NAME)/cmd/calico-bpf", $@)
 
 bin/pktgen: $(SRC_FILES) $(FV_SRC_FILES)
 	@echo Building pktgen...
-	mkdir -p bin
-	$(DOCKER_GO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
-		GOEXPERIMENT=$(GOEXPERIMENT) go build -v -o $@ -tags $(TAGS) -v -buildvcs=false $(BUILD_FLAGS) $(LDFLAGS) "$(PACKAGE_NAME)/fv/pktgen"'
+	$(call build_binary, "$(PACKAGE_NAME)/fv/pktgen", $@)
 
 bin/iptables-locker: ../go.mod $(shell find iptables -type f -name '*.go' -print)
 	@echo Building iptables-locker...
-	$(DOCKER_GO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
-	    GOEXPERIMENT=$(GOEXPERIMENT) go build -v -o $@ -tags $(TAGS) -v -buildvcs=false $(BUILD_FLAGS) $(LDFLAGS) "$(PACKAGE_NAME)/fv/iptables-locker"'
+	$(call build_binary, "$(PACKAGE_NAME)/fv/iptables-locker", $@)
 
 bin/test-workload: ../go.mod fv/cgroup/cgroup.go fv/utils/utils.go fv/connectivity/*.go fv/test-workload/*.go
 	@echo Building test-workload...
-	$(DOCKER_GO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
-	    GOEXPERIMENT=$(GOEXPERIMENT) go build -v -o $@ -tags $(TAGS) -v -buildvcs=false $(BUILD_FLAGS) $(LDFLAGS) "$(PACKAGE_NAME)/fv/test-workload"'
+	$(call build_binary, "$(PACKAGE_NAME)/fv/test-workload", $@)
 
 bin/test-connection: ../go.mod fv/cgroup/cgroup.go fv/utils/utils.go fv/connectivity/*.go fv/test-connection/*.go
 	@echo Building test-connection...
-	mkdir -p bin
-	$(DOCKER_GO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
-	    GOEXPERIMENT=$(GOEXPERIMENT) go build -v -o $@ -tags $(TAGS) -v -buildvcs=false $(BUILD_FLAGS) $(LDFLAGS) "$(PACKAGE_NAME)/fv/test-connection"'
+	$(call build_binary, "$(PACKAGE_NAME)/fv/test-connection", $@)
+
 st:
 	@echo "No STs available"
 
@@ -508,16 +501,16 @@ ut-watch: $(SRC_FILES)
 
 .PHONY: bin/bpf.test
 bin/bpf.test: $(GENERATED_FILES) $(shell find bpf/ -name '*.go')
-	$(DOCKER_GO_BUILD_CGO) go test $(BUILD_FLAGS) ./bpf/ -c -o $@
+	$(DOCKER_GO_BUILD_CGO) go test ./bpf/ -c -o $@
 
 .PHONY: bin/bpf_ut.test
 bin/bpf_ut.test: $(GENERATED_FILES) $(shell find bpf/ -name '*.go')
-	$(DOCKER_GO_BUILD_CGO) go test $(BUILD_FLAGS) ./bpf/ut -c -o $@
+	$(DOCKER_GO_BUILD_CGO) go test ./bpf/ut -c -o $@
 
 # Build debug version of bpf.test for use with the delve debugger.
 .PHONY: bin/bpf_debug.test
 bin/bpf_debug.test: $(GENERATED_FILES) $(shell find bpf/ -name '*.go')
-	$(DOCKER_GO_BUILD_CGO) go test $(BUILD_FLAGS) ./bpf/ut -c -gcflags="-N -l" -o $@
+	$(DOCKER_GO_BUILD_CGO) go test ./bpf/ut -c -gcflags="-N -l" -o $@
 
 .PHONY: ut-bpf
 ut-bpf: $(LIBBPF_A) bin/bpf_ut.test bin/bpf.test build-bpf
@@ -582,11 +575,7 @@ bin/calico-felix.transfer-url: bin/calico-felix
 # Cross-compile Felix for Windows
 bin/calico-felix.exe: $(SRC_FILES)
 	@echo Building felix for Windows...
-	mkdir -p bin
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
-	   	GOOS=windows go build -buildvcs=false -v -o $@ -v $(LDFLAGS) "$(PACKAGE_NAME)/cmd/calico-felix" && \
-		( ldd $@ 2>&1 | grep -q "Not a valid dynamic program\|not a dynamic executable" || \
-		( echo "Error: $@ was not statically linked"; false ) )'
+	$(call build_windows_binary, "$(PACKAGE_NAME)/cmd/calico-felix", $@)
 
 .PHONY: patch-script
 patch-script: bin/calico-felix.transfer-url

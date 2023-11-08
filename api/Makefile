@@ -112,9 +112,7 @@ examples: bin/list-gnp
 
 bin/list-gnp: examples/list-gnp/main.go
 	@echo Building list-gnp example binary...
-	mkdir -p bin
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
-		go build -buildvcs=false -v -o $@ "examples/list-gnp/main.go"'
+	$(call build_binary, examples/list-gnp/main.go, $@)
 
 WHAT?=.
 GINKGO_FOCUS?=.*
