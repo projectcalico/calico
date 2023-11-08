@@ -360,6 +360,8 @@ func setupAndRun(logger testLogger, loglevel, section string, rules *polprog.Rul
 
 	if topts.objname != "" {
 		obj = topts.objname
+	} else if topts.ipv6 {
+		obj += "_v6"
 	}
 
 	if topts.xdp {
