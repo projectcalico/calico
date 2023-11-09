@@ -806,7 +806,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 		CALI_DEBUG("Packet returned from tunnel %x\n", bpf_ntohl(tc_ctx->state->tun_ip));
 	} else if (CALI_F_TO_HOST || (skb_from_host(tc_ctx->skb) && result.flags & CALI_CT_FLAG_HOST_PSNAT)) {
 		/* Source of the packet is the endpoint, so check the src approval flag. */
-		if (src_to_dst->approved) {
+		if (CALI_F_LO || src_to_dst->approved) {
 			CALI_CT_VERB("Packet approved by this workload's policy.\n");
 		} else {
 			/* Only approved by the other side (so far)?  Unlike
@@ -819,7 +819,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 		}
 	} else if (CALI_F_FROM_HOST) {
 		/* Dest of the packet is the endpoint, so check the dest approval flag. */
-		if (dst_to_src->approved) {
+		if (CALI_F_LO || dst_to_src->approved) {
 			// Packet was approved by the policy attached to this endpoint.
 			CALI_CT_VERB("Packet approved by this workload's policy.\n");
 		} else {
@@ -872,7 +872,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct cali_t
 			 *
 			 * Do not check if packets are returning from the NP vxlan tunnel.
 			 */
-			if (!same_if && !ret_from_tun && !hep_rpf_check(tc_ctx) && !CALI_F_NAT_IF) {
+			if (!same_if && !ret_from_tun && !hep_rpf_check(tc_ctx) && !CALI_F_NAT_IF && !CALI_F_LO) {
 				ct_result_set_flag(result.rc, CT_RES_RPF_FAILED);
 			} else {
 				src_to_dst->ifindex = ifindex;
