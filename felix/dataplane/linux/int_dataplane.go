@@ -718,8 +718,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 		if config.BPFConnTimeLB == string(apiv3.BPFConnectTimeLBDisabled) &&
 			config.BPFHostNetworkedNAT == string(apiv3.BPFHostNetworkedNATDisabled) {
-			log.Warn("Access to services from host networked process wont work, forcing hostnetworked NAT to Enabled")
-			config.BPFHostNetworkedNAT = string(apiv3.BPFHostNetworkedNATEnabled)
+			log.Warn("Host-networked access to services from host networked process won't work properly " +
+				"- BPFHostNetworkedNAT is disabled.")
 		}
 
 		bpfEndpointManager, err = newBPFEndpointManager(
@@ -799,14 +799,18 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		// The above cases are invalid configuration. Revert to CTLB enabled.
 		if config.BPFHostNetworkedNAT == string(apiv3.BPFHostNetworkedNATEnabled) {
 			if config.BPFConnTimeLB == string(apiv3.BPFConnectTimeLBEnabled) {
-				log.Warn("Access to services may not work properly, reverting to default CTLB configuration")
-				config.BPFConnTimeLB = string(apiv3.BPFConnectTimeLBTCP)
+				log.Warn("Both BPFConnectTimeLoadBalancing and BPFHostNetworkedNATWithoutCTLB are enabled. " +
+					"Disabling BPFHostNetworkedNATWithoutCTLB. " +
+					"Set BPFConnectTimeLoadBalancing=TCP if you want disable it for other protocols.")
+				config.BPFHostNetworkedNAT = string(apiv3.BPFHostNetworkedNATDisabled)
 			}
 		} else {
 			if config.BPFConnTimeLB != string(apiv3.BPFConnectTimeLBEnabled) {
-				log.Warn("Access to services may not work properly, reverting to default CTLB configuration")
-				config.BPFConnTimeLB = string(apiv3.BPFConnectTimeLBTCP)
-				config.BPFHostNetworkedNAT = string(apiv3.BPFHostNetworkedNATEnabled)
+				if config.BPFHostNetworkedNAT == string(apiv3.BPFHostNetworkedNATDisabled) {
+					log.Warnf("Access to (some) services from host may not work properly because "+
+						"BPFConnectTimeLoadBalancing is %s and BPFHostNetworkedNATWithoutCTLB is disabled",
+						config.BPFConnTimeLB)
+				}
 			}
 		}
 
@@ -832,6 +836,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			if err != nil {
 				log.WithError(err).Panic("BPFConnTimeLBEnabled but failed to attach connect-time load balancer, bailing out.")
 			}
+			log.Infof("Connect time load balancer enabled: %s", config.BPFConnTimeLB)
 		} else {
 			// Deactivate the connect-time load balancer.
 			err = nat.RemoveConnectTimeLoadBalancer(config.BPFCgroupV2)
