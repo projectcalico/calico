@@ -128,29 +128,6 @@ static CALI_BPF_INLINE int icmp_v4_reply(struct cali_tc_ctx *ctx,
 	return 0;
 }
 
-static CALI_BPF_INLINE int icmp_v4_too_big(struct cali_tc_ctx *ctx)
-{
-	struct {
-		__be16  unused;
-		__be16  mtu;
-	} frag = {
-		.mtu = bpf_htons(TUNNEL_MTU),
-	};
-
-	CALI_DEBUG("Sending ICMP too big mtu=%d\n", bpf_ntohs(frag.mtu));
-	return icmp_v4_reply(ctx, ICMP_DEST_UNREACH, ICMP_FRAG_NEEDED, *(__be32 *)&frag);
-}
-
-static CALI_BPF_INLINE int icmp_v4_ttl_exceeded(struct cali_tc_ctx *ctx)
-{
-	return icmp_v4_reply(ctx, ICMP_TIME_EXCEEDED, ICMP_EXC_TTL, 0);
-}
-
-static CALI_BPF_INLINE int icmp_v4_port_unreachable(struct cali_tc_ctx *ctx)
-{
-	return icmp_v4_reply(ctx, ICMP_DEST_UNREACH, ICMP_PORT_UNREACH, 0);
-}
-
 static CALI_BPF_INLINE bool icmp_type_is_err(__u8 type)
 {
 	switch (type) {

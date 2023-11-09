@@ -7,7 +7,11 @@
 
 #include <linux/tcp.h>
 #include <linux/udp.h>
+#ifdef IPVER6
+#include <linux/icmpv6.h>
+#else
 #include <linux/icmp.h>
+#endif
 
 #include "types.h"
 #include "skb.h"
@@ -176,11 +180,11 @@ static CALI_BPF_INLINE int tc_state_fill_from_nexthdr(struct cali_tc_ctx *ctx, b
 #ifdef IPVER6
 	case IPPROTO_ICMPV6:
 		CALI_DEBUG("ICMPV6; type=%d code=%d\n",
-				icmp_hdr(ctx)->type, icmp_hdr(ctx)->code);
+				icmp_hdr(ctx)->icmp6_type, icmp_hdr(ctx)->icmp6_code);
 		ctx->state->sport = 0;
 		/* icmp_type/code are in dport */
-		ctx->state->icmp_type = icmp_hdr(ctx)->type;
-		ctx->state->icmp_code = icmp_hdr(ctx)->code;
+		ctx->state->icmp_type = icmp_hdr(ctx)->icmp6_type;
+		ctx->state->icmp_code = icmp_hdr(ctx)->icmp6_code;
 		break;
 #else
 	case IPPROTO_ICMP:
