@@ -39,7 +39,9 @@ static CALI_BPF_INLINE bool hep_rpf_check(struct cali_tc_ctx *ctx)
 {
 	bool ret = false;
 	bool strict;
-
+#ifdef IPVER6
+	bool linkLocal = false;
+#endif
 	if (!(GLOBAL_FLAGS & CALI_GLOBALS_RPF_OPTION_ENABLED)) {
 		CALI_DEBUG("Host RPF check disabled\n");
 		return true;
@@ -48,6 +50,9 @@ static CALI_BPF_INLINE bool hep_rpf_check(struct cali_tc_ctx *ctx)
 #ifdef IPVER6
 	if (ctx->state->ip_proto == IPPROTO_ICMPV6) {
 		return true;
+	}
+	if (ip_link_local(ctx->state->ip_dst) && ip_link_local(ctx->state->ip_src)) {
+		linkLocal = true;
 	}
 #endif
 
@@ -98,14 +103,13 @@ static CALI_BPF_INLINE bool hep_rpf_check(struct cali_tc_ctx *ctx)
 #endif
 			}
 			break;
-		case BPF_FIB_LKUP_RET_NOT_FWDED:
 #ifdef IPVER6
-			if (ip_link_local(ctx->state->ip_dst) && ip_link_local(ctx->state->ip_src)) {
+		case BPF_FIB_LKUP_RET_NOT_FWDED:
+			if (linkLocal) {
 				ret = true;
-				CALI_DEBUG("Host RPF check disabled if src and dst are link local\n");
 			}
-#endif
 			break;
+#endif
 
 	}
 
