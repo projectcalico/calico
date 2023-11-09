@@ -718,7 +718,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 		if config.BPFConnTimeLB == string(apiv3.BPFConnectTimeLBDisabled) &&
 			config.BPFHostNetworkedNAT == string(apiv3.BPFHostNetworkedNATDisabled) {
-			log.Warn("Host-networked access to services from host networked process won't properly " +
+			log.Warn("Host-networked access to services from host networked process won't work properly " +
 				"- BPFHostNetworkedNAT is disabled.")
 		}
 
