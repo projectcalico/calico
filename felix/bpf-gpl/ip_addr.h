@@ -47,6 +47,7 @@ static CALI_BPF_INLINE int ipv6_addr_t_cmp(ipv6_addr_t *x, ipv6_addr_t *y)
 }
 
 #define ip_void(ip)	((ip).a == 0 && (ip).b == 0 && (ip).c == 0 && (ip).d == 0)
+#define ip_link_local(ip)	(bpf_htonl((ip).a) == 0xfe800000)
 #define VOID_IP		({ipv6_addr_t x = {}; x;})
 #define ip_set_void(ip)	do {	\
 	(ip).a = 0;		\
