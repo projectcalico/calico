@@ -7,7 +7,6 @@
 #include "nat.h"
 #include "icmp.h"
 #include "parsing.h"
-#include "jump.h"
 
 const volatile struct cali_tc_globals __globals;
 
@@ -31,32 +30,10 @@ static CALI_BPF_INLINE int calico_unittest_entry (struct __sk_buff *skb)
 		return TC_ACT_SHOT;
 	}
 
-	if (parse_packet_ip(ctx) != PARSING_OK) {
-		return TC_ACT_UNSPEC;
+	if (parse_packet_ip(ctx) != PARSING_OK_V6) {
+		CALI_DEBUG("Not IPv6 packet\n");
+		return TC_ACT_SHOT;
 	}
 
-	tc_state_fill_from_iphdr(ctx);
-
-	switch (tc_state_fill_from_nexthdr(ctx, true)) {
-	case PARSING_ERROR:
-		goto deny;
-	case PARSING_ALLOW_WITHOUT_ENFORCING_POLICY:
-		goto allow;
-	}
-
-	struct {
-		__be16  unused;
-		__be16  mtu;
-	} frag = {
-		.mtu = bpf_htons(TUNNEL_MTU),
-	};
-
-	return icmp_v4_reply(ctx, ICMP_DEST_UNREACH, ICMP_FRAG_NEEDED, *(__be32 *)&frag);
-
-allow:
-	return TC_ACT_UNSPEC;
-
-deny:
-	return TC_ACT_SHOT;
+	return icmp_reply(ctx, ICMPV6_DEST_UNREACH, ICMPV6_PORT_UNREACH, 0);
 }
-

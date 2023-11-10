@@ -356,6 +356,11 @@ func setupAndRun(logger testLogger, loglevel, section string, rules *polprog.Rul
 	policyIdx := tcdefs.ProgIndexPolicy
 	if topts.ipv6 {
 		ipFamily = "IPv6"
+	}
+
+	if topts.objname != "" {
+		obj = topts.objname
+	} else if topts.ipv6 {
 		obj += "_v6"
 	}
 
@@ -1016,6 +1021,9 @@ func runBpfUnitTest(t *testing.T, source string, testFn func(bpfProgRunFn), opts
 	}
 
 	objFname := "../../bpf-gpl/ut/" + strings.TrimSuffix(source, path.Ext(source)) + vExt + ".o"
+	if topts.objname != "" {
+		objFname = "../../bpf-gpl/ut/" + topts.objname
+	}
 
 	obj, err := objUTLoad(objFname, bpfFsDir, "IPv4", topts, true, false)
 	Expect(err).NotTo(HaveOccurred())
@@ -1054,6 +1062,7 @@ type testOpts struct {
 	hostNetworked bool
 	progLog       string
 	ipv6          bool
+	objname       string
 }
 
 type testOption func(opts *testOpts)
@@ -1096,6 +1105,12 @@ func withHostNetworked() testOption {
 func withIPv6() testOption {
 	return func(o *testOpts) {
 		o.ipv6 = true
+	}
+}
+
+func withObjName(name string) testOption {
+	return func(o *testOpts) {
+		o.objname = name
 	}
 }
 

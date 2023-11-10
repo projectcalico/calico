@@ -7,7 +7,6 @@
 #include <linux/pkt_cls.h>
 #include <linux/ip.h>
 #include <linux/tcp.h>
-#include <linux/icmp.h>
 #include <linux/in.h>
 #include <linux/udp.h>
 #include <linux/if_ether.h>
@@ -396,8 +395,13 @@ static CALI_BPF_INLINE void calico_tc_process_ct_lookup(struct cali_tc_ctx *ctx)
 		ctx->state->post_nat_dport = ctx->nat_dest->port;
 	} else if (nat_res == NAT_NO_BACKEND) {
 		/* send icmp port unreachable if there is no backend for a service */
+#ifdef IPVER6
+		ctx->state->icmp_type = ICMPV6_DEST_UNREACH;
+		ctx->state->icmp_code = ICMPV6_PORT_UNREACH;
+#else
 		ctx->state->icmp_type = ICMP_DEST_UNREACH;
 		ctx->state->icmp_code = ICMP_PORT_UNREACH;
+#endif
 		ip_set_void(ctx->state->tun_ip);
 		goto icmp_send_reply;
 	} else {
@@ -561,14 +565,14 @@ syn_force_policy:
 do_policy:
 #ifdef IPVER6
 	if (ctx->state->ip_proto == IPPROTO_ICMPV6) {
-		switch (icmp_hdr(ctx)->type) {
+		switch (icmp_hdr(ctx)->icmp6_type) {
 		case 130: /* multicast listener query */
 		case 131: /* multicast listener report */
 		case 132: /* multicast listener done */
 		case 133: /* router solicitation */
 		case 135: /* neighbor solicitation */
 		case 136: /* neighbor advertisement */
-			CALI_DEBUG("allow ICMPv6 type %d\n", icmp_hdr(ctx)->type);
+			CALI_DEBUG("allow ICMPv6 type %d\n", icmp_hdr(ctx)->icmp6_type);
 			/* We use iptables to allow it only to the host. */
 			if (CALI_F_TO_HOST) {
 				ctx->state->flags |= CALI_ST_SKIP_FIB;
@@ -973,13 +977,14 @@ icmp_too_big:
 	} frag = {
 		.mtu = bpf_htons(TUNNEL_MTU),
 	};
-	STATE->tun_ip = *(__be32 *)&frag;
+	STATE->icmp_un = *(__be32 *)&frag;
+#else
+	STATE->icmp_type = ICMPV6_PKT_TOOBIG;
+	STATE->icmp_code = 0;
+	STATE->icmp_un = bpf_htonl(TUNNEL_MTU);
+#endif
 
 	return NAT_ICMP_TOO_BIG;
-#else
-	/* XXX not implemented yet. */
-	return NAT_DENY;
-#endif
 
 nat_encap:
 	/* XXX */
@@ -1531,13 +1536,16 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 	goto deny;
 
 icmp_ttl_exceeded:
-#ifndef IPVER6
+#ifdef IPVER6
+	state->icmp_type = ICMPV6_TIME_EXCEED;
+	state->icmp_code = ICMPV6_EXC_HOPLIMIT;
+#else
 	if (ip_frag_no(ip_hdr(ctx))) {
 		goto deny;
 	}
-#endif
 	state->icmp_type = ICMP_TIME_EXCEEDED;
 	state->icmp_code = ICMP_EXC_TTL;
+#endif
 	ip_set_void(state->tun_ip);
 	goto icmp_send_reply;
 
@@ -1690,9 +1698,6 @@ deny:
 SEC("tc")
 int calico_tc_skb_send_icmp_replies(struct __sk_buff *skb)
 {
-#ifdef IPVER6
-	return TC_ACT_SHOT;
-#else
 	__u32 fib_flags = 0;
 
 	/* Initialise the context, which is stored on the stack, and the state, which
@@ -1709,7 +1714,11 @@ int calico_tc_skb_send_icmp_replies(struct __sk_buff *skb)
 	CALI_DEBUG("Entering calico_tc_skb_send_icmp_replies\n");
 	CALI_DEBUG("ICMP type %d and code %d\n",ctx->state->icmp_type, ctx->state->icmp_code);
 
+#ifdef IPVER6
+	if (ctx->state->icmp_code == ICMPV6_PKT_TOOBIG) {
+#else
 	if (ctx->state->icmp_code == ICMP_FRAG_NEEDED) {
+#endif
 		fib_flags |= BPF_FIB_LOOKUP_OUTPUT;
 		if (CALI_F_FROM_WEP) {
 			/* we know it came from workload, just send it back the same way */
@@ -1717,7 +1726,7 @@ int calico_tc_skb_send_icmp_replies(struct __sk_buff *skb)
 		}
 	}
 
-	if (icmp_v4_reply(ctx, ctx->state->icmp_type, ctx->state->icmp_code, ctx->state->tun_ip)) {
+	if (icmp_reply(ctx, ctx->state->icmp_type, ctx->state->icmp_code, ctx->state->icmp_un)) {
 		ctx->fwd.res = TC_ACT_SHOT;
 	} else {
 		ctx->fwd.mark = CALI_SKB_MARK_BYPASS_FWD;
@@ -1738,7 +1747,6 @@ int calico_tc_skb_send_icmp_replies(struct __sk_buff *skb)
 deny:
 	(void)fib_flags;
 	return TC_ACT_SHOT;
-#endif /* IPVER6 */
 }
 
 #if HAS_HOST_CONFLICT_PROG

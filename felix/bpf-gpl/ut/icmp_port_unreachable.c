@@ -28,5 +28,5 @@ static CALI_BPF_INLINE int calico_unittest_entry (struct __sk_buff *skb)
 		CALI_DEBUG("Counters map lookup failed: DROP\n");
 		return TC_ACT_SHOT;
 	}
-	return icmp_v4_port_unreachable(ctx);
+	return icmp_v4_reply(ctx, ICMP_DEST_UNREACH, ICMP_PORT_UNREACH, 0);
 }
