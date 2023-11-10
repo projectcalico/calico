@@ -1065,6 +1065,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			It("should allow host -> host", func() {
 				// XXX as long as there is no HEP policy
 				// using hostW as a sink
+				cc.Expect(Some, felixes[0], hostW[0])
 				cc.Expect(Some, felixes[0], hostW[1])
 				cc.Expect(Some, felixes[1], hostW[0])
 				cc.CheckConnectivity()
