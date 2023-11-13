@@ -25073,7 +25073,10 @@ rules:
   - apiGroups:
       - operator.tigera.io
     resources:
-      - '*'
+      - installations
+      - tigerastatus
+      - apiservers
+      - imagesets
     verbs:
       - create
       - get
