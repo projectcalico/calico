@@ -25070,6 +25070,7 @@ rules:
       - deployments/finalizers
     verbs:
       - update
+  # The operator needs read and update permissions on the APIs that it controls.
   - apiGroups:
       - operator.tigera.io
     resources:
@@ -25078,13 +25079,19 @@ rules:
       - apiservers
       - imagesets
     verbs:
-      - create
       - get
       - list
       - update
       - patch
-      - delete
       - watch
+  # In addition to the above, the operator creates and deletes TigeraStatus resources.
+  - apiGroups:
+      - operator.tigera.io
+    resources:
+      - tigerastatus
+    verbs:
+      - create
+      - delete
   - apiGroups:
     - networking.k8s.io
     resources:
