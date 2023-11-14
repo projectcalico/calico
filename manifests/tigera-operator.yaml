@@ -25075,7 +25075,7 @@ rules:
       - operator.tigera.io
     resources:
       - installations
-      - tigerastatus
+      - tigerastatuses
       - apiservers
       - imagesets
     verbs:
@@ -25088,7 +25088,7 @@ rules:
   - apiGroups:
       - operator.tigera.io
     resources:
-      - tigerastatus
+      - tigerastatuses
     verbs:
       - create
       - delete
