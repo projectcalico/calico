@@ -4966,7 +4966,7 @@ spec:
         # This container runs flannel using the kube-subnet-mgr backend
         # for allocating subnets.
         - name: kube-flannel
-          image: docker.io/flannel/flannel:v0.21.3
+          image: docker.io/flannel/flannel:v0.23.0
           imagePullPolicy: IfNotPresent
           command: [ "/opt/bin/flanneld", "--ip-masq", "--kube-subnet-mgr" ]
           securityContext:
