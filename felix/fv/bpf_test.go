@@ -1425,7 +1425,13 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						By("starting tcpdump")
 						tcpdump := w[0][0].AttachTCPDump()
 						tcpdump.SetLogEnabled(true)
-						pattern := fmt.Sprintf(`IP %s.\d+ > %s\.80: Flags \[S\]`, w[0][0].IP, testSvc.Spec.ClusterIP)
+
+						var pattern string
+						if testOpts.ipv6 {
+							pattern = fmt.Sprintf(`IP6 %s.\d+ > %s\.80`, w[0][0].IP, testSvc.Spec.ClusterIP)
+						} else {
+							pattern = fmt.Sprintf(`IP %s.\d+ > %s\.80`, w[0][0].IP, testSvc.Spec.ClusterIP)
+						}
 						tcpdump.AddMatcher("no-backend", regexp.MustCompile(pattern))
 						tcpdump.Start()
 						defer tcpdump.Stop()
@@ -1681,15 +1687,34 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						pol = updatePolicy(pol)
 					})
 					It("should not have connectivity from external client, and return connection refused", func() {
+						icmpProto := "icmp"
 						if testOpts.ipv6 {
-							// XXX
-							return
+							icmpProto = "icmp6"
 						}
+
+						tcpdump := externalClient.AttachTCPDump("any")
+						tcpdump.SetLogEnabled(true)
+						if testOpts.ipv6 {
+							tcpdump.AddMatcher("unreach", regexp.MustCompile("destination unreachable"))
+							tcpdump.AddMatcher("bad csum", regexp.MustCompile("bad icmp6 cksum"))
+						} else {
+							tcpdump.AddMatcher("unreach", regexp.MustCompile("port \\d+ unreachable"))
+							tcpdump.AddMatcher("bad csum", regexp.MustCompile("wrong icmp cksum"))
+						}
+
+						tcpdump.Start("-vv", testOpts.protocol, "port", strconv.Itoa(int(port)), "or", icmpProto)
+						defer tcpdump.Stop()
+
 						cc.Expect(None, externalClient, TargetIP(ip[0]),
 							ExpectWithPorts(port),
 							ExpectNoneWithError("connection refused"),
 						)
 						cc.CheckConnectivity()
+
+						Eventually(func() int { return tcpdump.MatchCount("unreach") }).
+							Should(BeNumerically(">", 0))
+						// XXX
+						// Expect(tcpdump.MatchCount("bad csum")).To(Equal(0))
 					})
 				})
 

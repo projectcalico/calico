@@ -14,7 +14,8 @@ CFLAGS +=  \
 	-O2 \
 	-target bpf \
 	-emit-llvm \
-	-g
+	-g \
+	-D__x86_64__
 
 # Build against libbpf and its recent copy of the kernel headers.
 # We link against the user API version of the headers because they contain
@@ -78,6 +79,8 @@ UT_CFLAGS=\
 # Mini-UT programs that test one or two functions.  These are each in their own files.
 ut/%.ll: ut/%.c ut/ut.h
 	$(CC) $(UT_CFLAGS) $(CFLAGS) -c $< -o $@
+
+ut/icmp6_port_unreachable.ll: CFLAGS += -DIPVER6
 
 tc_preamble.ll: tc_preamble.c tc_preamble.d
 	$(CC) $(CFLAGS) -c $< -o $@

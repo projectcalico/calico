@@ -5,10 +5,14 @@
 #include <linux/types.h>
 #include <linux/bpf.h>
 #include <linux/pkt_cls.h>
-#include <linux/ip.h>
+#ifdef IPVER6
 #include <linux/ipv6.h>
-#include <linux/tcp.h>
+#include <linux/icmpv6.h>
+#else
+#include <linux/ip.h>
 #include <linux/icmp.h>
+#endif
+#include <linux/tcp.h>
 #include <linux/in.h>
 #include <linux/udp.h>
 #include <linux/if_ether.h>
