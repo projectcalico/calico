@@ -374,7 +374,7 @@ func NewCalculationGraph(callbacks PipelineCallbacks, conf *config.Config, liveC
 	//         |
 	//      <dataplane>
 	//
-	hostIPPassthru := NewDataplanePassthru(callbacks)
+	hostIPPassthru := NewDataplanePassthru(callbacks, conf.Ipv6Support)
 	hostIPPassthru.RegisterWith(allUpdDispatcher)
 	cg.hostIPPassthru = hostIPPassthru
 
