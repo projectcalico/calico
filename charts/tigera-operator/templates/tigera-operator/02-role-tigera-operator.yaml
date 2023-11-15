@@ -99,8 +99,11 @@ rules:
       - operator.tigera.io
     resources:
       - installations
+      - installations/status
       - tigerastatuses
+      - tigerastatuses/status
       - apiservers
+      - apiservers/status
       - imagesets
     verbs:
       - get
