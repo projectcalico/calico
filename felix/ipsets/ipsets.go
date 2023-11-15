@@ -21,10 +21,12 @@ import (
 	"io"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/projectcalico/calico/felix/deltatracker"
 	"github.com/projectcalico/calico/felix/logutils"
@@ -32,7 +34,9 @@ import (
 )
 
 const (
+	MaxIPSetParallelUpdates       = 10
 	MaxIPSetDeletionsPerIteration = 1
+	RestoreChunkSize              = 5000
 )
 
 type dataplaneMetadata struct {
@@ -47,6 +51,9 @@ type dataplaneMetadata struct {
 type IPSets struct {
 	IPVersionConfig *IPVersionConfig
 
+	// mutex protects setNameToProgrammedMetadata, nextTempIPSetIdx, and ipSetsWithDirtyMembers,
+	// which are updated from the apply worker goroutines.
+	mutex sync.Mutex
 	// setNameToAllMetadata contains an entry for each IP set that has been
 	// added by a call to AddOrReplaceIPSet (and not subsequently removed).
 	// It is *not* filtered by neededIPSetNames.
@@ -82,15 +89,7 @@ type IPSets struct {
 
 	logCxt *log.Entry
 
-	// restoreInCopy holds a copy of the stdin that we send to ipset restore.  It is reset
-	// after each use.
-	restoreInCopy bytes.Buffer
-	// stdoutCopy holds a copy of the the stdout emitted by ipset restore. It is reset after
-	// each use.
-	stdoutCopy bytes.Buffer
-	// stderrCopy holds a copy of the the stderr emitted by ipset restore. It is reset after
-	// each use.
-	stderrCopy bytes.Buffer
+	bufPool sync.Pool
 
 	opReporter logutils.OpRecorder
 
@@ -141,6 +140,7 @@ func NewIPSetsWithShims(
 		logCxt: log.WithFields(log.Fields{
 			"family": ipVersionConfig.Family,
 		}),
+		bufPool:    sync.Pool{New: func() any { return &bytes.Buffer{} }},
 		opReporter: recorder,
 	}
 }
@@ -644,35 +644,99 @@ func ParseRange(s string) (min int, max int, err error) {
 	return
 }
 
-// tryUpdates attempts to create and/or update IP sets.  It attempts to do the updates as a single
-// 'ipset restore' session in order to minimise process forking overhead.  Note: unlike
-// 'iptables-restore', 'ipset restore' is not atomic, updates are applied individually.
-// This function updates the set of programmed IPs - that is the IPs that were added or replaced in the IPSets
-// included by the ipsetFilter.
+// tryUpdates attempts to create and/or update IP sets.  It starts background goroutines, each
+// running one "ipset restore" session.  Note: unlike 'iptables-restore', 'ipset restore' is
+// not atomic, updates are applied individually.
 func (s *IPSets) tryUpdates() error {
-	var dirtyIPSets []string
-	s.ipSetsWithDirtyMembers.Iter(func(setName string) error {
-		if _, ok := s.setNameToProgrammedMetadata.Desired().Get(setName); !ok {
-			// Skip deletions and IP sets that aren't needed due to the filter.
-			return nil
-		}
-		dirtyIPSets = append(dirtyIPSets, setName)
-		return nil
-	})
-	s.setNameToProgrammedMetadata.PendingUpdates().Iter(func(setName string, v dataplaneMetadata) deltatracker.IterAction {
-		if !s.ipSetsWithDirtyMembers.Contains(setName) {
-			dirtyIPSets = append(dirtyIPSets, setName)
-		}
-		return deltatracker.IterActionNoOp
-	})
-	if len(dirtyIPSets) == 0 {
+	ipSetChunks, total, totalLines := s.chunkUpDirtyIPSets()
+	if total == 0 {
 		s.logCxt.Debug("No dirty IP sets.")
 		return nil
 	}
 	s.opReporter.RecordOperation(fmt.Sprint("update-ipsets-", s.IPVersionConfig.Family.Version()))
 
+	var errg errgroup.Group
+	errg.SetLimit(MaxIPSetParallelUpdates)
 	start := time.Now()
+	for _, setIDs := range ipSetChunks {
+		setIDs := setIDs
+		errg.Go(func() error {
+			return s.writeIPSetChunk(setIDs)
+		})
+	}
+
+	log.Debug("Waiting for background IP set updates to finish...")
+	err := errg.Wait()
+	log.Debug("Background IP set updates finished.")
+	if err != nil {
+		return fmt.Errorf("failed to write one or more IP set: %v", err)
+	}
+	log.Infof("Updated %d IPSets in %d chunks (%d lines) in %v", total, len(ipSetChunks), totalLines, time.Since(start))
+
+	// If we get here, the writes were successful, reset the IP sets delta tracking now the
+	// dataplane should be in sync.
+	s.ipSetsWithDirtyMembers.Clear()
+
+	return nil
+}
+
+// chunkUpDirtyIPSets breaks up the dirtyIPSetIDs set into slices for processing in parallel.
+func (s *IPSets) chunkUpDirtyIPSets() (chunks [][]string, numIPSets, numLines int) {
+	// We try to make sure that each chunk has a reasonable number of ipset input lines
+	// in it.  If we simply made each ipset into its own chunk then we'd pay the overhead of
+	// launching the ipset binary for every IP set, even if there was only 1 update per IP
+	// set.
+	var chunk []string
+	var estimatedNumLinesInChunk int
+	s.ipSetsWithDirtyMembers.Iter(func(setName string) error {
+		if _, ok := s.setNameToProgrammedMetadata.Desired().Get(setName); !ok {
+			// Skip deletions and IP sets that aren't needed due to the filter.
+			return nil
+		}
+		chunk = append(chunk, setName)
+		numIPSets++
+		numLinesForIPSet := s.estimateUpdateSize(setName)
+		estimatedNumLinesInChunk += numLinesForIPSet
+		numLines += numLinesForIPSet
+		if estimatedNumLinesInChunk >= RestoreChunkSize {
+			chunks = append(chunks, chunk)
+			chunk = nil
+			estimatedNumLinesInChunk = 0
+		}
+		return nil
+	})
+	s.setNameToProgrammedMetadata.PendingUpdates().Iter(func(setName string, v dataplaneMetadata) deltatracker.IterAction {
+		if !s.ipSetsWithDirtyMembers.Contains(setName) {
+			chunk = append(chunk, setName)
+			numIPSets++
+			estimatedNumLinesInChunk += s.estimateUpdateSize(setName)
+			if estimatedNumLinesInChunk >= RestoreChunkSize {
+				chunks = append(chunks, chunk)
+				chunk = nil
+				estimatedNumLinesInChunk = 0
+			}
+		}
+		return deltatracker.IterActionNoOp
+	})
+	if chunk != nil {
+		chunks = append(chunks, chunk)
+	}
+
+	if len(chunks) > MaxIPSetParallelUpdates {
+		chunks2 := make([][]string, MaxIPSetParallelUpdates)
+		for i, c := range chunks {
+			chunks2[i%MaxIPSetParallelUpdates] = append(chunks2[i%MaxIPSetParallelUpdates], c...)
+		}
+		return chunks2, numIPSets, numLines
+	}
+	return
+}
+
+func (s *IPSets) writeIPSetChunk(setNames []string) error {
 	// Set up an ipset restore session.
+	if log.IsLevelEnabled(log.DebugLevel) {
+		log.WithField("setNames", setNames).Debug("Started goroutine to update IP sets.")
+	}
 	countNumIPSetCalls.Inc()
 	cmd := s.newCmd("ipset", "restore")
 	// Get the pipe for stdin.
@@ -682,16 +746,17 @@ func (s *IPSets) tryUpdates() error {
 		return err
 	}
 
+	restoreInCopy := s.bufPool.Get().(*bytes.Buffer)
+	stdoutCopy := s.bufPool.Get().(*bytes.Buffer)
+	stderrCopy := s.bufPool.Get().(*bytes.Buffer)
+
 	// "Tee" the data that we write to stdin to a buffer so we can dump it to the log on
 	// failure.
-	stdin := io.MultiWriter(&s.restoreInCopy, rawStdin)
-	defer s.restoreInCopy.Reset()
+	stdin := io.MultiWriter(restoreInCopy, rawStdin)
 
 	// Channel stdout/err to buffers so we can include them in the log on failure.
-	cmd.SetStderr(&s.stderrCopy)
-	defer s.stderrCopy.Reset()
-	cmd.SetStdout(&s.stdoutCopy)
-	defer s.stdoutCopy.Reset()
+	cmd.SetStderr(stderrCopy)
+	cmd.SetStdout(stdoutCopy)
 
 	// Actually start the child process.
 	startTime := time.Now()
@@ -707,9 +772,8 @@ func (s *IPSets) tryUpdates() error {
 	}
 	summaryExecStart.Observe(float64(time.Since(startTime).Nanoseconds()) / 1000.0)
 
-	// Ask each dirty IP set to write its updates to the stream.
 	var writeErr error
-	for _, setName := range dirtyIPSets {
+	for _, setName := range setNames {
 		// Ask IP set to write its updates to the stream.
 		if log.IsLevelEnabled(log.DebugLevel) {
 			log.WithField("setName", setName).Debug("Writing updates to IP set.")
@@ -734,17 +798,19 @@ func (s *IPSets) tryUpdates() error {
 			"flushErr":   flushErr,
 			"closeErr":   closeErr,
 			"processErr": processErr,
-			"stdout":     s.stdoutCopy.String(),
-			"stderr":     s.stderrCopy.String(),
-			"input":      s.restoreInCopy.String(),
+			"stdout":     stdoutCopy.String(),
+			"stderr":     stderrCopy.String(),
+			"input":      restoreInCopy.String(),
 		}).Warning("Failed to complete ipset restore, IP sets may be out-of-sync.")
-		return fmt.Errorf("failed to write one or more IP set: %v", err)
+		return err
 	}
-	log.Debugf("Updated %d IPSets in %v", len(dirtyIPSets), time.Since(start))
 
-	// If we get here, the writes were successful, reset the IP sets delta tracking now the
-	// dataplane should be in sync.
-	s.ipSetsWithDirtyMembers.Clear()
+	restoreInCopy.Reset()
+	s.bufPool.Put(restoreInCopy)
+	stdoutCopy.Reset()
+	s.bufPool.Put(stdoutCopy)
+	stderrCopy.Reset()
+	s.bufPool.Put(stderrCopy)
 
 	return nil
 }
@@ -752,10 +818,13 @@ func (s *IPSets) tryUpdates() error {
 func (s *IPSets) writeUpdates(setName string, w io.Writer) (err error) {
 	logCxt := s.logCxt.WithField("setName", setName)
 
+	s.mutex.Lock()
 	desiredMeta, desiredExists := s.setNameToProgrammedMetadata.Desired().Get(setName)
 	dpMeta, dpExists := s.setNameToProgrammedMetadata.Dataplane().Get(setName)
-
+	// Note: we'll update members below without the lock.  This is safe because
+	// we only update it from one worker at a time.
 	members, membersExists := s.mainSetNameToMembers[setName]
+	s.mutex.Unlock()
 
 	if !desiredExists {
 		log.WithField("setName", setName).Panic("writeUpdates called for pending deletion?")
@@ -841,12 +910,14 @@ func (s *IPSets) writeUpdates(setName string, w io.Writer) (err error) {
 	}
 
 	if needCreate || needTempIPSet {
+		s.mutex.Lock()
 		if needTempIPSet {
 			// After the swap, the temp IP set has the _old_ dataplane metadata.
 			s.setNameToProgrammedMetadata.Dataplane().Set(tempSet, dpMeta)
 		}
 		// The main IP set now has the correct metadata.
 		s.setNameToProgrammedMetadata.Dataplane().Set(setName, desiredMeta)
+		s.mutex.Unlock()
 	}
 	return
 }
@@ -856,6 +927,8 @@ func (s *IPSets) writeUpdates(setName string, w io.Writer) (err error) {
 // around the fact that we sometimes see transient failures to remove
 // temporary IP sets.
 func (s *IPSets) nextFreeTempIPSetName() string {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
 	for {
 		candidateName := s.IPVersionConfig.NameForTempIPSet(s.nextTempIPSetIdx)
 		s.nextTempIPSetIdx++
@@ -982,6 +1055,27 @@ func firstNonNilErr(errs ...error) error {
 		}
 	}
 	return nil
+}
+
+func (s *IPSets) estimateUpdateSize(name string) int {
+	desiredMeta, desExists := s.setNameToProgrammedMetadata.Desired().Get(name)
+	dpMeta, dpExists := s.setNameToProgrammedMetadata.Dataplane().Get(name)
+	if !desExists {
+		return 0 // Deletions are handled elsewhere.
+	}
+	memberTracker := s.mainSetNameToMembers[name]
+	if dpExists {
+		if desiredMeta != dpMeta {
+			// Full rewrite needed to change metadata.
+			return 1 /*create*/ + memberTracker.Desired().LenUpperBound() + 1 /*swap*/
+		} else {
+			// Metadata up to date, just need to apply updates.
+			return memberTracker.PendingUpdates().Len() + memberTracker.PendingDeletions().Len()
+		}
+	} else {
+		// Full rewrite needed to create IPs set
+		return 1 /*create*/ + memberTracker.Desired().LenUpperBound()
+	}
 }
 
 func (s *IPSets) updateDirtiness(name string) {
