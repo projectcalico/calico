@@ -68,16 +68,10 @@ clean:
 ###############################################################################
 # Building the binary
 ###############################################################################
-build: $(BINDIR)/calico-typha
+build: $(BINDIR)/calico-typha-$(ARCH)
 build-all: $(addprefix sub-build-,$(VALIDARCHES))
 sub-build-%:
 	$(MAKE) build ARCH=$*
-
-$(BINDIR)/calico-typha: $(BINDIR)/calico-typha-$(ARCH)
-	ln -f $(BINDIR)/calico-typha-$(ARCH) $(BINDIR)/calico-typha
-
-$(BINDIR)/wrapper: $(BINDIR)/wrapper-$(ARCH)
-	ln -f $(BINDIR)/wrapper-$(ARCH) $(BINDIR)/wrapper
 
 $(BINDIR)/wrapper-$(ARCH): $(SRC_FILES) $(LOCAL_BUILD_DEP)
 ifeq ($(FIPS),true)
@@ -261,9 +255,6 @@ cover-report: combined.coverprofile
 				   sed 's=$(PACKAGE_NAME)/==' | \
 				   column -t | \
 				   grep -v '100\.0%'"
-
-$(BINDIR)/calico-typha.transfer-url: $(BINDIR)/calico-typha-$(ARCH)
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'curl --upload-file $(BINDIR)/calico-typha-$(ARCH) https://transfer.sh/calico-typha > $@'
 
 # Install or update the tools used by the build
 .PHONY: update-tools

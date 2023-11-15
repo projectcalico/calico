@@ -10,7 +10,6 @@ import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
-	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
 	testing "k8s.io/client-go/testing"
@@ -21,9 +20,9 @@ type FakeCalicoNodeStatuses struct {
 	Fake *FakeProjectcalicoV3
 }
 
-var caliconodestatusesResource = schema.GroupVersionResource{Group: "projectcalico.org", Version: "v3", Resource: "caliconodestatuses"}
+var caliconodestatusesResource = v3.SchemeGroupVersion.WithResource("caliconodestatuses")
 
-var caliconodestatusesKind = schema.GroupVersionKind{Group: "projectcalico.org", Version: "v3", Kind: "CalicoNodeStatus"}
+var caliconodestatusesKind = v3.SchemeGroupVersion.WithKind("CalicoNodeStatus")
 
 // Get takes name of the calicoNodeStatus, and returns the corresponding calicoNodeStatus object, and an error if there is any.
 func (c *FakeCalicoNodeStatuses) Get(ctx context.Context, name string, options v1.GetOptions) (result *v3.CalicoNodeStatus, err error) {
