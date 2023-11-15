@@ -12,7 +12,7 @@ K8S_VERSION=v1.27.8
 
 # Version of various tools used in the build and tests.
 COREDNS_VERSION=1.5.2
-ETCD_VERSION=v3.5.1
+ETCD_VERSION=v3.5.6
 # FIXME upgrading to kindest/node newer than v1.24.7 causes Node/kind-cluster and sig-network conformance
 # tests to timeout or fail.
 KINDEST_NODE_VERSION=v1.24.7
