@@ -35,13 +35,3 @@ func translateTimestampSince(timestamp metav1.Time) string {
 
 	return duration.HumanDuration(time.Since(timestamp.Time))
 }
-
-// translateTimestampUntil returns the elapsed time until timestamp in
-// human-readable approximation.
-func translateTimestampUntil(timestamp metav1.Time) string {
-	if timestamp.IsZero() {
-		return "<unknown>"
-	}
-
-	return duration.HumanDuration(time.Until(timestamp.Time))
-}

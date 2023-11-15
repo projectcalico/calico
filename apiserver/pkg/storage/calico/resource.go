@@ -438,7 +438,7 @@ func (rs *resourceStore) GuaranteedUpdate(
 		updatedRes := updatedObj.(resourceObject)
 		if !shouldCreateOnUpdate() {
 			if updatedRes.GetObjectMeta().GetResourceVersion() == "" || revInt < curState.rev {
-				updatedRes.(resourceObject).GetObjectMeta().SetResourceVersion(strconv.FormatUint(curState.rev, 10))
+				updatedRes.GetObjectMeta().SetResourceVersion(strconv.FormatUint(curState.rev, 10))
 			}
 		}
 		libcalicoObj := rs.converter.convertToLibcalico(updatedRes)

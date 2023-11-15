@@ -40,8 +40,8 @@ func CalicoNodeStatusAddHandlers(h printers.PrintHandler) {
 		{Name: "NUM-V4-ROUTES", Type: "string", Priority: 1, Description: "Number of V4 routes learned from BGP peers."},
 		{Name: "NUM-V6-ROUTES", Type: "string", Priority: 1, Description: "Number of V6 routes learned from BGP peers."},
 	}
-	h.TableHandler(calicoNodeStatusColumnDefinitions, printCalicoNodeStatusList)
-	h.TableHandler(calicoNodeStatusColumnDefinitions, printCalicoNodeStatus)
+	_ = h.TableHandler(calicoNodeStatusColumnDefinitions, printCalicoNodeStatusList)
+	_ = h.TableHandler(calicoNodeStatusColumnDefinitions, printCalicoNodeStatus)
 }
 
 func printCalicoNodeStatusList(statusList *calico.CalicoNodeStatusList, options printers.GenerateOptions) ([]metav1.TableRow, error) {
@@ -75,7 +75,7 @@ func printCalicoNodeStatus(status *calico.CalicoNodeStatus, options printers.Gen
 	for _, class := range status.Spec.Classes {
 		classes += fmt.Sprintf("%s,", class)
 	}
-	classesStr := fmt.Sprintf("%s", strings.TrimSuffix(classes, ","))
+	classesStr := strings.TrimSuffix(classes, ",")
 
 	var lastUpdatedStr string
 	lastUpdatedDate := status.Status.LastUpdated
