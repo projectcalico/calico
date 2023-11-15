@@ -31,7 +31,7 @@ CFLAGS +=  \
 TRIPLET := $(shell gcc -dumpmachine)
 CFLAGS += -I/usr/include/$(TRIPLET)
 
-CC := clang-15
+CC := clang-16
 LD := llc
 
 C_FILES:=filter.c redir.c sockops.c

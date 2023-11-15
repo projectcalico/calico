@@ -44,7 +44,7 @@ CFLAGS +=  \
 TRIPLET := $(shell gcc -dumpmachine)
 CFLAGS += -I/usr/include/$(TRIPLET)
 
-CC := clang-15
+CC := clang-16
 LD := llc
 
 UT_C_FILES:=$(shell find ut -name '*.c')
