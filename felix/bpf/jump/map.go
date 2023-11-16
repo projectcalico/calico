@@ -21,17 +21,28 @@ import (
 )
 
 const (
-	MaxEntries    = 10000
-	XDPMaxEntries = 100
+	// MaxSubPrograms is the maximum number of policy sub-programs that
+	// we allow for a single hook.  BPF allows a maximum of 32 tail calls
+	// (so 33 chained programs in total) but we reserve some for our own use.
+	MaxSubPrograms = 24
+
+	// TCMaxEntryPoints is the maximum number of policy program entry points
+	// (i.e. first program in a chain of sub-programs for the policy).
+	TCMaxEntryPoints = 10000
+	// TCMaxEntries is the size fo the map, i.e. all possible sub-programs.
+	TCMaxEntries = TCMaxEntryPoints * MaxSubPrograms
+
+	XDPMaxEntryPoints = 100
+	XDPMaxEntries     = XDPMaxEntryPoints * MaxSubPrograms
 )
 
 var MapParameters = maps.MapParameters{
 	Type:       "prog_array",
 	KeySize:    4,
 	ValueSize:  4,
-	MaxEntries: MaxEntries,
+	MaxEntries: TCMaxEntries,
 	Name:       "cali_jump",
-	Version:    2,
+	Version:    3,
 }
 
 func Map() maps.Map {
@@ -44,7 +55,7 @@ var XDPMapParameters = maps.MapParameters{
 	ValueSize:  4,
 	MaxEntries: XDPMaxEntries,
 	Name:       "xdp_cali_jump",
-	Version:    2,
+	Version:    3,
 }
 
 func XDPMap() maps.Map {

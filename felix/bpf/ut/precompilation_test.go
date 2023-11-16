@@ -91,7 +91,7 @@ func createVethName(name string) netlink.Link {
 		PeerName:  name + "b",
 	}
 	err := netlink.LinkAdd(veth)
-	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "failed to create test veth")
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(), fmt.Sprintf("failed to create test veth: %q", name))
 	return veth
 }
 
