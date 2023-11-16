@@ -3111,7 +3111,7 @@ func init() {
 			CIDR:    "10.0.0.0/24",
 			Node:    "node-1",
 		}, true),
-		Entry("should not accept delted block affinities", libapiv3.BlockAffinitySpec{
+		Entry("should not accept deleted block affinities", libapiv3.BlockAffinitySpec{
 			Deleted: "true",
 			State:   "confirmed",
 			CIDR:    "10.0.0.0/24",
