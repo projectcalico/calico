@@ -1653,7 +1653,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 				Context("Test load balancer service with no backend", func() {
 					if testOpts.connTimeEnabled || testOpts.udpUnConnected {
-						// Skip UDP unconnected, connectime load balancing cases as externalClient also does conntime balancing
+						// Skip UDP unconnected, connecttime load balancing cases as externalClient also does conntime balancing
 						return
 					}
 
