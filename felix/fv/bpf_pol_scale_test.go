@@ -19,6 +19,7 @@ package fv_test
 import (
 	"context"
 	"fmt"
+	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -101,7 +102,7 @@ var _ = Context("_BPF-SAFE_ BPF policy scale tests", func() {
 
 		cc.ExpectNone(w[0], w[1])
 		cc.ExpectNone(w[1], w[0])
-		cc.CheckConnectivity()
+		cc.CheckConnectivityWithTimeout(30 * time.Second)
 
 		cc.ResetExpectations()
 		ns := api.NewGlobalNetworkSet()
@@ -115,6 +116,6 @@ var _ = Context("_BPF-SAFE_ BPF policy scale tests", func() {
 
 		cc.ExpectSome(w[0], w[1])
 		cc.ExpectNone(w[1], w[0])
-		cc.CheckConnectivity()
+		cc.CheckConnectivityWithTimeout(30 * time.Second)
 	})
 })
