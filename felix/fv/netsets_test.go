@@ -48,7 +48,7 @@ const (
 	numNetworkSets = 100
 )
 
-// netsetsConfig is used to parametrise the whole suite of tests for IPv4 or IPv6, it provides
+// netsetsConfig is used to parameterize the whole suite of tests for IPv4 or IPv6, it provides
 // methods that return:
 //
 //   - the IP to use for a given workload, each from a separate subnet
