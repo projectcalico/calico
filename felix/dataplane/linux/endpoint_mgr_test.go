@@ -1791,7 +1791,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 					// Test that by disabling floatingIPs on the endpoint manager, even workload endpoints
 					// that have floating IP NAT addresses specified will not result in those routes being
 					// programmed.
-					Context("with floating IPs disasbled, but added to the endpoint", func() {
+					Context("with floating IPs disabled, but added to the endpoint", func() {
 						JustBeforeEach(func() {
 							epMgr.floatingIPsEnabled = false
 							epMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
