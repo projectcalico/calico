@@ -1136,7 +1136,7 @@ func (m *bpfEndpointManager) syncIfStateMap() {
 			} else {
 				// It will get deleted by the first CompleteDeferredWork() if we
 				// do not get any state update on that interface.
-				log.WithError(err).Warnf("Failed to sync ifstate for iface %d, deffering it.", ifindex)
+				log.WithError(err).Warnf("Failed to sync ifstate for iface %d, deferring it.", ifindex)
 			}
 		} else if m.isDataIface(netiface.Name) || m.isWorkloadIface(netiface.Name) || m.isL3Iface(netiface.Name) {
 			// We only add iface that we still manage as configuration could have changed.
