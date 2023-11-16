@@ -1252,7 +1252,7 @@ func (m *bpfEndpointManager) syncIfaceProperties() error {
 	})
 
 	if err != nil {
-		return fmt.Errorf("iterating over countrs map failed")
+		return fmt.Errorf("iterating over counters map failed")
 	}
 
 	return nil
