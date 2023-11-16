@@ -20,6 +20,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math"
+	"sort"
 	"strings"
 
 	log "github.com/sirupsen/logrus"
@@ -293,6 +294,7 @@ var (
 
 const InstructionSize = 8
 
+// Insn represents one 8-byte instruction.
 type Insn struct {
 	Instruction [InstructionSize]uint8 `json:"inst"`
 	Labels      []string               `json:"labels,omitempty"`
@@ -300,6 +302,7 @@ type Insn struct {
 	Annotation  string                 `json:"annotation,omitempty"`
 }
 
+// Insns represents a series of BPF instructions.
 type Insns []Insn
 
 func (ns Insns) AsBytes() []byte {
@@ -342,14 +345,35 @@ func (n Insn) Imm() int32 {
 	return int32(binary.LittleEndian.Uint32(n.Instruction[4:8]))
 }
 
+func (n Insn) IsNoOp() bool {
+	return n.OpCode() == Mov64 && n.Dst() == n.Src()
+}
+
+// Block is a "builder" object for a block of BPF instructions.  After
+// creating a new Block, call the instruction-named methods to add
+// instructions to the block and then call Assemble() to resolve the
+// bytecode.
+//
+// Block automatically skips unreachable instructions as they are added (this
+// is an optimisation to remove the need for a second pass over the code).
+// this assumes that all reachable instructions are reachable via *forward*
+// jumps.
+//
+// Block supports forwards jumps, including jumps that are longer than
+// a single eBPF jump allows.  It injects "trampoline" jump blocks where
+// needed.  Backwards jumps should also work but long backwards jumps are
+// not supported (there is no trampoline injection).
 type Block struct {
 	insns              Insns
-	fixUps             []fixUp
+	fixUps             map[string][]fixUp
 	labelToInsnIdx     map[string]int
 	insnIdxToLabels    map[int][]string
 	insnIdxToComments  map[int][]string
 	inUseJumpTargets   set.Set[string]
 	policyDebugEnabled bool
+	trampolineIdx      int
+	lastTrampolineAddr int
+	deferredErr        error
 }
 
 func NewBlock(policyDebugEnabled bool) *Block {
@@ -359,12 +383,16 @@ func NewBlock(policyDebugEnabled bool) *Block {
 		inUseJumpTargets:   set.New[string](),
 		insnIdxToComments:  map[int][]string{},
 		policyDebugEnabled: policyDebugEnabled,
+		fixUps:             map[string][]fixUp{},
 	}
 }
 
 type fixUp struct {
-	label       string
 	origInsnIdx int
+}
+
+func (b *Block) NoOp() {
+	b.Mov64(R0, R0)
 }
 
 func (b *Block) FromBE(dst Reg, size int32) {
@@ -640,10 +668,74 @@ func (b *Block) buildAnnotation(opcode OpCode, src, dst Reg, fo FieldOffset, imm
 
 type OffsetFixer func(origInsn Insn) Insn
 
+// Maximum jump distance is math.MaxInt16, we need to start writing the
+// trampoline before we reach that distance so that the whole trampoline fits
+// within the jump. Since we have at most a handful of labels outstanding,
+// (1-2 for a rule, one to jump to accept/deny/end-of-tier) this seems like
+// it should be enough.
+const trampolineHeadroom = 100
+const trampolineInterval = math.MaxInt16 - trampolineHeadroom
+
 func (b *Block) addInsnWithOffsetFixup(insn Insn, targetLabel string) {
-	insnLabel := strings.Join(b.insnIdxToLabels[len(b.insns)], ",")
+	b.maybeWriteTrampoline(insn)
+
+	b.addInsnWithOffsetFixupNoTrampoline(insn, targetLabel)
+}
+
+func (b *Block) maybeWriteTrampoline(nextInsn Insn) {
+	if len(b.insns)-b.lastTrampolineAddr < trampolineInterval {
+		return
+	}
+	if nextInsn.OpCode() == LoadImm64Pt2 {
+		// LoadImm64 is a 2-part instruction, we must not split it.
+		return
+	}
+	b.writeTrampoline()
+}
+
+func (b *Block) writeTrampoline() {
+	b.lastTrampolineAddr = len(b.insns)
+
+	if len(b.fixUps) == 0 {
+		return
+	}
+
+	// Find all the outstanding labels and add a jump for them.
+	labels := make([]string, 0, len(b.fixUps))
+	for label := range b.fixUps {
+		labels = append(labels, label)
+	}
+	// Sort for determinism.
+	sort.Strings(labels)
+
+	// Trampoline is written in the middle of other instructions, do an
+	// unconditional jump past the trampoline for the main execution flow.
+	// Using JumpNoTrampoline to avoid recursion here!
+	endLabel := fmt.Sprintf("skip-trampoline-%d", b.trampolineIdx)
+	b.trampolineIdx++
+	b.JumpNoTrampoline(endLabel)
+	for _, label := range labels {
+		b.LabelNextInsn(label)
+		b.JumpNoTrampoline(label)
+	}
+	b.LabelNextInsn(endLabel)
+}
+
+func (b *Block) JumpNoTrampoline(endLabel string) {
+	insn := MakeInsn(JumpA, 0, 0, 0, 0)
+	b.addInsnWithOffsetFixupNoTrampoline(insn, endLabel)
+}
+
+func (b *Block) addInsnWithOffsetFixupNoTrampoline(insn Insn, targetLabel string) {
+	var insnLabel string
+	debug := log.IsLevelEnabled(log.DebugLevel)
+	if debug {
+		insnLabel = strings.Join(b.insnIdxToLabels[len(b.insns)], ",")
+	}
 	if !b.nextInsnReachble() {
-		log.Debugf("Asm: %v UU:    %v [UNREACHABLE]", insnLabel, insn)
+		if debug {
+			log.Debugf("Asm: %v UU:    %v [UNREACHABLE]", insnLabel, insn)
+		}
 		for _, l := range b.insnIdxToLabels[len(b.insns)] {
 			delete(b.labelToInsnIdx, l)
 		}
@@ -654,14 +746,16 @@ func (b *Block) addInsnWithOffsetFixup(insn Insn, targetLabel string) {
 	if targetLabel != "" {
 		comment = " -> " + targetLabel
 	}
-	log.Debugf("Asm: %v %d:    %v%s", insnLabel, len(b.insns), insn, comment)
+	if debug {
+		log.Debugf("Asm: %v %d:    %v%s", insnLabel, len(b.insns), insn, comment)
+	}
 	b.insns = append(b.insns, insn)
 	if targetLabel != "" {
 		if b.policyDebugEnabled {
 			b.insns[len(b.insns)-1].Annotation = fmt.Sprintf("goto %s", targetLabel)
 		}
 		b.inUseJumpTargets.Add(targetLabel)
-		b.fixUps = append(b.fixUps, fixUp{label: targetLabel, origInsnIdx: len(b.insns) - 1})
+		b.fixUps[targetLabel] = append(b.fixUps[targetLabel], fixUp{origInsnIdx: len(b.insns) - 1})
 	}
 }
 
@@ -670,17 +764,15 @@ func (b *Block) TargetIsUsed(label string) bool {
 }
 
 func (b *Block) Assemble() (Insns, error) {
-	for _, f := range b.fixUps {
-		labelIdx, ok := b.labelToInsnIdx[f.label]
-		if !ok {
-			return nil, fmt.Errorf("missing label: %s", f.label)
+	if b.deferredErr != nil {
+		return nil, b.deferredErr
+	}
+
+	for label := range b.fixUps {
+		err := b.applyFixUps(label)
+		if err != nil {
+			return nil, err
 		}
-		// Offset is relative to the next instruction since the PC is auto-incremented.
-		offset := labelIdx - f.origInsnIdx - 1
-		if offset > math.MaxInt16 || offset < math.MinInt16 {
-			return nil, fmt.Errorf("calculated jump offset (%d) to label %s would exceed jump range", offset, f.label)
-		}
-		binary.LittleEndian.PutUint16(b.insns[f.origInsnIdx].Instruction[2:4], uint16(offset))
 	}
 
 	if b.policyDebugEnabled {
@@ -697,9 +789,44 @@ func (b *Block) Assemble() (Insns, error) {
 	return b.insns, nil
 }
 
+func (b *Block) applyFixUps(targetLabel string) error {
+	for _, f := range b.fixUps[targetLabel] {
+		labelIdx, ok := b.labelToInsnIdx[targetLabel]
+		if !ok {
+			return fmt.Errorf("missing label: %s", targetLabel)
+		}
+		// Offset is relative to the next instruction since the PC is auto-incremented.
+		offset := labelIdx - f.origInsnIdx - 1
+		if offset == -1 {
+			// This case is made more likely by the trampoline machinery
+			// since it's what we'd hit if a trampoline was generated but
+			// then the intended jump target was never added.
+			return fmt.Errorf("calculated jump offset (%d) to label %s would jump to same instruction", offset, targetLabel)
+		}
+		if offset > math.MaxInt16 || offset < math.MinInt16 {
+			return fmt.Errorf("calculated jump offset (%d) to label %s would exceed jump range", offset, targetLabel)
+		}
+		binary.LittleEndian.PutUint16(b.insns[f.origInsnIdx].Instruction[2:4], uint16(offset))
+	}
+	delete(b.fixUps, targetLabel)
+	return nil
+}
+
 func (b *Block) LabelNextInsn(label string) {
 	b.labelToInsnIdx[label] = len(b.insns)
 	b.insnIdxToLabels[len(b.insns)] = append(b.insnIdxToLabels[len(b.insns)], label)
+
+	// Eagerly apply fixUps now so that we can re-use the same label names
+	// when making trampolines.
+	err := b.applyFixUps(label)
+	if err != nil {
+		log.WithError(err).Error("Failed to apply fix-ups in BPF assembler; program generation will fail")
+		// Log a deferred error to be returned by Assemble().  This saves adding
+		// error checks throughout the policy program builder, for example.
+		if b.deferredErr == nil {
+			b.deferredErr = fmt.Errorf("failed to apply fix-ups when adding label %q @ %d: %w", label, len(b.insns), err)
+		}
+	}
 }
 
 func (b *Block) AddComment(comment string) {
@@ -712,17 +839,26 @@ func (b *Block) nextInsnReachble() bool {
 	if len(b.insns) == 0 {
 		return true // First instruction is always reachable.
 	}
-	for _, l := range b.insnIdxToLabels[len(b.insns)] {
-		if b.inUseJumpTargets.Contains(l) {
-			return true // Previous instruction jumps to this one, we're reachable.
-		}
-	}
 	lastInsn := b.insns[len(b.insns)-1]
-	switch lastInsn.OpCode() {
-	case JumpA, Exit:
-		// Previous instruction jumps or returns and it doesn't jump here so we're not reachable.
+	lastOpCode := lastInsn.OpCode()
+	if lastOpCode == JumpA /*Unconditional jump*/ || lastOpCode == Exit {
+		// Previous instruction doesn't fall through to this one, need
+		// to check if something else jumps here...
+		for _, l := range b.insnIdxToLabels[len(b.insns)] {
+			if b.inUseJumpTargets.Contains(l) {
+				return true // Previous instruction jumps to this one, we're reachable.
+			}
+		}
 		return false
-	default:
-		return true
 	}
+	return true
+}
+
+func (b *Block) ReserveInstructionCapacity(n int) {
+	if cap(b.insns) >= n {
+		return
+	}
+	newInsns := make(Insns, len(b.insns), n)
+	copy(newInsns, b.insns)
+	b.insns = newInsns
 }
