@@ -362,7 +362,7 @@ var _ = Describe("CalicoCni", func() {
 			  },
 			  "dataplane_options": {
 			  	"type": "grpc",
-			  	"socket": "unix:///tmp/xxxx-non-existent-dont-create-this-please.sock"
+			  	"socket": "unix:///tmp/xxxx-nonexistent-dont-create-this-please.sock"
 			  }
 			}`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"))
 

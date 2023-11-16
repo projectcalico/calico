@@ -3097,7 +3097,7 @@ func init() {
 			PrefixAdvertisements: []api.PrefixAdvertisement{{CIDR: "2001:4860::/128", Communities: []string{"100:5964:1147483647", "100:5223"}}},
 		}, true),
 		Entry("should not accept community name that is not defined", api.BGPConfigurationSpec{
-			PrefixAdvertisements: []api.PrefixAdvertisement{{CIDR: "2001:4860::/128", Communities: []string{"non-existent-community"}}},
+			PrefixAdvertisements: []api.PrefixAdvertisement{{CIDR: "2001:4860::/128", Communities: []string{"nonexistent-community"}}},
 		}, false),
 		Entry("should accept community name whose values are defined", api.BGPConfigurationSpec{
 			Communities:          []api.Community{{Name: "community-test", Value: "101:5695"}},

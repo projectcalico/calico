@@ -416,7 +416,7 @@ func applyV3(args map[string]interface{}) error {
 				// Check that the error is for a Node
 				if key, ok := e.Identifier.(model.ResourceKey); ok {
 					if key.Kind == libapiv3.KindNode {
-						fmt.Printf("[WARNING] Attempted to import node %v from etcd that references a non-existent Kubernetes node. Skipping that node. Non-Kubernetes nodes are not supported in the Kubernetes datastore and will be skipped.", e.Identifier)
+						fmt.Printf("[WARNING] Attempted to import node %v from etcd that references a nonexistent Kubernetes node. Skipping that node. Non-Kubernetes nodes are not supported in the Kubernetes datastore and will be skipped.", e.Identifier)
 						continue
 					}
 				}

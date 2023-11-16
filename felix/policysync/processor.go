@@ -417,7 +417,7 @@ func (p *Processor) handleIPSetDeltaUpdate(update *proto.IPSetDeltaUpdate) {
 	id := update.Id
 	log.WithField("ID", id).Debug("Processing IPSetDeltaUpdate")
 
-	// We trust the calc graph to never send us Delta updates for non-existent sets.
+	// We trust the calc graph to never send us Delta updates for nonexistent sets.
 	s := p.ipSetsByID[id]
 	s.deltaUpdate(update)
 

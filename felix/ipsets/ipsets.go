@@ -235,7 +235,7 @@ func (s *IPSets) AddMembers(setID string, newMembers []string) {
 	setName := s.nameForMainIPSet(setID)
 	setMeta, ok := s.setNameToAllMetadata[setName]
 	if !ok {
-		log.WithField("setName", setName).Panic("AddMembers called for non-existent IP set.")
+		log.WithField("setName", setName).Panic("AddMembers called for nonexistent IP set.")
 	}
 	canonMembers := s.filterAndCanonicaliseMembers(setMeta.Type, newMembers)
 	if canonMembers.Len() == 0 {
@@ -256,7 +256,7 @@ func (s *IPSets) RemoveMembers(setID string, removedMembers []string) {
 	setName := s.nameForMainIPSet(setID)
 	setMeta, ok := s.setNameToAllMetadata[setName]
 	if !ok {
-		log.WithField("setName", setName).Panic("RemoveMembers called for non-existent IP set.")
+		log.WithField("setName", setName).Panic("RemoveMembers called for nonexistent IP set.")
 	}
 	canonMembers := s.filterAndCanonicaliseMembers(setMeta.Type, removedMembers)
 	if canonMembers.Len() == 0 {

@@ -1314,7 +1314,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 				})
 			})
 
-			Describe("with host endpoint matching non-existent interface", func() {
+			Describe("with host endpoint matching nonexistent interface", func() {
 				JustBeforeEach(configureHostEp(&hostEpSpec{
 					id:   "id3",
 					name: "eth1",
