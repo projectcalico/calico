@@ -742,7 +742,7 @@ func TestMatchNet(t *testing.T) {
 			match: true,
 		},
 		{
-			title: "single v4 net no matcn",
+			title: "single v4 net no match",
 			nets:  []string{"192.168.0.0/16"},
 			ip:    "55.39.128.9",
 			match: false,
