@@ -103,7 +103,7 @@ const (
 	bootstrapJitter             = 0.2
 	bootstrapMaxRetriesFailFast = 2
 	bootstrapMaxRetries         = 5
-	boostrapK8sClientTimeout    = 10 * time.Second
+	bootstrapK8sClientTimeout   = 10 * time.Second
 )
 
 // BootstrapAndFilterTyphaAddresses performs wireguard bootstrap processing and filtering of typha addresses. This is
@@ -431,7 +431,7 @@ func getPublicKeyForNode(logCtx *log.Entry, nodeName string, calicoClient client
 	var err error
 	var node *apiv3.Node
 	for r := 0; r < maxRetries; r++ {
-		cxt, cancel := context.WithTimeout(context.Background(), boostrapK8sClientTimeout)
+		cxt, cancel := context.WithTimeout(context.Background(), bootstrapK8sClientTimeout)
 		node, err = calicoClient.Nodes().Get(cxt, nodeName, options.GetOptions{})
 		cancel()
 		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
@@ -587,7 +587,7 @@ func removeWireguardPublicKey(
 	var err error
 	var thisNode *apiv3.Node
 	for r := 0; r < bootstrapMaxRetries; r++ {
-		cxt, cancel := context.WithTimeout(context.Background(), boostrapK8sClientTimeout)
+		cxt, cancel := context.WithTimeout(context.Background(), bootstrapK8sClientTimeout)
 		thisNode, err = calicoClient.Nodes().Get(cxt, nodeName, options.GetOptions{})
 		cancel()
 		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
@@ -609,7 +609,7 @@ func removeWireguardPublicKey(
 			case 6:
 				thisNode.Status.WireguardPublicKeyV6 = ""
 			}
-			cxt, cancel = context.WithTimeout(context.Background(), boostrapK8sClientTimeout)
+			cxt, cancel = context.WithTimeout(context.Background(), bootstrapK8sClientTimeout)
 			_, err = calicoClient.Nodes().Update(cxt, thisNode, options.SetOptions{})
 			cancel()
 			if err != nil {
