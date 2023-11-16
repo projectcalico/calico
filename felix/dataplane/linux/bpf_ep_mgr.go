@@ -200,7 +200,7 @@ const (
 	ifaceNotReady ifaceReadiness = iota
 	ifaceIsReady
 	// We know it was ready at some point in time and we
-	// assume it still is, but we need to reassure outselves.
+	// assume it still is, but we need to reassure ourselves.
 	ifaceIsReadyNotAssured
 )
 
