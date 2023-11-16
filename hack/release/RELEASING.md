@@ -19,7 +19,7 @@ the process locally then the following requirements must be met.
 
 To publish Calico, you need **the following permissions**:
 
-- Write access to the projectcalico/calioco GitHub repository. You can create a [personal access token](https://github.com/settings/tokens) for Github and export it as the `GITHUB_TOKEN` env var (for example by adding it to your `.profile`).
+- Write access to the projectcalico/calico GitHub repository. You can create a [personal access token](https://github.com/settings/tokens) for Github and export it as the `GITHUB_TOKEN` env var (for example by adding it to your `.profile`).
 
 - Push access to the Calico DockerHub repositories. Assuming you've been granted access by an admin:
 
