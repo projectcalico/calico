@@ -20,7 +20,7 @@ const (
 	VersionCurrent      = "v3"
 	GroupVersionCurrent = Group + "/" + VersionCurrent
 
-	// AllNamepaces is used for client instantiation, either for when the namespace
+	// AllNamespaces is used for client instantiation, either for when the namespace
 	// will be specified in the resource request, or for List or Watch queries across
 	// all namespaces.
 	AllNamespaces = ""
