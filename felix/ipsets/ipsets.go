@@ -85,10 +85,10 @@ type IPSets struct {
 	// restoreInCopy holds a copy of the stdin that we send to ipset restore.  It is reset
 	// after each use.
 	restoreInCopy bytes.Buffer
-	// stdoutCopy holds a copy of the the stdout emitted by ipset restore. It is reset after
+	// stdoutCopy holds a copy of the stdout emitted by ipset restore. It is reset after
 	// each use.
 	stdoutCopy bytes.Buffer
-	// stderrCopy holds a copy of the the stderr emitted by ipset restore. It is reset after
+	// stderrCopy holds a copy of the stderr emitted by ipset restore. It is reset after
 	// each use.
 	stderrCopy bytes.Buffer
 

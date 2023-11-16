@@ -118,7 +118,7 @@ When starting development on a new minor release, the first step is to create a 
    make generate
    ```
 
-1. Create the the release notes file. This does not need to be populated now but does need to exist for the site to render. The file should match
+1. Create the release notes file. This does not need to be populated now but does need to exist for the site to render. The file should match
    the `title` field from `calico/_data/versions.yml` created in the previous step.
 
    ```
@@ -270,7 +270,7 @@ Follow [the tigera/operator release instructions](https://github.com/tigera/oper
 
 ### 4.d Build and publish OpenStack packages
 
-1. Check out the the release tag in the `projectcalico/calico` repository.
+1. Check out the release tag in the `projectcalico/calico` repository.
 
    ```
    git fetch origin --tags && git checkout vX.Y.Z
