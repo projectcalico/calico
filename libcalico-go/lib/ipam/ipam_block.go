@@ -31,7 +31,7 @@ import (
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
-// windwowsReservedHandle is the handle used to reserve addresses required for Windows
+// windowsReservedHandle is the handle used to reserve addresses required for Windows
 // networking so that workloads do not get assigned these addresses.
 const WindowsReservedHandle = "windows-reserved-ipam-handle"
 
