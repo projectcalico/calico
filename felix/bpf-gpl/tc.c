@@ -1587,7 +1587,7 @@ int calico_tc_skb_icmp_inner_nat(struct __sk_buff *skb)
 		goto deny;
 	}
 
-	/* Start parsing the packet again to get what is the outter IP header size */
+	/* Start parsing the packet again to get what is the outer IP header size */
 
 	switch (parse_packet_ip(ctx)) {
 #ifdef IPVER6
@@ -1670,7 +1670,7 @@ int calico_tc_skb_icmp_inner_nat(struct __sk_buff *skb)
 
 allow:
 	/* We are going to forward the packet now. But all the state is about
-	 * the inner IP so we need to refresh our state back to the outter IP
+	 * the inner IP so we need to refresh our state back to the outer IP
 	 * that is used for forwarding!
 	 *
 	 * N.B. we could just remember an update the state, however, forwarding
