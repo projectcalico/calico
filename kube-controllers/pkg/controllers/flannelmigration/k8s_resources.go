@@ -128,7 +128,7 @@ func (d daemonset) WaitForDaemonsetNotFound(k8sClientset *kubernetes.Clientset, 
 		if err != nil {
 			return true, err
 		}
-		// Daemoset still exists, retry.
+		// Daemonset still exists, retry.
 		return false, nil
 	})
 }
