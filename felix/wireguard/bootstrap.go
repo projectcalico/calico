@@ -253,7 +253,7 @@ func bootstrapAndFilterTyphaAddressesForIPVersion(
 		if len(filtered) == 0 {
 			// We have filtered out all of the typha endpoints, i.e. with our current wireguard configuration none of
 			// the typhas will be accessible due to asymmetric routing. Best thing to do is just delete our wireguard
-			// configuration after which all of the typha endpoints should eventually become acceessible.
+			// configuration after which all of the typha endpoints should eventually become accessible.
 			logCtx.Warning("None of the typhas will be accessible due to wireguard routing asymmetry - remove wireguard")
 			return typhas, removeWireguardForBootstrapping(configParams, getNetlinkHandle, calicoClient, ipVersion)
 		}
