@@ -185,7 +185,7 @@ enum calico_skb_mark {
 	/* CALI_SKB_MARK_SKIP_FIB is used for packets that should pass through host IP stack. */
 	CALI_SKB_MARK_SKIP_FIB               = CALI_SKB_MARK_SEEN | 0x00100000,
 	/* CT_ESTABLISHED is used by iptables to tell the BPF programs that the packet is part of an
-	 * established Linux conntrack flow. This allows the BPF program to let through pre-existing
+	 * established Linux conntrack flow. This allows the BPF program to let through preexisting
 	 * flows at start of day. */
 	CALI_SKB_MARK_CT_ESTABLISHED         = 0x08000000,
 	CALI_SKB_MARK_CT_ESTABLISHED_MASK    = 0x08000000,

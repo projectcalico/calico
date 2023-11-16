@@ -404,8 +404,8 @@ func (r ipPools) validateAndSetDefaults(ctx context.Context, new, old *apiv3.IPP
 		}
 
 		for _, otherPool := range allPools.Items {
-			// It's possible that Create is called for a pre-existing pool, so skip our own
-			// pool and let the generic processing handle the pre-existing resource error case.
+			// It's possible that Create is called for a preexisting pool, so skip our own
+			// pool and let the generic processing handle the preexisting resource error case.
 			if otherPool.Name == new.Name {
 				continue
 			}

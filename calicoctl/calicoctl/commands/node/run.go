@@ -137,7 +137,7 @@ Options:
                            system.
      --no-default-ippools  Do not create default pools upon startup.
                            Default IP pools will be created if this is not set
-                           and there are no pre-existing Calico IP pools.
+                           and there are no preexisting Calico IP pools.
   -c --config=<CONFIG>     Path to the file containing connection
                            configuration in YAML or JSON format.
                            [default: ` + constants.DefaultConfigPath + `]

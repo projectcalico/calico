@@ -109,7 +109,7 @@ func init() {
 //
 // Table supports two classes of operation:  "rule insertions" and "full chain updates".
 //
-// As the name suggests, rule insertions allow for inserting one or more rules into a pre-existing
+// As the name suggests, rule insertions allow for inserting one or more rules into a preexisting
 // chain.  Rule insertions are intended to be used to hook kernel chains (such as "FORWARD") in
 // order to direct them to a Felix-owned chain.  It is important to minimise the use of rule
 // insertions because the top-level chains are shared resources, which can be modified by other
