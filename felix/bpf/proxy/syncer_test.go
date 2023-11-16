@@ -677,7 +677,7 @@ var _ = Describe("BPF Syncer", func() {
 				net.IPv4(10, 0, 0, 2), 2222, net.IPv4(10, 2, 3, 1), 2222, 6)).To(BeTrue())
 
 			// Not all backends are reachable through the NodePort, but there is
-			// no harm in not cleaning connctions that cannot exist. Even if
+			// no harm in not cleaning connections that cannot exist. Even if
 			// they existed, why would we break them?
 
 			Expect(s.ConntrackFrontendHasBackend(
