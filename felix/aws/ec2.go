@@ -52,7 +52,7 @@ func convertError(err error) string {
 	return fmt.Sprintf("%v", err.Error())
 }
 
-func retriable(err error) bool {
+func retryable(err error) bool {
 	var awsErr smithy.APIError
 	if errors.As(err, &awsErr) {
 		switch awsErr.ErrorCode() {
@@ -219,7 +219,7 @@ func (c *ec2Client) getEC2NetworkInterfaceId(ctx context.Context) (networkInstan
 	for i := 0; i < retries; i++ {
 		out, err = c.EC2Svc.DescribeInstances(ctx, input)
 		if err != nil {
-			if retriable(err) {
+			if retryable(err) {
 				// if error is temporary, try again in a second.
 				time.Sleep(1 * time.Second)
 				log.WithField("instance-id", c.ec2InstanceId).Debug("retrying getting network-interface-id")
@@ -276,7 +276,7 @@ func (c *ec2Client) setEC2SourceDestinationCheck(ctx context.Context, ec2NetId s
 	for i := 0; i < retries; i++ {
 		_, err = c.EC2Svc.ModifyNetworkInterfaceAttribute(ctx, input)
 		if err != nil {
-			if retriable(err) {
+			if retryable(err) {
 				// if error is temporary, try again in a second.
 				time.Sleep(1 * time.Second)
 				log.WithField("net-instance-id", ec2NetId).Debug("retrying setting source-destination-check")

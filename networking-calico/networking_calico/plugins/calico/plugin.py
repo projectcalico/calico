@@ -90,7 +90,7 @@ class CalicoPlugin(Ml2Plugin, l3_db.L3_NAT_db_mixin):
         #   File "/usr/lib/python3/dist-packages/oslo_db/api.py", line 142, in wrapper
         #     return f(*args, **kwargs)
         #   File "/usr/lib/python3/dist-packages/neutron_lib/db/api.py", line 183, in wrapped
-        #     LOG.debug("Retry wrapper got retriable exception: %s", e)
+        #     LOG.debug("Retry wrapper got retryable exception: %s", e)
         #   File "/usr/lib/python3/dist-packages/oslo_utils/excutils.py", line 227, in __exit__
         #     self.force_reraise()
         #   File "/usr/lib/python3/dist-packages/oslo_utils/excutils.py", line 200, in force_reraise
