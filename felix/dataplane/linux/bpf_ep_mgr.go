@@ -2618,19 +2618,19 @@ func (m *bpfEndpointManager) ensureBPFDevices() error {
 	i := retries
 	for {
 		if err := netlink.NeighAdd(arp); err != nil && err != syscall.EEXIST {
-			log.WithError(err).Warnf("Failed to update neight for %s (arp %#v), retrying.", bpfOutDev, arp)
+			log.WithError(err).Warnf("Failed to update neigh for %s (arp %#v), retrying.", bpfOutDev, arp)
 			i--
 			if i > 0 {
 				time.Sleep(250 * time.Millisecond)
 				continue
 			} else {
-				return fmt.Errorf("failed to update neight for %s (arp %#v) after %d tries: %w",
+				return fmt.Errorf("failed to update neigh for %s (arp %#v) after %d tries: %w",
 					bpfOutDev, arp, retries, err)
 			}
 		}
 		break
 	}
-	log.Infof("Updated neight for %s (arp %v)", bpfOutDev, arp)
+	log.Infof("Updated neigh for %s (arp %v)", bpfOutDev, arp)
 
 	if !m.ipv6Enabled {
 		if err := configureInterface(bpfInDev, 4, "0", writeProcSys); err != nil {
