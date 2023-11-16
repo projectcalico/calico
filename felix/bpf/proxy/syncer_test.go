@@ -634,7 +634,7 @@ var _ = Describe("BPF Syncer", func() {
 			)
 
 			// XXX we do not have quite a good sync with the fixer in Syncer, we
-			// XXX just do it speculatively and to introduce some fuzzynes. If this
+			// XXX just do it speculatively and to introduce some fuzziness. If this
 			// XXX or the next test fails, something is wrong and should be fixed
 			svcs.Lock()
 			defer svcs.Unlock()
