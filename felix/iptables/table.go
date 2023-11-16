@@ -1062,11 +1062,11 @@ func (t *Table) Apply() (rescheduleAfter time.Duration) {
 		rescheduleAfter = t.refreshInterval - lastReadToNow
 	}
 	if t.postWriteInterval < time.Hour {
-		postWriteReched := t.lastWriteTime.Add(t.postWriteInterval).Sub(now)
-		if postWriteReched <= 0 {
+		postWriteReached := t.lastWriteTime.Add(t.postWriteInterval).Sub(now)
+		if postWriteReached <= 0 {
 			rescheduleAfter = 1 * time.Millisecond
-		} else if t.refreshInterval <= 0 || postWriteReched < rescheduleAfter {
-			rescheduleAfter = postWriteReched
+		} else if t.refreshInterval <= 0 || postWriteReached < rescheduleAfter {
+			rescheduleAfter = postWriteReached
 		}
 	}
 
