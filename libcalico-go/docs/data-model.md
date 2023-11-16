@@ -252,7 +252,7 @@ If `labels` is missing, it is treated as if there was an empty dict.
 
 ### Host endpoints
 
-For host enpdoints, the object stored is a JSON blob of the following
+For host endpoints, the object stored is a JSON blob of the following
 form; the fields are described below:
 
 ```
