@@ -4976,7 +4976,7 @@ func checkNodeConntrack(felixes []*infrastructure.Felix) error {
 			line = strings.Trim(line, " ")
 			if strings.Contains(line, "src=") {
 				// Whether traffic is generated in host namespace, or involves NAT, each
-				// contrack entry should be related to node's address
+				// conntrack entry should be related to node's address
 				if strings.Contains(line, felix.GetIP()) {
 					continue lineLoop
 				}

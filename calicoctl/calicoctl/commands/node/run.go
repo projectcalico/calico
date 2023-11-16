@@ -480,7 +480,7 @@ func setNFConntrackMax() {
 	err := os.WriteFile("/proc/sys/net/netfilter/nf_conntrack_max",
 		[]byte("1000000"), 0)
 	if err != nil {
-		fmt.Println("WARNING: Could not set nf_contrack_max. This may have an impact at scale.")
+		fmt.Println("WARNING: Could not set nf_conntrack_max. This may have an impact at scale.")
 	}
 }
 
