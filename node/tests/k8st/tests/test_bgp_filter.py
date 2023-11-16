@@ -584,7 +584,7 @@ spec:
   exportV4:
   - cidr: 10.111.111.0/24
     matchOperator: notin
-    action: Accept_
+    action: Accetp
   - cidr: 10.222.222.0/24
     matchOperator: in
     action: Accept
@@ -613,7 +613,7 @@ EOF
 
             expectedOutput = """The BGPFilter "test-invalid-filter" is invalid: 
 * MatchOperator: Invalid value: "notin": Reason: failed to validate Field: MatchOperator because of Tag: matchOperator 
-* Action: Invalid value: "Accept_": Reason: failed to validate Field: Action because of Tag: filterAction 
+* Action: Invalid value: "Accetp": Reason: failed to validate Field: Action because of Tag: filterAction 
 * MatchOperator: Invalid value: "in": Reason: failed to validate Field: MatchOperator because of Tag: matchOperator 
 * CIDR: Invalid value: "IPv4Address": Reason: failed to validate Field: CIDR because of Tag: netv4 
 * Action: Invalid value: "accept": Reason: failed to validate Field: Action because of Tag: filterAction 
