@@ -233,7 +233,7 @@ class TestFelixConfig(TestBase):
         levels = {"DEBUG": False, "INFO": True}
         self.check_log_levels(host3, "snapshot", levels, 3)
 
-        # Change severity to DEBUG. Check DEBUG INFO again since last snaphost.
+        # Change severity to DEBUG. Check DEBUG INFO again since last snapshot.
         self.add_felix_config(conf_name, {'LogSeverityScreen': 'DEBUG'})
         levels = {"DEBUG": True, "INFO": True}
         self.check_log_levels(host3, "log_diff", levels, 3, "snapshot")
