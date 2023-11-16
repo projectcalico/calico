@@ -70,7 +70,7 @@ docs_url=`curl https://latest-os.docs.eng.tigera.net/master.txt`
 kubectl create -f ${docs_url}/manifests/tigera-operator.yaml
 sleep 5
 
-# Deply OS Calico but for EE FV, apply EE crds and RBAC later.
+# Deploy OS Calico but for EE FV, apply EE crds and RBAC later.
 echo "Applying custom resources..."
 kubectl apply -f ${ROOT}/infra/installation-${BACKEND}.yaml
 kubectl get installation default -oyaml
