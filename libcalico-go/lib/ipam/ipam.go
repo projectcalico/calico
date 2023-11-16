@@ -2086,7 +2086,7 @@ func (c ipamClient) GetUtilization(ctx context.Context, args GetUtilizationArgs)
 }
 
 // EnsureBlock returns single IPv4/IPv6 IPAM block for a host as specified by the provided BlockArgs.
-// If there is no block allocated already for this host, allocate one and return its' CIDR.
+// If there is no block allocated already for this host, allocate one and return its CIDR.
 // Otherwise, return the CIDR of the IPAM block allocated for this host.
 func (c ipamClient) EnsureBlock(ctx context.Context, args BlockArgs) (*net.IPNet, *net.IPNet, error) {
 	// Determine the hostname to use - prefer the provided hostname if
