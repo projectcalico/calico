@@ -2712,7 +2712,7 @@ func (m *bpfEndpointManager) ensureProgramAttached(ap attachPoint) (bpf.AttachRe
 			return nil, fmt.Errorf("loading generic v%d tc hook program: %w", ipFamily, err)
 		}
 
-		// Load deafault policy before the real policy is created and loaded.
+		// Load default policy before the real policy is created and loaded.
 		switch at.DefaultPolicy() {
 		case hook.DefPolicyAllow:
 			err = maps.UpdateMapEntry(m.bpfmaps.JumpMap.MapFD(),
