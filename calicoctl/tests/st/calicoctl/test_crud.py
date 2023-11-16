@@ -1178,7 +1178,7 @@ class TestCalicoctlCommands(TestBase):
         rc = calicoctl("apply",data=node_name1_rev1)
         rc.assert_no_error()
         rc = calicoctl("label nodes node1 cluster --remove")
-        rc.assert_error("can not remove label")
+        rc.assert_error("cannot remove label")
 
     def test_patch(self):
         """

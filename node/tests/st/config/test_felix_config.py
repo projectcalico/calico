@@ -81,7 +81,7 @@ class TestFelixConfig(TestBase):
         self.run_failsafe(random, True)
 
         # With host endpoints setup. Default ports can be accessed.
-        # But random ports can not.
+        # But random ports cannot.
         self.add_host_iface(self.host1_hostname, self.host1.ip)
         self.run_failsafe(default, True)
         self.run_failsafe(random, False)
@@ -119,7 +119,7 @@ class TestFelixConfig(TestBase):
         self.run_failsafe(random, True)
 
         # With host endpoints setup. Default ports can be accessed.
-        # But random ports can not.
+        # But random ports cannot.
         self.add_host_iface(self.host2_hostname, self.host2.ip)
         self.run_failsafe(default, True)
         self.run_failsafe(random_no_2379, False)

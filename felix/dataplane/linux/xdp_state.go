@@ -1215,7 +1215,7 @@ func (s *xdpIPState) processPendingDiffState(epSource endpointsSource) {
 					"iface":      ifaceName,
 					"endpointID": data.EpID,
 					"policyID":   policyID.String(),
-				}).Info("Policy can not be optimized.")
+				}).Info("Policy cannot be optimized.")
 				// this means that new policy can't be optimized
 				delete(newCs.IfaceNameToData[ifaceName].PoliciesToSetIDs, policyID)
 			}
@@ -1302,7 +1302,7 @@ func (s *xdpIPState) processHostEndpointChange(ifaceName string, oldData *xdpIfa
 				"iface":      ifaceName,
 				"endpointID": newHepID,
 				"policyID":   policyID.String(),
-			}).Info("Policy can not be optimized.")
+			}).Info("Policy cannot be optimized.")
 			continue
 		}
 		s.logCxt.WithFields(log.Fields{
@@ -1417,7 +1417,7 @@ func (s *xdpIPState) updatePolicy(policyID proto.PolicyID, policy *proto.Policy)
 		s.logCxt.WithField("policyID", policyID).Debug("Policy can be optimized.")
 		s.pendingDiffState.PoliciesToUpdate[policyID] = &xdpRules
 	} else {
-		s.logCxt.WithField("policyID", policyID).Debug("Policy can not be optimized.")
+		s.logCxt.WithField("policyID", policyID).Debug("Policy cannot be optimized.")
 		s.pendingDiffState.PoliciesToUpdate[policyID] = nil
 	}
 }
