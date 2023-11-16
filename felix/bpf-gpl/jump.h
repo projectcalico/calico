@@ -81,9 +81,9 @@ enum cali_jump_index {
 
 #if CALI_F_XDP
 
-#define cali_jump_prog_map map_symbol(xdp_cali_jump, 2)
+#define cali_jump_prog_map map_symbol(xdp_cali_jump, 3)
 
-CALI_MAP_V1(cali_jump_prog_map, BPF_MAP_TYPE_PROG_ARRAY, __u32, __u32, 100, 0)
+CALI_MAP_V1(cali_jump_prog_map, BPF_MAP_TYPE_PROG_ARRAY, __u32, __u32, 2400, 0)
 
 /* We on any path, we always jump to the PROG_INDEX_POLICY for policy, that one
  * is shared!
@@ -92,9 +92,9 @@ CALI_MAP_V1(cali_jump_prog_map, BPF_MAP_TYPE_PROG_ARRAY, __u32, __u32, 100, 0)
 	bpf_tail_call((ctx)->xdp, &cali_jump_prog_map, (ctx)->xdp_globals->jumps[PROG_INDEX_POLICY])
 #else /* CALI_F_XDP */
 
-#define cali_jump_prog_map map_symbol(cali_jump, 2)
+#define cali_jump_prog_map map_symbol(cali_jump, 3)
 
-CALI_MAP_V1(cali_jump_prog_map, BPF_MAP_TYPE_PROG_ARRAY, __u32, __u32, 10000, 0)
+CALI_MAP_V1(cali_jump_prog_map, BPF_MAP_TYPE_PROG_ARRAY, __u32, __u32, 240000, 0)
 
 #define __CALI_JUMP_TO_POLICY(ctx, allow, deny, pol) do {	\
 	(ctx)->skb->cb[0] = (ctx)->globals->jumps[PROG_PATH(allow)];			\
