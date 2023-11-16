@@ -971,14 +971,14 @@ var localEpsWithTagInheritProfile = withProfileTagInherit.withKVUpdates(
 	routelocalWlV6ColonThree,
 ).withName("2 local, overlapping IPs & a tag inherit profile")
 
-var withProfileTagOverriden = initialisedStore.withKVUpdates(
+var withProfileTagOverridden = initialisedStore.withKVUpdates(
 	KVPair{Key: ProfileRulesKey{ProfileKey: ProfileKey{Name: "prof-1"}}, Value: &profileRulesWithTagInherit},
 	KVPair{Key: ResourceKey{Kind: v3.KindProfile, Name: "prof-1"}, Value: profileLabelsTag1},
 ).withName("profile")
 
 // localEpsWithTagOverriddenProfile Checks that tags-inherited labels can be
 // overridden by explicit labels on the profile.
-var localEpsWithTagOverriddenProfile = withProfileTagOverriden.withKVUpdates(
+var localEpsWithTagOverriddenProfile = withProfileTagOverridden.withKVUpdates(
 	// Two local endpoints with overlapping IPs.
 	KVPair{Key: localWlEpKey1, Value: &localWlEp1},
 	KVPair{Key: localWlEpKey2, Value: &localWlEp2},

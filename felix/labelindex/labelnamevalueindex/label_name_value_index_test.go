@@ -26,8 +26,8 @@ func TestLabelValueIndexCRUD(t *testing.T) {
 	RegisterTestingT(t)
 	idx := New[string, labels]("item")
 	x, ok := idx.Get("a")
-	Expect(x).To(BeNil(), "Get shouldn't return anything for non-existent key")
-	Expect(ok).To(BeFalse(), "Get should return false for a non-existent key")
+	Expect(x).To(BeNil(), "Get shouldn't return anything for nonexistent key")
+	Expect(ok).To(BeFalse(), "Get should return false for a nonexistent key")
 	Expect(idx.Len()).To(Equal(0), "Len should start at 0")
 
 	item := labels{"a": "A"}

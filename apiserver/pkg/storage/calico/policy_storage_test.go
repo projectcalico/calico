@@ -102,7 +102,7 @@ func TestNetworkPolicyCreateWithKeyExist(t *testing.T) {
 	defer testCleanup(t, ctx, store, gnpStore)
 
 	obj := &calico.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "foo"}}
-	key, _ := testPropogateStore(ctx, t, store, obj)
+	key, _ := testPropagateStore(ctx, t, store, obj)
 	out := &calico.NetworkPolicy{}
 	err := store.Create(ctx, key, obj, out, 0)
 	if err == nil || !storage.IsExist(err) {
@@ -135,7 +135,7 @@ func TestNetworkPolicyGet(t *testing.T) {
 	ctx, store, gnpStore := testSetup(t)
 	defer testCleanup(t, ctx, store, gnpStore)
 
-	key, storedObj := testPropogateStore(ctx, t, store, &calico.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "foo"}})
+	key, storedObj := testPropagateStore(ctx, t, store, &calico.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "foo"}})
 
 	tests := []struct {
 		key               string
@@ -181,7 +181,7 @@ func TestNetworkPolicyUnconditionalDelete(t *testing.T) {
 	ctx, store, gnpStore := testSetup(t)
 	defer testCleanup(t, ctx, store, gnpStore)
 
-	key, storedObj := testPropogateStore(ctx, t, store, &calico.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "foo"}})
+	key, storedObj := testPropagateStore(ctx, t, store, &calico.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "foo"}})
 
 	tests := []struct {
 		key               string
@@ -219,7 +219,7 @@ func TestNetworkPolicyConditionalDelete(t *testing.T) {
 	ctx, store, gnpStore := testSetup(t)
 	defer testCleanup(t, ctx, store, gnpStore)
 
-	key, storedObj := testPropogateStore(ctx, t, store, &calico.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "foo", UID: "A"}})
+	key, storedObj := testPropagateStore(ctx, t, store, &calico.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "foo", UID: "A"}})
 
 	tests := []struct {
 		precondition        *storage.Preconditions
@@ -247,7 +247,7 @@ func TestNetworkPolicyConditionalDelete(t *testing.T) {
 		if !reflect.DeepEqual(storedObj, out) {
 			t.Errorf("#%d: pod want=%#v, get=%#v", i, storedObj, out)
 		}
-		key, storedObj = testPropogateStore(ctx, t, store, &calico.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "foo", UID: "A"}})
+		key, storedObj = testPropagateStore(ctx, t, store, &calico.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "foo", UID: "A"}})
 	}
 }
 
@@ -269,7 +269,7 @@ func TestNetworkPolicyGetList(t *testing.T) {
 	ctx, store, gnpStore := testSetup(t)
 	defer testCleanup(t, ctx, store, gnpStore)
 
-	key, storedObj := testPropogateStore(ctx, t, store, &calico.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "foo"}})
+	key, storedObj := testPropagateStore(ctx, t, store, &calico.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "foo"}})
 
 	tests := []struct {
 		key         string
@@ -322,7 +322,7 @@ func TestNetworkPolicyGuaranteedUpdate(t *testing.T) {
 		testCleanup(t, ctx, store, gnpStore)
 		store.client.NetworkPolicies().Delete(ctx, "default", "non-existing", options.DeleteOptions{})
 	}()
-	key, storeObj := testPropogateStore(ctx, t, store, &calico.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "foo", UID: "A"}})
+	key, storeObj := testPropagateStore(ctx, t, store, &calico.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "foo", UID: "A"}})
 
 	tests := []struct {
 		key                 string
@@ -489,7 +489,7 @@ func TestNetworkPolicyGuaranteedUpdateWithTTL(t *testing.T) {
 func TestNetworkPolicyGuaranteedUpdateWithConflict(t *testing.T) {
 	ctx, store, gnpStore := testSetup(t)
 	defer testCleanup(t, ctx, store, gnpStore)
-	key, _ := testPropogateStore(ctx, t, store, &calico.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "foo"}})
+	key, _ := testPropagateStore(ctx, t, store, &calico.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "foo"}})
 
 	errChan := make(chan error, 1)
 	var firstToFinish sync.WaitGroup
@@ -656,9 +656,9 @@ func testCleanup(t *testing.T, ctx context.Context, store, gnpStore *resourceSto
 	}
 }
 
-// testPropogateStore helps propagates store with objects, automates key generation, and returns
+// testPropagateStore helps propagates store with objects, automates key generation, and returns
 // keys and stored objects.
-func testPropogateStore(ctx context.Context, t *testing.T, store *resourceStore, obj *calico.NetworkPolicy) (string, *calico.NetworkPolicy) {
+func testPropagateStore(ctx context.Context, t *testing.T, store *resourceStore, obj *calico.NetworkPolicy) (string, *calico.NetworkPolicy) {
 	// Setup store with a key and grab the output for returning.
 	key := "projectcalico.org/networkpolicies/default/foo"
 	setOutput := &calico.NetworkPolicy{}

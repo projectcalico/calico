@@ -51,7 +51,7 @@ func (e ErrorDatastoreError) Status() metav1.Status {
 }
 
 // Error indicating a resource does not exist.  Used when attempting to delete or
-// update a non-existent resource.
+// update a nonexistent resource.
 type ErrorResourceDoesNotExist struct {
 	Err        error
 	Identifier interface{}

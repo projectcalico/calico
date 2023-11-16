@@ -56,7 +56,7 @@ type NetworkPolicySpec struct {
 	// The ordered set of egress rules.  Each rule contains a set of packet match criteria and
 	// a corresponding action to apply.
 	Egress []Rule `json:"egress,omitempty" validate:"omitempty,dive"`
-	// The selector is an expression used to pick pick out the endpoints that the policy should
+	// The selector is an expression used to pick out the endpoints that the policy should
 	// be applied to.
 	//
 	// Selector expressions follow this syntax:

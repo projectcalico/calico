@@ -1462,7 +1462,7 @@ func (c *client) GetLoadBalancerIPs() []*net.IPNet {
 
 // updateGlobalRoutes updates programs and withdraws routes based on the given CIDRs as provided via
 // the BGPConfiguration API, and this node's service advertisement status as configured via
-// the per-node Service advertisment exclusion label.
+// the per-node Service advertisement exclusion label.
 //
 // Each call to this function is scoped to a particular route type - ClusterIP,
 // ExternalIP, or LoadBalancerIP - based on the provided RouteIndex.

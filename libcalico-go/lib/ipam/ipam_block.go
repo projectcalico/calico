@@ -31,7 +31,7 @@ import (
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
-// windwowsReservedHandle is the handle used to reserve addresses required for Windows
+// windowsReservedHandle is the handle used to reserve addresses required for Windows
 // networking so that workloads do not get assigned these addresses.
 const WindowsReservedHandle = "windows-reserved-ipam-handle"
 
@@ -262,7 +262,7 @@ func (b *allocationBlock) release(addresses []ReleaseOptions) ([]cnet.IP, map[st
 	delRefCounts := map[int]int{}
 	attrsToDelete := []int{}
 
-	// De-duplicate addresses to ensure reference counting is correcet
+	// De-duplicate addresses to ensure reference counting is correct
 	uniqueAddresses := make(map[string]ReleaseOptions)
 	for _, opt := range addresses {
 		uniqueAddresses[opt.Address] = opt

@@ -97,7 +97,7 @@ type BGPPeerSpec struct {
 	// restart timeout.  When not specified, the BIRD default of 120s is used.
 	MaxRestartTime *metav1.Duration `json:"maxRestartTime,omitempty"`
 	// Maximum number of local AS numbers that are allowed in the AS path for received routes.
-	// This removes BGP loop prevention and should only be used if absolutely necesssary.
+	// This removes BGP loop prevention and should only be used if absolutely necessary.
 	// +optional
 	NumAllowedLocalASNumbers *int32 `json:"numAllowedLocalASNumbers,omitempty"`
 	// TTLSecurity enables the generalized TTL security mechanism (GTSM) which protects against spoofed packets by

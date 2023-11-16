@@ -168,7 +168,7 @@ func TestPolicySorter_UpdatePolicy(t *testing.T) {
 
 	dirty = poc.UpdatePolicy(polKey, nil)
 	if dirty {
-		t.Error("Deleting non-existent policy - expected dirty to be false but it was true")
+		t.Error("Deleting nonexistent policy - expected dirty to be false but it was true")
 	}
 }
 

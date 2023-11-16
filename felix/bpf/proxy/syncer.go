@@ -380,7 +380,7 @@ func (s *Syncer) startupBuildPrev(state DPSyncerState) error {
 
 func (s *Syncer) startupSync(state DPSyncerState) error {
 	// Try to build the previous maps based on the current state and what is in bpf maps.
-	// Once we have the previous map, we can apply the the current state as if we never
+	// Once we have the previous map, we can apply the current state as if we never
 	// restarted and apply only the diff using the regular code path.
 	if err := s.startupBuildPrev(state); err != nil {
 		log.WithError(err).Error("Failed to load previous state of NAT maps from dataplane, " +

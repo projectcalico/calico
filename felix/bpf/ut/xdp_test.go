@@ -128,7 +128,7 @@ var xdpTestCases = []xdpTest{
 		Metadata:    false,
 	},
 	{
-		Description: "4 - Allow all rule, packet must pass with metada",
+		Description: "4 - Allow all rule, packet must pass with metadata",
 		Rules:       &allowAllRulesXDP,
 		IPv4Header:  ipv4Default,
 		Drop:        false,

@@ -1116,11 +1116,11 @@ func (c *tcpConn6Raw) Control(f func(fd uintptr)) error {
 }
 
 func (c *tcpConn6Raw) Read(f func(fd uintptr) (done bool)) error {
-	panic("not implemeneted")
+	panic("not implemented")
 }
 
 func (c *tcpConn6Raw) Write(f func(fd uintptr) (done bool)) error {
-	panic("not implemeneted")
+	panic("not implemented")
 }
 
 func tcpForceV6(ip net.IP, port int) (net.Conn, error) {

@@ -64,7 +64,7 @@ func TestTigeraOperatorHelmChart(t *testing.T) {
 
 			t.Run("does not create a secret", func(t *testing.T) {
 				g := NewWithT(t)
-				// assert an error occured. no other way to assert "file was not rendered"
+				// assert an error occurred. no other way to assert "file was not rendered"
 				err := renderChartResource(t, opts, "templates/tigera-operator/01-imagepullsecret.yaml", &corev1.Secret{})
 				g.Expect(err).To(HaveOccurred())
 			})

@@ -52,7 +52,7 @@ func convertError(err error) string {
 	return fmt.Sprintf("%v", err.Error())
 }
 
-func retriable(err error) bool {
+func retryable(err error) bool {
 	var awsErr smithy.APIError
 	if errors.As(err, &awsErr) {
 		switch awsErr.ErrorCode() {
@@ -141,7 +141,7 @@ func (updater *EC2SrcDstCheckUpdater) Update(caliCheckOption apiv3.AWSSrcDstChec
 }
 
 // Interface for EC2 Metadata service.
-type ec2MetadaAPI interface {
+type ec2MetadataAPI interface {
 	GetInstanceIdentityDocument(
 		ctx context.Context, params *imds.GetInstanceIdentityDocumentInput, optFns ...func(*imds.Options),
 	) (*imds.GetInstanceIdentityDocumentOutput, error)
@@ -155,7 +155,7 @@ type ec2API interface {
 	ModifyNetworkInterfaceAttribute(ctx context.Context, params *ec2.ModifyNetworkInterfaceAttributeInput, optFns ...func(*ec2.Options)) (*ec2.ModifyNetworkInterfaceAttributeOutput, error)
 }
 
-func getEC2InstanceID(ctx context.Context, svc ec2MetadaAPI) (string, error) {
+func getEC2InstanceID(ctx context.Context, svc ec2MetadataAPI) (string, error) {
 	idDoc, err := svc.GetInstanceIdentityDocument(ctx, nil)
 	if err != nil {
 		return "", err
@@ -164,7 +164,7 @@ func getEC2InstanceID(ctx context.Context, svc ec2MetadaAPI) (string, error) {
 	return idDoc.InstanceID, nil
 }
 
-func getEC2Region(ctx context.Context, svc ec2MetadaAPI) (string, error) {
+func getEC2Region(ctx context.Context, svc ec2MetadataAPI) (string, error) {
 	region, err := svc.GetRegion(ctx, nil)
 	if err != nil {
 		return "", err
@@ -219,7 +219,7 @@ func (c *ec2Client) getEC2NetworkInterfaceId(ctx context.Context) (networkInstan
 	for i := 0; i < retries; i++ {
 		out, err = c.EC2Svc.DescribeInstances(ctx, input)
 		if err != nil {
-			if retriable(err) {
+			if retryable(err) {
 				// if error is temporary, try again in a second.
 				time.Sleep(1 * time.Second)
 				log.WithField("instance-id", c.ec2InstanceId).Debug("retrying getting network-interface-id")
@@ -276,7 +276,7 @@ func (c *ec2Client) setEC2SourceDestinationCheck(ctx context.Context, ec2NetId s
 	for i := 0; i < retries; i++ {
 		_, err = c.EC2Svc.ModifyNetworkInterfaceAttribute(ctx, input)
 		if err != nil {
-			if retriable(err) {
+			if retryable(err) {
 				// if error is temporary, try again in a second.
 				time.Sleep(1 * time.Second)
 				log.WithField("net-instance-id", ec2NetId).Debug("retrying setting source-destination-check")

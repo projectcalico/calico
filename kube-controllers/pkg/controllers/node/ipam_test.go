@@ -50,7 +50,7 @@ const (
 	assertionTimeout = 3 * gracePeriod
 )
 
-// assertConsistenteState performs checks on the provided IPAM controller's internal
+// assertConsistentState performs checks on the provided IPAM controller's internal
 // caches to ensure that they are consistent with each other. Useful for ensuring that
 // at any arbitrary point in time, we're not in an unknown state.
 func assertConsistentState(c *ipamController) {

@@ -577,14 +577,14 @@ spec:
     action: accept
   - cidr: 10.222.222.0/24
     matchOperator: equal
-    action: Retecj
+    action: Reject_
   - cidr: fd00:1111:1111:1111::/64
     matchOperator: Equal
     action: Accept
   exportV4:
   - cidr: 10.111.111.0/24
     matchOperator: notin
-    action: Accetp
+    action: Accept_
   - cidr: 10.222.222.0/24
     matchOperator: in
     action: Accept
@@ -593,7 +593,7 @@ spec:
     action: Accept
   importV6:
   - cidr: fd00:1111:1111:1111::/64
-    matchOperator: Eqaul
+    matchOperator: Equal_
     action: accept
   - cidr: 10.111.111.0/24
     matchOperator: In
@@ -613,17 +613,17 @@ EOF
 
             expectedOutput = """The BGPFilter "test-invalid-filter" is invalid: 
 * MatchOperator: Invalid value: "notin": Reason: failed to validate Field: MatchOperator because of Tag: matchOperator 
-* Action: Invalid value: "Accetp": Reason: failed to validate Field: Action because of Tag: filterAction 
+* Action: Invalid value: "Accept_": Reason: failed to validate Field: Action because of Tag: filterAction 
 * MatchOperator: Invalid value: "in": Reason: failed to validate Field: MatchOperator because of Tag: matchOperator 
 * CIDR: Invalid value: "IPv4Address": Reason: failed to validate Field: CIDR because of Tag: netv4 
 * Action: Invalid value: "accept": Reason: failed to validate Field: Action because of Tag: filterAction 
 * MatchOperator: Invalid value: "equal": Reason: failed to validate Field: MatchOperator because of Tag: matchOperator 
-* Action: Invalid value: "Retecj": Reason: failed to validate Field: Action because of Tag: filterAction 
+* Action: Invalid value: "Reject_": Reason: failed to validate Field: Action because of Tag: filterAction 
 * CIDR: Invalid value: "fd00:1111:1111:1111::/64": Reason: failed to validate Field: CIDR because of Tag: netv4 
 * MatchOperator: Invalid value: "notequal": Reason: failed to validate Field: MatchOperator because of Tag: matchOperator 
 * Action: Invalid value: "reject": Reason: failed to validate Field: Action because of Tag: filterAction 
 * CIDR: Invalid value: "ipv6Address": Reason: failed to validate Field: CIDR because of Tag: netv6 
-* MatchOperator: Invalid value: "Eqaul": Reason: failed to validate Field: MatchOperator because of Tag: matchOperator 
+* MatchOperator: Invalid value: "Equal_": Reason: failed to validate Field: MatchOperator because of Tag: matchOperator 
 * CIDR: Invalid value: "10.111.111.0/24": Reason: failed to validate Field: CIDR because of Tag: netv6"""
             assert output == expectedOutput
 

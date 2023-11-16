@@ -226,8 +226,8 @@ func doMount(destinationDir string, ninputs *creds.Credentials, workloadPath str
 		return err
 	}
 
-	newDestianationDir := destinationDir + "/nodeagent"
-	err = os.MkdirAll(newDestianationDir, 0777)
+	newDestinationDir := destinationDir + "/nodeagent"
+	err = os.MkdirAll(newDestinationDir, 0777)
 	if err != nil {
 		cmd := exec.Command("/bin/umount", destinationDir)
 		e := cmd.Run()
@@ -242,7 +242,7 @@ func doMount(destinationDir string, ninputs *creds.Credentials, workloadPath str
 	}
 
 	// Do a bind mount
-	cmd := exec.Command("/bin/mount", "--bind", newDir, newDestianationDir)
+	cmd := exec.Command("/bin/mount", "--bind", newDir, newDestinationDir)
 	err = cmd.Run()
 	if err != nil {
 		cmd = exec.Command("/bin/umount", destinationDir)

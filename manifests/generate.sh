@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# This script updates the manifsts in this directory using helm.
+# This script updates the manifests in this directory using helm.
 # Values files for the manifests in this directory can be found in
 # ../calico/charts/values.
 

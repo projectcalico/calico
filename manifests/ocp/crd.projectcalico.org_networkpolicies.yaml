@@ -798,7 +798,7 @@ spec:
                   type: string
                 type: array
               selector:
-                description: "The selector is an expression used to pick pick out
+                description: "The selector is an expression used to pick out
                   the endpoints that the policy should be applied to. \n Selector
                   expressions follow this syntax: \n \tlabel == \"string_literal\"
                   \ ->  comparison, e.g. my_label == \"foo bar\" \tlabel != \"string_literal\"

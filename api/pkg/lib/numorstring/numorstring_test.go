@@ -159,7 +159,7 @@ func init() {
 	)
 
 	// Perform tests of Protocols FromString method.
-	DescribeTable("NumOrStringProtocols FromString is not case sensitive",
+	DescribeTable("NumOrStringProtocols FromString is not case-sensitive",
 		func(input, expected string) {
 			Expect(numorstring.ProtocolFromString(input).StrVal).To(Equal(expected),
 				"expected parsed protocol to match")

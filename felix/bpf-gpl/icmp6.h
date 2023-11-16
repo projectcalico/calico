@@ -105,7 +105,7 @@ static CALI_BPF_INLINE int icmp_v6_reply(struct cali_tc_ctx *ctx,
 		 * different registers...
 		 *
 		 * We need to make a check for sz < 128 because verifier cannot handle the
-		 * corner case when we atually have less then 128 bytes remaining and
+		 * corner case when we actually have less than 128 bytes remaining and
 		 * guesses that anything within ~ min MTU - headers is possible eventhough
 		 * the compiler and us know that it is not.
 		 */

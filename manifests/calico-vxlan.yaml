@@ -475,7 +475,7 @@ spec:
               numAllowedLocalASNumbers:
                 description: Maximum number of local AS numbers that are allowed in
                   the AS path for received routes. This removes BGP loop prevention
-                  and should only be used if absolutely necesssary.
+                  and should only be used if absolutely necessary.
                 format: int32
                 type: integer
               password:
@@ -1534,7 +1534,7 @@ spec:
                 description: 'MetadataAddr is the IP address or domain name of the
                   server that can answer VM queries for cloud-init metadata. In OpenStack,
                   this corresponds to the machine running nova-api (or in Ubuntu,
-                  nova-api-metadata). A value of none (case insensitive) means that
+                  nova-api-metadata). A value of none (case-insensitive) means that
                   Felix should not set up any NAT rule for the metadata path. [Default:
                   127.0.0.1]'
                 type: string
@@ -2627,7 +2627,7 @@ spec:
                   any DNAT.
                 type: boolean
               selector:
-                description: "The selector is an expression used to pick pick out
+                description: "The selector is an expression used to pick out
                   the endpoints that the policy should be applied to. \n Selector
                   expressions follow this syntax: \n \tlabel == \"string_literal\"
                   \ ->  comparison, e.g. my_label == \"foo bar\" \tlabel != \"string_literal\"
@@ -4295,7 +4295,7 @@ spec:
                   type: string
                 type: array
               selector:
-                description: "The selector is an expression used to pick pick out
+                description: "The selector is an expression used to pick out
                   the endpoints that the policy should be applied to. \n Selector
                   expressions follow this syntax: \n \tlabel == \"string_literal\"
                   \ ->  comparison, e.g. my_label == \"foo bar\" \tlabel != \"string_literal\"

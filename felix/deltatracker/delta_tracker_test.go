@@ -173,7 +173,7 @@ func TestDeltaTracker_GetDesired(t *testing.T) {
 		t.Errorf("DeltaTracker returned incorrect value after deleting from DP: %q", v)
 	}
 
-	// Adding a different value to the dataplane shouldn't affact desired.
+	// Adding a different value to the dataplane shouldn't affect desired.
 	dt.Dataplane().Set("1", "A2")
 	if v, ok := dt.Desired().Get("1"); !ok {
 		t.Errorf("DeltaTracker failed to get desired key with different value in DP")

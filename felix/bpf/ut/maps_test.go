@@ -193,7 +193,7 @@ func TestMapEntryDeletion(t *testing.T) {
 	// Defer error checking since the Delete calls do the cleanup for this test...
 	Expect(err1).NotTo(HaveOccurred(), "Failed to create map entry")
 	Expect(err2).NotTo(HaveOccurred(), "Failed to delete map entry")
-	Expect(bpfmaps.IsNotExists(err3)).To(Equal(true), "Error from deletion of non-existent entry was incorrect")
+	Expect(bpfmaps.IsNotExists(err3)).To(Equal(true), "Error from deletion of nonexistent entry was incorrect")
 }
 
 func TestMapIterActionDelete(t *testing.T) {

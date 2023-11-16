@@ -55,7 +55,7 @@ func Iter(parsedArgs map[string]interface{}, cb func(map[string]interface{}) err
 			}
 
 			if info.IsDir() {
-				// Return nil or SkipDir dpending on whether or not we are recursively following directories (note that
+				// Return nil or SkipDir depending on whether or not we are recursively following directories (note that
 				// we need to explicitly handle the root directory to ensure we do at least one layer of directory
 				// walking by default).
 				if recursive || path == f {

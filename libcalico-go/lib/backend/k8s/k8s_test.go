@@ -801,12 +801,12 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		})
 
 		By("Getting a Global Network Policy that does not exist", func() {
-			_, err := c.Get(ctx, model.ResourceKey{Name: "my-non-existent-test-gnp", Kind: apiv3.KindGlobalNetworkPolicy}, "")
+			_, err := c.Get(ctx, model.ResourceKey{Name: "my-nonexistent-test-gnp", Kind: apiv3.KindGlobalNetworkPolicy}, "")
 			Expect(err).To(HaveOccurred())
 		})
 
 		By("Listing a missing Global Network Policy", func() {
-			kvps, err := c.List(ctx, model.ResourceListOptions{Name: "my-non-existent-test-gnp", Kind: apiv3.KindGlobalNetworkPolicy}, "")
+			kvps, err := c.List(ctx, model.ResourceListOptions{Name: "my-nonexistent-test-gnp", Kind: apiv3.KindGlobalNetworkPolicy}, "")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(kvps.KVPairs).To(HaveLen(0))
 		})
@@ -943,7 +943,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		By("Create a non-existent Host Endpoint", func() {
+		By("Create a nonexistent Host Endpoint", func() {
 			kvpRes, err = c.Create(ctx, kvp2a)
 			Expect(err).NotTo(HaveOccurred())
 		})
@@ -955,12 +955,12 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		})
 
 		By("Getting a missing Host Endpoint", func() {
-			_, err := c.Get(ctx, model.ResourceKey{Name: "my-non-existent-test-hep", Kind: apiv3.KindHostEndpoint}, "")
+			_, err := c.Get(ctx, model.ResourceKey{Name: "my-nonexistent-test-hep", Kind: apiv3.KindHostEndpoint}, "")
 			Expect(err).To(HaveOccurred())
 		})
 
 		By("Listing a missing Host Endpoint", func() {
-			kvps, err := c.List(ctx, model.ResourceListOptions{Name: "my-non-existent-test-hep", Kind: apiv3.KindHostEndpoint}, "")
+			kvps, err := c.List(ctx, model.ResourceListOptions{Name: "my-nonexistent-test-hep", Kind: apiv3.KindHostEndpoint}, "")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(kvps.KVPairs).To(HaveLen(0))
 		})
@@ -1159,7 +1159,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			testutils.DeleteNamespace(c.ClientSet, ns.ObjectMeta.Name)
 		})
 
-		By("Listing all Network Sets in a non-existent namespace", func() {
+		By("Listing all Network Sets in a nonexistent namespace", func() {
 			kvps, err := c.List(ctx, model.ResourceListOptions{Namespace: ns.ObjectMeta.Name, Kind: apiv3.KindNetworkSet}, "")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(kvps.KVPairs).To(HaveLen(0))
@@ -1265,7 +1265,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		By("Create a non-existent BGP Peer", func() {
+		By("Create a nonexistent BGP Peer", func() {
 			kvpRes, err = c.Create(ctx, kvp2a)
 			Expect(err).NotTo(HaveOccurred())
 		})
@@ -1442,7 +1442,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		By("Applying a non-existent Node BGP Peer", func() {
+		By("Applying a nonexistent Node BGP Peer", func() {
 			var err error
 			kvpRes, err = c.Apply(ctx, kvp2a)
 			Expect(err).NotTo(HaveOccurred())
@@ -1524,7 +1524,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		By("Deleting a non-existent Node BGP Peer", func() {
+		By("Deleting a nonexistent Node BGP Peer", func() {
 			_, err := c.Delete(ctx, kvp1a.Key, "")
 			Expect(err).To(HaveOccurred())
 		})
@@ -2222,7 +2222,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			Expect(err).To(HaveOccurred())
 		})
 
-		By("Getting non-existent Node", func() {
+		By("Getting nonexistent Node", func() {
 			_, err := c.Get(ctx, model.ResourceKey{Name: "Fake", Kind: libapiv3.KindNode}, "")
 			Expect(err).To(HaveOccurred())
 		})
@@ -3101,7 +3101,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Inline kubeconfig support", testuti
 	ctx := context.Background()
 
 	BeforeEach(func() {
-		// Load kubeconfig file that was mounted in to the test.
+		// Load kubeconfig file that was mounted into the test.
 		conf, err := os.ReadFile("/kubeconfig.yaml")
 		Expect(err).NotTo(HaveOccurred())
 
