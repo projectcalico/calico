@@ -2939,7 +2939,7 @@ func (m *bpfEndpointManager) doUpdatePolicyProgram(hk hook.Hook, progName string
 	}
 
 	defer func() {
-		// Once we've put the program in the map, we don't need its FD any more.
+		// Once we've put the program in the map, we don't need its FD anymore.
 		err := progFD.Close()
 		if err != nil {
 			log.WithError(err).Panic("Failed to close program FD.")

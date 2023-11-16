@@ -1067,7 +1067,7 @@ func (c *ipamController) garbageCollectIPs() error {
 
 func (c *ipamController) cleanupNode(cnode string) error {
 	// At this point, we've verified that the node isn't in Kubernetes and that all the allocations
-	// are tied to pods which don't exist any more. Clean up any allocations which may still be laying around.
+	// are tied to pods which don't exist anymore. Clean up any allocations which may still be laying around.
 	logc := log.WithField("calicoNode", cnode)
 
 	// Release the affinities for this node, requiring that the blocks are empty.

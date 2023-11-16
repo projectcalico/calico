@@ -309,7 +309,7 @@ func (arc *ActiveRulesCalculator) updateEndpointProfileIDs(key model.Key, profil
 	for id := range removedIDs {
 		arc.profileIDToEndpointKeys.Discard(id, key)
 		if !arc.profileIDToEndpointKeys.ContainsKey(id) {
-			// No endpoint refers to this ID any more.  Clean it
+			// No endpoint refers to this ID anymore.  Clean it
 			// up.
 			arc.sendProfileUpdate(id)
 		}
