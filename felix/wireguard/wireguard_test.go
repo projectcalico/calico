@@ -668,7 +668,7 @@ var _ = Describe("Enable wireguard", func() {
 						Expect(s.numStatusCallbacks).To(Equal(1))
 						key := link.WireguardPrivateKey
 
-						// Basically the same test as before but calls are reveresed.
+						// Basically the same test as before but calls are reversed.
 						ipv4 := ip.FromString("1.2.3.4")
 						wg.EndpointUpdate(hostname, ipv4)
 						wg.EndpointWireguardUpdate(hostname, key.PublicKey(), nil)
@@ -691,7 +691,7 @@ var _ = Describe("Enable wireguard", func() {
 						Expect(sV6.numStatusCallbacks).To(Equal(1))
 						key := linkV6.WireguardPrivateKey
 
-						// Basically the same test as before but calls are reveresed.
+						// Basically the same test as before but calls are reversed.
 						ipv6 := ip.FromString("2001:db8::1:2:3:4")
 						wgV6.EndpointUpdate(hostname, ipv6)
 						wgV6.EndpointWireguardUpdate(hostname, key.PublicKey(), nil)
