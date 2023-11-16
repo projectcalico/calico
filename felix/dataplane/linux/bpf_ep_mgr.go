@@ -3265,7 +3265,7 @@ func (pa *jumpMapAlloc) Get() (int, error) {
 
 func (pa *jumpMapAlloc) Put(i int) error {
 	if i < 0 || i >= pa.max {
-		return nil // ignore, expecially if an index is -1 aka unused
+		return nil // ignore, especially if an index is -1 aka unused
 	}
 
 	select {
