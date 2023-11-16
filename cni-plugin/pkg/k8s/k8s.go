@@ -539,7 +539,7 @@ func CmdDelK8s(ctx context.Context, c calicoclient.Interface, epIDs utils.WEPIde
 			// we shouldn't delete the workload endpoint. We identify workload endpoints based on pod name and namespace, which means
 			// we can receive DEL commands for an old sandbox for a currently running pod. However, we key IPAM allocations based on the
 			// CNI_CONTAINERID, so we should still do that below for this case.
-			logger.WithField("WorkloadEndpoint", wep).Warning("CNI_CONTAINERID does not match WorkloadEndpoint ConainerID, don't delete WEP.")
+			logger.WithField("WorkloadEndpoint", wep).Warning("CNI_CONTAINERID does not match WorkloadEndpoint ContainerID, don't delete WEP.")
 		} else if _, err = c.WorkloadEndpoints().Delete(
 			ctx,
 			wep.Namespace,
