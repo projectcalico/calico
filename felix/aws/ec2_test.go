@@ -167,22 +167,22 @@ var _ = Describe("AWS Tests", func() {
 		Expect(errMsg).To(Equal(fakeMsg))
 	})
 
-	It("should handle retryable server error", func() {
+	It("should handle retriable server error", func() {
 		internalErrCode := "InternalError"
 		internalErrMsg := "internal error"
 
 		awsErr := newAPIError(internalErrCode, internalErrMsg)
-		Expect(retryable(awsErr)).To(BeTrue())
+		Expect(retriable(awsErr)).To(BeTrue())
 
 		fakeCode := "fakeCode"
 		fakeMsg := "fakeMsg"
 
 		awsErr = newAPIError(fakeCode, fakeMsg)
-		Expect(retryable(awsErr)).To(BeFalse())
+		Expect(retriable(awsErr)).To(BeFalse())
 
 		fakeMsg = "non-aws error"
 		err := fmt.Errorf(fakeMsg)
-		Expect(retryable(err)).To(BeFalse())
+		Expect(retriable(err)).To(BeFalse())
 	})
 
 	It("should handle EC2Metadata interactions correctly", func() {
