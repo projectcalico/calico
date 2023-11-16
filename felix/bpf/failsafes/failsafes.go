@@ -31,7 +31,7 @@ import (
 )
 
 type Manager struct {
-	// failsafesMap is the BPF map containing host enpodint failsafe ports.
+	// failsafesMap is the BPF map containing host endpoint failsafe ports.
 	failsafesMap maps.Map
 	// failsafesInSync is set to true if the failsafe map is in sync.
 	failsafesInSync bool
