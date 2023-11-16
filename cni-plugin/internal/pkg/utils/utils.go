@@ -244,7 +244,7 @@ func DeleteIPAM(conf types.NetConf, args *skel.CmdArgs, logger *logrus.Entry) er
 	if err != nil {
 		logger.Error(err)
 	} else if ae != nil {
-		// Clean up any Azure endpoint data now that we've claened up the IPAM allocation.
+		// Clean up any Azure endpoint data now that we've cleaned up the IPAM allocation.
 		// However, don't do this if the IPAM release failed - otherwise we'll lose information we need
 		// in order to release the address.
 		if err := ae.Delete(); err != nil {
