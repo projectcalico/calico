@@ -262,7 +262,7 @@ func (b *allocationBlock) release(addresses []ReleaseOptions) ([]cnet.IP, map[st
 	delRefCounts := map[int]int{}
 	attrsToDelete := []int{}
 
-	// De-duplicate addresses to ensure reference counting is correcet
+	// De-duplicate addresses to ensure reference counting is correct
 	uniqueAddresses := make(map[string]ReleaseOptions)
 	for _, opt := range addresses {
 		uniqueAddresses[opt.Address] = opt
