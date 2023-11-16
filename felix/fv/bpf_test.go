@@ -2958,8 +2958,8 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 										},
 									},
 								}
-								w00Slector := fmt.Sprintf("name=='%s'", w[0][0].Name)
-								pol.Spec.Selector = w00Slector
+								w00Selector := fmt.Sprintf("name=='%s'", w[0][0].Name)
+								pol.Spec.Selector = w00Selector
 
 								pol = createPolicy(pol)
 							})
@@ -3052,8 +3052,8 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 											},
 										},
 									}
-									w00Slector := fmt.Sprintf("name=='%s'", w[0][0].Name)
-									pol.Spec.Selector = w00Slector
+									w00Selector := fmt.Sprintf("name=='%s'", w[0][0].Name)
+									pol.Spec.Selector = w00Selector
 
 									pol = createPolicy(pol)
 								})
