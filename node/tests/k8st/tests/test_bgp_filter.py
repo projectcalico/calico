@@ -593,7 +593,7 @@ spec:
     action: Accept
   importV6:
   - cidr: fd00:1111:1111:1111::/64
-    matchOperator: Equal_
+    matchOperator: Eqaul
     action: accept
   - cidr: 10.111.111.0/24
     matchOperator: In
@@ -623,7 +623,7 @@ EOF
 * MatchOperator: Invalid value: "notequal": Reason: failed to validate Field: MatchOperator because of Tag: matchOperator 
 * Action: Invalid value: "reject": Reason: failed to validate Field: Action because of Tag: filterAction 
 * CIDR: Invalid value: "ipv6Address": Reason: failed to validate Field: CIDR because of Tag: netv6 
-* MatchOperator: Invalid value: "Equal_": Reason: failed to validate Field: MatchOperator because of Tag: matchOperator 
+* MatchOperator: Invalid value: "Eqaul": Reason: failed to validate Field: MatchOperator because of Tag: matchOperator 
 * CIDR: Invalid value: "10.111.111.0/24": Reason: failed to validate Field: CIDR because of Tag: netv6"""
             assert output == expectedOutput
 
