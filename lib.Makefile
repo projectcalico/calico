@@ -498,7 +498,7 @@ commit-and-push-pr:
 	$(GIT) push $(GIT_REMOTE) $(GIT_PR_BRANCH_HEAD)
 
 ###############################################################################
-# Github API helpers
+# GitHub API helpers
 #   Helper macros and targets to help with communicating with the github API
 ###############################################################################
 GIT_COMMIT_MESSAGE?="Automatic Pin Updates"
