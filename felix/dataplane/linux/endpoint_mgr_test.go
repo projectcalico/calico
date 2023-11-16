@@ -223,7 +223,7 @@ func chainsForIfaces(ifaceMetadata []string,
 			polName = nameParts[1]
 		} else {
 			// Interface name, policy name and untracked "eth0_polA_untracked"
-			// or applyOnForwrd "eth0_polA_applyOnForward".
+			// or applyOnForward "eth0_polA_applyOnForward".
 			log.Debug("Interface name policy name and untracked/ingress/egress")
 			ifaceName = nameParts[0]
 			polName = nameParts[1]
