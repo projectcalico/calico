@@ -623,7 +623,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 			affStrB := fmt.Sprintf("host:%s", hostB)
 
 			// Configure a fake client such that we successfully create the
-			// block affininty, but fail to create the actual block.
+			// block affinity, but fail to create the actual block.
 			fc := newFakeClient()
 
 			// Creation function for a block affinity - actually create it.
