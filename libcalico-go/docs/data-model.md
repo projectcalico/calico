@@ -556,7 +556,7 @@ which Calico uses to enforce the rule.
 
 > **WARNING**
 >
-> Due to the same kernel limiation, the negated versions of the
+> Due to the same kernel limitation, the negated versions of the
 > ICMP matches are treated together as a single match. A rule
 > that uses `!icmp_type` and `!icmp_code` together will match
 > all ICMP traffic apart from traffic that matches **both** type
