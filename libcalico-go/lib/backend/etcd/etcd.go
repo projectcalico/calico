@@ -442,7 +442,7 @@ func (c *EtcdClient) listHostMetadata(l model.HostMetadataListOptions) ([]*model
 
 	// No hostname specified, so enumerate the directories directly under
 	// the host tree, return no entries if the host directory does not exist.
-	log.Debug("Listing all host metadatas")
+	log.Debug("Listing all host metadata")
 	key := "/calico/v1/host"
 	results, err := c.etcdKeysAPI.Get(context.Background(), key, etcdListChildrenOpts)
 	if err != nil {
