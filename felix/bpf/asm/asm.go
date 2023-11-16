@@ -71,6 +71,7 @@ const (
 	OpClassJump64   = 0b00000_101 // 0x5 64-bit wide operands (jump target always in offset)
 	OpClassJump32   = 0b00000_110 // 0x6 32-bit wide operands (jump target always in offset)
 	OpClassALU64    = 0b00000_111 // 0x7
+	OpClassMask     = 0b00000_111
 
 	// For memory operations, the upper 3 bits are the mode.
 	MemOpModeImm  = 0b000_00_000
@@ -349,6 +350,10 @@ func (n Insn) IsNoOp() bool {
 	return n.OpCode() == Mov64 && n.Dst() == n.Src()
 }
 
+func (n Insn) OpClass() OpCode {
+	return n.OpCode() & OpClassMask
+}
+
 // Block is a "builder" object for a block of BPF instructions.  After
 // creating a new Block, call the instruction-named methods to add
 // instructions to the block and then call Assemble() to resolve the
@@ -371,9 +376,11 @@ type Block struct {
 	insnIdxToComments  map[int][]string
 	inUseJumpTargets   set.Set[string]
 	policyDebugEnabled bool
+	trampolinesEnabled bool
 	trampolineIdx      int
 	lastTrampolineAddr int
 	deferredErr        error
+	NumJumps           int
 }
 
 func NewBlock(policyDebugEnabled bool) *Block {
@@ -384,6 +391,7 @@ func NewBlock(policyDebugEnabled bool) *Block {
 		insnIdxToComments:  map[int][]string{},
 		policyDebugEnabled: policyDebugEnabled,
 		fixUps:             map[string][]fixUp{},
+		trampolinesEnabled: true,
 	}
 }
 
@@ -757,10 +765,27 @@ func (b *Block) addInsnWithOffsetFixupNoTrampoline(insn Insn, targetLabel string
 		b.inUseJumpTargets.Add(targetLabel)
 		b.fixUps[targetLabel] = append(b.fixUps[targetLabel], fixUp{origInsnIdx: len(b.insns) - 1})
 	}
+	if insn.OpClass() == OpClassJump64 || insn.OpClass() == OpClassJump32 {
+		// Track number of jumps written, useful for estimating how complex
+		// the verifier will think the program is.
+		b.NumJumps++
+	}
 }
 
 func (b *Block) TargetIsUsed(label string) bool {
 	return b.inUseJumpTargets.Contains(label)
+}
+
+// UnresolvedJumpTargets returns a slice containing the names of all target
+// labels that have been used in a jump but don't currently have a labeled
+// instruction to jump to.
+func (b *Block) UnresolvedJumpTargets() []string {
+	var out []string
+	for t := range b.fixUps {
+		out = append(out, t)
+	}
+	sort.Strings(out)
+	return out
 }
 
 func (b *Block) Assemble() (Insns, error) {
@@ -830,9 +855,18 @@ func (b *Block) LabelNextInsn(label string) {
 }
 
 func (b *Block) AddComment(comment string) {
-	if b.policyDebugEnabled {
-		b.insnIdxToComments[len(b.insns)] = append(b.insnIdxToComments[len(b.insns)], comment)
+	if !b.policyDebugEnabled {
+		return
 	}
+	b.insnIdxToComments[len(b.insns)] = append(b.insnIdxToComments[len(b.insns)], comment)
+}
+
+func (b *Block) AddCommentF(comment string, args ...any) {
+	if !b.policyDebugEnabled {
+		return
+	}
+	comment = fmt.Sprintf(comment, args...)
+	b.insnIdxToComments[len(b.insns)] = append(b.insnIdxToComments[len(b.insns)], comment)
 }
 
 func (b *Block) nextInsnReachable() bool {
@@ -861,4 +895,8 @@ func (b *Block) ReserveInstructionCapacity(n int) {
 	newInsns := make(Insns, len(b.insns), n)
 	copy(newInsns, b.insns)
 	b.insns = newInsns
+}
+
+func (b *Block) SetTrampolinesEnabled(en bool) {
+	b.trampolinesEnabled = en
 }
