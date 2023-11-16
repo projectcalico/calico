@@ -312,7 +312,7 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 		logger.Debugf("Bypassing IPAM to set the result to: %+v", overriddenResult)
 
 		// Convert overridden IPAM result into current Result.
-		// This method fill in all the empty fields necessory for CNI output according to spec.
+		// This method fill in all the empty fields necessary for CNI output according to spec.
 		result, err = cniv1.NewResultFromResult(overriddenResult)
 		if err != nil {
 			return nil, err

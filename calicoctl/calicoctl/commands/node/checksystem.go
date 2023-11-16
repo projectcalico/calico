@@ -261,7 +261,7 @@ func checkModule(filename, module, kernelVersion string, pattern string) error {
 	defer fh.Close()
 
 	for {
-		// Ignoring second output (isPrefix) since it's not necessory
+		// Ignoring second output (isPrefix) since it's not necessary
 		buf, _, err := f.ReadLine()
 		if err != nil {
 			// EOF without a match
