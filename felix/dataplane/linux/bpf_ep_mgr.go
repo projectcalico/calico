@@ -526,7 +526,7 @@ func newBPFEndpointManager(
 
 	// If not running in test
 	if m.dp == m {
-		// Repin jump maps to a differnt path so that existing programs keep working
+		// Repin jump maps to a different path so that existing programs keep working
 		// as if nothing has changed. We keep those maps as long as we have dirty
 		// devices.
 		//
