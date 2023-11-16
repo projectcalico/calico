@@ -577,7 +577,7 @@ spec:
     action: accept
   - cidr: 10.222.222.0/24
     matchOperator: equal
-    action: Reject_
+    action: Retecj
   - cidr: fd00:1111:1111:1111::/64
     matchOperator: Equal
     action: Accept
@@ -618,7 +618,7 @@ EOF
 * CIDR: Invalid value: "IPv4Address": Reason: failed to validate Field: CIDR because of Tag: netv4 
 * Action: Invalid value: "accept": Reason: failed to validate Field: Action because of Tag: filterAction 
 * MatchOperator: Invalid value: "equal": Reason: failed to validate Field: MatchOperator because of Tag: matchOperator 
-* Action: Invalid value: "Reject_": Reason: failed to validate Field: Action because of Tag: filterAction 
+* Action: Invalid value: "Retecj": Reason: failed to validate Field: Action because of Tag: filterAction 
 * CIDR: Invalid value: "fd00:1111:1111:1111::/64": Reason: failed to validate Field: CIDR because of Tag: netv4 
 * MatchOperator: Invalid value: "notequal": Reason: failed to validate Field: MatchOperator because of Tag: matchOperator 
 * Action: Invalid value: "reject": Reason: failed to validate Field: Action because of Tag: filterAction 
