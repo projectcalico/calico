@@ -178,4 +178,23 @@ func checkICMPv6PortUnreachable(pktR gopacket.Packet, ipv6 *layers.IPv6) {
 			layers.ICMPv6TypeDestinationUnreachable,
 			layers.ICMPv6CodePortUnreachable,
 		)))
+
+	// serialize to recalculate csums
+
+	icmp := *icmpR
+	_ = icmp.SetNetworkLayerForChecksum(ipv6L.(gopacket.NetworkLayer))
+
+	cpkt := gopacket.NewSerializeBuffer()
+	err := gopacket.SerializeLayers(cpkt, gopacket.SerializeOptions{ComputeChecksums: true},
+		(pktR.Layer(layers.LayerTypeEthernet)).(gopacket.SerializableLayer),
+		ipv6L.(gopacket.SerializableLayer), &icmp,
+		(pktR.ApplicationLayer()).(gopacket.SerializableLayer))
+	Expect(err).NotTo(HaveOccurred())
+
+	fmt.Printf("pktR.Bytes() = %+v\n", pktR.Data())
+	fmt.Printf("cpkt.Bytes() = %+v\n", cpkt.Bytes())
+
+	Expect(icmpR.Checksum).To(Equal(
+		gopacket.NewPacket(cpkt.Bytes(), layers.LayerTypeEthernet, gopacket.Default).
+			Layer(layers.LayerTypeICMPv6).(*layers.ICMPv6).Checksum))
 }

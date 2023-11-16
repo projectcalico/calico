@@ -144,7 +144,7 @@ static CALI_BPF_INLINE int icmp_v6_reply(struct cali_tc_ctx *ctx,
 	icmp_csum = bpf_csum_diff(0, 0, (__u32 *)&ip_hdr(ctx)->saddr, 16 + 16, 0);
 
 	__u32 pseudo[2];
-	pseudo[0] = bpf_htonl(len - (CALI_F_L3 ? 0 : ETH_SIZE) - IP_SIZE - ICMP_SIZE);
+	pseudo[0] = bpf_htonl(len - (CALI_F_L3 ? 0 : ETH_SIZE) - IP_SIZE);
 	pseudo[1] = bpf_htonl(IPPROTO_ICMPV6);
 	icmp_csum = bpf_csum_diff(0, 0, pseudo, sizeof(pseudo), icmp_csum);
 
