@@ -203,7 +203,7 @@ var expected1 = []*model.KVPair{
 	},
 }
 
-// np2 is a NeteworkPolicy with a single Ingress rule which allows from all namespaces.
+// np2 is a NetworkPolicy with a single Ingress rule which allows from all namespaces.
 var np2 = networkingv1.NetworkPolicy{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "test.policy",
