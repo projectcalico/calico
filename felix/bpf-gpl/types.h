@@ -138,7 +138,7 @@ enum cali_state_flags {
 	/* CALI_ST_HOST_PSNAT is set when we are resolving host source port collision. */
 	CALI_ST_HOST_PSNAT	  = 0x40,
 	/* CALI_ST_CT_NP_LOOP tells CT when creating an entry that we are
-	 * turnign this packet around from a nodeport to a local pod. */
+	 * turning this packet around from a nodeport to a local pod. */
 	CALI_ST_CT_NP_LOOP	  = 0x80,
 	/* CALI_ST_CT_NP_REMOTE is set when host is accessing a remote nodeport. */
 	CALI_ST_CT_NP_REMOTE	  = 0x100,
