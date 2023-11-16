@@ -177,7 +177,7 @@ func TestAttach(t *testing.T) {
 	host2 := createVethName("hostep2")
 	defer deleteLink(host2)
 
-	t.Run("create another host insterface without a host endpoint (no policy)", func(t *testing.T) {
+	t.Run("create another host interface without a host endpoint (no policy)", func(t *testing.T) {
 		bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("hostep2", ifacemonitor.StateUp, host2.Attrs().Index))
 		bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("hostep2", "4.3.2.1"))
 		err := bpfEpMgr.CompleteDeferredWork()
