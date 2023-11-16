@@ -609,7 +609,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 
 			It("should configure the vxlan device correctly", func() {
 				// The VXLAN device should appear with default MTU, etc. FV environment uses MTU 1500,
-				// which means that we should expect 1450 after subracting VXLAN overhead for IPv4 or 1430 for IPv6.
+				// which means that we should expect 1450 after subtracting VXLAN overhead for IPv4 or 1430 for IPv6.
 				mtuStr := "mtu 1450"
 				mtuStrV6 := "mtu 1430"
 				for _, felix := range felixes {
