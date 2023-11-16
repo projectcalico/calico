@@ -537,7 +537,7 @@ func newBPFEndpointManager(
 			return nil, err
 		}
 		m.removeOldJumps = true
-		// Make sure that we envetually clean up after previous versions.
+		// Make sure that we eventually clean up after previous versions.
 		m.legacyCleanUp = true
 	}
 
