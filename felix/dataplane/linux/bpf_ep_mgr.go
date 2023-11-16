@@ -675,12 +675,12 @@ func (m *bpfEndpointManager) OnUpdate(msg interface{}) {
 
 	case *proto.HostMetadataUpdate:
 		if !m.ipv6Enabled && msg.Hostname == m.hostname {
-			log.WithField("HostMetadataUpdate", msg).Info("Host IP changed")
+			log.WithField("HostMetadataUpdate", msg).Infof("Host IP changed: %s", msg.Ipv4Addr)
 			m.updateHostIP(net.ParseIP(msg.Ipv4Addr))
 		}
 	case *proto.HostMetadataV6Update:
 		if m.ipv6Enabled && msg.Hostname == m.hostname {
-			log.WithField("HostMetadataV6Update", msg).Info("Host IPv6 changed")
+			log.WithField("HostMetadataV6Update", msg).Infof("Host IPv6 changed: %s", msg.Ipv6Addr)
 			m.updateHostIP(net.ParseIP(msg.Ipv6Addr))
 		}
 	case *proto.HostMetadataV4V6Update:
@@ -688,10 +688,10 @@ func (m *bpfEndpointManager) OnUpdate(msg interface{}) {
 			break
 		}
 		if m.ipv6Enabled {
-			log.WithField("HostMetadataV4V6Update", msg).Info("Host IPv6 changed")
+			log.WithField("HostMetadataV4V6Update", msg).Infof("Host IPv6 changed: %s", msg.Ipv6Addr)
 			m.updateHostIP(net.ParseIP(msg.Ipv6Addr))
 		} else {
-			log.WithField("HostMetadataV4V6Update", msg).Info("Host IP changed")
+			log.WithField("HostMetadataV4V6Update", msg).Infof("Host IP changed: %s", msg.Ipv4Addr)
 			m.updateHostIP(net.ParseIP(msg.Ipv4Addr))
 		}
 	case *proto.ServiceUpdate:
