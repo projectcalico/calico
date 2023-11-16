@@ -213,7 +213,7 @@ COPY ${BIN_DIR}/calico-node-amd64 /bin/calico-node
 # Set the suid bit on calico-node
 RUN chmod u+s /bin/calico-node
 
-# Copy in the moutnns binary
+# Copy in the mountns binary
 COPY $BIN_DIR/mountns-amd64 /bin/mountns
 
 # Set the suid bit on mountns
