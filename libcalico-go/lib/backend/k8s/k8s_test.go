@@ -3101,7 +3101,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Inline kubeconfig support", testuti
 	ctx := context.Background()
 
 	BeforeEach(func() {
-		// Load kubeconfig file that was mounted in to the test.
+		// Load kubeconfig file that was mounted into the test.
 		conf, err := os.ReadFile("/kubeconfig.yaml")
 		Expect(err).NotTo(HaveOccurred())
 

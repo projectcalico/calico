@@ -285,7 +285,7 @@ func (c *ipamController) acceptScheduleRequests(stopCh <-chan struct{}) {
 			err := c.syncIPAM()
 			if err != nil {
 				// We can kick ourselves on error for a retry. We have rate limiting
-				// built in to the cleanup code.
+				// built into the cleanup code.
 				log.WithError(err).Warn("error syncing IPAM data")
 				kick(c.syncChan)
 			}
