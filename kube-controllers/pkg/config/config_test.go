@@ -52,7 +52,7 @@ var _ = Describe("Config", func() {
 	}
 
 	// setEnv() function that sets environment variables
-	// to some sensbile values
+	// to some sensible values
 	setEnv := func() {
 		os.Setenv("LOG_LEVEL", "debug")
 		os.Setenv("RECONCILER_PERIOD", "105s")
