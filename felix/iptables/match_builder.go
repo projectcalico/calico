@@ -257,22 +257,22 @@ func (m MatchCriteria) NotDestPorts(ports ...uint16) MatchCriteria {
 }
 
 func (m MatchCriteria) SourcePortRanges(ports []*proto.PortRange) MatchCriteria {
-	portsString := PortRangessToMultiport(ports)
+	portsString := PortRangesToMultiport(ports)
 	return append(m, fmt.Sprintf("-m multiport --source-ports %s", portsString))
 }
 
 func (m MatchCriteria) NotSourcePortRanges(ports []*proto.PortRange) MatchCriteria {
-	portsString := PortRangessToMultiport(ports)
+	portsString := PortRangesToMultiport(ports)
 	return append(m, fmt.Sprintf("-m multiport ! --source-ports %s", portsString))
 }
 
 func (m MatchCriteria) DestPortRanges(ports []*proto.PortRange) MatchCriteria {
-	portsString := PortRangessToMultiport(ports)
+	portsString := PortRangesToMultiport(ports)
 	return append(m, fmt.Sprintf("-m multiport --destination-ports %s", portsString))
 }
 
 func (m MatchCriteria) NotDestPortRanges(ports []*proto.PortRange) MatchCriteria {
-	portsString := PortRangessToMultiport(ports)
+	portsString := PortRangesToMultiport(ports)
 	return append(m, fmt.Sprintf("-m multiport ! --destination-ports %s", portsString))
 }
 
@@ -331,7 +331,7 @@ func PortsToMultiport(ports []uint16) string {
 	return portsString
 }
 
-func PortRangessToMultiport(ports []*proto.PortRange) string {
+func PortRangesToMultiport(ports []*proto.PortRange) string {
 	portFragments := make([]string, len(ports))
 	for i, port := range ports {
 		if port.First == port.Last {
