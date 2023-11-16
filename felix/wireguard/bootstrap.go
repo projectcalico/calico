@@ -63,7 +63,7 @@ import (
 //
 // Since Felix1 does not necessarily connect to its local typha, there can be a chain, or circular mismatched routing.
 //
-// The current solution. For the most part, most of the following is only valid when HostEncrytpionEnabled is set to
+// The current solution. For the most part, most of the following is only valid when HostEncryptionEnabled is set to
 // true. There are some exceptions which are marked in the text below with [**ALL**].
 // -  Typha discovery returns the set of available typhas, randomized but with a preference to use the local typha.
 //    In most cases, felix will connect to the local typha first. The upshot is that the routing for typha nodes
