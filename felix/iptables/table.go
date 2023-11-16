@@ -1300,7 +1300,7 @@ func (t *Table) applyUpdates() error {
 		t.opReporter.RecordOperation(fmt.Sprintf("update-%v-v%d", t.Name, t.IPVersion))
 
 		if err := t.execIptablesRestore(buf); err != nil {
-			return fmt.Errorf("writting out buffer: %w", err)
+			return fmt.Errorf("writing out buffer: %w", err)
 		}
 
 		t.lastWriteTime = t.timeNow()
@@ -1455,7 +1455,7 @@ func (t *Table) InsertRulesNow(chain string, rules []Rule) error {
 	buf.EndTransaction()
 
 	if err := t.execIptablesRestore(buf); err != nil {
-		return fmt.Errorf("writting out buffer: %w", err)
+		return fmt.Errorf("writing out buffer: %w", err)
 	}
 
 	return nil
