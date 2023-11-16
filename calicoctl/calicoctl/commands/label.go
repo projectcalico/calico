@@ -85,7 +85,7 @@ Description:
     * profile
     * workloadEndpoint
 
-  The resource type is case insensitive and may be pluralized.
+  The resource type is case-insensitive and may be pluralized.
 
   Attempting to label resources that do not exist will get an error.
 
