@@ -2653,7 +2653,7 @@ func (m *bpfEndpointManager) ensureBPFDevices() error {
 
 	// Setup a link local route to a nonexistent link local address that would
 	// serve as a gateway to route services via bpfnat veth rather than having
-	// link local routes for each service that would trigger ARP querries.
+	// link local routes for each service that would trigger ARP queries.
 	m.routeTable.RouteUpdate(bpfInDev, routetable.Target{
 		Type: routetable.TargetTypeLinkLocalUnicast,
 		CIDR: cidr,
