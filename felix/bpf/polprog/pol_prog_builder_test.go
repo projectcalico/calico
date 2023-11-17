@@ -231,5 +231,7 @@ func TestProgramSplitting(t *testing.T) {
 		Tiers: tiers,
 	})
 	Expect(err).NotTo(HaveOccurred())
-	Expect(len(progs)).To(Equal(7))
+	// Allow leeway in program size for enterprise.
+	Expect(len(progs)).To(BeNumerically(">=", 6))
+	Expect(len(progs)).To(BeNumerically("<=", 8))
 }
