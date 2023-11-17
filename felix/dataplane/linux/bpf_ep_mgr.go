@@ -3063,6 +3063,15 @@ func (m *bpfEndpointManager) doUpdatePolicyProgram(
 			return nil, fmt.Errorf("failed to update %s policy jump map [%d]=%d: %w", hk, subProgIdx, progFD, err)
 		}
 	}
+	for i := len(progFDs); i < jump.MaxSubPrograms; i++ {
+		subProgIdx := polprog.SubProgramJumpIdx(polJumpMapIdx, i, stride)
+		if err := polProgsMap.Delete(jump.Key(subProgIdx)); err != nil {
+			if os.IsNotExist(err) {
+				break
+			}
+			log.WithError(err).Warn("Unexpected error while trying to clean up old policy programs.")
+		}
+	}
 
 	return insns, nil
 }
