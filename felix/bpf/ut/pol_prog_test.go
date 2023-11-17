@@ -20,6 +20,8 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 
 	. "github.com/onsi/gomega"
@@ -121,14 +123,9 @@ func TestPolicyLoadKitchenSinkPolicy(t *testing.T) {
 		return id
 	}
 
-	jumpMap = jump.Map()
-	_ = unix.Unlink(jumpMap.Path())
-	err := jumpMap.EnsureExists()
-	Expect(err).NotTo(HaveOccurred())
-
 	cleanIPSetMap()
 
-	pg := polprog.NewBuilder(alloc, ipsMap.MapFD(), stateMap.MapFD(), jumpMap.MapFD(),
+	pg := polprog.NewBuilder(alloc, ipsMap.MapFD(), stateMap.MapFD(), policyJumpMap.MapFD(), 0,
 		polprog.WithAllowDenyJumps(tcdefs.ProgIndexAllowed, tcdefs.ProgIndexDrop))
 	insns, err := pg.Instructions(polprog.Rules{
 		Tiers: []polprog.Tier{{
@@ -163,7 +160,8 @@ func TestPolicyLoadKitchenSinkPolicy(t *testing.T) {
 		}}})
 
 	Expect(err).NotTo(HaveOccurred())
-	fd, err := bpf.LoadBPFProgramFromInsns(insns, "calico_policy", "Apache-2.0", unix.BPF_PROG_TYPE_SCHED_CLS)
+	Expect(insns).To(HaveLen(1))
+	fd, err := bpf.LoadBPFProgramFromInsns(insns[0], "calico_policy", "Apache-2.0", unix.BPF_PROG_TYPE_SCHED_CLS)
 	Expect(err).NotTo(HaveOccurred())
 	Expect(fd).NotTo(BeZero())
 	Expect(fd.Close()).NotTo(HaveOccurred())
@@ -2273,10 +2271,104 @@ func wrap(p polProgramTest) polProgramTestWrapper {
 	return polProgramTestWrapper{p}
 }
 
-func TestPolicyPolicyPrograms(t *testing.T) {
+func TestPolicyPrograms(t *testing.T) {
 	for i, p := range polProgramTests {
 		t.Run(fmt.Sprintf("%d:Policy=%s", i, p.PolicyName), func(t *testing.T) { runTest(t, wrap(p)) })
 	}
+}
+
+func TestExpandedPolicyPrograms(t *testing.T) {
+	RegisterTestingT(t)
+	for i, p := range polProgramTests {
+		for _, expander := range testExpanders {
+			expandedP := expander.Expand(p)
+			Expect(expandedP).NotTo(Equal(p))
+			t.Run(fmt.Sprintf("%s/%d:Policy=%s", expander.Name, i, p.PolicyName),
+				func(t *testing.T) {
+					// Expansions result ina  lot of debug output, disable that.
+					logLevel := log.GetLevel()
+					defer log.SetLevel(logLevel)
+					log.SetLevel(log.InfoLevel)
+
+					runTest(t, wrap(expandedP))
+				})
+		}
+	}
+}
+
+var testExpanders = []testExpander{
+	{
+		Name: "WithLargePrefixedTier",
+		Expand: func(p polProgramTest) polProgramTest {
+			out := p
+			initExtraTierOnce.Do(initExtraTier)
+			out.Policy.Tiers = append([]polprog.Tier{extraTier}, out.Policy.Tiers...)
+			return out
+		},
+	},
+}
+
+var extraTier polprog.Tier
+var initExtraTierOnce sync.Once
+
+func initExtraTier() {
+	const numExtraPols = 250
+	const numRulesPerPol = 50
+	pols := make([]polprog.Policy, 0, numExtraPols)
+	for i := 0; i < numExtraPols; i++ {
+		pol := polprog.Policy{
+			Name: fmt.Sprintf("pol-%d", i),
+		}
+		for j := 0; j < numRulesPerPol; j++ {
+			pol.Rules = append(pol.Rules, noOpRule(i*numRulesPerPol+j))
+		}
+		pols = append(pols, pol)
+	}
+	// Need a pass rule somewhere to send traffic to the tier under
+	// test.
+	passRule := polprog.Rule{
+		Rule: &proto.Rule{
+			Action: "pass",
+		},
+		MatchID: polprog.RuleMatchID(numExtraPols * numRulesPerPol),
+	}
+	pols[len(pols)-1].Rules = append(pols[len(pols)-1].Rules, passRule)
+	extraTier = polprog.Tier{
+		Name:     "extra tier",
+		Policies: pols,
+	}
+}
+func noOpRule(n int) polprog.Rule {
+	actions := []string{
+		"allow", "deny", "pass",
+	}
+	ports := []*proto.PortRange{
+		{First: 1, Last: int32(1 + (n % 8000))},
+	}
+	if n%1000 == 0 {
+		// Add lots of ports to a handful of rules.
+		for p := 0; p < 2000; p++ {
+			ports = append(ports, &proto.PortRange{
+				First: int32(p*2 + 10000),
+				Last:  int32(p*2 + 10001),
+			})
+		}
+	}
+	r := polprog.Rule{
+		Rule: &proto.Rule{
+			SrcIpSetIds: []string{"setNoOp"},
+			Protocol:    &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}},
+			Action:      actions[n%len(actions)],
+			DstPorts:    ports,
+		},
+		MatchID: polprog.RuleMatchID(n),
+	}
+	return r
+}
+
+type testExpander struct {
+	Name   string
+	Expand func(p polProgramTest) polProgramTest
 }
 
 func TestPolicyHostPolicyPrograms(t *testing.T) {
@@ -2459,7 +2551,9 @@ type testCase interface {
 	MatchStateOut(stateOut state.State)
 }
 
-func runTest(t *testing.T, tp testPolicy) {
+var nextPolProgIdx atomic.Int64
+
+func runTest(t *testing.T, tp testPolicy, polprogOpts ...polprog.Option) {
 	RegisterTestingT(t)
 
 	// The prog builder refuses to allocate IDs as a precaution, give it an allocator that forces allocations.
@@ -2476,9 +2570,12 @@ func runTest(t *testing.T, tp testPolicy) {
 		setUpIPSets(tp.IPSets(), realAlloc, ipsMap)
 	}
 
-	jumpMap = jump.Map()
-	_ = unix.Unlink(jumpMap.Path())
-	err := jumpMap.EnsureExists()
+	if policyJumpMap != nil {
+		_ = policyJumpMap.Close()
+	}
+	policyJumpMap = jump.Map()
+	_ = unix.Unlink(policyJumpMap.Path())
+	err := policyJumpMap.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 
 	// Build the program.
@@ -2487,36 +2584,74 @@ func runTest(t *testing.T, tp testPolicy) {
 
 	ipsfd := ipsMap.MapFD()
 
-	opts := []polprog.Option{polprog.WithAllowDenyJumps(allowIdx, denyIdx)}
+	staticProgsMap := maps.NewPinnedMap(maps.MapParameters{
+		Type:       "prog_array",
+		KeySize:    4,
+		ValueSize:  4,
+		MaxEntries: 32,
+		Name:       "teststatic",
+	})
+	err = staticProgsMap.EnsureExists()
+	defer func() {
+		_ = staticProgsMap.Close()
+	}()
+	Expect(err).NotTo(HaveOccurred())
+
+	polProgIdx := int(nextPolProgIdx.Add(1))
+	stride := jump.TCMaxEntryPoints
+	polprogOpts = append(polprogOpts, polprog.WithPolicyMapIndexAndStride(int(polProgIdx), stride))
+
+	polprogOpts = append(polprogOpts, polprog.WithAllowDenyJumps(allowIdx, denyIdx))
 	if tp.ForIPv6() {
-		opts = append(opts, polprog.WithIPv6())
+		polprogOpts = append(polprogOpts, polprog.WithIPv6())
 		ipsfd = ipsMapV6.MapFD()
 	}
 
-	pg := polprog.NewBuilder(forceAlloc, ipsfd, testStateMap.MapFD(), jumpMap.MapFD(), opts...)
+	pg := polprog.NewBuilder(
+		forceAlloc,
+		ipsfd,
+		testStateMap.MapFD(),
+		staticProgsMap.MapFD(),
+		policyJumpMap.MapFD(),
+		polprogOpts...,
+	)
 	insns, err := pg.Instructions(tp.Policy())
 	Expect(err).NotTo(HaveOccurred(), "failed to assemble program")
 
-	// Load the program into the kernel.  We don't pin it so it'll be removed when the
-	// test process exits (or by the defer).
-	polProgFD, err := bpf.LoadBPFProgramFromInsns(insns, "calico_policy", "Apache-2.0", unix.BPF_PROG_TYPE_SCHED_CLS)
-	Expect(err).NotTo(HaveOccurred(), "failed to load program into the kernel")
-	Expect(polProgFD).NotTo(BeZero())
+	// Load the program(s) into the kernel.
+	var polProgFDs []bpf.ProgFD
 	defer func() {
-		err := polProgFD.Close()
-		Expect(err).NotTo(HaveOccurred())
+		var errs []error
+		for _, polProgFD := range polProgFDs {
+			err := polProgFD.Close()
+			if err != nil {
+				errs = append(errs, err)
+			}
+		}
+		Expect(errs).To(BeEmpty())
 	}()
+	for i, p := range insns {
+		polProgFD, err := bpf.LoadBPFProgramFromInsns(p, "calico_policy", "Apache-2.0", unix.BPF_PROG_TYPE_SCHED_CLS)
+		Expect(err).NotTo(HaveOccurred(), "failed to load program into the kernel")
+		Expect(polProgFD).NotTo(BeZero())
+		polProgFDs = append(polProgFDs, polProgFD)
+		err = policyJumpMap.Update(
+			jump.Key(polprog.SubProgramJumpIdx(polProgIdx, i, stride)),
+			jump.Value(polProgFD.FD()),
+		)
+		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to add policy sub program %d/%d", i, len(insns)))
+	}
 
 	// Give the policy program somewhere to jump to.
-	jumpMapIndex := tcdefs.ProgIndexAllowed
-	epiFD := installAllowedProgram(jumpMap, jumpMapIndex)
+	allowProgIdx := tcdefs.ProgIndexAllowed
+	epiFD := installAllowedProgram(staticProgsMap, allowProgIdx)
 	defer func() {
 		err := epiFD.Close()
 		Expect(err).NotTo(HaveOccurred())
 	}()
 
-	jumpMapIndex = tcdefs.ProgIndexDrop
-	dropFD := installDropProgram(jumpMap, jumpMapIndex)
+	dropProgIdx := tcdefs.ProgIndexDrop
+	dropFD := installDropProgram(staticProgsMap, dropProgIdx)
 	defer func() {
 		err := dropFD.Close()
 		Expect(err).NotTo(HaveOccurred())
@@ -2526,19 +2661,19 @@ func runTest(t *testing.T, tp testPolicy) {
 	for _, tc := range tp.AllowedPackets() {
 		t.Run(fmt.Sprintf("should allow %s", tc), func(t *testing.T) {
 			RegisterTestingT(t)
-			runProgram(tc, testStateMap, polProgFD, RCAllowedReached, state.PolicyAllow)
+			runProgram(tc, testStateMap, polProgFDs[0], RCAllowedReached, state.PolicyAllow)
 		})
 	}
 	for _, tc := range tp.DroppedPackets() {
 		t.Run(fmt.Sprintf("should drop %s", tc), func(t *testing.T) {
 			RegisterTestingT(t)
-			runProgram(tc, testStateMap, polProgFD, RCDropReached, state.PolicyDeny)
+			runProgram(tc, testStateMap, polProgFDs[0], RCDropReached, state.PolicyDeny)
 		})
 	}
 	for _, tc := range tp.UnmatchedPackets() {
 		t.Run(fmt.Sprintf("should not match %s", tc), func(t *testing.T) {
 			RegisterTestingT(t)
-			runProgram(tc, testStateMap, polProgFD, XDPPass, state.PolicyNoMatch)
+			runProgram(tc, testStateMap, polProgFDs[0], XDPPass, state.PolicyNoMatch)
 		})
 	}
 }
