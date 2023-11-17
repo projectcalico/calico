@@ -7,7 +7,7 @@ import io
 import string
 import datetime
 
-# First create a Github instance. Create a token through Github website - provide "repo" auth.
+# First create a Github instance. Create a token through GitHub website - provide "repo" auth.
 g = Github(os.environ.get('GITHUB_TOKEN'))
 
 # The milestone to generate notes for.

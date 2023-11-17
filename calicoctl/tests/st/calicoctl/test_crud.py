@@ -186,7 +186,7 @@ class TestCalicoctlCommands(TestBase):
         rc.assert_error()
         rc.assert_output_contains("Failed to get resources: resource type 'somekind' is not supported")
 
-    def test_empty_name_is_ilegal(self):
+    def test_empty_name_is_illegal(self):
         """
         Test that we error if empty name is provided
         """
@@ -1178,7 +1178,7 @@ class TestCalicoctlCommands(TestBase):
         rc = calicoctl("apply",data=node_name1_rev1)
         rc.assert_no_error()
         rc = calicoctl("label nodes node1 cluster --remove")
-        rc.assert_error("can not remove label")
+        rc.assert_error("cannot remove label")
 
     def test_patch(self):
         """

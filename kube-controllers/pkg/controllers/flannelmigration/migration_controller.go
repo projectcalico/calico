@@ -272,7 +272,7 @@ func (c *flannelMigrationController) processNewNode(node *v1.Node) {
 // but at the same time migration controller restart itself.
 func (c *flannelMigrationController) readAndUpdateFlannelEnvConfig() error {
 	// Work out the Flannel config by kubectl exec into daemonset pod on controller node.
-	log.Infof("Trying to read Flannel env config by executing into daemonet pod.")
+	log.Infof("Trying to read Flannel env config by executing into daemonset pod.")
 	var podLabel map[string]string
 	if c.config.IsRunningCanal() {
 		podLabel = canalPodLabel

@@ -357,7 +357,7 @@ func truncateAndHashName(name string, maxLen int) (string, error) {
 	// Account for underscore we insert between truncated name and hash string
 	hashStrSize := hashCharsToUse + 1
 	if maxLen <= hashStrSize {
-		return "", fmt.Errorf("max truncated string length must be greater than the mininum size of %d",
+		return "", fmt.Errorf("max truncated string length must be greater than the minimum size of %d",
 			hashStrSize)
 	}
 	hash := sha256.New()

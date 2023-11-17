@@ -361,7 +361,7 @@ func TestMapUpgradeWhileResizeInProgress(t *testing.T) {
 		Expect(err).NotTo(HaveOccurred())
 	}
 
-	// Reping /sys/fs/bpt/tc/globals/cali_mock2_old1 to /sys/fs/bpt/tc/globals/cali_mock2_old
+	// Repin /sys/fs/bpt/tc/globals/cali_mock2_old1 to /sys/fs/bpt/tc/globals/cali_mock2_old
 	err = libbpf.ObjPin(int(mockMapv2_old.MapFD()), mockMapv2.Path()+"_old")
 	Expect(err).NotTo(HaveOccurred())
 	// Remove /sys/fs/bpt/tc/globals/cali_mock2_old1

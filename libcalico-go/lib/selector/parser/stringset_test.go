@@ -52,7 +52,7 @@ var _ = DescribeTable("StringSet contains tests",
 			Expect(len(stringSet)).To(BeNumerically("<=", len(input)))
 		})
 
-		By("Copying itself corrrectly", func() {
+		By("Copying itself correctly", func() {
 			Expect(stringSet.SliceCopy()).To(Equal(([]string)(stringSet)), "SliceCopy should return the correct values.")
 			Expect(stringSet.SliceCopy()).NotTo(BeIdenticalTo(([]string)(stringSet)), "SliceCopy() should return a copy.")
 		})

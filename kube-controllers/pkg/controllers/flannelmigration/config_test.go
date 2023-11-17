@@ -33,7 +33,7 @@ var _ = Describe("flannel migration config", func() {
 		os.Unsetenv("FLANNEL_ANNOTATION_PREFIX")
 		os.Unsetenv("FLANNEL_VNI")
 		os.Unsetenv("FLANNEL_PORT")
-		os.Unsetenv("CALICO_DAMONSET_NAME")
+		os.Unsetenv("CALICO_DAEMONSET_NAME")
 		os.Unsetenv("CNI_CONFIG_DIR")
 		os.Unsetenv("POD_NODE_NAME")
 		os.Unsetenv("FLANNEL_SUBNET_ENV")

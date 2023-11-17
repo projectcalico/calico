@@ -224,7 +224,7 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 
 		labels := map[string]string{"calico-label": "calico-value", "calico-label2": "value2"}
 
-		// Create a Calico node with a reference to an non-existent k8s node.
+		// Create a Calico node with a reference to an nonexistent k8s node.
 		cn := calicoNode(c, cNodeName, kNodeName, labels)
 		_, err := c.Nodes().Create(context.Background(), cn, options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())

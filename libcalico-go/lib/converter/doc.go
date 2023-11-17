@@ -13,7 +13,7 @@
 // limitations under the License.
 
 /*
-Package converter implements adaptors for for conversion between API and Backend
+Package converter implements adaptors for conversion between API and Backend
 models.
 */
 package converter

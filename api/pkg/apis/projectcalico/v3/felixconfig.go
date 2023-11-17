@@ -195,7 +195,7 @@ type FelixConfigurationSpec struct {
 
 	// MetadataAddr is the IP address or domain name of the server that can answer VM queries for
 	// cloud-init metadata. In OpenStack, this corresponds to the machine running nova-api (or in
-	// Ubuntu, nova-api-metadata). A value of none (case insensitive) means that Felix should not
+	// Ubuntu, nova-api-metadata). A value of none (case-insensitive) means that Felix should not
 	// set up any NAT rule for the metadata path. [Default: 127.0.0.1]
 	MetadataAddr string `json:"metadataAddr,omitempty"`
 	// MetadataPort is the port of the metadata server. This, combined with global.MetadataAddr (if

@@ -223,7 +223,7 @@ func chainsForIfaces(ifaceMetadata []string,
 			polName = nameParts[1]
 		} else {
 			// Interface name, policy name and untracked "eth0_polA_untracked"
-			// or applyOnForwrd "eth0_polA_applyOnForward".
+			// or applyOnForward "eth0_polA_applyOnForward".
 			log.Debug("Interface name policy name and untracked/ingress/egress")
 			ifaceName = nameParts[0]
 			polName = nameParts[1]
@@ -1314,7 +1314,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 				})
 			})
 
-			Describe("with host endpoint matching non-existent interface", func() {
+			Describe("with host endpoint matching nonexistent interface", func() {
 				JustBeforeEach(configureHostEp(&hostEpSpec{
 					id:   "id3",
 					name: "eth1",
@@ -1791,7 +1791,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 					// Test that by disabling floatingIPs on the endpoint manager, even workload endpoints
 					// that have floating IP NAT addresses specified will not result in those routes being
 					// programmed.
-					Context("with floating IPs disasbled, but added to the endpoint", func() {
+					Context("with floating IPs disabled, but added to the endpoint", func() {
 						JustBeforeEach(func() {
 							epMgr.floatingIPsEnabled = false
 							epMgr.OnUpdate(&proto.WorkloadEndpointUpdate{

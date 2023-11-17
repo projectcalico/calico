@@ -189,7 +189,7 @@ var _ = Describe("Hash extraction tests", func() {
 		}))
 	})
 
-	It("should extract a rule with a hash and a label commeent", func() {
+	It("should extract a rule with a hash and a label comment", func() {
 		hashes, rules, err := table.readHashesAndRulesFrom(newClosableBuf(
 			"-A FORWARD -m comment --comment \"cali:wUHhoiAYhphO9Mso\" -m comment --comment \"key=value\" -j cali-FORWARD\n"))
 		Expect(err).NotTo(HaveOccurred())

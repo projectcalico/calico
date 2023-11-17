@@ -84,7 +84,7 @@ type ListInterface interface {
 // KVPair holds a typed key and value object as well as datastore specific
 // revision information.
 //
-// The Value is dependent on the Key, but in general will be on of the following
+// The Value is dependent on the Key, but in general will be one of the following
 // types:
 //   - A pointer to a struct
 //   - A slice or map

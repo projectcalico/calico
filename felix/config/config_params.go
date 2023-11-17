@@ -756,7 +756,7 @@ func (config *Config) DatastoreConfig() apiconfig.CalicoAPIConfig {
 	}
 
 	// Now allow FELIX_XXXYYY variables or XxxYyy config file settings to override that, in the
-	// etcd case. Note that that etcd options are set even if the DatastoreType isn't etcdv3.
+	// etcd case. Note that etcd options are set even if the DatastoreType isn't etcdv3.
 	// This allows the user to rely the default DatastoreType being etcdv3 and still being able
 	// to configure the other etcdv3 options. As of the time of this code change, the etcd options
 	// have no affect if the DatastoreType is not etcdv3.

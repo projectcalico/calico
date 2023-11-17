@@ -817,17 +817,17 @@ spec:
                   any DNAT.
                 type: boolean
               selector:
-                description: "The selector is an expression used to pick pick out
-                  the endpoints that the policy should be applied to. \n Selector
-                  expressions follow this syntax: \n \tlabel == \"string_literal\"
-                  \ ->  comparison, e.g. my_label == \"foo bar\" \tlabel != \"string_literal\"
-                  \  ->  not equal; also matches if label is not present \tlabel in
-                  { \"a\", \"b\", \"c\", ... }  ->  true if the value of label X is
-                  one of \"a\", \"b\", \"c\" \tlabel not in { \"a\", \"b\", \"c\",
-                  ... }  ->  true if the value of label X is not one of \"a\", \"b\",
-                  \"c\" \thas(label_name)  -> True if that label is present \t! expr
-                  -> negation of expr \texpr && expr  -> Short-circuit and \texpr
-                  || expr  -> Short-circuit or \t( expr ) -> parens for grouping \tall()
+                description: "The selector is an expression used to pick out the endpoints
+                  that the policy should be applied to. \n Selector expressions follow
+                  this syntax: \n \tlabel == \"string_literal\"  ->  comparison, e.g.
+                  my_label == \"foo bar\" \tlabel != \"string_literal\"   ->  not
+                  equal; also matches if label is not present \tlabel in { \"a\",
+                  \"b\", \"c\", ... }  ->  true if the value of label X is one of
+                  \"a\", \"b\", \"c\" \tlabel not in { \"a\", \"b\", \"c\", ... }
+                  \ ->  true if the value of label X is not one of \"a\", \"b\", \"c\"
+                  \thas(label_name)  -> True if that label is present \t! expr ->
+                  negation of expr \texpr && expr  -> Short-circuit and \texpr ||
+                  expr  -> Short-circuit or \t( expr ) -> parens for grouping \tall()
                   or the empty selector -> matches all endpoints. \n Label names are
                   allowed to contain alphanumerics, -, _ and /. String literals are
                   more permissive but they do not support escape characters. \n Examples

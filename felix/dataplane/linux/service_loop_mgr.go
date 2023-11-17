@@ -29,7 +29,7 @@ import (
 // it's better for us to drop it, to avoid a possible routing loop between this node and this node's
 // default gateway.  The specific loop-generating scenario is when Calico is configured to advertise
 // service CIDRs and IPs over BGP: then the default gateway will have a route back to this node, for
-// the service CIDR, and there could be a loop if we allowed non-existent service traffic to be
+// the service CIDR, and there could be a loop if we allowed nonexistent service traffic to be
 // forwarded on from here.
 type serviceLoopManager struct {
 	ipVersion uint8

@@ -95,7 +95,7 @@ const (
 var (
 	// Stack offsets.  These are defined locally.
 	offStateKey = nextOffset(4, 4)
-	// Even for v4 progrtams, we have the v6 layout
+	// Even for v4 programs, we have the v6 layout
 	// N.B. we can use 64bit stack stores in ipv6 because of the 4 byte alignment
 	// preceded by the 4 bytes of StateKey. That makes the ip within the src key
 	// 8 bytes aligned. And since the ip is followed by 4 bytes of

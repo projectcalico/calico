@@ -82,7 +82,7 @@ type PolicySpec struct {
 	// a corresponding action to apply.
 	EgressRules []Rule `json:"egress,omitempty" validate:"omitempty,dive"`
 
-	// The selector is an expression used to pick pick out the endpoints that the policy should
+	// The selector is an expression used to pick out the endpoints that the policy should
 	// be applied to.
 	//
 	// Selector expressions follow this syntax:

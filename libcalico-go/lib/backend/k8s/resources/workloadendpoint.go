@@ -201,7 +201,7 @@ func (c *WorkloadEndpointClient) Get(ctx context.Context, key model.Key, revisio
 	log.Debug("Received Get request on WorkloadEndpoint type")
 	k := key.(model.ResourceKey)
 
-	// Parse resource name so we can get get the podName
+	// Parse resource name so we can get the podName
 	wepID, err := c.converter.ParseWorkloadEndpointName(key.(model.ResourceKey).Name)
 	if err != nil {
 		return nil, err

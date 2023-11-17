@@ -11,12 +11,12 @@ automatic support for v3.25.x is dropped.
 ## Reporting a Vulnerability
 
 Please follow responsible disclosure best practices and [Tigera's Vulnerability Disclosure Policy](https://www.tigera.io/vulnerability-disclosure/) when submitting
-security vulnerabilities.  **Do not** create a Github issue or pull 
+security vulnerabilities.  **Do not** create a GitHub issue or pull 
 request because those are immediately public. Instead:
 
 *  Email [psirt@projectcalico.org](psirt@projectcalico.org).
 *  Report a private [security advisory](https://github.com/projectcalico/calico/security/advisories)
-  through the Github interface.
+  through the GitHub interface.
 
 Please include as much information as possible, including the
 affected version(s) and steps to reproduce.

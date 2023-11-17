@@ -1029,7 +1029,7 @@ var _ = Describe("RouteTable", func() {
 
 	Describe("with an interface that disappears", func() {
 		BeforeEach(func() {
-			// Add an interface so that hte route table tries to list the routes assocaited with it.
+			// Add an interface so that hte route table tries to list the routes associated with it.
 			dataplane.AddIface(2, "cali1", true, true)
 			// But trigger the interface to disappear just before the list call.  This will trigger
 			// a list operation with no interface, resulting in an ENODEV.

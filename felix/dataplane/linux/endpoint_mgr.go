@@ -1141,7 +1141,7 @@ func (m *endpointManager) updateHostEndpoints() {
 	defaultIfaceName := ""
 	if _, ok := newIfaceNameToHostEpID[allInterfaces]; ok {
 		// All-interfaces host endpoint is active.  Arrange for it to be the default,
-		// instead of trying to dispatch to it directly based on the non-existent interface
+		// instead of trying to dispatch to it directly based on the nonexistent interface
 		// name *.
 		defaultIfaceName = allInterfaces
 		delete(newIfaceNameToHostEpID, allInterfaces)

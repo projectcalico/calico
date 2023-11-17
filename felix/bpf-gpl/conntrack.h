@@ -297,7 +297,7 @@ static CALI_BPF_INLINE int calico_ct_create_nat_fwd(struct cali_tc_ctx *ctx,
 
 	ct_value.nat_rev_key = *rk;
 
-	/* We do not need rk anymore, we can reause it for the new key.
+	/* We do not need rk anymore, we can reuse it for the new key.
 	 *
 	 * N.B. calico_ct_create_nat_fwd() is called _after_ calico_ct_v4_create_tracking()
 	 * which also uses the rk!

@@ -232,7 +232,7 @@ COPY dist/bin/calico-node-arm64 /bin/calico-node
 # Set the suid bit on calico-node
 RUN chmod u+s /bin/calico-node
 
-# Copy in the moutnns binary
+# Copy in the mountns binary
 COPY dist/bin/mountns-arm64 /bin/mountns
 
 # Set the suid bit on mountns
