@@ -266,7 +266,7 @@ blocks:
     - name: "Build"
       matrix:
       - env_var: ARCH
-        values: [ "arm64", "armv7", "ppc64le", "s390x" ]
+        values: [ "arm64", "ppc64le", "s390x" ]
       commands:
       # Only building the code, not the image here because the felix image is now only used for FV tests, which
       # only run on AMD64 at the moment.
@@ -511,7 +511,7 @@ blocks:
     - name: "Build image"
       matrix:
       - env_var: ARCH
-        values: [ "arm64", "armv7", "ppc64le", "s390x" ]
+        values: [ "arm64", "ppc64le", "s390x" ]
       commands:
       - ../.semaphore/run-and-monitor image-$ARCH.log make image ARCH=$ARCH
     - name: "Build Windows archive"

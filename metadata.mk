@@ -3,7 +3,8 @@
 #################################################################################################
 
 # The version of github.com/projectcalico/go-build to use.
-GO_BUILD_VER = v0.89
+GO_BUILD_VER = ubi8
+
 # Env var to ACK Ginkgo deprecation warnings, may need updating with go-build.
 ACK_GINKGO=ACK_GINKGO_DEPRECATIONS=1.16.5
 
@@ -12,7 +13,7 @@ K8S_VERSION=v1.26.8
 
 # Version of various tools used in the build and tests.
 COREDNS_VERSION=1.5.2
-ETCD_VERSION=v3.5.1
+ETCD_VERSION=v3.5.6
 # FIXME upgrading to kindest/node newer than v1.24.7 causes Node/kind-cluster and sig-network conformance
 # tests to timeout or fail.
 KINDEST_NODE_VERSION=v1.24.7
