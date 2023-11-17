@@ -1130,13 +1130,19 @@ func (m *bpfEndpointManager) syncIfStateMap() {
 				// about as we will not hear about that device again.
 				for _, fn := range []func() int{
 					v.XDPPolicy,
+				} {
+					if idx := fn(); idx != -1 {
+						_ = jumpMapDeleteEntry(m.bpfmaps.XDPJumpMap, idx)
+					}
+				}
+				for _, fn := range []func() int{
 					v.IngressPolicy,
 					v.EgressPolicy,
 					v.TcIngressFilter,
 					v.TcEgressFilter,
 				} {
 					if idx := fn(); idx != -1 {
-						_ = jumpMapDeleteEntry(m.bpfmaps.XDPJumpMap, idx)
+						_ = jumpMapDeleteEntry(m.bpfmaps.JumpMap, idx)
 					}
 				}
 			} else {
