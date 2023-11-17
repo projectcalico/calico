@@ -719,7 +719,7 @@ func splitIPSetDeltaUpdate(update *proto.IPSetDeltaUpdate) []proto.ToDataplane {
 			adds = adds[1:]
 		}
 
-		// Put removes in the message if they fit, but work from the end of the list since that is where
+		// Put removes on the message if they fit, but work from the end of the list since that is where
 		// partial slices will be.
 		end := len(dels) - 1
 		log.Debugf("end %d", end)
