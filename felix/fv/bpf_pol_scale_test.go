@@ -78,6 +78,17 @@ var _ = Context("_BPF-SAFE_ BPF policy scale tests", func() {
 		infra.Stop()
 	})
 
+	addW0NetSet := func(numSets int) {
+		ns := api.NewGlobalNetworkSet()
+		ns.Name = "netset-extra"
+		ns.Labels = map[string]string{
+			"netset": fmt.Sprintf("netset-%d", numSets-42),
+		}
+		ns.Spec.Nets = []string{w[0].IPNet()}
+		_, err := client.GlobalNetworkSets().Create(context.TODO(), ns, options.SetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+	}
+
 	It("should handle thousands of policy rules", func() {
 		// This test activates thousands of rules on one endpoint, which
 		// requires the policy program to be split into sub-programs.
@@ -95,27 +106,104 @@ var _ = Context("_BPF-SAFE_ BPF policy scale tests", func() {
 		w[0].ConfigureInInfra(infra)
 		w[1].ConfigureInInfra(infra)
 
-		Eventually(tc.Felixes[0].BPFNumPolProgramsFn(w[0].InterfaceName, "ingress"), "240s", "1s").Should(
-			BeNumerically(">", 5))
-		Eventually(tc.Felixes[0].BPFNumPolProgramsFn(w[1].InterfaceName, "ingress"), "20s", "1s").Should(
-			BeNumerically(">", 5))
+		// This test does take some time to converge, make sure that we wait for
+		// convergence before doing policy tests.
+		const expectedNumberOfPolicySubprogs = 5
+		Eventually(tc.Felixes[0].BPFNumContiguousPolProgramsFn(w[0].InterfaceName, "ingress"), "240s", "1s").Should(
+			BeNumerically(">", expectedNumberOfPolicySubprogs))
+		Eventually(tc.Felixes[0].BPFNumContiguousPolProgramsFn(w[1].InterfaceName, "ingress"), "20s", "1s").Should(
+			BeNumerically(">", expectedNumberOfPolicySubprogs))
 
+		// The network sets use IPs from outside the IP pool so we get no
+		// connectivity to start with.
 		cc.ExpectNone(w[0], w[1])
 		cc.ExpectNone(w[1], w[0])
 		cc.CheckConnectivityWithTimeout(30 * time.Second)
 
+		// Add a network set that matches one fo the rule labels and contains
+		// one of the workload's IPs.
 		cc.ResetExpectations()
-		ns := api.NewGlobalNetworkSet()
-		ns.Name = "netset-extra"
-		ns.Labels = map[string]string{
-			"netset": fmt.Sprintf("netset-%d", numSets-42),
-		}
-		ns.Spec.Nets = []string{w[0].IPNet()}
-		_, err := client.GlobalNetworkSets().Create(context.TODO(), ns, options.SetOptions{})
-		Expect(err).NotTo(HaveOccurred())
+		addW0NetSet(numSets)
 
+		// Should now get one-way connectivity.
 		cc.ExpectSome(w[0], w[1])
 		cc.ExpectNone(w[1], w[0])
 		cc.CheckConnectivityWithTimeout(30 * time.Second)
+	})
+
+	Describe("sub-program cleanup tests", func() {
+		const (
+			numPols        = 100
+			numRulesPerPol = 25
+			numSets        = numPols * numRulesPerPol
+		)
+		var (
+			w0PolIdxIngress, w0PolIdxEgress int
+		)
+		BeforeEach(func() {
+			// This test activates enough rules to trigger sub-programs, then
+			// verifies that they get cleaned up properly.
+			createNetworkSetPolicies(client, numPols, numRulesPerPol)
+
+			By("Creating a workload, activating the policies")
+			// Create a workload that uses the policy.
+			w[0].ConfigureInInfra(infra)
+			w[1].ConfigureInInfra(infra)
+
+			const expectedNumberOfPolicySubprogs = 2
+			Eventually(tc.Felixes[0].BPFNumContiguousPolProgramsFn(w[0].InterfaceName, "ingress"), "60s", "1s").Should(
+				BeNumerically(">=", expectedNumberOfPolicySubprogs))
+			Eventually(tc.Felixes[0].BPFNumContiguousPolProgramsFn(w[1].InterfaceName, "ingress"), "20s", "1s").Should(
+				BeNumerically(">=", expectedNumberOfPolicySubprogs))
+			addW0NetSet(numSets)
+
+			// Verify the policy really has converged.
+			cc.ExpectSome(w[0], w[1])
+			cc.ExpectNone(w[1], w[0])
+			cc.CheckConnectivityWithTimeout(30 * time.Second)
+
+			// Find the index of the policy program for w[0].
+			w0PolIdxIngress = tc.Felixes[0].BPFIfState()[w[0].InterfaceName].IngressPolicy
+			w0PolIdxEgress = tc.Felixes[0].BPFIfState()[w[0].InterfaceName].EgressPolicy
+		})
+
+		It("should clean up policy sub-programs: remove then stop", func() {
+			// Remove one EP.
+			w[0].RemoveFromInfra(infra)
+			// After removing workload, we get a dummy "drop all" policy program.
+			Eventually(tc.Felixes[0].BPFNumPolProgramsTotalByEntryPointFn(w0PolIdxIngress), "60s", "1s").Should(Equal(1),
+				"w[0] ingress policy programs not cleaned up after removing ep?")
+			Eventually(tc.Felixes[0].BPFNumPolProgramsTotalByEntryPointFn(w0PolIdxEgress), "60s", "1s").Should(Equal(1),
+				"w[0] egress policy programs not cleaned up after removing ep?")
+
+			// Stop it, should get full cleanup now.
+			w[0].Stop()
+			w[0] = nil // Prevent second call to Stop in AfterEach.
+			Eventually(tc.Felixes[0].BPFNumPolProgramsTotalByEntryPointFn(w0PolIdxIngress), "60s", "1s").Should(Equal(0),
+				"w[0] ingress policy programs not cleaned up?")
+			Eventually(tc.Felixes[0].BPFNumPolProgramsTotalByEntryPointFn(w0PolIdxEgress), "60s", "1s").Should(Equal(0),
+				"w[0] egress policy programs not cleaned up?")
+		})
+
+		It("should clean up policy sub-programs: stop then remove", func() {
+			w[0].Stop()
+			// Stop the workload (remove its cali interface).
+			defer func() {
+				// Prevent second call to Stop in AfterEach.
+				w[0] = nil
+			}()
+			// After stopping workload, interface is gone and programs get cleaned up.
+			Eventually(tc.Felixes[0].BPFNumPolProgramsTotalByEntryPointFn(w0PolIdxIngress), "60s", "1s").Should(Equal(0),
+				"w[0] ingress policy programs not cleaned up?")
+			Eventually(tc.Felixes[0].BPFNumPolProgramsTotalByEntryPointFn(w0PolIdxEgress), "60s", "1s").Should(Equal(0),
+				"w[0] egress policy programs not cleaned up?")
+
+			// Remove should have no further effect.
+			w[0].RemoveFromInfra(infra)
+			Consistently(tc.Felixes[0].BPFNumPolProgramsTotalByEntryPointFn(w0PolIdxIngress), "10s", "1s").Should(Equal(0),
+				"w[0] ingress policy programs came back?")
+			Consistently(tc.Felixes[0].BPFNumPolProgramsTotalByEntryPointFn(w0PolIdxEgress), "10s", "1s").Should(Equal(0),
+				"w[0] egress policy programs came back?")
+		})
 	})
 })

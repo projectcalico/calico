@@ -369,24 +369,40 @@ func (f *Felix) BPFIfState() map[string]BPFIfState {
 	return states
 }
 
-func (f *Felix) BPFNumPolProgramsFn(iface string, ingressOrEgress string) func() int {
+func (f *Felix) BPFNumContiguousPolProgramsFn(iface string, ingressOrEgress string) func() int {
 	return func() int {
-		return f.BPFNumPolPrograms(iface, ingressOrEgress)
+		cont, _ := f.BPFNumPolProgramsByName(iface, ingressOrEgress)
+		return cont
 	}
 }
 
-func (f *Felix) BPFNumPolPrograms(iface string, ingressOrEgress string) int {
-	ifState := f.BPFIfState()[iface]
-	var startProg int
-	if ingressOrEgress == "ingress" {
-		startProg = ifState.IngressPolicy
-	} else {
-		startProg = ifState.EgressPolicy
-	}
+func (f *Felix) BPFNumPolProgramsByName(iface string, ingressOrEgress string) (contiguous, total int) {
+	entryPointIdx := f.BPFPolEntryPointIdx(iface, ingressOrEgress)
+	return f.BPFNumPolProgramsByEntryPoint(entryPointIdx)
+}
 
-	var count int
+func (f *Felix) BPFPolEntryPointIdx(iface string, ingressOrEgress string) int {
+	ifState := f.BPFIfState()[iface]
+	var entryPointIdx int
+	if ingressOrEgress == "ingress" {
+		entryPointIdx = ifState.IngressPolicy
+	} else {
+		entryPointIdx = ifState.EgressPolicy
+	}
+	return entryPointIdx
+}
+
+func (f *Felix) BPFNumPolProgramsTotalByEntryPointFn(entryPointIdx int) func() (total int) {
+	return func() (total int) {
+		_, total = f.BPFNumPolProgramsByEntryPoint(entryPointIdx)
+		return
+	}
+}
+
+func (f *Felix) BPFNumPolProgramsByEntryPoint(entryPointIdx int) (contiguous, total int) {
+	gapSeen := false
 	for i := 0; i < jump.MaxSubPrograms; i++ {
-		k := polprog.SubProgramJumpIdx(startProg, i, jump.TCMaxEntryPoints)
+		k := polprog.SubProgramJumpIdx(entryPointIdx, i, jump.TCMaxEntryPoints)
 		out, err := f.ExecOutput(
 			"bpftool", "map", "lookup",
 			"pinned", "/sys/fs/bpf/tc/globals/cali_jump3",
@@ -397,13 +413,17 @@ func (f *Felix) BPFNumPolPrograms(iface string, ingressOrEgress string) int {
 			fmt.Sprintf("%d", (k>>24)&0xff),
 		)
 		if err != nil {
+			gapSeen = true
 			break
 		}
 		if strings.Contains(out, "value:") {
-			count++
+			total++
+			if !gapSeen {
+				contiguous++
+			}
 		} else {
-			break
+			gapSeen = true
 		}
 	}
-	return count
+	return
 }
