@@ -55,7 +55,7 @@ type PolicyMatchListener interface {
 //
 // When looking at policies, the ActiveRules calculator is only interested in the selector
 // attached to the policy itself (which determines the set of endpoints that it applies to).
-// The rules in a policy may also contain selectors; those are are ignored here; they are
+// The rules in a policy may also contain selectors; those are ignored here; they are
 // mapped to IP sets by the RuleScanner.
 type ActiveRulesCalculator struct {
 	// Caches of all known policies/profiles.
@@ -309,7 +309,7 @@ func (arc *ActiveRulesCalculator) updateEndpointProfileIDs(key model.Key, profil
 	for id := range removedIDs {
 		arc.profileIDToEndpointKeys.Discard(id, key)
 		if !arc.profileIDToEndpointKeys.ContainsKey(id) {
-			// No endpoint refers to this ID any more.  Clean it
+			// No endpoint refers to this ID anymore.  Clean it
 			// up.
 			arc.sendProfileUpdate(id)
 		}

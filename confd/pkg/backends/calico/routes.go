@@ -259,7 +259,7 @@ func (rg *routeGenerator) getAllRoutesForService(svc *v1.Service) []string {
 			if len(lbIngress.IP) > 0 {
 				// Only advertise allowed LB IPs
 				if !rg.isAllowedLoadBalancerIP(lbIngress.IP) {
-					log.WithFields(log.Fields{"ip": lbIngress.IP, "svc": svcID}).Info("Cannot advertise LoadBalancer IP - not not in allow list")
+					log.WithFields(log.Fields{"ip": lbIngress.IP, "svc": svcID}).Info("Cannot advertise LoadBalancer IP - not in allow list")
 					continue
 				}
 				routes = append(routes, lbIngress.IP)

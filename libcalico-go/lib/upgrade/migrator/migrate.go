@@ -806,7 +806,7 @@ func (m *migrationHelper) getV1ClusterVersion() (string, error) {
 }
 
 // versionRequiresMigration returns true if the given version requires
-// upgrating the data model, false otherwise. Returns an error if it was
+// upgrading the data model, false otherwise. Returns an error if it was
 // not possible to parse the version, or if the version was less than the
 // minimum requires for upgrade.
 func versionRequiresMigration(v string) (bool, error) {

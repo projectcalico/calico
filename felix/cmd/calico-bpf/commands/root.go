@@ -62,7 +62,7 @@ func init() {
 		"config file (default is $HOME/.calico-bpf.yaml)")
 	rootCmd.PersistentFlags().StringVar(&logLevel, "log-level", "warn", "Set log level")
 
-	ipv6 = rootCmd.PersistentFlags().BoolP("ipv6", "6", false, "Use IPv6 insted of IPv4")
+	ipv6 = rootCmd.PersistentFlags().BoolP("ipv6", "6", false, "Use IPv6 instead of IPv4")
 	rootCmd.SetOut(os.Stdout)
 }
 

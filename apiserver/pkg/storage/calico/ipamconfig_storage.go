@@ -86,7 +86,7 @@ func (gc IPAMConfigConverter) convertToLibcalico(aapiObj runtime.Object) resourc
 	lcgIPAMConfig.Spec.StrictAffinity = aapiIPAMConfig.Spec.StrictAffinity
 	lcgIPAMConfig.Spec.MaxBlocksPerHost = int(aapiIPAMConfig.Spec.MaxBlocksPerHost)
 
-	// AutoAllocatBlocks is an internal field and should be set to true.
+	// AutoAllocateBlocks is an internal field and should be set to true.
 	lcgIPAMConfig.Spec.AutoAllocateBlocks = true
 
 	return lcgIPAMConfig

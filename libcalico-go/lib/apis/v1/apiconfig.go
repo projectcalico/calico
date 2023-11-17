@@ -39,7 +39,7 @@ type CalicoAPIConfigMetadata struct {
 type CalicoAPIConfigSpec struct {
 	DatastoreType DatastoreType `json:"datastoreType" envconfig:"APIV1_DATASTORE_TYPE" default:"etcdv2"`
 
-	// Inline the ectd config fields
+	// Inline the etcd config fields
 	EtcdConfig
 
 	// Inline the k8s config fields.

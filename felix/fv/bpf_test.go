@@ -1653,7 +1653,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 				Context("Test load balancer service with no backend", func() {
 					if testOpts.connTimeEnabled || testOpts.udpUnConnected {
-						// Skip UDP unconnected, connectime load balancing cases as externalClient also does conntime balancing
+						// Skip UDP unconnected, connecttime load balancing cases as externalClient also does conntime balancing
 						return
 					}
 
@@ -2680,7 +2680,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						testSvc8056.Spec.SessionAffinity = "ClientIP"
 						k8sUpdateService(k8sClient, testSvcNamespace, testSvcName, testSvc, testSvc8056)
 
-						By("checking the the affinity is cleaned up")
+						By("checking the affinity is cleaned up")
 						Eventually(func() int {
 							if testOpts.ipv6 {
 								aff := dumpAffMapV6(tc.Felixes[0])
@@ -2958,8 +2958,8 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 										},
 									},
 								}
-								w00Slector := fmt.Sprintf("name=='%s'", w[0][0].Name)
-								pol.Spec.Selector = w00Slector
+								w00Selector := fmt.Sprintf("name=='%s'", w[0][0].Name)
+								pol.Spec.Selector = w00Selector
 
 								pol = createPolicy(pol)
 							})
@@ -3052,8 +3052,8 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 											},
 										},
 									}
-									w00Slector := fmt.Sprintf("name=='%s'", w[0][0].Name)
-									pol.Spec.Selector = w00Slector
+									w00Selector := fmt.Sprintf("name=='%s'", w[0][0].Name)
+									pol.Spec.Selector = w00Selector
 
 									pol = createPolicy(pol)
 								})
@@ -4976,7 +4976,7 @@ func checkNodeConntrack(felixes []*infrastructure.Felix) error {
 			line = strings.Trim(line, " ")
 			if strings.Contains(line, "src=") {
 				// Whether traffic is generated in host namespace, or involves NAT, each
-				// contrack entry should be related to node's address
+				// conntrack entry should be related to node's address
 				if strings.Contains(line, felix.GetIP()) {
 					continue lineLoop
 				}

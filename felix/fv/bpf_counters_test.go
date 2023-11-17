@@ -272,7 +272,7 @@ func checkDroppedByPolicyCounters(g Gomega, felix *infrastructure.Felix, ifName 
 			continue
 		}
 
-		// "Dropped by policy" is the desciption of DroppedByPolicy counter
+		// "Dropped by policy" is the description of DroppedByPolicy counter
 		// defined in felix/bpf/counters/counters.go.
 		if strings.TrimSpace(strings.ToLower(fields[0])) == "dropped" &&
 			strings.TrimSpace(strings.ToLower(fields[1])) == "by policy" {

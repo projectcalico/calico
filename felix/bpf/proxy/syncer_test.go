@@ -634,7 +634,7 @@ var _ = Describe("BPF Syncer", func() {
 			)
 
 			// XXX we do not have quite a good sync with the fixer in Syncer, we
-			// XXX just do it speculatively and to introduce some fuzzynes. If this
+			// XXX just do it speculatively and to introduce some fuzziness. If this
 			// XXX or the next test fails, something is wrong and should be fixed
 			svcs.Lock()
 			defer svcs.Unlock()
@@ -677,7 +677,7 @@ var _ = Describe("BPF Syncer", func() {
 				net.IPv4(10, 0, 0, 2), 2222, net.IPv4(10, 2, 3, 1), 2222, 6)).To(BeTrue())
 
 			// Not all backends are reachable through the NodePort, but there is
-			// no harm in not cleaning connctions that cannot exist. Even if
+			// no harm in not cleaning connections that cannot exist. Even if
 			// they existed, why would we break them?
 
 			Expect(s.ConntrackFrontendHasBackend(

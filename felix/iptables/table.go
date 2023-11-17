@@ -109,7 +109,7 @@ func init() {
 //
 // Table supports two classes of operation:  "rule insertions" and "full chain updates".
 //
-// As the name suggests, rule insertions allow for inserting one or more rules into a pre-existing
+// As the name suggests, rule insertions allow for inserting one or more rules into a preexisting
 // chain.  Rule insertions are intended to be used to hook kernel chains (such as "FORWARD") in
 // order to direct them to a Felix-owned chain.  It is important to minimise the use of rule
 // insertions because the top-level chains are shared resources, which can be modified by other
@@ -124,7 +124,7 @@ func init() {
 //
 // In either case, the actual dataplane updates are deferred until the next call to Apply() so
 // chain updates and insertions may occur in any order as long as they are consistent (i.e. there
-// are no references to non-existent chains) by the time Apply() is called.
+// are no references to nonexistent chains) by the time Apply() is called.
 //
 // # Design
 //
@@ -1062,11 +1062,11 @@ func (t *Table) Apply() (rescheduleAfter time.Duration) {
 		rescheduleAfter = t.refreshInterval - lastReadToNow
 	}
 	if t.postWriteInterval < time.Hour {
-		postWriteReched := t.lastWriteTime.Add(t.postWriteInterval).Sub(now)
-		if postWriteReched <= 0 {
+		postWriteReached := t.lastWriteTime.Add(t.postWriteInterval).Sub(now)
+		if postWriteReached <= 0 {
 			rescheduleAfter = 1 * time.Millisecond
-		} else if t.refreshInterval <= 0 || postWriteReched < rescheduleAfter {
-			rescheduleAfter = postWriteReched
+		} else if t.refreshInterval <= 0 || postWriteReached < rescheduleAfter {
+			rescheduleAfter = postWriteReached
 		}
 	}
 
@@ -1300,7 +1300,7 @@ func (t *Table) applyUpdates() error {
 		t.opReporter.RecordOperation(fmt.Sprintf("update-%v-v%d", t.Name, t.IPVersion))
 
 		if err := t.execIptablesRestore(buf); err != nil {
-			return fmt.Errorf("writting out buffer: %w", err)
+			return fmt.Errorf("writing out buffer: %w", err)
 		}
 
 		t.lastWriteTime = t.timeNow()
@@ -1455,7 +1455,7 @@ func (t *Table) InsertRulesNow(chain string, rules []Rule) error {
 	buf.EndTransaction()
 
 	if err := t.execIptablesRestore(buf); err != nil {
-		return fmt.Errorf("writting out buffer: %w", err)
+		return fmt.Errorf("writing out buffer: %w", err)
 	}
 
 	return nil
@@ -1486,7 +1486,7 @@ func (t *Table) renderDeleteByValueLine(chainName string, ruleNum int) (string, 
 	// For non-cali chains, get the rule by number but delete using the full rule instead of rule number.
 	rules, ok := t.chainToFullRules[chainName]
 	if !ok || ruleNum >= len(rules) {
-		return "", fmt.Errorf("Rendering delete for non-existent rule: Rule %d in %q", ruleNum, chainName)
+		return "", fmt.Errorf("Rendering delete for nonexistent rule: Rule %d in %q", ruleNum, chainName)
 	}
 
 	rule := rules[ruleNum]

@@ -48,7 +48,7 @@ const (
 	numNetworkSets = 100
 )
 
-// netsetsConfig is used to parametrise the whole suite of tests for IPv4 or IPv6, it provides
+// netsetsConfig is used to parameterize the whole suite of tests for IPv4 or IPv6, it provides
 // methods that return:
 //
 //   - the IP to use for a given workload, each from a separate subnet
@@ -617,7 +617,7 @@ var _ = Context("_NET_SETS_ Network sets tests with initialized Felix and etcd d
 						cc.ExpectNone(nw[1], nw[2])
 						cc.ExpectNone(nw[1], nw[3])
 
-						// Doesn't match as a source any more.
+						// Doesn't match as a source anymore.
 						cc.ExpectNone(nw[2], nw[0])
 						cc.ExpectNone(nw[2], nw[1])
 						cc.ExpectNone(nw[2], nw[3])
@@ -1035,7 +1035,7 @@ var _ = Context("_NET_SETS_ Network sets tests with initialized Felix and etcd d
 						cc.ExpectNone(w[1], w[2])
 						cc.ExpectNone(w[1], w[3])
 
-						// Doesn't match as a source any more.
+						// Doesn't match as a source anymore.
 						cc.ExpectNone(w[2], w[0])
 						cc.ExpectNone(w[2], w[1])
 						cc.ExpectNone(w[2], w[3])

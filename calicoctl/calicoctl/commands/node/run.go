@@ -137,7 +137,7 @@ Options:
                            system.
      --no-default-ippools  Do not create default pools upon startup.
                            Default IP pools will be created if this is not set
-                           and there are no pre-existing Calico IP pools.
+                           and there are no preexisting Calico IP pools.
   -c --config=<CONFIG>     Path to the file containing connection
                            configuration in YAML or JSON format.
                            [default: ` + constants.DefaultConfigPath + `]
@@ -480,7 +480,7 @@ func setNFConntrackMax() {
 	err := os.WriteFile("/proc/sys/net/netfilter/nf_conntrack_max",
 		[]byte("1000000"), 0)
 	if err != nil {
-		fmt.Println("WARNING: Could not set nf_contrack_max. This may have an impact at scale.")
+		fmt.Println("WARNING: Could not set nf_conntrack_max. This may have an impact at scale.")
 	}
 }
 

@@ -39,7 +39,7 @@ var policyTable = []TableEntry{
 				IngressRules: []apiv1.Rule{V1InRule1, V1InRule2},
 				EgressRules:  []apiv1.Rule{V1EgressRule1, V1EgressRule2},
 				Selector:     "calico/k8s_ns == 'default' || thing == 'value'",
-				DoNotTrack:   false, // DoNotTrack and PreDNAT can not both be true.
+				DoNotTrack:   false, // DoNotTrack and PreDNAT cannot both be true.
 				PreDNAT:      true,
 				Types:        []apiv1.PolicyType{apiv1.PolicyTypeIngress},
 			},

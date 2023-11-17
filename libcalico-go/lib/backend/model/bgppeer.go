@@ -201,7 +201,7 @@ type BGPPeer struct {
 	PeerIP net.IP `json:"ip"`
 
 	// ASNum is the AS number of the peer.  Note that we write out the
-	// value as a string in to the backend, because confd templating
+	// value as a string in the backend, because confd templating
 	// converts large uints to float e notation which breaks the BIRD
 	// configuration.
 	ASNum numorstring.ASNumber `json:"as_num,string"`

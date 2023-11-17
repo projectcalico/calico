@@ -132,7 +132,7 @@ func init() {
 	})
 }
 
-// Mock a super simple Hash32Caculator interface.
+// Mock a super simple Hash32Calculator interface.
 type mockHash32 struct {
 	lastByte byte
 }

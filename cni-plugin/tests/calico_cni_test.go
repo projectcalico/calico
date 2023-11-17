@@ -88,7 +88,7 @@ var _ = Describe("CalicoCni", func() {
 
 			Expect(len(result.IPs)).Should(Equal(1))
 			ip := result.IPs[0].Address.IP.String()
-			result.IPs[0].Address.IP = result.IPs[0].Address.IP.To4() // Make sure the IP is respresented as 4 bytes
+			result.IPs[0].Address.IP = result.IPs[0].Address.IP.To4() // Make sure the IP is represented as 4 bytes
 			Expect(result.IPs[0].Address.Mask.String()).Should(Equal("ffffffff"))
 
 			// datastore things:
@@ -362,7 +362,7 @@ var _ = Describe("CalicoCni", func() {
 			  },
 			  "dataplane_options": {
 			  	"type": "grpc",
-			  	"socket": "unix:///tmp/xxxx-non-existent-dont-create-this-please.sock"
+			  	"socket": "unix:///tmp/xxxx-nonexistent-dont-create-this-please.sock"
 			  }
 			}`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"))
 

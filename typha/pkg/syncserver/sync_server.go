@@ -1051,7 +1051,7 @@ func (h *connection) sendMsg(msg interface{}) error {
 
 func (h *connection) maybeResetWriteTimeout() error {
 	now := time.Now()
-	// Under heavy load, updating the timeout for every message seemed to cause noticible overhead,
+	// Under heavy load, updating the timeout for every message seemed to cause noticeable overhead,
 	// so we add a 10% buffer and then only reset it when it drops too low.
 	if h.currentWriteDeadline.Before(now.Add(h.config.WriteTimeout)) {
 		newWriteDeadline := now.Add(h.config.WriteTimeout * 110 / 100)

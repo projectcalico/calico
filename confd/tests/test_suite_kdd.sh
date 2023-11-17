@@ -30,7 +30,7 @@ CRDS=../libcalico-go/config/crd
 
 # Prepopulate k8s with data that cannot be populated through calicoctl.
 # All tests use the same set of nodes - for k8s these cannot be created through
-# calioctl, so we need to create them through kubectl.
+# calicoctl, so we need to create them through kubectl.
 echo "Waiting for k8s API server to come on line"
 for i in $(seq 1 30); do kubectl apply -f $CRDS 1>/dev/null 2>&1 && break || sleep 1; done
 

@@ -36,7 +36,7 @@ const minKernelVersion = "2.6.24"
 
 // Required kernel modules to run Calico are saved in a two dimensional map variable.
 // Keys are used to search in `lsmod` results or `modules.dep` and `modules.builtin` files.
-// Values are used to search the the `kernel config` or `ip_tables_matches` file.
+// Values are used to search the `kernel config` or `ip_tables_matches` file.
 var requiredModules = map[string]string{
 	"ip_set":               "CONFIG_IP_SET",
 	"ip6_tables":           "CONFIG_IP6_NF_IPTABLES",
@@ -261,7 +261,7 @@ func checkModule(filename, module, kernelVersion string, pattern string) error {
 	defer fh.Close()
 
 	for {
-		// Ignoring second output (isPrefix) since it's not necessory
+		// Ignoring second output (isPrefix) since it's not necessary
 		buf, _, err := f.ReadLine()
 		if err != nil {
 			// EOF without a match

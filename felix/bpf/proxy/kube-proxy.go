@@ -251,7 +251,7 @@ func (kp *KubeProxy) ConntrackFrontendHasBackend(ip net.IP, port uint16, backend
 	backendPort uint16, proto uint8) bool {
 
 	// Thanks to holding the lock since ConntrackScanStart, this condition holds for the
-	// whole iteration. So if we started without syncer, we willalso finish without it.
+	// whole iteration. So if we started without syncer, we will also finish without it.
 	// And if we had a syncer, we will have the same until the end.
 	if kp.syncer != nil {
 		return kp.syncer.ConntrackFrontendHasBackend(ip, port, backendIP, backendPort, proto)

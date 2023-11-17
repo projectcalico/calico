@@ -899,7 +899,7 @@ func cleanUpEndpointByIP(IP net.IP, logger *logrus.Entry, isDockerV1 bool) error
 		}
 		for _, ep := range endpoints {
 			if ep.IPAddress.Equal(IP) {
-				logger.WithField("conflictingEndpoint", ep).Error("Found pre-existing conflicting endpoint.")
+				logger.WithField("conflictingEndpoint", ep).Error("Found preexisting conflicting endpoint.")
 				_, err := ep.Delete()
 				if err != nil {
 					logger.WithError(err).Error("Failed to delete old endpoint")
@@ -916,7 +916,7 @@ func cleanUpEndpointByIP(IP net.IP, logger *logrus.Entry, isDockerV1 bool) error
 		for _, ep := range endpoints {
 			for _, ipConf := range ep.IpConfigurations {
 				if ipConf.IpAddress == IP.String() {
-					logger.WithField("conflictingEndpoint", ep).Error("Found pre-existing conflicting host compute endpoint.")
+					logger.WithField("conflictingEndpoint", ep).Error("Found preexisting conflicting host compute endpoint.")
 					err := ep.Delete()
 					if err != nil {
 						logger.WithError(err).Error("Failed to delete old host compute endpoint")

@@ -231,7 +231,7 @@ var _ = Describe("flannel-migration-controller FV test", func() {
 			_, err := calicoClient.IPPools().Create(context.Background(), p, options.SetOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
-			// Remove flannel daemonset, add Canal daemonet.
+			// Remove flannel daemonset, add Canal daemonset.
 			_, err = apiserver.ExecOutput("kubectl", "delete", "daemonset", flannelDs, "-n", "kube-system")
 			Expect(err).ShouldNot(HaveOccurred())
 			flannelCluster.AddCanalDaemonset("canal")
