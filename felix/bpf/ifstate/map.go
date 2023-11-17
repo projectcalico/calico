@@ -93,7 +93,15 @@ func KeyFromBytes(b []byte) Key {
 
 type Value [ValueSize]byte
 
-func NewValue(flags uint32, name string, xdpPol, ingressPol, egressPol, tcIngressFilter, tcEgressFilter int) Value {
+func NewValue(
+	flags uint32,
+	name string,
+	xdpPol,
+	ingressPol,
+	egressPol,
+	tcIngressFilter,
+	tcEgressFilter int,
+) Value {
 	var v Value
 
 	binary.LittleEndian.PutUint32(v[:], flags)
