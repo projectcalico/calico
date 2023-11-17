@@ -286,7 +286,7 @@ func schema_libcalico_go_lib_apis_v1_CalicoAPIConfigSpec(ref common.ReferenceCal
 					},
 					"EtcdConfig": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Inline the ectd config fields",
+							Description: "Inline the etcd config fields",
 							Default:     map[string]interface{}{},
 							Ref:         ref("github.com/projectcalico/calico/libcalico-go/lib/apis/v1.EtcdConfig"),
 						},
@@ -1372,7 +1372,7 @@ func schema_libcalico_go_lib_apis_v1_PolicySpec(ref common.ReferenceCallback) co
 					},
 					"selector": {
 						SchemaProps: spec.SchemaProps{
-							Description: "The selector is an expression used to pick pick out the endpoints that the policy should be applied to.\n\nSelector expressions follow this syntax:\n\n\tlabel == \"string_literal\"  ->  comparison, e.g. my_label == \"foo bar\"\n\tlabel != \"string_literal\"   ->  not equal; also matches if label is not present\n\tlabel in { \"a\", \"b\", \"c\", ... }  ->  true if the value of label X is one of \"a\", \"b\", \"c\"\n\tlabel not in { \"a\", \"b\", \"c\", ... }  ->  true if the value of label X is not one of \"a\", \"b\", \"c\"\n\thas(label_name)  -> True if that label is present\n\t! expr -> negation of expr\n\texpr && expr  -> Short-circuit and\n\texpr || expr  -> Short-circuit or\n\t( expr ) -> parens for grouping\n\tall() or the empty selector -> matches all endpoints.\n\nLabel names are allowed to contain alphanumerics, -, _ and /. String literals are more permissive but they do not support escape characters.\n\nExamples (with made-up labels):\n\n\ttype == \"webserver\" && deployment == \"prod\"\n\ttype in {\"frontend\", \"backend\"}\n\tdeployment != \"dev\"\n\t! has(label_name)",
+							Description: "The selector is an expression used to pick out the endpoints that the policy should be applied to.\n\nSelector expressions follow this syntax:\n\n\tlabel == \"string_literal\"  ->  comparison, e.g. my_label == \"foo bar\"\n\tlabel != \"string_literal\"   ->  not equal; also matches if label is not present\n\tlabel in { \"a\", \"b\", \"c\", ... }  ->  true if the value of label X is one of \"a\", \"b\", \"c\"\n\tlabel not in { \"a\", \"b\", \"c\", ... }  ->  true if the value of label X is not one of \"a\", \"b\", \"c\"\n\thas(label_name)  -> True if that label is present\n\t! expr -> negation of expr\n\texpr && expr  -> Short-circuit and\n\texpr || expr  -> Short-circuit or\n\t( expr ) -> parens for grouping\n\tall() or the empty selector -> matches all endpoints.\n\nLabel names are allowed to contain alphanumerics, -, _ and /. String literals are more permissive but they do not support escape characters.\n\nExamples (with made-up labels):\n\n\ttype == \"webserver\" && deployment == \"prod\"\n\ttype in {\"frontend\", \"backend\"}\n\tdeployment != \"dev\"\n\t! has(label_name)",
 							Default:     "",
 							Type:        []string{"string"},
 							Format:      "",
