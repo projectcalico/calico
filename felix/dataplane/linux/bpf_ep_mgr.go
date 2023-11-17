@@ -734,8 +734,14 @@ func (m *bpfEndpointManager) onInterfaceAddrsUpdate(update *ifaceAddrsUpdate) {
 		log.Debugf("Interface %+v received address update %+v", update.Name, update.Addrs)
 		update.Addrs.Iter(func(item string) error {
 			ip := net.ParseIP(item)
-			if ip.To4() != nil {
-				ipAddrs = append(ipAddrs, ip)
+			if m.ipv6Enabled {
+				if ip.To4() == nil && !ip.IsLinkLocalUnicast() {
+					ipAddrs = append(ipAddrs, ip)
+				}
+			} else {
+				if ip.To4() != nil {
+					ipAddrs = append(ipAddrs, ip)
+				}
 			}
 			return nil
 		})
