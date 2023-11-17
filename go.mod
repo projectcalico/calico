@@ -66,7 +66,7 @@ require (
 	github.com/satori/go.uuid v1.2.0
 	github.com/shirou/gopsutil v0.0.0-20190323131628-2cbc9195c892
 	github.com/sirupsen/logrus v1.9.0
-	github.com/spf13/cobra v1.7.0
+	github.com/spf13/cobra v1.8.0
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.17.0
 	github.com/tchap/go-patricia/v2 v2.3.1
@@ -77,7 +77,7 @@ require (
 	go.etcd.io/etcd/client/v2 v2.305.9
 	go.etcd.io/etcd/client/v3 v3.5.9
 	golang.org/x/net v0.18.0
-	golang.org/x/sync v0.4.0
+	golang.org/x/sync v0.5.0
 	golang.org/x/sys v0.14.0
 	golang.org/x/text v0.14.0
 	golang.org/x/time v0.3.0
@@ -149,7 +149,7 @@ require (
 	github.com/containerd/ttrpc v1.1.2 // indirect
 	github.com/coreos/go-iptables v0.6.0 // indirect
 	github.com/coreos/go-systemd/v22 v22.4.0 // indirect
-	github.com/cpuguy83/go-md2man/v2 v2.0.2 // indirect
+	github.com/cpuguy83/go-md2man/v2 v2.0.3 // indirect
 	github.com/cyphar/filepath-securejoin v0.2.4 // indirect
 	github.com/docker/distribution v2.8.2+incompatible // indirect
 	github.com/docker/go-units v0.5.0 // indirect
