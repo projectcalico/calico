@@ -15,6 +15,7 @@
 package polprog
 
 import (
+	"fmt"
 	"testing"
 
 	. "github.com/onsi/gomega"
@@ -23,6 +24,11 @@ import (
 	"github.com/projectcalico/calico/felix/idalloc"
 	"github.com/projectcalico/calico/felix/proto"
 )
+
+// These tests are just sanity checks and low-level UTs.  Most of the tests
+// of the policy program builder are in felix/bpf/ut/pol_prog_test.go because
+// that file has access to the eBPF test machinery (to allow verifying/running
+// the BPF programs "for real").
 
 func TestPolicySanityCheck(t *testing.T) {
 	// Just a basic sanity check with a kitchen sink policy.  The policy behaviour is tested "for real" in the
@@ -34,8 +40,8 @@ func TestPolicySanityCheck(t *testing.T) {
 		alloc.GetOrAlloc(id)
 		return id
 	}
-	pg := NewBuilder(alloc, 1, 2, 3, WithAllowDenyJumps(666, 777))
-	insns, err := pg.Instructions(Rules{
+	pg := NewBuilder(alloc, 1, 2, 3, 4, WithAllowDenyJumps(666, 777))
+	progs, err := pg.Instructions(Rules{
 		Tiers: []Tier{{
 			Policies: []Policy{{
 				Rules: []Rule{{
@@ -70,8 +76,8 @@ func TestPolicySanityCheck(t *testing.T) {
 	})
 
 	Expect(err).NotTo(HaveOccurred())
-	for i, in := range insns {
-		t.Log(i, ": ", in.Instruction)
+	for i, in := range progs[0] {
+		t.Log(i, ": ", in.String())
 	}
 }
 
@@ -79,7 +85,7 @@ func TestLogActionIgnored(t *testing.T) {
 	RegisterTestingT(t)
 	alloc := idalloc.New()
 
-	pg := NewBuilder(alloc, 1, 2, 3, WithAllowDenyJumps(666, 777))
+	pg := NewBuilder(alloc, 1, 2, 3, 4, WithAllowDenyJumps(666, 777))
 	insns, err := pg.Instructions(Rules{
 		Tiers: []Tier{{
 			Name: "default",
@@ -92,7 +98,7 @@ func TestLogActionIgnored(t *testing.T) {
 		}}})
 	Expect(err).NotTo(HaveOccurred())
 
-	pg = NewBuilder(alloc, 1, 2, 3, WithAllowDenyJumps(666, 777))
+	pg = NewBuilder(alloc, 1, 2, 3, 4, WithAllowDenyJumps(666, 777))
 	noOpInsns, err := pg.Instructions(Rules{
 		Tiers: []Tier{{
 			Name:     "default",
@@ -112,7 +118,7 @@ func TestPolicyDump(t *testing.T) {
 
 	checkLabelsAndComments := func(rule proto.Rule, expectedString string, matchLabelOrComment string) {
 
-		pg := NewBuilder(alloc, 1, 2, 3, WithAllowDenyJumps(666, 777), WithPolicyDebugEnabled())
+		pg := NewBuilder(alloc, 1, 2, 3, 4, WithAllowDenyJumps(666, 777), WithPolicyDebugEnabled())
 		rule.Action = "Allow"
 		rule.IpVersion = 4
 		insns, err := pg.Instructions(Rules{
@@ -126,7 +132,7 @@ func TestPolicyDump(t *testing.T) {
 		})
 		Expect(err).NotTo(HaveOccurred())
 
-		labels, comments := aggregateCommentsAndLabels(&insns)
+		labels, comments := aggregateCommentsAndLabels(&insns[0])
 		if matchLabelOrComment == "label" {
 			Expect(labels).To(ContainElement(expectedString))
 		} else {
@@ -171,4 +177,61 @@ func aggregateCommentsAndLabels(insns *asm.Insns) ([]string, []string) {
 		comments = append(comments, in.Comments...)
 	}
 	return labels, comments
+}
+
+func TestProgramSplitting(t *testing.T) {
+	RegisterTestingT(t)
+	alloc := idalloc.New()
+	setID := func(id string) string {
+		alloc.GetOrAlloc(id)
+		return id
+	}
+	pg := NewBuilder(alloc, 1, 2, 3, 4,
+		WithAllowDenyJumps(666, 777),
+		WithPolicyMapIndexAndStride(15, 1000))
+
+	// First tier: 10k rules that do a mix of pass/deny.
+	tier0 := Tier{
+		Name: "tier0",
+	}
+	actions := []string{"pass", "deny"}
+	for i := 0; i < 250; i++ {
+		pol := Policy{}
+		for j := 0; j < 40; j++ {
+			pol.Rules = append(pol.Rules, Rule{Rule: &proto.Rule{
+				Action:      actions[j%len(actions)],
+				IpVersion:   4,
+				Protocol:    &proto.Protocol{NumberOrName: &proto.Protocol_Number{Number: 6}},
+				SrcIpSetIds: []string{setID(fmt.Sprintf("s:sbcdef12%08x", i+j))},
+			}})
+		}
+		tier0.Policies = append(tier0.Policies, pol)
+	}
+	// Second tier: 1k rules that do a mix of allow/deny.
+	actions = []string{"allow", "deny"}
+	tier1 := Tier{
+		Name: "tier0",
+	}
+	for i := 0; i < 25; i++ {
+		pol := Policy{}
+		for j := 0; j < 40; j++ {
+			pol.Rules = append(pol.Rules, Rule{Rule: &proto.Rule{
+				Action:      actions[j%len(actions)],
+				IpVersion:   4,
+				Protocol:    &proto.Protocol{NumberOrName: &proto.Protocol_Number{Number: 6}},
+				SrcIpSetIds: []string{setID(fmt.Sprintf("s:sbcdef12%08x", i+j))},
+			}})
+		}
+		tier1.Policies = append(tier1.Policies, pol)
+	}
+
+	tiers := []Tier{tier0, tier1}
+
+	progs, err := pg.Instructions(Rules{
+		Tiers: tiers,
+	})
+	Expect(err).NotTo(HaveOccurred())
+	// Allow leeway in program size for enterprise.
+	Expect(len(progs)).To(BeNumerically(">=", 6))
+	Expect(len(progs)).To(BeNumerically("<=", 8))
 }
