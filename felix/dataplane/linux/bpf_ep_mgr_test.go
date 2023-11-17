@@ -223,12 +223,19 @@ type mockProgMapDP struct {
 	*mockDataplane
 }
 
-func (m *mockProgMapDP) loadPolicyProgram(_ string, _ proto.IPVersion, _ polprog.Rules, _ maps.Map, _ ...polprog.Option) (
-	fileDescriptor, asm.Insns, error) {
+func (m *mockProgMapDP) loadPolicyProgram(progName string,
+	ipFamily proto.IPVersion,
+	rules polprog.Rules,
+	staticProgsMap maps.Map,
+	polProgsMap maps.Map,
+	opts ...polprog.Option,
+) ([]fileDescriptor, []asm.Insns, error) {
 	fdCounter++
 
-	return mockFD(fdCounter), []asm.Insn{{Comments: []string{"blah"}}}, nil
+	return []fileDescriptor{mockFD(fdCounter)}, []asm.Insns{{{Comments: []string{"blah"}}}}, nil
 }
+
+var _ hasLoadPolicyProgram = (*mockProgMapDP)(nil)
 
 type mockFD uint32
 

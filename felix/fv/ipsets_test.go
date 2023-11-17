@@ -76,38 +76,8 @@ var _ = Context("_IPSets_ Tests for IPset rendering", func() {
 		// Overall, it verifies that we rate limit deletions of IP sets
 		// and that we're able to cope with such a flap without blocking
 		// all processing on the int-dataplane main loop.
-
-		By("Creating network sets")
-		sizes := []int{100, 1, 1, 1, 2, 3, 4, 5, 10, 10, 100, 200, 1000}
 		const numSets = 2000
-		for i := 0; i < numSets; i++ {
-			ns := api.NewGlobalNetworkSet()
-			ns.Name = fmt.Sprintf("netset-%d", i)
-			ns.Labels = map[string]string{
-				"netset": fmt.Sprintf("netset-%d", i),
-			}
-			ns.Spec.Nets = generateIPv4s(sizes[i%len(sizes)])
-			_, err := client.GlobalNetworkSets().Create(context.TODO(), ns, options.SetOptions{})
-			Expect(err).NotTo(HaveOccurred())
-		}
-
-		By("Creating policies with selectors")
-		// Make a policy that activates them
-		for i := 0; i < numSets; i++ {
-			pol := api.NewGlobalNetworkPolicy()
-			pol.Name = fmt.Sprintf("pol-%d", i)
-			pol.Spec.Ingress = []api.Rule{
-				{
-					Action: "Allow",
-					Source: api.EntityRule{
-						Selector: fmt.Sprintf("netset == 'netset-%d'", i),
-					},
-				},
-			}
-			pol.Spec.Selector = "all()"
-			_, err := client.GlobalNetworkPolicies().Create(context.TODO(), pol, options.SetOptions{})
-			Expect(err).NotTo(HaveOccurred())
-		}
+		createNetworkSetPolicies(client, numSets, 1)
 
 		By("Creating a workload, activating the policies")
 		// Create a workload that uses the policy.
@@ -156,3 +126,44 @@ var _ = Context("_IPSets_ Tests for IPset rendering", func() {
 			"Recreating IP sets succeeded but slower than expected")
 	})
 })
+
+func createNetworkSetPolicies(c client.Interface, numPols, numRulesPerPol int) {
+	By("Creating network sets")
+	sizes := []int{1, 1, 1, 2, 3, 4, 5, 5, 5, 5, 5, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 100, 200, 1000}
+	numSets := numPols * numRulesPerPol
+	for i := 0; i < numSets; i++ {
+		ns := api.NewGlobalNetworkSet()
+		ns.Name = fmt.Sprintf("netset-%d", i)
+		ns.Labels = map[string]string{
+			"netset": fmt.Sprintf("netset-%d", i),
+		}
+		ns.Spec.Nets = generateIPv4s(sizes[i%len(sizes)])
+		_, err := c.GlobalNetworkSets().Create(context.TODO(), ns, options.SetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+	}
+
+	By("Creating policies with selectors")
+	// Make a policy that activates them
+	for i := 0; i < numPols; i++ {
+		rules := make([]api.Rule, numRulesPerPol)
+		for j := 0; j < numRulesPerPol; j++ {
+			rules[j] = api.Rule{
+				Action: "Allow",
+				Source: api.EntityRule{
+					Selector: fmt.Sprintf("netset == 'netset-%d'", i*numRulesPerPol+j),
+				},
+			}
+		}
+		pol := api.NewGlobalNetworkPolicy()
+		pol.Name = fmt.Sprintf("pol-%d", i)
+		pol.Spec.Ingress = rules
+		pol.Spec.Egress = []api.Rule{
+			{Action: "Allow"},
+		}
+		pol.Spec.Selector = "all()"
+		order := 1000.0
+		pol.Spec.Order = &order
+		_, err := c.GlobalNetworkPolicies().Create(context.TODO(), pol, options.SetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+	}
+}

@@ -222,7 +222,7 @@ func ResetSizes() {
 
 func NewPinnedMap(params MapParameters) *PinnedMap {
 	if len(params.VersionedName()) >= unix.BPF_OBJ_NAME_LEN {
-		log.WithField("name", params.Name).Panic("Bug: BPF map name too long")
+		log.WithField("name", params.Name).Panicf("Bug: BPF map name too long (%d)", len(params.VersionedName()))
 	}
 	if val := Size(params.VersionedName()); val != 0 {
 		params.MaxEntries = val
@@ -333,10 +333,17 @@ func MapDeleteKeyCmd(m Map, key []byte) ([]string, error) {
 	return nil, errors.Errorf("unrecognized map type %T", m)
 }
 
+var ErrNotSupported = fmt.Errorf("prog_array iteration not supported")
+
 // Iter iterates over the map, passing each key/value pair to the provided callback function.  Warning:
 // The key and value are owned by the iterator and will be clobbered by the next iteration so they must not be
 // retained or modified.
 func (b *PinnedMap) Iter(f IterCallback) error {
+	if b.Type == "prog_array" {
+		// We currently have a bug in iteration of program array maps;
+		// the C code tight loops due to the empty slots.
+		return ErrNotSupported
+	}
 	valueSize := b.ValueSize
 	if b.perCPU {
 		valueSize = b.ValueSize * NumPossibleCPUs()
