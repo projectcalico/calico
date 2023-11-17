@@ -269,7 +269,7 @@ $(BIRD_SOURCE): .bird-source.created
 .bird-source.created:
 	rm -rf filesystem/included-source/bird*
 	mkdir -p filesystem/included-source/
-	wget -O $(BIRD_SOURCE) https://github.com/projectcalico/bird/tarball/$(BIRD_VERSION)
+	curl -sSf -L --retry 5 -o $(BIRD_SOURCE) https://github.com/projectcalico/bird/tarball/$(BIRD_VERSION)
 	touch $@
 
 # include GPL felix code in the image.
@@ -511,14 +511,14 @@ $(WINDOWS_ARCHIVE_ROOT)/confd/templates/%: windows-packaging/templates/%
         chmod +w $@
 
 $(WINDOWS_ARCHIVE_ROOT)/libs/hns/hns.psm1:
-	wget -P $(WINDOWS_ARCHIVE_ROOT)/libs/hns/ $(MICROSOFT_SDN_GITHUB_RAW_URL)/Kubernetes/windows/hns.psm1
+	curl -sSf -L --retry 5 -o $@ $(MICROSOFT_SDN_GITHUB_RAW_URL)/Kubernetes/windows/hns.psm1
 
 $(WINDOWS_ARCHIVE_ROOT)/libs/hns/License.txt:
-	wget -P $(WINDOWS_ARCHIVE_ROOT)/libs/hns/ $(MICROSOFT_SDN_GITHUB_RAW_URL)/License.txt
+	curl -sSf -L --retry 5 -o $@  $(MICROSOFT_SDN_GITHUB_RAW_URL)/License.txt
 
 ## Download NSSM.
 windows-packaging/nssm.zip:
-	wget -O windows-packaging/nssm.zip https://nssm.cc/ci/nssm-$(WINDOWS_NSSM_VERSION).zip
+	curl -sSf -L --retry 5 -o $@ https://nssm.cc/ci/nssm-$(WINDOWS_NSSM_VERSION).zip
 
 windows-packaging/nssm.exe: windows-packaging/nssm.zip
 	cd windows-packaging && \
