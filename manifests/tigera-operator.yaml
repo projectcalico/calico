@@ -25074,10 +25074,13 @@ rules:
   - apiGroups:
       - operator.tigera.io
     resources:
+      - apiservers/finalizers
       - installations
       - installations/status
+      - installations/finalizers
       - tigerastatuses
       - tigerastatuses/status
+      - tigerastatuses/finalizers
       - apiservers
       - apiservers/status
       - imagesets
