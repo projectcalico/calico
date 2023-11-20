@@ -28,6 +28,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
+
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	k8sopenapi "k8s.io/apiserver/pkg/endpoints/openapi"
 	"k8s.io/apiserver/pkg/features"
@@ -35,13 +36,11 @@ import (
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/klog/v2"
-	"k8s.io/kube-openapi/pkg/validation/spec"
-
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 
 	"github.com/projectcalico/api/pkg/openapi"
 
 	"github.com/projectcalico/calico/apiserver/pkg/apiserver"
+	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
 
 // CalicoServerOptions contains the aggregation of configuration structs for
@@ -90,16 +89,18 @@ func (o *CalicoServerOptions) Config() (*apiserver.Config, error) {
 	}
 
 	serverConfig := genericapiserver.NewRecommendedConfig(apiserver.Codecs)
-	serverConfig.OpenAPIConfig = genericapiserver.DefaultOpenAPIConfig(openapi.GetOpenAPIDefinitions, k8sopenapi.NewDefinitionNamer(apiserver.Scheme))
-	if serverConfig.OpenAPIConfig.Info == nil {
-		serverConfig.OpenAPIConfig.Info = &spec.Info{}
+	namer := k8sopenapi.NewDefinitionNamer(apiserver.Scheme)
+	version := "unversioned"
+	if serverConfig.Version != nil {
+		version = strings.Split(serverConfig.Version.String(), "-")[0]
 	}
+	serverConfig.OpenAPIConfig = genericapiserver.DefaultOpenAPIConfig(openapi.GetOpenAPIDefinitions, namer)
 	if serverConfig.OpenAPIConfig.Info.Version == "" {
-		if serverConfig.Version != nil {
-			serverConfig.OpenAPIConfig.Info.Version = strings.Split(serverConfig.Version.String(), "-")[0]
-		} else {
-			serverConfig.OpenAPIConfig.Info.Version = "unversioned"
-		}
+		serverConfig.OpenAPIConfig.Info.Version = version
+	}
+	serverConfig.OpenAPIV3Config = genericapiserver.DefaultOpenAPIV3Config(openapi.GetOpenAPIDefinitions, namer)
+	if serverConfig.OpenAPIV3Config.Info.Version == "" {
+		serverConfig.OpenAPIV3Config.Info.Version = version
 	}
 
 	if err := o.RecommendedOptions.Etcd.Complete(serverConfig.StorageObjectCountTracker, serverConfig.DrainedNotify(), serverConfig.AddPostStartHook); err != nil {
