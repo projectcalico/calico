@@ -28,8 +28,7 @@ import (
 )
 
 func TestPrintCalicoNodeStatus(t *testing.T) {
-	var seconds uint32
-	seconds = 10
+	var seconds uint32 = 10
 
 	backThreeMinutes := time.Minute * time.Duration(-3)
 	past := time.Now().Add(backThreeMinutes)

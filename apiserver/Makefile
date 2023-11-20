@@ -11,8 +11,7 @@ EXTRA_FILES_TO_COMMIT=*_generated.go *_generated.*.go
 API_SERVER_IMAGE      ?=apiserver
 BUILD_IMAGES          ?=$(API_SERVER_IMAGE)
 
-EXTRA_DOCKER_ARGS += -e GOLANGCI_LINT_CACHE=/lint-cache -v $(CURDIR)/.lint-cache:/lint-cache:rw \
-				 -v $(CURDIR)/../hack/boilerplate:/go/src/k8s.io/kubernetes/hack/boilerplate:rw
+EXTRA_DOCKER_ARGS += -v $(CURDIR)/../hack/boilerplate:/go/src/k8s.io/kubernetes/hack/boilerplate:rw
 
 ###############################################################################
 BINDIR ?= bin
@@ -71,26 +70,10 @@ endif
 CALICO_BUILD:=$(CALICO_BUILD)-$(ARCH)
 
 ###############################################################################
-# Static checks
-###############################################################################
-## Perform static checks on the code.
-# TODO: re-enable these linters !
-LINT_ARGS := --disable gosimple,govet,structcheck,errcheck,goimports,unused,ineffassign,staticcheck,deadcode,typecheck --timeout 5m
-
-###############################################################################
-# CI/CD
-###############################################################################
-.PHONY: ci
-## Run what CI runs
-ci: clean static-checks image ut fv
-
-## Deploys images to registry
-cd: image-all cd-common
-
 # This section builds the output binaries.
 # Some will have dedicated targets to make it easier to type, for example
 # "apiserver" instead of "$(BINDIR)/apiserver".
-#########################################################################
+###############################################################################
 $(BINDIR)/apiserver-$(ARCH): $(K8SAPISERVER_GO_FILES)
 ifeq ($(FIPS),true)
 	$(call build_cgo_boring_binary, $(PACKAGE_NAME)/cmd/apiserver, $@)
@@ -104,7 +87,8 @@ $(BINDIR)/filecheck-$(ARCH): $(K8SAPISERVER_GO_FILES)
 ###############################################################################
 # Building the image
 ###############################################################################
-build: image
+.PHONY: build
+build: $(BINDIR)/apiserver-$(ARCH) $(BINDIR)/filecheck-$(ARCH)
 
 CONTAINER_CREATED=.apiserver.created-$(ARCH)
 CONTAINER_FIPS_CREATED=.apiserver.created-$(ARCH)-fips
@@ -221,6 +205,16 @@ clean-bin:
 
 clean-hack-lib:
 	rm -rf hack/lib/
+
+###############################################################################
+# CI/CD
+###############################################################################
+.PHONY: ci
+## Run what CI runs
+ci: clean static-checks image ut fv
+
+## Deploys images to registry
+cd: image-all cd-common
 
 ###############################################################################
 # Release

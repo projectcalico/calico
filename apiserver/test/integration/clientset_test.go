@@ -33,10 +33,9 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 
-	"github.com/projectcalico/api/pkg/lib/numorstring"
-
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	calicoclient "github.com/projectcalico/api/pkg/client/clientset_generated/clientset"
+	"github.com/projectcalico/api/pkg/lib/numorstring"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
@@ -216,8 +215,8 @@ func testNetworkPolicyClient(client calicoclient.Interface, name string) error {
 		return fmt.Errorf("Error on watch")
 	}
 	var wg sync.WaitGroup
+	wg.Add(1)
 	go func() {
-		wg.Add(1)
 		defer wg.Done()
 		for e := range wIface.ResultChan() {
 			fmt.Println("Watch object: ", e)
@@ -280,7 +279,7 @@ func testGlobalNetworkPolicyClient(client calicoclient.Interface, name string) e
 	if err != nil {
 		return fmt.Errorf("error listing globalNetworkPolicies (%s)", err)
 	}
-	if 1 != len(globalNetworkPolicies.Items) {
+	if len(globalNetworkPolicies.Items) != 1 {
 		return fmt.Errorf("should have exactly one policies, had %v policies", len(globalNetworkPolicies.Items))
 	}
 
@@ -345,7 +344,7 @@ func testGlobalNetworkSetClient(client calicoclient.Interface, name string) erro
 		return fmt.Errorf("didn't get the same globalNetworkSet back from the server \n%+v\n%+v", globalNetworkSet, globalNetworkSetServer)
 	}
 
-	globalNetworkSets, err = globalNetworkSetClient.List(ctx, metav1.ListOptions{})
+	_, err = globalNetworkSetClient.List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return fmt.Errorf("error listing globalNetworkSets (%s)", err)
 	}
@@ -412,7 +411,7 @@ func testNetworkSetClient(client calicoclient.Interface, name string) error {
 
 	updatedNetworkSet := networkSetServer
 	updatedNetworkSet.Labels = map[string]string{"foo": "bar"}
-	networkSetServer, err = networkSetClient.Update(ctx, updatedNetworkSet, metav1.UpdateOptions{})
+	_, err = networkSetClient.Update(ctx, updatedNetworkSet, metav1.UpdateOptions{})
 	if nil != err {
 		return fmt.Errorf("error updating the networkSet '%v' (%v)", networkSet, err)
 	}
@@ -422,7 +421,7 @@ func testNetworkSetClient(client calicoclient.Interface, name string) error {
 	if err != nil {
 		return fmt.Errorf("error listing networkSets (%s)", err)
 	}
-	if 1 != len(networkSets.Items) {
+	if len(networkSets.Items) != 1 {
 		return fmt.Errorf("should have exactly one networkSet, had %v networkSets", len(networkSets.Items))
 	}
 
@@ -442,8 +441,8 @@ func testNetworkSetClient(client calicoclient.Interface, name string) error {
 		return fmt.Errorf("Error on watch")
 	}
 	var wg sync.WaitGroup
+	wg.Add(1)
 	go func() {
-		wg.Add(1)
 		defer wg.Done()
 		for e := range wIface.ResultChan() {
 			fmt.Println("Watch object: ", e)
@@ -467,7 +466,9 @@ func TestHostEndpointClient(t *testing.T) {
 		return &v3.HostEndpoint{}
 	})
 	defer shutdownServer()
-	defer deleteHostEndpointClient(client, name)
+	defer func() {
+		_ = deleteHostEndpointClient(client, name)
+	}()
 	rootTestFunc := func() func(t *testing.T) {
 		return func(t *testing.T) {
 			if err := testHostEndpointClient(client, name); err != nil {
@@ -565,7 +566,6 @@ func testHostEndpointClient(client calicoclient.Interface, name string) error {
 				return
 			}
 		}
-		return
 	}()
 
 	// Create two HostEndpoints
@@ -635,7 +635,7 @@ func testIPPoolClient(client calicoclient.Interface, name string) error {
 		return fmt.Errorf("didn't get the same ippool back from the server \n%+v\n%+v", ippool, ippoolServer)
 	}
 
-	ippools, err = ippoolClient.List(ctx, metav1.ListOptions{})
+	_, err = ippoolClient.List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return fmt.Errorf("error listing ippools (%s)", err)
 	}
@@ -704,7 +704,7 @@ func testIPReservationClient(client calicoclient.Interface, name string) error {
 		return fmt.Errorf("didn't get the same ipreservation back from the server \n%+v\n%+v", ipreservation, ipreservationServer)
 	}
 
-	ipreservations, err = ipreservationClient.List(ctx, metav1.ListOptions{})
+	_, err = ipreservationClient.List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return fmt.Errorf("error listing ipreservations (%s)", err)
 	}
@@ -774,7 +774,7 @@ func testBGPConfigurationClient(client calicoclient.Interface, name string) erro
 		return fmt.Errorf("didn't get the same bgpConfig back from server\n%+v\n%+v", bgpConfig, bgpRes)
 	}
 
-	bgpRes, err = bgpConfigClient.Get(ctx, resName, metav1.GetOptions{})
+	_, err = bgpConfigClient.Get(ctx, resName, metav1.GetOptions{})
 	if err != nil {
 		return fmt.Errorf("error getting bgpConfiguration %s (%s)", resName, err)
 	}
@@ -837,7 +837,7 @@ func testBGPPeerClient(client calicoclient.Interface, name string) error {
 		return fmt.Errorf("didn't get the same bgpPeer back from server\n%+v\n%+v", bgpPeer, bgpRes)
 	}
 
-	bgpRes, err = bgpPeerClient.Get(ctx, resName, metav1.GetOptions{})
+	_, err = bgpPeerClient.Get(ctx, resName, metav1.GetOptions{})
 	if err != nil {
 		return fmt.Errorf("error getting bgpPeer %s (%s)", resName, err)
 	}
@@ -968,7 +968,7 @@ func testFelixConfigurationClient(client calicoclient.Interface, name string) er
 		return fmt.Errorf("didn't get the same felixConfig back from the server \n%+v\n%+v", felixConfig, felixConfigServer)
 	}
 
-	felixConfigs, err = felixConfigClient.List(ctx, metav1.ListOptions{})
+	_, err = felixConfigClient.List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return fmt.Errorf("error listing felixConfigs (%s)", err)
 	}
@@ -1122,11 +1122,10 @@ func testKubeControllersConfigurationClient(client calicoclient.Interface) error
 				return
 			}
 		}
-		return
 	}()
 
 	// Create, then delete KubeControllersConfigurations
-	kubeControllersConfigServer, err = kubeControllersConfigClient.Create(ctx, kubeControllersConfig, metav1.CreateOptions{})
+	_, err = kubeControllersConfigClient.Create(ctx, kubeControllersConfig, metav1.CreateOptions{})
 	if nil != err {
 		return fmt.Errorf("error creating the kubeControllersConfig '%v' (%v)", kubeControllersConfig, err)
 	}
@@ -1257,7 +1256,7 @@ func testCalicoNodeStatusClient(client calicoclient.Interface, name string) erro
 		return fmt.Errorf("didn't get the same object back from the server \n%+v\n%+v", caliconodestatus, caliconodestatusNew)
 	}
 
-	caliconodestatusNew, err = caliconodestatusClient.Get(ctx, name, metav1.GetOptions{})
+	_, err = caliconodestatusClient.Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return fmt.Errorf("error getting object %s (%s)", name, err)
 	}
@@ -1307,13 +1306,13 @@ func testIPAMConfigClient(client calicoclient.Interface, name string) error {
 		return fmt.Errorf("error listing IPAMConfigurations: %s", err)
 	}
 
-	ipamConfigNew, err := ipamConfigClient.Create(ctx, ipamConfig, metav1.CreateOptions{})
+	_, err = ipamConfigClient.Create(ctx, ipamConfig, metav1.CreateOptions{})
 	if err == nil {
 		return fmt.Errorf("should not be able to create ipam config %s ", ipamConfig.Name)
 	}
 
 	ipamConfig.Name = "default"
-	ipamConfigNew, err = ipamConfigClient.Create(ctx, ipamConfig, metav1.CreateOptions{})
+	ipamConfigNew, err := ipamConfigClient.Create(ctx, ipamConfig, metav1.CreateOptions{})
 	if err != nil {
 		return fmt.Errorf("error creating the object '%v' (%v)", ipamConfig, err)
 	}

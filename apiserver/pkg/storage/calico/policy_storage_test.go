@@ -19,19 +19,18 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/watch"
+	"k8s.io/apiserver/pkg/registry/generic"
+	"k8s.io/apiserver/pkg/storage"
+	"k8s.io/apiserver/pkg/storage/storagebackend"
 	"k8s.io/klog/v2"
+
+	"golang.org/x/net/context"
 
 	calico "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
-
-	"k8s.io/apiserver/pkg/registry/generic"
-	"k8s.io/apiserver/pkg/storage"
-	"k8s.io/apiserver/pkg/storage/storagebackend"
-
-	"golang.org/x/net/context"
 )
 
 var scheme = runtime.NewScheme()
@@ -39,7 +38,7 @@ var codecs = serializer.NewCodecFactory(scheme)
 
 func init() {
 	metav1.AddToGroupVersion(scheme, metav1.SchemeGroupVersion)
-	calico.AddToScheme(scheme)
+	_ = calico.AddToScheme(scheme)
 }
 
 func TestNetworkPolicyCreate(t *testing.T) {
@@ -51,12 +50,12 @@ func TestNetworkPolicyCreate(t *testing.T) {
 	obj := &calico.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "foo"}}
 
 	// verify that kv pair is empty before set
-	libcPolicy, err := store.client.NetworkPolicies().Get(ctx, "default", "foo", options.GetOptions{})
+	libcPolicy, _ := store.client.NetworkPolicies().Get(ctx, "default", "foo", options.GetOptions{})
 	if libcPolicy != nil {
 		t.Fatalf("expecting empty result on key: %s", key)
 	}
 
-	err = store.Create(ctx, key, obj, out, 0)
+	err := store.Create(ctx, key, obj, out, 0)
 	if err != nil {
 		t.Fatalf("Set failed: %v", err)
 	}
@@ -120,12 +119,12 @@ func TestNetworkPolicyCreateDisallowK8sPrefix(t *testing.T) {
 	out := &calico.NetworkPolicy{}
 	obj := &calico.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: name}}
 
-	libcPolicy, err := store.client.NetworkPolicies().Get(ctx, ns, name, options.GetOptions{})
+	libcPolicy, _ := store.client.NetworkPolicies().Get(ctx, ns, name, options.GetOptions{})
 	if libcPolicy != nil {
 		t.Fatalf("expecting empty result on key: %s", key)
 	}
 
-	err = store.Create(ctx, key, obj, out, 0)
+	err := store.Create(ctx, key, obj, out, 0)
 	if err == nil {
 		t.Fatalf("Expected Create of a policy with prefix 'knp.default.' to fail")
 	}
@@ -320,7 +319,7 @@ func TestNetworkPolicyGuaranteedUpdate(t *testing.T) {
 	ctx, store, gnpStore := testSetup(t)
 	defer func() {
 		testCleanup(t, ctx, store, gnpStore)
-		store.client.NetworkPolicies().Delete(ctx, "default", "non-existing", options.DeleteOptions{})
+		_, _ = store.client.NetworkPolicies().Delete(ctx, "default", "non-existing", options.DeleteOptions{})
 	}()
 	key, storeObj := testPropagateStore(ctx, t, store, &calico.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "foo", UID: "A"}})
 
@@ -536,9 +535,9 @@ func TestNetworkPolicyGuaranteedUpdateWithConflict(t *testing.T) {
 func TestNetworkPolicyList(t *testing.T) {
 	ctx, store, _ := testSetup(t)
 	defer func() {
-		store.client.NetworkPolicies().Delete(ctx, "default", "foo", options.DeleteOptions{})
-		store.client.NetworkPolicies().Delete(ctx, "default1", "foo", options.DeleteOptions{})
-		store.client.NetworkPolicies().Delete(ctx, "default1", "bar", options.DeleteOptions{})
+		_, _ = store.client.NetworkPolicies().Delete(ctx, "default", "foo", options.DeleteOptions{})
+		_, _ = store.client.NetworkPolicies().Delete(ctx, "default1", "foo", options.DeleteOptions{})
+		_, _ = store.client.NetworkPolicies().Delete(ctx, "default1", "bar", options.DeleteOptions{})
 	}()
 
 	preset := []struct {
@@ -648,11 +647,11 @@ func testSetup(t *testing.T) (context.Context, *resourceStore, *resourceStore) {
 func testCleanup(t *testing.T, ctx context.Context, store, gnpStore *resourceStore) {
 	np, _ := store.client.NetworkPolicies().Get(ctx, "default", "foo", options.GetOptions{})
 	if np != nil {
-		store.client.NetworkPolicies().Delete(ctx, "default", "foo", options.DeleteOptions{})
+		_, _ = store.client.NetworkPolicies().Delete(ctx, "default", "foo", options.DeleteOptions{})
 	}
 	gnp, _ := gnpStore.client.GlobalNetworkPolicies().Get(ctx, "foo", options.GetOptions{})
 	if gnp != nil {
-		gnpStore.client.GlobalNetworkPolicies().Delete(ctx, "foo", options.DeleteOptions{})
+		_, _ = gnpStore.client.GlobalNetworkPolicies().Delete(ctx, "foo", options.DeleteOptions{})
 	}
 }
 
