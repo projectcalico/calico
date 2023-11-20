@@ -1633,10 +1633,13 @@ func (m *bpfEndpointManager) updateWEPsInDataplane() {
 	wg.Wait()
 
 	for ifaceName, err := range errs {
-		iface := m.nameToIface[ifaceName]
-		wlID := iface.info.endpointID
+		var wlID *proto.WorkloadEndpointID
 
-		m.updateIfaceStateMap(ifaceName, &iface)
+		m.withIface(ifaceName, func(iface *bpfInterface) bool {
+			wlID = iface.info.endpointID
+			m.updateIfaceStateMap(ifaceName, iface)
+			return false // no need to enforce dirty
+		})
 
 		if err == nil {
 			log.WithField("iface", ifaceName).Info("Updated workload interface.")
