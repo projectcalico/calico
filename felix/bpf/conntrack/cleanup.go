@@ -212,14 +212,17 @@ func NewStaleNATScanner(frontendHasBackend NATChecker) *StaleNATScanner {
 }
 
 // Check checks the conntrack entry
-func (sns *StaleNATScanner) Check(k KeyInterface, v ValueInterface, _ EntryGet) ScanVerdict {
+func (sns *StaleNATScanner) Check(k KeyInterface, v ValueInterface, get EntryGet) ScanVerdict {
 	debug := log.GetLevel() >= log.DebugLevel
+
+again:
 
 	switch v.Type() {
 	case TypeNormal:
 		// skip non-NAT entry
 
 	case TypeNATReverse:
+
 		proto := k.Proto()
 		ipA := k.AddrA()
 		ipB := k.AddrB()
@@ -288,8 +291,16 @@ func (sns *StaleNATScanner) Check(k KeyInterface, v ValueInterface, _ EntryGet) 
 				svcIP = kA
 				svcPort = kAport
 			} else {
-				log.WithFields(log.Fields{"key": k, "value": v}).Error("Mismatch between key and rev key")
-				return ScanVerdictOK // don't touch, will get deleted when expired
+				rv, err := get(revKey)
+				if err != nil {
+					// There is no match for the reverse key, delete it, its useless - we
+					// can get here due to host networked program accessing service
+					// without ctlb when the backed is accessible via tunnel.
+					return ScanVerdictDelete
+				}
+				k = revKey
+				v = rv
+				goto reverse // handle it based on the reverse entry
 			}
 		} else {
 			// snatPort is the new client port. It does not match the client
@@ -316,8 +327,16 @@ func (sns *StaleNATScanner) Check(k KeyInterface, v ValueInterface, _ EntryGet) 
 				svcIP = kA
 				svcPort = kAport
 			} else {
-				log.WithFields(log.Fields{"key": k, "value": v}).Error("Mismatch between key and rev key")
-				return ScanVerdictOK // don't touch, will get deleted when expired
+				rv, err := get(revKey)
+				if err != nil {
+					// There is no match for the reverse key, delete it, its useless - we
+					// can get here due to host networked program accessing service
+					// without ctlb when the backed is accessible via tunnel.
+					return ScanVerdictDelete
+				}
+				k = revKey
+				v = rv
+				goto reverse // handle it based on the reverse entry
 			}
 		}
 
@@ -336,6 +355,13 @@ func (sns *StaleNATScanner) Check(k KeyInterface, v ValueInterface, _ EntryGet) 
 	}
 
 	return ScanVerdictOK
+
+reverse:
+	if v.Type() == TypeNATReverse {
+		goto again
+	}
+
+	return ScanVerdictDelete
 }
 
 // IterationStart satisfies EntryScannerSynced
