@@ -3255,7 +3255,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 								// Also try host networked pods, both on a local and remote node.
 								cc.Expect(Some, hostW[0], TargetIP(clusterIP), ports, hostW0SrcIP)
-								//cc.Expect(Some, hostW[1], TargetIP(clusterIP), ports, hostW1SrcIP)
+								cc.Expect(Some, hostW[1], TargetIP(clusterIP), ports, hostW1SrcIP)
 
 								if testOpts.protocol == "tcp" && !testOpts.ipv6 {
 									// Also excercise ipv4 as ipv6
