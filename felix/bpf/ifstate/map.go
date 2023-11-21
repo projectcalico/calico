@@ -41,6 +41,7 @@ const (
 const (
 	FlgWEP   = uint32(0x1)
 	FlgReady = uint32(0x2)
+	FlgMax   = uint32(0x3)
 )
 
 var flagsToStr = map[uint32]string{
@@ -151,7 +152,8 @@ func (v Value) String() string {
 	fstr := ""
 	f := v.Flags()
 
-	for k, v := range flagsToStr {
+	for k := FlgWEP; k < FlgMax; k++ {
+		v := flagsToStr[k]
 		if f&k != 0 {
 			fstr = fstr + v + ","
 		}
@@ -161,8 +163,9 @@ func (v Value) String() string {
 		fstr = "host,"
 	}
 
-	return fmt.Sprintf("{flags: %s XDPPolicy: %d, IngressPolicy: %d, EgressPolicy: %d, name: %s}",
-		fstr, v.XDPPolicy(), v.IngressPolicy(), v.EgressPolicy(), v.IfName())
+	return fmt.Sprintf(
+		"{flags: %s XDPPolicy: %d, IngressPolicy: %d, EgressPolicy: %d, IngressFilter: %d, EgressFilter: %d, name: %s}",
+		fstr, v.XDPPolicy(), v.IngressPolicy(), v.EgressPolicy(), v.TcIngressFilter(), v.TcEgressFilter(), v.IfName())
 }
 
 func ValueFromBytes(b []byte) Value {
