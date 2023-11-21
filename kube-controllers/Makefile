@@ -78,7 +78,7 @@ $(BINDIR)/check-status-linux-$(ARCH): $(SRC_FILES)
 	$(call build_binary, ./cmd/check-status, $@)
 
 $(BINDIR)/kubectl-$(ARCH):
-	curl -sSf -L --retry 5 -o $@ https://storage.googleapis.com/kubernetes-release/release/$(K8S_VERSION)/bin/linux/$(subst armv7,arm,$(ARCH))/kubectl
+	curl -sSf -L --retry 5 -o $@ https://storage.googleapis.com/kubernetes-release/release/$(K8S_VERSION)/bin/linux/$(ARCH)/kubectl
 	chmod +x $@
 
 ###############################################################################

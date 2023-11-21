@@ -569,17 +569,10 @@ cover-report: combined.coverprofile
 				   column -t | \
 				   grep -v '100\.0%'"
 
-bin/calico-felix.transfer-url: bin/calico-felix
-	$(DOCKER_GO_BUILD) sh -c 'curl --upload-file bin/calico-felix https://transfer.sh/calico-felix > $@'
-
 # Cross-compile Felix for Windows
 bin/calico-felix.exe: $(SRC_FILES)
 	@echo Building felix for Windows...
 	$(call build_windows_binary, "$(PACKAGE_NAME)/cmd/calico-felix", $@)
-
-.PHONY: patch-script
-patch-script: bin/calico-felix.transfer-url
-	$(DOCKER_GO_BUILD) bash -c 'utils/make-patch-script.sh $$(cat bin/calico-felix.transfer-url)'
 
 ## Generate a diagram of Felix's internal calculation graph.
 docs/calc.pdf: docs/calc.dot
