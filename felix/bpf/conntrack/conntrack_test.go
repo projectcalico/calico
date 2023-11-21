@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/projectcalico/calico/felix/timeshim/mocktime"
+	"golang.org/x/sys/unix"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
@@ -244,7 +245,7 @@ var _ = Describe("BPF Conntrack StaleNATScanner", func() {
 			conntrack.NewValueNATForward(0, 0, 0, conntrack.NewKey(123, backendIP, backendPort, net.IPv4(3, 2, 2, 3), clientPort)),
 			conntrack.ScanVerdictDelete,
 			func(conntrack.KeyInterface) (conntrack.ValueInterface, error) {
-				return nil, fmt.Errorf("no reverse entry")
+				return nil, unix.ENOENT
 			},
 		),
 		Entry("snatport keyA - revA",

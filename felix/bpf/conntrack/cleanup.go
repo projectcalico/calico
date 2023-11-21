@@ -19,6 +19,7 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/timeshim"
@@ -293,10 +294,25 @@ again:
 			} else {
 				rv, err := get(revKey)
 				if err != nil {
-					// There is no match for the reverse key, delete it, its useless - we
-					// can get here due to host networked program accessing service
-					// without ctlb when the backed is accessible via tunnel.
-					return ScanVerdictDelete
+					if err == unix.ENOENT {
+						// There is no match for the reverse key, delete it, its useless - we
+						// can get here due to host networked program accessing service
+						// without ctlb when the backed is accessible via tunnel.
+						if debug {
+							log.WithFields(log.Fields{"key": k, "value": v}).
+								Debug("Mismatch between key and rev key - " +
+									"deleting entry because reverse key does not exist.")
+						}
+						return ScanVerdictDelete
+					} else {
+						if debug {
+							// In the worst case, the entry will timeout
+							log.WithFields(log.Fields{"key": k, "value": v}).WithError(err).
+								Debug("Mismatch between key and rev key - " +
+									"keeping entry, failed to retrieve reverse entry. Will try again.")
+						}
+						return ScanVerdictOK
+					}
 				}
 				k = revKey
 				v = rv
@@ -329,10 +345,25 @@ again:
 			} else {
 				rv, err := get(revKey)
 				if err != nil {
-					// There is no match for the reverse key, delete it, its useless - we
-					// can get here due to host networked program accessing service
-					// without ctlb when the backed is accessible via tunnel.
-					return ScanVerdictDelete
+					if err == unix.ENOENT {
+						// There is no match for the reverse key, delete it, its useless - we
+						// can get here due to host networked program accessing service
+						// without ctlb when the backed is accessible via tunnel.
+						if debug {
+							log.WithFields(log.Fields{"key": k, "value": v}).
+								Debug("Mismatch between key and rev key - " +
+									"deleting entry because reverse key does not exist.")
+						}
+						return ScanVerdictDelete
+					} else {
+						if debug {
+							// In the worst case, the entry will timeout
+							log.WithFields(log.Fields{"key": k, "value": v}).WithError(err).
+								Debug("Mismatch between key and rev key - " +
+									"keeping entry, failed to retrieve reverse entry. Will try again.")
+						}
+						return ScanVerdictOK
+					}
 				}
 				k = revKey
 				v = rv
@@ -359,6 +390,12 @@ again:
 reverse:
 	if v.Type() == TypeNATReverse {
 		goto again
+	}
+
+	if debug {
+		log.WithFields(log.Fields{"key": k, "value": v}).
+			Debug("Mismatch between key and rev key - " +
+				"deleting entry because reverse key does not point to a reverse entry.")
 	}
 
 	return ScanVerdictDelete
