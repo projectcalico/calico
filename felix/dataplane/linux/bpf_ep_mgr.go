@@ -425,14 +425,12 @@ func newBPFEndpointManager(
 			maps.NewTypedMap[ifstate.Key, ifstate.Value](
 				bpfmaps.IfStateMap.(maps.MapWithExistsCheck), ifstate.KeyFromBytes, ifstate.ValueFromBytes,
 			)),
-		jumpMapAlloc: &jumpMapAlloc{
-			max:  jump.MaxEntries,
-			free: make(chan int, jump.MaxEntries),
-		},
-		xdpJumpMapAlloc: &jumpMapAlloc{
-			max:  jump.XDPMaxEntries,
-			free: make(chan int, jump.XDPMaxEntries),
-		},
+
+		// Note: the allocators only allocate a fraction of the map, the
+		// rest is reserved for sub-programs generated if a single program
+		// would be too large.
+		jumpMapAlloc:        newJumpMapAlloc(jump.TCMaxEntryPoints),
+		xdpJumpMapAlloc:     newJumpMapAlloc(jump.XDPMaxEntryPoints),
 		ruleRenderer:        iptablesRuleRenderer,
 		iptablesFilterTable: iptablesFilterTable,
 		onStillAlive:        livenessCallback,

@@ -961,7 +961,6 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		It("should clean up jump map entries for missing interfaces", func() {
 			for i := 0; i < 17; i++ {
 				_ = jumpMap.Update(jump.Key(i), jump.Value(uint32(1000+i)))
-				_ = jumpMap.Update(jump.Key(i+jump.TCMaxEntryPoints), jump.Value(uint32(1000+i)))
 			}
 			for i := 0; i < 5; i++ {
 				_ = xdpJumpMap.Update(jump.Key(i), jump.Value(uint32(2000+i)))
@@ -993,8 +992,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 			Expect(ifStateMap.IsEmpty()).To(BeTrue())
 			Expect(jumpMap.Contents).To(Equal(map[string]string{
-				string(jump.Key(16)):                         string(jump.Value(uint32(1000 + 16))),
-				string(jump.Key(16 + jump.TCMaxEntryPoints)): string(jump.Value(uint32(1000 + 16))),
+				string(jump.Key(16)): string(jump.Value(uint32(1000 + 16))),
 			}))
 			Expect(xdpJumpMap.Contents).To(Equal(map[string]string{
 				// Key 4 wasn't used above so it should persist.
@@ -1025,7 +1023,6 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		It("should reclaim indexes for active interfaces", func() {
 			for i := 0; i < 8; i++ {
 				_ = jumpMap.Update(jump.Key(i), jump.Value(uint32(1000+i)))
-				_ = jumpMap.Update(jump.Key(i+jump.TCMaxEntryPoints), jump.Value(uint32(1000+i)))
 			}
 			for i := 1; i < 2; i++ {
 				_ = xdpJumpMap.Update(jump.Key(i), jump.Value(uint32(2000+i)))
@@ -1065,14 +1062,10 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 			// Expect clean-up deletions but no value changes due to mocking.
 			Expect(dumpJumpMap(jumpMap)).To(Equal(map[int]int{
-				0:     1000,
-				2:     1002,
-				3:     1003,
-				4:     1004,
-				10000: 1000,
-				10002: 1002,
-				10003: 1003,
-				10004: 1004,
+				0: 1000,
+				2: 1002,
+				3: 1003,
+				4: 1004,
 			}))
 			Expect(dumpJumpMap(xdpJumpMap)).To(Equal(map[int]int{
 				1: 2001,
