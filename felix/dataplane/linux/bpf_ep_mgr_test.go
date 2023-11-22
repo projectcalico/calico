@@ -30,9 +30,6 @@ import (
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/felix/environment"
-	"github.com/projectcalico/calico/felix/logutils"
-
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/asm"
 	"github.com/projectcalico/calico/felix/bpf/bpfmap"
@@ -41,6 +38,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/hook"
 	"github.com/projectcalico/calico/felix/bpf/ifstate"
 	bpfipsets "github.com/projectcalico/calico/felix/bpf/ipsets"
+	"github.com/projectcalico/calico/felix/bpf/jump"
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	bpfmaps "github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/mock"
@@ -48,12 +46,15 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/state"
 	"github.com/projectcalico/calico/felix/bpf/tc"
 	"github.com/projectcalico/calico/felix/bpf/xdp"
+	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/idalloc"
 	"github.com/projectcalico/calico/felix/ifacemonitor"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/ipsets"
+	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/rules"
+	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 type mockDataplane struct {
@@ -964,28 +965,301 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			Expect(name).To(Equal(vv.IfName()))
 		}
 
-		It("should clean up", func() {
+		It("should clean up jump map entries for missing interfaces", func() {
+			for i := 0; i < 17; i++ {
+				_ = jumpMap.Update(jump.Key(i), jump.Value(uint32(1000+i)))
+				_ = jumpMap.Update(jump.Key(i+jump.TCMaxEntryPoints), jump.Value(uint32(1000+i)))
+			}
+			for i := 0; i < 5; i++ {
+				_ = xdpJumpMap.Update(jump.Key(i), jump.Value(uint32(2000+i)))
+			}
+
 			_ = ifStateMap.Update(
 				ifstate.NewKey(123).AsBytes(),
-				ifstate.NewValue(ifstate.FlgReady, "eth123", -1, -1, -1, -1, -1).AsBytes(),
+				ifstate.NewValue(ifstate.FlgReady, "eth123",
+					1, 1, 2, 3, 4).AsBytes(),
 			)
 			_ = ifStateMap.Update(
 				ifstate.NewKey(124).AsBytes(),
-				ifstate.NewValue(0, "eth124", -1, -1, -1, -1, -1).AsBytes(),
+				ifstate.NewValue(0, "eth124",
+					2, 5, 6, 7, 8).AsBytes(),
 			)
 			_ = ifStateMap.Update(
 				ifstate.NewKey(125).AsBytes(),
-				ifstate.NewValue(ifstate.FlgWEP|ifstate.FlgReady, "eth125", -1, -1, -1, -1, -1).AsBytes(),
+				ifstate.NewValue(ifstate.FlgWEP|ifstate.FlgReady, "eth125",
+					3, 9, 10, 11, 12).AsBytes(),
 			)
 			_ = ifStateMap.Update(
 				ifstate.NewKey(126).AsBytes(),
-				ifstate.NewValue(ifstate.FlgWEP, "eth123", -1, -1, -1, -1, -1).AsBytes(),
+				ifstate.NewValue(ifstate.FlgWEP, "eth123",
+					0, 13, 14, 15, 0).AsBytes(),
 			)
 
 			err := bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(ifStateMap.IsEmpty()).To(BeTrue())
+			Expect(jumpMap.Contents).To(Equal(map[string]string{
+				string(jump.Key(16)):                         string(jump.Value(uint32(1000 + 16))),
+				string(jump.Key(16 + jump.TCMaxEntryPoints)): string(jump.Value(uint32(1000 + 16))),
+			}))
+			Expect(xdpJumpMap.Contents).To(Equal(map[string]string{
+				// Key 4 wasn't used above so it should persist.
+				string(jump.Key(4)): string(jump.Value(uint32(2000 + 4))),
+			}))
+		})
+
+		dumpJumpMap := func(in *mock.Map) map[int]int {
+			out := map[int]int{}
+			for k, v := range in.Contents {
+				parsedKey := binary.LittleEndian.Uint32([]byte(k))
+				parsedVal := binary.LittleEndian.Uint32([]byte(v))
+				out[int(parsedKey)] = int(parsedVal)
+			}
+			return out
+		}
+
+		dumpIfstateMap := func(in *mock.Map) map[int]string {
+			out := map[int]string{}
+			for k, v := range in.Contents {
+				parsedKey := ifstate.KeyFromBytes([]byte(k))
+				parsedVal := ifstate.ValueFromBytes([]byte(v))
+				out[int(parsedKey.IfIndex())] = parsedVal.String()
+			}
+			return out
+		}
+
+		It("should reclaim indexes for active interfaces", func() {
+			for i := 0; i < 8; i++ {
+				_ = jumpMap.Update(jump.Key(i), jump.Value(uint32(1000+i)))
+				_ = jumpMap.Update(jump.Key(i+jump.TCMaxEntryPoints), jump.Value(uint32(1000+i)))
+			}
+			for i := 1; i < 2; i++ {
+				_ = xdpJumpMap.Update(jump.Key(i), jump.Value(uint32(2000+i)))
+			}
+
+			key123 := ifstate.NewKey(123).AsBytes()
+			value123 := ifstate.NewValue(ifstate.FlgReady|ifstate.FlgWEP, "cali12345",
+				-1, 0, 2, 3, 4)
+			_ = ifStateMap.Update(
+				key123,
+				value123.AsBytes(),
+			)
+			_ = ifStateMap.Update(
+				ifstate.NewKey(124).AsBytes(),
+				ifstate.NewValue(0, "eth124",
+					2, 5, 6, 7, 1).AsBytes(),
+			)
+
+			dp.interfaceByIndexFn = func(ifindex int) (*net.Interface, error) {
+				if ifindex == 123 {
+					return &net.Interface{
+						Name:  "cali12345",
+						Index: 123,
+						Flags: net.FlagUp,
+					}, nil
+				}
+				return nil, errors.New("no such network interface")
+			}
+			genWLUpdate("cali12345", "pol-a")()
+
+			err := bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(dumpIfstateMap(ifStateMap)).To(Equal(map[int]string{
+				123: value123.String(),
+			}))
+
+			// Expect clean-up deletions but no value changes due to mocking.
+			Expect(dumpJumpMap(jumpMap)).To(Equal(map[int]int{
+				0:     1000,
+				2:     1002,
+				3:     1003,
+				4:     1004,
+				10000: 1000,
+				10002: 1002,
+				10003: 1003,
+				10004: 1004,
+			}))
+			Expect(dumpJumpMap(xdpJumpMap)).To(Equal(map[int]int{
+				1: 2001,
+			}))
+		})
+
+		It("should handle jump map collision: single iface", func() {
+			// This test verifies that we recover if we're started with
+			// bad data in the ifstate map; in particular if two policy
+			// program indexes collide.
+
+			key123 := ifstate.NewKey(123).AsBytes()
+
+			// Oops, we accidentally wrote all zeros to the dataplane...
+			value123Zeros := ifstate.NewValue(ifstate.FlgReady|ifstate.FlgWEP, "cali12345",
+				0, 0, 0, 0, 0)
+			_ = ifStateMap.Update(
+				key123,
+				value123Zeros.AsBytes(),
+			)
+
+			dp.interfaceByIndexFn = func(ifindex int) (*net.Interface, error) {
+				if ifindex == 123 {
+					return &net.Interface{
+						Name:  "cali12345",
+						Index: 123,
+						Flags: net.FlagUp,
+					}, nil
+				}
+				return nil, errors.New("no such network interface")
+			}
+			genWLUpdate("cali12345", "pol-a")()
+
+			err := bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+
+			// XDP gets cleaned up because it's a WEP, ingress keeps its
+			// ID because it was the first; egress gets reallocated.
+			value123Fixed := ifstate.NewValue(ifstate.FlgReady|ifstate.FlgWEP, "cali12345",
+				-1, 0, 1, -1, -1)
+			Expect(dumpIfstateMap(ifStateMap)).To(Equal(map[int]string{
+				123: value123Fixed.String(),
+			}))
+		})
+
+		It("should handle jump map collision: multi-iface", func() {
+			// This test verifies that we recover if we're started with
+			// bad data in the ifstate map; in particular if two policy
+			// program indexes collide.
+
+			// Oops, we accidentally wrote all zeros to the dataplane...
+			key123 := ifstate.NewKey(123).AsBytes()
+			value123Zeros := ifstate.NewValue(ifstate.FlgReady|ifstate.FlgWEP, "cali12345",
+				0, 0, 0, 0, 0)
+			_ = ifStateMap.Update(
+				key123,
+				value123Zeros.AsBytes(),
+			)
+
+			// ...twice.
+			key124 := ifstate.NewKey(124).AsBytes()
+			value124Zeros := ifstate.NewValue(ifstate.FlgReady|ifstate.FlgWEP, "cali56789",
+				0, 0, 0, 0, 0)
+			_ = ifStateMap.Update(
+				key124,
+				value124Zeros.AsBytes(),
+			)
+
+			dp.interfaceByIndexFn = func(ifindex int) (*net.Interface, error) {
+				if ifindex == 123 {
+					return &net.Interface{
+						Name:  "cali12345",
+						Index: 123,
+						Flags: net.FlagUp,
+					}, nil
+				}
+				if ifindex == 124 {
+					return &net.Interface{
+						Name:  "cali56789",
+						Index: 124,
+						Flags: net.FlagUp,
+					}, nil
+				}
+				return nil, errors.New("no such network interface")
+			}
+			genWLUpdate("cali12345", "pol-a")()
+			genWLUpdate("cali56789", "pol-b")()
+
+			err := bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+
+			// Everything collides but the allocations are non-deterministic
+			// so we need to check them by hand...
+			Expect(ifStateMap.Contents).To(HaveLen(2))
+			val123 := ifstate.ValueFromBytes([]byte(ifStateMap.Contents[string(key123)]))
+			val124 := ifstate.ValueFromBytes([]byte(ifStateMap.Contents[string(key124)]))
+
+			tcIDsSeen := set.New[int]()
+			for _, v := range []ifstate.Value{val123, val124} {
+				Expect(v.XDPPolicy()).To(Equal(-1), "WEPs shouldn't get XDP IDs")
+
+				Expect(v.IngressPolicy()).NotTo(Equal(-1), "WEPs should have ingress pol")
+				Expect(tcIDsSeen.Contains(v.IngressPolicy())).To(BeFalse(), "Saw same jump map ID more than once")
+				tcIDsSeen.Add(v.IngressPolicy())
+
+				Expect(v.EgressPolicy()).NotTo(Equal(-1), "WEPs should have egress pol")
+				Expect(tcIDsSeen.Contains(v.EgressPolicy())).To(BeFalse(), "Saw same jump map ID more than once")
+				tcIDsSeen.Add(v.EgressPolicy())
+
+				Expect(v.TcIngressFilter()).To(Equal(-1), "should be no filters in use")
+				Expect(v.TcEgressFilter()).To(Equal(-1), "should be no filters in use")
+			}
+		})
+
+		It("should handle jump map collision: multi-iface HEPs", func() {
+			// Verify collision of two HEPs (using same policy IDs), they
+			// use XDP too.
+
+			// Oops, we accidentally wrote all zeros to the dataplane...
+			key123 := ifstate.NewKey(123).AsBytes()
+			value123Zeros := ifstate.NewValue(ifstate.FlgReady, "eth0",
+				0, 0, 0, 0, -1)
+			_ = ifStateMap.Update(key123, value123Zeros.AsBytes())
+
+			// ...twice.
+			key124 := ifstate.NewKey(124).AsBytes()
+			// Using eth0a because the data iface pattern is eth0 (other tests
+			// use eth1 for something else...).
+			value124Zeros := ifstate.NewValue(ifstate.FlgReady, "eth0a",
+				0, 0, 0, -1, 0)
+			_ = ifStateMap.Update(key124, value124Zeros.AsBytes())
+
+			dp.interfaceByIndexFn = func(ifindex int) (*net.Interface, error) {
+				if ifindex == 123 {
+					return &net.Interface{
+						Name:  "eth0",
+						Index: 123,
+						Flags: net.FlagUp,
+					}, nil
+				}
+				if ifindex == 124 {
+					return &net.Interface{
+						Name:  "eth0a",
+						Index: 124,
+						Flags: net.FlagUp,
+					}, nil
+				}
+				return nil, errors.New("no such network interface")
+			}
+
+			err := bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+
+			// Everything collides but the allocations are non-deterministic
+			// so we need to check them by hand...
+			ifDump := dumpIfstateMap(ifStateMap)
+			Expect(ifDump).To(HaveLen(2))
+			Expect(ifDump).To(HaveKey(123))
+			Expect(ifDump).To(HaveKey(124))
+			val123 := ifstate.ValueFromBytes([]byte(ifStateMap.Contents[string(key123)]))
+			val124 := ifstate.ValueFromBytes([]byte(ifStateMap.Contents[string(key124)]))
+
+			xdpIDsSeen := set.New[int]()
+			tcIDsSeen := set.New[int]()
+			for _, v := range []ifstate.Value{val123, val124} {
+				Expect(v.XDPPolicy()).NotTo(Equal(-1), "WEPs shouldn't get XDP IDs")
+				Expect(xdpIDsSeen.Contains(v.XDPPolicy())).To(BeFalse(), fmt.Sprintf("Saw same jump XDP map ID %d more than once", v.XDPPolicy()))
+				xdpIDsSeen.Add(v.XDPPolicy())
+
+				Expect(v.IngressPolicy()).NotTo(Equal(-1), "WEPs should have ingress pol")
+				Expect(tcIDsSeen.Contains(v.IngressPolicy())).To(BeFalse(), "Saw same jump map ID more than once")
+				tcIDsSeen.Add(v.IngressPolicy())
+
+				Expect(v.EgressPolicy()).NotTo(Equal(-1), "WEPs should have egress pol")
+				Expect(tcIDsSeen.Contains(v.EgressPolicy())).To(BeFalse(), "Saw same jump map ID more than once")
+				tcIDsSeen.Add(v.EgressPolicy())
+
+				Expect(v.TcIngressFilter()).To(Equal(-1), "should be no filters in use")
+				Expect(v.TcEgressFilter()).To(Equal(-1), "should be no filters in use")
+			}
 		})
 
 		It("should clean up with update", func() {
@@ -1254,5 +1528,107 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			// changed.
 			Expect(changes).To(Equal(4))
 		})
+	})
+})
+
+var _ = Describe("jumpMapAlloc tests", func() {
+	var jma *jumpMapAlloc
+
+	BeforeEach(func() {
+		jma = newJumpMapAlloc(5)
+	})
+
+	It("should give initial values in order", func() {
+		for i := 0; i < 5; i++ {
+			idx, err := jma.Get("test")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(idx).To(Equal(i))
+		}
+		idx, err := jma.Get("test")
+		Expect(err).To(HaveOccurred())
+		Expect(idx).To(Equal(-1))
+	})
+
+	It("should allow explicit assign", func() {
+		// Free stack is [4,3,2,1,0] to begin with
+
+		err := jma.Assign(0, "test")
+		Expect(err).NotTo(HaveOccurred())
+		// Free stack now [4,3,2,1] -> 0
+
+		err = jma.Assign(3, "test")
+		Expect(err).NotTo(HaveOccurred())
+		// 3 gets swapped to end then popped:
+		// Free stack now [4,1,2] -> 3
+
+		Expect(jma.Get("test")).To(Equal(2))
+		Expect(jma.Get("test")).To(Equal(1))
+		Expect(jma.Get("test")).To(Equal(4))
+		_, err = jma.Get("test")
+		Expect(err).To(HaveOccurred())
+	})
+
+	It("should re-use items put back", func() {
+		idx0, err := jma.Get("test0")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(idx0).To(Equal(0))
+		idx1, err := jma.Get("test1")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(idx1).To(Equal(1))
+		Expect(jma.Put(idx0, "test0")).To(Succeed())
+		// Should re-use the value we put back in.
+		idx2, err := jma.Get("test2")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(idx2).To(Equal(0))
+	})
+
+	It("should assign ownership when calling Assign", func() {
+		err := jma.Assign(3, "test0")
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(jma.Put(3, "test1")).NotTo(Succeed())
+		Expect(jma.Put(3, "test0")).To(Succeed())
+	})
+
+	It("should reject Put from wrong owner", func() {
+		idx0, err := jma.Get("test0")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(idx0).To(Equal(0))
+		idx1, err := jma.Get("test1")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(idx1).To(Equal(1))
+
+		Expect(jma.Put(idx0, "test1")).NotTo(Succeed())
+
+		// Should ignore the value we put back in.
+		idx2, err := jma.Get("test2")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(idx2).To(Equal(2))
+	})
+
+	It("should reject Put if already free", func() {
+		idx0, err := jma.Get("test0")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(idx0).To(Equal(0))
+
+		Expect(jma.Put(idx0, "")).NotTo(Succeed())
+		Expect(jma.Put(idx0, "test0")).To(Succeed())
+		Expect(jma.Put(idx0, "test0")).NotTo(Succeed())
+		Expect(jma.Put(idx0, "test1")).NotTo(Succeed())
+	})
+
+	It("should reject Assign if already assigned", func() {
+		idx0, err := jma.Get("test0")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(idx0).To(Equal(0))
+
+		Expect(jma.Assign(idx0, "")).NotTo(Succeed())
+		Expect(jma.Assign(idx0, "test0")).NotTo(Succeed())
+		Expect(jma.Assign(idx0, "test1")).NotTo(Succeed())
+	})
+
+	It("should reject Assign out of range", func() {
+		Expect(jma.Assign(-1, "test0")).NotTo(Succeed())
+		Expect(jma.Assign(10, "test0")).NotTo(Succeed())
 	})
 })
