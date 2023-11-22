@@ -21,15 +21,19 @@ import (
 )
 
 const (
-	MaxEntries    = 10000
-	XDPMaxEntries = 100
+	TCMaxEntryPoints = 10000
+	// TCMaxEntries is the size fo the map, i.e. all possible sub-programs.
+	TCMaxEntries = TCMaxEntryPoints
+
+	XDPMaxEntryPoints = 100
+	XDPMaxEntries     = XDPMaxEntryPoints
 )
 
 var MapParameters = maps.MapParameters{
 	Type:       "prog_array",
 	KeySize:    4,
 	ValueSize:  4,
-	MaxEntries: MaxEntries,
+	MaxEntries: TCMaxEntries,
 	Name:       "cali_jump",
 	Version:    2,
 }
