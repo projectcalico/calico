@@ -85,22 +85,14 @@ build:
 	$(MAKE) $(BINDIR)/dikastes-$(ARCH) ARCH=$(ARCH)
 	$(MAKE) $(BINDIR)/healthz-$(ARCH) ARCH=$(ARCH)
 
-$(BINDIR)/dikastes-amd64: ARCH=amd64
-$(BINDIR)/dikastes-arm64: ARCH=arm64
-$(BINDIR)/dikastes-ppc64le: ARCH=ppc64le
-$(BINDIR)/dikastes-s390x: ARCH=s390x
-$(BINDIR)/dikastes-%: protobuf $(SRC_FILES)
+$(BINDIR)/dikastes-$(ARCH): protobuf $(SRC_FILES)
 ifeq ($(FIPS),true)
 	$(call build_cgo_boring_binary, ./cmd/dikastes, $@)
 else
 	$(call build_binary, ./cmd/dikastes, $@)
 endif
 
-$(BINDIR)/healthz-amd64: ARCH=amd64
-$(BINDIR)/healthz-arm64: ARCH=arm64
-$(BINDIR)/healthz-ppc64le: ARCH=ppc64le
-$(BINDIR)/healthz-s390x: ARCH=s390x
-$(BINDIR)/healthz-%: protobuf $(SRC_FILES)
+$(BINDIR)/healthz-$(ARCH): protobuf $(SRC_FILES)
 ifeq ($(FIPS),true)
 	$(call build_cgo_boring_binary, ./cmd/healthz, $@)
 else
