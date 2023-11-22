@@ -71,17 +71,10 @@ build: $(BINDIR)/node-driver-registrar-$(ARCH) bin/flexvol-$(ARCH) $(BINDIR)/csi
 
 # We need CGO to leverage Boring SSL.  However, pod2daemon doesn't perform any crypto,
 # so we can disable it across the board.
-bin/flexvol-amd64: ARCH=amd64
-bin/flexvol-arm64: ARCH=arm64
-bin/flexvol-ppc64le: ARCH=ppc64le
-bin/flexvol-s390x: ARCH=s390x
-bin/flexvol-%: $(SRC_FILES)
+bin/flexvol-$(ARCH): $(SRC_FILES)
 	$(call build_binary, flexvol/flexvoldriver.go, $@)
 
-$(BINDIR)/csi-driver-arm64: ARCH=arm64
-$(BINDIR)/csi-driver-ppc64le: ARCH=ppc64le
-$(BINDIR)/csi-driver-s390x: ARCH=s390x
-$(BINDIR)/csi-driver-%: $(SRC_FILES)
+$(BINDIR)/csi-driver-$(ARCH): $(SRC_FILES)
 	$(call build_binary, csidriver/main.go, $@)
 
 UPSTREAM_REGISTRAR_PROJECT ?= kubernetes-csi/$(REGISTRAR_IMAGE)
