@@ -880,7 +880,7 @@ push-image-arch-to-registry-%:
 push-manifests: var-require-all-IMAGETAG  $(addprefix sub-manifest-,$(call escapefs,$(PUSH_MANIFEST_IMAGES)))
 sub-manifest-%:
 	$(DOCKER) manifest create $(call unescapefs,$*):$(IMAGETAG) $(addprefix --amend ,$(addprefix $(call unescapefs,$*):$(IMAGETAG)-,$(VALIDARCHES)))
-	$(DOCKER) manifest push $(call unescapefs,$*):$(IMAGETAG)
+	$(DOCKER) manifest push --purge $(call unescapefs,$*):$(IMAGETAG)
 
 # cd-common tags and pushes images with the branch name and git version. This target uses PUSH_IMAGES, BUILD_IMAGE,
 # and BRANCH_NAME env variables to figure out what to tag and where to push it to.
