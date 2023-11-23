@@ -816,6 +816,8 @@ var _ = Describe("BPF Syncer", func() {
 			Expect(ok).To(BeTrue())
 			Expect(val1.Count()).To(Equal(uint32(4)))
 			Expect(val1.LocalCount()).To(Equal(uint32(2)))
+			// ClusterIP only reflects internal traffic policy, not the external one
+			Expect(val1.Flags()).To(Equal(uint32(nat.NATFlgInternalLocal)))
 
 			val2, ok := svcs.m[nat.NewNATKey(net.IPv4(192, 168, 0, 1), 4444, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))]
 			Expect(ok).To(BeTrue())
