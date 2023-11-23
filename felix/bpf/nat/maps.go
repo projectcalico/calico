@@ -249,18 +249,20 @@ func (v FrontendValue) Flags() uint32 {
 
 func (v FrontendValue) FlagsAsString() string {
 	flgs := v.Flags()
+	if flgs == 0 {
+		return ""
+	}
+
 	fstr := ""
 
-	for i := 0; i < 32; i++ {
-		flg := uint32(1 << i)
-		if flgs&flg != 0 {
-			fstr += flgTostr[int(flg)]
+	for flg, str := range flgTostr {
+		if flgs&uint32(flg) != 0 {
+			fstr += str + ", "
 		}
-		flgs &= ^flg
-		if flgs == 0 {
-			break
-		}
-		fstr += ", "
+	}
+
+	if fstr != "" {
+		fstr = fstr[:len(fstr)-2]
 	}
 
 	return fstr
