@@ -780,7 +780,12 @@ func (s *Syncer) updateService(skey svcKey, sinfo k8sp.ServicePort, id uint32, e
 		cnt++
 	}
 
-	if err := s.writeSvc(sinfo, id, cnt, local, 0); err != nil {
+	flags := uint32(0)
+	if sinfo.InternalPolicyLocal() {
+		flags |= nat.NATFlgInternalLocal
+	}
+
+	if err := s.writeSvc(sinfo, id, cnt, local, flags); err != nil {
 		return 0, 0, err
 	}
 
