@@ -2463,9 +2463,14 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						clusterIP := testSvc.Spec.ClusterIP
 						port := uint16(testSvc.Spec.Ports[0].Port)
 
-						cc.ExpectSome(w[0][1], TargetIP(clusterIP), port)
-						cc.ExpectSome(w[1][0], TargetIP(clusterIP), port)
-						cc.ExpectSome(w[1][1], TargetIP(clusterIP), port)
+						exp := Some
+						if intLocal {
+							exp = None
+						}
+
+						cc.Expect(Some, w[0][1], TargetIP(clusterIP), ExpectWithPorts(port))
+						cc.Expect(exp, w[1][0], TargetIP(clusterIP), ExpectWithPorts(port))
+						cc.Expect(exp, w[1][1], TargetIP(clusterIP), ExpectWithPorts(port))
 						cc.CheckConnectivity()
 					})
 
@@ -2476,12 +2481,12 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							node0IP := felixes[0].IP
 							node1IP := felixes[1].IP
 
-							// Should work through the nodeport where the pods is
+							// Should work through the nodeport from a pod on the node where the backend is
 							cc.ExpectSome(w[0][1], TargetIP(node0IP), npPort)
-							cc.ExpectSome(w[1][0], TargetIP(node0IP), npPort)
-							cc.ExpectSome(w[1][1], TargetIP(node0IP), npPort)
 
-							// Should not work through the nodeport where the pod isn't
+							// Should not work through the nodeport from a node where the backend is not.
+							cc.ExpectNone(w[1][0], TargetIP(node0IP), npPort)
+							cc.ExpectNone(w[1][1], TargetIP(node0IP), npPort)
 							cc.ExpectNone(w[0][1], TargetIP(node1IP), npPort)
 							cc.ExpectNone(w[1][0], TargetIP(node1IP), npPort)
 							cc.ExpectNone(w[1][1], TargetIP(node1IP), npPort)
