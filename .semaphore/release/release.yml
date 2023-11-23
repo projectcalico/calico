@@ -6,7 +6,7 @@ agent:
     os_image: ubuntu2004
 
 execution_time_limit:
-  minutes: 180
+  minutes: 600
 
 blocks:
   - name: "Publish official release"
@@ -19,6 +19,7 @@ blocks:
       - name: docker
       - name: oss-release-secrets
       - name: google-service-account-for-gce
+      - name: openstack-signing-publishing
       prologue:
         commands:
         # Load the github access secrets.  First fix the permissions.
@@ -43,12 +44,28 @@ blocks:
         - gcloud auth activate-service-account --key-file=${GOOGLE_APPLICATION_CREDENTIALS}
       jobs:
       - name: "Release on GCP VM"
+        execution_time_limit:
+          minutes: 180
         env_vars:
         - name: VAR_FILE
           value: /home/semaphore/secrets/release.tfvars
         commands:
         - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make GIT_BRANCH=${SEMAPHORE_GIT_BRANCH} -C hack/release release; fi
         - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make GIT_BRANCH=${SEMAPHORE_GIT_BRANCH} -C hack/release release-publish; fi
+      - name: "Build Openstack Packages"
+        execution_time_limit:
+          minutes: 60
+        env_vars:
+        - name: SECRET_KEY
+          value: ~/secrets/launchpad-gpg-key-dfox.key
+        - name: GCLOUD_ARGS
+          value: --zone us-east1-c --project tigera-wp-tcp-redirect
+        - name: HOST
+          value: ubuntu@binaries-projectcalico-org
+        commands:
+        - sudo apt update
+        - sudo apt install -y moreutils
+        - make publish-openstack
       epilogue:
         always:
           commands:
