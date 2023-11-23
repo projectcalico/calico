@@ -198,6 +198,10 @@ function do_felix {
     # RPM golang build dependencies that is exactly equivalent to our
     # containerized builds.
     make bin/calico-felix
+    # Felix is built with RHEL/UBI and links against libpcap.so.1. We need this patchelf
+    # until Debian changes the soname from .0.8 to .1.
+    # FIXME remove the following patchelf command once Debian dependency is updated.
+    patchelf --replace-needed libpcap.so.1 libpcap.so.0.8 bin/calico-felix
     # Remove all the files that were added by that build, except for the
     # bin/calico-felix binary.
     rm -f bin/calico-felix-amd64
