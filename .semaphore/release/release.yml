@@ -64,7 +64,7 @@ blocks:
           value: ubuntu@binaries-projectcalico-org
         commands:
         - sudo apt update
-        - sudo apt install -y moreutils
+        - sudo apt install -y moreutils patchelf
         - make publish-openstack
       epilogue:
         always:
