@@ -25,8 +25,9 @@ Architecture: amd64 ppc64el
 Depends:
  calico-common (= ${binary:Version}),
  conntrack,
- ipset,
  iproute2,
+ ipset,
+ libpcap0.8,
  net-tools,
  ${misc:Depends},
  ${shlibs:Depends}
