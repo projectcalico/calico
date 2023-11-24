@@ -27,7 +27,7 @@ global_job_config:
     - export GCLOUD_ARGS='--zone us-east1-c --project tigera-wp-tcp-redirect'
     - export HOST=ubuntu@binaries-projectcalico-org
     - sudo apt-get update -y
-    - sudo apt-get install -y moreutils
+    - sudo apt-get install -y moreutils patchelf
 
 blocks:
   - name: 'Publish openstack packages'
