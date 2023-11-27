@@ -1352,7 +1352,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							// Wait for the pool change to take effect
 							Eventually(func() string {
 								return bpfDumpRoutes(tc.Felixes[0])
-							}, "60s", "1s").ShouldNot(ContainSubstring("workload in-pool nat-out"))
+							}, "5s", "1s").ShouldNot(ContainSubstring("workload in-pool nat-out"))
 
 							cc.ResetExpectations()
 							cc.ExpectSNAT(w[0][0], w[0][0].IP, hostW[1])
@@ -1366,7 +1366,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							// Wait for the pool change to take effect
 							Eventually(func() string {
 								return bpfDumpRoutes(tc.Felixes[0])
-							}, "60s", "1s").Should(ContainSubstring("workload in-pool nat-out"))
+							}, "5s", "1s").Should(ContainSubstring("workload in-pool nat-out"))
 
 							cc.ResetExpectations()
 							cc.ExpectSNAT(w[0][0], felixIP(0), hostW[1])
@@ -5034,7 +5034,8 @@ func conntrackFlushWorkloadEntries(felixes []*infrastructure.Felix) func() {
 	return func() {
 		for _, felix := range felixes {
 			for _, w := range felix.Workloads {
-				if w.GetIP() == felix.GetIP() {
+				wIP := w.GetIP()
+				if wIP == felix.GetIP() || wIP == felix.GetIPv6() {
 					continue // Skip host-networked workloads.
 				}
 				for _, dirn := range []string{"--orig-src", "--orig-dst", "--reply-dst", "--reply-src"} {
