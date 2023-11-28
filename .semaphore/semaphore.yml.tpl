@@ -676,7 +676,7 @@ blocks:
 
 - name: 'crypto'
   run:
-    when: "false or change_in(['/lib.Makefile', '/crypto/'])"
+    when: "${FORCE_RUN} or change_in(['/lib.Makefile', '/crypto/'])"
   dependencies: ["Prerequisites"]
   task:
     prologue:
