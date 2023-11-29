@@ -14,40 +14,51 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-set -ex
+set -e
 
 FV_DIR="/home/semaphore/calico/process/testing/winfv"
+ERROR_CODE=0
 
 pushd ${FV_DIR}
 # Prepare local files
 cp ~/.docker/config.json docker_auth.json
-cp ~/$SEMAPHORE_GIT_DIR/felix/bin/calico-felix.exe .
-cp ~/$SEMAPHORE_GIT_DIR/felix/fv/win-fv.exe .
 
-# Prepare key for windows fv.
-ssh-keygen -f master_ssh_key -N ''
-puttygen ${MASTER_CONNECT_KEY} -O private -o ${WIN_PPK_KEY}
-chmod 600 $WIN_PPK_KEY
-aws ec2 import-key-pair --key-name ${KEYPAIR_NAME} --public-key-material file://${MASTER_CONNECT_KEY_PUB}
+if [[ $FV_PROVISIONER == "aws" ]]; then
+  cp ~/$SEMAPHORE_GIT_DIR/felix/bin/calico-felix.exe .
+  cp ~/$SEMAPHORE_GIT_DIR/felix/fv/win-fv.exe .
+  # Prepare key for windows fv.
+  ssh-keygen -f master_ssh_key -N ''
+  puttygen ${MASTER_CONNECT_KEY} -O private -o ${WIN_PPK_KEY}
+  chmod 600 $WIN_PPK_KEY
+  aws ec2 import-key-pair --key-name ${KEYPAIR_NAME} --public-key-material file://${MASTER_CONNECT_KEY_PUB}
 
-# Set up the cluster.
-NAME_PREFIX="$CLUSTER_NAME" KUBE_VERSION="${K8S_VERSION}" WINDOWS_KEYPAIR_NAME="$KEYPAIR_NAME" WINDOWS_PEM_FILE="$MASTER_CONNECT_KEY" WINDOWS_PPK_FILE="$WIN_PPK_KEY" WINDOWS_OS="Windows${WINDOWS_VERSION}container" BACKEND=${BACKEND} /bin/bash -x ./setup-fv.sh -q | tee fv.log
+  # Set up the cluster.
+  NAME_PREFIX="$CLUSTER_NAME" KUBE_VERSION="${K8S_VERSION}" WINDOWS_KEYPAIR_NAME="$KEYPAIR_NAME" WINDOWS_PEM_FILE="$MASTER_CONNECT_KEY" WINDOWS_PPK_FILE="$WIN_PPK_KEY" WINDOWS_OS="Windows${WINDOWS_VERSION}container" BACKEND=${BACKEND} /bin/bash -x ./setup-fv.sh -q | tee fv.log
 
-# Run FV
-MASTER_IP=$(grep ubuntu@ fv.log | cut -d '@' -f2)
-SSH_CMD=$(echo ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ${MASTER_CONNECT_KEY} ubuntu@${MASTER_IP})
+  # Run FV
+  MASTER_IP=$(grep ubuntu@ fv.log | cut -d '@' -f2)
+  SSH_CMD=$(echo ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ${MASTER_CONNECT_KEY} ubuntu@${MASTER_IP})
 
-${SSH_CMD} ls -ltr /home/ubuntu
-${SSH_CMD} ls -ltr /home/ubuntu/winfv
-${SSH_CMD} touch /home/ubuntu/winfv/file-ready
-${SSH_CMD} time /home/ubuntu/winfv/wait-report.sh
-${SSH_CMD} ls -ltr /home/ubuntu/report
-popd
+  ${SSH_CMD} ls -ltr /home/ubuntu
+  ${SSH_CMD} ls -ltr /home/ubuntu/winfv
+  ${SSH_CMD} touch /home/ubuntu/winfv/file-ready
+  ${SSH_CMD} time /home/ubuntu/winfv/wait-report.sh
+  ${SSH_CMD} ls -ltr /home/ubuntu/report
+  popd
 
-# Get results and logs
-SCP_CMD=$(echo scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ${FV_DIR}/${MASTER_CONNECT_KEY})
-${SCP_CMD} -r ubuntu@${MASTER_IP}:/home/ubuntu/report /home/semaphore
-
+  # Get results and logs
+  SCP_CMD=$(echo scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ${FV_DIR}/${MASTER_CONNECT_KEY})
+  ${SCP_CMD} -r ubuntu@${MASTER_IP}:/home/ubuntu/report /home/semaphore
+elif [[ $FV_PROVISIONER == "capz" ]]; then
+  chmod +x $FV_DIR/capz/create-cluster.sh
+  chmod +x $FV_DIR/capz/install-calico.sh
+  chmod +x $FV_DIR/capz/generate-helpers.sh
+  export KUBE_VERSION="$K8S_VERSION"
+  /bin/bash -x ./setup-fv-capz.sh -q | tee fv.log
+  if [[ ${PIPESTATUS[0]} != 0 ]]; then
+    ERROR_CODE=${PIPESTATUS[0]}
+  fi
+fi
 ls -ltr ./report
 mkdir /home/semaphore/fv.log
 # check if *.log glob contains any files so that mv doesn't fail
@@ -70,7 +81,7 @@ for log_file in /home/semaphore/fv.log/*.log; do
 done;
 
 # Search for error code file
-if [ -f /home/semaphore/report/error-codes ];
+if [[ -f /home/semaphore/report/error-codes || $ERROR_CODE != 0 ]];
 then
     echo "Windows FV returned error(s)."
     exit 1

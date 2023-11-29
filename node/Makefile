@@ -517,7 +517,7 @@ $(WINDOWS_ARCHIVE_ROOT)/libs/hns/License.txt:
 
 ## Download NSSM.
 windows-packaging/nssm.zip:
-	curl -sSf -L --retry 5 -o $@ https://nssm.cc/ci/nssm-$(WINDOWS_NSSM_VERSION).zip
+	curl -sSf -L --retry 5 -o $@ $(WINDOWS_NSSM_URL)
 
 windows-packaging/nssm.exe: windows-packaging/nssm.zip
 	cd windows-packaging && \
