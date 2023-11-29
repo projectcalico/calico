@@ -1,0 +1,26 @@
+spec:
+  template:
+    spec:
+      containers:
+        - args:
+            - $env:CONTAINER_SANDBOX_MOUNT_POINT/CalicoWindows/felix-service.ps1
+          env:
+            - name: FELIX_HEALTHENABLED
+              value: "true"
+          image: docker.io/library/node-windows:latest
+          imagePullPolicy: IfNotPresent
+          name: felix
+        - args:
+            - $env:CONTAINER_SANDBOX_MOUNT_POINT/CalicoWindows/node-service.ps1
+          env:
+            - name: FELIX_HEALTHENABLED
+              value: "true"
+          image: docker.io/library/node-windows:latest
+          imagePullPolicy: IfNotPresent
+          name: node
+      initContainers:
+        - args:
+            - $env:CONTAINER_SANDBOX_MOUNT_POINT/uninstall-calico.ps1
+          image: docker.io/library/node-windows:latest
+          imagePullPolicy: IfNotPresent
+          name: uninstall-calico
