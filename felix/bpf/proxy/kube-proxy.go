@@ -20,23 +20,18 @@ import (
 
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
-	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/projectcalico/calico/felix/bpf/bpfmap"
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/routes"
+	"github.com/projectcalico/calico/felix/ip"
 )
-
-func init() {
-	// Alpha since 1.21 Beta since 1.22 default true - no harm in supporting it by default.
-	_ = utilfeature.DefaultMutableFeatureGate.Set("ServiceInternalTrafficPolicy=true")
-}
 
 // KubeProxy is a wrapper of Proxy that deals with higher level issue like
 // configuration, restarting etc.
 type KubeProxy struct {
-	proxy  Proxy
+	proxy  ProxyFrontend
 	syncer DPSyncer
 
 	ipFamily      int
@@ -55,12 +50,14 @@ type KubeProxy struct {
 	rt          *RTCache
 	opts        []Option
 
+	excludedCIDRs *ip.CIDRTrie
+
 	dsrEnabled bool
 }
 
 // StartKubeProxy start a new kube-proxy if there was no error
 func StartKubeProxy(k8s kubernetes.Interface, hostname string,
-	bpfMaps *bpfmap.Maps, opts ...Option) (*KubeProxy, error) {
+	bpfMaps *bpfmap.IPMaps, opts ...Option) (*KubeProxy, error) {
 
 	kp := &KubeProxy{
 		k8s:         k8s,
@@ -134,7 +131,30 @@ func (kp *KubeProxy) run(hostIPs []net.IP) error {
 		withLocalNP = append(withLocalNP, podNPIPV6)
 	}
 
-	syncer, err := NewSyncer(kp.ipFamily, withLocalNP, kp.frontendMap, kp.backendMap, kp.affinityMap, kp.rt)
+	syncer, err := NewSyncer(kp.ipFamily, withLocalNP, kp.frontendMap, kp.backendMap, kp.affinityMap,
+		kp.rt, kp.excludedCIDRs)
+	if err != nil {
+		return errors.WithMessage(err, "new bpf syncer")
+	}
+
+	kp.proxy.SetSyncer(syncer)
+
+	log.Infof("kube-proxy v%d node info updated, hostname=%q hostIPs=%+v", kp.ipFamily, kp.hostname, hostIPs)
+
+	kp.syncer = syncer
+
+	return nil
+}
+
+func (kp *KubeProxy) start() error {
+	var withLocalNP []net.IP
+	if kp.ipFamily == 4 {
+		withLocalNP = append(withLocalNP, podNPIP)
+	} else {
+		withLocalNP = append(withLocalNP, podNPIPV6)
+	}
+
+	syncer, err := NewSyncer(kp.ipFamily, withLocalNP, kp.frontendMap, kp.backendMap, kp.affinityMap, kp.rt, kp.excludedCIDRs)
 	if err != nil {
 		return errors.WithMessage(err, "new bpf syncer")
 	}
@@ -144,20 +164,15 @@ func (kp *KubeProxy) run(hostIPs []net.IP) error {
 		return errors.WithMessage(err, "new proxy")
 	}
 
-	log.Infof("kube-proxy v%d started, hostname=%q hostIPs=%+v", kp.ipFamily, kp.hostname, hostIPs)
-
+	kp.lock.Lock()
 	kp.proxy = proxy
 	kp.syncer = syncer
-
-	return nil
-}
-
-func (kp *KubeProxy) start() error {
+	kp.lock.Unlock()
 
 	// wait for the initial update
 	hostIPs := <-kp.hostIPUpdates
 
-	err := kp.run(hostIPs)
+	err = kp.run(hostIPs)
 	if err != nil {
 		return err
 	}
@@ -166,39 +181,19 @@ func (kp *KubeProxy) start() error {
 	go func() {
 		defer kp.wg.Done()
 		for {
-			hostIPs, ok := <-kp.hostIPUpdates
-			if !ok {
-				defer log.Error("kube-proxy stopped since hostIPUpdates closed")
-				kp.proxy.Stop()
-				return
-			}
-
-			stopped := make(chan struct{})
-
-			go func() {
-				defer close(stopped)
-				defer log.Info("kube-proxy stopped to restart with updated host IPs")
-				kp.proxy.Stop()
-			}()
-
-		waitforstop:
-			for {
-				select {
-				case hostIPs, ok = <-kp.hostIPUpdates:
-					if !ok {
-						log.Error("kube-proxy: hostIPUpdates closed")
-						return
-					}
-				case <-kp.exiting:
-					log.Info("kube-proxy: exiting")
+			select {
+			case hostIPs, ok := <-kp.hostIPUpdates:
+				if !ok {
+					log.Error("kube-proxy: hostIPUpdates closed")
 					return
-				case <-stopped:
-					err = kp.run(hostIPs)
-					if err != nil {
-						log.Panic("kube-proxy failed to start after host IPs update")
-					}
-					break waitforstop
 				}
+				err = kp.run(hostIPs)
+				if err != nil {
+					log.Panic("kube-proxy failed to resync after host IPs update")
+				}
+			case <-kp.exiting:
+				log.Info("kube-proxy: exiting")
+				return
 			}
 		}
 	}()
@@ -257,7 +252,7 @@ func (kp *KubeProxy) ConntrackFrontendHasBackend(ip net.IP, port uint16, backend
 	backendPort uint16, proto uint8) bool {
 
 	// Thanks to holding the lock since ConntrackScanStart, this condition holds for the
-	// whole iteration. So if we started without syncer, we willalso finish without it.
+	// whole iteration. So if we started without syncer, we will also finish without it.
 	// And if we had a syncer, we will have the same until the end.
 	if kp.syncer != nil {
 		return kp.syncer.ConntrackFrontendHasBackend(ip, port, backendIP, backendPort, proto)

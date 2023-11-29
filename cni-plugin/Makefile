@@ -26,7 +26,7 @@ WINFV_SRCFILES=$(shell find win_tests -name '*.go')
 CURL=curl -C - -sSf
 
 # Use forked CNI plugin URL and corresponding tagged artifacts.
-CNI_VERSION=v1.1.1-calico+go-1.20.7
+CNI_VERSION=v1.1.1-calico+go-1.21.4
 CNI_ARTIFACTS_URL=https://github.com/projectcalico/containernetworking-plugins/releases/download
 FLANNEL_VERSION=v1.2.0
 
@@ -56,10 +56,10 @@ clean: clean-windows
 	# Clean .created files which indicate images / releases have been built.
 	find . -name '.*.created*' -type f -delete
 	find . -name '.*.published*' -type f -delete
-	rm -rf $(BIN) bin $(DEPLOY_CONTAINER_MARKER) .go-pkg-cache pkg/install/install.test
 	rm -f *.created
-	rm -rf config/
-	rm -rf dist/
+	rm -rf bin $(DEPLOY_CONTAINER_MARKER) pkg/install/install.test
+	rm -rf config/ dist/
+	-docker image rm -f $$(docker images $(CNI_PLUGIN_IMAGE) -a -q)
 
 clean-windows: clean-windows-builder
 	rm -rf $(WINDOWS_BIN) $(WINDOWS_DIST)
@@ -74,34 +74,40 @@ ifeq ($(ARCH),amd64)
 WINDOWS_BIN=bin/windows
 build: $(WINDOWS_BIN)/install.exe $(WINDOWS_BIN)/calico.exe $(WINDOWS_BIN)/calico-ipam.exe
 endif
-# If ARCH is arm based, find the requested version/variant
-ifeq ($(word 1,$(subst v, ,$(ARCH))),arm)
-ARM_VERSION := $(word 2,$(subst v, ,$(ARCH)))
-endif
-# Define go architecture flags to support arm variants
-GOARCH_FLAGS :=-e GOARCH=$(ARCH)
-ifdef ARM_VERSION
-GOARCH_FLAGS :=-e GOARCH=arm -e GOARM=$(ARM_VERSION)
-endif
 
 build-all: $(addprefix sub-build-,$(VALIDARCHES))
 sub-build-%:
 	$(MAKE) build ARCH=$*
 
-## Build the Calico network plugin and ipam plugins
+## Build the Calico installation binary for the network and ipam plugins
 $(BIN)/install binary: $(SRC_FILES)
 ifeq ($(FIPS),true)
+	$(call build_cgo_boring_binary, $(PACKAGE_NAME)/cmd/install, $@)
+else
+	$(call build_binary, $(PACKAGE_NAME)/cmd/install, $@)
+endif
+
+## Build the Calico network and ipam plugins
+$(BIN)/calico: $(SRC_FILES)
+ifeq ($(FIPS), true)
 	$(call build_cgo_boring_binary, $(PACKAGE_NAME)/cmd/calico, $@)
 else
 	$(call build_binary, $(PACKAGE_NAME)/cmd/calico, $@)
 endif
 
-## Build the Calico network plugin and ipam plugins for Windows
+$(BIN)/calico-ipam: $(BIN)/calico
+	cp "$<" "$@"
+
+## Build the Calico network and ipam plugins for Windows
 $(WINDOWS_BIN)/install.exe: $(SRC_FILES)
+	mkdir -p $(WINDOWS_BIN)
+	$(call build_windows_binary, $(PACKAGE_NAME)/cmd/install, $@)
+
+$(WINDOWS_BIN)/calico.exe: $(SRC_FILES)
 	mkdir -p $(WINDOWS_BIN)
 	$(call build_windows_binary, $(PACKAGE_NAME)/cmd/calico, $@)
 
-$(WINDOWS_BIN)/calico-ipam.exe $(WINDOWS_BIN)/calico.exe: $(WINDOWS_BIN)/install.exe
+$(WINDOWS_BIN)/calico-ipam.exe: $(WINDOWS_BIN)/calico.exe
 	cp "$<" "$@"
 
 # NOTE: WINDOWS_IMAGE_REQS must be defined with the requirements to build the windows
@@ -115,21 +121,19 @@ image-windows: $(WINDOWS_IMAGE_REQS)
 # Building the image
 ###############################################################################
 image: $(DEPLOY_CONTAINER_MARKER)
-image-all: $(addprefix sub-image-,$(VALIDARCHES)) sub-image-fips-amd64
+image-all: $(addprefix sub-image-,$(VALIDARCHES))
 sub-image-%:
-	$(MAKE) image ARCH=$*
-sub-image-fips-%:
-	$(MAKE) image FIPS=true ARCH=$*
+	$(MAKE) image FIPS=$(FIPS) ARCH=$*
 
 # Builds the statically compiled binaries into a container.
-$(DEPLOY_CONTAINER_STATIC_MARKER): Dockerfile.$(ARCH) build fetch-cni-bins
-	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BIN) -t $(CNI_PLUGIN_IMAGE):latest-$(ARCH) -f Dockerfile.$(ARCH) . --load
+$(DEPLOY_CONTAINER_STATIC_MARKER): Dockerfile build fetch-cni-bins
+	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BIN) -t $(CNI_PLUGIN_IMAGE):latest-$(ARCH) -f Dockerfile .
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 
 # Builds the FIPS binaries into a container.
-$(DEPLOY_CONTAINER_FIPS_MARKER): Dockerfile.$(ARCH) build fetch-cni-bins
-	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BIN) -t $(CNI_PLUGIN_IMAGE):latest-fips-$(ARCH) -f Dockerfile.$(ARCH) . --load
+$(DEPLOY_CONTAINER_FIPS_MARKER): Dockerfile build fetch-cni-bins
+	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BIN) -t $(CNI_PLUGIN_IMAGE):latest-fips-$(ARCH) -f Dockerfile .
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
 	touch $@
 
@@ -159,15 +163,11 @@ ut: run-k8s-controller-manager $(BIN)/install $(BIN)/host-local $(BIN)/calico-ip
 	$(MAKE) ut-datastore DATASTORE_TYPE=etcdv3
 	$(MAKE) ut-datastore DATASTORE_TYPE=kubernetes
 
-$(BIN)/calico-ipam $(BIN)/calico: $(BIN)/install
-	cp "$<" "$@"
-
 ut-datastore:
 	# The tests need to run as root
 	docker run --rm -t --privileged --net=host \
 	$(EXTRA_DOCKER_ARGS) \
 	-e ETCD_IP=$(LOCAL_IP_ENV) \
-	-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 	-e RUN_AS_ROOT=true \
 	-e ARCH=$(ARCH) \
 	-e PLUGIN=calico \

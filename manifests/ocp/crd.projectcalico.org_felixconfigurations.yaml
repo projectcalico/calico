@@ -118,6 +118,13 @@ spec:
                   Loose]'
                 pattern: ^(?i)(Disabled|Strict|Loose)?$
                 type: string
+              bpfExcludeCIDRsFromNAT:
+                description: BPFExcludeCIDRsFromNAT is a list of CIDRs that are to
+                  be excluded from NAT resolution so that host can handle them. A
+                  typical usecase is node local DNS cache.
+                items:
+                  type: string
+                type: array
               bpfExtToServiceConnmark:
                 description: 'BPFExtToServiceConnmark in BPF mode, control a 32bit
                   mark that is set on connections from an external client to a local
@@ -160,8 +167,9 @@ spec:
                 - Disabled
                 type: string
               bpfKubeProxyEndpointSlicesEnabled:
-                description: BPFKubeProxyEndpointSlicesEnabled in BPF mode, controls
-                  whether Felix's embedded kube-proxy accepts EndpointSlices or not.
+                description: BPFKubeProxyEndpointSlicesEnabled is deprecated and has
+                  no effect. BPF kube-proxy always accepts endpoint slices. This option
+                  will be removed in the next release.
                 type: boolean
               bpfKubeProxyIptablesCleanupEnabled:
                 description: 'BPFKubeProxyIptablesCleanupEnabled, if enabled in BPF
@@ -280,8 +288,17 @@ spec:
                 type: string
               debugDisableLogDropping:
                 type: boolean
+              debugHost:
+                description: DebugHost is the host IP or hostname to bind the debug
+                  port to.  Only used if DebugPort is set. [Default:localhost]
+                type: string
               debugMemoryProfilePath:
                 type: string
+              debugPort:
+                description: DebugPort if set, enables Felix's debug HTTP port, which
+                  allows memory and CPU profiles to be retrieved.  The debug port
+                  is not secure, it should not be exposed to the internet.
+                type: integer
               debugSimulateCalcGraphHangAfter:
                 pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                 type: string
@@ -595,7 +612,7 @@ spec:
                 description: 'MetadataAddr is the IP address or domain name of the
                   server that can answer VM queries for cloud-init metadata. In OpenStack,
                   this corresponds to the machine running nova-api (or in Ubuntu,
-                  nova-api-metadata). A value of none (case insensitive) means that
+                  nova-api-metadata). A value of none (case-insensitive) means that
                   Felix should not set up any NAT rule for the metadata path. [Default:
                   127.0.0.1]'
                 type: string

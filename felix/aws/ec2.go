@@ -141,7 +141,7 @@ func (updater *EC2SrcDstCheckUpdater) Update(caliCheckOption apiv3.AWSSrcDstChec
 }
 
 // Interface for EC2 Metadata service.
-type ec2MetadaAPI interface {
+type ec2MetadataAPI interface {
 	GetInstanceIdentityDocument(
 		ctx context.Context, params *imds.GetInstanceIdentityDocumentInput, optFns ...func(*imds.Options),
 	) (*imds.GetInstanceIdentityDocumentOutput, error)
@@ -155,7 +155,7 @@ type ec2API interface {
 	ModifyNetworkInterfaceAttribute(ctx context.Context, params *ec2.ModifyNetworkInterfaceAttributeInput, optFns ...func(*ec2.Options)) (*ec2.ModifyNetworkInterfaceAttributeOutput, error)
 }
 
-func getEC2InstanceID(ctx context.Context, svc ec2MetadaAPI) (string, error) {
+func getEC2InstanceID(ctx context.Context, svc ec2MetadataAPI) (string, error) {
 	idDoc, err := svc.GetInstanceIdentityDocument(ctx, nil)
 	if err != nil {
 		return "", err
@@ -164,7 +164,7 @@ func getEC2InstanceID(ctx context.Context, svc ec2MetadaAPI) (string, error) {
 	return idDoc.InstanceID, nil
 }
 
-func getEC2Region(ctx context.Context, svc ec2MetadaAPI) (string, error) {
+func getEC2Region(ctx context.Context, svc ec2MetadataAPI) (string, error) {
 	region, err := svc.GetRegion(ctx, nil)
 	if err != nil {
 		return "", err

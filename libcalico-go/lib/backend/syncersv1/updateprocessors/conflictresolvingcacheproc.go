@@ -68,7 +68,7 @@ func NewConflictResolvingCacheUpdateProcessor(v3Kind string, converter ConvertV2
 
 type ConvertV2ToV1 func(kvp *model.KVPair) (*model.KVPair, error)
 
-// conflictResolvingCache implements the ConflictRecolvingCache interface.
+// conflictResolvingCache implements the ConflictResolvingCache interface.
 type conflictResolvingCache struct {
 	v3Kind              string
 	converter           ConvertV2ToV1

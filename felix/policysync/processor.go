@@ -417,7 +417,7 @@ func (p *Processor) handleIPSetDeltaUpdate(update *proto.IPSetDeltaUpdate) {
 	id := update.Id
 	log.WithField("ID", id).Debug("Processing IPSetDeltaUpdate")
 
-	// We trust the calc graph to never send us Delta updates for non-existent sets.
+	// We trust the calc graph to never send us Delta updates for nonexistent sets.
 	s := p.ipSetsByID[id]
 	s.deltaUpdate(update)
 
@@ -719,7 +719,7 @@ func splitIPSetDeltaUpdate(update *proto.IPSetDeltaUpdate) []proto.ToDataplane {
 			adds = adds[1:]
 		}
 
-		// Put removes on the message if they fit, but work from end end of the list since that is where
+		// Put removes on the message if they fit, but work from the end of the list since that is where
 		// partial slices will be.
 		end := len(dels) - 1
 		log.Debugf("end %d", end)

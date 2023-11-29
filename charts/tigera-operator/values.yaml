@@ -18,6 +18,9 @@ installation:
 apiServer:
   enabled: true
 
+defaultFelixConfiguration:
+  enabled: false
+
 certs:
   node:
     key:
@@ -43,6 +46,9 @@ tolerations:
 nodeSelector:
   kubernetes.io/os: linux
 
+# PriorityClassName for the tigera/operator pod.
+priorityClassName: ""
+
 # Custom annotations for the tigera/operator pod.
 podAnnotations: {}
 
@@ -59,3 +65,8 @@ calicoctl:
   tag: master
 
 kubeletVolumePluginPath: /var/lib/kubelet
+
+# Optionally configure the host and port used to access the Kubernetes API server.
+kubernetesServiceEndpoint:
+  host: ""
+  port: "6443"

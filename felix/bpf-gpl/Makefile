@@ -43,8 +43,13 @@ CFLAGS +=  \
 TRIPLET := $(shell gcc -dumpmachine)
 CFLAGS += -I/usr/include/$(TRIPLET)
 
-CC := clang-15
-LD := llc-15
+ifeq ($(findstring x86_64,$(TRIPLET)),x86_64)
+	CFLAGS += -D__TARGET_ARCH_x86 -D__x86_64__
+else ifeq ($(findstring aarch64,$(TRIPLET)),aarch64)
+	CFLAGS += -D__TARGET_ARCH_arm64
+endif
+CC := clang-16
+LD := llc
 
 UT_C_FILES:=$(shell find ut -name '*.c')
 UT_OBJS:=$(UT_C_FILES:.c=.o) $(shell ./list-ut-objs)
@@ -52,7 +57,6 @@ UT_OBJS+=ut/ip_parse_test_v6.o
 
 OBJS:=$(shell ./list-objs)
 OBJS+=bin/tc_preamble.o
-OBJS+=bin/tc_preamble_v6.o
 OBJS+=bin/xdp_preamble.o
 OBJS+=bin/policy_default.o
 C_FILES:=tc_preamble.c tc.c connect_balancer.c connect_balancer_v46.c connect_balancer_v6.c xdp_preamble.c xdp.c policy_default.c
@@ -79,11 +83,10 @@ UT_CFLAGS=\
 ut/%.ll: ut/%.c ut/ut.h
 	$(CC) $(UT_CFLAGS) $(CFLAGS) -c $< -o $@
 
+ut/icmp6_port_unreachable.ll: CFLAGS += -DIPVER6
+
 tc_preamble.ll: tc_preamble.c tc_preamble.d
 	$(CC) $(CFLAGS) -c $< -o $@
-
-tc_preamble_v6.ll: tc_preamble.c tc_preamble.d
-	$(CC) $(CFLAGS) -DIPVER6 -c $< -o $@
 
 xdp_preamble.ll: xdp_preamble.c xdp_preamble.d
 	$(CC) $(CFLAGS) -DCALI_COMPILE_FLAGS=64 -c $< -o $@
@@ -112,8 +115,6 @@ test_xdp%.ll: xdp.c xdp.d calculate-flags
 
 LINK=$(LD) -march=bpf -filetype=obj -o $@ $<
 bin/tc_preamble.o: tc_preamble.ll | bin
-	$(LINK)
-bin/tc_preamble_v6.o: tc_preamble_v6.ll | bin
 	$(LINK)
 bin/xdp_preamble.o: xdp_preamble.ll | bin
 	$(LINK)

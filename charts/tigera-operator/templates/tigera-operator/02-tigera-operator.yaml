@@ -32,6 +32,9 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       serviceAccountName: tigera-operator
+{{- if .Values.priorityClassName }}
+      priorityClassName: {{.Values.priorityClassName}}
+{{- end }}
       # Set the termination grace period to match how long the operator will wait for
       # resources to terminate when being uninstalled.
       terminationGracePeriodSeconds: 60

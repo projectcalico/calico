@@ -50,8 +50,7 @@ clean:
 	# Clean .created files which indicate images / releases have been built.
 	find . -name '.*.created*' -type f -delete
 	find . -name '.*.published*' -type f -delete
-	rm -rf .go-pkg-cache \
-		bin \
+	rm -rf bin \
 		docker-image/bin \
 		build \
 		report/*.xml \
@@ -61,23 +60,16 @@ clean:
 	find . -name "coverage.xml" -type f -delete
 	find . -name ".coverage" -type f -delete
 	find . -name "*.pyc" -type f -delete
-	docker rmi $(TYPHA_IMAGE):latest-$(ARCH) || true
-	docker rmi $(TYPHA_IMAGE):latest-fips-$(ARCH) || true
+	-docker image rm -f $$(docker images $(TYPHA_IMAGE) -a -q)
 
 
 ###############################################################################
 # Building the binary
 ###############################################################################
-build: $(BINDIR)/calico-typha
+build: $(BINDIR)/calico-typha-$(ARCH)
 build-all: $(addprefix sub-build-,$(VALIDARCHES))
 sub-build-%:
 	$(MAKE) build ARCH=$*
-
-$(BINDIR)/calico-typha: $(BINDIR)/calico-typha-$(ARCH)
-	ln -f $(BINDIR)/calico-typha-$(ARCH) $(BINDIR)/calico-typha
-
-$(BINDIR)/wrapper: $(BINDIR)/wrapper-$(ARCH)
-	ln -f $(BINDIR)/wrapper-$(ARCH) $(BINDIR)/wrapper
 
 $(BINDIR)/wrapper-$(ARCH): $(SRC_FILES) $(LOCAL_BUILD_DEP)
 ifeq ($(FIPS),true)
@@ -110,11 +102,9 @@ image: $(BUILD_IMAGES)
 
 # Build the image for the target architecture
 .PHONY: image-all
-image-all: $(addprefix sub-image-,$(VALIDARCHES)) sub-image-fips-amd64
+image-all: $(addprefix sub-image-,$(VALIDARCHES))
 sub-image-%:
-	$(MAKE) image ARCH=$*
-sub-image-fips-%:
-	$(MAKE) image FIPS=true ARCH=$*
+	$(MAKE) image FIPS=$(FIPS) ARCH=$*
 
 # Build the calico/typha docker image, which contains only Typha.
 .PHONY: image $(TYPHA_IMAGE)
@@ -124,32 +114,28 @@ TYPHA_IMAGE_ID=$(shell docker images -q $(TYPHA_IMAGE_WITH_TAG))
 # This target actually builds the image if any of its dependencies have changed or if it's
 # missing from docker.
 $(TYPHA_CONTAINER_CREATED): $(BINDIR)/calico-typha-$(ARCH) \
-                            LICENSE docker-image/licenses/* \
-                            docker-image/Dockerfile* \
-                            docker-image/nsswitch.conf \
+                            LICENSE \
+                            docker-image/Dockerfile \
                             docker-image/typha.cfg \
                             $(shell test "$(TYPHA_IMAGE_ID)" || echo force-rebuild)
-	$(MAKE) register
 	rm -rf docker-image/bin
 	mkdir -p docker-image/bin
 	cp $(BINDIR)/calico-typha-$(ARCH) docker-image/bin/
 	cp LICENSE docker-image/
-	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(TYPHA_IMAGE):latest-$(ARCH) --file ./docker-image/Dockerfile.$(ARCH) docker-image --load
+	$(DOCKER_BUILD) -t $(TYPHA_IMAGE):latest-$(ARCH) -f docker-image/Dockerfile docker-image
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $(TYPHA_CONTAINER_CREATED)
 
 $(TYPHA_CONTAINER_FIPS_CREATED): $(BINDIR)/calico-typha-$(ARCH) \
-                            LICENSE docker-image/licenses/* \
-                            docker-image/Dockerfile* \
-                            docker-image/nsswitch.conf \
+                            LICENSE \
+                            docker-image/Dockerfile \
                             docker-image/typha.cfg \
                             $(shell test "$(TYPHA_IMAGE_ID)" || echo force-rebuild)
-	$(MAKE) register
 	rm -rf docker-image/bin
 	mkdir -p docker-image/bin
 	cp $(BINDIR)/calico-typha-$(ARCH) docker-image/bin/
 	cp LICENSE docker-image/
-	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(TYPHA_IMAGE):latest-fips-$(ARCH) --file ./docker-image/Dockerfile.$(ARCH) docker-image --load
+	$(DOCKER_BUILD) -t $(TYPHA_IMAGE):latest-fips-$(ARCH) -f docker-image/Dockerfile docker-image
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
 	touch $(TYPHA_CONTAINER_FIPS_CREATED)
 
@@ -178,7 +164,7 @@ ifeq (,$(filter k8sfv-test, $(EXCEPT)))
 endif
 
 ## Deploys images to registry
-cd: cd-common
+cd: image-all cd-common
 
 fv: k8sfv-test
 
@@ -261,9 +247,6 @@ cover-report: combined.coverprofile
 				   sed 's=$(PACKAGE_NAME)/==' | \
 				   column -t | \
 				   grep -v '100\.0%'"
-
-$(BINDIR)/calico-typha.transfer-url: $(BINDIR)/calico-typha-$(ARCH)
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'curl --upload-file $(BINDIR)/calico-typha-$(ARCH) https://transfer.sh/calico-typha > $@'
 
 # Install or update the tools used by the build
 .PHONY: update-tools

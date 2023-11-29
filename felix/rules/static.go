@@ -206,6 +206,46 @@ func (r *DefaultRuleRenderer) StaticFilterOutputForwardEndpointMarkChain() *Chai
 	}
 }
 
+func FilterInputChainAllowWG(ipVersion uint8, r Config, allowAction iptables.Action) []Rule {
+	var inputRules []Rule
+
+	if ipVersion == 4 && r.WireguardEnabled {
+		// When Wireguard is enabled, auto-allow Wireguard traffic from other nodes.  Without this,
+		// it's too easy to make a host policy that blocks Wireguard traffic, resulting in very confusing
+		// connectivity problems.
+		inputRules = append(inputRules,
+			Rule{
+				Match: Match().ProtocolNum(ProtoUDP).
+					DestPorts(uint16(r.WireguardListeningPort)).
+					DestAddrType(AddrTypeLocal),
+				Action:  allowAction,
+				Comment: []string{"Allow incoming IPv4 Wireguard packets"},
+			},
+			// Note that we do not need a drop rule for Wireguard because it already has the peering and allowed IPs
+			// baked into the crypto routing table.
+		)
+	}
+
+	if ipVersion == 6 && r.WireguardEnabledV6 {
+		// When Wireguard is enabled, auto-allow Wireguard traffic from other nodes.  Without this,
+		// it's too easy to make a host policy that blocks Wireguard traffic, resulting in very confusing
+		// connectivity problems.
+		inputRules = append(inputRules,
+			Rule{
+				Match: Match().ProtocolNum(ProtoUDP).
+					DestPorts(uint16(r.WireguardListeningPortV6)).
+					DestAddrType(AddrTypeLocal),
+				Action:  allowAction,
+				Comment: []string{"Allow incoming IPv6 Wireguard packets"},
+			},
+			// Note that we do not need a drop rule for Wireguard because it already has the peering and allowed IPs
+			// baked into the crypto routing table.
+		)
+	}
+
+	return inputRules
+}
+
 func (r *DefaultRuleRenderer) filterInputChain(ipVersion uint8) *Chain {
 	var inputRules []Rule
 
@@ -273,39 +313,7 @@ func (r *DefaultRuleRenderer) filterInputChain(ipVersion uint8) *Chain {
 		)
 	}
 
-	if ipVersion == 4 && r.WireguardEnabled {
-		// When Wireguard is enabled, auto-allow Wireguard traffic from other nodes.  Without this,
-		// it's too easy to make a host policy that blocks Wireguard traffic, resulting in very confusing
-		// connectivity problems.
-		inputRules = append(inputRules,
-			Rule{
-				Match: Match().ProtocolNum(ProtoUDP).
-					DestPorts(uint16(r.Config.WireguardListeningPort)).
-					DestAddrType(AddrTypeLocal),
-				Action:  r.filterAllowAction,
-				Comment: []string{"Allow incoming IPv4 Wireguard packets"},
-			},
-			// Note that we do not need a drop rule for Wireguard because it already has the peering and allowed IPs
-			// baked into the crypto routing table.
-		)
-	}
-
-	if ipVersion == 6 && r.WireguardEnabledV6 {
-		// When Wireguard is enabled, auto-allow Wireguard traffic from other nodes.  Without this,
-		// it's too easy to make a host policy that blocks Wireguard traffic, resulting in very confusing
-		// connectivity problems.
-		inputRules = append(inputRules,
-			Rule{
-				Match: Match().ProtocolNum(ProtoUDP).
-					DestPorts(uint16(r.Config.WireguardListeningPortV6)).
-					DestAddrType(AddrTypeLocal),
-				Action:  r.filterAllowAction,
-				Comment: []string{"Allow incoming IPv6 Wireguard packets"},
-			},
-			// Note that we do not need a drop rule for Wireguard because it already has the peering and allowed IPs
-			// baked into the crypto routing table.
-		)
-	}
+	inputRules = append(inputRules, FilterInputChainAllowWG(ipVersion, r.Config, r.filterAllowAction)...)
 
 	if r.KubeIPVSSupportEnabled {
 		// Check if packet belongs to forwarded traffic. (e.g. part of an ipvs connection).
@@ -485,6 +493,8 @@ func (r *DefaultRuleRenderer) failsafeInChain(table string, ipVersion uint8) *Ch
 					Protocol(protoPort.Protocol).
 					DestPorts(protoPort.Port).
 					SourceNet(protoPort.Net)
+			} else {
+				continue // don't add the rule
 			}
 		}
 		rules = append(rules, rule)
@@ -514,6 +524,8 @@ func (r *DefaultRuleRenderer) failsafeInChain(table string, ipVersion uint8) *Ch
 						Protocol(protoPort.Protocol).
 						SourcePorts(protoPort.Port).
 						SourceNet(protoPort.Net)
+				} else {
+					continue // don't add the rule
 				}
 			}
 			rules = append(rules, rule)
@@ -548,6 +560,8 @@ func (r *DefaultRuleRenderer) failsafeOutChain(table string, ipVersion uint8) *C
 					Protocol(protoPort.Protocol).
 					DestPorts(protoPort.Port).
 					DestNet(protoPort.Net)
+			} else {
+				continue // don't add the rule
 			}
 		}
 		rules = append(rules, rule)
@@ -576,7 +590,9 @@ func (r *DefaultRuleRenderer) failsafeOutChain(table string, ipVersion uint8) *C
 					rule.Match = Match().
 						Protocol(protoPort.Protocol).
 						SourcePorts(protoPort.Port).
-						SourceNet(protoPort.Net)
+						DestNet(protoPort.Net)
+				} else {
+					continue // don't add the rule
 				}
 			}
 			rules = append(rules, rule)
@@ -1200,7 +1216,7 @@ func (r *DefaultRuleRenderer) StaticBPFModeRawChains(ipVersion uint8,
 		Rules: bpfUntrackedFlowRules,
 	}
 
-	xdpUntrakedPoliciesChain := &Chain{
+	xdpUntrackedPoliciesChain := &Chain{
 		Name: ChainRawBPFUntrackedPolicy,
 		Rules: []Rule{
 			// At this point we know bypass mark is set, which means that the packet has
@@ -1225,7 +1241,7 @@ func (r *DefaultRuleRenderer) StaticBPFModeRawChains(ipVersion uint8,
 
 	chains := []*Chain{
 		rawPreroutingChain,
-		xdpUntrakedPoliciesChain,
+		xdpUntrackedPoliciesChain,
 		bpfUntrackedFlowChain,
 		r.failsafeOutChain("raw", ipVersion),
 		r.WireguardIncomingMarkChain(),

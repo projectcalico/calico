@@ -96,6 +96,7 @@ func ensureCgroupV2Filesystem() error {
 		return fmt.Errorf("failed to open %s. err: %w", mountInfoFile, err)
 	}
 	scanner := bufio.NewScanner(mounts)
+	cgroupV2Path := bpfdefs.GetCgroupV2Path()
 	for scanner.Scan() {
 		// An example line in mountinfo file:
 		// 35 24 0:30 / /sys/fs/cgroup rw,nosuid,nodev,noexec,relatime shared:9 - cgroup2 cgroup2 rw,nsdelegate,memory_recursiveprot
@@ -106,7 +107,7 @@ func ensureCgroupV2Filesystem() error {
 		if len(extraInfo) > 1 {
 			fsType := strings.Split(extraInfo[1], " ")[0] // fsType is the first string after -
 
-			if mountPoint == bpfdefs.CgroupV2Path && fsType == "cgroup2" {
+			if mountPoint == cgroupV2Path && fsType == "cgroup2" {
 				logrus.Info("Cgroup2 filesystem is mounted.")
 				return nil
 			}
@@ -119,13 +120,13 @@ func ensureCgroupV2Filesystem() error {
 	// If we get here, the Cgroup2 filesystem is not mounted.  Try to mount it.
 	logrus.Info("Cgroup2 filesystem is not mounted. Trying to mount it...")
 
-	err = os.MkdirAll(bpfdefs.CgroupV2Path, 0700)
+	err = os.MkdirAll(cgroupV2Path, 0700)
 	if err != nil {
-		return fmt.Errorf("failed to prepare mount point: %v. err: %w.", bpfdefs.CgroupV2Path, err)
+		return fmt.Errorf("failed to prepare mount point: %v. err: %w", cgroupV2Path, err)
 	}
-	logrus.Infof("Mount point %s is ready for mounting root cgroup2 fs.", bpfdefs.CgroupV2Path)
+	logrus.Infof("Mount point %s is ready for mounting root cgroup2 fs", cgroupV2Path)
 
-	mountCmd := exec.Command("mountns", bpfdefs.CgroupV2Path)
+	mountCmd := exec.Command("mountns", cgroupV2Path)
 	out, err := mountCmd.Output()
 	logrus.Debugf("Executed %v. err:%v out:\n%s", mountCmd, err, out)
 	if err != nil {

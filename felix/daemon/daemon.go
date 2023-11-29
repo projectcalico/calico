@@ -28,35 +28,10 @@ import (
 	"syscall"
 	"time"
 
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
-
-	"github.com/projectcalico/calico/libcalico-go/lib/backend/syncersv1/dedupebuffer"
-	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
-
-	"github.com/projectcalico/calico/libcalico-go/lib/seedrng"
-
-	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-
-	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
-	"github.com/projectcalico/calico/libcalico-go/lib/backend"
-	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
-	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s"
-	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
-	"github.com/projectcalico/calico/libcalico-go/lib/backend/syncersv1/felixsyncer"
-	"github.com/projectcalico/calico/libcalico-go/lib/backend/syncersv1/updateprocessors"
-	"github.com/projectcalico/calico/libcalico-go/lib/backend/watchersyncer"
-	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
-	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
-	"github.com/projectcalico/calico/libcalico-go/lib/health"
-	lclogutils "github.com/projectcalico/calico/libcalico-go/lib/logutils"
-	"github.com/projectcalico/calico/libcalico-go/lib/options"
-	"github.com/projectcalico/calico/libcalico-go/lib/set"
-	"github.com/projectcalico/calico/pod2daemon/binder"
-	"github.com/projectcalico/calico/typha/pkg/discovery"
-	"github.com/projectcalico/calico/typha/pkg/syncclient"
 
 	"github.com/projectcalico/calico/felix/buildinfo"
 	"github.com/projectcalico/calico/felix/calc"
@@ -68,6 +43,29 @@ import (
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/statusrep"
 	"github.com/projectcalico/calico/felix/usagerep"
+	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
+	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend"
+	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/syncersv1/dedupebuffer"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/syncersv1/felixsyncer"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/syncersv1/updateprocessors"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/watchersyncer"
+	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
+	"github.com/projectcalico/calico/libcalico-go/lib/debugserver"
+	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
+	"github.com/projectcalico/calico/libcalico-go/lib/health"
+	lclogutils "github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/libcalico-go/lib/metricsserver"
+	"github.com/projectcalico/calico/libcalico-go/lib/options"
+	"github.com/projectcalico/calico/libcalico-go/lib/seedrng"
+	"github.com/projectcalico/calico/libcalico-go/lib/set"
+	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
+	"github.com/projectcalico/calico/pod2daemon/binder"
+	"github.com/projectcalico/calico/typha/pkg/discovery"
+	"github.com/projectcalico/calico/typha/pkg/syncclient"
 )
 
 const (
@@ -222,7 +220,7 @@ configRetry:
 		}
 
 		// Each time round this loop, check that we're serving health reports if we should
-		// be, or cancel any existing server if we should not be serving any more.
+		// be, or cancel any existing server if we should not be serving anymore.
 		healthAggregator.ServeHTTP(configParams.HealthEnabled, configParams.HealthHost, configParams.HealthPort)
 
 		// We should now have enough config to connect to the datastore
@@ -373,7 +371,7 @@ configRetry:
 	if configParams.BPFEnabled {
 		// Check for BPF dataplane support before we do anything that relies on the flag being set one way or another.
 		if err := dp.SupportsBPF(); err != nil {
-			log.Error("BPF dataplane mode enabled but not supported by the kernel.  Disabling BPF mode.")
+			log.WithError(err).Error("BPF dataplane mode enabled but not supported by the kernel.  Disabling BPF mode.")
 			_, err := configParams.OverrideParam("BPFEnabled", "false")
 			if err != nil {
 				log.WithError(err).Panic("Bug: failed to override config parameter")
@@ -383,9 +381,6 @@ configRetry:
 
 	// Set any watchdog timeout overrides before we initialise components.
 	health.SetGlobalTimeoutOverrides(configParams.HealthTimeoutOverrides)
-
-	// We're now both live and ready.
-	healthAggregator.Report(healthName, &health.HealthReport{Live: true, Ready: true})
 
 	// Enable or disable the health HTTP server according to coalesced config.
 	healthAggregator.ServeHTTP(configParams.HealthEnabled, configParams.HealthHost, configParams.HealthPort)
@@ -409,6 +404,10 @@ configRetry:
 	if configParams.DebugSimulateDataRace {
 		log.Warn("DebugSimulateDataRace is set, will start some racing goroutines!")
 		simulateDataRace()
+	}
+
+	if configParams.DebugPort != 0 {
+		debugserver.StartDebugPprofServer(configParams.DebugHost, configParams.DebugPort)
 	}
 
 	// Start up the dataplane driver.  This may be the internal go-based driver or an external
@@ -435,6 +434,11 @@ configRetry:
 		configChangedRestartCallback,
 		fatalErrorCallback,
 		k8sClientSet)
+
+	// Defer reporting ready until we've started the dataplane driver.  This
+	// ensures that our overall readiness waits for the dataplane driver to
+	// report ready on its health report.
+	healthAggregator.Report(healthName, &health.HealthReport{Live: true, Ready: true})
 
 	// Initialise the glue logic that connects the calculation graph to/from the dataplane driver.
 	log.Info("Connect to the dataplane driver.")
@@ -679,7 +683,11 @@ configRetry:
 		})
 		gaugeHost.Set(1)
 		prometheus.MustRegister(gaugeHost)
-		go dp.ServePrometheusMetrics(configParams)
+		dp.ConfigurePrometheusMetrics(configParams)
+		go metricsserver.ServePrometheusMetricsForever(
+			configParams.PrometheusMetricsHost,
+			configParams.PrometheusMetricsPort,
+		)
 	}
 
 	// Register signal handlers to dump memory/CPU profiles.

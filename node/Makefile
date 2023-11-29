@@ -52,7 +52,7 @@ endif
 ifeq ($(ARCH),arm64)
 # Required for eBPF support in ARM64.
 # We need to force ARM64 build image to be used in a crosscompilation run.
-CALICO_BUILD:=$(CALICO_BUILD)-$(ARCH)
+CALICO_BUILD:=$(GO_BUILD_IMAGE):$(GO_BUILD_VER)-$(ARCH)
 endif
 
 ###############################################################################
@@ -95,7 +95,7 @@ WINDOWS_MOD_CACHED_FILES := \
     windows-packaging/conf.d/blocks.toml \
     windows-packaging/conf.d/peerings.toml \
     windows-packaging/templates/blocks.ps1.template \
-    windows-packaging/templates/peerings.ps1.template \
+    windows-packaging/templates/peerings.ps1.template
 
 # Files to include in the Windows ZIP archive.  We need to list some of these explicitly
 # because we need to force them to be built/copied into place. We also have
@@ -155,7 +155,6 @@ clean: clean-windows
 	find . -name '.*.created*' -type f -delete
 	find . -name '.*.published*' -type f -delete
 	find . -name '*.pyc' -exec rm -f {} +
-	rm -rf .go-pkg-cache
 	rm -rf certs *.tar $(NODE_CONTAINER_BIN_DIR)
 	rm -rf $(REMOTE_DEPS)
 	rm -rf filesystem/included-source
@@ -164,20 +163,20 @@ clean: clean-windows
 	# We build felix as part of the node build, so clean it as part of the clean.
 	make -C ../felix clean
 	# Delete images that we built in this repo
-	docker rmi $(NODE_IMAGE):latest-$(ARCH) || true
-	docker rmi $(NODE_IMAGE):latest-fips-$(ARCH) || true
-	docker rmi $(TEST_CONTAINER_NAME) || true
+	-docker image rm -f $$(docker images $(NODE_IMAGE) -a -q)
+	-docker image rm -f $$(docker images $(NODE_IMAGE) -a -q)
+	-docker image rm -f $$(docker images $(TEST_CONTAINER_NAME) -a -q)
 
 clean-windows: clean-windows-builder
-	-rm -f $(WINDOWS_ARCHIVE) $(WINDOWS_ARCHIVE_BINARY) $(WINDOWS_BINARY)
-	-rm -f $(WINDOWS_ARCHIVE_ROOT)/libs/hns/hns.psm1
-	-rm -f $(WINDOWS_ARCHIVE_ROOT)/libs/hns/License.txt
-	-rm -f $(WINDOWS_ARCHIVE_ROOT)/cni/*.exe
-	-rm -f $(WINDOWS_ARCHIVE_ROOT)/../nssm.zip
-	-rm -f $(WINDOWS_ARCHIVE_ROOT)/../nssm.exe
-	-rm -f $(WINDOWS_INSTALL_SCRIPT)
-	-rm -rf "$(WINDOWS_DIST)"
-	-docker rmi $(addprefix $(WINDOWS_IMAGE):latest-,$(WINDOWS_VERSIONS))
+	rm -f $(WINDOWS_ARCHIVE) $(WINDOWS_ARCHIVE_BINARY) $(WINDOWS_BINARY)
+	rm -f $(WINDOWS_ARCHIVE_ROOT)/libs/hns/hns.psm1
+	rm -f $(WINDOWS_ARCHIVE_ROOT)/libs/hns/License.txt
+	rm -f $(WINDOWS_ARCHIVE_ROOT)/cni/*.exe
+	rm -f $(WINDOWS_ARCHIVE_ROOT)/../nssm.zip
+	rm -f $(WINDOWS_ARCHIVE_ROOT)/../nssm.exe
+	rm -f $(WINDOWS_INSTALL_SCRIPT)
+	rm -rf "$(WINDOWS_DIST)"
+	-docker image rm -f $$(docker images $(WINDOWS_IMAGE) -a -q)
 
 ###############################################################################
 # Building the binary
@@ -218,7 +217,7 @@ $(NODE_CONTAINER_BINARY): filesystem/usr/lib/calico/bpf $(LIBBPF_A) $(SRC_FILES)
 ifeq ($(FIPS),true)
 	$(call build_cgo_boring_binary, ./cmd/calico-node/main.go, $@)
 else
-ifeq ($(ARCH),amd64)
+ifeq ($(ARCH),$(filter $(ARCH),amd64 arm64))
 	$(call build_cgo_binary, ./cmd/calico-node/main.go, $@)
 else
 	$(call build_binary, ./cmd/calico-node/main.go, $@)
@@ -247,20 +246,18 @@ endif
 # Building the image
 ###############################################################################
 ## Create the images for all supported ARCHes
-image-all: $(addprefix sub-image-,$(VALIDARCHES)) sub-image-fips-amd64 image-windows
+image-all: $(addprefix sub-image-,$(VALIDARCHES))
 sub-image-%:
-	$(MAKE) image ARCH=$*
-sub-image-fips-%:
-	$(MAKE) image FIPS=true ARCH=$*
+	$(MAKE) image FIPS=$(FIPS) ARCH=$*
 
 image $(NODE_IMAGE): register $(NODE_CONTAINER_MARKER)
 $(NODE_CONTAINER_CREATED): $(REMOTE_DEPS) ./Dockerfile.$(ARCH) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOURCE) $(NODE_CONTAINER_FILES) $(TOOLS_MOUNTNS_BINARY)
-	$(DOCKER_BUILD) --build-arg BIN_DIR=$(NODE_CONTAINER_BIN_DIR) --build-arg BIRD_IMAGE=$(BIRD_IMAGE) -t $(NODE_IMAGE):latest-$(ARCH) -f ./Dockerfile.$(ARCH) . --load
+	$(DOCKER_BUILD) --build-arg BIN_DIR=$(NODE_CONTAINER_BIN_DIR) --build-arg BIRD_IMAGE=$(BIRD_IMAGE) --build-arg GIT_VERSION=$(GIT_VERSION) -t $(NODE_IMAGE):latest-$(ARCH) -f ./Dockerfile.$(ARCH) .
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 
 $(NODE_CONTAINER_FIPS_CREATED): $(REMOTE_DEPS) ./Dockerfile.$(ARCH) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOURCE) $(NODE_CONTAINER_FILES) $(TOOLS_MOUNTNS_BINARY)
-	$(DOCKER_BUILD) --build-arg BIN_DIR=$(NODE_CONTAINER_BIN_DIR) --build-arg BIRD_IMAGE=$(BIRD_IMAGE) -t $(NODE_IMAGE):latest-fips-$(ARCH) -f ./Dockerfile.$(ARCH) . --load
+	$(DOCKER_BUILD) --build-arg BIN_DIR=$(NODE_CONTAINER_BIN_DIR) --build-arg BIRD_IMAGE=$(BIRD_IMAGE) --build-arg GIT_VERSION=$(GIT_VERSION) -t $(NODE_IMAGE):latest-fips-$(ARCH) -f ./Dockerfile.$(ARCH) .
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
 	touch $@
 
@@ -269,7 +266,7 @@ $(BIRD_SOURCE): .bird-source.created
 .bird-source.created:
 	rm -rf filesystem/included-source/bird*
 	mkdir -p filesystem/included-source/
-	wget -O $(BIRD_SOURCE) https://github.com/projectcalico/bird/tarball/$(BIRD_VERSION)
+	curl -sSf -L --retry 5 -o $(BIRD_SOURCE) https://github.com/projectcalico/bird/tarball/$(BIRD_VERSION)
 	touch $@
 
 # include GPL felix code in the image.
@@ -320,16 +317,16 @@ busybox.tar:
 	docker pull $(ARCH)/busybox:latest
 	docker save --output busybox.tar $(ARCH)/busybox:latest
 
-workload.tar:
-	cd workload && $(DOCKER_BUILD) -t workload -f Dockerfile.$(ARCH) . --load
+workload.tar: workload/Dockerfile
+	$(DOCKER_BUILD) -t workload -f workload/Dockerfile workload
 	docker save --output workload.tar workload
 
 IPT_ALLOW_ETCD:=-A INPUT -i docker0 -p tcp --dport 2379 -m comment --comment "calico-st-allow-etcd" -j ACCEPT
 
 # Create the calico/test image
 test_image: .calico_test.created
-.calico_test.created: $(TEST_CONTAINER_FILES)
-	cd calico_test && $(DOCKER_BUILD) -f Dockerfile.$(ARCH).calico_test -t $(TEST_CONTAINER_NAME) . --load
+.calico_test.created: calico_test/Dockerfile $(TEST_CONTAINER_FILES)
+	$(DOCKER_BUILD) --build-arg ETCD_VERSION=$(ETCD_VERSION) -f calico_test/Dockerfile -t $(TEST_CONTAINER_NAME) calico_test
 	touch $@
 
 calico-node.tar: $(NODE_CONTAINER_CREATED)
@@ -366,12 +363,18 @@ load-container-images: $(K8ST_IMAGE_TARS) $(KUBECTL)
 
 .PHONY: st-checks
 st-checks:
-	# Check that we're running as root.
-	test `id -u` -eq '0' || { echo "STs must be run as root to allow writes to /proc"; false; }
-
-	# Insert an iptables rule to allow access from our test containers to etcd
-	# running on the host.
-	iptables-save | grep -q 'calico-st-allow-etcd' || iptables $(IPT_ALLOW_ETCD)
+	@if mount | grep -q "cgroup on /sys/fs/cgroup"; then \
+		echo "cgroup v1 mounted"; \
+	else \
+		echo; \
+		echo "ERROR: Looks like your system uses cgroupv2, which is "; \
+		echo "not compatible with our ancient version of dind."; \
+		echo "You can either run this test in a VM, or add "; \
+		echo "systemd.unified_cgroup_hierarchy=0 to your kernel "; \
+		echo "command line (if supported by your kernel/OS)."; \
+		echo; \
+		exit 1; \
+	fi
 
 .PHONY: k8s-test
 ## Run the k8s tests
@@ -401,22 +404,15 @@ kind-k8st-run-test: .calico_test.created $(KIND_KUBECONFIG)
 .PHONY: kind-k8st-cleanup
 kind-k8st-cleanup: kind-cluster-destroy
 
-# Needed for Semaphore CI (where disk space is a real issue during k8s-test)
-.PHONY: remove-go-build-image
-remove-go-build-image:
-	@echo "Removing $(CALICO_BUILD) image to save space needed for testing ..."
-	@-docker rmi $(CALICO_BUILD)
-
 .PHONY: st
 ## Run the system tests
-st: $(REMOTE_DEPS) image dist/calicoctl busybox.tar calico-node.tar workload.tar run-etcd .calico_test.created dist/calico dist/calico-ipam
+st: st-checks $(REMOTE_DEPS) image dist/calicoctl busybox.tar calico-node.tar workload.tar run-etcd .calico_test.created dist/calico dist/calico-ipam
 	# Use the host, PID and network namespaces from the host.
 	# Privileged is needed since 'calico node' write to /proc (to enable ip_forwarding)
 	# Map the docker socket in so docker can be used from inside the container
 	# HOST_CHECKOUT_DIR is used for volume mounts on containers started by this one.
 	# All of code under test is mounted into the container.
 	#   - This also provides access to calicoctl and the docker client
-	# $(MAKE) st-checks
 	docker run --uts=host \
 		   --pid=host \
 		   --net=host \
@@ -439,7 +435,7 @@ st: $(REMOTE_DEPS) image dist/calicoctl busybox.tar calico-node.tar workload.tar
 ci: static-checks ut image image-windows st
 
 ## Deploys images to registry
-cd: cd-common release-windows
+cd: image-all cd-common
 
 ###############################################################################
 # Release
@@ -455,6 +451,7 @@ release-build: .release-$(VERSION).created
 	$(MAKE) FIPS=true retag-build-images-with-registries RELEASE=true IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
 	# Generate the Windows zip archives.
 	$(MAKE) release-windows-archive
+	$(MAKE) $(WINDOWS_INSTALL_SCRIPT)
 	touch $@
 
 ## Produces the Windows installation ZIP archive for the release.
@@ -511,14 +508,14 @@ $(WINDOWS_ARCHIVE_ROOT)/confd/templates/%: windows-packaging/templates/%
         chmod +w $@
 
 $(WINDOWS_ARCHIVE_ROOT)/libs/hns/hns.psm1:
-	wget -P $(WINDOWS_ARCHIVE_ROOT)/libs/hns/ $(MICROSOFT_SDN_GITHUB_RAW_URL)/Kubernetes/windows/hns.psm1
+	curl -sSf -L --retry 5 -o $@ $(MICROSOFT_SDN_GITHUB_RAW_URL)/Kubernetes/windows/hns.psm1
 
 $(WINDOWS_ARCHIVE_ROOT)/libs/hns/License.txt:
-	wget -P $(WINDOWS_ARCHIVE_ROOT)/libs/hns/ $(MICROSOFT_SDN_GITHUB_RAW_URL)/License.txt
+	curl -sSf -L --retry 5 -o $@  $(MICROSOFT_SDN_GITHUB_RAW_URL)/License.txt
 
 ## Download NSSM.
 windows-packaging/nssm.zip:
-	wget -O windows-packaging/nssm.zip https://nssm.cc/ci/nssm-$(WINDOWS_NSSM_VERSION).zip
+	wget -O windows-packaging/nssm.zip https://github.com/projectcalico/calico/releases/download/v3.27.0/nssm-$(WINDOWS_NSSM_VERSION).zip
 
 windows-packaging/nssm.exe: windows-packaging/nssm.zip
 	cd windows-packaging && \
@@ -568,5 +565,12 @@ WINDOWS_IMAGE_REQS := \
 	$(WINDOWS_ARCHIVE_ROOT)/felix/felix-service.ps1 \
 	$(WINDOWS_ARCHIVE_ROOT)/node/node-service.ps1 \
 	$(WINDOWS_ARCHIVE_ROOT)/uninstall-calico-hpc.ps1 \
+	$(WINDOWS_ARCHIVE_ROOT)/confd/confd-service.ps1 \
+	$(WINDOWS_ARCHIVE_ROOT)/confd/config-bgp.ps1 \
+	$(WINDOWS_ARCHIVE_ROOT)/confd/config-bgp.psm1 \
+	$(WINDOWS_ARCHIVE_ROOT)/confd/conf.d/blocks.toml \
+	$(WINDOWS_ARCHIVE_ROOT)/confd/conf.d/peerings.toml \
+	$(WINDOWS_ARCHIVE_ROOT)/confd/templates/blocks.ps1.template \
+	$(WINDOWS_ARCHIVE_ROOT)/confd/templates/peerings.ps1.template \
 	windows-packaging/nssm.exe
 image-windows: $(WINDOWS_IMAGE_REQS)

@@ -338,7 +338,7 @@ func (d *restoreCmd) Run() error {
 			rest := strings.Join(parts[3:], " ")
 			ruleIdx := ruleNum - 1 // 0-indexed array index of rule.
 			chain := chains[chainName]
-			Expect(len(chain)).To(BeNumerically(">", ruleIdx), "Replace of non-existent rule")
+			Expect(len(chain)).To(BeNumerically(">", ruleIdx), "Replace of nonexistent rule")
 			chain[ruleIdx] = rest
 			d.Dataplane.ChainMods.Add(chainMod{name: chainName, ruleNum: ruleNum})
 		case "-D", "--delete":
@@ -351,7 +351,7 @@ func (d *restoreCmd) Run() error {
 
 				ruleIdx := ruleNum - 1 // 0-indexed array index of rule.
 				chain := chains[chainName]
-				Expect(len(chain)).To(BeNumerically(">", ruleIdx), "Delete of non-existent rule")
+				Expect(len(chain)).To(BeNumerically(">", ruleIdx), "Delete of nonexistent rule")
 
 				for i := ruleIdx; i < len(chain)-1; i++ {
 					chain[i] = chain[i+1]
@@ -376,7 +376,7 @@ func (d *restoreCmd) Run() error {
 					newChain = append(newChain, chain[i])
 				}
 
-				Expect(found).To(BeTrue(), "Delete of non-existent rule")
+				Expect(found).To(BeTrue(), "Delete of nonexistent rule")
 				chains[chainName] = newChain
 				d.Dataplane.ChainMods.Add(chainMod{name: chainName, ruleNum: i})
 

@@ -22,6 +22,8 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 )
 
 // TyphaConfig specifies the sync-client connection parameters
@@ -42,9 +44,6 @@ type TyphaConfig struct {
 	CAFile   string
 	CN       string
 	URISAN   string
-
-	// FIPSModeEnabled Enables FIPS 140-2 verified crypto mode.
-	FIPSModeEnabled bool
 }
 
 // ReadTyphaConfig reads the TyphaConfig from environment variables.
@@ -71,6 +70,12 @@ func ReadTyphaConfig(supportedPrefixes []string) TyphaConfig {
 				} else if field.Type.Name() == "bool" {
 					reflect.ValueOf(typhaConfig).Elem().FieldByName(field.Name).SetBool(value == "true")
 				} else {
+					// File paths must use winutils.GetHostPath() to prepend the necessary
+					// mount path env var when running on Windows HPC containers.
+					// These are KeyFile, CertFile and CAFile.
+					if strings.HasSuffix(field.Name, "File") {
+						value = winutils.GetHostPath(value)
+					}
 					reflect.ValueOf(typhaConfig).Elem().FieldByName(field.Name).Set(reflect.ValueOf(value))
 				}
 				break

@@ -128,7 +128,7 @@ func (d daemonset) WaitForDaemonsetNotFound(k8sClientset *kubernetes.Clientset, 
 		if err != nil {
 			return true, err
 		}
-		// Daemoset still exists, retry.
+		// Daemonset still exists, retry.
 		return false, nil
 	})
 }
@@ -485,8 +485,8 @@ func (n k8snode) execCommandInPod(k8sClientset *kubernetes.Clientset, namespace,
 	}
 
 	if !found {
-		// Can not find pod.
-		return "", fmt.Errorf("failed to execute command in pod. Can not find pod with label in %v on node %s", label, nodeName)
+		// Cannot find pod.
+		return "", fmt.Errorf("failed to execute command in pod. Cannot find pod with label in %v on node %s", label, nodeName)
 	}
 
 	if !isPodRunningAndReady(&pod) {

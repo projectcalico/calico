@@ -1265,7 +1265,7 @@ var _ = Describe("XDP state", func() {
 						removeMembersIPSet("ipset", "member2"),
 						replaceIPSet("ipset2", "member21"),
 						// this is quite artificial, because removing
-						// an ipset would be acompanied with events
+						// an ipset would be accompanied with events
 						// about policy being updated or dropped,
 						// so there would be no mentions of the removed
 						// ipset anywhere

@@ -94,18 +94,42 @@ rules:
       - deployments/finalizers
     verbs:
       - update
+  # The operator needs read and update permissions on the APIs that it controls.
   - apiGroups:
       - operator.tigera.io
     resources:
-      - '*'
+      - apiservers/finalizers
+      - installations
+      - installations/status
+      - installations/finalizers
+      - tigerastatuses
+      - tigerastatuses/status
+      - tigerastatuses/finalizers
+      - apiservers
+      - apiservers/status
+      - imagesets
     verbs:
-      - create
       - get
       - list
       - update
       - patch
-      - delete
       - watch
+  # In addition to the above, the operator creates and deletes TigeraStatus resources.
+  - apiGroups:
+      - operator.tigera.io
+    resources:
+      - tigerastatuses
+    verbs:
+      - create
+      - delete
+  # In addition to the above, the operator should have the ability to delete their own resources during uninstallation.
+  - apiGroups:
+      - operator.tigera.io
+    resources:
+      - installations
+      - apiservers
+    verbs:
+      - delete
   - apiGroups:
     - networking.k8s.io
     resources:
@@ -199,6 +223,14 @@ rules:
       - get
       - create
       - delete
+  # Add the permissions to monitor the status of certificate signing requests when certificate management is enabled.
+  - apiGroups:
+      - certificates.k8s.io
+    resources:
+      - certificatesigningrequests
+    verbs:
+      - list
+      - watch
   # When running in OpenShift, we need to update networking config.
   - apiGroups:
       - config.openshift.io

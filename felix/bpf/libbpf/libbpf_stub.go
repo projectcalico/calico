@@ -135,13 +135,10 @@ const (
 	GlobalsRPFOptionEnabled uint32 = 16
 	GlobalsRPFOptionStrict  uint32 = 32
 	GlobalsNoDSRCidrs       uint32 = 12345
+	GlobalsLoUDPOnly        uint32 = 12345
 )
 
 func TcSetGlobals(_ *Map, globalData *TcGlobalData) error {
-	panic("LIBBPF syscall stub")
-}
-
-func TcSetGlobals6(_ *Map, globalData *TcGlobalData6) error {
 	panic("LIBBPF syscall stub")
 }
 

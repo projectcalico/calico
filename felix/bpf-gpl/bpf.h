@@ -185,7 +185,7 @@ enum calico_skb_mark {
 	/* CALI_SKB_MARK_SKIP_FIB is used for packets that should pass through host IP stack. */
 	CALI_SKB_MARK_SKIP_FIB               = CALI_SKB_MARK_SEEN | 0x00100000,
 	/* CT_ESTABLISHED is used by iptables to tell the BPF programs that the packet is part of an
-	 * established Linux conntrack flow. This allows the BPF program to let through pre-existing
+	 * established Linux conntrack flow. This allows the BPF program to let through preexisting
 	 * flows at start of day. */
 	CALI_SKB_MARK_CT_ESTABLISHED         = 0x08000000,
 	CALI_SKB_MARK_CT_ESTABLISHED_MASK    = 0x08000000,
@@ -253,27 +253,33 @@ static CALI_BPF_INLINE void ip_dec_ttl(struct iphdr *ip)
 
 extern const volatile struct cali_xdp_globals __globals;
 #define CALI_CONFIGURABLE(name) 1 /* any value will do, it is not configured */
+#define CALI_CONFIGURABLE_IP(name) 1
 
 #elif (!CALI_F_CGROUP) || defined(UNITTEST)
 
-extern const volatile struct cali_tc_globals __globals;
-#define CALI_CONFIGURABLE(name) ctx->globals->name
-
+extern const volatile struct cali_tc_preamble_globals __globals;
+#define CALI_CONFIGURABLE(name) ctx->globals->data.name
+#ifdef IPVER6
+#define CALI_CONFIGURABLE_IP(name) CALI_CONFIGURABLE(name)
+#else
+#define CALI_CONFIGURABLE_IP(name) ctx->globals->data.name.a
+#endif
 #else
 
 #define CALI_CONFIGURABLE(name) 1 /* any value will do, it is not configured */
+#define CALI_CONFIGURABLE_IP(name) 1
 
 #endif /* loader */
 
-#define HOST_IP		CALI_CONFIGURABLE(host_ip)
+#define HOST_IP		CALI_CONFIGURABLE_IP(host_ip)
 #define TUNNEL_MTU 	CALI_CONFIGURABLE(tunnel_mtu)
 #define VXLAN_PORT 	CALI_CONFIGURABLE(vxlan_port)
-#define INTF_IP		CALI_CONFIGURABLE(intf_ip)
+#define INTF_IP		CALI_CONFIGURABLE_IP(intf_ip)
 #define EXT_TO_SVC_MARK	CALI_CONFIGURABLE(ext_to_svc_mark)
 #define PSNAT_START	CALI_CONFIGURABLE(psnat_start)
 #define PSNAT_LEN	CALI_CONFIGURABLE(psnat_len)
 #define GLOBAL_FLAGS 	CALI_CONFIGURABLE(flags)
-#define HOST_TUNNEL_IP	CALI_CONFIGURABLE(host_tunnel_ip)
+#define HOST_TUNNEL_IP	CALI_CONFIGURABLE_IP(host_tunnel_ip)
 #define WG_PORT		CALI_CONFIGURABLE(wg_port)
 #define NATIN_IFACE	CALI_CONFIGURABLE(natin_idx)
 
@@ -330,5 +336,15 @@ struct {										\
 		CALI_MAP(name,, map_type, key_type, val_type, size, flags)
 
 char ____license[] __attribute__((section("license"), used)) = "GPL";
+
+#define NEXTHDR_HOP		0
+#define NEXTHDR_ROUTING		43
+#define NEXTHDR_FRAGMENT	44
+#define NEXTHDR_GRE		47
+#define NEXTHDR_ESP		50
+#define NEXTHDR_AUTH		51
+#define NEXTHDR_NONE		59
+#define NEXTHDR_DEST		60
+#define NEXTHDR_MOBILITY	135
 
 #endif /* __CALI_BPF_H__ */

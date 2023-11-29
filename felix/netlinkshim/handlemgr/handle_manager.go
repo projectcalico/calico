@@ -30,12 +30,13 @@ const (
 
 type HandleManager struct {
 	// Current netlink handle, or nil if we need to reconnect.
-	cachedHandle netlinkshim.Interface
+	cachedHandle         netlinkshim.Interface
+	reopenHandleNextTime bool
 	// numRepeatFailures counts the number of repeated netlink connection failures.
 	// reset on successful connection.
 	numRepeatFailures int
 
-	family        int
+	strictEnabled bool
 	socketTimeout time.Duration
 
 	featureDetector  environment.FeatureDetectorIface
@@ -56,16 +57,18 @@ func WithNewHandleOverride(newNetlinkHandle func() (netlinkshim.Interface, error
 	}
 }
 
-func NewHandleManager(
-	netlinkFamily int,
-	featureDetector environment.FeatureDetectorIface,
-	opts ...NetlinkHandleManagerOpt,
-) *HandleManager {
+func WithStrictModeOverride(strictEnabled bool) NetlinkHandleManagerOpt {
+	return func(manager *HandleManager) {
+		manager.strictEnabled = strictEnabled
+	}
+}
+
+func NewHandleManager(featureDetector environment.FeatureDetectorIface, opts ...NetlinkHandleManagerOpt) *HandleManager {
 	nlm := &HandleManager{
-		family:           netlinkFamily,
 		socketTimeout:    defaultSocketTimeout,
 		featureDetector:  featureDetector,
 		newNetlinkHandle: netlinkshim.NewRealNetlink,
+		strictEnabled:    true,
 	}
 	for _, o := range opts {
 		o(nlm)
@@ -75,6 +78,12 @@ func NewHandleManager(
 
 // Handle returns the cached netlink handle, initialising it if needed.
 func (r *HandleManager) Handle() (netlinkshim.Interface, error) {
+	if r.reopenHandleNextTime && r.cachedHandle != nil {
+		r.cachedHandle.Delete()
+		r.cachedHandle = nil
+	}
+	r.reopenHandleNextTime = false
+
 	if r.cachedHandle == nil {
 		nlHandle, err := r.newHandle()
 		if err != nil {
@@ -111,7 +120,7 @@ func (r *HandleManager) newHandle() (netlinkshim.Interface, error) {
 		nlHandle.Delete()
 		return nil, err
 	}
-	if r.featureDetector.GetFeatures().KernelSideRouteFiltering {
+	if r.strictEnabled && r.featureDetector.GetFeatures().KernelSideRouteFiltering {
 		logrus.Debug("Kernel supports route filtering, enabling 'strict' netlink mode.")
 		err = nlHandle.SetStrictCheck(true)
 		if err != nil {
@@ -125,12 +134,12 @@ func (r *HandleManager) newHandle() (netlinkshim.Interface, error) {
 	return nlHandle, nil
 }
 
-// CloseHandle closes any existing netlink handle so the next call to Handle() is forced
-// to create a new one.  Intended to be called after a failure.
-func (r *HandleManager) CloseHandle() {
-	if r.cachedHandle == nil {
-		return
-	}
-	r.cachedHandle.Delete()
-	r.cachedHandle = nil
+// MarkHandleForReopen ensures that the next call to Handle() will open a
+// fresh handle.  The current handle is not closed immediately, it will be
+// closed when the new handle is opened.
+//
+// We used to close the handle immediately but that led to bugs where the
+// caller wouldn't refresh its handle until the next time around its loop.
+func (r *HandleManager) MarkHandleForReopen() {
+	r.reopenHandleNextTime = true
 }

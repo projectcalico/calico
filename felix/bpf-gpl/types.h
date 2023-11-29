@@ -10,11 +10,12 @@
 #include <linux/pkt_cls.h>
 #ifdef IPVER6
 #include <linux/ipv6.h>
+#include <linux/icmpv6.h>
 #else
 #include <linux/ip.h>
+#include <linux/icmp.h>
 #endif
 #include <linux/tcp.h>
-#include <linux/icmp.h>
 #include <linux/in.h>
 #include <linux/udp.h>
 #include "bpf.h"
@@ -29,12 +30,13 @@
 #define ETH_SIZE (sizeof(struct ethhdr))
 #ifdef IPVER6
 #define IP_SIZE (sizeof(struct ipv6hdr))
+#define ICMP_SIZE (sizeof(struct icmp6hdr))
 #else
 #define IP_SIZE (sizeof(struct iphdr))
+#define ICMP_SIZE (sizeof(struct icmphdr))
 #endif
 #define UDP_SIZE (sizeof(struct udphdr))
 #define TCP_SIZE (sizeof(struct tcphdr))
-#define ICMP_SIZE (sizeof(struct icmphdr))
 
 #define MAX_RULE_IDS    32
 
@@ -56,10 +58,13 @@ struct cali_tc_state {
 	/* If no NAT, ip_dst.  Otherwise the NAT dest that we look up from the NAT maps or the conntrack entry
 	 * for CALI_CT_ESTABLISHED_DNAT. */
 	DECLARE_IP_ADDR(post_nat_ip_dst);
-	/* For packets that arrived over our VXLAN tunnel, the source IP of the tunnel packet.
-	 * Zeroed out when we decide to respond with an ICMP error.
-	 * Also used to stash the ICMP MTU when calling the ICMP response program. */
-	DECLARE_IP_ADDR(tun_ip);
+	union {
+		/* For packets that arrived over our VXLAN tunnel, the source IP of the tunnel packet.
+		 * Zeroed out when we decide to respond with an ICMP error.
+		 * Also used to stash the ICMP MTU when calling the ICMP response program. */
+		DECLARE_IP_ADDR(tun_ip);
+		__u32 icmp_un;
+	};
 	__u16 ihl;
 	__u16 unused;
 	/* Return code from the policy program CALI_POL_DENY/ALLOW etc. */
@@ -74,7 +79,7 @@ struct cali_tc_state {
 		struct
 		{
 			/* Only used to pass type/code to the program that generates and
-			 * send an ICMP error respose and to the policy program.
+			 * send an ICMP error response and to the policy program.
 			 */
 			__u8 icmp_type;
 			__u8 icmp_code;
@@ -133,7 +138,7 @@ enum cali_state_flags {
 	/* CALI_ST_HOST_PSNAT is set when we are resolving host source port collision. */
 	CALI_ST_HOST_PSNAT	  = 0x40,
 	/* CALI_ST_CT_NP_LOOP tells CT when creating an entry that we are
-	 * turnign this packet around from a nodeport to a local pod. */
+	 * turning this packet around from a nodeport to a local pod. */
 	CALI_ST_CT_NP_LOOP	  = 0x80,
 	/* CALI_ST_CT_NP_REMOTE is set when host is accessing a remote nodeport. */
 	CALI_ST_CT_NP_REMOTE	  = 0x100,
@@ -218,6 +223,11 @@ static CALI_BPF_INLINE struct ipv6hdr* ip_hdr(struct cali_tc_ctx *ctx)
 	return (struct ipv6hdr *)ctx->ip_header;
 }
 
+static CALI_BPF_INLINE struct icmp6hdr* icmp_hdr(struct cali_tc_ctx *ctx)
+{
+	return (struct icmp6hdr *)ctx->nh;
+}
+
 #define ip_hdr_set_ip(ctx, field, ip)	do {					\
 	struct in6_addr *addr = &(ip_hdr(ctx)->field);				\
 	addr->in6_u.u6_addr32[0] = ip.a;					\
@@ -237,6 +247,11 @@ static CALI_BPF_INLINE struct iphdr* ip_hdr(struct cali_tc_ctx *ctx)
 	ip_hdr(ctx)->field = ip;						\
 } while (0)
 
+static CALI_BPF_INLINE struct icmphdr* icmp_hdr(struct cali_tc_ctx *ctx)
+{
+	return (struct icmphdr *)ctx->nh;
+}
+
 #endif
 
 static CALI_BPF_INLINE struct ethhdr* eth_hdr(struct cali_tc_ctx *ctx)
@@ -252,11 +267,6 @@ static CALI_BPF_INLINE struct tcphdr* tcp_hdr(struct cali_tc_ctx *ctx)
 static CALI_BPF_INLINE struct udphdr* udp_hdr(struct cali_tc_ctx *ctx)
 {
 	return (struct udphdr *)ctx->nh;
-}
-
-static CALI_BPF_INLINE struct icmphdr* icmp_hdr(struct cali_tc_ctx *ctx)
-{
-	return (struct icmphdr *)ctx->nh;
 }
 
 static CALI_BPF_INLINE __u32 ctx_ifindex(struct cali_tc_ctx *ctx)

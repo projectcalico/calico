@@ -242,7 +242,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 
 			Expect(len(result.IPs)).Should(Equal(1))
 			ip := result.IPs[0].Address.IP.String()
-			result.IPs[0].Address.IP = result.IPs[0].Address.IP.To4() // Make sure the IP is respresented as 4 bytes
+			result.IPs[0].Address.IP = result.IPs[0].Address.IP.To4() // Make sure the IP is represented as 4 bytes
 			Expect(result.IPs[0].Address.Mask.String()).Should(Equal("ffffffff"))
 
 			// datastore things:
@@ -403,7 +403,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				mac := contVeth.Attrs().HardwareAddr
 
 				Expect(len(result.IPs)).Should(Equal(1))
-				result.IPs[0].Address.IP = result.IPs[0].Address.IP.To4() // Make sure the IP is respresented as 4 bytes
+				result.IPs[0].Address.IP = result.IPs[0].Address.IP.To4() // Make sure the IP is represented as 4 bytes
 				Expect(result.IPs[0].Address.Mask.String()).Should(Equal("ffffffff"))
 
 				// datastore things:
@@ -1557,6 +1557,84 @@ var _ = Describe("Kubernetes CNI tests", func() {
 
 			// Delete the container.
 			_, err = testutils.DeleteContainer(netconf, contNs.Path(), name, testutils.K8S_TEST_NS)
+			Expect(err).ShouldNot(HaveOccurred())
+		})
+	})
+
+	Context("using source IP spoofing annotation", func() {
+		var netconf types.NetConf
+		var clientset *kubernetes.Clientset
+
+		BeforeEach(func() {
+			netconf = types.NetConf{
+				CNIVersion:           cniVersion,
+				Name:                 "calico-network-name",
+				Type:                 "calico",
+				EtcdEndpoints:        fmt.Sprintf("http://%s:2379", os.Getenv("ETCD_IP")),
+				DatastoreType:        os.Getenv("DATASTORE_TYPE"),
+				Kubernetes:           types.Kubernetes{Kubeconfig: "/home/user/certs/kubeconfig"},
+				Policy:               types.Policy{PolicyType: "k8s"},
+				NodenameFileOptional: true,
+				LogLevel:             "info",
+			}
+			netconf.IPAM.Type = "calico-ipam"
+
+			// Create a new ipPool.
+			ipPool := "172.16.0.0/16"
+			testutils.MustCreateNewIPPool(calicoClient, ipPool, false, false, true)
+			_, _, err := net.ParseCIDR(ipPool)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Build kubernetes clients.
+			clientset = getKubernetesClient()
+
+			// Now create a K8s pod passing in allowedSourcePrefixes.
+			ensureNamespace(clientset, testutils.K8S_TEST_NS)
+			ensurePodCreated(clientset, testutils.K8S_TEST_NS, &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: name,
+					Annotations: map[string]string{
+						"cni.projectcalico.org/allowedSourcePrefixes": "[\"8.8.8.8/32\",\"1.1.1.0/24\"]",
+					},
+				},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{{
+						Name:  name,
+						Image: "ignore",
+					}},
+					NodeName: hostname,
+				},
+			})
+		})
+
+		AfterEach(func() {
+			// Delete pod
+			ensurePodDeleted(clientset, testutils.K8S_TEST_NS, name)
+
+			// Delete IPPools.
+			ipPool := "172.16.0.0/16"
+			testutils.MustDeleteIPPool(calicoClient, ipPool)
+		})
+
+		It("should look at the source spoofing disabling annotation", func() {
+			// Resolve the config struct.
+			confBytes, err := json.Marshal(netconf)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Invoke the CNI plugin
+			_, _, _, _, _, contNs, err := testutils.CreateContainer(string(confBytes), name, testutils.K8S_TEST_NS, "")
+			Expect(err).NotTo(HaveOccurred())
+
+			// Assert that the endpoint is created
+			endpoints, err := calicoClient.WorkloadEndpoints().List(ctx, options.ListOptions{})
+			Expect(err).ShouldNot(HaveOccurred())
+			Expect(endpoints.Items).Should(HaveLen(1))
+
+			// Assert that the endpoint contains the appropriate allowedSourcePrefixes
+			Expect(endpoints.Items[0].Spec.AllowSpoofedSourcePrefixes).To(ConsistOf([]string{"1.1.1.0/24", "8.8.8.8/32"}))
+
+			// Delete the container.
+			_, err = testutils.DeleteContainer(string(confBytes), contNs.Path(), name, testutils.K8S_TEST_NS)
 			Expect(err).ShouldNot(HaveOccurred())
 		})
 	})

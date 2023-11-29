@@ -80,7 +80,7 @@ func newSyncer(keysAPI etcd.KeysAPI, callbacks api.SyncerCallbacks) *etcdSyncer 
 // # The merge goroutine
 //
 // The merge goroutine receives updates about newly loaded snapshots (from the
-// snapshot reeading goroutine) and events (from the watcher goroutine) and
+// snapshot reading goroutine) and events (from the watcher goroutine) and
 // merges them into a consistent event stream.
 //
 // Since processing a snapshot takes some time and it happens concurrently with

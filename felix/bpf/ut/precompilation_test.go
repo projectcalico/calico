@@ -65,6 +65,8 @@ func TestPrecompiledBinariesAreLoadable(t *testing.T) {
 		objects[at.ObjectFile()] = struct{}{}
 	}
 
+	objects["tc_preamble.o"] = struct{}{}
+	objects["xdp_preamble.o"] = struct{}{}
 	for obj := range objects {
 		log.Debugf("Object %s", obj)
 		t.Run(obj, func(t *testing.T) {
@@ -72,9 +74,6 @@ func TestPrecompiledBinariesAreLoadable(t *testing.T) {
 			testObject(path.Join(bpfdefs.ObjectDir, obj))
 		})
 	}
-
-	testObject(path.Join(bpfdefs.ObjectDir, "tc_preamble.o"))
-	testObject(path.Join(bpfdefs.ObjectDir, "xdp_preamble.o"))
 }
 
 func createVeth() (string, netlink.Link) {
@@ -91,7 +90,7 @@ func createVethName(name string) netlink.Link {
 		PeerName:  name + "b",
 	}
 	err := netlink.LinkAdd(veth)
-	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "failed to create test veth")
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(), fmt.Sprintf("failed to create test veth: %q", name))
 	return veth
 }
 

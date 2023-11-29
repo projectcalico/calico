@@ -241,7 +241,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			Expect(len(result.IPs)).Should(Equal(1))
 			ip := result.IPs[0].Address.IP.String()
 			log.Debugf("ip is %v ", ip)
-			result.IPs[0].Address.IP = result.IPs[0].Address.IP.To4() // Make sure the IP is respresented as 4 bytes
+			result.IPs[0].Address.IP = result.IPs[0].Address.IP.To4() // Make sure the IP is represented as 4 bytes
 			Expect(result.IPs[0].Address.Mask.String()).Should(Equal("fffff000"))
 
 			// datastore things:
@@ -336,7 +336,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				log.Debugf("containerID %v ", containerID)
 				log.Debugf("result %v ", result)
 				Expect(len(result.IPs)).Should(Equal(1))
-				result.IPs[0].Address.IP = result.IPs[0].Address.IP.To4() // Make sure the IP is respresented as 4 bytes
+				result.IPs[0].Address.IP = result.IPs[0].Address.IP.To4() // Make sure the IP is represented as 4 bytes
 				Expect(result.IPs[0].Address.Mask.String()).Should(Equal("fffff000"))
 
 				// datastore things:
@@ -417,7 +417,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				Expect(len(result.IPs)).Should(Equal(1))
 				ip := result.IPs[0].Address.IP.String()
 				log.Debugf("ip is %v ", ip)
-				result.IPs[0].Address.IP = result.IPs[0].Address.IP.To4() // Make sure the IP is respresented as 4 bytes
+				result.IPs[0].Address.IP = result.IPs[0].Address.IP.To4() // Make sure the IP is represented as 4 bytes
 				Expect(result.IPs[0].Address.Mask.String()).Should(Equal("fffff000"))
 
 				ids := names.WorkloadEndpointIdentifiers{
@@ -496,7 +496,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				Expect(len(result.IPs)).Should(Equal(1))
 				ip := result.IPs[0].Address.IP.String()
 				log.Debugf("ip is %v ", ip)
-				result.IPs[0].Address.IP = result.IPs[0].Address.IP.To4() // Make sure the IP is respresented as 4 bytes
+				result.IPs[0].Address.IP = result.IPs[0].Address.IP.To4() // Make sure the IP is represented as 4 bytes
 				Expect(result.IPs[0].Address.Mask.String()).Should(Equal("fffff000"))
 
 				// datastore things:
@@ -600,7 +600,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				Expect(len(result.IPs)).Should(Equal(1))
 				ip := result.IPs[0].Address.IP.String()
 				log.Debugf("ip is %v ", ip)
-				result.IPs[0].Address.IP = result.IPs[0].Address.IP.To4() // Make sure the IP is respresented as 4 bytes
+				result.IPs[0].Address.IP = result.IPs[0].Address.IP.To4() // Make sure the IP is represented as 4 bytes
 				Expect(result.IPs[0].Address.Mask.String()).Should(Equal("fffff000"))
 
 				// datastore things:
@@ -771,7 +771,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				Expect(len(result.IPs)).Should(Equal(1))
 				ip := result.IPs[0].Address.IP.String()
 				log.Debugf("ip is %v ", ip)
-				result.IPs[0].Address.IP = result.IPs[0].Address.IP.To4() // Make sure the IP is respresented as 4 bytes
+				result.IPs[0].Address.IP = result.IPs[0].Address.IP.To4() // Make sure the IP is represented as 4 bytes
 				Expect(result.IPs[0].Address.Mask.String()).Should(Equal("fffff000"))
 
 				// datastore things:
@@ -983,7 +983,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 					Expect(len(result.IPs)).Should(Equal(1))
 					ip := result.IPs[0].Address.IP.String()
 					log.Debugf("ip is %v ", ip)
-					result.IPs[0].Address.IP = result.IPs[0].Address.IP.To4() // Make sure the IP is respresented as 4 bytes
+					result.IPs[0].Address.IP = result.IPs[0].Address.IP.To4() // Make sure the IP is represented as 4 bytes
 					Expect(result.IPs[0].Address.Mask.String()).Should(Equal("fffff000"))
 
 					// datastore things:
@@ -1818,7 +1818,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			Expect(len(result.IPs)).Should(Equal(1))
 			ip := result.IPs[0].Address.IP.String()
 			log.Debugf("ip is %v ", ip)
-			result.IPs[0].Address.IP = result.IPs[0].Address.IP.To4() // Make sure the IP is respresented as 4 bytes
+			result.IPs[0].Address.IP = result.IPs[0].Address.IP.To4() // Make sure the IP is represented as 4 bytes
 			Expect(result.IPs[0].Address.Mask.String()).Should(Equal("fffff000"))
 
 			// datastore things:

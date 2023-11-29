@@ -334,7 +334,7 @@ func (esr *EndpointStatusReporter) writeEndpointStatus(ctx context.Context, epID
 		logCxt.Info("Deleting endpoint status")
 		_, err = esr.datastore.Delete(ctx, epID, "")
 		if _, ok := err.(errors.ErrorResourceDoesNotExist); ok {
-			// Ignore non-existent resource.
+			// Ignore nonexistent resource.
 			err = nil
 		}
 	}

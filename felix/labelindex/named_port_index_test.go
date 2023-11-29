@@ -296,7 +296,7 @@ var (
 					Selector: "has(parentLabelC)",
 				},
 				"hasParentAAndParentB": {
-					// Checks indxing of parent labels.
+					// Checks indexing of parent labels.
 					Selector: "has(parentLabelA) && has(parentLabelB)",
 				},
 			},

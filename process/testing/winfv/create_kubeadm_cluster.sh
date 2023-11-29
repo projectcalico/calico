@@ -70,7 +70,7 @@ docs_url=`curl https://latest-os.docs.eng.tigera.net/master.txt`
 kubectl create -f ${docs_url}/manifests/tigera-operator.yaml
 sleep 5
 
-# Deply OS Calico but for EE FV, apply EE crds and RBAC later.
+# Deploy OS Calico but for EE FV, apply EE crds and RBAC later.
 echo "Applying custom resources..."
 kubectl apply -f ${ROOT}/infra/installation-${BACKEND}.yaml
 kubectl get installation default -oyaml
@@ -82,16 +82,16 @@ echo "Calico is running."
 kubectl taint nodes --all node-role.kubernetes.io/master-
 
 # strict affinity
-curl -O -L  https://github.com/projectcalico/calicoctl/releases/download/v3.17.1/calicoctl
+curl -sSf -L --retry 5 https://github.com/projectcalico/calico/releases/download/v3.27.0/calicoctl-linux-amd64 -o calicoctl
 chmod +x calicoctl
 export CALICO_DATASTORE_TYPE=kubernetes
 export CALICO_KUBECONFIG=~/.kube/config
-./calicoctl get node
-./calicoctl ipam configure --strictaffinity=true
+./calicoctl --allow-version-mismatch get node
+./calicoctl --allow-version-mismatch ipam configure --strictaffinity=true
 echo "ipam configured"
 
 pushd $ROOT/infra
-./setup.sh
+./setup.sh $CALICO_KUBECONFIG
 if [ "$FV_TYPE" == "tigera-felix" ]; then
   # Latest OS or EE crds is copied from felix's fv/infrastructure/crds.
   kubectl apply -f ee/crd

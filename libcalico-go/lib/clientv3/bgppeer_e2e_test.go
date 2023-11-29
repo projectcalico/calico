@@ -514,7 +514,7 @@ var _ = testutils.E2eDatastoreDescribe("BGPPeer tests", testutils.DatastoreAll, 
 			}, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 
-			By("Attempting to update the BGPPeer with a non-existent BGPFilter")
+			By("Attempting to update the BGPPeer with a nonexistent BGPFilter")
 			peerRes.Spec.Filters = []string{"bgp-filter-1", "bgp-filter-2"}
 			_, outError = c.BGPPeers().Update(ctx, peerRes, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())

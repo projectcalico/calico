@@ -7,7 +7,7 @@
 #include "nat.h"
 #include "icmp.h"
 
-const volatile struct cali_tc_globals __globals;
+const volatile struct cali_tc_preamble_globals __globals;
 
 static CALI_BPF_INLINE int calico_unittest_entry (struct __sk_buff *skb)
 {
@@ -18,7 +18,7 @@ static CALI_BPF_INLINE int calico_unittest_entry (struct __sk_buff *skb)
 	}
 
 	/* Set the globals for the rest of the prog chain. */
-	*globals = __globals;
+	globals->data = __globals.v4;
 	DECLARE_TC_CTX(_ctx,
 		.skb = skb,
 		.ipheader_len = IP_SIZE,
@@ -28,5 +28,5 @@ static CALI_BPF_INLINE int calico_unittest_entry (struct __sk_buff *skb)
 		CALI_DEBUG("Counters map lookup failed: DROP\n");
 		return TC_ACT_SHOT;
 	}
-	return icmp_v4_ttl_exceeded(ctx);
+	return icmp_v4_reply(ctx, ICMP_TIME_EXCEEDED, ICMP_EXC_TTL, 0);
 }

@@ -266,12 +266,12 @@ function GetCalicoKubeConfig()
         $secretName=c:\k\kubectl.exe --kubeconfig=$KubeConfigPath get secret -n $CalicoNamespace --field-selector=type=kubernetes.io/service-account-token --no-headers -o custom-columns=":metadata.name" | findstr $SecretNamePrefix | select -first 1
         $ErrorActionPreference = 'Stop'
         if ([string]::IsNullOrEmpty($secretName)) {
-            if (-Not $AutoCreateServiceAccountTokenSecret) {
-                throw "$SecretName service account token secret does not exist."
-            } else {
-                # Otherwise create the serviceaccount token secret.
+            if ($AutoCreateServiceAccountTokenSecret -EQ "yes") {
+                # Create the serviceaccount token secret.
                 $secretName = "calico-node-token"
                 CreateTokenAccountSecret -Name $secretName -Namespace $CalicoNamespace -KubeConfigPath $KubeConfigPath
+            } else {
+                throw "$SecretName service account token secret does not exist."
             }
         }
         # CA from the k8s secret is already base64-encoded.

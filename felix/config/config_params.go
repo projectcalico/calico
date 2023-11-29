@@ -203,6 +203,7 @@ type Config struct {
 	BPFPolicyDebugEnabled              bool              `config:"bool;true"`
 	BPFForceTrackPacketsFromIfaces     []string          `config:"iface-filter-slice;docker+"`
 	BPFDisableGROForIfaces             *regexp.Regexp    `config:"regexp;"`
+	BPFExcludeCIDRsFromNAT             []string          `config:"cidr-list;;"`
 
 	// DebugBPFCgroupV2 controls the cgroup v2 path that we apply the connect-time load balancer to.  Most distros
 	// are configured for cgroup v1, which prevents all but the root cgroup v2 from working so this is only useful
@@ -369,6 +370,10 @@ type Config struct {
 	DebugSimulateDataplaneHangAfter time.Duration `config:"seconds;0"`
 	DebugPanicAfter                 time.Duration `config:"seconds;0"`
 	DebugSimulateDataRace           bool          `config:"bool;false"`
+	// DebugHost is the host to bind the debug server port to.  Only used if DebugPort is non-zero.
+	DebugHost string `config:"host-address;localhost"`
+	// DebugPort is the port to bind the pprof debug server to or 0 to disable the debug port.
+	DebugPort int `config:"int(0,65535);"`
 
 	// Configure where Felix gets its routing information.
 	// - workloadIPs: use workload endpoints to construct routes.
@@ -756,7 +761,7 @@ func (config *Config) DatastoreConfig() apiconfig.CalicoAPIConfig {
 	}
 
 	// Now allow FELIX_XXXYYY variables or XxxYyy config file settings to override that, in the
-	// etcd case. Note that that etcd options are set even if the DatastoreType isn't etcdv3.
+	// etcd case. Note that etcd options are set even if the DatastoreType isn't etcdv3.
 	// This allows the user to rely the default DatastoreType being etcdv3 and still being able
 	// to configure the other etcdv3 options. As of the time of this code change, the etcd options
 	// have no affect if the DatastoreType is not etcdv3.

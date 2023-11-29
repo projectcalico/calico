@@ -43,7 +43,7 @@ func TestMainline(t *testing.T) {
 	}
 }
 
-func TestIntesection(t *testing.T) {
+func TestIntersection(t *testing.T) {
 	for _, test := range []struct {
 		Name          string
 		A, B          []string

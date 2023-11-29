@@ -51,7 +51,7 @@ func (_ Policy) APIV1ToBackendV1(a unversioned.Resource) (*model.KVPair, error) 
 	}
 
 	if ap.Spec.DoNotTrack || ap.Spec.PreDNAT {
-		// This case happens when there is a pre-existing policy in the datastore, from before
+		// This case happens when there is a preexisting policy in the datastore, from before
 		// the ApplyOnForward feature was available. DoNotTrack or PreDNAT policy applies to
 		// forward traffic by nature. So in this case we return ApplyOnForward flag as true.
 		d.Value.(*model.Policy).ApplyOnForward = true
@@ -114,14 +114,14 @@ func (_ Policy) BackendV1ToAPIV3(kvp *model.KVPair) (Resource, error) {
 	ap.Spec.Types = nil // Set later.
 
 	if !bp.ApplyOnForward && (bp.DoNotTrack || bp.PreDNAT) {
-		// This case happens when there is a pre-existing policy in the datastore, from before
+		// This case happens when there is a preexisting policy in the datastore, from before
 		// the ApplyOnForward feature was available. DoNotTrack or PreDNAT policy applies to
 		// forward traffic by nature. So in this case we return ApplyOnForward flag as true.
 		ap.Spec.ApplyOnForward = true
 	}
 
 	if len(bp.Types) == 0 {
-		// This case happens when there is a pre-existing policy in an etcd datastore, from
+		// This case happens when there is a preexisting policy in an etcd datastore, from
 		// before the explicit Types feature was available.  Calico's previous behaviour was
 		// always to apply policy to both ingress and egress traffic, so in this case we
 		// return Types as [ ingress, egress ].

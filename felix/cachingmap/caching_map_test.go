@@ -206,7 +206,7 @@ func TestCachingMap_DeleteBeforeLoad(t *testing.T) {
 	cm.Desired().Set("1, 4", "1, 2, 3, 5") // New K/V
 	cm.Desired().Delete("1, 2")            // Changed my mind.
 	cm.Desired().Delete("1, 4")            // Changed my mind.
-	cm.Desired().Delete("1, 8")            // Delete of non-existent key is a no-op.
+	cm.Desired().Delete("1, 8")            // Delete of nonexistent key is a no-op.
 	// Shouldn't do anything until we hit apply.
 	Expect(mockMap.OpCount()).To(Equal(0))
 
@@ -254,7 +254,7 @@ func TestCachingMap_PreLoad(t *testing.T) {
 	cm.Desired().Set("1, 1", "1, 2, 4, 3") // Same value for existing key.
 	cm.Desired().Set("1, 2", "1, 2, 3, 6") // New value for existing key.
 	cm.Desired().Set("1, 4", "1, 2, 3, 5") // New K/V
-	cm.Desired().Delete("1, 8")            // Delete of non-existent key is a no-op.
+	cm.Desired().Delete("1, 8")            // Delete of nonexistent key is a no-op.
 
 	err = cm.ApplyAllChanges()
 	Expect(err).NotTo(HaveOccurred())

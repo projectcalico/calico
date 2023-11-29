@@ -8,11 +8,11 @@ metadata:
 spec:
   containers:
   - name: nginx
-    image: nginx:1.8
+    image: nginx:1
     ports:
     - containerPort: 80
   nodeSelector:
-    beta.kubernetes.io/os: linux
+    kubernetes.io/os: linux
 
 ---
 
@@ -26,11 +26,11 @@ metadata:
 spec:
   containers:
   - name: nginx
-    image: nginx:1.8
+    image: nginx:1
     ports:
     - containerPort: 80
   nodeSelector:
-    beta.kubernetes.io/os: linux
+    kubernetes.io/os: linux
 
 ---
 

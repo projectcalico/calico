@@ -20,8 +20,8 @@ MAKE_REPO?=https://raw.githubusercontent.com/projectcalico/go-build/$(MAKE_BRANC
 include ../lib.Makefile
 
 SRC_FILES=$(shell find cmd -name '*.go') $(shell find pkg -name '*.go') $(shell find ../libcalico-go -name '*.go')
-KUBE_CONTROLLER_CONTAINER_CREATED=image.created-$(ARCH)
-KUBE_CONTROLLER_CONTAINER_FIPS_CREATED=image.created-$(ARCH)-fips
+KUBE_CONTROLLER_CONTAINER_CREATED=.image.created-$(ARCH)
+KUBE_CONTROLLER_CONTAINER_FIPS_CREATED=.image.created-$(ARCH)-fips
 
 FIPS ?= false
 
@@ -41,14 +41,11 @@ clean:
 	# Clean .created files which indicate images / releases have been built.
 	find . -name '.*.created*' -type f -delete
 	find . -name '.*.published*' -type f -delete
-	rm -rf .go-pkg-cache bin image.created-$(ARCH) build report/*.xml release-notes-*
-	-docker rmi $(KUBE_CONTROLLERS_IMAGE)
-	-docker rmi $(KUBE_CONTROLLERS_IMAGE):latest-amd64
-	-docker rmi $(KUBE_CONTROLLERS_IMAGE):latest-fips-amd64
-	-docker rmi $(FLANNEL_MIGRATION_IMAGE)
-	-docker rmi $(FLANNEL_MIGRATION_IMAGE):latest-amd64
-	rm -f tests/fv/fv.test
 	rm -f report/*.xml
+	rm -f tests/fv/fv.test
+	rm -rf bin image.created-$(ARCH) build report/*.xml release-notes-*
+	-docker image rm -f $$(docker images $(FLANNEL_MIGRATION_IMAGE) -a -q)
+	-docker image rm -f $$(docker images $(KUBE_CONTROLLERS_IMAGE) -a -q)
 
 ###############################################################################
 # Building the binary
@@ -78,30 +75,28 @@ $(BINDIR)/check-status-linux-$(ARCH): $(SRC_FILES)
 	$(call build_binary, ./cmd/check-status, $@)
 
 $(BINDIR)/kubectl-$(ARCH):
-	wget https://storage.googleapis.com/kubernetes-release/release/$(K8S_VERSION)/bin/linux/$(subst armv7,arm,$(ARCH))/kubectl -O $@
+	curl -sSf -L --retry 5 -o $@ https://storage.googleapis.com/kubernetes-release/release/$(K8S_VERSION)/bin/linux/$(ARCH)/kubectl
 	chmod +x $@
 
 ###############################################################################
 # Building the image
 ###############################################################################
 ## Builds the controller binary and docker image.
-image-all: $(addprefix sub-image-,$(VALIDARCHES)) sub-image-fips-amd64
+image-all: $(addprefix sub-image-,$(VALIDARCHES))
 sub-image-%:
-	$(MAKE) image ARCH=$*
-sub-image-fips-%:
-	$(MAKE) image FIPS=true ARCH=$*
+	$(MAKE) image FIPS=$(FIPS) ARCH=$*
 
 image: $(KUBE_CONTROLLER_CONTAINER_MARKER)
 
-$(KUBE_CONTROLLER_CONTAINER_CREATED): $(BINDIR)/kube-controllers-linux-$(ARCH) $(BINDIR)/check-status-linux-$(ARCH) $(BINDIR)/kubectl-$(ARCH) register
-	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(KUBE_CONTROLLERS_IMAGE):latest-$(ARCH) -f Dockerfile.$(ARCH) . --load
-	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(FLANNEL_MIGRATION_IMAGE):latest-$(ARCH) -f docker-images/flannel-migration/Dockerfile.$(ARCH) . --load
+$(KUBE_CONTROLLER_CONTAINER_CREATED): register Dockerfile docker-image/flannel-migration/Dockerfile $(BINDIR)/kube-controllers-linux-$(ARCH) $(BINDIR)/check-status-linux-$(ARCH) $(BINDIR)/kubectl-$(ARCH)
+	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(KUBE_CONTROLLERS_IMAGE):latest-$(ARCH) -f Dockerfile .
+	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(FLANNEL_MIGRATION_IMAGE):latest-$(ARCH) -f docker-image/flannel-migration/Dockerfile .
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 
-$(KUBE_CONTROLLER_CONTAINER_FIPS_CREATED): $(BINDIR)/kube-controllers-linux-$(ARCH) $(BINDIR)/check-status-linux-$(ARCH) $(BINDIR)/kubectl-$(ARCH) register
-	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(KUBE_CONTROLLERS_IMAGE):latest-fips-$(ARCH) -f Dockerfile.$(ARCH) . --load
-	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(FLANNEL_MIGRATION_IMAGE):latest-fips-$(ARCH) -f docker-images/flannel-migration/Dockerfile.$(ARCH) . --load
+$(KUBE_CONTROLLER_CONTAINER_FIPS_CREATED): register Dockerfile docker-image/flannel-migration/Dockerfile $(BINDIR)/kube-controllers-linux-$(ARCH) $(BINDIR)/check-status-linux-$(ARCH) $(BINDIR)/kubectl-$(ARCH)
+	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(KUBE_CONTROLLERS_IMAGE):latest-fips-$(ARCH) -f Dockerfile .
+	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(FLANNEL_MIGRATION_IMAGE):latest-fips-$(ARCH) -f docker-image/flannel-migration/Dockerfile .
 	$(MAKE) FIPS=true retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
 	touch $@
 
@@ -149,7 +144,7 @@ ut fv: $(TEST_BINARIES)
 # Only do this if there are .go files in the path.
 %/ut.test: $(SRC_FILES)
 	if [ $$(find ./$* -name '*.go' | wc -l) -gt 0 ]; then \
-		$(DOCKER_RUN) $(CALICO_BUILD) go test ./$* -c --tags fvtests -o $@; \
+		$(DOCKER_RUN) -e CGO_ENABLED=0 $(CALICO_BUILD) go test ./$* -c --tags fvtests -o $@; \
 	else \
 		echo "Skipping $* as it has no .go files in it"; \
 	fi
@@ -165,7 +160,7 @@ ci: clean mod-download image-all static-checks ut
 ###############################################################################
 .PHONY: cd
 ## Deploys images to registry
-cd: cd-common
+cd: image-all cd-common
 
 ###############################################################################
 # Release

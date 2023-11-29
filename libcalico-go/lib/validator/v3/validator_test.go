@@ -776,7 +776,7 @@ func init() {
 		Entry("should reject route table ranges max < min", api.FelixConfigurationSpec{RouteTableRanges: &api.RouteTableRanges{{Min: 50, Max: 45}}}, false),
 		Entry("should reject route table ranges max too large", api.FelixConfigurationSpec{RouteTableRanges: &api.RouteTableRanges{{Min: 1, Max: 0xf00000000}}}, false),
 		Entry("should reject single route table ranges targeting too many tables", api.FelixConfigurationSpec{RouteTableRanges: &api.RouteTableRanges{{Min: 1, Max: 0x10000}}}, false),
-		Entry("should reject multitple route table ranges targeting too many tables", api.FelixConfigurationSpec{RouteTableRanges: &api.RouteTableRanges{{Min: 1, Max: 2}, {Min: 3, Max: 4}, {Min: 5, Max: 0x10000}}}, false),
+		Entry("should reject multiple route table ranges targeting too many tables", api.FelixConfigurationSpec{RouteTableRanges: &api.RouteTableRanges{{Min: 1, Max: 2}, {Min: 3, Max: 4}, {Min: 5, Max: 0x10000}}}, false),
 
 		Entry("should reject spec with both RouteTableRanges and RouteTableRange set", api.FelixConfigurationSpec{
 			RouteTableRanges: &api.RouteTableRanges{
@@ -3097,7 +3097,7 @@ func init() {
 			PrefixAdvertisements: []api.PrefixAdvertisement{{CIDR: "2001:4860::/128", Communities: []string{"100:5964:1147483647", "100:5223"}}},
 		}, true),
 		Entry("should not accept community name that is not defined", api.BGPConfigurationSpec{
-			PrefixAdvertisements: []api.PrefixAdvertisement{{CIDR: "2001:4860::/128", Communities: []string{"non-existent-community"}}},
+			PrefixAdvertisements: []api.PrefixAdvertisement{{CIDR: "2001:4860::/128", Communities: []string{"nonexistent-community"}}},
 		}, false),
 		Entry("should accept community name whose values are defined", api.BGPConfigurationSpec{
 			Communities:          []api.Community{{Name: "community-test", Value: "101:5695"}},
@@ -3111,7 +3111,7 @@ func init() {
 			CIDR:    "10.0.0.0/24",
 			Node:    "node-1",
 		}, true),
-		Entry("should not accept delted block affinities", libapiv3.BlockAffinitySpec{
+		Entry("should not accept deleted block affinities", libapiv3.BlockAffinitySpec{
 			Deleted: "true",
 			State:   "confirmed",
 			CIDR:    "10.0.0.0/24",

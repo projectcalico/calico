@@ -130,3 +130,71 @@ func checkICMPPortUnreachable(pktR gopacket.Packet, ipv4 *layers.IPv4) {
 			layers.ICMPv4CodePort,
 		)))
 }
+
+func TestICMPV6PortUnreachable(t *testing.T) {
+	RegisterTestingT(t)
+
+	hop := &layers.IPv6HopByHop{}
+	hop.NextHeader = layers.IPProtocolUDP
+
+	/* from gopacket ip6_test.go */
+	tlv := &layers.IPv6HopByHopOption{}
+	tlv.OptionType = 0x01 //PadN
+	tlv.OptionData = []byte{0x00, 0x00, 0x00, 0x00}
+	hop.Options = append(hop.Options, tlv)
+
+	_, ipv6, _, _, pktBytes, err := testPacketV6(nil, ipv6Default, nil, nil, hop)
+	Expect(err).NotTo(HaveOccurred())
+
+	runBpfUnitTest(t, "icmp6_port_unreachable.c", func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(pktBytes)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).To(Equal(0))
+
+		Expect(res.dataOut).To(HaveLen(140)) // eth(14) + ipv6(40) + icmp(8) + ipv6(40) + ipopts(8) + len(pktBytes) - eth
+
+		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
+		fmt.Printf("pktR = %+v\n", pktR)
+
+		checkICMPv6PortUnreachable(pktR, ipv6)
+	}, withIPv6(), withObjName("icmp6_port_unreachable.o"))
+}
+
+func checkICMPv6PortUnreachable(pktR gopacket.Packet, ipv6 *layers.IPv6) {
+	ipv6L := pktR.Layer(layers.LayerTypeIPv6)
+	Expect(ipv6L).NotTo(BeNil())
+	ipv6R := ipv6L.(*layers.IPv6)
+
+	Expect(ipv6R.NextHeader).To(Equal(layers.IPProtocolICMPv6))
+	Expect(ipv6R.SrcIP.String()).To(Equal(intfIPV6.String()))
+	Expect(ipv6R.DstIP).To(Equal(ipv6.SrcIP))
+
+	icmpL := pktR.Layer(layers.LayerTypeICMPv6)
+	Expect(ipv6L).NotTo(BeNil())
+	icmpR := icmpL.(*layers.ICMPv6)
+
+	Expect(icmpR.TypeCode).To(Equal(
+		layers.CreateICMPv6TypeCode(
+			layers.ICMPv6TypeDestinationUnreachable,
+			layers.ICMPv6CodePortUnreachable,
+		)))
+
+	// serialize to recalculate csums
+
+	icmp := *icmpR
+	_ = icmp.SetNetworkLayerForChecksum(ipv6L.(gopacket.NetworkLayer))
+
+	cpkt := gopacket.NewSerializeBuffer()
+	err := gopacket.SerializeLayers(cpkt, gopacket.SerializeOptions{ComputeChecksums: true},
+		(pktR.Layer(layers.LayerTypeEthernet)).(gopacket.SerializableLayer),
+		ipv6L.(gopacket.SerializableLayer), &icmp,
+		(pktR.ApplicationLayer()).(gopacket.SerializableLayer))
+	Expect(err).NotTo(HaveOccurred())
+
+	fmt.Printf("pktR.Bytes() = %+v\n", pktR.Data())
+	fmt.Printf("cpkt.Bytes() = %+v\n", cpkt.Bytes())
+
+	Expect(icmpR.Checksum).To(Equal(
+		gopacket.NewPacket(cpkt.Bytes(), layers.LayerTypeEthernet, gopacket.Default).
+			Layer(layers.LayerTypeICMPv6).(*layers.ICMPv6).Checksum))
+}

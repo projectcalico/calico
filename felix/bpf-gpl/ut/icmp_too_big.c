@@ -9,7 +9,7 @@
 #include "parsing.h"
 #include "jump.h"
 
-const volatile struct cali_tc_globals __globals;
+const volatile struct cali_tc_preamble_globals __globals;
 
 static CALI_BPF_INLINE int calico_unittest_entry (struct __sk_buff *skb)
 {
@@ -20,7 +20,7 @@ static CALI_BPF_INLINE int calico_unittest_entry (struct __sk_buff *skb)
 	}
 
 	/* Set the globals for the rest of the prog chain. */
-	*globals = __globals;
+	globals->data = __globals.v4;
 	DECLARE_TC_CTX(_ctx,
 		.skb = skb,
 		.ipheader_len = IP_SIZE,
@@ -44,7 +44,14 @@ static CALI_BPF_INLINE int calico_unittest_entry (struct __sk_buff *skb)
 		goto allow;
 	}
 
-	return icmp_v4_too_big(ctx);
+	struct {
+		__be16  unused;
+		__be16  mtu;
+	} frag = {
+		.mtu = bpf_htons(TUNNEL_MTU),
+	};
+
+	return icmp_v4_reply(ctx, ICMP_DEST_UNREACH, ICMP_FRAG_NEEDED, *(__be32 *)&frag);
 
 allow:
 	return TC_ACT_UNSPEC;

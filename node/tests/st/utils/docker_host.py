@@ -354,7 +354,7 @@ class DockerHost(object):
             if FELIX_LOGLEVEL != "":
                 felix_logsetting = " -e FELIX_LOGSEVERITYSCREEN=" + FELIX_LOGLEVEL
 
-            # Construct the calicoctl command that we want, including the
+            # Construct the docker command that we want, including the
             # CALICO_IPV4POOL_CIDR setting.
             modified_cmd = (
                 prefix +

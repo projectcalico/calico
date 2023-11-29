@@ -84,7 +84,7 @@ if ($extraFeatures.Length -GT 0) {
     Write-Host "Enabling feature gates: $extraFeatures."
 }
 
-# kube-proxy doesn't handle resync if there are pre-existing policies, clean them
+# kube-proxy doesn't handle resync if there are preexisting policies, clean them
 # all out before (re)starting kube-proxy.
 $policyLists = Get-HnsPolicyList
 if ($policyLists) {

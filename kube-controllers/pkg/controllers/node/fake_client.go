@@ -353,7 +353,7 @@ func (f *fakeIPAMClient) GetUtilization(ctx context.Context, args ipam.GetUtiliz
 }
 
 // EnsureBlock returns single IPv4/IPv6 IPAM block for a host as specified by the provided BlockArgs.
-// If there is no block allocated already for this host, allocate one and return its' CIDR.
+// If there is no block allocated already for this host, allocate one and return its CIDR.
 // Otherwise, return the CIDR of the IPAM block allocated for this host.
 // It returns IPv4, IPv6 block CIDR and any error encountered.
 func (f *fakeIPAMClient) EnsureBlock(ctx context.Context, args ipam.BlockArgs) (*cnet.IPNet, *cnet.IPNet, error) {

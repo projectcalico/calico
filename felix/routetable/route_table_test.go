@@ -61,7 +61,6 @@ var _ = Describe("RouteTable v6", func() {
 			[]string{"^cali.*"},
 			6,
 			dataplane.NewMockNetlink,
-			false,
 			10*time.Second,
 			dataplane.AddStaticArpEntry,
 			dataplane,
@@ -130,7 +129,6 @@ var _ = Describe("RouteTable", func() {
 			[]string{"^cali.*"},
 			4,
 			dataplane.NewMockNetlink,
-			false,
 			10*time.Second,
 			dataplane.AddStaticArpEntry,
 			dataplane,
@@ -169,13 +167,13 @@ var _ = Describe("RouteTable", func() {
 	})
 
 	Describe("with some interfaces", func() {
-		var cali1, cali3, eth0 *mocknetlink.MockLink
+		var cali1, cali2, cali3, eth0 *mocknetlink.MockLink
 		var gatewayRoute, cali1Route, cali1Route2, cali3Route netlink.Route
 		BeforeEach(func() {
-			eth0 = dataplane.AddIface(0, "eth0", true, true)
-			cali1 = dataplane.AddIface(1, "cali1", true, true)
-			dataplane.AddIface(2, "cali2", true, true)
-			cali3 = dataplane.AddIface(3, "cali3", true, true)
+			eth0 = dataplane.AddIface(2, "eth0", true, true)
+			cali1 = dataplane.AddIface(3, "cali1", true, true)
+			cali2 = dataplane.AddIface(4, "cali2", true, true)
+			cali3 = dataplane.AddIface(5, "cali3", true, true)
 			cali1Route = netlink.Route{
 				LinkIndex: cali1.LinkAttrs.Index,
 				Dst:       mustParseCIDR("10.0.0.1/32"),
@@ -245,7 +243,7 @@ var _ = Describe("RouteTable", func() {
 			))
 		})
 		It("Should clear out a source address when source address is not set", func() {
-			updateLink := dataplane.AddIface(5, "cali5", true, true)
+			updateLink := dataplane.AddIface(6, "cali5", true, true)
 			updateRoute := netlink.Route{
 				LinkIndex: updateLink.LinkAttrs.Index,
 				Dst:       mustParseCIDR("10.0.0.5/32"),
@@ -267,7 +265,6 @@ var _ = Describe("RouteTable", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(dataplane.UpdatedRouteKeys).To(HaveKey(mocknetlink.KeyForRoute(&updateRoute)))
 			Expect(dataplane.RouteKeyToRoute[mocknetlink.KeyForRoute(&updateRoute)]).To(Equal(fixedRoute))
-
 		})
 		Describe("With a device route source address set", func() {
 			deviceRouteSource := "192.168.0.1"
@@ -278,7 +275,6 @@ var _ = Describe("RouteTable", func() {
 					[]string{"^cali.*"},
 					4,
 					dataplane.NewMockNetlink,
-					false,
 					10*time.Second,
 					dataplane.AddStaticArpEntry,
 					dataplane,
@@ -323,7 +319,7 @@ var _ = Describe("RouteTable", func() {
 			})
 			It("Should not remove routes with a source address", func() {
 				// Route that should be left alone
-				noopLink := dataplane.AddIface(4, "cali4", true, true)
+				noopLink := dataplane.AddIface(6, "cali4", true, true)
 				noopRoute := netlink.Route{
 					LinkIndex: noopLink.LinkAttrs.Index,
 					Dst:       mustParseCIDR("10.0.0.4/32"),
@@ -346,7 +342,7 @@ var _ = Describe("RouteTable", func() {
 			})
 			It("Should update source addresses from nil to a given source", func() {
 				// Route that needs to be updated
-				updateLink := dataplane.AddIface(5, "cali5", true, true)
+				updateLink := dataplane.AddIface(6, "cali5", true, true)
 				updateRoute := netlink.Route{
 					LinkIndex: updateLink.LinkAttrs.Index,
 					Dst:       mustParseCIDR("10.0.0.5/32"),
@@ -372,7 +368,7 @@ var _ = Describe("RouteTable", func() {
 
 			It("Should update source addresses from an old source to a new one", func() {
 				// Route that needs to be updated
-				updateLink := dataplane.AddIface(5, "cali5", true, true)
+				updateLink := dataplane.AddIface(6, "cali5", true, true)
 				updateRoute := netlink.Route{
 					LinkIndex: updateLink.LinkAttrs.Index,
 					Dst:       mustParseCIDR("10.0.0.5/32"),
@@ -406,7 +402,6 @@ var _ = Describe("RouteTable", func() {
 					[]string{"^cali.*"},
 					4,
 					dataplane.NewMockNetlink,
-					false,
 					10*time.Second,
 					dataplane.AddStaticArpEntry,
 					dataplane,
@@ -476,7 +471,7 @@ var _ = Describe("RouteTable", func() {
 					{CIDR: ip.MustParseCIDROrIP("10.0.0.7"), DestMAC: mac1},
 				})
 				// Persist failures, this will apply the deltas to the cache but will be out of sync with the dataplane.
-				dataplane.FailuresToSimulate = mocknetlink.FailNextRouteAdd
+				dataplane.FailuresToSimulate = mocknetlink.FailNextRouteAdd | mocknetlink.FailNextRouteReplace
 				dataplane.PersistFailures = true
 				err := rt.Apply()
 				Expect(err).To(HaveOccurred())
@@ -505,7 +500,7 @@ var _ = Describe("RouteTable", func() {
 			})
 			It("Should not remove routes with a protocol", func() {
 				// Route that should be left alone
-				noopLink := dataplane.AddIface(4, "cali4", true, true)
+				noopLink := dataplane.AddIface(6, "cali4", true, true)
 				noopRoute := netlink.Route{
 					LinkIndex: noopLink.LinkAttrs.Index,
 					Dst:       mustParseCIDR("10.0.0.4/32"),
@@ -526,7 +521,7 @@ var _ = Describe("RouteTable", func() {
 			})
 			It("Should update protocol from nil to a given protocol", func() {
 				// Route that needs to be updated
-				updateLink := dataplane.AddIface(5, "cali5", true, true)
+				updateLink := dataplane.AddIface(6, "cali5", true, true)
 				updateRoute := netlink.Route{
 					LinkIndex: updateLink.LinkAttrs.Index,
 					Dst:       mustParseCIDR("10.0.0.5/32"),
@@ -550,7 +545,7 @@ var _ = Describe("RouteTable", func() {
 
 			It("Should update protocol from an old protocol to a new one", func() {
 				// Route that needs to be updated
-				updateLink := dataplane.AddIface(5, "cali5", true, true)
+				updateLink := dataplane.AddIface(6, "cali5", true, true)
 				updateRoute := netlink.Route{
 					LinkIndex: updateLink.LinkAttrs.Index,
 					Dst:       mustParseCIDR("10.0.0.5/32"),
@@ -627,7 +622,7 @@ var _ = Describe("RouteTable", func() {
 				err := rt.Apply()
 				Expect(err).NotTo(HaveOccurred())
 
-				dataplane.FailuresToSimulate = mocknetlink.FailNextRouteAdd
+				dataplane.FailuresToSimulate = mocknetlink.FailNextRouteAdd | mocknetlink.FailNextRouteReplace
 				dataplane.PersistFailures = true
 				rt.RouteUpdate("cali3", Target{
 					CIDR: ip.MustParseCIDROrIP("10.20.30.40"),
@@ -845,7 +840,7 @@ var _ = Describe("RouteTable", func() {
 				})
 				It("should keep correct route", func() {
 					Expect(dataplane.RouteKeyToRoute["254-10.0.0.1/32"]).To(Equal(netlink.Route{
-						LinkIndex: 1,
+						LinkIndex: cali1.LinkAttrs.Index,
 						Dst:       &ip1,
 						Type:      syscall.RTN_UNICAST,
 						Protocol:  FelixRouteProtocol,
@@ -857,7 +852,7 @@ var _ = Describe("RouteTable", func() {
 				It("should add new route", func() {
 					Expect(dataplane.RouteKeyToRoute).To(HaveKey("254-10.0.0.2/32"))
 					Expect(dataplane.RouteKeyToRoute["254-10.0.0.2/32"]).To(Equal(netlink.Route{
-						LinkIndex: 2,
+						LinkIndex: cali2.LinkAttrs.Index,
 						Dst:       &ip2,
 						Type:      syscall.RTN_UNICAST,
 						Protocol:  FelixRouteProtocol,
@@ -868,7 +863,7 @@ var _ = Describe("RouteTable", func() {
 				It("should update changed route", func() {
 					Expect(dataplane.RouteKeyToRoute).To(HaveKey("254-10.0.1.3/32"))
 					Expect(dataplane.RouteKeyToRoute["254-10.0.1.3/32"]).To(Equal(netlink.Route{
-						LinkIndex: 3,
+						LinkIndex: cali3.LinkAttrs.Index,
 						Dst:       &ip13,
 						Type:      syscall.RTN_UNICAST,
 						Protocol:  FelixRouteProtocol,
@@ -956,7 +951,7 @@ var _ = Describe("RouteTable", func() {
 		var cali1 *mocknetlink.MockLink
 		var cali1Route netlink.Route
 		BeforeEach(func() {
-			cali1 = dataplane.AddIface(1, "cali1", false, false)
+			cali1 = dataplane.AddIface(2, "cali1", false, false)
 			cali1Route = netlink.Route{
 				LinkIndex: cali1.LinkAttrs.Index,
 				Dst:       mustParseCIDR("10.0.0.1/32"),
@@ -1017,7 +1012,7 @@ var _ = Describe("RouteTable", func() {
 
 				// Set interface up
 				rt.OnIfaceStateChanged("cali1", ifacemonitor.StateUp)
-				cali1 = dataplane.AddIface(1, "cali1", true, true)
+				dataplane.SetIface("cali1", true, true)
 
 				// Now, the apply should work.
 				err = rt.Apply()
@@ -1029,7 +1024,7 @@ var _ = Describe("RouteTable", func() {
 
 	Describe("with an interface that disappears", func() {
 		BeforeEach(func() {
-			// Add an interface so that hte route table tries to list the routes assocaited with it.
+			// Add an interface so that hte route table tries to list the routes associated with it.
 			dataplane.AddIface(2, "cali1", true, true)
 			// But trigger the interface to disappear just before the list call.  This will trigger
 			// a list operation with no interface, resulting in an ENODEV.
@@ -1063,7 +1058,6 @@ var _ = Describe("RouteTable (main table)", func() {
 			[]string{"^cali.*"},
 			4,
 			dataplane.NewMockNetlink,
-			false,
 			10*time.Second,
 			dataplane.AddStaticArpEntry,
 			dataplane,
@@ -1086,8 +1080,8 @@ var _ = Describe("RouteTable (main table)", func() {
 		var cali1, eth0 *mocknetlink.MockLink
 		var gatewayRoute, cali1Route, cali1RouteTable100 netlink.Route
 		BeforeEach(func() {
-			eth0 = dataplane.AddIface(0, "eth0", true, true)
-			cali1 = dataplane.AddIface(1, "cali1", true, true)
+			eth0 = dataplane.AddIface(2, "eth0", true, true)
+			cali1 = dataplane.AddIface(3, "cali1", true, true)
 			cali1Route = netlink.Route{
 				LinkIndex: cali1.LinkAttrs.Index,
 				Dst:       mustParseCIDR("10.0.0.1/32"),
@@ -1166,7 +1160,6 @@ var _ = Describe("RouteTable (table 100)", func() {
 			[]string{"^cali$", InterfaceNone}, // exact interface match
 			4,
 			dataplane.NewMockNetlink,
-			false,
 			10*time.Second,
 			dataplane.AddStaticArpEntry,
 			dataplane,
@@ -1189,8 +1182,8 @@ var _ = Describe("RouteTable (table 100)", func() {
 		var cali, eth0 *mocknetlink.MockLink
 		var gatewayRoute, caliRoute, caliRouteTable100, throwRoute, caliRouteTable100SameAsThrow netlink.Route
 		BeforeEach(func() {
-			eth0 = dataplane.AddIface(0, "eth0", true, true)
-			cali = dataplane.AddIface(1, "cali", true, true)
+			eth0 = dataplane.AddIface(2, "eth0", true, true)
+			cali = dataplane.AddIface(3, "cali", true, true)
 			caliRoute = netlink.Route{
 				LinkIndex: cali.LinkAttrs.Index,
 				Dst:       mustParseCIDR("10.0.0.1/32"),
@@ -1459,7 +1452,6 @@ var _ = Describe("Tests to verify ip version is policed", func() {
 				[]string{"^cali$", InterfaceNone},
 				5, // invalid IP version
 				dataplane.NewMockNetlink,
-				false,
 				10*time.Second,
 				dataplane.AddStaticArpEntry,
 				dataplane,

@@ -356,15 +356,16 @@ func setupAndRun(logger testLogger, loglevel, section string, rules *polprog.Rul
 	policyIdx := tcdefs.ProgIndexPolicy
 	if topts.ipv6 {
 		ipFamily = "IPv6"
+	}
+
+	if topts.objname != "" {
+		obj = topts.objname
+	} else if topts.ipv6 {
 		obj += "_v6"
 	}
 
 	if topts.xdp {
 		o, err := objLoad("../../bpf-gpl/bin/xdp_preamble.o", bpfFsDir, "preamble", topts, false, false)
-		Expect(err).NotTo(HaveOccurred())
-		defer o.Close()
-	} else if topts.ipv6 {
-		o, err := objLoad("../../bpf-gpl/bin/tc_preamble_v6.o", bpfFsDir, "preamble", topts, false, false)
 		Expect(err).NotTo(HaveOccurred())
 		defer o.Close()
 	} else {
@@ -396,32 +397,60 @@ func setupAndRun(logger testLogger, loglevel, section string, rules *polprog.Rul
 	defer o.Close()
 
 	if rules != nil {
-		jmpMap := progMap
-		polMap := jumpMap
+		staticProgMap := progMap
+		polMap := policyJumpMap
 		popts := []polprog.Option{}
+		stride := jump.TCMaxEntryPoints
 		if topts.xdp {
-			jmpMap = progMapXDP
-			polMap = jumpMapXDP
-			popts = append(popts, polprog.WithAllowDenyJumps(tcdefs.ProgIndexAllowed, tcdefs.ProgIndexDrop))
+			staticProgMap = progMapXDP
+			polMap = policyJumpMapXDP
+			popts = append(popts,
+				polprog.WithAllowDenyJumps(tcdefs.ProgIndexAllowed, tcdefs.ProgIndexDrop),
+				polprog.WithPolicyMapIndexAndStride(policyIdx, jump.XDPMaxEntryPoints),
+			)
+			stride = jump.XDPMaxEntryPoints
+		} else {
+			popts = append(popts,
+				polprog.WithPolicyMapIndexAndStride(policyIdx, jump.TCMaxEntryPoints),
+			)
 		}
 		alloc := &forceAllocator{alloc: idalloc.New()}
 		ipsMapFD := ipsMap.MapFD()
 		Expect(ipsMapFD).NotTo(BeZero())
 		stateMapFD := stateMap.MapFD()
 		Expect(stateMapFD).NotTo(BeZero())
-		pg := polprog.NewBuilder(alloc, ipsMapFD, stateMapFD, jmpMap.MapFD(), popts...)
+		pg := polprog.NewBuilder(alloc, ipsMapFD, stateMapFD, staticProgMap.MapFD(), polMap.MapFD(), popts...)
 		insns, err := pg.Instructions(*rules)
 		Expect(err).NotTo(HaveOccurred())
-		var polProgFD bpf.ProgFD
+
+		var polProgFDs []bpf.ProgFD
+		defer func() {
+			var errs []error
+			for _, polProgFD := range polProgFDs {
+				err := polProgFD.Close()
+				if err != nil {
+					errs = append(errs, err)
+				}
+			}
+			Expect(errs).To(BeEmpty())
+		}()
+		var progType uint32
 		if topts.xdp {
-			polProgFD, err = bpf.LoadBPFProgramFromInsns(insns, "calico_policy", "Apache-2.0", unix.BPF_PROG_TYPE_XDP)
+			progType = unix.BPF_PROG_TYPE_XDP
 		} else {
-			polProgFD, err = bpf.LoadBPFProgramFromInsns(insns, "calico_policy", "Apache-2.0", unix.BPF_PROG_TYPE_SCHED_CLS)
+			progType = unix.BPF_PROG_TYPE_SCHED_CLS
 		}
-		Expect(err).NotTo(HaveOccurred(), "Failed to load rules program.")
-		defer func() { _ = polProgFD.Close() }()
-		err = jumpMapUpdate(polMap, policyIdx, int(polProgFD))
-		Expect(err).NotTo(HaveOccurred())
+		for i, p := range insns {
+			polProgFD, err := bpf.LoadBPFProgramFromInsns(p, "calico_policy", "Apache-2.0", progType)
+			Expect(err).NotTo(HaveOccurred(), "failed to load program into the kernel")
+			Expect(polProgFD).NotTo(BeZero())
+			polProgFDs = append(polProgFDs, polProgFD)
+			err = polMap.Update(
+				jump.Key(polprog.SubProgramJumpIdx(policyIdx, i, stride)),
+				jump.Value(polProgFD.FD()),
+			)
+			Expect(err).NotTo(HaveOccurred())
+		}
 		log.WithField("rules", rules).Debug("set policy")
 	}
 
@@ -526,10 +555,10 @@ func bpftool(args ...string) ([]byte, error) {
 var (
 	mapInitOnce sync.Once
 
-	natMap, natBEMap, ctMap, rtMap, ipsMap, testStateMap, affinityMap, arpMap, fsafeMap   maps.Map
-	natMapV6, natBEMapV6, ctMapV6, rtMapV6, ipsMapV6, affinityMapV6, arpMapV6, fsafeMapV6 maps.Map
-	stateMap, countersMap, ifstateMap, progMap, progMapXDP, jumpMap, jumpMapXDP           maps.Map
-	allMaps                                                                               []maps.Map
+	natMap, natBEMap, ctMap, rtMap, ipsMap, testStateMap, affinityMap, arpMap, fsafeMap     maps.Map
+	natMapV6, natBEMapV6, ctMapV6, rtMapV6, ipsMapV6, affinityMapV6, arpMapV6, fsafeMapV6   maps.Map
+	stateMap, countersMap, ifstateMap, progMap, progMapXDP, policyJumpMap, policyJumpMapXDP maps.Map
+	allMaps                                                                                 []maps.Map
 )
 
 func initMapsOnce() {
@@ -554,10 +583,13 @@ func initMapsOnce() {
 		fsafeMapV6 = failsafes.MapV6()
 		countersMap = counters.Map()
 		ifstateMap = ifstate.Map()
+		policyJumpMap = jump.Map()
+		policyJumpMapXDP = jump.XDPMap()
 
 		allMaps = []maps.Map{natMap, natBEMap, natMapV6, natBEMapV6, ctMap, ctMapV6, rtMap, rtMapV6, ipsMap, ipsMapV6,
 			stateMap, testStateMap, affinityMap, affinityMapV6, arpMap, arpMapV6, fsafeMap, fsafeMapV6,
-			countersMap, ifstateMap}
+			countersMap, ifstateMap,
+			policyJumpMap, policyJumpMapXDP}
 		for _, m := range allMaps {
 			err := m.EnsureExists()
 			if err != nil {
@@ -583,6 +615,9 @@ func cleanUpMaps() {
 			return maps.IterDelete
 		})
 		if err != nil {
+			if errors.Is(err, maps.ErrNotSupported) {
+				continue
+			}
 			log.WithError(err).Panic("Failed to walk map")
 		}
 	}
@@ -656,22 +691,22 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 
 	// XXX we do not need to create both sets of maps, but, well, who cares here ;-)
 	progMap = hook.NewProgramsMap()
-	jumpMap = jump.Map()
+	policyJumpMap = jump.Map()
 	progMapXDP = hook.NewXDPProgramsMap()
-	jumpMapXDP = jump.XDPMap()
+	policyJumpMapXDP = jump.XDPMap()
 	if ipFamily == "preamble" {
 		_ = unix.Unlink(progMap.Path())
-		_ = unix.Unlink(jumpMap.Path())
+		_ = unix.Unlink(policyJumpMap.Path())
 		_ = unix.Unlink(progMapXDP.Path())
-		_ = unix.Unlink(jumpMapXDP.Path())
+		_ = unix.Unlink(policyJumpMapXDP.Path())
 	}
 	err := progMap.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
-	err = jumpMap.EnsureExists()
+	err = policyJumpMap.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 	err = progMapXDP.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
-	err = jumpMapXDP.EnsureExists()
+	err = policyJumpMapXDP.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 
 	obj, err := libbpf.OpenObject(fname)
@@ -695,42 +730,43 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 				}
 			} else if topts.ipv6 {
 				ifaceLog := topts.progLog + "-" + bpfIfaceName
-				globals := libbpf.TcGlobalData6{
+				globals := libbpf.TcGlobalData{
 					Tmtu:         natTunnelMTU,
 					VxlanPort:    testVxlanPort,
 					PSNatStart:   uint16(topts.psnaStart),
 					PSNatLen:     uint16(topts.psnatEnd-topts.psnaStart) + 1,
-					Flags:        libbpf.GlobalsIPv6Enabled | libbpf.GlobalsNoDSRCidrs,
+					Flags:        libbpf.GlobalsNoDSRCidrs,
 					LogFilterJmp: 0xffffffff,
 				}
 
-				copy(globals.HostTunnelIP[:], node1tunIPV6.To16())
-				copy(globals.HostIP[:], hostIP.To16())
-				copy(globals.IntfIP[:], intfIPV6.To16())
+				copy(globals.HostTunnelIPv6[:], node1tunIPV6.To16())
+				copy(globals.HostIPv6[:], hostIP.To16())
+				copy(globals.IntfIPv6[:], intfIPV6.To16())
 
 				for i := 0; i < tcdefs.ProgIndexEnd; i++ {
-					globals.Jumps[i] = uint32(i)
+					globals.JumpsV6[i] = uint32(i)
 				}
 
 				log.WithField("globals", globals).Debugf("configure program")
 
-				if err := tc.ConfigureProgramV6(m, ifaceLog, &globals); err != nil {
+				if err := tc.ConfigureProgram(m, ifaceLog, &globals); err != nil {
 					return nil, fmt.Errorf("failed to configure tc program: %w", err)
 				}
 				log.WithField("program", fname).Debugf("Configured BPF program iface \"%s\"", ifaceLog)
 			} else {
 				ifaceLog := topts.progLog + "-" + bpfIfaceName
 				globals := libbpf.TcGlobalData{
-					HostIP:       ipToU32(hostIP),
-					IntfIP:       ipToU32(intfIP),
 					Tmtu:         natTunnelMTU,
 					VxlanPort:    testVxlanPort,
 					PSNatStart:   uint16(topts.psnaStart),
 					PSNatLen:     uint16(topts.psnatEnd-topts.psnaStart) + 1,
-					Flags:        libbpf.GlobalsIPv6Enabled | libbpf.GlobalsNoDSRCidrs,
-					HostTunnelIP: ipToU32(node1tunIP),
+					Flags:        libbpf.GlobalsNoDSRCidrs,
 					LogFilterJmp: 0xffffffff,
 				}
+
+				copy(globals.HostIPv4[0:4], hostIP)
+				copy(globals.IntfIPv4[0:4], intfIP)
+				copy(globals.HostTunnelIPv4[0:4], node1tunIP.To4())
 
 				for i := 0; i < tcdefs.ProgIndexEnd; i++ {
 					globals.Jumps[i] = uint32(i)
@@ -783,9 +819,9 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 		polProgPath = path.Join(bpfFsDir, polProgPath)
 		_, err = os.Stat(polProgPath)
 		if err == nil {
-			m := jumpMap
+			m := policyJumpMap
 			if forXDP {
-				m = jumpMapXDP
+				m = policyJumpMapXDP
 			}
 			err = jumpMapUpdatePinned(m, policyIdx, polProgPath)
 			if err != nil {
@@ -832,32 +868,33 @@ func objUTLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHos
 		if m.IsMapInternal() {
 			ifaceLog := topts.progLog + "-" + bpfIfaceName
 			if topts.ipv6 {
-				globals := libbpf.TcGlobalData6{
+				globals := libbpf.TcGlobalData{
 					Tmtu:       natTunnelMTU,
 					VxlanPort:  testVxlanPort,
 					PSNatStart: uint16(topts.psnaStart),
 					PSNatLen:   uint16(topts.psnatEnd-topts.psnaStart) + 1,
-					Flags:      libbpf.GlobalsIPv6Enabled | libbpf.GlobalsNoDSRCidrs,
+					Flags:      libbpf.GlobalsNoDSRCidrs,
 				}
 
-				copy(globals.HostTunnelIP[:], node1tunIPV6.To16())
-				copy(globals.HostIP[:], hostIP.To16())
-				copy(globals.IntfIP[:], intfIPV6.To16())
+				copy(globals.HostTunnelIPv6[:], node1tunIPV6.To16())
+				copy(globals.HostIPv6[:], hostIP.To16())
+				copy(globals.IntfIPv6[:], intfIPV6.To16())
 
-				if err := tc.ConfigureProgramV6(m, ifaceLog, &globals); err != nil {
+				if err := tc.ConfigureProgram(m, ifaceLog, &globals); err != nil {
 					return nil, fmt.Errorf("failed to configure v6 tc program: %w", err)
 				}
 			} else {
 				globals := libbpf.TcGlobalData{
-					HostIP:       ipToU32(hostIP),
-					IntfIP:       ipToU32(intfIP),
-					Tmtu:         natTunnelMTU,
-					VxlanPort:    testVxlanPort,
-					PSNatStart:   uint16(topts.psnaStart),
-					PSNatLen:     uint16(topts.psnatEnd-topts.psnaStart) + 1,
-					Flags:        libbpf.GlobalsIPv6Enabled | libbpf.GlobalsNoDSRCidrs,
-					HostTunnelIP: ipToU32(node1tunIP),
+					Tmtu:       natTunnelMTU,
+					VxlanPort:  testVxlanPort,
+					PSNatStart: uint16(topts.psnaStart),
+					PSNatLen:   uint16(topts.psnatEnd-topts.psnaStart) + 1,
+					Flags:      libbpf.GlobalsNoDSRCidrs,
 				}
+				copy(globals.HostTunnelIPv4[0:4], node1tunIP.To4())
+				copy(globals.HostIPv4[0:4], hostIP.To4())
+				copy(globals.IntfIPv4[0:4], intfIP.To4())
+
 				if err := tc.ConfigureProgram(m, ifaceLog, &globals); err != nil {
 					return nil, fmt.Errorf("failed to configure tc program: %w", err)
 				}
@@ -1016,6 +1053,9 @@ func runBpfUnitTest(t *testing.T, source string, testFn func(bpfProgRunFn), opts
 	}
 
 	objFname := "../../bpf-gpl/ut/" + strings.TrimSuffix(source, path.Ext(source)) + vExt + ".o"
+	if topts.objname != "" {
+		objFname = "../../bpf-gpl/ut/" + topts.objname
+	}
 
 	obj, err := objUTLoad(objFname, bpfFsDir, "IPv4", topts, true, false)
 	Expect(err).NotTo(HaveOccurred())
@@ -1054,6 +1094,7 @@ type testOpts struct {
 	hostNetworked bool
 	progLog       string
 	ipv6          bool
+	objname       string
 }
 
 type testOption func(opts *testOpts)
@@ -1096,6 +1137,12 @@ func withHostNetworked() testOption {
 func withIPv6() testOption {
 	return func(o *testOpts) {
 		o.ipv6 = true
+	}
+}
+
+func withObjName(name string) testOption {
+	return func(o *testOpts) {
+		o.objname = name
 	}
 }
 
@@ -1739,7 +1786,7 @@ func ipv6HopByHopExt() gopacket.SerializableLayer {
 
 	/* from gopacket ip6_test.go */
 	tlv := &layers.IPv6HopByHopOption{}
-	tlv.OptionType = 0x01 //PadN
+	tlv.OptionType = 0x01 // PadN
 	tlv.OptionData = []byte{0x00, 0x00, 0x00, 0x00}
 	hop.Options = append(hop.Options, tlv)
 
@@ -1759,7 +1806,7 @@ func testPacketUDPDefaultNPV6(destIP net.IP) (*layers.Ethernet, *layers.IPv6, go
 
 	/* from gopacket ip6_test.go */
 	tlv := &layers.IPv6HopByHopOption{}
-	tlv.OptionType = 0x01 //PadN
+	tlv.OptionType = 0x01 // PadN
 	tlv.OptionData = []byte{0x00, 0x00, 0x00, 0x00}
 	hop.Options = append(hop.Options, tlv)
 
@@ -1878,12 +1925,13 @@ func TestJumpMap(t *testing.T) {
 	RegisterTestingT(t)
 
 	jumpMapFD := progMap.MapFD()
-	pg := polprog.NewBuilder(idalloc.New(), ipsMap.MapFD(), stateMap.MapFD(), jumpMapFD,
+	pg := polprog.NewBuilder(idalloc.New(), ipsMap.MapFD(), stateMap.MapFD(), jumpMapFD, policyJumpMap.MapFD(),
 		polprog.WithAllowDenyJumps(tcdefs.ProgIndexAllowed, tcdefs.ProgIndexDrop))
 	rules := polprog.Rules{}
 	insns, err := pg.Instructions(rules)
 	Expect(err).NotTo(HaveOccurred())
-	progFD, err := bpf.LoadBPFProgramFromInsns(insns, "calico_policy", "Apache-2.0", unix.BPF_PROG_TYPE_SCHED_CLS)
+	Expect(insns).To(HaveLen(1))
+	progFD, err := bpf.LoadBPFProgramFromInsns(insns[0], "calico_policy", "Apache-2.0", unix.BPF_PROG_TYPE_SCHED_CLS)
 	Expect(err).NotTo(HaveOccurred())
 
 	k := make([]byte, 4)

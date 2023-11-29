@@ -58,13 +58,6 @@ EXTRA_DOCKER_ARGS+=--init -v $(CURDIR)/../pod2daemon:/go/src/github.com/projectc
 ###############################################################################
 include ../lib.Makefile
 
-ifeq ($(ARCH),arm64)
-# Required for eBPF support in ARM64.
-# We need to force ARM64 build image to be used in a crosscompilation run.
-CALICO_BUILD:=$(CALICO_BUILD)-$(ARCH)
-DOCKER_GO_BUILD:=$(DOCKER_RUN) $(CALICO_BUILD)
-endif
-
 FV_ETCDIMAGE?=$(ETCD_IMAGE)
 FV_TYPHAIMAGE?=felix-test/typha:latest-$(BUILDARCH)
 FV_K8SIMAGE=calico/go-build:$(GO_BUILD_VER)
@@ -129,7 +122,7 @@ clean-generated:
 ###############################################################################
 BUILD_TARGETS:=bin/calico-felix
 
-ifeq ($(ARCH), $(filter $(ARCH),amd64 arm64))
+ifeq ($(ARCH),$(filter $(ARCH),amd64 arm64))
 # Currently CGO can be enabled in ARM64 and AMD64 builds.
 CGO_ENABLED=1
 CGO_LDFLAGS="-L$(LIBBPF_CONTAINER_PATH)/$(ARCH) -lbpf -lelf -lz"
@@ -168,7 +161,7 @@ bin/calico-felix-$(ARCH): $(LIBBPF_A) $(SRC_FILES)
 ifeq ($(FIPS),true)
 	$(call build_cgo_boring_binary, $(PACKAGE_NAME)/cmd/calico-felix, $@)
 else
-ifeq ($(ARCH),amd64)
+ifeq ($(ARCH),$(filter $(ARCH),amd64 arm64))
 	$(call build_cgo_binary, $(PACKAGE_NAME)/cmd/calico-felix, $@)
 else
 	$(call build_binary, $(PACKAGE_NAME)/cmd/calico-felix, $@)
@@ -195,7 +188,7 @@ protobuf proto/felixbackend.pb.go: proto/felixbackend.proto
 
 # We pre-build lots of different variants of the TC programs, defer to the script.
 BPF_GPL_O_FILES:=$(addprefix bpf-gpl/,$(shell bpf-gpl/list-objs))
-BPF_GPL_O_FILES+=bpf-gpl/bin/tc_preamble.o bpf-gpl/bin/tc_preamble_v6.o \
+BPF_GPL_O_FILES+=bpf-gpl/bin/tc_preamble.o \
 		 bpf-gpl/bin/xdp_preamble.o bpf-gpl/bin/policy_default.o
 
 # There's a one-to-one mapping from UT C files to objects and the same for the apache programs..
@@ -256,12 +249,12 @@ FELIX_CONTAINER_CREATED=.calico_felix.created-$(ARCH)
 FELIX_IMAGE_WITH_TAG=$(FELIX_IMAGE):latest-$(ARCH)
 FELIX_IMAGE_ID=$(shell docker images -q $(FELIX_IMAGE_WITH_TAG))
 $(FELIX_IMAGE)-$(ARCH): $(FELIX_CONTAINER_CREATED)
-$(FELIX_CONTAINER_CREATED): docker-image/calico-felix-wrapper \
+$(FELIX_CONTAINER_CREATED): register \
+                            docker-image/calico-felix-wrapper \
                             docker-image/felix.cfg \
-                            docker-image/Dockerfile* \
+                            docker-image/Dockerfile \
                             $(shell test "$(FELIX_IMAGE_ID)" || echo force-rebuild)
-	$(MAKE) register
-	$(DOCKER_BUILD) -t $(FELIX_IMAGE_WITH_TAG) --file ./docker-image/Dockerfile.$(ARCH) docker-image --load;
+	$(DOCKER_BUILD) -t $(FELIX_IMAGE_WITH_TAG) -f ./docker-image/Dockerfile docker-image
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $(FELIX_CONTAINER_CREATED)
 
@@ -569,17 +562,10 @@ cover-report: combined.coverprofile
 				   column -t | \
 				   grep -v '100\.0%'"
 
-bin/calico-felix.transfer-url: bin/calico-felix
-	$(DOCKER_GO_BUILD) sh -c 'curl --upload-file bin/calico-felix https://transfer.sh/calico-felix > $@'
-
 # Cross-compile Felix for Windows
 bin/calico-felix.exe: $(SRC_FILES)
 	@echo Building felix for Windows...
 	$(call build_windows_binary, "$(PACKAGE_NAME)/cmd/calico-felix", $@)
-
-.PHONY: patch-script
-patch-script: bin/calico-felix.transfer-url
-	$(DOCKER_GO_BUILD) bash -c 'utils/make-patch-script.sh $$(cat bin/calico-felix.transfer-url)'
 
 ## Generate a diagram of Felix's internal calculation graph.
 docs/calc.pdf: docs/calc.dot

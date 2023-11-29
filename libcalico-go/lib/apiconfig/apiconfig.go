@@ -42,7 +42,7 @@ type CalicoAPIConfig struct {
 // CalicoAPIConfigSpec contains the specification for a Calico CalicoAPIConfig resource.
 type CalicoAPIConfigSpec struct {
 	DatastoreType DatastoreType `json:"datastoreType" envconfig:"DATASTORE_TYPE"`
-	// Inline the ectd config fields
+	// Inline the etcd config fields
 	EtcdConfig
 	// Inline the k8s config fields.
 	KubeConfig
@@ -62,9 +62,6 @@ type EtcdConfig struct {
 	EtcdKey    string `json:"etcdKey" ignored:"true"`
 	EtcdCert   string `json:"etcdCert" ignored:"true"`
 	EtcdCACert string `json:"etcdCACert" ignored:"true"`
-
-	// EtcdFIPSModeEnabled uses images and features only that are using FIPS 140-2 validated cryptographic modules and standards.
-	EtcdFIPSModeEnabled bool `json:"etcdFIPSModeEnabled" envconfig:"ETCD_FIPS_MODE_ENABLED"`
 }
 
 type KubeConfig struct {

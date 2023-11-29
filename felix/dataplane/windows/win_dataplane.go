@@ -92,7 +92,7 @@ type Config struct {
 //
 // The dataplane does not do consistency checks on the incoming data. It expects to be told about
 // dependent resources before they are needed and for their lifetime to exceed that of the resources
-// that depend on them.  For example, it is important the the datastore layer send an IP set create
+// that depend on them.  For example, it is important the datastore layer send an IP set create
 // event before it sends a rule that references that IP set.
 type WindowsDataplane struct {
 	// the channel which we receive messages from felix
