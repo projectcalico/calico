@@ -213,9 +213,14 @@ func (m *mockDataplane) queryClassifier(ifindex, handle, prio int, ingress bool)
 	return 0, nil
 }
 
-var fdCounter = uint32(1234)
+var (
+	fdCounterLock sync.Mutex
+	fdCounter     = uint32(1234)
+)
 
 func (m *mockDataplane) loadTCLogFilter(ap *tc.AttachPoint) (fileDescriptor, int, error) {
+	fdCounterLock.Lock()
+	defer fdCounterLock.Unlock()
 	fdCounter++
 	return mockFD(fdCounter), ap.LogFilterIdx, nil
 }
@@ -231,6 +236,8 @@ func (m *mockProgMapDP) loadPolicyProgram(progName string,
 	polProgsMap maps.Map,
 	opts ...polprog.Option,
 ) ([]fileDescriptor, []asm.Insns, error) {
+	fdCounterLock.Lock()
+	defer fdCounterLock.Unlock()
 	fdCounter++
 
 	return []fileDescriptor{mockFD(fdCounter)}, []asm.Insns{{{Comments: []string{"blah"}}}}, nil
