@@ -1303,6 +1303,9 @@ func (c ipamClient) ReleaseAffinity(ctx context.Context, cidr net.IPNet, host st
 	fields := log.Fields{"cidr": cidr.String(), "host": host, "mustBeEmpty": mustBeEmpty}
 	log.WithFields(fields).Debugf("Releasing affinity for CIDR")
 	pool, err := c.blockReaderWriter.getPoolForIP(net.IP{IP: cidr.IP}, nil)
+	if err != nil {
+		return err
+	}
 	if pool == nil {
 		estr := fmt.Sprintf("The requested CIDR (%s) is not within any configured pools.", cidr.String())
 		return errors.New(estr)
