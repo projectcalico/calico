@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os"
 	"reflect"
 	"regexp"
 	"strings"
@@ -220,6 +221,7 @@ type RouteTable struct {
 
 	// The route deletion grace period.
 	routeCleanupGracePeriod time.Duration
+	featureDetector         environment.FeatureDetectorIface
 }
 
 type RouteTableOpt func(table *RouteTable)
@@ -361,6 +363,7 @@ func NewWithShims(
 			handlemgr.WithNewHandleOverride(newNetlinkHandle),
 			handlemgr.WithSocketTimeout(netlinkTimeout),
 		),
+		featureDetector: featureDetector,
 	}
 
 	for _, o := range opts {
@@ -716,7 +719,64 @@ func (r *RouteTable) syncRoutesForLink(ifaceName string, fullSync bool, firstTry
 		// In case this IP is being re-used, wait for any previous conntrack entry
 		// to be cleaned up.  (No-op if there are no pending deletes.)
 		r.waitForPendingConntrackDeletion(target.CIDR.Addr())
+		triedDeletion := false
+	retry:
 		if err := nl.RouteAdd(&route); err != nil {
+			if os.IsExist(err) && !triedDeletion && r.shouldDeleteConflictingRoutes() {
+				// There's an existing route causing a conflict.  There are a
+				// few reasons that this can happen:
+				//
+				// - We've been reconfigured and left behind some routes
+				//   that no longer appear to belong to us.  For example, the
+				//   parent device of a VXLAN tunnel changes.
+				// - Transient overlap of routes between workloads.
+				// - Overlap with an external route.
+				//
+				// Empirically, the first problem is the most common, so we try
+				// to delete the conflicting route.  The second case should
+				// "come out in the wash" when the overlap is removed.
+				// Overlap with an external route could be a problem, but it
+				// would be a misconfiguration that needs to be addressed
+				// anyway.
+				routeToDel := &netlink.Route{
+					Dst:   route.Dst,
+					Table: route.Table,
+				}
+				filterFlags := uint64(0)
+				if routeToDel.Table != 0 {
+					filterFlags |= netlink.RT_FILTER_TABLE
+				}
+				allRoutes, err := nl.RouteListFiltered(r.netlinkFamily, &netlink.Route{
+					Table: route.Table,
+				}, filterFlags)
+				if err != nil {
+					logCxt.WithFields(log.Fields{
+						"calicoRoute":          target,
+						"attemptedKernelRoute": route,
+					}).WithError(err).Warn("Route conflicts with another; failed to look up conflicting route.")
+				} else {
+					var conflictingRoutes []netlink.Route
+					for _, r := range allRoutes {
+						if r.Dst.String() == routeToDel.Dst.String() {
+							conflictingRoutes = append(conflictingRoutes, r)
+						}
+					}
+					logCxt.WithFields(log.Fields{
+						"calicoRoute":          target,
+						"attemptedKernelRoute": route,
+						"conflictingRoutes":    conflictingRoutes,
+					}).Warn("Route conflicts with another, attempting to delete conflicting route.")
+				}
+				delErr := nl.RouteDel(routeToDel)
+				triedDeletion = true
+				if delErr != nil && !os.IsNotExist(delErr) {
+					logCxt.WithError(err).WithField("route", route).Warn(
+						"Failed to remove conflicting route.")
+				} else {
+					logCxt.Info("Removed conflicting route.  Retrying original add...")
+					goto retry
+				}
+			}
 			if firstTry {
 				logCxt.WithError(err).WithField("route", route).Debug("Failed to add route on first attempt, retrying...")
 			} else {
@@ -1255,6 +1315,15 @@ func (r *RouteTable) getLinkAttributes(ifaceName string) (*netlink.LinkAttrs, er
 		return nil, filteredErr
 	}
 	return link.Attrs(), nil
+}
+
+func (r *RouteTable) shouldDeleteConflictingRoutes() bool {
+	gate := r.featureDetector.FeatureGate("DeleteConflictingRoutes")
+	switch strings.ToLower(gate) {
+	case "enabled", "": // Default is "enabled"
+		return true
+	}
+	return false
 }
 
 // safeTargetPointer returns a pointer to a Target safely ensuring the pointer is unique.
