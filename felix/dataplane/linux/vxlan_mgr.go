@@ -515,8 +515,9 @@ func (m *vxlanManager) CompleteDeferredWork() error {
 }
 
 func (m *vxlanManager) OnParentNameUpdate(name string) {
-	if m.parentIfaceName == "" {
+	if name == "" {
 		m.logCtx.Warn("Empty parent interface name? Ignoring.")
+		return
 	}
 	m.logCtx.WithField("parent", name).Info("Parent interface updated, creating new routing table.")
 	devRouteSrcAddr := m.dpConfig.DeviceRouteSourceAddress
@@ -631,7 +632,7 @@ func (m *vxlanManager) getParentInterface(localVTEP *proto.VXLANTunnelEndpointUp
 		}
 		for _, addr := range addrs {
 			if addr.IPNet.IP.String() == parentDeviceIP {
-				m.logCtx.Debugf("Found parent interface: %v", link)
+				m.logCtx.Debugf("Found parent interface: %+v", link)
 				return link, nil
 			}
 		}
