@@ -2994,9 +2994,9 @@ func (m *bpfEndpointManager) removePolicyProgram(ap attachPoint) error {
 		var pm maps.Map
 
 		if ap.HookName() == hook.XDP {
-			pm = m.bpfmaps.JumpMap
-		} else {
 			pm = m.bpfmaps.XDPJumpMap
+		} else {
+			pm = m.bpfmaps.JumpMap
 		}
 
 		if err := jumpMapDeleteEntry(pm, idx); err != nil {
