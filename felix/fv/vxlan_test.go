@@ -210,7 +210,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 					//   10.65.2.0/26 via 172.17.0.5 dev eth0 proto 80 onlink
 					//   172.17.0.0/16 dev eth0 proto kernel scope link src 172.17.0.7
 					felix := tc.Felixes[0]
-					Eventually(felix.ExecOutputFn("ip", "route", "show")).Should(ContainSubstring(
+					Eventually(felix.ExecOutputFn("ip", "route", "show"), "10s").Should(ContainSubstring(
 						fmt.Sprintf("10.65.1.0/26 via %s dev eth0 proto 80 onlink", tc.Felixes[1].IP)))
 
 					// Find the default and subnet routes, we'll need to
