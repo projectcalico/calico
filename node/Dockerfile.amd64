@@ -213,7 +213,7 @@ COPY ${BIN_DIR}/calico-node-amd64 /bin/calico-node
 # Set the suid bit on calico-node
 RUN chmod u+s /bin/calico-node
 
-# Copy in the moutnns binary
+# Copy in the mountns binary
 COPY $BIN_DIR/mountns-amd64 /bin/mountns
 
 # Set the suid bit on mountns
@@ -227,14 +227,13 @@ RUN /clean-up-filesystem.sh
 # Copy everything into a fresh scratch image so that naive CVE scanners don't pick up binaries and libraries
 # that have been removed in our later layers.
 FROM scratch
+
+ARG GIT_VERSION
+
 COPY --from=ubi / /
 
 # Add in top-level license file
 COPY LICENSE /licenses
-
-# Node is build on a debian image with pcap 1.8, but there is no 1.8 available so we copy 1.9 over. Ideally we should
-# should build node on a centos image so we can have correct pcap version alignment.
-RUN ln -s $(ls /usr/lib64/libpcap.so.1.9.* | tail -n 1) /usr/lib64/libpcap.so.0.8
 
 CMD ["start_runit"]
 
@@ -245,7 +244,7 @@ LABEL name="Calico node" \
       release="1" \
       summary="Calico node handles networking and policy for Calico" \
       description="Calico node handles networking and policy for Calico" \
-      maintainer="laurence@tigera.io"
+      maintainer="maintainers@tigera.io"
 
 # Tell sv where to find the services.
 ENV SVDIR=/etc/service/enabled

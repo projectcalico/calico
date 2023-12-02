@@ -38,7 +38,7 @@ const (
 // Configuration-type resources to the v1 model.  This converter basically
 // expands each field as a separate key and uses a stringified of the field as the
 // configuration value.  If the field is not specified in the configuration resource
-// we expand that that a delete for the associated key.
+// we expand that to a delete for the associated key.
 //
 // If the field specifies a "confignamev1" tag, then the value in that tag is used
 // as the config name, otherwise the struct field name is used.

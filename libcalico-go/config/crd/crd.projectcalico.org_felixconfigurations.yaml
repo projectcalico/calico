@@ -58,12 +58,25 @@ spec:
                   [Default: unset - means logs are emitted when BPFLogLevel id debug
                   and BPFLogFilters not set.]'
                 type: string
+              bpfConnectTimeLoadBalancing:
+                description: 'BPFConnectTimeLoadBalancing when in BPF mode, controls
+                  whether Felix installs the connect-time load balancer. The connect-time
+                  load balancer is required for the host to be able to reach Kubernetes
+                  services and it improves the performance of pod-to-service connections.When
+                  set to TCP, connect time load balancing is available only for services
+                  with TCP ports. [Default: TCP]'
+                enum:
+                - TCP
+                - Enabled
+                - Disabled
+                type: string
               bpfConnectTimeLoadBalancingEnabled:
                 description: 'BPFConnectTimeLoadBalancingEnabled when in BPF mode,
                   controls whether Felix installs the connection-time load balancer.  The
                   connect-time load balancer is required for the host to be able to
                   reach Kubernetes services and it improves the performance of pod-to-service
-                  connections.  The only reason to disable it is for debugging purposes.  [Default:
+                  connections.  The only reason to disable it is for debugging purposes.
+                  This will be deprecated. Use BPFConnectTimeLoadBalancing [Default:
                   true]'
                 type: boolean
               bpfDSROptoutCIDRs:
@@ -138,6 +151,14 @@ spec:
                   conntrack in BPF mode for workloads and services. [Default: true
                   - bypass Linux conntrack]'
                 type: boolean
+              bpfHostNetworkedNATWithoutCTLB:
+                description: 'BPFHostNetworkedNATWithoutCTLB when in BPF mode, controls
+                  whether Felix does a NAT without CTLB. This along with BPFConnectTimeLoadBalancing
+                  determines the CTLB behavior. [Default: Enabled]'
+                enum:
+                - Enabled
+                - Disabled
+                type: string
               bpfKubeProxyEndpointSlicesEnabled:
                 description: BPFKubeProxyEndpointSlicesEnabled in BPF mode, controls
                   whether Felix's embedded kube-proxy accepts EndpointSlices or not.
@@ -574,7 +595,7 @@ spec:
                 description: 'MetadataAddr is the IP address or domain name of the
                   server that can answer VM queries for cloud-init metadata. In OpenStack,
                   this corresponds to the machine running nova-api (or in Ubuntu,
-                  nova-api-metadata). A value of none (case insensitive) means that
+                  nova-api-metadata). A value of none (case-insensitive) means that
                   Felix should not set up any NAT rule for the metadata path. [Default:
                   127.0.0.1]'
                 type: string
@@ -763,6 +784,14 @@ spec:
                 type: integer
               vxlanVNI:
                 type: integer
+              windowsManageFirewallRules:
+                description: 'WindowsManageFirewallRules configures whether or not
+                  Felix will program Windows Firewall rules. (to allow inbound access
+                  to its own metrics ports) [Default: Disabled]'
+                enum:
+                - Enabled
+                - Disabled
+                type: string
               wireguardEnabled:
                 description: 'WireguardEnabled controls whether Wireguard is enabled
                   for IPv4 (encapsulating IPv4 traffic over an IPv4 underlay network).

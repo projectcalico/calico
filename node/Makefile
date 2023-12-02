@@ -37,7 +37,7 @@ include ../lib.Makefile
 
 FIPS ?= false
 
-ifeq ($(FIPS), true)
+ifeq ($(FIPS),true)
 NODE_CONTAINER_BIN_DIR=./dist/bin/$(ARCH)-fips
 NODE_CONTAINER_BINARY = $(NODE_CONTAINER_BIN_DIR)/calico-node-$(ARCH)
 NODE_CONTAINER_MARKER=$(NODE_CONTAINER_FIPS_CREATED)
@@ -143,6 +143,7 @@ LDFLAGS= -X $(PACKAGE_NAME)/pkg/lifecycle/startup.VERSION=$(GIT_VERSION) \
 
 # Source golang files on which compiling the calico-node binary depends.
 SRC_FILES=$(shell find ./pkg -name '*.go') \
+	  $(shell find ./cmd -name '*.go') \
 	  $(shell find ../felix -name '*.go') \
 	  $(shell find ../felix -name '*.[ch]') \
 	  $(shell find ../libcalico-go -name '*.go') \
@@ -213,43 +214,30 @@ CGO_LDFLAGS=""
 CGO_CFLAGS=""
 endif
 
-DOCKER_GO_BUILD_CGO=$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) -e CGO_LDFLAGS=$(CGO_LDFLAGS) -e CGO_CFLAGS=$(CGO_CFLAGS) $(CALICO_BUILD)
-DOCKER_GO_BUILD_CGO_WINDOWS=$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD)
-
 $(NODE_CONTAINER_BINARY): filesystem/usr/lib/calico/bpf $(LIBBPF_A) $(SRC_FILES) ../go.mod
-ifeq ($(ARCH),amd64)
-ifeq ($(FIPS), true)
+ifeq ($(FIPS),true)
 	$(call build_cgo_boring_binary, ./cmd/calico-node/main.go, $@)
 else
+ifeq ($(ARCH),amd64)
 	$(call build_cgo_binary, ./cmd/calico-node/main.go, $@)
-endif
 else
-	$(DOCKER_GO_BUILD_CGO) sh -c '$(GIT_CONFIG_SSH) go build -buildvcs=false -v -o $@ $(BUILD_FLAGS) -ldflags "$(LDFLAGS)" ./cmd/calico-node/main.go'
+	$(call build_binary, ./cmd/calico-node/main.go, $@)
+endif
 endif
 
 
-$(WINDOWS_BINARY):
-	$(DOCKER_GO_BUILD_CGO_WINDOWS) sh -c '$(GIT_CONFIG_SSH) \
-		GOOS=windows CC=x86_64-w64-mingw32-gcc \
-		go build -buildvcs=false --buildmode=exe -v -o $@ -ldflags "$(LDFLAGS)" ./cmd/calico-node/main.go'
+$(WINDOWS_BINARY): $(SRC_FILES)
+	$(call build_windows_binary, ./cmd/calico-node/main.go, $@)
 
 $(WINDOWS_ARCHIVE_ROOT)/cni/calico.exe:
-	$(DOCKER_RUN) \
-		-e GOOS=windows \
-		$(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
-		go build -buildvcs=false -v -o $@ -ldflags "$(LDFLAGS)" ./cmd/calico'
+	$(call build_windows_binary, ./cmd/calico, $@)
 
 $(WINDOWS_ARCHIVE_ROOT)/cni/calico-ipam.exe:
-	$(DOCKER_RUN) \
-		-e GOOS=windows \
-		$(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
-		go build -buildvcs=false -v -o $@ -ldflags "$(LDFLAGS)" ./cmd/calico-ipam'
+	$(call build_windows_binary, ./cmd/calico-ipam, $@)
 
 $(TOOLS_MOUNTNS_BINARY):
-ifeq ($(ARCH),amd64)
+ifeq ($(CGO_ENABLED),1)
 	$(call build_cgo_binary, ./cmd/mountns, $@)
-else ifeq ($(CGO_ENABLED),1)
-	$(DOCKER_GO_BUILD_CGO) sh -c '$(GIT_CONFIG_SSH) go build -buildvcs=false -v -o $@ $(BUILD_FLAGS)  ./cmd/mountns'
 else
 	$(call build_binary, ./cmd/mountns, $@)
 endif
@@ -267,12 +255,12 @@ sub-image-fips-%:
 
 image $(NODE_IMAGE): register $(NODE_CONTAINER_MARKER)
 $(NODE_CONTAINER_CREATED): $(REMOTE_DEPS) ./Dockerfile.$(ARCH) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOURCE) $(NODE_CONTAINER_FILES) $(TOOLS_MOUNTNS_BINARY)
-	$(DOCKER_BUILD) --build-arg BIN_DIR=$(NODE_CONTAINER_BIN_DIR) --build-arg BIRD_IMAGE=$(BIRD_IMAGE) -t $(NODE_IMAGE):latest-$(ARCH) -f ./Dockerfile.$(ARCH) . --load
+	$(DOCKER_BUILD) --build-arg BIN_DIR=$(NODE_CONTAINER_BIN_DIR) --build-arg BIRD_IMAGE=$(BIRD_IMAGE) --build-arg GIT_VERSION=$(GIT_VERSION) -t $(NODE_IMAGE):latest-$(ARCH) -f ./Dockerfile.$(ARCH) . --load
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 
 $(NODE_CONTAINER_FIPS_CREATED): $(REMOTE_DEPS) ./Dockerfile.$(ARCH) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOURCE) $(NODE_CONTAINER_FILES) $(TOOLS_MOUNTNS_BINARY)
-	$(DOCKER_BUILD) --build-arg BIN_DIR=$(NODE_CONTAINER_BIN_DIR) --build-arg BIRD_IMAGE=$(BIRD_IMAGE) -t $(NODE_IMAGE):latest-fips-$(ARCH) -f ./Dockerfile.$(ARCH) . --load
+	$(DOCKER_BUILD) --build-arg BIN_DIR=$(NODE_CONTAINER_BIN_DIR) --build-arg BIRD_IMAGE=$(BIRD_IMAGE) --build-arg GIT_VERSION=$(GIT_VERSION) -t $(NODE_IMAGE):latest-fips-$(ARCH) -f ./Dockerfile.$(ARCH) . --load
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
 	touch $@
 
@@ -281,7 +269,7 @@ $(BIRD_SOURCE): .bird-source.created
 .bird-source.created:
 	rm -rf filesystem/included-source/bird*
 	mkdir -p filesystem/included-source/
-	wget -O $(BIRD_SOURCE) https://github.com/projectcalico/bird/tarball/$(BIRD_VERSION)
+	curl -sSf -L --retry 5 -o $(BIRD_SOURCE) https://github.com/projectcalico/bird/tarball/$(BIRD_VERSION)
 	touch $@
 
 # include GPL felix code in the image.
@@ -453,11 +441,6 @@ ci: static-checks ut image image-windows st
 ## Deploys images to registry
 cd: cd-common release-windows
 
-check-boring-ssl: $(NODE_CONTAINER_BIN_DIR)/calico-node-amd64
-	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) \
-		go tool nm $(NODE_CONTAINER_BIN_DIR)/calico-node-amd64 > $(NODE_CONTAINER_BIN_DIR)/tags.txt && grep '_Cfunc__goboringcrypto_' $(NODE_CONTAINER_BIN_DIR)/tags.txt 1> /dev/null
-	-rm -f $(NODE_CONTAINER_BIN_DIR)/tags.txt
-
 ###############################################################################
 # Release
 ###############################################################################
@@ -528,14 +511,14 @@ $(WINDOWS_ARCHIVE_ROOT)/confd/templates/%: windows-packaging/templates/%
         chmod +w $@
 
 $(WINDOWS_ARCHIVE_ROOT)/libs/hns/hns.psm1:
-	wget -P $(WINDOWS_ARCHIVE_ROOT)/libs/hns/ $(MICROSOFT_SDN_GITHUB_RAW_URL)/Kubernetes/windows/hns.psm1
+	curl -sSf -L --retry 5 -o $@ $(MICROSOFT_SDN_GITHUB_RAW_URL)/Kubernetes/windows/hns.psm1
 
 $(WINDOWS_ARCHIVE_ROOT)/libs/hns/License.txt:
-	wget -P $(WINDOWS_ARCHIVE_ROOT)/libs/hns/ $(MICROSOFT_SDN_GITHUB_RAW_URL)/License.txt
+	curl -sSf -L --retry 5 -o $@  $(MICROSOFT_SDN_GITHUB_RAW_URL)/License.txt
 
 ## Download NSSM.
 windows-packaging/nssm.zip:
-	wget -O windows-packaging/nssm.zip https://nssm.cc/ci/nssm-$(WINDOWS_NSSM_VERSION).zip
+	curl -sSf -L --retry 5 -o $@ https://nssm.cc/ci/nssm-$(WINDOWS_NSSM_VERSION).zip
 
 windows-packaging/nssm.exe: windows-packaging/nssm.zip
 	cd windows-packaging && \

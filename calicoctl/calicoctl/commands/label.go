@@ -60,10 +60,10 @@ Options:
      --overwrite               If true, overwrite the value when the key is already
                                present in labels. Otherwise reports error when the
                                labeled resource already have the key in its labels.
-                               Can not be used with --remove.
+                               Cannot be used with --remove.
      --remove                  If true, remove the specified key in labels of the
                                resource. Reports error when specified key does not
-                               exist. Can not be used with --overwrite.
+                               exist. Cannot be used with --overwrite.
      --context=<context>       The name of the kubeconfig context to use.
      --allow-version-mismatch  Allow client and cluster versions mismatch.
 
@@ -85,7 +85,7 @@ Description:
     * profile
     * workloadEndpoint
 
-  The resource type is case insensitive and may be pluralized.
+  The resource type is case-insensitive and may be pluralized.
 
   Attempting to label resources that do not exist will get an error.
 
@@ -156,7 +156,7 @@ Description:
 		_, ok := labels[key]
 		if !ok {
 			// raise error if the key does not exist.
-			return fmt.Errorf("can not remove label of %s %s, key %s does not exist",
+			return fmt.Errorf("cannot remove label of %s %s, key %s does not exist",
 				kind, name, key)
 		} else {
 			delete(labels, key)

@@ -28,8 +28,7 @@ import (
 )
 
 func TestPrintCalicoNodeStatus(t *testing.T) {
-	var seconds uint32
-	seconds = 10
+	var seconds uint32 = 10
 
 	backThreeMinutes := time.Minute * time.Duration(-3)
 	past := time.Now().Add(backThreeMinutes)
@@ -74,19 +73,19 @@ func TestPrintCalicoNodeStatus(t *testing.T) {
 				PeersV4: []calico.CalicoNodePeer{
 					{
 						PeerIP: "172.17.8.104",
-						Type:   calico.RouteSourceTypeNodeMesh,
+						Type:   calico.BGPPeerTypeNodeMesh,
 						State:  calico.BGPSessionStateEstablished,
 						Since:  "2016-11-21",
 					},
 					{
 						PeerIP: "172.17.8.105",
-						Type:   calico.RouteSourceTypeNodeMesh,
+						Type:   calico.BGPPeerTypeNodeMesh,
 						State:  calico.BGPSessionStateEstablished,
 						Since:  "2016-11-21",
 					},
 					{
 						PeerIP: "172.17.8.106",
-						Type:   calico.RouteSourceTypeNodeMesh,
+						Type:   calico.BGPPeerTypeNodeMesh,
 						State:  calico.BGPSessionStateOpenSent,
 						Since:  "2016-11-21",
 					},
@@ -94,7 +93,7 @@ func TestPrintCalicoNodeStatus(t *testing.T) {
 				PeersV6: []calico.CalicoNodePeer{
 					{
 						PeerIP: "2001:20::8",
-						Type:   calico.RouteSourceTypeNodeMesh,
+						Type:   calico.BGPPeerTypeNodeMesh,
 						State:  calico.BGPSessionStateEstablished,
 						Since:  "2016-11-21",
 					},

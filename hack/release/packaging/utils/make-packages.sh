@@ -19,9 +19,7 @@ version=${FORCE_VERSION:-`git_auto_version`}
 version=`strip_v ${version}`
 sha=`git_commit_id`
 
-MY_UID=`id -u`
-MY_GID=`id -g`
-DOCKER_RUN_RM="docker run --rm --user ${MY_UID}:${MY_GID} -v $rpmDir:/rpm -v $(dirname `pwd`):/code -w /code/$(basename `pwd`)"
+DOCKER_RUN_RM="docker run --rm --user $(id -u):$(id -g) -v $rpmDir:/rpm -v $(dirname `pwd`):/code -w /code/$(basename `pwd`)"
 
 # Determine if this is a release (i.e. corresponds exactly to a Git tag) or a
 # snapshot.
@@ -49,7 +47,7 @@ for package_type in "$@"; do
 	    # Current time in Debian changelog format; e.g. Wed, 02
 	    # Mar 2016 14:08:51 +0000.
 	    timestamp=`date "+%a, %d %b %Y %H:%M:%S %z"`
-	    for series in trusty xenial bionic focal jammy; do
+	    for series in focal jammy; do
 		{
 			if ${release}; then
 				changelog_message="* ${NAME} v${version} (from Git commit ${sha})."

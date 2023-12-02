@@ -235,12 +235,14 @@ spec:
                       type: string
                     cidr:
                       type: string
+                    interface:
+                      type: string
                     matchOperator:
+                      type: string
+                    source:
                       type: string
                   required:
                   - action
-                  - cidr
-                  - matchOperator
                   type: object
                 type: array
               exportV6:
@@ -254,12 +256,14 @@ spec:
                       type: string
                     cidr:
                       type: string
+                    interface:
+                      type: string
                     matchOperator:
+                      type: string
+                    source:
                       type: string
                   required:
                   - action
-                  - cidr
-                  - matchOperator
                   type: object
                 type: array
               importV4:
@@ -273,12 +277,14 @@ spec:
                       type: string
                     cidr:
                       type: string
+                    interface:
+                      type: string
                     matchOperator:
+                      type: string
+                    source:
                       type: string
                   required:
                   - action
-                  - cidr
-                  - matchOperator
                   type: object
                 type: array
               importV6:
@@ -292,12 +298,14 @@ spec:
                       type: string
                     cidr:
                       type: string
+                    interface:
+                      type: string
                     matchOperator:
+                      type: string
+                    source:
                       type: string
                   required:
                   - action
-                  - cidr
-                  - matchOperator
                   type: object
                 type: array
             type: object
@@ -377,7 +385,7 @@ spec:
               numAllowedLocalASNumbers:
                 description: Maximum number of local AS numbers that are allowed in
                   the AS path for received routes. This removes BGP loop prevention
-                  and should only be used if absolutely necesssary.
+                  and should only be used if absolutely necessary.
                 format: int32
                 type: integer
               password:
@@ -899,12 +907,25 @@ spec:
                   [Default: unset - means logs are emitted when BPFLogLevel id debug
                   and BPFLogFilters not set.]'
                 type: string
+              bpfConnectTimeLoadBalancing:
+                description: 'BPFConnectTimeLoadBalancing when in BPF mode, controls
+                  whether Felix installs the connect-time load balancer. The connect-time
+                  load balancer is required for the host to be able to reach Kubernetes
+                  services and it improves the performance of pod-to-service connections.When
+                  set to TCP, connect time load balancing is available only for services
+                  with TCP ports. [Default: TCP]'
+                enum:
+                - TCP
+                - Enabled
+                - Disabled
+                type: string
               bpfConnectTimeLoadBalancingEnabled:
                 description: 'BPFConnectTimeLoadBalancingEnabled when in BPF mode,
                   controls whether Felix installs the connection-time load balancer.  The
                   connect-time load balancer is required for the host to be able to
                   reach Kubernetes services and it improves the performance of pod-to-service
-                  connections.  The only reason to disable it is for debugging purposes.  [Default:
+                  connections.  The only reason to disable it is for debugging purposes.
+                  This will be deprecated. Use BPFConnectTimeLoadBalancing [Default:
                   true]'
                 type: boolean
               bpfDSROptoutCIDRs:
@@ -979,6 +1000,14 @@ spec:
                   conntrack in BPF mode for workloads and services. [Default: true
                   - bypass Linux conntrack]'
                 type: boolean
+              bpfHostNetworkedNATWithoutCTLB:
+                description: 'BPFHostNetworkedNATWithoutCTLB when in BPF mode, controls
+                  whether Felix does a NAT without CTLB. This along with BPFConnectTimeLoadBalancing
+                  determines the CTLB behavior. [Default: Enabled]'
+                enum:
+                - Enabled
+                - Disabled
+                type: string
               bpfKubeProxyEndpointSlicesEnabled:
                 description: BPFKubeProxyEndpointSlicesEnabled in BPF mode, controls
                   whether Felix's embedded kube-proxy accepts EndpointSlices or not.
@@ -1415,7 +1444,7 @@ spec:
                 description: 'MetadataAddr is the IP address or domain name of the
                   server that can answer VM queries for cloud-init metadata. In OpenStack,
                   this corresponds to the machine running nova-api (or in Ubuntu,
-                  nova-api-metadata). A value of none (case insensitive) means that
+                  nova-api-metadata). A value of none (case-insensitive) means that
                   Felix should not set up any NAT rule for the metadata path. [Default:
                   127.0.0.1]'
                 type: string
@@ -1604,6 +1633,14 @@ spec:
                 type: integer
               vxlanVNI:
                 type: integer
+              windowsManageFirewallRules:
+                description: 'WindowsManageFirewallRules configures whether or not
+                  Felix will program Windows Firewall rules. (to allow inbound access
+                  to its own metrics ports) [Default: Disabled]'
+                enum:
+                - Enabled
+                - Disabled
+                type: string
               wireguardEnabled:
                 description: 'WireguardEnabled controls whether Wireguard is enabled
                   for IPv4 (encapsulating IPv4 traffic over an IPv4 underlay network).
@@ -2500,17 +2537,17 @@ spec:
                   any DNAT.
                 type: boolean
               selector:
-                description: "The selector is an expression used to pick pick out
-                  the endpoints that the policy should be applied to. \n Selector
-                  expressions follow this syntax: \n \tlabel == \"string_literal\"
-                  \ ->  comparison, e.g. my_label == \"foo bar\" \tlabel != \"string_literal\"
-                  \  ->  not equal; also matches if label is not present \tlabel in
-                  { \"a\", \"b\", \"c\", ... }  ->  true if the value of label X is
-                  one of \"a\", \"b\", \"c\" \tlabel not in { \"a\", \"b\", \"c\",
-                  ... }  ->  true if the value of label X is not one of \"a\", \"b\",
-                  \"c\" \thas(label_name)  -> True if that label is present \t! expr
-                  -> negation of expr \texpr && expr  -> Short-circuit and \texpr
-                  || expr  -> Short-circuit or \t( expr ) -> parens for grouping \tall()
+                description: "The selector is an expression used to pick out the endpoints
+                  that the policy should be applied to. \n Selector expressions follow
+                  this syntax: \n \tlabel == \"string_literal\"  ->  comparison, e.g.
+                  my_label == \"foo bar\" \tlabel != \"string_literal\"   ->  not
+                  equal; also matches if label is not present \tlabel in { \"a\",
+                  \"b\", \"c\", ... }  ->  true if the value of label X is one of
+                  \"a\", \"b\", \"c\" \tlabel not in { \"a\", \"b\", \"c\", ... }
+                  \ ->  true if the value of label X is not one of \"a\", \"b\", \"c\"
+                  \thas(label_name)  -> True if that label is present \t! expr ->
+                  negation of expr \texpr && expr  -> Short-circuit and \texpr ||
+                  expr  -> Short-circuit or \t( expr ) -> parens for grouping \tall()
                   or the empty selector -> matches all endpoints. \n Label names are
                   allowed to contain alphanumerics, -, _ and /. String literals are
                   more permissive but they do not support escape characters. \n Examples
@@ -4168,17 +4205,17 @@ spec:
                   type: string
                 type: array
               selector:
-                description: "The selector is an expression used to pick pick out
-                  the endpoints that the policy should be applied to. \n Selector
-                  expressions follow this syntax: \n \tlabel == \"string_literal\"
-                  \ ->  comparison, e.g. my_label == \"foo bar\" \tlabel != \"string_literal\"
-                  \  ->  not equal; also matches if label is not present \tlabel in
-                  { \"a\", \"b\", \"c\", ... }  ->  true if the value of label X is
-                  one of \"a\", \"b\", \"c\" \tlabel not in { \"a\", \"b\", \"c\",
-                  ... }  ->  true if the value of label X is not one of \"a\", \"b\",
-                  \"c\" \thas(label_name)  -> True if that label is present \t! expr
-                  -> negation of expr \texpr && expr  -> Short-circuit and \texpr
-                  || expr  -> Short-circuit or \t( expr ) -> parens for grouping \tall()
+                description: "The selector is an expression used to pick out the endpoints
+                  that the policy should be applied to. \n Selector expressions follow
+                  this syntax: \n \tlabel == \"string_literal\"  ->  comparison, e.g.
+                  my_label == \"foo bar\" \tlabel != \"string_literal\"   ->  not
+                  equal; also matches if label is not present \tlabel in { \"a\",
+                  \"b\", \"c\", ... }  ->  true if the value of label X is one of
+                  \"a\", \"b\", \"c\" \tlabel not in { \"a\", \"b\", \"c\", ... }
+                  \ ->  true if the value of label X is not one of \"a\", \"b\", \"c\"
+                  \thas(label_name)  -> True if that label is present \t! expr ->
+                  negation of expr \texpr && expr  -> Short-circuit and \texpr ||
+                  expr  -> Short-circuit or \t( expr ) -> parens for grouping \tall()
                   or the empty selector -> matches all endpoints. \n Label names are
                   allowed to contain alphanumerics, -, _ and /. String literals are
                   more permissive but they do not support escape characters. \n Examples

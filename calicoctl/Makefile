@@ -62,7 +62,6 @@ build-all: $(addprefix bin/calicoctl-linux-,$(VALIDARCHES)) bin/calicoctl-window
 build: bin/calicoctl-$(BUILDOS)-$(ARCH)
 # The supported different binary names. For each, ensure that an OS and ARCH is set
 bin/calicoctl-%-amd64: ARCH=amd64
-bin/calicoctl-%-armv7: ARCH=armv7
 bin/calicoctl-%-arm64: ARCH=arm64
 bin/calicoctl-%-ppc64le: ARCH=ppc64le
 bin/calicoctl-%-s390x: ARCH=s390x
@@ -76,11 +75,7 @@ bin/calicoctl-linux-%: BUILDOS=linux
 bin/calicoctl-%: $(SRC_FILES)
 	$(MAKE) build-calicoctl BUILDOS=$(BUILDOS) ARCH=$(ARCH)
 build-calicoctl:
-ifeq ($(BUILDOS)/$(ARCH), linux/amd64)
-	$(call build_static_cgo_boring_binary, ./calicoctl/calicoctl.go, bin/calicoctl-$(BUILDOS)-$(ARCH))
-else
 	$(call build_binary, ./calicoctl/calicoctl.go, bin/calicoctl-$(BUILDOS)-$(ARCH))
-endif
 
 # Overrides for the binaries that need different output names
 bin/calicoctl: bin/calicoctl-linux-amd64
@@ -118,7 +113,7 @@ CALICO_VERSION_HELPER_SRC=$(CALICO_VERSION_HELPER_DIR)/calico_version_helper.go
 .PHONY: version-helper
 version-helper: $(CALICO_VERSION_HELPER_BIN)
 $(CALICO_VERSION_HELPER_BIN): $(CALICO_VERSION_HELPER_SRC)
-	$(call build_static_cgo_boring_binary, $(CALICO_VERSION_HELPER_SRC), $(CALICO_VERSION_HELPER_BIN))
+	$(call build_binary, $(CALICO_VERSION_HELPER_SRC), $(CALICO_VERSION_HELPER_BIN))
 
 ###############################################################################
 # UTs

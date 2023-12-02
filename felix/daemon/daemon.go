@@ -222,7 +222,7 @@ configRetry:
 		}
 
 		// Each time round this loop, check that we're serving health reports if we should
-		// be, or cancel any existing server if we should not be serving any more.
+		// be, or cancel any existing server if we should not be serving anymore.
 		healthAggregator.ServeHTTP(configParams.HealthEnabled, configParams.HealthHost, configParams.HealthPort)
 
 		// We should now have enough config to connect to the datastore
@@ -397,6 +397,9 @@ configRetry:
 	// again.
 	buildInfoLogCxt.WithField("config", configParams).Info(
 		"Successfully loaded configuration.")
+
+	// Configure Windows firewall rules if appropriate
+	winutils.MaybeConfigureWindowsFirewallRules(configParams.WindowsManageFirewallRules, configParams.PrometheusMetricsEnabled, configParams.PrometheusMetricsPort)
 
 	if configParams.DebugPanicAfter > 0 {
 		log.WithField("delay", configParams.DebugPanicAfter).Warn("DebugPanicAfter is set, will panic after delay!")

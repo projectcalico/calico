@@ -86,6 +86,20 @@ func init() {
 	awsCheckbadVal = api.AWSSrcDstCheckOption("badVal")
 	awsCheckenable = api.AWSSrcDstCheckOption("enable")
 
+	var bpfHostNetworkedNatEnabled, bpfHostNetworkedNatDisabled,
+		bpfHostNetworkedNatenabled, bpfHostNetworkedNatBadVal api.BPFHostNetworkedNATType
+	var bpfConnectTimeLBTCP, bpfConnectTimeLBEnabled,
+		bpfConnectTimeLBDisabled, bpfConnectTimeLBBadVal api.BPFConnectTimeLBType
+
+	bpfHostNetworkedNatEnabled = api.BPFHostNetworkedNATEnabled
+	bpfHostNetworkedNatDisabled = api.BPFHostNetworkedNATDisabled
+	bpfHostNetworkedNatenabled = api.BPFHostNetworkedNATType("enabled")
+	bpfHostNetworkedNatBadVal = api.BPFHostNetworkedNATType("badVal")
+	bpfConnectTimeLBTCP = api.BPFConnectTimeLBTCP
+	bpfConnectTimeLBEnabled = api.BPFConnectTimeLBEnabled
+	bpfConnectTimeLBDisabled = api.BPFConnectTimeLBDisabled
+	bpfConnectTimeLBBadVal = api.BPFConnectTimeLBType("badVal")
+
 	iptablesBackendLegacy := api.IptablesBackend(api.IptablesBackendLegacy)
 	iptablesBackendNFTables := api.IptablesBackend(api.IptablesBackendNFTables)
 	iptablesBackendAuto := api.IptablesBackend(api.IptablesBackendAuto)
@@ -102,6 +116,10 @@ func init() {
 
 	// Max name length
 	maxNameLength := 253
+
+	windowsManageFirewallRulesEnabled := api.WindowsManageFirewallRulesEnabled
+	windowsManageFirewallRulesDisabled := api.WindowsManageFirewallRulesDisabled
+	var windowsManageFirewallRulesBlah api.WindowsManageFirewallRulesMode = "blah"
 
 	// Perform validation on error messages from validator
 	DescribeTable("Validator errors",
@@ -758,7 +776,7 @@ func init() {
 		Entry("should reject route table ranges max < min", api.FelixConfigurationSpec{RouteTableRanges: &api.RouteTableRanges{{Min: 50, Max: 45}}}, false),
 		Entry("should reject route table ranges max too large", api.FelixConfigurationSpec{RouteTableRanges: &api.RouteTableRanges{{Min: 1, Max: 0xf00000000}}}, false),
 		Entry("should reject single route table ranges targeting too many tables", api.FelixConfigurationSpec{RouteTableRanges: &api.RouteTableRanges{{Min: 1, Max: 0x10000}}}, false),
-		Entry("should reject multitple route table ranges targeting too many tables", api.FelixConfigurationSpec{RouteTableRanges: &api.RouteTableRanges{{Min: 1, Max: 2}, {Min: 3, Max: 4}, {Min: 5, Max: 0x10000}}}, false),
+		Entry("should reject multiple route table ranges targeting too many tables", api.FelixConfigurationSpec{RouteTableRanges: &api.RouteTableRanges{{Min: 1, Max: 2}, {Min: 3, Max: 4}, {Min: 5, Max: 0x10000}}}, false),
 
 		Entry("should reject spec with both RouteTableRanges and RouteTableRange set", api.FelixConfigurationSpec{
 			RouteTableRanges: &api.RouteTableRanges{
@@ -1526,6 +1544,252 @@ func init() {
 				Metadata: &api.RuleMetadata{Annotations: map[string]string{"...": "bar"}},
 			}, false),
 
+		// (API) BGPFilterSpec
+		Entry("should reject invalid BGPFilter rule-v4 interface - 1", api.BGPFilterRuleV4{
+			Interface: "eth&",
+			Action:    "Reject",
+		}, false),
+		Entry("should reject invalid BGPFilter rule-v4 interface - 2", api.BGPFilterRuleV4{
+			Interface: "%face",
+			Action:    "Reject",
+		}, false),
+		Entry("should reject invalid BGPFilter rule-v4 interface - 3", api.BGPFilterRuleV4{
+			Interface: "\"ace",
+			Action:    "Reject",
+		}, false),
+		Entry("should reject invalid BGPFilter rule-v6 interface - 1", api.BGPFilterRuleV6{
+			Interface: "$cali",
+			Action:    "Reject",
+		}, false),
+		Entry("should reject invalid BGPFilter rule-v6 interface - 2", api.BGPFilterRuleV6{
+			Interface: "eth#",
+			Action:    "Reject",
+		}, false),
+		Entry("should reject invalid BGPFilter rule-v6 interface - 3", api.BGPFilterRuleV6{
+			Interface: "\"face",
+			Action:    "Reject",
+		}, false),
+		Entry("should accept valid BGPFilter rule-v4 interface - 1 ", api.BGPFilterRuleV4{
+			Interface:     "ethx",
+			Source:        "RemotePeers",
+			CIDR:          "192.168.0.0/26",
+			MatchOperator: "In",
+			Action:        "Accept",
+		}, true),
+		Entry("should accept valid BGPFilter rule-v4 interface - 2", api.BGPFilterRuleV4{
+			Interface:     "*.calico",
+			CIDR:          "192.168.0.0/26",
+			MatchOperator: "In",
+			Action:        "Accept",
+		}, true),
+		Entry("should accept valid BGPFilter rule-v4 interface - 3", api.BGPFilterRuleV4{
+			Interface: "eth*",
+			Source:    "RemotePeers",
+			Action:    "Accept",
+		}, true),
+		Entry("should accept valid BGPFilter rule-v6 interface - 1", api.BGPFilterRuleV6{
+			Interface:     "ethx",
+			Source:        "RemotePeers",
+			CIDR:          "ffee::/64",
+			MatchOperator: "In",
+			Action:        "Accept",
+		}, true),
+		Entry("should accept valid BGPFilter rule-v6 interface - 2", api.BGPFilterRuleV6{
+			Interface:     "*.calico",
+			CIDR:          "ee2::dddd/128",
+			MatchOperator: "In",
+			Action:        "Accept",
+		}, true),
+		Entry("should accept valid BGPFilter rule-v6 interface - 3", api.BGPFilterRuleV6{
+			Interface: "*.calico",
+			Source:    "RemotePeers",
+			Action:    "Accept",
+		}, true),
+		Entry("should accept BGPFilter with only rule-v4 interface - 1 ", api.BGPFilterRuleV4{
+			Interface: "ethx",
+			Action:    "Accept",
+		}, true),
+		Entry("should accept BGPFilter with only rule-v4 interface - 2", api.BGPFilterRuleV4{
+			Interface: "eth*",
+			Action:    "Accept",
+		}, true),
+		Entry("should accept BGPFilter with only rule-v6 interface - 1", api.BGPFilterRuleV6{
+			Interface: "ethx.",
+			Action:    "Accept",
+		}, true),
+		Entry("should accept BGPFilter with only rule-v6 interface - 2", api.BGPFilterRuleV6{
+			Interface: "*.calico",
+			Action:    "Accept",
+		}, true),
+		Entry("should reject invalid BGPFilter rule-v4 source", api.BGPFilterRuleV4{
+			Source: "xyz",
+			Action: "Reject",
+		}, false),
+		Entry("should reject invalid BGPFilter rule-v6 source", api.BGPFilterRuleV6{
+			Source: "xyz",
+			Action: "Reject",
+		}, false),
+		Entry("should accept valid BGPFilter rule-v4 source", api.BGPFilterRuleV4{
+			Source:        "RemotePeers",
+			CIDR:          "192.168.0.0/26",
+			MatchOperator: "In",
+			Action:        "Reject",
+		}, true),
+		Entry("should accept valid BGPFilter rule-v6 source", api.BGPFilterRuleV6{
+			Source:        "RemotePeers",
+			CIDR:          "ffee::/64",
+			MatchOperator: "In",
+			Action:        "Reject",
+		}, true),
+		Entry("should accept BGPFilter rule with only source set - 1", api.BGPFilterRuleV4{
+			Source: "RemotePeers",
+			Action: "Reject",
+		}, true),
+		Entry("should accept BGPFilter rule with only source set - 2", api.BGPFilterRuleV6{
+			Source: "RemotePeers",
+			Action: "Reject",
+		}, true),
+		Entry("should accept BGPFilter rule with valid IPv4 CIDR", api.BGPFilterRuleV4{
+			CIDR:          "192.168.0.0/26",
+			MatchOperator: "In",
+			Action:        "Accept",
+		}, true),
+		Entry("should accept BGPFilter rule with valid IPv6 CIDR", api.BGPFilterRuleV6{
+			CIDR:          "ffee::/64",
+			MatchOperator: "In",
+			Action:        "Accept",
+		}, true),
+		Entry("should reject BGPFilter rule with invalid IPv4 CIDR - 1 ", api.BGPFilterRuleV4{
+			CIDR:          "x.x.x.x/26",
+			MatchOperator: "In",
+			Action:        "Accept",
+		}, false),
+		Entry("should reject BGPFilter rule with invalid IPv4 CIDR - 2", api.BGPFilterRuleV4{
+			CIDR:          "ffee::/64",
+			MatchOperator: "In",
+			Action:        "Accept",
+		}, false),
+		Entry("should reject BGPFilter rule with invalid IPv6 CIDR - 1", api.BGPFilterRuleV6{
+			CIDR:          "xxxx::/64",
+			MatchOperator: "In",
+			Action:        "Accept",
+		}, false),
+		Entry("should reject BGPFilter rule with invalid IPv6 CIDR - 2", api.BGPFilterRuleV6{
+			CIDR:          "10.0.10.0/32",
+			MatchOperator: "In",
+			Action:        "Accept",
+		}, false),
+		Entry("should reject BGPFilter rule with invalid operator - 1", api.BGPFilterRuleV4{
+			CIDR:          "10.0.10.0/32",
+			MatchOperator: "fancyOperator",
+			Action:        "Accept",
+		}, false),
+		Entry("should reject BGPFilter rule with invalid operator - 2", api.BGPFilterRuleV6{
+			CIDR:          "ffff::/128",
+			MatchOperator: "fancyOperator",
+			Action:        "Accept",
+		}, false),
+		Entry("should accept BGPFilter rule with In operator - 1", api.BGPFilterRuleV4{
+			CIDR:          "10.0.10.0/32",
+			MatchOperator: "In",
+			Action:        "Accept",
+		}, true),
+		Entry("should accept BGPFilter rule with In operator - 2", api.BGPFilterRuleV6{
+			CIDR:          "ffff::/128",
+			MatchOperator: "In",
+			Action:        "Accept",
+		}, true),
+		Entry("should accept BGPFilter rule with NotIn operator - 1", api.BGPFilterRuleV4{
+			CIDR:          "10.0.10.0/32",
+			MatchOperator: "NotIn",
+			Action:        "Accept",
+		}, true),
+		Entry("should accept BGPFilter rule with NotIn operator - 2", api.BGPFilterRuleV6{
+			CIDR:          "ffff::/128",
+			MatchOperator: "NotIn",
+			Action:        "Accept",
+		}, true),
+		Entry("should accept BGPFilter rule with Equal operator - 1", api.BGPFilterRuleV4{
+			CIDR:          "10.0.10.0/32",
+			MatchOperator: "Equal",
+			Action:        "Accept",
+		}, true),
+		Entry("should accept BGPFilter rule with Equal operator - 2", api.BGPFilterRuleV6{
+			CIDR:          "ffff::/128",
+			MatchOperator: "Equal",
+			Action:        "Accept",
+		}, true),
+		Entry("should accept BGPFilter rule with NotEqual operator - 1", api.BGPFilterRuleV4{
+			CIDR:          "10.0.10.0/32",
+			MatchOperator: "NotEqual",
+			Action:        "Accept",
+		}, true),
+		Entry("should accept BGPFilter rule with NotEqual operator - 2", api.BGPFilterRuleV6{
+			CIDR:          "ffff::/128",
+			MatchOperator: "NotEqual",
+			Action:        "Accept",
+		}, true),
+		Entry("should reject BGPFilter rule with no CIDR when MatchOperator is set - 1", api.BGPFilterRuleV4{
+			MatchOperator: "NotEqual",
+			Action:        "Reject",
+		}, false),
+		Entry("should reject BGPFilter rule with no CIDR when MatchOperator is set - 2", api.BGPFilterRuleV6{
+			MatchOperator: "NotEqual",
+			Action:        "Reject",
+		}, false),
+		Entry("should reject BGPFilter rule with no MatchOperator when CIDR is set - 1", api.BGPFilterRuleV4{
+			CIDR:   "10.0.10.0/32",
+			Action: "Reject",
+		}, false),
+		Entry("should reject BGPFilter rule with no MatchOperator when CIDR is set - 2", api.BGPFilterRuleV6{
+			CIDR:   "ffff::/128",
+			Action: "Reject",
+		}, false),
+		Entry("should reject BGPFilter rule with invalid Action - 1", api.BGPFilterRuleV4{
+			CIDR:          "10.0.10.0/32",
+			MatchOperator: "NotEqual",
+			Action:        "ActionX",
+		}, false),
+		Entry("should reject BGPFilter rule with invalid action - 2", api.BGPFilterRuleV6{
+			CIDR:          "ffff::/128",
+			MatchOperator: "NotEqual",
+			Action:        "ActionX",
+		}, false),
+		Entry("should accept BGPFilter rule with Accept action - 1", api.BGPFilterRuleV4{
+			CIDR:          "10.0.10.0/32",
+			MatchOperator: "NotEqual",
+			Action:        "Accept",
+		}, true),
+		Entry("should accept BGPFilter rule with Accept action - 2", api.BGPFilterRuleV6{
+			CIDR:          "ffff::/128",
+			MatchOperator: "NotEqual",
+			Action:        "Accept",
+		}, true),
+		Entry("should accept BGPFilter rule with Reject action - 1", api.BGPFilterRuleV4{
+			CIDR:          "10.0.10.0/32",
+			MatchOperator: "NotEqual",
+			Action:        "Reject",
+		}, true),
+		Entry("should accept BGPFilter rule with Reject action - 2", api.BGPFilterRuleV6{
+			CIDR:          "ffff::/128",
+			MatchOperator: "NotEqual",
+			Action:        "Reject",
+		}, true),
+		Entry("should reject BGPFilter rule with no action - 1", api.BGPFilterRuleV4{
+			MatchOperator: "NotEqual",
+			CIDR:          "10.0.10.0/32",
+		}, false),
+		Entry("should reject BGPFilter rule with no action - 2", api.BGPFilterRuleV6{
+			MatchOperator: "NotEqual",
+			CIDR:          "ffff::/128",
+		}, false),
+		Entry("should accept BGPFilter rule with just an action - 1", api.BGPFilterRuleV4{
+			Action: "Reject",
+		}, true),
+		Entry("should accept BGPFilter rule with just an action - 2", api.BGPFilterRuleV6{
+			Action: "Reject",
+		}, true),
+
 		// (API) BGPPeerSpec
 		Entry("should accept valid BGPPeerSpec", api.BGPPeerSpec{PeerIP: ipv4_1}, true),
 		Entry("should reject invalid BGPPeerSpec (IPv4)", api.BGPPeerSpec{PeerIP: bad_ipv4_1}, false),
@@ -1696,6 +1960,16 @@ func init() {
 		Entry("should accept a valid AWSSrcDstCheck value 'Disable'", api.FelixConfigurationSpec{AWSSrcDstCheck: &awsCheckDisable}, true),
 		Entry("should reject an invalid AWSSrcDstCheck value 'enable'", api.FelixConfigurationSpec{AWSSrcDstCheck: &awsCheckenable}, false),
 		Entry("should reject an invalid AWSSrcDstCheck value 'badVal'", api.FelixConfigurationSpec{AWSSrcDstCheck: &awsCheckbadVal}, false),
+
+		// BPF CTLB config check
+		Entry("should accept a valid BPFHostNetworkedNATWithoutCTLB value 'Disabled'", api.FelixConfigurationSpec{BPFHostNetworkedNATWithoutCTLB: &bpfHostNetworkedNatDisabled}, true),
+		Entry("should accept a valid BPFHostNetworkedNATWithoutCTLB value 'Enabled'", api.FelixConfigurationSpec{BPFHostNetworkedNATWithoutCTLB: &bpfHostNetworkedNatEnabled}, true),
+		Entry("should accept a valid BPFConnectTimeLoadBalancing value 'Enabled'", api.FelixConfigurationSpec{BPFConnectTimeLoadBalancing: &bpfConnectTimeLBEnabled}, true),
+		Entry("should accept a valid BPFConnectTimeLoadBalancing value 'Disabled'", api.FelixConfigurationSpec{BPFConnectTimeLoadBalancing: &bpfConnectTimeLBDisabled}, true),
+		Entry("should accept a valid BPFConnectTimeLoadBalancing value 'TCP'", api.FelixConfigurationSpec{BPFConnectTimeLoadBalancing: &bpfConnectTimeLBTCP}, true),
+		Entry("should reject an invalid BPFHostNetworkedNATWithoutCTLB value 'enabled'", api.FelixConfigurationSpec{BPFHostNetworkedNATWithoutCTLB: &bpfHostNetworkedNatenabled}, false),
+		Entry("should reject an invalid BPFHostNetworkedNATWithoutCTLB value 'BadVal'", api.FelixConfigurationSpec{BPFHostNetworkedNATWithoutCTLB: &bpfHostNetworkedNatBadVal}, false),
+		Entry("should reject an invalid BPFConnectTimeLoadBalancing value 'BadVal'", api.FelixConfigurationSpec{BPFConnectTimeLoadBalancing: &bpfConnectTimeLBBadVal}, false),
 
 		// GlobalNetworkPolicy validation.
 		Entry("disallow name with invalid character", &api.GlobalNetworkPolicy{ObjectMeta: v1.ObjectMeta{Name: "t~!s.h.i.ng"}}, false),
@@ -2696,6 +2970,10 @@ func init() {
 		Entry("should accept ServiceLoopPrevention Disabled", api.FelixConfigurationSpec{ServiceLoopPrevention: "Disabled"}, true),
 		Entry("should reject ServiceLoopPrevention Wibbly", api.FelixConfigurationSpec{ServiceLoopPrevention: "Wibbly"}, false),
 
+		Entry("should accept WindowsManageFirewallRules value Disabled", api.FelixConfigurationSpec{WindowsManageFirewallRules: &windowsManageFirewallRulesDisabled}, true),
+		Entry("should accept WindowsManageFirewallRules value Enabled", api.FelixConfigurationSpec{WindowsManageFirewallRules: &windowsManageFirewallRulesEnabled}, true),
+		Entry("should reject WindowsManageFirewallRules value blah", api.FelixConfigurationSpec{WindowsManageFirewallRules: &windowsManageFirewallRulesBlah}, false),
+
 		// KubeControllersConfiguration validation
 		Entry("should not accept invalid HealthChecks",
 			api.KubeControllersConfigurationSpec{HealthChecks: "invalid"}, false,
@@ -2819,7 +3097,7 @@ func init() {
 			PrefixAdvertisements: []api.PrefixAdvertisement{{CIDR: "2001:4860::/128", Communities: []string{"100:5964:1147483647", "100:5223"}}},
 		}, true),
 		Entry("should not accept community name that is not defined", api.BGPConfigurationSpec{
-			PrefixAdvertisements: []api.PrefixAdvertisement{{CIDR: "2001:4860::/128", Communities: []string{"non-existent-community"}}},
+			PrefixAdvertisements: []api.PrefixAdvertisement{{CIDR: "2001:4860::/128", Communities: []string{"nonexistent-community"}}},
 		}, false),
 		Entry("should accept community name whose values are defined", api.BGPConfigurationSpec{
 			Communities:          []api.Community{{Name: "community-test", Value: "101:5695"}},
@@ -2833,7 +3111,7 @@ func init() {
 			CIDR:    "10.0.0.0/24",
 			Node:    "node-1",
 		}, true),
-		Entry("should not accept delted block affinities", libapiv3.BlockAffinitySpec{
+		Entry("should not accept deleted block affinities", libapiv3.BlockAffinitySpec{
 			Deleted: "true",
 			State:   "confirmed",
 			CIDR:    "10.0.0.0/24",

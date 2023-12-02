@@ -28,6 +28,9 @@ import (
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/felix/bpf/jump"
+	"github.com/projectcalico/calico/felix/bpf/polprog"
+
 	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/felix/fv/tcpdump"
 	"github.com/projectcalico/calico/felix/fv/utils"
@@ -319,12 +322,14 @@ func (f *Felix) ProgramIptablesDNAT(serviceIP, targetIP, chain string, ipv6 bool
 }
 
 type BPFIfState struct {
-	IfIndex  int
-	Workload bool
-	Ready    bool
+	IfIndex       int
+	Workload      bool
+	Ready         bool
+	IngressPolicy int
+	EgressPolicy  int
 }
 
-var bpfIfStateRegexp = regexp.MustCompile(`.*([0-9]+) : \{flags: (.*) name: (.*)\}`)
+var bpfIfStateRegexp = regexp.MustCompile(`.*([0-9]+) : \{flags: (.*) name: (.*)}`)
 
 func (f *Felix) BPFIfState() map[string]BPFIfState {
 	out, err := f.ExecOutput("calico-bpf", "ifstate", "dump")
@@ -342,14 +347,82 @@ func (f *Felix) BPFIfState() map[string]BPFIfState {
 		name := match[3]
 		flags := match[2]
 		ifIndex, _ := strconv.Atoi(match[1])
+
+		r := regexp.MustCompile(`IngressPolicy: (\d+)`)
+		m := r.FindStringSubmatch(line)
+		inPol, _ := strconv.Atoi(m[1])
+		r = regexp.MustCompile(`EgressPolicy: (\d+)`)
+		m = r.FindStringSubmatch(line)
+		outPol, _ := strconv.Atoi(m[1])
+
 		state := BPFIfState{
-			IfIndex:  ifIndex,
-			Workload: strings.Contains(flags, "workload"),
-			Ready:    strings.Contains(flags, "ready"),
+			IfIndex:       ifIndex,
+			Workload:      strings.Contains(flags, "workload"),
+			Ready:         strings.Contains(flags, "ready"),
+			IngressPolicy: inPol,
+			EgressPolicy:  outPol,
 		}
 
 		states[name] = state
 	}
 
 	return states
+}
+
+func (f *Felix) BPFNumContiguousPolProgramsFn(iface string, ingressOrEgress string) func() int {
+	return func() int {
+		cont, _ := f.BPFNumPolProgramsByName(iface, ingressOrEgress)
+		return cont
+	}
+}
+
+func (f *Felix) BPFNumPolProgramsByName(iface string, ingressOrEgress string) (contiguous, total int) {
+	entryPointIdx := f.BPFPolEntryPointIdx(iface, ingressOrEgress)
+	return f.BPFNumPolProgramsByEntryPoint(entryPointIdx)
+}
+
+func (f *Felix) BPFPolEntryPointIdx(iface string, ingressOrEgress string) int {
+	ifState := f.BPFIfState()[iface]
+	var entryPointIdx int
+	if ingressOrEgress == "ingress" {
+		entryPointIdx = ifState.IngressPolicy
+	} else {
+		entryPointIdx = ifState.EgressPolicy
+	}
+	return entryPointIdx
+}
+
+func (f *Felix) BPFNumPolProgramsTotalByEntryPointFn(entryPointIdx int) func() (total int) {
+	return func() (total int) {
+		_, total = f.BPFNumPolProgramsByEntryPoint(entryPointIdx)
+		return
+	}
+}
+
+func (f *Felix) BPFNumPolProgramsByEntryPoint(entryPointIdx int) (contiguous, total int) {
+	gapSeen := false
+	for i := 0; i < jump.MaxSubPrograms; i++ {
+		k := polprog.SubProgramJumpIdx(entryPointIdx, i, jump.TCMaxEntryPoints)
+		out, err := f.ExecOutput(
+			"bpftool", "map", "lookup",
+			"pinned", "/sys/fs/bpf/tc/globals/cali_jump3",
+			"key",
+			fmt.Sprintf("%d", k&0xff),
+			fmt.Sprintf("%d", (k>>8)&0xff),
+			fmt.Sprintf("%d", (k>>16)&0xff),
+			fmt.Sprintf("%d", (k>>24)&0xff),
+		)
+		if err != nil {
+			gapSeen = true
+		}
+		if strings.Contains(out, "value:") {
+			total++
+			if !gapSeen {
+				contiguous++
+			}
+		} else {
+			gapSeen = true
+		}
+	}
+	return
 }

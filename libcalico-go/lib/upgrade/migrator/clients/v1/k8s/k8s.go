@@ -16,14 +16,11 @@ package k8s
 
 import (
 	"fmt"
-	"strings"
-	"time"
 
 	log "github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth" // Import all auth providers.
@@ -49,7 +46,6 @@ type KubeClient struct {
 	nodeBgpPeerClient       resources.K8sResourceClient
 	globalBgpConfigClient   resources.K8sResourceClient
 	globalFelixConfigClient resources.K8sResourceClient
-	nodeConfigClient        resources.K8sResourceClient
 }
 
 func NewKubeClient(kc *capi.KubeConfig) (*KubeClient, error) {
@@ -109,7 +105,7 @@ func NewKubeClient(kc *capi.KubeConfig) (*KubeClient, error) {
 
 	crdClientV1, err := buildCRDClientV1(*config)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to build V1 CRD client: %s", err)
+		return nil, fmt.Errorf("failed to build V1 CRD client: %s", err)
 	}
 
 	kubeClient := &KubeClient{
@@ -127,54 +123,6 @@ func NewKubeClient(kc *capi.KubeConfig) (*KubeClient, error) {
 
 func (c *KubeClient) IsKDD() bool {
 	return true
-}
-
-// waitForClusterType polls until GlobalFelixConfig is ready, or until 30 seconds have passed.
-func (c *KubeClient) waitForClusterType() error {
-	return wait.PollImmediate(1*time.Second, 30*time.Second, func() (bool, error) {
-		return c.ensureClusterType()
-	})
-}
-
-// ensureClusterType ensures that the ClusterType is configured.
-func (c *KubeClient) ensureClusterType() (bool, error) {
-	k := model.GlobalConfigKey{
-		Name: "ClusterType",
-	}
-	value := "KDD"
-
-	// See if a cluster type has been set.  If so, append
-	// any existing values to it.
-	ct, err := c.Get(k)
-	if err != nil {
-		if _, ok := err.(errors.ErrorResourceDoesNotExist); !ok {
-			// Resource exists but we got another error.
-			return false, err
-		}
-		// Resource does not exist.
-	}
-	rv := ""
-	if ct != nil {
-		existingValue := ct.Value.(string)
-		if !strings.Contains(existingValue, "KDD") {
-			existingValue = fmt.Sprintf("%s,KDD", existingValue)
-		}
-		value = existingValue
-		rv = ct.Revision
-	}
-	log.WithField("value", value).Debug("Setting ClusterType")
-	_, err = c.Apply(&model.KVPair{
-		Key:      k,
-		Value:    value,
-		Revision: rv,
-	})
-	if err != nil {
-		// Don't return an error, but indicate that we need
-		// to retry.
-		log.Warnf("Failed to apply ClusterType: %s", err)
-		return false, nil
-	}
-	return true, nil
 }
 
 // buildCRDClientV1 builds a RESTClient configured to interact with Calico CustomResourceDefinitions

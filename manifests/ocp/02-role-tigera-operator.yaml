@@ -94,18 +94,34 @@ rules:
       - deployments/finalizers
     verbs:
       - update
+  # The operator needs read and update permissions on the APIs that it controls.
   - apiGroups:
       - operator.tigera.io
     resources:
-      - '*'
+      - apiservers/finalizers
+      - installations
+      - installations/status
+      - installations/finalizers
+      - tigerastatuses
+      - tigerastatuses/status
+      - tigerastatuses/finalizers
+      - apiservers
+      - apiservers/status
+      - imagesets
     verbs:
-      - create
       - get
       - list
       - update
       - patch
-      - delete
       - watch
+  # In addition to the above, the operator creates and deletes TigeraStatus resources.
+  - apiGroups:
+      - operator.tigera.io
+    resources:
+      - tigerastatuses
+    verbs:
+      - create
+      - delete
   - apiGroups:
     - networking.k8s.io
     resources:

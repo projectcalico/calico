@@ -434,7 +434,7 @@ func (st *SyncerTester) ExpectUpdates(expectedUpdates []api.Update, checkOrder b
 // This removes all updates/onUpdate events from this receiver, so that the next call to this just requires the next set
 // of updates.
 //
-// Note that for this function to be useful, your test code needs to have fine grained control over the order in which
+// Note that for this function to be useful, your test code needs to have fine-grained control over the order in which
 // events occur.
 func (st *SyncerTester) ExpectOnUpdates(expected [][]api.Update) {
 	log.Infof("Expecting OnUpdates of %v", expected)

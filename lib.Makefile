@@ -47,9 +47,6 @@ endif
 ifeq ($(BUILDARCH),x86_64)
 	BUILDARCH=amd64
 endif
-ifeq ($(BUILDARCH),armv7l)
-        BUILDARCH=armv7
-endif
 
 # unless otherwise set, I am building for my own architecture, i.e. not cross-compiling
 ARCH ?= $(BUILDARCH)
@@ -61,17 +58,6 @@ endif
 ifeq ($(ARCH),x86_64)
 	override ARCH=amd64
 endif
-ifeq ($(ARCH),armv7l)
-        override ARCH=armv7
-endif
-ifeq ($(ARCH),armhfv7)
-        override ARCH=armv7
-endif
-
-# If ARCH is arm based, find the requested version/variant
-ifeq ($(word 1,$(subst v, ,$(ARCH))),arm)
-ARM_VERSION := $(word 2,$(subst v, ,$(ARCH)))
-endif
 
 # detect the local outbound ip address
 LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | awk '{print $$7}')
@@ -79,12 +65,8 @@ LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | awk '{print $$7}')
 LATEST_IMAGE_TAG?=latest
 
 # these macros create a list of valid architectures for pushing manifests
-space :=
-space +=
 comma := ,
 double_quote := $(shell echo '"')
-prefix_linux = $(addprefix linux/,$(strip $(subst armv,arm/v,$1)))
-join_platforms = $(subst $(space),$(comma),$(call prefix_linux,$(strip $1)))
 
 ## Targets used when cross building.
 .PHONY: native register
@@ -161,27 +143,6 @@ else
 CGO_ENABLED?=0
 endif
 
-# Build a static binary with boring crypto support.
-# This function expects you to pass in two arguments:
-#   1st arg: path/to/input/package(s)
-#   2nd arg: path/to/output/binary
-# Only when arch = amd64 it will use boring crypto to build the binary.
-# Uses LDFLAGS, CGO_LDFLAGS, CGO_CFLAGS when set.
-# Tests that the resulting binary contains boringcrypto symbols.
-define build_static_cgo_boring_binary
-    $(DOCKER_RUN) \
-        -e CGO_ENABLED=1 \
-        -e CGO_LDFLAGS=$(CGO_LDFLAGS) \
-        -e CGO_CFLAGS=$(CGO_CFLAGS) \
-        $(CALICO_BUILD) \
-        sh -c '$(GIT_CONFIG_SSH) \
-            GOEXPERIMENT=boringcrypto go build -o $(2)  \
-            -tags fipsstrict,osusergo,netgo -v -buildvcs=false \
-            -ldflags "$(LDFLAGS) -linkmode external -extldflags -static" \
-            $(1) \
-            && go tool nm $(2) | grep '_Cfunc__goboringcrypto_' 1> /dev/null'
-endef
-
 # Build a binary with boring crypto support.
 # This function expects you to pass in two arguments:
 #   1st arg: path/to/input/package(s)
@@ -190,53 +151,42 @@ endef
 # Uses LDFLAGS, CGO_LDFLAGS, CGO_CFLAGS when set.
 # Tests that the resulting binary contains boringcrypto symbols.
 define build_cgo_boring_binary
-    $(DOCKER_RUN) \
-        -e CGO_ENABLED=1 \
-        -e CGO_LDFLAGS=$(CGO_LDFLAGS) \
-        -e CGO_CFLAGS=$(CGO_CFLAGS) \
-        $(CALICO_BUILD) \
-        sh -c '$(GIT_CONFIG_SSH) \
-            GOEXPERIMENT=boringcrypto go build -o $(2)  \
-            -tags fipsstrict -v -buildvcs=false \
-            -ldflags "$(LDFLAGS)" \
-            $(1) \
-            && go tool nm $(2) | grep '_Cfunc__goboringcrypto_' 1> /dev/null'
+	$(DOCKER_RUN) \
+		-e CGO_ENABLED=1 \
+		-e CGO_CFLAGS=$(CGO_CFLAGS) \
+		-e CGO_LDFLAGS=$(CGO_LDFLAGS) \
+		$(CALICO_BUILD) \
+		sh -c '$(GIT_CONFIG_SSH) GOEXPERIMENT=boringcrypto go build -o $(2) -tags fipsstrict -v -buildvcs=false -ldflags "$(LDFLAGS)" $(1) \
+			&& go tool nm $(2) | grep '_Cfunc__goboringcrypto_' 1> /dev/null'
 endef
 
 # Use this when building binaries that need cgo, but have no crypto and therefore would not contain any boring symbols.
 define build_cgo_binary
-    $(DOCKER_RUN) \
-        -e CGO_ENABLED=1 \
-        -e CGO_LDFLAGS=$(CGO_LDFLAGS) \
-        -e CGO_CFLAGS=$(CGO_CFLAGS) \
-        $(CALICO_BUILD) \
-        sh -c '$(GIT_CONFIG_SSH) \
-            go build -o $(2)  \
-            -v -buildvcs=false \
-            -ldflags "$(LDFLAGS)" \
-            $(1)'
+	$(DOCKER_RUN) \
+		-e CGO_ENABLED=1 \
+		-e CGO_CFLAGS=$(CGO_CFLAGS) \
+		-e CGO_LDFLAGS=$(CGO_LDFLAGS) \
+		$(CALICO_BUILD) \
+		sh -c '$(GIT_CONFIG_SSH) go build -o $(2) -v -buildvcs=false -ldflags "$(LDFLAGS)" $(1)'
 endef
 
 # For binaries that do not require boring crypto.
 define build_binary
-	$(DOCKER_RUN) $(CALICO_BUILD) \
-		sh -c '$(GIT_CONFIG_SSH) \
-		go build -o $(2)  \
-		-v -buildvcs=false \
-		-ldflags "$(LDFLAGS)" \
-		$(1)'
+	$(DOCKER_RUN) \
+		-e CGO_ENABLED=0 \
+		$(CALICO_BUILD) \
+		sh -c '$(GIT_CONFIG_SSH) go build -o $(2) -v -buildvcs=false -ldflags "$(LDFLAGS)" $(1)'
 endef
 
-# For binaries that do not require boring crypto.
-define build_static_binary
-        $(DOCKER_RUN) $(CALICO_BUILD) \
-                sh -c '$(GIT_CONFIG_SSH) \
-                go build -o $(2)  \
-                -v -buildvcs=false \
-                -ldflags "$(LDFLAGS) -linkmode external -extldflags -static" \
-                $(1)'
+# For windows builds that do not require cgo.
+define build_windows_binary
+	$(DOCKER_RUN) \
+		-e CGO_ENABLED=0 \
+		-e GOARCH=amd64 \
+		-e GOOS=windows \
+		$(CALICO_BUILD) \
+		sh -c '$(GIT_CONFIG_SSH) go build -o $(2) -v -buildvcs=false -ldflags "$(LDFLAGS)" $(1)'
 endef
-
 
 # Images used in build / test across multiple directories.
 PROTOC_CONTAINER=calico/protoc:$(PROTOC_VER)-$(BUILDARCH)
@@ -252,7 +202,7 @@ ifeq ($(GIT_USE_SSH),true)
 endif
 
 # Get version from git.
-GIT_VERSION:=$(shell git describe --tags --dirty --always --abbrev=12)
+GIT_VERSION:=$(shell git describe --tags --dirty --long --always --abbrev=12)
 
 # Figure out version information.  To support builds from release tarballs, we default to
 # <unknown> if this isn't a git checkout.
@@ -262,9 +212,9 @@ BUILD_ID:=$(shell git rev-parse HEAD || uuidgen | sed 's/-//g')
 # Lazily set the git version we embed into the binaries we build. We want the
 # git tag at the time we build the binary.
 # Variables elsewhere that depend on this (such as LDFLAGS) must also be lazy.
-GIT_DESCRIPTION=$(shell git describe --tags --dirty --always --abbrev=12 || echo '<unknown>')
+GIT_DESCRIPTION=$(shell git describe --tags --dirty --long --always --abbrev=12 || echo '<unknown>')
 
-# Calculate a timestamp for any build artefacts.
+# Calculate a timestamp for any build artifacts.
 ifneq ($(OS),Windows_NT)
 DATE:=$(shell date -u +'%FT%T%z')
 endif
@@ -302,9 +252,6 @@ EXTRA_DOCKER_ARGS += -v $(GOMOD_CACHE):/go/pkg/mod:rw
 
 # Define go architecture flags to support arm variants
 GOARCH_FLAGS :=-e GOARCH=$(ARCH)
-ifdef ARM_VERSION
-GOARCH_FLAGS :=-e GOARCH=arm -e GOARM=$(ARM_VERSION)
-endif
 
 # Location of certificates used in UTs.
 REPO_ROOT := $(shell git rev-parse --show-toplevel)
@@ -314,9 +261,6 @@ CERTS_PATH := $(REPO_ROOT)/hack/test/certs
 # cross-builds get the correct architecture set in the produced images.
 ifeq ($(ARCH),arm64)
 TARGET_PLATFORM=--platform=linux/arm64/v8
-endif
-ifeq ($(ARCH),armv7)
-TARGET_PLATFORM=--platform=linux/arm/v7
 endif
 ifeq ($(ARCH),ppc64le)
 TARGET_PLATFORM=--platform=linux/ppc64le
@@ -507,21 +451,14 @@ endif
 GIT_CMD           = git
 DOCKER_CMD        = docker
 
-MANIFEST_TOOL_EXTRA_DOCKER_ARGS ?=
-# note that when using the MANIFEST_TOOL command you need to close the command with $(double_quote).
-MANIFEST_TOOL_CMD = docker run -t --entrypoint /bin/sh -v $(DOCKER_CONFIG):/root/.docker/config.json $(MANIFEST_TOOL_EXTRA_DOCKER_ARGS) $(CALICO_BUILD) -c \
-					  $(double_quote)/usr/bin/manifest-tool
-
 ifdef CONFIRM
 CRANE         = $(CRANE_CMD)
 GIT           = $(GIT_CMD)
 DOCKER        = $(DOCKER_CMD)
-MANIFEST_TOOL = $(MANIFEST_TOOL_CMD)
 else
 CRANE         = echo [DRY RUN] $(CRANE_CMD)
 GIT           = echo [DRY RUN] $(GIT_CMD)
 DOCKER        = echo [DRY RUN] $(DOCKER_CMD)
-MANIFEST_TOOL = echo [DRY RUN] $(MANIFEST_TOOL_CMD)
 endif
 
 commit-and-push-pr:
@@ -530,7 +467,7 @@ commit-and-push-pr:
 	$(GIT) push $(GIT_REMOTE) $(GIT_PR_BRANCH_HEAD)
 
 ###############################################################################
-# Github API helpers
+# GitHub API helpers
 #   Helper macros and targets to help with communicating with the github API
 ###############################################################################
 GIT_COMMIT_MESSAGE?="Automatic Pin Updates"
@@ -939,20 +876,11 @@ push-image-arch-to-registry-%:
 		$(NOECHO) $(NOOP)\
 	)
 
-manifest-tool-generate-spec: var-require-all-BUILD_IMAGE-IMAGETAG-MANIFEST_TOOL_SPEC_TEMPLATE-OUTPUT_FILE
-	bash $(MANIFEST_TOOL_SPEC_TEMPLATE) $(OUTPUT_FILE) $(BUILD_IMAGE) $(IMAGETAG)
-
-## push multi-arch manifest where supported. If the MANIFEST_TOOL_SPEC_TEMPLATE variable is specified this will include
-## the `from-spec` version of the tool.
+# push multi-arch manifest where supported.
 push-manifests: var-require-all-IMAGETAG  $(addprefix sub-manifest-,$(call escapefs,$(PUSH_MANIFEST_IMAGES)))
-ifdef MANIFEST_TOOL_SPEC_TEMPLATE
-sub-manifest-%: var-require-all-OUTPUT_DIR
-	$(MAKE) manifest-tool-generate-spec BUILD_IMAGE=$(call unescapefs,$*) OUTPUT_FILE=$(OUTPUT_DIR)$*.yaml
-	$(MANIFEST_TOOL) push from-spec $(OUTPUT_DIR)$*.yaml$(double_quote)
-else
 sub-manifest-%:
-	$(MANIFEST_TOOL) push from-args --platforms $(call join_platforms,$(VALIDARCHES)) --template $(call unescapefs,$*):$(IMAGETAG)-ARCHVARIANT --target $(call unescapefs,$*):$(IMAGETAG)$(double_quote)
-endif
+	$(DOCKER) manifest create $(call unescapefs,$*):$(IMAGETAG) $(addprefix --amend ,$(addprefix $(call unescapefs,$*):$(IMAGETAG)-,$(VALIDARCHES)))
+	$(DOCKER) manifest push --purge $(call unescapefs,$*):$(IMAGETAG)
 
 # cd-common tags and pushes images with the branch name and git version. This target uses PUSH_IMAGES, BUILD_IMAGE,
 # and BRANCH_NAME env variables to figure out what to tag and where to push it to.
@@ -980,7 +908,7 @@ cd-common: var-require-one-of-CONFIRM-DRYRUN var-require-all-BRANCH_NAME
 # - 'release' tag: A git tag of the form of `v3.8.0`. The commit that a release
 #   is cut from will have this tag, i.e. you can find the commit that release
 #   3.8 uses by finding the commit with the tag v3.8.0.
-# - 'dev' image: The image that is created for evey commit that is merged to
+# - 'dev' image: The image that is created for every commit that is merged to
 #   master or a release branch. This image is tagged with the dev tag, i.e.
 #   if commit 3a618e61c2d3 is on master or a release branch, there will be
 #   an image for that commit in the dev registry with the tag
@@ -1217,7 +1145,7 @@ check-dirty:
 bin/yq:
 	mkdir -p bin
 	$(eval TMP := $(shell mktemp -d))
-	wget https://github.com/mikefarah/yq/releases/download/v4.34.2/yq_linux_$(BUILDARCH).tar.gz -O $(TMP)/yq4.tar.gz
+	curl -sSf -L --retry 5 -o $(TMP)/yq4.tar.gz https://github.com/mikefarah/yq/releases/download/v4.34.2/yq_linux_$(BUILDARCH).tar.gz
 	tar -zxvf $(TMP)/yq4.tar.gz -C $(TMP)
 	mv $(TMP)/yq_linux_$(BUILDARCH) bin/yq
 
@@ -1337,9 +1265,9 @@ kubectl $(KUBECTL):
 bin/helm:
 	mkdir -p bin
 	$(eval TMP := $(shell mktemp -d))
-	wget -q https://get.helm.sh/helm-v3.11.0-linux-amd64.tar.gz -O $(TMP)/helm3.tar.gz
+	curl -sSf -L --retry 5 -o $(TMP)/helm3.tar.gz https://get.helm.sh/helm-v3.11.0-linux-$(ARCH).tar.gz
 	tar -zxvf $(TMP)/helm3.tar.gz -C $(TMP)
-	mv $(TMP)/linux-amd64/helm bin/helm
+	mv $(TMP)/linux-$(ARCH)/helm bin/helm
 
 ###############################################################################
 # Common functions for launching a local etcd instance.

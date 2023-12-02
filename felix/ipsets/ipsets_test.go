@@ -533,7 +533,7 @@ var _ = Describe("IP sets dataplane", func() {
 		})
 	})
 
-	Describe("with a persistent failure to delete a pre-existing temporary IP set", func() {
+	Describe("with a persistent failure to delete a preexisting temporary IP set", func() {
 		BeforeEach(func() {
 			dataplane.IPSetMembers = map[string]set.Set[string]{
 				v4MainIPSetName:  set.From("10.0.0.1"),

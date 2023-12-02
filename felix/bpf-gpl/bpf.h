@@ -102,12 +102,7 @@
 #define CALI_FIB_LOOKUP_ENABLED true
 #endif
 
-#ifdef IPVER6
-#undef CALI_FIB_LOOKUP_ENABLED
-#define CALI_FIB_LOOKUP_ENABLED false
-#else
 #define CALI_FIB_ENABLED (!CALI_F_L3 && CALI_FIB_LOOKUP_ENABLED && (CALI_F_TO_HOST || CALI_F_TO_HEP))
-#endif
 
 #define COMPILE_TIME_ASSERT(expr) {typedef char array[(expr) ? 1 : -1];}
 static CALI_BPF_INLINE void __compile_asserts(void) {
@@ -190,7 +185,7 @@ enum calico_skb_mark {
 	/* CALI_SKB_MARK_SKIP_FIB is used for packets that should pass through host IP stack. */
 	CALI_SKB_MARK_SKIP_FIB               = CALI_SKB_MARK_SEEN | 0x00100000,
 	/* CT_ESTABLISHED is used by iptables to tell the BPF programs that the packet is part of an
-	 * established Linux conntrack flow. This allows the BPF program to let through pre-existing
+	 * established Linux conntrack flow. This allows the BPF program to let through preexisting
 	 * flows at start of day. */
 	CALI_SKB_MARK_CT_ESTABLISHED         = 0x08000000,
 	CALI_SKB_MARK_CT_ESTABLISHED_MASK    = 0x08000000,
@@ -335,5 +330,15 @@ struct {										\
 		CALI_MAP(name,, map_type, key_type, val_type, size, flags)
 
 char ____license[] __attribute__((section("license"), used)) = "GPL";
+
+#define NEXTHDR_HOP		0
+#define NEXTHDR_ROUTING		43
+#define NEXTHDR_FRAGMENT	44
+#define NEXTHDR_GRE		47
+#define NEXTHDR_ESP		50
+#define NEXTHDR_AUTH		51
+#define NEXTHDR_NONE		59
+#define NEXTHDR_DEST		60
+#define NEXTHDR_MOBILITY	135
 
 #endif /* __CALI_BPF_H__ */

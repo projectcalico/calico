@@ -154,12 +154,12 @@ func (sw *secretWatcher) GetSecret(name, key string) (string, error) {
 
 	// Get and decode the key of interest.
 	if sw.watches[name].secret == nil {
-		return "", fmt.Errorf("No data available for secret %v", name)
+		return "", fmt.Errorf("no data available for secret %v", name)
 	}
 	if data, ok := sw.watches[name].secret.Data[key]; ok {
 		return string(data), nil
 	} else {
-		return "", fmt.Errorf("Secret %v does not have key %v", name, key)
+		return "", fmt.Errorf("secret %v does not have key %v", name, key)
 	}
 }
 
@@ -175,7 +175,7 @@ func (sw *secretWatcher) SweepStale() {
 	}
 }
 
-func (sw *secretWatcher) OnAdd(obj interface{}) {
+func (sw *secretWatcher) OnAdd(obj interface{}, isInInitialList bool) {
 	log.Debug("Secret added")
 	sw.updateSecret(obj.(*v1.Secret))
 	sw.client.recheckPeerConfig()

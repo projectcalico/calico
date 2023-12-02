@@ -61,7 +61,7 @@ type ResourceCache interface {
 }
 
 // ResourceCacheArgs struct passed to constructor of ResourceCache.
-// Groups togather all the arguments to pass in single struct.
+// Groups together all the arguments to pass in single struct.
 type ResourceCacheArgs struct {
 	// ListFunc returns a mapping of keys to objects from the Calico datastore.
 	ListFunc func() (map[string]interface{}, error)

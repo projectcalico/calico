@@ -8,7 +8,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
-	k8swatch "k8s.io/apimachinery/pkg/watch"
 	"k8s.io/apiserver/pkg/storage"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
@@ -25,7 +24,7 @@ type watchChan struct {
 }
 
 func (rs *resourceStore) watchResource(ctx context.Context, resourceVersion string,
-	p storage.SelectionPredicate, name, namespace string) (k8swatch.Interface, error) {
+	p storage.SelectionPredicate, name, namespace string) (watch.Interface, error) {
 	opts := options.ListOptions{Name: name, Namespace: namespace, ResourceVersion: resourceVersion}
 	ctx, cancel := context.WithCancel(ctx)
 	lWatch, err := rs.watch(ctx, rs.client, opts)

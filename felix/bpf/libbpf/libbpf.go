@@ -29,7 +29,6 @@ import (
 // #cgo CFLAGS: -I${SRCDIR}/../../bpf-gpl/include/libbpf/src -I${SRCDIR}/../../bpf-gpl/include/libbpf/include/uapi -I${SRCDIR}/../../bpf-gpl -Werror
 // #cgo amd64 LDFLAGS: -L${SRCDIR}/../../bpf-gpl/include/libbpf/src/amd64 -lbpf -lelf -lz
 // #cgo arm64 LDFLAGS: -L${SRCDIR}/../../bpf-gpl/include/libbpf/src/arm64 -lbpf -lelf -lz
-// #cgo armv7 LDFLAGS: -L${SRCDIR}/../../bpf-gpl/include/libbpf/src/armv7 -lbpf -lelf -lz
 // #include "libbpf_api.h"
 import "C"
 
@@ -382,6 +381,7 @@ const (
 	GlobalsRPFOptionEnabled uint32 = C.CALI_GLOBALS_RPF_OPTION_ENABLED
 	GlobalsRPFOptionStrict  uint32 = C.CALI_GLOBALS_RPF_OPTION_STRICT
 	GlobalsNoDSRCidrs       uint32 = C.CALI_GLOBALS_NO_DSR_CIDRS
+	GlobalsLoUDPOnly        uint32 = C.CALI_GLOBALS_LO_UDP_ONLY
 )
 
 func TcSetGlobals(

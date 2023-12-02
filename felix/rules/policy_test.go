@@ -806,7 +806,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			"-A test -m set --match-set cali40ipset-2 dst,dst --jump MARK --set-mark 0x400/0x400",
 			allBlocksPassAndEqThisBlockPassRule,
 
-			// Positive sroiuce CIDRs.
+			// Positive source CIDRs.
 			"-A test --source 10.1.0.0/16 --jump MARK --set-mark 0x400/0x400",
 			"-A test --source 11.0.0.0/8 --jump MARK --set-mark 0x400/0x400",
 			allBlocksPassAndEqThisBlockPassRule,

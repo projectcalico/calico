@@ -717,6 +717,56 @@ func (c *Container) AttachTCPDump(iface string) *tcpdump.TCPDump {
 	return tcpdump.AttachUnavailable(c.GetID(), iface)
 }
 
+// IPSetSize returns the size of the given (netfilter) IP set (or 0 is it is not present).
+func (c *Container) IPSetSize(ipSetName string) int {
+	// If we later optimize this to use 'ipset list <name>' note that the
+	// <name> variant fails with non-zero RC if the ipset doesn't exist.
+	return c.IPSetSizes()[ipSetName]
+}
+
+func (c *Container) IPSetSizeFn(ipSetName string) func() int {
+	return func() int {
+		return c.IPSetSize(ipSetName)
+	}
+}
+
+func (c *Container) IPSetSizes() map[string]int {
+	args := []string{"ipset", "list"}
+	ipsetsOutput, err := c.ExecOutput(args...)
+	Expect(err).NotTo(HaveOccurred())
+	numMembers := map[string]int{}
+	currentName := ""
+	membersSeen := false
+	log.WithField("ipsets", ipsetsOutput).Info("IP sets state")
+	for _, line := range strings.Split(ipsetsOutput, "\n") {
+		log.WithField("line", line).Debug("Parsing line")
+		if strings.HasPrefix(line, "Name:") {
+			currentName = strings.Split(line, " ")[1]
+			membersSeen = false
+		} else if strings.HasPrefix(line, "Members:") {
+			membersSeen = true
+		} else if membersSeen && len(strings.TrimSpace(line)) > 0 {
+			log.Debugf("IP set %s has member %s", currentName, line)
+			numMembers[currentName]++
+		}
+	}
+	return numMembers
+}
+
+func (c *Container) IPSetNames() []string {
+	out, err := c.ExecOutput("ipset", "list", "-name")
+	Expect(err).NotTo(HaveOccurred())
+	out = strings.Trim(out, "\n")
+	if out == "" {
+		return nil
+	}
+	return strings.Split(out, "\n")
+}
+
+func (c *Container) NumIPSets() int {
+	return len(c.IPSetNames())
+}
+
 // NumTCBPFProgs Returns the number of TC BPF programs attached to the given interface.  Only direct-action
 // programs are listed (i.e. the type that we use).
 func (c *Container) NumTCBPFProgs(ifaceName string) int {

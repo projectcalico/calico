@@ -262,7 +262,7 @@ class TestIPIP(TestBase):
                 modes.append(mode)
 
                 # At this point, since we are toggling between IPIP connectivity and no IPIP
-                # connectivity, there will be a mistmatch between the two nodes because host1
+                # connectivity, there will be a mismatch between the two nodes because host1
                 # does not have the BGP daemon running on it.
                 def check():
                     host1.execute("ip r")

@@ -70,7 +70,7 @@ func RunServer(opts *CalicoServerOptions, server *apiserver.ProjectCalicoServer)
 
 		// Add a post-start hook to write the readiness file, which is used for
 		// readiness probes.
-		server.GenericAPIServer.AddPostStartHook("apiserver-autoregistration",
+		if err := server.GenericAPIServer.AddPostStartHook("apiserver-autoregistration",
 			func(context genericapiserver.PostStartHookContext) error {
 				f, err := os.Create(readinessPath)
 				if err != nil {
@@ -80,16 +80,20 @@ func RunServer(opts *CalicoServerOptions, server *apiserver.ProjectCalicoServer)
 				klog.Info("apiserver is ready.")
 				f.Close()
 				return nil
-			})
+			}); err != nil {
+			klog.Errorln("failed to add post start hook apiserver-autoregistration:", err)
+		}
 
 		if opts.PrintSwagger {
-			server.GenericAPIServer.AddPostStartHook("swagger-printer",
+			if err := server.GenericAPIServer.AddPostStartHook("swagger-printer",
 				func(context genericapiserver.PostStartHookContext) error {
 					WriteSwaggerJSON(server.GenericAPIServer.Handler, opts.SwaggerFilePath)
 					// PrintSwagger option prints and exit.
 					os.Exit(0)
 					return nil
-				})
+				}); err != nil {
+				klog.Errorln("failed to add post start hook swagger-printer:", err)
+			}
 		}
 		if err := server.GenericAPIServer.PrepareRun().Run(allStop); err != nil {
 			klog.Errorln("Error running API server: ", err)

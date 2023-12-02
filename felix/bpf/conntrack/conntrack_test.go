@@ -20,6 +20,8 @@ import (
 	"net"
 	"time"
 
+	"golang.org/x/sys/unix"
+
 	"github.com/projectcalico/calico/felix/timeshim/mocktime"
 
 	. "github.com/onsi/ginkgo"
@@ -174,6 +176,9 @@ var _ = Describe("BPF Conntrack StaleNATScanner", func() {
 	backendIP := net.IPv4(2, 2, 2, 2)
 	backendPort := uint16(2222)
 
+	backendIP2 := net.IPv4(2, 2, 2, 3)
+	backendPort2 := uint16(223)
+
 	snatPort := uint16(456)
 
 	withSNATPort := func(snatport uint16, v conntrack.Value) conntrack.Value {
@@ -182,12 +187,17 @@ var _ = Describe("BPF Conntrack StaleNATScanner", func() {
 	}
 
 	DescribeTable("forward entries",
-		func(k conntrack.Key, v conntrack.Value, verdict conntrack.ScanVerdict) {
+		func(k conntrack.Key, v conntrack.Value, verdict conntrack.ScanVerdict, getFn ...conntrack.EntryGet) {
 			staleNATScanner := conntrack.NewStaleNATScanner(dummyNATChecker{
 				check: func(fIP net.IP, fPort uint16, bIP net.IP, bPort uint16, proto uint8) bool {
 					Expect(proto).To(Equal(uint8(123)))
 					Expect(fIP.Equal(svcIP)).To(BeTrue())
 					Expect(fPort).To(Equal(svcPort))
+
+					if bIP.Equal(backendIP2) && bPort == backendPort2 {
+						return true
+					}
+
 					Expect(bIP.Equal(backendIP)).To(BeTrue())
 					Expect(bPort).To(Equal(backendPort))
 					return false
@@ -195,7 +205,12 @@ var _ = Describe("BPF Conntrack StaleNATScanner", func() {
 			},
 			)
 
-			Expect(verdict).To(Equal(staleNATScanner.Check(k, v, nil)))
+			var get conntrack.EntryGet
+			if len(getFn) == 1 {
+				get = getFn[0]
+			}
+
+			Expect(verdict).To(Equal(staleNATScanner.Check(k, v, get)))
 		},
 		Entry("keyA - revA",
 			conntrack.NewKey(123, clientIP, clientPort, svcIP, svcPort),
@@ -217,25 +232,22 @@ var _ = Describe("BPF Conntrack StaleNATScanner", func() {
 			conntrack.NewValueNATForward(0, 0, 0, conntrack.NewKey(123, backendIP, backendPort, clientIP, clientPort)),
 			conntrack.ScanVerdictDelete,
 		),
-		Entry("mismatch key port",
-			conntrack.NewKey(123, svcIP, svcPort, clientIP, 54545),
-			conntrack.NewValueNATForward(0, 0, 0, conntrack.NewKey(123, backendIP, backendPort, clientIP, clientPort)),
+		Entry("mismatch IP",
+			conntrack.NewKey(123, svcIP, svcPort, net.IPv4(6, 6, 6, 6), clientPort),
+			conntrack.NewValueNATForward(0, 0, 0, conntrack.NewKey(123, backendIP2, backendPort2, clientIP, clientPort)),
 			conntrack.ScanVerdictOK,
+			func(conntrack.KeyInterface) (conntrack.ValueInterface, error) {
+				return conntrack.NewValueNATReverse(0, 0, 0, conntrack.Leg{}, conntrack.Leg{},
+					net.IPv4(0, 0, 0, 0), svcIP, svcPort), nil
+			},
 		),
-		Entry("mismatch key IP",
-			conntrack.NewKey(123, svcIP, svcPort, net.IPv4(2, 1, 2, 1), clientPort),
-			conntrack.NewValueNATForward(0, 0, 0, conntrack.NewKey(123, backendIP, backendPort, clientIP, clientPort)),
-			conntrack.ScanVerdictOK,
-		),
-		Entry("mismatch rev port",
-			conntrack.NewKey(123, svcIP, svcPort, clientIP, clientPort),
-			conntrack.NewValueNATForward(0, 0, 0, conntrack.NewKey(123, backendIP, backendPort, clientIP, 12321)),
-			conntrack.ScanVerdictOK,
-		),
-		Entry("mismatch rev IP",
+		Entry("mismatch rev IP missing rev",
 			conntrack.NewKey(123, svcIP, svcPort, clientIP, clientPort),
 			conntrack.NewValueNATForward(0, 0, 0, conntrack.NewKey(123, backendIP, backendPort, net.IPv4(3, 2, 2, 3), clientPort)),
-			conntrack.ScanVerdictOK,
+			conntrack.ScanVerdictDelete,
+			func(conntrack.KeyInterface) (conntrack.ValueInterface, error) {
+				return nil, unix.ENOENT
+			},
 		),
 		Entry("snatport keyA - revA",
 			conntrack.NewKey(123, clientIP, clientPort, svcIP, svcPort),

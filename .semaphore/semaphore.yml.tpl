@@ -266,7 +266,7 @@ blocks:
     - name: "Build"
       matrix:
       - env_var: ARCH
-        values: [ "arm64", "armv7", "ppc64le", "s390x" ]
+        values: [ "arm64", "ppc64le", "s390x" ]
       commands:
       # Only building the code, not the image here because the felix image is now only used for FV tests, which
       # only run on AMD64 at the moment.
@@ -511,7 +511,7 @@ blocks:
     - name: "Build image"
       matrix:
       - env_var: ARCH
-        values: [ "arm64", "armv7", "ppc64le", "s390x" ]
+        values: [ "arm64", "ppc64le", "s390x" ]
       commands:
       - ../.semaphore/run-and-monitor image-$ARCH.log make image ARCH=$ARCH
     - name: "Build Windows archive"
@@ -676,7 +676,7 @@ blocks:
 
 - name: 'crypto'
   run:
-    when: "false or change_in(['/lib.Makefile', '/crypto/'])"
+    when: "${FORCE_RUN} or change_in(['/lib.Makefile', '/crypto/'])"
   dependencies: ["Prerequisites"]
   task:
     prologue:
@@ -686,42 +686,6 @@ blocks:
       - name: "crypto tests"
         commands:
           - ../.semaphore/run-and-monitor ci.log make ci
-
-- name: 'OpenStack integration (Ussuri)'
-  run:
-    when: "${FORCE_RUN} or change_in(['/networking-calico/'])"
-  dependencies: ["Prerequisites"]
-  task:
-    agent:
-      machine:
-        type: e1-standard-4
-        os_image: ubuntu1804
-    prologue:
-      commands:
-      - cd networking-calico
-    jobs:
-      - name: 'Unit and FV tests (tox) on Ussuri'
-        commands:
-          - ../.semaphore/run-and-monitor tox.log make tox-ussuri
-      - name: 'Mainline ST (DevStack + Tempest) on Ussuri'
-        commands:
-          - git checkout -b devstack-test
-          - export LIBVIRT_TYPE=qemu
-          - export UPPER_CONSTRAINTS_FILE=https://releases.openstack.org/constraints/upper/ussuri
-          # Use proposed fix at
-          # https://review.opendev.org/c/openstack/requirements/+/810859.  See commit
-          # message for more context.
-          - export REQUIREMENTS_REPO=https://review.opendev.org/openstack/requirements
-          - export REQUIREMENTS_BRANCH=refs/changes/59/810859/1
-          - export NC_PLUGIN_REPO=$(dirname $(pwd))
-          - export NC_PLUGIN_REF=$(git rev-parse --abbrev-ref HEAD)
-          - TEMPEST=true DEVSTACK_BRANCH=stable/ussuri ./devstack/bootstrap.sh
-    epilogue:
-      on_fail:
-        commands:
-          - mkdir logs
-          - sudo journalctl > logs/journalctl.txt
-          - artifact push job --expire-in 1d logs
 
 - name: 'OpenStack integration (Yoga)'
   run:

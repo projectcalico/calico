@@ -179,9 +179,11 @@ type Config struct {
 	BPFLogLevel                        string            `config:"oneof(off,info,debug);off;non-zero"`
 	BPFLogFilters                      map[string]string `config:"keyvaluelist;;"`
 	BPFCTLBLogFilter                   string            `config:"oneof(all);;"`
-	BPFDataIfacePattern                *regexp.Regexp    `config:"regexp;^((en|wl|ww|sl|ib)[Popsx].*|(eth|wlan|wwan).*|tunl0$|vxlan.calico$|wireguard.cali$|wg-v6.cali$)"`
+	BPFDataIfacePattern                *regexp.Regexp    `config:"regexp;^((en|wl|ww|sl|ib)[Popsx].*|(eth|wlan|wwan).*|tunl0$|vxlan.calico$|vxlan-v6.calico$|wireguard.cali$|wg-v6.cali$)"`
 	BPFL3IfacePattern                  *regexp.Regexp    `config:"regexp;"`
-	BPFConnectTimeLoadBalancingEnabled bool              `config:"bool;true"`
+	BPFConnectTimeLoadBalancingEnabled bool              `config:"bool;;"`
+	BPFConnectTimeLoadBalancing        string            `config:"oneof(TCP,Enabled,Disabled);TCP;non-zero"`
+	BPFHostNetworkedNATWithoutCTLB     string            `config:"oneof(Enabled,Disabled);Enabled;non-zero"`
 	BPFExternalServiceMode             string            `config:"oneof(tunnel,dsr);tunnel;non-zero"`
 	BPFDSROptoutCIDRs                  []string          `config:"cidr-list;;"`
 	BPFKubeProxyIptablesCleanupEnabled bool              `config:"bool;true"`
@@ -238,8 +240,7 @@ type Config struct {
 	TyphaCN       string `config:"string;;local"`
 	TyphaURISAN   string `config:"string;;local"`
 
-	Ipv6Support    bool `config:"bool;true"`
-	BpfIpv6Support bool `config:"bool;false"`
+	Ipv6Support bool `config:"bool;true"`
 
 	IptablesBackend                    string            `config:"oneof(legacy,nft,auto);auto"`
 	RouteRefreshInterval               time.Duration     `config:"seconds;90"`
@@ -308,6 +309,9 @@ type Config struct {
 	// programming of NAT mappings derived from Kubernetes pod annotations.  OpenStack floating
 	// IPs are always programmed, regardless of this setting.
 	FloatingIPs string `config:"oneof(Enabled,Disabled);Disabled"`
+
+	// WindowsManageFirewallRules configures whether or not Felix will program Windows Firewall rules. [Default: Disabled]
+	WindowsManageFirewallRules string `config:"oneof(Enabled,Disabled);Disabled"`
 
 	// Knobs provided to explicitly control whether we add rules to drop encap traffic
 	// from workloads. We always add them unless explicitly requested not to add them.
@@ -752,7 +756,7 @@ func (config *Config) DatastoreConfig() apiconfig.CalicoAPIConfig {
 	}
 
 	// Now allow FELIX_XXXYYY variables or XxxYyy config file settings to override that, in the
-	// etcd case. Note that that etcd options are set even if the DatastoreType isn't etcdv3.
+	// etcd case. Note that etcd options are set even if the DatastoreType isn't etcdv3.
 	// This allows the user to rely the default DatastoreType being etcdv3 and still being able
 	// to configure the other etcdv3 options. As of the time of this code change, the etcd options
 	// have no affect if the DatastoreType is not etcdv3.

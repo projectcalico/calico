@@ -157,7 +157,7 @@ PRIORITY_RETRY = 2
 # any Neutron process, forked or not, should only ever have *one* Calico
 # Mechanism Driver in it. It's used by our monkeypatch of the
 # security_groups_rule_updated method below to locate the mechanism driver.
-# TODO(nj): Let's not do this any more. Please?
+# TODO(nj): Let's not do this anymore. Please?
 mech_driver = None
 
 

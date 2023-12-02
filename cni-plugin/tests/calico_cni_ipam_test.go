@@ -306,7 +306,7 @@ var _ = Describe("Calico IPAM Tests", func() {
 				result, _, _ = testutils.RunIPAMPlugin(netconf, "ADD", "", cid, cniVersion)
 				Expect(result.IPs[0].Address.IP.String()).Should(HavePrefix("192.169.1"))
 
-				// Re-enable the the pool. We can't delete the node if the IP pool is disabled.
+				// Re-enable the pool. We can't delete the node if the IP pool is disabled.
 				// This is arguably a bug in the node deletion code...
 				pool, err = calicoClient.IPPools().Get(context.Background(), "192-168-0-0-16", options.GetOptions{})
 				Expect(err).ToNot(HaveOccurred())

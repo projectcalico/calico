@@ -14,7 +14,8 @@ CFLAGS +=  \
 	-O2 \
 	-target bpf \
 	-emit-llvm \
-	-g
+	-g \
+	-D__x86_64__
 
 # Build against libbpf and its recent copy of the kernel headers.
 # We link against the user API version of the headers because they contain
@@ -43,8 +44,8 @@ CFLAGS +=  \
 TRIPLET := $(shell gcc -dumpmachine)
 CFLAGS += -I/usr/include/$(TRIPLET)
 
-CC := clang-15
-LD := llc-15
+CC := clang-16
+LD := llc
 
 UT_C_FILES:=$(shell find ut -name '*.c')
 UT_OBJS:=$(UT_C_FILES:.c=.o) $(shell ./list-ut-objs)
@@ -55,7 +56,7 @@ OBJS+=bin/tc_preamble.o
 OBJS+=bin/tc_preamble_v6.o
 OBJS+=bin/xdp_preamble.o
 OBJS+=bin/policy_default.o
-C_FILES:=tc_preamble.c tc.c connect_balancer.c connect_balancer_v6.c xdp_preamble.c xdp.c policy_default.c
+C_FILES:=tc_preamble.c tc.c connect_balancer.c connect_balancer_v46.c connect_balancer_v6.c xdp_preamble.c xdp.c policy_default.c
 
 all: $(OBJS)
 ut-objs: $(UT_OBJS)
@@ -63,8 +64,10 @@ ut-objs: $(UT_OBJS)
 COMPILE=$(CC) $(CFLAGS) `./calculate-flags $@` -c $< -o $@
 connect_time_%v4.ll: connect_balancer.c connect_balancer.d calculate-flags
 	$(COMPILE)
-connect_time_%v6.ll: connect_balancer_v6.c connect_balancer_v6.d calculate-flags
+connect_time_%v46.ll: connect_balancer_v46.c connect_balancer_v46.d calculate-flags
 	$(COMPILE)
+connect_time_%v6.ll: connect_balancer_v6.c connect_balancer_v6.d calculate-flags
+	$(COMPILE) -DIPVER6
 
 UT_CFLAGS=\
 	-D__BPFTOOL_LOADER__ \
@@ -76,6 +79,8 @@ UT_CFLAGS=\
 # Mini-UT programs that test one or two functions.  These are each in their own files.
 ut/%.ll: ut/%.c ut/ut.h
 	$(CC) $(UT_CFLAGS) $(CFLAGS) -c $< -o $@
+
+ut/icmp6_port_unreachable.ll: CFLAGS += -DIPVER6
 
 tc_preamble.ll: tc_preamble.c tc_preamble.d
 	$(CC) $(CFLAGS) -c $< -o $@
@@ -127,9 +132,13 @@ bin/xdp%.o: xdp%.ll | bin
 	$(LINK)
 bin/connect_time_%v4.o: connect_time_%v4.ll | bin
 	$(LINK)
+bin/connect_time_%v46.o: connect_time_%v46.ll | bin
+	$(LINK)
 bin/connect_time_%v6.o: connect_time_%v6.ll | bin
 	$(LINK)
 bin/connect_time_%v4_co-re.o: connect_time_%v4.ll | bin
+	$(LINK)
+bin/connect_time_%v46_co-re.o: connect_time_%v46.ll | bin
 	$(LINK)
 bin/connect_time_%v6_co-re.o: connect_time_%v6.ll | bin
 	$(LINK)

@@ -2,9 +2,6 @@ include ../metadata.mk
 
 PACKAGE_NAME = github.com/projectcalico/calico/cni-plugin
 
-# Add in local static-checks
-LOCAL_CHECKS=check-boring-ssl
-
 # Name of the images.
 # e.g., <registry>/<name>:<tag>
 CNI_PLUGIN_IMAGE ?=cni
@@ -29,7 +26,7 @@ WINFV_SRCFILES=$(shell find win_tests -name '*.go')
 CURL=curl -C - -sSf
 
 # Use forked CNI plugin URL and corresponding tagged artifacts.
-CNI_VERSION=v1.1.1-calico+go-1.20.7
+CNI_VERSION=v1.1.1-calico+go-1.21.4
 CNI_ARTIFACTS_URL=https://github.com/projectcalico/containernetworking-plugins/releases/download
 FLANNEL_VERSION=v1.2.0
 
@@ -45,13 +42,11 @@ DEPLOY_CONTAINER_FIPS_MARKER=cni_deploy_container-$(ARCH)-fips.created
 # on the host machine.
 FIPS ?= false
 
-ifeq ($(FIPS), true)
-CGO_ENABLED=1
+ifeq ($(FIPS),true)
 BIN=bin/$(ARCH)-fips
 DEPLOY_CONTAINER_MARKER=$(DEPLOY_CONTAINER_FIPS_MARKER)
 VALIDARCHES=amd64
 else
-CGO_ENABLED=0
 BIN=bin/$(ARCH)
 DEPLOY_CONTAINER_MARKER=$(DEPLOY_CONTAINER_STATIC_MARKER)
 endif
@@ -79,15 +74,8 @@ ifeq ($(ARCH),amd64)
 WINDOWS_BIN=bin/windows
 build: $(WINDOWS_BIN)/install.exe $(WINDOWS_BIN)/calico.exe $(WINDOWS_BIN)/calico-ipam.exe
 endif
-# If ARCH is arm based, find the requested version/variant
-ifeq ($(word 1,$(subst v, ,$(ARCH))),arm)
-ARM_VERSION := $(word 2,$(subst v, ,$(ARCH)))
-endif
 # Define go architecture flags to support arm variants
 GOARCH_FLAGS :=-e GOARCH=$(ARCH)
-ifdef ARM_VERSION
-GOARCH_FLAGS :=-e GOARCH=arm -e GOARM=$(ARM_VERSION)
-endif
 
 build-all: $(addprefix sub-build-,$(VALIDARCHES))
 sub-build-%:
@@ -95,22 +83,16 @@ sub-build-%:
 
 ## Build the Calico network plugin and ipam plugins
 $(BIN)/install binary: $(SRC_FILES)
-ifeq ($(FIPS), true)
-	$(call build_cgo_boring_binary, $(PACKAGE_NAME)/cmd/calico, $(BIN)/install)
+ifeq ($(FIPS),true)
+	$(call build_cgo_boring_binary, $(PACKAGE_NAME)/cmd/calico, $@)
 else
-	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) sh -c '\
-		$(GIT_CONFIG_SSH) go build -buildvcs=false -v -o $(BIN)/install -ldflags "$(LDFLAGS)" $(PACKAGE_NAME)/cmd/calico'
+	$(call build_binary, $(PACKAGE_NAME)/cmd/calico, $@)
 endif
 
 ## Build the Calico network plugin and ipam plugins for Windows
 $(WINDOWS_BIN)/install.exe: $(SRC_FILES)
-	-mkdir -p $(WINDOWS_BIN)
-	$(DOCKER_RUN) \
-	-e GOOS=windows \
-	-e GOARCH=amd64 \
-	-e CGO_ENABLED=1 \
-		$(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
-		go build -v -buildvcs=false -o $(WINDOWS_BIN)/install.exe -ldflags "$(LDFLAGS)" $(PACKAGE_NAME)/cmd/calico'
+	mkdir -p $(WINDOWS_BIN)
+	$(call build_windows_binary, $(PACKAGE_NAME)/cmd/calico, $@)
 
 $(WINDOWS_BIN)/calico-ipam.exe $(WINDOWS_BIN)/calico.exe: $(WINDOWS_BIN)/install.exe
 	cp "$<" "$@"
@@ -159,7 +141,7 @@ $(BIN)/flannel:
 
 $(WINDOWS_BIN)/flannel.exe:
 	-mkdir -p $(WINDOWS_BIN)
-	$(CURL) -L --retry 5 https://github.com/flannel-io/cni-plugin/releases/download/$(FLANNEL_VERSION)/cni-plugin-flannel-windows-amd64-$(FLANNEL_VERSION).tgz | tar -xz -C $(WINDOWS_BIN) ./flannel-amd64.exe
+	$(CURL) -L --retry 5 https://github.com/flannel-io/cni-plugin/releases/download/$(FLANNEL_VERSION)/cni-plugin-flannel-windows-amd64-$(FLANNEL_VERSION).tgz | tar -xz -C $(WINDOWS_BIN) flannel-amd64.exe
 	mv $(WINDOWS_BIN)/flannel-amd64.exe $@
 
 ###############################################################################
@@ -170,10 +152,6 @@ ut: run-k8s-controller-manager $(BIN)/install $(BIN)/host-local $(BIN)/calico-ip
 	$(MAKE) ut-datastore DATASTORE_TYPE=etcdv3
 	$(MAKE) ut-datastore DATASTORE_TYPE=kubernetes
 
-check-boring-ssl: $(BIN)/install
-	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) $(CHECK_BORINGSSL)
-	-rm -f $(BIN)/tags.txt
-
 $(BIN)/calico-ipam $(BIN)/calico: $(BIN)/install
 	cp "$<" "$@"
 
@@ -182,7 +160,6 @@ ut-datastore:
 	docker run --rm -t --privileged --net=host \
 	$(EXTRA_DOCKER_ARGS) \
 	-e ETCD_IP=$(LOCAL_IP_ENV) \
-	-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 	-e RUN_AS_ROOT=true \
 	-e ARCH=$(ARCH) \
 	-e PLUGIN=calico \

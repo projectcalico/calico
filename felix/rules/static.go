@@ -20,6 +20,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
+	"github.com/projectcalico/calico/felix/iptables"
 	. "github.com/projectcalico/calico/felix/iptables"
 	"github.com/projectcalico/calico/felix/proto"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
@@ -359,7 +360,7 @@ func (r *DefaultRuleRenderer) filterInputChain(ipVersion uint8) *Chain {
 	}
 }
 
-func (r *DefaultRuleRenderer) filterWorkloadToHostChain(ipVersion uint8) *Chain {
+func ICMPv6Filter(action iptables.Action) []Rule {
 	var rules []Rule
 
 	// For IPv6, we need to allow certain ICMP traffic from workloads in order to act
@@ -376,15 +377,23 @@ func (r *DefaultRuleRenderer) filterWorkloadToHostChain(ipVersion uint8) *Chain 
 	//        unsolicited router advertisement.
 	// - 135: neighbor solicitation.
 	// - 136: neighbor advertisement.
+	for _, icmpType := range []uint8{130, 131, 132, 133, 135, 136} {
+		rules = append(rules, Rule{
+			Match: Match().
+				ProtocolNum(ProtoICMPv6).
+				ICMPV6Type(icmpType),
+			Action: action,
+		})
+	}
+
+	return rules
+}
+
+func (r *DefaultRuleRenderer) filterWorkloadToHostChain(ipVersion uint8) *Chain {
+	var rules []Rule
+
 	if ipVersion == 6 {
-		for _, icmpType := range []uint8{130, 131, 132, 133, 135, 136} {
-			rules = append(rules, Rule{
-				Match: Match().
-					ProtocolNum(ProtoICMPv6).
-					ICMPV6Type(icmpType),
-				Action: r.filterAllowAction,
-			})
-		}
+		rules = ICMPv6Filter(r.filterAllowAction)
 	}
 
 	if r.OpenStackSpecialCasesEnabled {
@@ -1191,7 +1200,7 @@ func (r *DefaultRuleRenderer) StaticBPFModeRawChains(ipVersion uint8,
 		Rules: bpfUntrackedFlowRules,
 	}
 
-	xdpUntrakedPoliciesChain := &Chain{
+	xdpUntrackedPoliciesChain := &Chain{
 		Name: ChainRawBPFUntrackedPolicy,
 		Rules: []Rule{
 			// At this point we know bypass mark is set, which means that the packet has
@@ -1216,7 +1225,7 @@ func (r *DefaultRuleRenderer) StaticBPFModeRawChains(ipVersion uint8,
 
 	chains := []*Chain{
 		rawPreroutingChain,
-		xdpUntrakedPoliciesChain,
+		xdpUntrackedPoliciesChain,
 		bpfUntrackedFlowChain,
 		r.failsafeOutChain("raw", ipVersion),
 		r.WireguardIncomingMarkChain(),

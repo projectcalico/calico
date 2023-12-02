@@ -726,7 +726,7 @@ func TestNATNodePort(t *testing.T) {
 	dumpCTMap(ctMap)
 
 	skbMark = 0
-	// try a spoofed tunnel packet returnign back, should be dropped and have no effect
+	// try a spoofed tunnel packet returning back, should be dropped and have no effect
 	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
 		// modify the only known good src IP, we do not care about csums at this point
 		encapedPkt[26] = 235
@@ -3290,7 +3290,7 @@ func TestNATNodePortV6(t *testing.T) {
 	dumpCTMapV6(ctMapV6)
 
 	skbMark = 0
-	// try a spoofed tunnel packet returnign back, should be dropped and have no effect
+	// try a spoofed tunnel packet returning back, should be dropped and have no effect
 	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
 		// modify the only known good src IP, we do not care about csums at this point
 		encapedPkt[26] = 235

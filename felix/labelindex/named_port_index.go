@@ -841,7 +841,7 @@ func (idx *SelectorAndNamedPortIndex) RecalcCachedContributions(epData *endpoint
 	epData.cachedMatchingIPSetIDs.Iter(func(ipSetID string) error {
 		ipSetData := idx.ipSetDataByID[ipSetID]
 		if ipSetData == nil {
-			log.WithField("ipSetID", ipSetID).Panic("Endpoint cachedMatchingIPSetIDs refers to non-existent IP set.")
+			log.WithField("ipSetID", ipSetID).Panic("Endpoint cachedMatchingIPSetIDs refers to nonexistent IP set.")
 		}
 		contrib[ipSetID] = idx.CalculateEndpointContribution(epData, ipSetData)
 		return nil

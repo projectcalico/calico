@@ -210,7 +210,7 @@ var _ = Describe("ServiceIndex", func() {
 		// Not yet active, so ipset membership should be empty.
 		Expect(recorder.ipsets).To(Equal(map[string]map[labelindex.IPSetMember]bool{}))
 
-		// Make it active. We should have 6 IP set members - one for each address / port combintation.
+		// Make it active. We should have 6 IP set members - one for each address / port combination.
 		idx.UpdateIPSet("identifier", "default/svc1")
 		set, ok := recorder.ipsets["identifier"]
 		Expect(ok).To(BeTrue())

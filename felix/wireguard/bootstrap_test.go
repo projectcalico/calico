@@ -730,7 +730,7 @@ var _ = Describe("Wireguard bootstrapping", func() {
 					Expect(nodeClient.nodes[nodeName1].Status.WireguardPublicKeyV6).To(Equal(""))
 				})
 
-				It("deletes wireguard key from node 1 if wireguard intface is empty when calling BootstrapAndFilterTyphaAddresses", func() {
+				It("deletes wireguard key from node 1 if wireguard interface is empty when calling BootstrapAndFilterTyphaAddresses", func() {
 					configParams.WireguardInterfaceName = ""
 					configParams.WireguardInterfaceNameV6 = ""
 

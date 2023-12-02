@@ -312,7 +312,7 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 		logger.Debugf("Bypassing IPAM to set the result to: %+v", overriddenResult)
 
 		// Convert overridden IPAM result into current Result.
-		// This method fill in all the empty fields necessory for CNI output according to spec.
+		// This method fill in all the empty fields necessary for CNI output according to spec.
 		result, err = cniv1.NewResultFromResult(overriddenResult)
 		if err != nil {
 			return nil, err
@@ -500,7 +500,7 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 
 // CmdDelK8s performs CNI DEL processing when running under Kubernetes. In Kubernetes, we identify workload endpoints based on their
 // pod name and namespace rather than container ID, so we may receive multiple DEL calls for the same pod, but with different container IDs.
-// As such, we must only delete the workload endpoint when the provided CNI_CONATAINERID matches the value on the WorkloadEndpoint. If they do not match,
+// As such, we must only delete the workload endpoint when the provided CNI_CONTAINERID matches the value on the WorkloadEndpoint. If they do not match,
 // it means the DEL is for an old sandbox and the pod is still running. We should still clean up IPAM allocations, since they are identified by the
 // container ID rather than the pod name and namespace. If they do match, then we can delete the workload endpoint.
 func CmdDelK8s(ctx context.Context, c calicoclient.Interface, epIDs utils.WEPIdentifiers, args *skel.CmdArgs, conf types.NetConf, logger *logrus.Entry) error {
@@ -539,7 +539,7 @@ func CmdDelK8s(ctx context.Context, c calicoclient.Interface, epIDs utils.WEPIde
 			// we shouldn't delete the workload endpoint. We identify workload endpoints based on pod name and namespace, which means
 			// we can receive DEL commands for an old sandbox for a currently running pod. However, we key IPAM allocations based on the
 			// CNI_CONTAINERID, so we should still do that below for this case.
-			logger.WithField("WorkloadEndpoint", wep).Warning("CNI_CONTAINERID does not match WorkloadEndpoint ConainerID, don't delete WEP.")
+			logger.WithField("WorkloadEndpoint", wep).Warning("CNI_CONTAINERID does not match WorkloadEndpoint ContainerID, don't delete WEP.")
 		} else if _, err = c.WorkloadEndpoints().Delete(
 			ctx,
 			wep.Namespace,
@@ -841,7 +841,7 @@ func NewK8sClient(conf types.NetConf, logger *logrus.Entry) (*kubernetes.Clients
 	// Config can be overridden by config passed in explicitly in the network config.
 	configOverrides := &clientcmd.ConfigOverrides{}
 
-	// If an API root is given, make sure we're using using the name / port rather than
+	// If an API root is given, make sure we're using the name / port rather than
 	// the full URL. Earlier versions of the config required the full `/api/v1/` extension,
 	// so split that off to ensure compatibility.
 	conf.Policy.K8sAPIRoot = strings.Split(conf.Policy.K8sAPIRoot, "/api/")[0]

@@ -1,8 +1,0 @@
-FROM ubuntu:bionic
-MAINTAINER Daniel Fox <dan.fox@tigera.io>
-ENV STREAM bionic
-
-ADD install-ubuntu-build-deps install-ubuntu-build-deps
-RUN ./install-ubuntu-build-deps
-
-WORKDIR /code
