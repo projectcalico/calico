@@ -4,7 +4,8 @@ Param(
     [parameter(Mandatory = $false)] $OSVersion="<your os version>",
     [parameter(Mandatory = $false)] $ContainerRuntime="<your container runtime>",
     [parameter(Mandatory = $false)] $FVType="<your fv type>",
-    [parameter(Mandatory = $false)] $Provisioner="<your fv provisioner>"
+    [parameter(Mandatory = $false)] $Provisioner="<your fv provisioner>",
+    [parameter(Mandatory = $false)] $WinFvExecutable="win-fv.exe"
 )
 
 $Root="c:\\CalicoWindows"
