@@ -75,6 +75,9 @@ const (
 	ProfileInboundPfx  ProfileChainNamePrefix = ChainNamePrefix + "pri-"
 	ProfileOutboundPfx ProfileChainNamePrefix = ChainNamePrefix + "pro-"
 
+	PolicyGroupInboundPrefix  string = ChainNamePrefix + "gi-"
+	PolicyGroupOutboundPrefix string = ChainNamePrefix + "go-"
+
 	ChainWorkloadToHost       = ChainNamePrefix + "wl-to-host"
 	ChainFromWorkloadDispatch = ChainNamePrefix + "from-wl-dispatch"
 	ChainToWorkloadDispatch   = ChainNamePrefix + "to-wl-dispatch"
@@ -121,6 +124,13 @@ const (
 		`-A POSTROUTING -o tunl0 -m addrtype ! --src-type LOCAL --limit-iface-out -m addrtype --src-type LOCAL -j MASQUERADE`
 
 	KubeProxyInsertRuleRegex = `-j KUBE-[a-zA-Z0-9-]*SERVICES|-j KUBE-FORWARD`
+)
+
+type PolicyDirection string
+
+const (
+	PolicyDirectionIngress PolicyDirection = "ingress"
+	PolicyDirectionEgress  PolicyDirection = "egress"
 )
 
 // Typedefs to prevent accidentally passing the wrong prefix to the Policy/ProfileChainName()
@@ -180,14 +190,8 @@ type RuleRenderer interface {
 	StaticFilterForwardAppendRules() []iptables.Rule
 
 	WorkloadDispatchChains(map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint) []*iptables.Chain
-	WorkloadEndpointToIptablesChains(
-		ifaceName string,
-		epMarkMapper EndpointMarkMapper,
-		adminUp bool,
-		ingressPolicies []string,
-		egressPolicies []string,
-		profileIDs []string,
-	) []*iptables.Chain
+	WorkloadEndpointToIptablesChains(ifaceName string, epMarkMapper EndpointMarkMapper, adminUp bool, ingressPolicies []*PolicyGroup, egressPolicies []*PolicyGroup, profileIDs []string) []*iptables.Chain
+	PolicyGroupToIptablesChains(group *PolicyGroup) []*iptables.Chain
 
 	WorkloadInterfaceAllowChains(endpoints map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint) []*iptables.Chain
 

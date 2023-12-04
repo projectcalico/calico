@@ -317,8 +317,9 @@ func ParsedRulesToActivePolicyUpdate(key model.PolicyKey, rules *ParsedRules) *p
 				rules.OutboundRules,
 				"pol-out-default/"+key.Name,
 			),
-			Untracked: rules.Untracked,
-			PreDnat:   rules.PreDNAT,
+			Untracked:        rules.Untracked,
+			PreDnat:          rules.PreDNAT,
+			OriginalSelector: rules.OriginalSelector,
 		},
 	}
 }
