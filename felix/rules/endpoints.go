@@ -99,7 +99,7 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 	result = append(result,
 		// Chain for output traffic _to_ the endpoint.
 		r.endpointIptablesChain(
-			fakeGroups(egressPolicyNames),
+			FakeGroups(egressPolicyNames),
 			profileIDs,
 			ifaceName,
 			PolicyOutboundPfx,
@@ -114,7 +114,7 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 		),
 		// Chain for input traffic _from_ the endpoint.
 		r.endpointIptablesChain(
-			fakeGroups(ingressPolicyNames),
+			FakeGroups(ingressPolicyNames),
 			profileIDs,
 			ifaceName,
 			PolicyInboundPfx,
@@ -129,7 +129,7 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 		),
 		// Chain for forward traffic _to_ the endpoint.
 		r.endpointIptablesChain(
-			fakeGroups(egressForwardPolicyNames),
+			FakeGroups(egressForwardPolicyNames),
 			profileIDs,
 			ifaceName,
 			PolicyOutboundPfx,
@@ -144,7 +144,7 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 		),
 		// Chain for forward traffic _from_ the endpoint.
 		r.endpointIptablesChain(
-			fakeGroups(ingressForwardPolicyNames),
+			FakeGroups(ingressForwardPolicyNames),
 			profileIDs,
 			ifaceName,
 			PolicyInboundPfx,
@@ -173,7 +173,7 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 	return result
 }
 
-func fakeGroups(names []string) (groups []*PolicyGroup) {
+func FakeGroups(names []string) (groups []*PolicyGroup) {
 	for _, n := range names {
 		groups = append(groups, &PolicyGroup{
 			Tier:        "default",
@@ -194,7 +194,7 @@ func (r *DefaultRuleRenderer) HostEndpointToMangleEgressChains(
 		// ACCEPT because the mangle table is typically used, if at all, for packet
 		// manipulations that might need to apply to our allowed traffic.
 		r.endpointIptablesChain(
-			fakeGroups(egressPolicyNames),
+			FakeGroups(egressPolicyNames),
 			profileIDs,
 			ifaceName,
 			PolicyOutboundPfx,
@@ -216,7 +216,7 @@ func (r *DefaultRuleRenderer) HostEndpointToRawEgressChain(
 ) *Chain {
 	log.WithField("ifaceName", ifaceName).Debug("Rendering raw (untracked) host endpoint egress chain.")
 	return r.endpointIptablesChain(
-		fakeGroups(egressPolicyNames),
+		FakeGroups(egressPolicyNames),
 		nil, // We don't render profiles into the raw table.
 		ifaceName,
 		PolicyOutboundPfx,
@@ -242,7 +242,7 @@ func (r *DefaultRuleRenderer) HostEndpointToRawChains(
 		r.HostEndpointToRawEgressChain(ifaceName, egressPolicyNames),
 		// Chain for traffic _from_ the endpoint.
 		r.endpointIptablesChain(
-			fakeGroups(ingressPolicyNames),
+			FakeGroups(ingressPolicyNames),
 			nil, // We don't render profiles into the raw table.
 			ifaceName,
 			PolicyInboundPfx,
@@ -267,7 +267,7 @@ func (r *DefaultRuleRenderer) HostEndpointToMangleIngressChains(
 		// Chain for traffic _from_ the endpoint.  Pre-DNAT policy does not apply to
 		// outgoing traffic through a host endpoint.
 		r.endpointIptablesChain(
-			fakeGroups(preDNATPolicyNames),
+			FakeGroups(preDNATPolicyNames),
 			nil, // We don't render profiles into the raw table.
 			ifaceName,
 			PolicyInboundPfx,

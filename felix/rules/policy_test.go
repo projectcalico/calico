@@ -1103,10 +1103,6 @@ var _ = Describe("rule metadata tests", func() {
 							"Policy long-policy-name-that-gets-hashed ingress",
 						},
 					},
-					{
-						Match:  iptables.Match().MarkSingleBitSet(0x80),
-						Action: iptables.ReturnAction{},
-					},
 				},
 			},
 			&iptables.Chain{
@@ -1142,10 +1138,6 @@ var _ = Describe("rule metadata tests", func() {
 						Comment: []string{
 							"Profile long-policy-name-that-gets-hashed ingress",
 						},
-					},
-					{
-						Match:  iptables.Match().MarkSingleBitSet(0x80),
-						Action: iptables.ReturnAction{},
 					},
 				},
 			},

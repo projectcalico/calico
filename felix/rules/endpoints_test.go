@@ -188,8 +188,8 @@ var _ = Describe("Endpoints", func() {
 					"cali1234",
 					epMarkMapper,
 					true,
-					[]string{"ai", "bi"},
-					[]string{"ae", "be"},
+					FakeGroups([]string{"ai", "bi"}),
+					FakeGroups([]string{"ae", "be"}),
 					[]string{"prof1", "prof2"},
 				)).To(Equal(trimSMChain(kubeIPVSEnabled, []*Chain{
 					{
