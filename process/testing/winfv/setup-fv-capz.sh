@@ -7,12 +7,7 @@
 #         AZURE_CLIENT_ID
 #         AZURE_CLIENT_SECRET
 #
-export AZURE_SUBSCRIPTION_ID="058e3078-8970-434e-a2f0-98a72d053ea9"
-export AZURE_TENANT_ID="b0497432-28dd-4177-be42-7d4072ca6006"
-export AZURE_CLIENT_ID="0374ea97-5a41-436e-8e31-77dff480aa23"
-export AZURE_CLIENT_SECRET="7GM8Q~NAuLTXS5Sv86zV4dwufopjE3i6NIYdYbJ9"
-export CLUSTER_NAME_CAPZ="michal-win-fv"
-export AZURE_RESOURCE_GROUP="michal-win-fv-arg"
+
 
 GIT_VERSION=$(git describe --tags --dirty --long --always --abbrev=12)
 CALICO_HOME=$(cd $(dirname $0)/../../../; pwd)
