@@ -15,9 +15,12 @@
 package rules
 
 import (
+	"encoding/base64"
 	"fmt"
+	"strconv"
 
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/crypto/sha3"
 
 	"github.com/projectcalico/calico/felix/hashutils"
 	. "github.com/projectcalico/calico/felix/iptables"
@@ -29,14 +32,7 @@ const (
 	alwaysAllowIPIPEncap  = true
 )
 
-func (r *DefaultRuleRenderer) WorkloadEndpointToIptablesChains(
-	ifaceName string,
-	epMarkMapper EndpointMarkMapper,
-	adminUp bool,
-	ingressPolicies []string,
-	egressPolicies []string,
-	profileIDs []string,
-) []*Chain {
+func (r *DefaultRuleRenderer) WorkloadEndpointToIptablesChains(ifaceName string, epMarkMapper EndpointMarkMapper, adminUp bool, ingressPolicies []*PolicyGroup, egressPolicies []*PolicyGroup, profileIDs []string) []*Chain {
 	allowVXLANEncapFromWorkloads := r.Config.AllowVXLANPacketsFromWorkloads
 	allowIPIPEncapFromWorkloads := r.Config.AllowIPIPPacketsFromWorkloads
 	result := []*Chain{}
@@ -103,7 +99,7 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 	result = append(result,
 		// Chain for output traffic _to_ the endpoint.
 		r.endpointIptablesChain(
-			egressPolicyNames,
+			FakeGroups(egressPolicyNames),
 			profileIDs,
 			ifaceName,
 			PolicyOutboundPfx,
@@ -118,7 +114,7 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 		),
 		// Chain for input traffic _from_ the endpoint.
 		r.endpointIptablesChain(
-			ingressPolicyNames,
+			FakeGroups(ingressPolicyNames),
 			profileIDs,
 			ifaceName,
 			PolicyInboundPfx,
@@ -133,7 +129,7 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 		),
 		// Chain for forward traffic _to_ the endpoint.
 		r.endpointIptablesChain(
-			egressForwardPolicyNames,
+			FakeGroups(egressForwardPolicyNames),
 			profileIDs,
 			ifaceName,
 			PolicyOutboundPfx,
@@ -148,7 +144,7 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 		),
 		// Chain for forward traffic _from_ the endpoint.
 		r.endpointIptablesChain(
-			ingressForwardPolicyNames,
+			FakeGroups(ingressForwardPolicyNames),
 			profileIDs,
 			ifaceName,
 			PolicyInboundPfx,
@@ -177,6 +173,16 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 	return result
 }
 
+func FakeGroups(names []string) (groups []*PolicyGroup) {
+	for _, n := range names {
+		groups = append(groups, &PolicyGroup{
+			Tier:        "default",
+			PolicyNames: []string{n},
+		})
+	}
+	return
+}
+
 func (r *DefaultRuleRenderer) HostEndpointToMangleEgressChains(
 	ifaceName string,
 	egressPolicyNames []string,
@@ -188,7 +194,7 @@ func (r *DefaultRuleRenderer) HostEndpointToMangleEgressChains(
 		// ACCEPT because the mangle table is typically used, if at all, for packet
 		// manipulations that might need to apply to our allowed traffic.
 		r.endpointIptablesChain(
-			egressPolicyNames,
+			FakeGroups(egressPolicyNames),
 			profileIDs,
 			ifaceName,
 			PolicyOutboundPfx,
@@ -210,7 +216,7 @@ func (r *DefaultRuleRenderer) HostEndpointToRawEgressChain(
 ) *Chain {
 	log.WithField("ifaceName", ifaceName).Debug("Rendering raw (untracked) host endpoint egress chain.")
 	return r.endpointIptablesChain(
-		egressPolicyNames,
+		FakeGroups(egressPolicyNames),
 		nil, // We don't render profiles into the raw table.
 		ifaceName,
 		PolicyOutboundPfx,
@@ -236,7 +242,7 @@ func (r *DefaultRuleRenderer) HostEndpointToRawChains(
 		r.HostEndpointToRawEgressChain(ifaceName, egressPolicyNames),
 		// Chain for traffic _from_ the endpoint.
 		r.endpointIptablesChain(
-			ingressPolicyNames,
+			FakeGroups(ingressPolicyNames),
 			nil, // We don't render profiles into the raw table.
 			ifaceName,
 			PolicyInboundPfx,
@@ -261,7 +267,7 @@ func (r *DefaultRuleRenderer) HostEndpointToMangleIngressChains(
 		// Chain for traffic _from_ the endpoint.  Pre-DNAT policy does not apply to
 		// outgoing traffic through a host endpoint.
 		r.endpointIptablesChain(
-			preDNATPolicyNames,
+			FakeGroups(preDNATPolicyNames),
 			nil, // We don't render profiles into the raw table.
 			ifaceName,
 			PolicyInboundPfx,
@@ -307,21 +313,54 @@ func (r *DefaultRuleRenderer) endpointSetMarkChain(
 		Rules: rules,
 	}
 }
+func (r *DefaultRuleRenderer) PolicyGroupToIptablesChains(group *PolicyGroup) []*Chain {
+	rules := make([]Rule, 0, len(group.PolicyNames)*2-1)
+	polChainPrefix := PolicyInboundPfx
+	if group.Direction == PolicyDirectionEgress {
+		polChainPrefix = PolicyOutboundPfx
+	}
+	const returnStride = 5
+	for i, polName := range group.PolicyNames {
+		var chainToJumpTo string
+		chainToJumpTo = PolicyChainName(
+			polChainPrefix,
+			&proto.PolicyID{Name: polName},
+		)
 
-func (r *DefaultRuleRenderer) endpointIptablesChain(
-	policyNames []string,
-	profileIds []string,
-	name string,
-	policyPrefix PolicyChainNamePrefix,
-	profilePrefix ProfileChainNamePrefix,
-	endpointPrefix string,
-	failsafeChain string,
-	chainType endpointChainType,
-	adminUp bool,
-	allowAction Action,
-	allowVXLANEncap bool,
-	allowIPIPEncap bool,
-) *Chain {
+		// If a previous policy didn't set the "pass" mark, jump to the policy.
+		var match MatchCriteria
+		if i%returnStride != 0 {
+			match = Match().MarkMatchesWithMask(0, r.IptablesMarkPass|r.IptablesMarkAccept)
+		}
+		rules = append(rules, Rule{
+			Match:  match,
+			Action: JumpAction{Target: chainToJumpTo},
+		})
+
+		if i == len(group.PolicyNames)-1 {
+			break // Return rule is not needed, we automatically return.
+		}
+
+		if i%returnStride == returnStride-1 {
+			// If policy makes a verdict (i.e. the pass or accept bit is
+			// non-zero) return to the parent chain.  We can't do this in
+			// the endpoint chain because there we need to fall through to
+			// later rules in the pass case.  We know that all the rules in
+			// one group are from the same "tier".
+			rules = append(rules, Rule{
+				Match:   Match().NotMarkMatchesWithMask(0, r.IptablesMarkPass|r.IptablesMarkAccept),
+				Action:  ReturnAction{},
+				Comment: []string{"Return on verdict"},
+			})
+		}
+	}
+	return []*Chain{{
+		Name:  group.ChainName(),
+		Rules: rules,
+	}}
+}
+
+func (r *DefaultRuleRenderer) endpointIptablesChain(policyGroups []*PolicyGroup, profileIds []string, name string, policyPrefix PolicyChainNamePrefix, profilePrefix ProfileChainNamePrefix, endpointPrefix string, failsafeChain string, chainType endpointChainType, adminUp bool, allowAction Action, allowVXLANEncap bool, allowIPIPEncap bool) *Chain {
 	rules := []Rule{}
 	chainName := EndpointChainName(endpointPrefix, name)
 
@@ -375,7 +414,7 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 		})
 	}
 
-	if len(policyNames) > 0 {
+	if len(policyGroups) > 0 {
 		// Clear the "pass" mark.  If a policy sets that mark, we'll skip the rest of the policies and
 		// continue processing the profiles, if there are any.
 		rules = append(rules, Rule{
@@ -386,16 +425,23 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 		})
 
 		// Then, jump to each policy in turn.
-		for _, polID := range policyNames {
-			polChainName := PolicyChainName(
-				policyPrefix,
-				&proto.PolicyID{Name: polID},
-			)
+		for _, polGroup := range policyGroups {
+			var chainToJumpTo string
+			if polGroup.ShouldBeInlined() {
+				// Group is too small to have its own chain.
+				chainToJumpTo = PolicyChainName(
+					policyPrefix,
+					&proto.PolicyID{Name: polGroup.PolicyNames[0]},
+				)
+			} else {
+				// Group needs its own chain.
+				chainToJumpTo = polGroup.ChainName()
+			}
 
 			// If a previous policy didn't set the "pass" mark, jump to the policy.
 			rules = append(rules, Rule{
 				Match:  Match().MarkClear(r.IptablesMarkPass),
-				Action: JumpAction{Target: polChainName},
+				Action: JumpAction{Target: chainToJumpTo},
 			})
 			// If policy marked packet as accepted, it returns, setting the accept
 			// mark bit.
@@ -461,13 +507,13 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 		//
 		// For untracked rules, we don't do that because there may be tracked rules
 		// still to be applied to the packet in the filter table.
-		//if dropIfNoProfilesMatched {
+		// if dropIfNoProfilesMatched {
 		rules = append(rules, Rule{
 			Match:   Match(),
 			Action:  r.IptablesFilterDenyAction(),
 			Comment: []string{fmt.Sprintf("%s if no profiles matched", r.IptablesFilterDenyAction())},
 		})
-		//}
+		// }
 	}
 
 	return &Chain{
@@ -511,4 +557,56 @@ func EndpointChainName(prefix string, ifaceName string) string {
 		ifaceName,
 		MaxChainNameLength,
 	)
+}
+
+// MaxPolicyGroupUIDLength is sized for UIDs to fit into their chain names.
+const MaxPolicyGroupUIDLength = MaxChainNameLength - len(PolicyGroupInboundPrefix)
+
+// PolicyGroup represents a sequence of one or more policies extracted from
+// a list of policies.  If large enough it may be programmed into its own
+// chain.
+type PolicyGroup struct {
+	Tier        string
+	Direction   PolicyDirection
+	PolicyNames []string
+	Selector    string
+	cachedUID   string
+}
+
+func (g *PolicyGroup) UniqueID() string {
+	if g.cachedUID != "" {
+		return g.cachedUID
+	}
+
+	hash := sha3.New224()
+	write := func(s string) {
+		_, err := hash.Write([]byte(s))
+		if err != nil {
+			log.WithError(err).Panic("Failed to write to hasher")
+		}
+		_, err = hash.Write([]byte("\n"))
+		if err != nil {
+			log.WithError(err).Panic("Failed to write to hasher")
+		}
+	}
+	write(g.Tier)
+	write(g.Selector)
+	write(fmt.Sprint(g.Direction))
+	write(strconv.Itoa(len(g.PolicyNames)))
+	for _, name := range g.PolicyNames {
+		write(name)
+	}
+	hashBytes := hash.Sum(make([]byte, 0, hash.Size()))
+	return base64.RawURLEncoding.EncodeToString(hashBytes)[:MaxPolicyGroupUIDLength]
+}
+
+func (g *PolicyGroup) ChainName() string {
+	if g.Direction == PolicyDirectionIngress {
+		return PolicyGroupInboundPrefix + g.UniqueID()
+	}
+	return PolicyGroupOutboundPrefix + g.UniqueID()
+}
+
+func (g *PolicyGroup) ShouldBeInlined() bool {
+	return len(g.PolicyNames) <= 1
 }
