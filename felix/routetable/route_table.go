@@ -779,7 +779,7 @@ func (r *RouteTable) addOrOverwriteRoute(logCxt *log.Entry, nl netlinkshim.Inter
 		Dst:   route.Dst,
 		Table: route.Table,
 	}
-	if conflictingRoutes, err := r.lookUpConflictingRoutes(nl, routeToDel); len(conflictingRoutes) > 0 {
+	if conflictingRoutes, err := r.lookUpConflictingRoutes(nl, routeToDel); len(conflictingRoutes) == 0 {
 		logCxt.WithError(err).WithFields(log.Fields{
 			"calicoRoute":          target,
 			"attemptedKernelRoute": route,
@@ -815,12 +815,33 @@ func (r *RouteTable) lookUpConflictingRoutes(nl netlinkshim.Interface, route *ne
 	} else {
 		var conflictingRoutes []netlink.Route
 		for _, r := range allRoutes {
-			if r.Dst.String() == route.Dst.String() {
+			if ipNetsEqual(r.Dst, route.Dst) {
 				conflictingRoutes = append(conflictingRoutes, r)
 			}
 		}
 		return conflictingRoutes, nil
 	}
+}
+
+func ipNetsEqual(a, b *net.IPNet) bool {
+	if a == b {
+		return true // Both same pointer/both nil.
+	}
+	if a == nil || b == nil {
+		return false // One nil, one not.
+	}
+
+	// Both non-nil, check if masks are same length.
+	aOnes, aBits := a.Mask.Size()
+	bOnes, bBits := b.Mask.Size()
+	if aOnes != bOnes || aBits != bBits {
+		return false
+	}
+
+	// If masks are same length, and they contain each other's IP then the
+	// CIDRs are "close enough".  This check is loose enough to allow unmasked
+	// IPs to match.
+	return a.Contains(b.IP) && b.Contains(a.IP)
 }
 
 func (r *RouteTable) applyRouteDeltas(ifaceName string, deletedConnCIDRs set.Set[ip.CIDR]) (targetsToCreate, targetsToDelete []Target) {
