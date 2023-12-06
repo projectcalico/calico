@@ -172,26 +172,32 @@ func NewRuleScanner() *RuleScanner {
 }
 
 func (rs *RuleScanner) OnProfileActive(key model.ProfileRulesKey, profile *model.ProfileRules) {
-	parsedRules := rs.updateRules(key, profile.InboundRules, profile.OutboundRules, false, false, "")
+	parsedRules := rs.updateRules(key, profile.InboundRules, profile.OutboundRules, false, false, "", "")
 	rs.RulesUpdateCallbacks.OnProfileActive(key, parsedRules)
 }
 
 func (rs *RuleScanner) OnProfileInactive(key model.ProfileRulesKey) {
-	rs.updateRules(key, nil, nil, false, false, "")
+	rs.updateRules(key, nil, nil, false, false, "", "")
 	rs.RulesUpdateCallbacks.OnProfileInactive(key)
 }
 
 func (rs *RuleScanner) OnPolicyActive(key model.PolicyKey, policy *model.Policy) {
-	parsedRules := rs.updateRules(key, policy.InboundRules, policy.OutboundRules, policy.DoNotTrack, policy.PreDNAT, policy.Namespace)
+	parsedRules := rs.updateRules(key, policy.InboundRules, policy.OutboundRules, policy.DoNotTrack, policy.PreDNAT, policy.Namespace, policy.Selector)
 	rs.RulesUpdateCallbacks.OnPolicyActive(key, parsedRules)
 }
 
 func (rs *RuleScanner) OnPolicyInactive(key model.PolicyKey) {
-	rs.updateRules(key, nil, nil, false, false, "")
+	rs.updateRules(key, nil, nil, false, false, "", "")
 	rs.RulesUpdateCallbacks.OnPolicyInactive(key)
 }
 
-func (rs *RuleScanner) updateRules(key interface{}, inbound, outbound []model.Rule, untracked, preDNAT bool, origNamespace string) (parsedRules *ParsedRules) {
+func (rs *RuleScanner) updateRules(
+	key interface{},
+	inbound, outbound []model.Rule,
+	untracked, preDNAT bool,
+	origNamespace string,
+	origSelector string,
+) (parsedRules *ParsedRules) {
 	log.Debugf("Scanning rules (%v in, %v out) for key %v",
 		len(inbound), len(outbound), key)
 	// Extract all the new selectors/named ports.
@@ -219,11 +225,12 @@ func (rs *RuleScanner) updateRules(key interface{}, inbound, outbound []model.Ru
 		}
 	}
 	parsedRules = &ParsedRules{
-		Namespace:     origNamespace,
-		InboundRules:  parsedInbound,
-		OutboundRules: parsedOutbound,
-		Untracked:     untracked,
-		PreDNAT:       preDNAT,
+		Namespace:        origNamespace,
+		InboundRules:     parsedInbound,
+		OutboundRules:    parsedOutbound,
+		Untracked:        untracked,
+		PreDNAT:          preDNAT,
+		OriginalSelector: selector.Normalise(origSelector),
 	}
 
 	// Figure out which IP sets are new.
@@ -294,6 +301,8 @@ type ParsedRules struct {
 
 	// PreDNAT is true if these rules should be applied before any DNAT.
 	PreDNAT bool
+
+	OriginalSelector string
 }
 
 // ParsedRule is like a backend.model.Rule, except the selector matches and named ports are
