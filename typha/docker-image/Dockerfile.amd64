@@ -17,11 +17,6 @@ ARG UBI_IMAGE
 
 FROM ${UBI_IMAGE} as ubi
 
-# Since our binary isn't designed to run as PID 1, run it via the tini init daemon.
-ENV TINI_VERSION v0.18.0
-COPY https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini-static-amd64 /sbin/tini
-RUN chmod +x /sbin/tini
-
 # Add in top-level license file
 RUN mkdir /licenses
 COPY licenses /licenses
@@ -37,7 +32,6 @@ LABEL name="Calico Typha" \
       description="Calico Typha is a fan-out datastore proxy" \
       maintainer="Shaun Crampton <shaun@tigera.io>"
 
-COPY --from=ubi /sbin/tini /sbin/tini
 COPY --from=ubi /licenses /licenses
 
 COPY --from=ubi /usr/include /usr/include
@@ -67,5 +61,4 @@ ENV PATH="$PATH:/code"
 
 USER 999
 # Run Typha by default
-ENTRYPOINT ["/sbin/tini", "--"]
 CMD ["calico-typha"]
