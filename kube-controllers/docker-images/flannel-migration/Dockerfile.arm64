@@ -14,7 +14,7 @@
 FROM scratch
 LABEL maintainer "Song Jiang <song@tigera.io>"
 
-ADD bin/kubectl-arm64 /usr/bin/kubectl
-ADD bin/kube-controllers-linux-arm64 /usr/bin/kube-controllers
-ADD bin/check-status-linux-arm64 /usr/bin/check-status
+COPY bin/kubectl-arm64 /usr/bin/kubectl
+COPY bin/kube-controllers-linux-arm64 /usr/bin/kube-controllers
+COPY bin/check-status-linux-arm64 /usr/bin/check-status
 ENTRYPOINT ["/usr/bin/kube-controllers"]

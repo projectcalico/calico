@@ -1,10 +1,12 @@
+#!/bin/bash
+
 # Copyright (c) 2022 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#     http://www.apache.org/licenses/LICENSE-2.0
+#      http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
@@ -12,8 +14,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM s390x/alpine:3.16
+problems="$(find -name '*Dockerfile*' | xargs grep --with-filename '^ADD ')"
 
-COPY bin/csi-driver-s390x /usr/local/bin/csi-driver
+if [ "$problems" ]; then
+  echo "Some Dockerfiles use ADD instead of COPY"
+  echo "COPY is preferred to avoid false positives in CIS"
+  echo "benchmark scans."
+  echo
+  printf "%s" "$problems"
+  echo
+  echo
+  exit 1
+fi
 
-ENTRYPOINT ["/usr/local/bin/csi-driver"]

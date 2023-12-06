@@ -20,8 +20,8 @@ COPY  --from=ubi /tmp /tmp
 COPY  --from=ubi /lib /lib
 COPY  --from=ubi /lib64 /lib64
 
-ADD  bin/apiserver-s390x /code/apiserver
-ADD  bin/filecheck-s390x /code/filecheck
+COPY  bin/apiserver-s390x /code/apiserver
+COPY  bin/filecheck-s390x /code/filecheck
 
 WORKDIR /code
 

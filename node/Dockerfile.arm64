@@ -240,7 +240,7 @@ RUN chmod u+s /bin/mountns
 
 # Clean out as many files as we can from the filesystem.  We no longer need dnf or the platform python install
 # or any of its dependencies.
-ADD clean-up-filesystem.sh /
+COPY clean-up-filesystem.sh /
 
 # Allowing qemu binaries to persist.
 RUN sed -i 's#zmore#zmore\n\tqemu\n#m' clean-up-filesystem.sh
