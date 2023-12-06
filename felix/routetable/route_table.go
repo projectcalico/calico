@@ -775,31 +775,35 @@ func (r *RouteTable) addOrOverwriteRoute(logCxt *log.Entry, nl netlinkshim.Inter
 	// Overlap with an external route could be a problem, but it
 	// would be a misconfiguration that needs to be addressed
 	// anyway.
+	logCxt = logCxt.WithFields(log.Fields{
+		"calicoRoute":          target,
+		"attemptedKernelRoute": route,
+	})
 	routeToDel := &netlink.Route{
 		Dst:   route.Dst,
 		Table: route.Table,
 	}
-	if conflictingRoutes, err := r.lookUpConflictingRoutes(nl, routeToDel); len(conflictingRoutes) > 0 {
-		logCxt.WithError(err).WithFields(log.Fields{
-			"calicoRoute":          target,
-			"attemptedKernelRoute": route,
-		}).Warn("Route conflicts with another, failed to look up conflicting route.")
+	if conflictingRoutes, err := r.lookUpConflictingRoutes(nl, routeToDel); len(conflictingRoutes) == 0 {
+		logCxt.WithError(err).Warn("Route conflicts with another, failed to look up conflicting route.")
 	} else {
-		logCxt.WithFields(log.Fields{
-			"calicoRoute":          target,
-			"attemptedKernelRoute": route,
-			"conflictingRoutes":    conflictingRoutes,
-		}).Warn("Route conflicts with another, attempting to delete conflicting route.")
+		logCxt.WithField("conflictingRoute", conflictingRoutes).Warn(
+			"Route conflicts with another, attempting to delete conflicting route.")
 	}
 	err = nl.RouteDel(routeToDel)
-	if err != nil && !os.IsNotExist(err) {
+	if err != nil && !errors.Is(err, unix.ESRCH) {
 		logCxt.WithError(err).WithField("route", route).Warn(
 			"Failed to remove conflicting route.")
 	} else {
 		logCxt.Info("Removed conflicting route.  Retrying original add...")
 	}
 
-	return nl.RouteAdd(route)
+	err = nl.RouteAdd(route)
+	if err != nil {
+		logCxt.WithError(err).Warning("Failed to add route after trying to remove conflicting route.")
+	} else {
+		logCxt.Info("Successfully added route after removing conflicting route.")
+	}
+	return err
 }
 
 func (r *RouteTable) lookUpConflictingRoutes(nl netlinkshim.Interface, route *netlink.Route) ([]netlink.Route, error) {
@@ -815,12 +819,33 @@ func (r *RouteTable) lookUpConflictingRoutes(nl netlinkshim.Interface, route *ne
 	} else {
 		var conflictingRoutes []netlink.Route
 		for _, r := range allRoutes {
-			if r.Dst.String() == route.Dst.String() {
+			if ipNetsEqual(r.Dst, route.Dst) {
 				conflictingRoutes = append(conflictingRoutes, r)
 			}
 		}
 		return conflictingRoutes, nil
 	}
+}
+
+func ipNetsEqual(a, b *net.IPNet) bool {
+	if a == b {
+		return true // Both same pointer/both nil.
+	}
+	if a == nil || b == nil {
+		return false // One nil, one not.
+	}
+
+	// Both non-nil, check if masks are same length.
+	aOnes, aBits := a.Mask.Size()
+	bOnes, bBits := b.Mask.Size()
+	if aOnes != bOnes || aBits != bBits {
+		return false
+	}
+
+	// If masks are same length, and they contain each other's IP then the
+	// CIDRs are "close enough".  This check is loose enough to allow unmasked
+	// IPs to match.
+	return a.Contains(b.IP) && b.Contains(a.IP)
 }
 
 func (r *RouteTable) applyRouteDeltas(ifaceName string, deletedConnCIDRs set.Set[ip.CIDR]) (targetsToCreate, targetsToDelete []Target) {
