@@ -553,7 +553,6 @@ func (m *vxlanManager) KeepVXLANDeviceInSync(ctx context.Context, mtu int, xsumB
 		defer timer.Stop()
 		select {
 		case <-timer.C:
-			return
 		case <-ctx.Done():
 			logrus.Debug("Sleep returning early: context finished.")
 		case <-m.myVTEPChangedC:
