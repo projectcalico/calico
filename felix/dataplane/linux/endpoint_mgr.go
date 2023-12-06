@@ -371,8 +371,6 @@ func (m *endpointManager) OnUpdate(protoBufMsg interface{}) {
 		}
 		m.hostEndpointsDirty = true
 	case *proto.ActivePolicyUpdate:
-		// FIXME normalise selectors somewhere?  Here on in calc graph.
-		//       want "" to be equal to "all()" and for whitespace to be ignored.
 		newSel := msg.Policy.OriginalSelector
 		if oldSel, ok := m.activePolicySelectors[*msg.Id]; ok && oldSel == newSel {
 			// No change that we care about.

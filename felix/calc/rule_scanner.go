@@ -191,7 +191,13 @@ func (rs *RuleScanner) OnPolicyInactive(key model.PolicyKey) {
 	rs.RulesUpdateCallbacks.OnPolicyInactive(key)
 }
 
-func (rs *RuleScanner) updateRules(key interface{}, inbound, outbound []model.Rule, untracked, preDNAT bool, origNamespace string, origSelector string) (parsedRules *ParsedRules) {
+func (rs *RuleScanner) updateRules(
+	key interface{},
+	inbound, outbound []model.Rule,
+	untracked, preDNAT bool,
+	origNamespace string,
+	origSelector string,
+) (parsedRules *ParsedRules) {
 	log.Debugf("Scanning rules (%v in, %v out) for key %v",
 		len(inbound), len(outbound), key)
 	// Extract all the new selectors/named ports.
@@ -224,7 +230,7 @@ func (rs *RuleScanner) updateRules(key interface{}, inbound, outbound []model.Ru
 		OutboundRules:    parsedOutbound,
 		Untracked:        untracked,
 		PreDNAT:          preDNAT,
-		OriginalSelector: origSelector,
+		OriginalSelector: selector.Normalise(origSelector),
 	}
 
 	// Figure out which IP sets are new.
