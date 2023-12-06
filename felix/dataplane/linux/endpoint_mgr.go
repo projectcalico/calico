@@ -141,13 +141,13 @@ type endpointManager struct {
 	dirtyPolicyIDs      set.Set[proto.PolicyID]
 
 	// Active state, updated in CompleteDeferredWork.
-	activeWlEndpoints             map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint
-	activeWlIfaceNameToID         map[string]proto.WorkloadEndpointID
-	activeUpIfaces                set.Set[string]
-	activeWlIDToChains            map[proto.WorkloadEndpointID][]*iptables.Chain
-	activeWlDispatchChains        map[string]*iptables.Chain
-	activeEPMarkDispatchChains    map[string]*iptables.Chain
-	activeEPPolicyGroupChainNames map[any] /*endpoint ID*/ []string /*chain name*/
+	activeWlEndpoints           map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint
+	activeWlIfaceNameToID       map[string]proto.WorkloadEndpointID
+	activeUpIfaces              set.Set[string]
+	activeWlIDToChains          map[proto.WorkloadEndpointID][]*iptables.Chain
+	activeWlDispatchChains      map[string]*iptables.Chain
+	activeEPMarkDispatchChains  map[string]*iptables.Chain
+	ifaceNameToPolicyChainNames map[string][]string /*chain name*/
 
 	activePolicySelectors map[proto.PolicyID]string
 	policyChainRefCounts  map[string] /*chain name*/ int
@@ -294,10 +294,10 @@ func newEndpointManagerWithShims(
 
 		activeUpIfaces: set.New[string](),
 
-		activeWlEndpoints:             map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
-		activeWlIfaceNameToID:         map[string]proto.WorkloadEndpointID{},
-		activeWlIDToChains:            map[proto.WorkloadEndpointID][]*iptables.Chain{},
-		activeEPPolicyGroupChainNames: map[any][]string{},
+		activeWlEndpoints:           map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
+		activeWlIfaceNameToID:       map[string]proto.WorkloadEndpointID{},
+		activeWlIDToChains:          map[proto.WorkloadEndpointID][]*iptables.Chain{},
+		ifaceNameToPolicyChainNames: map[string][]string{},
 
 		activePolicySelectors: map[proto.PolicyID]string{},
 		policyChainRefCounts:  map[string]int{},
@@ -482,7 +482,25 @@ wepLoop:
 		}
 	}
 
-	// FIXME Extend to HEPs
+	if !m.hostEndpointsDirty {
+	hepLoop:
+		for _, hep := range m.rawHostEndpoints {
+			for _, t := range hep.Tiers {
+				for _, pols := range [][]string{t.IngressPolicies, t.EgressPolicies} {
+					for _, p := range pols {
+						polID := proto.PolicyID{
+							Tier: t.Name,
+							Name: p,
+						}
+						if m.dirtyPolicyIDs.Contains(polID) {
+							m.hostEndpointsDirty = true
+						}
+						break hepLoop
+					}
+				}
+			}
+		}
+	}
 
 	m.dirtyPolicyIDs.Clear()
 }
@@ -630,8 +648,8 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 				delete(m.sourceSpoofingConfig, oldWorkload.Name)
 				m.rpfSkipChainDirty = true
 			}
+			m.cleanUpPolicyGroups(oldWorkload.Name)
 		}
-		m.updatePolicyGroups(id, nil, nil)
 		delete(m.activeWlEndpoints, id)
 	}
 
@@ -822,7 +840,7 @@ func (m *endpointManager) updateWorkloadEndpointChains(
 ) {
 	ingressGroups := m.groupPolicies("default", ingressPolicyNames, rules.PolicyDirectionIngress)
 	egressGroups := m.groupPolicies("default", egressPolicyNames, rules.PolicyDirectionEgress)
-	m.updatePolicyGroups(id, ingressGroups, egressGroups)
+	m.updatePolicyGroups(workload.Name, append(ingressGroups, egressGroups...))
 
 	chains := m.ruleRenderer.WorkloadEndpointToIptablesChains(
 		workload.Name,
@@ -1056,6 +1074,11 @@ func (m *endpointManager) updateHostEndpoints() {
 		}
 	}
 
+	ifaceNameToPolicyGroups := map[string][]*rules.PolicyGroup{}
+	addPolicyGroups := func(ifaceName string, pgs []*rules.PolicyGroup) {
+		ifaceNameToPolicyGroups[ifaceName] = append(ifaceNameToPolicyGroups[ifaceName], pgs...)
+	}
+
 	if !m.bpfEnabled {
 		// Build iptables chains for normal and apply-on-forward host endpoint policy.
 		newHostIfaceFiltChains := map[string][]*iptables.Chain{}
@@ -1076,13 +1099,22 @@ func (m *endpointManager) updateHostEndpoints() {
 				egressForwardPolicyNames = hostEp.ForwardTiers[0].EgressPolicies
 			}
 
+			ingressGroups := m.groupPolicies("default", ingressPolicyNames, rules.PolicyDirectionIngress)
+			addPolicyGroups(ifaceName, ingressGroups)
+			egressGroups := m.groupPolicies("default", egressPolicyNames, rules.PolicyDirectionEgress)
+			addPolicyGroups(ifaceName, egressGroups)
+			ingressForwardGroups := m.groupPolicies("default", ingressForwardPolicyNames, rules.PolicyDirectionIngress)
+			addPolicyGroups(ifaceName, ingressForwardGroups)
+			egressForwardGroups := m.groupPolicies("default", egressForwardPolicyNames, rules.PolicyDirectionEgress)
+			addPolicyGroups(ifaceName, egressForwardGroups)
+
 			filtChains := m.ruleRenderer.HostEndpointToFilterChains(
 				ifaceName,
 				m.epMarkMapper,
-				ingressPolicyNames,
-				egressPolicyNames,
-				ingressForwardPolicyNames,
-				egressForwardPolicyNames,
+				ingressGroups,
+				egressGroups,
+				ingressForwardGroups,
+				egressForwardGroups,
 				hostEp.ProfileIds,
 			)
 
@@ -1094,7 +1126,7 @@ func (m *endpointManager) updateHostEndpoints() {
 
 			mangleChains := m.ruleRenderer.HostEndpointToMangleEgressChains(
 				ifaceName,
-				egressPolicyNames,
+				egressGroups,
 				hostEp.ProfileIds,
 			)
 			if !reflect.DeepEqual(mangleChains, m.activeHostIfaceToMangleEgressChains[ifaceName]) {
@@ -1115,9 +1147,11 @@ func (m *endpointManager) updateHostEndpoints() {
 			if len(hostEp.PreDnatTiers) > 0 {
 				ingressPolicyNames = hostEp.PreDnatTiers[0].IngressPolicies
 			}
+			ingressGroups := m.groupPolicies("default", ingressPolicyNames, rules.PolicyDirectionIngress)
+			addPolicyGroups(ifaceName, ingressGroups)
 			mangleChains := m.ruleRenderer.HostEndpointToMangleIngressChains(
 				ifaceName,
-				ingressPolicyNames,
+				ingressGroups,
 			)
 			if !reflect.DeepEqual(mangleChains, m.activeHostIfaceToMangleIngressChains[ifaceName]) {
 				m.mangleTable.UpdateChains(mangleChains)
@@ -1166,15 +1200,23 @@ func (m *endpointManager) updateHostEndpoints() {
 			}
 			var rawChains []*iptables.Chain
 			if m.bpfEnabled {
+				egressGroups := m.groupPolicies("default", egressPolicyNames, rules.PolicyDirectionEgress)
+				addPolicyGroups(ifaceName, egressGroups)
+
 				rawChains = append(rawChains, m.ruleRenderer.HostEndpointToRawEgressChain(
 					ifaceName,
-					egressPolicyNames,
+					egressGroups,
 				))
 			} else {
+				ingressGroups := m.groupPolicies("default", ingressPolicyNames, rules.PolicyDirectionIngress)
+				addPolicyGroups(ifaceName, ingressGroups)
+				egressGroups := m.groupPolicies("default", egressPolicyNames, rules.PolicyDirectionEgress)
+				addPolicyGroups(ifaceName, egressGroups)
+
 				rawChains = m.ruleRenderer.HostEndpointToRawChains(
 					ifaceName,
-					ingressPolicyNames,
-					egressPolicyNames,
+					ingressGroups,
+					egressGroups,
 				)
 			}
 			if !reflect.DeepEqual(rawChains, m.activeHostIfaceToRawChains[ifaceName]) {
@@ -1192,6 +1234,17 @@ func (m *endpointManager) updateHostEndpoints() {
 		}
 
 		m.activeHostIfaceToRawChains = newHostIfaceRawChains
+	}
+
+	// Update policy group refcounting.
+	for ifaceName := range m.ifaceNameToPolicyChainNames {
+		if _, ok := ifaceNameToPolicyGroups[ifaceName]; ok {
+			continue
+		}
+		m.cleanUpPolicyGroups(ifaceName)
+	}
+	for ifaceName, groups := range ifaceNameToPolicyGroups {
+		m.updatePolicyGroups(ifaceName, groups)
 	}
 
 	// Remember the host endpoints that are now in use.
@@ -1481,18 +1534,21 @@ func (m *endpointManager) decrefGroups(chainNames []string) {
 	}
 }
 
-func (m *endpointManager) updatePolicyGroups(id proto.WorkloadEndpointID, ingressGroups, egressGroups []*rules.PolicyGroup) {
-	allGroups := append(ingressGroups, egressGroups...)
-	oldEndpointGroups := m.activeEPPolicyGroupChainNames[id]
+func (m *endpointManager) updatePolicyGroups(ifaceName string, allGroups []*rules.PolicyGroup) {
+	oldEndpointGroups := m.ifaceNameToPolicyChainNames[ifaceName]
 	m.increfGroups(allGroups)
 	m.decrefGroups(oldEndpointGroups)
 	if len(allGroups) == 0 {
-		delete(m.activeEPPolicyGroupChainNames, id)
+		delete(m.ifaceNameToPolicyChainNames, ifaceName)
 		return
 	}
 	chainNames := make([]string, len(allGroups))
 	for i, g := range allGroups {
 		chainNames[i] = g.ChainName()
 	}
-	m.activeEPPolicyGroupChainNames[id] = chainNames
+	m.ifaceNameToPolicyChainNames[ifaceName] = chainNames
+}
+
+func (m *endpointManager) cleanUpPolicyGroups(ifaceName string) {
+	m.updatePolicyGroups(ifaceName, nil)
 }

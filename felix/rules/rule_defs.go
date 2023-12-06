@@ -207,29 +207,29 @@ type RuleRenderer interface {
 	HostEndpointToFilterChains(
 		ifaceName string,
 		epMarkMapper EndpointMarkMapper,
-		ingressPolicyNames []string,
-		egressPolicyNames []string,
-		ingressForwardPolicyNames []string,
-		egressForwardPolicyNames []string,
+		ingressPolicies []*PolicyGroup,
+		egressPolicies []*PolicyGroup,
+		ingressForwardPolicies []*PolicyGroup,
+		egressForwardPolicies []*PolicyGroup,
 		profileIDs []string,
 	) []*iptables.Chain
 	HostEndpointToMangleEgressChains(
 		ifaceName string,
-		egressPolicyNames []string,
+		egressPolicies []*PolicyGroup,
 		profileIDs []string,
 	) []*iptables.Chain
 	HostEndpointToRawEgressChain(
 		ifaceName string,
-		egressPolicyNames []string,
+		egressPolicies []*PolicyGroup,
 	) *iptables.Chain
 	HostEndpointToRawChains(
 		ifaceName string,
-		ingressPolicyNames []string,
-		egressPolicyNames []string,
+		ingressPolicies []*PolicyGroup,
+		egressPolicies []*PolicyGroup,
 	) []*iptables.Chain
 	HostEndpointToMangleIngressChains(
 		ifaceName string,
-		preDNATPolicyNames []string,
+		preDNATPolicies []*PolicyGroup,
 	) []*iptables.Chain
 
 	PolicyToIptablesChains(policyID *proto.PolicyID, policy *proto.Policy, ipVersion uint8) []*iptables.Chain
