@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os"
 	"reflect"
 	"regexp"
 	"strings"
@@ -220,6 +221,7 @@ type RouteTable struct {
 
 	// The route deletion grace period.
 	routeCleanupGracePeriod time.Duration
+	featureDetector         environment.FeatureDetectorIface
 }
 
 type RouteTableOpt func(table *RouteTable)
@@ -361,6 +363,7 @@ func NewWithShims(
 			handlemgr.WithNewHandleOverride(newNetlinkHandle),
 			handlemgr.WithSocketTimeout(netlinkTimeout),
 		),
+		featureDetector: featureDetector,
 	}
 
 	for _, o := range opts {
@@ -716,7 +719,7 @@ func (r *RouteTable) syncRoutesForLink(ifaceName string, fullSync bool, firstTry
 		// In case this IP is being re-used, wait for any previous conntrack entry
 		// to be cleaned up.  (No-op if there are no pending deletes.)
 		r.waitForPendingConntrackDeletion(target.CIDR.Addr())
-		if err := nl.RouteAdd(&route); err != nil {
+		if err := r.addOrOverwriteRoute(logCxt, nl, &target, &route); err != nil {
 			if firstTry {
 				logCxt.WithError(err).WithField("route", route).Debug("Failed to add route on first attempt, retrying...")
 			} else {
@@ -746,6 +749,99 @@ func (r *RouteTable) syncRoutesForLink(ifaceName string, fullSync bool, firstTry
 
 	// Return any un-handled re-sync error.
 	return resyncErr
+}
+
+func (r *RouteTable) addOrOverwriteRoute(logCxt *log.Entry, nl netlinkshim.Interface, target *Target, route *netlink.Route) error {
+	err := nl.RouteAdd(route)
+	if err == nil { // Return on success
+		return nil
+	}
+	if !os.IsExist(err) || !r.shouldDeleteConflictingRoutes() {
+		return err
+	}
+
+	// There's an existing route causing a conflict.  There are a
+	// few reasons that this can happen:
+	//
+	// - We've been reconfigured and left behind some routes
+	//   that no longer appear to belong to us.  For example, the
+	//   parent device of a VXLAN tunnel changes.
+	// - Transient overlap of routes between workloads.
+	// - Overlap with an external route.
+	//
+	// Empirically, the first problem is the most common, so we try
+	// to delete the conflicting route.  The second case should
+	// "come out in the wash" when the overlap is removed.
+	// Overlap with an external route could be a problem, but it
+	// would be a misconfiguration that needs to be addressed
+	// anyway.
+	routeToDel := &netlink.Route{
+		Dst:   route.Dst,
+		Table: route.Table,
+	}
+	if conflictingRoutes, err := r.lookUpConflictingRoutes(nl, routeToDel); len(conflictingRoutes) > 0 {
+		logCxt.WithError(err).WithFields(log.Fields{
+			"calicoRoute":          target,
+			"attemptedKernelRoute": route,
+		}).Warn("Route conflicts with another, failed to look up conflicting route.")
+	} else {
+		logCxt.WithFields(log.Fields{
+			"calicoRoute":          target,
+			"attemptedKernelRoute": route,
+			"conflictingRoutes":    conflictingRoutes,
+		}).Warn("Route conflicts with another, attempting to delete conflicting route.")
+	}
+	err = nl.RouteDel(routeToDel)
+	if err != nil && !os.IsNotExist(err) {
+		logCxt.WithError(err).WithField("route", route).Warn(
+			"Failed to remove conflicting route.")
+	} else {
+		logCxt.Info("Removed conflicting route.  Retrying original add...")
+	}
+
+	return nl.RouteAdd(route)
+}
+
+func (r *RouteTable) lookUpConflictingRoutes(nl netlinkshim.Interface, route *netlink.Route) ([]netlink.Route, error) {
+	filterFlags := uint64(0)
+	if route.Table != 0 {
+		filterFlags |= netlink.RT_FILTER_TABLE
+	}
+	allRoutes, err := nl.RouteListFiltered(r.netlinkFamily, &netlink.Route{
+		Table: route.Table,
+	}, filterFlags)
+	if err != nil {
+		return nil, err
+	} else {
+		var conflictingRoutes []netlink.Route
+		for _, r := range allRoutes {
+			if ipNetsEqual(r.Dst, route.Dst) {
+				conflictingRoutes = append(conflictingRoutes, r)
+			}
+		}
+		return conflictingRoutes, nil
+	}
+}
+
+func ipNetsEqual(a, b *net.IPNet) bool {
+	if a == b {
+		return true // Both same pointer/both nil.
+	}
+	if a == nil || b == nil {
+		return false // One nil, one not.
+	}
+
+	// Both non-nil, check if masks are same length.
+	aOnes, aBits := a.Mask.Size()
+	bOnes, bBits := b.Mask.Size()
+	if aOnes != bOnes || aBits != bBits {
+		return false
+	}
+
+	// If masks are same length, and they contain each other's IP then the
+	// CIDRs are "close enough".  This check is loose enough to allow unmasked
+	// IPs to match.
+	return a.Contains(b.IP) && b.Contains(a.IP)
 }
 
 func (r *RouteTable) applyRouteDeltas(ifaceName string, deletedConnCIDRs set.Set[ip.CIDR]) (targetsToCreate, targetsToDelete []Target) {
@@ -1255,6 +1351,15 @@ func (r *RouteTable) getLinkAttributes(ifaceName string) (*netlink.LinkAttrs, er
 		return nil, filteredErr
 	}
 	return link.Attrs(), nil
+}
+
+func (r *RouteTable) shouldDeleteConflictingRoutes() bool {
+	gate := r.featureDetector.FeatureGate("DeleteConflictingRoutes")
+	switch strings.ToLower(gate) {
+	case "enabled", "": // Default is "enabled"
+		return true
+	}
+	return false
 }
 
 // safeTargetPointer returns a pointer to a Target safely ensuring the pointer is unique.
