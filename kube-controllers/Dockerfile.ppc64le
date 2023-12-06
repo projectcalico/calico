@@ -14,6 +14,6 @@
 FROM scratch
 LABEL maintainer "Casey Davenport <casey@tigera.io>"
 
-ADD bin/kube-controllers-linux-ppc64le /usr/bin/kube-controllers
-ADD bin/check-status-linux-ppc64le /usr/bin/check-status
+COPY bin/kube-controllers-linux-ppc64le /usr/bin/kube-controllers
+COPY bin/check-status-linux-ppc64le /usr/bin/check-status
 ENTRYPOINT ["/usr/bin/kube-controllers"]

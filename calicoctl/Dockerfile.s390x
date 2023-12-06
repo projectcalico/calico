@@ -9,7 +9,7 @@ FROM s390x/alpine:3.10
 COPY --from=qemu /usr/bin/qemu-s390x-static /usr/bin/
 MAINTAINER LoZ Open Source Ecosystem (https://www.ibm.com/developerworks/community/groups/community/lozopensource)
 
-ADD bin/calicoctl-linux-s390x /calicoctl
+COPY bin/calicoctl-linux-s390x /calicoctl
 
 ENV CALICO_CTL_CONTAINER=TRUE
 ENV PATH=$PATH:/

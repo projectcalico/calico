@@ -27,6 +27,6 @@ COPY --from=ubi /lib64/libpthread.so.0 /lib64/libpthread.so.0
 COPY --from=ubi /lib64/libc.so.6 /lib64/libc.so.6
 
 ARG BIN_DIR
-ADD ${BIN_DIR}/node-driver-registrar-amd64 /usr/local/bin/node-driver-registrar
+COPY ${BIN_DIR}/node-driver-registrar-amd64 /usr/local/bin/node-driver-registrar
 
 ENTRYPOINT ["/usr/local/bin/node-driver-registrar"]

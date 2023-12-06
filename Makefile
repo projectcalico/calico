@@ -35,9 +35,13 @@ clean:
 	rm -rf ./bin
 
 ci-preflight-checks:
+	$(MAKE) check-dockerfiles
 	$(MAKE) check-language
 	$(MAKE) generate
 	$(MAKE) check-dirty
+
+check-dockerfiles:
+	./hack/check-dockerfiles.sh
 
 check-language:
 	./hack/check-language.sh

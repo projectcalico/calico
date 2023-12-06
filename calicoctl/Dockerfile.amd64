@@ -35,7 +35,7 @@ COPY --from=ubi /etc/host.conf /etc/host.conf
 COPY --from=ubi /etc/nsswitch.conf /etc/nsswitch.conf
 
 COPY --from=ubi /licenses /licenses
-ADD bin/calicoctl-linux-amd64 /calicoctl
+COPY bin/calicoctl-linux-amd64 /calicoctl
 
 ENV CALICO_CTL_CONTAINER=TRUE
 ENV PATH=$PATH:/

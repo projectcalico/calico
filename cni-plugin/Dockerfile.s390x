@@ -9,7 +9,7 @@ RUN mkdir -p /opt/cni/bin
 FROM scratch
 
 COPY licenses/ /licenses
-ADD bin/s390x/ /opt/cni/bin/
+COPY bin/s390x/ /opt/cni/bin/
 
 ENV PATH=$PATH:/opt/cni/bin
 WORKDIR /opt/cni/bin
