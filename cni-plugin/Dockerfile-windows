@@ -29,10 +29,10 @@ LABEL name="Calico Networking for CNI" \
       description="Calico Networking for CNI includes a CNI networking plugin and CNI IPAM plugin" \
       maintainer="maintainers@projectcalico.org"
 
-ADD licenses/ /licenses
-ADD LICENSE /licenses/
+COPY licenses/ /licenses
+COPY LICENSE /licenses/
 
-ADD bin/windows/ /opt/cni/bin/
+COPY bin/windows/ /opt/cni/bin/
 
 ENV PATH=$PATH;/opt/cni/bin
 WORKDIR /opt/cni/bin

@@ -25,23 +25,16 @@ MAINTAINER Shaun Crampton <shaun@tigera.io>
 # when running on a kernel >= 4.8, this will become less relevant
 COPY --from=qemu /usr/bin/qemu-ppc64le-static /usr/bin/
 
-# Since our binary isn't designed to run as PID 1, run it via the tini init daemon.
-ENV TINI_VERSION v0.18.0
-ADD https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini-static-ppc64el /sbin/tini
-RUN chmod +x /sbin/tini
-
 FROM scratch
-COPY --from=base /sbin/tini /sbin/tini
 
 # Put our binary in /code rather than directly in /usr/bin.  This allows the downstream builds
 # to more easily extract the build artefacts from the container.
-ADD bin/calico-typha-ppc64le /code/calico-typha
-ADD typha.cfg /etc/calico/typha.cfg
+COPY bin/calico-typha-ppc64le /code/calico-typha
+COPY typha.cfg /etc/calico/typha.cfg
 
 WORKDIR /code
 ENV PATH "$PATH:/code"
 
 USER 999
 # Run Typha by default
-ENTRYPOINT ["/sbin/tini", "--"]
 CMD ["calico-typha"]
