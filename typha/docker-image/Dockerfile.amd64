@@ -17,11 +17,6 @@ ARG UBI_IMAGE
 
 FROM ${UBI_IMAGE} as ubi
 
-# Since our binary isn't designed to run as PID 1, run it via the tini init daemon.
-ENV TINI_VERSION v0.18.0
-COPY https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini-static-amd64 /sbin/tini
-RUN chmod +x /sbin/tini
-
 # Add in top-level license file
 RUN mkdir /licenses
 COPY licenses /licenses
@@ -67,5 +62,4 @@ ENV PATH="$PATH:/code"
 
 USER 999
 # Run Typha by default
-ENTRYPOINT ["/sbin/tini", "--"]
 CMD ["calico-typha"]
