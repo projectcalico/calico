@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2023 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 package calc
 
 import (
@@ -182,7 +183,15 @@ func (rs *RuleScanner) OnProfileInactive(key model.ProfileRulesKey) {
 }
 
 func (rs *RuleScanner) OnPolicyActive(key model.PolicyKey, policy *model.Policy) {
-	parsedRules := rs.updateRules(key, policy.InboundRules, policy.OutboundRules, policy.DoNotTrack, policy.PreDNAT, policy.Namespace, policy.Selector)
+	parsedRules := rs.updateRules(
+		key,
+		policy.InboundRules,
+		policy.OutboundRules,
+		policy.DoNotTrack,
+		policy.PreDNAT,
+		policy.Namespace,
+		selector.Normalise(policy.Selector),
+	)
 	rs.RulesUpdateCallbacks.OnPolicyActive(key, parsedRules)
 }
 
@@ -191,7 +200,13 @@ func (rs *RuleScanner) OnPolicyInactive(key model.PolicyKey) {
 	rs.RulesUpdateCallbacks.OnPolicyInactive(key)
 }
 
-func (rs *RuleScanner) updateRules(key interface{}, inbound, outbound []model.Rule, untracked, preDNAT bool, origNamespace string, origSelector string) (parsedRules *ParsedRules) {
+func (rs *RuleScanner) updateRules(
+	key interface{},
+	inbound, outbound []model.Rule,
+	untracked, preDNAT bool,
+	origNamespace string,
+	origSelector string,
+) (parsedRules *ParsedRules) {
 	log.Debugf("Scanning rules (%v in, %v out) for key %v",
 		len(inbound), len(outbound), key)
 	// Extract all the new selectors/named ports.

@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2023 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"strconv"
+	"strings"
 
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/crypto/sha3"
@@ -32,7 +33,14 @@ const (
 	alwaysAllowIPIPEncap  = true
 )
 
-func (r *DefaultRuleRenderer) WorkloadEndpointToIptablesChains(ifaceName string, epMarkMapper EndpointMarkMapper, adminUp bool, ingressPolicies []*PolicyGroup, egressPolicies []*PolicyGroup, profileIDs []string) []*Chain {
+func (r *DefaultRuleRenderer) WorkloadEndpointToIptablesChains(
+	ifaceName string,
+	epMarkMapper EndpointMarkMapper,
+	adminUp bool,
+	ingressPolicies []*PolicyGroup,
+	egressPolicies []*PolicyGroup,
+	profileIDs []string,
+) []*Chain {
 	allowVXLANEncapFromWorkloads := r.Config.AllowVXLANPacketsFromWorkloads
 	allowIPIPEncapFromWorkloads := r.Config.AllowIPIPPacketsFromWorkloads
 	result := []*Chain{}
@@ -88,10 +96,10 @@ func (r *DefaultRuleRenderer) WorkloadEndpointToIptablesChains(ifaceName string,
 func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 	ifaceName string,
 	epMarkMapper EndpointMarkMapper,
-	ingressPolicyNames []string,
-	egressPolicyNames []string,
-	ingressForwardPolicyNames []string,
-	egressForwardPolicyNames []string,
+	ingressPolicies []*PolicyGroup,
+	egressPolicies []*PolicyGroup,
+	ingressForwardPolicies []*PolicyGroup,
+	egressForwardPolicies []*PolicyGroup,
 	profileIDs []string,
 ) []*Chain {
 	log.WithField("ifaceName", ifaceName).Debug("Rendering filter host endpoint chain.")
@@ -99,7 +107,7 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 	result = append(result,
 		// Chain for output traffic _to_ the endpoint.
 		r.endpointIptablesChain(
-			FakeGroups(egressPolicyNames),
+			egressPolicies,
 			profileIDs,
 			ifaceName,
 			PolicyOutboundPfx,
@@ -114,7 +122,7 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 		),
 		// Chain for input traffic _from_ the endpoint.
 		r.endpointIptablesChain(
-			FakeGroups(ingressPolicyNames),
+			ingressPolicies,
 			profileIDs,
 			ifaceName,
 			PolicyInboundPfx,
@@ -129,7 +137,7 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 		),
 		// Chain for forward traffic _to_ the endpoint.
 		r.endpointIptablesChain(
-			FakeGroups(egressForwardPolicyNames),
+			egressForwardPolicies,
 			profileIDs,
 			ifaceName,
 			PolicyOutboundPfx,
@@ -144,7 +152,7 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 		),
 		// Chain for forward traffic _from_ the endpoint.
 		r.endpointIptablesChain(
-			FakeGroups(ingressForwardPolicyNames),
+			ingressForwardPolicies,
 			profileIDs,
 			ifaceName,
 			PolicyInboundPfx,
@@ -185,7 +193,7 @@ func FakeGroups(names []string) (groups []*PolicyGroup) {
 
 func (r *DefaultRuleRenderer) HostEndpointToMangleEgressChains(
 	ifaceName string,
-	egressPolicyNames []string,
+	egressPolicies []*PolicyGroup,
 	profileIDs []string,
 ) []*Chain {
 	log.WithField("ifaceName", ifaceName).Debug("Render host endpoint mangle egress chain.")
@@ -194,7 +202,7 @@ func (r *DefaultRuleRenderer) HostEndpointToMangleEgressChains(
 		// ACCEPT because the mangle table is typically used, if at all, for packet
 		// manipulations that might need to apply to our allowed traffic.
 		r.endpointIptablesChain(
-			FakeGroups(egressPolicyNames),
+			egressPolicies,
 			profileIDs,
 			ifaceName,
 			PolicyOutboundPfx,
@@ -212,11 +220,11 @@ func (r *DefaultRuleRenderer) HostEndpointToMangleEgressChains(
 
 func (r *DefaultRuleRenderer) HostEndpointToRawEgressChain(
 	ifaceName string,
-	egressPolicyNames []string,
+	egressPolicies []*PolicyGroup,
 ) *Chain {
 	log.WithField("ifaceName", ifaceName).Debug("Rendering raw (untracked) host endpoint egress chain.")
 	return r.endpointIptablesChain(
-		FakeGroups(egressPolicyNames),
+		egressPolicies,
 		nil, // We don't render profiles into the raw table.
 		ifaceName,
 		PolicyOutboundPfx,
@@ -233,16 +241,16 @@ func (r *DefaultRuleRenderer) HostEndpointToRawEgressChain(
 
 func (r *DefaultRuleRenderer) HostEndpointToRawChains(
 	ifaceName string,
-	ingressPolicyNames []string,
-	egressPolicyNames []string,
+	ingressPolicies []*PolicyGroup,
+	egressPolicies []*PolicyGroup,
 ) []*Chain {
 	log.WithField("ifaceName", ifaceName).Debug("Rendering raw (untracked) host endpoint chain.")
 	return []*Chain{
 		// Chain for traffic _to_ the endpoint.
-		r.HostEndpointToRawEgressChain(ifaceName, egressPolicyNames),
+		r.HostEndpointToRawEgressChain(ifaceName, egressPolicies),
 		// Chain for traffic _from_ the endpoint.
 		r.endpointIptablesChain(
-			FakeGroups(ingressPolicyNames),
+			ingressPolicies,
 			nil, // We don't render profiles into the raw table.
 			ifaceName,
 			PolicyInboundPfx,
@@ -260,14 +268,14 @@ func (r *DefaultRuleRenderer) HostEndpointToRawChains(
 
 func (r *DefaultRuleRenderer) HostEndpointToMangleIngressChains(
 	ifaceName string,
-	preDNATPolicyNames []string,
+	preDNATPolicis []*PolicyGroup,
 ) []*Chain {
 	log.WithField("ifaceName", ifaceName).Debug("Rendering pre-DNAT host endpoint chain.")
 	return []*Chain{
 		// Chain for traffic _from_ the endpoint.  Pre-DNAT policy does not apply to
 		// outgoing traffic through a host endpoint.
 		r.endpointIptablesChain(
-			FakeGroups(preDNATPolicyNames),
+			preDNATPolicis,
 			nil, // We don't render profiles into the raw table.
 			ifaceName,
 			PolicyInboundPfx,
@@ -321,8 +329,7 @@ func (r *DefaultRuleRenderer) PolicyGroupToIptablesChains(group *PolicyGroup) []
 	}
 	const returnStride = 5
 	for i, polName := range group.PolicyNames {
-		var chainToJumpTo string
-		chainToJumpTo = PolicyChainName(
+		chainToJumpTo := PolicyChainName(
 			polChainPrefix,
 			&proto.PolicyID{Name: polName},
 		)
@@ -609,4 +616,25 @@ func (g *PolicyGroup) ChainName() string {
 
 func (g *PolicyGroup) ShouldBeInlined() bool {
 	return len(g.PolicyNames) <= 1
+}
+
+// PolicyGroupSliceStringer provides a String() method for a slice of
+// PolicyGroup pointers.
+type PolicyGroupSliceStringer []*PolicyGroup
+
+func (p PolicyGroupSliceStringer) String() string {
+	if p == nil {
+		return "<nil>"
+	}
+	if len(p) == 0 {
+		return "[]"
+	}
+	names := make([]string, len(p))
+	for i, pg := range p {
+		names[i] = pg.ChainName()
+		if pg.ShouldBeInlined() {
+			names[i] += "(inline)"
+		}
+	}
+	return "[" + strings.Join(names, ",") + "]"
 }
