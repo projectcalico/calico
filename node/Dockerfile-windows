@@ -30,17 +30,17 @@ LABEL name="Calico node" \
       description="Calico node handles networking and policy for Calico" \
       maintainer="maintainers@projectcalico.org"
 
-ADD LICENSE /licenses/
+COPY LICENSE /licenses/
 
-ADD dist/bin/calico-node.exe /CalicoWindows/calico-node.exe
-ADD windows-packaging/CalicoWindows/felix/felix-service.ps1 /CalicoWindows/felix-service.ps1
-ADD windows-packaging/CalicoWindows/node/node-service.ps1 /CalicoWindows/node-service.ps1
-ADD windows-packaging/CalicoWindows/confd /CalicoWindows/confd
-ADD windows-packaging/CalicoWindows/config-hpc.ps1 /CalicoWindows/config.ps1
-ADD windows-packaging/CalicoWindows/libs/calico/calico.psm1 /CalicoWindows/libs/calico/calico.psm1
-ADD windows-packaging/CalicoWindows/libs/hns/hns.psm1 /CalicoWindows/libs/hns/hns.psm1
-ADD windows-packaging/nssm.exe /nssm.exe
-ADD windows-packaging/CalicoWindows/uninstall-calico-hpc.ps1 /uninstall-calico.ps1
+COPY dist/bin/calico-node.exe /CalicoWindows/calico-node.exe
+COPY windows-packaging/CalicoWindows/felix/felix-service.ps1 /CalicoWindows/felix-service.ps1
+COPY windows-packaging/CalicoWindows/node/node-service.ps1 /CalicoWindows/node-service.ps1
+COPY windows-packaging/CalicoWindows/confd /CalicoWindows/confd
+COPY windows-packaging/CalicoWindows/config-hpc.ps1 /CalicoWindows/config.ps1
+COPY windows-packaging/CalicoWindows/libs/calico/calico.psm1 /CalicoWindows/libs/calico/calico.psm1
+COPY windows-packaging/CalicoWindows/libs/hns/hns.psm1 /CalicoWindows/libs/hns/hns.psm1
+COPY windows-packaging/nssm.exe /nssm.exe
+COPY windows-packaging/CalicoWindows/uninstall-calico-hpc.ps1 /uninstall-calico.ps1
 
 ENV PATH=$PATH;/CalicoWindows
 WORKDIR /CalicoWindows
