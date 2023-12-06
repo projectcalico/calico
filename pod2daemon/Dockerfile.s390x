@@ -14,7 +14,7 @@
 
 FROM s390x/alpine:3.16
 
-ADD flexvol/docker/flexvol.sh /usr/local/bin/
-ADD bin/flexvol-s390x /usr/local/bin/flexvol
+COPY flexvol/docker/flexvol.sh /usr/local/bin/
+COPY bin/flexvol-s390x /usr/local/bin/flexvol
 
 ENTRYPOINT ["/usr/local/bin/flexvol.sh"]
