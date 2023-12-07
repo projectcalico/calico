@@ -16,8 +16,8 @@ RUN apt-get update && \
     busybox \
     sudo 
 
-ADD nodeagent.sh /usr/local/bin/
-ADD nodeagent /usr/local/bin/
+COPY nodeagent.sh /usr/local/bin/
+COPY nodeagent /usr/local/bin/
 
 RUN chmod +x /usr/local/bin/nodeagent.sh
 

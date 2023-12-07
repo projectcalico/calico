@@ -13,6 +13,6 @@
 # limitations under the License.
 FROM scratch
 
-ADD bin/dikastes-ppc64le /dikastes
-ADD bin/healthz-ppc64le /healthz
+COPY bin/dikastes-ppc64le /dikastes
+COPY bin/healthz-ppc64le /healthz
 CMD ["/dikastes"]

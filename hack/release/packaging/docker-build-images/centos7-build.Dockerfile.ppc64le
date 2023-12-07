@@ -9,7 +9,7 @@ ARG GID
 # Therefore, we do a two step image build process, in step 1 (now) scripts are placed in the image, in step 2
 # a privileged container is started and the scripts are executed.
 
-ADD install-centos-build-deps install-centos-build-deps
+COPY install-centos-build-deps install-centos-build-deps
 
 # rpmbuild requires the current user to exist inside the container, copy in
 # some user/group entries calculated by the makefile.

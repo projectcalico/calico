@@ -14,6 +14,6 @@
 
 FROM arm64v8/alpine:3.16
 
-ADD bin/node-driver-registrar-arm64 /usr/local/bin/node-driver-registrar
+COPY bin/node-driver-registrar-arm64 /usr/local/bin/node-driver-registrar
 
 ENTRYPOINT ["/usr/local/bin/node-driver-registrar"]
