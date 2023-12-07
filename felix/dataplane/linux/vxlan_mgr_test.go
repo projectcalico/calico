@@ -15,6 +15,7 @@
 package intdataplane
 
 import (
+	"context"
 	"net"
 	"time"
 
@@ -192,10 +193,9 @@ var _ = Describe("VXLANManager", func() {
 		localVTEP := manager.getLocalVTEP()
 		Expect(localVTEP).NotTo(BeNil())
 
-		manager.noEncapRouteTable = prt
-
 		err := manager.configureVXLANDevice(50, localVTEP, false)
 		Expect(err).NotTo(HaveOccurred())
+		manager.OnParentNameUpdate("eth0")
 
 		Expect(manager.myVTEP).NotTo(BeNil())
 		Expect(manager.noEncapRouteTable).NotTo(BeNil())
@@ -269,10 +269,9 @@ var _ = Describe("VXLANManager", func() {
 		localVTEP := managerV6.getLocalVTEP()
 		Expect(localVTEP).NotTo(BeNil())
 
-		managerV6.noEncapRouteTable = prt
-
 		err := managerV6.configureVXLANDevice(50, localVTEP, false)
 		Expect(err).NotTo(HaveOccurred())
+		managerV6.OnParentNameUpdate("eth0")
 
 		Expect(managerV6.myVTEP).NotTo(BeNil())
 		Expect(managerV6.noEncapRouteTable).NotTo(BeNil())
@@ -329,14 +328,18 @@ var _ = Describe("VXLANManager", func() {
 	})
 
 	It("adds the route to the default table on next try when the parent route table is not immediately found", func() {
-		go manager.KeepVXLANDeviceInSync(1400, false, 1*time.Second)
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		parentNameC := make(chan string)
+		go manager.KeepVXLANDeviceInSync(ctx, 1400, false, 1*time.Second, parentNameC)
+
+		By("Sending another node's VTEP and route.")
 		manager.OnUpdate(&proto.VXLANTunnelEndpointUpdate{
 			Node:           "node2",
 			Mac:            "00:0a:95:9d:68:16",
 			Ipv4Addr:       "10.0.80.0/32",
 			ParentDeviceIp: "172.0.12.1",
 		})
-
 		manager.OnUpdate(&proto.RouteUpdate{
 			Type:        proto.RouteType_REMOTE_WORKLOAD,
 			IpPoolType:  proto.IPPoolType_VXLAN,
@@ -347,25 +350,23 @@ var _ = Describe("VXLANManager", func() {
 		})
 
 		err := manager.CompleteDeferredWork()
-
-		Expect(err).NotTo(BeNil())
-		Expect(err.Error()).To(Equal("no encap route table not set, will defer adding routes"))
+		Expect(err).To(MatchError("no encap route table not set, will defer adding routes"))
 		Expect(manager.routesDirty).To(BeTrue())
 
+		By("Sending another local VTEP.")
 		manager.OnUpdate(&proto.VXLANTunnelEndpointUpdate{
 			Node:           "node1",
 			Mac:            "00:0a:74:9d:68:16",
 			Ipv4Addr:       "10.0.0.0",
 			ParentDeviceIp: "172.0.0.2",
 		})
-
-		time.Sleep(2 * time.Second)
-
 		localVTEP := manager.getLocalVTEP()
 		Expect(localVTEP).NotTo(BeNil())
 
-		err = manager.configureVXLANDevice(50, localVTEP, false)
-		Expect(err).NotTo(HaveOccurred())
+		// Note: parent name is sent after configuration so this receive
+		// ensures we don't race.
+		Eventually(parentNameC, "2s").Should(Receive(Equal("eth0")))
+		manager.OnParentNameUpdate("eth0")
 
 		Expect(prt.currentRoutes["eth0"]).To(HaveLen(0))
 		err = manager.CompleteDeferredWork()
@@ -376,14 +377,18 @@ var _ = Describe("VXLANManager", func() {
 	})
 
 	It("adds the IPv6 route to the default table on next try when the parent route table is not immediately found", func() {
-		go managerV6.KeepVXLANDeviceInSync(1400, false, 1*time.Second)
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		parentNameC := make(chan string)
+		go managerV6.KeepVXLANDeviceInSync(ctx, 1400, false, 1*time.Second, parentNameC)
+
+		By("Sending another node's VTEP and route.")
 		managerV6.OnUpdate(&proto.VXLANTunnelEndpointUpdate{
 			Node:             "node2",
 			MacV6:            "00:0a:95:9d:68:16",
 			Ipv6Addr:         "fd00:10:96::/112",
 			ParentDeviceIpv6: "fc00:10:10::1",
 		})
-
 		managerV6.OnUpdate(&proto.RouteUpdate{
 			Type:        proto.RouteType_REMOTE_WORKLOAD,
 			IpPoolType:  proto.IPPoolType_VXLAN,
@@ -394,25 +399,23 @@ var _ = Describe("VXLANManager", func() {
 		})
 
 		err := managerV6.CompleteDeferredWork()
-
-		Expect(err).NotTo(BeNil())
-		Expect(err.Error()).To(Equal("no encap route table not set, will defer adding routes"))
+		Expect(err).To(MatchError("no encap route table not set, will defer adding routes"))
 		Expect(managerV6.routesDirty).To(BeTrue())
 
+		By("Sending another local VTEP.")
 		managerV6.OnUpdate(&proto.VXLANTunnelEndpointUpdate{
 			Node:             "node1",
 			MacV6:            "00:0a:74:9d:68:16",
 			Ipv6Addr:         "fd00:10:244::",
 			ParentDeviceIpv6: "fc00:10:96::2",
 		})
-
-		time.Sleep(2 * time.Second)
-
 		localVTEP := managerV6.getLocalVTEP()
 		Expect(localVTEP).NotTo(BeNil())
 
-		err = managerV6.configureVXLANDevice(50, localVTEP, false)
-		Expect(err).NotTo(HaveOccurred())
+		// Note: parent name is sent after configuration so this receive
+		// ensures we don't race.
+		Eventually(parentNameC, "2s").Should(Receive(Equal("eth0")))
+		managerV6.OnParentNameUpdate("eth0")
 
 		Expect(prt.currentRoutes["eth0"]).To(HaveLen(0))
 		err = managerV6.CompleteDeferredWork()

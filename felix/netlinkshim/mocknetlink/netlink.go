@@ -260,6 +260,10 @@ type MockNetlinkDataplane struct {
 	ConntrackSleep          time.Duration
 }
 
+func (d *MockNetlinkDataplane) FeatureGate(name string) string {
+	return ""
+}
+
 func (d *MockNetlinkDataplane) RefreshFeatures() {
 }
 
