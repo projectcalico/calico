@@ -149,7 +149,12 @@ func dumpNice[FK nat.FrontendKeyComparable, BV nat.BackendValueInterface](printf
 			if !ok {
 				printf("is missing\n")
 			} else {
-				printf("%s : %d\n", bv.Addr(), bv.Port())
+				fmtStr := "%s:%d\n"
+				// Use "[]" with IPv6 addresses
+				if bv.Addr().To4() == nil {
+					fmtStr = "[%s]:%d\n"
+				}
+				printf(fmtStr, bv.Addr(), bv.Port())
 			}
 		}
 	}
