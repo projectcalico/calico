@@ -24,8 +24,8 @@ LDFLAGS = -X $(PACKAGE_NAME)/buildinfo.GitVersion=$(GIT_DESCRIPTION) \
 ##############################################################################
 include ../lib.Makefile
 
-CONTAINER_CREATED=image.created-$(ARCH)
-CONTAINER_FIPS_CREATED=image.created-$(ARCH)-fips
+CONTAINER_CREATED=.image.created-$(ARCH)
+CONTAINER_FIPS_CREATED=.image.created-$(ARCH)-fips
 
 FIPS ?= false
 
@@ -53,14 +53,8 @@ clean:
 	# Clean .created files which indicate images / releases have been built.
 	find . -name '.*.created*' -type f -delete
 	find . -name '.*.published*' -type f -delete
-	rm -rf .go-pkg-cache report vendor bin
-	-docker rmi $(DIKASTES_IMAGE):latest-$(ARCH)
-	-docker rmi $(DIKASTES_IMAGE):$(VERSION)-$(ARCH)
-ifeq ($(ARCH),amd64)
-	-docker rmi $(DIKASTES_IMAGE):latest
-	-docker rmi $(DIKASTES_IMAGE):latest-fips-amd64
-	-docker rmi $(DIKASTES_IMAGE):$(VERSION)
-endif
+	rm -rf bin report
+	-docker image rm -f $$(docker images $(DIKASTES_IMAGE) -a -q)
 
 .PHONY: clean-generated
 # Delete (checked-in) generated files. Intentionally not part of the main clean target since these files are
@@ -147,13 +141,13 @@ sub-image-fips-%:
 	$(MAKE) image FIPS=true ARCH=$*
 
 $(DIKASTES_IMAGE): $(CONTAINER_MARKER)
-$(CONTAINER_CREATED): Dockerfile.$(ARCH) $(BINDIR)/dikastes-$(ARCH) $(BINDIR)/healthz-$(ARCH)
-	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(DIKASTES_IMAGE):latest-$(ARCH) -f Dockerfile.$(ARCH) . --load
+$(CONTAINER_CREATED): Dockerfile $(BINDIR)/dikastes-$(ARCH) $(BINDIR)/healthz-$(ARCH)
+	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(DIKASTES_IMAGE):latest-$(ARCH) -f Dockerfile .
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 
-$(CONTAINER_FIPS_CREATED): Dockerfile.$(ARCH) $(BINDIR)/dikastes-$(ARCH) $(BINDIR)/healthz-$(ARCH)
-	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(DIKASTES_IMAGE):latest-fips-$(ARCH) -f Dockerfile.$(ARCH) . --load
+$(CONTAINER_FIPS_CREATED): Dockerfile $(BINDIR)/dikastes-$(ARCH) $(BINDIR)/healthz-$(ARCH)
+	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(DIKASTES_IMAGE):latest-fips-$(ARCH) -f Dockerfile .
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
 	touch $@
 ###############################################################################
