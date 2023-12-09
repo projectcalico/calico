@@ -261,7 +261,7 @@ $(FELIX_CONTAINER_CREATED): docker-image/calico-felix-wrapper \
                             docker-image/Dockerfile* \
                             $(shell test "$(FELIX_IMAGE_ID)" || echo force-rebuild)
 	$(MAKE) register
-	$(DOCKER_BUILD) -t $(FELIX_IMAGE_WITH_TAG) --file ./docker-image/Dockerfile.$(ARCH) docker-image --load;
+	$(DOCKER_BUILD) -t $(FELIX_IMAGE_WITH_TAG) -f ./docker-image/Dockerfile.$(ARCH) docker-image
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $(FELIX_CONTAINER_CREATED)
 
