@@ -21,7 +21,7 @@ ARG QEMU_IMAGE
 ARG BIRD_IMAGE=calico/bird:latest
 ARG UBI_IMAGE
 
-FROM calico/bpftool:v5.0-arm64 as bpftool
+FROM calico/bpftool:v5.3-arm64 as bpftool
 FROM ${QEMU_IMAGE} as qemu
 FROM ${BIRD_IMAGE} as bird
 
