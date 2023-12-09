@@ -12,7 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-ARG QEMU_IMAGE=calico/go-build:latest
+ARG QEMU_IMAGE
 ARG BIRD_IMAGE
 
 FROM ${QEMU_IMAGE} as qemu
