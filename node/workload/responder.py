@@ -1,5 +1,5 @@
 import logging
-import SocketServer
+import socketserver
 import time
 
 logging.basicConfig(level=logging.DEBUG,
@@ -9,7 +9,7 @@ logging.basicConfig(level=logging.DEBUG,
 logger = logging.getLogger(__name__)
 
 
-class EchoRequestHandlerTCP(SocketServer.BaseRequestHandler):
+class EchoRequestHandlerTCP(socketserver.BaseRequestHandler):
     def handle(self):
         logger.debug('handle')
         # Echo the back to the client
@@ -20,7 +20,7 @@ class EchoRequestHandlerTCP(SocketServer.BaseRequestHandler):
         return
 
 
-class EchoRequestHandlerUDP(SocketServer.BaseRequestHandler):
+class EchoRequestHandlerUDP(socketserver.BaseRequestHandler):
     def handle(self):
         logger.debug('handle')
 
@@ -33,7 +33,7 @@ class EchoRequestHandlerUDP(SocketServer.BaseRequestHandler):
         return
 
 
-class EchoServerTCP(SocketServer.TCPServer):
+class EchoServerTCP(socketserver.TCPServer):
     def serve_forever(self):
         logger.info('waiting for tcp request')
         while True:
@@ -41,7 +41,7 @@ class EchoServerTCP(SocketServer.TCPServer):
         return
 
 
-class EchoServerUDP(SocketServer.UDPServer):
+class EchoServerUDP(socketserver.UDPServer):
     def serve_forever(self):
         logger.info('waiting for udp request')
         while True:
