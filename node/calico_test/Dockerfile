@@ -32,24 +32,39 @@
 # - eliminate most isolation, (--uts=host --pid=host --net=host --privileged)
 # - volume mount your ST source code
 # - run 'nosetests'
-FROM arm64v8/docker:18.06.0
-MAINTAINER Tom Denham <tom@projectcalico.org>
+
+FROM docker:18.09
+
+ARG ETCD_VERSION
+ARG TARGETARCH
 
 # Running STs in this container requires that it has all dependencies installed
 # for executing the tests. Install these dependencies:
-RUN apk add --update python python-dev py2-pip py-setuptools openssl-dev libffi-dev tshark \
-        netcat-openbsd iptables ip6tables iproute2 iputils ipset curl && \
-        echo 'hosts: files mdns4_minimal [NOTFOUND=return] dns mdns4' >> /etc/nsswitch.conf && \
-        rm -rf /var/cache/apk/*
+RUN apk add --no-cache \
+    curl \
+    gcc \
+    ip6tables \
+    iproute2 \
+    ipset \
+    iptables \
+    iputils \
+    jq \
+    libffi-dev \
+    musl-dev \
+    netcat-openbsd \
+    openssl-dev \
+    py-setuptools \
+    py2-pip \
+    python \
+    python-dev \
+    tshark
+
+# Install etcdctl
+RUN curl -sfL https://github.com/coreos/etcd/releases/download/${ETCD_VERSION}/etcd-${ETCD_VERSION}-linux-${TARGETARCH}.tar.gz | \
+    tar xz --strip-components 1 -C /usr/bin etcd-${ETCD_VERSION}-linux-${TARGETARCH}/etcdctl
 
 COPY requirements.txt /requirements.txt
 RUN pip install -r /requirements.txt
-
-# Install etcdctl
-RUN wget https://github.com/coreos/etcd/releases/download/v3.2.4/etcd-v3.2.4-linux-arm64.tar.gz && \
-    tar -xzf etcd-v3.2.4-linux-arm64.tar.gz && \
-    cd etcd-v3.2.4-linux-arm64 && \
-    ln -s etcdctl /usr/local/bin/
 
 # The container is used by mounting the code-under-test to /code
 WORKDIR /code/
