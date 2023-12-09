@@ -29,7 +29,7 @@ To build all of Calico, run the following command from the root of the repositor
 make image DEV_REGISTRY=my-registry
 ```
 
-This will produce several docker-images, each tagged with the registry provided.
+This will produce several container images, each tagged with the registry provided.
 
 ### Build a specific image
 
