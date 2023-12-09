@@ -19,7 +19,7 @@ ARG TARGETARCH
 COPY /licenses /licenses/
 COPY LICENSE /licenses/LICENSE
 
-COPY bin/calico-typha-${TARGETARCH} /code/calico-typha
+COPY bin/calico-typha-${TARGETARCH} /usr/bin/calico-typha
 COPY typha.cfg /etc/calico/typha.cfg
 
 FROM jha48/base
@@ -38,4 +38,4 @@ COPY --from=source / /
 
 USER 999
 
-CMD ["/code/calico-typha"]
+CMD ["/usr/bin/calico-typha"]
