@@ -27,7 +27,7 @@ LABEL name="Calico Networking for CNI" \
       release="1" \
       summary="Calico Networking for CNI" \
       description="Calico Networking for CNI includes a CNI networking plugin and CNI IPAM plugin" \
-      maintainer="maintainers@projectcalico.org"
+      maintainer="maintainers@tigera.io"
 
 COPY licenses/ /licenses
 COPY LICENSE /licenses/
