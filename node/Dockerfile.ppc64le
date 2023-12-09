@@ -12,13 +12,13 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-ARG QEMU_IMAGE=calico/go-build:latest
+ARG QEMU_IMAGE
 ARG BIRD_IMAGE=calico/bird:latest
 
 FROM ${QEMU_IMAGE} as qemu
 FROM ${BIRD_IMAGE} as bird
 
-FROM calico/bpftool:v5.0-ppc64le as bpftool
+FROM calico/bpftool:v5.3-ppc64le as bpftool
 
 FROM ppc64le/alpine:3.18
 MAINTAINER David Wilder <wilder@us.ibm.com>
