@@ -262,7 +262,7 @@ GOARCH_FLAGS :=-e GOARCH=$(ARCH)
 REPO_ROOT := $(shell git rev-parse --show-toplevel)
 CERTS_PATH := $(REPO_ROOT)/hack/test/certs
 
-QEMU_IMAGE ?= multiarch/qemu-user-static:latest
+QEMU_IMAGE ?= calico/qemu-user-static:latest
 
 # DOCKER_BUILD is the base build command used for building all images.
 DOCKER_BUILD=docker buildx build --load --platform=linux/$(ARCH) --pull \
