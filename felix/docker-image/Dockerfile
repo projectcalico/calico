@@ -17,16 +17,17 @@
 # This ensures that testing of Felix in this repository is done in the same
 # userspace environment as it will be deployed in calico/node.
 
-FROM ubuntu:focal as wgtool
+ARG QEMU_IMAGE
 
-RUN apt-get update && \
-    apt-get install --no-install-recommends wireguard-tools -y
+FROM ${QEMU_IMAGE} as qemu
 
-ARG TARGETARCH
 FROM calico/bpftool:v5.3-${TARGETARCH} as bpftool
 
-FROM debian:10-slim
+FROM debian:11-slim as source
+
 LABEL maintainer="Shaun Crampton <shaun@tigera.io>"
+
+COPY --from=qemu /usr/bin/qemu-*-static /usr/bin
 
 # Install remaining runtime deps required for felix from the global repository
 RUN apt-get update && apt-get install -y \
@@ -51,11 +52,13 @@ RUN apt-get update && apt-get install -y \
     # Felix FV tests require these
     wget \
     ethtool \
-    tcpdump \
-    hping3
+    hping3 \
+    libpcap0.8 \
+    tcpdump
 
-# Copy in wg tool from stage 1.
-COPY --from=wgtool /usr/bin/wg /usr/bin/wg
+RUN apt-get install --no-install-recommends -y wireguard-tools
+
+RUN apt-get clean
 
 # Default to the xtables backend of iptables.
 RUN update-alternatives --set iptables /usr/sbin/iptables-legacy
@@ -63,12 +66,19 @@ RUN update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy
 
 # Felix is built with RHEL/UBI and links against libpcap.so.1. We need this symbolic link
 # until Debian changes the soname from .0.8 to .1.
-RUN ln -s libpcap.so.1.8.1 /usr/lib/x86_64-linux-gnu/libpcap.so.1
+RUN ln -s $(readlink /usr/lib/*-linux-gnu/libpcap.so.0.8) $(ldconfig -v 2>/dev/null | grep /usr/lib/ | head -n 1 | sed -e 's/://')/libpcap.so.1
 
 COPY felix.cfg /etc/calico/felix.cfg
 COPY calico-felix-wrapper /usr/bin
 
 COPY --from=bpftool /bpftool /usr/bin
+
+RUN rm -f /usr/bin/qemu-*-static
+
+FROM scratch
+
+COPY --from=source / /
+
 WORKDIR /code
 
 # Run felix (via the wrapper script) by default
