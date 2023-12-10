@@ -28,7 +28,7 @@ LABEL name="Calico node" \
       release="1" \
       summary="Calico node handles networking and policy for Calico" \
       description="Calico node handles networking and policy for Calico" \
-      maintainer="maintainers@projectcalico.org"
+      maintainer="maintainers@tigera.io"
 
 COPY LICENSE /licenses/
 
