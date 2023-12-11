@@ -329,6 +329,8 @@ blocks:
       value: 1.22.1
     - name: WINDOWS_VERSION
       value: "1809"
+    - name: FV_PROVISIONER
+      value: "aws"
     jobs:
     - name: VXLAN - Windows FV
       commands:
@@ -342,6 +344,31 @@ blocks:
       env_vars:
       - name: BACKEND
         value: bgp
+
+- name: "Felix: Windows FV capz"
+  run:
+    when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/node', '/hack/test/certs/', '/process/testing/winfv/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+  dependencies: ["Felix: Build Windows binaries"]
+  task:
+    secrets:
+      - name: banzai-secrets
+      - name: private-repo
+    prologue:
+      commands:
+        - export FV_TYPE=calico-felix
+    epilogue:
+      always:
+        commands:
+          - artifact push job ${REPORT_DIR} --destination semaphore/test-results --expire-in ${SEMAPHORE_ARTIFACT_EXPIRY} || true
+          - artifact push job ${LOGS_DIR} --destination semaphore/logs --expire-in ${SEMAPHORE_ARTIFACT_EXPIRY} || true
+          - cd ~/calico/process/testing/winfv && ./setup-fv-capz.sh -q -u
+    env_vars:
+    - name: FV_PROVISIONER
+    value: "capz"
+    jobs:
+      - name: CAPZ - Windows FV
+        commands:
+          - ./.semaphore/run-win-fv
 
 - name: "Felix: FV Tests"
   run:
