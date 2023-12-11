@@ -58,7 +58,7 @@ blocks:
           minutes: 60
         env_vars:
         - name: SECRET_KEY
-          value: ~/secrets/launchpad-gpg-key-dfox.key
+          value: /home/semaphore/secrets/launchpad-gpg-key-dfox.key
         - name: GCLOUD_ARGS
           value: --zone us-east1-c --project tigera-wp-tcp-redirect
         - name: HOST
