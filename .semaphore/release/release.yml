@@ -52,12 +52,37 @@ blocks:
         commands:
         - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make GIT_BRANCH=${SEMAPHORE_GIT_BRANCH} -C hack/release release; fi
         - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make GIT_BRANCH=${SEMAPHORE_GIT_BRANCH} -C hack/release release-publish; fi
+  - name: "Publish official release"
+    skip:
+      # Only run on branches, not PRs.
+      when: "branch !~ '.+'"
+    task:
+      secrets:
+      - name: quay-robot-calico+semaphoreci
+      - name: docker
+      - name: oss-release-secrets
+      - name: google-service-account-for-gce
+      - name: openstack-signing-publishing
+      prologue:
+        commands:
+        # Load the github access secrets.  First fix the permissions.
+        - chmod 0600 /home/semaphore/.keys/git_ssh_rsa
+        - ssh-add /home/semaphore/.keys/git_ssh_rsa
+        # Checkout the code and unshallow it.
+        - checkout
+        # Semaphore mounts a copy-on-write FS as /var/lib/docker in order to provide a pre-loaded cache of
+        # some images. However, the cache is not useful to us and the copy-on-write FS is a big problem given
+        # how much we churn docker containers during the build.  Disable it.
+        # Free up space on the build machine.
+        - sudo rm -rf ~/.kiex ~/.phpbrew ~/.rbenv ~/.nvm ~/.kerl ~/.sbt ~/.npm /usr/lib/jvm /opt/firefox* /opt/apache-maven* /opt/scala /usr/local/golang
+      jobs:
       - name: "Build Openstack Packages"
+        dependencies: ["Publish official release"]
         execution_time_limit:
           minutes: 60
         env_vars:
         - name: SECRET_KEY
-          value: ~/secrets/launchpad-gpg-key-dfox.key
+          value: /home/semaphore/secrets/launchpad-gpg-key-dfox.key
         - name: GCLOUD_ARGS
           value: --zone us-east1-c --project tigera-wp-tcp-redirect
         - name: HOST
@@ -69,4 +94,5 @@ blocks:
       epilogue:
         always:
           commands:
-          - make VAR_FILE=/home/semaphore/secrets/release.tfvars -C hack/release destroy
+          - test -d hack/release/packaging/output hack/release/packaging/openstack
+          - artifact push workflow hack/release/packaging/openstack
