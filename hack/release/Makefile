@@ -10,6 +10,21 @@ release: .vm.created
 	./remote-execute.sh "cd calico && git fetch --tags && git checkout $(GIT_BRANCH)"
 	./remote-execute.sh "cd calico && make release"
 
+git-fetch-remote: .vm.created
+	./remote-execute.sh "cd calico && git fetch --tags && git checkout $(GIT_BRANCH)"
+
+update-versions-remote: .vm.created
+	./remote-execute.sh "cd calico && make update-versions"
+
+generate-manifests-remote: .vm.created
+	./remote-execute.sh "cd calico && make generate"
+
+commit-versions-remote: .vm.created
+	./remote-execute.sh "cd calico && make commit-versions-manifests"
+
+build-release-remote: .vm.created
+	./remote-execute.sh "cd calico && make release"
+
 # Expects that a release has already been created on the remote VM via the "release" target.
 release-publish: .vm.created
 	./remote-execute.sh "cd calico && make release-publish"
