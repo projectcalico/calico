@@ -288,7 +288,7 @@ func (r *ReleaseBuilder) publishPrereqs(ver string) error {
 //
 // - release-vX.Y.Z.tgz: contains images, manifests, and binaries.
 // - tigera-operator-vX.Y.Z.tgz: contains the helm v3 chart.
-// - calico-windows-vX.Y.Z.zip: Calico for Windows zip archive for non-HPC installation.
+// - calico-windows-vX.Y.Z.zip: Calico for Windows.
 // - calicoctl/bin: All calicoctl binaries.
 //
 // This function also generates checksums for each artifact that is uploaded to the release.
@@ -333,7 +333,7 @@ func (r *ReleaseBuilder) collectGithubArtifacts(ver string) error {
 	if _, err := r.runner.Run("cp", []string{fmt.Sprintf("bin/tigera-operator-%s.tgz", ver), uploadDir}, nil); err != nil {
 		return err
 	}
-	if _, err := r.runner.Run("cp", []string{"manifests/ocp.tgz", ver, uploadDir}, nil); err != nil {
+	if _, err := r.runner.Run("cp", []string{"bin/ocp.tgz", uploadDir}, nil); err != nil {
 		return err
 	}
 
@@ -367,7 +367,6 @@ func (r *ReleaseBuilder) uploadDir(ver string) string {
 // Builds the complete release tar for upload to github.
 // - release-vX.Y.Z.tgz: contains images, manifests, and binaries.
 // TODO: We should produce a tar per architecture that we ship.
-// TODO: We should produce windows tars
 func (r *ReleaseBuilder) buildReleaseTar(ver string, targetDir string) error {
 	// Create tar files for container image that are shipped.
 	releaseBase := fmt.Sprintf("_output/release-%s", ver)
@@ -418,7 +417,7 @@ func (r *ReleaseBuilder) buildReleaseTar(ver string, targetDir string) error {
 	}
 
 	// Add in manifests directory generated from the docs.
-	if _, err := r.runner.Run("cp", []string{"-r", "/manifests", releaseBase}, nil); err != nil {
+	if _, err := r.runner.Run("cp", []string{"-r", "manifests", releaseBase}, nil); err != nil {
 		return err
 	}
 
@@ -445,11 +444,6 @@ func (r *ReleaseBuilder) buildContainerImages(ver string) error {
 		"felix",
 	}
 
-	windowsReleaseDirs := []string{
-		"node",
-		"cni-plugin",
-	}
-
 	// Build env.
 	env := append(os.Environ(),
 		fmt.Sprintf("VERSION=%s", ver),
@@ -457,21 +451,10 @@ func (r *ReleaseBuilder) buildContainerImages(ver string) error {
 	)
 
 	for _, dir := range releaseDirs {
-		out, err := r.makeInDirectoryWithOutput(dir, "release-build", env...)
+		err := r.makeInDirectoryNoOutput(dir, "release-build", env...)
 		if err != nil {
-			logrus.Error(out)
 			return fmt.Errorf("Failed to build %s: %s", dir, err)
 		}
-		logrus.Info(out)
-	}
-
-	for _, dir := range windowsReleaseDirs {
-		out, err := r.makeInDirectoryWithOutput(dir, "image-windows", env...)
-		if err != nil {
-			logrus.Error(out)
-			return fmt.Errorf("Failed to build %s: %s", dir, err)
-		}
-		logrus.Info(out)
 	}
 	return nil
 }
@@ -533,11 +516,6 @@ func (r *ReleaseBuilder) publishContainerImages(ver string) error {
 		"node",
 	}
 
-	windowsReleaseDirs := []string{
-		"node",
-		"cni-plugin",
-	}
-
 	env := append(os.Environ(),
 		fmt.Sprintf("IMAGETAG=%s", ver),
 		fmt.Sprintf("VERSION=%s", ver),
@@ -553,25 +531,6 @@ func (r *ReleaseBuilder) publishContainerImages(ver string) error {
 		attempt := 0
 		for {
 			out, err := r.makeInDirectoryWithOutput(dir, "release-publish", env...)
-			if err != nil {
-				if attempt < maxRetries {
-					logrus.WithField("attempt", attempt).WithError(err).Warn("Publish failed, retrying")
-					attempt++
-					continue
-				}
-				logrus.Error(out)
-				return fmt.Errorf("Failed to publish %s: %s", dir, err)
-			}
-
-			// Success - move on to the next directory.
-			logrus.Info(out)
-			break
-		}
-	}
-	for _, dir := range windowsReleaseDirs {
-		attempt := 0
-		for {
-			out, err := r.makeInDirectoryWithOutput(dir, "release-windows", env...)
 			if err != nil {
 				if attempt < maxRetries {
 					logrus.WithField("attempt", attempt).WithError(err).Warn("Publish failed, retrying")
@@ -718,4 +677,8 @@ func (r *ReleaseBuilder) makeInDirectory(dir, target string, env ...string) erro
 
 func (r *ReleaseBuilder) makeInDirectoryWithOutput(dir, target string, env ...string) (string, error) {
 	return r.runner.Run("make", []string{"-C", dir, target}, env)
+}
+
+func (r *ReleaseBuilder) makeInDirectoryNoOutput(dir, target string, env ...string) error {
+	return r.runner.RunNoCapture("make", []string{"-C", dir, target}, env)
 }
