@@ -16,7 +16,7 @@ git-fetch-remote: .vm.created
 update-versions-remote: .vm.created
 	./remote-execute.sh "cd calico && make update-versions"
 
-generate-manifests-remote:
+generate-manifests-remote: .vm.created
 	./remote-execute.sh "cd calico && make generate"
 
 commit-versions-remote: .vm.created
