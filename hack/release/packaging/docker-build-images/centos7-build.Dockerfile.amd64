@@ -5,7 +5,7 @@ ENV STREAM el7
 ARG UID
 ARG GID
 
-ADD install-centos-build-deps install-centos-build-deps
+COPY install-centos-build-deps install-centos-build-deps
 RUN ./install-centos-build-deps
 
 # rpmbuild requires the current user to exist inside the container, copy in

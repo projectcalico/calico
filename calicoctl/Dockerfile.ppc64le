@@ -7,7 +7,7 @@ FROM ppc64le/alpine:3.10
 MAINTAINER Tom Denham <tom@projectcalico.org>
 COPY --from=qemu /usr/bin/qemu-ppc64le-static /usr/bin/
 
-ADD bin/calicoctl-linux-ppc64le /calicoctl
+COPY bin/calicoctl-linux-ppc64le /calicoctl
 
 ENV CALICO_CTL_CONTAINER=TRUE
 ENV PATH=$PATH:/

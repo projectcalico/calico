@@ -18,6 +18,7 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"os/exec"
 	"regexp"
@@ -864,7 +865,12 @@ func (c *Container) BPFNATDump() map[string][]string {
 // BPFNATHasBackendForService returns true is the given service has the given backend programmed in NAT tables
 func (c *Container) BPFNATHasBackendForService(svcIP string, svcPort, proto int, ip string, port int) bool {
 	front := fmt.Sprintf("%s port %d proto %d", svcIP, svcPort, proto)
-	back := fmt.Sprintf("%s:%d", ip, port)
+	fmtStr := "%s:%d"
+	ipAddr := net.ParseIP(ip)
+	if ipAddr.To4() == nil {
+		fmtStr = "[%s]:%d"
+	}
+	back := fmt.Sprintf(fmtStr, ip, port)
 
 	nat := c.BPFNATDump()
 	if natBack, ok := nat[front]; ok {

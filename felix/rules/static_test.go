@@ -94,7 +94,8 @@ var _ = Describe("Static", func() {
 					IPSetConfigV6:         ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
 					FailsafeInboundHostPorts: []config.ProtoPort{
 						{Net: "0.0.0.0/0", Protocol: "tcp", Port: 22},
-						{Net: "0.0.0.0/0", Protocol: "tcp", Port: 1022},
+						{Net: "10.0.0.0/24", Protocol: "tcp", Port: 1022},
+						{Net: "::/0", Protocol: "tcp", Port: 1022},
 					},
 					FailsafeOutboundHostPorts: []config.ProtoPort{
 						{Net: "0.0.0.0/0", Protocol: "tcp", Port: 23},
@@ -174,37 +175,27 @@ var _ = Describe("Static", func() {
 					expRawFailsafeIn := &Chain{
 						Name: "cali-failsafe-in",
 						Rules: []Rule{
-							{Match: Match().Protocol("tcp").DestPorts(22), Action: AcceptAction{}},
-							{Match: Match().Protocol("tcp").DestPorts(1022), Action: AcceptAction{}},
-							{Match: Match().Protocol("tcp").SourcePorts(23), Action: AcceptAction{}},
-							{Match: Match().Protocol("tcp").SourcePorts(1023), Action: AcceptAction{}},
+							{Match: Match().Protocol("tcp").DestPorts(1022).SourceNet("::/0"), Action: AcceptAction{}},
 						},
 					}
 
 					expRawFailsafeOut := &Chain{
 						Name: "cali-failsafe-out",
 						Rules: []Rule{
-							{Match: Match().Protocol("tcp").DestPorts(23), Action: AcceptAction{}},
-							{Match: Match().Protocol("tcp").DestPorts(1023), Action: AcceptAction{}},
-							{Match: Match().Protocol("tcp").SourcePorts(22), Action: AcceptAction{}},
-							{Match: Match().Protocol("tcp").SourcePorts(1022), Action: AcceptAction{}},
+							{Match: Match().Protocol("tcp").SourcePorts(1022).DestNet("::/0"), Action: AcceptAction{}},
 						},
 					}
 
 					expFailsafeIn := &Chain{
 						Name: "cali-failsafe-in",
 						Rules: []Rule{
-							{Match: Match().Protocol("tcp").DestPorts(22), Action: AcceptAction{}},
-							{Match: Match().Protocol("tcp").DestPorts(1022), Action: AcceptAction{}},
+							{Match: Match().Protocol("tcp").DestPorts(1022).SourceNet("::/0"), Action: AcceptAction{}},
 						},
 					}
 
 					expFailsafeOut := &Chain{
-						Name: "cali-failsafe-out",
-						Rules: []Rule{
-							{Match: Match().Protocol("tcp").DestPorts(23), Action: AcceptAction{}},
-							{Match: Match().Protocol("tcp").DestPorts(1023), Action: AcceptAction{}},
-						},
+						Name:  "cali-failsafe-out",
+						Rules: []Rule{},
 					}
 
 					if ipVersion == 4 {
@@ -212,7 +203,7 @@ var _ = Describe("Static", func() {
 							Name: "cali-failsafe-in",
 							Rules: []Rule{
 								{Match: Match().Protocol("tcp").DestPorts(22).SourceNet("0.0.0.0/0"), Action: AcceptAction{}},
-								{Match: Match().Protocol("tcp").DestPorts(1022).SourceNet("0.0.0.0/0"), Action: AcceptAction{}},
+								{Match: Match().Protocol("tcp").DestPorts(1022).SourceNet("10.0.0.0/24"), Action: AcceptAction{}},
 								{Match: Match().Protocol("tcp").SourcePorts(23).SourceNet("0.0.0.0/0"), Action: AcceptAction{}},
 								{Match: Match().Protocol("tcp").SourcePorts(1023).SourceNet("0.0.0.0/0"), Action: AcceptAction{}},
 							},
@@ -223,8 +214,8 @@ var _ = Describe("Static", func() {
 							Rules: []Rule{
 								{Match: Match().Protocol("tcp").DestPorts(23).DestNet("0.0.0.0/0"), Action: AcceptAction{}},
 								{Match: Match().Protocol("tcp").DestPorts(1023).DestNet("0.0.0.0/0"), Action: AcceptAction{}},
-								{Match: Match().Protocol("tcp").SourcePorts(22).SourceNet("0.0.0.0/0"), Action: AcceptAction{}},
-								{Match: Match().Protocol("tcp").SourcePorts(1022).SourceNet("0.0.0.0/0"), Action: AcceptAction{}},
+								{Match: Match().Protocol("tcp").SourcePorts(22).DestNet("0.0.0.0/0"), Action: AcceptAction{}},
+								{Match: Match().Protocol("tcp").SourcePorts(1022).DestNet("10.0.0.0/24"), Action: AcceptAction{}},
 							},
 						}
 
@@ -232,7 +223,7 @@ var _ = Describe("Static", func() {
 							Name: "cali-failsafe-in",
 							Rules: []Rule{
 								{Match: Match().Protocol("tcp").DestPorts(22).SourceNet("0.0.0.0/0"), Action: AcceptAction{}},
-								{Match: Match().Protocol("tcp").DestPorts(1022).SourceNet("0.0.0.0/0"), Action: AcceptAction{}},
+								{Match: Match().Protocol("tcp").DestPorts(1022).SourceNet("10.0.0.0/24"), Action: AcceptAction{}},
 							},
 						}
 

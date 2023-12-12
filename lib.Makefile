@@ -202,7 +202,7 @@ ifeq ($(GIT_USE_SSH),true)
 endif
 
 # Get version from git.
-GIT_VERSION:=$(shell git describe --tags --dirty --long --always --abbrev=12)
+GIT_VERSION:=$(shell git describe --tags --dirty --always --abbrev=12)
 
 # Figure out version information.  To support builds from release tarballs, we default to
 # <unknown> if this isn't a git checkout.
@@ -212,7 +212,7 @@ BUILD_ID:=$(shell git rev-parse HEAD || uuidgen | sed 's/-//g')
 # Lazily set the git version we embed into the binaries we build. We want the
 # git tag at the time we build the binary.
 # Variables elsewhere that depend on this (such as LDFLAGS) must also be lazy.
-GIT_DESCRIPTION=$(shell git describe --tags --dirty --long --always --abbrev=12 || echo '<unknown>')
+GIT_DESCRIPTION=$(shell git describe --tags --dirty --always --abbrev=12 || echo '<unknown>')
 
 # Calculate a timestamp for any build artifacts.
 ifneq ($(OS),Windows_NT)
@@ -841,7 +841,7 @@ retag-build-images-with-registry-%:
 # retag-build-image-with-registry-% retags the build arch images specified by $* and VALIDARCHES with the
 # registry specified by REGISTRY.
 retag-build-image-with-registry-%: var-require-all-REGISTRY-BUILD_IMAGES
-	$(MAKE) $(addprefix retag-build-image-arch-with-registry-,$(VALIDARCHES)) BUILD_IMAGE=$(call unescapefs,$*)
+	$(MAKE) -j12 $(addprefix retag-build-image-arch-with-registry-,$(VALIDARCHES)) BUILD_IMAGE=$(call unescapefs,$*)
 
 # retag-build-image-arch-with-registry-% retags the build / arch image specified by $* and BUILD_IMAGE with the
 # registry specified by REGISTRY.
@@ -864,13 +864,13 @@ push-images-to-registry-%:
 # push-image-to-registry-% pushes the build / arch images specified by $* and VALIDARCHES to the registry
 # specified by REGISTRY.
 push-image-to-registry-%:
-	$(MAKE) $(addprefix push-image-arch-to-registry-,$(VALIDARCHES)) BUILD_IMAGE=$(call unescapefs,$*)
+	$(MAKE) -j6 $(addprefix push-image-arch-to-registry-,$(VALIDARCHES)) BUILD_IMAGE=$(call unescapefs,$*)
 
 # push-image-arch-to-registry-% pushes the build / arch image specified by $* and BUILD_IMAGE to the registry
 # specified by REGISTRY.
 push-image-arch-to-registry-%:
 # If the registry we want to push to doesn't not support manifests don't push the ARCH image.
-	$(DOCKER) push $(call filter-registry,$(REGISTRY))$(BUILD_IMAGE):$(IMAGETAG)-$*
+	$(DOCKER) push --quiet $(call filter-registry,$(REGISTRY))$(BUILD_IMAGE):$(IMAGETAG)-$*
 	$(if $(filter $*,amd64),\
 		$(DOCKER) push $(REGISTRY)/$(BUILD_IMAGE):$(IMAGETAG),\
 		$(NOECHO) $(NOOP)\
