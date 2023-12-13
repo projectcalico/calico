@@ -246,30 +246,30 @@ COPY clean-up-filesystem.sh /
 RUN sed -i 's#zmore#zmore\n\tqemu\n#m' clean-up-filesystem.sh
 RUN /clean-up-filesystem.sh
 
+# Delete qemu binaries
+RUN rm /usr/bin/qemu-*-static
+
+# Add in top-level license file
+COPY LICENSE /licenses/LICENSE
+
 # Copy everything into a fresh scratch image so that naive CVE scanners don't pick up binaries and libraries
 # that have been removed in our later layers.
 FROM scratch
 
 ARG GIT_VERSION
 
-COPY --from=ubi / /
-
-# Add in top-level license file
-COPY LICENSE /licenses
-
-# Delete qemu binaries
-RUN rm /usr/bin/qemu-*-static
-
-CMD ["start_runit"]
-
-# Required labels for certification
-LABEL name="Calico node" \
-      vendor="Project Calico" \
-      version=$GIT_VERSION \
-      release="1" \
-      summary="Calico node handles networking and policy for Calico" \
-      description="Calico node handles networking and policy for Calico" \
-      maintainer="maintainers@tigera.io"
-
 # Tell sv where to find the services.
 ENV SVDIR=/etc/service/enabled
+
+# Required labels for certification
+LABEL description="Calico node handles networking and policy for Calico"
+LABEL maintainer="maintainers@tigera.io"
+LABEL name="Calico node"
+LABEL release="1"
+LABEL summary="Calico node handles networking and policy for Calico"
+LABEL vendor="Project Calico"
+LABEL version=${GIT_VERSION}
+
+COPY --from=ubi / /
+
+CMD ["start_runit"]

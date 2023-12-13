@@ -22,15 +22,15 @@ FROM mcr.microsoft.com/windows/nanoserver:${WINDOWS_VERSION}
 ARG GIT_VERSION=unknown
 
 # Required labels for certification
-LABEL name="Calico node" \
-      vendor="Project Calico" \
-      version=$GIT_VERSION \
-      release="1" \
-      summary="Calico node handles networking and policy for Calico" \
-      description="Calico node handles networking and policy for Calico" \
-      maintainer="maintainers@tigera.io"
+LABEL description="Calico node handles networking and policy for Calico"
+LABEL maintainer="maintainers@tigera.io"
+LABEL name="Calico node"
+LABEL release="1"
+LABEL summary="Calico node handles networking and policy for Calico"
+LABEL vendor="Project Calico"
+LABEL version=${GIT_VERSION}
 
-COPY LICENSE /licenses/
+COPY LICENSE /licenses/LICENSE
 
 COPY dist/bin/calico-node.exe /CalicoWindows/calico-node.exe
 COPY windows-packaging/CalicoWindows/felix/felix-service.ps1 /CalicoWindows/felix-service.ps1

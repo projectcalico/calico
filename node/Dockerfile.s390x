@@ -21,11 +21,25 @@ FROM ${BIRD_IMAGE} as bird
 FROM calico/bpftool:v5.3-s390x as bpftool
 
 FROM s390x/alpine:3.18 as base
+
+ARG ARCH=s390x
+ARG GIT_VERSION
+
+# Tell sv where to find the services.
+ENV SVDIR=/etc/service/enabled
+
+# Required labels for certification
+LABEL description="Calico node handles networking and policy for Calico"
+LABEL maintainer="maintainers@tigera.io"
+LABEL name="Calico node"
+LABEL release="1"
+LABEL summary="Calico node handles networking and policy for Calico"
+LABEL vendor="Project Calico"
+LABEL version=${GIT_VERSION}
+
 # Enable non-native builds of this image on an amd64 hosts.
 # This must be the first RUN command in this file!
 COPY --from=qemu /usr/bin/qemu-*-static /usr/bin/
-ARG ARCH=s390x
-ARG GIT_VERSION
 
 # Install remaining runtime deps required for felix from the global repository
 RUN apk add --no-cache bash ip6tables ipset iputils iproute2 conntrack-tools runit file ca-certificates
@@ -51,15 +65,3 @@ COPY --from=bpftool /bpftool /bin
 COPY LICENSE /licenses
 
 CMD ["start_runit"]
-
-# Required labels for certification
-LABEL name="Calico node" \
-      vendor="Project Calico" \
-      version=$GIT_VERSION \
-      release="1" \
-      summary="Calico node handles networking and policy for Calico" \
-      description="Calico node handles networking and policy for Calico" \
-      maintainer="maintainers@tigera.io"
-
-# Tell sv where to find the services.
-ENV SVDIR=/etc/service/enabled
