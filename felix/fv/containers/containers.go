@@ -816,8 +816,17 @@ func (c *Container) BPFRoutes() string {
 
 // BPFNATDump returns parsed out NAT maps keyed by "<ip> port <port> proto <proto>". Each
 // value is list of "<ip>:<port>".
-func (c *Container) BPFNATDump() map[string][]string {
-	out, err := c.ExecOutput("calico-bpf", "nat", "dump")
+func (c *Container) BPFNATDump(ipv6 bool) map[string][]string {
+	var (
+		err error
+		out string
+	)
+
+	if ipv6 {
+		out, err = c.ExecOutput("calico-bpf", "-6", "nat", "dump")
+	} else {
+		out, err = c.ExecOutput("calico-bpf", "nat", "dump")
+	}
 	if err != nil {
 		log.WithError(err).Error("Failed to run calico-bpf")
 	}
@@ -866,13 +875,15 @@ func (c *Container) BPFNATDump() map[string][]string {
 func (c *Container) BPFNATHasBackendForService(svcIP string, svcPort, proto int, ip string, port int) bool {
 	front := fmt.Sprintf("%s port %d proto %d", svcIP, svcPort, proto)
 	fmtStr := "%s:%d"
+	ipv6 := false
 	ipAddr := net.ParseIP(ip)
 	if ipAddr.To4() == nil {
 		fmtStr = "[%s]:%d"
+		ipv6 = true
 	}
 	back := fmt.Sprintf(fmtStr, ip, port)
 
-	nat := c.BPFNATDump()
+	nat := c.BPFNATDump(ipv6)
 	if natBack, ok := nat[front]; ok {
 		found := false
 		for _, b := range natBack {
