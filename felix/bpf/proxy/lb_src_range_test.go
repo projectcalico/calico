@@ -48,7 +48,7 @@ func testfn(makeIPs func(ips []string) proxy.K8sServicePortOption) {
 	externalIP := makeIPs([]string{"35.0.0.2"})
 	twoExternalIPs := makeIPs([]string{"35.0.0.2", "45.0.1.2"})
 
-	s, _ := proxy.NewSyncer(4, nodeIPs, svcs, eps, aff, rt)
+	s, _ := proxy.NewSyncer(4, nodeIPs, svcs, eps, aff, rt, nil)
 
 	svcKey := k8sp.ServicePortName{
 		NamespacedName: types.NamespacedName{
@@ -201,7 +201,7 @@ func testfn(makeIPs func(ips []string) proxy.K8sServicePortOption) {
 				externalIP,
 				proxy.K8sSvcWithLBSourceRangeIPs([]string{"35.0.1.2/24"}),
 			)
-			s, _ = proxy.NewSyncer(4, nodeIPs, svcs, eps, aff, rt)
+			s, _ = proxy.NewSyncer(4, nodeIPs, svcs, eps, aff, rt, nil)
 			err := s.Apply(state)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(svcs.m).To(HaveLen(3))
@@ -214,7 +214,7 @@ func testfn(makeIPs func(ips []string) proxy.K8sServicePortOption) {
 				v1.ProtocolTCP,
 				externalIP,
 			)
-			s, _ = proxy.NewSyncer(4, nodeIPs, svcs, eps, aff, rt)
+			s, _ = proxy.NewSyncer(4, nodeIPs, svcs, eps, aff, rt, nil)
 			err := s.Apply(state)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(svcs.m).To(HaveLen(2))

@@ -134,6 +134,14 @@ func WithListenAnyIP() Opt {
 	}
 }
 
+// WithHostNetworked force the workload to be host-networked even if the listen IP is
+// different than the host IP.
+func WithHostNetworked() Opt {
+	return func(w *Workload) {
+		w.InterfaceName = ""
+	}
+}
+
 func New(c *infrastructure.Felix, name, profile, ip, ports, protocol string, opts ...Opt) *Workload {
 	workloadIdx++
 	n := fmt.Sprintf("%s-idx%v", name, workloadIdx)
