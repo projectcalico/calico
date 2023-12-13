@@ -22,7 +22,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
-// ReachDestination auto-detects the interface Network by setting up a UDP
+// ReachDestination auto-detects the all interface Network by setting up a UDP
 // connection to a "reach" destination.
 func ReachDestination(dests []string, version int) (*net.IPNet, error) {
 	var allErr string
