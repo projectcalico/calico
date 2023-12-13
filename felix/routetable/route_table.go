@@ -783,7 +783,7 @@ func (r *RouteTable) addOrOverwriteRoute(logCxt *log.Entry, nl netlinkshim.Inter
 		Dst:   route.Dst,
 		Table: route.Table,
 	}
-	if conflictingRoutes, err := r.lookUpConflictingRoutes(nl, routeToDel); len(conflictingRoutes) == 0 {
+	if conflictingRoutes, err := r.lookUpConflictingRoutes(nl, routeToDel); err != nil || len(conflictingRoutes) == 0 {
 		logCxt.WithError(err).Warn("Route conflicts with another, failed to look up conflicting route.")
 	} else {
 		logCxt.WithField("conflictingRoute", conflictingRoutes).Warn(
@@ -791,8 +791,7 @@ func (r *RouteTable) addOrOverwriteRoute(logCxt *log.Entry, nl netlinkshim.Inter
 	}
 	err = nl.RouteDel(routeToDel)
 	if err != nil && !errors.Is(err, unix.ESRCH) {
-		logCxt.WithError(err).WithField("route", route).Warn(
-			"Failed to remove conflicting route.")
+		logCxt.WithError(err).WithField("route", route).Warn("Failed to remove conflicting route.")
 	} else {
 		logCxt.Info("Removed conflicting route.  Retrying original add...")
 	}
