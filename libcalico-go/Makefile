@@ -26,7 +26,7 @@ APIS_SRCS := $(filter-out ./lib/apis/v3/zz_generated.deepcopy.go, $(wildcard ./l
 
 .PHONY: clean
 clean:
-	rm -rf .go-pkg-cache $(BINDIR) checkouts
+	rm -rf $(BINDIR) checkouts
 	find . -name '*.coverprofile' -type f -delete
 
 ###############################################################################
