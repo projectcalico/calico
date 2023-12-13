@@ -21,13 +21,24 @@ FROM ${BIRD_IMAGE} as bird
 FROM calico/bpftool:v5.3-ppc64le as bpftool
 
 FROM ppc64le/alpine:3.18
-MAINTAINER David Wilder <wilder@us.ibm.com>
 
 ARG ARCH=ppc64le
 ARG GIT_VERSION
 
 # Set the minimum required Docker API version.
 ENV DOCKER_API_VERSION 1.21
+
+# Tell sv where to find the services.
+ENV SVDIR=/etc/service/enabled
+
+# Required labels for certification
+LABEL description="Calico node handles networking and policy for Calico"
+LABEL maintainer="maintainers@tigera.io"
+LABEL name="Calico node"
+LABEL release="1"
+LABEL summary="Calico node handles networking and policy for Calico"
+LABEL vendor="Project Calico"
+LABEL version=${GIT_VERSION}
 
 # Enable non-native builds of this image on an amd64 hosts.
 # This must be the first RUN command in this file!
@@ -58,15 +69,3 @@ COPY --from=bpftool /bpftool /bin
 RUN rm /usr/bin/qemu-${ARCH}-static
 
 CMD ["start_runit"]
-
-# Required labels for certification
-LABEL name="Calico node" \
-      vendor="Project Calico" \
-      version=$GIT_VERSION \
-      release="1" \
-      summary="Calico node handles networking and policy for Calico" \
-      description="Calico node handles networking and policy for Calico" \
-      maintainer="maintainers@tigera.io"
-
-# Tell sv where to find the services.
-ENV SVDIR=/etc/service/enabled

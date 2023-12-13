@@ -54,7 +54,7 @@ LABEL name="Calico FlexVolume driver installer"
 LABEL release="1"
 LABEL summary="Calico FlexVolume driver installer to setup secure connections from Kubernetes pods to local daemons"
 LABEL vendor="Project Calico"
-LABEL version=$GIT_VERSION
+LABEL version=${GIT_VERSION}
 
 COPY --from=source / /
 
