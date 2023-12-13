@@ -455,6 +455,7 @@ release-build: .release-$(VERSION).created
 	$(MAKE) FIPS=true retag-build-images-with-registries RELEASE=true IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
 	# Generate the Windows zip archives.
 	$(MAKE) release-windows-archive
+	$(MAKE) $(WINDOWS_INSTALL_SCRIPT)
 	touch $@
 
 ## Produces the Windows installation ZIP archive for the release.
