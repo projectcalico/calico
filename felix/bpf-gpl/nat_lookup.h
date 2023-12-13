@@ -114,6 +114,11 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_nat_lookup(ipv46_addr_t *i
 	}
 	__u32 count = nat_lv1_val->count;
 
+	if (nat_lv1_val->flags &  NAT_FLG_NAT_EXCLUDE) {
+		*res = NAT_EXCLUDE;
+		return NULL;
+	}
+
 	if (from_tun) {
 		count = nat_lv1_val->local;
 	} else if (nat_lv1_val->flags & (NAT_FLG_INTERNAL_LOCAL | NAT_FLG_EXTERNAL_LOCAL)) {
