@@ -88,7 +88,9 @@ const (
 	FailNextLinkByName
 	FailNextLinkByNameNotFound
 	FailNextRouteList
+	FailNextRouteAddOrReplace
 	FailNextRouteAdd
+	FailNextRouteReplace
 	FailNextRouteDel
 	FailNextAddARP
 	FailNextNewNetlink
@@ -143,6 +145,9 @@ func (f FailFlags) String() string {
 	}
 	if f&FailNextRouteAdd != 0 {
 		parts = append(parts, "FailNextRouteAdd")
+	}
+	if f&FailNextRouteReplace != 0 {
+		parts = append(parts, "FailNextRouteReplace")
 	}
 	if f&FailNextRouteDel != 0 {
 		parts = append(parts, "FailNextRouteDel")
@@ -258,6 +263,10 @@ type MockNetlinkDataplane struct {
 	mutex                   *sync.Mutex
 	deletedConntrackEntries set.Set[ip.Addr]
 	ConntrackSleep          time.Duration
+}
+
+func (d *MockNetlinkDataplane) FeatureGate(name string) string {
+	return ""
 }
 
 func (d *MockNetlinkDataplane) RefreshFeatures() {
@@ -747,7 +756,7 @@ func (d *MockNetlinkDataplane) RouteAdd(route *netlink.Route) error {
 	defer GinkgoRecover()
 
 	Expect(d.NetlinkOpen).To(BeTrue())
-	if d.shouldFail(FailNextRouteAdd) {
+	if d.shouldFail(FailNextRouteAdd) || d.shouldFail(FailNextRouteAddOrReplace) {
 		return SimulatedError
 	}
 	key := KeyForRoute(route)
@@ -765,6 +774,33 @@ func (d *MockNetlinkDataplane) RouteAdd(route *netlink.Route) error {
 		d.RouteKeyToRoute[key] = r
 		return nil
 	}
+}
+
+func (d *MockNetlinkDataplane) RouteReplace(route *netlink.Route) error {
+	d.mutex.Lock()
+	defer d.mutex.Unlock()
+	defer GinkgoRecover()
+
+	Expect(d.NetlinkOpen).To(BeTrue())
+	if d.shouldFail(FailNextRouteReplace) || d.shouldFail(FailNextRouteAddOrReplace) {
+		return SimulatedError
+	}
+	key := KeyForRoute(route)
+	log.WithField("routeKey", key).Info("Mock dataplane: RouteUpdate called")
+	d.AddedRouteKeys.Add(key)
+	d.ExistingTables.Add(route.Table)
+	if _, ok := d.RouteKeyToRoute[key]; ok {
+		d.UpdatedRouteKeys.Add(key)
+	} else {
+		d.AddedRouteKeys.Add(key)
+	}
+	r := *route
+	if r.Table == 0 {
+		// Table 0 is "unspecified", which gets defaulted to the main table.
+		r.Table = unix.RT_TABLE_MAIN
+	}
+	d.RouteKeyToRoute[key] = r
+	return nil
 }
 
 func (d *MockNetlinkDataplane) RouteDel(route *netlink.Route) error {
