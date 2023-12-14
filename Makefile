@@ -117,7 +117,7 @@ release: hack/release/release
 
 # Test the release code
 release-test:
-	$(DOCKER_RUN) $(CALICO_BUILD) ginkgo -cover -r hack/release/pkg
+	$(DOCKER_RUN) $(CALICO_BUILD) ginkgo2 -cover -r hack/release/pkg
 
 # Publish an already built release.
 release-publish: hack/release/release hack/release/ghr

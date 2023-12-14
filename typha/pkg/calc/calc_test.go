@@ -23,7 +23,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	. "github.com/projectcalico/calico/typha/pkg/calc"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 

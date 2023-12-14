@@ -18,8 +18,7 @@ import (
 	"fmt"
 	"strings"
 
-	. "github.com/onsi/ginkgo"
-	"github.com/onsi/ginkgo/extensions/table"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/format"
 
@@ -980,7 +979,7 @@ var _ = Describe("PolicyGroups", func() {
 	})
 })
 
-var _ = table.DescribeTable("PolicyGroup chains",
+var _ = DescribeTable("PolicyGroup chains",
 	func(group PolicyGroup, expectedRules []Rule) {
 		renderer := NewRenderer(Config{
 			IptablesMarkAccept:   0x8,
@@ -1182,8 +1181,8 @@ var _ = table.DescribeTable("PolicyGroup chains",
 	),
 )
 
-func polGroupEntry(group PolicyGroup, rules []Rule) table.TableEntry {
-	return table.Entry(
+func polGroupEntry(group PolicyGroup, rules []Rule) TableEntry {
+	return Entry(
 		fmt.Sprintf("%v", group),
 		group,
 		rules,
