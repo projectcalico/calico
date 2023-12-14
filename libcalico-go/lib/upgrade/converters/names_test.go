@@ -16,10 +16,9 @@ package converters
 
 import (
 	"net"
-
 	"strings"
 
-	. "github.com/onsi/ginkgo/extensions/table"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 
@@ -71,7 +70,7 @@ var _ = DescribeTable("v1->v3 name conversion tests",
 		}
 	},
 
-	namesTable...,
+	namesTable,
 )
 
 var namesNoDotsTable = []TableEntry{
@@ -120,7 +119,7 @@ var _ = DescribeTable("v1->v3 name conversion tests (no dots)",
 		}
 	},
 
-	namesNoDotsTable...,
+	namesNoDotsTable,
 )
 
 var ipToNameTable = []TableEntry{
@@ -133,7 +132,7 @@ var _ = DescribeTable("v1->v3 IP to name conversion tests",
 	func(ip net.IP, name string) {
 		Expect(convertIpToName(ip)).To(Equal(name), ip.String())
 	},
-	ipToNameTable...,
+	ipToNameTable,
 )
 
 var nodeNamesTable = []TableEntry{
@@ -163,5 +162,5 @@ var _ = DescribeTable("v1->v3 node name conversion tests",
 	func(before, after string) {
 		Expect(ConvertNodeName(before)).To(Equal(after), before)
 	},
-	nodeNamesTable...,
+	nodeNamesTable,
 )
