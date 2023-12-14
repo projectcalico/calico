@@ -17,9 +17,9 @@ package converters_test
 import (
 	cnet "net"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/ginkgo/extensions/table"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/projectcalico/api/pkg/lib/numorstring"
@@ -335,7 +335,7 @@ var _ = DescribeTable("v1->v3 workload endpoint conversion tests",
 		Expect(v3APIResult.(*libapiv3.WorkloadEndpoint).ObjectMeta.Labels).To(Equal(v3API.ObjectMeta.Labels))
 		Expect(v3APIResult.(*libapiv3.WorkloadEndpoint).Spec).To(Equal(v3API.Spec))
 	},
-	wepTable...,
+	wepTable,
 )
 
 var _ = Describe("v1->v3 workload endpoint conversion tests", func() {

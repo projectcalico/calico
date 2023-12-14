@@ -15,12 +15,10 @@
 package multidict_test
 
 import (
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
-
 	"testing"
 
-	"github.com/onsi/ginkgo/reporters"
+	"github.com/onsi/ginkgo/v2"
+	"github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
 )
@@ -30,7 +28,8 @@ func init() {
 }
 
 func TestMultidict(t *testing.T) {
-	RegisterFailHandler(Fail)
-	junitReporter := reporters.NewJUnitReporter("../report/multidict_suite.xml")
-	RunSpecsWithDefaultAndCustomReporters(t, "Multidict Suite", []Reporter{junitReporter})
+	gomega.RegisterFailHandler(ginkgo.Fail)
+	suiteConfig, reporterConfig := ginkgo.GinkgoConfiguration()
+	reporterConfig.JUnitReport = "../report/multidict_suite.xml"
+	ginkgo.RunSpecs(t, "Multidict Suite", suiteConfig, reporterConfig)
 }

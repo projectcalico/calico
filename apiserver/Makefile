@@ -66,9 +66,6 @@ CONTAINER_MARKER=$(CONTAINER_CREATED)
 BINDIR=bin
 endif
 
-# Use ARCH specific build image.
-CALICO_BUILD:=$(CALICO_BUILD)-$(ARCH)
-
 ###############################################################################
 # This section builds the output binaries.
 # Some will have dedicated targets to make it easier to type, for example
