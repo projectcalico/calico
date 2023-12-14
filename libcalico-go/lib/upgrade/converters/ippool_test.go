@@ -15,13 +15,12 @@
 package converters
 
 import (
-	. "github.com/onsi/ginkgo/extensions/table"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-
 	apiv1 "github.com/projectcalico/calico/libcalico-go/lib/apis/v1"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/encap"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -275,5 +274,5 @@ var _ = DescribeTable("v1->v3 IPPool conversion tests",
 		Expect(v3APIResult.(*apiv3.IPPool).Spec).To(Equal(v3API.Spec))
 	},
 
-	poolTable...,
+	poolTable,
 )

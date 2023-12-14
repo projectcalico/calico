@@ -15,7 +15,7 @@
 package converters
 
 import (
-	. "github.com/onsi/ginkgo/extensions/table"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 
@@ -31,5 +31,5 @@ var _ = DescribeTable("v1->v3 selector conversion tests",
 	func(v1, v3 string) {
 		Expect(convertSelector(v1)).To(Equal(v3), v1)
 	},
-	selectorTable...,
+	selectorTable,
 )
