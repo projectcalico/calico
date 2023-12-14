@@ -15,9 +15,9 @@
 package converters
 
 import (
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/ginkgo/extensions/table"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/projectcalico/api/pkg/lib/numorstring"
@@ -240,7 +240,7 @@ var _ = DescribeTable("v1->v3 Node conversion tests",
 		Expect(convertedv3.(*libapiv3.Node).Spec).To(Equal(v3API.Spec))
 	},
 
-	nodeTable...,
+	nodeTable,
 )
 
 var nodeV1FailTable = []TableEntry{
@@ -272,7 +272,7 @@ var _ = DescribeTable("v1->v3 Node conversion tests (failure)",
 		Expect(err).To(HaveOccurred())
 	},
 
-	nodeV1FailTable...,
+	nodeV1FailTable,
 )
 
 var _ = Describe("v1->v3 Node conversion tests (failure)", func() {
@@ -356,5 +356,5 @@ var _ = DescribeTable("KVP v1->v3 Node conversion tests",
 		Expect(convertedv3.(*libapiv3.Node).Spec).To(Equal(v3API.Spec))
 	},
 
-	nodeKVtoV3Table...,
+	nodeKVtoV3Table,
 )

@@ -21,7 +21,7 @@ import (
 	"sync"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 
@@ -183,7 +183,7 @@ var _ = Describe("Status", func() {
 					defer datastore.mutex.Unlock()
 					return datastore.workloadsListed
 				}).Should(BeTrue())
-			}, 1)
+			})
 			It("should coalesce flapping workload EP updates", func() {
 				epUpdates <- &wlEPUpdateUp
 				epUpdates <- &wlEPUpdateUp
@@ -287,7 +287,7 @@ var _ = Describe("Status", func() {
 					remoteWlEPKey:   wlEPUp,
 					remoteHostEPKey: hostEPDown,
 				}))
-			}, 1)
+			})
 			It("should clean up one endpoint per tick", func() {
 				// Kick off the resync.
 				resyncTickerChan <- time.Now()
@@ -302,7 +302,7 @@ var _ = Describe("Status", func() {
 				rateLimitTickerChan <- time.Now()
 				inSyncChan <- true
 				Expect(datastore.numKVs()).To(Equal(2))
-			}, 1)
+			})
 
 			It("with concurrent datastore changes, it should handle key not found", func() {
 				// Kick off the resync.
@@ -322,7 +322,7 @@ var _ = Describe("Status", func() {
 				rateLimitTickerChan <- time.Now()
 				// But it should only try each delete once.
 				Expect(datastore.NumDeletes()).To(Equal(2))
-			}, 1)
+			})
 
 			Describe("with an error on the first 2 List() calls", func() {
 				JustBeforeEach(func() {
@@ -377,7 +377,7 @@ var _ = Describe("Status", func() {
 				By("deleting first endpoint immediately after resync")
 				time.Sleep(20 * time.Millisecond)
 				Eventually(datastore.numKVs).Should(Equal(4))
-			}, 1)
+			})
 			It("should process workload update", func() {
 				epUpdates <- &wlEPUpdateUp
 				rateLimitTickerChan <- time.Now() // Copy to active.
@@ -430,7 +430,7 @@ var _ = Describe("Status", func() {
 					remoteWlEPKey:   nil,
 					remoteHostEPKey: nil,
 				}))
-			}, 1)
+			})
 			It("should clean up one endpoint per tick", func() {
 				// Kick off the resync.
 				resyncTickerChan <- time.Now()
@@ -440,7 +440,7 @@ var _ = Describe("Status", func() {
 				By("deleting second endpoint after rate limit timer tick")
 				rateLimitTickerChan <- time.Now()
 				Eventually(datastore.numKVs).Should(Equal(2))
-			}, 1)
+			})
 		})
 	})
 })
