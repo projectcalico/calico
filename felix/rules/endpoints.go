@@ -328,8 +328,7 @@ func (r *DefaultRuleRenderer) PolicyGroupToIptablesChains(group *PolicyGroup) []
 	}
 	const returnStride = 5
 	for i, polName := range group.PolicyNames {
-		var chainToJumpTo string
-		chainToJumpTo = PolicyChainName(
+		chainToJumpTo := PolicyChainName(
 			polChainPrefix,
 			&proto.PolicyID{Name: polName},
 		)
