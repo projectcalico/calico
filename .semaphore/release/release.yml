@@ -27,7 +27,7 @@ blocks:
         - ssh-add /home/semaphore/.keys/git_ssh_rsa
         # Checkout the code and unshallow it.
         - checkout
-        - retry git fetch --unshallow
+        - retry git fetch --quiet --unshallow
         # Semaphore mounts a copy-on-write FS as /var/lib/docker in order to provide a pre-loaded cache of
         # some images. However, the cache is not useful to us and the copy-on-write FS is a big problem given
         # how much we churn docker containers during the build.  Disable it.
@@ -39,19 +39,19 @@ blocks:
         # Log in to container registries needed for release.
         - echo $DOCKER_TOKEN | docker login --username "$DOCKER_USER" --password-stdin
         - echo $QUAY_TOKEN | docker login --username "$QUAY_USER" --password-stdin quay.io
-        # Credentials for accessing gcloud, needed to create a GCP VM.
-        - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/secret.google-service-account-key.json
+        # Credentials for accessing gcloud, needed to push images to gcr
+        - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/gcr-credentials.json
         - gcloud auth activate-service-account --key-file=${GOOGLE_APPLICATION_CREDENTIALS}
       jobs:
-      - name: "Release on GCP VM"
+      - name: "Release on Semaphore VM"
         execution_time_limit:
           minutes: 360
         env_vars:
         - name: VAR_FILE
           value: /home/semaphore/secrets/release.tfvars
         commands:
-        - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make GIT_BRANCH=${SEMAPHORE_GIT_BRANCH} -C hack/release release; fi
-        - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make GIT_BRANCH=${SEMAPHORE_GIT_BRANCH} -C hack/release release-publish; fi
+        - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make GIT_BRANCH=${SEMAPHORE_GIT_BRANCH} release; fi
+        - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make GIT_BRANCH=${SEMAPHORE_GIT_BRANCH} release-publish; fi
       - name: "Build Openstack Packages"
         execution_time_limit:
           minutes: 60
@@ -66,7 +66,3 @@ blocks:
         - sudo apt update
         - sudo apt install -y moreutils patchelf
         - make publish-openstack
-      epilogue:
-        always:
-          commands:
-          - make VAR_FILE=/home/semaphore/secrets/release.tfvars -C hack/release destroy
