@@ -1437,7 +1437,7 @@ docker-credential-gcr-binary: var-require-all-WINDOWS_DIST-DOCKER_CREDENTIAL_VER
 # image. These must be added as reqs to 'image-windows' (originally defined in
 # lib.Makefile) on the specific package Makefile otherwise they are not correctly
 # recognized.
-windows-sub-image-%: var-require-all-WINDOWS_IMAGE-WINDOWS_DIST-WINDOWS_IMAGE_REQS
+windows-sub-image-%: var-require-all-GIT_VERSION-WINDOWS_IMAGE-WINDOWS_DIST-WINDOWS_IMAGE_REQS
 	# ensure dir for windows image tars exits
 	-mkdir -p $(WINDOWS_DIST)
 	docker buildx build \
@@ -1477,10 +1477,10 @@ release-windows-with-tag: var-require-one-of-CONFIRM-DRYRUN var-require-all-IMAG
 		$(DOCKER_MANIFEST) push --purge $${manifest_image}; \
 	done;
 
-release-windows: var-require-one-of-CONFIRM-DRYRUN var-require-all-BRANCH_NAME-DEV_REGISTRIES
+release-windows: var-require-one-of-CONFIRM-DRYRUN var-require-all-DEV_REGISTRIES-WINDOWS_IMAGE var-require-one-of-VERSION-BRANCH_NAME
 	describe_tag=$(if $(IMAGETAG_PREFIX),$(IMAGETAG_PREFIX)-)$(shell git describe --tags --dirty --long --always --abbrev=12); \
-	branch_tag=$(if $(IMAGETAG_PREFIX),$(IMAGETAG_PREFIX)-)$(BRANCH_NAME); \
+	release_tag=$(if $(VERSION),$(VERSION),$(if $(IMAGETAG_PREFIX),$(IMAGETAG_PREFIX)-)$(BRANCH_NAME)); \
 	$(MAKE) release-windows-with-tag IMAGETAG=$${describe_tag}; \
 	for registry in $(DEV_REGISTRIES); do \
-		$(CRANE_BINDMOUNT) cp $${registry}/$(WINDOWS_IMAGE):$${describe_tag} $${registry}/$(WINDOWS_IMAGE):$${branch_tag}$(double_quote); \
+		$(CRANE_BINDMOUNT) cp $${registry}/$(WINDOWS_IMAGE):$${describe_tag} $${registry}/$(WINDOWS_IMAGE):$${release_tag}$(double_quote); \
 	done;
