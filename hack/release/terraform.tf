@@ -89,6 +89,7 @@ resource "null_resource" "configure_vm" {
       "cat /tmp/gcr-credentials.json | docker login -u _json_key --password-stdin https://us.gcr.io",
       "echo ${var.dockerhub_token} | docker login --username ${var.dockerhub_user} --password-stdin",
       "echo ${var.quay_token} | docker login --username ${var.quay_user} --password-stdin quay.io",
+      "gcloud auth activate-service-account --key-file=/tmp/gcr-credentials.json",
     ]
   }
 
