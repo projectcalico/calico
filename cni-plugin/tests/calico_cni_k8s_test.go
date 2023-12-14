@@ -21,21 +21,18 @@ import (
 	cniv1 "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/ns"
 	cnitestutils "github.com/containernetworking/plugins/pkg/testutils"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/vishvananda/netlink"
+
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 
-	"github.com/projectcalico/calico/libcalico-go/lib/seedrng"
-
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
-
 	"github.com/projectcalico/calico/cni-plugin/internal/pkg/testutils"
 	"github.com/projectcalico/calico/cni-plugin/internal/pkg/utils"
 	"github.com/projectcalico/calico/cni-plugin/pkg/types"
@@ -46,6 +43,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
+	"github.com/projectcalico/calico/libcalico-go/lib/seedrng"
 )
 
 var counterByPrefix map[string]int
@@ -88,7 +86,7 @@ func ensurePodCreated(clientset *kubernetes.Clientset, namespace string, pod *v1
 func ensurePodDeleted(clientset *kubernetes.Clientset, ns string, podName string) {
 	// Check if pod exists first.
 	_, err := clientset.CoreV1().Pods(ns).Get(context.Background(), podName, metav1.GetOptions{})
-	if kerrors.IsNotFound(err) {
+	if errors.IsNotFound(err) {
 		// Pod has been deleted already. Do nothing.
 		return
 	}
@@ -108,7 +106,7 @@ func ensurePodDeleted(clientset *kubernetes.Clientset, ns string, podName string
 	// Wait for pod to disappear.
 	Eventually(func() error {
 		_, err := clientset.CoreV1().Pods(ns).Get(context.Background(), podName, metav1.GetOptions{})
-		if kerrors.IsNotFound(err) {
+		if errors.IsNotFound(err) {
 			return nil
 		}
 		if err != nil {
@@ -122,7 +120,7 @@ func ensureNodeDeleted(clientset *kubernetes.Clientset, nodeName string) {
 	// Wait for node to disappear.
 	Eventually(func() error {
 		_, err := clientset.CoreV1().Nodes().Get(context.Background(), nodeName, metav1.GetOptions{})
-		if kerrors.IsNotFound(err) {
+		if errors.IsNotFound(err) {
 			return nil
 		}
 		if err != nil {
@@ -138,7 +136,7 @@ func ensureNodeDeleted(clientset *kubernetes.Clientset, nodeName string) {
 				PropagationPolicy:  &fg,
 				GracePeriodSeconds: &zero,
 			})
-		if kerrors.IsNotFound(err) {
+		if errors.IsNotFound(err) {
 			// That's what we want.
 			return nil
 		}
