@@ -15,8 +15,10 @@
 package proxy
 
 import (
+	"fmt"
 	"time"
 
+	"github.com/projectcalico/calico/felix/ip"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -81,4 +83,31 @@ func WithIPFamily(ipFamily int) Option {
 		p.setIpFamily(ipFamily)
 		return nil
 	}
+}
+
+var excludeIPsMatch = 1
+
+func WithExcludedIPs(cidrs []string) Option {
+	return makeKubeProxyOption(func(kp *KubeProxy) error {
+		if kp.ipFamily == 0 {
+			return fmt.Errorf("ip family is not set")
+		}
+
+		kp.excludedIPs = ip.NewCIDRTrie()
+
+		for _, c := range cidrs {
+			cidr, err := ip.CIDRFromString(c)
+			if err != nil {
+				return fmt.Errorf("bad CIDR %s: %w", c, err)
+			}
+
+			if int(cidr.Version()) != kp.ipFamily {
+				continue
+			}
+
+			kp.excludedIPs.Update(cidr, &excludeIPsMatch)
+		}
+
+		return nil
+	})
 }
