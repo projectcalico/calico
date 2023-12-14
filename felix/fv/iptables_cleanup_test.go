@@ -24,7 +24,7 @@ import (
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 )

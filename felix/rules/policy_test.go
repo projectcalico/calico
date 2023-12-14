@@ -15,16 +15,14 @@
 package rules_test
 
 import (
-	"github.com/projectcalico/calico/felix/environment"
-	. "github.com/projectcalico/calico/felix/rules"
-
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/ginkgo/extensions/table"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/iptables"
 	"github.com/projectcalico/calico/felix/proto"
+	. "github.com/projectcalico/calico/felix/rules"
 )
 
 var ruleTestData = []TableEntry{
@@ -217,7 +215,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			rules2 := renderer.ProtoRuleToIptablesRules(&in, uint8(ipVer))
 			Expect(rules2).To(Equal(rules))
 		},
-		ruleTestData...,
+		ruleTestData,
 	)
 
 	DescribeTable(
@@ -239,7 +237,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 				}))
 			}
 		},
-		ruleTestData...,
+		ruleTestData,
 	)
 
 	DescribeTable(
@@ -254,7 +252,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			Expect(rules[0].Match.Render()).To(Equal(expMatch))
 			Expect(rules[0].Action).To(Equal(iptables.LogAction{Prefix: "calico-packet"}))
 		},
-		ruleTestData...,
+		ruleTestData,
 	)
 
 	DescribeTable(
@@ -271,7 +269,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			Expect(rules[0].Match.Render()).To(Equal(expMatch))
 			Expect(rules[0].Action).To(Equal(iptables.LogAction{Prefix: "foobar"}))
 		},
-		ruleTestData...,
+		ruleTestData,
 	)
 
 	DescribeTable(
@@ -286,7 +284,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			Expect(rules[0].Match.Render()).To(Equal(expMatch))
 			Expect(rules[0].Action).To(Equal(iptables.DropAction{}))
 		},
-		ruleTestData...,
+		ruleTestData,
 	)
 
 	DescribeTable(
@@ -303,7 +301,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			Expect(rules[0].Match.Render()).To(Equal(expMatch))
 			Expect(rules[0].Action).To(Equal(iptables.RejectAction{}))
 		},
-		ruleTestData...,
+		ruleTestData,
 	)
 
 	const (

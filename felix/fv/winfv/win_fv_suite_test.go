@@ -15,12 +15,10 @@
 package winfv_test
 
 import (
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
-
 	"testing"
 
-	"github.com/onsi/ginkgo/reporters"
+	"github.com/onsi/ginkgo/v2"
+	"github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
 )
@@ -30,7 +28,8 @@ func init() {
 }
 
 func TestNetworkingWindows(t *testing.T) {
-	RegisterFailHandler(Fail)
-	junitReporter := reporters.NewJUnitReporter("../report/fv_suite.xml")
-	RunSpecsWithDefaultAndCustomReporters(t, "Felix windows Suite", []Reporter{junitReporter})
+	gomega.RegisterFailHandler(ginkgo.Fail)
+	suiteConfig, reporterConfig := ginkgo.GinkgoConfiguration()
+	reporterConfig.JUnitReport = "../report/fv_suite.xml"
+	ginkgo.RunSpecs(t, "Felix windows Suite", suiteConfig, reporterConfig)
 }
