@@ -21,14 +21,11 @@ import (
 	"os"
 	"testing"
 
-	"github.com/projectcalico/calico/felix/fv/connectivity"
-
+	"github.com/onsi/ginkgo/v2"
+	"github.com/onsi/gomega"
 	"github.com/onsi/gomega/format"
 
-	. "github.com/onsi/ginkgo"
-	"github.com/onsi/ginkgo/reporters"
-	. "github.com/onsi/gomega"
-
+	"github.com/projectcalico/calico/felix/fv/connectivity"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
 )
@@ -43,24 +40,25 @@ func init() {
 }
 
 func TestFv(t *testing.T) {
-	RegisterFailHandler(Fail)
-	junitReporter := reporters.NewJUnitReporter("../report/fv_suite.xml")
-	RunSpecsWithDefaultAndCustomReporters(t, "FV Suite", []Reporter{junitReporter})
+	gomega.RegisterFailHandler(ginkgo.Fail)
+	suiteConfig, reporterConfig := ginkgo.GinkgoConfiguration()
+	reporterConfig.JUnitReport = "../report/fv_suite.xml"
+	ginkgo.RunSpecs(t, "FV Suite", suiteConfig, reporterConfig)
 }
 
-var _ = BeforeEach(func() {
+var _ = ginkgo.BeforeEach(func() {
 	_, _ = fmt.Fprintf(realStdout, "\nFV-TEST-START: %s", CurrentGinkgoTestDescription().FullTestText)
 })
 
-var _ = JustAfterEach(func() {
-	if CurrentGinkgoTestDescription().Failed {
+var _ = ginkgo.JustAfterEach(func() {
+	if ginkgo.CurrentSpecReport().Failed() {
 		_, _ = fmt.Fprintf(realStdout, "\n")
 	}
 })
 
-var _ = AfterEach(func() {
+var _ = ginkgo.AfterEach(func() {
 	defer connectivity.UnactivatedCheckers.Clear()
-	if CurrentGinkgoTestDescription().Failed {
+	if ginkgo.CurrentSpecReport().Failed() {
 		// If the test has already failed, ignore any connectivity checker leak.
 		return
 	}
@@ -68,7 +66,7 @@ var _ = AfterEach(func() {
 		"Test bug: ConnectivityChecker was created but not activated.")
 })
 
-var _ = AfterSuite(func() {
+var _ = ginkgo.AfterSuite(func() {
 	for i, k8sInfra := range infrastructure.K8sInfra {
 		if k8sInfra != nil {
 			infrastructure.TearDownK8sInfra(k8sInfra)
