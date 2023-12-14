@@ -33,7 +33,7 @@ import (
 
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -195,7 +195,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 					log.Infof("Captured dmesg log:\n%v", dmesgBuf.String())
 				}
 
-				if CurrentGinkgoTestDescription().Failed {
+				if CurrentSpecReport().Failed() {
 					for _, felix := range topologyContainers.Felixes {
 						felix.Exec("ip", "addr")
 						felix.Exec("ip", "rule", "list")
@@ -221,7 +221,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 				}
 				topologyContainers.Stop()
 
-				if CurrentGinkgoTestDescription().Failed {
+				if CurrentSpecReport().Failed() {
 					infra.DumpErrorData()
 				}
 				infra.Stop()
@@ -1080,14 +1080,14 @@ var _ = infrastructure.DatastoreDescribe("WireGuard-Unsupported", []apiconfig.Da
 			})
 
 			AfterEach(func() {
-				if CurrentGinkgoTestDescription().Failed {
+				if CurrentSpecReport().Failed() {
 					tc.Felixes[0].Exec("ip", "link")
 					tc.Felixes[0].Exec("wg")
 				}
 
 				tc.Stop()
 
-				if CurrentGinkgoTestDescription().Failed {
+				if CurrentSpecReport().Failed() {
 					infra.DumpErrorData()
 				}
 				infra.Stop()
@@ -1185,7 +1185,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported 3 node 
 	})
 
 	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
+		if CurrentSpecReport().Failed() {
 			for _, felix := range tc.Felixes {
 				felix.Exec("ip", "addr")
 				felix.Exec("ip", "rule", "list")
@@ -1205,7 +1205,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported 3 node 
 
 		tc.Stop()
 
-		if CurrentGinkgoTestDescription().Failed {
+		if CurrentSpecReport().Failed() {
 			infra.DumpErrorData()
 		}
 		infra.Stop()
@@ -1509,7 +1509,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported 3-node 
 	})
 
 	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
+		if CurrentSpecReport().Failed() {
 			for _, felix := range tc.Felixes {
 				felix.Exec("ip", "addr")
 				felix.Exec("ip", "rule", "list")
@@ -1536,7 +1536,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported 3-node 
 
 		tc.Stop()
 
-		if CurrentGinkgoTestDescription().Failed {
+		if CurrentSpecReport().Failed() {
 			infra.DumpErrorData()
 		}
 		infra.Stop()

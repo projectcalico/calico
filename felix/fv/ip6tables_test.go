@@ -23,7 +23,7 @@ import (
 	"strconv"
 	"strings"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 
@@ -75,7 +75,7 @@ var _ = infrastructure.DatastoreDescribe("IPv6 iptables tests", []apiconfig.Data
 	})
 
 	JustAfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
+		if CurrentSpecReport().Failed() {
 			for _, felix := range tc.Felixes {
 				felix.Exec("conntrack", "-L")
 				felix.Exec("ip6tables-save", "-c")

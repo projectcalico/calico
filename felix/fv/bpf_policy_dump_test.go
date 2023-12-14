@@ -19,7 +19,7 @@ package fv_test
 import (
 	"os"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	"fmt"
@@ -64,7 +64,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test policy dump"
 	})
 
 	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
+		if CurrentSpecReport().Failed() {
 			infra.DumpErrorData()
 		}
 

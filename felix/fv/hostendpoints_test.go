@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"os"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/api/pkg/lib/numorstring"
@@ -87,7 +87,7 @@ func describeHostEndpointTests(getInfra infrastructure.InfraFactory, allInterfac
 	})
 
 	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
+		if CurrentSpecReport().Failed() {
 			for _, felix := range tc.Felixes {
 				felix.Exec("iptables-save", "-c")
 				felix.Exec("ipset", "list")
@@ -104,7 +104,7 @@ func describeHostEndpointTests(getInfra infrastructure.InfraFactory, allInterfac
 		}
 		tc.Stop()
 
-		if CurrentGinkgoTestDescription().Failed {
+		if CurrentSpecReport().Failed() {
 			infra.DumpErrorData()
 		}
 		infra.Stop()
