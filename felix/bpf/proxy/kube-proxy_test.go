@@ -15,7 +15,9 @@
 package proxy_test
 
 import (
+	"fmt"
 	"net"
+	"net/http"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -41,16 +43,20 @@ var _ = Describe("BPF kube-proxy", func() {
 
 	var p *proxy.KubeProxy
 
+	healthCheckNodePort := 1212
+
 	BeforeEach(func() {
 		testSvc := &v1.Service{
 			TypeMeta:   typeMetaV1("Service"),
 			ObjectMeta: objectMetaV1("testService"),
 			Spec: v1.ServiceSpec{
 				ClusterIP: "10.1.0.1",
-				Type:      v1.ServiceTypeClusterIP,
+				Type:      v1.ServiceTypeLoadBalancer,
 				Selector: map[string]string{
 					"app": "test",
 				},
+				ExternalTrafficPolicy: v1.ServiceExternalTrafficPolicyTypeLocal,
+				HealthCheckNodePort:   int32(healthCheckNodePort),
 				Ports: []v1.ServicePort{
 					{
 						Protocol: v1.ProtocolTCP,
@@ -104,6 +110,19 @@ var _ = Describe("BPF kube-proxy", func() {
 			}).Should(BeTrue())
 		})
 
+		By("checking that the healthCheckNodePort is accessible", func() {
+			Eventually(func() error {
+				result, err := http.Get(fmt.Sprintf("http://localhost:%d", healthCheckNodePort))
+				if err != nil {
+					return err
+				}
+				if result.StatusCode != 503 {
+					return fmt.Errorf("Unexpected status code %d; expected 503", result.StatusCode)
+				}
+				return nil
+			}, "5s", "200ms").Should(Succeed())
+		})
+
 		By("checking nodeport has the updated IP and not the initial IP", func() {
 			updatedIP := net.IPv4(2, 2, 2, 2)
 			p.OnHostIPsUpdate([]net.IP{updatedIP})
@@ -122,6 +141,19 @@ var _ = Describe("BPF kube-proxy", func() {
 				}
 				return false
 			}).Should(BeTrue())
+		})
+
+		By("checking that the healthCheckNodePort is still accessible", func() {
+			Eventually(func() error {
+				result, err := http.Get(fmt.Sprintf("http://localhost:%d", healthCheckNodePort))
+				if err != nil {
+					return err
+				}
+				if result.StatusCode != 503 {
+					return fmt.Errorf("Unexpected status code %d; expected 503", result.StatusCode)
+				}
+				return nil
+			}, "5s", "200ms").Should(Succeed())
 		})
 
 		By("checking nodeport has 2 updated IPs", func() {
