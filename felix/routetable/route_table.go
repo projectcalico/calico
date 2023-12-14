@@ -719,7 +719,19 @@ func (r *RouteTable) syncRoutesForLink(ifaceName string, fullSync bool, firstTry
 		// In case this IP is being re-used, wait for any previous conntrack entry
 		// to be cleaned up.  (No-op if there are no pending deletes.)
 		r.waitForPendingConntrackDeletion(target.CIDR.Addr())
-		if err := r.addOrOverwriteRoute(logCxt, nl, &target, &route); err != nil {
+
+		// We do two tries.
+		if firstTry {
+			// First try is opportunistic; we just try to add the route, and
+			// we won't have checked if it's already there (unless there
+			// happened to be a resync).
+			err = nl.RouteAdd(&route)
+		} else {
+			// Second try, we'll have checked if the route is already present
+			// and correct up above so we
+			err = r.addOrOverwriteRoute(logCxt, nl, &target, &route)
+		}
+		if err != nil {
 			if firstTry {
 				logCxt.WithError(err).WithField("route", route).Debug("Failed to add route on first attempt, retrying...")
 			} else {
