@@ -221,7 +221,7 @@ RUN chmod u+s /bin/mountns
 
 # Clean out as many files as we can from the filesystem.  We no longer need dnf or the platform python install
 # or any of its dependencies.
-ADD clean-up-filesystem.sh /
+COPY clean-up-filesystem.sh /
 RUN /clean-up-filesystem.sh
 
 # Copy everything into a fresh scratch image so that naive CVE scanners don't pick up binaries and libraries

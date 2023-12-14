@@ -6,7 +6,7 @@ agent:
     os_image: ubuntu2004
 
 execution_time_limit:
-  minutes: 600
+  minutes: 800
 
 blocks:
   - name: "Publish official release"
@@ -45,7 +45,7 @@ blocks:
       jobs:
       - name: "Release on GCP VM"
         execution_time_limit:
-          minutes: 180
+          minutes: 360
         env_vars:
         - name: VAR_FILE
           value: /home/semaphore/secrets/release.tfvars
@@ -57,7 +57,7 @@ blocks:
           minutes: 60
         env_vars:
         - name: SECRET_KEY
-          value: ~/secrets/launchpad-gpg-key-dfox.key
+          value: /home/semaphore/secrets/launchpad-gpg-key-dfox.key
         - name: GCLOUD_ARGS
           value: --zone us-east1-c --project tigera-wp-tcp-redirect
         - name: HOST
