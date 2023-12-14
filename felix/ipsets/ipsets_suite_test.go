@@ -15,12 +15,10 @@
 package ipsets_test
 
 import (
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
-
 	"testing"
 
-	"github.com/onsi/ginkgo/reporters"
+	"github.com/onsi/ginkgo/v2"
+	"github.com/onsi/gomega"
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
@@ -34,7 +32,8 @@ func init() {
 }
 
 func TestIPSets(t *testing.T) {
-	RegisterFailHandler(Fail)
-	junitReporter := reporters.NewJUnitReporter("../report/ipsets_suite.xml")
-	RunSpecsWithDefaultAndCustomReporters(t, "IP sets Suite", []Reporter{junitReporter})
+	gomega.RegisterFailHandler(ginkgo.Fail)
+	suiteConfig, reporterConfig := ginkgo.GinkgoConfiguration()
+	reporterConfig.JUnitReport = "../report/ipsets_suite.xml"
+	ginkgo.RunSpecs(t, "IP sets Suite", suiteConfig, reporterConfig)
 }
