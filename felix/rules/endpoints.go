@@ -334,7 +334,7 @@ func (r *DefaultRuleRenderer) PolicyGroupToIptablesChains(group *PolicyGroup) []
 		} else {
 			// We're not the first rule in a block, only jump to this policy if
 			// the previous policy didn't set a mark bit.
-			match = Match().MarkMatchesWithMask(0, r.IptablesMarkPass|r.IptablesMarkAccept)
+			match = Match().MarkClear(r.IptablesMarkPass | r.IptablesMarkAccept)
 		}
 		rules = append(rules, Rule{
 			Match:  match,
@@ -354,7 +354,7 @@ func (r *DefaultRuleRenderer) PolicyGroupToIptablesChains(group *PolicyGroup) []
 			// pass.  We're safe to return on pass because we only return as
 			// far as the endpoint chain.
 			rules = append(rules, Rule{
-				Match:   Match().NotMarkMatchesWithMask(0, r.IptablesMarkPass|r.IptablesMarkAccept),
+				Match:   Match().MarkNotClear(r.IptablesMarkPass | r.IptablesMarkAccept),
 				Action:  ReturnAction{},
 				Comment: []string{"Return on verdict"},
 			})
