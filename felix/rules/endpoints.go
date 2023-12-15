@@ -181,16 +181,6 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 	return result
 }
 
-func FakeGroups(names []string) (groups []*PolicyGroup) {
-	for _, n := range names {
-		groups = append(groups, &PolicyGroup{
-			Tier:        "default",
-			PolicyNames: []string{n},
-		})
-	}
-	return
-}
-
 func (r *DefaultRuleRenderer) HostEndpointToMangleEgressChains(
 	ifaceName string,
 	egressPolicies []*PolicyGroup,
@@ -406,11 +396,12 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(policyGroups []*PolicyGroup,
 		})
 	}
 
-	// Start by ensuring that the accept mark bit is clear, policies set that bit to indicate
-	// that they accepted the packet.
+	// Start by ensuring that the policy result bits are clear.  Policy chains
+	// set one of the bits to return their result (or leave the bits unset if
+	// there's no match).
 	rules = append(rules, Rule{
 		Action: ClearMarkAction{
-			Mark: r.IptablesMarkAccept,
+			Mark: r.IptablesMarkAccept | r.IptablesMarkPass,
 		},
 	})
 
@@ -431,16 +422,7 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(policyGroups []*PolicyGroup,
 	}
 
 	if len(policyGroups) > 0 {
-		// Clear the "pass" mark.  If a policy sets that mark, we'll skip the rest of the policies and
-		// continue processing the profiles, if there are any.
-		rules = append(rules, Rule{
-			Comment: []string{"Start of policies"},
-			Action: ClearMarkAction{
-				Mark: r.IptablesMarkPass,
-			},
-		})
-
-		// Then, jump to each policy in turn.
+		// Then, jump to each policy (or group) in turn.
 		for _, polGroup := range policyGroups {
 			var chainToJumpTo string
 			if polGroup.ShouldBeInlined() {
