@@ -72,12 +72,12 @@ var wlDispatchEmpty = []*iptables.Chain{
 	{
 		Name: "cali-set-endpoint-mark",
 		Rules: []iptables.Rule{
-			iptables.Rule{
+			{
 				Match:   iptables.Match().InInterface("cali+"),
 				Action:  iptables.DropAction{},
 				Comment: []string{"Unknown endpoint"},
 			},
-			iptables.Rule{
+			{
 				Match:   iptables.Match().InInterface("tap+"),
 				Action:  iptables.DropAction{},
 				Comment: []string{"Unknown endpoint"},
@@ -275,17 +275,12 @@ func chainsForIfaces(ifaceMetadata []string,
 		}
 		outRules = append(outRules, iptables.Rule{
 			Match:  iptables.Match(),
-			Action: iptables.ClearMarkAction{Mark: 8},
+			Action: iptables.ClearMarkAction{Mark: 0x18},
 		})
 		if !host {
 			outRules = append(outRules, dropEncapRules...)
 		}
 		if egress && polName != "" && tableKind == ifaceKind {
-			outRules = append(outRules, iptables.Rule{
-				Match:   iptables.Match(),
-				Action:  iptables.ClearMarkAction{Mark: 16},
-				Comment: []string{"Start of policies"},
-			})
 			outRules = append(outRules, iptables.Rule{
 				Match:  iptables.Match().MarkClear(16),
 				Action: iptables.JumpAction{Target: "cali-po-" + polName},
@@ -358,14 +353,9 @@ func chainsForIfaces(ifaceMetadata []string,
 		}
 		inRules = append(inRules, iptables.Rule{
 			Match:  iptables.Match(),
-			Action: iptables.ClearMarkAction{Mark: 8},
+			Action: iptables.ClearMarkAction{Mark: 0x18},
 		})
 		if ingress && polName != "" && tableKind == ifaceKind {
-			inRules = append(inRules, iptables.Rule{
-				Match:   iptables.Match(),
-				Action:  iptables.ClearMarkAction{Mark: 16},
-				Comment: []string{"Start of policies"},
-			})
 			// For untracked policy, we expect a tier with a policy in it.
 			inRules = append(inRules, iptables.Rule{
 				Match:  iptables.Match().MarkClear(16),
@@ -473,7 +463,7 @@ func chainsForIfaces(ifaceMetadata []string,
 				&iptables.Chain{
 					Name: epMarkSetOnePrefix + ifaceName,
 					Rules: []iptables.Rule{
-						iptables.Rule{
+						{
 							Action: iptables.SetMaskedMarkAction{Mark: epMark, Mask: epMarkMapper.GetMask()},
 						},
 					},
@@ -826,7 +816,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 				})
 				rawTable.checkChains([][]*iptables.Chain{
 					hostDispatchEmptyNormal,
-					[]*iptables.Chain{{
+					{{
 						Name:  "cali-rpf-skip",
 						Rules: []iptables.Rule{},
 					}},
@@ -1514,7 +1504,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 
 				Context("with policy", func() {
 					BeforeEach(func() {
-						tiers = []*proto.TierInfo{&proto.TierInfo{
+						tiers = []*proto.TierInfo{{
 							Name:            "default",
 							IngressPolicies: []string{"policy1"},
 							EgressPolicies:  []string{"policy1"},
@@ -1626,7 +1616,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 
 				Context("with ingress-only policy", func() {
 					BeforeEach(func() {
-						tiers = []*proto.TierInfo{&proto.TierInfo{
+						tiers = []*proto.TierInfo{{
 							Name:            "default",
 							IngressPolicies: []string{"policy1"},
 						}}
@@ -1637,7 +1627,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 
 				Context("with egress-only policy", func() {
 					BeforeEach(func() {
-						tiers = []*proto.TierInfo{&proto.TierInfo{
+						tiers = []*proto.TierInfo{{
 							Name:           "default",
 							EgressPolicies: []string{"policy1"},
 						}}
@@ -1957,7 +1947,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 					}
 					rawTable.checkChains([][]*iptables.Chain{hostDispatchEmptyNormal, {
 						&iptables.Chain{Name: rules.ChainRpfSkip, Rules: []iptables.Rule{
-							iptables.Rule{
+							{
 								Match:  iptables.Match().InInterface("cali23456-cd").SourceNet("8.8.8.8/32"),
 								Action: iptables.AcceptAction{},
 							},
@@ -1988,7 +1978,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 					}
 					rawTable.checkChains([][]*iptables.Chain{hostDispatchEmptyNormal, {
 						&iptables.Chain{Name: rules.ChainRpfSkip, Rules: []iptables.Rule{
-							iptables.Rule{
+							{
 								Match:  iptables.Match().InInterface("cali23456-cd").SourceNet("8.8.8.8/32"),
 								Action: iptables.AcceptAction{},
 							}}},
