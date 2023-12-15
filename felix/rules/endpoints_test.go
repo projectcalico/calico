@@ -19,6 +19,7 @@ import (
 	"strings"
 
 	. "github.com/onsi/ginkgo"
+	"github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/format"
 	. "github.com/projectcalico/calico/felix/rules"
@@ -977,3 +978,213 @@ var _ = Describe("PolicyGroups", func() {
 		}
 	})
 })
+
+var _ = table.DescribeTable("PolicyGroup chains",
+	func(group PolicyGroup, expectedRules []Rule) {
+		renderer := NewRenderer(Config{
+			IptablesMarkAccept:   0x8,
+			IptablesMarkPass:     0x10,
+			IptablesMarkScratch0: 0x1,
+			IptablesMarkScratch1: 0x2,
+			IptablesMarkEndpoint: 0x4,
+		})
+		chains := renderer.PolicyGroupToIptablesChains(&group)
+		Expect(chains).To(HaveLen(1))
+		Expect(chains[0].Name).ToNot(BeEmpty())
+		Expect(chains[0].Name).To(Equal(group.ChainName()))
+		Expect(chains[0].Rules).To(Equal(expectedRules))
+	},
+	polGroupEntry(
+		PolicyGroup{
+			Tier:        "default",
+			Direction:   PolicyDirectionIngress,
+			PolicyNames: []string{"a"},
+			Selector:    "all()",
+		},
+		[]Rule{
+			{
+				Action: JumpAction{Target: "cali-pi-a"},
+			},
+		},
+	),
+	polGroupEntry(
+		PolicyGroup{
+			Tier:        "default",
+			Direction:   PolicyDirectionIngress,
+			PolicyNames: []string{"a", "b"},
+			Selector:    "all()",
+		},
+		[]Rule{
+			{
+				Action: JumpAction{Target: "cali-pi-a"},
+			},
+			{
+				Match:  Match().MarkClear(0x18),
+				Action: JumpAction{Target: "cali-pi-b"},
+			},
+		},
+	),
+	polGroupEntry(
+		PolicyGroup{
+			Tier:        "default",
+			Direction:   PolicyDirectionIngress,
+			PolicyNames: []string{"a", "b", "c"},
+			Selector:    "all()",
+		},
+		[]Rule{
+			{
+				Action: JumpAction{Target: "cali-pi-a"},
+			},
+			{
+				Match:  Match().MarkClear(0x18),
+				Action: JumpAction{Target: "cali-pi-b"},
+			},
+			{
+				Match:  Match().MarkClear(0x18),
+				Action: JumpAction{Target: "cali-pi-c"},
+			},
+		},
+	),
+	polGroupEntry(
+		PolicyGroup{
+			Tier:        "default",
+			Direction:   PolicyDirectionIngress,
+			PolicyNames: []string{"a", "b", "c", "d"},
+			Selector:    "all()",
+		},
+		[]Rule{
+			{
+				Action: JumpAction{Target: "cali-pi-a"},
+			},
+			{
+				Match:  Match().MarkClear(0x18),
+				Action: JumpAction{Target: "cali-pi-b"},
+			},
+			{
+				Match:  Match().MarkClear(0x18),
+				Action: JumpAction{Target: "cali-pi-c"},
+			},
+			{
+				Match:  Match().MarkClear(0x18),
+				Action: JumpAction{Target: "cali-pi-d"},
+			},
+		},
+	),
+	polGroupEntry(
+		PolicyGroup{
+			Tier:        "default",
+			Direction:   PolicyDirectionIngress,
+			PolicyNames: []string{"a", "b", "c", "d", "e"},
+			Selector:    "all()",
+		},
+		[]Rule{
+			{
+				Action: JumpAction{Target: "cali-pi-a"},
+			},
+			{
+				Match:  Match().MarkClear(0x18),
+				Action: JumpAction{Target: "cali-pi-b"},
+			},
+			{
+				Match:  Match().MarkClear(0x18),
+				Action: JumpAction{Target: "cali-pi-c"},
+			},
+			{
+				Match:  Match().MarkClear(0x18),
+				Action: JumpAction{Target: "cali-pi-d"},
+			},
+			{
+				Match:  Match().MarkClear(0x18),
+				Action: JumpAction{Target: "cali-pi-e"},
+			},
+		},
+	),
+	polGroupEntry(
+		PolicyGroup{
+			Tier:        "default",
+			Direction:   PolicyDirectionIngress,
+			PolicyNames: []string{"a", "b", "c", "d", "e", "f"},
+			Selector:    "all()",
+		},
+		[]Rule{
+			{
+				Action: JumpAction{Target: "cali-pi-a"},
+			},
+			{
+				Match:  Match().MarkClear(0x18),
+				Action: JumpAction{Target: "cali-pi-b"},
+			},
+			{
+				Match:  Match().MarkClear(0x18),
+				Action: JumpAction{Target: "cali-pi-c"},
+			},
+			{
+				Match:  Match().MarkClear(0x18),
+				Action: JumpAction{Target: "cali-pi-d"},
+			},
+			{
+				Match:  Match().MarkClear(0x18),
+				Action: JumpAction{Target: "cali-pi-e"},
+			},
+			{
+				// Only get a return action every 5 rules and only if it's
+				// not the last action.
+				Match:   Match().MarkNotClear(0x18),
+				Action:  ReturnAction{},
+				Comment: []string{"Return on verdict"},
+			},
+			{
+				Action: JumpAction{Target: "cali-pi-f"},
+			},
+		},
+	),
+	polGroupEntry(
+		PolicyGroup{
+			Tier:        "default",
+			Direction:   PolicyDirectionEgress,
+			PolicyNames: []string{"a", "b", "c", "d", "e", "f", "g"},
+			Selector:    "all()",
+		},
+		[]Rule{
+			{
+				Action: JumpAction{Target: "cali-po-a"},
+			},
+			{
+				Match:  Match().MarkClear(0x18),
+				Action: JumpAction{Target: "cali-po-b"},
+			},
+			{
+				Match:  Match().MarkClear(0x18),
+				Action: JumpAction{Target: "cali-po-c"},
+			},
+			{
+				Match:  Match().MarkClear(0x18),
+				Action: JumpAction{Target: "cali-po-d"},
+			},
+			{
+				Match:  Match().MarkClear(0x18),
+				Action: JumpAction{Target: "cali-po-e"},
+			},
+			{
+				Match:   Match().MarkNotClear(0x18),
+				Action:  ReturnAction{},
+				Comment: []string{"Return on verdict"},
+			},
+			{
+				Action: JumpAction{Target: "cali-po-f"},
+			},
+			{
+				Match:  Match().MarkClear(0x18),
+				Action: JumpAction{Target: "cali-po-g"},
+			},
+		},
+	),
+)
+
+func polGroupEntry(group PolicyGroup, rules []Rule) table.TableEntry {
+	return table.Entry(
+		fmt.Sprintf("%v", group),
+		group,
+		rules,
+	)
+}
