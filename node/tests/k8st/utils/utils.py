@@ -27,7 +27,7 @@ from kubernetes import client, config
 _log = logging.getLogger(__name__)
 
 ROUTER_IMAGE = os.getenv("ROUTER_IMAGE", "calico/bird:latest")
-NGINX_IMAGE = os.getenv("NGINX_IMAGE", "nginx:1.25.2")
+NGINX_IMAGE = os.getenv("NGINX_IMAGE", "nginx:1")
 
 
 # Helps with printing diags after a test.
