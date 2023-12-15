@@ -327,6 +327,8 @@ func (r *DefaultRuleRenderer) PolicyGroupToIptablesChains(group *PolicyGroup) []
 	if group.Direction == PolicyDirectionEgress {
 		polChainPrefix = PolicyOutboundPfx
 	}
+	// To keep the number of rules low, we only drop a RETURN rule every
+	// returnStride jump rules.
 	const returnStride = 5
 	for i, polName := range group.PolicyNames {
 		chainToJumpTo := PolicyChainName(
@@ -334,9 +336,14 @@ func (r *DefaultRuleRenderer) PolicyGroupToIptablesChains(group *PolicyGroup) []
 			&proto.PolicyID{Name: polName},
 		)
 
-		// If a previous policy didn't set the "pass" mark, jump to the policy.
 		var match MatchCriteria
-		if i%returnStride != 0 {
+		if i%returnStride == 0 {
+			// Optimisation, we're the first rule in a block, immediately after
+			// start of chain or a RETURN rule.  No need to check the return bits.
+			match = Match()
+		} else {
+			// We're not the first rule in a block, only jump to this policy if
+			// the previous policy didn't set a mark bit.
 			match = Match().MarkMatchesWithMask(0, r.IptablesMarkPass|r.IptablesMarkAccept)
 		}
 		rules = append(rules, Rule{
@@ -344,16 +351,18 @@ func (r *DefaultRuleRenderer) PolicyGroupToIptablesChains(group *PolicyGroup) []
 			Action: JumpAction{Target: chainToJumpTo},
 		})
 
-		if i == len(group.PolicyNames)-1 {
-			break // Return rule is not needed, we automatically return.
-		}
-
 		if i%returnStride == returnStride-1 {
+			if i == len(group.PolicyNames)-1 {
+				// Optimisation: there's an automatic return at end of chain,
+				// so we don't need to write one.
+				break
+			}
+
 			// If policy makes a verdict (i.e. the pass or accept bit is
-			// non-zero) return to the parent chain.  We can't do this in
-			// the endpoint chain because there we need to fall through to
-			// later rules in the pass case.  We know that all the rules in
-			// one group are from the same "tier".
+			// non-zero) return to the parent chain.  Note: the handling in the
+			// endpoint chain is different due to needing to fall through on
+			// pass.  We're safe to return on pass because we only return as
+			// far as the endpoint chain.
 			rules = append(rules, Rule{
 				Match:   Match().NotMarkMatchesWithMask(0, r.IptablesMarkPass|r.IptablesMarkAccept),
 				Action:  ReturnAction{},
