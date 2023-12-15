@@ -1513,9 +1513,10 @@ func (m *endpointManager) increfGroups(groups []*rules.PolicyGroup) {
 		refcnt := m.policyChainRefCounts[group.ChainName()]
 		if refcnt == 0 {
 			// This group just became active.
-			m.filterTable.UpdateChains(m.ruleRenderer.PolicyGroupToIptablesChains(
-				group,
-			))
+			chains := m.ruleRenderer.PolicyGroupToIptablesChains(group)
+			m.filterTable.UpdateChains(chains)
+			m.mangleTable.UpdateChains(chains)
+			m.rawTable.UpdateChains(chains)
 		}
 		m.policyChainRefCounts[group.ChainName()] = refcnt + 1
 	}
@@ -1531,6 +1532,8 @@ func (m *endpointManager) decrefGroups(chainNames []string) {
 			// This chain just became inactive.
 			log.WithField("chainName", chainName).Debug("Policy chainName chain no longer referenced.  Removing chain.")
 			m.filterTable.RemoveChainByName(chainName)
+			m.mangleTable.RemoveChainByName(chainName)
+			m.rawTable.RemoveChainByName(chainName)
 			delete(m.policyChainRefCounts, chainName)
 			continue
 		}
