@@ -25,7 +25,18 @@ blocks:
         # Load the github access secrets.  First fix the permissions.
         - chmod 0600 /home/semaphore/.keys/git_ssh_rsa
         - ssh-add /home/semaphore/.keys/git_ssh_rsa
+        # For some reason, /mnt is 100 GB and has a qemu-nbd image file.
+        # Let's delete it and use it for our own purposes (building calico
+        # without running out of space)
+        - sudo killall qemu-nbd || true
+        - sudo rm -f /mnt/docker.qcow2
+        - sudo chown $(id -u):$(id -g) /mnt/
+        - mkdir calico
+        - sudo mount --bind /mnt calico
         # Checkout the code and unshallow it.
+        # (this is going to throw an error because it can't remove
+        # the `calico` directory, which is a mount, but it will
+        # continue anyway)
         - checkout
         - retry git fetch --quiet --unshallow
         # Semaphore mounts a copy-on-write FS as /var/lib/docker in order to provide a pre-loaded cache of
