@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2018,2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2023 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -188,8 +188,8 @@ var _ = Describe("Endpoints", func() {
 					"cali1234",
 					epMarkMapper,
 					true,
-					[]string{"ai", "bi"},
-					[]string{"ae", "be"},
+					FakeGroups([]string{"ai", "bi"}),
+					FakeGroups([]string{"ae", "be"}),
 					[]string{"prof1", "prof2"},
 				)).To(Equal(trimSMChain(kubeIPVSEnabled, []*Chain{
 					{
@@ -286,8 +286,8 @@ var _ = Describe("Endpoints", func() {
 			It("should render a host endpoint", func() {
 				Expect(renderer.HostEndpointToFilterChains("eth0",
 					epMarkMapper,
-					[]string{"ai", "bi"}, []string{"ae", "be"},
-					[]string{"afi", "bfi"}, []string{"afe", "bfe"},
+					FakeGroups([]string{"ai", "bi"}), FakeGroups([]string{"ae", "be"}),
+					FakeGroups([]string{"afi", "bfi"}), FakeGroups([]string{"afe", "bfe"}),
 					[]string{"prof1", "prof2"})).To(Equal(trimSMChain(kubeIPVSEnabled, []*Chain{
 					{
 						Name: "cali-th-eth0",
@@ -441,7 +441,9 @@ var _ = Describe("Endpoints", func() {
 			})
 
 			It("should render host endpoint raw chains with untracked policies", func() {
-				Expect(renderer.HostEndpointToRawChains("eth0", []string{"c"}, []string{"c"})).To(Equal([]*Chain{
+				Expect(renderer.HostEndpointToRawChains("eth0",
+					FakeGroups([]string{"c"}),
+					FakeGroups([]string{"c"}))).To(Equal([]*Chain{
 					{
 						Name: "cali-th-eth0",
 						Rules: []Rule{
@@ -492,7 +494,7 @@ var _ = Describe("Endpoints", func() {
 			It("should render host endpoint mangle chains with pre-DNAT policies", func() {
 				Expect(renderer.HostEndpointToMangleIngressChains(
 					"eth0",
-					[]string{"c"},
+					FakeGroups([]string{"c"}),
 				)).To(Equal([]*Chain{
 					{
 						Name: "cali-fh-eth0",
@@ -585,7 +587,7 @@ var _ = Describe("Endpoints", func() {
 			It("should render host endpoint mangle chains with pre-DNAT policies", func() {
 				Expect(renderer.HostEndpointToMangleIngressChains(
 					"eth0",
-					[]string{"c"},
+					FakeGroups([]string{"c"}),
 				)).To(Equal([]*Chain{
 					{
 						Name: "cali-fh-eth0",
