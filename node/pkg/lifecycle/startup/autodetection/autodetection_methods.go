@@ -150,7 +150,7 @@ func autoDetectCIDRByReach(dests []string, version int) *cnet.IPNet {
 	}
 }
 
-// autoDetectCIDRBySkipInterface auto-detects the first valid Network on the all interfaces
+// autoDetectCIDRBySkipInterface auto-detects the first valid Network on the interfaces
 // matching the supplied interface regexes.
 func autoDetectCIDRBySkipInterface(ifaceRegexes []string, version int) *cnet.IPNet {
 	incl := []string{}
