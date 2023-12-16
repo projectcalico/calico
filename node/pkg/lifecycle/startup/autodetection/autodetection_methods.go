@@ -140,12 +140,12 @@ func autoDetectCIDRByCIDR(matches []cnet.IPNet, version int) *cnet.IPNet {
 
 // autoDetectCIDRByReach auto-detects the IP and Network by setting up a UDP
 // connection to a "reach" address.
-func autoDetectCIDRByReach(dest []string, version int) *cnet.IPNet {
-	if cidr, err := ReachDestination(dest, version); err != nil {
-		log.Warnf("Unable to auto-detect IPv%d address by connecting to %s: %s", version, dest, err)
+func autoDetectCIDRByReach(dests []string, version int) *cnet.IPNet {
+	if cidr, err := ReachDestination(dests, version); err != nil {
+		log.Warnf("Unable to auto-detect IPv%d address by connecting to %s: %s", version, dests, err)
 		return nil
 	} else {
-		log.Infof("Using autodetected IPv%d address %s, detected by connecting to %s", version, cidr.String(), dest)
+		log.Infof("Using autodetected IPv%d address %s, detected by connecting to %s", version, cidr.String(), dests)
 		return cidr
 	}
 }
