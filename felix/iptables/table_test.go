@@ -334,10 +334,14 @@ func describeEmptyDataplaneTests(dataplaneMode string) {
 		})
 	})
 
-	Describe("after adding a chain", func() {
+	Describe("after adding a couple of chains", func() {
 		BeforeEach(func() {
 			table.UpdateChains([]*Chain{
 				{Name: "cali-foobar", Rules: []Rule{
+					{Action: AcceptAction{}},
+					{Action: DropAction{}},
+				}},
+				{Name: "cali-bazzbiff", Rules: []Rule{
 					{Action: AcceptAction{}},
 					{Action: DropAction{}},
 				}},
@@ -345,7 +349,7 @@ func describeEmptyDataplaneTests(dataplaneMode string) {
 			table.Apply()
 		})
 
-		It("it should not get programmed because it's not referenced", func() {
+		It("nothing should get programmed due to lack of references", func() {
 			Expect(dataplane.Chains).To(Equal(map[string][]string{
 				"FORWARD": {},
 				"INPUT":   {},
@@ -353,7 +357,112 @@ func describeEmptyDataplaneTests(dataplaneMode string) {
 			}))
 		})
 
-		Describe("after adding a reference from another chain", func() {
+		Describe("after adding a reference from another unreferenced chain", func() {
+			BeforeEach(func() {
+				table.UpdateChain(&Chain{
+					Name: "cali-FORWARD",
+					Rules: []Rule{
+						{Action: JumpAction{Target: "cali-foobar"}},
+					}})
+				table.Apply()
+			})
+
+			It("nothing should get programmed due to having no path back to root chain", func() {
+				Expect(dataplane.Chains).To(Equal(map[string][]string{
+					"FORWARD": {},
+					"INPUT":   {},
+					"OUTPUT":  {},
+				}))
+			})
+
+			Describe("after adding an indirect reference from an insert", func() {
+				BeforeEach(func() {
+					table.InsertOrAppendRules("FORWARD", []Rule{
+						{Action: JumpAction{Target: "cali-FORWARD"}},
+					})
+					table.Apply()
+				})
+				It("both chains should be programmed", func() {
+					Expect(dataplane.Chains).To(Equal(map[string][]string{
+						"FORWARD": {
+							"-m comment --comment \"cali:wUHhoiAYhphO9Mso\" --jump cali-FORWARD",
+						},
+						"INPUT":  {},
+						"OUTPUT": {},
+						"cali-FORWARD": {
+							"-m comment --comment \"cali:WiiHgeRwfPX6Ol7d\" --jump cali-foobar",
+						},
+						"cali-foobar": {
+							"-m comment --comment \"cali:42h7Q64_2XDzpwKe\" --jump ACCEPT",
+							"-m comment --comment \"cali:0sUFHicPNNqNyNx8\" --jump DROP",
+						},
+					}))
+				})
+
+				Describe("after deleting the inserted rule", func() {
+					BeforeEach(func() {
+						table.InsertOrAppendRules("FORWARD", nil)
+						table.Apply()
+					})
+					It("should clean up both chains", func() {
+						Expect(dataplane.Chains).To(Equal(map[string][]string{
+							"FORWARD": {},
+							"INPUT":   {},
+							"OUTPUT":  {},
+						}))
+					})
+				})
+
+				Describe("after switching the intermediate rule", func() {
+					BeforeEach(func() {
+						table.UpdateChain(&Chain{
+							Name: "cali-FORWARD",
+							Rules: []Rule{
+								{Action: JumpAction{Target: "cali-bazzbiff"}},
+							}})
+						table.Apply()
+					})
+					It("correct chain should be swapped in", func() {
+						Expect(dataplane.Chains).To(Equal(map[string][]string{
+							"FORWARD": {
+								"-m comment --comment \"cali:wUHhoiAYhphO9Mso\" --jump cali-FORWARD",
+							},
+							"INPUT":  {},
+							"OUTPUT": {},
+							"cali-FORWARD": {
+								"-m comment --comment \"cali:1pGUEVtqm3p-zY1p\" --jump cali-bazzbiff",
+							},
+							"cali-bazzbiff": {
+								"-m comment --comment \"cali:wQBCfaMfDn3BVJmT\" --jump ACCEPT",
+								"-m comment --comment \"cali:Ry8HbkntbrghgQKU\" --jump DROP",
+							},
+						}))
+					})
+				})
+
+				Describe("after removing the reference", func() {
+					BeforeEach(func() {
+						table.UpdateChain(&Chain{
+							Name:  "cali-FORWARD",
+							Rules: []Rule{},
+						})
+						table.Apply()
+					})
+					It("should clean up referred chain", func() {
+						Expect(dataplane.Chains).To(Equal(map[string][]string{
+							"FORWARD": {
+								"-m comment --comment \"cali:wUHhoiAYhphO9Mso\" --jump cali-FORWARD",
+							},
+							"INPUT":        {},
+							"OUTPUT":       {},
+							"cali-FORWARD": {},
+						}))
+					})
+				})
+			})
+		})
+
+		Describe("after adding a reference from another referenced chain", func() {
 			BeforeEach(func() {
 				table.InsertOrAppendRules("FORWARD", []Rule{
 					{Action: JumpAction{Target: "cali-FORWARD"}},
