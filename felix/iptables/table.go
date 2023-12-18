@@ -469,7 +469,7 @@ func NewTable(
 	return table
 }
 
-// Insert or Append rules based on insert mode configuration.
+// InsertOrAppendRules inserts or append rules based on the chain insert mode.
 func (t *Table) InsertOrAppendRules(chainName string, rules []Rule) {
 	t.logCxt.WithField("chainName", chainName).Debug("Updating rule insertions")
 	oldRules := t.chainToInsertedRules[chainName]
@@ -480,17 +480,19 @@ func (t *Table) InsertOrAppendRules(chainName string, rules []Rule) {
 
 	// Incref any newly-referenced chains, then decref the old ones.  By incrementing first we
 	// avoid marking a still-referenced chain as dirty.
-	t.increfReferredChains(rules)
-	t.decrefReferredChains(oldRules)
+	t.maybeIncrefReferredChains(chainName, rules)
+	t.maybeDecrefReferredChains(chainName, oldRules)
 
-	// Defensive: make sure we re-read the dataplane state before we make updates.  While the
-	// code was originally designed not to need this, we found that other users of
-	// iptables-restore can still clobber our updates so it's safest to re-read the state before
-	// each write.
+	// Defensive: updates to insert/append is very rare and the top-level
+	// chains are contended with other apps.  Make sure we re-read the state
+	// of the chains before updating them.
 	t.InvalidateDataplaneCache("insertion")
 }
 
-// Append rules.
+// AppendRules sets the rules to be appended to a given non-Calico chain.
+// These rules are always appended, even if chain insert mode is "insert".
+// If chain insert mode is "append", these rules are appended after any
+// rules added with InsertOrAppendRules.
 func (t *Table) AppendRules(chainName string, rules []Rule) {
 	t.logCxt.WithField("chainName", chainName).Debug("Updating rule appends")
 	oldRules := t.chainToAppendedRules[chainName]
@@ -501,13 +503,12 @@ func (t *Table) AppendRules(chainName string, rules []Rule) {
 
 	// Incref any newly-referenced chains, then decref the old ones.  By incrementing first we
 	// avoid marking a still-referenced chain as dirty.
-	t.increfReferredChains(rules)
-	t.decrefReferredChains(oldRules)
+	t.maybeIncrefReferredChains(chainName, rules)
+	t.maybeDecrefReferredChains(chainName, oldRules)
 
-	// Defensive: make sure we re-read the dataplane state before we make updates.  While the
-	// code was originally designed not to need this, we found that other users of
-	// iptables-restore can still clobber out updates so it's safest to re-read the state before
-	// each write.
+	// Defensive: updates to insert/append is very rare and the top-level
+	// chains are contended with other apps.  Make sure we re-read the state
+	// of the chains before updating them.
 	t.InvalidateDataplaneCache("insertion")
 }
 
@@ -523,10 +524,10 @@ func (t *Table) UpdateChain(chain *Chain) {
 
 	// Incref any newly-referenced chains, then decref the old ones.  By incrementing first we
 	// avoid marking a still-referenced chain as dirty.
-	t.increfReferredChains(chain.Rules)
+	t.maybeIncrefReferredChains(chain.Name, chain.Rules)
 	if oldChain := t.chainNameToChain[chain.Name]; oldChain != nil {
 		oldNumRules = len(oldChain.Rules)
-		t.decrefReferredChains(oldChain.Rules)
+		t.maybeDecrefReferredChains(chain.Name, oldChain.Rules)
 	}
 	t.chainNameToChain[chain.Name] = chain
 	numRulesDelta := len(chain.Rules) - oldNumRules
@@ -552,6 +553,7 @@ func (t *Table) RemoveChainByName(name string) {
 	t.logCxt.WithField("chainName", name).Debug("Removing chain from available set.")
 	if oldChain, known := t.chainNameToChain[name]; known {
 		t.gaugeNumRules.Sub(float64(len(oldChain.Rules)))
+		t.maybeDecrefReferredChains(name, oldChain.Rules)
 		delete(t.chainNameToChain, name)
 		if t.chainIsReferenced(name) {
 			t.dirtyChains.Add(name)
@@ -562,7 +564,6 @@ func (t *Table) RemoveChainByName(name string) {
 			// each write.
 			t.InvalidateDataplaneCache("chain removal")
 		}
-		t.decrefReferredChains(oldChain.Rules)
 	}
 }
 
@@ -570,9 +571,13 @@ func (t *Table) chainIsReferenced(name string) bool {
 	return t.chainRefCounts[name] > 0
 }
 
-// increfReferredChains finds all the chains that the given rules refer to  (i.e. have jumps/gotos to) and
-// increments their refcount.
-func (t *Table) increfReferredChains(rules []Rule) {
+// maybeIncrefReferredChains checks whether the named chain is referenced;
+// if so, it increfs all child chains.  If a child chain becomes newly
+// referenced, its children are increffed recursively.
+func (t *Table) maybeIncrefReferredChains(chainName string, rules []Rule) {
+	if !t.chainIsReferenced(chainName) {
+		return
+	}
 	for _, r := range rules {
 		if ref, ok := r.Action.(Referrer); ok {
 			t.increfChain(ref.ReferencedChain())
@@ -580,9 +585,13 @@ func (t *Table) increfReferredChains(rules []Rule) {
 	}
 }
 
-// decrefReferredChains finds all the chains that the given rules refer to (i.e. have jumps/gotos to) and
-// decrements their refcount.
-func (t *Table) decrefReferredChains(rules []Rule) {
+// maybeDecrefReferredChains checks whether the named chain is referenced;
+// if so, it decrefs all child chains.  If a child chain becomes newly
+// unreferenced, its children are decreffed recursively.
+func (t *Table) maybeDecrefReferredChains(chainName string, rules []Rule) {
+	if !t.chainIsReferenced(chainName) {
+		return
+	}
 	for _, r := range rules {
 		if ref, ok := r.Action.(Referrer); ok {
 			t.decrefChain(ref.ReferencedChain())
@@ -598,6 +607,12 @@ func (t *Table) increfChain(chainName string) {
 	if t.chainRefCounts[chainName] == 1 {
 		t.updateRateLimitedLog.WithField("chainName", chainName).Info("Chain became referenced, marking it for programming")
 		t.dirtyChains.Add(chainName)
+		if chain := t.chainNameToChain[chainName]; chain != nil {
+			// Recursively incref chains that this chain refers to.  If
+			// chain == nil then the chain is likely about to be added, in
+			// which case we'll handle this whe the chain is added.
+			t.maybeIncrefReferredChains(chainName, chain.Rules)
+		}
 	}
 }
 
@@ -605,12 +620,21 @@ func (t *Table) increfChain(chainName string) {
 // marks the chain dirty so it will be cleaned up.
 func (t *Table) decrefChain(chainName string) {
 	log.WithField("chainName", chainName).Debug("Decref chain")
-	t.chainRefCounts[chainName] -= 1
-	if t.chainRefCounts[chainName] == 0 {
+	if t.chainRefCounts[chainName] == 1 {
 		t.updateRateLimitedLog.WithField("chainName", chainName).Info("Chain no longer referenced, marking it for removal")
+		if chain := t.chainNameToChain[chainName]; chain != nil {
+			// Recursively decref chains that this chain refers to.  If
+			// chain == nil then the chain has probably already been deleted
+			// in which case we'll already have done the decrefs.
+			t.maybeDecrefReferredChains(chainName, chain.Rules)
+		}
 		delete(t.chainRefCounts, chainName)
 		t.dirtyChains.Add(chainName)
+		return
 	}
+
+	// Chain still referenced, just decrement.
+	t.chainRefCounts[chainName] -= 1
 }
 
 func (t *Table) loadDataplaneState() {
