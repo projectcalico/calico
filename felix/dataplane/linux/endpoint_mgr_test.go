@@ -72,12 +72,12 @@ var wlDispatchEmpty = []*iptables.Chain{
 	{
 		Name: "cali-set-endpoint-mark",
 		Rules: []iptables.Rule{
-			iptables.Rule{
+			{
 				Match:   iptables.Match().InInterface("cali+"),
 				Action:  iptables.DropAction{},
 				Comment: []string{"Unknown endpoint"},
 			},
-			iptables.Rule{
+			{
 				Match:   iptables.Match().InInterface("tap+"),
 				Action:  iptables.DropAction{},
 				Comment: []string{"Unknown endpoint"},
@@ -275,17 +275,12 @@ func chainsForIfaces(ifaceMetadata []string,
 		}
 		outRules = append(outRules, iptables.Rule{
 			Match:  iptables.Match(),
-			Action: iptables.ClearMarkAction{Mark: 8},
+			Action: iptables.ClearMarkAction{Mark: 0x18},
 		})
 		if !host {
 			outRules = append(outRules, dropEncapRules...)
 		}
 		if egress && polName != "" && tableKind == ifaceKind {
-			outRules = append(outRules, iptables.Rule{
-				Match:   iptables.Match(),
-				Action:  iptables.ClearMarkAction{Mark: 16},
-				Comment: []string{"Start of policies"},
-			})
 			outRules = append(outRules, iptables.Rule{
 				Match:  iptables.Match().MarkClear(16),
 				Action: iptables.JumpAction{Target: "cali-po-" + polName},
@@ -358,14 +353,9 @@ func chainsForIfaces(ifaceMetadata []string,
 		}
 		inRules = append(inRules, iptables.Rule{
 			Match:  iptables.Match(),
-			Action: iptables.ClearMarkAction{Mark: 8},
+			Action: iptables.ClearMarkAction{Mark: 0x18},
 		})
 		if ingress && polName != "" && tableKind == ifaceKind {
-			inRules = append(inRules, iptables.Rule{
-				Match:   iptables.Match(),
-				Action:  iptables.ClearMarkAction{Mark: 16},
-				Comment: []string{"Start of policies"},
-			})
 			// For untracked policy, we expect a tier with a policy in it.
 			inRules = append(inRules, iptables.Rule{
 				Match:  iptables.Match().MarkClear(16),
@@ -473,7 +463,7 @@ func chainsForIfaces(ifaceMetadata []string,
 				&iptables.Chain{
 					Name: epMarkSetOnePrefix + ifaceName,
 					Rules: []iptables.Rule{
-						iptables.Rule{
+						{
 							Action: iptables.SetMaskedMarkAction{Mark: epMark, Mask: epMarkMapper.GetMask()},
 						},
 					},
@@ -826,7 +816,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 				})
 				rawTable.checkChains([][]*iptables.Chain{
 					hostDispatchEmptyNormal,
-					[]*iptables.Chain{{
+					{{
 						Name:  "cali-rpf-skip",
 						Rules: []iptables.Rule{},
 					}},
@@ -873,6 +863,122 @@ func endpointManagerTests(ipVersion uint8) func() {
 			It("should have empty dispatch chains", expectEmptyChains())
 			It("should make no status reports", func() {
 				Expect(statusReportRec.currentState).To(BeEmpty())
+			})
+
+			Describe("with some policy selectors recorded", func() {
+				JustBeforeEach(func() {
+					epMgr.OnUpdate(&proto.ActivePolicyUpdate{
+						Id:     &proto.PolicyID{Tier: "default", Name: "polA1"},
+						Policy: &proto.Policy{OriginalSelector: "has(a)"},
+					})
+					epMgr.OnUpdate(&proto.ActivePolicyUpdate{
+						Id:     &proto.PolicyID{Tier: "default", Name: "polA2"},
+						Policy: &proto.Policy{OriginalSelector: "has(a)"},
+					})
+					epMgr.OnUpdate(&proto.ActivePolicyUpdate{
+						Id:     &proto.PolicyID{Tier: "default", Name: "polB1"},
+						Policy: &proto.Policy{OriginalSelector: "has(b)"},
+					})
+					epMgr.OnUpdate(&proto.ActivePolicyUpdate{
+						Id:     &proto.PolicyID{Tier: "default", Name: "polB2"},
+						Policy: &proto.Policy{OriginalSelector: "has(b)"},
+					})
+				})
+
+				It("should 'group' a single policy", func() {
+					Expect(epMgr.groupPolicies(
+						"default",
+						[]string{"polA1"},
+						rules.PolicyDirectionIngress,
+					)).To(Equal([]*rules.PolicyGroup{
+						{
+							Tier:        "default",
+							Direction:   rules.PolicyDirectionIngress,
+							PolicyNames: []string{"polA1"},
+							Selector:    "has(a)",
+						},
+					}))
+				})
+				It("should 'group' a pair of policies same selector", func() {
+					Expect(epMgr.groupPolicies(
+						"default",
+						[]string{"polA1", "polA2"},
+						rules.PolicyDirectionIngress,
+					)).To(Equal([]*rules.PolicyGroup{
+						{
+							Tier:        "default",
+							Direction:   rules.PolicyDirectionIngress,
+							PolicyNames: []string{"polA1", "polA2"},
+							Selector:    "has(a)",
+						},
+					}))
+				})
+				It("should 'group' a pair of policies different selector", func() {
+					Expect(epMgr.groupPolicies(
+						"default",
+						[]string{"polA1", "polB1"},
+						rules.PolicyDirectionIngress,
+					)).To(Equal([]*rules.PolicyGroup{
+						{
+							Tier:        "default",
+							Direction:   rules.PolicyDirectionIngress,
+							PolicyNames: []string{"polA1"},
+							Selector:    "has(a)",
+						},
+						{
+							Tier:        "default",
+							Direction:   rules.PolicyDirectionIngress,
+							PolicyNames: []string{"polB1"},
+							Selector:    "has(b)",
+						},
+					}))
+				})
+				It("should 'group' two pairs", func() {
+					Expect(epMgr.groupPolicies(
+						"default",
+						[]string{"polA1", "polA2", "polB1", "polB2"},
+						rules.PolicyDirectionIngress,
+					)).To(Equal([]*rules.PolicyGroup{
+						{
+							Tier:        "default",
+							Direction:   rules.PolicyDirectionIngress,
+							PolicyNames: []string{"polA1", "polA2"},
+							Selector:    "has(a)",
+						},
+						{
+							Tier:        "default",
+							Direction:   rules.PolicyDirectionIngress,
+							PolicyNames: []string{"polB1", "polB2"},
+							Selector:    "has(b)",
+						},
+					}))
+				})
+				It("should 'group' mixed", func() {
+					Expect(epMgr.groupPolicies(
+						"default",
+						[]string{"polA1", "polB1", "polB2", "polA2"},
+						rules.PolicyDirectionIngress,
+					)).To(Equal([]*rules.PolicyGroup{
+						{
+							Tier:        "default",
+							Direction:   rules.PolicyDirectionIngress,
+							PolicyNames: []string{"polA1"},
+							Selector:    "has(a)",
+						},
+						{
+							Tier:        "default",
+							Direction:   rules.PolicyDirectionIngress,
+							PolicyNames: []string{"polB1", "polB2"},
+							Selector:    "has(b)",
+						},
+						{
+							Tier:        "default",
+							Direction:   rules.PolicyDirectionIngress,
+							PolicyNames: []string{"polA2"},
+							Selector:    "has(a)",
+						},
+					}))
+				})
 			})
 
 			Describe("with * host endpoint", func() {
@@ -1514,7 +1620,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 
 				Context("with policy", func() {
 					BeforeEach(func() {
-						tiers = []*proto.TierInfo{&proto.TierInfo{
+						tiers = []*proto.TierInfo{{
 							Name:            "default",
 							IngressPolicies: []string{"policy1"},
 							EgressPolicies:  []string{"policy1"},
@@ -1626,7 +1732,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 
 				Context("with ingress-only policy", func() {
 					BeforeEach(func() {
-						tiers = []*proto.TierInfo{&proto.TierInfo{
+						tiers = []*proto.TierInfo{{
 							Name:            "default",
 							IngressPolicies: []string{"policy1"},
 						}}
@@ -1637,7 +1743,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 
 				Context("with egress-only policy", func() {
 					BeforeEach(func() {
-						tiers = []*proto.TierInfo{&proto.TierInfo{
+						tiers = []*proto.TierInfo{{
 							Name:           "default",
 							EgressPolicies: []string{"policy1"},
 						}}
@@ -1957,7 +2063,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 					}
 					rawTable.checkChains([][]*iptables.Chain{hostDispatchEmptyNormal, {
 						&iptables.Chain{Name: rules.ChainRpfSkip, Rules: []iptables.Rule{
-							iptables.Rule{
+							{
 								Match:  iptables.Match().InInterface("cali23456-cd").SourceNet("8.8.8.8/32"),
 								Action: iptables.AcceptAction{},
 							},
@@ -1988,7 +2094,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 					}
 					rawTable.checkChains([][]*iptables.Chain{hostDispatchEmptyNormal, {
 						&iptables.Chain{Name: rules.ChainRpfSkip, Rules: []iptables.Rule{
-							iptables.Rule{
+							{
 								Match:  iptables.Match().InInterface("cali23456-cd").SourceNet("8.8.8.8/32"),
 								Action: iptables.AcceptAction{},
 							}}},
