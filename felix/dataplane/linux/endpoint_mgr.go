@@ -1513,7 +1513,6 @@ func (m *endpointManager) increfGroups(groups []*rules.PolicyGroup) {
 		refcnt := m.policyChainRefCounts[group.ChainName()]
 		if refcnt == 0 {
 			// This group just became active.
-			// FIXME: Table only does one level of ref counting so this will activate policies in the wrong tables.
 			chains := m.ruleRenderer.PolicyGroupToIptablesChains(group)
 			m.filterTable.UpdateChains(chains)
 			m.mangleTable.UpdateChains(chains)
