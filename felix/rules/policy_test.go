@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2023 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -1103,10 +1103,6 @@ var _ = Describe("rule metadata tests", func() {
 							"Policy long-policy-name-that-gets-hashed ingress",
 						},
 					},
-					{
-						Match:  iptables.Match().MarkSingleBitSet(0x80),
-						Action: iptables.ReturnAction{},
-					},
 				},
 			},
 			&iptables.Chain{
@@ -1142,10 +1138,6 @@ var _ = Describe("rule metadata tests", func() {
 						Comment: []string{
 							"Profile long-policy-name-that-gets-hashed ingress",
 						},
-					},
-					{
-						Match:  iptables.Match().MarkSingleBitSet(0x80),
-						Action: iptables.ReturnAction{},
 					},
 				},
 			},
