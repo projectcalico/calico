@@ -518,7 +518,7 @@ func (t *Table) UpdateChains(chains []*Chain) {
 }
 
 func (t *Table) UpdateChain(chain *Chain) {
-	t.updateRateLimitedLog.WithField("chainName", chain.Name).Info("Queueing update of chain.")
+	t.logCxt.WithField("chainName", chain.Name).Debug("Adding chain to available set.")
 	oldNumRules := 0
 
 	// Incref any newly-referenced chains, then decref the old ones.  By incrementing first we
@@ -531,15 +531,15 @@ func (t *Table) UpdateChain(chain *Chain) {
 	t.chainNameToChain[chain.Name] = chain
 	numRulesDelta := len(chain.Rules) - oldNumRules
 	t.gaugeNumRules.Add(float64(numRulesDelta))
-	if t.chainRefCounts[chain.Name] > 0 {
+	if t.chainIsReferenced(chain.Name) {
 		t.dirtyChains.Add(chain.Name)
-	}
 
-	// Defensive: make sure we re-read the dataplane state before we make updates.  While the
-	// code was originally designed not to need this, we found that other users of
-	// iptables-restore can still clobber our updates so it's safest to re-read the state before
-	// each write.
-	t.InvalidateDataplaneCache("chain update")
+		// Defensive: make sure we re-read the dataplane state before we make updates.  While the
+		// code was originally designed not to need this, we found that other users of
+		// iptables-restore can still clobber our updates so it's safest to re-read the state before
+		// each write.
+		t.InvalidateDataplaneCache("chain update")
+	}
 }
 
 func (t *Table) RemoveChains(chains []*Chain) {
@@ -549,21 +549,25 @@ func (t *Table) RemoveChains(chains []*Chain) {
 }
 
 func (t *Table) RemoveChainByName(name string) {
-	t.updateRateLimitedLog.WithField("chainName", name).Debug("Queuing deletion of chain.")
+	t.logCxt.WithField("chainName", name).Debug("Removing chain from available set.")
 	if oldChain, known := t.chainNameToChain[name]; known {
 		t.gaugeNumRules.Sub(float64(len(oldChain.Rules)))
 		delete(t.chainNameToChain, name)
-		if t.chainRefCounts[name] > 0 {
+		if t.chainIsReferenced(name) {
 			t.dirtyChains.Add(name)
+
+			// Defensive: make sure we re-read the dataplane state before we make updates.  While the
+			// code was originally designed not to need this, we found that other users of
+			// iptables-restore can still clobber out updates so it's safest to re-read the state before
+			// each write.
+			t.InvalidateDataplaneCache("chain removal")
 		}
 		t.decrefReferredChains(oldChain.Rules)
 	}
+}
 
-	// Defensive: make sure we re-read the dataplane state before we make updates.  While the
-	// code was originally designed not to need this, we found that other users of
-	// iptables-restore can still clobber out updates so it's safest to re-read the state before
-	// each write.
-	t.InvalidateDataplaneCache("chain removal")
+func (t *Table) chainIsReferenced(name string) bool {
+	return t.chainRefCounts[name] > 0
 }
 
 // increfReferredChains finds all the chains that the given rules refer to  (i.e. have jumps/gotos to) and
@@ -1464,7 +1468,7 @@ func (t *Table) InsertRulesNow(chain string, rules []Rule) error {
 // desiredStateOfChain returns the given chain, if and only if it exists in the cache and it is referenced by some
 // other chain.  If the chain doesn't exist or it is not referenced, returns nil and false.
 func (t *Table) desiredStateOfChain(chainName string) (chain *Chain, present bool) {
-	if t.chainRefCounts[chainName] == 0 {
+	if !t.chainIsReferenced(chainName) {
 		return
 	}
 	chain, present = t.chainNameToChain[chainName]
