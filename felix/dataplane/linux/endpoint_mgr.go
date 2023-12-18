@@ -1478,7 +1478,7 @@ func (m *endpointManager) groupPolicies(tierName string, names []string, directi
 	if len(names) == 0 {
 		return nil
 	}
-	group := rules.PolicyGroup{
+	group := &rules.PolicyGroup{
 		Tier:        tierName,
 		Direction:   direction,
 		PolicyNames: []string{names[0]},
@@ -1487,18 +1487,19 @@ func (m *endpointManager) groupPolicies(tierName string, names []string, directi
 			Name: names[0],
 		}],
 	}
-	groups := []*rules.PolicyGroup{&group}
+	groups := []*rules.PolicyGroup{group}
 	for _, name := range names[1:] {
 		sel := m.activePolicySelectors[proto.PolicyID{
 			Tier: tierName,
-			Name: names[0],
+			Name: name,
 		}]
 		if sel != group.Selector {
-			group = rules.PolicyGroup{
-				Tier:     tierName,
-				Selector: sel,
+			group = &rules.PolicyGroup{
+				Tier:      tierName,
+				Direction: direction,
+				Selector:  sel,
 			}
-			groups = append(groups, &group)
+			groups = append(groups, group)
 		}
 		group.PolicyNames = append(group.PolicyNames, name)
 	}

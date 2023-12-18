@@ -865,6 +865,122 @@ func endpointManagerTests(ipVersion uint8) func() {
 				Expect(statusReportRec.currentState).To(BeEmpty())
 			})
 
+			Describe("with some policy selectors recorded", func() {
+				JustBeforeEach(func() {
+					epMgr.OnUpdate(&proto.ActivePolicyUpdate{
+						Id:     &proto.PolicyID{Tier: "default", Name: "polA1"},
+						Policy: &proto.Policy{OriginalSelector: "has(a)"},
+					})
+					epMgr.OnUpdate(&proto.ActivePolicyUpdate{
+						Id:     &proto.PolicyID{Tier: "default", Name: "polA2"},
+						Policy: &proto.Policy{OriginalSelector: "has(a)"},
+					})
+					epMgr.OnUpdate(&proto.ActivePolicyUpdate{
+						Id:     &proto.PolicyID{Tier: "default", Name: "polB1"},
+						Policy: &proto.Policy{OriginalSelector: "has(b)"},
+					})
+					epMgr.OnUpdate(&proto.ActivePolicyUpdate{
+						Id:     &proto.PolicyID{Tier: "default", Name: "polB2"},
+						Policy: &proto.Policy{OriginalSelector: "has(b)"},
+					})
+				})
+
+				It("should 'group' a single policy", func() {
+					Expect(epMgr.groupPolicies(
+						"default",
+						[]string{"polA1"},
+						rules.PolicyDirectionIngress,
+					)).To(Equal([]*rules.PolicyGroup{
+						{
+							Tier:        "default",
+							Direction:   rules.PolicyDirectionIngress,
+							PolicyNames: []string{"polA1"},
+							Selector:    "has(a)",
+						},
+					}))
+				})
+				It("should 'group' a pair of policies same selector", func() {
+					Expect(epMgr.groupPolicies(
+						"default",
+						[]string{"polA1", "polA2"},
+						rules.PolicyDirectionIngress,
+					)).To(Equal([]*rules.PolicyGroup{
+						{
+							Tier:        "default",
+							Direction:   rules.PolicyDirectionIngress,
+							PolicyNames: []string{"polA1", "polA2"},
+							Selector:    "has(a)",
+						},
+					}))
+				})
+				It("should 'group' a pair of policies different selector", func() {
+					Expect(epMgr.groupPolicies(
+						"default",
+						[]string{"polA1", "polB1"},
+						rules.PolicyDirectionIngress,
+					)).To(Equal([]*rules.PolicyGroup{
+						{
+							Tier:        "default",
+							Direction:   rules.PolicyDirectionIngress,
+							PolicyNames: []string{"polA1"},
+							Selector:    "has(a)",
+						},
+						{
+							Tier:        "default",
+							Direction:   rules.PolicyDirectionIngress,
+							PolicyNames: []string{"polB1"},
+							Selector:    "has(b)",
+						},
+					}))
+				})
+				It("should 'group' two pairs", func() {
+					Expect(epMgr.groupPolicies(
+						"default",
+						[]string{"polA1", "polA2", "polB1", "polB2"},
+						rules.PolicyDirectionIngress,
+					)).To(Equal([]*rules.PolicyGroup{
+						{
+							Tier:        "default",
+							Direction:   rules.PolicyDirectionIngress,
+							PolicyNames: []string{"polA1", "polA2"},
+							Selector:    "has(a)",
+						},
+						{
+							Tier:        "default",
+							Direction:   rules.PolicyDirectionIngress,
+							PolicyNames: []string{"polB1", "polB2"},
+							Selector:    "has(b)",
+						},
+					}))
+				})
+				It("should 'group' mixed", func() {
+					Expect(epMgr.groupPolicies(
+						"default",
+						[]string{"polA1", "polB1", "polB2", "polA2"},
+						rules.PolicyDirectionIngress,
+					)).To(Equal([]*rules.PolicyGroup{
+						{
+							Tier:        "default",
+							Direction:   rules.PolicyDirectionIngress,
+							PolicyNames: []string{"polA1"},
+							Selector:    "has(a)",
+						},
+						{
+							Tier:        "default",
+							Direction:   rules.PolicyDirectionIngress,
+							PolicyNames: []string{"polB1", "polB2"},
+							Selector:    "has(b)",
+						},
+						{
+							Tier:        "default",
+							Direction:   rules.PolicyDirectionIngress,
+							PolicyNames: []string{"polA2"},
+							Selector:    "has(a)",
+						},
+					}))
+				})
+			})
+
 			Describe("with * host endpoint", func() {
 				JustBeforeEach(configureHostEp(&hostEpSpec{
 					id:      "id1",
