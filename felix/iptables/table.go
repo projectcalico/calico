@@ -469,7 +469,10 @@ func NewTable(
 	return table
 }
 
-// InsertOrAppendRules inserts or append rules based on the chain insert mode.
+// InsertOrAppendRules sets the rules that should be inserted into or appended
+// to the given non-Calico chain (depending on the chain insert mode).  See
+// also AppendRules, which can be used to record additional rules that are
+// always appended.
 func (t *Table) InsertOrAppendRules(chainName string, rules []Rule) {
 	t.logCxt.WithField("chainName", chainName).Debug("Updating rule insertions")
 	oldRules := t.chainToInsertedRules[chainName]
