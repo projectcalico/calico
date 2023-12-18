@@ -126,6 +126,18 @@ var toHostDispatchEmpty = []*iptables.Chain{
 	},
 }
 
+var wlEPID1 = proto.WorkloadEndpointID{
+	OrchestratorId: "k8s",
+	WorkloadId:     "pod-11",
+	EndpointId:     "endpoint-id-11",
+}
+
+var wlEPID2 = proto.WorkloadEndpointID{
+	OrchestratorId: "k8s",
+	WorkloadId:     "pod-12",
+	EndpointId:     "endpoint-id-12",
+}
+
 func hostChainsForIfaces(ifaceMetadata []string, epMarkMapper rules.EndpointMarkMapper) []*iptables.Chain {
 	return append(chainsForIfaces(ifaceMetadata, epMarkMapper, true, "normal", false, iptables.AcceptAction{}),
 		chainsForIfaces(ifaceMetadata, epMarkMapper, true, "applyOnForward", false, iptables.AcceptAction{})...,
@@ -865,122 +877,6 @@ func endpointManagerTests(ipVersion uint8) func() {
 				Expect(statusReportRec.currentState).To(BeEmpty())
 			})
 
-			Describe("with some policy selectors recorded", func() {
-				JustBeforeEach(func() {
-					epMgr.OnUpdate(&proto.ActivePolicyUpdate{
-						Id:     &proto.PolicyID{Tier: "default", Name: "polA1"},
-						Policy: &proto.Policy{OriginalSelector: "has(a)"},
-					})
-					epMgr.OnUpdate(&proto.ActivePolicyUpdate{
-						Id:     &proto.PolicyID{Tier: "default", Name: "polA2"},
-						Policy: &proto.Policy{OriginalSelector: "has(a)"},
-					})
-					epMgr.OnUpdate(&proto.ActivePolicyUpdate{
-						Id:     &proto.PolicyID{Tier: "default", Name: "polB1"},
-						Policy: &proto.Policy{OriginalSelector: "has(b)"},
-					})
-					epMgr.OnUpdate(&proto.ActivePolicyUpdate{
-						Id:     &proto.PolicyID{Tier: "default", Name: "polB2"},
-						Policy: &proto.Policy{OriginalSelector: "has(b)"},
-					})
-				})
-
-				It("should 'group' a single policy", func() {
-					Expect(epMgr.groupPolicies(
-						"default",
-						[]string{"polA1"},
-						rules.PolicyDirectionIngress,
-					)).To(Equal([]*rules.PolicyGroup{
-						{
-							Tier:        "default",
-							Direction:   rules.PolicyDirectionIngress,
-							PolicyNames: []string{"polA1"},
-							Selector:    "has(a)",
-						},
-					}))
-				})
-				It("should 'group' a pair of policies same selector", func() {
-					Expect(epMgr.groupPolicies(
-						"default",
-						[]string{"polA1", "polA2"},
-						rules.PolicyDirectionIngress,
-					)).To(Equal([]*rules.PolicyGroup{
-						{
-							Tier:        "default",
-							Direction:   rules.PolicyDirectionIngress,
-							PolicyNames: []string{"polA1", "polA2"},
-							Selector:    "has(a)",
-						},
-					}))
-				})
-				It("should 'group' a pair of policies different selector", func() {
-					Expect(epMgr.groupPolicies(
-						"default",
-						[]string{"polA1", "polB1"},
-						rules.PolicyDirectionIngress,
-					)).To(Equal([]*rules.PolicyGroup{
-						{
-							Tier:        "default",
-							Direction:   rules.PolicyDirectionIngress,
-							PolicyNames: []string{"polA1"},
-							Selector:    "has(a)",
-						},
-						{
-							Tier:        "default",
-							Direction:   rules.PolicyDirectionIngress,
-							PolicyNames: []string{"polB1"},
-							Selector:    "has(b)",
-						},
-					}))
-				})
-				It("should 'group' two pairs", func() {
-					Expect(epMgr.groupPolicies(
-						"default",
-						[]string{"polA1", "polA2", "polB1", "polB2"},
-						rules.PolicyDirectionIngress,
-					)).To(Equal([]*rules.PolicyGroup{
-						{
-							Tier:        "default",
-							Direction:   rules.PolicyDirectionIngress,
-							PolicyNames: []string{"polA1", "polA2"},
-							Selector:    "has(a)",
-						},
-						{
-							Tier:        "default",
-							Direction:   rules.PolicyDirectionIngress,
-							PolicyNames: []string{"polB1", "polB2"},
-							Selector:    "has(b)",
-						},
-					}))
-				})
-				It("should 'group' mixed", func() {
-					Expect(epMgr.groupPolicies(
-						"default",
-						[]string{"polA1", "polB1", "polB2", "polA2"},
-						rules.PolicyDirectionIngress,
-					)).To(Equal([]*rules.PolicyGroup{
-						{
-							Tier:        "default",
-							Direction:   rules.PolicyDirectionIngress,
-							PolicyNames: []string{"polA1"},
-							Selector:    "has(a)",
-						},
-						{
-							Tier:        "default",
-							Direction:   rules.PolicyDirectionIngress,
-							PolicyNames: []string{"polB1", "polB2"},
-							Selector:    "has(b)",
-						},
-						{
-							Tier:        "default",
-							Direction:   rules.PolicyDirectionIngress,
-							PolicyNames: []string{"polA2"},
-							Selector:    "has(a)",
-						},
-					}))
-				})
-			})
-
 			Describe("with * host endpoint", func() {
 				JustBeforeEach(configureHostEp(&hostEpSpec{
 					id:      "id1",
@@ -1591,11 +1487,6 @@ func endpointManagerTests(ipVersion uint8) func() {
 
 		Describe("workload endpoints", func() {
 			Context("with a workload endpoint", func() {
-				wlEPID1 := proto.WorkloadEndpointID{
-					OrchestratorId: "k8s",
-					WorkloadId:     "pod-11",
-					EndpointId:     "endpoint-id-11",
-				}
 				var tiers []*proto.TierInfo
 
 				BeforeEach(func() {
@@ -2164,12 +2055,325 @@ func endpointManagerTests(ipVersion uint8) func() {
 			})
 		})
 
+		Describe("policy grouping tests", func() {
+			JustBeforeEach(func() {
+				epMgr.OnUpdate(&proto.ActivePolicyUpdate{
+					Id:     &proto.PolicyID{Tier: "default", Name: "polA1"},
+					Policy: &proto.Policy{OriginalSelector: "has(a)"},
+				})
+				epMgr.OnUpdate(&proto.ActivePolicyUpdate{
+					Id:     &proto.PolicyID{Tier: "default", Name: "polA2"},
+					Policy: &proto.Policy{OriginalSelector: "has(a)"},
+				})
+				epMgr.OnUpdate(&proto.ActivePolicyUpdate{
+					Id:     &proto.PolicyID{Tier: "default", Name: "polB1"},
+					Policy: &proto.Policy{OriginalSelector: "has(b)"},
+				})
+				epMgr.OnUpdate(&proto.ActivePolicyUpdate{
+					Id:     &proto.PolicyID{Tier: "default", Name: "polB2"},
+					Policy: &proto.Policy{OriginalSelector: "has(b)"},
+				})
+				epMgr.OnUpdate(&proto.ActivePolicyUpdate{
+					Id:     &proto.PolicyID{Tier: "default", Name: "polC1"},
+					Policy: &proto.Policy{OriginalSelector: "has(c)"},
+				})
+			})
+
+			It("should 'group' a single policy", func() {
+				Expect(epMgr.groupPolicies(
+					"default",
+					[]string{"polA1"},
+					rules.PolicyDirectionIngress,
+				)).To(Equal([]*rules.PolicyGroup{
+					{
+						Tier:        "default",
+						Direction:   rules.PolicyDirectionIngress,
+						PolicyNames: []string{"polA1"},
+						Selector:    "has(a)",
+					},
+				}))
+			})
+			It("should 'group' a pair of policies same selector", func() {
+				Expect(epMgr.groupPolicies(
+					"default",
+					[]string{"polA1", "polA2"},
+					rules.PolicyDirectionIngress,
+				)).To(Equal([]*rules.PolicyGroup{
+					{
+						Tier:        "default",
+						Direction:   rules.PolicyDirectionIngress,
+						PolicyNames: []string{"polA1", "polA2"},
+						Selector:    "has(a)",
+					},
+				}))
+			})
+			It("should 'group' a pair of policies different selector", func() {
+				Expect(epMgr.groupPolicies(
+					"default",
+					[]string{"polA1", "polB1"},
+					rules.PolicyDirectionIngress,
+				)).To(Equal([]*rules.PolicyGroup{
+					{
+						Tier:        "default",
+						Direction:   rules.PolicyDirectionIngress,
+						PolicyNames: []string{"polA1"},
+						Selector:    "has(a)",
+					},
+					{
+						Tier:        "default",
+						Direction:   rules.PolicyDirectionIngress,
+						PolicyNames: []string{"polB1"},
+						Selector:    "has(b)",
+					},
+				}))
+			})
+			It("should 'group' two pairs", func() {
+				Expect(epMgr.groupPolicies(
+					"default",
+					[]string{"polA1", "polA2", "polB1", "polB2"},
+					rules.PolicyDirectionIngress,
+				)).To(Equal([]*rules.PolicyGroup{
+					{
+						Tier:        "default",
+						Direction:   rules.PolicyDirectionIngress,
+						PolicyNames: []string{"polA1", "polA2"},
+						Selector:    "has(a)",
+					},
+					{
+						Tier:        "default",
+						Direction:   rules.PolicyDirectionIngress,
+						PolicyNames: []string{"polB1", "polB2"},
+						Selector:    "has(b)",
+					},
+				}))
+			})
+			It("should 'group' mixed", func() {
+				Expect(epMgr.groupPolicies(
+					"default",
+					[]string{"polA1", "polB1", "polB2", "polA2"},
+					rules.PolicyDirectionIngress,
+				)).To(Equal([]*rules.PolicyGroup{
+					{
+						Tier:        "default",
+						Direction:   rules.PolicyDirectionIngress,
+						PolicyNames: []string{"polA1"},
+						Selector:    "has(a)",
+					},
+					{
+						Tier:        "default",
+						Direction:   rules.PolicyDirectionIngress,
+						PolicyNames: []string{"polB1", "polB2"},
+						Selector:    "has(b)",
+					},
+					{
+						Tier:        "default",
+						Direction:   rules.PolicyDirectionIngress,
+						PolicyNames: []string{"polA2"},
+						Selector:    "has(a)",
+					},
+				}))
+			})
+
+			Describe("after adding two WEPs with shared policies", func() {
+				JustBeforeEach(func() {
+					epMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
+						Id: &wlEPID1,
+						Endpoint: &proto.WorkloadEndpoint{
+							State:      "active",
+							Mac:        "01:02:03:04:05:06",
+							Name:       "cali12345-ab",
+							ProfileIds: []string{},
+							Tiers: []*proto.TierInfo{
+								{
+									Name: "default",
+									IngressPolicies: []string{
+										"polA1",
+										"polA2",
+										"polB1",
+										"polB2",
+									},
+									EgressPolicies: []string{
+										"polA1",
+										"polB1",
+										"polB2",
+									},
+								},
+							},
+							Ipv4Nets: []string{"10.0.240.2/24"},
+							Ipv6Nets: []string{"2001:db8:2::2/128"},
+						},
+					})
+					epMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
+						Id: &wlEPID2,
+						Endpoint: &proto.WorkloadEndpoint{
+							State:      "active",
+							Mac:        "01:02:03:04:05:07",
+							Name:       "cali12345-ac",
+							ProfileIds: []string{},
+							Tiers: []*proto.TierInfo{
+								{
+									Name: "default",
+									IngressPolicies: []string{
+										"polB1",
+										"polB2",
+										"polC1",
+									},
+									EgressPolicies: []string{
+										"polB1",
+										"polB2",
+									},
+								},
+							},
+							Ipv4Nets: []string{"10.0.240.2/24"},
+							Ipv6Nets: []string{"2001:db8:2::3/128"},
+						},
+					})
+					applyUpdates(epMgr)
+				})
+
+				It("should get the expected policy group chains (ingress)", func() {
+					namesWEP1, groupsWEP1 := extractGroups(filterTable.currentChains, "cali-tw-cali12345-ab")
+					Expect(groupsWEP1).To(Equal([][]string{
+						{"polA1", "polA2"},
+						{"polB1", "polB2"},
+					}))
+					namesWEP2, groupsWEP2 := extractGroups(filterTable.currentChains, "cali-tw-cali12345-ac")
+					Expect(groupsWEP2).To(Equal([][]string{
+						{"polB1", "polB2"},
+						{"polC1"},
+					}))
+					Expect(namesWEP1[1]).NotTo(Equal(""), "Policy B group shouldn't be inlined")
+					Expect(namesWEP1[1]).To(Equal(namesWEP2[0]), "WEPs should share the policy B group")
+					Expect(namesWEP2[1]).To(Equal(""), "Group C should be inlined")
+				})
+
+				It("should get the expected policy group chains (egress)", func() {
+					namesWEP1, groupsWEP1 := extractGroups(filterTable.currentChains, "cali-fw-cali12345-ab")
+					Expect(groupsWEP1).To(Equal([][]string{
+						{"polA1"},
+						{"polB1", "polB2"},
+					}))
+					namesWEP2In, _ := extractGroups(filterTable.currentChains, "cali-tw-cali12345-ac")
+					namesWEP2, groupsWEP2 := extractGroups(filterTable.currentChains, "cali-fw-cali12345-ac")
+					Expect(groupsWEP2).To(Equal([][]string{
+						{"polB1", "polB2"},
+					}))
+					Expect(namesWEP1[0]).To(Equal(""), "Group A should be inlined")
+					Expect(namesWEP1[1]).NotTo(Equal(""), "Policy B group shouldn't be inlined")
+					Expect(namesWEP1[1]).To(Equal(namesWEP2[0]), "WEPs should share the policy B group")
+					Expect(namesWEP2In[0]).NotTo(Equal(namesWEP2[0]), "Ingress/Egress group names should differ")
+				})
+
+				It("should clean up group chain that is no longer used (EP deleted)", func() {
+					namesWEP1, _ := extractGroups(filterTable.currentChains, "cali-tw-cali12345-ab")
+					polAGroup := namesWEP1[0]
+					polBGroup := namesWEP1[1]
+					Expect(filterTable.currentChains).To(HaveKey(polAGroup))
+					epMgr.OnUpdate(&proto.WorkloadEndpointRemove{
+						Id: &wlEPID1,
+					})
+					applyUpdates(epMgr)
+					Expect(filterTable.currentChains).NotTo(HaveKey(polAGroup),
+						"Policy A group should be cleaned up")
+					Expect(filterTable.currentChains).To(HaveKey(polBGroup),
+						"Policy B group chain should still be present, it is shared with the second endpoint")
+				})
+
+				It("should clean up group chain that is no longer used (EP updated)", func() {
+					namesWEP1, _ := extractGroups(filterTable.currentChains, "cali-tw-cali12345-ab")
+					polAGroup := namesWEP1[0]
+					polBGroup := namesWEP1[1]
+					Expect(filterTable.currentChains).To(HaveKey(polAGroup))
+					epMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
+						Id: &wlEPID1,
+						Endpoint: &proto.WorkloadEndpoint{
+							State:      "active",
+							Mac:        "01:02:03:04:05:06",
+							Name:       "cali12345-ab",
+							ProfileIds: []string{},
+							Tiers: []*proto.TierInfo{
+								{
+									Name: "default",
+									IngressPolicies: []string{
+										"polB1",
+										"polB2",
+									},
+									EgressPolicies: []string{
+										"polB1",
+										"polB2",
+									},
+								},
+							},
+							Ipv4Nets: []string{"10.0.240.2/24"},
+							Ipv6Nets: []string{"2001:db8:2::2/128"},
+						},
+					})
+					applyUpdates(epMgr)
+					namesWEP1, groupsWEP1 := extractGroups(filterTable.currentChains, "cali-tw-cali12345-ab")
+					Expect(groupsWEP1).To(Equal([][]string{
+						{"polB1", "polB2"},
+					}))
+					Expect(filterTable.currentChains).NotTo(HaveKey(polAGroup),
+						"Policy A group should be cleaned up")
+					Expect(filterTable.currentChains).To(HaveKey(polBGroup),
+						"Policy B group chain should still be present, it is shared with the second endpoint")
+				})
+			})
+		})
+
 		It("should check the correct path", func() {
 			mockProcSys.pathsThatExist[fmt.Sprintf("/proc/sys/net/ipv%d/conf/cali1234", ipVersion)] = true
 			Expect(epMgr.interfaceExistsInProcSys("cali1234")).To(BeTrue())
 			Expect(epMgr.interfaceExistsInProcSys("cali3456")).To(BeFalse())
 		})
 	}
+}
+
+// extractGroups loosely parses the given chain (which should be a "to/from
+// endpoint" chain) to extract the policy group chains that it jumps to (along
+// with any inline policy jumps).  the returned slices have the same length;
+// a group chain is represented by the name of the group chain in
+// groupChainNames and a slice of policy names in the groups slice. An
+// inline policy jump is represented by "" in the groupChainNames slice and
+// single-entry slice containing the policy name in the groups slice.
+func extractGroups(dpChains map[string]*iptables.Chain, epChainName string) (groupChainNames []string, groups [][]string) {
+	epChain := dpChains[epChainName]
+	for _, r := range epChain.Rules {
+		if ja, ok := r.Action.(iptables.JumpAction); ok {
+			if strings.HasPrefix(ja.Target, rules.PolicyGroupInboundPrefix) ||
+				strings.HasPrefix(ja.Target, rules.PolicyGroupOutboundPrefix) {
+				// Found jump to group.
+				groupChainNames = append(groupChainNames, ja.Target)
+				groups = append(groups, extractPolicyNamesFromJumps(dpChains[ja.Target]))
+			} else if strings.HasPrefix(ja.Target, string(rules.PolicyInboundPfx)) ||
+				strings.HasPrefix(ja.Target, string(rules.PolicyOutboundPfx)) {
+				// Found jump to policy.
+				groupChainNames = append(groupChainNames, "")
+				groups = append(groups, []string{removePolChainNamePrefix(ja.Target)})
+			}
+		}
+	}
+	return
+}
+
+func extractPolicyNamesFromJumps(chain *iptables.Chain) (pols []string) {
+	for _, r := range chain.Rules {
+		if ja, ok := r.Action.(iptables.JumpAction); ok {
+			pols = append(pols, removePolChainNamePrefix(ja.Target))
+		}
+	}
+	return
+}
+
+func removePolChainNamePrefix(target string) string {
+	if strings.HasPrefix(target, string(rules.PolicyInboundPfx)) {
+		return target[len(rules.PolicyInboundPfx):]
+	}
+	if strings.HasPrefix(target, string(rules.PolicyOutboundPfx)) {
+		return target[len(rules.PolicyOutboundPfx):]
+	}
+	log.WithField("chainName", target).Panic("Not a policy chain name.")
+	panic("Not a policy chain name")
 }
 
 var _ = Describe("EndpointManager IPv4", endpointManagerTests(4))
