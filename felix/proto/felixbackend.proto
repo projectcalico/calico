@@ -244,6 +244,8 @@ message Policy {
   repeated Rule outbound_rules = 2;
   bool untracked = 3;
   bool pre_dnat = 4;
+
+  string original_selector = 6;
 }
 
 enum IPVersion {
