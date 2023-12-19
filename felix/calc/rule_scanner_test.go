@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2023 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -94,13 +94,15 @@ var _ = DescribeTable("RuleScanner rule conversion should generate correct Parse
 			Namespace:     "namespace",
 			InboundRules:  []model.Rule{modelRule},
 			OutboundRules: []model.Rule{},
+			Selector:      "a  ==  'A' ",
 		}
 		rs.OnPolicyActive(policyKey, policy)
 		Expect(ur.activeRules).To(Equal(map[model.Key]*ParsedRules{
 			policyKey: {
-				Namespace:     "namespace",
-				InboundRules:  []*ParsedRule{&expectedParsedRule},
-				OutboundRules: []*ParsedRule{},
+				Namespace:        "namespace",
+				InboundRules:     []*ParsedRule{&expectedParsedRule},
+				OutboundRules:    []*ParsedRule{},
+				OriginalSelector: "a == \"A\"",
 			},
 		}))
 		rs.OnPolicyInactive(policyKey)
