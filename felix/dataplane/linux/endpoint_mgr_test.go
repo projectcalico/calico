@@ -2083,11 +2083,11 @@ func endpointManagerTests(ipVersion uint8) func() {
 				Expect(epMgr.groupPolicies(
 					"default",
 					[]string{"polA1"},
-					rules.PolicyDirectionIngress,
+					rules.PolicyDirectionInbound,
 				)).To(Equal([]*rules.PolicyGroup{
 					{
 						Tier:        "default",
-						Direction:   rules.PolicyDirectionIngress,
+						Direction:   rules.PolicyDirectionInbound,
 						PolicyNames: []string{"polA1"},
 						Selector:    "has(a)",
 					},
@@ -2097,11 +2097,11 @@ func endpointManagerTests(ipVersion uint8) func() {
 				Expect(epMgr.groupPolicies(
 					"default",
 					[]string{"polA1", "polA2"},
-					rules.PolicyDirectionIngress,
+					rules.PolicyDirectionInbound,
 				)).To(Equal([]*rules.PolicyGroup{
 					{
 						Tier:        "default",
-						Direction:   rules.PolicyDirectionIngress,
+						Direction:   rules.PolicyDirectionInbound,
 						PolicyNames: []string{"polA1", "polA2"},
 						Selector:    "has(a)",
 					},
@@ -2111,17 +2111,17 @@ func endpointManagerTests(ipVersion uint8) func() {
 				Expect(epMgr.groupPolicies(
 					"default",
 					[]string{"polA1", "polB1"},
-					rules.PolicyDirectionIngress,
+					rules.PolicyDirectionInbound,
 				)).To(Equal([]*rules.PolicyGroup{
 					{
 						Tier:        "default",
-						Direction:   rules.PolicyDirectionIngress,
+						Direction:   rules.PolicyDirectionInbound,
 						PolicyNames: []string{"polA1"},
 						Selector:    "has(a)",
 					},
 					{
 						Tier:        "default",
-						Direction:   rules.PolicyDirectionIngress,
+						Direction:   rules.PolicyDirectionInbound,
 						PolicyNames: []string{"polB1"},
 						Selector:    "has(b)",
 					},
@@ -2131,17 +2131,17 @@ func endpointManagerTests(ipVersion uint8) func() {
 				Expect(epMgr.groupPolicies(
 					"default",
 					[]string{"polA1", "polA2", "polB1", "polB2"},
-					rules.PolicyDirectionIngress,
+					rules.PolicyDirectionInbound,
 				)).To(Equal([]*rules.PolicyGroup{
 					{
 						Tier:        "default",
-						Direction:   rules.PolicyDirectionIngress,
+						Direction:   rules.PolicyDirectionInbound,
 						PolicyNames: []string{"polA1", "polA2"},
 						Selector:    "has(a)",
 					},
 					{
 						Tier:        "default",
-						Direction:   rules.PolicyDirectionIngress,
+						Direction:   rules.PolicyDirectionInbound,
 						PolicyNames: []string{"polB1", "polB2"},
 						Selector:    "has(b)",
 					},
@@ -2151,23 +2151,23 @@ func endpointManagerTests(ipVersion uint8) func() {
 				Expect(epMgr.groupPolicies(
 					"default",
 					[]string{"polA1", "polB1", "polB2", "polA2"},
-					rules.PolicyDirectionIngress,
+					rules.PolicyDirectionInbound,
 				)).To(Equal([]*rules.PolicyGroup{
 					{
 						Tier:        "default",
-						Direction:   rules.PolicyDirectionIngress,
+						Direction:   rules.PolicyDirectionInbound,
 						PolicyNames: []string{"polA1"},
 						Selector:    "has(a)",
 					},
 					{
 						Tier:        "default",
-						Direction:   rules.PolicyDirectionIngress,
+						Direction:   rules.PolicyDirectionInbound,
 						PolicyNames: []string{"polB1", "polB2"},
 						Selector:    "has(b)",
 					},
 					{
 						Tier:        "default",
-						Direction:   rules.PolicyDirectionIngress,
+						Direction:   rules.PolicyDirectionInbound,
 						PolicyNames: []string{"polA2"},
 						Selector:    "has(a)",
 					},

@@ -129,8 +129,8 @@ const (
 type PolicyDirection string
 
 const (
-	PolicyDirectionIngress PolicyDirection = "ingress"
-	PolicyDirectionEgress  PolicyDirection = "egress"
+	PolicyDirectionInbound  PolicyDirection = "inbound"  // AKA ingress
+	PolicyDirectionOutbound PolicyDirection = "outbound" // AKA egress
 )
 
 // Typedefs to prevent accidentally passing the wrong prefix to the Policy/ProfileChainName()

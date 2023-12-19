@@ -258,14 +258,14 @@ func (r *DefaultRuleRenderer) HostEndpointToRawChains(
 
 func (r *DefaultRuleRenderer) HostEndpointToMangleIngressChains(
 	ifaceName string,
-	preDNATPolicis []*PolicyGroup,
+	preDNATPolicies []*PolicyGroup,
 ) []*Chain {
 	log.WithField("ifaceName", ifaceName).Debug("Rendering pre-DNAT host endpoint chain.")
 	return []*Chain{
 		// Chain for traffic _from_ the endpoint.  Pre-DNAT policy does not apply to
 		// outgoing traffic through a host endpoint.
 		r.endpointIptablesChain(
-			preDNATPolicis,
+			preDNATPolicies,
 			nil, // We don't render profiles into the raw table.
 			ifaceName,
 			PolicyInboundPfx,
@@ -314,17 +314,25 @@ func (r *DefaultRuleRenderer) endpointSetMarkChain(
 func (r *DefaultRuleRenderer) PolicyGroupToIptablesChains(group *PolicyGroup) []*Chain {
 	rules := make([]Rule, 0, len(group.PolicyNames)*2-1)
 	polChainPrefix := PolicyInboundPfx
-	if group.Direction == PolicyDirectionEgress {
+	if group.Direction == PolicyDirectionOutbound {
 		polChainPrefix = PolicyOutboundPfx
 	}
 	// To keep the number of rules low, we only drop a RETURN rule every
 	// returnStride jump rules.
 	const returnStride = 5
 	for i, polName := range group.PolicyNames {
-		chainToJumpTo := PolicyChainName(
-			polChainPrefix,
-			&proto.PolicyID{Name: polName},
-		)
+		if i != 0 && i%returnStride == 0 {
+			// If policy makes a verdict (i.e. the pass or accept bit is
+			// non-zero) return to the per-endpoint chain.  Note: the per-endpoint
+			// chain has a similar rule that only checks the accept bit.  Pass
+			// is handled differently in the per-endpoint chain because we need
+			// to continue processing in the same chain on a pass rule.
+			rules = append(rules, Rule{
+				Match:   Match().MarkNotClear(r.IptablesMarkPass | r.IptablesMarkAccept),
+				Action:  ReturnAction{},
+				Comment: []string{"Return on verdict"},
+			})
+		}
 
 		var match MatchCriteria
 		if i%returnStride == 0 {
@@ -336,29 +344,15 @@ func (r *DefaultRuleRenderer) PolicyGroupToIptablesChains(group *PolicyGroup) []
 			// the previous policy didn't set a mark bit.
 			match = Match().MarkClear(r.IptablesMarkPass | r.IptablesMarkAccept)
 		}
+
+		chainToJumpTo := PolicyChainName(
+			polChainPrefix,
+			&proto.PolicyID{Name: polName},
+		)
 		rules = append(rules, Rule{
 			Match:  match,
 			Action: JumpAction{Target: chainToJumpTo},
 		})
-
-		if i%returnStride == returnStride-1 {
-			if i == len(group.PolicyNames)-1 {
-				// Optimisation: there's an automatic return at end of chain,
-				// so we don't need to write one.
-				break
-			}
-
-			// If policy makes a verdict (i.e. the pass or accept bit is
-			// non-zero) return to the parent chain.  Note: the handling in the
-			// endpoint chain is different due to needing to fall through on
-			// pass.  We're safe to return on pass because we only return as
-			// far as the endpoint chain.
-			rules = append(rules, Rule{
-				Match:   Match().MarkNotClear(r.IptablesMarkPass | r.IptablesMarkAccept),
-				Action:  ReturnAction{},
-				Comment: []string{"Return on verdict"},
-			})
-		}
 	}
 	return []*Chain{{
 		Name:  group.ChainName(),
@@ -424,39 +418,43 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(policyGroups []*PolicyGroup,
 	if len(policyGroups) > 0 {
 		// Then, jump to each policy (or group) in turn.
 		for _, polGroup := range policyGroups {
-			var chainToJumpTo string
+			var chainsToJumpTo []string
 			if polGroup.ShouldBeInlined() {
 				// Group is too small to have its own chain.
-				chainToJumpTo = PolicyChainName(
-					policyPrefix,
-					&proto.PolicyID{Name: polGroup.PolicyNames[0]},
-				)
+				for _, p := range polGroup.PolicyNames {
+					chainsToJumpTo = append(chainsToJumpTo, PolicyChainName(
+						policyPrefix,
+						&proto.PolicyID{Name: p},
+					))
+				}
 			} else {
 				// Group needs its own chain.
-				chainToJumpTo = polGroup.ChainName()
+				chainsToJumpTo = []string{polGroup.ChainName()}
 			}
 
-			// If a previous policy didn't set the "pass" mark, jump to the policy.
-			rules = append(rules, Rule{
-				Match:  Match().MarkClear(r.IptablesMarkPass),
-				Action: JumpAction{Target: chainToJumpTo},
-			})
-			// If policy marked packet as accepted, it returns, setting the accept
-			// mark bit.
-			if chainType == chainTypeUntracked {
-				// For an untracked policy, map allow to "NOTRACK and ALLOW".
+			for _, chainToJumpTo := range chainsToJumpTo {
+				// If a previous policy/group didn't set the "pass" mark, jump to the policy.
 				rules = append(rules, Rule{
-					Match:  Match().MarkSingleBitSet(r.IptablesMarkAccept),
-					Action: NoTrackAction{},
+					Match:  Match().MarkClear(r.IptablesMarkPass),
+					Action: JumpAction{Target: chainToJumpTo},
+				})
+				// If policy marked packet as accepted, it returns, setting the accept
+				// mark bit.
+				if chainType == chainTypeUntracked {
+					// For an untracked policy, map allow to "NOTRACK and ALLOW".
+					rules = append(rules, Rule{
+						Match:  Match().MarkSingleBitSet(r.IptablesMarkAccept),
+						Action: NoTrackAction{},
+					})
+				}
+				// If accept bit is set, return from this chain.  We don't immediately
+				// accept because there may be other policy still to apply.
+				rules = append(rules, Rule{
+					Match:   Match().MarkSingleBitSet(r.IptablesMarkAccept),
+					Action:  ReturnAction{},
+					Comment: []string{"Return if policy accepted"},
 				})
 			}
-			// If accept bit is set, return from this chain.  We don't immediately
-			// accept because there may be other policy still to apply.
-			rules = append(rules, Rule{
-				Match:   Match().MarkSingleBitSet(r.IptablesMarkAccept),
-				Action:  ReturnAction{},
-				Comment: []string{"Return if policy accepted"},
-			})
 		}
 
 		if chainType == chainTypeNormal || chainType == chainTypeForward {
@@ -561,14 +559,27 @@ func EndpointChainName(prefix string, ifaceName string) string {
 const MaxPolicyGroupUIDLength = MaxChainNameLength - len(PolicyGroupInboundPrefix)
 
 // PolicyGroup represents a sequence of one or more policies extracted from
-// a list of policies.  If large enough it may be programmed into its own
-// chain.
+// a list of policies.  If large enough (currently >1 entry) it will be
+// programmed into its own chain.
 type PolicyGroup struct {
-	Tier        string
+	// Tier is only used in enterprise.  There can be policies with the same
+	// name in different tiers so we need to disambiguate.
+	Tier string
+	// Direction matches the policy model direction inbound/outbound. Each
+	// group is either inbound or outbound since the set of active policy
+	// can differ between the directions (a policy may have inbound rules
+	// only, for example).
 	Direction   PolicyDirection
 	PolicyNames []string
-	Selector    string
-	cachedUID   string
+	// Selector is the original selector used by the grouped policies.  By
+	// grouping on selector, we ensure that if one policy in a group matches
+	// an endpoint then all policies in that group must match the endpoint.
+	// Thus, two endpoint that share any policy in the group must share the
+	// whole group.
+	Selector string
+	// cachedUID is the cached hash of the policy group details.  Filled in on
+	// first call to UniqueID().
+	cachedUID string
 }
 
 func (g *PolicyGroup) UniqueID() string {
@@ -599,7 +610,7 @@ func (g *PolicyGroup) UniqueID() string {
 }
 
 func (g *PolicyGroup) ChainName() string {
-	if g.Direction == PolicyDirectionIngress {
+	if g.Direction == PolicyDirectionInbound {
 		return PolicyGroupInboundPrefix + g.UniqueID()
 	}
 	return PolicyGroupOutboundPrefix + g.UniqueID()

@@ -150,7 +150,7 @@ type endpointManager struct {
 	ifaceNameToPolicyGroupChainNames map[string][]string /*chain name*/
 
 	activePolicySelectors map[proto.PolicyID]string
-	policyChainRefCounts  map[string] /*chain name*/ int
+	policyChainRefCounts  map[string]int // Chain name to count.
 
 	// Workload endpoints that would be locally active but are 'shadowed' by other endpoints
 	// with the same interface name.
@@ -489,25 +489,32 @@ wepLoop:
 				hep.UntrackedTiers,
 				hep.ForwardTiers,
 			} {
-				for _, t := range tiers {
-					for _, pols := range [][]string{t.IngressPolicies, t.EgressPolicies} {
-						for _, p := range pols {
-							polID := proto.PolicyID{
-								Tier: t.Name,
-								Name: p,
-							}
-							if m.dirtyPolicyIDs.Contains(polID) {
-								m.hostEndpointsDirty = true
-								break hepLoop
-							}
-						}
-					}
+				if m.tiersUseDirtyPolicy(tiers) {
+					m.hostEndpointsDirty = true
+					break hepLoop
 				}
 			}
 		}
 	}
 
 	m.dirtyPolicyIDs.Clear()
+}
+
+func (m *endpointManager) tiersUseDirtyPolicy(tiers []*proto.TierInfo) bool {
+	for _, t := range tiers {
+		for _, pols := range [][]string{t.IngressPolicies, t.EgressPolicies} {
+			for _, p := range pols {
+				polID := proto.PolicyID{
+					Tier: t.Name,
+					Name: p,
+				}
+				if m.dirtyPolicyIDs.Contains(polID) {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }
 
 func (m *endpointManager) GetRouteTableSyncers() []routetable.RouteTableSyncer {
@@ -844,8 +851,8 @@ func (m *endpointManager) updateWorkloadEndpointChains(
 	egressPolicyNames []string,
 	adminUp bool,
 ) {
-	ingressGroups := m.groupPolicies("default", ingressPolicyNames, rules.PolicyDirectionIngress)
-	egressGroups := m.groupPolicies("default", egressPolicyNames, rules.PolicyDirectionEgress)
+	ingressGroups := m.groupPolicies("default", ingressPolicyNames, rules.PolicyDirectionInbound)
+	egressGroups := m.groupPolicies("default", egressPolicyNames, rules.PolicyDirectionOutbound)
 	m.updatePolicyGroups(workload.Name, append(ingressGroups, egressGroups...))
 
 	chains := m.ruleRenderer.WorkloadEndpointToIptablesChains(
@@ -1105,13 +1112,13 @@ func (m *endpointManager) updateHostEndpoints() {
 				egressForwardPolicyNames = hostEp.ForwardTiers[0].EgressPolicies
 			}
 
-			ingressGroups := m.groupPolicies("default", ingressPolicyNames, rules.PolicyDirectionIngress)
+			ingressGroups := m.groupPolicies("default", ingressPolicyNames, rules.PolicyDirectionInbound)
 			addPolicyGroups(ifaceName, ingressGroups)
-			egressGroups := m.groupPolicies("default", egressPolicyNames, rules.PolicyDirectionEgress)
+			egressGroups := m.groupPolicies("default", egressPolicyNames, rules.PolicyDirectionOutbound)
 			addPolicyGroups(ifaceName, egressGroups)
-			ingressForwardGroups := m.groupPolicies("default", ingressForwardPolicyNames, rules.PolicyDirectionIngress)
+			ingressForwardGroups := m.groupPolicies("default", ingressForwardPolicyNames, rules.PolicyDirectionInbound)
 			addPolicyGroups(ifaceName, ingressForwardGroups)
-			egressForwardGroups := m.groupPolicies("default", egressForwardPolicyNames, rules.PolicyDirectionEgress)
+			egressForwardGroups := m.groupPolicies("default", egressForwardPolicyNames, rules.PolicyDirectionOutbound)
 			addPolicyGroups(ifaceName, egressForwardGroups)
 
 			filtChains := m.ruleRenderer.HostEndpointToFilterChains(
@@ -1153,7 +1160,7 @@ func (m *endpointManager) updateHostEndpoints() {
 			if len(hostEp.PreDnatTiers) > 0 {
 				ingressPolicyNames = hostEp.PreDnatTiers[0].IngressPolicies
 			}
-			ingressGroups := m.groupPolicies("default", ingressPolicyNames, rules.PolicyDirectionIngress)
+			ingressGroups := m.groupPolicies("default", ingressPolicyNames, rules.PolicyDirectionInbound)
 			addPolicyGroups(ifaceName, ingressGroups)
 			mangleChains := m.ruleRenderer.HostEndpointToMangleIngressChains(
 				ifaceName,
@@ -1206,7 +1213,7 @@ func (m *endpointManager) updateHostEndpoints() {
 			}
 			var rawChains []*iptables.Chain
 			if m.bpfEnabled {
-				egressGroups := m.groupPolicies("default", egressPolicyNames, rules.PolicyDirectionEgress)
+				egressGroups := m.groupPolicies("default", egressPolicyNames, rules.PolicyDirectionOutbound)
 				addPolicyGroups(ifaceName, egressGroups)
 
 				rawChains = append(rawChains, m.ruleRenderer.HostEndpointToRawEgressChain(
@@ -1214,9 +1221,9 @@ func (m *endpointManager) updateHostEndpoints() {
 					egressGroups,
 				))
 			} else {
-				ingressGroups := m.groupPolicies("default", ingressPolicyNames, rules.PolicyDirectionIngress)
+				ingressGroups := m.groupPolicies("default", ingressPolicyNames, rules.PolicyDirectionInbound)
 				addPolicyGroups(ifaceName, ingressGroups)
-				egressGroups := m.groupPolicies("default", egressPolicyNames, rules.PolicyDirectionEgress)
+				egressGroups := m.groupPolicies("default", egressPolicyNames, rules.PolicyDirectionOutbound)
 				addPolicyGroups(ifaceName, egressGroups)
 
 				rawChains = m.ruleRenderer.HostEndpointToRawChains(

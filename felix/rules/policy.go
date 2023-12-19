@@ -74,6 +74,7 @@ func (r *DefaultRuleRenderer) ProtoRulesToIptablesRules(protoRules []*proto.Rule
 	}
 	return rules
 }
+
 func filterNets(mixedCIDRs []string, ipVersion uint8) (filtered []string, filteredAll bool) {
 	if len(mixedCIDRs) == 0 {
 		return nil, false

@@ -286,25 +286,25 @@ var _ = Describe("Endpoints", func() {
 
 				polGrpInABC := &PolicyGroup{
 					Tier:        "default",
-					Direction:   PolicyDirectionIngress,
+					Direction:   PolicyDirectionInbound,
 					PolicyNames: []string{"a", "b", "c"},
 					Selector:    "all()",
 				}
 				polGrpInEF := &PolicyGroup{
 					Tier:        "default",
-					Direction:   PolicyDirectionIngress,
+					Direction:   PolicyDirectionInbound,
 					PolicyNames: []string{"e", "f"},
 					Selector:    "someLabel == 'bar'",
 				}
 				polGrpOutAB := &PolicyGroup{
 					Tier:        "default",
-					Direction:   PolicyDirectionEgress,
+					Direction:   PolicyDirectionOutbound,
 					PolicyNames: []string{"a", "b"},
 					Selector:    "all()",
 				}
 				polGrpOutDE := &PolicyGroup{
 					Tier:        "default",
-					Direction:   PolicyDirectionEgress,
+					Direction:   PolicyDirectionOutbound,
 					PolicyNames: []string{"d", "e"},
 					Selector:    "someLabel == 'bar'",
 				}
@@ -915,55 +915,55 @@ var _ = Describe("PolicyGroups", func() {
 		pgs := []PolicyGroup{
 			{
 				Tier:        "default",
-				Direction:   PolicyDirectionIngress,
+				Direction:   PolicyDirectionInbound,
 				PolicyNames: nil,
 				Selector:    "all()",
 			},
 			{
 				Tier:        "foo",
-				Direction:   PolicyDirectionIngress,
+				Direction:   PolicyDirectionInbound,
 				PolicyNames: nil,
 				Selector:    "all()",
 			},
 			{
 				Tier:        "default",
-				Direction:   PolicyDirectionEgress,
+				Direction:   PolicyDirectionOutbound,
 				PolicyNames: nil,
 				Selector:    "all()",
 			},
 			{
 				Tier:        "default",
-				Direction:   PolicyDirectionIngress,
+				Direction:   PolicyDirectionInbound,
 				PolicyNames: []string{"a"},
 				Selector:    "all()",
 			},
 			{
 				Tier:        "default",
-				Direction:   PolicyDirectionIngress,
+				Direction:   PolicyDirectionInbound,
 				PolicyNames: nil,
 				Selector:    "a == 'b'",
 			},
 			{
 				Tier:        "default",
-				Direction:   PolicyDirectionIngress,
+				Direction:   PolicyDirectionInbound,
 				PolicyNames: []string{"a", "b"},
 				Selector:    "all()",
 			},
 			{
 				Tier:        "default",
-				Direction:   PolicyDirectionIngress,
+				Direction:   PolicyDirectionInbound,
 				PolicyNames: []string{"ab"},
 				Selector:    "all()",
 			},
 			{
 				Tier:        "default",
-				Direction:   PolicyDirectionIngress,
+				Direction:   PolicyDirectionInbound,
 				PolicyNames: []string{"aaa", "bbb"},
 				Selector:    "all()",
 			},
 			{
 				Tier:      "default",
-				Direction: PolicyDirectionIngress,
+				Direction: PolicyDirectionInbound,
 				// Between this and the entry above, we check that the data
 				// sent to the hasher is delimited somehow.
 				PolicyNames: []string{"aaab", "bb"},
@@ -998,7 +998,7 @@ var _ = table.DescribeTable("PolicyGroup chains",
 	polGroupEntry(
 		PolicyGroup{
 			Tier:        "default",
-			Direction:   PolicyDirectionIngress,
+			Direction:   PolicyDirectionInbound,
 			PolicyNames: []string{"a"},
 			Selector:    "all()",
 		},
@@ -1011,7 +1011,7 @@ var _ = table.DescribeTable("PolicyGroup chains",
 	polGroupEntry(
 		PolicyGroup{
 			Tier:        "default",
-			Direction:   PolicyDirectionIngress,
+			Direction:   PolicyDirectionInbound,
 			PolicyNames: []string{"a", "b"},
 			Selector:    "all()",
 		},
@@ -1028,7 +1028,7 @@ var _ = table.DescribeTable("PolicyGroup chains",
 	polGroupEntry(
 		PolicyGroup{
 			Tier:        "default",
-			Direction:   PolicyDirectionIngress,
+			Direction:   PolicyDirectionInbound,
 			PolicyNames: []string{"a", "b", "c"},
 			Selector:    "all()",
 		},
@@ -1049,7 +1049,7 @@ var _ = table.DescribeTable("PolicyGroup chains",
 	polGroupEntry(
 		PolicyGroup{
 			Tier:        "default",
-			Direction:   PolicyDirectionIngress,
+			Direction:   PolicyDirectionInbound,
 			PolicyNames: []string{"a", "b", "c", "d"},
 			Selector:    "all()",
 		},
@@ -1074,7 +1074,7 @@ var _ = table.DescribeTable("PolicyGroup chains",
 	polGroupEntry(
 		PolicyGroup{
 			Tier:        "default",
-			Direction:   PolicyDirectionIngress,
+			Direction:   PolicyDirectionInbound,
 			PolicyNames: []string{"a", "b", "c", "d", "e"},
 			Selector:    "all()",
 		},
@@ -1103,7 +1103,7 @@ var _ = table.DescribeTable("PolicyGroup chains",
 	polGroupEntry(
 		PolicyGroup{
 			Tier:        "default",
-			Direction:   PolicyDirectionIngress,
+			Direction:   PolicyDirectionInbound,
 			PolicyNames: []string{"a", "b", "c", "d", "e", "f"},
 			Selector:    "all()",
 		},
@@ -1142,7 +1142,7 @@ var _ = table.DescribeTable("PolicyGroup chains",
 	polGroupEntry(
 		PolicyGroup{
 			Tier:        "default",
-			Direction:   PolicyDirectionEgress,
+			Direction:   PolicyDirectionOutbound,
 			PolicyNames: []string{"a", "b", "c", "d", "e", "f", "g"},
 			Selector:    "all()",
 		},
