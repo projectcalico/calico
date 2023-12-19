@@ -86,5 +86,5 @@ func (t *mockTable) checkChainsSameAsBefore() {
 	for _, chain := range t.expectedChains {
 		log.WithField("chain", *chain).Debug("")
 	}
-	Expect(t.currentChains).To(Equal(t.expectedChains), t.Table+" chains incorrect")
+	ExpectWithOffset(1, t.currentChains).To(Equal(t.expectedChains), t.Table+" chains incorrect")
 }
