@@ -2935,6 +2935,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 					})
 
 					defineIngressPolicyGroupingTests()
+					defineEgressPolicyGroupingTests()
 				})
 
 				Describe("with two host endpoints no-track policy)", func() {
