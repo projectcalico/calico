@@ -5,6 +5,7 @@ prefix = "/calico"
 keys = [
     "/v1/ipam/v6/pool",
     "/staticroutesv6",
+    "/allowlistv6",
     "/rejectcidrsv6",
 ]
 reload_cmd = "sv hup bird6 || true"

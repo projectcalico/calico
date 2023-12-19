@@ -6,6 +6,7 @@ keys = [
     "/v1/ipam/v4/pool",
     "/bgp/v1/host//NODENAME",
     "/staticroutes",
+    "/allowlist",
     "/rejectcidrs",
 ]
 reload_cmd = "sv hup bird || true"

@@ -46,6 +46,8 @@ type routeGenerator struct {
 	svcIndexer, epIndexer      cache.Indexer
 	svcRouteMap                map[string]map[string]bool
 	routeAdvertisementRefCount map[string]int
+	svcAllowListMap            map[string]map[string]bool
+	routeAllowListRefCount     map[string]int
 	resyncKnownRoutesTrigger   chan struct{}
 }
 
@@ -66,6 +68,8 @@ func NewRouteGenerator(c *client) (rg *routeGenerator, err error) {
 		nodeName:                   nodename,
 		svcRouteMap:                make(map[string]map[string]bool),
 		routeAdvertisementRefCount: make(map[string]int),
+		svcAllowListMap:            make(map[string]map[string]bool),
+		routeAllowListRefCount:     make(map[string]int),
 		resyncKnownRoutesTrigger:   make(chan struct{}, 1),
 	}
 
@@ -207,7 +211,7 @@ func (rg *routeGenerator) setRouteForSvc(svc *v1.Service, ep *v1.Endpoints) {
 	rg.Lock()
 	defer rg.Unlock()
 
-	advertise := rg.advertiseThisService(svc, ep)
+	advertise, addToAllowList := rg.advertiseThisService(svc, ep)
 	logCtx.WithField("advertise", advertise).Debug("Checking routes for service")
 	if advertise {
 		routes := rg.getAllRoutesForService(svc)
@@ -215,6 +219,14 @@ func (rg *routeGenerator) setRouteForSvc(svc *v1.Service, ep *v1.Endpoints) {
 	} else {
 		routes := rg.getAdvertisedRoutes(key)
 		rg.withdrawRoutesForKey(key, routes)
+	}
+
+	if addToAllowList {
+		routes := rg.getAllRoutesForService(svc)
+		rg.setRoutesForKeyAllowList(key, routes)
+	} else {
+		routes := rg.getAllowedList(key)
+		rg.withdrawRoutesForKeyAllowList(key, routes)
 	}
 }
 
@@ -284,6 +296,20 @@ func (rg *routeGenerator) getAdvertisedRoutes(key string) []string {
 	return routes
 }
 
+// getAllowedList returns the routes that are currently in the bgp export
+// filter and associated with the given key.
+func (rg *routeGenerator) getAllowedList(key string) []string {
+	routes := make([]string, 0)
+
+	if rg.svcAllowListMap[key] != nil {
+		for route := range rg.svcAllowListMap[key] {
+			routes = append(routes, route)
+		}
+	}
+
+	return routes
+}
+
 // setRoutesForKey associates only the given routes with the given key,
 // and advertises the given routes. It also withdraws any routes that are no
 // longer associated with the given key.
@@ -307,6 +333,29 @@ func (rg *routeGenerator) setRoutesForKey(key string, routes []string) {
 		// Advertise route if not already advertised for this key.
 		if _, ok := advertisedRoutes[route]; !ok {
 			rg.advertiseRoute(key, route)
+		}
+	}
+}
+
+// setRoutesForKeyAllowList associates only the given routes with the given key,
+// and adds the routes to the allowlist. It also withdraws any routes that are no
+// no longer associated with the given key.
+func (rg *routeGenerator) setRoutesForKeyAllowList(key string, routes []string) {
+	allowedListRoutes := rg.svcAllowListMap[key]
+	if allowedListRoutes == nil {
+		allowedListRoutes = make(map[string]bool)
+	}
+	log.WithFields(log.Fields{"key": key, "routes": routes}).Debug("Settings routes for key to allowlist")
+
+	for route := range allowedListRoutes {
+		if !contains(routes, route) {
+			rg.withdrawRouteAllowList(key, route)
+		}
+	}
+
+	for _, route := range routes {
+		if _, ok := allowedListRoutes[route]; !ok {
+			rg.addRouteAllowList(key, route)
 		}
 	}
 }
@@ -395,39 +444,40 @@ func contains(items []string, target string) bool {
 	return false
 }
 
-// advertiseThisService returns true if this service should be advertised on this node,
-// false otherwise.
-func (rg *routeGenerator) advertiseThisService(svc *v1.Service, ep *v1.Endpoints) bool {
+// advertiseThisService returns true as its first return value if this service
+// should be advertised on this node and returns true as its second return
+// values if this service should be added to the BGP export list
+func (rg *routeGenerator) advertiseThisService(svc *v1.Service, ep *v1.Endpoints) (bool, bool) {
 	logc := log.WithField("svc", fmt.Sprintf("%s/%s", svc.Namespace, svc.Name))
 
 	// Don't advertise routes if this node is explicitly excluded from load balancers.
 	if rg.client.ExcludeServiceAdvertisement() {
 		logc.Debug("Skipping service because node is explicitly excluded from load balancers")
-		return false
+		return false, false
 	}
 
 	// do nothing if the svc is not a relevant type
 	if (svc.Spec.Type != v1.ServiceTypeClusterIP) && (svc.Spec.Type != v1.ServiceTypeNodePort) && (svc.Spec.Type != v1.ServiceTypeLoadBalancer) {
 		logc.Debugf("Skipping service with type %s", svc.Spec.Type)
-		return false
+		return false, false
 	}
 
 	// also do nothing if the clusterIP is empty or None
 	if svc.Spec.ClusterIP == "" || svc.Spec.ClusterIP == "None" {
 		logc.Debug("Skipping service with no cluster IP")
-		return false
+		return false, false
 	}
 
 	// we need to announce single IPs for services of type LoadBalancer and externalTrafficPolicy Cluster
 	if svc.Spec.Type == v1.ServiceTypeLoadBalancer && svc.Spec.ExternalTrafficPolicy == v1.ServiceExternalTrafficPolicyTypeCluster && rg.isSingleLoadBalancerIP(svc.Spec.LoadBalancerIP) {
 		logc.Debug("Advertising load balancer of type cluster because of single IP definition")
-		return true
+		return true, false
 	}
 
 	// we only need to advertise local services, since we advertise the entire cluster IP range.
 	if svc.Spec.ExternalTrafficPolicy != v1.ServiceExternalTrafficPolicyTypeLocal {
 		logc.Debugf("Skipping service with non-local external traffic policy '%s'", svc.Spec.ExternalTrafficPolicy)
-		return false
+		return false, false
 	}
 
 	isIPv6 := func(ip string) bool { return strings.Contains(ip, ":") }
@@ -440,12 +490,21 @@ func (rg *routeGenerator) advertiseThisService(svc *v1.Service, ep *v1.Endpoints
 		for _, address := range subset.Addresses {
 			if address.NodeName != nil && *address.NodeName == rg.nodeName && isIPv6(address.IP) == svcIsIPv6 {
 				logc.Debugf("Advertising local service")
-				return true
+				return true, false
 			}
 		}
 	}
+
+	// If the node is a Route Reflector and doesn't have a local endpoint
+	// for the service, add it to the allow list
+	isRouteReflector := rg.client.IsRouteReflector(rg.nodeName)
+	if isRouteReflector {
+		logc.Debug("Adding service to allowlist")
+		return false, true
+	}
+
 	logc.Debugf("Skipping service with no local endpoints")
-	return false
+	return false, false
 }
 
 // unsetRouteForSvc removes the route from the svcClusterRouteMap
@@ -466,6 +525,24 @@ func (rg *routeGenerator) unsetRouteForSvc(obj interface{}) {
 	rg.withdrawRoutesForKey(key, routes)
 }
 
+// unsetRouteForSvc removes the route from the svcClusterRouteMap
+// but checks to see if it wasn't already deleted by its sibling resource
+func (rg *routeGenerator) unsetAllowListForSvc(obj interface{}) {
+	// generate key
+	key, err := cache.MetaNamespaceKeyFunc(obj)
+	if err != nil {
+		log.WithError(err).Warn("unsetRouteForSvc: error on retrieving key for object, passing")
+		return
+	}
+
+	// mutex
+	rg.Lock()
+	defer rg.Unlock()
+
+	routes := rg.getAllowedList(key)
+	rg.withdrawRoutesForKeyAllowList(key, routes)
+}
+
 // advertiseRoute advertises a route associated with the given key and
 // caches it.
 func (rg *routeGenerator) advertiseRoute(key, route string) {
@@ -484,6 +561,26 @@ func (rg *routeGenerator) advertiseRoute(key, route string) {
 
 	// Increment the ref count.
 	rg.routeAdvertisementRefCount[route]++
+}
+
+// addRouteAllowList adds a route associated with the given key to the
+// allowlist and caches it.
+func (rg *routeGenerator) addRouteAllowList(key, route string) {
+	if _, hasKey := rg.svcAllowListMap[key]; !hasKey {
+		rg.svcAllowListMap[key] = make(map[string]bool)
+	}
+	rg.svcAllowListMap[key][route] = true
+
+	// We need to reference count routes. We may have multiple services that
+	// trigger advertisement of this prefix, however we only ever want to send
+	// a single static route advertisement as a result.
+	if rg.routeAllowListRefCount[route] == 0 {
+		// First time we've seen this route - advertise it.
+		rg.client.AddAllowListRoutes([]string{route})
+	}
+
+	// Increment the ref count.
+	rg.routeAllowListRefCount[route]++
 }
 
 // withdrawRoute withdraws a route associated with the given key and
@@ -519,6 +616,34 @@ func (rg *routeGenerator) withdrawRoutesForKey(key string, routes []string) {
 	}
 }
 
+// withdrawRouteAllowList withdraws a route associated with the given key and
+// removes it from the cache.
+func (rg *routeGenerator) withdrawRouteAllowList(key, route string) {
+	// Only remove from the allowlist if no other service needs
+	// the route to be present in the BGP export list
+	if rg.routeAllowListRefCount[route] == 1 {
+		rg.client.DeleteAllowListRoutes([]string{route})
+		delete(rg.routeAllowListRefCount, route)
+	} else {
+		rg.routeAllowListRefCount[route]--
+	}
+
+	if rg.svcAllowListMap[key] != nil {
+		delete(rg.svcAllowListMap[key], route)
+		if len(rg.svcAllowListMap[key]) == 0 {
+			delete(rg.svcAllowListMap, key)
+		}
+	}
+}
+
+// withdrawRoutesForKey withdraws the given routes associated with the given key
+// and removes them from the cache.
+func (rg *routeGenerator) withdrawRoutesForKeyAllowList(key string, routes []string) {
+	for _, route := range routes {
+		rg.withdrawRouteAllowList(key, route)
+	}
+}
+
 // onSvcAdd is called when a k8s service is created
 func (rg *routeGenerator) onSvcAdd(obj interface{}) {
 	svc, ok := obj.(*v1.Service)
@@ -542,6 +667,7 @@ func (rg *routeGenerator) onSvcUpdate(_, obj interface{}) {
 // onSvcUpdate is called when a k8s service is deleted
 func (rg *routeGenerator) onSvcDelete(obj interface{}) {
 	rg.unsetRouteForSvc(obj)
+	rg.unsetAllowListForSvc(obj)
 }
 
 // onEPAdd is called when a k8s endpoint is created
@@ -567,6 +693,7 @@ func (rg *routeGenerator) onEPUpdate(_, obj interface{}) {
 // onEPDelete is called when a k8s endpoint is deleted
 func (rg *routeGenerator) onEPDelete(obj interface{}) {
 	rg.unsetRouteForSvc(obj)
+	rg.unsetAllowListForSvc(obj)
 }
 
 // parseIPNets takes a v1 formatted, comma separated string of CIDRs and
