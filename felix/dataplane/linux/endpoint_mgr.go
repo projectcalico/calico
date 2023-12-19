@@ -483,17 +483,24 @@ wepLoop:
 	if !m.hostEndpointsDirty {
 	hepLoop:
 		for _, hep := range m.rawHostEndpoints {
-			for _, t := range hep.Tiers {
-				for _, pols := range [][]string{t.IngressPolicies, t.EgressPolicies} {
-					for _, p := range pols {
-						polID := proto.PolicyID{
-							Tier: t.Name,
-							Name: p,
+			for _, tiers := range [][]*proto.TierInfo{
+				hep.Tiers,
+				hep.PreDnatTiers,
+				hep.UntrackedTiers,
+				hep.ForwardTiers,
+			} {
+				for _, t := range tiers {
+					for _, pols := range [][]string{t.IngressPolicies, t.EgressPolicies} {
+						for _, p := range pols {
+							polID := proto.PolicyID{
+								Tier: t.Name,
+								Name: p,
+							}
+							if m.dirtyPolicyIDs.Contains(polID) {
+								m.hostEndpointsDirty = true
+								break hepLoop
+							}
 						}
-						if m.dirtyPolicyIDs.Contains(polID) {
-							m.hostEndpointsDirty = true
-						}
-						break hepLoop
 					}
 				}
 			}
