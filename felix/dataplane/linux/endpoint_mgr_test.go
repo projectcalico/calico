@@ -2255,7 +2255,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 						Expect(table.currentChains).To(HaveKey(polAGroup))
 						removeAPolsFromEp1()
 						applyUpdates(epMgr)
-						namesEP1, groupsEP1 := extractGroups(table.currentChains, ep1IngressChain)
+						_, groupsEP1 := extractGroups(table.currentChains, ep1IngressChain)
 						Expect(groupsEP1).To(Equal([][]string{
 							{"polB1", "polB2"},
 						}))
