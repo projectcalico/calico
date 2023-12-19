@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2023 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,7 +14,11 @@
 
 package selector
 
-import "github.com/projectcalico/calico/libcalico-go/lib/selector/parser"
+import (
+	"strings"
+
+	"github.com/projectcalico/calico/libcalico-go/lib/selector/parser"
+)
 
 // Selector represents a label selector.
 type Selector interface {
@@ -37,4 +41,16 @@ type Selector interface {
 // Parse a string representation of a selector expression into a Selector.
 func Parse(selector string) (sel Selector, err error) {
 	return parser.Parse(selector)
+}
+
+// Normalise converts the given selector to the form returned by
+// Selector.String(), i.e. "" is converted to "all()" and whitespace is
+// tidied up.  If the input string cannot be parsed, it is returned unaltered.
+func Normalise(selector string) string {
+	selector = strings.TrimSpace(selector)
+	parsed, err := Parse(selector)
+	if err != nil {
+		return selector
+	}
+	return parsed.String()
 }
