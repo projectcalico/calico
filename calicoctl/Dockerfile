@@ -17,7 +17,7 @@ FROM scratch as source
 ARG TARGETARCH
 
 COPY LICENSE /licenses/LICENSE
-COPY bin/calicoctl-linux-${TARGETARCH} /calicoctl
+COPY bin/calicoctl-linux-${TARGETARCH} /usr/bin/calicoctl
 
 FROM calico/base
 
@@ -35,4 +35,4 @@ ENV CALICO_CTL_CONTAINER=TRUE
 
 COPY --from=source / /
 
-ENTRYPOINT ["/calicoctl"]
+ENTRYPOINT ["/usr/bin/calicoctl"]

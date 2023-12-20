@@ -29,9 +29,9 @@ spec:
   serviceAccountName: calicoctl
   containers:
   - name: calicoctl
-    image: docker.io/calico/ctl:latest-amd64
+    image: calico/ctl:master
     command:
-      - /calicoctl
+      - calicoctl
     args:
       - version
       - --poll=1m
