@@ -82,7 +82,7 @@ echo "Calico is running."
 kubectl taint nodes --all node-role.kubernetes.io/master-
 
 # strict affinity
-curl -O -L  https://github.com/projectcalico/calicoctl/releases/download/v3.17.1/calicoctl
+curl -L https://github.com/projectcalico/calico/releases/download/v3.27.0/calicoctl-linux-amd64 -o calicoctl
 chmod +x calicoctl
 export CALICO_DATASTORE_TYPE=kubernetes
 export CALICO_KUBECONFIG=~/.kube/config
