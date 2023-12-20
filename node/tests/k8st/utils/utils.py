@@ -220,7 +220,7 @@ def kubectl(args, logerr=True, allow_fail=False, allow_codes=[], timeout=0, retu
                returnerr=returnerr)
 
 def calicoctl(args, allow_fail=False):
-    return kubectl("exec -i -n kube-system calicoctl -- /calicoctl --allow-version-mismatch " + args,
+    return kubectl("exec -i -n kube-system calicoctl -- calicoctl --allow-version-mismatch " + args,
                    allow_fail=allow_fail)
 
 
