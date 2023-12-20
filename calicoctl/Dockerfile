@@ -32,6 +32,7 @@ LABEL vendor="Project Calico"
 LABEL version=${GIT_VERSION}
 
 ENV CALICO_CTL_CONTAINER=TRUE
+ENV PATH=$PATH:/
 
 COPY --from=source / /
 
