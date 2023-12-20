@@ -18,10 +18,24 @@ import (
 	"strings"
 
 	"github.com/sirupsen/logrus"
+	"github.com/vishvananda/netlink"
 
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/proto"
 )
+
+// added so that we can shim netlink for tests
+type netlinkHandle interface {
+	LinkByName(name string) (netlink.Link, error)
+	LinkSetMTU(link netlink.Link, mtu int) error
+	LinkSetUp(link netlink.Link) error
+	AddrList(link netlink.Link, family int) ([]netlink.Addr, error)
+	AddrAdd(link netlink.Link, addr *netlink.Addr) error
+	AddrDel(link netlink.Link, addr *netlink.Addr) error
+	LinkList() ([]netlink.Link, error)
+	LinkAdd(netlink.Link) error
+	LinkDel(netlink.Link) error
+}
 
 func routeIsLocalBlock(msg *proto.RouteUpdate, routeProto proto.IPPoolType) bool {
 	// RouteType_LOCAL_WORKLOAD means "local IPAM block _or_ /32 of workload" in IPv4.

@@ -38,19 +38,6 @@ import (
 	"github.com/projectcalico/calico/felix/rules"
 )
 
-// added so that we can shim netlink for tests
-type netlinkHandle interface {
-	LinkByName(name string) (netlink.Link, error)
-	LinkSetMTU(link netlink.Link, mtu int) error
-	LinkSetUp(link netlink.Link) error
-	AddrList(link netlink.Link, family int) ([]netlink.Addr, error)
-	AddrAdd(link netlink.Link, addr *netlink.Addr) error
-	AddrDel(link netlink.Link, addr *netlink.Addr) error
-	LinkList() ([]netlink.Link, error)
-	LinkAdd(netlink.Link) error
-	LinkDel(netlink.Link) error
-}
-
 type vxlanManager struct {
 	sync.Mutex
 
