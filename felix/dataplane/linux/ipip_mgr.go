@@ -16,6 +16,7 @@ package intdataplane
 
 import (
 	"net"
+	"sync"
 	"syscall"
 	"time"
 
@@ -39,6 +40,8 @@ import (
 //
 // ipipManager also takes care of the configuration of the IPIP tunnel device.
 type ipipManager struct {
+	sync.Mutex
+
 	// Our dependencies.
 	hostname            string
 	routeTable          routetable.RouteTableInterface
@@ -238,6 +241,13 @@ func (m *ipipManager) deleteRoute(dst string) {
 	}
 }
 
+/*func (m *ipipManager) getNoEncapRouteTable() routetable.RouteTableInterface {
+	m.Lock()
+	defer m.Unlock()
+
+	return m.noEncapRouteTable
+}*/
+
 func (m *ipipManager) CompleteDeferredWork() error {
 	if !m.routesDirty {
 		m.logCtx.Debug("No change since last application, nothing to do")
@@ -295,7 +305,7 @@ func (m *ipipManager) CompleteDeferredWork() error {
 				}
 
 				ipipRoute := routetable.Target{
-					Type: routetable.TargetTypeVXLAN,
+					Type: routetable.TargetTypeOnLink,
 					CIDR: cidr,
 					GW:   ip.FromString(remoteAddr),
 				}
@@ -308,7 +318,26 @@ func (m *ipipManager) CompleteDeferredWork() error {
 		m.logCtx.WithField("ipip routes", ipipRoutes).Debug("IPIP manager sending IPIP L3 updates")
 		m.routeTable.SetRoutes(m.ipipDevice, ipipRoutes)
 
-		m.blackholeRouteTable.SetRoutes(routetable.InterfaceNone, m.blackholeRoutes())
+		m.blackholeRouteTable.SetRoutes(routetable.InterfaceNone, blackholeRoutes(m.localIPAMBlocks))
+
+		//noEncapRouteTable := m.getNoEncapRouteTable()
+		// only set the noEncapRouteTable table if it's nil, as you will lose the routes that are being managed already
+		// and the new table will probably delete routes that were put in there by the previous table
+		/*if noEncapRouteTable != nil {
+			localAddr, exists := m.activeHostnameToIP[m.hostname]
+			if !exists {
+				return fmt.Errorf("local address not found, will defer adding routes")
+			}
+			if parentDevice, err := m.getParentInterface(localAddr); err == nil {
+				ifName := parentDevice.Attrs().Name
+				m.logCtx.WithField("link", parentDevice).WithField("routes", noEncapRoutes).Debug("IPIP manager sending unencapsulated L3 updates")
+				noEncapRouteTable.SetRoutes(ifName, noEncapRoutes)
+			} else {
+				return err
+			}
+		} else {
+			return errors.New("no encap route table not set, will defer adding routes")
+		}*/
 
 		m.logCtx.Info("IPIP Manager completed deferred work")
 		m.routesDirty = false
@@ -317,30 +346,15 @@ func (m *ipipManager) CompleteDeferredWork() error {
 	return nil
 }
 
-func (m *ipipManager) blackholeRoutes() []routetable.Target {
-	var rtt []routetable.Target
-	for dst := range m.localIPAMBlocks {
-		cidr, err := ip.CIDRFromString(dst)
-		if err != nil {
-			m.logCtx.WithError(err).Warning(
-				"Error processing IPAM block CIDR: ", dst,
-			)
-			continue
-		}
-		rtt = append(rtt, routetable.Target{
-			Type: routetable.TargetTypeBlackhole,
-			CIDR: cidr,
-		})
-	}
-	m.logCtx.Debug("calculated blackholes ", rtt)
-	return rtt
-}
-
 // KeepIPIPDeviceInSync is a goroutine that configures the IPIP tunnel device, then periodically
 // checks that it is still correctly configured.
 func (m *ipipManager) KeepIPIPDeviceInSync(mtu int, address net.IP) {
-	m.logCtx.Info("IPIP thread started.")
+	m.logCtx.Info("IPIP tunnel device thread started.")
 	for {
+		/*link, err := m.getParentInterface(address.String())
+		if err != nil {
+
+		}*/
 		err := m.configureIPIPDevice(mtu, address)
 		if err != nil {
 			m.logCtx.WithError(err).Warn("Failed configure IPIP tunnel device, retrying...")
@@ -350,6 +364,30 @@ func (m *ipipManager) KeepIPIPDeviceInSync(mtu int, address net.IP) {
 		time.Sleep(10 * time.Second)
 	}
 }
+
+// getParentInterface returns the parent interface for the given local VTEP based on IP address. This link returned is nil
+// if, and only if, an error occurred
+/*func (m *ipipManager) getParentInterface(address string) (netlink.Link, error) {
+	m.logCtx.WithField("local address", address).Debug("Getting parent interface")
+	links, err := m.nlHandle.LinkList()
+	if err != nil {
+		return nil, err
+	}
+
+	for _, link := range links {
+		addrs, err := m.nlHandle.AddrList(link, netlink.FAMILY_V4)
+		if err != nil {
+			return nil, err
+		}
+		for _, addr := range addrs {
+			if addr.IPNet.IP.String() == address {
+				m.logCtx.Debugf("Found parent interface: %s", link)
+				return link, nil
+			}
+		}
+	}
+	return nil, fmt.Errorf("Unable to find parent interface with address %s", address)
+}*/
 
 // configureIPIPDevice ensures the IPIP tunnel device is up and configures correctly.
 func (m *ipipManager) configureIPIPDevice(mtu int, address net.IP) error {

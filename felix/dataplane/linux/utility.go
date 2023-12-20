@@ -22,6 +22,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/felix/routetable"
 )
 
 // added so that we can shim netlink for tests
@@ -68,4 +69,23 @@ func routeIsLocalBlock(msg *proto.RouteUpdate, routeProto proto.IPPoolType) bool
 		exactRoute = "/128"
 	}
 	return !strings.HasSuffix(msg.Dst, exactRoute)
+}
+
+func blackholeRoutes(localIPAMBlocks map[string]*proto.RouteUpdate) []routetable.Target {
+	var rtt []routetable.Target
+	for dst := range localIPAMBlocks {
+		cidr, err := ip.CIDRFromString(dst)
+		if err != nil {
+			logrus.WithError(err).Warning(
+				"Error processing IPAM block CIDR: ", dst,
+			)
+			continue
+		}
+		rtt = append(rtt, routetable.Target{
+			Type: routetable.TargetTypeBlackhole,
+			CIDR: cidr,
+		})
+	}
+	logrus.Debug("calculated blackholes ", rtt)
+	return rtt
 }

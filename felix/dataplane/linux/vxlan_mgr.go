@@ -419,10 +419,10 @@ func (m *vxlanManager) CompleteDeferredWork() error {
 			}
 		}
 
-		m.logCtx.WithField("vxlanroutes", vxlanRoutes).Debug("VXLAN manager sending VXLAN L3 updates")
+		m.logCtx.WithField("vxlan routes", vxlanRoutes).Debug("VXLAN manager sending VXLAN L3 updates")
 		m.routeTable.SetRoutes(m.vxlanDevice, vxlanRoutes)
 
-		m.blackholeRouteTable.SetRoutes(routetable.InterfaceNone, m.blackholeRoutes())
+		m.blackholeRouteTable.SetRoutes(routetable.InterfaceNone, blackholeRoutes(m.localIPAMBlocks))
 
 		noEncapRouteTable := m.getNoEncapRouteTable()
 		// only set the noEncapRouteTable table if it's nil, as you will lose the routes that are being managed already
@@ -443,25 +443,6 @@ func (m *vxlanManager) CompleteDeferredWork() error {
 		m.routesDirty = false
 	}
 	return nil
-}
-
-func (m *vxlanManager) blackholeRoutes() []routetable.Target {
-	var rtt []routetable.Target
-	for dst := range m.localIPAMBlocks {
-		cidr, err := ip.CIDRFromString(dst)
-		if err != nil {
-			m.logCtx.WithError(err).Warning(
-				"Error processing IPAM block CIDR: ", dst,
-			)
-			continue
-		}
-		rtt = append(rtt, routetable.Target{
-			Type: routetable.TargetTypeBlackhole,
-			CIDR: cidr,
-		})
-	}
-	m.logCtx.Debug("calculated blackholes ", rtt)
-	return rtt
 }
 
 // KeepVXLANDeviceInSync is a goroutine that configures the VXLAN tunnel device, then periodically
