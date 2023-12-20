@@ -242,7 +242,7 @@ def calicoctl(command, data=None, load_as_stdin=False, format="yaml", only_stdou
     elif data and not load_as_stdin:
         option_file = ' -f /tmp/input-data'
 
-    calicoctl_bin = os.environ.get("CALICOCTL", "/code/bin/calicoctl-linux-amd64")
+    calicoctl_bin = os.environ.get("CALICOCTL", "/usr/bin/calicoctl")
 
     if allowVersionMismatch:
         calicoctl_bin += " --allow-version-mismatch"
