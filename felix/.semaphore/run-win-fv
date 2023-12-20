@@ -61,10 +61,18 @@ do
     sleep 30
 done
 
+# Print relevant snippets from logs
+log_regexps='(?<!Decode)Failure|SUCCESS|FV-TEST-START'
+compgen -G ./fv.log/*.log > /dev/null && \
+for log_file in ./fv.log/*.log; do
+    prefix="[$(basename ${log_file})]"
+    cat ${log_file} | iconv -f UTF-16 -t UTF-8 | sed 's/\r$//g' | grep --line-buffered --perl ${log_regexps} -B 2 -A 15 | sed 's/.*/'"${prefix}"' &/g'
+done;
+
 # Search for error code file
 if [ -f /home/semaphore/report/error-codes ];
 then
-    echo "Windows FV return error."
+    echo "Windows FV returned error(s)."
     exit 1
 fi
 
