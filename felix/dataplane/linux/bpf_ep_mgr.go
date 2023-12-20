@@ -330,9 +330,10 @@ type bpfEndpointManager struct {
 
 	bpfPolicyDebugEnabled bool
 
-	routeTable    routetable.RouteTableInterface
-	services      map[serviceKey][]ip.CIDR
-	dirtyServices set.Set[serviceKey]
+	routeTable       routetable.RouteTableInterface
+	services         map[serviceKey][]ip.CIDR
+	dirtyServices    set.Set[serviceKey]
+	natExcludedCIDRs *ip.CIDRTrie
 
 	// Maps for policy rule counters
 	polNameToMatchIDs map[string]set.Set[polprog.RuleMatchID]
@@ -505,6 +506,22 @@ func newBPFEndpointManager(
 		)
 		m.services = make(map[serviceKey][]ip.CIDR)
 		m.dirtyServices = set.New[serviceKey]()
+		m.natExcludedCIDRs = ip.NewCIDRTrie()
+
+		var excludeCIDRsMatch = 1
+
+		for _, c := range config.BPFExcludeCIDRsFromNAT {
+			cidr, err := ip.CIDRFromString(c)
+			if err != nil {
+				log.WithError(err).Warnf("Bad %s CIDR to exclude from NAT", c)
+			}
+
+			if (cidr.Version() == 6) != m.ipv6Enabled {
+				continue
+			}
+
+			m.natExcludedCIDRs.Update(cidr, &excludeCIDRsMatch)
+		}
 
 		// Anything else would prevent packets being accepted from the special
 		// service veth. It does not create a security hole since BPF does the RPF
@@ -3242,6 +3259,10 @@ func (m *bpfEndpointManager) onServiceUpdate(update *proto.ServiceUpdate) {
 		if err != nil {
 			log.WithFields(log.Fields{"service": key, "ip": i}).Warn("Not a valid CIDR.")
 		} else {
+			_, v := m.natExcludedCIDRs.LPM(cidr)
+			if v != nil {
+				continue
+			}
 			if m.ipv6Enabled {
 				if _, ok := cidr.(ip.V6CIDR); ok {
 					ips = append(ips, cidr)
