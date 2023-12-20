@@ -25,7 +25,7 @@ spec:
   - name: calicoctl
     image: calico/ctl:master
     command:
-      - /calicoctl
+      - calicoctl
     args:
       - version
       - --poll=1m

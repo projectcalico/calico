@@ -283,7 +283,7 @@ class DockerHost(object):
         if not version:
             calicoctl = os.environ.get("CALICOCTL", "/code/dist/calicoctl")
         else:
-            calicoctl = "/code/dist/calicoctl-" + version
+            calicoctl = "/code/dist/calicoctl" + version
 
         if ETCD_SCHEME == "https":
             etcd_auth = "%s:2379" % ETCD_HOSTNAME_SSL
