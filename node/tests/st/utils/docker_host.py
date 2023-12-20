@@ -281,9 +281,9 @@ class DockerHost(object):
         whitespace removed.
         """
         if not version:
-            calicoctl = os.environ.get("CALICOCTL", "/code/dist/calicoctl")
+            calicoctl = os.environ.get("CALICOCTL", "/usr/bin/calicoctl")
         else:
-            calicoctl = "/code/dist/calicoctl-" + version
+            calicoctl = "/usr/bin/calicoctl-" + version
 
         if ETCD_SCHEME == "https":
             etcd_auth = "%s:2379" % ETCD_HOSTNAME_SSL
