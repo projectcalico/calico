@@ -25198,6 +25198,14 @@ rules:
       - get
       - create
       - delete
+  # Add the permissions to monitor the status of certificate signing requests when certificate management is enabled.
+  - apiGroups:
+      - certificates.k8s.io
+    resources:
+      - certificatesigningrequests
+    verbs:
+      - list
+      - watch
   # Add the appropriate pod security policy permissions
   - apiGroups:
       - policy
@@ -25218,14 +25226,6 @@ rules:
       - create
       - update
       - delete
-# Add the permissions to monitor the status of certificatesigningrequests when certificate management is enabled.
-  - apiGroups:
-      - certificates.k8s.io
-    resources:
-      - certificatesigningrequests
-    verbs:
-      - list
-      - watch
 ---
 # Source: tigera-operator/templates/tigera-operator/02-rolebinding-tigera-operator.yaml
 kind: ClusterRoleBinding
