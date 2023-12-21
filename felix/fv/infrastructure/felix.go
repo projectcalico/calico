@@ -426,3 +426,26 @@ func (f *Felix) BPFNumPolProgramsByEntryPoint(entryPointIdx int) (contiguous, to
 	}
 	return
 }
+
+func (f *Felix) IPTablesChains(table string) map[string][]string {
+	out := map[string][]string{}
+	raw, err := f.ExecOutput("iptables-save", "-t", table)
+	Expect(err).NotTo(HaveOccurred())
+	lines := strings.Split(raw, "\n")
+	for _, line := range lines {
+		if strings.HasPrefix(line, "#") {
+			continue
+		}
+		if strings.HasPrefix(line, ":") {
+			chainName := strings.SplitN(line[1:], " ", 2)[0]
+			out[chainName] = []string{}
+			continue
+		}
+		if strings.HasPrefix(line, "-A") {
+			chainName := strings.SplitN(line[3:], " ", 2)[0]
+			out[chainName] = append(out[chainName], line)
+			continue
+		}
+	}
+	return out
+}
