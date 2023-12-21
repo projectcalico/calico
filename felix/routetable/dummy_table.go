@@ -8,7 +8,7 @@ import (
 type DummyTable struct {
 }
 
-func (_ *DummyTable) OnIfaceStateChanged(_ string, _ ifacemonitor.State) {
+func (_ *DummyTable) OnIfaceStateChanged(_ string, _ int, _ ifacemonitor.State) {
 }
 
 func (_ *DummyTable) QueueResync() {
