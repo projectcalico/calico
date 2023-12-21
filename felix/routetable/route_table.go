@@ -447,7 +447,6 @@ func (r *RouteTable) OnIfaceStateChanged(ifaceName string, ifIndex int, state if
 		delete(r.ifaceIndexToName, r.ifaceNameToIndex[ifaceName])
 		r.ifaceNameToIndex[ifaceName] = ifIndex
 		r.ifaceIndexToName[ifIndex] = ifaceName
-		r.ifacesToRescan.Add(ifaceName)
 		recalculate = true
 	}
 
@@ -455,6 +454,7 @@ func (r *RouteTable) OnIfaceStateChanged(ifaceName string, ifIndex int, state if
 		// When an interface goes down/up that can remove its routes, mark
 		// all its routes as suspect.
 		logCxt.Debug("Interface up, marking for route sync")
+		r.ifacesToRescan.Add(ifaceName)
 		recalculate = true
 	}
 
@@ -639,27 +639,29 @@ func (r *RouteTable) Apply() error {
 }
 
 func (r *RouteTable) maybeResyncWithDataplane() error {
-	r.ifacesToRescan.Iter(func(ifaceName string) error {
-		r.fullResync = true // FIXME hack!
-		return set.RemoveItem
-	})
-
-	if !r.fullResync {
-		return nil
-	}
-
-	r.opReporter.RecordOperation(fmt.Sprint("resync-routes-v", r.ipVersion))
-
-	listStartTime := time.Now()
-
 	nl, err := r.nl.Handle()
 	if err != nil {
-		r.logCxt.WithError(err).Error("Failed to connect to netlink, retrying...")
+		r.logCxt.WithError(err).Error("Failed to connect to netlink.")
 		return ConnectFailed
 	}
 
+	if !r.fullResync {
+		return r.resyncIndividualInterfaces(nl)
+	}
+
+	// About to rescan everything, don't need the individual rescan set.
+	r.ifacesToRescan.Clear()
+
+	return r.doFullResync(nl)
+}
+
+func (r *RouteTable) doFullResync(nl netlinkshim.Interface) error {
+	r.opReporter.RecordOperation(fmt.Sprint("resync-routes-v", r.ipVersion))
+
+	resyncStartTime := time.Now()
+
 	// Load all the routes in the routing table.  If we're managing routes in
-	// a shared table (such as the main table) this will include a lot of routes
+	// a shared table (such as the main table) this may include a lot of routes
 	// that we're not managing.
 	routeFilter := &netlink.Route{}
 	routeFilterFlags := uint64(0)
@@ -675,63 +677,152 @@ func (r *RouteTable) maybeResyncWithDataplane() error {
 		allRoutes = nil
 	}
 	if err != nil {
-		return fmt.Errorf("failed to list all routes during resync: %w", err)
+		return fmt.Errorf("failed to list all routes for resync: %w", err)
 	}
 
 	err = r.kernelRoutes.Dataplane().ReplaceAllIter(func(f func(k kernelRouteKey, v kernelRoute)) error {
 		for _, route := range allRoutes {
-			if r.ifacePrefixRegexp != nil {
-				if routeIsSpecialNoIfRoute(route) && !r.includeNoInterface {
-					continue
-				}
-				if routeIsIPv6Bootstrap(route) {
-					continue
-				}
-				ifaceName := r.ifaceIndexToName[route.LinkIndex]
-				if ifaceName == "" {
-					// We don't know about this interface.  Either we're racing
-					// with link creation, in which case we'll hear about the
-					// interface soon and work out what to do, or we're seeing
-					// a route for a just-deleted interface, in which case
-					// we don't care.
-					r.logCxt.WithField("ifIndex", route.LinkIndex).Debug(
-						"Skipping resync of route for unknown iface")
-					continue
-				}
-				if !r.ifacePrefixRegexp.MatchString(ifaceName) {
-					continue
-				}
-			}
-			if !r.removeExternalRoutes && route.Protocol != r.deviceRouteProtocol {
-				r.logCxt.Debug("Ignoring non-Calico route.")
+			kernKey, kernRoute, ok := r.netlinkRouteToKernelRoute(route)
+			if !ok {
 				continue
-			}
-			kernKey := kernelRouteKey{
-				CIDR:     ip.CIDRFromIPNet(route.Dst),
-				Priority: route.Priority,
-				TOS:      route.Tos,
-			}
-			kernRoute := kernelRoute{
-				Type:     route.Type,
-				Scope:    route.Scope,
-				GW:       ip.FromNetIP(route.Gw),
-				Src:      ip.FromNetIP(route.Src),
-				Ifindex:  route.LinkIndex,
-				OnLink:   route.Flags&unix.RTNH_F_ONLINK != 0,
-				Protocol: route.Protocol,
 			}
 			f(kernKey, kernRoute)
 		}
 		return nil
 	})
 	if err != nil {
+		// Should be impossible unless we return an error from the iterator.
 		return fmt.Errorf("failed to update delta tracker: %w", err)
 	}
 
 	r.fullResync = false
-	listAllRoutesTime.Observe(r.time.Since(listStartTime).Seconds())
-
+	listAllRoutesTime.Observe(r.time.Since(resyncStartTime).Seconds())
 	return nil
+}
+
+func (r *RouteTable) resyncIndividualInterfaces(nl netlinkshim.Interface) error {
+	r.ifacesToRescan.Iter(func(ifaceName string) error {
+		ifIndex := 0
+		if ifaceName == InterfaceNone {
+			if r.ipVersion == 6 {
+				ifIndex = 1
+			}
+		} else {
+			ifIndex := r.ifaceNameToIndex[ifaceName]
+			if ifIndex == 0 {
+				r.logCxt.Debug("Ignoring rescan of unknown interface.")
+				return set.RemoveItem
+			}
+		}
+		routeFilter := &netlink.Route{
+			Table:     r.tableIndex,
+			LinkIndex: ifIndex,
+		}
+		routeFilterFlags := netlink.RT_FILTER_OIF | netlink.RT_FILTER_TABLE
+		netlinkRoutes, err := nl.RouteListFiltered(r.netlinkFamily, routeFilter, routeFilterFlags)
+		if errors.Is(err, unix.ENOENT) {
+			// In strict mode, get this if the routing table doesn't exist; it'll be auto-created
+			// when we add the first route so just treat it as empty.
+			log.WithError(err).Debug("Routing table doesn't exist (yet). Treating as empty.")
+			err = nil
+			netlinkRoutes = nil
+		}
+		if err != nil {
+			// Filter the error so that we don't spam errors if the interface is being torn
+			// down.
+			filteredErr := r.filterErrorByIfaceState(ifaceName, err, ListFailed, false)
+			if errors.Is(filteredErr, ListFailed) {
+				r.logCxt.WithError(err).WithFields(log.Fields{
+					"iface":       ifaceName,
+					"routeFilter": routeFilter,
+					"flags":       routeFilterFlags,
+				}).Error("Error listing routes")
+				r.nl.CloseHandle() // Defensive: force a netlink reconnection next time.
+				return set.RemoveItem
+			} else {
+				r.logCxt.WithError(filteredErr).WithField("iface", ifaceName).Debug(
+					"Failed to list routes; interface down/gone.")
+				return set.RemoveItem
+			}
+		}
+
+		// Loaded the routes, now update our tracker.  First index the data
+		// we loaded.
+		kernRoutes := map[kernelRouteKey]kernelRoute{}
+		for _, nlRoute := range netlinkRoutes {
+			kernKey, kernRoute, ok := r.netlinkRouteToKernelRoute(nlRoute)
+			if !ok {
+				continue
+			}
+			kernRoutes[kernKey] = kernRoute
+		}
+		// Then look for routes that the tracker says are there but are actually
+		// missing.
+		for cidr := range r.ifaceToRoutes[ifaceName] {
+			kernKey := kernelRouteKey{CIDR: cidr}
+			desiredKernRoute, ok := r.kernelRoutes.Desired().Get(kernKey)
+			if !ok || desiredKernRoute.Ifindex != ifIndex {
+				// This route belongs to some other interface right now.
+				continue
+			}
+			if _, ok := kernRoutes[kernKey]; ok {
+				continue
+			}
+			r.kernelRoutes.Dataplane().Delete(kernKey)
+		}
+		// Update tracker with the routes that we did see.
+		for kk, kr := range kernRoutes {
+			r.kernelRoutes.Dataplane().Set(kk, kr)
+		}
+
+		return set.RemoveItem
+	})
+	return nil
+}
+
+func (r *RouteTable) netlinkRouteToKernelRoute(route netlink.Route) (kernKey kernelRouteKey, kernRoute kernelRoute, ok bool) {
+	if r.ifacePrefixRegexp != nil {
+		if routeIsSpecialNoIfRoute(route) && !r.includeNoInterface {
+			return
+		}
+		if routeIsIPv6Bootstrap(route) {
+			return
+		}
+		ifaceName := r.ifaceIndexToName[route.LinkIndex]
+		if ifaceName == "" {
+			// We don't know about this interface.  Either we're racing
+			// with link creation, in which case we'll hear about the
+			// interface soon and work out what to do, or we're seeing
+			// a route for a just-deleted interface, in which case
+			// we don't care.
+			r.logCxt.WithField("ifIndex", route.LinkIndex).Debug(
+				"Skipping resync of route for unknown iface")
+			return
+		}
+		if !r.ifacePrefixRegexp.MatchString(ifaceName) {
+			return
+		}
+	}
+	if !r.removeExternalRoutes && route.Protocol != r.deviceRouteProtocol {
+		r.logCxt.Debug("Ignoring non-Calico route.")
+		return
+	}
+	kernKey = kernelRouteKey{
+		CIDR:     ip.CIDRFromIPNet(route.Dst),
+		Priority: route.Priority,
+		TOS:      route.Tos,
+	}
+	kernRoute = kernelRoute{
+		Type:     route.Type,
+		Scope:    route.Scope,
+		GW:       ip.FromNetIP(route.Gw),
+		Src:      ip.FromNetIP(route.Src),
+		Ifindex:  route.LinkIndex,
+		OnLink:   route.Flags&unix.RTNH_F_ONLINK != 0,
+		Protocol: route.Protocol,
+	}
+	ok = true
+	return
 }
 
 func routeIsIPv6Bootstrap(route netlink.Route) bool {
@@ -796,6 +887,8 @@ func (r *RouteTable) applyUpdates() error {
 		if v.OnLink {
 			flags = unix.RTNH_F_ONLINK
 		}
+
+		r.waitForPendingConntrackDeletion(kernKey.CIDR.Addr())
 
 		nlRoute := &netlink.Route{
 			Table:    r.tableIndex,
