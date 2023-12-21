@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -78,7 +79,9 @@ var _ = infrastructure.DatastoreDescribe("policy grouping tests", []apiconfig.Da
 				Action: v3.Allow,
 			},
 		}
-		pol, err := client.GlobalNetworkPolicies().Create(context.TODO(), pol, options.SetOptions{})
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		pol, err := client.GlobalNetworkPolicies().Create(ctx, pol, options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 	})
 
@@ -104,8 +107,10 @@ var _ = infrastructure.DatastoreDescribe("policy grouping tests", []apiconfig.Da
 					},
 				},
 			}
-			_, _ = client.GlobalNetworkPolicies().Delete(context.TODO(), pol.Name, options.DeleteOptions{})
-			pol, err := client.GlobalNetworkPolicies().Create(context.TODO(), pol, options.SetOptions{})
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			_, _ = client.GlobalNetworkPolicies().Delete(ctx, pol.Name, options.DeleteOptions{})
+			pol, err := client.GlobalNetworkPolicies().Create(ctx, pol, options.SetOptions{})
+			cancel()
 			Expect(err).NotTo(HaveOccurred())
 		}
 	}
