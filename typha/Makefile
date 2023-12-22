@@ -116,7 +116,7 @@ TYPHA_IMAGE_ID=$(shell docker images -q $(TYPHA_IMAGE_WITH_TAG))
 # This target actually builds the image if any of its dependencies have changed or if it's
 # missing from docker.
 $(TYPHA_CONTAINER_CREATED): $(BINDIR)/calico-typha-$(ARCH) \
-                            LICENSE docker-image/licenses/* \
+                            LICENSE \
                             docker-image/Dockerfile \
                             docker-image/typha.cfg \
                             $(shell test "$(TYPHA_IMAGE_ID)" || echo force-rebuild)
@@ -129,7 +129,7 @@ $(TYPHA_CONTAINER_CREATED): $(BINDIR)/calico-typha-$(ARCH) \
 	touch $(TYPHA_CONTAINER_CREATED)
 
 $(TYPHA_CONTAINER_FIPS_CREATED): $(BINDIR)/calico-typha-$(ARCH) \
-                            LICENSE docker-image/licenses/* \
+                            LICENSE \
                             docker-image/Dockerfile \
                             docker-image/typha.cfg \
                             $(shell test "$(TYPHA_IMAGE_ID)" || echo force-rebuild)
