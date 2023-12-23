@@ -195,7 +195,6 @@ RUN chmod u+s /bin/bird6
 # Copy in the filesystem - this contains licenses, etc...
 COPY filesystem/etc/ /etc
 COPY filesystem/included-source/ /included-source
-COPY filesystem/licenses/ /licenses
 COPY filesystem/usr/ /usr
 COPY filesystem/sbin/* /usr/sbin/
 
