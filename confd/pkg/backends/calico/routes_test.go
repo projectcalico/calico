@@ -29,6 +29,7 @@ const (
 
 	// Specific IP for loadbalancer IP test.
 	loadBalancerIP1 = "172.217.4.10"
+	loadBalancerIP2 = "172.217.4.11"
 )
 
 func addEndpointSubset(ep *v1.Endpoints, nodename string) {
@@ -97,6 +98,28 @@ func buildSimpleService3() (svc *v1.Service, ep *v1.Endpoints) {
 	return
 }
 
+func buildSimpleService4() (svc *v1.Service, ep *v1.Endpoints) {
+	meta := metav1.ObjectMeta{Namespace: "foo", Name: "lb-rr"}
+	svc = &v1.Service{
+		ObjectMeta: meta,
+		Spec: v1.ServiceSpec{
+			Type:                  v1.ServiceTypeLoadBalancer,
+			ClusterIP:             "127.0.0.15",
+			ExternalTrafficPolicy: v1.ServiceExternalTrafficPolicyTypeLocal,
+			LoadBalancerIP:        loadBalancerIP2,
+		},
+		Status: v1.ServiceStatus{
+			LoadBalancer: v1.LoadBalancerStatus{
+				Ingress: []v1.LoadBalancerIngress{{IP: loadBalancerIP2}},
+			},
+		},
+	}
+	ep = &v1.Endpoints{
+		ObjectMeta: meta,
+	}
+	return
+}
+
 var _ = Describe("RouteGenerator", func() {
 	var rg *routeGenerator
 	var expectedSvcRouteMap map[string]bool
@@ -120,6 +143,8 @@ var _ = Describe("RouteGenerator", func() {
 			epIndexer:                  cache.NewIndexer(cache.MetaNamespaceKeyFunc, nil),
 			svcRouteMap:                make(map[string]map[string]bool),
 			routeAdvertisementRefCount: make(map[string]int),
+			svcAllowListMap:            make(map[string]map[string]bool),
+			routeAllowListRefCount:   make(map[string]int),
 			client: &client{
 				cache:                    make(map[string]string),
 				syncedOnce:               true,
@@ -232,29 +257,37 @@ var _ = Describe("RouteGenerator", func() {
 
 	Describe("resourceInformerHandlers", func() {
 		var (
-			svc, svc2, svc3 *v1.Service
-			ep, ep2, ep3    *v1.Endpoints
+			svc, svc2, svc3, svc4 *v1.Service
+			ep, ep2, ep3, ep4     *v1.Endpoints
 		)
 
 		BeforeEach(func() {
 			svc, ep = buildSimpleService()
 			svc2, ep2 = buildSimpleService2()
 			svc3, ep3 = buildSimpleService3()
+			svc4, ep4 = buildSimpleService4()
 
 			addEndpointSubset(ep, rg.nodeName)
 			addEndpointSubset(ep2, rg.nodeName)
 			addEndpointSubset(ep3, rg.nodeName)
+			// Service with ExternalTrafficPolicy Local that has an endpoint
+			// in a different node
+			addEndpointSubset(ep4, "foobaz")
 			err := rg.epIndexer.Add(ep)
 			Expect(err).NotTo(HaveOccurred())
 			err = rg.epIndexer.Add(ep2)
 			Expect(err).NotTo(HaveOccurred())
 			err = rg.epIndexer.Add(ep3)
 			Expect(err).NotTo(HaveOccurred())
+			err = rg.epIndexer.Add(ep4)
+			Expect(err).NotTo(HaveOccurred())
 			err = rg.svcIndexer.Add(svc)
 			Expect(err).NotTo(HaveOccurred())
 			err = rg.svcIndexer.Add(svc2)
 			Expect(err).NotTo(HaveOccurred())
 			err = rg.svcIndexer.Add(svc3)
+			Expect(err).NotTo(HaveOccurred())
+			err = rg.svcIndexer.Add(svc4)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -626,6 +659,47 @@ var _ = Describe("RouteGenerator", func() {
 				rg.resyncKnownRoutes()
 				Expect(rg.client.cache).NotTo(HaveKey(key))
 				Expect(rg.client.programmedRouteRefCount).NotTo(HaveKey(key))
+			})
+
+			// This test simulates a situation where BGPConfiguration has a /32 route that exactly matches
+			// a LoadBalancer with ExternalTrafficPolicy set to Local. The route should be allowed in
+			// the BGP export filter only if the node is a RouteReflector
+			It("should add /32 LoadBalancer IP to allowlist if node is a RouteReflector", func() {
+				// Manually add the required cache rr_cluster_id key so the node is registered as a Route Reflector
+				rr_key, _ := model.KeyToDefaultPath(model.NodeBGPConfigKey{Nodename: rg.nodeName, Name: "rr_cluster_id"})
+				rg.client.cache[rr_key] = "224.0.0.1"
+
+				adv_key := "/calico/staticroutes/" + loadBalancerIP2 + "-32"
+
+				// Key to search for LoadBalancerIP in allowlist
+				allow_key := "/calico/allowlist/" + loadBalancerIP2 + "-32"
+
+				// Simulate an event from the syncer which sets the LoadBalancer IP range containing only the service's loadBalancerIP.
+				// We use a /32 route to trigger the situation under test.
+				loadBalancerIPRangeSingle := fmt.Sprintf("%s/32", loadBalancerIP2)
+				By("onLoadBalancerIPsUpdate to include /32 route")
+				rg.client.onLoadBalancerIPsUpdate([]string{loadBalancerIPRangeSingle})
+				rg.resyncKnownRoutes()
+
+				fmt.Fprintln(GinkgoWriter, rg.client.cache)
+				// No routes should be advertised
+				Expect(rg.client.cache[adv_key]).To(Equal(""))
+				Expect(rg.client.programmedRouteRefCount[adv_key]).To(Equal(0))
+
+				// But the LoadBalancer IP should be in the respective RouteGenerator
+				// maps and the allowlist
+				Expect(rg.svcAllowListMap["foo/lb-rr"]).To(HaveKey(loadBalancerIPRangeSingle))
+				Expect(rg.routeAllowListRefCount[loadBalancerIPRangeSingle]).To(Equal(1))
+				Expect(rg.client.cache[allow_key]).To(Equal(loadBalancerIP2 + "/32"))
+
+				// Remove the Route Reflector key and check if the route is
+				// withdrawn from the allowlist and the RouteGenerator maps
+				rg.client.cache[rr_key] = ""
+				rg.resyncKnownRoutes()
+
+				Expect(rg.svcAllowListMap["foo/lb-rr"]).NotTo(HaveKey(loadBalancerIPRangeSingle))
+				Expect(rg.routeAllowListRefCount[loadBalancerIPRangeSingle]).To(Equal(0))
+				Expect(rg.client.cache[allow_key]).NotTo(Equal(loadBalancerIP2 + "/32"))
 			})
 		})
 	})

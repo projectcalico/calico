@@ -408,6 +408,16 @@ func (c *client) ExcludeServiceAdvertisement() bool {
 	return false
 }
 
+// IsRouteReflector returns true if this node is configured as a Route Reflector.
+func (c *client) IsRouteReflector(nodeName string) bool {
+	rr_key, _ := model.KeyToDefaultPath(model.NodeBGPConfigKey{Nodename: nodeName, Name: "rr_cluster_id"})
+	rr_cluster_id, ok := c.cache[rr_key]
+	if ok && rr_cluster_id != "" {
+		return true
+	}
+	return false
+}
+
 // OnInSync handles multiplexing in-sync messages from multiple data sources
 // into a single representation of readiness.
 func (c *client) OnSyncChange(source string, ready bool) {
@@ -1780,10 +1790,12 @@ func (c *client) updateLogLevel() {
 }
 
 var (
-	routeKeyPrefix    = "/calico/staticroutes/"
-	rejectKeyPrefix   = "/calico/rejectcidrs/"
-	routeKeyPrefixV6  = "/calico/staticroutesv6/"
-	rejectKeyPrefixV6 = "/calico/rejectcidrsv6/"
+	routeKeyPrefix       = "/calico/staticroutes/"
+	allowListKeyPrefix   = "/calico/allowlist/"
+	rejectKeyPrefix      = "/calico/rejectcidrs/"
+	routeKeyPrefixV6     = "/calico/staticroutesv6/"
+	allowListKeyPrefixV6 = "/calico/allowlistv6/"
+	rejectKeyPrefixV6    = "/calico/rejectcidrsv6/"
 )
 
 func (c *client) addRoutesLockHeld(prefixV4, prefixV6 string, cidrs []string) {
@@ -1842,6 +1854,26 @@ func (c *client) DeleteStaticRoutes(cidrs []string) {
 
 	c.incrementCacheRevision()
 	c.deleteRoutesLockHeld(routeKeyPrefix, routeKeyPrefixV6, cidrs)
+	c.onNewUpdates()
+}
+
+// AddAllowListRoutes adds the given CIDRs to the BGP export filter
+func (c *client) AddAllowListRoutes(cidrs []string) {
+	c.cacheLock.Lock()
+	defer c.cacheLock.Unlock()
+
+	c.incrementCacheRevision()
+	c.addRoutesLockHeld(allowListKeyPrefix, allowListKeyPrefixV6, cidrs)
+	c.onNewUpdates()
+}
+
+// DeleteStaticRoutes withdraws the given CIDRs from the BGP export filter
+func (c *client) DeleteAllowListRoutes(cidrs []string) {
+	c.cacheLock.Lock()
+	defer c.cacheLock.Unlock()
+
+	c.incrementCacheRevision()
+	c.deleteRoutesLockHeld(allowListKeyPrefix, allowListKeyPrefixV6, cidrs)
 	c.onNewUpdates()
 }
 

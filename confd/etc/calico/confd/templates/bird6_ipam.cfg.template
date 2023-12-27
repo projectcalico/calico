@@ -38,6 +38,16 @@ function calico_export_to_bgp_peers(bool internal_peer) {
   if ( net ~ {{$cidr}} ) then { accept; }
   {{- end}}
 {{- end}}
+{{- $allowlist_key := "/allowlistv6"}}
+{{- if ls $allowlist_key}}
+
+  # Route reflector allow list
+  {{- range ls $allowlist_key}}
+    {{- $parts := split . "-"}}
+    {{- $cidr := join $parts "/"}}
+  if ( net ~ {{$cidr}} ) then { accept; }
+  {{- end}}
+{{- end}}
 {{range ls "/v1/ipam/v6/pool"}}{{$data := json (getv (printf "/v1/ipam/v6/pool/%s" .))}}
 {{- if $data.disableBGPExport}}
   # Skip {{$data.cidr}} as BGP export is disabled for it
