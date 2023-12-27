@@ -40,7 +40,7 @@ import (
 	k8sconversion "github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 
-	uuid "github.com/satori/go.uuid"
+	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 )
@@ -469,7 +469,7 @@ func CheckSysctlValue(sysctlPath, value string) error {
 
 // Convert the netns name to a container ID.
 func netnsToContainerID(netns string) string {
-	u := uuid.NewV5(uuid.NamespaceURL, netns)
+	u := uuid.NewSHA1(uuid.NameSpaceURL, []byte(netns))
 	buf := make([]byte, 10)
 	hex.Encode(buf, u[0:5])
 	return string(buf)
