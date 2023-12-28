@@ -136,7 +136,7 @@ endif
 # the one for the host should contain all the necessary cross-compilation tools
 # we do not need to use the arch since go-build:v0.15 now is multi-arch manifest
 GO_BUILD_IMAGE ?= calico/go-build
-CALICO_BUILD    = $(GO_BUILD_IMAGE):$(GO_BUILD_VER)
+CALICO_BUILD    = $(GO_BUILD_IMAGE):$(GO_BUILD_VER)-$(BUILDARCH)
 
 
 # We use BoringCrypto as FIPS validated cryptography in order to allow users to run in FIPS Mode (amd64 only).
