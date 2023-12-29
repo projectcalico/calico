@@ -375,6 +375,8 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			if testOpts.dsr {
 				options.ExtraEnvVars["FELIX_BPFExternalServiceMode"] = "dsr"
 			}
+			// ACCEPT is what is set by our manifests and operator by default.
+			options.ExtraEnvVars["FELIX_DefaultEndpointToHostAction"] = "ACCEPT"
 			options.ExternalIPs = true
 			options.ExtraEnvVars["FELIX_BPFExtToServiceConnmark"] = "0x80"
 			if !testOpts.ipv6 {
@@ -1479,6 +1481,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					It("should handle NAT outgoing", func() {
 						By("SNATting outgoing traffic with the flag set")
 						cc.ExpectSNAT(w[0][0], felixIP(0), hostW[1])
+						cc.Expect(Some, w[0][0], hostW[0]) // no snat
 						cc.CheckConnectivity(conntrackChecks(tc.Felixes)...)
 
 						if testOpts.tunnel == "none" {
