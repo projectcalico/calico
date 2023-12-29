@@ -1341,6 +1341,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					It("should handle NAT outgoing", func() {
 						By("SNATting outgoing traffic with the flag set")
 						cc.ExpectSNAT(w[0][0], felixIP(0), hostW[1])
+						cc.Expect(Some, w[0][0], hostW[0]) // no snat
 						cc.CheckConnectivity(conntrackChecks(tc.Felixes)...)
 
 						if testOpts.tunnel == "none" {

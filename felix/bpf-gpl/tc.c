@@ -451,7 +451,12 @@ syn_force_policy:
 
 		// Check whether the workload needs outgoing NAT to this address.
 		if (r->flags & CALI_RT_NAT_OUT) {
-			if (!(cali_rt_lookup_flags(&ctx->state->post_nat_ip_dst) & CALI_RT_IN_POOL)) {
+			struct cali_rt *rt = cali_rt_lookup(&ctx->state->post_nat_ip_dst);
+			enum cali_rt_flags flags = CALI_RT_UNKNOWN;
+			if (rt) {
+				flags = rt->flags;
+			}
+			if (!(flags & CALI_RT_IN_POOL) && !cali_rt_flags_local_host(flags)) {
 				CALI_DEBUG("Source is in NAT-outgoing pool "
 					   "but dest is not, need to SNAT.\n");
 				ctx->state->flags |= CALI_ST_NAT_OUTGOING;
