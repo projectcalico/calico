@@ -434,14 +434,19 @@ func (f *Felix) IPTablesChains(table string) map[string][]string {
 	lines := strings.Split(raw, "\n")
 	for _, line := range lines {
 		if strings.HasPrefix(line, "#") {
+			// Line is a comment, ignore.
 			continue
 		}
 		if strings.HasPrefix(line, ":") {
+			// A chain declaration line, for example:
+			// :cali-INPUT - [0:0]
 			chainName := strings.SplitN(line[1:], " ", 2)[0]
 			out[chainName] = []string{}
 			continue
 		}
 		if strings.HasPrefix(line, "-A") {
+			// "-A" means "append rule to chain".  For example:
+			// -A PREROUTING -m addrtype --dst-type LOCAL -j DOCKER
 			chainName := strings.SplitN(line[3:], " ", 2)[0]
 			out[chainName] = append(out[chainName], line)
 			continue

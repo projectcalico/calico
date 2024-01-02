@@ -127,11 +127,11 @@ var _ = infrastructure.DatastoreDescribe("policy grouping tests", []apiconfig.Da
 		}{
 			// One big group.
 			{[]string{selA, selA, selA}, true},
-			// Group group with two policies, one inlined.
+			// Group with two policies, one inlined.
 			{[]string{selA, selA, selB}, true},
-			// Group inlined group followed by group with two.
+			// Inlined group followed by group with two.
 			{[]string{selA, selB, selB}, true},
-			// No groups due to alternating selector.
+			// Three inlined groups due to alternating selector.
 			{[]string{selA, selB, selA}, false},
 		} {
 			// For each pattern of selectors (which should give a different
@@ -183,9 +183,6 @@ var _ = infrastructure.DatastoreDescribe("policy grouping tests", []apiconfig.Da
 			for _, felix := range tc.Felixes {
 				_ = felix.ExecMayFail("iptables-save", "-c")
 				_ = felix.ExecMayFail("ipset", "list")
-				if BPFMode() {
-					_ = felix.ExecMayFail("calico-bpf", "ipsets", "dump")
-				}
 			}
 		}
 		tc.Stop()
