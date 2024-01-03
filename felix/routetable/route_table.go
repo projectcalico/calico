@@ -93,9 +93,17 @@ type RouteTable struct {
 	logCxt        *log.Entry
 	ipVersion     uint8
 	netlinkFamily int
+	// The routing table index.  This is defaulted to RT_TABLE_MAIN if not specified.
+	tableIndex int
+	// Whether this route table is managing vxlan routes.
+	vxlan bool
+
+	deviceRouteSourceAddress ip.Addr
+	deviceRouteProtocol      netlink.RouteProtocol
+	removeExternalRoutes     bool
 
 	// Interface update tracking.
-	fullResync         bool
+	fullResyncNeeded   bool
 	ifacesToRescan     set.Set[string]
 	ifacePrefixRegexp  *regexp.Regexp
 	includeNoInterface bool
@@ -112,30 +120,15 @@ type RouteTable struct {
 	// in the kernel.
 	kernelRoutes *deltatracker.DeltaTracker[kernelRouteKey, kernelRoute]
 
-	l2Targets            *deltatracker.DeltaTracker[string, []L2Target]
+	l2Targets *deltatracker.DeltaTracker[string, []L2Target]
+
 	ifaceNameToFirstSeen map[string]time.Time
 	ifaceNameToIndex     map[string]int
 	ifaceIndexToName     map[int]string
 
 	pendingConntrackCleanups map[ip.Addr]chan struct{}
 
-	// Whether this route table is managing vxlan routes.
-	vxlan bool
-
-	deviceRouteSourceAddress ip.Addr
-
-	deviceRouteProtocol  netlink.RouteProtocol
-	removeExternalRoutes bool
-
 	nl *handlemgr.HandleManager
-
-	// The routing table index.  This is defaulted to RT_TABLE_MAIN if not specified.
-	tableIndex int
-
-	// Testing shims, swapped with mock versions for UT
-	addStaticARPEntry func(cidr ip.CIDR, destMAC net.HardwareAddr, ifaceName string) error
-	conntrack         conntrackIface
-	time              timeshim.Interface
 
 	opReporter       logutils.OpRecorder
 	livenessCallback func()
@@ -143,6 +136,11 @@ type RouteTable struct {
 	// The route deletion grace period.
 	routeCleanupGracePeriod time.Duration
 	featureDetector         environment.FeatureDetectorIface
+
+	// Testing shims, swapped with mock versions for UT
+	addStaticARPEntry func(cidr ip.CIDR, destMAC net.HardwareAddr, ifaceName string) error
+	conntrack         conntrackIface
+	time              timeshim.Interface
 }
 
 type RouteTableOpt func(table *RouteTable)
@@ -255,9 +253,18 @@ func NewWithShims(
 	}
 
 	rt := &RouteTable{
-		logCxt:             logCxt,
-		ipVersion:          ipVersion,
-		netlinkFamily:      family,
+		logCxt:        logCxt,
+		ipVersion:     ipVersion,
+		netlinkFamily: family,
+		tableIndex:    tableIndex,
+		vxlan:         vxlan,
+
+		deviceRouteSourceAddress: ip.FromNetIP(deviceRouteSourceAddress), // FIXME use ip.Addr as input
+		deviceRouteProtocol:      deviceRouteProtocol,
+		removeExternalRoutes:     removeExternalRoutes,
+
+		fullResyncNeeded:   true,
+		ifacesToRescan:     set.New[string](),
 		ifacePrefixRegexp:  ifacePrefixRegexp,
 		includeNoInterface: includeNoOIF,
 
@@ -265,21 +272,17 @@ func NewWithShims(
 		cidrToIfaces:  map[ip.CIDR]set.Set[string]{},
 
 		kernelRoutes: deltatracker.New[kernelRouteKey, kernelRoute](),
-		l2Targets:    deltatracker.New[string, []L2Target](),
 
-		ifaceNameToFirstSeen:     map[string]time.Time{},
-		fullResync:               true,
+		l2Targets: deltatracker.New[string, []L2Target](),
+
+		ifaceNameToFirstSeen: map[string]time.Time{},
+		ifaceNameToIndex:     map[string]int{},
+		ifaceIndexToName:     map[int]string{},
+
 		pendingConntrackCleanups: map[ip.Addr]chan struct{}{},
-		addStaticARPEntry:        addStaticARPEntry,
-		conntrack:                conntrack,
-		time:                     timeShim,
-		vxlan:                    vxlan,
-		deviceRouteSourceAddress: ip.FromNetIP(deviceRouteSourceAddress), // FIXME use ip.Addr as input
-		deviceRouteProtocol:      deviceRouteProtocol,
-		removeExternalRoutes:     removeExternalRoutes,
-		tableIndex:               tableIndex,
-		opReporter:               opReporter,
-		livenessCallback:         func() {},
+
+		opReporter:       opReporter,
+		livenessCallback: func() {},
 		nl: handlemgr.NewHandleManager(
 			family,
 			featureDetector,
@@ -287,6 +290,10 @@ func NewWithShims(
 			handlemgr.WithSocketTimeout(netlinkTimeout),
 		),
 		featureDetector: featureDetector,
+
+		addStaticARPEntry: addStaticARPEntry,
+		conntrack:         conntrack,
+		time:              timeShim,
 	}
 
 	for _, o := range opts {
@@ -299,42 +306,61 @@ func NewWithShims(
 func (r *RouteTable) OnIfaceStateChanged(ifaceName string, ifIndex int, state ifacemonitor.State) {
 	logCxt := r.logCxt.WithField("ifaceName", ifaceName)
 	if r.ifacePrefixRegexp == nil || !r.ifacePrefixRegexp.MatchString(ifaceName) {
-		logCxt.Debug("Ignoring interface state change, not an interface managed by this routetable.")
+		logCxt.Trace("Ignoring interface state change, not an interface managed by this routetable.")
 		return
 	}
-	if state == ifacemonitor.StateNotPresent {
-		// Interface explicitly deleted, if it shows up again then we'll give it
-		// a new grace period.
-		delete(r.ifaceNameToFirstSeen, ifaceName)
-	} else {
-		r.onIfaceSeen(ifaceName)
-	}
 
-	recalculate := false
+	// There are a couple of interesting corner cases:
+	//
+	// * Interface gets renamed: same ifindex, new name.  The interface
+	//   monitor deals with that by sending us a deletion for the old
+	//   name, then a creation for the new name.
+	// * Interface gets recreated: same name, new ifindex.  We should
+	//   see a deletion and then an add.
+
+	recheckInterfaceRoutes := false
 	if state == ifacemonitor.StateNotPresent {
 		// Interface deleted, clean up.
 		oldIndex := r.ifaceNameToIndex[ifaceName]
 		delete(r.ifaceIndexToName, oldIndex)
+		delete(r.ifaceNameToFirstSeen, ifaceName)
 		delete(r.ifaceNameToIndex, ifaceName)
-		recalculate = true
-	} else if ifIndex != r.ifaceNameToIndex[ifaceName] {
-		// Interface index new/updated.
-		delete(r.ifaceIndexToName, r.ifaceNameToIndex[ifaceName])
+		r.ifacesToRescan.Discard(ifaceName)
+
+		// This interface may have had some active routes that were shadowing
+		// routes from another interface.  Make sure we rescan.
+		recheckInterfaceRoutes = true
+	} else {
+		// Interface exists, record its details.
+		r.onIfaceSeen(ifaceName)
+		oldIfIndex, ok := r.ifaceNameToIndex[ifaceName]
+		if ok && oldIfIndex != ifIndex {
+			// Interface renumbered.  For example, deleted and then recreated
+			// with same name.  Clean up old number.
+			delete(r.ifaceIndexToName, oldIfIndex)
+
+			// The interface index is part of the route conflict tie-breaker,
+			// so we need to check if the winner has changed.
+			recheckInterfaceRoutes = true
+		} else if !ok {
+			// New interface.
+			recheckInterfaceRoutes = true
+		}
 		r.ifaceNameToIndex[ifaceName] = ifIndex
 		r.ifaceIndexToName[ifIndex] = ifaceName
-		recalculate = true
 	}
 
 	if state == ifacemonitor.StateUp {
-		// When an interface goes down/up, the kernel may remove the routes.
-		// Mark them as suspect.
+		// Interface transitioned to "up".  Force a rescan of its routes
+		// because routes often get removed when the interface goes down
+		// and its default route disappears.
 		logCxt.Debug("Interface up, marking for route sync")
 		r.ifacesToRescan.Add(ifaceName)
-		recalculate = true
+		recheckInterfaceRoutes = true
 	}
 
-	if recalculate {
-		r.recalculateAllIfaceRoutes(ifaceName)
+	if recheckInterfaceRoutes {
+		r.recheckRouteOwnershipsByIface(ifaceName)
 	}
 }
 
@@ -425,7 +451,9 @@ func (r *RouteTable) removeOwningIface(ifaceName string, cidr ip.CIDR) {
 	r.recalculateDesiredKernelRoute(cidr)
 }
 
-func (r *RouteTable) recalculateAllIfaceRoutes(name string) {
+// recheckRouteOwnershipsByIface reruns conflict resolution for all
+// the interface's routes.
+func (r *RouteTable) recheckRouteOwnershipsByIface(name string) {
 	for cidr := range r.ifaceToRoutes[name] {
 		r.recalculateDesiredKernelRoute(cidr)
 	}
@@ -525,7 +553,7 @@ func (r *RouteTable) SetL2Routes(ifaceName string, targets []L2Target) {
 
 func (r *RouteTable) QueueResync() {
 	r.logCxt.Debug("Queueing a resync of routing table.")
-	r.fullResync = true
+	r.fullResyncNeeded = true
 }
 
 func (r *RouteTable) Apply() error {
@@ -545,9 +573,7 @@ func (r *RouteTable) maybeResyncWithDataplane() error {
 		return ConnectFailed
 	}
 
-	if r.fullResync {
-		// About to rescan everything, don't need the individual rescan set.
-		r.ifacesToRescan.Clear()
+	if r.fullResyncNeeded {
 		return r.doFullResync(nl)
 	}
 
@@ -557,7 +583,6 @@ func (r *RouteTable) maybeResyncWithDataplane() error {
 
 func (r *RouteTable) doFullResync(nl netlinkshim.Interface) error {
 	r.opReporter.RecordOperation(fmt.Sprint("resync-routes-v", r.ipVersion))
-
 	resyncStartTime := time.Now()
 
 	// Load all the routes in the routing table.  If we're managing
@@ -582,6 +607,7 @@ func (r *RouteTable) doFullResync(nl netlinkshim.Interface) error {
 		for _, route := range allRoutes {
 			kernKey, kernRoute, ok := r.netlinkRouteToKernelRoute(route)
 			if !ok {
+				// Not a route that we're managing.
 				continue
 			}
 			f(kernKey, kernRoute)
@@ -593,25 +619,21 @@ func (r *RouteTable) doFullResync(nl netlinkshim.Interface) error {
 		return fmt.Errorf("failed to update delta tracker: %w", err)
 	}
 
-	r.fullResync = false
+	// We're now in sync.
+	r.ifacesToRescan.Clear()
+	r.fullResyncNeeded = false
 	listAllRoutesTime.Observe(r.time.Since(resyncStartTime).Seconds())
 	return nil
 }
 
 func (r *RouteTable) resyncIndividualInterfaces(nl netlinkshim.Interface) error {
 	r.ifacesToRescan.Iter(func(ifaceName string) error {
-		ifIndex := 0
-		if ifaceName == InterfaceNone {
-			if r.ipVersion == 6 {
-				ifIndex = 1
-			}
-		} else {
-			ifIndex := r.ifaceNameToIndex[ifaceName]
-			if ifIndex == 0 {
-				r.logCxt.Debug("Ignoring rescan of unknown interface.")
-				return set.RemoveItem
-			}
+		ifIndex, ok := r.lookupIfaceIndex(ifaceName)
+		if !ok {
+			r.logCxt.Debug("Ignoring rescan of unknown interface.")
+			return set.RemoveItem
 		}
+
 		routeFilter := &netlink.Route{
 			Table:     r.tableIndex,
 			LinkIndex: ifIndex,
@@ -681,15 +703,29 @@ func (r *RouteTable) resyncIndividualInterfaces(nl netlinkshim.Interface) error 
 	return nil
 }
 
+// netlinkRouteToKernelRoute converts (only) routes that we own back
+// to our kernelRoute/Key structs (returning ok=true).  Other routes
+// are ignored and returned with ok = false.
 func (r *RouteTable) netlinkRouteToKernelRoute(route netlink.Route) (kernKey kernelRouteKey, kernRoute kernelRoute, ok bool) {
+	// We're on the hot path, so it's worth avoiding the overheads of
+	// WithField(s) if debug is disabled.
 	debug := log.IsLevelEnabled(log.DebugLevel)
-	if r.ifacePrefixRegexp != nil {
-		if routeIsSpecialNoIfRoute(route) && !r.includeNoInterface {
+	logCxt := r.logCxt
+	if debug {
+		logCxt = logCxt.WithField("route", route)
+	}
+	if routeIsSpecialNoIfRoute(route) {
+		if !r.includeNoInterface {
+			logCxt.Debug("Ignoring no-interface route (we're not managing them)")
 			return
 		}
-		if routeIsIPv6Bootstrap(route) {
-			return
-		}
+	} else if routeIsIPv6Bootstrap(route) {
+		logCxt.Debug("Ignoring IPv6 bootstrap route, kernel manages these.")
+		return
+	} else if r.ifacePrefixRegexp == nil {
+		logCxt.Debug("Ignoring normal route; we're only managing special routes.")
+		return
+	} else {
 		ifaceName := r.ifaceIndexToName[route.LinkIndex]
 		if ifaceName == "" {
 			// We don't know about this interface.  Either we're racing
@@ -697,20 +733,18 @@ func (r *RouteTable) netlinkRouteToKernelRoute(route netlink.Route) (kernKey ker
 			// interface soon and work out what to do, or we're seeing
 			// a route for a just-deleted interface, in which case
 			// we don't care.
-			if debug {
-				r.logCxt.WithField("ifIndex", route.LinkIndex).Debug("Ignoring route for unknown iface")
-			}
+			logCxt.Debug("Ignoring route for unknown iface")
 			return
 		}
 		if !r.ifacePrefixRegexp.MatchString(ifaceName) {
 			if debug {
-				r.logCxt.WithField("ifaceName", ifaceName).Debug("Ignoring route for non-Calico interface.")
+				logCxt.WithField("ifaceName", ifaceName).Debug("Ignoring route for non-Calico interface.")
 			}
 			return
 		}
 	}
 	if !r.removeExternalRoutes && route.Protocol != r.deviceRouteProtocol {
-		r.logCxt.Debug("Ignoring route (not our protocol).")
+		logCxt.Debug("Ignoring route (not our protocol).")
 		return
 	}
 	kernKey = kernelRouteKey{
@@ -727,11 +761,20 @@ func (r *RouteTable) netlinkRouteToKernelRoute(route netlink.Route) (kernKey ker
 		OnLink:   route.Flags&unix.RTNH_F_ONLINK != 0,
 		Protocol: route.Protocol,
 	}
+	if debug {
+		logCxt.WithFields(log.Fields{
+			"kernRoute": kernRoute,
+			"kernKey":   kernKey,
+		}).Debug("Loaded route from kernel.")
+	}
 	ok = true
 	return
 }
 
 func routeIsIPv6Bootstrap(route netlink.Route) bool {
+	if route.Dst == nil {
+		return false
+	}
 	if route.Family != netlink.FAMILY_V6 {
 		return false
 	}
