@@ -23,6 +23,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+	log "github.com/sirupsen/logrus"
+	"github.com/vishvananda/netlink"
+	"golang.org/x/sys/unix"
+
 	"github.com/projectcalico/calico/felix/conntrack"
 	"github.com/projectcalico/calico/felix/deltatracker"
 	"github.com/projectcalico/calico/felix/environment"
@@ -34,10 +39,6 @@ import (
 	"github.com/projectcalico/calico/felix/timeshim"
 	cprometheus "github.com/projectcalico/calico/libcalico-go/lib/prometheus"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
-	"github.com/prometheus/client_golang/prometheus"
-	log "github.com/sirupsen/logrus"
-	"github.com/vishvananda/netlink"
-	"golang.org/x/sys/unix"
 )
 
 var (
@@ -83,131 +84,7 @@ const (
 	TargetTypeUnreachable TargetType = "unreachable"
 )
 
-const (
-	maxApplyRetries = 2
-)
-
-type L2Target struct {
-	// For VXLAN targets, this is the node's real IP address.
-	IP ip.Addr
-
-	// For VXLAN targets, this is the MAC address of the remote VTEP.
-	VTEPMAC net.HardwareAddr
-
-	// For VXLAN targets, this is the IP address of the remote VTEP.
-	GW ip.Addr
-}
-
-type Target struct {
-	Type    TargetType
-	CIDR    ip.CIDR
-	GW      ip.Addr
-	Src     ip.Addr
-	DestMAC net.HardwareAddr
-}
-
-func (t Target) Equal(t2 Target) bool {
-	return reflect.DeepEqual(t, t2)
-}
-
-func (t Target) RouteType() int {
-	switch t.Type {
-	case TargetTypeLocal:
-		return unix.RTN_LOCAL
-	case TargetTypeThrow:
-		return unix.RTN_THROW
-	case TargetTypeBlackhole:
-		return unix.RTN_BLACKHOLE
-	case TargetTypeProhibit:
-		return unix.RTN_PROHIBIT
-	case TargetTypeUnreachable:
-		return unix.RTN_UNREACHABLE
-	default:
-		return unix.RTN_UNICAST
-	}
-}
-
-func (t Target) RouteScope() netlink.Scope {
-	switch t.Type {
-	case TargetTypeLocal:
-		return netlink.SCOPE_HOST
-	case TargetTypeLinkLocalUnicast:
-		return netlink.SCOPE_LINK
-	case TargetTypeGlobalUnicast:
-		return netlink.SCOPE_UNIVERSE
-	case TargetTypeNoEncap:
-		return netlink.SCOPE_UNIVERSE
-	case TargetTypeVXLAN:
-		return netlink.SCOPE_UNIVERSE
-	case TargetTypeThrow:
-		return netlink.SCOPE_UNIVERSE
-	case TargetTypeBlackhole:
-		return netlink.SCOPE_UNIVERSE
-	case TargetTypeProhibit:
-		return netlink.SCOPE_UNIVERSE
-	case TargetTypeOnLink:
-		return netlink.SCOPE_LINK
-	default:
-		return netlink.SCOPE_LINK
-	}
-}
-
-func (t Target) Flags() netlink.NextHopFlag {
-	switch t.Type {
-	case TargetTypeVXLAN, TargetTypeNoEncap, TargetTypeOnLink:
-		return unix.RTNH_F_ONLINK
-	default:
-		return 0
-	}
-}
-
-// kernelRouteKey represents the kernel's FIB key.  The kernel allows routes
-// to coexist as long as they have different keys.
-type kernelRouteKey struct {
-	// Destination CIDR; route matches traffic to this destination.
-	CIDR ip.CIDR
-	// TOS is the Type-of-Service field.  For example, one app may mark its
-	// packets as "high importance" and that will take a different route to
-	// another app.
-	//
-	// Kernel uses the TOS=0 route if there isn't a more precise match.
-	TOS int
-	// Priority is the routing metric / distance.  Given two routes with the
-	// same CIDR, the kernel prefers the route with the _lower_ priority.
-	Priority int
-}
-
-// kernelRoute is our low-level representation of a route. It contains fields
-// that we can easily read back from the kernel for comparison. In particular,
-// we track the interface index instead of the interface name.  This means that
-// when interface indexes change, we must trigger recalculation of the desired
-// kernelRoute.
-type kernelRoute struct {
-	Type     int // unix.RTN_... constants.
-	Scope    netlink.Scope
-	GW       ip.Addr
-	Src      ip.Addr
-	Ifindex  int
-	Protocol netlink.RouteProtocol
-	OnLink   bool
-	// FIXME Add ARP entries
-}
-
-func (r kernelRoute) GWAsNetIP() net.IP {
-	if r.GW == nil {
-		return nil
-	}
-	return r.GW.AsNetIP()
-}
-
-func (r kernelRoute) SrcAsNetIP() net.IP {
-	if r.Src == nil {
-		return nil
-	}
-	return r.Src.AsNetIP()
-}
-
-// RouteTable manages calico routes for a specific table. It reconciles the
+// RouteTable manages the calico routes for a specific table. It reconciles the
 // routes that we desire to have for calico managed devices with what is the
 // current status in the dataplane. That is, it removes any routes that we do
 // not desire and adds those that we do. It skips over devices that we do not
@@ -224,10 +101,8 @@ type RouteTable struct {
 	includeNoInterface bool
 
 	// ifaceToRoutes and cidrToIfaces are our inputs, updated
-	// eagerly when something in the manager layer tells us tp change the
-	// routes.  The API to the manager layer is indexed on interface, but
-	// there's a mismatch with the kernel, which is indexed on CIDR.  We
-	// track both so that we can resolve conflicts.
+	// eagerly when something in the manager layer tells us to change the
+	// routes.
 	ifaceToRoutes map[string]map[ip.CIDR]Target
 	cidrToIfaces  map[ip.CIDR]set.Set[string]
 
@@ -451,8 +326,8 @@ func (r *RouteTable) OnIfaceStateChanged(ifaceName string, ifIndex int, state if
 	}
 
 	if state == ifacemonitor.StateUp {
-		// When an interface goes down/up that can remove its routes, mark
-		// all its routes as suspect.
+		// When an interface goes down/up, the kernel may remove the routes.
+		// Mark them as suspect.
 		logCxt.Debug("Interface up, marking for route sync")
 		r.ifacesToRescan.Add(ifaceName)
 		recalculate = true
@@ -556,36 +431,56 @@ func (r *RouteTable) recalculateAllIfaceRoutes(name string) {
 	}
 }
 
+func (r *RouteTable) lookupIfaceIndex(ifaceName string) (int, bool) {
+	if ifaceName == InterfaceNone {
+		if r.ipVersion == 6 {
+			// IPv6 "special" routes use ifindex 1 (vs 0 for IPv4).
+			return 1, true
+		} else {
+			// IPv4 uses 0.
+			return 0, true
+		}
+	}
+
+	idx, ok := r.ifaceNameToIndex[ifaceName]
+	return idx, ok
+}
+
 func (r *RouteTable) recalculateDesiredKernelRoute(cidr ip.CIDR) {
-	// Start with a blank slate.  We don't currently use the TOS/Priority
-	// for our routes so we leave those as 0 in the kernelRouteKey.
+	// We don't currently use the TOS/Priority for our routes, so we leave
+	// those as 0 in the kernelRouteKey.
 	kernKey := kernelRouteKey{CIDR: cidr}
+	oldDesiredRoute, _ := r.kernelRoutes.Desired().Get(kernKey)
+
+	// Start with a blank slate.  The delta-tracker will efficiently prevent
+	// dataplane churn if we add an identical route back again.
 	r.kernelRoutes.Desired().Delete(kernKey)
 
 	ifaces := r.cidrToIfaces[cidr]
 	if ifaces == nil {
-		r.logCxt.WithField("cidr", cidr).Debug("CIDR no longer has associated routes.")
+		// Keep the blank slate!
+		r.logCxt.WithFields(log.Fields{
+			"cidr":     cidr,
+			"oldRoute": oldDesiredRoute,
+		}).Debug("CIDR no longer has associated routes.")
 		return
 	}
+
+	// In case of conflicts (more than one route with the same CIDR), pick
+	// one deterministically so that we don't churn the dataplane.
 	var bestTarget Target
 	bestIface := ""
-	bestIfaceIdx := 0
+	bestIfaceIdx := -1
 	ifaces.Iter(func(ifaceName string) error {
-		ifIndex := 0
-		if ifaceName == InterfaceNone {
-			if r.ipVersion == 6 {
-				// IPv6 "special" routes use ifindex 1 (vs 0 for IPv4).
-				ifIndex = 1
-			}
-		} else {
-			ifIndex = r.ifaceNameToIndex[ifaceName]
-			if ifIndex == 0 {
-				r.logCxt.WithField("name", ifaceName).Debug("Skipping interface with unknown index.")
-				return nil
-			}
+		ifIndex, ok := r.lookupIfaceIndex(ifaceName)
+		if !ok {
+			r.logCxt.Debug("Skipping route for missing interface.")
+			return nil
 		}
-		// Arbitrary tie-breaker.
-		if ifaceName > bestIface {
+		// This tie-breaker tends to prefer "real" routes over "no-interface"
+		// special routes, and it tends to prefer newer interfaces (because
+		// they typically have higher indexes).
+		if ifIndex > bestIfaceIdx {
 			bestIface = ifaceName
 			bestIfaceIdx = ifIndex
 			bestTarget = r.ifaceToRoutes[ifaceName][cidr]
@@ -593,8 +488,8 @@ func (r *RouteTable) recalculateDesiredKernelRoute(cidr ip.CIDR) {
 		return nil
 	})
 
-	if bestIface == "" {
-		r.logCxt.WithField("cidr", cidr).Debug("CIDR no longer has associated route (all candidate routes missing iface index).")
+	if bestIfaceIdx == -1 {
+		r.logCxt.WithField("cidr", cidr).Debug("No valid route for this CIDR (all candidate routes missing iface index).")
 		return
 	}
 
@@ -608,10 +503,15 @@ func (r *RouteTable) recalculateDesiredKernelRoute(cidr ip.CIDR) {
 		GW:       bestTarget.GW,
 		Src:      src,
 		Ifindex:  bestIfaceIdx,
-		OnLink:   bestTarget.Flags()&unix.RTNH_F_ONLINK != 0, // FIXME handle other flags?
+		OnLink:   bestTarget.Flags()&unix.RTNH_F_ONLINK != 0, // FIXME handle (any?) other flags?
 		Protocol: r.deviceRouteProtocol,
 	}
-	r.logCxt.WithField("kernelRoute", kernRoute).Debug("Calculated kernel route.")
+	r.logCxt.WithFields(log.Fields{
+		"cidr":     cidr,
+		"oldRoute": oldDesiredRoute,
+		"newRoute": kernRoute,
+		"iface":    bestIface,
+	}).Debug("Calculated kernel route.")
 	r.kernelRoutes.Desired().Set(kernKey, kernRoute)
 }
 
@@ -645,14 +545,14 @@ func (r *RouteTable) maybeResyncWithDataplane() error {
 		return ConnectFailed
 	}
 
-	if !r.fullResync {
-		return r.resyncIndividualInterfaces(nl)
+	if r.fullResync {
+		// About to rescan everything, don't need the individual rescan set.
+		r.ifacesToRescan.Clear()
+		return r.doFullResync(nl)
 	}
 
-	// About to rescan everything, don't need the individual rescan set.
-	r.ifacesToRescan.Clear()
-
-	return r.doFullResync(nl)
+	// Do any partial per-interface resyncs.
+	return r.resyncIndividualInterfaces(nl)
 }
 
 func (r *RouteTable) doFullResync(nl netlinkshim.Interface) error {
@@ -660,23 +560,21 @@ func (r *RouteTable) doFullResync(nl netlinkshim.Interface) error {
 
 	resyncStartTime := time.Now()
 
-	// Load all the routes in the routing table.  If we're managing routes in
-	// a shared table (such as the main table) this may include a lot of routes
-	// that we're not managing.
-	routeFilter := &netlink.Route{}
-	routeFilterFlags := uint64(0)
-	if r.tableIndex != 0 {
-		routeFilterFlags |= netlink.RT_FILTER_TABLE
+	// Load all the routes in the routing table.  If we're managing
+	// routes in a shared table (such as the main table) this may include
+	// routes that we're not managing.
+	routeFilter := &netlink.Route{
+		Table: r.tableIndex,
 	}
+	routeFilterFlags := netlink.RT_FILTER_TABLE
 	allRoutes, err := nl.RouteListFiltered(r.netlinkFamily, routeFilter, routeFilterFlags)
 	if errors.Is(err, unix.ENOENT) {
 		// In strict mode, get this if the routing table doesn't exist; it'll be auto-created
 		// when we add the first route so just treat it as empty.
 		log.WithError(err).Debug("Routing table doesn't exist (yet). Treating as empty.")
-		err = nil
 		allRoutes = nil
-	}
-	if err != nil {
+		err = nil
+	} else if err != nil {
 		return fmt.Errorf("failed to list all routes for resync: %w", err)
 	}
 
@@ -752,6 +650,8 @@ func (r *RouteTable) resyncIndividualInterfaces(nl netlinkshim.Interface) error 
 		for _, nlRoute := range netlinkRoutes {
 			kernKey, kernRoute, ok := r.netlinkRouteToKernelRoute(nlRoute)
 			if !ok {
+				// Not a route that we're managing, so we don't want it to
+				// be a candidate for us to delete.
 				continue
 			}
 			kernRoutes[kernKey] = kernRoute
@@ -760,12 +660,13 @@ func (r *RouteTable) resyncIndividualInterfaces(nl netlinkshim.Interface) error 
 		// missing.
 		for cidr := range r.ifaceToRoutes[ifaceName] {
 			kernKey := kernelRouteKey{CIDR: cidr}
-			desiredKernRoute, ok := r.kernelRoutes.Desired().Get(kernKey)
-			if !ok || desiredKernRoute.Ifindex != ifIndex {
-				// This route belongs to some other interface right now.
+			if _, ok := kernRoutes[kernKey]; ok {
+				// Route still there; handled below.
 				continue
 			}
-			if _, ok := kernRoutes[kernKey]; ok {
+			desKernRoute, ok := r.kernelRoutes.Desired().Get(kernKey)
+			if !ok || desKernRoute.Ifindex != ifIndex {
+				// This interface doesn't "own" this route .
 				continue
 			}
 			r.kernelRoutes.Dataplane().Delete(kernKey)
@@ -781,6 +682,7 @@ func (r *RouteTable) resyncIndividualInterfaces(nl netlinkshim.Interface) error 
 }
 
 func (r *RouteTable) netlinkRouteToKernelRoute(route netlink.Route) (kernKey kernelRouteKey, kernRoute kernelRoute, ok bool) {
+	debug := log.IsLevelEnabled(log.DebugLevel)
 	if r.ifacePrefixRegexp != nil {
 		if routeIsSpecialNoIfRoute(route) && !r.includeNoInterface {
 			return
@@ -795,16 +697,20 @@ func (r *RouteTable) netlinkRouteToKernelRoute(route netlink.Route) (kernKey ker
 			// interface soon and work out what to do, or we're seeing
 			// a route for a just-deleted interface, in which case
 			// we don't care.
-			r.logCxt.WithField("ifIndex", route.LinkIndex).Debug(
-				"Skipping resync of route for unknown iface")
+			if debug {
+				r.logCxt.WithField("ifIndex", route.LinkIndex).Debug("Ignoring route for unknown iface")
+			}
 			return
 		}
 		if !r.ifacePrefixRegexp.MatchString(ifaceName) {
+			if debug {
+				r.logCxt.WithField("ifaceName", ifaceName).Debug("Ignoring route for non-Calico interface.")
+			}
 			return
 		}
 	}
 	if !r.removeExternalRoutes && route.Protocol != r.deviceRouteProtocol {
-		r.logCxt.Debug("Ignoring non-Calico route.")
+		r.logCxt.Debug("Ignoring route (not our protocol).")
 		return
 	}
 	kernKey = kernelRouteKey{
@@ -1359,7 +1265,122 @@ func (r *RouteTable) shouldDeleteConflictingRoutes() bool {
 	return false
 }
 
-// safeTargetPointer returns a pointer to a Target safely ensuring the pointer is unique.
-func safeTargetPointer(target Target) *Target {
-	return &target
+type L2Target struct {
+	// For VXLAN targets, this is the node's real IP address.
+	IP ip.Addr
+
+	// For VXLAN targets, this is the MAC address of the remote VTEP.
+	VTEPMAC net.HardwareAddr
+
+	// For VXLAN targets, this is the IP address of the remote VTEP.
+	GW ip.Addr
+}
+
+type Target struct {
+	Type    TargetType
+	CIDR    ip.CIDR
+	GW      ip.Addr
+	Src     ip.Addr
+	DestMAC net.HardwareAddr
+}
+
+func (t Target) Equal(t2 Target) bool {
+	return reflect.DeepEqual(t, t2)
+}
+
+func (t Target) RouteType() int {
+	switch t.Type {
+	case TargetTypeLocal:
+		return unix.RTN_LOCAL
+	case TargetTypeThrow:
+		return unix.RTN_THROW
+	case TargetTypeBlackhole:
+		return unix.RTN_BLACKHOLE
+	case TargetTypeProhibit:
+		return unix.RTN_PROHIBIT
+	case TargetTypeUnreachable:
+		return unix.RTN_UNREACHABLE
+	default:
+		return unix.RTN_UNICAST
+	}
+}
+
+func (t Target) RouteScope() netlink.Scope {
+	switch t.Type {
+	case TargetTypeLocal:
+		return netlink.SCOPE_HOST
+	case TargetTypeLinkLocalUnicast:
+		return netlink.SCOPE_LINK
+	case TargetTypeGlobalUnicast:
+		return netlink.SCOPE_UNIVERSE
+	case TargetTypeNoEncap:
+		return netlink.SCOPE_UNIVERSE
+	case TargetTypeVXLAN:
+		return netlink.SCOPE_UNIVERSE
+	case TargetTypeThrow:
+		return netlink.SCOPE_UNIVERSE
+	case TargetTypeBlackhole:
+		return netlink.SCOPE_UNIVERSE
+	case TargetTypeProhibit:
+		return netlink.SCOPE_UNIVERSE
+	case TargetTypeOnLink:
+		return netlink.SCOPE_LINK
+	default:
+		return netlink.SCOPE_LINK
+	}
+}
+
+func (t Target) Flags() netlink.NextHopFlag {
+	switch t.Type {
+	case TargetTypeVXLAN, TargetTypeNoEncap, TargetTypeOnLink:
+		return unix.RTNH_F_ONLINK
+	default:
+		return 0
+	}
+}
+
+// kernelRouteKey represents the kernel's FIB key.  The kernel allows routes
+// to coexist as long as they have different keys.
+type kernelRouteKey struct {
+	// Destination CIDR; route matches traffic to this destination.
+	CIDR ip.CIDR
+	// TOS is the Type-of-Service field.  For example, one app may mark its
+	// packets as "high importance" and that will take a different route to
+	// another app.
+	//
+	// Kernel uses the TOS=0 route if there isn't a more precise match.
+	TOS int
+	// Priority is the routing metric / distance.  Given two routes with the
+	// same CIDR, the kernel prefers the route with the _lower_ priority.
+	Priority int
+}
+
+// kernelRoute is our low-level representation of the parts of a route that
+// we care to program. It contains fields that we can easily read back from the
+// kernel for comparison. In particular, we track the interface index instead
+// of the interface name.  This means that if an interface is recreated, we
+// must trigger recalculation of the desired kernelRoute.
+type kernelRoute struct {
+	Type     int // unix.RTN_... constants.
+	Scope    netlink.Scope
+	GW       ip.Addr
+	Src      ip.Addr
+	Ifindex  int
+	Protocol netlink.RouteProtocol
+	OnLink   bool
+	// FIXME Add ARP entries
+}
+
+func (r kernelRoute) GWAsNetIP() net.IP {
+	if r.GW == nil {
+		return nil
+	}
+	return r.GW.AsNetIP()
+}
+
+func (r kernelRoute) SrcAsNetIP() net.IP {
+	if r.Src == nil {
+		return nil
+	}
+	return r.Src.AsNetIP()
 }
