@@ -80,6 +80,22 @@ var failsafeTests = []failsafeTest{
 		Allowed:  false,
 	},
 	{
+		Description: "Packets from localhost to failsafe IP and port are allowed",
+		Rules:       &denyAllRulesHost,
+		IPHeaderIPv4: &layers.IPv4{
+			Version:  4,
+			IHL:      5,
+			TTL:      64,
+			Flags:    layers.IPv4DontFragment,
+			SrcIP:    dstIP,
+			DstIP:    fsafeDstIP,
+			Protocol: layers.IPProtocolUDP,
+		},
+		Outbound:      true,
+		Allowed:       true,
+		FromLocalHost: true,
+	},
+	{
 		Description: "Packets from localhost to non-failsafe IP are denied",
 		Rules:       &denyAllRulesHost,
 		IPHeaderIPv4: &layers.IPv4{
@@ -91,18 +107,9 @@ var failsafeTests = []failsafeTest{
 			DstIP:    net.IPv4(4, 4, 4, 4),
 			Protocol: layers.IPProtocolUDP,
 		},
-		Outbound: false,
-		Allowed:  false,
-	},
-	{
-		Description:  "Packets from failsafe IP and non-failsafe port to localhost are denied",
-		Rules:        &denyAllRulesHost,
-		IPHeaderIPv4: ipv4Default,
-		IPHeaderUDP: &layers.UDP{
-			DstPort: 161,
-		},
-		Outbound: false,
-		Allowed:  false,
+		Outbound:      false,
+		Allowed:       false,
+		FromLocalHost: true,
 	},
 	{
 		Description: "Packets from outbound failsafes to inbound failsafes are denied",
@@ -150,20 +157,14 @@ var failsafeTests = []failsafeTest{
 		Allowed:  false,
 	},
 	{
-		Description: "Packets from localhost to failsafe IP and port are allowed",
-		Rules:       &denyAllRulesHost,
-		IPHeaderIPv4: &layers.IPv4{
-			Version:  4,
-			IHL:      5,
-			TTL:      64,
-			Flags:    layers.IPv4DontFragment,
-			SrcIP:    dstIP,
-			DstIP:    fsafeDstIP,
-			Protocol: layers.IPProtocolUDP,
+		Description:  "Packets from failsafe IP and non-failsafe port to localhost are denied",
+		Rules:        &denyAllRulesHost,
+		IPHeaderIPv4: ipv4Default,
+		IPHeaderUDP: &layers.UDP{
+			DstPort: 161,
 		},
-		Outbound:      true,
-		Allowed:       true,
-		FromLocalHost: true,
+		Outbound: false,
+		Allowed:  false,
 	},
 	{
 		Description: "Packets from localhost to non-failsafe IP and failsafe port are denied",
