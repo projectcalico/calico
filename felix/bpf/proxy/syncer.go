@@ -154,6 +154,8 @@ type Syncer struct {
 	newBackendValue        func(addr net.IP, port uint16) nat.BackendValueInterface
 	affinityKeyFromBytes   func([]byte) nat.AffinityKeyInterface
 	affinityValueFromBytes func([]byte) nat.AffinityValueInterface
+
+	excludedCIDRs *ip.CIDRTrie
 }
 
 type ipPort struct {
@@ -207,16 +209,18 @@ func uniqueIPs(ips []net.IP) []net.IP {
 func NewSyncer(family int, nodePortIPs []net.IP,
 	frontendMap maps.MapWithExistsCheck, backendMap maps.MapWithExistsCheck,
 	affmap maps.Map, rt Routes,
+	excludedCIDRs *ip.CIDRTrie,
 ) (*Syncer, error) {
 
 	s := &Syncer{
-		ipFamily:    family,
-		bpfAff:      affmap,
-		rt:          rt,
-		nodePortIPs: uniqueIPs(nodePortIPs),
-		prevSvcMap:  make(map[svcKey]svcInfo),
-		prevEpsMap:  make(k8sp.EndpointsMap),
-		stop:        make(chan struct{}),
+		ipFamily:      family,
+		bpfAff:        affmap,
+		rt:            rt,
+		nodePortIPs:   uniqueIPs(nodePortIPs),
+		prevSvcMap:    make(map[svcKey]svcInfo),
+		prevEpsMap:    make(k8sp.EndpointsMap),
+		stop:          make(chan struct{}),
+		excludedCIDRs: excludedCIDRs,
 	}
 
 	switch family {
@@ -904,6 +908,13 @@ func (s *Syncer) writeSvc(svc k8sp.ServicePort, svcID uint32, count, local int, 
 	key, err := s.getSvcNATKey(svc)
 	if err != nil {
 		return err
+	}
+
+	if s.excludedCIDRs != nil {
+		_, v := s.excludedCIDRs.LPM(ip.CIDRFromNetIP(svc.ClusterIP()))
+		if v != nil {
+			flags |= nat.NATFlgExclude
+		}
 	}
 
 	affinityTimeo := uint32(0)

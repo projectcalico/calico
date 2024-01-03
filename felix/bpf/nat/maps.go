@@ -202,11 +202,13 @@ func FrontendKeyFromBytes(b []byte) FrontendKeyInterface {
 const (
 	NATFlgExternalLocal = 0x1
 	NATFlgInternalLocal = 0x2
+	NATFlgExclude       = 0x4
 )
 
 var flgTostr = map[int]string{
 	NATFlgExternalLocal: "external-local",
 	NATFlgInternalLocal: "internal-local",
+	NATFlgExclude:       "nat-exclude",
 }
 
 type FrontendValue [frontendValueSize]byte
