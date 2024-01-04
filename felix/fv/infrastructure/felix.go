@@ -126,6 +126,7 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 		"SET_CORE_PATTERN": "true",
 
 		"FELIX_LOGSEVERITYSCREEN":        options.FelixLogSeverity,
+		"FELIX_LogDebugFilenameRegex":    options.FelixDebugFilenameRegex,
 		"FELIX_PROMETHEUSMETRICSENABLED": "true",
 		"FELIX_BPFLOGLEVEL":              "debug",
 		"FELIX_USAGEREPORTINGENABLED":    "false",
