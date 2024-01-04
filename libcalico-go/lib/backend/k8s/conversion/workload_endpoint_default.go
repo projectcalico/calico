@@ -273,22 +273,25 @@ func (wc defaultWorkloadEndpointConverter) podToDefaultWorkloadEndpoint(pod *kap
 // and returns the allowed prefixes as a slice of strings.
 func HandleSourceIPSpoofingAnnotation(annot map[string]string) ([]string, error) {
 	var sourcePrefixes []string
-	if annotation, ok := annot["cni.projectcalico.org/allowedSourcePrefixes"]; ok && annotation != "" {
-		// Parse Annotation data
-		var requestedSourcePrefixes []string
-		err := json.Unmarshal([]byte(annotation), &requestedSourcePrefixes)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse '%s' as JSON: %s", annotation, err)
-		}
+	annotation, ok := annot["cni.projectcalico.org/allowedSourcePrefixes"]
+	if !ok || annotation == "" {
+		return sourcePrefixes, nil
+	}
 
-		// Filter out any invalid entries and normalize the CIDRs.
-		for _, prefix := range requestedSourcePrefixes {
-			if _, n, err := cnet.ParseCIDR(prefix); err != nil {
-				return nil, fmt.Errorf("failed to parse '%s' as a CIDR: %s", prefix, err)
-			} else {
-				sourcePrefixes = append(sourcePrefixes, n.String())
-			}
+	// Parse Annotation data
+	var requestedSourcePrefixes []string
+	if err := json.Unmarshal([]byte(annotation), &requestedSourcePrefixes); err != nil {
+		return nil, fmt.Errorf("failed to parse '%s' as JSON: %s", annotation, err)
+	}
+
+	// Filter out any invalid entries and normalize the CIDRs.
+	for _, prefix := range requestedSourcePrefixes {
+		if _, n, err := cnet.ParseCIDR(prefix); err != nil {
+			return nil, fmt.Errorf("failed to parse '%s' as a CIDR: %s", prefix, err)
+		} else {
+			sourcePrefixes = append(sourcePrefixes, n.String())
 		}
 	}
+
 	return sourcePrefixes, nil
 }
