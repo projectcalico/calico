@@ -128,6 +128,7 @@ func newVXLANManager(
 			unix.RT_TABLE_MAIN,
 			opRecorder,
 			featureDetector,
+			routetable.WithRouteMetric(routetable.RoutingMetricIPAMBlockDrop),
 		)
 		if ipVersion == 6 {
 			brt = routetable.New(
@@ -141,6 +142,7 @@ func newVXLANManager(
 				unix.RT_TABLE_MAIN,
 				opRecorder,
 				featureDetector,
+				routetable.WithRouteMetric(routetable.RoutingMetricIPAMBlockDrop),
 			)
 		} else if ipVersion != 4 {
 			logrus.WithField("ipVersion", ipVersion).Panic("Unknown IP version")
@@ -161,7 +163,7 @@ func newVXLANManager(
 			deviceRouteSourceAddress net.IP, deviceRouteProtocol netlink.RouteProtocol, removeExternalRoutes bool) routetable.RouteTableInterface {
 			return routetable.New(interfaceRegexes, ipVersion, vxlan, netlinkTimeout,
 				deviceRouteSourceAddress, deviceRouteProtocol, removeExternalRoutes, unix.RT_TABLE_MAIN,
-				opRecorder, featureDetector,
+				opRecorder, featureDetector, routetable.WithRouteMetric(routetable.RoutingMetricSameSubnetWorkloads),
 			)
 		},
 	)

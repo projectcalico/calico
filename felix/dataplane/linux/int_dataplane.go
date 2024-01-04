@@ -26,7 +26,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
@@ -34,6 +33,8 @@ import (
 	"golang.org/x/sys/unix"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 	"k8s.io/client-go/kubernetes"
+
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/felix/bpf/bpfmap"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
@@ -507,7 +508,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			log.Debug("RouteSyncDisabled is false.")
 			routeTableVXLAN = routetable.New([]string{"^vxlan.calico$"}, 4, true, config.NetlinkTimeout,
 				config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, true, unix.RT_TABLE_MAIN,
-				dp.loopSummarizer, featureDetector, routetable.WithLivenessCB(dp.reportHealth))
+				dp.loopSummarizer, featureDetector, routetable.WithLivenessCB(dp.reportHealth),
+				routetable.WithRouteMetric(routetable.RoutingMetricVXLANTunneledWorkloads))
 		} else {
 			log.Info("RouteSyncDisabled is true, using DummyTable.")
 			routeTableVXLAN = &routetable.DummyTable{}
@@ -863,7 +865,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		routeTableV4 = routetable.New(interfaceRegexes, 4, false, config.NetlinkTimeout,
 			config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, config.RemoveExternalRoutes, unix.RT_TABLE_MAIN,
 			dp.loopSummarizer, featureDetector, routetable.WithLivenessCB(dp.reportHealth),
-			routetable.WithRouteCleanupGracePeriod(routeCleanupGracePeriod))
+			routetable.WithRouteCleanupGracePeriod(routeCleanupGracePeriod),
+			routetable.WithRouteMetric(routetable.RoutingMetricLocalWorkloads))
 	} else {
 		log.Info("RouteSyncDisabled is true, using DummyTable.")
 		routeTableV4 = &routetable.DummyTable{}
@@ -961,7 +964,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 				log.Debug("RouteSyncDisabled is false.")
 				routeTableVXLANV6 = routetable.New([]string{"^vxlan-v6.calico$"}, 6, true, config.NetlinkTimeout,
 					config.DeviceRouteSourceAddressIPv6, config.DeviceRouteProtocol, true, unix.RT_TABLE_MAIN,
-					dp.loopSummarizer, featureDetector, routetable.WithLivenessCB(dp.reportHealth))
+					dp.loopSummarizer, featureDetector, routetable.WithLivenessCB(dp.reportHealth),
+					routetable.WithRouteMetric(routetable.RoutingMetricVXLANTunneledWorkloads))
 			} else {
 				log.Debug("RouteSyncDisabled is true, using DummyTable for routeTableVXLANV6.")
 				routeTableVXLANV6 = &routetable.DummyTable{}
@@ -991,7 +995,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 				interfaceRegexes, 6, false, config.NetlinkTimeout,
 				config.DeviceRouteSourceAddressIPv6, config.DeviceRouteProtocol, config.RemoveExternalRoutes,
 				unix.RT_TABLE_MAIN, dp.loopSummarizer, featureDetector, routetable.WithLivenessCB(dp.reportHealth),
-				routetable.WithRouteCleanupGracePeriod(routeCleanupGracePeriod))
+				routetable.WithRouteCleanupGracePeriod(routeCleanupGracePeriod),
+				routetable.WithRouteMetric(routetable.RoutingMetricLocalWorkloads))
 		} else {
 			log.Debug("RouteSyncDisabled is true, using DummyTable for routeTableV6.")
 			routeTableV6 = &routetable.DummyTable{}

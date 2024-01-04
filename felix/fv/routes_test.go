@@ -22,6 +22,7 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/calico/felix/fv/connectivity"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
@@ -42,12 +43,15 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ routing table tests", []api
 	)
 
 	BeforeEach(func() {
+		w = [3][2]*workload.Workload{}
 		infra = getInfra()
 
 		topologyOptions := infrastructure.DefaultTopologyOptions()
 		topologyOptions.VXLANMode = api.VXLANModeAlways
 		topologyOptions.IPIPEnabled = false
+		topologyOptions.EnableIPv6 = false
 		topologyOptions.ExtraEnvVars["FELIX_ROUTESOURCE"] = "WorkloadIPs"
+		topologyOptions.FelixDebugFilenameRegex = "route_table.go"
 
 		tc, client = infrastructure.StartNNodeTopology(3, topologyOptions, infra)
 		cc = &connectivity.Checker{}
@@ -75,7 +79,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ routing table tests", []api
 
 	Describe("with locally conflicting IPs", func() {
 		BeforeEach(func() {
-			// Start two local workloads with the same IP.
+			// Start two local workloads with the same IP >:)
 			for i := 0; i < 2; i++ {
 				w[0][i] = workload.Run(tc.Felixes[0], fmt.Sprintf("w%d", i), "default", "10.65.0.2", "8088", "tcp")
 				w[0][i].ConfigureInInfra(infra)
@@ -104,7 +108,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ routing table tests", []api
 			// Winner is non-deterministic.
 			winner, loser := waitForInitialRouteProgramming()
 			w[0][winner].RemoveFromInfra(infra)
-			Eventually(tc.Felixes[0].ExecOutputFn("ip", "r", "get", "10.65.0.2")).Should(
+			Eventually(tc.Felixes[0].ExecOutputFn("ip", "r", "get", "10.65.0.2"), "10s").Should(
 				ContainSubstring(w[0][loser].InterfaceName),
 			)
 		})
@@ -115,6 +119,38 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ routing table tests", []api
 			w[0][loser].RemoveFromInfra(infra)
 			Consistently(tc.Felixes[0].ExecOutputFn("ip", "r", "get", "10.65.0.2"), "5s").Should(
 				ContainSubstring(w[0][winner].InterfaceName),
+			)
+		})
+	})
+
+	Describe("with local/remote conflicting IPs", func() {
+		BeforeEach(func() {
+			// One local, one remote workload with same IP >:)
+			for i := 0; i < 2; i++ {
+				w[i][0] = workload.Run(tc.Felixes[i], fmt.Sprintf("w%d", i), "default", "10.65.0.2", "8088", "tcp")
+				w[i][0].ConfigureInInfra(infra)
+			}
+
+			// VXLAN route gets suppressed by the calc graph so local workload route will "win".
+			Eventually(tc.Felixes[0].ExecOutputFn("ip", "r", "get", "10.65.0.2"), "10s").Should(
+				ContainSubstring(w[0][0].InterfaceName))
+			Consistently(tc.Felixes[0].ExecOutputFn("ip", "r", "get", "10.65.0.2"), "5s").Should(
+				ContainSubstring(w[0][0].InterfaceName),
+			)
+		})
+
+		It("should resolve when winning endpoint is removed", func() {
+			w[0][0].RemoveFromInfra(infra)
+			// Winner was remote so we now expect the local route to show up.
+			Eventually(tc.Felixes[0].ExecOutputFn("ip", "r", "get", "10.65.0.2"), "10s").Should(
+				ContainSubstring("vxlan.calico"),
+			)
+		})
+
+		It("should resolve when losing endpoint is removed", func() {
+			w[1][0].RemoveFromInfra(infra)
+			Consistently(tc.Felixes[0].ExecOutputFn("ip", "r", "get", "10.65.0.2"), "5s").Should(
+				ContainSubstring(w[0][0].InterfaceName),
 			)
 		})
 	})
