@@ -2028,6 +2028,10 @@ func (d *InternalDataplane) processIfaceStateUpdate(ifaceUpdate *ifaceStateUpdat
 		mgr.OnUpdate(ifaceUpdate)
 	}
 
+	for _, fdb := range d.vxlanFDBs {
+		fdb.OnIfaceStateChanged(ifaceUpdate.Name, ifaceUpdate.State)
+	}
+
 	for _, mgr := range d.managersWithRouteTables {
 		for _, routeTable := range mgr.GetRouteTableSyncers() {
 			routeTable.OnIfaceStateChanged(ifaceUpdate.Name, ifaceUpdate.Index, ifaceUpdate.State)

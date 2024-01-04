@@ -26,6 +26,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/deltatracker"
 	"github.com/projectcalico/calico/felix/environment"
+	"github.com/projectcalico/calico/felix/ifacemonitor"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/netlinkshim"
 	"github.com/projectcalico/calico/felix/netlinkshim/handlemgr"
@@ -78,6 +79,16 @@ func New(family int, ifaceName string, featureDetector environment.FeatureDetect
 		),
 	}
 	return &f
+}
+
+func (r *VXLANFDB) OnIfaceStateChanged(ifaceName string, state ifacemonitor.State) {
+	if ifaceName != r.ifaceName {
+		return
+	}
+	if state == ifacemonitor.StateUp {
+		r.logCxt.Debug("VXLAN device came up, doing a resync.")
+		r.resyncPending = true
+	}
 }
 
 func (r *VXLANFDB) SetL2Routes(targets []L2Target) {
@@ -214,6 +225,7 @@ func (r *VXLANFDB) resync(nl netlinkshim.Interface) error {
 	// this can change.
 	link, err := nl.LinkByName(r.ifaceName)
 	if err != nil {
+		r.resyncPending = false // OnIfaceStateChanged will trigger a resync when iface appears.
 		return fmt.Errorf("failed to get interface: %w", err)
 	}
 	r.ifIndex = link.Attrs().Index
