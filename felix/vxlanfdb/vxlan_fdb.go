@@ -91,6 +91,10 @@ func (r *VXLANFDB) OnIfaceStateChanged(ifaceName string, state ifacemonitor.Stat
 	}
 }
 
+func (r *VXLANFDB) QueueResync() {
+	r.resyncPending = true
+}
+
 func (r *VXLANFDB) SetL2Routes(targets []L2Target) {
 	r.arpEntries.Desired().DeleteAll()
 	r.fdbEntries.Desired().DeleteAll()

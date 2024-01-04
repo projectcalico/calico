@@ -2181,6 +2181,9 @@ func (d *InternalDataplane) apply() {
 			// Queue a resync on the next Apply().
 			r.QueueResync()
 		}
+		for _, fdb := range d.vxlanFDBs {
+			fdb.QueueResync()
+		}
 		d.forceRouteRefresh = false
 	}
 
