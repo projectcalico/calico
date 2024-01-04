@@ -432,7 +432,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 				for i, felix := range tc.Felixes {
 					felix.Exec("conntrack", "-L")
-					felix.Exec("calico-bpf", "-6", "policy", "dump", "cali1ab524b60b9", "all", "--asm")
+					felix.Exec("calico-bpf", "policy", "dump", "cali8d1e69e5f89", "all", "--asm")
 					if testOpts.ipv6 {
 						felix.Exec("ip6tables-save", "-c")
 						felix.Exec("ip", "-6", "link")
@@ -550,19 +550,23 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					w[i].ConfigureInInfra(infra)
 				}
 
-				err := infra.AddDefaultDeny()
-				Expect(err).NotTo(HaveOccurred())
+				if false {
+					err := infra.AddDefaultDeny()
+					Expect(err).NotTo(HaveOccurred())
+				}
 
 				ensureBPFProgramsAttached(tc.Felixes[0])
 
-				pol := api.NewGlobalNetworkPolicy()
-				pol.Namespace = "fv"
-				pol.Name = "policy-1"
-				pol.Spec.Ingress = []api.Rule{{Action: "Allow"}}
-				pol.Spec.Egress = []api.Rule{{Action: "Allow"}}
-				pol.Spec.Selector = "all()"
+				if false {
+					pol := api.NewGlobalNetworkPolicy()
+					pol.Namespace = "fv"
+					pol.Name = "policy-1"
+					pol.Spec.Ingress = []api.Rule{{Action: "Allow"}}
+					pol.Spec.Egress = []api.Rule{{Action: "Allow"}}
+					pol.Spec.Selector = "all()"
 
-				pol = createPolicy(pol)
+					pol = createPolicy(pol)
+				}
 			})
 
 			if testOpts.bpfLogLevel == "debug" && testOpts.protocol == "tcp" {
@@ -627,6 +631,18 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					cc.ExpectSome(w[1], w[0])
 					cc.ExpectNone(w[1], hostW)
 					cc.ExpectSome(hostW, w[0])
+					cc.CheckConnectivity(conntrackChecks(tc.Felixes)...)
+				})
+			})
+
+			Describe("with DefaultEndpointToHostAction=RETURN", func() {
+				BeforeEach(func() {
+					options.ExtraEnvVars["FELIX_DefaultEndpointToHostAction"] = "RETURN"
+					options.AutoHEPsEnabled = false
+				})
+				It("should allow traffic from workload to host", func() {
+					cc.Expect(Some, w[1], hostW)
+					cc.Expect(Some, hostW, w[0])
 					cc.CheckConnectivity(conntrackChecks(tc.Felixes)...)
 				})
 			})

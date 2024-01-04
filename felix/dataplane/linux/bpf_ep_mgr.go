@@ -1965,8 +1965,9 @@ func (m *bpfEndpointManager) wepApplyPolicy(ap *tc.AttachPoint,
 	}
 
 	// If workload egress and DefaultEndpointToHostAction is ACCEPT or DROP, suppress the normal
-	// host-* endpoint policy.
-	if polDirection == PolDirnEgress && m.epToHostAction != "RETURN" {
+	// host-* endpoint policy. If it does not exist, suppress it as well, not to
+	// create deny due to the fact that there are not profiles or tiers etc.
+	if polDirection == PolDirnEgress && (m.epToHostAction != "RETURN" || !m.wildcardExists) {
 		rules.SuppressNormalHostPolicy = true
 	}
 
