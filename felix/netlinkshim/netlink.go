@@ -42,6 +42,10 @@ type Interface interface {
 	RuleDel(rule *netlink.Rule) error
 	Delete()
 	NeighAdd(neigh *netlink.Neigh) error
+	NeighList(linkIndex, family int) ([]netlink.Neigh, error)
+	NeighListExecute(msg netlink.Ndmsg) ([]netlink.Neigh, error)
+	NeighSet(a *netlink.Neigh) error
+	NeighDel(a *netlink.Neigh) error
 }
 
 func NewRealNetlink() (Interface, error) {

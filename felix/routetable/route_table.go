@@ -95,8 +95,6 @@ type RouteTable struct {
 	netlinkFamily int
 	// The routing table index.  This is defaulted to RT_TABLE_MAIN if not specified.
 	tableIndex int
-	// Whether this route table is managing vxlan routes.
-	vxlan bool
 
 	deviceRouteSourceAddress ip.Addr
 	deviceRouteProtocol      netlink.RouteProtocol
@@ -120,8 +118,6 @@ type RouteTable struct {
 	// resolution if there are multiple routes) and the route that's actually
 	// in the kernel.
 	kernelRoutes *deltatracker.DeltaTracker[kernelRouteKey, kernelRoute]
-
-	l2Targets *deltatracker.DeltaTracker[string, []L2Target]
 
 	ifaceNameToFirstSeen map[string]time.Time
 	ifaceNameToIndex     map[string]int
@@ -154,6 +150,7 @@ func WithLivenessCB(cb func()) RouteTableOpt {
 
 func WithRouteCleanupGracePeriod(routeCleanupGracePeriod time.Duration) RouteTableOpt {
 	return func(table *RouteTable) {
+		// TODO route grace period
 		table.routeCleanupGracePeriod = routeCleanupGracePeriod
 	}
 }
@@ -167,7 +164,6 @@ func WithRouteMetric(metric RouteMetric) RouteTableOpt {
 func New(
 	interfaceRegexes []string,
 	ipVersion uint8,
-	vxlan bool,
 	netlinkTimeout time.Duration,
 	deviceRouteSourceAddress net.IP,
 	deviceRouteProtocol netlink.RouteProtocol,
@@ -181,9 +177,8 @@ func New(
 		interfaceRegexes,
 		ipVersion,
 		netlinkshim.NewRealNetlink,
-		vxlan,
 		netlinkTimeout,
-		addStaticARPEntry,
+		addStaticARPEntry, // FIXME add static ARP entries.
 		conntrack.New(),
 		timeshim.RealTime(),
 		deviceRouteSourceAddress,
@@ -201,7 +196,6 @@ func NewWithShims(
 	interfaceRegexes []string,
 	ipVersion uint8,
 	newNetlinkHandle func() (netlinkshim.Interface, error),
-	vxlan bool,
 	netlinkTimeout time.Duration,
 	addStaticARPEntry func(cidr ip.CIDR, destMAC net.HardwareAddr, ifaceName string) error,
 	conntrack conntrackIface,
@@ -264,7 +258,6 @@ func NewWithShims(
 		ipVersion:     ipVersion,
 		netlinkFamily: family,
 		tableIndex:    tableIndex,
-		vxlan:         vxlan,
 
 		deviceRouteSourceAddress: ip.FromNetIP(deviceRouteSourceAddress), // FIXME use ip.Addr as input
 		deviceRouteProtocol:      deviceRouteProtocol,
@@ -280,8 +273,6 @@ func NewWithShims(
 
 		kernelRoutes: deltatracker.New[kernelRouteKey, kernelRoute](),
 
-		l2Targets: deltatracker.New[string, []L2Target](),
-
 		ifaceNameToFirstSeen: map[string]time.Time{},
 		ifaceNameToIndex:     map[string]int{},
 		ifaceIndexToName:     map[int]string{},
@@ -290,13 +281,8 @@ func NewWithShims(
 
 		opReporter:       opReporter,
 		livenessCallback: func() {},
-		nl: handlemgr.NewHandleManager(
-			family,
-			featureDetector,
-			handlemgr.WithNewHandleOverride(newNetlinkHandle),
-			handlemgr.WithSocketTimeout(netlinkTimeout),
-		),
-		featureDetector: featureDetector,
+		nl:               handlemgr.NewHandleManager(featureDetector, handlemgr.WithNewHandleOverride(newNetlinkHandle), handlemgr.WithSocketTimeout(netlinkTimeout)),
+		featureDetector:  featureDetector,
 
 		addStaticARPEntry: addStaticARPEntry,
 		conntrack:         conntrack,
@@ -550,14 +536,6 @@ func (r *RouteTable) recalculateDesiredKernelRoute(cidr ip.CIDR) {
 		"iface":    bestIface,
 	}).Debug("Calculated kernel route.")
 	r.kernelRoutes.Desired().Set(kernKey, kernRoute)
-}
-
-func (r *RouteTable) SetL2Routes(ifaceName string, targets []L2Target) {
-	if len(targets) > 0 {
-		r.l2Targets.Desired().Set(ifaceName, targets)
-	} else {
-		r.l2Targets.Desired().Delete(ifaceName)
-	}
 }
 
 func (r *RouteTable) QueueResync() {
@@ -903,303 +881,6 @@ func (r *RouteTable) applyUpdates() error {
 	return nil // TODO
 }
 
-//
-// // fullResyncRoutesForLink performs a full resync of the routes by first listing current routes and correlating against
-// // the expected set. After correlation, it will create a set of routes to delete and update the delta routes to add
-// // back any missing routes.
-// func (r *RouteTable) fullResyncRoutesForLink(logCxt *log.Entry, ifaceName string, deletedConnCIDRs set.Set[ip.CIDR]) ([]netlink.Route, error) {
-// 	programmedRoutes, err := r.readProgrammedRoutes(logCxt, ifaceName)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-//
-// 	var routesToDelete []netlink.Route
-// 	expectedTargets := r.ifaceNameToTargets[ifaceName]
-// 	pendingDeltaTargets := r.pendingIfaceNameToDeltaTargets[ifaceName]
-// 	if pendingDeltaTargets == nil {
-// 		pendingDeltaTargets = map[ip.CIDR]*Target{}
-// 		r.pendingIfaceNameToDeltaTargets[ifaceName] = pendingDeltaTargets
-// 	}
-// 	alreadyCorrectCIDRs := set.New[ip.CIDR]()
-// 	leaveDirty := false
-// 	for _, route := range programmedRoutes {
-// 		logCxt.Debugf("Processing route: %v %v %v", route.Table, route.LinkIndex, route.Dst)
-// 		var dest ip.CIDR
-// 		if route.Dst != nil {
-// 			dest = ip.CIDRFromIPNet(route.Dst)
-// 		}
-// 		logCxt := logCxt.WithField("dest", dest)
-// 		// Check if we should remove routes not added by us
-// 		if !r.removeExternalRoutes && route.Protocol != r.deviceRouteProtocol {
-// 			logCxt.Debug("Syncing routes: not removing route as it is not marked as Felix route")
-// 			continue
-// 		}
-//
-// 		expectedTarget, expectedTargetFound := expectedTargets[dest]
-// 		routeExpected := expectedTargetFound || (r.ipVersion == 6 && dest == ipV6LinkLocalCIDR)
-// 		var routeProblems []string
-// 		if !routeExpected {
-// 			routeProblems = append(routeProblems, "unexpected route")
-// 		}
-// 		if dest != ipV6LinkLocalCIDR {
-// 			if !r.deviceRouteSourceAddress.Equal(route.Src) {
-// 				routeProblems = append(routeProblems, "incorrect source address")
-// 			}
-// 			if r.deviceRouteProtocol != route.Protocol {
-// 				routeProblems = append(routeProblems, "incorrect protocol")
-// 			}
-// 			if expectedTargetFound && expectedTarget.RouteType() != route.Type {
-// 				routeProblems = append(routeProblems, "incorrect type")
-// 			}
-// 			if (route.Gw == nil && expectedTarget.GW != nil) ||
-// 				(route.Gw != nil && expectedTarget.GW == nil) ||
-// 				(route.Gw != nil && expectedTarget.GW != nil && !route.Gw.Equal(expectedTarget.GW.AsNetIP())) {
-// 				routeProblems = append(routeProblems, "incorrect gateway")
-// 			}
-// 		}
-// 		if len(routeProblems) == 0 {
-// 			logCxt.Debug("Route is correct")
-// 			alreadyCorrectCIDRs.Add(dest)
-// 			continue
-// 		}
-// 		// In order to allow Calico to run without Felix in an emergency, the CNI plugin pre-adds
-// 		// the route to the interface.  To avoid flapping the route when Felix sees the interface
-// 		// before learning about the endpoint, we give each interface a grace period after we first
-// 		// see it before we remove routes that we're not expecting.  Check whether the grace period
-// 		// applies to this interface.
-// 		ifaceInGracePeriod := r.time.Since(r.ifaceNameToFirstSeen[ifaceName]) < r.routeCleanupGracePeriod
-// 		if ifaceInGracePeriod && !routeExpected {
-// 			// Don't remove unexpected routes from interfaces created recently.
-// 			logCxt.Info("Syncing routes: found unexpected route; ignoring due to grace period.")
-// 			leaveDirty = true
-// 			continue
-// 		}
-// 		logCxt.WithField("routeProblems", routeProblems).Info("Remove old route")
-// 		routesToDelete = append(routesToDelete, route)
-// 		if dest != nil {
-// 			deletedConnCIDRs.Add(dest)
-// 		}
-// 	}
-//
-// 	// Now loop through the expected CIDRs to Target. Remove any that we did not find, and add them back into our
-// 	// delta updates (unless the entry is superseded by another update).
-// 	for cidr, target := range expectedTargets {
-// 		if alreadyCorrectCIDRs.Contains(cidr) {
-// 			continue
-// 		}
-// 		logCxt := logCxt.WithField("cidr", cidr)
-// 		logCxt.Info("Deleting from expected targets")
-// 		delete(expectedTargets, cidr)
-//
-// 		// If we do not have an update that supersedes this entry, then add it back in as an update so that we add
-// 		// the route.
-// 		if pendingTarget, ok := pendingDeltaTargets[cidr]; !ok {
-// 			logCxt.Info("No pending target update, adding back in as an update")
-// 			pendingDeltaTargets[cidr] = safeTargetPointer(target)
-// 		} else if pendingTarget == nil {
-// 			logCxt.Info("Pending target deletion, removing delete update")
-// 			delete(pendingDeltaTargets, cidr)
-// 		} else {
-// 			logCxt.Info("Pending target update, no changes to deltas required")
-// 		}
-// 	}
-//
-// 	if leaveDirty {
-// 		// Superfluous routes on a recently created interface.  We'll recheck later.
-// 		return routesToDelete, IfaceGrace
-// 	}
-//
-// 	return routesToDelete, nil
-// }
-//
-// func (r *RouteTable) readProgrammedRoutes(logCxt *log.Entry, ifaceName string) ([]netlink.Route, error) {
-// 	// Get the netlink client and the link attributes
-// 	nl, err := r.nl.Handle()
-// 	if err != nil {
-// 		logCxt.Debug("Failed to connect to netlink")
-// 		return nil, ConnectFailed
-// 	}
-// 	// Try to get the link.  This may fail if it's been deleted out from under us.
-// 	linkAttrs, err := r.getLinkAttributes(ifaceName)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-//
-// 	// Got the link; try to sync its routes.  Note: We used to check if the interface
-// 	// was oper down before we tried to do the sync but that prevented us from removing
-// 	// routes from an interface in some corner cases (such as being admin up but oper
-// 	// down).
-// 	routeFilter := &netlink.Route{
-// 		Table: r.tableIndex,
-// 	}
-//
-// 	routeFilterFlags := netlink.RT_FILTER_OIF
-// 	if r.tableIndex != 0 {
-// 		routeFilterFlags |= netlink.RT_FILTER_TABLE
-// 	}
-// 	if linkAttrs != nil {
-// 		// Link attributes might be nil for the special "no-OIF" interface name.
-// 		routeFilter.LinkIndex = linkAttrs.Index
-// 	} else if r.ipVersion == 6 {
-// 		// IPv6 no-OIF interfaces get corrected to lo, which is interface index 1.
-// 		routeFilter.LinkIndex = 1
-// 	}
-// 	programmedRoutes, err := nl.RouteListFiltered(r.netlinkFamily, routeFilter, routeFilterFlags)
-// 	if errors.Is(err, unix.ENOENT) {
-// 		// In strict mode, get this if the routing table doesn't exist; it'll be auto-created
-// 		// when we add the first route so just treat it as empty.
-// 		log.WithError(err).Debug("Routing table doesn't exist (yet). Treating as empty.")
-// 		err = nil
-// 		programmedRoutes = nil
-// 	}
-// 	r.livenessCallback()
-// 	if err != nil {
-// 		// Filter the error so that we don't spam errors if the interface is being torn
-// 		// down.
-// 		filteredErr := r.filterErrorByIfaceState(ifaceName, err, ListFailed, false)
-// 		if filteredErr == ListFailed {
-// 			logCxt.WithError(err).WithFields(log.Fields{
-// 				"routeFilter": routeFilter,
-// 				"flags":       routeFilterFlags,
-// 			}).Error("Error listing routes")
-// 			r.nl.CloseHandle() // Defensive: force a netlink reconnection next time.
-// 		} else {
-// 			logCxt.WithError(err).Info("Failed to list routes; interface down/gone.")
-// 		}
-// 		return nil, filteredErr
-// 	}
-// 	return programmedRoutes, nil
-// }
-//
-// func (r *RouteTable) syncL2RoutesForLink(ifaceName string) error {
-// 	logCxt := r.logCxt.WithField("ifaceName", ifaceName)
-// 	logCxt.Debug("Syncing interface L2 routes")
-// 	if updatedTargets, ok := r.pendingIfaceNameToL2Targets[ifaceName]; ok {
-// 		logCxt.Debug("Have updated targets.")
-// 		if updatedTargets == nil {
-// 			delete(r.ifaceNameToL2Targets, ifaceName)
-// 		} else {
-// 			r.ifaceNameToL2Targets[ifaceName] = updatedTargets
-// 		}
-// 		delete(r.pendingIfaceNameToL2Targets, ifaceName)
-// 	}
-// 	expectedTargets := r.ifaceNameToL2Targets[ifaceName]
-//
-// 	// Try to get the link attributes.  This may fail if it's been deleted out from under us.
-// 	linkAttrs, err := r.getLinkAttributes(ifaceName)
-// 	if err != nil {
-// 		r.logCxt.WithError(err).Error("Failed to get link attributes")
-// 		return err
-// 	}
-//
-// 	// Build a map of expected targets by hwaddr for easier lookup,
-// 	// so we can compare the expected L2 targets against the programmed ones
-// 	// for this link.
-// 	expected := map[string]bool{}
-// 	for _, target := range expectedTargets {
-// 		expected[target.VTEPMAC.String()] = true
-// 	}
-//
-// 	// Get the current set of neighbors on this interface.
-// 	existingNeigh, err := netlink.NeighList(linkAttrs.Index, netlink.FAMILY_V4)
-// 	if err != nil {
-// 		return err
-// 	}
-//
-// 	// For each existing neighbor, if we don't expect an entry for its MAC address to be programmed
-// 	// on this link, then delete it.
-// 	var updatesFailed bool
-//
-// 	for _, existing := range existingNeigh {
-// 		if existing.HardwareAddr == nil {
-// 			log.WithField("neighbor", existing).Debug("Ignoring existing ARP entry with no hardware addr")
-// 			continue
-// 		}
-// 		if _, ok := expected[existing.HardwareAddr.String()]; !ok {
-// 			logCxt.WithField("neighbor", existing).Debug("Neighbor should no longer be programmed")
-//
-// 			// Remove the FDB entry for this neighbor.
-// 			n := netlink.Neigh{
-// 				LinkIndex:    existing.LinkIndex,
-// 				State:        netlink.NUD_PERMANENT,
-// 				Family:       unix.AF_BRIDGE,
-// 				Flags:        netlink.NTF_SELF,
-// 				IP:           existing.IP,
-// 				HardwareAddr: existing.HardwareAddr,
-// 			}
-// 			if err := netlink.NeighDel(&n); err != nil {
-// 				if !strings.Contains(err.Error(), "no such file or directory") {
-// 					logCxt.WithError(err).Warnf("Failed to delete neighbor FDB entry %+v", n)
-// 					updatesFailed = true
-// 				}
-// 			} else {
-// 				logCxt.WithField("neighbor", existing).Info("Removed old neighbor FDB entry")
-// 			}
-//
-// 			// Delete the ARP entry.
-// 			if err := netlink.NeighDel(&existing); err != nil {
-// 				if !strings.Contains(err.Error(), "no such file or directory") {
-// 					logCxt.WithError(err).Warnf("Failed to delete neighbor ARP entry %+v", existing)
-// 					updatesFailed = true
-// 				}
-// 			} else {
-// 				logCxt.WithField("neighbor", existing).Info("Removed old neighbor ARP entry")
-// 			}
-// 		}
-// 	}
-//
-// 	// For each expected target, ensure that it is programmed. If the value has changed since last programming, this
-// 	// will update it.
-// 	for _, target := range expectedTargets {
-// 		if err = r.ensureL2Dataplane(linkAttrs, target); err != nil {
-// 			logCxt.WithError(err).Warnf("Failed to sync L2 dataplane for interface")
-// 			updatesFailed = true
-// 			continue
-// 		}
-// 	}
-//
-// 	if updatesFailed {
-// 		r.nl.CloseHandle() // Defensive: force a netlink reconnection next time.
-//
-// 		// Recheck whether the interface exists so we don't produce spammy logs during
-// 		// interface removal.
-// 		return r.filterErrorByIfaceState(ifaceName, UpdateFailed, UpdateFailed, false)
-// 	}
-//
-// 	return nil
-// }
-
-func (r *RouteTable) ensureL2Dataplane(linkAttrs *netlink.LinkAttrs, target L2Target) error {
-	// For each L2 entry we need to program, program it.
-	// Add a static ARP entry.
-	a := &netlink.Neigh{
-		LinkIndex:    linkAttrs.Index,
-		State:        netlink.NUD_PERMANENT,
-		Type:         unix.RTN_UNICAST,
-		IP:           target.GW.AsNetIP(),
-		HardwareAddr: target.VTEPMAC,
-	}
-	if err := netlink.NeighSet(a); err != nil {
-		return err
-	}
-	log.WithField("entry", a).Debug("Programmed ARP")
-
-	// Add a FDB entry for this neighbor.
-	n := &netlink.Neigh{
-		LinkIndex:    linkAttrs.Index,
-		State:        netlink.NUD_PERMANENT,
-		Family:       unix.AF_BRIDGE,
-		Flags:        netlink.NTF_SELF,
-		IP:           target.IP.AsNetIP(),
-		HardwareAddr: target.VTEPMAC,
-	}
-	if err := netlink.NeighSet(n); err != nil {
-		return err
-	}
-	log.WithField("entry", n).Debug("Programmed FDB")
-	return nil
-}
-
 // startConntrackDeletion starts the deletion of conntrack entries for the given CIDR in the background.  Pending
 // deletions are tracked in the pendingConntrackCleanups map so we can block waiting for them later.
 //
@@ -1339,17 +1020,6 @@ func (r *RouteTable) shouldDeleteConflictingRoutes() bool {
 		return true
 	}
 	return false
-}
-
-type L2Target struct {
-	// For VXLAN targets, this is the node's real IP address.
-	IP ip.Addr
-
-	// For VXLAN targets, this is the MAC address of the remote VTEP.
-	VTEPMAC net.HardwareAddr
-
-	// For VXLAN targets, this is the IP address of the remote VTEP.
-	GW ip.Addr
 }
 
 type Target struct {

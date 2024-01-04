@@ -51,7 +51,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ routing table tests", []api
 		topologyOptions.IPIPEnabled = false
 		topologyOptions.EnableIPv6 = false
 		topologyOptions.ExtraEnvVars["FELIX_ROUTESOURCE"] = "WorkloadIPs"
-		topologyOptions.FelixDebugFilenameRegex = "route_table.go"
+		topologyOptions.FelixDebugFilenameRegex = "route_table.go|vxlan_fdb"
 
 		tc, client = infrastructure.StartNNodeTopology(3, topologyOptions, infra)
 		cc = &connectivity.Checker{}
