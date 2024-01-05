@@ -32,26 +32,27 @@ import (
 	"github.com/projectcalico/calico/felix/netlinkshim/handlemgr"
 )
 
-type L2Target struct {
-	// For VXLAN targets, this is the node's real IP address.
-	IP ip.Addr
-
-	// For VXLAN targets, this is the MAC address of the remote VTEP.
-	VTEPMAC net.HardwareAddr
-
-	// For VXLAN targets, this is the IP address of the remote VTEP.
-	GW ip.Addr
+type VTEP struct {
+	// HostIP is the node's real IP address; the IP that we send the
+	// VXLAN packets to.
+	HostIP ip.Addr
+	// TunnelIP is the IP of the remote tunnel device, which we use as
+	// a gateway for the remote workloads..
+	TunnelIP ip.Addr
+	// TunnelMAC is the MAC address of the remote tunnel device.
+	TunnelMAC net.HardwareAddr
 }
 
 type VXLANFDB struct {
-	ifaceName     string
-	ifIndex       int
-	arpEntries    *deltatracker.DeltaTracker[string, ipMACMapping]
-	fdbEntries    *deltatracker.DeltaTracker[string, ipMACMapping]
-	logCxt        *log.Entry
-	resyncPending bool
-	nl            *handlemgr.HandleManager
-	family        int
+	ifaceName      string
+	ifIndex        int
+	arpEntries     *deltatracker.DeltaTracker[string, ipMACMapping]
+	fdbEntries     *deltatracker.DeltaTracker[string, ipMACMapping]
+	logCxt         *log.Entry
+	resyncPending  bool
+	logNextSuccess bool
+	nl             *handlemgr.HandleManager
+	family         int
 }
 
 type ipMACMapping struct {
@@ -69,7 +70,8 @@ func New(family int, ifaceName string, featureDetector environment.FeatureDetect
 			"iface":  ifaceName,
 			"family": family,
 		}),
-		resyncPending: true,
+		resyncPending:  true,
+		logNextSuccess: true,
 		nl: handlemgr.NewHandleManager(
 			featureDetector,
 			handlemgr.WithSocketTimeout(netlinkTimeout),
@@ -95,17 +97,26 @@ func (r *VXLANFDB) QueueResync() {
 	r.resyncPending = true
 }
 
-func (r *VXLANFDB) SetL2Routes(targets []L2Target) {
+func (r *VXLANFDB) SetVTEPs(vteps []VTEP) {
 	r.arpEntries.Desired().DeleteAll()
 	r.fdbEntries.Desired().DeleteAll()
-	for _, t := range targets {
-		r.arpEntries.Desired().Set(t.VTEPMAC.String(), ipMACMapping{
-			MAC: t.VTEPMAC,
-			IP:  t.GW,
+	for _, t := range vteps {
+		macStr := t.TunnelMAC.String()
+		// Add an ARP entry, for the remote tunnel IP.  This allows the
+		// kernel to calculate the inner ethernet header without doing a
+		// broadcast ARP to all VXLAN peers.
+		r.arpEntries.Desired().Set(macStr, ipMACMapping{
+			IP:  t.TunnelIP,
+			MAC: t.TunnelMAC,
 		})
-		r.fdbEntries.Desired().Set(t.VTEPMAC.String(), ipMACMapping{
-			MAC: t.VTEPMAC,
-			IP:  t.IP,
+		// Add an FDB entry.  While this is also a MAC/IP tuple, it tells
+		// the kernel something very different!  The FDB entry tells the
+		// kernel that, if it needs to send traffic to the VTEP MAC, it
+		// should send the VXLAN packet to a particular host's real IP
+		// address.
+		r.fdbEntries.Desired().Set(macStr, ipMACMapping{
+			MAC: t.TunnelMAC,
+			IP:  t.HostIP,
 		})
 	}
 }
@@ -122,9 +133,21 @@ func (r *VXLANFDB) Apply() error {
 		}
 		r.resyncPending = false
 	}
+	defer func() {
+		if r.resyncPending {
+			r.logNextSuccess = true
+		}
+	}()
+
+	if r.ifIndex == 0 {
+		return ErrLinkDown
+	}
 
 	errs := map[string]error{}
 	r.arpEntries.PendingUpdates().Iter(func(macStr string, entry ipMACMapping) deltatracker.IterAction {
+		if log.IsLevelEnabled(log.DebugLevel) {
+			log.WithField("entry", entry).Debug("Adding ARP entry.")
+		}
 		a := &netlink.Neigh{
 			LinkIndex:    r.ifIndex,
 			State:        netlink.NUD_PERMANENT,
@@ -150,6 +173,9 @@ func (r *VXLANFDB) Apply() error {
 
 	r.arpEntries.PendingDeletions().Iter(func(macStr string) deltatracker.IterAction {
 		entry, _ := r.arpEntries.Dataplane().Get(macStr)
+		if log.IsLevelEnabled(log.DebugLevel) {
+			log.WithField("entry", entry).Debug("Deleting ARP entry.")
+		}
 		a := &netlink.Neigh{
 			LinkIndex:    r.ifIndex,
 			Type:         unix.RTN_UNICAST,
@@ -172,6 +198,9 @@ func (r *VXLANFDB) Apply() error {
 	}
 
 	r.fdbEntries.PendingUpdates().Iter(func(macStr string, entry ipMACMapping) deltatracker.IterAction {
+		if log.IsLevelEnabled(log.DebugLevel) {
+			log.WithField("entry", entry).Debug("Adding FDB entry.")
+		}
 		a := &netlink.Neigh{
 			LinkIndex:    r.ifIndex,
 			State:        netlink.NUD_PERMANENT,
@@ -198,6 +227,9 @@ func (r *VXLANFDB) Apply() error {
 
 	r.fdbEntries.PendingDeletions().Iter(func(macStr string) deltatracker.IterAction {
 		entry, _ := r.arpEntries.Dataplane().Get(macStr)
+		if log.IsLevelEnabled(log.DebugLevel) {
+			log.WithField("entry", entry).Debug("Deleting FDB entry.")
+		}
 		a := &netlink.Neigh{
 			LinkIndex:    r.ifIndex,
 			State:        netlink.NUD_PERMANENT,
@@ -221,8 +253,15 @@ func (r *VXLANFDB) Apply() error {
 		clear(errs)
 	}
 
+	if !r.resyncPending && r.logNextSuccess {
+		r.logCxt.Info("VXLAN FDB now in sync.")
+		r.logNextSuccess = false
+	}
+
 	return nil
 }
+
+var ErrLinkDown = fmt.Errorf("VXLAN device is down")
 
 func (r *VXLANFDB) resync(nl netlinkshim.Interface) error {
 	// Refresh the link ID.  If the VXLAN device gets recreated then
@@ -231,6 +270,10 @@ func (r *VXLANFDB) resync(nl netlinkshim.Interface) error {
 	if err != nil {
 		r.resyncPending = false // OnIfaceStateChanged will trigger a resync when iface appears.
 		return fmt.Errorf("failed to get interface: %w", err)
+	}
+	if !ifacemonitor.LinkIsOperUp(link) {
+		r.resyncPending = false // OnIfaceStateChanged will trigger a resync when iface appears.
+		return ErrLinkDown
 	}
 	r.ifIndex = link.Attrs().Index
 
@@ -251,6 +294,12 @@ func (r *VXLANFDB) resync(nl netlinkshim.Interface) error {
 				continue
 			}
 			hwAddrStr := n.HardwareAddr.String()
+			if log.IsLevelEnabled(log.DebugLevel) {
+				log.WithFields(log.Fields{
+					"mac": hwAddrStr,
+					"ip":  n.IP.String(),
+				}).Debug("Loaded ARP entry from kernel.")
+			}
 			f(hwAddrStr, ipMACMapping{
 				IP:  ip.FromNetIP(n.IP),
 				MAC: n.HardwareAddr,
@@ -267,6 +316,12 @@ func (r *VXLANFDB) resync(nl netlinkshim.Interface) error {
 				continue
 			}
 			hwAddrStr := n.HardwareAddr.String()
+			if log.IsLevelEnabled(log.DebugLevel) {
+				log.WithFields(log.Fields{
+					"mac": hwAddrStr,
+					"ip":  n.IP.String(),
+				}).Debug("Loaded FDB entry from kernel.")
+			}
 			f(hwAddrStr, ipMACMapping{
 				IP:  ip.FromNetIP(n.IP),
 				MAC: n.HardwareAddr,

@@ -392,7 +392,7 @@ func (m *vxlanManager) CompleteDeferredWork() error {
 
 		// The route table accepts the desired state. Start by setting the desired L2 "routes" by iterating
 		// known VTEPs.
-		var l2routes []vxlanfdb.L2Target
+		var l2routes []vxlanfdb.VTEP
 		for _, u := range m.vtepsByNode {
 			mac, err := parseMacForIPVersion(u, m.ipVersion)
 			if err != nil {
@@ -406,15 +406,15 @@ func (m *vxlanManager) CompleteDeferredWork() error {
 				addr = u.Ipv6Addr
 				parentDeviceIP = u.ParentDeviceIpv6
 			}
-			l2routes = append(l2routes, vxlanfdb.L2Target{
-				VTEPMAC: mac,
-				GW:      ip.FromString(addr),
-				IP:      ip.FromString(parentDeviceIP),
+			l2routes = append(l2routes, vxlanfdb.VTEP{
+				TunnelMAC: mac,
+				TunnelIP:  ip.FromString(addr),
+				HostIP:    ip.FromString(parentDeviceIP),
 			})
 			allowedVXLANSources = append(allowedVXLANSources, parentDeviceIP)
 		}
 		m.logCtx.WithField("l2routes", l2routes).Debug("VXLAN manager sending L2 updates")
-		m.fdb.SetL2Routes(l2routes)
+		m.fdb.SetVTEPs(l2routes)
 		m.ipsetsDataplane.AddOrReplaceIPSet(m.ipSetMetadata, allowedVXLANSources)
 		m.vtepsDirty = false
 	}

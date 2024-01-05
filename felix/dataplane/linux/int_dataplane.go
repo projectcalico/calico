@@ -2213,7 +2213,7 @@ func (d *InternalDataplane) apply() {
 		err := fdb.Apply()
 		if err != nil {
 			var lnf netlink.LinkNotFoundError
-			if errors.As(err, &lnf) {
+			if errors.As(err, &lnf) || errors.Is(err, vxlanfdb.ErrLinkDown) {
 				log.Debug("VXLAN interface not ready yet, can't sync FDB entries.")
 			} else {
 				log.WithError(err).Warn("Failed to synchronize VXLAN FDB entries, will retry...")
