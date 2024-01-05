@@ -293,6 +293,10 @@ func (r *VXLANFDB) resync(nl netlinkshim.Interface) error {
 			if n.HardwareAddr == nil {
 				continue
 			}
+			if n.State&unix.NUD_PERMANENT == 0 {
+				// We only manage static entries so ignore this one.
+				continue
+			}
 			hwAddrStr := n.HardwareAddr.String()
 			if log.IsLevelEnabled(log.DebugLevel) {
 				log.WithFields(log.Fields{
@@ -313,6 +317,10 @@ func (r *VXLANFDB) resync(nl netlinkshim.Interface) error {
 	err = r.fdbEntries.Dataplane().ReplaceAllIter(func(f func(k string, v ipMACMapping)) error {
 		for _, n := range existingFDB {
 			if n.HardwareAddr == nil {
+				continue
+			}
+			if n.State&unix.NUD_PERMANENT == 0 {
+				// We only manage static entries so ignore this one.
 				continue
 			}
 			hwAddrStr := n.HardwareAddr.String()

@@ -366,7 +366,7 @@ var _ = Describe("Enable wireguard", func() {
 				// Iface update indicating down.
 				if enableV4 {
 					wgDataplane.ResetDeltas()
-					wg.OnIfaceStateChanged(ifaceName, ifacemonitor.StateDown)
+					wg.OnIfaceStateChanged(ifaceName, 101, ifacemonitor.StateDown)
 					err := wg.Apply()
 					Expect(err).NotTo(HaveOccurred())
 					Expect(wgDataplane.NumLinkAddCalls).To(Equal(0))
@@ -374,7 +374,7 @@ var _ = Describe("Enable wireguard", func() {
 				}
 				if enableV6 {
 					wgDataplaneV6.ResetDeltas()
-					wgV6.OnIfaceStateChanged(ifaceNameV6, ifacemonitor.StateDown)
+					wgV6.OnIfaceStateChanged(ifaceNameV6, 101, ifacemonitor.StateDown)
 					err := wgV6.Apply()
 					Expect(err).NotTo(HaveOccurred())
 					Expect(wgDataplaneV6.NumLinkAddCalls).To(Equal(0))
@@ -387,7 +387,7 @@ var _ = Describe("Enable wireguard", func() {
 				if enableV4 {
 					wgDataplane.ResetDeltas()
 					wgDataplane.AddIface(1919, ifaceName+".foobar", true, true)
-					wg.OnIfaceStateChanged(ifaceName+".foobar", ifacemonitor.StateUp)
+					wg.OnIfaceStateChanged(ifaceName+".foobar", 1919, ifacemonitor.StateUp)
 					err := wg.Apply()
 					Expect(err).NotTo(HaveOccurred())
 					Expect(wgDataplane.NumLinkAddCalls).To(Equal(0))
@@ -396,7 +396,7 @@ var _ = Describe("Enable wireguard", func() {
 				if enableV6 {
 					wgDataplaneV6.ResetDeltas()
 					wgDataplaneV6.AddIface(1919, ifaceNameV6+".foobar", true, true)
-					wgV6.OnIfaceStateChanged(ifaceNameV6+".foobar", ifacemonitor.StateUp)
+					wgV6.OnIfaceStateChanged(ifaceNameV6+".foobar", 1919, ifacemonitor.StateUp)
 					err := wgV6.Apply()
 					Expect(err).NotTo(HaveOccurred())
 					Expect(wgDataplaneV6.NumLinkAddCalls).To(Equal(0))
@@ -407,7 +407,7 @@ var _ = Describe("Enable wireguard", func() {
 			It("should handle status update raising an error", func() {
 				if enableV4 {
 					wgDataplane.SetIface(ifaceName, true, true)
-					wg.OnIfaceStateChanged(ifaceName, ifacemonitor.StateUp)
+					wg.OnIfaceStateChanged(ifaceName, 101, ifacemonitor.StateUp)
 					s.statusErr = errors.New("foobarbaz")
 					err := wg.Apply()
 					Expect(err).To(HaveOccurred())
@@ -415,7 +415,7 @@ var _ = Describe("Enable wireguard", func() {
 				}
 				if enableV6 {
 					wgDataplaneV6.SetIface(ifaceNameV6, true, true)
-					wgV6.OnIfaceStateChanged(ifaceNameV6, ifacemonitor.StateUp)
+					wgV6.OnIfaceStateChanged(ifaceNameV6, 101, ifacemonitor.StateUp)
 					sV6.statusErr = errors.New("foobarbaz")
 					err := wgV6.Apply()
 					Expect(err).To(HaveOccurred())
@@ -427,13 +427,13 @@ var _ = Describe("Enable wireguard", func() {
 				BeforeEach(func() {
 					if enableV4 {
 						wgDataplane.SetIface(ifaceName, true, true)
-						wg.OnIfaceStateChanged(ifaceName, ifacemonitor.StateUp)
+						wg.OnIfaceStateChanged(ifaceName, 101, ifacemonitor.StateUp)
 						err := wg.Apply()
 						Expect(err).NotTo(HaveOccurred())
 					}
 					if enableV6 {
 						wgDataplaneV6.SetIface(ifaceNameV6, true, true)
-						wgV6.OnIfaceStateChanged(ifaceNameV6, ifacemonitor.StateUp)
+						wgV6.OnIfaceStateChanged(ifaceNameV6, 101, ifacemonitor.StateUp)
 						err := wgV6.Apply()
 						Expect(err).NotTo(HaveOccurred())
 					}
@@ -2727,7 +2727,7 @@ var _ = Describe("Enable wireguard", func() {
 						// Set the interface to be up
 						wgDataplane.SetIface(ifaceName, true, true)
 						rtDataplane.AddIface(link.LinkAttrs.Index, ifaceName, true, true)
-						wg.OnIfaceStateChanged(ifaceName, ifacemonitor.StateUp)
+						wg.OnIfaceStateChanged(ifaceName, link.LinkAttrs.Index, ifacemonitor.StateUp)
 						err = apply.Apply()
 						Expect(err).NotTo(HaveOccurred())
 
@@ -2783,7 +2783,7 @@ var _ = Describe("Enable wireguard", func() {
 						// Set the interface to be up
 						wgDataplaneV6.SetIface(ifaceNameV6, true, true)
 						rtDataplaneV6.AddIface(linkV6.LinkAttrs.Index, ifaceNameV6, true, true)
-						wgV6.OnIfaceStateChanged(ifaceNameV6, ifacemonitor.StateUp)
+						wgV6.OnIfaceStateChanged(ifaceNameV6, linkV6.LinkAttrs.Index, ifacemonitor.StateUp)
 						err = apply.Apply()
 						Expect(err).NotTo(HaveOccurred())
 

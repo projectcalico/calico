@@ -119,9 +119,9 @@ type RouteTable struct {
 	// in the kernel.
 	kernelRoutes *deltatracker.DeltaTracker[kernelRouteKey, kernelRoute]
 
-	ifaceNameToFirstSeen map[string]time.Time
-	ifaceNameToIndex     map[string]int
-	ifaceIndexToName     map[int]string
+	ifaceNameToIndex      map[string]int
+	ifaceIndexToName      map[int]string
+	ifaceIndexToFirstSeen map[int]time.Time
 
 	pendingConntrackCleanups map[ip.Addr]chan struct{}
 
@@ -132,6 +132,7 @@ type RouteTable struct {
 
 	// The route deletion grace period.
 	routeCleanupGracePeriod time.Duration
+	lastGracePeriodCleanup  time.Time
 	featureDetector         environment.FeatureDetectorIface
 
 	// Testing shims, swapped with mock versions for UT
@@ -178,7 +179,7 @@ func New(
 		ipVersion,
 		netlinkshim.NewRealNetlink,
 		netlinkTimeout,
-		addStaticARPEntry, // FIXME add static ARP entries.
+		addStaticARPEntry,
 		conntrack.New(),
 		timeshim.RealTime(),
 		deviceRouteSourceAddress,
@@ -273,9 +274,9 @@ func NewWithShims(
 
 		kernelRoutes: deltatracker.New[kernelRouteKey, kernelRoute](),
 
-		ifaceNameToFirstSeen: map[string]time.Time{},
-		ifaceNameToIndex:     map[string]int{},
-		ifaceIndexToName:     map[int]string{},
+		ifaceIndexToFirstSeen: map[int]time.Time{},
+		ifaceNameToIndex:      map[string]int{},
+		ifaceIndexToName:      map[int]string{},
 
 		pendingConntrackCleanups: map[ip.Addr]chan struct{}{},
 
@@ -316,7 +317,6 @@ func (r *RouteTable) OnIfaceStateChanged(ifaceName string, ifIndex int, state if
 		// Interface deleted, clean up.
 		oldIndex := r.ifaceNameToIndex[ifaceName]
 		delete(r.ifaceIndexToName, oldIndex)
-		delete(r.ifaceNameToFirstSeen, ifaceName)
 		delete(r.ifaceNameToIndex, ifaceName)
 		r.ifacesToRescan.Discard(ifaceName)
 
@@ -325,7 +325,7 @@ func (r *RouteTable) OnIfaceStateChanged(ifaceName string, ifIndex int, state if
 		recheckInterfaceRoutes = true
 	} else {
 		// Interface exists, record its details.
-		r.onIfaceSeen(ifaceName)
+		r.onIfaceSeen(ifIndex)
 		oldIfIndex, ok := r.ifaceNameToIndex[ifaceName]
 		if ok && oldIfIndex != ifIndex {
 			// Interface renumbered.  For example, deleted and then recreated
@@ -357,11 +357,11 @@ func (r *RouteTable) OnIfaceStateChanged(ifaceName string, ifIndex int, state if
 	}
 }
 
-func (r *RouteTable) onIfaceSeen(ifaceName string) {
-	if _, ok := r.ifaceNameToFirstSeen[ifaceName]; ok {
+func (r *RouteTable) onIfaceSeen(ifIndex int) {
+	if _, ok := r.ifaceIndexToFirstSeen[ifIndex]; ok {
 		return
 	}
-	r.ifaceNameToFirstSeen[ifaceName] = r.time.Now()
+	r.ifaceIndexToFirstSeen[ifIndex] = r.time.Now()
 }
 
 // SetRoutes replaces the full set of targets for the specified interface.
@@ -410,7 +410,12 @@ func (r *RouteTable) RouteUpdate(ifaceName string, target Target) {
 		return
 	}
 
-	r.ifaceToRoutes[ifaceName][target.CIDR] = target
+	routesByCIDR := r.ifaceToRoutes[ifaceName]
+	if routesByCIDR == nil {
+		routesByCIDR = map[ip.CIDR]Target{}
+		r.ifaceToRoutes[ifaceName] = routesByCIDR
+	}
+	routesByCIDR[target.CIDR] = target
 	r.addOwningIface(ifaceName, target.CIDR)
 }
 
@@ -440,7 +445,10 @@ func (r *RouteTable) addOwningIface(ifaceName string, cidr ip.CIDR) {
 }
 
 func (r *RouteTable) removeOwningIface(ifaceName string, cidr ip.CIDR) {
-	ifaceNames := r.cidrToIfaces[cidr]
+	ifaceNames, ok := r.cidrToIfaces[cidr]
+	if !ok {
+		return
+	}
 	ifaceNames.Discard(ifaceName)
 	if ifaceNames.Len() == 0 {
 		delete(r.cidrToIfaces, cidr)
@@ -550,7 +558,23 @@ func (r *RouteTable) Apply() error {
 	if err := r.applyUpdates(); err != nil {
 		return err
 	}
+	r.maybeCleanUpGracePeriods()
 	return nil
+}
+
+func (r *RouteTable) maybeCleanUpGracePeriods() {
+	if time.Since(r.lastGracePeriodCleanup) < r.routeCleanupGracePeriod {
+		return
+	}
+	for k, v := range r.ifaceIndexToFirstSeen {
+		if time.Since(v) < r.routeCleanupGracePeriod {
+			continue
+		}
+		if _, ok := r.ifaceIndexToName[k]; ok {
+			continue // Iface still exists, don't want to reset its grace period.
+		}
+		delete(r.ifaceIndexToFirstSeen, k)
+	}
 }
 
 func (r *RouteTable) maybeResyncWithDataplane() error {
@@ -599,6 +623,7 @@ func (r *RouteTable) doFullResync(nl netlinkshim.Interface) error {
 
 	err = r.kernelRoutes.Dataplane().ReplaceAllIter(func(f func(k kernelRouteKey, v kernelRoute)) error {
 		for _, route := range allRoutes {
+			r.onIfaceSeen(route.LinkIndex)
 			kernKey, kernRoute, ok := r.netlinkRouteToKernelRoute(route)
 			if !ok {
 				// Not a route that we're managing.
@@ -851,6 +876,17 @@ func (r *RouteTable) applyUpdates() error {
 	// First clean up any old routes.
 	deletionErrs := map[kernelRouteKey]error{}
 	r.kernelRoutes.PendingDeletions().Iter(func(kernKey kernelRouteKey) deltatracker.IterAction {
+		kernRoute, _ := r.kernelRoutes.PendingDeletions().Get(kernKey)
+		ifaceInGracePeriod := r.time.Since(r.ifaceIndexToFirstSeen[kernRoute.Ifindex]) < r.routeCleanupGracePeriod
+		if ifaceInGracePeriod {
+			// Don't remove unexpected routes from interfaces created recently.
+			r.logCxt.WithFields(log.Fields{
+				"route": kernRoute,
+				"dest":  kernKey,
+			}).Info("Found unexpected route; ignoring due to grace period.")
+			return deltatracker.IterActionNoOp
+		}
+
 		// Any deleted route should have the corresponding conntrack entries removed.
 		r.startConntrackDeletion(kernKey.CIDR.Addr())
 		dst := kernKey.CIDR.ToIPNet()
@@ -925,16 +961,30 @@ func (r *RouteTable) applyUpdates() error {
 			updateErrs[kernKey] = err
 			return deltatracker.IterActionNoOp
 		}
+
+		if r.ipVersion == 4 {
+			ifaceName := r.ifaceIndexToName[kRoute.Ifindex]
+			target := r.ifaceToRoutes[ifaceName][kernKey.CIDR]
+			mac := target.DestMAC
+			if mac != nil {
+				err := r.addStaticARPEntry(target.CIDR, target.DestMAC, ifaceName)
+				if err != nil {
+					// FIXME Do we actually need static ARP entries?
+					r.logCxt.WithError(err).Warn("Failed to set ARP entry, ignoring.")
+				}
+			}
+		}
+
 		// Route is gone, clean up the dataplane side of the tracker.
 		return deltatracker.IterActionUpdateDataplane
 	})
 	// TODO filter out interfaces that are gone
 	if len(updateErrs) > 0 {
 		log.WithField("errors", updateErrs).Warn(
-			"Encountered some errors when trying to update routes.")
+			"Encountered some errors when trying to update routes.  Will retry.")
 	}
 
-	return nil // TODO
+	return nil
 }
 
 // startConntrackDeletion starts the deletion of conntrack entries for the given CIDR in the background.  Pending
@@ -1170,7 +1220,6 @@ type kernelRoute struct {
 	Ifindex  int
 	Protocol netlink.RouteProtocol
 	OnLink   bool
-	// FIXME Add ARP entries
 }
 
 func (r kernelRoute) GWAsNetIP() net.IP {
