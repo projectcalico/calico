@@ -22,4 +22,21 @@ type Features struct {
 type FeatureDetectorIface interface {
 	GetFeatures() *Features
 	RefreshFeatures()
+	FeatureGate(name string) string
 }
+
+func WithFeatureGates(gates map[string]string) Option {
+	return func(detector *FeatureDetector) {
+		detector.featureGates = gates
+	}
+}
+
+type featureDetectorCommon struct {
+	featureGates map[string]string
+}
+
+func (d *featureDetectorCommon) FeatureGate(name string) string {
+	return d.featureGates[name]
+}
+
+var _ FeatureDetectorIface = (*FeatureDetector)(nil)
