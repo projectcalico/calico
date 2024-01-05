@@ -962,6 +962,18 @@ func (d *MockNetlinkDataplane) shouldFail(flag FailFlags) bool {
 	return flagPresent
 }
 
+// FIXME USe Neigh operations instead.
+func (d *MockNetlinkDataplane) AddStaticArpEntry(cidr ip.CIDR, mac net.HardwareAddr, name string) error {
+	return nil
+}
+
+func (d *MockNetlinkDataplane) IfIndex(name string) int {
+	d.mutex.Lock()
+	defer d.mutex.Unlock()
+
+	return d.NameToLink[name].LinkAttrs.Index
+}
+
 func KeyForRoute(route *netlink.Route) string {
 	table := route.Table
 	if table == 0 {

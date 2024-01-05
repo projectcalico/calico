@@ -61,7 +61,7 @@ type vxlanManager struct {
 	blackholeRouteTable routetable.RouteTableInterface
 	noEncapRouteTable   routetable.RouteTableInterface
 	parentIfaceName     string
-	fdb                 *vxlanfdb.VXLANFDB
+	fdb                 VXLANFDB
 
 	// Hold pending updates.
 	routesByDest    map[string]*proto.RouteUpdate
@@ -103,7 +103,7 @@ const (
 func newVXLANManager(
 	ipsetsDataplane common.IPSetsDataplane,
 	rt routetable.RouteTableInterface,
-	fdb *vxlanfdb.VXLANFDB,
+	fdb VXLANFDB,
 	deviceName string,
 	dpConfig Config,
 	opRecorder logutils.OpRecorder,
@@ -146,10 +146,14 @@ func newVXLANManager(
 	)
 }
 
+type VXLANFDB interface {
+	SetVTEPs(vteps []vxlanfdb.VTEP)
+}
+
 func newVXLANManagerWithShims(
 	ipsetsDataplane common.IPSetsDataplane,
 	rt, brt routetable.RouteTableInterface,
-	fdb *vxlanfdb.VXLANFDB,
+	fdb VXLANFDB,
 	deviceName string,
 	dpConfig Config,
 	nlHandle netlinkHandle,
