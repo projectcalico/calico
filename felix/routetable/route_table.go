@@ -559,6 +559,7 @@ func (r *RouteTable) Apply() error {
 		return err
 	}
 	r.maybeCleanUpGracePeriods()
+	r.cleanUpPendingConntrackDeletions()
 	return nil
 }
 
@@ -617,7 +618,8 @@ func (r *RouteTable) doFullResync(nl netlinkshim.Interface) error {
 		log.WithError(err).Debug("Routing table doesn't exist (yet). Treating as empty.")
 		allRoutes = nil
 		err = nil
-	} else if err != nil {
+	}
+	if err != nil {
 		return fmt.Errorf("failed to list all routes for resync: %w", err)
 	}
 
@@ -1084,48 +1086,6 @@ func (r *RouteTable) filterErrorByIfaceState(ifaceName string, currentErr, defau
 		logCxt.WithError(err).Error("Failed to access interface after a failure")
 		return defaultErr
 	}
-}
-
-// getLinkAttributes returns the link attributes for the specified link name. This method returns nil if the
-// interface name is the special "no-OIF" name.
-func (r *RouteTable) getLinkAttributes(ifaceName string) (*netlink.LinkAttrs, error) {
-	if ifaceName == InterfaceNone {
-		// Short circuit the no-OIF interface name.
-		return nil, nil
-	}
-
-	// Try to get the link.  This may fail if it's been deleted out from under us.
-	logCxt := r.logCxt.WithField("ifaceName", ifaceName)
-
-	nl, err := r.nl.Handle()
-	if err != nil {
-		r.logCxt.WithError(err).Error("Failed to connect to netlink, retrying...")
-		return nil, ConnectFailed
-	}
-
-	link, err := nl.LinkByName(ifaceName)
-	if err != nil {
-		// Filter the error so that we don't spam errors if the interface is being torn
-		// down.
-		filteredErr := r.filterErrorByIfaceState(ifaceName, err, GetFailed, false)
-		if filteredErr == GetFailed {
-			logCxt.WithError(err).Error("Failed to get interface.")
-			r.nl.CloseHandle() // Defensive: force a netlink reconnection next time.
-		} else {
-			logCxt.WithError(err).Info("Failed to get interface; it's down/gone.")
-		}
-		return nil, filteredErr
-	}
-	return link.Attrs(), nil
-}
-
-func (r *RouteTable) shouldDeleteConflictingRoutes() bool {
-	gate := r.featureDetector.FeatureGate("DeleteConflictingRoutes")
-	switch strings.ToLower(gate) {
-	case "enabled", "": // Default is "enabled"
-		return true
-	}
-	return false
 }
 
 type Target struct {

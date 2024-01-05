@@ -1031,7 +1031,3 @@ func (l *MockLink) copy() *MockLink {
 		WireguardPeers:        wgPeersCopy,
 	}
 }
-
-func getArpKey(cidr ip.CIDR, destMAC net.HardwareAddr, ifaceName string) string {
-	return cidr.String() + ":" + destMAC.String() + ":" + ifaceName
-}
