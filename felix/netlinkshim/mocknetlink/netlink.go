@@ -59,6 +59,7 @@ func New() *MockNetlinkDataplane {
 			},
 		},
 		SetStrictCheckErr: SimulatedError,
+		NeighsByFamily:    map[int]map[NeighKey]*netlink.Neigh{},
 
 		// Use a single global mutex.  This works around an issue in the wireguard tests, which use multiple
 		// mock dataplanes to hand to different parts of the code under test.  That led to concurrency bugs
@@ -88,7 +89,9 @@ const (
 	FailNextLinkByName
 	FailNextLinkByNameNotFound
 	FailNextRouteList
+	FailNextRouteAddOrReplace
 	FailNextRouteAdd
+	FailNextRouteReplace
 	FailNextRouteDel
 	FailNextAddARP
 	FailNextNewNetlink
@@ -143,6 +146,9 @@ func (f FailFlags) String() string {
 	}
 	if f&FailNextRouteAdd != 0 {
 		parts = append(parts, "FailNextRouteAdd")
+	}
+	if f&FailNextRouteReplace != 0 {
+		parts = append(parts, "FailNextRouteReplace")
 	}
 	if f&FailNextRouteDel != 0 {
 		parts = append(parts, "FailNextRouteDel")
@@ -230,6 +236,8 @@ type MockNetlinkDataplane struct {
 	DeletedRouteKeys set.Set[string]
 	UpdatedRouteKeys set.Set[string]
 
+	NeighsByFamily map[int]map[NeighKey]*netlink.Neigh
+
 	StrictEnabled               bool
 	NumNewNetlinkCalls          int
 	NetlinkOpen                 bool
@@ -253,11 +261,18 @@ type MockNetlinkDataplane struct {
 	SetStrictCheckErr              error
 	DeleteInterfaceAfterLinkByName bool
 
-	addedArpEntries set.Set[string]
-
 	mutex                   *sync.Mutex
 	deletedConntrackEntries set.Set[ip.Addr]
 	ConntrackSleep          time.Duration
+}
+
+type NeighKey struct {
+	MAC string
+	IP  ip.Addr
+}
+
+func (d *MockNetlinkDataplane) FeatureGate(name string) string {
+	return ""
 }
 
 func (d *MockNetlinkDataplane) RefreshFeatures() {
@@ -277,7 +292,6 @@ func (d *MockNetlinkDataplane) ResetDeltas() {
 	d.AddedRouteKeys = set.New[string]()
 	d.DeletedRouteKeys = set.New[string]()
 	d.UpdatedRouteKeys = set.New[string]()
-	d.addedArpEntries = set.New[string]()
 	d.NumLinkAddCalls = 0
 	d.NumLinkDeleteCalls = 0
 	d.NumNewNetlinkCalls = 0
@@ -747,7 +761,7 @@ func (d *MockNetlinkDataplane) RouteAdd(route *netlink.Route) error {
 	defer GinkgoRecover()
 
 	Expect(d.NetlinkOpen).To(BeTrue())
-	if d.shouldFail(FailNextRouteAdd) {
+	if d.shouldFail(FailNextRouteAdd) || d.shouldFail(FailNextRouteAddOrReplace) {
 		return SimulatedError
 	}
 	key := KeyForRoute(route)
@@ -765,6 +779,33 @@ func (d *MockNetlinkDataplane) RouteAdd(route *netlink.Route) error {
 		d.RouteKeyToRoute[key] = r
 		return nil
 	}
+}
+
+func (d *MockNetlinkDataplane) RouteReplace(route *netlink.Route) error {
+	d.mutex.Lock()
+	defer d.mutex.Unlock()
+	defer GinkgoRecover()
+
+	Expect(d.NetlinkOpen).To(BeTrue())
+	if d.shouldFail(FailNextRouteReplace) || d.shouldFail(FailNextRouteAddOrReplace) {
+		return SimulatedError
+	}
+	key := KeyForRoute(route)
+	log.WithField("routeKey", key).Info("Mock dataplane: RouteUpdate called")
+	d.AddedRouteKeys.Add(key)
+	d.ExistingTables.Add(route.Table)
+	if _, ok := d.RouteKeyToRoute[key]; ok {
+		d.UpdatedRouteKeys.Add(key)
+	} else {
+		d.AddedRouteKeys.Add(key)
+	}
+	r := *route
+	if r.Table == 0 {
+		// Table 0 is "unspecified", which gets defaulted to the main table.
+		r.Table = unix.RT_TABLE_MAIN
+	}
+	d.RouteKeyToRoute[key] = r
+	return nil
 }
 
 func (d *MockNetlinkDataplane) RouteDel(route *netlink.Route) error {
@@ -789,28 +830,112 @@ func (d *MockNetlinkDataplane) RouteDel(route *netlink.Route) error {
 	}
 }
 
-// ----- Routetable specific ARP and Conntrack functions -----
-
-func (d *MockNetlinkDataplane) AddStaticArpEntry(cidr ip.CIDR, destMAC net.HardwareAddr, ifaceName string) error {
-	d.mutex.Lock()
-	defer d.mutex.Unlock()
-	defer GinkgoRecover()
-
-	if d.shouldFail(FailNextAddARP) {
-		return SimulatedError
+func (d *MockNetlinkDataplane) NeighAdd(neigh *netlink.Neigh) error {
+	family := neigh.Family
+	err := d.checkNeighFamily(family)
+	if err != nil {
+		return err
 	}
-	log.WithFields(log.Fields{
-		"cidr":      cidr,
-		"destMac":   destMAC,
-		"ifaceName": ifaceName,
-	}).Info("Mock dataplane: adding ARP entry")
-	d.addedArpEntries.Add(getArpKey(cidr, destMAC, ifaceName))
+
+	if d.NeighsByFamily[family] == nil {
+		d.NeighsByFamily[family] = map[NeighKey]*netlink.Neigh{}
+	}
+	if neigh.IP == nil {
+		return unix.EINVAL
+	}
+	if neigh.HardwareAddr == nil {
+		return unix.EINVAL
+	}
+	nk := NeighKey{
+		MAC: neigh.HardwareAddr.String(),
+		IP:  ip.FromNetIP(neigh.IP),
+	}
+
+	if _, ok := d.NeighsByFamily[family][nk]; ok {
+		return unix.EEXIST
+	}
+	d.NeighsByFamily[family][nk] = neigh
 	return nil
 }
 
-func (d *MockNetlinkDataplane) HasStaticArpEntry(cidr ip.CIDR, destMAC net.HardwareAddr, ifaceName string) bool {
-	return d.addedArpEntries.Contains(getArpKey(cidr, destMAC, ifaceName))
+func (d *MockNetlinkDataplane) checkNeighFamily(family int) error {
+	switch family {
+	case unix.AF_INET, unix.AF_INET6, unix.AF_BRIDGE:
+	// Supported
+	default:
+		return fmt.Errorf("unsupported family, should be AF_INET/INET6/BRIDGE")
+	}
+	return nil
 }
+
+func (d *MockNetlinkDataplane) NeighList(linkIndex, family int) ([]netlink.Neigh, error) {
+	err := d.checkNeighFamily(family)
+	if err != nil {
+		return nil, err
+	}
+	var res []netlink.Neigh
+	for _, n := range d.NeighsByFamily[family] {
+		if linkIndex == 0 || n.LinkIndex == linkIndex {
+			res = append(res, *n)
+		}
+	}
+	return res, nil
+}
+
+func (d *MockNetlinkDataplane) NeighSet(neigh *netlink.Neigh) error {
+	family := neigh.Family
+	err := d.checkNeighFamily(family)
+	if err != nil {
+		return err
+	}
+
+	if d.NeighsByFamily[family] == nil {
+		d.NeighsByFamily[family] = map[NeighKey]*netlink.Neigh{}
+	}
+	if neigh.IP == nil {
+		return unix.EINVAL
+	}
+	if neigh.HardwareAddr == nil {
+		return unix.EINVAL
+	}
+	nk := NeighKey{
+		MAC: neigh.HardwareAddr.String(),
+		IP:  ip.FromNetIP(neigh.IP),
+	}
+
+	d.NeighsByFamily[family][nk] = neigh
+	return nil
+}
+
+func (d *MockNetlinkDataplane) NeighDel(neigh *netlink.Neigh) error {
+	family := neigh.Family
+	err := d.checkNeighFamily(family)
+	if err != nil {
+		return err
+	}
+
+	if d.NeighsByFamily[family] == nil {
+		d.NeighsByFamily[family] = map[NeighKey]*netlink.Neigh{}
+	}
+	if neigh.IP == nil {
+		return unix.EINVAL
+	}
+	if neigh.HardwareAddr == nil {
+		return unix.EINVAL
+	}
+	nk := NeighKey{
+		MAC: neigh.HardwareAddr.String(),
+		IP:  ip.FromNetIP(neigh.IP),
+	}
+
+	if _, ok := d.NeighsByFamily[family][nk]; !ok {
+		return unix.ENOENT
+	}
+	delete(d.NeighsByFamily[family], nk)
+	return nil
+}
+
+// ----- Routetable specific Conntrack functions -----
 
 func (d *MockNetlinkDataplane) RemoveConntrackFlows(ipVersion uint8, ipAddr net.IP) {
 	log.WithFields(log.Fields{
@@ -824,10 +949,6 @@ func (d *MockNetlinkDataplane) RemoveConntrackFlows(ipVersion uint8, ipAddr net.
 	time.Sleep(d.ConntrackSleep)
 }
 
-func (d *MockNetlinkDataplane) NeighAdd(neigh *netlink.Neigh) error {
-	return nil
-}
-
 // ----- Internals -----
 
 func (d *MockNetlinkDataplane) shouldFail(flag FailFlags) bool {
@@ -839,6 +960,18 @@ func (d *MockNetlinkDataplane) shouldFail(flag FailFlags) bool {
 		log.WithField("flag", flag).Warn("Mock dataplane: triggering failure")
 	}
 	return flagPresent
+}
+
+// FIXME USe Neigh operations instead.
+func (d *MockNetlinkDataplane) AddStaticArpEntry(cidr ip.CIDR, mac net.HardwareAddr, name string) error {
+	return nil
+}
+
+func (d *MockNetlinkDataplane) IfIndex(name string) int {
+	d.mutex.Lock()
+	defer d.mutex.Unlock()
+
+	return d.NameToLink[name].LinkAttrs.Index
 }
 
 func KeyForRoute(route *netlink.Route) string {
@@ -897,8 +1030,4 @@ func (l *MockLink) copy() *MockLink {
 		WireguardFirewallMark: l.WireguardFirewallMark,
 		WireguardPeers:        wgPeersCopy,
 	}
-}
-
-func getArpKey(cidr ip.CIDR, destMAC net.HardwareAddr, ifaceName string) string {
-	return cidr.String() + ":" + destMAC.String() + ":" + ifaceName
 }
