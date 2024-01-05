@@ -374,12 +374,16 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			if testOpts.dsr {
 				options.ExtraEnvVars["FELIX_BPFExternalServiceMode"] = "dsr"
 			}
+			// ACCEPT is what is set by our manifests and operator by default.
+			options.ExtraEnvVars["FELIX_DefaultEndpointToHostAction"] = "ACCEPT"
 			options.ExternalIPs = true
 			options.ExtraEnvVars["FELIX_BPFExtToServiceConnmark"] = "0x80"
 			if !testOpts.ipv6 {
 				options.ExtraEnvVars["FELIX_BPFDSROptoutCIDRs"] = "245.245.0.0/16"
+				options.ExtraEnvVars["FELIX_BPFEXCLUDEIPSFROMNAT"] = "10.101.0.222"
 			} else {
 				options.ExtraEnvVars["FELIX_IPV6SUPPORT"] = "true"
+				options.ExtraEnvVars["FELIX_BPFEXCLUDEIPSFROMNAT"] = "dead:beef::abcd:0:0:222"
 			}
 
 			if testOpts.protocol == "tcp" {
@@ -1035,10 +1039,12 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 			clusterIP := "10.101.0.10"
 			extIP := "10.1.2.3"
+			excludeSvcIP := "10.101.0.222"
 
 			if testOpts.ipv6 {
 				clusterIP = "dead:beef::abcd:0:0:10"
 				extIP = "dead:beef::abcd:1:2:3"
+				excludeSvcIP = "dead:beef::abcd:0:0:222"
 			}
 
 			if testOpts.protocol == "udp" && testOpts.udpUnConnected {
@@ -2166,6 +2172,33 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							cc.ExpectNone(w[1][0], TargetIP(ip), port)
 							cc.CheckConnectivity()
 						})
+					})
+
+					It("should have connectivity from workload via a service IP to a host-process listening on that IP", func() {
+						By("Setting up a dummy service " + excludeSvcIP)
+						svc := k8sService("dummy-service", excludeSvcIP, w[0][0] /* unimportant */, 8066, 8077, 0, testOpts.protocol)
+						_, err := k8sClient.CoreV1().Services(testSvc.ObjectMeta.Namespace).
+							Create(context.Background(), svc, metav1.CreateOptions{})
+						Expect(err).NotTo(HaveOccurred())
+
+						natFtKey := fmt.Sprintf("%s port %d proto %d", excludeSvcIP, 8066, numericProto)
+						Eventually(func() map[string][]string {
+							return tc.Felixes[0].BPFNATDump(testOpts.ipv6)
+						}, "5s", "300ms").Should(HaveKey(natFtKey))
+
+						By("Adding the service IP to the host")
+						// Sort of what node-local-dns does
+						tc.Felixes[0].Exec("ip", "link", "add", "dummy1", "type", "dummy")
+						tc.Felixes[0].Exec("ip", "link", "set", "dummy1", "up")
+						tc.Felixes[0].Exec("ip", "addr", "add", excludeSvcIP+"/"+ipMask(), "dev", "dummy1")
+
+						By("Starting host workload")
+						hostW := workload.Run(tc.Felixes[0], "dummy", "default",
+							excludeSvcIP, "9090", testOpts.protocol, workload.WithHostNetworked())
+						defer hostW.Stop()
+
+						cc.Expect(Some, w[0][0], TargetIP(excludeSvcIP), ExpectWithPorts(9090))
+						cc.CheckConnectivity()
 					})
 
 					It("should create sane conntrack entries and clean them up", func() {
