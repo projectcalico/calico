@@ -226,7 +226,7 @@ func (r *VXLANFDB) Apply() error {
 	}
 
 	r.fdbEntries.PendingDeletions().Iter(func(macStr string) deltatracker.IterAction {
-		entry, _ := r.arpEntries.Dataplane().Get(macStr)
+		entry, _ := r.fdbEntries.Dataplane().Get(macStr)
 		if log.IsLevelEnabled(log.DebugLevel) {
 			log.WithField("entry", entry).Debug("Deleting FDB entry.")
 		}
