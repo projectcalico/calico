@@ -31,10 +31,8 @@ import (
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	k8sopenapi "k8s.io/apiserver/pkg/endpoints/openapi"
-	"k8s.io/apiserver/pkg/features"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
-	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/klog/v2"
 
 	"github.com/projectcalico/api/pkg/openapi"
@@ -103,13 +101,21 @@ func (o *CalicoServerOptions) Config() (*apiserver.Config, error) {
 		serverConfig.OpenAPIV3Config.Info.Version = version
 	}
 
+	// k8s v1.27 enables APIServerTracing feature gate by default [1].
+	// When newETCD3Client is constructed within newETCD3Prober,
+	// otelgrpc is added as part of the tracingOpts [2]. Even with the Noop
+	// TracerProvider, we notice growing memory usage by the opentelemetry
+	// internal int64/float64 histograms. As an extension apiserver,
+	// we don't config etcd ServerList so skip the health check.
+	// [1] https://kubernetes.io/docs/concepts/cluster-administration/system-traces/#kube-apiserver-traces
+	// [2] https://github.com/kubernetes/kubernetes/blob/bee599726d8f593a23b0e22fcc01e963732ea40b/staging/src/k8s.io/apiserver/pkg/storage/storagebackend/factory/etcd3.go#L300
+	o.RecommendedOptions.Etcd.SkipHealthEndpoints = true
 	if err := o.RecommendedOptions.Etcd.Complete(serverConfig.StorageObjectCountTracker, serverConfig.DrainedNotify(), serverConfig.AddPostStartHook); err != nil {
 		return nil, err
 	}
 	if err := o.RecommendedOptions.Etcd.ApplyTo(&serverConfig.Config); err != nil {
 		return nil, err
 	}
-	o.RecommendedOptions.Etcd.StorageConfig.Paging = utilfeature.DefaultFeatureGate.Enabled(features.APIListChunking)
 	if err := o.RecommendedOptions.SecureServing.ApplyTo(&serverConfig.SecureServing, &serverConfig.LoopbackClientConfig); err != nil {
 		return nil, err
 	}
@@ -158,6 +164,11 @@ func (o *CalicoServerOptions) Config() (*apiserver.Config, error) {
 	} else if err := o.RecommendedOptions.Admission.ApplyTo(&serverConfig.Config, serverConfig.SharedInformerFactory, serverConfig.ClientConfig, o.RecommendedOptions.FeatureGate, initializers...); err != nil {
 		return nil, err
 	}
+
+	// disable unused apiserver profiling and metrics
+	serverConfig.EnableContentionProfiling = false
+	serverConfig.EnableMetrics = false
+	serverConfig.EnableProfiling = false
 
 	// Extra extra config from environments.
 	//TODO(rlb): Need to unify our logging libraries
