@@ -26,7 +26,7 @@ ORGANIZATION = projectcalico
 GIT_USE_SSH = true
 
 # The version of BIRD to use for calico/node builds and confd tests.
-BIRD_VERSION=v0.3.3-206-g0f4d6086
+BIRD_VERSION=v0.3.3-208-g1e2ff99d
 
 # DEV_REGISTRIES configures the container image registries which are built from this
 # repository. By default, just build images with calico/. Allow this variable to be overridden,
