@@ -321,6 +321,12 @@ func (d *MockNetlinkDataplane) GetDeletedConntrackEntries() []net.IP {
 }
 
 func (d *MockNetlinkDataplane) AddIface(idx int, name string, up bool, running bool) *MockLink {
+	if idx == 0 {
+		panic("0 is not a valid ifindex")
+	}
+	if idx == 1 && name != "lo" {
+		panic("1 is always 'lo'")
+	}
 	t := "unknown"
 	if strings.Contains(name, "wireguard") {
 		t = "wireguard"

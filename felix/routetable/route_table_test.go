@@ -82,6 +82,7 @@ var _ = Describe("RouteTable v6", func() {
 		// Route that should be left alone
 		noopLink := dataplane.AddIface(4, "cali4", true, true)
 		noopRoute := netlink.Route{
+			Family:    netlink.FAMILY_V6,
 			LinkIndex: noopLink.LinkAttrs.Index,
 			Dst:       mustParseCIDR("fe80::/64"),
 			Type:      syscall.RTN_UNICAST,
@@ -167,14 +168,15 @@ var _ = Describe("RouteTable", func() {
 	})
 
 	Describe("with some interfaces", func() {
-		var cali1, cali3, eth0 *mocknetlink.MockLink
+		var cali1, cali2, cali3, eth0 *mocknetlink.MockLink
 		var gatewayRoute, cali1Route, cali1Route2, cali3Route netlink.Route
 		BeforeEach(func() {
-			eth0 = dataplane.AddIface(0, "eth0", true, true)
-			cali1 = dataplane.AddIface(1, "cali1", true, true)
-			dataplane.AddIface(2, "cali2", true, true)
-			cali3 = dataplane.AddIface(3, "cali3", true, true)
+			eth0 = dataplane.AddIface(2, "eth0", true, true)
+			cali1 = dataplane.AddIface(3, "cali1", true, true)
+			cali2 = dataplane.AddIface(4, "cali2", true, true)
+			cali3 = dataplane.AddIface(5, "cali3", true, true)
 			cali1Route = netlink.Route{
+				Family:    unix.AF_INET,
 				LinkIndex: cali1.LinkAttrs.Index,
 				Dst:       mustParseCIDR("10.0.0.1/32"),
 				Type:      syscall.RTN_UNICAST,
@@ -184,6 +186,7 @@ var _ = Describe("RouteTable", func() {
 			}
 			dataplane.AddMockRoute(&cali1Route)
 			cali3Route = netlink.Route{
+				Family:    unix.AF_INET,
 				LinkIndex: cali3.LinkAttrs.Index,
 				Dst:       mustParseCIDR("10.0.0.3/32"),
 				Type:      syscall.RTN_UNICAST,
@@ -193,6 +196,7 @@ var _ = Describe("RouteTable", func() {
 			}
 			dataplane.AddMockRoute(&cali3Route)
 			gatewayRoute = netlink.Route{
+				Family:    unix.AF_INET,
 				LinkIndex: eth0.LinkAttrs.Index,
 				Type:      syscall.RTN_UNICAST,
 				Protocol:  FelixRouteProtocol,
@@ -245,6 +249,7 @@ var _ = Describe("RouteTable", func() {
 		It("Should clear out a source address when source address is not set", func() {
 			updateLink := dataplane.AddIface(5, "cali5", true, true)
 			updateRoute := netlink.Route{
+				Family:    unix.AF_INET,
 				LinkIndex: updateLink.LinkAttrs.Index,
 				Dst:       mustParseCIDR("10.0.0.5/32"),
 				Type:      syscall.RTN_UNICAST,
@@ -265,11 +270,10 @@ var _ = Describe("RouteTable", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(dataplane.UpdatedRouteKeys).To(HaveKey(mocknetlink.KeyForRoute(&updateRoute)))
 			Expect(dataplane.RouteKeyToRoute[mocknetlink.KeyForRoute(&updateRoute)]).To(Equal(fixedRoute))
-
 		})
 		Describe("With a device route source address set", func() {
 			deviceRouteSource := "192.168.0.1"
-			deviceRouteSourceAddress := net.ParseIP(deviceRouteSource)
+			deviceRouteSourceAddress := net.ParseIP(deviceRouteSource).To4()
 			// Modify the route table to have the device route source address set
 			BeforeEach(func() {
 				rt = NewWithShims(
@@ -308,6 +312,7 @@ var _ = Describe("RouteTable", func() {
 				err := rt.Apply()
 				Expect(err).ToNot(HaveOccurred())
 				Expect(dataplane.RouteKeyToRoute["254-10.0.0.6/32"]).To(Equal(netlink.Route{
+					Family:    unix.AF_INET,
 					LinkIndex: addLink.LinkAttrs.Index,
 					Dst:       mustParseCIDR("10.0.0.6/32"),
 					Type:      syscall.RTN_UNICAST,
@@ -322,6 +327,7 @@ var _ = Describe("RouteTable", func() {
 				// Route that should be left alone
 				noopLink := dataplane.AddIface(4, "cali4", true, true)
 				noopRoute := netlink.Route{
+					Family:    unix.AF_INET,
 					LinkIndex: noopLink.LinkAttrs.Index,
 					Dst:       mustParseCIDR("10.0.0.4/32"),
 					Type:      syscall.RTN_UNICAST,
@@ -345,6 +351,7 @@ var _ = Describe("RouteTable", func() {
 				// Route that needs to be updated
 				updateLink := dataplane.AddIface(5, "cali5", true, true)
 				updateRoute := netlink.Route{
+					Family:    unix.AF_INET,
 					LinkIndex: updateLink.LinkAttrs.Index,
 					Dst:       mustParseCIDR("10.0.0.5/32"),
 					Type:      syscall.RTN_UNICAST,
@@ -371,6 +378,7 @@ var _ = Describe("RouteTable", func() {
 				// Route that needs to be updated
 				updateLink := dataplane.AddIface(5, "cali5", true, true)
 				updateRoute := netlink.Route{
+					Family:    unix.AF_INET,
 					LinkIndex: updateLink.LinkAttrs.Index,
 					Dst:       mustParseCIDR("10.0.0.5/32"),
 					Type:      syscall.RTN_UNICAST,
@@ -430,6 +438,7 @@ var _ = Describe("RouteTable", func() {
 				err := rt.Apply()
 				Expect(err).ToNot(HaveOccurred())
 				Expect(dataplane.RouteKeyToRoute["254-10.0.0.6/32"]).To(Equal(netlink.Route{
+					Family:    unix.AF_INET,
 					LinkIndex: addLink.LinkAttrs.Index,
 					Dst:       mustParseCIDR("10.0.0.6/32"),
 					Type:      syscall.RTN_UNICAST,
@@ -448,6 +457,7 @@ var _ = Describe("RouteTable", func() {
 				err := rt.Apply()
 				Expect(err).ToNot(HaveOccurred())
 				Expect(dataplane.RouteKeyToRoute["254-10.0.0.6/32"]).To(Equal(netlink.Route{
+					Family:    unix.AF_INET,
 					LinkIndex: addLink.LinkAttrs.Index,
 					Dst:       mustParseCIDR("10.0.0.6/32"),
 					Type:      syscall.RTN_UNICAST,
@@ -456,6 +466,7 @@ var _ = Describe("RouteTable", func() {
 					Table:     unix.RT_TABLE_MAIN,
 				}))
 				Expect(dataplane.RouteKeyToRoute["254-10.0.0.7/32"]).To(Equal(netlink.Route{
+					Family:    unix.AF_INET,
 					LinkIndex: addLink.LinkAttrs.Index,
 					Dst:       mustParseCIDR("10.0.0.7/32"),
 					Type:      syscall.RTN_UNICAST,
@@ -483,6 +494,7 @@ var _ = Describe("RouteTable", func() {
 				err = rt.Apply()
 				Expect(err).NotTo(HaveOccurred())
 				Expect(dataplane.RouteKeyToRoute["254-10.0.0.6/32"]).To(Equal(netlink.Route{
+					Family:    unix.AF_INET,
 					LinkIndex: addLink.LinkAttrs.Index,
 					Dst:       mustParseCIDR("10.0.0.6/32"),
 					Type:      syscall.RTN_UNICAST,
@@ -491,6 +503,7 @@ var _ = Describe("RouteTable", func() {
 					Table:     unix.RT_TABLE_MAIN,
 				}))
 				Expect(dataplane.RouteKeyToRoute["254-10.0.0.7/32"]).To(Equal(netlink.Route{
+					Family:    unix.AF_INET,
 					LinkIndex: addLink.LinkAttrs.Index,
 					Dst:       mustParseCIDR("10.0.0.7/32"),
 					Type:      syscall.RTN_UNICAST,
@@ -503,6 +516,7 @@ var _ = Describe("RouteTable", func() {
 				// Route that should be left alone
 				noopLink := dataplane.AddIface(4, "cali4", true, true)
 				noopRoute := netlink.Route{
+					Family:    unix.AF_INET,
 					LinkIndex: noopLink.LinkAttrs.Index,
 					Dst:       mustParseCIDR("10.0.0.4/32"),
 					Type:      syscall.RTN_UNICAST,
@@ -524,6 +538,7 @@ var _ = Describe("RouteTable", func() {
 				// Route that needs to be updated
 				updateLink := dataplane.AddIface(5, "cali5", true, true)
 				updateRoute := netlink.Route{
+					Family:    unix.AF_INET,
 					LinkIndex: updateLink.LinkAttrs.Index,
 					Dst:       mustParseCIDR("10.0.0.5/32"),
 					Type:      syscall.RTN_UNICAST,
@@ -548,6 +563,7 @@ var _ = Describe("RouteTable", func() {
 				// Route that needs to be updated
 				updateLink := dataplane.AddIface(5, "cali5", true, true)
 				updateRoute := netlink.Route{
+					Family:    unix.AF_INET,
 					LinkIndex: updateLink.LinkAttrs.Index,
 					Dst:       mustParseCIDR("10.0.0.5/32"),
 					Type:      syscall.RTN_UNICAST,
@@ -638,6 +654,7 @@ var _ = Describe("RouteTable", func() {
 
 			It("has not programmed the route", func() {
 				Expect(dataplane.RouteKeyToRoute).NotTo(ContainElement(netlink.Route{
+					Family:    unix.AF_INET,
 					LinkIndex: cali3.LinkAttrs.Index,
 					Dst:       mustParseCIDR("10.20.30.40/32"),
 					Type:      syscall.RTN_UNICAST,
@@ -652,6 +669,7 @@ var _ = Describe("RouteTable", func() {
 				Expect(err).ToNot(HaveOccurred())
 
 				Expect(dataplane.RouteKeyToRoute).To(ContainElement(netlink.Route{
+					Family:    unix.AF_INET,
 					LinkIndex: cali3.LinkAttrs.Index,
 					Dst:       mustParseCIDR("10.20.30.40/32"),
 					Type:      syscall.RTN_UNICAST,
@@ -678,6 +696,7 @@ var _ = Describe("RouteTable", func() {
 
 			It("should have two routes for cali3", func() {
 				Expect(dataplane.RouteKeyToRoute).To(ContainElement(netlink.Route{
+					Family:    unix.AF_INET,
 					LinkIndex: cali3.LinkAttrs.Index,
 					Dst:       mustParseCIDR("10.20.30.40/32"),
 					Type:      syscall.RTN_UNICAST,
@@ -686,6 +705,7 @@ var _ = Describe("RouteTable", func() {
 					Table:     unix.RT_TABLE_MAIN,
 				}))
 				Expect(dataplane.RouteKeyToRoute).To(ContainElement(netlink.Route{
+					Family:    unix.AF_INET,
 					LinkIndex: cali3.LinkAttrs.Index,
 					Dst:       mustParseCIDR("10.0.20.0/24"),
 					Type:      syscall.RTN_UNICAST,
@@ -713,6 +733,7 @@ var _ = Describe("RouteTable", func() {
 				Expect(dataplane.UpdatedRouteKeys).To(BeEmpty())
 
 				Expect(dataplane.RouteKeyToRoute).To(ContainElement(netlink.Route{
+					Family:    unix.AF_INET,
 					LinkIndex: cali3.LinkAttrs.Index,
 					Dst:       mustParseCIDR("10.20.30.40/32"),
 					Type:      syscall.RTN_UNICAST,
@@ -721,6 +742,7 @@ var _ = Describe("RouteTable", func() {
 					Table:     unix.RT_TABLE_MAIN,
 				}))
 				Expect(dataplane.RouteKeyToRoute).To(ContainElement(netlink.Route{
+					Family:    unix.AF_INET,
 					LinkIndex: cali3.LinkAttrs.Index,
 					Dst:       mustParseCIDR("10.0.20.0/24"),
 					Type:      syscall.RTN_UNICAST,
@@ -747,6 +769,7 @@ var _ = Describe("RouteTable", func() {
 				Expect(dataplane.UpdatedRouteKeys).To(BeEmpty())
 
 				Expect(dataplane.RouteKeyToRoute).To(ContainElement(netlink.Route{
+					Family:    unix.AF_INET,
 					LinkIndex: cali3.LinkAttrs.Index,
 					Dst:       mustParseCIDR("10.20.30.40/32"),
 					Type:      syscall.RTN_UNICAST,
@@ -755,6 +778,7 @@ var _ = Describe("RouteTable", func() {
 					Table:     unix.RT_TABLE_MAIN,
 				}))
 				Expect(dataplane.RouteKeyToRoute).To(ContainElement(netlink.Route{
+					Family:    unix.AF_INET,
 					LinkIndex: cali3.LinkAttrs.Index,
 					Dst:       mustParseCIDR("10.0.20.0/24"),
 					Type:      syscall.RTN_UNICAST,
@@ -841,7 +865,8 @@ var _ = Describe("RouteTable", func() {
 				})
 				It("should keep correct route", func() {
 					Expect(dataplane.RouteKeyToRoute["254-10.0.0.1/32"]).To(Equal(netlink.Route{
-						LinkIndex: 1,
+						Family:    unix.AF_INET,
+						LinkIndex: cali1.LinkAttrs.Index,
 						Dst:       &ip1,
 						Type:      syscall.RTN_UNICAST,
 						Protocol:  FelixRouteProtocol,
@@ -853,7 +878,8 @@ var _ = Describe("RouteTable", func() {
 				It("should add new route", func() {
 					Expect(dataplane.RouteKeyToRoute).To(HaveKey("254-10.0.0.2/32"))
 					Expect(dataplane.RouteKeyToRoute["254-10.0.0.2/32"]).To(Equal(netlink.Route{
-						LinkIndex: 2,
+						Family:    unix.AF_INET,
+						LinkIndex: cali2.LinkAttrs.Index,
 						Dst:       &ip2,
 						Type:      syscall.RTN_UNICAST,
 						Protocol:  FelixRouteProtocol,
@@ -864,7 +890,8 @@ var _ = Describe("RouteTable", func() {
 				It("should update changed route", func() {
 					Expect(dataplane.RouteKeyToRoute).To(HaveKey("254-10.0.1.3/32"))
 					Expect(dataplane.RouteKeyToRoute["254-10.0.1.3/32"]).To(Equal(netlink.Route{
-						LinkIndex: 3,
+						Family:    unix.AF_INET,
+						LinkIndex: cali3.LinkAttrs.Index,
 						Dst:       &ip13,
 						Type:      syscall.RTN_UNICAST,
 						Protocol:  FelixRouteProtocol,
@@ -901,6 +928,7 @@ var _ = Describe("RouteTable", func() {
 				Describe("after an external route addition with route removal enabled", func() {
 					JustBeforeEach(func() {
 						cali1Route2 = netlink.Route{
+							Family:    unix.AF_INET,
 							LinkIndex: cali1.LinkAttrs.Index,
 							Dst:       mustParseCIDR("10.0.0.22/32"),
 							Type:      syscall.RTN_UNICAST,
@@ -952,8 +980,9 @@ var _ = Describe("RouteTable", func() {
 		var cali1 *mocknetlink.MockLink
 		var cali1Route netlink.Route
 		BeforeEach(func() {
-			cali1 = dataplane.AddIface(1, "cali1", false, false)
+			cali1 = dataplane.AddIface(2, "cali1", false, false)
 			cali1Route = netlink.Route{
+				Family:    unix.AF_INET,
 				LinkIndex: cali1.LinkAttrs.Index,
 				Dst:       mustParseCIDR("10.0.0.1/32"),
 				Type:      syscall.RTN_UNICAST,
@@ -1013,7 +1042,7 @@ var _ = Describe("RouteTable", func() {
 
 				// Set interface up
 				rt.OnIfaceStateChanged("cali1", 12, ifacemonitor.StateUp)
-				cali1 = dataplane.AddIface(1, "cali1", true, true)
+				cali1 = dataplane.AddIface(2, "cali1", true, true)
 
 				// Now, the apply should work.
 				err = rt.Apply()
@@ -1081,9 +1110,10 @@ var _ = Describe("RouteTable (main table)", func() {
 		var cali1, eth0 *mocknetlink.MockLink
 		var gatewayRoute, cali1Route, cali1RouteTable100 netlink.Route
 		BeforeEach(func() {
-			eth0 = dataplane.AddIface(0, "eth0", true, true)
-			cali1 = dataplane.AddIface(1, "cali1", true, true)
+			eth0 = dataplane.AddIface(2, "eth0", true, true)
+			cali1 = dataplane.AddIface(3, "cali1", true, true)
 			cali1Route = netlink.Route{
+				Family:    unix.AF_INET,
 				LinkIndex: cali1.LinkAttrs.Index,
 				Dst:       mustParseCIDR("10.0.0.1/32"),
 				Type:      syscall.RTN_UNICAST,
@@ -1093,6 +1123,7 @@ var _ = Describe("RouteTable (main table)", func() {
 			}
 			dataplane.AddMockRoute(&cali1Route)
 			cali1RouteTable100 = netlink.Route{
+				Family:    unix.AF_INET,
 				LinkIndex: cali1.LinkAttrs.Index,
 				Dst:       mustParseCIDR("10.0.0.3/32"),
 				Type:      syscall.RTN_UNICAST,
@@ -1102,6 +1133,7 @@ var _ = Describe("RouteTable (main table)", func() {
 			}
 			dataplane.AddMockRoute(&cali1RouteTable100)
 			gatewayRoute = netlink.Route{
+				Family:    unix.AF_INET,
 				LinkIndex: eth0.LinkAttrs.Index,
 				Type:      syscall.RTN_UNICAST,
 				Protocol:  FelixRouteProtocol,
@@ -1183,9 +1215,10 @@ var _ = Describe("RouteTable (table 100)", func() {
 		var cali, eth0 *mocknetlink.MockLink
 		var gatewayRoute, caliRoute, caliRouteTable100, throwRoute, caliRouteTable100SameAsThrow netlink.Route
 		BeforeEach(func() {
-			eth0 = dataplane.AddIface(0, "eth0", true, true)
-			cali = dataplane.AddIface(1, "cali", true, true)
+			eth0 = dataplane.AddIface(2, "eth0", true, true)
+			cali = dataplane.AddIface(3, "cali", true, true)
 			caliRoute = netlink.Route{
+				Family:    unix.AF_INET,
 				LinkIndex: cali.LinkAttrs.Index,
 				Dst:       mustParseCIDR("10.0.0.1/32"),
 				Type:      syscall.RTN_UNICAST,
@@ -1195,6 +1228,7 @@ var _ = Describe("RouteTable (table 100)", func() {
 			}
 			dataplane.AddMockRoute(&caliRoute)
 			caliRouteTable100 = netlink.Route{
+				Family:    unix.AF_INET,
 				LinkIndex: cali.LinkAttrs.Index,
 				Dst:       mustParseCIDR("10.0.0.3/32"),
 				Type:      syscall.RTN_UNICAST,
@@ -1204,6 +1238,7 @@ var _ = Describe("RouteTable (table 100)", func() {
 			}
 			dataplane.AddMockRoute(&caliRouteTable100)
 			gatewayRoute = netlink.Route{
+				Family:    unix.AF_INET,
 				LinkIndex: eth0.LinkAttrs.Index,
 				Type:      syscall.RTN_UNICAST,
 				Protocol:  FelixRouteProtocol,
@@ -1213,6 +1248,7 @@ var _ = Describe("RouteTable (table 100)", func() {
 			}
 			dataplane.AddMockRoute(&gatewayRoute)
 			throwRoute = netlink.Route{
+				Family:    unix.AF_INET,
 				LinkIndex: 0,
 				Dst:       mustParseCIDR("10.10.10.10/32"),
 				Type:      syscall.RTN_THROW,
@@ -1224,6 +1260,7 @@ var _ = Describe("RouteTable (table 100)", func() {
 
 			// Used in tests but not added to the dataplane at the start.
 			caliRouteTable100SameAsThrow = netlink.Route{
+				Family:    unix.AF_INET,
 				LinkIndex: cali.LinkAttrs.Index,
 				Dst:       mustParseCIDR("10.10.10.10/32"),
 				Type:      syscall.RTN_UNICAST,
@@ -1364,6 +1401,7 @@ var _ = Describe("RouteTable (table 100)", func() {
 
 			It("the blackhole route should remain", func() {
 				Expect(dataplane.RouteKeyToRoute).To(ConsistOf(caliRoute, gatewayRoute, netlink.Route{
+					Family:    unix.AF_INET,
 					LinkIndex: 0,
 					Dst:       mustParseCIDR("10.10.10.10/32"),
 					Type:      syscall.RTN_BLACKHOLE,
@@ -1371,8 +1409,7 @@ var _ = Describe("RouteTable (table 100)", func() {
 					Scope:     netlink.SCOPE_UNIVERSE,
 					Table:     100,
 				}))
-				Expect(dataplane.AddedRouteKeys.Contains("100-10.10.10.10/32")).To(BeTrue())
-				Expect(dataplane.DeletedRouteKeys.Contains("100-10.10.10.10/32")).To(BeTrue())
+				Expect(dataplane.UpdatedRouteKeys.Contains("100-10.10.10.10/32")).To(BeTrue())
 			})
 		})
 
@@ -1394,6 +1431,7 @@ var _ = Describe("RouteTable (table 100)", func() {
 
 			It("the prohibit route should remain", func() {
 				Expect(dataplane.RouteKeyToRoute).To(ConsistOf(caliRoute, gatewayRoute, netlink.Route{
+					Family:    unix.AF_INET,
 					LinkIndex: 0,
 					Dst:       mustParseCIDR("10.10.10.10/32"),
 					Type:      syscall.RTN_PROHIBIT,
@@ -1401,8 +1439,7 @@ var _ = Describe("RouteTable (table 100)", func() {
 					Scope:     netlink.SCOPE_UNIVERSE,
 					Table:     100,
 				}))
-				Expect(dataplane.AddedRouteKeys.Contains("100-10.10.10.10/32")).To(BeTrue())
-				Expect(dataplane.DeletedRouteKeys.Contains("100-10.10.10.10/32")).To(BeTrue())
+				Expect(dataplane.UpdatedRouteKeys.Contains("100-10.10.10.10/32")).To(BeTrue())
 			})
 		})
 	})
@@ -1413,6 +1450,7 @@ var _ = Describe("RouteTable (table 100)", func() {
 		BeforeEach(func() {
 			cali = dataplane.AddIface(2, "cali", true, true)
 			caliRoute = netlink.Route{
+				Family:    unix.AF_INET,
 				LinkIndex: cali.LinkAttrs.Index,
 				Dst:       mustParseCIDR("10.0.0.1/32"),
 				Type:      syscall.RTN_UNICAST,

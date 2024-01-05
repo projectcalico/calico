@@ -358,6 +358,10 @@ func (r *RouteTable) OnIfaceStateChanged(ifaceName string, ifIndex int, state if
 }
 
 func (r *RouteTable) onIfaceSeen(ifIndex int) {
+	if ifIndex <= 1 {
+		// Ignore "no interface" routes.
+		return
+	}
 	if _, ok := r.ifaceIndexToFirstSeen[ifIndex]; ok {
 		return
 	}
