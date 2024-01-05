@@ -86,7 +86,7 @@ mainLoop:
 				return
 			}
 			idx := int(linkUpd.Index)
-			linkIsUp := linkUpd.Header.Type == syscall.RTM_NEWLINK && linkIsOperUp(linkUpd.Link)
+			linkIsUp := linkUpd.Header.Type == syscall.RTM_NEWLINK && LinkIsOperUp(linkUpd.Link)
 			var delay time.Duration
 			if linkIsUp {
 				if len(updatesByIfaceIdx[idx]) == 0 {

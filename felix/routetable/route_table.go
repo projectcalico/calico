@@ -456,7 +456,7 @@ func (r *RouteTable) recheckRouteOwnershipsByIface(name string) {
 	}
 }
 
-func (r *RouteTable) lookupIfaceIndex(ifaceName string) (int, bool) {
+func (r *RouteTable) ifaceIndex(ifaceName string) (int, bool) {
 	if ifaceName == InterfaceNone {
 		if r.ipVersion == 6 {
 			// IPv6 "special" routes use ifindex 1 (vs 0 for IPv4).
@@ -495,7 +495,7 @@ func (r *RouteTable) recalculateDesiredKernelRoute(cidr ip.CIDR) {
 	bestIface := ""
 	bestIfaceIdx := -1
 	ifaces.Iter(func(ifaceName string) error {
-		ifIndex, ok := r.lookupIfaceIndex(ifaceName)
+		ifIndex, ok := r.ifaceIndex(ifaceName)
 		if !ok {
 			r.logCxt.Debug("Skipping route for missing interface.")
 			return nil
@@ -572,6 +572,13 @@ func (r *RouteTable) doFullResync(nl netlinkshim.Interface) error {
 	r.opReporter.RecordOperation(fmt.Sprint("resync-routes-v", r.ipVersion))
 	resyncStartTime := time.Now()
 
+	// It's possible that we get out of sync with the interface monitor; for example, if the
+	// RouteTable is created after start-of-day.  Do our own refresh of the list of links.
+	if err := r.refreshAllIfaceStates(nl); err != nil {
+		log.WithError(err).Error("Failed to list interfaces")
+		return fmt.Errorf("failed to list interfaces during resync: %w", err)
+	}
+
 	// Load all the routes in the routing table.  If we're managing
 	// routes in a shared table (such as the main table) this may include
 	// routes that we're not managing.
@@ -615,7 +622,11 @@ func (r *RouteTable) doFullResync(nl netlinkshim.Interface) error {
 
 func (r *RouteTable) resyncIndividualInterfaces(nl netlinkshim.Interface) error {
 	r.ifacesToRescan.Iter(func(ifaceName string) error {
-		ifIndex, ok := r.lookupIfaceIndex(ifaceName)
+		// Defensive: we can be out of sync with the interface monitor if this
+		// RouteTable was created after start-of-day.  Refresh the link.
+		r.refreshIfaceStateBestEffort(ifaceName)
+
+		ifIndex, ok := r.ifaceIndex(ifaceName)
 		if !ok {
 			r.logCxt.Debug("Ignoring rescan of unknown interface.")
 			return set.RemoveItem
@@ -688,6 +699,51 @@ func (r *RouteTable) resyncIndividualInterfaces(nl netlinkshim.Interface) error 
 		return set.RemoveItem
 	})
 	return nil
+}
+
+func (r *RouteTable) refreshAllIfaceStates(nl netlinkshim.Interface) error {
+	links, err := nl.LinkList()
+	if err != nil {
+		return err
+	}
+	seenNames := set.New[string]()
+	for _, link := range links {
+		state := ifacemonitor.StateDown
+		if ifacemonitor.LinkIsOperUp(link) {
+			state = ifacemonitor.StateUp
+		}
+		seenNames.Add(link.Attrs().Name)
+		r.OnIfaceStateChanged(link.Attrs().Name, link.Attrs().Index, state)
+	}
+	for name := range r.ifaceNameToIndex {
+		if seenNames.Contains(name) {
+			continue
+		}
+		r.OnIfaceStateChanged(name, 0, ifacemonitor.StateNotPresent)
+	}
+	return nil
+}
+
+func (r *RouteTable) refreshIfaceStateBestEffort(ifaceName string) {
+	nl, err := r.nl.Handle()
+	if err != nil {
+		log.WithError(err).Warn("Failed to get netlink handle.")
+		return
+	}
+	link, err := nl.LinkByName(ifaceName)
+	var lnf netlink.LinkNotFoundError
+	if errors.As(err, &lnf) {
+		r.OnIfaceStateChanged(ifaceName, 0, ifacemonitor.StateNotPresent)
+		return
+	} else if err != nil {
+		log.WithError(err).Warn("Failed to get link.")
+		return
+	}
+	state := ifacemonitor.StateDown
+	if ifacemonitor.LinkIsOperUp(link) {
+		state = ifacemonitor.StateUp
+	}
+	r.OnIfaceStateChanged(link.Attrs().Name, link.Attrs().Index, state)
 }
 
 func (r *RouteTable) routeKeyForCIDR(cidr ip.CIDR) kernelRouteKey {
