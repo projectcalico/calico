@@ -24,6 +24,7 @@ import (
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/rules"
+	"github.com/projectcalico/calico/felix/vxlanfdb"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -113,15 +114,13 @@ var _ = Describe("VXLANManager", func() {
 	BeforeEach(func() {
 		rt = &mockRouteTable{
 			currentRoutes:   map[string][]routetable.Target{},
-			currentL2Routes: map[string][]routetable.L2Target{},
+			currentL2Routes: map[string][]vxlanfdb.VTEP{},
 		}
 		brt = &mockRouteTable{
-			currentRoutes:   map[string][]routetable.Target{},
-			currentL2Routes: map[string][]routetable.L2Target{},
+			currentRoutes: map[string][]routetable.Target{},
 		}
 		prt = &mockRouteTable{
-			currentRoutes:   map[string][]routetable.Target{},
-			currentL2Routes: map[string][]routetable.L2Target{},
+			currentRoutes: map[string][]routetable.Target{},
 		}
 
 		la := netlink.NewLinkAttrs()
@@ -129,6 +128,7 @@ var _ = Describe("VXLANManager", func() {
 		manager = newVXLANManagerWithShims(
 			common.NewMockIPSets(),
 			rt, brt,
+			rt,
 			"vxlan.calico",
 			Config{
 				MaxIPSetSize:       5,
@@ -153,6 +153,7 @@ var _ = Describe("VXLANManager", func() {
 		managerV6 = newVXLANManagerWithShims(
 			common.NewMockIPSets(),
 			rt, brt,
+			rt,
 			"vxlan-v6.calico",
 			Config{
 				MaxIPSetSize:       5,

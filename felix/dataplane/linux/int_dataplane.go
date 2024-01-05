@@ -36,6 +36,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+
 	"github.com/projectcalico/calico/felix/vxlanfdb"
 
 	"github.com/projectcalico/calico/felix/bpf/bpfmap"
