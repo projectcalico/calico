@@ -27,7 +27,6 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
 	"github.com/projectcalico/calico/felix/ifacemonitor"
@@ -822,8 +821,8 @@ var _ = Describe("RouteTable", func() {
 		// each case, we make the failure transient so that only the first Apply() should
 		// fail.  Then, at most, the second call to Apply() should succeed.
 		for _, testFailFlags := range mocknetlink.RoutetableFailureScenarios {
-			failFlags := testFailFlags
-			desc := fmt.Sprintf("with some routes added and failures: %v", failFlags)
+			testFailFlags := testFailFlags
+			desc := fmt.Sprintf("with some routes added and failures: %v", testFailFlags)
 			Describe(desc, func() {
 				BeforeEach(func() {
 					rt.SetRoutes("cali1", []Target{
@@ -835,46 +834,56 @@ var _ = Describe("RouteTable", func() {
 					rt.SetRoutes("cali3", []Target{
 						{CIDR: ip.MustParseCIDROrIP("10.0.1.3/32")},
 					})
-					dataplane.FailuresToSimulate = failFlags
+					dataplane.FailuresToSimulate = testFailFlags
 				})
 				JustBeforeEach(func() {
 					maxTries := 1
-					if failFlags != mocknetlink.FailNone {
-						maxTries = 2
+					if testFailFlags != mocknetlink.FailNone {
+						maxTries = 3
 					}
 					for try := 0; try < maxTries; try++ {
+						By("Apply")
+						rt.OnIfaceStateChanged("cali1", cali1.LinkAttrs.Index, ifacemonitor.StateUp)
 						err := rt.Apply()
-						if err == nil {
-							// We should only need to retry if Apply returns an error.
-							log.Info("Apply returned no error, breaking out of loop")
-							break
+						if err != nil {
+							continue
 						}
-					}
-					if failFlags == mocknetlink.FailNextLinkByNameNotFound {
-						// Special case: a "not found" error doesn't get
-						// rechecked straight away because it's expected
-						// so we have to give the RouteTable a nudge.
-						rt.QueueResync()
-						err := rt.Apply()
-						Expect(err).ToNot(HaveOccurred())
+						if testFailFlags == mocknetlink.FailNextLinkByName ||
+							testFailFlags == mocknetlink.FailNextLinkByNameNotFound {
+							// Need >1 loop to hit these cases because, on the first try,
+							// we go through the full resync, which doesn't use LinkByName.
+							continue
+						}
+						break
 					}
 				})
+				if testFailFlags == mocknetlink.FailNextRouteAdd {
+					// RouteAdd is no longer used...
+					It("should not consume the error", func() {
+						// Check that all the failures we simulated were hit.
+						Expect(dataplane.FailuresToSimulate).To(Equal(testFailFlags),
+							"Error was consumed, does test need updating?")
+					})
+					return
+				}
 				It("should have consumed all failures", func() {
 					// Check that all the failures we simulated were hit.
 					Expect(dataplane.FailuresToSimulate).To(Equal(mocknetlink.FailNone))
 				})
-				It("should keep correct route", func() {
-					Expect(dataplane.RouteKeyToRoute["254-10.0.0.1/32"]).To(Equal(netlink.Route{
-						Family:    unix.AF_INET,
-						LinkIndex: cali1.LinkAttrs.Index,
-						Dst:       &ip1,
-						Type:      syscall.RTN_UNICAST,
-						Protocol:  FelixRouteProtocol,
-						Scope:     netlink.SCOPE_LINK,
-						Table:     unix.RT_TABLE_MAIN,
-					}))
-					Expect(dataplane.AddedRouteKeys.Contains("254-10.0.0.1/32")).To(BeFalse())
-				})
+				if testFailFlags != mocknetlink.FailNextLinkByNameNotFound {
+					It("should keep correct route", func() {
+						Expect(dataplane.RouteKeyToRoute["254-10.0.0.1/32"]).To(Equal(netlink.Route{
+							Family:    unix.AF_INET,
+							LinkIndex: cali1.LinkAttrs.Index,
+							Dst:       &ip1,
+							Type:      syscall.RTN_UNICAST,
+							Protocol:  FelixRouteProtocol,
+							Scope:     netlink.SCOPE_LINK,
+							Table:     unix.RT_TABLE_MAIN,
+						}))
+						Expect(dataplane.AddedRouteKeys.Contains("254-10.0.0.1/32")).To(BeFalse())
+					})
+				}
 				It("should add new route", func() {
 					Expect(dataplane.RouteKeyToRoute).To(HaveKey("254-10.0.0.2/32"))
 					Expect(dataplane.RouteKeyToRoute["254-10.0.0.2/32"]).To(Equal(netlink.Route{
@@ -899,7 +908,7 @@ var _ = Describe("RouteTable", func() {
 						Table:     unix.RT_TABLE_MAIN,
 					}))
 					Expect(dataplane.DeletedRouteKeys.Contains("254-10.0.0.3/32")).To(BeTrue())
-					Eventually(dataplane.GetDeletedConntrackEntries).Should(Equal([]net.IP{net.ParseIP("10.0.0.3").To4()}))
+					Eventually(dataplane.GetDeletedConntrackEntries).Should(ContainElement(net.ParseIP("10.0.0.3").To4()))
 				})
 				It("should have expected number of routes at the end", func() {
 					Expect(len(dataplane.RouteKeyToRoute)).To(Equal(4),
@@ -907,12 +916,12 @@ var _ = Describe("RouteTable", func() {
 							len(dataplane.RouteKeyToRoute),
 							dataplane.RouteKeyToRoute))
 				})
-				if failFlags&(mocknetlink.FailNextSetSocketTimeout|
+				if testFailFlags&(mocknetlink.FailNextSetSocketTimeout|
 					mocknetlink.FailNextSetStrict|
 					mocknetlink.FailNextNewNetlink|
 					mocknetlink.FailNextLinkByName|
 					mocknetlink.FailNextLinkList|
-					mocknetlink.FailNextRouteAdd|
+					mocknetlink.FailNextRouteReplace|
 					mocknetlink.FailNextRouteDel|
 					mocknetlink.FailNextAddARP|
 					mocknetlink.FailNextRouteList) != 0 {

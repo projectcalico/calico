@@ -76,7 +76,7 @@ var _ netlinkshim.Interface = (*MockNetlinkDataplane)(nil)
 
 var (
 	SimulatedError        = errors.New("dummy error")
-	NotFoundError         = errors.New("not found")
+	NotFoundError         = netlink.LinkNotFoundError{}
 	FileDoesNotExistError = errors.New("file does not exist")
 	AlreadyExistsError    = errors.New("already exists")
 	NotSupportedError     = errors.New("operation not supported")
@@ -146,6 +146,9 @@ func (f FailFlags) String() string {
 	}
 	if f&FailNextRouteAdd != 0 {
 		parts = append(parts, "FailNextRouteAdd")
+	}
+	if f&FailNextRouteAddOrReplace != 0 {
+		parts = append(parts, "FailNextRouteAddOrReplace")
 	}
 	if f&FailNextRouteReplace != 0 {
 		parts = append(parts, "FailNextRouteReplace")

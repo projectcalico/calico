@@ -103,6 +103,7 @@ type RouteTable struct {
 
 	// Interface update tracking.
 	fullResyncNeeded   bool
+	forceNetlinkClose  bool
 	ifacesToRescan     set.Set[string]
 	ifacePrefixRegexp  *regexp.Regexp
 	includeNoInterface bool
@@ -311,10 +312,10 @@ func (r *RouteTable) OnIfaceStateChanged(ifaceName string, ifIndex int, state if
 	// * Interface gets renamed: same ifindex, new name.  The interface
 	//   monitor deals with that by sending us a deletion for the old
 	//   name, then a creation for the new name.
-	// * Interface gets recreated: same name, new ifindex.  We should
-	//   see a deletion and then an add.
+	// * Interface gets recreated: same name, new ifindex.  Again we
+	//   should see a deletion and then an add.
 
-	recheckInterfaceRoutes := false
+	recheckRoutesOwnership := false
 	if state == ifacemonitor.StateNotPresent {
 		// Interface deleted, clean up.
 		oldIndex := r.ifaceNameToIndex[ifaceName]
@@ -324,7 +325,7 @@ func (r *RouteTable) OnIfaceStateChanged(ifaceName string, ifIndex int, state if
 
 		// This interface may have had some active routes that were shadowing
 		// routes from another interface.  Make sure we rescan.
-		recheckInterfaceRoutes = true
+		recheckRoutesOwnership = true
 	} else {
 		// Interface exists, record its details.
 		r.onIfaceSeen(ifIndex)
@@ -336,10 +337,10 @@ func (r *RouteTable) OnIfaceStateChanged(ifaceName string, ifIndex int, state if
 
 			// The interface index is part of the route conflict tie-breaker,
 			// so we need to check if the winner has changed.
-			recheckInterfaceRoutes = true
+			recheckRoutesOwnership = true
 		} else if !ok {
 			// New interface.
-			recheckInterfaceRoutes = true
+			recheckRoutesOwnership = true
 		}
 		r.ifaceNameToIndex[ifaceName] = ifIndex
 		r.ifaceIndexToName[ifIndex] = ifaceName
@@ -351,10 +352,10 @@ func (r *RouteTable) OnIfaceStateChanged(ifaceName string, ifIndex int, state if
 		// and its default route disappears.
 		logCxt.Debug("Interface up, marking for route sync")
 		r.ifacesToRescan.Add(ifaceName)
-		recheckInterfaceRoutes = true
+		recheckRoutesOwnership = true
 	}
 
-	if recheckInterfaceRoutes {
+	if recheckRoutesOwnership {
 		r.recheckRouteOwnershipsByIface(ifaceName)
 	}
 }
@@ -509,7 +510,9 @@ func (r *RouteTable) recalculateDesiredKernelRoute(cidr ip.CIDR) {
 	var bestTarget Target
 	bestIface := ""
 	bestIfaceIdx := -1
+	var candidates []string
 	ifaces.Iter(func(ifaceName string) error {
+		candidates = append(candidates, ifaceName)
 		ifIndex, ok := r.ifaceIndex(ifaceName)
 		if !ok {
 			r.logCxt.Debug("Skipping route for missing interface.")
@@ -527,7 +530,10 @@ func (r *RouteTable) recalculateDesiredKernelRoute(cidr ip.CIDR) {
 	})
 
 	if bestIfaceIdx == -1 {
-		r.logCxt.WithField("cidr", cidr).Debug("No valid route for this CIDR (all candidate routes missing iface index).")
+		r.logCxt.WithFields(log.Fields{
+			"cidr":       cidr,
+			"candidates": candidates,
+		}).Debug("No valid route for this CIDR (all candidate routes missing iface index).")
 		return
 	}
 
@@ -559,11 +565,17 @@ func (r *RouteTable) QueueResync() {
 	r.fullResyncNeeded = true
 }
 
-func (r *RouteTable) Apply() error {
-	if err := r.maybeResyncWithDataplane(); err != nil {
+func (r *RouteTable) Apply() (err error) {
+	defer func() {
+		if err != nil || r.forceNetlinkClose {
+			r.nl.CloseHandle()
+			r.forceNetlinkClose = false
+		}
+	}()
+	if err = r.maybeResyncWithDataplane(); err != nil {
 		return err
 	}
-	if err := r.applyUpdates(); err != nil {
+	if err = r.applyUpdates(); err != nil {
 		return err
 	}
 	r.maybeCleanUpGracePeriods()
@@ -602,6 +614,7 @@ func (r *RouteTable) maybeResyncWithDataplane() error {
 }
 
 func (r *RouteTable) doFullResync(nl netlinkshim.Interface) error {
+	r.logCxt.Debug("Doing full resync.")
 	r.opReporter.RecordOperation(fmt.Sprint("resync-routes-v", r.ipVersion))
 	resyncStartTime := time.Now()
 
@@ -660,7 +673,11 @@ func (r *RouteTable) resyncIndividualInterfaces(nl netlinkshim.Interface) error 
 	r.ifacesToRescan.Iter(func(ifaceName string) error {
 		// Defensive: we can be out of sync with the interface monitor if this
 		// RouteTable was created after start-of-day.  Refresh the link.
-		r.refreshIfaceStateBestEffort(ifaceName)
+		err := r.refreshIfaceStateBestEffort(nl, ifaceName)
+		if err != nil {
+			r.forceNetlinkClose = true
+			return nil
+		}
 
 		ifIndex, ok := r.ifaceIndex(ifaceName)
 		if !ok {
@@ -691,7 +708,7 @@ func (r *RouteTable) resyncIndividualInterfaces(nl netlinkshim.Interface) error 
 					"routeFilter": routeFilter,
 					"flags":       routeFilterFlags,
 				}).Error("Error listing routes")
-				r.nl.CloseHandle() // Defensive: force a netlink reconnection next time.
+				r.forceNetlinkClose = true
 				return set.RemoveItem
 			} else {
 				r.logCxt.WithError(filteredErr).WithField("iface", ifaceName).Debug(
@@ -761,26 +778,23 @@ func (r *RouteTable) refreshAllIfaceStates(nl netlinkshim.Interface) error {
 	return nil
 }
 
-func (r *RouteTable) refreshIfaceStateBestEffort(ifaceName string) {
-	nl, err := r.nl.Handle()
-	if err != nil {
-		log.WithError(err).Warn("Failed to get netlink handle.")
-		return
-	}
+func (r *RouteTable) refreshIfaceStateBestEffort(nl netlinkshim.Interface, ifaceName string) error {
+	r.logCxt.WithField("name", ifaceName).Debug("Refreshing state of interface.")
 	link, err := nl.LinkByName(ifaceName)
 	var lnf netlink.LinkNotFoundError
 	if errors.As(err, &lnf) {
 		r.OnIfaceStateChanged(ifaceName, 0, ifacemonitor.StateNotPresent)
-		return
+		return nil
 	} else if err != nil {
 		log.WithError(err).Warn("Failed to get link.")
-		return
+		return fmt.Errorf("failed to look up interface: %w", err)
 	}
 	state := ifacemonitor.StateDown
 	if ifacemonitor.LinkIsOperUp(link) {
 		state = ifacemonitor.StateUp
 	}
 	r.OnIfaceStateChanged(link.Attrs().Name, link.Attrs().Index, state)
+	return nil
 }
 
 func (r *RouteTable) routeKeyForCIDR(cidr ip.CIDR) kernelRouteKey {
@@ -909,13 +923,9 @@ func (r *RouteTable) applyUpdates() error {
 		return deltatracker.IterActionUpdateDataplane
 	})
 
-	if len(deletionErrs) > 0 {
-		log.WithField("errors", deletionErrs).Warn(
-			"Encountered some errors when trying to delete old routes.")
-	}
-
 	// Clean up any conntrack entries for routes that have been deleted.
 	r.possibleConntrackOwners.PendingDeletions().Iter(func(kernKey kernelRouteKey) deltatracker.IterAction {
+		log.WithField("kernKey", kernKey).Debug("Route deleted, starting conntrack deletion.")
 		r.startConntrackDeletion(kernKey.CIDR.Addr())
 		return deltatracker.IterActionUpdateDataplane
 	})
@@ -926,7 +936,7 @@ func (r *RouteTable) applyUpdates() error {
 	// - Clean up conntrack entries
 	// - Add the new route.
 	r.possibleConntrackOwners.PendingUpdates().Iter(func(kernKey kernelRouteKey, newOwners []int) deltatracker.IterAction {
-		_, ok := r.possibleConntrackOwners.Dataplane().Get(kernKey)
+		old, ok := r.possibleConntrackOwners.Dataplane().Get(kernKey)
 		if !ok {
 			// We don't have any owners recorded in the dataplane.  This is the
 			// mainline case when we're adding a route for the first time (or
@@ -934,6 +944,11 @@ func (r *RouteTable) applyUpdates() error {
 			// that the cleanup is all done).
 			return deltatracker.IterActionNoOp
 		}
+		log.WithFields(log.Fields{
+			"kernKey":   kernKey,
+			"oldOwners": old,
+			"newOwners": newOwners,
+		}).Info("Conntrack owners updated, starting conntrack deletion.")
 		err := r.deleteRoute(nl, kernKey)
 		if err != nil {
 			deletionErrs[kernKey] = err
@@ -1005,12 +1020,19 @@ func (r *RouteTable) applyUpdates() error {
 	})
 
 	// TODO filter out interfaces that are gone
+	err = nil
+	if len(deletionErrs) > 0 {
+		log.WithField("errors", deletionErrs).Warn(
+			"Encountered some errors when trying to delete old routes.")
+		err = UpdateFailed
+	}
 	if len(updateErrs) > 0 {
 		log.WithField("errors", updateErrs).Warn(
 			"Encountered some errors when trying to update routes.  Will retry.")
+		err = UpdateFailed
 	}
 
-	return nil
+	return err
 }
 
 func (r *RouteTable) deleteRoute(nl netlinkshim.Interface, kernKey kernelRouteKey) error {
