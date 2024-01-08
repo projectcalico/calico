@@ -388,7 +388,117 @@ func (s *IPSets) tryResync() (err error) {
 		}).Debug("Finished IPSets resync")
 	}()
 
-	// Start an 'ipset list' child process, which will emit output of the following form:
+	// Figure out if debug logging is enabled so we can disable some expensive-to-calculate logs
+	// in the tight loop below if they're not going to be emitted.  This speeds up the loop
+	// by a factor of 3-4x!
+	debug := log.GetLevel() >= log.DebugLevel
+
+	// Clear the dataplane metadata view, we'll build it back up again as we
+	// scan.
+	s.setNameToProgrammedMetadata.Dataplane().DeleteAll()
+
+	ipsets, err := s.list(debug)
+	if err != nil {
+		s.logCxt.WithError(err).Error("Failed to get the list of ipsets")
+		return
+	}
+
+	for _, name := range ipsets {
+		err = s.get(name, debug)
+		if err != nil {
+			s.logCxt.WithError(err).Errorf("Failed to process ipset %v", name)
+			return
+		}
+	}
+
+	// Mark any IP sets that we didn't see as empty.
+	for name, members := range s.mainSetNameToMembers {
+		if _, ok := s.setNameToProgrammedMetadata.Dataplane().Get(name); ok {
+			// In the dataplane, we should have updated its members above.
+			continue
+		}
+		if _, ok := s.setNameToAllMetadata[name]; !ok {
+			// Defensive: this IP set is not in the dataplane, and it's not
+			// one we are tracking, clean up its member tracker.
+			log.WithField("name", name).Warn(
+				"Cleaning up leaked(?) IP set member tracker.")
+			delete(s.mainSetNameToMembers, name)
+			continue
+		}
+		// We're tracking this IP set, but we didn't find it in the dataplane;
+		// reset the members set to empty.
+		members.Dataplane().DeleteAll()
+	}
+
+	return
+}
+
+func (s *IPSets) list(debug bool) ([]string, error) {
+	// Start an 'ipset list -name' child process, which will emit ipset's name, one at each line:
+	//
+	// 	test-100
+	//	test-1
+	//  ...
+	cmd := s.newCmd("ipset", "list", "-name")
+	// Grab stdout as a pipe so we can stream through the (potentially very large) output.
+	out, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, fmt.Errorf("Failed to get pipe for 'ipset list -name' - err: %w", err)
+	}
+	// Capture error output into a buffer.
+	var stderr bytes.Buffer
+	cmd.SetStderr(&stderr)
+	execStartTime := time.Now()
+	err = cmd.Start()
+	if err != nil {
+		return nil, fmt.Errorf("Failed to start 'ipset list -name' - err: %w", err)
+	}
+	summaryExecStart.Observe(float64(time.Since(execStartTime).Nanoseconds()) / 1000.0)
+
+	var calicoIpSets []string
+	// Use a scanner to chunk the input into lines.
+	scanner := bufio.NewScanner(out)
+	for scanner.Scan() {
+		ipSetName := scanner.Text()
+
+		// Look up to see if this is one of our IP sets.
+		if !s.IPVersionConfig.OwnsIPSet(ipSetName) || s.IPVersionConfig.IsTempIPSetName(ipSetName) {
+			if debug {
+				s.logCxt.WithField("name", ipSetName).Debug("Skip parsing members of IP set.")
+			}
+			continue
+		}
+		calicoIpSets = append(calicoIpSets, ipSetName)
+	}
+	closeErr := out.Close()
+	err = cmd.Wait()
+	logCxt := s.logCxt.WithField("stderr", stderr.String())
+	if scanner.Err() != nil {
+		logCxt.WithError(scanner.Err()).Error("Failed to read 'ipset list' output.")
+		return nil, scanner.Err()
+	}
+	if err != nil {
+		logCxt.WithError(err).Error("Bad return code from 'ipset list'.")
+		return nil, err
+	}
+	if closeErr != nil {
+		logCxt.WithError(closeErr).Error("Failed to close stdout from 'ipset list'.")
+		return nil, closeErr
+	}
+
+	s.logCxt.Debugf("Calico IpSets: %v", calicoIpSets)
+	return calicoIpSets, nil
+}
+
+func (s *IPSets) get(ipSetName string, debug bool) error {
+	// TODO: maybe we can use this case to list only the names
+	if ipSetName == "" {
+		return fmt.Errorf("No ipset name specified")
+	}
+	if debug {
+		s.logCxt.WithField("setName", ipSetName).Debug("Parsing IP set.")
+	}
+	// Start an 'ipset list [name]' child process, which will emit output of the following form:
 	//
 	// 	Name: test-100
 	//	Type: hash:ip
@@ -399,25 +509,11 @@ func (s *IPSets) tryResync() (err error) {
 	//	Members:
 	//	10.0.0.2
 	//	10.0.0.1
-	//
-	//	Name: test-1
-	//	Type: hash:ip
-	//	Revision: 4
-	//	Header: family inet hashsize 1024 maxelem 65536
-	//	Size in memory: 224
-	//	References: 0
-	//	Members:
-	//	10.0.0.1
-	//	10.0.0.2
-	//
-	// As we stream through the data, we extract the name of the IP set and its members. We
-	// use the IP set's metadata to convert each member to its canonical form for comparison.
-	cmd := s.newCmd("ipset", "list")
+	cmd := s.newCmd("ipset", "list", ipSetName)
 	// Grab stdout as a pipe so we can stream through the (potentially very large) output.
 	out, err := cmd.StdoutPipe()
 	if err != nil {
-		s.logCxt.WithError(err).Error("Failed to get pipe for 'ipset list'")
-		return
+		return fmt.Errorf("Failed to get pipe for 'ipset list [name]' - err: %w", err)
 	}
 	// Capture error output into a buffer.
 	var stderr bytes.Buffer
@@ -425,27 +521,23 @@ func (s *IPSets) tryResync() (err error) {
 	execStartTime := time.Now()
 	err = cmd.Start()
 	if err != nil {
-		s.logCxt.WithError(err).Error("Failed to start 'ipset list'")
-		return
+		return fmt.Errorf("Failed to start 'ipset list -name' - err: %w", err)
 	}
 	summaryExecStart.Observe(float64(time.Since(execStartTime).Nanoseconds()) / 1000.0)
 
-	// Use a scanner to chunk the input into lines.
-	scanner := bufio.NewScanner(out)
-
-	// Values of the last-seen header fields.
-	ipSetName := ""
 	var ipSetType IPSetType
 
-	// Figure out if debug logging is enabled so we can disable some expensive-to-calculate logs
-	// in the tight loop below if they're not going to be emitted.  This speeds up the loop
-	// by a factor of 3-4x!
-	debug := log.GetLevel() >= log.DebugLevel
-
-	// Clear the dataplane metadata view, we'll build it back up again as we
-	// scan.
-	s.setNameToProgrammedMetadata.Dataplane().DeleteAll()
+	// Use a scanner to chunk the input into lines.
+	scanner := bufio.NewScanner(out)
 	for scanner.Scan() {
+		// Look up to see if this is one of our IP sets.
+		/*if !s.IPVersionConfig.OwnsIPSet(ipSetName) || s.IPVersionConfig.IsTempIPSetName(ipSetName) {
+			if debug {
+				s.logCxt.WithField("name", ipSetName).Debug("Skip parsing members of IP set.")
+			}
+			continue
+		}*/
+
 		line := scanner.Text()
 		if debug {
 			s.logCxt.Debugf("Parsing line: %q", line)
@@ -592,39 +684,18 @@ func (s *IPSets) tryResync() (err error) {
 	logCxt := s.logCxt.WithField("stderr", stderr.String())
 	if scanner.Err() != nil {
 		logCxt.WithError(scanner.Err()).Error("Failed to read 'ipset list' output.")
-		err = scanner.Err()
-		return
+		return scanner.Err()
 	}
 	if err != nil {
 		logCxt.WithError(err).Error("Bad return code from 'ipset list'.")
-		return
+		return err
 	}
 	if closeErr != nil {
-		err = closeErr
-		logCxt.WithError(err).Error("Failed to close stdout from 'ipset list'.")
-		return
+		logCxt.WithError(closeErr).Error("Failed to close stdout from 'ipset list'.")
+		return closeErr
 	}
 
-	// Mark any IP sets that we didn't see as empty.
-	for name, members := range s.mainSetNameToMembers {
-		if _, ok := s.setNameToProgrammedMetadata.Dataplane().Get(name); ok {
-			// In the dataplane, we should have updated its members above.
-			continue
-		}
-		if _, ok := s.setNameToAllMetadata[name]; !ok {
-			// Defensive: this IP set is not in the dataplane, and it's not
-			// one we are tracking, clean up its member tracker.
-			log.WithField("name", name).Warn(
-				"Cleaning up leaked(?) IP set member tracker.")
-			delete(s.mainSetNameToMembers, name)
-			continue
-		}
-		// We're tracking this IP set, but we didn't find it in the dataplane;
-		// reset the members set to empty.
-		members.Dataplane().DeleteAll()
-	}
-
-	return
+	return nil
 }
 
 func ParseRange(s string) (min int, max int, err error) {
