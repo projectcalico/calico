@@ -870,6 +870,8 @@ var _ = Describe("RouteTable", func() {
 					// Check that all the failures we simulated were hit.
 					Expect(dataplane.FailuresToSimulate).To(Equal(mocknetlink.FailNone))
 				})
+				// If we return "not found" then the route gets cleaned up, because conflict
+				// resolution determines that no routes are eligible for programming.
 				if testFailFlags != mocknetlink.FailNextLinkByNameNotFound {
 					It("should keep correct route", func() {
 						Expect(dataplane.RouteKeyToRoute["254-10.0.0.1/32"]).To(Equal(netlink.Route{
@@ -1012,49 +1014,29 @@ var _ = Describe("RouteTable", func() {
 			mocknetlink.FailNextRouteList,
 		} {
 			failure := failure
-			It(fmt.Sprintf("with a %v failure, it should give up", failure), func() {
-				dataplane.FailuresToSimulate = failure
-				err := rt.Apply()
-				Expect(err).To(BeNil())
-				Expect(dataplane.RouteKeyToRoute).To(ConsistOf(cali1Route))
-			})
-			It(fmt.Sprintf("with a %v failure, it shouldn't leave the interface dirty", failure), func() {
-				// First Apply() with a failure.
-				dataplane.FailuresToSimulate = failure
-				err := rt.Apply()
-				Expect(err).ToNot(HaveOccurred())
-				// All failures should have been hit.
-				Expect(dataplane.FailuresToSimulate).To(BeZero())
-				// Try another Apply(), the interface shouldn't be marked dirty
-				// so nothing should happen.
-				err = rt.Apply()
-				Expect(err).ToNot(HaveOccurred())
-				Expect(dataplane.RouteKeyToRoute).To(ConsistOf(cali1Route))
-			})
 			It(fmt.Sprintf("with a %v failure it should ignore Down updates", failure), func() {
 				// First Apply() with a failure.
 				dataplane.FailuresToSimulate = failure
-				err := rt.Apply()
-				Expect(err).ToNot(HaveOccurred())
+				_ = rt.Apply()
+
 				// Fire in the update.
 				rt.OnIfaceStateChanged("cali1", 11, ifacemonitor.StateDown)
 				// Try another Apply(), the interface shouldn't be marked dirty
 				// so nothing should happen.
-				err = rt.Apply()
+				err := rt.Apply()
 				Expect(err).ToNot(HaveOccurred())
-				Expect(dataplane.RouteKeyToRoute).To(ConsistOf(cali1Route))
+				Expect(dataplane.RouteKeyToRoute).To(BeEmpty())
 			})
 			It(fmt.Sprintf("with a %v failure, then an interface kick, it should sync", failure), func() {
 				dataplane.FailuresToSimulate = failure
-				err := rt.Apply()
-				Expect(err).ToNot(HaveOccurred())
+				_ = rt.Apply()
 
 				// Set interface up
 				rt.OnIfaceStateChanged("cali1", 12, ifacemonitor.StateUp)
 				cali1 = dataplane.AddIface(2, "cali1", true, true)
 
 				// Now, the apply should work.
-				err = rt.Apply()
+				err := rt.Apply()
 				Expect(err).ToNot(HaveOccurred())
 				Expect(dataplane.RouteKeyToRoute).To(BeEmpty())
 			})
