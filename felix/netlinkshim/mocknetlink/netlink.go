@@ -23,6 +23,7 @@ import (
 	"sync"
 	"syscall"
 	"time"
+	"unsafe"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -81,6 +82,36 @@ var (
 	AlreadyExistsError    = errors.New("already exists")
 	NotSupportedError     = errors.New("operation not supported")
 )
+
+// Copy of the netlink.LinkNotFoundError struct.
+type myLinkNotFoundError struct {
+	error
+}
+
+func init() {
+	// Ugh, the error field isn't exported and logging out the error
+	// panics if the error field isn't set.  Use an unsafe cast to
+	// set the value.
+
+	// First check that our struct matches the netlink one...
+	nlType := reflect.TypeOf(NotFoundError)
+	ourType := reflect.TypeOf(myLinkNotFoundError{})
+	if nlType.NumField() != ourType.NumField() {
+		panic("netlink.LinkNotFoundError structure appears to have changed (different number of fields)")
+	}
+	for i := 0; i < ourType.NumField(); i++ {
+		nlFieldType := nlType.Field(i).Type
+		outFieldType := ourType.Field(i).Type
+		if nlFieldType != outFieldType {
+			panic(fmt.Sprintf("netlink.LinkNotFoundError structure appears to have changed (field type %v != %v)",
+				nlFieldType, ourType.Field(i).Type))
+		}
+	}
+
+	// All good, proceed with the sketchy cast...
+	var lnf = (*myLinkNotFoundError)((unsafe.Pointer)(&NotFoundError))
+	lnf.error = SimulatedError
+}
 
 type FailFlags uint32
 

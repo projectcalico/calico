@@ -3116,7 +3116,7 @@ var _ = Describe("Enable wireguard", func() {
 						wg.RouteUpdate(peer3, cidr_3)
 						wg.RouteUpdate(peer4, cidr_4)
 
-						wgDataplane.AddIface(1, ifaceName, true, true)
+						wgDataplane.AddIface(2, ifaceName, true, true)
 						link := wgDataplane.NameToLink[ifaceName]
 						Expect(link).NotTo(BeNil())
 						link.WireguardPeers = map[wgtypes.Key]wgtypes.Peer{
@@ -3225,7 +3225,7 @@ var _ = Describe("Enable wireguard", func() {
 						wgV6.RouteUpdate(peer3, cidrV6_3)
 						wgV6.RouteUpdate(peer4, cidrV6_4)
 
-						wgDataplaneV6.AddIface(1, ifaceNameV6, true, true)
+						wgDataplaneV6.AddIface(2, ifaceNameV6, true, true)
 						linkV6 := wgDataplaneV6.NameToLink[ifaceNameV6]
 						Expect(linkV6).NotTo(BeNil())
 						linkV6.WireguardPeers = map[wgtypes.Key]wgtypes.Peer{
@@ -3406,14 +3406,14 @@ var _ = Describe("Wireguard (disabled)", func() {
 	})
 
 	It("should handle deletion of the wireguard link", func() {
-		wgDataplane.AddIface(1, ifaceName, true, true)
+		wgDataplane.AddIface(2, ifaceName, true, true)
 		err := wg.Apply()
 		Expect(err).NotTo(HaveOccurred())
 		Expect(wgDataplane.NumLinkAddCalls).To(Equal(0))
 		Expect(wgDataplane.NumLinkDeleteCalls).To(Equal(1))
 		Expect(wgDataplane.DeletedLinks).To(HaveKey(ifaceName))
 
-		wgDataplaneV6.AddIface(1, ifaceNameV6, true, true)
+		wgDataplaneV6.AddIface(3, ifaceNameV6, true, true)
 		err = wgV6.Apply()
 		Expect(err).NotTo(HaveOccurred())
 		Expect(wgDataplaneV6.NumLinkAddCalls).To(Equal(0))
@@ -3477,8 +3477,8 @@ var _ = Describe("Wireguard (disabled)", func() {
 		Describe(desc, func() {
 			BeforeEach(func() {
 				// Create an interface to delete.
-				wgDataplane.AddIface(1, ifaceName, true, true)
-				rtDataplane.AddIface(1, ifaceName, true, true)
+				wgDataplane.AddIface(2, ifaceName, true, true)
+				rtDataplane.AddIface(2, ifaceName, true, true)
 
 				// Create a rule to route to the wireguard table.
 				rrDataplane.Rules = []netlink.Rule{
@@ -3526,8 +3526,8 @@ var _ = Describe("Wireguard (disabled)", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				// Create an interface to delete.
-				wgDataplaneV6.AddIface(1, ifaceNameV6, true, true)
-				rtDataplaneV6.AddIface(1, ifaceNameV6, true, true)
+				wgDataplaneV6.AddIface(3, ifaceNameV6, true, true)
+				rtDataplaneV6.AddIface(3, ifaceNameV6, true, true)
 
 				// Create a rule to route to the wireguard table.
 				rrDataplaneV6.Rules = []netlink.Rule{
