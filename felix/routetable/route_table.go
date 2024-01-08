@@ -123,6 +123,7 @@ type RouteTable struct {
 	ifaceIndexToName      map[int]string
 	ifaceIndexToFirstSeen map[int]time.Time
 
+	possibleConntrackOwners  *deltatracker.DeltaTracker[kernelRouteKey, []int]
 	pendingConntrackCleanups map[ip.Addr]chan struct{}
 
 	nl *handlemgr.HandleManager
@@ -279,6 +280,7 @@ func NewWithShims(
 		ifaceIndexToName:      map[int]string{},
 
 		pendingConntrackCleanups: map[ip.Addr]chan struct{}{},
+		possibleConntrackOwners:  deltatracker.New[kernelRouteKey, []int](),
 
 		opReporter:       opReporter,
 		livenessCallback: func() {},
@@ -487,9 +489,10 @@ func (r *RouteTable) recalculateDesiredKernelRoute(cidr ip.CIDR) {
 	kernKey := r.routeKeyForCIDR(cidr)
 	oldDesiredRoute, _ := r.kernelRoutes.Desired().Get(kernKey)
 
-	// Start with a blank slate.  The delta-tracker will efficiently prevent
+	// Start with a blank slate.  The delta-trackers will efficiently prevent
 	// dataplane churn if we add an identical route back again.
 	r.kernelRoutes.Desired().Delete(kernKey)
+	r.possibleConntrackOwners.Desired().Delete(kernKey)
 
 	ifaces := r.cidrToIfaces[cidr]
 	if ifaces == nil {
@@ -548,6 +551,7 @@ func (r *RouteTable) recalculateDesiredKernelRoute(cidr ip.CIDR) {
 		"iface":    bestIface,
 	}).Debug("Calculated kernel route.")
 	r.kernelRoutes.Desired().Set(kernKey, kernRoute)
+	r.possibleConntrackOwners.Desired().Set(kernKey, []int{bestIfaceIdx})
 }
 
 func (r *RouteTable) QueueResync() {
@@ -635,6 +639,7 @@ func (r *RouteTable) doFullResync(nl netlinkshim.Interface) error {
 				// Not a route that we're managing.
 				continue
 			}
+			r.addDataplaneConntrackOwner(kernKey, kernRoute.Ifindex)
 			f(kernKey, kernRoute)
 		}
 		return nil
@@ -705,6 +710,7 @@ func (r *RouteTable) resyncIndividualInterfaces(nl netlinkshim.Interface) error 
 				// be a candidate for us to delete.
 				continue
 			}
+			r.addDataplaneConntrackOwner(kernKey, kernRoute.Ifindex)
 			kernRoutes[kernKey] = kernRoute
 		}
 		// Then look for routes that the tracker says are there but are actually
@@ -893,31 +899,7 @@ func (r *RouteTable) applyUpdates() error {
 			return deltatracker.IterActionNoOp
 		}
 
-		// Any deleted route should have the corresponding conntrack entries removed.
-		r.startConntrackDeletion(kernKey.CIDR.Addr())
-		dst := kernKey.CIDR.ToIPNet()
-
-		// Template route for deletion.  The family, table, TOS, Priority uniquely
-		// identify the route, but we also need to set some fields to their "wildcard"
-		// values (found via code reading the kernel and running "ip route del" under
-		// strace).
-		nlRoute := &netlink.Route{
-			Family: r.netlinkFamily,
-
-			Table:    r.tableIndex,
-			Dst:      &dst,
-			Tos:      kernKey.TOS,
-			Priority: int(kernKey.Priority),
-
-			Protocol: unix.RTPROT_UNSPEC,    // Wildcard (but also zero value).
-			Scope:    unix.RT_SCOPE_NOWHERE, // Wildcard.  Note: non-zero value!
-			Type:     unix.RTN_UNSPEC,       // Wildcard (but also zero value).
-		}
-		err := nl.RouteDel(nlRoute)
-		if errors.Is(err, unix.ESRCH) {
-			r.logCxt.WithField("route", kernKey).Debug("Tried to delete route but it wasn't found.")
-			err = nil // Already gone (we hope).
-		}
+		err := r.deleteRoute(nl, kernKey)
 		if err != nil {
 			deletionErrs[kernKey] = err
 			return deltatracker.IterActionNoOp
@@ -926,10 +908,42 @@ func (r *RouteTable) applyUpdates() error {
 		r.logCxt.WithField("route", kernKey).Debug("Deleted route.")
 		return deltatracker.IterActionUpdateDataplane
 	})
+
 	if len(deletionErrs) > 0 {
 		log.WithField("errors", deletionErrs).Warn(
 			"Encountered some errors when trying to delete old routes.")
 	}
+
+	// Clean up any conntrack entries for routes that have been deleted.
+	r.possibleConntrackOwners.PendingDeletions().Iter(func(kernKey kernelRouteKey) deltatracker.IterAction {
+		r.startConntrackDeletion(kernKey.CIDR.Addr())
+		return deltatracker.IterActionUpdateDataplane
+	})
+
+	// Look for routes that are moving from one interface to another.  We need
+	// to sequence the update so that we:
+	// - Remove the old route
+	// - Clean up conntrack entries
+	// - Add the new route.
+	r.possibleConntrackOwners.PendingUpdates().Iter(func(kernKey kernelRouteKey, newOwners []int) deltatracker.IterAction {
+		_, ok := r.possibleConntrackOwners.Dataplane().Get(kernKey)
+		if !ok {
+			// We don't have any owners recorded in the dataplane.  This is the
+			// mainline case when we're adding a route for the first time (or
+			// it has been long enough since the last time this CIDR was used
+			// that the cleanup is all done).
+			return deltatracker.IterActionNoOp
+		}
+		err := r.deleteRoute(nl, kernKey)
+		if err != nil {
+			deletionErrs[kernKey] = err
+		} else {
+			r.kernelRoutes.Dataplane().Delete(kernKey)
+		}
+		r.startConntrackDeletion(kernKey.CIDR.Addr())
+		r.possibleConntrackOwners.Dataplane().Delete(kernKey)
+		return deltatracker.IterActionNoOp
+	})
 
 	updateErrs := map[kernelRouteKey]error{}
 	r.kernelRoutes.PendingUpdates().Iter(func(kernKey kernelRouteKey, kRoute kernelRoute) deltatracker.IterAction {
@@ -940,6 +954,11 @@ func (r *RouteTable) applyUpdates() error {
 		}
 
 		r.waitForPendingConntrackDeletion(kernKey.CIDR.Addr())
+
+		// Defensive: we should've already done any conntrack cleanup that's
+		// needed.  Make sure we put the conntrack ownership registry in a
+		// known state.
+		r.possibleConntrackOwners.Dataplane().Set(kernKey, []int{kRoute.Ifindex})
 
 		nlRoute := &netlink.Route{
 			Family: r.netlinkFamily,
@@ -984,6 +1003,7 @@ func (r *RouteTable) applyUpdates() error {
 		// Route is gone, clean up the dataplane side of the tracker.
 		return deltatracker.IterActionUpdateDataplane
 	})
+
 	// TODO filter out interfaces that are gone
 	if len(updateErrs) > 0 {
 		log.WithField("errors", updateErrs).Warn(
@@ -991,6 +1011,32 @@ func (r *RouteTable) applyUpdates() error {
 	}
 
 	return nil
+}
+
+func (r *RouteTable) deleteRoute(nl netlinkshim.Interface, kernKey kernelRouteKey) error {
+	// Template route for deletion.  The family, table, TOS, Priority uniquely
+	// identify the route, but we also need to set some fields to their "wildcard"
+	// values (found via code reading the kernel and running "ip route del" under
+	// strace).
+	dst := kernKey.CIDR.ToIPNet()
+	nlRoute := &netlink.Route{
+		Family: r.netlinkFamily,
+
+		Table:    r.tableIndex,
+		Dst:      &dst,
+		Tos:      kernKey.TOS,
+		Priority: int(kernKey.Priority),
+
+		Protocol: unix.RTPROT_UNSPEC,    // Wildcard (but also zero value).
+		Scope:    unix.RT_SCOPE_NOWHERE, // Wildcard.  Note: non-zero value!
+		Type:     unix.RTN_UNSPEC,       // Wildcard (but also zero value).
+	}
+	err := nl.RouteDel(nlRoute)
+	if errors.Is(err, unix.ESRCH) {
+		r.logCxt.WithField("route", kernKey).Debug("Tried to delete route but it wasn't found.")
+		err = nil // Already gone (we hope).
+	}
+	return err
 }
 
 // startConntrackDeletion starts the deletion of conntrack entries for the given CIDR in the background.  Pending
@@ -1090,6 +1136,17 @@ func (r *RouteTable) filterErrorByIfaceState(ifaceName string, currentErr, defau
 		logCxt.WithError(err).Error("Failed to access interface after a failure")
 		return defaultErr
 	}
+}
+
+func (r *RouteTable) addDataplaneConntrackOwner(kernKey kernelRouteKey, ifindex int) {
+	owners, _ := r.possibleConntrackOwners.Dataplane().Get(kernKey)
+	for _, o := range owners {
+		if o == ifindex {
+			return
+		}
+	}
+	owners = append(owners, ifindex)
+	r.possibleConntrackOwners.Dataplane().Set(kernKey, owners)
 }
 
 type Target struct {
