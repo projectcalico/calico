@@ -140,7 +140,7 @@ type fileDescriptor interface {
 
 type bpfDataplane interface {
 	ensureStarted()
-	ensureProgramAttached(ap attachPoint) (bpf.AttachResult, error)
+	ensureProgramLoaded(ap attachPoint, att bool) error
 	ensureNoProgram(ap attachPoint) error
 	ensureQdisc(iface string) (bool, error)
 	ensureBPFDevices() error
@@ -155,6 +155,7 @@ type bpfDataplane interface {
 	loadTCLogFilter(ap *tc.AttachPoint) (fileDescriptor, int, error)
 	interfaceByIndex(int) (*net.Interface, error)
 	queryClassifier(int, int, int, bool) (int, error)
+	attachProgram(attachPoint) (qDiscInfo, error)
 }
 
 type hasLoadPolicyProgram interface {
@@ -1532,22 +1533,41 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 
 			var parallelWG sync.WaitGroup
 			var ingressErr, xdpErr error
+			var ingressAP, egressAP *tc.AttachPoint
+			var xdpAP *xdp.AttachPoint
+
 			parallelWG.Add(1)
 			go func() {
 				defer parallelWG.Done()
-				ingressErr = m.attachDataIfaceProgram(iface, hepPtr, PolDirnIngress, ingressIdx, ingressFilterIdx)
+				ingressAP, ingressErr = m.attachDataIfaceProgram(iface, hepPtr, PolDirnIngress, ingressIdx, ingressFilterIdx)
 			}()
 
 			if !m.ipv6Enabled {
 				parallelWG.Add(1)
 				go func() {
 					defer parallelWG.Done()
-					xdpErr = m.attachXDPProgram(iface, hepPtr, xdpIdx)
+					xdpAP, xdpErr = m.attachXDPProgram(iface, hepPtr, xdpIdx)
 				}()
 			}
 
-			err = m.attachDataIfaceProgram(iface, hepPtr, PolDirnEgress, egressIdx, egressFilterIdx)
+			egressAP, err = m.attachDataIfaceProgram(iface, hepPtr, PolDirnEgress, egressIdx, egressFilterIdx)
 			parallelWG.Wait()
+			if ingressErr == nil && err == nil && xdpErr == nil {
+				parallelWG.Add(1)
+				go func() {
+					defer parallelWG.Done()
+					_, ingressErr = m.dp.attachProgram(ingressAP)
+				}()
+				if xdpAP != nil {
+					parallelWG.Add(1)
+					go func() {
+						defer parallelWG.Done()
+						_, xdpErr = m.dp.attachProgram(xdpAP)
+					}()
+				}
+				_, err = m.dp.attachProgram(egressAP)
+			}
+
 			if err == nil {
 				err = ingressErr
 			}
@@ -1787,35 +1807,31 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 	var (
 		ingressErr, egressErr     error
 		ingressQdisc, egressQdisc qDiscInfo
-		wg                        sync.WaitGroup
-		wep                       *proto.WorkloadEndpoint
+		//ingressQdisc qDiscInfo
+		ingressAP, egressAP *tc.AttachPoint
+		wg                  sync.WaitGroup
+		wep                 *proto.WorkloadEndpoint
 	)
 
 	if endpointID != nil {
 		wep = m.allWEPs[*endpointID]
 	}
 
+	readiness := state.readiness
+	if readiness == ifaceIsReady {
+		if _, err := m.dp.queryClassifier(ifindex, state.qdisc.handle, state.qdisc.prio, true); err != nil {
+			readiness = ifaceNotReady
+		}
+	}
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		readiness := state.readiness
-		if readiness == ifaceIsReady {
-			if _, err := m.dp.queryClassifier(ifindex, state.qdisc.handle, state.qdisc.prio, true); err != nil {
-				readiness = ifaceNotReady
-			}
-		}
-		ingressQdisc, ingressErr = m.wepApplyPolicyToDirection(readiness, ifaceName,
+		ingressAP, ingressErr = m.wepApplyPolicyToDirection(readiness, ifaceName,
 			state.policyIdx[hook.Ingress], state.filterIdx[hook.Ingress], wep, PolDirnIngress)
 	}()
 	go func() {
 		defer wg.Done()
-		readiness := state.readiness
-		if readiness == ifaceIsReady {
-			if _, err := m.dp.queryClassifier(ifindex, state.qdisc.handle, state.qdisc.prio, false); err != nil {
-				readiness = ifaceNotReady
-			}
-		}
-		egressQdisc, egressErr = m.wepApplyPolicyToDirection(readiness, ifaceName,
+		egressAP, egressErr = m.wepApplyPolicyToDirection(readiness, ifaceName,
 			state.policyIdx[hook.Egress], state.filterIdx[hook.Egress], wep, PolDirnEgress)
 	}()
 	wg.Wait()
@@ -1823,6 +1839,29 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 	if ingressErr != nil {
 		return state, ingressErr
 	}
+	if egressErr != nil {
+		return state, egressErr
+	}
+
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		if readiness != ifaceIsReady {
+			ingressQdisc, ingressErr = m.dp.attachProgram(ingressAP)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if readiness != ifaceIsReady {
+			egressQdisc, egressErr = m.dp.attachProgram(egressAP)
+		}
+	}()
+	wg.Wait()
+
+	if ingressErr != nil {
+		return state, ingressErr
+	}
+
 	if egressErr != nil {
 		return state, egressErr
 	}
@@ -1840,6 +1879,18 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 	state.readiness = ifaceIsReady
 
 	return state, nil
+}
+
+func (m *bpfEndpointManager) attachProgram(ap attachPoint) (qDiscInfo, error) {
+	var qdisc qDiscInfo
+	res, err := ap.AttachProgram()
+	if err != nil {
+		return qdisc, err
+	}
+	qdisc.valid = true
+	qdisc.prio = res.(tc.AttachResult).Prio()
+	qdisc.handle = res.(tc.AttachResult).Handle()
+	return qdisc, nil
 }
 
 // applyPolicy actually applies the policy to the given workload.
@@ -1895,40 +1946,35 @@ func (m *bpfEndpointManager) wepTCAttachPoint(ifaceName string, policyIdx, filte
 }
 
 func (m *bpfEndpointManager) wepApplyPolicyToDirection(readiness ifaceReadiness, ifaceName string, policyIdx,
-	filterIdx int, endpoint *proto.WorkloadEndpoint, polDirection PolDirection) (qDiscInfo, error) {
-
-	var qdisc qDiscInfo
+	filterIdx int, endpoint *proto.WorkloadEndpoint, polDirection PolDirection) (*tc.AttachPoint, error) {
 
 	if m.hostIP == nil {
 		// Do not bother and wait
-		return qdisc, fmt.Errorf("unknown host IP")
+		return nil, fmt.Errorf("unknown host IP")
 	}
 
 	ap := m.wepTCAttachPoint(ifaceName, policyIdx, filterIdx, polDirection)
 
 	log.WithField("iface", ifaceName).Debugf("readiness: %d", readiness)
 	if readiness != ifaceIsReady {
-		res, err := m.wepAttachProgram(ap)
+		err := m.loadWepPrograms(ap)
 		if err != nil {
-			return qdisc, fmt.Errorf("attaching program to wep: %w", err)
+			return nil, fmt.Errorf("attaching program to wep: %w", err)
 		}
-		qdisc.valid = true
-		qdisc.prio = res.(tc.AttachResult).Prio()
-		qdisc.handle = res.(tc.AttachResult).Handle()
 		ap.Log().Info("Attached programs to the WEP")
 	}
 
 	if err := m.wepApplyPolicy(ap, endpoint, polDirection); err != nil {
-		return qdisc, fmt.Errorf("applying policy to wep: %w", err)
+		return nil, fmt.Errorf("applying policy to wep: %w", err)
 	}
 
-	return qdisc, nil
+	return ap, nil
 }
 
-func (m *bpfEndpointManager) wepAttachProgram(ap *tc.AttachPoint) (bpf.AttachResult, error) {
-	res, err := m.dp.ensureProgramAttached(ap)
+func (m *bpfEndpointManager) loadWepPrograms(ap *tc.AttachPoint) error {
+	err := m.dp.ensureProgramLoaded(ap, false)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	if ap.LogLevel == "debug" {
@@ -1937,7 +1983,7 @@ func (m *bpfEndpointManager) wepAttachProgram(ap *tc.AttachPoint) (bpf.AttachRes
 		}
 	}
 
-	return res, nil
+	return nil
 }
 
 func (m *bpfEndpointManager) wepApplyPolicy(ap *tc.AttachPoint,
@@ -2005,11 +2051,11 @@ func (m *bpfEndpointManager) attachDataIfaceProgram(
 	ep *proto.HostEndpoint,
 	polDirection PolDirection,
 	policyIdx, filterIdx int,
-) error {
+) (*tc.AttachPoint, error) {
 
 	if m.hostIP == nil {
 		// Do not bother and wait
-		return fmt.Errorf("unknown host IP")
+		return nil, fmt.Errorf("unknown host IP")
 	}
 
 	ap := m.calculateTCAttachPoint(polDirection, ifaceName)
@@ -2028,8 +2074,8 @@ func (m *bpfEndpointManager) attachDataIfaceProgram(
 	ap.PolicyIdx = policyIdx
 	ap.LogFilterIdx = filterIdx
 
-	if _, err := m.dp.ensureProgramAttached(ap); err != nil {
-		return err
+	if err := m.dp.ensureProgramLoaded(ap, false); err != nil {
+		return nil, err
 	}
 
 	if ap.LogLevel == "debug" {
@@ -2043,16 +2089,18 @@ func (m *bpfEndpointManager) attachDataIfaceProgram(
 			ForHostInterface: true,
 		}
 		m.addHostPolicy(&rules, ep, polDirection)
-		return m.updatePolicyProgramFn(rules, polDirection.RuleDir(), ap)
+		if err := m.updatePolicyProgramFn(rules, polDirection.RuleDir(), ap); err != nil {
+			return nil, err
+		}
+	} else {
+		if err := m.dp.removePolicyProgram(ap); err != nil {
+			return nil, err
+		}
 	}
-
-	if err := m.dp.removePolicyProgram(ap); err != nil {
-		return err
-	}
-	return nil
+	return ap, nil
 }
 
-func (m *bpfEndpointManager) attachXDPProgram(ifaceName string, ep *proto.HostEndpoint, jumpIdx int) error {
+func (m *bpfEndpointManager) attachXDPProgram(ifaceName string, ep *proto.HostEndpoint, jumpIdx int) (*xdp.AttachPoint, error) {
 	ap := &xdp.AttachPoint{
 		AttachPoint: bpf.AttachPoint{
 			Hook:      hook.XDP,
@@ -2064,9 +2112,9 @@ func (m *bpfEndpointManager) attachXDPProgram(ifaceName string, ep *proto.HostEn
 	}
 
 	if ep != nil && len(ep.UntrackedTiers) == 1 {
-		_, err := m.dp.ensureProgramAttached(ap)
+		err := m.dp.ensureProgramLoaded(ap, false)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		ap.Log().Debugf("Building program for untracked policy hep=%v", ep.Name)
@@ -2078,11 +2126,12 @@ func (m *bpfEndpointManager) attachXDPProgram(ifaceName string, ep *proto.HostEn
 		ap.Log().Debugf("Rules: %v", rules)
 		err = m.updatePolicyProgramFn(rules, "xdp", ap)
 		ap.Log().WithError(err).Debugf("Applied untracked policy hep=%v", ep.Name)
-
-		return err
 	} else {
-		return m.dp.ensureNoProgram(ap)
+		if err := m.dp.ensureNoProgram(ap); err != nil {
+			return nil, err
+		}
 	}
+	return ap, nil
 }
 
 // PolDirection is the Calico datamodel direction of policy.  On a host endpoint, ingress is towards the host.
@@ -2730,7 +2779,7 @@ func (m *bpfEndpointManager) loadTCObj(at hook.AttachType) (hook.Layout, error) 
 }
 
 // Ensure TC/XDP program is attached to the specified interface.
-func (m *bpfEndpointManager) ensureProgramAttached(ap attachPoint) (bpf.AttachResult, error) {
+func (m *bpfEndpointManager) ensureProgramLoaded(ap attachPoint, att bool) error {
 	var err error
 
 	if aptc, ok := ap.(*tc.AttachPoint); ok {
@@ -2749,9 +2798,9 @@ func (m *bpfEndpointManager) ensureProgramAttached(ap attachPoint) (bpf.AttachRe
 		}
 
 		at.Family = ipFamily
-		ap.Log().Debugf("ensureProgramAttached %d", ipFamily)
+		ap.Log().Debugf("ensureProgramLoaded %d", ipFamily)
 		if aptc.HookLayout, err = m.loadTCObj(at); err != nil {
-			return nil, fmt.Errorf("loading generic v%d tc hook program: %w", ipFamily, err)
+			return fmt.Errorf("loading generic v%d tc hook program: %w", ipFamily, err)
 		}
 
 		// Load default policy before the real policy is created and loaded.
@@ -2765,7 +2814,7 @@ func (m *bpfEndpointManager) ensureProgramAttached(ap attachPoint) (bpf.AttachRe
 		}
 
 		if err != nil {
-			return nil, fmt.Errorf("failed to set default policy: %w", err)
+			return fmt.Errorf("failed to set default policy: %w", err)
 		}
 	} else if apxdp, ok := ap.(*xdp.AttachPoint); ok {
 		at := hook.AttachType{
@@ -2775,13 +2824,17 @@ func (m *bpfEndpointManager) ensureProgramAttached(ap attachPoint) (bpf.AttachRe
 
 		pm := m.bpfmaps.XDPProgramsMap.(*hook.ProgramsMap)
 		if apxdp.HookLayout, err = pm.LoadObj(at); err != nil {
-			return nil, fmt.Errorf("loading generic xdp hook program: %w", err)
+			return fmt.Errorf("loading generic xdp hook program: %w", err)
 		}
 	} else {
-		return nil, fmt.Errorf("unknown attach type")
+		return fmt.Errorf("unknown attach type")
 	}
 
-	return ap.AttachProgram()
+	if att {
+		_, err = ap.AttachProgram()
+		return err
+	}
+	return nil
 }
 
 // Ensure that the specified attach point does not have our program.
