@@ -439,53 +439,26 @@ func (s *IPSets) list(debug bool) ([]string, error) {
 	// 	test-100
 	//	test-1
 	//  ...
-	cmd := s.newCmd("ipset", "list", "-name")
-	// Grab stdout as a pipe so we can stream through the (potentially very large) output.
-	out, err := cmd.StdoutPipe()
-	if err != nil {
-		return nil, fmt.Errorf("Failed to get pipe for 'ipset list -name' - err: %w", err)
-	}
-	// Capture error output into a buffer.
-	var stderr bytes.Buffer
-	cmd.SetStderr(&stderr)
-	execStartTime := time.Now()
-	err = cmd.Start()
-	if err != nil {
-		return nil, fmt.Errorf("Failed to start 'ipset list -name' - err: %w", err)
-	}
-	summaryExecStart.Observe(float64(time.Since(execStartTime).Nanoseconds()) / 1000.0)
-
-	var calicoIpSets []string
-	// Use a scanner to chunk the input into lines.
-	scanner := bufio.NewScanner(out)
-	for scanner.Scan() {
-		ipSetName := scanner.Text()
-
-		// Look up to see if this is one of our IP sets.
-		if !s.IPVersionConfig.OwnsIPSet(ipSetName) || s.IPVersionConfig.IsTempIPSetName(ipSetName) {
-			if debug {
-				s.logCxt.WithField("name", ipSetName).Debug("Skip parsing members of IP set.")
+	getNames := func(scanner *bufio.Scanner) ([]string, error) {
+		var calicoIpSets []string
+		for scanner.Scan() {
+			ipSetName := scanner.Text()
+			// Look up to see if this is one of our IP sets.
+			if !s.IPVersionConfig.OwnsIPSet(ipSetName) || s.IPVersionConfig.IsTempIPSetName(ipSetName) {
+				if debug {
+					s.logCxt.WithField("name", ipSetName).Debug("Skip parsing members of IP set.")
+				}
+				continue
 			}
-			continue
+			calicoIpSets = append(calicoIpSets, ipSetName)
 		}
-		calicoIpSets = append(calicoIpSets, ipSetName)
-	}
-	closeErr := out.Close()
-	err = cmd.Wait()
-	logCxt := s.logCxt.WithField("stderr", stderr.String())
-	if scanner.Err() != nil {
-		logCxt.WithError(scanner.Err()).Error("Failed to read 'ipset list' output.")
-		return nil, scanner.Err()
-	}
-	if err != nil {
-		logCxt.WithError(err).Error("Bad return code from 'ipset list'.")
-		return nil, err
-	}
-	if closeErr != nil {
-		logCxt.WithError(closeErr).Error("Failed to close stdout from 'ipset list'.")
-		return nil, closeErr
+		return calicoIpSets, nil
 	}
 
+	calicoIpSets, err := s.run("", debug, getNames)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get list of ipsets - err: %w", err)
+	}
 	s.logCxt.Debugf("Calico IpSets: %v", calicoIpSets)
 	return calicoIpSets, nil
 }
@@ -509,11 +482,160 @@ func (s *IPSets) get(ipSetName string, debug bool) error {
 	//	Members:
 	//	10.0.0.2
 	//	10.0.0.1
-	cmd := s.newCmd("ipset", "list", ipSetName)
+	parseIpSet := func(scanner *bufio.Scanner) ([]string, error) {
+		for scanner.Scan() {
+			var ipSetType IPSetType
+			ipSetName := ""
+			// Look up to see if this is one of our IP sets.
+			/*if !s.IPVersionConfig.OwnsIPSet(ipSetName) || s.IPVersionConfig.IsTempIPSetName(ipSetName) {
+				if debug {
+					s.logCxt.WithField("name", ipSetName).Debug("Skip parsing members of IP set.")
+				}
+				continue
+			}*/
+
+			line := scanner.Text()
+			if debug {
+				s.logCxt.Debugf("Parsing line: %q", line)
+			}
+			if strings.HasPrefix(line, "Name:") {
+				ipSetName = strings.Split(line, " ")[1]
+				if debug {
+					s.logCxt.WithField("setName", ipSetName).Debug("Parsing IP set.")
+				}
+			}
+			if strings.HasPrefix(line, "Type:") {
+				ipSetType = IPSetType(strings.Split(line, " ")[1])
+				if debug {
+					s.logCxt.WithField("type", ipSetType).Debug("Parsed type of IP set.")
+				}
+			}
+			if strings.HasPrefix(line, "Header:") {
+				// When we hit the Header line we should know the name, and type of the IP set, which lets
+				// us update the tracker.
+				if !s.IPVersionConfig.OwnsIPSet(ipSetName) {
+					s.logCxt.WithField("name", ipSetName).Debug("Skip non-Calico/wrong version IP set.")
+					continue
+				}
+				parts := strings.Split(line, " ")
+				meta := dataplaneMetadata{
+					Type: ipSetType,
+				}
+				for idx, p := range parts {
+					if p == "maxelem" {
+						if idx+1 >= len(parts) {
+							log.WithField("line", line).Error(
+								"Failed to parse ipset list Header line, nothing after 'maxelem'.")
+							break
+						}
+						maxElem, err := strconv.Atoi(parts[idx+1])
+						if err != nil {
+							log.WithError(err).WithField("line", line).Error(
+								"Failed to parse ipset list Header line.")
+							break
+						}
+						meta.MaxSize = maxElem
+						break
+					}
+					if p == "range" {
+						if idx+1 >= len(parts) {
+							log.WithField("line", line).Error(
+								"Failed to parse ipset list Header line, nothing after 'range'.")
+							break
+						}
+						// For bitmaps, we see "range 123-456"
+						rMin, rMAx, err := ParseRange(parts[idx+1])
+						if err != nil {
+							log.WithError(err).WithField("line", line).Error(
+								"Failed to parse ipset list Header line.")
+							break
+						}
+						meta.RangeMin = rMin
+						meta.RangeMax = rMAx
+						break
+					}
+				}
+				s.setNameToProgrammedMetadata.Dataplane().Set(ipSetName, meta)
+			}
+			if strings.HasPrefix(line, "Members:") {
+				// Start of a Members entry, following this, there'll be one member per
+				// line then EOF or a blank line.
+
+				if !ipSetType.IsValid() {
+					s.logCxt.WithFields(log.Fields{
+						"setName": ipSetName,
+						"type":    string(ipSetType),
+					}).Warning("Dataplane IP set has unknown type.")
+				}
+
+				// One of our IP sets; we need to parse its members.
+				logCxt := s.logCxt.WithField("setName", ipSetName)
+				memberTracker := s.getOrCreateMemberTracker(ipSetName)
+				numExtrasExpected := memberTracker.PendingDeletions().Len()
+				err := memberTracker.Dataplane().ReplaceFromIter(func(f func(k IPSetMember)) error {
+					for scanner.Scan() {
+						line := scanner.Text()
+						if line == "" {
+							// End of members
+							break
+						}
+						var canonMember IPSetMember
+						if ipSetType.IsValid() {
+							canonMember = ipSetType.CanonicaliseMember(line)
+						} else {
+							// Unknown type found in dataplane, record it as
+							// a raw string.  Then we'll clean up the IP set
+							// when we go to sync.
+							canonMember = rawIPSetMember(line)
+						}
+						if debug {
+							logCxt.WithFields(log.Fields{
+								"member": line,
+								"canon":  canonMember,
+							}).Debug("Found member in dataplane")
+						}
+						f(canonMember)
+					}
+					return scanner.Err()
+				})
+				if err != nil {
+					logCxt.WithError(err).Error("Failed to read members from 'ipset list'.")
+					break
+				}
+
+				if numMissing := memberTracker.PendingUpdates().Len(); numMissing > 0 {
+					logCxt.WithField("numMissing", numMissing).Info(
+						"Resync found members missing from dataplane.")
+				}
+				if numExtras := memberTracker.PendingDeletions().Len() - numExtrasExpected; numExtras > 0 {
+					logCxt.WithField("numExtras", numExtras).Info(
+						"Resync found extra members in dataplane.")
+				}
+
+				s.updateDirtiness(ipSetName)
+			}
+		}
+		return nil, nil
+	}
+
+	_, err := s.run(ipSetName, debug, parseIpSet)
+	if err != nil {
+		return fmt.Errorf("failed to process ipset %v - err: %w", ipSetName, err)
+	}
+	return nil
+}
+
+func (s *IPSets) run(name string, debug bool, fn func(*bufio.Scanner) ([]string, error)) ([]string, error) {
+	arg := "-name"
+	if arg != "" {
+		arg = name
+	}
+	cmd := s.newCmd("ipset", "list", arg)
+	cmdStr := fmt.Sprintf("ipset list %v", arg)
 	// Grab stdout as a pipe so we can stream through the (potentially very large) output.
 	out, err := cmd.StdoutPipe()
 	if err != nil {
-		return fmt.Errorf("Failed to get pipe for 'ipset list [name]' - err: %w", err)
+		return nil, fmt.Errorf("Failed to get pipe for '%v' - err: %w", cmdStr, err)
 	}
 	// Capture error output into a buffer.
 	var stderr bytes.Buffer
@@ -521,181 +643,28 @@ func (s *IPSets) get(ipSetName string, debug bool) error {
 	execStartTime := time.Now()
 	err = cmd.Start()
 	if err != nil {
-		return fmt.Errorf("Failed to start 'ipset list -name' - err: %w", err)
+		return nil, fmt.Errorf("Failed to start '%v' - err: %w", cmdStr, err)
 	}
 	summaryExecStart.Observe(float64(time.Since(execStartTime).Nanoseconds()) / 1000.0)
 
-	var ipSetType IPSetType
-
 	// Use a scanner to chunk the input into lines.
 	scanner := bufio.NewScanner(out)
-	for scanner.Scan() {
-		// Look up to see if this is one of our IP sets.
-		/*if !s.IPVersionConfig.OwnsIPSet(ipSetName) || s.IPVersionConfig.IsTempIPSetName(ipSetName) {
-			if debug {
-				s.logCxt.WithField("name", ipSetName).Debug("Skip parsing members of IP set.")
-			}
-			continue
-		}*/
-
-		line := scanner.Text()
-		if debug {
-			s.logCxt.Debugf("Parsing line: %q", line)
-		}
-		if strings.HasPrefix(line, "Name:") {
-			ipSetName = strings.Split(line, " ")[1]
-			if debug {
-				s.logCxt.WithField("setName", ipSetName).Debug("Parsing IP set.")
-			}
-		}
-		if strings.HasPrefix(line, "Type:") {
-			ipSetType = IPSetType(strings.Split(line, " ")[1])
-			if debug {
-				s.logCxt.WithField("type", ipSetType).Debug("Parsed type of IP set.")
-			}
-		}
-		if strings.HasPrefix(line, "Header:") {
-			// When we hit the Header line we should know the name, and type of the IP set, which lets
-			// us update the tracker.
-			if !s.IPVersionConfig.OwnsIPSet(ipSetName) {
-				s.logCxt.WithField("name", ipSetName).Debug("Skip non-Calico/wrong version IP set.")
-				continue
-			}
-			parts := strings.Split(line, " ")
-			meta := dataplaneMetadata{
-				Type: ipSetType,
-			}
-			for idx, p := range parts {
-				if p == "maxelem" {
-					if idx+1 >= len(parts) {
-						log.WithField("line", line).Error(
-							"Failed to parse ipset list Header line, nothing after 'maxelem'.")
-						break
-					}
-					maxElem, err := strconv.Atoi(parts[idx+1])
-					if err != nil {
-						log.WithError(err).WithField("line", line).Error(
-							"Failed to parse ipset list Header line.")
-						break
-					}
-					meta.MaxSize = maxElem
-					break
-				}
-				if p == "range" {
-					if idx+1 >= len(parts) {
-						log.WithField("line", line).Error(
-							"Failed to parse ipset list Header line, nothing after 'range'.")
-						break
-					}
-					// For bitmaps, we see "range 123-456"
-					rMin, rMAx, err := ParseRange(parts[idx+1])
-					if err != nil {
-						log.WithError(err).WithField("line", line).Error(
-							"Failed to parse ipset list Header line.")
-						break
-					}
-					meta.RangeMin = rMin
-					meta.RangeMax = rMAx
-					break
-				}
-			}
-			s.setNameToProgrammedMetadata.Dataplane().Set(ipSetName, meta)
-		}
-		if strings.HasPrefix(line, "Members:") {
-			// Start of a Members entry, following this, there'll be one member per
-			// line then EOF or a blank line.
-
-			// Look up to see if this is one of our IP sets.
-			if !s.IPVersionConfig.OwnsIPSet(ipSetName) || s.IPVersionConfig.IsTempIPSetName(ipSetName) {
-				if debug {
-					s.logCxt.WithField("name", ipSetName).Debug("Skip parsing members of IP set.")
-				}
-				for scanner.Scan() {
-					line := scanner.Bytes()
-					if len(line) == 0 {
-						// End of members
-						break
-					}
-				}
-				ipSetName = ""
-				ipSetType = ""
-				continue
-			}
-
-			if !ipSetType.IsValid() {
-				s.logCxt.WithFields(log.Fields{
-					"setName": ipSetName,
-					"type":    string(ipSetType),
-				}).Warning("Dataplane IP set has unknown type.")
-			}
-
-			// One of our IP sets; we need to parse its members.
-			logCxt := s.logCxt.WithField("setName", ipSetName)
-			memberTracker := s.getOrCreateMemberTracker(ipSetName)
-			numExtrasExpected := memberTracker.PendingDeletions().Len()
-			err = memberTracker.Dataplane().ReplaceFromIter(func(f func(k IPSetMember)) error {
-				for scanner.Scan() {
-					line := scanner.Text()
-					if line == "" {
-						// End of members
-						break
-					}
-					var canonMember IPSetMember
-					if ipSetType.IsValid() {
-						canonMember = ipSetType.CanonicaliseMember(line)
-					} else {
-						// Unknown type found in dataplane, record it as
-						// a raw string.  Then we'll clean up the IP set
-						// when we go to sync.
-						canonMember = rawIPSetMember(line)
-					}
-					if debug {
-						logCxt.WithFields(log.Fields{
-							"member": line,
-							"canon":  canonMember,
-						}).Debug("Found member in dataplane")
-					}
-					f(canonMember)
-				}
-				return scanner.Err()
-			})
-			if err != nil {
-				logCxt.WithError(err).Error("Failed to read members from 'ipset list'.")
-				break
-			}
-
-			if numMissing := memberTracker.PendingUpdates().Len(); numMissing > 0 {
-				logCxt.WithField("numMissing", numMissing).Info(
-					"Resync found members missing from dataplane.")
-			}
-			if numExtras := memberTracker.PendingDeletions().Len() - numExtrasExpected; numExtras > 0 {
-				logCxt.WithField("numExtras", numExtras).Info(
-					"Resync found extra members in dataplane.")
-			}
-
-			s.updateDirtiness(ipSetName)
-
-			ipSetName = ""
-			ipSetType = ""
-		}
-	}
+	res, processErr := fn(scanner)
 	closeErr := out.Close()
 	err = cmd.Wait()
-	logCxt := s.logCxt.WithField("stderr", stderr.String())
 	if scanner.Err() != nil {
-		logCxt.WithError(scanner.Err()).Error("Failed to read 'ipset list' output.")
-		return scanner.Err()
+		return nil, fmt.Errorf("Failed to read '%v' output - err: %w", cmdStr, scanner.Err())
 	}
 	if err != nil {
-		logCxt.WithError(err).Error("Bad return code from 'ipset list'.")
-		return err
+		return nil, fmt.Errorf("Bad return code from '%v' - err: %w", cmdStr, err)
 	}
 	if closeErr != nil {
-		logCxt.WithError(closeErr).Error("Failed to close stdout from 'ipset list'.")
-		return closeErr
+		return nil, fmt.Errorf("Failed to close stdout from '%v' - err: %w", cmdStr, closeErr)
 	}
-
-	return nil
+	if processErr != nil {
+		return nil, fmt.Errorf("Failed to process '%v' output - err: %w", cmdStr, processErr)
+	}
+	return res, nil
 }
 
 func ParseRange(s string) (min int, max int, err error) {
