@@ -1536,10 +1536,15 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 			var ingressAP, egressAP *tc.AttachPoint
 			var xdpAP *xdp.AttachPoint
 
+			ap := m.calculateTCAttachPoint(iface)
+
+			ingressAttachPoint := *ap
+			egressAttachPoint := *ap
+
 			parallelWG.Add(1)
 			go func() {
 				defer parallelWG.Done()
-				ingressAP, ingressErr = m.attachDataIfaceProgram(iface, hepPtr, PolDirnIngress, ingressIdx, ingressFilterIdx)
+				ingressAP, ingressErr = m.attachDataIfaceProgram(iface, hepPtr, PolDirnIngress, ingressIdx, ingressFilterIdx, &ingressAttachPoint)
 			}()
 
 			if !m.ipv6Enabled {
@@ -1550,7 +1555,7 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 				}()
 			}
 
-			egressAP, err = m.attachDataIfaceProgram(iface, hepPtr, PolDirnEgress, egressIdx, egressFilterIdx)
+			egressAP, err = m.attachDataIfaceProgram(iface, hepPtr, PolDirnEgress, egressIdx, egressFilterIdx, &egressAttachPoint)
 			parallelWG.Wait()
 			if ingressErr == nil && err == nil && xdpErr == nil {
 				parallelWG.Add(1)
@@ -1807,10 +1812,9 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 	var (
 		ingressErr, egressErr     error
 		ingressQdisc, egressQdisc qDiscInfo
-		//ingressQdisc qDiscInfo
-		ingressAP, egressAP *tc.AttachPoint
-		wg                  sync.WaitGroup
-		wep                 *proto.WorkloadEndpoint
+		ingressAP, egressAP       *tc.AttachPoint
+		wg                        sync.WaitGroup
+		wep                       *proto.WorkloadEndpoint
 	)
 
 	if endpointID != nil {
@@ -1823,16 +1827,23 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 			readiness = ifaceNotReady
 		}
 	}
+
+	ap := m.calculateTCAttachPoint(ifaceName)
+
+	// Take 2 copies of the attach point. One for ingress and one for egress.
+	ingressAttachPoint := *ap
+	egressAttachPoint := *ap
+
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
 		ingressAP, ingressErr = m.wepApplyPolicyToDirection(readiness, ifaceName,
-			state.policyIdx[hook.Ingress], state.filterIdx[hook.Ingress], wep, PolDirnIngress)
+			state.policyIdx[hook.Ingress], state.filterIdx[hook.Ingress], wep, PolDirnIngress, &ingressAttachPoint)
 	}()
 	go func() {
 		defer wg.Done()
 		egressAP, egressErr = m.wepApplyPolicyToDirection(readiness, ifaceName,
-			state.policyIdx[hook.Egress], state.filterIdx[hook.Egress], wep, PolDirnEgress)
+			state.policyIdx[hook.Egress], state.filterIdx[hook.Egress], wep, PolDirnEgress, &egressAttachPoint)
 	}()
 	wg.Wait()
 
@@ -1919,10 +1930,11 @@ func isLinkNotFoundError(err error) bool {
 
 var calicoRouterIP = net.IPv4(169, 254, 1, 1).To4()
 
-func (m *bpfEndpointManager) wepTCAttachPoint(ifaceName string, policyIdx, filterIdx int,
+func (m *bpfEndpointManager) wepTCAttachPoint(ap *tc.AttachPoint, policyIdx, filterIdx int,
 	polDirection PolDirection) *tc.AttachPoint {
 
-	ap := m.calculateTCAttachPoint(polDirection, ifaceName)
+	ap = m.configureTCAttachPoint(polDirection, ap, false)
+	ifaceName := ap.IfaceName()
 	ap.HostIP = m.hostIP
 	// * Since we don't pass packet length when doing fib lookup, MTU check is skipped.
 	// * Hence it is safe to set the tunnel mtu same as veth mtu
@@ -1946,14 +1958,14 @@ func (m *bpfEndpointManager) wepTCAttachPoint(ifaceName string, policyIdx, filte
 }
 
 func (m *bpfEndpointManager) wepApplyPolicyToDirection(readiness ifaceReadiness, ifaceName string, policyIdx,
-	filterIdx int, endpoint *proto.WorkloadEndpoint, polDirection PolDirection) (*tc.AttachPoint, error) {
+	filterIdx int, endpoint *proto.WorkloadEndpoint, polDirection PolDirection, ap *tc.AttachPoint) (*tc.AttachPoint, error) {
 
 	if m.hostIP == nil {
 		// Do not bother and wait
 		return nil, fmt.Errorf("unknown host IP")
 	}
 
-	ap := m.wepTCAttachPoint(ifaceName, policyIdx, filterIdx, polDirection)
+	ap = m.wepTCAttachPoint(ap, policyIdx, filterIdx, polDirection)
 
 	log.WithField("iface", ifaceName).Debugf("readiness: %d", readiness)
 	if readiness != ifaceIsReady {
@@ -2051,6 +2063,7 @@ func (m *bpfEndpointManager) attachDataIfaceProgram(
 	ep *proto.HostEndpoint,
 	polDirection PolDirection,
 	policyIdx, filterIdx int,
+	ap *tc.AttachPoint,
 ) (*tc.AttachPoint, error) {
 
 	if m.hostIP == nil {
@@ -2058,7 +2071,7 @@ func (m *bpfEndpointManager) attachDataIfaceProgram(
 		return nil, fmt.Errorf("unknown host IP")
 	}
 
-	ap := m.calculateTCAttachPoint(polDirection, ifaceName)
+	ap = m.configureTCAttachPoint(polDirection, ap, true)
 	ap.HostIP = m.hostIP
 	ap.TunnelMTU = uint16(m.vxlanMTU)
 	ap.ExtToServiceConnmark = uint32(m.bpfExtToServiceConnmark)
@@ -2184,7 +2197,7 @@ func (m *bpfEndpointManager) apLogFilter(ap *tc.AttachPoint, iface string) (stri
 	return m.bpfLogLevel, exp
 }
 
-func (m *bpfEndpointManager) calculateTCAttachPoint(policyDirection PolDirection, ifaceName string) *tc.AttachPoint {
+func (m *bpfEndpointManager) calculateTCAttachPoint(ifaceName string) *tc.AttachPoint {
 	ap := &tc.AttachPoint{
 		AttachPoint: bpf.AttachPoint{
 			Iface: ifaceName,
@@ -2198,8 +2211,6 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(policyDirection PolDirection
 		endpointType = tcdefs.EpTypeWorkload
 	} else if ifaceName == "lo" {
 		endpointType = tcdefs.EpTypeLO
-		ap.HostTunnelIP = m.tunnelIP
-		log.Debugf("Setting tunnel ip %s on ap %s", m.tunnelIP, ifaceName)
 		if m.hostNetworkedNATMode == hostNetworkedNATUDPOnly {
 			ap.UDPOnly = true
 		}
@@ -2213,17 +2224,31 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(policyDirection PolDirection
 		endpointType = tcdefs.EpTypeL3Device
 	} else if ifaceName == bpfInDev || ifaceName == bpfOutDev {
 		endpointType = tcdefs.EpTypeNAT
-		ap.HostTunnelIP = m.tunnelIP
-		log.Debugf("Setting tunnel ip %s on ap %s", m.tunnelIP, ifaceName)
 	} else if m.isDataIface(ifaceName) {
 		endpointType = tcdefs.EpTypeHost
-		ap.HostTunnelIP = m.tunnelIP
-		log.Debugf("Setting tunnel ip %s on ap %s", m.tunnelIP, ifaceName)
 	} else {
 		log.Panicf("Unsupported ifaceName %v", ifaceName)
 	}
+	ap.Type = endpointType
+	ap.ToHostDrop = (m.epToHostAction == "DROP")
+	ap.FIB = m.fibLookupEnabled
+	ap.DSR = m.dsrEnabled
+	ap.DSROptoutCIDRs = m.dsrOptoutCidrs
+	ap.LogLevel, ap.LogFilter = m.apLogFilter(ap, ifaceName)
+	ap.VXLANPort = m.vxlanPort
+	ap.PSNATStart = m.psnatPorts.MinPort
+	ap.PSNATEnd = m.psnatPorts.MaxPort
+	ap.TunnelMTU = uint16(m.vxlanMTU)
+	return ap
+}
 
-	if endpointType == tcdefs.EpTypeWorkload {
+func (m *bpfEndpointManager) configureTCAttachPoint(policyDirection PolDirection, ap *tc.AttachPoint, isDataIface bool) *tc.AttachPoint {
+	if ap.Type == tcdefs.EpTypeLO || ap.Type == tcdefs.EpTypeNAT || isDataIface {
+		ap.HostTunnelIP = m.tunnelIP
+		log.Debugf("Setting tunnel ip %s on ap %s", m.tunnelIP, ap.IfaceName())
+	}
+
+	if ap.Type == tcdefs.EpTypeWorkload {
 		// Policy direction is relative to the workload so, from the host namespace it's flipped.
 		if policyDirection == PolDirnIngress {
 			ap.Hook = hook.Egress
@@ -2247,27 +2272,8 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(policyDirection PolDirection
 		toOrFrom = tcdefs.ToEp
 	}
 
-	ap.Type = endpointType
 	ap.ToOrFrom = toOrFrom
-	ap.ToHostDrop = (m.epToHostAction == "DROP")
-	ap.FIB = m.fibLookupEnabled
-	ap.DSR = m.dsrEnabled
-	ap.DSROptoutCIDRs = m.dsrOptoutCidrs
-	ap.LogLevel, ap.LogFilter = m.apLogFilter(ap, ifaceName)
-	ap.VXLANPort = m.vxlanPort
-	ap.PSNATStart = m.psnatPorts.MinPort
-	ap.PSNATEnd = m.psnatPorts.MaxPort
 	ap.IPv6Enabled = m.ipv6Enabled
-
-	switch m.rpfEnforceOption {
-	case "Strict":
-		ap.RPFEnforceOption = tcdefs.RPFEnforceOptionStrict
-	case "Loose":
-		ap.RPFEnforceOption = tcdefs.RPFEnforceOptionLoose
-	default:
-		ap.RPFEnforceOption = tcdefs.RPFEnforceOptionDisabled
-	}
-
 	return ap
 }
 
