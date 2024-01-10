@@ -25,6 +25,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+
 	"github.com/projectcalico/calico/felix/fv/connectivity"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/utils"
@@ -116,20 +117,47 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ endpoint-to-host-action tes
 
 			switch hepIface {
 			case "none":
-			case "eth0", "*":
+			case "eth0", "*", "*-pre-dnat":
 				policy := api.NewGlobalNetworkPolicy()
-				policy.Name = "default-hep"
+				policy.Name = "default-hep-egress"
 				policy.Spec.Selector = "hep=='true'"
-				policy.Spec.Egress = []api.Rule{{Action: api.Allow}}
-				policy.Spec.Ingress = []api.Rule{
+				policy.Spec.Egress = []api.Rule{
 					{
-						Action: hepPolicy,
-						Source: api.EntityRule{
-							Selector: "!has(hep)",
-						},
+						Action: api.Allow,
 					},
 				}
 				_, err := client.GlobalNetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
+				Expect(err).NotTo(HaveOccurred())
+
+				policy = api.NewGlobalNetworkPolicy()
+				policy.Name = "default-hep"
+				policy.Spec.Selector = "hep=='true'"
+
+				if hepIface == "*-pre-dnat" {
+					policy.Spec.ApplyOnForward = true
+					policy.Spec.PreDNAT = true
+					hepIface = "*"
+
+					// pre-DNAT applies to forwarded traffic, need to allow workload traffic explicitly.
+					policy.Spec.Ingress = append(policy.Spec.Ingress, api.Rule{
+						Action: api.Allow,
+						Source: api.EntityRule{
+							Selector: "!has(hep)",
+						},
+						Destination: api.EntityRule{
+							Selector: "!has(hep)",
+						},
+					})
+				}
+
+				policy.Spec.Ingress = append(policy.Spec.Ingress, api.Rule{
+					Action: hepPolicy,
+					Source: api.EntityRule{
+						Selector: "!has(hep)",
+					},
+				})
+
+				_, err = client.GlobalNetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
 				Expect(err).NotTo(HaveOccurred())
 
 				for _, f := range tc.Felixes {
@@ -183,11 +211,25 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ endpoint-to-host-action tes
 		entry("ACCEPT", "Return", "eth0", api.Deny, connectivity.Some),
 		entry("DROP", "Return", "eth0", api.Deny, connectivity.None),
 
-		// Wildcard HEP overrides the ep-to-host policy.
+		// Pre-dnat policy is applied before normal policy and before the DefaultEndpointToHostAction
+		// so it can drop extra traffic.  However, it can't allow traffic that DefaultEndpointToHostAction
+		// would then drop, because both checks are enforced.
+		entry("DROP", "Accept", "*-pre-dnat", api.Allow, connectivity.Some),
+		entry("DROP", "Return", "*-pre-dnat", api.Allow, connectivity.None),
+		entry("DROP", "Drop", "*-pre-dnat", api.Allow, connectivity.None),
+
+		entry("DROP", "Accept", "*-pre-dnat", api.Deny, connectivity.None),
+		entry("DROP", "Return", "*-pre-dnat", api.Deny, connectivity.None),
+		entry("DROP", "Drop", "*-pre-dnat", api.Deny, connectivity.None),
+
+		// DefaultEndpointToHostAction overrides normal wildcard HEP policy (this
+		// surprised me, but I think it was a change made near the end of development to prevent
+		// a breaking change).
 		entry("DROP", "Accept", "*", api.Allow, connectivity.Some),
-		entry("DROP", "Return", "*", api.Allow, connectivity.Some),
-		entry("DROP", "Drop", "*", api.Allow, connectivity.Some),
-		entry("DROP", "Accept", "*", api.Deny, connectivity.None),
+		entry("DROP", "Return", "*", api.Allow, connectivity.None),
+		entry("DROP", "Drop", "*", api.Allow, connectivity.None),
+
+		entry("DROP", "Accept", "*", api.Deny, connectivity.Some),
 		entry("DROP", "Return", "*", api.Deny, connectivity.None),
 		entry("DROP", "Drop", "*", api.Deny, connectivity.None),
 	)
