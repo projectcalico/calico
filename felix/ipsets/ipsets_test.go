@@ -952,7 +952,7 @@ var _ = Describe("IP sets dataplane", func() {
 		It("shouldn't do any work on resync", func() {
 			dataplane.CmdNames = nil
 			resyncAndApply()
-			Expect(dataplane.CmdNames).To(ConsistOf("list"))
+			Expect(dataplane.CmdNames).To(ConsistOf("list", "list"))
 		})
 	})
 
