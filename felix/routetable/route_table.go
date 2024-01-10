@@ -137,10 +137,8 @@ type RouteTable struct {
 	lastGracePeriodCleanup  time.Time
 	featureDetector         environment.FeatureDetectorIface
 
-	// Testing shims, swapped with mock versions for UT
-	addStaticARPEntry func(cidr ip.CIDR, destMAC net.HardwareAddr, ifaceName string) error
-	conntrack         conntrackIface
-	time              timeshim.Interface
+	conntrack conntrackIface
+	time      timeshim.Interface
 }
 
 type RouteTableOpt func(table *RouteTable)
@@ -181,7 +179,6 @@ func New(
 		ipVersion,
 		netlinkshim.NewRealNetlink,
 		netlinkTimeout,
-		addStaticARPEntry,
 		conntrack.New(),
 		timeshim.RealTime(),
 		deviceRouteSourceAddress,
@@ -200,7 +197,6 @@ func NewWithShims(
 	ipVersion uint8,
 	newNetlinkHandle func() (netlinkshim.Interface, error),
 	netlinkTimeout time.Duration,
-	addStaticARPEntry func(cidr ip.CIDR, destMAC net.HardwareAddr, ifaceName string) error,
 	conntrack conntrackIface,
 	timeShim timeshim.Interface,
 	deviceRouteSourceAddress net.IP,
@@ -288,9 +284,8 @@ func NewWithShims(
 		nl:               handlemgr.NewHandleManager(featureDetector, handlemgr.WithNewHandleOverride(newNetlinkHandle), handlemgr.WithSocketTimeout(netlinkTimeout)),
 		featureDetector:  featureDetector,
 
-		addStaticARPEntry: addStaticARPEntry,
-		conntrack:         conntrack,
-		time:              timeShim,
+		conntrack: conntrack,
+		time:      timeShim,
 	}
 
 	for _, o := range opts {
@@ -1003,14 +998,18 @@ func (r *RouteTable) applyUpdates() error {
 		}
 
 		if r.ipVersion == 4 {
+			// As a convenience, we add a static ARP entry for the peer.  At one point
+			// I think this was actually needed due to the way we set up routing but
+			// it no longer seems to be.  Leaving it in place in case it is needed in
+			// some obscure scenario.
 			ifaceName := r.ifaceIndexToName[kRoute.Ifindex]
 			target := r.ifaceToRoutes[ifaceName][kernKey.CIDR]
 			mac := target.DestMAC
 			if mac != nil {
-				err := r.addStaticARPEntry(target.CIDR, target.DestMAC, ifaceName)
+				err := r.addStaticARPEntry(target.CIDR, target.DestMAC, kRoute.Ifindex)
 				if err != nil {
-					// FIXME Do we actually need static ARP entries?
-					r.logCxt.WithError(err).Warn("Failed to set ARP entry, ignoring.")
+					log.WithError(err).Debug("Failed to add neighbor.")
+					updateErrs[kernKey] = err
 				}
 			}
 		}
@@ -1107,6 +1106,10 @@ func (r *RouteTable) waitForPendingConntrackDeletion(ipAddr ip.Addr) {
 // filterErrorByIfaceState checks the current state of the interface; if it's down or gone, it
 // returns IfaceDown or IfaceNotPresent, otherwise, it returns the given defaultErr.
 func (r *RouteTable) filterErrorByIfaceState(ifaceName string, currentErr, defaultErr error, suppressExistsWarning bool) error {
+	if currentErr == nil {
+		return nil
+	}
+
 	logCxt := r.logCxt.WithFields(log.Fields{"ifaceName": ifaceName, "error": currentErr})
 	if ifaceName == InterfaceNone {
 		// Short circuit the no-OIF interface name.
@@ -1169,6 +1172,23 @@ func (r *RouteTable) addDataplaneConntrackOwner(kernKey kernelRouteKey, ifindex 
 	}
 	owners = append(owners, ifindex)
 	r.possibleConntrackOwners.Dataplane().Set(kernKey, owners)
+}
+
+func (r *RouteTable) addStaticARPEntry(cidr ip.CIDR, mac net.HardwareAddr, ifindex int) error {
+	nl, err := r.nl.Handle()
+	if err != nil {
+		return err
+	}
+	a := &netlink.Neigh{
+		Family:       unix.AF_INET,
+		LinkIndex:    ifindex,
+		State:        netlink.NUD_PERMANENT,
+		Type:         unix.RTN_UNICAST,
+		IP:           cidr.Addr().AsNetIP(),
+		HardwareAddr: mac,
+	}
+	err = nl.NeighSet(a)
+	return err
 }
 
 type Target struct {

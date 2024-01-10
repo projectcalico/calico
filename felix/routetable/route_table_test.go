@@ -61,7 +61,6 @@ var _ = Describe("RouteTable v6", func() {
 			6,
 			dataplane.NewMockNetlink,
 			10*time.Second,
-			dataplane.AddStaticArpEntry,
 			dataplane,
 			t,
 			nil,
@@ -130,7 +129,6 @@ var _ = Describe("RouteTable", func() {
 			4,
 			dataplane.NewMockNetlink,
 			10*time.Second,
-			dataplane.AddStaticArpEntry,
 			dataplane,
 			t,
 			nil,
@@ -280,7 +278,6 @@ var _ = Describe("RouteTable", func() {
 					4,
 					dataplane.NewMockNetlink,
 					10*time.Second,
-					dataplane.AddStaticArpEntry,
 					dataplane,
 					t,
 					deviceRouteSourceAddress,
@@ -411,7 +408,6 @@ var _ = Describe("RouteTable", func() {
 					4,
 					dataplane.NewMockNetlink,
 					10*time.Second,
-					dataplane.AddStaticArpEntry,
 					dataplane,
 					t,
 					nil,
@@ -925,7 +921,7 @@ var _ = Describe("RouteTable", func() {
 					mocknetlink.FailNextLinkList|
 					mocknetlink.FailNextRouteReplace|
 					mocknetlink.FailNextRouteDel|
-					mocknetlink.FailNextAddARP|
+					mocknetlink.FailNextNeighSet|
 					mocknetlink.FailNextRouteList) != 0 {
 					It("should reconnect to netlink", func() {
 						Expect(dataplane.NumNewNetlinkCalls).To(Equal(2))
@@ -1085,7 +1081,6 @@ var _ = Describe("RouteTable (main table)", func() {
 			4,
 			dataplane.NewMockNetlink,
 			10*time.Second,
-			dataplane.AddStaticArpEntry,
 			dataplane,
 			t,
 			nil,
@@ -1190,7 +1185,6 @@ var _ = Describe("RouteTable (table 100)", func() {
 			4,
 			dataplane.NewMockNetlink,
 			10*time.Second,
-			dataplane.AddStaticArpEntry,
 			dataplane,
 			t,
 			nil,
@@ -1488,7 +1482,6 @@ var _ = Describe("Tests to verify ip version is policed", func() {
 				5, // invalid IP version
 				dataplane.NewMockNetlink,
 				10*time.Second,
-				dataplane.AddStaticArpEntry,
 				dataplane,
 				t,
 				nil,

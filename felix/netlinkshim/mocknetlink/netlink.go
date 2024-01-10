@@ -124,7 +124,7 @@ const (
 	FailNextRouteAdd
 	FailNextRouteReplace
 	FailNextRouteDel
-	FailNextAddARP
+	FailNextNeighSet
 	FailNextNewNetlink
 	FailNextSetSocketTimeout
 	FailNextLinkAdd
@@ -155,7 +155,7 @@ var RoutetableFailureScenarios = []FailFlags{
 	FailNextRouteList,
 	FailNextRouteAdd,
 	FailNextRouteDel,
-	FailNextAddARP,
+	FailNextNeighSet,
 	FailNextNewNetlink,
 	FailNextSetSocketTimeout,
 	FailNextSetStrict,
@@ -186,9 +186,6 @@ func (f FailFlags) String() string {
 	}
 	if f&FailNextRouteDel != 0 {
 		parts = append(parts, "FailNextRouteDel")
-	}
-	if f&FailNextAddARP != 0 {
-		parts = append(parts, "FailNextAddARP")
 	}
 	if f&FailNextNewNetlink != 0 {
 		parts = append(parts, "FailNextNewNetlink")
@@ -928,6 +925,9 @@ func (d *MockNetlinkDataplane) NeighSet(neigh *netlink.Neigh) error {
 	if err != nil {
 		return err
 	}
+	if d.shouldFail(FailNextNeighSet) {
+		return SimulatedError
+	}
 
 	if d.NeighsByFamily[family] == nil {
 		d.NeighsByFamily[family] = map[NeighKey]*netlink.Neigh{}
@@ -1000,11 +1000,6 @@ func (d *MockNetlinkDataplane) shouldFail(flag FailFlags) bool {
 		log.WithField("flag", flag).Warn("Mock dataplane: triggering failure")
 	}
 	return flagPresent
-}
-
-// FIXME USe Neigh operations instead.
-func (d *MockNetlinkDataplane) AddStaticArpEntry(cidr ip.CIDR, mac net.HardwareAddr, name string) error {
-	return nil
 }
 
 func (d *MockNetlinkDataplane) IfIndex(name string) int {

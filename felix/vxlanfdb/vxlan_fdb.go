@@ -149,6 +149,7 @@ func (r *VXLANFDB) Apply() error {
 			log.WithField("entry", entry).Debug("Adding ARP entry.")
 		}
 		a := &netlink.Neigh{
+			Family:       unix.AF_INET,
 			LinkIndex:    r.ifIndex,
 			State:        netlink.NUD_PERMANENT,
 			Type:         unix.RTN_UNICAST,
@@ -177,6 +178,7 @@ func (r *VXLANFDB) Apply() error {
 			log.WithField("entry", entry).Debug("Deleting ARP entry.")
 		}
 		a := &netlink.Neigh{
+			Family:       unix.AF_INET,
 			LinkIndex:    r.ifIndex,
 			Type:         unix.RTN_UNICAST,
 			IP:           entry.IP.AsNetIP(),
