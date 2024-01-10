@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2023 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -407,16 +407,10 @@ func (s *IPSets) tryResync() (err error) {
 		// Look up to see if this is one of our IP sets.
 		if !s.IPVersionConfig.OwnsIPSet(name) {
 			if debug {
-				s.logCxt.WithField("name", name).Debug("Skip parsing members of IP set.")
+				s.logCxt.WithField("name", name).Debug("Skip non-Calico/wrong version IP set.")
 			}
 			continue
 		}
-		/*if !s.IPVersionConfig.OwnsIPSet(name) || s.IPVersionConfig.IsTempIPSetName(name) {
-			if debug {
-				s.logCxt.WithField("name", name).Debug("Skip parsing members of IP set.")
-			}
-			continue
-		}*/
 		err = s.get(name, debug)
 		if err != nil {
 			s.logCxt.WithError(err).Errorf("Failed to process ipset %v", name)
@@ -453,26 +447,27 @@ func (s *IPSets) list(debug bool) ([]string, error) {
 	//	test-1
 	//  ...
 	getNames := func(scanner *bufio.Scanner) ([]string, error) {
-		var calicoIpSets []string
+		var ipSets []string
 		for scanner.Scan() {
-			ipSetName := scanner.Text()
-			calicoIpSets = append(calicoIpSets, ipSetName)
+			ipSets = append(ipSets, scanner.Text())
 		}
-		return calicoIpSets, nil
+		return ipSets, nil
 	}
 
-	calicoIpSets, err := s.run("", debug, getNames)
+	// Run ipset with -name to get the name of all ipsets
+	ipSets, err := s.runIpSetList("-name", debug, getNames)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get list of ipsets - err: %w", err)
+		return nil, err
 	}
-	s.logCxt.Debugf("Calico IpSets: %v", calicoIpSets)
-	return calicoIpSets, nil
+	s.logCxt.Debugf("List of ipsets: %v", ipSets)
+	return ipSets, nil
 }
 
 func (s *IPSets) get(ipSetName string, debug bool) error {
-	// TODO: maybe we can use this case to list only the names
+	// If ipSetName == "", it will run 'ipset list' which will return the list and details of all ipsets.
+	// We should prevent this to not hit ipset protocol mismatch from non-calico ipsets.
 	if ipSetName == "" {
-		return fmt.Errorf("No ipset name specified")
+		return fmt.Errorf("no ipset name specified")
 	}
 	if debug {
 		s.logCxt.WithField("setName", ipSetName).Debug("Parsing IP set.")
@@ -501,12 +496,6 @@ func (s *IPSets) get(ipSetName string, debug bool) error {
 				if debug {
 					s.logCxt.WithField("setName", ipSetName).Debug("Parsing IP set.")
 				}
-				/*if !s.IPVersionConfig.OwnsIPSet(ipSetName) || s.IPVersionConfig.IsTempIPSetName(ipSetName) {
-					if debug {
-						s.logCxt.WithField("name", ipSetName).Debug("Skip parsing members of IP set.")
-					}
-					return nil, nil
-				}*/
 			}
 			if strings.HasPrefix(line, "Type:") {
 				ipSetType = IPSetType(strings.Split(line, " ")[1])
@@ -565,6 +554,21 @@ func (s *IPSets) get(ipSetName string, debug bool) error {
 				// Start of a Members entry, following this, there'll be one member per
 				// line then EOF or a blank line.
 
+				// Look up to see if this is one of our IP sets.
+				if !s.IPVersionConfig.OwnsIPSet(ipSetName) || s.IPVersionConfig.IsTempIPSetName(ipSetName) {
+					if debug {
+						s.logCxt.WithField("name", ipSetName).Debug("Skip parsing members of IP set.")
+					}
+					for scanner.Scan() {
+						line := scanner.Bytes()
+						if len(line) == 0 {
+							// End of members
+							break
+						}
+					}
+					continue
+				}
+
 				if !ipSetType.IsValid() {
 					s.logCxt.WithFields(log.Fields{
 						"setName": ipSetName,
@@ -622,24 +626,21 @@ func (s *IPSets) get(ipSetName string, debug bool) error {
 		return nil, nil
 	}
 
-	_, err := s.run(ipSetName, debug, parseIpSet)
+	_, err := s.runIpSetList(ipSetName, debug, parseIpSet)
 	if err != nil {
-		return fmt.Errorf("failed to process ipset %v - err: %w", ipSetName, err)
+		return err
 	}
 	return nil
 }
 
-func (s *IPSets) run(name string, debug bool, fn func(*bufio.Scanner) ([]string, error)) ([]string, error) {
-	arg := "-name"
-	if name != "" {
-		arg = name
-	}
+func (s *IPSets) runIpSetList(arg string, debug bool, parsingFunc func(*bufio.Scanner) ([]string, error)) ([]string, error) {
 	cmd := s.newCmd("ipset", "list", arg)
 	cmdStr := fmt.Sprintf("ipset list %v", arg)
 	// Grab stdout as a pipe so we can stream through the (potentially very large) output.
 	out, err := cmd.StdoutPipe()
 	if err != nil {
-		return nil, fmt.Errorf("Failed to get pipe for '%v' - err: %w", cmdStr, err)
+		s.logCxt.WithError(err).Errorf("Failed to get pipe for '%v'.", cmdStr)
+		return nil, err
 	}
 	// Capture error output into a buffer.
 	var stderr bytes.Buffer
@@ -647,26 +648,33 @@ func (s *IPSets) run(name string, debug bool, fn func(*bufio.Scanner) ([]string,
 	execStartTime := time.Now()
 	err = cmd.Start()
 	if err != nil {
-		return nil, fmt.Errorf("Failed to start '%v' - err: %w", cmdStr, err)
+		s.logCxt.WithError(err).Errorf("Failed to start '%v'.", cmdStr)
+		return nil, err
 	}
 	summaryExecStart.Observe(float64(time.Since(execStartTime).Nanoseconds()) / 1000.0)
 
 	// Use a scanner to chunk the input into lines.
 	scanner := bufio.NewScanner(out)
-	res, processErr := fn(scanner)
+	res, parsingErr := parsingFunc(scanner)
 	closeErr := out.Close()
 	err = cmd.Wait()
+	logCxt := s.logCxt.WithField("stderr", stderr.String())
 	if scanner.Err() != nil {
-		return nil, fmt.Errorf("Failed to read '%v' output - err: %w", cmdStr, scanner.Err())
+		err = scanner.Err()
+		logCxt.WithError(err).Errorf("Failed to read '%v' output.", cmdStr)
+		return nil, err
 	}
 	if err != nil {
-		return nil, fmt.Errorf("Bad return code from '%v' - err: %w", cmdStr, err)
+		logCxt.WithError(err).Errorf("Bad return code from '%v'.", cmdStr)
+		return nil, err
 	}
 	if closeErr != nil {
-		return nil, fmt.Errorf("Failed to close stdout from '%v' - err: %w", cmdStr, closeErr)
+		logCxt.WithError(closeErr).Errorf("Failed to close stdout from '%v'.", cmdStr)
+		return nil, closeErr
 	}
-	if processErr != nil {
-		return nil, fmt.Errorf("Failed to process '%v' output - err: %w", cmdStr, processErr)
+	if parsingErr != nil {
+		logCxt.WithError(parsingErr).Errorf("Failed to process '%v' output.", cmdStr)
+		return nil, parsingErr
 	}
 	return res, nil
 }
