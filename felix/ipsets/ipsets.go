@@ -404,6 +404,19 @@ func (s *IPSets) tryResync() (err error) {
 	}
 
 	for _, name := range ipsets {
+		// Look up to see if this is one of our IP sets.
+		if !s.IPVersionConfig.OwnsIPSet(name) {
+			if debug {
+				s.logCxt.WithField("name", name).Debug("Skip parsing members of IP set.")
+			}
+			continue
+		}
+		/*if !s.IPVersionConfig.OwnsIPSet(name) || s.IPVersionConfig.IsTempIPSetName(name) {
+			if debug {
+				s.logCxt.WithField("name", name).Debug("Skip parsing members of IP set.")
+			}
+			continue
+		}*/
 		err = s.get(name, debug)
 		if err != nil {
 			s.logCxt.WithError(err).Errorf("Failed to process ipset %v", name)
@@ -443,13 +456,6 @@ func (s *IPSets) list(debug bool) ([]string, error) {
 		var calicoIpSets []string
 		for scanner.Scan() {
 			ipSetName := scanner.Text()
-			// Look up to see if this is one of our IP sets.
-			if !s.IPVersionConfig.OwnsIPSet(ipSetName) || s.IPVersionConfig.IsTempIPSetName(ipSetName) {
-				if debug {
-					s.logCxt.WithField("name", ipSetName).Debug("Skip parsing members of IP set.")
-				}
-				continue
-			}
 			calicoIpSets = append(calicoIpSets, ipSetName)
 		}
 		return calicoIpSets, nil
@@ -483,17 +489,9 @@ func (s *IPSets) get(ipSetName string, debug bool) error {
 	//	10.0.0.2
 	//	10.0.0.1
 	parseIpSet := func(scanner *bufio.Scanner) ([]string, error) {
+		ipSetName := ""
+		var ipSetType IPSetType
 		for scanner.Scan() {
-			var ipSetType IPSetType
-			ipSetName := ""
-			// Look up to see if this is one of our IP sets.
-			/*if !s.IPVersionConfig.OwnsIPSet(ipSetName) || s.IPVersionConfig.IsTempIPSetName(ipSetName) {
-				if debug {
-					s.logCxt.WithField("name", ipSetName).Debug("Skip parsing members of IP set.")
-				}
-				continue
-			}*/
-
 			line := scanner.Text()
 			if debug {
 				s.logCxt.Debugf("Parsing line: %q", line)
@@ -503,6 +501,12 @@ func (s *IPSets) get(ipSetName string, debug bool) error {
 				if debug {
 					s.logCxt.WithField("setName", ipSetName).Debug("Parsing IP set.")
 				}
+				/*if !s.IPVersionConfig.OwnsIPSet(ipSetName) || s.IPVersionConfig.IsTempIPSetName(ipSetName) {
+					if debug {
+						s.logCxt.WithField("name", ipSetName).Debug("Skip parsing members of IP set.")
+					}
+					return nil, nil
+				}*/
 			}
 			if strings.HasPrefix(line, "Type:") {
 				ipSetType = IPSetType(strings.Split(line, " ")[1])
@@ -627,7 +631,7 @@ func (s *IPSets) get(ipSetName string, debug bool) error {
 
 func (s *IPSets) run(name string, debug bool, fn func(*bufio.Scanner) ([]string, error)) ([]string, error) {
 	arg := "-name"
-	if arg != "" {
+	if name != "" {
 		arg = name
 	}
 	cmd := s.newCmd("ipset", "list", arg)
@@ -1006,7 +1010,7 @@ func (s *IPSets) deleteIPSet(setName string) error {
 }
 
 func (s *IPSets) dumpIPSetsToLog() {
-	cmd := s.newCmd("ipset", "list")
+	cmd := s.newCmd("ipset", "list", "-name")
 	output, err := cmd.Output()
 	if err != nil {
 		s.logCxt.WithError(err).Error("Failed to read IP sets")
