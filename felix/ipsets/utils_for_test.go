@@ -108,10 +108,12 @@ func (d *mockDataplane) newCmd(name string, arg ...string) CmdIface {
 			SetName:   name,
 		}
 	case "list":
-		Expect(len(arg)).To(Equal(1))
+		Expect(len(arg)).To(Equal(2))
 		cmd = &listCmd{
 			Dataplane: d,
 			resultC:   make(chan error),
+			allIpSets: arg[1] == "-name",
+			SetName:   arg[1], // either ipset name or '-name' to return the list of all ipsets
 		}
 	default:
 		Fail(fmt.Sprintf("Unexpected command %v", arg))
@@ -521,6 +523,7 @@ func (d *destroyCmd) CombinedOutput() ([]byte, error) {
 type listCmd struct {
 	Dataplane *mockDataplane
 	SetName   string
+	allIpSets bool
 	Stdout    *io.PipeWriter
 	resultC   chan error
 }
@@ -697,36 +700,41 @@ func (c *listCmd) main() {
 		return
 	}
 
-	first := true
-	for setName, members := range c.Dataplane.IPSetMembers {
-		if !first {
-			fmt.Fprint(c.Stdout, "\n")
+	if c.allIpSets {
+		for setName := range c.Dataplane.IPSetMembers {
+			fmt.Fprintf(c.Stdout, "%s\n", setName)
 		}
-		fmt.Fprintf(c.Stdout, "Name: %s\n", setName)
-		meta, ok := c.Dataplane.IPSetMetadata[setName]
-		if !ok {
-			// Default metadata for IP sets created by tests.
-			meta = setMetadata{
-				Name:    v4MainIPSetName,
-				Family:  IPFamilyV4,
-				Type:    IPSetTypeHashIP,
-				MaxSize: 1234,
-			}
-		}
-		fmt.Fprintf(c.Stdout, "Type: %s\n", meta.Type)
-		if meta.Type == IPSetTypeBitmapPort {
-			fmt.Fprintf(c.Stdout, "Header: family %s range %d-%d\n", meta.Family, meta.RangeMin, meta.RangeMax)
-		} else if meta.Type == "unknown:type" {
-			fmt.Fprintf(c.Stdout, "Header: floop\n")
-		} else {
-			fmt.Fprintf(c.Stdout, "Header: family %s hashsize 1024 maxelem %d\n", meta.Family, meta.MaxSize)
-		}
-		fmt.Fprint(c.Stdout, "Field: foobar\n") // Dummy field, should get ignored.
-		fmt.Fprint(c.Stdout, "Members:\n")
-		members.Iter(func(member string) error {
-			fmt.Fprintf(c.Stdout, "%s\n", member)
-			return nil
-		})
-		first = false
+		return
 	}
+
+	members, exists := c.Dataplane.IPSetMembers[c.SetName]
+	if !exists {
+		result = fmt.Errorf("ipset %v does not exists", c.SetName)
+		return
+	}
+	fmt.Fprintf(c.Stdout, "Name: %s\n", c.SetName)
+	meta, ok := c.Dataplane.IPSetMetadata[c.SetName]
+	if !ok {
+		// Default metadata for IP sets created by tests.
+		meta = setMetadata{
+			Name:    v4MainIPSetName,
+			Family:  IPFamilyV4,
+			Type:    IPSetTypeHashIP,
+			MaxSize: 1234,
+		}
+	}
+	fmt.Fprintf(c.Stdout, "Type: %s\n", meta.Type)
+	if meta.Type == IPSetTypeBitmapPort {
+		fmt.Fprintf(c.Stdout, "Header: family %s range %d-%d\n", meta.Family, meta.RangeMin, meta.RangeMax)
+	} else if meta.Type == "unknown:type" {
+		fmt.Fprintf(c.Stdout, "Header: floop\n")
+	} else {
+		fmt.Fprintf(c.Stdout, "Header: family %s hashsize 1024 maxelem %d\n", meta.Family, meta.MaxSize)
+	}
+	fmt.Fprint(c.Stdout, "Field: foobar\n") // Dummy field, should get ignored.
+	fmt.Fprint(c.Stdout, "Members:\n")
+	members.Iter(func(member string) error {
+		fmt.Fprintf(c.Stdout, "%s\n", member)
+		return nil
+	})
 }
