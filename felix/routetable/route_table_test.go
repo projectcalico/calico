@@ -1045,13 +1045,18 @@ var _ = Describe("RouteTable", func() {
 
 	Describe("with an interface that disappears", func() {
 		BeforeEach(func() {
-			// Add an interface so that hte route table tries to list the routes associated with it.
+			// Do initial apply so that we can trigger a per-interface sync below.
+			err := rt.Apply()
+			Expect(err).NotTo(HaveOccurred())
+			// Add an interface so that the route table tries to list the routes associated with it.
 			dataplane.AddIface(2, "cali1", true, true)
 			// But trigger the interface to disappear just before the list call.  This will trigger
 			// a list operation with no interface, resulting in an ENODEV.
 			dataplane.DeleteInterfaceAfterLinkByName = true
 		})
 		It("it should suppress the ENODEV error", func() {
+			// Trigger a per-interface sync.
+			rt.OnIfaceStateChanged("cali1", 2, ifacemonitor.StateUp)
 			rt.RouteUpdate("cali1", Target{
 				CIDR: ip.MustParseCIDROrIP("10.0.20.0/24"),
 			})
