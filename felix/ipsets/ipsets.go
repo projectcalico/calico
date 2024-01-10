@@ -413,7 +413,7 @@ func (s *IPSets) tryResync() (err error) {
 		}
 		err = s.get(name, debug)
 		if err != nil {
-			s.logCxt.WithError(err).Errorf("Failed to process ipset %v", name)
+			s.logCxt.WithError(err).Errorf("Failed to parse ipset %v", name)
 			return
 		}
 	}
@@ -506,10 +506,6 @@ func (s *IPSets) get(ipSetName string, debug bool) error {
 			if strings.HasPrefix(line, "Header:") {
 				// When we hit the Header line we should know the name, and type of the IP set, which lets
 				// us update the tracker.
-				if !s.IPVersionConfig.OwnsIPSet(ipSetName) {
-					s.logCxt.WithField("name", ipSetName).Debug("Skip non-Calico/wrong version IP set.")
-					continue
-				}
 				parts := strings.Split(line, " ")
 				meta := dataplaneMetadata{
 					Type: ipSetType,
@@ -517,31 +513,27 @@ func (s *IPSets) get(ipSetName string, debug bool) error {
 				for idx, p := range parts {
 					if p == "maxelem" {
 						if idx+1 >= len(parts) {
-							log.WithField("line", line).Error(
-								"Failed to parse ipset list Header line, nothing after 'maxelem'.")
-							break
+							return nil, fmt.Errorf(
+								"Failed to parse ipset list Header line, nothing after 'maxelem'. line: %v", line)
 						}
 						maxElem, err := strconv.Atoi(parts[idx+1])
 						if err != nil {
-							log.WithError(err).WithField("line", line).Error(
-								"Failed to parse ipset list Header line.")
-							break
+							return nil, fmt.Errorf(
+								"Failed to parse ipset list Header line. line: %v, err: %w", line, err)
 						}
 						meta.MaxSize = maxElem
 						break
 					}
 					if p == "range" {
 						if idx+1 >= len(parts) {
-							log.WithField("line", line).Error(
-								"Failed to parse ipset list Header line, nothing after 'range'.")
-							break
+							return nil, fmt.Errorf(
+								"Failed to parse ipset list Header line, nothing after 'range'. line: %v", line)
 						}
 						// For bitmaps, we see "range 123-456"
 						rMin, rMAx, err := ParseRange(parts[idx+1])
 						if err != nil {
-							log.WithError(err).WithField("line", line).Error(
-								"Failed to parse ipset list Header line.")
-							break
+							return nil, fmt.Errorf(
+								"Failed to parse ipset list Header line. line: %v, err: %w", line, err)
 						}
 						meta.RangeMin = rMin
 						meta.RangeMax = rMAx
@@ -559,14 +551,7 @@ func (s *IPSets) get(ipSetName string, debug bool) error {
 					if debug {
 						s.logCxt.WithField("name", ipSetName).Debug("Skip parsing members of IP set.")
 					}
-					for scanner.Scan() {
-						line := scanner.Bytes()
-						if len(line) == 0 {
-							// End of members
-							break
-						}
-					}
-					continue
+					return nil, nil
 				}
 
 				if !ipSetType.IsValid() {
@@ -607,8 +592,7 @@ func (s *IPSets) get(ipSetName string, debug bool) error {
 					return scanner.Err()
 				})
 				if err != nil {
-					logCxt.WithError(err).Error("Failed to read members from 'ipset list'.")
-					break
+					return nil, fmt.Errorf("Failed to read members from 'ipset list'. err: %w", err)
 				}
 
 				if numMissing := memberTracker.PendingUpdates().Len(); numMissing > 0 {

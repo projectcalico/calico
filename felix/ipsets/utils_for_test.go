@@ -112,7 +112,8 @@ func (d *mockDataplane) newCmd(name string, arg ...string) CmdIface {
 		cmd = &listCmd{
 			Dataplane: d,
 			resultC:   make(chan error),
-			SetName:   arg[1],
+			allIpSets: arg[1] == "-name",
+			SetName:   arg[1], // either ipset name or '-name' to return the list of all ipsets
 		}
 	default:
 		Fail(fmt.Sprintf("Unexpected command %v", arg))
@@ -522,6 +523,7 @@ func (d *destroyCmd) CombinedOutput() ([]byte, error) {
 type listCmd struct {
 	Dataplane *mockDataplane
 	SetName   string
+	allIpSets bool
 	Stdout    *io.PipeWriter
 	resultC   chan error
 }
@@ -698,7 +700,7 @@ func (c *listCmd) main() {
 		return
 	}
 
-	if c.SetName == "-name" {
+	if c.allIpSets {
 		for setName := range c.Dataplane.IPSetMembers {
 			fmt.Fprintf(c.Stdout, "%s\n", setName)
 		}
