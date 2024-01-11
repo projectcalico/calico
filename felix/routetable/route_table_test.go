@@ -138,6 +138,7 @@ var _ = Describe("RouteTable", func() {
 			logutils.NewSummarizer("test"),
 			dataplane,
 			WithRouteCleanupGracePeriod(10*time.Second),
+			WithStaticARPEntries(true),
 		)
 	})
 

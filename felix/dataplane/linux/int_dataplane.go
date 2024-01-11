@@ -511,7 +511,24 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		var routeTableVXLAN routetable.RouteTableInterface
 		if !config.RouteSyncDisabled {
 			log.Debug("RouteSyncDisabled is false.")
-			routeTableVXLAN = routetable.New([]string{"^vxlan.calico$"}, 4, config.NetlinkTimeout, config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, true, unix.RT_TABLE_MAIN, dp.loopSummarizer, featureDetector, routetable.WithLivenessCB(dp.reportHealth), routetable.WithRouteMetric(routetable.RoutingMetricVXLANTunneledWorkloads))
+			routeTableVXLAN = routetable.New(
+				[]string{"^vxlan.calico$"},
+				4,
+				config.NetlinkTimeout,
+				config.DeviceRouteSourceAddress,
+				config.DeviceRouteProtocol,
+				true,
+				unix.RT_TABLE_MAIN,
+				dp.loopSummarizer,
+				featureDetector,
+				// Note: deliberately not including:
+				// - Static neighbor entries: VXLAN needs neigh entries, but
+				//   they relate to the VTEP addresses.  Those are handled by
+				//   the VXLAN FDB.
+				// - Grace period: VXLAN routes should be cleaned up immediately.
+				routetable.WithLivenessCB(dp.reportHealth),
+				routetable.WithRouteMetric(routetable.RoutingMetricVXLANTunneledWorkloads),
+			)
 		} else {
 			log.Info("RouteSyncDisabled is true, using DummyTable.")
 			routeTableVXLAN = &routetable.DummyTable{}
@@ -872,7 +889,21 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 	if !config.RouteSyncDisabled {
 		log.Debug("RouteSyncDisabled is false.")
-		routeTableV4 = routetable.New(interfaceRegexes, 4, config.NetlinkTimeout, config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, config.RemoveExternalRoutes, unix.RT_TABLE_MAIN, dp.loopSummarizer, featureDetector, routetable.WithLivenessCB(dp.reportHealth), routetable.WithRouteCleanupGracePeriod(routeCleanupGracePeriod), routetable.WithRouteMetric(routetable.RoutingMetricLocalWorkloads))
+		routeTableV4 = routetable.New(
+			interfaceRegexes,
+			4,
+			config.NetlinkTimeout,
+			config.DeviceRouteSourceAddress,
+			config.DeviceRouteProtocol,
+			config.RemoveExternalRoutes,
+			unix.RT_TABLE_MAIN,
+			dp.loopSummarizer,
+			featureDetector,
+			routetable.WithStaticARPEntries(true),
+			routetable.WithLivenessCB(dp.reportHealth),
+			routetable.WithRouteCleanupGracePeriod(routeCleanupGracePeriod),
+			routetable.WithRouteMetric(routetable.RoutingMetricLocalWorkloads),
+		)
 	} else {
 		log.Info("RouteSyncDisabled is true, using DummyTable.")
 		routeTableV4 = &routetable.DummyTable{}
@@ -968,7 +999,23 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			var routeTableVXLANV6 routetable.RouteTableInterface
 			if !config.RouteSyncDisabled {
 				log.Debug("RouteSyncDisabled is false.")
-				routeTableVXLANV6 = routetable.New([]string{"^vxlan-v6.calico$"}, 6, config.NetlinkTimeout, config.DeviceRouteSourceAddressIPv6, config.DeviceRouteProtocol, true, unix.RT_TABLE_MAIN, dp.loopSummarizer, featureDetector, routetable.WithLivenessCB(dp.reportHealth), routetable.WithRouteMetric(routetable.RoutingMetricVXLANTunneledWorkloads))
+				routeTableVXLANV6 = routetable.New(
+					[]string{"^vxlan-v6.calico$"},
+					6,
+					config.NetlinkTimeout,
+					config.DeviceRouteSourceAddressIPv6,
+					config.DeviceRouteProtocol,
+					true, unix.RT_TABLE_MAIN,
+					dp.loopSummarizer,
+					featureDetector,
+					// Note: deliberately not including:
+					// - Static neighbor entries: VXLAN needs neigh entries, but
+					//   they relate to the VTEP addresses.  Those are handled by
+					//   the VXLAN FDB.
+					// - Grace period: VXLAN routes should be cleaned up immediately.
+					routetable.WithLivenessCB(dp.reportHealth),
+					routetable.WithRouteMetric(routetable.RoutingMetricVXLANTunneledWorkloads),
+				)
 			} else {
 				log.Debug("RouteSyncDisabled is true, using DummyTable for routeTableVXLANV6.")
 				routeTableVXLANV6 = &routetable.DummyTable{}
@@ -998,7 +1045,23 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		var routeTableV6 routetable.RouteTableInterface
 		if !config.RouteSyncDisabled {
 			log.Debug("RouteSyncDisabled is false.")
-			routeTableV6 = routetable.New(interfaceRegexes, 6, config.NetlinkTimeout, config.DeviceRouteSourceAddressIPv6, config.DeviceRouteProtocol, config.RemoveExternalRoutes, unix.RT_TABLE_MAIN, dp.loopSummarizer, featureDetector, routetable.WithLivenessCB(dp.reportHealth), routetable.WithRouteCleanupGracePeriod(routeCleanupGracePeriod), routetable.WithRouteMetric(routetable.RoutingMetricLocalWorkloads))
+			routeTableV6 = routetable.New(
+				interfaceRegexes,
+				6,
+				config.NetlinkTimeout,
+				config.DeviceRouteSourceAddressIPv6,
+				config.DeviceRouteProtocol,
+				config.RemoveExternalRoutes,
+				unix.RT_TABLE_MAIN,
+				dp.loopSummarizer,
+				featureDetector,
+				// Note: deliberately not including:
+				// - Static neighbor entries: we've never supported these for IPv6;
+				//   we let the kernel populate them.
+				routetable.WithLivenessCB(dp.reportHealth),
+				routetable.WithRouteCleanupGracePeriod(routeCleanupGracePeriod),
+				routetable.WithRouteMetric(routetable.RoutingMetricLocalWorkloads),
+			)
 		} else {
 			log.Debug("RouteSyncDisabled is true, using DummyTable for routeTableV6.")
 			routeTableV6 = &routetable.DummyTable{}

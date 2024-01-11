@@ -234,7 +234,6 @@ func NewWithShims(
 			ipVersion,
 			newRoutetableNetlink,
 			netlinkTimeout,
-			func(cidr ip.CIDR, destMAC net.HardwareAddr, ifaceName string) error { return nil }, // addStaticARPEntry
 			&noOpConnTrack{},
 			timeShim,
 			nil, // deviceRouteSourceAddress
@@ -243,6 +242,9 @@ func NewWithShims(
 			config.RoutingTableIndex,
 			opRecorder,
 			featureDetector,
+			// Note: deliberately not including:
+			// - Static neighbor entries: wireguard devices are L3.
+			// - Grace period: wireguard routes should be cleaned up immediately.
 		)
 	} else {
 		logCtx.Info("RouteSyncDisabled is true, using DummyTable.")

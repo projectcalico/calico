@@ -107,6 +107,7 @@ type RouteTable struct {
 	ifacesToRescan     set.Set[string]
 	ifacePrefixRegexp  *regexp.Regexp
 	includeNoInterface bool
+	makeARPEntries     bool
 
 	// ifaceToRoutes and cidrToIfaces are our inputs, updated
 	// eagerly when something in the manager layer tells us to change the
@@ -159,6 +160,16 @@ func WithRouteCleanupGracePeriod(routeCleanupGracePeriod time.Duration) RouteTab
 func WithRouteMetric(metric RouteMetric) RouteTableOpt {
 	return func(table *RouteTable) {
 		table.routeMetric = metric
+	}
+}
+
+func WithStaticARPEntries(b bool) RouteTableOpt {
+	return func(table *RouteTable) {
+		if table.ipVersion != 4 {
+			log.Error("Bug: ARP entries only supported fro IPv4.  Ignoring.")
+			return
+		}
+		table.makeARPEntries = b
 	}
 }
 
@@ -997,7 +1008,7 @@ func (r *RouteTable) applyUpdates() error {
 			return deltatracker.IterActionNoOp
 		}
 
-		if r.ipVersion == 4 {
+		if r.ipVersion == 4 && r.makeARPEntries {
 			// As a convenience, we add a static ARP entry for the peer.  At one point
 			// I think this was actually needed due to the way we set up routing but
 			// it no longer seems to be.  Leaving it in place in case it is needed in
