@@ -233,9 +233,7 @@ func NewWithShims(
 			[]string{"^" + interfaceName + "$", routetable.InterfaceNone},
 			ipVersion,
 			newRoutetableNetlink,
-			false, // vxlan
 			netlinkTimeout,
-			func(cidr ip.CIDR, destMAC net.HardwareAddr, ifaceName string) error { return nil }, // addStaticARPEntry
 			&noOpConnTrack{},
 			timeShim,
 			nil, // deviceRouteSourceAddress
@@ -244,6 +242,9 @@ func NewWithShims(
 			config.RoutingTableIndex,
 			opRecorder,
 			featureDetector,
+			// Note: deliberately not including:
+			// - Static neighbor entries: wireguard devices are L3.
+			// - Grace period: wireguard routes should be cleaned up immediately.
 		)
 	} else {
 		logCtx.Info("RouteSyncDisabled is true, using DummyTable.")
@@ -292,7 +293,7 @@ func NewWithShims(
 	}
 }
 
-func (w *Wireguard) OnIfaceStateChanged(ifaceName string, state ifacemonitor.State) {
+func (w *Wireguard) OnIfaceStateChanged(ifaceName string, ifIndex int, state ifacemonitor.State) {
 	logCtx := w.logCtx.WithField("wireguardIfaceName", w.interfaceName)
 	if w.interfaceName != ifaceName {
 		logCtx.WithField("ifaceName", ifaceName).Debug("Ignoring interface state change, not the wireguard interface.")
@@ -311,7 +312,7 @@ func (w *Wireguard) OnIfaceStateChanged(ifaceName string, state ifacemonitor.Sta
 	}
 
 	// Notify the wireguard routetable module.
-	w.routetable.OnIfaceStateChanged(ifaceName, state)
+	w.routetable.OnIfaceStateChanged(ifaceName, ifIndex, state)
 }
 
 // EndpointUpdate is called when a wireguard endpoint (a node) is updated. This controls which peers to configure.
