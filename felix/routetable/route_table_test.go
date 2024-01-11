@@ -56,19 +56,19 @@ var _ = Describe("RouteTable v6", func() {
 		dataplane = mocknetlink.New()
 		t = mocktime.New()
 		// No grace period set, so invalid routes should be deleted immediately on apply.
-		rt = NewWithShims(
+		rt = New(
 			[]string{"^cali.*"},
 			6,
-			dataplane.NewMockNetlink,
 			10*time.Second,
-			dataplane,
-			t,
 			nil,
 			FelixRouteProtocol,
 			true,
 			0,
 			logutils.NewSummarizer("test"),
 			dataplane,
+			WithTimeShim(t),
+			WithConntrackShim(dataplane),
+			WithNetlinkHandleShim(dataplane.NewMockNetlink),
 		)
 	})
 
@@ -124,13 +124,10 @@ var _ = Describe("RouteTable", func() {
 		// Setting an auto-increment greater than the route cleanup delay effectively
 		// disables the grace period for these tests.
 		t.SetAutoIncrement(11 * time.Second)
-		rt = NewWithShims(
+		rt = New(
 			[]string{"^cali.*"},
 			4,
-			dataplane.NewMockNetlink,
 			10*time.Second,
-			dataplane,
-			t,
 			nil,
 			FelixRouteProtocol,
 			true,
@@ -139,6 +136,9 @@ var _ = Describe("RouteTable", func() {
 			dataplane,
 			WithRouteCleanupGracePeriod(10*time.Second),
 			WithStaticARPEntries(true),
+			WithTimeShim(t),
+			WithConntrackShim(dataplane),
+			WithNetlinkHandleShim(dataplane.NewMockNetlink),
 		)
 	})
 
@@ -274,19 +274,19 @@ var _ = Describe("RouteTable", func() {
 			deviceRouteSourceAddress := net.ParseIP(deviceRouteSource).To4()
 			// Modify the route table to have the device route source address set
 			BeforeEach(func() {
-				rt = NewWithShims(
+				rt = New(
 					[]string{"^cali.*"},
 					4,
-					dataplane.NewMockNetlink,
 					10*time.Second,
-					dataplane,
-					t,
 					deviceRouteSourceAddress,
 					FelixRouteProtocol,
 					true,
 					0,
 					logutils.NewSummarizer("test"),
 					dataplane,
+					WithTimeShim(t),
+					WithConntrackShim(dataplane),
+					WithNetlinkHandleShim(dataplane.NewMockNetlink),
 				)
 			})
 			It("Should delete routes without a source address", func() {
@@ -404,19 +404,19 @@ var _ = Describe("RouteTable", func() {
 			deviceRouteProtocol := netlink.RouteProtocol(10)
 			// Modify the route table to have the device route source address set
 			BeforeEach(func() {
-				rt = NewWithShims(
+				rt = New(
 					[]string{"^cali.*"},
 					4,
-					dataplane.NewMockNetlink,
 					10*time.Second,
-					dataplane,
-					t,
 					nil,
 					deviceRouteProtocol,
 					true,
 					0,
 					logutils.NewSummarizer("test"),
 					dataplane,
+					WithTimeShim(t),
+					WithConntrackShim(dataplane),
+					WithNetlinkHandleShim(dataplane.NewMockNetlink),
 				)
 			})
 			It("Should delete routes without a protocol", func() {
@@ -1075,13 +1075,10 @@ var _ = Describe("RouteTable (main table)", func() {
 		// Setting an auto-increment greater than the route cleanup delay effectively
 		// disables the grace period for these tests.
 		t.SetAutoIncrement(11 * time.Second)
-		rt = NewWithShims(
+		rt = New(
 			[]string{"^cali.*"},
 			4,
-			dataplane.NewMockNetlink,
 			10*time.Second,
-			dataplane,
-			t,
 			nil,
 			FelixRouteProtocol,
 			true,
@@ -1089,6 +1086,9 @@ var _ = Describe("RouteTable (main table)", func() {
 			logutils.NewSummarizer("test"),
 			dataplane,
 			WithRouteCleanupGracePeriod(10*time.Second),
+			WithTimeShim(t),
+			WithConntrackShim(dataplane),
+			WithNetlinkHandleShim(dataplane.NewMockNetlink),
 		)
 	})
 
@@ -1179,13 +1179,10 @@ var _ = Describe("RouteTable (table 100)", func() {
 		// Setting an auto-increment greater than the route cleanup delay effectively
 		// disables the grace period for these tests.
 		t.SetAutoIncrement(11 * time.Second)
-		rt = NewWithShims(
+		rt = New(
 			[]string{"^cali$", InterfaceNone}, // exact interface match
 			4,
-			dataplane.NewMockNetlink,
 			10*time.Second,
-			dataplane,
-			t,
 			nil,
 			FelixRouteProtocol,
 			true,
@@ -1193,6 +1190,9 @@ var _ = Describe("RouteTable (table 100)", func() {
 			logutils.NewSummarizer("test"),
 			dataplane,
 			WithRouteCleanupGracePeriod(10*time.Second),
+			WithTimeShim(t),
+			WithConntrackShim(dataplane),
+			WithNetlinkHandleShim(dataplane.NewMockNetlink),
 		)
 	})
 
@@ -1476,19 +1476,19 @@ var _ = Describe("Tests to verify ip version is policed", func() {
 		Expect(func() {
 			dataplane := mocknetlink.New()
 			t := mocktime.New()
-			_ = NewWithShims(
+			_ = New(
 				[]string{"^cali$", InterfaceNone},
 				5, // invalid IP version
-				dataplane.NewMockNetlink,
 				10*time.Second,
-				dataplane,
-				t,
 				nil,
 				FelixRouteProtocol,
 				true,
 				100,
 				logutils.NewSummarizer("test"),
 				dataplane,
+				WithTimeShim(t),
+				WithConntrackShim(dataplane),
+				WithNetlinkHandleShim(dataplane.NewMockNetlink),
 			)
 		}).To(Panic())
 	})

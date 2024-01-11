@@ -139,8 +139,9 @@ type RouteTable struct {
 	lastGracePeriodCleanup  time.Time
 	featureDetector         environment.FeatureDetectorIface
 
-	conntrack conntrackIface
-	time      timeshim.Interface
+	conntrack        conntrackIface
+	time             timeshim.Interface
+	newNetlinkHandle func() (netlinkshim.Interface, error)
 }
 
 type RouteTableOpt func(table *RouteTable)
@@ -180,43 +181,28 @@ func WithConntrackCleanup(enabled bool) RouteTableOpt {
 	}
 }
 
+func WithTimeShim(shim timeshim.Interface) RouteTableOpt {
+	return func(table *RouteTable) {
+		table.time = shim
+	}
+}
+
+func WithConntrackShim(shim conntrackIface) RouteTableOpt {
+	return func(table *RouteTable) {
+		table.conntrack = shim
+	}
+}
+
+func WithNetlinkHandleShim(newNetlinkHandle func() (netlinkshim.Interface, error)) RouteTableOpt {
+	return func(table *RouteTable) {
+		table.newNetlinkHandle = newNetlinkHandle
+	}
+}
+
 func New(
 	interfaceRegexes []string,
 	ipVersion uint8,
 	netlinkTimeout time.Duration,
-	deviceRouteSourceAddress net.IP,
-	deviceRouteProtocol netlink.RouteProtocol,
-	removeExternalRoutes bool,
-	tableIndex int,
-	opReporter logutils.OpRecorder,
-	featureDetector environment.FeatureDetectorIface,
-	opts ...RouteTableOpt,
-) *RouteTable {
-	return NewWithShims(
-		interfaceRegexes,
-		ipVersion,
-		netlinkshim.NewRealNetlink,
-		netlinkTimeout,
-		conntrack.New(),
-		timeshim.RealTime(),
-		deviceRouteSourceAddress,
-		deviceRouteProtocol,
-		removeExternalRoutes,
-		tableIndex,
-		opReporter,
-		featureDetector,
-		opts...,
-	)
-}
-
-// NewWithShims is a test constructor, which allows netlink, arp and time to be replaced by shims.
-func NewWithShims(
-	interfaceRegexes []string,
-	ipVersion uint8,
-	newNetlinkHandle func() (netlinkshim.Interface, error),
-	netlinkTimeout time.Duration,
-	conntrack conntrackIface,
-	timeShim timeshim.Interface,
 	deviceRouteSourceAddress net.IP,
 	deviceRouteProtocol netlink.RouteProtocol,
 	removeExternalRoutes bool,
@@ -300,16 +286,23 @@ func NewWithShims(
 
 		opReporter:       opReporter,
 		livenessCallback: func() {},
-		nl:               handlemgr.NewHandleManager(featureDetector, handlemgr.WithNewHandleOverride(newNetlinkHandle), handlemgr.WithSocketTimeout(netlinkTimeout)),
 		featureDetector:  featureDetector,
 
-		conntrack: conntrack,
-		time:      timeShim,
+		// Shims; may get overridden by options below.
+		conntrack:        conntrack.New(),
+		time:             timeshim.RealTime(),
+		newNetlinkHandle: netlinkshim.NewRealNetlink,
 	}
 
 	for _, o := range opts {
 		o(rt)
 	}
+
+	rt.nl = handlemgr.NewHandleManager(
+		rt.featureDetector,
+		handlemgr.WithNewHandleOverride(rt.newNetlinkHandle),
+		handlemgr.WithSocketTimeout(netlinkTimeout),
+	)
 
 	return rt
 }

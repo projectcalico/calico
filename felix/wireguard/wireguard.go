@@ -229,13 +229,10 @@ func NewWithShims(
 	var rt routetable.RouteTableInterface
 	if !config.RouteSyncDisabled {
 		logCtx.Debug("RouteSyncDisabled is false.")
-		rt = routetable.NewWithShims(
+		rt = routetable.New(
 			[]string{"^" + interfaceName + "$", routetable.InterfaceNone},
 			ipVersion,
-			newRoutetableNetlink,
 			netlinkTimeout,
-			&noOpConnTrack{},
-			timeShim,
 			nil, // deviceRouteSourceAddress
 			deviceRouteProtocol,
 			true, // removeExternalRoutes
@@ -250,6 +247,8 @@ func NewWithShims(
 			// same destination, so we don't want to delete conntrack entries
 			// when moving a route to the wiregaurd interface.
 			routetable.WithConntrackCleanup(false),
+			routetable.WithTimeShim(timeShim),
+			routetable.WithNetlinkHandleShim(newRoutetableNetlink),
 		)
 	} else {
 		logCtx.Info("RouteSyncDisabled is true, using DummyTable.")
