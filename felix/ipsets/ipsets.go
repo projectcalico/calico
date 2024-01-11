@@ -440,7 +440,7 @@ func (s *IPSets) tryResync() (err error) {
 	return
 }
 
-func (s *IPSets) list(debug bool) ([]string, error) {
+func (s *IPSets) listAllIPSetNames() ([]string, error) {
 	// Start an 'ipset list -name' child process, which will emit ipset's name, one at each line:
 	//
 	// 	test-100
@@ -485,7 +485,7 @@ func (s *IPSets) get(ipSetName string, debug bool) ([]string, error) {
 	//	Members:
 	//	10.0.0.2
 	//	10.0.0.1
-	getIpSet := func(scanner *bufio.Scanner) ([]string, error) {
+	getIPSet := func(scanner *bufio.Scanner) ([]string, error) {
 		var lines []string
 		for scanner.Scan() {
 			lines = append(lines, scanner.Text())
@@ -557,7 +557,7 @@ func (s *IPSets) parse(ipSetName string, debug bool) error {
 					if p == "maxelem" {
 						if idx+1 >= len(parts) {
 							return nil, fmt.Errorf(
-								"Failed to parse ipset list Header line, nothing after 'maxelem'. line: '%v'", line)
+								"failed to parse ipset list Header line, nothing after 'maxelem'. line: '%v'", line)
 						}
 						maxElem, err := strconv.Atoi(parts[idx+1])
 						if err != nil {
@@ -660,7 +660,7 @@ func (s *IPSets) parse(ipSetName string, debug bool) error {
 	return nil
 }
 
-func (s *IPSets) runIpSetList(arg string, debug bool, parsingFunc func(*bufio.Scanner) ([]string, error)) ([]string, error) {
+func (s *IPSets) runIPSetList(arg string, debug bool, parsingFunc func(*bufio.Scanner) ([]string, error)) ([]string, error) {
 	cmd := s.newCmd("ipset", "list", arg)
 	cmdStr := fmt.Sprintf("ipset list %v", arg)
 	// Grab stdout as a pipe so we can stream through the (potentially very large) output.
