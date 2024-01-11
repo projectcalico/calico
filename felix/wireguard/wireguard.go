@@ -245,6 +245,11 @@ func NewWithShims(
 			// Note: deliberately not including:
 			// - Static neighbor entries: wireguard devices are L3.
 			// - Grace period: wireguard routes should be cleaned up immediately.
+
+			// Wireguard works as an alternative higher-priority route to the
+			// same destination, so we don't want to delete conntrack entries
+			// when moving a route to the wiregaurd interface.
+			routetable.WithConntrackCleanup(false),
 		)
 	} else {
 		logCtx.Info("RouteSyncDisabled is true, using DummyTable.")

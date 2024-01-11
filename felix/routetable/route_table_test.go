@@ -623,9 +623,7 @@ var _ = Describe("RouteTable", func() {
 			})
 
 			It("should panic after all its retries are exhausted", func() {
-				for i := 0; i < 3; i++ {
-					Expect(rt.Apply()).To(Equal(ConnectFailed))
-				}
+				Expect(rt.Apply()).To(Equal(ConnectFailed))
 				Expect(func() { _ = rt.Apply() }).To(Panic())
 			})
 		})
