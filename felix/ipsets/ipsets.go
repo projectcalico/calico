@@ -397,7 +397,7 @@ func (s *IPSets) tryResync() (err error) {
 	// scan.
 	s.setNameToProgrammedMetadata.Dataplane().DeleteAll()
 
-	ipSets, err := s.ListAllIPSetNames()
+	ipSets, err := s.ListCalicoIPSets()
 	if err != nil {
 		s.logCxt.WithError(err).Error("Failed to get the list of ipsets")
 		return
@@ -410,14 +410,7 @@ func (s *IPSets) tryResync() (err error) {
 		if debug {
 			s.logCxt.Debugf("Parsing IP set %v.", name)
 		}
-		// Look up to see if this is one of our IP sets.
-		if !s.IPVersionConfig.OwnsIPSet(name) {
-			if debug {
-				s.logCxt.WithField("name", name).Debug("Skip non-Calico/wrong version IP set.")
-			}
-			continue
-		}
-		err = s.parse(name)
+		err = s.resyncIPSet(name)
 		if err != nil {
 			s.logCxt.WithError(err).Errorf("Failed to parse ipset %v", name)
 			return
@@ -446,29 +439,36 @@ func (s *IPSets) tryResync() (err error) {
 	return
 }
 
-func (s *IPSets) ListAllIPSetNames() ([]string, error) {
+func (s *IPSets) ListCalicoIPSets() ([]string, error) {
 	// Start an 'ipset list -name' child process, which will emit ipset's name, one at each line:
 	//
 	// 	test-100
 	//	test-1
 	//  ...
-	getNames := func(scanner *bufio.Scanner) ([]string, error) {
-		var ipSets []string
-		for scanner.Scan() {
-			ipSets = append(ipSets, scanner.Text())
-		}
-		return ipSets, nil
-	}
-
+	var ipSets []string
 	// Run ipset with -name to get the name of all ipsets
-	ipSets, err := s.runIPSetList("-name", getNames)
+	err := s.runIPSetList("-name", func(scanner *bufio.Scanner) error {
+		debug := log.GetLevel() >= log.DebugLevel
+		for scanner.Scan() {
+			name := scanner.Text()
+			// Look up to see if this is one of our IP sets.
+			if !s.IPVersionConfig.OwnsIPSet(name) {
+				if debug {
+					s.logCxt.WithField("name", name).Debug("Skip non-Calico/wrong version IP set.")
+				}
+				continue
+			}
+			ipSets = append(ipSets, name)
+		}
+		return scanner.Err()
+	})
 	if err != nil {
 		return nil, err
 	}
 	return ipSets, nil
 }
 
-func (s *IPSets) parse(ipSetName string) error {
+func (s *IPSets) resyncIPSet(ipSetName string) error {
 	// If ipSetName == "", it will run 'ipset list' which will return the list and details of all ipsets.
 	// We should prevent this to not hit ipset protocol mismatch from non-calico ipsets.
 	if ipSetName == "" {
@@ -488,7 +488,7 @@ func (s *IPSets) parse(ipSetName string) error {
 	//
 	// As we stream through the data, we extract the name of the IP set and its members. We
 	// use the IP set's metadata to convert each member to its canonical form for comparison.
-	parseIpSet := func(scanner *bufio.Scanner) ([]string, error) {
+	err := s.runIPSetList(ipSetName, func(scanner *bufio.Scanner) error {
 		debug := log.GetLevel() >= log.DebugLevel
 		ipSetName := ""
 		var ipSetType IPSetType
@@ -519,12 +519,12 @@ func (s *IPSets) parse(ipSetName string) error {
 				for idx, p := range parts {
 					if p == "maxelem" {
 						if idx+1 >= len(parts) {
-							return nil, fmt.Errorf(
+							return fmt.Errorf(
 								"failed to parse ipset list Header line, nothing after 'maxelem'. line: '%v'", line)
 						}
 						maxElem, err := strconv.Atoi(parts[idx+1])
 						if err != nil {
-							return nil, fmt.Errorf(
+							return fmt.Errorf(
 								"Failed to parse ipset list Header line. line: '%v', err: %w", line, err)
 						}
 						meta.MaxSize = maxElem
@@ -532,13 +532,13 @@ func (s *IPSets) parse(ipSetName string) error {
 					}
 					if p == "range" {
 						if idx+1 >= len(parts) {
-							return nil, fmt.Errorf(
+							return fmt.Errorf(
 								"Failed to parse ipset list Header line, nothing after 'range'. line: '%v'", line)
 						}
 						// For bitmaps, we see "range 123-456"
 						rMin, rMAx, err := ParseRange(parts[idx+1])
 						if err != nil {
-							return nil, fmt.Errorf(
+							return fmt.Errorf(
 								"Failed to parse ipset list Header line. line: '%v', err: %w", line, err)
 						}
 						meta.RangeMin = rMin
@@ -557,7 +557,7 @@ func (s *IPSets) parse(ipSetName string) error {
 					if debug {
 						s.logCxt.WithField("name", ipSetName).Debug("Skip parsing members of IP set.")
 					}
-					return nil, nil
+					return nil
 				}
 
 				if !ipSetType.IsValid() {
@@ -598,7 +598,7 @@ func (s *IPSets) parse(ipSetName string) error {
 					return scanner.Err()
 				})
 				if err != nil {
-					return nil, fmt.Errorf("Failed to read members from 'ipset list'. err: %w", err)
+					return fmt.Errorf("Failed to read members from 'ipset list'. err: %w", err)
 				}
 
 				if numMissing := memberTracker.PendingUpdates().Len(); numMissing > 0 {
@@ -613,24 +613,22 @@ func (s *IPSets) parse(ipSetName string) error {
 				s.updateDirtiness(ipSetName)
 			}
 		}
-		return nil, nil
-	}
-
-	_, err := s.runIPSetList(ipSetName, parseIpSet)
+		return scanner.Err()
+	})
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (s *IPSets) runIPSetList(arg string, parsingFunc func(*bufio.Scanner) ([]string, error)) ([]string, error) {
+func (s *IPSets) runIPSetList(arg string, parsingFunc func(*bufio.Scanner) error) error {
 	cmd := s.newCmd("ipset", "list", arg)
 	cmdStr := fmt.Sprintf("ipset list %v", arg)
 	// Grab stdout as a pipe so we can stream through the (potentially very large) output.
 	out, err := cmd.StdoutPipe()
 	if err != nil {
 		s.logCxt.WithError(err).Errorf("Failed to get pipe for '%v'.", cmdStr)
-		return nil, err
+		return err
 	}
 	// Capture error output into a buffer.
 	var stderr bytes.Buffer
@@ -639,34 +637,34 @@ func (s *IPSets) runIPSetList(arg string, parsingFunc func(*bufio.Scanner) ([]st
 	err = cmd.Start()
 	if err != nil {
 		s.logCxt.WithError(err).Errorf("Failed to start '%v'.", cmdStr)
-		return nil, err
+		return err
 	}
 	summaryExecStart.Observe(float64(time.Since(execStartTime).Nanoseconds()) / 1000.0)
 
 	// Use a scanner to chunk the input into lines.
 	scanner := bufio.NewScanner(out)
-	res, parsingErr := parsingFunc(scanner)
+	parsingErr := parsingFunc(scanner)
 	closeErr := out.Close()
 	err = cmd.Wait()
 	logCxt := s.logCxt.WithField("stderr", stderr.String())
 	if scanner.Err() != nil {
 		err = scanner.Err()
 		logCxt.WithError(err).Errorf("Failed to read '%v' output.", cmdStr)
-		return nil, err
+		return err
 	}
 	if err != nil {
 		logCxt.WithError(err).Errorf("Bad return code from '%v'.", cmdStr)
-		return nil, err
+		return err
 	}
 	if closeErr != nil {
 		logCxt.WithError(closeErr).Errorf("Failed to close stdout from '%v'.", cmdStr)
-		return nil, closeErr
+		return closeErr
 	}
 	if parsingErr != nil {
 		logCxt.WithError(parsingErr).Errorf("Failed to process '%v' output.", cmdStr)
-		return nil, parsingErr
+		return parsingErr
 	}
-	return res, nil
+	return nil
 }
 
 func ParseRange(s string) (min int, max int, err error) {
@@ -1008,68 +1006,38 @@ func (s *IPSets) deleteIPSet(setName string) error {
 }
 
 func (s *IPSets) dumpIPSetsToLog() {
-	ipSets, err := s.ListAllIPSetNames()
+	ipSets, err := s.ListCalicoIPSets()
 	if err != nil {
 		s.logCxt.WithError(err).Error("Failed to get the list of IP sets.")
 		return
 	}
-	output := []string{
-		fmt.Sprintf("Lists of IP sets: %v", strings.Join(ipSets, " ")),
-		"Dump of Calico IP sets:",
-	}
+	s.logCxt.Infof("Current state of IP sets: %v", strings.Join(ipSets, " "))
 
-	debug := log.GetLevel() >= log.DebugLevel
 	for _, name := range ipSets {
-		if debug {
-			s.logCxt.Debugf("Dumping IP set %v.", name)
-		}
-		// Look up to see if this is one of our IP sets.
-		if !s.IPVersionConfig.OwnsIPSet(name) {
-			if debug {
-				s.logCxt.WithField("name", name).Debug("Skip non-Calico/wrong version IP set.")
+		s.logCxt.Infof("Dumping IP set %v.", name)
+
+		// Start an 'ipset list [name]' child process, which will emit output of the following form:
+		//
+		// 	Name: test-100
+		//	Type: hash:ip
+		//	Revision: 4
+		//	Header: family inet hashsize 1024 maxelem 65536
+		//	Size in memory: 224
+		//	References: 0
+		//	Members:
+		//	10.0.0.2
+		//	10.0.0.1
+		err := s.runIPSetList(name, func(scanner *bufio.Scanner) error {
+			for scanner.Scan() {
+				s.logCxt.Infof("%v", scanner.Text())
 			}
-			continue
-		}
-		lines, err := s.dumpIPSetFoDiags(name)
+			return scanner.Err()
+		})
 		if err != nil {
 			s.logCxt.WithError(err).Errorf("Failed to read ipset %v", name)
-			return
+			continue
 		}
-		output = append(output, lines...)
 	}
-	s.logCxt.Infof("Current state of IP sets:\n%v", strings.Join(output, "\n"))
-}
-
-func (s *IPSets) dumpIPSetFoDiags(ipSetName string) ([]string, error) {
-	// If ipSetName == "", it will run 'ipset list' which will return the list and details of all ipsets.
-	// We should prevent this to not hit ipset protocol mismatch from non-calico ipsets.
-	if ipSetName == "" {
-		return nil, fmt.Errorf("no ipset name specified")
-	}
-	// Start an 'ipset list [name]' child process, which will emit output of the following form:
-	//
-	// 	Name: test-100
-	//	Type: hash:ip
-	//	Revision: 4
-	//	Header: family inet hashsize 1024 maxelem 65536
-	//	Size in memory: 224
-	//	References: 0
-	//	Members:
-	//	10.0.0.2
-	//	10.0.0.1
-	getIPSet := func(scanner *bufio.Scanner) ([]string, error) {
-		var lines []string
-		for scanner.Scan() {
-			lines = append(lines, scanner.Text())
-		}
-		return lines, nil
-	}
-
-	lines, err := s.runIPSetList(ipSetName, getIPSet)
-	if err != nil {
-		return nil, err
-	}
-	return lines, nil
 }
 
 func firstNonNilErr(errs ...error) error {
