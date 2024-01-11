@@ -36,31 +36,31 @@ Project Calico is an open-source project with an active development and user com
 
 ## 🤝 Join the Calico Community
 
-[Calico Big Cats][big-cats]: Become an ambassador and share your journey</br>
-[Community Meetings][community-meetings]: Engage and contribute</br>
-[Contribute on GitHub][first-issues]: Start with 'good first issues'</br>
-[Connect on Slack][slack]: Join the conversation with fellow contributors and our developers</br>
+- [Calico Big Cats][big-cats]: Become an ambassador and share your journey</br>
+- [Community Meetings][community-meetings]: Engage and contribute</br>
+- [Contribute on GitHub][first-issues]: Start with 'good first issues'</br>
+- [Connect on Slack][slack]: Join the conversation with fellow contributors and our developers</br>
 
 ## 💡 Contributing to Project Calico
 
-[Get Started with Project Calico][get-started]</br>
-[Repositories][repos]</br>
-[Contribute to our docs][docs-contrib]</br>
-Documentation: [Dive into our training and resources][resources]</br>
-[Make Calico better][issues]</br>
+- [Get Started with Project Calico][get-started]</br>
+- [Repositories][repos]</br>
+- [Contribute to our docs][docs-contrib]</br>
+- Documentation: [Dive into our training and resources][resources]</br>
+- [Make Calico better][issues]</br>
 
 ## 🛠️ Projects & API We Maintain
 
-[Calico Golang API][api]</br>
-[Calico operator][operator]</br>
-[VPP dataplane][vpp]</br>
+- [Calico Golang API][api]</br>
+- [Calico operator][operator]</br>
+- [VPP dataplane][vpp]</br>
 
 ## 📢 Stay Connected
 
-Subscribe: [Join our newsletter][news]</br>
-[YouTube channel for updates & tutorials][youtube]</br>
-[Technical Blog][blog]</br>
-[Careers][join]: Passionate about open source? Join our team.</br>
+- Subscribe: [Join our newsletter][news]</br>
+- [YouTube channel for updates & tutorials][youtube]</br>
+- [Technical Blog][blog]</br>
+- [Careers][join]: Passionate about open source? Join our team.</br>
 
 [big-cats]: https://www.tigera.io/project-calico/calico-big-cats-ambassador-program/#meet-calico-big-cats
 [community-meetings]: https://calendar.google.com/calendar/u/0/embed?src=tigera.io_uunmavdev5ndovf0hc4frtl0i0@group.calendar.google.com
