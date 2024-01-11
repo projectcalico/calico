@@ -30,34 +30,35 @@ Project Calico is an open-source project with an active development and user com
 **Vibrant Contributor Community**: Over 200 contributors from a wide array of global companies.</br>
 **Flexible networking**: An array of networking tools at your disposal, including BGP, VXLAN, service advertisement, and more.</br>
 
-<img src="https://www.tigera.io/app/uploads/2023/09/Ecosystem_2023_02.svg">
+<img src="https://www.tigera.io/app/uploads/2023/09/Ecosystem_2023_02.svg" width="415px" height="508px">
 
 ## 🤝 Join the Calico Community
-[Calico Big Cats][big-cats]: Become an ambassador and share your journey
-[Community Meetings][community-meetings]: Engage and contribute
-[Contribute on GitHub][first-issues]: Start with 'good first issues'
-[Connect on Slack][slack]: Join the conversation with fellow contributors and our developers
+
+[Calico Big Cats][big-cats]: Become an ambassador and share your journey</br>
+[Community Meetings][community-meetings]: Engage and contribute</br>
+[Contribute on GitHub][first-issues]: Start with 'good first issues'</br>
+[Connect on Slack][slack]: Join the conversation with fellow contributors and our developers</br>
 
 ## 💡 Contributing to Project Calico
 
-[Get Started with Project Calico][get-started]
-[Repositories][repos]
-[Contribute to our docs][docs-contrib]
-Documentation: [Dive into our training and resources][resources]
-[Make Calico better][issues]
+[Get Started with Project Calico][get-started]</br>
+[Repositories][repos]</br>
+[Contribute to our docs][docs-contrib]</br>
+Documentation: [Dive into our training and resources][resources]</br>
+[Make Calico better][issues]</br>
 
 ## 🛠️ Projects & API We Maintain
 
-[Calico Golang API][api]
-[Calico operator][operator]
-[VPP dataplane][vpp]
+[Calico Golang API][api]</br>
+[Calico operator][operator]</br>
+[VPP dataplane][vpp]</br>
 
 ## 📢 Stay Connected
 
-Subscribe: [Join our newsletter][news]
-[YouTube channel for updates & tutorials][youtube]
-[Technical Blog][blog]
-[Careers][join]: Passionate about open source? Join our team.
+Subscribe: [Join our newsletter][news]</br>
+[YouTube channel for updates & tutorials][youtube]</br>
+[Technical Blog][blog]</br>
+[Careers][join]: Passionate about open source? Join our team.</br>
 
 [big-cats]: https://www.tigera.io/project-calico/calico-big-cats-ambassador-program/#meet-calico-big-cats
 [community-meetings]: https://calendar.google.com/calendar/u/0/embed?src=tigera.io_uunmavdev5ndovf0hc4frtl0i0@group.calendar.google.com
