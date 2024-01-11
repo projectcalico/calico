@@ -30,7 +30,9 @@ Project Calico is an open-source project with an active development and user com
 **Vibrant Contributor Community**: Over 200 contributors from a wide array of global companies.</br>
 **Flexible networking**: An array of networking tools at your disposal, including BGP, VXLAN, service advertisement, and more.</br>
 
-<img src="https://www.tigera.io/app/uploads/2023/09/Ecosystem_2023_02.svg" width="415px" height="508px">
+<div align=center>
+<img src="https://www.tigera.io/app/uploads/2023/09/Ecosystem_2023_02.svg">
+</div>
 
 ## 🤝 Join the Calico Community
 
