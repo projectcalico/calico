@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2023 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -952,7 +952,7 @@ var _ = Describe("IP sets dataplane", func() {
 		It("shouldn't do any work on resync", func() {
 			dataplane.CmdNames = nil
 			resyncAndApply()
-			Expect(dataplane.CmdNames).To(ConsistOf("list"))
+			Expect(dataplane.CmdNames).To(ConsistOf("list", "list"))
 		})
 	})
 
