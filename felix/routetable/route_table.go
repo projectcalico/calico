@@ -1320,6 +1320,10 @@ type kernelRouteKey struct {
 	Priority RouteMetric
 }
 
+func (k kernelRouteKey) String() string {
+	return fmt.Sprintf("%s(tos=%x metric=%d)", k.CIDR.String(), k.TOS, k.Priority)
+}
+
 // kernelRoute is our low-level representation of the parts of a route that
 // we care to program. It contains fields that we can easily read back from the
 // kernel for comparison. In particular, we track the interface index instead

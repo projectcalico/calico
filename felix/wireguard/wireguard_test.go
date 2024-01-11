@@ -2263,7 +2263,7 @@ func describeEnableTests(enableV4, enableV6 bool) {
 								err = wg.Apply()
 								Expect(err).NotTo(HaveOccurred())
 								Expect(rtDataplane.DeletedRouteKeys).To(HaveLen(0))
-								Expect(rtDataplane.UpdatedRouteKeys).To(HaveLen(1))
+								Expect(rtDataplane.AddedRouteKeys).To(HaveLen(1))
 								Expect(rtDataplane.RouteKeyToRoute[routekey_3]).To(Equal(netlink.Route{
 									Family:    unix.AF_INET,
 									LinkIndex: link.LinkAttrs.Index,
@@ -2303,7 +2303,6 @@ func describeEnableTests(enableV4, enableV6 bool) {
 								err = wgV6.Apply()
 								Expect(err).NotTo(HaveOccurred())
 								Expect(rtDataplaneV6.DeletedRouteKeys).To(HaveLen(1))
-								Expect(rtDataplaneV6.UpdatedRouteKeys).To(HaveLen(0))
 								Expect(rtDataplaneV6.RouteKeyToRoute).NotTo(HaveKey(routekeyV6_3))
 
 								By("Applying the same route to be remote")
@@ -2313,7 +2312,7 @@ func describeEnableTests(enableV4, enableV6 bool) {
 								err = wgV6.Apply()
 								Expect(err).NotTo(HaveOccurred())
 								Expect(rtDataplaneV6.DeletedRouteKeys).To(HaveLen(0))
-								Expect(rtDataplaneV6.UpdatedRouteKeys).To(HaveLen(1))
+								Expect(rtDataplaneV6.AddedRouteKeys).To(HaveLen(1))
 								Expect(rtDataplaneV6.RouteKeyToRoute[routekeyV6_3]).To(Equal(netlink.Route{
 									Family:    unix.AF_INET6,
 									LinkIndex: linkV6.LinkAttrs.Index,
