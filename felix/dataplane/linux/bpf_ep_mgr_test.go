@@ -105,7 +105,7 @@ func (m *mockDataplane) attachProgram(ap attachPoint) (qDiscInfo, error) {
 	return qdisc, nil
 }
 
-func (m *mockDataplane) ensureProgramLoaded(ap attachPoint, att bool) error {
+func (m *mockDataplane) ensureProgramLoaded(ap attachPoint) error {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
@@ -378,7 +378,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		)
 		Expect(err).NotTo(HaveOccurred())
 		bpfEpMgr.Features = environment.NewFeatureDetector(nil).GetFeatures()
-		bpfEpMgr.hostIP = net.ParseIP("1.2.3.4")
+		bpfEpMgr.v4.hostIP = net.ParseIP("1.2.3.4")
 	}
 
 	genIfaceUpdate := func(name string, state ifacemonitor.State, index int) func() {

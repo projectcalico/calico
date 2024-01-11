@@ -140,7 +140,7 @@ type fileDescriptor interface {
 
 type bpfDataplane interface {
 	ensureStarted()
-	ensureProgramLoaded(ap attachPoint, att bool) error
+	ensureProgramLoaded(ap attachPoint) error
 	ensureNoProgram(ap attachPoint) error
 	ensureQdisc(iface string) (bool, error)
 	ensureBPFDevices() error
@@ -250,10 +250,10 @@ type bpfEndpointManager struct {
 
 	dirtyIfaceNames set.Set[string]
 
-	logFilters              map[string]string
-	bpfLogLevel             string
-	hostname                string
-	hostIP                  net.IP
+	logFilters  map[string]string
+	bpfLogLevel string
+	hostname    string
+	//hostIP                  net.IP
 	fibLookupEnabled        bool
 	dataIfaceRegex          *regexp.Regexp
 	l3IfaceRegex            *regexp.Regexp
@@ -305,8 +305,8 @@ type bpfEndpointManager struct {
 	// UT-able BPF dataplane interface.
 	dp bpfDataplane
 
-	ifaceToIpMap map[string]net.IP
-	opReporter   logutils.OpRecorder
+	//ifaceToIpMap map[string]net.IP
+	opReporter logutils.OpRecorder
 
 	// XDP
 	xdpModes []bpf.XDPMode
@@ -344,6 +344,58 @@ type bpfEndpointManager struct {
 	natOutIdx int
 
 	arpMap maps.Map
+
+	v4 *dataplane
+	v6 *dataplane
+}
+
+type dataplane struct {
+	ipFamily                int
+	dp                      bpfDataplane
+	policies                map[proto.PolicyID]*proto.Policy
+	profiles                map[proto.ProfileID]*proto.Profile
+	logFilters              map[string]string
+	bpfLogLevel             string
+	hostIP                  net.IP
+	ipSetIDAlloc            *idalloc.IDAllocator
+	epToHostAction          string
+	vxlanMTU                int
+	vxlanPort               uint16
+	wgPort                  uint16
+	dsrEnabled              bool
+	dsrOptoutCidrs          bool
+	bpfExtToServiceConnmark int
+	psnatPorts              numorstring.Port
+	bpfmaps                 *bpfmap.Maps
+	jumpMapAlloc            *jumpMapAlloc
+	xdpJumpMapAlloc         *jumpMapAlloc
+	policyTcAllowFD         bpf.ProgFD
+	policyTcDenyFD          bpf.ProgFD
+
+	loadPolicyProgramFn func(
+		progName string,
+		ipFamily proto.IPVersion,
+		rules polprog.Rules,
+		staticProgsMap maps.Map,
+		polProgsMap maps.Map,
+		opts ...polprog.Option,
+	) ([]fileDescriptor, []asm.Insns, error)
+	updatePolicyProgramFn func(rules polprog.Rules, polDir string, ap attachPoint) error
+	ifaceToIpMap          map[string]net.IP
+	// XDP
+	xdpModes []bpf.XDPMode
+
+	// IP of the tunnel / overlay device
+	tunnelIP net.IP
+
+	// RPF mode
+	rpfEnforceOption string
+
+	// Service routes
+	hostNetworkedNATMode hostNetworkedNATMode
+
+	wildcardExists        bool
+	bpfPolicyDebugEnabled bool
 }
 
 type serviceKey struct {
@@ -403,6 +455,9 @@ func newBPFEndpointManager(
 		livenessCallback = func() {}
 	}
 
+	jumpMapAlloc := newJumpMapAlloc(jump.TCMaxEntryPoints)
+	xdpJumpMapAlloc := newJumpMapAlloc(jump.XDPMaxEntryPoints)
+
 	m := &bpfEndpointManager{
 		initUnknownIfaces:       set.New[string](),
 		dp:                      dp,
@@ -440,14 +495,14 @@ func newBPFEndpointManager(
 		// Note: the allocators only allocate a fraction of the map, the
 		// rest is reserved for sub-programs generated if a single program
 		// would be too large.
-		jumpMapAlloc:        newJumpMapAlloc(jump.TCMaxEntryPoints),
-		xdpJumpMapAlloc:     newJumpMapAlloc(jump.XDPMaxEntryPoints),
+		jumpMapAlloc:        jumpMapAlloc,
+		xdpJumpMapAlloc:     xdpJumpMapAlloc,
 		ruleRenderer:        iptablesRuleRenderer,
 		iptablesFilterTable: iptablesFilterTable,
 		onStillAlive:        livenessCallback,
 		hostIfaceToEpMap:    map[string]proto.HostEndpoint{},
-		ifaceToIpMap:        map[string]net.IP{},
-		opReporter:          opReporter,
+		//ifaceToIpMap:        map[string]net.IP{},
+		opReporter: opReporter,
 		// ipv6Enabled Should be set to config.Ipv6Enabled, but for now it is better
 		// to set it to BPFIpv6Enabled which is a dedicated flag for development of IPv6.
 		// TODO: set ipv6Enabled to config.Ipv6Enabled when IPv6 support is complete
@@ -485,6 +540,14 @@ func newBPFEndpointManager(
 		m.hostNetworkedNATMode = hostNetworkedNATUDPOnly
 	} else if config.BPFHostNetworkedNAT == string(apiv3.BPFHostNetworkedNATEnabled) {
 		m.hostNetworkedNATMode = hostNetworkedNATEnabled
+	}
+
+	m.v4 = newDataplane(4, config, bpfmaps, ipSetIDAlloc,
+		jumpMapAlloc, xdpJumpMapAlloc, m.hostNetworkedNATMode)
+
+	if m.ipv6Enabled {
+		m.v6 = newDataplane(6, config, bpfmaps, ipSetIDAlloc,
+			jumpMapAlloc, xdpJumpMapAlloc, m.hostNetworkedNATMode)
 	}
 
 	if m.hostNetworkedNATMode != hostNetworkedNATDisabled {
@@ -576,6 +639,64 @@ func newBPFEndpointManager(
 	return m, nil
 }
 
+func newDataplane(
+	ipFamily int,
+	//dp bpfDataplane,
+	config *Config,
+	bpfmaps *bpfmap.Maps,
+	ipSetIDAlloc *idalloc.IDAllocator,
+	jumpMapAlloc *jumpMapAlloc,
+	xdpJumpMapAlloc *jumpMapAlloc,
+	hostNetworkedNATMode hostNetworkedNATMode,
+) *dataplane {
+	d := &dataplane{
+		ipFamily: ipFamily,
+		//dp: dp,
+		policies:                map[proto.PolicyID]*proto.Policy{},
+		profiles:                map[proto.ProfileID]*proto.Profile{},
+		bpfLogLevel:             config.BPFLogLevel,
+		logFilters:              config.BPFLogFilters,
+		ipSetIDAlloc:            ipSetIDAlloc,
+		epToHostAction:          config.RulesConfig.EndpointToHostAction,
+		vxlanMTU:                config.VXLANMTU,
+		vxlanPort:               uint16(config.VXLANPort),
+		wgPort:                  uint16(config.Wireguard.ListeningPort),
+		dsrEnabled:              config.BPFNodePortDSREnabled,
+		dsrOptoutCidrs:          len(config.BPFDSROptoutCIDRs) > 0,
+		bpfExtToServiceConnmark: config.BPFExtToServiceConnmark,
+		psnatPorts:              config.BPFPSNATPorts,
+		bpfmaps:                 bpfmaps,
+		jumpMapAlloc:            jumpMapAlloc,
+		xdpJumpMapAlloc:         xdpJumpMapAlloc,
+		ifaceToIpMap:            map[string]net.IP{},
+		rpfEnforceOption:        config.BPFEnforceRPF,
+		bpfPolicyDebugEnabled:   config.BPFPolicyDebugEnabled,
+		hostNetworkedNATMode:    hostNetworkedNATMode,
+	}
+
+	/*
+	   if dp == nil {
+	           d.dp = *d
+	   }*/
+	// Calculate allowed XDP attachment modes.  Note, in BPF mode untracked ingress policy is
+	// _only_ implemented by XDP, so we _should_ fall back to XDPGeneric if necessary in order
+	// to preserve the semantics of untracked ingress policy.  (Therefore we are also saying
+	// here that the GenericXDPEnabled config setting, like XDPEnabled, is only relevant when
+	// BPFEnabled is false.)
+	d.xdpModes = []bpf.XDPMode{
+		bpf.XDPOffload,
+		bpf.XDPDriver,
+		bpf.XDPGeneric,
+	}
+	//d.updatePolicyProgramFn = d.dp.updatePolicyProgram
+
+	if x, ok := d.dp.(hasLoadPolicyProgram); ok {
+		d.loadPolicyProgramFn = x.loadPolicyProgram
+		//d.updatePolicyProgramFn = d.updatePolicyProgram
+	}
+	return d
+}
+
 var _ hasLoadPolicyProgram = (*bpfEndpointManager)(nil)
 
 func (m *bpfEndpointManager) repinJumpMaps() error {
@@ -658,9 +779,13 @@ func (m *bpfEndpointManager) withIface(ifaceName string, fn func(iface *bpfInter
 	m.dirtyIfaceNames.Add(ifaceName)
 }
 
-func (m *bpfEndpointManager) updateHostIP(ip net.IP) {
+func (m *bpfEndpointManager) updateHostIP(ip net.IP, ipFamily int) {
 	if ip != nil {
-		m.hostIP = ip
+		if ipFamily == 4 {
+			m.v4.hostIP = ip
+		} else {
+			m.v6.hostIP = ip
+		}
 		// Should be safe without the lock since there shouldn't be any active background threads
 		// but taking it now makes us robust to refactoring.
 		m.ifacesLock.Lock()
@@ -701,25 +826,23 @@ func (m *bpfEndpointManager) OnUpdate(msg interface{}) {
 		m.onProfileRemove(msg)
 
 	case *proto.HostMetadataUpdate:
-		if !m.ipv6Enabled && msg.Hostname == m.hostname {
-			log.WithField("HostMetadataUpdate", msg).Infof("Host IP changed: %s", msg.Ipv4Addr)
-			m.updateHostIP(net.ParseIP(msg.Ipv4Addr))
-		}
+		log.WithField("HostMetadataUpdate", msg).Infof("Host IP changed: %s", msg.Ipv4Addr)
+		m.updateHostIP(net.ParseIP(msg.Ipv4Addr), 4)
 	case *proto.HostMetadataV6Update:
 		if m.ipv6Enabled && msg.Hostname == m.hostname {
 			log.WithField("HostMetadataV6Update", msg).Infof("Host IPv6 changed: %s", msg.Ipv6Addr)
-			m.updateHostIP(net.ParseIP(msg.Ipv6Addr))
+			m.updateHostIP(net.ParseIP(msg.Ipv6Addr), 6)
 		}
 	case *proto.HostMetadataV4V6Update:
 		if msg.Hostname != m.hostname {
 			break
 		}
+		log.WithField("HostMetadataV4V6Update", msg).Infof("Host IP changed: %s", msg.Ipv4Addr)
+		m.updateHostIP(net.ParseIP(msg.Ipv4Addr), 4)
+
 		if m.ipv6Enabled {
 			log.WithField("HostMetadataV4V6Update", msg).Infof("Host IPv6 changed: %s", msg.Ipv6Addr)
-			m.updateHostIP(net.ParseIP(msg.Ipv6Addr))
-		} else {
-			log.WithField("HostMetadataV4V6Update", msg).Infof("Host IP changed: %s", msg.Ipv4Addr)
-			m.updateHostIP(net.ParseIP(msg.Ipv4Addr))
+			m.updateHostIP(net.ParseIP(msg.Ipv6Addr), 6)
 		}
 	case *proto.ServiceUpdate:
 		m.onServiceUpdate(msg)
@@ -741,11 +864,12 @@ func (m *bpfEndpointManager) onRouteUpdate(update *proto.RouteUpdate) {
 			if ip.To4() != nil {
 				return // skip ipv4 in ipv6 mode
 			}
-		} else {
-			if ip.To4() == nil {
-				return // skip ipv6 in ipv4 mode
-			}
+			m.v6.tunnelIP = ip
 		}
+		if ip.To4() == nil {
+			return // skip ipv6 in ipv4 mode
+		}
+		m.v4.tunnelIP = ip
 		m.tunnelIP = ip
 		log.WithField("ip", update.Dst).Info("host tunnel")
 		m.dirtyIfaceNames.Add(bpfOutDev)
@@ -753,22 +877,32 @@ func (m *bpfEndpointManager) onRouteUpdate(update *proto.RouteUpdate) {
 }
 
 func (m *bpfEndpointManager) onInterfaceAddrsUpdate(update *ifaceAddrsUpdate) {
-	var ipAddrs []net.IP
 	m.ifacesLock.Lock()
 	defer m.ifacesLock.Unlock()
 
+	var v6AddrsUpdate bool
+	v4AddrsUpdate := m.v4.updateIfaceIP(update)
+	if m.ipv6Enabled {
+		v6AddrsUpdate = m.v6.updateIfaceIP(update)
+	}
+	if v4AddrsUpdate || v6AddrsUpdate {
+		m.dirtyIfaceNames.Add(update.Name)
+	}
+}
+
+func (d *dataplane) updateIfaceIP(update *ifaceAddrsUpdate) bool {
+	var ipAddrs []net.IP
+	isDirty := false
 	if update.Addrs != nil && update.Addrs.Len() > 0 {
 		log.Debugf("Interface %+v received address update %+v", update.Name, update.Addrs)
 		update.Addrs.Iter(func(item string) error {
 			ip := net.ParseIP(item)
-			if m.ipv6Enabled {
+			if d.ipFamily == 6 {
 				if ip.To4() == nil && !ip.IsLinkLocalUnicast() {
 					ipAddrs = append(ipAddrs, ip)
 				}
-			} else {
-				if ip.To4() != nil {
-					ipAddrs = append(ipAddrs, ip)
-				}
+			} else if ip.To4() == nil {
+				ipAddrs = append(ipAddrs, ip)
 			}
 			return nil
 		})
@@ -776,20 +910,20 @@ func (m *bpfEndpointManager) onInterfaceAddrsUpdate(update *ifaceAddrsUpdate) {
 			return bytes.Compare(ipAddrs[i], ipAddrs[j]) < 0
 		})
 		if len(ipAddrs) > 0 {
-			ip, ok := m.ifaceToIpMap[update.Name]
+			ip, ok := d.ifaceToIpMap[update.Name]
 			if !ok || !ip.Equal(ipAddrs[0]) {
-				m.ifaceToIpMap[update.Name] = ipAddrs[0]
-				m.dirtyIfaceNames.Add(update.Name)
+				d.ifaceToIpMap[update.Name] = ipAddrs[0]
+				isDirty = true
 			}
-
 		}
 	} else {
-		_, ok := m.ifaceToIpMap[update.Name]
+		_, ok := d.ifaceToIpMap[update.Name]
 		if ok {
-			delete(m.ifaceToIpMap, update.Name)
-			m.dirtyIfaceNames.Add(update.Name)
+			delete(d.ifaceToIpMap, update.Name)
+			isDirty = true
 		}
 	}
+	return isDirty
 }
 
 func (m *bpfEndpointManager) updateIfaceStateMap(name string, iface *bpfInterface) {
@@ -1025,6 +1159,10 @@ func (m *bpfEndpointManager) onPolicyUpdate(msg *proto.ActivePolicyUpdate) {
 	polID := *msg.Id
 	log.WithField("id", polID).Debug("Policy update")
 	m.policies[polID] = msg.Policy
+	m.v4.policies[polID] = msg.Policy
+	if m.ipv6Enabled {
+		m.v6.policies[polID] = msg.Policy
+	}
 	m.markEndpointsDirty(m.policiesToWorkloads[polID], "policy")
 	if m.bpfPolicyDebugEnabled {
 		m.updatePolicyCache(polID.Name, "Policy", m.policies[polID].InboundRules, m.policies[polID].OutboundRules)
@@ -1038,6 +1176,10 @@ func (m *bpfEndpointManager) onPolicyRemove(msg *proto.ActivePolicyRemove) {
 	log.WithField("id", polID).Debug("Policy removed")
 	m.markEndpointsDirty(m.policiesToWorkloads[polID], "policy")
 	delete(m.policies, polID)
+	delete(m.v4.policies, polID)
+	if m.ipv6Enabled {
+		delete(m.v6.policies, polID)
+	}
 	delete(m.policiesToWorkloads, polID)
 	if m.bpfPolicyDebugEnabled {
 		m.dirtyRules.AddSet(m.polNameToMatchIDs[polID.Name])
@@ -1050,6 +1192,10 @@ func (m *bpfEndpointManager) onProfileUpdate(msg *proto.ActiveProfileUpdate) {
 	profID := *msg.Id
 	log.WithField("id", profID).Debug("Profile update")
 	m.profiles[profID] = msg.Profile
+	m.v4.profiles[profID] = msg.Profile
+	if m.ipv6Enabled {
+		m.v6.profiles[profID] = msg.Profile
+	}
 	m.markEndpointsDirty(m.profilesToWorkloads[profID], "profile")
 	if m.bpfPolicyDebugEnabled {
 		m.updatePolicyCache(profID.Name, "Profile", m.profiles[profID].InboundRules, m.profiles[profID].OutboundRules)
@@ -1063,6 +1209,10 @@ func (m *bpfEndpointManager) onProfileRemove(msg *proto.ActiveProfileRemove) {
 	log.WithField("id", profID).Debug("Profile removed")
 	m.markEndpointsDirty(m.profilesToWorkloads[profID], "profile")
 	delete(m.profiles, profID)
+	delete(m.v4.profiles, profID)
+	if m.ipv6Enabled {
+		delete(m.v6.profiles, profID)
+	}
 	delete(m.profilesToWorkloads, profID)
 	if m.bpfPolicyDebugEnabled {
 		m.dirtyRules.AddSet(m.polNameToMatchIDs[profID.Name])
@@ -1898,9 +2048,11 @@ func (m *bpfEndpointManager) attachProgram(ap attachPoint) (qDiscInfo, error) {
 	if err != nil {
 		return qdisc, err
 	}
-	qdisc.valid = true
-	qdisc.prio = res.(tc.AttachResult).Prio()
-	qdisc.handle = res.(tc.AttachResult).Handle()
+	if tcRes, ok := res.(*tc.AttachResult); ok {
+		qdisc.valid = true
+		qdisc.prio = tcRes.Prio()
+		qdisc.handle = tcRes.Handle()
+	}
 	return qdisc, nil
 }
 
@@ -1935,15 +2087,20 @@ func (m *bpfEndpointManager) wepTCAttachPoint(ap *tc.AttachPoint, policyIdx, fil
 
 	ap = m.configureTCAttachPoint(polDirection, ap, false)
 	ifaceName := ap.IfaceName()
-	ap.HostIP = m.hostIP
+
+	hostIP := m.v4.hostIP
+	if m.ipv6Enabled {
+		hostIP = m.v6.hostIP
+	}
+	ap.HostIP = hostIP
 	// * Since we don't pass packet length when doing fib lookup, MTU check is skipped.
 	// * Hence it is safe to set the tunnel mtu same as veth mtu
 	ap.TunnelMTU = uint16(m.vxlanMTU)
 	if m.ipv6Enabled {
-		ip, err := m.getInterfaceIP(ifaceName)
+		ip, err := m.v6.getInterfaceIP(ifaceName)
 		if err != nil {
 			log.Debugf("Error getting IP for interface %+v: %+v", ifaceName, err)
-			ap.IntfIP = m.hostIP
+			ap.IntfIP = hostIP
 		} else {
 			ap.IntfIP = *ip
 		}
@@ -1960,7 +2117,11 @@ func (m *bpfEndpointManager) wepTCAttachPoint(ap *tc.AttachPoint, policyIdx, fil
 func (m *bpfEndpointManager) wepApplyPolicyToDirection(readiness ifaceReadiness, ifaceName string, policyIdx,
 	filterIdx int, endpoint *proto.WorkloadEndpoint, polDirection PolDirection, ap *tc.AttachPoint) (*tc.AttachPoint, error) {
 
-	if m.hostIP == nil {
+	hostIP := m.v4.hostIP
+	if m.ipv6Enabled {
+		hostIP = m.v6.hostIP
+	}
+	if hostIP == nil {
 		// Do not bother and wait
 		return nil, fmt.Errorf("unknown host IP")
 	}
@@ -1984,7 +2145,7 @@ func (m *bpfEndpointManager) wepApplyPolicyToDirection(readiness ifaceReadiness,
 }
 
 func (m *bpfEndpointManager) loadWepPrograms(ap *tc.AttachPoint) error {
-	err := m.dp.ensureProgramLoaded(ap, false)
+	err := m.dp.ensureProgramLoaded(ap)
 	if err != nil {
 		return err
 	}
@@ -2066,19 +2227,31 @@ func (m *bpfEndpointManager) attachDataIfaceProgram(
 	ap *tc.AttachPoint,
 ) (*tc.AttachPoint, error) {
 
-	if m.hostIP == nil {
+	hostIP := m.v4.hostIP
+	if m.ipv6Enabled {
+		hostIP = m.v6.hostIP
+	}
+	if hostIP == nil {
 		// Do not bother and wait
 		return nil, fmt.Errorf("unknown host IP")
 	}
 
+	var ip *net.IP
+	var err error
+
 	ap = m.configureTCAttachPoint(polDirection, ap, true)
-	ap.HostIP = m.hostIP
+	ap.HostIP = hostIP
 	ap.TunnelMTU = uint16(m.vxlanMTU)
 	ap.ExtToServiceConnmark = uint32(m.bpfExtToServiceConnmark)
-	ip, err := m.getInterfaceIP(ifaceName)
+
+	if m.ipv6Enabled {
+		ip, err = m.v6.getInterfaceIP(ifaceName)
+	} else {
+		ip, err = m.v4.getInterfaceIP(ifaceName)
+	}
 	if err != nil {
 		log.Debugf("Error getting IP for interface %+v: %+v", ifaceName, err)
-		ap.IntfIP = m.hostIP
+		ap.IntfIP = hostIP
 	} else {
 		ap.IntfIP = *ip
 	}
@@ -2087,7 +2260,7 @@ func (m *bpfEndpointManager) attachDataIfaceProgram(
 	ap.PolicyIdx = policyIdx
 	ap.LogFilterIdx = filterIdx
 
-	if err := m.dp.ensureProgramLoaded(ap, false); err != nil {
+	if err := m.dp.ensureProgramLoaded(ap); err != nil {
 		return nil, err
 	}
 
@@ -2125,7 +2298,7 @@ func (m *bpfEndpointManager) attachXDPProgram(ifaceName string, ep *proto.HostEn
 	}
 
 	if ep != nil && len(ep.UntrackedTiers) == 1 {
-		err := m.dp.ensureProgramLoaded(ap, false)
+		err := m.dp.ensureProgramLoaded(ap)
 		if err != nil {
 			return nil, err
 		}
@@ -2143,6 +2316,7 @@ func (m *bpfEndpointManager) attachXDPProgram(ifaceName string, ep *proto.HostEn
 		if err := m.dp.ensureNoProgram(ap); err != nil {
 			return nil, err
 		}
+		return nil, nil
 	}
 	return ap, nil
 }
@@ -2785,7 +2959,7 @@ func (m *bpfEndpointManager) loadTCObj(at hook.AttachType) (hook.Layout, error) 
 }
 
 // Ensure TC/XDP program is attached to the specified interface.
-func (m *bpfEndpointManager) ensureProgramLoaded(ap attachPoint, att bool) error {
+func (m *bpfEndpointManager) ensureProgramLoaded(ap attachPoint) error {
 	var err error
 
 	if aptc, ok := ap.(*tc.AttachPoint); ok {
@@ -2834,11 +3008,6 @@ func (m *bpfEndpointManager) ensureProgramLoaded(ap attachPoint, att bool) error
 		}
 	} else {
 		return fmt.Errorf("unknown attach type")
-	}
-
-	if att {
-		_, err = ap.AttachProgram()
-		return err
 	}
 	return nil
 }
@@ -3244,9 +3413,9 @@ func FindJumpMap(progID int, ifaceName string) (mapFD maps.FD, err error) {
 	return 0, fmt.Errorf("failed to find jump map for iface=%s progID=%d", ifaceName, progID)
 }
 
-func (m *bpfEndpointManager) getInterfaceIP(ifaceName string) (*net.IP, error) {
+func (d *dataplane) getInterfaceIP(ifaceName string) (*net.IP, error) {
 	var ipAddrs []net.IP
-	if ip, ok := m.ifaceToIpMap[ifaceName]; ok {
+	if ip, ok := d.ifaceToIpMap[ifaceName]; ok {
 		return &ip, nil
 	}
 	intf, err := net.InterfaceByName(ifaceName)
@@ -3261,11 +3430,7 @@ func (m *bpfEndpointManager) getInterfaceIP(ifaceName string) (*net.IP, error) {
 	for _, addr := range addrs {
 		switch t := addr.(type) {
 		case *net.IPNet:
-			if !m.ipv6Enabled && t.IP.To4() != nil {
-				ipAddrs = append(ipAddrs, t.IP)
-			} else if m.ipv6Enabled && t.IP.To4() == nil {
-				ipAddrs = append(ipAddrs, t.IP)
-			}
+			ipAddrs = append(ipAddrs, t.IP)
 		}
 	}
 	sort.Slice(ipAddrs, func(i, j int) bool {
