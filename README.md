@@ -22,11 +22,8 @@ Project Calico is an open-source project with an active development and user com
 ## 🌟 Why use Calico?
 
 **Data Plane Choice**: eBPF, standard Linux, Windows, and VPP — versatility in network solutions.
-
 **Interoperability**: Works across multiple distros, multiple clouds, bare metal, and VMs.
-
 **Optimized Performance**: Engineered for high speed and low CPU usage, maximizing your cluster investments.
-
 **Scalable Architecture**: Grows seamlessly with your Kubernetes clusters without sacrificing performance.
 **Advanced Security**: Get granular access controls and WireGuard encryption.
 **Kubernetes Networking Policy Support**: Continually defining excellence in Kubernetes network policy standards and support.
