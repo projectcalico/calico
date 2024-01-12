@@ -369,6 +369,11 @@ func (d *MockNetlinkDataplane) AddIface(idx int, name string, up bool, running b
 		LinkAttrs: la,
 		LinkType:  t,
 	}
+	for otherName, link := range d.NameToLink {
+		if link.LinkAttrs.Index == idx {
+			Fail(fmt.Sprintf("ifindex %d already in use by %s, cannot add %s", idx, otherName, name))
+		}
+	}
 	d.NameToLink[name] = link
 	d.SetIface(name, up, running)
 	return link.copy()

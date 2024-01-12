@@ -245,7 +245,7 @@ var _ = Describe("RouteTable", func() {
 			))
 		})
 		It("Should clear out a source address when source address is not set", func() {
-			updateLink := dataplane.AddIface(5, "cali5", true, true)
+			updateLink := dataplane.AddIface(6, "cali5", true, true)
 			updateRoute := netlink.Route{
 				Family:    unix.AF_INET,
 				LinkIndex: updateLink.LinkAttrs.Index,
@@ -322,7 +322,7 @@ var _ = Describe("RouteTable", func() {
 			})
 			It("Should not remove routes with a source address", func() {
 				// Route that should be left alone
-				noopLink := dataplane.AddIface(4, "cali4", true, true)
+				noopLink := dataplane.AddIface(6, "cali4", true, true)
 				noopRoute := netlink.Route{
 					Family:    unix.AF_INET,
 					LinkIndex: noopLink.LinkAttrs.Index,
@@ -346,7 +346,7 @@ var _ = Describe("RouteTable", func() {
 			})
 			It("Should update source addresses from nil to a given source", func() {
 				// Route that needs to be updated
-				updateLink := dataplane.AddIface(5, "cali5", true, true)
+				updateLink := dataplane.AddIface(6, "cali5", true, true)
 				updateRoute := netlink.Route{
 					Family:    unix.AF_INET,
 					LinkIndex: updateLink.LinkAttrs.Index,
@@ -373,7 +373,7 @@ var _ = Describe("RouteTable", func() {
 
 			It("Should update source addresses from an old source to a new one", func() {
 				// Route that needs to be updated
-				updateLink := dataplane.AddIface(5, "cali5", true, true)
+				updateLink := dataplane.AddIface(6, "cali5", true, true)
 				updateRoute := netlink.Route{
 					Family:    unix.AF_INET,
 					LinkIndex: updateLink.LinkAttrs.Index,
@@ -510,7 +510,7 @@ var _ = Describe("RouteTable", func() {
 			})
 			It("Should not remove routes with a protocol", func() {
 				// Route that should be left alone
-				noopLink := dataplane.AddIface(4, "cali4", true, true)
+				noopLink := dataplane.AddIface(6, "cali4", true, true)
 				noopRoute := netlink.Route{
 					Family:    unix.AF_INET,
 					LinkIndex: noopLink.LinkAttrs.Index,
@@ -532,7 +532,7 @@ var _ = Describe("RouteTable", func() {
 			})
 			It("Should update protocol from nil to a given protocol", func() {
 				// Route that needs to be updated
-				updateLink := dataplane.AddIface(5, "cali5", true, true)
+				updateLink := dataplane.AddIface(6, "cali5", true, true)
 				updateRoute := netlink.Route{
 					Family:    unix.AF_INET,
 					LinkIndex: updateLink.LinkAttrs.Index,
@@ -557,7 +557,7 @@ var _ = Describe("RouteTable", func() {
 
 			It("Should update protocol from an old protocol to a new one", func() {
 				// Route that needs to be updated
-				updateLink := dataplane.AddIface(5, "cali5", true, true)
+				updateLink := dataplane.AddIface(6, "cali5", true, true)
 				updateRoute := netlink.Route{
 					Family:    unix.AF_INET,
 					LinkIndex: updateLink.LinkAttrs.Index,
@@ -1028,7 +1028,7 @@ var _ = Describe("RouteTable", func() {
 
 				// Set interface up
 				rt.OnIfaceStateChanged("cali1", 12, ifacemonitor.StateUp)
-				cali1 = dataplane.AddIface(2, "cali1", true, true)
+				cali1 = dataplane.AddIface(12, "cali1", true, true)
 
 				// Now, the apply should work.
 				err := rt.Apply()

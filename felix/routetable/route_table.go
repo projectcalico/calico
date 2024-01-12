@@ -329,7 +329,11 @@ func (r *RouteTable) OnIfaceStateChanged(ifaceName string, ifIndex int, state if
 	//   name, then a creation for the new name.
 	// * Interface gets recreated: same name, new ifindex.  Again we
 	//   should see a deletion and then an add.
-
+	logCxt.WithFields(log.Fields{
+		"ifIndex": ifIndex,
+		"state":   state,
+		"name":    ifaceName,
+	}).Debug("Interface state update.")
 	recheckRoutesOwnership := false
 	if state == ifacemonitor.StateNotPresent {
 		// Interface deleted, clean up.
@@ -830,11 +834,21 @@ func (r *RouteTable) refreshAllIfaceStates(nl netlinkshim.Interface) error {
 		if ok && oldIdx != link.Attrs().Index {
 			// Interface renumbered.  For example, deleted and then recreated.
 			// Simulate a deletion of the old interface.
+			log.WithFields(log.Fields{
+				"ifaceName": link.Attrs().Name,
+				"oldIdx":    oldIdx,
+				"newIdx":    link.Attrs().Index,
+			}).Debug("Spotted interface had changed index during resync.")
 			r.OnIfaceStateChanged(link.Attrs().Name, oldIdx, ifacemonitor.StateNotPresent)
 		}
 		oldName, ok := r.ifaceIndexToName[link.Attrs().Index]
 		if ok && oldName != link.Attrs().Name {
 			// Interface renamed.  Simulate a deletion of the old interface.
+			log.WithFields(log.Fields{
+				"ifaceName": link.Attrs().Name,
+				"oldName":   oldName,
+				"newName":   link.Attrs().Name,
+			}).Debug("Spotted interface had changed name during resync.")
 			r.OnIfaceStateChanged(oldName, link.Attrs().Index, ifacemonitor.StateNotPresent)
 		}
 	}
@@ -846,14 +860,21 @@ func (r *RouteTable) refreshAllIfaceStates(nl netlinkshim.Interface) error {
 		if ifacemonitor.LinkIsOperUp(link) {
 			newState = ifacemonitor.StateUp
 		}
-		if newState != r.ifaceIndexToState[link.Attrs().Index] {
+		oldState := r.ifaceIndexToState[link.Attrs().Index]
+		log.WithFields(log.Fields{
+			"ifaceName": link.Attrs().Name,
+			"newState":  newState,
+			"oldState":  oldState,
+			"idx":       link.Attrs().Index,
+		}).Debug("Checking interface state.")
+		if newState != oldState {
 			// Only call OnIfaceStateChanged if the state has actually changed
 			// so that we avoid triggering it to re-do conflict resolution
 			// (which will generate log spam if the interface hasn't changed).
 			if debug {
 				r.logCxt.WithFields(log.Fields{
 					"ifaceName": link.Attrs().Name,
-					"oldState":  r.ifaceIndexToState[link.Attrs().Index],
+					"oldState":  oldState,
 					"newState":  newState,
 				}).Debug("Spotted interface had changed state during resync.")
 			}
