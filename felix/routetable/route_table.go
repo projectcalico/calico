@@ -168,8 +168,7 @@ func WithRouteMetric(metric RouteMetric) RouteTableOpt {
 func WithStaticARPEntries(b bool) RouteTableOpt {
 	return func(table *RouteTable) {
 		if table.ipVersion != 4 {
-			log.Error("Bug: ARP entries only supported fro IPv4.  Ignoring.")
-			return
+			log.Panic("Bug: ARP entries only supported for IPv4.")
 		}
 		table.makeARPEntries = b
 	}
@@ -1033,18 +1032,17 @@ func (r *RouteTable) applyUpdates() error {
 			return deltatracker.IterActionNoOp
 		}
 
-		if r.ipVersion == 4 && r.makeARPEntries {
-			// As a convenience, we add a static ARP entry for the peer.  At one point
-			// I think this was actually needed due to the way we set up routing but
-			// it no longer seems to be.  Leaving it in place in case it is needed in
-			// some obscure scenario.
+		if r.makeARPEntries {
+			// Add a static ARP entry for the peer.  This doesn't seem to be needed
+			// any more, and we've never done it for IPv6, but we have tests that
+			// rely on it, and it's possible that it's needed in some obscure scenario.
 			ifaceName := r.ifaceIndexToName[kRoute.Ifindex]
 			target := r.ifaceToRoutes[ifaceName][kernKey.CIDR]
 			mac := target.DestMAC
 			if mac != nil {
-				err := r.addStaticARPEntry(target.CIDR, target.DestMAC, kRoute.Ifindex)
+				err := r.addStaticARPEntry(nl, target.CIDR, target.DestMAC, kRoute.Ifindex)
 				if err != nil {
-					log.WithError(err).Debug("Failed to add neighbor.")
+					log.WithError(err).Debug("Failed to add neighbor entry.")
 					updateErrs[kernKey] = err
 				}
 			}
@@ -1217,11 +1215,7 @@ func (r *RouteTable) addDataplaneConntrackOwner(kernKey kernelRouteKey, ifindex 
 	r.possibleConntrackOwners.Dataplane().Set(kernKey, owners)
 }
 
-func (r *RouteTable) addStaticARPEntry(cidr ip.CIDR, mac net.HardwareAddr, ifindex int) error {
-	nl, err := r.nl.Handle()
-	if err != nil {
-		return err
-	}
+func (r *RouteTable) addStaticARPEntry(nl netlinkshim.Interface, cidr ip.CIDR, mac net.HardwareAddr, ifindex int) error {
 	a := &netlink.Neigh{
 		Family:       unix.AF_INET,
 		LinkIndex:    ifindex,
@@ -1230,8 +1224,10 @@ func (r *RouteTable) addStaticARPEntry(cidr ip.CIDR, mac net.HardwareAddr, ifind
 		IP:           cidr.Addr().AsNetIP(),
 		HardwareAddr: mac,
 	}
-	err = nl.NeighSet(a)
-	return err
+	if log.IsLevelEnabled(log.DebugLevel) {
+		r.logCxt.WithField("entry", a).Debug("Adding static ARP entry.")
+	}
+	return nl.NeighSet(a)
 }
 
 type Target struct {
