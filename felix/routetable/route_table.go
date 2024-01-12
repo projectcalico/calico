@@ -123,7 +123,8 @@ type RouteTable struct {
 
 	ifaceNameToIndex      map[string]int
 	ifaceIndexToName      map[int]string
-	ifaceIndexToFirstSeen map[int]time.Time
+	ifaceIndexToState     map[int]ifacemonitor.State
+	ifaceIndexToGraceInfo map[int]graceInfo
 
 	conntrackCleanupEnabled  bool
 	possibleConntrackOwners  *deltatracker.DeltaTracker[kernelRouteKey, []int]
@@ -144,6 +145,11 @@ type RouteTable struct {
 	newNetlinkHandle func() (netlinkshim.Interface, error)
 }
 
+type graceInfo struct {
+	FirstSeen    time.Time
+	GraceExpired bool
+}
+
 type RouteTableOpt func(table *RouteTable)
 
 func WithLivenessCB(cb func()) RouteTableOpt {
@@ -154,7 +160,6 @@ func WithLivenessCB(cb func()) RouteTableOpt {
 
 func WithRouteCleanupGracePeriod(routeCleanupGracePeriod time.Duration) RouteTableOpt {
 	return func(table *RouteTable) {
-		// TODO route grace period
 		table.routeCleanupGracePeriod = routeCleanupGracePeriod
 	}
 }
@@ -278,9 +283,10 @@ func New(
 
 		kernelRoutes: deltatracker.New[kernelRouteKey, kernelRoute](),
 
-		ifaceIndexToFirstSeen: map[int]time.Time{},
+		ifaceIndexToGraceInfo: map[int]graceInfo{},
 		ifaceNameToIndex:      map[string]int{},
 		ifaceIndexToName:      map[int]string{},
+		ifaceIndexToState:     map[int]ifacemonitor.State{},
 
 		conntrackCleanupEnabled:  true,
 		pendingConntrackCleanups: map[ip.Addr]chan struct{}{},
@@ -329,6 +335,7 @@ func (r *RouteTable) OnIfaceStateChanged(ifaceName string, ifIndex int, state if
 		// Interface deleted, clean up.
 		oldIndex := r.ifaceNameToIndex[ifaceName]
 		delete(r.ifaceIndexToName, oldIndex)
+		delete(r.ifaceIndexToState, oldIndex)
 		delete(r.ifaceNameToIndex, ifaceName)
 		r.ifacesToRescan.Discard(ifaceName)
 
@@ -338,6 +345,7 @@ func (r *RouteTable) OnIfaceStateChanged(ifaceName string, ifIndex int, state if
 	} else {
 		// Interface exists, record its details.
 		r.onIfaceSeen(ifIndex)
+		r.ifaceIndexToState[ifIndex] = state
 		oldIfIndex, ok := r.ifaceNameToIndex[ifaceName]
 		if ok && oldIfIndex != ifIndex {
 			// Interface renumbered.  For example, deleted and then recreated
@@ -374,10 +382,12 @@ func (r *RouteTable) onIfaceSeen(ifIndex int) {
 		// Ignore "no interface" routes.
 		return
 	}
-	if _, ok := r.ifaceIndexToFirstSeen[ifIndex]; ok {
+	if _, ok := r.ifaceIndexToGraceInfo[ifIndex]; ok {
 		return
 	}
-	r.ifaceIndexToFirstSeen[ifIndex] = r.time.Now()
+	r.ifaceIndexToGraceInfo[ifIndex] = graceInfo{
+		FirstSeen: r.time.Now(),
+	}
 }
 
 // SetRoutes replaces the full set of targets for the specified interface.
@@ -529,6 +539,19 @@ func (r *RouteTable) recalculateDesiredKernelRoute(cidr ip.CIDR) {
 			r.logCxt.Debug("Skipping route for missing interface.")
 			return nil
 		}
+
+		// We've got some routes for this interface, force-expire its
+		// grace period.
+		if graceInf, ok := r.ifaceIndexToGraceInfo[ifIndex]; ok {
+			graceInf.GraceExpired = true
+			r.ifaceIndexToGraceInfo[ifIndex] = graceInf
+		}
+
+		if r.ifaceIndexToState[ifIndex] != ifacemonitor.StateUp {
+			r.logCxt.Debug("Skipping route for down interface.")
+			return nil
+		}
+
 		// This tie-breaker tends to prefer "real" routes over "no-interface"
 		// special routes, and it tends to prefer newer interfaces (because
 		// they typically have higher indexes).
@@ -558,7 +581,7 @@ func (r *RouteTable) recalculateDesiredKernelRoute(cidr ip.CIDR) {
 		GW:       bestTarget.GW,
 		Src:      src,
 		Ifindex:  bestIfaceIdx,
-		OnLink:   bestTarget.Flags()&unix.RTNH_F_ONLINK != 0, // FIXME handle (any?) other flags?
+		OnLink:   bestTarget.Flags()&unix.RTNH_F_ONLINK != 0,
 		Protocol: r.deviceRouteProtocol,
 	}
 	if log.IsLevelEnabled(log.DebugLevel) && !reflect.DeepEqual(oldDesiredRoute, kernRoute) {
@@ -623,14 +646,14 @@ func (r *RouteTable) maybeCleanUpGracePeriods() {
 	if time.Since(r.lastGracePeriodCleanup) < r.routeCleanupGracePeriod {
 		return
 	}
-	for k, v := range r.ifaceIndexToFirstSeen {
-		if time.Since(v) < r.routeCleanupGracePeriod {
+	for k, v := range r.ifaceIndexToGraceInfo {
+		if time.Since(v.FirstSeen) < r.routeCleanupGracePeriod {
 			continue
 		}
 		if _, ok := r.ifaceIndexToName[k]; ok {
 			continue // Iface still exists, don't want to reset its grace period.
 		}
-		delete(r.ifaceIndexToFirstSeen, k)
+		delete(r.ifaceIndexToGraceInfo, k)
 	}
 }
 
@@ -792,24 +815,60 @@ func (r *RouteTable) resyncIndividualInterfaces(nl netlinkshim.Interface) error 
 }
 
 func (r *RouteTable) refreshAllIfaceStates(nl netlinkshim.Interface) error {
+	debug := log.IsLevelEnabled(log.DebugLevel)
+
 	links, err := nl.LinkList()
 	if err != nil {
 		return err
 	}
 	seenNames := set.New[string]()
+
+	// First pass, simulate deletions of any interfaces that have been
+	// renamed or renumbered.
 	for _, link := range links {
-		state := ifacemonitor.StateDown
-		if ifacemonitor.LinkIsOperUp(link) {
-			state = ifacemonitor.StateUp
+		oldIdx, ok := r.ifaceNameToIndex[link.Attrs().Name]
+		if ok && oldIdx != link.Attrs().Index {
+			// Interface renumbered.  For example, deleted and then recreated.
+			// Simulate a deletion of the old interface.
+			r.OnIfaceStateChanged(link.Attrs().Name, oldIdx, ifacemonitor.StateNotPresent)
 		}
-		seenNames.Add(link.Attrs().Name)
-		r.OnIfaceStateChanged(link.Attrs().Name, link.Attrs().Index, state)
+		oldName, ok := r.ifaceIndexToName[link.Attrs().Index]
+		if ok && oldName != link.Attrs().Name {
+			// Interface renamed.  Simulate a deletion of the old interface.
+			r.OnIfaceStateChanged(oldName, link.Attrs().Index, ifacemonitor.StateNotPresent)
+		}
 	}
+
+	// Second pass, update the state of any changed interfaces.
+	for _, link := range links {
+		seenNames.Add(link.Attrs().Name)
+		newState := ifacemonitor.StateDown
+		if ifacemonitor.LinkIsOperUp(link) {
+			newState = ifacemonitor.StateUp
+		}
+		if newState != r.ifaceIndexToState[link.Attrs().Index] {
+			// Only call OnIfaceStateChanged if the state has actually changed
+			// so that we avoid triggering it to re-do conflict resolution
+			// (which will generate log spam if the interface hasn't changed).
+			if debug {
+				r.logCxt.WithFields(log.Fields{
+					"ifaceName": link.Attrs().Name,
+					"oldState":  r.ifaceIndexToState[link.Attrs().Index],
+					"newState":  newState,
+				}).Debug("Spotted interface had changed state during resync.")
+			}
+			r.OnIfaceStateChanged(link.Attrs().Name, link.Attrs().Index, newState)
+		}
+	}
+
+	// Third pass, remove any interfaces that have disappeared.
 	for name := range r.ifaceNameToIndex {
 		if seenNames.Contains(name) {
 			continue
 		}
-		r.logCxt.WithField("ifaceName", name).Debug("Spotted interface not present during full resync.  Cleaning up.")
+		if debug {
+			r.logCxt.WithField("ifaceName", name).Debug("Spotted interface not present during full resync.  Cleaning up.")
+		}
 		r.OnIfaceStateChanged(name, 0, ifacemonitor.StateNotPresent)
 	}
 	return nil
@@ -940,13 +999,14 @@ func (r *RouteTable) applyUpdates() error {
 	deletionErrs := map[kernelRouteKey]error{}
 	r.kernelRoutes.PendingDeletions().Iter(func(kernKey kernelRouteKey) deltatracker.IterAction {
 		kernRoute, _ := r.kernelRoutes.PendingDeletions().Get(kernKey)
-		ifaceInGracePeriod := r.time.Since(r.ifaceIndexToFirstSeen[kernRoute.Ifindex]) < r.routeCleanupGracePeriod
+		graceInf := r.ifaceIndexToGraceInfo[kernRoute.Ifindex]
+		ifaceInGracePeriod := !graceInf.GraceExpired && r.time.Since(graceInf.FirstSeen) < r.routeCleanupGracePeriod
 		if ifaceInGracePeriod {
 			// Don't remove unexpected routes from interfaces created recently.
 			r.logCxt.WithFields(log.Fields{
 				"route": kernRoute,
 				"dest":  kernKey,
-			}).Info("Found unexpected route; ignoring due to grace period.")
+			}).Debug("Found unexpected route; ignoring due to grace period.")
 			return deltatracker.IterActionNoOp
 		}
 
@@ -961,6 +1021,12 @@ func (r *RouteTable) applyUpdates() error {
 	})
 
 	if r.conntrackCleanupEnabled {
+		// FIXME, this is not quite right for IPv6.  IPv6 naturally uses multiple metrics
+		//  on its routes (systemd uses 512, 1024, 2048 for different preference levels
+		//  that means that we end up removing and re-adding routes with different prefs
+		//  and cleaning up the conntrack entries when we do so.  Really need to spot that
+		//  CIDR is on the same interface and only clean up ifindex changes.
+
 		// Clean up any conntrack entries for routes that have been deleted.
 		r.possibleConntrackOwners.PendingDeletions().Iter(func(kernKey kernelRouteKey) deltatracker.IterAction {
 			r.logCxt.WithField("kernKey", kernKey).Debug("Route deleted, starting conntrack deletion.")
