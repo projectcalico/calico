@@ -1964,10 +1964,16 @@ func (m *bpfEndpointManager) wepApplyPolicy(ap *tc.AttachPoint,
 		m.addHostPolicy(&rules, &m.wildcardHostEndpoint, polDirection.Inverse())
 	}
 
-	// If workload egress and DefaultEndpointToHostAction is ACCEPT or DROP, suppress the normal
-	// host-* endpoint policy. If it does not exist, suppress it as well, not to
-	// create deny due to the fact that there are not profiles or tiers etc.
-	if polDirection == PolDirnEgress && (m.epToHostAction != "RETURN" || !m.wildcardExists) {
+	// Intentionally leaving this code here until the *-hep takes precedence.
+	wildcardEPPolicyAppliesToWEPs := false
+	if wildcardEPPolicyAppliesToWEPs {
+		// If workload egress and DefaultEndpointToHostAction is ACCEPT or DROP, suppress the normal
+		// host-* endpoint policy. If it does not exist, suppress it as well, not to
+		// create deny due to the fact that there are not profiles or tiers etc.
+		if polDirection == PolDirnEgress && (m.epToHostAction != "RETURN" || !m.wildcardExists) {
+			rules.SuppressNormalHostPolicy = true
+		}
+	} else {
 		rules.SuppressNormalHostPolicy = true
 	}
 

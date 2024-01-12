@@ -51,6 +51,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ endpoint-to-host-action tes
 		options := infrastructure.DefaultTopologyOptions()
 		options.IPIPEnabled = false
 		options.DelayFelixStart = true
+		options.FelixLogSeverity = "Debug"
 		tc, client = infrastructure.StartNNodeTopology(2, options, infra)
 
 		infra.AddDefaultAllow()
@@ -222,6 +223,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ endpoint-to-host-action tes
 		entry("DROP", "Return", "*-pre-dnat", api.Deny, connectivity.None),
 		entry("DROP", "Drop", "*-pre-dnat", api.Deny, connectivity.None),
 
+		entry("ACCEPT", "Accept", "*-pre-dnat", api.Deny, connectivity.None),
+		entry("ACCEPT", "Return", "*-pre-dnat", api.Deny, connectivity.None),
+		entry("ACCEPT", "Drop", "*-pre-dnat", api.Deny, connectivity.None),
+
 		// DefaultEndpointToHostAction overrides normal wildcard HEP policy (this
 		// surprised me, but I think it was a change made near the end of development to prevent
 		// a breaking change).
@@ -232,5 +237,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ endpoint-to-host-action tes
 		entry("DROP", "Accept", "*", api.Deny, connectivity.Some),
 		entry("DROP", "Return", "*", api.Deny, connectivity.None),
 		entry("DROP", "Drop", "*", api.Deny, connectivity.None),
+
+		entry("ACCEPT", "Accept", "*", api.Deny, connectivity.Some),
+		entry("ACCEPT", "Return", "*", api.Deny, connectivity.Some),
+		entry("ACCEPT", "Drop", "*", api.Deny, connectivity.None),
 	)
 })
