@@ -91,6 +91,9 @@ const (
 
 	// Route cleanup grace period. Used for workload routes only.
 	routeCleanupGracePeriod = 10 * time.Second
+
+	VXLANIfaceNameV4 = "vxlan.calico"
+	VXLANIfaceNameV6 = "vxlan-v6.calico"
 )
 
 var (
@@ -512,7 +515,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		if !config.RouteSyncDisabled {
 			log.Debug("RouteSyncDisabled is false.")
 			routeTableVXLAN = routetable.New(
-				[]string{"^vxlan.calico$"},
+				[]string{"^" + VXLANIfaceNameV4 + "$"},
 				4,
 				config.NetlinkTimeout,
 				config.DeviceRouteSourceAddress,
@@ -534,14 +537,14 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			routeTableVXLAN = &routetable.DummyTable{}
 		}
 
-		vxlanFDB := vxlanfdb.New(netlink.FAMILY_V4, "vxlan.calico", featureDetector, config.NetlinkTimeout)
+		vxlanFDB := vxlanfdb.New(netlink.FAMILY_V4, VXLANIfaceNameV4, featureDetector, config.NetlinkTimeout)
 		dp.vxlanFDBs = append(dp.vxlanFDBs, vxlanFDB)
 
 		dp.vxlanManager = newVXLANManager(
 			ipSetsV4,
 			routeTableVXLAN,
 			vxlanFDB,
-			"vxlan.calico",
+			VXLANIfaceNameV4,
 			config,
 			dp.loopSummarizer,
 			4,
@@ -552,7 +555,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.RegisterManager(dp.vxlanManager)
 	} else {
 		// Start a cleanup goroutine not to block felix if it needs to retry
-		go cleanUpVXLANDevice("vxlan.calico")
+		go cleanUpVXLANDevice(VXLANIfaceNameV4)
 	}
 
 	dp.endpointStatusCombiner = newEndpointStatusCombiner(dp.fromDataplane, config.IPv6Enabled)
@@ -1000,7 +1003,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			if !config.RouteSyncDisabled {
 				log.Debug("RouteSyncDisabled is false.")
 				routeTableVXLANV6 = routetable.New(
-					[]string{"^vxlan-v6.calico$"},
+					[]string{"^" + VXLANIfaceNameV6 + "$"},
 					6,
 					config.NetlinkTimeout,
 					config.DeviceRouteSourceAddressIPv6,
@@ -1021,14 +1024,14 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 				routeTableVXLANV6 = &routetable.DummyTable{}
 			}
 
-			vxlanFDBV6 := vxlanfdb.New(netlink.FAMILY_V6, "vxlan-v6.calico", featureDetector, config.NetlinkTimeout)
+			vxlanFDBV6 := vxlanfdb.New(netlink.FAMILY_V6, VXLANIfaceNameV6, featureDetector, config.NetlinkTimeout)
 			dp.vxlanFDBs = append(dp.vxlanFDBs, vxlanFDBV6)
 
 			dp.vxlanManagerV6 = newVXLANManager(
 				ipSetsV6,
 				routeTableVXLANV6,
 				vxlanFDBV6,
-				"vxlan-v6.calico",
+				VXLANIfaceNameV6,
 				config,
 				dp.loopSummarizer,
 				6,
@@ -1039,7 +1042,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			dp.RegisterManager(dp.vxlanManagerV6)
 		} else {
 			// Start a cleanup goroutine not to block felix if it needs to retry
-			go cleanUpVXLANDevice("vxlan-v6.calico")
+			go cleanUpVXLANDevice(VXLANIfaceNameV6)
 		}
 
 		var routeTableV6 routetable.RouteTableInterface
