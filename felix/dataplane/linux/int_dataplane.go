@@ -1021,13 +1021,13 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 				routeTableVXLANV6 = &routetable.DummyTable{}
 			}
 
-			vxlanFDB := vxlanfdb.New(netlink.FAMILY_V6, "vxlan-v6.calico", featureDetector, config.NetlinkTimeout)
-			dp.vxlanFDBs = append(dp.vxlanFDBs, vxlanFDB)
+			vxlanFDBV6 := vxlanfdb.New(netlink.FAMILY_V6, "vxlan-v6.calico", featureDetector, config.NetlinkTimeout)
+			dp.vxlanFDBs = append(dp.vxlanFDBs, vxlanFDBV6)
 
 			dp.vxlanManagerV6 = newVXLANManager(
 				ipSetsV6,
 				routeTableVXLANV6,
-				vxlanFDB,
+				vxlanFDBV6,
 				"vxlan-v6.calico",
 				config,
 				dp.loopSummarizer,

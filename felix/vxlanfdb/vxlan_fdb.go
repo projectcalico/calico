@@ -61,6 +61,11 @@ type ipMACMapping struct {
 }
 
 func New(family int, ifaceName string, featureDetector environment.FeatureDetectorIface, netlinkTimeout time.Duration) *VXLANFDB {
+	switch family {
+	case unix.AF_INET, unix.AF_INET6:
+	default:
+		log.WithField("family", family).Panic("Unknown family")
+	}
 	f := VXLANFDB{
 		family:     family,
 		ifaceName:  ifaceName,
@@ -90,6 +95,8 @@ func (r *VXLANFDB) OnIfaceStateChanged(ifaceName string, state ifacemonitor.Stat
 	if state == ifacemonitor.StateUp {
 		r.logCxt.Debug("VXLAN device came up, doing a resync.")
 		r.resyncPending = true
+	} else {
+		r.logCxt.WithField("state", state).Debug("VXLAN device changed state.")
 	}
 }
 
@@ -122,6 +129,7 @@ func (r *VXLANFDB) SetVTEPs(vteps []VTEP) {
 }
 
 func (r *VXLANFDB) Apply() error {
+	debug := log.IsLevelEnabled(log.DebugLevel)
 	nl, err := r.nl.Handle()
 	if err != nil {
 		return fmt.Errorf("failed to connect to netlink")
@@ -145,11 +153,11 @@ func (r *VXLANFDB) Apply() error {
 
 	errs := map[string]error{}
 	r.arpEntries.PendingUpdates().Iter(func(macStr string, entry ipMACMapping) deltatracker.IterAction {
-		if log.IsLevelEnabled(log.DebugLevel) {
-			log.WithField("entry", entry).Debug("Adding ARP entry.")
+		if debug {
+			log.WithField("entry", entry).Debug("Adding ARP/NDP entry.")
 		}
 		a := &netlink.Neigh{
-			Family:       unix.AF_INET,
+			Family:       r.family,
 			LinkIndex:    r.ifIndex,
 			State:        netlink.NUD_PERMANENT,
 			Type:         unix.RTN_UNICAST,
@@ -174,11 +182,11 @@ func (r *VXLANFDB) Apply() error {
 
 	r.arpEntries.PendingDeletions().Iter(func(macStr string) deltatracker.IterAction {
 		entry, _ := r.arpEntries.Dataplane().Get(macStr)
-		if log.IsLevelEnabled(log.DebugLevel) {
+		if debug {
 			log.WithField("entry", entry).Debug("Deleting ARP entry.")
 		}
 		a := &netlink.Neigh{
-			Family:       unix.AF_INET,
+			Family:       r.family,
 			LinkIndex:    r.ifIndex,
 			Type:         unix.RTN_UNICAST,
 			IP:           entry.IP.AsNetIP(),
@@ -200,7 +208,7 @@ func (r *VXLANFDB) Apply() error {
 	}
 
 	r.fdbEntries.PendingUpdates().Iter(func(macStr string, entry ipMACMapping) deltatracker.IterAction {
-		if log.IsLevelEnabled(log.DebugLevel) {
+		if debug {
 			log.WithField("entry", entry).Debug("Adding FDB entry.")
 		}
 		a := &netlink.Neigh{
