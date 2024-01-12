@@ -228,22 +228,25 @@ func New(
 		tableIndex = unix.RT_TABLE_MAIN
 	}
 
-	logCxt := log.WithFields(log.Fields{
-		"ipVersion":  ipVersion,
-		"tableIndex": tableIndex,
-	})
+	var logCxt *log.Entry
+	description := fmt.Sprintf("IPv%d,%d", ipVersion, tableIndex)
 
 	// Create a regexp matching the interfaces this route table manages.
 	var ifacePrefixRegexp *regexp.Regexp
 	if len(filteredRegexes) == 0 && len(interfaceRegexes) > 0 {
 		// All of the regexp parts were special matches for non-interface types. In this case don't match any
 		// interfaces.
+		logCxt = log.WithFields(log.Fields{
+			"table": description,
+		})
 		logCxt.Info("No interface matches required for routetable")
 	} else {
 		// Either there were no regexp parts supplied (same as match all), or at least one real interface was included.
 		// Compile the interface regex.
 		ifaceNamePattern := strings.Join(filteredRegexes, "|")
-		logCxt = logCxt.WithField("ifaceRegex", ifaceNamePattern)
+		logCxt = log.WithFields(log.Fields{
+			"table": description + "," + ifaceNamePattern,
+		})
 		ifacePrefixRegexp = regexp.MustCompile(ifaceNamePattern)
 		logCxt.Info("Calculated interface name regexp")
 	}
@@ -252,7 +255,7 @@ func New(
 	if ipVersion == 6 {
 		family = netlink.FAMILY_V6
 	} else if ipVersion != 4 {
-		log.WithField("ipVersion", ipVersion).Panic("Unknown IP version")
+		logCxt.WithField("ipVersion", ipVersion).Panic("Unknown IP version")
 	}
 
 	rt := &RouteTable{
@@ -558,12 +561,20 @@ func (r *RouteTable) recalculateDesiredKernelRoute(cidr ip.CIDR) {
 		OnLink:   bestTarget.Flags()&unix.RTNH_F_ONLINK != 0, // FIXME handle (any?) other flags?
 		Protocol: r.deviceRouteProtocol,
 	}
-	r.logCxt.WithFields(log.Fields{
-		"cidr":     cidr,
-		"oldRoute": oldDesiredRoute,
-		"newRoute": kernRoute,
-		"iface":    bestIface,
-	}).Debug("Calculated kernel route.")
+	if log.IsLevelEnabled(log.DebugLevel) && !reflect.DeepEqual(oldDesiredRoute, kernRoute) {
+		r.logCxt.WithFields(log.Fields{
+			"dst":      kernKey,
+			"oldRoute": oldDesiredRoute,
+			"newRoute": kernRoute,
+			"iface":    bestIface,
+		}).Debug("Preferred kernel route for this dest has changed.")
+	} else if log.IsLevelEnabled(log.DebugLevel) {
+		r.logCxt.WithFields(log.Fields{
+			"dst":   kernKey,
+			"route": kernRoute,
+			"iface": bestIface,
+		}).Debug("Preferred kernel route for this dest still the same.")
+	}
 	r.kernelRoutes.Desired().Set(kernKey, kernRoute)
 	if r.conntrackCleanupEnabled {
 		r.possibleConntrackOwners.Desired().Set(kernKey, []int{bestIfaceIdx})
@@ -798,7 +809,7 @@ func (r *RouteTable) refreshAllIfaceStates(nl netlinkshim.Interface) error {
 		if seenNames.Contains(name) {
 			continue
 		}
-		log.WithField("ifaceName", name).Debug("Spotted interface not present during full resync.  Cleaning up.")
+		r.logCxt.WithField("ifaceName", name).Debug("Spotted interface not present during full resync.  Cleaning up.")
 		r.OnIfaceStateChanged(name, 0, ifacemonitor.StateNotPresent)
 	}
 	return nil
@@ -952,7 +963,7 @@ func (r *RouteTable) applyUpdates() error {
 	if r.conntrackCleanupEnabled {
 		// Clean up any conntrack entries for routes that have been deleted.
 		r.possibleConntrackOwners.PendingDeletions().Iter(func(kernKey kernelRouteKey) deltatracker.IterAction {
-			log.WithField("kernKey", kernKey).Debug("Route deleted, starting conntrack deletion.")
+			r.logCxt.WithField("kernKey", kernKey).Debug("Route deleted, starting conntrack deletion.")
 			r.startConntrackDeletion(kernKey.CIDR.Addr())
 			return deltatracker.IterActionUpdateDataplane
 		})
@@ -971,7 +982,7 @@ func (r *RouteTable) applyUpdates() error {
 				// that the cleanup is all done).
 				return deltatracker.IterActionNoOp
 			}
-			log.WithFields(log.Fields{
+			r.logCxt.WithFields(log.Fields{
 				"kernKey":   kernKey,
 				"oldOwners": old,
 				"newOwners": newOwners,
@@ -1055,12 +1066,12 @@ func (r *RouteTable) applyUpdates() error {
 	// TODO filter out interfaces that are gone
 	err = nil
 	if len(deletionErrs) > 0 {
-		log.WithField("errors", deletionErrs).Warn(
+		r.logCxt.WithField("errors", deletionErrs).Warn(
 			"Encountered some errors when trying to delete old routes.")
 		err = UpdateFailed
 	}
 	if len(updateErrs) > 0 {
-		log.WithField("errors", updateErrs).Warn(
+		r.logCxt.WithField("errors", updateErrs).Warn(
 			"Encountered some errors when trying to update routes.  Will retry.")
 		err = UpdateFailed
 	}
@@ -1105,13 +1116,13 @@ func (r *RouteTable) startConntrackDeletion(ipAddr ip.Addr) {
 		log.Error("startConntrackDeletion called but conntrack cleanup is disabled for this routeing table.  Ignoring.")
 		return
 	}
-	log.WithField("ip", ipAddr).Debug("Starting goroutine to delete conntrack entries")
+	r.logCxt.WithField("ip", ipAddr).Debug("Starting goroutine to delete conntrack entries")
 	done := make(chan struct{})
 	r.pendingConntrackCleanups[ipAddr] = done
 	go func() {
 		defer close(done)
 		r.conntrack.RemoveConntrackFlows(r.ipVersion, ipAddr.AsNetIP())
-		log.WithField("ip", ipAddr).Debug("Deleted conntrack entries")
+		r.logCxt.WithField("ip", ipAddr).Debug("Deleted conntrack entries")
 	}()
 }
 
@@ -1120,11 +1131,11 @@ func (r *RouteTable) cleanUpPendingConntrackDeletions() {
 	for ipAddr, c := range r.pendingConntrackCleanups {
 		select {
 		case <-c:
-			log.WithField("ip", ipAddr).Debug(
+			r.logCxt.WithField("ip", ipAddr).Debug(
 				"Background goroutine finished deleting conntrack entries")
 			delete(r.pendingConntrackCleanups, ipAddr)
 		default:
-			log.WithField("ip", ipAddr).Debug(
+			r.logCxt.WithField("ip", ipAddr).Debug(
 				"Background goroutine yet to finish deleting conntrack entries")
 			continue
 		}
@@ -1134,9 +1145,9 @@ func (r *RouteTable) cleanUpPendingConntrackDeletions() {
 // waitForPendingConntrackDeletion waits for any pending conntrack deletions (if any) for the given IP to complete.
 func (r *RouteTable) waitForPendingConntrackDeletion(ipAddr ip.Addr) {
 	if c := r.pendingConntrackCleanups[ipAddr]; c != nil {
-		log.WithField("ip", ipAddr).Info("Waiting for pending conntrack deletion to finish")
+		r.logCxt.WithField("ip", ipAddr).Info("Waiting for pending conntrack deletion to finish")
 		<-c
-		log.WithField("ip", ipAddr).Info("Done waiting for pending conntrack deletion to finish")
+		r.logCxt.WithField("ip", ipAddr).Info("Done waiting for pending conntrack deletion to finish")
 		delete(r.pendingConntrackCleanups, ipAddr)
 	}
 }
@@ -1340,4 +1351,21 @@ func (r kernelRoute) SrcAsNetIP() net.IP {
 		return nil
 	}
 	return r.Src.AsNetIP()
+}
+
+func (r kernelRoute) String() string {
+	var zeroVal kernelRoute
+	if r == zeroVal {
+		return "<none>"
+	}
+	gwStr := "<nil>"
+	if r.GW != nil {
+		gwStr = r.GW.String()
+	}
+	srcStr := "<nil>"
+	if r.Src != nil {
+		srcStr = r.Src.String()
+	}
+	return fmt.Sprintf("kernelRoute{Type:%d, Scope=%d, GW=%s, Src=%s, Ifindex=%d, Protocol=%v, OnLink=%v}",
+		r.Type, r.Scope, gwStr, srcStr, r.Ifindex, r.Protocol, r.OnLink)
 }
