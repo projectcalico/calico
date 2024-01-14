@@ -378,6 +378,7 @@ func StartDataplaneDriver(configParams *config.Config,
 			BPFConntrackTimeouts:               conntrack.DefaultTimeouts(), // FIXME make timeouts configurable
 			RouteTableManager:                  routeTableIndexAllocator,
 			MTUIfacePattern:                    configParams.MTUIfacePattern,
+			BPFExcludeCIDRsFromNAT:             configParams.BPFExcludeCIDRsFromNAT,
 
 			KubeClientSet: k8sClientSet,
 

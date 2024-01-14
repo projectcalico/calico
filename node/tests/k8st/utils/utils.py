@@ -27,7 +27,7 @@ from kubernetes import client, config
 _log = logging.getLogger(__name__)
 
 ROUTER_IMAGE = os.getenv("ROUTER_IMAGE", "calico/bird:latest")
-NGINX_IMAGE = os.getenv("NGINX_IMAGE", "nginx:1.25.2")
+NGINX_IMAGE = os.getenv("NGINX_IMAGE", "nginx:1")
 
 
 # Helps with printing diags after a test.
@@ -220,7 +220,7 @@ def kubectl(args, logerr=True, allow_fail=False, allow_codes=[], timeout=0, retu
                returnerr=returnerr)
 
 def calicoctl(args, allow_fail=False):
-    return kubectl("exec -i -n kube-system calicoctl -- /calicoctl --allow-version-mismatch " + args,
+    return kubectl("exec -i -n kube-system calicoctl -- calicoctl --allow-version-mismatch " + args,
                    allow_fail=allow_fail)
 
 

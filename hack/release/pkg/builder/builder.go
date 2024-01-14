@@ -236,6 +236,9 @@ func (r *ReleaseBuilder) NewBranch() error {
 	// Determine the name of the new branch.
 	nextBranchVersion := strings.Split(out, "-0.dev")[0]
 	sv, err := semver.NewVersion(strings.TrimPrefix(nextBranchVersion, "v"))
+	if err != nil {
+		return fmt.Errorf("error creating new semver version: %w", err)
+	}
 	branchName := fmt.Sprintf("release-v%d.%d", sv.Major, sv.Minor)
 	logrus.WithField("branch", branchName).Info("Next release branch")
 
