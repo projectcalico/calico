@@ -1073,7 +1073,10 @@ func (t *Table) Apply() (rescheduleAfter time.Duration) {
 				if err2 != nil {
 					t.logCxt.WithError(err2).Error("Failed to load iptables state")
 				} else {
-					t.logCxt.WithField("iptablesState", string(output)).Error("Current state of iptables")
+					t.logCxt.WithFields(log.Fields{
+						"iptablesState":            string(output),
+						logutilslc.FieldNoTruncate: true,
+					}).Error("Current state of iptables")
 				}
 				t.logCxt.WithError(err).Panic("Failed to program iptables, giving up after retries")
 			}

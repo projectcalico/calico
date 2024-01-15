@@ -37,10 +37,15 @@ const (
 	// message.  It can be used as follows: logrus.WithField(FieldForceFlush, true).Info("...")
 	FieldForceFlush = "__flush__"
 
+	// FieldNoTruncate when set to true, prevents truncation of the log fields.
+	FieldNoTruncate = "__no_trunc__"
+
 	// fieldFileName is a reserved field name used to pass the filename from the ContextHook to our Formatter.
 	fieldFileName = "__file__"
 	// fieldLineNumber is a reserved field name used to pass the line number from the ContextHook to our Formatter.
 	fieldLineNumber = "__line__"
+
+	MaxValueLen = 1024
 )
 
 // FilterLevels returns all the logrus.Level values <= maxLevel.
@@ -118,35 +123,99 @@ func FormatForSyslog(entry *log.Entry) string {
 // finishes it with a newline.
 func appendKVsAndNewLine(b *bytes.Buffer, entry *log.Entry) {
 	// Sort the keys for consistent output.
-	var keys []string = make([]string, 0, len(entry.Data))
+	keys := make([]string, 0, len(entry.Data))
 	for k := range entry.Data {
+		if k == fieldFileName ||
+			k == fieldLineNumber ||
+			k == FieldForceFlush ||
+			k == FieldNoTruncate {
+			continue
+		}
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
 
+	maxLen := MaxValueLen
+	if entry.Level < log.ErrorLevel || entry.Data[FieldNoTruncate] == true {
+		// Panic or Fatal, allow unlimited log message.
+		maxLen = 0
+	}
+
 	for _, key := range keys {
-		if key == fieldFileName || key == fieldLineNumber || key == FieldForceFlush {
-			continue
-		}
-		var value interface{} = entry.Data[key]
-		var stringifiedValue string
-		if err, ok := value.(error); ok {
-			stringifiedValue = err.Error()
-		} else if stringer, ok := value.(fmt.Stringer); ok {
-			// Trust the value's String() method.
-			stringifiedValue = stringer.String()
-		} else {
-			// No string method, use %#v to get a more thorough dump.
-			fmt.Fprintf(b, " %v=%#v", key, value)
-			continue
-		}
+		var value = entry.Data[key]
+
 		b.WriteByte(' ')
 		b.WriteString(key)
 		b.WriteByte('=')
-		b.WriteString(stringifiedValue)
+
+		// If the maximum length is set, write via a truncating writer.
+		var w interface {
+			io.StringWriter
+			io.Writer
+		}
+		tw := truncatingWriter{
+			w:     b,
+			limit: maxLen,
+		}
+		if maxLen == 0 {
+			// No limit, use the buffer directly.
+			w = b
+		} else {
+			// Limit is active, write via the truncating writer.
+			w = &tw
+		}
+
+		switch value := value.(type) {
+		case LogWriter:
+			// Best case, we have a custom WriteForLog() method that should
+			// work well with the truncating writer.
+			_ = value.WriteForLog(w)
+		case error:
+			_, _ = w.WriteString(value.(error).Error())
+		case fmt.Stringer:
+			_, _ = w.WriteString(value.String())
+		default:
+			_, _ = fmt.Fprintf(w, "%#v", value)
+		}
+		if maxLen != 0 && tw.truncated {
+			_, _ = fmt.Fprintf(b, "...<truncated>")
+		}
 	}
 	b.WriteByte('\n')
 }
+
+type LogWriter interface {
+	WriteForLog(w io.Writer) (err error)
+}
+
+type truncatingWriter struct {
+	w         io.Writer
+	limit     int
+	truncated bool
+}
+
+func (l *truncatingWriter) Write(p []byte) (n int, err error) {
+	limited := p
+	if len(limited) > l.limit {
+		limited = limited[:l.limit]
+	}
+	n, err = l.w.Write(limited)
+	l.limit -= n
+	if err != nil {
+		return
+	}
+	if len(p) > len(limited) {
+		l.truncated = true
+		err = errLimitReached
+	}
+	return
+}
+
+func (l *truncatingWriter) WriteString(s string) (n int, err error) {
+	return l.Write([]byte(s))
+}
+
+var errLimitReached = fmt.Errorf("limit reached")
 
 // NullWriter is a dummy writer that always succeeds and does nothing.
 type NullWriter struct{}

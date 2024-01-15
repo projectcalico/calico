@@ -253,8 +253,9 @@ func (d *WindowsDataplane) loopUpdatingDataplane() {
 
 	// function to pass messages to the managers for processing
 	processMsgFromCalcGraph := func(msg interface{}) {
-		log.WithField("msg", proto.MsgStringer{Msg: msg}).Infof(
-			"Received %T update from calculation graph", msg)
+		ms := proto.MaybeWrapWithStringer(msg)
+		log.WithField("msg", ms).Infof("Received %T update from calculation graph", msg)
+
 		for _, mgr := range d.allManagers {
 			mgr.OnUpdate(msg)
 		}

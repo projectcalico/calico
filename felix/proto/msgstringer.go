@@ -20,13 +20,26 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+//go:generate go run ./genlogmethods
+
+func MaybeWrapWithStringer(msg any) any {
+	if msg == nil {
+		return nil
+	}
+	switch msg.(type) {
+	case *IPSetUpdate, *IPSetDeltaUpdate:
+		return msgStringer{Msg: msg}
+	}
+	return msg
+}
+
 // msgStringer wraps an API message to customise how we stringify it.  For example, it truncates
 // the lists of members in the (potentially very large) IPSetsUpdate messages.
-type MsgStringer struct {
+type msgStringer struct {
 	Msg interface{}
 }
 
-func (m MsgStringer) String() string {
+func (m msgStringer) String() string {
 	if log.GetLevel() < log.DebugLevel && m.Msg != nil {
 		const truncateAt = 10
 		switch msg := m.Msg.(type) {
