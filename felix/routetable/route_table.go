@@ -513,11 +513,11 @@ func (r *RouteTable) recalculateDesiredKernelRoute(cidr ip.CIDR) {
 	kernKey := r.routeKeyForCIDR(cidr)
 	oldDesiredRoute, _ := r.kernelRoutes.Desired().Get(kernKey)
 
-	// Start with a blank slate.  The delta-trackers will efficiently prevent
-	// dataplane churn if we add an identical route back again.
-	r.kernelRoutes.Desired().Delete(kernKey)
-	if r.conntrackCleanupEnabled {
-		r.possibleConntrackOwners.Desired().Delete(kernKey)
+	cleanUpKernelRoutes := func() {
+		r.kernelRoutes.Desired().Delete(kernKey)
+		if r.conntrackCleanupEnabled {
+			r.possibleConntrackOwners.Desired().Delete(kernKey)
+		}
 	}
 
 	ifaces := r.cidrToIfaces[cidr]
@@ -527,6 +527,7 @@ func (r *RouteTable) recalculateDesiredKernelRoute(cidr ip.CIDR) {
 			"cidr":     cidr,
 			"oldRoute": oldDesiredRoute,
 		}).Debug("CIDR no longer has associated routes.")
+		cleanUpKernelRoutes()
 		return
 	}
 
@@ -551,7 +552,7 @@ func (r *RouteTable) recalculateDesiredKernelRoute(cidr ip.CIDR) {
 			r.ifaceIndexToGraceInfo[ifIndex] = graceInf
 		}
 
-		if r.ifaceIndexToState[ifIndex] != ifacemonitor.StateUp {
+		if ifaceName != InterfaceNone && r.ifaceIndexToState[ifIndex] != ifacemonitor.StateUp {
 			r.logCxt.Debug("Skipping route for down interface.")
 			return nil
 		}
@@ -572,6 +573,7 @@ func (r *RouteTable) recalculateDesiredKernelRoute(cidr ip.CIDR) {
 			"cidr":       cidr,
 			"candidates": candidates,
 		}).Debug("No valid route for this CIDR (all candidate routes missing iface index).")
+		cleanUpKernelRoutes()
 		return
 	}
 
@@ -602,6 +604,7 @@ func (r *RouteTable) recalculateDesiredKernelRoute(cidr ip.CIDR) {
 			"iface": bestIface,
 		}).Debug("Preferred kernel route for this dest still the same.")
 	}
+
 	r.kernelRoutes.Desired().Set(kernKey, kernRoute)
 	if r.conntrackCleanupEnabled {
 		r.possibleConntrackOwners.Desired().Set(kernKey, []int{bestIfaceIdx})
