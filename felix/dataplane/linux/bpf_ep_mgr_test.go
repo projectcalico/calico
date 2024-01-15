@@ -526,7 +526,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 				endpointToHostAction = "RETURN"
 			})
 
-			It("has host-* policy on workload egress but not ingress", func() {
+			It("has host-* policy suppressed on ingress and egress", func() {
 				var caliI, caliE *polprog.Rules
 
 				// Check workload ingress.
@@ -539,7 +539,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 				Expect(caliE.ForHostInterface).To(BeFalse())
 				Expect(caliE.HostNormalTiers).To(HaveLen(1))
 				Expect(caliE.HostNormalTiers[0].Policies).To(HaveLen(1))
-				Expect(caliE.SuppressNormalHostPolicy).To(BeFalse())
+				Expect(caliE.SuppressNormalHostPolicy).To(BeTrue())
 			})
 		})
 	})
