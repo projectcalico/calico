@@ -1018,13 +1018,13 @@ var _ = Describe("IP sets dataplane", func() {
 		resyncAndApply()
 		dataplane.ExpectMembers(map[string][]string{"noncali": v4Members1And2})
 	})
-	It("ListCalicoIPSets() should ignore non-calico IP sets", func() {
+	It("CalicoIPSets() should ignore non-calico IP sets", func() {
 		dataplane.IPSetMembers["noncali"] =
 			set.From("10.0.0.1", "10.0.0.2")
 		dataplane.IPSetMembers[v4MainIPSetName] =
 			set.From("10.0.0.1", "10.0.0.3", "10.0.0.4")
 
-		ipsets, err := ipsets.ListCalicoIPSets()
+		ipsets, err := ipsets.CalicoIPSets()
 		Expect(err).NotTo(HaveOccurred())
 		Expect(ipsets).Should(Equal([]string{v4MainIPSetName}))
 	})

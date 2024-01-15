@@ -109,12 +109,15 @@ func (d *mockDataplane) newCmd(name string, arg ...string) CmdIface {
 		}
 	case "list":
 		Expect(len(arg)).To(Equal(2))
-		cmd = &listCmd{
+		command := &listCmd{
 			Dataplane: d,
 			resultC:   make(chan error),
 			allIpSets: arg[1] == "-name",
-			SetName:   arg[1], // either ipset name or '-name' to return the list of all ipsets
 		}
+		if !command.allIpSets {
+			command.SetName = arg[1]
+		}
+		cmd = command
 	default:
 		Fail(fmt.Sprintf("Unexpected command %v", arg))
 	}

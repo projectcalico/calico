@@ -397,7 +397,7 @@ func (s *IPSets) tryResync() (err error) {
 	// scan.
 	s.setNameToProgrammedMetadata.Dataplane().DeleteAll()
 
-	ipSets, err := s.ListCalicoIPSets()
+	ipSets, err := s.CalicoIPSets()
 	if err != nil {
 		s.logCxt.WithError(err).Error("Failed to get the list of ipsets")
 		return
@@ -439,7 +439,7 @@ func (s *IPSets) tryResync() (err error) {
 	return
 }
 
-func (s *IPSets) ListCalicoIPSets() ([]string, error) {
+func (s *IPSets) CalicoIPSets() ([]string, error) {
 	// Start an 'ipset list -name' child process, which will emit ipset's name, one at each line:
 	//
 	// 	test-100
@@ -1006,7 +1006,7 @@ func (s *IPSets) deleteIPSet(setName string) error {
 }
 
 func (s *IPSets) dumpIPSetsToLog() {
-	ipSets, err := s.ListCalicoIPSets()
+	ipSets, err := s.CalicoIPSets()
 	if err != nil {
 		s.logCxt.WithError(err).Error("Failed to get the list of IP sets.")
 		return
