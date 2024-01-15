@@ -16,18 +16,8 @@ package routetable
 
 import (
 	"net"
-	"os/exec"
-
-	"github.com/projectcalico/calico/felix/ip"
 )
 
 type conntrackIface interface {
 	RemoveConntrackFlows(ipVersion uint8, ipAddr net.IP)
-}
-
-func addStaticARPEntry(cidr ip.CIDR, destMAC net.HardwareAddr, ifaceName string) error {
-	cmd := exec.Command("arp",
-		"-s", cidr.Addr().String(), destMAC.String(),
-		"-i", ifaceName)
-	return cmd.Run()
 }
