@@ -126,9 +126,10 @@ type RouteTable struct {
 	ifaceIndexToState     map[int]ifacemonitor.State
 	ifaceIndexToGraceInfo map[int]graceInfo
 
-	conntrackCleanupEnabled  bool
-	possibleConntrackOwners  *deltatracker.DeltaTracker[kernelRouteKey, []int]
-	pendingConntrackCleanups map[ip.Addr]chan struct{}
+	conntrackCleanupEnabled bool
+	// conntrackTracker is a RealConntrackTracker or a DummyConntrackTracker
+	// Depending on whether conntrack cleanup is enabled or not.
+	conntrackTracker ConntrackTracker
 
 	nl *handlemgr.HandleManager
 
@@ -269,7 +270,7 @@ func New(
 		netlinkFamily: family,
 		tableIndex:    tableIndex,
 
-		deviceRouteSourceAddress: ip.FromNetIP(deviceRouteSourceAddress), // FIXME use ip.Addr as input
+		deviceRouteSourceAddress: ip.FromNetIP(deviceRouteSourceAddress),
 		deviceRouteProtocol:      deviceRouteProtocol,
 		removeExternalRoutes:     removeExternalRoutes,
 
@@ -288,9 +289,7 @@ func New(
 		ifaceIndexToName:      map[int]string{},
 		ifaceIndexToState:     map[int]ifacemonitor.State{},
 
-		conntrackCleanupEnabled:  true,
-		pendingConntrackCleanups: map[ip.Addr]chan struct{}{},
-		possibleConntrackOwners:  deltatracker.New[kernelRouteKey, []int](),
+		conntrackCleanupEnabled: true,
 
 		opReporter:       opReporter,
 		livenessCallback: func() {},
@@ -311,6 +310,12 @@ func New(
 		handlemgr.WithNewHandleOverride(rt.newNetlinkHandle),
 		handlemgr.WithSocketTimeout(netlinkTimeout),
 	)
+
+	if rt.conntrackCleanupEnabled {
+		rt.conntrackTracker = NewRealConntrackTracker(ipVersion, rt.conntrack)
+	} else {
+		rt.conntrackTracker = NewDummyConntrackTracker()
+	}
 
 	return rt
 }
@@ -515,9 +520,7 @@ func (r *RouteTable) recalculateDesiredKernelRoute(cidr ip.CIDR) {
 
 	cleanUpKernelRoutes := func() {
 		r.kernelRoutes.Desired().Delete(kernKey)
-		if r.conntrackCleanupEnabled {
-			r.possibleConntrackOwners.Desired().Delete(kernKey)
-		}
+		r.conntrackTracker.RemoveAllowedOwner(kernKey)
 	}
 
 	ifaces := r.cidrToIfaces[cidr]
@@ -606,9 +609,7 @@ func (r *RouteTable) recalculateDesiredKernelRoute(cidr ip.CIDR) {
 	}
 
 	r.kernelRoutes.Desired().Set(kernKey, kernRoute)
-	if r.conntrackCleanupEnabled {
-		r.possibleConntrackOwners.Desired().Set(kernKey, []int{bestIfaceIdx})
-	}
+	r.conntrackTracker.SetAllowedOwner(kernKey, bestIfaceIdx)
 }
 
 func (r *RouteTable) QueueResync() {
@@ -645,7 +646,7 @@ func (r *RouteTable) attemptApply() (err error) {
 		return err
 	}
 	r.maybeCleanUpGracePeriods()
-	r.cleanUpPendingConntrackDeletions()
+	r.conntrackTracker.DoPeriodicCleanup()
 	return nil
 }
 
@@ -718,7 +719,7 @@ func (r *RouteTable) doFullResync(nl netlinkshim.Interface) error {
 				// Not a route that we're managing.
 				continue
 			}
-			r.addDataplaneConntrackOwner(kernKey, kernRoute.Ifindex)
+			r.conntrackTracker.AddDataplaneOwner(kernKey, kernRoute.Ifindex)
 			f(kernKey, kernRoute)
 		}
 		return nil
@@ -793,7 +794,7 @@ func (r *RouteTable) resyncIndividualInterfaces(nl netlinkshim.Interface) error 
 				// be a candidate for us to delete.
 				continue
 			}
-			r.addDataplaneConntrackOwner(kernKey, kernRoute.Ifindex)
+			r.conntrackTracker.AddDataplaneOwner(kernKey, kernRoute.Ifindex)
 			kernRoutes[kernKey] = kernRoute
 		}
 		// Then look for routes that the tracker says are there but are actually
@@ -1044,50 +1045,22 @@ func (r *RouteTable) applyUpdates() error {
 		return deltatracker.IterActionUpdateDataplane
 	})
 
-	if r.conntrackCleanupEnabled {
-		// FIXME, this is not quite right for IPv6.  IPv6 naturally uses multiple metrics
-		//  on its routes (systemd uses 512, 1024, 2048 for different preference levels
-		//  that means that we end up removing and re-adding routes with different prefs
-		//  and cleaning up the conntrack entries when we do so.  Really need to spot that
-		//  CIDR is on the same interface and only clean up ifindex changes.
-
-		// Clean up any conntrack entries for routes that have been deleted.
-		r.possibleConntrackOwners.PendingDeletions().Iter(func(kernKey kernelRouteKey) deltatracker.IterAction {
-			r.logCxt.WithField("kernKey", kernKey).Debug("Route deleted, starting conntrack deletion.")
-			r.startConntrackDeletion(kernKey.CIDR.Addr())
-			return deltatracker.IterActionUpdateDataplane
-		})
-
-		// Look for routes that are moving from one interface to another.  We need
-		// to sequence the update so that we:
-		// - Remove the old route
-		// - Clean up conntrack entries
-		// - Add the new route.
-		r.possibleConntrackOwners.PendingUpdates().Iter(func(kernKey kernelRouteKey, newOwners []int) deltatracker.IterAction {
-			old, ok := r.possibleConntrackOwners.Dataplane().Get(kernKey)
-			if !ok {
-				// We don't have any owners recorded in the dataplane.  This is the
-				// mainline case when we're adding a route for the first time (or
-				// it has been long enough since the last time this CIDR was used
-				// that the cleanup is all done).
-				return deltatracker.IterActionNoOp
-			}
-			r.logCxt.WithFields(log.Fields{
-				"kernKey":   kernKey,
-				"oldOwners": old,
-				"newOwners": newOwners,
-			}).Info("Conntrack owners updated, starting conntrack deletion.")
-			err := r.deleteRoute(nl, kernKey)
-			if err != nil {
-				deletionErrs[kernKey] = err
-			} else {
-				r.kernelRoutes.Dataplane().Delete(kernKey)
-			}
-			r.startConntrackDeletion(kernKey.CIDR.Addr())
-			r.possibleConntrackOwners.Dataplane().Delete(kernKey)
-			return deltatracker.IterActionNoOp
-		})
-	}
+	// Start background conntrack deletions for routes that have been removed.
+	// We only wait for these to finish one-by-one if we need to move the route
+	// to a new interface.
+	r.conntrackTracker.StartDeletionsForDeletedRoutes()
+	// For routes that are moving to a new interface, delete the old route
+	// synchronously and kick off conntrack deletions for the old interface.
+	// This makes sure that we don't have a window where a new connection
+	// can start using the old interface.
+	r.conntrackTracker.IterMovedRoutesAndStartDeletions(func(kernKey kernelRouteKey, newOwners []int) {
+		err := r.deleteRoute(nl, kernKey)
+		if err != nil {
+			deletionErrs[kernKey] = err
+		} else {
+			r.kernelRoutes.Dataplane().Delete(kernKey)
+		}
+	})
 
 	updateErrs := map[kernelRouteKey]error{}
 	r.kernelRoutes.PendingUpdates().Iter(func(kernKey kernelRouteKey, kRoute kernelRoute) deltatracker.IterAction {
@@ -1097,14 +1070,8 @@ func (r *RouteTable) applyUpdates() error {
 			flags = unix.RTNH_F_ONLINK
 		}
 
-		r.waitForPendingConntrackDeletion(kernKey.CIDR.Addr())
-
-		if r.conntrackCleanupEnabled {
-			// Defensive: we should've already done any conntrack cleanup that's
-			// needed.  Make sure we put the conntrack ownership registry in a
-			// known state.
-			r.possibleConntrackOwners.Dataplane().Set(kernKey, []int{kRoute.Ifindex})
-		}
+		r.conntrackTracker.WaitForPendingDeletion(kernKey.CIDR.Addr())
+		r.conntrackTracker.SetSingleDataplaneOwner(kernKey, kRoute.Ifindex)
 
 		nlRoute := &netlink.Route{
 			Family: r.netlinkFamily,
@@ -1195,53 +1162,6 @@ func (r *RouteTable) deleteRoute(nl netlinkshim.Interface, kernKey kernelRouteKe
 	return err
 }
 
-// startConntrackDeletion starts the deletion of conntrack entries for the given CIDR in the background.  Pending
-// deletions are tracked in the pendingConntrackCleanups map so we can block waiting for them later.
-//
-// It's important to do the conntrack deletions in the background because scanning the conntrack
-// table is very slow if there are a lot of entries.  Previously, we did the deletion synchronously
-// but that led to lengthy Apply() calls on the critical path.
-func (r *RouteTable) startConntrackDeletion(ipAddr ip.Addr) {
-	if !r.conntrackCleanupEnabled {
-		log.Error("startConntrackDeletion called but conntrack cleanup is disabled for this routeing table.  Ignoring.")
-		return
-	}
-	r.logCxt.WithField("ip", ipAddr).Debug("Starting goroutine to delete conntrack entries")
-	done := make(chan struct{})
-	r.pendingConntrackCleanups[ipAddr] = done
-	go func() {
-		defer close(done)
-		r.conntrack.RemoveConntrackFlows(r.ipVersion, ipAddr.AsNetIP())
-		r.logCxt.WithField("ip", ipAddr).Debug("Deleted conntrack entries")
-	}()
-}
-
-// cleanUpPendingConntrackDeletions scans the pendingConntrackCleanups map for completed entries and removes them.
-func (r *RouteTable) cleanUpPendingConntrackDeletions() {
-	for ipAddr, c := range r.pendingConntrackCleanups {
-		select {
-		case <-c:
-			r.logCxt.WithField("ip", ipAddr).Debug(
-				"Background goroutine finished deleting conntrack entries")
-			delete(r.pendingConntrackCleanups, ipAddr)
-		default:
-			r.logCxt.WithField("ip", ipAddr).Debug(
-				"Background goroutine yet to finish deleting conntrack entries")
-			continue
-		}
-	}
-}
-
-// waitForPendingConntrackDeletion waits for any pending conntrack deletions (if any) for the given IP to complete.
-func (r *RouteTable) waitForPendingConntrackDeletion(ipAddr ip.Addr) {
-	if c := r.pendingConntrackCleanups[ipAddr]; c != nil {
-		r.logCxt.WithField("ip", ipAddr).Info("Waiting for pending conntrack deletion to finish")
-		<-c
-		r.logCxt.WithField("ip", ipAddr).Info("Done waiting for pending conntrack deletion to finish")
-		delete(r.pendingConntrackCleanups, ipAddr)
-	}
-}
-
 // filterErrorByIfaceState checks the current state of the interface; if it's down or gone, it
 // returns IfaceDown or IfaceNotPresent, otherwise, it returns the given defaultErr.
 func (r *RouteTable) filterErrorByIfaceState(ifaceName string, currentErr, defaultErr error, suppressExistsWarning bool) error {
@@ -1300,20 +1220,6 @@ func (r *RouteTable) filterErrorByIfaceState(ifaceName string, currentErr, defau
 		logCxt.WithError(err).Error("Failed to access interface after a failure")
 		return defaultErr
 	}
-}
-
-func (r *RouteTable) addDataplaneConntrackOwner(kernKey kernelRouteKey, ifindex int) {
-	if !r.conntrackCleanupEnabled {
-		return
-	}
-	owners, _ := r.possibleConntrackOwners.Dataplane().Get(kernKey)
-	for _, o := range owners {
-		if o == ifindex {
-			return
-		}
-	}
-	owners = append(owners, ifindex)
-	r.possibleConntrackOwners.Dataplane().Set(kernKey, owners)
 }
 
 func (r *RouteTable) addStaticARPEntry(nl netlinkshim.Interface, cidr ip.CIDR, mac net.HardwareAddr, ifindex int) error {
