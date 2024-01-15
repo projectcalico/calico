@@ -28,7 +28,7 @@ func init() {
 		api.NewWorkloadEndpointList(),
 		true,
 		[]string{"workloadendpoint", "workloadendpoints", "wep", "weps"},
-		[]string{"WORKLOAD", "NODE", "NETWORKS", "INTERFACE"},
+		[]string{"NAME", "WORKLOAD", "NODE", "NETWORKS", "INTERFACE"},
 		[]string{"NAME", "WORKLOAD", "NODE", "NETWORKS", "INTERFACE", "PROFILES", "NATS"},
 		// NAMESPACE may be prepended in GrabTableTemplate so needs to remain in the map below
 		map[string]string{
