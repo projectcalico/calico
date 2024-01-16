@@ -27,6 +27,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/dataplane/common"
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -40,6 +41,7 @@ var _ = Describe("IpipMgr (tunnel configuration)", func() {
 		ipipMgr   *ipipManager
 		ipSets    *common.MockIPSets
 		dataplane *mockIPIPDataplane
+		rt, brt   *mockRouteTable
 	)
 
 	ip, _, err := net.ParseCIDR("10.0.0.1/32")
@@ -54,7 +56,25 @@ var _ = Describe("IpipMgr (tunnel configuration)", func() {
 	BeforeEach(func() {
 		dataplane = &mockIPIPDataplane{}
 		ipSets = common.NewMockIPSets()
-		ipipMgr = newIPIPManagerWithShim(ipSets, 1024, dataplane, nil)
+		rt = &mockRouteTable{
+			currentRoutes:   map[string][]routetable.Target{},
+			currentL2Routes: map[string][]routetable.L2Target{},
+		}
+		brt = &mockRouteTable{
+			currentRoutes:   map[string][]routetable.Target{},
+			currentL2Routes: map[string][]routetable.L2Target{},
+		}
+		ipipMgr = newIPIPManagerWithShim(
+			ipSets, rt, brt, "tunl0",
+			Config{
+				MaxIPSetSize:       1024,
+				Hostname:           "node1",
+				ExternalNodesCidrs: nil,
+			},
+			&mockIPIPDataplane{},
+			4,
+			dataplane,
+		)
 	})
 
 	Describe("after calling configureIPIPDevice", func() {
@@ -208,6 +228,7 @@ var _ = Describe("ipipManager IP set updates", func() {
 		ipipMgr   *ipipManager
 		ipSets    *common.MockIPSets
 		dataplane *mockIPIPDataplane
+		rt, brt   *mockRouteTable
 	)
 
 	const (
@@ -217,7 +238,25 @@ var _ = Describe("ipipManager IP set updates", func() {
 	BeforeEach(func() {
 		dataplane = &mockIPIPDataplane{}
 		ipSets = common.NewMockIPSets()
-		ipipMgr = newIPIPManagerWithShim(ipSets, 1024, dataplane, []string{externalCIDR})
+		rt = &mockRouteTable{
+			currentRoutes:   map[string][]routetable.Target{},
+			currentL2Routes: map[string][]routetable.L2Target{},
+		}
+		brt = &mockRouteTable{
+			currentRoutes:   map[string][]routetable.Target{},
+			currentL2Routes: map[string][]routetable.L2Target{},
+		}
+		ipipMgr = newIPIPManagerWithShim(
+			ipSets, rt, brt, "tunl0",
+			Config{
+				MaxIPSetSize:       1024,
+				Hostname:           "node1",
+				ExternalNodesCidrs: []string{externalCIDR},
+			},
+			&mockIPIPDataplane{},
+			4,
+			dataplane,
+		)
 	})
 
 	It("should not create the IP set until first call to CompleteDeferredWork()", func() {
@@ -435,6 +474,18 @@ func (d *mockIPIPDataplane) AddrDel(link netlink.Link, addr *netlink.Addr) error
 	Expect(d.addrs).To(HaveLen(1))
 	Expect(d.addrs[0].IP.String()).To(Equal(addr.IP.String()))
 	d.addrs = nil
+	return nil
+}
+
+func (d *mockIPIPDataplane) LinkList() ([]netlink.Link, error) {
+	return nil, nil
+}
+
+func (d *mockIPIPDataplane) LinkAdd(_ netlink.Link) error {
+	return nil
+}
+
+func (d *mockIPIPDataplane) LinkDel(_ netlink.Link) error {
 	return nil
 }
 
