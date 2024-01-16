@@ -291,16 +291,6 @@ type bpfEndpointManager struct {
 	// onStillAlive is called from loops to reset the watchdog.
 	onStillAlive func()
 
-	loadPolicyProgramFn func(
-		progName string,
-		ipFamily proto.IPVersion,
-		rules polprog.Rules,
-		staticProgsMap maps.Map,
-		polProgsMap maps.Map,
-		opts ...polprog.Option,
-	) ([]fileDescriptor, []asm.Insns, error)
-	updatePolicyProgramFn func(rules polprog.Rules, polDir string, ap attachPoint) error
-
 	// HEP processing.
 	hostIfaceToEpMap     map[string]proto.HostEndpoint
 	wildcardHostEndpoint proto.HostEndpoint
@@ -418,7 +408,7 @@ type ManagerWithHEPUpdate interface {
 }
 
 func NewTestEpMgr(config *Config, bpfmaps *bpfmap.Maps, workloadIfaceRegex *regexp.Regexp) (ManagerWithHEPUpdate, error) {
-	return newBPFEndpointManager(nil, config, bpfmaps, true, workloadIfaceRegex, idalloc.New(),
+	return newBPFEndpointManager(nil, nil, config, bpfmaps, true, workloadIfaceRegex, idalloc.New(),
 		rules.NewRenderer(rules.Config{
 			BPFEnabled:                  true,
 			IPIPEnabled:                 true,
@@ -444,7 +434,8 @@ func NewTestEpMgr(config *Config, bpfmaps *bpfmap.Maps, workloadIfaceRegex *rege
 }
 
 func newBPFEndpointManager(
-	dp bpfDataplane,
+	dpCommon bpfDataplane,
+	dp bpfDP,
 	config *Config,
 	bpfmaps *bpfmap.Maps,
 	fibLookupEnabled bool,
@@ -465,7 +456,7 @@ func newBPFEndpointManager(
 
 	m := &bpfEndpointManager{
 		initUnknownIfaces:       set.New[string](),
-		dp:                      dp,
+		dp:                      dpCommon,
 		allWEPs:                 map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
 		happyWEPs:               map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
 		happyWEPsDirty:          true,
@@ -547,11 +538,11 @@ func newBPFEndpointManager(
 		m.hostNetworkedNATMode = hostNetworkedNATEnabled
 	}
 
-	m.v4 = newDataplane(4, nil, config, bpfmaps, ipSetIDAlloc,
+	m.v4 = newDataplane(4, dp, config, bpfmaps, ipSetIDAlloc,
 		jumpMapAlloc, xdpJumpMapAlloc, m.hostNetworkedNATMode)
 
 	if m.ipv6Enabled {
-		m.v6 = newDataplane(6, nil, config, bpfmaps, ipSetIDAlloc,
+		m.v6 = newDataplane(6, dp, config, bpfmaps, ipSetIDAlloc,
 			jumpMapAlloc, xdpJumpMapAlloc, m.hostNetworkedNATMode)
 	}
 
@@ -685,8 +676,7 @@ func newDataplane(
 		bpf.XDPDriver,
 		bpf.XDPGeneric,
 	}
-	d.updatePolicyProgramFn = d.updatePolicyProgram
-
+	d.updatePolicyProgramFn = d.dp.updatePolicyProgram
 	if x, ok := d.dp.(hasLoadPolicyProgram); ok {
 		d.loadPolicyProgramFn = x.loadPolicyProgram
 		d.updatePolicyProgramFn = d.updatePolicyProgram
@@ -928,9 +918,9 @@ func (d *dataplane) reclaimPolicyIdx(name string, iface *bpfInterface) {
 		if err := d.jumpMapDelete(attachHook, iface.dpState.policyIdx[attachHook]); err != nil {
 			log.WithError(err).Warn("Policy program may leak.")
 		}
-                if err := d.xdpJumpMapAlloc.Put(iface.dpState.policyIdx[attachHook], name); err != nil {
-                        log.WithError(err).Error(attachHook.String())
-                }
+		if err := d.xdpJumpMapAlloc.Put(iface.dpState.policyIdx[attachHook], name); err != nil {
+			log.WithError(err).Error(attachHook.String())
+		}
 		if attachHook != hook.XDP {
 			if err := d.jumpMapDelete(attachHook, iface.dpState.filterIdx[attachHook]); err != nil {
 				log.WithError(err).Warn("Filter program may leak.")
@@ -966,42 +956,6 @@ func (m *bpfEndpointManager) updateIfaceStateMap(name string, iface *bpfInterfac
 			d = m.v6
 		}
 		d.reclaimPolicyIdx(name, iface)
-		/*
-		if err := m.jumpMapDelete(hook.XDP, iface.dpState.policyIdx[hook.XDP]); err != nil {
-			log.WithError(err).Warn("Policy program may leak.")
-		}
-		if err := m.xdpJumpMapAlloc.Put(iface.dpState.policyIdx[hook.XDP], name); err != nil {
-			log.WithError(err).Error("XDP")
-		}
-
-		if err := m.jumpMapDelete(hook.Ingress, iface.dpState.policyIdx[hook.Ingress]); err != nil {
-			log.WithError(err).Warn("Policy program may leak.")
-		}
-		if err := m.jumpMapAlloc.Put(iface.dpState.policyIdx[hook.Ingress], name); err != nil {
-			log.WithError(err).Error("Ingress")
-		}
-
-		if err := m.jumpMapDelete(hook.Egress, iface.dpState.policyIdx[hook.Egress]); err != nil {
-			log.WithError(err).Warn("Policy program may leak.")
-		}
-		if err := m.jumpMapAlloc.Put(iface.dpState.policyIdx[hook.Egress], name); err != nil {
-			log.WithError(err).Error("Ingress")
-		}
-
-		if err := m.jumpMapDelete(hook.Egress, iface.dpState.filterIdx[hook.Egress]); err != nil {
-			log.WithError(err).Warn("Filter program may leak.")
-		}
-		if err := m.jumpMapAlloc.Put(iface.dpState.filterIdx[hook.Egress], name); err != nil {
-			log.WithError(err).Error("Ingress")
-		}
-
-		if err := m.jumpMapDelete(hook.Ingress, iface.dpState.filterIdx[hook.Ingress]); err != nil {
-			log.WithError(err).Warn("Filter program may leak.")
-		}
-		if err := m.jumpMapAlloc.Put(iface.dpState.filterIdx[hook.Ingress], name); err != nil {
-			log.WithError(err).Error("Ingress")
-		}*/
-
 		m.ifStateMap.Desired().Delete(k)
 		iface.dpState.clearJumps()
 	}
@@ -1050,7 +1004,7 @@ func (m *bpfEndpointManager) cleanupOldAttach(iface string, ai bpf.EPAttachInfo)
 		if m.ipv6Enabled {
 			d = m.v6
 		}
-		
+
 		if err := d.dp.ensureNoProgram(&ap); err != nil {
 			return fmt.Errorf("tc egress: %w", err)
 		}
@@ -1930,7 +1884,7 @@ func (m *bpfEndpointManager) updateWEPsInDataplane() {
 
 func (m *bpfEndpointManager) wepStateFillJumps(ifaceName string, state *bpfInterfaceState) error {
 	var err error
-	
+
 	if state.policyIdx[hook.Ingress] == -1 {
 		state.policyIdx[hook.Ingress], err = m.jumpMapAlloc.Get(ifaceName)
 		if err != nil {
@@ -2054,13 +2008,13 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		ingressAP, ingressPolErr = d.wepApplyPolicyToDirection(readiness, ifaceName, &state, 
-						wep, PolDirnIngress, &ingressAttachPoint)
+		ingressAP, ingressPolErr = d.wepApplyPolicyToDirection(readiness, ifaceName, &state,
+			wep, PolDirnIngress, &ingressAttachPoint)
 	}()
 	go func() {
 		defer wg.Done()
 		egressAP, egressPolErr = d.wepApplyPolicyToDirection(readiness, ifaceName, &state,
-						 wep, PolDirnEgress, &egressAttachPoint)
+			wep, PolDirnEgress, &egressAttachPoint)
 	}()
 	wg.Wait()
 
@@ -2095,11 +2049,11 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 	}
 
 	if ingressPolErr != nil {
-		return state, fmt.Errorf("error applying policy to wep %w", wep)
+		return state, fmt.Errorf("error applying policy to wep %w", ingressPolErr)
 	}
 
 	if egressPolErr != nil {
-		return state, fmt.Errorf("error applying policy to wep %w", wep)
+		return state, fmt.Errorf("error applying policy to wep %w", egressPolErr)
 	}
 
 	if egressQdisc != ingressQdisc {
@@ -2193,7 +2147,6 @@ func (d *dataplane) wepApplyPolicyToDirection(readiness ifaceReadiness, ifaceNam
 		return nil, fmt.Errorf("unknown host IP")
 	}
 
-
 	if polDirection == PolDirnIngress {
 		policyIdx = state.policyIdx[hook.Ingress]
 		filterIdx = state.filterIdx[hook.Ingress]
@@ -2201,7 +2154,7 @@ func (d *dataplane) wepApplyPolicyToDirection(readiness ifaceReadiness, ifaceNam
 		policyIdx = state.policyIdx[hook.Egress]
 		filterIdx = state.filterIdx[hook.Egress]
 	}
-		
+
 	ap = d.wepTCAttachPoint(ap, policyIdx, filterIdx, polDirection)
 
 	log.WithField("iface", ifaceName).Debugf("readiness: %d", readiness)
@@ -2296,7 +2249,7 @@ func (d *dataplane) addHostPolicy(rules *polprog.Rules, hostEndpoint *proto.Host
 }
 
 func (d *dataplane) attachDataIfaceProgram(
-	ifaceName string, 
+	ifaceName string,
 	ep *proto.HostEndpoint,
 	polDirection PolDirection,
 	policyIdx, filterIdx int,
@@ -3170,51 +3123,6 @@ func (d *dataplane) writePolicyDebugInfo(insns []asm.Insns, ifaceName string, ip
 	return nil
 }
 
-func (m *bpfEndpointManager) writePolicyDebugInfo(insns []asm.Insns, ifaceName string, ipFamily proto.IPVersion, polDir string, h hook.Hook, polErr error) error {
-	if !m.bpfPolicyDebugEnabled {
-		return nil
-	}
-	if err := os.MkdirAll(bpf.RuntimePolDir, 0600); err != nil {
-		return err
-	}
-
-	errStr := ""
-	if polErr != nil {
-		errStr = polErr.Error()
-	}
-
-	// We may have >1 sub-program; it seems to work reasonably well to just
-	// concatenate the instructions.  The policy program builder writes
-	// comments that delineate the programs.
-	var combinedInsns asm.Insns
-	if len(insns) > 0 {
-		combinedInsns = insns[0]
-		for _, ins := range insns[1:] {
-			combinedInsns = append(combinedInsns, ins...)
-		}
-	}
-	policyDebugInfo := bpf.PolicyDebugInfo{
-		IfaceName:  ifaceName,
-		Hook:       "tc " + h.String(),
-		PolicyInfo: combinedInsns,
-		Error:      errStr,
-	}
-
-	filename := bpf.PolicyDebugJSONFileName(ifaceName, strings.ToLower(polDir), ipFamily)
-	buffer := &bytes.Buffer{}
-	encoder := json.NewEncoder(buffer)
-	err := encoder.Encode(policyDebugInfo)
-	if err != nil {
-		return err
-	}
-
-	if err := os.WriteFile(filename, buffer.Bytes(), 0600); err != nil {
-		return err
-	}
-	log.Debugf("Policy iface %s hook %s written to %s", ifaceName, h, filename)
-	return nil
-}
-
 func (d *dataplane) updatePolicyProgram(rules polprog.Rules, polDir string, ap attachPoint) error {
 	ipFamily := proto.IPVersion(d.ipFamily)
 
@@ -3271,7 +3179,7 @@ func (d *dataplane) loadTCLogFilter(ap *tc.AttachPoint) (fileDescriptor, int, er
 func (d *dataplane) updateLogFilter(ap attachPoint) error {
 	switch t := ap.(type) {
 	case *tc.AttachPoint:
-		fd, idx, err := d.loadTCLogFilter(t)
+		fd, idx, err := d.dp.loadTCLogFilter(t)
 		if err != nil {
 			return err
 		}

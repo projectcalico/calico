@@ -266,7 +266,8 @@ var _ = Describe("BPF Endpoint Manager", func() {
 	var (
 		bpfEpMgr             *bpfEndpointManager
 		dp                   *mockDataplane
-		mockDP               bpfDataplane
+		mockDPCommon         bpfDataplane
+		mockDP               bpfDP
 		fibLookupEnabled     bool
 		endpointToHostAction string
 		dataIfacePattern     string
@@ -351,6 +352,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 	newBpfEpMgr := func() {
 		var err error
 		bpfEpMgr, err = newBPFEndpointManager(
+			mockDPCommon,
 			mockDP,
 			&Config{
 				Hostname:              "uthost",
@@ -474,6 +476,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 	JustBeforeEach(func() {
 		dp = newMockDataplane()
+		mockDPCommon = dp
 		mockDP = dp
 		newBpfEpMgr()
 	})
@@ -752,8 +755,8 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		It("should update the maps with ruleIds", func() {
 			ingRule := &proto.Rule{Action: "Allow", RuleId: "INGRESSALLOW1234"}
 			egrRule := &proto.Rule{Action: "Allow", RuleId: "EGRESSALLOW12345"}
-			ingRuleMatchId := bpfEpMgr.dp.ruleMatchID("Ingress", "Allow", "Policy", "allowPol", 0)
-			egrRuleMatchId := bpfEpMgr.dp.ruleMatchID("Egress", "Allow", "Policy", "allowPol", 0)
+			ingRuleMatchId := bpfEpMgr.v4.dp.ruleMatchID("Ingress", "Allow", "Policy", "allowPol", 0)
+			egrRuleMatchId := bpfEpMgr.v4.dp.ruleMatchID("Egress", "Allow", "Policy", "allowPol", 0)
 			k := make([]byte, 8)
 			v := make([]byte, 8)
 			rcMap := bpfEpMgr.bpfmaps.RuleCountersMap
@@ -777,7 +780,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 			// update the ingress rule of the policy
 			ingDenyRule := &proto.Rule{Action: "Deny", RuleId: "INGRESSDENY12345"}
-			ingDenyRuleMatchId := bpfEpMgr.dp.ruleMatchID("Ingress", "Deny", "Policy", "allowPol", 0)
+			ingDenyRuleMatchId := bpfEpMgr.v4.dp.ruleMatchID("Ingress", "Deny", "Policy", "allowPol", 0)
 			bpfEpMgr.OnUpdate(&proto.ActivePolicyUpdate{
 				Id:     &proto.PolicyID{Tier: "default", Name: "allowPol"},
 				Policy: &proto.Policy{InboundRules: []*proto.Rule{ingDenyRule}, OutboundRules: []*proto.Rule{egrRule}},
@@ -818,8 +821,8 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		})
 
 		It("should cleanup the bpf map after restart", func() {
-			ingRuleMatchId := bpfEpMgr.dp.ruleMatchID("Ingress", "Allow", "Policy", "allowPol", 0)
-			egrRuleMatchId := bpfEpMgr.dp.ruleMatchID("Egress", "Allow", "Policy", "allowPol", 0)
+			ingRuleMatchId := bpfEpMgr.v4.dp.ruleMatchID("Ingress", "Allow", "Policy", "allowPol", 0)
+			egrRuleMatchId := bpfEpMgr.v4.dp.ruleMatchID("Egress", "Allow", "Policy", "allowPol", 0)
 			k := make([]byte, 8)
 			v := make([]byte, 8)
 			rcMap := bpfEpMgr.bpfmaps.RuleCountersMap
@@ -1396,9 +1399,11 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 	Describe("program map", func() {
 		JustBeforeEach(func() {
-			mockDP = &mockProgMapDP{
+			mapDP := &mockProgMapDP{
 				dp,
 			}
+			mockDP = mapDP
+			mockDPCommon = mapDP
 			newBpfEpMgr()
 
 			bpfEpMgr.bpfLogLevel = "debug"
@@ -1451,96 +1456,97 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			Expect(xdpJumpMap.Contents).To(HaveLen(0))
 		})
 
-		/*
-			It("should not update the wep log filter if only policy changes", func() {
-				dp.ensureQdiscFn = func(iface string) (bool, error) {
-					if iface == "cali12345" {
-						return true, nil
-					}
-					return false, nil
+		It("should not update the wep log filter if only policy changes", func() {
+			dp.ensureQdiscFn = func(iface string) (bool, error) {
+				if iface == "cali12345" {
+					return true, nil
 				}
-				genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
-				genPolicy("default", "mypolicy")()
-				genWLUpdate("cali12345", "mypolicy")()
+				return false, nil
+			}
+			genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
+			genPolicy("default", "mypolicy")()
+			genWLUpdate("cali12345", "mypolicy")()
 
-				err := bpfEpMgr.CompleteDeferredWork()
-				Expect(err).NotTo(HaveOccurred())
+			err := bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
 
-				Expect(jumpMap.Contents).To(HaveLen(4)) // 2x policy and 2x filter
-				Expect(xdpJumpMap.Contents).To(HaveLen(0))
+			Expect(jumpMap.Contents).To(HaveLen(4)) // 2x policy and 2x filter
+			Expect(xdpJumpMap.Contents).To(HaveLen(0))
 
-				jumpCopyContents := make(map[string]string, len(jumpMap.Contents))
-				for k, v := range jumpMap.Contents {
-					jumpCopyContents[k] = v
+			jumpCopyContents := make(map[string]string, len(jumpMap.Contents))
+			for k, v := range jumpMap.Contents {
+				jumpCopyContents[k] = v
+			}
+
+			genPolicy("default", "anotherpolicy")()
+			genWLUpdate("cali12345", "anotherpolicy")()
+
+			err = bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(len(jumpCopyContents)).To(Equal(len(jumpMap.Contents)))
+			Expect(jumpCopyContents).NotTo(Equal(jumpMap.Contents))
+
+			changes := 0
+
+			for k, v := range jumpCopyContents {
+				if v != jumpMap.Contents[k] {
+					changes++
 				}
+			}
 
-				genPolicy("default", "anotherpolicy")()
-				genWLUpdate("cali12345", "anotherpolicy")()
+			Expect(changes).To(Equal(2)) // only policies have changed
 
-				err = bpfEpMgr.CompleteDeferredWork()
-				Expect(err).NotTo(HaveOccurred())
+			// restart
 
-				Expect(len(jumpCopyContents)).To(Equal(len(jumpMap.Contents)))
-				Expect(jumpCopyContents).NotTo(Equal(jumpMap.Contents))
+			jumpCopyContents = make(map[string]string, len(jumpMap.Contents))
+			for k, v := range jumpMap.Contents {
+				jumpCopyContents[k] = v
+			}
 
-				changes := 0
+			dp = newMockDataplane()
+			mapDP := &mockProgMapDP{
+				dp,
+			}
+			mockDPCommon = mapDP
+			mockDP = mapDP
+			newBpfEpMgr()
 
-				for k, v := range jumpCopyContents {
-					if v != jumpMap.Contents[k] {
-						changes++
-					}
+			bpfEpMgr.bpfLogLevel = "debug"
+			bpfEpMgr.logFilters = map[string]string{"all": "tcp"}
+
+			dp.interfaceByIndexFn = func(ifindex int) (*net.Interface, error) {
+				if ifindex == 15 {
+					return &net.Interface{
+						Index: 15,
+						Name:  "cali12345",
+						Flags: net.FlagUp,
+					}, nil
 				}
+				return nil, errors.New("no such network interface")
+			}
+			genPolicy("default", "anotherpolicy")()
+			genWLUpdate("cali12345", "anotherpolicy")()
 
-				Expect(changes).To(Equal(2)) // only policies have changed
+			err = bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
 
-				// restart
+			Expect(len(jumpCopyContents)).To(Equal(len(jumpMap.Contents)))
+			Expect(jumpCopyContents).NotTo(Equal(jumpMap.Contents))
 
-				jumpCopyContents = make(map[string]string, len(jumpMap.Contents))
-				for k, v := range jumpMap.Contents {
-					jumpCopyContents[k] = v
+			changes = 0
+
+			for k, v := range jumpCopyContents {
+				if v != jumpMap.Contents[k] {
+					changes++
 				}
+			}
 
-				dp = newMockDataplane()
-				mockDP = &mockProgMapDP{
-					dp,
-				}
-				newBpfEpMgr()
-
-				bpfEpMgr.bpfLogLevel = "debug"
-				bpfEpMgr.logFilters = map[string]string{"all": "tcp"}
-
-				dp.interfaceByIndexFn = func(ifindex int) (*net.Interface, error) {
-					if ifindex == 15 {
-						return &net.Interface{
-							Index: 15,
-							Name:  "cali12345",
-							Flags: net.FlagUp,
-						}, nil
-					}
-					return nil, errors.New("no such network interface")
-				}
-				genPolicy("default", "anotherpolicy")()
-				genWLUpdate("cali12345", "anotherpolicy")()
-
-				err = bpfEpMgr.CompleteDeferredWork()
-				Expect(err).NotTo(HaveOccurred())
-
-				Expect(len(jumpCopyContents)).To(Equal(len(jumpMap.Contents)))
-				Expect(jumpCopyContents).NotTo(Equal(jumpMap.Contents))
-
-				changes = 0
-
-				for k, v := range jumpCopyContents {
-					if v != jumpMap.Contents[k] {
-						changes++
-					}
-				}
-
-				// After a restart, even devices that are in ready state get both
-				// programs reapplied as the configuration of logfilters coul dhave
-				// changed.
-				Expect(changes).To(Equal(4))
-			})*/
+			// After a restart, even devices that are in ready state get both
+			// programs reapplied as the configuration of logfilters coul dhave
+			// changed.
+			Expect(changes).To(Equal(4))
+		})
 	})
 })
 

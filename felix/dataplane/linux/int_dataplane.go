@@ -725,6 +725,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 		bpfEndpointManager, err = newBPFEndpointManager(
 			nil,
+			nil,
 			&config,
 			bpfMaps,
 			fibLookupEnabled,
