@@ -182,24 +182,9 @@ func (wc defaultWorkloadEndpointConverter) podToDefaultWorkloadEndpoint(pod *kap
 	}
 
 	// Handle source IP spoofing annotation
-	var sourcePrefixes []string
-	if annotation, ok := pod.Annotations["cni.projectcalico.org/allowedSourcePrefixes"]; ok && annotation != "" {
-		// Parse Annotation data
-		var requestedSourcePrefixes []string
-		err := json.Unmarshal([]byte(annotation), &requestedSourcePrefixes)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse '%s' as JSON: %s", annotation, err)
-		}
-
-		// Filter out any invalid entries and normalize the CIDRs.
-		for _, prefix := range requestedSourcePrefixes {
-			if _, n, err := cnet.ParseCIDR(prefix); err != nil {
-				return nil, fmt.Errorf("failed to parse '%s' as a CIDR: %s", prefix, err)
-			} else {
-				sourcePrefixes = append(sourcePrefixes, n.String())
-			}
-		}
-
+	sourcePrefixes, err := HandleSourceIPSpoofingAnnotation(pod.Annotations)
+	if err != nil {
+		return nil, err
 	}
 
 	// Map any named ports through.
@@ -282,4 +267,28 @@ func (wc defaultWorkloadEndpointConverter) podToDefaultWorkloadEndpoint(pod *kap
 		Revision: pod.ResourceVersion,
 	}
 	return &kvp, nil
+}
+
+// HandleSourceIPSpoofingAnnotation parses the allowedSourcePrefixes annotation if present,
+// and returns the allowed prefixes as a slice of strings.
+func HandleSourceIPSpoofingAnnotation(annot map[string]string) ([]string, error) {
+	var sourcePrefixes []string
+	if annotation, ok := annot["cni.projectcalico.org/allowedSourcePrefixes"]; ok && annotation != "" {
+		// Parse Annotation data
+		var requestedSourcePrefixes []string
+		err := json.Unmarshal([]byte(annotation), &requestedSourcePrefixes)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse '%s' as JSON: %s", annotation, err)
+		}
+
+		// Filter out any invalid entries and normalize the CIDRs.
+		for _, prefix := range requestedSourcePrefixes {
+			if _, n, err := cnet.ParseCIDR(prefix); err != nil {
+				return nil, fmt.Errorf("failed to parse '%s' as a CIDR: %s", prefix, err)
+			} else {
+				sourcePrefixes = append(sourcePrefixes, n.String())
+			}
+		}
+	}
+	return sourcePrefixes, nil
 }

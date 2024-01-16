@@ -167,6 +167,22 @@ var failsafeTests = []failsafeTest{
 		Allowed:  false,
 	},
 	{
+		Description: "Packets from localhost to non-failsafe IP and failsafe port are denied",
+		Rules:       &denyAllRulesHost,
+		IPHeaderIPv4: &layers.IPv4{
+			Version:  4,
+			IHL:      5,
+			TTL:      64,
+			Flags:    layers.IPv4DontFragment,
+			SrcIP:    dstIP,
+			DstIP:    srcIP,
+			Protocol: layers.IPProtocolUDP,
+		},
+		Outbound:      true,
+		Allowed:       false,
+		FromLocalHost: true,
+	},
+	{
 		Description: "Packets from localhost to failsafe IP and non-failsafe port are denied",
 		Rules:       &denyAllRulesHost,
 		IPHeaderIPv4: &layers.IPv4{

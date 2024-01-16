@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2023 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -75,6 +75,9 @@ const (
 	ProfileInboundPfx  ProfileChainNamePrefix = ChainNamePrefix + "pri-"
 	ProfileOutboundPfx ProfileChainNamePrefix = ChainNamePrefix + "pro-"
 
+	PolicyGroupInboundPrefix  string = ChainNamePrefix + "gi-"
+	PolicyGroupOutboundPrefix string = ChainNamePrefix + "go-"
+
 	ChainWorkloadToHost       = ChainNamePrefix + "wl-to-host"
 	ChainFromWorkloadDispatch = ChainNamePrefix + "from-wl-dispatch"
 	ChainToWorkloadDispatch   = ChainNamePrefix + "to-wl-dispatch"
@@ -121,6 +124,13 @@ const (
 		`-A POSTROUTING -o tunl0 -m addrtype ! --src-type LOCAL --limit-iface-out -m addrtype --src-type LOCAL -j MASQUERADE`
 
 	KubeProxyInsertRuleRegex = `-j KUBE-[a-zA-Z0-9-]*SERVICES|-j KUBE-FORWARD`
+)
+
+type PolicyDirection string
+
+const (
+	PolicyDirectionInbound  PolicyDirection = "inbound"  // AKA ingress
+	PolicyDirectionOutbound PolicyDirection = "outbound" // AKA egress
 )
 
 // Typedefs to prevent accidentally passing the wrong prefix to the Policy/ProfileChainName()
@@ -180,14 +190,8 @@ type RuleRenderer interface {
 	StaticFilterForwardAppendRules() []iptables.Rule
 
 	WorkloadDispatchChains(map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint) []*iptables.Chain
-	WorkloadEndpointToIptablesChains(
-		ifaceName string,
-		epMarkMapper EndpointMarkMapper,
-		adminUp bool,
-		ingressPolicies []string,
-		egressPolicies []string,
-		profileIDs []string,
-	) []*iptables.Chain
+	WorkloadEndpointToIptablesChains(ifaceName string, epMarkMapper EndpointMarkMapper, adminUp bool, ingressPolicies []*PolicyGroup, egressPolicies []*PolicyGroup, profileIDs []string) []*iptables.Chain
+	PolicyGroupToIptablesChains(group *PolicyGroup) []*iptables.Chain
 
 	WorkloadInterfaceAllowChains(endpoints map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint) []*iptables.Chain
 
@@ -203,29 +207,29 @@ type RuleRenderer interface {
 	HostEndpointToFilterChains(
 		ifaceName string,
 		epMarkMapper EndpointMarkMapper,
-		ingressPolicyNames []string,
-		egressPolicyNames []string,
-		ingressForwardPolicyNames []string,
-		egressForwardPolicyNames []string,
+		ingressPolicies []*PolicyGroup,
+		egressPolicies []*PolicyGroup,
+		ingressForwardPolicies []*PolicyGroup,
+		egressForwardPolicies []*PolicyGroup,
 		profileIDs []string,
 	) []*iptables.Chain
 	HostEndpointToMangleEgressChains(
 		ifaceName string,
-		egressPolicyNames []string,
+		egressPolicies []*PolicyGroup,
 		profileIDs []string,
 	) []*iptables.Chain
 	HostEndpointToRawEgressChain(
 		ifaceName string,
-		egressPolicyNames []string,
+		egressPolicies []*PolicyGroup,
 	) *iptables.Chain
 	HostEndpointToRawChains(
 		ifaceName string,
-		ingressPolicyNames []string,
-		egressPolicyNames []string,
+		ingressPolicies []*PolicyGroup,
+		egressPolicies []*PolicyGroup,
 	) []*iptables.Chain
 	HostEndpointToMangleIngressChains(
 		ifaceName string,
-		preDNATPolicyNames []string,
+		preDNATPolicies []*PolicyGroup,
 	) []*iptables.Chain
 
 	PolicyToIptablesChains(policyID *proto.PolicyID, policy *proto.Policy, ipVersion uint8) []*iptables.Chain

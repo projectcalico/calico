@@ -21,13 +21,13 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/projectcalico/calico/felix/ifacemonitor"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega/format"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/dataplane/common"
+	"github.com/projectcalico/calico/felix/ifacemonitor"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/iptables"
@@ -72,12 +72,12 @@ var wlDispatchEmpty = []*iptables.Chain{
 	{
 		Name: "cali-set-endpoint-mark",
 		Rules: []iptables.Rule{
-			iptables.Rule{
+			{
 				Match:   iptables.Match().InInterface("cali+"),
 				Action:  iptables.DropAction{},
 				Comment: []string{"Unknown endpoint"},
 			},
-			iptables.Rule{
+			{
 				Match:   iptables.Match().InInterface("tap+"),
 				Action:  iptables.DropAction{},
 				Comment: []string{"Unknown endpoint"},
@@ -124,6 +124,18 @@ var toHostDispatchEmpty = []*iptables.Chain{
 		Name:  "cali-to-host-endpoint",
 		Rules: []iptables.Rule{},
 	},
+}
+
+var wlEPID1 = proto.WorkloadEndpointID{
+	OrchestratorId: "k8s",
+	WorkloadId:     "pod-11",
+	EndpointId:     "endpoint-id-11",
+}
+
+var wlEPID2 = proto.WorkloadEndpointID{
+	OrchestratorId: "k8s",
+	WorkloadId:     "pod-12",
+	EndpointId:     "endpoint-id-12",
 }
 
 func hostChainsForIfaces(ifaceMetadata []string, epMarkMapper rules.EndpointMarkMapper) []*iptables.Chain {
@@ -275,17 +287,12 @@ func chainsForIfaces(ifaceMetadata []string,
 		}
 		outRules = append(outRules, iptables.Rule{
 			Match:  iptables.Match(),
-			Action: iptables.ClearMarkAction{Mark: 8},
+			Action: iptables.ClearMarkAction{Mark: 0x18},
 		})
 		if !host {
 			outRules = append(outRules, dropEncapRules...)
 		}
 		if egress && polName != "" && tableKind == ifaceKind {
-			outRules = append(outRules, iptables.Rule{
-				Match:   iptables.Match(),
-				Action:  iptables.ClearMarkAction{Mark: 16},
-				Comment: []string{"Start of policies"},
-			})
 			outRules = append(outRules, iptables.Rule{
 				Match:  iptables.Match().MarkClear(16),
 				Action: iptables.JumpAction{Target: "cali-po-" + polName},
@@ -358,14 +365,9 @@ func chainsForIfaces(ifaceMetadata []string,
 		}
 		inRules = append(inRules, iptables.Rule{
 			Match:  iptables.Match(),
-			Action: iptables.ClearMarkAction{Mark: 8},
+			Action: iptables.ClearMarkAction{Mark: 0x18},
 		})
 		if ingress && polName != "" && tableKind == ifaceKind {
-			inRules = append(inRules, iptables.Rule{
-				Match:   iptables.Match(),
-				Action:  iptables.ClearMarkAction{Mark: 16},
-				Comment: []string{"Start of policies"},
-			})
 			// For untracked policy, we expect a tier with a policy in it.
 			inRules = append(inRules, iptables.Rule{
 				Match:  iptables.Match().MarkClear(16),
@@ -473,7 +475,7 @@ func chainsForIfaces(ifaceMetadata []string,
 				&iptables.Chain{
 					Name: epMarkSetOnePrefix + ifaceName,
 					Rules: []iptables.Rule{
-						iptables.Rule{
+						{
 							Action: iptables.SetMaskedMarkAction{Mark: epMark, Mask: epMarkMapper.GetMask()},
 						},
 					},
@@ -826,7 +828,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 				})
 				rawTable.checkChains([][]*iptables.Chain{
 					hostDispatchEmptyNormal,
-					[]*iptables.Chain{{
+					{{
 						Name:  "cali-rpf-skip",
 						Rules: []iptables.Rule{},
 					}},
@@ -1485,11 +1487,6 @@ func endpointManagerTests(ipVersion uint8) func() {
 
 		Describe("workload endpoints", func() {
 			Context("with a workload endpoint", func() {
-				wlEPID1 := proto.WorkloadEndpointID{
-					OrchestratorId: "k8s",
-					WorkloadId:     "pod-11",
-					EndpointId:     "endpoint-id-11",
-				}
 				var tiers []*proto.TierInfo
 
 				BeforeEach(func() {
@@ -1514,7 +1511,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 
 				Context("with policy", func() {
 					BeforeEach(func() {
-						tiers = []*proto.TierInfo{&proto.TierInfo{
+						tiers = []*proto.TierInfo{{
 							Name:            "default",
 							IngressPolicies: []string{"policy1"},
 							EgressPolicies:  []string{"policy1"},
@@ -1626,7 +1623,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 
 				Context("with ingress-only policy", func() {
 					BeforeEach(func() {
-						tiers = []*proto.TierInfo{&proto.TierInfo{
+						tiers = []*proto.TierInfo{{
 							Name:            "default",
 							IngressPolicies: []string{"policy1"},
 						}}
@@ -1637,7 +1634,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 
 				Context("with egress-only policy", func() {
 					BeforeEach(func() {
-						tiers = []*proto.TierInfo{&proto.TierInfo{
+						tiers = []*proto.TierInfo{{
 							Name:           "default",
 							EgressPolicies: []string{"policy1"},
 						}}
@@ -1957,7 +1954,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 					}
 					rawTable.checkChains([][]*iptables.Chain{hostDispatchEmptyNormal, {
 						&iptables.Chain{Name: rules.ChainRpfSkip, Rules: []iptables.Rule{
-							iptables.Rule{
+							{
 								Match:  iptables.Match().InInterface("cali23456-cd").SourceNet("8.8.8.8/32"),
 								Action: iptables.AcceptAction{},
 							},
@@ -1988,7 +1985,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 					}
 					rawTable.checkChains([][]*iptables.Chain{hostDispatchEmptyNormal, {
 						&iptables.Chain{Name: rules.ChainRpfSkip, Rules: []iptables.Rule{
-							iptables.Rule{
+							{
 								Match:  iptables.Match().InInterface("cali23456-cd").SourceNet("8.8.8.8/32"),
 								Action: iptables.AcceptAction{},
 							}}},
@@ -2058,12 +2055,1057 @@ func endpointManagerTests(ipVersion uint8) func() {
 			})
 		})
 
+		Describe("policy grouping tests", func() {
+			JustBeforeEach(func() {
+				epMgr.OnUpdate(&proto.ActivePolicyUpdate{
+					Id:     &proto.PolicyID{Tier: "default", Name: "polA1"},
+					Policy: &proto.Policy{OriginalSelector: "has(a)"},
+				})
+				epMgr.OnUpdate(&proto.ActivePolicyUpdate{
+					Id:     &proto.PolicyID{Tier: "default", Name: "polA2"},
+					Policy: &proto.Policy{OriginalSelector: "has(a)"},
+				})
+				epMgr.OnUpdate(&proto.ActivePolicyUpdate{
+					Id:     &proto.PolicyID{Tier: "default", Name: "polB1"},
+					Policy: &proto.Policy{OriginalSelector: "has(b)"},
+				})
+				epMgr.OnUpdate(&proto.ActivePolicyUpdate{
+					Id:     &proto.PolicyID{Tier: "default", Name: "polB2"},
+					Policy: &proto.Policy{OriginalSelector: "has(b)"},
+				})
+				epMgr.OnUpdate(&proto.ActivePolicyUpdate{
+					Id:     &proto.PolicyID{Tier: "default", Name: "polC1"},
+					Policy: &proto.Policy{OriginalSelector: "has(c)"},
+				})
+			})
+
+			It("should 'group' a single policy", func() {
+				Expect(epMgr.groupPolicies(
+					"default",
+					[]string{"polA1"},
+					rules.PolicyDirectionInbound,
+				)).To(Equal([]*rules.PolicyGroup{
+					{
+						Tier:        "default",
+						Direction:   rules.PolicyDirectionInbound,
+						PolicyNames: []string{"polA1"},
+						Selector:    "has(a)",
+					},
+				}))
+			})
+			It("should 'group' a pair of policies same selector", func() {
+				Expect(epMgr.groupPolicies(
+					"default",
+					[]string{"polA1", "polA2"},
+					rules.PolicyDirectionInbound,
+				)).To(Equal([]*rules.PolicyGroup{
+					{
+						Tier:        "default",
+						Direction:   rules.PolicyDirectionInbound,
+						PolicyNames: []string{"polA1", "polA2"},
+						Selector:    "has(a)",
+					},
+				}))
+			})
+			It("should 'group' a pair of policies different selector", func() {
+				Expect(epMgr.groupPolicies(
+					"default",
+					[]string{"polA1", "polB1"},
+					rules.PolicyDirectionInbound,
+				)).To(Equal([]*rules.PolicyGroup{
+					{
+						Tier:        "default",
+						Direction:   rules.PolicyDirectionInbound,
+						PolicyNames: []string{"polA1"},
+						Selector:    "has(a)",
+					},
+					{
+						Tier:        "default",
+						Direction:   rules.PolicyDirectionInbound,
+						PolicyNames: []string{"polB1"},
+						Selector:    "has(b)",
+					},
+				}))
+			})
+			It("should 'group' two pairs", func() {
+				Expect(epMgr.groupPolicies(
+					"default",
+					[]string{"polA1", "polA2", "polB1", "polB2"},
+					rules.PolicyDirectionInbound,
+				)).To(Equal([]*rules.PolicyGroup{
+					{
+						Tier:        "default",
+						Direction:   rules.PolicyDirectionInbound,
+						PolicyNames: []string{"polA1", "polA2"},
+						Selector:    "has(a)",
+					},
+					{
+						Tier:        "default",
+						Direction:   rules.PolicyDirectionInbound,
+						PolicyNames: []string{"polB1", "polB2"},
+						Selector:    "has(b)",
+					},
+				}))
+			})
+			It("should 'group' mixed", func() {
+				Expect(epMgr.groupPolicies(
+					"default",
+					[]string{"polA1", "polB1", "polB2", "polA2"},
+					rules.PolicyDirectionInbound,
+				)).To(Equal([]*rules.PolicyGroup{
+					{
+						Tier:        "default",
+						Direction:   rules.PolicyDirectionInbound,
+						PolicyNames: []string{"polA1"},
+						Selector:    "has(a)",
+					},
+					{
+						Tier:        "default",
+						Direction:   rules.PolicyDirectionInbound,
+						PolicyNames: []string{"polB1", "polB2"},
+						Selector:    "has(b)",
+					},
+					{
+						Tier:        "default",
+						Direction:   rules.PolicyDirectionInbound,
+						PolicyNames: []string{"polA2"},
+						Selector:    "has(a)",
+					},
+				}))
+			})
+
+			Describe("policy grouping tests", func() {
+				var (
+					table              *mockTable
+					ep1IngressChain    string
+					ep1EgressChain     string
+					ep2IngressChain    string
+					ep2EgressChain     string
+					deleteEP1          func()
+					removeAPolsFromEp1 func()
+				)
+
+				defineIngressPolicyGroupingTests := func() {
+					It("should get the expected policy group chains (ingress)", func() {
+						ingressNamesEP1, groupsEP1 := extractGroups(table.currentChains, ep1IngressChain)
+						Expect(groupsEP1).To(Equal([][]string{
+							{"polA1", "polA2"},
+							{"polB1", "polB2"},
+						}))
+						namesEP2, groupsEP2 := extractGroups(table.currentChains, ep2IngressChain)
+						Expect(groupsEP2).To(Equal([][]string{
+							{"polB1", "polB2"},
+							{"polC1"},
+						}))
+						Expect(ingressNamesEP1[1]).NotTo(Equal(""), "Policy B group shouldn't be inlined")
+						Expect(ingressNamesEP1[1]).To(Equal(namesEP2[0]), "EPs should share the policy B group")
+						Expect(namesEP2[1]).To(Equal(""), "Group C should be inlined")
+					})
+
+					It("should handle a change of selector", func() {
+						// Start as with the above test...
+						ingressNamesEP1, groupsEP1 := extractGroups(table.currentChains, ep1IngressChain)
+						Expect(groupsEP1).To(Equal([][]string{
+							{"polA1", "polA2"},
+							{"polB1", "polB2"},
+						}))
+						_, groupsEP2 := extractGroups(table.currentChains, ep2IngressChain)
+						Expect(groupsEP2).To(Equal([][]string{
+							{"polB1", "polB2"},
+							{"polC1"},
+						}))
+
+						// Then move polA2 to the B group...
+						epMgr.OnUpdate(&proto.ActivePolicyUpdate{
+							Id:     &proto.PolicyID{Tier: "default", Name: "polA2"},
+							Policy: &proto.Policy{OriginalSelector: "has(b)"}, // :-O
+						})
+						applyUpdates(epMgr)
+
+						_, groupsEP1Post := extractGroups(table.currentChains, ep1IngressChain)
+						Expect(groupsEP1Post).To(Equal([][]string{
+							{"polA1"},
+							{"polA2", "polB1", "polB2"},
+						}))
+						_, groupsEP2Post := extractGroups(table.currentChains, ep2IngressChain)
+						Expect(groupsEP2Post).To(Equal([][]string{
+							{"polB1", "polB2"},
+							{"polC1"},
+						}))
+						Expect(table.currentChains).NotTo(HaveKey(ingressNamesEP1[0]), "Old polA group should be cleaned up")
+					})
+
+					It("should clean up group chain that is no longer used (EP deleted)", func() {
+						namesEP1, _ := extractGroups(table.currentChains, ep1IngressChain)
+						polAGroup := namesEP1[0]
+						polBGroup := namesEP1[1]
+						Expect(table.currentChains).To(HaveKey(polAGroup))
+						deleteEP1()
+						applyUpdates(epMgr)
+						Expect(table.currentChains).NotTo(HaveKey(polAGroup),
+							"Policy A group should be cleaned up")
+						Expect(table.currentChains).To(HaveKey(polBGroup),
+							"Policy B group chain should still be present, it is shared with the second endpoint")
+					})
+
+					It("should clean up group chain that is no longer used (EP updated)", func() {
+						namesEP1, _ := extractGroups(table.currentChains, ep1IngressChain)
+						polAGroup := namesEP1[0]
+						polBGroup := namesEP1[1]
+						Expect(table.currentChains).To(HaveKey(polAGroup))
+						removeAPolsFromEp1()
+						applyUpdates(epMgr)
+						_, groupsEP1 := extractGroups(table.currentChains, ep1IngressChain)
+						Expect(groupsEP1).To(Equal([][]string{
+							{"polB1", "polB2"},
+						}))
+						Expect(table.currentChains).NotTo(HaveKey(polAGroup),
+							"Policy A group should be cleaned up")
+						Expect(table.currentChains).To(HaveKey(polBGroup),
+							"Policy B group chain should still be present, it is shared with the second endpoint")
+					})
+				}
+				defineEgressPolicyGroupingTests := func() {
+					It("should get the expected policy group chains (egress)", func() {
+						namesEP1, groupsEP1 := extractGroups(table.currentChains, ep1EgressChain)
+						Expect(groupsEP1).To(Equal([][]string{
+							{"polA1"},
+							{"polB1", "polB2"},
+						}))
+						namesEP2In, _ := extractGroups(table.currentChains, ep2IngressChain)
+						namesEP2, groupsEP2 := extractGroups(table.currentChains, ep2EgressChain)
+						Expect(groupsEP2).To(Equal([][]string{
+							{"polB1", "polB2"},
+						}))
+						Expect(namesEP1[0]).To(Equal(""), "Group A should be inlined")
+						Expect(namesEP1[1]).NotTo(Equal(""), "Policy B group shouldn't be inlined")
+						Expect(namesEP1[1]).To(Equal(namesEP2[0]), "EPs should share the policy B group")
+						Expect(namesEP2In[0]).NotTo(Equal(namesEP2[0]), "Ingress/Egress group names should differ")
+					})
+				}
+
+				Describe("with two workload endpoints", func() {
+					JustBeforeEach(func() {
+						table = filterTable
+						ep1IngressChain = "cali-tw-cali12345-ab"
+						ep1EgressChain = "cali-fw-cali12345-ab"
+						ep2IngressChain = "cali-tw-cali12345-ac"
+						ep2EgressChain = "cali-fw-cali12345-ac"
+
+						epMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
+							Id: &wlEPID1,
+							Endpoint: &proto.WorkloadEndpoint{
+								State:      "active",
+								Mac:        "01:02:03:04:05:06",
+								Name:       "cali12345-ab",
+								ProfileIds: []string{},
+								Tiers: []*proto.TierInfo{
+									{
+										Name: "default",
+										IngressPolicies: []string{
+											"polA1",
+											"polA2",
+											"polB1",
+											"polB2",
+										},
+										EgressPolicies: []string{
+											"polA1",
+											"polB1",
+											"polB2",
+										},
+									},
+								},
+								Ipv4Nets: []string{"10.0.240.2/24"},
+								Ipv6Nets: []string{"2001:db8:2::2/128"},
+							},
+						})
+						epMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
+							Id: &wlEPID2,
+							Endpoint: &proto.WorkloadEndpoint{
+								State:      "active",
+								Mac:        "01:02:03:04:05:07",
+								Name:       "cali12345-ac",
+								ProfileIds: []string{},
+								Tiers: []*proto.TierInfo{
+									{
+										Name: "default",
+										IngressPolicies: []string{
+											"polB1",
+											"polB2",
+											"polC1",
+										},
+										EgressPolicies: []string{
+											"polB1",
+											"polB2",
+										},
+									},
+								},
+								Ipv4Nets: []string{"10.0.240.2/24"},
+								Ipv6Nets: []string{"2001:db8:2::3/128"},
+							},
+						})
+						applyUpdates(epMgr)
+
+						deleteEP1 = func() {
+							epMgr.OnUpdate(&proto.WorkloadEndpointRemove{
+								Id: &wlEPID1,
+							})
+						}
+
+						removeAPolsFromEp1 = func() {
+							epMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
+								Id: &wlEPID1,
+								Endpoint: &proto.WorkloadEndpoint{
+									State:      "active",
+									Mac:        "01:02:03:04:05:06",
+									Name:       "cali12345-ab",
+									ProfileIds: []string{},
+									Tiers: []*proto.TierInfo{
+										{
+											Name: "default",
+											IngressPolicies: []string{
+												"polB1",
+												"polB2",
+											},
+											EgressPolicies: []string{
+												"polB1",
+												"polB2",
+											},
+										},
+									},
+									Ipv4Nets: []string{"10.0.240.2/24"},
+									Ipv6Nets: []string{"2001:db8:2::2/128"},
+								},
+							})
+						}
+					})
+
+					defineIngressPolicyGroupingTests()
+					defineEgressPolicyGroupingTests()
+				})
+
+				Describe("with a workload and host endpoint (normal policy)", func() {
+					JustBeforeEach(func() {
+						table = filterTable
+						ep1IngressChain = "cali-tw-cali12345-ab"
+						ep1EgressChain = "cali-fw-cali12345-ab"
+						ep2IngressChain = "cali-fh-eth1"
+						ep2EgressChain = "cali-th-eth1"
+
+						epMgr.OnUpdate(&ifaceStateUpdate{
+							Name:  "eth1",
+							State: "up",
+						})
+						epMgr.OnUpdate(&ifaceAddrsUpdate{
+							Name:  "eth1",
+							Addrs: eth1Addrs,
+						})
+
+						epMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
+							Id: &wlEPID1,
+							Endpoint: &proto.WorkloadEndpoint{
+								State:      "active",
+								Mac:        "01:02:03:04:05:06",
+								Name:       "cali12345-ab",
+								ProfileIds: []string{},
+								Tiers: []*proto.TierInfo{
+									{
+										Name: "default",
+										IngressPolicies: []string{
+											"polA1",
+											"polA2",
+											"polB1",
+											"polB2",
+										},
+										EgressPolicies: []string{
+											"polA1",
+											"polB1",
+											"polB2",
+										},
+									},
+								},
+								Ipv4Nets: []string{"10.0.240.2/24"},
+								Ipv6Nets: []string{"2001:db8:2::2/128"},
+							},
+						})
+						epMgr.OnUpdate(&proto.HostEndpointUpdate{
+							Id: &proto.HostEndpointID{
+								EndpointId: "eth1",
+							},
+							Endpoint: &proto.HostEndpoint{
+								Name:       "eth1",
+								ProfileIds: []string{},
+								Tiers: []*proto.TierInfo{
+									{
+										Name: "default",
+										IngressPolicies: []string{
+											"polB1",
+											"polB2",
+											"polC1",
+										},
+										EgressPolicies: []string{
+											"polB1",
+											"polB2",
+										},
+									},
+								},
+							},
+						})
+						applyUpdates(epMgr)
+
+						deleteEP1 = func() {
+							epMgr.OnUpdate(&proto.WorkloadEndpointRemove{
+								Id: &wlEPID1,
+							})
+						}
+
+						removeAPolsFromEp1 = func() {
+							epMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
+								Id: &wlEPID1,
+								Endpoint: &proto.WorkloadEndpoint{
+									State:      "active",
+									Mac:        "01:02:03:04:05:06",
+									Name:       "cali12345-ab",
+									ProfileIds: []string{},
+									Tiers: []*proto.TierInfo{
+										{
+											Name: "default",
+											IngressPolicies: []string{
+												"polB1",
+												"polB2",
+											},
+											EgressPolicies: []string{
+												"polB1",
+												"polB2",
+											},
+										},
+									},
+									Ipv4Nets: []string{"10.0.240.2/24"},
+									Ipv6Nets: []string{"2001:db8:2::2/128"},
+								},
+							})
+						}
+					})
+
+					defineIngressPolicyGroupingTests()
+					defineEgressPolicyGroupingTests()
+				})
+
+				Describe("with a host and workload endpoint (normal policy)", func() {
+					JustBeforeEach(func() {
+						table = filterTable
+						ep1IngressChain = "cali-fh-eth0"
+						ep1EgressChain = "cali-th-eth0"
+						ep2IngressChain = "cali-tw-cali12345-ac"
+						ep2EgressChain = "cali-fw-cali12345-ac"
+
+						epMgr.OnUpdate(&ifaceStateUpdate{
+							Name:  "eth0",
+							State: "up",
+						})
+						epMgr.OnUpdate(&ifaceAddrsUpdate{
+							Name:  "eth0",
+							Addrs: eth1Addrs,
+						})
+
+						epMgr.OnUpdate(&proto.HostEndpointUpdate{
+							Id: &proto.HostEndpointID{
+								EndpointId: "eth0",
+							},
+							Endpoint: &proto.HostEndpoint{
+								Name:       "eth0",
+								ProfileIds: []string{},
+								Tiers: []*proto.TierInfo{
+									{
+										Name: "default",
+										IngressPolicies: []string{
+											"polA1",
+											"polA2",
+											"polB1",
+											"polB2",
+										},
+										EgressPolicies: []string{
+											"polA1",
+											"polB1",
+											"polB2",
+										},
+									},
+								},
+							},
+						})
+						epMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
+							Id: &wlEPID2,
+							Endpoint: &proto.WorkloadEndpoint{
+								State:      "active",
+								Mac:        "01:02:03:04:05:07",
+								Name:       "cali12345-ac",
+								ProfileIds: []string{},
+								Tiers: []*proto.TierInfo{
+									{
+										Name: "default",
+										IngressPolicies: []string{
+											"polB1",
+											"polB2",
+											"polC1",
+										},
+										EgressPolicies: []string{
+											"polB1",
+											"polB2",
+										},
+									},
+								},
+								Ipv4Nets: []string{"10.0.240.2/24"},
+								Ipv6Nets: []string{"2001:db8:2::3/128"},
+							},
+						})
+						applyUpdates(epMgr)
+
+						deleteEP1 = func() {
+							epMgr.OnUpdate(&proto.HostEndpointRemove{
+								Id: &proto.HostEndpointID{
+									EndpointId: "eth0",
+								},
+							})
+						}
+
+						removeAPolsFromEp1 = func() {
+							epMgr.OnUpdate(&proto.HostEndpointUpdate{
+								Id: &proto.HostEndpointID{
+									EndpointId: "eth0",
+								},
+								Endpoint: &proto.HostEndpoint{
+									Name:       "eth0",
+									ProfileIds: []string{},
+									Tiers: []*proto.TierInfo{
+										{
+											Name: "default",
+											IngressPolicies: []string{
+												"polB1",
+												"polB2",
+											},
+											EgressPolicies: []string{
+												"polB1",
+												"polB2",
+											},
+										},
+									},
+								},
+							})
+						}
+					})
+
+					defineIngressPolicyGroupingTests()
+					defineEgressPolicyGroupingTests()
+				})
+
+				Describe("with two host endpoints (normal policy)", func() {
+					JustBeforeEach(func() {
+						table = filterTable
+						ep1IngressChain = "cali-fh-eth0"
+						ep1EgressChain = "cali-th-eth0"
+						ep2IngressChain = "cali-fh-eth1"
+						ep2EgressChain = "cali-th-eth1"
+
+						epMgr.OnUpdate(&ifaceStateUpdate{
+							Name:  "eth0",
+							State: "up",
+						})
+						epMgr.OnUpdate(&ifaceAddrsUpdate{
+							Name:  "eth0",
+							Addrs: eth0Addrs,
+						})
+						epMgr.OnUpdate(&ifaceStateUpdate{
+							Name:  "eth1",
+							State: "up",
+						})
+						epMgr.OnUpdate(&ifaceAddrsUpdate{
+							Name:  "eth1",
+							Addrs: eth1Addrs,
+						})
+
+						epMgr.OnUpdate(&proto.HostEndpointUpdate{
+							Id: &proto.HostEndpointID{
+								EndpointId: "eth0",
+							},
+							Endpoint: &proto.HostEndpoint{
+								Name:       "eth0",
+								ProfileIds: []string{},
+								Tiers: []*proto.TierInfo{
+									{
+										Name: "default",
+										IngressPolicies: []string{
+											"polA1",
+											"polA2",
+											"polB1",
+											"polB2",
+										},
+										EgressPolicies: []string{
+											"polA1",
+											"polB1",
+											"polB2",
+										},
+									},
+								},
+							},
+						})
+						epMgr.OnUpdate(&proto.HostEndpointUpdate{
+							Id: &proto.HostEndpointID{
+								EndpointId: "eth1",
+							},
+							Endpoint: &proto.HostEndpoint{
+								Name:       "eth1",
+								ProfileIds: []string{},
+								Tiers: []*proto.TierInfo{
+									{
+										Name: "default",
+										IngressPolicies: []string{
+											"polB1",
+											"polB2",
+											"polC1",
+										},
+										EgressPolicies: []string{
+											"polB1",
+											"polB2",
+										},
+									},
+								},
+							},
+						})
+						applyUpdates(epMgr)
+
+						deleteEP1 = func() {
+							epMgr.OnUpdate(&proto.HostEndpointRemove{
+								Id: &proto.HostEndpointID{
+									EndpointId: "eth0",
+								},
+							})
+						}
+
+						removeAPolsFromEp1 = func() {
+							epMgr.OnUpdate(&proto.HostEndpointUpdate{
+								Id: &proto.HostEndpointID{
+									EndpointId: "eth0",
+								},
+								Endpoint: &proto.HostEndpoint{
+									Name:       "eth0",
+									ProfileIds: []string{},
+									Tiers: []*proto.TierInfo{
+										{
+											Name: "default",
+											IngressPolicies: []string{
+												"polB1",
+												"polB2",
+											},
+											EgressPolicies: []string{
+												"polB1",
+												"polB2",
+											},
+										},
+									},
+								},
+							})
+						}
+					})
+
+					defineIngressPolicyGroupingTests()
+					defineEgressPolicyGroupingTests()
+				})
+
+				Describe("with two host endpoints (pre-DNAT policy)", func() {
+					JustBeforeEach(func() {
+						table = mangleTable
+						ep1IngressChain = "cali-fh-eth0"
+						ep1EgressChain = "cali-th-eth0"
+						ep2IngressChain = "cali-fh-eth1"
+						ep2EgressChain = "cali-th-eth1"
+
+						epMgr.OnUpdate(&ifaceStateUpdate{
+							Name:  "eth0",
+							State: "up",
+						})
+						epMgr.OnUpdate(&ifaceAddrsUpdate{
+							Name:  "eth0",
+							Addrs: eth0Addrs,
+						})
+						epMgr.OnUpdate(&ifaceStateUpdate{
+							Name:  "eth1",
+							State: "up",
+						})
+						epMgr.OnUpdate(&ifaceAddrsUpdate{
+							Name:  "eth1",
+							Addrs: eth1Addrs,
+						})
+
+						epMgr.OnUpdate(&proto.HostEndpointUpdate{
+							Id: &proto.HostEndpointID{
+								EndpointId: "eth0",
+							},
+							Endpoint: &proto.HostEndpoint{
+								Name:       "eth0",
+								ProfileIds: []string{},
+								PreDnatTiers: []*proto.TierInfo{
+									{
+										Name: "default",
+										IngressPolicies: []string{
+											"polA1",
+											"polA2",
+											"polB1",
+											"polB2",
+										},
+										EgressPolicies: []string{
+											"polA1",
+											"polB1",
+											"polB2",
+										},
+									},
+								},
+							},
+						})
+						epMgr.OnUpdate(&proto.HostEndpointUpdate{
+							Id: &proto.HostEndpointID{
+								EndpointId: "eth1",
+							},
+							Endpoint: &proto.HostEndpoint{
+								Name:       "eth1",
+								ProfileIds: []string{},
+								PreDnatTiers: []*proto.TierInfo{
+									{
+										Name: "default",
+										IngressPolicies: []string{
+											"polB1",
+											"polB2",
+											"polC1",
+										},
+										EgressPolicies: []string{
+											"polB1",
+											"polB2",
+										},
+									},
+								},
+							},
+						})
+						applyUpdates(epMgr)
+
+						deleteEP1 = func() {
+							epMgr.OnUpdate(&proto.HostEndpointRemove{
+								Id: &proto.HostEndpointID{
+									EndpointId: "eth0",
+								},
+							})
+						}
+
+						removeAPolsFromEp1 = func() {
+							epMgr.OnUpdate(&proto.HostEndpointUpdate{
+								Id: &proto.HostEndpointID{
+									EndpointId: "eth0",
+								},
+								Endpoint: &proto.HostEndpoint{
+									Name:       "eth0",
+									ProfileIds: []string{},
+									PreDnatTiers: []*proto.TierInfo{
+										{
+											Name: "default",
+											IngressPolicies: []string{
+												"polB1",
+												"polB2",
+											},
+											EgressPolicies: []string{
+												"polB1",
+												"polB2",
+											},
+										},
+									},
+								},
+							})
+						}
+					})
+
+					defineIngressPolicyGroupingTests()
+				})
+
+				Describe("with two host endpoints (apply-on-forward policy)", func() {
+					JustBeforeEach(func() {
+						format.MaxLength = 100000000
+						table = filterTable
+						ep1IngressChain = "cali-fhfw-eth0"
+						ep1EgressChain = "cali-thfw-eth0"
+						ep2IngressChain = "cali-fhfw-eth1"
+						ep2EgressChain = "cali-thfw-eth1"
+
+						epMgr.OnUpdate(&ifaceStateUpdate{
+							Name:  "eth0",
+							State: "up",
+						})
+						epMgr.OnUpdate(&ifaceAddrsUpdate{
+							Name:  "eth0",
+							Addrs: eth0Addrs,
+						})
+						epMgr.OnUpdate(&ifaceStateUpdate{
+							Name:  "eth1",
+							State: "up",
+						})
+						epMgr.OnUpdate(&ifaceAddrsUpdate{
+							Name:  "eth1",
+							Addrs: eth1Addrs,
+						})
+
+						epMgr.OnUpdate(&proto.HostEndpointUpdate{
+							Id: &proto.HostEndpointID{
+								EndpointId: "eth0",
+							},
+							Endpoint: &proto.HostEndpoint{
+								Name:       "eth0",
+								ProfileIds: []string{},
+								ForwardTiers: []*proto.TierInfo{
+									{
+										Name: "default",
+										IngressPolicies: []string{
+											"polA1",
+											"polA2",
+											"polB1",
+											"polB2",
+										},
+										EgressPolicies: []string{
+											"polA1",
+											"polB1",
+											"polB2",
+										},
+									},
+								},
+							},
+						})
+						epMgr.OnUpdate(&proto.HostEndpointUpdate{
+							Id: &proto.HostEndpointID{
+								EndpointId: "eth1",
+							},
+							Endpoint: &proto.HostEndpoint{
+								Name:       "eth1",
+								ProfileIds: []string{},
+								ForwardTiers: []*proto.TierInfo{
+									{
+										Name: "default",
+										IngressPolicies: []string{
+											"polB1",
+											"polB2",
+											"polC1",
+										},
+										EgressPolicies: []string{
+											"polB1",
+											"polB2",
+										},
+									},
+								},
+							},
+						})
+						applyUpdates(epMgr)
+
+						deleteEP1 = func() {
+							epMgr.OnUpdate(&proto.HostEndpointRemove{
+								Id: &proto.HostEndpointID{
+									EndpointId: "eth0",
+								},
+							})
+						}
+
+						removeAPolsFromEp1 = func() {
+							epMgr.OnUpdate(&proto.HostEndpointUpdate{
+								Id: &proto.HostEndpointID{
+									EndpointId: "eth0",
+								},
+								Endpoint: &proto.HostEndpoint{
+									Name:       "eth0",
+									ProfileIds: []string{},
+									ForwardTiers: []*proto.TierInfo{
+										{
+											Name: "default",
+											IngressPolicies: []string{
+												"polB1",
+												"polB2",
+											},
+											EgressPolicies: []string{
+												"polB1",
+												"polB2",
+											},
+										},
+									},
+								},
+							})
+						}
+					})
+
+					defineIngressPolicyGroupingTests()
+					defineEgressPolicyGroupingTests()
+				})
+
+				Describe("with two host endpoints no-track policy)", func() {
+					JustBeforeEach(func() {
+						table = rawTable
+						ep1IngressChain = "cali-fh-eth0"
+						ep1EgressChain = "cali-th-eth0"
+						ep2IngressChain = "cali-fh-eth1"
+						ep2EgressChain = "cali-th-eth1"
+
+						epMgr.OnUpdate(&ifaceStateUpdate{
+							Name:  "eth0",
+							State: "up",
+						})
+						epMgr.OnUpdate(&ifaceAddrsUpdate{
+							Name:  "eth0",
+							Addrs: eth0Addrs,
+						})
+						epMgr.OnUpdate(&ifaceStateUpdate{
+							Name:  "eth1",
+							State: "up",
+						})
+						epMgr.OnUpdate(&ifaceAddrsUpdate{
+							Name:  "eth1",
+							Addrs: eth1Addrs,
+						})
+
+						epMgr.OnUpdate(&proto.HostEndpointUpdate{
+							Id: &proto.HostEndpointID{
+								EndpointId: "eth0",
+							},
+							Endpoint: &proto.HostEndpoint{
+								Name:       "eth0",
+								ProfileIds: []string{},
+								UntrackedTiers: []*proto.TierInfo{
+									{
+										Name: "default",
+										IngressPolicies: []string{
+											"polA1",
+											"polA2",
+											"polB1",
+											"polB2",
+										},
+										EgressPolicies: []string{
+											"polA1",
+											"polB1",
+											"polB2",
+										},
+									},
+								},
+							},
+						})
+						epMgr.OnUpdate(&proto.HostEndpointUpdate{
+							Id: &proto.HostEndpointID{
+								EndpointId: "eth1",
+							},
+							Endpoint: &proto.HostEndpoint{
+								Name:       "eth1",
+								ProfileIds: []string{},
+								UntrackedTiers: []*proto.TierInfo{
+									{
+										Name: "default",
+										IngressPolicies: []string{
+											"polB1",
+											"polB2",
+											"polC1",
+										},
+										EgressPolicies: []string{
+											"polB1",
+											"polB2",
+										},
+									},
+								},
+							},
+						})
+						applyUpdates(epMgr)
+
+						deleteEP1 = func() {
+							epMgr.OnUpdate(&proto.HostEndpointRemove{
+								Id: &proto.HostEndpointID{
+									EndpointId: "eth0",
+								},
+							})
+						}
+
+						removeAPolsFromEp1 = func() {
+							epMgr.OnUpdate(&proto.HostEndpointUpdate{
+								Id: &proto.HostEndpointID{
+									EndpointId: "eth0",
+								},
+								Endpoint: &proto.HostEndpoint{
+									Name:       "eth0",
+									ProfileIds: []string{},
+									UntrackedTiers: []*proto.TierInfo{
+										{
+											Name: "default",
+											IngressPolicies: []string{
+												"polB1",
+												"polB2",
+											},
+											EgressPolicies: []string{
+												"polB1",
+												"polB2",
+											},
+										},
+									},
+								},
+							})
+						}
+					})
+
+					defineIngressPolicyGroupingTests()
+					defineEgressPolicyGroupingTests()
+				})
+			})
+		})
+
 		It("should check the correct path", func() {
 			mockProcSys.pathsThatExist[fmt.Sprintf("/proc/sys/net/ipv%d/conf/cali1234", ipVersion)] = true
 			Expect(epMgr.interfaceExistsInProcSys("cali1234")).To(BeTrue())
 			Expect(epMgr.interfaceExistsInProcSys("cali3456")).To(BeFalse())
 		})
 	}
+}
+
+// extractGroups loosely parses the given chain (which should be a "to/from
+// endpoint" chain) to extract the policy group chains that it jumps to (along
+// with any inline policy jumps).  the returned slices have the same length;
+// a group chain is represented by the name of the group chain in
+// groupChainNames and a slice of policy names in the groups slice. An
+// inline policy jump is represented by "" in the groupChainNames slice and
+// single-entry slice containing the policy name in the groups slice.
+func extractGroups(dpChains map[string]*iptables.Chain, epChainName string) (groupChainNames []string, groups [][]string) {
+	Expect(dpChains).To(HaveKey(epChainName))
+	epChain := dpChains[epChainName]
+	for _, r := range epChain.Rules {
+		if ja, ok := r.Action.(iptables.JumpAction); ok {
+			if strings.HasPrefix(ja.Target, rules.PolicyGroupInboundPrefix) ||
+				strings.HasPrefix(ja.Target, rules.PolicyGroupOutboundPrefix) {
+				// Found jump to group.
+				groupChainNames = append(groupChainNames, ja.Target)
+				groups = append(groups, extractPolicyNamesFromJumps(dpChains[ja.Target]))
+			} else if strings.HasPrefix(ja.Target, string(rules.PolicyInboundPfx)) ||
+				strings.HasPrefix(ja.Target, string(rules.PolicyOutboundPfx)) {
+				// Found jump to policy.
+				groupChainNames = append(groupChainNames, "")
+				groups = append(groups, []string{removePolChainNamePrefix(ja.Target)})
+			}
+		}
+	}
+	return
+}
+
+func extractPolicyNamesFromJumps(chain *iptables.Chain) (pols []string) {
+	for _, r := range chain.Rules {
+		if ja, ok := r.Action.(iptables.JumpAction); ok {
+			pols = append(pols, removePolChainNamePrefix(ja.Target))
+		}
+	}
+	return
+}
+
+func removePolChainNamePrefix(target string) string {
+	if strings.HasPrefix(target, string(rules.PolicyInboundPfx)) {
+		return target[len(rules.PolicyInboundPfx):]
+	}
+	if strings.HasPrefix(target, string(rules.PolicyOutboundPfx)) {
+		return target[len(rules.PolicyOutboundPfx):]
+	}
+	log.WithField("chainName", target).Panic("Not a policy chain name.")
+	panic("Not a policy chain name")
 }
 
 var _ = Describe("EndpointManager IPv4", endpointManagerTests(4))
