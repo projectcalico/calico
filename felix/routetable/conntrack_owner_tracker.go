@@ -170,7 +170,6 @@ func (c *RealConntrackTracker) WaitForPendingDeletion(ipAddr ip.Addr) {
 	}
 done:
 	delete(c.pendingCleanups, ipAddr)
-	return
 }
 
 var _ ConntrackTracker = (*RealConntrackTracker)(nil)

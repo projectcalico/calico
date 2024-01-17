@@ -226,7 +226,9 @@ func NewWithShims(
 	if !config.RouteSyncDisabled {
 		logCtx.Debug("RouteSyncDisabled is false.")
 		rt = routetable.New(
-			[]string{"^" + interfaceName + "$", routetable.InterfaceNone},
+			&routetable.InterfaceOwnershipPolicy{
+				InterfaceNames: []string{interfaceName},
+			},
 			ipVersion,
 			netlinkTimeout,
 			nil, // deviceRouteSourceAddress
