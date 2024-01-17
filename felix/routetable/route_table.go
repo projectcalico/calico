@@ -1120,7 +1120,7 @@ func (r *RouteTable) applyUpdates() error {
 		return deltatracker.IterActionUpdateDataplane
 	})
 
-	// TODO filter out interfaces that are gone
+	// TODO filter out errors from interfaces that have gone away.
 	err = nil
 	if len(deletionErrs) > 0 {
 		r.logCxt.WithField("errors", deletionErrs).Warn(

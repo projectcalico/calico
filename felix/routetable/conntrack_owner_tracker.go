@@ -41,7 +41,7 @@ func NewRealConntrackTracker(ipVersion uint8, conntrack conntrackIface) *RealCon
 		possibleOwners:  deltatracker.New[kernelRouteKey, []int](),
 		pendingCleanups: map[ip.Addr]chan struct{}{},
 		conntrack:       conntrack,
-		ipVersion:       uint8(ipVersion),
+		ipVersion:       ipVersion,
 	}
 }
 
