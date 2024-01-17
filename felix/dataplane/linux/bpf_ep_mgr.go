@@ -183,8 +183,8 @@ type bpfInterface struct {
 }
 
 func (i *bpfInterfaceState) clearJumps() {
-	i.policyIdx = [hook.Count]int{-1, -1, -1}
-	i.filterIdx = [hook.Count]int{-1, -1, -1}
+	i.v4.clearJumps()
+	i.v6.clearJumps()
 }
 
 var zeroIface bpfInterface = func() bpfInterface {
@@ -214,10 +214,20 @@ const (
 )
 
 type bpfInterfaceState struct {
-	policyIdx [hook.Count]int
-	filterIdx [hook.Count]int
+	v4        bpfInterfaceJumpIndices
+	v6        bpfInterfaceJumpIndices
 	readiness ifaceReadiness
 	qdisc     qDiscInfo
+}
+
+type bpfInterfaceJumpIndices struct {
+	policyIdx [hook.Count]int
+	filterIdx [hook.Count]int
+}
+
+func (d *bpfInterfaceJumpIndices) clearJumps() {
+	d.policyIdx = [hook.Count]int{-1, -1, -1}
+	d.filterIdx = [hook.Count]int{-1, -1, -1}
 }
 
 type qDiscInfo struct {
@@ -914,18 +924,22 @@ func (d *dataplane) updateIfaceIP(update *ifaceAddrsUpdate) bool {
 }
 
 func (d *dataplane) reclaimPolicyIdx(name string, iface *bpfInterface) {
+	idx := &iface.dpState.v4
+	if d.ipFamily == 6 {
+		idx = &iface.dpState.v6
+	}
 	for _, attachHook := range []hook.Hook{hook.XDP, hook.Ingress, hook.Egress} {
-		if err := d.jumpMapDelete(attachHook, iface.dpState.policyIdx[attachHook]); err != nil {
+		if err := d.jumpMapDelete(attachHook, idx.policyIdx[attachHook]); err != nil {
 			log.WithError(err).Warn("Policy program may leak.")
 		}
-		if err := d.xdpJumpMapAlloc.Put(iface.dpState.policyIdx[attachHook], name); err != nil {
+		if err := d.xdpJumpMapAlloc.Put(idx.policyIdx[attachHook], name); err != nil {
 			log.WithError(err).Error(attachHook.String())
 		}
 		if attachHook != hook.XDP {
-			if err := d.jumpMapDelete(attachHook, iface.dpState.filterIdx[attachHook]); err != nil {
+			if err := d.jumpMapDelete(attachHook, idx.filterIdx[attachHook]); err != nil {
 				log.WithError(err).Warn("Filter program may leak.")
 			}
-			if err := d.jumpMapAlloc.Put(iface.dpState.filterIdx[attachHook], name); err != nil {
+			if err := d.jumpMapAlloc.Put(idx.filterIdx[attachHook], name); err != nil {
 				log.WithError(err).Error(attachHook.String())
 			}
 		}
@@ -935,6 +949,10 @@ func (d *dataplane) reclaimPolicyIdx(name string, iface *bpfInterface) {
 func (m *bpfEndpointManager) updateIfaceStateMap(name string, iface *bpfInterface) {
 	k := ifstate.NewKey(uint32(iface.info.ifIndex))
 	if iface.info.ifaceIsUp() {
+		idx := iface.dpState.v4
+		if m.ipv6Enabled {
+			idx = iface.dpState.v6
+		}
 		flags := uint32(0)
 		if m.isWorkloadIface(name) {
 			flags |= ifstate.FlgWEP
@@ -943,11 +961,11 @@ func (m *bpfEndpointManager) updateIfaceStateMap(name string, iface *bpfInterfac
 			flags |= ifstate.FlgReady
 		}
 		v := ifstate.NewValue(flags, name,
-			iface.dpState.policyIdx[hook.XDP],
-			iface.dpState.policyIdx[hook.Ingress],
-			iface.dpState.policyIdx[hook.Egress],
-			iface.dpState.filterIdx[hook.Ingress],
-			iface.dpState.filterIdx[hook.Egress],
+			idx.policyIdx[hook.XDP],
+			idx.policyIdx[hook.Ingress],
+			idx.policyIdx[hook.Egress],
+			idx.filterIdx[hook.Ingress],
+			idx.filterIdx[hook.Egress],
 		)
 		m.ifStateMap.Desired().Set(k, v)
 	} else {
@@ -1349,13 +1367,18 @@ func (m *bpfEndpointManager) syncIfStateMap() {
 
 				if !m.isWorkloadIface(netiface.Name) {
 					// We don't use XDP for WEPs so any ID we read back must be a mistake.
-					checkAndReclaimIdx(v.XDPPolicy(), hook.XDP, iface.dpState.policyIdx[:])
+					checkAndReclaimIdx(v.XDPPolicy(), hook.XDP, iface.dpState.v4.policyIdx[:])
+					checkAndReclaimIdx(v.XDPPolicy(), hook.XDP, iface.dpState.v6.policyIdx[:])
 				}
-				checkAndReclaimIdx(v.IngressPolicy(), hook.Ingress, iface.dpState.policyIdx[:])
-				checkAndReclaimIdx(v.EgressPolicy(), hook.Egress, iface.dpState.policyIdx[:])
+				checkAndReclaimIdx(v.IngressPolicy(), hook.Ingress, iface.dpState.v4.policyIdx[:])
+				checkAndReclaimIdx(v.IngressPolicy(), hook.Ingress, iface.dpState.v6.policyIdx[:])
+				checkAndReclaimIdx(v.EgressPolicy(), hook.Egress, iface.dpState.v4.policyIdx[:])
+				checkAndReclaimIdx(v.EgressPolicy(), hook.Egress, iface.dpState.v6.policyIdx[:])
 
-				checkAndReclaimIdx(v.TcIngressFilter(), hook.Ingress, iface.dpState.filterIdx[:])
-				checkAndReclaimIdx(v.TcEgressFilter(), hook.Egress, iface.dpState.filterIdx[:])
+				checkAndReclaimIdx(v.TcIngressFilter(), hook.Ingress, iface.dpState.v4.filterIdx[:])
+				checkAndReclaimIdx(v.TcIngressFilter(), hook.Ingress, iface.dpState.v6.filterIdx[:])
+				checkAndReclaimIdx(v.TcEgressFilter(), hook.Egress, iface.dpState.v4.filterIdx[:])
+				checkAndReclaimIdx(v.TcEgressFilter(), hook.Egress, iface.dpState.v6.filterIdx[:])
 
 				// Mark all interfaces that we knew about, that we still manage and
 				// that exist as dirty. Since they exist, we either have to deal
@@ -1586,10 +1609,11 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 		}
 
 		var (
-			err                               error
-			up                                bool
-			xdpIdx, ingressIdx, egressIdx     int
-			ingressFilterIdx, egressFilterIdx int
+			err   error
+			up    bool
+			state bpfInterfaceState
+			//xdpIdx, ingressIdx, egressIdx     int
+			//ingressFilterIdx, egressFilterIdx int
 		)
 
 		m.ifacesLock.Lock()
@@ -1597,46 +1621,10 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 		ifaceName := iface
 		m.withIface(iface, func(iface *bpfInterface) bool {
 			up = iface.info.ifaceIsUp()
-
-			if xdpIdx = iface.dpState.policyIdx[hook.XDP]; xdpIdx == -1 {
-				if xdpIdx, err = m.xdpJumpMapAlloc.Get(ifaceName); err != nil {
-					return false
-				}
+			if err := m.dataIfaceStateFillJumps(ifaceName, &iface.dpState); err != nil {
+				return false
 			}
-			iface.dpState.policyIdx[hook.XDP] = xdpIdx
-
-			if ingressIdx = iface.dpState.policyIdx[hook.Ingress]; ingressIdx == -1 {
-				if ingressIdx, err = m.jumpMapAlloc.Get(ifaceName); err != nil {
-					return false
-				}
-			}
-			iface.dpState.policyIdx[hook.Ingress] = ingressIdx
-
-			if egressIdx = iface.dpState.policyIdx[hook.Egress]; egressIdx == -1 {
-				if egressIdx, err = m.jumpMapAlloc.Get(ifaceName); err != nil {
-					return false
-				}
-			}
-			iface.dpState.policyIdx[hook.Egress] = egressIdx
-
-			if ingressFilterIdx = iface.dpState.filterIdx[hook.Ingress]; ingressFilterIdx == -1 {
-				if m.bpfLogLevel == "debug" {
-					if ingressFilterIdx, err = m.jumpMapAlloc.Get(ifaceName); err != nil {
-						return false
-					}
-				}
-			}
-			iface.dpState.filterIdx[hook.Ingress] = ingressFilterIdx
-
-			if egressFilterIdx = iface.dpState.filterIdx[hook.Egress]; egressFilterIdx == -1 {
-				if m.bpfLogLevel == "debug" {
-					if egressFilterIdx, err = m.jumpMapAlloc.Get(ifaceName); err != nil {
-						return false
-					}
-				}
-			}
-			iface.dpState.filterIdx[hook.Egress] = egressFilterIdx
-
+			state = iface.dpState
 			return false
 		})
 
@@ -1688,18 +1676,18 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 			parallelWG.Add(1)
 			go func() {
 				defer parallelWG.Done()
-				ingressAP, ingressPolErr = d.attachDataIfaceProgram(iface, hepPtr, PolDirnIngress, ingressIdx, ingressFilterIdx, &ingressAttachPoint)
+				ingressAP, ingressPolErr = d.attachDataIfaceProgram(iface, hepPtr, PolDirnIngress, &state, &ingressAttachPoint)
 			}()
 
 			if !m.ipv6Enabled {
 				parallelWG.Add(1)
 				go func() {
 					defer parallelWG.Done()
-					xdpAP, xdpPolErr = d.attachXDPProgram(iface, hepPtr, xdpIdx)
+					xdpAP, xdpPolErr = d.attachXDPProgram(iface, hepPtr, &state)
 				}()
 			}
 
-			egressAP, egressPolErr = d.attachDataIfaceProgram(iface, hepPtr, PolDirnEgress, egressIdx, egressFilterIdx, &egressAttachPoint)
+			egressAP, egressPolErr = d.attachDataIfaceProgram(iface, hepPtr, PolDirnEgress, &state, &egressAttachPoint)
 
 			parallelWG.Wait()
 			// Attach ingress program.
@@ -1882,39 +1870,106 @@ func (m *bpfEndpointManager) updateWEPsInDataplane() {
 	}
 }
 
-func (m *bpfEndpointManager) wepStateFillJumps(ifaceName string, state *bpfInterfaceState) error {
+func (m *bpfEndpointManager) allocJumpIndicesForWEP(ifaceName string, idx *bpfInterfaceJumpIndices) error {
 	var err error
-
-	if state.policyIdx[hook.Ingress] == -1 {
-		state.policyIdx[hook.Ingress], err = m.jumpMapAlloc.Get(ifaceName)
+	if idx.policyIdx[hook.Ingress] == -1 {
+		idx.policyIdx[hook.Ingress], err = m.jumpMapAlloc.Get(ifaceName)
 		if err != nil {
 			return err
 		}
 	}
 
-	if state.policyIdx[hook.Egress] == -1 {
-		state.policyIdx[hook.Egress], err = m.jumpMapAlloc.Get(ifaceName)
+	if idx.policyIdx[hook.Egress] == -1 {
+		idx.policyIdx[hook.Egress], err = m.jumpMapAlloc.Get(ifaceName)
 		if err != nil {
 			return err
 		}
 	}
 
 	if m.bpfLogLevel == "debug" {
-		if state.filterIdx[hook.Ingress] == -1 {
-			state.filterIdx[hook.Ingress], err = m.jumpMapAlloc.Get(ifaceName)
+		if idx.filterIdx[hook.Ingress] == -1 {
+			idx.filterIdx[hook.Ingress], err = m.jumpMapAlloc.Get(ifaceName)
 			if err != nil {
 				return err
 			}
 		}
-
-		if state.filterIdx[hook.Egress] == -1 {
-			state.filterIdx[hook.Egress], err = m.jumpMapAlloc.Get(ifaceName)
+		if idx.filterIdx[hook.Egress] == -1 {
+			idx.filterIdx[hook.Egress], err = m.jumpMapAlloc.Get(ifaceName)
 			if err != nil {
 				return err
 			}
 		}
 	}
+	return nil
+}
 
+func (m *bpfEndpointManager) allocJumpIndicesForDataIface(ifaceName string, idx *bpfInterfaceJumpIndices) error {
+	var err error
+	if idx.policyIdx[hook.Ingress] == -1 {
+		idx.policyIdx[hook.Ingress], err = m.jumpMapAlloc.Get(ifaceName)
+		if err != nil {
+			return err
+		}
+	}
+
+	if idx.policyIdx[hook.Egress] == -1 {
+		idx.policyIdx[hook.Egress], err = m.jumpMapAlloc.Get(ifaceName)
+		if err != nil {
+			return err
+		}
+	}
+
+	if idx.policyIdx[hook.XDP] == -1 {
+		idx.policyIdx[hook.XDP], err = m.xdpJumpMapAlloc.Get(ifaceName)
+		if err != nil {
+			return err
+		}
+	}
+
+	if m.bpfLogLevel == "debug" {
+		if idx.filterIdx[hook.Ingress] == -1 {
+			idx.filterIdx[hook.Ingress], err = m.jumpMapAlloc.Get(ifaceName)
+			if err != nil {
+				return err
+			}
+		}
+		if idx.filterIdx[hook.Egress] == -1 {
+			idx.filterIdx[hook.Egress], err = m.jumpMapAlloc.Get(ifaceName)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (m *bpfEndpointManager) wepStateFillJumps(ifaceName string, state *bpfInterfaceState) error {
+	if m.ipv6Enabled {
+		err := m.allocJumpIndicesForWEP(ifaceName, &state.v6)
+		if err != nil {
+			return err
+		}
+	} else {
+		err := m.allocJumpIndicesForWEP(ifaceName, &state.v4)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (m *bpfEndpointManager) dataIfaceStateFillJumps(ifaceName string, state *bpfInterfaceState) error {
+	if m.ipv6Enabled {
+		err := m.allocJumpIndicesForDataIface(ifaceName, &state.v6)
+		if err != nil {
+			return err
+		}
+	} else {
+		err := m.allocJumpIndicesForDataIface(ifaceName, &state.v4)
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -2147,12 +2202,18 @@ func (d *dataplane) wepApplyPolicyToDirection(readiness ifaceReadiness, ifaceNam
 		return nil, fmt.Errorf("unknown host IP")
 	}
 
+	// Sridhar
+	indices := state.v4
+	if d.ipFamily == 6 {
+		indices = state.v6
+	}
+
 	if polDirection == PolDirnIngress {
-		policyIdx = state.policyIdx[hook.Ingress]
-		filterIdx = state.filterIdx[hook.Ingress]
+		policyIdx = indices.policyIdx[hook.Ingress]
+		filterIdx = indices.filterIdx[hook.Ingress]
 	} else {
-		policyIdx = state.policyIdx[hook.Egress]
-		filterIdx = state.filterIdx[hook.Egress]
+		policyIdx = indices.policyIdx[hook.Egress]
+		filterIdx = indices.filterIdx[hook.Egress]
 	}
 
 	ap = d.wepTCAttachPoint(ap, policyIdx, filterIdx, polDirection)
@@ -2252,7 +2313,7 @@ func (d *dataplane) attachDataIfaceProgram(
 	ifaceName string,
 	ep *proto.HostEndpoint,
 	polDirection PolDirection,
-	policyIdx, filterIdx int,
+	state *bpfInterfaceState,
 	ap *tc.AttachPoint,
 ) (*tc.AttachPoint, error) {
 
@@ -2271,6 +2332,21 @@ func (d *dataplane) attachDataIfaceProgram(
 	} else {
 		ap.IntfIP = *ip
 	}
+
+	var policyIdx, filterIdx int
+	indices := state.v4
+	if d.ipFamily == 6 {
+		indices = state.v6
+	}
+
+	if polDirection == PolDirnIngress {
+		policyIdx = indices.policyIdx[hook.Ingress]
+		filterIdx = indices.filterIdx[hook.Ingress]
+	} else {
+		policyIdx = indices.policyIdx[hook.Egress]
+		filterIdx = indices.filterIdx[hook.Egress]
+	}
+
 	ap.PolicyIdx = policyIdx
 	ap.LogFilterIdx = filterIdx
 
@@ -2293,14 +2369,18 @@ func (d *dataplane) attachDataIfaceProgram(
 			return ap, errApplyingPolicy
 		}
 	} else {
-		if err := d.removePolicyProgram(ap); err != nil {
+		if err := d.dp.removePolicyProgram(ap); err != nil {
 			return nil, err
 		}
 	}
 	return ap, nil
 }
 
-func (d *dataplane) attachXDPProgram(ifaceName string, ep *proto.HostEndpoint, jumpIdx int) (*xdp.AttachPoint, error) {
+func (d *dataplane) attachXDPProgram(ifaceName string, ep *proto.HostEndpoint, state *bpfInterfaceState) (*xdp.AttachPoint, error) {
+	jumpIdx := state.v4.policyIdx[hook.XDP]
+	if d.ipFamily == 6 {
+		jumpIdx = state.v6.policyIdx[hook.XDP]
+	}
 	ap := &xdp.AttachPoint{
 		AttachPoint: bpf.AttachPoint{
 			Hook:      hook.XDP,
