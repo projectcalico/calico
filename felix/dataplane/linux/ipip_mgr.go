@@ -15,6 +15,8 @@
 package intdataplane
 
 import (
+	"errors"
+	"fmt"
 	"net"
 	"sync"
 	"syscall"
@@ -46,7 +48,7 @@ type ipipManager struct {
 	hostname            string
 	routeTable          routetable.RouteTableInterface
 	blackholeRouteTable routetable.RouteTableInterface
-	//noEncapRouteTable   routetable.RouteTableInterface
+	noEncapRouteTable   routetable.RouteTableInterface
 
 	// activeHostnameToIP maps hostname to string IP address. We don't bother to parse into
 	// net.IPs because we're going to pass them directly to the IPSet API.
@@ -73,6 +75,11 @@ type ipipManager struct {
 	externalNodeCIDRs []string
 	nlHandle          netlinkHandle
 	dpConfig          Config
+	noEncapProtocol   netlink.RouteProtocol
+
+	// Used so that we can shim the no encap route table for the tests
+	noEncapRTConstruct func(interfacePrefixes []string, ipVersion uint8, vxlan bool, netlinkTimeout time.Duration,
+		deviceRouteSourceAddress net.IP, deviceRouteProtocol netlink.RouteProtocol, removeExternalRoutes bool) routetable.RouteTableInterface
 
 	// Log context
 	logCtx *logrus.Entry
@@ -124,7 +131,15 @@ func newIPIPManager(
 		dpConfig,
 		nlHandle,
 		ipVersion,
-		realIPIPNetlink{})
+		realIPIPNetlink{},
+		func(interfaceRegexes []string, ipVersion uint8, vxlan bool, netlinkTimeout time.Duration,
+			deviceRouteSourceAddress net.IP, deviceRouteProtocol netlink.RouteProtocol, removeExternalRoutes bool) routetable.RouteTableInterface {
+			return routetable.New(interfaceRegexes, ipVersion, vxlan, netlinkTimeout,
+				deviceRouteSourceAddress, deviceRouteProtocol, removeExternalRoutes, unix.RT_TABLE_MAIN,
+				opRecorder, featureDetector,
+			)
+		},
+	)
 }
 
 func newIPIPManagerWithShim(
@@ -135,12 +150,18 @@ func newIPIPManagerWithShim(
 	nlHandle netlinkHandle,
 	ipVersion uint8,
 	dataplane ipipDataplane,
+	noEncapRTConstruct func(interfacePrefixes []string, ipVersion uint8, vxlan bool, netlinkTimeout time.Duration,
+		deviceRouteSourceAddress net.IP, deviceRouteProtocol netlink.RouteProtocol, removeExternalRoutes bool) routetable.RouteTableInterface,
 ) *ipipManager {
 	if ipVersion != 4 {
 		logrus.Infof("IPIP manager only supports IPv4")
 		return nil
 	}
-	ipipMgr := &ipipManager{
+	noEncapProtocol := defaultVXLANProto
+	if dpConfig.DeviceRouteProtocol != syscall.RTPROT_BOOT {
+		noEncapProtocol = dpConfig.DeviceRouteProtocol
+	}
+	return &ipipManager{
 		ipsetsDataplane:    ipsetsDataplane,
 		activeHostnameToIP: map[string]string{},
 		dataplane:          dataplane,
@@ -161,9 +182,10 @@ func newIPIPManagerWithShim(
 		ipSetDirty:          true,
 		dpConfig:            dpConfig,
 		nlHandle:            nlHandle,
+		noEncapProtocol:     noEncapProtocol,
+		noEncapRTConstruct:  noEncapRTConstruct,
 		logCtx:              logrus.WithField("ipVersion", ipVersion),
 	}
-	return ipipMgr
 }
 
 func (m *ipipManager) OnUpdate(msg interface{}) {
@@ -241,12 +263,19 @@ func (m *ipipManager) deleteRoute(dst string) {
 	}
 }
 
-/*func (m *ipipManager) getNoEncapRouteTable() routetable.RouteTableInterface {
+func (m *ipipManager) getNoEncapRouteTable() routetable.RouteTableInterface {
 	m.Lock()
 	defer m.Unlock()
 
 	return m.noEncapRouteTable
-}*/
+}
+
+func (m *ipipManager) setNoEncapRouteTable(rt routetable.RouteTableInterface) {
+	m.Lock()
+	defer m.Unlock()
+
+	m.noEncapRouteTable = rt
+}
 
 func (m *ipipManager) CompleteDeferredWork() error {
 	if !m.routesDirty {
@@ -271,7 +300,7 @@ func (m *ipipManager) CompleteDeferredWork() error {
 	if m.routesDirty {
 		// Iterate through all of our L3 routes and send them through to the route table.
 		var ipipRoutes []routetable.Target
-		//var noEncapRoutes []routetable.Target
+		var noEncapRoutes []routetable.Target
 		for _, r := range m.routesByDest {
 			logCtx := m.logCtx.WithField("route", r)
 			cidr, err := ip.CIDRFromString(r.Dst)
@@ -287,13 +316,13 @@ func (m *ipipManager) CompleteDeferredWork() error {
 					continue
 				}
 
-				/*defaultRoute := routetable.Target{
+				defaultRoute := routetable.Target{
 					Type: routetable.TargetTypeNoEncap,
 					CIDR: cidr,
 					GW:   ip.FromString(r.DstNodeIp),
 				}
 
-				noEncapRoutes = append(noEncapRoutes, defaultRoute)*/
+				noEncapRoutes = append(noEncapRoutes, defaultRoute)
 				logCtx.WithField("route", r).Debug("adding no encap route to list for addition")
 			} else {
 				// Extract the gateway addr for this route based on its remote VTEP.
@@ -320,15 +349,11 @@ func (m *ipipManager) CompleteDeferredWork() error {
 
 		m.blackholeRouteTable.SetRoutes(routetable.InterfaceNone, blackholeRoutes(m.localIPAMBlocks))
 
-		//noEncapRouteTable := m.getNoEncapRouteTable()
+		noEncapRouteTable := m.getNoEncapRouteTable()
 		// only set the noEncapRouteTable table if it's nil, as you will lose the routes that are being managed already
 		// and the new table will probably delete routes that were put in there by the previous table
-		/*if noEncapRouteTable != nil {
-			localAddr, exists := m.activeHostnameToIP[m.hostname]
-			if !exists {
-				return fmt.Errorf("local address not found, will defer adding routes")
-			}
-			if parentDevice, err := m.getParentInterface(localAddr); err == nil {
+		if noEncapRouteTable != nil {
+			if parentDevice, err := m.getParentInterface(); err == nil {
 				ifName := parentDevice.Attrs().Name
 				m.logCtx.WithField("link", parentDevice).WithField("routes", noEncapRoutes).Debug("IPIP manager sending unencapsulated L3 updates")
 				noEncapRouteTable.SetRoutes(ifName, noEncapRoutes)
@@ -337,7 +362,7 @@ func (m *ipipManager) CompleteDeferredWork() error {
 			}
 		} else {
 			return errors.New("no encap route table not set, will defer adding routes")
-		}*/
+		}
 
 		m.logCtx.Info("IPIP Manager completed deferred work")
 		m.routesDirty = false
@@ -351,10 +376,20 @@ func (m *ipipManager) CompleteDeferredWork() error {
 func (m *ipipManager) KeepIPIPDeviceInSync(mtu int, address net.IP) {
 	m.logCtx.Info("IPIP tunnel device thread started.")
 	for {
-		/*link, err := m.getParentInterface(address.String())
-		if err != nil {
+		if parent, err := m.getParentInterface(); err != nil {
+			m.logCtx.WithError(err).Warn("Failed to configure VXLAN tunnel device, retrying...")
+			time.Sleep(1 * time.Second)
+			continue
+		} else {
+			if m.getNoEncapRouteTable() == nil {
+				devRouteSrcAddr := m.dpConfig.DeviceRouteSourceAddress
+				noEncapRouteTable := m.noEncapRTConstruct([]string{"^" + parent.Attrs().Name + "$"}, m.ipVersion, false, m.dpConfig.NetlinkTimeout, devRouteSrcAddr,
+					m.noEncapProtocol, false)
+				m.setNoEncapRouteTable(noEncapRouteTable)
+			}
+		}
 
-		}*/
+		m.logCtx.WithField("local address", address.String()).Debug("Configuring IPIP device")
 		err := m.configureIPIPDevice(mtu, address)
 		if err != nil {
 			m.logCtx.WithError(err).Warn("Failed configure IPIP tunnel device, retrying...")
@@ -367,8 +402,14 @@ func (m *ipipManager) KeepIPIPDeviceInSync(mtu int, address net.IP) {
 
 // getParentInterface returns the parent interface for the given local VTEP based on IP address. This link returned is nil
 // if, and only if, an error occurred
-/*func (m *ipipManager) getParentInterface(address string) (netlink.Link, error) {
-	m.logCtx.WithField("local address", address).Debug("Getting parent interface")
+func (m *ipipManager) getParentInterface() (netlink.Link, error) {
+	m.logCtx.WithField("local hostname", m.hostname).Debug("Getting parent interface")
+	address, exists := m.activeHostnameToIP[m.hostname]
+	if !exists {
+		return nil, fmt.Errorf("local address not found, will defer adding routes")
+	}
+	m.logCtx.Debugf("Found parent's address: %v", address)
+
 	links, err := m.nlHandle.LinkList()
 	if err != nil {
 		return nil, err
@@ -387,7 +428,7 @@ func (m *ipipManager) KeepIPIPDeviceInSync(mtu int, address net.IP) {
 		}
 	}
 	return nil, fmt.Errorf("Unable to find parent interface with address %s", address)
-}*/
+}
 
 // configureIPIPDevice ensures the IPIP tunnel device is up and configures correctly.
 func (m *ipipManager) configureIPIPDevice(mtu int, address net.IP) error {
