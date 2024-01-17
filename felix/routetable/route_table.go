@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"net"
 	"reflect"
-	"regexp"
 	"strings"
 	"time"
 
@@ -99,15 +98,14 @@ type RouteTable struct {
 	deviceRouteSourceAddress ip.Addr
 	deviceRouteProtocol      netlink.RouteProtocol
 	routeMetric              RouteMetric
-	removeExternalRoutes     bool
+	removeExternalRoutes bool
+	routeDiscriminator   OwnershipPolicy
 
 	// Interface update tracking.
-	fullResyncNeeded   bool
-	forceNetlinkClose  bool
-	ifacesToRescan     set.Set[string]
-	ifacePrefixRegexp  *regexp.Regexp
-	includeNoInterface bool
-	makeARPEntries     bool
+	fullResyncNeeded  bool
+	forceNetlinkClose bool
+	ifacesToRescan    set.Set[string]
+	makeARPEntries    bool
 
 	// ifaceToRoutes and cidrToIfaces are our inputs, updated
 	// eagerly when something in the manager layer tells us to change the
@@ -205,8 +203,17 @@ func WithNetlinkHandleShim(newNetlinkHandle func() (netlinkshim.Interface, error
 	}
 }
 
+type OwnershipPolicy interface {
+	IfaceIsOurs(ifaceName string) bool
+	IfaceShouldHaveARPEntries(ifaceName string) bool
+	IfaceShouldHaveGracePeriod(ifaceName string) bool
+	RouteIsOurs(ifaceName string, route *netlink.Route) bool
+}
+
+// FIXME Makes sure that VXLAN same-subnet routes don't get cleaned up until VXLAN manager is in sync.
+
 func New(
-	interfaceRegexes []string,
+	discriminator OwnershipPolicy,
 	ipVersion uint8,
 	netlinkTimeout time.Duration,
 	deviceRouteSourceAddress net.IP,
@@ -217,17 +224,6 @@ func New(
 	featureDetector environment.FeatureDetectorIface,
 	opts ...RouteTableOpt,
 ) *RouteTable {
-	var filteredRegexes []string
-	includeNoOIF := false
-
-	for _, interfaceRegex := range interfaceRegexes {
-		if interfaceRegex == InterfaceNone {
-			includeNoOIF = true
-		} else {
-			filteredRegexes = append(filteredRegexes, interfaceRegex)
-		}
-	}
-
 	if tableIndex == 0 {
 		// If we set route.Table to 0, what we actually get is a route in RT_TABLE_MAIN.  However,
 		// RouteListFiltered is much more efficient if we give it the "real" table number.
@@ -237,26 +233,9 @@ func New(
 
 	var logCxt *log.Entry
 	description := fmt.Sprintf("IPv%d,%d", ipVersion, tableIndex)
-
-	// Create a regexp matching the interfaces this route table manages.
-	var ifacePrefixRegexp *regexp.Regexp
-	if len(filteredRegexes) == 0 && len(interfaceRegexes) > 0 {
-		// All of the regexp parts were special matches for non-interface types. In this case don't match any
-		// interfaces.
-		logCxt = log.WithFields(log.Fields{
-			"table": description,
-		})
-		logCxt.Info("No interface matches required for routetable")
-	} else {
-		// Either there were no regexp parts supplied (same as match all), or at least one real interface was included.
-		// Compile the interface regex.
-		ifaceNamePattern := strings.Join(filteredRegexes, "|")
-		logCxt = log.WithFields(log.Fields{
-			"table": description + "," + ifaceNamePattern,
-		})
-		ifacePrefixRegexp = regexp.MustCompile(ifaceNamePattern)
-		logCxt.Info("Calculated interface name regexp")
-	}
+	logCxt = log.WithFields(log.Fields{
+		"table": description,
+	})
 
 	family := netlink.FAMILY_V4
 	if ipVersion == 6 {
@@ -277,8 +256,7 @@ func New(
 
 		fullResyncNeeded:   true,
 		ifacesToRescan:     set.New[string](),
-		ifacePrefixRegexp:  ifacePrefixRegexp,
-		includeNoInterface: includeNoOIF,
+		routeDiscriminator: discriminator,
 
 		ifaceToRoutes: map[string]map[ip.CIDR]Target{},
 		cidrToIfaces:  map[ip.CIDR]set.Set[string]{},
@@ -324,7 +302,7 @@ func New(
 
 func (r *RouteTable) OnIfaceStateChanged(ifaceName string, ifIndex int, state ifacemonitor.State) {
 	logCxt := r.logCxt.WithField("ifaceName", ifaceName)
-	if r.ifacePrefixRegexp == nil || !r.ifacePrefixRegexp.MatchString(ifaceName) {
+	if !r.routeDiscriminator.IfaceIsOurs(ifaceName) {
 		logCxt.Trace("Ignoring interface state change, not an interface managed by this routetable.")
 		return
 	}
@@ -336,6 +314,7 @@ func (r *RouteTable) OnIfaceStateChanged(ifaceName string, ifIndex int, state if
 	//   name, then a creation for the new name.
 	// * Interface gets recreated: same name, new ifindex.  Again we
 	//   should see a deletion and then an add.
+
 	logCxt.WithFields(log.Fields{
 		"ifIndex": ifIndex,
 		"state":   state,
@@ -403,8 +382,9 @@ func (r *RouteTable) onIfaceSeen(ifIndex int) {
 
 // SetRoutes replaces the full set of targets for the specified interface.
 func (r *RouteTable) SetRoutes(ifaceName string, targets []Target) {
-	if ifaceName == InterfaceNone && !r.includeNoInterface {
-		r.logCxt.Error("Setting route with no interface")
+	if !r.routeDiscriminator.IfaceIsOurs(ifaceName) {
+		r.logCxt.WithField("ifaceName", ifaceName).Error(
+			"Cannot set route for interface not managed by this routetable.")
 		return
 	}
 	r.logCxt.WithFields(log.Fields{
@@ -451,8 +431,9 @@ func (r *RouteTable) SetRoutes(ifaceName string, targets []Target) {
 // RouteUpdate updates the route keyed off the target CIDR. These deltas will
 // be applied to any routes set using SetRoute.
 func (r *RouteTable) RouteUpdate(ifaceName string, target Target) {
-	if ifaceName == InterfaceNone && !r.includeNoInterface {
-		r.logCxt.Error("Updating route with no interface (but RouteTable is not configured for no-iface routes)")
+	if !r.routeDiscriminator.IfaceIsOurs(ifaceName) {
+		r.logCxt.WithField("ifaceName", ifaceName).Error(
+			"Cannot set route for interface not managed by this routetable.")
 		return
 	}
 
@@ -468,8 +449,9 @@ func (r *RouteTable) RouteUpdate(ifaceName string, target Target) {
 // RouteRemove removes the route with the specified CIDR. These deltas will
 // be applied to any routes set using SetRoute.
 func (r *RouteTable) RouteRemove(ifaceName string, cidr ip.CIDR) {
-	if ifaceName == InterfaceNone && !r.includeNoInterface {
-		r.logCxt.Error("Removing route with no interface (but RouteTable is not configured for no-iface routes)")
+	if !r.routeDiscriminator.IfaceIsOurs(ifaceName) {
+		r.logCxt.WithField("ifaceName", ifaceName).Error(
+			"Cannot set route for interface not managed by this routetable.")
 		return
 	}
 
@@ -944,19 +926,14 @@ func (r *RouteTable) netlinkRouteToKernelRoute(route netlink.Route) (kernKey ker
 	if debug {
 		logCxt = logCxt.WithField("route", route)
 	}
+	ifaceName := ""
 	if routeIsSpecialNoIfRoute(route) {
-		if !r.includeNoInterface {
-			logCxt.Debug("Ignoring no-interface route (we're not managing them)")
-			return
-		}
+		ifaceName = InterfaceNone
 	} else if routeIsIPv6Bootstrap(route) {
 		logCxt.Debug("Ignoring IPv6 bootstrap route, kernel manages these.")
 		return
-	} else if r.ifacePrefixRegexp == nil {
-		logCxt.Debug("Ignoring normal route; we're only managing special routes.")
-		return
 	} else {
-		ifaceName := r.ifaceIndexToName[route.LinkIndex]
+		ifaceName = r.ifaceIndexToName[route.LinkIndex]
 		if ifaceName == "" {
 			// We don't know about this interface.  Either we're racing
 			// with link creation, in which case we'll hear about the
@@ -966,17 +943,13 @@ func (r *RouteTable) netlinkRouteToKernelRoute(route netlink.Route) (kernKey ker
 			logCxt.Debug("Ignoring route for unknown iface")
 			return
 		}
-		if !r.ifacePrefixRegexp.MatchString(ifaceName) {
-			if debug {
-				logCxt.WithField("ifaceName", ifaceName).Debug("Ignoring route for non-Calico interface.")
-			}
-			return
-		}
 	}
-	if !r.removeExternalRoutes && route.Protocol != r.deviceRouteProtocol {
-		logCxt.Debug("Ignoring route (not our protocol).")
+
+	if !r.routeDiscriminator.RouteIsOurs(ifaceName, &route) {
+		logCxt.Debug("Ignoring route (it doesn't belong to us).")
 		return
 	}
+
 	kernKey = kernelRouteKey{
 		CIDR:     ip.CIDRFromIPNet(route.Dst),
 		Priority: RouteMetric(route.Priority),
