@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2023 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,6 +15,8 @@
 package intdataplane
 
 import (
+	"time"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
@@ -27,6 +29,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/dataplane/common"
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -37,9 +40,10 @@ var (
 
 var _ = Describe("IpipMgr (tunnel configuration)", func() {
 	var (
-		ipipMgr   *ipipManager
-		ipSets    *common.MockIPSets
-		dataplane *mockIPIPDataplane
+		ipipMgr      *ipipManager
+		ipSets       *common.MockIPSets
+		dataplane    *mockIPIPDataplane
+		rt, brt, prt *mockRouteTable
 	)
 
 	ip, _, err := net.ParseCIDR("10.0.0.1/32")
@@ -54,7 +58,33 @@ var _ = Describe("IpipMgr (tunnel configuration)", func() {
 	BeforeEach(func() {
 		dataplane = &mockIPIPDataplane{}
 		ipSets = common.NewMockIPSets()
-		ipipMgr = newIPIPManagerWithShim(ipSets, 1024, dataplane, nil)
+		rt = &mockRouteTable{
+			currentRoutes:   map[string][]routetable.Target{},
+			currentL2Routes: map[string][]routetable.L2Target{},
+		}
+		brt = &mockRouteTable{
+			currentRoutes:   map[string][]routetable.Target{},
+			currentL2Routes: map[string][]routetable.L2Target{},
+		}
+		prt = &mockRouteTable{
+			currentRoutes:   map[string][]routetable.Target{},
+			currentL2Routes: map[string][]routetable.L2Target{},
+		}
+		ipipMgr = newIPIPManagerWithShim(
+			ipSets, rt, brt, "tunl0",
+			Config{
+				MaxIPSetSize:       1024,
+				Hostname:           "node1",
+				ExternalNodesCidrs: nil,
+			},
+			&mockIPIPDataplane{},
+			4,
+			dataplane,
+			func(interfacePrefixes []string, ipVersion uint8, vxlan bool, netlinkTimeout time.Duration,
+				deviceRouteSourceAddress net.IP, deviceRouteProtocol netlink.RouteProtocol, removeExternalRoutes bool) routetable.RouteTableInterface {
+				return prt
+			},
+		)
 	})
 
 	Describe("after calling configureIPIPDevice", func() {
@@ -205,9 +235,10 @@ var _ = Describe("IpipMgr (tunnel configuration)", func() {
 
 var _ = Describe("ipipManager IP set updates", func() {
 	var (
-		ipipMgr   *ipipManager
-		ipSets    *common.MockIPSets
-		dataplane *mockIPIPDataplane
+		ipipMgr      *ipipManager
+		ipSets       *common.MockIPSets
+		dataplane    *mockIPIPDataplane
+		rt, brt, prt *mockRouteTable
 	)
 
 	const (
@@ -217,7 +248,42 @@ var _ = Describe("ipipManager IP set updates", func() {
 	BeforeEach(func() {
 		dataplane = &mockIPIPDataplane{}
 		ipSets = common.NewMockIPSets()
-		ipipMgr = newIPIPManagerWithShim(ipSets, 1024, dataplane, []string{externalCIDR})
+		rt = &mockRouteTable{
+			currentRoutes:   map[string][]routetable.Target{},
+			currentL2Routes: map[string][]routetable.L2Target{},
+		}
+		brt = &mockRouteTable{
+			currentRoutes:   map[string][]routetable.Target{},
+			currentL2Routes: map[string][]routetable.L2Target{},
+		}
+		prt = &mockRouteTable{
+			currentRoutes:   map[string][]routetable.Target{},
+			currentL2Routes: map[string][]routetable.L2Target{},
+		}
+
+		la := netlink.NewLinkAttrs()
+		la.Name = "eth0"
+		ipipDataplane := &mockIPIPDataplane{}
+		ipipMgr = newIPIPManagerWithShim(
+			ipSets, rt, brt, "tunl0",
+			Config{
+				MaxIPSetSize:       1024,
+				Hostname:           "node1",
+				ExternalNodesCidrs: []string{externalCIDR},
+			},
+			&mockVXLANDataplane{},
+			4,
+			&mockIPIPDataplane{},
+			func(interfacePrefixes []string, ipVersion uint8, vxlan bool, netlinkTimeout time.Duration,
+				deviceRouteSourceAddress net.IP, deviceRouteProtocol netlink.RouteProtocol, removeExternalRoutes bool) routetable.RouteTableInterface {
+				return prt
+			},
+		)
+		ipipMgr.setNoEncapRouteTable(prt)
+		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
+			Hostname: "node1",
+			Ipv4Addr: "10.0.0.10",
+		})
 	})
 
 	It("should not create the IP set until first call to CompleteDeferredWork()", func() {
@@ -357,6 +423,8 @@ type mockIPIPDataplane struct {
 
 	NumCalls    int
 	ErrorAtCall int
+
+	links []netlink.Link
 }
 
 func (d *mockIPIPDataplane) ResetCalls() {
@@ -413,6 +481,7 @@ func (d *mockIPIPDataplane) AddrList(link netlink.Link, family int) ([]netlink.A
 	if err := d.incCallCount(); err != nil {
 		return nil, err
 	}
+
 	Expect(link.Attrs().Name).To(Equal("tunl0"))
 	return d.addrs, nil
 }
@@ -435,6 +504,18 @@ func (d *mockIPIPDataplane) AddrDel(link netlink.Link, addr *netlink.Addr) error
 	Expect(d.addrs).To(HaveLen(1))
 	Expect(d.addrs[0].IP.String()).To(Equal(addr.IP.String()))
 	d.addrs = nil
+	return nil
+}
+
+func (d *mockIPIPDataplane) LinkList() ([]netlink.Link, error) {
+	return m.links, nil
+}
+
+func (d *mockIPIPDataplane) LinkAdd(_ netlink.Link) error {
+	return nil
+}
+
+func (d *mockIPIPDataplane) LinkDel(_ netlink.Link) error {
 	return nil
 }
 
