@@ -25105,6 +25105,14 @@ rules:
     verbs:
       - create
       - delete
+  # In addition to the above, the operator should have the ability to delete their own resources during uninstallation.
+  - apiGroups:
+      - operator.tigera.io
+    resources:
+      - installations
+      - apiservers
+    verbs:
+      - delete
   - apiGroups:
     - networking.k8s.io
     resources:
