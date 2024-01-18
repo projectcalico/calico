@@ -953,6 +953,33 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						return out
 					}).Should(ContainSubstring("kernel.unprivileged_bpf_disabled = 1"))
 				})
+
+				It("should cleanup after we disable eBPF", func() {
+					By("Waiting for dp to get setup up")
+
+					ensureAllNodesBPFProgramsAttached(tc.Felixes)
+
+					By("Changing env and restarting felix")
+
+					tc.Felixes[0].SetEvn(map[string]string{"FELIX_BPFENABLED": "false"})
+					tc.Felixes[0].Restart()
+
+					By("Checking that all programs got cleaned up")
+
+					Eventually(func() string {
+						out, _ := tc.Felixes[0].ExecOutput("bpftool", "-jp", "prog", "show")
+						return out
+					}, "15s", "1s").ShouldNot(
+						Or(ContainSubstring("cali_"), ContainSubstring("calico_"), ContainSubstring("xdp_cali_")))
+
+					// N.B. calico_failsafe map is created in iptables mode by
+					// bpf.NewFailsafeMap() It has calico_ prefix. All other bpf
+					// maps have only cali_ prefix.
+					Eventually(func() string {
+						out, _ := tc.Felixes[0].ExecOutput("bpftool", "-jp", "map", "show")
+						return out
+					}, "15s", "1s").ShouldNot(Or(ContainSubstring("cali_"), ContainSubstring("xdp_cali_")))
+				})
 			}
 		})
 
