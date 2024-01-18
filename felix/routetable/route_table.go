@@ -120,6 +120,7 @@ type RouteTable struct {
 	// resolution if there are multiple routes) and the route that's actually
 	// in the kernel.
 	kernelRoutes *deltatracker.DeltaTracker[kernelRouteKey, kernelRoute]
+	pendingARPs  map[string]map[ip.Addr]net.HardwareAddr
 
 	ifaceNameToIndex      map[string]int
 	ifaceIndexToName      map[int]string
@@ -283,6 +284,7 @@ func New(
 		cidrToIfaces:  map[ip.CIDR]set.Set[string]{},
 
 		kernelRoutes: deltatracker.New[kernelRouteKey, kernelRoute](),
+		pendingARPs:  map[string]map[ip.Addr]net.HardwareAddr{},
 
 		ifaceIndexToGraceInfo: map[int]graceInfo{},
 		ifaceNameToIndex:      map[string]int{},
@@ -422,8 +424,12 @@ func (r *RouteTable) SetRoutes(ifaceName string, targets []Target) {
 	// Record the new desired state.
 	if len(newTargets) == 0 {
 		delete(r.ifaceToRoutes, ifaceName)
+		delete(r.pendingARPs, ifaceName)
 	} else {
 		r.ifaceToRoutes[ifaceName] = newTargets
+		if r.makeARPEntries {
+			r.pendingARPs[ifaceName] = map[ip.Addr]net.HardwareAddr{}
+		}
 	}
 
 	// Clean up the old CIDRs.
@@ -432,8 +438,13 @@ func (r *RouteTable) SetRoutes(ifaceName string, targets []Target) {
 		r.recalculateDesiredKernelRoute(cidr)
 	}
 
-	for cidr := range newTargets {
+	for cidr, target := range newTargets {
 		r.recalculateDesiredKernelRoute(cidr)
+		if r.makeARPEntries && target.DestMAC != nil {
+			r.pendingARPs[ifaceName][cidr.Addr()] = target.DestMAC
+		} else {
+			delete(r.pendingARPs[ifaceName], cidr.Addr())
+		}
 	}
 }
 
@@ -1100,25 +1111,27 @@ func (r *RouteTable) applyUpdates() error {
 			return deltatracker.IterActionNoOp
 		}
 
-		if r.makeARPEntries {
-			// Add a static ARP entry for the peer.  This doesn't seem to be needed
-			// any more, and we've never done it for IPv6, but we have tests that
-			// rely on it, and it's possible that it's needed in some obscure scenario.
-			ifaceName := r.ifaceIndexToName[kRoute.Ifindex]
-			target := r.ifaceToRoutes[ifaceName][kernKey.CIDR]
-			mac := target.DestMAC
-			if mac != nil {
-				err := r.addStaticARPEntry(nl, target.CIDR, target.DestMAC, kRoute.Ifindex)
-				if err != nil {
-					log.WithError(err).Debug("Failed to add neighbor entry.")
-					updateErrs[kernKey] = err
-				}
-			}
-		}
-
 		// Route is gone, clean up the dataplane side of the tracker.
 		return deltatracker.IterActionUpdateDataplane
 	})
+
+	arpFailed := false
+	for ifaceName, addrToMAC := range r.pendingARPs {
+		// Add a static ARP entry for the peer.  This doesn't seem to be needed
+		// any more, and we've never done it for IPv6, but we have tests that
+		// rely on it, and it's possible that it's needed in some obscure scenario.
+		ifaceIdx, ok := r.ifaceIndex(ifaceName)
+		if ok {
+			for addr, mac := range addrToMAC {
+				err := r.addStaticARPEntry(nl, addr, mac, ifaceIdx)
+				if err != nil {
+					log.WithError(err).Debug("Failed to add neighbor entry.")
+					arpFailed = true
+				}
+			}
+			delete(r.pendingARPs, ifaceName)
+		}
+	}
 
 	// TODO filter out errors from interfaces that have gone away.
 	err = nil
@@ -1130,6 +1143,9 @@ func (r *RouteTable) applyUpdates() error {
 	if len(updateErrs) > 0 {
 		r.logCxt.WithField("errors", updateErrs).Warn(
 			"Encountered some errors when trying to update routes.  Will retry.")
+		err = UpdateFailed
+	}
+	if arpFailed {
 		err = UpdateFailed
 	}
 
@@ -1164,7 +1180,11 @@ func (r *RouteTable) deleteRoute(nl netlinkshim.Interface, kernKey kernelRouteKe
 
 // filterErrorByIfaceState checks the current state of the interface; if it's down or gone, it
 // returns IfaceDown or IfaceNotPresent, otherwise, it returns the given defaultErr.
-func (r *RouteTable) filterErrorByIfaceState(ifaceName string, currentErr, defaultErr error, suppressExistsWarning bool) error {
+func (r *RouteTable) filterErrorByIfaceState(
+	ifaceName string,
+	currentErr, defaultErr error,
+	suppressExistsWarning bool,
+) error {
 	if currentErr == nil {
 		return nil
 	}
@@ -1222,13 +1242,18 @@ func (r *RouteTable) filterErrorByIfaceState(ifaceName string, currentErr, defau
 	}
 }
 
-func (r *RouteTable) addStaticARPEntry(nl netlinkshim.Interface, cidr ip.CIDR, mac net.HardwareAddr, ifindex int) error {
+func (r *RouteTable) addStaticARPEntry(
+	nl netlinkshim.Interface,
+	addr ip.Addr,
+	mac net.HardwareAddr,
+	ifindex int,
+) error {
 	a := &netlink.Neigh{
 		Family:       unix.AF_INET,
 		LinkIndex:    ifindex,
 		State:        netlink.NUD_PERMANENT,
 		Type:         unix.RTN_UNICAST,
-		IP:           cidr.Addr().AsNetIP(),
+		IP:           addr.AsNetIP(),
 		HardwareAddr: mac,
 	}
 	if log.IsLevelEnabled(log.DebugLevel) {
