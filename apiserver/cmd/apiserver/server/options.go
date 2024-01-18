@@ -140,6 +140,16 @@ func (o *CalicoServerOptions) Config() (*apiserver.Config, error) {
 		if err := o.RecommendedOptions.Authentication.ApplyTo(&serverConfig.Authentication, serverConfig.SecureServing, serverConfig.OpenAPIConfig); err != nil {
 			return nil, err
 		}
+
+		// Prevent /readyz from bypassing authorization. This makes /readyz perform authorization against kube-apiserver,
+		// and therefore makes /readyz a better indication of whether the container is capable of handling requests.
+		var filteredAlwaysAllowPaths []string
+		for _, path := range o.RecommendedOptions.Authorization.AlwaysAllowPaths {
+			if path != "/readyz" {
+				filteredAlwaysAllowPaths = append(filteredAlwaysAllowPaths, path)
+			}
+		}
+		o.RecommendedOptions.Authorization.AlwaysAllowPaths = filteredAlwaysAllowPaths
 		if err := o.RecommendedOptions.Authorization.ApplyTo(&serverConfig.Authorization); err != nil {
 			return nil, err
 		}
