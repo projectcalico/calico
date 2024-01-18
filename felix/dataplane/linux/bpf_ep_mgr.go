@@ -1612,8 +1612,6 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 			err   error
 			up    bool
 			state bpfInterfaceState
-			//xdpIdx, ingressIdx, egressIdx     int
-			//ingressFilterIdx, egressFilterIdx int
 		)
 
 		m.ifacesLock.Lock()
@@ -1659,63 +1657,78 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 			}
 
 			var parallelWG sync.WaitGroup
+			var ingressPolErr4, xdpPolErr4, egressPolErr4 error
+			var ingressPolErr6, egressPolErr6 error
 			var ingressErr, xdpErr error
-			var ingressPolErr, xdpPolErr, egressPolErr error
-			var ingressAP, egressAP *tc.AttachPoint
-			var xdpAP *xdp.AttachPoint
+			var ingressAP4, egressAP4 *tc.AttachPoint
+			var ingressAP6, egressAP6 *tc.AttachPoint
+			var xdpAP4 *xdp.AttachPoint
 
 			ap := m.calculateTCAttachPoint(iface)
 
-			ingressAttachPoint := *ap
-			egressAttachPoint := *ap
+			ingressAttachPoint4 := *ap
+			egressAttachPoint4 := *ap
+			ingressAttachPoint6 := *ap
+			egressAttachPoint6 := *ap
 
-			d := m.v4
-			if m.ipv6Enabled {
-				d = m.v6
+			if !m.ipv6Enabled {
+				parallelWG.Add(3)
+				go func() {
+					defer parallelWG.Done()
+					ingressAP4, ingressPolErr4 = m.v4.attachDataIfaceProgram(iface, hepPtr, PolDirnIngress, &state, &ingressAttachPoint4)
+				}()
+
+				go func() {
+					defer parallelWG.Done()
+					egressAP4, egressPolErr4 = m.v4.attachDataIfaceProgram(iface, hepPtr, PolDirnEgress, &state, &egressAttachPoint4)
+				}()
+
+				go func() {
+					defer parallelWG.Done()
+					xdpAP4, xdpPolErr4 = m.v4.attachXDPProgram(iface, hepPtr, &state)
+				}()
+			} else {
+				parallelWG.Add(2)
+				go func() {
+					defer parallelWG.Done()
+					ingressAP6, ingressPolErr6 = m.v6.attachDataIfaceProgram(iface, hepPtr, PolDirnIngress, &state, &ingressAttachPoint6)
+				}()
+
+				go func() {
+					defer parallelWG.Done()
+					egressAP6, egressPolErr6 = m.v6.attachDataIfaceProgram(iface, hepPtr, PolDirnEgress, &state, &egressAttachPoint6)
+				}()
 			}
+			parallelWG.Wait()
+
+			// Attach ingress program.
 			parallelWG.Add(1)
 			go func() {
 				defer parallelWG.Done()
-				ingressAP, ingressPolErr = d.attachDataIfaceProgram(iface, hepPtr, PolDirnIngress, &state, &ingressAttachPoint)
+				ingressAP := mergeAttachPoints(ingressAP4, ingressAP6)
+				if ingressAP != nil {
+					_, ingressErr = m.dp.attachProgram(ingressAP)
+				}
 			}()
 
-			if !m.ipv6Enabled {
-				parallelWG.Add(1)
-				go func() {
-					defer parallelWG.Done()
-					xdpAP, xdpPolErr = d.attachXDPProgram(iface, hepPtr, &state)
-				}()
-			}
-
-			egressAP, egressPolErr = d.attachDataIfaceProgram(iface, hepPtr, PolDirnEgress, &state, &egressAttachPoint)
-
-			parallelWG.Wait()
-			// Attach ingress program.
-			if ingressPolErr == nil || ingressPolErr == errApplyingPolicy {
-				parallelWG.Add(1)
-				go func() {
-					defer parallelWG.Done()
-					_, ingressErr = m.dp.attachProgram(ingressAP)
-				}()
-			}
-
 			// Attach egress program.
-			if egressPolErr == nil || egressPolErr == errApplyingPolicy {
-				parallelWG.Add(1)
-				go func() {
-					defer parallelWG.Done()
+			parallelWG.Add(1)
+			go func() {
+				defer parallelWG.Done()
+				egressAP := mergeAttachPoints(egressAP4, egressAP6)
+				if egressAP != nil {
 					_, err = m.dp.attachProgram(egressAP)
-				}()
-			}
+				}
+			}()
 
 			// Attach xdp program.
-			if (xdpPolErr == nil || xdpPolErr == errApplyingPolicy) && xdpAP != nil {
-				parallelWG.Add(1)
-				go func() {
-					defer parallelWG.Done()
-					_, xdpErr = m.dp.attachProgram(xdpAP)
-				}()
-			}
+			parallelWG.Add(1)
+			go func() {
+				defer parallelWG.Done()
+				if xdpAP4 != nil {
+					_, xdpErr = m.dp.attachProgram(xdpAP4)
+				}
+			}()
 			parallelWG.Wait()
 
 			if err == nil {
@@ -1725,13 +1738,13 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 				err = xdpErr
 			}
 			if err == nil {
-				err = ingressPolErr
+				err = errors.Join(ingressPolErr4, ingressPolErr6)
 			}
 			if err == nil {
-				err = egressPolErr
+				err = errors.Join(egressPolErr4, egressPolErr6)
 			}
 			if err == nil {
-				err = xdpErr
+				err = xdpPolErr4
 			}
 			if err == nil {
 				// This is required to allow NodePort forwarding with
@@ -2031,12 +2044,14 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 	}
 
 	var (
-		ingressErr, egressErr       error
-		ingressPolErr, egressPolErr error
-		ingressQdisc, egressQdisc   qDiscInfo
-		ingressAP, egressAP         *tc.AttachPoint
-		wg                          sync.WaitGroup
-		wep                         *proto.WorkloadEndpoint
+		ingressErr, egressErr         error
+		ingressPolErr4, egressPolErr4 error
+		ingressPolErr6, egressPolErr6 error
+		ingressQdisc, egressQdisc     qDiscInfo
+		ingressAP4, egressAP4         *tc.AttachPoint
+		ingressAP6, egressAP6         *tc.AttachPoint
+		wg                            sync.WaitGroup
+		wep                           *proto.WorkloadEndpoint
 	)
 
 	if endpointID != nil {
@@ -2055,42 +2070,54 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 	// Take 2 copies of the attach point. One for ingress and one for egress.
 	ingressAttachPoint := *ap
 	egressAttachPoint := *ap
+	ingressAttachPoint6 := *ap
+	egressAttachPoint6 := *ap
 
-	d := m.v4
-	if m.ipv6Enabled {
-		d = m.v6
+	if !m.ipv6Enabled {
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			ingressAP4, ingressPolErr4 = m.v4.wepApplyPolicyToDirection(readiness, ifaceName, &state,
+				wep, PolDirnIngress, &ingressAttachPoint)
+		}()
+		go func() {
+			defer wg.Done()
+			egressAP4, egressPolErr4 = m.v4.wepApplyPolicyToDirection(readiness, ifaceName, &state,
+				wep, PolDirnEgress, &egressAttachPoint)
+		}()
+	} else {
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			ingressAP6, ingressPolErr6 = m.v6.wepApplyPolicyToDirection(readiness, ifaceName, &state,
+				wep, PolDirnIngress, &ingressAttachPoint6)
+		}()
+		go func() {
+			defer wg.Done()
+			egressAP6, egressPolErr6 = m.v6.wepApplyPolicyToDirection(readiness, ifaceName, &state,
+				wep, PolDirnEgress, &egressAttachPoint6)
+		}()
 	}
-	wg.Add(2)
-	go func() {
-		defer wg.Done()
-		ingressAP, ingressPolErr = d.wepApplyPolicyToDirection(readiness, ifaceName, &state,
-			wep, PolDirnIngress, &ingressAttachPoint)
-	}()
-	go func() {
-		defer wg.Done()
-		egressAP, egressPolErr = d.wepApplyPolicyToDirection(readiness, ifaceName, &state,
-			wep, PolDirnEgress, &egressAttachPoint)
-	}()
 	wg.Wait()
 
-	if ingressPolErr != nil && ingressPolErr != errApplyingPolicy {
-		return state, ingressPolErr
-	}
-	if egressPolErr != nil && egressPolErr != errApplyingPolicy {
-		return state, egressPolErr
-	}
-
+	//Attach preamble TC program
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
 		if readiness != ifaceIsReady {
-			ingressQdisc, ingressErr = m.dp.attachProgram(ingressAP)
+			ingressAP := mergeAttachPoints(ingressAP4, ingressAP6)
+			if ingressAP != nil {
+				ingressQdisc, ingressErr = m.dp.attachProgram(ingressAP)
+			}
 		}
 	}()
 	go func() {
 		defer wg.Done()
 		if readiness != ifaceIsReady {
-			egressQdisc, egressErr = m.dp.attachProgram(egressAP)
+			egressAP := mergeAttachPoints(egressAP4, egressAP6)
+			if egressAP != nil {
+				egressQdisc, egressErr = m.dp.attachProgram(egressAP)
+			}
 		}
 	}()
 	wg.Wait()
@@ -2103,12 +2130,12 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 		return state, egressErr
 	}
 
-	if ingressPolErr != nil {
-		return state, fmt.Errorf("error applying policy to wep %w", ingressPolErr)
+	if err := errors.Join(ingressPolErr4, ingressPolErr6); err != nil {
+		return state, err
 	}
 
-	if egressPolErr != nil {
-		return state, fmt.Errorf("error applying policy to wep %w", egressPolErr)
+	if err := errors.Join(egressPolErr4, egressPolErr6); err != nil {
+		return state, err
 	}
 
 	if egressQdisc != ingressQdisc {
@@ -2152,6 +2179,15 @@ func (m *bpfEndpointManager) applyPolicy(ifaceName string) error {
 	m.ifacesLock.Unlock()
 
 	return err
+}
+
+func mergeAttachPoints(ap, ap6 *tc.AttachPoint) *tc.AttachPoint {
+	if ap != nil && ap6 == nil {
+		return ap
+	} else if ap6 != nil && ap == nil {
+		return ap6
+	}
+	return nil
 }
 
 func isLinkNotFoundError(err error) bool {
@@ -2370,7 +2406,7 @@ func (d *dataplane) attachDataIfaceProgram(
 		}
 	} else {
 		if err := d.dp.removePolicyProgram(ap); err != nil {
-			return nil, err
+			return ap, err
 		}
 	}
 	return ap, nil
