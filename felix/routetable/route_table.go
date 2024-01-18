@@ -1115,20 +1115,30 @@ func (r *RouteTable) applyUpdates() error {
 		return deltatracker.IterActionUpdateDataplane
 	})
 
-	arpFailed := false
+	arpErrs := map[string]error{}
 	for ifaceName, addrToMAC := range r.pendingARPs {
-		// Add a static ARP entry for the peer.  This doesn't seem to be needed
-		// any more, and we've never done it for IPv6, but we have tests that
-		// rely on it, and it's possible that it's needed in some obscure scenario.
+		// Add static ARP entries (for workload endpoints).  This may have been
+		// needed at one point but it no longer seems to be required.  Leaving
+		// it here for two reasons: (1) there may be an obscure scenario where
+		// it is needed. (2) we have tests that monitor netlink, and they break
+		// if it is removed because they see the ARP traffic.
 		ifaceIdx, ok := r.ifaceIndex(ifaceName)
-		if ok {
-			for addr, mac := range addrToMAC {
-				err := r.addStaticARPEntry(nl, addr, mac, ifaceIdx)
-				if err != nil {
-					log.WithError(err).Debug("Failed to add neighbor entry.")
-					arpFailed = true
-				}
+		if !ok {
+			// Asked to add ARP entries but the interface isn't known (yet).
+			// Leave them pending.  We'll clean up the pending set if the
+			// datastore stops asking us to add ARP entries for this interface.
+			continue
+		}
+		for addr, mac := range addrToMAC {
+			err := r.addStaticARPEntry(nl, addr, mac, ifaceIdx)
+			if err != nil {
+				log.WithError(err).Debug("Failed to add neighbor entry.")
+				arpErrs[fmt.Sprintf("%s/%s", ifaceName, addr)] = err
+			} else {
+				delete(addrToMAC, addr)
 			}
+		}
+		if len(addrToMAC) == 0 {
 			delete(r.pendingARPs, ifaceName)
 		}
 	}
@@ -1145,7 +1155,9 @@ func (r *RouteTable) applyUpdates() error {
 			"Encountered some errors when trying to update routes.  Will retry.")
 		err = UpdateFailed
 	}
-	if arpFailed {
+	if len(arpErrs) > 0 {
+		r.logCxt.WithField("errors", arpErrs).Warn(
+			"Encountered some errors when trying to add static ARP entries.  Will retry.")
 		err = UpdateFailed
 	}
 
