@@ -28,7 +28,8 @@ func CleanUpCalicoPins(dir string) {
 		if err != nil {
 			return err
 		}
-		if strings.HasPrefix(info.Name(), "cali_") || strings.HasPrefix(info.Name(), "calico_") {
+		if strings.HasPrefix(info.Name(), "cali_") || strings.HasPrefix(info.Name(), "calico_") ||
+			strings.HasPrefix(info.Name(), "xdp_cali_") {
 			log.WithField("path", path).Debug("Deleting pinned BPF resource")
 			err = os.Remove(path)
 			if err != nil {
