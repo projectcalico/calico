@@ -773,8 +773,10 @@ func (m *bpfEndpointManager) OnUpdate(msg interface{}) {
 		m.onProfileRemove(msg)
 
 	case *proto.HostMetadataUpdate:
-		log.WithField("HostMetadataUpdate", msg).Infof("Host IP changed: %s", msg.Ipv4Addr)
-		m.updateHostIP(net.ParseIP(msg.Ipv4Addr), 4)
+		if msg.Hostname == m.hostname {
+			log.WithField("HostMetadataUpdate", msg).Infof("Host IP changed: %s", msg.Ipv4Addr)
+			m.updateHostIP(net.ParseIP(msg.Ipv4Addr), 4)
+		}
 	case *proto.HostMetadataV6Update:
 		if m.ipv6Enabled && msg.Hostname == m.hostname {
 			log.WithField("HostMetadataV6Update", msg).Infof("Host IPv6 changed: %s", msg.Ipv6Addr)
@@ -2314,7 +2316,7 @@ func (d *bpfEndpointManagerDataplane) attachDataIfaceProgram(
 		return nil, fmt.Errorf("unknown host IP")
 	}
 
-	ap = d.configureTCAttachPoint(polDirection, ap, false)
+	ap = d.configureTCAttachPoint(polDirection, ap, true)
 	ap.HostIP = d.hostIP
 
 	ip, err := d.getInterfaceIP(ifaceName)
@@ -2489,6 +2491,8 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(ifaceName string) *tc.Attach
 	ap.Type = endpointType
 	if ap.Type != tcdefs.EpTypeWorkload {
 		ap.WgPort = m.wgPort
+		ap.NATin = uint32(m.natInIdx)
+		ap.NATout = uint32(m.natOutIdx)
 	}
 
 	ap.ToHostDrop = (m.epToHostAction == "DROP")
@@ -2500,6 +2504,16 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(ifaceName string) *tc.Attach
 	ap.PSNATStart = m.psnatPorts.MinPort
 	ap.PSNATEnd = m.psnatPorts.MaxPort
 	ap.TunnelMTU = uint16(m.vxlanMTU)
+
+	switch m.rpfEnforceOption {
+	case "Strict":
+		ap.RPFEnforceOption = tcdefs.RPFEnforceOptionStrict
+	case "Loose":
+		ap.RPFEnforceOption = tcdefs.RPFEnforceOptionLoose
+	default:
+		ap.RPFEnforceOption = tcdefs.RPFEnforceOptionDisabled
+	}
+
 	return ap
 }
 
