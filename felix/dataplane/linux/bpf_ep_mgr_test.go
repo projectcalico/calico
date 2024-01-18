@@ -100,7 +100,7 @@ func (m *mockDataplane) loadDefaultPolicies() error {
 	return nil
 }
 
-func (m *mockDataplane) attachProgram(ap attachPoint) (qDiscInfo, error) {
+func (m *mockDataplane) ensureProgramAttached(ap attachPoint) (qDiscInfo, error) {
 	var qdisc qDiscInfo
 	return qdisc, nil
 }
@@ -266,8 +266,8 @@ var _ = Describe("BPF Endpoint Manager", func() {
 	var (
 		bpfEpMgr             *bpfEndpointManager
 		dp                   *mockDataplane
-		mockDPCommon         bpfDataplane
-		mockDP               bpfDP
+		mockDPCommon         bpfDataplaneCommon
+		mockDP               bpfDataplane
 		fibLookupEnabled     bool
 		endpointToHostAction string
 		dataIfacePattern     string
