@@ -1092,7 +1092,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 					By("Changing env and restarting felix")
 
-					tc.Felixes[0].SetEvn(map[string]string{"FELIX_BPFENABLED": "false"})
+					tc.Felixes[0].SetEnv(map[string]string{"FELIX_BPFENABLED": "false"})
 					tc.Felixes[0].Restart()
 
 					By("Checking that all programs got cleaned up")
