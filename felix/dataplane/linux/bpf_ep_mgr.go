@@ -2258,9 +2258,16 @@ func (d *bpfEndpointManagerDataplane) wepApplyPolicy(ap *tc.AttachPoint,
 		d.addHostPolicy(&rules, &d.wildcardHostEndpoint, polDirection.Inverse())
 	}
 
-	// If workload egress and DefaultEndpointToHostAction is ACCEPT or DROP, suppress the normal
-	// host-* endpoint policy.
-	if polDirection == PolDirnEgress && d.epToHostAction != "RETURN" {
+	// Intentionally leaving this code here until the *-hep takes precedence.
+	wildcardEPPolicyAppliesToWEPs := false
+	if wildcardEPPolicyAppliesToWEPs {
+		// If workload egress and DefaultEndpointToHostAction is ACCEPT or DROP, suppress the normal
+		// host-* endpoint policy. If it does not exist, suppress it as well, not to
+		// create deny due to the fact that there are not profiles or tiers etc.
+		if polDirection == PolDirnEgress && (d.epToHostAction != "RETURN" || !d.wildcardExists) {
+			rules.SuppressNormalHostPolicy = true
+		}
+	} else {
 		rules.SuppressNormalHostPolicy = true
 	}
 
@@ -3356,6 +3363,7 @@ func (m *bpfEndpointManager) loadPolicyProgram(
 	log.WithFields(log.Fields{
 		"progName": progName,
 		"ipFamily": ipFamily,
+		"rules":    rules,
 	}).Debug("Generating policy program...")
 
 	if ipFamily == proto.IPVersion_IPV6 {
