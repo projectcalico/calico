@@ -23,15 +23,21 @@ type InterfaceOwnershipPolicy struct {
 }
 
 func (d *InterfaceOwnershipPolicy) IfaceShouldHaveARPEntries(ifaceName string) bool {
-	return false // We only do ARP for WEPs, which are handled by the MainRouteTableDiscriminator.
+	// Returning true so that we defer to the RouteTable's main grace period
+	// configuration.
+	return true
 }
-
 func (d *InterfaceOwnershipPolicy) IfaceShouldHaveGracePeriod(ifaceName string) bool {
-	return false // We only do grace periods for WEPs, which are handled by the MainRouteTableDiscriminator.
+	// Returning true so that we defer to the RouteTable's main grace period
+	// configuration.
+	return true
 }
 
 func (d *InterfaceOwnershipPolicy) IfaceIsOurs(ifaceName string) bool {
 	if d.InterfaceNames == nil {
+		return true
+	}
+	if ifaceName == InterfaceNone {
 		return true
 	}
 	for _, iface := range d.InterfaceNames {
@@ -43,5 +49,5 @@ func (d *InterfaceOwnershipPolicy) IfaceIsOurs(ifaceName string) bool {
 }
 
 func (d *InterfaceOwnershipPolicy) RouteIsOurs(ifaceName string, route *netlink.Route) bool {
-	return d.IfaceIsOurs(ifaceName)
+	return true
 }

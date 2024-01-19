@@ -503,7 +503,7 @@ func (r *RouteTable) recheckRouteOwnershipsByIface(name string) {
 	}
 }
 
-func (r *RouteTable) ifaceIndex(ifaceName string) (int, bool) {
+func (r *RouteTable) ifaceIndexForName(ifaceName string) (int, bool) {
 	if ifaceName == InterfaceNone {
 		if r.ipVersion == 6 {
 			// IPv6 "special" routes use ifindex 1 (vs 0 for IPv4).
@@ -516,6 +516,14 @@ func (r *RouteTable) ifaceIndex(ifaceName string) (int, bool) {
 
 	idx, ok := r.ifaceNameToIndex[ifaceName]
 	return idx, ok
+}
+
+func (r *RouteTable) ifaceNameForIndex(ifindex int) (string, bool) {
+	if ifindex <= 1 {
+		return InterfaceNone, true
+	}
+	name, ok := r.ifaceIndexToName[ifindex]
+	return name, ok
 }
 
 func (r *RouteTable) recalculateDesiredKernelRoute(cidr ip.CIDR) {
@@ -546,7 +554,7 @@ func (r *RouteTable) recalculateDesiredKernelRoute(cidr ip.CIDR) {
 	var candidates []string
 	ifaces.Iter(func(ifaceName string) error {
 		candidates = append(candidates, ifaceName)
-		ifIndex, ok := r.ifaceIndex(ifaceName)
+		ifIndex, ok := r.ifaceIndexForName(ifaceName)
 		if !ok {
 			r.logCxt.Debug("Skipping route for missing interface.")
 			return nil
@@ -750,7 +758,7 @@ func (r *RouteTable) resyncIndividualInterfaces(nl netlinkshim.Interface) error 
 			return nil
 		}
 
-		ifIndex, ok := r.ifaceIndex(ifaceName)
+		ifIndex, ok := r.ifaceIndexForName(ifaceName)
 		if !ok {
 			r.logCxt.Debug("Ignoring rescan of unknown interface.")
 			return set.RemoveItem
@@ -1019,14 +1027,13 @@ func (r *RouteTable) applyUpdates() error {
 	deletionErrs := map[kernelRouteKey]error{}
 	r.kernelRoutes.PendingDeletions().Iter(func(kernKey kernelRouteKey) deltatracker.IterAction {
 		kernRoute, _ := r.kernelRoutes.PendingDeletions().Get(kernKey)
-		graceInf := r.ifaceIndexToGraceInfo[kernRoute.Ifindex]
-		ifaceInGracePeriod := !graceInf.GraceExpired && r.time.Since(graceInf.FirstSeen) < r.routeCleanupGracePeriod
-		if ifaceInGracePeriod {
+		if r.ifaceInGracePeriod(kernRoute.Ifindex) {
 			// Don't remove unexpected routes from interfaces created recently.
 			r.logCxt.WithFields(log.Fields{
 				"route": kernRoute,
 				"dest":  kernKey,
 			}).Debug("Found unexpected route; ignoring due to grace period.")
+			r.ifaceInGracePeriod(kernRoute.Ifindex)
 			return deltatracker.IterActionNoOp
 		}
 
@@ -1106,7 +1113,7 @@ func (r *RouteTable) applyUpdates() error {
 		// it here for two reasons: (1) there may be an obscure scenario where
 		// it is needed. (2) we have tests that monitor netlink, and they break
 		// if it is removed because they see the ARP traffic.
-		ifaceIdx, ok := r.ifaceIndex(ifaceName)
+		ifaceIdx, ok := r.ifaceIndexForName(ifaceName)
 		if !ok {
 			// Asked to add ARP entries but the interface isn't known (yet).
 			// Leave them pending.  We'll clean up the pending set if the
@@ -1146,6 +1153,24 @@ func (r *RouteTable) applyUpdates() error {
 	}
 
 	return err
+}
+
+func (r *RouteTable) ifaceInGracePeriod(ifindex int) bool {
+	graceInf, ok := r.ifaceIndexToGraceInfo[ifindex]
+	if !ok {
+		return false
+	}
+	if graceInf.GraceExpired {
+		return false
+	}
+	name, ok := r.ifaceNameForIndex(ifindex)
+	if !ok {
+		return false
+	}
+	if !r.ownershipPolicy.IfaceShouldHaveGracePeriod(name) {
+		return false
+	}
+	return r.time.Since(graceInf.FirstSeen) < r.routeCleanupGracePeriod
 }
 
 func (r *RouteTable) deleteRoute(nl netlinkshim.Interface, kernKey kernelRouteKey) error {
