@@ -95,7 +95,7 @@ WINDOWS_MOD_CACHED_FILES := \
     windows-packaging/conf.d/blocks.toml \
     windows-packaging/conf.d/peerings.toml \
     windows-packaging/templates/blocks.ps1.template \
-    windows-packaging/templates/peerings.ps1.template \
+    windows-packaging/templates/peerings.ps1.template
 
 # Files to include in the Windows ZIP archive.  We need to list some of these explicitly
 # because we need to force them to be built/copied into place. We also have
@@ -562,5 +562,12 @@ WINDOWS_IMAGE_REQS := \
 	$(WINDOWS_ARCHIVE_ROOT)/felix/felix-service.ps1 \
 	$(WINDOWS_ARCHIVE_ROOT)/node/node-service.ps1 \
 	$(WINDOWS_ARCHIVE_ROOT)/uninstall-calico-hpc.ps1 \
+	$(WINDOWS_ARCHIVE_ROOT)/confd/confd-service.ps1 \
+	$(WINDOWS_ARCHIVE_ROOT)/confd/config-bgp.ps1 \
+	$(WINDOWS_ARCHIVE_ROOT)/confd/config-bgp.psm1 \
+	$(WINDOWS_ARCHIVE_ROOT)/confd/conf.d/blocks.toml \
+	$(WINDOWS_ARCHIVE_ROOT)/confd/conf.d/peerings.toml \
+	$(WINDOWS_ARCHIVE_ROOT)/confd/templates/blocks.ps1.template \
+	$(WINDOWS_ARCHIVE_ROOT)/confd/templates/peerings.ps1.template \
 	windows-packaging/nssm.exe
 image-windows: $(WINDOWS_IMAGE_REQS)
