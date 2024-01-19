@@ -15,12 +15,10 @@
 package conntrack_test
 
 import (
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
-
 	"testing"
 
-	"github.com/onsi/ginkgo/reporters"
+	"github.com/onsi/ginkgo/v2"
+	"github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
 )
@@ -30,7 +28,8 @@ func init() {
 }
 
 func TestConntrack(t *testing.T) {
-	RegisterFailHandler(Fail)
-	junitReporter := reporters.NewJUnitReporter("../report/conntrack_suite.xml")
-	RunSpecsWithDefaultAndCustomReporters(t, "Conntrack Suite", []Reporter{junitReporter})
+	gomega.RegisterFailHandler(ginkgo.Fail)
+	suiteConfig, reporterConfig := ginkgo.GinkgoConfiguration()
+	reporterConfig.JUnitReport = "../report/conntrack_suite.xml"
+	ginkgo.RunSpecs(t, "Conntrack Suite", suiteConfig, reporterConfig)
 }
