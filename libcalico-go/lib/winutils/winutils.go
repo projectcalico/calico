@@ -32,16 +32,19 @@ import (
 )
 
 func Powershell(args ...string) (string, string, error) {
-	// Add default powershell to PATH
-	path := os.Getenv("PATH")
-	err := os.Setenv("PATH", path+";C:/Windows/System32/WindowsPowerShell/v1.0/")
+	// Add default powershell to PATH if it can't be found
+	_, err := exec.LookPath("powershell.exe")
 	if err != nil {
-		return "", "", err
+		path := os.Getenv("PATH")
+		err = os.Setenv("PATH", path+";C:/Windows/System32/WindowsPowerShell/v1.0/")
+		if err != nil {
+			return "", "", fmt.Errorf("Cannot add powershell to Windows PATH: %s", err.Error())
+		}
 	}
 
 	ps, err := exec.LookPath("powershell.exe")
 	if err != nil {
-		return "", "", err
+		return "", "", fmt.Errorf("Cannot find powershell.exe: %s", err.Error())
 	}
 
 	args = append([]string{"-NoProfile", "-NonInteractive"}, args...)
