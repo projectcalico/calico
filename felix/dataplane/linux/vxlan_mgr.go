@@ -111,7 +111,7 @@ type VXLANFDB interface {
 
 func newVXLANManagerWithShims(
 	ipsetsDataplane common.IPSetsDataplane,
-	rt routetable.RouteTableInterface,
+	mainRouteTable routetable.RouteTableInterface,
 	fdb VXLANFDB,
 	deviceName string,
 	dpConfig Config,
@@ -132,7 +132,7 @@ func newVXLANManagerWithShims(
 			Type:    ipsets.IPSetTypeHashNet,
 		},
 		hostname:          dpConfig.Hostname,
-		routeTable:        rt,
+		routeTable:        mainRouteTable,
 		fdb:               fdb,
 		routesByDest:      map[string]*proto.RouteUpdate{},
 		localIPAMBlocks:   map[string]*proto.RouteUpdate{},
