@@ -86,6 +86,6 @@ func blackholeRoutes(localIPAMBlocks map[string]*proto.RouteUpdate) []routetable
 			CIDR: cidr,
 		})
 	}
-	logrus.Debug("calculated blackholes ", rtt)
+	logrus.Debugf("calculated blackholes %v", rtt)
 	return rtt
 }
