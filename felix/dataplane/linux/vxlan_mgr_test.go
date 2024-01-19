@@ -72,6 +72,14 @@ func (m *mockVXLANDataplane) AddrList(link netlink.Link, family int) ([]netlink.
 		IPNet: &net.IPNet{
 			IP: net.IPv4(172, 0, 0, 2),
 		},
+	}, {
+		IPNet: &net.IPNet{
+			IP: net.IPv4(10, 0, 0, 1),
+		},
+	}, {
+		IPNet: &net.IPNet{
+			IP: net.IPv4(10, 0, 0, 2),
+		},
 	},
 	}
 
