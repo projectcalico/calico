@@ -99,7 +99,7 @@ type RouteTable struct {
 	deviceRouteProtocol      netlink.RouteProtocol
 	routeMetric              RouteMetric
 	removeExternalRoutes     bool
-	routeDiscriminator       OwnershipPolicy
+	ownershipPolicy          OwnershipPolicy
 
 	// Interface update tracking.
 	fullResyncNeeded  bool
@@ -203,17 +203,28 @@ func WithNetlinkHandleShim(newNetlinkHandle func() (netlinkshim.Interface, error
 	}
 }
 
+// OwnershipPolicy is used to determine whether a given interface or route
+// belongs to Calico.  Routes that are loaded from the kernel are checked
+// against this policy to determine if they should be tracked.  The RouteTable
+// cleans up tracked routes that don't match the current datastore state.
+//
+// The policy is also used to determine whether an interface should be tracked
+// or not.  If an interface is not tracked then the RouteTable will not be
+// able to program routes for it, and it will not respond to interface state
+// updates.  This is mainly a performance optimisation for our non-main
+// routing tables which tend to be used to manager routes for a single device.
 type OwnershipPolicy interface {
+	RouteIsOurs(ifaceName string, route *netlink.Route) bool
+
 	IfaceIsOurs(ifaceName string) bool
 	IfaceShouldHaveARPEntries(ifaceName string) bool
 	IfaceShouldHaveGracePeriod(ifaceName string) bool
-	RouteIsOurs(ifaceName string, route *netlink.Route) bool
 }
 
 // FIXME Makes sure that VXLAN same-subnet routes don't get cleaned up until VXLAN manager is in sync.
 
 func New(
-	discriminator OwnershipPolicy,
+	ownershipPolicy OwnershipPolicy,
 	ipVersion uint8,
 	netlinkTimeout time.Duration,
 	deviceRouteSourceAddress net.IP,
@@ -254,9 +265,9 @@ func New(
 		deviceRouteProtocol:      deviceRouteProtocol,
 		removeExternalRoutes:     removeExternalRoutes,
 
-		fullResyncNeeded:   true,
-		ifacesToRescan:     set.New[string](),
-		routeDiscriminator: discriminator,
+		fullResyncNeeded: true,
+		ifacesToRescan:   set.New[string](),
+		ownershipPolicy:  ownershipPolicy,
 
 		ifaceToRoutes: map[string]map[ip.CIDR]Target{},
 		cidrToIfaces:  map[ip.CIDR]set.Set[string]{},
@@ -302,7 +313,7 @@ func New(
 
 func (r *RouteTable) OnIfaceStateChanged(ifaceName string, ifIndex int, state ifacemonitor.State) {
 	logCxt := r.logCxt.WithField("ifaceName", ifaceName)
-	if !r.routeDiscriminator.IfaceIsOurs(ifaceName) {
+	if !r.ownershipPolicy.IfaceIsOurs(ifaceName) {
 		logCxt.Trace("Ignoring interface state change, not an interface managed by this routetable.")
 		return
 	}
@@ -382,7 +393,7 @@ func (r *RouteTable) onIfaceSeen(ifIndex int) {
 
 // SetRoutes replaces the full set of targets for the specified interface.
 func (r *RouteTable) SetRoutes(ifaceName string, targets []Target) {
-	if !r.routeDiscriminator.IfaceIsOurs(ifaceName) {
+	if !r.ownershipPolicy.IfaceIsOurs(ifaceName) {
 		r.logCxt.WithField("ifaceName", ifaceName).Error(
 			"Cannot set route for interface not managed by this routetable.")
 		return
@@ -431,7 +442,7 @@ func (r *RouteTable) SetRoutes(ifaceName string, targets []Target) {
 // RouteUpdate updates the route keyed off the target CIDR. These deltas will
 // be applied to any routes set using SetRoute.
 func (r *RouteTable) RouteUpdate(ifaceName string, target Target) {
-	if !r.routeDiscriminator.IfaceIsOurs(ifaceName) {
+	if !r.ownershipPolicy.IfaceIsOurs(ifaceName) {
 		r.logCxt.WithField("ifaceName", ifaceName).Error(
 			"Cannot set route for interface not managed by this routetable.")
 		return
@@ -449,7 +460,7 @@ func (r *RouteTable) RouteUpdate(ifaceName string, target Target) {
 // RouteRemove removes the route with the specified CIDR. These deltas will
 // be applied to any routes set using SetRoute.
 func (r *RouteTable) RouteRemove(ifaceName string, cidr ip.CIDR) {
-	if !r.routeDiscriminator.IfaceIsOurs(ifaceName) {
+	if !r.ownershipPolicy.IfaceIsOurs(ifaceName) {
 		r.logCxt.WithField("ifaceName", ifaceName).Error(
 			"Cannot set route for interface not managed by this routetable.")
 		return
@@ -945,7 +956,7 @@ func (r *RouteTable) netlinkRouteToKernelRoute(route netlink.Route) (kernKey ker
 		}
 	}
 
-	if !r.routeDiscriminator.RouteIsOurs(ifaceName, &route) {
+	if !r.ownershipPolicy.RouteIsOurs(ifaceName, &route) {
 		logCxt.Debug("Ignoring route (it doesn't belong to us).")
 		return
 	}

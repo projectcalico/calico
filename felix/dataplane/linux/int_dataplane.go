@@ -1110,6 +1110,8 @@ func mainRoutingTableOwnershipPolicy(config Config, ipVersion int) *routetable.M
 			// we'll clean up the routes if VXLAN is disabled.
 			vxlanDevice,
 			bpfInDev,
+			// Not including routetable.InterfaceNone because MainTableOwnershipPolicy
+			// automatically handles it.
 			// Not including tunl0, it is managed by BIRD.
 			// Not including Wireguard, it has its own routing table.
 		},

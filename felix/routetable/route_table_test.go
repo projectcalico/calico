@@ -45,6 +45,14 @@ var (
 	ip1  = ip.MustParseCIDROrIP("10.0.0.1/32").ToIPNet()
 	ip2  = ip.MustParseCIDROrIP("10.0.0.2/32").ToIPNet()
 	ip13 = ip.MustParseCIDROrIP("10.0.1.3/32").ToIPNet()
+
+	defaultOwnershipPolicy = MainTableOwnershipPolicy{
+		WorkloadInterfacePrefixes:     []string{"cali"},
+		RemoveNonCalicoWorkloadRoutes: true,
+		CalicoSpecialInterfaces:       nil,
+		AllRouteProtocols:             []netlink.RouteProtocol{FelixRouteProtocol, 80},
+		ExclusiveRouteProtocols:       []netlink.RouteProtocol{80},
+	}
 )
 
 var _ = Describe("RouteTable v6", func() {
@@ -57,7 +65,7 @@ var _ = Describe("RouteTable v6", func() {
 		t = mocktime.New()
 		// No grace period set, so invalid routes should be deleted immediately on apply.
 		rt = New(
-			[]string{"^cali.*"},
+			&defaultOwnershipPolicy,
 			6,
 			10*time.Second,
 			nil,
@@ -125,7 +133,7 @@ var _ = Describe("RouteTable", func() {
 		// disables the grace period for these tests.
 		t.SetAutoIncrement(11 * time.Second)
 		rt = New(
-			[]string{"^cali.*"},
+			&defaultOwnershipPolicy,
 			4,
 			10*time.Second,
 			nil,
@@ -275,7 +283,7 @@ var _ = Describe("RouteTable", func() {
 			// Modify the route table to have the device route source address set
 			BeforeEach(func() {
 				rt = New(
-					[]string{"^cali.*"},
+					&defaultOwnershipPolicy,
 					4,
 					10*time.Second,
 					deviceRouteSourceAddress,
@@ -402,10 +410,13 @@ var _ = Describe("RouteTable", func() {
 
 		Describe("With a device route protocol set", func() {
 			deviceRouteProtocol := netlink.RouteProtocol(10)
+			ownershipPol := defaultOwnershipPolicy
+			ownershipPol.AllRouteProtocols = []netlink.RouteProtocol{deviceRouteProtocol}
+			ownershipPol.ExclusiveRouteProtocols = []netlink.RouteProtocol{deviceRouteProtocol}
 			// Modify the route table to have the device route source address set
 			BeforeEach(func() {
 				rt = New(
-					[]string{"^cali.*"},
+					&ownershipPol,
 					4,
 					10*time.Second,
 					nil,
@@ -1076,7 +1087,7 @@ var _ = Describe("RouteTable (main table)", func() {
 		// disables the grace period for these tests.
 		t.SetAutoIncrement(11 * time.Second)
 		rt = New(
-			[]string{"^cali.*"},
+			&defaultOwnershipPolicy,
 			4,
 			10*time.Second,
 			nil,
@@ -1180,7 +1191,7 @@ var _ = Describe("RouteTable (table 100)", func() {
 		// disables the grace period for these tests.
 		t.SetAutoIncrement(11 * time.Second)
 		rt = New(
-			[]string{"^cali$", InterfaceNone}, // exact interface match
+			&defaultOwnershipPolicy, // exact interface match
 			4,
 			10*time.Second,
 			nil,
@@ -1477,7 +1488,7 @@ var _ = Describe("Tests to verify ip version is policed", func() {
 			dataplane := mocknetlink.New()
 			t := mocktime.New()
 			_ = New(
-				[]string{"^cali$", InterfaceNone},
+				&defaultOwnershipPolicy,
 				5, // invalid IP version
 				10*time.Second,
 				nil,
