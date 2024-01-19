@@ -17,7 +17,7 @@
 package fv_test
 
 import (
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	"context"
@@ -65,7 +65,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test counters", [
 	})
 
 	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
+		if CurrentSpecReport().Failed() {
 			infra.DumpErrorData()
 			for _, felix := range tc.Felixes {
 				felix.Exec("calico-bpf", "counters", "dump")
