@@ -35,7 +35,7 @@ type HandleManager struct {
 	// reset on successful connection.
 	numRepeatFailures int
 
-	family        int
+	strictEnabled bool
 	socketTimeout time.Duration
 
 	featureDetector  environment.FeatureDetectorIface
@@ -56,16 +56,18 @@ func WithNewHandleOverride(newNetlinkHandle func() (netlinkshim.Interface, error
 	}
 }
 
-func NewHandleManager(
-	netlinkFamily int,
-	featureDetector environment.FeatureDetectorIface,
-	opts ...NetlinkHandleManagerOpt,
-) *HandleManager {
+func WithStrictModeOverride(strictEnabled bool) NetlinkHandleManagerOpt {
+	return func(manager *HandleManager) {
+		manager.strictEnabled = strictEnabled
+	}
+}
+
+func NewHandleManager(featureDetector environment.FeatureDetectorIface, opts ...NetlinkHandleManagerOpt) *HandleManager {
 	nlm := &HandleManager{
-		family:           netlinkFamily,
 		socketTimeout:    defaultSocketTimeout,
 		featureDetector:  featureDetector,
 		newNetlinkHandle: netlinkshim.NewRealNetlink,
+		strictEnabled:    true,
 	}
 	for _, o := range opts {
 		o(nlm)
@@ -111,7 +113,7 @@ func (r *HandleManager) newHandle() (netlinkshim.Interface, error) {
 		nlHandle.Delete()
 		return nil, err
 	}
-	if r.featureDetector.GetFeatures().KernelSideRouteFiltering {
+	if r.strictEnabled && r.featureDetector.GetFeatures().KernelSideRouteFiltering {
 		logrus.Debug("Kernel supports route filtering, enabling 'strict' netlink mode.")
 		err = nlHandle.SetStrictCheck(true)
 		if err != nil {
