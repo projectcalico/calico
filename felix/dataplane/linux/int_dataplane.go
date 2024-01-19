@@ -514,35 +514,9 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	var routeTableV6 routetable.RouteTableInterface
 
 	if !config.RouteSyncDisabled {
-		log.Debug("RouteSyncDisabled is false.")
-		var allRouteProtos []netlink.RouteProtocol
-		var exclusiveRouteProtos []netlink.RouteProtocol
-		if config.DeviceRouteProtocol == unix.RTPROT_BOOT {
-			// Boot is our historic default, but it was a bad choice because it could
-			// be used by other processes.  Since that wasn't good enough for VXLAN
-			// blackhole and same-subnet routes, we defaulted VXLAN to using proto 80
-			// if the config was set to "boot".
-			allRouteProtos = []netlink.RouteProtocol{unix.RTPROT_BOOT, defaultVXLANProto}
-			exclusiveRouteProtos = []netlink.RouteProtocol{defaultVXLANProto}
-		} else {
-			allRouteProtos = []netlink.RouteProtocol{config.DeviceRouteProtocol}
-			exclusiveRouteProtos = []netlink.RouteProtocol{config.DeviceRouteProtocol}
-		}
+		log.Debug("Route management is enabled.")
 		routeTableV4 = routetable.New(
-			&routetable.MainTableOwnershipPolicy{
-				WorkloadInterfacePrefixes:     config.RulesConfig.WorkloadIfacePrefixes,
-				RemoveNonCalicoWorkloadRoutes: config.RemoveExternalRoutes,
-				CalicoSpecialInterfaces: []string{
-					// Always including VXLAN device, even if not enabled.  That means
-					// we'll clean up the routes if VXLAN is disabled.
-					VXLANIfaceNameV4,
-					bpfInDev,
-					// Not including tunl0, it is managed by BIRD.
-					// Not including Wireguard, it has its own routing table.
-				},
-				AllRouteProtocols:       allRouteProtos,
-				ExclusiveRouteProtocols: exclusiveRouteProtos,
-			},
+			mainRoutingTableOwnershipPolicy(config, 4),
 			4,
 			config.NetlinkTimeout,
 			config.DeviceRouteSourceAddress,
@@ -559,20 +533,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		)
 		if config.IPv6Enabled {
 			routeTableV6 = routetable.New(
-				&routetable.MainTableOwnershipPolicy{
-					WorkloadInterfacePrefixes:     config.RulesConfig.WorkloadIfacePrefixes,
-					RemoveNonCalicoWorkloadRoutes: config.RemoveExternalRoutes,
-					CalicoSpecialInterfaces: []string{
-						// Always including VXLAN device, even if not enabled.  That means
-						// we'll clean up the routes if VXLAN is disabled.
-						VXLANIfaceNameV6,
-						bpfInDev,
-						// Not including tunl0, it is managed by BIRD.
-						// Not including Wireguard, it has its own routing table.
-					},
-					AllRouteProtocols:       allRouteProtos,
-					ExclusiveRouteProtocols: exclusiveRouteProtos,
-				},
+				mainRoutingTableOwnershipPolicy(config, 6),
 				6,
 				config.NetlinkTimeout,
 				config.DeviceRouteSourceAddressIPv6,
@@ -590,7 +551,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			)
 		}
 	} else {
-		log.Info("RouteSyncDisabled is true, using DummyTable.")
+		log.Info("Route management is disabled, using DummyTables.")
 		routeTableV4 = &routetable.DummyTable{}
 		if config.IPv6Enabled {
 			routeTableV6 = &routetable.DummyTable{}
@@ -1119,6 +1080,43 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	}
 
 	return dp
+}
+
+func mainRoutingTableOwnershipPolicy(config Config, ipVersion int) *routetable.MainTableOwnershipPolicy {
+	var allRouteProtos []netlink.RouteProtocol
+	var exclusiveRouteProtos []netlink.RouteProtocol
+	if config.DeviceRouteProtocol == unix.RTPROT_BOOT {
+		// Boot is our historic default, but it was a bad choice because it could
+		// be used by other processes.  Since that wasn't good enough for VXLAN
+		// blackhole and same-subnet routes, we defaulted VXLAN to using proto 80
+		// if the config was set to "boot".
+		allRouteProtos = []netlink.RouteProtocol{unix.RTPROT_BOOT, defaultVXLANProto}
+		exclusiveRouteProtos = []netlink.RouteProtocol{defaultVXLANProto}
+	} else {
+		allRouteProtos = []netlink.RouteProtocol{config.DeviceRouteProtocol}
+		exclusiveRouteProtos = []netlink.RouteProtocol{config.DeviceRouteProtocol}
+	}
+	var vxlanDevice string
+	if ipVersion == 4 {
+		vxlanDevice = VXLANIfaceNameV4
+	} else {
+		vxlanDevice = VXLANIfaceNameV6
+	}
+	ownershipPolicy := &routetable.MainTableOwnershipPolicy{
+		WorkloadInterfacePrefixes:     config.RulesConfig.WorkloadIfacePrefixes,
+		RemoveNonCalicoWorkloadRoutes: config.RemoveExternalRoutes,
+		CalicoSpecialInterfaces: []string{
+			// Always including VXLAN device, even if not enabled.  That means
+			// we'll clean up the routes if VXLAN is disabled.
+			vxlanDevice,
+			bpfInDev,
+			// Not including tunl0, it is managed by BIRD.
+			// Not including Wireguard, it has its own routing table.
+		},
+		AllRouteProtocols:       allRouteProtos,
+		ExclusiveRouteProtocols: exclusiveRouteProtos,
+	}
+	return ownershipPolicy
 }
 
 // findHostMTU auto-detects the smallest host interface MTU.
