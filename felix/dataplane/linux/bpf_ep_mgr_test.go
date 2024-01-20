@@ -100,11 +100,16 @@ func (m *mockDataplane) loadDefaultPolicies() error {
 	return nil
 }
 
-func (m *mockDataplane) ensureProgramAttached(ap attachPoint) (bpf.AttachResult, error) {
+func (m *mockDataplane) ensureProgramAttached(ap attachPoint) (qDiscInfo, error) {
+	var qdisc qDiscInfo
+	return qdisc, nil
+}
+
+func (m *mockDataplane) ensureProgramLoaded(ap attachPoint) error {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
-	var res tc.AttachResult // we don't care about the values
+	//var res tc.AttachResult // we don't care about the values
 
 	if apxdp, ok := ap.(*xdp.AttachPoint); ok {
 		apxdp.HookLayout = hook.Layout{
@@ -115,11 +120,11 @@ func (m *mockDataplane) ensureProgramAttached(ap attachPoint) (bpf.AttachResult,
 
 	key := ap.IfaceName() + ":" + ap.HookName().String()
 	if _, exists := m.progs[key]; exists {
-		return res, nil
+		return nil
 	}
 	m.lastProgID += 1
 	m.progs[key] = m.lastProgID
-	return res, nil
+	return nil
 }
 
 func (m *mockDataplane) ensureNoProgram(ap attachPoint) error {
@@ -261,6 +266,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 	var (
 		bpfEpMgr             *bpfEndpointManager
 		dp                   *mockDataplane
+		mockDPCommon         bpfDataplaneCommon
 		mockDP               bpfDataplane
 		fibLookupEnabled     bool
 		endpointToHostAction string
@@ -346,6 +352,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 	newBpfEpMgr := func() {
 		var err error
 		bpfEpMgr, err = newBPFEndpointManager(
+			mockDPCommon,
 			mockDP,
 			&Config{
 				Hostname:              "uthost",
@@ -373,7 +380,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		)
 		Expect(err).NotTo(HaveOccurred())
 		bpfEpMgr.Features = environment.NewFeatureDetector(nil).GetFeatures()
-		bpfEpMgr.hostIP = net.ParseIP("1.2.3.4")
+		bpfEpMgr.v4.hostIP = net.ParseIP("1.2.3.4")
 	}
 
 	genIfaceUpdate := func(name string, state ifacemonitor.State, index int) func() {
@@ -469,6 +476,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 	JustBeforeEach(func() {
 		dp = newMockDataplane()
+		mockDPCommon = dp
 		mockDP = dp
 		newBpfEpMgr()
 	})
@@ -747,8 +755,8 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		It("should update the maps with ruleIds", func() {
 			ingRule := &proto.Rule{Action: "Allow", RuleId: "INGRESSALLOW1234"}
 			egrRule := &proto.Rule{Action: "Allow", RuleId: "EGRESSALLOW12345"}
-			ingRuleMatchId := bpfEpMgr.dp.ruleMatchID("Ingress", "Allow", "Policy", "allowPol", 0)
-			egrRuleMatchId := bpfEpMgr.dp.ruleMatchID("Egress", "Allow", "Policy", "allowPol", 0)
+			ingRuleMatchId := bpfEpMgr.v4.dp.ruleMatchID("Ingress", "Allow", "Policy", "allowPol", 0)
+			egrRuleMatchId := bpfEpMgr.v4.dp.ruleMatchID("Egress", "Allow", "Policy", "allowPol", 0)
 			k := make([]byte, 8)
 			v := make([]byte, 8)
 			rcMap := bpfEpMgr.bpfmaps.RuleCountersMap
@@ -772,7 +780,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 			// update the ingress rule of the policy
 			ingDenyRule := &proto.Rule{Action: "Deny", RuleId: "INGRESSDENY12345"}
-			ingDenyRuleMatchId := bpfEpMgr.dp.ruleMatchID("Ingress", "Deny", "Policy", "allowPol", 0)
+			ingDenyRuleMatchId := bpfEpMgr.v4.dp.ruleMatchID("Ingress", "Deny", "Policy", "allowPol", 0)
 			bpfEpMgr.OnUpdate(&proto.ActivePolicyUpdate{
 				Id:     &proto.PolicyID{Tier: "default", Name: "allowPol"},
 				Policy: &proto.Policy{InboundRules: []*proto.Rule{ingDenyRule}, OutboundRules: []*proto.Rule{egrRule}},
@@ -813,8 +821,8 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		})
 
 		It("should cleanup the bpf map after restart", func() {
-			ingRuleMatchId := bpfEpMgr.dp.ruleMatchID("Ingress", "Allow", "Policy", "allowPol", 0)
-			egrRuleMatchId := bpfEpMgr.dp.ruleMatchID("Egress", "Allow", "Policy", "allowPol", 0)
+			ingRuleMatchId := bpfEpMgr.v4.dp.ruleMatchID("Ingress", "Allow", "Policy", "allowPol", 0)
+			egrRuleMatchId := bpfEpMgr.v4.dp.ruleMatchID("Egress", "Allow", "Policy", "allowPol", 0)
 			k := make([]byte, 8)
 			v := make([]byte, 8)
 			rcMap := bpfEpMgr.bpfmaps.RuleCountersMap
@@ -1391,9 +1399,11 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 	Describe("program map", func() {
 		JustBeforeEach(func() {
-			mockDP = &mockProgMapDP{
+			mapDP := &mockProgMapDP{
 				dp,
 			}
+			mockDP = mapDP
+			mockDPCommon = mapDP
 			newBpfEpMgr()
 
 			bpfEpMgr.bpfLogLevel = "debug"
@@ -1495,9 +1505,11 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			}
 
 			dp = newMockDataplane()
-			mockDP = &mockProgMapDP{
+			mapDP := &mockProgMapDP{
 				dp,
 			}
+			mockDPCommon = mapDP
+			mockDP = mapDP
 			newBpfEpMgr()
 
 			bpfEpMgr.bpfLogLevel = "debug"
