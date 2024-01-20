@@ -311,6 +311,9 @@ type bpfEndpointManager struct {
 	//ifaceToIpMap map[string]net.IP
 	opReporter logutils.OpRecorder
 
+	// XDP
+	xdpModes []bpf.XDPMode
+
 	// IPv6 Support
 	ipv6Enabled bool
 
@@ -494,6 +497,17 @@ func newBPFEndpointManager(
 		polNameToMatchIDs:      map[string]set.Set[polprog.RuleMatchID]{},
 		dirtyRules:             set.New[polprog.RuleMatchID](),
 		arpMap:                 bpfmaps.ArpMap,
+	}
+
+	// Calculate allowed XDP attachment modes.  Note, in BPF mode untracked ingress policy is
+	// _only_ implemented by XDP, so we _should_ fall back to XDPGeneric if necessary in order
+	// to preserve the semantics of untracked ingress policy.  (Therefore we are also saying
+	// here that the GenericXDPEnabled config setting, like XDPEnabled, is only relevant when
+	// BPFEnabled is false.)
+	m.xdpModes = []bpf.XDPMode{
+		bpf.XDPOffload,
+		bpf.XDPDriver,
+		bpf.XDPGeneric,
 	}
 
 	// Clean all the files under /var/run/calico/bpf/prog to remove any information from the
@@ -1603,53 +1617,33 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 			}
 
 			var parallelWG sync.WaitGroup
-			var ingressPolErr4, xdpPolErr4, egressPolErr4 error
-			var ingressPolErr6, egressPolErr6 error
-			var ingressErr, xdpErr error
+			var ingressErr, xdpErr, err4, err6 error
 			var ingressAP4, egressAP4 *tc.AttachPoint
 			var ingressAP6, egressAP6 *tc.AttachPoint
-			var xdpAP4 *xdp.AttachPoint
+			var xdpAP4, xdpAP6 *xdp.AttachPoint
 
-			ap := m.calculateTCAttachPoint(iface)
-
-			ingressAttachPoint4 := *ap
-			egressAttachPoint4 := *ap
-			ingressAttachPoint6 := *ap
-			egressAttachPoint6 := *ap
-
-			if !m.ipv6Enabled {
-				parallelWG.Add(3)
-				go func() {
-					defer parallelWG.Done()
-					ingressAP4, ingressPolErr4 = m.v4.attachDataIfaceProgram(iface, hepPtr, PolDirnIngress, &state, &ingressAttachPoint4)
-				}()
-
-				go func() {
-					defer parallelWG.Done()
-					egressAP4, egressPolErr4 = m.v4.attachDataIfaceProgram(iface, hepPtr, PolDirnEgress, &state, &egressAttachPoint4)
-				}()
-
-				go func() {
-					defer parallelWG.Done()
-					xdpAP4, xdpPolErr4 = m.v4.attachXDPProgram(iface, hepPtr, &state)
-					if hepPtr == nil || len(hepPtr.UntrackedTiers) != 1 {
-						xdpPolErr4 = m.dp.ensureNoProgram(xdpAP4)
-						xdpAP4 = nil
-					}
-
-				}()
-			} else {
-				parallelWG.Add(2)
-				go func() {
-					defer parallelWG.Done()
-					ingressAP6, ingressPolErr6 = m.v6.attachDataIfaceProgram(iface, hepPtr, PolDirnIngress, &state, &ingressAttachPoint6)
-				}()
-
-				go func() {
-					defer parallelWG.Done()
-					egressAP6, egressPolErr6 = m.v6.attachDataIfaceProgram(iface, hepPtr, PolDirnEgress, &state, &egressAttachPoint6)
-				}()
+			tcAttachPoint := m.calculateTCAttachPoint(iface)
+			xdpAttachPoint := &xdp.AttachPoint{
+				AttachPoint: bpf.AttachPoint{
+					Hook:     hook.XDP,
+					Iface:    iface,
+					LogLevel: m.bpfLogLevel,
+				},
+				Modes: m.xdpModes,
 			}
+
+			if m.v6 != nil {
+				parallelWG.Add(1)
+				go func() {
+					defer parallelWG.Done()
+					ingressAP6, egressAP6, xdpAP6, err6 = m.v6.applyPolicyToDataIface(iface, hepPtr, &state,
+						tcAttachPoint, xdpAttachPoint)
+				}()
+			} else if m.v4 != nil {
+				ingressAP4, egressAP4, xdpAP4, err4 = m.v4.applyPolicyToDataIface(iface, hepPtr, &state,
+					tcAttachPoint, xdpAttachPoint)
+			}
+
 			parallelWG.Wait()
 
 			// Attach ingress program.
@@ -1673,13 +1667,18 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 			}()
 
 			// Attach xdp program.
-			parallelWG.Add(1)
-			go func() {
-				defer parallelWG.Done()
-				if xdpAP4 != nil {
-					_, xdpErr = m.dp.ensureProgramAttached(xdpAP4)
-				}
-			}()
+			if !m.ipv6Enabled {
+				parallelWG.Add(1)
+				go func() {
+					defer parallelWG.Done()
+					xdpAP := mergeAttachPoints(xdpAP4, xdpAP6)
+					if hepPtr != nil && len(hepPtr.UntrackedTiers) == 1 && xdpAP != nil {
+						_, xdpErr = m.dp.ensureProgramAttached(xdpAP4)
+					} else {
+						xdpErr = m.dp.ensureNoProgram(xdpAP)
+					}
+				}()
+			}
 			parallelWG.Wait()
 
 			if err == nil {
@@ -1689,13 +1688,10 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 				err = xdpErr
 			}
 			if err == nil {
-				err = errors.Join(ingressPolErr4, ingressPolErr6)
+				err = err4
 			}
 			if err == nil {
-				err = errors.Join(egressPolErr4, egressPolErr6)
-			}
-			if err == nil {
-				err = xdpPolErr4
+				err = err6
 			}
 			if err == nil {
 				// This is required to allow NodePort forwarding with
@@ -1995,14 +1991,13 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 	}
 
 	var (
-		ingressErr, egressErr         error
-		ingressPolErr4, egressPolErr4 error
-		ingressPolErr6, egressPolErr6 error
-		ingressQdisc, egressQdisc     qDiscInfo
-		ingressAP4, egressAP4         *tc.AttachPoint
-		ingressAP6, egressAP6         *tc.AttachPoint
-		wg                            sync.WaitGroup
-		wep                           *proto.WorkloadEndpoint
+		ingressErr, egressErr     error
+		err4, err6                error
+		ingressQdisc, egressQdisc qDiscInfo
+		ingressAP4, egressAP4     *tc.AttachPoint
+		ingressAP6, egressAP6     *tc.AttachPoint
+		wg                        sync.WaitGroup
+		wep                       *proto.WorkloadEndpoint
 	)
 
 	if endpointID != nil {
@@ -2018,41 +2013,19 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 
 	ap := m.calculateTCAttachPoint(ifaceName)
 
-	// Take 2 copies of the attach point. One for ingress and one for egress.
-	ingressAttachPoint := *ap
-	egressAttachPoint := *ap
-	ingressAttachPoint6 := *ap
-	egressAttachPoint6 := *ap
-
-	if !m.ipv6Enabled {
-		wg.Add(2)
+	if m.v6 != nil {
+		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			ingressAP4, ingressPolErr4 = m.v4.wepApplyPolicyToDirection(readiness, ifaceName, &state,
-				wep, PolDirnIngress, &ingressAttachPoint)
+			ingressAP6, egressAP6, err6 = m.v6.applyPolicyToWeps(readiness, ifaceName, &state, wep, ap)
 		}()
-		go func() {
-			defer wg.Done()
-			egressAP4, egressPolErr4 = m.v4.wepApplyPolicyToDirection(readiness, ifaceName, &state,
-				wep, PolDirnEgress, &egressAttachPoint)
-		}()
-	} else {
-		wg.Add(2)
-		go func() {
-			defer wg.Done()
-			ingressAP6, ingressPolErr6 = m.v6.wepApplyPolicyToDirection(readiness, ifaceName, &state,
-				wep, PolDirnIngress, &ingressAttachPoint6)
-		}()
-		go func() {
-			defer wg.Done()
-			egressAP6, egressPolErr6 = m.v6.wepApplyPolicyToDirection(readiness, ifaceName, &state,
-				wep, PolDirnEgress, &egressAttachPoint6)
-		}()
+	} else if m.v4 != nil {
+		ingressAP4, egressAP4, err4 = m.v4.applyPolicyToWeps(readiness, ifaceName, &state, wep, ap)
 	}
 	wg.Wait()
 
 	//Attach preamble TC program
-	wg.Add(2)
+	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		if readiness != ifaceIsReady {
@@ -2062,15 +2035,12 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 			}
 		}
 	}()
-	go func() {
-		defer wg.Done()
-		if readiness != ifaceIsReady {
-			egressAP := mergeAttachPoints(egressAP4, egressAP6)
-			if egressAP != nil {
-				egressQdisc, egressErr = m.dp.ensureProgramAttached(egressAP)
-			}
+	if readiness != ifaceIsReady {
+		egressAP := mergeAttachPoints(egressAP4, egressAP6)
+		if egressAP != nil {
+			egressQdisc, egressErr = m.dp.ensureProgramAttached(egressAP)
 		}
-	}()
+	}
 	wg.Wait()
 
 	if ingressErr != nil {
@@ -2081,12 +2051,12 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 		return state, egressErr
 	}
 
-	if err := errors.Join(ingressPolErr4, ingressPolErr6); err != nil {
-		return state, err
+	if err4 != nil {
+		return state, err4
 	}
 
-	if err := errors.Join(egressPolErr4, egressPolErr6); err != nil {
-		return state, err
+	if err6 != nil {
+		return state, err6
 	}
 
 	if egressQdisc != ingressQdisc {
@@ -2132,11 +2102,22 @@ func (m *bpfEndpointManager) applyPolicy(ifaceName string) error {
 	return err
 }
 
-func mergeAttachPoints(ap, ap6 *tc.AttachPoint) *tc.AttachPoint {
-	if ap != nil && ap6 == nil {
-		return ap
-	} else if ap6 != nil && ap == nil {
-		return ap6
+func mergeAttachPoints(ap, ap6 attachPoint) attachPoint {
+	if aptcV4, v4ok := ap.(*tc.AttachPoint); v4ok {
+		if aptcV6, v6ok := ap6.(*tc.AttachPoint); v6ok {
+			if aptcV4 != nil && aptcV6 == nil {
+				return aptcV4
+			} else if aptcV6 != nil && aptcV4 == nil {
+				return aptcV6
+			}
+		}
+	} else if apxdpV4, v4ok := ap.(*xdp.AttachPoint); v4ok {
+		apxdpV6, _ := ap6.(*xdp.AttachPoint)
+		if apxdpV4 != nil && apxdpV6 == nil {
+			return apxdpV4
+		} else if apxdpV6 != nil && apxdpV4 == nil {
+			return apxdpV6
+		}
 	}
 	return nil
 }
@@ -2179,7 +2160,7 @@ func (d *bpfEndpointManagerDataplane) wepTCAttachPoint(ap *tc.AttachPoint, polic
 	return ap
 }
 
-func (d *bpfEndpointManagerDataplane) wepApplyPolicyToDirection(readiness ifaceReadiness, ifaceName string, state *bpfInterfaceState,
+func (d *bpfEndpointManagerDataplane) wepApplyPolicyToDirection(readiness ifaceReadiness, state *bpfInterfaceState,
 	endpoint *proto.WorkloadEndpoint, polDirection PolDirection, ap *tc.AttachPoint) (*tc.AttachPoint, error) {
 
 	var policyIdx, filterIdx int
@@ -2205,7 +2186,7 @@ func (d *bpfEndpointManagerDataplane) wepApplyPolicyToDirection(readiness ifaceR
 
 	ap = d.wepTCAttachPoint(ap, policyIdx, filterIdx, polDirection)
 
-	log.WithField("iface", ifaceName).Debugf("readiness: %d", readiness)
+	log.WithField("iface", ap.IfaceName()).Debugf("readiness: %d", readiness)
 	if readiness != ifaceIsReady {
 		err := d.loadWepPrograms(ap)
 		if err != nil {
@@ -2303,6 +2284,72 @@ func (d *bpfEndpointManagerDataplane) addHostPolicy(rules *polprog.Rules, hostEn
 	rules.HostProfiles = d.extractProfiles(hostEndpoint.ProfileIds, polDirection)
 }
 
+func (d *bpfEndpointManagerDataplane) applyPolicyToWeps(
+	readiness ifaceReadiness,
+	ifaceName string,
+	state *bpfInterfaceState,
+	endpoint *proto.WorkloadEndpoint,
+	ap *tc.AttachPoint,
+) (*tc.AttachPoint, *tc.AttachPoint, error) {
+
+	ingressAttachPoint := *ap
+	egressAttachPoint := *ap
+
+	var parallelWG sync.WaitGroup
+	var ingressAP *tc.AttachPoint
+	var ingressErr error
+
+	parallelWG.Add(1)
+	go func() {
+		defer parallelWG.Done()
+		ingressAP, ingressErr = d.wepApplyPolicyToDirection(readiness,
+			state, endpoint, PolDirnIngress, &ingressAttachPoint)
+	}()
+
+	egressAP, egressErr := d.wepApplyPolicyToDirection(readiness,
+		state, endpoint, PolDirnEgress, &egressAttachPoint)
+	parallelWG.Wait()
+
+	return ingressAP, egressAP, errors.Join(ingressErr, egressErr)
+}
+
+func (d *bpfEndpointManagerDataplane) applyPolicyToDataIface(
+	ifaceName string,
+	ep *proto.HostEndpoint,
+	state *bpfInterfaceState,
+	ap *tc.AttachPoint,
+	xdpAP *xdp.AttachPoint,
+) (*tc.AttachPoint, *tc.AttachPoint, *xdp.AttachPoint, error) {
+
+	ingressAttachPoint := *ap
+	egressAttachPoint := *ap
+
+	var parallelWG sync.WaitGroup
+	var ingressAP, egressAP *tc.AttachPoint
+	var ingressErr, egressErr, xdpErr error
+
+	parallelWG.Add(2)
+	go func() {
+		defer parallelWG.Done()
+		ingressAP, ingressErr = d.attachDataIfaceProgram(ifaceName, ep, PolDirnIngress, state, &ingressAttachPoint)
+	}()
+
+	go func() {
+		defer parallelWG.Done()
+		// XDP IPv6 is not supported yet.
+		if d.ipFamily == 4 {
+			xdpErr = d.attachXDPProgram(xdpAP, ep, state)
+		} else {
+			xdpAP = nil
+		}
+	}()
+
+	egressAP, egressErr = d.attachDataIfaceProgram(ifaceName, ep, PolDirnEgress, state, &egressAttachPoint)
+	parallelWG.Wait()
+
+	return ingressAP, egressAP, xdpAP, errors.Join(ingressErr, egressErr, xdpErr)
+}
+
 func (d *bpfEndpointManagerDataplane) attachDataIfaceProgram(
 	ifaceName string,
 	ep *proto.HostEndpoint,
@@ -2360,7 +2407,7 @@ func (d *bpfEndpointManagerDataplane) attachDataIfaceProgram(
 		}
 		d.addHostPolicy(&rules, ep, polDirection)
 		if err := d.updatePolicyProgramFn(rules, polDirection.RuleDir(), ap); err != nil {
-			return ap, errApplyingPolicy
+			return ap, err
 		}
 	} else {
 		if err := d.dp.removePolicyProgram(ap); err != nil {
@@ -2370,24 +2417,17 @@ func (d *bpfEndpointManagerDataplane) attachDataIfaceProgram(
 	return ap, nil
 }
 
-func (d *bpfEndpointManagerDataplane) attachXDPProgram(ifaceName string, ep *proto.HostEndpoint, state *bpfInterfaceState) (*xdp.AttachPoint, error) {
-	jumpIdx := state.v4.policyIdx[hook.XDP]
+func (d *bpfEndpointManagerDataplane) attachXDPProgram(ap *xdp.AttachPoint, ep *proto.HostEndpoint, state *bpfInterfaceState) error {
 	if d.ipFamily == 6 {
-		jumpIdx = state.v6.policyIdx[hook.XDP]
+		ap.PolicyIdx = state.v6.policyIdx[hook.XDP]
+	} else {
+		ap.PolicyIdx = state.v4.policyIdx[hook.XDP]
 	}
-	ap := &xdp.AttachPoint{
-		AttachPoint: bpf.AttachPoint{
-			Hook:      hook.XDP,
-			Iface:     ifaceName,
-			LogLevel:  d.bpfLogLevel,
-			PolicyIdx: jumpIdx,
-		},
-		Modes: d.xdpModes,
-	}
+
 	if ep != nil && len(ep.UntrackedTiers) == 1 {
 		err := d.dp.ensureProgramLoaded(ap)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		ap.Log().Debugf("Building program for untracked policy hep=%v", ep.Name)
@@ -2399,9 +2439,9 @@ func (d *bpfEndpointManagerDataplane) attachXDPProgram(ifaceName string, ep *pro
 		ap.Log().Debugf("Rules: %v", rules)
 		err = d.updatePolicyProgramFn(rules, "xdp", ap)
 		ap.Log().WithError(err).Debugf("Applied untracked policy hep=%v", ep.Name)
-		return ap, err
+		return err
 	}
-	return ap, nil
+	return nil
 }
 
 // PolDirection is the Calico datamodel direction of policy.  On a host endpoint, ingress is towards the host.
