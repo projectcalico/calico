@@ -1396,10 +1396,9 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 	Describe("program map", func() {
 		JustBeforeEach(func() {
-			mapDP := &mockProgMapDP{
+			mockDP = &mockProgMapDP{
 				dp,
 			}
-			mockDP = mapDP
 			newBpfEpMgr()
 
 			bpfEpMgr.bpfLogLevel = "debug"
@@ -1501,10 +1500,9 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			}
 
 			dp = newMockDataplane()
-			mapDP := &mockProgMapDP{
+			mockDP = &mockProgMapDP{
 				dp,
 			}
-			mockDP = mapDP
 			newBpfEpMgr()
 
 			bpfEpMgr.bpfLogLevel = "debug"
