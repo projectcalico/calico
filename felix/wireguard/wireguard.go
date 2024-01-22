@@ -1093,8 +1093,8 @@ func (w *Wireguard) updateRouteTableFromNodeUpdates() {
 		// not programmed.
 		update.cidrsDeleted.Iter(func(cidr ip.CIDR) error {
 			w.logCtx.WithField("cidr", cidr).Debug("Removing CIDR from routetable interface")
-			w.routetable.RouteRemove(w.interfaceName, cidr)
-			w.routetable.RouteRemove(routetable.InterfaceNone, cidr)
+			w.routetable.RouteRemove(routetable.RouteClassWireguardThrow, w.interfaceName, cidr)
+			w.routetable.RouteRemove(routetable.RouteClassWireguardTunnel, routetable.InterfaceNone, cidr)
 			return nil
 		})
 	}
@@ -1120,17 +1120,20 @@ func (w *Wireguard) updateRouteTableFromNodeUpdates() {
 
 		var targetType routetable.TargetType
 		var ifaceName string
+		var routeClass routetable.RouteClass
 		if !shouldRouteToWireguard {
 			// If we should not route to wireguard then we need to use a throw directive to skip wireguard routing and
 			// return to normal routing. We may also need to delete the existing route to wireguard.
 			logCtx.Debug("Not routing to wireguard - set route type to throw")
 			targetType = routetable.TargetTypeThrow
 			ifaceName = routetable.InterfaceNone
+			routeClass = routetable.RouteClassWireguardThrow
 		} else {
 			// If we should route to wireguard then route to the wireguard interface. We may also need to delete the
 			// existing throw route that was used to circumvent wireguard routing.
 			logCtx.Debug("Routing to wireguard interface")
 			ifaceName = w.interfaceName
+			routeClass = routetable.RouteClassWireguardTunnel
 		}
 
 		updateSet.Iter(func(cidr ip.CIDR) error {
@@ -1145,10 +1148,10 @@ func (w *Wireguard) updateRouteTableFromNodeUpdates() {
 				// information to decide which route we need to remove - however we have also had bugs related to state
 				// tracking so deleting both is reasonable - routetable ignores the one that is not programmed.
 				updateLogCtx.Debug("Wireguard routing has changed - delete previous route")
-				w.routetable.RouteRemove(routetable.InterfaceNone, cidr)
-				w.routetable.RouteRemove(w.interfaceName, cidr)
+				w.routetable.RouteRemove(routetable.RouteClassWireguardThrow, routetable.InterfaceNone, cidr)
+				w.routetable.RouteRemove(routetable.RouteClassWireguardTunnel, w.interfaceName, cidr)
 			}
-			w.routetable.RouteUpdate(ifaceName, routetable.Target{
+			w.routetable.RouteUpdate(routeClass, ifaceName, routetable.Target{
 				Type: targetType,
 				CIDR: cidr,
 			})

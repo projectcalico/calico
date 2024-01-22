@@ -2681,7 +2681,7 @@ func (m *bpfEndpointManager) ensureBPFDevices() error {
 	// Setup a link local route to a nonexistent link local address that would
 	// serve as a gateway to route services via bpfnat veth rather than having
 	// link local routes for each service that would trigger ARP queries.
-	m.routeTable.RouteUpdate(bpfInDev, routetable.Target{
+	m.routeTable.RouteUpdate(routetable.RouteClassBPFSpecial, bpfInDev, routetable.Target{
 		Type: routetable.TargetTypeLinkLocalUnicast,
 		CIDR: cidr,
 	})
@@ -3313,7 +3313,7 @@ func (m *bpfEndpointManager) setRoute(cidr ip.CIDR) {
 	} else {
 		gw = bpfnatGWIP
 	}
-	m.routeTable.RouteUpdate(bpfInDev, routetable.Target{
+	m.routeTable.RouteUpdate(routetable.RouteClassBPFSpecial, bpfInDev, routetable.Target{
 		Type: routetable.TargetTypeGlobalUnicast,
 		CIDR: cidr,
 		GW:   gw,
@@ -3324,7 +3324,7 @@ func (m *bpfEndpointManager) setRoute(cidr ip.CIDR) {
 }
 
 func (m *bpfEndpointManager) delRoute(cidr ip.CIDR) {
-	m.routeTable.RouteRemove(bpfInDev, cidr)
+	m.routeTable.RouteRemove(routetable.RouteClassBPFSpecial, bpfInDev, cidr)
 	log.WithFields(log.Fields{
 		"cidr": cidr,
 	}).Debug("delRoute")

@@ -591,7 +591,7 @@ type mockRouteTable struct {
 	currentL2Routes map[string][]vxlanfdb.VTEP // FIXME move to separate mock.
 }
 
-func (t *mockRouteTable) SetRoutes(ifaceName string, targets []routetable.Target) {
+func (t *mockRouteTable) SetRoutes(routeClass routetable.RouteClass, ifaceName string, targets []routetable.Target) {
 	log.WithFields(log.Fields{
 		"ifaceName": ifaceName,
 		"targets":   targets,
@@ -606,10 +606,10 @@ func (t *mockRouteTable) SetVTEPs(targets []vxlanfdb.VTEP) {
 	t.currentL2Routes[""] = targets
 }
 
-func (t *mockRouteTable) RouteRemove(_ string, _ ip.CIDR) {
+func (t *mockRouteTable) RouteRemove(routeClass routetable.RouteClass, ifaceName string, cidr ip.CIDR) {
 }
 
-func (t *mockRouteTable) RouteUpdate(_ string, _ routetable.Target) {
+func (t *mockRouteTable) RouteUpdate(routeClass routetable.RouteClass, ifaceName string, target routetable.Target) {
 }
 
 func (t *mockRouteTable) OnIfaceStateChanged(string, int, ifacemonitor.State) {}

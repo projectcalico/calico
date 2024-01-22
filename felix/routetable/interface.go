@@ -30,7 +30,7 @@ type RouteTableSyncer interface {
 // RouteTable is the interface provided by the standard routetable module used to program the RIB.
 type RouteTableInterface interface {
 	RouteTableSyncer
-	SetRoutes(ifaceName string, targets []Target)
-	RouteRemove(ifaceName string, cidr ip.CIDR)
-	RouteUpdate(ifaceName string, target Target)
+	SetRoutes(routeClass RouteClass, ifaceName string, targets []Target)
+	RouteRemove(routeClass RouteClass, ifaceName string, cidr ip.CIDR)
+	RouteUpdate(routeClass RouteClass, ifaceName string, target Target)
 }

@@ -444,13 +444,13 @@ func (m *vxlanManager) CompleteDeferredWork() error {
 		}
 
 		m.logCtx.WithField("vxlanroutes", vxlanRoutes).Debug("VXLAN manager sending VXLAN L3 updates")
-		m.routeTable.SetRoutes(m.vxlanDevice, vxlanRoutes)
-		m.routeTable.SetRoutes(routetable.InterfaceNone, m.blackholeRoutes())
+		m.routeTable.SetRoutes(routetable.RouteClassVXLANTunnel, m.vxlanDevice, vxlanRoutes)
+		m.routeTable.SetRoutes(routetable.RouteClassIPAMBlockDrop, routetable.InterfaceNone, m.blackholeRoutes())
 
 		m.logCtx.WithField("link", m.parentIfaceName).WithField("routes", noEncapRoutes).Debug(
 			"VXLAN manager sending unencapsulated L3 updates",
 		)
-		m.routeTable.SetRoutes(m.parentIfaceName, noEncapRoutes)
+		m.routeTable.SetRoutes(routetable.RouteClassVXLANSameSubnet, m.parentIfaceName, noEncapRoutes)
 
 		m.logCtx.Info("VXLAN Manager completed deferred work")
 
@@ -470,7 +470,7 @@ func (m *vxlanManager) OnParentNameUpdate(name string) {
 	}
 	if m.parentIfaceName != "" {
 		// We're changing parent interface, remove the old routes.
-		m.routeTable.SetRoutes(m.parentIfaceName, nil)
+		m.routeTable.SetRoutes(routetable.RouteClassVXLANSameSubnet, m.parentIfaceName, nil)
 	}
 	m.parentIfaceName = name
 	m.routesDirty = true

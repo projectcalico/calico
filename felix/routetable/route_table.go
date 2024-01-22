@@ -97,7 +97,6 @@ type RouteTable struct {
 
 	deviceRouteSourceAddress ip.Addr
 	defaultRouteProtocol     netlink.RouteProtocol
-	routeMetric              RouteMetric
 	removeExternalRoutes     bool
 	ownershipPolicy          OwnershipPolicy
 
@@ -161,12 +160,6 @@ func WithLivenessCB(cb func()) RouteTableOpt {
 func WithRouteCleanupGracePeriod(routeCleanupGracePeriod time.Duration) RouteTableOpt {
 	return func(table *RouteTable) {
 		table.routeCleanupGracePeriod = routeCleanupGracePeriod
-	}
-}
-
-func WithRouteMetric(metric RouteMetric) RouteTableOpt {
-	return func(table *RouteTable) {
-		table.routeMetric = metric
 	}
 }
 
@@ -394,7 +387,7 @@ func (r *RouteTable) onIfaceSeen(ifIndex int) {
 }
 
 // SetRoutes replaces the full set of targets for the specified interface.
-func (r *RouteTable) SetRoutes(ifaceName string, targets []Target) {
+func (r *RouteTable) SetRoutes(routeClass RouteClass, ifaceName string, targets []Target) {
 	if !r.ownershipPolicy.IfaceIsOurs(ifaceName) {
 		r.logCxt.WithField("ifaceName", ifaceName).Error(
 			"Cannot set route for interface not managed by this routetable.")
@@ -443,7 +436,7 @@ func (r *RouteTable) SetRoutes(ifaceName string, targets []Target) {
 
 // RouteUpdate updates the route keyed off the target CIDR. These deltas will
 // be applied to any routes set using SetRoute.
-func (r *RouteTable) RouteUpdate(ifaceName string, target Target) {
+func (r *RouteTable) RouteUpdate(routeClass RouteClass, ifaceName string, target Target) {
 	if !r.ownershipPolicy.IfaceIsOurs(ifaceName) {
 		r.logCxt.WithField("ifaceName", ifaceName).Error(
 			"Cannot set route for interface not managed by this routetable.")
@@ -461,7 +454,7 @@ func (r *RouteTable) RouteUpdate(ifaceName string, target Target) {
 
 // RouteRemove removes the route with the specified CIDR. These deltas will
 // be applied to any routes set using SetRoute.
-func (r *RouteTable) RouteRemove(ifaceName string, cidr ip.CIDR) {
+func (r *RouteTable) RouteRemove(routeClass RouteClass, ifaceName string, cidr ip.CIDR) {
 	if !r.ownershipPolicy.IfaceIsOurs(ifaceName) {
 		r.logCxt.WithField("ifaceName", ifaceName).Error(
 			"Cannot set route for interface not managed by this routetable.")
@@ -937,7 +930,7 @@ func (r *RouteTable) refreshIfaceStateBestEffort(nl netlinkshim.Interface, iface
 }
 
 func (r *RouteTable) routeKeyForCIDR(cidr ip.CIDR) kernelRouteKey {
-	return kernelRouteKey{CIDR: cidr, Priority: r.routeMetric}
+	return kernelRouteKey{CIDR: cidr}
 }
 
 // netlinkRouteToKernelRoute converts (only) routes that we own back
@@ -977,7 +970,7 @@ func (r *RouteTable) netlinkRouteToKernelRoute(route netlink.Route) (kernKey ker
 
 	kernKey = kernelRouteKey{
 		CIDR:     ip.CIDRFromIPNet(route.Dst),
-		Priority: RouteMetric(route.Priority),
+		Priority: route.Priority,
 		TOS:      route.Tos,
 	}
 	kernRoute = kernelRoute{
@@ -1366,7 +1359,7 @@ type kernelRouteKey struct {
 	TOS int
 	// Priority is the routing metric / distance.  Given two routes with the
 	// same CIDR, the kernel prefers the route with the _lower_ priority.
-	Priority RouteMetric
+	Priority int
 }
 
 func (k kernelRouteKey) String() string {

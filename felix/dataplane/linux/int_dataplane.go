@@ -528,8 +528,6 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			routetable.WithStaticARPEntries(true),
 			routetable.WithLivenessCB(dp.reportHealth),
 			routetable.WithRouteCleanupGracePeriod(routeCleanupGracePeriod),
-			// FIXME metrics/priorities for the main routing table
-			routetable.WithRouteMetric(routetable.RoutingMetricLocalWorkloads),
 		)
 		if config.IPv6Enabled {
 			routeTableV6 = routetable.New(
@@ -547,7 +545,6 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 				//   we let the kernel populate them.
 				routetable.WithLivenessCB(dp.reportHealth),
 				routetable.WithRouteCleanupGracePeriod(routeCleanupGracePeriod),
-				routetable.WithRouteMetric(routetable.RoutingMetricLocalWorkloads),
 			)
 		}
 	} else {

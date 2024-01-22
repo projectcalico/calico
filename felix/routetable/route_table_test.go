@@ -96,7 +96,7 @@ var _ = Describe("RouteTable v6", func() {
 			Scope:     netlink.SCOPE_LINK,
 			Table:     unix.RT_TABLE_MAIN,
 		}
-		rt.SetRoutes(noopLink.LinkAttrs.Name, []Target{
+		rt.SetRoutes(RouteClassLocalWorkload, noopLink.LinkAttrs.Name, []Target{
 			{CIDR: ip.MustParseCIDROrIP("10.0.0.4/32"), DestMAC: mac1},
 		})
 		dataplane.AddMockRoute(&noopRoute)
@@ -265,7 +265,7 @@ var _ = Describe("RouteTable", func() {
 				Table:     unix.RT_TABLE_MAIN,
 			}
 			dataplane.AddMockRoute(&updateRoute)
-			rt.SetRoutes(updateLink.LinkAttrs.Name, []Target{
+			rt.SetRoutes(RouteClassLocalWorkload, updateLink.LinkAttrs.Name, []Target{
 				{CIDR: ip.MustParseCIDROrIP("10.0.0.5"), DestMAC: mac1},
 			})
 
@@ -311,7 +311,7 @@ var _ = Describe("RouteTable", func() {
 			It("Should add routes with a source address", func() {
 				// Route that needs to be added
 				addLink := dataplane.AddIface(6, "cali6", true, true)
-				rt.SetRoutes(addLink.LinkAttrs.Name, []Target{
+				rt.SetRoutes(RouteClassLocalWorkload, addLink.LinkAttrs.Name, []Target{
 					{CIDR: ip.MustParseCIDROrIP("10.0.0.6"), DestMAC: mac1},
 				})
 				err := rt.Apply()
@@ -341,7 +341,7 @@ var _ = Describe("RouteTable", func() {
 					Src:       deviceRouteSourceAddress,
 					Table:     unix.RT_TABLE_MAIN,
 				}
-				rt.SetRoutes(noopLink.LinkAttrs.Name, []Target{
+				rt.SetRoutes(RouteClassLocalWorkload, noopLink.LinkAttrs.Name, []Target{
 					{CIDR: ip.MustParseCIDROrIP("10.0.0.4/32"), DestMAC: mac1},
 				})
 				dataplane.AddMockRoute(&noopRoute)
@@ -364,7 +364,7 @@ var _ = Describe("RouteTable", func() {
 					Scope:     netlink.SCOPE_LINK,
 					Table:     unix.RT_TABLE_MAIN,
 				}
-				rt.SetRoutes(updateLink.LinkAttrs.Name, []Target{
+				rt.SetRoutes(RouteClassLocalWorkload, updateLink.LinkAttrs.Name, []Target{
 					{CIDR: ip.MustParseCIDROrIP("10.0.0.5"), DestMAC: mac1},
 				})
 				dataplane.AddMockRoute(&updateRoute)
@@ -392,7 +392,7 @@ var _ = Describe("RouteTable", func() {
 					Src:       net.ParseIP("192.168.0.2"),
 					Table:     unix.RT_TABLE_MAIN,
 				}
-				rt.SetRoutes(updateLink.LinkAttrs.Name, []Target{
+				rt.SetRoutes(RouteClassLocalWorkload, updateLink.LinkAttrs.Name, []Target{
 					{CIDR: ip.MustParseCIDROrIP("10.0.0.5"), DestMAC: mac1},
 				})
 				dataplane.AddMockRoute(&updateRoute)
@@ -439,7 +439,7 @@ var _ = Describe("RouteTable", func() {
 			It("Should add routes with a protocol", func() {
 				// Route that needs to be added
 				addLink := dataplane.AddIface(6, "cali6", true, true)
-				rt.SetRoutes(addLink.LinkAttrs.Name, []Target{
+				rt.SetRoutes(RouteClassLocalWorkload, addLink.LinkAttrs.Name, []Target{
 					{CIDR: ip.MustParseCIDROrIP("10.0.0.6"), DestMAC: mac1},
 				})
 				err := rt.Apply()
@@ -457,7 +457,7 @@ var _ = Describe("RouteTable", func() {
 			It("Should add multiple routes with a protocol", func() {
 				// Route that needs to be added
 				addLink := dataplane.AddIface(6, "cali6", true, true)
-				rt.SetRoutes(addLink.LinkAttrs.Name, []Target{
+				rt.SetRoutes(RouteClassLocalWorkload, addLink.LinkAttrs.Name, []Target{
 					{CIDR: ip.MustParseCIDROrIP("10.0.0.6"), DestMAC: mac1},
 					{CIDR: ip.MustParseCIDROrIP("10.0.0.7"), DestMAC: mac1},
 				})
@@ -485,7 +485,7 @@ var _ = Describe("RouteTable", func() {
 			It("Should add multiple routes with a protocol after persistent failures", func() {
 				// Route that needs to be added
 				addLink := dataplane.AddIface(6, "cali6", true, true)
-				rt.SetRoutes(addLink.LinkAttrs.Name, []Target{
+				rt.SetRoutes(RouteClassLocalWorkload, addLink.LinkAttrs.Name, []Target{
 					{CIDR: ip.MustParseCIDROrIP("10.0.0.6"), DestMAC: mac1},
 					{CIDR: ip.MustParseCIDROrIP("10.0.0.7"), DestMAC: mac1},
 				})
@@ -531,7 +531,7 @@ var _ = Describe("RouteTable", func() {
 					Scope:     netlink.SCOPE_LINK,
 					Table:     unix.RT_TABLE_MAIN,
 				}
-				rt.SetRoutes(noopLink.LinkAttrs.Name, []Target{
+				rt.SetRoutes(RouteClassLocalWorkload, noopLink.LinkAttrs.Name, []Target{
 					{CIDR: ip.MustParseCIDROrIP("10.0.0.4/32"), DestMAC: mac1},
 				})
 				dataplane.AddMockRoute(&noopRoute)
@@ -552,7 +552,7 @@ var _ = Describe("RouteTable", func() {
 					Scope:     netlink.SCOPE_LINK,
 					Table:     unix.RT_TABLE_MAIN,
 				}
-				rt.SetRoutes(updateLink.LinkAttrs.Name, []Target{
+				rt.SetRoutes(RouteClassLocalWorkload, updateLink.LinkAttrs.Name, []Target{
 					{CIDR: ip.MustParseCIDROrIP("10.0.0.5"), DestMAC: mac1},
 				})
 				dataplane.AddMockRoute(&updateRoute)
@@ -578,7 +578,7 @@ var _ = Describe("RouteTable", func() {
 					Scope:     netlink.SCOPE_LINK,
 					Table:     unix.RT_TABLE_MAIN,
 				}
-				rt.SetRoutes(updateLink.LinkAttrs.Name, []Target{
+				rt.SetRoutes(RouteClassLocalWorkload, updateLink.LinkAttrs.Name, []Target{
 					{CIDR: ip.MustParseCIDROrIP("10.0.0.5"), DestMAC: mac1},
 				})
 				dataplane.AddMockRoute(&updateRoute)
@@ -604,7 +604,7 @@ var _ = Describe("RouteTable", func() {
 				err := rt.Apply()
 				Expect(err).ToNot(HaveOccurred())
 				// We try to add 10.0.0.1 back in.
-				rt.SetRoutes("cali1", []Target{
+				rt.SetRoutes(RouteClassLocalWorkload, "cali1", []Target{
 					{CIDR: ip.MustParseCIDROrIP("10.0.0.1/32"), DestMAC: mac1},
 				})
 				start := time.Now()
@@ -618,7 +618,7 @@ var _ = Describe("RouteTable", func() {
 				err := rt.Apply()
 				Expect(err).ToNot(HaveOccurred())
 				// We try to add 10.0.0.10, which hasn't been seen before.
-				rt.SetRoutes("cali1", []Target{
+				rt.SetRoutes(RouteClassLocalWorkload, "cali1", []Target{
 					{CIDR: ip.MustParseCIDROrIP("10.0.0.10/32"), DestMAC: mac1},
 				})
 				start := time.Now()
@@ -646,7 +646,7 @@ var _ = Describe("RouteTable", func() {
 
 				dataplane.FailuresToSimulate = mocknetlink.FailNextRouteAdd | mocknetlink.FailNextRouteReplace
 				dataplane.PersistFailures = true
-				rt.RouteUpdate("cali3", Target{
+				rt.RouteUpdate(RouteClassLocalWorkload, "cali3", Target{
 					CIDR: ip.MustParseCIDROrIP("10.20.30.40"),
 				})
 				err = rt.Apply()
@@ -687,12 +687,12 @@ var _ = Describe("RouteTable", func() {
 
 		Describe("after adding two routes to cali3", func() {
 			JustBeforeEach(func() {
-				rt.RouteUpdate("cali3", Target{
+				rt.RouteUpdate(RouteClassLocalWorkload, "cali3", Target{
 					CIDR: ip.MustParseCIDROrIP("10.20.30.40"),
 				})
 				err := rt.Apply()
 				Expect(err).ToNot(HaveOccurred())
-				rt.RouteUpdate("cali3", Target{
+				rt.RouteUpdate(RouteClassLocalWorkload, "cali3", Target{
 					CIDR: ip.MustParseCIDROrIP("10.0.20.0/24"),
 				})
 				err = rt.Apply()
@@ -721,12 +721,12 @@ var _ = Describe("RouteTable", func() {
 			})
 
 			It("should make no dataplane updates when deleting, creating and updating back to the same target before the next apply", func() {
-				rt.RouteRemove("cali3", ip.MustParseCIDROrIP("10.0.20.0/24"))
-				rt.RouteUpdate("cali3", Target{
+				rt.RouteRemove(RouteClassLocalWorkload, "cali3", ip.MustParseCIDROrIP("10.0.20.0/24"))
+				rt.RouteUpdate(RouteClassLocalWorkload, "cali3", Target{
 					CIDR: ip.MustParseCIDROrIP("10.0.20.0/24"),
 					GW:   ip.FromString("1.2.3.4"),
 				})
-				rt.RouteUpdate("cali3", Target{
+				rt.RouteUpdate(RouteClassLocalWorkload, "cali3", Target{
 					CIDR: ip.MustParseCIDROrIP("10.0.20.0/24"),
 				})
 				dataplane.ResetDeltas()
@@ -758,8 +758,8 @@ var _ = Describe("RouteTable", func() {
 			})
 
 			It("should make no dataplane updates when deleting and then setting back to the same target before the next apply", func() {
-				rt.RouteRemove("cali3", ip.MustParseCIDROrIP("10.0.20.0/24"))
-				rt.SetRoutes("cali3", []Target{{
+				rt.RouteRemove(RouteClassLocalWorkload, "cali3", ip.MustParseCIDROrIP("10.0.20.0/24"))
+				rt.SetRoutes(RouteClassLocalWorkload, "cali3", []Target{{
 					CIDR: ip.MustParseCIDROrIP("10.0.20.0/24"),
 				}, {
 					CIDR: ip.MustParseCIDROrIP("10.20.30.40"),
@@ -796,10 +796,10 @@ var _ = Describe("RouteTable", func() {
 
 		Describe("delete interface", func() {
 			BeforeEach(func() {
-				rt.SetRoutes("cali1", []Target{
+				rt.SetRoutes(RouteClassLocalWorkload, "cali1", []Target{
 					{CIDR: ip.MustParseCIDROrIP("10.0.0.1/32")},
 				})
-				rt.SetRoutes("cali3", []Target{
+				rt.SetRoutes(RouteClassLocalWorkload, "cali3", []Target{
 					{CIDR: ip.MustParseCIDROrIP("10.0.0.3/32")},
 				})
 				// Apply the changes.
@@ -807,7 +807,7 @@ var _ = Describe("RouteTable", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				// Modify route and delete interface
-				rt.SetRoutes("cali3", nil)
+				rt.SetRoutes(RouteClassLocalWorkload, "cali3", nil)
 				delete(dataplane.NameToLink, "cali3")
 			})
 			It("should still get conntrack deletion invocation during resync", func() {
@@ -831,13 +831,13 @@ var _ = Describe("RouteTable", func() {
 			desc := fmt.Sprintf("with some routes added and failures: %v", testFailFlags)
 			Describe(desc, func() {
 				BeforeEach(func() {
-					rt.SetRoutes("cali1", []Target{
+					rt.SetRoutes(RouteClassLocalWorkload, "cali1", []Target{
 						{CIDR: ip.MustParseCIDROrIP("10.0.0.1/32"), DestMAC: mac1},
 					})
-					rt.SetRoutes("cali2", []Target{
+					rt.SetRoutes(RouteClassLocalWorkload, "cali2", []Target{
 						{CIDR: ip.MustParseCIDROrIP("10.0.0.2/32"), DestMAC: mac2},
 					})
-					rt.SetRoutes("cali3", []Target{
+					rt.SetRoutes(RouteClassLocalWorkload, "cali3", []Target{
 						{CIDR: ip.MustParseCIDROrIP("10.0.1.3/32")},
 					})
 					dataplane.FailuresToSimulate = testFailFlags
@@ -1063,7 +1063,7 @@ var _ = Describe("RouteTable", func() {
 		It("it should suppress the ENODEV error", func() {
 			// Trigger a per-interface sync.
 			rt.OnIfaceStateChanged("cali1", 2, ifacemonitor.StateUp)
-			rt.RouteUpdate("cali1", Target{
+			rt.RouteUpdate(RouteClassLocalWorkload, "cali1", Target{
 				CIDR: ip.MustParseCIDROrIP("10.0.20.0/24"),
 			})
 			err := rt.Apply()
@@ -1304,7 +1304,7 @@ var _ = Describe("RouteTable (table 100)", func() {
 
 		Describe("after configuring a throw route", func() {
 			JustBeforeEach(func() {
-				rt.RouteUpdate(InterfaceNone, Target{
+				rt.RouteUpdate(RouteClassTODO, InterfaceNone, Target{
 					CIDR: ip.MustParseCIDROrIP("10.10.10.10/32"),
 					Type: TargetTypeThrow,
 				})
@@ -1321,7 +1321,7 @@ var _ = Describe("RouteTable (table 100)", func() {
 
 		Describe("after configuring a throw route and then deleting and recreating the route via cali", func() {
 			JustBeforeEach(func() {
-				rt.RouteUpdate(InterfaceNone, Target{
+				rt.RouteUpdate(RouteClassWireguardThrow, InterfaceNone, Target{
 					CIDR: ip.MustParseCIDROrIP("10.10.10.10/32"),
 					Type: TargetTypeThrow,
 				})
@@ -1332,16 +1332,16 @@ var _ = Describe("RouteTable (table 100)", func() {
 			It("the throw route should be removed and the interface route added", func() {
 				// Modify the action associated with a particular destination.
 				for ii := 0; ii < 100; ii++ {
-					rt.RouteRemove(InterfaceNone, ip.MustParseCIDROrIP("10.10.10.10/32"))
-					rt.RouteUpdate("cali", Target{
+					rt.RouteRemove(RouteClassWireguardThrow, InterfaceNone, ip.MustParseCIDROrIP("10.10.10.10/32"))
+					rt.RouteUpdate(RouteClassLocalWorkload, "cali", Target{
 						CIDR: ip.MustParseCIDROrIP("10.10.10.10/32"),
 					})
 					err := rt.Apply()
 					Expect(err).ToNot(HaveOccurred())
 					Expect(dataplane.RouteKeyToRoute).To(ConsistOf(caliRoute, gatewayRoute, caliRouteTable100SameAsThrow))
 
-					rt.RouteRemove("cali", ip.MustParseCIDROrIP("10.10.10.10/32"))
-					rt.RouteUpdate(InterfaceNone, Target{
+					rt.RouteRemove(RouteClassLocalWorkload, "cali", ip.MustParseCIDROrIP("10.10.10.10/32"))
+					rt.RouteUpdate(RouteClassWireguardThrow, InterfaceNone, Target{
 						CIDR: ip.MustParseCIDROrIP("10.10.10.10/32"),
 						Type: TargetTypeThrow,
 					})
@@ -1354,24 +1354,25 @@ var _ = Describe("RouteTable (table 100)", func() {
 
 		Describe("throw route configured in dataplane, actual route is via cali", func() {
 			It("the throw route should be removed and the interface route added", func() {
-				rt.RouteUpdate("cali", Target{
+				rt.RouteUpdate(RouteClassLocalWorkload, "cali", Target{
 					CIDR: ip.MustParseCIDROrIP("10.10.10.10/32"),
 				})
 				err := rt.Apply()
 				Expect(err).ToNot(HaveOccurred())
 				Expect(dataplane.RouteKeyToRoute).To(ConsistOf(caliRoute, gatewayRoute, caliRouteTable100SameAsThrow))
+				// FIXME check that deleting cali route unshadows the throw route
 			})
 		})
 
 		Describe("after configuring an existing throw route and then deleting it", func() {
 			JustBeforeEach(func() {
-				rt.RouteUpdate(InterfaceNone, Target{
+				rt.RouteUpdate(RouteClassWireguardThrow, InterfaceNone, Target{
 					CIDR: ip.MustParseCIDROrIP("10.10.10.10/32"),
 					Type: TargetTypeThrow,
 				})
 				err := rt.Apply()
 				Expect(err).ToNot(HaveOccurred())
-				rt.RouteRemove(InterfaceNone, ip.MustParseCIDROrIP("10.10.10.10/32"))
+				rt.RouteRemove(RouteClassWireguardThrow, InterfaceNone, ip.MustParseCIDROrIP("10.10.10.10/32"))
 				err = rt.Apply()
 				Expect(err).ToNot(HaveOccurred())
 			})
@@ -1385,13 +1386,13 @@ var _ = Describe("RouteTable (table 100)", func() {
 
 		Describe("after configuring a throw route and then replacing it with a blackhole route", func() {
 			JustBeforeEach(func() {
-				rt.RouteUpdate(InterfaceNone, Target{
+				rt.RouteUpdate(RouteClassTODO, InterfaceNone, Target{
 					CIDR: ip.MustParseCIDROrIP("10.10.10.10/32"),
 					Type: TargetTypeThrow,
 				})
 				err := rt.Apply()
 				Expect(err).ToNot(HaveOccurred())
-				rt.RouteUpdate(InterfaceNone, Target{
+				rt.RouteUpdate(RouteClassTODO, InterfaceNone, Target{
 					CIDR: ip.MustParseCIDROrIP("10.10.10.10/32"),
 					Type: TargetTypeBlackhole,
 				})
@@ -1415,13 +1416,13 @@ var _ = Describe("RouteTable (table 100)", func() {
 
 		Describe("after configuring a blackhole route and then replacing it with a prohibit route", func() {
 			JustBeforeEach(func() {
-				rt.RouteUpdate(InterfaceNone, Target{
+				rt.RouteUpdate(RouteClassTODO, InterfaceNone, Target{
 					CIDR: ip.MustParseCIDROrIP("10.10.10.10/32"),
 					Type: TargetTypeBlackhole,
 				})
 				err := rt.Apply()
 				Expect(err).ToNot(HaveOccurred())
-				rt.RouteUpdate(InterfaceNone, Target{
+				rt.RouteUpdate(RouteClassTODO, InterfaceNone, Target{
 					CIDR: ip.MustParseCIDROrIP("10.10.10.10/32"),
 					Type: TargetTypeProhibit,
 				})
@@ -1462,7 +1463,7 @@ var _ = Describe("RouteTable (table 100)", func() {
 		It("should create the table as needed", func() {
 			// In "strict" mode, RouteListFiltered returns an error if the routing table doesn't exist.
 			// Check that is handled and that we proceed to create the route (and thus create the routing table).
-			rt.RouteUpdate("cali", Target{
+			rt.RouteUpdate(RouteClassLocalWorkload, "cali", Target{
 				CIDR: ip.MustParseCIDROrIP("10.0.0.1/32"),
 			})
 			err := rt.Apply()

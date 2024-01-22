@@ -14,30 +14,20 @@
 
 package routetable
 
-// RouteMetric represents the kernel's metric AKA priority field.  Two
-// routes with the same CIDR can co-exist if they have different metrics.
-// The matching route with the lowest metric wins.
-type RouteMetric int
+//go:generate stringer -type=RouteClass
 
-// These constants define metrics for our various RouteTables, which
-// share the main kernel routing table.  It's not ideal that we have more
-// than one RouteTable pointing at the same kernel table(!) but giving
-// each a different priority means that they can't clobber each other's
-// routes, and that the eventual outcome is deterministic.
-//
-// We give local workloads the lowest metric, so local "cali" interface
-// routes will be preferred, even if there's a conflicting remote or block
-// route.
-//
-// "Same subnet" routes are preferred over tunnel routes since they're
-// faster (but in practice the VXLAN manager avoids conflicts anyway).
-//
-// IPAM block blackhole routes are given a high metric so that the
-// blackhole route for a /32 block doesn't conflict with a (potentially
-// borrowed) workload route.
+// RouteClass is a string type used to identify the different groups of routes
+// that we program.  It is used as a tie-breaker when there are conflicting
+// routes for the same CIDR.
+type RouteClass int
+
 const (
-	RoutingMetricLocalWorkloads         RouteMetric = 0
-	RoutingMetricSameSubnetWorkloads    RouteMetric = 20
-	RoutingMetricVXLANTunneledWorkloads RouteMetric = 30
-	RoutingMetricIPAMBlockDrop          RouteMetric = 100
+	RouteClassTODO RouteClass = iota
+	RouteClassLocalWorkload
+	RouteClassBPFSpecial
+	RouteClassWireguardTunnel
+	RouteClassVXLANSameSubnet
+	RouteClassVXLANTunnel
+	RouteClassWireguardThrow
+	RouteClassIPAMBlockDrop
 )
