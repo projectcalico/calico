@@ -5,10 +5,13 @@ PORT     STATE SERVICE
 |     ciphers: 
 |       TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256 (secp256r1) - A
 |       TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384 (secp256r1) - A
-|       TLS_RSA_WITH_AES_128_GCM_SHA256 (rsa 2048) - A
-|       TLS_RSA_WITH_AES_256_GCM_SHA384 (rsa 2048) - A
 |     compressors: 
 |       NULL
+|     cipher preference: server
+|   TLSv1.3: 
+|     ciphers: 
+|       TLS_AKE_WITH_AES_128_GCM_SHA256 (secp256r1) - A
+|       TLS_AKE_WITH_AES_256_GCM_SHA384 (secp256r1) - A
 |     cipher preference: server
 |_  least strength: A
 
