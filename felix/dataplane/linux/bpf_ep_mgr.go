@@ -139,27 +139,24 @@ type fileDescriptor interface {
 	Close() error
 }
 
-type bpfDataplaneCommon interface {
+type bpfDataplane interface {
 	ensureStarted()
 	ensureProgramAttached(attachPoint) (qDiscInfo, error)
+	ensureProgramLoaded(ap attachPoint, ipFamily proto.IPVersion) error
 	ensureNoProgram(attachPoint) error
 	ensureQdisc(iface string) (bool, error)
 	ensureBPFDevices() error
+	updatePolicyProgram(rules polprog.Rules, polDir string, ap attachPoint, ipFamily proto.IPVersion) error
+	removePolicyProgram(ap attachPoint, ipFamily proto.IPVersion) error
 	setAcceptLocal(iface string, val bool) error
 	setRPFilter(iface string, val int) error
 	setRoute(ip.CIDR)
 	delRoute(ip.CIDR)
+	ruleMatchID(dir, action, owner, name string, idx int) polprog.RuleMatchID
 	loadDefaultPolicies() error
+	loadTCLogFilter(ap *tc.AttachPoint) (fileDescriptor, int, error)
 	interfaceByIndex(int) (*net.Interface, error)
 	queryClassifier(int, int, int, bool) (int, error)
-}
-
-type bpfDataplane interface {
-	ensureProgramLoaded(ap attachPoint) error
-	updatePolicyProgram(rules polprog.Rules, polDir string, ap attachPoint) error
-	removePolicyProgram(ap attachPoint) error
-	loadTCLogFilter(ap *tc.AttachPoint) (fileDescriptor, int, error)
-	ruleMatchID(dir, action, owner, name string, idx int) polprog.RuleMatchID
 }
 
 type hasLoadPolicyProgram interface {
@@ -300,13 +297,23 @@ type bpfEndpointManager struct {
 	// onStillAlive is called from loops to reset the watchdog.
 	onStillAlive func()
 
+	loadPolicyProgramFn func(
+		progName string,
+		ipFamily proto.IPVersion,
+		rules polprog.Rules,
+		staticProgsMap maps.Map,
+		polProgsMap maps.Map,
+		opts ...polprog.Option,
+	) ([]fileDescriptor, []asm.Insns, error)
+	updatePolicyProgramFn func(rules polprog.Rules, polDir string, ap attachPoint, ipFamily proto.IPVersion) error
+
 	// HEP processing.
 	hostIfaceToEpMap     map[string]proto.HostEndpoint
 	wildcardHostEndpoint proto.HostEndpoint
 	wildcardExists       bool
 
 	// UT-able BPF dataplane interface.
-	dp bpfDataplaneCommon
+	dp bpfDataplane
 
 	//ifaceToIpMap map[string]net.IP
 	opReporter logutils.OpRecorder
@@ -350,39 +357,14 @@ type bpfEndpointManager struct {
 }
 
 type bpfEndpointManagerDataplane struct {
-	ipFamily                uint8
-	dp                      bpfDataplane
-	policies                map[proto.PolicyID]*proto.Policy
-	profiles                map[proto.ProfileID]*proto.Profile
-	logFilters              map[string]string
-	bpfLogLevel             string
-	hostIP                  net.IP
-	ipSetIDAlloc            *idalloc.IDAllocator
-	epToHostAction          string
-	bpfExtToServiceConnmark int
-	bpfmaps                 *bpfmap.Maps
-	policyTcAllowFD         bpf.ProgFD
-	policyTcDenyFD          bpf.ProgFD
+	ipFamily proto.IPVersion
+	hostIP   net.IP
+	mgr      *bpfEndpointManager
 
-	loadPolicyProgramFn func(
-		progName string,
-		ipFamily proto.IPVersion,
-		rules polprog.Rules,
-		staticProgsMap maps.Map,
-		polProgsMap maps.Map,
-		opts ...polprog.Option,
-	) ([]fileDescriptor, []asm.Insns, error)
-	updatePolicyProgramFn func(rules polprog.Rules, polDir string, ap attachPoint) error
-	ifaceToIpMap          map[string]net.IP
-	// XDP
-	xdpModes []bpf.XDPMode
+	ifaceToIpMap map[string]net.IP
 
 	// IP of the tunnel / overlay device
 	tunnelIP net.IP
-
-	wildcardExists        bool
-	wildcardHostEndpoint  proto.HostEndpoint
-	bpfPolicyDebugEnabled bool
 }
 
 type serviceKey struct {
@@ -400,7 +382,7 @@ type ManagerWithHEPUpdate interface {
 }
 
 func NewTestEpMgr(config *Config, bpfmaps *bpfmap.Maps, workloadIfaceRegex *regexp.Regexp) (ManagerWithHEPUpdate, error) {
-	return newBPFEndpointManager(nil, nil, config, bpfmaps, true, workloadIfaceRegex, idalloc.New(),
+	return newBPFEndpointManager(nil, config, bpfmaps, true, workloadIfaceRegex, idalloc.New(),
 		rules.NewRenderer(rules.Config{
 			BPFEnabled:                  true,
 			IPIPEnabled:                 true,
@@ -426,7 +408,6 @@ func NewTestEpMgr(config *Config, bpfmaps *bpfmap.Maps, workloadIfaceRegex *rege
 }
 
 func newBPFEndpointManager(
-	dpCommon bpfDataplaneCommon,
 	dp bpfDataplane,
 	config *Config,
 	bpfmaps *bpfmap.Maps,
@@ -445,7 +426,7 @@ func newBPFEndpointManager(
 
 	m := &bpfEndpointManager{
 		initUnknownIfaces:       set.New[string](),
-		dp:                      dpCommon,
+		dp:                      dp,
 		allWEPs:                 map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
 		happyWEPs:               map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
 		happyWEPsDirty:          true,
@@ -526,10 +507,10 @@ func newBPFEndpointManager(
 		m.hostNetworkedNATMode = hostNetworkedNATEnabled
 	}
 
-	m.v4 = newBPFEndpointManagerDataplane(4, dp, config, bpfmaps, ipSetIDAlloc, m.hostNetworkedNATMode)
+	m.v4 = newBPFEndpointManagerDataplane(proto.IPVersion_IPV4, m)
 
 	if m.ipv6Enabled {
-		m.v6 = newBPFEndpointManagerDataplane(6, dp, config, bpfmaps, ipSetIDAlloc, m.hostNetworkedNATMode)
+		m.v6 = newBPFEndpointManagerDataplane(proto.IPVersion_IPV6, m)
 	}
 
 	if m.hostNetworkedNATMode != hostNetworkedNATDisabled {
@@ -611,49 +592,24 @@ func newBPFEndpointManager(
 		m.legacyCleanUp = true
 	}
 
+	m.updatePolicyProgramFn = m.dp.updatePolicyProgram
+
+	if x, ok := m.dp.(hasLoadPolicyProgram); ok {
+		m.loadPolicyProgramFn = x.loadPolicyProgram
+		m.updatePolicyProgramFn = m.updatePolicyProgram
+	}
+
 	return m, nil
 }
 
 func newBPFEndpointManagerDataplane(
-	ipFamily uint8,
-	dp bpfDataplane,
-	config *Config,
-	bpfmaps *bpfmap.Maps,
-	ipSetIDAlloc *idalloc.IDAllocator,
-	hostNetworkedNATMode hostNetworkedNATMode,
+	ipFamily proto.IPVersion,
+	epMgr *bpfEndpointManager,
 ) *bpfEndpointManagerDataplane {
 	d := &bpfEndpointManagerDataplane{
-		ipFamily:                ipFamily,
-		dp:                      dp,
-		policies:                map[proto.PolicyID]*proto.Policy{},
-		profiles:                map[proto.ProfileID]*proto.Profile{},
-		bpfLogLevel:             config.BPFLogLevel,
-		logFilters:              config.BPFLogFilters,
-		ipSetIDAlloc:            ipSetIDAlloc,
-		epToHostAction:          config.RulesConfig.EndpointToHostAction,
-		bpfExtToServiceConnmark: config.BPFExtToServiceConnmark,
-		bpfmaps:                 bpfmaps,
-		ifaceToIpMap:            map[string]net.IP{},
-		bpfPolicyDebugEnabled:   config.BPFPolicyDebugEnabled,
-	}
-
-	if dp == nil {
-		d.dp = d
-	}
-	// Calculate allowed XDP attachment modes.  Note, in BPF mode untracked ingress policy is
-	// _only_ implemented by XDP, so we _should_ fall back to XDPGeneric if necessary in order
-	// to preserve the semantics of untracked ingress policy.  (Therefore we are also saying
-	// here that the GenericXDPEnabled config setting, like XDPEnabled, is only relevant when
-	// BPFEnabled is false.)
-	d.xdpModes = []bpf.XDPMode{
-		bpf.XDPOffload,
-		bpf.XDPDriver,
-		bpf.XDPGeneric,
-	}
-	d.updatePolicyProgramFn = d.dp.updatePolicyProgram
-	if x, ok := d.dp.(hasLoadPolicyProgram); ok {
-		d.loadPolicyProgramFn = x.loadPolicyProgram
-		d.updatePolicyProgramFn = d.updatePolicyProgram
+		ipFamily:     ipFamily,
+		ifaceToIpMap: map[string]net.IP{},
+		mgr:          epMgr,
 	}
 	return d
 }
@@ -859,7 +815,7 @@ func (d *bpfEndpointManagerDataplane) updateIfaceIP(update *ifaceAddrsUpdate) bo
 		log.Debugf("Interface %+v received address update %+v", update.Name, update.Addrs)
 		update.Addrs.Iter(func(item string) error {
 			ip := net.ParseIP(item)
-			if d.ipFamily == 6 {
+			if d.ipFamily == proto.IPVersion_IPV6 {
 				if ip.To4() == nil && !ip.IsLinkLocalUnicast() {
 					ipAddrs = append(ipAddrs, ip)
 				}
@@ -1118,10 +1074,6 @@ func (m *bpfEndpointManager) onPolicyUpdate(msg *proto.ActivePolicyUpdate) {
 	polID := *msg.Id
 	log.WithField("id", polID).Debug("Policy update")
 	m.policies[polID] = msg.Policy
-	m.v4.policies[polID] = msg.Policy
-	if m.ipv6Enabled {
-		m.v6.policies[polID] = msg.Policy
-	}
 	m.markEndpointsDirty(m.policiesToWorkloads[polID], "policy")
 	if m.bpfPolicyDebugEnabled {
 		m.updatePolicyCache(polID.Name, "Policy", m.policies[polID].InboundRules, m.policies[polID].OutboundRules)
@@ -1135,10 +1087,6 @@ func (m *bpfEndpointManager) onPolicyRemove(msg *proto.ActivePolicyRemove) {
 	log.WithField("id", polID).Debug("Policy removed")
 	m.markEndpointsDirty(m.policiesToWorkloads[polID], "policy")
 	delete(m.policies, polID)
-	delete(m.v4.policies, polID)
-	if m.ipv6Enabled {
-		delete(m.v6.policies, polID)
-	}
 	delete(m.policiesToWorkloads, polID)
 	if m.bpfPolicyDebugEnabled {
 		m.dirtyRules.AddSet(m.polNameToMatchIDs[polID.Name])
@@ -1151,10 +1099,6 @@ func (m *bpfEndpointManager) onProfileUpdate(msg *proto.ActiveProfileUpdate) {
 	profID := *msg.Id
 	log.WithField("id", profID).Debug("Profile update")
 	m.profiles[profID] = msg.Profile
-	m.v4.profiles[profID] = msg.Profile
-	if m.ipv6Enabled {
-		m.v6.profiles[profID] = msg.Profile
-	}
 	m.markEndpointsDirty(m.profilesToWorkloads[profID], "profile")
 	if m.bpfPolicyDebugEnabled {
 		m.updatePolicyCache(profID.Name, "Profile", m.profiles[profID].InboundRules, m.profiles[profID].OutboundRules)
@@ -1168,10 +1112,6 @@ func (m *bpfEndpointManager) onProfileRemove(msg *proto.ActiveProfileRemove) {
 	log.WithField("id", profID).Debug("Profile removed")
 	m.markEndpointsDirty(m.profilesToWorkloads[profID], "profile")
 	delete(m.profiles, profID)
-	delete(m.v4.profiles, profID)
-	if m.ipv6Enabled {
-		delete(m.v6.profiles, profID)
-	}
 	delete(m.profilesToWorkloads, profID)
 	if m.bpfPolicyDebugEnabled {
 		m.dirtyRules.AddSet(m.polNameToMatchIDs[profID.Name])
@@ -1440,21 +1380,12 @@ func (m *bpfEndpointManager) loadDefaultPolicies() error {
 		return fmt.Errorf("failed to load default deny policy program: %w", err)
 	}
 	m.policyTcDenyFD = bpf.ProgFD(fd)
-	m.v4.policyTcDenyFD = bpf.ProgFD(fd)
-	if m.ipv6Enabled {
-		m.v6.policyTcDenyFD = bpf.ProgFD(fd)
-	}
 
 	fd, err = obj.ProgramFD("calico_tc_allow")
 	if err != nil {
 		return fmt.Errorf("failed to load default allow policy program: %w", err)
 	}
 	m.policyTcAllowFD = bpf.ProgFD(fd)
-
-	m.v4.policyTcAllowFD = bpf.ProgFD(fd)
-	if m.ipv6Enabled {
-		m.v6.policyTcAllowFD = bpf.ProgFD(fd)
-	}
 	return nil
 }
 
@@ -2142,7 +2073,7 @@ func (d *bpfEndpointManagerDataplane) wepTCAttachPoint(ap *tc.AttachPoint, polic
 	ap.HostIP = d.hostIP
 	// * Since we don't pass packet length when doing fib lookup, MTU check is skipped.
 	// * Hence it is safe to set the tunnel mtu same as veth mtu
-	if d.ipFamily == uint8(proto.IPVersion_IPV6) {
+	if d.ipFamily == proto.IPVersion_IPV6 {
 		ip, err := d.getInterfaceIP(ifaceName)
 		if err != nil {
 			log.Debugf("Error getting IP for interface %+v: %+v", ifaceName, err)
@@ -2153,7 +2084,6 @@ func (d *bpfEndpointManagerDataplane) wepTCAttachPoint(ap *tc.AttachPoint, polic
 	} else {
 		ap.IntfIP = calicoRouterIP
 	}
-	ap.ExtToServiceConnmark = uint32(d.bpfExtToServiceConnmark)
 	ap.PolicyIdx = policyIdx
 	ap.LogFilterIdx = filterIdx
 
@@ -2170,25 +2100,23 @@ func (d *bpfEndpointManagerDataplane) wepApplyPolicyToDirection(readiness ifaceR
 		return nil, fmt.Errorf("unknown host IP")
 	}
 
-	// Sridhar
 	indices := state.v4
-	if d.ipFamily == 6 {
+	if d.ipFamily == proto.IPVersion_IPV6 {
 		indices = state.v6
 	}
 
-	if polDirection == PolDirnIngress {
-		policyIdx = indices.policyIdx[hook.Ingress]
-		filterIdx = indices.filterIdx[hook.Ingress]
-	} else {
-		policyIdx = indices.policyIdx[hook.Egress]
-		filterIdx = indices.filterIdx[hook.Egress]
+	attachHook := hook.Ingress
+	if polDirection == PolDirnEgress {
+		attachHook = hook.Egress
 	}
+	policyIdx = indices.policyIdx[attachHook]
+	filterIdx = indices.filterIdx[attachHook]
 
 	ap = d.wepTCAttachPoint(ap, policyIdx, filterIdx, polDirection)
 
 	log.WithField("iface", ap.IfaceName()).Debugf("readiness: %d", readiness)
 	if readiness != ifaceIsReady {
-		err := d.loadWepPrograms(ap)
+		err := d.mgr.loadPrograms(ap, d.ipFamily)
 		if err != nil {
 			return nil, fmt.Errorf("attaching program to wep: %w", err)
 		}
@@ -2202,14 +2130,14 @@ func (d *bpfEndpointManagerDataplane) wepApplyPolicyToDirection(readiness ifaceR
 	return ap, nil
 }
 
-func (d *bpfEndpointManagerDataplane) loadWepPrograms(ap *tc.AttachPoint) error {
-	err := d.dp.ensureProgramLoaded(ap)
+func (m *bpfEndpointManager) loadPrograms(ap *tc.AttachPoint, ipFamily proto.IPVersion) error {
+	err := m.dp.ensureProgramLoaded(ap, ipFamily)
 	if err != nil {
 		return err
 	}
 
 	if ap.LogLevel == "debug" {
-		if err := d.updateLogFilter(ap); err != nil {
+		if err := m.updateLogFilter(ap); err != nil {
 			ap.Log().WithError(err).Warn("Failed to update logging filter, logging may be incorrect.")
 		}
 	}
@@ -2232,13 +2160,14 @@ func (d *bpfEndpointManagerDataplane) wepApplyPolicy(ap *tc.AttachPoint,
 			"Workload interface with no endpoint in datastore, installing default-drop program.")
 	}
 
+	m := d.mgr
 	// If tier or profileIDs is nil, this will return an empty set of rules but updatePolicyProgram appends a
 	// drop rule, giving us default drop behaviour in that case.
-	rules := d.extractRules(tier, profileIDs, polDirection)
+	rules := m.extractRules(tier, profileIDs, polDirection)
 
 	// If host-* endpoint is configured, add in its policy.
-	if d.wildcardExists {
-		d.addHostPolicy(&rules, &d.wildcardHostEndpoint, polDirection.Inverse())
+	if m.wildcardExists {
+		m.addHostPolicy(&rules, &d.mgr.wildcardHostEndpoint, polDirection.Inverse())
 	}
 
 	// Intentionally leaving this code here until the *-hep takes precedence.
@@ -2247,7 +2176,7 @@ func (d *bpfEndpointManagerDataplane) wepApplyPolicy(ap *tc.AttachPoint,
 		// If workload egress and DefaultEndpointToHostAction is ACCEPT or DROP, suppress the normal
 		// host-* endpoint policy. If it does not exist, suppress it as well, not to
 		// create deny due to the fact that there are not profiles or tiers etc.
-		if polDirection == PolDirnEgress && (d.epToHostAction != "RETURN" || !d.wildcardExists) {
+		if polDirection == PolDirnEgress && (m.epToHostAction != "RETURN" || !m.wildcardExists) {
 			rules.SuppressNormalHostPolicy = true
 		}
 	} else {
@@ -2259,29 +2188,29 @@ func (d *bpfEndpointManagerDataplane) wepApplyPolicy(ap *tc.AttachPoint,
 		rules.SuppressNormalHostPolicy = true
 	}
 
-	return d.updatePolicyProgramFn(rules, polDirection.RuleDir(), ap)
+	return m.updatePolicyProgramFn(rules, polDirection.RuleDir(), ap, d.ipFamily)
 }
 
-func (d *bpfEndpointManagerDataplane) addHostPolicy(rules *polprog.Rules, hostEndpoint *proto.HostEndpoint, polDirection PolDirection) {
+func (m *bpfEndpointManager) addHostPolicy(rules *polprog.Rules, hostEndpoint *proto.HostEndpoint, polDirection PolDirection) {
 
 	// When there is applicable pre-DNAT policy that does not explicitly Allow or Deny traffic,
 	// we continue on to subsequent tiers and normal or AoF policy.
 	if len(hostEndpoint.PreDnatTiers) == 1 {
-		rules.HostPreDnatTiers = d.extractTiers(hostEndpoint.PreDnatTiers[0], polDirection, NoEndTierDrop)
+		rules.HostPreDnatTiers = m.extractTiers(hostEndpoint.PreDnatTiers[0], polDirection, NoEndTierDrop)
 	}
 
 	// When there is applicable apply-on-forward policy that does not explicitly Allow or Deny
 	// traffic, traffic is dropped.
 	if len(hostEndpoint.ForwardTiers) == 1 {
-		rules.HostForwardTiers = d.extractTiers(hostEndpoint.ForwardTiers[0], polDirection, EndTierDrop)
+		rules.HostForwardTiers = m.extractTiers(hostEndpoint.ForwardTiers[0], polDirection, EndTierDrop)
 	}
 
 	// When there is applicable normal policy that does not explicitly Allow or Deny traffic,
 	// traffic is dropped.
 	if len(hostEndpoint.Tiers) == 1 {
-		rules.HostNormalTiers = d.extractTiers(hostEndpoint.Tiers[0], polDirection, EndTierDrop)
+		rules.HostNormalTiers = m.extractTiers(hostEndpoint.Tiers[0], polDirection, EndTierDrop)
 	}
-	rules.HostProfiles = d.extractProfiles(hostEndpoint.ProfileIds, polDirection)
+	rules.HostProfiles = m.extractProfiles(hostEndpoint.ProfileIds, polDirection)
 }
 
 func (d *bpfEndpointManagerDataplane) applyPolicyToWeps(
@@ -2337,7 +2266,7 @@ func (d *bpfEndpointManagerDataplane) applyPolicyToDataIface(
 	go func() {
 		defer parallelWG.Done()
 		// XDP IPv6 is not supported yet.
-		if d.ipFamily == 4 {
+		if d.ipFamily == proto.IPVersion_IPV4 {
 			xdpErr = d.attachXDPProgram(xdpAP, ep, state)
 		} else {
 			xdpAP = nil
@@ -2376,7 +2305,7 @@ func (d *bpfEndpointManagerDataplane) attachDataIfaceProgram(
 
 	var policyIdx, filterIdx int
 	indices := state.v4
-	if d.ipFamily == 6 {
+	if d.ipFamily == proto.IPVersion_IPV6 {
 		indices = state.v6
 	}
 
@@ -2391,26 +2320,22 @@ func (d *bpfEndpointManagerDataplane) attachDataIfaceProgram(
 	ap.PolicyIdx = policyIdx
 	ap.LogFilterIdx = filterIdx
 
-	if err := d.dp.ensureProgramLoaded(ap); err != nil {
-		return nil, err
-	}
+	m := d.mgr
 
-	if ap.LogLevel == "debug" {
-		if err := d.updateLogFilter(ap); err != nil {
-			ap.Log().WithError(err).Warn("Failed to update logging filter, logging may be incorrect.")
-		}
+	if err := m.loadPrograms(ap, d.ipFamily); err != nil {
+		return nil, err
 	}
 
 	if ep != nil {
 		rules := polprog.Rules{
 			ForHostInterface: true,
 		}
-		d.addHostPolicy(&rules, ep, polDirection)
-		if err := d.updatePolicyProgramFn(rules, polDirection.RuleDir(), ap); err != nil {
+		m.addHostPolicy(&rules, ep, polDirection)
+		if err := m.updatePolicyProgramFn(rules, polDirection.RuleDir(), ap, d.ipFamily); err != nil {
 			return ap, err
 		}
 	} else {
-		if err := d.dp.removePolicyProgram(ap); err != nil {
+		if err := m.dp.removePolicyProgram(ap, d.ipFamily); err != nil {
 			return ap, err
 		}
 	}
@@ -2418,14 +2343,15 @@ func (d *bpfEndpointManagerDataplane) attachDataIfaceProgram(
 }
 
 func (d *bpfEndpointManagerDataplane) attachXDPProgram(ap *xdp.AttachPoint, ep *proto.HostEndpoint, state *bpfInterfaceState) error {
-	if d.ipFamily == 6 {
+	if d.ipFamily == proto.IPVersion_IPV6 {
 		ap.PolicyIdx = state.v6.policyIdx[hook.XDP]
 	} else {
 		ap.PolicyIdx = state.v4.policyIdx[hook.XDP]
 	}
 
+	m := d.mgr
 	if ep != nil && len(ep.UntrackedTiers) == 1 {
-		err := d.dp.ensureProgramLoaded(ap)
+		err := m.dp.ensureProgramLoaded(ap, d.ipFamily)
 		if err != nil {
 			return err
 		}
@@ -2433,11 +2359,11 @@ func (d *bpfEndpointManagerDataplane) attachXDPProgram(ap *xdp.AttachPoint, ep *
 		ap.Log().Debugf("Building program for untracked policy hep=%v", ep.Name)
 		rules := polprog.Rules{
 			ForHostInterface: true,
-			HostNormalTiers:  d.extractTiers(ep.UntrackedTiers[0], PolDirnIngress, false),
+			HostNormalTiers:  m.extractTiers(ep.UntrackedTiers[0], PolDirnIngress, false),
 			ForXDP:           true,
 		}
 		ap.Log().Debugf("Rules: %v", rules)
-		err = d.updatePolicyProgramFn(rules, "xdp", ap)
+		err = m.updatePolicyProgramFn(rules, "xdp", ap, d.ipFamily)
 		ap.Log().WithError(err).Debugf("Applied untracked policy hep=%v", ep.Name)
 		return err
 	}
@@ -2533,6 +2459,8 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(ifaceName string) *tc.Attach
 		ap.WgPort = m.wgPort
 		ap.NATin = uint32(m.natInIdx)
 		ap.NATout = uint32(m.natOutIdx)
+	} else {
+		ap.ExtToServiceConnmark = uint32(m.bpfExtToServiceConnmark)
 	}
 
 	ap.ToHostDrop = (m.epToHostAction == "DROP")
@@ -2587,14 +2515,14 @@ func (d *bpfEndpointManagerDataplane) configureTCAttachPoint(policyDirection Pol
 	}
 
 	ap.ToOrFrom = toOrFrom
-	ap.IPv6Enabled = (d.ipFamily == uint8(proto.IPVersion_IPV6))
+	ap.IPv6Enabled = (d.ipFamily == proto.IPVersion_IPV6)
 	return ap
 }
 
 const EndTierDrop = true
 const NoEndTierDrop = false
 
-func (d *bpfEndpointManagerDataplane) extractTiers(tier *proto.TierInfo, direction PolDirection, endTierDrop bool) (rTiers []polprog.Tier) {
+func (m *bpfEndpointManager) extractTiers(tier *proto.TierInfo, direction PolDirection, endTierDrop bool) (rTiers []polprog.Tier) {
 	dir := direction.RuleDir()
 	if tier == nil {
 		return
@@ -2612,7 +2540,7 @@ func (d *bpfEndpointManagerDataplane) extractTiers(tier *proto.TierInfo, directi
 		}
 
 		for i, polName := range directionalPols {
-			pol := d.policies[proto.PolicyID{Tier: tier.Name, Name: polName}]
+			pol := m.policies[proto.PolicyID{Tier: tier.Name, Name: polName}]
 			if pol == nil {
 				log.WithField("tier", tier).Warn("Tier refers to unknown policy!")
 				continue
@@ -2631,7 +2559,7 @@ func (d *bpfEndpointManagerDataplane) extractTiers(tier *proto.TierInfo, directi
 			for ri, r := range prules {
 				policy.Rules[ri] = polprog.Rule{
 					Rule:    r,
-					MatchID: d.ruleMatchID(dir, r.Action, "Policy", polName, ri),
+					MatchID: m.ruleMatchID(dir, r.Action, "Policy", polName, ri),
 				}
 			}
 
@@ -2649,13 +2577,13 @@ func (d *bpfEndpointManagerDataplane) extractTiers(tier *proto.TierInfo, directi
 	return
 }
 
-func (d *bpfEndpointManagerDataplane) extractProfiles(profileNames []string, direction PolDirection) (rProfiles []polprog.Profile) {
+func (m *bpfEndpointManager) extractProfiles(profileNames []string, direction PolDirection) (rProfiles []polprog.Profile) {
 	dir := direction.RuleDir()
 	if count := len(profileNames); count > 0 {
 		rProfiles = make([]polprog.Profile, count)
 
 		for i, profName := range profileNames {
-			prof := d.profiles[proto.ProfileID{Name: profName}]
+			prof := m.profiles[proto.ProfileID{Name: profName}]
 			var prules []*proto.Rule
 			if direction == PolDirnIngress {
 				prules = prof.InboundRules
@@ -2670,7 +2598,7 @@ func (d *bpfEndpointManagerDataplane) extractProfiles(profileNames []string, dir
 			for ri, r := range prules {
 				profile.Rules[ri] = polprog.Rule{
 					Rule:    r,
-					MatchID: d.ruleMatchID(dir, r.Action, "Profile", profName, ri),
+					MatchID: m.ruleMatchID(dir, r.Action, "Profile", profName, ri),
 				}
 			}
 
@@ -2680,14 +2608,14 @@ func (d *bpfEndpointManagerDataplane) extractProfiles(profileNames []string, dir
 	return
 }
 
-func (d *bpfEndpointManagerDataplane) extractRules(tier *proto.TierInfo, profileNames []string, direction PolDirection) polprog.Rules {
+func (m *bpfEndpointManager) extractRules(tier *proto.TierInfo, profileNames []string, direction PolDirection) polprog.Rules {
 	var r polprog.Rules
 
 	// When there is applicable normal policy that does not explicitly Allow or Deny traffic,
 	// traffic is dropped.
-	r.Tiers = d.extractTiers(tier, direction, EndTierDrop)
+	r.Tiers = m.extractTiers(tier, direction, EndTierDrop)
 
-	r.Profiles = d.extractProfiles(profileNames, direction)
+	r.Profiles = m.extractProfiles(profileNames, direction)
 
 	return r
 }
@@ -2825,12 +2753,6 @@ func (m *bpfEndpointManager) OnHEPUpdate(hostIfaceToEpMap map[string]proto.HostE
 		m.removeHEPFromIndexes(allInterfaces, &m.wildcardHostEndpoint)
 		m.wildcardHostEndpoint = wildcardHostEndpoint
 		m.wildcardExists = wildcardExists
-		m.v4.wildcardExists = wildcardExists
-		m.v4.wildcardHostEndpoint = wildcardHostEndpoint
-		if m.ipv6Enabled {
-			m.v6.wildcardExists = wildcardExists
-			m.v6.wildcardHostEndpoint = wildcardHostEndpoint
-		}
 		m.addHEPToIndexes(allInterfaces, &wildcardHostEndpoint)
 		for ifaceName := range m.nameToIface {
 			if m.isWorkloadIface(ifaceName) {
@@ -3083,8 +3005,8 @@ func (m *bpfEndpointManager) ensureQdisc(iface string) (bool, error) {
 	return tc.EnsureQdisc(iface)
 }
 
-func (d *bpfEndpointManagerDataplane) loadTCObj(at hook.AttachType) (hook.Layout, error) {
-	pm := d.bpfmaps.ProgramsMap.(*hook.ProgramsMap)
+func (m *bpfEndpointManager) loadTCObj(at hook.AttachType) (hook.Layout, error) {
+	pm := m.bpfmaps.ProgramsMap.(*hook.ProgramsMap)
 
 	layout, err := pm.LoadObj(at)
 	if err != nil {
@@ -3105,7 +3027,7 @@ func (d *bpfEndpointManagerDataplane) loadTCObj(at hook.AttachType) (hook.Layout
 }
 
 // Ensure TC/XDP program is attached to the specified interface.
-func (d *bpfEndpointManagerDataplane) ensureProgramLoaded(ap attachPoint) error {
+func (m *bpfEndpointManager) ensureProgramLoaded(ap attachPoint, ipFamily proto.IPVersion) error {
 	var err error
 
 	if aptc, ok := ap.(*tc.AttachPoint); ok {
@@ -3118,20 +3040,20 @@ func (d *bpfEndpointManagerDataplane) ensureProgramLoaded(ap attachPoint) error 
 			DSR:        aptc.DSR,
 		}
 
-		at.Family = int(d.ipFamily)
-		ap.Log().Debugf("ensureProgramLoaded %d", d.ipFamily)
-		if aptc.HookLayout, err = d.loadTCObj(at); err != nil {
-			return fmt.Errorf("loading generic v%d tc hook program: %w", d.ipFamily, err)
+		at.Family = int(ipFamily)
+		ap.Log().Debugf("ensureProgramLoaded %d", ipFamily)
+		if aptc.HookLayout, err = m.loadTCObj(at); err != nil {
+			return fmt.Errorf("loading generic v%d tc hook program: %w", ipFamily, err)
 		}
 
 		// Load default policy before the real policy is created and loaded.
 		switch at.DefaultPolicy() {
 		case hook.DefPolicyAllow:
-			err = maps.UpdateMapEntry(d.bpfmaps.JumpMap.MapFD(),
-				jump.Key(aptc.PolicyIdx), jump.Value(d.policyTcAllowFD.FD()))
+			err = maps.UpdateMapEntry(m.bpfmaps.JumpMap.MapFD(),
+				jump.Key(aptc.PolicyIdx), jump.Value(m.policyTcAllowFD.FD()))
 		case hook.DefPolicyDeny:
-			err = maps.UpdateMapEntry(d.bpfmaps.JumpMap.MapFD(),
-				jump.Key(aptc.PolicyIdx), jump.Value(d.policyTcDenyFD.FD()))
+			err = maps.UpdateMapEntry(m.bpfmaps.JumpMap.MapFD(),
+				jump.Key(aptc.PolicyIdx), jump.Value(m.policyTcDenyFD.FD()))
 		}
 
 		if err != nil {
@@ -3143,7 +3065,7 @@ func (d *bpfEndpointManagerDataplane) ensureProgramLoaded(ap attachPoint) error 
 			LogLevel: apxdp.LogLevel,
 		}
 
-		pm := d.bpfmaps.XDPProgramsMap.(*hook.ProgramsMap)
+		pm := m.bpfmaps.XDPProgramsMap.(*hook.ProgramsMap)
 		if apxdp.HookLayout, err = pm.LoadObj(at); err != nil {
 			return fmt.Errorf("loading generic xdp hook program: %w", err)
 		}
@@ -3196,19 +3118,8 @@ func (m *bpfEndpointManager) removePolicyDebugInfo(ifaceName string, ipFamily pr
 	}
 }
 
-func (d *bpfEndpointManagerDataplane) removePolicyDebugInfo(ifaceName string, hook hook.Hook) {
-	if !d.bpfPolicyDebugEnabled {
-		return
-	}
-	filename := bpf.PolicyDebugJSONFileName(ifaceName, hook.String(), proto.IPVersion(d.ipFamily))
-	err := os.Remove(filename)
-	if err != nil {
-		log.WithError(err).Debugf("Failed to remove the policy debug file %v. Ignoring", filename)
-	}
-}
-
-func (d *bpfEndpointManagerDataplane) writePolicyDebugInfo(insns []asm.Insns, ifaceName string, ipFamily proto.IPVersion, polDir string, h hook.Hook, polErr error) error {
-	if !d.bpfPolicyDebugEnabled {
+func (m *bpfEndpointManager) writePolicyDebugInfo(insns []asm.Insns, ifaceName string, ipFamily proto.IPVersion, polDir string, h hook.Hook, polErr error) error {
+	if !m.bpfPolicyDebugEnabled {
 		return nil
 	}
 	if err := os.MkdirAll(bpf.RuntimePolDir, 0600); err != nil {
@@ -3252,10 +3163,9 @@ func (d *bpfEndpointManagerDataplane) writePolicyDebugInfo(insns []asm.Insns, if
 	return nil
 }
 
-func (d *bpfEndpointManagerDataplane) updatePolicyProgram(rules polprog.Rules, polDir string, ap attachPoint) error {
-	ipFamily := proto.IPVersion(d.ipFamily)
+func (m *bpfEndpointManager) updatePolicyProgram(rules polprog.Rules, polDir string, ap attachPoint, ipFamily proto.IPVersion) error {
 
-	progName := policyProgramName(ap.IfaceName(), polDir, ipFamily)
+	progName := policyProgramName(ap.IfaceName(), polDir, proto.IPVersion(ipFamily))
 
 	var opts []polprog.Option
 	if apj, ok := ap.(attachPointWithPolicyJumps); ok {
@@ -3270,7 +3180,7 @@ func (d *bpfEndpointManagerDataplane) updatePolicyProgram(rules polprog.Rules, p
 		}
 		opts = append(opts, polprog.WithAllowDenyJumps(allow, deny))
 	}
-	insns, err := d.doUpdatePolicyProgram(
+	insns, err := m.doUpdatePolicyProgram(
 		ap.HookName(),
 		progName,
 		ap.PolicyJmp(),
@@ -3278,7 +3188,7 @@ func (d *bpfEndpointManagerDataplane) updatePolicyProgram(rules polprog.Rules, p
 		ipFamily,
 		opts...,
 	)
-	perr := d.writePolicyDebugInfo(insns, ap.IfaceName(), ipFamily, polDir, ap.HookName(), err)
+	perr := m.writePolicyDebugInfo(insns, ap.IfaceName(), ipFamily, polDir, ap.HookName(), err)
 	if perr != nil {
 		log.WithError(perr).Warn("error writing policy debug information")
 	}
@@ -3289,8 +3199,8 @@ func (d *bpfEndpointManagerDataplane) updatePolicyProgram(rules polprog.Rules, p
 	return nil
 }
 
-func (d *bpfEndpointManagerDataplane) loadTCLogFilter(ap *tc.AttachPoint) (fileDescriptor, int, error) {
-	logFilter, err := filter.New(ap.Type, 64, ap.LogFilter, d.bpfmaps.ProgramsMap.MapFD())
+func (m *bpfEndpointManager) loadTCLogFilter(ap *tc.AttachPoint) (fileDescriptor, int, error) {
+	logFilter, err := filter.New(ap.Type, 64, ap.LogFilter, m.bpfmaps.ProgramsMap.MapFD())
 	if err != nil {
 		return nil, 0, err
 	}
@@ -3305,15 +3215,15 @@ func (d *bpfEndpointManagerDataplane) loadTCLogFilter(ap *tc.AttachPoint) (fileD
 	return fd, ap.LogFilterIdx, nil
 }
 
-func (d *bpfEndpointManagerDataplane) updateLogFilter(ap attachPoint) error {
+func (m *bpfEndpointManager) updateLogFilter(ap attachPoint) error {
 	switch t := ap.(type) {
 	case *tc.AttachPoint:
-		fd, idx, err := d.dp.loadTCLogFilter(t)
+		fd, idx, err := m.dp.loadTCLogFilter(t)
 		if err != nil {
 			return err
 		}
 		defer fd.Close()
-		if err := d.bpfmaps.JumpMap.Update(jump.Key(idx), jump.Value(fd.FD())); err != nil {
+		if err := m.bpfmaps.JumpMap.Update(jump.Key(idx), jump.Value(fd.FD())); err != nil {
 			return fmt.Errorf("failed to update %s policy jump map [%d]=%d: %w", ap.HookName(), idx, fd.FD(), err)
 		}
 
@@ -3334,76 +3244,6 @@ func policyProgramName(iface, polDir string, ipFamily proto.IPVersion) string {
 	return fmt.Sprintf("p%v%c_%s", version, polDir[0], iface)
 }
 
-func (d *bpfEndpointManagerDataplane) loadPolicyProgram(
-	progName string,
-	ipFamily proto.IPVersion,
-	rules polprog.Rules,
-	staticProgsMap maps.Map,
-	polProgsMap maps.Map,
-	opts ...polprog.Option,
-) (
-	fd []fileDescriptor, insns []asm.Insns, err error,
-) {
-	log.WithFields(log.Fields{
-		"progName": progName,
-		"ipFamily": ipFamily,
-	}).Debug("Generating policy program...")
-
-	if ipFamily == proto.IPVersion_IPV6 {
-		opts = append(opts, polprog.WithIPv6())
-	}
-
-	pg := polprog.NewBuilder(
-		d.ipSetIDAlloc,
-		d.bpfmaps.IpsetsMap.MapFD(),
-		d.bpfmaps.StateMap.MapFD(),
-		staticProgsMap.MapFD(),
-		polProgsMap.MapFD(),
-		opts...,
-	)
-	programs, err := pg.Instructions(rules)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to generate policy bytecode v%v: %w", ipFamily, err)
-	}
-	progType := unix.BPF_PROG_TYPE_SCHED_CLS
-	if rules.ForXDP {
-		progType = unix.BPF_PROG_TYPE_XDP
-	}
-
-	progFDs := make([]fileDescriptor, 0, len(programs))
-	success := false
-	defer func() {
-		if success {
-			return
-		}
-		for _, progFD := range progFDs {
-			if err := progFD.Close(); err != nil {
-				log.WithError(err).Panic("Failed to close program FD.")
-			}
-		}
-	}()
-	for i, p := range programs {
-		subProgName := progName
-		if i > 0 {
-			if len(subProgName) > 12 {
-				subProgName = subProgName[:12]
-			}
-			subProgName = fmt.Sprintf("%s_%d", subProgName, i)
-		}
-		progFD, err := bpf.LoadBPFProgramFromInsns(p, subProgName, "Apache-2.0", uint32(progType))
-		if err != nil {
-			log.WithError(err).WithFields(log.Fields{
-				"name":       subProgName,
-				"subProgram": i,
-			}).Error("Failed to load BPF policy program")
-			return nil, nil, fmt.Errorf("failed to load BPF policy program %v: %w", ipFamily, err)
-		}
-		progFDs = append(progFDs, progFD)
-	}
-	success = true
-	return progFDs, programs, nil
-}
-
 func (m *bpfEndpointManager) loadPolicyProgram(
 	progName string,
 	ipFamily proto.IPVersion,
@@ -3417,7 +3257,6 @@ func (m *bpfEndpointManager) loadPolicyProgram(
 	log.WithFields(log.Fields{
 		"progName": progName,
 		"ipFamily": ipFamily,
-		"rules":    rules,
 	}).Debug("Generating policy program...")
 
 	if ipFamily == proto.IPVersion_IPV6 {
@@ -3475,7 +3314,7 @@ func (m *bpfEndpointManager) loadPolicyProgram(
 	return progFDs, programs, nil
 }
 
-func (d *bpfEndpointManagerDataplane) doUpdatePolicyProgram(
+func (m *bpfEndpointManager) doUpdatePolicyProgram(
 	hk hook.Hook,
 	progName string,
 	polJumpMapIdx int,
@@ -3483,26 +3322,26 @@ func (d *bpfEndpointManagerDataplane) doUpdatePolicyProgram(
 	ipFamily proto.IPVersion,
 	opts ...polprog.Option,
 ) ([]asm.Insns, error) {
-	if d.bpfPolicyDebugEnabled {
+	if m.bpfPolicyDebugEnabled {
 		opts = append(opts, polprog.WithPolicyDebugEnabled())
 	}
 
-	staticProgsMap := d.bpfmaps.ProgramsMap
+	staticProgsMap := m.bpfmaps.ProgramsMap
 	if hk == hook.XDP {
-		staticProgsMap = d.bpfmaps.XDPProgramsMap
+		staticProgsMap = m.bpfmaps.XDPProgramsMap
 	}
 
 	// If we have to break a program up into sub-programs to please the
 	// verifier then we store the sub-programs at
 	// polJumpMapIdx + subProgNo * stride.
-	polProgsMap := d.bpfmaps.JumpMap
+	polProgsMap := m.bpfmaps.JumpMap
 	stride := jump.TCMaxEntryPoints
 	if hk == hook.XDP {
-		polProgsMap = d.bpfmaps.XDPJumpMap
+		polProgsMap = m.bpfmaps.XDPJumpMap
 		stride = jump.XDPMaxEntryPoints
 	}
 	opts = append(opts, polprog.WithPolicyMapIndexAndStride(polJumpMapIdx, stride))
-	progFDs, insns, err := d.loadPolicyProgramFn(
+	progFDs, insns, err := m.loadPolicyProgramFn(
 		progName,
 		ipFamily,
 		rules,
@@ -3558,7 +3397,7 @@ func (m *bpfEndpointManager) jumpMapDelete(h hook.Hook, idx int) error {
 	return jumpMapDeleteEntry(jumpMap, idx, stride)
 }
 
-func (d *bpfEndpointManagerDataplane) removePolicyProgram(ap attachPoint) error {
+func (m *bpfEndpointManager) removePolicyProgram(ap attachPoint, ipFamily proto.IPVersion) error {
 	idx := ap.PolicyJmp()
 	if idx == -1 {
 		return fmt.Errorf("invalid policy jump map idx %d", idx)
@@ -3568,17 +3407,17 @@ func (d *bpfEndpointManagerDataplane) removePolicyProgram(ap attachPoint) error 
 	var stride int
 	if ap.HookName() == hook.XDP {
 		stride = jump.XDPMaxEntryPoints
-		pm = d.bpfmaps.XDPJumpMap
+		pm = m.bpfmaps.XDPJumpMap
 	} else {
 		stride = jump.TCMaxEntryPoints
-		pm = d.bpfmaps.JumpMap
+		pm = m.bpfmaps.JumpMap
 	}
 
 	if err := jumpMapDeleteEntry(pm, idx, stride); err != nil {
 		return fmt.Errorf("removing policy iface %s hook %s: %w", ap.IfaceName(), ap.HookName(), err)
 	}
 
-	d.removePolicyDebugInfo(ap.IfaceName(), ap.HookName())
+	m.removePolicyDebugInfo(ap.IfaceName(), ipFamily, ap.HookName())
 	return nil
 }
 
@@ -3818,13 +3657,13 @@ func (m *bpfEndpointManager) updatePolicyCache(name string, owner string, inboun
 func (m *bpfEndpointManager) addRuleInfo(rule *proto.Rule, idx int,
 	owner string, direction PolDirection, polName string) polprog.RuleMatchID {
 
-	matchID := m.v4.dp.ruleMatchID(direction.RuleDir(), rule.Action, owner, polName, idx)
+	matchID := m.dp.ruleMatchID(direction.RuleDir(), rule.Action, owner, polName, idx)
 	m.dirtyRules.Discard(matchID)
 
 	return matchID
 }
 
-func (d *bpfEndpointManagerDataplane) ruleMatchID(dir, action, owner, name string, idx int) polprog.RuleMatchID {
+func (m *bpfEndpointManager) ruleMatchID(dir, action, owner, name string, idx int) polprog.RuleMatchID {
 	h := fnv.New64a()
 	h.Write([]byte(action + owner + dir + strconv.Itoa(idx) + name))
 	return h.Sum64()

@@ -105,7 +105,7 @@ func (m *mockDataplane) ensureProgramAttached(ap attachPoint) (qDiscInfo, error)
 	return qdisc, nil
 }
 
-func (m *mockDataplane) ensureProgramLoaded(ap attachPoint) error {
+func (m *mockDataplane) ensureProgramLoaded(ap attachPoint, ipFamily proto.IPVersion) error {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
@@ -145,7 +145,7 @@ func (m *mockDataplane) ensureQdisc(iface string) (bool, error) {
 	return false, nil
 }
 
-func (m *mockDataplane) updatePolicyProgram(rules polprog.Rules, polDir string, ap attachPoint) error {
+func (m *mockDataplane) updatePolicyProgram(rules polprog.Rules, polDir string, ap attachPoint, ipFamily proto.IPVersion) error {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 	key := ap.IfaceName() + ":" + ap.HookName().String()
@@ -153,7 +153,7 @@ func (m *mockDataplane) updatePolicyProgram(rules polprog.Rules, polDir string, 
 	return nil
 }
 
-func (m *mockDataplane) removePolicyProgram(ap attachPoint) error {
+func (m *mockDataplane) removePolicyProgram(ap attachPoint, ipFamily proto.IPVersion) error {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 	key := ap.IfaceName() + ":" + ap.HookName().String()
@@ -266,7 +266,6 @@ var _ = Describe("BPF Endpoint Manager", func() {
 	var (
 		bpfEpMgr             *bpfEndpointManager
 		dp                   *mockDataplane
-		mockDPCommon         bpfDataplaneCommon
 		mockDP               bpfDataplane
 		fibLookupEnabled     bool
 		endpointToHostAction string
@@ -352,7 +351,6 @@ var _ = Describe("BPF Endpoint Manager", func() {
 	newBpfEpMgr := func() {
 		var err error
 		bpfEpMgr, err = newBPFEndpointManager(
-			mockDPCommon,
 			mockDP,
 			&Config{
 				Hostname:              "uthost",
@@ -476,7 +474,6 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 	JustBeforeEach(func() {
 		dp = newMockDataplane()
-		mockDPCommon = dp
 		mockDP = dp
 		newBpfEpMgr()
 	})
@@ -755,8 +752,8 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		It("should update the maps with ruleIds", func() {
 			ingRule := &proto.Rule{Action: "Allow", RuleId: "INGRESSALLOW1234"}
 			egrRule := &proto.Rule{Action: "Allow", RuleId: "EGRESSALLOW12345"}
-			ingRuleMatchId := bpfEpMgr.v4.dp.ruleMatchID("Ingress", "Allow", "Policy", "allowPol", 0)
-			egrRuleMatchId := bpfEpMgr.v4.dp.ruleMatchID("Egress", "Allow", "Policy", "allowPol", 0)
+			ingRuleMatchId := bpfEpMgr.dp.ruleMatchID("Ingress", "Allow", "Policy", "allowPol", 0)
+			egrRuleMatchId := bpfEpMgr.dp.ruleMatchID("Egress", "Allow", "Policy", "allowPol", 0)
 			k := make([]byte, 8)
 			v := make([]byte, 8)
 			rcMap := bpfEpMgr.bpfmaps.RuleCountersMap
@@ -780,7 +777,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 			// update the ingress rule of the policy
 			ingDenyRule := &proto.Rule{Action: "Deny", RuleId: "INGRESSDENY12345"}
-			ingDenyRuleMatchId := bpfEpMgr.v4.dp.ruleMatchID("Ingress", "Deny", "Policy", "allowPol", 0)
+			ingDenyRuleMatchId := bpfEpMgr.dp.ruleMatchID("Ingress", "Deny", "Policy", "allowPol", 0)
 			bpfEpMgr.OnUpdate(&proto.ActivePolicyUpdate{
 				Id:     &proto.PolicyID{Tier: "default", Name: "allowPol"},
 				Policy: &proto.Policy{InboundRules: []*proto.Rule{ingDenyRule}, OutboundRules: []*proto.Rule{egrRule}},
@@ -821,8 +818,8 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		})
 
 		It("should cleanup the bpf map after restart", func() {
-			ingRuleMatchId := bpfEpMgr.v4.dp.ruleMatchID("Ingress", "Allow", "Policy", "allowPol", 0)
-			egrRuleMatchId := bpfEpMgr.v4.dp.ruleMatchID("Egress", "Allow", "Policy", "allowPol", 0)
+			ingRuleMatchId := bpfEpMgr.dp.ruleMatchID("Ingress", "Allow", "Policy", "allowPol", 0)
+			egrRuleMatchId := bpfEpMgr.dp.ruleMatchID("Egress", "Allow", "Policy", "allowPol", 0)
 			k := make([]byte, 8)
 			v := make([]byte, 8)
 			rcMap := bpfEpMgr.bpfmaps.RuleCountersMap
@@ -1403,7 +1400,6 @@ var _ = Describe("BPF Endpoint Manager", func() {
 				dp,
 			}
 			mockDP = mapDP
-			mockDPCommon = mapDP
 			newBpfEpMgr()
 
 			bpfEpMgr.bpfLogLevel = "debug"
@@ -1508,7 +1504,6 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			mapDP := &mockProgMapDP{
 				dp,
 			}
-			mockDPCommon = mapDP
 			mockDP = mapDP
 			newBpfEpMgr()
 
