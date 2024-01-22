@@ -118,6 +118,14 @@ func newVXLANManagerWithShims(
 	nlHandle netlinkHandle,
 	ipVersion uint8,
 ) *vxlanManager {
+	// For same-subnet and blackhole routes, we need a unique protocol
+	// to attach to the routes.  If the global DeviceRouteProtocol is set to
+	// a usable value, use that; otherwise, pick a safer default.  (For back
+	// compatibility, our DeviceRouteProtocol defaults to RTPROT_BOOT, which
+	// can also be used byu other processes.)
+	//
+	// Routes to the VXLAN tunnel device itself are identified by their target
+	// interface.  We don't need to worry about their protocol.
 	noEncapProtocol := defaultVXLANProto
 	if dpConfig.DeviceRouteProtocol != syscall.RTPROT_BOOT {
 		noEncapProtocol = dpConfig.DeviceRouteProtocol
@@ -325,8 +333,9 @@ func (m *vxlanManager) blackholeRoutes() []routetable.Target {
 		}
 		rtt = append(
 			rtt, routetable.Target{
-				Type: routetable.TargetTypeBlackhole,
-				CIDR: cidr,
+				Type:     routetable.TargetTypeBlackhole,
+				CIDR:     cidr,
+				Protocol: m.noEncapProtocol,
 			},
 		)
 	}
@@ -402,9 +411,10 @@ func (m *vxlanManager) CompleteDeferredWork() error {
 				}
 
 				defaultRoute := routetable.Target{
-					Type: routetable.TargetTypeNoEncap,
-					CIDR: cidr,
-					GW:   ip.FromString(r.DstNodeIp),
+					Type:     routetable.TargetTypeNoEncap,
+					CIDR:     cidr,
+					GW:       ip.FromString(r.DstNodeIp),
+					Protocol: m.noEncapProtocol,
 				}
 
 				noEncapRoutes = append(noEncapRoutes, defaultRoute)

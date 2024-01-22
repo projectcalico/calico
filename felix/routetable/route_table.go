@@ -96,7 +96,7 @@ type RouteTable struct {
 	tableIndex int
 
 	deviceRouteSourceAddress ip.Addr
-	deviceRouteProtocol      netlink.RouteProtocol
+	defaultRouteProtocol     netlink.RouteProtocol
 	routeMetric              RouteMetric
 	removeExternalRoutes     bool
 	ownershipPolicy          OwnershipPolicy
@@ -222,13 +222,15 @@ type OwnershipPolicy interface {
 }
 
 // FIXME Makes sure that VXLAN same-subnet routes don't get cleaned up until VXLAN manager is in sync.
+// FIXME Prioritisation of routes between different managers.
+// FIXME Protocol
 
 func New(
 	ownershipPolicy OwnershipPolicy,
 	ipVersion uint8,
 	netlinkTimeout time.Duration,
 	deviceRouteSourceAddress net.IP,
-	deviceRouteProtocol netlink.RouteProtocol,
+	defaultRouteProtocol netlink.RouteProtocol,
 	removeExternalRoutes bool,
 	tableIndex int,
 	opReporter logutils.OpRecorder,
@@ -262,7 +264,7 @@ func New(
 		tableIndex:    tableIndex,
 
 		deviceRouteSourceAddress: ip.FromNetIP(deviceRouteSourceAddress),
-		deviceRouteProtocol:      deviceRouteProtocol,
+		defaultRouteProtocol:     defaultRouteProtocol,
 		removeExternalRoutes:     removeExternalRoutes,
 
 		fullResyncNeeded: true,
@@ -596,6 +598,10 @@ func (r *RouteTable) recalculateDesiredKernelRoute(cidr ip.CIDR) {
 	if bestTarget.Src != nil {
 		src = bestTarget.Src
 	}
+	proto := r.defaultRouteProtocol
+	if bestTarget.Protocol != 0 {
+		proto = bestTarget.Protocol
+	}
 	kernRoute := kernelRoute{
 		Type:     bestTarget.RouteType(),
 		Scope:    bestTarget.RouteScope(),
@@ -603,7 +609,7 @@ func (r *RouteTable) recalculateDesiredKernelRoute(cidr ip.CIDR) {
 		Src:      src,
 		Ifindex:  bestIfaceIdx,
 		OnLink:   bestTarget.Flags()&unix.RTNH_F_ONLINK != 0,
-		Protocol: r.deviceRouteProtocol,
+		Protocol: proto,
 	}
 	if log.IsLevelEnabled(log.DebugLevel) && !reflect.DeepEqual(oldDesiredRoute, kernRoute) {
 		r.logCxt.WithFields(log.Fields{
@@ -1284,11 +1290,12 @@ func (r *RouteTable) addStaticARPEntry(
 }
 
 type Target struct {
-	Type    TargetType
-	CIDR    ip.CIDR
-	GW      ip.Addr
-	Src     ip.Addr
-	DestMAC net.HardwareAddr
+	Type     TargetType
+	CIDR     ip.CIDR
+	GW       ip.Addr
+	Src      ip.Addr
+	DestMAC  net.HardwareAddr
+	Protocol netlink.RouteProtocol
 }
 
 func (t Target) Equal(t2 Target) bool {
