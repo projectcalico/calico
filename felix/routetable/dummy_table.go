@@ -8,7 +8,7 @@ import (
 type DummyTable struct {
 }
 
-func (_ *DummyTable) OnIfaceStateChanged(_ string, _ ifacemonitor.State) {
+func (_ *DummyTable) OnIfaceStateChanged(_ string, _ int, _ ifacemonitor.State) {
 }
 
 func (_ *DummyTable) QueueResync() {
@@ -19,9 +19,6 @@ func (_ *DummyTable) Apply() error {
 }
 
 func (_ *DummyTable) SetRoutes(_ string, _ []Target) {
-}
-
-func (_ *DummyTable) SetL2Routes(_ string, _ []L2Target) {
 }
 
 func (_ *DummyTable) RouteRemove(_ string, _ ip.CIDR) {

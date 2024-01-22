@@ -15,6 +15,7 @@
 package intdataplane
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"os"
@@ -25,7 +26,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
@@ -33,6 +34,10 @@ import (
 	"golang.org/x/sys/unix"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 	"k8s.io/client-go/kubernetes"
+
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+
+	"github.com/projectcalico/calico/felix/vxlanfdb"
 
 	"github.com/projectcalico/calico/felix/bpf/bpfmap"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
@@ -86,6 +91,9 @@ const (
 
 	// Route cleanup grace period. Used for workload routes only.
 	routeCleanupGracePeriod = 10 * time.Second
+
+	VXLANIfaceNameV4 = "vxlan.calico"
+	VXLANIfaceNameV6 = "vxlan-v6.calico"
 )
 
 var (
@@ -286,6 +294,12 @@ type InternalDataplane struct {
 
 	ipipManager *ipipManager
 
+	vxlanManager   *vxlanManager
+	vxlanParentC   chan string
+	vxlanManagerV6 *vxlanManager
+	vxlanParentCV6 chan string
+	vxlanFDBs      []*vxlanfdb.VXLANFDB
+
 	wireguardManager   *wireguardManager
 	wireguardManagerV6 *wireguardManager
 
@@ -380,7 +394,10 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		log.WithError(err).Error("Failed to write MTU file, pod MTU may not be properly set")
 	}
 
-	featureDetector := environment.NewFeatureDetector(config.FeatureDetectOverrides)
+	featureDetector := environment.NewFeatureDetector(
+		config.FeatureDetectOverrides,
+		environment.WithFeatureGates(config.FeatureGates),
+	)
 	dp := &InternalDataplane{
 		toDataplane:    make(chan interface{}, msgPeekLimit),
 		fromDataplane:  make(chan interface{}, 100),
@@ -493,32 +510,65 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	dp.iptablesFilterTables = append(dp.iptablesFilterTables, filterTableV4)
 	dp.ipSets = append(dp.ipSets, ipSetsV4)
 
-	if config.RulesConfig.VXLANEnabled {
-		var routeTableVXLAN routetable.RouteTableInterface
-		if !config.RouteSyncDisabled {
-			log.Debug("RouteSyncDisabled is false.")
-			routeTableVXLAN = routetable.New([]string{"^vxlan.calico$"}, 4, true, config.NetlinkTimeout,
-				config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, true, unix.RT_TABLE_MAIN,
-				dp.loopSummarizer, featureDetector, routetable.WithLivenessCB(dp.reportHealth))
-		} else {
-			log.Info("RouteSyncDisabled is true, using DummyTable.")
-			routeTableVXLAN = &routetable.DummyTable{}
-		}
+	var routeTableV4 routetable.RouteTableInterface
+	var routeTableV6 routetable.RouteTableInterface
 
-		vxlanManager := newVXLANManager(
-			ipSetsV4,
-			routeTableVXLAN,
-			"vxlan.calico",
-			config,
-			dp.loopSummarizer,
+	if !config.RouteSyncDisabled {
+		log.Debug("Route management is enabled.")
+		routeTableV4 = routetable.New(
+			mainRoutingTableOwnershipPolicy(config, 4),
 			4,
+			config.NetlinkTimeout,
+			config.DeviceRouteSourceAddress,
+			config.DeviceRouteProtocol,
+			config.RemoveExternalRoutes,
+			unix.RT_TABLE_MAIN,
+			dp.loopSummarizer,
 			featureDetector,
+			routetable.WithStaticARPEntries(true),
+			routetable.WithLivenessCB(dp.reportHealth),
+			routetable.WithRouteCleanupGracePeriod(routeCleanupGracePeriod),
+			// FIXME metrics/priorities for the main routing table
+			routetable.WithRouteMetric(routetable.RoutingMetricLocalWorkloads),
 		)
-		go vxlanManager.KeepVXLANDeviceInSync(config.VXLANMTU, dataplaneFeatures.ChecksumOffloadBroken, 10*time.Second)
-		dp.RegisterManager(vxlanManager)
+		if config.IPv6Enabled {
+			routeTableV6 = routetable.New(
+				mainRoutingTableOwnershipPolicy(config, 6),
+				6,
+				config.NetlinkTimeout,
+				config.DeviceRouteSourceAddressIPv6,
+				config.DeviceRouteProtocol,
+				config.RemoveExternalRoutes,
+				unix.RT_TABLE_MAIN,
+				dp.loopSummarizer,
+				featureDetector,
+				// Note: deliberately not including:
+				// - Static neighbor entries: we've never supported these for IPv6;
+				//   we let the kernel populate them.
+				routetable.WithLivenessCB(dp.reportHealth),
+				routetable.WithRouteCleanupGracePeriod(routeCleanupGracePeriod),
+				routetable.WithRouteMetric(routetable.RoutingMetricLocalWorkloads),
+			)
+		}
+	} else {
+		log.Info("Route management is disabled, using DummyTables.")
+		routeTableV4 = &routetable.DummyTable{}
+		if config.IPv6Enabled {
+			routeTableV6 = &routetable.DummyTable{}
+		}
+	}
+
+	if config.RulesConfig.VXLANEnabled {
+		vxlanFDB := vxlanfdb.New(netlink.FAMILY_V4, VXLANIfaceNameV4, featureDetector, config.NetlinkTimeout)
+		dp.vxlanFDBs = append(dp.vxlanFDBs, vxlanFDB)
+
+		dp.vxlanManager = newVXLANManager(ipSetsV4, routeTableV4, vxlanFDB, VXLANIfaceNameV4, config, 4)
+		dp.vxlanParentC = make(chan string, 1)
+		go dp.vxlanManager.KeepVXLANDeviceInSync(context.Background(), config.VXLANMTU, dataplaneFeatures.ChecksumOffloadBroken, 10*time.Second, dp.vxlanParentC)
+		dp.RegisterManager(dp.vxlanManager)
 	} else {
 		// Start a cleanup goroutine not to block felix if it needs to retry
-		go cleanUpVXLANDevice("vxlan.calico")
+		go cleanUpVXLANDevice(VXLANIfaceNameV4)
 	}
 
 	dp.endpointStatusCombiner = newEndpointStatusCombiner(dp.fromDataplane, config.IPv6Enabled)
@@ -723,6 +773,10 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 				"- BPFHostNetworkedNAT is disabled.")
 		}
 
+		bpfRouteTable := routeTableV4
+		if config.BPFIpv6Enabled {
+			bpfRouteTable = routeTableV6
+		}
 		bpfEndpointManager, err = newBPFEndpointManager(
 			nil,
 			&config,
@@ -734,7 +788,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			filterTbl,
 			dp.reportHealth,
 			dp.loopSummarizer,
-			featureDetector,
+			bpfRouteTable,
 		)
 
 		if err != nil {
@@ -851,19 +905,6 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		}
 	}
 
-	var routeTableV4 routetable.RouteTableInterface
-
-	if !config.RouteSyncDisabled {
-		log.Debug("RouteSyncDisabled is false.")
-		routeTableV4 = routetable.New(interfaceRegexes, 4, false, config.NetlinkTimeout,
-			config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, config.RemoveExternalRoutes, unix.RT_TABLE_MAIN,
-			dp.loopSummarizer, featureDetector, routetable.WithLivenessCB(dp.reportHealth),
-			routetable.WithRouteCleanupGracePeriod(routeCleanupGracePeriod))
-	} else {
-		log.Info("RouteSyncDisabled is true, using DummyTable.")
-		routeTableV4 = &routetable.DummyTable{}
-	}
-
 	epManager := newEndpointManager(
 		rawTableV4,
 		mangleTableV4,
@@ -951,44 +992,16 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.iptablesFilterTables = append(dp.iptablesFilterTables, filterTableV6)
 
 		if config.RulesConfig.VXLANEnabledV6 {
-			var routeTableVXLANV6 routetable.RouteTableInterface
-			if !config.RouteSyncDisabled {
-				log.Debug("RouteSyncDisabled is false.")
-				routeTableVXLANV6 = routetable.New([]string{"^vxlan-v6.calico$"}, 6, true, config.NetlinkTimeout,
-					config.DeviceRouteSourceAddressIPv6, config.DeviceRouteProtocol, true, unix.RT_TABLE_MAIN,
-					dp.loopSummarizer, featureDetector, routetable.WithLivenessCB(dp.reportHealth))
-			} else {
-				log.Debug("RouteSyncDisabled is true, using DummyTable for routeTableVXLANV6.")
-				routeTableVXLANV6 = &routetable.DummyTable{}
-			}
+			vxlanFDBV6 := vxlanfdb.New(netlink.FAMILY_V6, VXLANIfaceNameV6, featureDetector, config.NetlinkTimeout)
+			dp.vxlanFDBs = append(dp.vxlanFDBs, vxlanFDBV6)
 
-			vxlanManagerV6 := newVXLANManager(
-				ipSetsV6,
-				routeTableVXLANV6,
-				"vxlan-v6.calico",
-				config,
-				dp.loopSummarizer,
-				6,
-				featureDetector,
-			)
-			go vxlanManagerV6.KeepVXLANDeviceInSync(config.VXLANMTUV6, dataplaneFeatures.ChecksumOffloadBroken, 10*time.Second)
-			dp.RegisterManager(vxlanManagerV6)
+			dp.vxlanManagerV6 = newVXLANManager(ipSetsV6, routeTableV6, vxlanFDBV6, VXLANIfaceNameV6, config, 6)
+			dp.vxlanParentCV6 = make(chan string, 1)
+			go dp.vxlanManagerV6.KeepVXLANDeviceInSync(context.Background(), config.VXLANMTUV6, dataplaneFeatures.ChecksumOffloadBroken, 10*time.Second, dp.vxlanParentCV6)
+			dp.RegisterManager(dp.vxlanManagerV6)
 		} else {
 			// Start a cleanup goroutine not to block felix if it needs to retry
-			go cleanUpVXLANDevice("vxlan-v6.calico")
-		}
-
-		var routeTableV6 routetable.RouteTableInterface
-		if !config.RouteSyncDisabled {
-			log.Debug("RouteSyncDisabled is false.")
-			routeTableV6 = routetable.New(
-				interfaceRegexes, 6, false, config.NetlinkTimeout,
-				config.DeviceRouteSourceAddressIPv6, config.DeviceRouteProtocol, config.RemoveExternalRoutes,
-				unix.RT_TABLE_MAIN, dp.loopSummarizer, featureDetector, routetable.WithLivenessCB(dp.reportHealth),
-				routetable.WithRouteCleanupGracePeriod(routeCleanupGracePeriod))
-		} else {
-			log.Debug("RouteSyncDisabled is true, using DummyTable for routeTableV6.")
-			routeTableV6 = &routetable.DummyTable{}
+			go cleanUpVXLANDevice(VXLANIfaceNameV6)
 		}
 
 		ipsetsManagerV6.AddDataplane(ipSetsV6)
@@ -1067,6 +1080,45 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	}
 
 	return dp
+}
+
+func mainRoutingTableOwnershipPolicy(config Config, ipVersion int) *routetable.MainTableOwnershipPolicy {
+	var allRouteProtos []netlink.RouteProtocol
+	var exclusiveRouteProtos []netlink.RouteProtocol
+	if config.DeviceRouteProtocol == unix.RTPROT_BOOT {
+		// Boot is our historic default, but it was a bad choice because it could
+		// be used by other processes.  Since that wasn't good enough for VXLAN
+		// blackhole and same-subnet routes, we defaulted VXLAN to using proto 80
+		// if the config was set to "boot".
+		allRouteProtos = []netlink.RouteProtocol{unix.RTPROT_BOOT, defaultVXLANProto}
+		exclusiveRouteProtos = []netlink.RouteProtocol{defaultVXLANProto}
+	} else {
+		allRouteProtos = []netlink.RouteProtocol{config.DeviceRouteProtocol}
+		exclusiveRouteProtos = []netlink.RouteProtocol{config.DeviceRouteProtocol}
+	}
+	var vxlanDevice string
+	if ipVersion == 4 {
+		vxlanDevice = VXLANIfaceNameV4
+	} else {
+		vxlanDevice = VXLANIfaceNameV6
+	}
+	ownershipPolicy := &routetable.MainTableOwnershipPolicy{
+		WorkloadInterfacePrefixes:     config.RulesConfig.WorkloadIfacePrefixes,
+		RemoveNonCalicoWorkloadRoutes: config.RemoveExternalRoutes,
+		CalicoSpecialInterfaces: []string{
+			// Always including VXLAN device, even if not enabled.  That means
+			// we'll clean up the routes if VXLAN is disabled.
+			vxlanDevice,
+			bpfInDev,
+			// Not including routetable.InterfaceNone because MainTableOwnershipPolicy
+			// automatically handles it.
+			// Not including tunl0, it is managed by BIRD.
+			// Not including Wireguard, it has its own routing table.
+		},
+		AllRouteProtocols:       allRouteProtos,
+		ExclusiveRouteProtocols: exclusiveRouteProtos,
+	}
+	return ownershipPolicy
 }
 
 // findHostMTU auto-detects the smallest host interface MTU.
@@ -1848,6 +1900,10 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 			d.onDatastoreMessage(msg)
 		case ifaceUpdate := <-d.ifaceUpdates:
 			d.onIfaceMonitorMessage(ifaceUpdate)
+		case name := <-d.vxlanParentC:
+			d.vxlanManager.OnParentNameUpdate(name)
+		case name := <-d.vxlanParentCV6:
+			d.vxlanManagerV6.OnParentNameUpdate(name)
 		case <-ipSetsRefreshC:
 			log.Debug("Refreshing IP sets state")
 			d.forceIPSetsRefresh = true
@@ -2015,9 +2071,13 @@ func (d *InternalDataplane) processIfaceStateUpdate(ifaceUpdate *ifaceStateUpdat
 		mgr.OnUpdate(ifaceUpdate)
 	}
 
+	for _, fdb := range d.vxlanFDBs {
+		fdb.OnIfaceStateChanged(ifaceUpdate.Name, ifaceUpdate.State)
+	}
+
 	for _, mgr := range d.managersWithRouteTables {
 		for _, routeTable := range mgr.GetRouteTableSyncers() {
-			routeTable.OnIfaceStateChanged(ifaceUpdate.Name, ifaceUpdate.State)
+			routeTable.OnIfaceStateChanged(ifaceUpdate.Name, ifaceUpdate.Index, ifaceUpdate.State)
 		}
 	}
 }
@@ -2123,6 +2183,12 @@ func (d *InternalDataplane) apply() {
 		d.reportHealth()
 	}
 
+	if d.dataplaneNeedsSync {
+		// Not safe to continue to the dataplane apply stage if an operation above
+		// failed.
+		return
+	}
+
 	if d.xdpState != nil {
 		if d.forceXDPRefresh {
 			// Refresh timer popped.
@@ -2164,6 +2230,9 @@ func (d *InternalDataplane) apply() {
 			// Queue a resync on the next Apply().
 			r.QueueResync()
 		}
+		for _, fdb := range d.vxlanFDBs {
+			fdb.QueueResync()
+		}
 		d.forceRouteRefresh = false
 	}
 
@@ -2186,6 +2255,20 @@ func (d *InternalDataplane) apply() {
 			d.reportHealth()
 			ipSetsWG.Done()
 		}(ipSets)
+	}
+
+	// Update any VXLAN FDB entries.
+	for _, fdb := range d.vxlanFDBs {
+		err := fdb.Apply()
+		if err != nil {
+			var lnf netlink.LinkNotFoundError
+			if errors.As(err, &lnf) || errors.Is(err, vxlanfdb.ErrLinkDown) {
+				log.Debug("VXLAN interface not ready yet, can't sync FDB entries.")
+			} else {
+				log.WithError(err).Warn("Failed to synchronize VXLAN FDB entries, will retry...")
+				d.dataplaneNeedsSync = true
+			}
+		}
 	}
 
 	// Update the routing table in parallel with the other updates.  We'll wait for it to finish
