@@ -27,7 +27,7 @@ type RouteTableSyncer interface {
 	Apply() error
 }
 
-// RouteTable is the interface provided by the standard routetable module used to program the RIB.
+// RouteTableInterface is the interface provided by the standard routetable module used to program the RIB.
 type RouteTableInterface interface {
 	RouteTableSyncer
 	SetRoutes(routeClass RouteClass, ifaceName string, targets []Target)

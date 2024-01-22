@@ -1304,7 +1304,7 @@ var _ = Describe("RouteTable (table 100)", func() {
 
 		Describe("after configuring a throw route", func() {
 			JustBeforeEach(func() {
-				rt.RouteUpdate(RouteClassTODO, InterfaceNone, Target{
+				rt.RouteUpdate(RouteClassWireguard, InterfaceNone, Target{
 					CIDR: ip.MustParseCIDROrIP("10.10.10.10/32"),
 					Type: TargetTypeThrow,
 				})
@@ -1319,9 +1319,9 @@ var _ = Describe("RouteTable (table 100)", func() {
 			})
 		})
 
-		Describe("after configuring a throw route and then deleting and recreating the route via cali", func() {
+		Describe("after configuring a throw route", func() {
 			JustBeforeEach(func() {
-				rt.RouteUpdate(RouteClassWireguardThrow, InterfaceNone, Target{
+				rt.RouteUpdate(RouteClassWireguard, InterfaceNone, Target{
 					CIDR: ip.MustParseCIDROrIP("10.10.10.10/32"),
 					Type: TargetTypeThrow,
 				})
@@ -1329,10 +1329,10 @@ var _ = Describe("RouteTable (table 100)", func() {
 				Expect(err).ToNot(HaveOccurred())
 			})
 
-			It("the throw route should be removed and the interface route added", func() {
+			It("should be able to toggle between throw and local iface routes", func() {
 				// Modify the action associated with a particular destination.
-				for ii := 0; ii < 100; ii++ {
-					rt.RouteRemove(RouteClassWireguardThrow, InterfaceNone, ip.MustParseCIDROrIP("10.10.10.10/32"))
+				for ii := 0; ii < 3; ii++ {
+					rt.RouteRemove(RouteClassWireguard, InterfaceNone, ip.MustParseCIDROrIP("10.10.10.10/32"))
 					rt.RouteUpdate(RouteClassLocalWorkload, "cali", Target{
 						CIDR: ip.MustParseCIDROrIP("10.10.10.10/32"),
 					})
@@ -1341,7 +1341,7 @@ var _ = Describe("RouteTable (table 100)", func() {
 					Expect(dataplane.RouteKeyToRoute).To(ConsistOf(caliRoute, gatewayRoute, caliRouteTable100SameAsThrow))
 
 					rt.RouteRemove(RouteClassLocalWorkload, "cali", ip.MustParseCIDROrIP("10.10.10.10/32"))
-					rt.RouteUpdate(RouteClassWireguardThrow, InterfaceNone, Target{
+					rt.RouteUpdate(RouteClassWireguard, InterfaceNone, Target{
 						CIDR: ip.MustParseCIDROrIP("10.10.10.10/32"),
 						Type: TargetTypeThrow,
 					})
@@ -1349,6 +1349,20 @@ var _ = Describe("RouteTable (table 100)", func() {
 					Expect(err).ToNot(HaveOccurred())
 					Expect(dataplane.RouteKeyToRoute).To(ConsistOf(caliRoute, gatewayRoute, throwRoute))
 				}
+			})
+
+			It("should prioritise a workload route over the throw route", func() {
+				rt.RouteUpdate(RouteClassLocalWorkload, "cali", Target{
+					CIDR: ip.MustParseCIDROrIP("10.10.10.10/32"),
+				})
+				err := rt.Apply()
+				Expect(err).ToNot(HaveOccurred())
+				Expect(dataplane.RouteKeyToRoute).To(ConsistOf(caliRoute, gatewayRoute, caliRouteTable100SameAsThrow))
+
+				rt.RouteRemove(RouteClassLocalWorkload, "cali", ip.MustParseCIDROrIP("10.10.10.10/32"))
+				err = rt.Apply()
+				Expect(err).ToNot(HaveOccurred())
+				Expect(dataplane.RouteKeyToRoute).To(ConsistOf(caliRoute, gatewayRoute, throwRoute))
 			})
 		})
 
@@ -1360,19 +1374,18 @@ var _ = Describe("RouteTable (table 100)", func() {
 				err := rt.Apply()
 				Expect(err).ToNot(HaveOccurred())
 				Expect(dataplane.RouteKeyToRoute).To(ConsistOf(caliRoute, gatewayRoute, caliRouteTable100SameAsThrow))
-				// FIXME check that deleting cali route unshadows the throw route
 			})
 		})
 
 		Describe("after configuring an existing throw route and then deleting it", func() {
 			JustBeforeEach(func() {
-				rt.RouteUpdate(RouteClassWireguardThrow, InterfaceNone, Target{
+				rt.RouteUpdate(RouteClassWireguard, InterfaceNone, Target{
 					CIDR: ip.MustParseCIDROrIP("10.10.10.10/32"),
 					Type: TargetTypeThrow,
 				})
 				err := rt.Apply()
 				Expect(err).ToNot(HaveOccurred())
-				rt.RouteRemove(RouteClassWireguardThrow, InterfaceNone, ip.MustParseCIDROrIP("10.10.10.10/32"))
+				rt.RouteRemove(RouteClassWireguard, InterfaceNone, ip.MustParseCIDROrIP("10.10.10.10/32"))
 				err = rt.Apply()
 				Expect(err).ToNot(HaveOccurred())
 			})

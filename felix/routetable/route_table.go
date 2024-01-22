@@ -109,8 +109,8 @@ type RouteTable struct {
 	// ifaceToRoutes and cidrToIfaces are our inputs, updated
 	// eagerly when something in the manager layer tells us to change the
 	// routes.
-	ifaceToRoutes map[string]map[ip.CIDR]Target
-	cidrToIfaces  map[ip.CIDR]set.Set[string]
+	ifaceToRoutes map[RouteClass]map[string]map[ip.CIDR]Target
+	cidrToIfaces  map[RouteClass]map[ip.CIDR]set.Set[string]
 
 	// kernelRoutes tracks the relationship between the route that we want
 	// to program for a given CIDR (i.e. the route selected after conflict
@@ -214,10 +214,6 @@ type OwnershipPolicy interface {
 	IfaceShouldHaveGracePeriod(ifaceName string) bool
 }
 
-// FIXME Makes sure that VXLAN same-subnet routes don't get cleaned up until VXLAN manager is in sync.
-// FIXME Prioritisation of routes between different managers.
-// FIXME Protocol
-
 func New(
 	ownershipPolicy OwnershipPolicy,
 	ipVersion uint8,
@@ -264,8 +260,8 @@ func New(
 		ifacesToRescan:   set.New[string](),
 		ownershipPolicy:  ownershipPolicy,
 
-		ifaceToRoutes: map[string]map[ip.CIDR]Target{},
-		cidrToIfaces:  map[ip.CIDR]set.Set[string]{},
+		ifaceToRoutes: map[RouteClass]map[string]map[ip.CIDR]Target{},
+		cidrToIfaces:  map[RouteClass]map[ip.CIDR]set.Set[string]{},
 
 		kernelRoutes: deltatracker.New[kernelRouteKey, kernelRoute](),
 		pendingARPs:  map[string]map[ip.Addr]net.HardwareAddr{},
@@ -394,25 +390,30 @@ func (r *RouteTable) SetRoutes(routeClass RouteClass, ifaceName string, targets 
 		return
 	}
 	r.logCxt.WithFields(log.Fields{
-		"ifaceName": ifaceName,
-		"targets":   targets,
+		"routeClass": routeClass,
+		"ifaceName":  ifaceName,
+		"targets":    targets,
 	}).Debug("SetRoutes called.")
 
+	if r.ifaceToRoutes[routeClass] == nil {
+		r.ifaceToRoutes[routeClass] = map[string]map[ip.CIDR]Target{}
+	}
+
 	// Figure out what has changed.
-	oldTargetsToCleanUp := r.ifaceToRoutes[ifaceName]
+	oldTargetsToCleanUp := r.ifaceToRoutes[routeClass][ifaceName]
 	newTargets := map[ip.CIDR]Target{}
 	for _, t := range targets {
 		delete(oldTargetsToCleanUp, t.CIDR)
 		newTargets[t.CIDR] = t
-		r.addOwningIface(ifaceName, t.CIDR)
+		r.addOwningIface(routeClass, ifaceName, t.CIDR)
 	}
 
 	// Record the new desired state.
 	if len(newTargets) == 0 {
-		delete(r.ifaceToRoutes, ifaceName)
+		delete(r.ifaceToRoutes[routeClass], ifaceName)
 		delete(r.pendingARPs, ifaceName)
 	} else {
-		r.ifaceToRoutes[ifaceName] = newTargets
+		r.ifaceToRoutes[routeClass][ifaceName] = newTargets
 		if r.makeARPEntries {
 			r.pendingARPs[ifaceName] = map[ip.Addr]net.HardwareAddr{}
 		}
@@ -420,7 +421,7 @@ func (r *RouteTable) SetRoutes(routeClass RouteClass, ifaceName string, targets 
 
 	// Clean up the old CIDRs.
 	for cidr := range oldTargetsToCleanUp {
-		r.removeOwningIface(ifaceName, cidr)
+		r.removeOwningIface(routeClass, ifaceName, cidr)
 		r.recalculateDesiredKernelRoute(cidr)
 	}
 
@@ -443,13 +444,17 @@ func (r *RouteTable) RouteUpdate(routeClass RouteClass, ifaceName string, target
 		return
 	}
 
-	routesByCIDR := r.ifaceToRoutes[ifaceName]
+	if r.ifaceToRoutes[routeClass] == nil {
+		r.ifaceToRoutes[routeClass] = map[string]map[ip.CIDR]Target{}
+	}
+
+	routesByCIDR := r.ifaceToRoutes[routeClass][ifaceName]
 	if routesByCIDR == nil {
 		routesByCIDR = map[ip.CIDR]Target{}
-		r.ifaceToRoutes[ifaceName] = routesByCIDR
+		r.ifaceToRoutes[routeClass][ifaceName] = routesByCIDR
 	}
 	routesByCIDR[target.CIDR] = target
-	r.addOwningIface(ifaceName, target.CIDR)
+	r.addOwningIface(routeClass, ifaceName, target.CIDR)
 }
 
 // RouteRemove removes the route with the specified CIDR. These deltas will
@@ -461,31 +466,34 @@ func (r *RouteTable) RouteRemove(routeClass RouteClass, ifaceName string, cidr i
 		return
 	}
 
-	delete(r.ifaceToRoutes[ifaceName], cidr)
-	if len(r.ifaceToRoutes[ifaceName]) == 0 {
-		delete(r.ifaceToRoutes, ifaceName)
+	delete(r.ifaceToRoutes[routeClass][ifaceName], cidr)
+	if len(r.ifaceToRoutes[routeClass][ifaceName]) == 0 {
+		delete(r.ifaceToRoutes[routeClass], ifaceName)
 	}
-	r.removeOwningIface(ifaceName, cidr)
+	r.removeOwningIface(routeClass, ifaceName, cidr)
 }
 
-func (r *RouteTable) addOwningIface(ifaceName string, cidr ip.CIDR) {
-	ifaceNames := r.cidrToIfaces[cidr]
+func (r *RouteTable) addOwningIface(class RouteClass, ifaceName string, cidr ip.CIDR) {
+	if r.cidrToIfaces[class] == nil {
+		r.cidrToIfaces[class] = map[ip.CIDR]set.Set[string]{}
+	}
+	ifaceNames := r.cidrToIfaces[class][cidr]
 	if ifaceNames == nil {
 		ifaceNames = set.New[string]()
-		r.cidrToIfaces[cidr] = ifaceNames
+		r.cidrToIfaces[class][cidr] = ifaceNames
 	}
 	ifaceNames.Add(ifaceName)
 	r.recalculateDesiredKernelRoute(cidr)
 }
 
-func (r *RouteTable) removeOwningIface(ifaceName string, cidr ip.CIDR) {
-	ifaceNames, ok := r.cidrToIfaces[cidr]
+func (r *RouteTable) removeOwningIface(class RouteClass, ifaceName string, cidr ip.CIDR) {
+	ifaceNames, ok := r.cidrToIfaces[class][cidr]
 	if !ok {
 		return
 	}
 	ifaceNames.Discard(ifaceName)
 	if ifaceNames.Len() == 0 {
-		delete(r.cidrToIfaces, cidr)
+		delete(r.cidrToIfaces[class], cidr)
 	}
 	r.recalculateDesiredKernelRoute(cidr)
 }
@@ -493,8 +501,15 @@ func (r *RouteTable) removeOwningIface(ifaceName string, cidr ip.CIDR) {
 // recheckRouteOwnershipsByIface reruns conflict resolution for all
 // the interface's routes.
 func (r *RouteTable) recheckRouteOwnershipsByIface(name string) {
-	for cidr := range r.ifaceToRoutes[name] {
-		r.recalculateDesiredKernelRoute(cidr)
+	seen := set.New[ip.CIDR]()
+	for _, ifaceToRoutes := range r.ifaceToRoutes {
+		for cidr := range ifaceToRoutes[name] {
+			if seen.Contains(cidr) {
+				continue
+			}
+			r.recalculateDesiredKernelRoute(cidr)
+			seen.Add(cidr)
+		}
 	}
 }
 
@@ -530,59 +545,65 @@ func (r *RouteTable) recalculateDesiredKernelRoute(cidr ip.CIDR) {
 		r.conntrackTracker.RemoveAllowedOwner(kernKey)
 	}
 
-	ifaces := r.cidrToIfaces[cidr]
-	if ifaces == nil {
-		// Keep the blank slate!
-		r.logCxt.WithFields(log.Fields{
-			"cidr":     cidr,
-			"oldRoute": oldDesiredRoute,
-		}).Debug("CIDR no longer has associated routes.")
-		cleanUpKernelRoutes()
-		return
-	}
-
-	// In case of conflicts (more than one route with the same CIDR), pick
-	// one deterministically so that we don't churn the dataplane.
 	var bestTarget Target
+	bestRouteClass := RouteClassMax
 	bestIface := ""
 	bestIfaceIdx := -1
 	var candidates []string
-	ifaces.Iter(func(ifaceName string) error {
-		candidates = append(candidates, ifaceName)
-		ifIndex, ok := r.ifaceIndexForName(ifaceName)
-		if !ok {
-			r.logCxt.Debug("Skipping route for missing interface.")
+
+	for routeClass, cidrToIface := range r.cidrToIfaces {
+		ifaces := cidrToIface[cidr]
+		if ifaces == nil {
+			continue
+		}
+
+		// In case of conflicts (more than one route with the same CIDR), pick
+		// one deterministically so that we don't churn the dataplane.
+
+		ifaces.Iter(func(ifaceName string) error {
+			candidates = append(candidates, ifaceName)
+			ifIndex, ok := r.ifaceIndexForName(ifaceName)
+			if !ok {
+				r.logCxt.Debug("Skipping route for missing interface.")
+				return nil
+			}
+
+			// We've got some routes for this interface, force-expire its
+			// grace period.
+			if graceInf, ok := r.ifaceIndexToGraceInfo[ifIndex]; ok {
+				graceInf.GraceExpired = true
+				r.ifaceIndexToGraceInfo[ifIndex] = graceInf
+			}
+
+			if ifaceName != InterfaceNone && r.ifaceIndexToState[ifIndex] != ifacemonitor.StateUp {
+				r.logCxt.Debug("Skipping route for down interface.")
+				return nil
+			}
+
+			// Main tie-breaker is the RouteClass, which is prioritised
+			// by the function of the routes.  For example, local workload routes
+			// take precedence over VXLAN tunnel routes.
+			if routeClass < bestRouteClass || (routeClass == bestRouteClass && ifIndex > bestIfaceIdx) {
+				bestIface = ifaceName
+				bestIfaceIdx = ifIndex
+				bestRouteClass = routeClass
+				bestTarget = r.ifaceToRoutes[routeClass][ifaceName][cidr]
+			}
 			return nil
-		}
-
-		// We've got some routes for this interface, force-expire its
-		// grace period.
-		if graceInf, ok := r.ifaceIndexToGraceInfo[ifIndex]; ok {
-			graceInf.GraceExpired = true
-			r.ifaceIndexToGraceInfo[ifIndex] = graceInf
-		}
-
-		if ifaceName != InterfaceNone && r.ifaceIndexToState[ifIndex] != ifacemonitor.StateUp {
-			r.logCxt.Debug("Skipping route for down interface.")
-			return nil
-		}
-
-		// This tie-breaker tends to prefer "real" routes over "no-interface"
-		// special routes, and it tends to prefer newer interfaces (because
-		// they typically have higher indexes).
-		if ifIndex > bestIfaceIdx {
-			bestIface = ifaceName
-			bestIfaceIdx = ifIndex
-			bestTarget = r.ifaceToRoutes[ifaceName][cidr]
-		}
-		return nil
-	})
+		})
+	}
 
 	if bestIfaceIdx == -1 {
-		r.logCxt.WithFields(log.Fields{
-			"cidr":       cidr,
-			"candidates": candidates,
-		}).Debug("No valid route for this CIDR (all candidate routes missing iface index).")
+		if len(candidates) == 0 {
+			r.logCxt.WithFields(log.Fields{
+				"cidr": cidr,
+			}).Debug("CIDR no longer has any associated routes.")
+		} else {
+			r.logCxt.WithFields(log.Fields{
+				"cidr":       cidr,
+				"candidates": candidates,
+			}).Debug("No valid route for this CIDR (all candidate routes missing iface index).")
+		}
 		cleanUpKernelRoutes()
 		return
 	}
@@ -810,18 +831,20 @@ func (r *RouteTable) resyncIndividualInterfaces(nl netlinkshim.Interface) error 
 		}
 		// Then look for routes that the tracker says are there but are actually
 		// missing.
-		for cidr := range r.ifaceToRoutes[ifaceName] {
-			kernKey := r.routeKeyForCIDR(cidr)
-			if _, ok := kernRoutes[kernKey]; ok {
-				// Route still there; handled below.
-				continue
+		for _, ifaceToRoutes := range r.ifaceToRoutes {
+			for cidr := range ifaceToRoutes[ifaceName] {
+				kernKey := r.routeKeyForCIDR(cidr)
+				if _, ok := kernRoutes[kernKey]; ok {
+					// Route still there; handled below.
+					continue
+				}
+				desKernRoute, ok := r.kernelRoutes.Desired().Get(kernKey)
+				if !ok || desKernRoute.Ifindex != ifIndex {
+					// This interface doesn't "own" this route .
+					continue
+				}
+				r.kernelRoutes.Dataplane().Delete(kernKey)
 			}
-			desKernRoute, ok := r.kernelRoutes.Desired().Get(kernKey)
-			if !ok || desKernRoute.Ifindex != ifIndex {
-				// This interface doesn't "own" this route .
-				continue
-			}
-			r.kernelRoutes.Dataplane().Delete(kernKey)
 		}
 		// Update tracker with the routes that we did see.
 		for kk, kr := range kernRoutes {

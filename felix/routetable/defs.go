@@ -22,12 +22,13 @@ package routetable
 type RouteClass int
 
 const (
-	RouteClassTODO RouteClass = iota
-	RouteClassLocalWorkload
+	RouteClassLocalWorkload RouteClass = iota
 	RouteClassBPFSpecial
-	RouteClassWireguardTunnel
+	RouteClassWireguard
 	RouteClassVXLANSameSubnet
 	RouteClassVXLANTunnel
-	RouteClassWireguardThrow
 	RouteClassIPAMBlockDrop
+
+	RouteClassTODO
+	RouteClassMax
 )
