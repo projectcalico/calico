@@ -4,7 +4,7 @@ metadata:
   name: tigera-operator
   namespace: {{.Release.Namespace}}
   labels:
-    k8s-app: tigera-operator
+    {{- include "tigera-operator.labels" (dict "context" .) | nindent 4 }}
 spec:
   replicas: 1
   selector:
