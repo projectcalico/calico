@@ -32,7 +32,7 @@ certs:
 # Resource requests and limits for the tigera/operator pod.
 resources: {}
 
-# Common labels for the all resources
+# Common labels for the all resources created by this chart
 additionalLabels: {}
 
 # Tolerations for the tigera/operator pod.
