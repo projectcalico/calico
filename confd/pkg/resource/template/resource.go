@@ -87,7 +87,20 @@ func NewTemplateResource(path string, config Config) (*TemplateResource, error) 
 	addFuncs(tr.funcMap, tr.store.FuncMap)
 
 	if runtime.GOOS == "windows" {
-		tr.shellCmd = "powershell"
+		// On Windows HPC containers, $PATH does not contain the directory with 'powershell.exe'. Add it so that the powershell command works.
+		_, err = exec.LookPath("powershell.exe")
+		if err != nil {
+			path := os.Getenv("PATH")
+			err = os.Setenv("PATH", path+";C:/Windows/System32/WindowsPowerShell/v1.0/")
+			if err != nil {
+				return nil, fmt.Errorf("Cannot add powershell to Windows PATH: %s", err.Error())
+			}
+			_, err = exec.LookPath("powershell.exe")
+			if err != nil {
+				return nil, fmt.Errorf("Cannot find powershell.exe after addding default path to Windows PATH: %s", err.Error())
+			}
+		}
+		tr.shellCmd = "powershell.exe"
 	} else {
 		tr.shellCmd = "/bin/sh"
 	}
