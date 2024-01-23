@@ -232,6 +232,41 @@ var _ = Describe("BPF Syncer", func() {
 			Expect(eps.m).To(ContainElement(nat.NewNATBackendValue(net.IPv4(10, 2, 0, 1), 2222)))
 		}))
 
+		By("terminating second-service backend", makestep(func() {
+			state.EpsMap[svcKey2] = []k8sp.Endpoint{
+				&k8sp.BaseEndpointInfo{Ready: false, Terminating: true, Endpoint: "10.2.0.1:2222"},
+			}
+
+			err := s.Apply(state)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(svcs.m).To(HaveLen(01))
+			val, ok := svcs.m[nat.NewNATKey(net.IPv4(10, 0, 0, 2), 2222, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))]
+			Expect(ok).To(BeTrue())
+			Expect(val.Count()).To(Equal(uint32(0)))
+
+			Expect(eps.m).To(HaveLen(0))
+		}))
+
+		// Just that the rest of the test has the expected conditions.
+		By("reviving one second-service backend", makestep(func() {
+			state.EpsMap[svcKey2] = []k8sp.Endpoint{
+				&k8sp.BaseEndpointInfo{Ready: true, Endpoint: "10.2.0.1:2222"},
+			}
+
+			err := s.Apply(state)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(svcs.m).To(HaveLen(1))
+			val, ok := svcs.m[nat.NewNATKey(net.IPv4(10, 0, 0, 2), 2222, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))]
+			Expect(ok).To(BeTrue())
+			Expect(val.Count()).To(Equal(uint32(1)))
+
+			Expect(eps.m).To(HaveLen(1))
+			Expect(eps.m).To(HaveKey(nat.NewNATBackendKey(val.ID(), 0)))
+			Expect(eps.m).To(ContainElement(nat.NewNATBackendValue(net.IPv4(10, 2, 0, 1), 2222)))
+		}))
+
 		By("checking that another CT entry pair is cleaned up by connScan", makestep(func() {
 
 			connScan.Scan()
