@@ -907,6 +907,13 @@ func (kds *K8sDatastoreInfra) DumpErrorData() {
 			log.Info(spew.Sdump(hep))
 		}
 	}
+	fcs, err := kds.calicoClient.FelixConfigurations().List(context.Background(), options.ListOptions{})
+	if err == nil {
+		log.Info("DIAGS: Calico FelixConfigurations:")
+		for _, fc := range fcs.Items {
+			log.Info(spew.Sdump(fc))
+		}
+	}
 }
 
 func (kds *K8sDatastoreInfra) containerGetIPForURL(c *containers.Container) string {

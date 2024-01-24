@@ -16,7 +16,7 @@ fv: setup-fv bin/fips-test-build
 	# Run the nmap tool on the server to find out the tls versions and ciphers.
 	docker run --net=host --rm -it instrumentisto/nmap --script ssl-enum-ciphers -p 8083 127.0.0.1 > tmp/nmap.log
 	# remove times and dates from file
-	sed -i '1,4d;19d' tmp/nmap.log
+	sed -i '1,4d;22d' tmp/nmap.log
 	$(MAKE) kill
 	# If the ciphers are as expected, we get exit code 0.
 	diff fv/expected-nmap.log  tmp/nmap.log
