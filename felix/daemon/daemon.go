@@ -18,16 +18,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net"
-	"net/http"
-	_ "net/http/pprof" // Registers pprof handler on the default mux.
 	"os"
 	"os/exec"
 	"os/signal"
 	"reflect"
 	"runtime"
 	"runtime/debug"
-	"strconv"
 	"sync"
 	"syscall"
 	"time"
@@ -36,28 +32,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
-
-	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
-	"github.com/projectcalico/calico/libcalico-go/lib/backend"
-	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
-	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s"
-	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
-	"github.com/projectcalico/calico/libcalico-go/lib/backend/syncersv1/dedupebuffer"
-	"github.com/projectcalico/calico/libcalico-go/lib/backend/syncersv1/felixsyncer"
-	"github.com/projectcalico/calico/libcalico-go/lib/backend/syncersv1/updateprocessors"
-	"github.com/projectcalico/calico/libcalico-go/lib/backend/watchersyncer"
-	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
-	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
-	"github.com/projectcalico/calico/libcalico-go/lib/health"
-	lclogutils "github.com/projectcalico/calico/libcalico-go/lib/logutils"
-	"github.com/projectcalico/calico/libcalico-go/lib/options"
-	"github.com/projectcalico/calico/libcalico-go/lib/seedrng"
-	"github.com/projectcalico/calico/libcalico-go/lib/set"
-	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
-	"github.com/projectcalico/calico/pod2daemon/binder"
-	"github.com/projectcalico/calico/typha/pkg/discovery"
-	"github.com/projectcalico/calico/typha/pkg/syncclient"
 
 	"github.com/projectcalico/calico/felix/buildinfo"
 	"github.com/projectcalico/calico/felix/calc"
@@ -69,6 +43,28 @@ import (
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/statusrep"
 	"github.com/projectcalico/calico/felix/usagerep"
+	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
+	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend"
+	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/syncersv1/dedupebuffer"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/syncersv1/felixsyncer"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/syncersv1/updateprocessors"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/watchersyncer"
+	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
+	"github.com/projectcalico/calico/libcalico-go/lib/debugserver"
+	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
+	"github.com/projectcalico/calico/libcalico-go/lib/health"
+	lclogutils "github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/libcalico-go/lib/options"
+	"github.com/projectcalico/calico/libcalico-go/lib/seedrng"
+	"github.com/projectcalico/calico/libcalico-go/lib/set"
+	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
+	"github.com/projectcalico/calico/pod2daemon/binder"
+	"github.com/projectcalico/calico/typha/pkg/discovery"
+	"github.com/projectcalico/calico/typha/pkg/syncclient"
 )
 
 const (
@@ -410,7 +406,7 @@ configRetry:
 	}
 
 	if configParams.DebugPort != 0 {
-		startDebugPortServer(configParams.DebugHost, configParams.DebugPort)
+		debugserver.StartDebugPortServer(configParams.DebugHost, configParams.DebugPort)
 	}
 
 	// Start up the dataplane driver.  This may be the internal go-based driver or an external
@@ -695,21 +691,6 @@ configRetry:
 	// Now monitor the worker process and our worker threads and shut
 	// down the process gracefully if they fail.
 	monitorAndManageShutdown(failureReportChan, dpDriverCmd, stopSignalChans)
-}
-
-func startDebugPortServer(host string, port int) {
-	log.Infof("Insecure debug port is enabled on %s:%d.", host, port)
-	go func() {
-		addr := net.JoinHostPort(host, strconv.Itoa(port))
-		for {
-			log.Infof("Attempting to open debug port %s:%d", host, port)
-			err := http.ListenAndServe(addr, nil)
-			if err != nil {
-				log.WithError(err).Error("Debug port HTTP server failed.  Will retry...")
-				time.Sleep(time.Second)
-			}
-		}
-	}()
 }
 
 func monitorAndManageShutdown(failureReportChan <-chan string, driverCmd *exec.Cmd, stopSignalChans []chan<- *sync.WaitGroup) {
