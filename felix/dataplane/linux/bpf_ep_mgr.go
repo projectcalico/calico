@@ -330,9 +330,10 @@ type bpfEndpointManager struct {
 
 	bpfPolicyDebugEnabled bool
 
-	routeTable    routetable.RouteTableInterface
-	services      map[serviceKey][]ip.CIDR
-	dirtyServices set.Set[serviceKey]
+	routeTable       routetable.RouteTableInterface
+	services         map[serviceKey][]ip.CIDR
+	dirtyServices    set.Set[serviceKey]
+	natExcludedCIDRs *ip.CIDRTrie
 
 	// Maps for policy rule counters
 	polNameToMatchIDs map[string]set.Set[polprog.RuleMatchID]
@@ -505,6 +506,22 @@ func newBPFEndpointManager(
 		)
 		m.services = make(map[serviceKey][]ip.CIDR)
 		m.dirtyServices = set.New[serviceKey]()
+		m.natExcludedCIDRs = ip.NewCIDRTrie()
+
+		var excludeCIDRsMatch = 1
+
+		for _, c := range config.BPFExcludeCIDRsFromNAT {
+			cidr, err := ip.CIDRFromString(c)
+			if err != nil {
+				log.WithError(err).Warnf("Bad %s CIDR to exclude from NAT", c)
+			}
+
+			if (cidr.Version() == 6) != m.ipv6Enabled {
+				continue
+			}
+
+			m.natExcludedCIDRs.Update(cidr, &excludeCIDRsMatch)
+		}
 
 		// Anything else would prevent packets being accepted from the special
 		// service veth. It does not create a security hole since BPF does the RPF
@@ -1947,9 +1964,16 @@ func (m *bpfEndpointManager) wepApplyPolicy(ap *tc.AttachPoint,
 		m.addHostPolicy(&rules, &m.wildcardHostEndpoint, polDirection.Inverse())
 	}
 
-	// If workload egress and DefaultEndpointToHostAction is ACCEPT or DROP, suppress the normal
-	// host-* endpoint policy.
-	if polDirection == PolDirnEgress && m.epToHostAction != "RETURN" {
+	// Intentionally leaving this code here until the *-hep takes precedence.
+	wildcardEPPolicyAppliesToWEPs := false
+	if wildcardEPPolicyAppliesToWEPs {
+		// If workload egress and DefaultEndpointToHostAction is ACCEPT or DROP, suppress the normal
+		// host-* endpoint policy. If it does not exist, suppress it as well, not to
+		// create deny due to the fact that there are not profiles or tiers etc.
+		if polDirection == PolDirnEgress && (m.epToHostAction != "RETURN" || !m.wildcardExists) {
+			rules.SuppressNormalHostPolicy = true
+		}
+	} else {
 		rules.SuppressNormalHostPolicy = true
 	}
 
@@ -2949,6 +2973,7 @@ func (m *bpfEndpointManager) loadPolicyProgram(
 	log.WithFields(log.Fields{
 		"progName": progName,
 		"ipFamily": ipFamily,
+		"rules":    rules,
 	}).Debug("Generating policy program...")
 
 	if ipFamily == proto.IPVersion_IPV6 {
@@ -3242,6 +3267,10 @@ func (m *bpfEndpointManager) onServiceUpdate(update *proto.ServiceUpdate) {
 		if err != nil {
 			log.WithFields(log.Fields{"service": key, "ip": i}).Warn("Not a valid CIDR.")
 		} else {
+			_, v := m.natExcludedCIDRs.LPM(cidr)
+			if v != nil {
+				continue
+			}
 			if m.ipv6Enabled {
 				if _, ok := cidr.(ip.V6CIDR); ok {
 					ips = append(ips, cidr)

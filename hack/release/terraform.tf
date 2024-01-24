@@ -4,11 +4,18 @@ provider "google" {
   zone    = var.google_zone
 }
 
+provider "google-beta" {
+  project = var.google_project
+  region  = var.google_region
+  zone    = var.google_zone
+}
+
 resource "tls_private_key" "ssh" {
   algorithm = "RSA"
 }
 
 resource "google_compute_instance" "vm_instance" {
+  provider     = google-beta
   name         = "${var.prefix}-calico-release-executor"
   machine_type = var.machine_type
   zone         = var.google_zone
@@ -61,7 +68,7 @@ resource "null_resource" "configure_vm" {
       "sudo apt update",
       "sudo apt install -y ca-certificates curl",
       "curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg",
-      "echo 'deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu bionic stable' | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null",
+      "echo 'deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu focal stable' | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null",
       "sudo apt update",
       "sudo apt install -y docker-ce docker-ce-cli containerd.io",
       "sudo apt install -y git make zip unzip",

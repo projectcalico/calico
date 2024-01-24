@@ -48,7 +48,6 @@ $argList = @(`
     "--enable-debugging-handlers",`
     "--cluster-dns=$env:DNS_NAME_SERVERS",`
     "--cluster-domain=cluster.local",`
-    "--kubeconfig=c:\k\config",`
     "--hairpin-mode=promiscuous-bridge",`
     "--cgroups-per-qos=false",`
     "--enforce-node-allocatable=""""",`

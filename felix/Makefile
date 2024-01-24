@@ -61,7 +61,7 @@ include ../lib.Makefile
 ifeq ($(ARCH),arm64)
 # Required for eBPF support in ARM64.
 # We need to force ARM64 build image to be used in a crosscompilation run.
-CALICO_BUILD:=$(CALICO_BUILD)-$(ARCH)
+CALICO_BUILD:=$(GO_BUILD_IMAGE):$(GO_BUILD_VER)-$(ARCH)
 DOCKER_GO_BUILD:=$(DOCKER_RUN) $(CALICO_BUILD)
 endif
 
@@ -256,12 +256,12 @@ FELIX_CONTAINER_CREATED=.calico_felix.created-$(ARCH)
 FELIX_IMAGE_WITH_TAG=$(FELIX_IMAGE):latest-$(ARCH)
 FELIX_IMAGE_ID=$(shell docker images -q $(FELIX_IMAGE_WITH_TAG))
 $(FELIX_IMAGE)-$(ARCH): $(FELIX_CONTAINER_CREATED)
-$(FELIX_CONTAINER_CREATED): docker-image/calico-felix-wrapper \
+$(FELIX_CONTAINER_CREATED): register \
+                            docker-image/calico-felix-wrapper \
                             docker-image/felix.cfg \
-                            docker-image/Dockerfile* \
+                            docker-image/Dockerfile \
                             $(shell test "$(FELIX_IMAGE_ID)" || echo force-rebuild)
-	$(MAKE) register
-	$(DOCKER_BUILD) -t $(FELIX_IMAGE_WITH_TAG) --file ./docker-image/Dockerfile.$(ARCH) docker-image --load;
+	$(DOCKER_BUILD) -t $(FELIX_IMAGE_WITH_TAG) -f ./docker-image/Dockerfile docker-image
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $(FELIX_CONTAINER_CREATED)
 

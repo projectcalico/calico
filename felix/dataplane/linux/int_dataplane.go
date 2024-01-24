@@ -218,6 +218,7 @@ type Config struct {
 	BPFHostConntrackBypass             bool
 	BPFEnforceRPF                      string
 	BPFDisableGROForIfaces             *regexp.Regexp
+	BPFExcludeCIDRsFromNAT             []string
 	KubeProxyMinSyncPeriod             time.Duration
 	SidecarAccelerationEnabled         bool
 
@@ -783,6 +784,10 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 		if config.BPFIpv6Enabled {
 			bpfproxyOpts = append(bpfproxyOpts, bpfproxy.WithIPFamily(6))
+		}
+
+		if len(config.BPFExcludeCIDRsFromNAT) > 0 {
+			bpfproxyOpts = append(bpfproxyOpts, bpfproxy.WithExcludedCIDRs(config.BPFExcludeCIDRsFromNAT))
 		}
 
 		if config.KubeClientSet != nil {
@@ -1570,15 +1575,13 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 			})
 		}
 
-		// Accept any SEEN packets that go to the host. What remains here should be from
-		// host interfaces. This should accept packets in default-DROP iptable
-		// environments.  Such packets go through BPF on host iface but must go through
-		// the INPUT of iptables too. default-DROP would block IPIP/VXLAN/WG/etc. traffic
-		// without explicit ACCEPT.
-		inputRules = append(inputRules, iptables.Rule{
-			Match:  iptables.Match().MarkMatchesWithMask(tcdefs.MarkSeen, tcdefs.MarkSeenMask),
-			Action: iptables.AcceptAction{},
-		})
+		if rulesConfig.EndpointToHostAction != "ACCEPT" {
+			// We must accept WG traffic that goes towards the host. By this time, it is a
+			// SEEN traffic, so it was policed and accepted at a HEP. If the default INPUT
+			// chain policy was DROP, it would get dropped now, therefore an explicit accept
+			// is needed.
+			inputRules = append(inputRules, rules.FilterInputChainAllowWG(t.IPVersion, rulesConfig, iptables.AcceptAction{})...)
+		}
 
 		if t.IPVersion == 6 {
 			if !d.config.BPFIpv6Enabled {

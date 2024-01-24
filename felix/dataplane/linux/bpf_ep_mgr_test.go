@@ -213,9 +213,14 @@ func (m *mockDataplane) queryClassifier(ifindex, handle, prio int, ingress bool)
 	return 0, nil
 }
 
-var fdCounter = uint32(1234)
+var (
+	fdCounterLock sync.Mutex
+	fdCounter     = uint32(1234)
+)
 
 func (m *mockDataplane) loadTCLogFilter(ap *tc.AttachPoint) (fileDescriptor, int, error) {
+	fdCounterLock.Lock()
+	defer fdCounterLock.Unlock()
 	fdCounter++
 	return mockFD(fdCounter), ap.LogFilterIdx, nil
 }
@@ -231,6 +236,8 @@ func (m *mockProgMapDP) loadPolicyProgram(progName string,
 	polProgsMap maps.Map,
 	opts ...polprog.Option,
 ) ([]fileDescriptor, []asm.Insns, error) {
+	fdCounterLock.Lock()
+	defer fdCounterLock.Unlock()
 	fdCounter++
 
 	return []fileDescriptor{mockFD(fdCounter)}, []asm.Insns{{{Comments: []string{"blah"}}}}, nil
@@ -519,7 +526,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 				endpointToHostAction = "RETURN"
 			})
 
-			It("has host-* policy on workload egress but not ingress", func() {
+			It("has host-* policy suppressed on ingress and egress", func() {
 				var caliI, caliE *polprog.Rules
 
 				// Check workload ingress.
@@ -532,7 +539,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 				Expect(caliE.ForHostInterface).To(BeFalse())
 				Expect(caliE.HostNormalTiers).To(HaveLen(1))
 				Expect(caliE.HostNormalTiers[0].Policies).To(HaveLen(1))
-				Expect(caliE.SuppressNormalHostPolicy).To(BeFalse())
+				Expect(caliE.SuppressNormalHostPolicy).To(BeTrue())
 			})
 		})
 	})
