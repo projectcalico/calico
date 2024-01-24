@@ -432,7 +432,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 				for i, felix := range tc.Felixes {
 					felix.Exec("conntrack", "-L")
-					felix.Exec("calico-bpf", "-6", "policy", "dump", "cali1ab524b60b9", "all", "--asm")
+					felix.Exec("calico-bpf", "policy", "dump", "cali8d1e69e5f89", "all", "--asm")
 					if testOpts.ipv6 {
 						felix.Exec("ip6tables-save", "-c")
 						felix.Exec("ip", "-6", "link")
@@ -627,6 +627,18 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					cc.ExpectSome(w[1], w[0])
 					cc.ExpectNone(w[1], hostW)
 					cc.ExpectSome(hostW, w[0])
+					cc.CheckConnectivity(conntrackChecks(tc.Felixes)...)
+				})
+			})
+
+			Describe("with DefaultEndpointToHostAction=RETURN", func() {
+				BeforeEach(func() {
+					options.ExtraEnvVars["FELIX_DefaultEndpointToHostAction"] = "RETURN"
+					options.AutoHEPsEnabled = false
+				})
+				It("should allow traffic from workload to host", func() {
+					cc.Expect(Some, w[1], hostW)
+					cc.Expect(Some, hostW, w[0])
 					cc.CheckConnectivity(conntrackChecks(tc.Felixes)...)
 				})
 			})

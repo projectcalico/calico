@@ -19,7 +19,7 @@
 # (non-zero) if not.
 
 mod_dir=/lib/modules/`uname -r`
-for f in `find $mod_dir -name wireguard.ko`; do
+for f in `find $mod_dir -name wireguard.ko*`; do
     echo Found Wireguard module object at $f
     exit 0
 done
