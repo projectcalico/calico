@@ -368,10 +368,6 @@ func setupAndRun(logger testLogger, loglevel, section string, rules *polprog.Rul
 		o, err := objLoad("../../bpf-gpl/bin/xdp_preamble.o", bpfFsDir, "preamble", topts, false, false)
 		Expect(err).NotTo(HaveOccurred())
 		defer o.Close()
-	} else if topts.ipv6 {
-		o, err := objLoad("../../bpf-gpl/bin/tc_preamble_v6.o", bpfFsDir, "preamble", topts, false, false)
-		Expect(err).NotTo(HaveOccurred())
-		defer o.Close()
 	} else {
 		o, err := objLoad("../../bpf-gpl/bin/tc_preamble.o", bpfFsDir, "preamble", topts, false, false)
 		Expect(err).NotTo(HaveOccurred())
@@ -734,7 +730,7 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 				}
 			} else if topts.ipv6 {
 				ifaceLog := topts.progLog + "-" + bpfIfaceName
-				globals := libbpf.TcGlobalData6{
+				globals := libbpf.TcGlobalData{
 					Tmtu:         natTunnelMTU,
 					VxlanPort:    testVxlanPort,
 					PSNatStart:   uint16(topts.psnaStart),
@@ -743,33 +739,35 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 					LogFilterJmp: 0xffffffff,
 				}
 
-				copy(globals.HostTunnelIP[:], node1tunIPV6.To16())
-				copy(globals.HostIP[:], hostIP.To16())
-				copy(globals.IntfIP[:], intfIPV6.To16())
+				copy(globals.HostTunnelIPv6[:], node1tunIPV6.To16())
+				copy(globals.HostIPv6[:], hostIP.To16())
+				copy(globals.IntfIPv6[:], intfIPV6.To16())
 
 				for i := 0; i < tcdefs.ProgIndexEnd; i++ {
-					globals.Jumps[i] = uint32(i)
+					globals.JumpsV6[i] = uint32(i)
 				}
 
 				log.WithField("globals", globals).Debugf("configure program")
 
-				if err := tc.ConfigureProgramV6(m, ifaceLog, &globals); err != nil {
+				if err := tc.ConfigureProgram(m, ifaceLog, &globals); err != nil {
 					return nil, fmt.Errorf("failed to configure tc program: %w", err)
 				}
 				log.WithField("program", fname).Debugf("Configured BPF program iface \"%s\"", ifaceLog)
 			} else {
 				ifaceLog := topts.progLog + "-" + bpfIfaceName
 				globals := libbpf.TcGlobalData{
-					HostIP:       ipToU32(hostIP),
-					IntfIP:       ipToU32(intfIP),
 					Tmtu:         natTunnelMTU,
 					VxlanPort:    testVxlanPort,
 					PSNatStart:   uint16(topts.psnaStart),
 					PSNatLen:     uint16(topts.psnatEnd-topts.psnaStart) + 1,
 					Flags:        libbpf.GlobalsIPv6Enabled | libbpf.GlobalsNoDSRCidrs,
-					HostTunnelIP: ipToU32(node1tunIP),
 					LogFilterJmp: 0xffffffff,
 				}
+
+				copy(globals.HostIP[0:4], hostIP)
+				copy(globals.IntfIP[0:4], intfIP)
+				copy(globals.HostTunnelIP[0:4], node1tunIP.To4())
+				fmt.Println("Sridhar1 ", globals.HostIP, globals.IntfIP, globals.HostTunnelIP)
 
 				for i := 0; i < tcdefs.ProgIndexEnd; i++ {
 					globals.Jumps[i] = uint32(i)
@@ -871,7 +869,7 @@ func objUTLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHos
 		if m.IsMapInternal() {
 			ifaceLog := topts.progLog + "-" + bpfIfaceName
 			if topts.ipv6 {
-				globals := libbpf.TcGlobalData6{
+				globals := libbpf.TcGlobalData{
 					Tmtu:       natTunnelMTU,
 					VxlanPort:  testVxlanPort,
 					PSNatStart: uint16(topts.psnaStart),
@@ -879,24 +877,25 @@ func objUTLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHos
 					Flags:      libbpf.GlobalsIPv6Enabled | libbpf.GlobalsNoDSRCidrs,
 				}
 
-				copy(globals.HostTunnelIP[:], node1tunIPV6.To16())
-				copy(globals.HostIP[:], hostIP.To16())
-				copy(globals.IntfIP[:], intfIPV6.To16())
+				copy(globals.HostTunnelIPv6[:], node1tunIPV6.To16())
+				copy(globals.HostIPv6[:], hostIP.To16())
+				copy(globals.IntfIPv6[:], intfIPV6.To16())
 
-				if err := tc.ConfigureProgramV6(m, ifaceLog, &globals); err != nil {
+				if err := tc.ConfigureProgram(m, ifaceLog, &globals); err != nil {
 					return nil, fmt.Errorf("failed to configure v6 tc program: %w", err)
 				}
 			} else {
 				globals := libbpf.TcGlobalData{
-					HostIP:       ipToU32(hostIP),
-					IntfIP:       ipToU32(intfIP),
-					Tmtu:         natTunnelMTU,
-					VxlanPort:    testVxlanPort,
-					PSNatStart:   uint16(topts.psnaStart),
-					PSNatLen:     uint16(topts.psnatEnd-topts.psnaStart) + 1,
-					Flags:        libbpf.GlobalsIPv6Enabled | libbpf.GlobalsNoDSRCidrs,
-					HostTunnelIP: ipToU32(node1tunIP),
+					Tmtu:       natTunnelMTU,
+					VxlanPort:  testVxlanPort,
+					PSNatStart: uint16(topts.psnaStart),
+					PSNatLen:   uint16(topts.psnatEnd-topts.psnaStart) + 1,
+					Flags:      libbpf.GlobalsIPv6Enabled | libbpf.GlobalsNoDSRCidrs,
 				}
+				copy(globals.HostTunnelIP[0:4], node1tunIP.To4())
+				copy(globals.HostIP[0:4], hostIP.To4())
+				copy(globals.IntfIP[0:4], intfIP.To4())
+
 				if err := tc.ConfigureProgram(m, ifaceLog, &globals); err != nil {
 					return nil, fmt.Errorf("failed to configure tc program: %w", err)
 				}
