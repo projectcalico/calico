@@ -153,10 +153,6 @@ func (s *IPSets) AddOrReplaceIPSet(setMetadata IPSetMetadata, members []string) 
 	// an ip.Addr instead of a string) so that we can compare them with members that we read
 	// back from the dataplane.  This also filters out IPs of the incorrect IP version.
 	setID := setMetadata.SetID
-	s.logCxt.WithFields(log.Fields{
-		"setID":   setID,
-		"setType": setMetadata.Type,
-	}).Info("Queueing IP set for creation")
 
 	// Mark that we want this IP set to exist and with the correct size etc.
 	// If the IP set exists, but it has the wrong metadata then the
@@ -170,7 +166,16 @@ func (s *IPSets) AddOrReplaceIPSet(setMetadata IPSetMetadata, members []string) 
 	}
 	s.setNameToAllMetadata[mainIPSetName] = dpMeta
 	if s.ipSetNeeded(mainIPSetName) {
+		s.logCxt.WithFields(log.Fields{
+			"setID":   setID,
+			"setType": setMetadata.Type,
+		}).Info("Queueing IP set for creation")
 		s.setNameToProgrammedMetadata.Desired().Set(mainIPSetName, dpMeta)
+	} else if log.IsLevelEnabled(log.DebugLevel) {
+		s.logCxt.WithFields(log.Fields{
+			"setID":   setID,
+			"setType": setMetadata.Type,
+		}).Debug("IP set is filtered out, skipping creation.")
 	}
 
 	// Set the desired contents of the IP set.
@@ -204,7 +209,6 @@ func (s *IPSets) getOrCreateMemberTracker(mainIPSetName string) *deltatracker.Se
 // RemoveIPSet queues up the removal of an IP set, it need not be empty.  The IP sets will be
 // removed on the next call to ApplyDeletions().
 func (s *IPSets) RemoveIPSet(setID string) {
-	s.logCxt.WithField("setID", setID).Info("Queueing IP set for removal")
 	// Mark that we no longer need this IP set.  The DeltaTracker will keep track of the metadata
 	// until we actually delete the IP set.  We clean up mainSetNameToMembers only when we actually
 	// delete it.
@@ -215,7 +219,7 @@ func (s *IPSets) RemoveIPSet(setID string) {
 		// Set is currently in the dataplane, clear its desired members but
 		// we keep the member tracker until we actually delete the IP set
 		// from the dataplane later.
-		log.Debug("IP set to remove is in the dataplane.")
+		s.logCxt.WithField("setID", setID).Info("Queueing IP set for removal")
 		s.mainSetNameToMembers[setName].Desired().DeleteAll()
 	} else {
 		// If it's not in the dataplane, clean it up immediately.
