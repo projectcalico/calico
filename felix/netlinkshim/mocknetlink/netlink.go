@@ -102,8 +102,8 @@ func init() {
 	}
 	for i := 0; i < ourType.NumField(); i++ {
 		nlFieldType := nlType.Field(i).Type
-		outFieldType := ourType.Field(i).Type
-		if nlFieldType != outFieldType {
+		ourFieldType := ourType.Field(i).Type
+		if nlFieldType != ourFieldType {
 			panic(fmt.Sprintf("netlink.LinkNotFoundError structure appears to have changed (field type %v != %v)",
 				nlFieldType, ourType.Field(i).Type))
 		}
@@ -841,7 +841,7 @@ func (d *MockNetlinkDataplane) RouteReplace(route *netlink.Route) error {
 		return SimulatedError
 	}
 	key := KeyForRoute(route)
-	log.WithField("routeKey", key).Info("Mock dataplane: RouteUpdate called")
+	log.WithField("routeKey", key).Info("Mock dataplane: RouteReplace called")
 	d.AddedRouteKeys.Add(key)
 	d.ExistingTables.Add(route.Table)
 	if _, ok := d.RouteKeyToRoute[key]; ok {
