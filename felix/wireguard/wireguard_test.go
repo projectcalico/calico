@@ -2863,7 +2863,9 @@ var _ = Describe("Enable wireguard", func() {
 				})
 
 				for _, nextTestFailFlags := range []mocknetlink.FailFlags{
-					mocknetlink.FailNextWireguardConfigureDevice, mocknetlink.FailNextRouteAdd, mocknetlink.FailNextRouteDel,
+					mocknetlink.FailNextWireguardConfigureDevice,
+					mocknetlink.FailNextRouteAddOrReplace,
+					mocknetlink.FailNextRouteDel,
 				} {
 					failFlags := nextTestFailFlags
 					desc := fmt.Sprintf("additional adds/deletes with another failure (%v)", failFlags)
