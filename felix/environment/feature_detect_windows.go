@@ -15,6 +15,7 @@
 package environment
 
 type FeatureDetector struct {
+	featureDetectorCommon
 }
 
 type Option func(detector *FeatureDetector)
@@ -25,6 +26,9 @@ func NewFeatureDetector(overrides map[string]string, opts ...Option) *FeatureDet
 		opt(fd)
 	}
 	return fd
+}
+
+func (d *FeatureDetector) RefreshFeatures() {
 }
 
 func (d *FeatureDetector) GetFeatures() *Features {

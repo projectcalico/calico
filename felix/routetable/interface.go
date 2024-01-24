@@ -22,7 +22,7 @@ import (
 // RouteTableSyncer is the interface used to manage data-sync of route table managers. This includes notification of
 // interface state changes, hooks to queue a full resync and apply routing updates.
 type RouteTableSyncer interface {
-	OnIfaceStateChanged(string, ifacemonitor.State)
+	OnIfaceStateChanged(name string, ifIndex int, state ifacemonitor.State)
 	QueueResync()
 	Apply() error
 }
@@ -31,7 +31,6 @@ type RouteTableSyncer interface {
 type RouteTableInterface interface {
 	RouteTableSyncer
 	SetRoutes(ifaceName string, targets []Target)
-	SetL2Routes(ifaceName string, targets []L2Target)
 	RouteRemove(ifaceName string, cidr ip.CIDR)
 	RouteUpdate(ifaceName string, target Target)
 }
