@@ -22,12 +22,11 @@ import (
 	"strconv"
 	"time"
 
-	log "github.com/sirupsen/logrus"
-	"k8s.io/client-go/kubernetes"
-
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	log "github.com/sirupsen/logrus"
+	"k8s.io/client-go/kubernetes"
 
 	"github.com/projectcalico/calico/felix/config"
 	windataplane "github.com/projectcalico/calico/felix/dataplane/windows"
