@@ -35,6 +35,7 @@ import (
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/felix/testutils"
+	"github.com/projectcalico/calico/felix/vxlanfdb"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -587,10 +588,10 @@ func chainsForIfaces(ifaceMetadata []string,
 
 type mockRouteTable struct {
 	currentRoutes   map[string][]routetable.Target
-	currentL2Routes map[string][]routetable.L2Target
+	currentL2Routes map[string][]vxlanfdb.VTEP // FIXME move to separate mock.
 }
 
-func (t *mockRouteTable) SetRoutes(ifaceName string, targets []routetable.Target) {
+func (t *mockRouteTable) SetRoutes(routeClass routetable.RouteClass, ifaceName string, targets []routetable.Target) {
 	log.WithFields(log.Fields{
 		"ifaceName": ifaceName,
 		"targets":   targets,
@@ -598,22 +599,21 @@ func (t *mockRouteTable) SetRoutes(ifaceName string, targets []routetable.Target
 	t.currentRoutes[ifaceName] = targets
 }
 
-func (t *mockRouteTable) SetL2Routes(ifaceName string, targets []routetable.L2Target) {
+func (t *mockRouteTable) SetVTEPs(targets []vxlanfdb.VTEP) {
 	log.WithFields(log.Fields{
-		"ifaceName": ifaceName,
-		"targets":   targets,
+		"targets": targets,
 	}).Debug("SetL2Routes")
-	t.currentL2Routes[ifaceName] = targets
+	t.currentL2Routes[""] = targets
 }
 
-func (t *mockRouteTable) RouteRemove(_ string, _ ip.CIDR) {
+func (t *mockRouteTable) RouteRemove(routeClass routetable.RouteClass, ifaceName string, cidr ip.CIDR) {
 }
 
-func (t *mockRouteTable) RouteUpdate(_ string, _ routetable.Target) {
+func (t *mockRouteTable) RouteUpdate(routeClass routetable.RouteClass, ifaceName string, target routetable.Target) {
 }
 
-func (t *mockRouteTable) OnIfaceStateChanged(string, ifacemonitor.State) {}
-func (t *mockRouteTable) QueueResync()                                   {}
+func (t *mockRouteTable) OnIfaceStateChanged(string, int, ifacemonitor.State) {}
+func (t *mockRouteTable) QueueResync()                                        {}
 func (t *mockRouteTable) Apply() error {
 	return nil
 }
