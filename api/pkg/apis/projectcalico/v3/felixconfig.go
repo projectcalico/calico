@@ -408,6 +408,12 @@ type FelixConfigurationSpec struct {
 	// +kubebuilder:validation:Type=string
 	// +kubebuilder:validation:Pattern=`^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$`
 	DebugSimulateDataplaneHangAfter *metav1.Duration `json:"debugSimulateDataplaneHangAfter,omitempty" configv1timescale:"seconds"`
+	// DebugHost is the host IP or hostname to bind the debug port to.  Only used
+	// if DebugPort is set. [Default:localhost]
+	DebugHost *string `json:"debugHost,omitempty"`
+	// DebugPort if set, enables Felix's debug HTTP port, which allows memory and CPU profiles
+	// to be retrieved.  The debug port is not secure, it should not be exposed to the internet.
+	DebugPort *int `json:"debugPort,omitempty" validate:"omitempty,gte=0,lte=65535"`
 
 	IptablesNATOutgoingInterfaceFilter string `json:"iptablesNATOutgoingInterfaceFilter,omitempty" validate:"omitempty,ifaceFilter"`
 
