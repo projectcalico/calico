@@ -205,7 +205,7 @@ func WithNetlinkHandleShim(newNetlinkHandle func() (netlinkshim.Interface, error
 // or not.  If an interface is not tracked then the RouteTable will not be
 // able to program routes for it, and it will not respond to interface state
 // updates.  This is mainly a performance optimisation for our non-main
-// routing tables which tend to be used to manager routes for a single device.
+// routing tables which tend to be used to manage routes for a single device.
 type OwnershipPolicy interface {
 	RouteIsOurs(ifaceName string, route *netlink.Route) bool
 
