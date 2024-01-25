@@ -458,8 +458,8 @@ func (m *vxlanManager) CompleteDeferredWork() error {
 			}
 			l2routes = append(l2routes, vxlanfdb.VTEP{
 				TunnelMAC: mac,
-				TunnelIP:  ip.FromString(addr),
-				HostIP:    ip.FromString(parentDeviceIP),
+				TunnelIP:  ip.FromIPOrCIDRString(addr),
+				HostIP:    ip.FromIPOrCIDRString(parentDeviceIP),
 			})
 			allowedVXLANSources = append(allowedVXLANSources, parentDeviceIP)
 		}

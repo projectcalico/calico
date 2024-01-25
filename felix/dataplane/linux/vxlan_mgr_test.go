@@ -108,7 +108,8 @@ func (m *mockVXLANDataplane) LinkDel(netlink.Link) error {
 }
 
 type mockVXLANFDB struct {
-	currentVTEPs []vxlanfdb.VTEP // FIXME move to separate mock.
+	setVTEPsCalls int
+	currentVTEPs []vxlanfdb.VTEP
 }
 
 func (t *mockVXLANFDB) SetVTEPs(targets []vxlanfdb.VTEP) {
@@ -116,6 +117,7 @@ func (t *mockVXLANFDB) SetVTEPs(targets []vxlanfdb.VTEP) {
 		"targets": targets,
 	}).Debug("SetL2Routes")
 	t.currentVTEPs = targets
+	t.setVTEPsCalls++
 }
 
 var _ = Describe("VXLANManager", func() {
@@ -134,7 +136,6 @@ var _ = Describe("VXLANManager", func() {
 			currentRoutes: map[string][]routetable.Target{},
 		}
 
-		// FIXME actually assert on the FDB contents.
 		fdb = &mockVXLANFDB{}
 
 		la := netlink.NewLinkAttrs()
@@ -263,11 +264,22 @@ var _ = Describe("VXLANManager", func() {
 		Expect(brt.currentRoutes[routetable.InterfaceNone]).To(HaveLen(0))
 
 		err = manager.CompleteDeferredWork()
-
 		Expect(err).NotTo(HaveOccurred())
+
 		Expect(rt.currentRoutes["vxlan.calico"]).To(HaveLen(1))
 		Expect(brt.currentRoutes[routetable.InterfaceNone]).To(HaveLen(1))
 		Expect(prt.currentRoutes["eth0"]).NotTo(BeNil())
+
+		mac, err := net.ParseMAC("00:0a:95:9d:68:16")
+		Expect(fdb.currentVTEPs).To(ConsistOf(vxlanfdb.VTEP{
+			HostIP:    ip.FromString("172.0.12.1"),
+			TunnelIP:  ip.FromString("10.0.80.0"),
+			TunnelMAC: mac,
+		}))
+		Expect(fdb.setVTEPsCalls).To(Equal(1))
+		err = manager.CompleteDeferredWork()
+		Expect(err).NotTo(HaveOccurred())
+		Expect(fdb.setVTEPsCalls).To(Equal(1))
 	})
 
 	It("successfully adds a IPv6 route to the parent interface", func() {
@@ -339,11 +351,22 @@ var _ = Describe("VXLANManager", func() {
 		Expect(brt.currentRoutes[routetable.InterfaceNone]).To(HaveLen(0))
 
 		err = managerV6.CompleteDeferredWork()
-
 		Expect(err).NotTo(HaveOccurred())
+
 		Expect(rt.currentRoutes["vxlan-v6.calico"]).To(HaveLen(1))
 		Expect(brt.currentRoutes[routetable.InterfaceNone]).To(HaveLen(1))
 		Expect(prt.currentRoutes["eth0"]).NotTo(BeNil())
+
+		mac, err := net.ParseMAC("00:0a:95:9d:68:16")
+		Expect(fdb.currentVTEPs).To(ConsistOf(vxlanfdb.VTEP{
+			HostIP:    ip.FromString("fc00:10:10::1"),
+			TunnelIP:  ip.FromString("fd00:10:96::"),
+			TunnelMAC: mac,
+		}))
+		Expect(fdb.setVTEPsCalls).To(Equal(1))
+		err = managerV6.CompleteDeferredWork()
+		Expect(err).NotTo(HaveOccurred())
+		Expect(fdb.setVTEPsCalls).To(Equal(1))
 	})
 
 	It("adds the route to the default table on next try when the parent route table is not immediately found", func() {
