@@ -40,6 +40,7 @@ import (
 
 type TopologyOptions struct {
 	FelixLogSeverity string
+	FelixDebugFilenameRegex string
 	EnableIPv6       bool
 	// Temporary flag to implement and test IPv6 in bpf dataplane.
 	// TODO: Remove it when IPv6 implementation in BPF mode is complete.
