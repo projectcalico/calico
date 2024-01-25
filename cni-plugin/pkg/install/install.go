@@ -162,32 +162,25 @@ func Install() error {
 	// Copy over any TLS assets from the SECRETS_MOUNT_DIR to the host.
 	// First check if the dir exists and has anything in it.
 	if directoryExists(c.TLSAssetsDir) {
-		logrus.Info("Installing any TLS assets")
-		mkdir(winutils.GetHostPath("/host/etc/cni/net.d/calico-tls"))
-		if err := copyFileAndPermissions(fmt.Sprintf("%s/%s", c.TLSAssetsDir, "etcd-ca"), winutils.GetHostPath("/host/etc/cni/net.d/calico-tls/etcd-ca")); err != nil {
-			logrus.Warnf("Missing etcd-ca")
+		// Only install TLS assets if at least one of them exists in the dir.
+		etcdCaPath := fmt.Sprintf("%s/%s", c.TLSAssetsDir, "etcd-ca")
+		etcdCertPath := fmt.Sprintf("%s/%s", c.TLSAssetsDir, "etcd-cert")
+		etcdKeyPath := fmt.Sprintf("%s/%s", c.TLSAssetsDir, "etcd-key")
+		if !fileExists(etcdCaPath) && !fileExists(etcdCertPath) && !fileExists(etcdKeyPath) {
+			logrus.Infof("No TLS assets found in %s, skipping", c.TLSAssetsDir)
+		} else {
+			logrus.Info("Installing any TLS assets")
+			mkdir(winutils.GetHostPath("/host/etc/cni/net.d/calico-tls"))
+			if err := copyFileAndPermissions(etcdCaPath, winutils.GetHostPath("/host/etc/cni/net.d/calico-tls/etcd-ca")); err != nil {
+				logrus.Warnf("Missing etcd-ca")
+			}
+			if err := copyFileAndPermissions(etcdCertPath, winutils.GetHostPath("/host/etc/cni/net.d/calico-tls/etcd-cert")); err != nil {
+				logrus.Warnf("Missing etcd-cert")
+			}
+			if err := copyFileAndPermissions(etcdKeyPath, winutils.GetHostPath("/host/etc/cni/net.d/calico-tls/etcd-key")); err != nil {
+				logrus.Warnf("Missing etcd-key")
+			}
 		}
-		if err := copyFileAndPermissions(fmt.Sprintf("%s/%s", c.TLSAssetsDir, "etcd-cert"), winutils.GetHostPath("/host/etc/cni/net.d/calico-tls/etcd-cert")); err != nil {
-			logrus.Warnf("Missing etcd-cert")
-		}
-		if err := copyFileAndPermissions(fmt.Sprintf("%s/%s", c.TLSAssetsDir, "etcd-key"), winutils.GetHostPath("/host/etc/cni/net.d/calico-tls/etcd-key")); err != nil {
-			logrus.Warnf("Missing etcd-key")
-		}
-	}
-
-	// Set the suid bit on the binaries to allow them to run as non-root users.
-	if err := setSuidBit("/opt/cni/bin/install"); err != nil {
-		logrus.WithError(err).Fatalf("Failed to set the suid bit on the install binary")
-	}
-
-	// TODO: Remove the setSUID code here on calico and calico-ipam when they eventually
-	// get refactored to all use install as the source.
-	if err := setSuidBit("/opt/cni/bin/calico"); err != nil {
-		logrus.WithError(err).Fatalf("Failed to set the suid bit on the calico binary")
-	}
-
-	if err := setSuidBit("/opt/cni/bin/calico-ipam"); err != nil {
-		logrus.WithError(err).Fatalf("Failed to set the suid bit on the calico-ipam")
 	}
 
 	// Place the new binaries if the directory is writeable.
@@ -198,6 +191,8 @@ func Install() error {
 			logrus.Infof("%s is not writeable, skipping", d)
 			continue
 		}
+		// For security, don't exec the 'calico' binary later on if it has been skipped
+		calicoBinarySkipped := false
 
 		containerBinDir := "/opt/cni/bin/"
 		// The binaries dir in the container needs to be prepended by the CONTAINER_SANDBOX_MOUNT_POINT env var on Windows Host Process Containers
@@ -213,10 +208,20 @@ func Install() error {
 		for _, binary := range files {
 			target := fmt.Sprintf("%s/%s", d, binary.Name())
 			source := fmt.Sprintf("%s/%s", containerBinDir, binary.Name())
+			// Skip the 'install' binary as it is not needed on the host
+			if binary.Name() == "install" || binary.Name() == "install.exe" {
+				continue
+			}
 			if c.skipBinary(binary.Name()) {
+				if binary.Name() == "calico" || binary.Name() == "calico.exe" {
+					calicoBinarySkipped = true
+				}
 				continue
 			}
 			if fileExists(target) && !c.UpdateCNIBinaries {
+				if binary.Name() == "calico" || binary.Name() == "calico.exe" {
+					calicoBinarySkipped = true
+				}
 				logrus.Infof("Skipping installation of %s", target)
 				continue
 			}
@@ -231,17 +236,20 @@ func Install() error {
 		logrus.Infof("Wrote Calico CNI binaries to %s\n", d)
 		binsWritten = true
 
-		// Print CNI plugin version to confirm that the binary was actually written.
-		// If this fails, it means something has gone wrong so we should retry.
-		cmd := exec.Command(d+"/calico", "-v")
-		var out bytes.Buffer
-		cmd.Stdout = &out
-		err = cmd.Run()
-		if err != nil {
-			logrus.WithError(err).Warnf("Failed getting CNI plugin version from installed binary, exiting")
-			return err
+		// For security, don't exec the 'calico' binary later on if it has been skipped
+		if !calicoBinarySkipped {
+			// Print CNI plugin version to confirm that the binary was actually written.
+			// If this fails, it means something has gone wrong so we should retry.
+			cmd := exec.Command(d+"/calico", "-v")
+			var out bytes.Buffer
+			cmd.Stdout = &out
+			err = cmd.Run()
+			if err != nil {
+				logrus.WithError(err).Warnf("Failed getting CNI plugin version from installed binary, exiting")
+				return err
+			}
+			logrus.Infof("CNI plugin version: %s", out.String())
 		}
-		logrus.Infof("CNI plugin version: %s", out.String())
 	}
 
 	// If binaries were not placed, exit
