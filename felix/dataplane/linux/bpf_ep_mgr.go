@@ -780,15 +780,13 @@ func (m *bpfEndpointManager) onRouteUpdate(update *proto.RouteUpdate) {
 			return
 		}
 		if m.ipv6Enabled {
-			if ip.To4() != nil {
-				return // skip ipv4 in ipv6 mode
+			if ip.To4() == nil {
+				m.v6.tunnelIP = ip
 			}
-			m.v6.tunnelIP = ip
 		}
-		if ip.To4() == nil {
-			return // skip ipv6 in ipv4 mode
+		if ip.To4() != nil {
+			m.v4.tunnelIP = ip
 		}
-		m.v4.tunnelIP = ip
 		log.WithField("ip", update.Dst).Info("host tunnel")
 		m.dirtyIfaceNames.Add(bpfOutDev)
 	}
@@ -1265,20 +1263,24 @@ func (m *bpfEndpointManager) syncIfStateMap() {
 					indexMap[h] = idx
 				}
 
-				if !m.isWorkloadIface(netiface.Name) {
-					// We don't use XDP for WEPs so any ID we read back must be a mistake.
-					checkAndReclaimIdx(v.XDPPolicy(), hook.XDP, iface.dpState.v4.policyIdx[:])
-					checkAndReclaimIdx(v.XDPPolicy(), hook.XDP, iface.dpState.v6.policyIdx[:])
+				if m.ipv6Enabled {
+					checkAndReclaimIdx(v.IngressPolicy(), hook.Ingress, iface.dpState.v6.policyIdx[:])
+					checkAndReclaimIdx(v.EgressPolicy(), hook.Egress, iface.dpState.v6.policyIdx[:])
+					checkAndReclaimIdx(v.TcIngressFilter(), hook.Ingress, iface.dpState.v6.filterIdx[:])
+					checkAndReclaimIdx(v.TcEgressFilter(), hook.Egress, iface.dpState.v6.filterIdx[:])
+					if !m.isWorkloadIface(netiface.Name) {
+						checkAndReclaimIdx(v.XDPPolicy(), hook.XDP, iface.dpState.v6.policyIdx[:])
+					}
+				} else {
+					checkAndReclaimIdx(v.IngressPolicy(), hook.Ingress, iface.dpState.v4.policyIdx[:])
+					checkAndReclaimIdx(v.EgressPolicy(), hook.Egress, iface.dpState.v4.policyIdx[:])
+					checkAndReclaimIdx(v.TcIngressFilter(), hook.Ingress, iface.dpState.v4.filterIdx[:])
+					checkAndReclaimIdx(v.TcEgressFilter(), hook.Egress, iface.dpState.v4.filterIdx[:])
+					if !m.isWorkloadIface(netiface.Name) {
+						// We don't use XDP for WEPs so any ID we read back must be a mistake.
+						checkAndReclaimIdx(v.XDPPolicy(), hook.XDP, iface.dpState.v4.policyIdx[:])
+					}
 				}
-				checkAndReclaimIdx(v.IngressPolicy(), hook.Ingress, iface.dpState.v4.policyIdx[:])
-				checkAndReclaimIdx(v.IngressPolicy(), hook.Ingress, iface.dpState.v6.policyIdx[:])
-				checkAndReclaimIdx(v.EgressPolicy(), hook.Egress, iface.dpState.v4.policyIdx[:])
-				checkAndReclaimIdx(v.EgressPolicy(), hook.Egress, iface.dpState.v6.policyIdx[:])
-
-				checkAndReclaimIdx(v.TcIngressFilter(), hook.Ingress, iface.dpState.v4.filterIdx[:])
-				checkAndReclaimIdx(v.TcIngressFilter(), hook.Ingress, iface.dpState.v6.filterIdx[:])
-				checkAndReclaimIdx(v.TcEgressFilter(), hook.Egress, iface.dpState.v4.filterIdx[:])
-				checkAndReclaimIdx(v.TcEgressFilter(), hook.Egress, iface.dpState.v6.filterIdx[:])
 
 				// Mark all interfaces that we knew about, that we still manage and
 				// that exist as dirty. Since they exist, we either have to deal
@@ -1587,16 +1589,6 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 				}
 			}()
 
-			// Attach egress program.
-			parallelWG.Add(1)
-			go func() {
-				defer parallelWG.Done()
-				egressAP := mergeAttachPoints(egressAP4, egressAP6)
-				if egressAP != nil {
-					_, err = m.dp.ensureProgramAttached(egressAP)
-				}
-			}()
-
 			// Attach xdp program.
 			if !m.ipv6Enabled {
 				parallelWG.Add(1)
@@ -1610,6 +1602,13 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 					}
 				}()
 			}
+
+			// Attach egress program.
+			egressAP := mergeAttachPoints(egressAP4, egressAP6)
+			if egressAP != nil {
+				_, err = m.dp.ensureProgramAttached(egressAP)
+			}
+
 			parallelWG.Wait()
 
 			if err == nil {
@@ -1956,23 +1955,21 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 	wg.Wait()
 
 	//Attach preamble TC program
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		if readiness != ifaceIsReady {
+	if readiness != ifaceIsReady {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
 			ingressAP := mergeAttachPoints(ingressAP4, ingressAP6)
 			if ingressAP != nil {
 				ingressQdisc, ingressErr = m.dp.ensureProgramAttached(ingressAP)
 			}
-		}
-	}()
-	if readiness != ifaceIsReady {
+		}()
 		egressAP := mergeAttachPoints(egressAP4, egressAP6)
 		if egressAP != nil {
 			egressQdisc, egressErr = m.dp.ensureProgramAttached(egressAP)
 		}
+		wg.Wait()
 	}
-	wg.Wait()
 
 	if ingressErr != nil {
 		return state, ingressErr
@@ -2033,8 +2030,8 @@ func (m *bpfEndpointManager) applyPolicy(ifaceName string) error {
 	return err
 }
 
-func mergeAttachPoints(ap, ap6 attachPoint) attachPoint {
-	if aptcV4, v4ok := ap.(*tc.AttachPoint); v4ok {
+func mergeAttachPoints(ap4, ap6 attachPoint) attachPoint {
+	if aptcV4, v4ok := ap4.(*tc.AttachPoint); v4ok {
 		if aptcV6, v6ok := ap6.(*tc.AttachPoint); v6ok {
 			if aptcV4 != nil && aptcV6 == nil {
 				return aptcV4
@@ -2042,7 +2039,7 @@ func mergeAttachPoints(ap, ap6 attachPoint) attachPoint {
 				return aptcV6
 			}
 		}
-	} else if apxdpV4, v4ok := ap.(*xdp.AttachPoint); v4ok {
+	} else if apxdpV4, v4ok := ap4.(*xdp.AttachPoint); v4ok {
 		apxdpV6, _ := ap6.(*xdp.AttachPoint)
 		if apxdpV4 != nil && apxdpV6 == nil {
 			return apxdpV4
