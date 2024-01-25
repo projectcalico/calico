@@ -19,11 +19,14 @@ import (
 	"net"
 	"time"
 
+	log "github.com/sirupsen/logrus"
+
 	"github.com/projectcalico/calico/felix/dataplane/common"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/rules"
+	"github.com/projectcalico/calico/felix/vxlanfdb"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -73,16 +76,14 @@ func (m *mockVXLANDataplane) AddrList(link netlink.Link, family int) ([]netlink.
 		IPNet: &net.IPNet{
 			IP: net.IPv4(172, 0, 0, 2),
 		},
-	},
-	}
+	}}
 
 	if m.ipVersion == 6 {
 		l = []netlink.Addr{{
 			IPNet: &net.IPNet{
 				IP: net.ParseIP("fc00:10:96::2"),
 			},
-		},
-		}
+		}}
 	}
 	return l, nil
 }
@@ -106,29 +107,42 @@ func (m *mockVXLANDataplane) LinkDel(netlink.Link) error {
 	return nil
 }
 
+type mockVXLANFDB struct {
+	currentVTEPs []vxlanfdb.VTEP // FIXME move to separate mock.
+}
+
+func (t *mockVXLANFDB) SetVTEPs(targets []vxlanfdb.VTEP) {
+	log.WithFields(log.Fields{
+		"targets": targets,
+	}).Debug("SetL2Routes")
+	t.currentVTEPs = targets
+}
+
 var _ = Describe("VXLANManager", func() {
 	var manager, managerV6 *vxlanManager
 	var rt, brt, prt *mockRouteTable
+	var fdb *mockVXLANFDB
 
 	BeforeEach(func() {
 		rt = &mockRouteTable{
-			currentRoutes:   map[string][]routetable.Target{},
-			currentL2Routes: map[string][]routetable.L2Target{},
+			currentRoutes: map[string][]routetable.Target{},
 		}
 		brt = &mockRouteTable{
-			currentRoutes:   map[string][]routetable.Target{},
-			currentL2Routes: map[string][]routetable.L2Target{},
+			currentRoutes: map[string][]routetable.Target{},
 		}
 		prt = &mockRouteTable{
-			currentRoutes:   map[string][]routetable.Target{},
-			currentL2Routes: map[string][]routetable.L2Target{},
+			currentRoutes: map[string][]routetable.Target{},
 		}
+
+		// FIXME actually assert on the FDB contents.
+		fdb = &mockVXLANFDB{}
 
 		la := netlink.NewLinkAttrs()
 		la.Name = "eth0"
 		manager = newVXLANManagerWithShims(
 			common.NewMockIPSets(),
 			rt, brt,
+			fdb,
 			"vxlan.calico",
 			Config{
 				MaxIPSetSize:       5,
@@ -144,8 +158,10 @@ var _ = Describe("VXLANManager", func() {
 				ipVersion: 4,
 			},
 			4,
-			func(interfacePrefixes []string, ipVersion uint8, vxlan bool, netlinkTimeout time.Duration,
-				deviceRouteSourceAddress net.IP, deviceRouteProtocol netlink.RouteProtocol, removeExternalRoutes bool) routetable.RouteTableInterface {
+			func(
+				interfacePrefixes []string, ipVersion uint8, netlinkTimeout time.Duration,
+				deviceRouteSourceAddress net.IP, deviceRouteProtocol netlink.RouteProtocol, removeExternalRoutes bool,
+			) routetable.RouteTableInterface {
 				return prt
 			},
 		)
@@ -153,6 +169,7 @@ var _ = Describe("VXLANManager", func() {
 		managerV6 = newVXLANManagerWithShims(
 			common.NewMockIPSets(),
 			rt, brt,
+			fdb,
 			"vxlan-v6.calico",
 			Config{
 				MaxIPSetSize:       5,
@@ -168,8 +185,10 @@ var _ = Describe("VXLANManager", func() {
 				ipVersion: 6,
 			},
 			6,
-			func(interfacePrefixes []string, ipVersion uint8, vxlan bool, netlinkTimeout time.Duration,
-				deviceRouteSourceAddress net.IP, deviceRouteProtocol netlink.RouteProtocol, removeExternalRoutes bool) routetable.RouteTableInterface {
+			func(
+				interfacePrefixes []string, ipVersion uint8, netlinkTimeout time.Duration,
+				deviceRouteSourceAddress net.IP, deviceRouteProtocol netlink.RouteProtocol, removeExternalRoutes bool,
+			) routetable.RouteTableInterface {
 				return prt
 			},
 		)
