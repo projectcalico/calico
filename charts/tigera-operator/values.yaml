@@ -59,3 +59,8 @@ calicoctl:
   tag: master
 
 kubeletVolumePluginPath: /var/lib/kubelet
+
+# Optionally configure the host and port used to access the Kubernetes API server.
+kubernetesServiceEndpoint:
+  host: ""
+  port: "6443"
