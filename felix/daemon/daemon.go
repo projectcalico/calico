@@ -373,7 +373,7 @@ configRetry:
 	if configParams.BPFEnabled {
 		// Check for BPF dataplane support before we do anything that relies on the flag being set one way or another.
 		if err := dp.SupportsBPF(); err != nil {
-			log.Error("BPF dataplane mode enabled but not supported by the kernel.  Disabling BPF mode.")
+			log.WithError(err).Error("BPF dataplane mode enabled but not supported by the kernel.  Disabling BPF mode.")
 			_, err := configParams.OverrideParam("BPFEnabled", "false")
 			if err != nil {
 				log.WithError(err).Panic("Bug: failed to override config parameter")

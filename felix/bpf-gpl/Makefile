@@ -53,7 +53,6 @@ UT_OBJS+=ut/ip_parse_test_v6.o
 
 OBJS:=$(shell ./list-objs)
 OBJS+=bin/tc_preamble.o
-OBJS+=bin/tc_preamble_v6.o
 OBJS+=bin/xdp_preamble.o
 OBJS+=bin/policy_default.o
 C_FILES:=tc_preamble.c tc.c connect_balancer.c connect_balancer_v46.c connect_balancer_v6.c xdp_preamble.c xdp.c policy_default.c
@@ -85,9 +84,6 @@ ut/icmp6_port_unreachable.ll: CFLAGS += -DIPVER6
 tc_preamble.ll: tc_preamble.c tc_preamble.d
 	$(CC) $(CFLAGS) -c $< -o $@
 
-tc_preamble_v6.ll: tc_preamble.c tc_preamble.d
-	$(CC) $(CFLAGS) -DIPVER6 -c $< -o $@
-
 xdp_preamble.ll: xdp_preamble.c xdp_preamble.d
 	$(CC) $(CFLAGS) -DCALI_COMPILE_FLAGS=64 -c $< -o $@
 
@@ -115,8 +111,6 @@ test_xdp%.ll: xdp.c xdp.d calculate-flags
 
 LINK=$(LD) -march=bpf -filetype=obj -o $@ $<
 bin/tc_preamble.o: tc_preamble.ll | bin
-	$(LINK)
-bin/tc_preamble_v6.o: tc_preamble_v6.ll | bin
 	$(LINK)
 bin/xdp_preamble.o: xdp_preamble.ll | bin
 	$(LINK)

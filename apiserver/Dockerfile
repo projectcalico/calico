@@ -6,7 +6,6 @@ ARG TARGETARCH
 COPY LICENSE /licenses/LICENSE
 
 COPY ${BIN_DIR}/apiserver-${TARGETARCH} /code/apiserver
-COPY ${BIN_DIR}/filecheck-${TARGETARCH} /code/filecheck
 
 FROM calico/base
 

@@ -36,6 +36,7 @@ import (
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
+	discovery "k8s.io/api/discovery/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/kubernetes"
@@ -952,6 +953,137 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						}
 						return out
 					}).Should(ContainSubstring("kernel.unprivileged_bpf_disabled = 1"))
+				})
+
+				It("should remove terminating workload from the NAT backends", func() {
+					By("Creating a fake service with fake endpoint")
+
+					clusterIP := "10.101.0.254"
+					svcIP1 := "192.168.12.1"
+					svcIP2 := "192.168.12.2"
+					svcIP3 := "192.168.12.3"
+					addrType := discovery.AddressTypeIPv4
+					family := 4
+					if testOpts.ipv6 {
+						clusterIP = "dead:beef::abcd:0:0:254"
+						svcIP1 = "dead:beef::192:168:12:1"
+						svcIP2 = "dead:beef::192:168:12:2"
+						svcIP3 = "dead:beef::192:168:12:3"
+						addrType = discovery.AddressTypeIPv6
+						family = 6
+					}
+
+					fakeSvc := &v1.Service{
+						TypeMeta:   typeMetaV1("Service"),
+						ObjectMeta: objectMetaV1("fake-service"),
+						Spec: v1.ServiceSpec{
+							ClusterIP: clusterIP,
+							Type:      "ClusterIP",
+							Ports: []v1.ServicePort{
+								{
+									Protocol: v1.ProtocolTCP,
+									Port:     int32(11666),
+								},
+							},
+						},
+					}
+
+					k8sClient := infra.(*infrastructure.K8sDatastoreInfra).K8sClient
+					_, err := k8sClient.CoreV1().Services("default").Create(context.Background(), fakeSvc, metav1.CreateOptions{})
+					Expect(err).NotTo(HaveOccurred())
+
+					portName := ""
+					portProto := v1.ProtocolTCP
+					portPort := int32(11166)
+					falsePtr := new(bool)
+					*falsePtr = false
+					truePtr := new(bool)
+					*truePtr = true
+
+					fakeEps := &discovery.EndpointSlice{
+						TypeMeta: metav1.TypeMeta{
+							Kind:       "EndpointSlice",
+							APIVersion: "discovery.k8s.io/v1",
+						},
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "fake-service-eps",
+							Namespace: "default",
+							Labels: map[string]string{
+								"kubernetes.io/service-name": "fake-service",
+							},
+						},
+						AddressType: addrType,
+						Endpoints: []discovery.Endpoint{
+							{
+								Addresses: []string{svcIP1},
+								Conditions: discovery.EndpointConditions{
+									Ready:       truePtr,
+									Terminating: falsePtr,
+								},
+							},
+							{
+								Addresses: []string{svcIP2},
+								Conditions: discovery.EndpointConditions{
+									Ready:       truePtr,
+									Terminating: falsePtr,
+								},
+							},
+							{
+								Addresses: []string{svcIP3},
+								Conditions: discovery.EndpointConditions{
+									Ready:       truePtr,
+									Terminating: falsePtr,
+								},
+							},
+						},
+						Ports: []discovery.EndpointPort{{
+							Name:     &portName,
+							Protocol: &portProto,
+							Port:     &portPort,
+						}},
+					}
+
+					_, err = k8sClient.DiscoveryV1().EndpointSlices("default").
+						Create(context.Background(), fakeEps, metav1.CreateOptions{})
+					Expect(err).NotTo(HaveOccurred())
+
+					var natK nat.FrontendKeyInterface
+					if testOpts.ipv6 {
+						natK = nat.NewNATKeyV6(net.ParseIP(clusterIP), 11666, 6)
+					} else {
+						natK = nat.NewNATKey(net.ParseIP(clusterIP), 11666, 6)
+					}
+
+					Eventually(func(g Gomega) {
+						natmap, natbe := dumpNATMapsAny(family, tc.Felixes[0])
+						g.Expect(natmap).To(HaveKey(natK))
+						g.Expect(natmap[natK].Count()).To(Equal(uint32(3)))
+						svc := natmap[natK]
+						bckID := svc.ID()
+						g.Expect(natbe).To(HaveKey(nat.NewNATBackendKey(bckID, 0)))
+						g.Expect(natbe).To(HaveKey(nat.NewNATBackendKey(bckID, 1)))
+						g.Expect(natbe).To(HaveKey(nat.NewNATBackendKey(bckID, 2)))
+						g.Expect(natbe).NotTo(HaveKey(nat.NewNATBackendKey(bckID, 3)))
+					}, "5s").Should(Succeed(), "service or backedns didn't show up")
+
+					fakeEps.Endpoints[1].Conditions.Ready = falsePtr
+					fakeEps.Endpoints[1].Conditions.Terminating = truePtr
+
+					_, err = k8sClient.DiscoveryV1().EndpointSlices("default").
+						Update(context.Background(), fakeEps, metav1.UpdateOptions{})
+					Expect(err).NotTo(HaveOccurred())
+
+					Eventually(func(g Gomega) {
+						natmap, natbe := dumpNATMapsAny(family, tc.Felixes[0])
+						g.Expect(natmap).To(HaveKey(natK))
+						g.Expect(natmap[natK].Count()).To(Equal(uint32(2)))
+						svc := natmap[natK]
+						bckID := svc.ID()
+						g.Expect(natbe).To(HaveKey(nat.NewNATBackendKey(bckID, 0)))
+						g.Expect(natbe).To(HaveKey(nat.NewNATBackendKey(bckID, 1)))
+						g.Expect(natbe).NotTo(HaveKey(nat.NewNATBackendKey(bckID, 2)))
+					}, "5s").Should(Succeed(), "NAT did not get updated properly")
+
 				})
 			}
 		})

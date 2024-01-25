@@ -95,7 +95,7 @@ WINDOWS_MOD_CACHED_FILES := \
     windows-packaging/conf.d/blocks.toml \
     windows-packaging/conf.d/peerings.toml \
     windows-packaging/templates/blocks.ps1.template \
-    windows-packaging/templates/peerings.ps1.template \
+    windows-packaging/templates/peerings.ps1.template
 
 # Files to include in the Windows ZIP archive.  We need to list some of these explicitly
 # because we need to force them to be built/copied into place. We also have
@@ -365,12 +365,18 @@ load-container-images: $(K8ST_IMAGE_TARS) $(KUBECTL)
 
 .PHONY: st-checks
 st-checks:
-	# Check that we're running as root.
-	test `id -u` -eq '0' || { echo "STs must be run as root to allow writes to /proc"; false; }
-
-	# Insert an iptables rule to allow access from our test containers to etcd
-	# running on the host.
-	iptables-save | grep -q 'calico-st-allow-etcd' || iptables $(IPT_ALLOW_ETCD)
+	@if mount | grep -q "cgroup on /sys/fs/cgroup"; then \
+		echo "cgroup v1 mounted"; \
+	else \
+		echo; \
+		echo "ERROR: Looks like your system uses cgroupv2, which is "; \
+		echo "not compatible with our ancient version of dind."; \
+		echo "You can either run this test in a VM, or add "; \
+		echo "systemd.unified_cgroup_hierarchy=0 to your kernel "; \
+		echo "command line (if supported by your kernel/OS)."; \
+		echo; \
+		exit 1; \
+	fi
 
 .PHONY: k8s-test
 ## Run the k8s tests
@@ -402,14 +408,13 @@ kind-k8st-cleanup: kind-cluster-destroy
 
 .PHONY: st
 ## Run the system tests
-st: $(REMOTE_DEPS) image dist/calicoctl busybox.tar calico-node.tar workload.tar run-etcd .calico_test.created dist/calico dist/calico-ipam
+st: st-checks $(REMOTE_DEPS) image dist/calicoctl busybox.tar calico-node.tar workload.tar run-etcd .calico_test.created dist/calico dist/calico-ipam
 	# Use the host, PID and network namespaces from the host.
 	# Privileged is needed since 'calico node' write to /proc (to enable ip_forwarding)
 	# Map the docker socket in so docker can be used from inside the container
 	# HOST_CHECKOUT_DIR is used for volume mounts on containers started by this one.
 	# All of code under test is mounted into the container.
 	#   - This also provides access to calicoctl and the docker client
-	# $(MAKE) st-checks
 	docker run --uts=host \
 		   --pid=host \
 		   --net=host \
@@ -562,5 +567,12 @@ WINDOWS_IMAGE_REQS := \
 	$(WINDOWS_ARCHIVE_ROOT)/felix/felix-service.ps1 \
 	$(WINDOWS_ARCHIVE_ROOT)/node/node-service.ps1 \
 	$(WINDOWS_ARCHIVE_ROOT)/uninstall-calico-hpc.ps1 \
+	$(WINDOWS_ARCHIVE_ROOT)/confd/confd-service.ps1 \
+	$(WINDOWS_ARCHIVE_ROOT)/confd/config-bgp.ps1 \
+	$(WINDOWS_ARCHIVE_ROOT)/confd/config-bgp.psm1 \
+	$(WINDOWS_ARCHIVE_ROOT)/confd/conf.d/blocks.toml \
+	$(WINDOWS_ARCHIVE_ROOT)/confd/conf.d/peerings.toml \
+	$(WINDOWS_ARCHIVE_ROOT)/confd/templates/blocks.ps1.template \
+	$(WINDOWS_ARCHIVE_ROOT)/confd/templates/peerings.ps1.template \
 	windows-packaging/nssm.exe
 image-windows: $(WINDOWS_IMAGE_REQS)

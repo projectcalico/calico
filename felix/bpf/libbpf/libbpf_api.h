@@ -139,67 +139,26 @@ int bpf_link_destroy(struct bpf_link *link) {
 
 void bpf_tc_set_globals(struct bpf_map *map,
 			char *iface_name,
-			uint host_ip,
-			uint intf_ip,
+			char* host_ip,
+			char* intf_ip,
+			char* host_ip6,
+			char* intf_ip6,
 			uint ext_to_svc_mark,
 			ushort tmtu,
 			ushort vxlanPort,
 			ushort psnat_start,
 			ushort psnat_len,
-			uint host_tunnel_ip,
+			char* host_tunnel_ip,
+			char* host_tunnel_ip6,
 			uint flags,
 			ushort wg_port,
 			uint natin,
 			uint natout,
 			uint log_filter_jmp,
-			uint *jumps)
+			uint *jumps,
+			uint *jumps6)
 {
-	struct cali_tc_globals data = {
-		.host_ip = host_ip,
-		.tunnel_mtu = tmtu,
-		.vxlan_port = vxlanPort,
-		.intf_ip = intf_ip,
-		.ext_to_svc_mark = ext_to_svc_mark,
-		.psnat_start = psnat_start,
-		.psnat_len = psnat_len,
-		.host_tunnel_ip = host_tunnel_ip,
-		.flags = flags,
-		.wg_port = wg_port,
-		.natin_idx = natin,
-		.natout_idx = natout,
-		.log_filter_jmp = log_filter_jmp,
-	};
-
-	strncpy(data.iface_name, iface_name, sizeof(data.iface_name));
-	data.iface_name[sizeof(data.iface_name)-1] = '\0';
-
-	int i;
-
-	for (i = 0; i < sizeof(data.jumps)/sizeof(uint); i++) {
-		data.jumps[i] = jumps[i];
-	}
-
-	set_errno(bpf_map__set_initial_value(map, (void*)(&data), sizeof(data)));
-}
-
-void bpf_tc_set_globals_v6(struct bpf_map *map,
-			   char *iface_name,
-			   char* host_ip,
-			   char* intf_ip,
-			   uint ext_to_svc_mark,
-			   ushort tmtu,
-			   ushort vxlanPort,
-			   ushort psnat_start,
-			   ushort psnat_len,
-			   char* host_tunnel_ip,
-			   uint flags,
-			   ushort wg_port,
-			   uint natin,
-			   uint natout,
-			   uint log_filter_jmp,
-			   uint *jumps)
-{
-	struct cali_tc_globals_v6 data = {
+	struct cali_tc_global_data v4 = {
 		.tunnel_mtu = tmtu,
 		.vxlan_port = vxlanPort,
 		.ext_to_svc_mark = ext_to_svc_mark,
@@ -212,19 +171,32 @@ void bpf_tc_set_globals_v6(struct bpf_map *map,
 		.log_filter_jmp = log_filter_jmp,
 	};
 
-	memcpy(&data.host_ip, host_ip, 16);
-	memcpy(&data.intf_ip, intf_ip, 16);
-	memcpy(&data.host_tunnel_ip, host_tunnel_ip, 16);
+	strncpy(v4.iface_name, iface_name, sizeof(v4.iface_name));
+	v4.iface_name[sizeof(v4.iface_name)-1] = '\0';
 
-	strncpy(data.iface_name, iface_name, sizeof(data.iface_name));
-	data.iface_name[sizeof(data.iface_name)-1] = '\0';
+	struct cali_tc_global_data v6 = v4;
+	struct cali_tc_preamble_globals data;
+
+	memcpy(&v4.host_ip, host_ip, 16);
+	memcpy(&v4.intf_ip, intf_ip, 16);
+	memcpy(&v4.host_tunnel_ip, host_tunnel_ip, 16);
+
+	memcpy(&v6.host_ip, host_ip6, 16);
+	memcpy(&v6.intf_ip, intf_ip6, 16);
+	memcpy(&v6.host_tunnel_ip, host_tunnel_ip6, 16);
 
 	int i;
 
-	for (i = 0; i < sizeof(data.jumps)/sizeof(uint); i++) {
-		data.jumps[i] = jumps[i];
+	for (i = 0; i < sizeof(v4.jumps)/sizeof(uint); i++) {
+		v4.jumps[i] = jumps[i];
 	}
 
+	for (i = 0; i < sizeof(v6.jumps)/sizeof(uint); i++) {
+		v6.jumps[i] = jumps6[i];
+	}
+
+	data.v4 = v4;
+	data.v6 = v6;
 	set_errno(bpf_map__set_initial_value(map, (void*)(&data), sizeof(data)));
 }
 
