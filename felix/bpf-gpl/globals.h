@@ -7,7 +7,7 @@
 
 #include "ip_addr.h"
 
-#define DECLARE_TC_GLOBALS(name, ip_t)	\
+#define DECLARE_TC_GLOBAL_DATA(name, ip_t)	\
 struct name {				\
 	ip_t host_ip;			\
 	__be16 tunnel_mtu;		\
@@ -25,19 +25,23 @@ struct name {				\
 	__u8 iface_name[16];		\
 	__u32 log_filter_jmp;		\
 	__u32 jumps[40];		\
+}
+
+DECLARE_TC_GLOBAL_DATA(cali_tc_global_data, ipv6_addr_t);
+struct cali_tc_globals {
+	struct cali_tc_global_data data;
+
 	/* Needs to be 32bit aligned as it is followed by scratch area for 				\
 	 * building headers. We reuse the same slot in state map to save 				\
 	 * ourselves a lookup. 										\
 	 */												\
 	__u32 __scratch[]; /* N.B. this provides pointer to the location but does not add to the size */ \
-}
+};
 
-DECLARE_TC_GLOBALS(cali_tc_globals, ipv46_addr_t);
-/* cali_tc_globals_v6 is for userspace as cali_tc_globals are used for ipv4 in
- * userspace, but it has the exact same layout as cali_tc_globals in eBPF when
- * compiled for ipv6.
- */
-DECLARE_TC_GLOBALS(cali_tc_globals_v6, ipv6_addr_t);
+struct cali_tc_preamble_globals {
+	struct cali_tc_global_data v4;
+	struct cali_tc_global_data v6;
+};
 
 enum cali_globals_flags {
 	/* CALI_GLOBALS_IPV6_ENABLED is set when IPv6 is enabled by Felix */
