@@ -161,6 +161,6 @@ kubeletVolumePluginPath: None
 
 # Optionally configure the host and port used to access the Kubernetes API server.
 kubernetesServiceEndpoint:
-  host: "" #e.g. k8s.mycompany.com
+  host: ""
   port: "6443"
 ```
