@@ -220,6 +220,7 @@ type RouteTable struct {
 
 	// The route deletion grace period.
 	routeCleanupGracePeriod time.Duration
+	featureDetector         environment.FeatureDetectorIface
 }
 
 type RouteTableOpt func(table *RouteTable)
@@ -361,6 +362,7 @@ func NewWithShims(
 			handlemgr.WithNewHandleOverride(newNetlinkHandle),
 			handlemgr.WithSocketTimeout(netlinkTimeout),
 		),
+		featureDetector: featureDetector,
 	}
 
 	for _, o := range opts {
@@ -716,7 +718,19 @@ func (r *RouteTable) syncRoutesForLink(ifaceName string, fullSync bool, firstTry
 		// In case this IP is being re-used, wait for any previous conntrack entry
 		// to be cleaned up.  (No-op if there are no pending deletes.)
 		r.waitForPendingConntrackDeletion(target.CIDR.Addr())
-		if err := nl.RouteAdd(&route); err != nil {
+
+		if firstTry || !r.shouldDeleteConflictingRoutes() {
+			// Even if we're in "delete conflicting" mode, we use RouteAdd on
+			// the first pass.  This makes sure that we scan over all interfaces
+			// at least once before we start overwriting conflicting routes.
+			// This makes sure that we handle a common case where a route
+			// is being removed from one interface and added to another more
+			// cleanly.
+			err = nl.RouteAdd(&route)
+		} else {
+			err = nl.RouteReplace(&route)
+		}
+		if err != nil {
 			if firstTry {
 				logCxt.WithError(err).WithField("route", route).Debug("Failed to add route on first attempt, retrying...")
 			} else {
@@ -1272,6 +1286,15 @@ func (r *RouteTable) getLinkAttributes(ifaceName string) (*netlink.LinkAttrs, er
 		return nil, filteredErr
 	}
 	return link.Attrs(), nil
+}
+
+func (r *RouteTable) shouldDeleteConflictingRoutes() bool {
+	gate := r.featureDetector.FeatureGate("DeleteConflictingRoutes")
+	switch strings.ToLower(gate) {
+	case "enabled": // Default to disabled.
+		return true
+	}
+	return false
 }
 
 // safeTargetPointer returns a pointer to a Target safely ensuring the pointer is unique.

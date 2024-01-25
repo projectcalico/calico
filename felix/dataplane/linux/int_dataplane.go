@@ -15,6 +15,7 @@
 package intdataplane
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"os"
@@ -286,6 +287,11 @@ type InternalDataplane struct {
 
 	ipipManager *ipipManager
 
+	vxlanManager   *vxlanManager
+	vxlanParentC   chan string
+	vxlanManagerV6 *vxlanManager
+	vxlanParentCV6 chan string
+
 	wireguardManager   *wireguardManager
 	wireguardManagerV6 *wireguardManager
 
@@ -380,7 +386,10 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		log.WithError(err).Error("Failed to write MTU file, pod MTU may not be properly set")
 	}
 
-	featureDetector := environment.NewFeatureDetector(config.FeatureDetectOverrides)
+	featureDetector := environment.NewFeatureDetector(
+		config.FeatureDetectOverrides,
+		environment.WithFeatureGates(config.FeatureGates),
+	)
 	dp := &InternalDataplane{
 		toDataplane:    make(chan interface{}, msgPeekLimit),
 		fromDataplane:  make(chan interface{}, 100),
@@ -505,7 +514,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			routeTableVXLAN = &routetable.DummyTable{}
 		}
 
-		vxlanManager := newVXLANManager(
+		dp.vxlanManager = newVXLANManager(
 			ipSetsV4,
 			routeTableVXLAN,
 			"vxlan.calico",
@@ -514,8 +523,9 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			4,
 			featureDetector,
 		)
-		go vxlanManager.KeepVXLANDeviceInSync(config.VXLANMTU, dataplaneFeatures.ChecksumOffloadBroken, 10*time.Second)
-		dp.RegisterManager(vxlanManager)
+		dp.vxlanParentC = make(chan string, 1)
+		go dp.vxlanManager.KeepVXLANDeviceInSync(context.Background(), config.VXLANMTU, dataplaneFeatures.ChecksumOffloadBroken, 10*time.Second, dp.vxlanParentC)
+		dp.RegisterManager(dp.vxlanManager)
 	} else {
 		// Start a cleanup goroutine not to block felix if it needs to retry
 		go cleanUpVXLANDevice("vxlan.calico")
@@ -962,7 +972,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 				routeTableVXLANV6 = &routetable.DummyTable{}
 			}
 
-			vxlanManagerV6 := newVXLANManager(
+			dp.vxlanManagerV6 = newVXLANManager(
 				ipSetsV6,
 				routeTableVXLANV6,
 				"vxlan-v6.calico",
@@ -971,8 +981,9 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 				6,
 				featureDetector,
 			)
-			go vxlanManagerV6.KeepVXLANDeviceInSync(config.VXLANMTUV6, dataplaneFeatures.ChecksumOffloadBroken, 10*time.Second)
-			dp.RegisterManager(vxlanManagerV6)
+			dp.vxlanParentCV6 = make(chan string, 1)
+			go dp.vxlanManagerV6.KeepVXLANDeviceInSync(context.Background(), config.VXLANMTUV6, dataplaneFeatures.ChecksumOffloadBroken, 10*time.Second, dp.vxlanParentCV6)
+			dp.RegisterManager(dp.vxlanManagerV6)
 		} else {
 			// Start a cleanup goroutine not to block felix if it needs to retry
 			go cleanUpVXLANDevice("vxlan-v6.calico")
@@ -1848,6 +1859,10 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 			d.onDatastoreMessage(msg)
 		case ifaceUpdate := <-d.ifaceUpdates:
 			d.onIfaceMonitorMessage(ifaceUpdate)
+		case name := <-d.vxlanParentC:
+			d.vxlanManager.OnParentNameUpdate(name)
+		case name := <-d.vxlanParentCV6:
+			d.vxlanManagerV6.OnParentNameUpdate(name)
 		case <-ipSetsRefreshC:
 			log.Debug("Refreshing IP sets state")
 			d.forceIPSetsRefresh = true
