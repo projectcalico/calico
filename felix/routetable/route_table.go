@@ -1291,7 +1291,7 @@ func (r *RouteTable) getLinkAttributes(ifaceName string) (*netlink.LinkAttrs, er
 func (r *RouteTable) shouldDeleteConflictingRoutes() bool {
 	gate := r.featureDetector.FeatureGate("DeleteConflictingRoutes")
 	switch strings.ToLower(gate) {
-	case "enabled", "": // Default is "enabled"
+	case "enabled": // Default to disabled.
 		return true
 	}
 	return false

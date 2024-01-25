@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"net"
 	"reflect"
+	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"syscall"
@@ -38,6 +40,7 @@ import (
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/rules"
+	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 // added so that we can shim netlink for tests
@@ -55,11 +58,13 @@ type netlinkHandle interface {
 
 type vxlanManager struct {
 	// Our dependencies.
-	hostname            string
-	routeTable          routetable.RouteTableInterface
-	blackholeRouteTable routetable.RouteTableInterface
-	noEncapRouteTable   routetable.RouteTableInterface
-	parentIfaceName     string
+	hostname                  string
+	routeTable                routetable.RouteTableInterface
+	blackholeRouteTable       routetable.RouteTableInterface
+	noEncapRouteTable         routetable.RouteTableInterface
+	parentIfaceName           string
+	lastParentDevUpdate       time.Time
+	previouslyUsedParentNames set.Set[string]
 
 	// Hold pending updates.
 	routesByDest    map[string]*proto.RouteUpdate
@@ -87,8 +92,10 @@ type vxlanManager struct {
 	dpConfig          Config
 	noEncapProtocol   netlink.RouteProtocol
 	// Used so that we can shim the no encap route table for the tests
-	noEncapRTConstruct func(interfacePrefixes []string, ipVersion uint8, vxlan bool, netlinkTimeout time.Duration,
-		deviceRouteSourceAddress net.IP, deviceRouteProtocol netlink.RouteProtocol, removeExternalRoutes bool) routetable.RouteTableInterface
+	noEncapRTConstruct func(
+		interfacePrefixes []string, ipVersion uint8, vxlan bool, netlinkTimeout time.Duration,
+		deviceRouteSourceAddress net.IP, deviceRouteProtocol netlink.RouteProtocol, removeExternalRoutes bool,
+	) routetable.RouteTableInterface
 
 	// Log context
 	logCtx *logrus.Entry
@@ -190,25 +197,26 @@ func newVXLANManagerWithShims(
 			SetID:   rules.IPSetIDAllVXLANSourceNets,
 			Type:    ipsets.IPSetTypeHashNet,
 		},
-		hostname:            dpConfig.Hostname,
-		routeTable:          rt,
-		blackholeRouteTable: brt,
-		routesByDest:        map[string]*proto.RouteUpdate{},
-		localIPAMBlocks:     map[string]*proto.RouteUpdate{},
-		vtepsByNode:         map[string]*proto.VXLANTunnelEndpointUpdate{},
-		myVTEPChangedC:      make(chan struct{}, 1),
-		vxlanDevice:         deviceName,
-		vxlanID:             dpConfig.RulesConfig.VXLANVNI,
-		vxlanPort:           dpConfig.RulesConfig.VXLANPort,
-		ipVersion:           ipVersion,
-		externalNodeCIDRs:   dpConfig.ExternalNodesCidrs,
-		routesDirty:         true,
-		vtepsDirty:          true,
-		dpConfig:            dpConfig,
-		nlHandle:            nlHandle,
-		noEncapProtocol:     noEncapProtocol,
-		noEncapRTConstruct:  noEncapRTConstruct,
-		logCtx:              logCtx,
+		hostname:                  dpConfig.Hostname,
+		routeTable:                rt,
+		blackholeRouteTable:       brt,
+		previouslyUsedParentNames: set.New[string](),
+		routesByDest:              map[string]*proto.RouteUpdate{},
+		localIPAMBlocks:           map[string]*proto.RouteUpdate{},
+		vtepsByNode:               map[string]*proto.VXLANTunnelEndpointUpdate{},
+		myVTEPChangedC:            make(chan struct{}, 1),
+		vxlanDevice:               deviceName,
+		vxlanID:                   dpConfig.RulesConfig.VXLANVNI,
+		vxlanPort:                 dpConfig.RulesConfig.VXLANPort,
+		ipVersion:                 ipVersion,
+		externalNodeCIDRs:         dpConfig.ExternalNodesCidrs,
+		routesDirty:               true,
+		vtepsDirty:                true,
+		dpConfig:                  dpConfig,
+		nlHandle:                  nlHandle,
+		noEncapProtocol:           noEncapProtocol,
+		noEncapRTConstruct:        noEncapRTConstruct,
+		logCtx:                    logCtx,
 	}
 }
 
@@ -370,7 +378,12 @@ func (m *vxlanManager) getLocalVTEPParent() (netlink.Link, error) {
 func (m *vxlanManager) GetRouteTableSyncers() []routetable.RouteTableSyncer {
 	rts := []routetable.RouteTableSyncer{m.routeTable, m.blackholeRouteTable}
 
+	if time.Since(m.lastParentDevUpdate) > 5*time.Minute && m.previouslyUsedParentNames.Len() > 1 {
+		// Make sure the set of names doesn't grow forever.
+		m.previouslyUsedParentNames.Clear()
+	}
 	if m.noEncapRouteTable != nil {
+		m.previouslyUsedParentNames.Add(m.parentIfaceName)
 		rts = append(rts, m.noEncapRouteTable)
 	}
 
@@ -525,8 +538,22 @@ func (m *vxlanManager) OnParentNameUpdate(name string) {
 		devRouteSrcAddr = m.dpConfig.DeviceRouteSourceAddressIPv6
 	}
 	m.parentIfaceName = name
+	m.lastParentDevUpdate = time.Now()
+
+	// If we're changing the name, we need to make sure the new RouteTable will
+	// clean up the routes on the old interface.  Add previously-used names to
+	// the regexp.
+	names := m.previouslyUsedParentNames.Slice()
+	if !m.previouslyUsedParentNames.Contains(m.parentIfaceName) {
+		names = append(names, m.parentIfaceName)
+	}
+	sort.Strings(names)
+	for i, name := range names {
+		names[i] = regexp.QuoteMeta(name)
+	}
+
 	m.noEncapRouteTable = m.noEncapRTConstruct(
-		[]string{"^" + name + "$"},
+		[]string{"^" + strings.Join(names, "|") + "$"},
 		m.ipVersion,
 		false,
 		m.dpConfig.NetlinkTimeout,
