@@ -44,15 +44,17 @@ type VTEP struct {
 }
 
 type VXLANFDB struct {
-	ifaceName      string
-	ifIndex        int
-	arpEntries     *deltatracker.DeltaTracker[string, ipMACMapping]
-	fdbEntries     *deltatracker.DeltaTracker[string, ipMACMapping]
-	logCxt         *log.Entry
-	resyncPending  bool
-	logNextSuccess bool
-	nl             *handlemgr.HandleManager
-	family         int
+	ifaceName        string
+	ifIndex          int
+	arpEntries       *deltatracker.DeltaTracker[string, ipMACMapping]
+	fdbEntries       *deltatracker.DeltaTracker[string, ipMACMapping]
+	logCxt           *log.Entry
+	resyncPending    bool
+	logNextSuccess   bool
+	nl               *handlemgr.HandleManager
+	family           int
+
+	newNetlinkHandle func() (netlinkshim.Interface, error)
 }
 
 type ipMACMapping struct {
@@ -60,7 +62,21 @@ type ipMACMapping struct {
 	MAC net.HardwareAddr
 }
 
-func New(family int, ifaceName string, featureDetector environment.FeatureDetectorIface, netlinkTimeout time.Duration) *VXLANFDB {
+type VXLANFDBOption func(*VXLANFDB)
+
+func WithNetlinkHandleShim(newNetlinkHandle func() (netlinkshim.Interface, error)) VXLANFDBOption {
+	return func(fdb *VXLANFDB) {
+		fdb.newNetlinkHandle = newNetlinkHandle
+	}
+}
+
+func New(
+	family int,
+	ifaceName string,
+	featureDetector environment.FeatureDetectorIface,
+	netlinkTimeout time.Duration,
+	opts ...VXLANFDBOption,
+) *VXLANFDB {
 	switch family {
 	case unix.AF_INET, unix.AF_INET6:
 	default:
@@ -77,14 +93,21 @@ func New(family int, ifaceName string, featureDetector environment.FeatureDetect
 		}),
 		resyncPending:  true,
 		logNextSuccess: true,
-		nl: handlemgr.NewHandleManager(
-			featureDetector,
-			handlemgr.WithSocketTimeout(netlinkTimeout),
-			// The Netlink library doesn't seem to be able to list
-			// both types of neighbors in strict mode.
-			handlemgr.WithStrictModeOverride(false),
-		),
+		newNetlinkHandle: netlinkshim.NewRealNetlink,
 	}
+
+	for _, o := range opts {
+		o(&f)
+	}
+
+	f.nl = handlemgr.NewHandleManager(
+		featureDetector,
+		handlemgr.WithSocketTimeout(netlinkTimeout),
+		// The Netlink library doesn't seem to be able to list
+		// both types of neighbors in strict mode.
+		handlemgr.WithStrictModeOverride(false),
+		handlemgr.WithNewHandleOverride(f.newNetlinkHandle),
+	)
 	return &f
 }
 
@@ -287,7 +310,7 @@ func (r *VXLANFDB) resync(nl netlinkshim.Interface) error {
 	}
 	r.ifIndex = link.Attrs().Index
 
-	// Refresh the neighbours.
+	// Refresh the neighbors.
 	existingNeigh, err := nl.NeighList(r.ifIndex, unix.AF_INET)
 	if err != nil {
 		r.logCxt.WithError(err).Error("Failed to list neighbors")

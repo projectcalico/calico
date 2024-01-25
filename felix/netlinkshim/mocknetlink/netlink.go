@@ -305,7 +305,8 @@ type MockNetlinkDataplane struct {
 }
 
 type NeighKey struct {
-	MAC string
+	LinkIndex int
+	MAC       string
 	IP  ip.Addr
 }
 
@@ -485,6 +486,7 @@ func (d *MockNetlinkDataplane) LinkByName(name string) (netlink.Link, error) {
 	if d.DeleteInterfaceAfterLinkByName {
 		defer delete(d.NameToLink, name)
 	}
+	log.Debugf("Looking for interface: %s", name)
 	if link, ok := d.NameToLink[name]; ok {
 		return link.copy(), nil
 	}
@@ -880,6 +882,27 @@ func (d *MockNetlinkDataplane) RouteDel(route *netlink.Route) error {
 	}
 }
 
+// AddNeighs allows test code to add neighbours to the mock dataplane
+// without going through the netlink API.
+func (d *MockNetlinkDataplane) AddNeighs(family int, neighs ...netlink.Neigh) {
+	err := d.checkNeighFamily(family)
+	if err != nil {
+		panic(err)
+	}
+	if d.NeighsByFamily[family] == nil {
+		d.NeighsByFamily[family] = map[NeighKey]*netlink.Neigh{}
+	}
+	for _, neigh := range neighs {
+		neigh := neigh
+		nk := NeighKey{
+			LinkIndex: neigh.LinkIndex,
+			MAC:       neigh.HardwareAddr.String(),
+			IP:        ip.FromNetIP(neigh.IP),
+		}
+		d.NeighsByFamily[family][nk] = &neigh
+	}
+}
+
 func (d *MockNetlinkDataplane) NeighAdd(neigh *netlink.Neigh) error {
 	family := neigh.Family
 	err := d.checkNeighFamily(family)
@@ -896,7 +919,11 @@ func (d *MockNetlinkDataplane) NeighAdd(neigh *netlink.Neigh) error {
 	if neigh.HardwareAddr == nil {
 		return unix.EINVAL
 	}
+	if neigh.LinkIndex == 0 {
+		return unix.EINVAL
+	}
 	nk := NeighKey{
+		LinkIndex: neigh.LinkIndex,
 		MAC: neigh.HardwareAddr.String(),
 		IP:  ip.FromNetIP(neigh.IP),
 	}
@@ -951,7 +978,11 @@ func (d *MockNetlinkDataplane) NeighSet(neigh *netlink.Neigh) error {
 	if neigh.HardwareAddr == nil {
 		return unix.EINVAL
 	}
+	if neigh.LinkIndex == 0 {
+		return unix.EINVAL
+	}
 	nk := NeighKey{
+		LinkIndex: neigh.LinkIndex,
 		MAC: neigh.HardwareAddr.String(),
 		IP:  ip.FromNetIP(neigh.IP),
 	}
@@ -976,7 +1007,11 @@ func (d *MockNetlinkDataplane) NeighDel(neigh *netlink.Neigh) error {
 	if neigh.HardwareAddr == nil {
 		return unix.EINVAL
 	}
+	if neigh.LinkIndex == 0 {
+		return unix.EINVAL
+	}
 	nk := NeighKey{
+		LinkIndex: neigh.LinkIndex,
 		MAC: neigh.HardwareAddr.String(),
 		IP:  ip.FromNetIP(neigh.IP),
 	}
@@ -1011,8 +1046,9 @@ func (d *MockNetlinkDataplane) AddStaticArpEntry(cidr ip.CIDR, destMAC net.Hardw
 
 	linkIndex := d.NameToLink[ifaceName].LinkAttrs.Index
 	d.NeighsByFamily[unix.AF_INET][NeighKey{
-		MAC: destMAC.String(),
-		IP:  cidr.Addr(),
+		LinkIndex: linkIndex,
+		MAC:       destMAC.String(),
+		IP:        cidr.Addr(),
 	}] = &netlink.Neigh{
 		Family:       unix.AF_INET,
 		LinkIndex:    linkIndex,
