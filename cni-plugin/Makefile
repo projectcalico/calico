@@ -74,27 +74,40 @@ ifeq ($(ARCH),amd64)
 WINDOWS_BIN=bin/windows
 build: $(WINDOWS_BIN)/install.exe $(WINDOWS_BIN)/calico.exe $(WINDOWS_BIN)/calico-ipam.exe
 endif
-# Define go architecture flags to support arm variants
-GOARCH_FLAGS :=-e GOARCH=$(ARCH)
 
 build-all: $(addprefix sub-build-,$(VALIDARCHES))
 sub-build-%:
 	$(MAKE) build ARCH=$*
 
-## Build the Calico network plugin and ipam plugins
+## Build the Calico installation binary for the network and ipam plugins
 $(BIN)/install binary: $(SRC_FILES)
 ifeq ($(FIPS),true)
+	$(call build_cgo_boring_binary, $(PACKAGE_NAME)/cmd/install, $@)
+else
+	$(call build_binary, $(PACKAGE_NAME)/cmd/install, $@)
+endif
+
+## Build the Calico network and ipam plugins
+$(BIN)/calico: $(SRC_FILES)
+ifeq ($(FIPS), true)
 	$(call build_cgo_boring_binary, $(PACKAGE_NAME)/cmd/calico, $@)
 else
 	$(call build_binary, $(PACKAGE_NAME)/cmd/calico, $@)
 endif
 
-## Build the Calico network plugin and ipam plugins for Windows
+$(BIN)/calico-ipam: $(BIN)/calico
+	cp "$<" "$@"
+
+## Build the Calico network and ipam plugins for Windows
 $(WINDOWS_BIN)/install.exe: $(SRC_FILES)
+	mkdir -p $(WINDOWS_BIN)
+	$(call build_windows_binary, $(PACKAGE_NAME)/cmd/install, $@)
+
+$(WINDOWS_BIN)/calico.exe: $(SRC_FILES)
 	mkdir -p $(WINDOWS_BIN)
 	$(call build_windows_binary, $(PACKAGE_NAME)/cmd/calico, $@)
 
-$(WINDOWS_BIN)/calico-ipam.exe $(WINDOWS_BIN)/calico.exe: $(WINDOWS_BIN)/install.exe
+$(WINDOWS_BIN)/calico-ipam.exe: $(WINDOWS_BIN)/calico.exe
 	cp "$<" "$@"
 
 # NOTE: WINDOWS_IMAGE_REQS must be defined with the requirements to build the windows
@@ -151,9 +164,6 @@ $(WINDOWS_BIN)/flannel.exe:
 ut: run-k8s-controller-manager $(BIN)/install $(BIN)/host-local $(BIN)/calico-ipam $(BIN)/calico
 	$(MAKE) ut-datastore DATASTORE_TYPE=etcdv3
 	$(MAKE) ut-datastore DATASTORE_TYPE=kubernetes
-
-$(BIN)/calico-ipam $(BIN)/calico: $(BIN)/install
-	cp "$<" "$@"
 
 ut-datastore:
 	# The tests need to run as root
