@@ -199,6 +199,62 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 				}
 			})
 
+			if vxlanMode == api.VXLANModeCrossSubnet && !enableIPv6 && routeSource == "CalicoIPAM" {
+				It("should move same-subnet routes when the node IP moves to a new interface", func() {
+					// Routes should look like this:
+					//
+					//   default via 172.17.0.1 dev eth0
+					//   blackhole 10.65.0.0/26 proto 80
+					//   10.65.0.2 dev cali29f56ea1abf scope link
+					//   10.65.1.0/26 via 172.17.0.6 dev eth0 proto 80 onlink
+					//   10.65.2.0/26 via 172.17.0.5 dev eth0 proto 80 onlink
+					//   172.17.0.0/16 dev eth0 proto kernel scope link src 172.17.0.7
+					felix := tc.Felixes[0]
+					Eventually(felix.ExecOutputFn("ip", "route", "show"), "10s").Should(ContainSubstring(
+						fmt.Sprintf("10.65.1.0/26 via %s dev eth0 proto 80 onlink", tc.Felixes[1].IP)))
+
+					// Find the default and subnet routes, we'll need to
+					// recreate those after moving the IP.
+					defaultRoute, err := felix.ExecOutput("ip", "route", "show", "default")
+					Expect(err).NotTo(HaveOccurred())
+					lines := strings.Split(strings.Trim(defaultRoute, "\n "), "\n")
+					Expect(lines).To(HaveLen(1))
+					defaultRouteArgs := strings.Split(strings.Replace(lines[0], "eth0", "bond0", -1), " ")
+
+					// Assuming the subnet route will be "proto kernel" and that will be the only such route.
+					subnetRoute, err := felix.ExecOutput("ip", "route", "show", "proto", "kernel")
+					Expect(err).NotTo(HaveOccurred())
+					lines = strings.Split(strings.Trim(subnetRoute, "\n "), "\n")
+					Expect(lines).To(HaveLen(1), "expected only one proto kernel route, has docker's routing set-up changed?")
+					subnetArgs := strings.Split(strings.Replace(lines[0], "eth0", "bond0", -1), " ")
+
+					// Add the bond, replacing eth0.
+					felix.Exec("ip", "addr", "del", felix.IP, "dev", "eth0")
+					felix.Exec("ip", "link", "add", "dev", "bond0", "type", "bond")
+					felix.Exec("ip", "link", "set", "dev", "eth0", "down")
+					felix.Exec("ip", "link", "set", "dev", "eth0", "master", "bond0")
+					felix.Exec("ip", "link", "set", "dev", "eth0", "up")
+					felix.Exec("ip", "link", "set", "dev", "bond0", "up")
+
+					// Move IP to bond0.  We don't actually set up more than one
+					// bonded interface in this test, we just want to know that
+					// felix spots the IP move.
+					ipWithSubnet := felix.IP + "/" + felix.GetIPPrefix()
+					felix.Exec("ip", "addr", "add", ipWithSubnet, "dev", "bond0")
+
+					// Re-add the default routes, via bond0 (one gets removed when
+					// eth0 goes down, the other gets stuck on eth0).
+					felix.Exec(append([]string{"ip", "r", "add"}, defaultRouteArgs...)...)
+					felix.Exec(append([]string{"ip", "r", "replace"}, subnetArgs...)...)
+
+					expCrossSubRoute := fmt.Sprintf("10.65.1.0/26 via %s dev bond0 proto 80 onlink", tc.Felixes[1].IP)
+					Eventually(felix.ExecOutputFn("ip", "route", "show"), "10s").Should(
+						ContainSubstring(expCrossSubRoute),
+						"Cross-subnet route should move from eth0 to bond0.",
+					)
+				})
+			}
+
 			It("should have host to workload connectivity", func() {
 				if vxlanMode == api.VXLANModeAlways && routeSource == "WorkloadIPs" {
 					Skip("Skipping due to known issue with tunnel IPs not being programmed in WEP mode")
