@@ -159,7 +159,7 @@ calicoctl:
 # Configuration for the Calico CSI plugin - setting to None will disable the plugin, default: /var/lib/kubelet
 kubeletVolumePluginPath: None   
 
-#for windows or eBFP support it is necessary to supply the api server
+# Optionally configure the host and port used to access the Kubernetes API server.
 kubernetesServiceEndpoint:
   host: "" #e.g. k8s.mycompany.com
   port: "6443"
