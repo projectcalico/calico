@@ -227,7 +227,7 @@ func describeEnableTests(enableV4, enableV6 bool) {
 			rrDataplane = mocknetlink.New()
 			s = &mockCallbacks{}
 		} else {
-			// Nil out to avoid test polution.
+			// Nil out to avoid test pollution.
 			wgDataplane = nil
 			rtDataplane = nil
 			rrDataplane = nil
@@ -238,7 +238,7 @@ func describeEnableTests(enableV4, enableV6 bool) {
 			rrDataplaneV6 = mocknetlink.New()
 			sV6 = &mockCallbacks{}
 		} else {
-			// Nil out to avoid test polution.
+			// Nil out to avoid test pollution.
 			wgDataplaneV6 = nil
 			rtDataplaneV6 = nil
 			rrDataplaneV6 = nil

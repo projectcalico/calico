@@ -1038,8 +1038,8 @@ var _ = Describe("RouteTable", func() {
 				_ = rt.Apply()
 
 				// Set interface up
-				rt.OnIfaceStateChanged("cali1", 12, ifacemonitor.StateUp)
-				cali1 = dataplane.AddIface(12, "cali1", true, true)
+				rt.OnIfaceStateChanged("cali1", cali1.LinkAttrs.Index, ifacemonitor.StateUp)
+				dataplane.SetIface("cali1", true, true)
 
 				// Now, the apply should work.
 				err := rt.Apply()

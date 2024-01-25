@@ -1239,7 +1239,7 @@ func (r *RouteTable) filterErrorByIfaceState(
 		return defaultErr
 	}
 
-	if strings.Contains(currentErr.Error(), "not found") {
+	if isNotFoundError(currentErr) {
 		// Current error already tells us that the link was not present.  If we re-check
 		// the status in this case, we open a race where the interface gets created and
 		// we log an error when we're about to re-trigger programming anyway.
@@ -1274,7 +1274,7 @@ func (r *RouteTable) filterErrorByIfaceState(
 			logCxt.WithField("link", link).Debug("Interface is down")
 			return IfaceDown
 		}
-	} else if strings.Contains(err.Error(), "not found") {
+	} else if isNotFoundError(err) {
 		// Special case: Link no longer exists.
 		logCxt.Info("Interface was deleted during operation, filtering error")
 		return IfaceNotPresent
@@ -1283,6 +1283,23 @@ func (r *RouteTable) filterErrorByIfaceState(
 		logCxt.WithError(err).Error("Failed to access interface after a failure")
 		return defaultErr
 	}
+}
+
+func isNotFoundError(err error) bool {
+	if err == nil {
+		return false
+	}
+	var lnf netlink.LinkNotFoundError
+	if errors.As(err, &lnf) {
+		return true
+	}
+	if errors.Is(err, unix.ENOENT) {
+		return true
+	}
+	if strings.Contains(err.Error(), "not found") {
+		return true
+	}
+	return false
 }
 
 func (r *RouteTable) addStaticARPEntry(

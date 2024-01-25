@@ -77,40 +77,41 @@ var _ netlinkshim.Interface = (*MockNetlinkDataplane)(nil)
 
 var (
 	SimulatedError        = errors.New("dummy error")
-	NotFoundError         = netlink.LinkNotFoundError{}
+	NotFoundError         = errors.New("not found")
+	LinkNotFoundError     = netlink.LinkNotFoundError{}
 	FileDoesNotExistError = errors.New("file does not exist")
 	AlreadyExistsError    = errors.New("already exists")
 	NotSupportedError     = errors.New("operation not supported")
 )
-
-// Copy of the netlink.LinkNotFoundError struct.
-type myLinkNotFoundError struct {
-	error
-}
 
 func init() {
 	// Ugh, the error field isn't exported and logging out the error
 	// panics if the error field isn't set.  Use an unsafe cast to
 	// set the value.
 
+	// Copy of the netlink.LinkNotFoundError struct.
+	type myLinkNotFoundError struct {
+		error
+	}
+
 	// First check that our struct matches the netlink one...
-	nlType := reflect.TypeOf(NotFoundError)
+	nlType := reflect.TypeOf(LinkNotFoundError)
 	ourType := reflect.TypeOf(myLinkNotFoundError{})
 	if nlType.NumField() != ourType.NumField() {
 		panic("netlink.LinkNotFoundError structure appears to have changed (different number of fields)")
 	}
 	for i := 0; i < ourType.NumField(); i++ {
 		nlFieldType := nlType.Field(i).Type
-		outFieldType := ourType.Field(i).Type
-		if nlFieldType != outFieldType {
+		ourFieldType := ourType.Field(i).Type
+		if nlFieldType != ourFieldType {
 			panic(fmt.Sprintf("netlink.LinkNotFoundError structure appears to have changed (field type %v != %v)",
 				nlFieldType, ourType.Field(i).Type))
 		}
 	}
 
 	// All good, proceed with the sketchy cast...
-	var lnf = (*myLinkNotFoundError)((unsafe.Pointer)(&NotFoundError))
-	lnf.error = SimulatedError
+	var lnf = (*myLinkNotFoundError)((unsafe.Pointer)(&LinkNotFoundError))
+	lnf.error = NotFoundError
 }
 
 type FailFlags uint32
@@ -469,7 +470,7 @@ func (d *MockNetlinkDataplane) LinkByName(name string) (netlink.Link, error) {
 
 	Expect(d.NetlinkOpen).To(BeTrue())
 	if d.shouldFail(FailNextLinkByNameNotFound) {
-		return nil, NotFoundError
+		return nil, LinkNotFoundError
 	}
 	if d.shouldFail(FailNextLinkByName) {
 		return nil, SimulatedError
@@ -480,7 +481,7 @@ func (d *MockNetlinkDataplane) LinkByName(name string) (netlink.Link, error) {
 	if link, ok := d.NameToLink[name]; ok {
 		return link.copy(), nil
 	}
-	return nil, NotFoundError
+	return nil, LinkNotFoundError
 }
 
 func (d *MockNetlinkDataplane) LinkAdd(link netlink.Link) error {
@@ -523,7 +524,7 @@ func (d *MockNetlinkDataplane) LinkDel(link netlink.Link) error {
 	}
 
 	if _, ok := d.NameToLink[link.Attrs().Name]; !ok {
-		return NotFoundError
+		return LinkNotFoundError
 	}
 
 	delete(d.NameToLink, link.Attrs().Name)
@@ -545,7 +546,7 @@ func (d *MockNetlinkDataplane) LinkSetMTU(link netlink.Link, mtu int) error {
 		d.NameToLink[link.Attrs().Name] = link
 		return nil
 	}
-	return NotFoundError
+	return LinkNotFoundError
 }
 
 func (d *MockNetlinkDataplane) LinkSetUp(link netlink.Link) error {
@@ -565,7 +566,7 @@ func (d *MockNetlinkDataplane) LinkSetUp(link netlink.Link) error {
 		d.NameToLink[link.Attrs().Name] = link
 		return nil
 	}
-	return NotFoundError
+	return LinkNotFoundError
 }
 
 func (d *MockNetlinkDataplane) AddrList(link netlink.Link, family int) ([]netlink.Addr, error) {
@@ -833,7 +834,7 @@ func (d *MockNetlinkDataplane) RouteReplace(route *netlink.Route) error {
 		return SimulatedError
 	}
 	key := KeyForRoute(route)
-	log.WithField("routeKey", key).Info("Mock dataplane: RouteUpdate called")
+	log.WithField("routeKey", key).Info("Mock dataplane: RouteReplace called")
 	d.AddedRouteKeys.Add(key)
 	d.ExistingTables.Add(route.Table)
 	if _, ok := d.RouteKeyToRoute[key]; ok {
