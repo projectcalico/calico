@@ -38,7 +38,7 @@ struct cali_tc_globals {
 	__u32 __scratch[]; /* N.B. this provides pointer to the location but does not add to the size */ \
 };
 
-struct cali_globals {
+struct cali_tc_preamble_globals {
 	struct cali_tc_global_data v4;
 	struct cali_tc_global_data v6;
 };

@@ -13,7 +13,7 @@
 #include "jump.h"
 #include "log.h"
 
-const volatile struct cali_globals __globals;
+const volatile struct cali_tc_preamble_globals __globals;
 
 #define JUMP_IDX(idx) (idx)
 #define JUMP_IDX_DEBUG(idx) (idx ## _DEBUG)

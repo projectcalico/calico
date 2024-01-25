@@ -8,7 +8,7 @@
 #include "icmp.h"
 #include "parsing.h"
 
-const volatile struct cali_globals __globals;
+const volatile struct cali_tc_preamble_globals __globals;
 
 static CALI_BPF_INLINE int calico_unittest_entry (struct __sk_buff *skb)
 {

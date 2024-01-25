@@ -175,7 +175,7 @@ void bpf_tc_set_globals(struct bpf_map *map,
 	v4.iface_name[sizeof(v4.iface_name)-1] = '\0';
 
 	struct cali_tc_global_data v6 = v4;
-	struct cali_globals data;
+	struct cali_tc_preamble_globals data;
 
 	memcpy(&v4.host_ip, host_ip, 16);
 	memcpy(&v4.intf_ip, intf_ip, 16);

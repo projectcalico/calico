@@ -257,7 +257,7 @@ extern const volatile struct cali_xdp_globals __globals;
 
 #elif (!CALI_F_CGROUP) || defined(UNITTEST)
 
-extern const volatile struct cali_globals __globals;
+extern const volatile struct cali_tc_preamble_globals __globals;
 #define CALI_CONFIGURABLE(name) ctx->globals->data.name
 #ifdef IPVER6
 #define CALI_CONFIGURABLE_IP(name) CALI_CONFIGURABLE(name)
