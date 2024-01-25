@@ -1,0 +1,10 @@
+{{- if .Values.kubernetesServiceEndpoint.host -}}
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: kubernetes-services-endpoint
+  namespace: {{.Release.Namespace}}
+data:
+  KUBERNETES_SERVICE_HOST: {{ .Values.kubernetesServiceEndpoint.host }}
+  KUBERNETES_SERVICE_PORT: {{ .Values.kubernetesServiceEndpoint.port }}
+{{- end }}
