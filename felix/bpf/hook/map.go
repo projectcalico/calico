@@ -27,7 +27,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/maps"
 )
 
-const maxPrograms = 200
+const maxPrograms = 400
 
 type SubProg int
 

@@ -652,11 +652,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	if config.BPFEnabled {
 		log.Info("BPF enabled, starting BPF endpoint manager and map manager.")
 		var err error
-		ipFamily := 4
-		if config.BPFIpv6Enabled {
-			ipFamily = 6
-		}
-		bpfMaps, err = bpfmap.CreateBPFMaps(ipFamily)
+
+		bpfMaps, err = bpfmap.CreateBPFMaps(config.BPFIpv6Enabled)
 		if err != nil {
 			log.WithError(err).Panic("error creating bpf maps")
 		}
@@ -669,7 +666,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			ipSetsV6 := bpfipsets.NewBPFIPSets(
 				config.RulesConfig.IPSetConfigV6,
 				ipSetIDAllocator,
-				bpfMaps.IpsetsMap,
+				bpfMaps.IpsetsMapV6,
 				bpfipsets.IPSetEntryV6FromBytes,
 				bpfipsets.ProtoIPSetMemberToBPFEntryV6,
 				dp.loopSummarizer,
@@ -696,12 +693,14 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		fibLookupEnabled := !config.RulesConfig.IPIPEnabled
 		keyFromSlice := failsafes.KeyFromSlice
 		makeKey := failsafes.MakeKey
+		failsafeMap := bpfMaps.FailsafesMap
 		if config.BPFIpv6Enabled {
 			keyFromSlice = failsafes.KeyV6FromSlice
 			makeKey = failsafes.MakeKeyV6
+			failsafeMap = bpfMaps.FailsafesMapV6
 		}
 		failsafeMgr := failsafes.NewManager(
-			bpfMaps.FailsafesMap,
+			failsafeMap,
 			config.RulesConfig.FailsafeInboundHostPorts,
 			config.RulesConfig.FailsafeOutboundHostPorts,
 			dp.loopSummarizer,
@@ -747,12 +746,14 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 		kfb := conntrack.KeyFromBytes
 		vfb := conntrack.ValueFromBytes
+		ctMap := bpfMaps.CtMap
 		if config.BPFIpv6Enabled {
 			kfb = conntrack.KeyV6FromBytes
 			vfb = conntrack.ValueV6FromBytes
+			ctMap = bpfMaps.CtMapV6
 		}
 
-		conntrackScanner := bpfconntrack.NewScanner(bpfMaps.CtMap, kfb, vfb,
+		conntrackScanner := bpfconntrack.NewScanner(ctMap, kfb, vfb,
 			bpfconntrack.NewLivenessScanner(config.BPFConntrackTimeouts, config.BPFNodePortDSREnabled))
 
 		// Before we start, scan for all finished / timed out connections to
