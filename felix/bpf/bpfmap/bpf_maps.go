@@ -35,17 +35,29 @@ import (
 )
 
 type Maps struct {
-	IpsetsMap       maps.Map
-	StateMap        maps.Map
-	ArpMap          maps.Map
-	FailsafesMap    maps.Map
-	FrontendMap     maps.Map
-	BackendMap      maps.Map
-	AffinityMap     maps.Map
-	RouteMap        maps.Map
-	CtMap           maps.Map
-	SrMsgMap        maps.Map
-	CtNatsMap       maps.Map
+	IpsetsMap    maps.Map
+	StateMap     maps.Map
+	ArpMap       maps.Map
+	FailsafesMap maps.Map
+	FrontendMap  maps.Map
+	BackendMap   maps.Map
+	AffinityMap  maps.Map
+	RouteMap     maps.Map
+	CtMap        maps.Map
+	SrMsgMap     maps.Map
+	CtNatsMap    maps.Map
+
+	IpsetsMapV6    maps.Map
+	ArpMapV6       maps.Map
+	FailsafesMapV6 maps.Map
+	FrontendMapV6  maps.Map
+	BackendMapV6   maps.Map
+	AffinityMapV6  maps.Map
+	RouteMapV6     maps.Map
+	CtMapV6        maps.Map
+	SrMsgMapV6     maps.Map
+	CtNatsMapV6    maps.Map
+
 	IfStateMap      maps.Map
 	RuleCountersMap maps.Map
 	CountersMap     maps.Map
@@ -55,7 +67,7 @@ type Maps struct {
 	XDPJumpMap      maps.MapWithDeleteIfExists
 }
 
-func (m *Maps) Destroy() {
+func (m *Maps) Destroy(ipv6Enabled bool) {
 	mps := []maps.Map{
 		m.IpsetsMap,
 		m.StateMap,
@@ -74,61 +86,68 @@ func (m *Maps) Destroy() {
 		m.XDPJumpMap,
 	}
 
+	if ipv6Enabled {
+		v6Maps := []maps.Map{
+			m.IpsetsMapV6,
+			m.ArpMapV6,
+			m.FailsafesMapV6,
+			m.FrontendMapV6,
+			m.BackendMapV6,
+			m.AffinityMapV6,
+			m.RouteMapV6,
+			m.CtMapV6,
+			m.SrMsgMapV6,
+			m.CtNatsMapV6,
+		}
+
+		mps = append(mps, v6Maps...)
+	}
+
 	for _, m := range mps {
 		os.Remove(m.(pinnedMap).Path())
 		m.(pinnedMap).Close()
 	}
 }
 
-func CreateBPFMaps(ipFamily int) (*Maps, error) {
+func CreateBPFMaps(ipv6Enabled bool) (*Maps, error) {
 	mps := []maps.Map{}
 	ret := new(Maps)
 
-	getmap := func(v4, v6 func() maps.Map) maps.Map {
-		if ipFamily == 4 {
-			return v4()
-		}
-		return v6()
+	getmapWithExistsCheck := func(m func() maps.MapWithExistsCheck) maps.MapWithExistsCheck {
+		return m()
 	}
 
-	getmapWithExistsCheck := func(v4, v6 func() maps.MapWithExistsCheck) maps.MapWithExistsCheck {
-		if ipFamily == 4 {
-			return v4()
-		}
-		return v6()
-	}
-
-	ret.IpsetsMap = getmap(ipsets.Map, ipsets.MapV6)
+	ret.IpsetsMap = ipsets.Map()
 	mps = append(mps, ret.IpsetsMap)
 
 	ret.StateMap = state.Map()
 	mps = append(mps, ret.StateMap)
 
-	ret.ArpMap = getmap(arp.Map, arp.MapV6)
+	ret.ArpMap = arp.Map()
 	mps = append(mps, ret.ArpMap)
 
-	ret.FailsafesMap = getmap(failsafes.Map, failsafes.MapV6)
+	ret.FailsafesMap = failsafes.Map()
 	mps = append(mps, ret.FailsafesMap)
 
-	ret.FrontendMap = getmapWithExistsCheck(nat.FrontendMap, nat.FrontendMapV6)
+	ret.FrontendMap = getmapWithExistsCheck(nat.FrontendMap)
 	mps = append(mps, ret.FrontendMap)
 
-	ret.BackendMap = getmapWithExistsCheck(nat.BackendMap, nat.BackendMapV6)
+	ret.BackendMap = getmapWithExistsCheck(nat.BackendMap)
 	mps = append(mps, ret.BackendMap)
 
-	ret.AffinityMap = getmap(nat.AffinityMap, nat.AffinityMapV6)
+	ret.AffinityMap = nat.AffinityMap()
 	mps = append(mps, ret.AffinityMap)
 
-	ret.RouteMap = getmap(routes.Map, routes.MapV6)
+	ret.RouteMap = routes.Map()
 	mps = append(mps, ret.RouteMap)
 
-	ret.CtMap = getmap(conntrack.Map, conntrack.MapV6)
+	ret.CtMap = conntrack.Map()
 	mps = append(mps, ret.CtMap)
 
-	ret.SrMsgMap = getmap(nat.SendRecvMsgMap, nat.SendRecvMsgMapV6)
+	ret.SrMsgMap = nat.SendRecvMsgMap()
 	mps = append(mps, ret.SrMsgMap)
 
-	ret.CtNatsMap = getmap(nat.AllNATsMsgMap, nat.AllNATsMsgMapV6)
+	ret.CtNatsMap = nat.AllNATsMsgMap()
 	mps = append(mps, ret.CtNatsMap)
 
 	ret.IfStateMap = ifstate.Map()
@@ -152,6 +171,37 @@ func CreateBPFMaps(ipFamily int) (*Maps, error) {
 	ret.XDPJumpMap = jump.XDPMap().(maps.MapWithDeleteIfExists)
 	mps = append(mps, ret.XDPJumpMap)
 
+	if ipv6Enabled {
+		ret.IpsetsMapV6 = ipsets.MapV6()
+		mps = append(mps, ret.IpsetsMapV6)
+
+		ret.ArpMapV6 = arp.MapV6()
+		mps = append(mps, ret.ArpMapV6)
+
+		ret.FailsafesMapV6 = failsafes.MapV6()
+		mps = append(mps, ret.FailsafesMapV6)
+
+		ret.FrontendMapV6 = getmapWithExistsCheck(nat.FrontendMapV6)
+		mps = append(mps, ret.FrontendMapV6)
+
+		ret.BackendMapV6 = getmapWithExistsCheck(nat.BackendMapV6)
+		mps = append(mps, ret.BackendMapV6)
+
+		ret.AffinityMapV6 = nat.AffinityMapV6()
+		mps = append(mps, ret.AffinityMapV6)
+
+		ret.RouteMapV6 = routes.MapV6()
+		mps = append(mps, ret.RouteMapV6)
+
+		ret.CtMapV6 = conntrack.MapV6()
+		mps = append(mps, ret.CtMapV6)
+
+		ret.SrMsgMapV6 = nat.SendRecvMsgMapV6()
+		mps = append(mps, ret.SrMsgMapV6)
+
+		ret.CtNatsMapV6 = nat.AllNATsMsgMapV6()
+		mps = append(mps, ret.CtNatsMapV6)
+	}
 	for i, bpfMap := range mps {
 		err := bpfMap.EnsureExists()
 		if err != nil {

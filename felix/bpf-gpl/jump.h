@@ -39,7 +39,7 @@ static CALI_BPF_INLINE struct cali_xdp_globals *state_get_globals_xdp(void)
 
 #define cali_jump_map map_symbol(xdp_cali_progs, 2)
 
-CALI_MAP_V1(cali_jump_map, BPF_MAP_TYPE_PROG_ARRAY, __u32, __u32, 200, 0)
+CALI_MAP_V1(cali_jump_map, BPF_MAP_TYPE_PROG_ARRAY, __u32, __u32, 400, 0)
 
 #define CALI_JUMP_TO(ctx, index) bpf_tail_call((ctx)->xdp, &cali_jump_map, (ctx)->xdp_globals->jumps[PROG_PATH(index)])
 
@@ -47,7 +47,7 @@ CALI_MAP_V1(cali_jump_map, BPF_MAP_TYPE_PROG_ARRAY, __u32, __u32, 200, 0)
 
 #define cali_jump_map map_symbol(cali_progs, 2)
 
-CALI_MAP_V1(cali_jump_map, BPF_MAP_TYPE_PROG_ARRAY, __u32, __u32, 200, 0)
+CALI_MAP_V1(cali_jump_map, BPF_MAP_TYPE_PROG_ARRAY, __u32, __u32, 400, 0)
 
 #define __CALI_JUMP_TO(ctx, index) do {	\
 	CALI_DEBUG("jump to idx %d prog at %d\n", index, (ctx)->globals->data.jumps[PROG_PATH(index)]);	\

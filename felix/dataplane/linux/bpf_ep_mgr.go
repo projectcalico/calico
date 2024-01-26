@@ -350,8 +350,6 @@ type bpfEndpointManager struct {
 	natInIdx  int
 	natOutIdx int
 
-	arpMap maps.Map
-
 	v4 *bpfEndpointManagerDataplane
 	v6 *bpfEndpointManagerDataplane
 }
@@ -477,7 +475,6 @@ func newBPFEndpointManager(
 		bpfPolicyDebugEnabled:  config.BPFPolicyDebugEnabled,
 		polNameToMatchIDs:      map[string]set.Set[polprog.RuleMatchID]{},
 		dirtyRules:             set.New[polprog.RuleMatchID](),
-		arpMap:                 bpfmaps.ArpMap,
 	}
 
 	// Calculate allowed XDP attachment modes.  Note, in BPF mode untracked ingress policy is
@@ -1467,9 +1464,17 @@ func (m *bpfEndpointManager) CompleteDeferredWork() error {
 	// Copy data from old map to the new map
 	m.copyDeltaOnce.Do(func() {
 		log.Info("Copy delta entries from old map to the new map")
-		err := m.bpfmaps.CtMap.CopyDeltaFromOldMap()
-		if err != nil {
-			log.WithError(err).Debugf("Failed to copy data from old conntrack map %s", err)
+
+		if !m.ipv6Enabled {
+			err := m.bpfmaps.CtMap.CopyDeltaFromOldMap()
+			if err != nil {
+				log.WithError(err).Debugf("Failed to copy data from old conntrack map %s", err)
+			}
+		} else {
+			err := m.bpfmaps.CtMapV6.CopyDeltaFromOldMap()
+			if err != nil {
+				log.WithError(err).Debugf("Failed to copy data from old conntrack map %s", err)
+			}
 		}
 	})
 
@@ -2914,13 +2919,13 @@ func (m *bpfEndpointManager) ensureBPFDevices() error {
 
 	if m.ipv6Enabled {
 		anyV6, _ := ip.CIDRFromString("::/128")
-		err = m.arpMap.Update(
+		err = m.bpfmaps.ArpMapV6.Update(
 			bpfarp.NewKeyV6(anyV6.Addr().AsNetIP(), uint32(m.natInIdx)).AsBytes(),
 			bpfarp.NewValue(bpfin.Attrs().HardwareAddr, bpfout.Attrs().HardwareAddr).AsBytes(),
 		)
 	} else {
 		anyV4, _ := ip.CIDRFromString("0.0.0.0/0")
-		err = m.arpMap.Update(
+		err = m.bpfmaps.ArpMap.Update(
 			bpfarp.NewKey(anyV4.Addr().AsNetIP(), uint32(m.natInIdx)).AsBytes(),
 			bpfarp.NewValue(bpfin.Attrs().HardwareAddr, bpfout.Attrs().HardwareAddr).AsBytes(),
 		)
@@ -3256,13 +3261,15 @@ func (m *bpfEndpointManager) loadPolicyProgram(
 		"ipFamily": ipFamily,
 	}).Debug("Generating policy program...")
 
+	ipsetsMapFD := m.bpfmaps.IpsetsMap.MapFD()
 	if ipFamily == proto.IPVersion_IPV6 {
 		opts = append(opts, polprog.WithIPv6())
+		ipsetsMapFD = m.bpfmaps.IpsetsMapV6.MapFD()
 	}
 
 	pg := polprog.NewBuilder(
 		m.ipSetIDAlloc,
-		m.bpfmaps.IpsetsMap.MapFD(),
+		ipsetsMapFD,
 		m.bpfmaps.StateMap.MapFD(),
 		staticProgsMap.MapFD(),
 		polProgsMap.MapFD(),

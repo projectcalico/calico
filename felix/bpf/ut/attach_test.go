@@ -46,7 +46,7 @@ import (
 func TestAttach(t *testing.T) {
 	RegisterTestingT(t)
 
-	bpfmaps, err := bpfmap.CreateBPFMaps(4)
+	bpfmaps, err := bpfmap.CreateBPFMaps(false)
 	Expect(err).NotTo(HaveOccurred())
 
 	programs := bpfmaps.ProgramsMap.(*hook.ProgramsMap)
