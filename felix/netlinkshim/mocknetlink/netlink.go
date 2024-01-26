@@ -127,6 +127,8 @@ const (
 	FailNextRouteDel
 	FailNextAddARP
 	FailNextNeighSet
+	FailNextNeighDel
+	FailNextNeighList
 	FailNextNewNetlink
 	FailNextSetSocketTimeout
 	FailNextLinkAdd
@@ -191,6 +193,15 @@ func (f FailFlags) String() string {
 	}
 	if f&FailNextAddARP != 0 {
 		parts = append(parts, "FailNextAddARP")
+	}
+	if f&FailNextNeighSet != 0 {
+		parts = append(parts, "FailNextNeighSet")
+	}
+	if f&FailNextNeighList != 0 {
+		parts = append(parts, "FailNextNeighList")
+	}
+	if f&FailNextNeighDel != 0 {
+		parts = append(parts, "FailNextNeighDel")
 	}
 	if f&FailNextNewNetlink != 0 {
 		parts = append(parts, "FailNextNewNetlink")
@@ -390,7 +401,7 @@ func (d *MockNetlinkDataplane) AddIface(idx int, name string, up bool, running b
 
 func (d *MockNetlinkDataplane) SetIface(name string, up bool, running bool) {
 	link, ok := d.NameToLink[name]
-	Expect(ok).To(BeTrue())
+	ExpectWithOffset(1, ok).To(BeTrue(), "SetIface called with unknown interface "+name)
 	if up {
 		link.LinkAttrs.Flags |= net.FlagUp
 		link.LinkAttrs.RawFlags |= syscall.IFF_UP
@@ -892,6 +903,10 @@ func (d *MockNetlinkDataplane) AddNeighs(family int, neighs ...netlink.Neigh) {
 	if d.NeighsByFamily[family] == nil {
 		d.NeighsByFamily[family] = map[NeighKey]*netlink.Neigh{}
 	}
+	addNeighs(d.NeighsByFamily[family], neighs)
+}
+
+func addNeighs(neighMap map[NeighKey]*netlink.Neigh, neighs []netlink.Neigh) {
 	for _, neigh := range neighs {
 		neigh := neigh
 		nk := NeighKey{
@@ -899,8 +914,14 @@ func (d *MockNetlinkDataplane) AddNeighs(family int, neighs ...netlink.Neigh) {
 			MAC:       neigh.HardwareAddr.String(),
 			IP:        ip.FromNetIP(neigh.IP),
 		}
-		d.NeighsByFamily[family][nk] = &neigh
+		neighMap[nk] = &neigh
 	}
+}
+
+func (d *MockNetlinkDataplane) ExpectNeighs(family int, neigh3s ...netlink.Neigh) {
+	nm := map[NeighKey]*netlink.Neigh{}
+	addNeighs(nm, neigh3s)
+	ExpectWithOffset(1, nm).To(Equal(d.NeighsByFamily[family]))
 }
 
 func (d *MockNetlinkDataplane) NeighAdd(neigh *netlink.Neigh) error {
@@ -950,6 +971,9 @@ func (d *MockNetlinkDataplane) NeighList(linkIndex, family int) ([]netlink.Neigh
 	if err != nil {
 		return nil, err
 	}
+	if d.shouldFail(FailNextNeighList) {
+		return nil, SimulatedError
+	}
 	var res []netlink.Neigh
 	for _, n := range d.NeighsByFamily[family] {
 		if linkIndex == 0 || n.LinkIndex == linkIndex {
@@ -996,6 +1020,9 @@ func (d *MockNetlinkDataplane) NeighDel(neigh *netlink.Neigh) error {
 	err := d.checkNeighFamily(family)
 	if err != nil {
 		return err
+	}
+	if d.shouldFail(FailNextNeighDel) {
+		return SimulatedError
 	}
 
 	if d.NeighsByFamily[family] == nil {

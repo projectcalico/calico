@@ -290,6 +290,9 @@ func (r *VXLANFDB) Apply() error {
 		r.logCxt.Info("VXLAN FDB now in sync.")
 		r.logNextSuccess = false
 	}
+	if r.resyncPending {
+		return fmt.Errorf("failed to add/delete some neighbor entries")
+	}
 
 	return nil
 }
@@ -314,16 +317,18 @@ func (r *VXLANFDB) resync(nl netlinkshim.Interface) error {
 	existingNeigh, err := nl.NeighList(r.ifIndex, unix.AF_INET)
 	if err != nil {
 		r.logCxt.WithError(err).Error("Failed to list neighbors")
+		r.nl.MarkHandleForReopen() // Defensive: force a netlink reconnection next time.
 		return fmt.Errorf("failed to list neighbors: %w", err)
 	}
 	existingFDB, err := nl.NeighList(r.ifIndex, unix.AF_BRIDGE)
 	if err != nil {
 		r.logCxt.WithError(err).Error("Failed to list FDB entries")
+		r.nl.MarkHandleForReopen() // Defensive: force a netlink reconnection next time.
 		return fmt.Errorf("failed to list FDB entries: %w", err)
 	}
 	err = r.arpEntries.Dataplane().ReplaceAllIter(func(f func(macStr string, v ipMACMapping)) error {
 		for _, n := range existingNeigh {
-			if n.HardwareAddr == nil {
+			if len(n.HardwareAddr) == 0 {
 				// Kernel creates transient entries with no MAC, ignore
 				continue
 			}
@@ -350,7 +355,7 @@ func (r *VXLANFDB) resync(nl netlinkshim.Interface) error {
 	}
 	err = r.fdbEntries.Dataplane().ReplaceAllIter(func(f func(k string, v ipMACMapping)) error {
 		for _, n := range existingFDB {
-			if n.HardwareAddr == nil {
+			if len(n.HardwareAddr) == 0 {
 				// Kernel creates transient entries with no MAC, ignore
 				continue
 			}

@@ -36,53 +36,133 @@ func init() {
 	logrus.SetLevel(logrus.DebugLevel)
 }
 
-func TestVXLANFDB_Mainline(t *testing.T) {
-	RegisterTestingT(t)
-	logutils.ConfigureLoggingForTestingT(t)
+const ifaceName = "vxlan.calico"
 
-	dataplane := mocknetlink.New()
-	fdb := New(
-		unix.AF_INET,
-		"vxlan.calico",
-		&environment.FakeFeatureDetector{
-			Features: environment.Features{
-				// FDB should force disable strict mode even though we
-				// pretend it's supported.
-				KernelSideRouteFiltering: true,
-			},
+var (
+	hostIP1 = ip.FromString("192.168.0.1")
+	hostIP2 = ip.FromString("192.168.1.1")
+	hostIP3 = ip.FromString("192.168.2.1")
+	hostIP4 = ip.FromString("192.168.3.1")
+
+	tunnelIP1 = ip.FromString("10.0.0.1")
+	tunnelIP2 = ip.FromString("10.0.1.1")
+	tunnelIP3 = ip.FromString("10.0.2.1")
+	tunnelIP4 = ip.FromString("10.0.3.1")
+
+	mac1 = "01:02:03:04:05:06"
+	mac2 = "01:02:03:04:05:07"
+	mac3 = "01:02:03:04:05:08"
+	mac4 = "01:02:03:04:05:09"
+	mac5 = "01:02:03:04:05:10"
+
+	hwAddr1 = mustParseMAC(mac1)
+	hwAddr2 = mustParseMAC(mac2)
+	hwAddr3 = mustParseMAC(mac3)
+	hwAddr4 = mustParseMAC(mac4)
+	hwAddr5 = mustParseMAC(mac5)
+)
+
+// TestVXLANFDB_LinkCreatedAfterSetup tests the case where the VTEPs are configured first,
+// then the interface shows up.
+func TestVXLANFDB_LinkCreatedAfterSetup(t *testing.T) {
+	dataplane, fdb := setup(t)
+
+	fdb.SetVTEPs([]VTEP{
+		{
+			HostIP:    hostIP1,
+			TunnelIP:  tunnelIP1,
+			TunnelMAC: hwAddr1,
 		},
-		10*time.Second,
-		WithNetlinkHandleShim(dataplane.NewMockNetlink),
+		{
+			HostIP:    hostIP2,
+			TunnelIP:  tunnelIP2,
+			TunnelMAC: hwAddr2,
+		},
+	})
+
+	// Fist apply, link not there yet.
+	Expect(fdb.resyncPending).To(BeTrue())
+	err := fdb.Apply()
+	Expect(err).To(MatchError(ContainSubstring("not found")))
+	Expect(fdb.resyncPending).To(BeFalse(), "Link not found should disable resync until OnIfaceStateChanged called")
+
+	// Kick for another interface should be ignored.
+	fdb.OnIfaceStateChanged("foo", ifacemonitor.StateUp)
+	Expect(fdb.resyncPending).To(BeFalse(), "Shouldn't resync for unknown iface")
+
+	// Link arrives.
+	dataplane.AddIface(2, ifaceName, false, false)
+	fdb.OnIfaceStateChanged(ifaceName, ifacemonitor.StateDown)
+
+	// Second apply, should return early.
+	err = fdb.Apply()
+	Expect(err).To(Equal(ErrLinkDown))
+
+	// Set link up...
+	dataplane.SetIface(ifaceName, true, true)
+	fdb.OnIfaceStateChanged(ifaceName, ifacemonitor.StateUp)
+
+	// Now we're up, should see it resync.
+	err = fdb.Apply()
+	Expect(err).NotTo(HaveOccurred())
+
+	dataplane.ExpectNeighs(unix.AF_INET,
+		// Should have been added.
+		netlink.Neigh{
+			Family:       unix.AF_INET,
+			LinkIndex:    2,
+			State:        netlink.NUD_PERMANENT,
+			Type:         unix.RTN_UNICAST,
+			IP:           tunnelIP1.AsNetIP(),
+			HardwareAddr: hwAddr1,
+		},
+		netlink.Neigh {
+			Family:       unix.AF_INET,
+			LinkIndex:    2,
+			State:        netlink.NUD_PERMANENT,
+			Type:         unix.RTN_UNICAST,
+			IP:           tunnelIP2.AsNetIP(),
+			HardwareAddr: hwAddr2,
+		},
 	)
 
-	hostIP1 := ip.FromString("192.168.0.1")
-	hostIP2 := ip.FromString("192.168.1.1")
-	hostIP3 := ip.FromString("192.168.2.1")
-	hostIP4 := ip.FromString("192.168.3.1")
+	dataplane.ExpectNeighs(unix.AF_BRIDGE,
+		// Should have been added.
+		netlink.Neigh{
+			Family:       unix.AF_BRIDGE,
+			Flags:        netlink.NTF_SELF,
+			LinkIndex:    2,
+			State:        netlink.NUD_PERMANENT,
+			HardwareAddr: hwAddr1,
+			IP:           hostIP1.AsNetIP(),
+		},
+		netlink.Neigh {
+			Family:       unix.AF_BRIDGE,
+			Flags:        netlink.NTF_SELF,
+			LinkIndex:    2,
+			State:        netlink.NUD_PERMANENT,
+			HardwareAddr: hwAddr2,
+			IP:           hostIP2.AsNetIP(),
+		},
+	)
+	Expect(fdb.resyncPending).To(BeFalse())
 
-	tunnelIP1 := ip.FromString("10.0.0.1")
-	tunnelIP2 := ip.FromString("10.0.1.1")
-	tunnelIP3 := ip.FromString("10.0.2.1")
-	tunnelIP4 := ip.FromString("10.0.3.1")
+	fdb.QueueResync()
+	Expect(fdb.resyncPending).To(BeTrue())
+}
 
-	mac1 := "01:02:03:04:05:06"
-	hwAddr1, err := net.ParseMAC(mac1)
-	Expect(err).NotTo(HaveOccurred())
-	mac2 := "01:02:03:04:05:07"
-	hwAddr2, err := net.ParseMAC(mac2)
-	Expect(err).NotTo(HaveOccurred())
-	mac3 := "01:02:03:04:05:08"
-	hwAddr3, err := net.ParseMAC(mac3)
-	Expect(err).NotTo(HaveOccurred())
-	mac4 := "01:02:03:04:05:09"
-	hwAddr4, err := net.ParseMAC(mac4)
-	Expect(err).NotTo(HaveOccurred())
-	mac5 := "01:02:03:04:05:10"
-	hwAddr5, err := net.ParseMAC(mac5)
-	Expect(err).NotTo(HaveOccurred())
+// TestVXLANFDB_LinkPresentAtStartup tests the case where the link is present
+// already with some existing neigh entries.
+func TestVXLANFDB_LinkPresentAtStartup(t *testing.T) {
+	dataplane, fdb := setup(t)
+
+	// Pre-create the link.  We shouldn't even need to signal it with
+	// OnIfaceStateChanged.
+	dataplane.AddIface(2, ifaceName, true, true)
 
 	// Set initial state of the ARP table.
 	dataplane.AddNeighs(unix.AF_INET,
+		// This entry is correct already.
 		netlink.Neigh{
 			Family:       unix.AF_INET,
 			LinkIndex:    2,
@@ -100,7 +180,7 @@ func TestVXLANFDB_Mainline(t *testing.T) {
 			IP:           tunnelIP3.AsNetIP(),
 			HardwareAddr: hwAddr4,
 		},
-		// This one needs to be removed.
+		// This one should be removed.
 		netlink.Neigh{
 			Family:       unix.AF_INET,
 			LinkIndex:    2,
@@ -131,7 +211,7 @@ func TestVXLANFDB_Mainline(t *testing.T) {
 			HardwareAddr: hwAddr4,
 			IP:           hostIP3.AsNetIP(),
 		},
-		// This one needs to be removed.
+		// This one should be removed.
 		netlink.Neigh{
 			Family:       unix.AF_BRIDGE,
 			Flags:        netlink.NTF_SELF,
@@ -163,35 +243,14 @@ func TestVXLANFDB_Mainline(t *testing.T) {
 		},
 	})
 
-	// Fist apply, link not there yet.
-	Expect(fdb.resyncPending).To(BeTrue())
-	err = fdb.Apply()
-	Expect(err).To(MatchError(ContainSubstring("not found")))
-	Expect(fdb.resyncPending).To(BeFalse(), "Link not found should disable resync until OnIfaceStateChanged called")
-
-	// Link arrives.
-	dataplane.AddIface(2, "vxlan.calico", false, false)
-	fdb.OnIfaceStateChanged("vxlan.calico", ifacemonitor.StateDown)
-
-	// Second apply, should return early.
-	err = fdb.Apply()
-	Expect(err).To(Equal(ErrLinkDown))
-
-	// Set link up...
-	dataplane.SetIface("vxlan.calico", true, true)
-	fdb.OnIfaceStateChanged("vxlan.calico", ifacemonitor.StateUp)
-
-	// Now we're up, should see it resync.
-	err = fdb.Apply()
+	// First apply should go straight through
+	err := fdb.Apply()
 	Expect(err).NotTo(HaveOccurred())
 
-	Expect(dataplane.NeighsByFamily[unix.AF_INET]).To(Equal(map[mocknetlink.NeighKey]*netlink.Neigh{
+	dataplane.ExpectNeighs(
+		unix.AF_INET,
 		// Should have been added.
-		mocknetlink.NeighKey{
-			LinkIndex: 2,
-			IP:        tunnelIP1,
-			MAC:       mac1,
-		}: {
+		netlink.Neigh{
 			Family:       unix.AF_INET,
 			LinkIndex:    2,
 			State:        netlink.NUD_PERMANENT,
@@ -200,11 +259,7 @@ func TestVXLANFDB_Mainline(t *testing.T) {
 			HardwareAddr: hwAddr1,
 		},
 		// This one is correct already.
-		mocknetlink.NeighKey{
-			LinkIndex: 2,
-			IP:        tunnelIP2,
-			MAC:       mac2,
-		}: {
+		netlink.Neigh{
 			Family:       unix.AF_INET,
 			LinkIndex:    2,
 			State:        netlink.NUD_PERMANENT,
@@ -213,11 +268,7 @@ func TestVXLANFDB_Mainline(t *testing.T) {
 			HardwareAddr: hwAddr2,
 		},
 		// Should have been updated.
-		mocknetlink.NeighKey{
-			LinkIndex: 2,
-			IP:        tunnelIP3,
-			MAC:       mac3,
-		}: {
+		netlink.Neigh{
 			Family:       unix.AF_INET,
 			LinkIndex:    2,
 			State:        netlink.NUD_PERMANENT,
@@ -225,15 +276,12 @@ func TestVXLANFDB_Mainline(t *testing.T) {
 			IP:           tunnelIP3.AsNetIP(),
 			HardwareAddr: hwAddr3,
 		},
-	}))
+	)
 
-	Expect(dataplane.NeighsByFamily[unix.AF_BRIDGE]).To(Equal(map[mocknetlink.NeighKey]*netlink.Neigh{
+	dataplane.ExpectNeighs(
+		unix.AF_BRIDGE,
 		// Should have been added.
-		mocknetlink.NeighKey{
-			LinkIndex: 2,
-			MAC:       mac1,
-			IP:        hostIP1,
-		}: {
+		netlink.Neigh{
 			Family:       unix.AF_BRIDGE,
 			Flags:        netlink.NTF_SELF,
 			LinkIndex:    2,
@@ -242,11 +290,7 @@ func TestVXLANFDB_Mainline(t *testing.T) {
 			IP:           hostIP1.AsNetIP(),
 		},
 		// This one is correct already.
-		mocknetlink.NeighKey{
-			LinkIndex: 2,
-			MAC:       mac2,
-			IP:        hostIP2,
-		}: {
+		netlink.Neigh{
 			Family:       unix.AF_BRIDGE,
 			Flags:        netlink.NTF_SELF,
 			LinkIndex:    2,
@@ -255,11 +299,7 @@ func TestVXLANFDB_Mainline(t *testing.T) {
 			IP:           hostIP2.AsNetIP(),
 		},
 		// Should have been updated.
-		mocknetlink.NeighKey{
-			LinkIndex: 2,
-			MAC:       mac3,
-			IP:        hostIP3,
-		}: {
+		netlink.Neigh {
 			Family:       unix.AF_BRIDGE,
 			Flags:        netlink.NTF_SELF,
 			LinkIndex:    2,
@@ -267,6 +307,255 @@ func TestVXLANFDB_Mainline(t *testing.T) {
 			HardwareAddr: hwAddr3,
 			IP:           hostIP3.AsNetIP(),
 		},
-	}))
+	)
 	Expect(fdb.resyncPending).To(BeFalse())
+}
+
+func TestVXLANFDB_IgnoreNonCalicoNeighs(t *testing.T) {
+	dataplane, fdb := setup(t)
+
+	// Pre-create the link.  We shouldn't even need to signal it with
+	// OnIfaceStateChanged.
+	dataplane.AddIface(2, ifaceName, true, true)
+
+	// Set initial state of the ARP table.
+	dataplane.AddNeighs(unix.AF_INET,
+		// Should be ignored.
+		netlink.Neigh{
+			Family:       unix.AF_INET,
+			LinkIndex:    2,
+			State:        netlink.NUD_PROBE,
+			Type:         unix.RTN_UNICAST,
+			IP:           tunnelIP4.AsNetIP(),
+			HardwareAddr: hwAddr4,
+		},
+		netlink.Neigh{
+			Family:       unix.AF_INET,
+			LinkIndex:    2,
+			State:        netlink.NUD_PROBE,
+			Type:         unix.RTN_UNICAST,
+			IP:           tunnelIP3.AsNetIP(),
+			HardwareAddr: nil,
+		},
+	)
+
+	// Set initial state of the FDB table.
+	dataplane.AddNeighs(unix.AF_BRIDGE,
+		// Should be ignored, wrong flags.
+		netlink.Neigh{
+			Family:       unix.AF_BRIDGE,
+			Flags:        netlink.NTF_SELF,
+			LinkIndex:    2,
+			State:        netlink.NUD_PROBE,
+			HardwareAddr: hwAddr2,
+			IP:           hostIP2.AsNetIP(),
+		},
+		// Missing MAC.
+		netlink.Neigh{
+			Family:       unix.AF_BRIDGE,
+			Flags:        netlink.NTF_SELF,
+			LinkIndex:    2,
+			State:        netlink.NUD_PERMANENT,
+			HardwareAddr: nil,
+			IP:           hostIP2.AsNetIP(),
+		},
+	)
+
+	fdb.SetVTEPs([]VTEP{
+		// This one should be added.
+		{
+			HostIP:    hostIP1,
+			TunnelIP:  tunnelIP1,
+			TunnelMAC: hwAddr1,
+		},
+	})
+
+	// First apply should go straight through
+	err := fdb.Apply()
+	Expect(err).NotTo(HaveOccurred())
+
+	dataplane.ExpectNeighs(
+		unix.AF_INET,
+		// Should have been added.
+		netlink.Neigh{
+			Family:       unix.AF_INET,
+			LinkIndex:    2,
+			State:        netlink.NUD_PERMANENT,
+			Type:         unix.RTN_UNICAST,
+			IP:           tunnelIP1.AsNetIP(),
+			HardwareAddr: hwAddr1,
+		},
+
+		// No change to these.
+		netlink.Neigh{
+			Family:       unix.AF_INET,
+			LinkIndex:    2,
+			State:        netlink.NUD_PROBE,
+			Type:         unix.RTN_UNICAST,
+			IP:           tunnelIP4.AsNetIP(),
+			HardwareAddr: hwAddr4,
+		},
+		netlink.Neigh{
+			Family:       unix.AF_INET,
+			LinkIndex:    2,
+			State:        netlink.NUD_PROBE,
+			Type:         unix.RTN_UNICAST,
+			IP:           tunnelIP3.AsNetIP(),
+			HardwareAddr: nil,
+		},
+	)
+
+	dataplane.ExpectNeighs(
+		unix.AF_BRIDGE,
+		// Should have been added.
+		netlink.Neigh{
+			Family:       unix.AF_BRIDGE,
+			Flags:        netlink.NTF_SELF,
+			LinkIndex:    2,
+			State:        netlink.NUD_PERMANENT,
+			HardwareAddr: hwAddr1,
+			IP:           hostIP1.AsNetIP(),
+		},
+
+		// No cahnge to these.
+		netlink.Neigh{
+			Family:       unix.AF_BRIDGE,
+			Flags:        netlink.NTF_SELF,
+			LinkIndex:    2,
+			State:        netlink.NUD_PROBE,
+			HardwareAddr: hwAddr2,
+			IP:           hostIP2.AsNetIP(),
+		},
+		netlink.Neigh{
+			Family:       unix.AF_BRIDGE,
+			Flags:        netlink.NTF_SELF,
+			LinkIndex:    2,
+			State:        netlink.NUD_PERMANENT,
+			HardwareAddr: nil,
+			IP:           hostIP2.AsNetIP(),
+		},
+	)
+	Expect(fdb.resyncPending).To(BeFalse())
+}
+
+func TestVXLANFDB_TransientNetlinkErrors(t *testing.T) {
+	for _, failFlag := range []mocknetlink.FailFlags{
+		mocknetlink.FailNextNeighSet,
+		mocknetlink.FailNextNeighDel,
+		mocknetlink.FailNextNeighList,
+		mocknetlink.FailNextNewNetlink,
+	} {
+		t.Run(failFlag.String(), func(t *testing.T) {
+			dataplane, fdb := setup(t)
+			dataplane.FailuresToSimulate = failFlag
+			dataplane.PersistFailures = true
+
+			// Pre-create the link.  We shouldn't even need to signal it with
+			// OnIfaceStateChanged.
+			dataplane.AddIface(2, ifaceName, true, true)
+
+			// Add an unknown entry so that the FDB has something to delete.
+			dataplane.AddNeighs(unix.AF_INET,
+				// This one should be removed.
+				netlink.Neigh{
+					Family:       unix.AF_INET,
+					LinkIndex:    2,
+					State:        netlink.NUD_PERMANENT,
+					Type:         unix.RTN_UNICAST,
+					IP:           tunnelIP4.AsNetIP(),
+					HardwareAddr: hwAddr5,
+				},
+			)
+
+			// Set initial state of the FDB table.
+			dataplane.AddNeighs(unix.AF_BRIDGE,
+				// This one should be removed.
+				netlink.Neigh{
+					Family:       unix.AF_BRIDGE,
+					Flags:        netlink.NTF_SELF,
+					LinkIndex:    2,
+					State:        netlink.NUD_PERMANENT,
+					HardwareAddr: hwAddr5,
+					IP:           hostIP4.AsNetIP(),
+				},
+			)
+
+			fdb.SetVTEPs([]VTEP{
+				// This one should be added.
+				{
+					HostIP:    hostIP1,
+					TunnelIP:  tunnelIP1,
+					TunnelMAC: hwAddr1,
+				},
+			})
+
+			// Applies should fail while we have persistent failures.
+			err := fdb.Apply()
+			Expect(err).To(HaveOccurred())
+			Expect(fdb.resyncPending).To(BeTrue())
+			Expect(dataplane.NumNewNetlinkCalls).To(Equal(1))
+			err = fdb.Apply()
+			Expect(err).To(HaveOccurred())
+			Expect(fdb.resyncPending).To(BeTrue())
+			Expect(dataplane.NumNewNetlinkCalls).To(Equal(2))
+			dataplane.FailuresToSimulate = 0
+
+			// Now apply should succeed.
+			err = fdb.Apply()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(fdb.resyncPending).To(BeFalse())
+
+			dataplane.ExpectNeighs(
+				unix.AF_INET,
+				netlink.Neigh{
+					Family:       unix.AF_INET,
+					LinkIndex:    2,
+					State:        netlink.NUD_PERMANENT,
+					Type:         unix.RTN_UNICAST,
+					IP:           tunnelIP1.AsNetIP(),
+					HardwareAddr: hwAddr1,
+				},
+			)
+			dataplane.ExpectNeighs(
+				unix.AF_BRIDGE,
+				netlink.Neigh{
+					Family:       unix.AF_BRIDGE,
+					Flags:        netlink.NTF_SELF,
+					LinkIndex:    2,
+					State:        netlink.NUD_PERMANENT,
+					HardwareAddr: hwAddr1,
+					IP:           hostIP1.AsNetIP(),
+				},
+			)
+		})
+	}
+}
+
+func setup(t *testing.T) (*mocknetlink.MockNetlinkDataplane, *VXLANFDB) {
+	RegisterTestingT(t)
+	logutils.ConfigureLoggingForTestingT(t)
+
+	dataplane := mocknetlink.New()
+	fdb := New(
+		unix.AF_INET,
+		ifaceName,
+		&environment.FakeFeatureDetector{
+			Features: environment.Features{
+				// FDB should force disable strict mode even though we
+				// pretend it's supported.
+				KernelSideRouteFiltering: true,
+			},
+		},
+		10*time.Second,
+		WithNetlinkHandleShim(dataplane.NewMockNetlink),
+	)
+	return dataplane, fdb
+}
+
+func mustParseMAC(s string) net.HardwareAddr {
+	hwAddr, err := net.ParseMAC(s)
+	if err != nil {
+		panic(err)
+	}
+	return hwAddr
 }
