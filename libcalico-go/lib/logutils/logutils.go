@@ -25,6 +25,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"testing"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -521,4 +522,34 @@ func SafeParseLogLevel(logLevel string) log.Level {
 		}
 	}
 	return defaultedLevel
+}
+
+// TestingTWriter adapts a *testing.T as a Writer so it can be used as a target
+// for logrus.
+type TestingTWriter struct {
+	T *testing.T
+}
+
+func (l TestingTWriter) Write(p []byte) (n int, err error) {
+	l.T.Helper()
+	l.T.Log(strings.TrimRight(string(p), "\r\n"))
+	return len(p), nil
+}
+
+func RedirectLogrusToTestingT(t *testing.T) (cancel func()) {
+	oldOut := log.StandardLogger().Out
+	cancel = func() {
+		log.SetOutput(oldOut)
+	}
+	log.SetOutput(TestingTWriter{T: t})
+	return
+}
+
+var confForTestingOnce sync.Once
+func ConfigureLoggingForTestingT(t *testing.T) {
+	confForTestingOnce.Do(func() {
+		log.SetFormatter(&Formatter{Component: "test"})
+		log.AddHook(ContextHook{})
+	})
+	t.Cleanup(RedirectLogrusToTestingT(t))
 }
