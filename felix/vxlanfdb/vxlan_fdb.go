@@ -43,6 +43,23 @@ type VTEP struct {
 	TunnelMAC net.HardwareAddr
 }
 
+// VXLANFDB manages the FDB and ARP/NDP entries for a VXLAN device. I.e.
+// all the layer-2 state for the VXLAN device.
+//
+// Overall, we use VXLAN to create a layer 3 routed network.  We do that
+// by
+//
+// - Giving each node a "tunnel IP" which is an IP on the VXLAN network.
+// - (In this object) setting up static ARP/NDP entries for the tunnel IPs.
+// - (In this object) setting up static FDB entries for the tunnel MACs.
+// - (Elsewhere) setting up a routes to remote workloads via the tunnel IPs.
+//
+// ARP/NDP entries and FDB entries are confusingly similar(!) Both are MAC/IP
+// tuples, but they mean very different things.  ARP/NDP entries tell the
+// kernel what MAC address to use for the inner ethernet frame inside the
+// VXLAN packet.  FDB entries tell the kernel what IP address to use for the
+// outer IP header, given a particular inner MAC.  So, ARP maps IP->(inner)MAC;
+// FDB maps (inner)MAC->(outer)IP.
 type VXLANFDB struct {
 	family         int
 	ifaceName      string

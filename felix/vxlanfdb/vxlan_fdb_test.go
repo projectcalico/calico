@@ -36,7 +36,10 @@ func init() {
 	logrus.SetLevel(logrus.DebugLevel)
 }
 
-const ifaceName = "vxlan.calico"
+const (
+	ifaceName   = "vxlan.calico"
+	ifaceNameV6 = "vxlan-v6.calico"
+)
 
 var (
 	hostIP1 = ip.FromString("192.168.0.1")
@@ -48,6 +51,9 @@ var (
 	tunnelIP2 = ip.FromString("10.0.1.1")
 	tunnelIP3 = ip.FromString("10.0.2.1")
 	tunnelIP4 = ip.FromString("10.0.3.1")
+
+	hostIP1V6   = ip.FromString("f00f::1")
+	tunnelIP1V6 = ip.FromString("f00f::2")
 
 	mac1 = "01:02:03:04:05:06"
 	mac2 = "01:02:03:04:05:07"
@@ -143,6 +149,71 @@ func TestVXLANFDB_LinkCreatedAfterSetup(t *testing.T) {
 			State:        netlink.NUD_PERMANENT,
 			HardwareAddr: hwAddr2,
 			IP:           hostIP2.AsNetIP(),
+		},
+	)
+	Expect(fdb.resyncPending).To(BeFalse())
+
+	fdb.QueueResync()
+	Expect(fdb.resyncPending).To(BeTrue())
+}
+
+// TestVXLANFDB_IPv6 mainline test for IPv6.
+func TestVXLANFDB_IPv6(t *testing.T) {
+	RegisterTestingT(t)
+	logutils.ConfigureLoggingForTestingT(t)
+
+	dataplane := mocknetlink.New()
+	fdb := New(
+		unix.AF_INET6,
+		ifaceNameV6,
+		&environment.FakeFeatureDetector{
+			Features: environment.Features{
+				// FDB should force disable strict mode even though we
+				// pretend it's supported.
+				KernelSideRouteFiltering: true,
+			},
+		},
+		10*time.Second,
+		WithNetlinkHandleShim(dataplane.NewMockNetlink),
+	)
+
+	fdb.SetVTEPs([]VTEP{
+		{
+			HostIP:    hostIP1V6,
+			TunnelIP:  tunnelIP1V6,
+			TunnelMAC: hwAddr1,
+		},
+	})
+
+	// Link arrives.
+	dataplane.AddIface(2, ifaceNameV6, true, true)
+	fdb.OnIfaceStateChanged(ifaceNameV6, ifacemonitor.StateUp)
+
+	// Now we're up, should see it resync.
+	err := fdb.Apply()
+	Expect(err).NotTo(HaveOccurred())
+
+	dataplane.ExpectNeighs(unix.AF_INET6,
+		// Should have been added.
+		netlink.Neigh{
+			Family:       unix.AF_INET6,
+			LinkIndex:    2,
+			State:        netlink.NUD_PERMANENT,
+			Type:         unix.RTN_UNICAST,
+			IP:           tunnelIP1V6.AsNetIP(),
+			HardwareAddr: hwAddr1,
+		},
+	)
+
+	dataplane.ExpectNeighs(unix.AF_BRIDGE,
+		// Should have been added.
+		netlink.Neigh{
+			Family:       unix.AF_BRIDGE,
+			Flags:        netlink.NTF_SELF,
+			LinkIndex:    2,
+			State:        netlink.NUD_PERMANENT,
+			HardwareAddr: hwAddr1,
+			IP:           hostIP1V6.AsNetIP(),
 		},
 	)
 	Expect(fdb.resyncPending).To(BeFalse())

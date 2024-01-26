@@ -271,6 +271,7 @@ var _ = Describe("VXLANManager", func() {
 		Expect(prt.currentRoutes["eth0"]).NotTo(BeNil())
 
 		mac, err := net.ParseMAC("00:0a:95:9d:68:16")
+		Expect(err).NotTo(HaveOccurred())
 		Expect(fdb.currentVTEPs).To(ConsistOf(vxlanfdb.VTEP{
 			HostIP:    ip.FromString("172.0.12.1"),
 			TunnelIP:  ip.FromString("10.0.80.0"),
@@ -358,6 +359,7 @@ var _ = Describe("VXLANManager", func() {
 		Expect(prt.currentRoutes["eth0"]).NotTo(BeNil())
 
 		mac, err := net.ParseMAC("00:0a:95:9d:68:16")
+		Expect(err).NotTo(HaveOccurred())
 		Expect(fdb.currentVTEPs).To(ConsistOf(vxlanfdb.VTEP{
 			HostIP:    ip.FromString("fc00:10:10::1"),
 			TunnelIP:  ip.FromString("fd00:10:96::"),
