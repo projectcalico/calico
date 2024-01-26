@@ -116,7 +116,7 @@ func TestVXLANFDB_LinkCreatedAfterSetup(t *testing.T) {
 			IP:           tunnelIP1.AsNetIP(),
 			HardwareAddr: hwAddr1,
 		},
-		netlink.Neigh {
+		netlink.Neigh{
 			Family:       unix.AF_INET,
 			LinkIndex:    2,
 			State:        netlink.NUD_PERMANENT,
@@ -136,7 +136,7 @@ func TestVXLANFDB_LinkCreatedAfterSetup(t *testing.T) {
 			HardwareAddr: hwAddr1,
 			IP:           hostIP1.AsNetIP(),
 		},
-		netlink.Neigh {
+		netlink.Neigh{
 			Family:       unix.AF_BRIDGE,
 			Flags:        netlink.NTF_SELF,
 			LinkIndex:    2,
@@ -299,7 +299,7 @@ func TestVXLANFDB_LinkPresentAtStartup(t *testing.T) {
 			IP:           hostIP2.AsNetIP(),
 		},
 		// Should have been updated.
-		netlink.Neigh {
+		netlink.Neigh{
 			Family:       unix.AF_BRIDGE,
 			Flags:        netlink.NTF_SELF,
 			LinkIndex:    2,

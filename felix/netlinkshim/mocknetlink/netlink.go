@@ -318,7 +318,7 @@ type MockNetlinkDataplane struct {
 type NeighKey struct {
 	LinkIndex int
 	MAC       string
-	IP  ip.Addr
+	IP        ip.Addr
 }
 
 func (d *MockNetlinkDataplane) FeatureGate(name string) string {
@@ -945,8 +945,8 @@ func (d *MockNetlinkDataplane) NeighAdd(neigh *netlink.Neigh) error {
 	}
 	nk := NeighKey{
 		LinkIndex: neigh.LinkIndex,
-		MAC: neigh.HardwareAddr.String(),
-		IP:  ip.FromNetIP(neigh.IP),
+		MAC:       neigh.HardwareAddr.String(),
+		IP:        ip.FromNetIP(neigh.IP),
 	}
 
 	if _, ok := d.NeighsByFamily[family][nk]; ok {
@@ -1007,8 +1007,8 @@ func (d *MockNetlinkDataplane) NeighSet(neigh *netlink.Neigh) error {
 	}
 	nk := NeighKey{
 		LinkIndex: neigh.LinkIndex,
-		MAC: neigh.HardwareAddr.String(),
-		IP:  ip.FromNetIP(neigh.IP),
+		MAC:       neigh.HardwareAddr.String(),
+		IP:        ip.FromNetIP(neigh.IP),
 	}
 
 	d.NeighsByFamily[family][nk] = neigh
@@ -1039,8 +1039,8 @@ func (d *MockNetlinkDataplane) NeighDel(neigh *netlink.Neigh) error {
 	}
 	nk := NeighKey{
 		LinkIndex: neigh.LinkIndex,
-		MAC: neigh.HardwareAddr.String(),
-		IP:  ip.FromNetIP(neigh.IP),
+		MAC:       neigh.HardwareAddr.String(),
+		IP:        ip.FromNetIP(neigh.IP),
 	}
 
 	if _, ok := d.NeighsByFamily[family][nk]; !ok {

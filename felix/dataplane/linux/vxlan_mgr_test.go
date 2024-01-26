@@ -109,7 +109,7 @@ func (m *mockVXLANDataplane) LinkDel(netlink.Link) error {
 
 type mockVXLANFDB struct {
 	setVTEPsCalls int
-	currentVTEPs []vxlanfdb.VTEP
+	currentVTEPs  []vxlanfdb.VTEP
 }
 
 func (t *mockVXLANFDB) SetVTEPs(targets []vxlanfdb.VTEP) {
