@@ -285,7 +285,7 @@ func (m *InterfaceMonitor) storeAndNotifyLink(ifaceExists bool, link netlink.Lin
 	m.storeAndNotifyLinkInner(ifaceExists, newName, link)
 }
 
-func linkIsOperUp(link netlink.Link) bool {
+func LinkIsOperUp(link netlink.Link) bool {
 	// We need the operstate of the interface; this is carried in the IFF_RUNNING flag.  The
 	// IFF_UP flag contains the admin state, which doesn't tell us whether we can program routes
 	// etc.
@@ -315,7 +315,7 @@ func (m *InterfaceMonitor) storeAndNotifyLinkInner(ifaceExists bool, ifaceName s
 	}
 	newState := StateNotPresent
 	if ifaceExists {
-		if linkIsOperUp(link) {
+		if LinkIsOperUp(link) {
 			newState = StateUp
 		} else {
 			newState = StateDown

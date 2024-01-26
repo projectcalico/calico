@@ -32,7 +32,7 @@ type netlinkReal struct {
 
 func newRealNetlink(featureDetector environment.FeatureDetectorIface, timeout time.Duration) *netlinkReal {
 	return &netlinkReal{
-		handleMgr: handlemgr.NewHandleManager(netlink.FAMILY_ALL, featureDetector, handlemgr.WithSocketTimeout(timeout)),
+		handleMgr: handlemgr.NewHandleManager(featureDetector, handlemgr.WithSocketTimeout(timeout)),
 	}
 }
 
