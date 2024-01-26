@@ -199,7 +199,7 @@ func (r *VXLANFDB) Apply() error {
 	if len(errs) > 0 {
 		log.WithField("numErrors", len(errs)).Warn("Failed to add some ARP entries")
 		r.resyncPending = true
-		r.nl.CloseHandle() // Defensive: force a netlink reconnection next time.
+		r.nl.MarkHandleForReopen() // Defensive: force a netlink reconnection next time.
 		clear(errs)
 	}
 
@@ -226,7 +226,7 @@ func (r *VXLANFDB) Apply() error {
 	if len(errs) > 0 {
 		log.WithField("numErrors", len(errs)).Warn("Failed to remove some ARP entries")
 		r.resyncPending = true
-		r.nl.CloseHandle() // Defensive: force a netlink reconnection next time.
+		r.nl.MarkHandleForReopen() // Defensive: force a netlink reconnection next time.
 		clear(errs)
 	}
 
@@ -254,7 +254,7 @@ func (r *VXLANFDB) Apply() error {
 	if len(errs) > 0 {
 		log.WithField("numErrors", len(errs)).Warn("Failed to add some FDB entries")
 		r.resyncPending = true
-		r.nl.CloseHandle() // Defensive: force a netlink reconnection next time.
+		r.nl.MarkHandleForReopen() // Defensive: force a netlink reconnection next time.
 		clear(errs)
 	}
 
@@ -282,7 +282,7 @@ func (r *VXLANFDB) Apply() error {
 	if len(errs) > 0 {
 		log.WithField("numErrors", len(errs)).Warn("Failed to remove some ARP entries")
 		r.resyncPending = true
-		r.nl.CloseHandle() // Defensive: force a netlink reconnection next time.
+		r.nl.MarkHandleForReopen() // Defensive: force a netlink reconnection next time.
 		clear(errs)
 	}
 
@@ -324,6 +324,7 @@ func (r *VXLANFDB) resync(nl netlinkshim.Interface) error {
 	err = r.arpEntries.Dataplane().ReplaceAllIter(func(f func(macStr string, v ipMACMapping)) error {
 		for _, n := range existingNeigh {
 			if n.HardwareAddr == nil {
+				// Kernel creates transient entries with no MAC, ignore
 				continue
 			}
 			if n.State&unix.NUD_PERMANENT == 0 {
@@ -350,6 +351,7 @@ func (r *VXLANFDB) resync(nl netlinkshim.Interface) error {
 	err = r.fdbEntries.Dataplane().ReplaceAllIter(func(f func(k string, v ipMACMapping)) error {
 		for _, n := range existingFDB {
 			if n.HardwareAddr == nil {
+				// Kernel creates transient entries with no MAC, ignore
 				continue
 			}
 			if n.State&unix.NUD_PERMANENT == 0 {

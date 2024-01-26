@@ -170,10 +170,18 @@ func TestVXLANFDB_Mainline(t *testing.T) {
 	Expect(fdb.resyncPending).To(BeFalse(), "Link not found should disable resync until OnIfaceStateChanged called")
 
 	// Link arrives.
-	dataplane.AddIface(2, "vxlan.calico", true, true)
+	dataplane.AddIface(2, "vxlan.calico", false, false)
+	fdb.OnIfaceStateChanged("vxlan.calico", ifacemonitor.StateDown)
+
+	// Second apply, should return early.
+	err = fdb.Apply()
+	Expect(err).To(Equal(ErrLinkDown))
+
+	// Set link up...
+	dataplane.SetIface("vxlan.calico", true, true)
 	fdb.OnIfaceStateChanged("vxlan.calico", ifacemonitor.StateUp)
 
-	// Second apply, should be good.
+	// Now we're up, should see it resync.
 	err = fdb.Apply()
 	Expect(err).NotTo(HaveOccurred())
 

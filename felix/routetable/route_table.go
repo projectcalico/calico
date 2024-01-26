@@ -504,7 +504,7 @@ func (r *RouteTable) Apply() error {
 			links, err := nl.LinkList()
 			if err != nil {
 				r.logCxt.WithError(err).Error("Failed to list interfaces, retrying...")
-				r.nl.CloseHandle() // Defensive: force a netlink reconnection next time.
+				r.nl.MarkHandleForReopen() // Defensive: force a netlink reconnection next time.
 				return ListFailed
 			}
 			// Track the seen interfaces, and for each seen interface flag for full resync. No point in doing a full resync
@@ -735,7 +735,7 @@ func (r *RouteTable) syncRoutesForLink(ifaceName string, fullSync bool, firstTry
 	}
 
 	if updatesFailed {
-		r.nl.CloseHandle() // Defensive: force a netlink reconnection next time.
+		r.nl.MarkHandleForReopen() // Defensive: force a netlink reconnection next time.
 
 		// Recheck whether the interface exists so we don't produce spammy logs during
 		// interface removal.
@@ -985,7 +985,7 @@ func (r *RouteTable) readProgrammedRoutes(logCxt *log.Entry, ifaceName string) (
 				"routeFilter": routeFilter,
 				"flags":       routeFilterFlags,
 			}).Error("Error listing routes")
-			r.nl.CloseHandle() // Defensive: force a netlink reconnection next time.
+			r.nl.MarkHandleForReopen() // Defensive: force a netlink reconnection next time.
 		} else {
 			logCxt.WithError(err).Info("Failed to list routes; interface down/gone.")
 		}
@@ -1134,7 +1134,7 @@ func (r *RouteTable) getLinkAttributes(ifaceName string) (*netlink.LinkAttrs, er
 		filteredErr := r.filterErrorByIfaceState(ifaceName, err, GetFailed, false)
 		if filteredErr == GetFailed {
 			logCxt.WithError(err).Error("Failed to get interface.")
-			r.nl.CloseHandle() // Defensive: force a netlink reconnection next time.
+			r.nl.MarkHandleForReopen() // Defensive: force a netlink reconnection next time.
 		} else {
 			logCxt.WithError(err).Info("Failed to get interface; it's down/gone.")
 		}
