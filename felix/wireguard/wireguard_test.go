@@ -2881,7 +2881,9 @@ func describeEnableTests(enableV4, enableV6 bool) {
 			})
 
 			for _, nextTestFailFlags := range []mocknetlink.FailFlags{
-				mocknetlink.FailNextWireguardConfigureDevice, mocknetlink.FailNextRouteAdd, mocknetlink.FailNextRouteDel,
+				mocknetlink.FailNextWireguardConfigureDevice,
+				mocknetlink.FailNextRouteAddOrReplace,
+				mocknetlink.FailNextRouteDel,
 			} {
 				failFlags := nextTestFailFlags
 				desc := fmt.Sprintf("additional adds/deletes with another failure (%v)", failFlags)
