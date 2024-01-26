@@ -524,7 +524,8 @@ func SafeParseLogLevel(logLevel string) log.Level {
 	return defaultedLevel
 }
 
-// TestingTWriter adapts a *testing.T as a Writer so it can be used as a target logging.
+// TestingTWriter adapts a *testing.T as a Writer so it can be used as a target
+// for logrus.
 type TestingTWriter struct {
 	T *testing.T
 }
