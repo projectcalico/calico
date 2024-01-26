@@ -546,6 +546,7 @@ func RedirectLogrusToTestingT(t *testing.T) (cancel func()) {
 }
 
 var confForTestingOnce sync.Once
+
 func ConfigureLoggingForTestingT(t *testing.T) {
 	confForTestingOnce.Do(func() {
 		log.SetFormatter(&Formatter{Component: "test"})
