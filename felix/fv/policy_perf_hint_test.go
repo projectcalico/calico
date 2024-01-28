@@ -19,7 +19,7 @@ package fv_test
 import (
 	"context"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
@@ -98,7 +98,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ policy performance hints te
 	})
 
 	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
+		if CurrentSpecReport().Failed() {
 			for _, felix := range tc.Felixes {
 				_ = felix.ExecMayFail("iptables-save", "-c")
 				_ = felix.ExecMayFail("ipset", "list")
@@ -108,7 +108,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ policy performance hints te
 			}
 		}
 		tc.Stop()
-		if CurrentGinkgoTestDescription().Failed {
+		if CurrentSpecReport().Failed() {
 			infra.DumpErrorData()
 		}
 		infra.Stop()
