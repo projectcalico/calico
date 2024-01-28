@@ -274,7 +274,7 @@ UT_PACKAGES_TO_SKIP?=fv,k8sfv,bpf/ut
 .PHONY: ut
 ut combined.coverprofile: $(SRC_FILES) $(LIBBPF_A) build-bpf
 	@echo Running Go UTs.
-	$(DOCKER_RUN) -e $(ACK_GINKGO) $(CALICO_BUILD) ./utils/run-coverage -skipPackage $(UT_PACKAGES_TO_SKIP) $(GINKGO_ARGS)
+	$(DOCKER_RUN) $(CALICO_BUILD) ./utils/run-coverage -skip-package $(UT_PACKAGES_TO_SKIP) $(GINKGO_ARGS)
 
 ###############################################################################
 # FV Tests
@@ -324,7 +324,6 @@ fv fv/latency.log fv/data-races.log: fv-prereqs
 fv-no-prereqs:
 	rm -f fv/data-races.log fv/latency.log
 	cd fv && \
-	  $(ACK_GINKGO) \
 	  FV_FELIXIMAGE=$(FV_FELIXIMAGE) \
 	  FV_ETCDIMAGE=$(FV_ETCDIMAGE) \
 	  FV_TYPHAIMAGE=$(FV_TYPHAIMAGE) \
@@ -492,12 +491,12 @@ release-build: .release-$(VERSION).created
 .PHONY: ut-no-cover
 ut-no-cover: $(SRC_FILES)
 	@echo Running Go UTs without coverage.
-	$(DOCKER_GO_BUILD) -e $(ACK_GINKGO) ginkgo -r -skipPackage $(UT_PACKAGES_TO_SKIP) $(GINKGO_ARGS)
+	$(DOCKER_GO_BUILD) ginkgo2 -r -skip-package $(UT_PACKAGES_TO_SKIP) $(GINKGO_ARGS)
 
 .PHONY: ut-watch
 ut-watch: $(SRC_FILES)
 	@echo Watching go UTs for changes...
-	$(DOCKER_GO_BUILD) -e $(ACK_GINKGO) ginkgo watch -r -skipPackage $(UT_PACKAGES_TO_SKIP) $(GINKGO_ARGS)
+	$(DOCKER_GO_BUILD) ginkgo2 watch -r -skip-package $(UT_PACKAGES_TO_SKIP) $(GINKGO_ARGS)
 
 .PHONY: bin/bpf.test
 bin/bpf.test: $(GENERATED_FILES) $(shell find bpf/ -name '*.go')
@@ -517,14 +516,12 @@ ut-bpf: $(LIBBPF_A) bin/bpf_ut.test bin/bpf.test build-bpf
 	$(DOCKER_RUN) \
 		--privileged \
 		-e RUN_AS_ROOT=true \
-		-e $(ACK_GINKGO) \
 		$(CALICO_BUILD) sh -c ' \
 		mount bpffs /sys/fs/bpf -t bpf && \
 		cd /go/src/$(PACKAGE_NAME)/bpf/ && \
 		BPF_FORCE_REAL_LIB=true ../bin/bpf.test -test.v -test.run "$(FOCUS)"'
 	$(DOCKER_RUN) \
 		--privileged \
-		-e $(ACK_GINKGO) \
 		-e RUN_AS_ROOT=true \
 		-v `pwd`:/code \
 		-v `pwd`/bpf-gpl/bin:/usr/lib/calico/bpf \
@@ -537,7 +534,6 @@ ut-bpf: $(LIBBPF_A) bin/bpf_ut.test bin/bpf.test build-bpf
 bench-bpf: $(LIBBPF_A) bin/bpf_ut.test bin/bpf.test build-bpf
 	$(DOCKER_RUN) \
 		--privileged \
-		-e $(ACK_GINKGO) \
 		-e RUN_AS_ROOT=true \
 		-v `pwd`:/code \
 		-v `pwd`/bpf-gpl/bin:/usr/lib/calico/bpf \

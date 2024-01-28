@@ -15,7 +15,7 @@
 package resources
 
 import (
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
