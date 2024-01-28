@@ -22,7 +22,7 @@ import (
 	"strconv"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/felix/environment"
@@ -116,7 +116,7 @@ func xdpTest(getInfra infrastructure.InfraFactory, proto string) {
 	})
 
 	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
+		if CurrentSpecReport().Failed() {
 			infra.DumpErrorData()
 			for _, felix := range tc.Felixes {
 				felix.Exec("iptables-save", "-c")
