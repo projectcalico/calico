@@ -1355,9 +1355,12 @@ var _ = Describe("IPAM controller UTs", func() {
 
 		// The empty block should be released after the grace period.
 		fakeClient := cli.IPAM().(*fakeIPAMClient)
+		Eventually(func() bool {
+			return fakeClient.affinityReleased(fmt.Sprintf("%s/%s", blockCIDR2, "cnode"))
+		}, assertionTimeout, 100*time.Millisecond).Should(BeTrue())
 		Consistently(func() bool {
 			return fakeClient.affinityReleased(fmt.Sprintf("%s/%s", blockCIDR2, "cnode"))
-		}, assertionTimeout, 100*time.Millisecond).Should(BeFalse())
+		}, assertionTimeout, 100*time.Millisecond).Should(BeTrue())
 	})
 
 	It("should NOT clean up all blocks assigned to a node", func() {
