@@ -628,10 +628,13 @@ func (c *ipamController) updateMetrics() {
 
 // checkEmptyBlocks looks at known empty blocks, and releases their affinity
 // if appropriate. A block is a candidate for having its affinity released if:
+//
 // - The block is empty.
 // - The block's node has at least one other affine block.
-// - The other blocks on the node are not at capacity.
 // - The node is not currently undergoing a migration from Flannel
+//
+// A block will only be released if it has been in this state for longer than the configured
+// grace period, which defaults to 15m.
 func (c *ipamController) checkEmptyBlocks() error {
 	for blockCIDR, node := range c.emptyBlocks {
 		logc := log.WithFields(log.Fields{"blockCIDR": blockCIDR, "node": node})
