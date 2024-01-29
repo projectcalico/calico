@@ -640,28 +640,6 @@ func (c *ipamController) checkEmptyBlocks() error {
 			continue
 		}
 
-		// The node has more than one block. Check that the other blocks allocated to this node
-		// are not at capacity. We only release blocks when there's room in the other affine blocks,
-		// otherwise the next IP allocation will just assign a new block to this node anyway.
-		numAddressesAvailableOnNode := 0
-		for b := range nodeBlocks {
-			if b == blockCIDR {
-				// Skip the known empty block.
-				continue
-			}
-
-			// Sum the number of unallocated addresses across the other blocks.
-			kvp := c.allBlocks[b]
-			numAddressesAvailableOnNode += len(kvp.Value.(*model.AllocationBlock).Unallocated)
-		}
-
-		// Make sure there are some addresses available before releasing.
-		if numAddressesAvailableOnNode < 3 {
-			logc.Debug("Block is still needed, skip release")
-			c.blockReleaseTracker.markInUse(blockCIDR)
-			continue
-		}
-
 		// During a Flannel migration, we can only migrate blocks affined to nodes that have already undergone the migration
 		migrating, err := c.nodeIsBeingMigrated(node)
 		if err != nil {
