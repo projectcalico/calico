@@ -220,6 +220,7 @@ type RouteTable struct {
 
 	// The route deletion grace period.
 	routeCleanupGracePeriod time.Duration
+	featureDetector         environment.FeatureDetectorIface
 }
 
 type RouteTableOpt func(table *RouteTable)
@@ -361,6 +362,7 @@ func NewWithShims(
 			handlemgr.WithNewHandleOverride(newNetlinkHandle),
 			handlemgr.WithSocketTimeout(netlinkTimeout),
 		),
+		featureDetector: featureDetector,
 	}
 
 	for _, o := range opts {
@@ -716,7 +718,19 @@ func (r *RouteTable) syncRoutesForLink(ifaceName string, fullSync bool, firstTry
 		// In case this IP is being re-used, wait for any previous conntrack entry
 		// to be cleaned up.  (No-op if there are no pending deletes.)
 		r.waitForPendingConntrackDeletion(target.CIDR.Addr())
-		if err := nl.RouteAdd(&route); err != nil {
+
+		if firstTry || !r.shouldDeleteConflictingRoutes() {
+			// Even if we're in "delete conflicting" mode, we use RouteAdd on
+			// the first pass.  This makes sure that we scan over all interfaces
+			// at least once before we start overwriting conflicting routes.
+			// This makes sure that we handle a common case where a route
+			// is being removed from one interface and added to another more
+			// cleanly.
+			err = nl.RouteAdd(&route)
+		} else {
+			err = nl.RouteReplace(&route)
+		}
+		if err != nil {
 			if firstTry {
 				logCxt.WithError(err).WithField("route", route).Debug("Failed to add route on first attempt, retrying...")
 			} else {
@@ -1178,7 +1192,7 @@ func (r *RouteTable) filterErrorByIfaceState(ifaceName string, currentErr, defau
 		return defaultErr
 	}
 
-	if strings.Contains(currentErr.Error(), "not found") {
+	if isNotFoundError(currentErr) {
 		// Current error already tells us that the link was not present.  If we re-check
 		// the status in this case, we open a race where the interface gets created and
 		// we log an error when we're about to re-trigger programming anyway.
@@ -1213,7 +1227,7 @@ func (r *RouteTable) filterErrorByIfaceState(ifaceName string, currentErr, defau
 			logCxt.WithField("link", link).Debug("Interface is down")
 			return IfaceDown
 		}
-	} else if strings.Contains(err.Error(), "not found") {
+	} else if isNotFoundError(err) {
 		// Special case: Link no longer exists.
 		logCxt.Info("Interface was deleted during operation, filtering error")
 		return IfaceNotPresent
@@ -1222,6 +1236,23 @@ func (r *RouteTable) filterErrorByIfaceState(ifaceName string, currentErr, defau
 		logCxt.WithError(err).Error("Failed to access interface after a failure")
 		return defaultErr
 	}
+}
+
+func isNotFoundError(err error) bool {
+	if err == nil {
+		return false
+	}
+	var lnf netlink.LinkNotFoundError
+	if errors.As(err, &lnf) {
+		return true
+	}
+	if errors.Is(err, unix.ENOENT) {
+		return true
+	}
+	if strings.Contains(err.Error(), "not found") {
+		return true
+	}
+	return false
 }
 
 // getLinkAttributes returns the link attributes for the specified link name. This method returns nil if the
@@ -1255,6 +1286,15 @@ func (r *RouteTable) getLinkAttributes(ifaceName string) (*netlink.LinkAttrs, er
 		return nil, filteredErr
 	}
 	return link.Attrs(), nil
+}
+
+func (r *RouteTable) shouldDeleteConflictingRoutes() bool {
+	gate := r.featureDetector.FeatureGate("DeleteConflictingRoutes")
+	switch strings.ToLower(gate) {
+	case "enabled": // Default to disabled.
+		return true
+	}
+	return false
 }
 
 // safeTargetPointer returns a pointer to a Target safely ensuring the pointer is unique.

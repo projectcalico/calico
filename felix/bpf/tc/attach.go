@@ -15,7 +15,6 @@
 package tc
 
 import (
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"net"
@@ -74,7 +73,7 @@ func (ap *AttachPoint) Log() *log.Entry {
 	})
 }
 
-func (ap *AttachPoint) loadObject(ipVer int, file string) (*libbpf.Obj, error) {
+func (ap *AttachPoint) loadObject(file string) (*libbpf.Obj, error) {
 	obj, err := libbpf.OpenObject(file)
 	if err != nil {
 		return nil, err
@@ -89,14 +88,9 @@ func (ap *AttachPoint) loadObject(ipVer int, file string) (*libbpf.Obj, error) {
 			if strings.HasPrefix(mapName, ".rodata") {
 				continue
 			}
-			if ipVer == 4 {
-				if err := ap.ConfigureProgram(m); err != nil {
-					return nil, fmt.Errorf("failed to configure %s: %w", file, err)
-				}
-			} else {
-				if err := ap.ConfigureProgramV6(m); err != nil {
-					return nil, fmt.Errorf("failed to configure %s: %w", file, err)
-				}
+
+			if err := ap.ConfigureProgram(m); err != nil {
+				return nil, fmt.Errorf("failed to configure %s: %w", file, err)
 			}
 			continue
 		}
@@ -140,16 +134,8 @@ func (ap *AttachPoint) AttachProgram() (bpf.AttachResult, error) {
 	// By now the attach type specific generic set of programs is loaded and we
 	// only need to load and configure the preamble that will pass the
 	// configuration further to the selected set of programs.
-	var binaryToLoad string
-	var ipFamily int
-	if ap.IPv6Enabled {
-		binaryToLoad = path.Join(bpfdefs.ObjectDir, "tc_preamble_v6.o")
-		ipFamily = 6
-	} else {
-		binaryToLoad = path.Join(bpfdefs.ObjectDir, "tc_preamble.o")
-		ipFamily = 4
-	}
 
+	binaryToLoad := path.Join(bpfdefs.ObjectDir, "tc_preamble.o")
 	var res AttachResult
 
 	/* XXX we should remember the tag of the program and skip the rest if the tag is
@@ -159,10 +145,10 @@ func (ap *AttachPoint) AttachProgram() (bpf.AttachResult, error) {
 		return nil, err
 	}
 
-	obj, err := ap.loadObject(ipFamily, binaryToLoad)
+	obj, err := ap.loadObject(binaryToLoad)
 	if err != nil {
 		logCxt.Warn("Failed to load program")
-		return nil, fmt.Errorf("object v%d: %w", ipFamily, err)
+		return nil, fmt.Errorf("object %w", err)
 	}
 	defer obj.Close()
 
@@ -405,18 +391,19 @@ func (ap *AttachPoint) ConfigureProgram(m *libbpf.Map) error {
 
 		LogFilterJmp: uint32(ap.LogFilterIdx),
 	}
-	var err error
-	globalData.HostIP, err = convertIPToUint32(ap.HostIP)
-	if err != nil {
-		return err
+	if ap.HostIP.To4() != nil {
+		copy(globalData.HostIP[0:4], ap.HostIP.To4())
+	} else {
+		copy(globalData.HostIPv6[:], ap.HostIP.To16())
 	}
 	if globalData.VxlanPort == 0 {
 		globalData.VxlanPort = 4789
 	}
 
-	globalData.IntfIP, err = convertIPToUint32(ap.IntfIP)
-	if err != nil {
-		return err
+	if ap.IntfIP.To4() != nil {
+		copy(globalData.IntfIP[0:4], ap.IntfIP.To4())
+	} else {
+		copy(globalData.IntfIPv6[:], ap.IntfIP.To16())
 	}
 
 	if ap.DSROptoutCIDRs {
@@ -438,80 +425,34 @@ func (ap *AttachPoint) ConfigureProgram(m *libbpf.Map) error {
 	globalData.HostTunnelIP = globalData.HostIP
 
 	if ap.HostTunnelIP != nil {
-		globalData.HostTunnelIP, err = convertIPToUint32(ap.HostTunnelIP)
-		if err != nil {
-			return err
+		if ap.HostTunnelIP.To4() != nil {
+			copy(globalData.HostTunnelIP[0:4], ap.HostTunnelIP.To4())
+		} else {
+			copy(globalData.HostTunnelIPv6[:], ap.HostTunnelIP.To16())
 		}
 	}
 
 	for i := 0; i < len(globalData.Jumps); i++ {
-		globalData.Jumps[i] = 0xffffffff /* uint32(-1) */
+		globalData.Jumps[i] = 0xffffffff   /* uint32(-1) */
+		globalData.JumpsV6[i] = 0xffffffff /* uint32(-1) */
 	}
 
 	if ap.HookLayout != nil {
 		log.WithField("HookLayout", ap.HookLayout).Debugf("ConfigureProgram")
-		for p, i := range ap.HookLayout {
-			globalData.Jumps[p] = uint32(i)
+		if ap.IPv6Enabled {
+			for p, i := range ap.HookLayout {
+				globalData.JumpsV6[p] = uint32(i)
+			}
+			globalData.JumpsV6[tcdefs.ProgIndexPolicy] = uint32(ap.PolicyIdx)
+		} else {
+			for p, i := range ap.HookLayout {
+				globalData.Jumps[p] = uint32(i)
+			}
+			globalData.Jumps[tcdefs.ProgIndexPolicy] = uint32(ap.PolicyIdx)
 		}
-		globalData.Jumps[tcdefs.ProgIndexPolicy] = uint32(ap.PolicyIdx)
 	}
 
 	return ConfigureProgram(m, ap.Iface, &globalData)
-}
-
-func (ap *AttachPoint) ConfigureProgramV6(m *libbpf.Map) error {
-	globalData := libbpf.TcGlobalData6{
-		ExtToSvcMark: ap.ExtToServiceConnmark,
-		VxlanPort:    ap.VXLANPort,
-		Tmtu:         ap.TunnelMTU,
-		PSNatStart:   ap.PSNATStart,
-		PSNatLen:     ap.PSNATEnd,
-		WgPort:       ap.WgPort,
-		NatIn:        ap.NATin,
-		NatOut:       ap.NATout,
-
-		LogFilterJmp: uint32(ap.LogFilterIdx),
-	}
-
-	copy(globalData.HostIP[:], ap.HostIP.To16())
-
-	if globalData.VxlanPort == 0 {
-		globalData.VxlanPort = 4789
-	}
-
-	copy(globalData.IntfIP[:], ap.IntfIP.To16())
-
-	if ap.DSROptoutCIDRs {
-		globalData.Flags |= libbpf.GlobalsNoDSRCidrs
-	}
-
-	switch ap.RPFEnforceOption {
-	case tcdefs.RPFEnforceOptionStrict:
-		globalData.Flags |= libbpf.GlobalsRPFOptionEnabled
-		globalData.Flags |= libbpf.GlobalsRPFOptionStrict
-	case tcdefs.RPFEnforceOptionLoose:
-		globalData.Flags |= libbpf.GlobalsRPFOptionEnabled
-	}
-
-	copy(globalData.HostTunnelIP[:], globalData.HostIP[:])
-
-	if ap.HostTunnelIP != nil {
-		copy(globalData.HostTunnelIP[:], ap.HostTunnelIP.To16())
-	}
-
-	for i := 0; i < len(globalData.Jumps); i++ {
-		globalData.Jumps[i] = 0xffffffff /* uint32(-1) */
-	}
-
-	if ap.HookLayout != nil {
-		log.WithField("HookLayout", ap.HookLayout).Debugf("ConfigureProgram")
-		for p, i := range ap.HookLayout {
-			globalData.Jumps[p] = uint32(i)
-		}
-		globalData.Jumps[tcdefs.ProgIndexPolicy] = uint32(ap.PolicyIdx)
-	}
-
-	return ConfigureProgramV6(m, ap.Iface, &globalData)
 }
 
 func ConfigureProgram(m *libbpf.Map, iface string, globalData *libbpf.TcGlobalData) error {
@@ -520,20 +461,4 @@ func ConfigureProgram(m *libbpf.Map, iface string, globalData *libbpf.TcGlobalDa
 	globalData.IfaceName = string(in)
 
 	return libbpf.TcSetGlobals(m, globalData)
-}
-
-func ConfigureProgramV6(m *libbpf.Map, iface string, globalData *libbpf.TcGlobalData6) error {
-	in := []byte("---------------")
-	copy(in, iface)
-	globalData.IfaceName = string(in)
-
-	return libbpf.TcSetGlobals6(m, globalData)
-}
-
-func convertIPToUint32(ip net.IP) (uint32, error) {
-	ipv4 := ip.To4()
-	if ipv4 == nil {
-		return 0, fmt.Errorf("ip addr nil")
-	}
-	return binary.LittleEndian.Uint32([]byte(ipv4)), nil
 }
