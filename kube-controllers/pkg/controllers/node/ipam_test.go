@@ -86,7 +86,6 @@ func assertConsistentState(c *ipamController) {
 }
 
 var _ = Describe("IPAM controller UTs", func() {
-
 	var c *ipamController
 	var cli client.Interface
 	var cs kubernetes.Interface
@@ -1252,7 +1251,7 @@ var _ = Describe("IPAM controller UTs", func() {
 		}, assertionTimeout, 100*time.Millisecond).Should(BeTrue())
 	})
 
-	It("should NOT clean up empty blocks if the node is full", func() {
+	It("should clean up empty blocks even if the node is full", func() {
 		// Create Calico and k8s nodes for the test.
 		n := libapiv3.Node{}
 		n.Name = "cnode"
@@ -1354,7 +1353,7 @@ var _ = Describe("IPAM controller UTs", func() {
 		// Mark the syncer as InSync so that the GC will be enabled.
 		c.onStatusUpdate(bapi.InSync)
 
-		// The empty block should NOT be released, because the other block on the node is full.
+		// The empty block should be released after the grace period.
 		fakeClient := cli.IPAM().(*fakeIPAMClient)
 		Consistently(func() bool {
 			return fakeClient.affinityReleased(fmt.Sprintf("%s/%s", blockCIDR2, "cnode"))
@@ -1444,7 +1443,5 @@ var _ = Describe("IPAM controller UTs", func() {
 		}
 		Eventually(numBlocks, 1*time.Second, 100*time.Millisecond).Should(Equal(1))
 		Consistently(numBlocks, assertionTimeout, 100*time.Millisecond).Should(Equal(1))
-
 	})
-
 })
