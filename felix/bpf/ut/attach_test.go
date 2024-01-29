@@ -556,8 +556,8 @@ func BenchmarkAttachProgram(b *testing.B) {
 		Type:     tcdefs.EpTypeWorkload,
 		ToOrFrom: tcdefs.FromEp,
 		FIB:      true,
-		HostIP:   net.IPv4(1, 1, 1, 1),
-		IntfIP:   net.IPv4(1, 1, 1, 1),
+		HostIPv4: net.IPv4(1, 1, 1, 1),
+		IntfIPv4: net.IPv4(1, 1, 1, 1),
 	}
 
 	_, err = ap.AttachProgram()
