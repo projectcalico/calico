@@ -757,11 +757,11 @@ func (s *Syncer) updateService(skey svcKey, sinfo k8sp.ServicePort, id uint32, e
 			if err := s.writeSvcBackend(id, uint32(cnt), ep); err != nil {
 				return 0, 0, err
 			}
+			cnt++
+			local++
 		}
 
 		cpEps = append(cpEps, ep)
-		cnt++
-		local++
 	}
 
 	for _, ep := range eps {
@@ -774,10 +774,10 @@ func (s *Syncer) updateService(skey svcKey, sinfo k8sp.ServicePort, id uint32, e
 			if err := s.writeSvcBackend(id, uint32(cnt), ep); err != nil {
 				return 0, 0, err
 			}
+			cnt++
 		}
 
 		cpEps = append(cpEps, ep)
-		cnt++
 	}
 
 	flags := uint32(0)
