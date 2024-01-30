@@ -154,11 +154,11 @@ func replacePlatformSpecificVars(c config, netconf string) string {
 	netconf = strings.Replace(netconf, "__IPAM_TYPE__", ipamType, -1)
 
 	// Get Windows version information via powershell to determine whether DSR is supported.
-	// Retry for 3 attempts in case any step fails.
+	// Retry for 10 attempts in case any step fails.
 	var stdout, stderr string
 	var err error
 	var winVerInt, buildNumInt, halVerInt int
-	for attempts := 3; attempts > 0; attempts-- {
+	for attempts := 10; attempts > 0; attempts-- {
 		stdout, stderr, err = winutils.Powershell("Get-ComputerInfo | select WindowsVersion, OsBuildNumber, OsHardwareAbstractionLayer")
 		logger := logrus.WithFields(logrus.Fields{"stderr": stderr, "stdout": stdout})
 		if err != nil {
