@@ -158,7 +158,7 @@ func replacePlatformSpecificVars(c config, netconf string) string {
 	var stdout, stderr string
 	var err error
 	var winVerInt, buildNumInt, halVerInt int
-	for attempts := 3; attempts > 0; attempts-- {
+	for attempts := 10; attempts > 0; attempts-- {
 		stdout, stderr, err = winutils.Powershell("Get-ComputerInfo | select WindowsVersion, OsBuildNumber, OsHardwareAbstractionLayer")
 		logger := logrus.WithFields(logrus.Fields{"stderr": stderr, "stdout": stdout})
 		if err != nil {
