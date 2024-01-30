@@ -39,7 +39,7 @@ COPY --chown=999 --from=builder /var/run/dikastes /var/run/dikastes/
 COPY ${BIN_DIR}/dikastes-${TARGETARCH} /dikastes
 COPY ${BIN_DIR}/healthz-${TARGETARCH} /healthz
 
-FROM calico/base
+FROM jha48/base:ubi9
 
 ARG GIT_VERSION=unknown
 
