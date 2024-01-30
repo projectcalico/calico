@@ -12,9 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG UBI_IMAGE
-
-FROM ${UBI_IMAGE} as ubi
+FROM registry.access.redhat.com/ubi8/ubi-minimal:latest as ubi
 
 FROM scratch as source
 

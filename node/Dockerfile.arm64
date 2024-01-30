@@ -19,7 +19,6 @@ ARG IPSET_VER=7.11-6
 ARG RUNIT_VER=2.1.2
 ARG QEMU_IMAGE
 ARG BIRD_IMAGE=calico/bird:latest
-ARG UBI_IMAGE
 
 FROM calico/bpftool:v5.3-arm64 as bpftool
 FROM ${QEMU_IMAGE} as qemu
@@ -117,7 +116,7 @@ RUN wget -P /tmp https://ftp.debian.org/debian/pool/main/r/runit/runit_${RUNIT_V
 
 ARG UBI_DIGEST
 
-FROM --platform=linux/arm64 ${UBI_IMAGE} as ubi
+FROM registry.access.redhat.com/ubi8/ubi-minimal:latest as ubi
 
 ARG ARCH
 ARG GIT_VERSION
