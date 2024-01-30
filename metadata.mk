@@ -17,7 +17,6 @@ ETCD_VERSION=v3.5.6
 # tests to timeout or fail.
 KINDEST_NODE_VERSION=v1.24.7
 PROTOC_VER=v0.1
-UBI_VERSION=8.9
 
 # Configuration for Semaphore integration.
 ORGANIZATION = projectcalico
