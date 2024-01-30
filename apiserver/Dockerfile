@@ -7,7 +7,7 @@ COPY LICENSE /licenses/LICENSE
 
 COPY ${BIN_DIR}/apiserver-${TARGETARCH} /code/apiserver
 
-FROM calico/base
+FROM jha48/base:ubi9
 
 ARG GIT_VERSION=unknown
 
