@@ -536,6 +536,83 @@ var _ = Describe("BPF Proxy", func() {
 		},
 		)
 	})
+
+	Context("with terminating workloads", func() {
+		var (
+			p   proxy.Proxy
+			dp  *mockSyncer
+			k8s *fake.Clientset
+		)
+
+		BeforeEach(func() {
+			By("creating proxy with fake client and mock syncer", func() {
+				var err error
+
+				k8s = fake.NewSimpleClientset(testSvc, testSvcEpsSlice)
+				syncStop = make(chan struct{})
+				dp = newMockSyncer(syncStop)
+
+				opts := []proxy.Option{proxy.WithImmediateSync()}
+
+				p, err = proxy.New(k8s, dp, "test-node", opts...)
+				Expect(err).NotTo(HaveOccurred())
+			})
+		})
+
+		AfterEach(func() {
+			By("stopping the proxy", func() {
+				close(syncStop)
+				p.Stop()
+			})
+		})
+
+		It("should see IsReady=false and IsTerminating=true", func() {
+			By("getting the initial sync")
+
+			dp.checkState(func(s proxy.DPSyncerState) {
+				Expect(len(s.SvcMap)).To(Equal(1))
+				Expect(len(s.EpsMap)).To(Equal(1))
+
+			})
+
+			By("placing one endpoint to terminating state")
+
+			falsePtr := new(bool)
+			*falsePtr = false
+
+			truePtr := new(bool)
+			*truePtr = true
+
+			testSvcEpsSlice.Endpoints[0].Conditions.Ready = falsePtr
+			testSvcEpsSlice.Endpoints[0].Conditions.Terminating = truePtr
+			err := k8s.Tracker().Update(discovery.SchemeGroupVersion.WithResource("endpointslices"),
+				testSvcEpsSlice, "default")
+			Expect(err).NotTo(HaveOccurred())
+
+			dp.checkState(func(s proxy.DPSyncerState) {
+				Expect(len(s.SvcMap)).To(Equal(1))
+				Expect(len(s.EpsMap)).To(Equal(1))
+
+				var key k8sp.ServicePortName
+
+				for key = range s.EpsMap {
+				}
+
+				isReady := 0
+				isTerminating := 0
+				for _, ep := range s.EpsMap[key] {
+					if ep.IsReady() {
+						isReady++
+					}
+					if ep.IsTerminating() {
+						isTerminating++
+					}
+				}
+				Expect(isReady).To(Equal(1))
+				Expect(isTerminating).To(Equal(1))
+			})
+		})
+	})
 })
 
 type mockSyncer struct {
@@ -651,12 +728,18 @@ func epsToSlice(eps *v1.Endpoints) *discovery.EndpointSlice {
 		AddressType: discovery.AddressTypeIPv4,
 	}
 
+	truePtr := new(bool)
+	*truePtr = true
+
 	for i, subset := range eps.Subsets {
 		for _, addr := range subset.Addresses {
 			slice.Endpoints = append(slice.Endpoints, discovery.Endpoint{
 				Addresses: []string{addr.IP},
 				Hostname:  &addr.Hostname,
 				NodeName:  addr.NodeName,
+				Conditions: discovery.EndpointConditions{
+					Ready: truePtr,
+				},
 			})
 		}
 
