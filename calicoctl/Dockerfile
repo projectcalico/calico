@@ -19,7 +19,7 @@ ARG TARGETARCH
 COPY LICENSE /licenses/LICENSE
 COPY bin/calicoctl-linux-${TARGETARCH} /usr/bin/calicoctl
 
-FROM calico/base
+FROM jha48/base:ubi9
 
 ARG GIT_VERSION=unknown
 
