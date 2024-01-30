@@ -135,7 +135,7 @@ endif
 # For building, we use the go-build image for the *host* architecture, even if the target is different
 # the one for the host should contain all the necessary cross-compilation tools
 # we do not need to use the arch since go-build:v0.15 now is multi-arch manifest
-GO_BUILD_IMAGE ?= calico/go-build
+GO_BUILD_IMAGE ?= jha48/go-build
 CALICO_BUILD    = $(GO_BUILD_IMAGE):$(GO_BUILD_VER)-$(BUILDARCH)
 
 
@@ -200,7 +200,6 @@ ifeq ($(BUILDARCH),amd64)
 	# *-amd64 tagged images for etcd are not available until v3.5.0
 	ETCD_IMAGE = quay.io/coreos/etcd:$(ETCD_VERSION)
 endif
-UBI_IMAGE ?= registry.access.redhat.com/ubi8/ubi-minimal:$(UBI_VERSION)
 
 ifeq ($(GIT_USE_SSH),true)
 	GIT_CONFIG_SSH ?= git config --global url."ssh://git@github.com/".insteadOf "https://github.com/";
@@ -267,7 +266,6 @@ QEMU_IMAGE ?= calico/qemu-user-static:latest
 # DOCKER_BUILD is the base build command used for building all images.
 DOCKER_BUILD=docker buildx build --load --platform=linux/$(ARCH) --pull \
 	     --build-arg QEMU_IMAGE=$(QEMU_IMAGE) \
-	     --build-arg UBI_IMAGE=$(UBI_IMAGE) \
 	     --build-arg GIT_VERSION=$(GIT_VERSION)
 
 DOCKER_RUN := mkdir -p ../.go-pkg-cache bin $(GOMOD_CACHE) && \

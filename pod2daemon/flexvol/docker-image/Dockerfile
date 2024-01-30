@@ -12,9 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG UBI_IMAGE
-
-FROM ${UBI_IMAGE} as ubi
+FROM registry.access.redhat.com/ubi8/ubi-minimal:latest as ubi
 
 FROM scratch as source
 
@@ -44,7 +42,7 @@ COPY LICENSE /licenses/LICENSE
 COPY ${BIN_DIR}/flexvol-${TARGETARCH} /usr/local/bin/flexvol
 COPY flexvol/docker-image/flexvol.sh /usr/local/bin/flexvol.sh
 
-FROM calico/base
+FROM jha48/base:ubi9
 
 ARG GIT_VERSION=unknown
 
