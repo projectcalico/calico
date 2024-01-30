@@ -21,7 +21,7 @@ COPY LICENSE /licenses/LICENSE
 COPY bin/calico-typha-${TARGETARCH} /usr/bin/calico-typha
 COPY typha.cfg /etc/calico/typha.cfg
 
-FROM calico/base
+FROM jha48/base:ubi9
 
 ARG GIT_VERSION=unknown
 
