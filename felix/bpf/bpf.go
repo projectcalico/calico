@@ -396,12 +396,36 @@ type perCpuMapEntry []struct {
 }
 
 type ProgInfo struct {
-	Name   string `json:"name"`
-	Id     int    `json:"id"`
-	Type   string `json:"type"`
-	Tag    string `json:"tag"`
-	MapIds []int  `json:"map_ids"`
-	Err    string `json:"error"`
+	Name   string      `json:"name"`
+	Id     int         `json:"id"`
+	Type   BPFProgType `json:"type"`
+	Tag    string      `json:"tag"`
+	MapIds []int       `json:"map_ids"`
+	Err    string      `json:"error"`
+}
+
+// BPFProgType is usually a string, but if the type is not known to bpftool, it
+// would be represented by an int. We do not care about those, but we must not
+// fail on parsing them.
+type BPFProgType string
+
+func (t *BPFProgType) UnmarshalJSON(data []byte) error {
+	if string(data) == "null" || string(data) == `""` || len(data) < 1 {
+		return nil
+	}
+
+	if data[0] == '"' {
+		var s string
+		err := json.Unmarshal(data, &s)
+		if err != nil {
+			return fmt.Errorf("cannot parse json output: %v\n%s", err, data)
+		}
+		*t = BPFProgType(s)
+		return nil
+	}
+
+	*t = BPFProgType(data)
+	return nil
 }
 
 type cgroupProgEntry struct {
