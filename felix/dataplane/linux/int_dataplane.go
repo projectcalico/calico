@@ -16,6 +16,7 @@ package intdataplane
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -26,7 +27,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
@@ -36,35 +36,30 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-
-	"github.com/projectcalico/calico/felix/vxlanfdb"
-
-	"github.com/projectcalico/calico/felix/bpf/bpfmap"
-	"github.com/projectcalico/calico/felix/bpf/conntrack"
-	"github.com/projectcalico/calico/felix/bpf/failsafes"
-	bpfmaps "github.com/projectcalico/calico/felix/bpf/maps"
-	"github.com/projectcalico/calico/felix/bpf/nat"
-	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
-	"github.com/projectcalico/calico/felix/environment"
-	"github.com/projectcalico/calico/felix/iptables/cmdshim"
-
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 
 	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/bpf/bpfmap"
+	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	bpfconntrack "github.com/projectcalico/calico/felix/bpf/conntrack"
+	"github.com/projectcalico/calico/felix/bpf/failsafes"
 	bpfifstate "github.com/projectcalico/calico/felix/bpf/ifstate"
 	bpfipsets "github.com/projectcalico/calico/felix/bpf/ipsets"
+	bpfmaps "github.com/projectcalico/calico/felix/bpf/maps"
+	"github.com/projectcalico/calico/felix/bpf/nat"
 	bpfnat "github.com/projectcalico/calico/felix/bpf/nat"
 	bpfproxy "github.com/projectcalico/calico/felix/bpf/proxy"
 	bpfroutes "github.com/projectcalico/calico/felix/bpf/routes"
-
 	"github.com/projectcalico/calico/felix/bpf/tc"
+	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 	"github.com/projectcalico/calico/felix/config"
 	"github.com/projectcalico/calico/felix/dataplane/common"
+	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/idalloc"
 	"github.com/projectcalico/calico/felix/ifacemonitor"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/iptables"
+	"github.com/projectcalico/calico/felix/iptables/cmdshim"
 	"github.com/projectcalico/calico/felix/jitter"
 	"github.com/projectcalico/calico/felix/labelindex"
 	"github.com/projectcalico/calico/felix/logutils"
@@ -73,6 +68,7 @@ import (
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/felix/throttle"
+	"github.com/projectcalico/calico/felix/vxlanfdb"
 	"github.com/projectcalico/calico/felix/wireguard"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
 	lclogutils "github.com/projectcalico/calico/libcalico-go/lib/logutils"
@@ -91,9 +87,6 @@ const (
 
 	// Route cleanup grace period. Used for workload routes only.
 	routeCleanupGracePeriod = 10 * time.Second
-
-	VXLANIfaceNameV4 = "vxlan.calico"
-	VXLANIfaceNameV6 = "vxlan-v6.calico"
 )
 
 var (
@@ -559,7 +552,14 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		vxlanFDB := vxlanfdb.New(netlink.FAMILY_V4, VXLANIfaceNameV4, featureDetector, config.NetlinkTimeout)
 		dp.vxlanFDBs = append(dp.vxlanFDBs, vxlanFDB)
 
-		dp.vxlanManager = newVXLANManager(ipSetsV4, routeTableV4, vxlanFDB, VXLANIfaceNameV4, config, 4)
+		dp.vxlanManager = newVXLANManager(
+			ipSetsV4,
+			routeTableV4,
+			vxlanFDB,
+			VXLANIfaceNameV4,
+			config,
+			4,
+		)
 		dp.vxlanParentC = make(chan string, 1)
 		go dp.vxlanManager.KeepVXLANDeviceInSync(context.Background(), config.VXLANMTU, dataplaneFeatures.ChecksumOffloadBroken, 10*time.Second, dp.vxlanParentC)
 		dp.RegisterManager(dp.vxlanManager)
@@ -992,7 +992,14 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			vxlanFDBV6 := vxlanfdb.New(netlink.FAMILY_V6, VXLANIfaceNameV6, featureDetector, config.NetlinkTimeout)
 			dp.vxlanFDBs = append(dp.vxlanFDBs, vxlanFDBV6)
 
-			dp.vxlanManagerV6 = newVXLANManager(ipSetsV6, routeTableV6, vxlanFDBV6, VXLANIfaceNameV6, config, 6)
+			dp.vxlanManagerV6 = newVXLANManager(
+				ipSetsV6,
+				routeTableV6,
+				vxlanFDBV6,
+				VXLANIfaceNameV6,
+				config,
+				6,
+			)
 			dp.vxlanParentCV6 = make(chan string, 1)
 			go dp.vxlanManagerV6.KeepVXLANDeviceInSync(context.Background(), config.VXLANMTUV6, dataplaneFeatures.ChecksumOffloadBroken, 10*time.Second, dp.vxlanParentCV6)
 			dp.RegisterManager(dp.vxlanManagerV6)

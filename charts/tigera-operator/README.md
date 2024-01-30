@@ -158,4 +158,9 @@ calicoctl:
 
 # Configuration for the Calico CSI plugin - setting to None will disable the plugin, default: /var/lib/kubelet
 kubeletVolumePluginPath: None   
+
+# Optionally configure the host and port used to access the Kubernetes API server.
+kubernetesServiceEndpoint:
+  host: ""
+  port: "6443"
 ```

@@ -200,7 +200,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 			})
 
 			if vxlanMode == api.VXLANModeCrossSubnet && !enableIPv6 && routeSource == "CalicoIPAM" {
-				It("should move cross-subnet routes when the node IP moves to a new interface", func() {
+				It("should move same-subnet routes when the node IP moves to a new interface", func() {
 					// Routes should look like this:
 					//
 					//   default via 172.17.0.1 dev eth0

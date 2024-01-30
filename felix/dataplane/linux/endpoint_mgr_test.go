@@ -35,7 +35,6 @@ import (
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/felix/testutils"
-	"github.com/projectcalico/calico/felix/vxlanfdb"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -587,8 +586,7 @@ func chainsForIfaces(ifaceMetadata []string,
 }
 
 type mockRouteTable struct {
-	currentRoutes   map[string][]routetable.Target
-	currentL2Routes map[string][]vxlanfdb.VTEP // FIXME move to separate mock.
+	currentRoutes map[string][]routetable.Target
 }
 
 func (t *mockRouteTable) SetRoutes(routeClass routetable.RouteClass, ifaceName string, targets []routetable.Target) {
@@ -597,13 +595,6 @@ func (t *mockRouteTable) SetRoutes(routeClass routetable.RouteClass, ifaceName s
 		"targets":   targets,
 	}).Debug("SetRoutes")
 	t.currentRoutes[ifaceName] = targets
-}
-
-func (t *mockRouteTable) SetVTEPs(targets []vxlanfdb.VTEP) {
-	log.WithFields(log.Fields{
-		"targets": targets,
-	}).Debug("SetL2Routes")
-	t.currentL2Routes[""] = targets
 }
 
 func (t *mockRouteTable) RouteRemove(routeClass routetable.RouteClass, ifaceName string, cidr ip.CIDR) {

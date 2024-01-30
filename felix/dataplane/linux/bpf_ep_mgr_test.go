@@ -101,11 +101,16 @@ func (m *mockDataplane) loadDefaultPolicies() error {
 	return nil
 }
 
-func (m *mockDataplane) ensureProgramAttached(ap attachPoint) (bpf.AttachResult, error) {
+func (m *mockDataplane) ensureProgramAttached(ap attachPoint) (qDiscInfo, error) {
+	var qdisc qDiscInfo
+	return qdisc, nil
+}
+
+func (m *mockDataplane) ensureProgramLoaded(ap attachPoint, ipFamily proto.IPVersion) error {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
-	var res tc.AttachResult // we don't care about the values
+	//var res tc.AttachResult // we don't care about the values
 
 	if apxdp, ok := ap.(*xdp.AttachPoint); ok {
 		apxdp.HookLayout = hook.Layout{
@@ -116,11 +121,11 @@ func (m *mockDataplane) ensureProgramAttached(ap attachPoint) (bpf.AttachResult,
 
 	key := ap.IfaceName() + ":" + ap.HookName().String()
 	if _, exists := m.progs[key]; exists {
-		return res, nil
+		return nil
 	}
 	m.lastProgID += 1
 	m.progs[key] = m.lastProgID
-	return res, nil
+	return nil
 }
 
 func (m *mockDataplane) ensureNoProgram(ap attachPoint) error {
@@ -141,7 +146,7 @@ func (m *mockDataplane) ensureQdisc(iface string) (bool, error) {
 	return false, nil
 }
 
-func (m *mockDataplane) updatePolicyProgram(rules polprog.Rules, polDir string, ap attachPoint) error {
+func (m *mockDataplane) updatePolicyProgram(rules polprog.Rules, polDir string, ap attachPoint, ipFamily proto.IPVersion) error {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 	key := ap.IfaceName() + ":" + ap.HookName().String()
@@ -149,7 +154,7 @@ func (m *mockDataplane) updatePolicyProgram(rules polprog.Rules, polDir string, 
 	return nil
 }
 
-func (m *mockDataplane) removePolicyProgram(ap attachPoint) error {
+func (m *mockDataplane) removePolicyProgram(ap attachPoint, ipFamily proto.IPVersion) error {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 	key := ap.IfaceName() + ":" + ap.HookName().String()
@@ -374,7 +379,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		)
 		Expect(err).NotTo(HaveOccurred())
 		bpfEpMgr.Features = environment.NewFeatureDetector(nil).GetFeatures()
-		bpfEpMgr.hostIP = net.ParseIP("1.2.3.4")
+		bpfEpMgr.v4.hostIP = net.ParseIP("1.2.3.4")
 	}
 
 	genIfaceUpdate := func(name string, state ifacemonitor.State, index int) func() {

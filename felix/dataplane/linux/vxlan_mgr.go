@@ -38,6 +38,11 @@ import (
 	"github.com/projectcalico/calico/felix/vxlanfdb"
 )
 
+const (
+	VXLANIfaceNameV4 = "vxlan.calico"
+	VXLANIfaceNameV6 = "vxlan-v6.calico"
+)
+
 // added so that we can shim netlink for tests
 type netlinkHandle interface {
 	LinkByName(name string) (netlink.Link, error)
@@ -92,6 +97,10 @@ const (
 	defaultVXLANProto netlink.RouteProtocol = 80
 )
 
+type VXLANFDB interface {
+	SetVTEPs(vteps []vxlanfdb.VTEP)
+}
+
 func newVXLANManager(
 	ipsetsDataplane common.IPSetsDataplane,
 	rt routetable.RouteTableInterface,
@@ -103,10 +112,6 @@ func newVXLANManager(
 	nlHandle, _ := netlink.NewHandle()
 
 	return newVXLANManagerWithShims(ipsetsDataplane, rt, fdb, deviceName, dpConfig, nlHandle, ipVersion)
-}
-
-type VXLANFDB interface {
-	SetVTEPs(vteps []vxlanfdb.VTEP)
 }
 
 func newVXLANManagerWithShims(
@@ -376,13 +381,11 @@ func (m *vxlanManager) CompleteDeferredWork() error {
 				addr = u.Ipv6Addr
 				parentDeviceIP = u.ParentDeviceIpv6
 			}
-			l2routes = append(
-				l2routes, vxlanfdb.VTEP{
-					TunnelMAC: mac,
-					TunnelIP:  ip.FromString(addr),
-					HostIP:    ip.FromString(parentDeviceIP),
-				},
-			)
+			l2routes = append(l2routes, vxlanfdb.VTEP{
+				TunnelMAC: mac,
+				TunnelIP:  ip.FromIPOrCIDRString(addr),
+				HostIP:    ip.FromIPOrCIDRString(parentDeviceIP),
+			})
 			allowedVXLANSources = append(allowedVXLANSources, parentDeviceIP)
 		}
 		m.logCtx.WithField("l2routes", l2routes).Debug("VXLAN manager sending L2 updates")
@@ -716,7 +719,10 @@ func (m *vxlanManager) ensureAddressOnLink(ipStr string, link netlink.Link) erro
 			addrPresent = true
 			continue
 		}
-		m.logCtx.WithFields(logrus.Fields{"address": existing, "link": link.Attrs().Name}).Warn("Removing unwanted IP from VXLAN device")
+		m.logCtx.WithFields(logrus.Fields{
+			"address": existing,
+			"link":    link.Attrs().Name,
+		}).Warn("Removing unwanted IP from VXLAN device")
 		if err := m.nlHandle.AddrDel(link, &existing); err != nil {
 			return fmt.Errorf("failed to remove IP address %s", existing)
 		}

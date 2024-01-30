@@ -43,7 +43,25 @@ type VTEP struct {
 	TunnelMAC net.HardwareAddr
 }
 
+// VXLANFDB manages the FDB and ARP/NDP entries for a VXLAN device. I.e.
+// all the layer-2 state for the VXLAN device.
+//
+// Overall, we use VXLAN to create a layer 3 routed network.  We do that
+// by
+//
+// - Giving each node a "tunnel IP" which is an IP on the VXLAN network.
+// - (In this object) setting up static ARP/NDP entries for the tunnel IPs.
+// - (In this object) setting up static FDB entries for the tunnel MACs.
+// - (Elsewhere) setting up a routes to remote workloads via the tunnel IPs.
+//
+// ARP/NDP entries and FDB entries are confusingly similar(!) Both are MAC/IP
+// tuples, but they mean very different things.  ARP/NDP entries tell the
+// kernel what MAC address to use for the inner ethernet frame inside the
+// VXLAN packet.  FDB entries tell the kernel what IP address to use for the
+// outer IP header, given a particular inner MAC.  So, ARP maps IP->(inner)MAC;
+// FDB maps (inner)MAC->(outer)IP.
 type VXLANFDB struct {
+	family         int
 	ifaceName      string
 	ifIndex        int
 	arpEntries     *deltatracker.DeltaTracker[string, ipMACMapping]
@@ -52,7 +70,8 @@ type VXLANFDB struct {
 	resyncPending  bool
 	logNextSuccess bool
 	nl             *handlemgr.HandleManager
-	family         int
+
+	newNetlinkHandle func() (netlinkshim.Interface, error)
 }
 
 type ipMACMapping struct {
@@ -60,7 +79,21 @@ type ipMACMapping struct {
 	MAC net.HardwareAddr
 }
 
-func New(family int, ifaceName string, featureDetector environment.FeatureDetectorIface, netlinkTimeout time.Duration) *VXLANFDB {
+type VXLANFDBOption func(*VXLANFDB)
+
+func WithNetlinkHandleShim(newNetlinkHandle func() (netlinkshim.Interface, error)) VXLANFDBOption {
+	return func(fdb *VXLANFDB) {
+		fdb.newNetlinkHandle = newNetlinkHandle
+	}
+}
+
+func New(
+	family int,
+	ifaceName string,
+	featureDetector environment.FeatureDetectorIface,
+	netlinkTimeout time.Duration,
+	opts ...VXLANFDBOption,
+) *VXLANFDB {
 	switch family {
 	case unix.AF_INET, unix.AF_INET6:
 	default:
@@ -75,44 +108,51 @@ func New(family int, ifaceName string, featureDetector environment.FeatureDetect
 			"iface":  ifaceName,
 			"family": family,
 		}),
-		resyncPending:  true,
-		logNextSuccess: true,
-		nl: handlemgr.NewHandleManager(
-			featureDetector,
-			handlemgr.WithSocketTimeout(netlinkTimeout),
-			// The Netlink library doesn't seem to be able to list
-			// both types of neighbors in strict mode.
-			handlemgr.WithStrictModeOverride(false),
-		),
+		resyncPending:    true,
+		logNextSuccess:   true,
+		newNetlinkHandle: netlinkshim.NewRealNetlink,
 	}
+
+	for _, o := range opts {
+		o(&f)
+	}
+
+	f.nl = handlemgr.NewHandleManager(
+		featureDetector,
+		handlemgr.WithSocketTimeout(netlinkTimeout),
+		// The Netlink library doesn't seem to be able to list
+		// both types of neighbors in strict mode.
+		handlemgr.WithStrictModeOverride(false),
+		handlemgr.WithNewHandleOverride(f.newNetlinkHandle),
+	)
 	return &f
 }
 
-func (r *VXLANFDB) OnIfaceStateChanged(ifaceName string, state ifacemonitor.State) {
-	if ifaceName != r.ifaceName {
+func (f *VXLANFDB) OnIfaceStateChanged(ifaceName string, state ifacemonitor.State) {
+	if ifaceName != f.ifaceName {
 		return
 	}
 	if state == ifacemonitor.StateUp {
-		r.logCxt.Debug("VXLAN device came up, doing a resync.")
-		r.resyncPending = true
+		f.logCxt.Debug("VXLAN device came up, doing a resync.")
+		f.resyncPending = true
 	} else {
-		r.logCxt.WithField("state", state).Debug("VXLAN device changed state.")
+		f.logCxt.WithField("state", state).Debug("VXLAN device changed state.")
 	}
 }
 
-func (r *VXLANFDB) QueueResync() {
-	r.resyncPending = true
+func (f *VXLANFDB) QueueResync() {
+	f.resyncPending = true
 }
 
-func (r *VXLANFDB) SetVTEPs(vteps []VTEP) {
-	r.arpEntries.Desired().DeleteAll()
-	r.fdbEntries.Desired().DeleteAll()
+func (f *VXLANFDB) SetVTEPs(vteps []VTEP) {
+	f.arpEntries.Desired().DeleteAll()
+	f.fdbEntries.Desired().DeleteAll()
 	for _, t := range vteps {
 		macStr := t.TunnelMAC.String()
 		// Add an ARP entry, for the remote tunnel IP.  This allows the
 		// kernel to calculate the inner ethernet header without doing a
 		// broadcast ARP to all VXLAN peers.
-		r.arpEntries.Desired().Set(macStr, ipMACMapping{
+		f.arpEntries.Desired().Set(macStr, ipMACMapping{
 			IP:  t.TunnelIP,
 			MAC: t.TunnelMAC,
 		})
@@ -121,235 +161,191 @@ func (r *VXLANFDB) SetVTEPs(vteps []VTEP) {
 		// kernel that, if it needs to send traffic to the VTEP MAC, it
 		// should send the VXLAN packet to a particular host's real IP
 		// address.
-		r.fdbEntries.Desired().Set(macStr, ipMACMapping{
+		f.fdbEntries.Desired().Set(macStr, ipMACMapping{
 			MAC: t.TunnelMAC,
 			IP:  t.HostIP,
 		})
 	}
 }
 
-func (r *VXLANFDB) Apply() error {
-	debug := log.IsLevelEnabled(log.DebugLevel)
-	nl, err := r.nl.Handle()
+func (f *VXLANFDB) Apply() error {
+	nl, err := f.nl.Handle()
 	if err != nil {
 		return fmt.Errorf("failed to connect to netlink")
 	}
 
-	if r.resyncPending {
-		if err := r.resync(nl); err != nil {
+	if f.resyncPending {
+		if err := f.resync(nl); err != nil {
 			return err
 		}
-		r.resyncPending = false
+		f.resyncPending = false
 	}
 	defer func() {
-		if r.resyncPending {
-			r.logNextSuccess = true
+		if f.resyncPending {
+			f.logNextSuccess = true
 		}
 	}()
 
-	if r.ifIndex == 0 {
+	if f.ifIndex == 0 {
 		return ErrLinkDown
 	}
 
-	errs := map[string]error{}
-	r.arpEntries.PendingUpdates().Iter(func(macStr string, entry ipMACMapping) deltatracker.IterAction {
-		if debug {
-			log.WithField("entry", entry).Debug("Adding ARP/NDP entry.")
-		}
-		a := &netlink.Neigh{
-			Family:       r.family,
-			LinkIndex:    r.ifIndex,
-			State:        netlink.NUD_PERMANENT,
-			Type:         unix.RTN_UNICAST,
-			IP:           entry.IP.AsNetIP(),
-			HardwareAddr: entry.MAC,
-		}
-		if err := nl.NeighSet(a); err != nil {
-			if len(errs) == 0 {
-				log.WithError(err).WithField("entry", entry).Warn("Failed to add ARP entry, only logging first instance.")
+	f.applyFamily(nl, "ARP/NDP", f.arpEntries,
+		func(mapping ipMACMapping) *netlink.Neigh {
+			return &netlink.Neigh{
+				Family:       f.family,
+				LinkIndex:    f.ifIndex,
+				State:        netlink.NUD_PERMANENT,
+				Type:         unix.RTN_UNICAST,
+				IP:           mapping.IP.AsNetIP(),
+				HardwareAddr: mapping.MAC,
 			}
-			errs[macStr] = err
-			return deltatracker.IterActionNoOp
-		}
-		return deltatracker.IterActionUpdateDataplane
-	})
-	if len(errs) > 0 {
-		log.WithField("numErrors", len(errs)).Warn("Failed to add some ARP entries")
-		r.resyncPending = true
-		r.nl.CloseHandle() // Defensive: force a netlink reconnection next time.
-		clear(errs)
-	}
+		},
+	)
 
-	r.arpEntries.PendingDeletions().Iter(func(macStr string) deltatracker.IterAction {
-		entry, _ := r.arpEntries.Dataplane().Get(macStr)
-		if debug {
-			log.WithField("entry", entry).Debug("Deleting ARP entry.")
-		}
-		a := &netlink.Neigh{
-			Family:       r.family,
-			LinkIndex:    r.ifIndex,
-			Type:         unix.RTN_UNICAST,
-			IP:           entry.IP.AsNetIP(),
-			HardwareAddr: entry.MAC,
-		}
-		if err := nl.NeighDel(a); err != nil && !errors.Is(err, unix.ENOENT) {
-			if len(errs) == 0 {
-				log.WithError(err).WithField("entry", entry).Warn("Failed to delete ARP entry, only logging first instance.")
+	f.applyFamily(nl, "FDB", f.fdbEntries,
+		func(mapping ipMACMapping) *netlink.Neigh {
+			return &netlink.Neigh{
+				Family:       unix.AF_BRIDGE,
+				LinkIndex:    f.ifIndex,
+				State:        netlink.NUD_PERMANENT,
+				Flags:        netlink.NTF_SELF,
+				IP:           mapping.IP.AsNetIP(),
+				HardwareAddr: mapping.MAC,
 			}
-			errs[macStr] = err
-		}
-		return deltatracker.IterActionUpdateDataplane
-	})
-	if len(errs) > 0 {
-		log.WithField("numErrors", len(errs)).Warn("Failed to remove some ARP entries")
-		r.resyncPending = true
-		r.nl.CloseHandle() // Defensive: force a netlink reconnection next time.
-		clear(errs)
-	}
+		},
+	)
 
-	r.fdbEntries.PendingUpdates().Iter(func(macStr string, entry ipMACMapping) deltatracker.IterAction {
-		if debug {
-			log.WithField("entry", entry).Debug("Adding FDB entry.")
-		}
-		a := &netlink.Neigh{
-			LinkIndex:    r.ifIndex,
-			State:        netlink.NUD_PERMANENT,
-			Family:       unix.AF_BRIDGE,
-			Flags:        netlink.NTF_SELF,
-			IP:           entry.IP.AsNetIP(),
-			HardwareAddr: entry.MAC,
-		}
-		if err := nl.NeighSet(a); err != nil {
-			if len(errs) == 0 {
-				log.WithError(err).WithField("entry", entry).Warn("Failed to add FDB entry, only logging first instance.")
-			}
-			errs[macStr] = err
-			return deltatracker.IterActionNoOp
-		}
-		return deltatracker.IterActionUpdateDataplane
-	})
-	if len(errs) > 0 {
-		log.WithField("numErrors", len(errs)).Warn("Failed to add some FDB entries")
-		r.resyncPending = true
-		r.nl.CloseHandle() // Defensive: force a netlink reconnection next time.
-		clear(errs)
+	if !f.resyncPending && f.logNextSuccess {
+		f.logCxt.Info("VXLAN FDB now in sync.")
+		f.logNextSuccess = false
 	}
-
-	r.fdbEntries.PendingDeletions().Iter(func(macStr string) deltatracker.IterAction {
-		entry, _ := r.fdbEntries.Dataplane().Get(macStr)
-		if log.IsLevelEnabled(log.DebugLevel) {
-			log.WithField("entry", entry).Debug("Deleting FDB entry.")
-		}
-		a := &netlink.Neigh{
-			LinkIndex:    r.ifIndex,
-			State:        netlink.NUD_PERMANENT,
-			Family:       unix.AF_BRIDGE,
-			Flags:        netlink.NTF_SELF,
-			IP:           entry.IP.AsNetIP(),
-			HardwareAddr: entry.MAC,
-		}
-		if err := nl.NeighDel(a); err != nil && !errors.Is(err, unix.ENOENT) {
-			if len(errs) == 0 {
-				log.WithError(err).WithField("entry", entry).Warn("Failed to delete FDB entry, only logging first instance.")
-			}
-			errs[macStr] = err
-		}
-		return deltatracker.IterActionUpdateDataplane
-	})
-	if len(errs) > 0 {
-		log.WithField("numErrors", len(errs)).Warn("Failed to remove some ARP entries")
-		r.resyncPending = true
-		r.nl.CloseHandle() // Defensive: force a netlink reconnection next time.
-		clear(errs)
-	}
-
-	if !r.resyncPending && r.logNextSuccess {
-		r.logCxt.Info("VXLAN FDB now in sync.")
-		r.logNextSuccess = false
+	if f.resyncPending {
+		return fmt.Errorf("failed to add/delete some neighbor entries")
 	}
 
 	return nil
 }
 
+func (f *VXLANFDB) applyFamily(
+	nl netlinkshim.Interface,
+	description string,
+	entries *deltatracker.DeltaTracker[string, ipMACMapping],
+	entryToNeigh func(mapping ipMACMapping) *netlink.Neigh,
+) {
+	debug := log.IsLevelEnabled(log.DebugLevel)
+	errs := map[string]error{}
+	entries.PendingUpdates().Iter(func(macStr string, entry ipMACMapping) deltatracker.IterAction {
+		if debug {
+			log.WithField("entry", entry).Debugf("Adding %s entry.", description)
+		}
+		neigh := entryToNeigh(entry)
+		if err := nl.NeighSet(neigh); err != nil {
+			if len(errs) == 0 {
+				log.WithError(err).WithField("entry", entry).Warnf("Failed to add %s entry, only logging first instance.", description)
+			}
+			errs[macStr] = err
+			return deltatracker.IterActionNoOp
+		}
+		return deltatracker.IterActionUpdateDataplane
+	})
+	if len(errs) > 0 {
+		log.WithField("numErrors", len(errs)).Warnf("Failed to add some %s entries", description)
+		f.resyncPending = true
+		f.nl.MarkHandleForReopen() // Defensive: force a netlink reconnection next time.
+		clear(errs)
+	}
+
+	entries.PendingDeletions().Iter(func(macStr string) deltatracker.IterAction {
+		entry, _ := entries.Dataplane().Get(macStr)
+		if debug {
+			log.WithField("entry", entry).Debug("Deleting ARP entry.")
+		}
+		neigh := entryToNeigh(entry)
+		if err := nl.NeighDel(neigh); err != nil && !errors.Is(err, unix.ENOENT) {
+			if len(errs) == 0 {
+				log.WithError(err).WithField("entry", entry).Warnf("Failed to delete %s entry, only logging first instance.", description)
+			}
+			errs[macStr] = err
+		}
+		return deltatracker.IterActionUpdateDataplane
+	})
+	if len(errs) > 0 {
+		log.WithField("numErrors", len(errs)).Warnf("Failed to remove some %s entries", description)
+		f.resyncPending = true
+		f.nl.MarkHandleForReopen() // Defensive: force a netlink reconnection next time.
+		clear(errs)
+	}
+}
+
 var ErrLinkDown = fmt.Errorf("VXLAN device is down")
 
-func (r *VXLANFDB) resync(nl netlinkshim.Interface) error {
+func (f *VXLANFDB) resync(nl netlinkshim.Interface) error {
 	// Refresh the link ID.  If the VXLAN device gets recreated then
 	// this can change.
-	link, err := nl.LinkByName(r.ifaceName)
+	link, err := nl.LinkByName(f.ifaceName)
 	if err != nil {
-		r.resyncPending = false // OnIfaceStateChanged will trigger a resync when iface appears.
+		f.resyncPending = false // OnIfaceStateChanged will trigger a resync when iface appears.
 		return fmt.Errorf("failed to get interface: %w", err)
 	}
 	if !ifacemonitor.LinkIsOperUp(link) {
-		r.resyncPending = false // OnIfaceStateChanged will trigger a resync when iface appears.
+		f.resyncPending = false // OnIfaceStateChanged will trigger a resync when iface appears.
 		return ErrLinkDown
 	}
-	r.ifIndex = link.Attrs().Index
+	f.ifIndex = link.Attrs().Index
 
-	// Refresh the neighbours.
-	existingNeigh, err := nl.NeighList(r.ifIndex, unix.AF_INET)
+	err = f.resyncFamily(nl, "ARP/NDP", f.family, f.arpEntries)
 	if err != nil {
-		r.logCxt.WithError(err).Error("Failed to list neighbors")
+		return err
+	}
+	err = f.resyncFamily(nl, "FDB", unix.AF_BRIDGE, f.fdbEntries)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (f *VXLANFDB) resyncFamily(
+	nl netlinkshim.Interface,
+	description string,
+	family int,
+	entries *deltatracker.DeltaTracker[string, ipMACMapping],
+) error {
+	// Refresh the neighbors.
+	existingNeigh, err := nl.NeighList(f.ifIndex, family)
+	if err != nil {
+		f.logCxt.WithError(err).Errorf("Failed to list %s entries", description)
+		f.nl.MarkHandleForReopen() // Defensive: force a netlink reconnection next time.
 		return fmt.Errorf("failed to list neighbors: %w", err)
 	}
-	existingFDB, err := nl.NeighList(r.ifIndex, unix.AF_BRIDGE)
-	if err != nil {
-		r.logCxt.WithError(err).Error("Failed to list FDB entries")
-		return fmt.Errorf("failed to list FDB entries: %w", err)
-	}
-	err = r.arpEntries.Dataplane().ReplaceAllIter(func(f func(macStr string, v ipMACMapping)) error {
-		for _, n := range existingNeigh {
-			if n.HardwareAddr == nil {
-				continue
-			}
-			if n.State&unix.NUD_PERMANENT == 0 {
-				// We only manage static entries so ignore this one.
-				continue
-			}
-			hwAddrStr := n.HardwareAddr.String()
-			if log.IsLevelEnabled(log.DebugLevel) {
-				log.WithFields(log.Fields{
-					"mac": hwAddrStr,
-					"ip":  n.IP.String(),
-				}).Debug("Loaded ARP entry from kernel.")
-			}
-			f(hwAddrStr, ipMACMapping{
-				IP:  ip.FromNetIP(n.IP),
-				MAC: n.HardwareAddr,
-			})
-		}
-		return nil
-	})
-	if err != nil {
-		return fmt.Errorf("failed to update arpEntries: %w", err)
-	}
-	err = r.fdbEntries.Dataplane().ReplaceAllIter(func(f func(k string, v ipMACMapping)) error {
-		for _, n := range existingFDB {
-			if n.HardwareAddr == nil {
-				continue
-			}
-			if n.State&unix.NUD_PERMANENT == 0 {
-				// We only manage static entries so ignore this one.
-				continue
-			}
-			hwAddrStr := n.HardwareAddr.String()
-			if log.IsLevelEnabled(log.DebugLevel) {
-				log.WithFields(log.Fields{
-					"mac": hwAddrStr,
-					"ip":  n.IP.String(),
-				}).Debug("Loaded FDB entry from kernel.")
-			}
-			f(hwAddrStr, ipMACMapping{
-				IP:  ip.FromNetIP(n.IP),
-				MAC: n.HardwareAddr,
-			})
-		}
-		return nil
-	})
-	if err != nil {
-		return fmt.Errorf("failed to update fdbEntries: %w", err)
-	}
 
+	err = entries.Dataplane().ReplaceAllIter(func(f func(macStr string, v ipMACMapping)) error {
+		for _, n := range existingNeigh {
+			if len(n.HardwareAddr) == 0 {
+				// Kernel creates transient entries with no MAC, ignore
+				continue
+			}
+			if n.State&unix.NUD_PERMANENT == 0 {
+				// We only manage static entries so ignore this one.
+				continue
+			}
+			hwAddrStr := n.HardwareAddr.String()
+			if log.IsLevelEnabled(log.DebugLevel) {
+				log.WithFields(log.Fields{
+					"mac": hwAddrStr,
+					"ip":  n.IP.String(),
+				}).Debugf("Loaded %s entry from kernel.", description)
+			}
+			f(hwAddrStr, ipMACMapping{
+				IP:  ip.FromNetIP(n.IP),
+				MAC: n.HardwareAddr,
+			})
+		}
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("failed to update %s entries: %w", description, err)
+	}
 	return nil
 }

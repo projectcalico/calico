@@ -102,7 +102,6 @@ type RouteTable struct {
 
 	// Interface update tracking.
 	fullResyncNeeded  bool
-	forceNetlinkClose bool
 	ifacesToRescan    set.Set[string]
 	makeARPEntries    bool
 
@@ -666,9 +665,8 @@ func (r *RouteTable) Apply() (err error) {
 
 func (r *RouteTable) attemptApply() (err error) {
 	defer func() {
-		if err != nil || r.forceNetlinkClose {
-			r.nl.CloseHandle()
-			r.forceNetlinkClose = false
+		if err != nil {
+			r.nl.MarkHandleForReopen()
 		}
 	}()
 	if err = r.maybeResyncWithDataplane(); err != nil {
@@ -774,7 +772,7 @@ func (r *RouteTable) resyncIndividualInterfaces(nl netlinkshim.Interface) error 
 		// RouteTable was created after start-of-day.  Refresh the link.
 		err := r.refreshIfaceStateBestEffort(nl, ifaceName)
 		if err != nil {
-			r.forceNetlinkClose = true
+			r.nl.MarkHandleForReopen()
 			return nil
 		}
 
@@ -807,7 +805,7 @@ func (r *RouteTable) resyncIndividualInterfaces(nl netlinkshim.Interface) error 
 					"routeFilter": routeFilter,
 					"flags":       routeFilterFlags,
 				}).Error("Error listing routes")
-				r.forceNetlinkClose = true
+				r.nl.MarkHandleForReopen()
 				return set.RemoveItem
 			} else {
 				r.logCxt.WithError(filteredErr).WithField("iface", ifaceName).Debug(
