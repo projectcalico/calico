@@ -405,6 +405,10 @@ func (ap *AttachPoint) ConfigureProgram(m *libbpf.Map) error {
 		globalData.VxlanPort = 4789
 	}
 
+	if ap.IPv6Enabled {
+		globalData.Flags |= libbpf.GlobalsIPv6Enabled
+	}
+
 	if ap.DSROptoutCIDRs {
 		globalData.Flags |= libbpf.GlobalsNoDSRCidrs
 	}
