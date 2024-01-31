@@ -27,7 +27,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/maps"
 )
 
-const maxPrograms = 200
+const maxPrograms = 400
 
 type SubProg int
 
@@ -95,7 +95,7 @@ var ProgramsMapParameters = maps.MapParameters{
 	ValueSize:  4,
 	MaxEntries: maxPrograms,
 	Name:       "cali_progs",
-	Version:    2,
+	Version:    3,
 }
 
 func NewProgramsMap() maps.Map {
@@ -113,7 +113,7 @@ func NewXDPProgramsMap() maps.Map {
 			ValueSize:  4,
 			MaxEntries: maxPrograms,
 			Name:       "xdp_cali_progs",
-			Version:    2,
+			Version:    3,
 		}),
 		programs: make(map[AttachType]Layout),
 	}
