@@ -53,6 +53,8 @@ type KubeProxy struct {
 	excludedCIDRs *ip.CIDRTrie
 
 	dsrEnabled bool
+
+	bpfMaps *bpfmap.Maps
 }
 
 // StartKubeProxy start a new kube-proxy if there was no error
@@ -72,6 +74,7 @@ func StartKubeProxy(k8s kubernetes.Interface, hostname string,
 
 		hostIPUpdates: make(chan []net.IP, 1),
 		exiting:       make(chan struct{}),
+		bpfMaps:       bpfMaps,
 	}
 
 	for _, o := range opts {

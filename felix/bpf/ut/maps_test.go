@@ -58,9 +58,12 @@ func TestMapResize(t *testing.T) {
 	bpfmaps.EnableRepin()
 	defer bpfmaps.DisableRepin()
 
-	maps, err := bpfmap.CreateBPFMaps(4)
+	mapsArr, err := bpfmap.CreateBPFMaps(false)
 	Expect(err).NotTo(HaveOccurred())
+
+	maps := &mapsArr[bpfmap.V4MapIndex]
 	defer restoreMaps(maps)
+	defer restoreMaps(&mapsArr[bpfmap.CommonMapIndex])
 	// New CT map should have max_entries as 600
 	ctMapInfo, err := bpfmaps.GetMapInfo(maps.CtMap.MapFD())
 	Expect(err).NotTo(HaveOccurred(), "Failed to get ct map info")
@@ -79,9 +82,11 @@ func TestMapResizeWithCopy(t *testing.T) {
 
 	// Resize the CT map to 600. New map should have the entry in the old map
 	conntrack.SetMapSize(600)
-	maps, err := bpfmap.CreateBPFMaps(4)
+	mapsArr, err := bpfmap.CreateBPFMaps(false)
 	Expect(err).NotTo(HaveOccurred())
+	maps := &mapsArr[bpfmap.V4MapIndex]
 	defer restoreMaps(maps)
+	defer restoreMaps(&mapsArr[bpfmap.CommonMapIndex])
 	val, err := maps.CtMap.Get(k.AsBytes())
 	Expect(err).NotTo(HaveOccurred(), "ct entry not present in the new map")
 	v := conntrack.Value{}
@@ -107,8 +112,8 @@ func TestMapDownSize(t *testing.T) {
 
 	// New map creation should panic as the number of entries in old map is more than what the new map can
 	// accommodate
-	maps, err := bpfmap.CreateBPFMaps(4)
-	defer restoreMaps(maps)
+	_, err := bpfmap.CreateBPFMaps(false)
+	defer restoreMaps(nil)
 	expectedError := fmt.Sprintf("failed to create %s map, err=new map cannot hold all the data from the old map %s", ctMap.GetName(), ctMap.GetName())
 	Expect(err.Error()).To(Equal(expectedError))
 }
@@ -121,10 +126,12 @@ func TestCTDeltaMigration(t *testing.T) {
 	// Resize the ctmap
 	conntrack.SetMapSize(666)
 
-	maps, err := bpfmap.CreateBPFMaps(4)
+	mapsArr, err := bpfmap.CreateBPFMaps(false)
 	Expect(err).NotTo(HaveOccurred())
 
+	maps := &mapsArr[bpfmap.V4MapIndex]
 	defer restoreMaps(maps)
+	defer restoreMaps(&mapsArr[bpfmap.CommonMapIndex])
 	v := conntrack.Value{}
 	for i := range v {
 		v[i] = uint8(i)
