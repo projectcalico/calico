@@ -21,6 +21,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/sirupsen/logrus"
 
@@ -152,29 +153,62 @@ func replacePlatformSpecificVars(c config, netconf string) string {
 	}
 	netconf = strings.Replace(netconf, "__IPAM_TYPE__", ipamType, -1)
 
-	stdout, stderr, err := winutils.Powershell("Get-ComputerInfo | select WindowsVersion, OsBuildNumber, OsHardwareAbstractionLayer")
-	if err != nil {
-		logrus.Fatalf("Failed to interact with powershell\nerror: %s\nstderr: %s", err, stderr)
+	// Get Windows version information via powershell to determine whether DSR is supported.
+	// Retry for 10 attempts in case any step fails.
+	var stdout, stderr string
+	var err error
+	var winVerInt, buildNumInt, halVerInt int
+	for attempts := 10; attempts > 0; attempts-- {
+		stdout, stderr, err = winutils.Powershell("Get-ComputerInfo | select WindowsVersion, OsBuildNumber, OsHardwareAbstractionLayer")
+		logger := logrus.WithFields(logrus.Fields{"stderr": stderr, "stdout": stdout})
+		if err != nil {
+			logger.WithError(err).Warn("Failed to interact with powershell. May retry...")
+			time.Sleep(1 * time.Second)
+			continue
+		}
+		lines := strings.Split(stdout, "\r\n")
+		if len(lines) < 4 {
+			logger.WithError(err).Warn("Could not parse output from powershell command. May retry...")
+			time.Sleep(1 * time.Second)
+			continue
+		}
+		line := lines[3]
+		fields := strings.Fields(line)
+		if len(fields) < 3 {
+			logger.WithError(err).WithField("line", line).Warn("Could not parse fields from powershell command output line. May retry...")
+			time.Sleep(1 * time.Second)
+			continue
+		}
+		winVer := fields[0]
+		winVerInt, err = strconv.Atoi(winVer)
+		if err != nil {
+			logger.WithError(err).WithField("winVer", winVer).Warn("Error converting winVer to int. May retry...")
+			time.Sleep(1 * time.Second)
+			continue
+		}
+		buildNum := fields[1]
+		buildNumInt, err = strconv.Atoi(buildNum)
+		if err != nil {
+			logger.WithError(err).WithField("buildNum", buildNum).Warn("Error converting buildNum to int. May retry...")
+			time.Sleep(1 * time.Second)
+			continue
+		}
+		hal := fields[2]
+		halVer := strings.Split(hal, ".")[3]
+		halVerInt, err = strconv.Atoi(halVer)
+		if err != nil {
+			logger.WithError(err).WithField("halVer", halVer).Warn("Error converting halVer to int. May retry...")
+			time.Sleep(1 * time.Second)
+			continue
+		}
+		break
 	}
-	line := strings.Split(stdout, "\r\n")[3]
-	fields := strings.Fields(line)
-	winVer := fields[0]
-	winVerInt, err := strconv.Atoi(winVer)
 	if err != nil {
-		logrus.Fatalf("Error converting winVer to int\nerror: %s", err)
+		logrus.WithError(err).Fatal("Failed to retrieve Windows version information to determine DSR support.")
 	}
-	buildNum := fields[1]
-	buildNumInt, err := strconv.Atoi(buildNum)
-	if err != nil {
-		logrus.Fatalf("Error converting buildNum to int\nerror: %s", err)
-	}
-	hal := fields[2]
-	halVer := strings.Split(hal, ".")[3]
-	halVerInt, err := strconv.Atoi(halVer)
-	if err != nil {
-		logrus.Fatalf("Error converting halVer to int\nerror: %s", err)
-	}
+
 	supportsDSR := (winVerInt == 1809 && buildNumInt >= 17763 && halVerInt >= 1432) || (winVerInt >= 1903 && buildNumInt >= 18317)
+	logrus.WithField("supportsDSR", supportsDSR).Info("Successfully determined whether DSR is supported.")
 	// Remove the quotes when replacing with boolean values (the quotes are in so that the template is valid JSON even before replacing)
 	if supportsDSR {
 		netconf = strings.Replace(netconf, `"__DSR_SUPPORT__"`, "true", -1)
