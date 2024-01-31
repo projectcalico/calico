@@ -493,6 +493,8 @@ func (r *DefaultRuleRenderer) failsafeInChain(table string, ipVersion uint8) *Ch
 					Protocol(protoPort.Protocol).
 					DestPorts(protoPort.Port).
 					SourceNet(protoPort.Net)
+			} else {
+				continue // don't add the rule
 			}
 		}
 		rules = append(rules, rule)
@@ -522,6 +524,8 @@ func (r *DefaultRuleRenderer) failsafeInChain(table string, ipVersion uint8) *Ch
 						Protocol(protoPort.Protocol).
 						SourcePorts(protoPort.Port).
 						SourceNet(protoPort.Net)
+				} else {
+					continue // don't add the rule
 				}
 			}
 			rules = append(rules, rule)
@@ -556,6 +560,8 @@ func (r *DefaultRuleRenderer) failsafeOutChain(table string, ipVersion uint8) *C
 					Protocol(protoPort.Protocol).
 					DestPorts(protoPort.Port).
 					DestNet(protoPort.Net)
+			} else {
+				continue // don't add the rule
 			}
 		}
 		rules = append(rules, rule)
@@ -584,7 +590,9 @@ func (r *DefaultRuleRenderer) failsafeOutChain(table string, ipVersion uint8) *C
 					rule.Match = Match().
 						Protocol(protoPort.Protocol).
 						SourcePorts(protoPort.Port).
-						SourceNet(protoPort.Net)
+						DestNet(protoPort.Net)
+				} else {
+					continue // don't add the rule
 				}
 			}
 			rules = append(rules, rule)
