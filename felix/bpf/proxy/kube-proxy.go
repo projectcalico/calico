@@ -95,12 +95,6 @@ func StartKubeProxy(k8s kubernetes.Interface, hostname string,
 
 func (kp *KubeProxy) setIpFamily(ipFamily int) {
 	kp.ipFamily = ipFamily
-	if ipFamily == 6 {
-		kp.frontendMap = kp.bpfMaps.FrontendMapV6.(maps.MapWithExistsCheck)
-		kp.backendMap = kp.bpfMaps.BackendMapV6.(maps.MapWithExistsCheck)
-		kp.affinityMap = kp.bpfMaps.AffinityMapV6
-		kp.ctMap = kp.bpfMaps.CtMapV6
-	}
 }
 
 // Stop stops KubeProxy and waits for it to exit

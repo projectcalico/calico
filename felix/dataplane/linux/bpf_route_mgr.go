@@ -162,6 +162,7 @@ func newBPFRouteManager(config *Config, maps *bpfmap.Maps,
 		dsrOptoutCIDRs:    noDsrCIDRs,
 
 		desiredRoutes: map[routes.KeyInterface]routes.ValueInterface{},
+		routeMap:      maps.RouteMap,
 
 		dirtyRoutes:     set.New[routes.KeyInterface](),
 		resyncScheduled: true,
@@ -179,7 +180,6 @@ func newBPFRouteManager(config *Config, maps *bpfmap.Maps,
 		m.bpfOps.NewValueWithIfIndex = routes.NewValueV6IntfWithIfIndex
 		m.bpfOps.KeyFromBytes = routes.KeyV6InftFromBytes
 		m.bpfOps.ValueFromBytes = routes.ValueV6InftFromBytes
-		m.routeMap = maps.RouteMapV6
 	} else {
 		m.bpfOps.NewKey = routes.NewKeyIntf
 		m.bpfOps.NewValue = routes.NewValueIntf
@@ -187,7 +187,6 @@ func newBPFRouteManager(config *Config, maps *bpfmap.Maps,
 		m.bpfOps.NewValueWithIfIndex = routes.NewValueIntfWithIfIndex
 		m.bpfOps.KeyFromBytes = routes.KeyInftFromBytes
 		m.bpfOps.ValueFromBytes = routes.ValueInftFromBytes
-		m.routeMap = maps.RouteMap
 	}
 
 	return m

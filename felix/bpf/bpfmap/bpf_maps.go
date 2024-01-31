@@ -34,9 +34,14 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/state"
 )
 
+const (
+	V4MapIndex = iota
+	V6MapIndex
+	CommonMapIndex
+)
+
 type Maps struct {
 	IpsetsMap    maps.Map
-	StateMap     maps.Map
 	ArpMap       maps.Map
 	FailsafesMap maps.Map
 	FrontendMap  maps.Map
@@ -47,17 +52,7 @@ type Maps struct {
 	SrMsgMap     maps.Map
 	CtNatsMap    maps.Map
 
-	IpsetsMapV6    maps.Map
-	ArpMapV6       maps.Map
-	FailsafesMapV6 maps.Map
-	FrontendMapV6  maps.Map
-	BackendMapV6   maps.Map
-	AffinityMapV6  maps.Map
-	RouteMapV6     maps.Map
-	CtMapV6        maps.Map
-	SrMsgMapV6     maps.Map
-	CtNatsMapV6    maps.Map
-
+	StateMap        maps.Map
 	IfStateMap      maps.Map
 	RuleCountersMap maps.Map
 	CountersMap     maps.Map
@@ -67,7 +62,7 @@ type Maps struct {
 	XDPJumpMap      maps.MapWithDeleteIfExists
 }
 
-func (m *Maps) Destroy(ipv6Enabled bool) {
+func (m *Maps) Destroy() {
 	mps := []maps.Map{
 		m.IpsetsMap,
 		m.StateMap,
@@ -86,122 +81,105 @@ func (m *Maps) Destroy(ipv6Enabled bool) {
 		m.XDPJumpMap,
 	}
 
-	if ipv6Enabled {
-		v6Maps := []maps.Map{
-			m.IpsetsMapV6,
-			m.ArpMapV6,
-			m.FailsafesMapV6,
-			m.FrontendMapV6,
-			m.BackendMapV6,
-			m.AffinityMapV6,
-			m.RouteMapV6,
-			m.CtMapV6,
-			m.SrMsgMapV6,
-			m.CtNatsMapV6,
-		}
-
-		mps = append(mps, v6Maps...)
-	}
-
 	for _, m := range mps {
+		if m == nil {
+			continue
+		}
 		os.Remove(m.(pinnedMap).Path())
 		m.(pinnedMap).Close()
 	}
 }
 
-func CreateBPFMaps(ipv6Enabled bool) (*Maps, error) {
+func getCommonBPFMaps(mapsPtr *Maps) []maps.Map {
 	mps := []maps.Map{}
-	ret := new(Maps)
 
-	getmapWithExistsCheck := func(m func() maps.MapWithExistsCheck) maps.MapWithExistsCheck {
-		return m()
+	// Create the common maps
+	mapsPtr.StateMap = state.Map()
+	mps = append(mps, mapsPtr.StateMap)
+
+	mapsPtr.IfStateMap = ifstate.Map()
+	mps = append(mps, mapsPtr.IfStateMap)
+
+	mapsPtr.RuleCountersMap = counters.PolicyMap()
+	mps = append(mps, mapsPtr.RuleCountersMap)
+
+	mapsPtr.CountersMap = counters.Map()
+	mps = append(mps, mapsPtr.CountersMap)
+
+	mapsPtr.ProgramsMap = hook.NewProgramsMap()
+	mps = append(mps, mapsPtr.ProgramsMap)
+
+	mapsPtr.JumpMap = jump.Map().(maps.MapWithDeleteIfExists)
+	mps = append(mps, mapsPtr.JumpMap)
+
+	mapsPtr.XDPProgramsMap = hook.NewXDPProgramsMap()
+	mps = append(mps, mapsPtr.XDPProgramsMap)
+
+	mapsPtr.XDPJumpMap = jump.XDPMap().(maps.MapWithDeleteIfExists)
+	mps = append(mps, mapsPtr.XDPJumpMap)
+
+	return mps
+}
+
+func getBPFMapsPerIPFamily(mapsPtr *Maps, ipFamily int) []maps.Map {
+	mps := []maps.Map{}
+
+	getmap := func(v4, v6 func() maps.Map, ipFamily int) maps.Map {
+		if ipFamily == 4 {
+			return v4()
+		}
+		return v6()
 	}
 
-	ret.IpsetsMap = ipsets.Map()
-	mps = append(mps, ret.IpsetsMap)
+	getmapWithExistsCheck := func(v4, v6 func() maps.MapWithExistsCheck, ipFamily int) maps.MapWithExistsCheck {
+		if ipFamily == 4 {
+			return v4()
+		}
+		return v6()
+	}
+	mapsPtr.IpsetsMap = getmap(ipsets.Map, ipsets.MapV6, ipFamily)
+	mps = append(mps, mapsPtr.IpsetsMap)
 
-	ret.StateMap = state.Map()
-	mps = append(mps, ret.StateMap)
+	mapsPtr.ArpMap = getmap(arp.Map, arp.MapV6, ipFamily)
+	mps = append(mps, mapsPtr.ArpMap)
 
-	ret.ArpMap = arp.Map()
-	mps = append(mps, ret.ArpMap)
+	mapsPtr.FailsafesMap = getmap(failsafes.Map, failsafes.MapV6, ipFamily)
+	mps = append(mps, mapsPtr.FailsafesMap)
 
-	ret.FailsafesMap = failsafes.Map()
-	mps = append(mps, ret.FailsafesMap)
+	mapsPtr.FrontendMap = getmapWithExistsCheck(nat.FrontendMap, nat.FrontendMapV6, ipFamily)
+	mps = append(mps, mapsPtr.FrontendMap)
 
-	ret.FrontendMap = getmapWithExistsCheck(nat.FrontendMap)
-	mps = append(mps, ret.FrontendMap)
+	mapsPtr.BackendMap = getmapWithExistsCheck(nat.BackendMap, nat.BackendMapV6, ipFamily)
+	mps = append(mps, mapsPtr.BackendMap)
 
-	ret.BackendMap = getmapWithExistsCheck(nat.BackendMap)
-	mps = append(mps, ret.BackendMap)
+	mapsPtr.AffinityMap = getmap(nat.AffinityMap, nat.AffinityMapV6, ipFamily)
+	mps = append(mps, mapsPtr.AffinityMap)
 
-	ret.AffinityMap = nat.AffinityMap()
-	mps = append(mps, ret.AffinityMap)
+	mapsPtr.RouteMap = getmap(routes.Map, routes.MapV6, ipFamily)
+	mps = append(mps, mapsPtr.RouteMap)
 
-	ret.RouteMap = routes.Map()
-	mps = append(mps, ret.RouteMap)
+	mapsPtr.CtMap = getmap(conntrack.Map, conntrack.MapV6, ipFamily)
+	mps = append(mps, mapsPtr.CtMap)
 
-	ret.CtMap = conntrack.Map()
-	mps = append(mps, ret.CtMap)
+	mapsPtr.SrMsgMap = getmap(nat.SendRecvMsgMap, nat.SendRecvMsgMapV6, ipFamily)
+	mps = append(mps, mapsPtr.SrMsgMap)
 
-	ret.SrMsgMap = nat.SendRecvMsgMap()
-	mps = append(mps, ret.SrMsgMap)
+	mapsPtr.CtNatsMap = getmap(nat.AllNATsMsgMap, nat.AllNATsMsgMapV6, ipFamily)
+	mps = append(mps, mapsPtr.CtNatsMap)
 
-	ret.CtNatsMap = nat.AllNATsMsgMap()
-	mps = append(mps, ret.CtNatsMap)
+	return mps
+}
 
-	ret.IfStateMap = ifstate.Map()
-	mps = append(mps, ret.IfStateMap)
+func CreateBPFMaps(ipv6Enabled bool) ([]Maps, error) {
+	mps := []maps.Map{}
+	ret := make([]Maps, 3)
 
-	ret.RuleCountersMap = counters.PolicyMap()
-	mps = append(mps, ret.RuleCountersMap)
-
-	ret.CountersMap = counters.Map()
-	mps = append(mps, ret.CountersMap)
-
-	ret.ProgramsMap = hook.NewProgramsMap()
-	mps = append(mps, ret.ProgramsMap)
-
-	ret.JumpMap = jump.Map().(maps.MapWithDeleteIfExists)
-	mps = append(mps, ret.JumpMap)
-
-	ret.XDPProgramsMap = hook.NewXDPProgramsMap()
-	mps = append(mps, ret.XDPProgramsMap)
-
-	ret.XDPJumpMap = jump.XDPMap().(maps.MapWithDeleteIfExists)
-	mps = append(mps, ret.XDPJumpMap)
-
+	mps = append(mps, getBPFMapsPerIPFamily(&ret[V4MapIndex], 4)...)
 	if ipv6Enabled {
-		ret.IpsetsMapV6 = ipsets.MapV6()
-		mps = append(mps, ret.IpsetsMapV6)
-
-		ret.ArpMapV6 = arp.MapV6()
-		mps = append(mps, ret.ArpMapV6)
-
-		ret.FailsafesMapV6 = failsafes.MapV6()
-		mps = append(mps, ret.FailsafesMapV6)
-
-		ret.FrontendMapV6 = getmapWithExistsCheck(nat.FrontendMapV6)
-		mps = append(mps, ret.FrontendMapV6)
-
-		ret.BackendMapV6 = getmapWithExistsCheck(nat.BackendMapV6)
-		mps = append(mps, ret.BackendMapV6)
-
-		ret.AffinityMapV6 = nat.AffinityMapV6()
-		mps = append(mps, ret.AffinityMapV6)
-
-		ret.RouteMapV6 = routes.MapV6()
-		mps = append(mps, ret.RouteMapV6)
-
-		ret.CtMapV6 = conntrack.MapV6()
-		mps = append(mps, ret.CtMapV6)
-
-		ret.SrMsgMapV6 = nat.SendRecvMsgMapV6()
-		mps = append(mps, ret.SrMsgMapV6)
-
-		ret.CtNatsMapV6 = nat.AllNATsMsgMapV6()
-		mps = append(mps, ret.CtNatsMapV6)
+		mps = append(mps, getBPFMapsPerIPFamily(&ret[V6MapIndex], 6)...)
 	}
+	mps = append(mps, getCommonBPFMaps(&ret[CommonMapIndex])...)
+
 	for i, bpfMap := range mps {
 		err := bpfMap.EnsureExists()
 		if err != nil {

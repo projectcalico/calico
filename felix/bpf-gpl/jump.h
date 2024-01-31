@@ -37,7 +37,7 @@ static CALI_BPF_INLINE struct cali_xdp_globals *state_get_globals_xdp(void)
 
 #if CALI_F_XDP
 
-#define cali_jump_map map_symbol(xdp_cali_progs, 2)
+#define cali_jump_map map_symbol(xdp_cali_progs, 3)
 
 CALI_MAP_V1(cali_jump_map, BPF_MAP_TYPE_PROG_ARRAY, __u32, __u32, 400, 0)
 
@@ -45,7 +45,7 @@ CALI_MAP_V1(cali_jump_map, BPF_MAP_TYPE_PROG_ARRAY, __u32, __u32, 400, 0)
 
 #else /* CALI_F_XDP */
 
-#define cali_jump_map map_symbol(cali_progs, 2)
+#define cali_jump_map map_symbol(cali_progs, 3)
 
 CALI_MAP_V1(cali_jump_map, BPF_MAP_TYPE_PROG_ARRAY, __u32, __u32, 400, 0)
 
