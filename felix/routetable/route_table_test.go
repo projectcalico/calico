@@ -475,7 +475,7 @@ var _ = Describe("RouteTable", func() {
 					{CIDR: ip.MustParseCIDROrIP("10.0.0.7"), DestMAC: mac1},
 				})
 				// Persist failures, this will apply the deltas to the cache but will be out of sync with the dataplane.
-				dataplane.FailuresToSimulate = mocknetlink.FailNextRouteAdd
+				dataplane.FailuresToSimulate = mocknetlink.FailNextRouteAdd | mocknetlink.FailNextRouteReplace
 				dataplane.PersistFailures = true
 				err := rt.Apply()
 				Expect(err).To(HaveOccurred())
@@ -626,7 +626,7 @@ var _ = Describe("RouteTable", func() {
 				err := rt.Apply()
 				Expect(err).NotTo(HaveOccurred())
 
-				dataplane.FailuresToSimulate = mocknetlink.FailNextRouteAdd
+				dataplane.FailuresToSimulate = mocknetlink.FailNextRouteAdd | mocknetlink.FailNextRouteReplace
 				dataplane.PersistFailures = true
 				rt.RouteUpdate("cali3", Target{
 					CIDR: ip.MustParseCIDROrIP("10.20.30.40"),

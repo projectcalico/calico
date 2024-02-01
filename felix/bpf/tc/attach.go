@@ -40,10 +40,14 @@ type AttachPoint struct {
 	LogFilterIdx         int
 	Type                 tcdefs.EndpointType
 	ToOrFrom             tcdefs.ToOrFromEp
-	HookLayout           hook.Layout
-	HostIP               net.IP
-	HostTunnelIP         net.IP
-	IntfIP               net.IP
+	HookLayoutV4         hook.Layout
+	HookLayoutV6         hook.Layout
+	HostIPv4             net.IP
+	HostIPv6             net.IP
+	HostTunnelIPv4       net.IP
+	HostTunnelIPv6       net.IP
+	IntfIPv4             net.IP
+	IntfIPv6             net.IP
 	FIB                  bool
 	ToHostDrop           bool
 	DSR                  bool
@@ -388,22 +392,21 @@ func (ap *AttachPoint) ConfigureProgram(m *libbpf.Map) error {
 		WgPort:       ap.WgPort,
 		NatIn:        ap.NATin,
 		NatOut:       ap.NATout,
-
 		LogFilterJmp: uint32(ap.LogFilterIdx),
 	}
-	if ap.HostIP.To4() != nil {
-		copy(globalData.HostIP[0:4], ap.HostIP.To4())
-	} else {
-		copy(globalData.HostIPv6[:], ap.HostIP.To16())
-	}
+
+	copy(globalData.HostIPv4[0:4], ap.HostIPv4.To4())
+	copy(globalData.HostIPv6[:], ap.HostIPv6.To16())
+
+	copy(globalData.IntfIPv4[0:4], ap.IntfIPv4.To4())
+	copy(globalData.IntfIPv6[:], ap.IntfIPv6.To16())
+
 	if globalData.VxlanPort == 0 {
 		globalData.VxlanPort = 4789
 	}
 
-	if ap.IntfIP.To4() != nil {
-		copy(globalData.IntfIP[0:4], ap.IntfIP.To4())
-	} else {
-		copy(globalData.IntfIPv6[:], ap.IntfIP.To16())
+	if ap.IPv6Enabled {
+		globalData.Flags |= libbpf.GlobalsIPv6Enabled
 	}
 
 	if ap.DSROptoutCIDRs {
@@ -422,34 +425,31 @@ func (ap *AttachPoint) ConfigureProgram(m *libbpf.Map) error {
 		globalData.Flags |= libbpf.GlobalsLoUDPOnly
 	}
 
-	globalData.HostTunnelIP = globalData.HostIP
+	globalData.HostTunnelIPv4 = globalData.HostIPv4
+	globalData.HostTunnelIPv6 = globalData.HostIPv6
 
-	if ap.HostTunnelIP != nil {
-		if ap.HostTunnelIP.To4() != nil {
-			copy(globalData.HostTunnelIP[0:4], ap.HostTunnelIP.To4())
-		} else {
-			copy(globalData.HostTunnelIPv6[:], ap.HostTunnelIP.To16())
-		}
-	}
+	copy(globalData.HostTunnelIPv4[0:4], ap.HostTunnelIPv4.To4())
+	copy(globalData.HostTunnelIPv6[:], ap.HostTunnelIPv6.To16())
 
 	for i := 0; i < len(globalData.Jumps); i++ {
 		globalData.Jumps[i] = 0xffffffff   /* uint32(-1) */
 		globalData.JumpsV6[i] = 0xffffffff /* uint32(-1) */
 	}
 
-	if ap.HookLayout != nil {
-		log.WithField("HookLayout", ap.HookLayout).Debugf("ConfigureProgram")
-		if ap.IPv6Enabled {
-			for p, i := range ap.HookLayout {
-				globalData.JumpsV6[p] = uint32(i)
-			}
-			globalData.JumpsV6[tcdefs.ProgIndexPolicy] = uint32(ap.PolicyIdx)
-		} else {
-			for p, i := range ap.HookLayout {
-				globalData.Jumps[p] = uint32(i)
-			}
-			globalData.Jumps[tcdefs.ProgIndexPolicy] = uint32(ap.PolicyIdx)
+	if ap.HookLayoutV4 != nil {
+		log.WithField("HookLayout", ap.HookLayoutV4).Debugf("ConfigureProgram")
+		for p, i := range ap.HookLayoutV4 {
+			globalData.Jumps[p] = uint32(i)
 		}
+		globalData.Jumps[tcdefs.ProgIndexPolicy] = uint32(ap.PolicyIdxV4)
+	}
+
+	if ap.HookLayoutV6 != nil {
+		log.WithField("HookLayout", ap.HookLayoutV6).Debugf("ConfigureProgram")
+		for p, i := range ap.HookLayoutV6 {
+			globalData.JumpsV6[p] = uint32(i)
+		}
+		globalData.JumpsV6[tcdefs.ProgIndexPolicy] = uint32(ap.PolicyIdxV6)
 	}
 
 	return ConfigureProgram(m, ap.Iface, &globalData)
