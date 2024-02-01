@@ -75,7 +75,7 @@ func main() {
 	panicIfError(err)
 
 	listenAnyIP := false
-	if _, ok := arguments["--listen-any-ip"]; ok {
+	if arg, ok := arguments["--listen-any-ip"]; ok && arg.(bool) {
 		listenAnyIP = true
 	}
 
