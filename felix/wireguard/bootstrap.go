@@ -413,20 +413,20 @@ func removeWireguardForBootstrapping(
 
 // getPublicKeyForNode returns the configured wireguard public key for a given node.
 func getPublicKeyForNode(logCtx *log.Entry, nodeName string, calicoClient clientv3.NodesClient, maxRetries int, ipVersion uint8) (string, error) {
-	//nolint:staticcheck // Ignore SA1019 deprecated
-	expBackoffMgr := wait.NewExponentialBackoffManager(
-		bootstrapBackoffDuration,
-		bootstrapBackoffMax,
-		time.Minute,
-		bootstrapBackoffExpFactor,
-		bootstrapJitter,
-		clock.RealClock{},
-	)
 	if ipVersion != 4 && ipVersion != 6 {
 		return "", fmt.Errorf("unknown IP version: %d", ipVersion)
 	}
 
-	defer expBackoffMgr.Backoff().Stop()
+	clock := clock.RealClock{}
+	bf := wait.Backoff{
+		Duration: bootstrapBackoffDuration,
+		Cap:      bootstrapBackoffMax,
+		Factor:   bootstrapBackoffExpFactor,
+		Jitter:   bootstrapJitter,
+	}.DelayWithReset(clock, time.Minute)
+
+	timer := bf.Timer(clock)
+	defer timer.Stop()
 
 	var err error
 	var node *apiv3.Node
@@ -440,7 +440,7 @@ func getPublicKeyForNode(logCtx *log.Entry, nodeName string, calicoClient client
 			return "", nil
 		} else if err != nil {
 			logCtx.WithError(err).Warn("Couldn't fetch node config from datastore, retrying")
-			<-expBackoffMgr.Backoff().C() // safe to block here as we're not dependent on other threads
+			<-timer.C() // safe to block here as we're not dependent on other threads
 			continue
 		}
 
@@ -523,16 +523,16 @@ func removeWireguardDevice(
 
 	logCtx.Debug("Removing wireguard device")
 
-	//nolint:staticcheck // Ignore SA1019 deprecated
-	expBackoffMgr := wait.NewExponentialBackoffManager(
-		bootstrapBackoffDuration,
-		bootstrapBackoffMax,
-		time.Minute,
-		bootstrapBackoffExpFactor,
-		bootstrapJitter,
-		clock.RealClock{},
-	)
-	defer expBackoffMgr.Backoff().Stop()
+	clock := clock.RealClock{}
+	bf := wait.Backoff{
+		Duration: bootstrapBackoffDuration,
+		Cap:      bootstrapBackoffMax,
+		Factor:   bootstrapBackoffExpFactor,
+		Jitter:   bootstrapJitter,
+	}.DelayWithReset(clock, time.Minute)
+
+	timer := bf.Timer(clock)
+	defer timer.Stop()
 
 	// Make a few attempts to delete the wireguard device.
 	var err error
@@ -540,13 +540,13 @@ func removeWireguardDevice(
 	for r := 0; r < bootstrapMaxRetries; r++ {
 		if handle == nil {
 			if handle, err = getNetlinkHandle(); err != nil {
-				<-expBackoffMgr.Backoff().C()
+				<-timer.C()
 				continue
 			}
 			defer handle.Delete()
 		}
 		if err = removeDevice(logCtx, wgDeviceName, handle); err != nil {
-			<-expBackoffMgr.Backoff().C()
+			<-timer.C()
 			continue
 		}
 		return nil
@@ -572,16 +572,16 @@ func removeWireguardPublicKey(
 		return fmt.Errorf("unknown IP version: %d", ipVersion)
 	}
 
-	//nolint:staticcheck // Ignore SA1019 deprecated
-	expBackoffMgr := wait.NewExponentialBackoffManager(
-		bootstrapBackoffDuration,
-		bootstrapBackoffMax,
-		time.Minute,
-		bootstrapBackoffExpFactor,
-		bootstrapJitter,
-		clock.RealClock{},
-	)
-	defer expBackoffMgr.Backoff().Stop()
+	clock := clock.RealClock{}
+	bf := wait.Backoff{
+		Duration: bootstrapBackoffDuration,
+		Cap:      bootstrapBackoffMax,
+		Factor:   bootstrapBackoffExpFactor,
+		Jitter:   bootstrapJitter,
+	}.DelayWithReset(clock, time.Minute)
+
+	timer := bf.Timer(clock)
+	defer timer.Stop()
 
 	// Make a few attempts to remove the public key from the datastore.
 	var err error
@@ -596,7 +596,7 @@ func removeWireguardPublicKey(
 			return nil
 		} else if err != nil {
 			logCtx.WithError(err).Warn("Couldn't fetch node config from datastore, retrying")
-			<-expBackoffMgr.Backoff().C() // safe to block here as we're not dependent on other threads
+			<-timer.C() // safe to block here as we're not dependent on other threads
 			continue
 		}
 
@@ -619,7 +619,7 @@ func removeWireguardPublicKey(
 				default:
 					logCtx.Errorf("Failed to clear wireguard config: %v", err)
 				}
-				<-expBackoffMgr.Backoff().C()
+				<-timer.C()
 				continue
 			}
 			logCtx.Info("Cleared wireguard public key from datastore")
