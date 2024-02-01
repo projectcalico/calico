@@ -25,8 +25,8 @@ import (
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 
-	"github.com/tigera/key-cert-provisioner/pkg/cfg"
-	"github.com/tigera/key-cert-provisioner/pkg/tls"
+	"github.com/projectcalico/calico/key-cert-provisioner/pkg/cfg"
+	"github.com/projectcalico/calico/key-cert-provisioner/pkg/tls"
 )
 
 var _ = Describe("Test TLS functions", func() {

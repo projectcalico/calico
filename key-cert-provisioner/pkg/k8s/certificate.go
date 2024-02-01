@@ -21,8 +21,8 @@ import (
 	"path"
 
 	log "github.com/sirupsen/logrus"
-	"github.com/tigera/key-cert-provisioner/pkg/cfg"
-	"github.com/tigera/key-cert-provisioner/pkg/tls"
+	"github.com/projectcalico/calico/key-cert-provisioner/pkg/cfg"
+	"github.com/projectcalico/calico/key-cert-provisioner/pkg/tls"
 	certV1 "k8s.io/api/certificates/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"

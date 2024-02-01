@@ -27,7 +27,7 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/tigera/key-cert-provisioner/pkg/cfg"
+	"github.com/projectcalico/calico/key-cert-provisioner/pkg/cfg"
 )
 
 type X509CSR struct {

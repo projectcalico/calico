@@ -21,9 +21,9 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/tigera/key-cert-provisioner/pkg/cfg"
-	"github.com/tigera/key-cert-provisioner/pkg/k8s"
-	"github.com/tigera/key-cert-provisioner/pkg/tls"
+	"github.com/projectcalico/calico/key-cert-provisioner/pkg/cfg"
+	"github.com/projectcalico/calico/key-cert-provisioner/pkg/k8s"
+	"github.com/projectcalico/calico/key-cert-provisioner/pkg/tls"
 )
 
 func main() {

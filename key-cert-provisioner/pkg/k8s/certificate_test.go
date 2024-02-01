@@ -21,9 +21,9 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/tigera/key-cert-provisioner/pkg/cfg"
-	"github.com/tigera/key-cert-provisioner/pkg/k8s"
-	"github.com/tigera/key-cert-provisioner/pkg/tls"
+	"github.com/projectcalico/calico/key-cert-provisioner/pkg/cfg"
+	"github.com/projectcalico/calico/key-cert-provisioner/pkg/k8s"
+	"github.com/projectcalico/calico/key-cert-provisioner/pkg/tls"
 
 	certV1 "k8s.io/api/certificates/v1"
 	certV1beta1 "k8s.io/api/certificates/v1beta1"
