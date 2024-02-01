@@ -428,13 +428,8 @@ func (ap *AttachPoint) ConfigureProgram(m *libbpf.Map) error {
 	globalData.HostTunnelIPv4 = globalData.HostIPv4
 	globalData.HostTunnelIPv6 = globalData.HostIPv6
 
-	if ap.HostTunnelIPv4 != nil {
-		copy(globalData.HostTunnelIPv4[0:4], ap.HostTunnelIPv4.To4())
-	}
-
-	if ap.HostTunnelIPv6 != nil {
-		copy(globalData.HostTunnelIPv6[:], ap.HostTunnelIPv6.To16())
-	}
+	copy(globalData.HostTunnelIPv4[0:4], ap.HostTunnelIPv4.To4())
+	copy(globalData.HostTunnelIPv6[:], ap.HostTunnelIPv6.To16())
 
 	for i := 0; i < len(globalData.Jumps); i++ {
 		globalData.Jumps[i] = 0xffffffff   /* uint32(-1) */
