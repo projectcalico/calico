@@ -99,7 +99,7 @@ type bpfRouteManager struct {
 	ipv6Enabled bool
 }
 
-func newBPFRouteManager(config *Config, maps *bpfmap.Maps,
+func newBPFRouteManager(config *Config, maps *bpfmap.IPMaps,
 	opReporter logutils.OpRecorder) *bpfRouteManager {
 
 	// Record the external node CIDRs and pre-mark them as dirty.  These can only change with a config update,
