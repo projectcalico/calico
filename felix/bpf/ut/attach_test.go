@@ -49,10 +49,7 @@ func TestAttach(t *testing.T) {
 	bpfmaps, err := bpfmap.CreateBPFMaps(false)
 	Expect(err).NotTo(HaveOccurred())
 
-	fmt.Println(bpfmaps)
-	v4Maps := &bpfmaps[bpfmap.V4MapIndex]
-	v6Maps := &bpfmaps[bpfmap.V6MapIndex]
-	commonMaps := &bpfmaps[bpfmap.CommonMapIndex]
+	commonMaps := bpfmaps.CommonMaps
 	programs := commonMaps.ProgramsMap.(*hook.ProgramsMap)
 	loglevel := "off"
 
@@ -73,9 +70,7 @@ func TestAttach(t *testing.T) {
 			},
 			BPFPolicyDebugEnabled: true,
 		},
-		v4Maps,
-		v6Maps,
-		commonMaps,
+		bpfmaps,
 		regexp.MustCompile("^workloadep[123]"),
 	)
 	Expect(err).NotTo(HaveOccurred())
@@ -372,9 +367,7 @@ func TestAttach(t *testing.T) {
 				},
 				BPFPolicyDebugEnabled: true,
 			},
-			v4Maps,
-			v6Maps,
-			commonMaps,
+			bpfmaps,
 			regexp.MustCompile("^workloadep[123]"),
 		)
 		Expect(err).NotTo(HaveOccurred())
@@ -497,9 +490,7 @@ func TestAttach(t *testing.T) {
 				},
 				BPFPolicyDebugEnabled: true,
 			},
-			v4Maps,
-			v6Maps,
-			commonMaps,
+			bpfmaps,
 			regexp.MustCompile("^workloadep[123]"),
 		)
 		Expect(err).NotTo(HaveOccurred())

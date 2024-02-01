@@ -275,7 +275,8 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		vxlanMTU             int
 		nodePortDSR          bool
 		maps                 *bpfmap.Maps
-		commonMaps           *bpfmap.Maps
+		v4Maps               *bpfmap.IPMaps
+		commonMaps           *bpfmap.CommonMaps
 		rrConfigNormal       rules.Config
 		ruleRenderer         rules.RuleRenderer
 		filterTableV4        IptablesTable
@@ -297,10 +298,12 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		bpfmaps.EnableRepin()
 
 		maps = new(bpfmap.Maps)
-		commonMaps = new(bpfmap.Maps)
 
-		maps.IpsetsMap = bpfipsets.Map()
-		maps.CtMap = conntrack.Map()
+		v4Maps = new(bpfmap.IPMaps)
+		commonMaps = new(bpfmap.CommonMaps)
+
+		v4Maps.IpsetsMap = bpfipsets.Map()
+		v4Maps.CtMap = conntrack.Map()
 
 		commonMaps.StateMap = state.Map()
 		ifStateMap = mock.NewMockMap(ifstate.MapParams)
@@ -326,6 +329,9 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		commonMaps.JumpMap = jumpMap
 		xdpJumpMap = mock.NewMockMap(progsParams)
 		commonMaps.XDPJumpMap = xdpJumpMap
+
+		maps.V4 = v4Maps
+		maps.CommonMaps = commonMaps
 
 		rrConfigNormal = rules.Config{
 			IPIPEnabled:                 true,
@@ -370,8 +376,6 @@ var _ = Describe("BPF Endpoint Manager", func() {
 				BPFPolicyDebugEnabled:   true,
 			},
 			maps,
-			nil,
-			commonMaps,
 			fibLookupEnabled,
 			regexp.MustCompile(workloadIfaceRegex),
 			ipSetIDAllocator,
@@ -761,7 +765,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			egrRuleMatchId := bpfEpMgr.dp.ruleMatchID("Egress", "Allow", "Policy", "allowPol", 0)
 			k := make([]byte, 8)
 			v := make([]byte, 8)
-			rcMap := bpfEpMgr.commonBPFMaps.RuleCountersMap
+			rcMap := bpfEpMgr.commonMaps.RuleCountersMap
 
 			// create a new policy
 			bpfEpMgr.OnUpdate(&proto.ActivePolicyUpdate{
@@ -827,7 +831,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			egrRuleMatchId := bpfEpMgr.dp.ruleMatchID("Egress", "Allow", "Policy", "allowPol", 0)
 			k := make([]byte, 8)
 			v := make([]byte, 8)
-			rcMap := bpfEpMgr.commonBPFMaps.RuleCountersMap
+			rcMap := bpfEpMgr.commonMaps.RuleCountersMap
 
 			binary.LittleEndian.PutUint64(k, ingRuleMatchId)
 			binary.LittleEndian.PutUint64(v, uint64(10))

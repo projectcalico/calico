@@ -646,78 +646,28 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 	var (
 		bpfEndpointManager *bpfEndpointManager
-		bpfMaps            []bpfmap.Maps
-		v4Maps             *bpfmap.Maps
-		v6Maps             *bpfmap.Maps
-		commonMaps         *bpfmap.Maps
 	)
 
 	if config.BPFEnabled {
 		log.Info("BPF enabled, starting BPF endpoint manager and map manager.")
-		var err error
 
-		bpfMaps, err = bpfmap.CreateBPFMaps(config.BPFIpv6Enabled)
+		bpfMaps, err := bpfmap.CreateBPFMaps(config.BPFIpv6Enabled)
 		if err != nil {
 			log.WithError(err).Panic("error creating bpf maps")
 		}
-		v4Maps = &bpfMaps[bpfmap.V4MapIndex]
-		v6Maps = &bpfMaps[bpfmap.V6MapIndex]
-		commonMaps = &bpfMaps[bpfmap.CommonMapIndex]
 
 		// Register map managers first since they create the maps that will be used by the endpoint manager.
 		// Important that we create the maps before we load a BPF program with TC since we make sure the map
 		// metadata name is set whereas TC doesn't set that field.
 		ipSetIDAllocator := idalloc.New()
 
-		var bpfRTMgr *bpfRouteManager
 		if config.BPFIpv6Enabled {
-			ipSetsV6 := bpfipsets.NewBPFIPSets(
-				config.RulesConfig.IPSetConfigV6,
-				ipSetIDAllocator,
-				v6Maps.IpsetsMap,
-				bpfipsets.IPSetEntryV6FromBytes,
-				bpfipsets.ProtoIPSetMemberToBPFEntryV6,
-				dp.loopSummarizer,
-			)
-			dp.ipSets = append(dp.ipSets, ipSetsV6)
-			ipsetsManagerV6.AddDataplane(ipSetsV6)
-			bpfRTMgr = newBPFRouteManager(&config, v6Maps, dp.loopSummarizer)
-			dp.RegisterManager(bpfRTMgr)
+			startBPFDataplaneComponents(proto.IPVersion_IPV6, bpfMaps.V6, ipSetIDAllocator, config, ipsetsManagerV6, dp)
 		} else {
-			ipSetsV4 := bpfipsets.NewBPFIPSets(
-				ipSetsConfigV4,
-				ipSetIDAllocator,
-				v4Maps.IpsetsMap,
-				bpfipsets.IPSetEntryFromBytes,
-				bpfipsets.ProtoIPSetMemberToBPFEntry,
-				dp.loopSummarizer,
-			)
-			dp.ipSets = append(dp.ipSets, ipSetsV4)
-			ipsetsManager.AddDataplane(ipSetsV4)
-			bpfRTMgr = newBPFRouteManager(&config, v4Maps, dp.loopSummarizer)
-			dp.RegisterManager(bpfRTMgr)
+			startBPFDataplaneComponents(proto.IPVersion_IPV4, bpfMaps.V4, ipSetIDAllocator, config, ipsetsManager, dp)
 		}
-
 		// Forwarding into an IPIP tunnel fails silently because IPIP tunnels are L3 devices and support for
 		// L3 devices in BPF is not available yet.  Disable the FIB lookup in that case.
-		fibLookupEnabled := !config.RulesConfig.IPIPEnabled
-		keyFromSlice := failsafes.KeyFromSlice
-		makeKey := failsafes.MakeKey
-		failsafeMap := v4Maps.FailsafesMap
-		if config.BPFIpv6Enabled {
-			keyFromSlice = failsafes.KeyV6FromSlice
-			makeKey = failsafes.MakeKeyV6
-			failsafeMap = v6Maps.FailsafesMap
-		}
-		failsafeMgr := failsafes.NewManager(
-			failsafeMap,
-			config.RulesConfig.FailsafeInboundHostPorts,
-			config.RulesConfig.FailsafeOutboundHostPorts,
-			dp.loopSummarizer,
-			keyFromSlice,
-			makeKey,
-		)
-		dp.RegisterManager(failsafeMgr)
 
 		filterTbl := filterTableV4
 		if config.BPFIpv6Enabled {
@@ -732,12 +682,11 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 				"- BPFHostNetworkedNAT is disabled.")
 		}
 
+		fibLookupEnabled := !config.RulesConfig.IPIPEnabled
 		bpfEndpointManager, err = newBPFEndpointManager(
 			nil,
 			&config,
-			v4Maps,
-			v6Maps,
-			commonMaps,
+			bpfMaps,
 			fibLookupEnabled,
 			workloadIfaceRegex,
 			ipSetIDAllocator,
@@ -755,77 +704,6 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.RegisterManager(bpfEndpointManager)
 
 		bpfEndpointManager.Features = dataplaneFeatures
-
-		kfb := conntrack.KeyFromBytes
-		vfb := conntrack.ValueFromBytes
-		ctMap := bpfMaps[0].CtMap
-		if config.BPFIpv6Enabled {
-			kfb = conntrack.KeyV6FromBytes
-			vfb = conntrack.ValueV6FromBytes
-			ctMap = bpfMaps[1].CtMap
-		}
-
-		conntrackScanner := bpfconntrack.NewScanner(ctMap, kfb, vfb,
-			bpfconntrack.NewLivenessScanner(config.BPFConntrackTimeouts, config.BPFNodePortDSREnabled))
-
-		// Before we start, scan for all finished / timed out connections to
-		// free up the conntrack table asap as it may take time to sync up the
-		// proxy and kick off the first full cleaner scan.
-		conntrackScanner.Scan()
-
-		bpfproxyOpts := []bpfproxy.Option{
-			bpfproxy.WithMinSyncPeriod(config.KubeProxyMinSyncPeriod),
-		}
-
-		if config.BPFNodePortDSREnabled {
-			bpfproxyOpts = append(bpfproxyOpts, bpfproxy.WithDSREnabled())
-		}
-
-		if len(config.NodeZone) != 0 {
-			bpfproxyOpts = append(bpfproxyOpts, bpfproxy.WithTopologyNodeZone(config.NodeZone))
-		}
-
-		if config.BPFIpv6Enabled {
-			bpfproxyOpts = append(bpfproxyOpts, bpfproxy.WithIPFamily(6))
-		}
-
-		if len(config.BPFExcludeCIDRsFromNAT) > 0 {
-			bpfproxyOpts = append(bpfproxyOpts, bpfproxy.WithExcludedCIDRs(config.BPFExcludeCIDRsFromNAT))
-		}
-
-		if config.KubeClientSet != nil {
-			var kp *bpfproxy.KubeProxy
-			var err error
-			// We have a Kubernetes connection, start watching services and populating the NAT maps.
-			if config.BPFIpv6Enabled {
-				kp, err = bpfproxy.StartKubeProxy(
-					config.KubeClientSet,
-					config.Hostname,
-					v6Maps,
-					bpfproxyOpts...,
-				)
-				if err != nil {
-					log.WithError(err).Panic("Failed to start kube-proxy.")
-				}
-			} else {
-				kp, err = bpfproxy.StartKubeProxy(
-					config.KubeClientSet,
-					config.Hostname,
-					v4Maps,
-					bpfproxyOpts...,
-				)
-				if err != nil {
-					log.WithError(err).Panic("Failed to start kube-proxy.")
-				}
-			}
-
-			bpfRTMgr.setHostIPUpdatesCallBack(kp.OnHostIPsUpdate)
-			bpfRTMgr.setRoutesCallBacks(kp.OnRouteUpdate, kp.OnRouteDelete)
-			conntrackScanner.AddUnlocked(bpfconntrack.NewStaleNATScanner(kp))
-			conntrackScanner.Start()
-		} else {
-			log.Info("BPF enabled but no Kubernetes client available, unable to run kube-proxy module.")
-		}
 
 		// HostNetworkedNAT is Enabled and CTLB enabled.
 		// HostNetworkedNAT is Disabled and CTLB is either disabled/TCP.
@@ -2383,4 +2261,96 @@ func (d dummyLock) Lock() {
 }
 
 func (d dummyLock) Unlock() {
+}
+
+func startBPFDataplaneComponents(ipFamily proto.IPVersion,
+	bpfmaps *bpfmap.IPMaps,
+	ipSetIDAllocator *idalloc.IDAllocator,
+	config Config,
+	ipSetsMgr *common.IPSetsManager,
+	dp *InternalDataplane) {
+
+	ipSetConfig := config.RulesConfig.IPSetConfigV4
+	ipSetEntry := bpfipsets.IPSetEntryFromBytes
+	ipSetProtoEntry := bpfipsets.ProtoIPSetMemberToBPFEntry
+
+	failSafesKeyFromSlice := failsafes.KeyFromSlice
+	failSafesKey := failsafes.MakeKey
+
+	ctKey := conntrack.KeyFromBytes
+	ctVal := conntrack.ValueFromBytes
+
+	bpfproxyOpts := []bpfproxy.Option{
+		bpfproxy.WithMinSyncPeriod(config.KubeProxyMinSyncPeriod),
+	}
+
+	if config.BPFNodePortDSREnabled {
+		bpfproxyOpts = append(bpfproxyOpts, bpfproxy.WithDSREnabled())
+	}
+
+	if len(config.NodeZone) != 0 {
+		bpfproxyOpts = append(bpfproxyOpts, bpfproxy.WithTopologyNodeZone(config.NodeZone))
+	}
+
+	if len(config.BPFExcludeCIDRsFromNAT) > 0 {
+		bpfproxyOpts = append(bpfproxyOpts, bpfproxy.WithExcludedCIDRs(config.BPFExcludeCIDRsFromNAT))
+	}
+
+	if ipFamily == proto.IPVersion_IPV6 {
+		ipSetConfig = config.RulesConfig.IPSetConfigV6
+		ipSetEntry = bpfipsets.IPSetEntryV6FromBytes
+		ipSetProtoEntry = bpfipsets.ProtoIPSetMemberToBPFEntryV6
+
+		failSafesKeyFromSlice = failsafes.KeyV6FromSlice
+		failSafesKey = failsafes.MakeKeyV6
+
+		ctKey = conntrack.KeyV6FromBytes
+		ctVal = conntrack.ValueV6FromBytes
+
+		bpfproxyOpts = append(bpfproxyOpts, bpfproxy.WithIPFamily(6))
+	}
+
+	ipSets := bpfipsets.NewBPFIPSets(ipSetConfig, ipSetIDAllocator, bpfmaps.IpsetsMap, ipSetEntry, ipSetProtoEntry, dp.loopSummarizer)
+	dp.ipSets = append(dp.ipSets, ipSets)
+	ipSetsMgr.AddDataplane(ipSets)
+
+	failsafeMgr := failsafes.NewManager(
+		bpfmaps.FailsafesMap,
+		config.RulesConfig.FailsafeInboundHostPorts,
+		config.RulesConfig.FailsafeOutboundHostPorts,
+		dp.loopSummarizer,
+		failSafesKeyFromSlice,
+		failSafesKey,
+	)
+	dp.RegisterManager(failsafeMgr)
+
+	bpfRTMgr := newBPFRouteManager(&config, bpfmaps, dp.loopSummarizer)
+	dp.RegisterManager(bpfRTMgr)
+
+	conntrackScanner := bpfconntrack.NewScanner(bpfmaps.CtMap, ctKey, ctVal,
+		bpfconntrack.NewLivenessScanner(config.BPFConntrackTimeouts, config.BPFNodePortDSREnabled))
+
+	// Before we start, scan for all finished / timed out connections to
+	// free up the conntrack table asap as it may take time to sync up the
+	// proxy and kick off the first full cleaner scan.
+	conntrackScanner.Scan()
+
+	if config.KubeClientSet != nil {
+		kp, err := bpfproxy.StartKubeProxy(
+			config.KubeClientSet,
+			config.Hostname,
+			bpfmaps,
+			bpfproxyOpts...,
+		)
+		if err != nil {
+			log.WithError(err).Panic("Failed to start kube-proxy.")
+		}
+
+		bpfRTMgr.setHostIPUpdatesCallBack(kp.OnHostIPsUpdate)
+		bpfRTMgr.setRoutesCallBacks(kp.OnRouteUpdate, kp.OnRouteDelete)
+		conntrackScanner.AddUnlocked(bpfconntrack.NewStaleNATScanner(kp))
+		conntrackScanner.Start()
+	} else {
+		log.Info("BPF enabled but no Kubernetes client available, unable to run kube-proxy module.")
+	}
 }

@@ -40,7 +40,7 @@ const (
 	CommonMapIndex
 )
 
-type Maps struct {
+type IPMaps struct {
 	IpsetsMap    maps.Map
 	ArpMap       maps.Map
 	FailsafesMap maps.Map
@@ -51,7 +51,9 @@ type Maps struct {
 	CtMap        maps.Map
 	SrMsgMap     maps.Map
 	CtNatsMap    maps.Map
+}
 
+type CommonMaps struct {
 	StateMap        maps.Map
 	IfStateMap      maps.Map
 	RuleCountersMap maps.Map
@@ -62,25 +64,19 @@ type Maps struct {
 	XDPJumpMap      maps.MapWithDeleteIfExists
 }
 
-func (m *Maps) Destroy() {
-	mps := []maps.Map{
-		m.IpsetsMap,
-		m.StateMap,
-		m.ArpMap,
-		m.FailsafesMap,
-		m.FrontendMap,
-		m.BackendMap,
-		m.AffinityMap,
-		m.RouteMap,
-		m.CtMap,
-		m.SrMsgMap,
-		m.CtNatsMap,
-		m.ProgramsMap,
-		m.JumpMap,
-		m.XDPProgramsMap,
-		m.XDPJumpMap,
-	}
+type Maps struct {
+	CommonMaps *CommonMaps
+	V4         *IPMaps
+	V6         *IPMaps
+}
 
+func (m *Maps) Destroy() {
+	mps := []maps.Map{}
+	mps = append(mps, m.CommonMaps.slice()...)
+	mps = append(mps, m.V4.slice()...)
+	if m.V6 != nil {
+		mps = append(mps, m.V6.slice()...)
+	}
 	for _, m := range mps {
 		if m == nil {
 			continue
@@ -90,95 +86,60 @@ func (m *Maps) Destroy() {
 	}
 }
 
-func getCommonBPFMaps(mapsPtr *Maps) []maps.Map {
-	mps := []maps.Map{}
-
-	// Create the common maps
-	mapsPtr.StateMap = state.Map()
-	mps = append(mps, mapsPtr.StateMap)
-
-	mapsPtr.IfStateMap = ifstate.Map()
-	mps = append(mps, mapsPtr.IfStateMap)
-
-	mapsPtr.RuleCountersMap = counters.PolicyMap()
-	mps = append(mps, mapsPtr.RuleCountersMap)
-
-	mapsPtr.CountersMap = counters.Map()
-	mps = append(mps, mapsPtr.CountersMap)
-
-	mapsPtr.ProgramsMap = hook.NewProgramsMap()
-	mps = append(mps, mapsPtr.ProgramsMap)
-
-	mapsPtr.JumpMap = jump.Map().(maps.MapWithDeleteIfExists)
-	mps = append(mps, mapsPtr.JumpMap)
-
-	mapsPtr.XDPProgramsMap = hook.NewXDPProgramsMap()
-	mps = append(mps, mapsPtr.XDPProgramsMap)
-
-	mapsPtr.XDPJumpMap = jump.XDPMap().(maps.MapWithDeleteIfExists)
-	mps = append(mps, mapsPtr.XDPJumpMap)
-
-	return mps
+func getCommonMaps() *CommonMaps {
+	return &CommonMaps{
+		StateMap:        state.Map(),
+		IfStateMap:      ifstate.Map(),
+		RuleCountersMap: counters.PolicyMap(),
+		CountersMap:     counters.Map(),
+		ProgramsMap:     hook.NewProgramsMap(),
+		JumpMap:         jump.Map().(maps.MapWithDeleteIfExists),
+		XDPProgramsMap:  hook.NewXDPProgramsMap(),
+		XDPJumpMap:      jump.XDPMap().(maps.MapWithDeleteIfExists),
+	}
 }
 
-func getBPFMapsPerIPFamily(mapsPtr *Maps, ipFamily int) []maps.Map {
-	mps := []maps.Map{}
-
-	getmap := func(v4, v6 func() maps.Map, ipFamily int) maps.Map {
+func getIPMaps(ipFamily int) *IPMaps {
+	getmap := func(V4, V6 func() maps.Map) maps.Map {
 		if ipFamily == 4 {
-			return v4()
+			return V4()
 		}
-		return v6()
+		return V6()
 	}
 
-	getmapWithExistsCheck := func(v4, v6 func() maps.MapWithExistsCheck, ipFamily int) maps.MapWithExistsCheck {
+	getmapWithExistsCheck := func(V4, V6 func() maps.MapWithExistsCheck) maps.MapWithExistsCheck {
 		if ipFamily == 4 {
-			return v4()
+			return V4()
 		}
-		return v6()
+		return V6()
 	}
-	mapsPtr.IpsetsMap = getmap(ipsets.Map, ipsets.MapV6, ipFamily)
-	mps = append(mps, mapsPtr.IpsetsMap)
 
-	mapsPtr.ArpMap = getmap(arp.Map, arp.MapV6, ipFamily)
-	mps = append(mps, mapsPtr.ArpMap)
-
-	mapsPtr.FailsafesMap = getmap(failsafes.Map, failsafes.MapV6, ipFamily)
-	mps = append(mps, mapsPtr.FailsafesMap)
-
-	mapsPtr.FrontendMap = getmapWithExistsCheck(nat.FrontendMap, nat.FrontendMapV6, ipFamily)
-	mps = append(mps, mapsPtr.FrontendMap)
-
-	mapsPtr.BackendMap = getmapWithExistsCheck(nat.BackendMap, nat.BackendMapV6, ipFamily)
-	mps = append(mps, mapsPtr.BackendMap)
-
-	mapsPtr.AffinityMap = getmap(nat.AffinityMap, nat.AffinityMapV6, ipFamily)
-	mps = append(mps, mapsPtr.AffinityMap)
-
-	mapsPtr.RouteMap = getmap(routes.Map, routes.MapV6, ipFamily)
-	mps = append(mps, mapsPtr.RouteMap)
-
-	mapsPtr.CtMap = getmap(conntrack.Map, conntrack.MapV6, ipFamily)
-	mps = append(mps, mapsPtr.CtMap)
-
-	mapsPtr.SrMsgMap = getmap(nat.SendRecvMsgMap, nat.SendRecvMsgMapV6, ipFamily)
-	mps = append(mps, mapsPtr.SrMsgMap)
-
-	mapsPtr.CtNatsMap = getmap(nat.AllNATsMsgMap, nat.AllNATsMsgMapV6, ipFamily)
-	mps = append(mps, mapsPtr.CtNatsMap)
-
-	return mps
+	return &IPMaps{
+		IpsetsMap:    getmap(ipsets.Map, ipsets.MapV6),
+		ArpMap:       getmap(arp.Map, arp.MapV6),
+		FailsafesMap: getmap(failsafes.Map, failsafes.MapV6),
+		FrontendMap:  getmapWithExistsCheck(nat.FrontendMap, nat.FrontendMapV6),
+		BackendMap:   getmapWithExistsCheck(nat.BackendMap, nat.BackendMapV6),
+		AffinityMap:  getmap(nat.AffinityMap, nat.AffinityMapV6),
+		RouteMap:     getmap(routes.Map, routes.MapV6),
+		CtMap:        getmap(conntrack.Map, conntrack.MapV6),
+		SrMsgMap:     getmap(nat.SendRecvMsgMap, nat.SendRecvMsgMapV6),
+		CtNatsMap:    getmap(nat.AllNATsMsgMap, nat.AllNATsMsgMapV6),
+	}
 }
 
-func CreateBPFMaps(ipv6Enabled bool) ([]Maps, error) {
+func CreateBPFMaps(ipV6Enabled bool) (*Maps, error) {
 	mps := []maps.Map{}
-	ret := make([]Maps, 3)
+	ret := new(Maps)
 
-	mps = append(mps, getBPFMapsPerIPFamily(&ret[V4MapIndex], 4)...)
-	if ipv6Enabled {
-		mps = append(mps, getBPFMapsPerIPFamily(&ret[V6MapIndex], 6)...)
+	ret.CommonMaps = getCommonMaps()
+	mps = append(mps, ret.CommonMaps.slice()...)
+	ret.V4 = getIPMaps(4)
+	mps = append(mps, ret.V4.slice()...)
+	if ipV6Enabled {
+		ret.V6 = getIPMaps(6)
+		mps = append(mps, ret.V6.slice()...)
 	}
-	mps = append(mps, getCommonBPFMaps(&ret[CommonMapIndex])...)
 
 	for i, bpfMap := range mps {
 		err := bpfMap.EnsureExists()
@@ -195,6 +156,34 @@ func CreateBPFMaps(ipv6Enabled bool) ([]Maps, error) {
 	}
 
 	return ret, nil
+}
+
+func (c *CommonMaps) slice() []maps.Map {
+	return []maps.Map{
+		c.StateMap,
+		c.IfStateMap,
+		c.RuleCountersMap,
+		c.CountersMap,
+		c.ProgramsMap,
+		c.JumpMap,
+		c.XDPProgramsMap,
+		c.XDPJumpMap,
+	}
+}
+
+func (i *IPMaps) slice() []maps.Map {
+	return []maps.Map{
+		i.IpsetsMap,
+		i.ArpMap,
+		i.FailsafesMap,
+		i.FrontendMap,
+		i.BackendMap,
+		i.AffinityMap,
+		i.RouteMap,
+		i.CtMap,
+		i.SrMsgMap,
+		i.CtNatsMap,
+	}
 }
 
 type pinnedMap interface {
