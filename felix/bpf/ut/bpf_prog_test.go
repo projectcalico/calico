@@ -764,10 +764,9 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 					LogFilterJmp: 0xffffffff,
 				}
 
-				copy(globals.HostIP[0:4], hostIP)
-				copy(globals.IntfIP[0:4], intfIP)
-				copy(globals.HostTunnelIP[0:4], node1tunIP.To4())
-				fmt.Println("Sridhar1 ", globals.HostIP, globals.IntfIP, globals.HostTunnelIP)
+				copy(globals.HostIPv4[0:4], hostIP)
+				copy(globals.IntfIPv4[0:4], intfIP)
+				copy(globals.HostTunnelIPv4[0:4], node1tunIP.To4())
 
 				for i := 0; i < tcdefs.ProgIndexEnd; i++ {
 					globals.Jumps[i] = uint32(i)
@@ -892,9 +891,9 @@ func objUTLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHos
 					PSNatLen:   uint16(topts.psnatEnd-topts.psnaStart) + 1,
 					Flags:      libbpf.GlobalsIPv6Enabled | libbpf.GlobalsNoDSRCidrs,
 				}
-				copy(globals.HostTunnelIP[0:4], node1tunIP.To4())
-				copy(globals.HostIP[0:4], hostIP.To4())
-				copy(globals.IntfIP[0:4], intfIP.To4())
+				copy(globals.HostTunnelIPv4[0:4], node1tunIP.To4())
+				copy(globals.HostIPv4[0:4], hostIP.To4())
+				copy(globals.IntfIPv4[0:4], intfIP.To4())
 
 				if err := tc.ConfigureProgram(m, ifaceLog, &globals); err != nil {
 					return nil, fmt.Errorf("failed to configure tc program: %w", err)
