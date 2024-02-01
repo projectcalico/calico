@@ -57,7 +57,7 @@ type KubeProxy struct {
 
 // StartKubeProxy start a new kube-proxy if there was no error
 func StartKubeProxy(k8s kubernetes.Interface, hostname string,
-	bpfMaps *bpfmap.Maps, opts ...Option) (*KubeProxy, error) {
+	bpfMaps *bpfmap.IPMaps, opts ...Option) (*KubeProxy, error) {
 
 	kp := &KubeProxy{
 		k8s:         k8s,

@@ -46,10 +46,11 @@ import (
 func TestAttach(t *testing.T) {
 	RegisterTestingT(t)
 
-	bpfmaps, err := bpfmap.CreateBPFMaps(4)
+	bpfmaps, err := bpfmap.CreateBPFMaps(false)
 	Expect(err).NotTo(HaveOccurred())
 
-	programs := bpfmaps.ProgramsMap.(*hook.ProgramsMap)
+	commonMaps := bpfmaps.CommonMaps
+	programs := commonMaps.ProgramsMap.(*hook.ProgramsMap)
 	loglevel := "off"
 
 	bpfEpMgr, err := linux.NewTestEpMgr(
@@ -125,7 +126,7 @@ func TestAttach(t *testing.T) {
 		err = bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
-		ifstateMap := ifstateMapDump(bpfmaps.IfStateMap)
+		ifstateMap := ifstateMapDump(commonMaps.IfStateMap)
 		Expect(ifstateMap).To(HaveKey(ifstate.NewKey(uint32(host1.Attrs().Index))))
 
 		hostep1State = ifstateMap[ifstate.NewKey(uint32(host1.Attrs().Index))]
@@ -133,7 +134,7 @@ func TestAttach(t *testing.T) {
 		Expect(hostep1State.EgressPolicy()).NotTo(Equal(-1))
 		Expect(hostep1State.XDPPolicy()).NotTo(Equal(-1))
 
-		pm := jumpMapDump(bpfmaps.JumpMap)
+		pm := jumpMapDump(commonMaps.JumpMap)
 		Expect(pm).To(HaveKey(hostep1State.IngressPolicy()))
 		Expect(pm).To(HaveKey(hostep1State.EgressPolicy()))
 
@@ -148,7 +149,7 @@ func TestAttach(t *testing.T) {
 		}
 		Expect(hasXDP).To(BeTrue())
 
-		xdppm := jumpMapDump(bpfmaps.XDPJumpMap)
+		xdppm := jumpMapDump(commonMaps.XDPJumpMap)
 		Expect(xdppm).To(HaveLen(1))
 		Expect(xdppm).To(HaveKey(hostep1State.XDPPolicy()))
 	})
@@ -166,7 +167,7 @@ func TestAttach(t *testing.T) {
 		err = bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
-		xdppm := jumpMapDump(bpfmaps.XDPJumpMap)
+		xdppm := jumpMapDump(commonMaps.XDPJumpMap)
 		Expect(xdppm).To(HaveLen(0))
 
 		_, xdpProgs, err := bpf.ListTcXDPAttachedProgs("hostep1")
@@ -185,7 +186,7 @@ func TestAttach(t *testing.T) {
 
 		Expect(programs.Count()).To(Equal(13))
 
-		pm := jumpMapDump(bpfmaps.JumpMap)
+		pm := jumpMapDump(commonMaps.JumpMap)
 		Expect(len(pm)).To(Equal(2)) // no policy for hep2
 	})
 
@@ -218,13 +219,13 @@ func TestAttach(t *testing.T) {
 			ToHostDrop: false,
 			DSR:        false}))
 
-		ifstateMap := ifstateMapDump(bpfmaps.IfStateMap)
+		ifstateMap := ifstateMapDump(commonMaps.IfStateMap)
 		wl1State := ifstateMap[ifstate.NewKey(uint32(workload1.Attrs().Index))]
 		Expect(wl1State.IngressPolicy()).NotTo(Equal(-1))
 		Expect(wl1State.EgressPolicy()).NotTo(Equal(-1))
 		Expect(wl1State.XDPPolicy()).To(Equal(-1))
 
-		pm := jumpMapDump(bpfmaps.JumpMap)
+		pm := jumpMapDump(commonMaps.JumpMap)
 		Expect(pm).To(HaveKey(wl1State.IngressPolicy()))
 		Expect(pm).To(HaveKey(wl1State.EgressPolicy()))
 	})
@@ -240,7 +241,7 @@ func TestAttach(t *testing.T) {
 
 		Expect(programs.Count()).To(Equal(25))
 
-		pm := jumpMapDump(bpfmaps.JumpMap)
+		pm := jumpMapDump(commonMaps.JumpMap)
 		Expect(len(pm)).To(Equal((2 /* wl 1+2 */ + 1 /* hep1 */) * 2))
 	})
 
@@ -250,22 +251,22 @@ func TestAttach(t *testing.T) {
 		err := bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
-		pm := jumpMapDump(bpfmaps.JumpMap)
+		pm := jumpMapDump(commonMaps.JumpMap)
 		// We remember the state from above
 		Expect(pm).NotTo(HaveKey(hostep1State.IngressPolicy()))
 		Expect(pm).NotTo(HaveKey(hostep1State.EgressPolicy()))
-		xdppm := jumpMapDump(bpfmaps.XDPJumpMap)
+		xdppm := jumpMapDump(commonMaps.XDPJumpMap)
 		Expect(xdppm).To(HaveLen(0))
 	})
 
 	var wl1State ifstate.Value
 
 	t.Run("change workload policy - should apply the changes", func(t *testing.T) {
-		ifstateMap := ifstateMapDump(bpfmaps.IfStateMap)
+		ifstateMap := ifstateMapDump(commonMaps.IfStateMap)
 		wl1State = ifstateMap[ifstate.NewKey(uint32(workload1.Attrs().Index))]
 		fmt.Printf("wl1State = %+v\n", wl1State)
 
-		pm := jumpMapDump(bpfmaps.JumpMap)
+		pm := jumpMapDump(commonMaps.JumpMap)
 		wl1IngressPol := pm[wl1State.IngressPolicy()]
 		wl1EgressPol := pm[wl1State.EgressPolicy()]
 
@@ -292,12 +293,12 @@ func TestAttach(t *testing.T) {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Policy indexes did not change ...
-		ifstateMap2 := ifstateMapDump(bpfmaps.IfStateMap)
+		ifstateMap2 := ifstateMapDump(commonMaps.IfStateMap)
 		wl1State2 := ifstateMap2[ifstate.NewKey(uint32(workload1.Attrs().Index))]
 		Expect(wl1State2).To(Equal(wl1State))
 
 		// ... but the policy programs changed
-		pm = jumpMapDump(bpfmaps.JumpMap)
+		pm = jumpMapDump(commonMaps.JumpMap)
 		Expect(wl1IngressPol).NotTo(Equal(pm[wl1State2.IngressPolicy()]))
 		Expect(wl1EgressPol).NotTo(Equal(pm[wl1State2.IngressPolicy()]))
 
@@ -314,7 +315,7 @@ func TestAttach(t *testing.T) {
 		err := bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
-		pm := jumpMapDump(bpfmaps.JumpMap)
+		pm := jumpMapDump(commonMaps.JumpMap)
 		// We remember the state from above
 		Expect(pm).NotTo(HaveKey(wl1State.IngressPolicy()))
 		Expect(pm).NotTo(HaveKey(wl1State.EgressPolicy()))
@@ -333,7 +334,7 @@ func TestAttach(t *testing.T) {
 		}
 
 		Expect(err).NotTo(HaveOccurred())
-		ifstateMap := ifstateMapDump(bpfmaps.IfStateMap)
+		ifstateMap := ifstateMapDump(commonMaps.IfStateMap)
 		wl2State := ifstateMap[ifstate.NewKey(uint32(workload2.Attrs().Index))]
 		Expect(ifstateMap).To(HaveKey(ifstate.NewKey(uint32(workload3.Attrs().Index))))
 
@@ -406,9 +407,9 @@ func TestAttach(t *testing.T) {
 
 		// After restat we get new maps which are empty
 		Expect(programs.Count()).To(Equal(0))
-		pm = jumpMapDump(bpfmaps.ProgramsMap)
+		pm = jumpMapDump(commonMaps.ProgramsMap)
 		Expect(pm).To(HaveLen(0))
-		pm = jumpMapDump(bpfmaps.JumpMap)
+		pm = jumpMapDump(commonMaps.JumpMap)
 		Expect(pm).To(HaveLen(0))
 
 		err = bpfEpMgr.CompleteDeferredWork()
@@ -428,10 +429,10 @@ func TestAttach(t *testing.T) {
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(programs.Count()).To(Equal(25))
-		pm = jumpMapDump(bpfmaps.ProgramsMap)
+		pm = jumpMapDump(commonMaps.ProgramsMap)
 		Expect(pm).To(HaveLen(25))
 
-		pm = jumpMapDump(bpfmaps.JumpMap)
+		pm = jumpMapDump(commonMaps.JumpMap)
 		// We remember the state from above
 		Expect(pm).To(HaveLen(2))
 		Expect(pm).To(HaveKey(wl2State.IngressPolicy()))
@@ -464,7 +465,7 @@ func TestAttach(t *testing.T) {
 		}
 
 		Expect(err).NotTo(HaveOccurred())
-		ifstateMap := ifstateMapDump(bpfmaps.IfStateMap)
+		ifstateMap := ifstateMapDump(commonMaps.IfStateMap)
 		wl2State := ifstateMap[ifstate.NewKey(uint32(workload2.Attrs().Index))]
 		Expect(ifstateMap).To(HaveKey(ifstate.NewKey(uint32(workload3.Attrs().Index))))
 
@@ -494,7 +495,7 @@ func TestAttach(t *testing.T) {
 		)
 		Expect(err).NotTo(HaveOccurred())
 
-		pm := jumpMapDump(bpfmaps.JumpMap)
+		pm := jumpMapDump(commonMaps.JumpMap)
 		Expect(pm).To(HaveLen(0))
 
 		bpfEpMgr.OnUpdate(&proto.HostMetadataUpdate{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
@@ -505,7 +506,7 @@ func TestAttach(t *testing.T) {
 		err = bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
-		pm = jumpMapDump(bpfmaps.JumpMap)
+		pm = jumpMapDump(commonMaps.JumpMap)
 		// We remember the state from above
 		Expect(pm).To(HaveLen(2))
 		Expect(pm).To(HaveKey(wl2State.IngressPolicy()))
