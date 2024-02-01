@@ -407,6 +407,12 @@ static CALI_BPF_INLINE void calico_tc_process_ct_lookup(struct cali_tc_ctx *ctx)
 	} else {
 		ctx->state->post_nat_ip_dst = ctx->state->ip_dst;
 		ctx->state->post_nat_dport = ctx->state->dport;
+		if (nat_res == NAT_EXCLUDE) {
+			/* We want such packets to go through the host namespace. The main
+			 * usecase of this is node-local-dns.
+			 */
+			ctx->state->flags |= CALI_ST_SKIP_FIB;
+		}
 	}
 
 syn_force_policy:
