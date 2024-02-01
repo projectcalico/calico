@@ -72,9 +72,6 @@ func (m *Maps) Destroy() {
 		mps = append(mps, m.V6.slice()...)
 	}
 	for _, m := range mps {
-		if m == nil {
-			continue
-		}
 		os.Remove(m.(pinnedMap).Path())
 		m.(pinnedMap).Close()
 	}
@@ -94,18 +91,18 @@ func getCommonMaps() *CommonMaps {
 }
 
 func getIPMaps(ipFamily int) *IPMaps {
-	getmap := func(V4, V6 func() maps.Map) maps.Map {
+	getmap := func(v4, v6 func() maps.Map) maps.Map {
 		if ipFamily == 4 {
-			return V4()
+			return v4()
 		}
-		return V6()
+		return v6()
 	}
 
-	getmapWithExistsCheck := func(V4, V6 func() maps.MapWithExistsCheck) maps.MapWithExistsCheck {
+	getmapWithExistsCheck := func(v4, v6 func() maps.MapWithExistsCheck) maps.MapWithExistsCheck {
 		if ipFamily == 4 {
-			return V4()
+			return v4()
 		}
-		return V6()
+		return v6()
 	}
 
 	return &IPMaps{
