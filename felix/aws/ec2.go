@@ -87,9 +87,15 @@ func WaitForEC2SrcDstCheckUpdate(check apiv3.AWSSrcDstCheckOption, healthAgg *he
 		jitter        = 0.1
 	)
 
-	//nolint:staticcheck // Ignore SA1019 deprecated
-	backoffMgr := wait.NewExponentialBackoffManager(initBackoff, maxBackoff, resetDuration, backoffFactor, jitter, c)
-	defer backoffMgr.Backoff().Stop()
+	bf := wait.Backoff{
+		Duration: initBackoff,
+		Cap:      maxBackoff,
+		Factor:   backoffFactor,
+		Jitter:   jitter,
+	}.DelayWithReset(c, resetDuration)
+
+	timer := bf.Timer(c)
+	defer timer.Stop()
 
 	const healthName = "AWSSourceDestinationCheck"
 	healthAgg.RegisterReporter(healthName, &health.HealthReport{Live: true, Ready: true}, 0)
@@ -106,7 +112,7 @@ func WaitForEC2SrcDstCheckUpdate(check apiv3.AWSSrcDstCheckOption, healthAgg *he
 			return
 		}
 
-		<-backoffMgr.Backoff().C()
+		<-timer.C()
 	}
 }
 
