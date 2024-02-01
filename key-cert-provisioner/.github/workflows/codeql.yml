@@ -12,10 +12,6 @@
 name: "CodeQL"
 
 on:
-<<<<<<< HEAD
-  schedule:
-    - cron: '0 1 * * *'
-=======
   push:
     branches: [ "master", "release-v1.1" ]
   pull_request:
@@ -23,7 +19,6 @@ on:
     branches: [ "master", "release-v1.1" ]
   schedule:
     - cron: '0 23 * * 0'
->>>>>>> key-cert-provisioner/master
 
 jobs:
   analyze:
@@ -37,11 +32,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-<<<<<<< HEAD
-        language: [ 'go', 'python' ]
-=======
         language: [ 'go' ]
->>>>>>> key-cert-provisioner/master
         # CodeQL supports [ 'cpp', 'csharp', 'go', 'java', 'javascript', 'python', 'ruby' ]
         # Use only 'java' to analyze code written in Java, Kotlin or both
         # Use only 'javascript' to analyze code written in JavaScript, TypeScript or both

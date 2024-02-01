@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 .go-pkg-cache/
 report/
 bin/
@@ -27,3 +28,16 @@ hack/test/kind/*kubeconfig.yaml
 pod2daemon/node-driver-registrar/
 
 /networking-calico/upper-constraints*.txt
+=======
+.idea/
+bin/
+.go-pkg-cache
+Makefile.common*
+
+test-signer/ca.crt
+test-signer/ca.key
+test-signer/signer
+
+/.idea/
+.vscode/
+>>>>>>> key-cert-provisioner/master
