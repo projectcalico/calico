@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 [![Go Report Card](https://goreportcard.com/badge/github.com/projectcalico/calico)](https://goreportcard.com/report/github.com/projectcalico/calico)
 [![ArtifactHub](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/tigera-operator)](https://artifacthub.io/packages/helm/projectcalico/tigera-operator)
 [![License](https://img.shields.io/badge/license-Apache-blue.svg)](calico/LICENSE)
@@ -65,6 +64,3 @@ and developers. You can find out more about our monthly meetings, Slack group, a
 ## License
 
 Calico is open source, with most code and documentation available under the Apache 2.0 license (see the [LICENSE](/LICENSE.md)), though some elements are necessarily licensed under different open source licenses for compatibility with upstream licensing or code linking. For example, some Calico BPF programs are licensed under GPL v2.0 for compatibility with Linux kernel helper functions.
-=======
-# key-cert-provisioner
->>>>>>> key-cert-provisioner/master
