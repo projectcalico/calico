@@ -34,12 +34,6 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/state"
 )
 
-const (
-	V4MapIndex = iota
-	V6MapIndex
-	CommonMapIndex
-)
-
 type IPMaps struct {
 	IpsetsMap    maps.Map
 	ArpMap       maps.Map
