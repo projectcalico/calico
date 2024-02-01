@@ -502,6 +502,8 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 		Name: endpoint.Spec.InterfaceName},
 	)
 
+	time.Sleep(100 * time.Second)
+
 	return result, nil
 }
 
