@@ -42,6 +42,24 @@ type cgroupProgs struct {
 	Name        string `json:"name"`
 }
 
+const (
+	ProgIndexCTLBV6 = iota
+	ProgIndexCTLBSendV6
+	ProgIndexCTLBRecvV6
+)
+
+var ProgramsMapParameters = maps.MapParameters{
+	Type:       "prog_array",
+	KeySize:    4,
+	ValueSize:  4,
+	MaxEntries: 3,
+	Name:       "cali_ctlb_progs",
+}
+
+func NewProgramsMap() maps.Map {
+	return maps.NewPinnedMap(ProgramsMapParameters)
+}
+
 func RemoveConnectTimeLoadBalancer(cgroupv2 string) error {
 	if os.Getenv("FELIX_DebugSkipCTLBCleanup") == "true" {
 		log.Info("FV special case: skipping CTLB cleanup")
@@ -86,25 +104,20 @@ func RemoveConnectTimeLoadBalancer(cgroupv2 string) error {
 	}
 
 	bpf.CleanUpCalicoPins("/sys/fs/bpf/calico_connect4")
+	ctlbProgsMap := NewProgramsMap()
+	os.Remove(ctlbProgsMap.Path())
 
 	return nil
 }
 
-func installProgram(name, ipver, bpfMount, cgroupPath, logLevel string, udpNotSeen time.Duration, excludeUDP bool) error {
-
-	progPinDir := path.Join(bpfMount, "calico_connect4")
-	_ = os.RemoveAll(progPinDir)
-
+func loadProgram(logLevel, ipver string, udpNotSeen time.Duration, excludeUDP bool) (*libbpf.Obj, error) {
 	filename := path.Join(bpfdefs.ObjectDir, ProgFileName(logLevel, ipver))
-
-	progName := "calico_" + name + "_v" + ipver
 
 	log.WithField("filename", filename).Debug("Loading object file")
 	obj, err := libbpf.OpenObject(filename)
 	if err != nil {
-		return fmt.Errorf("failed to load program %s from %s: %w", progName, filename, err)
+		return nil, fmt.Errorf("failed to load %s: %w", filename, err)
 	}
-	defer obj.Close()
 
 	for m, err := obj.FirstMap(); m != nil && err == nil; m, err = m.NextMap() {
 		// In case of global variables, libbpf creates an internal map <prog_name>.rodata
@@ -116,7 +129,7 @@ func installProgram(name, ipver, bpfMount, cgroupPath, logLevel string, udpNotSe
 				continue
 			}
 			if err := libbpf.CTLBSetGlobals(m, udpNotSeen, excludeUDP); err != nil {
-				return fmt.Errorf("error setting globals: %w", err)
+				return nil, fmt.Errorf("error setting globals: %w", err)
 			}
 			continue
 		}
@@ -124,18 +137,27 @@ func installProgram(name, ipver, bpfMount, cgroupPath, logLevel string, udpNotSe
 		if size := maps.Size(mapName); size != 0 {
 			err := m.SetSize(size)
 			if err != nil {
-				return fmt.Errorf("error set map size %s: %w", m.Name(), err)
+				return nil, fmt.Errorf("error set map size %s: %w", m.Name(), err)
 			}
 		}
 		if err := m.SetPinPath(path.Join(bpfdefs.GlobalPinDir, mapName)); err != nil {
-			return fmt.Errorf("error pinning map %s: %w", mapName, err)
+			return nil, fmt.Errorf("error pinning map %s: %w", mapName, err)
 		}
-		log.WithFields(log.Fields{"program": progName, "map": mapName}).Debug("Pinned map")
+		log.WithFields(log.Fields{"obj": filename, "map": mapName}).Debug("Pinned map")
 	}
 
 	if err := obj.Load(); err != nil {
-		return fmt.Errorf("error loading program %s: %w", progName, err)
+		return nil, fmt.Errorf("error loading object %s: %w", filename, err)
 	}
+	return obj, nil
+}
+
+func attachProgram(name, ipver, bpfMount, cgroupPath string, udpNotSeen time.Duration, excludeUDP bool, obj *libbpf.Obj) error {
+
+	progPinDir := path.Join(bpfMount, "calico_connect4")
+	_ = os.RemoveAll(progPinDir)
+
+	progName := "calico_" + name + "_v" + ipver
 
 	// N.B. no need to remember the link since we are never going to detach
 	// these programs unless Felix restarts.
@@ -148,7 +170,28 @@ func installProgram(name, ipver, bpfMount, cgroupPath, logLevel string, udpNotSe
 	return nil
 }
 
-func InstallConnectTimeLoadBalancer(ipFamily int, cgroupv2 string, logLevel string, udpNotSeen time.Duration, excludeUDP bool) error {
+func updateCTLBJumpMap(name string, obj *libbpf.Obj) error {
+	err := obj.UpdateJumpMap(name, "calico_connect_v6", ProgIndexCTLBV6)
+	if err != nil {
+		log.WithError(err).Errorf("Failed to update %s map at index %d", name, ProgIndexCTLBV6)
+		return err
+	}
+
+	err = obj.UpdateJumpMap(name, "calico_sendmsg_v6", ProgIndexCTLBSendV6)
+	if err != nil {
+		log.WithError(err).Errorf("Failed to update %s map at index %d", name, ProgIndexCTLBSendV6)
+		return err
+	}
+
+	err = obj.UpdateJumpMap(name, "calico_recvmsg_v6", ProgIndexCTLBRecvV6)
+	if err != nil {
+		log.WithError(err).Errorf("Failed to update %s map at index %d", name, ProgIndexCTLBRecvV6)
+		return err
+	}
+	return nil
+}
+
+func InstallConnectTimeLoadBalancer(ipv4Enabled, ipv6Enabled bool, cgroupv2 string, logLevel string, udpNotSeen time.Duration, excludeUDP bool) error {
 
 	bpfMount, err := utils.MaybeMountBPFfs()
 	if err != nil {
@@ -161,60 +204,93 @@ func InstallConnectTimeLoadBalancer(ipFamily int, cgroupv2 string, logLevel stri
 		return errors.Wrap(err, "failed to set-up cgroupv2")
 	}
 
-	switch ipFamily {
-	case 4:
-		err = installProgram("connect", "4", bpfMount, cgroupPath, logLevel, udpNotSeen, excludeUDP)
+	ctlbProgsMap := NewProgramsMap()
+	var v4Obj, v46Obj, v6Obj *libbpf.Obj
+
+	// Load the v6 CTLB program.
+	if ipv6Enabled {
+		v6Obj, err = loadProgram(logLevel, "6", udpNotSeen, excludeUDP)
 		if err != nil {
 			return err
 		}
-
-		err = installProgram("connect", "46", bpfMount, cgroupPath, logLevel, udpNotSeen, excludeUDP)
-		if err != nil {
-			return err
-		}
-
-		if !excludeUDP {
-			err = installProgram("sendmsg", "4", bpfMount, cgroupPath, logLevel, udpNotSeen, false)
-			if err != nil {
-				return err
-			}
-
-			err = installProgram("recvmsg", "4", bpfMount, cgroupPath, logLevel, udpNotSeen, false)
-			if err != nil {
-				return err
-			}
-
-			err = installProgram("sendmsg", "46", bpfMount, cgroupPath, logLevel, udpNotSeen, false)
-			if err != nil {
-				return err
-			}
-
-			err = installProgram("recvmsg", "46", bpfMount, cgroupPath, logLevel, udpNotSeen, false)
-			if err != nil {
-				return err
-			}
-		}
-	case 6:
-		err = installProgram("connect", "6", bpfMount, cgroupPath, logLevel, udpNotSeen, excludeUDP)
-		if err != nil {
-			return err
-		}
-
-		if !excludeUDP {
-			err = installProgram("sendmsg", "6", bpfMount, cgroupPath, logLevel, udpNotSeen, false)
-			if err != nil {
-				return err
-			}
-
-			err = installProgram("recvmsg", "6", bpfMount, cgroupPath, logLevel, udpNotSeen, false)
-			if err != nil {
-				return err
-			}
-		}
-	default:
-		return fmt.Errorf("unrecognized ip family %d", ipFamily)
+		defer v6Obj.Close()
 	}
 
+	// Load and attach v4, v46 CTLB program.
+	if ipv4Enabled {
+		v4Obj, err = loadProgram(logLevel, "4", udpNotSeen, excludeUDP)
+		if err != nil {
+			return err
+		}
+		defer v4Obj.Close()
+
+		v46Obj, err = loadProgram(logLevel, "46", udpNotSeen, excludeUDP)
+		if err != nil {
+			return err
+		}
+		defer v46Obj.Close()
+		err = attachProgram("connect", "4", bpfMount, cgroupPath, udpNotSeen, excludeUDP, v4Obj)
+		if err != nil {
+			return err
+		}
+		err = attachProgram("connect", "46", bpfMount, cgroupPath, udpNotSeen, excludeUDP, v46Obj)
+		if err != nil {
+			return err
+		}
+
+		if !excludeUDP {
+			err = attachProgram("sendmsg", "4", bpfMount, cgroupPath, udpNotSeen, false, v4Obj)
+			if err != nil {
+				return err
+			}
+
+			err = attachProgram("recvmsg", "4", bpfMount, cgroupPath, udpNotSeen, false, v4Obj)
+			if err != nil {
+				return err
+			}
+
+			err = attachProgram("sendmsg", "46", bpfMount, cgroupPath, udpNotSeen, false, v46Obj)
+			if err != nil {
+				return err
+			}
+
+			err = attachProgram("recvmsg", "46", bpfMount, cgroupPath, udpNotSeen, false, v46Obj)
+			if err != nil {
+				return err
+			}
+		}
+		// If dual-stack, populate the jump maps with v6 ctlb programs.
+		if v6Obj != nil {
+			if err := ctlbProgsMap.EnsureExists(); err != nil {
+				log.WithError(err).Error("Failed to create CTLB programs maps")
+				return err
+			}
+			err = updateCTLBJumpMap(ctlbProgsMap.GetName(), v6Obj)
+			if err != nil {
+				return err
+			}
+		} else {
+			//delete the jump map
+			os.Remove(ctlbProgsMap.Path())
+		}
+		return nil
+	}
+	err = attachProgram("connect", "6", bpfMount, cgroupPath, udpNotSeen, excludeUDP, v6Obj)
+	if err != nil {
+		return err
+	}
+
+	if !excludeUDP {
+		err = attachProgram("sendmsg", "6", bpfMount, cgroupPath, udpNotSeen, false, v6Obj)
+		if err != nil {
+			return err
+		}
+
+		err = attachProgram("recvmsg", "6", bpfMount, cgroupPath, udpNotSeen, false, v6Obj)
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
