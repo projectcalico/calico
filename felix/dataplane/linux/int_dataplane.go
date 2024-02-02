@@ -217,6 +217,7 @@ type Config struct {
 	BPFHostConntrackBypass             bool
 	BPFEnforceRPF                      string
 	BPFDisableGROForIfaces             *regexp.Regexp
+	BPFExcludeCIDRsFromNAT             []string
 	KubeProxyMinSyncPeriod             time.Duration
 	SidecarAccelerationEnabled         bool
 
@@ -773,6 +774,10 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 		if config.BPFIpv6Enabled {
 			bpfproxyOpts = append(bpfproxyOpts, bpfproxy.WithIPFamily(6))
+		}
+
+		if len(config.BPFExcludeCIDRsFromNAT) > 0 {
+			bpfproxyOpts = append(bpfproxyOpts, bpfproxy.WithExcludedCIDRs(config.BPFExcludeCIDRsFromNAT))
 		}
 
 		if config.KubeClientSet != nil {

@@ -25,6 +25,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/bpfmap"
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/routes"
+	"github.com/projectcalico/calico/felix/ip"
 )
 
 // KubeProxy is a wrapper of Proxy that deals with higher level issue like
@@ -48,6 +49,8 @@ type KubeProxy struct {
 	ctMap       maps.Map
 	rt          *RTCache
 	opts        []Option
+
+	excludedCIDRs *ip.CIDRTrie
 
 	dsrEnabled bool
 }
@@ -128,7 +131,8 @@ func (kp *KubeProxy) run(hostIPs []net.IP) error {
 		withLocalNP = append(withLocalNP, podNPIPV6)
 	}
 
-	syncer, err := NewSyncer(kp.ipFamily, withLocalNP, kp.frontendMap, kp.backendMap, kp.affinityMap, kp.rt)
+	syncer, err := NewSyncer(kp.ipFamily, withLocalNP, kp.frontendMap, kp.backendMap, kp.affinityMap,
+		kp.rt, kp.excludedCIDRs)
 	if err != nil {
 		return errors.WithMessage(err, "new bpf syncer")
 	}
@@ -150,7 +154,7 @@ func (kp *KubeProxy) start() error {
 		withLocalNP = append(withLocalNP, podNPIPV6)
 	}
 
-	syncer, err := NewSyncer(kp.ipFamily, withLocalNP, kp.frontendMap, kp.backendMap, kp.affinityMap, kp.rt)
+	syncer, err := NewSyncer(kp.ipFamily, withLocalNP, kp.frontendMap, kp.backendMap, kp.affinityMap, kp.rt, kp.excludedCIDRs)
 	if err != nil {
 		return errors.WithMessage(err, "new bpf syncer")
 	}
