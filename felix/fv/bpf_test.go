@@ -56,6 +56,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/ifstate"
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/nat"
+	"github.com/projectcalico/calico/felix/bpf/proxy"
 	. "github.com/projectcalico/calico/felix/fv/connectivity"
 	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
@@ -381,10 +382,8 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			options.ExtraEnvVars["FELIX_BPFExtToServiceConnmark"] = "0x80"
 			if !testOpts.ipv6 {
 				options.ExtraEnvVars["FELIX_BPFDSROptoutCIDRs"] = "245.245.0.0/16"
-				options.ExtraEnvVars["FELIX_BPFEXCLUDEIPSFROMNAT"] = "10.101.0.222"
 			} else {
 				options.ExtraEnvVars["FELIX_IPV6SUPPORT"] = "true"
-				options.ExtraEnvVars["FELIX_BPFEXCLUDEIPSFROMNAT"] = "dead:beef::abcd:0:0:222"
 			}
 
 			if testOpts.protocol == "tcp" {
@@ -2348,6 +2347,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					It("should have connectivity from workload via a service IP to a host-process listening on that IP", func() {
 						By("Setting up a dummy service " + excludeSvcIP)
 						svc := k8sService("dummy-service", excludeSvcIP, w[0][0] /* unimportant */, 8066, 8077, 0, testOpts.protocol)
+						svc.ObjectMeta.Annotations = map[string]string{
+							proxy.ExcludeServiceAnnotation: "true",
+						}
 						_, err := k8sClient.CoreV1().Services(testSvc.ObjectMeta.Namespace).
 							Create(context.Background(), svc, metav1.CreateOptions{})
 						Expect(err).NotTo(HaveOccurred())

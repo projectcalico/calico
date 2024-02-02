@@ -366,18 +366,26 @@ func (r *loggerRecorder) Eventf(regarding runtime.Object, related runtime.Object
 const (
 	ReapTerminatingUDPAnnotation   = "projectcalico.org/udpConntrackCleanup"
 	ReapTerminatingUDPImmediatelly = "terminatingImmediately"
+
+	ExcludeServiceAnnotation = "projectcalico.org/natExcludeService"
 )
 
 type ServiceAnnotations interface {
 	ReapTerminatingUDP() bool
+	ExcludeService() bool
 }
 
 type servicePortAnnotations struct {
 	reapTerminatingUDP bool
+	excludeService     bool
 }
 
 func (s *servicePortAnnotations) ReapTerminatingUDP() bool {
 	return s.reapTerminatingUDP
+}
+
+func (s *servicePortAnnotations) ExcludeService() bool {
+	return s.excludeService
 }
 
 type servicePort struct {
@@ -390,11 +398,17 @@ func makeServiceInfo(_ *v1.ServicePort, s *v1.Service, baseSvc *k8sp.BaseService
 		ServicePort: baseSvc,
 	}
 
+	if v, ok := s.ObjectMeta.Annotations[ExcludeServiceAnnotation]; ok && v == "true" {
+		svc.excludeService = true
+		goto out
+	}
+
 	if baseSvc.Protocol() == v1.ProtocolUDP {
 		if v, ok := s.ObjectMeta.Annotations[ReapTerminatingUDPAnnotation]; ok && v == ReapTerminatingUDPImmediatelly {
 			svc.reapTerminatingUDP = true
 		}
 	}
 
+out:
 	return svc
 }
