@@ -49,6 +49,14 @@ CALI_MAP_NAMED(cali_v4_ct_nats, cali_ct_nats ,,
 		struct ct_nats_key, struct sendrec_val,
 		10000, 0)
 
+CALI_MAP_V1(cali_ctlb_progs, BPF_MAP_TYPE_PROG_ARRAY, __u32, __u32, 3, 0)
+
+enum cali_ctlb_prog_index {
+	PROG_INDEX_V6_CONNECT,
+	PROG_INDEX_V6_SENDMSG,
+	PROG_INDEX_V6_RECVMSG,
+};
+
 static CALI_BPF_INLINE __u16 ctx_port_to_host(__u32 port)
 {
 	return bpf_ntohl(port) >> 16;
