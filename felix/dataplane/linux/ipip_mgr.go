@@ -46,6 +46,7 @@ type ipipManager struct {
 
 	// Our dependencies.
 	hostname            string
+	hostAddr            string
 	routeTable          routetable.RouteTableInterface
 	blackholeRouteTable routetable.RouteTableInterface
 	noEncapRouteTable   routetable.RouteTableInterface
@@ -189,8 +190,10 @@ func newIPIPManagerWithShim(
 }
 
 func (m *ipipManager) OnUpdate(msg interface{}) {
+	m.logCtx.Infof("Pepper %v", msg)
 	switch msg := msg.(type) {
 	case *proto.RouteUpdate:
+		m.logCtx.Infof("Pepper1 %v", msg)
 		cidr, err := ip.CIDRFromString(msg.Dst)
 		if err != nil {
 			m.logCtx.WithError(err).WithField("msg", msg).Warning("Unable to parse route update destination. Skipping update.")
@@ -236,12 +239,20 @@ func (m *ipipManager) OnUpdate(msg interface{}) {
 		m.deleteRoute(msg.Dst)
 	case *proto.HostMetadataUpdate:
 		m.logCtx.WithField("hostname", msg.Hostname).Debug("Host update/create")
-		m.activeHostnameToIP[msg.Hostname] = msg.Ipv4Addr
+		if msg.Hostname == m.hostname {
+			m.setLocalHostAddr(msg.Ipv4Addr)
+		} else {
+			m.activeHostnameToIP[msg.Hostname] = msg.Ipv4Addr
+		}
 		m.ipSetDirty = true
 		m.routesDirty = true
 	case *proto.HostMetadataRemove:
 		m.logCtx.WithField("hostname", msg.Hostname).Debug("Host removed")
-		delete(m.activeHostnameToIP, msg.Hostname)
+		if msg.Hostname == m.hostname {
+			m.setLocalHostAddr("")
+		} else {
+			delete(m.activeHostnameToIP, msg.Hostname)
+		}
 		m.ipSetDirty = true
 		m.routesDirty = true
 	}
@@ -261,6 +272,18 @@ func (m *ipipManager) deleteRoute(dst string) {
 		delete(m.localIPAMBlocks, dst)
 		m.routesDirty = true
 	}
+}
+
+func (m *ipipManager) setLocalHostAddr(address string) {
+	m.Lock()
+	defer m.Unlock()
+	m.hostAddr = address
+}
+
+func (m *ipipManager) getLocalHostAddr() string {
+	m.Lock()
+	defer m.Unlock()
+	return m.hostAddr
 }
 
 func (m *ipipManager) getNoEncapRouteTable() routetable.RouteTableInterface {
@@ -377,7 +400,7 @@ func (m *ipipManager) KeepIPIPDeviceInSync(mtu int, address net.IP) {
 	m.logCtx.Info("IPIP tunnel device thread started.")
 	for {
 		if parent, err := m.getParentInterface(); err != nil {
-			m.logCtx.WithError(err).Warn("Failed to configure VXLAN tunnel device, retrying...")
+			m.logCtx.WithError(err).Debug("Missing local host information, retrying...")
 			time.Sleep(1 * time.Second)
 			continue
 		} else {
@@ -404,8 +427,8 @@ func (m *ipipManager) KeepIPIPDeviceInSync(mtu int, address net.IP) {
 // if, and only if, an error occurred
 func (m *ipipManager) getParentInterface() (netlink.Link, error) {
 	m.logCtx.WithField("local hostname", m.hostname).Debug("Getting parent interface")
-	address, exists := m.activeHostnameToIP[m.hostname]
-	if !exists {
+	address := m.getLocalHostAddr()
+	if address == "" {
 		return nil, fmt.Errorf("local address not found, will defer adding routes")
 	}
 	m.logCtx.Debugf("Found parent's address: %v", address)

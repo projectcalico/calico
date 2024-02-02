@@ -52,6 +52,7 @@ type TopologyOptions struct {
 	TyphaLogSeverity          string
 	IPIPEnabled               bool
 	IPIPRoutesEnabled         bool
+	IPIPMode                  api.IPIPMode
 	VXLANMode                 api.VXLANMode
 	WireguardEnabled          bool
 	WireguardEnabledV6        bool
@@ -99,7 +100,7 @@ func DefaultTopologyOptions() TopologyOptions {
 		WithFelixTyphaTLS: false,
 		TyphaLogSeverity:  "info",
 		IPIPEnabled:       true,
-		IPIPRoutesEnabled: true,
+		IPIPRoutesEnabled: false,
 		IPPoolCIDR:        DefaultIPPoolCIDR,
 		IPv6PoolCIDR:      DefaultIPv6PoolCIDR,
 		UseIPPools:        true,
@@ -423,8 +424,8 @@ func StartNNodeTopology(n int, opts TopologyOptions, infra DatastoreInfra) (tc T
 					}, "10s", "1s").ShouldNot(HaveOccurred())
 				} else if opts.VXLANMode == api.VXLANModeNever {
 					// If VXLAN is enabled, Felix will program these routes itself.
-					err := iFelix.ExecMayFail("ip", "route", "add", jBlock, "via", jFelix.IP, "dev", "eth0")
-					Expect(err).ToNot(HaveOccurred())
+					//err := iFelix.ExecMayFail("ip", "route", "add", jBlock, "via", jFelix.IP, "dev", "eth0")
+					//Expect(err).ToNot(HaveOccurred())
 				}
 				if opts.EnableIPv6 {
 					jBlockV6 := fmt.Sprintf("%x%x:%x%x:%x%x:%x%x:%x%x:0:%d:0/112", IPv6CIDR.IP[0], IPv6CIDR.IP[1], IPv6CIDR.IP[2], IPv6CIDR.IP[3], IPv6CIDR.IP[4], IPv6CIDR.IP[5], IPv6CIDR.IP[6], IPv6CIDR.IP[7], IPv6CIDR.IP[8], IPv6CIDR.IP[9], j)
