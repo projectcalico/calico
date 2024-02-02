@@ -46,17 +46,19 @@ func init() {
 }
 
 var _ = Describe("BPF Syncer", func() {
-	svcs := newMockNATMap()
-	eps := newMockNATBackendMap()
-	aff := newMockAffinityMap()
-	ct := mock.NewMockMap(conntrack.MapParams)
+	var (
+		svcs *mockNATMap
+		eps  *mockNATBackendMap
+		aff  *mockAffinityMap
+		ct   *mock.Map
 
-	var connScan *conntrack.Scanner
+		s        *proxy.Syncer
+		connScan *conntrack.Scanner
+		state    proxy.DPSyncerState
+		rt       *proxy.RTCache
+	)
 
 	nodeIPs := []net.IP{net.IPv4(192, 168, 0, 1), net.IPv4(10, 123, 0, 1)}
-	rt := proxy.NewRTCache()
-
-	s, _ := proxy.NewSyncer(4, nodeIPs, svcs, eps, aff, rt, nil)
 
 	svcKey := k8sp.ServicePortName{
 		NamespacedName: types.NamespacedName{
@@ -65,18 +67,29 @@ var _ = Describe("BPF Syncer", func() {
 		},
 	}
 
-	state := proxy.DPSyncerState{
-		SvcMap: k8sp.ServicePortMap{
-			svcKey: proxy.NewK8sServicePort(
-				net.IPv4(10, 0, 0, 1),
-				1234,
-				v1.ProtocolTCP,
-			),
-		},
-		EpsMap: k8sp.EndpointsMap{
-			svcKey: []k8sp.Endpoint{&k8sp.BaseEndpointInfo{Ready: true, Endpoint: "10.1.0.1:5555"}},
-		},
-	}
+	BeforeEach(func() {
+		svcs = newMockNATMap()
+		eps = newMockNATBackendMap()
+		aff = newMockAffinityMap()
+		ct = mock.NewMockMap(conntrack.MapParams)
+
+		rt = proxy.NewRTCache()
+
+		s, _ = proxy.NewSyncer(4, nodeIPs, svcs, eps, aff, rt, nil)
+
+		state = proxy.DPSyncerState{
+			SvcMap: k8sp.ServicePortMap{
+				svcKey: proxy.NewK8sServicePort(
+					net.IPv4(10, 0, 0, 1),
+					1234,
+					v1.ProtocolTCP,
+				),
+			},
+			EpsMap: k8sp.EndpointsMap{
+				svcKey: []k8sp.Endpoint{&k8sp.BaseEndpointInfo{Ready: true, Endpoint: "10.1.0.1:5555"}},
+			},
+		}
+	})
 
 	makestep := func(step func()) func() {
 		return func() {
@@ -1189,6 +1202,77 @@ var _ = Describe("BPF Syncer", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(cnt).To(Equal(6))
 		}))
+
+	})
+
+	It("should remove conntrack of terminating UDP backed if service annotated as such", func() {
+		state = proxy.DPSyncerState{
+			SvcMap: k8sp.ServicePortMap{
+				svcKey: proxy.NewK8sServicePort(
+					net.IPv4(10, 0, 0, 1),
+					1234,
+					v1.ProtocolUDP,
+					proxy.K8sSvcWithReapTerminatingUDP(),
+				),
+			},
+			EpsMap: k8sp.EndpointsMap{
+				svcKey: []k8sp.Endpoint{
+					&k8sp.BaseEndpointInfo{Ready: true, Endpoint: "10.1.0.1:5555"},
+					&k8sp.BaseEndpointInfo{Terminating: true, Endpoint: "10.1.0.2:5555"},
+				},
+			},
+		}
+
+		err := s.Apply(state)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(svcs.m).To(HaveLen(1))
+		val, ok := svcs.m[nat.NewNATKey(net.IPv4(10, 0, 0, 1), 1234, proxy.ProtoV1ToIntPanic(v1.ProtocolUDP))]
+		Expect(ok).To(BeTrue())
+		Expect(val.Count()).To(Equal(uint32(1))) // only the ready endpoint
+
+		By("running ct scan - expect terminating to be reaped", func() {
+			s.StopExpandNPFixup()
+			s.ConntrackScanStart()
+			defer s.ConntrackScanEnd()
+
+			Expect(s.ConntrackFrontendHasBackend(
+				net.IPv4(10, 0, 0, 1), 1234, net.IPv4(10, 1, 0, 1), 5555, 17)).To(BeTrue())
+			Expect(s.ConntrackFrontendHasBackend(
+				net.IPv4(10, 0, 0, 1), 1234, net.IPv4(10, 1, 0, 2), 5555, 17)).To(BeFalse())
+		})
+
+		By("removing the annotation")
+
+		state = proxy.DPSyncerState{
+			SvcMap: k8sp.ServicePortMap{
+				svcKey: proxy.NewK8sServicePort(
+					net.IPv4(10, 0, 0, 1),
+					1234,
+					v1.ProtocolUDP,
+				),
+			},
+			EpsMap: k8sp.EndpointsMap{
+				svcKey: []k8sp.Endpoint{
+					&k8sp.BaseEndpointInfo{Ready: true, Endpoint: "10.1.0.1:5555"},
+					&k8sp.BaseEndpointInfo{Terminating: true, Endpoint: "10.1.0.2:5555"},
+				},
+			},
+		}
+
+		err = s.Apply(state)
+		Expect(err).NotTo(HaveOccurred())
+
+		By("running ct scan again - expect terminating not to be reaped", func() {
+			s.StopExpandNPFixup()
+			s.ConntrackScanStart()
+			defer s.ConntrackScanEnd()
+
+			Expect(s.ConntrackFrontendHasBackend(
+				net.IPv4(10, 0, 0, 1), 1234, net.IPv4(10, 1, 0, 1), 5555, 17)).To(BeTrue())
+			Expect(s.ConntrackFrontendHasBackend(
+				net.IPv4(10, 0, 0, 1), 1234, net.IPv4(10, 1, 0, 2), 5555, 17)).To(BeTrue())
+		})
 
 	})
 })
