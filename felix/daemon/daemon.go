@@ -669,7 +669,7 @@ configRetry:
 		// `fromDataplane` consumers do not stop consuming
 		// msgs from that channel to avoid deadlocks.
 		// If safe, stop these loops when context is cancelled.
-		ctx := context.Background()
+		ctx := context.TODO()
 		statusFileReporter.SyncForever(ctx)
 	}
 
@@ -1273,7 +1273,7 @@ func (fc *DataplaneConnector) Start() {
 	go fc.handleWireguardStatUpdateFromDataplane()
 
 	// Begin consuming StatusUpdatesFromDataplane and dispatching to downstream components (e.g. status reporter).
-	ctx := context.Background()
+	ctx := context.TODO()
 	go fc.StatusUpdatesFromDataplaneDispatcher.DispatchForever(ctx, fc.StatusUpdatesFromDataplaneConsumers...)
 }
 
