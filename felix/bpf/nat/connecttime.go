@@ -43,9 +43,9 @@ type cgroupProgs struct {
 }
 
 const (
-	CTLBConnectV6 = iota
-	CTLBSendV6
-	CTLBRecvV6
+	ProgIndexCTLBV6 = iota
+	ProgIndexCTLBSendV6
+	ProgIndexCTLBRecvV6
 )
 
 var ProgramsMapParameters = maps.MapParameters{
@@ -171,21 +171,21 @@ func attachProgram(name, ipver, bpfMount, cgroupPath string, udpNotSeen time.Dur
 }
 
 func updateCTLBJumpMap(name string, obj *libbpf.Obj) error {
-	err := obj.UpdateJumpMap(name, "calico_connect_v6", CTLBConnectV6)
+	err := obj.UpdateJumpMap(name, "calico_connect_v6", ProgIndexCTLBV6)
 	if err != nil {
-		log.WithError(err).Errorf("Failed to update %s map at index %d", name, CTLBConnectV6)
+		log.WithError(err).Errorf("Failed to update %s map at index %d", name, ProgIndexCTLBV6)
 		return err
 	}
 
-	err = obj.UpdateJumpMap(name, "calico_sendmsg_v6", CTLBSendV6)
+	err = obj.UpdateJumpMap(name, "calico_sendmsg_v6", ProgIndexCTLBSendV6)
 	if err != nil {
-		log.WithError(err).Errorf("Failed to update %s map at index %d", name, CTLBSendV6)
+		log.WithError(err).Errorf("Failed to update %s map at index %d", name, ProgIndexCTLBSendV6)
 		return err
 	}
 
-	err = obj.UpdateJumpMap(name, "calico_recvmsg_v6", CTLBRecvV6)
+	err = obj.UpdateJumpMap(name, "calico_recvmsg_v6", ProgIndexCTLBRecvV6)
 	if err != nil {
-		log.WithError(err).Errorf("Failed to update %s map at index %d", name, CTLBRecvV6)
+		log.WithError(err).Errorf("Failed to update %s map at index %d", name, ProgIndexCTLBRecvV6)
 		return err
 	}
 	return nil
