@@ -39,7 +39,7 @@ COPY LICENSE /licenses/LICENSE
 COPY ${BIN_DIR}/kube-controllers-linux-${TARGETARCH} /usr/bin/kube-controllers
 COPY ${BIN_DIR}/check-status-linux-${TARGETARCH} /usr/bin/check-status
 
-FROM calico/base
+FROM jha48/base:ubi9
 
 ARG GIT_VERSION=unknown
 

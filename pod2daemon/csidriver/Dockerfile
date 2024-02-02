@@ -19,7 +19,7 @@ ARG TARGETARCH
 
 COPY ${BIN_DIR}/csi-driver-${TARGETARCH} /usr/bin/csi-driver
 
-FROM calico/base
+FROM jha48/base:ubi9
 
 ARG GIT_VERSION=unknown
 
