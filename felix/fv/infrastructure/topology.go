@@ -92,7 +92,7 @@ func (c *TopologyContainers) TriggerDelayedStart() {
 }
 
 func DefaultTopologyOptions() TopologyOptions {
-	felixLogLevel := "Info"
+	felixLogLevel := "Debug"
 	if envLogLevel := os.Getenv("FV_FELIX_LOG_LEVEL"); envLogLevel != "" {
 		log.WithField("level", envLogLevel).Info("FV_FELIX_LOG_LEVEL env var set; overriding felix log level")
 		felixLogLevel = envLogLevel
@@ -421,14 +421,14 @@ func StartNNodeTopology(n int, opts TopologyOptions, infra DatastoreInfra) (tc T
 			go func(i, j int, iFelix, jFelix *Felix) {
 				defer wg.Done()
 				defer ginkgo.GinkgoRecover()
-				jBlock := fmt.Sprintf("%d.%d.%d.0/24", IPv4CIDR.IP[0], IPv4CIDR.IP[1], j)
+				//jBlock := fmt.Sprintf("%d.%d.%d.0/24", IPv4CIDR.IP[0], IPv4CIDR.IP[1], j)
 				if opts.IPIPEnabled && opts.IPIPRoutesEnabled {
 					// Can get "Nexthop device is not up" error here if tunl0 device is
 					// not ready yet, which can happen especially if Felix start was
 					// delayed.
-					Eventually(func() error {
+					/*Eventually(func() error {
 						return iFelix.ExecMayFail("ip", "route", "add", jBlock, "via", jFelix.IP, "dev", "tunl0", "onlink")
-					}, "10s", "1s").ShouldNot(HaveOccurred())
+					}, "10s", "1s").ShouldNot(HaveOccurred())*/
 				} else if opts.VXLANMode == api.VXLANModeNever {
 					// If VXLAN is enabled, Felix will program these routes itself.
 					//err := iFelix.ExecMayFail("ip", "route", "add", jBlock, "via", jFelix.IP, "dev", "eth0")

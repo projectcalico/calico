@@ -210,8 +210,9 @@ func (m *ipipManager) OnUpdate(msg interface{}) {
 		// In case the route changes type to one we no longer care about...
 		m.deleteRoute(msg.Dst)
 
+		m.logCtx.Infof("Pepper2 %v", msg)
 		// Process remote IPAM blocks.
-		if msg.Type == proto.RouteType_REMOTE_WORKLOAD && msg.IpPoolType == proto.IPPoolType_IPIP {
+		if msg.Type == proto.RouteType_REMOTE_TUNNEL && msg.IpPoolType == proto.IPPoolType_IPIP {
 			m.logCtx.WithField("msg", msg).Debug("IPIP data plane received route update")
 			m.routesByDest[msg.Dst] = msg
 			m.routesDirty = true
@@ -324,11 +325,13 @@ func (m *ipipManager) CompleteDeferredWork() error {
 		m.ipSetDirty = false
 	}
 	if m.routesDirty {
+		m.logCtx.Infof("Angal routes: %v", m.routesByDest)
 		// Iterate through all of our L3 routes and send them through to the route table.
 		var ipipRoutes []routetable.Target
 		var noEncapRoutes []routetable.Target
 		for _, r := range m.routesByDest {
 			logCtx := m.logCtx.WithField("route", r)
+			logCtx.Infof("Nina: %v", r)
 			cidr, err := ip.CIDRFromString(r.Dst)
 			if err != nil {
 				// Don't block programming of other routes if somehow we receive one with a bad dst.

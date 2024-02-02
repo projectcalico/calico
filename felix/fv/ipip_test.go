@@ -140,7 +140,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 	})
 
 	It("Mazdak should have workload to workload connectivity", func() {
-		//time.Sleep(time.Minute * 60)
+		time.Sleep(time.Minute * 60)
 		cc.ExpectSome(w[0], w[1])
 		cc.ExpectSome(w[1], w[0])
 		cc.CheckConnectivity()
