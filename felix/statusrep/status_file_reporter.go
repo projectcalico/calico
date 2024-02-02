@@ -22,8 +22,9 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/projectcalico/calico/felix/proto"
 	"k8s.io/apimachinery/pkg/util/wait"
+
+	"github.com/projectcalico/calico/felix/proto"
 
 	"github.com/sirupsen/logrus"
 )
