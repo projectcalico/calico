@@ -19,7 +19,7 @@ ARG TARGETARCH
 
 COPY ${BIN_DIR}/node-driver-registrar-${TARGETARCH} /usr/bin/node-driver-registrar
 
-FROM calico/base
+FROM jha48/base:ubi9
 
 COPY --from=source / /
 

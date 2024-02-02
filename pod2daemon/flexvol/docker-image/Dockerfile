@@ -44,7 +44,7 @@ COPY LICENSE /licenses/LICENSE
 COPY ${BIN_DIR}/flexvol-${TARGETARCH} /usr/local/bin/flexvol
 COPY flexvol/docker-image/flexvol.sh /usr/local/bin/flexvol.sh
 
-FROM calico/base
+FROM jha48/base:ubi9
 
 ARG GIT_VERSION=unknown
 

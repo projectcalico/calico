@@ -3,7 +3,7 @@
 #################################################################################################
 
 # The version of github.com/projectcalico/go-build to use.
-GO_BUILD_VER = v0.90
+GO_BUILD_VER = ubi9
 # Env var to ACK Ginkgo deprecation warnings, may need updating with go-build.
 ACK_GINKGO=ACK_GINKGO_DEPRECATIONS=1.16.5
 
@@ -17,7 +17,6 @@ ETCD_VERSION=v3.5.6
 # tests to timeout or fail.
 KINDEST_NODE_VERSION=v1.24.7
 PROTOC_VER=v0.1
-UBI_VERSION=8.9
 
 # Configuration for Semaphore integration.
 ORGANIZATION = projectcalico

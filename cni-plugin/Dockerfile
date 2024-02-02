@@ -19,7 +19,7 @@ ARG BIN_DIR
 COPY LICENSE /licenses/LICENSE
 COPY ${BIN_DIR} /opt/cni/bin/
 
-FROM calico/base
+FROM jha48/base:ubi9
 
 ARG GIT_VERSION=unknown
 
