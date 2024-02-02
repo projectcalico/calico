@@ -7,7 +7,7 @@ execution_time_limit:
 agent:
   machine:
     type: e1-standard-2
-    os_image: ubuntu2004
+    os_image: ubuntu2204
 
 auto_cancel:
   running:
@@ -140,7 +140,7 @@ blocks:
     agent:
       machine:
         type: e1-standard-4
-        os_image: ubuntu2004
+        os_image: ubuntu2204
     prologue:
       commands:
       - cd apiserver
@@ -157,7 +157,7 @@ blocks:
     agent:
       machine:
         type: e1-standard-4
-        os_image: ubuntu2004
+        os_image: ubuntu2204
     prologue:
       commands:
       - cd apiserver
@@ -188,7 +188,7 @@ blocks:
     agent:
       machine:
         type: e1-standard-4
-        os_image: ubuntu2004
+        os_image: ubuntu2204
     jobs:
     - name: "Typha: UT and FV tests"
       commands:
@@ -219,7 +219,7 @@ blocks:
     agent:
       machine:
         type: e1-standard-4
-        os_image: ubuntu2004
+        os_image: ubuntu2204
     prologue:
       commands:
       - cd felix
@@ -256,7 +256,7 @@ blocks:
     agent:
       machine:
         type: e1-standard-4
-        os_image: ubuntu2004
+        os_image: ubuntu2204
     prologue:
       commands:
       - cd felix
@@ -450,7 +450,7 @@ blocks:
     agent:
       machine:
         type: e1-standard-8
-        os_image: ubuntu2004
+        os_image: ubuntu2204
     prologue:
       commands:
       - cd node
@@ -503,7 +503,7 @@ blocks:
     agent:
       machine:
         type: e1-standard-4
-        os_image: ubuntu2004
+        os_image: ubuntu2204
     prologue:
       commands:
       - cd node
@@ -529,7 +529,7 @@ blocks:
     agent:
       machine:
         type: e1-standard-8
-        os_image: ubuntu2004
+        os_image: ubuntu2204
     jobs:
     - name: "sig-network conformance"
       env_vars:
@@ -546,7 +546,7 @@ blocks:
     agent:
       machine:
         type: e1-standard-4
-        os_image: ubuntu2004
+        os_image: ubuntu2204
     prologue:
       commands:
       - cd kube-controllers
