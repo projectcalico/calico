@@ -135,7 +135,7 @@ endif
 # For building, we use the go-build image for the *host* architecture, even if the target is different
 # the one for the host should contain all the necessary cross-compilation tools
 # we do not need to use the arch since go-build:v0.15 now is multi-arch manifest
-GO_BUILD_IMAGE ?= calico/go-build
+GO_BUILD_IMAGE ?= jha48/go-build
 CALICO_BUILD    = $(GO_BUILD_IMAGE):$(GO_BUILD_VER)-$(BUILDARCH)
 
 
@@ -200,7 +200,7 @@ ifeq ($(BUILDARCH),amd64)
 	# *-amd64 tagged images for etcd are not available until v3.5.0
 	ETCD_IMAGE = quay.io/coreos/etcd:$(ETCD_VERSION)
 endif
-UBI_IMAGE ?= registry.access.redhat.com/ubi8/ubi-minimal:$(UBI_VERSION)
+UBI_IMAGE ?= registry.access.redhat.com/ubi9/ubi-minimal
 
 ifeq ($(GIT_USE_SSH),true)
 	GIT_CONFIG_SSH ?= git config --global url."ssh://git@github.com/".insteadOf "https://github.com/";
@@ -1234,7 +1234,7 @@ kind-cluster-destroy: $(KIND) $(KUBECTL)
 
 kind $(KIND):
 	mkdir -p $(KIND_DIR)
-	$(DOCKER_GO_BUILD) sh -c "GOBIN=/go/src/github.com/projectcalico/calico/hack/test/kind go install sigs.k8s.io/kind@v0.14.0"
+	$(DOCKER_GO_BUILD) sh -c "GOBIN=/go/src/github.com/projectcalico/calico/hack/test/kind go install sigs.k8s.io/kind@v0.20.0"
 
 kubectl $(KUBECTL):
 	mkdir -p $(KIND_DIR)
