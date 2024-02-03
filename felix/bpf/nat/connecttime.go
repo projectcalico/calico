@@ -30,6 +30,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/bpfdefs"
 	"github.com/projectcalico/calico/felix/bpf/bpfutils"
+	"github.com/projectcalico/calico/felix/bpf/jump"
 	"github.com/projectcalico/calico/felix/bpf/libbpf"
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/utils"
@@ -43,10 +44,16 @@ type cgroupProgs struct {
 }
 
 const (
-	ProgIndexCTLBV6 = iota
+	ProgIndexCTLBConnectV6 = iota
 	ProgIndexCTLBSendV6
 	ProgIndexCTLBRecvV6
 )
+
+var ctlbProgToIndex = map[string]int{
+	"calico_connect_v6": ProgIndexCTLBConnectV6,
+	"calico_sendmsg_v6": ProgIndexCTLBSendV6,
+	"calico_recvmsg_v6": ProgIndexCTLBRecvV6,
+}
 
 var ProgramsMapParameters = maps.MapParameters{
 	Type:       "prog_array",
@@ -56,7 +63,7 @@ var ProgramsMapParameters = maps.MapParameters{
 	Name:       "cali_ctlb_progs",
 }
 
-func NewProgramsMap() maps.Map {
+func newProgramsMap() maps.Map {
 	return maps.NewPinnedMap(ProgramsMapParameters)
 }
 
@@ -104,7 +111,7 @@ func RemoveConnectTimeLoadBalancer(cgroupv2 string) error {
 	}
 
 	bpf.CleanUpCalicoPins("/sys/fs/bpf/calico_connect4")
-	ctlbProgsMap := NewProgramsMap()
+	ctlbProgsMap := newProgramsMap()
 	os.Remove(ctlbProgsMap.Path())
 
 	return nil
@@ -170,23 +177,18 @@ func attachProgram(name, ipver, bpfMount, cgroupPath string, udpNotSeen time.Dur
 	return nil
 }
 
-func updateCTLBJumpMap(name string, obj *libbpf.Obj) error {
-	err := obj.UpdateJumpMap(name, "calico_connect_v6", ProgIndexCTLBV6)
-	if err != nil {
-		log.WithError(err).Errorf("Failed to update %s map at index %d", name, ProgIndexCTLBV6)
-		return err
-	}
+func updateCTLBJumpMap(jumpMap maps.Map, obj *libbpf.Obj) error {
+	for prog, index := range ctlbProgToIndex {
+		fd, err := obj.ProgramFD(prog)
+		if err != nil {
+			return fmt.Errorf("failed to get prog FD. Program = %s: %w", prog, err)
+		}
 
-	err = obj.UpdateJumpMap(name, "calico_sendmsg_v6", ProgIndexCTLBSendV6)
-	if err != nil {
-		log.WithError(err).Errorf("Failed to update %s map at index %d", name, ProgIndexCTLBSendV6)
-		return err
-	}
-
-	err = obj.UpdateJumpMap(name, "calico_recvmsg_v6", ProgIndexCTLBRecvV6)
-	if err != nil {
-		log.WithError(err).Errorf("Failed to update %s map at index %d", name, ProgIndexCTLBRecvV6)
-		return err
+		err = maps.UpdateMapEntry(jumpMap.MapFD(), jump.Key(index), jump.Value(uint32(fd)))
+		if err != nil {
+			log.WithError(err).Errorf("Failed to update %s map at index %d", prog, index)
+			return err
+		}
 	}
 	return nil
 }
@@ -204,7 +206,7 @@ func InstallConnectTimeLoadBalancer(ipv4Enabled, ipv6Enabled bool, cgroupv2 stri
 		return errors.Wrap(err, "failed to set-up cgroupv2")
 	}
 
-	ctlbProgsMap := NewProgramsMap()
+	ctlbProgsMap := newProgramsMap()
 	var v4Obj, v46Obj, v6Obj *libbpf.Obj
 
 	// Load the v6 CTLB program.
@@ -265,7 +267,7 @@ func InstallConnectTimeLoadBalancer(ipv4Enabled, ipv6Enabled bool, cgroupv2 stri
 				log.WithError(err).Error("Failed to create CTLB programs maps")
 				return err
 			}
-			err = updateCTLBJumpMap(ctlbProgsMap.GetName(), v6Obj)
+			err = updateCTLBJumpMap(ctlbProgsMap, v6Obj)
 			if err != nil {
 				return err
 			}
