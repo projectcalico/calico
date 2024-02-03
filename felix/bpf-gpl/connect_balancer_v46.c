@@ -20,6 +20,24 @@
 #include "sendrecv.h"
 #include "connect.h"
 
+static CALI_BPF_INLINE bool is_ipv4_as_ipv6(__u32 *addr) {
+	return addr[0] == 0 && addr[1] == 0 && addr[2] == bpf_htonl(0x0000ffff);
+}
+
+struct {
+	__uint(type, BPF_MAP_TYPE_PROG_ARRAY);
+	__type(key, __u32);
+	__type(value, __u32);
+	__uint(max_entries, 3);
+	__uint(map_flags, 0);
+}cali_ctlb_progs SEC(".maps");
+
+enum cali_ctlb_prog_index {
+	PROG_INDEX_V6_CONNECT,
+	PROG_INDEX_V6_SENDMSG,
+	PROG_INDEX_V6_RECVMSG,
+};
+
 SEC("cgroup/connect6")
 int calico_connect_v46(struct bpf_sock_addr *ctx)
 {
@@ -33,13 +51,11 @@ int calico_connect_v46(struct bpf_sock_addr *ctx)
 			ctx->user_ip6[2],
 			ctx->user_ip6[3]);
 
-	/* check if it is a IPv4 mapped as IPv6 and if so, use the v4 table */
-	if (ctx->user_ip6[0] == 0 && ctx->user_ip6[1] == 0 &&
-			ctx->user_ip6[2] == bpf_htonl(0x0000ffff)) {
+	if (is_ipv4_as_ipv6(ctx->user_ip6)) {
 		goto v4;
 	}
 
-	CALI_DEBUG("connect_v46: not implemented for v6 yet\n");
+	bpf_tail_call(ctx, &cali_ctlb_progs, PROG_INDEX_V6_CONNECT);
 	goto out;
 
 v4:
@@ -58,8 +74,37 @@ out:
 SEC("cgroup/sendmsg6")
 int calico_sendmsg_v46(struct bpf_sock_addr *ctx)
 {
-	CALI_DEBUG("sendmsg_v46\n");
+	if (CTLB_EXCLUDE_UDP) {
+		goto out;
+	}
 
+	__be32 ipv4;
+
+	CALI_DEBUG("sendmsg_v46 ip[0-1] %x%x\n",
+			ctx->user_ip6[0],
+			ctx->user_ip6[1]);
+	CALI_DEBUG("sendmsg_v46 ip[2-3] %x%x\n",
+			ctx->user_ip6[2],
+			ctx->user_ip6[3]);
+
+	if (is_ipv4_as_ipv6(ctx->user_ip6)) {
+		goto v4;
+	}
+
+	bpf_tail_call(ctx, &cali_ctlb_progs, PROG_INDEX_V6_SENDMSG);
+	goto out;
+
+v4:
+	ipv4 = ctx->user_ip6[3];
+	CALI_DEBUG("sendmsg_v46 %x:%d\n", bpf_ntohl(ipv4), ctx_port_to_host(ctx->user_port));
+
+	if (ctx->type != SOCK_DGRAM) {
+		CALI_INFO("unexpected sock type %d\n", ctx->type);
+		goto out;
+	}
+	do_nat_common(ctx, IPPROTO_UDP, &ipv4, false);
+
+out:
 	return 1;
 }
 
@@ -79,13 +124,11 @@ int calico_recvmsg_v46(struct bpf_sock_addr *ctx)
 			ctx->user_ip6[2],
 			ctx->user_ip6[3]);
 
-	/* check if it is a IPv4 mapped as IPv6 and if so, use the v4 table */
-	if (ctx->user_ip6[0] == 0 && ctx->user_ip6[1] == 0 &&
-			ctx->user_ip6[2] == bpf_htonl(0x0000ffff)) {
+	if (is_ipv4_as_ipv6(ctx->user_ip6)) {
 		goto v4;
 	}
 
-	CALI_DEBUG("recvmsg_v46: not implemented for v6 yet\n");
+	bpf_tail_call(ctx, &cali_ctlb_progs, PROG_INDEX_V6_RECVMSG);
 	goto out;
 
 
@@ -125,3 +168,4 @@ v4:
 out:
 	return 1;
 }
+
