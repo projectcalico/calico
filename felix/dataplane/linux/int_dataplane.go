@@ -676,8 +676,6 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		} else {
 			startBPFDataplaneComponents(proto.IPVersion_IPV4, bpfMaps.V4, ipSetIDAllocator, config, ipsetsManager, dp)
 		}
-		// Forwarding into an IPIP tunnel fails silently because IPIP tunnels are L3 devices and support for
-		// L3 devices in BPF is not available yet.  Disable the FIB lookup in that case.
 
 		filterTbl := filterTableV4
 		if config.BPFIpv6Enabled {
@@ -692,6 +690,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 				"- BPFHostNetworkedNAT is disabled.")
 		}
 
+		// Forwarding into an IPIP tunnel fails silently because IPIP tunnels are L3 devices and support for
+		// L3 devices in BPF is not available yet.  Disable the FIB lookup in that case.
 		fibLookupEnabled := !config.RulesConfig.IPIPEnabled
 		bpfEndpointManager, err = newBPFEndpointManager(
 			nil,

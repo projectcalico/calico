@@ -356,7 +356,7 @@ type bpfEndpointManager struct {
 }
 
 type bpfEndpointManagerDataplane struct {
-	bpfmap.IPMaps
+	*bpfmap.IPMaps
 	ipFamily proto.IPVersion
 	hostIP   net.IP
 	mgr      *bpfEndpointManager
@@ -607,23 +607,12 @@ func newBPFEndpointManagerDataplane(
 	epMgr *bpfEndpointManager,
 ) *bpfEndpointManagerDataplane {
 
-	d := &bpfEndpointManagerDataplane{
+	return &bpfEndpointManagerDataplane{
 		ipFamily:     ipFamily,
 		ifaceToIpMap: map[string]net.IP{},
 		mgr:          epMgr,
+		IPMaps:       ipMaps,
 	}
-
-	d.IpsetsMap = ipMaps.IpsetsMap
-	d.ArpMap = ipMaps.ArpMap
-	d.FailsafesMap = ipMaps.FailsafesMap
-	d.FrontendMap = ipMaps.FrontendMap
-	d.BackendMap = ipMaps.BackendMap
-	d.AffinityMap = ipMaps.AffinityMap
-	d.RouteMap = ipMaps.RouteMap
-	d.CtMap = ipMaps.CtMap
-	d.SrMsgMap = ipMaps.SrMsgMap
-	d.CtNatsMap = ipMaps.CtNatsMap
-	return d
 }
 
 var _ hasLoadPolicyProgram = (*bpfEndpointManager)(nil)

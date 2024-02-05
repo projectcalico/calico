@@ -120,18 +120,15 @@ func getIPMaps(ipFamily int) *IPMaps {
 }
 
 func CreateBPFMaps(ipV6Enabled bool) (*Maps, error) {
-	mps := []maps.Map{}
 	ret := new(Maps)
 
 	ret.CommonMaps = getCommonMaps()
-	mps = append(mps, ret.CommonMaps.slice()...)
 	ret.V4 = getIPMaps(4)
-	mps = append(mps, ret.V4.slice()...)
 	if ipV6Enabled {
 		ret.V6 = getIPMaps(6)
-		mps = append(mps, ret.V6.slice()...)
 	}
 
+	mps := ret.slice()
 	for i, bpfMap := range mps {
 		err := bpfMap.EnsureExists()
 		if err != nil {
@@ -147,6 +144,18 @@ func CreateBPFMaps(ipV6Enabled bool) (*Maps, error) {
 	}
 
 	return ret, nil
+}
+
+func (m *Maps) slice() []maps.Map {
+	mps := []maps.Map{}
+	mps = append(mps, m.CommonMaps.slice()...)
+	if m.V4 != nil {
+		mps = append(mps, m.V4.slice()...)
+	}
+	if m.V6 != nil {
+		mps = append(mps, m.V6.slice()...)
+	}
+	return mps
 }
 
 func (c *CommonMaps) slice() []maps.Map {
