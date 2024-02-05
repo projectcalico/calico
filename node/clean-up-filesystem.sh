@@ -228,6 +228,7 @@ done < <(find /usr/lib64 \( -type f -or -type l \))
 # binaries and libraries that we don't want.
 packages_to_keep=(
   bash
+  bzip2-libs
   ca-certificates
   conntrack-tools
   coreutils-single
