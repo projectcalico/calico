@@ -17,7 +17,6 @@ package dispatcher
 import (
 	"context"
 	"errors"
-	"reflect"
 
 	"github.com/sirupsen/logrus"
 )
@@ -71,29 +70,14 @@ func (d *BlockingDispatcher[T]) DispatchForever(ctx context.Context, outputs ...
 				log.Panic("Input channel closed unexpectedly")
 			}
 			log.WithField("message", msg).Debug("Pulled message off input chan")
-
-			// Now do a dynamic select to send to all outputs.
-			// ctx.Done is always select-case 0.
-			selectCases := []reflect.SelectCase{
-				{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(ctx.Done())},
-			}
 			for _, o := range outputs {
-				selectCases = append(selectCases, reflect.SelectCase{
-					Dir:  reflect.SelectSend,
-					Chan: reflect.ValueOf(o),
-					Send: reflect.ValueOf(msg),
-				})
-			}
-
-			for range outputs {
-				i, _, _ := reflect.Select(selectCases)
-				if i == 0 {
-					// 0 is always the ctx.Done channel.
+				select {
+				case <-ctx.Done():
 					log.Debug("Context closed. Exiting...")
 					return
+				case o <- msg:
 				}
 			}
-
 			log.WithField("message", msg).Debug("Sent message to all outputs")
 		}
 	}
