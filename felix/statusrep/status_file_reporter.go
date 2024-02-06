@@ -147,7 +147,7 @@ func (fr *EndpointStatusFileReporter) SyncForever(ctx context.Context) {
 				if err != nil {
 					logrus.WithError(err).WithField("file", filename).Warn("Couldn't write status file")
 				} else {
-					defer f.Close()
+					f.Close()
 				}
 			case *proto.WorkloadEndpointStatusRemove:
 				// Delete file from dir.
