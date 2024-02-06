@@ -278,7 +278,7 @@ type bpfEndpointManager struct {
 	dsrOptoutCidrs          bool
 	bpfExtToServiceConnmark int
 	psnatPorts              numorstring.Port
-	bpfmaps                 *bpfmap.Maps
+	commonMaps              *bpfmap.CommonMaps
 	ifStateMap              *cachingmap.CachingMap[ifstate.Key, ifstate.Value]
 	removeOldJumps          bool
 	legacyCleanUp           bool
@@ -351,13 +351,12 @@ type bpfEndpointManager struct {
 	natInIdx  int
 	natOutIdx int
 
-	arpMap maps.Map
-
 	v4 *bpfEndpointManagerDataplane
 	v6 *bpfEndpointManagerDataplane
 }
 
 type bpfEndpointManagerDataplane struct {
+	*bpfmap.IPMaps
 	ipFamily proto.IPVersion
 	hostIP   net.IP
 	mgr      *bpfEndpointManager
@@ -452,10 +451,10 @@ func newBPFEndpointManager(
 		dsrOptoutCidrs:          len(config.BPFDSROptoutCIDRs) > 0,
 		bpfExtToServiceConnmark: config.BPFExtToServiceConnmark,
 		psnatPorts:              config.BPFPSNATPorts,
-		bpfmaps:                 bpfmaps,
+		commonMaps:              bpfmaps.CommonMaps,
 		ifStateMap: cachingmap.New[ifstate.Key, ifstate.Value](ifstate.MapParams.Name,
 			maps.NewTypedMap[ifstate.Key, ifstate.Value](
-				bpfmaps.IfStateMap.(maps.MapWithExistsCheck), ifstate.KeyFromBytes, ifstate.ValueFromBytes,
+				bpfmaps.CommonMaps.IfStateMap.(maps.MapWithExistsCheck), ifstate.KeyFromBytes, ifstate.ValueFromBytes,
 			)),
 
 		// Note: the allocators only allocate a fraction of the map, the
@@ -478,7 +477,6 @@ func newBPFEndpointManager(
 		bpfPolicyDebugEnabled:  config.BPFPolicyDebugEnabled,
 		polNameToMatchIDs:      map[string]set.Set[polprog.RuleMatchID]{},
 		dirtyRules:             set.New[polprog.RuleMatchID](),
-		arpMap:                 bpfmaps.ArpMap,
 	}
 
 	// Calculate allowed XDP attachment modes.  Note, in BPF mode untracked ingress policy is
@@ -508,10 +506,10 @@ func newBPFEndpointManager(
 		m.hostNetworkedNATMode = hostNetworkedNATEnabled
 	}
 
-	m.v4 = newBPFEndpointManagerDataplane(proto.IPVersion_IPV4, m)
+	m.v4 = newBPFEndpointManagerDataplane(proto.IPVersion_IPV4, bpfmaps.V4, m)
 
 	if m.ipv6Enabled {
-		m.v6 = newBPFEndpointManagerDataplane(proto.IPVersion_IPV6, m)
+		m.v6 = newBPFEndpointManagerDataplane(proto.IPVersion_IPV6, bpfmaps.V6, m)
 	}
 
 	if m.hostNetworkedNATMode != hostNetworkedNATDisabled {
@@ -568,7 +566,7 @@ func newBPFEndpointManager(
 	}
 
 	if m.bpfPolicyDebugEnabled {
-		err := m.bpfmaps.RuleCountersMap.Iter(func(k, v []byte) maps.IteratorAction {
+		err := m.commonMaps.RuleCountersMap.Iter(func(k, v []byte) maps.IteratorAction {
 			return maps.IterDelete
 		})
 		if err != nil {
@@ -605,14 +603,16 @@ func newBPFEndpointManager(
 
 func newBPFEndpointManagerDataplane(
 	ipFamily proto.IPVersion,
+	ipMaps *bpfmap.IPMaps,
 	epMgr *bpfEndpointManager,
 ) *bpfEndpointManagerDataplane {
-	d := &bpfEndpointManagerDataplane{
+
+	return &bpfEndpointManagerDataplane{
 		ipFamily:     ipFamily,
 		ifaceToIpMap: map[string]net.IP{},
 		mgr:          epMgr,
+		IPMaps:       ipMaps,
 	}
-	return d
 }
 
 var _ hasLoadPolicyProgram = (*bpfEndpointManager)(nil)
@@ -630,10 +630,10 @@ func (m *bpfEndpointManager) repinJumpMaps() error {
 	}
 
 	mps := []maps.Map{
-		m.bpfmaps.ProgramsMap,
-		m.bpfmaps.JumpMap,
-		m.bpfmaps.XDPProgramsMap,
-		m.bpfmaps.XDPJumpMap,
+		m.commonMaps.ProgramsMap,
+		m.commonMaps.JumpMap,
+		m.commonMaps.XDPProgramsMap,
+		m.commonMaps.XDPJumpMap,
 	}
 
 	for _, mp := range mps {
@@ -900,15 +900,15 @@ func (m *bpfEndpointManager) updateIfaceStateMap(name string, iface *bpfInterfac
 }
 
 func (m *bpfEndpointManager) deleteIfaceCounters(name string, ifindex int) {
-	err := m.bpfmaps.CountersMap.Delete(counters.NewKey(ifindex, hook.Ingress).AsBytes())
+	err := m.commonMaps.CountersMap.Delete(counters.NewKey(ifindex, hook.Ingress).AsBytes())
 	if err != nil && !maps.IsNotExists(err) {
 		log.WithError(err).Warnf("Failed to remove  ingress counters for dev %s ifindex %d.", name, ifindex)
 	}
-	err = m.bpfmaps.CountersMap.Delete(counters.NewKey(ifindex, hook.Egress).AsBytes())
+	err = m.commonMaps.CountersMap.Delete(counters.NewKey(ifindex, hook.Egress).AsBytes())
 	if err != nil && !maps.IsNotExists(err) {
 		log.WithError(err).Warnf("Failed to remove  egress counters for dev %s ifindex %d.", name, ifindex)
 	}
-	err = m.bpfmaps.CountersMap.Delete(counters.NewKey(ifindex, hook.XDP).AsBytes())
+	err = m.commonMaps.CountersMap.Delete(counters.NewKey(ifindex, hook.XDP).AsBytes())
 	if err != nil && !maps.IsNotExists(err) {
 		log.WithError(err).Warnf("Failed to remove  XDP counters for dev %s ifindex %d.", name, ifindex)
 	}
@@ -1123,7 +1123,7 @@ func (m *bpfEndpointManager) removeDirtyPolicies() {
 	m.dirtyRules.Iter(func(item polprog.RuleMatchID) error {
 		binary.LittleEndian.PutUint64(b, item)
 		log.WithField("ruleId", item).Debug("deleting entry")
-		err := m.bpfmaps.RuleCountersMap.Delete(b)
+		err := m.commonMaps.RuleCountersMap.Delete(b)
 		if err != nil && !maps.IsNotExists(err) {
 			log.WithField("ruleId", item).Info("error deleting entry")
 		}
@@ -1209,7 +1209,7 @@ func (m *bpfEndpointManager) syncIfStateMap() {
 					v.XDPPolicy,
 				} {
 					if idx := fn(); idx != -1 {
-						_ = jumpMapDeleteEntry(m.bpfmaps.XDPJumpMap, idx, jump.XDPMaxEntryPoints)
+						_ = jumpMapDeleteEntry(m.commonMaps.XDPJumpMap, idx, jump.XDPMaxEntryPoints)
 					}
 				}
 				for _, fn := range []func() int{
@@ -1219,7 +1219,7 @@ func (m *bpfEndpointManager) syncIfStateMap() {
 					v.TcEgressFilter,
 				} {
 					if idx := fn(); idx != -1 {
-						_ = jumpMapDeleteEntry(m.bpfmaps.JumpMap, idx, jump.TCMaxEntryPoints)
+						_ = jumpMapDeleteEntry(m.commonMaps.JumpMap, idx, jump.TCMaxEntryPoints)
 					}
 				}
 			} else {
@@ -1330,7 +1330,7 @@ func (m *bpfEndpointManager) syncIfaceProperties() error {
 		exists.Add(ifaces[i].Index)
 	}
 
-	err = m.bpfmaps.CountersMap.Iter(func(k, v []byte) maps.IteratorAction {
+	err = m.commonMaps.CountersMap.Iter(func(k, v []byte) maps.IteratorAction {
 		var key counters.Key
 		copy(key[:], k)
 
@@ -1466,8 +1466,12 @@ func (m *bpfEndpointManager) CompleteDeferredWork() error {
 	// Copy data from old map to the new map
 	m.copyDeltaOnce.Do(func() {
 		log.Info("Copy delta entries from old map to the new map")
-
-		err := m.bpfmaps.CtMap.CopyDeltaFromOldMap()
+		var err error
+		if m.v6 != nil {
+			err = m.v6.CtMap.CopyDeltaFromOldMap()
+		} else {
+			err = m.v4.CtMap.CopyDeltaFromOldMap()
+		}
 		if err != nil {
 			log.WithError(err).Debugf("Failed to copy data from old conntrack map %s", err)
 		}
@@ -2938,13 +2942,13 @@ func (m *bpfEndpointManager) ensureBPFDevices() error {
 
 	if m.ipv6Enabled {
 		anyV6, _ := ip.CIDRFromString("::/128")
-		err = m.arpMap.Update(
+		err = m.v6.ArpMap.Update(
 			bpfarp.NewKeyV6(anyV6.Addr().AsNetIP(), uint32(m.natInIdx)).AsBytes(),
 			bpfarp.NewValue(bpfin.Attrs().HardwareAddr, bpfout.Attrs().HardwareAddr).AsBytes(),
 		)
 	} else {
 		anyV4, _ := ip.CIDRFromString("0.0.0.0/0")
-		err = m.arpMap.Update(
+		err = m.v4.ArpMap.Update(
 			bpfarp.NewKey(anyV4.Addr().AsNetIP(), uint32(m.natInIdx)).AsBytes(),
 			bpfarp.NewValue(bpfin.Attrs().HardwareAddr, bpfout.Attrs().HardwareAddr).AsBytes(),
 		)
@@ -3027,7 +3031,7 @@ func (m *bpfEndpointManager) ensureQdisc(iface string) (bool, error) {
 }
 
 func (m *bpfEndpointManager) loadTCObj(at hook.AttachType) (hook.Layout, error) {
-	pm := m.bpfmaps.ProgramsMap.(*hook.ProgramsMap)
+	pm := m.commonMaps.ProgramsMap.(*hook.ProgramsMap)
 
 	layout, err := pm.LoadObj(at)
 	if err != nil {
@@ -3078,10 +3082,10 @@ func (m *bpfEndpointManager) ensureProgramLoaded(ap attachPoint, ipFamily proto.
 		// Load default policy before the real policy is created and loaded.
 		switch at.DefaultPolicy() {
 		case hook.DefPolicyAllow:
-			err = maps.UpdateMapEntry(m.bpfmaps.JumpMap.MapFD(),
+			err = maps.UpdateMapEntry(m.commonMaps.JumpMap.MapFD(),
 				jump.Key(policyIdx), jump.Value(m.policyTcAllowFD.FD()))
 		case hook.DefPolicyDeny:
-			err = maps.UpdateMapEntry(m.bpfmaps.JumpMap.MapFD(),
+			err = maps.UpdateMapEntry(m.commonMaps.JumpMap.MapFD(),
 				jump.Key(policyIdx), jump.Value(m.policyTcDenyFD.FD()))
 		}
 
@@ -3094,7 +3098,7 @@ func (m *bpfEndpointManager) ensureProgramLoaded(ap attachPoint, ipFamily proto.
 			LogLevel: apxdp.LogLevel,
 		}
 
-		pm := m.bpfmaps.XDPProgramsMap.(*hook.ProgramsMap)
+		pm := m.commonMaps.XDPProgramsMap.(*hook.ProgramsMap)
 		if apxdp.HookLayout, err = pm.LoadObj(at); err != nil {
 			return fmt.Errorf("loading generic xdp hook program: %w", err)
 		}
@@ -3231,7 +3235,7 @@ func (m *bpfEndpointManager) updatePolicyProgram(rules polprog.Rules, polDir str
 }
 
 func (m *bpfEndpointManager) loadTCLogFilter(ap *tc.AttachPoint) (fileDescriptor, int, error) {
-	logFilter, err := filter.New(ap.Type, 64, ap.LogFilter, m.bpfmaps.ProgramsMap.MapFD())
+	logFilter, err := filter.New(ap.Type, 64, ap.LogFilter, m.commonMaps.ProgramsMap.MapFD())
 	if err != nil {
 		return nil, 0, err
 	}
@@ -3254,7 +3258,7 @@ func (m *bpfEndpointManager) updateLogFilter(ap attachPoint) error {
 			return err
 		}
 		defer fd.Close()
-		if err := m.bpfmaps.JumpMap.Update(jump.Key(idx), jump.Value(fd.FD())); err != nil {
+		if err := m.commonMaps.JumpMap.Update(jump.Key(idx), jump.Value(fd.FD())); err != nil {
 			return fmt.Errorf("failed to update %s policy jump map [%d]=%d: %w", ap.HookName(), idx, fd.FD(), err)
 		}
 
@@ -3290,14 +3294,16 @@ func (m *bpfEndpointManager) loadPolicyProgram(
 		"ipFamily": ipFamily,
 	}).Debug("Generating policy program...")
 
+	ipsetsMapFD := m.v4.IpsetsMap.MapFD()
 	if ipFamily == proto.IPVersion_IPV6 {
 		opts = append(opts, polprog.WithIPv6())
+		ipsetsMapFD = m.v6.IpsetsMap.MapFD()
 	}
 
 	pg := polprog.NewBuilder(
 		m.ipSetIDAlloc,
-		m.bpfmaps.IpsetsMap.MapFD(),
-		m.bpfmaps.StateMap.MapFD(),
+		ipsetsMapFD,
+		m.commonMaps.StateMap.MapFD(),
 		staticProgsMap.MapFD(),
 		polProgsMap.MapFD(),
 		opts...,
@@ -3357,18 +3363,18 @@ func (m *bpfEndpointManager) doUpdatePolicyProgram(
 		opts = append(opts, polprog.WithPolicyDebugEnabled())
 	}
 
-	staticProgsMap := m.bpfmaps.ProgramsMap
+	staticProgsMap := m.commonMaps.ProgramsMap
 	if hk == hook.XDP {
-		staticProgsMap = m.bpfmaps.XDPProgramsMap
+		staticProgsMap = m.commonMaps.XDPProgramsMap
 	}
 
 	// If we have to break a program up into sub-programs to please the
 	// verifier then we store the sub-programs at
 	// polJumpMapIdx + subProgNo * stride.
-	polProgsMap := m.bpfmaps.JumpMap
+	polProgsMap := m.commonMaps.JumpMap
 	stride := jump.TCMaxEntryPoints
 	if hk == hook.XDP {
-		polProgsMap = m.bpfmaps.XDPJumpMap
+		polProgsMap = m.commonMaps.XDPJumpMap
 		stride = jump.XDPMaxEntryPoints
 	}
 	opts = append(opts, polprog.WithPolicyMapIndexAndStride(polJumpMapIdx, stride))
@@ -3418,10 +3424,10 @@ func (m *bpfEndpointManager) jumpMapDelete(h hook.Hook, idx int) error {
 		return nil
 	}
 
-	jumpMap := m.bpfmaps.JumpMap
+	jumpMap := m.commonMaps.JumpMap
 	stride := jump.TCMaxEntryPoints
 	if h == hook.XDP {
-		jumpMap = m.bpfmaps.XDPJumpMap
+		jumpMap = m.commonMaps.XDPJumpMap
 		stride = jump.XDPMaxEntryPoints
 	}
 
@@ -3438,10 +3444,10 @@ func (m *bpfEndpointManager) removePolicyProgram(ap attachPoint, ipFamily proto.
 	var stride int
 	if ap.HookName() == hook.XDP {
 		stride = jump.XDPMaxEntryPoints
-		pm = m.bpfmaps.XDPJumpMap
+		pm = m.commonMaps.XDPJumpMap
 	} else {
 		stride = jump.TCMaxEntryPoints
-		pm = m.bpfmaps.JumpMap
+		pm = m.commonMaps.JumpMap
 	}
 
 	if err := jumpMapDeleteEntry(pm, idx, stride); err != nil {
