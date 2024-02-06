@@ -1,11 +1,5 @@
-.idea/
 bin/
-.go-pkg-cache
-Makefile.common*
 
 test-signer/ca.crt
 test-signer/ca.key
 test-signer/signer
-
-/.idea/
-.vscode/
