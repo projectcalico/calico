@@ -1,4 +1,4 @@
-// Copyright (c) 2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,13 +21,14 @@ import (
 	"path"
 
 	log "github.com/sirupsen/logrus"
-	"github.com/projectcalico/calico/key-cert-provisioner/pkg/cfg"
-	"github.com/projectcalico/calico/key-cert-provisioner/pkg/tls"
 	certV1 "k8s.io/api/certificates/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/watch"
+
+	"github.com/projectcalico/calico/key-cert-provisioner/pkg/cfg"
+	"github.com/projectcalico/calico/key-cert-provisioner/pkg/tls"
 )
 
 // WatchCSR Watches the CSR resource for updates and writes results to the certificate location (which should be mounted as an emptyDir)
