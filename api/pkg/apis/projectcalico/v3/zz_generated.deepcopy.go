@@ -1135,6 +1135,11 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(v1.Duration)
 		**out = **in
 	}
+	if in.EndpointStatusPathPrefix != nil {
+		in, out := &in.EndpointStatusPathPrefix, &out.EndpointStatusPathPrefix
+		*out = new(string)
+		**out = **in
+	}
 	if in.IptablesMarkMask != nil {
 		in, out := &in.IptablesMarkMask, &out.IptablesMarkMask
 		*out = new(uint32)
