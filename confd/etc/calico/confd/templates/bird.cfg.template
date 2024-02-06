@@ -111,12 +111,12 @@ protocol bfd {
   interface -"cali*", -"kube-ipvs*", "*" {
     interval 500 ms;
     idle tx interval 2000 ms;
-    multiplier 6;
+    multiplier 16;
   };
   multihop {
     interval 500 ms;
     idle tx interval 2000 ms;
-    multiplier 6;
+    multiplier 16;
   };
 }
 
