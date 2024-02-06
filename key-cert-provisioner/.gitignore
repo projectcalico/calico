@@ -1,0 +1,5 @@
+bin/
+
+test-signer/ca.crt
+test-signer/ca.key
+test-signer/signer
