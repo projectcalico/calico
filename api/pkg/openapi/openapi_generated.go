@@ -2524,7 +2524,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"endpointStatusPathPrefix": {
 						SchemaProps: spec.SchemaProps{
-							Description: "EndpointStatusPathPrefix is the path to the directory where endpoint status will be written. Endpoint status file reporting is disabled if field is left empty.\n\nChosen directory should match the directory used by the CNI for PodStartupDelay. [Default: empty]",
+							Description: "EndpointStatusPathPrefix is the path to the directory where endpoint status will be written. Endpoint status file reporting is disabled if field is left empty.\n\nChosen directory should match the directory used by the CNI for PodStartupDelay. [Default: \"\"]",
 							Type:        []string{"string"},
 							Format:      "",
 						},
