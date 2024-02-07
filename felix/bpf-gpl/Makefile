@@ -43,9 +43,9 @@ CFLAGS +=  \
 TRIPLET := $(shell gcc -dumpmachine)
 CFLAGS += -I/usr/include/$(TRIPLET)
 
-ifeq ($(ARCH),amd64)
-	CFLAGS += -D__TARGET_ARCH_x86
-else ifeq ($(ARCH),arm64)
+ifeq ($(findstring x86_64,$(TRIPLET)),x86_64)
+	CFLAGS += -D__TARGET_ARCH_x86 -D__x86_64__
+else ifeq ($(findstring aarch64,$(TRIPLET)),aarch64)
 	CFLAGS += -D__TARGET_ARCH_arm64
 endif
 CC := clang-16
