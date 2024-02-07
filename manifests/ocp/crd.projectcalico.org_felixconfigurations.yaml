@@ -336,7 +336,7 @@ spec:
                 description: "EndpointStatusPathPrefix is the path to the directory
                   where endpoint status will be written. Endpoint status file reporting
                   is disabled if field is left empty. \n Chosen directory should match
-                  the directory used by the CNI for PodStartupDelay. [Default: empty]"
+                  the directory used by the CNI for PodStartupDelay. [Default: \"\"]"
                 type: string
               externalNodesList:
                 description: ExternalNodesCIDRList is a list of CIDR's of external-non-calico-nodes
