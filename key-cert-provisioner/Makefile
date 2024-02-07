@@ -13,8 +13,6 @@ BUILD_IMAGES               ?=$(KEY_CERT_PROVISIONER_IMAGE) $(TEST_SIGNER_IMAGE)
 PUSH_IMAGES           ?= $(foreach registry,$(DEV_REGISTRIES),$(addprefix $(registry)/,$(BUILD_IMAGES)))
 RELEASE_IMAGES        ?= $(foreach registry,$(RELEASE_REGISTRIES),$(addprefix $(registry)/,$(BUILD_IMAGES)))
 
-GOFLAGS = -buildvcs=false
-
 ###############################################################################
 # Download and include ../lib.Makefile
 #   Additions to EXTRA_DOCKER_ARGS need to happen before the include since
