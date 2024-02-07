@@ -34,6 +34,10 @@ promotions:
   pipeline_file: push-images/cni-plugin.yml
   auto_promote:
     when: "branch =~ 'master|release-'"
+- name: Push key-cert-provisioner images
+  pipeline_file: push-images/key-cert-provisioner.yml
+  auto_promote:
+    when: "branch =~ 'master|release-'"
 - name: Push kube-controllers images
   pipeline_file: push-images/kube-controllers.yml
   auto_promote:
@@ -537,6 +541,23 @@ blocks:
         value: "sig-network.*Conformance"
       commands:
       - .semaphore/run-and-monitor e2e-test.log make e2e-test
+
+- name: "key-cert-provisioner: Tests"
+  run:
+    when: "${FORCE_RUN} or change_in(['/*', '/key-cert-provisioner/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+  dependencies: ["Prerequisites"]
+  task:
+    agent:
+      machine:
+        type: e1-standard-4
+        os_image: ubuntu2004
+    prologue:
+      commands:
+      - cd key-cert-provisioner
+    jobs:
+    - name: "key-cert-provisioner: tests"
+      commands:
+      - ../.semaphore/run-and-monitor ci.log make ci
 
 - name: "kube-controllers: Tests"
   run:
