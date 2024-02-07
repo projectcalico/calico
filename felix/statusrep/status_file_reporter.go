@@ -48,7 +48,7 @@ type EndpointStatusFileReporter struct {
 	endpointStatusDirPrefix string
 
 	// DeltaTracker for the policy subdirectory
-	policyDirDeltaTracker *deltatracker.SetDeltaTracker[*proto.WorkloadEndpointID]
+	policyDirDeltaTracker *deltatracker.SetDeltaTracker[string]
 
 	// Wraps and manages a real or mock wait.Backoff.
 	bom backoffManager
@@ -99,7 +99,7 @@ func NewEndpointStatusFileReporter(
 		inSyncC:                 inSyncC,
 		endpointUpdatesC:        endpointUpdatesC,
 		endpointStatusDirPrefix: statusDirPath,
-		policyDirDeltaTracker:   deltatracker.NewSetDeltaTracker[*proto.WorkloadEndpointID](),
+		policyDirDeltaTracker:   deltatracker.NewSetDeltaTracker[string](),
 		bom:                     newBackoffManager(newDefaultBackoff),
 	}
 
@@ -179,12 +179,16 @@ func (fr *EndpointStatusFileReporter) SyncForever(ctx context.Context) {
 	}
 }
 
+// updates delta tracker state to match the received update.
+// if commitToKernel is true, attempts to commit our state to the FS.
+// Can only return an error after a failed commit, so a returned error should
+// always result in SyncForever queueing a retry.
 func (fr *EndpointStatusFileReporter) syncForeverHandleEndpointUpdate(e interface{}, commitToKernel bool) error {
 	switch m := e.(type) {
 	case *proto.WorkloadEndpointStatusUpdate:
-		fr.policyDirDeltaTracker.Desired().Add(m.Id)
+		fr.policyDirDeltaTracker.Desired().Add(names.WorkloadEndpointIDToStatusFilename(m.Id))
 	case *proto.WorkloadEndpointStatusRemove:
-		fr.policyDirDeltaTracker.Desired().Delete(m.Id)
+		fr.policyDirDeltaTracker.Desired().Delete(names.WorkloadEndpointIDToStatusFilename(m.Id))
 	default:
 		logrus.WithField("update", e).Warn("Skipping unrecognized endpoint update")
 		return nil
@@ -197,13 +201,12 @@ func (fr *EndpointStatusFileReporter) syncForeverHandleEndpointUpdate(e interfac
 		}
 	}
 
-	fr.bom.reset()
 	return nil
 }
 
-func (fr *EndpointStatusFileReporter) writePolicyFile(wl *proto.WorkloadEndpointID) error {
+func (fr *EndpointStatusFileReporter) writePolicyFile(name string) error {
 	// Write file to dir.
-	filename := filepath.Join(fr.endpointStatusDirPrefix, dirPolicyStatus, names.WorkloadEndpointIDToStatusFilename(wl))
+	filename := filepath.Join(fr.endpointStatusDirPrefix, dirPolicyStatus, name)
 	f, err := os.Create(filename)
 	if err != nil {
 		return err
@@ -211,8 +214,8 @@ func (fr *EndpointStatusFileReporter) writePolicyFile(wl *proto.WorkloadEndpoint
 	return f.Close()
 }
 
-func (fr *EndpointStatusFileReporter) deletePolicyFile(wl *proto.WorkloadEndpointID) error {
-	filename := filepath.Join(fr.endpointStatusDirPrefix, dirPolicyStatus, names.WorkloadEndpointIDToStatusFilename(wl))
+func (fr *EndpointStatusFileReporter) deletePolicyFile(name string) error {
+	filename := filepath.Join(fr.endpointStatusDirPrefix, dirPolicyStatus, name)
 	return os.Remove(filename)
 }
 
@@ -228,15 +231,13 @@ func (fr *EndpointStatusFileReporter) reconcilePolicyFiles(fullResync bool) erro
 			return err
 		}
 		for _, entry := range entries {
-			id := names.StatusFilenameToWorkloadEndpointID(entry.Name())
-			// TODO should this be a ReplaceAllIter?
-			fr.policyDirDeltaTracker.Dataplane().Add(id)
+			fr.policyDirDeltaTracker.Dataplane().Add(entry.Name())
 		}
 	}
 
 	var lastError error
-	fr.policyDirDeltaTracker.PendingUpdates().Iter(func(k *proto.WorkloadEndpointID) deltatracker.IterAction {
-		err := fr.writePolicyFile(k)
+	fr.policyDirDeltaTracker.PendingUpdates().Iter(func(name string) deltatracker.IterAction {
+		err := fr.writePolicyFile(name)
 		if err != nil {
 			logrus.WithError(err).Warn("Failed to write file to policy-status dir")
 			lastError = err
@@ -246,8 +247,8 @@ func (fr *EndpointStatusFileReporter) reconcilePolicyFiles(fullResync bool) erro
 		return deltatracker.IterActionUpdateDataplane
 	})
 
-	fr.policyDirDeltaTracker.PendingDeletions().Iter(func(k *proto.WorkloadEndpointID) deltatracker.IterAction {
-		err := fr.deletePolicyFile(k)
+	fr.policyDirDeltaTracker.PendingDeletions().Iter(func(name string) deltatracker.IterAction {
+		err := fr.deletePolicyFile(name)
 		if err != nil {
 			logrus.WithError(err).Warn("Failed to delete file in policy-status-dir")
 			// Carry on as normal (with a warning) if the file is somehow already deleted.
@@ -271,6 +272,7 @@ func ensurePolicyStatusDir(prefix string) (entries []fs.DirEntry, err error) {
 
 	entries, err = os.ReadDir(filename)
 	if err != nil && errors.Is(err, fs.ErrNotExist) {
+		// Discard ErrNotExist and return the result of attempting to create it.
 		return entries, os.Mkdir(filename, 0644)
 	}
 
