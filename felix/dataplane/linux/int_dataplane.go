@@ -671,10 +671,11 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		// metadata name is set whereas TC doesn't set that field.
 		ipSetIDAllocator := idalloc.New()
 
+		// Start IPv4 BPF dataplane components
+		startBPFDataplaneComponents(proto.IPVersion_IPV4, bpfMaps.V4, ipSetIDAllocator, config, ipsetsManager, dp)
 		if config.BPFIpv6Enabled {
+			// Start IPv6 BPF dataplane components
 			startBPFDataplaneComponents(proto.IPVersion_IPV6, bpfMaps.V6, ipSetIDAllocator, config, ipsetsManagerV6, dp)
-		} else {
-			startBPFDataplaneComponents(proto.IPVersion_IPV4, bpfMaps.V4, ipSetIDAllocator, config, ipsetsManager, dp)
 		}
 
 		filterTbl := filterTableV4
@@ -2339,7 +2340,7 @@ func startBPFDataplaneComponents(ipFamily proto.IPVersion,
 	)
 	dp.RegisterManager(failsafeMgr)
 
-	bpfRTMgr := newBPFRouteManager(&config, bpfmaps, dp.loopSummarizer)
+	bpfRTMgr := newBPFRouteManager(&config, bpfmaps, ipFamily, dp.loopSummarizer)
 	dp.RegisterManager(bpfRTMgr)
 
 	conntrackScanner := bpfconntrack.NewScanner(bpfmaps.CtMap, ctKey, ctVal,
