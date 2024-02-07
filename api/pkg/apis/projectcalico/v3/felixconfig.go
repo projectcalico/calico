@@ -305,6 +305,14 @@ type FelixConfigurationSpec struct {
 	// +kubebuilder:validation:Pattern=`^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$`
 	EndpointReportingDelay *metav1.Duration `json:"endpointReportingDelay,omitempty" configv1timescale:"seconds" confignamev1:"EndpointReportingDelaySecs"`
 
+	// EndpointStatusPathPrefix is the path to the directory
+	// where endpoint status will be written. Endpoint status
+	// file reporting is disabled if field is left empty.
+	//
+	// Chosen directory should match the directory used by the CNI for PodStartupDelay.
+	// [Default: ""]
+	EndpointStatusPathPrefix string `json:"endpointStatusPathPrefix,omitempty"`
+
 	// IptablesMarkMask is the mask that Felix selects its IPTables Mark bits from. Should be a 32 bit hexadecimal
 	// number with at least 8 bits set, none of which clash with any other mark bits in use on the system.
 	// [Default: 0xff000000]

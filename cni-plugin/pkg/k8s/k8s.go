@@ -32,6 +32,7 @@ import (
 	libipam "github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 
+	"github.com/fsnotify/fsnotify"
 	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -502,6 +503,16 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 		Name: endpoint.Spec.InterfaceName},
 	)
 
+	// Conditionally wait for host-local Felix to program the policy for this WEP.
+	if conf.PodStartupDelaySeconds < 0 {
+		return nil, fmt.Errorf("Invalid pod startup delay of %d", conf.PodStartupDelaySeconds)
+	} else if conf.PodStartupDelaySeconds > 0 {
+		if conf.EndpointStatusDir == "" {
+			conf.EndpointStatusDir = "/var/run/calico/policy"
+		}
+		blockUntilPolicyFileExists(logger, conf.EndpointStatusDir, time.Duration(conf.PodStartupDelaySeconds)*time.Second)
+	}
+
 	return result, nil
 }
 
@@ -969,4 +980,60 @@ func getIPsByFamily(cidrs []string) (string, string, error) {
 	}
 
 	return ipv4Cidr, ipv6Cidr, nil
+}
+
+func blockUntilPolicyFileExists(log *logrus.Entry, policyDir, fileName string, timeout time.Duration) {
+	log = log.WithFields(logrus.Fields{
+		"policyDir":    policyDir,
+		"workloadPath": fileName,
+	})
+
+	var watcher *fsnotify.Watcher
+	var err error
+	timeoutC := time.After(timeout)
+	for {
+		select {
+		case <-timeoutC:
+			log.Warn("Timed out before receiving policy update for workload")
+			return
+		default:
+		}
+
+		if watcher == nil {
+			watcher, err = fsnotify.NewWatcher()
+			if err != nil {
+				log.WithError(err).Warn("Couldn't create filesystem watch, scheduling retry...")
+				continue
+			}
+		}
+
+		if wl := watcher.WatchList(); wl == nil || len(wl) == 0 {
+			err = watcher.Add(policyDir)
+			if err != nil {
+				log.WithError(err).Warn("Couldn't add directory to watch")
+				continue
+			}
+		}
+
+		for {
+			select {
+			case e := <-watcher.Events:
+				log.WithField("name", e.Name).Info("Received watch event")
+				switch e.Op {
+				case fsnotify.Create:
+					if e.Name == fileName {
+						log.Info("Policy programmed for ")
+					}
+				default:
+				}
+			case err = <-watcher.Errors:
+				log.WithError(err).Warn("Received error while watching directory")
+			case <-timeoutC:
+				log.Warn("Timed out before receiving policy update for workload")
+				return
+			}
+
+		}
+	}
+
 }
