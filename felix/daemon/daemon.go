@@ -648,13 +648,15 @@ configRetry:
 		log.WithField("delay", delay).Info(
 			"Endpoint status reporting enabled, starting status reporter")
 
-		fromDataplaneC := make(chan interface{})
+		fromDataplaneC := make(chan interface{}, 10)
+		inSyncC := make(chan bool, 1)
 		dpConnector.StatusUpdatesFromDataplaneConsumers = append(dpConnector.StatusUpdatesFromDataplaneConsumers, fromDataplaneC)
+		dpConnector.InSyncConsumers = append(dpConnector.InSyncConsumers, inSyncC)
 		statusReporter := statusrep.NewEndpointStatusReporter(
 			configParams.FelixHostname,
 			configParams.OpenstackRegion,
 			fromDataplaneC,
-			dpConnector.InSync,
+			inSyncC,
 			dpConnector.datastore,
 			delay,
 			delay*180,
@@ -662,15 +664,13 @@ configRetry:
 		statusReporter.Start()
 	}
 
-	if configParams.EndpointStatusPathPrefix != nil && *configParams.EndpointStatusPathPrefix != "" {
-		fromDataplaneC := make(chan interface{})
+	if configParams.EndpointStatusPathPrefix != "" {
+		fromDataplaneC := make(chan interface{}, 10)
+		inSyncC := make(chan bool, 1)
 		dpConnector.StatusUpdatesFromDataplaneConsumers = append(dpConnector.StatusUpdatesFromDataplaneConsumers, fromDataplaneC)
-		statusFileReporter := statusrep.NewEndpointStatusFileReporter(fromDataplaneC, *configParams.EndpointStatusPathPrefix)
+		dpConnector.InSyncConsumers = append(dpConnector.InSyncConsumers, inSyncC)
+		statusFileReporter := statusrep.NewEndpointStatusFileReporter(fromDataplaneC, inSyncC, configParams.EndpointStatusPathPrefix)
 
-		// TODO: investigate if it's a requirement that
-		// `fromDataplane` consumers do not stop consuming
-		// msgs from that channel to avoid deadlocks.
-		// If safe, stop these loops when context is cancelled.
 		ctx := context.TODO()
 		statusFileReporter.SyncForever(ctx)
 	}
@@ -980,6 +980,8 @@ type DataplaneConnector struct {
 	StatusUpdatesFromDataplaneConsumers  []chan interface{}
 	StatusUpdatesFromDataplaneDispatcher *dispatcher.BlockingDispatcher[interface{}]
 	InSync                               chan bool
+	InSyncConsumers                      []chan bool
+	InSyncDispatcher                     *dispatcher.BlockingDispatcher[bool]
 	failureReportChan                    chan<- string
 	dataplane                            dp.DataplaneDriver
 	datastore                            bapi.Client
@@ -1010,7 +1012,8 @@ func newConnector(configParams *config.Config,
 		ToDataplane:                         make(chan interface{}),
 		StatusUpdatesFromDataplane:          make(chan interface{}),
 		StatusUpdatesFromDataplaneConsumers: make([]chan interface{}, 0),
-		InSync:                              make(chan bool, 1),
+		InSync:                              make(chan bool),
+		InSyncConsumers:                     make([]chan bool, 0),
 		failureReportChan:                   failureReportChan,
 		dataplane:                           dataplane,
 		wireguardStatUpdateFromDataplane:    make(chan *proto.WireguardStatusUpdate, 1),
@@ -1021,6 +1024,12 @@ func newConnector(configParams *config.Config,
 		log.WithError(err).Panic("Failed to create dispatcher for status updates from dataplane")
 	}
 	felixConn.StatusUpdatesFromDataplaneDispatcher = fromDataplaneDispatcher
+
+	inSyncDispatcher, err := dispatcher.NewBlockingDispatcher[bool](felixConn.InSync)
+	if err != nil {
+		log.WithError(err).Panic("Failed to create dispatcher for in-sync updates")
+	}
+	felixConn.InSyncDispatcher = inSyncDispatcher
 
 	return felixConn
 }
@@ -1278,9 +1287,10 @@ func (fc *DataplaneConnector) Start() {
 	// Start a background thread to handle Wireguard update to Node.
 	go fc.handleWireguardStatUpdateFromDataplane()
 
-	// Begin consuming StatusUpdatesFromDataplane and dispatching to downstream components (e.g. status reporter).
+	// Begin consuming StatusUpdatesFromDataplane/InSync's and dispatching to downstream components (e.g. status reporter).
 	ctx := context.TODO()
 	go fc.StatusUpdatesFromDataplaneDispatcher.DispatchForever(ctx, fc.StatusUpdatesFromDataplaneConsumers...)
+	go fc.InSyncDispatcher.DispatchForever(ctx, fc.InSyncConsumers...)
 }
 
 func (fc *DataplaneConnector) handleConfigUpdate(msg *proto.ConfigUpdate) {

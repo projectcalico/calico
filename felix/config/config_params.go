@@ -336,8 +336,8 @@ type Config struct {
 	// file reporting is disabled if field is left empty.
 	//
 	// Chosen directory should match the directory used by the CNI for PodStartupDelay.
-	// [Default: empty]
-	EndpointStatusPathPrefix *string `config:"file;;"`
+	// [Default: ""]
+	EndpointStatusPathPrefix string `config:"file;;"`
 
 	IptablesMarkMask uint32 `config:"mark-bitmask;0xffff0000;non-zero,die-on-fail"`
 
