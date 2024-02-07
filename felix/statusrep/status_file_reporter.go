@@ -17,6 +17,7 @@ package statusrep
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -24,9 +25,15 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/wait"
 
+	"github.com/projectcalico/calico/felix/deltatracker"
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/libcalico-go/lib/names"
 
 	"github.com/sirupsen/logrus"
+)
+
+const (
+	dirPolicyStatus = "policy"
 )
 
 // EndpointStatusFileReporter writes a file to the FS
@@ -36,8 +43,12 @@ import (
 //     an entry for each workload, when each workload's
 //     policy is programmed for the first time.
 type EndpointStatusFileReporter struct {
+	inSyncC                 <-chan bool
 	endpointUpdatesC        <-chan interface{}
 	endpointStatusDirPrefix string
+
+	// DeltaTracker for the policy subdirectory
+	policyDirDeltaTracker *deltatracker.SetDeltaTracker[*proto.WorkloadEndpointID]
 
 	// Wraps and manages a real or mock wait.Backoff.
 	bom backoffManager
@@ -79,15 +90,17 @@ type FileReporterOption func(*EndpointStatusFileReporter)
 // NewEndpointStatusFileReporter creates a new EndpointStatusFileReporter.
 func NewEndpointStatusFileReporter(
 	endpointUpdatesC <-chan interface{},
+	inSyncC <-chan bool,
 	statusDirPath string,
 	opts ...FileReporterOption,
 ) *EndpointStatusFileReporter {
 
 	sr := &EndpointStatusFileReporter{
-		endpointUpdatesC:        make(<-chan interface{}),
+		inSyncC:                 inSyncC,
+		endpointUpdatesC:        endpointUpdatesC,
 		endpointStatusDirPrefix: statusDirPath,
-
-		bom: newBackoffManager(newDefaultBackoff),
+		policyDirDeltaTracker:   deltatracker.NewSetDeltaTracker[*proto.WorkloadEndpointID](),
+		bom:                     newBackoffManager(newDefaultBackoff),
 	}
 
 	for _, o := range opts {
@@ -106,89 +119,162 @@ func WithNewBackoffFunc(newBackoffFunc func() Backoff) FileReporterOption {
 }
 
 // SyncForever blocks until ctx is cancelled.
-// Continuously pulls from endpoint-updates C,
-// and writes files to the status directory.
+// Continuously pulls status-updates from updates C,
+// and reconciles the filesystem with internal state.
 func (fr *EndpointStatusFileReporter) SyncForever(ctx context.Context) {
-	recreatePolicyDir := true
+	inSyncWithUpstream := false
+	var retryC <-chan time.Time // Starts out as nil, ignored by selects.
 	for {
-		if recreatePolicyDir {
-			logrus.Debug("Creating/truncating policy status directory")
-			err := ensurePolicyStatusDir(fr.endpointStatusDirPrefix, true)
-			if err != nil {
-				logrus.WithError(err).Warn("Failed to create policy status directory; queueing retry...")
-				select {
-				case <-ctx.Done():
-					logrus.Debug("Context cancelled; stopping...")
-					return
-				case <-time.After(fr.bom.getBackoff().Step()):
-					continue
-				}
-			} else {
-				// Reset backoff.
-				fr.bom.reset()
-				recreatePolicyDir = false
-			}
-		}
-
 		select {
 		case <-ctx.Done():
 			logrus.Debug("Context cancelled, stopping...")
 			return
+		case b, ok := <-fr.inSyncC:
+			if !ok {
+				logrus.Panic("InSync channel closed unexpectedly.")
+			}
+
+			if b == true {
+				inSyncWithUpstream = true
+				err := fr.reconcilePolicyFiles(true)
+				if err != nil {
+					retryC = time.After(fr.bom.Step())
+				} else {
+					// Ensure backoff-retries are reset/off in the case of success.
+					fr.bom.reset()
+					retryC = nil
+				}
+			}
 		case e, ok := <-fr.endpointUpdatesC:
-			logrus.WithField("endpoint", e).Debug("Handling endpoint update")
 			if !ok {
 				logrus.Panic("Input channel closed unexpectedly")
 			}
-			switch m := e.(type) {
-			case *proto.WorkloadEndpointStatusUpdate:
-				// Write file to dir.
-				filename := filepath.Join(fr.endpointStatusDirPrefix, m.Id.WorkloadId)
-				f, err := os.Create(filename)
-				if err != nil {
-					logrus.WithError(err).WithField("file", filename).Warn("Couldn't write status file")
-				} else {
-					f.Close()
-				}
-			case *proto.WorkloadEndpointStatusRemove:
-				// Delete file from dir.
-				filename := filepath.Join(fr.endpointStatusDirPrefix, m.Id.WorkloadId)
-				err := os.Remove(filename)
-				if err != nil {
-					logrus.WithError(err).WithField("file", filename).Warn("Couldn't rm status file")
-				}
-			default:
-				logrus.WithField("update", e).Warn("Skipping unrecognized endpoint update")
+			logrus.WithField("endpoint", e).Debug("Handling endpoint update")
+
+			err := fr.syncForeverHandleEndpointUpdate(e, inSyncWithUpstream)
+			if err != nil {
+				logrus.WithError(err).Warn("Encountered an error while handling an endpoint update. Queueing retry...")
+				retryC = time.After(fr.bom.Step())
+			} else {
+				fr.bom.reset()
+				retryC = nil
+			}
+		case _, ok := <-retryC:
+			if !ok {
+				logrus.Panic("Retry channel closed unexpectedly")
+			}
+
+			err := fr.reconcilePolicyFiles(true)
+			if err != nil {
+				backoffDuration := fr.bom.Step()
+				logrus.WithError(err).WithField("backoff", backoffDuration.String()).
+					Warn("Encountered an error during a retried update. Will retry again after a backoff...")
+
+				retryC = time.After(backoffDuration)
+			} else {
+				retryC = nil
+				fr.bom.reset()
 			}
 		}
 	}
 }
 
-// ensurePolicyStatusDir ensures there is a directory
-// named "policy" with the specified path prefix.
-// If truncate is true, wipes all contents from the
-// existing directory.
-func ensurePolicyStatusDir(prefix string, truncate bool) error {
-	filename := filepath.Join(prefix, "policy")
+func (fr *EndpointStatusFileReporter) syncForeverHandleEndpointUpdate(e interface{}, commitToKernel bool) error {
+	switch m := e.(type) {
+	case *proto.WorkloadEndpointStatusUpdate:
+		fr.policyDirDeltaTracker.Desired().Add(m.Id)
+	case *proto.WorkloadEndpointStatusRemove:
+		fr.policyDirDeltaTracker.Desired().Delete(m.Id)
+	default:
+		logrus.WithField("update", e).Warn("Skipping unrecognized endpoint update")
+		return nil
+	}
 
-	entries, err := os.ReadDir(filename)
-	if err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
-			return os.Mkdir(filename, 0644)
+	if commitToKernel {
+		err := fr.reconcilePolicyFiles(false)
+		if err != nil {
+			return fmt.Errorf("Couldn't reconcile policy-status: %w", err)
 		}
+	}
+
+	fr.bom.reset()
+	return nil
+}
+
+func (fr *EndpointStatusFileReporter) writePolicyFile(wl *proto.WorkloadEndpointID) error {
+	// Write file to dir.
+	filename := filepath.Join(fr.endpointStatusDirPrefix, dirPolicyStatus, names.WorkloadEndpointIDToStatusFilename(wl))
+	f, err := os.Create(filename)
+	if err != nil {
 		return err
 	}
+	return f.Close()
+}
 
-	if truncate {
-		for _, e := range entries {
-			// Remove file (and children if it's a directory).
-			err := os.RemoveAll(filepath.Join(filename, e.Name()))
-			if err != nil {
-				return err
-			}
+func (fr *EndpointStatusFileReporter) deletePolicyFile(wl *proto.WorkloadEndpointID) error {
+	filename := filepath.Join(fr.endpointStatusDirPrefix, dirPolicyStatus, names.WorkloadEndpointIDToStatusFilename(wl))
+	return os.Remove(filename)
+}
+
+func (fr *EndpointStatusFileReporter) reconcilePolicyFiles(fullResync bool) error {
+	if fullResync {
+		// If calling this due to the first in-sync msg from upstream,
+		// this will be a no-op.
+		fr.policyDirDeltaTracker.Dataplane().DeleteAll()
+
+		// Load any existing committed dataplane entries.
+		entries, err := ensurePolicyStatusDir(fr.endpointStatusDirPrefix)
+		if err != nil {
+			return err
+		}
+		for _, entry := range entries {
+			id := names.StatusFilenameToWorkloadEndpointID(entry.Name())
+			// TODO should this be a ReplaceAllIter?
+			fr.policyDirDeltaTracker.Dataplane().Add(id)
 		}
 	}
 
-	return nil
+	var lastError error
+	fr.policyDirDeltaTracker.PendingUpdates().Iter(func(k *proto.WorkloadEndpointID) deltatracker.IterAction {
+		err := fr.writePolicyFile(k)
+		if err != nil {
+			logrus.WithError(err).Warn("Failed to write file to policy-status dir")
+			lastError = err
+			return deltatracker.IterActionNoOp
+		}
+
+		return deltatracker.IterActionUpdateDataplane
+	})
+
+	fr.policyDirDeltaTracker.PendingDeletions().Iter(func(k *proto.WorkloadEndpointID) deltatracker.IterAction {
+		err := fr.deletePolicyFile(k)
+		if err != nil {
+			logrus.WithError(err).Warn("Failed to delete file in policy-status-dir")
+			// Carry on as normal (with a warning) if the file is somehow already deleted.
+			if !errors.Is(err, fs.ErrNotExist) {
+				lastError = err
+				return deltatracker.IterActionNoOp
+			}
+		}
+
+		return deltatracker.IterActionUpdateDataplane
+	})
+
+	return lastError
+}
+
+// ensurePolicyStatusDir ensures there is a directory named "policy", within
+// the parent dir specified by prefix. Attempts to create the dir if it doesn't exist.
+// Returns all entries within the dir if any exist.
+func ensurePolicyStatusDir(prefix string) (entries []fs.DirEntry, err error) {
+	filename := filepath.Join(prefix, dirPolicyStatus)
+
+	entries, err = os.ReadDir(filename)
+	if err != nil && errors.Is(err, fs.ErrNotExist) {
+		return entries, os.Mkdir(filename, 0644)
+	}
+
+	return entries, err
 }
 
 func newDefaultBackoff() Backoff {
