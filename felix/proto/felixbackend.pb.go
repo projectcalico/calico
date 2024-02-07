@@ -2,95 +2,102 @@
 // source: felixbackend.proto
 
 /*
-	Package proto is a generated protocol buffer package.
+Package proto is a generated protocol buffer package.
 
-	It is generated from these files:
-		felixbackend.proto
+It is generated from these files:
 
-	It has these top-level messages:
-		SyncRequest
-		ToDataplane
-		FromDataplane
-		ConfigUpdate
-		RawConfig
-		InSync
-		IPSetUpdate
-		IPSetDeltaUpdate
-		IPSetRemove
-		ActiveProfileUpdate
-		ActiveProfileRemove
-		ProfileID
-		Profile
-		ActivePolicyUpdate
-		ActivePolicyRemove
-		PolicyID
-		Policy
-		Rule
-		ServiceAccountMatch
-		HTTPMatch
-		RuleMetadata
-		IcmpTypeAndCode
-		Protocol
-		PortRange
-		WorkloadEndpointID
-		WorkloadEndpointUpdate
-		WorkloadEndpoint
-		WorkloadEndpointRemove
-		HostEndpointID
-		HostEndpointUpdate
-		HostEndpoint
-		HostEndpointRemove
-		TierInfo
-		NatInfo
-		ProcessStatusUpdate
-		HostEndpointStatusUpdate
-		EndpointStatus
-		HostEndpointStatusRemove
-		WorkloadEndpointStatusUpdate
-		WorkloadEndpointStatusRemove
-		WireguardStatusUpdate
-		HostMetadataV4V6Update
-		HostMetadataV4V6Remove
-		HostMetadataUpdate
-		HostMetadataRemove
-		HostMetadataV6Update
-		HostMetadataV6Remove
-		IPAMPoolUpdate
-		IPAMPoolRemove
-		IPAMPool
-		Encapsulation
-		ServiceAccountUpdate
-		ServiceAccountRemove
-		ServiceAccountID
-		NamespaceUpdate
-		NamespaceRemove
-		NamespaceID
-		TunnelType
-		RouteUpdate
-		RouteRemove
-		VXLANTunnelEndpointUpdate
-		VXLANTunnelEndpointRemove
-		WireguardEndpointUpdate
-		WireguardEndpointRemove
-		WireguardEndpointV6Update
-		WireguardEndpointV6Remove
-		GlobalBGPConfigUpdate
-		ServicePort
-		ServiceUpdate
-		ServiceRemove
+	felixbackend.proto
+
+It has these top-level messages:
+
+	SyncRequest
+	ToDataplane
+	FromDataplane
+	ConfigUpdate
+	RawConfig
+	InSync
+	IPSetUpdate
+	IPSetDeltaUpdate
+	IPSetRemove
+	ActiveProfileUpdate
+	ActiveProfileRemove
+	ProfileID
+	Profile
+	ActivePolicyUpdate
+	ActivePolicyRemove
+	PolicyID
+	Policy
+	Rule
+	ServiceAccountMatch
+	HTTPMatch
+	RuleMetadata
+	IcmpTypeAndCode
+	Protocol
+	PortRange
+	WorkloadEndpointID
+	WorkloadEndpointUpdate
+	WorkloadEndpoint
+	WorkloadEndpointRemove
+	HostEndpointID
+	HostEndpointUpdate
+	HostEndpoint
+	HostEndpointRemove
+	TierInfo
+	NatInfo
+	ProcessStatusUpdate
+	HostEndpointStatusUpdate
+	EndpointStatus
+	HostEndpointStatusRemove
+	WorkloadEndpointStatusUpdate
+	WorkloadEndpointStatusRemove
+	WireguardStatusUpdate
+	HostMetadataV4V6Update
+	HostMetadataV4V6Remove
+	HostMetadataUpdate
+	HostMetadataRemove
+	HostMetadataV6Update
+	HostMetadataV6Remove
+	IPAMPoolUpdate
+	IPAMPoolRemove
+	IPAMPool
+	Encapsulation
+	ServiceAccountUpdate
+	ServiceAccountRemove
+	ServiceAccountID
+	NamespaceUpdate
+	NamespaceRemove
+	NamespaceID
+	TunnelType
+	RouteUpdate
+	RouteRemove
+	VXLANTunnelEndpointUpdate
+	VXLANTunnelEndpointRemove
+	WireguardEndpointUpdate
+	WireguardEndpointRemove
+	WireguardEndpointV6Update
+	WireguardEndpointV6Remove
+	GlobalBGPConfigUpdate
+	ServicePort
+	ServiceUpdate
+	ServiceRemove
 */
 package proto
 
-import proto1 "github.com/gogo/protobuf/proto"
-import fmt "fmt"
-import math "math"
+import (
+	fmt "fmt"
 
-import context "golang.org/x/net/context"
-import grpc "google.golang.org/grpc"
+	proto1 "github.com/gogo/protobuf/proto"
 
-import binary "encoding/binary"
+	math "math"
 
-import io "io"
+	context "golang.org/x/net/context"
+
+	grpc "google.golang.org/grpc"
+
+	binary "encoding/binary"
+
+	io "io"
+)
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto1.Marshal
@@ -1871,10 +1878,12 @@ type ActiveProfileRemove struct {
 	Id *ProfileID `protobuf:"bytes,1,opt,name=id" json:"id,omitempty"`
 }
 
-func (m *ActiveProfileRemove) Reset()                    { *m = ActiveProfileRemove{} }
-func (m *ActiveProfileRemove) String() string            { return proto1.CompactTextString(m) }
-func (*ActiveProfileRemove) ProtoMessage()               {}
-func (*ActiveProfileRemove) Descriptor() ([]byte, []int) { return fileDescriptorFelixbackend, []int{10} }
+func (m *ActiveProfileRemove) Reset()         { *m = ActiveProfileRemove{} }
+func (m *ActiveProfileRemove) String() string { return proto1.CompactTextString(m) }
+func (*ActiveProfileRemove) ProtoMessage()    {}
+func (*ActiveProfileRemove) Descriptor() ([]byte, []int) {
+	return fileDescriptorFelixbackend, []int{10}
+}
 
 func (m *ActiveProfileRemove) GetId() *ProfileID {
 	if m != nil {
@@ -2549,10 +2558,12 @@ type ServiceAccountMatch struct {
 	Names    []string `protobuf:"bytes,2,rep,name=names" json:"names,omitempty"`
 }
 
-func (m *ServiceAccountMatch) Reset()                    { *m = ServiceAccountMatch{} }
-func (m *ServiceAccountMatch) String() string            { return proto1.CompactTextString(m) }
-func (*ServiceAccountMatch) ProtoMessage()               {}
-func (*ServiceAccountMatch) Descriptor() ([]byte, []int) { return fileDescriptorFelixbackend, []int{18} }
+func (m *ServiceAccountMatch) Reset()         { *m = ServiceAccountMatch{} }
+func (m *ServiceAccountMatch) String() string { return proto1.CompactTextString(m) }
+func (*ServiceAccountMatch) ProtoMessage()    {}
+func (*ServiceAccountMatch) Descriptor() ([]byte, []int) {
+	return fileDescriptorFelixbackend, []int{18}
+}
 
 func (m *ServiceAccountMatch) GetSelector() string {
 	if m != nil {
@@ -3249,10 +3260,12 @@ type ProcessStatusUpdate struct {
 	Uptime       float64 `protobuf:"fixed64,2,opt,name=uptime,proto3" json:"uptime,omitempty"`
 }
 
-func (m *ProcessStatusUpdate) Reset()                    { *m = ProcessStatusUpdate{} }
-func (m *ProcessStatusUpdate) String() string            { return proto1.CompactTextString(m) }
-func (*ProcessStatusUpdate) ProtoMessage()               {}
-func (*ProcessStatusUpdate) Descriptor() ([]byte, []int) { return fileDescriptorFelixbackend, []int{34} }
+func (m *ProcessStatusUpdate) Reset()         { *m = ProcessStatusUpdate{} }
+func (m *ProcessStatusUpdate) String() string { return proto1.CompactTextString(m) }
+func (*ProcessStatusUpdate) ProtoMessage()    {}
+func (*ProcessStatusUpdate) Descriptor() ([]byte, []int) {
+	return fileDescriptorFelixbackend, []int{34}
+}
 
 func (m *ProcessStatusUpdate) GetIsoTimestamp() string {
 	if m != nil {
