@@ -61,7 +61,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test counters", [
 			w[i].WorkloadEndpoint.Labels = map[string]string{"name": w[i].Name}
 			w[i].ConfigureInInfra(infra)
 		}
-		ensureBPFProgramsAttached(tc.Felixes[0], false)
+		ensureBPFProgramsAttached(tc.Felixes[0])
 	})
 
 	AfterEach(func() {

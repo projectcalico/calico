@@ -554,7 +554,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				err := infra.AddDefaultDeny()
 				Expect(err).NotTo(HaveOccurred())
 
-				ensureBPFProgramsAttached(tc.Felixes[0], testOpts.ipv6)
+				ensureBPFProgramsAttached(tc.Felixes[0])
 
 				pol := api.NewGlobalNetworkPolicy()
 				pol.Namespace = "fv"
@@ -1172,7 +1172,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			err := infra.AddDefaultDeny()
 			Expect(err).NotTo(HaveOccurred())
 			if !options.TestManagesBPF {
-				ensureAllNodesBPFProgramsAttached(tc.Felixes, testOpts.ipv6)
+				ensureAllNodesBPFProgramsAttached(tc.Felixes)
 			}
 		}
 
@@ -4304,7 +4304,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				Expect(err).NotTo(HaveOccurred())
 
 				// Wait for BPF to be active.
-				ensureAllNodesBPFProgramsAttached(tc.Felixes, testOpts.ipv6)
+				ensureAllNodesBPFProgramsAttached(tc.Felixes)
 			}
 
 			expectPongs := func() {
@@ -4943,17 +4943,17 @@ func dumpIfStateMap(felix *infrastructure.Felix) ifstate.MapMem {
 	return m
 }
 
-func ensureAllNodesBPFProgramsAttached(felixes []*infrastructure.Felix, ipv6Enabled bool) {
+func ensureAllNodesBPFProgramsAttached(felixes []*infrastructure.Felix) {
 	for _, felix := range felixes {
-		ensureBPFProgramsAttachedOffset(2, ipv6Enabled, felix)
+		ensureBPFProgramsAttachedOffset(2, felix)
 	}
 }
 
-func ensureBPFProgramsAttached(felix *infrastructure.Felix, ipv6Enabled bool, ifacesExtra ...string) {
-	ensureBPFProgramsAttachedOffset(2, ipv6Enabled, felix, ifacesExtra...)
+func ensureBPFProgramsAttached(felix *infrastructure.Felix, ifacesExtra ...string) {
+	ensureBPFProgramsAttachedOffset(2, felix, ifacesExtra...)
 }
 
-func ensureBPFProgramsAttachedOffset(offset int, ipv6Enabled bool, felix *infrastructure.Felix, ifacesExtra ...string) {
+func ensureBPFProgramsAttachedOffset(offset int, felix *infrastructure.Felix, ifacesExtra ...string) {
 	expectedIfaces := []string{"eth0"}
 	if felix.ExpectedIPIPTunnelAddr != "" {
 		expectedIfaces = append(expectedIfaces, "tunl0")
@@ -4989,7 +4989,7 @@ func ensureBPFProgramsAttachedOffset(offset int, ipv6Enabled bool, felix *infras
 		m := dumpIfStateMap(felix)
 		for _, v := range m {
 			flags := v.Flags()
-			if ipv6Enabled {
+			if felix.TopologyOptions.EnableIPv6 {
 				if (flags & ifstate.FlgIPv6Ready) > 0 {
 					prog = append(prog, v.IfName())
 				}

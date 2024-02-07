@@ -938,7 +938,7 @@ func setupWorkloads(infra infrastructure.DatastoreInfra, tc infrastructure.Topol
 	}
 
 	if BPFMode() {
-		ensureAllNodesBPFProgramsAttached(tc.Felixes, enableIPv6)
+		ensureAllNodesBPFProgramsAttached(tc.Felixes)
 	}
 
 	return

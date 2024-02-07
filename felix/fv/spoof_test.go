@@ -111,7 +111,7 @@ var _ = Describe("Spoof tests", func() {
 			}
 
 			if BPFMode() {
-				ensureAllNodesBPFProgramsAttached(tc.Felixes, false)
+				ensureAllNodesBPFProgramsAttached(tc.Felixes)
 			}
 		})
 
