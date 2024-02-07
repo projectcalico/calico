@@ -669,13 +669,15 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		// Register map managers first since they create the maps that will be used by the endpoint manager.
 		// Important that we create the maps before we load a BPF program with TC since we make sure the map
 		// metadata name is set whereas TC doesn't set that field.
-		ipSetIDAllocator := idalloc.New()
+		var ipSetIDAllocatorV4, ipSetIDAllocatorV6 *idalloc.IDAllocator
+		ipSetIDAllocatorV4 = idalloc.New()
 
 		// Start IPv4 BPF dataplane components
-		startBPFDataplaneComponents(proto.IPVersion_IPV4, bpfMaps.V4, ipSetIDAllocator, config, ipsetsManager, dp)
+		startBPFDataplaneComponents(proto.IPVersion_IPV4, bpfMaps.V4, ipSetIDAllocatorV4, config, ipsetsManager, dp)
 		if config.BPFIpv6Enabled {
 			// Start IPv6 BPF dataplane components
-			startBPFDataplaneComponents(proto.IPVersion_IPV6, bpfMaps.V6, ipSetIDAllocator, config, ipsetsManagerV6, dp)
+			ipSetIDAllocatorV6 = idalloc.New()
+			startBPFDataplaneComponents(proto.IPVersion_IPV6, bpfMaps.V6, ipSetIDAllocatorV6, config, ipsetsManagerV6, dp)
 		}
 
 		filterTbl := filterTableV4
@@ -700,7 +702,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			bpfMaps,
 			fibLookupEnabled,
 			workloadIfaceRegex,
-			ipSetIDAllocator,
+			ipSetIDAllocatorV4,
+			ipSetIDAllocatorV6,
 			ruleRenderer,
 			filterTbl,
 			dp.reportHealth,

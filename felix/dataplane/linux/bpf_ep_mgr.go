@@ -269,7 +269,8 @@ type bpfEndpointManager struct {
 	dataIfaceRegex          *regexp.Regexp
 	l3IfaceRegex            *regexp.Regexp
 	workloadIfaceRegex      *regexp.Regexp
-	ipSetIDAlloc            *idalloc.IDAllocator
+	ipSetIDAllocV4          *idalloc.IDAllocator
+	ipSetIDAllocV6          *idalloc.IDAllocator
 	epToHostAction          string
 	vxlanMTU                int
 	vxlanPort               uint16
@@ -382,7 +383,7 @@ type ManagerWithHEPUpdate interface {
 }
 
 func NewTestEpMgr(config *Config, bpfmaps *bpfmap.Maps, workloadIfaceRegex *regexp.Regexp) (ManagerWithHEPUpdate, error) {
-	return newBPFEndpointManager(nil, config, bpfmaps, true, workloadIfaceRegex, idalloc.New(),
+	return newBPFEndpointManager(nil, config, bpfmaps, true, workloadIfaceRegex, idalloc.New(), idalloc.New(),
 		rules.NewRenderer(rules.Config{
 			BPFEnabled:                  true,
 			IPIPEnabled:                 true,
@@ -413,7 +414,8 @@ func newBPFEndpointManager(
 	bpfmaps *bpfmap.Maps,
 	fibLookupEnabled bool,
 	workloadIfaceRegex *regexp.Regexp,
-	ipSetIDAlloc *idalloc.IDAllocator,
+	ipSetIDAllocV4 *idalloc.IDAllocator,
+	ipSetIDAllocV6 *idalloc.IDAllocator,
 	iptablesRuleRenderer bpfAllowChainRenderer,
 	iptablesFilterTable IptablesTable,
 	livenessCallback func(),
@@ -442,7 +444,8 @@ func newBPFEndpointManager(
 		dataIfaceRegex:          config.BPFDataIfacePattern,
 		l3IfaceRegex:            config.BPFL3IfacePattern,
 		workloadIfaceRegex:      workloadIfaceRegex,
-		ipSetIDAlloc:            ipSetIDAlloc,
+		ipSetIDAllocV4:          ipSetIDAllocV4,
+		ipSetIDAllocV6:          ipSetIDAllocV6,
 		epToHostAction:          config.RulesConfig.EndpointToHostAction,
 		vxlanMTU:                config.VXLANMTU,
 		vxlanPort:               uint16(config.VXLANPort),
@@ -3295,13 +3298,15 @@ func (m *bpfEndpointManager) loadPolicyProgram(
 	}).Debug("Generating policy program...")
 
 	ipsetsMapFD := m.v4.IpsetsMap.MapFD()
+	ipSetIDAlloc := m.ipSetIDAllocV4
 	if ipFamily == proto.IPVersion_IPV6 {
 		opts = append(opts, polprog.WithIPv6())
 		ipsetsMapFD = m.v6.IpsetsMap.MapFD()
+		ipSetIDAlloc = m.ipSetIDAllocV6
 	}
 
 	pg := polprog.NewBuilder(
-		m.ipSetIDAlloc,
+		ipSetIDAlloc,
 		ipsetsMapFD,
 		m.commonMaps.StateMap.MapFD(),
 		staticProgsMap.MapFD(),

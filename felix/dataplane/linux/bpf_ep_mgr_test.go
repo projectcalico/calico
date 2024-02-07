@@ -271,7 +271,8 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		endpointToHostAction string
 		dataIfacePattern     string
 		workloadIfaceRegex   string
-		ipSetIDAllocator     *idalloc.IDAllocator
+		ipSetIDAllocatorV4   *idalloc.IDAllocator
+		ipSetIDAllocatorV6   *idalloc.IDAllocator
 		vxlanMTU             int
 		nodePortDSR          bool
 		maps                 *bpfmap.Maps
@@ -291,7 +292,8 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		endpointToHostAction = "DROP"
 		dataIfacePattern = "^eth0"
 		workloadIfaceRegex = "cali"
-		ipSetIDAllocator = idalloc.New()
+		ipSetIDAllocatorV4 = idalloc.New()
+		ipSetIDAllocatorV6 = idalloc.New()
 		vxlanMTU = 0
 		nodePortDSR = true
 
@@ -378,7 +380,8 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			maps,
 			fibLookupEnabled,
 			regexp.MustCompile(workloadIfaceRegex),
-			ipSetIDAllocator,
+			ipSetIDAllocatorV4,
+			ipSetIDAllocatorV6,
 			ruleRenderer,
 			filterTableV4,
 			nil,
