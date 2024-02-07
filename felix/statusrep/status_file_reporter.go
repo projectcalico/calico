@@ -179,8 +179,9 @@ func (fr *EndpointStatusFileReporter) SyncForever(ctx context.Context) {
 	}
 }
 
-// updates delta tracker state to match the received update.
-// if commitToKernel is true, attempts to commit our state to the FS.
+// A sub-call of SyncForever, not intended to be called outside the main loop.
+// Updates delta tracker state to match the received update.
+// If commitToKernel is true, attempts to commit the new state to the kernel.
 // Can only return an error after a failed commit, so a returned error should
 // always result in SyncForever queueing a retry.
 func (fr *EndpointStatusFileReporter) syncForeverHandleEndpointUpdate(e interface{}, commitToKernel bool) error {
