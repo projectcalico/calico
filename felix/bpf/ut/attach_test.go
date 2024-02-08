@@ -130,13 +130,13 @@ func TestAttach(t *testing.T) {
 		Expect(ifstateMap).To(HaveKey(ifstate.NewKey(uint32(host1.Attrs().Index))))
 
 		hostep1State = ifstateMap[ifstate.NewKey(uint32(host1.Attrs().Index))]
-		Expect(hostep1State.IngressPolicy()).NotTo(Equal(-1))
-		Expect(hostep1State.EgressPolicy()).NotTo(Equal(-1))
-		Expect(hostep1State.XDPPolicy()).NotTo(Equal(-1))
+		Expect(hostep1State.IngressPolicyV4()).NotTo(Equal(-1))
+		Expect(hostep1State.EgressPolicyV4()).NotTo(Equal(-1))
+		Expect(hostep1State.XDPPolicyV4()).NotTo(Equal(-1))
 
 		pm := jumpMapDump(commonMaps.JumpMap)
-		Expect(pm).To(HaveKey(hostep1State.IngressPolicy()))
-		Expect(pm).To(HaveKey(hostep1State.EgressPolicy()))
+		Expect(pm).To(HaveKey(hostep1State.IngressPolicyV4()))
+		Expect(pm).To(HaveKey(hostep1State.EgressPolicyV4()))
 
 		progs, err := bpf.GetAllProgs()
 		Expect(err).NotTo(HaveOccurred())
@@ -151,7 +151,7 @@ func TestAttach(t *testing.T) {
 
 		xdppm := jumpMapDump(commonMaps.XDPJumpMap)
 		Expect(xdppm).To(HaveLen(1))
-		Expect(xdppm).To(HaveKey(hostep1State.XDPPolicy()))
+		Expect(xdppm).To(HaveKey(hostep1State.XDPPolicyV4()))
 	})
 
 	t.Run("remove the untracked (xdp) policy", func(t *testing.T) {
@@ -221,13 +221,13 @@ func TestAttach(t *testing.T) {
 
 		ifstateMap := ifstateMapDump(commonMaps.IfStateMap)
 		wl1State := ifstateMap[ifstate.NewKey(uint32(workload1.Attrs().Index))]
-		Expect(wl1State.IngressPolicy()).NotTo(Equal(-1))
-		Expect(wl1State.EgressPolicy()).NotTo(Equal(-1))
-		Expect(wl1State.XDPPolicy()).To(Equal(-1))
+		Expect(wl1State.IngressPolicyV4()).NotTo(Equal(-1))
+		Expect(wl1State.EgressPolicyV4()).NotTo(Equal(-1))
+		Expect(wl1State.XDPPolicyV4()).To(Equal(-1))
 
 		pm := jumpMapDump(commonMaps.JumpMap)
-		Expect(pm).To(HaveKey(wl1State.IngressPolicy()))
-		Expect(pm).To(HaveKey(wl1State.EgressPolicy()))
+		Expect(pm).To(HaveKey(wl1State.IngressPolicyV4()))
+		Expect(pm).To(HaveKey(wl1State.EgressPolicyV4()))
 	})
 
 	workload2 := createVethName("workloadep2")
@@ -253,8 +253,8 @@ func TestAttach(t *testing.T) {
 
 		pm := jumpMapDump(commonMaps.JumpMap)
 		// We remember the state from above
-		Expect(pm).NotTo(HaveKey(hostep1State.IngressPolicy()))
-		Expect(pm).NotTo(HaveKey(hostep1State.EgressPolicy()))
+		Expect(pm).NotTo(HaveKey(hostep1State.IngressPolicyV4()))
+		Expect(pm).NotTo(HaveKey(hostep1State.EgressPolicyV4()))
 		xdppm := jumpMapDump(commonMaps.XDPJumpMap)
 		Expect(xdppm).To(HaveLen(0))
 	})
@@ -267,8 +267,8 @@ func TestAttach(t *testing.T) {
 		fmt.Printf("wl1State = %+v\n", wl1State)
 
 		pm := jumpMapDump(commonMaps.JumpMap)
-		wl1IngressPol := pm[wl1State.IngressPolicy()]
-		wl1EgressPol := pm[wl1State.EgressPolicy()]
+		wl1IngressPol := pm[wl1State.IngressPolicyV4()]
+		wl1EgressPol := pm[wl1State.EgressPolicyV4()]
 
 		bpfEpMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
 			Id: &proto.WorkloadEndpointID{
@@ -299,8 +299,8 @@ func TestAttach(t *testing.T) {
 
 		// ... but the policy programs changed
 		pm = jumpMapDump(commonMaps.JumpMap)
-		Expect(wl1IngressPol).NotTo(Equal(pm[wl1State2.IngressPolicy()]))
-		Expect(wl1EgressPol).NotTo(Equal(pm[wl1State2.IngressPolicy()]))
+		Expect(wl1IngressPol).NotTo(Equal(pm[wl1State2.IngressPolicyV4()]))
+		Expect(wl1EgressPol).NotTo(Equal(pm[wl1State2.IngressPolicyV4()]))
 
 		progs, err := bpf.GetAllProgs()
 		Expect(err).NotTo(HaveOccurred())
@@ -317,8 +317,8 @@ func TestAttach(t *testing.T) {
 
 		pm := jumpMapDump(commonMaps.JumpMap)
 		// We remember the state from above
-		Expect(pm).NotTo(HaveKey(wl1State.IngressPolicy()))
-		Expect(pm).NotTo(HaveKey(wl1State.EgressPolicy()))
+		Expect(pm).NotTo(HaveKey(wl1State.IngressPolicyV4()))
+		Expect(pm).NotTo(HaveKey(wl1State.EgressPolicyV4()))
 	})
 
 	t.Run("restart", func(t *testing.T) {
@@ -435,8 +435,8 @@ func TestAttach(t *testing.T) {
 		pm = jumpMapDump(commonMaps.JumpMap)
 		// We remember the state from above
 		Expect(pm).To(HaveLen(2))
-		Expect(pm).To(HaveKey(wl2State.IngressPolicy()))
-		Expect(pm).To(HaveKey(wl2State.EgressPolicy()))
+		Expect(pm).To(HaveKey(wl2State.IngressPolicyV4()))
+		Expect(pm).To(HaveKey(wl2State.EgressPolicyV4()))
 
 		_, err = os.Stat(path.Join(bpfdefs.GlobalPinDir, "old_jumps"))
 		Expect(err).To(HaveOccurred())
@@ -509,8 +509,8 @@ func TestAttach(t *testing.T) {
 		pm = jumpMapDump(commonMaps.JumpMap)
 		// We remember the state from above
 		Expect(pm).To(HaveLen(2))
-		Expect(pm).To(HaveKey(wl2State.IngressPolicy()))
-		Expect(pm).To(HaveKey(wl2State.EgressPolicy()))
+		Expect(pm).To(HaveKey(wl2State.IngressPolicyV4()))
+		Expect(pm).To(HaveKey(wl2State.EgressPolicyV4()))
 	})
 }
 
