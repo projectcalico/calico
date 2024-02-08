@@ -1617,11 +1617,13 @@ func (m *bpfEndpointManager) doApplyPolicyToDataIface(iface string) (bpfInterfac
 	if xdpErr != nil {
 		return state, xdpErr
 	}
-	if err4 == nil && m.v4 != nil {
+
+	if m.v6 != nil {
+		if err6 == nil {
+			state.v6Readiness = v6Readiness
+		}
+	} else if err4 == nil {
 		state.v4Readiness = v4Readiness
-	}
-	if err6 == nil && m.v6 != nil {
-		state.v6Readiness = v6Readiness
 	}
 	return state, errors.Join(err4, err6)
 }
@@ -1972,29 +1974,21 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			ingressAP6, egressAP6, err6 = m.v6.applyPolicyToWeps(v4Readiness, ifaceName, &state, wep, ap)
+			ingressAP6, egressAP6, err6 = m.v6.applyPolicyToWeps(v6Readiness, ifaceName, &state, wep, ap)
 		}()
 	} else if m.v4 != nil {
-		ingressAP4, egressAP4, err4 = m.v4.applyPolicyToWeps(v6Readiness, ifaceName, &state, wep, ap)
+		ingressAP4, egressAP4, err4 = m.v4.applyPolicyToWeps(v4Readiness, ifaceName, &state, wep, ap)
 	}
 	wg.Wait()
 
-	if ingressAP4 != nil && egressAP4 != nil {
-		v4Readiness = ifaceIsReady
+	attachPreamble := false
+	if m.v6 != nil {
+		attachPreamble = v6Readiness != ifaceIsReady
+	} else {
+		attachPreamble = v4Readiness != ifaceIsReady
 	}
-
-	if ingressAP6 != nil && egressAP6 != nil {
-		v6Readiness = ifaceIsReady
-	}
-
-	mustAttachPreamble := false
-	if (state.v4Readiness != ifaceIsReady && v4Readiness == ifaceIsReady) ||
-		(state.v6Readiness != ifaceIsReady && v6Readiness == ifaceIsReady) {
-		mustAttachPreamble = true
-	}
-
 	//Attach preamble TC program
-	if mustAttachPreamble {
+	if attachPreamble {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -2020,12 +2014,16 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 		return state, egressErr
 	}
 
-	if err4 != nil {
-		return state, err4
+	if m.v6 != nil {
+		if err6 == nil {
+			v6Readiness = ifaceIsReady
+		}
+	} else if err4 == nil {
+		v4Readiness = ifaceIsReady
 	}
 
-	if err6 != nil {
-		return state, err6
+	if errors.Join(err4, err6) != nil {
+		return state, errors.Join(err4, err6)
 	}
 
 	if egressQdisc != ingressQdisc {
@@ -2037,10 +2035,9 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 	log.WithFields(log.Fields{"timeTaken": applyTime, "ifaceName": ifaceName}).
 		Info("Finished applying BPF programs for workload")
 
-	state.qdisc = ingressQdisc
 	state.v4Readiness = v4Readiness
 	state.v6Readiness = v6Readiness
-
+	state.qdisc = ingressQdisc
 	return state, nil
 }
 
