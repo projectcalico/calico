@@ -42,7 +42,7 @@ const (
 	FlgWEP       = uint32(0x1)
 	FlgIPv4Ready = uint32(0x2)
 	FlgIPv6Ready = uint32(0x4)
-	FlgMax       = uint32(0x8)
+	FlgMax       = uint32(0x7)
 )
 
 var flagsToStr = map[uint32]string{
@@ -173,8 +173,8 @@ func (v Value) String() string {
 	f := v.Flags()
 
 	for k := FlgWEP; k < FlgMax; k++ {
-		v := flagsToStr[k]
-		if f&k != 0 {
+		v, ok := flagsToStr[k]
+		if ok && f&k != 0 {
 			fstr = fstr + v + ","
 		}
 	}
