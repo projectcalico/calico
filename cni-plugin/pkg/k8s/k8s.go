@@ -30,8 +30,10 @@ import (
 	"github.com/containernetworking/plugins/pkg/ipam"
 
 	libipam "github.com/projectcalico/calico/libcalico-go/lib/ipam"
+	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 
+	"github.com/fsnotify/fsnotify"
 	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -502,6 +504,17 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 		Name: endpoint.Spec.InterfaceName},
 	)
 
+	// Conditionally wait for host-local Felix to program the policy for this WEP.
+	if conf.PodStartupDelaySeconds < 0 {
+		return nil, fmt.Errorf("Invalid pod startup delay of %d", conf.PodStartupDelaySeconds)
+	} else if conf.PodStartupDelaySeconds > 0 {
+		if conf.EndpointPolicyStatusDir == "" {
+			conf.EndpointPolicyStatusDir = "/var/run/calico/policy"
+		}
+		timeout := time.Duration(conf.PodStartupDelaySeconds) * time.Second
+		waitForPolicyWithTimeout(logger, conf.EndpointPolicyStatusDir, epIDs, timeout)
+	}
+
 	return result, nil
 }
 
@@ -969,4 +982,96 @@ func getIPsByFamily(cidrs []string) (string, string, error) {
 	}
 
 	return ipv4Cidr, ipv6Cidr, nil
+}
+
+func waitForPolicyWithTimeout(log *logrus.Entry, policyDir string, epIDs utils.WEPIdentifiers, timeout time.Duration) {
+	log = log.WithFields(logrus.Fields{
+		"policyDir": policyDir,
+		"namespace": epIDs.Namespace,
+		"workload":  epIDs.WEPName,
+	})
+
+	filename := names.WorkloadEndpointIdentifiersToStatusFilename(epIDs.WorkloadEndpointIdentifiers)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	notify := make(chan struct{})
+	go notifyWhenFileExists(ctx, notify, policyDir, filename)
+
+	select {
+	case <-notify:
+	case <-time.After(timeout):
+		cancel()
+		log.WithField("filename", filename).Warn("Timed out waiting for policy file to be created for workload")
+	}
+}
+
+// notifyWhenFileExists closes notif when the specified file is seen on disk.
+// Returns without closing the channel if ctx is cancelled.
+func notifyWhenFileExists(ctx context.Context, notif chan struct{}, directory, filename string) {
+	var watcher *fsnotify.Watcher
+	var err error
+	// Retry loop for any errors are encountered.
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+
+		if watcher == nil {
+			watcher, err = fsnotify.NewWatcher()
+			if err != nil {
+				logrus.WithError(err).Warn("Couldn't create filesystem watch, scheduling retry...")
+				continue
+			}
+		}
+
+		if wl := watcher.WatchList(); wl == nil || len(wl) == 0 {
+			err = watcher.Add(directory)
+			if err != nil {
+				logrus.WithError(err).Warn("Couldn't add directory to watcher")
+				continue
+			}
+		}
+
+		// We should check once that we didn't miss the creation
+		// of the file, while setting up the watcher.
+		entries, err := os.ReadDir(directory)
+		if err != nil {
+			logrus.WithError(err).Warn("Couldn't probe status directory 'policy'")
+			continue
+		}
+		for _, e := range entries {
+			if e.Name() == filename {
+				err = watcher.Close()
+				if err != nil {
+					logrus.WithError(err).Warn("Error closing watcher. Continuing...")
+				}
+				close(notif)
+				return
+			}
+		}
+
+		for {
+			select {
+			case e := <-watcher.Events:
+				logrus.WithField("name", e.Name).Info("Received watch event")
+				switch e.Op {
+				case fsnotify.Create:
+					if e.Name == filename {
+						logrus.WithField("file", e.Name).Debug("FS 'Create' event seen for file. Firing notification and stopping watch.")
+						close(notif)
+						return
+					}
+				default:
+				}
+			case err = <-watcher.Errors:
+				logrus.WithError(err).Warn("Ignoring error while watching directory")
+			case <-ctx.Done():
+				watcher.Close()
+				return
+			}
+		}
+	}
 }
