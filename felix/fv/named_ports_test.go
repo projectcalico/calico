@@ -23,22 +23,19 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/projectcalico/calico/felix/fv/connectivity"
-
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/ginkgo/extensions/table"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
-
-	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 
+	"github.com/projectcalico/calico/felix/fv/connectivity"
 	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/felix/fv/workload"
+	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	libv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
@@ -150,7 +147,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 	})
 
 	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
+		if CurrentSpecReport().Failed() {
 			log.Warn("Test failed, dumping diags...")
 			utils.Run("docker", "logs", tc.Felixes[0].Name)
 			utils.Run("docker", "exec", tc.Felixes[0].Name, "iptables-save", "-c")
@@ -203,7 +200,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 		}
 		tc.Stop()
 
-		if CurrentGinkgoTestDescription().Failed {
+		if CurrentSpecReport().Failed() {
 			utils.Run("docker", "exec", etcd.Name, "etcdctl", "get", "/", "--prefix", "--keys-only")
 		}
 		etcd.Stop()
@@ -807,7 +804,7 @@ var _ = Describe("TCP: named port with a simulated kubernetes nginx and client",
 	})
 
 	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
+		if CurrentSpecReport().Failed() {
 			log.Warn("Test failed, dumping diags...")
 			utils.Run("docker", "logs", tc.Felixes[0].Name)
 			utils.Run("docker", "exec", tc.Felixes[0].Name, "iptables-save", "-c")
@@ -819,7 +816,7 @@ var _ = Describe("TCP: named port with a simulated kubernetes nginx and client",
 		nginxClient.Stop()
 		tc.Stop()
 
-		if CurrentGinkgoTestDescription().Failed {
+		if CurrentSpecReport().Failed() {
 			utils.Run("docker", "exec", etcd.Name, "etcdctl", "get", "/", "--prefix", "--keys-only")
 		}
 		etcd.Stop()
@@ -914,7 +911,7 @@ func describeNamedPortHostEndpointTests(getInfra infrastructure.InfraFactory, na
 	})
 
 	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
+		if CurrentSpecReport().Failed() {
 			for _, felix := range tc.Felixes {
 				felix.Exec("iptables-save", "-c")
 				felix.Exec("ipset", "list")
@@ -1123,7 +1120,7 @@ var _ = Describe("tests with mixed TCP/UDP", func() {
 	})
 
 	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
+		if CurrentSpecReport().Failed() {
 			log.Warn("Test failed, dumping diags...")
 			utils.Run("docker", "logs", tc.Felixes[0].Name)
 			utils.Run("docker", "exec", tc.Felixes[0].Name, "iptables-save", "-c")
@@ -1136,7 +1133,7 @@ var _ = Describe("tests with mixed TCP/UDP", func() {
 		clientWorkload.Stop()
 		tc.Stop()
 
-		if CurrentGinkgoTestDescription().Failed {
+		if CurrentSpecReport().Failed() {
 			utils.Run("docker", "exec", etcd.Name, "etcdctl", "get", "/", "--prefix", "--keys-only")
 		}
 		etcd.Stop()

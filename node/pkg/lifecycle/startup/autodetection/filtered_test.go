@@ -18,7 +18,7 @@ import (
 
 	"github.com/projectcalico/calico/node/pkg/lifecycle/startup/autodetection"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 

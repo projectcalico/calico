@@ -15,7 +15,7 @@ import (
 
 	cniv1 "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/ns"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/vishvananda/netlink"
 
@@ -896,7 +896,7 @@ var _ = Describe("CalicoCni", func() {
 			_, err = c.CombinedOutput()
 			Expect(err).ToNot(HaveOccurred())
 			close(done)
-		}, 10)
+		})
 
 		It("reports it cannot connect to the datastore", func(done Done) {
 			// wrong port.
@@ -927,7 +927,7 @@ var _ = Describe("CalicoCni", func() {
 			_, err = c.CombinedOutput()
 			Expect(err).To(HaveOccurred())
 			close(done)
-		}, 10)
+		})
 
 	})
 })

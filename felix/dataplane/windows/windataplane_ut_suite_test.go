@@ -15,12 +15,10 @@
 package windataplane_test
 
 import (
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
-
 	"testing"
 
-	"github.com/onsi/ginkgo/reporters"
+	"github.com/onsi/ginkgo/v2"
+	"github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
 )
@@ -30,7 +28,8 @@ func init() {
 }
 
 func TestWindataplane(t *testing.T) {
-	RegisterFailHandler(Fail)
-	junitReporter := reporters.NewJUnitReporter("../../report/windataplane_suite.xml")
-	RunSpecsWithDefaultAndCustomReporters(t, "Windataplane Suite", []Reporter{junitReporter})
+	gomega.RegisterFailHandler(ginkgo.Fail)
+	suiteConfig, reporterConfig := ginkgo.GinkgoConfiguration()
+	reporterConfig.JUnitReport = "../../report/windataplane_suite.xml"
+	ginkgo.RunSpecs(t, "Windataplane Suite", suiteConfig, reporterConfig)
 }

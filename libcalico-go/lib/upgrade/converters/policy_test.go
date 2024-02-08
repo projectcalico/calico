@@ -15,8 +15,9 @@
 package converters
 
 import (
-	. "github.com/onsi/ginkgo/extensions/table"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -368,7 +369,7 @@ var _ = DescribeTable("v1->v3 policy conversion tests",
 		Expect(v3APIResult.(*apiv3.GlobalNetworkPolicy).Spec).To(Equal(v3API.Spec))
 	},
 
-	policyTable...,
+	policyTable,
 )
 
 var policyTableBackend = []TableEntry{
@@ -419,5 +420,5 @@ var _ = DescribeTable("v1->v3 policy conversion tests (backend)",
 		Expect(v3APIResult.(*apiv3.GlobalNetworkPolicy).Spec).To(Equal(v3API.Spec))
 	},
 
-	policyTableBackend...,
+	policyTableBackend,
 )

@@ -22,7 +22,7 @@ import (
 	"path"
 	"reflect"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/types"
 	"golang.org/x/net/context"
@@ -769,7 +769,7 @@ var _ = Describe("Processor", func() {
 						Expect(g).To(HavePayload(wepUpd))
 
 						close(done)
-					}, 2)
+					})
 
 					It("should split large IPSetUpdate", func(done Done) {
 						msg := updateIpSet(IPSetName, 82250)
@@ -786,7 +786,7 @@ var _ = Describe("Processor", func() {
 						Expect(err).ToNot(HaveOccurred())
 						Expect(out.GetIpsetDeltaUpdate().GetAddedMembers()).To(HaveLen(50))
 						close(done)
-					}, 5)
+					})
 
 					It("should split IpSetDeltaUpdates with both large adds and removes", func(done Done) {
 						msg2 := deltaUpdateIpSet(IPSetName, 82250, 82250)
@@ -812,7 +812,7 @@ var _ = Describe("Processor", func() {
 						Expect(out.GetIpsetDeltaUpdate().GetRemovedMembers()).To(HaveLen(82200))
 
 						close(done)
-					}, 5)
+					})
 
 					It("should split IpSetDeltaUpdates with large adds", func(done Done) {
 						msg2 := deltaUpdateIpSet(IPSetName, 82250, 0)
@@ -832,7 +832,7 @@ var _ = Describe("Processor", func() {
 						Expect(out.GetIpsetDeltaUpdate().GetRemovedMembers()).To(HaveLen(0))
 
 						close(done)
-					}, 5)
+					})
 
 					It("should split IpSetDeltaUpdates with large removes", func(done Done) {
 						msg2 := deltaUpdateIpSet(IPSetName, 0, 82250)
@@ -852,7 +852,7 @@ var _ = Describe("Processor", func() {
 						Expect(out.GetIpsetDeltaUpdate().GetRemovedMembers()).To(HaveLen(82200))
 
 						close(done)
-					}, 5)
+					})
 
 					AfterEach(func() {
 						clientCancel()

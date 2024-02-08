@@ -15,12 +15,10 @@
 package routerule_test
 
 import (
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
-
 	"testing"
 
-	"github.com/onsi/ginkgo/reporters"
+	"github.com/onsi/ginkgo/v2"
+	"github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
 )
@@ -30,7 +28,8 @@ func init() {
 }
 
 func TestRules(t *testing.T) {
-	RegisterFailHandler(Fail)
-	junitReporter := reporters.NewJUnitReporter("../report/routerule_suite.xml")
-	RunSpecsWithDefaultAndCustomReporters(t, "RouteRule Suite", []Reporter{junitReporter})
+	gomega.RegisterFailHandler(ginkgo.Fail)
+	suiteConfig, reporterConfig := ginkgo.GinkgoConfiguration()
+	reporterConfig.JUnitReport = "../report/routerule_suite.xml"
+	ginkgo.RunSpecs(t, "RouteRule Suite", suiteConfig, reporterConfig)
 }

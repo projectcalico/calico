@@ -21,7 +21,7 @@ import (
 	"errors"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -61,7 +61,7 @@ var _ = Context("Config update tests, after starting felix", func() {
 
 	AfterEach(func() {
 
-		if CurrentGinkgoTestDescription().Failed {
+		if CurrentSpecReport().Failed() {
 			tc.Felixes[0].Exec("iptables-save", "-c")
 			tc.Felixes[0].Exec("ip", "r")
 		}
@@ -71,7 +71,7 @@ var _ = Context("Config update tests, after starting felix", func() {
 		}
 		tc.Stop()
 
-		if CurrentGinkgoTestDescription().Failed {
+		if CurrentSpecReport().Failed() {
 			etcd.Exec("etcdctl", "get", "/", "--prefix", "--keys-only")
 		}
 		etcd.Stop()

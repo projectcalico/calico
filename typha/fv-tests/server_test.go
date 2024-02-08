@@ -27,14 +27,16 @@ import (
 	"sync"
 	"time"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/ginkgo/extensions/table"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+
 	"github.com/prometheus/client_golang/prometheus"
 	io_prometheus_client "github.com/prometheus/client_model/go"
 	log "github.com/sirupsen/logrus"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
@@ -1368,8 +1370,6 @@ const (
 )
 
 var _ = Describe("with server requiring TLS", func() {
-	var certDir string
-
 	BeforeEach(func() {
 		// Generating certs is expensive, so we defer it until this BeforeEach and then reuse the certs for all the
 		// tests.
@@ -1424,13 +1424,6 @@ var _ = Describe("with server requiring TLS", func() {
 		clientCert, clientKey = tlsutils.MakePeerCert(clientCN, clientURISAN, x509.ExtKeyUsageClientAuth, untrustedCert, untrustedKey)
 		tlsutils.WriteKey(clientKey, filepath.Join(certDir, "client-untrusted.key"))
 		tlsutils.WriteCert(clientCert, filepath.Join(certDir, "client-untrusted.crt"))
-	})
-
-	var _ = AfterSuite(func() {
-		// Remove TLS keys and certificates.
-		if certDir != "" {
-			_ = os.RemoveAll(certDir)
-		}
 	})
 
 	// We'll create this pipeline for updates to flow through:

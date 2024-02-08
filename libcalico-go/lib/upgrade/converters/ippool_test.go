@@ -15,7 +15,7 @@
 package converters
 
 import (
-	. "github.com/onsi/ginkgo/extensions/table"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -275,5 +275,5 @@ var _ = DescribeTable("v1->v3 IPPool conversion tests",
 		Expect(v3APIResult.(*apiv3.IPPool).Spec).To(Equal(v3API.Spec))
 	},
 
-	poolTable...,
+	poolTable,
 )

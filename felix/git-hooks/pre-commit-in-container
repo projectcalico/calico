@@ -196,19 +196,6 @@ if $logrus_hook_check_failed; then
   echo '	testutils.HookLogrusForGinkgo()'
   echo '}'
 fi
-if $junit_hook_check_failed; then
-  echo
-  echo "One or more test suites don't call NewJUnitReporter()."
-  echo "If a suite doesn't call NewJUnitReporter() then it won't generate "
-  echo "a junit report during UT runs.  Example:"
-  echo
-  echo 'import "github.com/onsi/ginkgo/reporters"'
-  echo 'func TestFoo(t *testing.T) {'
-  echo '	RegisterFailHandler(Fail)'
-  echo '	junitReporter := reporters.NewJUnitReporter("junit.xml")'
-  echo '	RunSpecsWithDefaultAndCustomReporters(t, "Foo Suite", []Reporter{junitReporter})'
-  echo '}'
-fi
 if $go_copyright_check_failed; then
   echo
   echo "Copyright statement should match"
