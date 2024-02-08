@@ -130,10 +130,11 @@ type NetConf struct {
 	//
 	// Default: 0
 	PodStartupDelaySeconds int `json:"pod_startup_delay_seconds,omitempty"`
+
 	// The directory to watch for policy updates for workloads.
 	//
 	// Default: /var/run/calico/policy
-	EndpointStatusDir string `json:"endpoint_status_dir,omitempty"`
+	EndpointPolicyStatusDir string `json:"endpoint_status_dir,omitempty"`
 
 	// Options below here are deprecated.
 	EtcdAuthority string `json:"etcd_authority"`
