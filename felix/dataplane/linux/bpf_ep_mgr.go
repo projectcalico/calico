@@ -1565,16 +1565,6 @@ func (m *bpfEndpointManager) doApplyPolicyToDataIface(iface string) (bpfInterfac
 	}
 
 	parallelWG.Wait()
-	v4Readiness := ifaceNotReady
-	v6Readiness := ifaceNotReady
-	if ingressAP4 != nil && egressAP4 != nil {
-		v4Readiness = ifaceIsReady
-	}
-
-	if ingressAP6 != nil && egressAP6 != nil {
-		v6Readiness = ifaceIsReady
-	}
-
 	// Attach ingress program.
 	parallelWG.Add(1)
 	go func() {
@@ -1620,10 +1610,10 @@ func (m *bpfEndpointManager) doApplyPolicyToDataIface(iface string) (bpfInterfac
 
 	if m.v6 != nil {
 		if err6 == nil {
-			state.v6Readiness = v6Readiness
+			state.v6Readiness = ifaceIsReady
 		}
 	} else if err4 == nil {
-		state.v4Readiness = v4Readiness
+		state.v4Readiness = ifaceIsReady
 	}
 	return state, errors.Join(err4, err6)
 }
