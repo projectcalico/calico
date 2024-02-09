@@ -26,7 +26,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
@@ -34,6 +33,8 @@ import (
 	"golang.org/x/sys/unix"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 	"k8s.io/client-go/kubernetes"
+
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/felix/bpf/bpfmap"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
@@ -1002,6 +1003,10 @@ func findHostMTU(matchRegex *regexp.Regexp) (int, error) {
 		fields := log.Fields{"mtu": l.Attrs().MTU, "name": l.Attrs().Name}
 		if matchRegex == nil || !matchRegex.MatchString(l.Attrs().Name) {
 			log.WithFields(fields).Debug("Skipping interface for MTU detection")
+			continue
+		}
+		if !ifacemonitor.LinkIsOperUp(l) {
+			log.WithFields(fields).Debug("Skipping down interface for MTU detection")
 			continue
 		}
 		log.WithFields(fields).Debug("Examining link for MTU calculation")
