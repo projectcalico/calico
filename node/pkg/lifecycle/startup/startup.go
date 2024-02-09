@@ -159,7 +159,7 @@ func Run() {
 		if err != nil {
 			if kerrors.IsNotFound(err) {
 				kubeadmConfig = nil
-			} else if kerrors.IsUnauthorized(err) {
+			} else if kerrors.IsUnauthorized(err) || kerrors.IsForbidden(err) {
 				kubeadmConfig = nil
 				log.WithError(err).Info("Unauthorized to query kubeadm configmap, assuming not on kubeadm. CIDR detection will not occur.")
 			} else {
@@ -174,7 +174,7 @@ func Run() {
 		if err != nil {
 			if kerrors.IsNotFound(err) {
 				rancherState = nil
-			} else if kerrors.IsUnauthorized(err) {
+			} else if kerrors.IsUnauthorized(err) || kerrors.IsForbidden(err) {
 				kubeadmConfig = nil
 				log.WithError(err).Info("Unauthorized to query rancher configmap, assuming not on rancher. CIDR detection will not occur.")
 			} else {
