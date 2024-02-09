@@ -1282,9 +1282,16 @@ func (fc *DataplaneConnector) Start() {
 	go fc.handleWireguardStatUpdateFromDataplane()
 
 	// Begin consuming StatusUpdatesFromDataplane/InSync's and dispatching to downstream components (e.g. status reporter).
-	ctx := context.TODO()
-	go fc.StatusUpdatesFromDataplaneDispatcher.DispatchForever(ctx, fc.StatusUpdatesFromDataplaneConsumers...)
-	go fc.InSyncDispatcher.DispatchForever(ctx, fc.InSyncConsumers...)
+	if len(fc.StatusUpdatesFromDataplaneConsumers) > 0 {
+		ctx := context.TODO()
+		log.Debug("Starting StatsUpdatesFromDataplaneDispatcher")
+		go fc.StatusUpdatesFromDataplaneDispatcher.DispatchForever(ctx, fc.StatusUpdatesFromDataplaneConsumers...)
+	}
+	if len(fc.InSyncConsumers) > 0 {
+		ctx := context.TODO()
+		log.Debug("Starting InSyncDispatcher")
+		go fc.InSyncDispatcher.DispatchForever(ctx, fc.InSyncConsumers...)
+	}
 }
 
 func (fc *DataplaneConnector) handleConfigUpdate(msg *proto.ConfigUpdate) {
