@@ -84,6 +84,12 @@ func (c *TopologyContainers) Stop() {
 	}
 }
 
+func (c *TopologyContainers) TriggerDelayedStart() {
+	for _, f := range c.Felixes {
+		f.TriggerDelayedStart()
+	}
+}
+
 func DefaultTopologyOptions() TopologyOptions {
 	felixLogLevel := "Info"
 	if envLogLevel := os.Getenv("FV_FELIX_LOG_LEVEL"); envLogLevel != "" {
