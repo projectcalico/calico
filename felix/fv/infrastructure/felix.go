@@ -276,7 +276,7 @@ func (f *Felix) RestartWithDelayedStartup() func() {
 	}
 }
 
-func (f *Felix) SetEvn(env map[string]string) {
+func (f *Felix) SetEnv(env map[string]string) {
 	fn := "extra-env.sh"
 
 	file, err := os.OpenFile("./"+fn, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
