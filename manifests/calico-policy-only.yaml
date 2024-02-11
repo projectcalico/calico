@@ -1121,8 +1121,9 @@ spec:
                 - Disabled
                 type: string
               bpfKubeProxyEndpointSlicesEnabled:
-                description: BPFKubeProxyEndpointSlicesEnabled in BPF mode, controls
-                  whether Felix's embedded kube-proxy accepts EndpointSlices or not.
+                description: BPFKubeProxyEndpointSlicesEnabled is deprecated and has
+                  no effect. BPF kube-proxy always accepts endpoint slices. This option
+                  will be removed in the next release.
                 type: boolean
               bpfKubeProxyIptablesCleanupEnabled:
                 description: 'BPFKubeProxyIptablesCleanupEnabled, if enabled in BPF
