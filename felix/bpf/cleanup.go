@@ -28,6 +28,9 @@ func CleanUpCalicoPins(dir string) {
 		if err != nil {
 			return err
 		}
+		if path == "/sys/fs/bpf/calico/sockmap" {
+			return filepath.SkipDir
+		}
 		if strings.HasPrefix(info.Name(), "cali_") || strings.HasPrefix(info.Name(), "calico_") ||
 			strings.HasPrefix(info.Name(), "xdp_cali_") {
 			log.WithField("path", path).Debug("Deleting pinned BPF resource")
