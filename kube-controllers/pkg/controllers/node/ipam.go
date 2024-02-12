@@ -472,11 +472,18 @@ func (c *ipamController) onBlockUpdated(kvp model.KVPair) {
 		log.WithFields(alloc.fields()).Debug("New IP allocation")
 	}
 
-	// If the block is empty, mark it as such. We'll check if it needs to be
-	// cleaned up in the sync loop.
+	// Check if the block is empty and schedule it for GC if needed.
+	// Skip blocks without an affinity, since these will be cleaned up when their last address is freed and
+	// thus we don't need to do any explicit GC.
 	delete(c.emptyBlocks, blockCIDR)
 	if n != "" && numAllocationsInBlock == 0 {
+		// The block is empty and affine to a node - add it to the emptyBlocks map. We'll check these blocks
+		// later to see if they can be cleaned up.
 		c.emptyBlocks[blockCIDR] = n
+	} else if n != "" {
+		// The block is assigned to a node and not empty - mark it as in-use, clearing any previous empty
+		// status if it had been marked empty before.
+		c.blockReleaseTracker.markInUse(blockCIDR)
 	}
 
 	// Remove any previously assigned allocations that have since been released.
@@ -628,37 +635,18 @@ func (c *ipamController) updateMetrics() {
 
 // checkEmptyBlocks looks at known empty blocks, and releases their affinity
 // if appropriate. A block is a candidate for having its affinity released if:
+//
 // - The block is empty.
 // - The block's node has at least one other affine block.
-// - The other blocks on the node are not at capacity.
 // - The node is not currently undergoing a migration from Flannel
+//
+// A block will only be released if it has been in this state for longer than the configured
+// grace period, which defaults to 15m.
 func (c *ipamController) checkEmptyBlocks() error {
 	for blockCIDR, node := range c.emptyBlocks {
 		logc := log.WithFields(log.Fields{"blockCIDR": blockCIDR, "node": node})
 		nodeBlocks := c.blocksByNode[node]
 		if len(nodeBlocks) <= 1 {
-			continue
-		}
-
-		// The node has more than one block. Check that the other blocks allocated to this node
-		// are not at capacity. We only release blocks when there's room in the other affine blocks,
-		// otherwise the next IP allocation will just assign a new block to this node anyway.
-		numAddressesAvailableOnNode := 0
-		for b := range nodeBlocks {
-			if b == blockCIDR {
-				// Skip the known empty block.
-				continue
-			}
-
-			// Sum the number of unallocated addresses across the other blocks.
-			kvp := c.allBlocks[b]
-			numAddressesAvailableOnNode += len(kvp.Value.(*model.AllocationBlock).Unallocated)
-		}
-
-		// Make sure there are some addresses available before releasing.
-		if numAddressesAvailableOnNode < 3 {
-			logc.Debug("Block is still needed, skip release")
-			c.blockReleaseTracker.markInUse(blockCIDR)
 			continue
 		}
 

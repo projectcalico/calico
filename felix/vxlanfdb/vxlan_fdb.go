@@ -49,11 +49,11 @@ type VTEP struct {
 // Overall, we use VXLAN to create a layer 3 routed network.  We do that
 // by
 //
-// - Giving each node a "tunnel IP" which is an IP on the Calico VXLAN network.
-//   this IP is allocated from a VXLAN IP pool.
-// - (In this object) setting up static ARP/NDP entries for the tunnel IPs.
-// - (In this object) setting up static FDB entries for the tunnel MACs.
-// - (Elsewhere) setting up a routes to remote workloads via the tunnel IPs.
+//   - Giving each node a "tunnel IP" which is an IP on the Calico VXLAN network.
+//     this IP is allocated from a VXLAN IP pool.
+//   - (In this object) setting up static ARP/NDP entries for the tunnel IPs.
+//   - (In this object) setting up static FDB entries for the tunnel MACs.
+//   - (Elsewhere) setting up a routes to remote workloads via the tunnel IPs.
 //
 // ARP/NDP entries and FDB entries are confusingly similar(!) Both are MAC/IP
 // tuples, but they mean very different things.  ARP/NDP entries tell the
@@ -64,13 +64,13 @@ type VTEP struct {
 //
 // From a packet's point of view, routing works like this:
 //
-// - A local workload or this host sends a packet to a remote workload.
-// - The packet hits a route of the form
-//   <remote workload IPAM block> via <remote tunnel IP> dev <VXLAN device> onlink
-//   which sends it to the VXLAN device for encapsulation.
-// - The ARP entry resolves the remote tunnel IP to the remote tunnel MAC.
-// - The FDP entry resolves the remote tunnel MAC to the remote host's real IP.
-// - The packet is encapsulated and sent to the remote host's real IP.
+//   - A local workload or this host sends a packet to a remote workload.
+//   - The packet hits a route of the form
+//     <remote workload IPAM block> via <remote tunnel IP> dev <VXLAN device> onlink
+//     which sends it to the VXLAN device for encapsulation.
+//   - The ARP entry resolves the remote tunnel IP to the remote tunnel MAC.
+//   - The FDP entry resolves the remote tunnel MAC to the remote host's real IP.
+//   - The packet is encapsulated and sent to the remote host's real IP.
 type VXLANFDB struct {
 	family         int
 	ifaceName      string

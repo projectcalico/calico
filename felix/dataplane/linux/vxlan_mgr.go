@@ -148,7 +148,7 @@ func newVXLANManager(
 				opRecorder,
 				featureDetector,
 			)
-		}else if ipVersion == 6 {
+		} else if ipVersion == 6 {
 			brt = routetable.New(
 				[]string{routetable.InterfaceNone},
 				ipVersion,
