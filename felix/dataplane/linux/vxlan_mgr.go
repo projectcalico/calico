@@ -136,18 +136,19 @@ func newVXLANManager(
 	var brt routetable.RouteTableInterface
 	if !dpConfig.RouteSyncDisabled {
 		logrus.Debug("RouteSyncDisabled is false.")
-		brt = routetable.New(
-			[]string{routetable.InterfaceNone},
-			4,
-			dpConfig.NetlinkTimeout,
-			dpConfig.DeviceRouteSourceAddress,
-			blackHoleProto,
-			false,
-			unix.RT_TABLE_MAIN,
-			opRecorder,
-			featureDetector,
-		)
-		if ipVersion == 6 {
+		if ipVersion == 4 {
+			brt = routetable.New(
+				[]string{routetable.InterfaceNone},
+				4,
+				dpConfig.NetlinkTimeout,
+				dpConfig.DeviceRouteSourceAddress,
+				blackHoleProto,
+				false,
+				unix.RT_TABLE_MAIN,
+				opRecorder,
+				featureDetector,
+			)
+		}else if ipVersion == 6 {
 			brt = routetable.New(
 				[]string{routetable.InterfaceNone},
 				ipVersion,
@@ -159,7 +160,7 @@ func newVXLANManager(
 				opRecorder,
 				featureDetector,
 			)
-		} else if ipVersion != 4 {
+		} else {
 			logrus.WithField("ipVersion", ipVersion).Panic("Unknown IP version")
 		}
 	} else {

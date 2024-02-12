@@ -137,6 +137,9 @@ func (r *HandleManager) newHandle() (netlinkshim.Interface, error) {
 // MarkHandleForReopen ensures that the next call to Handle() will open a
 // fresh handle.  The current handle is not closed immediately, it will be
 // closed when the new handle is opened.
+//
+// We used to close the handle immediately but that led to bugs where the
+// caller wouldn't refresh its handle until the next time around its loop.
 func (r *HandleManager) MarkHandleForReopen() {
 	r.reopenHandleNextTime = true
 }

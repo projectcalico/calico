@@ -507,7 +507,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		var routeTableVXLAN routetable.RouteTableInterface
 		if !config.RouteSyncDisabled {
 			log.Debug("RouteSyncDisabled is false.")
-			routeTableVXLAN = routetable.New([]string{"^vxlan.calico$"}, 4, config.NetlinkTimeout,
+			routeTableVXLAN = routetable.New([]string{"^"+VXLANIfaceNameV4+"$"}, 4, config.NetlinkTimeout,
 				config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, true, unix.RT_TABLE_MAIN,
 				dp.loopSummarizer, featureDetector, routetable.WithLivenessCB(dp.reportHealth))
 		} else {
@@ -969,7 +969,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			var routeTableVXLANV6 routetable.RouteTableInterface
 			if !config.RouteSyncDisabled {
 				log.Debug("RouteSyncDisabled is false.")
-				routeTableVXLANV6 = routetable.New([]string{"^vxlan-v6.calico$"}, 6, config.NetlinkTimeout,
+				routeTableVXLANV6 = routetable.New([]string{"^"+VXLANIfaceNameV6+"$"}, 6, config.NetlinkTimeout,
 					config.DeviceRouteSourceAddressIPv6, config.DeviceRouteProtocol, true, unix.RT_TABLE_MAIN,
 					dp.loopSummarizer, featureDetector, routetable.WithLivenessCB(dp.reportHealth))
 			} else {
