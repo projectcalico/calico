@@ -108,14 +108,14 @@ Options:
                            > interface=<IFACE NAME REGEX LIST>
                              Use the first valid IP address found on interfaces
                              named as per the first matching supplied interface
-			     name regex. Regexes are separated by commas
-			     (e.g. eth.*,enp0s.*).
-			   > skip-interface=<IFACE NAME REGEX LIST>
-			     Use the first valid IP address on the first
-			     enumerated interface (same logic as first-found
-			     above) that does NOT match with any of the
-			     specified interface name regexes. Regexes are
-			     separated by commas (e.g. eth.*,enp0s.*).
+                             name regex. Regexes are separated by commas
+                             (e.g. eth.*,enp0s.*).
+                           > skip-interface=<IFACE NAME REGEX LIST>
+                             Use the first valid IP address on the first
+                             enumerated interface (same logic as first-found
+                             above) that does NOT match with any of the
+                             specified interface name regexes. Regexes are
+                             separated by commas (e.g. eth.*,enp0s.*).
                            [default: first-found]
      --ip6-autodetection-method=<IP6_AUTODETECTION_METHOD>
                            Specify the autodetection method for detecting the
@@ -145,7 +145,7 @@ Options:
                            Path to the file containing Felix
                            configuration in YAML or JSON format.
      --allow-version-mismatch
-	                       Allow client and cluster versions mismatch.
+                           Allow client and cluster versions mismatch.
 
 Description:
   This command is used to start a calico/node container instance which provides
@@ -238,6 +238,8 @@ Description:
 	envs := map[string]string{
 		"NODENAME":                  name,
 		"CALICO_NETWORKING_BACKEND": backend,
+		// Disable CNI management, it is only supported inside k8s.
+		"CALICO_MANAGE_CNI": "false",
 	}
 
 	if nopools {
