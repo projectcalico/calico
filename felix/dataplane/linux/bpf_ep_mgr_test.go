@@ -281,6 +281,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		rrConfigNormal       rules.Config
 		ruleRenderer         rules.RuleRenderer
 		filterTableV4        IptablesTable
+		filterTableV6        IptablesTable
 		ifStateMap           *mock.Map
 		countersMap          *mock.Map
 		jumpMap              *mock.Map
@@ -336,7 +337,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		commonMaps.XDPJumpMap = xdpJumpMap
 
 		maps.V4 = v4Maps
-		maps.V6 = v4Maps
+		maps.V6 = v6Maps
 		maps.CommonMaps = commonMaps
 
 		rrConfigNormal = rules.Config{
@@ -357,6 +358,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		}
 		ruleRenderer = rules.NewRenderer(rrConfigNormal)
 		filterTableV4 = newMockTable("filter")
+		filterTableV6 = newMockTable("filter")
 	})
 
 	AfterEach(func() {
@@ -388,6 +390,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			ipSetIDAllocator,
 			ruleRenderer,
 			filterTableV4,
+			filterTableV6,
 			nil,
 			logutils.NewSummarizer("test"),
 			&environment.FakeFeatureDetector{},

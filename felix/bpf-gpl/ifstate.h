@@ -25,10 +25,13 @@ CALI_MAP(cali_iface, 4,
 
 #define IFACE_STATE_WEP		0x1
 #define IFACE_STATE_V4_READY	0x2
-#define IFACE_STATE_V6_READY	0x6
+#define IFACE_STATE_V6_READY	0x4
 
 #define iface_is_workload(state)		((state) & IFACE_STATE_WEP)
-#define iface_is_v4_ready(state)		((state) & IFACE_STATE_V4_READY)
-#define iface_is_v6_ready(state)		((state) & IFACE_STATE_V6_READY)
+#ifdef IPVER6
+#define iface_is_ready(state)	((state) & IFACE_STATE_V6_READY)
+#else
+#define iface_is_ready(state)	((state) & IFACE_STATE_V4_READY)
+#endif
 
 #endif /* __CALI_IFSTATE_H__ */

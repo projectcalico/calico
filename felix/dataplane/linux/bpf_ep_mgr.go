@@ -290,8 +290,7 @@ type bpfEndpointManager struct {
 	policyTcAllowFD  bpf.ProgFD
 	policyTcDenyFD   bpf.ProgFD
 
-	ruleRenderer        bpfAllowChainRenderer
-	iptablesFilterTable IptablesTable
+	ruleRenderer bpfAllowChainRenderer
 
 	startupOnce   sync.Once
 	copyDeltaOnce sync.Once
@@ -365,7 +364,8 @@ type bpfEndpointManagerDataplane struct {
 	ifaceToIpMap map[string]net.IP
 
 	// IP of the tunnel / overlay device
-	tunnelIP net.IP
+	tunnelIP            net.IP
+	iptablesFilterTable IptablesTable
 }
 
 type serviceKey struct {
@@ -402,6 +402,7 @@ func NewTestEpMgr(config *Config, bpfmaps *bpfmap.Maps, workloadIfaceRegex *rege
 			VXLANVNI:                    4096,
 		}),
 		iptables.NewNoopTable(),
+		iptables.NewNoopTable(),
 		nil,
 		logutils.NewSummarizer("test"),
 		new(environment.FakeFeatureDetector),
@@ -416,7 +417,8 @@ func newBPFEndpointManager(
 	workloadIfaceRegex *regexp.Regexp,
 	ipSetIDAlloc *idalloc.IDAllocator,
 	iptablesRuleRenderer bpfAllowChainRenderer,
-	iptablesFilterTable IptablesTable,
+	iptablesFilterTableV4 IptablesTable,
+	iptablesFilterTableV6 IptablesTable,
 	livenessCallback func(),
 	opReporter logutils.OpRecorder,
 	featureDetector environment.FeatureDetectorIface,
@@ -461,12 +463,11 @@ func newBPFEndpointManager(
 		// Note: the allocators only allocate a fraction of the map, the
 		// rest is reserved for sub-programs generated if a single program
 		// would be too large.
-		jumpMapAlloc:        newJumpMapAlloc(jump.TCMaxEntryPoints),
-		xdpJumpMapAlloc:     newJumpMapAlloc(jump.XDPMaxEntryPoints),
-		ruleRenderer:        iptablesRuleRenderer,
-		iptablesFilterTable: iptablesFilterTable,
-		onStillAlive:        livenessCallback,
-		hostIfaceToEpMap:    map[string]proto.HostEndpoint{},
+		jumpMapAlloc:     newJumpMapAlloc(jump.TCMaxEntryPoints),
+		xdpJumpMapAlloc:  newJumpMapAlloc(jump.XDPMaxEntryPoints),
+		ruleRenderer:     iptablesRuleRenderer,
+		onStillAlive:     livenessCallback,
+		hostIfaceToEpMap: map[string]proto.HostEndpoint{},
 		//ifaceToIpMap:        map[string]net.IP{},
 		opReporter: opReporter,
 		// ipv6Enabled Should be set to config.Ipv6Enabled, but for now it is better
@@ -507,10 +508,10 @@ func newBPFEndpointManager(
 		m.hostNetworkedNATMode = hostNetworkedNATEnabled
 	}
 
-	m.v4 = newBPFEndpointManagerDataplane(proto.IPVersion_IPV4, bpfmaps.V4, m)
+	m.v4 = newBPFEndpointManagerDataplane(proto.IPVersion_IPV4, bpfmaps.V4, iptablesFilterTableV4, m)
 
 	if m.ipv6Enabled {
-		m.v6 = newBPFEndpointManagerDataplane(proto.IPVersion_IPV6, bpfmaps.V6, m)
+		m.v6 = newBPFEndpointManagerDataplane(proto.IPVersion_IPV6, bpfmaps.V6, iptablesFilterTableV6, m)
 	}
 
 	if m.hostNetworkedNATMode != hostNetworkedNATDisabled {
@@ -605,14 +606,16 @@ func newBPFEndpointManager(
 func newBPFEndpointManagerDataplane(
 	ipFamily proto.IPVersion,
 	ipMaps *bpfmap.IPMaps,
+	iptablesFilterTable IptablesTable,
 	epMgr *bpfEndpointManager,
 ) *bpfEndpointManagerDataplane {
 
 	return &bpfEndpointManagerDataplane{
-		ipFamily:     ipFamily,
-		ifaceToIpMap: map[string]net.IP{},
-		mgr:          epMgr,
-		IPMaps:       ipMaps,
+		ipFamily:            ipFamily,
+		ifaceToIpMap:        map[string]net.IP{},
+		mgr:                 epMgr,
+		IPMaps:              ipMaps,
+		iptablesFilterTable: iptablesFilterTable,
 	}
 }
 
@@ -1469,7 +1472,11 @@ func (m *bpfEndpointManager) CompleteDeferredWork() error {
 
 	if m.happyWEPsDirty {
 		chains := m.ruleRenderer.WorkloadInterfaceAllowChains(m.happyWEPs)
-		m.iptablesFilterTable.UpdateChains(chains)
+		if m.v6 != nil {
+			m.v6.iptablesFilterTable.UpdateChains(chains)
+		} else {
+			m.v4.iptablesFilterTable.UpdateChains(chains)
+		}
 		m.happyWEPsDirty = false
 	}
 	bpfHappyEndpointsGauge.Set(float64(len(m.happyWEPs)))

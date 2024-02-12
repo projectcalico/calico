@@ -172,9 +172,9 @@ func (v Value) String() string {
 	fstr := ""
 	f := v.Flags()
 
-	for k := FlgWEP; k < FlgMax; k++ {
-		v, ok := flagsToStr[k]
-		if ok && f&k != 0 {
+	for k := FlgWEP; k < FlgMax; k *= 2 {
+		v := flagsToStr[k]
+		if f&k != 0 {
 			fstr = fstr + v + ","
 		}
 	}
