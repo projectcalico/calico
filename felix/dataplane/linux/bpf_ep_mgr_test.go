@@ -276,10 +276,12 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		nodePortDSR          bool
 		maps                 *bpfmap.Maps
 		v4Maps               *bpfmap.IPMaps
+		v6Maps               *bpfmap.IPMaps
 		commonMaps           *bpfmap.CommonMaps
 		rrConfigNormal       rules.Config
 		ruleRenderer         rules.RuleRenderer
 		filterTableV4        IptablesTable
+		filterTableV6        IptablesTable
 		ifStateMap           *mock.Map
 		countersMap          *mock.Map
 		jumpMap              *mock.Map
@@ -300,10 +302,14 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		maps = new(bpfmap.Maps)
 
 		v4Maps = new(bpfmap.IPMaps)
+		v6Maps = new(bpfmap.IPMaps)
 		commonMaps = new(bpfmap.CommonMaps)
 
 		v4Maps.IpsetsMap = bpfipsets.Map()
 		v4Maps.CtMap = conntrack.Map()
+
+		v6Maps.IpsetsMap = bpfipsets.MapV6()
+		v6Maps.CtMap = conntrack.MapV6()
 
 		commonMaps.StateMap = state.Map()
 		ifStateMap = mock.NewMockMap(ifstate.MapParams)
@@ -331,6 +337,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		commonMaps.XDPJumpMap = xdpJumpMap
 
 		maps.V4 = v4Maps
+		maps.V6 = v6Maps
 		maps.CommonMaps = commonMaps
 
 		rrConfigNormal = rules.Config{
@@ -351,13 +358,14 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		}
 		ruleRenderer = rules.NewRenderer(rrConfigNormal)
 		filterTableV4 = newMockTable("filter")
+		filterTableV6 = newMockTable("filter")
 	})
 
 	AfterEach(func() {
 		bpfmaps.DisableRepin()
 	})
 
-	newBpfEpMgr := func() {
+	newBpfEpMgr := func(ipv6Enabled bool) {
 		var err error
 		bpfEpMgr, err = newBPFEndpointManager(
 			mockDP,
@@ -374,6 +382,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 				BPFExtToServiceConnmark: 0,
 				BPFHostNetworkedNAT:     "Enabled",
 				BPFPolicyDebugEnabled:   true,
+				BPFIpv6Enabled:          ipv6Enabled,
 			},
 			maps,
 			fibLookupEnabled,
@@ -381,6 +390,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			ipSetIDAllocator,
 			ruleRenderer,
 			filterTableV4,
+			filterTableV6,
 			nil,
 			logutils.NewSummarizer("test"),
 			&environment.FakeFeatureDetector{},
@@ -388,6 +398,9 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		Expect(err).NotTo(HaveOccurred())
 		bpfEpMgr.Features = environment.NewFeatureDetector(nil).GetFeatures()
 		bpfEpMgr.v4.hostIP = net.ParseIP("1.2.3.4")
+		if ipv6Enabled {
+			bpfEpMgr.v6.hostIP = net.ParseIP("1::4")
+		}
 	}
 
 	genIfaceUpdate := func(name string, state ifacemonitor.State, index int) func() {
@@ -484,7 +497,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 	JustBeforeEach(func() {
 		dp = newMockDataplane()
 		mockDP = dp
-		newBpfEpMgr()
+		newBpfEpMgr(false)
 	})
 
 	It("exists", func() {
@@ -572,7 +585,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		Context("with dataIfacePattern changed to eth1", func() {
 			JustBeforeEach(func() {
 				dataIfacePattern = "^eth1"
-				newBpfEpMgr()
+				newBpfEpMgr(false)
 
 				dp.ensureStartedFn = func() {
 					bpfEpMgr.initAttaches = map[string]bpf.EPAttachInfo{
@@ -843,7 +856,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			err = rcMap.Update(k[:], v[:])
 			Expect(err).NotTo(HaveOccurred())
 
-			newBpfEpMgr()
+			newBpfEpMgr(false)
 			binary.LittleEndian.PutUint64(k, ingRuleMatchId)
 			_, err = rcMap.Get(k[:])
 			Expect(err).To(HaveOccurred())
@@ -975,432 +988,530 @@ var _ = Describe("BPF Endpoint Manager", func() {
 	})
 
 	Describe("ifstate", func() {
-		checkIfState := func(idx int, name string, flags uint32) {
-			k := ifstate.NewKey(uint32(idx))
-			vb, err := ifStateMap.Get(k.AsBytes())
-			if err != nil {
-				Fail(fmt.Sprintf("Ifstate does not have key %s", k), 1)
+		for _, ipv6Enabled := range []bool{false, true} {
+			JustBeforeEach(func() {
+				newBpfEpMgr(ipv6Enabled)
+			})
+			checkIfState := func(idx int, name string, flags uint32) {
+				k := ifstate.NewKey(uint32(idx))
+				vb, err := ifStateMap.Get(k.AsBytes())
+				if err != nil {
+					Fail(fmt.Sprintf("Ifstate does not have key %s", k), 1)
+				}
+				vv := ifstate.ValueFromBytes(vb)
+				Expect(flags).To(Equal(vv.Flags()))
+				Expect(name).To(Equal(vv.IfName()))
 			}
-			vv := ifstate.ValueFromBytes(vb)
-			Expect(flags).To(Equal(vv.Flags()))
-			Expect(name).To(Equal(vv.IfName()))
+
+			It("should clean up jump map entries for missing interfaces", func() {
+				for i := 0; i < 17; i++ {
+					_ = jumpMap.Update(jump.Key(i), jump.Value(uint32(1000+i)))
+					_ = jumpMap.Update(jump.Key(i+jump.TCMaxEntryPoints), jump.Value(uint32(1000+i)))
+				}
+				for i := 0; i < 5; i++ {
+					_ = xdpJumpMap.Update(jump.Key(i), jump.Value(uint32(2000+i)))
+				}
+
+				if !ipv6Enabled {
+					_ = ifStateMap.Update(
+						ifstate.NewKey(123).AsBytes(),
+						ifstate.NewValue(ifstate.FlgIPv4Ready, "eth123",
+							1, 1, 2, -1, -1, -1, 3, 4).AsBytes(),
+					)
+					_ = ifStateMap.Update(
+						ifstate.NewKey(124).AsBytes(),
+						ifstate.NewValue(0, "eth124",
+							2, 5, 6, -1, -1, -1, 7, 8).AsBytes(),
+					)
+					_ = ifStateMap.Update(
+						ifstate.NewKey(125).AsBytes(),
+						ifstate.NewValue(ifstate.FlgWEP|ifstate.FlgIPv4Ready, "eth125",
+							3, 9, 10, -1, -1, -1, 11, 12).AsBytes(),
+					)
+					_ = ifStateMap.Update(
+						ifstate.NewKey(126).AsBytes(),
+						ifstate.NewValue(ifstate.FlgWEP, "eth123",
+							0, 13, 14, -1, -1, -1, 15, 0).AsBytes(),
+					)
+				} else {
+					_ = ifStateMap.Update(
+						ifstate.NewKey(123).AsBytes(),
+						ifstate.NewValue(ifstate.FlgIPv6Ready, "eth123",
+							-1, -1, -1, 1, 1, 2, 3, 4).AsBytes(),
+					)
+					_ = ifStateMap.Update(
+						ifstate.NewKey(124).AsBytes(),
+						ifstate.NewValue(0, "eth124",
+							-1, -1, -1, 2, 5, 6, 7, 8).AsBytes(),
+					)
+					_ = ifStateMap.Update(
+						ifstate.NewKey(125).AsBytes(),
+						ifstate.NewValue(ifstate.FlgWEP|ifstate.FlgIPv6Ready, "eth125",
+							-1, -1, -1, 3, 9, 10, 11, 12).AsBytes(),
+					)
+					_ = ifStateMap.Update(
+						ifstate.NewKey(126).AsBytes(),
+						ifstate.NewValue(ifstate.FlgWEP, "eth123",
+							-1, -1, -1, 0, 13, 14, 15, 0).AsBytes(),
+					)
+				}
+
+				err := bpfEpMgr.CompleteDeferredWork()
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(ifStateMap.IsEmpty()).To(BeTrue())
+				Expect(jumpMap.Contents).To(Equal(map[string]string{
+					string(jump.Key(16)):                         string(jump.Value(uint32(1000 + 16))),
+					string(jump.Key(16 + jump.TCMaxEntryPoints)): string(jump.Value(uint32(1000 + 16))),
+				}))
+				Expect(xdpJumpMap.Contents).To(Equal(map[string]string{
+					// Key 4 wasn't used above so it should persist.
+					string(jump.Key(4)): string(jump.Value(uint32(2000 + 4))),
+				}))
+			})
+
+			dumpJumpMap := func(in *mock.Map) map[int]int {
+				out := map[int]int{}
+				for k, v := range in.Contents {
+					parsedKey := binary.LittleEndian.Uint32([]byte(k))
+					parsedVal := binary.LittleEndian.Uint32([]byte(v))
+					out[int(parsedKey)] = int(parsedVal)
+				}
+				return out
+			}
+
+			dumpIfstateMap := func(in *mock.Map) map[int]string {
+				out := map[int]string{}
+				for k, v := range in.Contents {
+					parsedKey := ifstate.KeyFromBytes([]byte(k))
+					parsedVal := ifstate.ValueFromBytes([]byte(v))
+					out[int(parsedKey.IfIndex())] = parsedVal.String()
+				}
+				return out
+			}
+
+			It("should reclaim indexes for active interfaces", func() {
+				for i := 0; i < 8; i++ {
+					_ = jumpMap.Update(jump.Key(i), jump.Value(uint32(1000+i)))
+					_ = jumpMap.Update(jump.Key(i+jump.TCMaxEntryPoints), jump.Value(uint32(1000+i)))
+				}
+				for i := 1; i < 2; i++ {
+					_ = xdpJumpMap.Update(jump.Key(i), jump.Value(uint32(2000+i)))
+				}
+
+				key123 := ifstate.NewKey(123).AsBytes()
+				value123 := ifstate.NewValue(ifstate.FlgIPv4Ready|ifstate.FlgWEP, "cali12345",
+					-1, 0, 2, -1, -1, -1, 3, 4)
+				value124 := ifstate.NewValue(0, "eth124", 2, 5, 6, -1, -1, -1, 7, 1)
+				if ipv6Enabled {
+					value123 = ifstate.NewValue(ifstate.FlgIPv6Ready|ifstate.FlgWEP, "cali12345",
+						-1, -1, -1, -1, 0, 2, 3, 4)
+					value124 = ifstate.NewValue(0, "eth124", -1, -1, -1, 2, 5, 6, 7, 1)
+				}
+				_ = ifStateMap.Update(
+					key123,
+					value123.AsBytes(),
+				)
+				_ = ifStateMap.Update(
+					ifstate.NewKey(124).AsBytes(),
+					value124.AsBytes(),
+				)
+
+				dp.interfaceByIndexFn = func(ifindex int) (*net.Interface, error) {
+					if ifindex == 123 {
+						return &net.Interface{
+							Name:  "cali12345",
+							Index: 123,
+							Flags: net.FlagUp,
+						}, nil
+					}
+					return nil, errors.New("no such network interface")
+				}
+				genWLUpdate("cali12345", "pol-a")()
+
+				err := bpfEpMgr.CompleteDeferredWork()
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(dumpIfstateMap(ifStateMap)).To(Equal(map[int]string{
+					123: value123.String(),
+				}))
+
+				// Expect clean-up deletions but no value changes due to mocking.
+				Expect(dumpJumpMap(jumpMap)).To(Equal(map[int]int{
+					0:     1000,
+					2:     1002,
+					3:     1003,
+					4:     1004,
+					10000: 1000,
+					10002: 1002,
+					10003: 1003,
+					10004: 1004,
+				}))
+				Expect(dumpJumpMap(xdpJumpMap)).To(Equal(map[int]int{
+					1: 2001,
+				}))
+			})
+
+			It("should handle jump map collision: single iface", func() {
+				// This test verifies that we recover if we're started with
+				// bad data in the ifstate map; in particular if two policy
+				// program indexes collide.
+
+				key123 := ifstate.NewKey(123).AsBytes()
+
+				// Oops, we accidentally wrote all zeros to the dataplane...
+				value123Zeros := ifstate.NewValue(ifstate.FlgIPv4Ready|ifstate.FlgWEP, "cali12345",
+					0, 0, 0, -1, -1, -1, 0, 0)
+				if ipv6Enabled {
+					value123Zeros = ifstate.NewValue(ifstate.FlgIPv6Ready|ifstate.FlgWEP, "cali12345",
+						-1, -1, -1, 0, 0, 0, 0, 0)
+				}
+
+				_ = ifStateMap.Update(
+					key123,
+					value123Zeros.AsBytes(),
+				)
+
+				dp.interfaceByIndexFn = func(ifindex int) (*net.Interface, error) {
+					if ifindex == 123 {
+						return &net.Interface{
+							Name:  "cali12345",
+							Index: 123,
+							Flags: net.FlagUp,
+						}, nil
+					}
+					return nil, errors.New("no such network interface")
+				}
+				genWLUpdate("cali12345", "pol-a")()
+
+				err := bpfEpMgr.CompleteDeferredWork()
+				Expect(err).NotTo(HaveOccurred())
+
+				// XDP gets cleaned up because it's a WEP, ingress keeps its
+				// ID because it was the first; egress gets reallocated.
+				value123Fixed := ifstate.NewValue(ifstate.FlgIPv4Ready|ifstate.FlgWEP, "cali12345",
+					-1, 0, 1, -1, -1, -1, -1, -1)
+				if ipv6Enabled {
+					value123Fixed = ifstate.NewValue(ifstate.FlgIPv6Ready|ifstate.FlgWEP, "cali12345",
+						-1, -1, -1, -1, 0, 1, -1, -1)
+				}
+				Expect(dumpIfstateMap(ifStateMap)).To(Equal(map[int]string{
+					123: value123Fixed.String(),
+				}))
+			})
+
+			It("should handle jump map collision: multi-iface", func() {
+				// This test verifies that we recover if we're started with
+				// bad data in the ifstate map; in particular if two policy
+				// program indexes collide.
+
+				// Oops, we accidentally wrote all zeros to the dataplane...
+				key123 := ifstate.NewKey(123).AsBytes()
+				value123Zeros := ifstate.NewValue(ifstate.FlgIPv4Ready|ifstate.FlgWEP, "cali12345",
+					0, 0, 0, -1, -1, -1, 0, 0)
+
+				key124 := ifstate.NewKey(124).AsBytes()
+				value124Zeros := ifstate.NewValue(ifstate.FlgIPv4Ready|ifstate.FlgWEP, "cali56789",
+					0, 0, 0, -1, -1, -1, 0, 0)
+
+				if ipv6Enabled {
+					value123Zeros = ifstate.NewValue(ifstate.FlgIPv6Ready|ifstate.FlgWEP, "cali12345",
+						-1, -1, -1, 0, 0, 0, 0, 0)
+					value124Zeros = ifstate.NewValue(ifstate.FlgIPv6Ready|ifstate.FlgWEP, "cali56789",
+						-1, -1, -1, 0, 0, 0, 0, 0)
+				}
+				_ = ifStateMap.Update(
+					key123,
+					value123Zeros.AsBytes(),
+				)
+				// ...twice.
+				_ = ifStateMap.Update(
+					key124,
+					value124Zeros.AsBytes(),
+				)
+
+				dp.interfaceByIndexFn = func(ifindex int) (*net.Interface, error) {
+					if ifindex == 123 {
+						return &net.Interface{
+							Name:  "cali12345",
+							Index: 123,
+							Flags: net.FlagUp,
+						}, nil
+					}
+					if ifindex == 124 {
+						return &net.Interface{
+							Name:  "cali56789",
+							Index: 124,
+							Flags: net.FlagUp,
+						}, nil
+					}
+					return nil, errors.New("no such network interface")
+				}
+				genWLUpdate("cali12345", "pol-a")()
+				genWLUpdate("cali56789", "pol-b")()
+
+				err := bpfEpMgr.CompleteDeferredWork()
+				Expect(err).NotTo(HaveOccurred())
+
+				// Everything collides but the allocations are non-deterministic
+				// so we need to check them by hand...
+				Expect(ifStateMap.Contents).To(HaveLen(2))
+				val123 := ifstate.ValueFromBytes([]byte(ifStateMap.Contents[string(key123)]))
+				val124 := ifstate.ValueFromBytes([]byte(ifStateMap.Contents[string(key124)]))
+
+				tcIDsSeen := set.New[int]()
+				for _, v := range []ifstate.Value{val123, val124} {
+					if ipv6Enabled {
+						Expect(v.IngressPolicyV6()).NotTo(Equal(-1), "WEPs should have ingress pol")
+						Expect(tcIDsSeen.Contains(v.IngressPolicyV6())).To(BeFalse(), "Saw same jump map ID more than once")
+						tcIDsSeen.Add(v.IngressPolicyV6())
+
+						Expect(v.EgressPolicyV6()).NotTo(Equal(-1), "WEPs should have egress pol")
+						Expect(tcIDsSeen.Contains(v.EgressPolicyV6())).To(BeFalse(), "Saw same jump map ID more than once")
+						tcIDsSeen.Add(v.EgressPolicyV6())
+					} else {
+						Expect(v.XDPPolicyV4()).To(Equal(-1), "WEPs shouldn't get XDP IDs")
+						Expect(v.IngressPolicyV4()).NotTo(Equal(-1), "WEPs should have ingress pol")
+						Expect(tcIDsSeen.Contains(v.IngressPolicyV4())).To(BeFalse(), "Saw same jump map ID more than once")
+						tcIDsSeen.Add(v.IngressPolicyV4())
+
+						Expect(v.EgressPolicyV4()).NotTo(Equal(-1), "WEPs should have egress pol")
+						Expect(tcIDsSeen.Contains(v.EgressPolicyV4())).To(BeFalse(), "Saw same jump map ID more than once")
+						tcIDsSeen.Add(v.EgressPolicyV4())
+					}
+
+					Expect(v.TcIngressFilter()).To(Equal(-1), "should be no filters in use")
+					Expect(v.TcEgressFilter()).To(Equal(-1), "should be no filters in use")
+				}
+			})
+
+			It("should handle jump map collision: multi-iface HEPs", func() {
+				// Verify collision of two HEPs (using same policy IDs), they
+				// use XDP too.
+
+				// Oops, we accidentally wrote all zeros to the dataplane...
+				key123 := ifstate.NewKey(123).AsBytes()
+				value123Zeros := ifstate.NewValue(ifstate.FlgIPv4Ready, "eth0",
+					0, 0, 0, -1, -1, -1, 0, -1)
+				// ...twice.
+				key124 := ifstate.NewKey(124).AsBytes()
+				// Using eth0a because the data iface pattern is eth0 (other tests
+				// use eth1 for something else...).
+				value124Zeros := ifstate.NewValue(ifstate.FlgIPv4Ready, "eth0a",
+					0, 0, 0, -1, -1, -1, -1, 0)
+				if ipv6Enabled {
+					value123Zeros = ifstate.NewValue(ifstate.FlgIPv6Ready, "eth0",
+						-1, -1, -1, 0, 0, 0, 0, -1)
+					value124Zeros = ifstate.NewValue(ifstate.FlgIPv6Ready, "eth0a",
+						-1, -1, -1, 0, 0, 0, -1, 0)
+				}
+				_ = ifStateMap.Update(key123, value123Zeros.AsBytes())
+				_ = ifStateMap.Update(key124, value124Zeros.AsBytes())
+
+				dp.interfaceByIndexFn = func(ifindex int) (*net.Interface, error) {
+					if ifindex == 123 {
+						return &net.Interface{
+							Name:  "eth0",
+							Index: 123,
+							Flags: net.FlagUp,
+						}, nil
+					}
+					if ifindex == 124 {
+						return &net.Interface{
+							Name:  "eth0a",
+							Index: 124,
+							Flags: net.FlagUp,
+						}, nil
+					}
+					return nil, errors.New("no such network interface")
+				}
+
+				err := bpfEpMgr.CompleteDeferredWork()
+				Expect(err).NotTo(HaveOccurred())
+
+				// Everything collides but the allocations are non-deterministic
+				// so we need to check them by hand...
+				ifDump := dumpIfstateMap(ifStateMap)
+				Expect(ifDump).To(HaveLen(2))
+				Expect(ifDump).To(HaveKey(123))
+				Expect(ifDump).To(HaveKey(124))
+				val123 := ifstate.ValueFromBytes([]byte(ifStateMap.Contents[string(key123)]))
+				val124 := ifstate.ValueFromBytes([]byte(ifStateMap.Contents[string(key124)]))
+
+				xdpIDsSeen := set.New[int]()
+				tcIDsSeen := set.New[int]()
+				for _, v := range []ifstate.Value{val123, val124} {
+					if ipv6Enabled {
+						Expect(v.IngressPolicyV6()).NotTo(Equal(-1), "WEPs should have ingress pol")
+						Expect(tcIDsSeen.Contains(v.IngressPolicyV6())).To(BeFalse(), "Saw same jump map ID more than once")
+						tcIDsSeen.Add(v.IngressPolicyV6())
+
+						Expect(v.EgressPolicyV6()).NotTo(Equal(-1), "WEPs should have egress pol")
+						Expect(tcIDsSeen.Contains(v.EgressPolicyV6())).To(BeFalse(), "Saw same jump map ID more than once")
+						tcIDsSeen.Add(v.EgressPolicyV6())
+					} else {
+						Expect(v.XDPPolicyV4()).NotTo(Equal(-1), "WEPs shouldn't get XDP IDs")
+						Expect(xdpIDsSeen.Contains(v.XDPPolicyV4())).To(BeFalse(), fmt.Sprintf("Saw same jump XDP map ID %d more than once", v.XDPPolicyV4()))
+						xdpIDsSeen.Add(v.XDPPolicyV4())
+
+						Expect(v.IngressPolicyV4()).NotTo(Equal(-1), "WEPs should have ingress pol")
+						Expect(tcIDsSeen.Contains(v.IngressPolicyV4())).To(BeFalse(), "Saw same jump map ID more than once")
+						tcIDsSeen.Add(v.IngressPolicyV4())
+
+						Expect(v.EgressPolicyV4()).NotTo(Equal(-1), "WEPs should have egress pol")
+						Expect(tcIDsSeen.Contains(v.EgressPolicyV4())).To(BeFalse(), "Saw same jump map ID more than once")
+						tcIDsSeen.Add(v.EgressPolicyV4())
+					}
+
+					Expect(v.TcIngressFilter()).To(Equal(-1), "should be no filters in use")
+					Expect(v.TcEgressFilter()).To(Equal(-1), "should be no filters in use")
+				}
+			})
+
+			It("should clean up with update", func() {
+				_ = ifStateMap.Update(
+					ifstate.NewKey(123).AsBytes(),
+					ifstate.NewValue(ifstate.FlgIPv4Ready, "eth123", -1, -1, -1, -1, -1, -1, -1, -1).AsBytes(),
+				)
+
+				genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
+				genWLUpdate("cali12345")()
+
+				err := bpfEpMgr.CompleteDeferredWork()
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(ifStateMap.ContainsKey(ifstate.NewKey(123).AsBytes())).To(BeFalse())
+				flags := ifstate.FlgWEP | ifstate.FlgIPv4Ready
+				if ipv6Enabled {
+					flags = ifstate.FlgWEP | ifstate.FlgIPv6Ready
+				}
+				checkIfState(15, "cali12345", flags)
+			})
+
+			It("iface up -> wl", func() {
+				genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
+				genWLUpdate("cali12345")()
+
+				err := bpfEpMgr.CompleteDeferredWork()
+				Expect(err).NotTo(HaveOccurred())
+
+				flags := ifstate.FlgWEP | ifstate.FlgIPv4Ready
+				if ipv6Enabled {
+					flags = ifstate.FlgWEP | ifstate.FlgIPv6Ready
+				}
+				checkIfState(15, "cali12345", flags)
+			})
+
+			It("iface up -> defer -> wl", func() {
+				genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
+
+				err := bpfEpMgr.CompleteDeferredWork()
+				Expect(err).NotTo(HaveOccurred())
+
+				flags := ifstate.FlgWEP | ifstate.FlgIPv4Ready
+				if ipv6Enabled {
+					flags = ifstate.FlgWEP | ifstate.FlgIPv6Ready
+				}
+
+				checkIfState(15, "cali12345", flags)
+
+				genWLUpdate("cali12345")()
+
+				err = bpfEpMgr.CompleteDeferredWork()
+				Expect(err).NotTo(HaveOccurred())
+
+				checkIfState(15, "cali12345", flags)
+			})
+
+			It("wl -> iface up", func() {
+				genWLUpdate("cali12345")()
+				genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
+
+				err := bpfEpMgr.CompleteDeferredWork()
+				Expect(err).NotTo(HaveOccurred())
+
+				flags := ifstate.FlgWEP | ifstate.FlgIPv4Ready
+				if ipv6Enabled {
+					flags = ifstate.FlgWEP | ifstate.FlgIPv6Ready
+				}
+				checkIfState(15, "cali12345", flags)
+			})
+
+			It("wl -> defer -> iface up", func() {
+				genWLUpdate("cali12345")()
+
+				err := bpfEpMgr.CompleteDeferredWork()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(ifStateMap.ContainsKey(ifstate.NewKey(uint32(15)).AsBytes())).To(BeFalse())
+
+				genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
+
+				err = bpfEpMgr.CompleteDeferredWork()
+				Expect(err).NotTo(HaveOccurred())
+
+				flags := ifstate.FlgWEP | ifstate.FlgIPv4Ready
+				if ipv6Enabled {
+					flags = ifstate.FlgWEP | ifstate.FlgIPv6Ready
+				}
+				checkIfState(15, "cali12345", flags)
+			})
+
+			It("iface up -> wl -> iface down", func() {
+				genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
+				genWLUpdate("cali12345")()
+
+				err := bpfEpMgr.CompleteDeferredWork()
+				Expect(err).NotTo(HaveOccurred())
+
+				genIfaceUpdate("cali12345", ifacemonitor.StateDown, 15)()
+
+				err = bpfEpMgr.CompleteDeferredWork()
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(ifStateMap.ContainsKey(ifstate.NewKey(15).AsBytes())).To(BeFalse())
+			})
+
+			It("iface up -> wl -> iface down, up, down", func() {
+				genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
+				genWLUpdate("cali12345")()
+
+				err := bpfEpMgr.CompleteDeferredWork()
+				Expect(err).NotTo(HaveOccurred())
+
+				genIfaceUpdate("cali12345", ifacemonitor.StateDown, 15)()
+				genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
+				genIfaceUpdate("cali12345", ifacemonitor.StateDown, 15)()
+
+				err = bpfEpMgr.CompleteDeferredWork()
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(ifStateMap.ContainsKey(ifstate.NewKey(15).AsBytes())).To(BeFalse())
+			})
+
+			It("iface up -> wl -> iface down -> iface up", func() {
+				genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
+				genWLUpdate("cali12345")()
+
+				err := bpfEpMgr.CompleteDeferredWork()
+				Expect(err).NotTo(HaveOccurred())
+
+				genIfaceUpdate("cali12345", ifacemonitor.StateDown, 15)()
+
+				err = bpfEpMgr.CompleteDeferredWork()
+				Expect(err).NotTo(HaveOccurred())
+
+				genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
+
+				err = bpfEpMgr.CompleteDeferredWork()
+				Expect(err).NotTo(HaveOccurred())
+
+				flags := ifstate.FlgWEP | ifstate.FlgIPv4Ready
+				if ipv6Enabled {
+					flags = ifstate.FlgWEP | ifstate.FlgIPv6Ready
+				}
+				checkIfState(15, "cali12345", flags)
+			})
 		}
-
-		It("should clean up jump map entries for missing interfaces", func() {
-			for i := 0; i < 17; i++ {
-				_ = jumpMap.Update(jump.Key(i), jump.Value(uint32(1000+i)))
-				_ = jumpMap.Update(jump.Key(i+jump.TCMaxEntryPoints), jump.Value(uint32(1000+i)))
-			}
-			for i := 0; i < 5; i++ {
-				_ = xdpJumpMap.Update(jump.Key(i), jump.Value(uint32(2000+i)))
-			}
-
-			_ = ifStateMap.Update(
-				ifstate.NewKey(123).AsBytes(),
-				ifstate.NewValue(ifstate.FlgReady, "eth123",
-					1, 1, 2, 3, 4).AsBytes(),
-			)
-			_ = ifStateMap.Update(
-				ifstate.NewKey(124).AsBytes(),
-				ifstate.NewValue(0, "eth124",
-					2, 5, 6, 7, 8).AsBytes(),
-			)
-			_ = ifStateMap.Update(
-				ifstate.NewKey(125).AsBytes(),
-				ifstate.NewValue(ifstate.FlgWEP|ifstate.FlgReady, "eth125",
-					3, 9, 10, 11, 12).AsBytes(),
-			)
-			_ = ifStateMap.Update(
-				ifstate.NewKey(126).AsBytes(),
-				ifstate.NewValue(ifstate.FlgWEP, "eth123",
-					0, 13, 14, 15, 0).AsBytes(),
-			)
-
-			err := bpfEpMgr.CompleteDeferredWork()
-			Expect(err).NotTo(HaveOccurred())
-
-			Expect(ifStateMap.IsEmpty()).To(BeTrue())
-			Expect(jumpMap.Contents).To(Equal(map[string]string{
-				string(jump.Key(16)):                         string(jump.Value(uint32(1000 + 16))),
-				string(jump.Key(16 + jump.TCMaxEntryPoints)): string(jump.Value(uint32(1000 + 16))),
-			}))
-			Expect(xdpJumpMap.Contents).To(Equal(map[string]string{
-				// Key 4 wasn't used above so it should persist.
-				string(jump.Key(4)): string(jump.Value(uint32(2000 + 4))),
-			}))
-		})
-
-		dumpJumpMap := func(in *mock.Map) map[int]int {
-			out := map[int]int{}
-			for k, v := range in.Contents {
-				parsedKey := binary.LittleEndian.Uint32([]byte(k))
-				parsedVal := binary.LittleEndian.Uint32([]byte(v))
-				out[int(parsedKey)] = int(parsedVal)
-			}
-			return out
-		}
-
-		dumpIfstateMap := func(in *mock.Map) map[int]string {
-			out := map[int]string{}
-			for k, v := range in.Contents {
-				parsedKey := ifstate.KeyFromBytes([]byte(k))
-				parsedVal := ifstate.ValueFromBytes([]byte(v))
-				out[int(parsedKey.IfIndex())] = parsedVal.String()
-			}
-			return out
-		}
-
-		It("should reclaim indexes for active interfaces", func() {
-			for i := 0; i < 8; i++ {
-				_ = jumpMap.Update(jump.Key(i), jump.Value(uint32(1000+i)))
-				_ = jumpMap.Update(jump.Key(i+jump.TCMaxEntryPoints), jump.Value(uint32(1000+i)))
-			}
-			for i := 1; i < 2; i++ {
-				_ = xdpJumpMap.Update(jump.Key(i), jump.Value(uint32(2000+i)))
-			}
-
-			key123 := ifstate.NewKey(123).AsBytes()
-			value123 := ifstate.NewValue(ifstate.FlgReady|ifstate.FlgWEP, "cali12345",
-				-1, 0, 2, 3, 4)
-			_ = ifStateMap.Update(
-				key123,
-				value123.AsBytes(),
-			)
-			_ = ifStateMap.Update(
-				ifstate.NewKey(124).AsBytes(),
-				ifstate.NewValue(0, "eth124",
-					2, 5, 6, 7, 1).AsBytes(),
-			)
-
-			dp.interfaceByIndexFn = func(ifindex int) (*net.Interface, error) {
-				if ifindex == 123 {
-					return &net.Interface{
-						Name:  "cali12345",
-						Index: 123,
-						Flags: net.FlagUp,
-					}, nil
-				}
-				return nil, errors.New("no such network interface")
-			}
-			genWLUpdate("cali12345", "pol-a")()
-
-			err := bpfEpMgr.CompleteDeferredWork()
-			Expect(err).NotTo(HaveOccurred())
-
-			Expect(dumpIfstateMap(ifStateMap)).To(Equal(map[int]string{
-				123: value123.String(),
-			}))
-
-			// Expect clean-up deletions but no value changes due to mocking.
-			Expect(dumpJumpMap(jumpMap)).To(Equal(map[int]int{
-				0:     1000,
-				2:     1002,
-				3:     1003,
-				4:     1004,
-				10000: 1000,
-				10002: 1002,
-				10003: 1003,
-				10004: 1004,
-			}))
-			Expect(dumpJumpMap(xdpJumpMap)).To(Equal(map[int]int{
-				1: 2001,
-			}))
-		})
-
-		It("should handle jump map collision: single iface", func() {
-			// This test verifies that we recover if we're started with
-			// bad data in the ifstate map; in particular if two policy
-			// program indexes collide.
-
-			key123 := ifstate.NewKey(123).AsBytes()
-
-			// Oops, we accidentally wrote all zeros to the dataplane...
-			value123Zeros := ifstate.NewValue(ifstate.FlgReady|ifstate.FlgWEP, "cali12345",
-				0, 0, 0, 0, 0)
-			_ = ifStateMap.Update(
-				key123,
-				value123Zeros.AsBytes(),
-			)
-
-			dp.interfaceByIndexFn = func(ifindex int) (*net.Interface, error) {
-				if ifindex == 123 {
-					return &net.Interface{
-						Name:  "cali12345",
-						Index: 123,
-						Flags: net.FlagUp,
-					}, nil
-				}
-				return nil, errors.New("no such network interface")
-			}
-			genWLUpdate("cali12345", "pol-a")()
-
-			err := bpfEpMgr.CompleteDeferredWork()
-			Expect(err).NotTo(HaveOccurred())
-
-			// XDP gets cleaned up because it's a WEP, ingress keeps its
-			// ID because it was the first; egress gets reallocated.
-			value123Fixed := ifstate.NewValue(ifstate.FlgReady|ifstate.FlgWEP, "cali12345",
-				-1, 0, 1, -1, -1)
-			Expect(dumpIfstateMap(ifStateMap)).To(Equal(map[int]string{
-				123: value123Fixed.String(),
-			}))
-		})
-
-		It("should handle jump map collision: multi-iface", func() {
-			// This test verifies that we recover if we're started with
-			// bad data in the ifstate map; in particular if two policy
-			// program indexes collide.
-
-			// Oops, we accidentally wrote all zeros to the dataplane...
-			key123 := ifstate.NewKey(123).AsBytes()
-			value123Zeros := ifstate.NewValue(ifstate.FlgReady|ifstate.FlgWEP, "cali12345",
-				0, 0, 0, 0, 0)
-			_ = ifStateMap.Update(
-				key123,
-				value123Zeros.AsBytes(),
-			)
-
-			// ...twice.
-			key124 := ifstate.NewKey(124).AsBytes()
-			value124Zeros := ifstate.NewValue(ifstate.FlgReady|ifstate.FlgWEP, "cali56789",
-				0, 0, 0, 0, 0)
-			_ = ifStateMap.Update(
-				key124,
-				value124Zeros.AsBytes(),
-			)
-
-			dp.interfaceByIndexFn = func(ifindex int) (*net.Interface, error) {
-				if ifindex == 123 {
-					return &net.Interface{
-						Name:  "cali12345",
-						Index: 123,
-						Flags: net.FlagUp,
-					}, nil
-				}
-				if ifindex == 124 {
-					return &net.Interface{
-						Name:  "cali56789",
-						Index: 124,
-						Flags: net.FlagUp,
-					}, nil
-				}
-				return nil, errors.New("no such network interface")
-			}
-			genWLUpdate("cali12345", "pol-a")()
-			genWLUpdate("cali56789", "pol-b")()
-
-			err := bpfEpMgr.CompleteDeferredWork()
-			Expect(err).NotTo(HaveOccurred())
-
-			// Everything collides but the allocations are non-deterministic
-			// so we need to check them by hand...
-			Expect(ifStateMap.Contents).To(HaveLen(2))
-			val123 := ifstate.ValueFromBytes([]byte(ifStateMap.Contents[string(key123)]))
-			val124 := ifstate.ValueFromBytes([]byte(ifStateMap.Contents[string(key124)]))
-
-			tcIDsSeen := set.New[int]()
-			for _, v := range []ifstate.Value{val123, val124} {
-				Expect(v.XDPPolicy()).To(Equal(-1), "WEPs shouldn't get XDP IDs")
-
-				Expect(v.IngressPolicy()).NotTo(Equal(-1), "WEPs should have ingress pol")
-				Expect(tcIDsSeen.Contains(v.IngressPolicy())).To(BeFalse(), "Saw same jump map ID more than once")
-				tcIDsSeen.Add(v.IngressPolicy())
-
-				Expect(v.EgressPolicy()).NotTo(Equal(-1), "WEPs should have egress pol")
-				Expect(tcIDsSeen.Contains(v.EgressPolicy())).To(BeFalse(), "Saw same jump map ID more than once")
-				tcIDsSeen.Add(v.EgressPolicy())
-
-				Expect(v.TcIngressFilter()).To(Equal(-1), "should be no filters in use")
-				Expect(v.TcEgressFilter()).To(Equal(-1), "should be no filters in use")
-			}
-		})
-
-		It("should handle jump map collision: multi-iface HEPs", func() {
-			// Verify collision of two HEPs (using same policy IDs), they
-			// use XDP too.
-
-			// Oops, we accidentally wrote all zeros to the dataplane...
-			key123 := ifstate.NewKey(123).AsBytes()
-			value123Zeros := ifstate.NewValue(ifstate.FlgReady, "eth0",
-				0, 0, 0, 0, -1)
-			_ = ifStateMap.Update(key123, value123Zeros.AsBytes())
-
-			// ...twice.
-			key124 := ifstate.NewKey(124).AsBytes()
-			// Using eth0a because the data iface pattern is eth0 (other tests
-			// use eth1 for something else...).
-			value124Zeros := ifstate.NewValue(ifstate.FlgReady, "eth0a",
-				0, 0, 0, -1, 0)
-			_ = ifStateMap.Update(key124, value124Zeros.AsBytes())
-
-			dp.interfaceByIndexFn = func(ifindex int) (*net.Interface, error) {
-				if ifindex == 123 {
-					return &net.Interface{
-						Name:  "eth0",
-						Index: 123,
-						Flags: net.FlagUp,
-					}, nil
-				}
-				if ifindex == 124 {
-					return &net.Interface{
-						Name:  "eth0a",
-						Index: 124,
-						Flags: net.FlagUp,
-					}, nil
-				}
-				return nil, errors.New("no such network interface")
-			}
-
-			err := bpfEpMgr.CompleteDeferredWork()
-			Expect(err).NotTo(HaveOccurred())
-
-			// Everything collides but the allocations are non-deterministic
-			// so we need to check them by hand...
-			ifDump := dumpIfstateMap(ifStateMap)
-			Expect(ifDump).To(HaveLen(2))
-			Expect(ifDump).To(HaveKey(123))
-			Expect(ifDump).To(HaveKey(124))
-			val123 := ifstate.ValueFromBytes([]byte(ifStateMap.Contents[string(key123)]))
-			val124 := ifstate.ValueFromBytes([]byte(ifStateMap.Contents[string(key124)]))
-
-			xdpIDsSeen := set.New[int]()
-			tcIDsSeen := set.New[int]()
-			for _, v := range []ifstate.Value{val123, val124} {
-				Expect(v.XDPPolicy()).NotTo(Equal(-1), "WEPs shouldn't get XDP IDs")
-				Expect(xdpIDsSeen.Contains(v.XDPPolicy())).To(BeFalse(), fmt.Sprintf("Saw same jump XDP map ID %d more than once", v.XDPPolicy()))
-				xdpIDsSeen.Add(v.XDPPolicy())
-
-				Expect(v.IngressPolicy()).NotTo(Equal(-1), "WEPs should have ingress pol")
-				Expect(tcIDsSeen.Contains(v.IngressPolicy())).To(BeFalse(), "Saw same jump map ID more than once")
-				tcIDsSeen.Add(v.IngressPolicy())
-
-				Expect(v.EgressPolicy()).NotTo(Equal(-1), "WEPs should have egress pol")
-				Expect(tcIDsSeen.Contains(v.EgressPolicy())).To(BeFalse(), "Saw same jump map ID more than once")
-				tcIDsSeen.Add(v.EgressPolicy())
-
-				Expect(v.TcIngressFilter()).To(Equal(-1), "should be no filters in use")
-				Expect(v.TcEgressFilter()).To(Equal(-1), "should be no filters in use")
-			}
-		})
-
-		It("should clean up with update", func() {
-			_ = ifStateMap.Update(
-				ifstate.NewKey(123).AsBytes(),
-				ifstate.NewValue(ifstate.FlgReady, "eth123", -1, -1, -1, -1, -1).AsBytes(),
-			)
-
-			genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
-			genWLUpdate("cali12345")()
-
-			err := bpfEpMgr.CompleteDeferredWork()
-			Expect(err).NotTo(HaveOccurred())
-
-			Expect(ifStateMap.ContainsKey(ifstate.NewKey(123).AsBytes())).To(BeFalse())
-			checkIfState(15, "cali12345", ifstate.FlgWEP|ifstate.FlgReady)
-		})
-
-		It("iface up -> wl", func() {
-			genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
-			genWLUpdate("cali12345")()
-
-			err := bpfEpMgr.CompleteDeferredWork()
-			Expect(err).NotTo(HaveOccurred())
-
-			checkIfState(15, "cali12345", ifstate.FlgWEP|ifstate.FlgReady)
-		})
-
-		It("iface up -> defer -> wl", func() {
-			genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
-
-			err := bpfEpMgr.CompleteDeferredWork()
-			Expect(err).NotTo(HaveOccurred())
-
-			checkIfState(15, "cali12345", ifstate.FlgWEP|ifstate.FlgReady)
-
-			genWLUpdate("cali12345")()
-
-			err = bpfEpMgr.CompleteDeferredWork()
-			Expect(err).NotTo(HaveOccurred())
-
-			checkIfState(15, "cali12345", ifstate.FlgWEP|ifstate.FlgReady)
-		})
-
-		It("wl -> iface up", func() {
-			genWLUpdate("cali12345")()
-			genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
-
-			err := bpfEpMgr.CompleteDeferredWork()
-			Expect(err).NotTo(HaveOccurred())
-
-			checkIfState(15, "cali12345", ifstate.FlgWEP|ifstate.FlgReady)
-		})
-
-		It("wl -> defer -> iface up", func() {
-			genWLUpdate("cali12345")()
-
-			err := bpfEpMgr.CompleteDeferredWork()
-			Expect(err).NotTo(HaveOccurred())
-			Expect(ifStateMap.ContainsKey(ifstate.NewKey(uint32(15)).AsBytes())).To(BeFalse())
-
-			genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
-
-			err = bpfEpMgr.CompleteDeferredWork()
-			Expect(err).NotTo(HaveOccurred())
-
-			checkIfState(15, "cali12345", ifstate.FlgWEP|ifstate.FlgReady)
-		})
-
-		It("iface up -> wl -> iface down", func() {
-			genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
-			genWLUpdate("cali12345")()
-
-			err := bpfEpMgr.CompleteDeferredWork()
-			Expect(err).NotTo(HaveOccurred())
-
-			genIfaceUpdate("cali12345", ifacemonitor.StateDown, 15)()
-
-			err = bpfEpMgr.CompleteDeferredWork()
-			Expect(err).NotTo(HaveOccurred())
-
-			Expect(ifStateMap.ContainsKey(ifstate.NewKey(15).AsBytes())).To(BeFalse())
-		})
-
-		It("iface up -> wl -> iface down, up, down", func() {
-			genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
-			genWLUpdate("cali12345")()
-
-			err := bpfEpMgr.CompleteDeferredWork()
-			Expect(err).NotTo(HaveOccurred())
-
-			genIfaceUpdate("cali12345", ifacemonitor.StateDown, 15)()
-			genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
-			genIfaceUpdate("cali12345", ifacemonitor.StateDown, 15)()
-
-			err = bpfEpMgr.CompleteDeferredWork()
-			Expect(err).NotTo(HaveOccurred())
-
-			Expect(ifStateMap.ContainsKey(ifstate.NewKey(15).AsBytes())).To(BeFalse())
-		})
-
-		It("iface up -> wl -> iface down -> iface up", func() {
-			genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
-			genWLUpdate("cali12345")()
-
-			err := bpfEpMgr.CompleteDeferredWork()
-			Expect(err).NotTo(HaveOccurred())
-
-			genIfaceUpdate("cali12345", ifacemonitor.StateDown, 15)()
-
-			err = bpfEpMgr.CompleteDeferredWork()
-			Expect(err).NotTo(HaveOccurred())
-
-			genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
-
-			err = bpfEpMgr.CompleteDeferredWork()
-			Expect(err).NotTo(HaveOccurred())
-
-			checkIfState(15, "cali12345", ifstate.FlgWEP|ifstate.FlgReady)
-		})
 	})
 
 	Describe("program map", func() {
@@ -1408,7 +1519,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			mockDP = &mockProgMapDP{
 				dp,
 			}
-			newBpfEpMgr()
+			newBpfEpMgr(false)
 
 			bpfEpMgr.bpfLogLevel = "debug"
 			bpfEpMgr.logFilters = map[string]string{"all": "tcp"}
@@ -1512,7 +1623,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			mockDP = &mockProgMapDP{
 				dp,
 			}
-			newBpfEpMgr()
+			newBpfEpMgr(false)
 
 			bpfEpMgr.bpfLogLevel = "debug"
 			bpfEpMgr.logFilters = map[string]string{"all": "tcp"}
