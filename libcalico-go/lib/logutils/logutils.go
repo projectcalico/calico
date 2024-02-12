@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2019,2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"testing"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -521,4 +522,42 @@ func SafeParseLogLevel(logLevel string) log.Level {
 		}
 	}
 	return defaultedLevel
+}
+
+// TestingTWriter adapts a *testing.T as a Writer so it can be used as a target
+// for logrus.  typically, it should be used via the ConfigureLoggingForTestingT
+// helper.
+type TestingTWriter struct {
+	T *testing.T
+}
+
+func (l TestingTWriter) Write(p []byte) (n int, err error) {
+	l.T.Helper()
+	l.T.Log(strings.TrimRight(string(p), "\r\n"))
+	return len(p), nil
+}
+
+// RedirectLogrusToTestingT redirects logrus output to the given testing.T.  It
+// returns a func() that can be called to restore the original log output.
+func RedirectLogrusToTestingT(t *testing.T) (cancel func()) {
+	oldOut := log.StandardLogger().Out
+	cancel = func() {
+		log.SetOutput(oldOut)
+	}
+	log.SetOutput(TestingTWriter{T: t})
+	return
+}
+
+var confForTestingOnce sync.Once
+
+// ConfigureLoggingForTestingT configures logrus to write to the logger of the
+// given testing.T.  It should be called at the start of each "go test" that
+// wants to capture log output.  It registers a cleanup with the testing.T to
+// remove the log redirection at the end of the test.
+func ConfigureLoggingForTestingT(t *testing.T) {
+	confForTestingOnce.Do(func() {
+		log.SetFormatter(&Formatter{Component: "test"})
+		log.AddHook(ContextHook{})
+	})
+	t.Cleanup(RedirectLogrusToTestingT(t))
 }
