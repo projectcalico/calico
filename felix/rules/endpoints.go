@@ -606,7 +606,8 @@ func (g *PolicyGroup) UniqueID() string {
 		write(name)
 	}
 	hashBytes := hash.Sum(make([]byte, 0, hash.Size()))
-	return base64.RawURLEncoding.EncodeToString(hashBytes)[:MaxPolicyGroupUIDLength]
+	g.cachedUID = base64.RawURLEncoding.EncodeToString(hashBytes)[:MaxPolicyGroupUIDLength]
+	return g.cachedUID
 }
 
 func (g *PolicyGroup) ChainName() string {
