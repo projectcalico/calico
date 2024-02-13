@@ -41,6 +41,8 @@ const (
 	fieldFileName = "__file__"
 	// fieldLineNumber is a reserved field name used to pass the line number from the ContextHook to our Formatter.
 	fieldLineNumber = "__line__"
+
+	MaxValueLen = 1024
 )
 
 // FilterLevels returns all the logrus.Level values <= maxLevel.
@@ -128,25 +130,64 @@ func appendKVsAndNewLine(b *bytes.Buffer, entry *log.Entry) {
 		if key == fieldFileName || key == fieldLineNumber || key == FieldForceFlush {
 			continue
 		}
-		var value interface{} = entry.Data[key]
-		var stringifiedValue string
-		if err, ok := value.(error); ok {
-			stringifiedValue = err.Error()
-		} else if stringer, ok := value.(fmt.Stringer); ok {
-			// Trust the value's String() method.
-			stringifiedValue = stringer.String()
-		} else {
-			// No string method, use %#v to get a more thorough dump.
-			fmt.Fprintf(b, " %v=%#v", key, value)
-			continue
-		}
+		var value = entry.Data[key]
+
 		b.WriteByte(' ')
 		b.WriteString(key)
 		b.WriteByte('=')
-		b.WriteString(stringifiedValue)
+		w := &truncatingWriter{
+			w:     b,
+			limit: MaxValueLen,
+		}
+		switch value := value.(type) {
+		case LogWriter:
+			_ = value.WriteForLog(w)
+		case error:
+			_, _ = w.WriteString(value.(error).Error())
+		case fmt.Stringer:
+			_, _ = w.WriteString(value.String())
+		default:
+			_, _ = fmt.Fprintf(w, "%#v", value)
+		}
+		if w.truncated {
+			_, _ = fmt.Fprintf(b, "...<truncated>")
+		}
 	}
 	b.WriteByte('\n')
 }
+
+type LogWriter interface {
+	WriteForLog(w io.Writer) (err error)
+}
+
+type truncatingWriter struct {
+	w         io.Writer
+	limit     int
+	truncated bool
+}
+
+func (l *truncatingWriter) Write(p []byte) (n int, err error) {
+	limited := p
+	if len(limited) > l.limit {
+		limited = limited[:l.limit]
+	}
+	n, err = l.w.Write(limited)
+	l.limit -= n
+	if err != nil {
+		return
+	}
+	if len(p) > len(limited) {
+		l.truncated = true
+		err = errLimitReached
+	}
+	return
+}
+
+func (l *truncatingWriter) WriteString(s string) (n int, err error) {
+	return l.Write([]byte(s))
+}
+
+var errLimitReached = fmt.Errorf("limit reached")
 
 // NullWriter is a dummy writer that always succeeds and does nothing.
 type NullWriter struct{}
