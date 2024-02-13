@@ -173,7 +173,7 @@ func New(k8s kubernetes.Interface, dp DPSyncer, hostname string, opts ...Option)
 		p.recorder,
 		nil,
 	)
-	p.svcChanges = k8sp.NewServiceChangeTracker(nil, ipVersion, p.recorder, nil)
+	p.svcChanges = k8sp.NewServiceChangeTracker(makeServiceInfo, ipVersion, p.recorder, nil)
 
 	noProxyName, err := labels.NewRequirement(apis.LabelServiceProxyName, selection.DoesNotExist, nil)
 	if err != nil {
@@ -361,4 +361,40 @@ func (is *initState) setEpsSynced() {
 type loggerRecorder struct{}
 
 func (r *loggerRecorder) Eventf(regarding runtime.Object, related runtime.Object, eventtype, reason, action, note string, args ...interface{}) {
+}
+
+const (
+	ReapTerminatingUDPAnnotation   = "projectcalico.org/udpConntrackCleanup"
+	ReapTerminatingUDPImmediatelly = "terminatingImmediately"
+)
+
+type ServiceAnnotations interface {
+	ReapTerminatingUDP() bool
+}
+
+type servicePortAnnotations struct {
+	reapTerminatingUDP bool
+}
+
+func (s *servicePortAnnotations) ReapTerminatingUDP() bool {
+	return s.reapTerminatingUDP
+}
+
+type servicePort struct {
+	k8sp.ServicePort
+	servicePortAnnotations
+}
+
+func makeServiceInfo(_ *v1.ServicePort, s *v1.Service, baseSvc *k8sp.BaseServicePortInfo) k8sp.ServicePort {
+	svc := &servicePort{
+		ServicePort: baseSvc,
+	}
+
+	if baseSvc.Protocol() == v1.ProtocolUDP {
+		if v, ok := s.ObjectMeta.Annotations[ReapTerminatingUDPAnnotation]; ok && v == ReapTerminatingUDPImmediatelly {
+			svc.reapTerminatingUDP = true
+		}
+	}
+
+	return svc
 }

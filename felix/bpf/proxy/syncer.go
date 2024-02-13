@@ -43,11 +43,17 @@ var podNPIP = net.ParseIP(podNPIPStr)
 var podNPIPV6Str = "ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff"
 var podNPIPV6 = net.ParseIP(podNPIPV6Str)
 
+// Service combines k8s service properties with the service annotations
+type Service interface {
+	k8sp.ServicePort
+	ServiceAnnotations
+}
+
 type svcInfo struct {
 	id         uint32
 	count      int
 	localCount int
-	svc        k8sp.ServicePort
+	svc        Service
 }
 
 type svcKey struct {
@@ -344,7 +350,7 @@ func (s *Syncer) startupBuildPrev(state DPSyncerState) error {
 			id:         id,
 			count:      count,
 			localCount: int(svcv.LocalCount()),
-			svc:        state.SvcMap[svckey.sname],
+			svc:        state.SvcMap[svckey.sname].(Service),
 		}
 
 		if id >= s.nextSvcID {
@@ -393,7 +399,7 @@ func (s *Syncer) startupSync(state DPSyncerState) error {
 	return nil
 }
 
-func (s *Syncer) applySvc(skey svcKey, sinfo k8sp.ServicePort, eps []k8sp.Endpoint) error {
+func (s *Syncer) applySvc(skey svcKey, sinfo Service, eps []k8sp.Endpoint) error {
 	var id uint32
 
 	old, exists := s.prevSvcMap[skey]
@@ -421,7 +427,7 @@ func (s *Syncer) applySvc(skey svcKey, sinfo k8sp.ServicePort, eps []k8sp.Endpoi
 	return nil
 }
 
-func (s *Syncer) addActiveEps(id uint32, svc k8sp.ServicePort, eps []k8sp.Endpoint) {
+func (s *Syncer) addActiveEps(id uint32, svc Service, eps []k8sp.Endpoint) {
 	svcKey := servicePortToIPPortProto(svc)
 
 	s.activeSvcsMap[svcKey] = id
@@ -433,6 +439,9 @@ func (s *Syncer) addActiveEps(id uint32, svc k8sp.ServicePort, eps []k8sp.Endpoi
 	epsmap := make(map[ipPort]struct{})
 	s.activeEpsMap[id] = epsmap
 	for _, ep := range eps {
+		if ep.IsTerminating() && svc.Protocol() == v1.ProtocolUDP && svc.ReapTerminatingUDP() {
+			continue // do not add this endpoint, treat it as if does not exist anymore
+		}
 		port, _ := ep.Port() // it is error free by this point
 		epsmap[ipPort{
 			ip:   ep.IP(),
@@ -519,7 +528,7 @@ func (s *Syncer) expandNodePorts(
 func (s *Syncer) applyDerived(
 	sname k8sp.ServicePortName,
 	t svcType,
-	sinfo k8sp.ServicePort,
+	sinfo Service,
 ) error {
 
 	svc, ok := s.newSvcMap[getSvcKey(sname, "")]
@@ -591,7 +600,8 @@ func (s *Syncer) apply(state DPSyncerState) error {
 
 	// insert or update existing services
 	for sname, sinfo := range state.SvcMap {
-		hintsAnnotation := sinfo.HintsAnnotation()
+		svc := sinfo.(Service)
+		hintsAnnotation := svc.HintsAnnotation()
 
 		log.WithField("service", sname).Debug("Applying service")
 		skey := getSvcKey(sname, "")
@@ -612,14 +622,14 @@ func (s *Syncer) apply(state DPSyncerState) error {
 			}
 		}
 
-		err := s.applySvc(skey, sinfo, eps)
+		err := s.applySvc(skey, svc, eps)
 		if err != nil {
 			return err
 		}
 
-		for _, lbIP := range sinfo.LoadBalancerIPStrings() {
+		for _, lbIP := range svc.LoadBalancerIPStrings() {
 			if lbIP != "" {
-				extInfo := serviceInfoFromK8sServicePort(sinfo)
+				extInfo := serviceInfoFromK8sServicePort(svc)
 				extInfo.clusterIP = net.ParseIP(lbIP)
 				err := s.applyDerived(sname, svcTypeLoadBalancer, extInfo)
 				if err != nil {
@@ -630,8 +640,8 @@ func (s *Syncer) apply(state DPSyncerState) error {
 			}
 		}
 		// N.B. we assume that k8s provide us with no duplicities
-		for _, extIP := range sinfo.ExternalIPStrings() {
-			extInfo := serviceInfoFromK8sServicePort(sinfo)
+		for _, extIP := range svc.ExternalIPStrings() {
+			extInfo := serviceInfoFromK8sServicePort(svc)
 			extInfo.clusterIP = net.ParseIP(extIP)
 			err := s.applyDerived(sname, svcTypeExternalIP, extInfo)
 			if err != nil {
@@ -640,12 +650,12 @@ func (s *Syncer) apply(state DPSyncerState) error {
 			}
 		}
 
-		if nport := sinfo.NodePort(); nport != 0 {
+		if nport := svc.NodePort(); nport != 0 {
 			for _, npip := range s.nodePortIPs {
-				npInfo := serviceInfoFromK8sServicePort(sinfo)
+				npInfo := serviceInfoFromK8sServicePort(svc)
 				npInfo.clusterIP = npip
 				npInfo.port = nport
-				if sinfo.InternalPolicyLocal() &&
+				if svc.InternalPolicyLocal() &&
 					((s.ipFamily == 4 && npip.Equal(podNPIP)) || (s.ipFamily == 6 && npip.Equal(podNPIPV6))) {
 					// do not program the meta entry, program each node
 					// separately
@@ -657,8 +667,8 @@ func (s *Syncer) apply(state DPSyncerState) error {
 					continue
 				}
 			}
-			if sinfo.InternalPolicyLocal() {
-				if miss := s.expandAndApplyNodePorts(sname, sinfo, eps, nport, s.rt.Lookup); miss != nil {
+			if svc.InternalPolicyLocal() {
+				if miss := s.expandAndApplyNodePorts(sname, svc, eps, nport, s.rt.Lookup); miss != nil {
 					expNPMisses = append(expNPMisses, miss)
 				}
 			}
@@ -1246,7 +1256,7 @@ func (s *Syncer) ConntrackFrontendHasBackend(ip net.IP, port uint16,
 	return ok
 }
 
-// ConntrackScanStart excludes Apply from running and builds the active maps from
+// ConntrackScanStart excludes Apply from running and builds the active maps for
 // ConntrackFrontendHasBackend
 func (s *Syncer) ConntrackScanStart() {
 	log.Debug("ConntrackScanStart")
@@ -1297,6 +1307,8 @@ func serviceInfoFromK8sServicePort(sport k8sp.ServicePort) *serviceInfo {
 	sinfo.hintsAnnotation = sport.HintsAnnotation()
 	sinfo.internalTrafficPolicy = sport.InternalTrafficPolicy()
 
+	sinfo.servicePortAnnotations = sport.(*servicePort).servicePortAnnotations
+
 	return sinfo
 }
 
@@ -1315,6 +1327,8 @@ type serviceInfo struct {
 	nodeLocalInternal        bool
 	hintsAnnotation          string
 	internalTrafficPolicy    *v1.ServiceInternalTrafficPolicyType
+
+	servicePortAnnotations
 }
 
 // ExternallyAccessible returns true if the service port is reachable via something
@@ -1420,10 +1434,12 @@ type K8sServicePortOption func(interface{})
 func NewK8sServicePort(clusterIP net.IP, port int, proto v1.Protocol,
 	opts ...K8sServicePortOption) k8sp.ServicePort {
 
-	x := &serviceInfo{
-		clusterIP: clusterIP,
-		port:      port,
-		protocol:  proto,
+	x := &servicePort{
+		ServicePort: &serviceInfo{
+			clusterIP: clusterIP,
+			port:      port,
+			protocol:  proto,
+		},
 	}
 
 	for _, o := range opts {
@@ -1480,50 +1496,56 @@ func stringsEqual(a, b []string) bool {
 // K8sSvcWithLoadBalancerIPs set LoadBalancerIPStrings
 func K8sSvcWithLoadBalancerIPs(ips []string) K8sServicePortOption {
 	return func(s interface{}) {
-		s.(*serviceInfo).loadBalancerIPStrings = ips
+		s.(*servicePort).ServicePort.(*serviceInfo).loadBalancerIPStrings = ips
 	}
 }
 
 // K8sSvcWithLBSourceRangeIPs sets LBSourcePortRangeIPs
 func K8sSvcWithLBSourceRangeIPs(ips []string) K8sServicePortOption {
 	return func(s interface{}) {
-		s.(*serviceInfo).loadBalancerSourceRanges = ips
+		s.(*servicePort).ServicePort.(*serviceInfo).loadBalancerSourceRanges = ips
 	}
 }
 
 // K8sSvcWithExternalIPs sets ExternalIPs
 func K8sSvcWithExternalIPs(ips []string) K8sServicePortOption {
 	return func(s interface{}) {
-		s.(*serviceInfo).externalIPs = ips
+		s.(*servicePort).ServicePort.(*serviceInfo).externalIPs = ips
 	}
 }
 
 // K8sSvcWithNodePort sets the nodeport
 func K8sSvcWithNodePort(np int) K8sServicePortOption {
 	return func(s interface{}) {
-		s.(*serviceInfo).nodePort = np
+		s.(*servicePort).ServicePort.(*serviceInfo).nodePort = np
 	}
 }
 
 // K8sSvcWithLocalOnly sets OnlyNodeLocalEndpoints=true
 func K8sSvcWithLocalOnly() K8sServicePortOption {
 	return func(s interface{}) {
-		s.(*serviceInfo).nodeLocalExternal = true
-		s.(*serviceInfo).nodeLocalInternal = true
+		s.(*servicePort).ServicePort.(*serviceInfo).nodeLocalExternal = true
+		s.(*servicePort).ServicePort.(*serviceInfo).nodeLocalInternal = true
 	}
 }
 
 // K8sSvcWithStickyClientIP sets ServiceAffinityClientIP to seconds
 func K8sSvcWithStickyClientIP(seconds int) K8sServicePortOption {
 	return func(s interface{}) {
-		s.(*serviceInfo).stickyMaxAgeSeconds = seconds
-		s.(*serviceInfo).sessionAffinityType = v1.ServiceAffinityClientIP
+		s.(*servicePort).ServicePort.(*serviceInfo).stickyMaxAgeSeconds = seconds
+		s.(*servicePort).ServicePort.(*serviceInfo).sessionAffinityType = v1.ServiceAffinityClientIP
 	}
 }
 
 // K8sSvcWithHintsAnnotation sets hints annotation to service info object
 func K8sSvcWithHintsAnnotation(hintsAnnotation string) K8sServicePortOption {
 	return func(s interface{}) {
-		s.(*serviceInfo).hintsAnnotation = hintsAnnotation
+		s.(*servicePort).ServicePort.(*serviceInfo).hintsAnnotation = hintsAnnotation
+	}
+}
+
+func K8sSvcWithReapTerminatingUDP() K8sServicePortOption {
+	return func(s interface{}) {
+		s.(*servicePort).reapTerminatingUDP = true
 	}
 }
