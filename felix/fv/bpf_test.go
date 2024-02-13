@@ -5014,8 +5014,15 @@ func ensureBPFProgramsAttachedOffset(offset int, felix *infrastructure.Felix, if
 		prog := []string{}
 		m := dumpIfStateMap(felix)
 		for _, v := range m {
-			if (v.Flags() & ifstate.FlgReady) > 0 {
-				prog = append(prog, v.IfName())
+			flags := v.Flags()
+			if felix.TopologyOptions.EnableIPv6 {
+				if (flags & ifstate.FlgIPv6Ready) > 0 {
+					prog = append(prog, v.IfName())
+				}
+			} else {
+				if (flags & ifstate.FlgIPv4Ready) > 0 {
+					prog = append(prog, v.IfName())
+				}
 			}
 		}
 		return prog

@@ -323,16 +323,19 @@ func (f *Felix) ProgramIptablesDNAT(serviceIP, targetIP, chain string, ipv6 bool
 }
 
 type BPFIfState struct {
-	IfIndex       int
-	Workload      bool
-	Ready         bool
-	IngressPolicy int
-	EgressPolicy  int
+	IfIndex         int
+	Workload        bool
+	V4Ready         bool
+	V6Ready         bool
+	IngressPolicyV4 int
+	EgressPolicyV4  int
+	IngressPolicyV6 int
+	EgressPolicyV6  int
 }
 
 var bpfIfStateRegexp = regexp.MustCompile(`.*([0-9]+) : \{flags: (.*) name: (.*)}`)
 
-func (f *Felix) BPFIfState() map[string]BPFIfState {
+func (f *Felix) BPFIfState(family int) map[string]BPFIfState {
 	out, err := f.ExecOutput("calico-bpf", "ifstate", "dump")
 	Expect(err).NotTo(HaveOccurred())
 
@@ -349,19 +352,35 @@ func (f *Felix) BPFIfState() map[string]BPFIfState {
 		flags := match[2]
 		ifIndex, _ := strconv.Atoi(match[1])
 
-		r := regexp.MustCompile(`IngressPolicy: (\d+)`)
-		m := r.FindStringSubmatch(line)
-		inPol, _ := strconv.Atoi(m[1])
-		r = regexp.MustCompile(`EgressPolicy: (\d+)`)
-		m = r.FindStringSubmatch(line)
-		outPol, _ := strconv.Atoi(m[1])
+		inPolV4 := -1
+		outPolV4 := -1
+		inPolV6 := -1
+		outPolV6 := -1
+		if family == 4 {
+			r := regexp.MustCompile(`IngressPolicyV4: (\d+)`)
+			m := r.FindStringSubmatch(line)
+			inPolV4, _ = strconv.Atoi(m[1])
+			r = regexp.MustCompile(`EgressPolicyV4: (\d+)`)
+			m = r.FindStringSubmatch(line)
+			outPolV4, _ = strconv.Atoi(m[1])
+		} else {
+			r := regexp.MustCompile(`IngressPolicyV6: (\d+)`)
+			m := r.FindStringSubmatch(line)
+			inPolV6, _ = strconv.Atoi(m[1])
+			r = regexp.MustCompile(`EgressPolicyV6: (\d+)`)
+			m = r.FindStringSubmatch(line)
+			outPolV6, _ = strconv.Atoi(m[1])
+		}
 
 		state := BPFIfState{
-			IfIndex:       ifIndex,
-			Workload:      strings.Contains(flags, "workload"),
-			Ready:         strings.Contains(flags, "ready"),
-			IngressPolicy: inPol,
-			EgressPolicy:  outPol,
+			IfIndex:         ifIndex,
+			Workload:        strings.Contains(flags, "workload"),
+			V4Ready:         strings.Contains(flags, "v4Ready"),
+			V6Ready:         strings.Contains(flags, "v6Ready"),
+			IngressPolicyV4: inPolV4,
+			EgressPolicyV4:  outPolV4,
+			IngressPolicyV6: inPolV6,
+			EgressPolicyV6:  outPolV6,
 		}
 
 		states[name] = state
@@ -370,25 +389,31 @@ func (f *Felix) BPFIfState() map[string]BPFIfState {
 	return states
 }
 
-func (f *Felix) BPFNumContiguousPolProgramsFn(iface string, ingressOrEgress string) func() int {
+func (f *Felix) BPFNumContiguousPolProgramsFn(iface string, ingressOrEgress string, family int) func() int {
 	return func() int {
-		cont, _ := f.BPFNumPolProgramsByName(iface, ingressOrEgress)
+		cont, _ := f.BPFNumPolProgramsByName(iface, ingressOrEgress, family)
 		return cont
 	}
 }
 
-func (f *Felix) BPFNumPolProgramsByName(iface string, ingressOrEgress string) (contiguous, total int) {
-	entryPointIdx := f.BPFPolEntryPointIdx(iface, ingressOrEgress)
+func (f *Felix) BPFNumPolProgramsByName(iface string, ingressOrEgress string, family int) (contiguous, total int) {
+	entryPointIdx := f.BPFPolEntryPointIdx(iface, ingressOrEgress, family)
 	return f.BPFNumPolProgramsByEntryPoint(entryPointIdx)
 }
 
-func (f *Felix) BPFPolEntryPointIdx(iface string, ingressOrEgress string) int {
-	ifState := f.BPFIfState()[iface]
+func (f *Felix) BPFPolEntryPointIdx(iface string, ingressOrEgress string, family int) int {
+	ifState := f.BPFIfState(family)[iface]
 	var entryPointIdx int
 	if ingressOrEgress == "ingress" {
-		entryPointIdx = ifState.IngressPolicy
+		entryPointIdx = ifState.IngressPolicyV4
+		if family == 6 {
+			entryPointIdx = ifState.IngressPolicyV6
+		}
 	} else {
-		entryPointIdx = ifState.EgressPolicy
+		entryPointIdx = ifState.EgressPolicyV4
+		if family == 6 {
+			entryPointIdx = ifState.EgressPolicyV6
+		}
 	}
 	return entryPointIdx
 }

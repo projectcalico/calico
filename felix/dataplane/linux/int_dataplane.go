@@ -681,11 +681,6 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			startBPFDataplaneComponents(proto.IPVersion_IPV4, bpfMaps.V4, ipSetIDAllocator, config, ipsetsManager, dp)
 		}
 
-		filterTbl := filterTableV4
-		if config.BPFIpv6Enabled {
-			filterTbl = filterTableV6
-		}
-
 		workloadIfaceRegex := regexp.MustCompile(strings.Join(interfaceRegexes, "|"))
 
 		if config.BPFConnTimeLB == string(apiv3.BPFConnectTimeLBDisabled) &&
@@ -705,7 +700,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			workloadIfaceRegex,
 			ipSetIDAllocator,
 			ruleRenderer,
-			filterTbl,
+			filterTableV4,
+			filterTableV6,
 			dp.reportHealth,
 			dp.loopSummarizer,
 			featureDetector,

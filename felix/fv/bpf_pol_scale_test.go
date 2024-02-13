@@ -109,9 +109,9 @@ var _ = Context("_BPF-SAFE_ BPF policy scale tests", func() {
 		// This test does take some time to converge, make sure that we wait for
 		// convergence before doing policy tests.
 		const expectedNumberOfPolicySubprogs = 5
-		Eventually(tc.Felixes[0].BPFNumContiguousPolProgramsFn(w[0].InterfaceName, "ingress"), "240s", "1s").Should(
+		Eventually(tc.Felixes[0].BPFNumContiguousPolProgramsFn(w[0].InterfaceName, "ingress", 4), "240s", "1s").Should(
 			BeNumerically(">", expectedNumberOfPolicySubprogs))
-		Eventually(tc.Felixes[0].BPFNumContiguousPolProgramsFn(w[1].InterfaceName, "ingress"), "20s", "1s").Should(
+		Eventually(tc.Felixes[0].BPFNumContiguousPolProgramsFn(w[1].InterfaceName, "ingress", 4), "20s", "1s").Should(
 			BeNumerically(">", expectedNumberOfPolicySubprogs))
 
 		// The network sets use IPs from outside the IP pool so we get no
@@ -151,9 +151,9 @@ var _ = Context("_BPF-SAFE_ BPF policy scale tests", func() {
 			w[1].ConfigureInInfra(infra)
 
 			const expectedNumberOfPolicySubprogs = 2
-			Eventually(tc.Felixes[0].BPFNumContiguousPolProgramsFn(w[0].InterfaceName, "ingress"), "60s", "1s").Should(
+			Eventually(tc.Felixes[0].BPFNumContiguousPolProgramsFn(w[0].InterfaceName, "ingress", 4), "60s", "1s").Should(
 				BeNumerically(">=", expectedNumberOfPolicySubprogs))
-			Eventually(tc.Felixes[0].BPFNumContiguousPolProgramsFn(w[1].InterfaceName, "ingress"), "20s", "1s").Should(
+			Eventually(tc.Felixes[0].BPFNumContiguousPolProgramsFn(w[1].InterfaceName, "ingress", 4), "20s", "1s").Should(
 				BeNumerically(">=", expectedNumberOfPolicySubprogs))
 			addW0NetSet(numSets)
 
@@ -163,8 +163,8 @@ var _ = Context("_BPF-SAFE_ BPF policy scale tests", func() {
 			cc.CheckConnectivityWithTimeout(30 * time.Second)
 
 			// Find the index of the policy program for w[0].
-			w0PolIdxIngress = tc.Felixes[0].BPFIfState()[w[0].InterfaceName].IngressPolicy
-			w0PolIdxEgress = tc.Felixes[0].BPFIfState()[w[0].InterfaceName].EgressPolicy
+			w0PolIdxIngress = tc.Felixes[0].BPFIfState(4)[w[0].InterfaceName].IngressPolicyV4
+			w0PolIdxEgress = tc.Felixes[0].BPFIfState(4)[w[0].InterfaceName].EgressPolicyV4
 		})
 
 		It("should clean up policy sub-programs: remove then stop", func() {
