@@ -83,11 +83,36 @@ const (
 	TargetTypeUnreachable TargetType = "unreachable"
 )
 
-// RouteTable manages the calico routes for a specific table. It reconciles the
-// routes that we desire to have for calico managed devices with what is the
-// current status in the dataplane. That is, it removes any routes that we do
-// not desire and adds those that we do. It skips over devices that we do not
-// manage not to interfere with other users of the route tables.
+// RouteTable manages the Calico routes for a specific kernel routing table.
+//
+// There are several complicating factors to managing the routes and all of
+// these have caused real problems in the past:
+//
+//   - There is more than one Felix subcomponent that needs to program routes,
+//     often into the same table.  It is possible for different components to
+//     try to program conflicting routes for the same CIDR (for example, if a
+//     local and remote endpoint share the same IP address).  To deal with this
+//     we assign a RouteClass to each type of route and use that to resolve
+//     conflicts.
+//
+//   - Most Calico components only deal with CIDRs and interfaces, but the
+//     kernel routing table is indexed by CIDR, metric and ToS field.  To handle
+//     this difference in indexing, we use a DeltaTracker indexed in a way that
+//     matches the kernel's indexing.  That allows us to correctly clean up any
+//     kernel routes that would alias if we only considered CIDR.
+//
+//   - We need to translate interface name to interface index and that mapping
+//     can change over time.  Interfaces can be renamed, keeping the same index.
+//     Interfaces can be recreated, keeping the same name but getting a new index.
+//     We handle this by indexing the routes we've been told to create on interface
+//     name and by listening for interface state changes.  When an interface
+//     is updated, we re-calculate the routes that we want to program for it and
+//     re-do conflict resolution.
+//
+//   - When IP addresses move from one interface to another (for example because
+//     a workload has been terminated and a new workload now has the IP) we need
+//     to clean up the conntrack entries from the old workload.  We delegate this
+//     cleanup to the ConntrackTracker; giving it callbacks when routes move.
 type RouteTable struct {
 	logCxt        *log.Entry
 	ipVersion     uint8
@@ -101,9 +126,9 @@ type RouteTable struct {
 	ownershipPolicy          OwnershipPolicy
 
 	// Interface update tracking.
-	fullResyncNeeded  bool
-	ifacesToRescan    set.Set[string]
-	makeARPEntries    bool
+	fullResyncNeeded bool
+	ifacesToRescan   set.Set[string]
+	makeARPEntries   bool
 
 	// ifaceToRoutes and cidrToIfaces are our inputs, updated
 	// eagerly when something in the manager layer tells us to change the
