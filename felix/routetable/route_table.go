@@ -109,10 +109,15 @@ const (
 //     is updated, we re-calculate the routes that we want to program for it and
 //     re-do conflict resolution.
 //
+//   - We can race with the interface monitor goroutine, being asked to program
+//     a route before we've heard about the interface, or spotting a new
+//     interface index when we do a read back of routes from the kernel.
+//
 //   - When IP addresses move from one interface to another (for example because
 //     a workload has been terminated and a new workload now has the IP) we need
 //     to clean up the conntrack entries from the old workload.  We delegate this
 //     cleanup to the ConntrackTracker; giving it callbacks when routes move.
+//
 type RouteTable struct {
 	logCxt        *log.Entry
 	ipVersion     uint8
