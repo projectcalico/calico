@@ -28,7 +28,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gogo/protobuf/proto"
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 )
@@ -141,11 +140,8 @@ func appendKVsAndNewLine(b *bytes.Buffer, entry *log.Entry) {
 			limit: MaxValueLen,
 		}
 		switch value := value.(type) {
-		case proto.Message:
-			// Protobuf message, use custom marshaller to avoid dumping the whole message.
-			// Important that this comes before the fmt.Stringer case below because
-			// proto.Message is also a fmt.Stringer.
-			_ = proto.CompactText(w, value)
+		case LogWriter:
+			_ = value.WriteForLog(w)
 		case error:
 			_, _ = w.WriteString(value.(error).Error())
 		case fmt.Stringer:
@@ -158,6 +154,10 @@ func appendKVsAndNewLine(b *bytes.Buffer, entry *log.Entry) {
 		}
 	}
 	b.WriteByte('\n')
+}
+
+type LogWriter interface {
+	WriteForLog(w io.Writer) (err error)
 }
 
 type truncatingWriter struct {
