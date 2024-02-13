@@ -27,8 +27,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/projectcalico/api/pkg/lib/numorstring"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
@@ -37,6 +35,8 @@ import (
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 	"k8s.io/client-go/kubernetes"
 
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/projectcalico/api/pkg/lib/numorstring"
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/bpfmap"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
@@ -1879,7 +1879,8 @@ func (d *InternalDataplane) onDatastoreMessage(msg interface{}) {
 }
 
 func (d *InternalDataplane) processMsgFromCalcGraph(msg interface{}) {
-	log.WithField("msg", proto.MsgStringer{Msg: msg}).Infof("Received %T update from calculation graph", msg)
+	ms := proto.MaybeWrapWithStringer(msg)
+	log.WithField("msg", ms).Infof("Received %T update from calculation graph", msg)
 	d.datastoreBatchSize++
 	d.dataplaneNeedsSync = true
 	d.recordMsgStat(msg)
