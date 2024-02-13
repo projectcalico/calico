@@ -19,9 +19,7 @@ import (
 	"fmt"
 	"net"
 	"reflect"
-	"regexp"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -30,6 +28,7 @@ import (
 	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/calico/felix/conntrack"
+	"github.com/projectcalico/calico/felix/deltatracker"
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/ifacemonitor"
 	"github.com/projectcalico/calico/felix/ip"
@@ -52,18 +51,14 @@ var (
 
 	ipV6LinkLocalCIDR = ip.MustParseCIDROrIP("fe80::/64")
 
-	listIfaceTime = cprometheus.NewSummary(prometheus.SummaryOpts{
-		Name: "felix_route_table_list_seconds",
-		Help: "Time taken to list all the interfaces during a resync.",
-	})
-	perIfaceSyncTime = cprometheus.NewSummary(prometheus.SummaryOpts{
-		Name: "felix_route_table_per_iface_sync_seconds",
-		Help: "Time taken to sync each interface",
+	listAllRoutesTime = cprometheus.NewSummary(prometheus.SummaryOpts{
+		Name: "felix_route_table_list_all_routes_seconds",
+		Help: "Time taken to list all the routes during a resync.",
 	})
 )
 
 func init() {
-	prometheus.MustRegister(listIfaceTime, perIfaceSyncTime)
+	prometheus.MustRegister(listAllRoutesTime)
 }
 
 const (
@@ -88,136 +83,94 @@ const (
 	TargetTypeUnreachable TargetType = "unreachable"
 )
 
-const (
-	maxApplyRetries = 2
-)
-
-type L2Target struct {
-	// For VXLAN targets, this is the node's real IP address.
-	IP ip.Addr
-
-	// For VXLAN targets, this is the MAC address of the remote VTEP.
-	VTEPMAC net.HardwareAddr
-
-	// For VXLAN targets, this is the IP address of the remote VTEP.
-	GW ip.Addr
-}
-
-type Target struct {
-	Type    TargetType
-	CIDR    ip.CIDR
-	GW      ip.Addr
-	Src     ip.Addr
-	DestMAC net.HardwareAddr
-}
-
-func (t Target) Equal(t2 Target) bool {
-	return reflect.DeepEqual(t, t2)
-}
-
-func (t Target) RouteType() int {
-	switch t.Type {
-	case TargetTypeLocal:
-		return syscall.RTN_LOCAL
-	case TargetTypeThrow:
-		return syscall.RTN_THROW
-	case TargetTypeBlackhole:
-		return syscall.RTN_BLACKHOLE
-	case TargetTypeProhibit:
-		return syscall.RTN_PROHIBIT
-	case TargetTypeUnreachable:
-		return syscall.RTN_UNREACHABLE
-	default:
-		return syscall.RTN_UNICAST
-	}
-}
-
-func (t Target) RouteScope() netlink.Scope {
-	switch t.Type {
-	case TargetTypeLocal:
-		return netlink.SCOPE_HOST
-	case TargetTypeLinkLocalUnicast:
-		return netlink.SCOPE_LINK
-	case TargetTypeGlobalUnicast:
-		return netlink.SCOPE_UNIVERSE
-	case TargetTypeNoEncap:
-		return netlink.SCOPE_UNIVERSE
-	case TargetTypeVXLAN:
-		return netlink.SCOPE_UNIVERSE
-	case TargetTypeThrow:
-		return netlink.SCOPE_UNIVERSE
-	case TargetTypeBlackhole:
-		return netlink.SCOPE_UNIVERSE
-	case TargetTypeProhibit:
-		return netlink.SCOPE_UNIVERSE
-	case TargetTypeOnLink:
-		return netlink.SCOPE_LINK
-	default:
-		return netlink.SCOPE_LINK
-	}
-}
-
-func (t Target) Flags() netlink.NextHopFlag {
-	switch t.Type {
-	case TargetTypeVXLAN, TargetTypeNoEncap, TargetTypeOnLink:
-		return syscall.RTNH_F_ONLINK
-	default:
-		return 0
-	}
-}
-
-type updateType byte
-
-const (
-	updateTypeFullResync updateType = iota
-	updateTypeDelta
-)
-
-// RouteTable manages calico routes for a specific table. It reconciles the
-// routes that we desire to have for calico managed devices with what is the
-// current status in the dataplane. That is, it removes any routes that we do
-// not desire and adds those that we do. It skips over devices that we do not
-// manage not to interfere with other users of the route tables.
+// RouteTable manages the Calico routes for a specific kernel routing table.
+//
+// There are several complicating factors to managing the routes and all of
+// these have caused real problems in the past:
+//
+//   - There is more than one Felix subcomponent that needs to program routes,
+//     often into the same table.  It is possible for different components to
+//     try to program conflicting routes for the same CIDR (for example, if a
+//     local and remote endpoint share the same IP address).  To deal with this
+//     we assign a RouteClass to each type of route and use that to resolve
+//     conflicts.
+//
+//   - Most Calico components only deal with CIDRs and interfaces, but the
+//     kernel routing table is indexed by CIDR, metric and ToS field.  To handle
+//     this difference in indexing, we use a DeltaTracker indexed in a way that
+//     matches the kernel's indexing.  That allows us to correctly clean up any
+//     kernel routes that would alias if we only considered CIDR.
+//
+//   - We need to translate interface name to interface index and that mapping
+//     can change over time.  Interfaces can be renamed, keeping the same index.
+//     Interfaces can be recreated, keeping the same name but getting a new index.
+//     We handle this by indexing the routes we've been told to create on interface
+//     name and by listening for interface state changes.  When an interface
+//     is updated, we re-calculate the routes that we want to program for it and
+//     re-do conflict resolution.
+//
+//   - When IP addresses move from one interface to another (for example because
+//     a workload has been terminated and a new workload now has the IP) we need
+//     to clean up the conntrack entries from the old workload.  We delegate this
+//     cleanup to the ConntrackTracker; giving it callbacks when routes move.
 type RouteTable struct {
 	logCxt        *log.Entry
 	ipVersion     uint8
 	netlinkFamily int
-
-	// Interface update tracking.
-	reSync                bool
-	ifaceNameToUpdateType map[string]updateType
-	ifacePrefixRegexp     *regexp.Regexp
-	includeNoInterface    bool
-
-	ifaceNameToTargets             map[string]map[ip.CIDR]Target
-	ifaceNameToL2Targets           map[string][]L2Target
-	ifaceNameToFirstSeen           map[string]time.Time
-	pendingIfaceNameToDeltaTargets map[string]map[ip.CIDR]*Target
-	pendingIfaceNameToL2Targets    map[string][]L2Target
-
-	pendingConntrackCleanups map[ip.Addr]chan struct{}
-
-	deviceRouteSourceAddress net.IP
-
-	deviceRouteProtocol  netlink.RouteProtocol
-	removeExternalRoutes bool
-
-	nl *handlemgr.HandleManager
-
-	// The route table index. A value of 0 defaults to the main table.
+	// The routing table index.  This is defaulted to RT_TABLE_MAIN if not specified.
 	tableIndex int
 
-	// Testing shims, swapped with mock versions for UT
-	addStaticARPEntry func(cidr ip.CIDR, destMAC net.HardwareAddr, ifaceName string) error
-	conntrack         conntrackIface
-	time              timeshim.Interface
+	deviceRouteSourceAddress ip.Addr
+	defaultRouteProtocol     netlink.RouteProtocol
+	removeExternalRoutes     bool
+	ownershipPolicy          OwnershipPolicy
+
+	// Interface update tracking.
+	fullResyncNeeded bool
+	ifacesToRescan   set.Set[string]
+	makeARPEntries   bool
+
+	// ifaceToRoutes and cidrToIfaces are our inputs, updated
+	// eagerly when something in the manager layer tells us to change the
+	// routes.
+	ifaceToRoutes map[RouteClass]map[string]map[ip.CIDR]Target
+	cidrToIfaces  map[RouteClass]map[ip.CIDR]set.Set[string]
+
+	// kernelRoutes tracks the relationship between the route that we want
+	// to program for a given CIDR (i.e. the route selected after conflict
+	// resolution if there are multiple routes) and the route that's actually
+	// in the kernel.
+	kernelRoutes *deltatracker.DeltaTracker[kernelRouteKey, kernelRoute]
+	pendingARPs  map[string]map[ip.Addr]net.HardwareAddr
+
+	ifaceNameToIndex      map[string]int
+	ifaceIndexToName      map[int]string
+	ifaceIndexToState     map[int]ifacemonitor.State
+	ifaceIndexToGraceInfo map[int]graceInfo
+
+	conntrackCleanupEnabled bool
+	// conntrackTracker is a RealConntrackTracker or a DummyConntrackTracker
+	// Depending on whether conntrack cleanup is enabled or not.
+	conntrackTracker ConntrackTracker
+
+	nl *handlemgr.HandleManager
 
 	opReporter       logutils.OpRecorder
 	livenessCallback func()
 
 	// The route deletion grace period.
 	routeCleanupGracePeriod time.Duration
+	lastGracePeriodCleanup  time.Time
 	featureDetector         environment.FeatureDetectorIface
+
+	conntrack        conntrackIface
+	time             timeshim.Interface
+	newNetlinkHandle func() (netlinkshim.Interface, error)
+}
+
+type graceInfo struct {
+	FirstSeen    time.Time
+	GraceExpired bool
 }
 
 type RouteTableOpt func(table *RouteTable)
@@ -234,64 +187,69 @@ func WithRouteCleanupGracePeriod(routeCleanupGracePeriod time.Duration) RouteTab
 	}
 }
 
-func New(
-	interfaceRegexes []string,
-	ipVersion uint8,
-	netlinkTimeout time.Duration,
-	deviceRouteSourceAddress net.IP,
-	deviceRouteProtocol netlink.RouteProtocol,
-	removeExternalRoutes bool,
-	tableIndex int,
-	opReporter logutils.OpRecorder,
-	featureDetector environment.FeatureDetectorIface,
-	opts ...RouteTableOpt,
-) *RouteTable {
-	return NewWithShims(
-		interfaceRegexes,
-		ipVersion,
-		netlinkshim.NewRealNetlink,
-		netlinkTimeout,
-		addStaticARPEntry,
-		conntrack.New(),
-		timeshim.RealTime(),
-		deviceRouteSourceAddress,
-		deviceRouteProtocol,
-		removeExternalRoutes,
-		tableIndex,
-		opReporter,
-		featureDetector,
-		opts...,
-	)
+func WithStaticARPEntries(b bool) RouteTableOpt {
+	return func(table *RouteTable) {
+		if table.ipVersion != 4 {
+			log.Panic("Bug: ARP entries only supported for IPv4.")
+		}
+		table.makeARPEntries = b
+	}
 }
 
-// NewWithShims is a test constructor, which allows netlink, arp and time to be replaced by shims.
-func NewWithShims(
-	interfaceRegexes []string,
+func WithConntrackCleanup(enabled bool) RouteTableOpt {
+	return func(table *RouteTable) {
+		table.conntrackCleanupEnabled = enabled
+	}
+}
+
+func WithTimeShim(shim timeshim.Interface) RouteTableOpt {
+	return func(table *RouteTable) {
+		table.time = shim
+	}
+}
+
+func WithConntrackShim(shim conntrackIface) RouteTableOpt {
+	return func(table *RouteTable) {
+		table.conntrack = shim
+	}
+}
+
+func WithNetlinkHandleShim(newNetlinkHandle func() (netlinkshim.Interface, error)) RouteTableOpt {
+	return func(table *RouteTable) {
+		table.newNetlinkHandle = newNetlinkHandle
+	}
+}
+
+// OwnershipPolicy is used to determine whether a given interface or route
+// belongs to Calico.  Routes that are loaded from the kernel are checked
+// against this policy to determine if they should be tracked.  The RouteTable
+// cleans up tracked routes that don't match the current datastore state.
+//
+// The policy is also used to determine whether an interface should be tracked
+// or not.  If an interface is not tracked then the RouteTable will not be
+// able to program routes for it, and it will not respond to interface state
+// updates.  This is mainly a performance optimisation for our non-main
+// routing tables which tend to be used to manage routes for a single device.
+type OwnershipPolicy interface {
+	RouteIsOurs(ifaceName string, route *netlink.Route) bool
+
+	IfaceIsOurs(ifaceName string) bool
+	IfaceShouldHaveARPEntries(ifaceName string) bool
+	IfaceShouldHaveGracePeriod(ifaceName string) bool
+}
+
+func New(
+	ownershipPolicy OwnershipPolicy,
 	ipVersion uint8,
-	newNetlinkHandle func() (netlinkshim.Interface, error),
 	netlinkTimeout time.Duration,
-	addStaticARPEntry func(cidr ip.CIDR, destMAC net.HardwareAddr, ifaceName string) error,
-	conntrack conntrackIface,
-	timeShim timeshim.Interface,
 	deviceRouteSourceAddress net.IP,
-	deviceRouteProtocol netlink.RouteProtocol,
+	defaultRouteProtocol netlink.RouteProtocol,
 	removeExternalRoutes bool,
 	tableIndex int,
 	opReporter logutils.OpRecorder,
 	featureDetector environment.FeatureDetectorIface,
 	opts ...RouteTableOpt,
 ) *RouteTable {
-	var filteredRegexes []string
-	includeNoOIF := false
-
-	for _, interfaceRegex := range interfaceRegexes {
-		if interfaceRegex == InterfaceNone {
-			includeNoOIF = true
-		} else {
-			filteredRegexes = append(filteredRegexes, interfaceRegex)
-		}
-	}
-
 	if tableIndex == 0 {
 		// If we set route.Table to 0, what we actually get is a route in RT_TABLE_MAIN.  However,
 		// RouteListFiltered is much more efficient if we give it the "real" table number.
@@ -299,747 +257,1004 @@ func NewWithShims(
 		tableIndex = unix.RT_TABLE_MAIN
 	}
 
-	logCxt := log.WithFields(log.Fields{
-		"ipVersion":  ipVersion,
-		"tableIndex": tableIndex,
+	var logCxt *log.Entry
+	description := fmt.Sprintf("IPv%d,%d", ipVersion, tableIndex)
+	logCxt = log.WithFields(log.Fields{
+		"table": description,
 	})
-
-	// Create a regexp matching the interfaces this route table manages.
-	var ifacePrefixRegexp *regexp.Regexp
-	if len(filteredRegexes) == 0 && len(interfaceRegexes) > 0 {
-		// All of the regexp parts were special matches for non-interface types. In this case don't match any
-		// interfaces.
-		logCxt.Info("No interface matches required for routetable")
-	} else {
-		// Either there were no regexp parts supplied (same as match all), or at least one real interface was included.
-		// Compile the interface regex.
-		ifaceNamePattern := strings.Join(filteredRegexes, "|")
-		logCxt = logCxt.WithField("ifaceRegex", ifaceNamePattern)
-		ifacePrefixRegexp = regexp.MustCompile(ifaceNamePattern)
-		logCxt.Info("Calculated interface name regexp")
-	}
 
 	family := netlink.FAMILY_V4
 	if ipVersion == 6 {
 		family = netlink.FAMILY_V6
 	} else if ipVersion != 4 {
-		log.WithField("ipVersion", ipVersion).Panic("Unknown IP version")
+		logCxt.WithField("ipVersion", ipVersion).Panic("Unknown IP version")
 	}
 
 	rt := &RouteTable{
-		logCxt:                         logCxt,
-		ipVersion:                      ipVersion,
-		netlinkFamily:                  family,
-		ifacePrefixRegexp:              ifacePrefixRegexp,
-		includeNoInterface:             includeNoOIF,
-		ifaceNameToTargets:             map[string]map[ip.CIDR]Target{},
-		ifaceNameToL2Targets:           map[string][]L2Target{},
-		ifaceNameToFirstSeen:           map[string]time.Time{},
-		pendingIfaceNameToDeltaTargets: map[string]map[ip.CIDR]*Target{},
-		pendingIfaceNameToL2Targets:    map[string][]L2Target{},
-		reSync:                         true,
-		ifaceNameToUpdateType:          map[string]updateType{},
-		pendingConntrackCleanups:       map[ip.Addr]chan struct{}{},
-		addStaticARPEntry:              addStaticARPEntry,
-		conntrack:                      conntrack,
-		time:                           timeShim,
-		deviceRouteSourceAddress:       deviceRouteSourceAddress,
-		deviceRouteProtocol:            deviceRouteProtocol,
-		removeExternalRoutes:           removeExternalRoutes,
-		tableIndex:                     tableIndex,
-		opReporter:                     opReporter,
-		livenessCallback:               func() {},
-		nl: handlemgr.NewHandleManager(
-			featureDetector,
-			handlemgr.WithNewHandleOverride(newNetlinkHandle),
-			handlemgr.WithSocketTimeout(netlinkTimeout),
-		),
-		featureDetector: featureDetector,
+		logCxt:        logCxt,
+		ipVersion:     ipVersion,
+		netlinkFamily: family,
+		tableIndex:    tableIndex,
+
+		deviceRouteSourceAddress: ip.FromNetIP(deviceRouteSourceAddress),
+		defaultRouteProtocol:     defaultRouteProtocol,
+		removeExternalRoutes:     removeExternalRoutes,
+
+		fullResyncNeeded: true,
+		ifacesToRescan:   set.New[string](),
+		ownershipPolicy:  ownershipPolicy,
+
+		ifaceToRoutes: map[RouteClass]map[string]map[ip.CIDR]Target{},
+		cidrToIfaces:  map[RouteClass]map[ip.CIDR]set.Set[string]{},
+
+		kernelRoutes: deltatracker.New[kernelRouteKey, kernelRoute](),
+		pendingARPs:  map[string]map[ip.Addr]net.HardwareAddr{},
+
+		ifaceIndexToGraceInfo: map[int]graceInfo{},
+		ifaceNameToIndex:      map[string]int{},
+		ifaceIndexToName:      map[int]string{},
+		ifaceIndexToState:     map[int]ifacemonitor.State{},
+
+		conntrackCleanupEnabled: true,
+
+		opReporter:       opReporter,
+		livenessCallback: func() {},
+		featureDetector:  featureDetector,
+
+		// Shims; may get overridden by options below.
+		conntrack:        conntrack.New(),
+		time:             timeshim.RealTime(),
+		newNetlinkHandle: netlinkshim.NewRealNetlink,
 	}
 
 	for _, o := range opts {
 		o(rt)
 	}
 
+	rt.nl = handlemgr.NewHandleManager(
+		rt.featureDetector,
+		handlemgr.WithNewHandleOverride(rt.newNetlinkHandle),
+		handlemgr.WithSocketTimeout(netlinkTimeout),
+	)
+
+	if rt.conntrackCleanupEnabled {
+		rt.conntrackTracker = NewRealConntrackTracker(ipVersion, rt.conntrack)
+	} else {
+		rt.conntrackTracker = NewDummyConntrackTracker()
+	}
+
 	return rt
 }
 
-func (r *RouteTable) OnIfaceStateChanged(ifaceName string, state ifacemonitor.State) {
+func (r *RouteTable) OnIfaceStateChanged(ifaceName string, ifIndex int, state ifacemonitor.State) {
 	logCxt := r.logCxt.WithField("ifaceName", ifaceName)
-	if r.ifacePrefixRegexp == nil || !r.ifacePrefixRegexp.MatchString(ifaceName) {
-		logCxt.Debug("Ignoring interface state change, not an interface managed by this routetable.")
+	if !r.ownershipPolicy.IfaceIsOurs(ifaceName) {
+		logCxt.Trace("Ignoring interface state change, not an interface managed by this routetable.")
 		return
 	}
+
+	// There are a couple of interesting corner cases:
+	//
+	// * Interface gets renamed: same ifindex, new name.  The interface
+	//   monitor deals with that by sending us a deletion for the old
+	//   name, then a creation for the new name.
+	// * Interface gets recreated: same name, new ifindex.  Again we
+	//   should see a deletion and then an add.
+
+	logCxt.WithFields(log.Fields{
+		"ifIndex": ifIndex,
+		"state":   state,
+		"name":    ifaceName,
+	}).Debug("Interface state update.")
+	recheckRoutesOwnership := false
+	if state == ifacemonitor.StateNotPresent {
+		// Interface deleted, clean up.
+		oldIndex := r.ifaceNameToIndex[ifaceName]
+		delete(r.ifaceIndexToName, oldIndex)
+		delete(r.ifaceIndexToState, oldIndex)
+		delete(r.ifaceNameToIndex, ifaceName)
+		r.ifacesToRescan.Discard(ifaceName)
+
+		// This interface may have had some active routes that were shadowing
+		// routes from another interface.  Make sure we rescan.
+		recheckRoutesOwnership = true
+	} else {
+		// Interface exists, record its details.
+		r.onIfaceSeen(ifIndex)
+		r.ifaceIndexToState[ifIndex] = state
+		oldIfIndex, ok := r.ifaceNameToIndex[ifaceName]
+		if ok && oldIfIndex != ifIndex {
+			// Interface renumbered.  For example, deleted and then recreated
+			// with same name.  Clean up old number.
+			delete(r.ifaceIndexToName, oldIfIndex)
+
+			// The interface index is part of the route conflict tie-breaker,
+			// so we need to check if the winner has changed.
+			recheckRoutesOwnership = true
+		} else if !ok {
+			// New interface.
+			recheckRoutesOwnership = true
+		}
+		r.ifaceNameToIndex[ifaceName] = ifIndex
+		r.ifaceIndexToName[ifIndex] = ifaceName
+	}
+
 	if state == ifacemonitor.StateUp {
+		// Interface transitioned to "up".  Force a rescan of its routes
+		// because routes often get removed when the interface goes down
+		// and its default route disappears.
 		logCxt.Debug("Interface up, marking for route sync")
-		r.ifaceNameToUpdateType[ifaceName] = updateTypeFullResync
-		r.onIfaceSeen(ifaceName)
+		r.ifacesToRescan.Add(ifaceName)
+		recheckRoutesOwnership = true
+	}
+
+	if recheckRoutesOwnership {
+		r.recheckRouteOwnershipsByIface(ifaceName)
 	}
 }
 
-func (r *RouteTable) onIfaceSeen(ifaceName string) {
-	if _, ok := r.ifaceNameToFirstSeen[ifaceName]; ok {
+func (r *RouteTable) onIfaceSeen(ifIndex int) {
+	if ifIndex <= 1 {
+		// Ignore "no interface" routes.
 		return
 	}
-	r.ifaceNameToFirstSeen[ifaceName] = r.time.Now()
-}
-
-// markIfaceForUpdate marks an interface update is required. This is either a delta update from a route
-// set, update, or remove, or a full resync triggered from start-up processing, QueueResync or a previous failed update.
-func (r *RouteTable) markIfaceForUpdate(ifaceName string, resync bool) {
-	if resync {
-		// This is a full resync so flag as such.
-		r.ifaceNameToUpdateType[ifaceName] = updateTypeFullResync
-	} else if _, ok := r.ifaceNameToUpdateType[ifaceName]; !ok {
-		// This is not a full resync - set the update status if not already set (because we don't want to "downgrade"
-		// a full-resync to a delta update).
-		r.ifaceNameToUpdateType[ifaceName] = updateTypeDelta
-	}
-}
-
-// SetRoutes sets the full set of targets for the specified interface. This recalculates the deltas from the current
-// set of programmed routes.
-func (r *RouteTable) SetRoutes(ifaceName string, targets []Target) {
-	if ifaceName == InterfaceNone && !r.includeNoInterface {
-		r.logCxt.Error("Setting route with no interface")
+	if _, ok := r.ifaceIndexToGraceInfo[ifIndex]; ok {
 		return
 	}
+	r.ifaceIndexToGraceInfo[ifIndex] = graceInfo{
+		FirstSeen: r.time.Now(),
+	}
+}
 
-	currentCIDRsToTarget := r.ifaceNameToTargets[ifaceName]
-	deltas := map[ip.CIDR]*Target{}
+// SetRoutes replaces the full set of targets for the specified interface.
+func (r *RouteTable) SetRoutes(routeClass RouteClass, ifaceName string, targets []Target) {
+	if !r.ownershipPolicy.IfaceIsOurs(ifaceName) {
+		r.logCxt.WithField("ifaceName", ifaceName).Error(
+			"Cannot set route for interface not managed by this routetable.")
+		return
+	}
+	r.logCxt.WithFields(log.Fields{
+		"routeClass": routeClass,
+		"ifaceName":  ifaceName,
+		"targets":    targets,
+	}).Debug("SetRoutes called.")
 
-	// Delete all of the existing targets.
-	for cidr := range currentCIDRsToTarget {
-		deltas[cidr] = nil
+	if r.ifaceToRoutes[routeClass] == nil {
+		r.ifaceToRoutes[routeClass] = map[string]map[ip.CIDR]Target{}
 	}
 
-	// Add the new targets.
-	for _, target := range targets {
-		if current, ok := currentCIDRsToTarget[target.CIDR]; ok && current.Equal(target) {
-			// Entry is unchanged.  Remove from the deltas.
-			log.Debugf("Expected target unchanged for CIDR: %v", target.CIDR)
-			delete(deltas, target.CIDR)
-		} else {
-			// Entry has either been modified or been created. If modified then we'll keep the delete followed by a
-			// create.
-			log.Debugf("New target for CIDR: %v", target.CIDR)
-			deltas[target.CIDR] = safeTargetPointer(target)
+	// Figure out what has changed.
+	oldTargetsToCleanUp := r.ifaceToRoutes[routeClass][ifaceName]
+	newTargets := map[ip.CIDR]Target{}
+	for _, t := range targets {
+		delete(oldTargetsToCleanUp, t.CIDR)
+		newTargets[t.CIDR] = t
+		r.addOwningIface(routeClass, ifaceName, t.CIDR)
+	}
+
+	// Record the new desired state.
+	if len(newTargets) == 0 {
+		delete(r.ifaceToRoutes[routeClass], ifaceName)
+		delete(r.pendingARPs, ifaceName)
+	} else {
+		r.ifaceToRoutes[routeClass][ifaceName] = newTargets
+		if r.makeARPEntries {
+			r.pendingARPs[ifaceName] = map[ip.Addr]net.HardwareAddr{}
 		}
 	}
 
-	// Store the routes.  Remove any delta routes since this is a full set of routes.
-	r.pendingIfaceNameToDeltaTargets[ifaceName] = deltas
-	r.markIfaceForUpdate(ifaceName, false)
+	// Clean up the old CIDRs.
+	for cidr := range oldTargetsToCleanUp {
+		r.removeOwningIface(routeClass, ifaceName, cidr)
+		r.recalculateDesiredKernelRoute(cidr)
+	}
+
+	for cidr, target := range newTargets {
+		r.recalculateDesiredKernelRoute(cidr)
+		if r.makeARPEntries && target.DestMAC != nil {
+			r.pendingARPs[ifaceName][cidr.Addr()] = target.DestMAC
+		} else {
+			delete(r.pendingARPs[ifaceName], cidr.Addr())
+		}
+	}
 }
 
-// RouteUpdate updates the route keyed off the target CIDR. These deltas will be applied to any routes set using
-// SetRoute.
-func (r *RouteTable) RouteUpdate(ifaceName string, target Target) {
-	if ifaceName == InterfaceNone && !r.includeNoInterface {
-		r.logCxt.Error("Updating route with no interface")
+// RouteUpdate updates the route keyed off the target CIDR. These deltas will
+// be applied to any routes set using SetRoute.
+func (r *RouteTable) RouteUpdate(routeClass RouteClass, ifaceName string, target Target) {
+	if !r.ownershipPolicy.IfaceIsOurs(ifaceName) {
+		r.logCxt.WithField("ifaceName", ifaceName).Error(
+			"Cannot set route for interface not managed by this routetable.")
 		return
 	}
 
-	if r.pendingIfaceNameToDeltaTargets[ifaceName] == nil {
-		r.pendingIfaceNameToDeltaTargets[ifaceName] = map[ip.CIDR]*Target{}
+	if r.ifaceToRoutes[routeClass] == nil {
+		r.ifaceToRoutes[routeClass] = map[string]map[ip.CIDR]Target{}
 	}
-	if current, ok := r.ifaceNameToTargets[ifaceName][target.CIDR]; ok && current.Equal(target) {
-		// Target unchanged from current programmed route, remove deltas.
-		r.logCxt.Debugf("Target unchanged for CIDR %s", target.CIDR)
-		delete(r.pendingIfaceNameToDeltaTargets[ifaceName], target.CIDR)
-	} else {
-		// Target new or changed, save delta.
-		r.pendingIfaceNameToDeltaTargets[ifaceName][target.CIDR] = &target
-		r.markIfaceForUpdate(ifaceName, false)
+
+	routesByCIDR := r.ifaceToRoutes[routeClass][ifaceName]
+	if routesByCIDR == nil {
+		routesByCIDR = map[ip.CIDR]Target{}
+		r.ifaceToRoutes[routeClass][ifaceName] = routesByCIDR
 	}
+	routesByCIDR[target.CIDR] = target
+	r.addOwningIface(routeClass, ifaceName, target.CIDR)
 }
 
-// RouteRemove removes the route with the specified CIDR. These deltas will be applied to any routes set using
-// SetRoute.
-func (r *RouteTable) RouteRemove(ifaceName string, cidr ip.CIDR) {
-	if ifaceName == InterfaceNone && !r.includeNoInterface {
-		r.logCxt.Error("Removing route with no interface")
+// RouteRemove removes the route with the specified CIDR. These deltas will
+// be applied to any routes set using SetRoute.
+func (r *RouteTable) RouteRemove(routeClass RouteClass, ifaceName string, cidr ip.CIDR) {
+	if !r.ownershipPolicy.IfaceIsOurs(ifaceName) {
+		r.logCxt.WithField("ifaceName", ifaceName).Error(
+			"Cannot set route for interface not managed by this routetable.")
 		return
 	}
 
-	if r.pendingIfaceNameToDeltaTargets[ifaceName] == nil {
-		r.pendingIfaceNameToDeltaTargets[ifaceName] = map[ip.CIDR]*Target{}
+	delete(r.ifaceToRoutes[routeClass][ifaceName], cidr)
+	if len(r.ifaceToRoutes[routeClass][ifaceName]) == 0 {
+		delete(r.ifaceToRoutes[routeClass], ifaceName)
 	}
-	if _, ok := r.ifaceNameToTargets[ifaceName][cidr]; !ok {
-		// Target not programmed, remote deltas.
-		r.logCxt.Debugf("Target is not programmed for CIDR %s", cidr)
-		delete(r.pendingIfaceNameToDeltaTargets[ifaceName], cidr)
-	} else {
-		// Target programmed, set delta for deletion.
-		r.pendingIfaceNameToDeltaTargets[ifaceName][cidr] = nil
-		r.markIfaceForUpdate(ifaceName, false)
+	r.removeOwningIface(routeClass, ifaceName, cidr)
+}
+
+func (r *RouteTable) addOwningIface(class RouteClass, ifaceName string, cidr ip.CIDR) {
+	if r.cidrToIfaces[class] == nil {
+		r.cidrToIfaces[class] = map[ip.CIDR]set.Set[string]{}
+	}
+	ifaceNames := r.cidrToIfaces[class][cidr]
+	if ifaceNames == nil {
+		ifaceNames = set.New[string]()
+		r.cidrToIfaces[class][cidr] = ifaceNames
+	}
+	ifaceNames.Add(ifaceName)
+	r.recalculateDesiredKernelRoute(cidr)
+}
+
+func (r *RouteTable) removeOwningIface(class RouteClass, ifaceName string, cidr ip.CIDR) {
+	ifaceNames, ok := r.cidrToIfaces[class][cidr]
+	if !ok {
+		return
+	}
+	ifaceNames.Discard(ifaceName)
+	if ifaceNames.Len() == 0 {
+		delete(r.cidrToIfaces[class], cidr)
+	}
+	r.recalculateDesiredKernelRoute(cidr)
+}
+
+// recheckRouteOwnershipsByIface reruns conflict resolution for all
+// the interface's routes.
+func (r *RouteTable) recheckRouteOwnershipsByIface(name string) {
+	seen := set.New[ip.CIDR]()
+	for _, ifaceToRoutes := range r.ifaceToRoutes {
+		for cidr := range ifaceToRoutes[name] {
+			if seen.Contains(cidr) {
+				continue
+			}
+			r.recalculateDesiredKernelRoute(cidr)
+			seen.Add(cidr)
+		}
 	}
 }
 
-func (r *RouteTable) SetL2Routes(ifaceName string, targets []L2Target) {
-	r.pendingIfaceNameToL2Targets[ifaceName] = targets
-	r.markIfaceForUpdate(ifaceName, false)
+func (r *RouteTable) ifaceIndexForName(ifaceName string) (int, bool) {
+	if ifaceName == InterfaceNone {
+		if r.ipVersion == 6 {
+			// IPv6 "special" routes use ifindex 1 (vs 0 for IPv4).
+			return 1, true
+		} else {
+			// IPv4 uses 0.
+			return 0, true
+		}
+	}
+
+	idx, ok := r.ifaceNameToIndex[ifaceName]
+	return idx, ok
+}
+
+func (r *RouteTable) ifaceNameForIndex(ifindex int) (string, bool) {
+	if ifindex <= 1 {
+		return InterfaceNone, true
+	}
+	name, ok := r.ifaceIndexToName[ifindex]
+	return name, ok
+}
+
+func (r *RouteTable) recalculateDesiredKernelRoute(cidr ip.CIDR) {
+	kernKey := r.routeKeyForCIDR(cidr)
+	oldDesiredRoute, _ := r.kernelRoutes.Desired().Get(kernKey)
+
+	cleanUpKernelRoutes := func() {
+		r.kernelRoutes.Desired().Delete(kernKey)
+		r.conntrackTracker.RemoveAllowedOwner(kernKey)
+	}
+
+	var bestTarget Target
+	bestRouteClass := RouteClassMax
+	bestIface := ""
+	bestIfaceIdx := -1
+	var candidates []string
+
+	for routeClass, cidrToIface := range r.cidrToIfaces {
+		ifaces := cidrToIface[cidr]
+		if ifaces == nil {
+			continue
+		}
+
+		// In case of conflicts (more than one route with the same CIDR), pick
+		// one deterministically so that we don't churn the dataplane.
+
+		ifaces.Iter(func(ifaceName string) error {
+			candidates = append(candidates, ifaceName)
+			ifIndex, ok := r.ifaceIndexForName(ifaceName)
+			if !ok {
+				r.logCxt.Debug("Skipping route for missing interface.")
+				return nil
+			}
+
+			// We've got some routes for this interface, force-expire its
+			// grace period.
+			if graceInf, ok := r.ifaceIndexToGraceInfo[ifIndex]; ok {
+				graceInf.GraceExpired = true
+				r.ifaceIndexToGraceInfo[ifIndex] = graceInf
+			}
+
+			if ifaceName != InterfaceNone && r.ifaceIndexToState[ifIndex] != ifacemonitor.StateUp {
+				r.logCxt.Debug("Skipping route for down interface.")
+				return nil
+			}
+
+			// Main tie-breaker is the RouteClass, which is prioritised
+			// by the function of the routes.  For example, local workload routes
+			// take precedence over VXLAN tunnel routes.
+			if routeClass < bestRouteClass || (routeClass == bestRouteClass && ifIndex > bestIfaceIdx) {
+				bestIface = ifaceName
+				bestIfaceIdx = ifIndex
+				bestRouteClass = routeClass
+				bestTarget = r.ifaceToRoutes[routeClass][ifaceName][cidr]
+			}
+			return nil
+		})
+	}
+
+	if bestIfaceIdx == -1 {
+		if len(candidates) == 0 {
+			r.logCxt.WithFields(log.Fields{
+				"cidr": cidr,
+			}).Debug("CIDR no longer has any associated routes.")
+		} else {
+			r.logCxt.WithFields(log.Fields{
+				"cidr":       cidr,
+				"candidates": candidates,
+			}).Debug("No valid route for this CIDR (all candidate routes missing iface index).")
+		}
+		cleanUpKernelRoutes()
+		return
+	}
+
+	src := r.deviceRouteSourceAddress
+	if bestTarget.Src != nil {
+		src = bestTarget.Src
+	}
+	proto := r.defaultRouteProtocol
+	if bestTarget.Protocol != 0 {
+		proto = bestTarget.Protocol
+	}
+	kernRoute := kernelRoute{
+		Type:     bestTarget.RouteType(),
+		Scope:    bestTarget.RouteScope(),
+		GW:       bestTarget.GW,
+		Src:      src,
+		Ifindex:  bestIfaceIdx,
+		OnLink:   bestTarget.Flags()&unix.RTNH_F_ONLINK != 0,
+		Protocol: proto,
+	}
+	if log.IsLevelEnabled(log.DebugLevel) && !reflect.DeepEqual(oldDesiredRoute, kernRoute) {
+		r.logCxt.WithFields(log.Fields{
+			"dst":      kernKey,
+			"oldRoute": oldDesiredRoute,
+			"newRoute": kernRoute,
+			"iface":    bestIface,
+		}).Debug("Preferred kernel route for this dest has changed.")
+	} else if log.IsLevelEnabled(log.DebugLevel) {
+		r.logCxt.WithFields(log.Fields{
+			"dst":   kernKey,
+			"route": kernRoute,
+			"iface": bestIface,
+		}).Debug("Preferred kernel route for this dest still the same.")
+	}
+
+	r.kernelRoutes.Desired().Set(kernKey, kernRoute)
+	r.conntrackTracker.SetAllowedOwner(kernKey, bestIfaceIdx)
 }
 
 func (r *RouteTable) QueueResync() {
 	r.logCxt.Debug("Queueing a resync of routing table.")
-	r.reSync = true
+	r.fullResyncNeeded = true
 }
 
-func (r *RouteTable) Apply() error {
-	if r.reSync {
-		r.opReporter.RecordOperation(fmt.Sprint("resync-routes-v", r.ipVersion))
-
-		listStartTime := time.Now()
-
-		if r.ifacePrefixRegexp != nil {
-			// If there is an interface regex then we need to query links to find matching links for this route table
-			// instance and mark the interface for update.
-			log.Debug("Check interfaces matching regex")
-			nl, err := r.nl.Handle()
-			if err != nil {
-				r.logCxt.WithError(err).Error("Failed to connect to netlink, retrying...")
-				return ConnectFailed
-			}
-			links, err := nl.LinkList()
-			if err != nil {
-				r.logCxt.WithError(err).Error("Failed to list interfaces, retrying...")
-				r.nl.MarkHandleForReopen() // Defensive: force a netlink reconnection next time.
-				return ListFailed
-			}
-			// Track the seen interfaces, and for each seen interface flag for full resync. No point in doing a full resync
-			// for interfaces that are still in our cache and have been deleted, so leave them unchanged - if there are any
-			// route deletions then the delta processing for those interfaces will ensure conntrack entries are deleted.
-			seen := set.New[string]()
-			for _, link := range links {
-				r.livenessCallback()
-				attrs := link.Attrs()
-				if attrs == nil {
-					continue
-				}
-				ifaceName := attrs.Name
-				if r.ifacePrefixRegexp.MatchString(ifaceName) {
-					r.logCxt.WithField("ifaceName", ifaceName).Debug(
-						"Resync: found calico-owned interface")
-					r.markIfaceForUpdate(ifaceName, true)
-					r.onIfaceSeen(ifaceName)
-					seen.Add(ifaceName)
-				}
-			}
-			// Clean up first-seen timestamps for old interfaces.
-			// Resyncs happen periodically, so the amount of memory leaked to old
-			// first seen timestamps is small.
-			for name, firstSeen := range r.ifaceNameToFirstSeen {
-				if seen.Contains(name) {
-					// Interface still present.
-					continue
-				}
-				if r.time.Since(firstSeen) < r.routeCleanupGracePeriod {
-					// Interface first seen recently.
-					continue
-				}
-				log.WithField("ifaceName", name).Debug(
-					"Cleaning up timestamp for removed interface.")
-				delete(r.ifaceNameToFirstSeen, name)
-			}
-		}
-
-		// If we are managing no-OIF routes then add that to our dirty set.
-		if r.includeNoInterface {
-			log.Debug("Flag no OIF for full re-sync")
-			r.markIfaceForUpdate(InterfaceNone, true)
-		}
-
-		r.reSync = false
-		listIfaceTime.Observe(r.time.Since(listStartTime).Seconds())
-	}
-
-	graceIfaces := 0
-	for retry := 0; retry < maxApplyRetries; retry++ {
-	ifaceLoop:
-		for ifaceName, ia := range r.ifaceNameToUpdateType {
-			logCxt := r.logCxt.WithField("ifaceName", ifaceName)
-			r.livenessCallback()
-			firstTry := retry == 0
-			lastTry := retry == maxApplyRetries-1
-			fullResync := ia == updateTypeFullResync || lastTry
-			err := r.syncRoutesForLink(ifaceName, fullResync, firstTry)
-
-			// Handle errors from syncing either L2 or L3 routes.
-			switch err {
-			case nil:
-				logCxt.Debug("Synchronised routes on interface")
-				delete(r.ifaceNameToUpdateType, ifaceName)
-				continue ifaceLoop
-			case IfaceNotPresent:
-				logCxt.Info("Interface missing, will retry if it appears.")
-				delete(r.ifaceNameToUpdateType, ifaceName)
-				continue ifaceLoop
-			case IfaceDown:
-				logCxt.Info("Interface down, will retry if it goes up.")
-				delete(r.ifaceNameToUpdateType, ifaceName)
-				continue ifaceLoop
-			case IfaceGrace:
-				if lastTry {
-					logCxt.Info("Interface in cleanup grace period, will retry after.")
-				}
-				graceIfaces++
-				continue ifaceLoop
-			}
-
-			if lastTry {
-				// The interface might be flapping or being deleted. Flag that it will require a full re-sync
-				logCxt.Warn("Failed to sync routes to interface even after retries. " +
-					"Leaving it dirty, requiring a full sync.")
-				r.markIfaceForUpdate(ifaceName, true)
-			}
+func (r *RouteTable) Apply() (err error) {
+	err = r.attemptApply()
+	if err != nil {
+		// Do one inline retry with a fresh netlink connection.
+		r.logCxt.WithError(err).Warn("First attempt at updating routing table failed.  Retrying...")
+		err = r.attemptApply()
+		if err != nil {
+			r.logCxt.WithError(err).Error("Second attempt at updating routing table failed. Will retry later.")
+		} else {
+			r.logCxt.WithError(err).Info("Retry was successful.")
 		}
 	}
-	r.livenessCallback()
-	r.cleanUpPendingConntrackDeletions()
+	return err
+}
 
-	// Don't return a failure if there are only interfaces in the cleanup grace period.
-	// They'll be retried on the next invocation (the route refresh timer), and we mustn't
-	// count them as Sync Errors.
-	if len(r.ifaceNameToUpdateType) > graceIfaces {
-		r.logCxt.Warn("Some interfaces still out-of sync.")
-		return UpdateFailed
+func (r *RouteTable) attemptApply() (err error) {
+	defer func() {
+		if err != nil {
+			r.nl.MarkHandleForReopen()
+		}
+	}()
+	if err = r.maybeResyncWithDataplane(); err != nil {
+		return err
 	}
-
+	if err = r.applyUpdates(); err != nil {
+		return err
+	}
+	r.maybeCleanUpGracePeriods()
+	r.conntrackTracker.DoPeriodicCleanup()
 	return nil
 }
 
-func (r *RouteTable) syncRoutesForLink(ifaceName string, fullSync bool, firstTry bool) error {
-	startTime := time.Now()
-	defer func() {
-		perIfaceSyncTime.Observe(r.time.Since(startTime).Seconds())
-	}()
-	logCxt := r.logCxt.WithField("ifaceName", ifaceName)
-	logCxt.Debug("Syncing interface routes")
-
-	// Any deleted route that is not being replaced by a route with the same CIDR should have the corresponding
-	// conntrack entry removed.
-	deletedConnCIDRs := set.New[ip.CIDR]()
-	defer func() {
-		cidrsToTarget := r.ifaceNameToTargets[ifaceName]
-		deletedConnCIDRs.Iter(func(cidr ip.CIDR) error {
-			if _, ok := cidrsToTarget[cidr]; !ok {
-				// Route is deleted and CIDR should not be routable anymore - remove conntrack entries.
-				r.startConntrackDeletion(cidr.Addr())
-			}
-			return nil
-		})
-	}()
-
-	// If necessary perform a full resync. This will return a set of routes that need deleting and will update the
-	// deltas to fix any discrepancies with the expected configuration. If this errors, we still apply the deltas
-	// first because this allows us to tidy up configuration for interfaces that no longer have any routes associated
-	// with them.
-	var routesToDelete []netlink.Route
-	updatesFailed := false
-	var resyncErr error
-	if fullSync {
-		// Performing a full re-sync.  Start by applying the deltas so that we don't delete routes that are required.
-		logCxt.Debug("Reconcile against kernel programming")
-		_, _ = r.applyRouteDeltas(ifaceName, deletedConnCIDRs)
-
-		// Now do the resync - this will update our deltas again based on what is not programmed (it's a little bit
-		// circuitous, but simplifies the code paths for resync and delta processing).
-		if routesToDelete, resyncErr = r.fullResyncRoutesForLink(logCxt, ifaceName, deletedConnCIDRs); resyncErr != nil && resyncErr != IfaceGrace {
-			// If we hit anything other than an interface-in-grace error, exit now.
-			r.logCxt.WithError(resyncErr).Info("Hit error doing kernel reconciliation")
-			return r.filterErrorByIfaceState(ifaceName, resyncErr, UpdateFailed, firstTry)
-		}
-
-		// Ensure we have static ARP entries for all of our existing routes.
-		for _, target := range r.ifaceNameToTargets[ifaceName] {
-			if r.ipVersion == 4 && target.DestMAC != nil {
-				// TODO(smc) clean up/sync old ARP entries
-				r.livenessCallback()
-				err := r.addStaticARPEntry(target.CIDR, target.DestMAC, ifaceName)
-				if err != nil {
-					logCxt.WithError(err).Warn("Failed to set ARP entry")
-					updatesFailed = true
-				}
-			}
-		}
+func (r *RouteTable) maybeCleanUpGracePeriods() {
+	if time.Since(r.lastGracePeriodCleanup) < r.routeCleanupGracePeriod {
+		return
 	}
-
-	// Update the cached values from the deltas and get the set of targets to create and delete.
-	targetsToCreate, targetsToDelete := r.applyRouteDeltas(ifaceName, deletedConnCIDRs)
-
-	// Try to get the link.  This may fail if it's been deleted out from under us.
-	linkAttrs, err := r.getLinkAttributes(ifaceName)
-	if err != nil {
-		return err
+	for k, v := range r.ifaceIndexToGraceInfo {
+		if time.Since(v.FirstSeen) < r.routeCleanupGracePeriod {
+			continue
+		}
+		if _, ok := r.ifaceIndexToName[k]; ok {
+			continue // Iface still exists, don't want to reset its grace period.
+		}
+		delete(r.ifaceIndexToGraceInfo, k)
 	}
+}
+
+func (r *RouteTable) maybeResyncWithDataplane() error {
 	nl, err := r.nl.Handle()
 	if err != nil {
-		logCxt.Debug("Failed to connect to netlink")
+		r.logCxt.WithError(err).Error("Failed to connect to netlink.")
 		return ConnectFailed
 	}
 
-	// Add the target deletes to the set of routes to delete (we do this first so that we only have one set of deletion
-	// data that we use to tidy up routes and conntrack entries).
-	for _, target := range targetsToDelete {
-		routesToDelete = append(routesToDelete, r.createL3Route(linkAttrs, target))
+	if r.fullResyncNeeded {
+		return r.doFullResync(nl)
 	}
 
-	// Delete the combined set of routes.
-	for _, route := range routesToDelete {
-		r.livenessCallback()
-		if err := nl.RouteDel(&route); err != nil {
-			logCxt.WithError(err).Warn("Failed to delete route")
-			updatesFailed = true
-		}
-	}
-
-	// Now add target routes.
-	for _, target := range targetsToCreate {
-		r.livenessCallback()
-		route := r.createL3Route(linkAttrs, target)
-
-		// In case this IP is being re-used, wait for any previous conntrack entry
-		// to be cleaned up.  (No-op if there are no pending deletes.)
-		r.waitForPendingConntrackDeletion(target.CIDR.Addr())
-
-		if firstTry || !r.shouldDeleteConflictingRoutes() {
-			// Even if we're in "delete conflicting" mode, we use RouteAdd on
-			// the first pass.  This makes sure that we scan over all interfaces
-			// at least once before we start overwriting conflicting routes.
-			// This makes sure that we handle a common case where a route
-			// is being removed from one interface and added to another more
-			// cleanly.
-			err = nl.RouteAdd(&route)
-		} else {
-			err = nl.RouteReplace(&route)
-		}
-		if err != nil {
-			if firstTry {
-				logCxt.WithError(err).WithField("route", route).Debug("Failed to add route on first attempt, retrying...")
-			} else {
-				logCxt.WithError(err).WithField("route", route).Warn("Failed to add route")
-			}
-			updatesFailed = true
-		} else {
-			logCxt.WithField("route", route).Debug("Added route")
-		}
-		if r.ipVersion == 4 && target.DestMAC != nil {
-			// TODO(smc) clean up/sync old ARP entries
-			err := r.addStaticARPEntry(target.CIDR, target.DestMAC, ifaceName)
-			if err != nil {
-				logCxt.WithError(err).Warn("Failed to set ARP entry")
-				updatesFailed = true
-			}
-		}
-	}
-
-	if updatesFailed {
-		r.nl.MarkHandleForReopen() // Defensive: force a netlink reconnection next time.
-
-		// Recheck whether the interface exists so we don't produce spammy logs during
-		// interface removal.
-		return r.filterErrorByIfaceState(ifaceName, UpdateFailed, UpdateFailed, firstTry)
-	}
-
-	// Return any un-handled re-sync error.
-	return resyncErr
+	// Do any partial per-interface resyncs.
+	return r.resyncIndividualInterfaces(nl)
 }
 
-func (r *RouteTable) applyRouteDeltas(ifaceName string, deletedConnCIDRs set.Set[ip.CIDR]) (targetsToCreate, targetsToDelete []Target) {
-	// Determine the set of deleted, created and current targets
-	cidrsToTarget := r.ifaceNameToTargets[ifaceName]
-	if cidrsToTarget == nil {
-		// Police against there being no existing targets, but handling a route update.
-		cidrsToTarget = map[ip.CIDR]Target{}
+func (r *RouteTable) doFullResync(nl netlinkshim.Interface) error {
+	r.logCxt.Debug("Doing full resync.")
+	r.opReporter.RecordOperation(fmt.Sprint("resync-routes-v", r.ipVersion))
+	resyncStartTime := time.Now()
+
+	// It's possible that we get out of sync with the interface monitor; for example, if the
+	// RouteTable is created after start-of-day.  Do our own refresh of the list of links.
+	if err := r.refreshAllIfaceStates(nl); err != nil {
+		log.WithError(err).Error("Failed to list interfaces")
+		return fmt.Errorf("failed to list interfaces during resync: %w", err)
 	}
 
-	// Now apply deltas to our cache and track targets to delete and create.
-	deltaTargets := r.pendingIfaceNameToDeltaTargets[ifaceName]
-	for cidr, target := range deltaTargets {
-		if current, ok := cidrsToTarget[cidr]; ok {
-			// Previous entry exists, so need to delete it. Note that the SetRoutes, RouteUpdate and RouteRemove will not
-			// add deltas for unchanged targets, so we don't need to check for target equivalency here.
-			log.Debugf("Deleted or updated CIDR: %v", cidr)
-			targetsToDelete = append(targetsToDelete, current)
-			deletedConnCIDRs.Add(cidr)
-			delete(cidrsToTarget, cidr)
-		}
-		if target != nil {
-			// Delta adds a new entry.
-			log.Debugf("Added or updated CIDR: %v", cidr)
-			targetsToCreate = append(targetsToCreate, *target)
-			cidrsToTarget[cidr] = *target
-		}
-	}
-
-	// Processed the deltas so remove them.
-	delete(r.pendingIfaceNameToDeltaTargets, ifaceName)
-
-	// If there are no more expected targets for this interface then remove from the cache.
-	if len(cidrsToTarget) == 0 {
-		delete(r.ifaceNameToTargets, ifaceName)
-	} else {
-		r.ifaceNameToTargets[ifaceName] = cidrsToTarget
-	}
-
-	return
-}
-
-func (r *RouteTable) createL3Route(linkAttrs *netlink.LinkAttrs, target Target) netlink.Route {
-	log.Debugf("Create L3 route for: %#v", target)
-	var linkIndex int
-	if linkAttrs != nil {
-		linkIndex = linkAttrs.Index
-	}
-	cidr := target.CIDR
-	ipNet := cidr.ToIPNet()
-	route := netlink.Route{
-		LinkIndex: linkIndex,
-		Dst:       &ipNet,
-		Type:      target.RouteType(),
-		Protocol:  r.deviceRouteProtocol,
-		Scope:     target.RouteScope(),
-		Table:     r.tableIndex,
-	}
-
-	// If this is an IPv6 blackhole or throw route, set the dev to lo. This matches
-	// what the kernel does, and ensures we properly query programmed routes.
-	if r.ipVersion == 6 && (target.RouteType() == syscall.RTN_BLACKHOLE || target.RouteType() == syscall.RTN_THROW) {
-		route.LinkIndex = 1
-	}
-
-	if target.Src != nil {
-		route.Src = target.Src.AsNetIP()
-	} else if r.deviceRouteSourceAddress != nil {
-		route.Src = r.deviceRouteSourceAddress
-	}
-
-	if target.GW != nil {
-		route.Gw = target.GW.AsNetIP()
-	}
-
-	if target.Type == TargetTypeVXLAN || target.Type == TargetTypeNoEncap {
-		route.Scope = netlink.SCOPE_UNIVERSE
-		route.SetFlag(syscall.RTNH_F_ONLINK)
-	}
-
-	return route
-}
-
-// fullResyncRoutesForLink performs a full resync of the routes by first listing current routes and correlating against
-// the expected set. After correlation, it will create a set of routes to delete and update the delta routes to add
-// back any missing routes.
-func (r *RouteTable) fullResyncRoutesForLink(logCxt *log.Entry, ifaceName string, deletedConnCIDRs set.Set[ip.CIDR]) ([]netlink.Route, error) {
-	programmedRoutes, err := r.readProgrammedRoutes(logCxt, ifaceName)
-	if err != nil {
-		return nil, err
-	}
-
-	var routesToDelete []netlink.Route
-	expectedTargets := r.ifaceNameToTargets[ifaceName]
-	pendingDeltaTargets := r.pendingIfaceNameToDeltaTargets[ifaceName]
-	if pendingDeltaTargets == nil {
-		pendingDeltaTargets = map[ip.CIDR]*Target{}
-		r.pendingIfaceNameToDeltaTargets[ifaceName] = pendingDeltaTargets
-	}
-	alreadyCorrectCIDRs := set.New[ip.CIDR]()
-	leaveDirty := false
-	for _, route := range programmedRoutes {
-		logCxt.Debugf("Processing route: %v %v %v", route.Table, route.LinkIndex, route.Dst)
-		var dest ip.CIDR
-		if route.Dst != nil {
-			dest = ip.CIDRFromIPNet(route.Dst)
-		}
-		logCxt := logCxt.WithField("dest", dest)
-		// Check if we should remove routes not added by us
-		if !r.removeExternalRoutes && route.Protocol != r.deviceRouteProtocol {
-			logCxt.Debug("Syncing routes: not removing route as it is not marked as Felix route")
-			continue
-		}
-
-		expectedTarget, expectedTargetFound := expectedTargets[dest]
-		routeExpected := expectedTargetFound || (r.ipVersion == 6 && dest == ipV6LinkLocalCIDR)
-		var routeProblems []string
-		if !routeExpected {
-			routeProblems = append(routeProblems, "unexpected route")
-		}
-		if dest != ipV6LinkLocalCIDR {
-			if !r.deviceRouteSourceAddress.Equal(route.Src) {
-				routeProblems = append(routeProblems, "incorrect source address")
-			}
-			if r.deviceRouteProtocol != route.Protocol {
-				routeProblems = append(routeProblems, "incorrect protocol")
-			}
-			if expectedTargetFound && expectedTarget.RouteType() != route.Type {
-				routeProblems = append(routeProblems, "incorrect type")
-			}
-			if (route.Gw == nil && expectedTarget.GW != nil) ||
-				(route.Gw != nil && expectedTarget.GW == nil) ||
-				(route.Gw != nil && expectedTarget.GW != nil && !route.Gw.Equal(expectedTarget.GW.AsNetIP())) {
-				routeProblems = append(routeProblems, "incorrect gateway")
-			}
-		}
-		if len(routeProblems) == 0 {
-			logCxt.Debug("Route is correct")
-			alreadyCorrectCIDRs.Add(dest)
-			continue
-		}
-		// In order to allow Calico to run without Felix in an emergency, the CNI plugin pre-adds
-		// the route to the interface.  To avoid flapping the route when Felix sees the interface
-		// before learning about the endpoint, we give each interface a grace period after we first
-		// see it before we remove routes that we're not expecting.  Check whether the grace period
-		// applies to this interface.
-		ifaceInGracePeriod := r.time.Since(r.ifaceNameToFirstSeen[ifaceName]) < r.routeCleanupGracePeriod
-		if ifaceInGracePeriod && !routeExpected {
-			// Don't remove unexpected routes from interfaces created recently.
-			logCxt.Info("Syncing routes: found unexpected route; ignoring due to grace period.")
-			leaveDirty = true
-			continue
-		}
-		logCxt.WithField("routeProblems", routeProblems).Info("Remove old route")
-		routesToDelete = append(routesToDelete, route)
-		if dest != nil {
-			deletedConnCIDRs.Add(dest)
-		}
-	}
-
-	// Now loop through the expected CIDRs to Target. Remove any that we did not find, and add them back into our
-	// delta updates (unless the entry is superseded by another update).
-	for cidr, target := range expectedTargets {
-		if alreadyCorrectCIDRs.Contains(cidr) {
-			continue
-		}
-		logCxt := logCxt.WithField("cidr", cidr)
-		logCxt.Info("Deleting from expected targets")
-		delete(expectedTargets, cidr)
-
-		// If we do not have an update that supersedes this entry, then add it back in as an update so that we add
-		// the route.
-		if pendingTarget, ok := pendingDeltaTargets[cidr]; !ok {
-			logCxt.Info("No pending target update, adding back in as an update")
-			pendingDeltaTargets[cidr] = safeTargetPointer(target)
-		} else if pendingTarget == nil {
-			logCxt.Info("Pending target deletion, removing delete update")
-			delete(pendingDeltaTargets, cidr)
-		} else {
-			logCxt.Info("Pending target update, no changes to deltas required")
-		}
-	}
-
-	if leaveDirty {
-		// Superfluous routes on a recently created interface.  We'll recheck later.
-		return routesToDelete, IfaceGrace
-	}
-
-	return routesToDelete, nil
-}
-
-func (r *RouteTable) readProgrammedRoutes(logCxt *log.Entry, ifaceName string) ([]netlink.Route, error) {
-	// Get the netlink client and the link attributes
-	nl, err := r.nl.Handle()
-	if err != nil {
-		logCxt.Debug("Failed to connect to netlink")
-		return nil, ConnectFailed
-	}
-	// Try to get the link.  This may fail if it's been deleted out from under us.
-	linkAttrs, err := r.getLinkAttributes(ifaceName)
-	if err != nil {
-		return nil, err
-	}
-
-	// Got the link; try to sync its routes.  Note: We used to check if the interface
-	// was oper down before we tried to do the sync but that prevented us from removing
-	// routes from an interface in some corner cases (such as being admin up but oper
-	// down).
+	// Load all the routes in the routing table.  If we're managing
+	// routes in a shared table (such as the main table) this may include
+	// routes that we're not managing.
 	routeFilter := &netlink.Route{
 		Table: r.tableIndex,
 	}
-
-	routeFilterFlags := netlink.RT_FILTER_OIF
-	if r.tableIndex != 0 {
-		routeFilterFlags |= netlink.RT_FILTER_TABLE
-	}
-	if linkAttrs != nil {
-		// Link attributes might be nil for the special "no-OIF" interface name.
-		routeFilter.LinkIndex = linkAttrs.Index
-	} else if r.ipVersion == 6 {
-		// IPv6 no-OIF interfaces get corrected to lo, which is interface index 1.
-		routeFilter.LinkIndex = 1
-	}
-	programmedRoutes, err := nl.RouteListFiltered(r.netlinkFamily, routeFilter, routeFilterFlags)
+	routeFilterFlags := netlink.RT_FILTER_TABLE
+	allRoutes, err := nl.RouteListFiltered(r.netlinkFamily, routeFilter, routeFilterFlags)
 	if errors.Is(err, unix.ENOENT) {
 		// In strict mode, get this if the routing table doesn't exist; it'll be auto-created
 		// when we add the first route so just treat it as empty.
 		log.WithError(err).Debug("Routing table doesn't exist (yet). Treating as empty.")
+		allRoutes = nil
 		err = nil
-		programmedRoutes = nil
 	}
-	r.livenessCallback()
 	if err != nil {
-		// Filter the error so that we don't spam errors if the interface is being torn
-		// down.
-		filteredErr := r.filterErrorByIfaceState(ifaceName, err, ListFailed, false)
-		if filteredErr == ListFailed {
-			logCxt.WithError(err).WithFields(log.Fields{
-				"routeFilter": routeFilter,
-				"flags":       routeFilterFlags,
-			}).Error("Error listing routes")
-			r.nl.MarkHandleForReopen() // Defensive: force a netlink reconnection next time.
-		} else {
-			logCxt.WithError(err).Info("Failed to list routes; interface down/gone.")
-		}
-		return nil, filteredErr
+		return fmt.Errorf("failed to list all routes for resync: %w", err)
 	}
-	return programmedRoutes, nil
+
+	err = r.kernelRoutes.Dataplane().ReplaceAllIter(func(f func(k kernelRouteKey, v kernelRoute)) error {
+		for _, route := range allRoutes {
+			r.onIfaceSeen(route.LinkIndex)
+			kernKey, kernRoute, ok := r.netlinkRouteToKernelRoute(route)
+			if !ok {
+				// Not a route that we're managing.
+				continue
+			}
+			r.conntrackTracker.AddDataplaneOwner(kernKey, kernRoute.Ifindex)
+			f(kernKey, kernRoute)
+		}
+		return nil
+	})
+	if err != nil {
+		// Should be impossible unless we return an error from the iterator.
+		return fmt.Errorf("failed to update delta tracker: %w", err)
+	}
+
+	// We're now in sync.
+	r.ifacesToRescan.Clear()
+	r.fullResyncNeeded = false
+	listAllRoutesTime.Observe(r.time.Since(resyncStartTime).Seconds())
+	return nil
 }
 
-// startConntrackDeletion starts the deletion of conntrack entries for the given CIDR in the background.  Pending
-// deletions are tracked in the pendingConntrackCleanups map so we can block waiting for them later.
-//
-// It's important to do the conntrack deletions in the background because scanning the conntrack
-// table is very slow if there are a lot of entries.  Previously, we did the deletion synchronously
-// but that led to lengthy Apply() calls on the critical path.
-func (r *RouteTable) startConntrackDeletion(ipAddr ip.Addr) {
-	log.WithField("ip", ipAddr).Debug("Starting goroutine to delete conntrack entries")
-	done := make(chan struct{})
-	r.pendingConntrackCleanups[ipAddr] = done
-	go func() {
-		defer close(done)
-		r.conntrack.RemoveConntrackFlows(r.ipVersion, ipAddr.AsNetIP())
-		log.WithField("ip", ipAddr).Debug("Deleted conntrack entries")
-	}()
+func (r *RouteTable) resyncIndividualInterfaces(nl netlinkshim.Interface) error {
+	r.ifacesToRescan.Iter(func(ifaceName string) error {
+		// Defensive: we can be out of sync with the interface monitor if this
+		// RouteTable was created after start-of-day.  Refresh the link.
+		err := r.refreshIfaceStateBestEffort(nl, ifaceName)
+		if err != nil {
+			r.nl.MarkHandleForReopen()
+			return nil
+		}
+
+		ifIndex, ok := r.ifaceIndexForName(ifaceName)
+		if !ok {
+			r.logCxt.Debug("Ignoring rescan of unknown interface.")
+			return set.RemoveItem
+		}
+
+		routeFilter := &netlink.Route{
+			Table:     r.tableIndex,
+			LinkIndex: ifIndex,
+		}
+		routeFilterFlags := netlink.RT_FILTER_OIF | netlink.RT_FILTER_TABLE
+		netlinkRoutes, err := nl.RouteListFiltered(r.netlinkFamily, routeFilter, routeFilterFlags)
+		if errors.Is(err, unix.ENOENT) {
+			// In strict mode, get this if the routing table doesn't exist; it'll be auto-created
+			// when we add the first route so just treat it as empty.
+			log.WithError(err).Debug("Routing table doesn't exist (yet). Treating as empty.")
+			err = nil
+			netlinkRoutes = nil
+		}
+		if err != nil {
+			// Filter the error so that we don't spam errors if the interface is being torn
+			// down.
+			filteredErr := r.filterErrorByIfaceState(ifaceName, err, ListFailed, false)
+			if errors.Is(filteredErr, ListFailed) {
+				r.logCxt.WithError(err).WithFields(log.Fields{
+					"iface":       ifaceName,
+					"routeFilter": routeFilter,
+					"flags":       routeFilterFlags,
+				}).Error("Error listing routes")
+				r.nl.MarkHandleForReopen()
+				return set.RemoveItem
+			} else {
+				r.logCxt.WithError(filteredErr).WithField("iface", ifaceName).Debug(
+					"Failed to list routes; interface down/gone.")
+				return set.RemoveItem
+			}
+		}
+
+		// Loaded the routes, now update our tracker.  First index the data
+		// we loaded.
+		kernRoutes := map[kernelRouteKey]kernelRoute{}
+		for _, nlRoute := range netlinkRoutes {
+			kernKey, kernRoute, ok := r.netlinkRouteToKernelRoute(nlRoute)
+			if !ok {
+				// Not a route that we're managing, so we don't want it to
+				// be a candidate for us to delete.
+				continue
+			}
+			r.conntrackTracker.AddDataplaneOwner(kernKey, kernRoute.Ifindex)
+			kernRoutes[kernKey] = kernRoute
+		}
+		// Then look for routes that the tracker says are there but are actually
+		// missing.
+		for _, ifaceToRoutes := range r.ifaceToRoutes {
+			for cidr := range ifaceToRoutes[ifaceName] {
+				kernKey := r.routeKeyForCIDR(cidr)
+				if _, ok := kernRoutes[kernKey]; ok {
+					// Route still there; handled below.
+					continue
+				}
+				desKernRoute, ok := r.kernelRoutes.Desired().Get(kernKey)
+				if !ok || desKernRoute.Ifindex != ifIndex {
+					// This interface doesn't "own" this route .
+					continue
+				}
+				r.kernelRoutes.Dataplane().Delete(kernKey)
+			}
+		}
+		// Update tracker with the routes that we did see.
+		for kk, kr := range kernRoutes {
+			r.kernelRoutes.Dataplane().Set(kk, kr)
+		}
+
+		return set.RemoveItem
+	})
+	return nil
 }
 
-// cleanUpPendingConntrackDeletions scans the pendingConntrackCleanups map for completed entries and removes them.
-func (r *RouteTable) cleanUpPendingConntrackDeletions() {
-	for ipAddr, c := range r.pendingConntrackCleanups {
-		select {
-		case <-c:
-			log.WithField("ip", ipAddr).Debug(
-				"Background goroutine finished deleting conntrack entries")
-			delete(r.pendingConntrackCleanups, ipAddr)
-		default:
-			log.WithField("ip", ipAddr).Debug(
-				"Background goroutine yet to finish deleting conntrack entries")
+func (r *RouteTable) refreshAllIfaceStates(nl netlinkshim.Interface) error {
+	debug := log.IsLevelEnabled(log.DebugLevel)
+
+	links, err := nl.LinkList()
+	if err != nil {
+		return err
+	}
+	seenNames := set.New[string]()
+
+	// First pass, simulate deletions of any interfaces that have been
+	// renamed or renumbered.
+	for _, link := range links {
+		oldIdx, ok := r.ifaceNameToIndex[link.Attrs().Name]
+		if ok && oldIdx != link.Attrs().Index {
+			// Interface renumbered.  For example, deleted and then recreated.
+			// Simulate a deletion of the old interface.
+			log.WithFields(log.Fields{
+				"ifaceName": link.Attrs().Name,
+				"oldIdx":    oldIdx,
+				"newIdx":    link.Attrs().Index,
+			}).Debug("Spotted interface had changed index during resync.")
+			r.OnIfaceStateChanged(link.Attrs().Name, oldIdx, ifacemonitor.StateNotPresent)
+		}
+		oldName, ok := r.ifaceIndexToName[link.Attrs().Index]
+		if ok && oldName != link.Attrs().Name {
+			// Interface renamed.  Simulate a deletion of the old interface.
+			log.WithFields(log.Fields{
+				"ifaceName": link.Attrs().Name,
+				"oldName":   oldName,
+				"newName":   link.Attrs().Name,
+			}).Debug("Spotted interface had changed name during resync.")
+			r.OnIfaceStateChanged(oldName, link.Attrs().Index, ifacemonitor.StateNotPresent)
+		}
+	}
+
+	// Second pass, update the state of any changed interfaces.
+	for _, link := range links {
+		seenNames.Add(link.Attrs().Name)
+		newState := ifacemonitor.StateDown
+		if ifacemonitor.LinkIsOperUp(link) {
+			newState = ifacemonitor.StateUp
+		}
+		oldState := r.ifaceIndexToState[link.Attrs().Index]
+		log.WithFields(log.Fields{
+			"ifaceName": link.Attrs().Name,
+			"newState":  newState,
+			"oldState":  oldState,
+			"idx":       link.Attrs().Index,
+		}).Debug("Checking interface state.")
+		if newState != oldState {
+			// Only call OnIfaceStateChanged if the state has actually changed
+			// so that we avoid triggering it to re-do conflict resolution
+			// (which will generate log spam if the interface hasn't changed).
+			if debug {
+				r.logCxt.WithFields(log.Fields{
+					"ifaceName": link.Attrs().Name,
+					"oldState":  oldState,
+					"newState":  newState,
+				}).Debug("Spotted interface had changed state during resync.")
+			}
+			r.OnIfaceStateChanged(link.Attrs().Name, link.Attrs().Index, newState)
+		}
+	}
+
+	// Third pass, remove any interfaces that have disappeared.
+	for name := range r.ifaceNameToIndex {
+		if seenNames.Contains(name) {
 			continue
 		}
+		if debug {
+			r.logCxt.WithField("ifaceName", name).Debug("Spotted interface not present during full resync.  Cleaning up.")
+		}
+		r.OnIfaceStateChanged(name, 0, ifacemonitor.StateNotPresent)
 	}
+	return nil
 }
 
-// waitForPendingConntrackDeletion waits for any pending conntrack deletions (if any) for the given IP to complete.
-func (r *RouteTable) waitForPendingConntrackDeletion(ipAddr ip.Addr) {
-	if c := r.pendingConntrackCleanups[ipAddr]; c != nil {
-		log.WithField("ip", ipAddr).Info("Waiting for pending conntrack deletion to finish")
-		<-c
-		log.WithField("ip", ipAddr).Info("Done waiting for pending conntrack deletion to finish")
-		delete(r.pendingConntrackCleanups, ipAddr)
+func (r *RouteTable) refreshIfaceStateBestEffort(nl netlinkshim.Interface, ifaceName string) error {
+	r.logCxt.WithField("name", ifaceName).Debug("Refreshing state of interface.")
+	link, err := nl.LinkByName(ifaceName)
+	var lnf netlink.LinkNotFoundError
+	if errors.As(err, &lnf) {
+		r.OnIfaceStateChanged(ifaceName, 0, ifacemonitor.StateNotPresent)
+		return nil
+	} else if err != nil {
+		log.WithError(err).Warn("Failed to get link.")
+		return fmt.Errorf("failed to look up interface: %w", err)
 	}
+	state := ifacemonitor.StateDown
+	if ifacemonitor.LinkIsOperUp(link) {
+		state = ifacemonitor.StateUp
+	}
+	r.OnIfaceStateChanged(link.Attrs().Name, link.Attrs().Index, state)
+	return nil
+}
+
+func (r *RouteTable) routeKeyForCIDR(cidr ip.CIDR) kernelRouteKey {
+	return kernelRouteKey{CIDR: cidr}
+}
+
+// netlinkRouteToKernelRoute converts (only) routes that we own back
+// to our kernelRoute/Key structs (returning ok=true).  Other routes
+// are ignored and returned with ok = false.
+func (r *RouteTable) netlinkRouteToKernelRoute(route netlink.Route) (kernKey kernelRouteKey, kernRoute kernelRoute, ok bool) {
+	// We're on the hot path, so it's worth avoiding the overheads of
+	// WithField(s) if debug is disabled.
+	debug := log.IsLevelEnabled(log.DebugLevel)
+	logCxt := r.logCxt
+	if debug {
+		logCxt = logCxt.WithField("route", route)
+	}
+	ifaceName := ""
+	if routeIsSpecialNoIfRoute(route) {
+		ifaceName = InterfaceNone
+	} else if routeIsIPv6Bootstrap(route) {
+		logCxt.Debug("Ignoring IPv6 bootstrap route, kernel manages these.")
+		return
+	} else {
+		ifaceName = r.ifaceIndexToName[route.LinkIndex]
+		if ifaceName == "" {
+			// We don't know about this interface.  Either we're racing
+			// with link creation, in which case we'll hear about the
+			// interface soon and work out what to do, or we're seeing
+			// a route for a just-deleted interface, in which case
+			// we don't care.
+			logCxt.Debug("Ignoring route for unknown iface")
+			return
+		}
+	}
+
+	if !r.ownershipPolicy.RouteIsOurs(ifaceName, &route) {
+		logCxt.Debug("Ignoring route (it doesn't belong to us).")
+		return
+	}
+
+	kernKey = kernelRouteKey{
+		CIDR:     ip.CIDRFromIPNet(route.Dst),
+		Priority: route.Priority,
+		TOS:      route.Tos,
+	}
+	kernRoute = kernelRoute{
+		Type:     route.Type,
+		Scope:    route.Scope,
+		GW:       ip.FromNetIP(route.Gw),
+		Src:      ip.FromNetIP(route.Src),
+		Ifindex:  route.LinkIndex,
+		OnLink:   route.Flags&unix.RTNH_F_ONLINK != 0,
+		Protocol: route.Protocol,
+	}
+	if debug {
+		logCxt.WithFields(log.Fields{
+			"kernRoute": kernRoute,
+			"kernKey":   kernKey,
+		}).Debug("Loaded route from kernel.")
+	}
+	ok = true
+	return
+}
+
+func routeIsIPv6Bootstrap(route netlink.Route) bool {
+	if route.Dst == nil {
+		return false
+	}
+	if route.Family != netlink.FAMILY_V6 {
+		return false
+	}
+	return ip.CIDRFromIPNet(route.Dst) == ipV6LinkLocalCIDR
+}
+
+func routeIsSpecialNoIfRoute(route netlink.Route) bool {
+	if route.LinkIndex > 1 {
+		// Special routes either have 0 for the link index or 1 ('lo'),
+		// depending on IP version.
+		return false
+	}
+	switch route.Type {
+	case unix.RTN_LOCAL, unix.RTN_THROW, unix.RTN_BLACKHOLE, unix.RTN_PROHIBIT, unix.RTN_UNREACHABLE:
+		return true
+	}
+	return false
+}
+
+func (r *RouteTable) applyUpdates() error {
+	nl, err := r.nl.Handle()
+	if err != nil {
+		r.logCxt.Debug("Failed to connect to netlink")
+		return ConnectFailed
+	}
+
+	// First clean up any old routes.
+	deletionErrs := map[kernelRouteKey]error{}
+	r.kernelRoutes.PendingDeletions().Iter(func(kernKey kernelRouteKey) deltatracker.IterAction {
+		kernRoute, _ := r.kernelRoutes.PendingDeletions().Get(kernKey)
+		if r.ifaceInGracePeriod(kernRoute.Ifindex) {
+			// Don't remove unexpected routes from interfaces created recently.
+			r.logCxt.WithFields(log.Fields{
+				"route": kernRoute,
+				"dest":  kernKey,
+			}).Debug("Found unexpected route; ignoring due to grace period.")
+			r.ifaceInGracePeriod(kernRoute.Ifindex)
+			return deltatracker.IterActionNoOp
+		}
+
+		err := r.deleteRoute(nl, kernKey)
+		if err != nil {
+			deletionErrs[kernKey] = err
+			return deltatracker.IterActionNoOp
+		}
+		// Route is gone, clean up the dataplane side of the tracker.
+		r.logCxt.WithField("route", kernKey).Debug("Deleted route.")
+		return deltatracker.IterActionUpdateDataplane
+	})
+
+	// Start background conntrack deletions for routes that have been removed.
+	// We only wait for these to finish one-by-one if we need to move the route
+	// to a new interface.
+	r.conntrackTracker.StartDeletionsForDeletedRoutes()
+	// For routes that are moving to a new interface, delete the old route
+	// synchronously and kick off conntrack deletions for the old interface.
+	// This makes sure that we don't have a window where a new connection
+	// can start using the old interface.
+	r.conntrackTracker.IterMovedRoutesAndStartDeletions(func(kernKey kernelRouteKey, newOwners []int) {
+		err := r.deleteRoute(nl, kernKey)
+		if err != nil {
+			deletionErrs[kernKey] = err
+		} else {
+			r.kernelRoutes.Dataplane().Delete(kernKey)
+		}
+	})
+
+	updateErrs := map[kernelRouteKey]error{}
+	r.kernelRoutes.PendingUpdates().Iter(func(kernKey kernelRouteKey, kRoute kernelRoute) deltatracker.IterAction {
+		dst := kernKey.CIDR.ToIPNet()
+		flags := 0
+		if kRoute.OnLink {
+			flags = unix.RTNH_F_ONLINK
+		}
+
+		r.conntrackTracker.WaitForPendingDeletion(kernKey.CIDR.Addr())
+		r.conntrackTracker.SetSingleDataplaneOwner(kernKey, kRoute.Ifindex)
+
+		nlRoute := &netlink.Route{
+			Family: r.netlinkFamily,
+
+			Table:    r.tableIndex,
+			Dst:      &dst,
+			Tos:      kernKey.TOS,
+			Priority: int(kernKey.Priority),
+
+			Type:      kRoute.Type,
+			Scope:     kRoute.Scope,
+			Gw:        kRoute.GWAsNetIP(),
+			Src:       kRoute.SrcAsNetIP(),
+			LinkIndex: kRoute.Ifindex,
+			Protocol:  kRoute.Protocol,
+			Flags:     flags,
+		}
+		r.logCxt.WithFields(log.Fields{
+			"nlRoute":  nlRoute,
+			"ourKey":   kernKey,
+			"ourRoute": kRoute,
+		}).Debug("Replacing route")
+		err := nl.RouteReplace(nlRoute)
+		if err != nil {
+			updateErrs[kernKey] = err
+			return deltatracker.IterActionNoOp
+		}
+
+		// Route is gone, clean up the dataplane side of the tracker.
+		return deltatracker.IterActionUpdateDataplane
+	})
+
+	arpErrs := map[string]error{}
+	for ifaceName, addrToMAC := range r.pendingARPs {
+		// Add static ARP entries (for workload endpoints).  This may have been
+		// needed at one point but it no longer seems to be required.  Leaving
+		// it here for two reasons: (1) there may be an obscure scenario where
+		// it is needed. (2) we have tests that monitor netlink, and they break
+		// if it is removed because they see the ARP traffic.
+		ifaceIdx, ok := r.ifaceIndexForName(ifaceName)
+		if !ok {
+			// Asked to add ARP entries but the interface isn't known (yet).
+			// Leave them pending.  We'll clean up the pending set if the
+			// datastore stops asking us to add ARP entries for this interface.
+			continue
+		}
+		for addr, mac := range addrToMAC {
+			err := r.addStaticARPEntry(nl, addr, mac, ifaceIdx)
+			if err != nil {
+				log.WithError(err).Debug("Failed to add neighbor entry.")
+				arpErrs[fmt.Sprintf("%s/%s", ifaceName, addr)] = err
+			} else {
+				delete(addrToMAC, addr)
+			}
+		}
+		if len(addrToMAC) == 0 {
+			delete(r.pendingARPs, ifaceName)
+		}
+	}
+
+	// TODO filter out errors from interfaces that have gone away.
+	err = nil
+	if len(deletionErrs) > 0 {
+		r.logCxt.WithField("errors", deletionErrs).Warn(
+			"Encountered some errors when trying to delete old routes.")
+		err = UpdateFailed
+	}
+	if len(updateErrs) > 0 {
+		r.logCxt.WithField("errors", updateErrs).Warn(
+			"Encountered some errors when trying to update routes.  Will retry.")
+		err = UpdateFailed
+	}
+	if len(arpErrs) > 0 {
+		r.logCxt.WithField("errors", arpErrs).Warn(
+			"Encountered some errors when trying to add static ARP entries.  Will retry.")
+		err = UpdateFailed
+	}
+
+	return err
+}
+
+func (r *RouteTable) ifaceInGracePeriod(ifindex int) bool {
+	graceInf, ok := r.ifaceIndexToGraceInfo[ifindex]
+	if !ok {
+		return false
+	}
+	if graceInf.GraceExpired {
+		return false
+	}
+	name, ok := r.ifaceNameForIndex(ifindex)
+	if !ok {
+		return false
+	}
+	if !r.ownershipPolicy.IfaceShouldHaveGracePeriod(name) {
+		return false
+	}
+	return r.time.Since(graceInf.FirstSeen) < r.routeCleanupGracePeriod
+}
+
+func (r *RouteTable) deleteRoute(nl netlinkshim.Interface, kernKey kernelRouteKey) error {
+	// Template route for deletion.  The family, table, TOS, Priority uniquely
+	// identify the route, but we also need to set some fields to their "wildcard"
+	// values (found via code reading the kernel and running "ip route del" under
+	// strace).
+	dst := kernKey.CIDR.ToIPNet()
+	nlRoute := &netlink.Route{
+		Family: r.netlinkFamily,
+
+		Table:    r.tableIndex,
+		Dst:      &dst,
+		Tos:      kernKey.TOS,
+		Priority: int(kernKey.Priority),
+
+		Protocol: unix.RTPROT_UNSPEC,    // Wildcard (but also zero value).
+		Scope:    unix.RT_SCOPE_NOWHERE, // Wildcard.  Note: non-zero value!
+		Type:     unix.RTN_UNSPEC,       // Wildcard (but also zero value).
+	}
+	err := nl.RouteDel(nlRoute)
+	if errors.Is(err, unix.ESRCH) {
+		r.logCxt.WithField("route", kernKey).Debug("Tried to delete route but it wasn't found.")
+		err = nil // Already gone (we hope).
+	}
+	return err
 }
 
 // filterErrorByIfaceState checks the current state of the interface; if it's down or gone, it
 // returns IfaceDown or IfaceNotPresent, otherwise, it returns the given defaultErr.
-func (r *RouteTable) filterErrorByIfaceState(ifaceName string, currentErr, defaultErr error, suppressExistsWarning bool) error {
+func (r *RouteTable) filterErrorByIfaceState(
+	ifaceName string,
+	currentErr, defaultErr error,
+	suppressExistsWarning bool,
+) error {
+	if currentErr == nil {
+		return nil
+	}
+
 	logCxt := r.logCxt.WithFields(log.Fields{"ifaceName": ifaceName, "error": currentErr})
 	if ifaceName == InterfaceNone {
 		// Short circuit the no-OIF interface name.
@@ -1110,49 +1325,152 @@ func isNotFoundError(err error) bool {
 	return false
 }
 
-// getLinkAttributes returns the link attributes for the specified link name. This method returns nil if the
-// interface name is the special "no-OIF" name.
-func (r *RouteTable) getLinkAttributes(ifaceName string) (*netlink.LinkAttrs, error) {
-	if ifaceName == InterfaceNone {
-		// Short circuit the no-OIF interface name.
-		return nil, nil
+func (r *RouteTable) addStaticARPEntry(
+	nl netlinkshim.Interface,
+	addr ip.Addr,
+	mac net.HardwareAddr,
+	ifindex int,
+) error {
+	a := &netlink.Neigh{
+		Family:       unix.AF_INET,
+		LinkIndex:    ifindex,
+		State:        netlink.NUD_PERMANENT,
+		Type:         unix.RTN_UNICAST,
+		IP:           addr.AsNetIP(),
+		HardwareAddr: mac,
 	}
-
-	// Try to get the link.  This may fail if it's been deleted out from under us.
-	logCxt := r.logCxt.WithField("ifaceName", ifaceName)
-
-	nl, err := r.nl.Handle()
-	if err != nil {
-		r.logCxt.WithError(err).Error("Failed to connect to netlink, retrying...")
-		return nil, ConnectFailed
+	if log.IsLevelEnabled(log.DebugLevel) {
+		r.logCxt.WithField("entry", a).Debug("Adding static ARP entry.")
 	}
-
-	link, err := nl.LinkByName(ifaceName)
-	if err != nil {
-		// Filter the error so that we don't spam errors if the interface is being torn
-		// down.
-		filteredErr := r.filterErrorByIfaceState(ifaceName, err, GetFailed, false)
-		if filteredErr == GetFailed {
-			logCxt.WithError(err).Error("Failed to get interface.")
-			r.nl.MarkHandleForReopen() // Defensive: force a netlink reconnection next time.
-		} else {
-			logCxt.WithError(err).Info("Failed to get interface; it's down/gone.")
-		}
-		return nil, filteredErr
-	}
-	return link.Attrs(), nil
+	return nl.NeighSet(a)
 }
 
-func (r *RouteTable) shouldDeleteConflictingRoutes() bool {
-	gate := r.featureDetector.FeatureGate("DeleteConflictingRoutes")
-	switch strings.ToLower(gate) {
-	case "enabled": // Default to disabled.
-		return true
-	}
-	return false
+type Target struct {
+	Type     TargetType
+	CIDR     ip.CIDR
+	GW       ip.Addr
+	Src      ip.Addr
+	DestMAC  net.HardwareAddr
+	Protocol netlink.RouteProtocol
 }
 
-// safeTargetPointer returns a pointer to a Target safely ensuring the pointer is unique.
-func safeTargetPointer(target Target) *Target {
-	return &target
+func (t Target) Equal(t2 Target) bool {
+	return reflect.DeepEqual(t, t2)
+}
+
+func (t Target) RouteType() int {
+	switch t.Type {
+	case TargetTypeLocal:
+		return unix.RTN_LOCAL
+	case TargetTypeThrow:
+		return unix.RTN_THROW
+	case TargetTypeBlackhole:
+		return unix.RTN_BLACKHOLE
+	case TargetTypeProhibit:
+		return unix.RTN_PROHIBIT
+	case TargetTypeUnreachable:
+		return unix.RTN_UNREACHABLE
+	default:
+		return unix.RTN_UNICAST
+	}
+}
+
+func (t Target) RouteScope() netlink.Scope {
+	switch t.Type {
+	case TargetTypeLocal:
+		return netlink.SCOPE_HOST
+	case TargetTypeLinkLocalUnicast:
+		return netlink.SCOPE_LINK
+	case TargetTypeGlobalUnicast:
+		return netlink.SCOPE_UNIVERSE
+	case TargetTypeNoEncap:
+		return netlink.SCOPE_UNIVERSE
+	case TargetTypeVXLAN:
+		return netlink.SCOPE_UNIVERSE
+	case TargetTypeThrow:
+		return netlink.SCOPE_UNIVERSE
+	case TargetTypeBlackhole:
+		return netlink.SCOPE_UNIVERSE
+	case TargetTypeProhibit:
+		return netlink.SCOPE_UNIVERSE
+	case TargetTypeOnLink:
+		return netlink.SCOPE_LINK
+	default:
+		return netlink.SCOPE_LINK
+	}
+}
+
+func (t Target) Flags() netlink.NextHopFlag {
+	switch t.Type {
+	case TargetTypeVXLAN, TargetTypeNoEncap, TargetTypeOnLink:
+		return unix.RTNH_F_ONLINK
+	default:
+		return 0
+	}
+}
+
+// kernelRouteKey represents the kernel's FIB key.  The kernel allows routes
+// to coexist as long as they have different keys.
+type kernelRouteKey struct {
+	// Destination CIDR; route matches traffic to this destination.
+	CIDR ip.CIDR
+	// TOS is the Type-of-Service field.  For example, one app may mark its
+	// packets as "high importance" and that will take a different route to
+	// another app.
+	//
+	// Kernel uses the TOS=0 route if there isn't a more precise match.
+	TOS int
+	// Priority is the routing metric / distance.  Given two routes with the
+	// same CIDR, the kernel prefers the route with the _lower_ priority.
+	Priority int
+}
+
+func (k kernelRouteKey) String() string {
+	return fmt.Sprintf("%s(tos=%x metric=%d)", k.CIDR.String(), k.TOS, k.Priority)
+}
+
+// kernelRoute is our low-level representation of the parts of a route that
+// we care to program. It contains fields that we can easily read back from the
+// kernel for comparison. In particular, we track the interface index instead
+// of the interface name.  This means that if an interface is recreated, we
+// must trigger recalculation of the desired kernelRoute.
+type kernelRoute struct {
+	Type     int // unix.RTN_... constants.
+	Scope    netlink.Scope
+	GW       ip.Addr
+	Src      ip.Addr
+	Ifindex  int
+	Protocol netlink.RouteProtocol
+	OnLink   bool
+}
+
+func (r kernelRoute) GWAsNetIP() net.IP {
+	if r.GW == nil {
+		return nil
+	}
+	return r.GW.AsNetIP()
+}
+
+func (r kernelRoute) SrcAsNetIP() net.IP {
+	if r.Src == nil {
+		return nil
+	}
+	return r.Src.AsNetIP()
+}
+
+func (r kernelRoute) String() string {
+	var zeroVal kernelRoute
+	if r == zeroVal {
+		return "<none>"
+	}
+	gwStr := "<nil>"
+	if r.GW != nil {
+		gwStr = r.GW.String()
+	}
+	srcStr := "<nil>"
+	if r.Src != nil {
+		srcStr = r.Src.String()
+	}
+	return fmt.Sprintf("kernelRoute{Type:%d, Scope=%d, GW=%s, Src=%s, Ifindex=%d, Protocol=%v, OnLink=%v}",
+		r.Type, r.Scope, gwStr, srcStr, r.Ifindex, r.Protocol, r.OnLink)
 }

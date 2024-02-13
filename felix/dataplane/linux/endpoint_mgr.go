@@ -23,8 +23,9 @@ import (
 	"regexp"
 	"strings"
 
-	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
+
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/felix/dataplane/common"
 	"github.com/projectcalico/calico/felix/ifacemonitor"
@@ -652,7 +653,7 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 			// Remove any routes from the routing table.  The RouteTable will remove any
 			// conntrack entries as a side-effect.
 			logCxt.Info("Workload removed, deleting old state.")
-			m.routeTable.SetRoutes(oldWorkload.Name, nil)
+			m.routeTable.SetRoutes(routetable.RouteClassLocalWorkload, oldWorkload.Name, nil)
 			m.wlIfaceNamesToReconfigure.Discard(oldWorkload.Name)
 			delete(m.activeWlIfaceNameToID, oldWorkload.Name)
 			if m.hasSourceSpoofingConfiguration(oldWorkload.Name) {
@@ -709,7 +710,7 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 							m.rpfSkipChainDirty = true
 						}
 					}
-					m.routeTable.SetRoutes(oldWorkload.Name, nil)
+					m.routeTable.SetRoutes(routetable.RouteClassLocalWorkload, oldWorkload.Name, nil)
 					m.wlIfaceNamesToReconfigure.Discard(oldWorkload.Name)
 					delete(m.activeWlIfaceNameToID, oldWorkload.Name)
 				}
@@ -781,7 +782,7 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 				} else {
 					logCxt.Debug("Endpoint down, removing routes")
 				}
-				m.routeTable.SetRoutes(workload.Name, routeTargets)
+				m.routeTable.SetRoutes(routetable.RouteClassLocalWorkload, workload.Name, routeTargets)
 				m.wlIfaceNamesToReconfigure.Add(workload.Name)
 				m.activeWlEndpoints[id] = workload
 				m.activeWlIfaceNameToID[workload.Name] = id
