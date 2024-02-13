@@ -20,6 +20,8 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+//go:generate go run ./genlogmethods
+
 func MaybeWrapWithStringer(msg any) any {
 	if msg == nil {
 		return nil
