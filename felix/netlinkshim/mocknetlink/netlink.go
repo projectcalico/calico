@@ -114,7 +114,7 @@ func init() {
 	lnf.error = NotFoundError
 }
 
-type FailFlags uint32
+type FailFlags uint64
 
 const (
 	FailNextLinkList FailFlags = 1 << iota
@@ -911,9 +911,9 @@ func addNeighs(neighMap map[NeighKey]*netlink.Neigh, neighs []netlink.Neigh) {
 	}
 }
 
-func (d *MockNetlinkDataplane) ExpectNeighs(family int, neigh3s ...netlink.Neigh) {
+func (d *MockNetlinkDataplane) ExpectNeighs(family int, neighs ...netlink.Neigh) {
 	nm := map[NeighKey]*netlink.Neigh{}
-	addNeighs(nm, neigh3s)
+	addNeighs(nm, neighs)
 	ExpectWithOffset(1, nm).To(Equal(d.NeighsByFamily[family]))
 }
 

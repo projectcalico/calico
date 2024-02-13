@@ -496,8 +496,9 @@ type FelixConfigurationSpec struct {
 	// +kubebuilder:validation:Type=string
 	// +kubebuilder:validation:Pattern=`^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$`
 	BPFKubeProxyMinSyncPeriod *metav1.Duration `json:"bpfKubeProxyMinSyncPeriod,omitempty" validate:"omitempty" configv1timescale:"seconds"`
-	// BPFKubeProxyEndpointSlicesEnabled in BPF mode, controls whether Felix's
-	// embedded kube-proxy accepts EndpointSlices or not.
+	// BPFKubeProxyEndpointSlicesEnabled is deprecated and has no effect. BPF
+	// kube-proxy always accepts endpoint slices. This option will be removed in
+	// the next release.
 	BPFKubeProxyEndpointSlicesEnabled *bool `json:"bpfKubeProxyEndpointSlicesEnabled,omitempty" validate:"omitempty"`
 	// BPFPSNATPorts sets the range from which we randomly pick a port if there is a source port
 	// collision. This should be within the ephemeral range as defined by RFC 6056 (1024–65535) and

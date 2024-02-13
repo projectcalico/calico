@@ -86,7 +86,6 @@ func assertConsistentState(c *ipamController) {
 }
 
 var _ = Describe("IPAM controller UTs", func() {
-
 	var c *ipamController
 	var cli client.Interface
 	var cs kubernetes.Interface
@@ -1252,7 +1251,7 @@ var _ = Describe("IPAM controller UTs", func() {
 		}, assertionTimeout, 100*time.Millisecond).Should(BeTrue())
 	})
 
-	It("should NOT clean up empty blocks if the node is full", func() {
+	It("should clean up empty blocks even if the node is full", func() {
 		// Create Calico and k8s nodes for the test.
 		n := libapiv3.Node{}
 		n.Name = "cnode"
@@ -1354,11 +1353,14 @@ var _ = Describe("IPAM controller UTs", func() {
 		// Mark the syncer as InSync so that the GC will be enabled.
 		c.onStatusUpdate(bapi.InSync)
 
-		// The empty block should NOT be released, because the other block on the node is full.
+		// The empty block should be released after the grace period.
 		fakeClient := cli.IPAM().(*fakeIPAMClient)
+		Eventually(func() bool {
+			return fakeClient.affinityReleased(fmt.Sprintf("%s/%s", blockCIDR2, "cnode"))
+		}, assertionTimeout, 100*time.Millisecond).Should(BeTrue())
 		Consistently(func() bool {
 			return fakeClient.affinityReleased(fmt.Sprintf("%s/%s", blockCIDR2, "cnode"))
-		}, assertionTimeout, 100*time.Millisecond).Should(BeFalse())
+		}, assertionTimeout, 100*time.Millisecond).Should(BeTrue())
 	})
 
 	It("should NOT clean up all blocks assigned to a node", func() {
@@ -1444,7 +1446,84 @@ var _ = Describe("IPAM controller UTs", func() {
 		}
 		Eventually(numBlocks, 1*time.Second, 100*time.Millisecond).Should(Equal(1))
 		Consistently(numBlocks, assertionTimeout, 100*time.Millisecond).Should(Equal(1))
-
 	})
 
+	// This test verifies that the GC cleans up blocks even if the total number of free addresses on the node
+	// is small.
+	// Reference: https://github.com/projectcalico/calico/issues/7987
+	It("should clean up small IPAM blocks", func() {
+		// Create Calico and k8s nodes for the test.
+		n := libapiv3.Node{}
+		n.Name = "cnode"
+		n.Spec.OrchRefs = []libapiv3.OrchRef{{NodeName: "kname", Orchestrator: apiv3.OrchestratorKubernetes}}
+		_, err := cli.Nodes().Create(context.TODO(), &n, options.SetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		kn := v1.Node{}
+		kn.Name = "kname"
+		_, err = cs.CoreV1().Nodes().Create(context.TODO(), &kn, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		var node *v1.Node
+		Eventually(nodes).WithTimeout(time.Second).Should(Receive(&node))
+
+		// Start the controller.
+		c.Start(stopChan)
+
+		// Add small, empty blocks to the node.
+		// Use a block size of 31, resulting in 2 allocations per block.
+		for i := 0; i < 5; i++ {
+			unallocated := make([]int, 64)
+			for i := 0; i < len(unallocated); i++ {
+				unallocated[i] = i
+			}
+			cidr := net.MustParseCIDR(fmt.Sprintf("10.0.%d.0/31", i))
+			aff := "host:cnode"
+			key := model.BlockKey{CIDR: cidr}
+			b := model.AllocationBlock{
+				CIDR:        cidr,
+				Affinity:    &aff,
+				Allocations: make([]*int, 64),
+				Unallocated: unallocated,
+				Attributes:  []model.AllocationAttribute{},
+			}
+			kvp := model.KVPair{
+				Key:   key,
+				Value: &b,
+			}
+			update := bapi.Update{KVPair: kvp, UpdateType: bapi.UpdateTypeKVNew}
+			c.onUpdate(update)
+		}
+
+		// Wait for controller state to update with all blocks.
+		Eventually(func() bool {
+			done := c.pause()
+			defer done()
+			return len(c.allBlocks) == 5
+		}, 1*time.Second, 100*time.Millisecond).Should(BeTrue())
+
+		// The controller should recognize them all as empty.
+		Eventually(func() bool {
+			done := c.pause()
+			defer done()
+			return len(c.emptyBlocks) == 5
+		}, 1*time.Second, 100*time.Millisecond).Should(BeTrue())
+
+		// Mark the syncer as InSync so that the GC will be enabled.
+		c.onStatusUpdate(bapi.InSync)
+
+		// 4 out of the 5 empty blocks should be released, but not all.
+		numBlocks := func() int {
+			done := c.pause()
+			defer done()
+			return len(c.blocksByNode["cnode"])
+		}
+		Eventually(numBlocks, assertionTimeout, 100*time.Millisecond).Should(Equal(1))
+		Consistently(numBlocks, assertionTimeout, 100*time.Millisecond).Should(Equal(1))
+		numBlocks = func() int {
+			done := c.pause()
+			defer done()
+			return len(c.emptyBlocks)
+		}
+		Eventually(numBlocks, 1*time.Second, 100*time.Millisecond).Should(Equal(1))
+		Consistently(numBlocks, assertionTimeout, 100*time.Millisecond).Should(Equal(1))
+	})
 })

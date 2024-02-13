@@ -1,0 +1,91 @@
+# kubectl create secret generic test-signer-ca --from-file=tls.crt=<tls.crt> --from-file=tls.key=<tls.key> -n test-signer
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: test-signer
+
+---
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: test-signer
+  namespace: test-signer
+
+---
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: test-signer
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+  - kind: ServiceAccount
+    name: test-signer
+    namespace: test-signer
+
+---
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    k8s-app: test-signer
+  name: test-signer
+  namespace: test-signer
+spec:
+  selector:
+    matchLabels:
+      name: test-signer
+  template:
+    metadata:
+      labels:
+        k8s-app: test-signer
+        name: test-signer
+    spec:
+      tolerations:
+        - effect: NoSchedule
+          operator: Exists
+      containers:
+      - env:
+          - name: CA_KEY
+            value: /test-signer-ca/tls.key
+          - name: CA_CRT
+            value: /test-signer-ca/tls.crt
+          - name: SIGNER_NAME
+            value: tigera.io/test-signer
+        image: quay.io/tigera/test-signer:master
+        imagePullPolicy: Always
+        name: test-signer
+        resources: {}
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+              - ALL
+          privileged: false
+          runAsGroup: 10001
+          runAsNonRoot: true
+          runAsUser: 10001
+          seccompProfile:
+            type: RuntimeDefault
+        volumeMounts:
+          - mountPath: /test-signer-ca
+            name: test-signer-ca
+            readOnly: true
+      nodeSelector:
+        kubernetes.io/os: linux
+      hostNetwork: true
+      securityContext: {}
+      imagePullSecrets:
+        - name: tigera-pull-secret
+      serviceAccount: test-signer
+      serviceAccountName: test-signer
+      volumes:
+        - name: test-signer-ca
+          secret:
+            secretName: test-signer-ca

@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2019,2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -525,7 +525,8 @@ func SafeParseLogLevel(logLevel string) log.Level {
 }
 
 // TestingTWriter adapts a *testing.T as a Writer so it can be used as a target
-// for logrus.
+// for logrus.  typically, it should be used via the ConfigureLoggingForTestingT
+// helper.
 type TestingTWriter struct {
 	T *testing.T
 }
@@ -536,6 +537,8 @@ func (l TestingTWriter) Write(p []byte) (n int, err error) {
 	return len(p), nil
 }
 
+// RedirectLogrusToTestingT redirects logrus output to the given testing.T.  It
+// returns a func() that can be called to restore the original log output.
 func RedirectLogrusToTestingT(t *testing.T) (cancel func()) {
 	oldOut := log.StandardLogger().Out
 	cancel = func() {
@@ -547,6 +550,10 @@ func RedirectLogrusToTestingT(t *testing.T) (cancel func()) {
 
 var confForTestingOnce sync.Once
 
+// ConfigureLoggingForTestingT configures logrus to write to the logger of the
+// given testing.T.  It should be called at the start of each "go test" that
+// wants to capture log output.  It registers a cleanup with the testing.T to
+// remove the log redirection at the end of the test.
 func ConfigureLoggingForTestingT(t *testing.T) {
 	confForTestingOnce.Do(func() {
 		log.SetFormatter(&Formatter{Component: "test"})

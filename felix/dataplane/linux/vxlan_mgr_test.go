@@ -115,7 +115,7 @@ type mockVXLANFDB struct {
 func (t *mockVXLANFDB) SetVTEPs(targets []vxlanfdb.VTEP) {
 	log.WithFields(log.Fields{
 		"targets": targets,
-	}).Debug("SetL2Routes")
+	}).Debug("SetVTEPs")
 	t.currentVTEPs = targets
 	t.setVTEPsCalls++
 }
