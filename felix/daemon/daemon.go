@@ -671,8 +671,9 @@ configRetry:
 		dpConnector.InSyncConsumers = append(dpConnector.InSyncConsumers, inSyncC)
 		statusFileReporter := statusrep.NewEndpointStatusFileReporter(fromDataplaneC, inSyncC, configParams.EndpointStatusPathPrefix)
 
+		log.WithField("path", configParams.EndpointStatusPathPrefix).Warn("EndpointStatusPathPrefix is non-empty. Starting StatusFileReporter")
 		ctx := context.TODO()
-		statusFileReporter.SyncForever(ctx)
+		go statusFileReporter.SyncForever(ctx)
 	}
 
 	// Start communicating with the dataplane driver.
@@ -1012,7 +1013,7 @@ func newConnector(configParams *config.Config,
 		ToDataplane:                         make(chan interface{}),
 		StatusUpdatesFromDataplane:          make(chan interface{}),
 		StatusUpdatesFromDataplaneConsumers: make([]chan interface{}, 0),
-		InSync:                              make(chan bool),
+		InSync:                              make(chan bool, 1),
 		InSyncConsumers:                     make([]chan bool, 0),
 		failureReportChan:                   failureReportChan,
 		dataplane:                           dataplane,
@@ -1045,7 +1046,7 @@ func (fc *DataplaneConnector) readMessagesFromDataplane() {
 			log.WithError(err).Error("Failed to read from front-end socket")
 			fc.shutDownProcess("Failed to read from front-end socket")
 		}
-		log.WithField("payload", payload).Debug("New message from dataplane")
+		log.WithField("payload", payload).Warn("New message from dataplane")
 		switch msg := payload.(type) {
 		case *proto.ProcessStatusUpdate:
 			fc.handleProcessStatusUpdate(context.TODO(), msg)
@@ -1071,7 +1072,7 @@ func (fc *DataplaneConnector) readMessagesFromDataplane() {
 		default:
 			log.WithField("msg", msg).Warning("Unknown message from dataplane")
 		}
-		log.Debug("Finished handling message from front-end")
+		log.Warn("Finished handling message from front-end")
 	}
 }
 
@@ -1287,15 +1288,20 @@ func (fc *DataplaneConnector) Start() {
 	// Start a background thread to handle Wireguard update to Node.
 	go fc.handleWireguardStatUpdateFromDataplane()
 
+	log.WithFields(log.Fields{
+		"statusUpdatesFromDataplaneConsumers": len(fc.StatusUpdatesFromDataplaneConsumers),
+		"inSyncConsumers":                     len(fc.InSyncConsumers),
+	}).Warn("DataplaneConnector starting.")
+
 	// Begin consuming StatusUpdatesFromDataplane/InSync's and dispatching to downstream components (e.g. status reporter).
 	if len(fc.StatusUpdatesFromDataplaneConsumers) > 0 {
 		ctx := context.TODO()
-		log.Debug("Starting StatsUpdatesFromDataplaneDispatcher")
+		log.Warn("Starting StatsUpdatesFromDataplaneDispatcher")
 		go fc.StatusUpdatesFromDataplaneDispatcher.DispatchForever(ctx, fc.StatusUpdatesFromDataplaneConsumers...)
 	}
 	if len(fc.InSyncConsumers) > 0 {
 		ctx := context.TODO()
-		log.Debug("Starting InSyncDispatcher")
+		log.Warn("Starting InSyncDispatcher")
 		go fc.InSyncDispatcher.DispatchForever(ctx, fc.InSyncConsumers...)
 	}
 }
