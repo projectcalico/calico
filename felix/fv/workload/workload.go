@@ -46,6 +46,7 @@ type Workload struct {
 	Name                  string
 	InterfaceName         string
 	IP                    string
+	IP6                   string
 	Ports                 string
 	DefaultPort           string
 	runCmd                *exec.Cmd
@@ -161,11 +162,7 @@ func New(c *infrastructure.Felix, name, profile, ip, ports, protocol string, opt
 	wep.Spec.Orchestrator = "felixfv"
 	wep.Spec.Workload = n
 	wep.Spec.Endpoint = n
-	prefixLen := "32"
-	if strings.Contains(ip, ":") {
-		prefixLen = "128"
-	}
-	wep.Spec.IPNetworks = []string{ip + "/" + prefixLen}
+	wep.Spec.IPNetworks = []string{}
 	wep.Spec.InterfaceName = interfaceName
 	wep.Spec.Profiles = []string{profile}
 
@@ -175,11 +172,31 @@ func New(c *infrastructure.Felix, name, profile, ip, ports, protocol string, opt
 		SpoofName:          spoofN,
 		InterfaceName:      interfaceName,
 		SpoofInterfaceName: spoofIfaceName,
-		IP:                 ip,
 		Ports:              ports,
 		Protocol:           protocol,
 		WorkloadEndpoint:   wep,
 		MTU:                defaultMTU,
+	}
+
+	ipAddrs := strings.Split(ip, ",")
+	if len(ipAddrs) == 1 {
+		prefixLen := "32"
+		if strings.Contains(ipAddrs[0], ":") {
+			prefixLen = "128"
+		}
+		workload.IP = ipAddrs[0]
+		wep.Spec.IPNetworks = append(wep.Spec.IPNetworks, ipAddrs[0]+"/"+prefixLen)
+	} else {
+		for _, ipAddr := range ipAddrs {
+			prefixLen := "32"
+			if strings.Contains(ipAddr, ":") {
+				prefixLen = "128"
+				workload.IP6 = ipAddr
+			} else {
+				workload.IP = ipAddr
+			}
+			wep.Spec.IPNetworks = append(wep.Spec.IPNetworks, ipAddr+"/"+prefixLen)
+		}
 	}
 
 	for _, o := range opts {
@@ -205,7 +222,7 @@ func (w *Workload) Start() error {
 		protoArg = "--protocol=" + w.Protocol
 	}
 
-	command := fmt.Sprintf("echo $$ > /tmp/%v; exec test-workload %v '%v' '%v' '%v'",
+	command := fmt.Sprintf("echo $$ > /tmp/%v; exec test-workload %v '%v' '%v,%v' '%v'",
 		w.Name,
 		protoArg,
 		w.InterfaceName,
@@ -401,7 +418,14 @@ func (w *Workload) SourceName() string {
 }
 
 func (w *Workload) SourceIPs() []string {
-	return []string{w.IP}
+	ips := []string{}
+	if w.IP != "" {
+		ips = append(ips, w.IP)
+	}
+	if w.IP6 != "" {
+		ips = append(ips, w.IP)
+	}
+	return ips
 }
 
 func (w *Workload) PreRetryCleanup(ip, port, protocol string, opts ...connectivity.CheckOption) {
