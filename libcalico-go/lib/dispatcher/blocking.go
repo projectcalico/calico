@@ -59,6 +59,7 @@ func (d *BlockingDispatcher[T]) DispatchForever(ctx context.Context, outputs ...
 		log.Panic("No outputs provided for dispatching input")
 	}
 
+	log.WithField("outputs", len(outputs)).Warn("Dispatcher running...")
 	for {
 		// Wait for input or ctx cancellation.
 		select {
@@ -69,16 +70,16 @@ func (d *BlockingDispatcher[T]) DispatchForever(ctx context.Context, outputs ...
 			if !ok {
 				log.Panic("Input channel closed unexpectedly")
 			}
-			log.WithField("message", msg).Debug("Pulled message off input chan")
+			log.WithField("message", msg).Warn("Pulled message off input chan")
 			for _, o := range outputs {
 				select {
 				case <-ctx.Done():
-					log.Debug("Context closed. Exiting...")
+					log.Warn("Context closed. Exiting...")
 					return
 				case o <- msg:
 				}
 			}
-			log.WithField("message", msg).Debug("Sent message to all outputs")
+			log.WithField("message", msg).Warn("Sent message to all outputs")
 		}
 	}
 }
