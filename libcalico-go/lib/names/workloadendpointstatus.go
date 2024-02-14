@@ -19,6 +19,8 @@ import (
 	"strings"
 
 	"github.com/projectcalico/calico/felix/proto"
+
+	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -40,8 +42,9 @@ var (
 func WorkloadEndpointIDToStatusFilename(id *proto.WorkloadEndpointID) string {
 	parts := make([]string, len(expectedFields))
 	parts[fieldOrchestratorID] = id.OrchestratorId
-	parts[fieldWorkloadID] = id.WorkloadId
+	parts[fieldWorkloadID] = strings.ReplaceAll(id.WorkloadId, "/", separator)
 	parts[fieldEndpointID] = id.EndpointId
+	logrus.WithField("parts", parts).Warn("gnerating filename from workload endpoint ID")
 	return strings.Join(parts, separator)
 }
 

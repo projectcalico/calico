@@ -123,11 +123,13 @@ func WithNewBackoffFunc(newBackoffFunc func() Backoff) FileReporterOption {
 // and reconciles the filesystem with internal state.
 func (fr *EndpointStatusFileReporter) SyncForever(ctx context.Context) {
 	inSyncWithUpstream := false
-	var retryC <-chan time.Time // Starts out as nil, ignored by selects.
+	var retryC, scheduledResync <-chan time.Time // Starts out as nil, ignored by selects.
+
+	logrus.Warn("Endpoint status file reporter running.")
 	for {
 		select {
 		case <-ctx.Done():
-			logrus.Debug("Context cancelled, stopping...")
+			logrus.Warn("Context cancelled, stopping...")
 			return
 		case b, ok := <-fr.inSyncC:
 			if !ok {
@@ -135,8 +137,9 @@ func (fr *EndpointStatusFileReporter) SyncForever(ctx context.Context) {
 			}
 
 			if b == true {
+				logrus.Warn("InSync received from calc graph.")
 				inSyncWithUpstream = true
-				err := fr.reconcilePolicyFiles(true)
+				err := fr.syncForeverReconcilePolicyFiles(true)
 				if err != nil {
 					retryC = time.After(fr.bom.Step())
 				} else {
@@ -149,7 +152,7 @@ func (fr *EndpointStatusFileReporter) SyncForever(ctx context.Context) {
 			if !ok {
 				logrus.Panic("Input channel closed unexpectedly")
 			}
-			logrus.WithField("endpoint", e).Debug("Handling endpoint update")
+			logrus.WithField("endpoint", e).Warn("Handling endpoint update")
 
 			err := fr.syncForeverHandleEndpointUpdate(e, inSyncWithUpstream)
 			if err != nil {
@@ -164,7 +167,7 @@ func (fr *EndpointStatusFileReporter) SyncForever(ctx context.Context) {
 				logrus.Panic("Retry channel closed unexpectedly")
 			}
 
-			err := fr.reconcilePolicyFiles(true)
+			err := fr.syncForeverReconcilePolicyFiles(true)
 			if err != nil {
 				backoffDuration := fr.bom.Step()
 				logrus.WithError(err).WithField("backoff", backoffDuration.String()).
@@ -174,6 +177,17 @@ func (fr *EndpointStatusFileReporter) SyncForever(ctx context.Context) {
 			} else {
 				retryC = nil
 				fr.bom.reset()
+			}
+		case _, ok := <-scheduledResync:
+			if !ok {
+				logrus.Panic("Internal scheduled-resync channel closed unexpectedly")
+			}
+
+			err := fr.syncForeverReconcilePolicyFiles(true)
+			if err != nil {
+				backoffDuration := fr.bom.Step()
+				logrus.WithError(err).WithField("backoff", backoffDuration.String()).
+					Warn("Encountered an error during a scheduled re-sync. Queueing retry...")
 			}
 		}
 	}
@@ -196,7 +210,7 @@ func (fr *EndpointStatusFileReporter) syncForeverHandleEndpointUpdate(e interfac
 	}
 
 	if commitToKernel {
-		err := fr.reconcilePolicyFiles(false)
+		err := fr.syncForeverReconcilePolicyFiles(false)
 		if err != nil {
 			return fmt.Errorf("Couldn't reconcile policy-status: %w", err)
 		}
@@ -205,22 +219,7 @@ func (fr *EndpointStatusFileReporter) syncForeverHandleEndpointUpdate(e interfac
 	return nil
 }
 
-func (fr *EndpointStatusFileReporter) writePolicyFile(name string) error {
-	// Write file to dir.
-	filename := filepath.Join(fr.endpointStatusDirPrefix, dirPolicyStatus, name)
-	f, err := os.Create(filename)
-	if err != nil {
-		return err
-	}
-	return f.Close()
-}
-
-func (fr *EndpointStatusFileReporter) deletePolicyFile(name string) error {
-	filename := filepath.Join(fr.endpointStatusDirPrefix, dirPolicyStatus, name)
-	return os.Remove(filename)
-}
-
-func (fr *EndpointStatusFileReporter) reconcilePolicyFiles(fullResync bool) error {
+func (fr *EndpointStatusFileReporter) syncForeverReconcilePolicyFiles(fullResync bool) error {
 	if fullResync {
 		// If calling this due to the first in-sync msg from upstream,
 		// this will be a no-op.
@@ -263,6 +262,21 @@ func (fr *EndpointStatusFileReporter) reconcilePolicyFiles(fullResync bool) erro
 	})
 
 	return lastError
+}
+
+func (fr *EndpointStatusFileReporter) writePolicyFile(name string) error {
+	// Write file to dir.
+	filename := filepath.Join(fr.endpointStatusDirPrefix, dirPolicyStatus, name)
+	f, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+	return f.Close()
+}
+
+func (fr *EndpointStatusFileReporter) deletePolicyFile(name string) error {
+	filename := filepath.Join(fr.endpointStatusDirPrefix, dirPolicyStatus, name)
+	return os.Remove(filename)
 }
 
 // ensurePolicyStatusDir ensures there is a directory named "policy", within
