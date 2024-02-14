@@ -39,6 +39,7 @@ import (
 	"time"
 
 	"github.com/projectcalico/calico/felix/ethtool"
+	"github.com/projectcalico/calico/libcalico-go/lib/health"
 
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
@@ -86,6 +87,8 @@ import (
 const (
 	bpfInDev  = "bpfin.cali"
 	bpfOutDev = "bpfout.cali"
+
+	bpfEPManagerHealthName = "BPFEndpointManager"
 )
 
 var (
@@ -161,7 +164,8 @@ type bpfDataplane interface {
 }
 
 type hasLoadPolicyProgram interface {
-	loadPolicyProgram(progName string,
+	loadPolicyProgram(
+		progName string,
 		ipFamily proto.IPVersion,
 		rules polprog.Rules,
 		staticProgsMap maps.Map,
@@ -353,6 +357,8 @@ type bpfEndpointManager struct {
 
 	v4 *bpfEndpointManagerDataplane
 	v6 *bpfEndpointManagerDataplane
+	
+	healthAggregator *health.HealthAggregator
 }
 
 type bpfEndpointManagerDataplane struct {
@@ -382,7 +388,11 @@ type ManagerWithHEPUpdate interface {
 	OnHEPUpdate(hostIfaceToEpMap map[string]proto.HostEndpoint)
 }
 
-func NewTestEpMgr(config *Config, bpfmaps *bpfmap.Maps, workloadIfaceRegex *regexp.Regexp) (ManagerWithHEPUpdate, error) {
+func NewTestEpMgr(
+	config *Config,
+	bpfmaps *bpfmap.Maps,
+	workloadIfaceRegex *regexp.Regexp,
+) (ManagerWithHEPUpdate, error) {
 	return newBPFEndpointManager(nil, config, bpfmaps, true, workloadIfaceRegex, idalloc.New(),
 		rules.NewRenderer(rules.Config{
 			BPFEnabled:                  true,
@@ -406,6 +416,7 @@ func NewTestEpMgr(config *Config, bpfmaps *bpfmap.Maps, workloadIfaceRegex *rege
 		nil,
 		logutils.NewSummarizer("test"),
 		new(environment.FakeFeatureDetector),
+		nil,
 	)
 }
 
@@ -422,6 +433,7 @@ func newBPFEndpointManager(
 	livenessCallback func(),
 	opReporter logutils.OpRecorder,
 	featureDetector environment.FeatureDetectorIface,
+	healthAggregator *health.HealthAggregator,
 ) (*bpfEndpointManager, error) {
 	if livenessCallback == nil {
 		livenessCallback = func() {}
@@ -479,6 +491,19 @@ func newBPFEndpointManager(
 		bpfPolicyDebugEnabled:  config.BPFPolicyDebugEnabled,
 		polNameToMatchIDs:      map[string]set.Set[polprog.RuleMatchID]{},
 		dirtyRules:             set.New[polprog.RuleMatchID](),
+
+		healthAggregator: healthAggregator,
+	}
+
+	if healthAggregator != nil {
+		healthAggregator.RegisterReporter(bpfEPManagerHealthName, &health.HealthReport{
+			Ready: true,
+			Live:  false,
+		}, 0)
+		healthAggregator.Report(bpfEPManagerHealthName, &health.HealthReport{
+			Ready:  false,
+			Detail: "Not yet synced.",
+		})
 	}
 
 	// Calculate allowed XDP attachment modes.  Note, in BPF mode untracked ingress policy is
@@ -1466,6 +1491,12 @@ func (m *bpfEndpointManager) CompleteDeferredWork() error {
 
 	if err := m.ifStateMap.ApplyAllChanges(); err != nil {
 		log.WithError(err).Warn("Failed to write updates to ifstate BPF map.")
+		if m.healthAggregator != nil {
+			m.healthAggregator.Report(bpfEPManagerHealthName, &health.HealthReport{
+				Ready:  false,
+				Detail: "Failed to update interface state map.",
+			})
+		}
 		return err
 	}
 
@@ -1497,6 +1528,12 @@ func (m *bpfEndpointManager) CompleteDeferredWork() error {
 		if m.removeOldJumps {
 			oldBase := path.Join(bpfdefs.GlobalPinDir, "old_jumps")
 			if err := os.RemoveAll(oldBase); err != nil && os.IsNotExist(err) {
+				if m.healthAggregator != nil {
+					m.healthAggregator.Report(bpfEPManagerHealthName, &health.HealthReport{
+						Ready:  false,
+						Detail: "Failed to clean up old jump maps.",
+					})
+				}
 				return fmt.Errorf("failed to remove %s: %w", oldBase, err)
 			}
 			m.removeOldJumps = false
@@ -1505,6 +1542,17 @@ func (m *bpfEndpointManager) CompleteDeferredWork() error {
 			legacy.CleanUpMaps()
 			m.legacyCleanUp = false
 		}
+
+		if m.healthAggregator != nil {
+			m.healthAggregator.Report(bpfEPManagerHealthName, &health.HealthReport{
+				Ready: true,
+			})
+		}
+	} else if m.healthAggregator != nil {
+		m.healthAggregator.Report(bpfEPManagerHealthName, &health.HealthReport{
+			Ready:  false,
+			Detail: "Failed to configure some interfaces.",
+		})
 	}
 
 	return nil
@@ -2097,8 +2145,10 @@ func isLinkNotFoundError(err error) bool {
 
 var calicoRouterIP = net.IPv4(169, 254, 1, 1).To4()
 
-func (d *bpfEndpointManagerDataplane) wepTCAttachPoint(ap *tc.AttachPoint, policyIdx, filterIdx int,
-	polDirection PolDirection) *tc.AttachPoint {
+func (d *bpfEndpointManagerDataplane) wepTCAttachPoint(
+	ap *tc.AttachPoint, policyIdx, filterIdx int,
+	polDirection PolDirection,
+) *tc.AttachPoint {
 
 	ap = d.configureTCAttachPoint(polDirection, ap, false)
 	ifaceName := ap.IfaceName()
@@ -2122,8 +2172,10 @@ func (d *bpfEndpointManagerDataplane) wepTCAttachPoint(ap *tc.AttachPoint, polic
 	return ap
 }
 
-func (d *bpfEndpointManagerDataplane) wepApplyPolicyToDirection(readiness ifaceReadiness, state *bpfInterfaceState,
-	endpoint *proto.WorkloadEndpoint, polDirection PolDirection, ap *tc.AttachPoint) (*tc.AttachPoint, error) {
+func (d *bpfEndpointManagerDataplane) wepApplyPolicyToDirection(
+	readiness ifaceReadiness, state *bpfInterfaceState,
+	endpoint *proto.WorkloadEndpoint, polDirection PolDirection, ap *tc.AttachPoint,
+) (*tc.AttachPoint, error) {
 
 	var policyIdx, filterIdx int
 
@@ -2178,8 +2230,10 @@ func (m *bpfEndpointManager) loadFilterProgram(ap attachPoint) {
 	}
 }
 
-func (d *bpfEndpointManagerDataplane) wepApplyPolicy(ap *tc.AttachPoint,
-	endpoint *proto.WorkloadEndpoint, polDirection PolDirection) error {
+func (d *bpfEndpointManagerDataplane) wepApplyPolicy(
+	ap *tc.AttachPoint,
+	endpoint *proto.WorkloadEndpoint, polDirection PolDirection,
+) error {
 
 	var profileIDs []string
 	var tier *proto.TierInfo
@@ -2224,7 +2278,11 @@ func (d *bpfEndpointManagerDataplane) wepApplyPolicy(ap *tc.AttachPoint,
 	return m.updatePolicyProgramFn(rules, polDirection.RuleDir(), ap, d.ipFamily)
 }
 
-func (m *bpfEndpointManager) addHostPolicy(rules *polprog.Rules, hostEndpoint *proto.HostEndpoint, polDirection PolDirection) {
+func (m *bpfEndpointManager) addHostPolicy(
+	rules *polprog.Rules,
+	hostEndpoint *proto.HostEndpoint,
+	polDirection PolDirection,
+) {
 
 	// When there is applicable pre-DNAT policy that does not explicitly Allow or Deny traffic,
 	// we continue on to subsequent tiers and normal or AoF policy.
@@ -2386,7 +2444,11 @@ func (d *bpfEndpointManagerDataplane) attachDataIfaceProgram(
 	return ap, nil
 }
 
-func (d *bpfEndpointManagerDataplane) attachXDPProgram(ap *xdp.AttachPoint, ep *proto.HostEndpoint, state *bpfInterfaceState) error {
+func (d *bpfEndpointManagerDataplane) attachXDPProgram(
+	ap *xdp.AttachPoint,
+	ep *proto.HostEndpoint,
+	state *bpfInterfaceState,
+) error {
 	if d.ipFamily == proto.IPVersion_IPV6 {
 		ap.PolicyIdxV6 = state.v6.policyIdx[hook.XDP]
 	} else {
@@ -2529,7 +2591,11 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(ifaceName string) *tc.Attach
 	return ap
 }
 
-func (d *bpfEndpointManagerDataplane) configureTCAttachPoint(policyDirection PolDirection, ap *tc.AttachPoint, isDataIface bool) *tc.AttachPoint {
+func (d *bpfEndpointManagerDataplane) configureTCAttachPoint(
+	policyDirection PolDirection,
+	ap *tc.AttachPoint,
+	isDataIface bool,
+) *tc.AttachPoint {
 	if ap.Type == tcdefs.EpTypeLO || ap.Type == tcdefs.EpTypeNAT || isDataIface {
 		if d.ipFamily == proto.IPVersion_IPV6 {
 			ap.HostTunnelIPv6 = d.tunnelIP
@@ -2570,7 +2636,11 @@ func (d *bpfEndpointManagerDataplane) configureTCAttachPoint(policyDirection Pol
 const EndTierDrop = true
 const NoEndTierDrop = false
 
-func (m *bpfEndpointManager) extractTiers(tier *proto.TierInfo, direction PolDirection, endTierDrop bool) (rTiers []polprog.Tier) {
+func (m *bpfEndpointManager) extractTiers(
+	tier *proto.TierInfo,
+	direction PolDirection,
+	endTierDrop bool,
+) (rTiers []polprog.Tier) {
 	dir := direction.RuleDir()
 	if tier == nil {
 		return
@@ -2625,7 +2695,10 @@ func (m *bpfEndpointManager) extractTiers(tier *proto.TierInfo, direction PolDir
 	return
 }
 
-func (m *bpfEndpointManager) extractProfiles(profileNames []string, direction PolDirection) (rProfiles []polprog.Profile) {
+func (m *bpfEndpointManager) extractProfiles(
+	profileNames []string,
+	direction PolDirection,
+) (rProfiles []polprog.Profile) {
 	dir := direction.RuleDir()
 	if count := len(profileNames); count > 0 {
 		rProfiles = make([]polprog.Profile, count)
@@ -2656,7 +2729,11 @@ func (m *bpfEndpointManager) extractProfiles(profileNames []string, direction Po
 	return
 }
 
-func (m *bpfEndpointManager) extractRules(tier *proto.TierInfo, profileNames []string, direction PolDirection) polprog.Rules {
+func (m *bpfEndpointManager) extractRules(
+	tier *proto.TierInfo,
+	profileNames []string,
+	direction PolDirection,
+) polprog.Rules {
 	var r polprog.Rules
 
 	// When there is applicable normal policy that does not explicitly Allow or Deny traffic,
@@ -3176,7 +3253,14 @@ func (m *bpfEndpointManager) removePolicyDebugInfo(ifaceName string, ipFamily pr
 	}
 }
 
-func (m *bpfEndpointManager) writePolicyDebugInfo(insns []asm.Insns, ifaceName string, ipFamily proto.IPVersion, polDir string, h hook.Hook, polErr error) error {
+func (m *bpfEndpointManager) writePolicyDebugInfo(
+	insns []asm.Insns,
+	ifaceName string,
+	ipFamily proto.IPVersion,
+	polDir string,
+	h hook.Hook,
+	polErr error,
+) error {
 	if !m.bpfPolicyDebugEnabled {
 		return nil
 	}
@@ -3221,7 +3305,12 @@ func (m *bpfEndpointManager) writePolicyDebugInfo(insns []asm.Insns, ifaceName s
 	return nil
 }
 
-func (m *bpfEndpointManager) updatePolicyProgram(rules polprog.Rules, polDir string, ap attachPoint, ipFamily proto.IPVersion) error {
+func (m *bpfEndpointManager) updatePolicyProgram(
+	rules polprog.Rules,
+	polDir string,
+	ap attachPoint,
+	ipFamily proto.IPVersion,
+) error {
 
 	progName := policyProgramName(ap.IfaceName(), polDir, proto.IPVersion(ipFamily))
 
@@ -3714,8 +3803,10 @@ func (m *bpfEndpointManager) updatePolicyCache(name string, owner string, inboun
 	m.polNameToMatchIDs[name] = ruleIds
 }
 
-func (m *bpfEndpointManager) addRuleInfo(rule *proto.Rule, idx int,
-	owner string, direction PolDirection, polName string) polprog.RuleMatchID {
+func (m *bpfEndpointManager) addRuleInfo(
+	rule *proto.Rule, idx int,
+	owner string, direction PolDirection, polName string,
+) polprog.RuleMatchID {
 
 	matchID := m.dp.ruleMatchID(direction.RuleDir(), rule.Action, owner, polName, idx)
 	m.dirtyRules.Discard(matchID)
