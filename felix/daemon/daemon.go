@@ -395,8 +395,10 @@ configRetry:
 	logutils.ConfigureLogging(configParams)
 	// Since we may have enabled more logging, log with the build context
 	// again.
-	buildInfoLogCxt.WithField("config", configParams).Info(
-		"Successfully loaded configuration.")
+	buildInfoLogCxt.WithFields(log.Fields{
+		"config":                   configParams,
+		lclogutils.FieldNoTruncate: true,
+	}).Info("Successfully loaded configuration.")
 
 	// Configure Windows firewall rules if appropriate
 	winutils.MaybeConfigureWindowsFirewallRules(configParams.WindowsManageFirewallRules, configParams.PrometheusMetricsEnabled, configParams.PrometheusMetricsPort)
@@ -1252,7 +1254,8 @@ func (fc *DataplaneConnector) handleConfigUpdate(msg *proto.ConfigUpdate) {
 	}
 
 	log.WithField("configUpdate", msg).WithFields(log.Fields{
-		"configBySource": sourceToRaw,
+		"configBySource":           sourceToRaw,
+		lclogutils.FieldNoTruncate: true,
 	}).Info("Configuration update from calculation graph.")
 
 	var oldConfigCopy, newConfigCopy *config.Config
