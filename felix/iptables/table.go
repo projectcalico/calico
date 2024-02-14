@@ -1436,10 +1436,11 @@ func (t *Table) execIptablesRestore(buf *RestoreInputBuilder) error {
 		// (and the logger may convert to string on a background thread).
 		inputStr := string(inputBytes)
 		t.logCxt.WithFields(log.Fields{
-			"output":      outputBuf.String(),
-			"errorOutput": errBuf.String(),
-			"error":       err,
-			"input":       inputStr,
+			"output":                   outputBuf.String(),
+			"errorOutput":              errBuf.String(),
+			"error":                    err,
+			"input":                    inputStr,
+			logutilslc.FieldNoTruncate: true,
 		}).Warn("Failed to execute ip(6)tables-restore command")
 		t.inSyncWithDataPlane = false
 		countNumRestoreErrors.Inc()
