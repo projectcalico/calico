@@ -1,6 +1,11 @@
 #!/bin/sh
 # From https://github.com/faisyl/alpine-runit
-env > /etc/envvars
+# If running as non-root user, use sudo
+if [[ $UID -ne 0 ]]; then
+    sudo --preserv-env sh -c 'env > /etc/envvars'
+else
+    env > /etc/envvars
+fi
 
 /etc/rc.local
 retval=$?

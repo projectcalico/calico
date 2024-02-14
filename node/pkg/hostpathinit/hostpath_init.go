@@ -36,61 +36,69 @@ func Run() {
 
 	uid, err := strconv.Atoi(uidStr)
 	if err != nil {
-		log.Panicf("Failed to parse value for UID %s", uidStr)
+		log.WithError(err).Panicf("Failed to parse value for UID %s", uidStr)
 	}
 
-	// Create the calico directory in /var/lib/
+	// Create the calico directory in /var/lib/ if it doesn't exist
 	err = os.MkdirAll("/var/lib/calico/", 0700)
 	if err != nil {
-		log.Panic("Unable to create directory /var/lib/calico/")
+		log.WithError(err).Panic("Unable to create directory /var/lib/calico/")
 	}
 
-	// Change ownership of /var/lib/calico/ to our non-root user
-	err = os.Chown("/var/lib/calico/", uid, 0)
+	// Change ownership of /var/lib/calico/ and all files in it to our non-root user
+	// There may already be files there when switching from root to non-root mode
+	err = recursiveChown("/var/lib/calico/", uid, 0)
 	if err != nil {
-		log.Panic("Unable to chown /var/lib/calico/")
+		log.WithError(err).Panic("Unable to chown /var/lib/calico/")
 	}
 
-	// Create the calico directory in /var/run/
+	// Create the calico directory in /var/run/ if it doesn't exist
 	err = os.MkdirAll("/var/run/calico/", 0700)
 	if err != nil {
-		log.Panic("Unable to create directory /var/run/calico/")
+		log.WithError(err).Panic("Unable to create directory /var/run/calico/")
 	}
 
-	// Change ownership of /var/run/calico/ to our non-root user
-	err = os.Chown("/var/run/calico/", uid, 0)
+	// Change ownership of /var/run/calico/ and all files in it to our non-root user
+	// There may already be files there when switching from root to non-root mode
+	err = recursiveChown("/var/run/calico/", uid, 0)
 	if err != nil {
-		log.Panic("Unable to chown /var/run/calico/")
+		log.WithError(err).Panic("Unable to chown /var/run/calico/")
 	}
 
 	// Create the calico directory in /var/log/ and the cni log directory in /var/log/calico/
 	err = os.MkdirAll("/var/log/calico/cni", 0700)
 	if err != nil {
-		log.Panic("Unable to create directory /var/log/calico/cni")
+		log.WithError(err).Panic("Unable to create directory /var/log/calico/cni")
 	}
 
-	// Change ownership of /var/log/calico/ to  our non-root user
-	err = os.Chown("/var/log/calico/", uid, 0)
+	// Change ownership of /var/log/calico/ and all files in it to our non-root user
+	// There may already be files there when switching from root to non-root mode
+	err = recursiveChown("/var/log/calico/", uid, 0)
 	if err != nil {
-		log.Panic("Unable to chown /var/log/calico/")
+		log.WithError(err).Panic("Unable to chown /var/log/calico/")
 	}
 
 	// Change ownership of the cni log directory and all files in the cni log directory.
 	// There will likely be files here since logs might have been created
 	// separately by the CNI plugin.
-	err = filepath.Walk("/var/log/calico/cni", func(path string, info fs.FileInfo, walkErr error) error {
+	err = recursiveChown("/var/log/calico/cni", uid, 0)
+	if err != nil {
+		log.WithError(err).Panic("Unable to chown /var/log/calico/cni")
+	}
+}
+
+// Change ownership of a directory and all files in it.
+func recursiveChown(dir string, uid, gid int) error {
+	return filepath.Walk(dir, func(path string, info fs.FileInfo, walkErr error) error {
 		// There was an error related to the path. Directory will not be explored so skip
-		if walkErr != nil && path != "/var/log/calico/cni" {
+		if walkErr != nil && path != dir {
 			return nil
 		}
 
-		err := os.Chown(path, uid, 0)
+		err := os.Chown(path, uid, gid)
 		if err != nil {
 			return fmt.Errorf("Unable to chown %s: %s", path, err)
 		}
 		return nil
 	})
-	if err != nil {
-		log.Panicf("Unable to chown cni log file: %s", err)
-	}
 }
