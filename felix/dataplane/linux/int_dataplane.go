@@ -27,8 +27,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/projectcalico/api/pkg/lib/numorstring"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
@@ -36,6 +34,9 @@ import (
 	"golang.org/x/sys/unix"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 	"k8s.io/client-go/kubernetes"
+
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/projectcalico/api/pkg/lib/numorstring"
 
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/bpfmap"
@@ -705,6 +706,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			dp.reportHealth,
 			dp.loopSummarizer,
 			featureDetector,
+			config.HealthAggregator,
 		)
 
 		if err != nil {
