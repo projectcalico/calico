@@ -832,7 +832,7 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 	m.wlIfaceNamesToReconfigure.Iter(func(ifaceName string) error {
 		err := m.configureInterface(ifaceName)
 		if err != nil {
-			if exists, err := m.interfaceExistsInProcSys(ifaceName); err == nil && !exists {
+			if exists, err2 := m.interfaceExistsInProcSys(ifaceName); err2 == nil && !exists {
 				// Suppress log spam if interface has been removed.
 				log.WithError(err).Debug("Failed to configure interface and it seems to be gone")
 			} else {
@@ -1365,16 +1365,24 @@ func (m *endpointManager) interfaceExistsInProcSys(name string) (bool, error) {
 func configureInterface(name string, ipVersion int, rpFilter string, writeProcSys procSysWriter) error {
 	log.WithField("ifaceName", name).Info(
 		"Applying /proc/sys configuration to interface.")
+
+	// When running as non-root, the host's '/proc' is mounted at '/nodeproc'
+	procDir := "/proc"
+	if os.Getenv("SUDO_UID") != "" {
+		procDir = "/nodeproc"
+		log.Infof("Not running as root, applying configs to %s", procDir)
+	}
+
 	if ipVersion == 4 {
 		// Enable routing to localhost.  This is required to allow for NAT to the local
 		// host.
-		err := writeProcSys(fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/route_localnet", name), "1")
+		err := writeProcSys(fmt.Sprintf("%s/sys/net/ipv4/conf/%s/route_localnet", procDir, name), "1")
 		if err != nil {
 			return err
 		}
 		// Normally, the kernel has a delay before responding to proxy ARP but we know
 		// that's not needed in a Calico network so we disable it.
-		err = writeProcSys(fmt.Sprintf("/proc/sys/net/ipv4/neigh/%s/proxy_delay", name), "0")
+		err = writeProcSys(fmt.Sprintf("%s/sys/net/ipv4/neigh/%s/proxy_delay", procDir, name), "0")
 		if err != nil {
 			log.Warnf("failed to set net.ipv4.neigh.%s.proxy_delay=0: %s", name, err)
 		}
@@ -1394,33 +1402,33 @@ func configureInterface(name string, ipVersion int, rpFilter string, writeProcSy
 		//   means that we don't need to assign the link local address explicitly to each
 		//   host side of the veth, which is one fewer thing to maintain and one fewer
 		//   thing we may clash over.
-		err = writeProcSys(fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/proxy_arp", name), "1")
+		err = writeProcSys(fmt.Sprintf("%s/sys/net/ipv4/conf/%s/proxy_arp", procDir, name), "1")
 		if err != nil {
 			return err
 		}
 		// Enable IP forwarding of packets coming _from_ this interface.  For packets to
 		// be forwarded in both directions we need this flag to be set on the fabric-facing
 		// interface too (or for the global default to be set).
-		err = writeProcSys(fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/forwarding", name), "1")
+		err = writeProcSys(fmt.Sprintf("%s/sys/net/ipv4/conf/%s/forwarding", procDir, name), "1")
 		if err != nil {
 			return err
 		}
 		// Disable kernel rpf check for interfaces that have rpf filtering explicitly disabled
 		// This is set only in IPv4 mode as there's no equivalent sysctl in IPv6
-		err = writeProcSys(fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/rp_filter", name), rpFilter)
+		err = writeProcSys(fmt.Sprintf("%s/sys/net/ipv4/conf/%s/rp_filter", procDir, name), rpFilter)
 		if err != nil {
 			return err
 		}
 	} else {
 		// Enable proxy NDP, similarly to proxy ARP, described above.
-		err := writeProcSys(fmt.Sprintf("/proc/sys/net/ipv6/conf/%s/proxy_ndp", name), "1")
+		err := writeProcSys(fmt.Sprintf("%s/sys/net/ipv6/conf/%s/proxy_ndp", procDir, name), "1")
 		if err != nil {
 			return err
 		}
 		// Enable IP forwarding of packets coming _from_ this interface.  For packets to
 		// be forwarded in both directions we need this flag to be set on the fabric-facing
 		// interface too (or for the global default to be set).
-		err = writeProcSys(fmt.Sprintf("/proc/sys/net/ipv6/conf/%s/forwarding", name), "1")
+		err = writeProcSys(fmt.Sprintf("%s/sys/net/ipv6/conf/%s/forwarding", procDir, name), "1")
 		if err != nil {
 			return err
 		}
@@ -1436,8 +1444,15 @@ func (m *endpointManager) configureInterface(name string) error {
 		return nil
 	}
 
+	// When running as non-root, the host's '/proc' is mounted at '/nodeproc'
+	procDir := "/proc"
+	if os.Getenv("SUDO_UID") != "" {
+		procDir = "/nodeproc"
+		log.Infof("Not running as root, applying configs to %s", procDir)
+	}
+
 	// Special case: for security, even if our IPv6 support is disabled, try to disable RAs on the interface.
-	acceptRAPath := fmt.Sprintf("/proc/sys/net/ipv6/conf/%s/accept_ra", name)
+	acceptRAPath := fmt.Sprintf("%s/sys/net/ipv6/conf/%s/accept_ra", procDir, name)
 	err := m.writeProcSys(acceptRAPath, "0")
 	if err != nil {
 		if exists, err2 := m.interfaceExistsInProcSys(name); err2 == nil && !exists {

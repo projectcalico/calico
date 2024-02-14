@@ -1987,15 +1987,22 @@ func (d *InternalDataplane) configureKernel() {
 	out, err := mp.Exec()
 	log.WithError(err).WithField("output", out).Infof("attempted to modprobe %s", moduleConntrackSCTP)
 
+	// When running as non-root, the host's '/proc' is mounted at '/nodeproc'
+	procDir := "/proc"
+	if os.Getenv("SUDO_UID") != "" {
+		procDir = "/nodeproc"
+		log.Infof("Not running as root, applying configs to %s", procDir)
+	}
+
 	log.Info("Making sure IPv4 forwarding is enabled.")
-	err = writeProcSys("/proc/sys/net/ipv4/ip_forward", "1")
+	err = writeProcSys(fmt.Sprintf("%s/sys/net/ipv4/ip_forward", procDir), "1")
 	if err != nil {
 		log.WithError(err).Error("Failed to set IPv4 forwarding sysctl")
 	}
 
 	if d.config.IPv6Enabled {
 		log.Info("Making sure IPv6 forwarding is enabled.")
-		err = writeProcSys("/proc/sys/net/ipv6/conf/all/forwarding", "1")
+		err = writeProcSys(fmt.Sprintf("%s/sys/net/ipv6/conf/all/forwarding", procDir), "1")
 		if err != nil {
 			log.WithError(err).Error("Failed to set IPv6 forwarding sysctl")
 		}
@@ -2003,7 +2010,7 @@ func (d *InternalDataplane) configureKernel() {
 
 	if d.config.BPFEnabled && d.config.BPFDisableUnprivileged {
 		log.Info("BPF enabled, disabling unprivileged BPF usage.")
-		err := writeProcSys("/proc/sys/kernel/unprivileged_bpf_disabled", "1")
+		err := writeProcSys(fmt.Sprintf("%s/sys/kernel/unprivileged_bpf_disabled", procDir), "1")
 		if err != nil {
 			log.WithError(err).Error("Failed to set unprivileged_bpf_disabled sysctl")
 		}
