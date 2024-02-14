@@ -1000,6 +1000,7 @@ func waitForPolicyWithTimeout(log *logrus.Entry, policyDir string, epIDs utils.W
 
 	select {
 	case <-notify:
+		log.WithField("filename", filename).Warn("Notification received; status file found in policy directory")
 	case <-time.After(timeout):
 		cancel()
 		log.WithField("filename", filename).Warn("Timed out waiting for policy file to be created for workload")
@@ -1011,18 +1012,31 @@ func waitForPolicyWithTimeout(log *logrus.Entry, policyDir string, epIDs utils.W
 func notifyWhenFileExists(ctx context.Context, notif chan struct{}, directory, filename string) {
 	var watcher *fsnotify.Watcher
 	var err error
-	// Retry loop for any errors are encountered.
+	retryInterval := 1 * time.Second
+
+	// Overwrite with a delay if an error occurrs.
+	var retryWait <-chan time.Time
 	for {
-		select {
-		case <-ctx.Done():
-			return
-		default:
+		if retryWait != nil {
+			select {
+			case <-ctx.Done():
+			case <-retryWait:
+				// Retry delay was successful. Nil-out.
+				retryWait = nil
+			}
+		} else {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
 		}
 
 		if watcher == nil {
 			watcher, err = fsnotify.NewWatcher()
 			if err != nil {
 				logrus.WithError(err).Warn("Couldn't create filesystem watch, scheduling retry...")
+				retryWait = time.After(retryInterval)
 				continue
 			}
 		}
@@ -1031,6 +1045,7 @@ func notifyWhenFileExists(ctx context.Context, notif chan struct{}, directory, f
 			err = watcher.Add(directory)
 			if err != nil {
 				logrus.WithError(err).Warn("Couldn't add directory to watcher")
+				retryWait = time.After(retryInterval)
 				continue
 			}
 		}
@@ -1040,6 +1055,7 @@ func notifyWhenFileExists(ctx context.Context, notif chan struct{}, directory, f
 		entries, err := os.ReadDir(directory)
 		if err != nil {
 			logrus.WithError(err).Warn("Couldn't probe status directory 'policy'")
+			retryWait = time.After(retryInterval)
 			continue
 		}
 		for _, e := range entries {
