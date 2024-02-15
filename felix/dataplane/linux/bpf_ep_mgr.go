@@ -339,7 +339,7 @@ type bpfEndpointManager struct {
 
 	bpfPolicyDebugEnabled bool
 
-	routeTable       routetable.RouteTableInterface
+	routeTable       *routetable.ClassView
 	services         map[serviceKey][]ip.CIDR
 	dirtyServices    set.Set[serviceKey]
 	natExcludedCIDRs *ip.CIDRTrie
@@ -405,7 +405,7 @@ func NewTestEpMgr(config *Config, bpfmaps *bpfmap.Maps, workloadIfaceRegex *rege
 		iptables.NewNoopTable(),
 		nil,
 		logutils.NewSummarizer("test"),
-		new(environment.FakeFeatureDetector),
+		&routetable.DummyTable{},
 	)
 }
 
@@ -421,7 +421,7 @@ func newBPFEndpointManager(
 	iptablesFilterTableV6 IptablesTable,
 	livenessCallback func(),
 	opReporter logutils.OpRecorder,
-	featureDetector environment.FeatureDetectorIface,
+	mainRouteTable routetable.Interface,
 ) (*bpfEndpointManager, error) {
 	if livenessCallback == nil {
 		livenessCallback = func() {}
@@ -516,21 +516,7 @@ func newBPFEndpointManager(
 
 	if m.hostNetworkedNATMode != hostNetworkedNATDisabled {
 		log.Infof("HostNetworkedNATMode is %d", m.hostNetworkedNATMode)
-		family := uint8(4)
-		if m.ipv6Enabled {
-			family = 6
-		}
-		m.routeTable = routetable.New(
-			[]string{bpfInDev},
-			family,
-			config.NetlinkTimeout,
-			nil, // deviceRouteSourceAddress
-			config.DeviceRouteProtocol,
-			true, // removeExternalRoutes
-			unix.RT_TABLE_MAIN,
-			opReporter,
-			featureDetector,
-		)
+		m.routeTable = routetable.NewClassView(routetable.RouteClassBPFSpecial, mainRouteTable)
 		m.services = make(map[serviceKey][]ip.CIDR)
 		m.dirtyServices = set.New[serviceKey]()
 		m.natExcludedCIDRs = ip.NewCIDRTrie()
@@ -3682,16 +3668,6 @@ func (m *bpfEndpointManager) delRoute(cidr ip.CIDR) {
 	log.WithFields(log.Fields{
 		"cidr": cidr,
 	}).Debug("delRoute")
-}
-
-func (m *bpfEndpointManager) GetRouteTableSyncers() []routetable.RouteTableSyncer {
-	if m.hostNetworkedNATMode == hostNetworkedNATDisabled {
-		return nil
-	}
-
-	tables := []routetable.RouteTableSyncer{m.routeTable}
-
-	return tables
 }
 
 // updatePolicyCache modifies entries in the cache, adding new entries and marking old entries dirty.
