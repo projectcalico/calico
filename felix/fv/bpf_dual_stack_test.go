@@ -1,4 +1,4 @@
-// Copyright (c) 2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,26 +25,23 @@ import (
 	"net"
 	"strconv"
 
-	//"time"
-
-	//"strings"
+	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/kubernetes"
 
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 
 	. "github.com/projectcalico/calico/felix/fv/connectivity"
-	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 
-	//"github.com/projectcalico/calico/felix/bpf/counters"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/felix/fv/workload"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
-	//options2 "github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
 var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf dual stack tests", []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
@@ -54,13 +51,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf dual stack tests"
 	}
 
 	var (
-		infra          infrastructure.DatastoreInfra
-		tc             infrastructure.TopologyContainers
-		w              [3][2]*workload.Workload
-		hostW          [3]*workload.Workload
-		externalClient *containers.Container
-		calicoClient   client.Interface
-		cc             *Checker
+		infra        infrastructure.DatastoreInfra
+		tc           infrastructure.TopologyContainers
+		w            [3][2]*workload.Workload
+		calicoClient client.Interface
+		cc           *Checker
 	)
 
 	felixIP := func(f int) string {
@@ -74,7 +69,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf dual stack tests"
 	BeforeEach(func() {
 		iOpts := []infrastructure.CreateOption{infrastructure.K8sWithIPv6(),
 			infrastructure.K8sWithAPIServerBindAddress("::"),
-			infrastructure.K8sWithServiceClusterIPRange("dead:beef::abcd:0:0:0/112")}
+			infrastructure.K8sWithServiceClusterIPRange("dead:beef::abcd:0:0:0/112,10.101.0.0/16")}
 		infra = getInfra(iOpts...)
 		cc = &Checker{
 			CheckSNAT: true,
@@ -84,13 +79,14 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf dual stack tests"
 		opts.EnableIPv6 = true
 		//opts.FelixLogSeverity = "Debug"
 		opts.NATOutgoingEnabled = true
-		opts.AutoHEPsEnabled = true
+		opts.AutoHEPsEnabled = false
 		opts.IPIPEnabled = false
 		opts.IPIPRoutesEnabled = false
 
 		opts.ExtraEnvVars["FELIX_IPV6SUPPORT"] = "true"
 		opts.ExtraEnvVars["FELIX_BPFConnectTimeLoadBalancing"] = string(api.BPFConnectTimeLBDisabled)
 		opts.ExtraEnvVars["FELIX_BPFHostNetworkedNATWithoutCTLB"] = string(api.BPFHostNetworkedNATEnabled)
+		opts.ExtraEnvVars["FELIX_DefaultEndpointToHostAction"] = "RETURN"
 
 		//opts.ExtraEnvVars["FELIX_BPFLogLevel"] = fmt.Sprint("debug")
 		tc, calicoClient = infrastructure.StartNNodeTopology(3, opts, infra)
@@ -142,36 +138,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf dual stack tests"
 
 		// Start a host networked workload on each host for connectivity checks.
 		for ii := range tc.Felixes {
-			// We tell each host-networked workload to open:
-			// TODO: Copied from another test
-			// - its normal (uninteresting) port, 8055
-			// - port 2379, which is both an inbound and an outbound failsafe port
-			// - port 22, which is an inbound failsafe port.
-			// This allows us to test the interaction between do-not-track policy and failsafe
-			// ports.
-			hostW[ii] = workload.Run(
-				tc.Felixes[ii],
-				fmt.Sprintf("host%d", ii),
-				"default",
-				felixIP(ii)+","+felixIP6(ii), // Same IP as felix means "run in the host's namespace"
-				"8055",
-				"tcp")
-
-			hostW[ii].WorkloadEndpoint.Labels = map[string]string{"name": hostW[ii].Name}
-
 			// Two workloads on each host so we can check the same host and other host cases.
 			w[ii][0] = addWorkload(true, ii, 0, 8055, map[string]string{"port": "8055"})
 			w[ii][1] = addWorkload(true, ii, 1, 8056, nil)
 		}
-
-		// Create a workload on node 0 that does not run, but we can use it to set up paths
-		//deadWorkload = addWorkload(false, 0, 2, 8057, nil)
-
-		// We will use this container to model an external client trying to connect into
-		// workloads on a host.  Create a route in the container for the workload CIDR.
-		// TODO: Copied from another test
-		externalClient = infrastructure.RunExtClient("ext-client")
-		_ = externalClient
 
 		err := infra.AddDefaultDeny()
 		Expect(err).NotTo(HaveOccurred())
@@ -204,10 +174,14 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf dual stack tests"
 
 	Context("with a policy allowing ingress to w[0][0] from all regular workloads", func() {
 		var (
-			pol       *api.GlobalNetworkPolicy
-			k8sClient *kubernetes.Clientset
+			pol              *api.GlobalNetworkPolicy
+			k8sClient        *kubernetes.Clientset
+			testSvc          *v1.Service
+			testSvcNamespace string
 		)
 
+		npPort := uint16(30333)
+		clusterIPs := []string{"10.101.0.10", "dead:beef::abcd:0:0:10"}
 		BeforeEach(func() {
 			pol = api.NewGlobalNetworkPolicy()
 			pol.Namespace = "fv"
@@ -233,16 +207,81 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf dual stack tests"
 			pol = createPolicy(pol)
 			k8sClient = infra.(*infrastructure.K8sDatastoreInfra).K8sClient
 			_ = k8sClient
+			testSvc = k8sServiceForDualStack("test-svc", clusterIPs, w[0][0], 80, 8055, int32(npPort), "tcp")
+			testSvcNamespace = testSvc.ObjectMeta.Namespace
+			_, err := k8sClient.CoreV1().Services(testSvcNamespace).Create(context.Background(), testSvc, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(1),
+				"Service endpoints didn't get created? Is controller-manager happy?")
 		})
-		It("Connect to w[0][0] from all other workloads", func() {
+		It("Should connect to w[0][0] from all other workloads with IPv4 and IPv6", func() {
 			cc.ExpectSome(w[0][1], w[0][0])
-			cc.Expect(Some, w[1][0], w[0][0])
+			cc.ExpectSome(w[1][0], w[0][0])
 			cc.ExpectSome(w[1][1], w[0][0])
+
 			cc.Expect(Some, w[0][1], w[0][0], ExpectWithIPv6())
 			cc.Expect(Some, w[1][0], w[0][0], ExpectWithIPv6())
 			cc.Expect(Some, w[1][1], w[0][0], ExpectWithIPv6())
 			cc.CheckConnectivity()
 		})
+
+		It("Should connect to w[0][0] via clusterIP (IPv4 and IPv6)", func() {
+			port := uint16(testSvc.Spec.Ports[0].Port)
+			cc.ExpectSome(w[1][0], TargetIP(clusterIPs[0]), port)
+			cc.ExpectSome(w[1][0], TargetIP(clusterIPs[1]), port)
+
+			cc.ExpectSome(w[0][1], TargetIP(clusterIPs[0]), port)
+			cc.ExpectSome(w[0][1], TargetIP(clusterIPs[1]), port)
+			cc.CheckConnectivity()
+		})
+
+		It("Should connect to w[0][0] via nodePort (IPv4 and IPv6)", func() {
+			cc.ExpectSome(w[1][0], TargetIP(felixIP(0)), npPort)
+			cc.ExpectSome(w[0][1], TargetIP(felixIP(0)), npPort)
+
+			cc.ExpectSome(w[1][0], TargetIP(felixIP6(0)), npPort)
+			cc.ExpectSome(w[0][1], TargetIP(felixIP6(0)), npPort)
+			cc.CheckConnectivity()
+		})
+
 	})
 
 })
+
+func k8sServiceForDualStack(name string, clusterIPs []string, w *workload.Workload, port,
+	tgtPort int, nodePort int32, protocol string) *v1.Service {
+	k8sProto := v1.ProtocolTCP
+	if protocol == "udp" {
+		k8sProto = v1.ProtocolUDP
+	}
+
+	ipFamilyPolicyStr := v1.IPFamilyPolicyRequireDualStack
+	svcType := v1.ServiceTypeClusterIP
+	if nodePort != 0 {
+		svcType = v1.ServiceTypeNodePort
+	}
+
+	return &v1.Service{
+		TypeMeta:   typeMetaV1("Service"),
+		ObjectMeta: objectMetaV1(name),
+		Spec: v1.ServiceSpec{
+			ClusterIP:  clusterIPs[0],
+			ClusterIPs: clusterIPs,
+			Type:       svcType,
+			Selector: map[string]string{
+				"name": w.Name,
+			},
+			IPFamilies:     []v1.IPFamily{v1.IPv4Protocol, v1.IPv6Protocol},
+			IPFamilyPolicy: &ipFamilyPolicyStr,
+			Ports: []v1.ServicePort{
+				{
+					Protocol:   k8sProto,
+					Port:       int32(port),
+					NodePort:   nodePort,
+					Name:       fmt.Sprintf("port-%d", tgtPort),
+					TargetPort: intstr.FromInt(tgtPort),
+				},
+			},
+		},
+	}
+}
