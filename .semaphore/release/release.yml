@@ -86,9 +86,6 @@ blocks:
         - ssh-add /home/semaphore/.keys/git_ssh_rsa
         # Checkout the code and unshallow it.
         - checkout
-        # Semaphore mounts a copy-on-write FS as /var/lib/docker in order to provide a pre-loaded cache of
-        # some images. However, the cache is not useful to us and the copy-on-write FS is a big problem given
-        # how much we churn docker containers during the build.  Disable it.
         # Free up space on the build machine.
         - sudo rm -rf ~/.kiex ~/.phpbrew ~/.rbenv ~/.nvm ~/.kerl ~/.sbt ~/.npm /usr/lib/jvm /opt/firefox* /opt/apache-maven* /opt/scala /usr/local/golang
       jobs:
