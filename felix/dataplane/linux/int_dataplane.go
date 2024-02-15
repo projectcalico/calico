@@ -561,6 +561,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			vxlanFDB,
 			VXLANIfaceNameV4,
 			config,
+			dp.loopSummarizer,
 			4,
 		)
 		dp.vxlanParentC = make(chan string, 1)
@@ -907,6 +908,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 				vxlanFDBV6,
 				VXLANIfaceNameV6,
 				config,
+				dp.loopSummarizer,
 				6,
 			)
 			dp.vxlanParentCV6 = make(chan string, 1)
