@@ -58,7 +58,7 @@ func main() {
 		log.WithError(err).Fatal("Failed to parse usage")
 	}
 	interfaceName := arguments["<interface-name>"].(string)
-	ipAddress := arguments["<ip-address>"].(string)
+	ipAddressStr := arguments["<ip-address>"].(string)
 	portsStr := arguments["<ports>"].(string)
 	protocol := arguments["--protocol"].(string)
 	nsPath := ""
@@ -80,6 +80,7 @@ func main() {
 	}
 
 	ports := strings.Split(portsStr, ",")
+	ipAddrs := strings.Split(ipAddressStr, ",")
 
 	var namespace ns.NetNS
 	if nsPath != "" {
@@ -131,29 +132,31 @@ func main() {
 		panicIfError(err)
 
 		var hostIPv6Addr net.IP
-		if strings.Contains(ipAddress, ":") {
-			attempts := 0
-			for {
-				// No need to add a dummy next hop route as the host veth device will already have an IPv6
-				// link local address that can be used as a next hop.
-				// Just fetch the address of the host end of the veth and use it as the next hop.
-				addresses, err := netlink.AddrList(veth, netlink.FAMILY_V6)
-				if err != nil {
-					log.WithError(err).Panic("Error listing IPv6 addresses for the host side of the veth pair")
-				}
-
-				if len(addresses) < 1 {
-					attempts++
-					if attempts > 30 {
-						log.WithError(err).Panic("Giving up waiting for IPv6 addresses after multiple retries")
+		for _, ipAddress := range ipAddrs {
+			if strings.Contains(ipAddress, ":") {
+				attempts := 0
+				for {
+					// No need to add a dummy next hop route as the host veth device will already have an IPv6
+					// link local address that can be used as a next hop.
+					// Just fetch the address of the host end of the veth and use it as the next hop.
+					addresses, err := netlink.AddrList(veth, netlink.FAMILY_V6)
+					if err != nil {
+						log.WithError(err).Panic("Error listing IPv6 addresses for the host side of the veth pair")
 					}
 
-					time.Sleep(100 * time.Millisecond)
-					continue
-				}
+					if len(addresses) < 1 {
+						attempts++
+						if attempts > 30 {
+							log.WithError(err).Panic("Giving up waiting for IPv6 addresses after multiple retries")
+						}
 
-				hostIPv6Addr = addresses[0].IP
-				break
+						time.Sleep(100 * time.Millisecond)
+						continue
+					}
+
+					hostIPv6Addr = addresses[0].IP
+					break
+				}
 			}
 		}
 
@@ -178,72 +181,74 @@ func main() {
 				log.WithError(err).Info("Failed to set dev lo up")
 			}
 
-			if strings.Contains(ipAddress, ":") {
-				// Make sure ipv6 is enabled in the container/pod network namespace.
-				// Without these sysctls enabled, interfaces will come up but they won't get a link local IPv6 address,
-				// which is required to add the default IPv6 route.
-				if err = writeProcSys("/proc/sys/net/ipv6/conf/all/disable_ipv6", "0"); err != nil {
-					log.WithError(err).Error("Failed to enable IPv6.")
-					return
-				}
+			for _, ipAddress := range ipAddrs {
+				if strings.Contains(ipAddress, ":") {
+					// Make sure ipv6 is enabled in the container/pod network namespace.
+					// Without these sysctls enabled, interfaces will come up but they won't get a link local IPv6 address,
+					// which is required to add the default IPv6 route.
+					if err = writeProcSys("/proc/sys/net/ipv6/conf/all/disable_ipv6", "0"); err != nil {
+						log.WithError(err).Error("Failed to enable IPv6.")
+						return
+					}
 
-				if err = writeProcSys("/proc/sys/net/ipv6/conf/default/disable_ipv6", "0"); err != nil {
-					log.WithError(err).Error("Failed to enable IPv6 by default.")
-					return
-				}
+					if err = writeProcSys("/proc/sys/net/ipv6/conf/default/disable_ipv6", "0"); err != nil {
+						log.WithError(err).Error("Failed to enable IPv6 by default.")
+						return
+					}
 
-				if err = writeProcSys("/proc/sys/net/ipv6/conf/lo/disable_ipv6", "0"); err != nil {
-					log.WithError(err).Error("Failed to enable IPv6 on the loopback interface.")
-					return
-				}
+					if err = writeProcSys("/proc/sys/net/ipv6/conf/lo/disable_ipv6", "0"); err != nil {
+						log.WithError(err).Error("Failed to enable IPv6 on the loopback interface.")
+						return
+					}
 
-				err = utils.RunCommand("ip", "-6", "addr", "add", ipAddress+"/128", "dev", "eth0")
-				if err != nil {
-					log.WithField("ipAddress", ipAddress+"/128").WithError(err).Error("Failed to add IPv6 addr to eth0.")
-					return
-				}
-				err = utils.RunCommand("ip", "-6", "route", "add", "default", "via", hostIPv6Addr.String(), "dev", "eth0")
-				if err != nil {
-					log.WithField("hostIP", hostIPv6Addr.String()).WithError(err).Info("Failed to add IPv6 route to eth0.")
-					return
-				}
+					err = utils.RunCommand("ip", "-6", "addr", "add", ipAddress+"/128", "dev", "eth0")
+					if err != nil {
+						log.WithField("ipAddress", ipAddress+"/128").WithError(err).Error("Failed to add IPv6 addr to eth0.")
+						return
+					}
+					err = utils.RunCommand("ip", "-6", "route", "add", "default", "via", hostIPv6Addr.String(), "dev", "eth0")
+					if err != nil {
+						log.WithField("hostIP", hostIPv6Addr.String()).WithError(err).Info("Failed to add IPv6 route to eth0.")
+						return
+					}
 
-				// Output the routing table to the log for diagnostic purposes.
-				err = utils.RunCommand("ip", "-6", "route")
-				if err != nil {
-					log.WithError(err).Info("Failed to output IPv6 routes.")
-				}
-				err = utils.RunCommand("ip", "-6", "addr")
-				if err != nil {
-					log.WithError(err).Info("Failed to output IPv6 addresses.")
-				}
-			} else {
-				err = utils.RunCommand("ip", "addr", "add", ipAddress+"/32", "dev", "eth0")
-				if err != nil {
-					log.WithField("ipAddress", ipAddress+"/32").WithError(err).Error("Failed to add IPv4 addr to eth0.")
-					return
-				}
-				err = utils.RunCommand("ip", "route", "add", "169.254.169.254/32", "dev", "eth0")
-				if err != nil {
-					log.WithField("hostIP", hostIPv6Addr.String()).WithError(err).Info("Failed to add IPv4 route to eth0.")
-					return
-				}
-				err = utils.RunCommand("ip", "route", "add", "default", "via", "169.254.169.254", "dev", "eth0")
-				if err != nil {
-					log.WithField("hostIP", hostIPv6Addr.String()).WithError(err).Info("Failed to add default route to eth0.")
-					return
-				}
+					// Output the routing table to the log for diagnostic purposes.
+					err = utils.RunCommand("ip", "-6", "route")
+					if err != nil {
+						log.WithError(err).Info("Failed to output IPv6 routes.")
+					}
+					err = utils.RunCommand("ip", "-6", "addr")
+					if err != nil {
+						log.WithError(err).Info("Failed to output IPv6 addresses.")
+					}
+				} else {
+					err = utils.RunCommand("ip", "addr", "add", ipAddress+"/32", "dev", "eth0")
+					if err != nil {
+						log.WithField("ipAddress", ipAddress+"/32").WithError(err).Error("Failed to add IPv4 addr to eth0.")
+						return
+					}
+					err = utils.RunCommand("ip", "route", "add", "169.254.169.254/32", "dev", "eth0")
+					if err != nil {
+						log.WithField("hostIP", hostIPv6Addr.String()).WithError(err).Info("Failed to add IPv4 route to eth0.")
+						return
+					}
+					err = utils.RunCommand("ip", "route", "add", "default", "via", "169.254.169.254", "dev", "eth0")
+					if err != nil {
+						log.WithField("hostIP", hostIPv6Addr.String()).WithError(err).Info("Failed to add default route to eth0.")
+						return
+					}
 
-				// Output the routing table to the log for diagnostic purposes.
-				err = utils.RunCommand("ip", "route")
-				if err != nil {
-					log.WithError(err).Info("Failed to output IPv4 routes.")
-					return
-				}
-				err = utils.RunCommand("ip", "addr")
-				if err != nil {
-					log.WithError(err).Info("Failed to output IPv4 addresses.")
-					return
+					// Output the routing table to the log for diagnostic purposes.
+					err = utils.RunCommand("ip", "route")
+					if err != nil {
+						log.WithError(err).Info("Failed to output IPv4 routes.")
+						return
+					}
+					err = utils.RunCommand("ip", "addr")
+					if err != nil {
+						log.WithError(err).Info("Failed to output IPv4 addresses.")
+						return
+					}
 				}
 			}
 			return
@@ -278,20 +283,22 @@ func main() {
 				return fmt.Errorf("failed to setup sidecar-like iptables: %v", err)
 			}
 		}
-		if strings.Contains(ipAddress, ":") {
-			attempts := 0
-			for {
-				out, err := exec.Command("ip", "-6", "addr").CombinedOutput()
-				panicIfError(err)
-				if strings.Contains(string(out), "tentative") {
-					attempts++
-					if attempts > 30 {
-						log.Panic("IPv6 address still tentative after 30s")
+		for _, ipAddress := range ipAddrs {
+			if strings.Contains(ipAddress, ":") {
+				attempts := 0
+				for {
+					out, err := exec.Command("ip", "-6", "addr").CombinedOutput()
+					panicIfError(err)
+					if strings.Contains(string(out), "tentative") {
+						attempts++
+						if attempts > 30 {
+							log.Panic("IPv6 address still tentative after 30s")
+						}
+						time.Sleep(1 * time.Second)
+						continue
 					}
-					time.Sleep(1 * time.Second)
-					continue
+					break
 				}
-				break
 			}
 		}
 
@@ -410,71 +417,73 @@ func main() {
 
 		// Listen on each port.
 		for _, port := range ports {
-			var myAddr string
-			if listenAnyIP {
-				myAddr = "0.0.0.0"
-			} else if strings.Contains(ipAddress, ":") {
-				myAddr = "[" + ipAddress + "]"
-			} else {
-				myAddr = ipAddress
-			}
-			if !strings.HasPrefix(protocol, "ip") {
-				myAddr += ":" + port
-			}
-			logCxt := log.WithFields(log.Fields{
-				"protocol": protocol,
-				"myAddr":   myAddr,
-			})
-			if strings.HasPrefix(protocol, "ip") {
-				logCxt.Info("About to listen for raw IP packets")
-				p, err := net.ListenPacket(protocol, myAddr)
-				panicIfError(err)
-				logCxt.Info("Listening for raw IP packets")
-
-				go loopRespondingToPackets(logCxt, p)
-			} else if protocol == "udp" {
-				// Since UDP is connectionless, we can't use Listen() as we do for TCP.  Instead,
-				// we use ListenPacket so that we can directly send/receive individual packets.
-				logCxt.Info("About to listen for UDP packets")
-				p, err := net.ListenPacket("udp", myAddr)
-				panicIfError(err)
-				logCxt.Info("Listening for UDP connections")
-
-				go loopRespondingToPackets(logCxt, p)
-			} else if protocol == "sctp" {
-				portInt, err := strconv.Atoi(port)
-				panicIfError(err)
-				netIP, err := net.ResolveIPAddr("ip", ipAddress)
-				panicIfError(err)
-				sAddrs := &sctp.SCTPAddr{
-					IPAddrs: []net.IPAddr{*netIP},
-					Port:    portInt,
+			for _, ipAddress := range ipAddrs {
+				var myAddr string
+				if listenAnyIP {
+					myAddr = "0.0.0.0"
+				} else if strings.Contains(ipAddress, ":") {
+					myAddr = "[" + ipAddress + "]"
+				} else {
+					myAddr = ipAddress
 				}
-				logCxt.Info("About to listen for SCTP connections")
-				l, err := sctp.ListenSCTP("sctp", sAddrs)
-				panicIfError(err)
-				logCxt.Info("Listening for SCTP connections")
-				go func() {
-					defer l.Close()
-					for {
-						conn, err := l.Accept()
-						panicIfError(err)
-						go handleRequest(conn)
+				if !strings.HasPrefix(protocol, "ip") {
+					myAddr += ":" + port
+				}
+				logCxt := log.WithFields(log.Fields{
+					"protocol": protocol,
+					"myAddr":   myAddr,
+				})
+				if strings.HasPrefix(protocol, "ip") {
+					logCxt.Info("About to listen for raw IP packets")
+					p, err := net.ListenPacket(protocol, myAddr)
+					panicIfError(err)
+					logCxt.Info("Listening for raw IP packets")
+
+					go loopRespondingToPackets(logCxt, p)
+				} else if protocol == "udp" {
+					// Since UDP is connectionless, we can't use Listen() as we do for TCP.  Instead,
+					// we use ListenPacket so that we can directly send/receive individual packets.
+					logCxt.Info("About to listen for UDP packets")
+					p, err := net.ListenPacket("udp", myAddr)
+					panicIfError(err)
+					logCxt.Info("Listening for UDP connections")
+
+					go loopRespondingToPackets(logCxt, p)
+				} else if protocol == "sctp" {
+					portInt, err := strconv.Atoi(port)
+					panicIfError(err)
+					netIP, err := net.ResolveIPAddr("ip", ipAddress)
+					panicIfError(err)
+					sAddrs := &sctp.SCTPAddr{
+						IPAddrs: []net.IPAddr{*netIP},
+						Port:    portInt,
 					}
-				}()
-			} else {
-				logCxt.Info("About to listen for TCP connections")
-				l, err := net.Listen("tcp", myAddr)
-				panicIfError(err)
-				logCxt.Info("Listening for TCP connections")
-				go func() {
-					defer l.Close()
-					for {
-						conn, err := l.Accept()
-						panicIfError(err)
-						go handleRequest(conn)
-					}
-				}()
+					logCxt.Info("About to listen for SCTP connections")
+					l, err := sctp.ListenSCTP("sctp", sAddrs)
+					panicIfError(err)
+					logCxt.Info("Listening for SCTP connections")
+					go func() {
+						defer l.Close()
+						for {
+							conn, err := l.Accept()
+							panicIfError(err)
+							go handleRequest(conn)
+						}
+					}()
+				} else {
+					logCxt.Info("About to listen for TCP connections")
+					l, err := net.Listen("tcp", myAddr)
+					panicIfError(err)
+					logCxt.Info("Listening for TCP connections")
+					go func() {
+						defer l.Close()
+						for {
+							conn, err := l.Accept()
+							panicIfError(err)
+							go handleRequest(conn)
+						}
+					}()
+				}
 			}
 		}
 		for {

@@ -95,11 +95,11 @@ type bpfRouteManager struct {
 
 	opReporter logutils.OpRecorder
 
-	wgEnabled   bool
-	ipv6Enabled bool
+	wgEnabled bool
+	ipFamily  proto.IPVersion
 }
 
-func newBPFRouteManager(config *Config, maps *bpfmap.IPMaps,
+func newBPFRouteManager(config *Config, maps *bpfmap.IPMaps, ipFamily proto.IPVersion,
 	opReporter logutils.OpRecorder) *bpfRouteManager {
 
 	// Record the external node CIDRs and pre-mark them as dirty.  These can only change with a config update,
@@ -116,11 +116,17 @@ func newBPFRouteManager(config *Config, maps *bpfmap.IPMaps,
 			log.WithError(err).WithField("cidr", cidr).Error(
 				"Failed to parse external node CIDR (which should have been validated already).")
 		}
-		if !config.BPFIpv6Enabled {
+
+		if ipFamily == proto.IPVersion_IPV4 {
 			if _, ok := cidr.(ip.V4CIDR); !ok {
 				continue
 			}
+		} else {
+			if _, ok := cidr.(ip.V6CIDR); !ok {
+				continue
+			}
 		}
+
 		extCIDRs.Add(cidr)
 		log.WithField("cidr", cidr).Debugf("newBPFRouteManager 1")
 		dirtyCIDRs.Add(cidr)
@@ -137,8 +143,13 @@ func newBPFRouteManager(config *Config, maps *bpfmap.IPMaps,
 			log.WithError(err).WithField("cidr", cidr).Error(
 				"Failed to parse DSR optout CIDR (which should have been validated already).")
 		}
-		if !config.BPFIpv6Enabled {
+
+		if ipFamily == proto.IPVersion_IPV4 {
 			if _, ok := cidr.(ip.V4CIDR); !ok {
+				continue
+			}
+		} else {
+			if _, ok := cidr.(ip.V6CIDR); !ok {
 				continue
 			}
 		}
@@ -169,11 +180,11 @@ func newBPFRouteManager(config *Config, maps *bpfmap.IPMaps,
 
 		opReporter: opReporter,
 
-		wgEnabled:   config.Wireguard.Enabled || config.Wireguard.EnabledV6,
-		ipv6Enabled: config.BPFIpv6Enabled,
+		wgEnabled: config.Wireguard.Enabled || config.Wireguard.EnabledV6,
+		ipFamily:  ipFamily,
 	}
 
-	if m.ipv6Enabled {
+	if ipFamily == proto.IPVersion_IPV6 {
 		m.bpfOps.NewKey = routes.NewKeyV6Intf
 		m.bpfOps.NewValue = routes.NewValueV6Intf
 		m.bpfOps.NewValueWithNextHop = routes.NewValueV6IntfWithNextHop
@@ -247,12 +258,12 @@ func (m *bpfRouteManager) CompleteDeferredWork() error {
 func (m *bpfRouteManager) recalculateRoutesForDirtyCIDRs() {
 	m.dirtyCIDRs.Iter(func(cidr ip.CIDR) error {
 		// Ignore IPv4 routes if IPv6 is enabled and vice-versa.
-		if m.ipv6Enabled {
-			if _, ok := cidr.(ip.V4CIDR); ok {
+		if m.ipFamily == proto.IPVersion_IPV4 {
+			if _, ok := cidr.(ip.V4CIDR); !ok {
 				return set.RemoveItem
 			}
 		} else {
-			if _, ok := cidr.(ip.V6CIDR); ok {
+			if _, ok := cidr.(ip.V6CIDR); !ok {
 				return set.RemoveItem
 			}
 		}
@@ -520,8 +531,12 @@ func (m *bpfRouteManager) onIfaceAddrsUpdate(update *ifaceAddrsUpdate) {
 		newCIDRs = set.New[ip.CIDR]()
 		update.Addrs.Iter(func(cidrStr string) error {
 			cidr := ip.MustParseCIDROrIP(cidrStr)
-			if !m.ipv6Enabled {
+			if m.ipFamily == proto.IPVersion_IPV4 {
 				if _, ok := cidr.(ip.V4CIDR); !ok {
+					return nil
+				}
+			} else {
+				if _, ok := cidr.(ip.V6CIDR); !ok {
 					return nil
 				}
 			}
@@ -588,8 +603,12 @@ func (m *bpfRouteManager) onHostIPsChange(newIPs []net.IP) {
 
 func (m *bpfRouteManager) onRouteUpdate(update *proto.RouteUpdate) {
 	cidr := ip.MustParseCIDROrIP(update.Dst)
-	if !m.ipv6Enabled {
+	if m.ipFamily == proto.IPVersion_IPV4 {
 		if _, ok := cidr.(ip.V4CIDR); !ok {
+			return
+		}
+	} else {
+		if _, ok := cidr.(ip.V6CIDR); !ok {
 			return
 		}
 	}
@@ -610,12 +629,15 @@ func (m *bpfRouteManager) onRouteUpdate(update *proto.RouteUpdate) {
 
 func (m *bpfRouteManager) onRouteRemove(update *proto.RouteRemove) {
 	cidr := ip.MustParseCIDROrIP(update.Dst)
-	if !m.ipv6Enabled {
+	if m.ipFamily == proto.IPVersion_IPV4 {
 		if _, ok := cidr.(ip.V4CIDR); !ok {
 			return
 		}
+	} else {
+		if _, ok := cidr.(ip.V6CIDR); !ok {
+			return
+		}
 	}
-
 	if _, ok := m.cidrToRoute[cidr]; ok {
 		// Check the entry is in the cache before removing and flagging as dirty.
 		delete(m.cidrToRoute, cidr)
@@ -679,7 +701,7 @@ func (m *bpfRouteManager) getWorkloadCIDRs(wep *proto.WorkloadEndpoint) (cidrs [
 	if wep == nil {
 		return
 	}
-	if m.ipv6Enabled {
+	if m.ipFamily == proto.IPVersion_IPV6 {
 		for _, addr := range wep.Ipv6Nets {
 			cidrs = append(cidrs, ip.MustParseCIDROrIP(addr))
 		}
