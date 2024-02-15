@@ -217,7 +217,11 @@ func (c *Checker) ActualConnectivity(isARetry bool) ([]*Result, []string) {
 			go func(i int, exp Expectation) {
 				defer ginkgo.GinkgoRecover()
 				defer wg.Done()
-				exp.From.PreRetryCleanup(exp.To.IP, exp.To.Port, p, preCalcOpts[i]...)
+				if exp.withIPv6 {
+					exp.From.PreRetryCleanup(exp.To.IP6, exp.To.Port, p, preCalcOpts[i]...)
+				} else {
+					exp.From.PreRetryCleanup(exp.To.IP, exp.To.Port, p, preCalcOpts[i]...)
+				}
 			}(i, exp)
 		}
 		wg.Wait()
@@ -229,7 +233,12 @@ func (c *Checker) ActualConnectivity(isARetry bool) ([]*Result, []string) {
 		go func(i int, exp Expectation) {
 			defer ginkgo.GinkgoRecover()
 			defer wg.Done()
-			res := exp.From.CanConnectTo(exp.To.IP, exp.To.Port, p, preCalcOpts[i]...)
+			var res *Result
+			if exp.withIPv6 {
+				res = exp.From.CanConnectTo(exp.To.IP6, exp.To.Port, p, preCalcOpts[i]...)
+			} else {
+				res = exp.From.CanConnectTo(exp.To.IP, exp.To.Port, p, preCalcOpts[i]...)
+			}
 			pretty[i] += fmt.Sprintf("%s -> %s = %v", exp.From.SourceName(), exp.To.TargetName, res.HasConnectivity())
 
 			if res != nil {
@@ -481,7 +490,7 @@ func HaveConnectivityTo(target ConnectionTarget, explicitPort ...uint16) types.G
 }
 
 type Matcher struct {
-	IP, Port, TargetName, Protocol string
+	IP, Port, TargetName, Protocol, IP6 string
 }
 
 type ConnectionSource interface {
@@ -578,6 +587,12 @@ func ExpectWithPorts(ports ...uint16) ExpectationOption {
 	}
 }
 
+func ExpectWithIPv6() ExpectationOption {
+	return func(e *Expectation) {
+		e.withIPv6 = true
+	}
+}
+
 type Expectation struct {
 	From               ConnectionSource // Workload or Container
 	To                 *Matcher         // Workload or IP, + port
@@ -596,6 +611,8 @@ type Expectation struct {
 	srcPort uint16
 
 	ErrorStr string
+
+	withIPv6 bool
 }
 
 type ExpPacketLoss struct {

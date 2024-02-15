@@ -222,11 +222,15 @@ func (w *Workload) Start() error {
 		protoArg = "--protocol=" + w.Protocol
 	}
 
-	command := fmt.Sprintf("echo $$ > /tmp/%v; exec test-workload %v '%v' '%v,%v' '%v'",
+	wIP := w.IP
+	if w.IP != "" && w.IP6 != "" {
+		wIP = wIP + "," + w.IP6
+	}
+	command := fmt.Sprintf("echo $$ > /tmp/%v; exec test-workload %v '%v' '%v' '%v'",
 		w.Name,
 		protoArg,
 		w.InterfaceName,
-		w.IP,
+		wIP,
 		w.Ports,
 	)
 
@@ -423,7 +427,7 @@ func (w *Workload) SourceIPs() []string {
 		ips = append(ips, w.IP)
 	}
 	if w.IP6 != "" {
-		ips = append(ips, w.IP)
+		ips = append(ips, w.IP6)
 	}
 	return ips
 }
@@ -651,6 +655,7 @@ func (w *Workload) ToMatcher(explicitPort ...uint16) *connectivity.Matcher {
 	}
 	return &connectivity.Matcher{
 		IP:         w.IP,
+		IP6:        w.IP6,
 		Port:       port,
 		TargetName: fmt.Sprintf("%s on port %s", w.Name, port),
 		Protocol:   "tcp",
