@@ -429,7 +429,8 @@ syn_force_policy:
 		}
 	}
 
-	if (CALI_F_TO_WEP && !skb_seen(ctx->skb) &&
+	if (CALI_F_TO_WEP && (!skb_seen(ctx->skb) ||
+			skb_mark_equals(ctx->skb, CALI_SKB_MARK_FROM_NAT_IFACE_OUT, CALI_SKB_MARK_FROM_NAT_IFACE_OUT)) &&
 			cali_rt_flags_local_host(cali_rt_lookup_flags(&ctx->state->ip_src))) {
 		/* Host to workload traffic always allowed.  We discount traffic that was
 		 * seen by another program since it must have come in via another interface.
