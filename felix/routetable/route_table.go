@@ -117,7 +117,6 @@ const (
 //     a workload has been terminated and a new workload now has the IP) we need
 //     to clean up the conntrack entries from the old workload.  We delegate this
 //     cleanup to the ConntrackTracker; giving it callbacks when routes move.
-//
 type RouteTable struct {
 	logCxt        *log.Entry
 	ipVersion     uint8
