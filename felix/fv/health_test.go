@@ -437,7 +437,7 @@ func healthStatus(ip, port, endpoint string) int {
 }
 
 func waitForMainLoop(felix *infrastructure.Felix) {
-	Eventually(func() string {
+	EventuallyWithOffset(1, func() string {
 		resp, err := http.Get("http://" + felix.IP + ":9099/readiness")
 		if err != nil {
 			log.WithError(err).WithField("resp", resp).Warn("HTTP GET failed")
