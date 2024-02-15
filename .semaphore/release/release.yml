@@ -4,10 +4,8 @@ agent:
   machine:
     type: e1-standard-8
     os_image: ubuntu2004
-
 execution_time_limit:
   minutes: 800
-
 blocks:
   - name: "Publish official release"
     skip:
@@ -15,56 +13,48 @@ blocks:
       when: "branch !~ '.+'"
     task:
       secrets:
-      - name: quay-robot-calico+semaphoreci
-      - name: docker
-      - name: oss-release-secrets
-      - name: google-service-account-for-gce
-      - name: openstack-signing-publishing
+        - name: quay-robot-calico+semaphoreci
+        - name: docker
+        - name: oss-release-secrets
+        - name: google-service-account-for-gce
+        - name: openstack-signing-publishing
       prologue:
         commands:
-        # Load the github access secrets.  First fix the permissions.
-        - chmod 0600 /home/semaphore/.keys/git_ssh_rsa
-        - ssh-add /home/semaphore/.keys/git_ssh_rsa
-
-        # Stop docker, unmount /var/lib/docker, restart it
-        - sudo systemctl stop docker
-        - sudo umount /var/lib/docker
-        - sudo systemctl start docker
-
-        # For some reason, /mnt is 100 GB and has a qemu-nbd image file.
-        # Let's delete it and use it for our own purposes (building calico
-        # without running out of space)
-        - sudo killall qemu-nbd || true
-        - sudo rm -f /mnt/docker.qcow2
-        - sudo chown $(id -u):$(id -g) /mnt/
-        - mkdir calico
-        - sudo mount --bind /mnt calico
-
-        # Checkout the code and unshallow it.
-        # (this is going to throw an error because it can't remove
-        # the `calico` directory, which is a mount, but it will
-        # continue anyway)
-        - checkout
-        # (We unshallow the code so that `git describe ...` will work correctly)
-        - retry git fetch --quiet --unshallow
-
-        # Delete some junk to free some space
-        - sudo rm -rf ~/.kiex ~/.phpbrew ~/.rbenv ~/.nvm ~/.kerl ~/.sbt ~/.npm /usr/lib/jvm /opt/firefox* /opt/apache-maven* /opt/scala /usr/local/golang
-
-        # Log in to container registries needed for release.
-        - echo $DOCKER_TOKEN | docker login --username "$DOCKER_USER" --password-stdin
-        - echo $QUAY_TOKEN | docker login --username "$QUAY_USER" --password-stdin quay.io
-
-        # Credentials for accessing gcloud, needed to push images to gcr
-        - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/gcr-credentials.json
-        - gcloud auth activate-service-account --key-file=${GOOGLE_APPLICATION_CREDENTIALS}
-
-        # Manually log in to GCR until we can test the gcr credentials helper
-        - cat ${GOOGLE_APPLICATION_CREDENTIALS} | docker login -u _json_key --password-stdin https://gcr.io
-        - cat ${GOOGLE_APPLICATION_CREDENTIALS} | docker login -u _json_key --password-stdin https://eu.gcr.io
-        - cat ${GOOGLE_APPLICATION_CREDENTIALS} | docker login -u _json_key --password-stdin https://asia.gcr.io
-        - cat ${GOOGLE_APPLICATION_CREDENTIALS} | docker login -u _json_key --password-stdin https://us.gcr.io
-
+          # Load the github access secrets.  First fix the permissions.
+          - chmod 0600 /home/semaphore/.keys/git_ssh_rsa
+          - ssh-add /home/semaphore/.keys/git_ssh_rsa
+          # Stop docker, unmount /var/lib/docker, restart it
+          - sudo systemctl stop docker
+          - sudo umount /var/lib/docker
+          - sudo systemctl start docker
+          # For some reason, /mnt is 100 GB and has a qemu-nbd image file.
+          # Let's delete it and use it for our own purposes (building calico
+          # without running out of space)
+          - sudo killall qemu-nbd || true
+          - sudo rm -f /mnt/docker.qcow2
+          - sudo chown $(id -u):$(id -g) /mnt/
+          - mkdir calico
+          - sudo mount --bind /mnt calico
+          # Checkout the code and unshallow it.
+          # (this is going to throw an error because it can't remove
+          # the `calico` directory, which is a mount, but it will
+          # continue anyway)
+          - checkout
+          # (We unshallow the code so that `git describe ...` will work correctly)
+          - retry git fetch --quiet --unshallow
+          # Delete some junk to free some space
+          - sudo rm -rf ~/.kiex ~/.phpbrew ~/.rbenv ~/.nvm ~/.kerl ~/.sbt ~/.npm /usr/lib/jvm /opt/firefox* /opt/apache-maven* /opt/scala /usr/local/golang
+          # Log in to container registries needed for release.
+          - echo $DOCKER_TOKEN | docker login --username "$DOCKER_USER" --password-stdin
+          - echo $QUAY_TOKEN | docker login --username "$QUAY_USER" --password-stdin quay.io
+          # Credentials for accessing gcloud, needed to push images to gcr
+          - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/gcr-credentials.json
+          - gcloud auth activate-service-account --key-file=${GOOGLE_APPLICATION_CREDENTIALS}
+          # Manually log in to GCR until we can test the gcr credentials helper
+          - cat ${GOOGLE_APPLICATION_CREDENTIALS} | docker login -u _json_key --password-stdin https://gcr.io
+          - cat ${GOOGLE_APPLICATION_CREDENTIALS} | docker login -u _json_key --password-stdin https://eu.gcr.io
+          - cat ${GOOGLE_APPLICATION_CREDENTIALS} | docker login -u _json_key --password-stdin https://asia.gcr.io
+          - cat ${GOOGLE_APPLICATION_CREDENTIALS} | docker login -u _json_key --password-stdin https://us.gcr.io
       jobs:
         # Tag, build, and release Calico enterprise
         - name: "Release on Semaphore VM"
@@ -74,28 +64,26 @@ blocks:
           commands:
             - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make GIT_BRANCH=${SEMAPHORE_GIT_BRANCH} release; fi
             - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make GIT_BRANCH=${SEMAPHORE_GIT_BRANCH} release-publish; fi
-
         # Build our Openstack packages if the above release succeeded
         - name: "Build Openstack Packages"
           dependencies: ["Publish official release"]
           execution_time_limit:
             minutes: 60
           env_vars:
-          - name: SECRET_KEY
-            value: /home/semaphore/secrets/launchpad-gpg-key-dfox.key
-          - name: GCLOUD_ARGS
-            value: --zone us-east1-c --project tigera-wp-tcp-redirect
-          - name: HOST
-            value: ubuntu@binaries-projectcalico-org
+            - name: SECRET_KEY
+              value: /home/semaphore/secrets/launchpad-gpg-key-dfox.key
+            - name: GCLOUD_ARGS
+              value: --zone us-east1-c --project tigera-wp-tcp-redirect
+            - name: HOST
+              value: ubuntu@binaries-projectcalico-org
           commands:
-          - sudo apt update
-          - sudo apt install -y moreutils patchelf
-          - make publish-openstack
-
+            - sudo apt update
+            - sudo apt install -y moreutils patchelf
+            - make publish-openstack
       # This gets run at the end of the pipeline, even if things fail,
       # but *not* if the job is stopped manually or times out.
       epilogue:
         always:
           commands:
-          - test -d hack/release/packaging/output  && mv -v hack/release/packaging/output hack/release/packaging/openstack
-          - artifact push workflow hack/release/packaging/openstack
+            - test -d hack/release/packaging/output  && mv -v hack/release/packaging/output hack/release/packaging/openstack
+            - artifact push workflow hack/release/packaging/openstack
