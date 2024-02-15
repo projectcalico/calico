@@ -58,7 +58,7 @@ type netlinkHandle interface {
 type vxlanManager struct {
 	// Our dependencies.
 	hostname        string
-	routeTable      routetable.RouteTableInterface
+	routeTable      routetable.Interface
 	parentIfaceName string
 	fdb             VXLANFDB
 
@@ -102,7 +102,7 @@ type VXLANFDB interface {
 
 func newVXLANManager(
 	ipsetsDataplane common.IPSetsDataplane,
-	mainRouteTable routetable.RouteTableInterface,
+	mainRouteTable routetable.Interface,
 	fdb VXLANFDB,
 	deviceName string,
 	dpConfig Config,
@@ -122,7 +122,7 @@ func newVXLANManager(
 
 func newVXLANManagerWithShims(
 	ipsetsDataplane common.IPSetsDataplane,
-	mainRouteTable routetable.RouteTableInterface,
+	mainRouteTable routetable.Interface,
 	fdb VXLANFDB,
 	deviceName string,
 	dpConfig Config,

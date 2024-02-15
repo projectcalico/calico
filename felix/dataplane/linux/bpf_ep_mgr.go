@@ -339,7 +339,7 @@ type bpfEndpointManager struct {
 
 	bpfPolicyDebugEnabled bool
 
-	routeTable       routetable.RouteTableInterface
+	routeTable       *routetable.ClassView
 	services         map[serviceKey][]ip.CIDR
 	dirtyServices    set.Set[serviceKey]
 	natExcludedCIDRs *ip.CIDRTrie
@@ -418,7 +418,7 @@ func newBPFEndpointManager(
 	iptablesFilterTable IptablesTable,
 	livenessCallback func(),
 	opReporter logutils.OpRecorder,
-	mainRouteTable routetable.RouteTableInterface,
+	mainRouteTable routetable.Interface,
 ) (*bpfEndpointManager, error) {
 	if livenessCallback == nil {
 		livenessCallback = func() {}
@@ -514,7 +514,7 @@ func newBPFEndpointManager(
 
 	if m.hostNetworkedNATMode != hostNetworkedNATDisabled {
 		log.Infof("HostNetworkedNATMode is %d", m.hostNetworkedNATMode)
-		m.routeTable = mainRouteTable
+		m.routeTable = routetable.NewClassView(routetable.RouteClassBPFSpecial, mainRouteTable)
 		m.services = make(map[serviceKey][]ip.CIDR)
 		m.dirtyServices = set.New[serviceKey]()
 		m.natExcludedCIDRs = ip.NewCIDRTrie()
@@ -3003,7 +3003,7 @@ func (m *bpfEndpointManager) ensureBPFDevices() error {
 	// Setup a link local route to a nonexistent link local address that would
 	// serve as a gateway to route services via bpfnat veth rather than having
 	// link local routes for each service that would trigger ARP queries.
-	m.routeTable.RouteUpdate(routetable.RouteClassBPFSpecial, bpfInDev, routetable.Target{
+	m.routeTable.RouteUpdate(bpfInDev, routetable.Target{
 		Type: routetable.TargetTypeLinkLocalUnicast,
 		CIDR: cidr,
 	})
@@ -3629,7 +3629,7 @@ func (m *bpfEndpointManager) setRoute(cidr ip.CIDR) {
 	} else {
 		gw = bpfnatGWIP
 	}
-	m.routeTable.RouteUpdate(routetable.RouteClassBPFSpecial, bpfInDev, routetable.Target{
+	m.routeTable.RouteUpdate(bpfInDev, routetable.Target{
 		Type: routetable.TargetTypeGlobalUnicast,
 		CIDR: cidr,
 		GW:   gw,
@@ -3640,7 +3640,7 @@ func (m *bpfEndpointManager) setRoute(cidr ip.CIDR) {
 }
 
 func (m *bpfEndpointManager) delRoute(cidr ip.CIDR) {
-	m.routeTable.RouteRemove(routetable.RouteClassBPFSpecial, bpfInDev, cidr)
+	m.routeTable.RouteRemove(bpfInDev, cidr)
 	log.WithFields(log.Fields{
 		"cidr": cidr,
 	}).Debug("delRoute")

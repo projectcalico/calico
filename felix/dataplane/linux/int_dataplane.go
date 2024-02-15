@@ -278,6 +278,7 @@ type InternalDataplane struct {
 	toDataplane   chan interface{}
 	fromDataplane chan interface{}
 
+	mainRouteTables      []routetable.SyncerInterface
 	allIptablesTables    []*iptables.Table
 	iptablesMangleTables []*iptables.Table
 	iptablesNATTables    []*iptables.Table
@@ -503,8 +504,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	dp.iptablesFilterTables = append(dp.iptablesFilterTables, filterTableV4)
 	dp.ipSets = append(dp.ipSets, ipSetsV4)
 
-	var routeTableV4 routetable.RouteTableInterface
-	var routeTableV6 routetable.RouteTableInterface
+	var routeTableV4 routetable.Interface
+	var routeTableV6 routetable.Interface
 
 	if !config.RouteSyncDisabled {
 		log.Debug("Route management is enabled.")
@@ -522,6 +523,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			routetable.WithLivenessCB(dp.reportHealth),
 			routetable.WithRouteCleanupGracePeriod(routeCleanupGracePeriod),
 		)
+		dp.mainRouteTables = append(dp.mainRouteTables, routeTableV4)
 		if config.IPv6Enabled {
 			routeTableV6 = routetable.New(
 				mainRoutingTableOwnershipPolicy(config, 6),
@@ -539,6 +541,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 				routetable.WithLivenessCB(dp.reportHealth),
 				routetable.WithRouteCleanupGracePeriod(routeCleanupGracePeriod),
 			)
+			dp.mainRouteTables = append(dp.mainRouteTables, routeTableV6)
 		}
 	} else {
 		log.Info("Route management is disabled, using DummyTables.")
@@ -1269,7 +1272,7 @@ type Manager interface {
 
 type ManagerWithRouteTables interface {
 	Manager
-	GetRouteTableSyncers() []routetable.RouteTableSyncer
+	GetRouteTableSyncers() []routetable.SyncerInterface
 }
 
 type ManagerWithRouteRules interface {
@@ -1284,12 +1287,11 @@ type routeRules interface {
 	Apply() error
 }
 
-func (d *InternalDataplane) routeTableSyncers() []routetable.RouteTableSyncer {
-	var rts []routetable.RouteTableSyncer
+func (d *InternalDataplane) routeTableSyncers() []routetable.SyncerInterface {
+	rts := d.mainRouteTables
 	for _, mrts := range d.managersWithRouteTables {
 		rts = append(rts, mrts.GetRouteTableSyncers()...)
 	}
-
 	return rts
 }
 
@@ -2184,7 +2186,7 @@ func (d *InternalDataplane) apply() {
 	var routesWG sync.WaitGroup
 	for _, r := range d.routeTableSyncers() {
 		routesWG.Add(1)
-		go func(r routetable.RouteTableSyncer) {
+		go func(r routetable.SyncerInterface) {
 			err := r.Apply()
 			if err != nil {
 				log.Warn("Failed to synchronize routing table, will retry...")

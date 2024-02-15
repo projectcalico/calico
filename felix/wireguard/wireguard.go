@@ -153,7 +153,7 @@ type Wireguard struct {
 	publicKeyToNodeNames map[wgtypes.Key]set.Set[string]
 
 	// Wireguard routing table and rule managers
-	routetable routetable.RouteTableInterface
+	routetable *routetable.ClassView
 	routerule  *routerule.RouteRules
 
 	// Callback function used to notify of public key updates for the local nodeData
@@ -222,7 +222,7 @@ func NewWithShims(
 	}
 
 	// Create routetable. We provide dummy callbacks for ARP and conntrack processing.
-	var rt routetable.RouteTableInterface
+	var rt routetable.Interface
 	if !config.RouteSyncDisabled {
 		logCtx.Debug("RouteSyncDisabled is false.")
 		rt = routetable.New(
@@ -283,7 +283,7 @@ func NewWithShims(
 		cidrToNodeName:       map[ip.CIDR]string{},
 		publicKeyToNodeNames: map[wgtypes.Key]set.Set[string]{},
 		nodeUpdates:          map[string]*nodeUpdateData{},
-		routetable:           rt,
+		routetable:           routetable.NewClassView(routetable.RouteClassWireguard, rt),
 		routerule:            rr,
 		statusCallback:       statusCallback,
 		localIPs:             set.New[ip.Addr](),
@@ -1093,8 +1093,8 @@ func (w *Wireguard) updateRouteTableFromNodeUpdates() {
 		// not programmed.
 		update.cidrsDeleted.Iter(func(cidr ip.CIDR) error {
 			w.logCtx.WithField("cidr", cidr).Debug("Removing CIDR from routetable interface")
-			w.routetable.RouteRemove(routetable.RouteClassWireguard, w.interfaceName, cidr)
-			w.routetable.RouteRemove(routetable.RouteClassWireguard, routetable.InterfaceNone, cidr)
+			w.routetable.RouteRemove(w.interfaceName, cidr)
+			w.routetable.RouteRemove(routetable.InterfaceNone, cidr)
 			return nil
 		})
 	}
@@ -1145,10 +1145,10 @@ func (w *Wireguard) updateRouteTableFromNodeUpdates() {
 				// information to decide which route we need to remove - however we have also had bugs related to state
 				// tracking so deleting both is reasonable - routetable ignores the one that is not programmed.
 				updateLogCtx.Debug("Wireguard routing has changed - delete previous route")
-				w.routetable.RouteRemove(routetable.RouteClassWireguard, routetable.InterfaceNone, cidr)
-				w.routetable.RouteRemove(routetable.RouteClassWireguard, w.interfaceName, cidr)
+				w.routetable.RouteRemove(routetable.InterfaceNone, cidr)
+				w.routetable.RouteRemove(w.interfaceName, cidr)
 			}
-			w.routetable.RouteUpdate(routetable.RouteClassWireguard, ifaceName, routetable.Target{
+			w.routetable.RouteUpdate(ifaceName, routetable.Target{
 				Type: targetType,
 				CIDR: cidr,
 			})

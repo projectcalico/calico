@@ -130,7 +130,7 @@ type endpointManager struct {
 	mangleTable  IptablesTable
 	filterTable  IptablesTable
 	ruleRenderer rules.RuleRenderer
-	routeTable   routetable.RouteTableInterface
+	routeTable   *routetable.ClassView
 	writeProcSys procSysWriter
 	osStat       func(path string) (os.FileInfo, error)
 	epMarkMapper rules.EndpointMarkMapper
@@ -215,7 +215,7 @@ func newEndpointManager(
 	mangleTable IptablesTable,
 	filterTable IptablesTable,
 	ruleRenderer rules.RuleRenderer,
-	routeTable routetable.RouteTableInterface,
+	routeTable routetable.Interface,
 	ipVersion uint8,
 	epMarkMapper rules.EndpointMarkMapper,
 	kubeIPVSSupportEnabled bool,
@@ -253,7 +253,7 @@ func newEndpointManagerWithShims(
 	mangleTable IptablesTable,
 	filterTable IptablesTable,
 	ruleRenderer rules.RuleRenderer,
-	routeTable routetable.RouteTableInterface,
+	routeTable routetable.Interface,
 	ipVersion uint8,
 	epMarkMapper rules.EndpointMarkMapper,
 	kubeIPVSSupportEnabled bool,
@@ -282,7 +282,7 @@ func newEndpointManagerWithShims(
 		mangleTable:  mangleTable,
 		filterTable:  filterTable,
 		ruleRenderer: ruleRenderer,
-		routeTable:   routeTable,
+		routeTable:   routetable.NewClassView(routetable.RouteClassLocalWorkload, routeTable),
 		writeProcSys: procSysWriter,
 		osStat:       osStat,
 		epMarkMapper: epMarkMapper,
@@ -518,10 +518,6 @@ func (m *endpointManager) tiersUseDirtyPolicy(tiers []*proto.TierInfo) bool {
 	return false
 }
 
-func (m *endpointManager) GetRouteTableSyncers() []routetable.RouteTableSyncer {
-	return []routetable.RouteTableSyncer{m.routeTable}
-}
-
 func (m *endpointManager) markEndpointStatusDirtyByIface(ifaceName string) {
 	logCxt := log.WithField("ifaceName", ifaceName)
 	if epID, ok := m.activeWlIfaceNameToID[ifaceName]; ok {
@@ -653,7 +649,7 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 			// Remove any routes from the routing table.  The RouteTable will remove any
 			// conntrack entries as a side-effect.
 			logCxt.Info("Workload removed, deleting old state.")
-			m.routeTable.SetRoutes(routetable.RouteClassLocalWorkload, oldWorkload.Name, nil)
+			m.routeTable.SetRoutes(oldWorkload.Name, nil)
 			m.wlIfaceNamesToReconfigure.Discard(oldWorkload.Name)
 			delete(m.activeWlIfaceNameToID, oldWorkload.Name)
 			if m.hasSourceSpoofingConfiguration(oldWorkload.Name) {
@@ -710,7 +706,7 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 							m.rpfSkipChainDirty = true
 						}
 					}
-					m.routeTable.SetRoutes(routetable.RouteClassLocalWorkload, oldWorkload.Name, nil)
+					m.routeTable.SetRoutes(oldWorkload.Name, nil)
 					m.wlIfaceNamesToReconfigure.Discard(oldWorkload.Name)
 					delete(m.activeWlIfaceNameToID, oldWorkload.Name)
 				}
@@ -782,7 +778,7 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 				} else {
 					logCxt.Debug("Endpoint down, removing routes")
 				}
-				m.routeTable.SetRoutes(routetable.RouteClassLocalWorkload, workload.Name, routeTargets)
+				m.routeTable.SetRoutes(workload.Name, routeTargets)
 				m.wlIfaceNamesToReconfigure.Add(workload.Name)
 				m.activeWlEndpoints[id] = workload
 				m.activeWlIfaceNameToID[workload.Name] = id
