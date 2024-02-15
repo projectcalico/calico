@@ -250,17 +250,17 @@ static CALI_BPF_INLINE void calico_tc_process_ct_lookup(struct cali_tc_ctx *ctx)
 	CALI_DEBUG("conntrack entry flags 0x%x\n", ctx->state->ct_result.flags);
 
 	/* We are forwarding a packet if it has a seen mark (that is another
-	 * program has seen it already) and is either not routed through the
-	 * bpfnat iface (which may be true for host traffic) or has the specific
+	 * program has seen it already) and is not routed through the
+	 * bpfnat iface (which may be true for host traffic) and has the specific
 	 * reasons set.
 	 */
 	bool forwarding = CALI_F_EGRESS &&
 		skb_mark_equals(ctx->skb, CALI_SKB_MARK_SEEN_MASK, CALI_SKB_MARK_SEEN) &&
-		(!skb_mark_equals(ctx->skb, CALI_SKB_MARK_FROM_NAT_IFACE_OUT, CALI_SKB_MARK_FROM_NAT_IFACE_OUT) ||
+		!skb_mark_equals(ctx->skb, CALI_SKB_MARK_FROM_NAT_IFACE_OUT, CALI_SKB_MARK_FROM_NAT_IFACE_OUT) &&
 		 (skb_mark_equals(ctx->skb, CALI_SKB_MARK_BYPASS_MASK, CALI_SKB_MARK_FALLTHROUGH) ||
 		  skb_mark_equals(ctx->skb, CALI_SKB_MARK_BYPASS_MASK, CALI_SKB_MARK_NAT_OUT) ||
 		  skb_mark_equals(ctx->skb, CALI_SKB_MARK_BYPASS_MASK, CALI_SKB_MARK_MASQ) ||
-		  skb_mark_equals(ctx->skb, CALI_SKB_MARK_BYPASS_MASK, CALI_SKB_MARK_SKIP_FIB)));
+		  skb_mark_equals(ctx->skb, CALI_SKB_MARK_BYPASS_MASK, CALI_SKB_MARK_SKIP_FIB));
 
 	if (HAS_HOST_CONFLICT_PROG &&
 			(ctx->state->ct_result.flags & CALI_CT_FLAG_VIA_NAT_IF) &&
@@ -593,6 +593,11 @@ do_policy:
 	}
 #endif
 
+	if (CALI_F_TO_WEP && ctx->skb->mark == CALI_SKB_MARK_MASQ) {
+		CALI_DEBUG("MASQ to self - using dest as source for policy.\n");
+		ctx->state->ip_src_masq = ctx->state->ip_src;
+		ctx->state->ip_src = ctx->state->ip_dst;
+	}
 	CALI_DEBUG("About to jump to policy program.\n");
 	CALI_JUMP_TO_POLICY(ctx);
 	if (CALI_F_HEP) {
@@ -1136,6 +1141,13 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 
 	if (!(ctx->state->flags & CALI_ST_SKIP_POLICY)) {
 		counter_inc(ctx, CALI_REASON_ACCEPTED_BY_POLICY);
+		if (CALI_F_TO_WEP && ctx->skb->mark == CALI_SKB_MARK_MASQ) {
+			/* Restore state->ip_src and state->ct_result */
+			CALI_DEBUG("Accepted MASQ to self - restoring source for conntrack.\n");
+			ctx->state->ip_src = ctx->state->ip_src_masq;
+			__builtin_memset(&ctx->state->ct_result, 0, sizeof(ctx->state->ct_result));
+			ctx->state->ct_result.rc = CALI_CT_NEW;
+		}
 	}
 
 	if (CALI_F_HEP) {
@@ -1191,7 +1203,6 @@ int calico_tc_skb_new_flow_entrypoint(struct __sk_buff *skb)
 	struct cali_tc_state *state = ctx->state;
 	enum do_nat_res nat_res = NAT_ALLOW;
 	bool is_dnat = false;
-	int ct_rc = ct_result_rc(state->ct_result.rc);
 	__u32 seen_mark = ctx->fwd.mark;
 	bool fib = true;
 
@@ -1346,7 +1357,7 @@ int calico_tc_skb_new_flow_entrypoint(struct __sk_buff *skb)
 	}
 
 	nat_res = do_nat(ctx, skb_iphdr_offset(ctx), l4_csum_off, false,
-			 ct_rc, ct_ctx_nat, &is_dnat, &seen_mark, false);
+			 CALI_CT_NEW, ct_ctx_nat, &is_dnat, &seen_mark, false);
 	if (nat_res == NAT_ICMP_TOO_BIG) {
 		goto icmp_send_reply;
 	}
