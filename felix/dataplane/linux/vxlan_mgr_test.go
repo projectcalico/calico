@@ -353,7 +353,7 @@ var _ = Describe("VXLANManager", func() {
 		Expect(fdb.setVTEPsCalls).To(Equal(1))
 	})
 
-	It("adds the route to the default table on next try when the parent route table is not immediately found", func() {
+	It("should fall back to programming tunneled routes if the parent device is not known", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 		parentNameC := make(chan string)
@@ -376,8 +376,10 @@ var _ = Describe("VXLANManager", func() {
 		})
 
 		err := manager.CompleteDeferredWork()
-		Expect(err).To(MatchError("waiting for VXLAN device to be created"))
-		Expect(manager.routesDirty).To(BeTrue())
+		Expect(err).NotTo(HaveOccurred())
+		Expect(manager.routesDirty).To(BeFalse())
+		Expect(rt.currentRoutes["eth0"]).To(HaveLen(0))
+		Expect(rt.currentRoutes[VXLANIfaceNameV4]).To(HaveLen(1))
 
 		By("Sending another local VTEP.")
 		manager.OnUpdate(&proto.VXLANTunnelEndpointUpdate{
@@ -400,9 +402,10 @@ var _ = Describe("VXLANManager", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(manager.routesDirty).To(BeFalse())
 		Expect(rt.currentRoutes["eth0"]).To(HaveLen(1))
+		Expect(rt.currentRoutes[VXLANIfaceNameV4]).To(HaveLen(0))
 	})
 
-	It("adds the IPv6 route to the default table on next try when the parent route table is not immediately found", func() {
+	It("IPv6: should fall back to programming tunneled routes if the parent device is not known", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 		parentNameC := make(chan string)
@@ -425,8 +428,10 @@ var _ = Describe("VXLANManager", func() {
 		})
 
 		err := managerV6.CompleteDeferredWork()
-		Expect(err).To(MatchError("waiting for VXLAN device to be created"))
-		Expect(managerV6.routesDirty).To(BeTrue())
+		Expect(err).NotTo(HaveOccurred())
+		Expect(managerV6.routesDirty).To(BeFalse())
+		Expect(rt.currentRoutes["eth0"]).To(HaveLen(0))
+		Expect(rt.currentRoutes[VXLANIfaceNameV6]).To(HaveLen(1))
 
 		By("Sending another local VTEP.")
 		managerV6.OnUpdate(&proto.VXLANTunnelEndpointUpdate{
@@ -449,5 +454,6 @@ var _ = Describe("VXLANManager", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(managerV6.routesDirty).To(BeFalse())
 		Expect(rt.currentRoutes["eth0"]).To(HaveLen(1))
+		Expect(rt.currentRoutes[VXLANIfaceNameV6]).To(HaveLen(0))
 	})
 })
