@@ -23,6 +23,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/dataplane/common"
 	"github.com/projectcalico/calico/felix/ip"
+	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/rules"
@@ -134,6 +135,7 @@ var _ = Describe("VXLANManager", func() {
 
 		la := netlink.NewLinkAttrs()
 		la.Name = "eth0"
+		opRecorder := logutils.NewSummarizer("test")
 		manager = newVXLANManagerWithShims(
 			common.NewMockIPSets(),
 			rt,
@@ -148,6 +150,7 @@ var _ = Describe("VXLANManager", func() {
 					VXLANPort: 20,
 				},
 			},
+			opRecorder,
 			&mockVXLANDataplane{
 				links:     []netlink.Link{&mockLink{attrs: la}},
 				ipVersion: 4,
@@ -169,6 +172,7 @@ var _ = Describe("VXLANManager", func() {
 					VXLANPort: 20,
 				},
 			},
+			opRecorder,
 			&mockVXLANDataplane{
 				links:     []netlink.Link{&mockLink{attrs: la}},
 				ipVersion: 6,

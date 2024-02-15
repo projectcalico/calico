@@ -31,6 +31,7 @@ import (
 	"github.com/projectcalico/calico/felix/ethtool"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/ipsets"
+	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/rules"
@@ -89,7 +90,8 @@ type vxlanManager struct {
 	noEncapProtocol   netlink.RouteProtocol
 
 	// Log context
-	logCtx *logrus.Entry
+	logCtx     *logrus.Entry
+	opRecorder logutils.OpRecorder
 }
 
 const (
@@ -106,6 +108,7 @@ func newVXLANManager(
 	fdb VXLANFDB,
 	deviceName string,
 	dpConfig Config,
+	opRecorder logutils.OpRecorder,
 	ipVersion uint8,
 ) *vxlanManager {
 	nlHandle, _ := netlink.NewHandle()
@@ -115,6 +118,7 @@ func newVXLANManager(
 		fdb,
 		deviceName,
 		dpConfig,
+		opRecorder,
 		nlHandle,
 		ipVersion,
 	)
@@ -126,6 +130,7 @@ func newVXLANManagerWithShims(
 	fdb VXLANFDB,
 	deviceName string,
 	dpConfig Config,
+	opRecorder logutils.OpRecorder,
 	nlHandle netlinkHandle,
 	ipVersion uint8,
 ) *vxlanManager {
@@ -155,6 +160,7 @@ func newVXLANManagerWithShims(
 		nlHandle:          nlHandle,
 		noEncapProtocol:   calculateNonEncapRouteProtocol(dpConfig),
 		logCtx:            logCtx,
+		opRecorder: opRecorder,
 	}
 }
 
@@ -393,6 +399,7 @@ func (m *vxlanManager) CompleteDeferredWork() error {
 
 func (m *vxlanManager) updateNeighborsAndAllowedSources() {
 	m.logCtx.Debug("VTEPs are dirty, updating allowed VXLAN sources and L2 neighbors.")
+	m.opRecorder.RecordOperation("update-vxlan-vteps")
 
 	// We allow VXLAN packets from configured external sources as well as
 	// each Calico node with a valid VTEP.
@@ -431,6 +438,7 @@ func (m *vxlanManager) updateRoutes() {
 	// RouteTable.  It's a little wasteful to recalculate everything but the
 	// RouteTable will avoid making dataplane changes for routes that haven't
 	// changed.
+	m.opRecorder.RecordOperation("update-vxlan-routes")
 	var vxlanRoutes []routetable.Target
 	var noEncapRoutes []routetable.Target
 	for _, r := range m.routesByDest {

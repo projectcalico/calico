@@ -523,7 +523,6 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			routetable.WithLivenessCB(dp.reportHealth),
 			routetable.WithRouteCleanupGracePeriod(routeCleanupGracePeriod),
 		)
-		dp.mainRouteTables = append(dp.mainRouteTables, routeTableV4)
 		if config.IPv6Enabled {
 			routeTableV6 = routetable.New(
 				mainRoutingTableOwnershipPolicy(config, 6),
@@ -541,7 +540,6 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 				routetable.WithLivenessCB(dp.reportHealth),
 				routetable.WithRouteCleanupGracePeriod(routeCleanupGracePeriod),
 			)
-			dp.mainRouteTables = append(dp.mainRouteTables, routeTableV6)
 		}
 	} else {
 		log.Info("Route management is disabled, using DummyTables.")
@@ -549,6 +547,10 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		if config.IPv6Enabled {
 			routeTableV6 = &routetable.DummyTable{}
 		}
+	}
+	dp.mainRouteTables = append(dp.mainRouteTables, routeTableV4)
+	if routeTableV6 != nil {
+		dp.mainRouteTables = append(dp.mainRouteTables, routeTableV6)
 	}
 
 	if config.RulesConfig.VXLANEnabled {
@@ -561,6 +563,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			vxlanFDB,
 			VXLANIfaceNameV4,
 			config,
+			dp.loopSummarizer,
 			4,
 		)
 		dp.vxlanParentC = make(chan string, 1)
@@ -907,6 +910,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 				vxlanFDBV6,
 				VXLANIfaceNameV6,
 				config,
+				dp.loopSummarizer,
 				6,
 			)
 			dp.vxlanParentCV6 = make(chan string, 1)
