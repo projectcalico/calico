@@ -10,6 +10,7 @@ execution_time_limit:
 
 blocks:
   - name: "Publish official release"
+    dependencies: []
     skip:
       # Only run on branches, not PRs.
       when: "branch !~ '.+'"
