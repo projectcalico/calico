@@ -46,210 +46,223 @@ import (
 	options2 "github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
-var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf dual stack tests", []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
+var _ = describeBPFDualStackTests(false)
+var _ = describeBPFDualStackTests(true)
 
+func describeBPFDualStackTests(ctlbEnabled bool) bool {
 	if !BPFMode() {
-		return
+		return true
 	}
+	desc := fmt.Sprintf("_BPF-SAFE_ BPF dual stack tests (ct = %v)", ctlbEnabled)
+	return infrastructure.DatastoreDescribe(desc, []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
 
-	var (
-		infra        infrastructure.DatastoreInfra
-		tc           infrastructure.TopologyContainers
-		w            [2][2]*workload.Workload
-		calicoClient client.Interface
-		cc           *Checker
-		pol          *api.GlobalNetworkPolicy
-		k8sClient    *kubernetes.Clientset
-	)
-
-	felixIP := func(f int) string {
-		return tc.Felixes[f].Container.IP
-	}
-
-	felixIP6 := func(f int) string {
-		return tc.Felixes[f].Container.IPv6
-	}
-
-	BeforeEach(func() {
-		iOpts := []infrastructure.CreateOption{infrastructure.K8sWithIPv6(),
-			infrastructure.K8sWithAPIServerBindAddress("::"),
-			infrastructure.K8sWithServiceClusterIPRange("dead:beef::abcd:0:0:0/112,10.101.0.0/16")}
-		infra = getInfra(iOpts...)
-		cc = &Checker{
-			CheckSNAT: true,
-		}
-		cc.Protocol = "tcp"
-		opts := infrastructure.DefaultTopologyOptions()
-		opts.EnableIPv6 = true
-		opts.NATOutgoingEnabled = true
-		opts.AutoHEPsEnabled = false
-		opts.IPIPEnabled = false
-		opts.IPIPRoutesEnabled = false
-
-		opts.ExtraEnvVars["FELIX_IPV6SUPPORT"] = "true"
-		opts.ExtraEnvVars["FELIX_BPFConnectTimeLoadBalancing"] = string(api.BPFConnectTimeLBDisabled)
-		opts.ExtraEnvVars["FELIX_BPFHostNetworkedNATWithoutCTLB"] = string(api.BPFHostNetworkedNATEnabled)
-		opts.ExtraEnvVars["FELIX_DefaultEndpointToHostAction"] = "RETURN"
-
-		tc, calicoClient = infrastructure.StartNNodeTopology(2, opts, infra)
-
-		addWorkload := func(run bool, ii, wi, port int, labels map[string]string) *workload.Workload {
-			if labels == nil {
-				labels = make(map[string]string)
-			}
-
-			wIP := fmt.Sprintf("10.65.%d.%d", ii, wi+2)
-			wName := fmt.Sprintf("w%d%d", ii, wi)
-
-			w := workload.New(tc.Felixes[ii], wName, "default",
-				wIP, strconv.Itoa(port), "tcp", workload.WithIPv6Address(net.ParseIP(fmt.Sprintf("dead:beef::%d:%d", ii, wi+2)).String()))
-
-			labels["name"] = w.Name
-			labels["workload"] = "regular"
-
-			w.WorkloadEndpoint.Labels = labels
-			if run {
-				err := w.Start()
-				Expect(err).NotTo(HaveOccurred())
-				w.ConfigureInInfra(infra)
-			}
-
-			if opts.UseIPPools {
-				// Assign the workload's IP in IPAM, this will trigger calculation of routes.
-				err := calicoClient.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
-					IP:       cnet.MustParseIP(w.IP),
-					HandleID: &w.Name,
-					Attrs: map[string]string{
-						ipam.AttributeNode: tc.Felixes[ii].Hostname,
-					},
-					Hostname: tc.Felixes[ii].Hostname,
-				})
-				Expect(err).NotTo(HaveOccurred())
-				err = calicoClient.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
-					IP:       cnet.MustParseIP(w.IP6),
-					HandleID: &w.Name,
-					Attrs: map[string]string{
-						ipam.AttributeNode: tc.Felixes[ii].Hostname,
-					},
-					Hostname: tc.Felixes[ii].Hostname,
-				})
-			}
-
-			return w
-		}
-
-		createPolicy := func(policy *api.GlobalNetworkPolicy) *api.GlobalNetworkPolicy {
-			log.WithField("policy", dumpResource(policy)).Info("Creating policy")
-			policy, err := calicoClient.GlobalNetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
-			Expect(err).NotTo(HaveOccurred())
-			return policy
-		}
-
-		for ii := range tc.Felixes {
-			// Two workloads on each host so we can check the same host and other host cases.
-			w[ii][0] = addWorkload(true, ii, 0, 8055, map[string]string{"port": "8055"})
-			w[ii][1] = addWorkload(true, ii, 1, 8056, nil)
-		}
-
-		err := infra.AddDefaultDeny()
-		Expect(err).NotTo(HaveOccurred())
-		ensureAllNodesBPFProgramsAttached(tc.Felixes)
-		pol = api.NewGlobalNetworkPolicy()
-		pol.Namespace = "fv"
-		pol.Name = "policy-1"
-		pol.Spec.Ingress = []api.Rule{
-			{
-				Action: "Allow",
-				Source: api.EntityRule{
-					Selector: "workload=='regular'",
-				},
-			},
-		}
-		pol.Spec.Egress = []api.Rule{
-			{
-				Action: "Allow",
-				Source: api.EntityRule{
-					Selector: "workload=='regular'",
-				},
-			},
-		}
-		pol.Spec.Selector = "workload=='regular'"
-
-		pol = createPolicy(pol)
-	})
-
-	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
-			infra.DumpErrorData()
-			for _, felix := range tc.Felixes {
-				felix.Exec("calico-bpf", "counters", "dump")
-			}
-		}
-
-		for i := 0; i < 2; i++ {
-			for j := 0; j < 2; j++ {
-				w[i][j].Stop()
-			}
-		}
-		_, err := calicoClient.GlobalNetworkPolicies().Delete(context.Background(), "policy-1", options2.DeleteOptions{})
-		Expect(err).NotTo(HaveOccurred())
-		tc.Stop()
-		infra.Stop()
-	})
-
-	Context("with a policy allowing ingress to w[0][0] from all regular workloads", func() {
 		var (
-			testSvc          *v1.Service
-			testSvcNamespace string
+			infra        infrastructure.DatastoreInfra
+			tc           infrastructure.TopologyContainers
+			w            [2][2]*workload.Workload
+			calicoClient client.Interface
+			cc           *Checker
+			pol          *api.GlobalNetworkPolicy
+			k8sClient    *kubernetes.Clientset
 		)
 
-		npPort := uint16(30333)
-		clusterIPs := []string{"10.101.0.10", "dead:beef::abcd:0:0:10"}
+		felixIP := func(f int) string {
+			return tc.Felixes[f].Container.IP
+		}
+
+		felixIP6 := func(f int) string {
+			return tc.Felixes[f].Container.IPv6
+		}
+
 		BeforeEach(func() {
-			k8sClient = infra.(*infrastructure.K8sDatastoreInfra).K8sClient
-			_ = k8sClient
-			testSvc = k8sServiceForDualStack("test-svc", clusterIPs, w[0][0], 80, 8055, int32(npPort), "tcp")
-			testSvcNamespace = testSvc.ObjectMeta.Namespace
-			_, err := k8sClient.CoreV1().Services(testSvcNamespace).Create(context.Background(), testSvc, metav1.CreateOptions{})
+			iOpts := []infrastructure.CreateOption{infrastructure.K8sWithIPv6(),
+				infrastructure.K8sWithAPIServerBindAddress("::"),
+				infrastructure.K8sWithServiceClusterIPRange("dead:beef::abcd:0:0:0/112,10.101.0.0/16")}
+			infra = getInfra(iOpts...)
+			cc = &Checker{
+				CheckSNAT: true,
+			}
+			cc.Protocol = "tcp"
+			opts := infrastructure.DefaultTopologyOptions()
+			opts.EnableIPv6 = true
+			opts.NATOutgoingEnabled = true
+			opts.AutoHEPsEnabled = false
+			opts.IPIPEnabled = false
+			opts.IPIPRoutesEnabled = false
+
+			opts.ExtraEnvVars["FELIX_IPV6SUPPORT"] = "true"
+
+			if !ctlbEnabled {
+				opts.ExtraEnvVars["FELIX_BPFConnectTimeLoadBalancing"] = string(api.BPFConnectTimeLBDisabled)
+				opts.ExtraEnvVars["FELIX_BPFHostNetworkedNATWithoutCTLB"] = string(api.BPFHostNetworkedNATEnabled)
+			} else {
+				opts.ExtraEnvVars["FELIX_BPFConnectTimeLoadBalancing"] = string(api.BPFConnectTimeLBEnabled)
+				opts.ExtraEnvVars["FELIX_BPFHostNetworkedNATWithoutCTLB"] = string(api.BPFHostNetworkedNATDisabled)
+				opts.ExtraEnvVars["FELIX_BPFConnectTimeLoadBalancing"] = string(api.BPFConnectTimeLBTCP)
+			}
+
+			opts.ExtraEnvVars["FELIX_DefaultEndpointToHostAction"] = "RETURN"
+
+			tc, calicoClient = infrastructure.StartNNodeTopology(2, opts, infra)
+
+			addWorkload := func(run bool, ii, wi, port int, labels map[string]string) *workload.Workload {
+				if labels == nil {
+					labels = make(map[string]string)
+				}
+
+				wIP := fmt.Sprintf("10.65.%d.%d", ii, wi+2)
+				wName := fmt.Sprintf("w%d%d", ii, wi)
+
+				w := workload.New(tc.Felixes[ii], wName, "default",
+					wIP, strconv.Itoa(port), "tcp", workload.WithIPv6Address(net.ParseIP(fmt.Sprintf("dead:beef::%d:%d", ii, wi+2)).String()))
+
+				labels["name"] = w.Name
+				labels["workload"] = "regular"
+
+				w.WorkloadEndpoint.Labels = labels
+				if run {
+					err := w.Start()
+					Expect(err).NotTo(HaveOccurred())
+					w.ConfigureInInfra(infra)
+				}
+
+				if opts.UseIPPools {
+					// Assign the workload's IP in IPAM, this will trigger calculation of routes.
+					err := calicoClient.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
+						IP:       cnet.MustParseIP(w.IP),
+						HandleID: &w.Name,
+						Attrs: map[string]string{
+							ipam.AttributeNode: tc.Felixes[ii].Hostname,
+						},
+						Hostname: tc.Felixes[ii].Hostname,
+					})
+					Expect(err).NotTo(HaveOccurred())
+					err = calicoClient.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
+						IP:       cnet.MustParseIP(w.IP6),
+						HandleID: &w.Name,
+						Attrs: map[string]string{
+							ipam.AttributeNode: tc.Felixes[ii].Hostname,
+						},
+						Hostname: tc.Felixes[ii].Hostname,
+					})
+				}
+
+				return w
+			}
+
+			createPolicy := func(policy *api.GlobalNetworkPolicy) *api.GlobalNetworkPolicy {
+				log.WithField("policy", dumpResource(policy)).Info("Creating policy")
+				policy, err := calicoClient.GlobalNetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
+				Expect(err).NotTo(HaveOccurred())
+				return policy
+			}
+
+			for ii := range tc.Felixes {
+				// Two workloads on each host so we can check the same host and other host cases.
+				w[ii][0] = addWorkload(true, ii, 0, 8055, map[string]string{"port": "8055"})
+				w[ii][1] = addWorkload(true, ii, 1, 8056, nil)
+			}
+
+			err := infra.AddDefaultDeny()
 			Expect(err).NotTo(HaveOccurred())
-			Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(1),
-				"Service endpoints didn't get created? Is controller-manager happy?")
+			ensureAllNodesBPFProgramsAttached(tc.Felixes)
+			pol = api.NewGlobalNetworkPolicy()
+			pol.Namespace = "fv"
+			pol.Name = "policy-1"
+			pol.Spec.Ingress = []api.Rule{
+				{
+					Action: "Allow",
+					Source: api.EntityRule{
+						Selector: "workload=='regular'",
+					},
+				},
+			}
+			pol.Spec.Egress = []api.Rule{
+				{
+					Action: "Allow",
+					Source: api.EntityRule{
+						Selector: "workload=='regular'",
+					},
+				},
+			}
+			pol.Spec.Selector = "workload=='regular'"
+
+			pol = createPolicy(pol)
 		})
-		It("Should connect to w[0][0] from all other workloads with IPv4 and IPv6", func() {
-			cc.ExpectSome(w[0][1], w[0][0])
-			cc.ExpectSome(w[1][0], w[0][0])
-			cc.ExpectSome(w[1][1], w[0][0])
 
-			cc.Expect(Some, w[0][1], w[0][0], ExpectWithIPVersion(6))
-			cc.Expect(Some, w[1][0], w[0][0], ExpectWithIPVersion(6))
-			cc.Expect(Some, w[1][1], w[0][0], ExpectWithIPVersion(6))
-			cc.CheckConnectivity()
+		AfterEach(func() {
+			if CurrentGinkgoTestDescription().Failed {
+				infra.DumpErrorData()
+				for _, felix := range tc.Felixes {
+					felix.Exec("calico-bpf", "counters", "dump")
+				}
+			}
+
+			for i := 0; i < 2; i++ {
+				for j := 0; j < 2; j++ {
+					w[i][j].Stop()
+				}
+			}
+			_, err := calicoClient.GlobalNetworkPolicies().Delete(context.Background(), "policy-1", options2.DeleteOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			tc.Stop()
+			infra.Stop()
 		})
 
-		It("Should connect to w[0][0] via clusterIP (IPv4 and IPv6)", func() {
-			port := uint16(testSvc.Spec.Ports[0].Port)
-			cc.ExpectSome(w[1][0], TargetIP(clusterIPs[0]), port)
-			cc.ExpectSome(w[1][0], TargetIP(clusterIPs[1]), port)
+		Context("with a policy allowing ingress to w[0][0] from all regular workloads", func() {
+			var (
+				testSvc          *v1.Service
+				testSvcNamespace string
+			)
 
-			cc.ExpectSome(w[0][1], TargetIP(clusterIPs[0]), port)
-			cc.ExpectSome(w[0][1], TargetIP(clusterIPs[1]), port)
-			cc.CheckConnectivity()
-		})
+			npPort := uint16(30333)
+			clusterIPs := []string{"10.101.0.10", "dead:beef::abcd:0:0:10"}
+			BeforeEach(func() {
+				k8sClient = infra.(*infrastructure.K8sDatastoreInfra).K8sClient
+				_ = k8sClient
+				testSvc = k8sServiceForDualStack("test-svc", clusterIPs, w[0][0], 80, 8055, int32(npPort), "tcp")
+				testSvcNamespace = testSvc.ObjectMeta.Namespace
+				_, err := k8sClient.CoreV1().Services(testSvcNamespace).Create(context.Background(), testSvc, metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(1),
+					"Service endpoints didn't get created? Is controller-manager happy?")
+			})
+			It("Should connect to w[0][0] from all other workloads with IPv4 and IPv6", func() {
+				cc.ExpectSome(w[0][1], w[0][0])
+				cc.ExpectSome(w[1][0], w[0][0])
+				cc.ExpectSome(w[1][1], w[0][0])
 
-		It("Should connect to w[0][0] via nodePort (IPv4 and IPv6)", func() {
-			cc.ExpectSome(w[1][0], TargetIP(felixIP(0)), npPort)
-			cc.ExpectSome(w[0][1], TargetIP(felixIP(0)), npPort)
+				cc.Expect(Some, w[0][1], w[0][0], ExpectWithIPVersion(6))
+				cc.Expect(Some, w[1][0], w[0][0], ExpectWithIPVersion(6))
+				cc.Expect(Some, w[1][1], w[0][0], ExpectWithIPVersion(6))
+				cc.CheckConnectivity()
+			})
 
-			cc.ExpectSome(w[1][0], TargetIP(felixIP6(0)), npPort)
-			cc.ExpectSome(w[0][1], TargetIP(felixIP6(0)), npPort)
-			cc.CheckConnectivity()
+			It("Should connect to w[0][0] via clusterIP (IPv4 and IPv6)", func() {
+				port := uint16(testSvc.Spec.Ports[0].Port)
+				cc.ExpectSome(w[1][0], TargetIP(clusterIPs[0]), port)
+				cc.ExpectSome(w[1][0], TargetIP(clusterIPs[1]), port)
+
+				cc.ExpectSome(w[0][1], TargetIP(clusterIPs[0]), port)
+				cc.ExpectSome(w[0][1], TargetIP(clusterIPs[1]), port)
+				cc.CheckConnectivity()
+			})
+
+			It("Should connect to w[0][0] via nodePort (IPv4 and IPv6)", func() {
+				cc.ExpectSome(w[1][0], TargetIP(felixIP(0)), npPort)
+				cc.ExpectSome(w[0][1], TargetIP(felixIP(0)), npPort)
+
+				cc.ExpectSome(w[1][0], TargetIP(felixIP6(0)), npPort)
+				cc.ExpectSome(w[0][1], TargetIP(felixIP6(0)), npPort)
+				cc.CheckConnectivity()
+			})
+
 		})
 
 	})
+}
 
-})
-
-var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ bpf dual stack tests with delayed start", []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
+var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ BPF dual stack tests with delayed start", []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
 
 	if !BPFMode() {
 		return
