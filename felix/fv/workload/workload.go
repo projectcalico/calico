@@ -61,6 +61,7 @@ type Workload struct {
 	isRunning             bool
 	isSpoofing            bool
 	listenAnyIP           bool
+	pid         string
 
 	cleanupLock sync.Mutex
 }
@@ -94,13 +95,8 @@ func (w *Workload) Stop() {
 		log.Info("Stop no-op because nil workload")
 	} else {
 		log.WithField("workload", w).Info("Stop")
-		output, err := w.C.ExecOutput("cat", fmt.Sprintf("/tmp/%v", w.Name))
-		Expect(err).NotTo(HaveOccurred(), "failed to run docker exec command to get workload pid")
-		pid := strings.TrimSpace(output)
-		w.C.Exec("kill", pid)
-		_ = w.C.ExecMayFail("ip", "link", "del", w.InterfaceName)
-		_ = w.C.ExecMayFail("ip", "netns", "del", w.NamespaceID())
-		_, err = w.runCmd.Process.Wait()
+		_ = w.C.ExecMayFail("sh", "-c", fmt.Sprintf("kill -9 %s & ip link del %s & ip netns del %s & wait", w.pid, w.InterfaceName, w.NamespaceID()))
+		_, err := w.runCmd.Process.Wait()
 		if err != nil {
 			log.WithField("workload", w).Error("failed to wait for process")
 		}
@@ -205,8 +201,7 @@ func (w *Workload) Start() error {
 		protoArg = "--protocol=" + w.Protocol
 	}
 
-	command := fmt.Sprintf("echo $$ > /tmp/%v; exec test-workload %v '%v' '%v' '%v'",
-		w.Name,
+	command := fmt.Sprintf("echo $$; exec test-workload %v '%v' '%v' '%v'",
 		protoArg,
 		w.InterfaceName,
 		w.IP,
@@ -253,12 +248,22 @@ func (w *Workload) Start() error {
 		}
 	}()
 
+	pid, err := stdoutReader.ReadString('\n')
+	if err != nil {
+		// (Only) if we fail here, wait for the stderr to be output before returning.
+		defer errDone.Wait()
+		if err != nil {
+			return fmt.Errorf("reading PID from stdout failed: %w", err)
+		}
+	}
+	w.pid = strings.TrimSpace(pid)
+
 	namespacePath, err := stdoutReader.ReadString('\n')
 	if err != nil {
 		// (Only) if we fail here, wait for the stderr to be output before returning.
 		defer errDone.Wait()
 		if err != nil {
-			return fmt.Errorf("Reading from stdout failed: %v", err)
+			return fmt.Errorf("reading from stdout failed: %w", err)
 		}
 	}
 
