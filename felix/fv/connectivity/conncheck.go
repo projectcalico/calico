@@ -148,8 +148,9 @@ func (c *Checker) expect(expected Expected, from ConnectionSource, to Connection
 	}
 
 	e := Expectation{
-		From:     from,
-		Expected: expected,
+		From:      from,
+		Expected:  expected,
+		ipVersion: 4,
 	}
 
 	if expected {
@@ -217,7 +218,11 @@ func (c *Checker) ActualConnectivity(isARetry bool) ([]*Result, []string) {
 			go func(i int, exp Expectation) {
 				defer ginkgo.GinkgoRecover()
 				defer wg.Done()
-				exp.From.PreRetryCleanup(exp.To.IP, exp.To.Port, p, preCalcOpts[i]...)
+				if exp.ipVersion == 6 {
+					exp.From.PreRetryCleanup(exp.To.IP6, exp.To.Port, p, preCalcOpts[i]...)
+				} else {
+					exp.From.PreRetryCleanup(exp.To.IP, exp.To.Port, p, preCalcOpts[i]...)
+				}
 			}(i, exp)
 		}
 		wg.Wait()
@@ -229,7 +234,12 @@ func (c *Checker) ActualConnectivity(isARetry bool) ([]*Result, []string) {
 		go func(i int, exp Expectation) {
 			defer ginkgo.GinkgoRecover()
 			defer wg.Done()
-			res := exp.From.CanConnectTo(exp.To.IP, exp.To.Port, p, preCalcOpts[i]...)
+			var res *Result
+			if exp.ipVersion == 6 {
+				res = exp.From.CanConnectTo(exp.To.IP6, exp.To.Port, p, preCalcOpts[i]...)
+			} else {
+				res = exp.From.CanConnectTo(exp.To.IP, exp.To.Port, p, preCalcOpts[i]...)
+			}
 			pretty[i] += fmt.Sprintf("%s -> %s = %v", exp.From.SourceName(), exp.To.TargetName, res.HasConnectivity())
 
 			if res != nil {
@@ -481,7 +491,7 @@ func HaveConnectivityTo(target ConnectionTarget, explicitPort ...uint16) types.G
 }
 
 type Matcher struct {
-	IP, Port, TargetName, Protocol string
+	IP, Port, TargetName, Protocol, IP6 string
 }
 
 type ConnectionSource interface {
@@ -578,6 +588,12 @@ func ExpectWithPorts(ports ...uint16) ExpectationOption {
 	}
 }
 
+func ExpectWithIPVersion(ipVersion int) ExpectationOption {
+	return func(e *Expectation) {
+		e.ipVersion = ipVersion
+	}
+}
+
 type Expectation struct {
 	From               ConnectionSource // Workload or Container
 	To                 *Matcher         // Workload or IP, + port
@@ -596,6 +612,8 @@ type Expectation struct {
 	srcPort uint16
 
 	ErrorStr string
+
+	ipVersion int
 }
 
 type ExpPacketLoss struct {
