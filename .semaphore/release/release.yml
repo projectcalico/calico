@@ -109,6 +109,9 @@ blocks:
         - checkout
         # Free up space on the build machine.
         - sudo rm -rf ~/.kiex ~/.phpbrew ~/.rbenv ~/.nvm ~/.kerl ~/.sbt ~/.npm /usr/lib/jvm /opt/firefox* /opt/apache-maven* /opt/scala /usr/local/golang
+        # Install more tools
+        - sudo apt update
+        - sudo apt install -y moreutils
     jobs:
       - name: "Build Openstack Packages"
         execution_time_limit:
@@ -121,9 +124,7 @@ blocks:
         - name: HOST
           value: ubuntu@binaries-projectcalico-org
         commands:
-        - sudo apt update
-        - sudo apt install -y moreutils
-        - make publish-openstack
+          - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make publish-openstack; fi
         epilogue:
           always:
             commands:
