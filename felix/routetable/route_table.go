@@ -1234,7 +1234,7 @@ func (r *RouteTable) deleteRoute(nl netlinkshim.Interface, kernKey kernelRouteKe
 		Table:    r.tableIndex,
 		Dst:      &dst,
 		Tos:      kernKey.TOS,
-		Priority: int(kernKey.Priority),
+		Priority: kernKey.Priority,
 
 		Protocol: unix.RTPROT_UNSPEC,    // Wildcard (but also zero value).
 		Scope:    unix.RT_SCOPE_NOWHERE, // Wildcard.  Note: non-zero value!
