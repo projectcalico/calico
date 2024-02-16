@@ -256,10 +256,6 @@ func NewSyncer(family int, nodePortIPs []net.IP,
 		return nil, fmt.Errorf("unknwn family %d", family)
 	}
 
-	if err := s.loadOrigs(); err != nil {
-		return nil, err
-	}
-
 	return s, nil
 }
 
@@ -383,6 +379,11 @@ func (s *Syncer) startupBuildPrev(state DPSyncerState) error {
 }
 
 func (s *Syncer) startupSync(state DPSyncerState) error {
+	// Load current dataplane state.
+	if err := s.loadOrigs(); err != nil {
+		return err
+	}
+
 	// Try to build the previous maps based on the current state and what is in bpf maps.
 	// Once we have the previous map, we can apply the the current state as if we never
 	// restarted and apply only the diff using the regular code path.
