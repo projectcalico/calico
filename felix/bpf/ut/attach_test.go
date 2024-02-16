@@ -543,23 +543,27 @@ func TestAttachWithDualStack(t *testing.T) {
 			BPFIpv6Enabled:        true,
 		},
 		bpfmaps,
-		regexp.MustCompile("^workloadep[123]"),
+		regexp.MustCompile("^workloadep[1234]"),
 	)
 	Expect(err).NotTo(HaveOccurred())
 
 	host1 := createVethName("hostep1")
 	defer deleteLink(host1)
 
+	workload4 := createVethName("workloadep4")
+	defer deleteLink(workload4)
+
 	var hostep1State ifstate.Value
 
 	t.Run("create first host endpoint with untracked (xdp) policy", func(t *testing.T) {
 		bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("hostep1", ifacemonitor.StateUp, host1.Attrs().Index))
+		bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep4", ifacemonitor.StateUp, workload4.Attrs().Index))
 		bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("hostep1", "1.2.3.4"))
 		bpfEpMgr.OnUpdate(&proto.HostMetadataUpdate{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
 		err = bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
-		Expect(programs.Count()).To(Equal(13))
+		Expect(programs.Count()).To(Equal(25))
 		at := programs.Programs()
 		Expect(at).To(HaveKey(hook.AttachType{
 			Hook:       hook.Ingress,
@@ -594,12 +598,22 @@ func TestAttachWithDualStack(t *testing.T) {
 			ToHostDrop: false,
 			DSR:        false}))
 
+		ifstateMap := ifstateMapDump(commonMaps.IfStateMap)
+		Expect(ifstateMap).To(HaveKey(ifstate.NewKey(uint32(host1.Attrs().Index))))
+		Expect(ifstateMap).To(HaveKey(ifstate.NewKey(uint32(workload4.Attrs().Index))))
+
+		hostep1State = ifstateMap[ifstate.NewKey(uint32(host1.Attrs().Index))]
+		Expect(hostep1State.Flags()).To(Equal(ifstate.FlgIPv4Ready))
+
+		workloadep4State := ifstateMap[ifstate.NewKey(uint32(workload4.Attrs().Index))]
+		Expect(workloadep4State.Flags()).To(Equal(ifstate.FlgWEP | ifstate.FlgIPv4Ready))
+
 		// IPv6 address update
 		bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("hostep1", "1::4"))
 		bpfEpMgr.OnUpdate(&proto.HostMetadataV6Update{Hostname: "uthost", Ipv6Addr: "1::4"})
 		err = bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
-		Expect(programs.Count()).To(Equal(26))
+		Expect(programs.Count()).To(Equal(50))
 
 		Expect(at).To(HaveKey(hook.AttachType{
 			Hook:       hook.Ingress,
@@ -654,8 +668,9 @@ func TestAttachWithDualStack(t *testing.T) {
 		err = bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
-		ifstateMap := ifstateMapDump(commonMaps.IfStateMap)
+		ifstateMap = ifstateMapDump(commonMaps.IfStateMap)
 		Expect(ifstateMap).To(HaveKey(ifstate.NewKey(uint32(host1.Attrs().Index))))
+		Expect(ifstateMap).To(HaveKey(ifstate.NewKey(uint32(workload4.Attrs().Index))))
 
 		hostep1State = ifstateMap[ifstate.NewKey(uint32(host1.Attrs().Index))]
 		Expect(hostep1State.IngressPolicyV4()).NotTo(Equal(-1))
@@ -665,6 +680,10 @@ func TestAttachWithDualStack(t *testing.T) {
 		Expect(hostep1State.IngressPolicyV6()).NotTo(Equal(-1))
 		Expect(hostep1State.EgressPolicyV6()).NotTo(Equal(-1))
 		Expect(hostep1State.XDPPolicyV6()).NotTo(Equal(-1))
+		Expect(hostep1State.Flags()).To(Equal(ifstate.FlgIPv4Ready | ifstate.FlgIPv6Ready))
+
+		workloadep4State = ifstateMap[ifstate.NewKey(uint32(workload4.Attrs().Index))]
+		Expect(workloadep4State.Flags()).To(Equal(ifstate.FlgWEP | ifstate.FlgIPv4Ready | ifstate.FlgIPv6Ready))
 
 		pm := jumpMapDump(commonMaps.JumpMap)
 		Expect(pm).To(HaveKey(hostep1State.IngressPolicyV4()))
@@ -719,10 +738,10 @@ func TestAttachWithDualStack(t *testing.T) {
 		err := bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
-		Expect(programs.Count()).To(Equal(26))
+		Expect(programs.Count()).To(Equal(50))
 
 		pm := jumpMapDump(commonMaps.JumpMap)
-		Expect(len(pm)).To(Equal(4)) // no policy for hep2
+		Expect(len(pm)).To(Equal(8)) // no policy for hep2
 	})
 
 	workload1 := createVethName("workloadep1")
@@ -798,7 +817,7 @@ func TestAttachWithDualStack(t *testing.T) {
 		Expect(programs.Count()).To(Equal(50))
 
 		pm := jumpMapDump(commonMaps.JumpMap)
-		Expect(len(pm)).To(Equal((2 /* wl 1+2 */ + 1 /* hep1 */) * 4))
+		Expect(len(pm)).To(Equal((3 /* wl 1+2 */ + 1 /* hep1 */) * 4))
 	})
 
 	t.Run("bring first host ep down, should clean up its policies", func(t *testing.T) {
@@ -960,7 +979,7 @@ func TestAttachWithDualStack(t *testing.T) {
 		err = oldPolicies.Open()
 		Expect(err).NotTo(HaveOccurred())
 		pm = jumpMapDump(oldPolicies)
-		Expect(pm).To(HaveLen(8))
+		Expect(pm).To(HaveLen(12))
 
 		// After restat we get new maps which are empty
 		Expect(programs.Count()).To(Equal(0))

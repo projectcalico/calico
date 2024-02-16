@@ -148,8 +148,9 @@ func (c *Checker) expect(expected Expected, from ConnectionSource, to Connection
 	}
 
 	e := Expectation{
-		From:     from,
-		Expected: expected,
+		From:      from,
+		Expected:  expected,
+		ipVersion: 4,
 	}
 
 	if expected {
@@ -217,7 +218,7 @@ func (c *Checker) ActualConnectivity(isARetry bool) ([]*Result, []string) {
 			go func(i int, exp Expectation) {
 				defer ginkgo.GinkgoRecover()
 				defer wg.Done()
-				if exp.withIPv6 {
+				if exp.ipVersion == 6 {
 					exp.From.PreRetryCleanup(exp.To.IP6, exp.To.Port, p, preCalcOpts[i]...)
 				} else {
 					exp.From.PreRetryCleanup(exp.To.IP, exp.To.Port, p, preCalcOpts[i]...)
@@ -234,7 +235,7 @@ func (c *Checker) ActualConnectivity(isARetry bool) ([]*Result, []string) {
 			defer ginkgo.GinkgoRecover()
 			defer wg.Done()
 			var res *Result
-			if exp.withIPv6 {
+			if exp.ipVersion == 6 {
 				res = exp.From.CanConnectTo(exp.To.IP6, exp.To.Port, p, preCalcOpts[i]...)
 			} else {
 				res = exp.From.CanConnectTo(exp.To.IP, exp.To.Port, p, preCalcOpts[i]...)
@@ -587,9 +588,9 @@ func ExpectWithPorts(ports ...uint16) ExpectationOption {
 	}
 }
 
-func ExpectWithIPv6() ExpectationOption {
+func ExpectWithIPVersion(ipVersion int) ExpectationOption {
 	return func(e *Expectation) {
-		e.withIPv6 = true
+		e.ipVersion = ipVersion
 	}
 }
 
@@ -612,7 +613,7 @@ type Expectation struct {
 
 	ErrorStr string
 
-	withIPv6 bool
+	ipVersion int
 }
 
 type ExpPacketLoss struct {

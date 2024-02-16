@@ -2045,29 +2045,26 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 		return state, egressErr
 	}
 
+	if egressQdisc != ingressQdisc {
+		return state, fmt.Errorf("ingress qdisc info (%v) does not equal egress qdist info (%v)",
+			ingressQdisc, egressQdisc)
+	}
+	state.qdisc = ingressQdisc
+
 	if m.v6 != nil && err6 == nil {
-		v6Readiness = ifaceIsReady
+		state.v6Readiness = ifaceIsReady
 	}
 	if m.v4 != nil && err4 == nil {
-		v4Readiness = ifaceIsReady
+		state.v4Readiness = ifaceIsReady
 	}
 
 	if errors.Join(err4, err6) != nil {
 		return state, errors.Join(err4, err6)
 	}
 
-	if egressQdisc != ingressQdisc {
-		return state, fmt.Errorf("ingress qdisc info (%v) does not equal egress qdist info (%v)",
-			ingressQdisc, egressQdisc)
-	}
-
 	applyTime := time.Since(startTime)
 	log.WithFields(log.Fields{"timeTaken": applyTime, "ifaceName": ifaceName}).
 		Info("Finished applying BPF programs for workload")
-
-	state.v4Readiness = v4Readiness
-	state.v6Readiness = v6Readiness
-	state.qdisc = ingressQdisc
 	return state, nil
 }
 

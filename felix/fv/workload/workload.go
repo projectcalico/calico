@@ -129,6 +129,12 @@ func WithMTU(mtu int) Opt {
 	}
 }
 
+func WithIPv6Address(ipv6 string) Opt {
+	return func(w *Workload) {
+		w.IP6 = ipv6
+	}
+}
+
 func WithListenAnyIP() Opt {
 	return func(w *Workload) {
 		w.listenAnyIP = true
@@ -162,13 +168,18 @@ func New(c *infrastructure.Felix, name, profile, ip, ports, protocol string, opt
 	wep.Spec.Orchestrator = "felixfv"
 	wep.Spec.Workload = n
 	wep.Spec.Endpoint = n
-	wep.Spec.IPNetworks = []string{}
+	prefixLen := "32"
+	if strings.Contains(ip, ":") {
+		prefixLen = "128"
+	}
+	wep.Spec.IPNetworks = []string{ip + "/" + prefixLen}
 	wep.Spec.InterfaceName = interfaceName
 	wep.Spec.Profiles = []string{profile}
 
 	workload := &Workload{
 		C:                  c.Container,
 		Name:               n,
+		IP:                 ip,
 		SpoofName:          spoofN,
 		InterfaceName:      interfaceName,
 		SpoofInterfaceName: spoofIfaceName,
@@ -178,29 +189,12 @@ func New(c *infrastructure.Felix, name, profile, ip, ports, protocol string, opt
 		MTU:                defaultMTU,
 	}
 
-	ipAddrs := strings.Split(ip, ",")
-	if len(ipAddrs) == 1 {
-		prefixLen := "32"
-		if strings.Contains(ipAddrs[0], ":") {
-			prefixLen = "128"
-		}
-		workload.IP = ipAddrs[0]
-		wep.Spec.IPNetworks = append(wep.Spec.IPNetworks, ipAddrs[0]+"/"+prefixLen)
-	} else {
-		for _, ipAddr := range ipAddrs {
-			prefixLen := "32"
-			if strings.Contains(ipAddr, ":") {
-				prefixLen = "128"
-				workload.IP6 = ipAddr
-			} else {
-				workload.IP = ipAddr
-			}
-			wep.Spec.IPNetworks = append(wep.Spec.IPNetworks, ipAddr+"/"+prefixLen)
-		}
-	}
-
 	for _, o := range opts {
 		o(workload)
+	}
+
+	if workload.IP6 != "" {
+		wep.Spec.IPNetworks = append(wep.Spec.IPNetworks, workload.IP6+"/128")
 	}
 
 	c.Workloads = append(c.Workloads, workload)
@@ -223,7 +217,7 @@ func (w *Workload) Start() error {
 	}
 
 	wIP := w.IP
-	if w.IP != "" && w.IP6 != "" {
+	if w.IP6 != "" {
 		wIP = wIP + "," + w.IP6
 	}
 	command := fmt.Sprintf("echo $$ > /tmp/%v; exec test-workload %v '%v' '%v' '%v'",
