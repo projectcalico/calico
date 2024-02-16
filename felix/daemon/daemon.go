@@ -384,9 +384,6 @@ configRetry:
 	// Set any watchdog timeout overrides before we initialise components.
 	health.SetGlobalTimeoutOverrides(configParams.HealthTimeoutOverrides)
 
-	// We're now both live and ready.
-	healthAggregator.Report(healthName, &health.HealthReport{Live: true, Ready: true})
-
 	// Enable or disable the health HTTP server according to coalesced config.
 	healthAggregator.ServeHTTP(configParams.HealthEnabled, configParams.HealthHost, configParams.HealthPort)
 
@@ -435,6 +432,11 @@ configRetry:
 		configChangedRestartCallback,
 		fatalErrorCallback,
 		k8sClientSet)
+
+	// Defer reporting ready until we've started the dataplane driver.  This
+	// ensures that our overall readiness waits for the dataplane driver to
+	// report ready on its health report.
+	healthAggregator.Report(healthName, &health.HealthReport{Live: true, Ready: true})
 
 	// Initialise the glue logic that connects the calculation graph to/from the dataplane driver.
 	log.Info("Connect to the dataplane driver.")

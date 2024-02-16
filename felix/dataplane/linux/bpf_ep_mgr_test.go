@@ -394,6 +394,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			nil,
 			logutils.NewSummarizer("test"),
 			&environment.FakeFeatureDetector{},
+			nil,
 		)
 		Expect(err).NotTo(HaveOccurred())
 		bpfEpMgr.Features = environment.NewFeatureDetector(nil).GetFeatures()
