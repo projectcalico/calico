@@ -24,7 +24,7 @@ import (
 var VERSION string
 
 func main() {
-	err := install.Install()
+	err := install.Install(VERSION)
 	if err != nil {
 		logrus.WithError(err).Fatal("Error installing CNI plugin")
 	}

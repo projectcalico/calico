@@ -77,14 +77,11 @@ endif
 ifeq ($(word 1,$(subst v, ,$(ARCH))),arm)
 ARM_VERSION := $(word 2,$(subst v, ,$(ARCH)))
 endif
-<<<<<<< HEAD
 # Define go architecture flags to support arm variants
 GOARCH_FLAGS :=-e GOARCH=$(ARCH)
 ifdef ARM_VERSION
 GOARCH_FLAGS :=-e GOARCH=arm -e GOARM=$(ARM_VERSION)
 endif
-=======
->>>>>>> Improvements to cni-plugin binaries
 
 build-all: $(addprefix sub-build-,$(VALIDARCHES))
 sub-build-%:
@@ -105,6 +102,9 @@ ifeq ($(FIPS), true)
 else
 	$(call build_binary, $(PACKAGE_NAME)/cmd/calico, $@)
 endif
+
+$(BIN)/calico-ipam: $(BIN)/calico
+	cp "$<" "$@"
 
 ## Build the Calico network plugin and ipam plugins for Windows
 $(BIN_WIN)/calico.exe $(BIN_WIN)/calico-ipam.exe: $(SRC_FILES)
@@ -157,16 +157,10 @@ ut: run-k8s-controller-manager $(BIN)/install $(BIN)/host-local $(BIN)/calico-ip
 	$(MAKE) ut-datastore DATASTORE_TYPE=etcdv3
 	$(MAKE) ut-datastore DATASTORE_TYPE=kubernetes
 
-<<<<<<< HEAD
 check-boring-ssl: $(BIN)/install
 	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) $(CHECK_BORINGSSL)
 	-rm -f $(BIN)/tags.txt
 
-$(BIN)/calico-ipam $(BIN)/calico: $(BIN)/install
-	cp "$<" "$@"
-
-=======
->>>>>>> Improvements to cni-plugin binaries
 ut-datastore:
 	# The tests need to run as root
 	docker run --rm -t --privileged --net=host \
