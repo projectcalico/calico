@@ -91,21 +91,21 @@ blocks:
         # Install more tools
         - sudo apt update
         - sudo apt install -y moreutils
-    jobs:
-      - name: "Build Openstack Packages"
-        execution_time_limit:
-          minutes: 60
-        env_vars:
-        - name: SECRET_KEY
-          value: /home/semaphore/secrets/launchpad-gpg-key-dfox.key
-        - name: GCLOUD_ARGS
-          value: --zone us-east1-c --project tigera-wp-tcp-redirect
-        - name: HOST
-          value: ubuntu@binaries-projectcalico-org
-        commands:
-          - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make publish-openstack; fi
-        epilogue:
-          always:
-            commands:
-            - test -d hack/release/packaging/output  && mv -v hack/release/packaging/output hack/release/packaging/openstack
-            - artifact push workflow hack/release/packaging/openstack
+      jobs:
+        - name: "Build Openstack Packages"
+          execution_time_limit:
+            minutes: 60
+          env_vars:
+          - name: SECRET_KEY
+            value: /home/semaphore/secrets/launchpad-gpg-key-dfox.key
+          - name: GCLOUD_ARGS
+            value: --zone us-east1-c --project tigera-wp-tcp-redirect
+          - name: HOST
+            value: ubuntu@binaries-projectcalico-org
+          commands:
+            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make publish-openstack; fi
+          epilogue:
+            always:
+              commands:
+              - test -d hack/release/packaging/output  && mv -v hack/release/packaging/output hack/release/packaging/openstack
+              - artifact push workflow hack/release/packaging/openstack
