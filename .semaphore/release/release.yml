@@ -15,11 +15,11 @@ blocks:
       when: "branch !~ '.+'"
     task:
       secrets:
-      - name: quay-robot-calico+semaphoreci
-      - name: docker
-      - name: oss-release-secrets
-      - name: google-service-account-for-gce
-      - name: openstack-signing-publishing
+        - name: quay-robot-calico+semaphoreci
+        - name: docker
+        - name: oss-release-secrets
+        - name: google-service-account-for-gce
+        - name: openstack-signing-publishing
       prologue:
         commands:
         # Load the github access secrets.  First fix the permissions.
@@ -68,17 +68,17 @@ blocks:
         commands:
         - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make GIT_BRANCH=${SEMAPHORE_GIT_BRANCH} release; fi
         - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make GIT_BRANCH=${SEMAPHORE_GIT_BRANCH} release-publish; fi
-  - name: "Publish official release"
+  - name: "Build Openstack Packages"
+    dependencies: ["Publish official release"]
     skip:
-      # Only run on branches, not PRs.
       when: "branch !~ '.+'"
     task:
       secrets:
-      - name: quay-robot-calico+semaphoreci
-      - name: docker
-      - name: oss-release-secrets
-      - name: google-service-account-for-gce
-      - name: openstack-signing-publishing
+        - name: quay-robot-calico+semaphoreci
+        - name: docker
+        - name: oss-release-secrets
+        - name: google-service-account-for-gce
+        - name: openstack-signing-publishing
       prologue:
         commands:
         # Load the github access secrets.  First fix the permissions.
@@ -88,9 +88,11 @@ blocks:
         - checkout
         # Free up space on the build machine.
         - sudo rm -rf ~/.kiex ~/.phpbrew ~/.rbenv ~/.nvm ~/.kerl ~/.sbt ~/.npm /usr/lib/jvm /opt/firefox* /opt/apache-maven* /opt/scala /usr/local/golang
-      jobs:
+        # Install more tools
+        - sudo apt update
+        - sudo apt install -y moreutils
+    jobs:
       - name: "Build Openstack Packages"
-        dependencies: ["Publish official release"]
         execution_time_limit:
           minutes: 60
         env_vars:
@@ -101,11 +103,9 @@ blocks:
         - name: HOST
           value: ubuntu@binaries-projectcalico-org
         commands:
-        - sudo apt update
-        - sudo apt install -y moreutils
-        - make publish-openstack
-      epilogue:
-        always:
-          commands:
-          - test -d hack/release/packaging/output  && mv -v hack/release/packaging/output hack/release/packaging/openstack
-          - artifact push workflow hack/release/packaging/openstack
+          - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make publish-openstack; fi
+        epilogue:
+          always:
+            commands:
+            - test -d hack/release/packaging/output  && mv -v hack/release/packaging/output hack/release/packaging/openstack
+            - artifact push workflow hack/release/packaging/openstack
