@@ -3,12 +3,12 @@
 #################################################################################################
 
 # The version of github.com/projectcalico/go-build to use.
-GO_BUILD_VER = v0.90
+GO_BUILD_VER=v0.90
 # Env var to ACK Ginkgo deprecation warnings, may need updating with go-build.
 ACK_GINKGO=ACK_GINKGO_DEPRECATIONS=1.16.5
 
 # Version of Kubernetes to use for tests, bitnami/kubectl, and kubectl binary release.
-K8S_VERSION=v1.27.8
+K8S_VERSION=v1.27.10
 
 # Version of various tools used in the build and tests.
 COREDNS_VERSION=1.5.2
