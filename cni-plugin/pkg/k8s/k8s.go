@@ -1002,12 +1002,10 @@ func waitForPolicyWithTimeout(policyDir string, endpoint *libapi.WorkloadEndpoin
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	notifyWhenFileExists(ctx, policyDir, filename)
+	waitUntilFileExists(ctx, policyDir, filename)
 }
 
-// notifyWhenFileExists closes notif when the specified file is seen on disk.
-// Returns without closing the channel if ctx is cancelled.
-func notifyWhenFileExists(ctx context.Context, directory, filename string) {
+func waitUntilFileExists(ctx context.Context, directory, filename string) {
 	var watcher *fsnotify.Watcher
 	var err error
 	log := logrus.WithFields(logrus.Fields{
