@@ -1,0 +1,13 @@
+- name: crypto
+  run:
+    when: "${FORCE_RUN} or change_in(['/lib.Makefile', '/crypto/'])"
+  dependencies:
+    - Prerequisites
+  task:
+    prologue:
+      commands:
+        - cd crypto
+    jobs:
+      - name: "crypto tests"
+        commands:
+          - ../.semaphore/run-and-monitor ci.log make ci

@@ -1,0 +1,17 @@
+- name: e2e tests
+  run:
+    when: "${FORCE_RUN} or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/confd/', '/bird/', '/pod2daemon/', '/node/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+  dependencies:
+    - Prerequisites
+  task:
+    agent:
+      machine:
+        type: e1-standard-8
+        os_image: ubuntu2004
+    jobs:
+      - name: sig-network conformance
+        env_vars:
+          - name: E2E_FOCUS
+            value: "sig-network.*Conformance"
+        commands:
+          - .semaphore/run-and-monitor e2e-test.log make e2e-test
