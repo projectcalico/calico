@@ -1,0 +1,13 @@
+- name: libcalico-go
+  run:
+    when: "${FORCE_RUN} or change_in(['/*', '/api/', '/libcalico-go/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+  dependencies:
+    - Prerequisites
+  task:
+    prologue:
+      commands:
+        - cd libcalico-go
+    jobs:
+      - name: "libcalico-go: tests"
+        commands:
+          - ../.semaphore/run-and-monitor make-ci.log make ci
