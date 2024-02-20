@@ -1,0 +1,33 @@
+- name: Typha
+  run:
+    when: "${FORCE_RUN} or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/hack/test/certs/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+  dependencies:
+    - Prerequisites
+  task:
+    agent:
+      machine:
+        type: e1-standard-4
+        os_image: ubuntu2004
+    prologue:
+      commands:
+        - cd typha
+    jobs:
+      - name: "Typha: UT and FV tests"
+        commands:
+          - ../.semaphore/run-and-monitor make-ci.log make ci EXCEPT=k8sfv-test
+    epilogue:
+      always:
+        commands:
+          - |
+            for f in /home/semaphore/calico/typha/report/*; do
+              NAME=$(basename $f)
+              test-results compile --name typha-$NAME $f $NAME.json || true
+            done
+            for f in /home/semaphore/calico/typha/pkg/report/*; do
+              NAME=$(basename $f)
+              test-results compile --name typha-$NAME $f $NAME.json || true
+            done
+            test-results combine *.xml.json report.json || true
+            artifact push job report.json -d test-results/junit.json || true
+            artifact push workflow report.json -d test-results/${SEMAPHORE_PIPELINE_ID}/${SEMAPHORE_JOB_ID}.json || true
+          - test-results publish /home/semaphore/calico/felix/report/k8sfv_suite.xml --name "typha-k8sfv" || true

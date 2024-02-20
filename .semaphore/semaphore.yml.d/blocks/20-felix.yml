@@ -1,0 +1,224 @@
+- name: "Felix: Build"
+  run:
+    when: "${FORCE_RUN} or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/hack/test/certs/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+  dependencies:
+    - Prerequisites
+  task:
+    agent:
+      machine:
+        type: e1-standard-4
+        os_image: ubuntu2004
+    prologue:
+      commands:
+        - cd felix
+        - cache restore go-pkg-cache
+        - cache restore go-mod-cache
+    jobs:
+      - name: Build and run UT, k8sfv
+        execution_time_limit:
+          minutes: 60
+        commands:
+          - make build image fv-prereqs
+          - "cache store bin-${SEMAPHORE_GIT_SHA} bin"
+          - "cache store fv.test-${SEMAPHORE_GIT_SHA} fv/fv.test"
+          - cache store go-pkg-cache .go-pkg-cache
+          - "cache store go-mod-cache ${HOME}/go/pkg/mod/cache"
+          - docker save -o /tmp/calico-felix.tar calico/felix:latest-amd64
+          - "cache store felix-image-${SEMAPHORE_GIT_SHA} /tmp/calico-felix.tar"
+          - docker save -o /tmp/felixtest-typha.tar felix-test/typha:latest-amd64
+          - "cache store felixtest-typha-image-${SEMAPHORE_GIT_SHA} /tmp/felixtest-typha.tar"
+          - ../.semaphore/run-and-monitor ut.log make ut
+          - ../.semaphore/run-and-monitor k8sfv-typha.log make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=true
+          - ../.semaphore/run-and-monitor k8sfv-no-typha.log make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=false
+      - name: Static checks
+        execution_time_limit:
+          minutes: 60
+        commands:
+          - ../.semaphore/run-and-monitor static-checks.log make static-checks
+
+- name: "Felix: multi-arch builds"
+  run:
+    when: "${FORCE_RUN} or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+  dependencies:
+    - "Felix: Build"
+  task:
+    agent:
+      machine:
+        type: e1-standard-4
+        os_image: ubuntu2004
+    prologue:
+      commands:
+        - cd felix
+        - cache restore go-pkg-cache
+        - cache restore go-mod-cache
+    jobs:
+      - name: Build binary
+        matrix:
+          - env_var: ARCH
+            values:
+              - arm64
+              - ppc64le
+              - s390x
+        commands:
+          # Only building the code, not the image here because the felix image is now only used for FV tests, which
+          # only run on AMD64 at the moment.
+          - ../.semaphore/run-and-monitor build-$ARCH.log make build ARCH=$ARCH
+
+- name: "Felix: Build Windows binaries"
+  run:
+    when: "${FORCE_RUN} or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+  dependencies:
+    - Prerequisites
+  task:
+    jobs:
+      - name: Build Windows binaries
+        commands:
+          - cd felix
+          - make bin/calico-felix.exe fv/win-fv.exe
+
+- name: "Felix: Windows FV"
+  run:
+    when: "${FORCE_RUN} or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/node', '/hack/test/certs/', '/process/testing/winfv/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+  dependencies:
+    - "Felix: Build Windows binaries"
+  task:
+    secrets:
+      - name: banzai-secrets
+      - name: private-repo
+    prologue:
+      commands:
+        # Load the github access secrets.  First fix the permissions.
+        - chmod 0600 ~/.keys/*
+        - ssh-add ~/.keys/*
+        # Prepare aws configuration.
+        - pip install --upgrade --user awscli
+        - export REPORT_DIR=~/report
+        - export LOGS_DIR=~/fv.log
+        - export SHORT_WORKFLOW_ID=$(echo ${SEMAPHORE_WORKFLOW_ID} | sha256sum | cut -c -8)
+        - export CLUSTER_NAME=sem-${SEMAPHORE_PROJECT_NAME}-pr${SEMAPHORE_GIT_PR_NUMBER}-${BACKEND}-${SHORT_WORKFLOW_ID}
+        - export KEYPAIR_NAME=${CLUSTER_NAME}
+        - echo CLUSTER_NAME=${CLUSTER_NAME}
+        - sudo apt-get install -y putty-tools
+        - cd felix
+        - make bin/calico-felix.exe fv/win-fv.exe
+    epilogue:
+      always:
+        commands:
+          - artifact push job ${REPORT_DIR} --destination semaphore/test-results --expire-in ${SEMAPHORE_ARTIFACT_EXPIRY} || true
+          - artifact push job ${LOGS_DIR} --destination semaphore/logs --expire-in ${SEMAPHORE_ARTIFACT_EXPIRY} || true
+          - aws ec2 delete-key-pair --key-name ${KEYPAIR_NAME} || true
+          - cd ~/calico/process/testing/winfv && NAME_PREFIX="${CLUSTER_NAME}" ./setup-fv.sh -q -u
+    env_vars:
+      - name: SEMAPHORE_ARTIFACT_EXPIRY
+        value: 2w
+      - name: MASTER_CONNECT_KEY_PUB
+        value: master_ssh_key.pub
+      - name: MASTER_CONNECT_KEY
+        value: master_ssh_key
+      - name: WIN_PPK_KEY
+        value: win_ppk_key
+      - name: K8S_VERSION
+        value: 1.22.1
+      - name: WINDOWS_VERSION
+        value: "1809"
+    jobs:
+      - name: VXLAN - Windows FV
+        commands:
+          - ./.semaphore/run-win-fv
+        env_vars:
+          - name: BACKEND
+            value: vxlan
+      - name: BGP - Windows FV
+        commands:
+          - ./.semaphore/run-win-fv
+        env_vars:
+          - name: BACKEND
+            value: bgp
+
+- name: "Felix: FV Tests"
+  run:
+    when: "${FORCE_RUN} or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+  dependencies:
+    - "Felix: Build"
+  task:
+    prologue:
+      commands:
+        - cd felix
+        - cache restore go-pkg-cache
+        - cache restore go-mod-cache
+        - "cache restore bin-${SEMAPHORE_GIT_SHA}"
+        - "cache restore fv.test-${SEMAPHORE_GIT_SHA}"
+        - "cache restore felix-image-${SEMAPHORE_GIT_SHA}"
+        - "cache restore felixtest-typha-image-${SEMAPHORE_GIT_SHA}"
+        - |-
+          if [ -s /etc/docker/daemon.json  ]; then
+          sudo sed -i '$d' /etc/docker/daemon.json && sudo sed -i '$s/$/,/' /etc/docker/daemon.json && sudo bash -c ' cat >> /etc/docker/daemon.json << EOF
+            "ipv6": true,
+            "fixed-cidr-v6": "2001:db8:1::/64"
+          }
+          EOF
+          ' ; else sudo bash -c ' cat > /etc/docker/daemon.json << EOF
+          {
+            "ipv6": true,
+            "fixed-cidr-v6": "2001:db8:1::/64"
+          }
+          EOF
+          ' ; fi
+        - sudo systemctl restart docker
+        # Load in the docker images pre-built by the build job.
+        - docker load -i /tmp/calico-felix.tar
+        - docker tag calico/felix:latest-amd64 felix:latest-amd64
+        - rm /tmp/calico-felix.tar
+        - docker load -i /tmp/felixtest-typha.tar
+        - docker tag felix-test/typha:latest-amd64 typha:latest-amd64
+        - rm /tmp/felixtest-typha.tar
+        # Pre-loading the IPIP module prevents a flake where the first felix to use IPIP loads the module and
+        # routing in that first felix container chooses different source IPs than the tests are expecting.
+        - sudo modprobe ipip
+    jobs:
+      - name: FV Test matrix
+        execution_time_limit:
+          minutes: 120
+        commands:
+          - make check-wireguard
+          - ../.semaphore/run-and-monitor fv-${SEMAPHORE_JOB_INDEX}.log make fv-no-prereqs FV_BATCHES_TO_RUN="${SEMAPHORE_JOB_INDEX}" FV_NUM_BATCHES=${SEMAPHORE_JOB_COUNT}
+        parallelism: 3
+    epilogue:
+      always:
+        commands:
+          - ./.semaphore/collect-artifacts
+          - ./.semaphore/publish-artifacts
+          - test-results publish /home/semaphore/calico/felix/report/fv_suite.xml --name "felix-fv-${SEMAPHORE_JOB_INDEX}" || true
+
+- name: "Felix: BPF UT/FV tests on new kernel"
+  run:
+    when: "${FORCE_RUN} or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+  dependencies:
+    - "Felix: Build"
+  task:
+    prologue:
+      commands:
+        - cd felix
+        - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/secret.google-service-account-key.json
+        - export SHORT_WORKFLOW_ID=$(echo ${SEMAPHORE_WORKFLOW_ID} | sha256sum | cut -c -8)
+        - export ZONE=europe-west3-c
+        - export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-felix-
+        - echo VM_PREFIX=${VM_PREFIX}
+        - export REPO_NAME=$(basename $(pwd))
+        - export NUM_FV_BATCHES=8
+        - mkdir artifacts
+        - ./.semaphore/create-test-vms ${VM_PREFIX}
+    jobs:
+      - name: UT/FV tests on new kernel
+        execution_time_limit:
+          minutes: 180
+        commands:
+          - ./.semaphore/run-tests-on-vms ${VM_PREFIX}
+    epilogue:
+      always:
+        commands:
+          - ./.semaphore/collect-artifacts-from-vms ${VM_PREFIX}
+          - ./.semaphore/publish-artifacts
+          - ./.semaphore/clean-up-vms ${VM_PREFIX}
+    secrets:
+      - name: google-service-account-for-gce

@@ -1,0 +1,13 @@
+- name: pod2daemon
+  run:
+    when: "${FORCE_RUN} or change_in(['/*', '/pod2daemon/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+  dependencies:
+    - Prerequisites
+  task:
+    prologue:
+      commands:
+        - cd pod2daemon
+    jobs:
+      - name: pod2daemon tests
+        commands:
+          - ../.semaphore/run-and-monitor ci.log make ci

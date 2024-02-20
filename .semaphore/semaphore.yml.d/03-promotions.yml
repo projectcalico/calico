@@ -1,0 +1,53 @@
+promotions:
+  # Manual promotion for publishing a release.
+  - name: Publish official release
+    pipeline_file: release/release.yml
+  # Cleanup after ourselves if we are stopped-short.
+  - name: Cleanup
+    pipeline_file: cleanup.yml
+    auto_promote:
+      when: "result = 'stopped'"
+  # Have separate promotions for publishing images so we can re-run
+  # them individually if they fail, and so we can run them in parallel.
+  - name: Push apiserver images
+    pipeline_file: push-images/apiserver.yml
+    auto_promote:
+      when: "branch =~ 'master|release-.*'"
+  - name: Push ALP images
+    pipeline_file: push-images/alp.yml
+    auto_promote:
+      when: "branch =~ 'master|release-'"
+  - name: Push calicoctl images
+    pipeline_file: push-images/calicoctl.yml
+    auto_promote:
+      when: "branch =~ 'master|release-'"
+  - name: Push calico-node images
+    pipeline_file: push-images/node.yml
+    auto_promote:
+      when: "branch =~ 'master|release-'"
+  - name: Push cni-plugin images
+    pipeline_file: push-images/cni-plugin.yml
+    auto_promote:
+      when: "branch =~ 'master|release-'"
+  - name: Push key-cert-provisioner images
+    pipeline_file: push-images/key-cert-provisioner.yml
+    auto_promote:
+      when: "branch =~ 'master|release-'"
+  - name: Push kube-controllers images
+    pipeline_file: push-images/kube-controllers.yml
+    auto_promote:
+      when: "branch =~ 'master|release-'"
+  - name: Push typha images
+    pipeline_file: push-images/typha.yml
+    auto_promote:
+      when: "branch =~ 'master|release-'"
+
+  - name: Publish openstack packages
+    pipeline_file: push-images/packaging.yaml
+    auto_promote:
+      when: "branch =~ 'master'"
+
+  - name: Run Fossa scans
+    pipeline_file: license-scanning/fossa-scan.yml
+    auto_promote:
+      when: "branch =~ 'master|release-.*'"
