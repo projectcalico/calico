@@ -17,7 +17,6 @@ package statusrep
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -33,7 +32,7 @@ import (
 )
 
 const (
-	dirPolicyStatus = "policy"
+	dirStatus = "status"
 )
 
 // EndpointStatusFileReporter writes a file to the FS
@@ -48,7 +47,8 @@ type EndpointStatusFileReporter struct {
 	endpointStatusDirPrefix string
 
 	// DeltaTracker for the policy subdirectory
-	policyDirDeltaTracker *deltatracker.SetDeltaTracker[string]
+	statusDirDeltaTracker *deltatracker.SetDeltaTracker[string]
+	inSyncWithUpstream    bool
 
 	// Wraps and manages a real or mock wait.Backoff.
 	bom backoffManager
@@ -99,7 +99,7 @@ func NewEndpointStatusFileReporter(
 		inSyncC:                 inSyncC,
 		endpointUpdatesC:        endpointUpdatesC,
 		endpointStatusDirPrefix: statusDirPath,
-		policyDirDeltaTracker:   deltatracker.NewSetDeltaTracker[string](),
+		statusDirDeltaTracker:   deltatracker.NewSetDeltaTracker[string](),
 		bom:                     newBackoffManager(newDefaultBackoff),
 	}
 
@@ -122,151 +122,190 @@ func WithNewBackoffFunc(newBackoffFunc func() Backoff) FileReporterOption {
 // Continuously pulls status-updates from updates C,
 // and reconciles the filesystem with internal state.
 func (fr *EndpointStatusFileReporter) SyncForever(ctx context.Context) {
-	inSyncWithUpstream := false
-	var retryC, scheduledResync <-chan time.Time // Starts out as nil, ignored by selects.
+	// State flags influencing the loop.
+	// Each flag triggers one behaviour within the loop.
+	// Once the behaviour succeeds, the flag is switched off.
+	// If the behaviour fails, the flag is left on, and a retry is queued.
+	var retryTimerResetNeeded, resyncWithKernelNeeded, applyToKernelNeeded, exit bool
 
-	logrus.Warn("Endpoint status file reporter running.")
+	// Timer channels are stored separately from the timer, and nilled-out when not needed.
+	var retry, scheduledReapply *time.Timer
+	var retryC, scheduledReapplyC <-chan time.Time
+	reapplyInterval := 10 * time.Second
+	logrus.Debug("Endpoint status file reporter running.")
 	for {
 		select {
 		case <-ctx.Done():
-			logrus.Warn("Context cancelled, stopping...")
-			return
+			logrus.Debug("Context cancelled, cleaning up and stopping endpoint status file reporter...")
+			retryTimerResetNeeded, resyncWithKernelNeeded, applyToKernelNeeded = false, false, false
+			exit = true
 		case b, ok := <-fr.inSyncC:
 			if !ok {
 				logrus.Panic("InSync channel closed unexpectedly.")
 			}
-
-			if b == true {
-				logrus.Warn("InSync received from calc graph.")
-				inSyncWithUpstream = true
-				err := fr.syncForeverReconcilePolicyFiles(true)
-				if err != nil {
-					retryC = time.After(fr.bom.Step())
-				} else {
-					// Ensure backoff-retries are reset/off in the case of success.
-					fr.bom.reset()
-					retryC = nil
-				}
+			if b {
+				logrus.Debug("InSync received from calc graph.")
+				fr.inSyncWithUpstream = true
+				resyncWithKernelNeeded = true
+				applyToKernelNeeded = true
 			}
+
 		case e, ok := <-fr.endpointUpdatesC:
 			if !ok {
 				logrus.Panic("Input channel closed unexpectedly")
 			}
-			logrus.WithField("endpoint", e).Warn("Handling endpoint update")
+			logrus.WithField("endpoint", e).Debug("Handling endpoint update")
+			fr.handleEndpointUpdate(e)
+			if fr.inSyncWithUpstream {
+				applyToKernelNeeded = true
+			}
 
-			err := fr.syncForeverHandleEndpointUpdate(e, inSyncWithUpstream)
+		case <-retryC:
+		case <-scheduledReapplyC:
+			resyncWithKernelNeeded, applyToKernelNeeded = true, true
+		}
+
+		if resyncWithKernelNeeded {
+			err := fr.resyncDataplaneWithKernel()
 			if err != nil {
-				logrus.WithError(err).Warn("Encountered an error while handling an endpoint update. Queueing retry...")
-				retryC = time.After(fr.bom.Step())
+				logrus.WithError(err).Warn("Encountered an error while resyncing state with kernel. Queueing retry...")
+				retryTimerResetNeeded = true
 			} else {
-				fr.bom.reset()
-				retryC = nil
+				resyncWithKernelNeeded = false
 			}
-		case _, ok := <-retryC:
-			if !ok {
-				logrus.Panic("Retry channel closed unexpectedly")
-			}
+		}
 
-			err := fr.syncForeverReconcilePolicyFiles(true)
+		if applyToKernelNeeded {
+			err := fr.reconcileStatusFiles()
 			if err != nil {
-				backoffDuration := fr.bom.Step()
-				logrus.WithError(err).WithField("backoff", backoffDuration.String()).
-					Warn("Encountered an error during a retried update. Will retry again after a backoff...")
-
-				retryC = time.After(backoffDuration)
+				logrus.WithError(err).Warn("Encountered one or more errors while reconciling endpoint status dir. Queueing retry...")
+				retryTimerResetNeeded = true
 			} else {
-				retryC = nil
-				fr.bom.reset()
+				applyToKernelNeeded = false
 			}
-		case _, ok := <-scheduledResync:
-			if !ok {
-				logrus.Panic("Internal scheduled-resync channel closed unexpectedly")
-			}
+		}
 
-			err := fr.syncForeverReconcilePolicyFiles(true)
-			if err != nil {
-				backoffDuration := fr.bom.Step()
-				logrus.WithError(err).WithField("backoff", backoffDuration.String()).
-					Warn("Encountered an error during a scheduled re-sync. Queueing retry...")
+		// Timer leak-protection; check if we need to drain retryC.
+		if retry != nil && !retry.Stop() {
+			select {
+			case <-retry.C:
+				// Timer fired but another channel was selected (retryC was not drained).
+			default:
+				// Timer fired and was drained by the select.
 			}
+		}
+		// Always stop the reapply timer after any operation
+		// to avoid doubling-up applies in quick succession.
+		if scheduledReapply != nil && !scheduledReapply.Stop() {
+			select {
+			case <-scheduledReapply.C:
+			default:
+			}
+		}
+
+		// Cleanup done, safe to exit.
+		if exit {
+			return
+		}
+
+		// Retry should be stopped in all cases by now, and retryC drained.
+		// It's safe now to reset / nil-out resources.
+		if retryTimerResetNeeded {
+			if retry == nil {
+				retry = time.NewTimer(fr.bom.Step())
+			} else {
+				retry.Reset(fr.bom.Step())
+			}
+			retryC = retry.C
+			retryTimerResetNeeded = false
+		} else {
+			fr.bom.reset()
+			// Nil channels will never be selected.
+			retryC = nil
+		}
+
+		// If we're in-sync and healthy (no retry queued), queue a periodic resync.
+		// Useful in-case a 3rdparty is interfering with the dataplane underneath us.
+		if fr.inSyncWithUpstream && retryC == nil {
+			if scheduledReapply == nil {
+				scheduledReapply = time.NewTimer(reapplyInterval)
+			} else {
+				scheduledReapply.Reset(reapplyInterval)
+			}
+			scheduledReapplyC = scheduledReapply.C
 		}
 	}
 }
 
 // A sub-call of SyncForever, not intended to be called outside the main loop.
 // Updates delta tracker state to match the received update.
+//
 // If commitToKernel is true, attempts to commit the new state to the kernel.
+//
 // Can only return an error after a failed commit, so a returned error should
 // always result in SyncForever queueing a retry.
-func (fr *EndpointStatusFileReporter) syncForeverHandleEndpointUpdate(e interface{}, commitToKernel bool) error {
+func (fr *EndpointStatusFileReporter) handleEndpointUpdate(e interface{}) {
 	switch m := e.(type) {
 	case *proto.WorkloadEndpointStatusUpdate:
-		fr.policyDirDeltaTracker.Desired().Add(names.WorkloadEndpointIDToStatusFilename(m.Id))
+		fr.statusDirDeltaTracker.Desired().Add(names.WorkloadEndpointIDToStatusFilename(m.Id))
 	case *proto.WorkloadEndpointStatusRemove:
-		fr.policyDirDeltaTracker.Desired().Delete(names.WorkloadEndpointIDToStatusFilename(m.Id))
+		fr.statusDirDeltaTracker.Desired().Delete(names.WorkloadEndpointIDToStatusFilename(m.Id))
 	default:
-		logrus.WithField("update", e).Warn("Skipping unrecognized endpoint update")
-		return nil
+		logrus.WithField("update", e).Debug("Skipping undesired endpoint update")
+	}
+}
+
+// Overwrites our user-space representation of the kernel with a fresh snapshot.
+func (fr *EndpointStatusFileReporter) resyncDataplaneWithKernel() error {
+	// Load any pre-existing committed dataplane entries.
+	entries, err := ensureStatusDir(fr.endpointStatusDirPrefix)
+	if err != nil {
+		return err
 	}
 
-	if commitToKernel {
-		err := fr.syncForeverReconcilePolicyFiles(false)
-		if err != nil {
-			return fmt.Errorf("Couldn't reconcile policy-status: %w", err)
+	fr.statusDirDeltaTracker.Dataplane().ReplaceFromIter(func(f func(k string)) error {
+		for _, entry := range entries {
+			f(entry.Name())
 		}
-	}
+		return nil
+	})
 
 	return nil
 }
 
-func (fr *EndpointStatusFileReporter) syncForeverReconcilePolicyFiles(fullResync bool) error {
-	if fullResync {
-		// If calling this due to the first in-sync msg from upstream,
-		// this will be a no-op.
-		fr.policyDirDeltaTracker.Dataplane().DeleteAll()
-
-		// Load any existing committed dataplane entries.
-		entries, err := ensurePolicyStatusDir(fr.endpointStatusDirPrefix)
-		if err != nil {
-			return err
-		}
-		for _, entry := range entries {
-			fr.policyDirDeltaTracker.Dataplane().Add(entry.Name())
-		}
-	}
-
+// A sub-call of SyncForever. Not intended to be called outside the main loop.
+// Applies pending updates and deletes pending deletions.
+func (fr *EndpointStatusFileReporter) reconcileStatusFiles() error {
 	var lastError error
-	fr.policyDirDeltaTracker.PendingUpdates().Iter(func(name string) deltatracker.IterAction {
-		err := fr.writePolicyFile(name)
+	fr.statusDirDeltaTracker.PendingUpdates().Iter(func(name string) deltatracker.IterAction {
+		err := fr.writeStatusFile(name)
 		if err != nil {
-			logrus.WithError(err).Warn("Failed to write file to policy-status dir")
-			lastError = err
-			return deltatracker.IterActionNoOp
+			if !errors.Is(err, fs.ErrExist) {
+				lastError = err
+				return deltatracker.IterActionNoOp
+			}
 		}
-
 		return deltatracker.IterActionUpdateDataplane
 	})
 
-	fr.policyDirDeltaTracker.PendingDeletions().Iter(func(name string) deltatracker.IterAction {
-		err := fr.deletePolicyFile(name)
+	fr.statusDirDeltaTracker.PendingDeletions().Iter(func(name string) deltatracker.IterAction {
+		err := fr.deleteStatusFile(name)
 		if err != nil {
-			logrus.WithError(err).Warn("Failed to delete file in policy-status-dir")
 			// Carry on as normal (with a warning) if the file is somehow already deleted.
 			if !errors.Is(err, fs.ErrNotExist) {
 				lastError = err
 				return deltatracker.IterActionNoOp
 			}
 		}
-
 		return deltatracker.IterActionUpdateDataplane
 	})
 
 	return lastError
 }
 
-func (fr *EndpointStatusFileReporter) writePolicyFile(name string) error {
+func (fr *EndpointStatusFileReporter) writeStatusFile(name string) error {
 	// Write file to dir.
-	filename := filepath.Join(fr.endpointStatusDirPrefix, dirPolicyStatus, name)
+	filename := filepath.Join(fr.endpointStatusDirPrefix, dirStatus, name)
 	f, err := os.Create(filename)
 	if err != nil {
 		return err
@@ -274,21 +313,21 @@ func (fr *EndpointStatusFileReporter) writePolicyFile(name string) error {
 	return f.Close()
 }
 
-func (fr *EndpointStatusFileReporter) deletePolicyFile(name string) error {
-	filename := filepath.Join(fr.endpointStatusDirPrefix, dirPolicyStatus, name)
+func (fr *EndpointStatusFileReporter) deleteStatusFile(name string) error {
+	filename := filepath.Join(fr.endpointStatusDirPrefix, dirStatus, name)
 	return os.Remove(filename)
 }
 
-// ensurePolicyStatusDir ensures there is a directory named "policy", within
+// ensureStatusDir ensures there is a directory named "status", within
 // the parent dir specified by prefix. Attempts to create the dir if it doesn't exist.
 // Returns all entries within the dir if any exist.
-func ensurePolicyStatusDir(prefix string) (entries []fs.DirEntry, err error) {
-	filename := filepath.Join(prefix, dirPolicyStatus)
+func ensureStatusDir(prefix string) (entries []fs.DirEntry, err error) {
+	filename := filepath.Join(prefix, dirStatus)
 
 	entries, err = os.ReadDir(filename)
 	if err != nil && errors.Is(err, fs.ErrNotExist) {
 		// Discard ErrNotExist and return the result of attempting to create it.
-		return entries, os.Mkdir(filename, 0644)
+		return entries, os.Mkdir(filename, fs.FileMode(0644))
 	}
 
 	return entries, err

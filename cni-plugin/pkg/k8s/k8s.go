@@ -19,8 +19,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"net"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -505,14 +507,14 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 	)
 
 	// Conditionally wait for host-local Felix to program the policy for this WEP.
-	if conf.PodStartupDelaySeconds < 0 {
-		return nil, fmt.Errorf("Invalid pod startup delay of %d", conf.PodStartupDelaySeconds)
-	} else if conf.PodStartupDelaySeconds > 0 {
-		if conf.EndpointPolicyStatusDir == "" {
-			conf.EndpointPolicyStatusDir = "/var/run/calico/policy"
+	if conf.PolicyProgrammingTimeoutSeconds < 0 {
+		return nil, fmt.Errorf("invalid pod startup delay of %d", conf.PolicyProgrammingTimeoutSeconds)
+	} else if conf.PolicyProgrammingTimeoutSeconds > 0 {
+		if conf.EndpointStatusDir == "" {
+			conf.EndpointStatusDir = "/var/run/calico/status"
 		}
-		timeout := time.Duration(conf.PodStartupDelaySeconds) * time.Second
-		waitForPolicyWithTimeout(logger, conf.EndpointPolicyStatusDir, epIDs, timeout)
+		timeout := time.Duration(conf.PolicyProgrammingTimeoutSeconds) * time.Second
+		waitForPolicyWithTimeout(conf.EndpointStatusDir, endpoint, timeout)
 	}
 
 	return result, nil
@@ -984,109 +986,142 @@ func getIPsByFamily(cidrs []string) (string, string, error) {
 	return ipv4Cidr, ipv6Cidr, nil
 }
 
-func waitForPolicyWithTimeout(log *logrus.Entry, policyDir string, epIDs utils.WEPIdentifiers, timeout time.Duration) {
-	log = log.WithFields(logrus.Fields{
-		"policyDir": policyDir,
-		"namespace": epIDs.Namespace,
-		"workload":  epIDs.WEPName,
-	})
+func waitForPolicyWithTimeout(policyDir string, endpoint *libapi.WorkloadEndpoint, timeout time.Duration) {
+	if endpoint == nil {
+		logrus.Panic("Endpoint is nil")
+	}
 
-	filename := names.WorkloadEndpointIdentifiersToStatusFilename(epIDs.WorkloadEndpointIdentifiers)
+	filename := names.WorkloadEndpointToStatusFilename(endpoint)
+	log := logrus.WithFields(logrus.Fields{
+		"policyDir":   policyDir,
+		"namespace":   endpoint.Namespace,
+		"workload":    endpoint.Name,
+		"desiredFile": filename,
+	})
+	log.Debug("Waiting for workload's status file to appear")
+
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-
-	notify := make(chan struct{})
-	go notifyWhenFileExists(ctx, notify, policyDir, filename)
-
-	select {
-	case <-notify:
-		log.WithField("filename", filename).Warn("Notification received; status file found in policy directory")
-	case <-time.After(timeout):
-		cancel()
-		log.WithField("filename", filename).Warn("Timed out waiting for policy file to be created for workload")
-	}
+	notifyWhenFileExists(ctx, policyDir, filename)
 }
 
 // notifyWhenFileExists closes notif when the specified file is seen on disk.
 // Returns without closing the channel if ctx is cancelled.
-func notifyWhenFileExists(ctx context.Context, notif chan struct{}, directory, filename string) {
+func notifyWhenFileExists(ctx context.Context, directory, filename string) {
 	var watcher *fsnotify.Watcher
 	var err error
-	retryInterval := 1 * time.Second
+	log := logrus.WithFields(logrus.Fields{
+		"directory":   directory,
+		"disiredFile": filename,
+	})
+	retryInterval := 500 * time.Millisecond
 
-	// Overwrite with a delay if an error occurrs.
-	var retryWait <-chan time.Time
+	// Flags handled at start of each iteration of initChecks.
+	// Should be reset immediately after being handled.
+	var refreshWatcher, delayRetry, exitFileFound, exitFileNotFound bool
+
+retry:
 	for {
-		if retryWait != nil {
+		// Handle flags before beginning setup.
+		// Reset each flag once it's checked.
+		if delayRetry {
+			delayRetry = false
 			select {
 			case <-ctx.Done():
-			case <-retryWait:
-				// Retry delay was successful. Nil-out.
-				retryWait = nil
+				exitFileNotFound = true
+			case <-time.After(retryInterval):
 			}
 		} else {
 			select {
 			case <-ctx.Done():
-				return
+				exitFileNotFound = true
 			default:
 			}
 		}
 
+		// Cleanup old watchers, avoid leaking.
+		if refreshWatcher || exitFileFound || exitFileNotFound {
+			log.Debug("Cleaning up stale FS watcher")
+			refreshWatcher = false
+			if watcher != nil {
+				err := watcher.Close()
+				if err != nil {
+					log.WithError(err).Debug("Ignoring error while attempting to close watcher")
+				}
+				watcher = nil
+			}
+		}
+
+		if exitFileFound {
+			log.WithField("filename", filename).Debug("Notification received; status file found")
+			return
+		}
+
+		if exitFileNotFound {
+			log.WithField("filename", filename).Warn("Timed out waiting for policy file to be created for workload")
+			return
+		}
+
+		// Init watch utils if necessary.
 		if watcher == nil {
 			watcher, err = fsnotify.NewWatcher()
 			if err != nil {
-				logrus.WithError(err).Warn("Couldn't create filesystem watch, scheduling retry...")
-				retryWait = time.After(retryInterval)
-				continue
+				log.WithError(err).Warn("Couldn't create filesystem watch, scheduling retry...")
+				delayRetry, refreshWatcher = true, true
+				continue retry
 			}
 		}
-
 		if wl := watcher.WatchList(); wl == nil || len(wl) == 0 {
 			err = watcher.Add(directory)
 			if err != nil {
-				logrus.WithError(err).Warn("Couldn't add directory to watcher")
-				retryWait = time.After(retryInterval)
-				continue
+				log.WithError(err).Warn("Couldn't add directory to watcher, scheduling retry...")
+				delayRetry, refreshWatcher = true, true
+				continue retry
 			}
 		}
 
-		// We should check once that we didn't miss the creation
-		// of the file, while setting up the watcher.
-		entries, err := os.ReadDir(directory)
+		// We should check that we didn't miss the creation
+		// of the file while we were setting up the watcher.
+		f, err := os.Stat(filepath.Join(directory, filename))
 		if err != nil {
-			logrus.WithError(err).Warn("Couldn't probe status directory 'policy'")
-			retryWait = time.After(retryInterval)
-			continue
-		}
-		for _, e := range entries {
-			if e.Name() == filename {
-				err = watcher.Close()
-				if err != nil {
-					logrus.WithError(err).Warn("Error closing watcher. Continuing...")
-				}
-				close(notif)
-				return
+			if errors.Is(err, fs.ErrNotExist) {
+				log.WithError(err).Debug("Initial stat of status directory did not find file for workload. Watching for new events...")
+			} else {
+				log.WithError(err).Warn("Unexpected error during file stat")
+				delayRetry = true
+				continue retry
 			}
 		}
+		if f.Name() == filename {
+			log.WithField("file", f.Name()).Debug("Initial stat found status file for workload. Firing notification and stopping watch")
+			exitFileFound = true
+			continue retry
+		}
 
+	watchEvents:
 		for {
 			select {
 			case e := <-watcher.Events:
-				logrus.WithField("name", e.Name).Info("Received watch event")
+				log.WithField("eventName", e.Name).Debug("Received watch event")
 				switch e.Op {
 				case fsnotify.Create:
-					if e.Name == filename {
-						logrus.WithField("file", e.Name).Debug("FS 'Create' event seen for file. Firing notification and stopping watch.")
-						close(notif)
-						return
+					if filepath.Base(e.Name) == filename {
+						log.WithField("file", e.Name).Debug("FS 'Create' event seen for file. Firing notification and stopping watch")
+						exitFileFound = true
+						continue retry
 					}
 				default:
 				}
+				// Fallthru. Keep processing events.
+				continue watchEvents
+
 			case err = <-watcher.Errors:
-				logrus.WithError(err).Warn("Ignoring error while watching directory")
+				log.WithError(err).Warn("Error while watching directory. Refreshing watcher...")
+				delayRetry, refreshWatcher = true, true
+				continue retry
 			case <-ctx.Done():
-				watcher.Close()
-				return
+				exitFileNotFound = false
+				continue retry
 			}
 		}
 	}
