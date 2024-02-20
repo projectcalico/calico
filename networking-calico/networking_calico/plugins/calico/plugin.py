@@ -12,9 +12,10 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+# Import Ml2Plugin before l3_db to fix https://github.com/projectcalico/calico/issues/8494
+from neutron.plugins.ml2.plugin import Ml2Plugin
 from neutron.db import l3_db
 from neutron.db.models import l3
-from neutron.plugins.ml2.plugin import Ml2Plugin
 
 from networking_calico.compat import cfg
 from networking_calico.compat import constants
