@@ -16,7 +16,6 @@ package dispatcher
 
 import (
 	"context"
-	"errors"
 
 	"github.com/sirupsen/logrus"
 )
@@ -28,24 +27,19 @@ import (
 type BlockingDispatcher[T any] struct {
 	outputs []chan<- T
 	input   <-chan T
-
-	log *logrus.Entry
 }
 
 // NewBlockingDispatcher returns a BlockingDispatcher which
 // will consume messages from the input channel.
 // Dispatcher must be started with Start(ctx). Stopped by cancelling ctx.
 func NewBlockingDispatcher[T any](input <-chan T) (*BlockingDispatcher[T], error) {
-	log := logrus.WithField("component", "BlockingDispatcher")
-
 	if input == nil {
-		return nil, errors.New("No input channel provided for dispatcher to consume")
+		logrus.Panic("No input channels passed to dispatcher")
 	}
 
 	return &BlockingDispatcher[T]{
 		input:   input,
 		outputs: make([]chan<- T, 0),
-		log:     log,
 	}, nil
 }
 
@@ -53,33 +47,31 @@ func NewBlockingDispatcher[T any](input <-chan T) (*BlockingDispatcher[T], error
 // Loops Forever, pulling from input, and sending to all outputs.
 // All output channels must consume messages promptly to keep dispatcher from blocking.
 func (d *BlockingDispatcher[T]) DispatchForever(ctx context.Context, outputs ...chan T) {
-	log := d.log
-
 	if outputs == nil || len(outputs) == 0 {
-		log.Panic("No outputs provided for dispatching input")
+		logrus.Panic("No output channels provided for dispatching input")
 	}
 
-	log.WithField("outputs", len(outputs)).Warn("Dispatcher running...")
+	logrus.WithField("outputs", len(outputs)).Debug("Dispatcher running...")
 	for {
 		// Wait for input or ctx cancellation.
 		select {
 		case <-ctx.Done():
-			log.Debug("Stopping...")
+			logrus.Debug("Stopping dispatcher...")
 			return
 		case msg, ok := <-d.input:
 			if !ok {
-				log.Panic("Input channel closed unexpectedly")
+				logrus.Panic("Input channel closed unexpectedly")
 			}
-			log.WithField("message", msg).Warn("Pulled message off input chan")
+			logrus.WithField("message", msg).Debug("Pulled message off input chan")
 			for _, o := range outputs {
 				select {
 				case <-ctx.Done():
-					log.Warn("Context closed. Exiting...")
+					logrus.Debug("Context closed. Exiting...")
 					return
 				case o <- msg:
 				}
 			}
-			log.WithField("message", msg).Warn("Sent message to all outputs")
+			logrus.WithField("message", msg).Debug("Sent message to all outputs")
 		}
 	}
 }
