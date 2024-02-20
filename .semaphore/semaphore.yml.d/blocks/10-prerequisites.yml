@@ -1,0 +1,7 @@
+- name: Prerequisites
+  dependencies: []
+  task:
+    jobs:
+      - name: Pre-flight checks
+        commands:
+          - make ci-preflight-checks
