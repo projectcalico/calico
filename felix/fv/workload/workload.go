@@ -94,13 +94,29 @@ func (w *Workload) Stop() {
 	if w == nil {
 		log.Info("Stop no-op because nil workload")
 	} else {
-		log.WithField("workload", w).Info("Stop")
+		log.WithField("workload", w.Name).Info("Stop")
 		_ = w.C.ExecMayFail("sh", "-c", fmt.Sprintf("kill -9 %s & ip link del %s & ip netns del %s & wait", w.pid, w.InterfaceName, w.NamespaceID()))
-		_, err := w.runCmd.Process.Wait()
-		if err != nil {
-			log.WithField("workload", w).Error("failed to wait for process")
+		// Killing the process inside the container should cause our long-running
+		// docker exec command to exit.  Do the Wait on a background goroutine,
+		// so we can time it out, just in case.
+		waitDone := make(chan struct{})
+		go func() {
+			defer close(waitDone)
+			_, err := w.runCmd.Process.Wait()
+			if err != nil {
+				log.WithField("workload", w.Name).Error("Failed to wait for docker exec, attempting to kill it.")
+				_ = w.runCmd.Process.Kill()
+			}
+		}()
+
+		select {
+		case <-waitDone:
+			log.WithField("workload", w.Name).Info("Workload stopped")
+		case <-time.After(10 * time.Second):
+			log.WithField("workload", w.Name).Error("Workload docker exec failed to exit?  Killing it.")
+			_ = w.runCmd.Process.Kill()
 		}
-		log.WithField("workload", w).Info("Workload now stopped")
+
 		w.isRunning = false
 	}
 }
@@ -252,9 +268,7 @@ func (w *Workload) Start() error {
 	if err != nil {
 		// (Only) if we fail here, wait for the stderr to be output before returning.
 		defer errDone.Wait()
-		if err != nil {
-			return fmt.Errorf("reading PID from stdout failed: %w", err)
-		}
+		return fmt.Errorf("reading PID from stdout failed: %w", err)
 	}
 	w.pid = strings.TrimSpace(pid)
 
@@ -262,9 +276,7 @@ func (w *Workload) Start() error {
 	if err != nil {
 		// (Only) if we fail here, wait for the stderr to be output before returning.
 		defer errDone.Wait()
-		if err != nil {
-			return fmt.Errorf("reading from stdout failed: %w", err)
-		}
+		return fmt.Errorf("reading from stdout failed: %w", err)
 	}
 
 	w.namespacePath = strings.TrimSpace(namespacePath)
