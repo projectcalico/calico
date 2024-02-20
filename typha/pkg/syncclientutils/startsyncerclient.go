@@ -72,15 +72,14 @@ func MustStartSyncerClientIfTyphaConfigured(
 		myVersion, myHostname, myInfo,
 		dedupeBuf,
 		&syncclient.Options{
-			SyncerType:      syncerType,
-			ReadTimeout:     typhaConfig.ReadTimeout,
-			WriteTimeout:    typhaConfig.WriteTimeout,
-			KeyFile:         typhaConfig.KeyFile,
-			CertFile:        typhaConfig.CertFile,
-			CAFile:          typhaConfig.CAFile,
-			ServerCN:        typhaConfig.CN,
-			ServerURISAN:    typhaConfig.URISAN,
-			FIPSModeEnabled: typhaConfig.FIPSModeEnabled,
+			SyncerType:   syncerType,
+			ReadTimeout:  typhaConfig.ReadTimeout,
+			WriteTimeout: typhaConfig.WriteTimeout,
+			KeyFile:      typhaConfig.KeyFile,
+			CertFile:     typhaConfig.CertFile,
+			CAFile:       typhaConfig.CAFile,
+			ServerCN:     typhaConfig.CN,
+			ServerURISAN: typhaConfig.URISAN,
 		},
 	)
 	if err := typhaConnection.Start(context.Background()); err != nil {
