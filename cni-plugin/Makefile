@@ -88,7 +88,7 @@ sub-build-%:
 	$(MAKE) build ARCH=$*
 
 ## Build the Calico installation binary for the network and ipam plugins
-$(BIN)/install binary: $(SRC_FILES)
+$(BIN)/install: $(SRC_FILES)
 ifeq ($(FIPS), true)
 	$(call build_cgo_boring_binary, $(PACKAGE_NAME)/cmd/install, $@)
 else
