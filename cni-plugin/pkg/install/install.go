@@ -15,13 +15,11 @@
 package install
 
 import (
-	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"runtime"
 	"strings"
 	"time"
@@ -120,7 +118,7 @@ func loadConfig() config {
 	return c
 }
 
-func Install() error {
+func Install(version string) error {
 	// Make sure the RNG is seeded.
 	seedrng.EnsureSeeded()
 
@@ -191,15 +189,10 @@ func Install() error {
 			logrus.Infof("%s is not writeable, skipping", d)
 			continue
 		}
-		// Don't exec the 'calico' binary later on if it has been skipped
-		calicoBinarySkipped := true
 
-		containerBinDir := "/opt/cni/bin/"
 		// The binaries dir in the container needs to be prepended by the CONTAINER_SANDBOX_MOUNT_POINT env var on Windows Host Process Containers
 		// see https://kubernetes.io/docs/tasks/configure-pod-container/create-hostprocess-pod/#containerd-v1-7-and-greater
-		if runtime.GOOS == "windows" {
-			containerBinDir = os.Getenv("CONTAINER_SANDBOX_MOUNT_POINT") + "/" + containerBinDir
-		}
+		containerBinDir := winutils.GetHostPath("/opt/cni/bin")
 		// Iterate through each binary we might want to install.
 		files, err := os.ReadDir(containerBinDir)
 		if err != nil {
@@ -223,9 +216,6 @@ func Install() error {
 				logrus.WithError(err).Errorf("Failed to install %s", target)
 				os.Exit(1)
 			}
-			if binary.Name() == "calico" || binary.Name() == "calico.exe" {
-				calicoBinarySkipped = false
-			}
 			logrus.Infof("Installed %s", target)
 		}
 
@@ -233,19 +223,19 @@ func Install() error {
 		logrus.Infof("Wrote Calico CNI binaries to %s\n", d)
 		binsWritten = true
 
-		// Don't exec the 'calico' binary later on if it has been skipped
-		if !calicoBinarySkipped {
-			// Print CNI plugin version to confirm that the binary was actually written.
-			// If this fails, it means something has gone wrong so we should retry.
-			cmd := exec.Command(d+"/calico", "-v")
-			var out bytes.Buffer
-			cmd.Stdout = &out
-			err = cmd.Run()
-			if err != nil {
-				logrus.WithError(err).Warnf("Failed getting CNI plugin version from installed binary, exiting")
-				return err
-			}
-			logrus.Infof("CNI plugin version: %s", out.String())
+		// Instead of executing 'calico -v', check if the calico binary was copied successfully
+		calicoBinaryName := "calico"
+		if runtime.GOOS == "windows" {
+			calicoBinaryName = "calico.exe"
+		}
+		calicoBinaryOK, err := destinationUptoDate(containerBinDir+"/"+calicoBinaryName, d+"/"+calicoBinaryName)
+		if err != nil {
+			logrus.WithError(err).Warnf("Failed verifying installed binary, exiting")
+			return err
+		}
+		// Print version number successful
+		if calicoBinaryOK {
+			logrus.Infof("CNI plugin version: %s", version)
 		}
 	}
 
