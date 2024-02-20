@@ -670,7 +670,7 @@ configRetry:
 		statusFileReporter := statusrep.NewEndpointStatusFileReporter(fromDataplaneC, inSyncC, configParams.EndpointStatusPathPrefix)
 
 		log.WithField("path", configParams.EndpointStatusPathPrefix).Warn("EndpointStatusPathPrefix is non-empty. Starting StatusFileReporter")
-		ctx := context.TODO()
+		ctx := context.Background()
 		go statusFileReporter.SyncForever(ctx)
 	}
 
@@ -1007,6 +1007,8 @@ func newConnector(configParams *config.Config,
 		ToDataplane:                         make(chan interface{}),
 		StatusUpdatesFromDataplane:          make(chan interface{}),
 		StatusUpdatesFromDataplaneConsumers: make([]chan interface{}, 0),
+		// InSync should be buffered as it will always be sent a single
+		// message, regardless of any downstream consumers.
 		InSync:                              make(chan bool, 1),
 		InSyncConsumers:                     make([]chan bool, 0),
 		failureReportChan:                   failureReportChan,
@@ -1045,20 +1047,20 @@ func (fc *DataplaneConnector) readMessagesFromDataplane() {
 		case *proto.ProcessStatusUpdate:
 			fc.handleProcessStatusUpdate(context.TODO(), msg)
 		case *proto.WorkloadEndpointStatusUpdate:
-			if len(fc.StatusUpdatesFromDataplaneConsumers) > 0 && fc.StatusUpdatesFromDataplaneDispatcher != nil {
+			if fc.StatusUpdatesFromDataplaneDispatcher != nil {
 				fc.StatusUpdatesFromDataplane <- msg
 			}
 
 		case *proto.WorkloadEndpointStatusRemove:
-			if len(fc.StatusUpdatesFromDataplaneConsumers) > 0 && fc.StatusUpdatesFromDataplaneDispatcher != nil {
+			if fc.StatusUpdatesFromDataplaneDispatcher != nil {
 				fc.StatusUpdatesFromDataplane <- msg
 			}
 		case *proto.HostEndpointStatusUpdate:
-			if len(fc.StatusUpdatesFromDataplaneConsumers) > 0 && fc.StatusUpdatesFromDataplaneDispatcher != nil {
+			if fc.StatusUpdatesFromDataplaneDispatcher != nil {
 				fc.StatusUpdatesFromDataplane <- msg
 			}
 		case *proto.HostEndpointStatusRemove:
-			if len(fc.StatusUpdatesFromDataplaneConsumers) > 0 && fc.StatusUpdatesFromDataplaneDispatcher != nil {
+			if fc.StatusUpdatesFromDataplaneDispatcher != nil {
 				fc.StatusUpdatesFromDataplane <- msg
 			}
 		case *proto.WireguardStatusUpdate:
@@ -1289,12 +1291,12 @@ func (fc *DataplaneConnector) Start() {
 
 	// Begin consuming StatusUpdatesFromDataplane/InSync's and dispatching to downstream components (e.g. status reporter).
 	if len(fc.StatusUpdatesFromDataplaneConsumers) > 0 {
-		ctx := context.TODO()
+		ctx := context.Background()
 		log.Warn("Starting StatsUpdatesFromDataplaneDispatcher")
 		go fc.StatusUpdatesFromDataplaneDispatcher.DispatchForever(ctx, fc.StatusUpdatesFromDataplaneConsumers...)
 	}
 	if len(fc.InSyncConsumers) > 0 {
-		ctx := context.TODO()
+		ctx := context.Background()
 		log.Warn("Starting InSyncDispatcher")
 		go fc.InSyncDispatcher.DispatchForever(ctx, fc.InSyncConsumers...)
 	}
