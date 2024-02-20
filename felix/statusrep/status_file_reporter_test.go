@@ -66,7 +66,7 @@ var _ = Describe("Endpoint Policy Status Reports [file-reporting]", func() {
 		}
 
 		// Use a path we think the reporter cannot write to.
-		fileReporter = statusrep.NewEndpointStatusFileReporter(endpointUpdatesC, "/root/", statusrep.WithNewBackoffFunc(newMockBackoff))
+		fileReporter = statusrep.NewEndpointStatusFileReporter(endpointUpdatesC, nil, "/root/", statusrep.WithNewBackoffFunc(newMockBackoff))
 
 		By("Starting a fileReporter which cannot create the necessary directory")
 
