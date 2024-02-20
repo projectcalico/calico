@@ -11,7 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-ARG ARCH=aarch64
 ARG GIT_VERSION=unknown
 ARG IPTABLES_VER=1.8.8-6
 ARG LIBNFTNL_VER=1.2.2-1
@@ -25,14 +24,15 @@ FROM calico/bpftool:v5.3-arm64 as bpftool
 FROM ${QEMU_IMAGE} as qemu
 FROM ${BIRD_IMAGE} as bird
 
+# Use this build stage to build iptables rpm and runit binaries.
+# We need to rebuild the iptables rpm because the prepackaged rpm does not have legacy iptables binaries.
+# We need to build runit because there aren't any rpms for it in CentOS or ubi repositories.
 FROM quay.io/centos/centos:stream8 as centos
 
-MAINTAINER Reza Ramezanpour <reza@projectcalico.org>
 # Enable non-native builds of this image on an amd64 hosts.
 # This must be the first RUN command in this file!
 COPY --from=qemu /usr/bin/qemu-*-static /usr/bin/
 
-ARG ARCH
 ARG IPTABLES_VER
 ARG LIBNFTNL_VER
 ARG IPSET_VER
@@ -51,8 +51,8 @@ RUN dnf install -y 'dnf-command(config-manager)' && \
     yum install --allowerasing -y rpm-build yum-utils make && \
     # Need these to build runit.
     yum install --allowerasing -y wget glibc-static gcc && \
-    # Ensure security updates are installed.
-    yum -y update-minimal --security --sec-severity=Important --sec-severity=Critical
+    # Ensure all security updates are installed.
+    yum -y update-minimal --security
 
 # In order to rebuild the iptables RPM, we first need to rebuild the libnftnl RPM because building
 # iptables requires libnftnl-devel but libnftnl-devel is not available on ubi or CentOS repos.
@@ -62,8 +62,8 @@ RUN rpm -i ${LIBNFTNL_SOURCERPM_URL} && \
     yum-builddep -y --spec /root/rpmbuild/SPECS/libnftnl.spec && \
     rpmbuild -bb /root/rpmbuild/SPECS/libnftnl.spec && \
     # Now install libnftnl and libnftnl-devel
-    rpm -Uv /root/rpmbuild/RPMS/${ARCH}/libnftnl-${LIBNFTNL_VER}.el8.${ARCH}.rpm && \
-    rpm -Uv /root/rpmbuild/RPMS/${ARCH}/libnftnl-devel-${LIBNFTNL_VER}.el8.${ARCH}.rpm && \
+    rpm -Uv /root/rpmbuild/RPMS/aarch64/libnftnl-${LIBNFTNL_VER}.el8.aarch64.rpm && \
+    rpm -Uv /root/rpmbuild/RPMS/aarch64/libnftnl-devel-${LIBNFTNL_VER}.el8.aarch64.rpm && \
     # Install source RPM for iptables and install its build dependencies.
     rpm -i ${IPTABLES_SOURCERPM_URL} && \
     yum-builddep -y --spec /root/rpmbuild/SPECS/iptables.spec && \
@@ -94,11 +94,8 @@ RUN wget -P /tmp https://ftp.debian.org/debian/pool/main/r/runit/runit_${RUNIT_V
     sed -i "s/utmpset/\/tmp\/admin\/runit-2.1.2\/compile\/utmpset/" src/utmpset.dist && \
     package/install
 
-ARG UBI_DIGEST
+FROM ${UBI_IMAGE} as ubi
 
-FROM --platform=linux/arm64 ${UBI_IMAGE} as ubi
-
-ARG ARCH
 ARG GIT_VERSION
 ARG IPTABLES_VER
 ARG LIBNFTNL_VER
@@ -116,7 +113,7 @@ RUN microdnf upgrade
 COPY --from=centos  /tmp/admin/runit-${RUNIT_VER}/command/* /usr/local/bin/
 
 # Copy in our rpms
-COPY --from=centos  /root/rpmbuild/RPMS/${ARCH}/* /tmp/rpms/
+COPY --from=centos  /root/rpmbuild/RPMS/aarch64/* /tmp/rpms/
 
 # Install a subset of packages from UBI prior to removing the UBI repo below.
 # We do this because the UBI repo has updated versions with CVE fixes. We can remove
@@ -148,7 +145,7 @@ RUN rm /etc/yum.repos.d/ubi.repo && \
     # Need kmod to ensure ip6tables-save works correctly
     kmod \
     # Also needed (provides utilities for browsing procfs like ps)
-    procps-ng \
+    procps \
     iproute \
     iproute-tc \
     # Needed for conntrack
@@ -161,16 +158,16 @@ RUN rm /etc/yum.repos.d/ubi.repo && \
     microdnf clean all && \
     # Install iptables via rpms. The libs must be force installed because the iptables source RPM has the release
     # version '9.el8_0.1' while the existing iptables-libs (pulled in by the iputils package) has version '9.el8.1'.
-    rpm --force -i /tmp/rpms/iptables-libs-${IPTABLES_VER}.el8.${ARCH}.rpm && \
-    rpm --force -i /tmp/rpms/iptables-legacy-libs-${IPTABLES_VER}.el8.2.${ARCH}.rpm && \
+    rpm --force -i /tmp/rpms/iptables-libs-${IPTABLES_VER}.el8.aarch64.rpm && \
+    rpm --force -i /tmp/rpms/iptables-legacy-libs-${IPTABLES_VER}.el8.2.aarch64.rpm && \
     # Install compatible libnftnl version with selected iptables version
-    rpm --force -i /tmp/rpms/libnftnl-${LIBNFTNL_VER}.el8.${ARCH}.rpm && \
+    rpm --force -i /tmp/rpms/libnftnl-${LIBNFTNL_VER}.el8.aarch64.rpm && \
     # Install both and select at runtime.
-    rpm -i /tmp/rpms/iptables-legacy-${IPTABLES_VER}.el8.2.${ARCH}.rpm && \
-    rpm -i /tmp/rpms/iptables-nft-${IPTABLES_VER}.el8.${ARCH}.rpm && \
+    rpm -i /tmp/rpms/iptables-legacy-${IPTABLES_VER}.el8.2.aarch64.rpm && \
+    rpm -i /tmp/rpms/iptables-nft-${IPTABLES_VER}.el8.aarch64.rpm && \
     # Install ipset version
-    rpm --force -i /tmp/rpms/ipset-libs-${IPSET_VER}.el8.${ARCH}.rpm && \
-    rpm -i /tmp/rpms/ipset-${IPSET_VER}.el8.${ARCH}.rpm && \
+    rpm --force -i /tmp/rpms/ipset-libs-${IPSET_VER}.el8.aarch64.rpm && \
+    rpm -i /tmp/rpms/ipset-${IPSET_VER}.el8.aarch64.rpm && \
     # Set alternatives
     alternatives --install /usr/sbin/iptables iptables /usr/sbin/iptables-legacy 1 && \
     alternatives --install /usr/sbin/ip6tables ip6tables /usr/sbin/ip6tables-legacy 1
@@ -207,14 +204,15 @@ RUN chgrp -R 0 /etc/calico && \
 
 COPY --from=bpftool /bpftool /bin
 
+ARG BIN_DIR
 # Copy in the calico-node binary
-COPY dist/bin/calico-node-arm64 /bin/calico-node
+COPY ${BIN_DIR}/calico-node-arm64 /bin/calico-node
 
 # Set the suid bit on calico-node
 RUN chmod u+s /bin/calico-node
 
 # Copy in the mountns binary
-COPY dist/bin/mountns-arm64 /bin/mountns
+COPY ${BIN_DIR}/mountns-arm64 /bin/mountns
 
 # Set the suid bit on mountns
 RUN chmod u+s /bin/mountns
