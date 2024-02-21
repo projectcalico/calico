@@ -9,7 +9,7 @@ ci: fv
 .PHONY: fv
 fv: setup-fv bin/fips-test-build
 	# Run a server using the FIPS strict mode settings and wait 1s to let it come up.
-	$(DOCKER_RUN) --name fips-test-build --rm $(CALICO_BUILD) ./bin/fips-test-build &
+	$(DOCKER_RUN) --name fips-test-build --rm -d $(CALICO_BUILD) ./bin/fips-test-build
 	sleep 1
 	# The server should respond with the value for STRICT_FIPS.
 	$(DOCKER_RUN) $(CALICO_BUILD) curl -k  https://localhost:8083 | grep true
