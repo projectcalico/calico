@@ -19,8 +19,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"net"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -30,8 +32,10 @@ import (
 	"github.com/containernetworking/plugins/pkg/ipam"
 
 	libipam "github.com/projectcalico/calico/libcalico-go/lib/ipam"
+	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 
+	"github.com/fsnotify/fsnotify"
 	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -502,6 +506,17 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 		Name: endpoint.Spec.InterfaceName},
 	)
 
+	// Conditionally wait for host-local Felix to program the policy for this WEP.
+	if conf.PolicyProgrammingTimeoutSeconds < 0 {
+		return nil, fmt.Errorf("invalid pod startup delay of %d", conf.PolicyProgrammingTimeoutSeconds)
+	} else if conf.PolicyProgrammingTimeoutSeconds > 0 {
+		if conf.EndpointStatusDir == "" {
+			conf.EndpointStatusDir = "/var/run/calico/status"
+		}
+		timeout := time.Duration(conf.PolicyProgrammingTimeoutSeconds) * time.Second
+		waitForPolicyWithTimeout(conf.EndpointStatusDir, endpoint, timeout)
+	}
+
 	return result, nil
 }
 
@@ -969,4 +984,162 @@ func getIPsByFamily(cidrs []string) (string, string, error) {
 	}
 
 	return ipv4Cidr, ipv6Cidr, nil
+}
+
+func waitForPolicyWithTimeout(policyDir string, endpoint *libapi.WorkloadEndpoint, timeout time.Duration) {
+	if endpoint == nil {
+		logrus.Panic("Endpoint is nil")
+	}
+
+	filename := names.WorkloadEndpointToStatusFilename(endpoint)
+	log := logrus.WithFields(logrus.Fields{
+		"policyDir":   policyDir,
+		"namespace":   endpoint.Namespace,
+		"workload":    endpoint.Name,
+		"desiredFile": filename,
+	})
+	log.Debug("Waiting for workload's status file to appear")
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	waitUntilFileExists(ctx, policyDir, filename)
+}
+
+func waitUntilFileExists(ctx context.Context, directory, filename string) {
+	log := logrus.WithFields(logrus.Fields{
+		"directory":   directory,
+		"disiredFile": filename,
+	})
+
+	retryInterval := 500 * time.Millisecond
+	for {
+		waitThenCleanup, err := startWatchForFile(ctx, directory, filename)
+		if err != nil {
+			log.WithError(err).Warn("Encountered an error while starting a filesystem watch")
+		}
+
+		// Always call a stat before continuing with watcher processing.
+		// If watches are boken, the loop will then degrade into a poll.
+		// If the watch is healthy, we should still stat incase we missed
+		// the create event.
+		found, err := statFile(directory, filename)
+		if err != nil {
+			log.WithError(err).Warn("Encountered an error when polling filesystem for file")
+		} else if found {
+			break
+		}
+
+		// In the case where the watcher was created, progress to
+		// consuming watch events. Otherwise move onto a retry.
+		if waitThenCleanup != nil {
+			log.Debug("Progressing to watch event processing")
+			found, err = waitThenCleanup()
+			if err != nil {
+				log.WithError(err).Warn("Filesystem watch encountered an error")
+				// Fall through to retry.
+			} else if found {
+				break
+			} else {
+				// Not found and no error - context was cancelled.
+				goto exitFileNotFound
+			}
+		}
+
+		select {
+		case <-ctx.Done():
+			goto exitFileNotFound
+		case <-time.After(retryInterval):
+			log.Info("Retrying filesystem check...")
+		}
+	}
+
+	log.Debug("Stopping FS watch; found file matching workload")
+	return
+
+exitFileNotFound:
+	log.Warn("Stopping FS watch; timeout / file not found")
+	return
+}
+
+// Starts a watcher in the given directory and returns a blocking function which
+// consumes watch events.
+//
+// The returned func returns a bool indicating whether or not create-type event was
+// seen for a file whos name matches the passed string, and returns non-nil error
+// if one is received from the watcher.
+//
+// The returned func always cleans up the watcher on-return.
+func startWatchForFile(ctx context.Context, directory, filename string) (func() (bool, error), error) {
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		return nil, err
+	}
+
+	err = watcher.Add(directory)
+	if err != nil {
+		defer closeWatcherAndIgnoreErr(watcher)
+		return nil, err
+	}
+
+	return func() (bool, error) {
+		return waitForCreateEventAndCleanup(ctx, watcher, filename)
+	}, nil
+}
+
+// Processes events from watcher and returns a boolean indicating
+// whether an event was seen for a file whose base mathes filename.
+// Will only return an error if an error event from the watcher is received.
+// In all cases, cleans-up the watcher on-return.
+func waitForCreateEventAndCleanup(ctx context.Context, watcher *fsnotify.Watcher, filename string) (bool, error) {
+	log := logrus.WithFields(logrus.Fields{
+		"watchedDirectories": watcher.WatchList(),
+		"targetFilename":     filename,
+	})
+
+	if watcher == nil {
+		log.Panic("watcher is nil")
+	}
+
+	defer closeWatcherAndIgnoreErr(watcher)
+
+	for {
+		select {
+		case e := <-watcher.Events:
+			log.WithField("eventName", e.Name).Debug("Received watch event")
+			switch e.Op {
+			case fsnotify.Create:
+				if filepath.Base(e.Name) == filename {
+					log.WithField("eventName", e.Name).Debug("FS 'Create' event seen for file. Firing notification and stopping watch")
+					return true, nil
+				}
+			default:
+			}
+
+		case err := <-watcher.Errors:
+			return false, err
+		case <-ctx.Done():
+			return false, nil
+		}
+	}
+}
+
+func closeWatcherAndIgnoreErr(w *fsnotify.Watcher) {
+	err := w.Close()
+	if err != nil {
+		logrus.WithError(err).Debug("Ignoring error encountered while closing filesystem watch")
+	}
+}
+
+func statFile(directory, filename string) (bool, error) {
+	f, err := os.Stat(filepath.Join(directory, filename))
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return false, nil
+		}
+		return false, err
+	} else if f != nil && f.Name() == filename {
+		return true, nil
+	}
+
+	return false, err
 }
