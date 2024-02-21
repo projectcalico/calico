@@ -1006,121 +1006,140 @@ func waitForPolicyWithTimeout(policyDir string, endpoint *libapi.WorkloadEndpoin
 }
 
 func waitUntilFileExists(ctx context.Context, directory, filename string) {
-	var watcher *fsnotify.Watcher
-	var err error
 	log := logrus.WithFields(logrus.Fields{
 		"directory":   directory,
 		"disiredFile": filename,
 	})
+
 	retryInterval := 500 * time.Millisecond
-
-	// Flags handled at start of each iteration of initChecks.
-	// Should be reset immediately after being handled.
-	var refreshWatcher, delayRetry, exitFileFound, exitFileNotFound bool
-
-retry:
 	for {
-		// Handle flags before beginning setup.
-		// Reset each flag once it's checked.
-		if delayRetry {
-			delayRetry = false
-			select {
-			case <-ctx.Done():
-				exitFileNotFound = true
-			case <-time.After(retryInterval):
-			}
-		} else {
-			select {
-			case <-ctx.Done():
-				exitFileNotFound = true
-			default:
-			}
-		}
-
-		// Cleanup old watchers, avoid leaking.
-		if refreshWatcher || exitFileFound || exitFileNotFound {
-			log.Debug("Cleaning up stale FS watcher")
-			refreshWatcher = false
-			if watcher != nil {
-				err := watcher.Close()
-				if err != nil {
-					log.WithError(err).Debug("Ignoring error while attempting to close watcher")
-				}
-				watcher = nil
-			}
-		}
-
-		if exitFileFound {
-			log.WithField("filename", filename).Debug("Notification received; status file found")
-			return
-		}
-
-		if exitFileNotFound {
-			log.WithField("filename", filename).Warn("Timed out waiting for policy file to be created for workload")
-			return
-		}
-
-		// Init watch utils if necessary.
-		if watcher == nil {
-			watcher, err = fsnotify.NewWatcher()
-			if err != nil {
-				log.WithError(err).Warn("Couldn't create filesystem watch, scheduling retry...")
-				delayRetry, refreshWatcher = true, true
-				continue retry
-			}
-		}
-		if wl := watcher.WatchList(); wl == nil || len(wl) == 0 {
-			err = watcher.Add(directory)
-			if err != nil {
-				log.WithError(err).Warn("Couldn't add directory to watcher, scheduling retry...")
-				delayRetry, refreshWatcher = true, true
-				continue retry
-			}
-		}
-
-		// We should check that we didn't miss the creation
-		// of the file while we were setting up the watcher.
-		f, err := os.Stat(filepath.Join(directory, filename))
+		waitThenCleanup, err := startWatchForFile(ctx, directory, filename)
 		if err != nil {
-			if errors.Is(err, fs.ErrNotExist) {
-				log.WithError(err).Debug("Initial stat of status directory did not find file for workload. Watching for new events...")
+			log.WithError(err).Warn("Encountered an error while starting a filesystem watch")
+		}
+
+		// Always call a stat before continuing with watcher processing.
+		// If watches are boken, the loop will then degrade into a poll.
+		// If the watch is healthy, we should still stat incase we missed
+		// the create event.
+		found, err := statFile(directory, filename)
+		if err != nil {
+			log.WithError(err).Warn("Encountered an error when polling filesystem for file")
+		} else if found {
+			break
+		}
+
+		// In the case where the watcher was created, progress to
+		// consuming watch events. Otherwise move onto a retry.
+		if waitThenCleanup != nil {
+			log.Debug("Progressing to watch event processing")
+			found, err = waitThenCleanup()
+			if err != nil {
+				log.WithError(err).Warn("Filesystem watch encountered an error")
+				// Fall through to retry.
+			} else if found {
+				break
 			} else {
-				log.WithError(err).Warn("Unexpected error during file stat")
-				delayRetry = true
-				continue retry
+				// Not found and no error - context was cancelled.
+				goto exitFileNotFound
 			}
 		}
-		if f.Name() == filename {
-			log.WithField("file", f.Name()).Debug("Initial stat found status file for workload. Firing notification and stopping watch")
-			exitFileFound = true
-			continue retry
-		}
 
-	watchEvents:
-		for {
-			select {
-			case e := <-watcher.Events:
-				log.WithField("eventName", e.Name).Debug("Received watch event")
-				switch e.Op {
-				case fsnotify.Create:
-					if filepath.Base(e.Name) == filename {
-						log.WithField("file", e.Name).Debug("FS 'Create' event seen for file. Firing notification and stopping watch")
-						exitFileFound = true
-						continue retry
-					}
-				default:
-				}
-				// Fallthru. Keep processing events.
-				continue watchEvents
-
-			case err = <-watcher.Errors:
-				log.WithError(err).Warn("Error while watching directory. Refreshing watcher...")
-				delayRetry, refreshWatcher = true, true
-				continue retry
-			case <-ctx.Done():
-				exitFileNotFound = false
-				continue retry
-			}
+		select {
+		case <-ctx.Done():
+			goto exitFileNotFound
+		case <-time.After(retryInterval):
+			log.Info("Retrying filesystem check...")
 		}
 	}
+
+	log.Debug("Stopping FS watch; found file matching workload")
+	return
+
+exitFileNotFound:
+	log.Warn("Stopping FS watch; timeout / file not found")
+	return
+}
+
+// Starts a watcher in the given directory and returns a blocking function which
+// consumes watch events.
+//
+// The returned func returns a bool indicating whether or not create-type event was
+// seen for a file whos name matches the passed string, and returns non-nil error
+// if one is received from the watcher.
+//
+// The returned func always cleans up the watcher on-return.
+func startWatchForFile(ctx context.Context, directory, filename string) (func() (bool, error), error) {
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		return nil, err
+	}
+
+	err = watcher.Add(directory)
+	if err != nil {
+		defer closeWatcherAndIgnoreErr(watcher)
+		return nil, err
+	}
+
+	return func() (bool, error) {
+		return waitForCreateEventAndCleanup(ctx, watcher, filename)
+	}, nil
+}
+
+// Processes events from watcher and returns a boolean indicating
+// whether an event was seen for a file whose base mathes filename.
+// Will only return an error if an error event from the watcher is received.
+// In all cases, cleans-up the watcher on-return.
+func waitForCreateEventAndCleanup(ctx context.Context, watcher *fsnotify.Watcher, filename string) (bool, error) {
+	log := logrus.WithFields(logrus.Fields{
+		"watchedDirectories": watcher.WatchList(),
+		"targetFilename":     filename,
+	})
+
+	if watcher == nil {
+		log.Panic("watcher is nil")
+	}
+
+	defer closeWatcherAndIgnoreErr(watcher)
+
+	for {
+		select {
+		case e := <-watcher.Events:
+			log.WithField("eventName", e.Name).Debug("Received watch event")
+			switch e.Op {
+			case fsnotify.Create:
+				if filepath.Base(e.Name) == filename {
+					log.WithField("eventName", e.Name).Debug("FS 'Create' event seen for file. Firing notification and stopping watch")
+					return true, nil
+				}
+			default:
+			}
+
+		case err := <-watcher.Errors:
+			return false, err
+		case <-ctx.Done():
+			return false, nil
+		}
+	}
+}
+
+func closeWatcherAndIgnoreErr(w *fsnotify.Watcher) {
+	err := w.Close()
+	if err != nil {
+		logrus.WithError(err).Debug("Ignoring error encountered while closing filesystem watch")
+	}
+}
+
+func statFile(directory, filename string) (bool, error) {
+	f, err := os.Stat(filepath.Join(directory, filename))
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return false, nil
+		}
+		return false, err
+	} else if f != nil && f.Name() == filename {
+		return true, nil
+	}
+
+	return false, err
 }
