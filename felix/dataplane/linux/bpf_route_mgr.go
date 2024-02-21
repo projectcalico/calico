@@ -117,14 +117,8 @@ func newBPFRouteManager(config *Config, maps *bpfmap.IPMaps, ipFamily proto.IPVe
 				"Failed to parse external node CIDR (which should have been validated already).")
 		}
 
-		if ipFamily == proto.IPVersion_IPV4 {
-			if _, ok := cidr.(ip.V4CIDR); !ok {
-				continue
-			}
-		} else {
-			if _, ok := cidr.(ip.V6CIDR); !ok {
-				continue
-			}
+		if uint8(ipFamily) != cidr.Version() {
+			continue
 		}
 
 		extCIDRs.Add(cidr)
@@ -144,14 +138,8 @@ func newBPFRouteManager(config *Config, maps *bpfmap.IPMaps, ipFamily proto.IPVe
 				"Failed to parse DSR optout CIDR (which should have been validated already).")
 		}
 
-		if ipFamily == proto.IPVersion_IPV4 {
-			if _, ok := cidr.(ip.V4CIDR); !ok {
-				continue
-			}
-		} else {
-			if _, ok := cidr.(ip.V6CIDR); !ok {
-				continue
-			}
+		if uint8(ipFamily) != cidr.Version() {
+			continue
 		}
 
 		noDsrCIDRs.Update(cidr, something) // We need to store something
@@ -258,14 +246,8 @@ func (m *bpfRouteManager) CompleteDeferredWork() error {
 func (m *bpfRouteManager) recalculateRoutesForDirtyCIDRs() {
 	m.dirtyCIDRs.Iter(func(cidr ip.CIDR) error {
 		// Ignore IPv4 routes if IPv6 is enabled and vice-versa.
-		if m.ipFamily == proto.IPVersion_IPV4 {
-			if _, ok := cidr.(ip.V4CIDR); !ok {
-				return set.RemoveItem
-			}
-		} else {
-			if _, ok := cidr.(ip.V6CIDR); !ok {
-				return set.RemoveItem
-			}
+		if uint8(m.ipFamily) != cidr.Version() {
+			return set.RemoveItem
 		}
 		dataplaneKey := m.bpfOps.NewKey(cidr)
 		newValue := m.calculateRoute(cidr)
@@ -531,14 +513,8 @@ func (m *bpfRouteManager) onIfaceAddrsUpdate(update *ifaceAddrsUpdate) {
 		newCIDRs = set.New[ip.CIDR]()
 		update.Addrs.Iter(func(cidrStr string) error {
 			cidr := ip.MustParseCIDROrIP(cidrStr)
-			if m.ipFamily == proto.IPVersion_IPV4 {
-				if _, ok := cidr.(ip.V4CIDR); !ok {
-					return nil
-				}
-			} else {
-				if _, ok := cidr.(ip.V6CIDR); !ok {
-					return nil
-				}
+			if uint8(m.ipFamily) != cidr.Version() {
+				return nil
 			}
 			if cidr.Addr().AsNetIP().IsGlobalUnicast() {
 				newCIDRs.Add(cidr)
@@ -603,14 +579,8 @@ func (m *bpfRouteManager) onHostIPsChange(newIPs []net.IP) {
 
 func (m *bpfRouteManager) onRouteUpdate(update *proto.RouteUpdate) {
 	cidr := ip.MustParseCIDROrIP(update.Dst)
-	if m.ipFamily == proto.IPVersion_IPV4 {
-		if _, ok := cidr.(ip.V4CIDR); !ok {
-			return
-		}
-	} else {
-		if _, ok := cidr.(ip.V6CIDR); !ok {
-			return
-		}
+	if uint8(m.ipFamily) != cidr.Version() {
+		return
 	}
 
 	// For now don't handle the local tunnel addresses, which were previously not being included in the route updates.
@@ -629,14 +599,8 @@ func (m *bpfRouteManager) onRouteUpdate(update *proto.RouteUpdate) {
 
 func (m *bpfRouteManager) onRouteRemove(update *proto.RouteRemove) {
 	cidr := ip.MustParseCIDROrIP(update.Dst)
-	if m.ipFamily == proto.IPVersion_IPV4 {
-		if _, ok := cidr.(ip.V4CIDR); !ok {
-			return
-		}
-	} else {
-		if _, ok := cidr.(ip.V6CIDR); !ok {
-			return
-		}
+	if uint8(m.ipFamily) != cidr.Version() {
+		return
 	}
 	if _, ok := m.cidrToRoute[cidr]; ok {
 		// Check the entry is in the cache before removing and flagging as dirty.

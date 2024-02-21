@@ -218,11 +218,7 @@ func (c *Checker) ActualConnectivity(isARetry bool) ([]*Result, []string) {
 			go func(i int, exp Expectation) {
 				defer ginkgo.GinkgoRecover()
 				defer wg.Done()
-				if exp.ipVersion == 6 {
-					exp.From.PreRetryCleanup(exp.To.IP6, exp.To.Port, p, preCalcOpts[i]...)
-				} else {
-					exp.From.PreRetryCleanup(exp.To.IP, exp.To.Port, p, preCalcOpts[i]...)
-				}
+				exp.From.PreRetryCleanup(exp.DestIP(), exp.To.Port, p, preCalcOpts[i]...)
 			}(i, exp)
 		}
 		wg.Wait()
@@ -234,12 +230,7 @@ func (c *Checker) ActualConnectivity(isARetry bool) ([]*Result, []string) {
 		go func(i int, exp Expectation) {
 			defer ginkgo.GinkgoRecover()
 			defer wg.Done()
-			var res *Result
-			if exp.ipVersion == 6 {
-				res = exp.From.CanConnectTo(exp.To.IP6, exp.To.Port, p, preCalcOpts[i]...)
-			} else {
-				res = exp.From.CanConnectTo(exp.To.IP, exp.To.Port, p, preCalcOpts[i]...)
-			}
+			res := exp.From.CanConnectTo(exp.DestIP(), exp.To.Port, p, preCalcOpts[i]...)
 			pretty[i] += fmt.Sprintf("%s -> %s = %v", exp.From.SourceName(), exp.To.TargetName, res.HasConnectivity())
 
 			if res != nil {
@@ -620,6 +611,13 @@ type ExpPacketLoss struct {
 	Duration   time.Duration // how long test will run
 	MaxPercent float64       // 10 means 10%. -1 means field not valid.
 	MaxNumber  int           // 10 means 10 packets. -1 means field not valid.
+}
+
+func (e Expectation) DestIP() string {
+	if e.ipVersion == 6 {
+		return e.To.IP6
+	}
+	return e.To.IP
 }
 
 func (e Expectation) Matches(response *Result, checkSNAT bool) bool {

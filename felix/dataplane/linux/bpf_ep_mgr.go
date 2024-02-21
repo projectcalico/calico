@@ -274,8 +274,6 @@ type bpfEndpointManager struct {
 	dataIfaceRegex          *regexp.Regexp
 	l3IfaceRegex            *regexp.Regexp
 	workloadIfaceRegex      *regexp.Regexp
-	ipSetIDAllocV4          *idalloc.IDAllocator
-	ipSetIDAllocV6          *idalloc.IDAllocator
 	epToHostAction          string
 	vxlanMTU                int
 	vxlanPort               uint16
@@ -374,6 +372,7 @@ type bpfEndpointManagerDataplane struct {
 	// IP of the tunnel / overlay device
 	tunnelIP            net.IP
 	iptablesFilterTable IptablesTable
+	ipSetIDAlloc        *idalloc.IDAllocator
 }
 
 type serviceKey struct {
@@ -460,8 +459,6 @@ func newBPFEndpointManager(
 		dataIfaceRegex:          config.BPFDataIfacePattern,
 		l3IfaceRegex:            config.BPFL3IfacePattern,
 		workloadIfaceRegex:      workloadIfaceRegex,
-		ipSetIDAllocV4:          ipSetIDAllocV4,
-		ipSetIDAllocV6:          ipSetIDAllocV6,
 		epToHostAction:          config.RulesConfig.EndpointToHostAction,
 		vxlanMTU:                config.VXLANMTU,
 		vxlanPort:               uint16(config.VXLANPort),
@@ -536,10 +533,10 @@ func newBPFEndpointManager(
 		m.hostNetworkedNATMode = hostNetworkedNATEnabled
 	}
 
-	m.v4 = newBPFEndpointManagerDataplane(proto.IPVersion_IPV4, bpfmaps.V4, iptablesFilterTableV4, m)
+	m.v4 = newBPFEndpointManagerDataplane(proto.IPVersion_IPV4, bpfmaps.V4, iptablesFilterTableV4, ipSetIDAllocV4, m)
 
 	if m.ipv6Enabled {
-		m.v6 = newBPFEndpointManagerDataplane(proto.IPVersion_IPV6, bpfmaps.V6, iptablesFilterTableV6, m)
+		m.v6 = newBPFEndpointManagerDataplane(proto.IPVersion_IPV6, bpfmaps.V6, iptablesFilterTableV6, ipSetIDAllocV6, m)
 	}
 
 	if m.hostNetworkedNATMode != hostNetworkedNATDisabled {
@@ -646,6 +643,7 @@ func newBPFEndpointManagerDataplane(
 	ipFamily proto.IPVersion,
 	ipMaps *bpfmap.IPMaps,
 	iptablesFilterTable IptablesTable,
+	ipSetIDAlloc *idalloc.IDAllocator,
 	epMgr *bpfEndpointManager,
 ) *bpfEndpointManagerDataplane {
 
@@ -655,6 +653,7 @@ func newBPFEndpointManagerDataplane(
 		mgr:                 epMgr,
 		IPMaps:              ipMaps,
 		iptablesFilterTable: iptablesFilterTable,
+		ipSetIDAlloc:        ipSetIDAlloc,
 	}
 }
 
@@ -2088,7 +2087,7 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 	}
 
 	if egressQdisc != ingressQdisc {
-		return state, fmt.Errorf("ingress qdisc info (%v) does not equal egress qdist info (%v)",
+		return state, fmt.Errorf("ingress qdisc info (%v) does not equal egress qdisc info (%v)",
 			ingressQdisc, egressQdisc)
 	}
 	state.qdisc = ingressQdisc
@@ -3246,15 +3245,7 @@ func (m *bpfEndpointManager) ensureNoProgram(ap attachPoint) error {
 }
 
 func (m *bpfEndpointManager) removeIfaceAllPolicyDebugInfo(ifaceName string) {
-	ipVersions := []proto.IPVersion{}
-	if m.v4 != nil {
-		ipVersions = append(ipVersions, proto.IPVersion_IPV4)
-	}
-	if m.v6 != nil {
-		ipVersions = append(ipVersions, proto.IPVersion_IPV6)
-	}
-
-	for _, ipFamily := range ipVersions {
+	for _, ipFamily := range []proto.IPVersion{proto.IPVersion_IPV4, proto.IPVersion_IPV6} {
 		for _, hook := range hook.All {
 			m.removePolicyDebugInfo(ifaceName, ipFamily, hook)
 		}
@@ -3414,11 +3405,11 @@ func (m *bpfEndpointManager) loadPolicyProgram(
 	}).Debug("Generating policy program...")
 
 	ipsetsMapFD := m.v4.IpsetsMap.MapFD()
-	ipSetIDAlloc := m.ipSetIDAllocV4
+	ipSetIDAlloc := m.v4.ipSetIDAlloc
 	if ipFamily == proto.IPVersion_IPV6 {
 		opts = append(opts, polprog.WithIPv6())
 		ipsetsMapFD = m.v6.IpsetsMap.MapFD()
-		ipSetIDAlloc = m.ipSetIDAllocV6
+		ipSetIDAlloc = m.v6.ipSetIDAlloc
 	}
 
 	pg := polprog.NewBuilder(
@@ -3760,23 +3751,19 @@ var (
 )
 
 func (m *bpfEndpointManager) setRoute(cidr ip.CIDR) {
-	if m.v6 != nil {
-		if _, ok := cidr.(ip.V6CIDR); ok {
-			m.routeTableV6.RouteUpdate(bpfInDev, routetable.Target{
-				Type: routetable.TargetTypeGlobalUnicast,
-				CIDR: cidr,
-				GW:   bpfnatGWIPv6,
-			})
-		}
+	if m.v6 != nil && cidr.Version() == 6 {
+		m.routeTableV6.RouteUpdate(bpfInDev, routetable.Target{
+			Type: routetable.TargetTypeGlobalUnicast,
+			CIDR: cidr,
+			GW:   bpfnatGWIPv6,
+		})
 	}
-	if m.v4 != nil {
-		if _, ok := cidr.(ip.V4CIDR); ok {
-			m.routeTableV4.RouteUpdate(bpfInDev, routetable.Target{
-				Type: routetable.TargetTypeGlobalUnicast,
-				CIDR: cidr,
-				GW:   bpfnatGWIP,
-			})
-		}
+	if m.v4 != nil && cidr.Version() == 4 {
+		m.routeTableV4.RouteUpdate(bpfInDev, routetable.Target{
+			Type: routetable.TargetTypeGlobalUnicast,
+			CIDR: cidr,
+			GW:   bpfnatGWIP,
+		})
 	}
 
 	log.WithFields(log.Fields{
@@ -3785,15 +3772,11 @@ func (m *bpfEndpointManager) setRoute(cidr ip.CIDR) {
 }
 
 func (m *bpfEndpointManager) delRoute(cidr ip.CIDR) {
-	if m.v6 != nil {
-		if _, ok := cidr.(ip.V6CIDR); ok {
-			m.routeTableV6.RouteRemove(bpfInDev, cidr)
-		}
+	if m.v6 != nil && cidr.Version() == 6 {
+		m.routeTableV6.RouteRemove(bpfInDev, cidr)
 	}
-	if m.v4 != nil {
-		if _, ok := cidr.(ip.V4CIDR); ok {
-			m.routeTableV4.RouteRemove(bpfInDev, cidr)
-		}
+	if m.v4 != nil && cidr.Version() == 4 {
+		m.routeTableV4.RouteRemove(bpfInDev, cidr)
 	}
 	log.WithFields(log.Fields{
 		"cidr": cidr,
