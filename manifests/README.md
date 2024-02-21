@@ -21,8 +21,6 @@ commit your changes. **The following manifests are not auto generated:**
 
 - alp/istio-inject-configmap-X.yaml
 - apiserver.yaml
-- calico-windows-bgp.yaml
-- calico-windows-vxlan.yaml
 - calicoctl-etcd.yaml
 - calicoctl.yaml
 - canal-etcd.yaml
@@ -36,4 +34,3 @@ commit your changes. **The following manifests are not auto generated:**
 - ocp/01-cr-installation.yaml
 - ocp-tigera-operator-no-resource-loading.yaml
 - operator-crds.yaml
-- windows-kube-proxy.yaml
