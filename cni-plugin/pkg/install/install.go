@@ -166,14 +166,14 @@ func Install(version string) error {
 			logrus.Infof("No TLS assets found in %s, skipping", c.TLSAssetsDir)
 		} else {
 			logrus.Info("Installing any TLS assets")
-			mkdir(winutils.GetHostPath("/host/etc/cni/net.d/calico-tls"))
-			if err := copyFileAndPermissions(etcdCaPath, winutils.GetHostPath("/host/etc/cni/net.d/calico-tls/etcd-ca")); err != nil {
+			mkdir("/host/etc/cni/net.d/calico-tls")
+			if err := copyFileAndPermissions(etcdCaPath, "/host/etc/cni/net.d/calico-tls/etcd-ca"); err != nil {
 				logrus.Warnf("Missing etcd-ca")
 			}
-			if err := copyFileAndPermissions(etcdCertPath, winutils.GetHostPath("/host/etc/cni/net.d/calico-tls/etcd-cert")); err != nil {
+			if err := copyFileAndPermissions(etcdCertPath, "/host/etc/cni/net.d/calico-tls/etcd-cert"); err != nil {
 				logrus.Warnf("Missing etcd-cert")
 			}
-			if err := copyFileAndPermissions(etcdKeyPath, winutils.GetHostPath("/host/etc/cni/net.d/calico-tls/etcd-key")); err != nil {
+			if err := copyFileAndPermissions(etcdKeyPath, "/host/etc/cni/net.d/calico-tls/etcd-key"); err != nil {
 				logrus.Warnf("Missing etcd-key")
 			}
 		}
