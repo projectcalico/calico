@@ -76,12 +76,25 @@ type TopologyContainers struct {
 }
 
 func (c *TopologyContainers) Stop() {
+	var wg sync.WaitGroup
+
 	for _, felix := range c.Felixes {
-		felix.Stop()
+		wg.Add(1)
+		go func(felix *Felix) {
+			defer wg.Done()
+			felix.Stop()
+		}(felix)
 	}
+
 	if c.Typha != nil {
-		c.Typha.Stop()
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			c.Typha.Stop()
+		}()
 	}
+
+	wg.Wait()
 }
 
 func (c *TopologyContainers) TriggerDelayedStart() {
