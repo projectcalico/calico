@@ -148,9 +148,6 @@ type Config struct {
 	K8sServiceName                        string        `config:"string;calico-typha"`
 	K8sPortName                           string        `config:"string;calico-typha"`
 
-	// FIPSModeEnabled Enables FIPS 140-2 verified crypto mode.
-	FIPSModeEnabled bool `config:"bool;false"`
-
 	// State tracking.
 
 	// nameToSource tracks where we loaded each config param from.
