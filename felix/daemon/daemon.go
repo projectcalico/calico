@@ -1007,11 +1007,11 @@ func newConnector(configParams *config.Config,
 		StatusUpdatesFromDataplaneConsumers: make([]chan interface{}, 0),
 		// InSync should be buffered as it will always be sent a single
 		// message, regardless of any downstream consumers.
-		InSync:                              make(chan bool, 1),
-		InSyncConsumers:                     make([]chan bool, 0),
-		failureReportChan:                   failureReportChan,
-		dataplane:                           dataplane,
-		wireguardStatUpdateFromDataplane:    make(chan *proto.WireguardStatusUpdate, 1),
+		InSync:                           make(chan bool, 1),
+		InSyncConsumers:                  make([]chan bool, 0),
+		failureReportChan:                failureReportChan,
+		dataplane:                        dataplane,
+		wireguardStatUpdateFromDataplane: make(chan *proto.WireguardStatusUpdate, 1),
 	}
 
 	fromDataplaneDispatcher, err := dispatcher.NewBlockingDispatcher[interface{}](felixConn.StatusUpdatesFromDataplane)
