@@ -209,15 +209,6 @@ func InstallConnectTimeLoadBalancer(ipv4Enabled, ipv6Enabled bool, cgroupv2 stri
 	ctlbProgsMap := newProgramsMap()
 	var v4Obj, v46Obj, v6Obj *libbpf.Obj
 
-	// Load the v6 CTLB program.
-	if ipv6Enabled {
-		v6Obj, err = loadProgram(logLevel, "6", udpNotSeen, excludeUDP)
-		if err != nil {
-			return err
-		}
-		defer v6Obj.Close()
-	}
-
 	// Load and attach v4, v46 CTLB program.
 	if ipv4Enabled {
 		v4Obj, err = loadProgram(logLevel, "4", udpNotSeen, excludeUDP)
@@ -261,8 +252,20 @@ func InstallConnectTimeLoadBalancer(ipv4Enabled, ipv6Enabled bool, cgroupv2 stri
 				return err
 			}
 		}
+		if !ipv6Enabled {
+			//delete the jump map
+			os.Remove(ctlbProgsMap.Path())
+		}
+	}
+	// Load the v6 CTLB program.
+	if ipv6Enabled {
+		v6Obj, err = loadProgram(logLevel, "6", udpNotSeen, excludeUDP)
+		if err != nil {
+			return err
+		}
+		defer v6Obj.Close()
 		// If dual-stack, populate the jump maps with v6 ctlb programs.
-		if v6Obj != nil {
+		if ipv4Enabled {
 			if err := ctlbProgsMap.EnsureExists(); err != nil {
 				log.WithError(err).Error("Failed to create CTLB programs maps")
 				return err
@@ -272,25 +275,22 @@ func InstallConnectTimeLoadBalancer(ipv4Enabled, ipv6Enabled bool, cgroupv2 stri
 				return err
 			}
 		} else {
-			//delete the jump map
-			os.Remove(ctlbProgsMap.Path())
-		}
-		return nil
-	}
-	err = attachProgram("connect", "6", bpfMount, cgroupPath, udpNotSeen, excludeUDP, v6Obj)
-	if err != nil {
-		return err
-	}
+			err = attachProgram("connect", "6", bpfMount, cgroupPath, udpNotSeen, excludeUDP, v6Obj)
+			if err != nil {
+				return err
+			}
 
-	if !excludeUDP {
-		err = attachProgram("sendmsg", "6", bpfMount, cgroupPath, udpNotSeen, false, v6Obj)
-		if err != nil {
-			return err
-		}
+			if !excludeUDP {
+				err = attachProgram("sendmsg", "6", bpfMount, cgroupPath, udpNotSeen, false, v6Obj)
+				if err != nil {
+					return err
+				}
 
-		err = attachProgram("recvmsg", "6", bpfMount, cgroupPath, udpNotSeen, false, v6Obj)
-		if err != nil {
-			return err
+				err = attachProgram("recvmsg", "6", bpfMount, cgroupPath, udpNotSeen, false, v6Obj)
+				if err != nil {
+					return err
+				}
+			}
 		}
 	}
 	return nil

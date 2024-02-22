@@ -407,6 +407,17 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		}
 	}
 
+	checkIfState := func(idx int, name string, flags uint32) {
+		k := ifstate.NewKey(uint32(idx))
+		vb, err := ifStateMap.Get(k.AsBytes())
+		if err != nil {
+			Fail(fmt.Sprintf("Ifstate does not have key %s", k), 1)
+		}
+		vv := ifstate.ValueFromBytes(vb)
+		Expect(flags).To(Equal(vv.Flags()))
+		Expect(name).To(Equal(vv.IfName()))
+	}
+
 	genIfaceUpdate := func(name string, state ifacemonitor.State, index int) func() {
 		return func() {
 			bpfEpMgr.OnUpdate(&ifaceStateUpdate{Name: name, State: state, Index: index})
@@ -992,17 +1003,6 @@ var _ = Describe("BPF Endpoint Manager", func() {
 	})
 
 	Describe("ifstate(ipv6 disabled)", func() {
-		checkIfState := func(idx int, name string, flags uint32) {
-			k := ifstate.NewKey(uint32(idx))
-			vb, err := ifStateMap.Get(k.AsBytes())
-			if err != nil {
-				Fail(fmt.Sprintf("Ifstate does not have key %s", k), 1)
-			}
-			vv := ifstate.ValueFromBytes(vb)
-			Expect(flags).To(Equal(vv.Flags()))
-			Expect(name).To(Equal(vv.IfName()))
-		}
-
 		It("should clean up jump map entries for missing interfaces", func() {
 			for i := 0; i < 17; i++ {
 				_ = jumpMap.Update(jump.Key(i), jump.Value(uint32(1000+i)))
@@ -1229,6 +1229,9 @@ var _ = Describe("BPF Endpoint Manager", func() {
 				Expect(tcIDsSeen.Contains(v.EgressPolicyV4())).To(BeFalse(), "Saw same jump map ID more than once")
 				tcIDsSeen.Add(v.EgressPolicyV4())
 
+				Expect(v.XDPPolicyV6()).To(Equal(-1), "WEPs shouldn't get XDP IPv6 ID")
+				Expect(v.IngressPolicyV6()).To(Equal(-1), "WEPs shouldn't get IPv6 ingress pol")
+				Expect(v.EgressPolicyV6()).To(Equal(-1), "WEPs shouldn't get IPv6 egress pol")
 				Expect(v.TcIngressFilter()).To(Equal(-1), "should be no filters in use")
 				Expect(v.TcEgressFilter()).To(Equal(-1), "should be no filters in use")
 			}
@@ -1296,6 +1299,9 @@ var _ = Describe("BPF Endpoint Manager", func() {
 				Expect(tcIDsSeen.Contains(v.EgressPolicyV4())).To(BeFalse(), "Saw same jump map ID more than once")
 				tcIDsSeen.Add(v.EgressPolicyV4())
 
+				Expect(v.XDPPolicyV6()).To(Equal(-1), "WEPs shouldn't get XDP IPv6 ID")
+				Expect(v.IngressPolicyV6()).To(Equal(-1), "WEPs shouldn't get IPv6 ingress pol")
+				Expect(v.EgressPolicyV6()).To(Equal(-1), "WEPs shouldn't get IPv6 egress pol")
 				Expect(v.TcIngressFilter()).To(Equal(-1), "should be no filters in use")
 				Expect(v.TcEgressFilter()).To(Equal(-1), "should be no filters in use")
 			}
@@ -1431,17 +1437,6 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		JustBeforeEach(func() {
 			newBpfEpMgr(true)
 		})
-		checkIfState := func(idx int, name string, flags uint32) {
-			k := ifstate.NewKey(uint32(idx))
-			vb, err := ifStateMap.Get(k.AsBytes())
-			if err != nil {
-				Fail(fmt.Sprintf("Ifstate does not have key %s", k), 1)
-			}
-			vv := ifstate.ValueFromBytes(vb)
-			Expect(flags).To(Equal(vv.Flags()))
-			Expect(name).To(Equal(vv.IfName()))
-		}
-
 		It("should clean up jump map entries for missing interfaces", func() {
 			for i := 0; i < 17; i++ {
 				_ = jumpMap.Update(jump.Key(i), jump.Value(uint32(1000+i)))
