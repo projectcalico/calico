@@ -81,17 +81,8 @@ func NewKubeClient(kc *capi.KubeConfig) (*KubeClient, error) {
 
 	// A kubeconfig file was provided.  Use it to load a config, passing through
 	// any overrides.
-	var config *rest.Config
-	var err error
-	if winutils.InHostProcessContainer() {
-		// ClientConfig() calls InClusterConfig() at some point, which doesn't work
-		// on Windows HPC. Use winutils.GetInClusterConfig() instead in this case.
-		// FIXME: this will no longer be needed when containerd v1.6 is EOL'd
-		config, err = winutils.GetInClusterConfig()
-	} else {
-		config, err = clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
-			&loadingRules, configOverrides).ClientConfig()
-	}
+	config, err := winutils.NewNonInteractiveDeferredLoadingClientConfig(
+		&loadingRules, configOverrides)
 	if err != nil {
 		return nil, resources.K8sErrorToCalico(err, nil)
 	}
