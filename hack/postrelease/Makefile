@@ -10,22 +10,14 @@ bin/yq:
 
 ### Utility!
 
-define set_variable_error_with_message
-$(warning The variable $(1) is required but is not defined)
-$(eval REQUIRED_VARIABLES_FAILED=1)
-endef
-
 require_var = $(if \
                   $(filter-out undefined,$(origin $(1))),\
                   ,\
-                  $(call set_variable_error_with_message,$1) \
+                  $(error The variable $(1) is required but is not defined) \
           )
 
 require-vars-%:
 	$(foreach var,$(subst -, ,$*),$(call require_var,$(var)))
-	ifeq ($(REQUIRED_VARIABLES_FAILED),1)
-	$(error Please correct missing variables and retry)
-	endif
 
 ### Actual rules below here!
 
