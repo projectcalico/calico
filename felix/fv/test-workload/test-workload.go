@@ -58,7 +58,7 @@ func main() {
 		log.WithError(err).Fatal("Failed to parse usage")
 	}
 	interfaceName := arguments["<interface-name>"].(string)
-	ipAddress := arguments["<ip-address>"].(string)
+	ipAddressStr := arguments["<ip-address>"].(string)
 	portsStr := arguments["<ports>"].(string)
 	protocol := arguments["--protocol"].(string)
 	nsPath := ""
@@ -80,6 +80,16 @@ func main() {
 	}
 
 	ports := strings.Split(portsStr, ",")
+	ipAddrs := strings.Split(ipAddressStr, ",")
+	ipv6Addr := ""
+	ipv4Addr := ""
+	for _, ipAddress := range ipAddrs {
+		if strings.Contains(ipAddress, ":") {
+			ipv6Addr = ipAddress
+		} else {
+			ipv4Addr = ipAddress
+		}
+	}
 
 	var namespace ns.NetNS
 	if nsPath != "" {
@@ -131,7 +141,8 @@ func main() {
 		panicIfError(err)
 
 		var hostIPv6Addr net.IP
-		if strings.Contains(ipAddress, ":") {
+
+		if ipv6Addr != "" {
 			attempts := 0
 			for {
 				// No need to add a dummy next hop route as the host veth device will already have an IPv6
@@ -178,7 +189,7 @@ func main() {
 				log.WithError(err).Info("Failed to set dev lo up")
 			}
 
-			if strings.Contains(ipAddress, ":") {
+			if ipv6Addr != "" {
 				// Make sure ipv6 is enabled in the container/pod network namespace.
 				// Without these sysctls enabled, interfaces will come up but they won't get a link local IPv6 address,
 				// which is required to add the default IPv6 route.
@@ -197,9 +208,9 @@ func main() {
 					return
 				}
 
-				err = utils.RunCommand("ip", "-6", "addr", "add", ipAddress+"/128", "dev", "eth0")
+				err = utils.RunCommand("ip", "-6", "addr", "add", ipv6Addr+"/128", "dev", "eth0")
 				if err != nil {
-					log.WithField("ipAddress", ipAddress+"/128").WithError(err).Error("Failed to add IPv6 addr to eth0.")
+					log.WithField("ipAddress", ipv6Addr+"/128").WithError(err).Error("Failed to add IPv6 addr to eth0.")
 					return
 				}
 				err = utils.RunCommand("ip", "-6", "route", "add", "default", "via", hostIPv6Addr.String(), "dev", "eth0")
@@ -217,10 +228,11 @@ func main() {
 				if err != nil {
 					log.WithError(err).Info("Failed to output IPv6 addresses.")
 				}
-			} else {
-				err = utils.RunCommand("ip", "addr", "add", ipAddress+"/32", "dev", "eth0")
+			}
+			if ipv4Addr != "" {
+				err = utils.RunCommand("ip", "addr", "add", ipv4Addr+"/32", "dev", "eth0")
 				if err != nil {
-					log.WithField("ipAddress", ipAddress+"/32").WithError(err).Error("Failed to add IPv4 addr to eth0.")
+					log.WithField("ipAddress", ipv4Addr+"/32").WithError(err).Error("Failed to add IPv4 addr to eth0.")
 					return
 				}
 				err = utils.RunCommand("ip", "route", "add", "169.254.169.254/32", "dev", "eth0")
@@ -278,7 +290,7 @@ func main() {
 				return fmt.Errorf("failed to setup sidecar-like iptables: %v", err)
 			}
 		}
-		if strings.Contains(ipAddress, ":") {
+		if ipv6Addr != "" {
 			attempts := 0
 			for {
 				out, err := exec.Command("ip", "-6", "addr").CombinedOutput()
@@ -410,71 +422,73 @@ func main() {
 
 		// Listen on each port.
 		for _, port := range ports {
-			var myAddr string
-			if listenAnyIP {
-				myAddr = "0.0.0.0"
-			} else if strings.Contains(ipAddress, ":") {
-				myAddr = "[" + ipAddress + "]"
-			} else {
-				myAddr = ipAddress
-			}
-			if !strings.HasPrefix(protocol, "ip") {
-				myAddr += ":" + port
-			}
-			logCxt := log.WithFields(log.Fields{
-				"protocol": protocol,
-				"myAddr":   myAddr,
-			})
-			if strings.HasPrefix(protocol, "ip") {
-				logCxt.Info("About to listen for raw IP packets")
-				p, err := net.ListenPacket(protocol, myAddr)
-				panicIfError(err)
-				logCxt.Info("Listening for raw IP packets")
-
-				go loopRespondingToPackets(logCxt, p)
-			} else if protocol == "udp" {
-				// Since UDP is connectionless, we can't use Listen() as we do for TCP.  Instead,
-				// we use ListenPacket so that we can directly send/receive individual packets.
-				logCxt.Info("About to listen for UDP packets")
-				p, err := net.ListenPacket("udp", myAddr)
-				panicIfError(err)
-				logCxt.Info("Listening for UDP connections")
-
-				go loopRespondingToPackets(logCxt, p)
-			} else if protocol == "sctp" {
-				portInt, err := strconv.Atoi(port)
-				panicIfError(err)
-				netIP, err := net.ResolveIPAddr("ip", ipAddress)
-				panicIfError(err)
-				sAddrs := &sctp.SCTPAddr{
-					IPAddrs: []net.IPAddr{*netIP},
-					Port:    portInt,
+			for _, ipAddress := range ipAddrs {
+				var myAddr string
+				if listenAnyIP {
+					myAddr = "0.0.0.0"
+				} else if strings.Contains(ipAddress, ":") {
+					myAddr = "[" + ipAddress + "]"
+				} else {
+					myAddr = ipAddress
 				}
-				logCxt.Info("About to listen for SCTP connections")
-				l, err := sctp.ListenSCTP("sctp", sAddrs)
-				panicIfError(err)
-				logCxt.Info("Listening for SCTP connections")
-				go func() {
-					defer l.Close()
-					for {
-						conn, err := l.Accept()
-						panicIfError(err)
-						go handleRequest(conn)
+				if !strings.HasPrefix(protocol, "ip") {
+					myAddr += ":" + port
+				}
+				logCxt := log.WithFields(log.Fields{
+					"protocol": protocol,
+					"myAddr":   myAddr,
+				})
+				if strings.HasPrefix(protocol, "ip") {
+					logCxt.Info("About to listen for raw IP packets")
+					p, err := net.ListenPacket(protocol, myAddr)
+					panicIfError(err)
+					logCxt.Info("Listening for raw IP packets")
+
+					go loopRespondingToPackets(logCxt, p)
+				} else if protocol == "udp" {
+					// Since UDP is connectionless, we can't use Listen() as we do for TCP.  Instead,
+					// we use ListenPacket so that we can directly send/receive individual packets.
+					logCxt.Info("About to listen for UDP packets")
+					p, err := net.ListenPacket("udp", myAddr)
+					panicIfError(err)
+					logCxt.Info("Listening for UDP connections")
+
+					go loopRespondingToPackets(logCxt, p)
+				} else if protocol == "sctp" {
+					portInt, err := strconv.Atoi(port)
+					panicIfError(err)
+					netIP, err := net.ResolveIPAddr("ip", ipAddress)
+					panicIfError(err)
+					sAddrs := &sctp.SCTPAddr{
+						IPAddrs: []net.IPAddr{*netIP},
+						Port:    portInt,
 					}
-				}()
-			} else {
-				logCxt.Info("About to listen for TCP connections")
-				l, err := net.Listen("tcp", myAddr)
-				panicIfError(err)
-				logCxt.Info("Listening for TCP connections")
-				go func() {
-					defer l.Close()
-					for {
-						conn, err := l.Accept()
-						panicIfError(err)
-						go handleRequest(conn)
-					}
-				}()
+					logCxt.Info("About to listen for SCTP connections")
+					l, err := sctp.ListenSCTP("sctp", sAddrs)
+					panicIfError(err)
+					logCxt.Info("Listening for SCTP connections")
+					go func() {
+						defer l.Close()
+						for {
+							conn, err := l.Accept()
+							panicIfError(err)
+							go handleRequest(conn)
+						}
+					}()
+				} else {
+					logCxt.Info("About to listen for TCP connections")
+					l, err := net.Listen("tcp", myAddr)
+					panicIfError(err)
+					logCxt.Info("Listening for TCP connections")
+					go func() {
+						defer l.Close()
+						for {
+							conn, err := l.Accept()
+							panicIfError(err)
+							go handleRequest(conn)
+						}
+					}()
+				}
 			}
 		}
 		for {
