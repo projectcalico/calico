@@ -381,10 +381,10 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			options.ExtraEnvVars["FELIX_BPFExtToServiceConnmark"] = "0x80"
 			if !testOpts.ipv6 {
 				options.ExtraEnvVars["FELIX_BPFDSROptoutCIDRs"] = "245.245.0.0/16"
-				options.ExtraEnvVars["FELIX_BPFEXCLUDEIPSFROMNAT"] = "10.101.0.222"
+				options.ExtraEnvVars["FELIX_BPFEXCLUDECIDRSFROMNAT"] = "10.101.0.222"
 			} else {
 				options.ExtraEnvVars["FELIX_IPV6SUPPORT"] = "true"
-				options.ExtraEnvVars["FELIX_BPFEXCLUDEIPSFROMNAT"] = "dead:beef::abcd:0:0:222"
+				options.ExtraEnvVars["FELIX_BPFEXCLUDECIDRSFROMNAT"] = "dead:beef::abcd:0:0:222"
 			}
 
 			if testOpts.protocol == "tcp" {
@@ -2365,10 +2365,10 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 						By("Starting host workload")
 						hostW := workload.Run(tc.Felixes[0], "dummy", "default",
-							excludeSvcIP, "9090", testOpts.protocol, workload.WithHostNetworked())
+							excludeSvcIP, "8066", testOpts.protocol, workload.WithHostNetworked())
 						defer hostW.Stop()
 
-						cc.Expect(Some, w[0][0], TargetIP(excludeSvcIP), ExpectWithPorts(9090))
+						cc.Expect(Some, w[0][0], TargetIP(excludeSvcIP), ExpectWithPorts(8066))
 						cc.CheckConnectivity()
 					})
 
