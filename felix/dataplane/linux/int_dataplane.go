@@ -674,12 +674,15 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		// Register map managers first since they create the maps that will be used by the endpoint manager.
 		// Important that we create the maps before we load a BPF program with TC since we make sure the map
 		// metadata name is set whereas TC doesn't set that field.
-		ipSetIDAllocator := idalloc.New()
+		var ipSetIDAllocatorV4, ipSetIDAllocatorV6 *idalloc.IDAllocator
+		ipSetIDAllocatorV4 = idalloc.New()
 
+		// Start IPv4 BPF dataplane components
+		startBPFDataplaneComponents(proto.IPVersion_IPV4, bpfMaps.V4, ipSetIDAllocatorV4, config, ipsetsManager, dp)
 		if config.BPFIpv6Enabled {
-			startBPFDataplaneComponents(proto.IPVersion_IPV6, bpfMaps.V6, ipSetIDAllocator, config, ipsetsManagerV6, dp)
-		} else {
-			startBPFDataplaneComponents(proto.IPVersion_IPV4, bpfMaps.V4, ipSetIDAllocator, config, ipsetsManager, dp)
+			// Start IPv6 BPF dataplane components
+			ipSetIDAllocatorV6 = idalloc.New()
+			startBPFDataplaneComponents(proto.IPVersion_IPV6, bpfMaps.V6, ipSetIDAllocatorV6, config, ipsetsManagerV6, dp)
 		}
 
 		workloadIfaceRegex := regexp.MustCompile(strings.Join(interfaceRegexes, "|"))
@@ -699,7 +702,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			bpfMaps,
 			fibLookupEnabled,
 			workloadIfaceRegex,
-			ipSetIDAllocator,
+			ipSetIDAllocatorV4,
+			ipSetIDAllocatorV6,
 			ruleRenderer,
 			filterTableV4,
 			filterTableV6,
@@ -749,12 +753,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 				}
 			}
 
-			ipFamily := 4
-			if config.BPFIpv6Enabled {
-				ipFamily = 6
-			}
 			// Activate the connect-time load balancer.
-			err = bpfnat.InstallConnectTimeLoadBalancer(ipFamily,
+			err = bpfnat.InstallConnectTimeLoadBalancer(true, config.BPFIpv6Enabled,
 				config.BPFCgroupV2, logLevel, config.BPFConntrackTimeouts.UDPLastSeen, excludeUDP)
 			if err != nil {
 				log.WithError(err).Panic("BPFConnTimeLBEnabled but failed to attach connect-time load balancer, bailing out.")
@@ -2370,7 +2370,7 @@ func startBPFDataplaneComponents(ipFamily proto.IPVersion,
 	)
 	dp.RegisterManager(failsafeMgr)
 
-	bpfRTMgr := newBPFRouteManager(&config, bpfmaps, dp.loopSummarizer)
+	bpfRTMgr := newBPFRouteManager(&config, bpfmaps, ipFamily, dp.loopSummarizer)
 	dp.RegisterManager(bpfRTMgr)
 
 	conntrackScanner := bpfconntrack.NewScanner(bpfmaps.CtMap, ctKey, ctVal,

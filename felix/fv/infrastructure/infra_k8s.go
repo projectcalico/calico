@@ -762,10 +762,10 @@ func (kds *K8sDatastoreInfra) RemoveWorkload(ns, name string) error {
 }
 
 func (kds *K8sDatastoreInfra) AddWorkload(wep *libapi.WorkloadEndpoint) (*libapi.WorkloadEndpoint, error) {
-	podIP := wep.Spec.IPNetworks[0]
-	if strings.Contains(podIP, "/") {
-		// Our WEP will have a /32 rather than an IP, strip it off.
-		podIP = strings.Split(podIP, "/")[0]
+	podIPs := []v1.PodIP{}
+	for _, ipnet := range wep.Spec.IPNetworks {
+		podIP := strings.Split(ipnet, "/")[0]
+		podIPs = append(podIPs, v1.PodIP{IP: podIP})
 	}
 	desiredStatus := v1.PodStatus{
 		Phase: v1.PodRunning,
@@ -779,7 +779,7 @@ func (kds *K8sDatastoreInfra) AddWorkload(wep *libapi.WorkloadEndpoint) (*libapi
 				Status: v1.ConditionTrue,
 			},
 		},
-		PodIP: podIP,
+		PodIPs: podIPs,
 	}
 	podIn := &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{Name: wep.Spec.Workload, Namespace: wep.Namespace},
