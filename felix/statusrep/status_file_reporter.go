@@ -52,6 +52,8 @@ type EndpointStatusFileReporter struct {
 
 	// Wraps and manages a real or mock wait.Backoff.
 	bom backoffManager
+
+	hostname string
 }
 
 // Backoff wraps a timer-based-retry type which can be stepped.
@@ -101,6 +103,7 @@ func NewEndpointStatusFileReporter(
 		endpointStatusDirPrefix: statusDirPath,
 		statusDirDeltaTracker:   deltatracker.NewSetDeltaTracker[string](),
 		bom:                     newBackoffManager(newDefaultBackoff),
+		hostname:                "",
 	}
 
 	for _, o := range opts {
@@ -115,6 +118,14 @@ func NewEndpointStatusFileReporter(
 func WithNewBackoffFunc(newBackoffFunc func() Backoff) FileReporterOption {
 	return func(fr *EndpointStatusFileReporter) {
 		fr.bom = newBackoffManager(newBackoffFunc)
+	}
+}
+
+// WithHostname instructs the reporter to use the give hostname
+// when creating endpoint structures.
+func WithHostname(hostname string) FileReporterOption {
+	return func(fr *EndpointStatusFileReporter) {
+		fr.hostname = hostname
 	}
 }
 
@@ -247,9 +258,17 @@ func (fr *EndpointStatusFileReporter) SyncForever(ctx context.Context) {
 func (fr *EndpointStatusFileReporter) handleEndpointUpdate(e interface{}) {
 	switch m := e.(type) {
 	case *proto.WorkloadEndpointStatusUpdate:
-		fr.statusDirDeltaTracker.Desired().Add(names.WorkloadEndpointIDToStatusFilename(m.Id))
+		key := names.WorkloadEndpointIDToWorkloadEndpointKey(m.Id, fr.hostname)
+		if key == nil {
+			logrus.WithField("update", e).Warn("Couldn't generate a WorkloadEndpointKey from update")
+		}
+		fr.statusDirDeltaTracker.Desired().Add(names.WorkloadEndpointKeyToStatusFilename(key))
 	case *proto.WorkloadEndpointStatusRemove:
-		fr.statusDirDeltaTracker.Desired().Delete(names.WorkloadEndpointIDToStatusFilename(m.Id))
+		key := names.WorkloadEndpointIDToWorkloadEndpointKey(m.Id, fr.hostname)
+		if key == nil {
+			logrus.WithField("update", e).Warn("Couldn't generate a WorkloadEndpointKey from update")
+		}
+		fr.statusDirDeltaTracker.Desired().Delete(names.WorkloadEndpointKeyToStatusFilename(key))
 	default:
 		logrus.WithField("update", e).Debug("Skipping undesired endpoint update")
 	}
