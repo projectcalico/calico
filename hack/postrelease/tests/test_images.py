@@ -4,6 +4,7 @@ import subprocess
 import pytest
 import requests
 import variables
+import utilities
 
 OPERATOR_IMAGE = f"quay.io/tigera/operator:{variables.OPERATOR_VERSION}"
 
@@ -101,7 +102,7 @@ def test_quay_release_tags_present(image_name):
             f"Got status code {resp.status_code} from API URL {resp.request.url}"
         )
 
-
+@utilities.skip_if_master("GCR images are not published for master branch")
 @pytest.mark.parametrize("image_name", GCR_IMAGES)
 def test_gcr_release_tag_present(image_name):
     """
@@ -127,7 +128,7 @@ def test_gcr_release_tag_present(image_name):
 
     assert EXPECTED_ARCHS.sort() == found_archs.sort()
 
-
+@utilities.skip_if_master("Docker images are not published for master branch")
 @pytest.mark.parametrize("image_name", CHECK_IMAGES)
 def test_docker_release_tag_present(image_name):
     """
