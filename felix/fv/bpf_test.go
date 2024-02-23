@@ -2367,10 +2367,10 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 						By("Starting host workload")
 						hostW := workload.Run(tc.Felixes[0], "dummy", "default",
-							excludeSvcIP, "9090", testOpts.protocol, workload.WithHostNetworked())
+							excludeSvcIP, "8066", testOpts.protocol, workload.WithHostNetworked())
 						defer hostW.Stop()
 
-						cc.Expect(Some, w[0][0], TargetIP(excludeSvcIP), ExpectWithPorts(9090))
+						cc.Expect(Some, w[0][0], TargetIP(excludeSvcIP), ExpectWithPorts(8066))
 						cc.CheckConnectivity()
 					})
 
