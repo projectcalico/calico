@@ -15,13 +15,12 @@
 package install
 
 import (
-	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
+	"runtime"
 	"strings"
 	"time"
 
@@ -118,7 +117,7 @@ func loadConfig() config {
 	return c
 }
 
-func Install() error {
+func Install(version string) error {
 	// Make sure the RNG is seeded.
 	seedrng.EnsureSeeded()
 
@@ -159,32 +158,25 @@ func Install() error {
 	// Copy over any TLS assets from the SECRETS_MOUNT_DIR to the host.
 	// First check if the dir exists and has anything in it.
 	if directoryExists(c.TLSAssetsDir) {
-		logrus.Info("Installing any TLS assets")
-		mkdir("/host/etc/cni/net.d/calico-tls")
-		if err := copyFileAndPermissions(fmt.Sprintf("%s/%s", c.TLSAssetsDir, "etcd-ca"), "/host/etc/cni/net.d/calico-tls/etcd-ca"); err != nil {
-			logrus.Warnf("Missing etcd-ca")
+		// Only install TLS assets if at least one of them exists in the dir.
+		etcdCaPath := fmt.Sprintf("%s/%s", c.TLSAssetsDir, "etcd-ca")
+		etcdCertPath := fmt.Sprintf("%s/%s", c.TLSAssetsDir, "etcd-cert")
+		etcdKeyPath := fmt.Sprintf("%s/%s", c.TLSAssetsDir, "etcd-key")
+		if !fileExists(etcdCaPath) && !fileExists(etcdCertPath) && !fileExists(etcdKeyPath) {
+			logrus.Infof("No TLS assets found in %s, skipping", c.TLSAssetsDir)
+		} else {
+			logrus.Info("Installing any TLS assets")
+			mkdir("/host/etc/cni/net.d/calico-tls")
+			if err := copyFileAndPermissions(etcdCaPath, "/host/etc/cni/net.d/calico-tls/etcd-ca"); err != nil {
+				logrus.Warnf("Missing etcd-ca")
+			}
+			if err := copyFileAndPermissions(etcdCertPath, "/host/etc/cni/net.d/calico-tls/etcd-cert"); err != nil {
+				logrus.Warnf("Missing etcd-cert")
+			}
+			if err := copyFileAndPermissions(etcdKeyPath, "/host/etc/cni/net.d/calico-tls/etcd-key"); err != nil {
+				logrus.Warnf("Missing etcd-key")
+			}
 		}
-		if err := copyFileAndPermissions(fmt.Sprintf("%s/%s", c.TLSAssetsDir, "etcd-cert"), "/host/etc/cni/net.d/calico-tls/etcd-cert"); err != nil {
-			logrus.Warnf("Missing etcd-cert")
-		}
-		if err := copyFileAndPermissions(fmt.Sprintf("%s/%s", c.TLSAssetsDir, "etcd-key"), "/host/etc/cni/net.d/calico-tls/etcd-key"); err != nil {
-			logrus.Warnf("Missing etcd-key")
-		}
-	}
-
-	// Set the suid bit on the binaries to allow them to run as non-root users.
-	if err := setSuidBit("/opt/cni/bin/install"); err != nil {
-		logrus.WithError(err).Fatalf("Failed to set the suid bit on the install binary")
-	}
-
-	// TODO: Remove the setSUID code here on calico and calico-ipam when they eventually
-	// get refactored to all use install as the source.
-	if err := setSuidBit("/opt/cni/bin/calico"); err != nil {
-		logrus.WithError(err).Fatalf("Failed to set the suid bit on the calico binary")
-	}
-
-	if err := setSuidBit("/opt/cni/bin/calico-ipam"); err != nil {
-		logrus.WithError(err).Fatalf("Failed to set the suid bit on the calico-ipam")
 	}
 
 	// Place the new binaries if the directory is writeable.
@@ -204,6 +196,10 @@ func Install() error {
 		for _, binary := range files {
 			target := fmt.Sprintf("%s/%s", d, binary.Name())
 			source := fmt.Sprintf("/opt/cni/bin/%s", binary.Name())
+			// Skip the 'install' binary as it is not needed on the host
+			if binary.Name() == "install" || binary.Name() == "install.exe" {
+				continue
+			}
 			if c.skipBinary(binary.Name()) {
 				continue
 			}
@@ -222,17 +218,20 @@ func Install() error {
 		logrus.Infof("Wrote Calico CNI binaries to %s\n", d)
 		binsWritten = true
 
-		// Print CNI plugin version to confirm that the binary was actually written.
-		// If this fails, it means something has gone wrong so we should retry.
-		cmd := exec.Command(d+"/calico", "-v")
-		var out bytes.Buffer
-		cmd.Stdout = &out
-		err = cmd.Run()
+		// Instead of executing 'calico -v', check if the calico binary was copied successfully
+		calicoBinaryName := "calico"
+		if runtime.GOOS == "windows" {
+			calicoBinaryName = "calico.exe"
+		}
+		calicoBinaryOK, err := destinationUptoDate("/opt/cni/bin/"+calicoBinaryName, d+"/"+calicoBinaryName)
 		if err != nil {
-			logrus.WithError(err).Warnf("Failed getting CNI plugin version from installed binary, exiting")
+			logrus.WithError(err).Warnf("Failed verifying installed binary, exiting")
 			return err
 		}
-		logrus.Infof("CNI plugin version: %s", out.String())
+		// Print version number if successful
+		if calicoBinaryOK {
+			logrus.Infof("CNI plugin version: %s", version)
+		}
 	}
 
 	// If binaries were not placed, exit
@@ -505,19 +504,6 @@ current-context: calico-context`
 	if err := os.WriteFile("/host/etc/cni/net.d/calico-kubeconfig", []byte(data), 0600); err != nil {
 		logrus.Fatal(err)
 	}
-}
-
-func setSuidBit(file string) error {
-	fi, err := os.Stat(file)
-	if err != nil {
-		return fmt.Errorf("failed to stat file: %s", err)
-	}
-	err = os.Chmod(file, fi.Mode()|os.FileMode(uint32(8388608)))
-	if err != nil {
-		return fmt.Errorf("failed to chmod file: %s", err)
-	}
-
-	return nil
 }
 
 // destinationUptoDate compares the given files and returns
