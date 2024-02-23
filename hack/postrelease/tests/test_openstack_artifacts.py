@@ -36,15 +36,15 @@ UBUNTU_NETWORKING_URLS = []
 # Build a list of URLs to check for Felix packaging.
 # - RPM URL
 # - PPA URL for each Ubuntu version we support.
-for component in ("calico-common", "calico-felix", "felix-debuginfo"):
+for component_name in ("calico-common", "calico-felix", "felix-debuginfo"):
     arch = "x86_64"
     RPM_URLS_x86.append(
         RPM_FILE_TMPL.format(
-            ppa_ver=PPA_VER, component=component, component_version=COMP_VER, arch=arch
+            ppa_ver=PPA_VER, component=component_name, component_version=COMP_VER, arch=arch
         )
     )
 
-for component in (
+for component_name in (
     "calico-compute",
     "calico-control",
     "calico-dhcp-agent",
@@ -53,12 +53,12 @@ for component in (
     arch = "noarch"
     RPM_URLS_noarch.append(
         RPM_FILE_TMPL.format(
-            ppa_ver=PPA_VER, component=component, component_version=COMP_VER, arch=arch
+            ppa_ver=PPA_VER, component=component_name, component_version=COMP_VER, arch=arch
         )
     )
 
-for component in ("calico-felix", "calico-common"):
-    if component == "calico-felix":
+for component_name in ("calico-felix", "calico-common"):
+    if component_name == "calico-felix":
         arch = "amd64"
     else:
         arch = "all"
@@ -66,14 +66,14 @@ for component in ("calico-felix", "calico-common"):
         UBUNTU_FELIX_URLS.append(
             UBUNTU_DEB_FILE_TMPL.format(
                 ppa_ver=PPA_VER,
-                component=component,
+                component=component_name,
                 component_version=COMP_VER,
                 ubuntu_version=ubuntu_version,
                 arch=arch,
             )
         )
 
-for component in (
+for component_name in (
     "calico-compute",
     "calico-control",
     "calico-dhcp-agent",
@@ -84,7 +84,7 @@ for component in (
         UBUNTU_NETWORKING_URLS.append(
             UBUNTU_DEB_FILE_TMPL.format(
                 ppa_ver=PPA_VER,
-                component=component,
+                component=component_name,
                 component_version=COMP_VER,
                 ubuntu_version=ubuntu_version,
                 arch=arch,
