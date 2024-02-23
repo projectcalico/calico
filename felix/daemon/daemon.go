@@ -665,7 +665,7 @@ configRetry:
 		inSyncC := make(chan bool, 1)
 		dpConnector.StatusUpdatesFromDataplaneConsumers = append(dpConnector.StatusUpdatesFromDataplaneConsumers, fromDataplaneC)
 		dpConnector.InSyncConsumers = append(dpConnector.InSyncConsumers, inSyncC)
-		statusFileReporter := statusrep.NewEndpointStatusFileReporter(fromDataplaneC, inSyncC, configParams.EndpointStatusPathPrefix)
+		statusFileReporter := statusrep.NewEndpointStatusFileReporter(fromDataplaneC, inSyncC, configParams.EndpointStatusPathPrefix, statusrep.WithHostname(configParams.FelixHostname))
 
 		log.WithField("path", configParams.EndpointStatusPathPrefix).Warn("EndpointStatusPathPrefix is non-empty. Starting StatusFileReporter")
 		ctx := context.Background()
