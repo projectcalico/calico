@@ -667,7 +667,7 @@ configRetry:
 		inSyncC := make(chan bool, 1)
 		dpConnector.StatusUpdatesFromDataplaneConsumers = append(dpConnector.StatusUpdatesFromDataplaneConsumers, fromDataplaneC)
 		dpConnector.InSyncConsumers = append(dpConnector.InSyncConsumers, inSyncC)
-		statusFileReporter := statusrep.NewEndpointStatusFileReporter(fromDataplaneC, inSyncC, configParams.EndpointStatusPathPrefix, statusrep.WithHostname(configParams.FelixHostname))
+		statusFileReporter := statusrep.NewEndpointStatusFileReporter(fromDataplaneC, configParams.EndpointStatusPathPrefix, statusrep.WithHostname(configParams.FelixHostname))
 
 		log.WithField("path", configParams.EndpointStatusPathPrefix).Warn("EndpointStatusPathPrefix is non-empty. Starting StatusFileReporter")
 		ctx := context.Background()
@@ -1065,6 +1065,10 @@ func (fc *DataplaneConnector) readMessagesFromDataplane() {
 			}
 		case *proto.WireguardStatusUpdate:
 			fc.wireguardStatUpdateFromDataplane <- msg
+		case *proto.DataplaneInSync:
+			if fc.StatusUpdatesFromDataplaneDispatcher != nil {
+				fc.StatusUpdatesFromDataplane <- msg
+			}
 		default:
 			log.WithField("msg", msg).Warning("Unknown message from dataplane")
 		}

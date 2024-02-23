@@ -21,6 +21,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
+	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/statusrep"
 )
 
@@ -66,7 +67,7 @@ var _ = Describe("Endpoint Policy Status Reports [file-reporting]", func() {
 		}
 
 		// Use a path we think the reporter cannot write to.
-		fileReporter = statusrep.NewEndpointStatusFileReporter(endpointUpdatesC, nil, "/root/", statusrep.WithNewBackoffFunc(newMockBackoff))
+		fileReporter = statusrep.NewEndpointStatusFileReporter(endpointUpdatesC, "/root/", statusrep.WithNewBackoffFunc(newMockBackoff))
 
 		By("Starting a fileReporter which cannot create the necessary directory")
 
@@ -77,6 +78,7 @@ var _ = Describe("Endpoint Policy Status Reports [file-reporting]", func() {
 			fileReporter.SyncForever(ctx)
 		}()
 
-		Eventually(backoffCalledC).Should(BeClosed(), "Backoff wasn't called by the reporter (is the file-reporting unexpectedly succeeding?).")
+		Eventually(endpointUpdatesC, "10s").Should(BeSent(&proto.DataplaneInSync{}))
+		Eventually(backoffCalledC, "10s").Should(BeClosed(), "Backoff wasn't called by the reporter (is the file-reporting unexpectedly succeeding?).")
 	})
 })

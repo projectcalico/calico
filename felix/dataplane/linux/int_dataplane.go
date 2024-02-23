@@ -2248,6 +2248,10 @@ func (d *InternalDataplane) apply() {
 		}
 		d.reschedC = d.reschedTimer.C
 	}
+
+	if !d.dataplaneNeedsSync {
+		d.fromDataplane <- &proto.DataplaneInSync{}
+	}
 }
 
 func (d *InternalDataplane) applyXDPActions() error {
