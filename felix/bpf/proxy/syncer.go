@@ -750,7 +750,7 @@ func (s *Syncer) Apply(state DPSyncerState) error {
 	return s.cleanupSticky()
 }
 
-func (s *Syncer) updateService(skey svcKey, sinfo k8sp.ServicePort, id uint32, eps []k8sp.Endpoint) (int, int, error) {
+func (s *Syncer) updateService(skey svcKey, sinfo Service, id uint32, eps []k8sp.Endpoint) (int, int, error) {
 	cpEps := make([]k8sp.Endpoint, 0, len(eps))
 
 	cnt := 0
@@ -915,7 +915,7 @@ func (s *Syncer) writeLBSrcRangeSvcNATKeys(svc k8sp.ServicePort, svcID uint32, c
 	return nil
 }
 
-func (s *Syncer) writeSvc(svc k8sp.ServicePort, svcID uint32, count, local int, flags uint32) error {
+func (s *Syncer) writeSvc(svc Service, svcID uint32, count, local int, flags uint32) error {
 	key, err := s.getSvcNATKey(svc)
 	if err != nil {
 		return err
@@ -926,6 +926,9 @@ func (s *Syncer) writeSvc(svc k8sp.ServicePort, svcID uint32, count, local int, 
 		if v != nil {
 			flags |= nat.NATFlgExclude
 		}
+	}
+	if svc.ExcludeService() {
+		flags |= nat.NATFlgExclude
 	}
 
 	affinityTimeo := uint32(0)
