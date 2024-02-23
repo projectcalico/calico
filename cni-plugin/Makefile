@@ -100,7 +100,7 @@ $(BIN)/calico: $(SRC_FILES)
 ifeq ($(FIPS), true)
 	$(call build_cgo_boring_binary, $(PACKAGE_NAME)/cmd/calico, $@)
 else
-	$(call build_binary, $(PACKAGE_NAME)/cmd/calico, $@)
+	$(call build_static_binary, $(PACKAGE_NAME)/cmd/calico, $@)
 endif
 
 $(BIN)/calico-ipam: $(BIN)/calico
