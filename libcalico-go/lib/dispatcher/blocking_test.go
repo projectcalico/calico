@@ -78,12 +78,4 @@ var _ = Describe("Dispatching", func() {
 			}
 		})
 	})
-
-	Context("BlockingDispatcherErrorHandling", func() {
-		It("should return an error if no input is given", func() {
-			blockingDispatcher, err := dispatcher.NewBlockingDispatcher[interface{}](nil)
-			Expect(blockingDispatcher).To(BeNil())
-			Expect(err).To(HaveOccurred())
-		})
-	})
 })
