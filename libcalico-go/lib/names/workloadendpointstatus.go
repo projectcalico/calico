@@ -15,13 +15,12 @@
 package names
 
 import (
-	"errors"
-	"fmt"
 	"net/url"
 	"strings"
 
 	"github.com/projectcalico/calico/felix/proto"
 	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 
 	"github.com/sirupsen/logrus"
 )
@@ -44,14 +43,18 @@ var (
 	unescape       = url.PathUnescape
 )
 
-// WorkloadEndpointIDToStatusFilename accepts a workload endpoint ID
+// WorkloadEndpointKeyToStatusFilename accepts a workload endpoint Key
 // and converts it to a filename for use in WEP-policy status syncing
 // between Felix and the CNI.
-func WorkloadEndpointIDToStatusFilename(id *proto.WorkloadEndpointID) string {
+// Returns "" if passed a nilptr.
+func WorkloadEndpointKeyToStatusFilename(id *model.WorkloadEndpointKey) string {
+	if id == nil {
+		return ""
+	}
 	parts := make([]string, len(expectedFields))
-	parts[fieldOrchestratorID] = escape(id.OrchestratorId)
-	parts[fieldWorkloadID] = escape(id.WorkloadId)
-	parts[fieldEndpointID] = escape(id.EndpointId)
+	parts[fieldOrchestratorID] = escape(id.OrchestratorID)
+	parts[fieldWorkloadID] = escape(id.WorkloadID)
+	parts[fieldEndpointID] = escape(id.EndpointID)
 
 	logrus.WithFields(logrus.Fields{
 		"parts": parts,
@@ -61,51 +64,35 @@ func WorkloadEndpointIDToStatusFilename(id *proto.WorkloadEndpointID) string {
 	return strings.Join(parts, separator)
 }
 
-// StatusFilenameToWorkloadEndpointID accepts the stringed name of
-// a policy-status file and reverses the conversion
-// from WorkloadEndpointID to filename.
-func StatusFilenameToWorkloadEndpointID(filename string) (*proto.WorkloadEndpointID, error) {
-	parts := strings.Split(filename, separator)
-	if len(parts) != len(expectedFields) {
-		return nil, fmt.Errorf("couldn't parse WorkloadEndpointID from string %s", filename)
+// WorkloadEndpointIDToWorkloadEndpointKey converts the proto representation
+// of an endpoint key back to the canonical model structure.
+// Returns nil if passed a nilptr.
+func WorkloadEndpointIDToWorkloadEndpointKey(id *proto.WorkloadEndpointID, hostname string) *model.WorkloadEndpointKey {
+	if id == nil {
+		return nil
 	}
-
-	logrus.WithFields(logrus.Fields{
-		"filename": filename,
-		"parsed":   parts,
-	}).Debug("Generating workload endpoint ID from filename")
-
-	parsed := make([]string, len(parts))
-	var err error
-	for i, p := range parts {
-		if p == "" {
-			return nil, errors.New("found double-separated, empty field")
-		}
-		parsed[i], err = unescape(p)
-		if err != nil {
-			return nil, err
-		}
+	return &model.WorkloadEndpointKey{
+		Hostname:       hostname,
+		OrchestratorID: id.OrchestratorId,
+		WorkloadID:     id.WorkloadId,
+		EndpointID:     id.EndpointId,
 	}
-
-	return &proto.WorkloadEndpointID{
-		OrchestratorId: parsed[fieldOrchestratorID],
-		WorkloadId:     parsed[fieldWorkloadID],
-		EndpointId:     parsed[fieldEndpointID]}, nil
 }
 
-// WorkloadEndpointToStatusFilename generates a string to be used as a status-file's name.
-// Operation should be reversible, i.e., the stringification shouldn't be lossy.
-// Returns "" if passed endpoint is nil.
-func WorkloadEndpointToStatusFilename(ep *libapi.WorkloadEndpoint) string {
+// APIWorkloadEndpointToWorkloadEndpointKey generates a WorkloadEndpointKey from the given WorkloadEndpoint.
+// Returns nil if passed endpoint is nil.
+func APIWorkloadEndpointToWorkloadEndpointKey(ep *libapi.WorkloadEndpoint) *model.WorkloadEndpointKey {
 	if ep == nil {
-		return ""
+		return nil
 	}
 
-	parts := make([]string, len(expectedFields))
-	parts[fieldOrchestratorID] = escape(ep.Spec.Orchestrator)
-	parts[fieldWorkloadID] = escape(ep.Namespace + "/" + ep.Spec.Pod)
-	parts[fieldEndpointID] = escape(ep.Spec.Endpoint)
+	key := &model.WorkloadEndpointKey{
+		Hostname:       ep.Spec.Node,
+		OrchestratorID: ep.Spec.Orchestrator,
+		WorkloadID:     ep.Namespace + "/" + ep.Spec.Pod,
+		EndpointID:     ep.Spec.Endpoint,
+	}
 
-	logrus.WithField("parts", parts).WithField("endpoint", ep).Debug("Generating status filename from workload endpoint")
-	return strings.Join(parts, separator)
+	logrus.WithField("key", key).WithField("endpoint", ep).Debug("Generating WorkloadEndpointKey from api WorkloadEndpoint")
+	return key
 }
