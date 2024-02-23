@@ -26,6 +26,7 @@ manifest_list = [
 
 OVERRIDE_FILE = os.getenv("OVERRIDE_FILE")
 
+pytestmark = utilities.skip_if_master("Release archives are not published for master branch")
 
 @pytest.fixture(scope="session")
 def image_file_members(tmpdir_factory):
