@@ -42,7 +42,6 @@ const (
 //     an entry for each workload, when each workload's
 //     policy is programmed for the first time.
 type EndpointStatusFileReporter struct {
-	inSyncC                 <-chan bool
 	endpointUpdatesC        <-chan interface{}
 	endpointStatusDirPrefix string
 
@@ -92,13 +91,11 @@ type FileReporterOption func(*EndpointStatusFileReporter)
 // NewEndpointStatusFileReporter creates a new EndpointStatusFileReporter.
 func NewEndpointStatusFileReporter(
 	endpointUpdatesC <-chan interface{},
-	inSyncC <-chan bool,
 	statusDirPath string,
 	opts ...FileReporterOption,
 ) *EndpointStatusFileReporter {
 
 	sr := &EndpointStatusFileReporter{
-		inSyncC:                 inSyncC,
 		endpointUpdatesC:        endpointUpdatesC,
 		endpointStatusDirPrefix: statusDirPath,
 		statusDirDeltaTracker:   deltatracker.NewSetDeltaTracker[string](),
@@ -150,25 +147,25 @@ func (fr *EndpointStatusFileReporter) SyncForever(ctx context.Context) {
 			logrus.Debug("Context cancelled, cleaning up and stopping endpoint status file reporter...")
 			retryTimerResetNeeded, resyncWithKernelNeeded, applyToKernelNeeded = false, false, false
 			exit = true
-		case b, ok := <-fr.inSyncC:
-			if !ok {
-				logrus.Panic("InSync channel closed unexpectedly.")
-			}
-			if b {
-				logrus.Debug("InSync received from calc graph.")
-				fr.inSyncWithUpstream = true
-				resyncWithKernelNeeded = true
-				applyToKernelNeeded = true
-			}
 
 		case e, ok := <-fr.endpointUpdatesC:
 			if !ok {
 				logrus.Panic("Input channel closed unexpectedly")
 			}
-			logrus.WithField("endpoint", e).Debug("Handling endpoint update")
-			fr.handleEndpointUpdate(e)
-			if fr.inSyncWithUpstream {
+
+			switch e.(type){
+			case *proto.DataplaneInSync:
+				logrus.Debug("DataplaneInSync received from upstream.")
+				fr.inSyncWithUpstream = true
+				resyncWithKernelNeeded = true
 				applyToKernelNeeded = true
+
+			default:
+				logrus.WithField("endpoint", e).Debug("Handling endpoint update")
+				fr.handleEndpointUpdate(e)
+				if fr.inSyncWithUpstream {
+					applyToKernelNeeded = true
+				}
 			}
 
 		case <-retryC:
