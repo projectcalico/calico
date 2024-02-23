@@ -1,0 +1,9 @@
+{{ if .Values.defaultFelixConfiguration.enabled }}
+{{ $spec := omit .Values.defaultFelixConfiguration "enabled" }}
+kind: FelixConfiguration
+apiVersion: crd.projectcalico.org/v1
+metadata:
+  name: default
+spec:
+{{ $spec | toYaml | indent 2 }}
+{{ end }}

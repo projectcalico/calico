@@ -18,6 +18,9 @@ installation:
 apiServer:
   enabled: true
 
+defaultFelixConfiguration:
+  enabled: false
+
 certs:
   node:
     key:
