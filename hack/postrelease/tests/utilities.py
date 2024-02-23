@@ -3,12 +3,25 @@
 import shutil
 from functools import cache
 
+import pytest
 import requests
 import rich.progress
-import variables
 import yaml
 
+import variables
+
 HELM_CHART = "https://projectcalico.docs.tigera.io/charts/index.yaml"
+
+def skip_if_master(reason):
+    return pytest.mark.skipif(variables.RELEASE_STREAM == "master", reason=reason)
+
+class ResponseMissingContentDispositionError(Exception):
+    pass
+
+def get_filename_from_url(url):
+    url_path = urllib.parse.urlparse(url).path
+    filename = pathlib.Path(url_path).name
+    return filename
 
 
 def get_content_disposition(response):
