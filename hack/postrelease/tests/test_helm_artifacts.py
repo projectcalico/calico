@@ -8,6 +8,7 @@ CHART_URL = (
     f"{variables.RELEASE_VERSION}/tigera-operator-{variables.RELEASE_VERSION}.tgz"
 )
 
+pytestmark = utilities.skip_if_master("Helm charts are not published for master branch")
 
 @pytest.fixture(scope="session")
 def operator_helm_chart_entry():

@@ -3,6 +3,7 @@ import re
 import pytest
 import requests
 import variables
+import utilities
 
 PPA_VER = variables.RELEASE_STREAM.replace("v", "calico-")
 COMP_VER = variables.RELEASE_VERSION.replace("v", "")
@@ -101,6 +102,7 @@ file_checks += [
 file_checks += [("rpm", "x86", filename) for filename in RPM_URLS_x86]
 file_checks += [("rpm", "noarch", filename) for filename in RPM_URLS_noarch]
 
+pytestmark = utilities.skip_if_master("OpenStack images are not published for master branch")
 
 @pytest.mark.openstack
 @pytest.mark.parametrize("distro,component,filename", file_checks)

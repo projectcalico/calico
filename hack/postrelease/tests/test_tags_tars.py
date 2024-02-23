@@ -3,6 +3,7 @@ import re
 import pytest
 import requests
 import variables
+import utilities
 
 DOWNLOAD_BASE = "https://github.com/projectcalico/calico/releases/download"
 
@@ -34,6 +35,7 @@ project_tags = (
     ("coreos/flannel", variables.FLANNEL_VERSION),
 )
 
+pytestmark = utilities.skip_if_master("Release archives are not published for master branch")
 
 @pytest.mark.github
 @pytest.mark.parametrize("artifact", calicoctl_binaries)

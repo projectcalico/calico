@@ -12,13 +12,14 @@ def get_var_or_error(var_name):
 # Get the release version.
 RELEASE_VERSION = get_var_or_error("VERSION")
 
-print(RELEASE_VERSION)
-
 # Extract release stream from the version.
 try:
-    match = re.search(r"(v\d+\.\d+)\.\d+", RELEASE_VERSION)
-    if match and len(match.groups()) == 1:
-        RELEASE_STREAM = match.groups()[0]
+    if RELEASE_VERSION == "master":
+        RELEASE_STREAM = "master"
+    else:
+        match = re.search(r"(v\d+\.\d+)\.\d+", RELEASE_VERSION)
+        if match and len(match.groups()) == 1:
+            RELEASE_STREAM = match.groups()[0]
 except TypeError as exc:
     raise RuntimeError(
         f"Variable RELEASE_VERSION had bad value {RELEASE_VERSION}"
