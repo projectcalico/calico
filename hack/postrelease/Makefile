@@ -41,12 +41,11 @@ create_docker_container: .docker_container.stamp
 
 ## Execution
 
-run_pytests_docker: create_docker_container require-vars-QUAY_TOKEN
+run_pytests_docker: create_docker_container
 	$(info +++ Running postrelease tests)
 	@docker run -it --rm                     \
 		-v .:/code                           \
 		-v /run/docker.sock:/run/docker.sock \
-		-e QUAY_TOKEN                        \
 		$(CALICO_POSTRELEASE_TEST_IMAGE)     \
 		pytest -v --junitxml=xunit.xml tests
 
