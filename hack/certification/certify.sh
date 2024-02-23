@@ -1,4 +1,19 @@
 #!/bin/bash
+
+# Copyright (c) 2024 Tigera, Inc. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 # This script runs Openshift preflight against Calico images and optionally uploads the results to Openshift Connect for the certification process.
 # In addition, the certification process also requires the following, which are NOT handled by this script:
 # - the operator metadata bundle (see the tigera/operator repo) to be submitted by PR
@@ -22,15 +37,15 @@ SUBMIT="${SUBMIT:-""}"
 
 podman pull quay.io/opdev/preflight:$PREFLIGHT_TAG
 
-declare -a LINUX_PLATFORMS=( \
-    "amd64" \
-    "arm64" \
-    "s390x" \
-    "ppc64le" \
+declare -a LINUX_PLATFORMS=(
+    "amd64"
+    "arm64"
+    "s390x"
+    "ppc64le"
     )
 
 # dictionaries of Openshift Connect project IDs
-declare -A calico_image_project=( \
+declare -A calico_image_project=(
     ["node"]="5e61a7ab06151b52d45a1148"
     ["cni"]="5e7e3829afa92f4963e7d9db"
     ["kube-controllers"]="5e6054f906151b52d45a1081"
@@ -44,37 +59,37 @@ declare -A calico_image_project=( \
     ["ctl"]="5f1781b1421fb18d530fad40"
 )
 
-declare -A operator_image_project=( \
+declare -A operator_image_project=(
     ["operator"]="5e60736f2f3c1acdd05f6014"
 )
 
 # # The openshift certification process doesn't support windows images currently
-# declare -a WINDOWS_PLATFORMS=(  \
-# "windows/amd64/10.0.17763.5122" \
-# "windows/amd64/10.0.19041.1415" \
-# "windows/amd64/10.0.19042.1889" \
-# "windows/amd64/10.0.20348.2113" \
+# declare -a WINDOWS_PLATFORMS=(
+# "windows/amd64/10.0.17763.5122"
+# "windows/amd64/10.0.19041.1415"
+# "windows/amd64/10.0.19042.1889"
+# "windows/amd64/10.0.20348.2113"
 # )
 
 # # The openshift certification process doesn't support windows images currently
-# declare -A windows_image_project=( \
+# declare -A windows_image_project=(
 #     ["windows-upgrade"]="64c01760bb2ac622579092af"  # windows
 #     ["node-windows"]=""
 #     ["cni-windows"]=""
 # )
 
 certify_image () {
-    for PLATFORM in "${PLATFORMS[@]}"; do \
+    for PLATFORM in "${PLATFORMS[@]}"; do
         mkdir -p "${IMAGE}"
         pushd "${IMAGE}" || exit
         podman run -it --rm --security-opt=label=disable \
             --env PFLT_PLATFORM="$PLATFORM" \
             --env PFLT_LOGLEVEL=trace \
             --env PFLT_ARTIFACTS=/artifacts \
-            --env PFLT_LOGFILE=/artifacts/preflight.log   \
-            --env PFLT_CERTIFICATION_PROJECT_ID="${PROJECT}"   \
-            --env PFLT_PYXIS_API_TOKEN="$RH_API_KEY"  \
-            -v "$PWD":/artifacts  \
+            --env PFLT_LOGFILE=/artifacts/preflight.log \
+            --env PFLT_CERTIFICATION_PROJECT_ID="${PROJECT}" \
+            --env PFLT_PYXIS_API_TOKEN="$RH_API_KEY" \
+            -v "$PWD":/artifacts \
             quay.io/opdev/preflight:$PREFLIGHT_TAG check container ${ORG}/${IMAGE}:${VERSION} ${SUBMIT}
         popd || exit
     done
@@ -83,7 +98,7 @@ certify_image () {
 mkdir -p output-${CALICO_VERSION}
 pushd output-${CALICO_VERSION} || exit
 
-for IMAGE in "${!calico_image_project[@]}"; do \
+for IMAGE in "${!calico_image_project[@]}"; do
     PLATFORMS=("${LINUX_PLATFORMS[@]}")
     ORG="quay.io/calico"
     PROJECT="${calico_image_project[${IMAGE}]}"
@@ -91,7 +106,7 @@ for IMAGE in "${!calico_image_project[@]}"; do \
     certify_image
 done
 
-for IMAGE in "${!operator_image_project[@]}"; do \
+for IMAGE in "${!operator_image_project[@]}"; do
     PLATFORMS=("${LINUX_PLATFORMS[@]}")
     ORG="quay.io/tigera"
     PROJECT="${operator_image_project[${IMAGE}]}"
@@ -100,7 +115,7 @@ for IMAGE in "${!operator_image_project[@]}"; do \
 done
 
 # # The openshift certification process doesn't support windows images currently
-# for IMAGE in "${!windows_image_project[@]}"; do \
+# for IMAGE in "${!windows_image_project[@]}"; do
 #     PLATFORMS=("${WINDOWS_PLATFORMS[@]}")
 #     ORG="quay.io/calico"
 #     PROJECT="${windows_image_project[${IMAGE}]}"
