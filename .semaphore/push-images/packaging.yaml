@@ -10,27 +10,27 @@ execution_time_limit:
 
 global_job_config:
   secrets:
-  - name: google-service-account-for-tigera-infra
-  - name: launchpad-secret-key
+    - name: google-service-account-for-tigera-infra
+    - name: launchpad-secret-key
   prologue:
     commands:
-    - checkout
-    # Semaphore is doing shallow clone on a commit without tags.
-    # unshallow it because we need a reliable git describe.
-    - retry git fetch --unshallow
-    - git config --global user.email marvin@tigera.io
-    - git config --global user.name Marvin
-    - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/tigera-infra-access.json
-    - gcloud config set project tigera-wp-tcp-redirect
-    - gcloud auth activate-service-account --key-file=$GOOGLE_APPLICATION_CREDENTIALS
-    - export SECRET_KEY=$HOME/secrets/marvin.txt
-    - export GCLOUD_ARGS='--zone us-east1-c --project tigera-wp-tcp-redirect'
-    - export HOST=ubuntu@binaries-projectcalico-org
-    - sudo apt-get update -y
-    - sudo apt-get install -y moreutils patchelf
+      - checkout
+      # Semaphore is doing shallow clone on a commit without tags.
+      # unshallow it because we need a reliable git describe.
+      - retry git fetch --unshallow
+      - git config --global user.email marvin@tigera.io
+      - git config --global user.name Marvin
+      - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/tigera-infra-access.json
+      - gcloud config set project tigera-wp-tcp-redirect
+      - gcloud auth activate-service-account --key-file=$GOOGLE_APPLICATION_CREDENTIALS
+      - export SECRET_KEY=$HOME/secrets/marvin.txt
+      - export GCLOUD_ARGS='--zone us-east1-c --project tigera-wp-tcp-redirect'
+      - export HOST=ubuntu@binaries-projectcalico-org
+      - sudo apt-get update -y
+      - sudo apt-get install -y moreutils patchelf
 
 blocks:
-  - name: 'Publish openstack packages'
+  - name: "Publish openstack packages"
     skip:
       # Only run on branches, not PRs.
       #
@@ -44,6 +44,6 @@ blocks:
       when: "branch !~ '.+'"
     task:
       jobs:
-      - name: 'packages'
-        commands:
-        - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C hack/release/packaging release-publish VERSION=$SEMAPHORE_GIT_BRANCH; fi
+        - name: "packages"
+          commands:
+            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C hack/release/packaging release-publish VERSION=$SEMAPHORE_GIT_BRANCH; fi

@@ -37,6 +37,10 @@ promotions:
     pipeline_file: push-images/kube-controllers.yml
     auto_promote:
       when: "branch =~ 'master|release-'"
+  - name: Push pod2daemon images
+    pipeline_file: push-images/pod2daemon.yml
+    auto_promote:
+      when: "branch =~ 'master|release-'"
   - name: Push typha images
     pipeline_file: push-images/typha.yml
     auto_promote:
