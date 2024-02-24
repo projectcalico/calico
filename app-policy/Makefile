@@ -134,11 +134,9 @@ proto/healthz.pb.go: proto/healthz.proto
 ###############################################################################
 .PHONY: image $(DIKASTES_IMAGE)
 image: $(DIKASTES_IMAGE)
-image-all: $(addprefix sub-image-,$(VALIDARCHES)) sub-image-fips-amd64
+image-all: $(addprefix sub-image-,$(VALIDARCHES))
 sub-image-%:
-	$(MAKE) image ARCH=$*
-sub-image-fips-%:
-	$(MAKE) image FIPS=true ARCH=$*
+	$(MAKE) image FIPS=$(FIPS) ARCH=$*
 
 $(DIKASTES_IMAGE): $(CONTAINER_MARKER)
 $(CONTAINER_CREATED): register Dockerfile $(BINDIR)/dikastes-$(ARCH) $(BINDIR)/healthz-$(ARCH)
