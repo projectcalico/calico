@@ -82,11 +82,9 @@ $(BINDIR)/kubectl-$(ARCH):
 # Building the image
 ###############################################################################
 ## Builds the controller binary and docker image.
-image-all: $(addprefix sub-image-,$(VALIDARCHES)) sub-image-fips-amd64
+image-all: $(addprefix sub-image-,$(VALIDARCHES))
 sub-image-%:
-	$(MAKE) image ARCH=$*
-sub-image-fips-%:
-	$(MAKE) image FIPS=true ARCH=$*
+	$(MAKE) image FIPS=$(FIPS) ARCH=$*
 
 image: $(KUBE_CONTROLLER_CONTAINER_MARKER)
 
@@ -162,7 +160,7 @@ ci: clean mod-download image-all static-checks ut
 ###############################################################################
 .PHONY: cd
 ## Deploys images to registry
-cd: cd-common
+cd: image-all cd-common
 
 ###############################################################################
 # Release
