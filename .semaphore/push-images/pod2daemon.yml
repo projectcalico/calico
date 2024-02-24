@@ -1,5 +1,5 @@
 version: v1.0
-name: Publish ALP images
+name: Publish pod2daemon images
 agent:
   machine:
     type: e1-standard-2
@@ -34,7 +34,7 @@ global_job_config:
       - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
 
 blocks:
-  - name: Publish ALP images
+  - name: Publish pod2daemon images
     dependencies: []
     skip:
       when: "branch !~ '.+'"
@@ -42,14 +42,14 @@ blocks:
       jobs:
         - name: Linux multi-arch
           commands:
-            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C app-policy cd CONFIRM=true; fi
-  - name: Publish ALP multi-arch manifests
+            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C pod2daemon cd CONFIRM=true; fi
+  - name: Publish pod2daemon multi-arch manifests
     dependencies:
-      - Publish ALP images
+      - Publish pod2daemon images
     skip:
       when: "branch !~ '.+'"
     task:
       jobs:
         - name: Linux multi-arch manifests
           commands:
-            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C app-policy push-manifests-with-tag CONFIRM=true; fi
+            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C pod2daemon push-manifests-with-tag CONFIRM=true; fi
