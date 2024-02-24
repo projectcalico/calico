@@ -80,6 +80,10 @@ promotions:
     pipeline_file: push-images/kube-controllers.yml
     auto_promote:
       when: "branch =~ 'master|release-'"
+  - name: Push pod2daemon images
+    pipeline_file: push-images/pod2daemon.yml
+    auto_promote:
+      when: "branch =~ 'master|release-'"
   - name: Push typha images
     pipeline_file: push-images/typha.yml
     auto_promote:
@@ -335,16 +339,12 @@ blocks:
         commands:
           - ../.semaphore/run-and-monitor static-checks.log make static-checks
 
-- name: "Felix: multi-arch builds"
+- name: "Felix: multi-arch build"
   run:
     when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
   dependencies:
     - "Felix: Build"
   task:
-    agent:
-      machine:
-        type: e1-standard-4
-        os_image: ubuntu2004
     prologue:
       commands:
         - cd felix
@@ -355,13 +355,31 @@ blocks:
         matrix:
           - env_var: ARCH
             values:
-              - arm64
               - ppc64le
               - s390x
         commands:
           # Only building the code, not the image here because the felix image is now only used for FV tests, which
           # only run on AMD64 at the moment.
           - ../.semaphore/run-and-monitor build-$ARCH.log make build ARCH=$ARCH
+
+- name: "Felix: Build - native arm64 runner"
+  run:
+    when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+  dependencies:
+    - "Felix: Build"
+  task:
+    agent:
+      machine:
+        type: s1-aws-arm64-2
+    prologue:
+      commands:
+        - cd felix
+        - cache restore go-pkg-cache
+        - cache restore go-mod-cache
+    jobs:
+      - name: Build binary
+        commands:
+          - ../.semaphore/run-and-monitor build-arm64.log make build ARCH=arm64
 
 - name: "Felix: Build Windows binaries"
   run:
@@ -493,7 +511,7 @@ blocks:
   run:
     when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
   dependencies:
-    - "Felix: Build"
+    - Prerequisites
   task:
     prologue:
       commands:
@@ -573,7 +591,7 @@ blocks:
   run:
     when: "false or change_in(['/felix/', '/confd/', '/node/'])"
   dependencies:
-    - Prerequisites
+    - "Node: Build"
   task:
     agent:
       machine:
@@ -587,7 +605,6 @@ blocks:
         matrix:
           - env_var: ARCH
             values:
-              - arm64
               - ppc64le
               - s390x
         commands:
@@ -598,6 +615,23 @@ blocks:
       - name: "Build Windows image"
         commands:
           - ../.semaphore/run-and-monitor build-windows-image.log make image-windows
+
+- name: "Node: Build - native arm64 runner"
+  run:
+    when: "false or change_in(['/felix/', '/confd/', '/node/'])"
+  dependencies:
+    - "Node: Build"
+  task:
+    agent:
+      machine:
+        type: s1-aws-arm64-2
+    prologue:
+      commands:
+        - cd node
+    jobs:
+      - name: Build image
+        commands:
+          - ../.semaphore/run-and-monitor build-arm64.log make image ARCH=arm64
 
 - name: "Node: kind-cluster tests"
   run:
