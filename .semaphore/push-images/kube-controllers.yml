@@ -8,38 +8,48 @@ agent:
 execution_time_limit:
   minutes: 60
 
+global_job_config:
+  env_vars:
+    - name: DEV_REGISTRIES
+      value: quay.io/calico docker.io/calico
+  secrets:
+    - name: docker
+    - name: quay-robot-calico+semaphoreci
+  prologue:
+    commands:
+      - checkout
+      # Semaphore mounts a copy-on-write FS as /var/lib/docker in order to provide a pre-loaded cache of
+      # some images. However, the cache is not useful to us and the copy-on-write FS is a big problem given
+      # how much we churn docker containers during the build.  Disable it.
+      - sudo systemctl stop docker
+      - sudo umount /var/lib/docker && sudo killall qemu-nbd || true
+      - sudo systemctl start docker
+      # Free up space on the build machine.
+      - sudo rm -rf ~/{.kerl,.kiex,.npm,.nvm,.phpbrew,.rbenv,.sbt} /opt/{apache-maven*,firefox*,scala} /usr/lib/jvm /usr/local/{aws2,golang,phantomjs*}
+      # Semaphore is doing shallow clone on a commit without tags.
+      # unshallow it for GIT_VERSION:=$(shell git describe --tags --dirty --always)
+      - retry git fetch --unshallow
+      - echo $DOCKER_TOKEN | docker login --username "$DOCKER_USER" --password-stdin
+      - echo $QUAY_TOKEN | docker login --username "$QUAY_USER" --password-stdin quay.io
+      - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
+
 blocks:
-  # Build and push images.
-  # We'll only do this on non-PR builds, where we have credentials to do so.
-  - name: "Publish kube-controllers images"
+  - name: Publish kube-controllers images
+    dependencies: []
     skip:
-      # Only run on branches, not PRs.
       when: "branch !~ '.+'"
     task:
-      prologue:
-        commands:
-        - checkout
-        # Semaphore mounts a copy-on-write FS as /var/lib/docker in order to provide a pre-loaded cache of
-        # some images. However, the cache is not useful to us and the copy-on-write FS is a big problem given
-        # how much we churn docker containers during the build.  Disable it.
-        - sudo systemctl stop docker
-        - sudo umount /var/lib/docker && sudo killall qemu-nbd || true
-        - sudo systemctl start docker
-        # Free up space on the build machine.
-        - sudo rm -rf ~/.kiex ~/.phpbrew ~/.rbenv ~/.nvm ~/.kerl ~/.sbt ~/.npm /usr/lib/jvm /opt/firefox* /opt/apache-maven* /opt/scala /usr/local/golang
-        # Semaphore is doing shallow clone on a commit without tags.
-        # unshallow it for GIT_VERSION:=$(shell git describe --tags --dirty --always)
-        - retry git fetch --unshallow
-        - echo $DOCKER_TOKEN | docker login --username "$DOCKER_USER" --password-stdin
-        - echo $QUAY_TOKEN | docker login --username "$QUAY_USER" --password-stdin quay.io
-        - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
-      secrets:
-      - name: quay-robot-calico+semaphoreci
-      - name: docker
       jobs:
-      - name: "kube-controllers"
-        env_vars:
-        - name: DEV_REGISTRIES
-          value: quay.io/calico docker.io/calico
-        commands:
-        - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C kube-controllers image-all cd CONFIRM=true; fi
+        - name: "kube-controllers"
+          commands:
+            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C kube-controllers cd CONFIRM=true; fi
+  - name: Publish kube-controllers multi-arch manifests
+    dependencies:
+      - Publish kube-controllers images
+    skip:
+      when: "branch !~ '.+'"
+    task:
+      jobs:
+        - name: Linux multi-arch manifests
+          commands:
+            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C kube-controllers push-manifests-with-tag CONFIRM=true; fi
