@@ -20,7 +20,7 @@
   run:
     when: "${FORCE_RUN} or change_in(['/felix/', '/confd/', '/node/'])"
   dependencies:
-    - Prerequisites
+    - "Node: Build"
   task:
     agent:
       machine:
@@ -34,7 +34,6 @@
         matrix:
           - env_var: ARCH
             values:
-              - arm64
               - ppc64le
               - s390x
         commands:
@@ -45,6 +44,23 @@
       - name: "Build Windows image"
         commands:
           - ../.semaphore/run-and-monitor build-windows-image.log make image-windows
+
+- name: "Node: Build - native arm64 runner"
+  run:
+    when: "${FORCE_RUN} or change_in(['/felix/', '/confd/', '/node/'])"
+  dependencies:
+    - "Node: Build"
+  task:
+    agent:
+      machine:
+        type: s1-aws-arm64-2
+    prologue:
+      commands:
+        - cd node
+    jobs:
+      - name: Build image
+        commands:
+          - ../.semaphore/run-and-monitor build-arm64.log make image ARCH=arm64
 
 - name: "Node: kind-cluster tests"
   run:
