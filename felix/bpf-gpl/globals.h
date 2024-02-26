@@ -44,8 +44,6 @@ struct cali_tc_preamble_globals {
 };
 
 enum cali_globals_flags {
-	/* CALI_GLOBALS_IPV6_ENABLED is set when IPv6 is enabled by Felix */
-	CALI_GLOBALS_IPV6_ENABLED		= 0x00000001,
 	CALI_GLOBALS_RESERVED1			= 0x00000002,
 	CALI_GLOBALS_RESERVED2			= 0x00000004,
 	CALI_GLOBALS_RESERVED3			= 0x00000008,

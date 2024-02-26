@@ -34,6 +34,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/bpf/ifstate"
+	"github.com/projectcalico/calico/felix/bpf/nat"
 	. "github.com/projectcalico/calico/felix/fv/connectivity"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
@@ -46,10 +47,11 @@ import (
 	options2 "github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
-var _ = describeBPFDualStackTests(false)
-var _ = describeBPFDualStackTests(true)
+var _ = describeBPFDualStackTests(false, true)
+var _ = describeBPFDualStackTests(true, true)
+var _ = describeBPFDualStackTests(false, false)
 
-func describeBPFDualStackTests(ctlbEnabled bool) bool {
+func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 	if !BPFMode() {
 		return true
 	}
@@ -60,6 +62,7 @@ func describeBPFDualStackTests(ctlbEnabled bool) bool {
 			infra        infrastructure.DatastoreInfra
 			tc           infrastructure.TopologyContainers
 			w            [2][2]*workload.Workload
+			hostW        [2]*workload.Workload
 			calicoClient client.Interface
 			cc           *Checker
 			pol          *api.GlobalNetworkPolicy
@@ -91,7 +94,12 @@ func describeBPFDualStackTests(ctlbEnabled bool) bool {
 			opts.IPIPRoutesEnabled = false
 			opts.DelayFelixStart = true
 
-			opts.ExtraEnvVars["FELIX_IPV6SUPPORT"] = "true"
+			if ipv6Dataplane {
+				opts.ExtraEnvVars["FELIX_IPV6SUPPORT"] = "true"
+			} else {
+				opts.ExtraEnvVars["FELIX_IPV6SUPPORT"] = "false"
+			}
+			opts.ExtraEnvVars["FELIX_BPFLogLevel"] = "debug"
 
 			if !ctlbEnabled {
 				opts.ExtraEnvVars["FELIX_BPFConnectTimeLoadBalancing"] = string(api.BPFConnectTimeLBDisabled)
@@ -158,6 +166,15 @@ func describeBPFDualStackTests(ctlbEnabled bool) bool {
 			}
 
 			for ii := range tc.Felixes {
+				hostW[ii] = workload.Run(
+					tc.Felixes[ii],
+					fmt.Sprintf("host%d", ii),
+					"default",
+					felixIP(ii), // Same IP as felix means "run in the host's namespace"
+					"8055",
+					"tcp", workload.WithIPv6Address(net.ParseIP(felixIP6(ii)).String()))
+
+				hostW[ii].WorkloadEndpoint.Labels = map[string]string{"name": hostW[ii].Name}
 				// Two workloads on each host so we can check the same host and other host cases.
 				w[ii][0] = addWorkload(true, ii, 0, 8055, map[string]string{"port": "8055"})
 				w[ii][1] = addWorkload(true, ii, 1, 8056, nil)
@@ -168,33 +185,66 @@ func describeBPFDualStackTests(ctlbEnabled bool) bool {
 			pol = api.NewGlobalNetworkPolicy()
 			pol.Namespace = "fv"
 			pol.Name = "policy-1"
-			pol.Spec.Ingress = []api.Rule{
-				{
-					Action: "Allow",
-					Source: api.EntityRule{
-						Selector: "workload=='regular'",
-					},
-				},
-			}
-			pol.Spec.Egress = []api.Rule{
-				{
-					Action: "Allow",
-					Source: api.EntityRule{
-						Selector: "workload=='regular'",
-					},
-				},
-			}
-			pol.Spec.Selector = "workload=='regular'"
-
+			pol.Spec.Ingress = []api.Rule{{Action: "Allow"}}
+			pol.Spec.Egress = []api.Rule{{Action: "Allow"}}
+			pol.Spec.Selector = "all()"
 			pol = createPolicy(pol)
+		})
+
+		JustAfterEach(func() {
+			if CurrentGinkgoTestDescription().Failed {
+				var (
+					currBpfsvcs   []nat.MapMem
+					currBpfeps    []nat.BackendMapMem
+					currBpfsvcsV6 []nat.MapMemV6
+					currBpfepsV6  []nat.BackendMapMemV6
+				)
+
+				currBpfsvcsV6, currBpfepsV6 = dumpNATmapsV6(tc.Felixes)
+				currBpfsvcs, currBpfeps = dumpNATmaps(tc.Felixes)
+
+				for i, felix := range tc.Felixes {
+					felix.Exec("conntrack", "-L")
+					felix.Exec("ip6tables-save", "-c")
+					felix.Exec("ip", "-6", "link")
+					felix.Exec("ip", "-6", "addr")
+					felix.Exec("ip", "-6", "rule")
+					felix.Exec("ip", "-6", "route")
+					felix.Exec("ip", "-6", "neigh")
+					felix.Exec("calico-bpf", "-6", "ipsets", "dump")
+					felix.Exec("calico-bpf", "-6", "routes", "dump")
+					felix.Exec("calico-bpf", "-6", "nat", "dump")
+					felix.Exec("calico-bpf", "-6", "nat", "aff")
+					felix.Exec("calico-bpf", "-6", "conntrack", "dump")
+					felix.Exec("calico-bpf", "-6", "arp", "dump")
+					felix.Exec("iptables-save", "-c")
+					felix.Exec("ip", "link")
+					felix.Exec("ip", "addr")
+					felix.Exec("ip", "rule")
+					felix.Exec("ip", "route")
+					felix.Exec("ip", "neigh")
+					felix.Exec("arp")
+					felix.Exec("calico-bpf", "ipsets", "dump")
+					felix.Exec("calico-bpf", "routes", "dump")
+					felix.Exec("calico-bpf", "nat", "dump")
+					felix.Exec("calico-bpf", "nat", "aff")
+					felix.Exec("calico-bpf", "conntrack", "dump")
+					felix.Exec("calico-bpf", "arp", "dump")
+					felix.Exec("calico-bpf", "counters", "dump")
+					felix.Exec("calico-bpf", "ifstate", "dump")
+					log.Infof("[%d]FrontendMapV6: %+v", i, currBpfsvcsV6[i])
+					log.Infof("[%d]NATBackendV6: %+v", i, currBpfepsV6[i])
+					log.Infof("[%d]SendRecvMapV6: %+v", i, dumpSendRecvMapV6(felix))
+					log.Infof("[%d]FrontendMap: %+v", i, currBpfsvcs[i])
+					log.Infof("[%d]NATBackend: %+v", i, currBpfeps[i])
+					log.Infof("[%d]SendRecvMap: %+v", i, dumpSendRecvMap(felix))
+				}
+			}
 		})
 
 		AfterEach(func() {
 			if CurrentGinkgoTestDescription().Failed {
 				infra.DumpErrorData()
-				for _, felix := range tc.Felixes {
-					felix.Exec("calico-bpf", "counters", "dump")
-				}
 			}
 
 			for i := 0; i < 2; i++ {
@@ -208,7 +258,7 @@ func describeBPFDualStackTests(ctlbEnabled bool) bool {
 			infra.Stop()
 		})
 
-		Context("with a policy allowing ingress to w[0][0] from all regular workloads", func() {
+		if ipv6Dataplane {
 			var (
 				testSvc          *v1.Service
 				testSvcNamespace string
@@ -216,108 +266,135 @@ func describeBPFDualStackTests(ctlbEnabled bool) bool {
 
 			npPort := uint16(30333)
 			clusterIPs := []string{"10.101.0.10", "dead:beef::abcd:0:0:10"}
+			Context("with IPv4 and IPv6 enabled", func() {
+				JustBeforeEach(func() {
+					tc.TriggerDelayedStart()
+					ensureAllNodesBPFProgramsAttached(tc.Felixes)
+				})
+				BeforeEach(func() {
+					k8sClient = infra.(*infrastructure.K8sDatastoreInfra).K8sClient
+					_ = k8sClient
+					testSvc = k8sServiceForDualStack("test-svc", clusterIPs, w[0][0], 80, 8055, int32(npPort), "tcp")
+					testSvcNamespace = testSvc.ObjectMeta.Namespace
+					_, err := k8sClient.CoreV1().Services(testSvcNamespace).Create(context.Background(), testSvc, metav1.CreateOptions{})
+					Expect(err).NotTo(HaveOccurred())
+					Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(1),
+						"Service endpoints didn't get created? Is controller-manager happy?")
+				})
+				It("Should connect to w[0][0] from all other workloads with IPv4 and IPv6", func() {
+					cc.ExpectSome(w[0][1], w[0][0])
+					cc.ExpectSome(w[1][0], w[0][0])
+					cc.ExpectSome(w[1][1], w[0][0])
+
+					cc.Expect(Some, w[0][1], w[0][0], ExpectWithIPVersion(6))
+					cc.Expect(Some, w[1][0], w[0][0], ExpectWithIPVersion(6))
+					cc.Expect(Some, w[1][1], w[0][0], ExpectWithIPVersion(6))
+					cc.CheckConnectivity()
+				})
+
+				It("Should connect to w[0][0] via clusterIP (IPv4 and IPv6)", func() {
+					port := uint16(testSvc.Spec.Ports[0].Port)
+					cc.ExpectSome(w[1][0], TargetIP(clusterIPs[0]), port)
+					cc.ExpectSome(w[1][0], TargetIP(clusterIPs[1]), port)
+
+					cc.ExpectSome(w[0][1], TargetIP(clusterIPs[0]), port)
+					cc.ExpectSome(w[0][1], TargetIP(clusterIPs[1]), port)
+					cc.CheckConnectivity()
+				})
+
+				It("Should connect to w[0][0] via nodePort (IPv4 and IPv6)", func() {
+					cc.ExpectSome(w[1][0], TargetIP(felixIP(0)), npPort)
+					cc.ExpectSome(w[0][1], TargetIP(felixIP(0)), npPort)
+
+					cc.ExpectSome(w[1][0], TargetIP(felixIP6(0)), npPort)
+					cc.ExpectSome(w[0][1], TargetIP(felixIP6(0)), npPort)
+					cc.CheckConnectivity()
+				})
+			})
+
+			// Running this test once should be enough as this test doesn't depend on CTLB.
+			if !ctlbEnabled {
+				It("Should connect to w[0][0] using IPv6 after IPv6 host IP is added", func() {
+					k8sClient = infra.(*infrastructure.K8sDatastoreInfra).K8sClient
+					_ = k8sClient
+
+					// Remove Node IPv6 address.
+					node, err := k8sClient.CoreV1().Nodes().Get(context.Background(), tc.Felixes[0].Hostname, metav1.GetOptions{})
+					Expect(err).NotTo(HaveOccurred())
+
+					delete(node.ObjectMeta.Annotations, "projectcalico.org/IPv6Address")
+					_, err = k8sClient.CoreV1().Nodes().Update(context.Background(), node, metav1.UpdateOptions{})
+					Expect(err).NotTo(HaveOccurred())
+
+					node, err = k8sClient.CoreV1().Nodes().Get(context.Background(), tc.Felixes[0].Hostname, metav1.GetOptions{})
+					Expect(err).NotTo(HaveOccurred())
+					node.Status.Addresses = []v1.NodeAddress{{Type: v1.NodeInternalIP, Address: felixIP(0)}}
+					_, err = k8sClient.CoreV1().Nodes().UpdateStatus(context.Background(), node, metav1.UpdateOptions{})
+					Expect(err).NotTo(HaveOccurred())
+
+					tc.TriggerDelayedStart()
+
+					ensureRightIFStateFlags(tc.Felixes[0], ifstate.FlgIPv4Ready)
+					ensureRightIFStateFlags(tc.Felixes[1], ifstate.FlgIPv4Ready|ifstate.FlgIPv6Ready)
+					cc.ExpectSome(w[0][1], w[0][0])
+					cc.ExpectSome(w[1][0], w[0][0])
+					cc.ExpectSome(w[1][1], w[0][0])
+
+					cc.Expect(None, w[0][1], w[0][0], ExpectWithIPVersion(6))
+					cc.Expect(None, w[1][0], w[0][0], ExpectWithIPVersion(6))
+					cc.Expect(None, w[1][1], w[0][0], ExpectWithIPVersion(6))
+					cc.Expect(Some, hostW[0], hostW[1], ExpectWithIPVersion(6))
+
+					cc.CheckConnectivity()
+					cc.ResetExpectations()
+
+					// Since we allow the IPv6 packets through IPv4 programs, a stale neighbor entry might get created
+					// when trying to reach w[0][0] from workloads in felix-1. This will impact subsequent
+					// tests. This does not seem to be a problem with ubuntu 22+ but is on ubuntu 20.
+					// Hence cleaning up the neighbor entry.
+					tc.Felixes[0].Exec("ip", "-6", "neigh", "del", w[0][0].IP6, "dev", w[0][0].InterfaceName)
+
+					// Add the node IPv6 address
+					node, err = k8sClient.CoreV1().Nodes().Get(context.Background(), tc.Felixes[0].Hostname, metav1.GetOptions{})
+					Expect(err).NotTo(HaveOccurred())
+					node.ObjectMeta.Annotations["projectcalico.org/IPv6Address"] = fmt.Sprintf("%s/%s", felixIP6(0), tc.Felixes[0].IPv6Prefix)
+					_, err = k8sClient.CoreV1().Nodes().Update(context.Background(), node, metav1.UpdateOptions{})
+					Expect(err).NotTo(HaveOccurred())
+
+					node, err = k8sClient.CoreV1().Nodes().Get(context.Background(), tc.Felixes[0].Hostname, metav1.GetOptions{})
+					Expect(err).NotTo(HaveOccurred())
+					node.Status.Addresses = []v1.NodeAddress{{Type: v1.NodeInternalIP, Address: felixIP(0)}, {Type: v1.NodeInternalIP, Address: felixIP6(0)}}
+					_, err = k8sClient.CoreV1().Nodes().UpdateStatus(context.Background(), node, metav1.UpdateOptions{})
+					Expect(err).NotTo(HaveOccurred())
+
+					ensureRightIFStateFlags(tc.Felixes[0], ifstate.FlgIPv4Ready|ifstate.FlgIPv6Ready)
+					cc.ExpectSome(w[0][1], w[0][0])
+					cc.ExpectSome(w[1][0], w[0][0])
+					cc.ExpectSome(w[1][1], w[0][0])
+
+					cc.Expect(Some, w[0][1], w[0][0], ExpectWithIPVersion(6))
+					cc.Expect(Some, w[1][0], w[0][0], ExpectWithIPVersion(6))
+					cc.Expect(Some, w[1][1], w[0][0], ExpectWithIPVersion(6))
+					cc.CheckConnectivity()
+				})
+			}
+		} else {
 			JustBeforeEach(func() {
 				tc.TriggerDelayedStart()
-				ensureAllNodesBPFProgramsAttached(tc.Felixes)
-			})
-			BeforeEach(func() {
-				k8sClient = infra.(*infrastructure.K8sDatastoreInfra).K8sClient
-				_ = k8sClient
-				testSvc = k8sServiceForDualStack("test-svc", clusterIPs, w[0][0], 80, 8055, int32(npPort), "tcp")
-				testSvcNamespace = testSvc.ObjectMeta.Namespace
-				_, err := k8sClient.CoreV1().Services(testSvcNamespace).Create(context.Background(), testSvc, metav1.CreateOptions{})
-				Expect(err).NotTo(HaveOccurred())
-				Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(1),
-					"Service endpoints didn't get created? Is controller-manager happy?")
-			})
-			It("Should connect to w[0][0] from all other workloads with IPv4 and IPv6", func() {
-				cc.ExpectSome(w[0][1], w[0][0])
-				cc.ExpectSome(w[1][0], w[0][0])
-				cc.ExpectSome(w[1][1], w[0][0])
-
-				cc.Expect(Some, w[0][1], w[0][0], ExpectWithIPVersion(6))
-				cc.Expect(Some, w[1][0], w[0][0], ExpectWithIPVersion(6))
-				cc.Expect(Some, w[1][1], w[0][0], ExpectWithIPVersion(6))
-				cc.CheckConnectivity()
-			})
-
-			It("Should connect to w[0][0] via clusterIP (IPv4 and IPv6)", func() {
-				port := uint16(testSvc.Spec.Ports[0].Port)
-				cc.ExpectSome(w[1][0], TargetIP(clusterIPs[0]), port)
-				cc.ExpectSome(w[1][0], TargetIP(clusterIPs[1]), port)
-
-				cc.ExpectSome(w[0][1], TargetIP(clusterIPs[0]), port)
-				cc.ExpectSome(w[0][1], TargetIP(clusterIPs[1]), port)
-				cc.CheckConnectivity()
-			})
-
-			It("Should connect to w[0][0] via nodePort (IPv4 and IPv6)", func() {
-				cc.ExpectSome(w[1][0], TargetIP(felixIP(0)), npPort)
-				cc.ExpectSome(w[0][1], TargetIP(felixIP(0)), npPort)
-
-				cc.ExpectSome(w[1][0], TargetIP(felixIP6(0)), npPort)
-				cc.ExpectSome(w[0][1], TargetIP(felixIP6(0)), npPort)
-				cc.CheckConnectivity()
-			})
-
-		})
-		if !ctlbEnabled {
-			It("Should connect to w[0][0] using IPv6 after IPv6 host IP is added", func() {
-				k8sClient = infra.(*infrastructure.K8sDatastoreInfra).K8sClient
-				_ = k8sClient
-
-				// Remove Node IPv6 address.
-				node, err := k8sClient.CoreV1().Nodes().Get(context.Background(), tc.Felixes[0].Hostname, metav1.GetOptions{})
-				Expect(err).NotTo(HaveOccurred())
-
-				delete(node.ObjectMeta.Annotations, "projectcalico.org/IPv6Address")
-				_, err = k8sClient.CoreV1().Nodes().Update(context.Background(), node, metav1.UpdateOptions{})
-				Expect(err).NotTo(HaveOccurred())
-
-				node, err = k8sClient.CoreV1().Nodes().Get(context.Background(), tc.Felixes[0].Hostname, metav1.GetOptions{})
-				Expect(err).NotTo(HaveOccurred())
-				node.Status.Addresses = []v1.NodeAddress{{Type: v1.NodeInternalIP, Address: felixIP(0)}}
-				_, err = k8sClient.CoreV1().Nodes().UpdateStatus(context.Background(), node, metav1.UpdateOptions{})
-				Expect(err).NotTo(HaveOccurred())
-
-				tc.TriggerDelayedStart()
-
 				ensureRightIFStateFlags(tc.Felixes[0], ifstate.FlgIPv4Ready)
-				cc.ExpectSome(w[0][1], w[0][0])
-				cc.ExpectSome(w[1][0], w[0][0])
-				cc.ExpectSome(w[1][1], w[0][0])
-
-				cc.Expect(None, w[0][1], w[0][0], ExpectWithIPVersion(6))
-				cc.Expect(None, w[1][0], w[0][0], ExpectWithIPVersion(6))
-				cc.Expect(None, w[1][1], w[0][0], ExpectWithIPVersion(6))
-				cc.CheckConnectivity()
-				cc.ResetExpectations()
-
-				// Add the node IPv6 address
-				node, err = k8sClient.CoreV1().Nodes().Get(context.Background(), tc.Felixes[0].Hostname, metav1.GetOptions{})
-				Expect(err).NotTo(HaveOccurred())
-				node.ObjectMeta.Annotations["projectcalico.org/IPv6Address"] = fmt.Sprintf("%s/%s", felixIP6(0), tc.Felixes[0].IPv6Prefix)
-				_, err = k8sClient.CoreV1().Nodes().Update(context.Background(), node, metav1.UpdateOptions{})
-				Expect(err).NotTo(HaveOccurred())
-
-				node, err = k8sClient.CoreV1().Nodes().Get(context.Background(), tc.Felixes[0].Hostname, metav1.GetOptions{})
-				Expect(err).NotTo(HaveOccurred())
-				node.Status.Addresses = []v1.NodeAddress{{Type: v1.NodeInternalIP, Address: felixIP(0)}, {Type: v1.NodeInternalIP, Address: felixIP6(0)}}
-				_, err = k8sClient.CoreV1().Nodes().UpdateStatus(context.Background(), node, metav1.UpdateOptions{})
-				Expect(err).NotTo(HaveOccurred())
-
-				ensureRightIFStateFlags(tc.Felixes[0], ifstate.FlgIPv4Ready|ifstate.FlgIPv6Ready)
-				cc.ExpectSome(w[0][1], w[0][0])
-				cc.ExpectSome(w[1][0], w[0][0])
-				cc.ExpectSome(w[1][1], w[0][0])
-
-				cc.Expect(Some, w[0][1], w[0][0], ExpectWithIPVersion(6))
-				cc.Expect(Some, w[1][0], w[0][0], ExpectWithIPVersion(6))
-				cc.Expect(Some, w[1][1], w[0][0], ExpectWithIPVersion(6))
+				ensureRightIFStateFlags(tc.Felixes[1], ifstate.FlgIPv4Ready)
+			})
+			It("should drop ipv6 packets at workload interface and allow ipv6 packets at host interface when in IPv4 only mode", func() {
+				// IPv4 connectivity must work.
+				cc.Expect(Some, hostW[0], w[0][0])
+				cc.Expect(Some, hostW[0], hostW[1])
+				// Host to workload IPv6 connectivity must fail
+				cc.Expect(None, w[0][0], w[1][0], ExpectWithIPVersion(6))
+				// Host to Host IPv6 connectivity must pass.
+				cc.Expect(Some, hostW[0], hostW[1], ExpectWithIPVersion(6))
 				cc.CheckConnectivity()
 			})
 		}
-
 	})
 }
 
