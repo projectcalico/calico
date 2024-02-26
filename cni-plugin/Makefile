@@ -92,7 +92,8 @@ $(BIN)/install: $(SRC_FILES)
 ifeq ($(FIPS), true)
 	$(call build_cgo_boring_binary, $(PACKAGE_NAME)/cmd/install, $@)
 else
-	$(call build_binary, $(PACKAGE_NAME)/cmd/install, $@)
+	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) sh -c '\
+		$(GIT_CONFIG_SSH) go build -buildvcs=false -v -o $@ -ldflags "$(LDFLAGS)" $(PACKAGE_NAME)/cmd/install'
 endif
 
 ## Build the Calico network and ipam plugins
@@ -100,7 +101,8 @@ $(BIN)/calico: $(SRC_FILES)
 ifeq ($(FIPS), true)
 	$(call build_cgo_boring_binary, $(PACKAGE_NAME)/cmd/calico, $@)
 else
-	$(call build_static_binary, $(PACKAGE_NAME)/cmd/calico, $@)
+	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) sh -c '\
+		$(GIT_CONFIG_SSH) go build -buildvcs=false -v -o $@ -ldflags "$(LDFLAGS)" $(PACKAGE_NAME)/cmd/calico'
 endif
 
 $(BIN)/calico-ipam: $(BIN)/calico
@@ -110,7 +112,7 @@ $(BIN)/calico-ipam: $(BIN)/calico
 $(BIN_WIN)/calico.exe $(BIN_WIN)/calico-ipam.exe: $(SRC_FILES)
 	$(DOCKER_RUN) \
 	-e GOOS=windows \
-	-e CGO_ENABLED=1 \
+	-e CGO_ENABLED=0 \
 	    $(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
 		go build -v -buildvcs=false -o $(BIN_WIN)/calico.exe -ldflags "$(LDFLAGS)" $(PACKAGE_NAME)/cmd/calico && \
 		go build -v -buildvcs=false -o $(BIN_WIN)/calico-ipam.exe -ldflags "$(LDFLAGS)" $(PACKAGE_NAME)/cmd/calico'
