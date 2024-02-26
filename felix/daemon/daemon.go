@@ -645,14 +645,11 @@ configRetry:
 			"Endpoint status reporting enabled, starting status reporter")
 
 		fromDataplaneC := make(chan interface{}, 10)
-		inSyncC := make(chan bool, 1)
-		dpConnector.StatusUpdatesFromDataplaneConsumers = append(dpConnector.StatusUpdatesFromDataplaneConsumers, fromDataplaneC)
-		dpConnector.InSyncConsumers = append(dpConnector.InSyncConsumers, inSyncC)
 		statusReporter := statusrep.NewEndpointStatusReporter(
 			configParams.FelixHostname,
 			configParams.OpenstackRegion,
 			fromDataplaneC,
-			inSyncC,
+			dpConnector.InSync,
 			dpConnector.datastore,
 			delay,
 			delay*180,
@@ -662,12 +659,10 @@ configRetry:
 
 	if configParams.EndpointStatusPathPrefix != "" {
 		fromDataplaneC := make(chan interface{}, 10)
-		inSyncC := make(chan bool, 1)
 		dpConnector.StatusUpdatesFromDataplaneConsumers = append(dpConnector.StatusUpdatesFromDataplaneConsumers, fromDataplaneC)
-		dpConnector.InSyncConsumers = append(dpConnector.InSyncConsumers, inSyncC)
 		statusFileReporter := statusrep.NewEndpointStatusFileReporter(fromDataplaneC, configParams.EndpointStatusPathPrefix, statusrep.WithHostname(configParams.FelixHostname))
 
-		log.WithField("path", configParams.EndpointStatusPathPrefix).Warn("EndpointStatusPathPrefix is non-empty. Starting StatusFileReporter")
+		log.WithField("path", configParams.EndpointStatusPathPrefix).Info("Starting status-file reporter")
 		ctx := context.Background()
 		go statusFileReporter.SyncForever(ctx)
 	}
@@ -973,8 +968,6 @@ type DataplaneConnector struct {
 	StatusUpdatesFromDataplaneConsumers  []chan interface{}
 	StatusUpdatesFromDataplaneDispatcher *dispatcher.BlockingDispatcher[interface{}]
 	InSync                               chan bool
-	InSyncConsumers                      []chan bool
-	InSyncDispatcher                     *dispatcher.BlockingDispatcher[bool]
 	failureReportChan                    chan<- string
 	dataplane                            dp.DataplaneDriver
 	datastore                            bapi.Client
@@ -1008,7 +1001,6 @@ func newConnector(configParams *config.Config,
 		// InSync should be buffered as it will always be sent a single
 		// message, regardless of any downstream consumers.
 		InSync:                           make(chan bool, 1),
-		InSyncConsumers:                  make([]chan bool, 0),
 		failureReportChan:                failureReportChan,
 		dataplane:                        dataplane,
 		wireguardStatUpdateFromDataplane: make(chan *proto.WireguardStatusUpdate, 1),
@@ -1019,12 +1011,6 @@ func newConnector(configParams *config.Config,
 		log.WithError(err).Panic("Failed to create dispatcher for status updates from dataplane")
 	}
 	felixConn.StatusUpdatesFromDataplaneDispatcher = fromDataplaneDispatcher
-
-	inSyncDispatcher, err := dispatcher.NewBlockingDispatcher[bool](felixConn.InSync)
-	if err != nil {
-		log.WithError(err).Panic("Failed to create dispatcher for in-sync updates")
-	}
-	felixConn.InSyncDispatcher = inSyncDispatcher
 
 	return felixConn
 }
@@ -1040,7 +1026,7 @@ func (fc *DataplaneConnector) readMessagesFromDataplane() {
 			log.WithError(err).Error("Failed to read from front-end socket")
 			fc.shutDownProcess("Failed to read from front-end socket")
 		}
-		log.WithField("payload", payload).Warn("New message from dataplane")
+		log.WithField("payload", payload).Debug("New message from dataplane")
 		switch msg := payload.(type) {
 		case *proto.ProcessStatusUpdate:
 			fc.handleProcessStatusUpdate(context.TODO(), msg)
@@ -1070,7 +1056,7 @@ func (fc *DataplaneConnector) readMessagesFromDataplane() {
 		default:
 			log.WithField("msg", msg).Warning("Unknown message from dataplane")
 		}
-		log.Warn("Finished handling message from front-end")
+		log.Debug("Finished handling message from front-end")
 	}
 }
 
@@ -1288,19 +1274,13 @@ func (fc *DataplaneConnector) Start() {
 
 	log.WithFields(log.Fields{
 		"statusUpdatesFromDataplaneConsumers": len(fc.StatusUpdatesFromDataplaneConsumers),
-		"inSyncConsumers":                     len(fc.InSyncConsumers),
-	}).Warn("DataplaneConnector starting.")
+	}).Debug("DataplaneConnector starting.")
 
-	// Begin consuming StatusUpdatesFromDataplane/InSync's and dispatching to downstream components (e.g. status reporter).
+	// Begin consuming StatusUpdatesFromDataplane and dispatching to downstream components (e.g. status reporter).
 	if len(fc.StatusUpdatesFromDataplaneConsumers) > 0 {
 		ctx := context.Background()
-		log.Warn("Starting StatsUpdatesFromDataplaneDispatcher")
+		log.Debug("Starting StatusUpdatesFromDataplaneDispatcher")
 		go fc.StatusUpdatesFromDataplaneDispatcher.DispatchForever(ctx, fc.StatusUpdatesFromDataplaneConsumers...)
-	}
-	if len(fc.InSyncConsumers) > 0 {
-		ctx := context.Background()
-		log.Warn("Starting InSyncDispatcher")
-		go fc.InSyncDispatcher.DispatchForever(ctx, fc.InSyncConsumers...)
 	}
 }
 
