@@ -82,11 +82,6 @@ func (bom *backoffManager) reset() {
 	bom.Backoff = bom.newBackoffFunc()
 }
 
-// Gets the manager's backoff.
-func (bom *backoffManager) getBackoff() Backoff {
-	return bom.Backoff
-}
-
 // FileReporterOption allows modification of a new EndpointStatusFileReporter.
 type FileReporterOption func(*EndpointStatusFileReporter)
 
