@@ -34,6 +34,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/bpf/ifstate"
+	"github.com/projectcalico/calico/felix/bpf/nat"
 	. "github.com/projectcalico/calico/felix/fv/connectivity"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
@@ -190,12 +191,60 @@ func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 			pol = createPolicy(pol)
 		})
 
+		JustAfterEach(func() {
+			if CurrentGinkgoTestDescription().Failed {
+				var (
+					currBpfsvcs   []nat.MapMem
+					currBpfeps    []nat.BackendMapMem
+					currBpfsvcsV6 []nat.MapMemV6
+					currBpfepsV6  []nat.BackendMapMemV6
+				)
+
+				currBpfsvcsV6, currBpfepsV6 = dumpNATmapsV6(tc.Felixes)
+				currBpfsvcs, currBpfeps = dumpNATmaps(tc.Felixes)
+
+				for i, felix := range tc.Felixes {
+					felix.Exec("conntrack", "-L")
+					felix.Exec("ip6tables-save", "-c")
+					felix.Exec("ip", "-6", "link")
+					felix.Exec("ip", "-6", "addr")
+					felix.Exec("ip", "-6", "rule")
+					felix.Exec("ip", "-6", "route")
+					felix.Exec("ip", "-6", "neigh")
+					felix.Exec("calico-bpf", "-6", "ipsets", "dump")
+					felix.Exec("calico-bpf", "-6", "routes", "dump")
+					felix.Exec("calico-bpf", "-6", "nat", "dump")
+					felix.Exec("calico-bpf", "-6", "nat", "aff")
+					felix.Exec("calico-bpf", "-6", "conntrack", "dump")
+					felix.Exec("calico-bpf", "-6", "arp", "dump")
+					felix.Exec("iptables-save", "-c")
+					felix.Exec("ip", "link")
+					felix.Exec("ip", "addr")
+					felix.Exec("ip", "rule")
+					felix.Exec("ip", "route")
+					felix.Exec("ip", "neigh")
+					felix.Exec("arp")
+					felix.Exec("calico-bpf", "ipsets", "dump")
+					felix.Exec("calico-bpf", "routes", "dump")
+					felix.Exec("calico-bpf", "nat", "dump")
+					felix.Exec("calico-bpf", "nat", "aff")
+					felix.Exec("calico-bpf", "conntrack", "dump")
+					felix.Exec("calico-bpf", "arp", "dump")
+					felix.Exec("calico-bpf", "counters", "dump")
+					felix.Exec("calico-bpf", "ifstate", "dump")
+					log.Infof("[%d]FrontendMapV6: %+v", i, currBpfsvcsV6[i])
+					log.Infof("[%d]NATBackendV6: %+v", i, currBpfepsV6[i])
+					log.Infof("[%d]SendRecvMapV6: %+v", i, dumpSendRecvMapV6(felix))
+					log.Infof("[%d]FrontendMap: %+v", i, currBpfsvcs[i])
+					log.Infof("[%d]NATBackend: %+v", i, currBpfeps[i])
+					log.Infof("[%d]SendRecvMap: %+v", i, dumpSendRecvMap(felix))
+				}
+			}
+		})
+
 		AfterEach(func() {
 			if CurrentGinkgoTestDescription().Failed {
 				infra.DumpErrorData()
-				for _, felix := range tc.Felixes {
-					felix.Exec("calico-bpf", "counters", "dump")
-				}
 			}
 
 			for i := 0; i < 2; i++ {
@@ -298,6 +347,11 @@ func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 
 					cc.CheckConnectivity()
 					cc.ResetExpectations()
+
+					// Since we allow the IPv6 packets through IPv4 programs, a stale neighbor entry might get created
+					// when trying to reach w[0][0] from workloads in felix-1. This will impact subsequent
+					// tests. Hence cleaning up the neighbor entry.
+					tc.Felixes[0].Exec("ip", "-6", "neigh", "del", w[0][0].IP6, "dev", w[0][0].InterfaceName)
 
 					// Add the node IPv6 address
 					node, err = k8sClient.CoreV1().Nodes().Get(context.Background(), tc.Felixes[0].Hostname, metav1.GetOptions{})
