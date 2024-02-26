@@ -2150,7 +2150,6 @@ func mergeAttachPoints(ap4, ap6 attachPoint) attachPoint {
 				aptcV4.HostTunnelIPv6 = aptcV6.HostTunnelIPv6
 				aptcV4.HookLayoutV6 = aptcV6.HookLayoutV6
 				aptcV4.PolicyIdxV6 = aptcV6.PolicyIdxV6
-				aptcV4.IPv6Enabled = true
 				return aptcV4
 			}
 		}
@@ -2643,7 +2642,6 @@ func (d *bpfEndpointManagerDataplane) configureTCAttachPoint(policyDirection Pol
 	}
 
 	ap.ToOrFrom = toOrFrom
-	ap.IPv6Enabled = (d.ipFamily == proto.IPVersion_IPV6)
 	return ap
 }
 

@@ -210,14 +210,14 @@ func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 		})
 
 		if ipv6Dataplane {
-			Context("with a policy allowing ingress to w[0][0] from all regular workloads", func() {
-				var (
-					testSvc          *v1.Service
-					testSvcNamespace string
-				)
+			var (
+				testSvc          *v1.Service
+				testSvcNamespace string
+			)
 
-				npPort := uint16(30333)
-				clusterIPs := []string{"10.101.0.10", "dead:beef::abcd:0:0:10"}
+			npPort := uint16(30333)
+			clusterIPs := []string{"10.101.0.10", "dead:beef::abcd:0:0:10"}
+			Context("with IPv4 and IPv6 enabled", func() {
 				JustBeforeEach(func() {
 					tc.TriggerDelayedStart()
 					ensureAllNodesBPFProgramsAttached(tc.Felixes)
@@ -261,8 +261,9 @@ func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 					cc.ExpectSome(w[0][1], TargetIP(felixIP6(0)), npPort)
 					cc.CheckConnectivity()
 				})
-
 			})
+
+			// Running this test once should be enough as this test doesn't depend on CTLB.
 			if !ctlbEnabled {
 				It("Should connect to w[0][0] using IPv6 after IPv6 host IP is added", func() {
 					k8sClient = infra.(*infrastructure.K8sDatastoreInfra).K8sClient
@@ -323,22 +324,20 @@ func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 				})
 			}
 		} else {
-			Context("with a policy allowing all traffic", func() {
-				JustBeforeEach(func() {
-					tc.TriggerDelayedStart()
-					ensureRightIFStateFlags(tc.Felixes[0], ifstate.FlgIPv4Ready)
-					ensureRightIFStateFlags(tc.Felixes[1], ifstate.FlgIPv4Ready)
-				})
-				It("should drop ipv6 packets at workload interface and allow ipv6 packets at host interface when in IPv4 only mode", func() {
-					// IPv4 connectivity must work.
-					cc.ExpectSome(hostW[0], w[0][0])
-					cc.ExpectSome(hostW[0], hostW[1])
-					// Host to workload IPv6 connectivity must fail
-					cc.Expect(None, w[0][0], w[1][0], ExpectWithIPVersion(6))
-					// Host to Host IPv6 connectivity must pass.
-					cc.Expect(Some, hostW[0], hostW[1], ExpectWithIPVersion(6))
-					cc.CheckConnectivity()
-				})
+			JustBeforeEach(func() {
+				tc.TriggerDelayedStart()
+				ensureRightIFStateFlags(tc.Felixes[0], ifstate.FlgIPv4Ready)
+				ensureRightIFStateFlags(tc.Felixes[1], ifstate.FlgIPv4Ready)
+			})
+			It("should drop ipv6 packets at workload interface and allow ipv6 packets at host interface when in IPv4 only mode", func() {
+				// IPv4 connectivity must work.
+				cc.Expect(Some, hostW[0], w[0][0])
+				cc.Expect(Some, hostW[0], hostW[1])
+				// Host to workload IPv6 connectivity must fail
+				cc.Expect(None, w[0][0], w[1][0], ExpectWithIPVersion(6))
+				// Host to Host IPv6 connectivity must pass.
+				cc.Expect(Some, hostW[0], hostW[1], ExpectWithIPVersion(6))
+				cc.CheckConnectivity()
 			})
 		}
 	})
