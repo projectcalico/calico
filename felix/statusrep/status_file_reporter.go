@@ -153,7 +153,7 @@ func (fr *EndpointStatusFileReporter) SyncForever(ctx context.Context) {
 				logrus.Panic("Input channel closed unexpectedly")
 			}
 
-			switch e.(type){
+			switch e.(type) {
 			case *proto.DataplaneInSync:
 				logrus.Debug("DataplaneInSync received from upstream.")
 				fr.inSyncWithUpstream = true
@@ -312,6 +312,7 @@ func (fr *EndpointStatusFileReporter) reconcileStatusFiles() error {
 				lastError = err
 				return deltatracker.IterActionNoOp
 			}
+			logrus.WithField("file", name).Warn("Ignoring error; attempted to delete file which does not exist")
 		}
 		return deltatracker.IterActionUpdateDataplane
 	})
