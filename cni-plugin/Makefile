@@ -87,24 +87,35 @@ build-all: $(addprefix sub-build-,$(VALIDARCHES))
 sub-build-%:
 	$(MAKE) build ARCH=$*
 
-## Build the Calico network plugin and ipam plugins
-$(BIN)/install binary: $(SRC_FILES)
+## Build the Calico installation binary for the network and ipam plugins
+$(BIN)/install: $(SRC_FILES)
 ifeq ($(FIPS), true)
-	$(call build_cgo_boring_binary, $(PACKAGE_NAME)/cmd/calico, $(BIN)/install)
+	$(call build_cgo_boring_binary, $(PACKAGE_NAME)/cmd/install, $@)
 else
 	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) sh -c '\
-		$(GIT_CONFIG_SSH) go build -buildvcs=false -v -o $(BIN)/install -ldflags "$(LDFLAGS)" $(PACKAGE_NAME)/cmd/calico'
+		$(GIT_CONFIG_SSH) go build -buildvcs=false -v -o $@ -ldflags "$(LDFLAGS)" $(PACKAGE_NAME)/cmd/install'
 endif
+
+## Build the Calico network and ipam plugins
+$(BIN)/calico: $(SRC_FILES)
+ifeq ($(FIPS), true)
+	$(call build_cgo_boring_binary, $(PACKAGE_NAME)/cmd/calico, $@)
+else
+	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) sh -c '\
+		$(GIT_CONFIG_SSH) go build -buildvcs=false -v -o $@ -ldflags "$(LDFLAGS)" $(PACKAGE_NAME)/cmd/calico'
+endif
+
+$(BIN)/calico-ipam: $(BIN)/calico
+	cp "$<" "$@"
 
 ## Build the Calico network plugin and ipam plugins for Windows
 $(BIN_WIN)/calico.exe $(BIN_WIN)/calico-ipam.exe: $(SRC_FILES)
 	$(DOCKER_RUN) \
 	-e GOOS=windows \
-	-e CGO_ENABLED=1 \
+	-e CGO_ENABLED=0 \
 	    $(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
 		go build -v -buildvcs=false -o $(BIN_WIN)/calico.exe -ldflags "$(LDFLAGS)" $(PACKAGE_NAME)/cmd/calico && \
 		go build -v -buildvcs=false -o $(BIN_WIN)/calico-ipam.exe -ldflags "$(LDFLAGS)" $(PACKAGE_NAME)/cmd/calico'
-
 
 ###############################################################################
 # Building the image
@@ -151,9 +162,6 @@ ut: run-k8s-controller-manager $(BIN)/install $(BIN)/host-local $(BIN)/calico-ip
 check-boring-ssl: $(BIN)/install
 	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) $(CHECK_BORINGSSL)
 	-rm -f $(BIN)/tags.txt
-
-$(BIN)/calico-ipam $(BIN)/calico: $(BIN)/install
-	cp "$<" "$@"
 
 ut-datastore:
 	# The tests need to run as root
