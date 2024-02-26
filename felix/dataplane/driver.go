@@ -20,25 +20,19 @@ import (
 	"context"
 	"math/bits"
 	"net"
-	"net/http"
 	"os/exec"
 	"runtime/debug"
-	"strconv"
 	"strings"
-	"time"
 
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
+	log "github.com/sirupsen/logrus"
+	"github.com/vishvananda/netlink"
 	coreV1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/utils/clock"
-
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/collectors"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
-	log "github.com/sirupsen/logrus"
-	"github.com/vishvananda/netlink"
-
-	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/felix/aws"
 	"github.com/projectcalico/calico/felix/bpf"
@@ -419,11 +413,7 @@ func SupportsBPF() error {
 	return bpf.SupportsBPFDataplane()
 }
 
-func ServePrometheusMetrics(configParams *config.Config) {
-	log.WithFields(log.Fields{
-		"host": configParams.PrometheusMetricsHost,
-		"port": configParams.PrometheusMetricsPort,
-	}).Info("Starting prometheus metrics endpoint")
+func ConfigurePrometheusMetrics(configParams *config.Config) {
 	if configParams.PrometheusGoMetricsEnabled && configParams.PrometheusProcessMetricsEnabled && configParams.PrometheusWireGuardMetricsEnabled {
 		log.Info("Including Golang, Process and WireGuard metrics")
 	} else {
@@ -439,13 +429,5 @@ func ServePrometheusMetrics(configParams *config.Config) {
 			log.Info("Discarding WireGuard metrics")
 			prometheus.Unregister(wireguard.MustNewWireguardMetrics())
 		}
-	}
-	http.Handle("/metrics", promhttp.Handler())
-	addr := net.JoinHostPort(configParams.PrometheusMetricsHost, strconv.Itoa(configParams.PrometheusMetricsPort))
-	for {
-		err := http.ListenAndServe(addr, nil)
-		log.WithError(err).Error(
-			"Prometheus metrics endpoint failed, trying to restart it...")
-		time.Sleep(1 * time.Second)
 	}
 }
