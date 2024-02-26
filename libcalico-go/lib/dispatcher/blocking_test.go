@@ -16,7 +16,6 @@ package dispatcher_test
 
 import (
 	"context"
-	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -62,19 +61,9 @@ var _ = Describe("Dispatching", func() {
 			// Dispatcher itself implicitly acts as a buffer of size 1.
 			input <- dummyInput
 
-			for range []chan interface{}{output1, output2} {
-				var o interface{}
-				var ok bool
-				select {
-				case o, ok = <-output1:
-				case o, ok = <-output2:
-				case <-time.After(1 * time.Second):
-					Fail("Timed out waiting for dispatcher to send to outputs.")
-				}
-				Expect(ok).To(BeTrue(), "A channel closed unexpectedly.")
-				dummyOutput, ok := o.(int)
-				Expect(ok).To(BeTrue(), "Output should be the same datatype as input.")
-				Expect(dummyOutput).To(Equal(dummyInput))
+			// Should output to each consumer in order.
+			for _, o := range []chan interface{}{output1, output2} {
+				Eventually(o, "10s").Should(Receive(Equal(dummyInput)), "Output channel didn't receive from dispatcher.")
 			}
 		})
 	})
