@@ -137,6 +137,11 @@ type Config struct {
 	DebugMemoryProfilePath  string `config:"file;;"`
 	DebugDisableLogDropping bool   `config:"bool;false"`
 
+	// DebugHost is the host to bind the debug server port to.  Only used if DebugPort is non-zero.
+	DebugHost string `config:"host-address;localhost"`
+	// DebugPort is the port to bind the pprof debug server to or 0 to disable the debug port.
+	DebugPort int `config:"int(0,65535);"`
+
 	ConnectionRebalancingMode             string        `config:"oneof(none,kubernetes);none"`
 	ConnectionDropIntervalSecs            time.Duration `config:"seconds;1"`
 	ShutdownTimeoutSecs                   time.Duration `config:"seconds;300"`

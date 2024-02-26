@@ -1243,8 +1243,17 @@ spec:
                 type: string
               debugDisableLogDropping:
                 type: boolean
+              debugHost:
+                description: DebugHost is the host IP or hostname to bind the debug
+                  port to.  Only used if DebugPort is set. [Default:localhost]
+                type: string
               debugMemoryProfilePath:
                 type: string
+              debugPort:
+                description: DebugPort if set, enables Felix's debug HTTP port, which
+                  allows memory and CPU profiles to be retrieved.  The debug port
+                  is not secure, it should not be exposed to the internet.
+                type: integer
               debugSimulateCalcGraphHangAfter:
                 pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                 type: string
