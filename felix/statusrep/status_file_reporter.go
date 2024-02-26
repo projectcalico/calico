@@ -239,11 +239,7 @@ func (fr *EndpointStatusFileReporter) resetStoppedTimerOrInit(t *time.Timer, d t
 
 // A sub-call of SyncForever, not intended to be called outside the main loop.
 // Updates delta tracker state to match the received update.
-//
-// If commitToKernel is true, attempts to commit the new state to the kernel.
-//
-// Can only return an error after a failed commit, so a returned error should
-// always result in SyncForever queueing a retry.
+// Logs and discards errors generated from converting endpoint updates to endpoint keys.
 func (fr *EndpointStatusFileReporter) handleEndpointUpdate(e interface{}) {
 	switch m := e.(type) {
 	case *proto.WorkloadEndpointStatusUpdate:
@@ -271,14 +267,12 @@ func (fr *EndpointStatusFileReporter) resyncDataplaneWithKernel() error {
 		return err
 	}
 
-	fr.statusDirDeltaTracker.Dataplane().ReplaceFromIter(func(f func(k string)) error {
+	return fr.statusDirDeltaTracker.Dataplane().ReplaceFromIter(func(f func(k string)) error {
 		for _, entry := range entries {
 			f(entry.Name())
 		}
 		return nil
 	})
-
-	return nil
 }
 
 // A sub-call of SyncForever. Not intended to be called outside the main loop.
