@@ -137,7 +137,7 @@ func (fr *EndpointStatusFileReporter) SyncForever(ctx context.Context) {
 	// Each flag triggers one behaviour within the loop.
 	// Once the behaviour succeeds, the flag is switched off.
 	// If the behaviour fails, the flag is left on, and a retry is queued.
-	var retryTimerResetNeeded, resyncWithKernelNeeded, applyToKernelNeeded bool
+	var retryTimerResetNeeded, resyncWithKernelNeeded bool
 
 	// Timer channels are stored separately from the timer, and nilled-out when not needed.
 	var retry, scheduledReapply *time.Timer
@@ -161,19 +161,15 @@ func (fr *EndpointStatusFileReporter) SyncForever(ctx context.Context) {
 				logrus.Debug("DataplaneInSync received from upstream.")
 				fr.inSyncWithUpstream = true
 				resyncWithKernelNeeded = true
-				applyToKernelNeeded = true
 
 			default:
 				logrus.WithField("endpoint", e).Debug("Handling endpoint update")
 				fr.handleEndpointUpdate(e)
-				if fr.inSyncWithUpstream {
-					applyToKernelNeeded = true
-				}
 			}
 
 		case <-retryC:
 		case <-scheduledReapplyC:
-			resyncWithKernelNeeded, applyToKernelNeeded = true, true
+			resyncWithKernelNeeded = true
 		}
 
 		if resyncWithKernelNeeded {
@@ -186,20 +182,18 @@ func (fr *EndpointStatusFileReporter) SyncForever(ctx context.Context) {
 			}
 		}
 
-		if applyToKernelNeeded {
+		if fr.inSyncWithUpstream {
+			// There may be no updates to apply here,
+			// but that case will be close to a no-op.
 			err := fr.reconcileStatusFiles()
 			if err != nil {
 				logrus.WithError(err).Warn("Encountered one or more errors while reconciling endpoint status dir. Queueing retry...")
 				retryTimerResetNeeded = true
-			} else {
-				applyToKernelNeeded = false
 			}
 		}
 
-		// Timer leak-protection; check if we need to drain retryC.
+		// Timer leak-protection; stop timers check if we need to drain timer channels.
 		fr.drainTimer(retry)
-		// Always stop the reapply timer after any operation
-		// to avoid doubling-up applies in quick succession.
 		fr.drainTimer(scheduledReapply)
 
 		// Retry should be stopped in all cases by now, and retryC drained.
@@ -214,7 +208,7 @@ func (fr *EndpointStatusFileReporter) SyncForever(ctx context.Context) {
 		}
 
 		// If we're in-sync and healthy (no retry queued), queue a periodic resync.
-		// Useful in-case a 3rdparty is interfering with the dataplane underneath us.
+		// Useful in-case a 3rd-party is interfering with the dataplane underneath us.
 		if fr.inSyncWithUpstream && retryC == nil {
 			scheduledReapply = fr.resetStoppedTimerOrInit(scheduledReapply, fr.reapplyInterval)
 			scheduledReapplyC = scheduledReapply.C
