@@ -58,7 +58,6 @@ type AttachPoint struct {
 	ExtToServiceConnmark uint32
 	PSNATStart           uint16
 	PSNATEnd             uint16
-	IPv6Enabled          bool
 	RPFEnforceOption     uint8
 	NATin                uint32
 	NATout               uint32
@@ -403,10 +402,6 @@ func (ap *AttachPoint) ConfigureProgram(m *libbpf.Map) error {
 
 	if globalData.VxlanPort == 0 {
 		globalData.VxlanPort = 4789
-	}
-
-	if ap.IPv6Enabled {
-		globalData.Flags |= libbpf.GlobalsIPv6Enabled
 	}
 
 	if ap.DSROptoutCIDRs {
