@@ -735,7 +735,7 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 					VxlanPort:    testVxlanPort,
 					PSNatStart:   uint16(topts.psnaStart),
 					PSNatLen:     uint16(topts.psnatEnd-topts.psnaStart) + 1,
-					Flags:        libbpf.GlobalsIPv6Enabled | libbpf.GlobalsNoDSRCidrs,
+					Flags:        libbpf.GlobalsNoDSRCidrs,
 					LogFilterJmp: 0xffffffff,
 				}
 
@@ -760,7 +760,7 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 					VxlanPort:    testVxlanPort,
 					PSNatStart:   uint16(topts.psnaStart),
 					PSNatLen:     uint16(topts.psnatEnd-topts.psnaStart) + 1,
-					Flags:        libbpf.GlobalsIPv6Enabled | libbpf.GlobalsNoDSRCidrs,
+					Flags:        libbpf.GlobalsNoDSRCidrs,
 					LogFilterJmp: 0xffffffff,
 				}
 
@@ -873,7 +873,7 @@ func objUTLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHos
 					VxlanPort:  testVxlanPort,
 					PSNatStart: uint16(topts.psnaStart),
 					PSNatLen:   uint16(topts.psnatEnd-topts.psnaStart) + 1,
-					Flags:      libbpf.GlobalsIPv6Enabled | libbpf.GlobalsNoDSRCidrs,
+					Flags:      libbpf.GlobalsNoDSRCidrs,
 				}
 
 				copy(globals.HostTunnelIPv6[:], node1tunIPV6.To16())
@@ -889,7 +889,7 @@ func objUTLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHos
 					VxlanPort:  testVxlanPort,
 					PSNatStart: uint16(topts.psnaStart),
 					PSNatLen:   uint16(topts.psnatEnd-topts.psnaStart) + 1,
-					Flags:      libbpf.GlobalsIPv6Enabled | libbpf.GlobalsNoDSRCidrs,
+					Flags:      libbpf.GlobalsNoDSRCidrs,
 				}
 				copy(globals.HostTunnelIPv4[0:4], node1tunIP.To4())
 				copy(globals.HostIPv4[0:4], hostIP.To4())
