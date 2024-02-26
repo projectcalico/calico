@@ -35,9 +35,9 @@ static CALI_BPF_INLINE int parse_packet_ip_v4(struct cali_tc_ctx *ctx)
 		CALI_DEBUG("ARP: allowing packet\n");
 		goto allow_no_fib;
 	case ETH_P_IPV6:
-		// Drop if the packet is from workload
+		// Drop if the packet is to/from workload
 		if (CALI_F_WEP) {
-			CALI_DEBUG("IPv6 from workload: drop\n");
+			CALI_DEBUG("IPv6 to/from workload: drop\n");
 			goto deny;
 		} else { // or allow, it the packet is on host interface
 			CALI_DEBUG("IPv6 on host interface: allow\n");
