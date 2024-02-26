@@ -51,6 +51,8 @@ type EndpointStatusFileReporter struct {
 
 	// Wraps and manages a real or mock wait.Backoff.
 	bom backoffManager
+	// Interval between maintainence re-applies when dataplane is healthy.
+	reapplyInterval time.Duration
 
 	hostname string
 }
@@ -101,6 +103,7 @@ func NewEndpointStatusFileReporter(
 		statusDirDeltaTracker:   deltatracker.NewSetDeltaTracker[string](),
 		bom:                     newBackoffManager(newDefaultBackoff),
 		hostname:                "",
+		reapplyInterval:         10 * time.Second,
 	}
 
 	for _, o := range opts {
@@ -134,19 +137,19 @@ func (fr *EndpointStatusFileReporter) SyncForever(ctx context.Context) {
 	// Each flag triggers one behaviour within the loop.
 	// Once the behaviour succeeds, the flag is switched off.
 	// If the behaviour fails, the flag is left on, and a retry is queued.
-	var retryTimerResetNeeded, resyncWithKernelNeeded, applyToKernelNeeded, exit bool
+	var retryTimerResetNeeded, resyncWithKernelNeeded, applyToKernelNeeded bool
 
 	// Timer channels are stored separately from the timer, and nilled-out when not needed.
 	var retry, scheduledReapply *time.Timer
 	var retryC, scheduledReapplyC <-chan time.Time
-	reapplyInterval := 10 * time.Second
 	logrus.Debug("Endpoint status file reporter running.")
 	for {
 		select {
 		case <-ctx.Done():
 			logrus.Debug("Context cancelled, cleaning up and stopping endpoint status file reporter...")
-			retryTimerResetNeeded, resyncWithKernelNeeded, applyToKernelNeeded = false, false, false
-			exit = true
+			fr.drainTimer(retry)
+			fr.drainTimer(scheduledReapply)
+			return
 
 		case e, ok := <-fr.endpointUpdatesC:
 			if !ok {
@@ -194,55 +197,50 @@ func (fr *EndpointStatusFileReporter) SyncForever(ctx context.Context) {
 		}
 
 		// Timer leak-protection; check if we need to drain retryC.
-		if retry != nil && !retry.Stop() {
-			select {
-			case <-retry.C:
-				// Timer fired but another channel was selected (retryC was not drained).
-			default:
-				// Timer fired and was drained by the select.
-			}
-		}
+		fr.drainTimer(retry)
 		// Always stop the reapply timer after any operation
 		// to avoid doubling-up applies in quick succession.
-		if scheduledReapply != nil && !scheduledReapply.Stop() {
-			select {
-			case <-scheduledReapply.C:
-			default:
-			}
-		}
-
-		// Cleanup done, safe to exit.
-		if exit {
-			return
-		}
+		fr.drainTimer(scheduledReapply)
 
 		// Retry should be stopped in all cases by now, and retryC drained.
 		// It's safe now to reset / nil-out resources.
 		if retryTimerResetNeeded {
-			if retry == nil {
-				retry = time.NewTimer(fr.bom.Step())
-			} else {
-				retry.Reset(fr.bom.Step())
-			}
+			retry = fr.resetStoppedTimerOrInit(retry, fr.bom.Step())
 			retryC = retry.C
 			retryTimerResetNeeded = false
 		} else {
+			// No need to nil-out our local timer channel var, as it's guaranteed to be drained anyway.
 			fr.bom.reset()
-			// Nil channels will never be selected.
-			retryC = nil
 		}
 
 		// If we're in-sync and healthy (no retry queued), queue a periodic resync.
 		// Useful in-case a 3rdparty is interfering with the dataplane underneath us.
 		if fr.inSyncWithUpstream && retryC == nil {
-			if scheduledReapply == nil {
-				scheduledReapply = time.NewTimer(reapplyInterval)
-			} else {
-				scheduledReapply.Reset(reapplyInterval)
-			}
+			scheduledReapply = fr.resetStoppedTimerOrInit(scheduledReapply, fr.reapplyInterval)
 			scheduledReapplyC = scheduledReapply.C
 		}
 	}
+}
+
+func (fr *EndpointStatusFileReporter) drainTimer(t *time.Timer) {
+	if t == nil || t.Stop() {
+		return
+	}
+	select {
+	// Case where timer was already drained.
+	case <-t.C:
+	// Case where timer was not already drained.
+	default:
+	}
+}
+
+// Passed timer must be guaranteed stopped and drained if not-nil.
+func (fr *EndpointStatusFileReporter) resetStoppedTimerOrInit(t *time.Timer, d time.Duration) *time.Timer {
+	if t == nil {
+		return time.NewTimer(d)
+	}
+	_ = t.Reset(d)
+	return t
 }
 
 // A sub-call of SyncForever, not intended to be called outside the main loop.
