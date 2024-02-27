@@ -36,20 +36,16 @@ global_job_config:
 blocks:
   - name: Publish ALP images
     dependencies: []
-    skip:
-      when: "branch !~ '.+'"
     task:
       jobs:
         - name: Linux multi-arch
           commands:
-            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C app-policy cd CONFIRM=true; fi
+            - make -C app-policy cd CONFIRM=true
   - name: Publish ALP multi-arch manifests
     dependencies:
       - Publish ALP images
-    skip:
-      when: "branch !~ '.+'"
     task:
       jobs:
         - name: Linux multi-arch manifests
           commands:
-            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C app-policy push-manifests-with-tag CONFIRM=true; fi
+            - make -C app-policy push-manifests-with-tag CONFIRM=true

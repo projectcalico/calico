@@ -36,20 +36,16 @@ global_job_config:
 blocks:
   - name: "Publish node images"
     dependencies: []
-    skip:
-      when: "branch !~ '.+'"
     task:
       jobs:
         - name: Linux multi-arch
           commands:
-            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C node cd EXCLUDEARCH=arm64 CONFIRM=true; fi
+            - make -C node cd EXCLUDEARCH=arm64 CONFIRM=true
         - name: Windows
           commands:
-            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C node release-windows CONFIRM=true; fi
+            - make -C node release-windows CONFIRM=true
   - name: Publish node images - native arm64 runner
     dependencies: []
-    skip:
-      when: "branch !~ '.+'"
     task:
       agent:
         machine:
@@ -57,15 +53,13 @@ blocks:
       jobs:
         - name: Linux arm64
           commands:
-            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; make -C node cd ARCHES=arm64 CONFIRM=true; fi
+            - make -C node cd ARCHES=arm64 CONFIRM=true
   - name: Publish node multi-arch manifests
     dependencies:
       - Publish node images
       - "Publish node images - native arm64 runner"
-    skip:
-      when: "branch !~ '.+'"
     task:
       jobs:
         - name: Linux multi-arch manifests
           commands:
-            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C node push-manifests-with-tag CONFIRM=true; fi
+            - make -C node push-manifests-with-tag CONFIRM=true

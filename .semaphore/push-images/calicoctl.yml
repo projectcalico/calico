@@ -36,20 +36,16 @@ global_job_config:
 blocks:
   - name: Publish calicoctl images
     dependencies: []
-    skip:
-      when: "branch !~ '.+'"
     task:
       jobs:
         - name: Linux multi-arch
           commands:
-            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C calicoctl cd CONFIRM=true; fi
+            - make -C calicoctl cd CONFIRM=true
   - name: Publish calicoctl multi-arch manifests
     dependencies:
       - Publish calicoctl images
-    skip:
-      when: "branch !~ '.+'"
     task:
       jobs:
         - name: Linux multi-arch manifests
           commands:
-            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C calicoctl push-manifests-with-tag CONFIRM=true; fi
+            - make -C calicoctl push-manifests-with-tag CONFIRM=true
