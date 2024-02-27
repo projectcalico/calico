@@ -1,8 +1,8 @@
 version: v1.0
-name: Publish node images
+name: Publish pod2daemon images
 agent:
   machine:
-    type: e1-standard-4
+    type: e1-standard-2
     os_image: ubuntu2004
 
 execution_time_limit:
@@ -34,7 +34,7 @@ global_job_config:
       - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
 
 blocks:
-  - name: "Publish node images"
+  - name: Publish pod2daemon images
     dependencies: []
     skip:
       when: "branch !~ '.+'"
@@ -42,30 +42,14 @@ blocks:
       jobs:
         - name: Linux multi-arch
           commands:
-            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C node cd EXCLUDEARCH=arm64 CONFIRM=true; fi
-        - name: Windows
-          commands:
-            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C node release-windows CONFIRM=true; fi
-  - name: Publish node images - native arm64 runner
-    dependencies: []
-    skip:
-      when: "branch !~ '.+'"
-    task:
-      agent:
-        machine:
-          type: s1-aws-arm64-2
-      jobs:
-        - name: Linux arm64
-          commands:
-            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; make -C node cd ARCHES=arm64 CONFIRM=true; fi
-  - name: Publish node multi-arch manifests
+            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C pod2daemon cd CONFIRM=true; fi
+  - name: Publish pod2daemon multi-arch manifests
     dependencies:
-      - Publish node images
-      - "Publish node images - native arm64 runner"
+      - Publish pod2daemon images
     skip:
       when: "branch !~ '.+'"
     task:
       jobs:
         - name: Linux multi-arch manifests
           commands:
-            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C node push-manifests-with-tag CONFIRM=true; fi
+            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C pod2daemon push-manifests-with-tag CONFIRM=true; fi
