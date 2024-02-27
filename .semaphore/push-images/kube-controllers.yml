@@ -36,20 +36,16 @@ global_job_config:
 blocks:
   - name: Publish kube-controllers images
     dependencies: []
-    skip:
-      when: "branch !~ '.+'"
     task:
       jobs:
         - name: "kube-controllers"
           commands:
-            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C kube-controllers cd CONFIRM=true; fi
+            - make -C kube-controllers cd CONFIRM=true
   - name: Publish kube-controllers multi-arch manifests
     dependencies:
       - Publish kube-controllers images
-    skip:
-      when: "branch !~ '.+'"
     task:
       jobs:
         - name: Linux multi-arch manifests
           commands:
-            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C kube-controllers push-manifests-with-tag CONFIRM=true; fi
+            - make -C kube-controllers push-manifests-with-tag CONFIRM=true

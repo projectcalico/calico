@@ -36,20 +36,16 @@ global_job_config:
 blocks:
   - name: Publish apiserver images
     dependencies: []
-    skip:
-      when: "branch !~ '.+'"
     task:
       jobs:
         - name: Linux multi-arch
           commands:
-            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C apiserver cd CONFIRM=true; fi
+            - make -C apiserver cd CONFIRM=true
   - name: Publish apiserver multi-arch manifests
     dependencies:
       - Publish apiserver images
-    skip:
-      when: "branch !~ '.+'"
     task:
       jobs:
         - name: Linux multi-arch manifests
           commands:
-            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C apiserver push-manifests-with-tag CONFIRM=true; fi
+            - make -C apiserver push-manifests-with-tag CONFIRM=true
