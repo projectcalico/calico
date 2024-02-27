@@ -999,7 +999,7 @@ func newConnector(configParams *config.Config,
 		datastorev3:                         datastorev3,
 		ToDataplane:                         make(chan interface{}),
 		StatusUpdatesFromDataplane:          make(chan interface{}),
-		StatusUpdatesFromDataplaneConsumers: make([]chan interface{}, 0),
+		StatusUpdatesFromDataplaneConsumers: nil,
 		// InSync should be buffered as it will always be sent a single
 		// message, regardless of any downstream consumers.
 		InSync:                           make(chan bool, 1),
