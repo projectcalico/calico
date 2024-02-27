@@ -16,22 +16,16 @@ ARG IPTABLES_VER=1.8.8-6
 ARG LIBNFTNL_VER=1.2.2-1
 ARG IPSET_VER=7.11-6
 ARG RUNIT_VER=2.1.2
-ARG QEMU_IMAGE
 ARG BIRD_IMAGE=calico/bird:latest
 ARG UBI_IMAGE
 
 FROM calico/bpftool:v5.3-arm64 as bpftool
-FROM ${QEMU_IMAGE} as qemu
 FROM ${BIRD_IMAGE} as bird
 
 # Use this build stage to build iptables rpm and runit binaries.
 # We need to rebuild the iptables rpm because the prepackaged rpm does not have legacy iptables binaries.
 # We need to build runit because there aren't any rpms for it in CentOS or ubi repositories.
 FROM quay.io/centos/centos:stream8 as centos
-
-# Enable non-native builds of this image on an amd64 hosts.
-# This must be the first RUN command in this file!
-COPY --from=qemu /usr/bin/qemu-*-static /usr/bin/
 
 ARG IPTABLES_VER
 ARG LIBNFTNL_VER
@@ -85,13 +79,6 @@ RUN wget -P /tmp https://ftp.debian.org/debian/pool/main/r/runit/runit_${RUNIT_V
     gunzip /tmp/runit_${RUNIT_VER}.orig.tar.gz && \
     tar -xpf /tmp/runit_${RUNIT_VER}.orig.tar -C /tmp && \
     cd /tmp/admin/runit-${RUNIT_VER}/ && \
-    # runit compilation trigger a false positive error halting the process.
-    sed -i "s/runit-init/\/tmp\/admin\/runit-2.1.2\/compile\/runit-init/" src/runit-init.dist && \
-    sed -i "s/runsv/\/tmp\/admin\/runit-2.1.2\/compile\/runsv/" src/runsv.dist && \
-    sed -i "s/runsvchdir/\/tmp\/admin\/runit-2.1.2\/compile\/runsvchdir/" src/runsvchdir.dist && \
-    sed -i "s/runsvdir/\/tmp\/admin\/runit-2.1.2\/compile\/runsvdir/" src/runsvdir.dist && \
-    sed -i "s/svlogd/\/tmp\/admin\/runit-2.1.2\/compile\/svlogd/" src/svlogd.dist && \
-    sed -i "s/utmpset/\/tmp\/admin\/runit-2.1.2\/compile\/utmpset/" src/utmpset.dist && \
     package/install
 
 FROM ${UBI_IMAGE} as ubi
@@ -101,10 +88,6 @@ ARG IPTABLES_VER
 ARG LIBNFTNL_VER
 ARG IPSET_VER
 ARG RUNIT_VER
-
-# Enable non-native builds of this image on an amd64 hosts.
-# This must be the first RUN command in this file!
-COPY --from=qemu /usr/bin/qemu-*-static /usr/bin/
 
 # Update base packages to pick up security updates.  Must do this before adding the centos repo.
 RUN microdnf upgrade
@@ -219,14 +202,8 @@ RUN chmod u+s /bin/mountns
 
 # Clean out as many files as we can from the filesystem.  We no longer need dnf or the platform python install
 # or any of its dependencies.
-COPY clean-up-filesystem.sh /
-
-# Allowing qemu binaries to persist.
-RUN sed -i 's#zmore#zmore\n\tqemu\n#m' clean-up-filesystem.sh
+COPY clean-up-filesystem.sh /clean-up-filesystem.sh
 RUN /clean-up-filesystem.sh
-
-# Delete qemu binaries
-RUN rm /usr/bin/qemu-*-static
 
 # Add in top-level license file
 COPY LICENSE /licenses/LICENSE
