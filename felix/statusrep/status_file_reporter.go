@@ -38,7 +38,7 @@ const (
 // EndpointStatusFileReporter writes a file to the FS
 // any time it sees an Endpoint go up in the dataplane.
 //
-//   - Currently only writes to a directory "policy", creating
+//   - Currently only writes to a directory "status", creating
 //     an entry for each workload, when each workload's
 //     policy is programmed for the first time.
 type EndpointStatusFileReporter struct {
@@ -241,12 +241,14 @@ func (fr *EndpointStatusFileReporter) handleEndpointUpdate(e interface{}) {
 		key := names.WorkloadEndpointIDToWorkloadEndpointKey(m.Id, fr.hostname)
 		if key == nil {
 			logrus.WithField("update", e).Warn("Couldn't generate a WorkloadEndpointKey from update")
+			return
 		}
 		fr.statusDirDeltaTracker.Desired().Add(names.WorkloadEndpointKeyToStatusFilename(key))
 	case *proto.WorkloadEndpointStatusRemove:
 		key := names.WorkloadEndpointIDToWorkloadEndpointKey(m.Id, fr.hostname)
 		if key == nil {
 			logrus.WithField("update", e).Warn("Couldn't generate a WorkloadEndpointKey from update")
+			return
 		}
 		fr.statusDirDeltaTracker.Desired().Delete(names.WorkloadEndpointKeyToStatusFilename(key))
 	default:
