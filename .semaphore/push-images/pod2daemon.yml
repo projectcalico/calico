@@ -1,8 +1,8 @@
 version: v1.0
-name: Publish node images
+name: Publish pod2daemon images
 agent:
   machine:
-    type: e1-standard-4
+    type: e1-standard-2
     os_image: ubuntu2004
 
 execution_time_limit:
@@ -34,32 +34,18 @@ global_job_config:
       - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
 
 blocks:
-  - name: "Publish node images"
+  - name: Publish pod2daemon images
     dependencies: []
     task:
       jobs:
         - name: Linux multi-arch
           commands:
-            - make -C node cd EXCLUDEARCH=arm64 CONFIRM=true
-        - name: Windows
-          commands:
-            - make -C node release-windows CONFIRM=true
-  - name: Publish node images - native arm64 runner
-    dependencies: []
-    task:
-      agent:
-        machine:
-          type: s1-aws-arm64-2
-      jobs:
-        - name: Linux arm64
-          commands:
-            - make -C node cd ARCHES=arm64 CONFIRM=true
-  - name: Publish node multi-arch manifests
+            - make -C pod2daemon cd CONFIRM=true
+  - name: Publish pod2daemon multi-arch manifests
     dependencies:
-      - Publish node images
-      - "Publish node images - native arm64 runner"
+      - Publish pod2daemon images
     task:
       jobs:
         - name: Linux multi-arch manifests
           commands:
-            - make -C node push-manifests-with-tag CONFIRM=true
+            - make -C pod2daemon push-manifests-with-tag CONFIRM=true
