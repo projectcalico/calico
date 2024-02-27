@@ -34,7 +34,13 @@ var _ = Describe("k8s-wait", func() {
 		BeforeEach(func() {})
 		AfterEach(func() {})
 
-		It("should wait for the given timeout before returning if no file is found", func() {
+		pollAndReturn := func(exit chan error, dummyEndpoint *v3.WorkloadEndpoint, timeout time.Duration) {
+			defer close(exit)
+			err := ForEndpointReadyWithTimeout("/tmp", dummyEndpoint, timeout)
+			exit <- err
+		}
+
+		It("should wait for the given timeout and return error when no file is found", func() {
 			dummyEndpoint := &v3.WorkloadEndpoint{
 				ObjectMeta: v1.ObjectMeta{
 					Namespace: "name-space",
@@ -47,16 +53,14 @@ var _ = Describe("k8s-wait", func() {
 				},
 			}
 
+			pollTimeout := 3 * time.Second
 			exit := make(chan error)
-			go func() {
-				defer close(exit)
-				err := ForEndpointReadyWithTimeout("/tmp", dummyEndpoint, 3*time.Second)
-				if err != nil {
-					exit <- err
-				}
-			}()
+			go pollAndReturn(exit, dummyEndpoint, pollTimeout)
+			Consistently(exit, "1s").ShouldNot(Receive(), "Polling thread returned too soon.")
 
-			Eventually(exit, "6s").Should(Receive(), "Expected an error to be returned after timeout elapsed.")
+			var err error
+			Eventually(exit, "6s").Should(Receive(&err), "Expected a return value from polling thread.")
+			Expect(err).To(HaveOccurred(), "Expected an error from polling thread.")
 		})
 
 		It("should return immediately after the right file is created", func() {
@@ -72,14 +76,10 @@ var _ = Describe("k8s-wait", func() {
 				},
 			}
 
+			pollTimeout := 3*time.Second
 			exit := make(chan error)
-			go func() {
-				defer close(exit)
-				err := ForEndpointReadyWithTimeout("/tmp", dummyEndpoint, 10*time.Second)
-				if err != nil {
-					exit <- err
-				}
-			}()
+			go pollAndReturn(exit, dummyEndpoint, pollTimeout)
+			Consistently(exit, "1s").ShouldNot(Receive(), "Polling thread returned too soon.")
 
 			epKey := names.APIWorkloadEndpointToWorkloadEndpointKey(dummyEndpoint)
 			Expect(epKey).NotTo(BeNil(), "Couldn't convert dummy endpoint to workload endpoint key.")
@@ -94,7 +94,8 @@ var _ = Describe("k8s-wait", func() {
 			}()
 			Expect(err).NotTo(HaveOccurred(), "Test failed to create a file in /tmp")
 
-			Eventually(exit, "15s").Should(BeClosed(), "Expected return with no error when file created.")
+			Eventually(exit, "3s").Should(Receive(&err), "Expected a return value to be passed from polling thread.")
+			Expect(err).NotTo(HaveOccurred(), "Polling thread returned an error.")
 		})
 	})
 })
