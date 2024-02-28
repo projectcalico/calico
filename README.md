@@ -5,62 +5,78 @@
 [![CII Best Practices](https://bestpractices.coreinfrastructure.org/projects/6064/badge)](https://bestpractices.coreinfrastructure.org/projects/6064)
 
 <div align=center>
-<img src="https://docs.tigera.io/img/calico/felix_icon.png" width="100" height="100"> 
 <h1>Calico</h1>
 <h2>
-<a href="https://projectcalico.docs.tigera.io/getting-started/kubernetes/quickstart">Quickstart</a> | 
-<a href="https://projectcalico.docs.tigera.io">Docs</a> | 
-<a href="CONTRIBUTING.md">Contribute</a> | 
+<a href="https://projectcalico.docs.tigera.io/getting-started/kubernetes/quickstart">Quickstart</a> |
+<a href="https://projectcalico.docs.tigera.io">Docs</a> |
+<a href="CONTRIBUTING.md">Contribute</a> |
 <a href="https://slack.projectcalico.org">Slack</a> |
 <a href="https://github.com/projectcalico/calico/releases">Releases</a>
 </h2>
 </div>
 
-## About
+## 🐾 Welcome to Project Calico!
 
-Calico is a widely adopted, battle-tested open source networking and network security solution for Kubernetes, virtual machines, and bare-metal workloads.
-Calico provides two major services for Cloud Native applications:
+Project Calico is an open-source project with an active development and user community. Calico Open Source has grown to be the most widely adopted solution for container networking and security, powering 8M+ nodes daily across 166 countries.
 
-- Network connectivity between workloads.
-- Network security policy enforcement between workloads.
+## 🌟 Why use Calico?
 
-Calico’s flexible architecture supports a wide range of deployment options, using modular components and technologies, including:
+- **Data Plane Choice**: eBPF, standard Linux, Windows, and VPP — versatility in network solutions.
+- **Interoperability**: Works across multiple distros, multiple clouds, bare metal, and VMs.
+- **Optimized Performance**: Engineered for high speed and low CPU usage, maximizing your cluster investments.
+- **Scalable Architecture**: Grows seamlessly with your Kubernetes clusters without sacrificing performance.
+- **Advanced Security**: Get granular access controls and WireGuard encryption.
+- **Kubernetes Networking Policy Support**: Continually defining excellence in Kubernetes network policy standards and support.
+- **Vibrant Contributor Community**: Over 200 contributors from a wide array of global companies.
+- **Flexible networking**: An array of networking tools at your disposal, including BGP, VXLAN, service advertisement, and more.
 
-- Choice of data plane technology, whether it be [eBPF](https://projectcalico.docs.tigera.io/maintenance/ebpf/use-cases-ebpf), standard Linux, [Windows HNS](https://docs.microsoft.com/en-us/virtualization/windowscontainers/container-networking/architecture) or [VPP](https://github.com/projectcalico/vpp-dataplane)
-- Enforcement of the full set of Kubernetes network policy features, plus for those needing a richer set of policy features, Calico network policies.
-- An optimized Kubernetes Service implementation using eBPF.
-- Kubernetes [apiserver integration](./apiserver), for managing Calico configuration and Calico network policies.
-- Both non-overlay and [overlay (via IPIP or VXLAN)](https://projectcalico.docs.tigera.io/networking/vxlan-ipip) networking options in either public cloud or on-prem deployments.
-- [CNI plugins](./cni-plugin) for Kubernetes to provide highly efficient pod networking and IP Address Management (IPAM).
-- A [Neutron ML2](./networking-calico) plugin to provide VM networking for OpenStack.
-- A [BGP routing stack](https://projectcalico.docs.tigera.io/networking/bgp) that can advertise routes for workload and service IP addresses to physical network infrastructure.
+<div align=center>
+<img src="https://www.tigera.io/app/uploads/2024/02/Ecosystem_shrunken_2023.svg">
+</div>
 
-## Getting Started Running Calico
+## 🤝 Join the Calico Community
 
-There are many avenues to get started with Calico depending on your situation.
+- [Calico Big Cats][big-cats]: Become an ambassador and share your journey
+- [Community Meetings][community-meetings]: Engage and contribute
+- [Contribute on GitHub][first-issues]: Start with 'good first issues'
+- [Connect on Slack][slack]: Join the conversation with fellow contributors and our developers
 
-- Trying out Kubernetes on a single host or on your own hardware? The
-  [quick start guide](https://projectcalico.docs.tigera.io/getting-started/kubernetes/quickstart) will have you up and running in
-  about fifteen minutes.
-- Running a managed public cloud? Use our
-  [guides for enabling Calico network policies](https://projectcalico.docs.tigera.io/getting-started/kubernetes/managed-public-cloud/).
-- Want to go deeper? Visit [https://projectcalico.docs.tigera.io](https://projectcalico.docs.tigera.io) for full documentation.
+## 💡 Contributing to Project Calico
 
-## Getting Started Developing Calico
+- [Get Started with Project Calico][get-started]
+- [Repositories][repos]
+- [Contribute to our docs][docs-contrib]
+- Documentation: [Dive into our training and resources][resources]
+- [Make Calico better][issues]
 
-Calico is an open source project, and welcomes your contribution, be it through code, a bug report, a feature request, or user
-feedback.
+## 🛠️ Projects We Maintain
 
-- [The Contribution Guidelines](CONTRIBUTING.md) document will get you started on submitting changes to the project.
-- [The Developer Guide](DEVELOPER_GUIDE.md) will walk you through how to set up a development environment, build the code, and run tests.
-- [The Calico Documentation Guide](CONTRIBUTING_DOCS.md) will get you started on making changes to [https://projectcalico.docs.tigera.io](https://projectcalico.docs.tigera.io).
+- [Calico Golang API][api]
+- [Calico operator][operator]
+- [VPP dataplane][vpp]
+- [Calico BIRD][bird]
 
-## Join the Calico Community!
+## 📢 Stay Connected
 
-The Calico community is committed to fostering an open and welcoming environment, with several ways to engage with other users
-and developers. You can find out more about our monthly meetings, Slack group, and Discourse by visiting our
-[community repository](https://github.com/projectcalico/community).
+- Subscribe: [Join our newsletter][news]
+- [YouTube channel for updates & tutorials][youtube]
+- [Technical Blog][blog]
+- [Careers][join]: Passionate about open source? Join our team.
 
-## License
-
-Calico is open source, with most code and documentation available under the Apache 2.0 license (see the [LICENSE](/LICENSE.md)), though some elements are necessarily licensed under different open source licenses for compatibility with upstream licensing or code linking. For example, some Calico BPF programs are licensed under GPL v2.0 for compatibility with Linux kernel helper functions.
+[big-cats]: https://www.tigera.io/project-calico/calico-big-cats-ambassador-program/#meet-calico-big-cats
+[community-meetings]: https://calendar.google.com/calendar/u/0/embed?src=tigera.io_uunmavdev5ndovf0hc4frtl0i0@group.calendar.google.com
+[first-issues]: https://github.com/projectcalico/calico/labels/good%20first%20issue
+[slack]: https://slack.projectcalico.org/
+[get-started]: https://docs.tigera.io/calico/latest/about
+[repos]: https://github.com/orgs/projectcalico/repositories
+[docs-contrib]: https://github.com/projectcalico/calico/blob/master/CONTRIBUTING_DOCS.md
+[resources]: https://docs.tigera.io/calico/latest/about/training-resources
+[issues]: https://github.com/projectcalico/calico/issues
+[api]: https://github.com/projectcalico/api
+[operator]: https://github.com/tigera/operator
+[vpp]: https://github.com/projectcalico/vpp-dataplane
+[news]: https://www.tigera.io/project-calico/#:~:text=Join%20Calico%20Open%20Source%20community%20newsletter
+[youtube]: https://www.youtube.com/channel/UCFpTnXDNcBoXI4gqCDmegFA
+[blog]: https://www.tigera.io/blog/?_sft_category=technical-blog
+[join]: https://www.tigera.io/careers/
+[bird]: https://github.com/projectcalico/bird
