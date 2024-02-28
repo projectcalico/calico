@@ -67,9 +67,6 @@ CONTAINER_MARKER=$(CONTAINER_CREATED)
 BINDIR=bin
 endif
 
-# Use ARCH specific build image.
-CALICO_BUILD:=$(CALICO_BUILD)-$(ARCH)
-
 ###############################################################################
 # Static checks
 ###############################################################################
@@ -117,14 +114,14 @@ sub-image-%:
 sub-image-fips-%:
 	$(MAKE) image FIPS=true ARCH=$*
 
-$(API_SERVER_IMAGE): register $(CONTAINER_MARKER)
-$(CONTAINER_CREATED): docker-image/Dockerfile.$(ARCH) $(BINDIR)/apiserver-$(ARCH) $(BINDIR)/filecheck-$(ARCH)
-	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(API_SERVER_IMAGE):latest-$(ARCH) -f docker-image/Dockerfile.$(ARCH) . --load
+$(API_SERVER_IMAGE): $(CONTAINER_MARKER)
+$(CONTAINER_CREATED): Dockerfile $(BINDIR)/apiserver-$(ARCH) $(BINDIR)/filecheck-$(ARCH)
+	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(API_SERVER_IMAGE):latest-$(ARCH) -f Dockerfile .
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 
-$(CONTAINER_FIPS_CREATED): docker-image/Dockerfile.$(ARCH) $(BINDIR)/apiserver-$(ARCH) $(BINDIR)/filecheck-$(ARCH)
-	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(API_SERVER_IMAGE):latest-fips-$(ARCH) -f docker-image/Dockerfile.$(ARCH) . --load
+$(CONTAINER_FIPS_CREATED): Dockerfile $(BINDIR)/apiserver-$(ARCH) $(BINDIR)/filecheck-$(ARCH)
+	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(API_SERVER_IMAGE):latest-fips-$(ARCH) -f Dockerfile .
 	$(MAKE) FIPS=true retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
 	touch $@
 
@@ -216,8 +213,7 @@ clean: clean-bin clean-hack-lib
 	docker rmi $(API_SERVER_IMAGE):latest-fips-$(ARCH) || true
 
 clean-bin:
-	rm -rf $(BINDIR) \
-	    docker-image/bin
+	rm -rf $(BINDIR)
 
 clean-hack-lib:
 	rm -rf hack/lib/
