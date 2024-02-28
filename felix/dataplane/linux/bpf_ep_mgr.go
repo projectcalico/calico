@@ -899,14 +899,18 @@ func (m *bpfEndpointManager) reclaimPolicyIdx(name string, ipFamily int, iface *
 		if err := m.jumpMapDelete(attachHook, idx.policyIdx[attachHook]); err != nil {
 			log.WithError(err).Warn("Policy program may leak.")
 		}
-		if err := m.xdpJumpMapAlloc.Put(idx.policyIdx[attachHook], name); err != nil {
-			log.WithError(err).Error(attachHook.String())
-		}
 		if attachHook != hook.XDP {
+			if err := m.jumpMapAlloc.Put(idx.policyIdx[attachHook], name); err != nil {
+				log.WithError(err).Error(attachHook.String())
+			}
 			if err := m.jumpMapDelete(attachHook, iface.dpState.filterIdx[attachHook]); err != nil {
 				log.WithError(err).Warn("Filter program may leak.")
 			}
 			if err := m.jumpMapAlloc.Put(iface.dpState.filterIdx[attachHook], name); err != nil {
+				log.WithError(err).Error(attachHook.String())
+			}
+		} else {
+			if err := m.xdpJumpMapAlloc.Put(idx.policyIdx[attachHook], name); err != nil {
 				log.WithError(err).Error(attachHook.String())
 			}
 		}
