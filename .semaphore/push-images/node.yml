@@ -57,7 +57,7 @@ blocks:
       jobs:
         - name: Linux arm64
           commands:
-            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; make -C node cd ARCHES=arm64 CONFIRM=true; fi
+            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C node cd ARCHES=arm64 CONFIRM=true; fi
   - name: Publish node multi-arch manifests
     dependencies:
       - Publish node images
