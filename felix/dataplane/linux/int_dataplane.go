@@ -2365,6 +2365,7 @@ func startBPFDataplaneComponents(ipFamily proto.IPVersion,
 		config.RulesConfig.FailsafeInboundHostPorts,
 		config.RulesConfig.FailsafeOutboundHostPorts,
 		dp.loopSummarizer,
+		ipFamily,
 		failSafesKeyFromSlice,
 		failSafesKey,
 	)
