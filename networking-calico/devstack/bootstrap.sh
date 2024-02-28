@@ -87,6 +87,7 @@ if [ "${DEVSTACK_BRANCH}" = stable/yoga ]; then
     export NEUTRON_BRANCH=unmaintained/yoga
     export NOVA_BRANCH=unmaintained/yoga
     export PLACEMENT_BRANCH=unmaintained/yoga
+    export REQUIREMENTS_BRANCH=unmaintained/yoga
 fi
 
 : ${NC_PLUGIN_REPO:=https://github.com/projectcalico/calico}
