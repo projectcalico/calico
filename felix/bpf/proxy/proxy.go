@@ -19,6 +19,7 @@ package proxy
 
 import (
 	"net"
+	"strings"
 	"sync"
 	"time"
 
@@ -365,7 +366,7 @@ func (r *loggerRecorder) Eventf(regarding runtime.Object, related runtime.Object
 
 const (
 	ReapTerminatingUDPAnnotation   = "projectcalico.org/udpConntrackCleanup"
-	ReapTerminatingUDPImmediatelly = "terminatingImmediately"
+	ReapTerminatingUDPImmediatelly = "TerminatingImmediately"
 
 	ExcludeServiceAnnotation = "projectcalico.org/natExcludeService"
 )
@@ -404,7 +405,7 @@ func makeServiceInfo(_ *v1.ServicePort, s *v1.Service, baseSvc *k8sp.BaseService
 	}
 
 	if baseSvc.Protocol() == v1.ProtocolUDP {
-		if v, ok := s.ObjectMeta.Annotations[ReapTerminatingUDPAnnotation]; ok && v == ReapTerminatingUDPImmediatelly {
+		if v, ok := s.ObjectMeta.Annotations[ReapTerminatingUDPAnnotation]; ok && strings.EqualFold(v, ReapTerminatingUDPImmediatelly) {
 			svc.reapTerminatingUDP = true
 		}
 	}
