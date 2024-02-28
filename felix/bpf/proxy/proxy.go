@@ -365,7 +365,7 @@ func (r *loggerRecorder) Eventf(regarding runtime.Object, related runtime.Object
 
 const (
 	ReapTerminatingUDPAnnotation   = "projectcalico.org/udpConntrackCleanup"
-	ReapTerminatingUDPImmediatelly = "terminatingImmediately"
+	ReapTerminatingUDPImmediatelly = "TerminatingImmediately"
 
 	ExcludeServiceAnnotation = "projectcalico.org/natExcludeService"
 )
