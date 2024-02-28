@@ -24,6 +24,11 @@ ifeq ($(ARCHES),)
 	ARCHES=$(patsubst Dockerfile.%,%,$(wildcard Dockerfile.*))
 endif
 
+# If architectures cannot infer from Dockerfiles, set default supported architecture.
+ifeq ($(ARCHES),)
+	ARCHES=amd64 arm64 ppc64le s390x
+endif
+
 # list of arches *not* to build when doing *-all
 EXCLUDEARCH?=
 VALIDARCHES = $(filter-out $(EXCLUDEARCH),$(ARCHES))
@@ -280,24 +285,17 @@ CERTS_PATH := $(REPO_ROOT)/hack/test/certs
 
 # Set the platform correctly for building docker images so that
 # cross-builds get the correct architecture set in the produced images.
-ifeq ($(ARCH),arm64)
-TARGET_PLATFORM=--platform=linux/arm64/v8
-endif
 ifeq ($(ARCH),armv7)
 TARGET_PLATFORM=--platform=linux/arm/v7
-endif
-ifeq ($(ARCH),ppc64le)
-TARGET_PLATFORM=--platform=linux/ppc64le
-endif
-ifeq ($(ARCH),s390x)
-TARGET_PLATFORM=--platform=linux/s390x
+else
+TARGET_PLATFORM=--platform=linux/$(ARCH)
 endif
 
 # DOCKER_BUILD is the base build command used for building all images.
-DOCKER_BUILD=docker buildx build --pull \
+DOCKER_BUILD=docker buildx build --load $(TARGET_PLATFORM) --pull \
 	     --build-arg QEMU_IMAGE=$(CALICO_BUILD) \
 	     --build-arg UBI_IMAGE=$(UBI_IMAGE) \
-	     --build-arg GIT_VERSION=$(GIT_VERSION) $(TARGET_PLATFORM)
+	     --build-arg GIT_VERSION=$(GIT_VERSION)
 
 DOCKER_RUN := mkdir -p ../.go-pkg-cache bin $(GOMOD_CACHE) && \
 	docker run --rm \
