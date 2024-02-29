@@ -2247,7 +2247,7 @@ func (d *InternalDataplane) apply() {
 		d.reschedC = d.reschedTimer.C
 	}
 
-	if !d.dataplaneNeedsSync && !d.doneFirstApply{
+	if !d.dataplaneNeedsSync && !d.doneFirstApply {
 		d.fromDataplane <- &proto.DataplaneInSync{}
 	}
 }
