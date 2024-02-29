@@ -76,7 +76,7 @@ var _ = Describe("k8s-wait", func() {
 				},
 			}
 
-			pollTimeout := 3*time.Second
+			pollTimeout := 3 * time.Second
 			exit := make(chan error)
 			go pollAndReturn(exit, dummyEndpoint, pollTimeout)
 			Consistently(exit, "1s").ShouldNot(Receive(), "Polling thread returned too soon.")
