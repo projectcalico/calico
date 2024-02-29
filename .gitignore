@@ -22,7 +22,10 @@ hack/release/ghr
 
 /* Created by local kind cluster */
 hack/test/kind/kind
+hack/test/kind/kind-v*
+hack/test/kind/.*updated*
 hack/test/kind/kubectl
+hack/test/kind/kubectl-v*
 hack/test/kind/*kubeconfig.yaml
 pod2daemon/node-driver-registrar/
 
