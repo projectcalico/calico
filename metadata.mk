@@ -8,9 +8,11 @@ GO_BUILD_VER=v0.90
 ACK_GINKGO=ACK_GINKGO_DEPRECATIONS=1.16.5
 
 # Version of Kubernetes to use for tests, bitnami/kubectl, and kubectl binary release.
-K8S_VERSION=v1.27.10
+K8S_VERSION=v1.27.11
 
 # Version of various tools used in the build and tests.
+KIND_VERSION=v0.14.0
+HELM_VERSION=v3.11.3
 COREDNS_VERSION=1.5.2
 ETCD_VERSION=v3.5.6
 # FIXME upgrading to kindest/node newer than v1.24.7 causes Node/kind-cluster and sig-network conformance
