@@ -92,17 +92,6 @@ const (
 	maxApplyRetries = 2
 )
 
-type L2Target struct {
-	// For VXLAN targets, this is the node's real IP address.
-	IP ip.Addr
-
-	// For VXLAN targets, this is the MAC address of the remote VTEP.
-	VTEPMAC net.HardwareAddr
-
-	// For VXLAN targets, this is the IP address of the remote VTEP.
-	GW ip.Addr
-}
-
 type Target struct {
 	Type    TargetType
 	CIDR    ip.CIDR
@@ -190,10 +179,8 @@ type RouteTable struct {
 	includeNoInterface    bool
 
 	ifaceNameToTargets             map[string]map[ip.CIDR]Target
-	ifaceNameToL2Targets           map[string][]L2Target
 	ifaceNameToFirstSeen           map[string]time.Time
 	pendingIfaceNameToDeltaTargets map[string]map[ip.CIDR]*Target
-	pendingIfaceNameToL2Targets    map[string][]L2Target
 
 	pendingConntrackCleanups map[ip.Addr]chan struct{}
 
@@ -333,10 +320,8 @@ func NewWithShims(
 		ifacePrefixRegexp:              ifacePrefixRegexp,
 		includeNoInterface:             includeNoOIF,
 		ifaceNameToTargets:             map[string]map[ip.CIDR]Target{},
-		ifaceNameToL2Targets:           map[string][]L2Target{},
 		ifaceNameToFirstSeen:           map[string]time.Time{},
 		pendingIfaceNameToDeltaTargets: map[string]map[ip.CIDR]*Target{},
-		pendingIfaceNameToL2Targets:    map[string][]L2Target{},
 		reSync:                         true,
 		ifaceNameToUpdateType:          map[string]updateType{},
 		pendingConntrackCleanups:       map[ip.Addr]chan struct{}{},
@@ -474,11 +459,6 @@ func (r *RouteTable) RouteRemove(ifaceName string, cidr ip.CIDR) {
 		r.pendingIfaceNameToDeltaTargets[ifaceName][cidr] = nil
 		r.markIfaceForUpdate(ifaceName, false)
 	}
-}
-
-func (r *RouteTable) SetL2Routes(ifaceName string, targets []L2Target) {
-	r.pendingIfaceNameToL2Targets[ifaceName] = targets
-	r.markIfaceForUpdate(ifaceName, false)
 }
 
 func (r *RouteTable) QueueResync() {
