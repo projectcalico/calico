@@ -1245,12 +1245,19 @@ kubectl $(KUBECTL):
 	curl -L https://storage.googleapis.com/kubernetes-release/release/$(K8S_VERSION)/bin/linux/$(ARCH)/kubectl -o $@
 	chmod +x $@
 
-bin/helm:
+HELM_VERSION=v3.11.3
+bin/helm-$(HELM_VERSION):
 	mkdir -p bin
+	# Remove old helm versions so that switching branches will make the bin/helm
+	# target stale and trigger a re-download.
+	rm -f bin/helm-*
 	$(eval TMP := $(shell mktemp -d))
-	curl -sSf -L --retry 5 -o $(TMP)/helm3.tar.gz https://get.helm.sh/helm-v3.11.0-linux-$(ARCH).tar.gz
+	curl -sSf -L --retry 5 -o $(TMP)/helm3.tar.gz https://get.helm.sh/helm-$(HELM_VERSION)-linux-$(ARCH).tar.gz
 	tar -zxvf $(TMP)/helm3.tar.gz -C $(TMP)
-	mv $(TMP)/linux-$(ARCH)/helm bin/helm
+	mv $(TMP)/linux-$(ARCH)/helm bin/helm-$(HELM_VERSION)
+
+bin/helm: bin/helm-$(HELM_VERSION)
+	cd bin && ln -fs helm-$(HELM_VERSION) helm
 
 ###############################################################################
 # Common functions for launching a local etcd instance.
