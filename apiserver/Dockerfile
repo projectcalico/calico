@@ -10,6 +10,8 @@ FROM calico/base
 
 COPY --from=source / /
 
+USER 10001:10001
+
 WORKDIR /code
 
 ENTRYPOINT ["/code/apiserver"]
