@@ -121,38 +121,14 @@ func (m *Manager) ResyncFailsafes() error {
 			return
 		}
 
-		mask, bits := ipnet.Mask.Size()
+		mask, _ := ipnet.Mask.Size()
 		maskedIPStr := ""
 		if m.ipFamily == proto.IPVersion_IPV4 {
 			ipv4 := ip.To4()
-			if ipv4 == nil || len(ipv4) != 4 {
-				// If ipv4 is nil, then the IP is not an IPv4 address. Only IPv4 addresses are supported in failsafes.
-				log.Errorf("Invalid IPv4 address configured in the failsafe ports: %s", cidr)
-				syncFailed = true
-				return
-			}
-
-			if bits != 32 {
-				log.Errorf("CIDR mask size not valid for IPv4 addresses: %d", bits)
-				syncFailed = true
-				return
-			}
-
 			// Mask the IP
 			maskedIPStr = ipv4.Mask(ipnet.Mask).String()
 		} else {
 			ipv6 := ip.To16()
-			if ipv6 == nil || len(ipv6) != 16 {
-				log.Errorf("Invalid IPv6 address configured in the failsafe ports: %s", cidr)
-				syncFailed = true
-				return
-			}
-
-			if bits != 128 {
-				log.Errorf("CIDR mask size not valid for IPv6 addresses: %d", bits)
-				syncFailed = true
-				return
-			}
 			maskedIPStr = ipv6.Mask(ipnet.Mask).String()
 		}
 
