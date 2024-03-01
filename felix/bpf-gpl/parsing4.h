@@ -35,14 +35,9 @@ static CALI_BPF_INLINE int parse_packet_ip_v4(struct cali_tc_ctx *ctx)
 		CALI_DEBUG("ARP: allowing packet\n");
 		goto allow_no_fib;
 	case ETH_P_IPV6:
-		// If IPv6 is supported and enabled, handle the packet
-		if (GLOBAL_FLAGS & CALI_GLOBALS_IPV6_ENABLED) {
-			CALI_DEBUG("IPv6 packet, continue with parsing it.\n");
-			goto ipv6_packet;
-		}
-		// otherwise, drop if the packet is from workload
+		// Drop if the packet is to/from workload
 		if (CALI_F_WEP) {
-			CALI_DEBUG("IPv6 from workload: drop\n");
+			CALI_DEBUG("IPv6 to/from workload: drop\n");
 			goto deny;
 		} else { // or allow, it the packet is on host interface
 			CALI_DEBUG("IPv6 on host interface: allow\n");
@@ -79,10 +74,6 @@ static CALI_BPF_INLINE int parse_packet_ip_v4(struct cali_tc_ctx *ctx)
 	}
 
 	return PARSING_OK;
-
-ipv6_packet:
-	// Parse IPv6 header, and perform necessary checks here
-	return PARSING_OK_V6;
 
 allow_no_fib:
 	return PARSING_ALLOW_WITHOUT_ENFORCING_POLICY;

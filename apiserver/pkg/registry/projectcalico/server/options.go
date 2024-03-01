@@ -165,7 +165,7 @@ func (o Options) GetStorage(
 			indexers,
 		)
 		if err != nil {
-			klog.Warning("error (%s)", err)
+			klog.Warning("error (%w)", err)
 			return registry.DryRunnableStorage{}, nil, err
 		}
 		dryRunnableStorage := registry.DryRunnableStorage{Storage: storageInterface, Codec: etcdRESTOpts.StorageConfig.Codec}

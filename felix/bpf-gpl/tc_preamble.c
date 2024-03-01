@@ -32,7 +32,7 @@ int  cali_tc_preamble(struct __sk_buff *skb)
 
 	__u16 protocol = bpf_ntohs(skb->protocol);
 	/* Set the globals for the rest of the prog chain. */
-	if (protocol == ETH_P_IPV6) {
+	if (protocol == ETH_P_IPV6 && (__globals.v6.jumps[PROG_INDEX_MAIN] != (__u32)-1)) {
 		globals->data = __globals.v6;
 	} else {
 		globals->data = __globals.v4;

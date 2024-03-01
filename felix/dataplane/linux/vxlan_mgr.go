@@ -160,7 +160,7 @@ func newVXLANManagerWithShims(
 		nlHandle:          nlHandle,
 		noEncapProtocol:   calculateNonEncapRouteProtocol(dpConfig),
 		logCtx:            logCtx,
-		opRecorder: opRecorder,
+		opRecorder:        opRecorder,
 	}
 }
 

@@ -30,8 +30,8 @@ import (
 
 	"github.com/projectcalico/calico/felix/bpf/jump"
 	"github.com/projectcalico/calico/felix/bpf/polprog"
-
 	"github.com/projectcalico/calico/felix/fv/containers"
+	"github.com/projectcalico/calico/felix/fv/metrics"
 	"github.com/projectcalico/calico/felix/fv/tcpdump"
 	"github.com/projectcalico/calico/felix/fv/utils"
 )
@@ -236,6 +236,9 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 }
 
 func (f *Felix) Stop() {
+	if f == nil {
+		return
+	}
 	if CreateCgroupV2 {
 		_ = f.ExecMayFail("rmdir", path.Join("/run/calico/cgroup/", f.Name))
 	}
@@ -276,7 +279,7 @@ func (f *Felix) RestartWithDelayedStartup() func() {
 	}
 }
 
-func (f *Felix) SetEvn(env map[string]string) {
+func (f *Felix) SetEnv(env map[string]string) {
 	fn := "extra-env.sh"
 
 	file, err := os.OpenFile("./"+fn, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
@@ -323,16 +326,19 @@ func (f *Felix) ProgramIptablesDNAT(serviceIP, targetIP, chain string, ipv6 bool
 }
 
 type BPFIfState struct {
-	IfIndex       int
-	Workload      bool
-	Ready         bool
-	IngressPolicy int
-	EgressPolicy  int
+	IfIndex         int
+	Workload        bool
+	V4Ready         bool
+	V6Ready         bool
+	IngressPolicyV4 int
+	EgressPolicyV4  int
+	IngressPolicyV6 int
+	EgressPolicyV6  int
 }
 
 var bpfIfStateRegexp = regexp.MustCompile(`.*([0-9]+) : \{flags: (.*) name: (.*)}`)
 
-func (f *Felix) BPFIfState() map[string]BPFIfState {
+func (f *Felix) BPFIfState(family int) map[string]BPFIfState {
 	out, err := f.ExecOutput("calico-bpf", "ifstate", "dump")
 	Expect(err).NotTo(HaveOccurred())
 
@@ -349,19 +355,35 @@ func (f *Felix) BPFIfState() map[string]BPFIfState {
 		flags := match[2]
 		ifIndex, _ := strconv.Atoi(match[1])
 
-		r := regexp.MustCompile(`IngressPolicy: (\d+)`)
-		m := r.FindStringSubmatch(line)
-		inPol, _ := strconv.Atoi(m[1])
-		r = regexp.MustCompile(`EgressPolicy: (\d+)`)
-		m = r.FindStringSubmatch(line)
-		outPol, _ := strconv.Atoi(m[1])
+		inPolV4 := -1
+		outPolV4 := -1
+		inPolV6 := -1
+		outPolV6 := -1
+		if family == 4 {
+			r := regexp.MustCompile(`IngressPolicyV4: (\d+)`)
+			m := r.FindStringSubmatch(line)
+			inPolV4, _ = strconv.Atoi(m[1])
+			r = regexp.MustCompile(`EgressPolicyV4: (\d+)`)
+			m = r.FindStringSubmatch(line)
+			outPolV4, _ = strconv.Atoi(m[1])
+		} else {
+			r := regexp.MustCompile(`IngressPolicyV6: (\d+)`)
+			m := r.FindStringSubmatch(line)
+			inPolV6, _ = strconv.Atoi(m[1])
+			r = regexp.MustCompile(`EgressPolicyV6: (\d+)`)
+			m = r.FindStringSubmatch(line)
+			outPolV6, _ = strconv.Atoi(m[1])
+		}
 
 		state := BPFIfState{
-			IfIndex:       ifIndex,
-			Workload:      strings.Contains(flags, "workload"),
-			Ready:         strings.Contains(flags, "ready"),
-			IngressPolicy: inPol,
-			EgressPolicy:  outPol,
+			IfIndex:         ifIndex,
+			Workload:        strings.Contains(flags, "workload"),
+			V4Ready:         strings.Contains(flags, "v4Ready"),
+			V6Ready:         strings.Contains(flags, "v6Ready"),
+			IngressPolicyV4: inPolV4,
+			EgressPolicyV4:  outPolV4,
+			IngressPolicyV6: inPolV6,
+			EgressPolicyV6:  outPolV6,
 		}
 
 		states[name] = state
@@ -370,25 +392,31 @@ func (f *Felix) BPFIfState() map[string]BPFIfState {
 	return states
 }
 
-func (f *Felix) BPFNumContiguousPolProgramsFn(iface string, ingressOrEgress string) func() int {
+func (f *Felix) BPFNumContiguousPolProgramsFn(iface string, ingressOrEgress string, family int) func() int {
 	return func() int {
-		cont, _ := f.BPFNumPolProgramsByName(iface, ingressOrEgress)
+		cont, _ := f.BPFNumPolProgramsByName(iface, ingressOrEgress, family)
 		return cont
 	}
 }
 
-func (f *Felix) BPFNumPolProgramsByName(iface string, ingressOrEgress string) (contiguous, total int) {
-	entryPointIdx := f.BPFPolEntryPointIdx(iface, ingressOrEgress)
+func (f *Felix) BPFNumPolProgramsByName(iface string, ingressOrEgress string, family int) (contiguous, total int) {
+	entryPointIdx := f.BPFPolEntryPointIdx(iface, ingressOrEgress, family)
 	return f.BPFNumPolProgramsByEntryPoint(entryPointIdx)
 }
 
-func (f *Felix) BPFPolEntryPointIdx(iface string, ingressOrEgress string) int {
-	ifState := f.BPFIfState()[iface]
+func (f *Felix) BPFPolEntryPointIdx(iface string, ingressOrEgress string, family int) int {
+	ifState := f.BPFIfState(family)[iface]
 	var entryPointIdx int
 	if ingressOrEgress == "ingress" {
-		entryPointIdx = ifState.IngressPolicy
+		entryPointIdx = ifState.IngressPolicyV4
+		if family == 6 {
+			entryPointIdx = ifState.IngressPolicyV6
+		}
 	} else {
-		entryPointIdx = ifState.EgressPolicy
+		entryPointIdx = ifState.EgressPolicyV4
+		if family == 6 {
+			entryPointIdx = ifState.EgressPolicyV6
+		}
 	}
 	return entryPointIdx
 }
@@ -454,4 +482,36 @@ func (f *Felix) IPTablesChains(table string) map[string][]string {
 		}
 	}
 	return out
+}
+
+func (f *Felix) PromMetric(name string) PrometheusMetric {
+	return PrometheusMetric{
+		f:    f,
+		Name: name,
+	}
+}
+
+type PrometheusMetric struct {
+	f    *Felix
+	Name string
+}
+
+func (p PrometheusMetric) Raw() (string, error) {
+	return metrics.GetFelixMetric(p.f.IP, p.Name)
+}
+
+func (p PrometheusMetric) Int() (int, error) {
+	raw, err := p.Raw()
+	if err != nil {
+		return 0, err
+	}
+	return strconv.Atoi(raw)
+}
+
+func (p PrometheusMetric) Float() (float64, error) {
+	raw, err := p.Raw()
+	if err != nil {
+		return 0, err
+	}
+	return strconv.ParseFloat(raw, 64)
 }

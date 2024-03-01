@@ -153,34 +153,37 @@ var _ = Describe("BPF Proxy", func() {
 	})
 
 	Describe("with k8s client", func() {
-		Context("with EndpointSlices", func() {
-			var (
-				p   proxy.Proxy
-				dp  *mockSyncer
-				k8s *fake.Clientset
-			)
+		var (
+			p   proxy.Proxy
+			dp  *mockSyncer
+			k8s *fake.Clientset
+		)
 
-			k8s = fake.NewSimpleClientset(testSvc, testSvcEpsSlice, secondSvc, secondSvcEpsSlice)
+		JustBeforeEach(func() {
+			By("creating proxy with fake client and mock syncer", func() {
+				var err error
+
+				syncStop = make(chan struct{})
+				dp = newMockSyncer(syncStop)
+
+				opts := []proxy.Option{proxy.WithImmediateSync()}
+
+				p, err = proxy.New(k8s, dp, "testnode", opts...)
+				Expect(err).NotTo(HaveOccurred())
+			})
+		})
+
+		AfterEach(func() {
+			By("stopping the proxy", func() {
+				close(syncStop)
+				p.Stop()
+			})
+		})
+
+		Context("with EndpointSlices", func() {
 
 			BeforeEach(func() {
-				By("creating proxy with fake client and mock syncer", func() {
-					var err error
-
-					syncStop = make(chan struct{})
-					dp = newMockSyncer(syncStop)
-
-					opts := []proxy.Option{proxy.WithImmediateSync()}
-
-					p, err = proxy.New(k8s, dp, "testnode", opts...)
-					Expect(err).NotTo(HaveOccurred())
-				})
-			})
-
-			AfterEach(func() {
-				By("stopping the proxy", func() {
-					close(syncStop)
-					p.Stop()
-				})
+				k8s = fake.NewSimpleClientset(testSvc, testSvcEpsSlice, secondSvc, secondSvcEpsSlice)
 			})
 
 			It("should make the right transitions", func() {
@@ -439,177 +442,171 @@ var _ = Describe("BPF Proxy", func() {
 			})
 		},
 		)
-	})
 
-	Describe("ExternalPolicy=Local with k8s client", func() {
-		Context("ExternalPolicy=Local with EndpointSlices", func() {
-			var (
-				p   proxy.Proxy
-				dp  *mockSyncer
-				k8s *fake.Clientset
-			)
+		Describe("ExternalPolicy=Local with k8s client", func() {
+			Context("ExternalPolicy=Local with EndpointSlices", func() {
 
-			testNodeName := "testnode"
-			testNodeNameOther := "someothernode"
+				testNodeName := "testnode"
+				testNodeNameOther := "someothernode"
 
-			nodeport := &v1.Service{
-				TypeMeta:   typeMetaV1("Service"),
-				ObjectMeta: objectMetaV1("nodeport"),
-				Spec: v1.ServiceSpec{
-					ClusterIP: "10.1.0.1",
-					Type:      v1.ServiceTypeNodePort,
-					Selector: map[string]string{
-						"app": "test",
+				nodeport := &v1.Service{
+					TypeMeta:   typeMetaV1("Service"),
+					ObjectMeta: objectMetaV1("nodeport"),
+					Spec: v1.ServiceSpec{
+						ClusterIP: "10.1.0.1",
+						Type:      v1.ServiceTypeNodePort,
+						Selector: map[string]string{
+							"app": "test",
+						},
+						Ports: []v1.ServicePort{
+							{
+								Protocol: v1.ProtocolTCP,
+								Port:     1234,
+								NodePort: 32678,
+							},
+						},
+						ExternalTrafficPolicy: "Local",
 					},
-					Ports: []v1.ServicePort{
+				}
+
+				nodeportEps := &v1.Endpoints{
+					TypeMeta:   typeMetaV1("Endpoints"),
+					ObjectMeta: objectMetaV1("nodeport"),
+					Subsets: []v1.EndpointSubset{
 						{
-							Protocol: v1.ProtocolTCP,
-							Port:     1234,
-							NodePort: 32678,
-						},
-					},
-					ExternalTrafficPolicy: "Local",
-				},
-			}
-
-			nodeportEps := &v1.Endpoints{
-				TypeMeta:   typeMetaV1("Endpoints"),
-				ObjectMeta: objectMetaV1("nodeport"),
-				Subsets: []v1.EndpointSubset{
-					{
-						Addresses: []v1.EndpointAddress{
-							{
-								IP:       "10.1.2.1",
-								NodeName: &testNodeName,
+							Addresses: []v1.EndpointAddress{
+								{
+									IP:       "10.1.2.1",
+									NodeName: &testNodeName,
+								},
+								{
+									IP:       "10.1.2.2",
+									NodeName: &testNodeNameOther,
+								},
+								{
+									IP:       "10.1.2.3",
+									NodeName: nil,
+								},
 							},
-							{
-								IP:       "10.1.2.2",
-								NodeName: &testNodeNameOther,
-							},
-							{
-								IP:       "10.1.2.3",
-								NodeName: nil,
-							},
-						},
-						Ports: []v1.EndpointPort{
-							{
-								Port: 1234,
+							Ports: []v1.EndpointPort{
+								{
+									Port: 1234,
+								},
 							},
 						},
 					},
-				},
-			}
+				}
 
-			k8s = fake.NewSimpleClientset(nodeport, epsToSlice(nodeportEps))
+				BeforeEach(func() {
+					k8s = fake.NewSimpleClientset(nodeport, epsToSlice(nodeportEps))
+				})
 
+				It("should set local correctly", func() {
+					dp.checkState(func(s proxy.DPSyncerState) {
+						Expect(s.SvcMap).To(HaveLen(1))
+						for k := range s.SvcMap {
+							for _, ep := range s.EpsMap[k] {
+								Expect(ep.GetIsLocal()).To(Equal(ep.String() == "10.1.2.1:1234"))
+							}
+						}
+					})
+				})
+			},
+			)
+		})
+
+		Context("with terminating workloads", func() {
 			BeforeEach(func() {
-				By("creating proxy with fake client and mock syncer", func() {
-					var err error
-
-					syncStop = make(chan struct{})
-					dp = newMockSyncer(syncStop)
-
-					opts := []proxy.Option{proxy.WithImmediateSync()}
-
-					p, err = proxy.New(k8s, dp, testNodeName, opts...)
-					Expect(err).NotTo(HaveOccurred())
-				})
+				k8s = fake.NewSimpleClientset(testSvc, testSvcEpsSlice)
 			})
 
-			AfterEach(func() {
-				By("stopping the proxy", func() {
-					close(syncStop)
-					p.Stop()
-				})
-			})
+			It("should see IsReady=false and IsTerminating=true", func() {
+				By("getting the initial sync")
 
-			It("should set local correctly", func() {
 				dp.checkState(func(s proxy.DPSyncerState) {
-					Expect(s.SvcMap).To(HaveLen(1))
-					for k := range s.SvcMap {
-						for _, ep := range s.EpsMap[k] {
-							Expect(ep.GetIsLocal()).To(Equal(ep.String() == "10.1.2.1:1234"))
+					Expect(len(s.SvcMap)).To(Equal(1))
+					Expect(len(s.EpsMap)).To(Equal(1))
+
+				})
+
+				By("placing one endpoint to terminating state")
+
+				falsePtr := new(bool)
+				*falsePtr = false
+
+				truePtr := new(bool)
+				*truePtr = true
+
+				testSvcEpsSlice.Endpoints[0].Conditions.Ready = falsePtr
+				testSvcEpsSlice.Endpoints[0].Conditions.Terminating = truePtr
+				err := k8s.Tracker().Update(discovery.SchemeGroupVersion.WithResource("endpointslices"),
+					testSvcEpsSlice, "default")
+				Expect(err).NotTo(HaveOccurred())
+
+				dp.checkState(func(s proxy.DPSyncerState) {
+					Expect(len(s.SvcMap)).To(Equal(1))
+					Expect(len(s.EpsMap)).To(Equal(1))
+
+					var key k8sp.ServicePortName
+
+					for key = range s.EpsMap {
+					}
+
+					isReady := 0
+					isTerminating := 0
+					for _, ep := range s.EpsMap[key] {
+						if ep.IsReady() {
+							isReady++
+						}
+						if ep.IsTerminating() {
+							isTerminating++
 						}
 					}
+					Expect(isReady).To(Equal(1))
+					Expect(isTerminating).To(Equal(1))
 				})
 			})
-		},
-		)
-	})
-
-	Context("with terminating workloads", func() {
-		var (
-			p   proxy.Proxy
-			dp  *mockSyncer
-			k8s *fake.Clientset
-		)
-
-		BeforeEach(func() {
-			By("creating proxy with fake client and mock syncer", func() {
-				var err error
-
-				k8s = fake.NewSimpleClientset(testSvc, testSvcEpsSlice)
-				syncStop = make(chan struct{})
-				dp = newMockSyncer(syncStop)
-
-				opts := []proxy.Option{proxy.WithImmediateSync()}
-
-				p, err = proxy.New(k8s, dp, "test-node", opts...)
-				Expect(err).NotTo(HaveOccurred())
-			})
 		})
 
-		AfterEach(func() {
-			By("stopping the proxy", func() {
-				close(syncStop)
-				p.Stop()
-			})
-		})
-
-		It("should see IsReady=false and IsTerminating=true", func() {
-			By("getting the initial sync")
-
-			dp.checkState(func(s proxy.DPSyncerState) {
-				Expect(len(s.SvcMap)).To(Equal(1))
-				Expect(len(s.EpsMap)).To(Equal(1))
-
-			})
-
-			By("placing one endpoint to terminating state")
-
-			falsePtr := new(bool)
-			*falsePtr = false
-
-			truePtr := new(bool)
-			*truePtr = true
-
-			testSvcEpsSlice.Endpoints[0].Conditions.Ready = falsePtr
-			testSvcEpsSlice.Endpoints[0].Conditions.Terminating = truePtr
-			err := k8s.Tracker().Update(discovery.SchemeGroupVersion.WithResource("endpointslices"),
-				testSvcEpsSlice, "default")
-			Expect(err).NotTo(HaveOccurred())
-
-			dp.checkState(func(s proxy.DPSyncerState) {
-				Expect(len(s.SvcMap)).To(Equal(1))
-				Expect(len(s.EpsMap)).To(Equal(1))
-
-				var key k8sp.ServicePortName
-
-				for key = range s.EpsMap {
+		Context("annotated service", func() {
+			BeforeEach(func() {
+				testSvc := &v1.Service{
+					TypeMeta:   typeMetaV1("Service"),
+					ObjectMeta: objectMetaV1("testService"),
+					Spec: v1.ServiceSpec{
+						ClusterIP: "10.1.0.1",
+						Type:      v1.ServiceTypeClusterIP,
+						Selector: map[string]string{
+							"app": "test",
+						},
+						Ports: []v1.ServicePort{
+							{
+								Protocol: v1.ProtocolUDP,
+								Port:     1234,
+							},
+						},
+					},
 				}
 
-				isReady := 0
-				isTerminating := 0
-				for _, ep := range s.EpsMap[key] {
-					if ep.IsReady() {
-						isReady++
-					}
-					if ep.IsTerminating() {
-						isTerminating++
-					}
+				testSvc.ObjectMeta.Annotations = map[string]string{
+					proxy.ReapTerminatingUDPAnnotation: proxy.ReapTerminatingUDPImmediatelly,
 				}
-				Expect(isReady).To(Equal(1))
-				Expect(isTerminating).To(Equal(1))
+
+				k8s = fake.NewSimpleClientset(testSvc)
+			})
+
+			It("Should see the annotation", func() {
+				dp.checkState(func(s proxy.DPSyncerState) {
+					Expect(len(s.SvcMap)).To(Equal(1))
+					Expect(len(s.EpsMap)).To(Equal(0))
+					Expect(s.SvcMap[k8sp.ServicePortName{
+						NamespacedName: types.NamespacedName{
+							Namespace: "default",
+							Name:      "testService",
+						},
+						Protocol: v1.ProtocolUDP,
+					}].(proxy.Service).ReapTerminatingUDP()).To(BeTrue())
+				})
 			})
 		})
 	})
