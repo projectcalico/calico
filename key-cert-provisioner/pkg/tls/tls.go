@@ -65,7 +65,7 @@ func CreateX509CSR(config *cfg.Config) (*X509CSR, error) {
 		return nil, err
 	}
 
-	usageVal, err := marshalKeyUsage(x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature)
+	usageVal, err := marshalKeyUsage(config.X509KeyUsage)
 	if err != nil {
 		return nil, err
 	}
@@ -95,7 +95,7 @@ func CreateX509CSR(config *cfg.Config) (*X509CSR, error) {
 				Value:    basicVal,
 				Critical: true,
 			},
-			// KeyUsage will be set to KeyEncipherment and DigitalSignature.
+			// KeyUsage will be based on the type of private key algorithm.
 			usageVal,
 			{
 				// ExtKeyUsage will be set to ServerAuth and ClientAuth.
@@ -132,22 +132,22 @@ type basicConstraints struct {
 // Default: 2048 bit.
 func GeneratePrivateKey(algorithm string) (interface{}, []byte, error) {
 	switch algorithm {
-	case "RSAWithSize2048":
+	case cfg.RSAWithSize2048:
 		return genRSA(2048)
 
-	case "RSAWithSize4096":
+	case cfg.RSAWithSize4096:
 		return genRSA(4096)
 
-	case "RSAWithSize8192":
+	case cfg.RSAWithSize8192:
 		return genRSA(8192)
 
-	case "ECDSAWithCurve256":
+	case cfg.ECDSAWithCurve256:
 		return genECDSA(elliptic.P256())
 
-	case "ECDSAWithCurve384":
+	case cfg.ECDSAWithCurve384:
 		return genECDSA(elliptic.P384())
 
-	case "ECDSAWithCurve521":
+	case cfg.ECDSAWithCurve521:
 		return genECDSA(elliptic.P521())
 
 	default:
