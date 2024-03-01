@@ -138,7 +138,7 @@ type NetConf struct {
 
 	// The directory to watch for workload status updates from Felix.
 	//
-	// Default: /var/run/calico/status
+	// Default: /var/run/calico/endpoint-status
 	EndpointStatusDir string `json:"endpoint_status_dir,omitempty"`
 
 	// Options below here are deprecated.
