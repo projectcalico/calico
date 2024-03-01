@@ -508,7 +508,7 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 		return nil, fmt.Errorf("invalid pod startup delay of %d", conf.PolicySetupTimeoutSeconds)
 	} else if conf.PolicySetupTimeoutSeconds > 0 {
 		if conf.EndpointStatusDir == "" {
-			conf.EndpointStatusDir = "/var/run/calico/status"
+			conf.EndpointStatusDir = "/var/run/calico/endpoint-status"
 		}
 		timeout := time.Duration(conf.PolicySetupTimeoutSeconds) * time.Second
 		err := wait.ForEndpointReadyWithTimeout(conf.EndpointStatusDir, endpoint, timeout)

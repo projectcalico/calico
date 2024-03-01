@@ -32,7 +32,7 @@ import (
 )
 
 const (
-	dirStatus = "status"
+	dirStatus = "endpoint-status"
 )
 
 // EndpointStatusFileReporter writes a file to the FS
