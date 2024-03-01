@@ -161,7 +161,7 @@ func (c *DesiredView[K, V]) Get(k K) (V, bool) {
 // cache, it is added to the pending deletions set.  Removes the key from the pending updates set.
 func (c *DesiredView[K, V]) Delete(k K) {
 	if logrus.GetLevel() >= logrus.DebugLevel {
-		c.logCtx.WithFields(logrus.Fields{"k": k}).Debug("Delete")
+		c.logCtx.WithFields(logrus.Fields{"k": k}).Debug("Delete (desired)")
 	}
 	delete(c.desiredUpdates, k)
 
