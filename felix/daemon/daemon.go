@@ -662,13 +662,17 @@ configRetry:
 	}
 
 	if configParams.EndpointStatusPathPrefix != "" {
-		fromDataplaneC := make(chan interface{}, 10)
-		dpConnector.StatusUpdatesFromDataplaneConsumers = append(dpConnector.StatusUpdatesFromDataplaneConsumers, fromDataplaneC)
-		statusFileReporter := statusrep.NewEndpointStatusFileReporter(fromDataplaneC, configParams.EndpointStatusPathPrefix, statusrep.WithHostname(configParams.FelixHostname))
+		if runtime.GOOS == "windows" {
+			log.WithField("os", runtime.GOOS).Warn("EndpointStatusPathPrefix is currently unsupported on Windows. Ignoring config...")
+		} else {
+			fromDataplaneC := make(chan interface{}, 10)
+			dpConnector.StatusUpdatesFromDataplaneConsumers = append(dpConnector.StatusUpdatesFromDataplaneConsumers, fromDataplaneC)
+			statusFileReporter := statusrep.NewEndpointStatusFileReporter(fromDataplaneC, configParams.EndpointStatusPathPrefix, statusrep.WithHostname(configParams.FelixHostname))
 
-		log.WithField("path", configParams.EndpointStatusPathPrefix).Info("Starting status-file reporter")
-		ctx := context.Background()
-		go statusFileReporter.SyncForever(ctx)
+			log.WithField("path", configParams.EndpointStatusPathPrefix).Info("Starting status-file reporter")
+			ctx := context.Background()
+			go statusFileReporter.SyncForever(ctx)
+		}
 	}
 
 	// Start communicating with the dataplane driver.
