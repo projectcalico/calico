@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"runtime"
 	"strings"
 	"time"
 
@@ -504,16 +505,21 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 	)
 
 	// Conditionally wait for host-local Felix to program the policy for this WEP.
+	// Error if negative, ignore if 0.
 	if conf.PolicySetupTimeoutSeconds < 0 {
 		return nil, fmt.Errorf("invalid pod startup delay of %d", conf.PolicySetupTimeoutSeconds)
 	} else if conf.PolicySetupTimeoutSeconds > 0 {
-		if conf.EndpointStatusDir == "" {
-			conf.EndpointStatusDir = "/var/run/calico/endpoint-status"
-		}
-		timeout := time.Duration(conf.PolicySetupTimeoutSeconds) * time.Second
-		err := wait.ForEndpointReadyWithTimeout(conf.EndpointStatusDir, endpoint, timeout)
-		if err != nil {
-			logrus.WithError(err).Warn("Error waiting for endpoint to become ready. Unblocking pod creation...")
+		if runtime.GOOS == "windows" {
+			logger.Warn("Config policy_setup_timeout_seconds is not supported on Windows. Ignoring...")
+		} else {
+			if conf.EndpointStatusDir == "" {
+				conf.EndpointStatusDir = "/var/run/calico/endpoint-status"
+			}
+			timeout := time.Duration(conf.PolicySetupTimeoutSeconds) * time.Second
+			err := wait.ForEndpointReadyWithTimeout(conf.EndpointStatusDir, endpoint, timeout)
+			if err != nil {
+				logrus.WithError(err).Warn("Error waiting for endpoint to become ready. Unblocking pod creation...")
+			}
 		}
 	}
 
