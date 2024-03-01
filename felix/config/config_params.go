@@ -331,6 +331,14 @@ type Config struct {
 	EndpointReportingEnabled   bool          `config:"bool;false"`
 	EndpointReportingDelaySecs time.Duration `config:"seconds;1"`
 
+	// EndpointStatusPathPrefix is the path to the directory
+	// where endpoint status will be written. Endpoint status
+	// file reporting is disabled if field is left empty.
+	//
+	// Chosen directory should match the directory used by the CNI for PodStartupDelay.
+	// [Default: ""]
+	EndpointStatusPathPrefix string `config:"file;;"`
+
 	IptablesMarkMask uint32 `config:"mark-bitmask;0xffff0000;non-zero,die-on-fail"`
 
 	DisableConntrackInvalidCheck bool `config:"bool;false"`
