@@ -15,6 +15,7 @@
 package cfg
 
 import (
+	"crypto/x509"
 	"encoding/base64"
 	"fmt"
 	"os"
@@ -22,6 +23,7 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
+	certV1 "k8s.io/api/certificates/v1"
 )
 
 // Config holds parameters that are used during runtime.
@@ -39,10 +41,21 @@ type Config struct {
 	DNSNames            []string
 	SignatureAlgorithm  string
 	PrivateKeyAlgorithm string
+	X509KeyUsage        x509.KeyUsage
+	Certv1Usage         []certV1.KeyUsage
 	RegisterApiserver   bool
 	AppName             string
 	TimeoutDuration     time.Duration
 }
+
+const (
+	RSAWithSize2048   = "RSAWithSize2048"
+	RSAWithSize4096   = "RSAWithSize4096"
+	RSAWithSize8192   = "RSAWithSize8192"
+	ECDSAWithCurve256 = "ECDSAWithCurve256"
+	ECDSAWithCurve384 = "ECDSAWithCurve384"
+	ECDSAWithCurve521 = "ECDSAWithCurve521"
+)
 
 // GetEnvOrDie convenience method for initializing env.
 func GetEnvOrDie(env string) string {
@@ -89,6 +102,7 @@ func GetConfigOrDie() *Config {
 		}
 
 	}
+	keyAlgorithm, x509Usage, certv1Usage := GetPrivateKeyInfo(os.Getenv("KEY_ALGORITHM"))
 	return &Config{
 		CSRName:             csrName,
 		SignatureAlgorithm:  os.Getenv("SIGNATURE_ALGORITHM"),
@@ -102,8 +116,31 @@ func GetConfigOrDie() *Config {
 		CACertPEM:           caCert,
 		PodIP:               GetEnvOrDie("POD_IP"),
 		AppName:             GetEnvOrDie("APP_NAME"),
-		PrivateKeyAlgorithm: os.Getenv("KEY_ALGORITHM"),
+		PrivateKeyAlgorithm: keyAlgorithm,
+		Certv1Usage:         certv1Usage,
+		X509KeyUsage:        x509Usage,
 		DNSNames:            dnsNames,
 		TimeoutDuration:     timeoutDuration,
 	}
+}
+
+func GetPrivateKeyInfo(keyAlgorithm string) (string, x509.KeyUsage, []certV1.KeyUsage) {
+	var x509Usage x509.KeyUsage
+	var certv1Usage []certV1.KeyUsage
+	switch keyAlgorithm {
+	case RSAWithSize2048, RSAWithSize4096, RSAWithSize8192:
+		x509Usage = x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment
+		certv1Usage = []certV1.KeyUsage{certV1.UsageServerAuth, certV1.UsageClientAuth, certV1.UsageDigitalSignature, certV1.UsageKeyEncipherment}
+		break
+	case ECDSAWithCurve256, ECDSAWithCurve384, ECDSAWithCurve521:
+		x509Usage = x509.KeyUsageDigitalSignature | x509.KeyUsageKeyAgreement
+		certv1Usage = []certV1.KeyUsage{certV1.UsageServerAuth, certV1.UsageClientAuth, certV1.UsageDigitalSignature, certV1.UsageKeyAgreement}
+		break
+	default:
+		log.Warnf("Unknown or missing private key algorithm, defaulting to RSAWithSize2048")
+		keyAlgorithm = RSAWithSize2048
+		x509Usage = x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment
+		certv1Usage = []certV1.KeyUsage{certV1.UsageServerAuth, certV1.UsageClientAuth, certV1.UsageDigitalSignature, certV1.UsageKeyEncipherment}
+	}
+	return keyAlgorithm, x509Usage, certv1Usage
 }

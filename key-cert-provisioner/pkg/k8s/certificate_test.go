@@ -54,6 +54,8 @@ var _ = Describe("Test Certificates", func() {
 		config = &cfg.Config{
 			Signer:  signer,
 			CSRName: csrName,
+			Certv1Usage: []certV1.KeyUsage{certV1.UsageServerAuth, certV1.UsageClientAuth,
+				certV1.UsageDigitalSignature, certV1.UsageKeyAgreement},
 		}
 		tlsCsr = &tls.X509CSR{
 			CSR: csrPem,
