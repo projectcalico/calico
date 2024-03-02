@@ -4285,6 +4285,35 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				})
 			})
 
+			It("should have connectivity from host-networked pods via service to host-networked backend", func() {
+				By("Setting up the service")
+				hostW[0].ConfigureInInfra(infra)
+				testSvc := k8sService("host-svc", clusterIP, hostW[0], 80, 8055, 0, testOpts.protocol)
+				testSvcNamespace := testSvc.ObjectMeta.Namespace
+				k8sClient := infra.(*infrastructure.K8sDatastoreInfra).K8sClient
+				_, err := k8sClient.CoreV1().Services(testSvcNamespace).Create(context.Background(), testSvc, metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(1),
+					"Service endpoints didn't get created? Is controller-manager happy?")
+
+				By("Testing connectivity")
+				port := uint16(testSvc.Spec.Ports[0].Port)
+
+				hostW0SrcIP := ExpectWithSrcIPs(felixIP(0))
+				hostW1SrcIP := ExpectWithSrcIPs(felixIP(1))
+				if !testOpts.connTimeEnabled {
+					switch testOpts.tunnel {
+					case "ipip":
+						hostW0SrcIP = ExpectWithSrcIPs(tc.Felixes[0].ExpectedIPIPTunnelAddr)
+						hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedIPIPTunnelAddr)
+					}
+				}
+
+				cc.Expect(Some, hostW[0], TargetIP(clusterIP), ExpectWithPorts(port), hostW0SrcIP)
+				cc.Expect(Some, hostW[1], TargetIP(clusterIP), ExpectWithPorts(port), hostW1SrcIP)
+				cc.CheckConnectivity()
+			})
+
 		})
 
 		Describe("with BPF disabled to begin with", func() {
