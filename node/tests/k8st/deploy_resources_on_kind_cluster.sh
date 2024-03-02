@@ -7,10 +7,10 @@ ARCH=${ARCH:-amd64}
 # kubectl binary.
 : ${kubectl:=../hack/test/kind/kubectl}
 
-function checkModule(){
+function checkModule() {
   MODULE="$1"
   echo "Checking kernel module $MODULE ..."
-  if lsmod | grep "$MODULE" &> /dev/null ; then
+  if lsmod | grep "$MODULE" &>/dev/null; then
     return 0
   else
     return 1
@@ -34,7 +34,7 @@ EOF
 EOF
 
   # And add all the IPV6 env vars
-  sed -i '/# Enable IPIP/r /dev/stdin' "${yaml}" << EOF
+  sed -i '/# Enable IPIP/r /dev/stdin' "${yaml}" <<EOF
             - name: IP6
               value: "autodetect"
             - name: CALICO_IPV6POOL_CIDR
@@ -72,9 +72,9 @@ echo
 
 echo "Wait for Calico to be ready..."
 while ! time ${kubectl} wait pod -l k8s-app=calico-node --for=condition=Ready -n kube-system --timeout=300s; do
-    # This happens when no matching resources exist yet,
-    # i.e. immediately after application of the Calico YAML.
-    sleep 5
+  # This happens when no matching resources exist yet,
+  # i.e. immediately after application of the Calico YAML.
+  sleep 5
 done
 time ${kubectl} wait pod -l k8s-app=calico-kube-controllers --for=condition=Ready -n kube-system --timeout=300s
 time ${kubectl} wait pod -l k8s-app=kube-dns --for=condition=Ready -n kube-system --timeout=300s
@@ -92,10 +92,10 @@ ${kubectl} apply -f tests/k8st/infra/test-webserver.yaml
 
 echo "Wait for client and webserver pods to be ready..."
 while ! time ${kubectl} wait pod -l pod-name=client --for=condition=Ready --timeout=300s; do
-    sleep 5
+  sleep 5
 done
 while ! time ${kubectl} wait pod -l app=webserver --for=condition=Ready --timeout=300s; do
-    sleep 5
+  sleep 5
 done
 echo "client and webserver pods are running."
 echo
@@ -108,7 +108,7 @@ rm $TEST_DIR/infra/apiserver.yaml.tmp
 openssl req -x509 -nodes -newkey rsa:4096 -keyout apiserver.key -out apiserver.crt -days 365 -subj "/" -addext "subjectAltName = DNS:calico-api.calico-apiserver.svc"
 ${kubectl} create secret -n calico-apiserver generic calico-apiserver-certs --from-file=apiserver.key --from-file=apiserver.crt
 ${kubectl} patch apiservice v3.projectcalico.org -p \
-    "{\"spec\": {\"caBundle\": \"$(${kubectl} get secret -n calico-apiserver calico-apiserver-certs -o go-template='{{ index .data "apiserver.crt" }}')\"}}"
+  "{\"spec\": {\"caBundle\": \"$(${kubectl} get secret -n calico-apiserver calico-apiserver-certs -o go-template='{{ index .data "apiserver.crt" }}')\"}}"
 time ${kubectl} wait pod -l k8s-app=calico-apiserver --for=condition=Ready -n calico-apiserver --timeout=30s
 echo "Calico apiserver is running."
 

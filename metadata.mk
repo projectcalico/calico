@@ -11,13 +11,11 @@ ACK_GINKGO=ACK_GINKGO_DEPRECATIONS=1.16.5
 K8S_VERSION=v1.27.11
 
 # Version of various tools used in the build and tests.
-KIND_VERSION=v0.14.0
-HELM_VERSION=v3.11.3
 COREDNS_VERSION=1.5.2
 ETCD_VERSION=v3.5.6
-# FIXME upgrading to kindest/node newer than v1.24.7 causes Node/kind-cluster and sig-network conformance
-# tests to timeout or fail.
-KINDEST_NODE_VERSION=v1.24.7
+HELM_VERSION=v3.11.3
+KINDEST_NODE_VERSION=v1.27.11
+KIND_VERSION=v0.22.0
 PROTOC_VER=v0.1
 UBI_VERSION=8.9
 
