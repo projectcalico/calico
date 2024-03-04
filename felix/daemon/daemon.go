@@ -649,6 +649,7 @@ configRetry:
 			"Endpoint status reporting enabled, starting status reporter")
 
 		fromDataplaneC := make(chan interface{}, 10)
+		dpConnector.StatusUpdatesFromDataplaneConsumers = append(dpConnector.StatusUpdatesFromDataplaneConsumers, fromDataplaneC)
 		statusReporter := statusrep.NewEndpointStatusReporter(
 			configParams.FelixHostname,
 			configParams.OpenstackRegion,
@@ -1043,26 +1044,26 @@ func (fc *DataplaneConnector) readMessagesFromDataplane() {
 		case *proto.ProcessStatusUpdate:
 			fc.handleProcessStatusUpdate(context.TODO(), msg)
 		case *proto.WorkloadEndpointStatusUpdate:
-			if fc.StatusUpdatesFromDataplaneDispatcher != nil {
+			if len(fc.StatusUpdatesFromDataplaneConsumers) > 0 {
 				fc.StatusUpdatesFromDataplane <- msg
 			}
 
 		case *proto.WorkloadEndpointStatusRemove:
-			if fc.StatusUpdatesFromDataplaneDispatcher != nil {
+			if len(fc.StatusUpdatesFromDataplaneConsumers) > 0 {
 				fc.StatusUpdatesFromDataplane <- msg
 			}
 		case *proto.HostEndpointStatusUpdate:
-			if fc.StatusUpdatesFromDataplaneDispatcher != nil {
+			if len(fc.StatusUpdatesFromDataplaneConsumers) > 0 {
 				fc.StatusUpdatesFromDataplane <- msg
 			}
 		case *proto.HostEndpointStatusRemove:
-			if fc.StatusUpdatesFromDataplaneDispatcher != nil {
+			if len(fc.StatusUpdatesFromDataplaneConsumers) > 0 {
 				fc.StatusUpdatesFromDataplane <- msg
 			}
 		case *proto.WireguardStatusUpdate:
 			fc.wireguardStatUpdateFromDataplane <- msg
 		case *proto.DataplaneInSync:
-			if fc.StatusUpdatesFromDataplaneDispatcher != nil {
+			if len(fc.StatusUpdatesFromDataplaneConsumers) > 0 {
 				fc.StatusUpdatesFromDataplane <- msg
 			}
 		default:
