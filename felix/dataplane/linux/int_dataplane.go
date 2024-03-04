@@ -182,7 +182,8 @@ type Config struct {
 	WatchdogTimeout    time.Duration
 	RouteTableManager  *idalloc.IndexAllocator
 
-	DebugSimulateDataplaneHangAfter time.Duration
+	DebugSimulateDataplaneHangAfter  time.Duration
+	DebugSimulateDataplaneApplyDelay time.Duration
 
 	ExternalNodesCidrs []string
 
@@ -1817,6 +1818,9 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 				log.Debug("Applying dataplane updates")
 				applyStart := time.Now()
 
+				if d.config.DebugSimulateDataplaneApplyDelay > 0 {
+					time.Sleep(d.config.DebugSimulateDataplaneApplyDelay)
+				}
 				// Actually apply the changes to the dataplane.
 				d.apply()
 
@@ -2247,6 +2251,10 @@ func (d *InternalDataplane) apply() {
 			d.reschedTimer.Reset(reschedDelay)
 		}
 		d.reschedC = d.reschedTimer.C
+	}
+
+	if !d.dataplaneNeedsSync && !d.doneFirstApply {
+		d.fromDataplane <- &proto.DataplaneInSync{}
 	}
 }
 
