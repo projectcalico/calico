@@ -32,6 +32,7 @@ import (
 	kapiv1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
@@ -3130,6 +3131,7 @@ var _ = Describe("Test Namespace conversion", func() {
 					"roger": "rabbit",
 				},
 				Annotations: map[string]string{},
+				UID:         types.UID("30316465-6365-4463-ad63-3564622d3638"),
 			},
 			Spec: kapiv1.NamespaceSpec{},
 		}
@@ -3162,6 +3164,7 @@ var _ = Describe("Test Namespace conversion", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:        "default",
 				Annotations: map[string]string{},
+				UID:         types.UID("30316465-6365-4463-ad63-3564622d3638"),
 			},
 			Spec: kapiv1.NamespaceSpec{},
 		}
@@ -3192,6 +3195,7 @@ var _ = Describe("Test Namespace conversion", func() {
 				Annotations: map[string]string{
 					"net.beta.kubernetes.io/network-policy": "{\"ingress\": {\"isolation\": \"DefaultDeny\"}}",
 				},
+				UID: types.UID("30316465-6365-4463-ad63-3564622d3638"),
 			},
 			Spec: kapiv1.NamespaceSpec{},
 		}
@@ -3217,6 +3221,7 @@ var _ = Describe("Test Namespace conversion", func() {
 				Annotations: map[string]string{
 					"net.beta.kubernetes.io/network-policy": "invalidJSON",
 				},
+				UID: types.UID("30316465-6365-4463-ad63-3564622d3638"),
 			},
 			Spec: kapiv1.NamespaceSpec{},
 		}
@@ -3227,6 +3232,23 @@ var _ = Describe("Test Namespace conversion", func() {
 		})
 	})
 
+	It("should generate a deterministic UID for a Namespace Profile", func() {
+		ns := kapiv1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "default",
+				UID:  types.UID("30316465-6365-4463-ad63-3564622d3638"),
+			},
+			Spec: kapiv1.NamespaceSpec{},
+		}
+
+		p, err := c.NamespaceToProfile(&ns)
+		Expect(err).NotTo(HaveOccurred())
+		p2, err := c.NamespaceToProfile(&ns)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(p.UID).To(Equal(p2.UID))
+		Expect(p.UID).NotTo(Equal(ns.UID))
+	})
+
 	It("should handle a valid but not DefaultDeny annotation", func() {
 		ns := kapiv1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
@@ -3234,6 +3256,7 @@ var _ = Describe("Test Namespace conversion", func() {
 				Annotations: map[string]string{
 					"net.beta.kubernetes.io/network-policy": "{}",
 				},
+				UID: types.UID("30316465-6365-4463-ad63-3564622d3638"),
 			},
 			Spec: kapiv1.NamespaceSpec{},
 		}
@@ -3272,6 +3295,7 @@ var _ = Describe("Test ServiceAccount conversion", func() {
 					"roger": "rabbit",
 				},
 				Annotations: map[string]string{},
+				UID:         types.UID("30316465-6365-4463-ad63-3564622d3638"),
 			},
 		}
 
@@ -3294,12 +3318,29 @@ var _ = Describe("Test ServiceAccount conversion", func() {
 		Expect(labels["pcsa.roger"]).To(Equal("rabbit"))
 	})
 
+	It("should generate a deterministic UID for a ServiceAccount Profile", func() {
+		sa := kapiv1.ServiceAccount{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "sa-test",
+				Namespace: "test",
+				UID:       types.UID("30316465-6365-4463-ad63-3564622d3638"),
+			},
+		}
+		p, err := c.ServiceAccountToProfile(&sa)
+		Expect(err).NotTo(HaveOccurred())
+		p2, err := c.ServiceAccountToProfile(&sa)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(p.UID).To(Equal(p2.UID))
+		Expect(p.UID).NotTo(Equal(sa.UID))
+	})
+
 	It("should parse a ServiceAccount in Namespace to a Profile", func() {
 		sa := kapiv1.ServiceAccount{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:        "sa-test",
 				Namespace:   "test",
 				Annotations: map[string]string{},
+				UID:         types.UID("30316465-6365-4463-ad63-3564622d3638"),
 			},
 		}
 
@@ -3314,6 +3355,7 @@ var _ = Describe("Test ServiceAccount conversion", func() {
 		sa := kapiv1.ServiceAccount{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "sa-test",
+				UID:  types.UID("30316465-6365-4463-ad63-3564622d3638"),
 			},
 		}
 
