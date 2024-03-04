@@ -17,7 +17,7 @@
 NAME_PREFIX="${NAME_PREFIX:=${USER}-win-fv}"
 
 # Kubernetes version
-KUBE_VERSION="${KUBE_VERSION:=1.20.1}"
+KUBE_VERSION="${KUBE_VERSION:=1.28.7}"
 
 # AWS keypair name for nodes
 WINDOWS_KEYPAIR_NAME="${WINDOWS_KEYPAIR_NAME:=AWS-key-pair}"
@@ -324,7 +324,7 @@ function show_all_instances() {
 }
 
 function wait_for_docker_installed() {
-  echo "Waiting for docker been installed on linux node"
+  echo "Waiting for docker to have been installed on linux node"
   for i in `seq 1 30`; do
     sleep 2
     ${MASTER_CONNECT_COMMAND} docker images
