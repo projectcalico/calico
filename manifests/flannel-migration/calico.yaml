@@ -1244,6 +1244,9 @@ spec:
               debugSimulateDataplaneHangAfter:
                 pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                 type: string
+              debugSimulateSlowDataplane:
+                pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
+                type: string
               defaultEndpointToHostAction:
                 description: 'DefaultEndpointToHostAction controls what happens to
                   traffic that goes from a workload endpoint to the host itself (after
