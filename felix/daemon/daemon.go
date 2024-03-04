@@ -1287,6 +1287,10 @@ func (fc *DataplaneConnector) shutDownProcess(reason string) {
 	log.Panic("Managed shutdown failed. Panicking.")
 }
 
+// Start creates goroutines for:
+// - sending calc-graph messages to the dataplane driver,
+// - reading messages from the dataplane (and broadcasting to all consumers of those messages),
+// - reading wireguard status updates from the dataplane
 func (fc *DataplaneConnector) Start() {
 	// Start a background thread to write to the dataplane driver.
 	go fc.sendMessagesToDataplaneDriver()
