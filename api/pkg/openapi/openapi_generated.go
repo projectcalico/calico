@@ -2762,6 +2762,11 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
 						},
 					},
+					"debugSimulateSlowDataplane": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+						},
+					},
 					"debugHost": {
 						SchemaProps: spec.SchemaProps{
 							Description: "DebugHost is the host IP or hostname to bind the debug port to.  Only used if DebugPort is set. [Default:localhost]",
