@@ -25,7 +25,9 @@ sudo apt-get update -y
 KUBE_REPO_VERSION=$(echo ${KUBE_VERSION} | cut -d '.' -f 1,2)
 # Download the k8s repo signing key
 sudo mkdir -p /etc/apt/keyrings
+sudo chmod 755 /etc/apt/keyrings
 curl -fsSL https://pkgs.k8s.io/core:/stable:/v{KUBE_REPO_VERSION}/deb/Release.key | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+sudo chmod 644 /etc/apt/keyrings/kubernetes-apt-keyring.gpg
 # Add the Kubernetes apt repository
 echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v${KUBE_REPO_VERSION}/deb/ /" | sudo tee /etc/apt/sources.list.d/kubernetes.list
 
