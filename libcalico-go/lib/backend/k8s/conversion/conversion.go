@@ -84,6 +84,18 @@ func (c converter) ParseWorkloadEndpointName(workloadName string) (names.Workloa
 	return names.ParseWorkloadEndpointName(workloadName)
 }
 
+func ProfileUID(uid types.UID) (types.UID, error) {
+	// We don't want to use the same UID for the Profile as the originating object, as two
+	// objects should not have the same UID. This causes confusion in the Kubernetes garbage collection logic.
+	// We can still generate a new UID programmatically from the parent's UID, though. This ensures a deterministic
+	// yet unique UID.
+	newUID, err := uuid.NewRandomFromReader(strings.NewReader(string(uid)))
+	if err != nil {
+		return "", err
+	}
+	return types.UID(newUID.String()), nil
+}
+
 // NamespaceToProfile converts a Namespace to a Calico Profile.  The Profile stores
 // labels from the Namespace which are inherited by the WorkloadEndpoints within
 // the Profile. This Profile also has the default ingress and egress rules, which are both 'allow'.
@@ -99,11 +111,7 @@ func (c converter) NamespaceToProfile(ns *kapiv1.Namespace) (*model.KVPair, erro
 	// based on name within the namespaceSelector.
 	labels[NamespaceLabelPrefix+NameLabel] = ns.Name
 
-	// We don't want to use the same UID for the Profile as the Namespace, as two
-	// objects should not have the same UID. This causes confusion in the Kubernetes garbage collection logic.
-	// We can still generate a new UID programmatically from the Namespace's UID, though. This ensures a deterministic
-	// yet unique UID.
-	uid, err := uuid.NewRandomFromReader(strings.NewReader(string(ns.UID)))
+	uid, err := ProfileUID(ns.UID)
 	if err != nil {
 		return nil, err
 	}
@@ -114,7 +122,7 @@ func (c converter) NamespaceToProfile(ns *kapiv1.Namespace) (*model.KVPair, erro
 	profile.ObjectMeta = metav1.ObjectMeta{
 		Name:              name,
 		CreationTimestamp: ns.CreationTimestamp,
-		UID:               types.UID(uid.String()),
+		UID:               uid,
 	}
 	profile.Spec = apiv3.ProfileSpec{
 		Ingress:       []apiv3.Rule{{Action: apiv3.Allow}},
@@ -740,11 +748,7 @@ func (c converter) ServiceAccountToProfile(sa *kapiv1.ServiceAccount) (*model.KV
 	// based on name within the serviceAccountSelector.
 	labels[ServiceAccountLabelPrefix+NameLabel] = sa.Name
 
-	// We don't want to use the same UID for the Profile as the ServiceAccount, as two
-	// objects should not have the same UID. This causes confusion in the Kubernetes garbage collection logic.
-	// We can still generate a new UID programmatically from the ServiceAccount's UID, though. This ensures a deterministic
-	// yet unique UID.
-	uid, err := uuid.NewRandomFromReader(strings.NewReader(string(sa.UID)))
+	uid, err := ProfileUID(sa.UID)
 	if err != nil {
 		return nil, err
 	}
@@ -754,7 +758,7 @@ func (c converter) ServiceAccountToProfile(sa *kapiv1.ServiceAccount) (*model.KV
 	profile.ObjectMeta = metav1.ObjectMeta{
 		Name:              name,
 		CreationTimestamp: sa.CreationTimestamp,
-		UID:               types.UID(uid.String()),
+		UID:               uid,
 	}
 	profile.Spec.LabelsToApply = labels
 
