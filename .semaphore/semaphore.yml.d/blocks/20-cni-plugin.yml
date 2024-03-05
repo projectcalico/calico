@@ -58,8 +58,6 @@
         value: master_ssh_key
       - name: WIN_PPK_KEY
         value: win_ppk_key
-      - name: K8S_VERSION
-        value: 1.28.7
     jobs:
       - name: Containerd - Windows FV
         execution_time_limit:
