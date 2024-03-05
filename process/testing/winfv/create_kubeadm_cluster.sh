@@ -21,12 +21,14 @@ sudo systemctl restart docker
 sudo usermod -aG docker ubuntu
 
 sudo apt-get update -y
-# Download the Google Cloud public signing key
-sudo curl -fsSLo /usr/share/keyrings/kubernetes-archive-keyring.gpg https://dl.k8s.io/apt/doc/apt-key.gpg
-# Add the Kubernetes apt repository
-echo "deb [signed-by=/usr/share/keyrings/kubernetes-archive-keyring.gpg] https://apt.kubernetes.io/ kubernetes-xenial main" | sudo tee /etc/apt/sources.list.d/kubernetes.list
 
-K8S_PKG_VERSION=${KUBE_VERSION}-00
+KUBE_REPO_VERSION=$(echo ${KUBE_VERSION} | cut -d '.' -f 1,2)
+# Download the k8s repo signing key
+curl -fsSL https://pkgs.k8s.io/core:/stable:/v{KUBE_REPO_VERSION}/deb/Release.key | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+# Add the Kubernetes apt repository
+echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v${KUBE_REPO_VERSION}/deb/ /" | sudo tee /etc/apt/sources.list.d/kubernetes.list
+
+K8S_PKG_VERSION=${KUBE_VERSION}-1.1
 sudo apt-get update && sudo apt-get install -y kubelet=${K8S_PKG_VERSION} kubeadm=${K8S_PKG_VERSION} kubectl=${K8S_PKG_VERSION}
 sudo swapoff -a
 
