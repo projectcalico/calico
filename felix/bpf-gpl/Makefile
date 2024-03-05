@@ -114,6 +114,8 @@ xdp%_v6.ll: xdp.c xdp.d calculate-flags
 	$(COMPILE)
 test_xdp%.ll: xdp.c xdp.d calculate-flags
 	$(COMPILE)
+test_xdp%_v6.ll: xdp.c xdp.d calculate-flags
+	$(COMPILE)
 
 LINK=$(LD) -march=bpf -filetype=obj -o $@ $<
 bin/tc_preamble.o: tc_preamble.ll | bin

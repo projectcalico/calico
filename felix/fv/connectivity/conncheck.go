@@ -277,7 +277,7 @@ func (c *Checker) ExpectedConnectivityPretty() []string {
 			}
 		}
 		if exp.ipVersion == 6 {
-			result[i] += fmt.Sprintf(" (with IPv6)")
+			result[i] += " (with IPv6)"
 		}
 		if exp.ExpectedPacketLoss.Duration > 0 {
 			if exp.ExpectedPacketLoss.MaxNumber >= 0 {
