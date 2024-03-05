@@ -32,6 +32,7 @@ type Interface interface {
 	LinkSetUp(link netlink.Link) error
 	RouteListFiltered(family int, filter *netlink.Route, filterMask uint64) ([]netlink.Route, error)
 	RouteAdd(route *netlink.Route) error
+	RouteReplace(route *netlink.Route) error
 	RouteDel(route *netlink.Route) error
 	AddrList(link netlink.Link, family int) ([]netlink.Addr, error)
 	AddrAdd(link netlink.Link, addr *netlink.Addr) error
@@ -41,6 +42,9 @@ type Interface interface {
 	RuleDel(rule *netlink.Rule) error
 	Delete()
 	NeighAdd(neigh *netlink.Neigh) error
+	NeighList(linkIndex, family int) ([]netlink.Neigh, error)
+	NeighSet(a *netlink.Neigh) error
+	NeighDel(a *netlink.Neigh) error
 }
 
 func NewRealNetlink() (Interface, error) {

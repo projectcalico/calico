@@ -15,9 +15,8 @@
 # limitations under the License.
 
 set -e
-set -x
 
-echo "Removing old coverprofiles..."
+# Remove the old profiles.
 find . -name "*.coverprofile" -type f -delete
 
 echo "Calculating packages to cover..."
@@ -27,19 +26,28 @@ go_dirs=$(find -type f -name '*.go' | \
 	      sort | uniq | \
 	      tr '\n' ',' | \
 	      sed 's/,$//' )
-echo "Covering: $go_dirs"
 test ! -z "$go_dirs"
 
 test_pkgs=$(go list -buildvcs=false -f '{{ if .TestGoFiles | or .XTestGoFiles }}{{ .ImportPath }}{{ end }}' \
                     ./... | grep -v /vendor/ )
 test ! -z "$test_pkgs"
-echo "Packages with tests: $test_pkgs"
 
+if [ "$#" -eq 0 ]; then
+  # Only log out the packages if we've not been given an override
+  # argument.
+  echo "Packages with tests: $test_pkgs"
+fi
+
+set -x
 ginkgo -cover -covermode=count -coverpkg=${go_dirs} -keepGoing -r "$@"
+set +x
+
 gocovmerge $(find . -name '*.coverprofile') > combined.coverprofile
 
 # Print the coverage.  We use sed to remove the verbose prefix and trim down
 # the whitespace.
 go tool cover -func combined.coverprofile | \
   sed 's=github.com/projectcalico/felix/==' | \
-  column -t
+  column -t | grep -v --perl -e '\b0\.0%|\binit\b'
+
+echo "(hiding uncovered functions and init functions)"

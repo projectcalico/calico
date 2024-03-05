@@ -18,6 +18,7 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"os/exec"
 	"regexp"
@@ -717,6 +718,56 @@ func (c *Container) AttachTCPDump(iface string) *tcpdump.TCPDump {
 	return tcpdump.AttachUnavailable(c.GetID(), iface)
 }
 
+// IPSetSize returns the size of the given (netfilter) IP set (or 0 is it is not present).
+func (c *Container) IPSetSize(ipSetName string) int {
+	// If we later optimize this to use 'ipset list <name>' note that the
+	// <name> variant fails with non-zero RC if the ipset doesn't exist.
+	return c.IPSetSizes()[ipSetName]
+}
+
+func (c *Container) IPSetSizeFn(ipSetName string) func() int {
+	return func() int {
+		return c.IPSetSize(ipSetName)
+	}
+}
+
+func (c *Container) IPSetSizes() map[string]int {
+	args := []string{"ipset", "list"}
+	ipsetsOutput, err := c.ExecOutput(args...)
+	Expect(err).NotTo(HaveOccurred())
+	numMembers := map[string]int{}
+	currentName := ""
+	membersSeen := false
+	log.WithField("ipsets", ipsetsOutput).Info("IP sets state")
+	for _, line := range strings.Split(ipsetsOutput, "\n") {
+		log.WithField("line", line).Debug("Parsing line")
+		if strings.HasPrefix(line, "Name:") {
+			currentName = strings.Split(line, " ")[1]
+			membersSeen = false
+		} else if strings.HasPrefix(line, "Members:") {
+			membersSeen = true
+		} else if membersSeen && len(strings.TrimSpace(line)) > 0 {
+			log.Debugf("IP set %s has member %s", currentName, line)
+			numMembers[currentName]++
+		}
+	}
+	return numMembers
+}
+
+func (c *Container) IPSetNames() []string {
+	out, err := c.ExecOutput("ipset", "list", "-name")
+	Expect(err).NotTo(HaveOccurred())
+	out = strings.Trim(out, "\n")
+	if out == "" {
+		return nil
+	}
+	return strings.Split(out, "\n")
+}
+
+func (c *Container) NumIPSets() int {
+	return len(c.IPSetNames())
+}
+
 // NumTCBPFProgs Returns the number of TC BPF programs attached to the given interface.  Only direct-action
 // programs are listed (i.e. the type that we use).
 func (c *Container) NumTCBPFProgs(ifaceName string) int {
@@ -765,8 +816,17 @@ func (c *Container) BPFRoutes() string {
 
 // BPFNATDump returns parsed out NAT maps keyed by "<ip> port <port> proto <proto>". Each
 // value is list of "<ip>:<port>".
-func (c *Container) BPFNATDump() map[string][]string {
-	out, err := c.ExecOutput("calico-bpf", "nat", "dump")
+func (c *Container) BPFNATDump(ipv6 bool) map[string][]string {
+	var (
+		err error
+		out string
+	)
+
+	if ipv6 {
+		out, err = c.ExecOutput("calico-bpf", "-6", "nat", "dump")
+	} else {
+		out, err = c.ExecOutput("calico-bpf", "nat", "dump")
+	}
 	if err != nil {
 		log.WithError(err).Error("Failed to run calico-bpf")
 	}
@@ -814,9 +874,16 @@ func (c *Container) BPFNATDump() map[string][]string {
 // BPFNATHasBackendForService returns true is the given service has the given backend programmed in NAT tables
 func (c *Container) BPFNATHasBackendForService(svcIP string, svcPort, proto int, ip string, port int) bool {
 	front := fmt.Sprintf("%s port %d proto %d", svcIP, svcPort, proto)
-	back := fmt.Sprintf("%s:%d", ip, port)
+	fmtStr := "%s:%d"
+	ipv6 := false
+	ipAddr := net.ParseIP(ip)
+	if ipAddr.To4() == nil {
+		fmtStr = "[%s]:%d"
+		ipv6 = true
+	}
+	back := fmt.Sprintf(fmtStr, ip, port)
 
-	nat := c.BPFNATDump()
+	nat := c.BPFNATDump(ipv6)
 	if natBack, ok := nat[front]; ok {
 		found := false
 		for _, b := range natBack {

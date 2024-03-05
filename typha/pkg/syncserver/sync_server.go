@@ -158,9 +158,6 @@ type Config struct {
 	// DebugLogWrites tells the server to wrap each connection with a Writer that
 	// logs every write.  Intended only for use in tests!
 	DebugLogWrites bool
-
-	// FIPSModeEnabled Enables FIPS 140-2 verified crypto mode.
-	FIPSModeEnabled bool
 }
 
 const (
@@ -343,10 +340,7 @@ func (s *Server) serve(cxt context.Context) {
 	)
 	if s.config.requiringTLS() {
 		pwd, _ := os.Getwd()
-		logCxt.WithFields(log.Fields{
-			"pwd":             pwd,
-			"fipsModeEnabled": s.config.FIPSModeEnabled,
-		}).Info("Opening TLS listen socket")
+		logCxt.WithField("pwd", pwd).Info("Opening TLS listen socket")
 		cert, tlsErr := tls.LoadX509KeyPair(s.config.CertFile, s.config.KeyFile)
 		if tlsErr != nil {
 			logCxt.WithFields(log.Fields{
@@ -354,7 +348,7 @@ func (s *Server) serve(cxt context.Context) {
 				"keyFile":  s.config.KeyFile,
 			}).WithError(tlsErr).Panic("Failed to load certificate and key")
 		}
-		tlsConfig := calicotls.NewTLSConfig(s.config.FIPSModeEnabled)
+		tlsConfig := calicotls.NewTLSConfig()
 		tlsConfig.Certificates = []tls.Certificate{cert}
 
 		// Arrange for server to verify the clients' certificates.
@@ -1051,7 +1045,7 @@ func (h *connection) sendMsg(msg interface{}) error {
 
 func (h *connection) maybeResetWriteTimeout() error {
 	now := time.Now()
-	// Under heavy load, updating the timeout for every message seemed to cause noticible overhead,
+	// Under heavy load, updating the timeout for every message seemed to cause noticeable overhead,
 	// so we add a 10% buffer and then only reset it when it drops too low.
 	if h.currentWriteDeadline.Before(now.Add(h.config.WriteTimeout)) {
 		newWriteDeadline := now.Add(h.config.WriteTimeout * 110 / 100)

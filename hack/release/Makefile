@@ -10,6 +10,21 @@ release: .vm.created
 	./remote-execute.sh "cd calico && git fetch --tags && git checkout $(GIT_BRANCH)"
 	./remote-execute.sh "cd calico && make release"
 
+git-fetch-remote: .vm.created
+	./remote-execute.sh "cd calico && git fetch --tags && git checkout $(GIT_BRANCH)"
+
+update-versions-remote: .vm.created
+	./remote-execute.sh "cd calico && make update-versions"
+
+generate-manifests-remote: .vm.created
+	./remote-execute.sh "cd calico && make generate"
+
+commit-versions-remote: .vm.created
+	./remote-execute.sh "cd calico && make commit-versions-manifests"
+
+build-release-remote: .vm.created
+	./remote-execute.sh "cd calico && make release"
+
 # Expects that a release has already been created on the remote VM via the "release" target.
 release-publish: .vm.created
 	./remote-execute.sh "cd calico && make release-publish"
@@ -38,4 +53,4 @@ bin/terraform: bin/terraform.zip
 	unzip bin/terraform.zip -d bin && touch $@
 bin/terraform.zip:
 	mkdir -p bin
-	wget https://releases.hashicorp.com/terraform/1.1.7/terraform_1.1.7_linux_amd64.zip -O $@
+	curl -sSf -L --retry 5 -o $@ https://releases.hashicorp.com/terraform/1.1.7/terraform_1.1.7_linux_amd64.zip

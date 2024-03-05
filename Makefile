@@ -35,9 +35,13 @@ clean:
 	rm -rf ./bin
 
 ci-preflight-checks:
+	$(MAKE) check-dockerfiles
 	$(MAKE) check-language
 	$(MAKE) generate
 	$(MAKE) check-dirty
+
+check-dockerfiles:
+	./hack/check-dockerfiles.sh
 
 check-language:
 	./hack/check-language.sh
@@ -101,7 +105,7 @@ e2e-test:
 ###############################################################################
 # Build the release tool.
 hack/release/release: $(shell find ./hack/release -type f -name '*.go')
-	$(DOCKER_RUN) $(CALICO_BUILD) go build -v -o $@ ./hack/release/cmd
+	$(call build_binary, ./hack/release/cmd, $@)
 
 # Install ghr for publishing to github.
 hack/release/ghr:
@@ -122,6 +126,18 @@ release-publish: hack/release/release hack/release/ghr
 # Create a release branch.
 create-release-branch: hack/release/release
 	@hack/release/release -new-branch
+
+# Currently our openstack builds either build *or* build and publish,
+# hence why we have two separate jobs here that do almost the same thing.
+build-openstack: bin/yq
+	$(eval VERSION=$(shell bin/yq '.version' charts/calico/values.yaml))
+	$(info Building openstack packages for version $(VERSION))
+	$(MAKE) -C hack/release/packaging release VERSION=$(VERSION)
+
+publish-openstack: bin/yq
+	$(eval VERSION=$(shell bin/yq '.version' charts/calico/values.yaml))
+	$(info Publishing openstack packages for version $(VERSION))
+	$(MAKE) -C hack/release/packaging release-publish VERSION=$(VERSION)
 
 ## Kicks semaphore job which syncs github released helm charts with helm index file
 .PHONY: helm-index

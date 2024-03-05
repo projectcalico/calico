@@ -20,32 +20,24 @@ import (
 	"context"
 	"math/bits"
 	"net"
-	"net/http"
 	"os/exec"
 	"runtime/debug"
-	"strconv"
 	"strings"
-	"time"
 
-	coreV1 "k8s.io/api/core/v1"
-
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
+	coreV1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/utils/clock"
 
-	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
-
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/collectors"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
-
-	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-
 	"github.com/projectcalico/calico/felix/aws"
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
+	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 	"github.com/projectcalico/calico/felix/config"
 	extdataplane "github.com/projectcalico/calico/felix/dataplane/external"
 	"github.com/projectcalico/calico/felix/dataplane/inactive"
@@ -324,7 +316,7 @@ func StartDataplaneDriver(configParams *config.Config,
 			IptablesLockProbeInterval:      configParams.IptablesLockProbeIntervalMillis,
 			MaxIPSetSize:                   configParams.MaxIpsetSize,
 			IPv6Enabled:                    configParams.Ipv6Support,
-			BPFIpv6Enabled:                 configParams.BpfIpv6Support,
+			BPFIpv6Enabled:                 configParams.Ipv6Support && configParams.BPFEnabled,
 			BPFHostConntrackBypass:         configParams.BPFHostConntrackBypass,
 			StatusReportingInterval:        configParams.ReportingIntervalSecs,
 			XDPRefreshInterval:             configParams.XDPRefreshInterval,
@@ -353,6 +345,8 @@ func StartDataplaneDriver(configParams *config.Config,
 			BPFPolicyDebugEnabled:              configParams.BPFPolicyDebugEnabled,
 			BPFDisableUnprivileged:             configParams.BPFDisableUnprivileged,
 			BPFConnTimeLBEnabled:               configParams.BPFConnectTimeLoadBalancingEnabled,
+			BPFConnTimeLB:                      configParams.BPFConnectTimeLoadBalancing,
+			BPFHostNetworkedNAT:                configParams.BPFHostNetworkedNATWithoutCTLB,
 			BPFKubeProxyIptablesCleanupEnabled: configParams.BPFKubeProxyIptablesCleanupEnabled,
 			BPFLogLevel:                        configParams.BPFLogLevel,
 			BPFLogFilters:                      configParams.BPFLogFilters,
@@ -378,6 +372,7 @@ func StartDataplaneDriver(configParams *config.Config,
 			BPFConntrackTimeouts:               conntrack.DefaultTimeouts(), // FIXME make timeouts configurable
 			RouteTableManager:                  routeTableIndexAllocator,
 			MTUIfacePattern:                    configParams.MTUIfacePattern,
+			BPFExcludeCIDRsFromNAT:             configParams.BPFExcludeCIDRsFromNAT,
 
 			KubeClientSet: k8sClientSet,
 
@@ -398,10 +393,11 @@ func StartDataplaneDriver(configParams *config.Config,
 		intDP.Start()
 
 		// Set source-destination-check on AWS EC2 instance.
-		if configParams.AWSSrcDstCheck != string(apiv3.AWSSrcDstCheckOptionDoNothing) {
+		check := apiv3.AWSSrcDstCheckOption(configParams.AWSSrcDstCheck)
+		if check != apiv3.AWSSrcDstCheckOptionDoNothing {
 			c := &clock.RealClock{}
 			updater := aws.NewEC2SrcDstCheckUpdater()
-			go aws.WaitForEC2SrcDstCheckUpdate(configParams.AWSSrcDstCheck, healthAggregator, updater, c)
+			go aws.WaitForEC2SrcDstCheckUpdate(check, healthAggregator, updater, c)
 		}
 
 		return intDP, nil
@@ -417,11 +413,7 @@ func SupportsBPF() error {
 	return bpf.SupportsBPFDataplane()
 }
 
-func ServePrometheusMetrics(configParams *config.Config) {
-	log.WithFields(log.Fields{
-		"host": configParams.PrometheusMetricsHost,
-		"port": configParams.PrometheusMetricsPort,
-	}).Info("Starting prometheus metrics endpoint")
+func ConfigurePrometheusMetrics(configParams *config.Config) {
 	if configParams.PrometheusGoMetricsEnabled && configParams.PrometheusProcessMetricsEnabled && configParams.PrometheusWireGuardMetricsEnabled {
 		log.Info("Including Golang, Process and WireGuard metrics")
 	} else {
@@ -437,13 +429,5 @@ func ServePrometheusMetrics(configParams *config.Config) {
 			log.Info("Discarding WireGuard metrics")
 			prometheus.Unregister(wireguard.MustNewWireguardMetrics())
 		}
-	}
-	http.Handle("/metrics", promhttp.Handler())
-	addr := net.JoinHostPort(configParams.PrometheusMetricsHost, strconv.Itoa(configParams.PrometheusMetricsPort))
-	for {
-		err := http.ListenAndServe(addr, nil)
-		log.WithError(err).Error(
-			"Prometheus metrics endpoint failed, trying to restart it...")
-		time.Sleep(1 * time.Second)
 	}
 }

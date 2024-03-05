@@ -1303,6 +1303,9 @@ func (c ipamClient) ReleaseAffinity(ctx context.Context, cidr net.IPNet, host st
 	fields := log.Fields{"cidr": cidr.String(), "host": host, "mustBeEmpty": mustBeEmpty}
 	log.WithFields(fields).Debugf("Releasing affinity for CIDR")
 	pool, err := c.blockReaderWriter.getPoolForIP(net.IP{IP: cidr.IP}, nil)
+	if err != nil {
+		return err
+	}
 	if pool == nil {
 		estr := fmt.Sprintf("The requested CIDR (%s) is not within any configured pools.", cidr.String())
 		return errors.New(estr)
@@ -2086,7 +2089,7 @@ func (c ipamClient) GetUtilization(ctx context.Context, args GetUtilizationArgs)
 }
 
 // EnsureBlock returns single IPv4/IPv6 IPAM block for a host as specified by the provided BlockArgs.
-// If there is no block allocated already for this host, allocate one and return its' CIDR.
+// If there is no block allocated already for this host, allocate one and return its CIDR.
 // Otherwise, return the CIDR of the IPAM block allocated for this host.
 func (c ipamClient) EnsureBlock(ctx context.Context, args BlockArgs) (*net.IPNet, *net.IPNet, error) {
 	// Determine the hostname to use - prefer the provided hostname if

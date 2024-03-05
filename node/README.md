@@ -153,5 +153,5 @@ Below is a listing of userspace tools packaged into the node container. The list
 
 Calico binaries are licensed under the [Apache v2.0 license](LICENSE), with the exception of some [GPL licensed eBPF programs](https://github.com/projectcalico/felix/tree/master/bpf-gpl).
 
-Calico imports packages with a number of apache-compatible licenses. For more information, see [filesystem/licenses](./filesystem/licenses). In addition, the base container image contains
+Calico imports packages with a number of apache-compatible licenses. For more information, see [licenses](/licenses). In addition, the base container image contains
 pre-packaged software with a variety of licenses.

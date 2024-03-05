@@ -39,8 +39,9 @@ import (
 )
 
 type TopologyOptions struct {
-	FelixLogSeverity string
-	EnableIPv6       bool
+	FelixLogSeverity        string
+	FelixDebugFilenameRegex string
+	EnableIPv6              bool
 	// Temporary flag to implement and test IPv6 in bpf dataplane.
 	// TODO: Remove it when IPv6 implementation in BPF mode is complete.
 	BPFEnableIPv6             bool
@@ -80,6 +81,12 @@ func (c *TopologyContainers) Stop() {
 	}
 	if c.Typha != nil {
 		c.Typha.Stop()
+	}
+}
+
+func (c *TopologyContainers) TriggerDelayedStart() {
+	for _, f := range c.Felixes {
+		f.TriggerDelayedStart()
 	}
 }
 
@@ -289,6 +296,10 @@ func StartNNodeTopology(n int, opts TopologyOptions, infra DatastoreInfra) (tc T
 		// host.  So, disable CTLB handling for subsequent Felixes.
 		if i > 0 {
 			optsPerFelix[i].ExtraEnvVars["FELIX_BPFConnectTimeLoadBalancingEnabled"] = "false"
+			optsPerFelix[i].ExtraEnvVars["FELIX_BPFConnectTimeLoadBalancing"] = string(api.BPFConnectTimeLBDisabled)
+			if optsPerFelix[i].ExtraEnvVars["FELIX_BPFHostNetworkedNATWithoutCTLB"] == "" {
+				optsPerFelix[i].ExtraEnvVars["FELIX_BPFHostNetworkedNATWithoutCTLB"] = string(api.BPFHostNetworkedNATDisabled)
+			}
 			optsPerFelix[i].ExtraEnvVars["FELIX_DebugSkipCTLBCleanup"] = "true"
 		}
 	}

@@ -4,12 +4,6 @@ PACKAGE_NAME = github.com/projectcalico/calico/app-policy
 
 ###############################################################################
 
-# Figure out the users UID/GID.  These are needed to run docker containers
-# as the current user and ensure that files built inside containers are
-# owned by the current user.
-LOCAL_USER_ID:=$(shell id -u)
-MY_GID:=$(shell id -g)
-
 GENERATED_FILES=proto/felixbackend.pb.go proto/healthz.pb.go
 SRC_FILES=$(shell find . -name '*.go' |grep -v vendor) $(GENERATED_FILES)
 
@@ -30,19 +24,12 @@ LDFLAGS = -X $(PACKAGE_NAME)/buildinfo.GitVersion=$(GIT_DESCRIPTION) \
 ##############################################################################
 include ../lib.Makefile
 
-# We need CGO to leverage Boring SSL.  However, the cross-compile doesn't support CGO yet.
-ifeq ($(ARCH), $(filter $(ARCH),amd64))
-CGO_ENABLED=1
-else
-CGO_ENABLED=0
-endif
-
-CONTAINER_CREATED=image.created-$(ARCH)
-CONTAINER_FIPS_CREATED=image.created-$(ARCH)-fips
+CONTAINER_CREATED=.image.created-$(ARCH)
+CONTAINER_FIPS_CREATED=.image.created-$(ARCH)-fips
 
 FIPS ?= false
 
-ifeq ($(FIPS), true)
+ifeq ($(FIPS),true)
 CONTAINER_MARKER=$(CONTAINER_FIPS_CREATED)
 VALIDARCHES=amd64
 BINDIR=bin/$(ARCH)-fips
@@ -66,14 +53,8 @@ clean:
 	# Clean .created files which indicate images / releases have been built.
 	find . -name '.*.created*' -type f -delete
 	find . -name '.*.published*' -type f -delete
-	rm -rf .go-pkg-cache report vendor bin
-	-docker rmi $(DIKASTES_IMAGE):latest-$(ARCH)
-	-docker rmi $(DIKASTES_IMAGE):$(VERSION)-$(ARCH)
-ifeq ($(ARCH),amd64)
-	-docker rmi $(DIKASTES_IMAGE):latest
-	-docker rmi $(DIKASTES_IMAGE):latest-fips-amd64
-	-docker rmi $(DIKASTES_IMAGE):$(VERSION)
-endif
+	rm -rf bin report
+	-docker image rm -f $$(docker images $(DIKASTES_IMAGE) -a -q)
 
 .PHONY: clean-generated
 # Delete (checked-in) generated files. Intentionally not part of the main clean target since these files are
@@ -103,17 +84,10 @@ $(BINDIR)/dikastes-arm64: ARCH=arm64
 $(BINDIR)/dikastes-ppc64le: ARCH=ppc64le
 $(BINDIR)/dikastes-s390x: ARCH=s390x
 $(BINDIR)/dikastes-%: protobuf $(SRC_FILES)
-ifeq ($(ARCH),amd64)
 ifeq ($(FIPS),true)
 	$(call build_cgo_boring_binary, ./cmd/dikastes, $@)
 else
 	$(call build_binary, ./cmd/dikastes, $@)
-endif
-else
-	$(DOCKER_RUN_RO) \
-	  -e CGO_ENABLED=$(CGO_ENABLED) \
-	  -v $(CURDIR)/bin:/go/src/$(PACKAGE_NAME)/bin \
-	  $(CALICO_BUILD) go build -buildvcs=false -ldflags "-X main.VERSION=$(GIT_VERSION)" -v -o $(BINDIR)/dikastes-$(ARCH) ./cmd/dikastes
 endif
 
 $(BINDIR)/healthz-amd64: ARCH=amd64
@@ -121,17 +95,10 @@ $(BINDIR)/healthz-arm64: ARCH=arm64
 $(BINDIR)/healthz-ppc64le: ARCH=ppc64le
 $(BINDIR)/healthz-s390x: ARCH=s390x
 $(BINDIR)/healthz-%: protobuf $(SRC_FILES)
-ifeq ($(ARCH),amd64)
-ifeq ($(FIPS), true)
-	$(call build_static_cgo_boring_binary, ./cmd/healthz, $@)
+ifeq ($(FIPS),true)
+	$(call build_cgo_boring_binary, ./cmd/healthz, $@)
 else
-	$(call build_static_binary, ./cmd/healthz, $@)
-endif
-else
-	$(DOCKER_RUN_RO) \
-	  -e CGO_ENABLED=$(CGO_ENABLED) \
-	  -v $(CURDIR)/bin:/go/src/$(PACKAGE_NAME)/bin \
-	  $(CALICO_BUILD) go build -buildvcs=false -ldflags "-X main.VERSION=$(GIT_VERSION)" -v -o $(BINDIR)/healthz-$(ARCH) ./cmd/healthz
+	$(call build_binary, ./cmd/healthz, $@)
 endif
 
 # We use gogofast for protobuf compilation.  Regular gogo is incompatible with
@@ -147,7 +114,7 @@ PROTOC_IMPORTS =  -I proto\
 protobuf: proto/felixbackend.pb.go proto/healthz.pb.go
 
 proto/felixbackend.pb.go: proto/felixbackend.proto
-	$(DOCKER_RUN) -v $(CURDIR):/src:rw --user $(LOCAL_USER_ID):$(LOCAL_USER_ID) \
+	$(DOCKER_RUN) -v $(CURDIR):/src:rw --user $(LOCAL_USER_ID):$(LOCAL_GROUP_ID) \
 		      $(PROTOC_CONTAINER) \
 		      $(PROTOC_IMPORTS) \
 		      proto/*.proto \
@@ -155,7 +122,7 @@ proto/felixbackend.pb.go: proto/felixbackend.proto
 	$(MAKE) fix
 
 proto/healthz.pb.go: proto/healthz.proto
-	$(DOCKER_RUN) -v $(CURDIR):/src:rw --user $(LOCAL_USER_ID):$(LOCAL_USER_ID) \
+	$(DOCKER_RUN) -v $(CURDIR):/src:rw --user $(LOCAL_USER_ID):$(LOCAL_GROUP_ID) \
 		      $(PROTOC_CONTAINER) \
 		      $(PROTOC_IMPORTS) \
 		      proto/*.proto \
@@ -167,20 +134,18 @@ proto/healthz.pb.go: proto/healthz.proto
 ###############################################################################
 .PHONY: image $(DIKASTES_IMAGE)
 image: $(DIKASTES_IMAGE)
-image-all: $(addprefix sub-image-,$(VALIDARCHES)) sub-image-fips-amd64
+image-all: $(addprefix sub-image-,$(VALIDARCHES))
 sub-image-%:
-	$(MAKE) image ARCH=$*
-sub-image-fips-%:
-	$(MAKE) image FIPS=true ARCH=$*
+	$(MAKE) image FIPS=$(FIPS) ARCH=$*
 
 $(DIKASTES_IMAGE): $(CONTAINER_MARKER)
-$(CONTAINER_CREATED): Dockerfile.$(ARCH) $(BINDIR)/dikastes-$(ARCH) $(BINDIR)/healthz-$(ARCH)
-	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(DIKASTES_IMAGE):latest-$(ARCH) -f Dockerfile.$(ARCH) . --load
+$(CONTAINER_CREATED): register Dockerfile $(BINDIR)/dikastes-$(ARCH) $(BINDIR)/healthz-$(ARCH)
+	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(DIKASTES_IMAGE):latest-$(ARCH) -f Dockerfile .
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 
-$(CONTAINER_FIPS_CREATED): Dockerfile.$(ARCH) $(BINDIR)/dikastes-$(ARCH) $(BINDIR)/healthz-$(ARCH)
-	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(DIKASTES_IMAGE):latest-fips-$(ARCH) -f Dockerfile.$(ARCH) . --load
+$(CONTAINER_FIPS_CREATED): register Dockerfile $(BINDIR)/dikastes-$(ARCH) $(BINDIR)/healthz-$(ARCH)
+	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(DIKASTES_IMAGE):latest-fips-$(ARCH) -f Dockerfile .
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
 	touch $@
 ###############################################################################
@@ -198,11 +163,6 @@ ut: protobuf
 
 .PHONY: ci
 ci: mod-download build-all check-generated-files static-checks ut
-
-check-boring-ssl: bin/dikastes-amd64
-	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) \
-		go tool nm bin/dikastes-amd64 > bin/tags.txt && grep '_Cfunc__goboringcrypto_' bin/tags.txt 1> /dev/null
-	-rm -f bin/tags.txt
 
 ## Check if generated files are out of date
 .PHONY: check-generated-files

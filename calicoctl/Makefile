@@ -43,13 +43,8 @@ clean:
 	# Clean .created files which indicate images / releases have been built.
 	find . -name '.*.created*' -type f -delete
 	find . -name '.*.published*' -type f -delete
-	rm -rf .go-pkg-cache bin build certs *.tar calicoctl/commands/report $(CALICO_VERSION_HELPER_DIR)/bin
-	docker rmi $(CALICOCTL_IMAGE):latest-$(ARCH) || true
-	docker rmi $(CALICOCTL_IMAGE):$(VERSION)-$(ARCH) || true
-ifeq ($(ARCH),amd64)
-	docker rmi $(CALICOCTL_IMAGE):latest || true
-	docker rmi $(CALICOCTL_IMAGE):$(VERSION) || true
-endif
+	rm -rf bin build certs *.tar calicoctl/commands/report $(CALICO_VERSION_HELPER_DIR)/bin
+	-docker image rm -f $$(docker images $(CALICOCTL_IMAGE) -a -q)
 
 ###############################################################################
 # Building the binary
@@ -62,7 +57,6 @@ build-all: $(addprefix bin/calicoctl-linux-,$(VALIDARCHES)) bin/calicoctl-window
 build: bin/calicoctl-$(BUILDOS)-$(ARCH)
 # The supported different binary names. For each, ensure that an OS and ARCH is set
 bin/calicoctl-%-amd64: ARCH=amd64
-bin/calicoctl-%-armv7: ARCH=armv7
 bin/calicoctl-%-arm64: ARCH=arm64
 bin/calicoctl-%-ppc64le: ARCH=ppc64le
 bin/calicoctl-%-s390x: ARCH=s390x
@@ -76,11 +70,7 @@ bin/calicoctl-linux-%: BUILDOS=linux
 bin/calicoctl-%: $(SRC_FILES)
 	$(MAKE) build-calicoctl BUILDOS=$(BUILDOS) ARCH=$(ARCH)
 build-calicoctl:
-ifeq ($(BUILDOS)/$(ARCH), linux/amd64)
-	$(call build_static_cgo_boring_binary, ./calicoctl/calicoctl.go, bin/calicoctl-$(BUILDOS)-$(ARCH))
-else
 	$(call build_binary, ./calicoctl/calicoctl.go, bin/calicoctl-$(BUILDOS)-$(ARCH))
-endif
 
 # Overrides for the binaries that need different output names
 bin/calicoctl: bin/calicoctl-linux-amd64
@@ -100,8 +90,8 @@ gen-crds:
 .PHONY: image $(CALICOCTL_IMAGE)
 image: $(CALICOCTL_IMAGE)
 $(CALICOCTL_IMAGE): $(CTL_CONTAINER_CREATED)
-$(CTL_CONTAINER_CREATED): Dockerfile.$(ARCH) bin/calicoctl-linux-$(ARCH) register
-	$(DOCKER_BUILD) -t $(CALICOCTL_IMAGE):latest-$(ARCH) -f Dockerfile.$(ARCH) . --load
+$(CTL_CONTAINER_CREATED): Dockerfile bin/calicoctl-linux-$(ARCH)
+	$(DOCKER_BUILD) -t $(CALICOCTL_IMAGE):latest-$(ARCH) -f Dockerfile .
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 
@@ -118,7 +108,7 @@ CALICO_VERSION_HELPER_SRC=$(CALICO_VERSION_HELPER_DIR)/calico_version_helper.go
 .PHONY: version-helper
 version-helper: $(CALICO_VERSION_HELPER_BIN)
 $(CALICO_VERSION_HELPER_BIN): $(CALICO_VERSION_HELPER_SRC)
-	$(call build_static_cgo_boring_binary, $(CALICO_VERSION_HELPER_SRC), $(CALICO_VERSION_HELPER_BIN))
+	$(call build_binary, $(CALICO_VERSION_HELPER_SRC), $(CALICO_VERSION_HELPER_BIN))
 
 ###############################################################################
 # UTs

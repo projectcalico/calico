@@ -5,18 +5,14 @@ package calico
 import (
 	"reflect"
 
-	"k8s.io/klog/v2"
-
-	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
-
-	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-
-	"github.com/projectcalico/calico/libcalico-go/lib/errors"
-
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/storage"
+	"k8s.io/klog/v2"
 
-	aapi "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+
+	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/errors"
 )
 
 func aapiError(err error, key string) error {
@@ -35,93 +31,76 @@ func aapiError(err error, key string) error {
 // TODO: convertToAAPI should be same as the ones specific to resources.
 // This is common code. Refactor this workflow.
 func convertToAAPI(libcalicoObject runtime.Object) (res runtime.Object) {
-	switch libcalicoObject.(type) {
-	case *api.NetworkPolicy:
-		lcgPolicy := libcalicoObject.(*api.NetworkPolicy)
-		aapiPolicy := &aapi.NetworkPolicy{}
-		NetworkPolicyConverter{}.convertToAAPI(lcgPolicy, aapiPolicy)
+	switch obj := libcalicoObject.(type) {
+	case *v3.NetworkPolicy:
+		aapiPolicy := &v3.NetworkPolicy{}
+		NetworkPolicyConverter{}.convertToAAPI(obj, aapiPolicy)
 		return aapiPolicy
-	case *api.GlobalNetworkPolicy:
-		lcgPolicy := libcalicoObject.(*api.GlobalNetworkPolicy)
-		aapiPolicy := &aapi.GlobalNetworkPolicy{}
-		GlobalNetworkPolicyConverter{}.convertToAAPI(lcgPolicy, aapiPolicy)
+	case *v3.GlobalNetworkPolicy:
+		aapiPolicy := &v3.GlobalNetworkPolicy{}
+		GlobalNetworkPolicyConverter{}.convertToAAPI(obj, aapiPolicy)
 		return aapiPolicy
-	case *api.GlobalNetworkSet:
-		lcgNetworkSet := libcalicoObject.(*api.GlobalNetworkSet)
-		aapiNetworkSet := &aapi.GlobalNetworkSet{}
-		GlobalNetworkSetConverter{}.convertToAAPI(lcgNetworkSet, aapiNetworkSet)
+	case *v3.GlobalNetworkSet:
+		aapiNetworkSet := &v3.GlobalNetworkSet{}
+		GlobalNetworkSetConverter{}.convertToAAPI(obj, aapiNetworkSet)
 		return aapiNetworkSet
-	case *api.NetworkSet:
-		lcgNetworkSet := libcalicoObject.(*api.NetworkSet)
-		aapiNetworkSet := &aapi.NetworkSet{}
-		NetworkSetConverter{}.convertToAAPI(lcgNetworkSet, aapiNetworkSet)
+	case *v3.NetworkSet:
+		aapiNetworkSet := &v3.NetworkSet{}
+		NetworkSetConverter{}.convertToAAPI(obj, aapiNetworkSet)
 		return aapiNetworkSet
-	case *api.HostEndpoint:
-		lcg := libcalicoObject.(*api.HostEndpoint)
-		aapi := &aapi.HostEndpoint{}
-		HostEndpointConverter{}.convertToAAPI(lcg, aapi)
+	case *v3.HostEndpoint:
+		aapi := &v3.HostEndpoint{}
+		HostEndpointConverter{}.convertToAAPI(obj, aapi)
 		return aapi
-	case *api.IPPool:
-		lcg := libcalicoObject.(*api.IPPool)
-		aapi := &aapi.IPPool{}
-		IPPoolConverter{}.convertToAAPI(lcg, aapi)
+	case *v3.IPPool:
+		aapi := &v3.IPPool{}
+		IPPoolConverter{}.convertToAAPI(obj, aapi)
 		return aapi
-	case *api.IPReservation:
-		lcg := libcalicoObject.(*api.IPReservation)
-		aapi := &aapi.IPReservation{}
-		IPReservationConverter{}.convertToAAPI(lcg, aapi)
+	case *v3.IPReservation:
+		aapi := &v3.IPReservation{}
+		IPReservationConverter{}.convertToAAPI(obj, aapi)
 		return aapi
-	case *api.BGPConfiguration:
-		lcg := libcalicoObject.(*api.BGPConfiguration)
-		aapi := &aapi.BGPConfiguration{}
-		BGPConfigurationConverter{}.convertToAAPI(lcg, aapi)
+	case *v3.BGPConfiguration:
+		aapi := &v3.BGPConfiguration{}
+		BGPConfigurationConverter{}.convertToAAPI(obj, aapi)
 		return aapi
-	case *api.BGPPeer:
-		lcg := libcalicoObject.(*api.BGPPeer)
-		aapi := &aapi.BGPPeer{}
-		BGPPeerConverter{}.convertToAAPI(lcg, aapi)
+	case *v3.BGPPeer:
+		aapi := &v3.BGPPeer{}
+		BGPPeerConverter{}.convertToAAPI(obj, aapi)
 		return aapi
-	case *api.BGPFilter:
-		lcg := libcalicoObject.(*api.BGPFilter)
-		aapi := &api.BGPFilter{}
-		BGPFilterConverter{}.convertToAAPI(lcg, aapi)
+	case *v3.BGPFilter:
+		aapi := &v3.BGPFilter{}
+		BGPFilterConverter{}.convertToAAPI(obj, aapi)
 		return aapi
-	case *api.Profile:
-		lcg := libcalicoObject.(*api.Profile)
-		aapi := &aapi.Profile{}
-		ProfileConverter{}.convertToAAPI(lcg, aapi)
+	case *v3.Profile:
+		aapi := &v3.Profile{}
+		ProfileConverter{}.convertToAAPI(obj, aapi)
 		return aapi
-	case *api.FelixConfiguration:
-		lcg := libcalicoObject.(*api.FelixConfiguration)
-		aapi := &aapi.FelixConfiguration{}
-		FelixConfigurationConverter{}.convertToAAPI(lcg, aapi)
+	case *v3.FelixConfiguration:
+		aapi := &v3.FelixConfiguration{}
+		FelixConfigurationConverter{}.convertToAAPI(obj, aapi)
 		return aapi
-	case *api.KubeControllersConfiguration:
-		lcg := libcalicoObject.(*api.KubeControllersConfiguration)
-		aapi := &aapi.KubeControllersConfiguration{}
-		KubeControllersConfigurationConverter{}.convertToAAPI(lcg, aapi)
+	case *v3.KubeControllersConfiguration:
+		aapi := &v3.KubeControllersConfiguration{}
+		KubeControllersConfigurationConverter{}.convertToAAPI(obj, aapi)
 		return aapi
-	case *api.ClusterInformation:
-		lcg := libcalicoObject.(*api.ClusterInformation)
-		aapi := &aapi.ClusterInformation{}
-		ClusterInformationConverter{}.convertToAAPI(lcg, aapi)
+	case *v3.ClusterInformation:
+		aapi := &v3.ClusterInformation{}
+		ClusterInformationConverter{}.convertToAAPI(obj, aapi)
 		return aapi
-	case *api.CalicoNodeStatus:
-		lcg := libcalicoObject.(*api.CalicoNodeStatus)
-		aapi := &aapi.CalicoNodeStatus{}
-		CalicoNodeStatusConverter{}.convertToAAPI(lcg, aapi)
+	case *v3.CalicoNodeStatus:
+		aapi := &v3.CalicoNodeStatus{}
+		CalicoNodeStatusConverter{}.convertToAAPI(obj, aapi)
 		return aapi
 	case *libapi.IPAMConfig:
-		lcg := libcalicoObject.(*libapi.IPAMConfig)
-		aapi := &aapi.IPAMConfiguration{}
-		IPAMConfigConverter{}.convertToAAPI(lcg, aapi)
+		aapi := &v3.IPAMConfiguration{}
+		IPAMConfigConverter{}.convertToAAPI(obj, aapi)
 		return aapi
 	// BlockAffinity works off of the libapi objects since
 	// the v3 client is used for mostly internal operations.
 	case *libapi.BlockAffinity:
-		lcg := libcalicoObject.(*libapi.BlockAffinity)
-		aapi := &aapi.BlockAffinity{}
-		BlockAffinityConverter{}.convertToAAPI(lcg, aapi)
+		aapi := &v3.BlockAffinity{}
+		BlockAffinityConverter{}.convertToAAPI(obj, aapi)
 		return aapi
 	default:
 		klog.Infof("Unrecognized libcalico object (type %v)", reflect.TypeOf(libcalicoObject))

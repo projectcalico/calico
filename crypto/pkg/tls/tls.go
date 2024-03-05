@@ -20,16 +20,6 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-// Ciphers supported by TLS 1.2 in fips mode
-var tls12CiphersFIPS = []uint16{
-	tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-	tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-	tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-	tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
-	tls.TLS_RSA_WITH_AES_128_GCM_SHA256,
-	tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
-}
-
 // Ciphers supported by TLS 1.2
 var tls12Ciphers = []uint16{
 	tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
@@ -53,30 +43,13 @@ var tls13Ciphers = []uint16{
 	tls.TLS_AES_128_GCM_SHA256,
 }
 
-// NewTLSConfig returns a tls.Config with the recommended default settings for Calico Enterprise components.
-// Read more recommendations here in Chapter 3:
-// https://www.gsa.gov/cdnstatic/SSL_TLS_Implementation_%5BCIO_IT_Security_14-69_Rev_6%5D_04-06-2021docx.pdf
-// When built with GOEXPERIMENT and tag boringcrypto, the TLS settings in the config will automatically
-// be overwritten and set to strict mode, due to the fipsonly import in fipstls.go.
-func NewTLSConfig(fipsMode bool) *tls.Config {
-	log.WithField("BuiltWithBoringCrypto", BuiltWithBoringCrypto).
-		WithField("fipsMode", fipsMode).
-		Debug("creating a TLS config")
-
-	cfg := &tls.Config{
-		MinVersion: tls.VersionTLS12,
-		MaxVersion: tls.VersionTLS13,
+// NewTLSConfig returns a tls.Config with the recommended default settings for Calico components. Based on build flags,
+// boringCrypto may be used and fips strict mode may be enforced, which can override the parameters defined in this func.
+func NewTLSConfig() *tls.Config {
+	log.WithField("BuiltWithBoringCrypto", BuiltWithBoringCrypto).Debug("creating a TLS config")
+	return &tls.Config{
+		MinVersion:   tls.VersionTLS12,
+		MaxVersion:   tls.VersionTLS13,
+		CipherSuites: append(tls12Ciphers, tls13Ciphers...),
 	}
-
-	if fipsMode {
-		cfg.CurvePreferences = []tls.CurveID{tls.CurveP384, tls.CurveP256}
-		cfg.CipherSuites = tls12CiphersFIPS
-		// Our certificate for FIPS validation not mention validation for v1.3.
-		cfg.MaxVersion = tls.VersionTLS12
-		cfg.Renegotiation = tls.RenegotiateNever
-	} else {
-		cfg.CipherSuites = tls12Ciphers
-		cfg.CipherSuites = append(cfg.CipherSuites, tls13Ciphers...)
-	}
-	return cfg
 }

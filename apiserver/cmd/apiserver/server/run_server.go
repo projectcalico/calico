@@ -50,9 +50,6 @@ func PrepareServer(opts *CalicoServerOptions) (*apiserver.ProjectCalicoServer, e
 
 // RunServer runs the Calico API server.  This blocks until stopped channel (passed in through options) is closed.
 func RunServer(opts *CalicoServerOptions, server *apiserver.ProjectCalicoServer) error {
-	readinessPath := "/tmp/ready"
-	_ = os.Remove(readinessPath)
-
 	allStop := make(chan struct{})
 	go func() {
 		klog.Infoln("Starting watch extension")
@@ -68,28 +65,16 @@ func RunServer(opts *CalicoServerOptions, server *apiserver.ProjectCalicoServer)
 	go func() {
 		klog.Infoln("Running the API server")
 
-		// Add a post-start hook to write the readiness file, which is used for
-		// readiness probes.
-		server.GenericAPIServer.AddPostStartHook("apiserver-autoregistration",
-			func(context genericapiserver.PostStartHookContext) error {
-				f, err := os.Create(readinessPath)
-				if err != nil {
-					klog.Errorln(err)
-					return err
-				}
-				klog.Info("apiserver is ready.")
-				f.Close()
-				return nil
-			})
-
 		if opts.PrintSwagger {
-			server.GenericAPIServer.AddPostStartHook("swagger-printer",
+			if err := server.GenericAPIServer.AddPostStartHook("swagger-printer",
 				func(context genericapiserver.PostStartHookContext) error {
 					WriteSwaggerJSON(server.GenericAPIServer.Handler, opts.SwaggerFilePath)
 					// PrintSwagger option prints and exit.
 					os.Exit(0)
 					return nil
-				})
+				}); err != nil {
+				klog.Errorln("failed to add post start hook swagger-printer:", err)
+			}
 		}
 		if err := server.GenericAPIServer.PrepareRun().Run(allStop); err != nil {
 			klog.Errorln("Error running API server: ", err)

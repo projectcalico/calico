@@ -18,6 +18,38 @@
 ipmo .\libs\calico\calico.psm1 -Force
 ipmo .\libs\hns\hns.psm1 -Force -DisableNameChecking
 
+function Get-TokenRefresherPid()
+{
+    return $(Get-WmiObject Win32_Process -Filter "name = 'calico-node.exe'" | Select-Object CommandLine, ProcessId | Where-Object -Property CommandLine -match ".*calico-node.exe.*-monitor-token.*").ProcessId
+}
+
+function Start-TokenRefresher()
+{
+    Write-Host "Starting Calico token refresher..."
+    Start-Process -NoNewWindow .\calico-node.exe -ArgumentList "-monitor-token"
+    Write-Host "Calico token refresher running on PID" $(Get-TokenRefresherPid)
+}
+
+function Ensure-TokenRefresher()
+{
+    if (-not $(Get-TokenRefresherPid))
+    {
+        Write-Host "Calico token refresher is not running, restarting it"
+        Start-TokenRefresher
+    }
+}
+
+function Restart-TokenRefresher()
+{
+    $tokenRefresherPid = Get-TokenRefresherPid
+    if ($tokenRefresherPid)
+    {
+        Write-Host "Restarting Calico token refresher"
+        Stop-Process -force -Id $tokenRefresherPid
+    }
+    Start-TokenRefresher
+}
+
 $lastBootTime = Get-LastBootTime
 $Stored = Get-StoredLastBootTime
 Write-Host "StoredLastBootTime $Stored, CurrentLastBootTime $lastBootTime"
@@ -165,6 +197,7 @@ while ($True)
                 if ($LastExitCode -EQ 0)
                 {
                     Write-Host "Calico node initialisation succeeded; monitoring kubelet for restarts..."
+                    Restart-TokenRefresher
                     break
                 }
 
@@ -190,6 +223,8 @@ while ($True)
             }
         }
     }
+
+    Ensure-TokenRefresher
 
     Start-Sleep 10
 }

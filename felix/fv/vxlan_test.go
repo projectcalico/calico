@@ -199,6 +199,62 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 				}
 			})
 
+			if vxlanMode == api.VXLANModeCrossSubnet && !enableIPv6 && routeSource == "CalicoIPAM" {
+				It("should move same-subnet routes when the node IP moves to a new interface", func() {
+					// Routes should look like this:
+					//
+					//   default via 172.17.0.1 dev eth0
+					//   blackhole 10.65.0.0/26 proto 80
+					//   10.65.0.2 dev cali29f56ea1abf scope link
+					//   10.65.1.0/26 via 172.17.0.6 dev eth0 proto 80 onlink
+					//   10.65.2.0/26 via 172.17.0.5 dev eth0 proto 80 onlink
+					//   172.17.0.0/16 dev eth0 proto kernel scope link src 172.17.0.7
+					felix := tc.Felixes[0]
+					Eventually(felix.ExecOutputFn("ip", "route", "show"), "10s").Should(ContainSubstring(
+						fmt.Sprintf("10.65.1.0/26 via %s dev eth0 proto 80 onlink", tc.Felixes[1].IP)))
+
+					// Find the default and subnet routes, we'll need to
+					// recreate those after moving the IP.
+					defaultRoute, err := felix.ExecOutput("ip", "route", "show", "default")
+					Expect(err).NotTo(HaveOccurred())
+					lines := strings.Split(strings.Trim(defaultRoute, "\n "), "\n")
+					Expect(lines).To(HaveLen(1))
+					defaultRouteArgs := strings.Split(strings.Replace(lines[0], "eth0", "bond0", -1), " ")
+
+					// Assuming the subnet route will be "proto kernel" and that will be the only such route.
+					subnetRoute, err := felix.ExecOutput("ip", "route", "show", "proto", "kernel")
+					Expect(err).NotTo(HaveOccurred())
+					lines = strings.Split(strings.Trim(subnetRoute, "\n "), "\n")
+					Expect(lines).To(HaveLen(1), "expected only one proto kernel route, has docker's routing set-up changed?")
+					subnetArgs := strings.Split(strings.Replace(lines[0], "eth0", "bond0", -1), " ")
+
+					// Add the bond, replacing eth0.
+					felix.Exec("ip", "addr", "del", felix.IP, "dev", "eth0")
+					felix.Exec("ip", "link", "add", "dev", "bond0", "type", "bond")
+					felix.Exec("ip", "link", "set", "dev", "eth0", "down")
+					felix.Exec("ip", "link", "set", "dev", "eth0", "master", "bond0")
+					felix.Exec("ip", "link", "set", "dev", "eth0", "up")
+					felix.Exec("ip", "link", "set", "dev", "bond0", "up")
+
+					// Move IP to bond0.  We don't actually set up more than one
+					// bonded interface in this test, we just want to know that
+					// felix spots the IP move.
+					ipWithSubnet := felix.IP + "/" + felix.GetIPPrefix()
+					felix.Exec("ip", "addr", "add", ipWithSubnet, "dev", "bond0")
+
+					// Re-add the default routes, via bond0 (one gets removed when
+					// eth0 goes down, the other gets stuck on eth0).
+					felix.Exec(append([]string{"ip", "r", "add"}, defaultRouteArgs...)...)
+					felix.Exec(append([]string{"ip", "r", "replace"}, subnetArgs...)...)
+
+					expCrossSubRoute := fmt.Sprintf("10.65.1.0/26 via %s dev bond0 proto 80 onlink", tc.Felixes[1].IP)
+					Eventually(felix.ExecOutputFn("ip", "route", "show"), "10s").Should(
+						ContainSubstring(expCrossSubRoute),
+						"Cross-subnet route should move from eth0 to bond0.",
+					)
+				})
+			}
+
 			It("should have host to workload connectivity", func() {
 				if vxlanMode == api.VXLANModeAlways && routeSource == "WorkloadIPs" {
 					Skip("Skipping due to known issue with tunnel IPs not being programmed in WEP mode")
@@ -496,9 +552,21 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 			Context("after removing BGP address from third node", func() {
 				// Simulate having a host send VXLAN traffic from an unknown source, should get blocked.
 				BeforeEach(func() {
-					Eventually(func() int {
-						return getNumIPSetMembers(felixes[0].Container, "cali40all-vxlan-net")
-					}, "10s", "200ms").Should(Equal(len(felixes) - 1))
+					for _, f := range felixes {
+						if BPFMode() {
+							Eventually(func() int {
+								return strings.Count(f.BPFRoutes(), "host")
+							}).Should(Equal(len(felixes)*2),
+								"Expected one host and one host tunneled route per node")
+						} else {
+							Eventually(f.IPSetSizeFn("cali40all-vxlan-net"), "10s", "200ms").Should(Equal(len(felixes) - 1))
+						}
+					}
+
+					// Pause felix[2], so it can't touch the dataplane; we want to
+					// test that felix[0] blocks the traffic.
+					pid := felixes[2].GetFelixPID()
+					felixes[2].Exec("kill", "-STOP", fmt.Sprint(pid))
 
 					ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 					defer cancel()
@@ -506,18 +574,19 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 					node, err := client.Nodes().Get(ctx, felixes[2].Hostname, options.GetOptions{})
 					Expect(err).NotTo(HaveOccurred())
 
-					// Pause felix so it can't touch the dataplane!
-					pid := felixes[2].GetFelixPID()
-					felixes[2].Exec("kill", "-STOP", fmt.Sprint(pid))
-
 					node.Spec.BGP = nil
 					_, err = client.Nodes().Update(ctx, node, options.SetOptions{})
 				})
 
 				It("should have no connectivity from third felix and expected number of IPs in allow list", func() {
-					Eventually(func() int {
-						return getNumIPSetMembers(felixes[0].Container, "cali40all-vxlan-net")
-					}, "5s", "200ms").Should(Equal(len(felixes) - 2))
+					if BPFMode() {
+						Eventually(func() int {
+							return strings.Count(felixes[0].BPFRoutes(), "host")
+						}).Should(Equal((len(felixes)-1)*2),
+							"Expected one host and one host tunneled route per node, not: "+felixes[0].BPFRoutes())
+					} else {
+						Eventually(felixes[0].IPSetSizeFn("cali40all-vxlan-net"), "5s", "200ms").Should(Equal(len(felixes) - 2))
+					}
 
 					cc.ExpectSome(w[0], w[1])
 					cc.ExpectSome(w[1], w[0])
@@ -544,12 +613,15 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 			Context("after removing BGP address from third node, all felixes paused", func() {
 				// Simulate having a host send VXLAN traffic from an unknown source, should get blocked.
 				BeforeEach(func() {
+					if BPFMode() {
+						Skip("Skipping due to manual removal of host from ipset not breaking connectivity in BPF mode")
+						return
+					}
+
 					// Check we initially have the expected number of entries.
 					for _, f := range felixes {
 						// Wait for Felix to set up the allow list.
-						Eventually(func() int {
-							return getNumIPSetMembers(f.Container, "cali40all-vxlan-net")
-						}, "5s", "200ms").Should(Equal(len(felixes) - 1))
+						Eventually(f.IPSetSizeFn("cali40all-vxlan-net"), "5s", "200ms").Should(Equal(len(felixes) - 1))
 					}
 
 					// Wait until dataplane has settled.
@@ -566,13 +638,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 					}
 				})
 
-				if vxlanMode == api.VXLANModeAlways {
+				// BPF mode doesn't use the IP set.
+				if vxlanMode == api.VXLANModeAlways && !BPFMode() {
 					It("after manually removing third node from allow list should have expected connectivity", func() {
-						if BPFMode() {
-							Skip("Skipping due to manual removal of host from ipset not breaking connectivity in BPF mode")
-							return
-						}
-
 						felixes[0].Exec("ipset", "del", "cali40all-vxlan-net", felixes[2].IP)
 						if enableIPv6 {
 							felixes[0].Exec("ipset", "del", "cali60all-vxlan-net", felixes[2].IPv6)
@@ -597,7 +665,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 
 			It("should configure the vxlan device correctly", func() {
 				// The VXLAN device should appear with default MTU, etc. FV environment uses MTU 1500,
-				// which means that we should expect 1450 after subracting VXLAN overhead for IPv4 or 1430 for IPv6.
+				// which means that we should expect 1450 after subtracting VXLAN overhead for IPv4 or 1430 for IPv6.
 				mtuStr := "mtu 1450"
 				mtuStrV6 := "mtu 1430"
 				for _, felix := range felixes {

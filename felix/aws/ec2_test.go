@@ -21,16 +21,19 @@ import (
 	"os"
 	"time"
 
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
+
 	"github.com/aws/aws-sdk-go-v2/feature/ec2/imds"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/aws/smithy-go"
+
 	clock "k8s.io/utils/clock/testing"
 
-	"github.com/projectcalico/calico/libcalico-go/lib/health"
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
+	"github.com/projectcalico/calico/libcalico-go/lib/health"
 )
 
 const (
@@ -118,7 +121,7 @@ func newMockSrcDstCheckUpdater(healthAgg *health.HealthAggregator, fc *clock.Fak
 	}
 }
 
-func (updater *mockSrcDstCheckUpdater) Update(option string) error {
+func (updater *mockSrcDstCheckUpdater) Update(option apiv3.AWSSrcDstCheckOption) error {
 	// taking jitter into consideration, each fakeClock step should be slightly longer
 	fakeClockSteps := []time.Duration{
 		40 * time.Second,

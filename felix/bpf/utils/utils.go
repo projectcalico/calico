@@ -74,27 +74,28 @@ func MaybeMountBPFfs() (string, error) {
 
 func MaybeMountCgroupV2() (string, error) {
 	var err error
-	if err := os.MkdirAll(bpfdefs.CgroupV2Path, 0700); err != nil {
+	cgroupV2Path := bpfdefs.GetCgroupV2Path()
+	if err := os.MkdirAll(cgroupV2Path, 0700); err != nil {
 		return "", err
 	}
 
-	mnt, err := isMount(bpfdefs.CgroupV2Path)
+	mnt, err := isMount(cgroupV2Path)
 	if err != nil {
-		return "", fmt.Errorf("error checking if %s is a mount: %v", bpfdefs.CgroupV2Path, err)
+		return "", fmt.Errorf("error checking if %s is a mount: %v", cgroupV2Path, err)
 	}
 
-	fsCgroup, err := isCgroupV2(bpfdefs.CgroupV2Path)
+	fsCgroup, err := isCgroupV2(cgroupV2Path)
 	if err != nil {
-		return "", fmt.Errorf("error checking if %s is CgroupV2: %v", bpfdefs.CgroupV2Path, err)
+		return "", fmt.Errorf("error checking if %s is CgroupV2: %v", cgroupV2Path, err)
 	}
 
 	if !mnt {
-		err = mountCgroupV2(bpfdefs.CgroupV2Path)
+		err = mountCgroupV2(cgroupV2Path)
 	} else if !fsCgroup {
-		err = fmt.Errorf("something that's not cgroup v2 is already mounted in %s", bpfdefs.CgroupV2Path)
+		err = fmt.Errorf("something that's not cgroup v2 is already mounted in %s", cgroupV2Path)
 	}
 
-	return bpfdefs.CgroupV2Path, err
+	return cgroupV2Path, err
 }
 
 func mountCgroupV2(path string) error {

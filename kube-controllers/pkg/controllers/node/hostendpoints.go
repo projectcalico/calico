@@ -238,13 +238,14 @@ func (c *autoHostEndpointController) listAutoHostendpoints(ctx context.Context) 
 // the operation a few times until it succeeds.
 func (c *autoHostEndpointController) deleteHostendpoint(ctx context.Context, hepName string) error {
 	log.Debugf("deleting hostendpoint %q", hepName)
-	time.Sleep(c.rl.When(RateLimitCalicoDelete))
+	rlKey := rateLimiterItemKey{Type: RateLimitCalicoDelete, Name: hepName}
+	time.Sleep(c.rl.When(rlKey))
 	_, err := c.client.HostEndpoints().Delete(ctx, hepName, options.DeleteOptions{})
 	if err != nil {
 		log.WithError(err).Warnf("could not delete host endpoint %q", hepName)
 		return err
 	}
-	c.rl.Forget(RateLimitCalicoDelete)
+	c.rl.Forget(rlKey)
 
 	log.Infof("deleted hostendpoint %q", hepName)
 	return nil
@@ -279,14 +280,15 @@ func isAutoHostendpoint(h *api.HostEndpoint) bool {
 // createAutoHostendpoint creates an auto hostendpoint for the specified node.
 func (c *autoHostEndpointController) createAutoHostendpoint(ctx context.Context, n *libapi.Node) (*api.HostEndpoint, error) {
 	hep := c.generateAutoHostendpointFromNode(n)
+	rlKey := rateLimiterItemKey{Type: RateLimitCalicoCreate, Name: hep.Name}
 
-	time.Sleep(c.rl.When(RateLimitCalicoCreate))
+	time.Sleep(c.rl.When(rlKey))
 	res, err := c.client.HostEndpoints().Create(ctx, hep, options.SetOptions{})
 	if err != nil {
 		log.Warnf("could not create hostendpoint for node: %v", err)
 		return nil, err
 	}
-	c.rl.Forget(RateLimitCalicoCreate)
+	c.rl.Forget(rlKey)
 	return res, nil
 }
 
@@ -396,10 +398,11 @@ func (c *autoHostEndpointController) updateHostendpoint(current *api.HostEndpoin
 		expected.ObjectMeta.CreationTimestamp = current.ObjectMeta.CreationTimestamp
 		expected.ObjectMeta.UID = current.ObjectMeta.UID
 
-		time.Sleep(c.rl.When(RateLimitCalicoUpdate))
+		rlKey := rateLimiterItemKey{Type: RateLimitCalicoUpdate, Name: current.Name}
+		time.Sleep(c.rl.When(rlKey))
 		_, err := c.client.HostEndpoints().Update(context.Background(), expected, options.SetOptions{})
 		if err == nil {
-			c.rl.Forget(RateLimitCalicoUpdate)
+			c.rl.Forget(rlKey)
 		}
 		return err
 	}

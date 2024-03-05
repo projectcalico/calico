@@ -19,6 +19,7 @@ package proxy
 
 import (
 	"net"
+	"strings"
 	"sync"
 	"time"
 
@@ -30,6 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/selection"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/events"
@@ -37,6 +39,7 @@ import (
 	"k8s.io/kubernetes/pkg/proxy/apis"
 	"k8s.io/kubernetes/pkg/proxy/config"
 	"k8s.io/kubernetes/pkg/proxy/healthcheck"
+	"k8s.io/kubernetes/pkg/proxy/util"
 	"k8s.io/kubernetes/pkg/util/async"
 )
 
@@ -47,6 +50,11 @@ type Proxy interface {
 	Stop()
 
 	setIpFamily(int)
+}
+
+type ProxyFrontend interface {
+	Proxy
+	SetSyncer(DPSyncer)
 }
 
 // DPSyncerState groups the information passed to the DPSyncer's Apply
@@ -81,7 +89,8 @@ type proxy struct {
 	svcMap k8sp.ServicePortMap
 	epsMap k8sp.EndpointsMap
 
-	dpSyncer DPSyncer
+	dpSyncer  DPSyncer
+	syncerLck sync.Mutex
 	// executes periodic the dataplane updates
 	runner *async.BoundedFrequencyRunner
 	// ensures that only one invocation runs at any time
@@ -108,7 +117,7 @@ type stoppableRunner interface {
 }
 
 // New returns a new Proxy for the given k8s interface
-func New(k8s kubernetes.Interface, dp DPSyncer, hostname string, opts ...Option) (Proxy, error) {
+func New(k8s kubernetes.Interface, dp DPSyncer, hostname string, opts ...Option) (ProxyFrontend, error) {
 
 	if k8s == nil {
 		return nil, errors.Errorf("no k8s client")
@@ -145,7 +154,14 @@ func New(k8s kubernetes.Interface, dp DPSyncer, hostname string, opts ...Option)
 		p.invokeDPSyncer, p.minDPSyncPeriod, time.Hour /* XXX might be infinite? */, 1)
 	dp.SetTriggerFn(p.runner.Run)
 
-	p.svcHealthServer = healthcheck.NewServiceHealthServer(p.hostname, p.recorder, []string{"0.0.0.0/0"})
+	nodeRef := &v1.ObjectReference{
+		Kind:      "Node",
+		Name:      p.hostname,
+		UID:       types.UID(p.hostname),
+		Namespace: "",
+	}
+	p.healthzServer = healthcheck.NewProxierHealthServer("0.0.0.0:10256", p.minDPSyncPeriod, p.recorder, nodeRef)
+	p.svcHealthServer = healthcheck.NewServiceHealthServer(p.hostname, p.recorder, util.NewNodePortAddresses([]string{"0.0.0.0/0"}), p.healthzServer)
 
 	ipVersion := v1.IPv4Protocol
 	if p.ipFamily != 4 {
@@ -158,7 +174,7 @@ func New(k8s kubernetes.Interface, dp DPSyncer, hostname string, opts ...Option)
 		p.recorder,
 		nil,
 	)
-	p.svcChanges = k8sp.NewServiceChangeTracker(nil, ipVersion, p.recorder, nil)
+	p.svcChanges = k8sp.NewServiceChangeTracker(makeServiceInfo, ipVersion, p.recorder, nil)
 
 	noProxyName, err := labels.NewRequirement(apis.LabelServiceProxyName, selection.DoesNotExist, nil)
 	if err != nil {
@@ -205,6 +221,9 @@ func (p *proxy) setIpFamily(ipFamily int) {
 func (p *proxy) Stop() {
 	p.stopOnce.Do(func() {
 		log.Info("Proxy stopping")
+		// Pass empty update to close all the health checks.
+		_ = p.svcHealthServer.SyncServices(map[types.NamespacedName]uint16{})
+		_ = p.svcHealthServer.SyncEndpoints(map[types.NamespacedName]int{})
 		p.dpSyncer.Stop()
 		close(p.stopCh)
 		p.stopWg.Wait()
@@ -236,21 +255,23 @@ func (p *proxy) invokeDPSyncer() {
 	p.runnerLck.Lock()
 	defer p.runnerLck.Unlock()
 
-	svcUpdateResult := p.svcMap.Update(p.svcChanges)
-	epsUpdateResult := p.epsMap.Update(p.epsChanges)
+	_ = p.svcMap.Update(p.svcChanges)
+	_ = p.epsMap.Update(p.epsChanges)
 
-	if err := p.svcHealthServer.SyncServices(svcUpdateResult.HCServiceNodePorts); err != nil {
+	if err := p.svcHealthServer.SyncServices(p.svcMap.HealthCheckNodePorts()); err != nil {
 		log.WithError(err).Error("Error syncing healthcheck services")
 	}
-	if err := p.svcHealthServer.SyncEndpoints(epsUpdateResult.HCEndpointsLocalIPSize); err != nil {
+	if err := p.svcHealthServer.SyncEndpoints(p.epsMap.LocalReadyEndpoints()); err != nil {
 		log.WithError(err).Error("Error syncing healthcheck endpoints")
 	}
 
+	p.syncerLck.Lock()
 	err := p.dpSyncer.Apply(DPSyncerState{
 		SvcMap:   p.svcMap,
 		EpsMap:   p.epsMap,
 		NodeZone: p.nodeZone,
 	})
+	p.syncerLck.Unlock()
 
 	if err != nil {
 		log.WithError(err).Errorf("applying changes failed")
@@ -282,25 +303,6 @@ func (p *proxy) OnServiceSynced() {
 	p.forceSyncDP()
 }
 
-func (p *proxy) OnEndpointsAdd(eps *v1.Endpoints) {
-	p.OnEndpointsUpdate(nil, eps)
-}
-
-func (p *proxy) OnEndpointsUpdate(old, curr *v1.Endpoints) {
-	if p.epsChanges.Update(old, curr) && p.isInitialized() {
-		p.syncDP()
-	}
-}
-
-func (p *proxy) OnEndpointsDelete(eps *v1.Endpoints) {
-	p.OnEndpointsUpdate(eps, nil)
-}
-
-func (p *proxy) OnEndpointsSynced() {
-	p.setEpsSynced()
-	p.forceSyncDP()
-}
-
 func (p *proxy) OnEndpointSliceAdd(eps *discovery.EndpointSlice) {
 	if p.epsChanges.EndpointSliceUpdate(eps, false) && p.isInitialized() {
 		p.syncDP()
@@ -321,6 +323,15 @@ func (p *proxy) OnEndpointSliceDelete(eps *discovery.EndpointSlice) {
 
 func (p *proxy) OnEndpointSlicesSynced() {
 	p.setEpsSynced()
+	p.forceSyncDP()
+}
+
+func (p *proxy) SetSyncer(s DPSyncer) {
+	p.syncerLck.Lock()
+	p.dpSyncer.Stop()
+	p.dpSyncer = s
+	p.syncerLck.Unlock()
+
 	p.forceSyncDP()
 }
 
@@ -351,4 +362,54 @@ func (is *initState) setEpsSynced() {
 type loggerRecorder struct{}
 
 func (r *loggerRecorder) Eventf(regarding runtime.Object, related runtime.Object, eventtype, reason, action, note string, args ...interface{}) {
+}
+
+const (
+	ReapTerminatingUDPAnnotation   = "projectcalico.org/udpConntrackCleanup"
+	ReapTerminatingUDPImmediatelly = "TerminatingImmediately"
+
+	ExcludeServiceAnnotation = "projectcalico.org/natExcludeService"
+)
+
+type ServiceAnnotations interface {
+	ReapTerminatingUDP() bool
+	ExcludeService() bool
+}
+
+type servicePortAnnotations struct {
+	reapTerminatingUDP bool
+	excludeService     bool
+}
+
+func (s *servicePortAnnotations) ReapTerminatingUDP() bool {
+	return s.reapTerminatingUDP
+}
+
+func (s *servicePortAnnotations) ExcludeService() bool {
+	return s.excludeService
+}
+
+type servicePort struct {
+	k8sp.ServicePort
+	servicePortAnnotations
+}
+
+func makeServiceInfo(_ *v1.ServicePort, s *v1.Service, baseSvc *k8sp.BaseServicePortInfo) k8sp.ServicePort {
+	svc := &servicePort{
+		ServicePort: baseSvc,
+	}
+
+	if v, ok := s.ObjectMeta.Annotations[ExcludeServiceAnnotation]; ok && v == "true" {
+		svc.excludeService = true
+		goto out
+	}
+
+	if baseSvc.Protocol() == v1.ProtocolUDP {
+		if v, ok := s.ObjectMeta.Annotations[ReapTerminatingUDPAnnotation]; ok && strings.EqualFold(v, ReapTerminatingUDPImmediatelly) {
+			svc.reapTerminatingUDP = true
+		}
+	}
+
+out:
+	return svc
 }

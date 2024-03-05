@@ -99,7 +99,7 @@ func TestCreateCIDRMap(t *testing.T) {
 }
 
 func TestValidMap(t *testing.T) {
-	t.Log("A non-existent map should not be valid")
+	t.Log("A nonexistent map should not be valid")
 	v, err := bpfDP.IsValidMap("valid1", IPFamilyV4)
 	if err == nil || v {
 		t.Fatalf("checking map validity should have failed: v=%v err=%v", v, err)
@@ -149,7 +149,7 @@ func TestRemoveCIDRMap(t *testing.T) {
 		t.Fatalf("deleting already deleted map should have failed: %v", err)
 	}
 
-	t.Log("Removing a non-existent map should fail")
+	t.Log("Removing a nonexistent map should fail")
 	err = bpfDP.RemoveCIDRMap("none1", IPFamilyV4)
 	if err == nil {
 		t.Fatalf("map deletion should have failed: %v", err)
@@ -282,7 +282,7 @@ func TestCIDRMapContent(t *testing.T) {
 		visited[value] = struct{}{}
 	}
 
-	t.Log("Removing a non-existent element of a CIDR map should fail")
+	t.Log("Removing a nonexistent element of a CIDR map should fail")
 	err = bpfDP.RemoveItemCIDRMap("foo1", IPFamilyV4, ipWrong, mask2)
 	if err == nil {
 		t.Fatalf("remove item from map should have failed")
@@ -404,7 +404,7 @@ func TestXDP(t *testing.T) {
 		t.Fatalf("got wrong tag: tag=%q fileTag=%q", tag, fileTag)
 	}
 
-	t.Log("Getting the XDP tag of a non-existent XDP object file should fail")
+	t.Log("Getting the XDP tag of a nonexistent XDP object file should fail")
 	_, err = bpfDP.GetXDPObjTag("/NONE")
 	if err == nil {
 		t.Fatalf("getting xdp tag should have failed")
@@ -479,7 +479,7 @@ func TestLoadBadXDP(t *testing.T) {
 }
 
 func TestRemoveBadXDP(t *testing.T) {
-	t.Log("Removing an XDP program from a non-existent iface should fail")
+	t.Log("Removing an XDP program from a nonexistent iface should fail")
 	err := bpfDP.RemoveXDP("CAKE", XDPGeneric)
 	if err == nil {
 		t.Fatalf("removing xdp should have failed")
@@ -499,7 +499,7 @@ func TestGetBadXDPTag(t *testing.T) {
 	}
 }
 func TestGetBadXDPID(t *testing.T) {
-	t.Log("Getting the XDP ID from a non-existent iface should fail")
+	t.Log("Getting the XDP ID from a nonexistent iface should fail")
 	id, err := bpfDP.GetXDPID("DUMMY")
 	if err == nil {
 		t.Fatalf("getting xdp id should have failed: tag=%v", id)
@@ -606,7 +606,7 @@ func TestFailsafeMapContent(t *testing.T) {
 		t.Fatalf("cannot update map: %v", err)
 	}
 
-	t.Log("Removing a non-existent item from a failsafe map should fail")
+	t.Log("Removing a nonexistent item from a failsafe map should fail")
 	err = bpfDP.RemoveItemFailsafeMap(10, portWrong)
 	if err == nil {
 		t.Fatalf("remove item from map should have failed")
@@ -680,7 +680,7 @@ func TestGetXDPIfaces(t *testing.T) {
 }
 
 func TestGetFailsafeMapID(t *testing.T) {
-	t.Log("Getting the ID of a non-existent failsafe map should fail")
+	t.Log("Getting the ID of a nonexistent failsafe map should fail")
 	_, err := bpfDP.GetFailsafeMapID()
 	if err == nil {
 		t.Fatalf("getting map ID should have failed")

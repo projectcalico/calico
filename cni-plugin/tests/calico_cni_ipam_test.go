@@ -8,10 +8,10 @@ import (
 	"os"
 
 	"github.com/containernetworking/cni/pkg/types"
+	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
-	uuid "github.com/satori/go.uuid"
 
 	"github.com/projectcalico/calico/cni-plugin/internal/pkg/testutils"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
@@ -37,7 +37,7 @@ var _ = Describe("Calico IPAM Tests", func() {
 		testutils.MustCreateNewIPPool(calicoClient, "fd80:24e2:f998:72d6::/64", false, false, true)
 
 		// Create a unique container ID for each test.
-		cid = uuid.NewV4().String()
+		cid = uuid.NewString()
 
 		// Create the node for these tests. The IPAM code requires a corresponding Calico node to exist.
 		var name string
@@ -306,7 +306,7 @@ var _ = Describe("Calico IPAM Tests", func() {
 				result, _, _ = testutils.RunIPAMPlugin(netconf, "ADD", "", cid, cniVersion)
 				Expect(result.IPs[0].Address.IP.String()).Should(HavePrefix("192.169.1"))
 
-				// Re-enable the the pool. We can't delete the node if the IP pool is disabled.
+				// Re-enable the pool. We can't delete the node if the IP pool is disabled.
 				// This is arguably a bug in the node deletion code...
 				pool, err = calicoClient.IPPools().Get(context.Background(), "192-168-0-0-16", options.GetOptions{})
 				Expect(err).ToNot(HaveOccurred())

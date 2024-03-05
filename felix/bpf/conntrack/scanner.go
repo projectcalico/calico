@@ -46,7 +46,7 @@ type EntryScanner interface {
 	Check(KeyInterface, ValueInterface, EntryGet) ScanVerdict
 }
 
-// EntryScannerSynced is a scaner synchronized with the iteration start/end.
+// EntryScannerSynced is a scanner synchronized with the iteration start/end.
 type EntryScannerSynced interface {
 	EntryScanner
 	IterationStart()

@@ -285,7 +285,7 @@ func (m *Iterator) Close() error {
 	C.free(m.values)
 	m.values = nil
 
-	// Don't need the finalizer any more.
+	// Don't need the finalizer anymore.
 	runtime.SetFinalizer(m, nil)
 
 	return nil

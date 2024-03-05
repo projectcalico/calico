@@ -27,6 +27,7 @@ from kubernetes import client, config
 _log = logging.getLogger(__name__)
 
 ROUTER_IMAGE = os.getenv("ROUTER_IMAGE", "calico/bird:latest")
+NGINX_IMAGE = os.getenv("NGINX_IMAGE", "nginx:1")
 
 
 # Helps with printing diags after a test.
@@ -75,7 +76,7 @@ def start_external_node_with_bgp(name, bird_peer_config=None, bird6_peer_config=
     # Install curl and iproute2.
     run("docker exec %s apk add --no-cache curl iproute2" % name)
 
-    # Set ECMP hash algrithm to L4 for a proper load balancing between nodes.
+    # Set ECMP hash algorithm to L4 for a proper load balancing between nodes.
     run("docker exec %s sysctl -w net.ipv4.fib_multipath_hash_policy=1" % name)
 
     # Add "merge paths on" to the BIRD config.
@@ -219,7 +220,7 @@ def kubectl(args, logerr=True, allow_fail=False, allow_codes=[], timeout=0, retu
                returnerr=returnerr)
 
 def calicoctl(args, allow_fail=False):
-    return kubectl("exec -i -n kube-system calicoctl -- /calicoctl --allow-version-mismatch " + args,
+    return kubectl("exec -i -n kube-system calicoctl -- calicoctl --allow-version-mismatch " + args,
                    allow_fail=allow_fail)
 
 

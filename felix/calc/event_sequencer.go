@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2023 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -317,8 +317,9 @@ func ParsedRulesToActivePolicyUpdate(key model.PolicyKey, rules *ParsedRules) *p
 				rules.OutboundRules,
 				"pol-out-default/"+key.Name,
 			),
-			Untracked: rules.Untracked,
-			PreDnat:   rules.PreDNAT,
+			Untracked:        rules.Untracked,
+			PreDnat:          rules.PreDNAT,
+			OriginalSelector: rules.OriginalSelector,
 		},
 	}
 }
@@ -817,7 +818,7 @@ func (buf *EventSequencer) Flush() {
 
 	// Flush VXLAN data. Order such that no routes are present in the data plane unless
 	// they have a corresponding VTEP in the data plane as well. Do this by sending VTEP adds
-	// before flushsing route adds, and route removes before flushing VTEP removes. We also send
+	// before flushing route adds, and route removes before flushing VTEP removes. We also send
 	// route removes before route adds in order to minimize maximum occupancy.
 	buf.flushRouteRemoves()
 	buf.flushVTEPRemoves()

@@ -32,17 +32,10 @@ clean:
 	rm -rf bin/$(REGISTRAR_IMAGE)-$(ARCH)
 	rm -rf bin
 
-	docker rmi $(FLEXVOL_IMAGE):latest-$(ARCH) || true
-	docker rmi $(FLEXVOL_IMAGE):$(VERSION)-$(ARCH) || true
-	docker rmi $(CSI_IMAGE):latest-$(ARCH) || true
-	docker rmi $(REGISTRAR_IMAGE):latest-$(ARCH) || true
-	docker rmi $(CSI_IMAGE):latest-fips-$(ARCH) || true
-	docker rmi $(REGISTRAR_IMAGE):latest-fips-$(ARCH) || true
+	-docker image rm -f $$(docker images $(CSI_IMAGE) -a -q)
+	-docker image rm -f $$(docker images $(FLEXVOL_IMAGE) -a -q)
+	-docker image rm -f $$(docker images $(REGISTRAR_IMAGE) -a -q)
 	$(MAKE) clean-registrar
-ifeq ($(ARCH),amd64)
-	docker rmi $(FLEXVOL_IMAGE):latest || true
-	docker rmi $(FLEXVOL_IMAGE):$(VERSION) || true
-endif
 
 ###############################################################################
 # Building the binary
@@ -50,7 +43,7 @@ endif
 FIPS ?= false
 
 FLEXVOL_CONTAINER_MARKER=$(FLEXVOL_CONTAINER_CREATED)
-ifeq ($(FIPS), true)
+ifeq ($(FIPS),true)
 CSI_CONTAINER_MARKER=$(CSI_CONTAINER_FIPS_CREATED)
 REGISTRAR_CONTAINER_MARKER=$(REGISTRAR_CONTAINER_FIPS_CREATED)
 VALIDARCHES=amd64
@@ -73,45 +66,30 @@ build: $(BINDIR)/node-driver-registrar-$(ARCH) bin/flexvol-$(ARCH) $(BINDIR)/csi
 # so we can disable it across the board.
 bin/flexvol-amd64: ARCH=amd64
 bin/flexvol-arm64: ARCH=arm64
-bin/flexvol-armv7: ARCH=armv7
 bin/flexvol-ppc64le: ARCH=ppc64le
 bin/flexvol-s390x: ARCH=s390x
 bin/flexvol-%: $(SRC_FILES)
-	$(DOCKER_RUN) -e CGO_ENABLED=0 $(CALICO_BUILD) go build -buildvcs=false -v -o bin/flexvol-$(ARCH) flexvol/flexvoldriver.go
+	$(call build_binary, flexvol/flexvoldriver.go, $@)
 
 $(BINDIR)/csi-driver-arm64: ARCH=arm64
-$(BINDIR)/csi-driver-armv7: ARCH=armv7
 $(BINDIR)/csi-driver-ppc64le: ARCH=ppc64le
 $(BINDIR)/csi-driver-s390x: ARCH=s390x
 $(BINDIR)/csi-driver-%: $(SRC_FILES)
-	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) go build -buildvcs=false -v -o $(BINDIR)/csi-driver-$(ARCH) csidriver/main.go
-
-$(BINDIR)/csi-driver-amd64: $(SRC_FILES)
-ifeq ($(FIPS), true)
-	$(call build_static_cgo_boring_binary, csidriver/main.go, $@)
-else
-	$(call build_static_binary, csidriver/main.go, $@)
-endif
+	$(call build_binary, csidriver/main.go, $@)
 
 UPSTREAM_REGISTRAR_PROJECT ?= kubernetes-csi/$(REGISTRAR_IMAGE)
-UPSTREAM_REGISTRAR_TAG     ?= v2.8.0
-
-ifeq ($(ARCH), $(filter $(ARCH),amd64))
-REGISTRAR_TIGERA_BUILD_CMD_LDFLAGS = -ldflags '-linkmode external -extldflags -static'
-else
-REGISTRAR_TIGERA_BUILD_CMD_LDFLAGS =
-endif
+UPSTREAM_REGISTRAR_TAG     ?= v2.9.1
 
 REGISTRAR_TIGERA_BUILD_CMD="cd /go/src/github.com/$(UPSTREAM_REGISTRAR_PROJECT) && \
-                    			  go build -buildvcs=false $(REGISTRAR_TIGERA_BUILD_CMD_LDFLAGS) -tags $(TAGS) -v -o $(BINDIR)/csi-node-driver-registrar cmd/csi-node-driver-registrar/*.go"
+	go build -tags $(TAGS) -buildvcs=false -v -o $(BINDIR)/csi-node-driver-registrar cmd/csi-node-driver-registrar/*.go"
 REGISTRAR_UPSTREAM_BUILD_CMD="cd /go/src/github.com/$(UPSTREAM_REGISTRAR_PROJECT) && \
-							      make build BUILD_PLATFORMS=$(BUILD_PLATFORMS)"
+	make build BUILD_PLATFORMS=$(BUILD_PLATFORMS)"
 
 ifeq ($(ARCH), $(filter $(ARCH),amd64))
 # We need CGO to leverage Boring SSL.  However, the cross-compile doesn't support CGO yet.
 REGISTRAR_BUILD_CMD=$(REGISTRAR_TIGERA_BUILD_CMD)
 CGO_ENABLED=1
-ifeq ($(FIPS), true)
+ifeq ($(FIPS),true)
 TAGS=fipsstrict
 GOEXPERIMENT=boringcrypto
 else
@@ -119,10 +97,6 @@ GOEXPERIMENT=""
 endif
 else ifeq ($(ARCH), $(filter $(ARCH),arm64))
 CGO_ENABLED=0
-REGISTRAR_BUILD_CMD=$(REGISTRAR_TIGERA_BUILD_CMD)
-else ifeq ($(ARCH), $(filter $(ARCH),armv7))
-CGO_ENABLED=0
-GOARCH=arm -e GOARM=7
 REGISTRAR_BUILD_CMD=$(REGISTRAR_TIGERA_BUILD_CMD)
 else ifeq ($(ARCH), $(filter $(ARCH),ppc64le))
 BUILD_PLATFORMS="linux ppc64le ppc64le"
@@ -163,37 +137,35 @@ REGISTRAR_CONTAINER_FIPS_CREATED=.csi-registrar.created-$(ARCH)-fips
 
 .PHONY: image calico/pod2daemon-flexvol
 image: $(FLEXVOL_IMAGE) $(CSI_IMAGE) $(REGISTRAR_IMAGE)
-image-all: $(addprefix sub-image-,$(VALIDARCHES)) sub-image-fips-amd64
+image-all: $(addprefix sub-image-,$(VALIDARCHES))
 sub-image-%:
-	$(MAKE) image ARCH=$*
-sub-image-fips-%:
-	$(MAKE) image FIPS=true ARCH=$*
+	$(MAKE) image FIPS=$(FIPS) ARCH=$*
 
 $(FLEXVOL_IMAGE): $(FLEXVOL_CONTAINER_MARKER)
-$(FLEXVOL_CONTAINER_CREATED): Dockerfile.$(ARCH) bin/flexvol-$(ARCH)
-	$(DOCKER_BUILD) --build-arg BIN_DIR=bin -t $(FLEXVOL_IMAGE):latest-$(ARCH) -f Dockerfile.$(ARCH) . --load
+$(FLEXVOL_CONTAINER_CREATED): flexvol/docker-image/Dockerfile bin/flexvol-$(ARCH)
+	$(DOCKER_BUILD) --build-arg BIN_DIR=bin -t $(FLEXVOL_IMAGE):latest-$(ARCH) -f flexvol/docker-image/Dockerfile .
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest BUILD_IMAGES=$(FLEXVOL_IMAGE)
 	touch $@
 
 $(CSI_IMAGE): $(CSI_CONTAINER_MARKER)
-$(CSI_CONTAINER_CREATED): csidriver/Dockerfile.$(ARCH) $(BINDIR)/csi-driver-$(ARCH)
-	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(CSI_IMAGE):latest-$(ARCH) -f csidriver/Dockerfile.$(ARCH) . --load
+$(CSI_CONTAINER_CREATED): csidriver/Dockerfile $(BINDIR)/csi-driver-$(ARCH)
+	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(CSI_IMAGE):latest-$(ARCH) -f csidriver/Dockerfile .
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest BUILD_IMAGES=$(CSI_IMAGE)
 	touch $@
 
-$(CSI_CONTAINER_FIPS_CREATED): csidriver/Dockerfile.$(ARCH) $(BINDIR)/csi-driver-$(ARCH)
-	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(CSI_IMAGE):latest-fips-$(ARCH) -f csidriver/Dockerfile.$(ARCH) . --load
+$(CSI_CONTAINER_FIPS_CREATED): csidriver/Dockerfile $(BINDIR)/csi-driver-$(ARCH)
+	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(CSI_IMAGE):latest-fips-$(ARCH) -f csidriver/Dockerfile .
 	$(MAKE) FIPS=true retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest-fips BUILD_IMAGES=$(CSI_IMAGE) LATEST_IMAGE_TAG=latest-fips
 	touch $@
 
 $(REGISTRAR_IMAGE): $(REGISTRAR_CONTAINER_MARKER)
-$(REGISTRAR_CONTAINER_CREATED): node-driver-registrar-docker/Dockerfile.$(ARCH) $(BINDIR)/node-driver-registrar-$(ARCH)
-	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(REGISTRAR_IMAGE):latest-$(ARCH) -f node-driver-registrar-docker/Dockerfile.$(ARCH) . --load
+$(REGISTRAR_CONTAINER_CREATED): node-driver-registrar-docker/Dockerfile $(BINDIR)/node-driver-registrar-$(ARCH)
+	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(REGISTRAR_IMAGE):latest-$(ARCH) -f node-driver-registrar-docker/Dockerfile .
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest BUILD_IMAGES=$(REGISTRAR_IMAGE)
 	touch $@
 
-$(REGISTRAR_CONTAINER_FIPS_CREATED): node-driver-registrar-docker/Dockerfile.$(ARCH) $(BINDIR)/node-driver-registrar-$(ARCH)
-	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(REGISTRAR_IMAGE):latest-fips-$(ARCH) -f node-driver-registrar-docker/Dockerfile.$(ARCH) . --load
+$(REGISTRAR_CONTAINER_FIPS_CREATED): node-driver-registrar-docker/Dockerfile $(BINDIR)/node-driver-registrar-$(ARCH)
+	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(REGISTRAR_IMAGE):latest-fips-$(ARCH) -f node-driver-registrar-docker/Dockerfile .
 	$(MAKE) FIPS=true retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest-fips BUILD_IMAGES=$(REGISTRAR_IMAGE) LATEST_IMAGE_TAG=latest-fips
 	touch $@
 node-driver-registrar/release-tools/filter-junit.go:

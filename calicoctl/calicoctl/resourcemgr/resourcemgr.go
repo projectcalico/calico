@@ -216,7 +216,7 @@ func (rh resourceHelper) Update(ctx context.Context, client client.Interface, re
 	if rv != "" {
 		// Clean out the resource version to always get the latest revision.
 		resource.GetObjectMeta().SetResourceVersion("")
-		// Validate the metadata is not changed for the the resource.
+		// Validate the metadata is not changed for the resource.
 		ro, err := rh.get(ctx, client, resource)
 		if err != nil {
 			return ro, err

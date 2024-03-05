@@ -171,7 +171,7 @@ func TestSNATHostServiceRemotePod(t *testing.T) {
 		pktBytes = res.dataOut
 	})
 
-	// Out via wg tunnel (to intruduce ct entries)
+	// Out via wg tunnel (to introduce ct entries)
 
 	expectMark(tcdefs.MarkSeen | tcdefs.MarkSeenFromNatIfaceOut)
 

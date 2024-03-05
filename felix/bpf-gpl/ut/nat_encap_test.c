@@ -6,7 +6,7 @@
 #include "bpf.h"
 #include "nat.h"
 
-const volatile struct cali_tc_globals __globals;
+const volatile struct cali_tc_preamble_globals __globals;
 
 static CALI_BPF_INLINE int calico_unittest_entry (struct __sk_buff *skb)
 {
@@ -17,7 +17,7 @@ static CALI_BPF_INLINE int calico_unittest_entry (struct __sk_buff *skb)
 	}
 
 	/* Set the globals for the rest of the prog chain. */
-	*globals = __globals;
+	globals->data = __globals.v4;
 	DECLARE_TC_CTX(_ctx,
 		.skb = skb,
 		.fwd = {

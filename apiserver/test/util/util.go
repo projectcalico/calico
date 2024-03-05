@@ -30,10 +30,10 @@ import (
 // WaitForGlobalNetworkPoliciesToNotExist waits for the GlobalNetworkPolicy with the given name to no
 // longer exist.
 func WaitForGlobalNetworkPoliciesToNotExist(client calicoclient.ProjectcalicoV3Interface, name string) error {
-	return wait.PollImmediate(500*time.Millisecond, wait.ForeverTestTimeout,
-		func() (bool, error) {
+	return wait.PollUntilContextTimeout(context.Background(), 500*time.Millisecond, wait.ForeverTestTimeout, true,
+		func(ctx context.Context) (bool, error) {
 			klog.V(5).Infof("Waiting for broker %v to not exist", name)
-			_, err := client.GlobalNetworkPolicies().Get(context.Background(), name, metav1.GetOptions{})
+			_, err := client.GlobalNetworkPolicies().Get(ctx, name, metav1.GetOptions{})
 			if nil == err {
 				return false, nil
 			}
@@ -50,8 +50,8 @@ func WaitForGlobalNetworkPoliciesToNotExist(client calicoclient.ProjectcalicoV3I
 // WaitForGlobalNetworkPoliciesToExist waits for the GlobalNetworkPolicy with the given name
 // to exist.
 func WaitForGlobalNetworkPoliciesToExist(client calicoclient.ProjectcalicoV3Interface, name string) error {
-	return wait.PollImmediate(500*time.Millisecond, wait.ForeverTestTimeout,
-		func() (bool, error) {
+	return wait.PollUntilContextTimeout(context.Background(), 500*time.Millisecond, wait.ForeverTestTimeout, true,
+		func(ctx context.Context) (bool, error) {
 			klog.V(5).Infof("Waiting for serviceClass %v to exist", name)
 			_, err := client.GlobalNetworkPolicies().Get(context.Background(), name, metav1.GetOptions{})
 			if nil == err {

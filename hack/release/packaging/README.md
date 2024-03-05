@@ -57,8 +57,6 @@ Supported, optional environment variables:
 
    -  `dnsmasq`: Build dnsmasq packages.
 
-   -  `nettle`: Build nettle packages (Ubuntu Xenial only).
-
    -  `pub_debs`: Publish all Debian packages.
 
    -  `pub_rpms`: Publish all RPMs.
@@ -78,9 +76,8 @@ Published column.
 
 We build and publish packages for these platforms:
 
--  Ubuntu 14.04 (Trusty), 16.04 (Xenial), 18.04 (Bionic)
-   and 20.04 (Focal). The hosting for these packages is
-   in PPAs at https://launchpad.net/~project-calico.
+-  Ubuntu 20.04 (Focal) and 22.04 (Jammy). The hosting for these
+   packages is in PPAs at https://launchpad.net/~project-calico.
 
 -  CentOS 7 or RHEL 7.  The hosting for these packages is in RPM repos
    at binaries.projectcalico.org (for example
@@ -110,7 +107,7 @@ The components that we package and host are:
    [document](https://docs.projectcalico.org/master/getting-started/openstack/installation/ubuntu)
    that the installer must do `pip install etcd3gw`.
 
--  dnsmasq and nettle - see below.
+-  dnsmasq - see below.
 
 For OpenStack and bare metal installs we don't currently need any
 other Calico components.
@@ -148,20 +145,10 @@ releases is as follows.
 -  2018-01-18 Remove limit of 67 on the number of VMs per compute node
 -  v2.79
 
-To get all of these patches requires Dnsmasq v2.79 or later.  Ubuntu
-Bionic or later have that, but none of our other target platforms do,
-so we build and host v2.79 packages for those platforms ourselves.
-The source for that comes from the following tags in [our Dnsmasq
+To get all of these patches requires Dnsmasq v2.79 or later.  Our Ubuntu
+platforms have that, but not CentOS/RHEL 7, so for CentOS/RHEL we build
+and host v2.79 packages ourselves.  The source for that comes from the
+following tags in [our Dnsmasq
 fork](https://github.com/projectcalico/calico-dnsmasq).
 
--  For Ubuntu Trusty, `2.79test1calico1-3-trusty`.
--  For Ubuntu Xenial, `2.79test1calico1-2-xenial`.
 -  For CentOS/RHEL 7, `rpm_2.79`.
-
-## Nettle
-
-The dnsmasq code that we build for Xenial has a hardcoded
-package-install-time dependency on libnettle6 >= 3.3, which is
-problematic because that version of libnettle is not available in
-Xenial.  Therefore, for Ubuntu Xenial only, we build and upload nettle
-3.3 to our PPA.

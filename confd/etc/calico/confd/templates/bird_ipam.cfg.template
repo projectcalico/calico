@@ -8,9 +8,24 @@ function reject_disabled_pools ()
 {{- end}}
 }
 
-function calico_export_to_bgp_peers () {
-  # filter code terminates when it calls `accept;` or `reject;`, call reject_disabled_pools() first, then apply_communities() and then calico_aggr()
+function reject_tunnel_routes () {
+  # Don't export tunnel routes to other nodes, Felix programs them.
+  # IPIP routes are handled by Bird, and it does not re-advertise them.
+  if (defined(ifname)) then {
+     if ((ifname ~ "*.cali") || (ifname ~ "*.calico")) then {
+        reject;
+     }
+  }
+}
+
+function calico_export_to_bgp_peers(bool internal_peer) {
+  # filter code terminates when it calls `accept;` or `reject;`,
+  # call reject_disabled_pools() first, then reject_tunnel_routes(),
+  # then apply_communities() and then calico_aggr()
   reject_disabled_pools();
+  if (internal_peer) then {
+    reject_tunnel_routes();
+  }
   apply_communities();
   calico_aggr();
 {{- $static_key := "/staticroutes"}}
@@ -22,6 +37,20 @@ function calico_export_to_bgp_peers () {
     {{- $cidr := join $parts "/"}}
   if ( net ~ {{$cidr}} ) then { accept; }
   {{- end}}
+{{- end}}
+{{- $rr_cluster_id_key := printf "/bgp/v1/host/%s/rr_cluster_id" (getenv "NODENAME")}}
+{{- $lb_ips := "/bgp/v1/global/svc_loadbalancer_ips"}}
+{{- if exists $rr_cluster_id_key}}{{$rr_cluster_id := getv $rr_cluster_id_key}}
+{{- if and (not (eq $rr_cluster_id "")) (exists $lb_ips)}}
+
+  # Configured as a RR - accept any routes within configured LB service IP ranges
+  {{- range split (getv $lb_ips) ","}}
+    {{- $cidr := .}}
+    {{- if not (contains $cidr ":")}}
+  if ( net ~ {{$cidr}} ) then { accept; }
+    {{- end}}
+  {{- end}}
+{{- end}}
 {{- end}}
 {{range ls "/v1/ipam/v4/pool"}}{{$data := json (getv (printf "/v1/ipam/v4/pool/%s" .))}}
 {{- if $data.disableBGPExport}}

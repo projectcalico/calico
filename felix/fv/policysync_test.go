@@ -33,6 +33,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
+	"github.com/projectcalico/calico/libcalico-go/lib/selector"
+
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 	"github.com/projectcalico/calico/pod2daemon/binder"
@@ -383,18 +385,18 @@ var _ = Context("_POL-SYNC_ _BPF-SAFE_ policy sync API tests", func() {
 							Eventually(mockWlClient[0].ActivePolicies).Should(Equal(set.From(
 								policyID,
 							)))
-							policy := mockWlClient[0].ActivePolicy(policyID)
+							protoPol := mockWlClient[0].ActivePolicy(policyID)
 							// The rule IDs are fairly random hashes, check they're there but
 							// ignore them for the comparison.
-							for _, r := range policy.InboundRules {
+							for _, r := range protoPol.InboundRules {
 								Expect(r.RuleId).NotTo(Equal(""))
 								r.RuleId = ""
 							}
-							for _, r := range policy.OutboundRules {
+							for _, r := range protoPol.OutboundRules {
 								Expect(r.RuleId).NotTo(Equal(""))
 								r.RuleId = ""
 							}
-							Expect(policy).To(Equal(
+							Expect(protoPol).To(Equal(
 								&proto.Policy{
 									Namespace: "", // Global policy has no namespace
 									InboundRules: []*proto.Rule{
@@ -417,6 +419,7 @@ var _ = Context("_POL-SYNC_ _BPF-SAFE_ policy sync API tests", func() {
 											Action: "allow",
 										},
 									},
+									OriginalSelector: selector.Normalise(policy.Spec.Selector),
 								},
 							))
 						})

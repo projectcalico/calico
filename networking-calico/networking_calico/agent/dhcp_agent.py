@@ -200,7 +200,7 @@ class MTUWatcher(object):
                 time.sleep(0.5)
 
             if not exited_event.ready():
-                # Now run 'ip link', to find MTU of all pre-existing interfaces.
+                # Now run 'ip link', to find MTU of all preexisting interfaces.
                 self.process_command(['ip', 'link'])
 
             # Wait for the 'ip monitor link' thread to exit, so that we

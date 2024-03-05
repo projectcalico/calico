@@ -97,8 +97,8 @@ func TestMatchHTTPMethods(t *testing.T) {
 	}{
 		{"empty", []string{}, "GET", true},
 		{"match", []string{"GET", "HEAD"}, "GET", true},
-		// HTTP methods are case sensitive. https://www.w3.org/Protocols/rfc2616/rfc2616-sec5.html
-		{"case sensitive", []string{"get", "HEAD"}, "GET", false},
+		// HTTP methods are case-sensitive. https://www.w3.org/Protocols/rfc2616/rfc2616-sec5.html
+		{"case-sensitive", []string{"get", "HEAD"}, "GET", false},
 		{"wildcard", []string{"*"}, "MADNESS", true},
 	}
 
@@ -742,7 +742,7 @@ func TestMatchNet(t *testing.T) {
 			match: true,
 		},
 		{
-			title: "single v4 net no matcn",
+			title: "single v4 net no match",
 			nets:  []string{"192.168.0.0/16"},
 			ip:    "55.39.128.9",
 			match: false,

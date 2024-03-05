@@ -79,6 +79,18 @@ sudo pip list || true
 #
 # ------------------------------------------------------------------------------
 
+# Handle current branch name transition from "stable/yoga" to "unmaintained/yoga".  The DevStack
+# repo itself has not transitioned yet.
+if [ "${DEVSTACK_BRANCH}" = stable/yoga ]; then
+    export CINDER_BRANCH=unmaintained/yoga
+    export GLANCE_BRANCH=unmaintained/yoga
+    export KEYSTONE_BRANCH=unmaintained/yoga
+    export NEUTRON_BRANCH=unmaintained/yoga
+    export NOVA_BRANCH=unmaintained/yoga
+    export PLACEMENT_BRANCH=unmaintained/yoga
+    export REQUIREMENTS_BRANCH=unmaintained/yoga
+fi
+
 : ${NC_PLUGIN_REPO:=https://github.com/projectcalico/calico}
 : ${NC_PLUGIN_REF:=master}
 
