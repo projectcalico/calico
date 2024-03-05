@@ -19,9 +19,11 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
 	kapiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 
 	discovery "k8s.io/api/discovery/v1"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -36,9 +38,7 @@ import (
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
-var (
-	protoTCP = kapiv1.ProtocolTCP
-)
+var protoTCP = kapiv1.ProtocolTCP
 
 type selectorType int8
 
@@ -99,13 +99,18 @@ func (c converter) NamespaceToProfile(ns *kapiv1.Namespace) (*model.KVPair, erro
 	// based on name within the namespaceSelector.
 	labels[NamespaceLabelPrefix+NameLabel] = ns.Name
 
+	uid, err := ProfileUID(ns.UID)
+	if err != nil {
+		return nil, err
+	}
+
 	// Create the profile object.
 	name := NamespaceProfileNamePrefix + ns.Name
 	profile := apiv3.NewProfile()
 	profile.ObjectMeta = metav1.ObjectMeta{
 		Name:              name,
 		CreationTimestamp: ns.CreationTimestamp,
-		UID:               ns.UID,
+		UID:               uid,
 	}
 	profile.Spec = apiv3.ProfileSpec{
 		Ingress:       []apiv3.Rule{{Action: apiv3.Allow}},
@@ -731,12 +736,17 @@ func (c converter) ServiceAccountToProfile(sa *kapiv1.ServiceAccount) (*model.KV
 	// based on name within the serviceAccountSelector.
 	labels[ServiceAccountLabelPrefix+NameLabel] = sa.Name
 
+	uid, err := ProfileUID(sa.UID)
+	if err != nil {
+		return nil, err
+	}
+
 	name := serviceAccountNameToProfileName(sa.Name, sa.Namespace)
 	profile := apiv3.NewProfile()
 	profile.ObjectMeta = metav1.ObjectMeta{
 		Name:              name,
 		CreationTimestamp: sa.CreationTimestamp,
-		UID:               sa.UID,
+		UID:               uid,
 	}
 	profile.Spec.LabelsToApply = labels
 
@@ -754,7 +764,6 @@ func (c converter) ServiceAccountToProfile(sa *kapiv1.ServiceAccount) (*model.KV
 
 // ProfileNameToServiceAccount extracts the ServiceAccount name from the given Profile name.
 func (c converter) ProfileNameToServiceAccount(profileName string) (ns, sa string, err error) {
-
 	// Profile objects backed by ServiceAccounts have form "ksa.<namespace>.<sa_name>"
 	if !strings.HasPrefix(profileName, ServiceAccountProfileNamePrefix) {
 		// This is not backed by a Kubernetes ServiceAccount.
@@ -808,4 +817,16 @@ func stringsToIPNets(ipStrings []string) ([]*cnet.IPNet, error) {
 		podIPNets = append(podIPNets, ipNet)
 	}
 	return podIPNets, nil
+}
+
+func ProfileUID(uid types.UID) (types.UID, error) {
+	// We don't want to use the same UID for the Profile as the originating object, as two
+	// objects should not have the same UID. This causes confusion in the Kubernetes garbage collection logic.
+	// We can still generate a new UID programmatically from the parent's UID, though. This ensures a deterministic
+	// yet unique UID.
+	newUID, err := uuid.NewRandomFromReader(strings.NewReader(string(uid)))
+	if err != nil {
+		return "", fmt.Errorf("failed to generate UID for profile: %s", err)
+	}
+	return types.UID(newUID.String()), nil
 }
