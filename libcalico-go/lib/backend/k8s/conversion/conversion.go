@@ -84,18 +84,6 @@ func (c converter) ParseWorkloadEndpointName(workloadName string) (names.Workloa
 	return names.ParseWorkloadEndpointName(workloadName)
 }
 
-func ProfileUID(uid types.UID) (types.UID, error) {
-	// We don't want to use the same UID for the Profile as the originating object, as two
-	// objects should not have the same UID. This causes confusion in the Kubernetes garbage collection logic.
-	// We can still generate a new UID programmatically from the parent's UID, though. This ensures a deterministic
-	// yet unique UID.
-	newUID, err := uuid.NewRandomFromReader(strings.NewReader(string(uid)))
-	if err != nil {
-		return "", err
-	}
-	return types.UID(newUID.String()), nil
-}
-
 // NamespaceToProfile converts a Namespace to a Calico Profile.  The Profile stores
 // labels from the Namespace which are inherited by the WorkloadEndpoints within
 // the Profile. This Profile also has the default ingress and egress rules, which are both 'allow'.
@@ -829,4 +817,16 @@ func stringsToIPNets(ipStrings []string) ([]*cnet.IPNet, error) {
 		podIPNets = append(podIPNets, ipNet)
 	}
 	return podIPNets, nil
+}
+
+func ProfileUID(uid types.UID) (types.UID, error) {
+	// We don't want to use the same UID for the Profile as the originating object, as two
+	// objects should not have the same UID. This causes confusion in the Kubernetes garbage collection logic.
+	// We can still generate a new UID programmatically from the parent's UID, though. This ensures a deterministic
+	// yet unique UID.
+	newUID, err := uuid.NewRandomFromReader(strings.NewReader(string(uid)))
+	if err != nil {
+		return "", fmt.Errorf("failed to generate UID for profile: %s", err)
+	}
+	return types.UID(newUID.String()), nil
 }
