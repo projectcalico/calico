@@ -112,7 +112,7 @@ func (m *mockDataplane) ensureProgramLoaded(ap attachPoint, ipFamily proto.IPVer
 	//var res tc.AttachResult // we don't care about the values
 
 	if apxdp, ok := ap.(*xdp.AttachPoint); ok {
-		apxdp.HookLayout = hook.Layout{
+		apxdp.HookLayoutV4 = hook.Layout{
 			hook.SubProgXDPAllowed: 123,
 			hook.SubProgXDPDrop:    456,
 		}

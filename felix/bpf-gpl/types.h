@@ -100,13 +100,13 @@ struct cali_tc_state {
 	/* Record of the rule IDs of the rules that were hit. */
 	__u64 rule_ids[MAX_RULE_IDS];
 
+	__u64 flags;
 	/* Result of the conntrack lookup. */
 	struct calico_ct_result ct_result; /* 28 bytes */
 
 	/* Result of the NAT calculation.  Zeroed if there is no DNAT. */
 	struct calico_nat_dest nat_dest; /* 8 bytes */
 	__u64 prog_start_time;
-	__u64 flags;
 #ifndef IPVER6
 	__u8 __pad_ipv4[48];
 #endif

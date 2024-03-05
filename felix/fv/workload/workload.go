@@ -828,6 +828,7 @@ func (p *Port) ToMatcher(explicitPort ...uint16) *connectivity.Matcher {
 		IP:         p.Workload.IP,
 		Port:       fmt.Sprint(p.Port),
 		TargetName: fmt.Sprintf("%s on port %d", p.Workload.Name, p.Port),
+		IP6:        p.Workload.IP6,
 	}
 }
 
