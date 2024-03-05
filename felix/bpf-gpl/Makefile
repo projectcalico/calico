@@ -110,6 +110,8 @@ test%_v6.ll: tc.c tc.d calculate-flags
 	$(COMPILE)
 xdp%.ll: xdp.c xdp.d calculate-flags
 	$(COMPILE)
+xdp%_v6.ll: xdp.c xdp.d calculate-flags
+	$(COMPILE)
 test_xdp%.ll: xdp.c xdp.d calculate-flags
 	$(COMPILE)
 
