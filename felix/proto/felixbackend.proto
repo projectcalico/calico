@@ -165,6 +165,8 @@ message FromDataplane {
     // WireguardStatusUpdate is sent when the wireguard is available with the
     // crypto primitives set up.
     WireguardStatusUpdate wireguard_status_update = 9;
+
+    DataplaneInSync dataplane_in_sync = 10;
   }
 }
 
@@ -474,6 +476,9 @@ message WireguardStatusUpdate {
 
   // The IP version of this update
   IPVersion ip_version = 2;
+}
+
+message DataplaneInSync {
 }
 
 message HostMetadataV4V6Update {
