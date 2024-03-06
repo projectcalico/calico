@@ -145,7 +145,6 @@ func main() {
 		select {
 		case <-initCtx.Done():
 			log.Fatal("Failed to initialize Calico datastore")
-			break
 		case <-time.After(5 * time.Second):
 			// Try to initialize again
 		}

@@ -46,6 +46,9 @@ tolerations:
 nodeSelector:
   kubernetes.io/os: linux
 
+# Affinity for the tigera/operator pod.
+affinity: {}
+
 # PriorityClassName for the tigera/operator pod.
 priorityClassName: ""
 
