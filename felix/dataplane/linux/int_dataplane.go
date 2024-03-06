@@ -804,8 +804,29 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	dp.RegisterManager(newFloatingIPManager(natTableV4, ruleRenderer, 4, config.FloatingIPsEnabled))
 	dp.RegisterManager(newMasqManager(ipSetsV4, natTableV4, ruleRenderer, config.MaxIPSetSize, 4))
 	if config.RulesConfig.IPIPEnabled {
+		var routeTableIPIP routetable.RouteTableInterface
+		if !config.RouteSyncDisabled {
+			log.Debug("RouteSyncDisabled is false.")
+			routeTableIPIP = routetable.New(
+				[]string{"^tunl0$"}, 4, config.NetlinkTimeout,
+				config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, config.RemoveExternalRoutes,
+				unix.RT_TABLE_MAIN, dp.loopSummarizer, featureDetector, routetable.WithLivenessCB(dp.reportHealth),
+				routetable.WithRouteCleanupGracePeriod(routeCleanupGracePeriod))
+		} else {
+			log.Info("RouteSyncDisabled is true, using DummyTable.")
+			routeTableIPIP = &routetable.DummyTable{}
+		}
+
 		// Add a manager to keep the all-hosts IP set up to date.
-		dp.ipipManager = newIPIPManager(ipSetsV4, config.MaxIPSetSize, config.ExternalNodesCidrs)
+		dp.ipipManager = newIPIPManager(
+			ipSetsV4,
+			"tunl0",
+			routeTableIPIP,
+			config,
+			dp.loopSummarizer,
+			4,
+			featureDetector,
+		)
 		dp.RegisterManager(dp.ipipManager) // IPv4-only
 	} else {
 		// Only clean up IPIP addresses if IPIP is implicitly disabled (no IPIP pools and not explicitly set in FelixConfig)
