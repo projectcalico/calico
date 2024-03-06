@@ -586,8 +586,7 @@ func chainsForIfaces(ifaceMetadata []string,
 }
 
 type mockRouteTable struct {
-	currentRoutes   map[string][]routetable.Target
-	currentL2Routes map[string][]routetable.L2Target
+	currentRoutes map[string][]routetable.Target
 }
 
 func (t *mockRouteTable) SetRoutes(ifaceName string, targets []routetable.Target) {
@@ -596,14 +595,6 @@ func (t *mockRouteTable) SetRoutes(ifaceName string, targets []routetable.Target
 		"targets":   targets,
 	}).Debug("SetRoutes")
 	t.currentRoutes[ifaceName] = targets
-}
-
-func (t *mockRouteTable) SetL2Routes(ifaceName string, targets []routetable.L2Target) {
-	log.WithFields(log.Fields{
-		"ifaceName": ifaceName,
-		"targets":   targets,
-	}).Debug("SetL2Routes")
-	t.currentL2Routes[ifaceName] = targets
 }
 
 func (t *mockRouteTable) RouteRemove(_ string, _ ip.CIDR) {

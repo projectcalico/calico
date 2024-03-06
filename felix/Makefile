@@ -58,13 +58,6 @@ EXTRA_DOCKER_ARGS+=--init -v $(CURDIR)/../pod2daemon:/go/src/github.com/projectc
 ###############################################################################
 include ../lib.Makefile
 
-ifeq ($(ARCH),arm64)
-# Required for eBPF support in ARM64.
-# We need to force ARM64 build image to be used in a crosscompilation run.
-CALICO_BUILD:=$(GO_BUILD_IMAGE):$(GO_BUILD_VER)-$(ARCH)
-DOCKER_GO_BUILD:=$(DOCKER_RUN) $(CALICO_BUILD)
-endif
-
 FV_ETCDIMAGE?=$(ETCD_IMAGE)
 FV_TYPHAIMAGE?=felix-test/typha:latest-$(BUILDARCH)
 FV_K8SIMAGE=calico/go-build:$(GO_BUILD_VER)
@@ -129,7 +122,7 @@ clean-generated:
 ###############################################################################
 BUILD_TARGETS:=bin/calico-felix
 
-ifeq ($(ARCH), $(filter $(ARCH),amd64 arm64))
+ifeq ($(ARCH),$(filter $(ARCH),amd64 arm64))
 # Currently CGO can be enabled in ARM64 and AMD64 builds.
 CGO_ENABLED=1
 CGO_LDFLAGS="-L$(LIBBPF_CONTAINER_PATH)/$(ARCH) -lbpf -lelf -lz"
@@ -168,7 +161,7 @@ bin/calico-felix-$(ARCH): $(LIBBPF_A) $(SRC_FILES)
 ifeq ($(FIPS),true)
 	$(call build_cgo_boring_binary, $(PACKAGE_NAME)/cmd/calico-felix, $@)
 else
-ifeq ($(ARCH),amd64)
+ifeq ($(ARCH),$(filter $(ARCH),amd64 arm64))
 	$(call build_cgo_binary, $(PACKAGE_NAME)/cmd/calico-felix, $@)
 else
 	$(call build_binary, $(PACKAGE_NAME)/cmd/calico-felix, $@)
@@ -195,7 +188,7 @@ protobuf proto/felixbackend.pb.go: proto/felixbackend.proto
 
 # We pre-build lots of different variants of the TC programs, defer to the script.
 BPF_GPL_O_FILES:=$(addprefix bpf-gpl/,$(shell bpf-gpl/list-objs))
-BPF_GPL_O_FILES+=bpf-gpl/bin/tc_preamble.o bpf-gpl/bin/tc_preamble_v6.o \
+BPF_GPL_O_FILES+=bpf-gpl/bin/tc_preamble.o \
 		 bpf-gpl/bin/xdp_preamble.o bpf-gpl/bin/policy_default.o
 
 # There's a one-to-one mapping from UT C files to objects and the same for the apache programs..

@@ -40,7 +40,6 @@ CALI_MAP_NAMED(cali_v4_fsafes, cali_fsafes, 2,
 #define FSAFE_PREFIX_LEN_IN_BITS (FSAFE_PREFIX_LEN * 8)
 
 static CALI_BPF_INLINE bool is_failsafe_in(__u8 ip_proto, __u16 dport, ipv46_addr_t ip) {
-#ifndef IPVER6
 	struct failsafe_key key = {
 		.prefixlen = FSAFE_PREFIX_LEN_IN_BITS,
 		.ip_proto = ip_proto,
@@ -51,14 +50,10 @@ static CALI_BPF_INLINE bool is_failsafe_in(__u8 ip_proto, __u16 dport, ipv46_add
 	if (cali_fsafes_lookup_elem(&key)) {
 		return true;
 	}
-#else
-	/* XXX not implemented yet*/
-#endif
 	return false;
 }
 
 static CALI_BPF_INLINE bool is_failsafe_out(__u8 ip_proto, __u16 dport, ipv46_addr_t ip) {
-#ifndef IPVER6
 	struct failsafe_key key = {
 		.prefixlen = FSAFE_PREFIX_LEN_IN_BITS,
 		.ip_proto = ip_proto,
@@ -69,9 +64,6 @@ static CALI_BPF_INLINE bool is_failsafe_out(__u8 ip_proto, __u16 dport, ipv46_ad
 	if (cali_fsafes_lookup_elem(&key)) {
 		return true;
 	}
-#else
-	/* XXX not implemented yet*/
-#endif
 	return false;
 }
 

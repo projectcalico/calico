@@ -694,7 +694,7 @@ func (kds *K8sDatastoreInfra) AddNode(felix *Felix, v4CIDR *net.IPNet, v6CIDR *n
 			}},
 		},
 	}
-	if len(felix.IPv6) > 0 {
+	if len(felix.IPv6) > 0 && v6CIDR != nil {
 		nodeIn.ObjectMeta.Annotations["projectcalico.org/IPv6Address"] = fmt.Sprintf("%s/%s", felix.IPv6, felix.IPv6Prefix)
 		nodeIn.Spec.PodCIDRs = append(nodeIn.Spec.PodCIDRs, fmt.Sprintf("%x%x:%x%x:%x%x:%x%x:%x%x:%x%x:%d:0/96", v6CIDR.IP[0], v6CIDR.IP[1], v6CIDR.IP[2], v6CIDR.IP[3], v6CIDR.IP[4], v6CIDR.IP[5], v6CIDR.IP[6], v6CIDR.IP[7], v6CIDR.IP[8], v6CIDR.IP[9], v6CIDR.IP[10], v6CIDR.IP[11], idx))
 		nodeIn.Status.Addresses = append(nodeIn.Status.Addresses, v1.NodeAddress{
@@ -762,10 +762,10 @@ func (kds *K8sDatastoreInfra) RemoveWorkload(ns, name string) error {
 }
 
 func (kds *K8sDatastoreInfra) AddWorkload(wep *libapi.WorkloadEndpoint) (*libapi.WorkloadEndpoint, error) {
-	podIP := wep.Spec.IPNetworks[0]
-	if strings.Contains(podIP, "/") {
-		// Our WEP will have a /32 rather than an IP, strip it off.
-		podIP = strings.Split(podIP, "/")[0]
+	podIPs := []v1.PodIP{}
+	for _, ipnet := range wep.Spec.IPNetworks {
+		podIP := strings.Split(ipnet, "/")[0]
+		podIPs = append(podIPs, v1.PodIP{IP: podIP})
 	}
 	desiredStatus := v1.PodStatus{
 		Phase: v1.PodRunning,
@@ -779,7 +779,7 @@ func (kds *K8sDatastoreInfra) AddWorkload(wep *libapi.WorkloadEndpoint) (*libapi
 				Status: v1.ConditionTrue,
 			},
 		},
-		PodIP: podIP,
+		PodIPs: podIPs,
 	}
 	podIn := &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{Name: wep.Spec.Workload, Namespace: wep.Namespace},

@@ -28,6 +28,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/config"
 	"github.com/projectcalico/calico/felix/logutils"
+	"github.com/projectcalico/calico/felix/proto"
 )
 
 type Manager struct {
@@ -43,6 +44,7 @@ type Manager struct {
 	opReporter   logutils.OpRecorder
 	keyFromSlice func([]byte) KeyInterface
 	makeKey      func(ipProto uint8, port uint16, outbound bool, ip string, mask int) KeyInterface
+	ipFamily     proto.IPVersion
 }
 
 func (m *Manager) OnUpdate(_ interface{}) {
@@ -52,6 +54,7 @@ func NewManager(
 	failsafesMap maps.Map,
 	failsafesIn, failsafesOut []config.ProtoPort,
 	opReporter logutils.OpRecorder,
+	ipFamily proto.IPVersion,
 	keyFromSlice func([]byte) KeyInterface,
 	makeKey func(ipProto uint8, port uint16, outbound bool, ip string, mask int) KeyInterface,
 ) *Manager {
@@ -62,6 +65,7 @@ func NewManager(
 		opReporter:   opReporter,
 		keyFromSlice: keyFromSlice,
 		makeKey:      makeKey,
+		ipFamily:     ipFamily,
 	}
 }
 
@@ -102,6 +106,9 @@ func (m *Manager) ResyncFailsafes() error {
 		cidr := p.Net
 		if p.Net == "" {
 			cidr = "0.0.0.0/0"
+			if m.ipFamily == proto.IPVersion_IPV6 {
+				cidr = "0::0/0"
+			}
 		}
 		ip, ipnet, err := cnet.ParseCIDROrIP(cidr)
 		if err != nil {
@@ -110,25 +117,22 @@ func (m *Manager) ResyncFailsafes() error {
 			return
 		}
 
-		ipv4 := ip.To4()
-		if ipv4 == nil || len(ipv4) != 4 {
-			// If ipv4 is nil, then the IP is not an IPv4 address. Only IPv4 addresses are supported in failsafes.
-			log.Errorf("Invalid IPv4 address configured in the failsafe ports: %s", cidr)
-			syncFailed = true
+		if ipnet.Version() != int(m.ipFamily) {
 			return
 		}
 
-		mask, bits := ipnet.Mask.Size()
-		if bits != 32 {
-			log.Errorf("CIDR mask size not valid for IPv4 addresses: %d", bits)
-			syncFailed = true
-			return
+		mask, _ := ipnet.Mask.Size()
+		maskedIPStr := ""
+		if m.ipFamily == proto.IPVersion_IPV4 {
+			ipv4 := ip.To4()
+			// Mask the IP
+			maskedIPStr = ipv4.Mask(ipnet.Mask).String()
+		} else {
+			ipv6 := ip.To16()
+			maskedIPStr = ipv6.Mask(ipnet.Mask).String()
 		}
 
-		// Mask the IP
-		maskedIP := ipv4.Mask(ipnet.Mask)
-
-		k := m.makeKey(ipProto, p.Port, outbound, maskedIP.String(), mask)
+		k := m.makeKey(ipProto, p.Port, outbound, maskedIPStr, mask)
 		unknownKeys.Discard(k)
 		err = m.failsafesMap.Update(k.ToSlice(), Value())
 		if err != nil {

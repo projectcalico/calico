@@ -2,7 +2,7 @@ version: v1.0
 name: Publish official release
 agent:
   machine:
-    type: e1-standard-4
+    type: e1-standard-8
     os_image: ubuntu2004
 
 execution_time_limit:
@@ -25,9 +25,20 @@ blocks:
         # Load the github access secrets.  First fix the permissions.
         - chmod 0600 /home/semaphore/.keys/git_ssh_rsa
         - ssh-add /home/semaphore/.keys/git_ssh_rsa
+        # For some reason, /mnt is 100 GB and has a qemu-nbd image file.
+        # Let's delete it and use it for our own purposes (building calico
+        # without running out of space)
+        - sudo killall qemu-nbd || true
+        - sudo rm -f /mnt/docker.qcow2
+        - sudo chown $(id -u):$(id -g) /mnt/
+        - mkdir calico
+        - sudo mount --bind /mnt calico
         # Checkout the code and unshallow it.
+        # (this is going to throw an error because it can't remove
+        # the `calico` directory, which is a mount, but it will
+        # continue anyway)
         - checkout
-        - retry git fetch --unshallow
+        - retry git fetch --quiet --unshallow
         # Semaphore mounts a copy-on-write FS as /var/lib/docker in order to provide a pre-loaded cache of
         # some images. However, the cache is not useful to us and the copy-on-write FS is a big problem given
         # how much we churn docker containers during the build.  Disable it.
@@ -39,19 +50,24 @@ blocks:
         # Log in to container registries needed for release.
         - echo $DOCKER_TOKEN | docker login --username "$DOCKER_USER" --password-stdin
         - echo $QUAY_TOKEN | docker login --username "$QUAY_USER" --password-stdin quay.io
-        # Credentials for accessing gcloud, needed to create a GCP VM.
-        - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/secret.google-service-account-key.json
+        # Credentials for accessing gcloud, needed to push images to gcr
+        - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/gcr-credentials.json
         - gcloud auth activate-service-account --key-file=${GOOGLE_APPLICATION_CREDENTIALS}
+        # Manually log in to GCR until we can test the gcr credentials helper
+        - cat ${GOOGLE_APPLICATION_CREDENTIALS} | docker login -u _json_key --password-stdin https://gcr.io
+        - cat ${GOOGLE_APPLICATION_CREDENTIALS} | docker login -u _json_key --password-stdin https://eu.gcr.io
+        - cat ${GOOGLE_APPLICATION_CREDENTIALS} | docker login -u _json_key --password-stdin https://asia.gcr.io
+        - cat ${GOOGLE_APPLICATION_CREDENTIALS} | docker login -u _json_key --password-stdin https://us.gcr.io
       jobs:
-      - name: "Release on GCP VM"
+      - name: "Release on Semaphore VM"
         execution_time_limit:
           minutes: 360
         env_vars:
         - name: VAR_FILE
           value: /home/semaphore/secrets/release.tfvars
         commands:
-        - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make GIT_BRANCH=${SEMAPHORE_GIT_BRANCH} -C hack/release release; fi
-        - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make GIT_BRANCH=${SEMAPHORE_GIT_BRANCH} -C hack/release release-publish; fi
+        - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make GIT_BRANCH=${SEMAPHORE_GIT_BRANCH} release; fi
+        - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make GIT_BRANCH=${SEMAPHORE_GIT_BRANCH} release-publish; fi
       - name: "Build Openstack Packages"
         execution_time_limit:
           minutes: 60
@@ -66,7 +82,3 @@ blocks:
         - sudo apt update
         - sudo apt install -y moreutils patchelf
         - make publish-openstack
-      epilogue:
-        always:
-          commands:
-          - make VAR_FILE=/home/semaphore/secrets/release.tfvars -C hack/release destroy

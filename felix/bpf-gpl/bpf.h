@@ -253,27 +253,33 @@ static CALI_BPF_INLINE void ip_dec_ttl(struct iphdr *ip)
 
 extern const volatile struct cali_xdp_globals __globals;
 #define CALI_CONFIGURABLE(name) 1 /* any value will do, it is not configured */
+#define CALI_CONFIGURABLE_IP(name) 1
 
 #elif (!CALI_F_CGROUP) || defined(UNITTEST)
 
-extern const volatile struct cali_tc_globals __globals;
-#define CALI_CONFIGURABLE(name) ctx->globals->name
-
+extern const volatile struct cali_tc_preamble_globals __globals;
+#define CALI_CONFIGURABLE(name) ctx->globals->data.name
+#ifdef IPVER6
+#define CALI_CONFIGURABLE_IP(name) CALI_CONFIGURABLE(name)
+#else
+#define CALI_CONFIGURABLE_IP(name) ctx->globals->data.name.a
+#endif
 #else
 
 #define CALI_CONFIGURABLE(name) 1 /* any value will do, it is not configured */
+#define CALI_CONFIGURABLE_IP(name) 1
 
 #endif /* loader */
 
-#define HOST_IP		CALI_CONFIGURABLE(host_ip)
+#define HOST_IP		CALI_CONFIGURABLE_IP(host_ip)
 #define TUNNEL_MTU 	CALI_CONFIGURABLE(tunnel_mtu)
 #define VXLAN_PORT 	CALI_CONFIGURABLE(vxlan_port)
-#define INTF_IP		CALI_CONFIGURABLE(intf_ip)
+#define INTF_IP		CALI_CONFIGURABLE_IP(intf_ip)
 #define EXT_TO_SVC_MARK	CALI_CONFIGURABLE(ext_to_svc_mark)
 #define PSNAT_START	CALI_CONFIGURABLE(psnat_start)
 #define PSNAT_LEN	CALI_CONFIGURABLE(psnat_len)
 #define GLOBAL_FLAGS 	CALI_CONFIGURABLE(flags)
-#define HOST_TUNNEL_IP	CALI_CONFIGURABLE(host_tunnel_ip)
+#define HOST_TUNNEL_IP	CALI_CONFIGURABLE_IP(host_tunnel_ip)
 #define WG_PORT		CALI_CONFIGURABLE(wg_port)
 #define NATIN_IFACE	CALI_CONFIGURABLE(natin_idx)
 

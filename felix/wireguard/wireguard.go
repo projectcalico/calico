@@ -233,7 +233,6 @@ func NewWithShims(
 			[]string{"^" + interfaceName + "$", routetable.InterfaceNone},
 			ipVersion,
 			newRoutetableNetlink,
-			false, // vxlan
 			netlinkTimeout,
 			func(cidr ip.CIDR, destMAC net.HardwareAddr, ifaceName string) error { return nil }, // addStaticARPEntry
 			&noOpConnTrack{},

@@ -61,9 +61,6 @@ var (
 	VERSION    string
 	version    bool
 	statusFile string
-
-	// fipsModeEnabled enables FIPS 140-2 validated crypto mode.
-	fipsModeEnabled bool
 )
 
 func init() {
@@ -83,7 +80,6 @@ func init() {
 	if err != nil {
 		log.WithError(err).Fatal("Failed to set klog logging configuration")
 	}
-	fipsModeEnabled = os.Getenv("FIPS_MODE_ENABLED") == "true"
 }
 
 func main() {
@@ -149,7 +145,6 @@ func main() {
 		select {
 		case <-initCtx.Done():
 			log.Fatal("Failed to initialize Calico datastore")
-			break
 		case <-time.After(5 * time.Second):
 			// Try to initialize again
 		}
@@ -416,7 +411,7 @@ func newEtcdV3Client() (*clientv3.Client, error) {
 		return nil, err
 	}
 
-	baseTLSConfig := tls.NewTLSConfig(fipsModeEnabled)
+	baseTLSConfig := tls.NewTLSConfig()
 	tlsClient.MaxVersion = baseTLSConfig.MaxVersion
 	tlsClient.MinVersion = baseTLSConfig.MinVersion
 	tlsClient.CipherSuites = baseTLSConfig.CipherSuites

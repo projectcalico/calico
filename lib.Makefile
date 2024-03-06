@@ -861,11 +861,15 @@ sub-manifest-%:
 	$(DOCKER) manifest create $(call unescapefs,$*):$(IMAGETAG) $(addprefix --amend ,$(addprefix $(call unescapefs,$*):$(IMAGETAG)-,$(VALIDARCHES)))
 	$(DOCKER) manifest push --purge $(call unescapefs,$*):$(IMAGETAG)
 
+push-manifests-with-tag: var-require-one-of-CONFIRM-DRYRUN var-require-all-BRANCH_NAME
+	$(MAKE) push-manifests IMAGETAG=$(if $(IMAGETAG_PREFIX),$(IMAGETAG_PREFIX)-)$(BRANCH_NAME) EXCLUDEARCH="$(EXCLUDEARCH)"
+	$(MAKE) push-manifests IMAGETAG=$(if $(IMAGETAG_PREFIX),$(IMAGETAG_PREFIX)-)$(GIT_VERSION) EXCLUDEARCH="$(EXCLUDEARCH)"
+
 # cd-common tags and pushes images with the branch name and git version. This target uses PUSH_IMAGES, BUILD_IMAGE,
 # and BRANCH_NAME env variables to figure out what to tag and where to push it to.
 cd-common: var-require-one-of-CONFIRM-DRYRUN var-require-all-BRANCH_NAME
-	$(MAKE) retag-build-images-with-registries push-images-to-registries push-manifests IMAGETAG=$(if $(IMAGETAG_PREFIX),$(IMAGETAG_PREFIX)-)$(BRANCH_NAME) EXCLUDEARCH="$(EXCLUDEARCH)"
-	$(MAKE) retag-build-images-with-registries push-images-to-registries push-manifests IMAGETAG=$(if $(IMAGETAG_PREFIX),$(IMAGETAG_PREFIX)-)$(shell git describe --tags --dirty --long --always --abbrev=12) EXCLUDEARCH="$(EXCLUDEARCH)"
+	$(MAKE) retag-build-images-with-registries push-images-to-registries IMAGETAG=$(if $(IMAGETAG_PREFIX),$(IMAGETAG_PREFIX)-)$(BRANCH_NAME) EXCLUDEARCH="$(EXCLUDEARCH)"
+	$(MAKE) retag-build-images-with-registries push-images-to-registries IMAGETAG=$(if $(IMAGETAG_PREFIX),$(IMAGETAG_PREFIX)-)$(shell git describe --tags --dirty --long --always --abbrev=12) EXCLUDEARCH="$(EXCLUDEARCH)"
 
 ###############################################################################
 # Release targets and helpers
@@ -1232,21 +1236,55 @@ kind-cluster-destroy: $(KIND) $(KUBECTL)
 	rm -f $(KIND_KUBECONFIG)
 	rm -f $(REPO_ROOT)/.$(KIND_NAME).created
 
-kind $(KIND):
-	mkdir -p $(KIND_DIR)
-	$(DOCKER_GO_BUILD) sh -c "GOBIN=/go/src/github.com/projectcalico/calico/hack/test/kind go install sigs.k8s.io/kind@v0.14.0"
+$(KIND)-$(KIND_VERSION):
+	mkdir -p $(KIND_DIR)/$(KIND_VERSION)
+	$(DOCKER_GO_BUILD) sh -c "GOBIN=/go/src/github.com/projectcalico/calico/hack/test/kind/$(KIND_VERSION) go install sigs.k8s.io/kind@$(KIND_VERSION)"
+	mv $(KIND_DIR)/$(KIND_VERSION)/kind $(KIND_DIR)/kind-$(KIND_VERSION)
+	rm -r $(KIND_DIR)/$(KIND_VERSION)
 
-kubectl $(KUBECTL):
+$(KIND_DIR)/.kind-updated-$(KIND_VERSION): $(KIND)-$(KIND_VERSION)
+	rm -f $(KIND_DIR)/.kind-updated-*
+	cd $(KIND_DIR) && ln -fs kind-$(KIND_VERSION) kind
+	touch $@
+
+.PHONY: kind
+kind: $(KIND)
+	@echo "kind: $(KIND)"
+$(KIND): $(KIND_DIR)/.kind-updated-$(KIND_VERSION)
+
+$(KUBECTL)-$(K8S_VERSION):
 	mkdir -p $(KIND_DIR)
 	curl -L https://storage.googleapis.com/kubernetes-release/release/$(K8S_VERSION)/bin/linux/$(ARCH)/kubectl -o $@
 	chmod +x $@
 
-bin/helm:
+$(KIND_DIR)/.kubectl-updated-$(K8S_VERSION): $(KUBECTL)-$(K8S_VERSION)
+	rm -f $(KIND_DIR)/.kubectl-updated-*
+	cd $(KIND_DIR) && ln -fs kubectl-$(K8S_VERSION) kubectl
+	touch $@
+
+.PHONY: kubectl
+kubectl: $(KUBECTL)
+	@echo "kubectl: $(KUBECTL)"
+$(KUBECTL): $(KIND_DIR)/.kubectl-updated-$(K8S_VERSION)
+
+bin/helm-$(HELM_VERSION):
 	mkdir -p bin
 	$(eval TMP := $(shell mktemp -d))
-	curl -sSf -L --retry 5 -o $(TMP)/helm3.tar.gz https://get.helm.sh/helm-v3.11.0-linux-$(ARCH).tar.gz
+	curl -sSf -L --retry 5 -o $(TMP)/helm3.tar.gz https://get.helm.sh/helm-$(HELM_VERSION)-linux-$(ARCH).tar.gz
 	tar -zxvf $(TMP)/helm3.tar.gz -C $(TMP)
-	mv $(TMP)/linux-$(ARCH)/helm bin/helm
+	mv $(TMP)/linux-$(ARCH)/helm bin/helm-$(HELM_VERSION)
+
+bin/.helm-updated-$(HELM_VERSION): bin/helm-$(HELM_VERSION)
+	# Remove old marker files so that bin/helm will be stale if we switch
+	# branches and the helm version changes.
+	rm -f bin/.helm-updated-*
+	cd bin && ln -fs helm-$(HELM_VERSION) helm
+	touch $@
+
+.PHONY: helm
+helm: bin/helm
+	@echo "helm: $^"
+bin/helm: bin/.helm-updated-$(HELM_VERSION)
 
 ###############################################################################
 # Common functions for launching a local etcd instance.

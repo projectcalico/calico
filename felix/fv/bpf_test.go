@@ -56,6 +56,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/ifstate"
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/nat"
+	"github.com/projectcalico/calico/felix/bpf/proxy"
 	. "github.com/projectcalico/calico/felix/fv/connectivity"
 	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
@@ -381,10 +382,8 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			options.ExtraEnvVars["FELIX_BPFExtToServiceConnmark"] = "0x80"
 			if !testOpts.ipv6 {
 				options.ExtraEnvVars["FELIX_BPFDSROptoutCIDRs"] = "245.245.0.0/16"
-				options.ExtraEnvVars["FELIX_BPFEXCLUDEIPSFROMNAT"] = "10.101.0.222"
 			} else {
 				options.ExtraEnvVars["FELIX_IPV6SUPPORT"] = "true"
-				options.ExtraEnvVars["FELIX_BPFEXCLUDEIPSFROMNAT"] = "dead:beef::abcd:0:0:222"
 			}
 
 			if testOpts.protocol == "tcp" {
@@ -1083,7 +1082,33 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						g.Expect(natbe).To(HaveKey(nat.NewNATBackendKey(bckID, 1)))
 						g.Expect(natbe).NotTo(HaveKey(nat.NewNATBackendKey(bckID, 2)))
 					}, "5s").Should(Succeed(), "NAT did not get updated properly")
+				})
 
+				It("should cleanup after we disable eBPF", func() {
+					By("Waiting for dp to get setup up")
+
+					ensureAllNodesBPFProgramsAttached(tc.Felixes)
+
+					By("Changing env and restarting felix")
+
+					tc.Felixes[0].SetEnv(map[string]string{"FELIX_BPFENABLED": "false"})
+					tc.Felixes[0].Restart()
+
+					By("Checking that all programs got cleaned up")
+
+					Eventually(func() string {
+						out, _ := tc.Felixes[0].ExecOutput("bpftool", "-jp", "prog", "show")
+						return out
+					}, "15s", "1s").ShouldNot(
+						Or(ContainSubstring("cali_"), ContainSubstring("calico_"), ContainSubstring("xdp_cali_")))
+
+					// N.B. calico_failsafe map is created in iptables mode by
+					// bpf.NewFailsafeMap() It has calico_ prefix. All other bpf
+					// maps have only cali_ prefix.
+					Eventually(func() string {
+						out, _ := tc.Felixes[0].ExecOutput("bpftool", "-jp", "map", "show")
+						return out
+					}, "15s", "1s").ShouldNot(Or(ContainSubstring("cali_"), ContainSubstring("xdp_cali_")))
 				})
 			}
 		})
@@ -2322,6 +2347,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					It("should have connectivity from workload via a service IP to a host-process listening on that IP", func() {
 						By("Setting up a dummy service " + excludeSvcIP)
 						svc := k8sService("dummy-service", excludeSvcIP, w[0][0] /* unimportant */, 8066, 8077, 0, testOpts.protocol)
+						svc.ObjectMeta.Annotations = map[string]string{
+							proxy.ExcludeServiceAnnotation: "true",
+						}
 						_, err := k8sClient.CoreV1().Services(testSvc.ObjectMeta.Namespace).
 							Create(context.Background(), svc, metav1.CreateOptions{})
 						Expect(err).NotTo(HaveOccurred())
@@ -2339,10 +2367,10 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 						By("Starting host workload")
 						hostW := workload.Run(tc.Felixes[0], "dummy", "default",
-							excludeSvcIP, "9090", testOpts.protocol, workload.WithHostNetworked())
+							excludeSvcIP, "8066", testOpts.protocol, workload.WithHostNetworked())
 						defer hostW.Stop()
 
-						cc.Expect(Some, w[0][0], TargetIP(excludeSvcIP), ExpectWithPorts(9090))
+						cc.Expect(Some, w[0][0], TargetIP(excludeSvcIP), ExpectWithPorts(8066))
 						cc.CheckConnectivity()
 					})
 
@@ -4257,6 +4285,35 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				})
 			})
 
+			It("should have connectivity from host-networked pods via service to host-networked backend", func() {
+				By("Setting up the service")
+				hostW[0].ConfigureInInfra(infra)
+				testSvc := k8sService("host-svc", clusterIP, hostW[0], 80, 8055, 0, testOpts.protocol)
+				testSvcNamespace := testSvc.ObjectMeta.Namespace
+				k8sClient := infra.(*infrastructure.K8sDatastoreInfra).K8sClient
+				_, err := k8sClient.CoreV1().Services(testSvcNamespace).Create(context.Background(), testSvc, metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(1),
+					"Service endpoints didn't get created? Is controller-manager happy?")
+
+				By("Testing connectivity")
+				port := uint16(testSvc.Spec.Ports[0].Port)
+
+				hostW0SrcIP := ExpectWithSrcIPs(felixIP(0))
+				hostW1SrcIP := ExpectWithSrcIPs(felixIP(1))
+				if !testOpts.connTimeEnabled {
+					switch testOpts.tunnel {
+					case "ipip":
+						hostW0SrcIP = ExpectWithSrcIPs(tc.Felixes[0].ExpectedIPIPTunnelAddr)
+						hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedIPIPTunnelAddr)
+					}
+				}
+
+				cc.Expect(Some, hostW[0], TargetIP(clusterIP), ExpectWithPorts(port), hostW0SrcIP)
+				cc.Expect(Some, hostW[1], TargetIP(clusterIP), ExpectWithPorts(port), hostW1SrcIP)
+				cc.CheckConnectivity()
+			})
+
 		})
 
 		Describe("with BPF disabled to begin with", func() {
@@ -4988,8 +5045,15 @@ func ensureBPFProgramsAttachedOffset(offset int, felix *infrastructure.Felix, if
 		prog := []string{}
 		m := dumpIfStateMap(felix)
 		for _, v := range m {
-			if (v.Flags() & ifstate.FlgReady) > 0 {
-				prog = append(prog, v.IfName())
+			flags := v.Flags()
+			if felix.TopologyOptions.EnableIPv6 {
+				if (flags & ifstate.FlgIPv6Ready) > 0 {
+					prog = append(prog, v.IfName())
+				}
+			} else {
+				if (flags & ifstate.FlgIPv4Ready) > 0 {
+					prog = append(prog, v.IfName())
+				}
 			}
 		}
 		return prog

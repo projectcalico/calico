@@ -2755,6 +2755,20 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
 						},
 					},
+					"debugHost": {
+						SchemaProps: spec.SchemaProps{
+							Description: "DebugHost is the host IP or hostname to bind the debug port to.  Only used if DebugPort is set. [Default:localhost]",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"debugPort": {
+						SchemaProps: spec.SchemaProps{
+							Description: "DebugPort if set, enables Felix's debug HTTP port, which allows memory and CPU profiles to be retrieved.  The debug port is not secure, it should not be exposed to the internet.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
 					"iptablesNATOutgoingInterfaceFilter": {
 						SchemaProps: spec.SchemaProps{
 							Type:   []string{"string"},
@@ -2906,7 +2920,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"bpfKubeProxyEndpointSlicesEnabled": {
 						SchemaProps: spec.SchemaProps{
-							Description: "BPFKubeProxyEndpointSlicesEnabled in BPF mode, controls whether Felix's embedded kube-proxy accepts EndpointSlices or not.",
+							Description: "BPFKubeProxyEndpointSlicesEnabled is deprecated and has no effect. BPF kube-proxy always accepts endpoint slices. This option will be removed in the next release.",
 							Type:        []string{"boolean"},
 							Format:      "",
 						},

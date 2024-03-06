@@ -34,7 +34,7 @@ import (
 var _ = Describe("BPF kube-proxy", func() {
 	initIP := net.IPv4(1, 1, 1, 1)
 
-	maps := new(bpfmap.Maps)
+	maps := new(bpfmap.IPMaps)
 	maps.FrontendMap = newMockNATMap()
 	maps.BackendMap = newMockNATBackendMap()
 	maps.AffinityMap = newMockAffinityMap()
