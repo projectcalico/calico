@@ -65,6 +65,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 		if BPFMode() && getDataStoreType(infra) == "etcdv3" {
 			Skip("Skipping BPF test for etcdv3 backend.")
 		}
+
 		tc, client = infrastructure.StartNNodeTopology(2, infrastructure.DefaultTopologyOptions(), infra)
 
 		// Install a default profile that allows all ingress and egress, in the absence of any Policy.
@@ -138,7 +139,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 		}
 	})
 
-	It("should have workload to workload connectivity", func() {
+	It("Mazdak should have workload to workload connectivity", func() {
+		//time.Sleep(time.Minute * 60)
 		cc.ExpectSome(w[0], w[1])
 		cc.ExpectSome(w[1], w[0])
 		cc.CheckConnectivity()
