@@ -88,6 +88,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Pod setup status wait", []a
 			for i := range dummyWorkloads {
 				dummyWorkloads[i] = workload.New(tc.Felixes[0], fmt.Sprintf("workload-endpoint-status-tests-%d", i), "default", fmt.Sprintf("10.65.0.%d", 10+i), "8080", "tcp")
 				dummyWorkloads[i].ConfigureInInfra(infra)
+				// Hack: backfill a field which is not populated by etcd,
+				// but should be populated by the K8s Calico CNI plugin.
 				if _, ok := infra.(*infrastructure.EtcdDatastoreInfra); ok {
 					dummyWorkloads[i].WorkloadEndpoint.Spec.Pod = dummyWorkloads[i].WorkloadEndpoint.Spec.Workload
 				}
@@ -135,6 +137,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Pod setup status wait", []a
 			By("creating a workload before Felix starts")
 			wl := workload.New(tc.Felixes[0], "workload-endpoint-status-tests-0", "default", "10.65.0.10", "8080", "tcp")
 			wl.ConfigureInInfra(infra)
+			// Hack: backfill a field which is not populated by etcd,
+			// but should be populated by theK8s  Calico CNI plugin.
 			if _, ok := infra.(*infrastructure.EtcdDatastoreInfra); ok {
 				wl.WorkloadEndpoint.Spec.Pod = wl.WorkloadEndpoint.Spec.Workload
 			}
