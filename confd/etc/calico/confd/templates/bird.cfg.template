@@ -178,6 +178,8 @@ template bgp bgp_template {
   passive on; # Mesh is unidirectional, peer will connect to us.
   {{- end}}
   graceful restart time 120;
+  long lived stale time 3600;
+  long lived graceful restart;
   bfd graceful;
 }{{end}}{{end}}{{end}}
 {{else}}
@@ -203,7 +205,9 @@ protocol bgp Global_{{$id}} from bgp_template {
   source address {{$node_ip}};  # The local address we use for the TCP connection
 {{- end}}
 {{- if ne $data.restart_time ""}}
-  graceful restart time {{$data.restart_time}};
+  #graceful restart time {{$data.restart_time}};
+  graceful restart time 120;
+  long lived stale time 3600;
   bfd graceful;
 {{- end}}
 {{- if and (eq $data.as_num $node_as_num) (ne "" ($node_cluster_id)) (ne $data.rr_cluster_id ($node_cluster_id))}}
@@ -240,7 +244,9 @@ protocol bgp Node_{{$id}} from bgp_template {
   source address {{$node_ip}};  # The local address we use for the TCP connection
 {{- end}}
 {{- if ne $data.restart_time ""}}
-  graceful restart time {{$data.restart_time}};
+  #graceful restart time {{$data.restart_time}};
+  graceful restart time 120;
+  long lived stale time 3600;
   bfd graceful;
 {{- end}}
 {{- if and (eq $data.as_num $node_as_num) (ne "" ($node_cluster_id)) (ne $data.rr_cluster_id ($node_cluster_id))}}
