@@ -19,7 +19,7 @@ import (
 	"strings"
 
 	"github.com/projectcalico/calico/felix/proto"
-	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	v3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 
 	"github.com/sirupsen/logrus"
@@ -58,8 +58,7 @@ func WorkloadEndpointKeyToStatusFilename(id *model.WorkloadEndpointKey) string {
 
 	logrus.WithFields(logrus.Fields{
 		"parts": parts,
-		"id":    id,
-	}).Debug("Generating filename from workload endpoint ID")
+	}).Debug("Generating filename from workload endpoint key")
 
 	return strings.Join(parts, separator)
 }
@@ -81,7 +80,7 @@ func WorkloadEndpointIDToWorkloadEndpointKey(id *proto.WorkloadEndpointID, hostn
 
 // APIWorkloadEndpointToWorkloadEndpointKey generates a WorkloadEndpointKey from the given WorkloadEndpoint.
 // Returns nil if passed endpoint is nil.
-func APIWorkloadEndpointToWorkloadEndpointKey(ep *libapi.WorkloadEndpoint) *model.WorkloadEndpointKey {
+func APIWorkloadEndpointToWorkloadEndpointKey(ep *v3.WorkloadEndpoint) *model.WorkloadEndpointKey {
 	if ep == nil {
 		return nil
 	}
@@ -92,7 +91,6 @@ func APIWorkloadEndpointToWorkloadEndpointKey(ep *libapi.WorkloadEndpoint) *mode
 		WorkloadID:     ep.Namespace + "/" + ep.Spec.Pod,
 		EndpointID:     ep.Spec.Endpoint,
 	}
-
-	logrus.WithField("key", key).WithField("endpoint", ep).Debug("Generating WorkloadEndpointKey from api WorkloadEndpoint")
+	logrus.WithField("key", key).Debug("Generating WorkloadEndpointKey from api WorkloadEndpoint")
 	return key
 }

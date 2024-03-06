@@ -305,6 +305,7 @@ func (fr *EndpointStatusFileReporter) reconcileStatusFiles() error {
 
 func (fr *EndpointStatusFileReporter) writeStatusFile(name string) error {
 	// Write file to dir.
+	logrus.WithField("filename", name).Debug("Writing endpoint-status file to status-dir")
 	filename := filepath.Join(fr.endpointStatusDirPrefix, dirStatus, name)
 	f, err := os.Create(filename)
 	if err != nil {

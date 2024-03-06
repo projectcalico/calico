@@ -668,7 +668,7 @@ configRetry:
 			fromDataplaneC := dpConnector.NewFromDataplaneConsumer()
 			statusFileReporter := statusrep.NewEndpointStatusFileReporter(fromDataplaneC, configParams.EndpointStatusPathPrefix, statusrep.WithHostname(configParams.FelixHostname))
 
-			log.WithField("path", configParams.EndpointStatusPathPrefix).Info("Starting status-file reporter")
+			log.WithField("path", configParams.EndpointStatusPathPrefix).Info("Starting endpoint-status file-reporter")
 			ctx := context.Background()
 			go statusFileReporter.SyncForever(ctx)
 		}
