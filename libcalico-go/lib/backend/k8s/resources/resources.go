@@ -19,6 +19,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/json"
 )
@@ -43,8 +44,10 @@ type ResourceList interface {
 
 // Function signature for conversion function to convert a K8s resource to a
 // KVPair equivalent.
-type ConvertK8sResourceToKVPair func(Resource) (*model.KVPair, error)
-type ConvertK8sResourceToKVPairs func(Resource) ([]*model.KVPair, error)
+type (
+	ConvertK8sResourceToKVPair  func(Resource) (*model.KVPair, error)
+	ConvertK8sResourceToKVPairs func(Resource) ([]*model.KVPair, error)
+)
 
 // ConvertK8sResourceOneToOneAdapter converts a ConvertK8sResourceToKVPair function to a ConvertK8sResourceToKVPairs function
 func ConvertK8sResourceOneToOneAdapter(oneToOne ConvertK8sResourceToKVPair) ConvertK8sResourceToKVPairs {
@@ -158,7 +161,6 @@ func ConvertCalicoResourceToK8sResource(resIn Resource) (Resource, error) {
 	meta.Namespace = rom.GetNamespace()
 	meta.ResourceVersion = rom.GetResourceVersion()
 	meta.Labels = rom.GetLabels()
-	meta.UID = rom.GetUID()
 
 	resOut := resIn.DeepCopyObject().(Resource)
 	romOut := resOut.GetObjectMeta()
@@ -173,6 +175,19 @@ func ConvertCalicoResourceToK8sResource(resIn Resource) (Resource, error) {
 func ConvertK8sResourceToCalicoResource(res Resource) error {
 	rom := res.GetObjectMeta()
 	annotations := rom.GetAnnotations()
+
+	// We NEVER want to use the UID from the underlying CR so that we can guarantee uniqueness.
+	// So, always generate a new one deterministically. If a UID was stored in the annotations of the CR
+	// when it was created (e.g., via the API server or calicoctl) then we will use that instead.
+	// But for controllers or users to create crd.projectcalico.org resources directly, we need to ensure a unique UID is set even
+	// if there is no UID in the annotations.
+	// Any updates to the resource will write the UID back into the annotation for consistency.
+	uid, err := conversion.ConvertUID(rom.GetUID())
+	if err != nil {
+		return err
+	}
+	rom.SetUID(uid)
+
 	if len(annotations) == 0 {
 		// Make no changes if there are no annotations to read Calico Metadata out of.
 		return nil
@@ -183,7 +198,7 @@ func ConvertK8sResourceToCalicoResource(res Resource) error {
 	}
 
 	meta := &metav1.ObjectMeta{}
-	err := json.Unmarshal([]byte(annotations[metadataAnnotation]), meta)
+	err = json.Unmarshal([]byte(annotations[metadataAnnotation]), meta)
 	if err != nil {
 		return err
 	}
@@ -201,7 +216,6 @@ func ConvertK8sResourceToCalicoResource(res Resource) error {
 	meta.ResourceVersion = rom.GetResourceVersion()
 	meta.Labels = rom.GetLabels()
 	meta.Annotations = annotations
-	meta.UID = rom.GetUID()
 
 	// If no creation timestamp was stored in the metadata annotation, use the one from the CR.
 	// The timestamp is normally set in the clientv3 code. However, for objects that bypass

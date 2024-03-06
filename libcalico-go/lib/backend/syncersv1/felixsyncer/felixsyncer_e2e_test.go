@@ -140,7 +140,7 @@ func calculateDefaultFelixSyncerEntries(cs kubernetes.Interface, dt apiconfig.Da
 				},
 			})
 
-			uid, err := conversion.ProfileUID(ns.UID)
+			uid, err := conversion.ConvertUID(ns.UID)
 			Expect(err).NotTo(HaveOccurred())
 
 			// And expect a v3 profile for each namespace.
@@ -184,7 +184,7 @@ func calculateDefaultFelixSyncerEntries(cs kubernetes.Interface, dt apiconfig.Da
 					},
 				})
 
-				uid, err := conversion.ProfileUID(sa.UID)
+				uid, err := conversion.ConvertUID(sa.UID)
 				Expect(err).NotTo(HaveOccurred())
 
 				//  We also expect one v3 Profile to be present for each ServiceAccount.
