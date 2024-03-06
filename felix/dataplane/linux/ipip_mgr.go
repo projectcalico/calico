@@ -36,6 +36,10 @@ import (
 	"github.com/projectcalico/calico/felix/rules"
 )
 
+const (
+	IPIPIfaceName = "tunl0"
+)
+
 // ipipManager manages the all-hosts IP set, which is used by some rules in our static chains
 // when IPIP is enabled.  It doesn't actually program the rules, because they are part of the
 // top-level static chains.
@@ -112,7 +116,6 @@ func newIPIPManager(
 		brt = routetable.New(
 			[]string{routetable.InterfaceNone},
 			4,
-			false,
 			dpConfig.NetlinkTimeout,
 			dpConfig.DeviceRouteSourceAddress,
 			blackHoleProto,
@@ -135,7 +138,7 @@ func newIPIPManager(
 		realIPIPNetlink{},
 		func(interfaceRegexes []string, ipVersion uint8, vxlan bool, netlinkTimeout time.Duration,
 			deviceRouteSourceAddress net.IP, deviceRouteProtocol netlink.RouteProtocol, removeExternalRoutes bool) routetable.RouteTableInterface {
-			return routetable.New(interfaceRegexes, ipVersion, vxlan, netlinkTimeout,
+			return routetable.New(interfaceRegexes, ipVersion, netlinkTimeout,
 				deviceRouteSourceAddress, deviceRouteProtocol, removeExternalRoutes, unix.RT_TABLE_MAIN,
 				opRecorder, featureDetector,
 			)
@@ -461,19 +464,19 @@ func (m *ipipManager) configureIPIPDevice(mtu int, address net.IP) error {
 		"device":     m.ipipDevice,
 	})
 	logCxt.Debug("Configuring IPIP tunnel")
-	link, err := m.dataplane.LinkByName("tunl0")
+	link, err := m.dataplane.LinkByName(IPIPIfaceName)
 	if err != nil {
 		m.logCtx.WithError(err).Info("Failed to get IPIP tunnel device, assuming it isn't present")
 		// We call out to "ip tunnel", which takes care of loading the kernel module if
 		// needed.  The tunl0 device is actually created automatically by the kernel
 		// module.
 		// TODO: fix this:
-		err := m.dataplane.RunCmd("ip", "tunnel", "add", "tunl0", "mode", "ipip")
+		err := m.dataplane.RunCmd("ip", "tunnel", "add", IPIPIfaceName, "mode", "ipip")
 		if err != nil {
 			m.logCtx.WithError(err).Warning("Failed to add IPIP tunnel device")
 			return err
 		}
-		link, err = m.dataplane.LinkByName("tunl0")
+		link, err = m.dataplane.LinkByName(IPIPIfaceName)
 		if err != nil {
 			m.logCtx.WithError(err).Warning("Failed to get tunnel device")
 			return err
@@ -499,7 +502,7 @@ func (m *ipipManager) configureIPIPDevice(mtu int, address net.IP) error {
 		logCxt.Info("Set tunnel admin up")
 	}
 
-	if err := m.setLinkAddressV4("tunl0", address); err != nil {
+	if err := m.setLinkAddressV4(IPIPIfaceName, address); err != nil {
 		m.logCtx.WithError(err).Warn("Failed to set tunnel device IP")
 		return err
 	}

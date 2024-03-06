@@ -807,9 +807,11 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		var routeTableIPIP routetable.RouteTableInterface
 		if !config.RouteSyncDisabled {
 			log.Debug("RouteSyncDisabled is false.")
-			routeTableIPIP = routetable.New([]string{"^tunl0$"}, 4, false, config.NetlinkTimeout,
-				nil, config.DeviceRouteProtocol, true, unix.RT_TABLE_MAIN,
-				dp.loopSummarizer, featureDetector, routetable.WithLivenessCB(dp.reportHealth))
+			routeTableIPIP = routetable.New(
+				[]string{"^tunl0$"}, 4, config.NetlinkTimeout,
+				config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, config.RemoveExternalRoutes,
+				unix.RT_TABLE_MAIN, dp.loopSummarizer, featureDetector, routetable.WithLivenessCB(dp.reportHealth),
+				routetable.WithRouteCleanupGracePeriod(routeCleanupGracePeriod))
 		} else {
 			log.Info("RouteSyncDisabled is true, using DummyTable.")
 			routeTableIPIP = &routetable.DummyTable{}
