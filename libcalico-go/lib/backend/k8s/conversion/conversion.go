@@ -99,7 +99,7 @@ func (c converter) NamespaceToProfile(ns *kapiv1.Namespace) (*model.KVPair, erro
 	// based on name within the namespaceSelector.
 	labels[NamespaceLabelPrefix+NameLabel] = ns.Name
 
-	uid, err := ProfileUID(ns.UID)
+	uid, err := ConvertUID(ns.UID)
 	if err != nil {
 		return nil, err
 	}
@@ -340,13 +340,18 @@ func (c converter) K8sNetworkPolicyToCalico(np *networkingv1.NetworkPolicy) (*mo
 		types = append(types, apiv3.PolicyTypeIngress)
 	}
 
+	uid, err := ConvertUID(np.UID)
+	if err != nil {
+		return nil, err
+	}
+
 	// Create the NetworkPolicy.
 	policy := apiv3.NewNetworkPolicy()
 	policy.ObjectMeta = metav1.ObjectMeta{
 		Name:              policyName,
 		Namespace:         np.Namespace,
 		CreationTimestamp: np.CreationTimestamp,
-		UID:               np.UID,
+		UID:               uid,
 		ResourceVersion:   np.ResourceVersion,
 	}
 	policy.Spec = apiv3.NetworkPolicySpec{
@@ -736,7 +741,7 @@ func (c converter) ServiceAccountToProfile(sa *kapiv1.ServiceAccount) (*model.KV
 	// based on name within the serviceAccountSelector.
 	labels[ServiceAccountLabelPrefix+NameLabel] = sa.Name
 
-	uid, err := ProfileUID(sa.UID)
+	uid, err := ConvertUID(sa.UID)
 	if err != nil {
 		return nil, err
 	}
@@ -819,14 +824,14 @@ func stringsToIPNets(ipStrings []string) ([]*cnet.IPNet, error) {
 	return podIPNets, nil
 }
 
-func ProfileUID(uid types.UID) (types.UID, error) {
-	// We don't want to use the same UID for the Profile as the originating object, as two
-	// objects should not have the same UID. This causes confusion in the Kubernetes garbage collection logic.
-	// We can still generate a new UID programmatically from the parent's UID, though. This ensures a deterministic
-	// yet unique UID.
+// ConvertUID converts a UID to a new UID in a deterministic way. This is useful when we want to generate a new UID
+// for a resource that is derived from another resource, but we don't want to use the same UID in order to
+// ensure that the new resource is treated as unique. This is important, as two objects with the same UID causes
+// confusion in the Kubernetes garbage collection logic.
+func ConvertUID(uid types.UID) (types.UID, error) {
 	newUID, err := uuid.NewRandomFromReader(strings.NewReader(string(uid)))
 	if err != nil {
-		return "", fmt.Errorf("failed to generate UID for profile: %s", err)
+		return "", fmt.Errorf("failed to generate UID for resource: %s", err)
 	}
 	return types.UID(newUID.String()), nil
 }
