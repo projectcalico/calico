@@ -104,6 +104,7 @@ type State struct {
 	IPSize              uint16
 	RulesHit            uint32
 	RuleIDs             [MaxRuleIDs]uint64
+	Flags               uint64
 	ConntrackRCFlags    uint32
 	_                   uint32
 	ConntrackNATIPPort  uint64
@@ -113,7 +114,6 @@ type State struct {
 	_                   uint32
 	NATData             uint64
 	ProgStartTime       uint64
-	Flags               uint64
 	_                   [48]byte // ipv6 padding
 }
 

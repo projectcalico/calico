@@ -27,6 +27,7 @@ for log_level in debug info no_log; do
   echo "bin/connect_time_${log_level}_v46_co-re.o"
   echo "bin/connect_time_${log_level}_v6_co-re.o"
   echo "bin/xdp_${log_level}.o"
+  echo "bin/xdp_${log_level}_co-re_v6.o"
 
   for core_support in co-re legacy; do
     for host_drop in "" "host_drop_"; do
