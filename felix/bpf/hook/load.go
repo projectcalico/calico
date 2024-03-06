@@ -170,12 +170,7 @@ func initObjectFiles() {
 			}
 			filename := "xdp_" + l + ".o"
 			if family == 6 {
-				filename = "xdp_" + l
-				if bpfutils.SupportsBTF() {
-					filename = filename + "_co-re_v6.o"
-				} else {
-					filename = filename + "_v6.o"
-				}
+				filename = "xdp_" + l + "_co-re_v6.o"
 			}
 
 			objectFiles[AttachType{
