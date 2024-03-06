@@ -22,10 +22,26 @@ sudo usermod -aG docker ubuntu
 
 sudo apt-get update -y
 
+# Set up repository and install updated containerd
+# https://forum.linuxfoundation.org/discussion/862825/kubeadm-init-error-cri-v1-runtime-api-is-not-implemented
+# https://docs.docker.com/engine/install/ubuntu/#set-up-the-repository
+sudo install -m 0755 -d /etc/apt/keyrings
+sudo curl -fsSL --retry 5 https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+sudo chmod 644 /etc/apt/keyrings/docker.asc
+echo \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
+  $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+  sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+sudo apt-get update -y
+sudo apt remove containerd
+sudo apt install containerd.io
+sudo rm /etc/containerd/config.toml
+sudo systemctl enable --now containerd
+sudo systemctl daemon-reload
+sudo systemctl restart containerd
+
 KUBE_REPO_VERSION=$(echo ${KUBE_VERSION} | cut -d '.' -f 1,2)
 # Download the k8s repo signing key
-sudo mkdir -p /etc/apt/keyrings
-sudo chmod 755 /etc/apt/keyrings
 curl -fsSL --retry 5 "https://pkgs.k8s.io/core:/stable:/v${KUBE_REPO_VERSION}/deb/Release.key" | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
 sudo chmod 644 /etc/apt/keyrings/kubernetes-apt-keyring.gpg
 # Add the Kubernetes apt repository

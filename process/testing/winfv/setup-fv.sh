@@ -346,6 +346,20 @@ function wait_for_docker_installed() {
   return 1
 }
 
+function wait_for_containerd_installed() {
+  echo "Waiting for containerd to have been installed on linux node"
+  for i in `seq 1 30`; do
+    sleep 2
+    ${MASTER_CONNECT_COMMAND} crictl images
+
+    if [ $? -eq 0 ]; then
+      echo "containerd installed. Ready to setup linux node for FV"
+      return 0
+    fi
+  done
+  return 1
+}
+
 function master_scp() {
   local file=$1
   scp -i ${WINDOWS_PEM_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no $file ubuntu@${LINUX_EIP}:/home/ubuntu
@@ -404,6 +418,7 @@ function setup_kubeadm_cluster(){
 }
 function setup_fv() {
   wait_for_docker_installed
+  wait_for_containerd_installed
 
   setup_linux
   setup_kubeadm_cluster
