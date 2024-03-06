@@ -1187,6 +1187,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test.policy",
 				Namespace: "default",
+				UID:       types.UID("30316465-6365-4463-ad63-3564622d3638"),
 			},
 			Spec: networkingv1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{
@@ -1260,6 +1261,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test.policy",
 				Namespace: "default",
+				UID:       types.UID("30316465-6365-4463-ad63-3564622d3638"),
 			},
 			Spec: networkingv1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{
@@ -1308,6 +1310,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test.policy",
 				Namespace: "default",
+				UID:       types.UID("30316465-6365-4463-ad63-3564622d3638"),
 			},
 			Spec: networkingv1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{
@@ -1360,6 +1363,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test.policy",
 				Namespace: "default",
+				UID:       types.UID("30316465-6365-4463-ad63-3564622d3638"),
 			},
 			Spec: networkingv1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{
@@ -1425,6 +1429,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test.policy",
 				Namespace: "default",
+				UID:       types.UID("30316465-6365-4463-ad63-3564622d3638"),
 			},
 			Spec: networkingv1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{
@@ -1529,6 +1534,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test.policy",
 				Namespace: "default",
+				UID:       types.UID("30316465-6365-4463-ad63-3564622d3638"),
 			},
 			Spec: networkingv1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{
@@ -1677,6 +1683,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test.policy",
 				Namespace: "default",
+				UID:       types.UID("30316465-6365-4463-ad63-3564622d3638"),
 			},
 			Spec: networkingv1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{
@@ -1711,6 +1718,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "testPolicy",
 				Namespace: "default",
+				UID:       types.UID("30316465-6365-4463-ad63-3564622d3638"),
 			},
 			Spec: networkingv1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{},
@@ -1755,6 +1763,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test.policy",
 				Namespace: "default",
+				UID:       types.UID("30316465-6365-4463-ad63-3564622d3638"),
 			},
 			Spec: networkingv1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{
@@ -1825,6 +1834,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test.policy",
 				Namespace: "default",
+				UID:       types.UID("30316465-6365-4463-ad63-3564622d3638"),
 			},
 			Spec: networkingv1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{
@@ -1902,6 +1912,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test.policy",
 				Namespace: "default",
+				UID:       types.UID("30316465-6365-4463-ad63-3564622d3638"),
 			},
 			Spec: networkingv1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{
@@ -1988,6 +1999,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test.policy",
 				Namespace: "default",
+				UID:       types.UID("30316465-6365-4463-ad63-3564622d3638"),
 			},
 			Spec: networkingv1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{},
@@ -2020,6 +2032,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test.policy",
 				Namespace: "default",
+				UID:       types.UID("30316465-6365-4463-ad63-3564622d3638"),
 			},
 			Spec: networkingv1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{
@@ -2070,6 +2083,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test.policy",
 				Namespace: "default",
+				UID:       types.UID("30316465-6365-4463-ad63-3564622d3638"),
 			},
 			Spec: networkingv1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{
@@ -2116,6 +2130,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test.policy",
 				Namespace: "default",
+				UID:       types.UID("30316465-6365-4463-ad63-3564622d3638"),
 			},
 			Spec: networkingv1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{
@@ -2163,6 +2178,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test.policy",
 				Namespace: "default",
+				UID:       types.UID("30316465-6365-4463-ad63-3564622d3638"),
 			},
 			Spec: networkingv1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{
@@ -2219,6 +2235,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test.policy",
 				Namespace: "default",
+				UID:       types.UID("30316465-6365-4463-ad63-3564622d3638"),
 			},
 			Spec: networkingv1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{
@@ -2261,6 +2278,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test.policy",
 				Namespace: "default",
+				UID:       types.UID("30316465-6365-4463-ad63-3564622d3638"),
 			},
 			Spec: networkingv1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{},
@@ -2309,6 +2327,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test.policy",
 				Namespace: "default",
+				UID:       types.UID("30316465-6365-4463-ad63-3564622d3638"),
 			},
 			Spec: networkingv1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{},
@@ -2356,6 +2375,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test.policy",
 				Namespace: "default",
+				UID:       types.UID("30316465-6365-4463-ad63-3564622d3638"),
 			},
 			Spec: networkingv1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{},
@@ -2404,6 +2424,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test.policy",
 				Namespace: "default",
+				UID:       types.UID("30316465-6365-4463-ad63-3564622d3638"),
 			},
 			Spec: networkingv1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{},
@@ -2450,6 +2471,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test.policy",
 				Namespace: "default",
+				UID:       types.UID("30316465-6365-4463-ad63-3564622d3638"),
 			},
 			Spec: networkingv1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{},
@@ -2497,6 +2519,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test.policy",
 				Namespace: "default",
+				UID:       types.UID("30316465-6365-4463-ad63-3564622d3638"),
 			},
 			Spec: networkingv1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{},
@@ -2550,6 +2573,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test.policy",
 				Namespace: "default",
+				UID:       types.UID("30316465-6365-4463-ad63-3564622d3638"),
 			},
 			Spec: networkingv1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{},
@@ -2678,6 +2702,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test.policy",
 				Namespace: "default",
+				UID:       types.UID("30316465-6365-4463-ad63-3564622d3638"),
 			},
 			Spec: networkingv1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{},
@@ -2751,6 +2776,7 @@ var _ = Describe("Test NetworkPolicy conversion (k8s <= 1.7, no policyTypes)", f
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test.policy",
 				Namespace: "default",
+				UID:       types.UID("30316465-6365-4463-ad63-3564622d3638"),
 			},
 			Spec: networkingv1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{
@@ -2816,6 +2842,7 @@ var _ = Describe("Test NetworkPolicy conversion (k8s <= 1.7, no policyTypes)", f
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test.policy",
 				Namespace: "default",
+				UID:       types.UID("30316465-6365-4463-ad63-3564622d3638"),
 			},
 			Spec: networkingv1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{
@@ -2849,6 +2876,7 @@ var _ = Describe("Test NetworkPolicy conversion (k8s <= 1.7, no policyTypes)", f
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test.policy",
 				Namespace: "default",
+				UID:       types.UID("30316465-6365-4463-ad63-3564622d3638"),
 			},
 			Spec: networkingv1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{
@@ -2921,6 +2949,7 @@ var _ = Describe("Test NetworkPolicy conversion (k8s <= 1.7, no policyTypes)", f
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test.policy",
 				Namespace: "default",
+				UID:       types.UID("30316465-6365-4463-ad63-3564622d3638"),
 			},
 			Spec: networkingv1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{
@@ -3006,6 +3035,7 @@ var _ = Describe("Test NetworkPolicy conversion (k8s <= 1.7, no policyTypes)", f
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test.policy",
 				Namespace: "default",
+				UID:       types.UID("30316465-6365-4463-ad63-3564622d3638"),
 			},
 			Spec: networkingv1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{},
@@ -3037,6 +3067,7 @@ var _ = Describe("Test NetworkPolicy conversion (k8s <= 1.7, no policyTypes)", f
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test.policy",
 				Namespace: "default",
+				UID:       types.UID("30316465-6365-4463-ad63-3564622d3638"),
 			},
 			Spec: networkingv1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{
@@ -3078,6 +3109,7 @@ var _ = Describe("Test NetworkPolicy conversion (k8s <= 1.7, no policyTypes)", f
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test.policy",
 				Namespace: "default",
+				UID:       types.UID("30316465-6365-4463-ad63-3564622d3638"),
 			},
 			Spec: networkingv1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{},
