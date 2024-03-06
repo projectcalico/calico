@@ -3405,6 +3405,7 @@ func (m *bpfEndpointManager) loadPolicyProgram(
 	log.WithFields(log.Fields{
 		"progName": progName,
 		"ipFamily": ipFamily,
+		"rules":    rules,
 	}).Debug("Generating policy program...")
 
 	ipsetsMapFD := m.v4.IpsetsMap.MapFD()
