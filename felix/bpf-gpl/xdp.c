@@ -46,9 +46,6 @@ int calico_xdp_main(struct xdp_md *xdp)
 		.ipheader_len = IP_SIZE,
 	};
 	struct cali_tc_ctx *ctx = &_ctx;
-#ifdef IPVER6
-CALI_DEBUG("Received ipv6 pkt\n");
-#endif
 
 	if (!ctx->xdp_globals) {
 		CALI_LOG_IF(CALI_LOG_LEVEL_DEBUG, "State map globals lookup failed: DROP\n");

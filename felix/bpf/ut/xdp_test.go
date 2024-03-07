@@ -102,6 +102,7 @@ type xdpTestV6 struct {
 	NextHeader  gopacket.Layer
 	Drop        bool
 	Metadata    bool
+	IPProto     layers.IPProtocol
 }
 
 var xdpTestCases = []xdpTest{
@@ -311,6 +312,7 @@ var xdpV6TestCases = []xdpTestV6{
 		},
 		Drop:     false,
 		Metadata: false,
+		IPProto:  layers.IPProtocolUDP,
 	},
 	{
 		Description: "6 - Match against a deny policy, must drop",
@@ -327,6 +329,7 @@ var xdpV6TestCases = []xdpTestV6{
 		},
 		Drop:     true,
 		Metadata: false,
+		IPProto:  layers.IPProtocolTCP,
 	},
 	{
 		Description: "7 - Match against a deny policy, must drop",
@@ -343,6 +346,7 @@ var xdpV6TestCases = []xdpTestV6{
 		},
 		Drop:     true,
 		Metadata: false,
+		IPProto:  layers.IPProtocolTCP,
 	},
 	{
 		Description: "8 - Match against an allow policy, must pass with metadata",
@@ -359,6 +363,7 @@ var xdpV6TestCases = []xdpTestV6{
 		},
 		Drop:     false,
 		Metadata: true,
+		IPProto:  layers.IPProtocolTCP,
 	},
 	{
 		Description: "9 - Unmatched packet against failsafe and a policy",
@@ -375,6 +380,7 @@ var xdpV6TestCases = []xdpTestV6{
 		},
 		Drop:     false,
 		Metadata: false,
+		IPProto:  layers.IPProtocolUDP,
 	},
 }
 
@@ -393,7 +399,16 @@ func TestXDPV6Programs(t *testing.T) {
 	for i, tc := range xdpV6TestCases {
 		bpfIfaceName = fmt.Sprintf("XDPV6-%d", i)
 		runBpfTest(t, "xdp_calico_entrypoint", tc.Rules, func(bpfrun bpfProgRunFn) {
-			_, _, _, _, pktBytes, err := testPacketV6(nil, tc.IPv6Header, tc.NextHeader, nil)
+
+			var pktBytes []byte
+			var err error
+			if tc.NextHeader != nil {
+				hop := ipv6HopByHopExt()
+				hop.(*layers.IPv6HopByHop).NextHeader = tc.IPProto
+				_, _, _, _, pktBytes, err = testPacketV6(nil, tc.IPv6Header, tc.NextHeader, nil, hop)
+			} else {
+				_, _, _, _, pktBytes, err = testPacketV6(nil, tc.IPv6Header, tc.NextHeader, nil)
+			}
 			Expect(err).NotTo(HaveOccurred())
 			res, err := bpfrun(pktBytes)
 			Expect(err).NotTo(HaveOccurred())

@@ -16,12 +16,13 @@
 
 const volatile struct cali_xdp_preamble_globals __globals;
 
-static CALI_BPF_INLINE __u16 parse_eth_hdr(struct xdp_md *xdp) {
+static CALI_BPF_INLINE __u16 parse_eth_hdr(struct xdp_md *xdp)
+{
 	void *data_end = (void *)(long)xdp->data_end;
 	struct ethhdr *eth = (void *)(long)xdp->data;
 	__u64 offset = sizeof(*eth);
 	if ((void *)eth + offset > data_end) {
-		return 0xffff;
+		bpf_exit(XDP_DROP);
 	}
 	return bpf_ntohs(eth->h_proto);
 }	

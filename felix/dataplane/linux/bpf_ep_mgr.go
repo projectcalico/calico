@@ -2366,15 +2366,16 @@ func (d *bpfEndpointManagerDataplane) applyPolicyToDataIface(
 	ep *proto.HostEndpoint,
 	state *bpfInterfaceState,
 	ap *tc.AttachPoint,
-	xdpAP *xdp.AttachPoint,
+	apxdp *xdp.AttachPoint,
 ) (*tc.AttachPoint, *tc.AttachPoint, *xdp.AttachPoint, error) {
 
 	ingressAttachPoint := *ap
 	egressAttachPoint := *ap
-	xdpAttachPoint := *xdpAP
+	xdpAttachPoint := *apxdp
 
 	var parallelWG sync.WaitGroup
 	var ingressAP, egressAP *tc.AttachPoint
+	var xdpAP *xdp.AttachPoint
 	var ingressErr, egressErr, xdpErr error
 
 	parallelWG.Add(2)
@@ -2490,7 +2491,7 @@ func (d *bpfEndpointManagerDataplane) attachXDPProgram(ap *xdp.AttachPoint, ep *
 		}
 		ap.Log().Infof("Rules: %v", rules)
 		err = m.updatePolicyProgramFn(rules, "xdp", ap, d.ipFamily)
-		ap.Log().WithError(err).Infof("Applied untracked policy hep=%v", ep.Name)
+		ap.Log().WithError(err).Debugf("Applied untracked policy hep=%v", ep.Name)
 		return ap, err
 	}
 	return ap, nil

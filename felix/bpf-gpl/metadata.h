@@ -22,7 +22,6 @@ enum cali_metadata_flags {
 // Set metadata to be received by TC programs
 static CALI_BPF_INLINE int xdp2tc_set_metadata(struct cali_tc_ctx *ctx, __u32 flags)
 {
-		/* XXX */
 #ifndef UNITTEST
 		struct cali_metadata *metadata;
 		// Reserve space in-front of xdp_md.meta for metadata.
