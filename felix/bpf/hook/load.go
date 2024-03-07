@@ -162,15 +162,23 @@ func initObjectFiles() {
 		}
 	}
 
-	for _, logLevel := range []string{"off", "info", "debug"} {
-		l := strings.ToLower(logLevel)
-		if l == "off" {
-			l = "no_log"
+	for _, family := range []int{4, 6} {
+		for _, logLevel := range []string{"off", "info", "debug"} {
+			l := strings.ToLower(logLevel)
+			if l == "off" {
+				l = "no_log"
+			}
+			filename := "xdp_" + l + ".o"
+			if family == 6 {
+				filename = "xdp_" + l + "_co-re_v6.o"
+			}
+
+			objectFiles[AttachType{
+				Family:   family,
+				Hook:     XDP,
+				LogLevel: logLevel,
+			}] = filename
 		}
-		objectFiles[AttachType{
-			Hook:     XDP,
-			LogLevel: logLevel,
-		}] = "xdp_" + l + ".o"
 	}
 }
 

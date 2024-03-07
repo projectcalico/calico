@@ -1599,6 +1599,7 @@ func (m *bpfEndpointManager) doApplyPolicyToDataIface(iface string) (bpfInterfac
 	if err := m.dataIfaceStateFillJumps(ifaceName, &state); err != nil {
 		return state, err
 	}
+
 	_, err = m.dp.ensureQdisc(iface)
 	if err != nil {
 		return state, err
@@ -1651,18 +1652,16 @@ func (m *bpfEndpointManager) doApplyPolicyToDataIface(iface string) (bpfInterfac
 	}()
 
 	// Attach xdp program.
-	if m.v4 != nil {
-		parallelWG.Add(1)
-		go func() {
-			defer parallelWG.Done()
-			xdpAP := mergeAttachPoints(xdpAP4, xdpAP6)
-			if hepPtr != nil && len(hepPtr.UntrackedTiers) == 1 && xdpAP != nil {
-				_, xdpErr = m.dp.ensureProgramAttached(xdpAP4)
-			} else {
-				xdpErr = m.dp.ensureNoProgram(xdpAP)
-			}
-		}()
-	}
+	parallelWG.Add(1)
+	go func() {
+		defer parallelWG.Done()
+		xdpAP := mergeAttachPoints(xdpAP4, xdpAP6)
+		if hepPtr != nil && len(hepPtr.UntrackedTiers) == 1 && xdpAP != nil {
+			_, xdpErr = m.dp.ensureProgramAttached(xdpAP)
+		} else {
+			xdpErr = m.dp.ensureNoProgram(xdpAP)
+		}
+	}()
 
 	// Attach egress program.
 	egressAP := mergeAttachPoints(egressAP4, egressAP6)
@@ -2163,6 +2162,10 @@ func mergeAttachPoints(ap4, ap6 attachPoint) attachPoint {
 			return apxdpV4
 		} else if apxdpV6 != nil && apxdpV4 == nil {
 			return apxdpV6
+		} else if apxdpV6 != nil && apxdpV4 != nil {
+			apxdpV4.PolicyIdxV6 = apxdpV6.PolicyIdxV6
+			apxdpV4.HookLayoutV6 = apxdpV6.HookLayoutV6
+			return apxdpV4
 		}
 	}
 	return nil
@@ -2363,14 +2366,16 @@ func (d *bpfEndpointManagerDataplane) applyPolicyToDataIface(
 	ep *proto.HostEndpoint,
 	state *bpfInterfaceState,
 	ap *tc.AttachPoint,
-	xdpAP *xdp.AttachPoint,
+	apxdp *xdp.AttachPoint,
 ) (*tc.AttachPoint, *tc.AttachPoint, *xdp.AttachPoint, error) {
 
 	ingressAttachPoint := *ap
 	egressAttachPoint := *ap
+	xdpAttachPoint := *apxdp
 
 	var parallelWG sync.WaitGroup
 	var ingressAP, egressAP *tc.AttachPoint
+	var xdpAP *xdp.AttachPoint
 	var ingressErr, egressErr, xdpErr error
 
 	parallelWG.Add(2)
@@ -2381,12 +2386,7 @@ func (d *bpfEndpointManagerDataplane) applyPolicyToDataIface(
 
 	go func() {
 		defer parallelWG.Done()
-		// XDP IPv6 is not supported yet.
-		if d.ipFamily == proto.IPVersion_IPV4 {
-			xdpErr = d.attachXDPProgram(xdpAP, ep, state)
-		} else {
-			xdpAP = nil
-		}
+		xdpAP, xdpErr = d.attachXDPProgram(&xdpAttachPoint, ep, state)
 	}()
 
 	egressAP, egressErr = d.attachDataIfaceProgram(ifaceName, ep, PolDirnEgress, state, &egressAttachPoint)
@@ -2469,7 +2469,7 @@ func (d *bpfEndpointManagerDataplane) attachDataIfaceProgram(
 	return ap, nil
 }
 
-func (d *bpfEndpointManagerDataplane) attachXDPProgram(ap *xdp.AttachPoint, ep *proto.HostEndpoint, state *bpfInterfaceState) error {
+func (d *bpfEndpointManagerDataplane) attachXDPProgram(ap *xdp.AttachPoint, ep *proto.HostEndpoint, state *bpfInterfaceState) (*xdp.AttachPoint, error) {
 	if d.ipFamily == proto.IPVersion_IPV6 {
 		ap.PolicyIdxV6 = state.v6.policyIdx[hook.XDP]
 	} else {
@@ -2480,21 +2480,21 @@ func (d *bpfEndpointManagerDataplane) attachXDPProgram(ap *xdp.AttachPoint, ep *
 	if ep != nil && len(ep.UntrackedTiers) == 1 {
 		err := m.dp.ensureProgramLoaded(ap, d.ipFamily)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
-		ap.Log().Debugf("Building program for untracked policy hep=%v", ep.Name)
+		ap.Log().Infof("Building program for untracked policy hep=%v, family=%v", ep.Name, d.ipFamily)
 		rules := polprog.Rules{
 			ForHostInterface: true,
 			HostNormalTiers:  m.extractTiers(ep.UntrackedTiers[0], PolDirnIngress, false),
 			ForXDP:           true,
 		}
-		ap.Log().Debugf("Rules: %v", rules)
+		ap.Log().Infof("Rules: %v", rules)
 		err = m.updatePolicyProgramFn(rules, "xdp", ap, d.ipFamily)
 		ap.Log().WithError(err).Debugf("Applied untracked policy hep=%v", ep.Name)
-		return err
+		return ap, err
 	}
-	return nil
+	return ap, nil
 }
 
 // PolDirection is the Calico datamodel direction of policy.  On a host endpoint, ingress is towards the host.
@@ -3215,9 +3215,16 @@ func (m *bpfEndpointManager) ensureProgramLoaded(ap attachPoint, ipFamily proto.
 			LogLevel: apxdp.LogLevel,
 		}
 
+		at.Family = int(ipFamily)
 		pm := m.commonMaps.XDPProgramsMap.(*hook.ProgramsMap)
-		if apxdp.HookLayout, err = pm.LoadObj(at); err != nil {
-			return fmt.Errorf("loading generic xdp hook program: %w", err)
+		if ipFamily == proto.IPVersion_IPV6 {
+			if apxdp.HookLayoutV6, err = pm.LoadObj(at); err != nil {
+				return fmt.Errorf("loading generic xdp hook program: %w", err)
+			}
+		} else {
+			if apxdp.HookLayoutV4, err = pm.LoadObj(at); err != nil {
+				return fmt.Errorf("loading generic xdp hook program: %w", err)
+			}
 		}
 	} else {
 		return fmt.Errorf("unknown attach type")

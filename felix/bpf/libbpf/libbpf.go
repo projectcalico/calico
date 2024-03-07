@@ -444,14 +444,19 @@ func XDPSetGlobals(
 	defer C.free(unsafe.Pointer(cName))
 
 	cJumps := make([]C.uint, len(globalData.Jumps))
+	cJumpsV6 := make([]C.uint, len(globalData.Jumps))
 
 	for i, v := range globalData.Jumps {
 		cJumps[i] = C.uint(v)
 	}
 
+	for i, v := range globalData.JumpsV6 {
+		cJumpsV6[i] = C.uint(v)
+	}
 	_, err := C.bpf_xdp_set_globals(m.bpfMap,
 		cName,
 		&cJumps[0],
+		&cJumpsV6[0],
 	)
 
 	return err
