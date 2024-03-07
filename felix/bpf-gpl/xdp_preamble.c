@@ -40,15 +40,12 @@ int  cali_xdp_preamble(struct xdp_md *xdp)
 		return XDP_DROP;
 	}
 
-	switch (protocol) {
-		case ETH_P_IPV6:
-			*globals = __globals.v6;
-			break;
-		case ETH_P_IP:
-			*globals = __globals.v4;
-			break;
-		default:
-			return XDP_PASS;
+	if (protocol == ETH_P_IPV6 && (__globals.v6.jumps[PROG_INDEX_MAIN] != (__u32)-1)) {
+		*globals = __globals.v6;
+	} else if (protocol == ETH_P_IP && (__globals.v4.jumps[PROG_INDEX_MAIN] != (__u32)-1)) {
+		*globals = __globals.v4;
+	} else {
+		return XDP_PASS;
 	}
 
 #if EMIT_LOGS
