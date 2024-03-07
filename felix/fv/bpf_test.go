@@ -1408,42 +1408,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 					pol = createPolicy(pol)
 
-					By("allowing to self via MASQ", func() {
-
-						nets := []string{}
-
-						if testOpts.ipv6 {
-							nets = []string{felixIP(0) + "/128"}
-							switch testOpts.tunnel {
-							case "vxlan":
-								nets = []string{tc.Felixes[0].ExpectedVXLANV6TunnelAddr + "/128"}
-							case "wireguard":
-								nets = []string{tc.Felixes[0].ExpectedWireguardV6TunnelAddr + "/128"}
-							}
-						} else {
-							nets = []string{felixIP(0) + "/32"}
-							switch testOpts.tunnel {
-							case "ipip":
-								nets = []string{tc.Felixes[0].ExpectedIPIPTunnelAddr + "/32"}
-							}
-						}
-
-						pol := api.NewGlobalNetworkPolicy()
-						pol.Namespace = "fv"
-						pol.Name = "self-snat"
-						pol.Spec.Ingress = []api.Rule{
-							{
-								Action: "Allow",
-								Source: api.EntityRule{
-									Nets: nets,
-								},
-							},
-						}
-						pol.Spec.Selector = "name=='" + w[0][0].Name + "'"
-
-						pol = createPolicy(pol)
-					})
-
 					k8sClient = infra.(*infrastructure.K8sDatastoreInfra).K8sClient
 					_ = k8sClient
 				})
@@ -1991,6 +1955,27 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						ip := testSvc.Spec.ClusterIP
 						port := uint16(testSvc.Spec.Ports[0].Port)
 
+						w00Expects := []ExpectationOption{ExpectWithPorts(port)}
+						hostW0SrcIP := ExpectWithSrcIPs(felixIP(0))
+						if testOpts.ipv6 {
+							hostW0SrcIP = ExpectWithSrcIPs(felixIP(0))
+							switch testOpts.tunnel {
+							case "vxlan":
+								hostW0SrcIP = ExpectWithSrcIPs(tc.Felixes[0].ExpectedVXLANV6TunnelAddr)
+							case "wireguard":
+								hostW0SrcIP = ExpectWithSrcIPs(tc.Felixes[0].ExpectedWireguardV6TunnelAddr)
+							}
+						}
+						switch testOpts.tunnel {
+						case "ipip":
+							hostW0SrcIP = ExpectWithSrcIPs(tc.Felixes[0].ExpectedIPIPTunnelAddr)
+						}
+
+						if !testOpts.connTimeEnabled {
+							w00Expects = append(w00Expects, hostW0SrcIP)
+						}
+
+						cc.Expect(Some, w[0][0], TargetIP(ip), w00Expects...)
 						cc.ExpectSome(w[0][1], TargetIP(ip), port)
 						cc.ExpectSome(w[1][0], TargetIP(ip), port)
 						cc.ExpectSome(w[1][1], TargetIP(ip), port)
@@ -3048,6 +3033,27 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							exp = None
 						}
 
+						w00Expects := []ExpectationOption{ExpectWithPorts(port)}
+						hostW0SrcIP := ExpectWithSrcIPs(felixIP(0))
+						if testOpts.ipv6 {
+							hostW0SrcIP = ExpectWithSrcIPs(felixIP(0))
+							switch testOpts.tunnel {
+							case "vxlan":
+								hostW0SrcIP = ExpectWithSrcIPs(tc.Felixes[0].ExpectedVXLANV6TunnelAddr)
+							case "wireguard":
+								hostW0SrcIP = ExpectWithSrcIPs(tc.Felixes[0].ExpectedWireguardV6TunnelAddr)
+							}
+						}
+						switch testOpts.tunnel {
+						case "ipip":
+							hostW0SrcIP = ExpectWithSrcIPs(tc.Felixes[0].ExpectedIPIPTunnelAddr)
+						}
+
+						if !testOpts.connTimeEnabled {
+							w00Expects = append(w00Expects, hostW0SrcIP)
+						}
+
+						cc.Expect(Some, w[0][0], TargetIP(clusterIP), w00Expects...)
 						cc.Expect(Some, w[0][1], TargetIP(clusterIP), ExpectWithPorts(port))
 						cc.Expect(exp, w[1][0], TargetIP(clusterIP), ExpectWithPorts(port))
 						cc.Expect(exp, w[1][1], TargetIP(clusterIP), ExpectWithPorts(port))
