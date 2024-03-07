@@ -33,24 +33,30 @@ const DetachedID = 0
 
 type AttachPoint struct {
 	bpf.AttachPoint
-	HookLayout hook.Layout
+	HookLayoutV4 hook.Layout
+	HookLayoutV6 hook.Layout
 
 	Modes []bpf.XDPMode
 }
 
 func (ap *AttachPoint) PolicyAllowJumpIdx(family int) int {
-	if ap.HookLayout != nil {
-		return ap.HookLayout[hook.SubProgXDPAllowed]
+	if family == 4 && ap.HookLayoutV4 != nil {
+		return ap.HookLayoutV4[hook.SubProgXDPAllowed]
 	}
-
+	if family == 6 && ap.HookLayoutV6 != nil {
+		return ap.HookLayoutV6[hook.SubProgXDPAllowed]
+	}
 	return -1
 }
 
 func (ap *AttachPoint) PolicyDenyJumpIdx(family int) int {
-	if ap.HookLayout != nil {
-		return ap.HookLayout[hook.SubProgXDPDrop]
+	if family == 4 && ap.HookLayoutV4 != nil {
+		return ap.HookLayoutV4[hook.SubProgXDPDrop]
 	}
 
+	if family == 6 && ap.HookLayoutV6 != nil {
+		return ap.HookLayoutV6[hook.SubProgXDPDrop]
+	}
 	return -1
 }
 
@@ -125,6 +131,7 @@ func (ap *AttachPoint) AttachProgram() (bpf.AttachResult, error) {
 	// By now the attach type specific generic set of programs is loaded and we
 	// only need to load and configure the preamble that will pass the
 	// configuration further to the selected set of programs.
+
 	binaryToLoad := path.Join(bpfdefs.ObjectDir, "xdp_preamble.o")
 
 	obj, err := libbpf.OpenObject(binaryToLoad)
@@ -141,10 +148,19 @@ func (ap *AttachPoint) AttachProgram() (bpf.AttachResult, error) {
 			}
 			var globals libbpf.XDPGlobalData
 
-			for p, i := range ap.HookLayout {
-				globals.Jumps[p] = uint32(i)
+			if ap.HookLayoutV4 != nil {
+				for p, i := range ap.HookLayoutV4 {
+					globals.Jumps[p] = uint32(i)
+				}
+				globals.Jumps[tcdefs.ProgIndexPolicy] = uint32(ap.PolicyIdxV4)
 			}
-			globals.Jumps[tcdefs.ProgIndexPolicy] = uint32(ap.PolicyIdxV4)
+			if ap.HookLayoutV6 != nil {
+				log.Infof("Sridhar layout6 %+v", ap.HookLayoutV6)
+				for p, i := range ap.HookLayoutV6 {
+					globals.JumpsV6[p] = uint32(i)
+				}
+				globals.JumpsV6[tcdefs.ProgIndexPolicy] = uint32(ap.PolicyIdxV6)
+			}
 
 			if err := ConfigureProgram(m, ap.Iface, &globals); err != nil {
 				return nil, err

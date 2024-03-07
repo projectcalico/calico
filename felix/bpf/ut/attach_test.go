@@ -245,10 +245,14 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		Expect(hasXDP).To(BeTrue())
 
 		xdppm := jumpMapDump(commonMaps.XDPJumpMap)
-		Expect(xdppm).To(HaveLen(1))
+		xdpMapLen := 1
+		if ipv6Enabled {
+			xdpMapLen = 2
+		}
+		Expect(xdppm).To(HaveLen(xdpMapLen))
 		Expect(xdppm).To(HaveKey(hostep1State.XDPPolicyV4()))
 		if ipv6Enabled {
-			Expect(xdppm).NotTo(HaveKey(hostep1State.XDPPolicyV6()))
+			Expect(xdppm).To(HaveKey(hostep1State.XDPPolicyV6()))
 		}
 	})
 

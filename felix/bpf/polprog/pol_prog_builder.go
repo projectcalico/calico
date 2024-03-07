@@ -142,7 +142,7 @@ var (
 	stateOffRulesHit = FieldOffset{Offset: stateEventHdrSize + 100, Field: "state->rules_hit"}
 	stateOffRuleIDs  = FieldOffset{Offset: stateEventHdrSize + 104, Field: "state->rule_ids"}
 
-	stateOffFlags = FieldOffset{Offset: stateEventHdrSize + 408, Field: "state->flags"}
+	stateOffFlags = FieldOffset{Offset: stateEventHdrSize + 360, Field: "state->flags"}
 
 	skbCb0 = FieldOffset{Offset: 12*4 + 0*4, Field: "skb->cb[0]"}
 	skbCb1 = FieldOffset{Offset: 12*4 + 1*4, Field: "skb->cb[1]"}
