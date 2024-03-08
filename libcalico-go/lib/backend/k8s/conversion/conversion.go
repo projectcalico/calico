@@ -16,6 +16,7 @@ package conversion
 
 import (
 	"fmt"
+	"math/bits"
 	"sort"
 	"strings"
 
@@ -829,9 +830,34 @@ func stringsToIPNets(ipStrings []string) ([]*cnet.IPNet, error) {
 // ensure that the new resource is treated as unique. This is important, as two objects with the same UID causes
 // confusion in the Kubernetes garbage collection logic.
 func ConvertUID(uid types.UID) (types.UID, error) {
-	newUID, err := uuid.NewRandomFromReader(strings.NewReader(string(uid)))
+	parsed, err := uuid.Parse(string(uid))
 	if err != nil {
-		return "", fmt.Errorf("failed to generate UID for resource: %s", err)
+		return "", fmt.Errorf("failed to parse UID for resource: %s", err)
 	}
-	return types.UID(newUID.String()), nil
+	reversed, err := reverseUID(parsed)
+	if err != nil {
+		return "", fmt.Errorf("failed to reverse UID for resource: %s", err)
+	}
+	return types.UID(reversed.String()), nil
+}
+
+func reverseUID(uid uuid.UUID) (uuid.UUID, error) {
+	// v4 UUIDs used by Kubernetes use bits in the 7th byte to indicate the version and
+	// bits in the 8th byte to indicate the variant. Reverse the bits in the surrounding bytes but leave these intact.
+	nuid := make([]byte, len(uid))
+	copy(nuid, uid[:])
+
+	// Reverse the bits in the first 6 bytes.
+	for ii := range uid[:6] {
+		nuid[ii] = byte(bits.Reverse(uint(uid[ii])) >> 56)
+	}
+
+	// Reverse the bits in the 8th byte.
+	nuid[7] = byte(bits.Reverse(uint(uid[7])) >> 56)
+
+	// Reverse the bits in the remaining bytes.
+	for ii := range uid[9:] {
+		nuid[ii+9] = byte(bits.Reverse(uint(uid[ii+9])) >> 56)
+	}
+	return uuid.FromBytes(nuid)
 }

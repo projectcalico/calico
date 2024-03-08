@@ -133,7 +133,7 @@ func ConvertCalicoResourceToK8sResource(resIn Resource) (Resource, error) {
 	rom := resIn.GetObjectMeta()
 
 	// Make sure to remove data that is passed to Kubernetes so it is not duplicated in
-	// the annotations.
+	// the metadata annotation.
 	romCopy := &metav1.ObjectMeta{}
 	rom.(*metav1.ObjectMeta).DeepCopyInto(romCopy)
 	romCopy.Name = ""
@@ -141,6 +141,7 @@ func ConvertCalicoResourceToK8sResource(resIn Resource) (Resource, error) {
 	romCopy.ResourceVersion = ""
 	romCopy.Labels = nil
 	romCopy.Annotations = nil
+	romCopy.UID = ""
 
 	// Marshal the data and store the json representation in the annotations.
 	metadataBytes, err := json.Marshal(romCopy)
@@ -162,6 +163,14 @@ func ConvertCalicoResourceToK8sResource(resIn Resource) (Resource, error) {
 	meta.ResourceVersion = rom.GetResourceVersion()
 	meta.Labels = rom.GetLabels()
 
+	// The UID of the underlying CR is a function of the v3 resource UID. Make sure
+	// we set it properly so that preconditions work correctly.
+	uid, err := conversion.ConvertUID(rom.GetUID())
+	if err != nil {
+		return nil, err
+	}
+	meta.UID = uid
+
 	resOut := resIn.DeepCopyObject().(Resource)
 	romOut := resOut.GetObjectMeta()
 	meta.DeepCopyInto(romOut.(*metav1.ObjectMeta))
@@ -177,11 +186,8 @@ func ConvertK8sResourceToCalicoResource(res Resource) error {
 	annotations := rom.GetAnnotations()
 
 	// We NEVER want to use the UID from the underlying CR so that we can guarantee uniqueness.
-	// So, always generate a new one deterministically. If a UID was stored in the annotations of the CR
-	// when it was created (e.g., via the API server or calicoctl) then we will use that instead.
-	// But for controllers or users to create crd.projectcalico.org resources directly, we need to ensure a unique UID is set even
-	// if there is no UID in the annotations.
-	// Any updates to the resource will write the UID back into the annotation for consistency.
+	// So, always generate a new one deterministically so that the UID is correct even
+	// if there is no metadata annotation present.
 	uid, err := conversion.ConvertUID(rom.GetUID())
 	if err != nil {
 		return err
@@ -216,6 +222,7 @@ func ConvertK8sResourceToCalicoResource(res Resource) error {
 	meta.ResourceVersion = rom.GetResourceVersion()
 	meta.Labels = rom.GetLabels()
 	meta.Annotations = annotations
+	meta.UID = rom.GetUID()
 
 	// If no creation timestamp was stored in the metadata annotation, use the one from the CR.
 	// The timestamp is normally set in the clientv3 code. However, for objects that bypass
