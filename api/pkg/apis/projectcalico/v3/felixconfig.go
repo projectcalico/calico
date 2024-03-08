@@ -560,6 +560,8 @@ type FelixConfigurationSpec struct {
 	// resolution so that host can handle them. A typical usecase is node local
 	// DNS cache.
 	BPFExcludeCIDRsFromNAT *[]string `json:"bpfExcludeCIDRsFromNAT,omitempty" validate:"omitempty,cidrs"`
+	// BPFFsMountDir allows to override the default bpffs mountpoint.
+	BPFFsMountDir string `json:"bpfFsMountDir,omitempty"`
 
 	// RouteSource configures where Felix gets its routing information.
 	// - WorkloadIPs: use workload endpoints to construct routes.
