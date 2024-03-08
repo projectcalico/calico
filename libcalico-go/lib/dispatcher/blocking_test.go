@@ -59,7 +59,7 @@ var _ = Describe("Dispatching", func() {
 			runDispatcherInBackgroundWithOutputChans(output1, output2)
 
 			// Dispatcher itself implicitly acts as a buffer of size 1.
-			go func(){
+			go func() {
 				input <- dummyInput
 			}()
 
