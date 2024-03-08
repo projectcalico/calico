@@ -2522,6 +2522,13 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
 						},
 					},
+					"endpointStatusPathPrefix": {
+						SchemaProps: spec.SchemaProps{
+							Description: "EndpointStatusPathPrefix is the path to the directory where endpoint status will be written. Endpoint status file reporting is disabled if field is left empty.\n\nChosen directory should match the directory used by the CNI for PodStartupDelay. [Default: \"\"]",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 					"iptablesMarkMask": {
 						SchemaProps: spec.SchemaProps{
 							Description: "IptablesMarkMask is the mask that Felix selects its IPTables Mark bits from. Should be a 32 bit hexadecimal number with at least 8 bits set, none of which clash with any other mark bits in use on the system. [Default: 0xff000000]",
@@ -2751,6 +2758,11 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 						},
 					},
 					"debugSimulateDataplaneHangAfter": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+						},
+					},
+					"debugSimulateDataplaneApplyDelay": {
 						SchemaProps: spec.SchemaProps{
 							Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
 						},
