@@ -49,7 +49,8 @@ var _ = DescribeTable("WorkloadEndpointID to model.WorkloadEndpointKey",
 
 var _ = DescribeTable("V3 WorkloadEndpoint to model WorkloadEndpointKey",
 	func(ep *v3.WorkloadEndpoint, expectedKey *model.WorkloadEndpointKey) {
-		genKey := names.V3WorkloadEndpointToWorkloadEndpointKey(ep)
+		genKey, err := names.V3WorkloadEndpointToWorkloadEndpointKey(ep)
+		Expect(err).NotTo(HaveOccurred())
 		Expect(genKey).To(BeEquivalentTo(expectedKey))
 	},
 	Entry("Valid, FV endpoint (etcd datastore)",

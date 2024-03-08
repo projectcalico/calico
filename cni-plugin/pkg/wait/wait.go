@@ -37,7 +37,10 @@ func ForEndpointReadyWithTimeout(policyDir string, endpoint *libapi.WorkloadEndp
 		logrus.Panic("Endpoint is nil")
 	}
 
-	key := names.V3WorkloadEndpointToWorkloadEndpointKey(endpoint)
+	key, err := names.V3WorkloadEndpointToWorkloadEndpointKey(endpoint)
+	if err != nil {
+		return fmt.Errorf("failed to convert endpoint to key: %w", err)
+	}
 	filename := names.WorkloadEndpointKeyToStatusFilename(key)
 	log := logrus.WithFields(logrus.Fields{
 		"policyDir":   policyDir,
@@ -49,7 +52,7 @@ func ForEndpointReadyWithTimeout(policyDir string, endpoint *libapi.WorkloadEndp
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	err := waitUntilFileExists(ctx, policyDir, filename)
+	err = waitUntilFileExists(ctx, policyDir, filename)
 	if err != nil {
 		return fmt.Errorf("timed out waiting for endpoint status file '%s': %w", filepath.Join(policyDir, filename), err)
 	}

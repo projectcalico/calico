@@ -90,7 +90,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Pod setup status wait", []a
 				Expect(err).NotTo(HaveOccurred())
 				dummyWorkloads[i].ConfigureInInfra(infra)
 
-				key := names.V3WorkloadEndpointToWorkloadEndpointKey(dummyWorkloads[i].WorkloadEndpoint)
+				key, err := names.V3WorkloadEndpointToWorkloadEndpointKey(dummyWorkloads[i].WorkloadEndpoint)
+				Expect(err).NotTo(HaveOccurred())
 				filenames[i] = names.WorkloadEndpointKeyToStatusFilename(key)
 				statCmds[i] = buildStatCmdInFelix(tc.Felixes[0], filepath.Join("/tmp/endpoint-status", filenames[i]))
 			}
@@ -132,7 +133,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Pod setup status wait", []a
 			wl.ConfigureInInfra(infra)
 
 			By("determining the filename Felix will look for")
-			wKey := names.V3WorkloadEndpointToWorkloadEndpointKey(wl.WorkloadEndpoint)
+			wKey, err := names.V3WorkloadEndpointToWorkloadEndpointKey(wl.WorkloadEndpoint)
+			Expect(err).NotTo(HaveOccurred())
 			Expect(wKey).NotTo(BeNil(), "failed to create a workload endpoint key from a v3 workload endpoint")
 
 			filename := names.WorkloadEndpointKeyToStatusFilename(wKey)

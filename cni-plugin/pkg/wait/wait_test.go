@@ -81,14 +81,15 @@ var _ = Describe("k8s-wait", func() {
 			go pollAndReturn(exit, dummyEndpoint, pollTimeout)
 			Consistently(exit, "1s").ShouldNot(Receive(), "Polling thread returned too soon.")
 
-			epKey := names.V3WorkloadEndpointToWorkloadEndpointKey(dummyEndpoint)
+			epKey, err := names.V3WorkloadEndpointToWorkloadEndpointKey(dummyEndpoint)
+			Expect(err).NotTo(HaveOccurred(), "Couldn't convert dummy endpoint to workload endpoint key.")
 			Expect(epKey).NotTo(BeNil(), "Couldn't convert dummy endpoint to workload endpoint key.")
 
 			epFilename := names.WorkloadEndpointKeyToStatusFilename(epKey)
 			Expect(epFilename).NotTo(HaveLen(0), "Couldn't generate endpoint status filename from endpoint key.")
 
 			fullFilePath := filepath.Join("/tmp", epFilename)
-			_, err := os.Create(fullFilePath)
+			_, err = os.Create(fullFilePath)
 			defer func() {
 				_ = os.Remove(fullFilePath)
 			}()

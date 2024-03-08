@@ -492,7 +492,8 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 	// Pod resource. (In Enterprise) Felix also modifies the pod through a patch and setting this avoids patching the
 	// same fields as Felix so that we can't clobber Felix's updates.
 	ctxPatchCNI := k8sresources.ContextWithPatchMode(ctx, k8sresources.PatchModeCNI)
-	if _, err := utils.CreateOrUpdate(ctxPatchCNI, calicoClient, endpoint); err != nil {
+	var endpointOut *libapi.WorkloadEndpoint
+	if endpointOut, err = utils.CreateOrUpdate(ctxPatchCNI, calicoClient, endpoint); err != nil {
 		logger.WithError(err).Error("Error creating/updating endpoint in datastore.")
 		releaseIPAM()
 		return nil, err
@@ -516,7 +517,9 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 				conf.EndpointStatusDir = "/var/run/calico/endpoint-status"
 			}
 			timeout := time.Duration(conf.PolicySetupTimeoutSeconds) * time.Second
-			err := wait.ForEndpointReadyWithTimeout(conf.EndpointStatusDir, endpoint, timeout)
+			// Must use endpointOut because we need the endpoint's Name field
+			// to be filled in.
+			err := wait.ForEndpointReadyWithTimeout(conf.EndpointStatusDir, endpointOut, timeout)
 			if err != nil {
 				logrus.WithError(err).Warn("Error waiting for endpoint to become ready. Unblocking pod creation...")
 			}

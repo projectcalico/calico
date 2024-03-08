@@ -83,17 +83,32 @@ func WorkloadEndpointIDToWorkloadEndpointKey(id *proto.WorkloadEndpointID, hostn
 
 // V3WorkloadEndpointToWorkloadEndpointKey generates a WorkloadEndpointKey from the given WorkloadEndpoint.
 // Returns nil if passed endpoint is nil.
-func V3WorkloadEndpointToWorkloadEndpointKey(ep *v3.WorkloadEndpoint) *model.WorkloadEndpointKey {
+func V3WorkloadEndpointToWorkloadEndpointKey(ep *v3.WorkloadEndpoint) (*model.WorkloadEndpointKey, error) {
 	if ep == nil {
-		return nil
+		return nil, nil
 	}
 
-	key := &model.WorkloadEndpointKey{
-		Hostname:       ep.Spec.Node,
-		OrchestratorID: ep.Spec.Orchestrator,
-		WorkloadID:     ep.Namespace + "/" + ep.Spec.Workload,
-		EndpointID:     ep.Spec.Endpoint,
+	name := ep.GetName()
+	if name == "" {
+		// The name is normally calculated when we write the object to the
+		// datastore but, in case this is a pre-write object (for example
+		// in a test), calculate it now.
+		ids := IdentifiersForV3WorkloadEndpoint(ep)
+		var err error
+		name, err = ids.CalculateWorkloadEndpointName(false)
+		if err != nil {
+			return nil, err
+		}
 	}
-	logrus.WithField("key", key).Debug("Generating WorkloadEndpointKey from api WorkloadEndpoint")
-	return key
+	v3Key := model.ResourceKey{
+		Kind:      v3.KindWorkloadEndpoint,
+		Name:      name,
+		Namespace: ep.GetNamespace(),
+	}
+
+	modelKey, err := ConvertWorkloadEndpointV3KeyToV1Key(v3Key)
+	if err != nil {
+		return nil, err
+	}
+	return &modelKey, nil
 }
