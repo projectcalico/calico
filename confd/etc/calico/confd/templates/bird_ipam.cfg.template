@@ -46,7 +46,21 @@ function export_pools ()
 {{- end}}
 }
 
+function reject_default_route()
+{
+  if (net = 0.0.0.0/0) then {
+    reject;
+  }
+}
+
+filter calico_import_from_bgp_peers {
+  reject_default_route();
+  accept;
+}
+
 filter calico_export_to_bgp_peers {
+  reject_default_route();
+
   # NOTICE: Use "nodeSelector: !all()" instead of setting "disabled: true" in
   # order to use IPPools to define which encapsulation method (if any) shall be
   # used for the given route.
