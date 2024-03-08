@@ -302,6 +302,9 @@ spec:
               debugSimulateCalcGraphHangAfter:
                 pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                 type: string
+              debugSimulateDataplaneApplyDelay:
+                pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
+                type: string
               debugSimulateDataplaneHangAfter:
                 pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                 type: string
@@ -341,6 +344,12 @@ spec:
                 type: string
               endpointReportingEnabled:
                 type: boolean
+              endpointStatusPathPrefix:
+                description: "EndpointStatusPathPrefix is the path to the directory
+                  where endpoint status will be written. Endpoint status file reporting
+                  is disabled if field is left empty. \n Chosen directory should match
+                  the directory used by the CNI for PodStartupDelay. [Default: \"\"]"
+                type: string
               externalNodesList:
                 description: ExternalNodesCIDRList is a list of CIDR's of external-non-calico-nodes
                   which may source tunnel traffic and have the tunneled traffic be
