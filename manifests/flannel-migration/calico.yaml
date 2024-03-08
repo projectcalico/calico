@@ -1092,6 +1092,9 @@ spec:
                 items:
                   type: string
                 type: array
+              bpfFsMountDir:
+                description: BPFFsMountDir allows to override the default bpffs mountpoint.
+                type: string
               bpfHostConntrackBypass:
                 description: 'BPFHostConntrackBypass Controls whether to bypass Linux
                   conntrack in BPF mode for workloads and services. [Default: true
