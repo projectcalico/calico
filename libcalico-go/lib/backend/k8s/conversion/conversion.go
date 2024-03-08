@@ -843,7 +843,7 @@ func ConvertUID(uid types.UID) (types.UID, error) {
 
 func reverseUID(uid uuid.UUID) (uuid.UUID, error) {
 	// v4 UUIDs used by Kubernetes use bits in the 7th byte to indicate the version and
-	// bits in the 8th byte to indicate the variant. Reverse the bits in the surrounding bytes but leave these intact.
+	// bits in the 9th byte to indicate the variant. Reverse the bits in the surrounding bytes but leave these intact.
 	nuid := make([]byte, len(uid))
 	copy(nuid, uid[:])
 
