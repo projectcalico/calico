@@ -37,7 +37,7 @@ func ForEndpointReadyWithTimeout(policyDir string, endpoint *libapi.WorkloadEndp
 		logrus.Panic("Endpoint is nil")
 	}
 
-	key := names.APIWorkloadEndpointToWorkloadEndpointKey(endpoint)
+	key := names.V3WorkloadEndpointToWorkloadEndpointKey(endpoint)
 	filename := names.WorkloadEndpointKeyToStatusFilename(key)
 	log := logrus.WithFields(logrus.Fields{
 		"policyDir":   policyDir,
@@ -69,7 +69,7 @@ func waitUntilFileExists(ctx context.Context, directory, filename string) error 
 	for {
 		found, err := waitUntilFileExistsOrError(ctx, directory, filename)
 		if err != nil {
-			log.Info("Filesystem check failed with an error. Scheduling retry...")
+			log.WithError(err).Info("Filesystem check failed. Scheduling retry...")
 		} else if found {
 			break
 		}
@@ -110,7 +110,7 @@ func waitUntilFileExistsOrError(ctx context.Context, directory, filename string)
 
 	// Always call a stat before continuing with watcher processing.
 	// If watches are broken, the loop will then degrade into a poll.
-	// If the watch is healthy, we should still stat incase we missed
+	// If the watch is healthy, we should still stat in case we missed
 	// the create event.
 	found, err = statFile(directory, filename)
 	if err != nil {
@@ -121,12 +121,11 @@ func waitUntilFileExistsOrError(ctx context.Context, directory, filename string)
 
 	// In the case where the watcher was created, progress to
 	// consuming watch events. Otherwise return error.
-	if watch != nil {
-		log.Debug("Progressing to watch event processing")
-		return watch()
+	if watch == nil {
+		return false, err
 	}
-
-	return false, err
+	log.Debug("Progressing to watch event processing")
+	return watch()
 }
 
 // Starts a watcher in the given directory and returns:

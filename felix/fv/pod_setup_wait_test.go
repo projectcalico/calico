@@ -23,10 +23,12 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/workload"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
+
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 )
 
@@ -49,27 +51,24 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Pod setup status wait", []a
 		// /tmp should be automatically mounted by an internal call to RunFelix
 		// by the infrastructure pkg when Topology is started.
 		topologyOptions.ExtraEnvVars["FELIX_ENDPOINTSTATUSPATHPREFIX"] = "/tmp"
-		topologyOptions.ExtraEnvVars["FELIX_LOGSEVERITYSCREEN"] = "DEBUG"
-		topologyOptions.ExtraEnvVars["FELIX_LOGSEVERITYFILE"] = "DEBUG"
-		topologyOptions.ExtraEnvVars["FELIX_LOGSEVERITYSYS"] = "DEBUG"
-		topologyOptions.ExtraEnvVars["FELIX_LOGDEBUGFILENAMEREGEX"] = "status_file_reporter"
+		topologyOptions.ExtraEnvVars["FELIX_DEBUGDISABLElOGDROPPING"] = "true"
+		topologyOptions.FelixLogSeverity = "Debug"
+		topologyOptions.FelixDebugFilenameRegex = "status_file_reporter"
+
+		tc, _ = infrastructure.StartNNodeTopology(nodeCount, topologyOptions, infra)
+		tc.Felixes[0].Exec("rm", "-rf", "/tmp/endpoint-status")
+		dataplaneInSyncReceivedC = tc.Felixes[0].WatchStdoutFor(regexp.MustCompile("DataplaneInSync received from upstream"))
+	})
+
+	AfterEach(func() {
+		tc.Stop()
+		if CurrentGinkgoTestDescription().Failed {
+			infra.DumpErrorData()
+		}
+		infra.Stop()
 	})
 
 	Describe("with the file-reporter writing endpoint status to '/tmp/endpoint-status'", func() {
-		JustBeforeEach(func() {
-			tc, _ = infrastructure.StartNNodeTopology(nodeCount, topologyOptions, infra)
-			tc.Felixes[0].Exec("rm", "-rf", "/tmp/endpoint-status")
-			dataplaneInSyncReceivedC = tc.Felixes[0].WatchStdoutFor(regexp.MustCompile("DataplaneInSync received from upstream"))
-		})
-
-		AfterEach(func() {
-			tc.Stop()
-			if CurrentGinkgoTestDescription().Failed {
-				infra.DumpErrorData()
-			}
-			infra.Stop()
-		})
-
 		buildStatCmdInFelix := func(felix *infrastructure.Felix, filename string) func() error {
 			return func() error {
 				return felix.ExecMayFail("stat", filename)
@@ -87,21 +86,17 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Pod setup status wait", []a
 			var statCmds [2]func() error
 			for i := range dummyWorkloads {
 				dummyWorkloads[i] = workload.New(tc.Felixes[0], fmt.Sprintf("workload-endpoint-status-tests-%d", i), "default", fmt.Sprintf("10.65.0.%d", 10+i), "8080", "tcp")
+				err := dummyWorkloads[i].Start()
+				Expect(err).NotTo(HaveOccurred(), "fuck you spastic cunt")
 				dummyWorkloads[i].ConfigureInInfra(infra)
-				// Hack: backfill a field which is not populated by etcd,
-				// but should be populated by the K8s Calico CNI plugin.
-				if _, ok := infra.(*infrastructure.EtcdDatastoreInfra); ok {
-					dummyWorkloads[i].WorkloadEndpoint.Spec.Pod = dummyWorkloads[i].WorkloadEndpoint.Spec.Workload
-				}
 
-				wKey := names.APIWorkloadEndpointToWorkloadEndpointKey(dummyWorkloads[i].WorkloadEndpoint)
-				Expect(wKey).NotTo(BeNil(), "failed to create a workload endpoint key from a v3 workload endpoint")
-
-				filenames[i] = names.WorkloadEndpointKeyToStatusFilename(wKey)
-				Expect(filenames[i]).NotTo(HaveLen(0), "failed to create a status filename from a workload endpoint key")
-
+				key := names.V3WorkloadEndpointToWorkloadEndpointKey(dummyWorkloads[i].WorkloadEndpoint)
+				filenames[i] = names.WorkloadEndpointKeyToStatusFilename(key)
+				Expect(filenames[i]).To(BeNil(), ":) :) :) ;) :) :)")
 				statCmds[i] = buildStatCmdInFelix(tc.Felixes[0], filepath.Join("/tmp/endpoint-status", filenames[i]))
 			}
+
+			Expect(filenames[0]).NotTo(Equal(filenames[1]), "duplicated filenames found")
 
 			for i := range dummyWorkloads {
 				Eventually(statCmds[i], "10s").Should(BeNil(), "status file was not programmed")
@@ -114,38 +109,33 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Pod setup status wait", []a
 		})
 
 		It("should cleanup stale files after a restart", func() {
-			By("creating a file whose name we know Felix will look will not match a workload")
+			By("creating a file whose name we know Felix will not match to a workload")
 			name := filepath.Join("/tmp/endpoint-status", "sdfsdf")
 			tc.Felixes[0].Exec("mkdir", "/tmp/endpoint-status")
 			tc.Felixes[0].Exec("touch", name)
-			_, err := tc.Felixes[0].ExecOutput("stat", name)
-			Expect(err).NotTo(HaveOccurred(), "stat call failed while trying to create a file")
 
-			By("Waiting for Felix's status file reporter to become in-sync")
+			By("Waiting for Felix's status file reporter to come in-sync")
 			tc.Felixes[0].TriggerDelayedStart()
 			Eventually(dataplaneInSyncReceivedC, "10s").Should(BeClosed(), "receipt of DataplaneInSync message not seen in logs")
 
-			By("checking if the pre-existing file's access time changed")
-			checkFile := func() error {
+			By("checking if the stale file has been cleaned up")
+			fileExists := func() bool {
+				logrus.WithField("file", name).Info("Checking existence of expected file in endpoint-status dir")
 				_, err := tc.Felixes[0].ExecOutput("stat", name)
-				return err
+				return err == nil
 			}
-			Eventually(checkFile).ShouldNot(BeNil(), "felix modified a file it didn't need to")
+			Eventually(fileExists).Should(BeFalse(), "Stale file was not cleaned up by Felix")
 		})
 
 		It("should re-use pre-existing, valid files after a restart", func() {
 			By("creating a workload before Felix starts")
 			wl := workload.New(tc.Felixes[0], "workload-endpoint-status-tests-0", "default", "10.65.0.10", "8080", "tcp")
 			wl.ConfigureInInfra(infra)
-			// Hack: backfill a field which is not populated by etcd,
-			// but should be populated by theK8s  Calico CNI plugin.
-			if _, ok := infra.(*infrastructure.EtcdDatastoreInfra); ok {
-				wl.WorkloadEndpoint.Spec.Pod = wl.WorkloadEndpoint.Spec.Workload
-			}
 
 			By("determining the filename Felix will look for")
-			wKey := names.APIWorkloadEndpointToWorkloadEndpointKey(wl.WorkloadEndpoint)
+			wKey := names.V3WorkloadEndpointToWorkloadEndpointKey(wl.WorkloadEndpoint)
 			Expect(wKey).NotTo(BeNil(), "failed to create a workload endpoint key from a v3 workload endpoint")
+
 			filename := names.WorkloadEndpointKeyToStatusFilename(wKey)
 			Expect(filename).NotTo(HaveLen(0), "failed to create a status filename from a workload endpoint key")
 
@@ -154,7 +144,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Pod setup status wait", []a
 			tc.Felixes[0].Exec("mkdir", "/tmp/endpoint-status")
 			tc.Felixes[0].Exec("touch", expectedFilename)
 			// This stat call returns the time since epoch when the file was last accessed.
-			lastAccessed, err := tc.Felixes[0].ExecOutput("stat", "--format='%X'", expectedFilename)
+			lastAccessed, err := tc.Felixes[0].ExecOutput("stat", "--format='%Y'", expectedFilename)
 			Expect(err).NotTo(HaveOccurred(), "stat call failed while trying to create a file")
 
 			By("waiting for Felix's status file reporter to become in-sync")
@@ -166,7 +156,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Pod setup status wait", []a
 				lastAccessedPostStartup, _ := tc.Felixes[0].ExecOutput("stat", "--format='%X'", expectedFilename)
 				return lastAccessedPostStartup
 			}
-			Consistently(checkLastAccessed, "3s").Should(BeEquivalentTo(lastAccessed), "felix modified a file it didn't need to")
+			Consistently(checkLastAccessed, "3s").Should(BeEquivalentTo(lastAccessed), "felix modified/deleted a file it didn't need to, or the test and Felix expected differing filenames")
 		})
 	})
 

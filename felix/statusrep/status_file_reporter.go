@@ -184,6 +184,7 @@ func (fr *EndpointStatusFileReporter) SyncForever(ctx context.Context) {
 			if err != nil {
 				logrus.WithError(err).Warn("Encountered one or more errors while reconciling endpoint status dir. Queueing retry...")
 				retryTimerResetNeeded = true
+				resyncWithKernelNeeded = true
 			}
 		}
 
@@ -216,9 +217,9 @@ func (fr *EndpointStatusFileReporter) drainTimer(t *time.Timer) {
 		return
 	}
 	select {
-	// Case where timer was already drained.
-	case <-t.C:
 	// Case where timer was not already drained.
+	case <-t.C:
+		// Case where timer was already drained.
 	default:
 	}
 }
@@ -239,18 +240,12 @@ func (fr *EndpointStatusFileReporter) handleEndpointUpdate(e interface{}) {
 	switch m := e.(type) {
 	case *proto.WorkloadEndpointStatusUpdate:
 		key := names.WorkloadEndpointIDToWorkloadEndpointKey(m.Id, fr.hostname)
-		if key == nil {
-			logrus.WithField("update", e).Warn("Couldn't generate a WorkloadEndpointKey from update")
-			return
-		}
-		fr.statusDirDeltaTracker.Desired().Add(names.WorkloadEndpointKeyToStatusFilename(key))
+		fn := names.WorkloadEndpointKeyToStatusFilename(key)
+		fr.statusDirDeltaTracker.Desired().Add(fn)
 	case *proto.WorkloadEndpointStatusRemove:
 		key := names.WorkloadEndpointIDToWorkloadEndpointKey(m.Id, fr.hostname)
-		if key == nil {
-			logrus.WithField("update", e).Warn("Couldn't generate a WorkloadEndpointKey from update")
-			return
-		}
-		fr.statusDirDeltaTracker.Desired().Delete(names.WorkloadEndpointKeyToStatusFilename(key))
+		fn := names.WorkloadEndpointKeyToStatusFilename(key)
+		fr.statusDirDeltaTracker.Desired().Delete(fn)
 	default:
 		logrus.WithField("update", e).Debug("Skipping undesired endpoint update")
 	}
@@ -319,7 +314,7 @@ func (fr *EndpointStatusFileReporter) deleteStatusFile(name string) error {
 	return os.Remove(filename)
 }
 
-// ensureStatusDir ensures there is a directory named "status", within
+// ensureStatusDir ensures there is a directory named "endpoint-status", within
 // the parent dir specified by prefix. Attempts to create the dir if it doesn't exist.
 // Returns all entries within the dir if any exist.
 func ensureStatusDir(prefix string) (entries []fs.DirEntry, err error) {

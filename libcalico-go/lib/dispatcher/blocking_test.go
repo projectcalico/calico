@@ -59,11 +59,11 @@ var _ = Describe("Dispatching", func() {
 			runDispatcherInBackgroundWithOutputChans(output1, output2)
 
 			// Dispatcher itself implicitly acts as a buffer of size 1.
-			input <- dummyInput
+			Eventually(input).Should(BeSent(&dummyInput), "Couldn't send input to dispatcher")
 
 			// Should output to each consumer in order.
 			for _, o := range []chan interface{}{output1, output2} {
-				Eventually(o, "10s").Should(Receive(Equal(dummyInput)), "Output channel didn't receive from dispatcher.")
+				Eventually(o, "10s").Should(Receive(Equal(dummyInput)), "Output channel didn't receive from dispatcher")
 			}
 		})
 	})

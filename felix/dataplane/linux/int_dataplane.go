@@ -276,8 +276,9 @@ type UpdateBatchResolver interface {
 // depend on them. For example, it is important that the datastore layer sends an IP set
 // create event before it sends a rule that references that IP set.
 type InternalDataplane struct {
-	toDataplane   chan interface{}
-	fromDataplane chan interface{}
+	toDataplane             chan interface{}
+	fromDataplane           chan interface{}
+	sendDataplaneInSyncOnce sync.Once
 
 	allIptablesTables    []*iptables.Table
 	iptablesMangleTables []*iptables.Table
@@ -327,7 +328,8 @@ type InternalDataplane struct {
 	// check the XDP state in the dataplane.
 	forceXDPRefresh bool
 	// doneFirstApply is set after we finish the first update to the dataplane. It indicates
-	// that the dataplane should now be in sync.
+	// that the dataplane should now be in sync, though it is possible that an error occurred
+	// necessitating a re-apply.
 	doneFirstApply bool
 
 	reschedTimer *time.Timer
@@ -1819,6 +1821,7 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 				applyStart := time.Now()
 
 				if d.config.DebugSimulateDataplaneApplyDelay > 0 {
+					log.WithField("delay", d.config.DebugSimulateDataplaneApplyDelay).Debug("Simulating a dataplane-apply delay")
 					time.Sleep(d.config.DebugSimulateDataplaneApplyDelay)
 				}
 				// Actually apply the changes to the dataplane.
@@ -1831,6 +1834,10 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 				if d.dataplaneNeedsSync {
 					// Dataplane is still dirty, record an error.
 					countDataplaneSyncErrors.Inc()
+				} else {
+					d.sendDataplaneInSyncOnce.Do(func() {
+						d.fromDataplane <- &proto.DataplaneInSync{}
+					})
 				}
 
 				d.loopSummarizer.EndOfIteration(applyTime)
@@ -2251,10 +2258,6 @@ func (d *InternalDataplane) apply() {
 			d.reschedTimer.Reset(reschedDelay)
 		}
 		d.reschedC = d.reschedTimer.C
-	}
-
-	if !d.dataplaneNeedsSync && !d.doneFirstApply {
-		d.fromDataplane <- &proto.DataplaneInSync{}
 	}
 }
 
