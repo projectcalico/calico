@@ -17,7 +17,7 @@ EXTRA_DOCKER_ARGS += -v $(CURDIR)/../hack/boilerplate:/go/src/k8s.io/kubernetes/
 BINDIR ?= bin
 BUILD_DIR ?= build
 
-TOP_SRC_DIRS = pkg cmd ../libcalico-go/
+TOP_SRC_DIRS = pkg cmd
 SRC_DIRS = $(shell sh -c "find $(TOP_SRC_DIRS) -name \\*.go \
                    -exec dirname {} \\; | sort | uniq")
 TEST_DIRS ?= $(shell sh -c "find $(TOP_SRC_DIRS) -name \\*_test.go \

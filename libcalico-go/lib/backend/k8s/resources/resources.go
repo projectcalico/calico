@@ -163,13 +163,13 @@ func ConvertCalicoResourceToK8sResource(resIn Resource) (Resource, error) {
 	meta.ResourceVersion = rom.GetResourceVersion()
 	meta.Labels = rom.GetLabels()
 
-	// The UID of the underlying CR is a function of the v3 resource UID. Make sure
-	// we set it properly so that preconditions work correctly.
-	uid, err := conversion.ConvertUID(rom.GetUID())
-	if err != nil {
-		return nil, err
+	if rom.GetUID() != "" {
+		uid, err := conversion.ConvertUID(rom.GetUID())
+		if err != nil {
+			return nil, err
+		}
+		meta.UID = uid
 	}
-	meta.UID = uid
 
 	resOut := resIn.DeepCopyObject().(Resource)
 	romOut := resOut.GetObjectMeta()
