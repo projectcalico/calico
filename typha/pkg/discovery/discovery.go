@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
+	"os"
 
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -177,7 +178,7 @@ func (d *Discoverer) discoverTyphaAddrs() ([]Typha, error) {
 	if d.k8sClient == nil && d.inCluster {
 		// Client didn't provide a kube client but we're allowed to create one.
 		logrus.Info("Creating Kubernetes client for Typha discovery...")
-		k8sConf, err := winutils.GetInClusterConfig()
+		k8sConf, err := winutils.BuildConfigFromFlags("", os.Getenv("KUBECONFIG"))
 		if err != nil {
 			logrus.WithError(err).Error("Unable to create in-cluster Kubernetes config.")
 			return nil, err
