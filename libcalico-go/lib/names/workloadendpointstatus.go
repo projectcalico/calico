@@ -88,9 +88,21 @@ func V3WorkloadEndpointToWorkloadEndpointKey(ep *v3.WorkloadEndpoint) (*model.Wo
 		return nil, nil
 	}
 
+	name := ep.GetName()
+	if name == "" {
+		// The name is normally calculated when we write the object to the
+		// datastore but, in case this is a pre-write object (for example
+		// in a test), calculate it now.
+		ids := IdentifiersForV3WorkloadEndpoint(ep)
+		var err error
+		name, err = ids.CalculateWorkloadEndpointName(false)
+		if err != nil {
+			return nil, err
+		}
+	}
 	v3Key := model.ResourceKey{
 		Kind:      v3.KindWorkloadEndpoint,
-		Name:      ep.GetName(),
+		Name:      name,
 		Namespace: ep.GetNamespace(),
 	}
 
