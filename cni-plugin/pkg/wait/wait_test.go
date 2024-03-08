@@ -81,7 +81,7 @@ var _ = Describe("k8s-wait", func() {
 			go pollAndReturn(exit, dummyEndpoint, pollTimeout)
 			Consistently(exit, "1s").ShouldNot(Receive(), "Polling thread returned too soon.")
 
-			epKey := names.APIWorkloadEndpointToWorkloadEndpointKey(dummyEndpoint)
+			epKey := names.V3WorkloadEndpointToWorkloadEndpointKey(dummyEndpoint)
 			Expect(epKey).NotTo(BeNil(), "Couldn't convert dummy endpoint to workload endpoint key.")
 
 			epFilename := names.WorkloadEndpointKeyToStatusFilename(epKey)

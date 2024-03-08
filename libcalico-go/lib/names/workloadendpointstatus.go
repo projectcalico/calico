@@ -47,18 +47,18 @@ var (
 // and converts it to a filename for use in WEP-policy status syncing
 // between Felix and the CNI.
 // Returns "" if passed a nilptr.
-func WorkloadEndpointKeyToStatusFilename(id *model.WorkloadEndpointKey) string {
-	if id == nil {
+func WorkloadEndpointKeyToStatusFilename(key *model.WorkloadEndpointKey) string {
+	if key == nil {
 		return ""
 	}
 	parts := make([]string, len(expectedFields))
-	parts[fieldOrchestratorID] = escape(id.OrchestratorID)
-	parts[fieldWorkloadID] = escape(id.WorkloadID)
-	parts[fieldEndpointID] = escape(id.EndpointID)
+	parts[fieldOrchestratorID] = escape(key.OrchestratorID)
+	parts[fieldWorkloadID] = escape(key.WorkloadID)
+	parts[fieldEndpointID] = escape(key.EndpointID)
 
 	logrus.WithFields(logrus.Fields{
 		"parts": parts,
-	}).Debug("Generating filename from workload endpoint key")
+	}).Debug("Generating filename from WorkloadEndpointKey")
 
 	return strings.Join(parts, separator)
 }
@@ -70,17 +70,20 @@ func WorkloadEndpointIDToWorkloadEndpointKey(id *proto.WorkloadEndpointID, hostn
 	if id == nil {
 		return nil
 	}
-	return &model.WorkloadEndpointKey{
+
+	key := &model.WorkloadEndpointKey{
 		Hostname:       hostname,
 		OrchestratorID: id.OrchestratorId,
 		WorkloadID:     id.WorkloadId,
 		EndpointID:     id.EndpointId,
 	}
+	logrus.WithField("key", key).Debug("Generating WorkloadEndpointKey from WorkloadEndpointID")
+	return key
 }
 
-// APIWorkloadEndpointToWorkloadEndpointKey generates a WorkloadEndpointKey from the given WorkloadEndpoint.
+// V3WorkloadEndpointToWorkloadEndpointKey generates a WorkloadEndpointKey from the given WorkloadEndpoint.
 // Returns nil if passed endpoint is nil.
-func APIWorkloadEndpointToWorkloadEndpointKey(ep *v3.WorkloadEndpoint) *model.WorkloadEndpointKey {
+func V3WorkloadEndpointToWorkloadEndpointKey(ep *v3.WorkloadEndpoint) *model.WorkloadEndpointKey {
 	if ep == nil {
 		return nil
 	}
@@ -88,7 +91,7 @@ func APIWorkloadEndpointToWorkloadEndpointKey(ep *v3.WorkloadEndpoint) *model.Wo
 	key := &model.WorkloadEndpointKey{
 		Hostname:       ep.Spec.Node,
 		OrchestratorID: ep.Spec.Orchestrator,
-		WorkloadID:     ep.Namespace + "/" + ep.Spec.Pod,
+		WorkloadID:     ep.Namespace + "/" + ep.Spec.Workload,
 		EndpointID:     ep.Spec.Endpoint,
 	}
 	logrus.WithField("key", key).Debug("Generating WorkloadEndpointKey from api WorkloadEndpoint")

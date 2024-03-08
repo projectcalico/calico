@@ -418,7 +418,7 @@ type FelixConfigurationSpec struct {
 	DebugSimulateDataplaneHangAfter *metav1.Duration `json:"debugSimulateDataplaneHangAfter,omitempty" configv1timescale:"seconds"`
 	// +kubebuilder:validation:Type=string
 	// +kubebuilder:validation:Pattern=`^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$`
-	DebugSimulateDataplaneApplyDelay *metav1.Duration `json:"debugSimulateSlowDataplane,omitempty" configv1timescale:"seconds"`
+	DebugSimulateDataplaneApplyDelay *metav1.Duration `json:"debugSimulateDataplaneApplyDelay,omitempty" configv1timescale:"seconds"`
 	// DebugHost is the host IP or hostname to bind the debug port to.  Only used
 	// if DebugPort is set. [Default:localhost]
 	DebugHost *string `json:"debugHost,omitempty"`

@@ -28,7 +28,7 @@ func init() {
 	testutils.HookLogrusForGinkgo()
 }
 
-func TestInstall(t *testing.T) {
+func TestWait(t *testing.T) {
 	RegisterFailHandler(Fail)
 	junitReporter := reporters.NewJUnitReporter("../../report/status_wait_suite.xml")
 	RunSpecsWithDefaultAndCustomReporters(t, "Status Wait Suite", []Reporter{junitReporter})
