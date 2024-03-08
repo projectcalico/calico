@@ -185,14 +185,16 @@ func ConvertK8sResourceToCalicoResource(res Resource) error {
 	rom := res.GetObjectMeta()
 	annotations := rom.GetAnnotations()
 
-	// We NEVER want to use the UID from the underlying CR so that we can guarantee uniqueness.
-	// So, always generate a new one deterministically so that the UID is correct even
-	// if there is no metadata annotation present.
-	uid, err := conversion.ConvertUID(rom.GetUID())
-	if err != nil {
-		return err
+	if rom.GetUID() != "" {
+		// We NEVER want to use the UID from the underlying CR so that we can guarantee uniqueness.
+		// So, always generate a new one deterministically so that the UID is correct even
+		// if there is no metadata annotation present.
+		uid, err := conversion.ConvertUID(rom.GetUID())
+		if err != nil {
+			return err
+		}
+		rom.SetUID(uid)
 	}
-	rom.SetUID(uid)
 
 	if len(annotations) == 0 {
 		// Make no changes if there are no annotations to read Calico Metadata out of.
@@ -204,7 +206,7 @@ func ConvertK8sResourceToCalicoResource(res Resource) error {
 	}
 
 	meta := &metav1.ObjectMeta{}
-	err = json.Unmarshal([]byte(annotations[metadataAnnotation]), meta)
+	err := json.Unmarshal([]byte(annotations[metadataAnnotation]), meta)
 	if err != nil {
 		return err
 	}

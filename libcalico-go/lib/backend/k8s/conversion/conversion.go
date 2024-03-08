@@ -321,12 +321,12 @@ func (c converter) K8sNetworkPolicyToCalico(np *networkingv1.NetworkPolicy) (*mo
 			egress = true
 		}
 	}
-	types := []apiv3.PolicyType{}
+	policyTypes := []apiv3.PolicyType{}
 	if ingress {
-		types = append(types, apiv3.PolicyTypeIngress)
+		policyTypes = append(policyTypes, apiv3.PolicyTypeIngress)
 	}
 	if egress {
-		types = append(types, apiv3.PolicyTypeEgress)
+		policyTypes = append(policyTypes, apiv3.PolicyTypeEgress)
 	} else if len(egressRules) > 0 {
 		// Egress was introduced at the same time as policyTypes.  It shouldn't be possible to
 		// receive a NetworkPolicy with an egress rule but without "Egress" specified in its types,
@@ -337,13 +337,17 @@ func (c converter) K8sNetworkPolicyToCalico(np *networkingv1.NetworkPolicy) (*mo
 	// If no types were specified in the policy, then we're running on a cluster that doesn't
 	// include support for that field in the API.  In that case, the correct behavior is for the policy
 	// to apply to only ingress traffic.
-	if len(types) == 0 {
-		types = append(types, apiv3.PolicyTypeIngress)
+	if len(policyTypes) == 0 {
+		policyTypes = append(policyTypes, apiv3.PolicyTypeIngress)
 	}
 
-	uid, err := ConvertUID(np.UID)
-	if err != nil {
-		return nil, err
+	var uid types.UID
+	var err error
+	if np.UID != "" {
+		uid, err = ConvertUID(np.UID)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// Create the NetworkPolicy.
@@ -360,7 +364,7 @@ func (c converter) K8sNetworkPolicyToCalico(np *networkingv1.NetworkPolicy) (*mo
 		Selector: c.k8sSelectorToCalico(&np.Spec.PodSelector, SelectorPod),
 		Ingress:  ingressRules,
 		Egress:   egressRules,
-		Types:    types,
+		Types:    policyTypes,
 	}
 
 	// Build the KVPair.
