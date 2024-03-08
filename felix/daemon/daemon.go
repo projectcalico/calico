@@ -55,6 +55,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/watchersyncer"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/debugserver"
+	"github.com/projectcalico/calico/libcalico-go/lib/dispatcher"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
 	lclogutils "github.com/projectcalico/calico/libcalico-go/lib/logutils"
@@ -646,16 +647,31 @@ configRetry:
 		delay := configParams.EndpointReportingDelaySecs
 		log.WithField("delay", delay).Info(
 			"Endpoint status reporting enabled, starting status reporter")
-		dpConnector.statusReporter = statusrep.NewEndpointStatusReporter(
+
+		fromDataplaneC := dpConnector.NewFromDataplaneConsumer()
+		statusReporter := statusrep.NewEndpointStatusReporter(
 			configParams.FelixHostname,
 			configParams.OpenstackRegion,
-			dpConnector.StatusUpdatesFromDataplane,
+			fromDataplaneC,
 			dpConnector.InSync,
 			dpConnector.datastore,
 			delay,
 			delay*180,
 		)
-		dpConnector.statusReporter.Start()
+		statusReporter.Start()
+	}
+
+	if configParams.EndpointStatusPathPrefix != "" {
+		if runtime.GOOS == "windows" {
+			log.WithField("os", runtime.GOOS).Warn("EndpointStatusPathPrefix is currently unsupported on Windows. Ignoring config...")
+		} else {
+			fromDataplaneC := dpConnector.NewFromDataplaneConsumer()
+			statusFileReporter := statusrep.NewEndpointStatusFileReporter(fromDataplaneC, configParams.EndpointStatusPathPrefix, statusrep.WithHostname(configParams.FelixHostname))
+
+			log.WithField("path", configParams.EndpointStatusPathPrefix).Info("Starting endpoint-status file-reporter")
+			ctx := context.Background()
+			go statusFileReporter.SyncForever(ctx)
+		}
 	}
 
 	// Start communicating with the dataplane driver.
@@ -957,17 +973,21 @@ type DataplaneConnector struct {
 	configLock sync.Mutex
 	config     *config.Config
 
-	configUpdChan              chan<- map[string]string
-	ToDataplane                chan interface{}
-	StatusUpdatesFromDataplane chan interface{}
-	InSync                     chan bool
-	failureReportChan          chan<- string
-	dataplane                  dp.DataplaneDriver
-	datastore                  bapi.Client
-	datastorev3                client.Interface
-	statusReporter             *statusrep.EndpointStatusReporter
+	configUpdChan chan<- map[string]string
+	ToDataplane   chan interface{}
+	InSync        chan bool
 
-	datastoreInSync bool
+	// Input channel for msgs from the dataplane.
+	// Msgs popped off this channel are dispatched to all StatusUpdatesFromDataplaneConsumers.
+	statusUpdatesFromDataplane           chan interface{}
+	statusUpdatesFromDataplaneDispatcher *dispatcher.BlockingDispatcher[interface{}]
+	statusUpdatesFromDataplaneConsumers  []chan interface{}
+
+	failureReportChan chan<- string
+	dataplane         dp.DataplaneDriver
+	datastore         bapi.Client
+	datastorev3       client.Interface
+	datastoreInSync   bool
 
 	firstStatusReportSent bool
 
@@ -986,18 +1006,37 @@ func newConnector(configParams *config.Config,
 	failureReportChan chan<- string,
 ) *DataplaneConnector {
 	felixConn := &DataplaneConnector{
-		config:                           configParams,
-		configUpdChan:                    configUpdChan,
-		datastore:                        datastore,
-		datastorev3:                      datastorev3,
-		ToDataplane:                      make(chan interface{}),
-		StatusUpdatesFromDataplane:       make(chan interface{}),
+		config:                              configParams,
+		configUpdChan:                       configUpdChan,
+		datastore:                           datastore,
+		datastorev3:                         datastorev3,
+		ToDataplane:                         make(chan interface{}),
+		statusUpdatesFromDataplane:          make(chan interface{}),
+		statusUpdatesFromDataplaneConsumers: nil,
+		// InSync should be buffered as it will always be sent a single
+		// message, regardless of any downstream consumers.
 		InSync:                           make(chan bool, 1),
 		failureReportChan:                failureReportChan,
 		dataplane:                        dataplane,
 		wireguardStatUpdateFromDataplane: make(chan *proto.WireguardStatusUpdate, 1),
 	}
+
+	fromDataplaneDispatcher, err := dispatcher.NewBlockingDispatcher[interface{}](felixConn.statusUpdatesFromDataplane)
+	if err != nil {
+		log.WithError(err).Panic("Failed to create dispatcher for status updates from dataplane")
+	}
+	felixConn.statusUpdatesFromDataplaneDispatcher = fromDataplaneDispatcher
+
 	return felixConn
+}
+
+// NewFromDataplaneConsumer creates a channel which receives status updates from the dataplane.
+// Each call creates a new consumer channel, and each consumer is dispatched dataplane msgs in series.
+// So, it's important that all created chans are continuously drained to avoid deadlocking.
+func (fc *DataplaneConnector) NewFromDataplaneConsumer() <-chan interface{} {
+	fromDataplaneC := make(chan interface{}, 10)
+	fc.statusUpdatesFromDataplaneConsumers = append(fc.statusUpdatesFromDataplaneConsumers, fromDataplaneC)
+	return fromDataplaneC
 }
 
 func (fc *DataplaneConnector) readMessagesFromDataplane() {
@@ -1016,23 +1055,29 @@ func (fc *DataplaneConnector) readMessagesFromDataplane() {
 		case *proto.ProcessStatusUpdate:
 			fc.handleProcessStatusUpdate(context.TODO(), msg)
 		case *proto.WorkloadEndpointStatusUpdate:
-			if fc.statusReporter != nil {
-				fc.StatusUpdatesFromDataplane <- msg
+			if len(fc.statusUpdatesFromDataplaneConsumers) > 0 {
+				fc.statusUpdatesFromDataplane <- msg
 			}
 		case *proto.WorkloadEndpointStatusRemove:
-			if fc.statusReporter != nil {
-				fc.StatusUpdatesFromDataplane <- msg
+			if len(fc.statusUpdatesFromDataplaneConsumers) > 0 {
+				fc.statusUpdatesFromDataplane <- msg
 			}
 		case *proto.HostEndpointStatusUpdate:
-			if fc.statusReporter != nil {
-				fc.StatusUpdatesFromDataplane <- msg
+			if len(fc.statusUpdatesFromDataplaneConsumers) > 0 {
+				fc.statusUpdatesFromDataplane <- msg
 			}
 		case *proto.HostEndpointStatusRemove:
-			if fc.statusReporter != nil {
-				fc.StatusUpdatesFromDataplane <- msg
+			if len(fc.statusUpdatesFromDataplaneConsumers) > 0 {
+				fc.statusUpdatesFromDataplane <- msg
 			}
+		case *proto.DataplaneInSync:
+			if len(fc.statusUpdatesFromDataplaneConsumers) > 0 {
+				fc.statusUpdatesFromDataplane <- msg
+			}
+
 		case *proto.WireguardStatusUpdate:
 			fc.wireguardStatUpdateFromDataplane <- msg
+
 		default:
 			log.WithField("msg", msg).Warning("Unknown message from dataplane")
 		}
@@ -1242,6 +1287,10 @@ func (fc *DataplaneConnector) shutDownProcess(reason string) {
 	log.Panic("Managed shutdown failed. Panicking.")
 }
 
+// Start creates goroutines for:
+// - sending calc-graph messages to the dataplane driver,
+// - reading messages from the dataplane (and broadcasting to all consumers of those messages),
+// - reading wireguard status updates from the dataplane
 func (fc *DataplaneConnector) Start() {
 	// Start a background thread to write to the dataplane driver.
 	go fc.sendMessagesToDataplaneDriver()
@@ -1251,6 +1300,17 @@ func (fc *DataplaneConnector) Start() {
 
 	// Start a background thread to handle Wireguard update to Node.
 	go fc.handleWireguardStatUpdateFromDataplane()
+
+	log.WithFields(log.Fields{
+		"statusUpdatesFromDataplaneConsumers": len(fc.statusUpdatesFromDataplaneConsumers),
+	}).Debug("DataplaneConnector starting.")
+
+	// Begin consuming StatusUpdatesFromDataplane and dispatching to downstream components (e.g. status reporter).
+	if len(fc.statusUpdatesFromDataplaneConsumers) > 0 {
+		ctx := context.Background()
+		log.Debug("Starting StatusUpdatesFromDataplaneDispatcher")
+		go fc.statusUpdatesFromDataplaneDispatcher.DispatchForever(ctx, fc.statusUpdatesFromDataplaneConsumers...)
+	}
 }
 
 func (fc *DataplaneConnector) handleConfigUpdate(msg *proto.ConfigUpdate) {
