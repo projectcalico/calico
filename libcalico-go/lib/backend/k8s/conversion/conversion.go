@@ -16,12 +16,15 @@ package conversion
 
 import (
 	"fmt"
+	"math/bits"
 	"sort"
 	"strings"
 
+	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
 	kapiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 
 	discovery "k8s.io/api/discovery/v1"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -36,9 +39,7 @@ import (
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
-var (
-	protoTCP = kapiv1.ProtocolTCP
-)
+var protoTCP = kapiv1.ProtocolTCP
 
 type selectorType int8
 
@@ -99,13 +100,18 @@ func (c converter) NamespaceToProfile(ns *kapiv1.Namespace) (*model.KVPair, erro
 	// based on name within the namespaceSelector.
 	labels[NamespaceLabelPrefix+NameLabel] = ns.Name
 
+	uid, err := ConvertUID(ns.UID)
+	if err != nil {
+		return nil, err
+	}
+
 	// Create the profile object.
 	name := NamespaceProfileNamePrefix + ns.Name
 	profile := apiv3.NewProfile()
 	profile.ObjectMeta = metav1.ObjectMeta{
 		Name:              name,
 		CreationTimestamp: ns.CreationTimestamp,
-		UID:               ns.UID,
+		UID:               uid,
 	}
 	profile.Spec = apiv3.ProfileSpec{
 		Ingress:       []apiv3.Rule{{Action: apiv3.Allow}},
@@ -335,13 +341,18 @@ func (c converter) K8sNetworkPolicyToCalico(np *networkingv1.NetworkPolicy) (*mo
 		types = append(types, apiv3.PolicyTypeIngress)
 	}
 
+	uid, err := ConvertUID(np.UID)
+	if err != nil {
+		return nil, err
+	}
+
 	// Create the NetworkPolicy.
 	policy := apiv3.NewNetworkPolicy()
 	policy.ObjectMeta = metav1.ObjectMeta{
 		Name:              policyName,
 		Namespace:         np.Namespace,
 		CreationTimestamp: np.CreationTimestamp,
-		UID:               np.UID,
+		UID:               uid,
 		ResourceVersion:   np.ResourceVersion,
 	}
 	policy.Spec = apiv3.NetworkPolicySpec{
@@ -731,12 +742,17 @@ func (c converter) ServiceAccountToProfile(sa *kapiv1.ServiceAccount) (*model.KV
 	// based on name within the serviceAccountSelector.
 	labels[ServiceAccountLabelPrefix+NameLabel] = sa.Name
 
+	uid, err := ConvertUID(sa.UID)
+	if err != nil {
+		return nil, err
+	}
+
 	name := serviceAccountNameToProfileName(sa.Name, sa.Namespace)
 	profile := apiv3.NewProfile()
 	profile.ObjectMeta = metav1.ObjectMeta{
 		Name:              name,
 		CreationTimestamp: sa.CreationTimestamp,
-		UID:               sa.UID,
+		UID:               uid,
 	}
 	profile.Spec.LabelsToApply = labels
 
@@ -754,7 +770,6 @@ func (c converter) ServiceAccountToProfile(sa *kapiv1.ServiceAccount) (*model.KV
 
 // ProfileNameToServiceAccount extracts the ServiceAccount name from the given Profile name.
 func (c converter) ProfileNameToServiceAccount(profileName string) (ns, sa string, err error) {
-
 	// Profile objects backed by ServiceAccounts have form "ksa.<namespace>.<sa_name>"
 	if !strings.HasPrefix(profileName, ServiceAccountProfileNamePrefix) {
 		// This is not backed by a Kubernetes ServiceAccount.
@@ -808,4 +823,41 @@ func stringsToIPNets(ipStrings []string) ([]*cnet.IPNet, error) {
 		podIPNets = append(podIPNets, ipNet)
 	}
 	return podIPNets, nil
+}
+
+// ConvertUID converts a UID to a new UID in a deterministic way. This is useful when we want to generate a new UID
+// for a resource that is derived from another resource, but we don't want to use the same UID in order to
+// ensure that the new resource is treated as unique. This is important, as two objects with the same UID causes
+// confusion in the Kubernetes garbage collection logic.
+func ConvertUID(uid types.UID) (types.UID, error) {
+	parsed, err := uuid.Parse(string(uid))
+	if err != nil {
+		return "", fmt.Errorf("failed to parse UID for resource: %s", err)
+	}
+	reversed, err := reverseUID(parsed)
+	if err != nil {
+		return "", fmt.Errorf("failed to reverse UID for resource: %s", err)
+	}
+	return types.UID(reversed.String()), nil
+}
+
+func reverseUID(uid uuid.UUID) (uuid.UUID, error) {
+	// v4 UUIDs used by Kubernetes use bits in the 7th byte to indicate the version and
+	// bits in the 9th byte to indicate the variant. Reverse the bits in the surrounding bytes but leave these intact.
+	nuid := make([]byte, len(uid))
+	copy(nuid, uid[:])
+
+	// Reverse the bits in the first 6 bytes.
+	for ii := range uid[:6] {
+		nuid[ii] = byte(bits.Reverse(uint(uid[ii])) >> 56)
+	}
+
+	// Reverse the bits in the 8th byte.
+	nuid[7] = byte(bits.Reverse(uint(uid[7])) >> 56)
+
+	// Reverse the bits in the remaining bytes.
+	for ii := range uid[9:] {
+		nuid[ii+9] = byte(bits.Reverse(uint(uid[ii+9])) >> 56)
+	}
+	return uuid.FromBytes(nuid)
 }
