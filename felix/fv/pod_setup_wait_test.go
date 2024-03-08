@@ -143,7 +143,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Pod setup status wait", []a
 			tc.Felixes[0].Exec("mkdir", "/tmp/endpoint-status")
 			tc.Felixes[0].Exec("touch", expectedFilename)
 			// This stat call returns the time since epoch when the file was last accessed.
-			lastAccessed, err := tc.Felixes[0].ExecOutput("stat", "--format='%Y'", expectedFilename)
+			lastAccessed, err := tc.Felixes[0].ExecOutput("stat", "--format='%y'", expectedFilename)
 			Expect(err).NotTo(HaveOccurred(), "stat call failed while trying to create a file")
 
 			By("waiting for Felix's status file reporter to become in-sync")
@@ -152,7 +152,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Pod setup status wait", []a
 
 			By("checking if the pre-existing file's access time changed")
 			checkLastAccessed := func() string {
-				lastAccessedPostStartup, _ := tc.Felixes[0].ExecOutput("stat", "--format='%X'", expectedFilename)
+				lastAccessedPostStartup, _ := tc.Felixes[0].ExecOutput("stat", "--format='%y'", expectedFilename)
 				return lastAccessedPostStartup
 			}
 			Consistently(checkLastAccessed, "3s").Should(BeEquivalentTo(lastAccessed), "felix modified/deleted a file it didn't need to, or the test and Felix expected differing filenames")

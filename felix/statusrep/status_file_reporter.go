@@ -239,10 +239,18 @@ func (fr *EndpointStatusFileReporter) resetStoppedTimerOrInit(t *time.Timer, d t
 func (fr *EndpointStatusFileReporter) handleEndpointUpdate(e interface{}) {
 	switch m := e.(type) {
 	case *proto.WorkloadEndpointStatusUpdate:
+		if m.Id == nil {
+			logrus.WithField("update", m).Warn("Couldn't handle nil WorkloadEndpointStatusUpdate")
+			return
+		}
 		key := names.WorkloadEndpointIDToWorkloadEndpointKey(m.Id, fr.hostname)
 		fn := names.WorkloadEndpointKeyToStatusFilename(key)
 		fr.statusDirDeltaTracker.Desired().Add(fn)
 	case *proto.WorkloadEndpointStatusRemove:
+		if m.Id == nil {
+			logrus.WithField("update", m).Warn("Couldn't handle nil WorkloadEndpointStatusRemove")
+			return
+		}
 		key := names.WorkloadEndpointIDToWorkloadEndpointKey(m.Id, fr.hostname)
 		fn := names.WorkloadEndpointKeyToStatusFilename(key)
 		fr.statusDirDeltaTracker.Desired().Delete(fn)
