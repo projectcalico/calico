@@ -31,6 +31,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 )
@@ -220,7 +221,13 @@ func (c *customK8sResourceClient) Delete(ctx context.Context, k model.Key, revis
 
 	opts := &metav1.DeleteOptions{}
 	if uid != nil {
-		opts.Preconditions = &metav1.Preconditions{UID: uid}
+		// The UID in the v3 resources is a translation of the UID in the CR. Translate it
+		// before passing as a precondition.
+		uid, err := conversion.ConvertUID(*uid)
+		if err != nil {
+			return nil, err
+		}
+		opts.Preconditions = &metav1.Preconditions{UID: &uid}
 	}
 
 	// Delete the resource using the name.
