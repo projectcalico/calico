@@ -996,7 +996,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		})
 	})
 
-	It("should handle a CRUD of Network Sets", func() {
+	It("should handle CRUD of Network Sets", func() {
 		kvp1 := &model.KVPair{
 			Key: model.ResourceKey{
 				Name:      "test-syncer-netset1",
