@@ -1246,10 +1246,10 @@ spec:
               debugSimulateCalcGraphHangAfter:
                 pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                 type: string
-              debugSimulateDataplaneHangAfter:
+              debugSimulateDataplaneApplyDelay:
                 pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                 type: string
-              debugSimulateSlowDataplane:
+              debugSimulateDataplaneHangAfter:
                 pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                 type: string
               defaultEndpointToHostAction:

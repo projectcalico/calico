@@ -238,6 +238,7 @@ func (wc defaultWorkloadEndpointConverter) podToDefaultWorkloadEndpoint(pod *kap
 		Orchestrator:               "k8s",
 		Node:                       pod.Spec.NodeName,
 		Pod:                        pod.Name,
+		Workload:                   pod.Name,
 		ContainerID:                containerID,
 		Endpoint:                   "eth0",
 		InterfaceName:              interfaceName,
