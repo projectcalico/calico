@@ -1420,6 +1420,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 		portFoo := intstr.FromString("foo")
 		portBad1 := intstr.FromString("-50:-1")
 		portBad2 := intstr.FromString("-22:-3")
+		portBad3 := intstr.FromString("443,4443")
 		np1 := networkingv1.NetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test.policy",
@@ -1585,6 +1586,22 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 							},
 						},
 					},
+					{
+						Ports: []networkingv1.NetworkPolicyPort{
+							{Port: &port80},
+							{Port: &portBad3},
+						},
+						To: []networkingv1.NetworkPolicyPeer{
+							{
+								PodSelector: &metav1.LabelSelector{
+									MatchLabels: map[string]string{
+										"k":  "v",
+										"k2": "v2",
+									},
+								},
+							},
+						},
+					},
 				},
 				PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
 			},
@@ -1647,6 +1664,34 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 						},
 					},
 					Reason: "k8s rule couldn't be converted: failed to parse k8s port: invalid port -22:-3: invalid name for named port (-22:-3)",
+				},
+				{
+					IngressRule: nil,
+					EgressRule: &networkingv1.NetworkPolicyEgressRule{
+						Ports: []networkingv1.NetworkPolicyPort{
+							{
+								Protocol: nil,
+								Port:     &intstr.IntOrString{Type: 0, IntVal: 80, StrVal: ""},
+								EndPort:  nil,
+							},
+							{
+								Protocol: nil,
+								Port:     &intstr.IntOrString{Type: 1, IntVal: 0, StrVal: "443,4443"},
+								EndPort:  nil,
+							},
+						},
+						To: []networkingv1.NetworkPolicyPeer{
+							{
+								PodSelector: &metav1.LabelSelector{
+									MatchLabels:      map[string]string{"k2": "v2", "k": "v"},
+									MatchExpressions: nil,
+								},
+								NamespaceSelector: nil,
+								IPBlock:           nil,
+							},
+						},
+					},
+					Reason: "k8s rule couldn't be converted: failed to parse k8s port: invalid port 443,4443: invalid name for named port (443,4443)",
 				},
 			},
 		}
