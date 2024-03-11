@@ -18,6 +18,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
@@ -1173,6 +1174,49 @@ var _ = Describe("Test Pod conversion", func() {
 						"default": true,
 						"dns": {}
 					}]`))
+	})
+})
+
+var _ = Describe("Test UID conversion", func() {
+	It("should parse a UID to a Calico ID", func() {
+		By("Converting a UID")
+		original := types.UID("30316465-6365-4463-ad63-3564622d3638")
+		converted, err := ConvertUID(original)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(string(converted)).To(Equal("0c8c26a6-c6a6-44c6-adc6-ac2646b46c1c"))
+
+		By("Parsing it as a valid UID")
+		parsed, err := uuid.Parse(string(converted))
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Checking the version bits are correct")
+		Expect(parsed[6] >> 4).To(Equal(byte(0x4))) // Version 4
+
+		By("Converting it back")
+		convertedBack, err := ConvertUID(converted)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(convertedBack).To(Equal(original))
+	})
+
+	It("should error on an invalid UID", func() {
+		_, err := ConvertUID("not-a-uid")
+		Expect(err).To(HaveOccurred())
+	})
+
+	It("should always maintain the v4 version metadata bits, and convert back", func() {
+		for i := 0; i < 100000; i++ {
+			original := types.UID(uuid.New().String())
+			converted, err := ConvertUID(original)
+			Expect(err).NotTo(HaveOccurred())
+
+			parsed, err := uuid.Parse(string(converted))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(parsed[6] >> 4).To(Equal(byte(0x4))) // Version 4
+
+			convertedBack, err := ConvertUID(converted)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(convertedBack).To(Equal(original))
+		}
 	})
 })
 
