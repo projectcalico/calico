@@ -2062,6 +2062,13 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			Expect(updFC.Value.(*apiv3.FelixConfiguration).Spec.InterfacePrefix).To(Equal("someotherprefix-"))
 		})
 
+		By("updating an existing object with a bad UID in the precondition", func() {
+			updFC.Value.(*apiv3.FelixConfiguration).Spec.InterfacePrefix = "someevenothererprefix-"
+			updFC.Value.(*apiv3.FelixConfiguration).ObjectMeta.UID = types.UID("19e9c0f4-501d-429f-b581-8954440883f4")
+			_, err = c.Update(ctx, updFC)
+			Expect(err).To(HaveOccurred())
+		})
+
 		By("getting the updated object", func() {
 			updFC, err = c.Get(ctx, fc.Key, "")
 			Expect(err).NotTo(HaveOccurred())
