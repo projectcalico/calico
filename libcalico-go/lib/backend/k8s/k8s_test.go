@@ -996,7 +996,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		})
 	})
 
-	It("should handle a CRUD of Network Sets", func() {
+	It("should handle CRUD of Network Sets", func() {
 		kvp1 := &model.KVPair{
 			Key: model.ResourceKey{
 				Name:      "test-syncer-netset1",
@@ -2060,6 +2060,13 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			updFC, err = c.Update(ctx, updFC)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(updFC.Value.(*apiv3.FelixConfiguration).Spec.InterfacePrefix).To(Equal("someotherprefix-"))
+		})
+
+		By("updating an existing object with a bad UID in the precondition", func() {
+			updFC.Value.(*apiv3.FelixConfiguration).Spec.InterfacePrefix = "someevenothererprefix-"
+			updFC.Value.(*apiv3.FelixConfiguration).ObjectMeta.UID = types.UID("19e9c0f4-501d-429f-b581-8954440883f4")
+			_, err = c.Update(ctx, updFC)
+			Expect(err).To(HaveOccurred())
 		})
 
 		By("getting the updated object", func() {
