@@ -125,6 +125,22 @@ type NetConf struct {
 	// The CNI plugin waits until all the endpoints specified in ReadinessGates are ready
 	ReadinessGates []string `json:"readiness_gates"`
 
+	// PolicySetupTimeoutSeconds is the maximum duration to delay
+	// pod startup when waiting for Felix to program policy for the endpoint.
+	//
+	// When set to a positive integer, the CNI will watch the directory specified
+	// by EndpointStatusDir for status updates about workloads being created.
+	//
+	// Feature is off when set to 0.
+	//
+	// Default: 0
+	PolicySetupTimeoutSeconds int `json:"policy_setup_timeout_seconds,omitempty"`
+
+	// The directory to watch for workload status updates from Felix.
+	//
+	// Default: /var/run/calico/endpoint-status
+	EndpointStatusDir string `json:"endpoint_status_dir,omitempty"`
+
 	// Options below here are deprecated.
 	EtcdAuthority string `json:"etcd_authority"`
 	Hostname      string `json:"hostname"`
