@@ -172,6 +172,24 @@ var _ = testutils.E2eDatastoreDescribe("FelixConfiguration tests", testutils.Dat
 			Expect(res).To(BeNil())
 			Expect(outError.Error()).To(Equal("error with field Metadata.UID = '' (field must be set for an Update request)"))
 
+			By("Attempting to update the FelixConfiguration the wrong UID")
+			res, outError = c.FelixConfigurations().Update(ctx, &apiv3.FelixConfiguration{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:              name1,
+					ResourceVersion:   "1234",
+					CreationTimestamp: metav1.Now(),
+					UID:               uid,
+				},
+				Spec: spec1,
+			}, options.SetOptions{})
+			Expect(outError).To(HaveOccurred())
+			if config.Spec.DatastoreType == apiconfig.Kubernetes {
+				Expect(outError.Error()).To(ContainSubstring("Precondition failed: UID in precondition"))
+			} else {
+				// etcd data store produces a different error message.
+				Expect(outError.Error()).To(ContainSubstring("update conflict: FelixConfiguration(felixconfig-1)"))
+			}
+
 			// Track the version of the updated name1 data.
 			rv1_2 := res1.ResourceVersion
 
