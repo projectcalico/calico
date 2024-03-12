@@ -140,6 +140,12 @@ func GetInClusterConfig() (*rest.Config, error) {
 // GetInClusterConfig(), which uses winutils.GetHostPath() for the file paths, so that
 // Windows hostprocess containers on containerd v1.6 can work with the in-cluster config.
 func BuildConfigFromFlags(masterUrl, kubeconfigPath string) (*rest.Config, error) {
+	if InHostProcessContainer() {
+		if kubeconfigPath != "" {
+			log.Warning("Ignoring kubeconfig path for Windows HostProcess container. Using the inClusterConfig.")
+		}
+		return GetInClusterConfig()
+	}
 	if kubeconfigPath == "" && masterUrl == "" {
 		log.Warning("Neither --kubeconfig nor --master was specified.  Using the inClusterConfig.  This might not work.")
 		kubeconfig, err := GetInClusterConfig()
@@ -151,6 +157,19 @@ func BuildConfigFromFlags(masterUrl, kubeconfigPath string) (*rest.Config, error
 	return clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
 		&clientcmd.ClientConfigLoadingRules{ExplicitPath: kubeconfigPath},
 		&clientcmd.ConfigOverrides{ClusterInfo: clientcmdapi.Cluster{Server: masterUrl}}).ClientConfig()
+}
+
+// NewNonInteractiveDeferredLoadingClientConfig is a wrapper on top of
+// clientcmd.NewNonInteractiveDeferredLoadingClientConfig.
+// FIXME: this will no longer be needed when containerd v1.6 is EOL'd
+func NewNonInteractiveDeferredLoadingClientConfig(loader clientcmd.ClientConfigLoader, overrides *clientcmd.ConfigOverrides) (*rest.Config, error) {
+	// ClientConfig() calls InClusterConfig() at some point, which doesn't work
+	// on Windows HPC. So use GetInClusterConfig() instead in this case.
+	if InHostProcessContainer() {
+		log.Warning("Ignoring kubeconfig configs for Windows HostProcess container. Using the inClusterConfig.")
+		return GetInClusterConfig()
+	}
+	return clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loader, overrides).ClientConfig()
 }
 
 // When running in a Windows hostprocess container (HPC), add Calico Prometheus metrics
