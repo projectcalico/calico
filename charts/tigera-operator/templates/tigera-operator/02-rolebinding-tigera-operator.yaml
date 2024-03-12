@@ -2,6 +2,8 @@ kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   name: tigera-operator
+  labels:
+    {{- include "tigera-operator.labels" (dict "context" .) | nindent 4 }}
 subjects:
 - kind: ServiceAccount
   name: tigera-operator

@@ -6,6 +6,7 @@ metadata:
   labels:
     k8s-app: tigera-operator-uninstall
     helm.sh/chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
+    {{- include "tigera-operator.labels" (dict "context" .) | nindent 4 }}
   annotations:
     # Mark this Job as a pre-deletion hook. This will only be executed as part
     # of helm uninstall, in order to ensure the Installation is cleaned up prior to

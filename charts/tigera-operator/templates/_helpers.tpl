@@ -18,3 +18,13 @@ by combining installation.imagePullSecrets with toplevel imagePullSecrets.
 {{- end -}}
 {{ $secrets | toYaml }}
 {{- end -}}
+
+{{/*
+Common labels
+*/}}
+{{- define "tigera-operator.labels" -}}
+k8s-app: tigera-operator
+{{- with .context.Values.additionalLabels }}
+{{ toYaml . }}
+{{- end }}
+{{- end }}
