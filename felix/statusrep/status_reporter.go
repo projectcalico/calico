@@ -182,6 +182,8 @@ loop:
 					Hostname:   esr.hostname,
 					EndpointID: msg.Id.EndpointId,
 				}
+			case *proto.DataplaneInSync:
+				datamodelInSync = true
 			default:
 				log.Panicf("Unexpected message: %#v", msg)
 			}
