@@ -16,8 +16,17 @@
 # Prefix for cluster name
 NAME_PREFIX="${NAME_PREFIX:=${USER}-win-fv}"
 
+# Get K8S_VERSION variable from metadata.mk, default to a value if it cannot be found
+SCRIPT_CURRENT_DIR="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )"
+METADATAMK=${SCRIPT_CURRENT_DIR}/../../../metadata.mk
+if [ -f ${METADATAMK} ]; then
+    K8S_VERSION=$(grep K8S_VERSION ${METADATAMK} | cut -d "=" -f 2)
+else
+    K8S_VERSION=v1.27.11
+fi
+
 # Kubernetes version
-KUBE_VERSION="${KUBE_VERSION:=1.20.1}"
+KUBE_VERSION="${KUBE_VERSION:=${K8S_VERSION#v}}"
 
 # AWS keypair name for nodes
 WINDOWS_KEYPAIR_NAME="${WINDOWS_KEYPAIR_NAME:=AWS-key-pair}"
@@ -45,7 +54,7 @@ WINDOWS_OS="${WINDOWS_OS:=Windows2022container}"
 CONTAINER_RUNTIME="${CONTAINER_RUNTIME:=docker}"
 
 # Specify containerd version to use.
-CONTAINERD_VERSION="${CONTAINERD_VERSION:=1.4.4}"
+CONTAINERD_VERSION="${CONTAINERD_VERSION:=1.6.22}"
 
 #specify description of AMI,this would be a filter to search AMI.
 #we can create a Json file for description and use it. TODO????
@@ -324,13 +333,27 @@ function show_all_instances() {
 }
 
 function wait_for_docker_installed() {
-  echo "Waiting for docker been installed on linux node"
+  echo "Waiting for docker to have been installed on linux node"
   for i in `seq 1 30`; do
     sleep 2
     ${MASTER_CONNECT_COMMAND} docker images
 
     if [ $? -eq 0 ]; then
       echo "Docker installed. Ready to setup linux node for FV"
+      return 0
+    fi
+  done
+  return 1
+}
+
+function wait_for_containerd_installed() {
+  echo "Waiting for containerd to have been installed on linux node"
+  for i in `seq 1 30`; do
+    sleep 2
+    ${MASTER_CONNECT_COMMAND} crictl images
+
+    if [ $? -eq 0 ]; then
+      echo "containerd installed. Ready to setup linux node for FV"
       return 0
     fi
   done
@@ -395,6 +418,7 @@ function setup_kubeadm_cluster(){
 }
 function setup_fv() {
   wait_for_docker_installed
+  wait_for_containerd_installed
 
   setup_linux
   setup_kubeadm_cluster
