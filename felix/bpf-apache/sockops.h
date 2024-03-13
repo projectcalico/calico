@@ -28,4 +28,4 @@ struct {
     __type(key, struct sock_key);
     __type(value, __u32);
     __uint(max_entries, 65535);
-} calico_sock_map SEC(".map");
+} calico_sock_map SEC(".maps");

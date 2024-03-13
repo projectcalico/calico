@@ -21,15 +21,6 @@
 #include <stddef.h>
 #include <linux/ip.h>
 
-/* Kernel/libbpf bpf_helpers.h also contain this struct 'bpf_map_def' */
-/*struct bpf_map_def {
-        unsigned int type;
-        unsigned int key_size;
-        unsigned int value_size;
-        unsigned int max_entries;
-        unsigned int map_flags;
-};*/
-
 #define CALI_BPF_INLINE inline __attribute__((always_inline))
 
 #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__

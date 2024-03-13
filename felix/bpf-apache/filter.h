@@ -25,7 +25,7 @@ struct {
     __type(value, __u32);
     __uint(max_entries, 10240);
     __uint(map_flags, BPF_F_NO_PREALLOC);
-} calico_prefilter_v4 SEC(".map");
+} calico_prefilter_v4 SEC(".maps");
 
 struct {
     __uint(type, BPF_MAP_TYPE_HASH);
@@ -33,4 +33,4 @@ struct {
     __type(value, __u32);
     __uint(max_entries, 65535);
     __uint(map_flags, BPF_F_NO_PREALLOC);
-} calico_failsafe_ports SEC(".map");
+} calico_failsafe_ports SEC(".maps");
