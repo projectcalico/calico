@@ -140,10 +140,13 @@ func calculateDefaultFelixSyncerEntries(cs kubernetes.Interface, dt apiconfig.Da
 				},
 			})
 
+			uid, err := conversion.ConvertUID(ns.UID)
+			Expect(err).NotTo(HaveOccurred())
+
 			// And expect a v3 profile for each namespace.
 			prof := apiv3.Profile{
 				TypeMeta:   metav1.TypeMeta{Kind: "Profile", APIVersion: "projectcalico.org/v3"},
-				ObjectMeta: metav1.ObjectMeta{Name: name, UID: ns.UID, CreationTimestamp: ns.CreationTimestamp},
+				ObjectMeta: metav1.ObjectMeta{Name: name, UID: uid, CreationTimestamp: ns.CreationTimestamp},
 				Spec: apiv3.ProfileSpec{
 					LabelsToApply: map[string]string{
 						"pcns.projectcalico.org/name":      ns.Name,
@@ -181,10 +184,13 @@ func calculateDefaultFelixSyncerEntries(cs kubernetes.Interface, dt apiconfig.Da
 					},
 				})
 
+				uid, err := conversion.ConvertUID(sa.UID)
+				Expect(err).NotTo(HaveOccurred())
+
 				//  We also expect one v3 Profile to be present for each ServiceAccount.
 				prof := apiv3.Profile{
 					TypeMeta:   metav1.TypeMeta{Kind: "Profile", APIVersion: "projectcalico.org/v3"},
-					ObjectMeta: metav1.ObjectMeta{Name: name, UID: sa.UID, CreationTimestamp: sa.CreationTimestamp},
+					ObjectMeta: metav1.ObjectMeta{Name: name, UID: uid, CreationTimestamp: sa.CreationTimestamp},
 					Spec: apiv3.ProfileSpec{
 						LabelsToApply: map[string]string{
 							"pcsa.projectcalico.org/name": sa.Name,
