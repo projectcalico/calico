@@ -238,7 +238,7 @@ blocks:
     jobs:
       - name: Containerd - Windows FV
         execution_time_limit:
-          minutes: 60
+          minutes: 120
         commands:
           - ../.semaphore/run-and-monitor win-fv-containerd.log ./.semaphore/run-win-fv.sh
         env_vars:
