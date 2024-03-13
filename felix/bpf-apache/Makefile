@@ -25,7 +25,8 @@ CFLAGS +=  \
 	-fno-stack-protector \
 	-O2 \
 	-target bpf \
-	-emit-llvm
+	-emit-llvm \
+	-g
 
 # Workaround for Ubuntu placing "asm/types.h" in /usr/include/x86_64-linux-gnu
 TRIPLET := $(shell gcc -dumpmachine)

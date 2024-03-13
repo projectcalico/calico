@@ -53,7 +53,7 @@ CALI_BPF_INLINE static int extract_ports(__u32 len, struct iphdr * h,
 }
 
 
-__attribute__((section("prefilter_func")))
+SEC("xdp")
 enum xdp_action prefilter(struct xdp_md* xdp)
 {
 	struct ethhdr * ehdr;
