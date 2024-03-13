@@ -653,7 +653,6 @@ configRetry:
 			configParams.FelixHostname,
 			configParams.OpenstackRegion,
 			fromDataplaneC,
-			dpConnector.InSync,
 			dpConnector.datastore,
 			delay,
 			delay*180,
@@ -987,7 +986,6 @@ type DataplaneConnector struct {
 	dataplane         dp.DataplaneDriver
 	datastore         bapi.Client
 	datastorev3       client.Interface
-	datastoreInSync   bool
 
 	firstStatusReportSent bool
 
@@ -1013,12 +1011,9 @@ func newConnector(configParams *config.Config,
 		ToDataplane:                         make(chan interface{}),
 		statusUpdatesFromDataplane:          make(chan interface{}),
 		statusUpdatesFromDataplaneConsumers: nil,
-		// InSync should be buffered as it will always be sent a single
-		// message, regardless of any downstream consumers.
-		InSync:                           make(chan bool, 1),
-		failureReportChan:                failureReportChan,
-		dataplane:                        dataplane,
-		wireguardStatUpdateFromDataplane: make(chan *proto.WireguardStatusUpdate, 1),
+		failureReportChan:                   failureReportChan,
+		dataplane:                           dataplane,
+		wireguardStatUpdateFromDataplane:    make(chan *proto.WireguardStatusUpdate, 1),
 	}
 
 	fromDataplaneDispatcher, err := dispatcher.NewBlockingDispatcher[interface{}](felixConn.statusUpdatesFromDataplane)
@@ -1249,11 +1244,6 @@ func (fc *DataplaneConnector) sendMessagesToDataplaneDriver() {
 		switch msg := msg.(type) {
 		case *proto.InSync:
 			log.Info("Datastore now in sync.")
-			if !fc.datastoreInSync {
-				log.Info("Datastore in sync for first time, sending message to status reporter.")
-				fc.datastoreInSync = true
-				fc.InSync <- true
-			}
 		case *proto.ConfigUpdate:
 			fc.handleConfigUpdate(msg)
 		case *calc.DatastoreNotReady:
