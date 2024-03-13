@@ -308,7 +308,7 @@ configRetry:
 		} else {
 			// Not using KDD, fall back on trying to get a Kubernetes client from the environment.
 			log.Info("Not using Kubernetes datastore driver, trying to get a Kubernetes client...")
-			k8sconf, err := winutils.GetInClusterConfig()
+			k8sconf, err := winutils.BuildConfigFromFlags("", os.Getenv("KUBECONFIG"))
 			if err != nil {
 				log.WithError(err).Info("Kubernetes in-cluster config not available. " +
 					"Assuming we're not in a Kubernetes deployment.")
