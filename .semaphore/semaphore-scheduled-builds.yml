@@ -720,7 +720,7 @@ blocks:
           - ../.semaphore/run-and-monitor ci.log make ci
 - name: "OpenStack integration (Yoga)"
   run:
-    when: "true or change_in(['/networking-calico/'])"
+    when: "true or change_in(['/networking-calico/', '/felix/'])"
   dependencies:
     - Prerequisites
   task:
