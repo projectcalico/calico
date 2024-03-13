@@ -636,27 +636,17 @@ blocks:
       value: master_ssh_key
     - name: WIN_PPK_KEY
       value: win_ppk_key
-    - name: K8S_VERSION
-      value: 1.22.6
     jobs:
-    - name: Docker - Windows FV
-      execution_time_limit:
-        minutes: 60
-      commands:
-      - ../.semaphore/run-and-monitor win-fv-docker.log ./.semaphore/run-win-fv.sh
-      env_vars:
-      - name: CONTAINER_RUNTIME
-        value: docker
     - name: Containerd - Windows FV
       execution_time_limit:
-        minutes: 60
+        minutes: 120
       commands:
       - ../.semaphore/run-and-monitor win-fv-containerd.log ./.semaphore/run-win-fv.sh
       env_vars:
       - name: CONTAINER_RUNTIME
         value: containerd
       - name: CONTAINERD_VERSION
-        value: 1.4.12
+        value: 1.6.22
 
 - name: "cni-plugin"
   run:
