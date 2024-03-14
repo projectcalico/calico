@@ -73,6 +73,7 @@ type K8sDatastoreInfra struct {
 	runningTest string
 
 	ipv6                  bool
+	dualStack             bool
 	serviceClusterIPRange string
 	apiServerBindIP       string
 	ipMask                string
@@ -168,7 +169,7 @@ func GetK8sDatastoreInfra(index K8sInfraIndex, opts ...CreateOption) (*K8sDatast
 			ginkgo.Fail(fmt.Sprintf("Previous test didn't clean up the infra: %s", K8sInfra[index].runningTest))
 		}
 
-		resetAll := temp.ipv6 != kds.ipv6
+		resetAll := temp.ipv6 != kds.ipv6 || temp.dualStack != kds.dualStack
 
 		if !resetAll {
 			kds.EnsureReady()
@@ -1165,6 +1166,16 @@ func K8sWithIPv6() CreateOption {
 	return func(ds DatastoreInfra) {
 		if kds, ok := ds.(*K8sDatastoreInfra); ok {
 			kds.ipv6 = true
+			kds.ipMask = "/128"
+		}
+	}
+}
+
+func K8sWithDualStack() CreateOption {
+	return func(ds DatastoreInfra) {
+		if kds, ok := ds.(*K8sDatastoreInfra); ok {
+			kds.ipv6 = true
+			kds.dualStack = true
 			kds.ipMask = "/128"
 		}
 	}
