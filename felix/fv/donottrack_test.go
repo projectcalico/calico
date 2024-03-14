@@ -51,13 +51,17 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ do-not-track policy tests; 
 
 	BeforeEach(func() {
 		var err error
-		iOpts := []infrastructure.CreateOption{infrastructure.K8sWithIPv6(),
-			infrastructure.K8sWithAPIServerBindAddress("::"),
-			infrastructure.K8sWithServiceClusterIPRange("dead:beef::abcd:0:0:0/112,10.101.0.0/16")}
+		iOpts := []infrastructure.CreateOption{}
+		if BPFMode() {
+			iOpts = append(iOpts,
+				infrastructure.K8sWithDualStack(),
+				infrastructure.K8sWithAPIServerBindAddress("::"),
+				infrastructure.K8sWithServiceClusterIPRange("dead:beef::abcd:0:0:0/112,10.101.0.0/16"))
+		}
 		infra = getInfra(iOpts...)
 		options := infrastructure.DefaultTopologyOptions()
-		options.EnableIPv6 = true
 		if BPFMode() {
+			options.EnableIPv6 = true
 			options.ExtraEnvVars["FELIX_BPFLogLevel"] = "debug"
 			options.IPIPEnabled = false
 		}
