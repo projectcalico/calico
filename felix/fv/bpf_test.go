@@ -1219,11 +1219,13 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			clusterIP := "10.101.0.10"
 			extIP := "10.1.2.3"
 			excludeSvcIP := "10.101.0.222"
+			loIP := "5.6.5.6"
 
 			if testOpts.ipv6 {
 				clusterIP = "dead:beef::abcd:0:0:10"
 				extIP = "dead:beef::abcd:1:2:3"
 				excludeSvcIP = "dead:beef::abcd:0:0:222"
+				loIP = "dead:beef::abcd:0:5656:5656"
 			}
 
 			if testOpts.protocol == "udp" && testOpts.udpUnConnected {
@@ -3456,7 +3458,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 								switch testOpts.tunnel {
 								case "ipip":
-									hostW0SrcIP = ExpectWithSrcIPs(tc.Felixes[0].ExpectedIPIPTunnelAddr)
+									if testOpts.connTimeEnabled {
+										hostW0SrcIP = ExpectWithSrcIPs(tc.Felixes[0].ExpectedIPIPTunnelAddr)
+									}
 									hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedIPIPTunnelAddr)
 								case "wireguard":
 									if testOpts.ipv6 {
@@ -3489,6 +3493,49 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 									cc.Expect(Some, hostW[0], TargetIPv4AsIPv6(clusterIP), ports, hostW0SrcIP)
 									cc.Expect(Some, hostW[1], TargetIPv4AsIPv6(clusterIP), ports, hostW1SrcIP)
 								}
+
+								cc.CheckConnectivity()
+							})
+
+							It("should have connectivity from all host-networked workloads to workload 0 "+
+								"via clusterIP with non-routable address set on lo", func() {
+								// It only makes sense for turned off CTLB as with CTLB routing
+								// picks the right source IP.
+								if testOpts.connTimeEnabled {
+									return
+								}
+								By("Configuring ip on lo")
+								tc.Felixes[0].Exec("ip", "addr", "add", loIP+"/"+ipMask(), "dev", "lo")
+								tc.Felixes[1].Exec("ip", "addr", "add", loIP+"/"+ipMask(), "dev", "lo")
+
+								By("testing connectivity")
+
+								node0IP := felixIP(0)
+								node1IP := felixIP(1)
+								hostW0SrcIP := ExpectWithSrcIPs(node0IP)
+								hostW1SrcIP := ExpectWithSrcIPs(node1IP)
+
+								switch testOpts.tunnel {
+								case "ipip":
+									hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedIPIPTunnelAddr)
+								case "wireguard":
+									if testOpts.ipv6 {
+										hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedWireguardV6TunnelAddr)
+									} else {
+										hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedWireguardTunnelAddr)
+									}
+								case "vxlan":
+									if testOpts.ipv6 {
+										hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedVXLANV6TunnelAddr)
+									} else {
+										hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedVXLANTunnelAddr)
+									}
+								}
+								clusterIP := testSvc.Spec.ClusterIP
+								ports := ExpectWithPorts(uint16(testSvc.Spec.Ports[0].Port))
+
+								cc.Expect(Some, hostW[0], TargetIP(clusterIP), ports, hostW0SrcIP)
+								cc.Expect(Some, hostW[1], TargetIP(clusterIP), ports, hostW1SrcIP)
 
 								cc.CheckConnectivity()
 							})
@@ -4317,13 +4364,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 				hostW0SrcIP := ExpectWithSrcIPs(felixIP(0))
 				hostW1SrcIP := ExpectWithSrcIPs(felixIP(1))
-				if !testOpts.connTimeEnabled {
-					switch testOpts.tunnel {
-					case "ipip":
-						hostW0SrcIP = ExpectWithSrcIPs(tc.Felixes[0].ExpectedIPIPTunnelAddr)
-						hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedIPIPTunnelAddr)
-					}
-				}
 
 				cc.Expect(Some, hostW[0], TargetIP(clusterIP), ExpectWithPorts(port), hostW0SrcIP)
 				cc.Expect(Some, hostW[1], TargetIP(clusterIP), ExpectWithPorts(port), hostW1SrcIP)
