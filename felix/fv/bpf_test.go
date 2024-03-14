@@ -1209,11 +1209,13 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			clusterIP := "10.101.0.10"
 			extIP := "10.1.2.3"
 			excludeSvcIP := "10.101.0.222"
+			loIP := "5.6.5.6"
 
 			if testOpts.ipv6 {
 				clusterIP = "dead:beef::abcd:0:0:10"
 				extIP = "dead:beef::abcd:1:2:3"
 				excludeSvcIP = "dead:beef::abcd:0:0:222"
+				loIP = "dead:beef::abcd:0:5656:5656"
 			}
 
 			if testOpts.protocol == "udp" && testOpts.udpUnConnected {
@@ -3006,10 +3008,12 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 				nodePortsTest := func(extLocal, intLocal bool) {
 					var (
-						testSvc          *v1.Service
-						testSvcNamespace string
-						feKey            nat.FrontendKeyInterface
-						family           int
+						testSvc                  *v1.Service
+						testSvcNamespace         string
+						feKey                    nat.FrontendKeyInterface
+						family                   int
+						node0IP, node1IP         string
+						hostW0SrcIP, hostW1SrcIP ExpectationOption
 					)
 
 					testSvcName := "test-service"
@@ -3037,6 +3041,32 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						Expect(err).NotTo(HaveOccurred())
 						Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(1),
 							"Service endpoints didn't get created? Is controller-manager happy?")
+
+						node0IP = felixIP(0)
+						node1IP = felixIP(1)
+
+						hostW0SrcIP = ExpectWithSrcIPs(node0IP)
+						hostW1SrcIP = ExpectWithSrcIPs(node1IP)
+
+						switch testOpts.tunnel {
+						case "ipip":
+							hostW0SrcIP = ExpectWithSrcIPs(tc.Felixes[0].ExpectedIPIPTunnelAddr)
+							hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedIPIPTunnelAddr)
+						case "wireguard":
+							if testOpts.ipv6 {
+								hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedWireguardV6TunnelAddr)
+								hostW0SrcIP = ExpectWithSrcIPs(tc.Felixes[0].ExpectedWireguardV6TunnelAddr)
+							} else {
+								hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedWireguardTunnelAddr)
+							}
+						case "vxlan":
+							if testOpts.ipv6 {
+								hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedVXLANV6TunnelAddr)
+								hostW0SrcIP = ExpectWithSrcIPs(tc.Felixes[0].ExpectedVXLANV6TunnelAddr)
+							} else {
+								hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedVXLANTunnelAddr)
+							}
+						}
 					})
 
 					It("should have connectivity from all workloads via a service to workload 0", func() {
@@ -3176,39 +3206,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							})
 
 							It("should have connectivity from all host-networked workloads to workload 0 via nodeport", func() {
-								node0IP := felixIP(0)
-								node1IP := felixIP(1)
-
-								hostW0SrcIP := ExpectWithSrcIPs(node0IP)
-								hostW1SrcIP := ExpectWithSrcIPs(node1IP)
-
-								if testOpts.ipv6 {
-									switch testOpts.tunnel {
-									case "wireguard":
-										if testOpts.connTimeEnabled {
-											hostW0SrcIP = ExpectWithSrcIPs(tc.Felixes[0].ExpectedWireguardV6TunnelAddr)
-										}
-										hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedWireguardV6TunnelAddr)
-									case "vxlan":
-										if testOpts.connTimeEnabled {
-											hostW0SrcIP = ExpectWithSrcIPs(tc.Felixes[0].ExpectedVXLANV6TunnelAddr)
-										}
-										hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedVXLANV6TunnelAddr)
-									}
-								} else {
-									switch testOpts.tunnel {
-									case "ipip":
-										if testOpts.connTimeEnabled {
-											hostW0SrcIP = ExpectWithSrcIPs(tc.Felixes[0].ExpectedIPIPTunnelAddr)
-										}
-										hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedIPIPTunnelAddr)
-									case "wireguard":
-										hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedWireguardTunnelAddr)
-									case "vxlan":
-										hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedVXLANTunnelAddr)
-									}
-								}
-
 								ports := ExpectWithPorts(npPort)
 
 								cc.Expect(Some, hostW[0], TargetIP(node0IP), ports, hostW0SrcIP)
@@ -3337,25 +3334,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 									})
 									if !testOpts.connTimeEnabled {
 										It("should have connection when via clusterIP starts first", func() {
-											node1IP := felixIP(1)
-
-											hostW1SrcIP := ExpectWithSrcIPs(node1IP)
-
-											switch testOpts.tunnel {
-											case "ipip":
-												hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedIPIPTunnelAddr)
-											case "wireguard":
-												hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedWireguardTunnelAddr)
-												if testOpts.ipv6 {
-													hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedWireguardV6TunnelAddr)
-												}
-											case "vxlan":
-												hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedVXLANTunnelAddr)
-												if testOpts.ipv6 {
-													hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedVXLANV6TunnelAddr)
-												}
-											}
-
 											clusterIP := testSvc.Spec.ClusterIP
 											port := uint16(testSvc.Spec.Ports[0].Port)
 
@@ -3383,25 +3361,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 										})
 
 										It("should have connection when direct starts first", func() {
-											node1IP := felixIP(1)
-
-											hostW1SrcIP := ExpectWithSrcIPs(node1IP)
-
-											switch testOpts.tunnel {
-											case "ipip":
-												hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedIPIPTunnelAddr)
-											case "wireguard":
-												hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedWireguardTunnelAddr)
-												if testOpts.ipv6 {
-													hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedWireguardV6TunnelAddr)
-												}
-											case "vxlan":
-												hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedVXLANTunnelAddr)
-												if testOpts.ipv6 {
-													hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedVXLANV6TunnelAddr)
-												}
-											}
-
 											clusterIP := testSvc.Spec.ClusterIP
 											port := uint16(testSvc.Spec.Ports[0].Port)
 
@@ -3432,32 +3391,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								})
 
 							It("should have connectivity from all host-networked workloads to workload 0 via clusterIP", func() {
-								node0IP := felixIP(0)
-								node1IP := felixIP(1)
-
-								hostW0SrcIP := ExpectWithSrcIPs(node0IP)
-								hostW1SrcIP := ExpectWithSrcIPs(node1IP)
-
-								switch testOpts.tunnel {
-								case "ipip":
-									hostW0SrcIP = ExpectWithSrcIPs(tc.Felixes[0].ExpectedIPIPTunnelAddr)
-									hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedIPIPTunnelAddr)
-								case "wireguard":
-									if testOpts.ipv6 {
-										hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedWireguardV6TunnelAddr)
-										hostW0SrcIP = ExpectWithSrcIPs(tc.Felixes[0].ExpectedWireguardV6TunnelAddr)
-									} else {
-										hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedWireguardTunnelAddr)
-									}
-								case "vxlan":
-									if testOpts.ipv6 {
-										hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedVXLANV6TunnelAddr)
-										hostW0SrcIP = ExpectWithSrcIPs(tc.Felixes[0].ExpectedVXLANV6TunnelAddr)
-									} else {
-										hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedVXLANTunnelAddr)
-									}
-								}
-
 								clusterIP := testSvc.Spec.ClusterIP
 								ports := ExpectWithPorts(uint16(testSvc.Spec.Ports[0].Port))
 
@@ -3473,6 +3406,28 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 									cc.Expect(Some, hostW[0], TargetIPv4AsIPv6(clusterIP), ports, hostW0SrcIP)
 									cc.Expect(Some, hostW[1], TargetIPv4AsIPv6(clusterIP), ports, hostW1SrcIP)
 								}
+
+								cc.CheckConnectivity()
+							})
+
+							It("should have connectivity from all host-networked workloads to workload 0 "+
+								"via clusterIP with non-routable address set on lo", func() {
+								// It only makes sense for turned off CTLB as with CTLB routing
+								// picks the right source IP.
+								if testOpts.connTimeEnabled {
+									return
+								}
+								By("Configuring ip on lo")
+								tc.Felixes[0].Exec("ip", "addr", "add", loIP+"/"+ipMask(), "dev", "lo")
+								tc.Felixes[1].Exec("ip", "addr", "add", loIP+"/"+ipMask(), "dev", "lo")
+
+								By("testing connectivity")
+								hostW0SrcIP = ExpectWithSrcIPs(loIP)
+								clusterIP := testSvc.Spec.ClusterIP
+								ports := ExpectWithPorts(uint16(testSvc.Spec.Ports[0].Port))
+
+								cc.Expect(Some, hostW[0], TargetIP(clusterIP), ports, hostW0SrcIP)
+								cc.Expect(Some, hostW[1], TargetIP(clusterIP), ports, hostW1SrcIP)
 
 								cc.CheckConnectivity()
 							})
@@ -4285,33 +4240,71 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				})
 			})
 
-			It("should have connectivity from host-networked pods via service to host-networked backend", func() {
-				By("Setting up the service")
-				hostW[0].ConfigureInInfra(infra)
-				testSvc := k8sService("host-svc", clusterIP, hostW[0], 80, 8055, 0, testOpts.protocol)
-				testSvcNamespace := testSvc.ObjectMeta.Namespace
-				k8sClient := infra.(*infrastructure.K8sDatastoreInfra).K8sClient
-				_, err := k8sClient.CoreV1().Services(testSvcNamespace).Create(context.Background(), testSvc, metav1.CreateOptions{})
-				Expect(err).NotTo(HaveOccurred())
-				Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(1),
-					"Service endpoints didn't get created? Is controller-manager happy?")
+			Context("With service backed by host-networked pods", func() {
+				var (
+					testSvc    *v1.Service
+					exp0, exp1 []ExpectationOption
+					port       uint16
+				)
 
-				By("Testing connectivity")
-				port := uint16(testSvc.Spec.Ports[0].Port)
+				BeforeEach(func() {
+					hostW[0].ConfigureInInfra(infra)
+					testSvc = k8sService("host-svc", clusterIP, hostW[0], 80, 8055, 0, testOpts.protocol)
+					testSvcNamespace := testSvc.ObjectMeta.Namespace
+					k8sClient := infra.(*infrastructure.K8sDatastoreInfra).K8sClient
+					_, err := k8sClient.CoreV1().Services(testSvcNamespace).Create(context.Background(), testSvc, metav1.CreateOptions{})
+					Expect(err).NotTo(HaveOccurred())
+					Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(1),
+						"Service endpoints didn't get created? Is controller-manager happy?")
 
-				hostW0SrcIP := ExpectWithSrcIPs(felixIP(0))
-				hostW1SrcIP := ExpectWithSrcIPs(felixIP(1))
-				if !testOpts.connTimeEnabled {
-					switch testOpts.tunnel {
-					case "ipip":
-						hostW0SrcIP = ExpectWithSrcIPs(tc.Felixes[0].ExpectedIPIPTunnelAddr)
-						hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedIPIPTunnelAddr)
+					port = uint16(testSvc.Spec.Ports[0].Port)
+
+					hostW0SrcIP := ExpectWithSrcIPs(felixIP(0))
+					hostW1SrcIP := ExpectWithSrcIPs(felixIP(1))
+					if !testOpts.connTimeEnabled {
+						switch testOpts.tunnel {
+						case "ipip":
+							hostW0SrcIP = ExpectWithSrcIPs(tc.Felixes[0].ExpectedIPIPTunnelAddr)
+							hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedIPIPTunnelAddr)
+						}
 					}
-				}
 
-				cc.Expect(Some, hostW[0], TargetIP(clusterIP), ExpectWithPorts(port), hostW0SrcIP)
-				cc.Expect(Some, hostW[1], TargetIP(clusterIP), ExpectWithPorts(port), hostW1SrcIP)
-				cc.CheckConnectivity()
+					exp0 = append(exp0, hostW0SrcIP, ExpectWithPorts(port))
+					exp1 = append(exp1, hostW1SrcIP, ExpectWithPorts(port))
+				})
+
+				It("host-networked pods should have connectivityi to the service", func() {
+					cc.Expect(Some, hostW[0], TargetIP(clusterIP), exp0...)
+					cc.Expect(Some, hostW[1], TargetIP(clusterIP), exp1...)
+					cc.CheckConnectivity()
+				})
+
+				Context("With non-routable address set on lo", func() {
+					// It only makes sense for turned off CTLB as with CTLB routing
+					// picks the right source IP.
+					if testOpts.connTimeEnabled {
+						return
+					}
+
+					loIP := "5.6.5.6"
+
+					if testOpts.ipv6 {
+						loIP = "dead:beef::abcd:0:5656:5656"
+					}
+
+					BeforeEach(func() {
+						tc.Felixes[0].Exec("ip", "addr", "add", loIP+"/"+ipMask(), "dev", "lo")
+						tc.Felixes[1].Exec("ip", "addr", "add", loIP+"/"+ipMask(), "dev", "lo")
+					})
+
+					It("host-networked pods should have connectivityi to the service", func() {
+						exp0 = append(exp0, ExpectWithSrcIPs(loIP))
+						exp1 = append(exp1, ExpectWithSrcIPs(felixIP(1)))
+						cc.Expect(Some, hostW[0], TargetIP(clusterIP), exp0...)
+						cc.Expect(Some, hostW[1], TargetIP(clusterIP), exp1...)
+						cc.CheckConnectivity()
+					})
+				})
 			})
 
 		})
