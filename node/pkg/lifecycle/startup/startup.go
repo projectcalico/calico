@@ -130,14 +130,7 @@ func Run() {
 	}
 
 	// If running under kubernetes with secrets to call k8s API
-	kubeconfig := os.Getenv("KUBECONFIG")
-	// Host env vars may override the container on Windows HPC, so $env:KUBECONFIG cannot
-	// be trusted in this case
-	// FIXME: this will no longer be needed when containerd v1.6 is EOL'd
-	if winutils.InHostProcessContainer() {
-		kubeconfig = ""
-	}
-	if config, err := winutils.BuildConfigFromFlags("", kubeconfig); err == nil {
+	if config, err := winutils.BuildConfigFromFlags("", os.Getenv("KUBECONFIG")); err == nil {
 		// default timeout is 30 seconds, which isn't appropriate for this kind of
 		// startup action because network services, like kube-proxy might not be
 		// running and we don't want to block the full 30 seconds if they are just
@@ -337,14 +330,7 @@ func MonitorIPAddressSubnets() {
 	if nodeRef := os.Getenv("CALICO_K8S_NODE_REF"); nodeRef != "" {
 		k8sNodeName = nodeRef
 	}
-	kubeconfig := os.Getenv("KUBECONFIG")
-	// Host env vars may override the container on Windows HPC, so $env:KUBECONFIG cannot
-	// be trusted in this case
-	// FIXME: this will no longer be needed when containerd v1.6 is EOL'd
-	if winutils.InHostProcessContainer() {
-		kubeconfig = ""
-	}
-	if config, err = winutils.BuildConfigFromFlags("", kubeconfig); err == nil {
+	if config, err = winutils.BuildConfigFromFlags("", os.Getenv("KUBECONFIG")); err == nil {
 		// Create the k8s clientset.
 		clientset, err = kubernetes.NewForConfig(config)
 		if err != nil {

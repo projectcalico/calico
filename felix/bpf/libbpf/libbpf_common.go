@@ -40,4 +40,5 @@ type TcGlobalData struct {
 type XDPGlobalData struct {
 	IfaceName string
 	Jumps     [16]uint32
+	JumpsV6   [16]uint32
 }

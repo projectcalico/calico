@@ -35,20 +35,11 @@ import (
 // Create a new SyncerUpdateProcessor to sync WorkloadEndpoint data in v1 format for
 // consumption by Felix.
 func NewWorkloadEndpointUpdateProcessor() watchersyncer.SyncerUpdateProcessor {
-	return NewSimpleUpdateProcessor(libapiv3.KindWorkloadEndpoint, convertWorkloadEndpointV2ToV1Key, convertWorkloadEndpointV2ToV1Value)
+	return NewSimpleUpdateProcessor(libapiv3.KindWorkloadEndpoint, convertWorkloadEndpointV3ToV1Key, convertWorkloadEndpointV2ToV1Value)
 }
 
-func convertWorkloadEndpointV2ToV1Key(v3key model.ResourceKey) (model.Key, error) {
-	parts := names.ExtractDashSeparatedParms(v3key.Name, 4)
-	if len(parts) != 4 || v3key.Namespace == "" {
-		return model.WorkloadEndpointKey{}, errors.New("Not enough information provided to create v1 Workload Endpoint Key")
-	}
-	return model.WorkloadEndpointKey{
-		Hostname:       parts[0],
-		OrchestratorID: parts[1],
-		WorkloadID:     v3key.Namespace + "/" + parts[2],
-		EndpointID:     parts[3],
-	}, nil
+func convertWorkloadEndpointV3ToV1Key(key model.ResourceKey) (model.Key, error) {
+	return names.ConvertWorkloadEndpointV3KeyToV1Key(key)
 }
 
 func convertWorkloadEndpointV2ToV1Value(val interface{}) (interface{}, error) {

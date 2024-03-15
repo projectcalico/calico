@@ -122,7 +122,7 @@ EOF
 	    for elversion in ${elversions}; do
 		# Skip the rpm build if we are missing the matching build image.
 		imageid=$(docker images -q calico-build/centos${elversion}:latest)
-		[ -n "$imageid"  ] && ${DOCKER_RUN_RM} -e EL_VERSION=el${elversion} \
+		[ -n "$imageid" ] && ${DOCKER_RUN_RM} -e EL_VERSION=el${elversion} \
 		    -e FORCE_VERSION=${FORCE_VERSION} \
 		    -e RPM_TAR_ARGS="${RPM_TAR_ARGS}" \
 		    $imageid /rpm/build-rpms

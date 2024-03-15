@@ -78,7 +78,7 @@ func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 		}
 
 		BeforeEach(func() {
-			iOpts := []infrastructure.CreateOption{infrastructure.K8sWithIPv6(),
+			iOpts := []infrastructure.CreateOption{infrastructure.K8sWithDualStack(),
 				infrastructure.K8sWithAPIServerBindAddress("::"),
 				infrastructure.K8sWithServiceClusterIPRange("dead:beef::abcd:0:0:0/112,10.101.0.0/16")}
 			infra = getInfra(iOpts...)

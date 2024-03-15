@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2024 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -53,7 +53,7 @@ CALI_BPF_INLINE static int extract_ports(__u32 len, struct iphdr * h,
 }
 
 
-__attribute__((section("prefilter_func")))
+SEC("xdp")
 enum xdp_action prefilter(struct xdp_md* xdp)
 {
 	struct ethhdr * ehdr;

@@ -21,6 +21,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -53,10 +54,15 @@ var _ = Describe("Custom resource conversion methods (tested using BGPPeer)", fu
 		Kind: apiv3.KindBGPPeer,
 	}
 
+	// Define a UID and its converted equivalent.
+	baseUID := types.UID("41cb1fde-57e7-42c1-a73b-0acaf38c7737")
+	convertedUID := types.UID("82d3f87b-eae7-4283-a7dc-5053cf31eeec")
+
 	// Compatible set of KVPair and Kubernetes Resource.
 	value1 := apiv3.NewBGPPeer()
 	value1.ObjectMeta.Name = name1
 	value1.ObjectMeta.ResourceVersion = "rv"
+	value1.ObjectMeta.UID = baseUID
 	value1.Spec = apiv3.BGPPeerSpec{
 		PeerIP:   peerIP1.String(),
 		ASNumber: 1212,
@@ -74,6 +80,7 @@ var _ = Describe("Custom resource conversion methods (tested using BGPPeer)", fu
 		ObjectMeta: metav1.ObjectMeta{
 			Name:            name1,
 			ResourceVersion: "rv",
+			UID:             convertedUID,
 		},
 		Spec: apiv3.BGPPeerSpec{
 			ASNumber: 1212,
@@ -110,7 +117,9 @@ var _ = Describe("Custom resource conversion methods (tested using BGPPeer)", fu
 		Expect(r).To(BeAssignableToTypeOf(&apiv3.BGPPeer{}))
 		Expect(r.(*apiv3.BGPPeer).Spec).To(Equal(res1.Spec))
 
-		// Make sure to clean up the annotations on the resource
+		// UID is populated by Kubernetes on write. Add one here to simulate that before converting back.
+		r.GetObjectMeta().SetUID(baseUID)
+
 		err = ConvertK8sResourceToCalicoResource(r)
 		Expect(err).NotTo(HaveOccurred())
 	})

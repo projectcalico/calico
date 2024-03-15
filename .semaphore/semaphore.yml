@@ -235,17 +235,7 @@ blocks:
         value: master_ssh_key
       - name: WIN_PPK_KEY
         value: win_ppk_key
-      - name: K8S_VERSION
-        value: 1.22.6
     jobs:
-      - name: Docker - Windows FV
-        execution_time_limit:
-          minutes: 60
-        commands:
-          - ../.semaphore/run-and-monitor win-fv-docker.log ./.semaphore/run-win-fv.sh
-        env_vars:
-          - name: CONTAINER_RUNTIME
-            value: docker
       - name: Containerd - Windows FV
         execution_time_limit:
           minutes: 60
@@ -255,7 +245,7 @@ blocks:
           - name: CONTAINER_RUNTIME
             value: containerd
           - name: CONTAINERD_VERSION
-            value: 1.6.0
+            value: 1.6.22
 - name: confd
   run:
     when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/confd/', '/hack/test/certs/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
@@ -609,10 +599,10 @@ blocks:
               - s390x
         commands:
           - ../.semaphore/run-and-monitor image-$ARCH.log make image ARCH=$ARCH
-      - name: "Build Windows archive"
+      - name: Build Windows archive
         commands:
           - ../.semaphore/run-and-monitor build-windows-archive.log make build-windows-archive
-      - name: "Build Windows image"
+      - name: Build Windows image
         commands:
           - ../.semaphore/run-and-monitor build-windows-image.log make image-windows
 
