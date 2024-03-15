@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2024 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,17 +16,10 @@
 #define __CALI_BPF_H__
 
 #include <linux/bpf.h>
+#include <bpf/bpf_helpers.h>
+
 #include <stddef.h>
 #include <linux/ip.h>
-
-/* Kernel/libbpf bpf_helpers.h also contain this struct 'bpf_map_def' */
-struct bpf_map_def {
-        unsigned int type;
-        unsigned int key_size;
-        unsigned int value_size;
-        unsigned int max_entries;
-        unsigned int map_flags;
-};
 
 #define CALI_BPF_INLINE inline __attribute__((always_inline))
 
@@ -53,16 +46,8 @@ struct bpf_map_def {
  * BPF helper function stubs
  */
 
-#define MAKEFUNC(ret_type,fname,...) \
-	static ret_type (*bpf_ ## fname)(__VA_ARGS__) = (void*) BPF_FUNC_ ## fname;
-
 #define BPF_REDIR_EGRESS 0
 #define BPF_REDIR_INGRESS 1
-MAKEFUNC(int, msg_redirect_hash,
-	struct sk_msg_md*, struct bpf_map_def*, void*, __u64)
-MAKEFUNC(int, sock_hash_update,
-	struct bpf_sock_ops*, struct bpf_map_def*, void*, __u64)
-MAKEFUNC(void*, map_lookup_elem, void*, const void*)
 
 /*
  * Data types, structs, and unions
