@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2024 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <linux/bpf.h>
 #include "bpf.h"
 
 struct protoport {
@@ -20,18 +19,18 @@ struct protoport {
 	__u16 port;
 };
 
-struct bpf_map_def __attribute__((section("maps"))) calico_prefilter_v4 = {
-	.type           = BPF_MAP_TYPE_LPM_TRIE,
-	.key_size       = sizeof(union ip4_bpf_lpm_trie_key),
-	.value_size     = sizeof(__u32),
-	.max_entries    = 10240,
-	.map_flags      = BPF_F_NO_PREALLOC,
-};
+struct {
+    __uint(type, BPF_MAP_TYPE_LPM_TRIE);
+    __type(key, union ip4_bpf_lpm_trie_key);
+    __type(value, __u32);
+    __uint(max_entries, 10240);
+    __uint(map_flags, BPF_F_NO_PREALLOC);
+} calico_prefilter_v4 SEC(".maps");
 
-struct bpf_map_def __attribute__((section("maps"))) calico_failsafe_ports = {
-	.type           = BPF_MAP_TYPE_HASH,
-	.key_size       = sizeof(struct protoport),
-	.value_size     = 1,
-	.max_entries    = 65535,
-	.map_flags      = BPF_F_NO_PREALLOC,
-};
+struct {
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __type(key, struct protoport);
+    __type(value, __u32);
+    __uint(max_entries, 65535);
+    __uint(map_flags, BPF_F_NO_PREALLOC);
+} calico_failsafe_ports SEC(".maps");
