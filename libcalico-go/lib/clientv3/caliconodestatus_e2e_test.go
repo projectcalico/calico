@@ -15,14 +15,13 @@
 package clientv3_test
 
 import (
+	"context"
 	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-	"context"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
@@ -35,7 +34,6 @@ import (
 )
 
 var _ = testutils.E2eDatastoreDescribe("CalicoNodeStatus tests", testutils.DatastoreAll, func(config apiconfig.CalicoAPIConfig) {
-
 	ctx := context.Background()
 	name1 := "caliconodestatus-1"
 	name2 := "caliconodestatus-2"
@@ -201,7 +199,7 @@ var _ = testutils.E2eDatastoreDescribe("CalicoNodeStatus tests", testutils.Datas
 
 			By("Updating the CalicoNodeStatus before it is created")
 			_, outError := c.CalicoNodeStatus().Update(ctx, &apiv3.CalicoNodeStatus{
-				ObjectMeta: metav1.ObjectMeta{Name: name1, ResourceVersion: "1234", CreationTimestamp: metav1.Now(), UID: "test-fail-caliconodestatus"},
+				ObjectMeta: metav1.ObjectMeta{Name: name1, ResourceVersion: "1234", CreationTimestamp: metav1.Now(), UID: uid},
 				Spec:       spec1,
 				Status:     status1,
 			}, options.SetOptions{})
@@ -292,7 +290,7 @@ var _ = testutils.E2eDatastoreDescribe("CalicoNodeStatus tests", testutils.Datas
 
 			By("Attempting to update the CalicoNodeStatus without a Creation Timestamp")
 			res, outError = c.CalicoNodeStatus().Update(ctx, &apiv3.CalicoNodeStatus{
-				ObjectMeta: metav1.ObjectMeta{Name: name1, ResourceVersion: "1234", UID: "test-fail-caliconodestatus"},
+				ObjectMeta: metav1.ObjectMeta{Name: name1, ResourceVersion: "1234", UID: uid},
 				Spec:       spec1,
 				Status:     status1,
 			}, options.SetOptions{})

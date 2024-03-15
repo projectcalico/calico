@@ -34,7 +34,6 @@ import (
 )
 
 var _ = testutils.E2eDatastoreDescribe("GlobalNetworkSet tests", testutils.DatastoreAll, func(config apiconfig.CalicoAPIConfig) {
-
 	ctx := context.Background()
 	name1 := "networkset-1"
 	name2 := "networkset-2"
@@ -63,7 +62,7 @@ var _ = testutils.E2eDatastoreDescribe("GlobalNetworkSet tests", testutils.Datas
 
 			By("Updating the GlobalNetworkSet before it is created")
 			_, outError := c.GlobalNetworkSets().Update(ctx, &apiv3.GlobalNetworkSet{
-				ObjectMeta: metav1.ObjectMeta{Name: name1, ResourceVersion: "1234", CreationTimestamp: metav1.Now(), UID: "test-fail-globalNetworkSet"},
+				ObjectMeta: metav1.ObjectMeta{Name: name1, ResourceVersion: "1234", CreationTimestamp: metav1.Now(), UID: uid},
 				Spec:       spec1,
 			}, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
@@ -144,7 +143,7 @@ var _ = testutils.E2eDatastoreDescribe("GlobalNetworkSet tests", testutils.Datas
 
 			By("Attempting to update the GlobalNetworkSet without a Creation Timestamp")
 			res, outError = c.GlobalNetworkSets().Update(ctx, &apiv3.GlobalNetworkSet{
-				ObjectMeta: metav1.ObjectMeta{Name: name1, ResourceVersion: "1234", UID: "test-fail-globalNetworkSet"},
+				ObjectMeta: metav1.ObjectMeta{Name: name1, ResourceVersion: "1234", UID: uid},
 				Spec:       spec1,
 			}, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
