@@ -28,7 +28,6 @@ import (
 )
 
 var _ = Describe("Namespace conversion tests", func() {
-
 	nsConverter := converter.NewNamespaceConverter()
 
 	It("should parse a Namespace to a Profile", func() {
@@ -40,6 +39,7 @@ var _ = Describe("Namespace conversion tests", func() {
 					"roger":       "rabbit",
 				},
 				Annotations: map[string]string{},
+				UID:         "aa844ac0-87c8-440a-b270-307cdba8fd25",
 			},
 			Spec: k8sapi.NamespaceSpec{},
 		}
@@ -79,6 +79,7 @@ var _ = Describe("Namespace conversion tests", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:        "default",
 				Annotations: map[string]string{},
+				UID:         "aa844ac0-87c8-440a-b270-307cdba8fd25",
 			},
 			Spec: k8sapi.NamespaceSpec{},
 		}
@@ -120,6 +121,7 @@ var _ = Describe("Namespace conversion tests", func() {
 				ObjectMeta: metav1.ObjectMeta{
 					Name:        "default",
 					Annotations: map[string]string{},
+					UID:         "aa844ac0-87c8-440a-b270-307cdba8fd25",
 				},
 				Spec: k8sapi.NamespaceSpec{},
 			},
@@ -178,6 +180,5 @@ var _ = Describe("Namespace conversion tests", func() {
 			Expect(ns).To(Equal(""))
 			Expect(name).To(Equal("kns.default"))
 		})
-
 	})
 })

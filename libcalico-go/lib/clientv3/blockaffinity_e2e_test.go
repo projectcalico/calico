@@ -35,7 +35,6 @@ import (
 )
 
 var _ = testutils.E2eDatastoreDescribe("Block affinity tests", testutils.DatastoreAll, func(config apiconfig.CalicoAPIConfig) {
-
 	ctx := context.Background()
 	name1 := "affinity-1"
 	name2 := "affinity-2"
@@ -70,7 +69,7 @@ var _ = testutils.E2eDatastoreDescribe("Block affinity tests", testutils.Datasto
 		func(name1, name2 string, spec1, spec2 libapiv3.BlockAffinitySpec) {
 			By("Updating the block affinity before it is created")
 			_, outError := c.BlockAffinities().Update(ctx, &libapiv3.BlockAffinity{
-				ObjectMeta: metav1.ObjectMeta{Name: name1, ResourceVersion: "1234", CreationTimestamp: metav1.Now(), UID: "test-fail-affinity"},
+				ObjectMeta: metav1.ObjectMeta{Name: name1, ResourceVersion: "1234", CreationTimestamp: metav1.Now(), UID: uid},
 				Spec:       spec1,
 			}, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
@@ -157,7 +156,7 @@ var _ = testutils.E2eDatastoreDescribe("Block affinity tests", testutils.Datasto
 
 			By("Attempting to update the BlockAffinity without a Creation Timestamp")
 			res, outError = c.BlockAffinities().Update(ctx, &libapiv3.BlockAffinity{
-				ObjectMeta: metav1.ObjectMeta{Name: name1, ResourceVersion: "1234", UID: "test-fail-affinity"},
+				ObjectMeta: metav1.ObjectMeta{Name: name1, ResourceVersion: "1234", UID: uid},
 				Spec:       spec1,
 			}, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
