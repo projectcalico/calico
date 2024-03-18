@@ -102,6 +102,7 @@ require (
 	modernc.org/memory v1.7.2
 	sigs.k8s.io/controller-runtime v0.15.3
 	sigs.k8s.io/kind v0.22.0
+	sigs.k8s.io/knftables v0.0.15
 	sigs.k8s.io/yaml v1.4.0
 )
 
