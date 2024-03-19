@@ -38,7 +38,7 @@ metadata:
 ---
 # Source: calico/templates/calico-etcd-secrets.yaml
 # The following contains k8s Secrets for use with a TLS enabled etcd cluster.
-# For information on populating Secrets, see http://kubernetes.io/docs/user-guide/secrets/
+# For information on populating Secrets, see https://kubernetes.io/docs/concepts/configuration/secret/
 apiVersion: v1
 kind: Secret
 type: Opaque
@@ -223,7 +223,7 @@ rules:
 ---
 # Source: calico/templates/calico-node-rbac.yaml
 # Flannel ClusterRole
-# Pulled from https://github.com/coreos/flannel/blob/master/Documentation/kube-flannel-rbac.yml
+# Pulled from https://github.com/flannel-io/flannel/blob/master/Documentation/k8s-old-manifests/kube-flannel-rbac.yml
 kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
