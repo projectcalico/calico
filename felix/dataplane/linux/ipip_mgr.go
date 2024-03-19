@@ -15,6 +15,7 @@
 package intdataplane
 
 import (
+	"fmt"
 	"net"
 	"time"
 
@@ -22,6 +23,7 @@ import (
 	"github.com/vishvananda/netlink"
 
 	"github.com/projectcalico/calico/felix/dataplane/common"
+	"github.com/projectcalico/calico/felix/ethtool"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/rules"
@@ -80,10 +82,10 @@ func newIPIPManagerWithShim(
 
 // KeepIPIPDeviceInSync is a goroutine that configures the IPIP tunnel device, then periodically
 // checks that it is still correctly configured.
-func (d *ipipManager) KeepIPIPDeviceInSync(mtu int, address net.IP) {
+func (d *ipipManager) KeepIPIPDeviceInSync(mtu int, address net.IP, xsumBroken bool) {
 	log.Info("IPIP thread started.")
 	for {
-		err := d.configureIPIPDevice(mtu, address)
+		err := d.configureIPIPDevice(mtu, address, xsumBroken)
 		if err != nil {
 			log.WithError(err).Warn("Failed configure IPIP tunnel device, retrying...")
 			time.Sleep(1 * time.Second)
@@ -94,7 +96,7 @@ func (d *ipipManager) KeepIPIPDeviceInSync(mtu int, address net.IP) {
 }
 
 // configureIPIPDevice ensures the IPIP tunnel device is up and configures correctly.
-func (d *ipipManager) configureIPIPDevice(mtu int, address net.IP) error {
+func (d *ipipManager) configureIPIPDevice(mtu int, address net.IP, xsumBroken bool) error {
 	logCxt := log.WithFields(log.Fields{
 		"mtu":        mtu,
 		"tunnelAddr": address,
@@ -128,6 +130,14 @@ func (d *ipipManager) configureIPIPDevice(mtu int, address net.IP) error {
 		}
 		logCxt.Info("Updated tunnel MTU")
 	}
+
+	// If required, disable checksum offload.
+	if xsumBroken {
+		if err := ethtool.EthtoolTXOff("tunl0"); err != nil {
+			return fmt.Errorf("failed to disable checksum offload: %s", err)
+		}
+	}
+
 	if attrs.Flags&net.FlagUp == 0 {
 		logCxt.WithField("flags", attrs.Flags).Info("Tunnel wasn't admin up, enabling it")
 		if err := d.dataplane.LinkSetUp(link); err != nil {

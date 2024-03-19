@@ -807,8 +807,10 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	dp.RegisterManager(newFloatingIPManager(natTableV4, ruleRenderer, 4, config.FloatingIPsEnabled))
 	dp.RegisterManager(newMasqManager(ipSetsV4, natTableV4, ruleRenderer, config.MaxIPSetSize, 4))
 	if config.RulesConfig.IPIPEnabled {
+		log.Info("IPIP enabled, starting thread to keep tunnel configuration in sync.")
 		// Add a manager to keep the all-hosts IP set up to date.
 		dp.ipipManager = newIPIPManager(ipSetsV4, config.MaxIPSetSize, config.ExternalNodesCidrs)
+		go dp.ipipManager.KeepIPIPDeviceInSync(config.IPIPMTU, config.RulesConfig.IPIPTunnelAddress, dataplaneFeatures.ChecksumOffloadBroken)
 		dp.RegisterManager(dp.ipipManager) // IPv4-only
 	} else {
 		// Only clean up IPIP addresses if IPIP is implicitly disabled (no IPIP pools and not explicitly set in FelixConfig)
@@ -1410,16 +1412,6 @@ func (d *InternalDataplane) doStaticDataplaneConfig() {
 		d.setUpIptablesBPF()
 	} else {
 		d.setUpIptablesNormal()
-	}
-
-	if d.config.RulesConfig.IPIPEnabled {
-		log.Info("IPIP enabled, starting thread to keep tunnel configuration in sync.")
-		go d.ipipManager.KeepIPIPDeviceInSync(
-			d.config.IPIPMTU,
-			d.config.RulesConfig.IPIPTunnelAddress,
-		)
-	} else {
-		log.Info("IPIP disabled. Not starting tunnel update thread.")
 	}
 }
 
