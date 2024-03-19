@@ -53,13 +53,38 @@ function reject_default_route()
   }
 }
 
+function reject_bogons()
+{
+  # Multicast range
+  if (net ~ 127.0.0.0/8) then {
+    reject;
+  }
+
+  # Loopback range
+  if (net ~ 224.0.0.0/4) then {
+    reject;
+  }
+
+  # Link-local range
+  if (net ~ 169.254.0.0/16) then {
+    reject;
+  }
+
+  # CGNAT range
+  if (net ~ 100.64.0.0/10) then {
+    reject;
+  }
+}
+
 filter calico_import_from_bgp_peers {
   reject_default_route();
+  reject_bogons();
   accept;
 }
 
 filter calico_export_to_bgp_peers {
   reject_default_route();
+  reject_bogons();
 
   # NOTICE: Use "nodeSelector: !all()" instead of setting "disabled: true" in
   # order to use IPPools to define which encapsulation method (if any) shall be
