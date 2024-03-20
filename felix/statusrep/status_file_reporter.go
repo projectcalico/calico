@@ -331,7 +331,7 @@ func ensureStatusDir(prefix string) (entries []fs.DirEntry, err error) {
 	entries, err = os.ReadDir(filename)
 	if err != nil && errors.Is(err, fs.ErrNotExist) {
 		// Discard ErrNotExist and return the result of attempting to create it.
-		return entries, os.Mkdir(filename, fs.FileMode(0644))
+		return entries, os.Mkdir(filename, fs.FileMode(0655))
 	}
 
 	return entries, err
