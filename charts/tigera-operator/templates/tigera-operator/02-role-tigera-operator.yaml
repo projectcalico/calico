@@ -145,6 +145,7 @@ rules:
     - crd.projectcalico.org
     resources:
     - felixconfigurations
+    - ippools
     verbs:
     - create
     - patch
@@ -154,10 +155,21 @@ rules:
   - apiGroups:
     - crd.projectcalico.org
     resources:
-    - ippools
     - kubecontrollersconfigurations
     - bgpconfigurations
     verbs:
+    - get
+    - list
+    - watch
+  - apiGroups:
+    - projectcalico.org
+    resources:
+    - ippools
+    verbs:
+    - create
+    - update
+    - delete
+    - patch
     - get
     - list
     - watch
