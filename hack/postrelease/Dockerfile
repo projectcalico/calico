@@ -15,15 +15,18 @@ RUN --mount=type=tmpfs,target=/var/cache/apk apk add --no-cache \
     python3         \
     python3-dev     \
     py3-pip         \
+    py3-yaml        \
+    py3-pytest      \
+    py3-requests    \
+    py3-rich        \
     py-setuptools   \
     openssl-dev     \
     curl            \
-    jq
+    jq              \
+    yq
 
 RUN mkdir -p /root/.docker /code
 COPY config.json /root/.docker/
-COPY requirements.txt /requirements.txt
-RUN pip install --no-cache-dir -r /requirements.txt
 
 # The container is used by mounting the code-under-test to /code
 WORKDIR /code/
