@@ -65,7 +65,12 @@ func AutoDetectCIDR(method string, version int, k8sNode *v1.Node, getInterfaces 
 	} else if strings.HasPrefix(method, AUTODETECTION_METHOD_CAN_REACH) {
 		// Autodetect the IP by connecting a UDP socket to a supplied address.
 		destStr := strings.TrimPrefix(method, AUTODETECTION_METHOD_CAN_REACH)
-		return autoDetectCIDRByReach(destStr, version)
+		matches := []string{}
+		for _, r := range regexp.MustCompile(`\s*,\s*`).Split(destStr, -1) {
+			matches = append(matches, r)
+		}
+
+		return autoDetectCIDRByReach(matches, version)
 	} else if strings.HasPrefix(method, AUTODETECTION_METHOD_SKIP_INTERFACE) {
 		// Autodetect the Ip by enumerating all interfaces (excluding
 		// known internal interfaces and any interfaces whose name
@@ -135,12 +140,12 @@ func autoDetectCIDRByCIDR(matches []cnet.IPNet, version int) *cnet.IPNet {
 
 // autoDetectCIDRByReach auto-detects the IP and Network by setting up a UDP
 // connection to a "reach" address.
-func autoDetectCIDRByReach(dest string, version int) *cnet.IPNet {
-	if cidr, err := ReachDestination(dest, version); err != nil {
-		log.Warnf("Unable to auto-detect IPv%d address by connecting to %s: %s", version, dest, err)
+func autoDetectCIDRByReach(dests []string, version int) *cnet.IPNet {
+	if cidr, err := ReachDestination(dests, version); err != nil {
+		log.Warnf("Unable to auto-detect IPv%d address by connecting to %s: %s", version, dests, err)
 		return nil
 	} else {
-		log.Infof("Using autodetected IPv%d address %s, detected by connecting to %s", version, cidr.String(), dest)
+		log.Infof("Using autodetected IPv%d address %s, detected by connecting to %s", version, cidr.String(), dests)
 		return cidr
 	}
 }
