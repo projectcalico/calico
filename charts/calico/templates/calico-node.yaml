@@ -43,7 +43,7 @@ spec:
       terminationGracePeriodSeconds: 0
       priorityClassName: system-node-critical
       initContainers:
-{{- if and (eq .Values.network "calico") (eq .Values.datastore "kubernetes") }}
+{{- if and (eq .Values.network "calico") (eq .Values.datastore "kubernetes") (eq .Values.ipam "calico-ipam") }}
         # This container performs upgrade from host-local IPAM to calico-ipam.
         # It can be deleted if this is a fresh installation, or if you have already
         # upgraded to use calico-ipam.
