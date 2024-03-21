@@ -65,8 +65,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 		if BPFMode() && getDataStoreType(infra) == "etcdv3" {
 			Skip("Skipping BPF test for etcdv3 backend.")
 		}
-		tc, client = infrastructure.StartNNodeTopology(2, infrastructure.DefaultTopologyOptions(), infra)
-
+		tc, client = infrastructure.StartNNodeTopology(2, createDefaultTopologyOptionsWithChecksumOffload(true), infra)
 		// Install a default profile that allows all ingress and egress, in the absence of any Policy.
 		infra.AddDefaultAllow()
 
@@ -154,6 +153,16 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 		cc.ExpectSome(tc.Felixes[0], hostW[1])
 		cc.ExpectSome(tc.Felixes[1], hostW[0])
 		cc.CheckConnectivity()
+	})
+
+	It("should disable checksum offload", func() {
+		Eventually(func() string {
+			out, err := tc.Felixes[0].ExecOutput("ethtool", "-k", "tunl0")
+			if err != nil {
+				return fmt.Sprintf("ERROR: %v", err)
+			}
+			return out
+		}, "10s", "100ms").Should(ContainSubstring("tx-checksumming: off"))
 	})
 
 	Context("with host protection policy in place", func() {
@@ -490,6 +499,15 @@ type createK8sServiceWithoutKubeProxyArgs struct {
 	tgtPort   int
 	chain     string
 	ipv6      bool
+}
+
+func createDefaultTopologyOptionsWithChecksumOffload(brokenXSum bool) infrastructure.TopologyOptions {
+	topologyOptions := infrastructure.DefaultTopologyOptions()
+	// We force the broken checksum handling on or off so that we're not dependent on kernel version
+	// for these tests.  Since we're testing in containers anyway, checksum offload can't really be
+	// tested but we can verify the state with ethtool.
+	topologyOptions.ExtraEnvVars["FELIX_FeatureDetectOverride"] = fmt.Sprintf("ChecksumOffloadBroken=%t", brokenXSum)
+	return topologyOptions
 }
 
 func createK8sServiceWithoutKubeProxy(args createK8sServiceWithoutKubeProxyArgs) {
