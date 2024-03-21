@@ -4541,6 +4541,7 @@ rules:
     resources:
       - endpoints
       - services
+      - secrets
     verbs:
       # Used to discover service IPs for advertisement.
       - watch
