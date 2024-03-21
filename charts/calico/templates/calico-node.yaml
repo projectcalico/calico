@@ -637,7 +637,7 @@ spec:
           secret:
             secretName: calico-etcd-secrets
             defaultMode: 0400
-{{- else if and (eq .Values.network "calico") (eq .Values.datastore "kubernetes") }}
+{{- else if and (eq .Values.network "calico") (eq .Values.datastore "kubernetes") (eq .Values.ipam "calico-ipam") }}
         # Mount in the directory for host-local IPAM allocations. This is
         # used when upgrading from host-local to calico-ipam, and can be removed
         # if not using the upgrade-ipam init container.
