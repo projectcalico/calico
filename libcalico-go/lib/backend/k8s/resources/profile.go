@@ -73,7 +73,12 @@ func (c *profileClient) DeleteKVP(ctx context.Context, kvp *model.KVPair) (*mode
 	return c.Delete(ctx, kvp.Key, kvp.Revision, kvp.UID)
 }
 
-func (c *profileClient) Delete(ctx context.Context, key model.Key, revision string, uid *types.UID) (*model.KVPair, error) {
+func (c *profileClient) Delete(
+	ctx context.Context,
+	key model.Key,
+	revision string,
+	uid *types.UID,
+) (*model.KVPair, error) {
 	log.Warn("Operation Delete is not supported on Profile type")
 	return nil, cerrors.ErrorOperationNotSupported{
 		Identifier: key,
@@ -90,7 +95,26 @@ func (c *profileClient) getSaKv(sa *v1.ServiceAccount) (*model.KVPair, error) {
 	return kvPair, nil
 }
 
-func (c *profileClient) getServiceAccount(ctx context.Context, rk model.ResourceKey, revision string) (*model.KVPair, error) {
+func (c *profileClient) getBaselineAdminNetworkPolicy(
+	ctx context.Context,
+	rk model.ResourceKey,
+	revision string,
+) (*model.KVPair, error) {
+	banpClient := c.netPolClient.PolicyV1alpha1().BaselineAdminNetworkPolicies()
+	banp, err := banpClient.Get(ctx, "default", metav1.GetOptions{
+		ResourceVersion: revision,
+	})
+	if err != nil {
+		return nil, K8sErrorToCalico(err, rk)
+	}
+	return c.getBaselineKV(banp)
+}
+
+func (c *profileClient) getServiceAccount(
+	ctx context.Context,
+	rk model.ResourceKey,
+	revision string,
+) (*model.KVPair, error) {
 
 	namespace, serviceAccountName, err := c.ProfileNameToServiceAccount(rk.Name)
 	if err != nil {
@@ -114,7 +138,11 @@ func (c *profileClient) getNsKv(ns *v1.Namespace) (*model.KVPair, error) {
 	return kvPair, nil
 }
 
-func (c *profileClient) getNamespace(ctx context.Context, rk model.ResourceKey, revision string) (*model.KVPair, error) {
+func (c *profileClient) getNamespace(
+	ctx context.Context,
+	rk model.ResourceKey,
+	revision string,
+) (*model.KVPair, error) {
 	namespaceName, err := c.ProfileNameToNamespace(rk.Name)
 	if err != nil {
 		return nil, err
@@ -138,31 +166,30 @@ func (c *profileClient) Get(ctx context.Context, key model.Key, revision string)
 		return resources.DefaultAllowProfile(), nil
 	}
 
-	nsRev, saRev, err := c.SplitProfileRevision(revision)
+	nsRev, saRev, banpRev, err := c.SplitProfileRevision(revision)
 	if err != nil {
 		return nil, err
 	}
 
 	splits := strings.SplitAfterN(rk.Name, ".", 2)
-	if len(splits) == 1 {
-		if splits[0] == conversion.KubeBaselineProfile {
-			panic("TODO: implement KubeBaselineProfile")
-		}
-
-		return nil, fmt.Errorf("Invalid name %s", rk.Name)
-	}
 
 	switch splits[0] {
 	case conversion.NamespaceProfileNamePrefix:
 		return c.getNamespace(ctx, rk, nsRev)
 	case conversion.ServiceAccountProfileNamePrefix:
 		return c.getServiceAccount(ctx, rk, saRev)
+	case conversion.KubeBaselineProfile:
+		return c.getBaselineAdminNetworkPolicy(ctx, rk, banpRev)
+	default:
+		return nil, fmt.Errorf("invalid name %s", rk.Name)
 	}
-
-	return nil, fmt.Errorf("Revision %s invalid", revision)
 }
 
-func (c *profileClient) List(ctx context.Context, list model.ListInterface, revision string) (*model.KVPairList, error) {
+func (c *profileClient) List(
+	ctx context.Context,
+	list model.ListInterface,
+	revision string,
+) (*model.KVPairList, error) {
 	logContext := log.WithField("Resource", "Profile")
 	logContext.Debug("Received List request")
 	nl := list.(model.ResourceListOptions)
@@ -188,7 +215,7 @@ func (c *profileClient) List(ctx context.Context, list model.ListInterface, revi
 		}, nil
 	}
 
-	nsRev, saRev, err := c.SplitProfileRevision(revision)
+	nsRev, saRev, banpRev, err := c.SplitProfileRevision(revision)
 	if err != nil {
 		return nil, err
 	}
@@ -198,14 +225,14 @@ func (c *profileClient) List(ctx context.Context, list model.ListInterface, revi
 		return c.netPolClient.PolicyV1alpha1().BaselineAdminNetworkPolicies().List(ctx, opts)
 	}
 	convertFunc := func(r Resource) ([]*model.KVPair, error) {
-		ns := r.(*v1alpha1.BaselineAdminNetworkPolicy)
-		kvp, err := c.getBaselineKv(ns)
+		banp := r.(*v1alpha1.BaselineAdminNetworkPolicy)
+		kvp, err := c.getBaselineKV(banp)
 		if err != nil {
 			return nil, err
 		}
 		return []*model.KVPair{kvp}, nil
 	}
-	nsKVPs, err := pagedList(ctx, logContext.WithField("from", "namespaces"), nsRev, list, convertFunc, listFunc)
+	banpKVPs, err := pagedList(ctx, logContext.WithField("from", "namespaces"), banpRev, list, convertFunc, listFunc)
 	if err != nil {
 		return nil, err
 	}
@@ -222,7 +249,7 @@ func (c *profileClient) List(ctx context.Context, list model.ListInterface, revi
 		}
 		return []*model.KVPair{kvp}, nil
 	}
-	nsKVPs, err = pagedList(ctx, logContext.WithField("from", "namespaces"), nsRev, list, convertFunc, listFunc)
+	nsKVPs, err := pagedList(ctx, logContext.WithField("from", "namespaces"), nsRev, list, convertFunc, listFunc)
 	if err != nil {
 		return nil, err
 	}
@@ -245,11 +272,18 @@ func (c *profileClient) List(ctx context.Context, list model.ListInterface, revi
 	}
 
 	// Return a merged KVPairList including both results as well as the default-allow profile.
-	kvps := append([]*model.KVPair{resources.DefaultAllowProfile()}, nsKVPs.KVPairs...)
+	kvps := append([]*model.KVPair{
+		resources.DefaultAllowProfile(),
+	}, nsKVPs.KVPairs...)
 	kvps = append(kvps, saKVPs.KVPairs...)
+	kvps = append(kvps, banpKVPs.KVPairs...)
 	return &model.KVPairList{
-		KVPairs:  kvps,
-		Revision: c.JoinProfileRevisions(nsKVPs.Revision, saKVPs.Revision),
+		KVPairs: kvps,
+		Revision: c.JoinProfileRevisions(
+			nsKVPs.Revision,
+			saKVPs.Revision,
+			banpKVPs.Revision,
+		),
 	}, nil
 }
 
@@ -257,7 +291,11 @@ func (c *profileClient) EnsureInitialized() error {
 	return nil
 }
 
-func (c *profileClient) Watch(ctx context.Context, list model.ListInterface, revision string) (api.WatchInterface, error) {
+func (c *profileClient) Watch(
+	ctx context.Context,
+	list model.ListInterface,
+	revision string,
+) (api.WatchInterface, error) {
 	// Build watch options to pass to k8s.
 	opts := metav1.ListOptions{Watch: true, AllowWatchBookmarks: false}
 	rlo, ok := list.(model.ResourceListOptions)
@@ -281,7 +319,7 @@ func (c *profileClient) Watch(ctx context.Context, list model.ListInterface, rev
 		// events because no events will occur for the static default-allow profile.
 		if rlo.Name == resources.DefaultAllowProfileName {
 			log.WithField("rv", revision).Debug("Creating a fake watch on default-allow profile")
-			return newProfileWatcher(ctx, api.NewFake(), api.NewFake()), nil
+			return newProfileWatcher(ctx, api.NewFake(), api.NewFake(), api.NewFake()), nil
 		} else if strings.HasPrefix(rlo.Name, conversion.NamespaceProfileNamePrefix) {
 			watchSA = false
 			ns, err = c.ProfileNameToNamespace(rlo.Name)
@@ -300,11 +338,36 @@ func (c *profileClient) Watch(ctx context.Context, list model.ListInterface, rev
 			return nil, fmt.Errorf("Unsupported prefix for resource name: %s", rlo.Name)
 		}
 	}
-	nsRev, saRev, err := c.SplitProfileRevision(revision)
+	nsRev, saRev, banpRev, err := c.SplitProfileRevision(revision)
 	if err != nil {
 		return nil, err
 	}
 
+	// Watch the BANP.
+	success := false
+	opts.ResourceVersion = banpRev
+	var banpWatch kwatch.Interface
+	banpWatch, err = c.netPolClient.PolicyV1alpha1().BaselineAdminNetworkPolicies().Watch(
+		ctx, opts,
+	)
+	if err != nil {
+		return nil, K8sErrorToCalico(err, list)
+	}
+	defer func() {
+		if !success {
+			banpWatch.Stop()
+		}
+	}()
+	converter := func(r Resource) (*model.KVPair, error) {
+		banp, ok := r.(*v1alpha1.BaselineAdminNetworkPolicy)
+		if !ok {
+			return nil, errors.New("Profile conversion with incorrect k8s resource type")
+		}
+		return c.BaselineAdminNetworkPolicyToProfile(banp)
+	}
+	banpWatcher := newK8sWatcherConverter(ctx, "Profile-BANP", converter, banpWatch)
+
+	// Watch all namespaces.
 	opts.ResourceVersion = nsRev
 	var nsWatch kwatch.Interface = kwatch.NewFake()
 	if watchNS {
@@ -313,8 +376,13 @@ func (c *profileClient) Watch(ctx context.Context, list model.ListInterface, rev
 		if err != nil {
 			return nil, K8sErrorToCalico(err, list)
 		}
+		defer func() {
+			if !success {
+				nsWatch.Stop()
+			}
+		}()
 	}
-	converter := func(r Resource) (*model.KVPair, error) {
+	converter = func(r Resource) (*model.KVPair, error) {
 		k8sNamespace, ok := r.(*v1.Namespace)
 		if !ok {
 			return nil, errors.New("Profile conversion with incorrect k8s resource type")
@@ -330,24 +398,27 @@ func (c *profileClient) Watch(ctx context.Context, list model.ListInterface, rev
 		log.Debugf("Watching serviceAccount at revision %q", saRev)
 		saWatch, err = c.clientSet.CoreV1().ServiceAccounts(ns).Watch(ctx, opts)
 		if err != nil {
-			nsWatch.Stop()
 			return nil, K8sErrorToCalico(err, list)
 		}
+		defer func() {
+			if !success {
+				saWatch.Stop()
+			}
+		}()
 	}
 	converterSA := func(r Resource) (*model.KVPair, error) {
 		k8sServiceAccount, ok := r.(*v1.ServiceAccount)
 		if !ok {
-			nsWatch.Stop()
 			return nil, errors.New("Profile conversion with incorrect k8s resource type")
 		}
 		return c.ServiceAccountToProfile(k8sServiceAccount)
 	}
 	saWatcher := newK8sWatcherConverter(ctx, "Profile-SA", converterSA, saWatch)
-
-	return newProfileWatcher(ctx, nsWatcher, saWatcher), nil
+	success = true
+	return newProfileWatcher(ctx, nsWatcher, saWatcher, banpWatcher), nil
 }
 
-func (c *profileClient) getBaselineKv(banp *v1alpha1.BaselineAdminNetworkPolicy) (*model.KVPair, error) {
+func (c *profileClient) getBaselineKV(banp *v1alpha1.BaselineAdminNetworkPolicy) (*model.KVPair, error) {
 	kvPair, err := c.BaselineAdminNetworkPolicyToProfile(banp)
 	if err != nil {
 		return nil, err
@@ -356,15 +427,19 @@ func (c *profileClient) getBaselineKv(banp *v1alpha1.BaselineAdminNetworkPolicy)
 	return kvPair, nil
 }
 
-func newProfileWatcher(ctx context.Context, k8sWatchNS, k8sWatchSA api.WatchInterface) api.WatchInterface {
+func newProfileWatcher(
+	ctx context.Context,
+	k8sWatchNS, k8sWatchSA, k8sWatchBANP api.WatchInterface,
+) api.WatchInterface {
 	ctx, cancel := context.WithCancel(ctx)
 	wc := &profileWatcher{
-		k8sNSWatch: k8sWatchNS,
-		k8sSAWatch: k8sWatchSA,
-		context:    ctx,
-		cancel:     cancel,
-		resultChan: make(chan api.WatchEvent, resultsBufSize),
-		Converter:  conversion.NewConverter(),
+		k8sNSWatch:   k8sWatchNS,
+		k8sSAWatch:   k8sWatchSA,
+		k8sBANPWatch: k8sWatchBANP,
+		context:      ctx,
+		cancel:       cancel,
+		resultChan:   make(chan api.WatchEvent, resultsBufSize),
+		Converter:    conversion.NewConverter(),
 	}
 	go wc.processProfileEvents()
 	return wc
@@ -372,15 +447,17 @@ func newProfileWatcher(ctx context.Context, k8sWatchNS, k8sWatchSA api.WatchInte
 
 type profileWatcher struct {
 	conversion.Converter
-	converter  ConvertK8sResourceToKVPair
-	k8sNSWatch api.WatchInterface
-	k8sSAWatch api.WatchInterface
-	k8sNSRev   string
-	k8sSARev   string
-	context    context.Context
-	cancel     context.CancelFunc
-	resultChan chan api.WatchEvent
-	terminated uint32
+	converter    ConvertK8sResourceToKVPair
+	k8sNSWatch   api.WatchInterface
+	k8sSAWatch   api.WatchInterface
+	k8sBANPWatch api.WatchInterface
+	k8sNSRev     string
+	k8sSARev     string
+	k8sBANPRev   string
+	context      context.Context
+	cancel       context.CancelFunc
+	resultChan   chan api.WatchEvent
+	terminated   uint32
 }
 
 // Stop stops the watcher and releases associated resources.
@@ -389,6 +466,7 @@ func (pw *profileWatcher) Stop() {
 	pw.cancel()
 	pw.k8sNSWatch.Stop()
 	pw.k8sSAWatch.Stop()
+	pw.k8sBANPWatch.Stop()
 }
 
 // ResultChan returns a channel used to receive WatchEvents.
@@ -405,6 +483,9 @@ func (pw *profileWatcher) HasTerminated() bool {
 	}
 	if pw.k8sSAWatch != nil {
 		terminated = terminated && pw.k8sSAWatch.HasTerminated()
+	}
+	if pw.k8sBANPWatch != nil {
+		terminated = terminated && pw.k8sBANPWatch.HasTerminated()
 	}
 
 	return terminated
@@ -424,7 +505,7 @@ func (pw *profileWatcher) processProfileEvents() {
 	for {
 		var ok bool
 		var e api.WatchEvent
-		var isNsEvent bool
+		var revToUpdate *string
 		select {
 		case e, ok = <-pw.k8sNSWatch.ResultChan():
 			if !ok {
@@ -433,7 +514,7 @@ func (pw *profileWatcher) processProfileEvents() {
 				return
 			}
 			log.Debug("Processing Namespace event")
-			isNsEvent = true
+			revToUpdate = &pw.k8sNSRev
 
 		case e, ok = <-pw.k8sSAWatch.ResultChan():
 			if !ok {
@@ -442,7 +523,16 @@ func (pw *profileWatcher) processProfileEvents() {
 				return
 			}
 			log.Debug("Processing ServiceAccount event")
-			isNsEvent = false
+			revToUpdate = &pw.k8sSARev
+
+		case e, ok = <-pw.k8sBANPWatch.ResultChan():
+			if !ok {
+				// Watch channel is closed by upstream hence, return from loop.
+				log.Debug("Profile, BANP watch channel closed by remote.")
+				return
+			}
+			log.Debug("Processing ServiceAccount event")
+			revToUpdate = &pw.k8sBANPRev
 
 		case <-pw.context.Done(): //user cancel
 			log.Debug("Process watcher done event in kdd client")
@@ -470,12 +560,9 @@ func (pw *profileWatcher) processProfileEvents() {
 				// handle this Error as a Watcher termination by remote.
 				return
 			} else {
-				if isNsEvent {
-					pw.k8sNSRev = oma.GetObjectMeta().GetResourceVersion()
-				} else {
-					pw.k8sSARev = oma.GetObjectMeta().GetResourceVersion()
-				}
-				oma.GetObjectMeta().SetResourceVersion(pw.JoinProfileRevisions(pw.k8sNSRev, pw.k8sSARev))
+				*revToUpdate = oma.GetObjectMeta().GetResourceVersion()
+				combinedRev := pw.JoinProfileRevisions(pw.k8sNSRev, pw.k8sSARev, pw.k8sBANPRev)
+				oma.GetObjectMeta().SetResourceVersion(combinedRev)
 			}
 		} else if e.Error == nil {
 			log.WithField("event", e).Warning("Event without error or value")
