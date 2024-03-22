@@ -100,7 +100,7 @@ filter calico_export_to_bgp_peers {
 
   # Filter out further propagation of routes redistributed to this node which
   # haven't originated from this AS nor are static.
-  reject_transit();
+  #reject_transit();
 
   export_pools();
 
