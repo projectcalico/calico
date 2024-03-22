@@ -55,12 +55,12 @@ function reject_default_route()
 
 function reject_bogons()
 {
-  # Multicast range
+  # Loopback range
   if (net ~ 127.0.0.0/8) then {
     reject;
   }
 
-  # Loopback range
+  # Multicast range
   if (net ~ 224.0.0.0/4) then {
     reject;
   }
@@ -77,7 +77,7 @@ function reject_bogons()
 }
 
 filter calico_import_from_bgp_peers {
-  reject_default_route();
+  #reject_default_route();
   reject_bogons();
   accept;
 }
