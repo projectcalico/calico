@@ -15,6 +15,7 @@
 package conversion
 
 const (
+	KubeBaselineProfile             = "kbl"
 	NamespaceLabelPrefix            = "pcns."
 	NamespaceProfileNamePrefix      = "kns."
 	K8sNetworkPolicyNamePrefix      = "knp.default."
