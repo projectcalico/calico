@@ -29,6 +29,8 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	kwatch "k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
+	"sigs.k8s.io/network-policy-api/apis/v1alpha1"
+	netpolclient "sigs.k8s.io/network-policy-api/pkg/client/clientset/versioned"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
@@ -46,7 +48,8 @@ func NewProfileClient(c *kubernetes.Clientset) K8sResourceClient {
 
 // Implements the api.Client interface for Profiles.
 type profileClient struct {
-	clientSet *kubernetes.Clientset
+	clientSet    *kubernetes.Clientset
+	netPolClient netpolclient.Interface
 	conversion.Converter
 }
 
@@ -142,6 +145,10 @@ func (c *profileClient) Get(ctx context.Context, key model.Key, revision string)
 
 	splits := strings.SplitAfterN(rk.Name, ".", 2)
 	if len(splits) == 1 {
+		if splits[0] == conversion.KubeBaselineProfile {
+			panic("TODO: implement KubeBaselineProfile")
+		}
+
 		return nil, fmt.Errorf("Invalid name %s", rk.Name)
 	}
 
@@ -186,11 +193,28 @@ func (c *profileClient) List(ctx context.Context, list model.ListInterface, revi
 		return nil, err
 	}
 
-	// Enumerate all namespaces, paginated.
+	// Get the baseline policy.
 	listFunc := func(ctx context.Context, opts metav1.ListOptions) (runtime.Object, error) {
-		return c.clientSet.CoreV1().Namespaces().List(ctx, opts)
+		return c.netPolClient.PolicyV1alpha1().BaselineAdminNetworkPolicies().List(ctx, opts)
 	}
 	convertFunc := func(r Resource) ([]*model.KVPair, error) {
+		ns := r.(*v1alpha1.BaselineAdminNetworkPolicy)
+		kvp, err := c.getBaselineKv(ns)
+		if err != nil {
+			return nil, err
+		}
+		return []*model.KVPair{kvp}, nil
+	}
+	nsKVPs, err := pagedList(ctx, logContext.WithField("from", "namespaces"), nsRev, list, convertFunc, listFunc)
+	if err != nil {
+		return nil, err
+	}
+
+	// Enumerate all namespaces, paginated.
+	listFunc = func(ctx context.Context, opts metav1.ListOptions) (runtime.Object, error) {
+		return c.clientSet.CoreV1().Namespaces().List(ctx, opts)
+	}
+	convertFunc = func(r Resource) ([]*model.KVPair, error) {
 		ns := r.(*v1.Namespace)
 		kvp, err := c.getNsKv(ns)
 		if err != nil {
@@ -198,7 +222,7 @@ func (c *profileClient) List(ctx context.Context, list model.ListInterface, revi
 		}
 		return []*model.KVPair{kvp}, nil
 	}
-	nsKVPs, err := pagedList(ctx, logContext.WithField("from", "namespaces"), nsRev, list, convertFunc, listFunc)
+	nsKVPs, err = pagedList(ctx, logContext.WithField("from", "namespaces"), nsRev, list, convertFunc, listFunc)
 	if err != nil {
 		return nil, err
 	}
@@ -321,6 +345,15 @@ func (c *profileClient) Watch(ctx context.Context, list model.ListInterface, rev
 	saWatcher := newK8sWatcherConverter(ctx, "Profile-SA", converterSA, saWatch)
 
 	return newProfileWatcher(ctx, nsWatcher, saWatcher), nil
+}
+
+func (c *profileClient) getBaselineKv(banp *v1alpha1.BaselineAdminNetworkPolicy) (*model.KVPair, error) {
+	kvPair, err := c.BaselineAdminNetworkPolicyToProfile(banp)
+	if err != nil {
+		return nil, err
+	}
+
+	return kvPair, nil
 }
 
 func newProfileWatcher(ctx context.Context, k8sWatchNS, k8sWatchSA api.WatchInterface) api.WatchInterface {
