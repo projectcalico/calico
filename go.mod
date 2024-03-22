@@ -87,20 +87,21 @@ require (
 	gopkg.in/go-playground/validator.v9 v9.30.2
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 	gopkg.in/yaml.v2 v2.4.0
-	k8s.io/api v0.27.10
+	k8s.io/api v0.28.1
 	k8s.io/apiextensions-apiserver v0.27.10
-	k8s.io/apimachinery v0.27.10
+	k8s.io/apimachinery v0.28.2
 	k8s.io/apiserver v0.27.10
-	k8s.io/client-go v0.27.10
+	k8s.io/client-go v0.28.1
 	k8s.io/code-generator v0.27.10
 	k8s.io/component-base v0.27.10
 	k8s.io/klog/v2 v2.120.1
 	k8s.io/kube-aggregator v0.27.10
-	k8s.io/kube-openapi v0.0.0-20230501164219-8b0f38b5fd1f
+	k8s.io/kube-openapi v0.0.0-20230717233707-2695361300d9
 	k8s.io/kubernetes v1.27.10
-	k8s.io/utils v0.0.0-20230313181309-38a27ef9d749
+	k8s.io/utils v0.0.0-20230406110748-d93618cff8a2
 	modernc.org/memory v1.7.2
 	sigs.k8s.io/kind v0.22.0
+	sigs.k8s.io/network-policy-api v0.1.2
 	sigs.k8s.io/yaml v1.4.0
 )
 
@@ -158,7 +159,7 @@ require (
 	github.com/emicklei/go-restful/v3 v3.11.0 // indirect
 	github.com/envoyproxy/protoc-gen-validate v1.0.2 // indirect
 	github.com/euank/go-kmsg-parser v2.0.0+incompatible // indirect
-	github.com/evanphx/json-patch v4.12.0+incompatible // indirect
+	github.com/evanphx/json-patch v5.6.0+incompatible // indirect
 	github.com/evanphx/json-patch/v5 v5.6.0 // indirect
 	github.com/felixge/fgprof v0.9.3 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
@@ -168,7 +169,7 @@ require (
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-ole/go-ole v1.2.4 // indirect
 	github.com/go-openapi/jsonpointer v0.19.6 // indirect
-	github.com/go-openapi/jsonreference v0.20.1 // indirect
+	github.com/go-openapi/jsonreference v0.20.2 // indirect
 	github.com/go-openapi/swag v0.22.3 // indirect
 	github.com/go-playground/locales v0.12.1 // indirect
 	github.com/go-playground/universal-translator v0.0.0-20170327191703-71201497bace // indirect
@@ -316,6 +317,7 @@ replace (
 	k8s.io/csi-translation-lib => k8s.io/csi-translation-lib v0.27.10
 	k8s.io/kube-aggregator => k8s.io/kube-aggregator v0.27.10
 	k8s.io/kube-controller-manager => k8s.io/kube-controller-manager v0.27.10
+	k8s.io/kube-openapi => k8s.io/kube-openapi v0.0.0-20230501164219-8b0f38b5fd1f
 	k8s.io/kube-proxy => k8s.io/kube-proxy v0.27.10
 	k8s.io/kube-scheduler => k8s.io/kube-scheduler v0.27.10
 	k8s.io/kubectl => k8s.io/kubectl v0.27.10
@@ -330,4 +332,6 @@ replace (
 	k8s.io/mount-utils => k8s.io/mount-utils v0.27.10
 	k8s.io/pod-security-admission => k8s.io/pod-security-admission v0.27.10
 	k8s.io/sample-apiserver => k8s.io/sample-apiserver v0.27.10
+	sigs.k8s.io/controller-runtime => sigs.k8s.io/controller-runtime v0.27.10
+	sigs.k8s.io/controller-tools => sigs.k8s.io/controller-tools v0.27.10
 )

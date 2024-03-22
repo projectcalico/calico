@@ -22,6 +22,8 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega/format"
+	"sigs.k8s.io/network-policy-api/apis/v1alpha1"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
@@ -1217,6 +1219,128 @@ var _ = Describe("Test UID conversion", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(convertedBack).To(Equal(original))
 		}
+	})
+})
+
+func init() {
+	format.MaxLength = 0
+}
+
+var _ = Describe("Test BaselineAdminNetworkPolicy conversion", func() {
+	// Use a single instance of the Converter for these tests.
+	c := NewConverter()
+
+	It("should convert a BANP", func() {
+		namedPort := "http"
+		ports := []v1alpha1.AdminNetworkPolicyPort{
+			{
+				PortNumber: &v1alpha1.Port{
+					Protocol: kapiv1.ProtocolTCP,
+					Port:     8080,
+				},
+			},
+			{
+				NamedPort: &namedPort,
+			},
+			{
+				PortRange: &v1alpha1.PortRange{
+					Protocol: kapiv1.ProtocolTCP,
+					Start:    123,
+					End:      567,
+				},
+			},
+		}
+		banp := v1alpha1.BaselineAdminNetworkPolicy{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "default",
+				Namespace: "default",
+				UID:       types.UID("30316465-6365-4463-ad63-3564622d3638"),
+			},
+			Spec: v1alpha1.BaselineAdminNetworkPolicySpec{
+				Subject: v1alpha1.AdminNetworkPolicySubject{},
+				Ingress: []v1alpha1.BaselineAdminNetworkPolicyIngressRule{
+					{
+						Name:   "ingress 1",
+						Action: v1alpha1.BaselineAdminNetworkPolicyRuleActionAllow,
+						From: []v1alpha1.AdminNetworkPolicyPeer{
+							{
+								Namespaces: &v1alpha1.NamespacedPeer{
+									NamespaceSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{
+											"foo": "bar",
+										},
+									},
+								},
+							},
+							{
+								Pods: &v1alpha1.NamespacedPodPeer{
+									Namespaces: v1alpha1.NamespacedPeer{
+										NamespaceSelector: &metav1.LabelSelector{
+											MatchLabels: map[string]string{
+												"biff": "baz",
+											},
+										},
+									},
+								},
+							},
+						},
+						Ports: &ports,
+					},
+				},
+				Egress: []v1alpha1.BaselineAdminNetworkPolicyEgressRule{},
+			},
+		}
+		prof, err := c.BaselineAdminNetworkPolicyToProfile(&banp)
+		Expect(err).NotTo(HaveOccurred())
+
+		//
+
+		proto := numorstring.ProtocolFromString("TCP")
+		Expect(prof.Value).To(Equal(&apiv3.Profile{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "Profile",
+				APIVersion: "projectcalico.org/v3",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "kbl",
+				Namespace: "default",
+				UID:       "0c8c26a6-c6a6-44c6-adc6-ac2646b46c1c",
+			},
+			Spec: apiv3.ProfileSpec{
+				Ingress: []apiv3.Rule{
+					{
+						Action:   "Allow",
+						Protocol: &proto,
+						Source: apiv3.EntityRule{
+							Selector:          "projectcalico.org/orchestrator == 'k8s'",
+							NamespaceSelector: "foo == 'bar'",
+						},
+						Destination: apiv3.EntityRule{
+							Ports: []numorstring.Port{
+								{MinPort: 0, MaxPort: 0, PortName: "http"},
+								{MinPort: 123, MaxPort: 567, PortName: ""},
+								{MinPort: 8080, MaxPort: 8080, PortName: ""},
+							},
+						},
+					},
+					{
+						Action:   "Allow",
+						Protocol: &proto,
+						Source: apiv3.EntityRule{
+							Selector:          "projectcalico.org/orchestrator == 'k8s'",
+							NamespaceSelector: "biff == 'baz'",
+						},
+						Destination: apiv3.EntityRule{
+							Ports: []numorstring.Port{
+								{MinPort: 0, MaxPort: 0, PortName: "http"},
+								{MinPort: 123, MaxPort: 567, PortName: ""},
+								{MinPort: 8080, MaxPort: 8080, PortName: ""},
+							},
+						},
+					},
+				},
+			},
+		}))
 	})
 })
 
@@ -3452,46 +3576,51 @@ var _ = Describe("Test ServiceAccount conversion", func() {
 
 	It("should handle ServiceAccount resource versions", func() {
 		By("converting ns and sa versions to the correct combined version")
-		rev := c.JoinProfileRevisions("1234", "5678")
-		Expect(rev).To(Equal("1234/5678"))
+		rev := c.JoinProfileRevisions("1234", "5678", "2")
+		Expect(rev).To(Equal("1234/5678/2"))
 
-		rev = c.JoinProfileRevisions("", "5678")
-		Expect(rev).To(Equal("/5678"))
+		rev = c.JoinProfileRevisions("", "5678", "")
+		Expect(rev).To(Equal("/5678/"))
 
-		rev = c.JoinProfileRevisions("1234", "")
-		Expect(rev).To(Equal("1234/"))
+		rev = c.JoinProfileRevisions("1234", "", "")
+		Expect(rev).To(Equal("1234//"))
 
 		By("extracting ns and sa versions from the combined version")
-		nsRev, saRev, err := c.SplitProfileRevision("")
+		nsRev, saRev, banpRev, err := c.SplitProfileRevision("")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(nsRev).To(Equal(""))
 		Expect(saRev).To(Equal(""))
+		Expect(banpRev).To(Equal(""))
 
-		nsRev, saRev, err = c.SplitProfileRevision("/")
+		nsRev, saRev, banpRev, err = c.SplitProfileRevision("//")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(nsRev).To(Equal(""))
 		Expect(saRev).To(Equal(""))
+		Expect(banpRev).To(Equal(""))
 
-		nsRev, saRev, err = c.SplitProfileRevision("1234/5678")
+		nsRev, saRev, banpRev, err = c.SplitProfileRevision("1234/5678/23")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(nsRev).To(Equal("1234"))
 		Expect(saRev).To(Equal("5678"))
+		Expect(banpRev).To(Equal("23"))
 
-		nsRev, saRev, err = c.SplitProfileRevision("/5678")
+		nsRev, saRev, banpRev, err = c.SplitProfileRevision("/5678/")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(nsRev).To(Equal(""))
 		Expect(saRev).To(Equal("5678"))
+		Expect(banpRev).To(Equal(""))
 
-		nsRev, saRev, err = c.SplitProfileRevision("1234/")
+		nsRev, saRev, banpRev, err = c.SplitProfileRevision("1234//")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(nsRev).To(Equal("1234"))
 		Expect(saRev).To(Equal(""))
+		Expect(banpRev).To(Equal(""))
 
 		By("failing to convert an invalid combined version")
-		_, _, err = c.SplitProfileRevision("1234")
+		_, _,_, err = c.SplitProfileRevision("1234")
 		Expect(err).To(HaveOccurred())
 
-		_, _, err = c.SplitProfileRevision("1234/5678/1313")
+		_, _,_, err = c.SplitProfileRevision("1234/5678/1313/1434")
 		Expect(err).To(HaveOccurred())
 	})
 })
