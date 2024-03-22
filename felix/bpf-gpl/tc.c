@@ -445,7 +445,12 @@ syn_force_policy:
 		}
 	}
 
-	if (CALI_F_TO_WEP && !skb_seen(ctx->skb) &&
+	if (CALI_F_TO_WEP &&
+			/* We have not seen the packet yet, must originate from the host. */
+			(!skb_seen(ctx->skb) ||
+			 /* We have seen the packet, but was looped via NAT iface and so it must be from the host. */
+			 skb_mark_equals(ctx->skb, CALI_SKB_MARK_FROM_NAT_IFACE_OUT, CALI_SKB_MARK_FROM_NAT_IFACE_OUT)) &&
+			/* Double check that it has host source IP - do it last, it is the most expensive test. */
 			cali_rt_flags_local_host(cali_rt_lookup_flags(&ctx->state->ip_src))) {
 		/* Host to workload traffic always allowed.  We discount traffic that was
 		 * seen by another program since it must have come in via another interface.
@@ -1329,17 +1334,30 @@ int calico_tc_skb_new_flow_entrypoint(struct __sk_buff *skb)
 
 	if ((CALI_F_TO_HOST && CALI_F_NAT_IF) || (CALI_F_TO_HEP && (CALI_F_LO || CALI_F_MAIN))) {
 		struct cali_rt *r = cali_rt_lookup(&state->post_nat_ip_dst);
-		if (r && cali_rt_flags_remote_workload(r->flags) && cali_rt_is_tunneled(r)) {
-			CALI_DEBUG("remote wl %x tunneled via %x\n",
-					debug_ip(state->post_nat_ip_dst), debug_ip(HOST_TUNNEL_IP));
-			ct_ctx_nat->src = HOST_TUNNEL_IP;
-			/* This would be the place to set a new source port if we
-			 * had a way how to allocate it. Instead we rely on source
-			 * port collision resolution.
-			 * ct_ctx_nat->sport = 10101;
-			 */
-			state->ct_result.nat_sip = ct_ctx_nat->src;
-			state->ct_result.nat_sport = ct_ctx_nat->sport;
+		if (r) {
+			if (cali_rt_flags_remote_workload(r->flags) && cali_rt_is_tunneled(r)) {
+				CALI_DEBUG("remote wl %x tunneled via %x\n",
+						debug_ip(state->post_nat_ip_dst), debug_ip(HOST_TUNNEL_IP));
+				ct_ctx_nat->src = HOST_TUNNEL_IP;
+				/* This would be the place to set a new source port if we
+				 * had a way how to allocate it. Instead we rely on source
+				 * port collision resolution.
+				 * ct_ctx_nat->sport = 10101;
+				 */
+				state->ct_result.nat_sip = ct_ctx_nat->src;
+				state->ct_result.nat_sport = ct_ctx_nat->sport;
+			} else if (!cali_rt_is_local(r) && !ip_equal(state->ip_src, HOST_IP)) {
+				CALI_DEBUG("remote wl %x fixing unexpected IP from lo %x\n",
+						debug_ip(state->post_nat_ip_dst), debug_ip(HOST_IP));
+				ct_ctx_nat->src = HOST_IP;
+				/* This would be the place to set a new source port if we
+				 * had a way how to allocate it. Instead we rely on source
+				 * port collision resolution.
+				 * ct_ctx_nat->sport = 10101;
+				 */
+				state->ct_result.nat_sip = ct_ctx_nat->src;
+				state->ct_result.nat_sport = ct_ctx_nat->sport;
+			}
 		}
 	}
 
