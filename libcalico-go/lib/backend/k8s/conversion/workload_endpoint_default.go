@@ -76,7 +76,7 @@ func (wc defaultWorkloadEndpointConverter) podToDefaultWorkloadEndpoint(pod *kap
 	var profiles []string
 
 	// Pull out the Namespace based profile off the pod name and Namespace.
-	profiles = append(profiles, NamespaceProfileNamePrefix+pod.Namespace)
+	profiles = append(profiles, KubeBaselineProfile, NamespaceProfileNamePrefix+pod.Namespace)
 
 	// Pull out the Serviceaccount based profile off the pod SA and namespace
 	if pod.Spec.ServiceAccountName != "" {
