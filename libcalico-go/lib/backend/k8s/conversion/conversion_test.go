@@ -3617,10 +3617,10 @@ var _ = Describe("Test ServiceAccount conversion", func() {
 		Expect(banpRev).To(Equal(""))
 
 		By("failing to convert an invalid combined version")
-		_, _,_, err = c.SplitProfileRevision("1234")
+		_, _, _, err = c.SplitProfileRevision("1234")
 		Expect(err).To(HaveOccurred())
 
-		_, _,_, err = c.SplitProfileRevision("1234/5678/1313/1434")
+		_, _, _, err = c.SplitProfileRevision("1234/5678/1313/1434")
 		Expect(err).To(HaveOccurred())
 	})
 })

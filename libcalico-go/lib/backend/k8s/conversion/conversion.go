@@ -748,11 +748,11 @@ func (c converter) k8sAdminRuleToCalico(
 		}
 
 		// FIXME protocol for named ports?
-		if protocol == nil {
-			nos := numorstring.ProtocolFromString("TCP")
-			protocol = &nos
-		}
-		pStr := protocol.String()
+		pStr := ""
+		if protocol != nil {
+			pStr = protocol.String()
+		} // else named port (Which doesn't have a protocol).
+
 		// treat nil as 'all ports'
 		if calicoPorts == nil {
 			protocolPorts[pStr] = nil
@@ -783,7 +783,6 @@ func (c converter) k8sAdminRuleToCalico(
 		}
 
 		for _, peer := range peers {
-
 			selector, nsSelector, nets, notNets := c.k8sPeerToCalicoFields(peer, "")
 			if ingress {
 				// Build inbound rule and append to list.
