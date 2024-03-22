@@ -66,8 +66,8 @@ type Converter interface {
 	ProfileNameToNamespace(profileName string) (string, error)
 	ServiceAccountToProfile(sa *kapiv1.ServiceAccount) (*model.KVPair, error)
 	ProfileNameToServiceAccount(profileName string) (ns, sa string, err error)
-	JoinProfileRevisions(nsRev, saRev string) string
-	SplitProfileRevision(rev string) (nsRev string, saRev string, err error)
+	JoinProfileRevisions(nsRev, saRev, banpRev string) string
+	SplitProfileRevision(rev string) (nsRev string, saRev, banpRev string, err error)
 }
 
 type converter struct {
@@ -128,7 +128,7 @@ func (c converter) NamespaceToProfile(ns *kapiv1.Namespace) (*model.KVPair, erro
 			Kind: apiv3.KindProfile,
 		},
 		Value:    profile,
-		Revision: c.JoinProfileRevisions(ns.ResourceVersion, ""),
+		Revision: c.JoinProfileRevisions(ns.ResourceVersion, "", ""),
 	}
 	return &kvp, nil
 }
@@ -1023,7 +1023,7 @@ func (c converter) ServiceAccountToProfile(sa *kapiv1.ServiceAccount) (*model.KV
 			Kind: apiv3.KindProfile,
 		},
 		Value:    profile,
-		Revision: c.JoinProfileRevisions("", sa.ResourceVersion),
+		Revision: c.JoinProfileRevisions("", sa.ResourceVersion, ""),
 	}
 	return &kvp, nil
 }
@@ -1051,25 +1051,26 @@ func (c converter) ProfileNameToServiceAccount(profileName string) (ns, sa strin
 // JoinProfileRevisions constructs the revision from the individual namespace and serviceaccount
 // revisions.
 // This is conditional on the feature flag for serviceaccount set or not.
-func (c converter) JoinProfileRevisions(nsRev, saRev string) string {
-	return nsRev + "/" + saRev
+func (c converter) JoinProfileRevisions(nsRev, saRev, banpRev string) string {
+	return nsRev + "/" + saRev + "/" + banpRev
 }
 
 // SplitProfileRevision extracts the namespace and serviceaccount revisions from the combined
 // revision returned on the KDD service account based profile.
 // This is conditional on the feature flag for serviceaccount set or not.
-func (c converter) SplitProfileRevision(rev string) (nsRev string, saRev string, err error) {
+func (c converter) SplitProfileRevision(rev string) (nsRev, saRev, banpRev string, err error) {
 	if rev == "" || rev == "0" {
 		return
 	}
 
 	revs := strings.Split(rev, "/")
-	if len(revs) != 2 {
+	if len(revs) != 3 {
 		err = fmt.Errorf("ResourceVersion is not valid: %s", rev)
 		return
 	}
 	nsRev = revs[0]
 	saRev = revs[1]
+	banpRev = revs[2]
 	return
 }
 

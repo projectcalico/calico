@@ -20,6 +20,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 
 	"github.com/projectcalico/calico/felix/dispatcher"
