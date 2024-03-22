@@ -66,8 +66,8 @@ type Converter interface {
 	ProfileNameToNamespace(profileName string) (string, error)
 	ServiceAccountToProfile(sa *kapiv1.ServiceAccount) (*model.KVPair, error)
 	ProfileNameToServiceAccount(profileName string) (ns, sa string, err error)
-	JoinProfileRevisions(nsRev, saRev string) string
-	SplitProfileRevision(rev string) (nsRev string, saRev string, err error)
+	JoinProfileRevisions(nsRev, saRev, banpRev string) string
+	SplitProfileRevision(rev string) (nsRev string, saRev, banpRev string, err error)
 }
 
 type converter struct {
