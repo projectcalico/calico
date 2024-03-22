@@ -17,8 +17,11 @@ package calc
 import (
 	"reflect"
 
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
+
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 
 	"github.com/projectcalico/calico/felix/dispatcher"
 	"github.com/projectcalico/calico/felix/labelindex"
@@ -351,6 +354,10 @@ var (
 		InboundRules:  []model.Rule{{Action: "deny"}},
 		OutboundRules: []model.Rule{{Action: "deny"}},
 	}
+	DummyAllowRules = model.ProfileRules{
+		InboundRules:  []model.Rule{{Action: "allow"}},
+		OutboundRules: []model.Rule{{Action: "allow"}},
+	}
 )
 
 func (arc *ActiveRulesCalculator) sendProfileUpdate(profileID string) {
@@ -364,21 +371,27 @@ func (arc *ActiveRulesCalculator) sendProfileUpdate(profileID string) {
 	arc.missingProfiles.Discard(key.Name)
 	if active {
 		if !known {
-			if arc.datastoreInSync {
-				// We're in sync so we know the profile is missing from the
-				// datastore or it failed validation
-				log.WithField("profileID", profileID).Info(
-					"One or more endpoints uses a profile that doesn't exist; generating " +
-						"default-drop profile. (This can happen transiently when a Kubernetes " +
-						"namespace is deleted.)")
+			if profileID == conversion.KubeBaselineProfile {
+				// If there's no BaselineAdminNetworkPolicy, Kubernetes default
+				// is allow all.
+				rules = &DummyAllowRules
 			} else {
-				// Not in sync, the profile may still show up.  Keep a record of its
-				// name so we can log it out at the end of the resync.
-				arc.missingProfiles.Add(profileID)
-				log.WithField("profileID", profileID).Debug(
-					"Profile unknown during resync.")
+				if arc.datastoreInSync {
+					// We're in sync so we know the profile is missing from the
+					// datastore or it failed validation
+					log.WithField("profileID", profileID).Info(
+						"One or more endpoints uses a profile that doesn't exist; generating " +
+							"default-drop profile. (This can happen transiently when a Kubernetes " +
+							"namespace is deleted.)")
+				} else {
+					// Not in sync, the profile may still show up.  Keep a record of its
+					// name so we can log it out at the end of the resync.
+					arc.missingProfiles.Add(profileID)
+					log.WithField("profileID", profileID).Debug(
+						"Profile unknown during resync.")
+				}
+				rules = &DummyDropRules
 			}
-			rules = &DummyDropRules
 		}
 		arc.RuleScanner.OnProfileActive(key, rules)
 	} else {
