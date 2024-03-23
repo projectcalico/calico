@@ -1014,7 +1014,6 @@ func (h *connection) sendMsg(msg interface{}) error {
 		// Optimisation, don't bother to send if we're being torn down.
 		return h.cxt.Err()
 	}
-	h.logCxt.WithField("msg", msg).Trace("Sending message to client")
 	envelope := syncproto.Envelope{
 		Message: msg,
 	}
@@ -1027,17 +1026,14 @@ func (h *connection) sendMsg(msg interface{}) error {
 	// Make sure we have a timeout on the connection so that we can't block forever in the synchronous
 	// part of the protocol.  After we send the snapshot we rely more on the layer 7 ping/pong.
 	if err := h.maybeResetWriteTimeout(); err != nil {
-		h.logCxt.WithError(err).Info("Failed to set write timeout when sending to client.")
-		return err
+		return fmt.Errorf("Failed to set write timeout when sending to client: %w", err)
 	}
 
 	if err := h.encoder.Encode(&envelope); err != nil {
-		h.logCxt.WithError(err).Info("Failed to write to client")
-		return err
+		return fmt.Errorf("Failed to write client: %w", err)
 	}
 	if err := h.flushWriter(); err != nil {
-		h.logCxt.WithError(err).Info("Failed to flush write to client")
-		return err
+		return fmt.Errorf("Failed to flush write to client: %w", err)
 	}
 	h.summaryWriteLatency.Observe(time.Since(startTime).Seconds())
 	return nil
