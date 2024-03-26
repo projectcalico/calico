@@ -83,7 +83,7 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 		return nil, err
 	}
 
-	crdClientV1, err := buildCRDClientV1(*config)
+	crdClientV1, err := BuildCRDClientV1(*config)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to build V1 CRD client: %v", err)
 	}
@@ -493,8 +493,8 @@ func (c *KubeClient) Close() error {
 
 var addToSchemeOnce sync.Once
 
-// buildCRDClientV1 builds a RESTClient configured to interact with Calico CustomResourceDefinitions
-func buildCRDClientV1(cfg rest.Config) (*rest.RESTClient, error) {
+// BuildCRDClientV1 builds a RESTClient configured to interact with Calico CustomResourceDefinitions
+func BuildCRDClientV1(cfg rest.Config) (*rest.RESTClient, error) {
 	// Generate config using the base config.
 	cfg.GroupVersion = &schema.GroupVersion{
 		Group:   "crd.projectcalico.org",
