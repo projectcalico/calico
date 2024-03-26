@@ -83,7 +83,7 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 		return nil, err
 	}
 
-	crdClientV1, err := BuildCRDClientV1(*config)
+	crdClientV1, err := buildCRDClientV1(*config)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to build V1 CRD client: %v", err)
 	}
@@ -296,7 +296,7 @@ func fillLoadingRulesFromKubeConfigSpec(loadingRules *clientcmd.ClientConfigLoad
 func CreateKubernetesClientset(ca *apiconfig.CalicoAPIConfigSpec) (*rest.Config, *kubernetes.Clientset, error) {
 	// Use the kubernetes client code to load the kubeconfig file and combine it with the overrides.
 	configOverrides := &clientcmd.ConfigOverrides{}
-	var overridesMap = []struct {
+	overridesMap := []struct {
 		variable *string
 		value    string
 	}{
@@ -493,8 +493,8 @@ func (c *KubeClient) Close() error {
 
 var addToSchemeOnce sync.Once
 
-// BuildCRDClientV1 builds a RESTClient configured to interact with Calico CustomResourceDefinitions
-func BuildCRDClientV1(cfg rest.Config) (*rest.RESTClient, error) {
+// buildCRDClientV1 builds a RESTClient configured to interact with Calico CustomResourceDefinitions
+func buildCRDClientV1(cfg rest.Config) (*rest.RESTClient, error) {
 	// Generate config using the base config.
 	cfg.GroupVersion = &schema.GroupVersion{
 		Group:   "crd.projectcalico.org",
@@ -707,7 +707,7 @@ func (c *KubeClient) getReadyStatus(ctx context.Context, k model.ReadyFlagKey, r
 }
 
 func (c *KubeClient) listHostConfig(ctx context.Context, l model.HostConfigListOptions, revision string) (*model.KVPairList, error) {
-	var kvps = []*model.KVPair{}
+	kvps := []*model.KVPair{}
 
 	// Short circuit if they aren't asking for information we can provide.
 	if l.Name != "" && l.Name != "IpInIpTunnelAddr" {
