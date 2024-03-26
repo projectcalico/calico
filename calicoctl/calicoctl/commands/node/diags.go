@@ -129,7 +129,9 @@ func runDiags(logDir string) error {
 			content, err := exec.Command(parts[0], parts[1], parts[2]).CombinedOutput()
 			if err != nil {
 				fmt.Printf("Failed to run command: %s\nError: %s\n", strings.Join(parts, " "), string(content))
-			}
+			} else {
+                                fmt.Println("Dumping ss (\"netstat -a -n\" fails, used \"ss -a -n\" instead)")
+                        }
 
 			fp := filepath.Join(diagsTmpDir, parts[0])
 			if err := os.WriteFile(fp, content, 0666); err != nil {
