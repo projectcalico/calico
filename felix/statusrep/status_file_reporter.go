@@ -20,6 +20,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -32,7 +33,9 @@ import (
 )
 
 const (
-	dirStatus = "endpoint-status"
+	dirStatus  = "endpoint-status"
+	statusUp   = "up"
+	statusDown = "down"
 )
 
 // EndpointStatusFileReporter writes a file to the FS
@@ -55,6 +58,8 @@ type EndpointStatusFileReporter struct {
 	reapplyInterval time.Duration
 
 	hostname string
+
+	*sync.Mutex
 }
 
 // Backoff wraps a timer-based-retry type which can be stepped.
@@ -99,6 +104,7 @@ func NewEndpointStatusFileReporter(
 		bom:                     newBackoffManager(newDefaultBackoff),
 		hostname:                "",
 		reapplyInterval:         10 * time.Second,
+		Mutex:                   new(sync.Mutex),
 	}
 
 	for _, o := range opts {
@@ -237,6 +243,9 @@ func (fr *EndpointStatusFileReporter) resetStoppedTimerOrInit(t *time.Timer, d t
 // Updates delta tracker state to match the received update.
 // Logs and discards errors generated from converting endpoint updates to endpoint keys.
 func (fr *EndpointStatusFileReporter) handleEndpointUpdate(e interface{}) {
+	fr.Lock()
+	defer fr.Unlock()
+
 	switch m := e.(type) {
 	case *proto.WorkloadEndpointStatusUpdate:
 		if m.Id == nil {
@@ -245,7 +254,20 @@ func (fr *EndpointStatusFileReporter) handleEndpointUpdate(e interface{}) {
 		}
 		key := names.WorkloadEndpointIDToWorkloadEndpointKey(m.Id, fr.hostname)
 		fn := names.WorkloadEndpointKeyToStatusFilename(key)
-		fr.statusDirDeltaTracker.Desired().Add(fn)
+
+		if m.Status.Status == statusDown {
+			logrus.WithField("update", e).Debug("Removing undesired WorkloadEndpointStatusUpdate with down status")
+			fr.statusDirDeltaTracker.Desired().Delete(fn)
+			return
+		} else if m.Status.Status == statusUp {
+			// Explicitly checking the opposite case here (rather than fallthrough)
+			// in-case of a terrible failure where status is neither "up" nor "down".
+			logrus.WithField("update", e).Debug("Handling WorkloadEndpointUpdate with up status")
+			fr.statusDirDeltaTracker.Desired().Add(fn)
+		} else {
+			logrus.WithField("update", e).Warn("Skipping update with unrecognized status")
+		}
+
 	case *proto.WorkloadEndpointStatusRemove:
 		if m.Id == nil {
 			logrus.WithField("update", m).Warn("Couldn't handle nil WorkloadEndpointStatusRemove")
@@ -259,8 +281,12 @@ func (fr *EndpointStatusFileReporter) handleEndpointUpdate(e interface{}) {
 	}
 }
 
+// A sub-call of SyncForever.
 // Overwrites our user-space representation of the kernel with a fresh snapshot.
 func (fr *EndpointStatusFileReporter) resyncDataplaneWithKernel() error {
+	fr.Lock()
+	defer fr.Unlock()
+
 	// Load any pre-existing committed dataplane entries.
 	entries, err := ensureStatusDir(fr.endpointStatusDirPrefix)
 	if err != nil {
@@ -278,6 +304,9 @@ func (fr *EndpointStatusFileReporter) resyncDataplaneWithKernel() error {
 // A sub-call of SyncForever. Not intended to be called outside the main loop.
 // Applies pending updates and deletes pending deletions.
 func (fr *EndpointStatusFileReporter) reconcileStatusFiles() error {
+	fr.Lock()
+	defer fr.Unlock()
+
 	var lastError error
 	fr.statusDirDeltaTracker.PendingUpdates().Iter(func(name string) deltatracker.IterAction {
 		err := fr.writeStatusFile(name)
@@ -320,6 +349,13 @@ func (fr *EndpointStatusFileReporter) writeStatusFile(name string) error {
 func (fr *EndpointStatusFileReporter) deleteStatusFile(name string) error {
 	filename := filepath.Join(fr.endpointStatusDirPrefix, dirStatus, name)
 	return os.Remove(filename)
+}
+
+// GetSetDeltaTracker is thread-safe.
+func (fr *EndpointStatusFileReporter) GetSetDeltaTracker() *deltatracker.SetDeltaTracker[string] {
+	fr.Lock()
+	defer fr.Unlock()
+	return fr.statusDirDeltaTracker
 }
 
 // ensureStatusDir ensures there is a directory named "endpoint-status", within
