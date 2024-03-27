@@ -353,7 +353,7 @@ func CreateClientAndSyncer(cfg apiconfig.KubeConfig) (*KubeClient, *cb, api.Sync
 
 var _ = testutils.E2eDatastoreDescribe("Test UIDs and owner references", testutils.DatastoreK8s, func(cfg apiconfig.CalicoAPIConfig) {
 	var (
-		c   *k8s.KubeClient
+		c   *KubeClient
 		cli ctrlclient.Client
 		ctx context.Context
 	)
@@ -368,7 +368,7 @@ var _ = testutils.E2eDatastoreDescribe("Test UIDs and owner references", testuti
 
 		// Create a controller-runtime client.
 		// Create a client for interacting with CRDs directly.
-		config, _, err := k8s.CreateKubernetesClientset(&cfg.Spec)
+		config, _, err := CreateKubernetesClientset(&cfg.Spec)
 		Expect(err).NotTo(HaveOccurred())
 		cli, err = ctrlclient.New(config, ctrlclient.Options{})
 
