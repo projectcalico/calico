@@ -15,4 +15,9 @@ export FELIX_ETCDCERTFILE=$ETCD_CERT_FILE
 if [ ! -z $DATASTORE_TYPE ]; then
     export FELIX_DATASTORETYPE=$DATASTORE_TYPE
 fi
-exec calico-node -felix 
+# If running as non-root user, use sudo
+if [[ $UID -ne 0 ]]; then
+    exec sh -c "sudo --preserve-env sh -c 'calico-node -felix'"
+else
+    exec calico-node -felix
+fi

@@ -61,6 +61,9 @@ bin_allow_list_patterns=(
   ip6tables
   ipset
 
+  # Needed for non-root mode
+  '/sudo$'
+
   # kmod is a multi-binary backing depmod/insmod/etc; used by iptables
   kmod depmod insmod modinfo modprobe rmmod lsmod
 
@@ -231,18 +234,27 @@ while read -r path; do
     libs_to_keep[$path]=true
     continue
   fi
+  # sudo plugins and pam modules, not directly linked (mostly retrieved from 'ldd /usr/libexec/sudo/sudoers.so').
+  if [[ "$path" =~ libaudit|libpam|libldap|liblber|libsudo_util|libpthread|libdl|libz|libc|libcap-ng|libr|libsasl2|libssl|libcrypto|libcrypt|libgssapi_krb5|libkrb5|libk5crypto|libcom_err|libkrb5support|libkeyutils|libselinux|libpcre2|/usr/lib64/security|libtirpc|libnsl ]]; then
+    echo "SUDO PLUGIN: $path"
+    libs_to_keep[$path]=true
+    continue
+  fi
 done < <(find /usr/lib64 \( -type f -or -type l \))
 
 # Now remove all but a keep-list of RPM packages.  Cleaning up packages with rpm itself updates the
 # metadata that CVE scanners look for so it's best to do this before we clean up any remaining
 # binaries and libraries that we don't want.
 packages_to_keep=(
+  audit-libs
   bash
   bzip2-libs
   ca-certificates
   conntrack-tools
   coreutils-single
+  cracklib
   crypto-policies
+  cyrus-sasl-lib
   filesystem
   findutils
   glibc
@@ -251,12 +263,19 @@ packages_to_keep=(
   iproute
   ipset
   iptables
+  keyutils-libs
   kmod
+  krb5-libs
   langpacks
   libacl
   libattr
   libcap
+  libcom_err
+  libcrypt
   libcrypto
+  libcurl
+  libdb
+  libdb-utils
   libelf
   libgcc
   libibverbs
@@ -265,23 +284,33 @@ packages_to_keep=(
   libnfnetlink
   libnftnl
   libnl3
+  libnsl2
   libnss
   libpcap
   libpwquality
+  librepo
+  librhsm
   libselinux
-  libzstd
+  libtirpc
+  libxcrypt
   libz
+  libzstd
   ncurses
   net-tools
+  openldap
   openssl-libs
   p11-kit-trust
+  pam
   pcre
+  readline
   redhat-release
   rootfiles
+  rpm-libs
   sed
   setup
   shadow-utils
   shared-mime-info
+  sudo
   systemd-libs
   tzdata
   util-linux
@@ -312,7 +341,6 @@ done
 packages_to_remove=$(microdnf repoquery --installed |
   sed -e 's/^\(\([a-zA-Z][a-zA-Z0-9_+]*\)\(-\([a-zA-Z][a-zA-Z0-9_+]*\)\)*\).*/\1/g' |
   grep -v "${grep_args[@]}")
-
 
 echo "Removing ${packages_to_remove}"
 # Removing one of the packages deletes rc.local, move it out of the way.
