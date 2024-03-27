@@ -29,7 +29,7 @@ CURL=curl -C - -sSf
 CNI_VERSION=v1.1.1-calico+go-1.21.8
 CNI_ARTIFACTS_URL=https://github.com/projectcalico/containernetworking-plugins/releases/download
 FLANNEL_ARTIFACTS_URL=https://github.com/projectcalico/flannel-cni-plugin/releases/download
-FLANNEL_VERSION=v1.2.0-flannel2-go1.20.12
+FLANNEL_VERSION=v1.2.0-flannel2-go1.21.8
 
 # By default set the CNI_SPEC_VERSION to 0.3.1 for tests.
 CNI_SPEC_VERSION?=0.3.1
