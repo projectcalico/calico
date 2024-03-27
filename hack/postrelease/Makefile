@@ -33,6 +33,7 @@ create_docker_container: .docker_container.stamp
 	$(info +++ Building docker container with Calico $(CALICO_VERSION), Operator $(OPERATOR_VERSION), Flannel $(FLANNEL_VERSION))
 	docker buildx build \
 		-t $(CALICO_POSTRELEASE_TEST_IMAGE)              \
+		--build-arg UID=$(shell id -u)                   \
 		--build-arg VERSION=$(CALICO_VERSION)            \
 		--build-arg FLANNEL_VERSION=$(FLANNEL_VERSION)   \
 		--build-arg OPERATOR_VERSION=$(OPERATOR_VERSION) \
