@@ -18,6 +18,7 @@ RUN --mount=type=tmpfs,target=/var/cache/apk apk add --no-cache \
     py3-pip         \
     py3-yaml        \
     py3-pytest      \
+    py3-pytest-xdist\
     py3-requests    \
     py3-rich        \
     py-setuptools   \

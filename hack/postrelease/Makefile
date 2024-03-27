@@ -48,7 +48,7 @@ run_pytests_docker: create_docker_container
 		-v .:/code                           \
 		-v /run/docker.sock:/run/docker.sock \
 		$(CALICO_POSTRELEASE_TEST_IMAGE)     \
-		pytest -v --junitxml=xunit.xml tests
+		pytest -n$(shell nproc) --junitxml=xunit.xml tests
 
 ## Cleanup
 
