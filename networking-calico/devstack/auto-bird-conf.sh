@@ -4,6 +4,8 @@ set -x
 
 HOST_IP=$1
 ETCDCTL=${2:-etcdctl}
+export ETCDCTL_ENDPOINTS=${3-http://${HOST_IP}:2379}
+export ETCDCTL_API=3
 
 # Automatically generate full mesh BIRD config for a multi-node
 # Calico/DevStack deployment.
@@ -21,9 +23,9 @@ HOST_IPV6=$1
 # In a sub-shell, periodically write our own IP into etcd.
 (
     while true; do
-        $ETCDCTL set ${MY_ETCD_DIR}/$HOST_IP $HOST_IP --ttl 600
+        $ETCDCTL put ${MY_ETCD_DIR}/$HOST_IP $HOST_IP
         if test -n "$HOST_IPV6"; then
-            $ETCDCTL set ${MY_ETCD_DIR}/$HOST_IPV6 $HOST_IPV6 --ttl 600
+            $ETCDCTL put ${MY_ETCD_DIR}/$HOST_IPV6 $HOST_IPV6
         fi
         sleep 300
     done
@@ -37,7 +39,10 @@ while true; do
     # IPs that are in etcd now.
     peer_ips=
     peer_ipv6s=
-    for key in `$ETCDCTL get ${MY_ETCD_DIR} --prefix --keys-only`; do
+    cmd="$ETCDCTL get --prefix --keys-only ${MY_ETCD_DIR}"
+    echo "Running: $cmd"
+    $cmd
+    for key in `$cmd`; do
         key=`basename $key`
         case $key in
             *:* )
@@ -64,6 +69,6 @@ while true; do
     fi
 
     # Wait for the next change.
-    $ETCDCTL watch ${MY_ETCD_DIR} --recursive
+    $ETCDCTL watch --prefix ${MY_ETCD_DIR}
 
 done
