@@ -18,6 +18,7 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"fmt"
+	"net"
 	"os"
 	"strings"
 
@@ -133,6 +134,15 @@ func (wc defaultWorkloadEndpointConverter) podToDefaultWorkloadEndpoint(pod *kap
 		labels[apiv3.LabelServiceAccount] = pod.Spec.ServiceAccountName
 	}
 
+	var wepmac string
+	if annotation, ok := pod.Annotations[AnnotationHwAddr]; ok && annotation != "" {
+		tmpWepMac, err := net.ParseMAC(annotation)
+		if err != nil {
+			return nil, err
+		}
+		wepmac = tmpWepMac.String()
+	}
+
 	// Pull out floating IP annotation
 	var floatingIPs []libapiv3.IPNAT
 	if annotation, ok := pod.Annotations["cni.projectcalico.org/floatingIPs"]; ok && len(podIPNets) > 0 {
@@ -240,6 +250,7 @@ func (wc defaultWorkloadEndpointConverter) podToDefaultWorkloadEndpoint(pod *kap
 		Pod:                        pod.Name,
 		ContainerID:                containerID,
 		Endpoint:                   "eth0",
+		MAC:                        wepmac,
 		InterfaceName:              interfaceName,
 		Profiles:                   profiles,
 		IPNetworks:                 ipNets,

@@ -128,6 +128,12 @@ func (c *WorkloadEndpointClient) calcCNIAnnotations(kvp *model.KVPair) map[strin
 		log.WithField("containerID", containerID).Debug("Container ID specified, including in patch")
 		annotations[conversion.AnnotationContainerID] = containerID
 	}
+
+	mac := wep.Spec.MAC
+	if mac != "" {
+		log.WithField("MAC", mac).Debug("MAC specified, including in patch")
+		annotations[conversion.AnnotationHwAddr] = mac
+	}
 	return annotations
 }
 

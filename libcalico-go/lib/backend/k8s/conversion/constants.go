@@ -41,6 +41,12 @@ const (
 	// on older Pods.
 	AnnotationContainerID = "cni.projectcalico.org/containerID"
 
+	// AnnotationHwAddr is used to store the desired MAC address that will be assigned to a network interface
+	// on a pod. If a desired MAC address is not specified by the user, the Calico CNI plugin will still set
+	// the current MAC address in this annotation. This allows for both the specification of a custom MAC
+	// address and the automatic handling of MAC addresses by the plugin.
+	AnnotationHwAddr = "cni.projectcalico.org/hwAddr"
+
 	// NameLabel is a label that can be used to match a serviceaccount or namespace
 	// name exactly.
 	NameLabel = "projectcalico.org/name"
