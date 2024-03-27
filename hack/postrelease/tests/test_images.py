@@ -190,7 +190,7 @@ def test_operator_images():
     )
     output = req.stdout.read()
 
-    cmd = f"docker run --rm -t {OPERATOR_IMAGE} -print-images list"
+    cmd = f"docker run --rm -t {OPERATOR_IMAGE} --print-images=list"
     req = subprocess.Popen(
         cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
     )
