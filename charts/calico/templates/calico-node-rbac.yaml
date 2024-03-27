@@ -191,6 +191,14 @@ rules:
       - namespaces
     verbs:
       - get
+  - apiGroups: [""]
+    resources:
+      - nodes/status
+    verbs:
+      # Needed for clearing NodeNetworkUnavailable flag.
+      - patch
+      # Calico stores some configuration information in node annotations.
+      - update
 {{- if eq .Values.datastore "kubernetes" }}
   - apiGroups: [""]
     resources:
