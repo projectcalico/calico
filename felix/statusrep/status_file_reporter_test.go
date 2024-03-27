@@ -20,9 +20,11 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/statusrep"
+	"github.com/projectcalico/calico/libcalico-go/lib/names"
 )
 
 type mockBackoff struct {
@@ -40,6 +42,7 @@ func (b *mockBackoff) Step() time.Duration {
 }
 
 var _ = Describe("Endpoint Policy Status Reports [file-reporting]", func() {
+	logrus.SetLevel(logrus.DebugLevel)
 	var endpointUpdatesC chan interface{}
 	var ctx context.Context
 	var cancel context.CancelFunc
@@ -80,5 +83,46 @@ var _ = Describe("Endpoint Policy Status Reports [file-reporting]", func() {
 
 		Eventually(endpointUpdatesC, "10s").Should(BeSent(&proto.DataplaneInSync{}))
 		Eventually(backoffCalledC, "10s").Should(BeClosed(), "Backoff wasn't called by the reporter (is the file-reporting unexpectedly succeeding?).")
+	})
+
+	It("should only add a desired file to the delta-tracker when update has status up", func() {
+		reporter := statusrep.NewEndpointStatusFileReporter(endpointUpdatesC, "/tmp", statusrep.WithHostname("host"))
+		go func() {
+			defer close(doneC)
+			reporter.SyncForever(ctx)
+		}()
+
+		By("Sending a status-down update to the reporter")
+
+		wepID := &proto.WorkloadEndpointID{
+			OrchestratorId: "abc",
+			WorkloadId:     "default/pod1",
+			EndpointId:     "eth0",
+		}
+		key := names.WorkloadEndpointIDToWorkloadEndpointKey(wepID, "host")
+		mapKey := names.WorkloadEndpointKeyToStatusFilename(key)
+
+		Eventually(endpointUpdatesC, "10s").Should(BeSent(&proto.WorkloadEndpointStatusUpdate{
+			Id: wepID,
+			Status: &proto.EndpointStatus{
+				Status: "down",
+			},
+		}))
+
+		checkDesiredDelta := func() bool {
+			return reporter.GetSetDeltaTracker().Desired().Contains(mapKey)
+		}
+
+		Consistently(checkDesiredDelta, "3s").Should(BeFalse(), "Tracker desired a file for an endpoint before status was up")
+
+		By("Sending a status-up update to the reporter")
+		Eventually(endpointUpdatesC, "10s").Should(BeSent(&proto.WorkloadEndpointStatusUpdate{
+			Id: wepID,
+			Status: &proto.EndpointStatus{
+				Status: "up",
+			},
+		}))
+
+		Eventually(checkDesiredDelta, "10s").Should(BeTrue(), "Tracker did not add desired file for endpoint with status up")
 	})
 })
