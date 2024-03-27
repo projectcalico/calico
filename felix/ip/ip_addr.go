@@ -355,7 +355,12 @@ func FromCalicoIP(ip calinet.IP) Addr {
 	return FromNetIP(ip.IP)
 }
 
+// CIDRFromIPNet converts a *net.IPNet to a CIDR; if passed nil,
+// returns nil.
 func CIDRFromIPNet(ipNet *net.IPNet) CIDR {
+	if ipNet == nil {
+		return nil
+	}
 	ones, _ := ipNet.Mask.Size()
 	// Mask the IP before creating the CIDR so that we have it in canonical format.
 	ip := FromNetIP(ipNet.IP.Mask(ipNet.Mask))
