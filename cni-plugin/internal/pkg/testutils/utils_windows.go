@@ -446,7 +446,7 @@ func NetworkPod(
 		"Namespace":   netns,
 	})
 	d := windows.NewWindowsDataplane(conf, logger)
-	_, _, err = d.DoNetworking(ctx, calicoClient, args, result, "", nil, nil, nil)
+	_, _, err = d.DoNetworking(ctx, calicoClient, conf, args, result, "", nil, nil, nil)
 	return err
 }
 

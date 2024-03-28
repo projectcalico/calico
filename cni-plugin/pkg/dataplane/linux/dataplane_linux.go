@@ -54,6 +54,7 @@ func NewLinuxDataplane(conf types.NetConf, logger *logrus.Entry) *linuxDataplane
 func (d *linuxDataplane) DoNetworking(
 	ctx context.Context,
 	calicoClient calicoclient.Interface,
+	conf types.NetConf,
 	args *skel.CmdArgs,
 	result *cniv1.Result,
 	desiredVethName string,
@@ -309,7 +310,7 @@ func (d *linuxDataplane) DoNetworking(
 	}
 
 	// Add the routes to host veth in the host namespace.
-	err = SetupRoutes(hostNlHandle, hostVeth, result)
+	err = SetupRoutes(conf, hostNlHandle, hostVeth, result)
 	if err != nil {
 		return "", "", fmt.Errorf("error adding host side routes for interface: %s, error: %s", hostVeth.Attrs().Name, err)
 	}
@@ -327,7 +328,7 @@ func disableDAD(contVethName string) error {
 }
 
 // SetupRoutes sets up the routes for the host side of the veth pair.
-func SetupRoutes(hostNlHandle *netlink.Handle, hostVeth netlink.Link, result *cniv1.Result) error {
+func SetupRoutes(conf types.NetConf, hostNlHandle *netlink.Handle, hostVeth netlink.Link, result *cniv1.Result) error {
 
 	// Go through all the IPs and add routes for each IP in the result.
 	for _, ipAddr := range result.IPs {
@@ -381,6 +382,14 @@ func SetupRoutes(hostNlHandle *netlink.Handle, hostVeth netlink.Link, result *cn
 						conflict = fmt.Sprintf("route (Ifindex: %d, Dst: %s, Scope: %v, Iface: %s)",
 							r.LinkIndex, r.Dst.String(), r.Scope, linkName)
 						break
+					}
+				}
+
+				// If the network type is IPIP and pods with the same address are being created, 
+				// it usually indicates an ongoing migration.
+				if conf.Type == "ipip" {
+					if err := hostNlHandle.RouteReplace(&route); err == nil {
+						return nil
 					}
 				}
 

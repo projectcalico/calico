@@ -135,6 +135,7 @@ func SetupVxlanNetwork(networkName string, subNet *net.IPNet, vni uint64, logger
 func (d *windowsDataplane) DoNetworking(
 	ctx context.Context,
 	calicoClient calicoclient.Interface,
+	conf types.NetConf,
 	args *skel.CmdArgs,
 	result *cniv1.Result,
 	desiredVethName string,

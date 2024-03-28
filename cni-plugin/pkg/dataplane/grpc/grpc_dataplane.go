@@ -71,6 +71,7 @@ func NewGrpcDataplane(conf types.NetConf, logger *logrus.Entry) (*grpcDataplane,
 func (d *grpcDataplane) DoNetworking(
 	ctx context.Context,
 	calicoClient calicoclient.Interface,
+	conf types.NetConf,
 	args *skel.CmdArgs,
 	result *cniv1.Result,
 	desiredVethName string,

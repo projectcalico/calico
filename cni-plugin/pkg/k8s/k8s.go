@@ -395,7 +395,7 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 	// Whether the endpoint existed or not, the veth needs (re)creating.
 	desiredVethName := k8sconversion.NewConverter().VethNameForWorkload(epIDs.Namespace, epIDs.Pod)
 	hostVethName, contVethMac, err := d.DoNetworking(
-		ctx, calicoClient, args, result, desiredVethName, routes, endpoint, annot)
+		ctx, calicoClient, conf, args, result, desiredVethName, routes, endpoint, annot)
 	if err != nil {
 		logger.WithError(err).Error("Error setting up networking")
 		releaseIPAM()
