@@ -19,12 +19,15 @@ package bpf
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"net"
 	"os"
 	"os/exec"
 	"testing"
+	"strings"
 
+	"path/filepath"
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/felix/environment"
@@ -357,6 +360,30 @@ func TestXDP(t *testing.T) {
 		t.Fatalf("cannot create veth pair: %v\n%s", err, output)
 	}
 
+	// Load dummy BPF program.
+	progPath := filepath.Join(bpfDP.GetBPFCalicoDir(), "test")
+	err = bpfDP.loadBPF(filepath.Join("../testdata", "test.o"), progPath, "xdpgeneric", nil)
+	if err != nil {
+		t.Fatalf("could not load sample program: %v", err)
+	}
+
+	// Pin dummy BPF program to interface test_B.
+	prog := "ip"
+	args := []string{
+		"link",
+		"set",
+		"dev",
+		"test_B",
+		"xdpgeneric",
+		"pinned",
+		progPath,
+	}
+	printCommand(prog, args...)
+	output, err = exec.Command(prog, args...).CombinedOutput()
+	if err != nil {
+		t.Fatalf("could not execute ip command: %v\n%s", err, output)
+	}
+
 	t.Log("Loading an XDP program to a veth iface should succeed")
 	err = bpfDP.loadXDPRaw(objFile, "test_A", XDPGeneric, nil)
 	if err != nil {
@@ -423,6 +450,29 @@ func TestXDP(t *testing.T) {
 	_, err = bpfDP.GetMapsFromXDP("test_B") // other iface
 	if err == nil {
 		t.Fatalf("getting maps ids from XDP should have failed")
+	}
+
+	t.Log("An XDP program that is not attached to Calico should not get removed")
+	err = bpfDP.RemoveXDP("test_B", XDPGeneric) // other iface
+	if err == nil {
+		t.Fatalf("removal should have failed")
+	}
+
+	t.Log("Program attached to test_B should not be removed")
+	if _, err := os.Stat(progPath); errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("test XDP program should not have been deleted")
+	}
+
+	prog = "ip"
+	args = []string{
+		"link",
+		"show",
+		"test_B"}
+
+	printCommand(prog, args...)
+	output, err = exec.Command(prog, args...).CombinedOutput()
+	if !strings.Contains(string(output), "xdp") {
+		t.Fatalf("xdp program was detached but should not: %s", output)
 	}
 
 	t.Log("Getting the XDP program ID from an iface with an XDP program attached should succeed")
