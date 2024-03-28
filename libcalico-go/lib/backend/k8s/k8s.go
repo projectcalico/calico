@@ -296,7 +296,7 @@ func fillLoadingRulesFromKubeConfigSpec(loadingRules *clientcmd.ClientConfigLoad
 func CreateKubernetesClientset(ca *apiconfig.CalicoAPIConfigSpec) (*rest.Config, *kubernetes.Clientset, error) {
 	// Use the kubernetes client code to load the kubeconfig file and combine it with the overrides.
 	configOverrides := &clientcmd.ConfigOverrides{}
-	var overridesMap = []struct {
+	overridesMap := []struct {
 		variable *string
 		value    string
 	}{
@@ -707,7 +707,7 @@ func (c *KubeClient) getReadyStatus(ctx context.Context, k model.ReadyFlagKey, r
 }
 
 func (c *KubeClient) listHostConfig(ctx context.Context, l model.HostConfigListOptions, revision string) (*model.KVPairList, error) {
-	var kvps = []*model.KVPair{}
+	kvps := []*model.KVPair{}
 
 	// Short circuit if they aren't asking for information we can provide.
 	if l.Name != "" && l.Name != "IpInIpTunnelAddr" {
