@@ -32,7 +32,9 @@ import (
 )
 
 const (
-	dirStatus = "endpoint-status"
+	dirStatus  = "endpoint-status"
+	statusUp   = "up"
+	statusDown = "down"
 )
 
 // EndpointStatusFileReporter writes a file to the FS
@@ -55,6 +57,8 @@ type EndpointStatusFileReporter struct {
 	reapplyInterval time.Duration
 
 	hostname string
+
+	filesys
 }
 
 // Backoff wraps a timer-based-retry type which can be stepped.
@@ -66,6 +70,35 @@ type Backoff interface {
 type backoffManager struct {
 	Backoff
 	newBackoffFunc func() Backoff
+}
+
+type filesys interface {
+	Create(name string) (*os.File, error)
+	Remove(name string) error
+	Mkdir(name string, perm os.FileMode) error
+	ReadDir(name string) ([]os.DirEntry, error)
+}
+
+type defaultFilesys struct{}
+
+// Create wraps os.Create.
+func (fs *defaultFilesys) Create(name string) (*os.File, error) {
+	return os.Create(name)
+}
+
+// Remove wraps os.Remove.
+func (fs *defaultFilesys) Remove(name string) error {
+	return os.Remove(name)
+}
+
+// Mkdir wraps os.Mkdir.
+func (fs *defaultFilesys) Mkdir(name string, perm os.FileMode) error {
+	return os.Mkdir(name, perm)
+}
+
+// ReadDir wraps os.ReadDir.
+func (fs *defaultFilesys) ReadDir(name string) ([]os.DirEntry, error) {
+	return os.ReadDir(name)
 }
 
 // newBackoffManager creates a backoffManager which uses the
@@ -99,6 +132,7 @@ func NewEndpointStatusFileReporter(
 		bom:                     newBackoffManager(newDefaultBackoff),
 		hostname:                "",
 		reapplyInterval:         10 * time.Second,
+		filesys:                 &defaultFilesys{},
 	}
 
 	for _, o := range opts {
@@ -121,6 +155,13 @@ func WithNewBackoffFunc(newBackoffFunc func() Backoff) FileReporterOption {
 func WithHostname(hostname string) FileReporterOption {
 	return func(fr *EndpointStatusFileReporter) {
 		fr.hostname = hostname
+	}
+}
+
+// WithFilesys allows shimming into filesystem calls.
+func WithFilesys(f filesys) FileReporterOption {
+	return func(fr *EndpointStatusFileReporter) {
+		fr.filesys = f
 	}
 }
 
@@ -245,7 +286,20 @@ func (fr *EndpointStatusFileReporter) handleEndpointUpdate(e interface{}) {
 		}
 		key := names.WorkloadEndpointIDToWorkloadEndpointKey(m.Id, fr.hostname)
 		fn := names.WorkloadEndpointKeyToStatusFilename(key)
-		fr.statusDirDeltaTracker.Desired().Add(fn)
+
+		if m.Status.Status == statusDown {
+			logrus.WithField("update", e).Debug("Skipping WorkloadEndpointStatusUpdate with down status")
+			fr.statusDirDeltaTracker.Desired().Delete(fn)
+			return
+		} else if m.Status.Status == statusUp {
+			// Explicitly checking the opposite case here (rather than fallthrough)
+			// in-case of a terrible failure where status is neither "up" nor "down".
+			logrus.WithField("update", e).Debug("Handling WorkloadEndpointUpdate with up status")
+			fr.statusDirDeltaTracker.Desired().Add(fn)
+		} else {
+			logrus.WithField("update", e).Warn("Skipping update with unrecognized status")
+		}
+
 	case *proto.WorkloadEndpointStatusRemove:
 		if m.Id == nil {
 			logrus.WithField("update", m).Warn("Couldn't handle nil WorkloadEndpointStatusRemove")
@@ -259,10 +313,11 @@ func (fr *EndpointStatusFileReporter) handleEndpointUpdate(e interface{}) {
 	}
 }
 
+// A sub-call of SyncForever.
 // Overwrites our user-space representation of the kernel with a fresh snapshot.
 func (fr *EndpointStatusFileReporter) resyncDataplaneWithKernel() error {
 	// Load any pre-existing committed dataplane entries.
-	entries, err := ensureStatusDir(fr.endpointStatusDirPrefix)
+	entries, err := fr.ensureStatusDir(fr.endpointStatusDirPrefix)
 	if err != nil {
 		return err
 	}
@@ -310,7 +365,7 @@ func (fr *EndpointStatusFileReporter) writeStatusFile(name string) error {
 	// Write file to dir.
 	logrus.WithField("filename", name).Debug("Writing endpoint-status file to status-dir")
 	filename := filepath.Join(fr.endpointStatusDirPrefix, dirStatus, name)
-	f, err := os.Create(filename)
+	f, err := fr.filesys.Create(filename)
 	if err != nil {
 		return err
 	}
@@ -319,19 +374,19 @@ func (fr *EndpointStatusFileReporter) writeStatusFile(name string) error {
 
 func (fr *EndpointStatusFileReporter) deleteStatusFile(name string) error {
 	filename := filepath.Join(fr.endpointStatusDirPrefix, dirStatus, name)
-	return os.Remove(filename)
+	return fr.filesys.Remove(filename)
 }
 
 // ensureStatusDir ensures there is a directory named "endpoint-status", within
 // the parent dir specified by prefix. Attempts to create the dir if it doesn't exist.
 // Returns all entries within the dir if any exist.
-func ensureStatusDir(prefix string) (entries []fs.DirEntry, err error) {
+func (fr *EndpointStatusFileReporter) ensureStatusDir(prefix string) (entries []fs.DirEntry, err error) {
 	filename := filepath.Join(prefix, dirStatus)
 
-	entries, err = os.ReadDir(filename)
+	entries, err = fr.filesys.ReadDir(filename)
 	if err != nil && errors.Is(err, fs.ErrNotExist) {
 		// Discard ErrNotExist and return the result of attempting to create it.
-		return entries, os.Mkdir(filename, fs.FileMode(0655))
+		return entries, fr.filesys.Mkdir(filename, fs.FileMode(0655))
 	}
 
 	return entries, err
