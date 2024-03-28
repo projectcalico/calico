@@ -1,0 +1,21 @@
+---
+    name: Yaml Lint
+    on: [push]  # yamllint disable-line rule:truthy
+    jobs:
+      lintAllTheThings:
+        runs-on: ubuntu-latest
+        steps:
+          - uses: actions/checkout@v3
+          - id: yaml-lint
+            uses: ibiqlik/action-yamllint@v3
+            with:
+              file_or_dir: .semaphore/**/*.yml
+              config_file: .semaphore/.yamllint.yml
+    
+          - run: echo ${{ steps.yaml-lint.outputs.logfile }}
+    
+          - uses: actions/upload-artifact@v2
+            if: always()
+            with:
+              name: yamllint-logfile
+              path: ${{ steps.yaml-lint.outputs.logfile }}
