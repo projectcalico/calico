@@ -909,6 +909,12 @@ func (c *ipamController) allocationIsValid(a *allocation, preferCache bool) bool
 		return true
 	}
 
+	// Pod evicted by agent like kubelet, failed forever, safe to release IP resource
+	if p.Status.Phase == v1.PodFailed && p.Status.Reason == "Evicted" {
+		logc.Debugf("Pod has failed with Evicted. Allocation no longer valid")
+		return false
+	}
+
 	// Convert the pod to a workload endpoint. This takes advantage of the IP
 	// gathering logic already implemented in the converter, and handles exceptional cases like
 	// additional WEPs attached to Multus networks.
