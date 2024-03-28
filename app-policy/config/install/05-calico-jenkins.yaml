@@ -11,7 +11,7 @@ data:
   veth_mtu: "1440"
   cni_network_config: |-
     {
-      "name": "k8s-pod-network",
+      "name": "calico",
       "cniVersion": "0.3.0",
       "plugins": [
         {
