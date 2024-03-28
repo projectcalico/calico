@@ -120,15 +120,23 @@ func runDiags(logDir string) error {
 	diagsTmpDir := filepath.Join(tmpDir, "diagnostics")
 
 	for _, v := range cmds {
-		err = writeDiags(v, diagsTmpDir)
-		// sometimes socket information is not collected as netstat tool
-		// is obsolete and removed in Ubuntu and other distros. so when
-		// "netstat -a -n " fails, we should use "ss -a -n" instead of it
-		if err != nil && v.cmd == "netstat -a -n" {
+		if v.cmd != "netstat -a -n" {
+			_ = writeDiags(v, diagsTmpDir)
+			continue
+		}
+
+		if _, err := exec.LookPath("netstat"); err == nil {
+			_ = writeDiags(v, diagsTmpDir)
+		} else {
+			// sometimes socket information is not collected as netstat tool
+			// is obsolete and removed in Ubuntu and other distros. so when
+			// "netstat -a -n " fails, we should use "ss -a -n" instead of it
 			parts := []string{"ss", "-a", "-n"}
 			content, err := exec.Command(parts[0], parts[1], parts[2]).CombinedOutput()
 			if err != nil {
 				fmt.Printf("Failed to run command: %s\nError: %s\n", strings.Join(parts, " "), string(content))
+			} else {
+				fmt.Println("Dumping ss")
 			}
 
 			fp := filepath.Join(diagsTmpDir, parts[0])
@@ -136,7 +144,6 @@ func runDiags(logDir string) error {
 				log.Errorf("Error writing diags to file: %s\n", err)
 			}
 		}
-
 	}
 
 	tmpLogDir := filepath.Join(diagsTmpDir, "logs")
