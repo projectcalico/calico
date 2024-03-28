@@ -15,7 +15,7 @@ spec:
     - name: SERVE_PORT_80
       value: foobar
   nodeSelector:
-    beta.kubernetes.io/os: windows
+    kubernetes.io/os: windows
 
 ---
 
