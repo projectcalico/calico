@@ -3049,6 +3049,13 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							},
 						},
 					},
+					"cgrouV2Path": {
+						SchemaProps: spec.SchemaProps{
+							Description: "CgroupV2Path overrides the default location where to find the cgroup hierarchy.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 					"routeSource": {
 						SchemaProps: spec.SchemaProps{
 							Description: "RouteSource configures where Felix gets its routing information. - WorkloadIPs: use workload endpoints to construct routes. - CalicoIPAM: the default - use IPAM data to construct routes.",
