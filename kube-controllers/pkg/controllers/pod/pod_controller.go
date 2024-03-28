@@ -321,7 +321,9 @@ func (c *podController) syncToCalico(key string) error {
 		new := wepData.(converter.WorkloadEndpointData)
 		if !reflect.DeepEqual(old, new) {
 			// The relevant wep data has changed - update the wep and write it to the datastore.
+			c.workloadEndpointCache.RLock()
 			log.Infof("Writing endpoint %s with updated data %#v to Calico datastore", key, new)
+			c.workloadEndpointCache.RUnlock()
 			converter.MergeWorkloadEndpointData(&wep, new)
 			_, err := c.calicoClient.WorkloadEndpoints().Update(c.ctx, &wep, options.SetOptions{})
 			if err != nil {
