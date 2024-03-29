@@ -118,13 +118,13 @@ func runDiags(logDir string) error {
 	}
 	diagsTmpDir := filepath.Join(tmpDir, "diagnostics")
 
-	netstatCmd := diagCmd {  
+	netstatCmd := diagCmd{  
 		info:     "Dumping netstat",  
 		cmd:      "netstat -a -n",  
 		filename: "netstat",  
 	}  
 	  
-	ssCmd := diagCmd {  
+	ssCmd := diagCmd{  
 		info:     "Dumping ss",  
 		cmd:      "ss -a -n",  
 		filename: "ss",  
