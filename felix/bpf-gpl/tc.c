@@ -456,7 +456,7 @@ syn_force_policy:
 
 	if (CALI_F_FROM_WEP
 #ifdef IPVER6
-			&& ctx->state->ip_proto != IPPROTO_ICMPV6
+			&& !(ctx->state->ip_proto == IPPROTO_ICMPV6 && ip_link_local(ctx->state->ip_src))
 #endif
 		) {
 		struct cali_rt *r = cali_rt_lookup(&ctx->state->ip_src);
