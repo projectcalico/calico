@@ -118,30 +118,30 @@ func runDiags(logDir string) error {
 	}
 	diagsTmpDir := filepath.Join(tmpDir, "diagnostics")
 
-	netstatCmd := diagCmd{  
-		info:     "Dumping netstat",  
-		cmd:      "netstat -a -n",  
-		filename: "netstat",  
-	}  
-	  
-	ssCmd := diagCmd{  
-		info:     "Dumping ss",  
-		cmd:      "ss -a -n",  
-		filename: "ss",  
-	}
-	
-	// sometimes socket information is not collected as netstat tool
-	// is obsolete and removed in Ubuntu and other distros. so when
-	// "netstat -a -n " fails, we should use "ss -a -n" instead of it
-	if _, err := exec.LookPath(netstatCmd.filename); err == nil {
-		cmds = append(cmds, netstatCmd)
-	} else {
-		cmds = append(cmds, ssCmd)
-	}
+    netstatCmd := diagCmd{  
+        info:     "Dumping netstat",  
+        cmd:      "netstat -a -n",  
+        filename: "netstat",  
+    }  
 
-	for _, v := range cmds {
-		_ = writeDiags(v, diagsTmpDir)
-	}
+    ssCmd := diagCmd{  
+        info:     "Dumping ss",  
+        cmd:      "ss -a -n",  
+        filename: "ss",  
+    }
+
+    // sometimes socket information is not collected as netstat tool
+    // is obsolete and removed in Ubuntu and other distros. so when
+    // "netstat -a -n " fails, we should use "ss -a -n" instead of it
+    if _, err := exec.LookPath(netstatCmd.filename); err == nil {
+        cmds = append(cmds, netstatCmd)
+    } else {
+        cmds = append(cmds, ssCmd)
+    }
+
+    for _, v := range cmds {
+        _ = writeDiags(v, diagsTmpDir)
+    }
 
 	tmpLogDir := filepath.Join(diagsTmpDir, "logs")
 
