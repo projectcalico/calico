@@ -632,7 +632,13 @@ func (b *PinnedMap) EnsureExists() error {
 		if b.KeySize != mapInfo.KeySize || b.ValueSize != mapInfo.ValueSize {
 			b.MapFD().Close()
 			os.Remove(b.Path())
-			log.Warn("Map with same name but different parameters exists. Deleting it")
+			log.WithFields(log.Fields{
+				"name":          b.Name,
+				"Old KeySize":   mapInfo.KeySize,
+				"New KeySize":   b.KeySize,
+				"Old ValueSize": mapInfo.ValueSize,
+				"New ValueSize": b.ValueSize,
+			}).Warn("Map with same name but different parameters exists. Deleting it")
 		} else {
 			if b.MaxEntries == mapInfo.MaxEntries {
 				return nil
