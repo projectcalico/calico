@@ -25,7 +25,7 @@ group "default" {
 
 # All ubuntu images
 group "ubuntu" {
-  targets = ["focal", "jammy"]
+  targets = ["focal", "jammy", "noble"]
 }
 
 # All centos images
@@ -38,9 +38,15 @@ target "focal" {
   dockerfile = "ubuntu-focal-build.Dockerfile.${ARCH}"
   tags = ["calico-build/focal"]
 }
+
 target "jammy" {
   dockerfile = "ubuntu-jammy-build.Dockerfile.${ARCH}"
   tags = ["calico-build/jammy"]
+}
+
+target "noble" {
+  dockerfile = "ubuntu-noble-build.Dockerfile.${ARCH}"
+  tags = ["calico-build/noble"]
 }
 
 # CentOS builds
