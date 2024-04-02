@@ -705,7 +705,7 @@ blocks:
           - export UPPER_CONSTRAINTS_FILE=https://releases.openstack.org/constraints/upper/yoga
           - export NC_PLUGIN_REPO=$(dirname $(pwd))
           - export NC_PLUGIN_REF=$(git rev-parse --abbrev-ref HEAD)
-          - TEMPEST=true DEVSTACK_BRANCH=stable/yoga ./devstack/bootstrap.sh
+          - TEMPEST=true DEVSTACK_BRANCH=unmaintained/yoga ./devstack/bootstrap.sh
     epilogue:
       on_fail:
         commands:
