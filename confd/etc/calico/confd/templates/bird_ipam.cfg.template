@@ -8,14 +8,15 @@ function reject_disabled_pools ()
 {{- end}}
 }
 
+{{- $node_as_key := printf "/host/%s/as_num" (getenv "NODENAME")}}
+{{- $as_key := or (and (exists $node_as_key) $node_as_key) "/global/as_num"}}
+{{- $node_as_num := getv $as_key}}
 function reject_transit ()
 {
   if (defined(bgp_path)) then {
-    if (bgp_path.len != 1) then {
+    if (bgp_path.last != {{$node_as_num}}) then {
       reject;
     }
-  } else {
-    reject;
   }
 }
 
@@ -77,7 +78,7 @@ function reject_bogons()
 }
 
 filter calico_import_from_bgp_peers {
-  #reject_default_route();
+  reject_default_route();
   reject_bogons();
   accept;
 }
@@ -100,7 +101,7 @@ filter calico_export_to_bgp_peers {
 
   # Filter out further propagation of routes redistributed to this node which
   # haven't originated from this AS nor are static.
-  #reject_transit();
+  reject_transit();
 
   export_pools();
 
