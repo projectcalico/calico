@@ -629,26 +629,38 @@ func (b *PinnedMap) EnsureExists() error {
 			return fmt.Errorf("error getting map info of the pinned map %w", err)
 		}
 
-		if b.MaxEntries == mapInfo.MaxEntries {
-			return nil
-		}
-		log.WithField("name", b.Name).Debugf("Size changed %d -> %d", mapInfo.MaxEntries, b.MaxEntries)
+		if b.KeySize != mapInfo.KeySize || b.ValueSize != mapInfo.ValueSize {
+			b.MapFD().Close()
+			os.Remove(b.Path())
+			log.WithFields(log.Fields{
+				"name":          b.Name,
+				"Old KeySize":   mapInfo.KeySize,
+				"New KeySize":   b.KeySize,
+				"Old ValueSize": mapInfo.ValueSize,
+				"New ValueSize": b.ValueSize,
+			}).Warn("Map with same name but different parameters exists. Deleting it")
+		} else {
+			if b.MaxEntries == mapInfo.MaxEntries {
+				return nil
+			}
+			log.WithField("name", b.Name).Debugf("Size changed %d -> %d", mapInfo.MaxEntries, b.MaxEntries)
 
-		// store the old fd
-		b.oldfd = b.MapFD()
-		b.oldSize = mapInfo.MaxEntries
+			// store the old fd
+			b.oldfd = b.MapFD()
+			b.oldSize = mapInfo.MaxEntries
 
-		err = b.repinAt(int(b.MapFD()), b.Path(), oldMapPath)
-		if err != nil {
-			return fmt.Errorf("error migrating the old map %w", err)
-		}
-		copyData = true
-		// Do not close the oldfd if the map is updated by the BPF programs.
-		if !b.UpdatedByBPF {
-			defer func() {
-				b.oldfd.Close()
-				b.oldfd = 0
-			}()
+			err = b.repinAt(int(b.MapFD()), b.Path(), oldMapPath)
+			if err != nil {
+				return fmt.Errorf("error migrating the old map %w", err)
+			}
+			copyData = true
+			// Do not close the oldfd if the map is updated by the BPF programs.
+			if !b.UpdatedByBPF {
+				defer func() {
+					b.oldfd.Close()
+					b.oldfd = 0
+				}()
+			}
 		}
 	}
 
