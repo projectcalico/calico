@@ -15,13 +15,13 @@
 #include <linux/bpf.h>
 #include "sockops.h"
 
-struct bpf_map_def __attribute__((section("maps"))) calico_sk_endpoints = {
-	.type           = BPF_MAP_TYPE_LPM_TRIE,
-	.key_size       = sizeof(union ip4_bpf_lpm_trie_key),
-	.value_size     = sizeof(__u32),
-	.max_entries    = 65535,
-	.map_flags      = BPF_F_NO_PREALLOC,
-};
+struct {
+    __uint(type, BPF_MAP_TYPE_LPM_TRIE);
+    __uint(max_entries, 65535);
+    __type(key, union ip4_bpf_lpm_trie_key);
+    __type(value, __u32);
+    __uint(map_flags, BPF_F_NO_PREALLOC);
+} calico_sk_endpoints __attribute__((section(".maps")));
 
 __attribute__((section("calico_sockops_func")))
 enum bpf_ret_code calico_sockops(struct bpf_sock_ops *skops)
