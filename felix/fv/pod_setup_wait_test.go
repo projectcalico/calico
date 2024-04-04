@@ -131,6 +131,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Pod setup status wait", []a
 			By("creating a workload before Felix starts")
 			wl := workload.New(tc.Felixes[0], "workload-endpoint-status-tests-0", "default", "10.65.0.10", "8080", "tcp")
 			wl.ConfigureInInfra(infra)
+			err := wl.Start()
+			Expect(err).NotTo(HaveOccurred(), "Couldn't start a test workload")
 
 			By("determining the filename Felix will look for")
 			wKey, err := names.V3WorkloadEndpointToWorkloadEndpointKey(wl.WorkloadEndpoint)

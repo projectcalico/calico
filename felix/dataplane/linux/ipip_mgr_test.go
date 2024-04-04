@@ -95,7 +95,7 @@ var _ = Describe("IpipMgr (tunnel configuration)", func() {
 		}
 
 		BeforeEach(func() {
-			err = ipipMgr.configureIPIPDevice(1400, ip)
+			err = ipipMgr.configureIPIPDevice(1400, ip, false)
 			Expect(err).ToNot(HaveOccurred())
 		})
 
@@ -116,7 +116,7 @@ var _ = Describe("IpipMgr (tunnel configuration)", func() {
 		Describe("after second call with same params", func() {
 			BeforeEach(func() {
 				dataplane.ResetCalls()
-				err := ipipMgr.configureIPIPDevice(1400, ip)
+				err := ipipMgr.configureIPIPDevice(1400, ip, false)
 				Expect(err).ToNot(HaveOccurred())
 			})
 			It("should avoid creating the interface", func() {
@@ -136,7 +136,7 @@ var _ = Describe("IpipMgr (tunnel configuration)", func() {
 		Describe("after second call with different params", func() {
 			BeforeEach(func() {
 				dataplane.ResetCalls()
-				err = ipipMgr.configureIPIPDevice(1500, ip2)
+				err = ipipMgr.configureIPIPDevice(1500, ip2, false)
 				Expect(err).ToNot(HaveOccurred())
 
 			})
@@ -158,7 +158,7 @@ var _ = Describe("IpipMgr (tunnel configuration)", func() {
 		Describe("after second call with nil IP", func() {
 			BeforeEach(func() {
 				dataplane.ResetCalls()
-				err := ipipMgr.configureIPIPDevice(1500, nil)
+				err := ipipMgr.configureIPIPDevice(1500, nil, false)
 				Expect(err).ToNot(HaveOccurred())
 			})
 			It("should avoid creating the interface", func() {
@@ -178,7 +178,7 @@ var _ = Describe("IpipMgr (tunnel configuration)", func() {
 
 	Describe("after calling configureIPIPDevice with no IP", func() {
 		BeforeEach(func() {
-			err := ipipMgr.configureIPIPDevice(1400, nil)
+			err := ipipMgr.configureIPIPDevice(1400, nil, false)
 			Expect(err).ToNot(HaveOccurred())
 		})
 
@@ -201,7 +201,7 @@ var _ = Describe("IpipMgr (tunnel configuration)", func() {
 	const expNumCalls = 8
 	It("a successful call should only call into dataplane expected number of times", func() {
 		// This spec is a sanity-check that we've got the expNumCalls constant correct.
-		err := ipipMgr.configureIPIPDevice(1400, ip)
+		err := ipipMgr.configureIPIPDevice(1400, ip, false)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(dataplane.NumCalls).To(BeNumerically("==", expNumCalls))
 	})
@@ -216,7 +216,7 @@ var _ = Describe("IpipMgr (tunnel configuration)", func() {
 			})
 
 			It("should return the error", func() {
-				Expect(ipipMgr.configureIPIPDevice(1400, ip)).To(Equal(mockFailure))
+				Expect(ipipMgr.configureIPIPDevice(1400, ip, false)).To(Equal(mockFailure))
 			})
 
 			Describe("with an IP to remove", func() {
@@ -227,7 +227,7 @@ var _ = Describe("IpipMgr (tunnel configuration)", func() {
 						})
 				})
 				It("should return the error", func() {
-					Expect(ipipMgr.configureIPIPDevice(1400, ip)).To(Equal(mockFailure))
+					Expect(ipipMgr.configureIPIPDevice(1400, ip, false)).To(Equal(mockFailure))
 				})
 			})
 		})

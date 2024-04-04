@@ -23,11 +23,13 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/calico/felix/dataplane/common"
 	"github.com/projectcalico/calico/felix/environment"
+	"github.com/projectcalico/calico/felix/ethtool"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/logutils"
@@ -402,8 +404,8 @@ func (m *ipipManager) CompleteDeferredWork() error {
 
 // KeepIPIPDeviceInSync is a goroutine that configures the IPIP tunnel device, then periodically
 // checks that it is still correctly configured.
-func (m *ipipManager) KeepIPIPDeviceInSync(mtu int, address net.IP) {
-	m.logCtx.Info("IPIP tunnel device thread started.")
+func (m *ipipManager) KeepIPIPDeviceInSync(mtu int, address net.IP, xsumBroken bool) {
+	log.Info("IPIP thread started.")
 	for {
 		if parent, err := m.getParentInterface(); err != nil {
 			m.logCtx.WithError(err).Debug("Missing local host information, retrying...")
@@ -419,7 +421,7 @@ func (m *ipipManager) KeepIPIPDeviceInSync(mtu int, address net.IP) {
 		}
 
 		m.logCtx.WithField("local address", address.String()).Debug("Configuring IPIP device")
-		err := m.configureIPIPDevice(mtu, address)
+		err := m.configureIPIPDevice(mtu, address, xsumBroken)
 		if err != nil {
 			m.logCtx.WithError(err).Warn("Failed configure IPIP tunnel device, retrying...")
 			time.Sleep(1 * time.Second)
@@ -460,8 +462,8 @@ func (m *ipipManager) getParentInterface() (netlink.Link, error) {
 }
 
 // configureIPIPDevice ensures the IPIP tunnel device is up and configures correctly.
-func (m *ipipManager) configureIPIPDevice(mtu int, address net.IP) error {
-	logCxt := m.logCtx.WithFields(logrus.Fields{
+func (m *ipipManager) configureIPIPDevice(mtu int, address net.IP, xsumBroken bool) error {
+	logCxt := log.WithFields(log.Fields{
 		"mtu":        mtu,
 		"tunnelAddr": address,
 		"device":     m.ipipDevice,
@@ -496,6 +498,14 @@ func (m *ipipManager) configureIPIPDevice(mtu int, address net.IP) error {
 		}
 		logCxt.Info("Updated tunnel MTU")
 	}
+
+	// If required, disable checksum offload.
+	if xsumBroken {
+		if err := ethtool.EthtoolTXOff("tunl0"); err != nil {
+			return fmt.Errorf("failed to disable checksum offload: %s", err)
+		}
+	}
+
 	if attrs.Flags&net.FlagUp == 0 {
 		logCxt.WithField("flags", attrs.Flags).Info("Tunnel wasn't admin up, enabling it")
 		if err := m.dataplane.LinkSetUp(link); err != nil {

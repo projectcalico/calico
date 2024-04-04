@@ -23,6 +23,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"regexp"
 	"strconv"
 
 	v1 "k8s.io/api/core/v1"
@@ -376,6 +377,30 @@ func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 					cc.Expect(Some, w[1][0], w[0][0], ExpectWithIPVersion(6))
 					cc.Expect(Some, w[1][1], w[0][0], ExpectWithIPVersion(6))
 					cc.CheckConnectivity()
+				})
+
+				It("should be able to ping external client from w[0][0]", func() {
+					tc.TriggerDelayedStart()
+					externalClient := infrastructure.RunExtClient("ext-client")
+					_ = externalClient
+					ensureRightIFStateFlags(tc.Felixes[0], ifstate.FlgIPv4Ready|ifstate.FlgIPv6Ready)
+					ensureRightIFStateFlags(tc.Felixes[1], ifstate.FlgIPv4Ready|ifstate.FlgIPv6Ready)
+
+					tcpdump := externalClient.AttachTCPDump("any")
+					tcpdump.SetLogEnabled(true)
+					matcher := fmt.Sprintf("IP6 %s > %s: ICMP6, echo request",
+						felixIP6(0), externalClient.IPv6)
+
+					tcpdump.AddMatcher("ICMP", regexp.MustCompile(matcher))
+					tcpdump.Start()
+					defer tcpdump.Stop()
+
+					_, err := w[0][0].ExecCombinedOutput("ping6", "-c", "2", externalClient.IPv6)
+					Expect(err).NotTo(HaveOccurred())
+					Eventually(func() int { return tcpdump.MatchCount("ICMP") }).
+						Should(BeNumerically(">", 0), matcher)
+					externalClient.Stop()
+
 				})
 			}
 		} else {

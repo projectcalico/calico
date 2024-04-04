@@ -4680,7 +4680,7 @@ rules:
 ---
 # Source: calico/templates/calico-node-rbac.yaml
 # Flannel ClusterRole
-# Pulled from https://github.com/coreos/flannel/blob/master/Documentation/kube-flannel-rbac.yml
+# Pulled from https://github.com/flannel-io/flannel/blob/master/Documentation/k8s-old-manifests/kube-flannel-rbac.yml
 kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
