@@ -65,7 +65,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 		if BPFMode() && getDataStoreType(infra) == "etcdv3" {
 			Skip("Skipping BPF test for etcdv3 backend.")
 		}
-
 		tc, client = infrastructure.StartNNodeTopology(2, infrastructure.DefaultTopologyOptions(), infra)
 
 		// Install a default profile that allows all ingress and egress, in the absence of any Policy.

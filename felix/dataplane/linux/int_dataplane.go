@@ -2054,7 +2054,6 @@ func (d *InternalDataplane) apply() {
 	for _, mgr := range d.allManagers {
 		err := mgr.CompleteDeferredWork()
 		if err != nil {
-			log.Infof("Marva: %v", mgr)
 			log.WithField("manager", reflect.TypeOf(mgr).Name()).WithError(err).Debug(
 				"couldn't complete deferred work for manager, will try again later")
 			d.dataplaneNeedsSync = true

@@ -16,7 +16,6 @@ package calc
 
 import (
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -393,7 +392,6 @@ func NewCalculationGraph(callbacks PipelineCallbacks, conf *config.Config, liveC
 		//         |
 		//      <dataplane>
 		//
-		logrus.Info("Marmar")
 		l3RR := NewL3RouteResolver(hostname, callbacks, conf.UseNodeResourceUpdates(), conf.RouteSource)
 		l3RR.RegisterWith(allUpdDispatcher, localEndpointDispatcher)
 		l3RR.OnAlive = liveCallback
