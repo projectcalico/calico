@@ -421,18 +421,11 @@ func StartNNodeTopology(n int, opts TopologyOptions, infra DatastoreInfra) (tc T
 			go func(i, j int, iFelix, jFelix *Felix) {
 				defer wg.Done()
 				defer ginkgo.GinkgoRecover()
-				//jBlock := fmt.Sprintf("%d.%d.%d.0/24", IPv4CIDR.IP[0], IPv4CIDR.IP[1], j)
-				if opts.IPIPEnabled && opts.IPIPRoutesEnabled {
-					// Can get "Nexthop device is not up" error here if tunl0 device is
-					// not ready yet, which can happen especially if Felix start was
-					// delayed.
-					/*Eventually(func() error {
-						return iFelix.ExecMayFail("ip", "route", "add", jBlock, "via", jFelix.IP, "dev", "tunl0", "onlink")
-					}, "10s", "1s").ShouldNot(HaveOccurred())*/
-				} else if opts.VXLANMode == api.VXLANModeNever {
-					// If VXLAN is enabled, Felix will program these routes itself.
-					//err := iFelix.ExecMayFail("ip", "route", "add", jBlock, "via", jFelix.IP, "dev", "eth0")
-					//Expect(err).ToNot(HaveOccurred())
+				jBlock := fmt.Sprintf("%d.%d.%d.0/24", IPv4CIDR.IP[0], IPv4CIDR.IP[1], j)
+				if opts.IPIPMode == api.IPIPModeNever || opts.VXLANMode == api.VXLANModeNever {
+					// If IPIP is enabled, Felix will program these routes itself.
+					err := iFelix.ExecMayFail("ip", "route", "add", jBlock, "via", jFelix.IP, "dev", "eth0")
+					Expect(err).ToNot(HaveOccurred())
 				}
 				if opts.EnableIPv6 {
 					jBlockV6 := fmt.Sprintf("%x%x:%x%x:%x%x:%x%x:%x%x:0:%d:0/112", IPv6CIDR.IP[0], IPv6CIDR.IP[1], IPv6CIDR.IP[2], IPv6CIDR.IP[3], IPv6CIDR.IP[4], IPv6CIDR.IP[5], IPv6CIDR.IP[6], IPv6CIDR.IP[7], IPv6CIDR.IP[8], IPv6CIDR.IP[9], j)

@@ -60,16 +60,13 @@ var _ = Describe("IpipMgr (tunnel configuration)", func() {
 		dataplane = &mockIPIPDataplane{}
 		ipSets = common.NewMockIPSets()
 		rt = &mockRouteTable{
-			currentRoutes:   map[string][]routetable.Target{},
-			currentL2Routes: map[string][]routetable.L2Target{},
+			currentRoutes: map[string][]routetable.Target{},
 		}
 		brt = &mockRouteTable{
-			currentRoutes:   map[string][]routetable.Target{},
-			currentL2Routes: map[string][]routetable.L2Target{},
+			currentRoutes: map[string][]routetable.Target{},
 		}
 		prt = &mockRouteTable{
-			currentRoutes:   map[string][]routetable.Target{},
-			currentL2Routes: map[string][]routetable.L2Target{},
+			currentRoutes: map[string][]routetable.Target{},
 		}
 		ipipMgr = newIPIPManagerWithShim(
 			ipSets, rt, brt, "tunl0",
@@ -250,16 +247,13 @@ var _ = Describe("ipipManager IP set updates", func() {
 		dataplane = &mockIPIPDataplane{}
 		ipSets = common.NewMockIPSets()
 		rt = &mockRouteTable{
-			currentRoutes:   map[string][]routetable.Target{},
-			currentL2Routes: map[string][]routetable.L2Target{},
+			currentRoutes: map[string][]routetable.Target{},
 		}
 		brt = &mockRouteTable{
-			currentRoutes:   map[string][]routetable.Target{},
-			currentL2Routes: map[string][]routetable.L2Target{},
+			currentRoutes: map[string][]routetable.Target{},
 		}
 		prt = &mockRouteTable{
-			currentRoutes:   map[string][]routetable.Target{},
-			currentL2Routes: map[string][]routetable.L2Target{},
+			currentRoutes: map[string][]routetable.Target{},
 		}
 
 		la := netlink.NewLinkAttrs()
@@ -424,16 +418,13 @@ var _ = Describe("IPIPManager", func() {
 		dataplane = &mockIPIPDataplane{}
 		ipSets = common.NewMockIPSets()
 		rt = &mockRouteTable{
-			currentRoutes:   map[string][]routetable.Target{},
-			currentL2Routes: map[string][]routetable.L2Target{},
+			currentRoutes: map[string][]routetable.Target{},
 		}
 		brt = &mockRouteTable{
-			currentRoutes:   map[string][]routetable.Target{},
-			currentL2Routes: map[string][]routetable.L2Target{},
+			currentRoutes: map[string][]routetable.Target{},
 		}
 		prt = &mockRouteTable{
-			currentRoutes:   map[string][]routetable.Target{},
-			currentL2Routes: map[string][]routetable.L2Target{},
+			currentRoutes: map[string][]routetable.Target{},
 		}
 
 		la := netlink.NewLinkAttrs()
@@ -473,7 +464,7 @@ var _ = Describe("IPIPManager", func() {
 
 		manager.noEncapRouteTable = prt
 
-		err := manager.configureIPIPDevice(50, manager.dpConfig.RulesConfig.IPIPTunnelAddress)
+		err := manager.configureIPIPDevice(50, manager.dpConfig.RulesConfig.IPIPTunnelAddress, false)
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(manager.noEncapRouteTable).NotTo(BeNil())
@@ -530,7 +521,7 @@ var _ = Describe("IPIPManager", func() {
 	})
 
 	It("adds the route to the default table on next try when the parent route table is not immediately found", func() {
-		go manager.KeepIPIPDeviceInSync(1400, manager.dpConfig.RulesConfig.IPIPTunnelAddress)
+		go manager.KeepIPIPDeviceInSync(1400, manager.dpConfig.RulesConfig.IPIPTunnelAddress, false)
 		manager.OnUpdate(&proto.HostMetadataUpdate{
 			Hostname: "node2",
 			Ipv4Addr: "172.0.12.1/32",
@@ -558,7 +549,7 @@ var _ = Describe("IPIPManager", func() {
 
 		time.Sleep(2 * time.Second)
 
-		err = manager.configureIPIPDevice(50, manager.dpConfig.RulesConfig.IPIPTunnelAddress)
+		err = manager.configureIPIPDevice(50, manager.dpConfig.RulesConfig.IPIPTunnelAddress, false)
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(prt.currentRoutes["eth0"]).To(HaveLen(0))

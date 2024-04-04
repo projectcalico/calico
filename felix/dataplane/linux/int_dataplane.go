@@ -807,9 +807,26 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	dp.RegisterManager(newFloatingIPManager(natTableV4, ruleRenderer, 4, config.FloatingIPsEnabled))
 	dp.RegisterManager(newMasqManager(ipSetsV4, natTableV4, ruleRenderer, config.MaxIPSetSize, 4))
 	if config.RulesConfig.IPIPEnabled {
+		var routeTableIPIP routetable.RouteTableInterface
+		if !config.RouteSyncDisabled {
+			log.Debug("RouteSyncDisabled is false.")
+			routeTableIPIP = routetable.New([]string{"^" + IPIPIfaceName + "$"}, 4, config.NetlinkTimeout,
+				config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, true, unix.RT_TABLE_MAIN,
+				dp.loopSummarizer, featureDetector, routetable.WithLivenessCB(dp.reportHealth))
+		} else {
+			log.Info("RouteSyncDisabled is true, using DummyTable.")
+			routeTableIPIP = &routetable.DummyTable{}
+		}
 		log.Info("IPIP enabled, starting thread to keep tunnel configuration in sync.")
 		// Add a manager to keep the all-hosts IP set up to date.
-		dp.ipipManager = newIPIPManager(ipSetsV4, config.MaxIPSetSize, config.ExternalNodesCidrs)
+		dp.ipipManager = newIPIPManager(
+			ipSetsV4,
+			routeTableIPIP,
+			IPIPIfaceName,
+			config,
+			dp.loopSummarizer,
+			4,
+			featureDetector)
 		go dp.ipipManager.KeepIPIPDeviceInSync(config.IPIPMTU, config.RulesConfig.IPIPTunnelAddress, dataplaneFeatures.ChecksumOffloadBroken)
 		dp.RegisterManager(dp.ipipManager) // IPv4-only
 	} else {

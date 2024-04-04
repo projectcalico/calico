@@ -94,8 +94,8 @@ type ipipManager struct {
 
 func newIPIPManager(
 	ipsetsDataplane common.IPSetsDataplane,
-	deviceName string,
 	rt routetable.RouteTableInterface,
+	deviceName string,
 	dpConfig Config,
 	opRecorder logutils.OpRecorder,
 	ipVersion uint8,
