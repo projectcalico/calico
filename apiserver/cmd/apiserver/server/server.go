@@ -21,10 +21,13 @@ package server
 import (
 	"flag"
 	"io"
+	"os"
 
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 
 	"github.com/projectcalico/calico/apiserver/pkg/apiserver"
+	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/sirupsen/logrus"
 
 	"k8s.io/kubernetes/pkg/util/interrupt"
 
@@ -35,6 +38,20 @@ import (
 )
 
 const defaultEtcdPathPrefix = ""
+
+func logrusLevel() logrus.Level {
+	if env := os.Getenv("LOG_LEVEL"); env != "" {
+		return logutils.SafeParseLogLevel(env)
+	}
+
+	if klog.V(2).Enabled() {
+		return logrus.DebugLevel
+	}
+	if klog.V(1).Enabled() {
+		return logrus.InfoLevel
+	}
+	return logrus.ErrorLevel
+}
 
 // NewCommandStartMaster provides a CLI handler for 'start master' command
 func NewCommandStartCalicoServer(out io.Writer) (*cobra.Command, error) {
@@ -60,6 +77,8 @@ func NewCommandStartCalicoServer(out io.Writer) (*cobra.Command, error) {
 	opts.addFlags(flags)
 
 	cmd.Run = func(c *cobra.Command, args []string) {
+		logrus.SetLevel(logrusLevel())
+
 		h := interrupt.New(nil, func() {
 			close(stopCh)
 		})
