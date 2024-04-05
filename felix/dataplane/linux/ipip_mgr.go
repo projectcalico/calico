@@ -36,6 +36,7 @@ import (
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/rules"
+	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 const (
@@ -51,11 +52,14 @@ type ipipManager struct {
 	sync.Mutex
 
 	// Our dependencies.
-	hostname            string
-	hostAddr            string
-	routeTable          routetable.RouteTableInterface
-	blackholeRouteTable routetable.RouteTableInterface
-	noEncapRouteTable   routetable.RouteTableInterface
+	hostname                  string
+	hostAddr                  string
+	routeTable                routetable.RouteTableInterface
+	blackholeRouteTable       routetable.RouteTableInterface
+	noEncapRouteTable         routetable.RouteTableInterface
+	parentIfaceName           string
+	lastParentDevUpdate       time.Time
+	previouslyUsedParentNames set.Set[string]
 
 	// activeHostnameToIP maps hostname to string IP address. We don't bother to parse into
 	// net.IPs because we're going to pass them directly to the IPSet API.
@@ -102,7 +106,7 @@ func newIPIPManager(
 	featureDetector environment.FeatureDetectorIface,
 ) *ipipManager {
 	if ipVersion != 4 {
-		logrus.Infof("IPIP manager only supports IPv4")
+		logrus.Errorf("IPIP manager only supports IPv4")
 		return nil
 	}
 	nlHandle, _ := netlink.NewHandle()
@@ -160,7 +164,7 @@ func newIPIPManagerWithShim(
 		deviceRouteSourceAddress net.IP, deviceRouteProtocol netlink.RouteProtocol, removeExternalRoutes bool) routetable.RouteTableInterface,
 ) *ipipManager {
 	if ipVersion != 4 {
-		logrus.Infof("IPIP manager only supports IPv4")
+		logrus.Errorf("IPIP manager only supports IPv4")
 		return nil
 	}
 	noEncapProtocol := defaultVXLANProto

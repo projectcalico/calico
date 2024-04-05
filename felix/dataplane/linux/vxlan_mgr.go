@@ -194,7 +194,6 @@ func newVXLANManagerWithShims(
 		noEncapProtocol = dpConfig.DeviceRouteProtocol
 	}
 
-	logCtx := logrus.WithField("ipVersion", ipVersion)
 	return &vxlanManager{
 		ipsetsDataplane: ipsetsDataplane,
 		ipSetMetadata: ipsets.IPSetMetadata{
@@ -222,7 +221,7 @@ func newVXLANManagerWithShims(
 		nlHandle:                  nlHandle,
 		noEncapProtocol:           noEncapProtocol,
 		noEncapRTConstruct:        noEncapRTConstruct,
-		logCtx:                    logCtx,
+		logCtx:                    logrus.WithField("ipVersion", ipVersion),
 	}
 }
 
