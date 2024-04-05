@@ -26,7 +26,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
@@ -38,7 +37,6 @@ import (
 	"github.com/projectcalico/api/pkg/openapi"
 
 	"github.com/projectcalico/calico/apiserver/pkg/apiserver"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
 
 // CalicoServerOptions contains the aggregation of configuration structs for
@@ -62,6 +60,7 @@ type CalicoServerOptions struct {
 
 func (s *CalicoServerOptions) addFlags(flags *pflag.FlagSet) {
 	s.RecommendedOptions.AddFlags(flags)
+
 	flags.BoolVar(&s.EnableAdmissionController, "enable-admission-controller-support", s.EnableAdmissionController,
 		"If true, admission controller hooks will be enabled.")
 	flags.BoolVar(&s.PrintSwagger, "print-swagger", false,
@@ -179,14 +178,6 @@ func (o *CalicoServerOptions) Config() (*apiserver.Config, error) {
 	serverConfig.EnableContentionProfiling = false
 	serverConfig.EnableMetrics = false
 	serverConfig.EnableProfiling = false
-
-	// Extra extra config from environments.
-	//TODO(rlb): Need to unify our logging libraries
-	logrusLevel := logrus.InfoLevel
-	if env := os.Getenv("LOG_LEVEL"); env != "" {
-		logrusLevel = logutils.SafeParseLogLevel(env)
-	}
-	logrus.SetLevel(logrusLevel)
 
 	minResourceRefreshInterval := 5 * time.Second
 	if env := os.Getenv("MIN_RESOURCE_REFRESH_INTERVAL"); env != "" {
