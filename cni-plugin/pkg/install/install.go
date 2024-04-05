@@ -103,7 +103,7 @@ func fileExists(file string) bool {
 }
 
 func mkdir(path string) {
-	if err := os.MkdirAll(path, 0777); err != nil {
+	if err := os.MkdirAll(path, 0o777); err != nil {
 		logrus.WithError(err).Fatalf("Failed to create directory %s", path)
 	}
 }
@@ -124,6 +124,9 @@ func Install(version string) error {
 
 	// Configure logging before anything else.
 	logrus.SetFormatter(&logutils.Formatter{Component: "cni-installer"})
+
+	// Install a hook that adds file/line no information.
+	logrus.AddHook(&logutils.ContextHook{})
 
 	// Clean up any existing binaries / config / assets.
 	if err := os.RemoveAll(winutils.GetHostPath("/host/etc/cni/net.d/calico-tls")); err != nil && !os.IsNotExist(err) {
@@ -386,7 +389,7 @@ func writeCNIConfig(c config) {
 	// Write out the file.
 	name := getEnv("CNI_CONF_NAME", "10-calico.conflist")
 	path := winutils.GetHostPath(fmt.Sprintf("/host/etc/cni/net.d/%s", name))
-	err = os.WriteFile(path, []byte(netconf), 0644)
+	err = os.WriteFile(path, []byte(netconf), 0o644)
 	if err != nil {
 		logrus.Fatal(err)
 	}
@@ -495,7 +498,7 @@ current-context: calico-context`
 		data = strings.Replace(data, "__TLS_CFG__", ca, -1)
 	}
 
-	if err := os.WriteFile(winutils.GetHostPath("/host/etc/cni/net.d/calico-kubeconfig"), []byte(data), 0600); err != nil {
+	if err := os.WriteFile(winutils.GetHostPath("/host/etc/cni/net.d/calico-kubeconfig"), []byte(data), 0o600); err != nil {
 		logrus.Fatal(err)
 	}
 }
