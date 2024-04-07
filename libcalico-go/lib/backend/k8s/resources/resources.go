@@ -143,6 +143,25 @@ func ConvertCalicoResourceToK8sResource(resIn Resource) (Resource, error) {
 	romCopy.Annotations = nil
 	romCopy.UID = ""
 
+	// Any projectcalico.org/v3 owners need to be translated to their equivalent crd.projectcalico.org/v1 representations.
+	// They will be converted back on read.
+	var err error
+	var refs []metav1.OwnerReference
+	for _, ref := range romCopy.GetOwnerReferences() {
+		// Skip any owners that aren't projectcalico.org/v3. These do not need translation.
+		if ref.APIVersion == "projectcalico.org/v3" {
+			// Update the UID and API version to indicate that the referenced UID is valid
+			// on the crd.projectcalico.org/v1 API.
+			ref.APIVersion = "crd.projectcalico.org/v1"
+			ref.UID, err = conversion.ConvertUID(ref.UID)
+			if err != nil {
+				return nil, err
+			}
+		}
+		refs = append(refs, ref)
+	}
+	romCopy.SetOwnerReferences(refs)
+
 	// Marshal the data and store the json representation in the annotations.
 	metadataBytes, err := json.Marshal(romCopy)
 	if err != nil {
@@ -170,7 +189,6 @@ func ConvertCalicoResourceToK8sResource(resIn Resource) (Resource, error) {
 		}
 		meta.UID = uid
 	}
-
 	resOut := resIn.DeepCopyObject().(Resource)
 	romOut := resOut.GetObjectMeta()
 	meta.DeepCopyInto(romOut.(*metav1.ObjectMeta))
@@ -210,6 +228,25 @@ func ConvertK8sResourceToCalicoResource(res Resource) error {
 	if err != nil {
 		return err
 	}
+
+	// Any crd.projectcalico.org/v1 owners need to be translated to their equivalent projectcalico.org/v3 representations.
+	var refs []metav1.OwnerReference
+	for _, ref := range meta.GetOwnerReferences() {
+		// Skip any owners that aren't crd.projectcalico.org/v1. These do not need translation.
+		// We also need to translate projectcalico.org/v3 owners, if any, since these represent resources that were
+		// written prior to the UID conversion fix.
+		if ref.APIVersion == "crd.projectcalico.org/v1" || ref.APIVersion == "projectcalico.org/v3" {
+			// Update the UID and API version to indicate that the referenced UID is valid
+			// on the projectcalico.org/v3 API.
+			ref.APIVersion = "projectcalico.org/v3"
+			ref.UID, err = conversion.ConvertUID(ref.UID)
+			if err != nil {
+				return err
+			}
+		}
+		refs = append(refs, ref)
+	}
+	meta.SetOwnerReferences(refs)
 
 	// Clear out the annotations
 	delete(annotations, metadataAnnotation)

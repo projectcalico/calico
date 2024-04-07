@@ -227,6 +227,7 @@ func Run() {
 			err := utils.SetNodeNetworkUnavailableCondition(*clientset, k8sNodeName, false, 30*time.Second)
 			if err != nil {
 				log.WithError(err).Error("Unable to set NetworkUnavailable to False")
+				utils.Terminate()
 			}
 		}
 	}

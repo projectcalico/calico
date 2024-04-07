@@ -16,6 +16,7 @@ package k8s
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -32,6 +33,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
+	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
@@ -348,6 +350,100 @@ func CreateClientAndSyncer(cfg apiconfig.KubeConfig) (*KubeClient, *cb, api.Sync
 	syncer := felixsyncer.New(c, caCfg, callback, true)
 	return c.(*KubeClient), &callback, syncer
 }
+
+var _ = testutils.E2eDatastoreDescribe("Test UIDs and owner references", testutils.DatastoreK8s, func(cfg apiconfig.CalicoAPIConfig) {
+	var (
+		c   *KubeClient
+		cli ctrlclient.Client
+		ctx context.Context
+	)
+
+	BeforeEach(func() {
+		log.SetLevel(log.DebugLevel)
+
+		// Create a k8s backend KVP client.
+		var err error
+		apicfg := apiconfig.KubeConfig{Kubeconfig: "/kubeconfig.yaml", K8sDisableNodePoll: true}
+		c, _, _ = CreateClientAndSyncer(apicfg)
+
+		// Create a controller-runtime client.
+		// Create a client for interacting with CRDs directly.
+		config, _, err := CreateKubernetesClientset(&cfg.Spec)
+		Expect(err).NotTo(HaveOccurred())
+		cli, err = ctrlclient.New(config, ctrlclient.Options{})
+
+		ctx = context.Background()
+	})
+
+	It("should properly read / write owner references", func() {
+		podUID := types.UID("3b5bff7a-501d-429f-b581-8954440883f4")
+		npUID := types.UID("19e9c0f4-501d-429f-b581-8954440883f4")
+		npUIDv1, err := conversion.ConvertUID(npUID)
+		Expect(err).NotTo(HaveOccurred())
+
+		name := "test-owner-ref-policy"
+		kvp := model.KVPair{
+			Key: model.ResourceKey{
+				Name:      name,
+				Namespace: "default",
+				Kind:      apiv3.KindNetworkPolicy,
+			},
+			Value: &apiv3.NetworkPolicy{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       apiv3.KindNetworkPolicy,
+					APIVersion: apiv3.GroupVersionCurrent,
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      name,
+					Namespace: "default",
+					OwnerReferences: []metav1.OwnerReference{
+						{
+							// Add an owner reference for a non Calico resource.
+							APIVersion: "v1",
+							Kind:       "Pod",
+							Name:       "test-owner-ref-pod",
+							UID:        podUID,
+						},
+						{
+							// Add an owner reference for a Calico resource.
+							APIVersion: apiv3.GroupVersionCurrent,
+							Kind:       apiv3.KindNetworkSet,
+							Name:       "test-owner-ref-networkset",
+							UID:        npUID,
+						},
+					},
+				},
+			},
+		}
+		_, err = c.Create(ctx, &kvp)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Read back the object and check the owner references match.
+		kvp2, err := c.Get(ctx, kvp.Key, "")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(kvp2.Value.(*apiv3.NetworkPolicy).ObjectMeta.OwnerReferences).To(Equal(kvp.Value.(*apiv3.NetworkPolicy).ObjectMeta.OwnerReferences))
+
+		// Query the underlying crd.projectcalico.org/v1 resource and check that the
+		// UID belonging to the pod is unchanged, but that the UID belonging to the
+		// Calico resource has been translated.
+		crd := &apiv3.NetworkPolicy{}
+		err = cli.Get(ctx, types.NamespacedName{Name: name, Namespace: "default"}, crd)
+		Expect(err).NotTo(HaveOccurred())
+
+		// The OwnerReferences are stored in an annotation. Load it.
+		meta := metav1.ObjectMeta{}
+		annot := crd.Annotations["projectcalico.org/metadata"]
+		err = json.Unmarshal([]byte(annot), &meta)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Compare the OwnerReferences. pod UID should be unchanged, but np UID should be translated.
+		Expect(meta.OwnerReferences).To(HaveLen(2))
+		Expect(meta.OwnerReferences[0].UID).To(Equal(podUID))
+		Expect(meta.OwnerReferences[0].APIVersion).To(Equal("v1"))
+		Expect(meta.OwnerReferences[1].UID).To(Equal(npUIDv1))
+		Expect(meta.OwnerReferences[1].APIVersion).To(Equal("crd.projectcalico.org/v1"))
+	})
+})
 
 var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend", testutils.DatastoreK8s, func(cfg apiconfig.CalicoAPIConfig) {
 	var (
