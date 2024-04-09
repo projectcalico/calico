@@ -1692,12 +1692,35 @@ func (m *bpfEndpointManager) doApplyPolicyToDataIface(iface string) (bpfInterfac
 		return state, xdpErr
 	}
 
-	if m.v6 != nil && err6 == nil {
-		state.v6Readiness = ifaceIsReady
+	if err4 != nil && err6 != nil {
+		// This covers the case when we don't have hostIP on both paths.
+		return state, errors.Join(err4, err6)
 	}
-	if m.v4 != nil && err4 == nil {
-		state.v4Readiness = ifaceIsReady
+
+	if m.v6 != nil {
+		if err6 == nil {
+			state.v6Readiness = ifaceIsReady
+		}
+		if m.v6.hostIP == nil {
+			// If we do not have host IP for the IP version, we certainly error.
+			// But that should not prevent the other IP version path from
+			// working correctly.
+			err6 = nil
+		}
 	}
+
+	if m.v4 != nil {
+		if err4 == nil {
+			state.v4Readiness = ifaceIsReady
+		}
+		if m.v4.hostIP == nil {
+			// If we do not have host IP for the IP version, we certainly error.
+			// But that should not prevent the other IP version path from
+			// working correctly.
+			err4 = nil
+		}
+	}
+
 	return state, errors.Join(err4, err6)
 }
 
@@ -2106,11 +2129,33 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 	}
 	state.qdisc = ingressQdisc
 
-	if m.v6 != nil && err6 == nil {
-		state.v6Readiness = ifaceIsReady
+	if err4 != nil && err6 != nil {
+		// This covers the case when we don't have hostIP on both paths.
+		return state, errors.Join(err4, err6)
 	}
-	if m.v4 != nil && err4 == nil {
-		state.v4Readiness = ifaceIsReady
+
+	if m.v6 != nil {
+		if err6 == nil {
+			state.v6Readiness = ifaceIsReady
+		}
+		if m.v6.hostIP == nil {
+			// If we do not have host IP for the IP version, we certainly error.
+			// But that should not prevent the other IP version path from
+			// working correctly.
+			err6 = nil
+		}
+	}
+
+	if m.v4 != nil {
+		if err4 == nil {
+			state.v4Readiness = ifaceIsReady
+		}
+		if m.v4.hostIP == nil {
+			// If we do not have host IP for the IP version, we certainly error.
+			// But that should not prevent the other IP version path from
+			// working correctly.
+			err4 = nil
+		}
 	}
 
 	if errors.Join(err4, err6) != nil {

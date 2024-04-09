@@ -101,6 +101,8 @@ func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 				opts.ExtraEnvVars["FELIX_IPV6SUPPORT"] = "false"
 			}
 			opts.ExtraEnvVars["FELIX_BPFLogLevel"] = "debug"
+			opts.ExtraEnvVars["FELIX_HEALTHENABLED"] = "true"
+			opts.ExtraEnvVars["FELIX_HEALTHHOST"] = "::"
 
 			if !ctlbEnabled {
 				opts.ExtraEnvVars["FELIX_BPFConnectTimeLoadBalancing"] = string(api.BPFConnectTimeLBDisabled)
@@ -422,7 +424,112 @@ func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 
 			})
 		}
+
+		Context("with IPv6 addresses only", func() {
+			BeforeEach(func() {
+				k8sClient = infra.(*infrastructure.K8sDatastoreInfra).K8sClient
+				for _, f := range tc.Felixes {
+					removeIPv4Address(k8sClient, f)
+				}
+				tc.TriggerDelayedStart()
+			})
+
+			It("should be ready and have connectivity to w[0][0] from all other workloads with IPv6 only", func() {
+				for _, f := range tc.Felixes {
+					ensureBPFProgramsAttachedOffsetWithIPVersion(1, f, false, true, "eth0")
+				}
+
+				felixReady := func(f *infrastructure.Felix) int {
+					return healthStatus("["+f.IPv6+"]", "9099", "readiness")
+				}
+
+				for _, f := range tc.Felixes {
+					Eventually(felixReady(f), "5s", "100ms").Should(BeGood())
+					Consistently(felixReady(f), "10s", "1s").Should(BeGood())
+				}
+
+				cc.Expect(None, w[0][1], w[0][0])
+				cc.Expect(None, w[1][0], w[0][0])
+				cc.Expect(None, w[1][1], w[0][0])
+
+				cc.Expect(Some, w[0][1], w[0][0], ExpectWithIPVersion(6))
+				cc.Expect(Some, w[1][0], w[0][0], ExpectWithIPVersion(6))
+				cc.Expect(Some, w[1][1], w[0][0], ExpectWithIPVersion(6))
+
+				cc.CheckConnectivity()
+			})
+		})
+
+		Context("with IPv4 addresses only", func() {
+			BeforeEach(func() {
+				k8sClient = infra.(*infrastructure.K8sDatastoreInfra).K8sClient
+				for _, f := range tc.Felixes {
+					removeIPv6Address(k8sClient, f)
+					f.SetEnv(map[string]string{"FELIX_HEALTHHOST": "0.0.0.0"})
+				}
+				tc.TriggerDelayedStart()
+			})
+
+			It("should be ready and have connectivity to w[0][0] from all other workloads with IPv4 only", func() {
+				for _, f := range tc.Felixes {
+					ensureBPFProgramsAttachedOffsetWithIPVersion(1, f, true, false, "eth0")
+				}
+
+				felixReady := func(f *infrastructure.Felix) int {
+					return healthStatus(f.IP, "9099", "readiness")
+				}
+
+				for _, f := range tc.Felixes {
+					Eventually(felixReady(f), "5s", "100ms").Should(BeGood())
+					Consistently(felixReady(f), "10s", "1s").Should(BeGood())
+				}
+
+				cc.Expect(None, w[0][1], w[0][0], ExpectWithIPVersion(6))
+				cc.Expect(None, w[1][0], w[0][0], ExpectWithIPVersion(6))
+				cc.Expect(None, w[1][1], w[0][0], ExpectWithIPVersion(6))
+
+				cc.Expect(Some, w[0][1], w[0][0])
+				cc.Expect(Some, w[1][0], w[0][0])
+				cc.Expect(Some, w[1][1], w[0][0])
+
+				cc.CheckConnectivity()
+			})
+		})
 	})
+}
+
+func removeIPv4Address(k8sClient *kubernetes.Clientset, felix *infrastructure.Felix) {
+	node, err := k8sClient.CoreV1().Nodes().Get(context.Background(), felix.Hostname, metav1.GetOptions{})
+	Expect(err).NotTo(HaveOccurred())
+
+	delete(node.ObjectMeta.Annotations, "projectcalico.org/IPv4Address")
+	_, err = k8sClient.CoreV1().Nodes().Update(context.Background(), node, metav1.UpdateOptions{})
+	Expect(err).NotTo(HaveOccurred())
+
+	node, err = k8sClient.CoreV1().Nodes().Get(context.Background(), felix.Hostname, metav1.GetOptions{})
+	Expect(err).NotTo(HaveOccurred())
+	node.Status.Addresses = []v1.NodeAddress{{Type: v1.NodeInternalIP, Address: felix.Container.IPv6}}
+	_, err = k8sClient.CoreV1().Nodes().UpdateStatus(context.Background(), node, metav1.UpdateOptions{})
+	Expect(err).NotTo(HaveOccurred())
+
+	felix.Exec("ip", "addr", "del", felix.Container.IP, "dev", "eth0")
+}
+
+func removeIPv6Address(k8sClient *kubernetes.Clientset, felix *infrastructure.Felix) {
+	node, err := k8sClient.CoreV1().Nodes().Get(context.Background(), felix.Hostname, metav1.GetOptions{})
+	Expect(err).NotTo(HaveOccurred())
+
+	delete(node.ObjectMeta.Annotations, "projectcalico.org/IPv6Address")
+	_, err = k8sClient.CoreV1().Nodes().Update(context.Background(), node, metav1.UpdateOptions{})
+	Expect(err).NotTo(HaveOccurred())
+
+	node, err = k8sClient.CoreV1().Nodes().Get(context.Background(), felix.Hostname, metav1.GetOptions{})
+	Expect(err).NotTo(HaveOccurred())
+	node.Status.Addresses = []v1.NodeAddress{{Type: v1.NodeInternalIP, Address: felix.Container.IP}}
+	_, err = k8sClient.CoreV1().Nodes().UpdateStatus(context.Background(), node, metav1.UpdateOptions{})
+	Expect(err).NotTo(HaveOccurred())
+
+	felix.Exec("ip", "-6", "addr", "del", felix.Container.IPv6+"/64", "dev", "eth0")
 }
 
 func ensureRightIFStateFlags(felix *infrastructure.Felix, ready uint32) {
