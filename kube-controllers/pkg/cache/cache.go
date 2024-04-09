@@ -126,7 +126,9 @@ func (c *calicoCache) Set(key string, newObj interface{}) {
 	if reflect.TypeOf(newObj) != c.ObjectType {
 		c.log.Fatalf("Wrong object type received to store in cache. Expected: %s, Found: %s", c.ObjectType, reflect.TypeOf(newObj))
 	}
-
+	// lock the cache
+	c.mut.Lock()
+	defer c.mut.Unlock()
 	// Check if the object exists in the cache already.  If it does and hasn't changed,
 	// then we don't need to send an update on the queue.
 	if existingObj, found := c.threadSafeCache.Get(key); found {
