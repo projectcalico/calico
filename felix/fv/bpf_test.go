@@ -5046,24 +5046,32 @@ func ensureBPFProgramsAttachedOffset(offset int, felix *infrastructure.Felix, if
 	}
 
 	expectedIfaces = append(expectedIfaces, ifacesExtra...)
+	ensureBPFProgramsAttachedOffsetWithIPVersion(offset+1, felix,
+		true, felix.TopologyOptions.EnableIPv6,
+		expectedIfaces...)
+}
+
+func ensureBPFProgramsAttachedOffsetWithIPVersion(offset int, felix *infrastructure.Felix, v4, v6 bool, ifaces ...string) {
+	var expFlgs uint32
+
+	if v4 {
+		expFlgs |= ifstate.FlgIPv4Ready
+	}
+	if v6 {
+		expFlgs |= ifstate.FlgIPv6Ready
+	}
 
 	EventuallyWithOffset(offset, func() []string {
 		prog := []string{}
 		m := dumpIfStateMap(felix)
 		for _, v := range m {
 			flags := v.Flags()
-			if felix.TopologyOptions.EnableIPv6 {
-				if (flags & ifstate.FlgIPv6Ready) > 0 {
-					prog = append(prog, v.IfName())
-				}
-			} else {
-				if (flags & ifstate.FlgIPv4Ready) > 0 {
-					prog = append(prog, v.IfName())
-				}
+			if (flags & (ifstate.FlgIPv6Ready | ifstate.FlgIPv4Ready)) == expFlgs {
+				prog = append(prog, v.IfName())
 			}
 		}
 		return prog
-	}, "1m", "1s").Should(ContainElements(expectedIfaces))
+	}, "1m", "1s").Should(ContainElements(ifaces))
 }
 
 func k8sService(name, clusterIP string, w *workload.Workload, port,
