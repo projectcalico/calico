@@ -28,7 +28,6 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
@@ -37,7 +36,6 @@ import (
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
-
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/bpfmap"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
@@ -1080,7 +1078,7 @@ func determinePodMTU(config Config) int {
 		// No enabled encapsulation. Just use the host MTU.
 		mtu = config.hostMTU
 	} else if mtu > config.hostMTU {
-		fields := logrus.Fields{"mtu": mtu, "hostMTU": config.hostMTU}
+		fields := log.Fields{"mtu": mtu, "hostMTU": config.hostMTU}
 		log.WithFields(fields).Warn("Configured MTU is larger than detected host interface MTU")
 	}
 	log.WithField("mtu", mtu).Info("Determined pod MTU")
