@@ -241,6 +241,10 @@ func (c *calicoCache) reconcile(reconcilerPeriod string) {
 }
 
 func (c *calicoCache) performDatastoreSync() error {
+	// lock the cache
+	c.mut.Lock()
+	defer c.mut.Unlock()
+
 	// Get all the objects we care about from the datastore using ListFunc.
 	objMap, err := c.ListFunc()
 	if err != nil {
