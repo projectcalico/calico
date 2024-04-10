@@ -380,10 +380,13 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			options.ExtraEnvVars["FELIX_DefaultEndpointToHostAction"] = "ACCEPT"
 			options.ExternalIPs = true
 			options.ExtraEnvVars["FELIX_BPFExtToServiceConnmark"] = "0x80"
+			options.ExtraEnvVars["FELIX_HEALTHENABLED"] = "true"
 			if !testOpts.ipv6 {
 				options.ExtraEnvVars["FELIX_BPFDSROptoutCIDRs"] = "245.245.0.0/16"
+				options.ExtraEnvVars["FELIX_HEALTHHOST"] = "0.0.0.0"
 			} else {
 				options.ExtraEnvVars["FELIX_IPV6SUPPORT"] = "true"
+				options.ExtraEnvVars["FELIX_HEALTHHOST"] = "::"
 			}
 
 			if testOpts.protocol == "tcp" {
@@ -1198,6 +1201,13 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			Expect(err).NotTo(HaveOccurred())
 			if !options.TestManagesBPF {
 				ensureAllNodesBPFProgramsAttached(tc.Felixes)
+				felixReady := func(f *infrastructure.Felix) int {
+					return healthStatus(containerIP(f.Container), "9099", "readiness")
+				}
+
+				for _, f := range tc.Felixes {
+					Eventually(felixReady(f), "5s", "100ms").Should(BeGood())
+				}
 			}
 		}
 
@@ -5046,24 +5056,32 @@ func ensureBPFProgramsAttachedOffset(offset int, felix *infrastructure.Felix, if
 	}
 
 	expectedIfaces = append(expectedIfaces, ifacesExtra...)
+	ensureBPFProgramsAttachedOffsetWithIPVersion(offset+1, felix,
+		true, felix.TopologyOptions.EnableIPv6,
+		expectedIfaces...)
+}
+
+func ensureBPFProgramsAttachedOffsetWithIPVersion(offset int, felix *infrastructure.Felix, v4, v6 bool, ifaces ...string) {
+	var expFlgs uint32
+
+	if v4 {
+		expFlgs |= ifstate.FlgIPv4Ready
+	}
+	if v6 {
+		expFlgs |= ifstate.FlgIPv6Ready
+	}
 
 	EventuallyWithOffset(offset, func() []string {
 		prog := []string{}
 		m := dumpIfStateMap(felix)
 		for _, v := range m {
 			flags := v.Flags()
-			if felix.TopologyOptions.EnableIPv6 {
-				if (flags & ifstate.FlgIPv6Ready) > 0 {
-					prog = append(prog, v.IfName())
-				}
-			} else {
-				if (flags & ifstate.FlgIPv4Ready) > 0 {
-					prog = append(prog, v.IfName())
-				}
+			if (flags & (ifstate.FlgIPv6Ready | ifstate.FlgIPv4Ready)) == expFlgs {
+				prog = append(prog, v.IfName())
 			}
 		}
 		return prog
-	}, "1m", "1s").Should(ContainElements(expectedIfaces))
+	}, "1m", "1s").Should(ContainElements(ifaces))
 }
 
 func k8sService(name, clusterIP string, w *workload.Workload, port,
