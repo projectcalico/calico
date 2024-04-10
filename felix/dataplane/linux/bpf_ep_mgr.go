@@ -908,18 +908,23 @@ func (m *bpfEndpointManager) reclaimPolicyIdx(name string, ipFamily int, iface *
 		}
 		if attachHook != hook.XDP {
 			if err := m.jumpMapAlloc.Put(idx.policyIdx[attachHook], name); err != nil {
-				log.WithError(err).Error(attachHook.String())
-			}
-			if err := m.jumpMapDelete(attachHook, iface.dpState.filterIdx[attachHook]); err != nil {
-				log.WithError(err).Warn("Filter program may leak.")
-			}
-			if err := m.jumpMapAlloc.Put(iface.dpState.filterIdx[attachHook], name); err != nil {
-				log.WithError(err).Error(attachHook.String())
+				log.WithError(err).Errorf("Policy family %d, hook %s", ipFamily, attachHook)
 			}
 		} else {
 			if err := m.xdpJumpMapAlloc.Put(idx.policyIdx[attachHook], name); err != nil {
 				log.WithError(err).Error(attachHook.String())
 			}
+		}
+	}
+}
+
+func (m *bpfEndpointManager) reclaimFilterIdx(name string, iface *bpfInterface) {
+	for _, attachHook := range []hook.Hook{hook.Ingress, hook.Egress} {
+		if err := m.jumpMapDelete(attachHook, iface.dpState.filterIdx[attachHook]); err != nil {
+			log.WithError(err).Warn("Filter program may leak.")
+		}
+		if err := m.jumpMapAlloc.Put(iface.dpState.filterIdx[attachHook], name); err != nil {
+			log.WithError(err).Errorf("Filter hook %s", attachHook)
 		}
 	}
 }
@@ -955,6 +960,7 @@ func (m *bpfEndpointManager) updateIfaceStateMap(name string, iface *bpfInterfac
 		if m.v6 != nil {
 			m.reclaimPolicyIdx(name, 6, iface)
 		}
+		m.reclaimFilterIdx(name, iface)
 		m.ifStateMap.Desired().Delete(k)
 		iface.dpState.clearJumps()
 	}
