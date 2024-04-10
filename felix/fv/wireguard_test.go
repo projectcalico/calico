@@ -104,11 +104,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 					Skip("Skipping Wireguard supported tests.")
 				}
 
-				// IPv6 Wireguard is not supported on BPF dataplane, so skip in this case
-				if wireguardEnabledV6 && os.Getenv("FELIX_FV_ENABLE_BPF") == "true" {
-					Skip("Skipping IPv6 Wireguard testing on BPF dataplane")
-				}
-
 				// Enable Wireguard module debugging.
 				utils.Run("sudo", "sh", "-c", "echo module wireguard +p > /sys/kernel/debug/dynamic_debug/control")
 
@@ -123,8 +118,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 				log.Info("Started dmesg log capture")
 
 				infra = getInfra()
+				ipipEnabled := !BPFMode() || !wireguardEnabledV6
 				topologyOptions := wireguardTopologyOptions(
-					"CalicoIPAM", true, wireguardEnabledV4, wireguardEnabledV6,
+					"CalicoIPAM", ipipEnabled, wireguardEnabledV4, wireguardEnabledV6,
 					map[string]string{
 						"FELIX_DebugDisableLogDropping": "true",
 						"FELIX_DBG_WGBOOTSTRAP":         "true",
@@ -203,6 +199,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 						felix.Exec("ip", "route", "show", "cached")
 						felix.Exec("wg")
 						felix.Exec("wg", "show", "all", "private-key")
+						if BPFMode() {
+							felix.Exec("calico-bpf", "policy", "dump", "eth0", "all", "--asm")
+							felix.Exec("calico-bpf", "policy", "-6", "dump", "eth0", "all", "--asm")
+						}
 					}
 				}
 
@@ -1062,16 +1062,12 @@ var _ = infrastructure.DatastoreDescribe("WireGuard-Unsupported", []apiconfig.Da
 					Skip("Skipping Wireguard unsupported tests.")
 				}
 
-				// IPv6 Wireguard is not supported on BPF dataplane, so skip in this case
-				if wireguardEnabledV6 && os.Getenv("FELIX_FV_ENABLE_BPF") == "true" {
-					Skip("Skipping IPv6 Wireguard testing on BPF dataplane")
-				}
-
 				// Setup a single node cluster.
 				const nodeCount = 1
 
 				infra = getInfra()
-				tc, _ = infrastructure.StartNNodeTopology(nodeCount, wireguardTopologyOptions("CalicoIPAM", true, wireguardEnabledV4, wireguardEnabledV6), infra)
+				ipipEnabled := !BPFMode() || !wireguardEnabledV6
+				tc, _ = infrastructure.StartNNodeTopology(nodeCount, wireguardTopologyOptions("CalicoIPAM", ipipEnabled, wireguardEnabledV4, wireguardEnabledV6), infra)
 
 				// Install a default profile that allows all ingress and egress, in the absence of any Policy.
 				infra.AddDefaultAllow()
