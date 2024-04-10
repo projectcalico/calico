@@ -1574,7 +1574,7 @@ func (m *bpfEndpointManager) CompleteDeferredWork() error {
 		m.reportHealth(true, "")
 	} else {
 		m.dirtyIfaceNames.Iter(func(iface string) error {
-			m.updateRateLimitedLog.WithField("name", iface).Debug("Interface remains dirty.")
+			m.updateRateLimitedLog.WithField("name", iface).Info("Interface remains dirty.")
 			return nil
 		})
 		m.reportHealth(false, "Failed to configure some interfaces.")
@@ -1738,6 +1738,11 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 		if !m.isDataIface(iface) && !m.isL3Iface(iface) {
 			log.WithField("iface", iface).Debug(
 				"Ignoring interface that doesn't match the host data/l3 interface regex")
+			if !m.isWorkloadIface(iface) {
+				log.WithField("iface", iface).Debug(
+					"Removing interface that doesn't match the host data/l3 interface and is not workload interface")
+				return set.RemoveItem
+			}
 			return nil
 		}
 
