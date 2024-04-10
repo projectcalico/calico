@@ -214,7 +214,7 @@ func (m *ipipManager) OnUpdate(msg interface{}) {
 
 		m.logCtx.Infof("Pepper2 %v", msg)
 		// Process remote IPAM blocks.
-		if msg.Type == proto.RouteType_REMOTE_TUNNEL && msg.IpPoolType == proto.IPPoolType_IPIP {
+		if msg.Type == proto.RouteType_REMOTE_WORKLOAD && msg.IpPoolType == proto.IPPoolType_IPIP {
 			m.logCtx.WithField("msg", msg).Debug("IPIP data plane received route update")
 			m.routesByDest[msg.Dst] = msg
 			m.routesDirty = true
@@ -247,18 +247,16 @@ func (m *ipipManager) OnUpdate(msg interface{}) {
 		m.logCtx.WithField("hostname", msg.Hostname).Debug("Host update/create")
 		if msg.Hostname == m.hostname {
 			m.setLocalHostAddr(msg.Ipv4Addr)
-		} else {
-			m.activeHostnameToIP[msg.Hostname] = msg.Ipv4Addr
 		}
+		m.activeHostnameToIP[msg.Hostname] = msg.Ipv4Addr
 		m.ipSetDirty = true
 		m.routesDirty = true
 	case *proto.HostMetadataRemove:
 		m.logCtx.WithField("hostname", msg.Hostname).Debug("Host removed")
 		if msg.Hostname == m.hostname {
 			m.setLocalHostAddr("")
-		} else {
-			delete(m.activeHostnameToIP, msg.Hostname)
 		}
+		delete(m.activeHostnameToIP, msg.Hostname)
 		m.ipSetDirty = true
 		m.routesDirty = true
 	}

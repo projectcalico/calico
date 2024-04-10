@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"net"
 
+	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
@@ -476,26 +477,26 @@ var _ = Describe("IPIPManager", func() {
 		manager.OnUpdate(&proto.RouteUpdate{
 			Type:        proto.RouteType_REMOTE_WORKLOAD,
 			IpPoolType:  proto.IPPoolType_IPIP,
-			Dst:         "172.0.0.1/26",
+			Dst:         "192.168.0.3/26",
 			DstNodeName: "node2",
-			DstNodeIp:   "172.8.8.8",
+			DstNodeIp:   "172.0.12.1",
 			SameSubnet:  true,
 		})
 
 		manager.OnUpdate(&proto.RouteUpdate{
 			Type:        proto.RouteType_REMOTE_WORKLOAD,
 			IpPoolType:  proto.IPPoolType_IPIP,
-			Dst:         "172.0.0.2/26",
+			Dst:         "192.168.0.2/26",
 			DstNodeName: "node2",
-			DstNodeIp:   "172.8.8.8",
+			DstNodeIp:   "172.0.12.1",
 		})
 
 		manager.OnUpdate(&proto.RouteUpdate{
 			Type:        proto.RouteType_LOCAL_WORKLOAD,
 			IpPoolType:  proto.IPPoolType_IPIP,
-			Dst:         "172.0.0.0/26",
-			DstNodeName: "node0",
-			DstNodeIp:   "172.8.8.8",
+			Dst:         "192.168.0.100/26",
+			DstNodeName: "node1",
+			DstNodeIp:   "172.0.0.2",
 			SameSubnet:  true,
 		})
 
@@ -503,9 +504,9 @@ var _ = Describe("IPIPManager", func() {
 		manager.OnUpdate(&proto.RouteUpdate{
 			Type:        proto.RouteType_LOCAL_WORKLOAD,
 			IpPoolType:  proto.IPPoolType_IPIP,
-			Dst:         "172.0.0.1/32",
+			Dst:         "192.168.0.10/32",
 			DstNodeName: "node1",
-			DstNodeIp:   "172.8.8.7",
+			DstNodeIp:   "172.0.0.7",
 			SameSubnet:  true,
 		})
 
@@ -515,6 +516,9 @@ var _ = Describe("IPIPManager", func() {
 		err = manager.CompleteDeferredWork()
 
 		Expect(err).NotTo(HaveOccurred())
+		logrus.Infof("mazdak rt %v", rt.currentRoutes)
+		logrus.Infof("mazdak brt %v", brt.currentRoutes)
+		logrus.Infof("mazdak prt %v", prt.currentRoutes)
 		Expect(rt.currentRoutes["tunl0"]).To(HaveLen(1))
 		Expect(brt.currentRoutes[routetable.InterfaceNone]).To(HaveLen(1))
 		Expect(prt.currentRoutes["eth0"]).NotTo(BeNil())
