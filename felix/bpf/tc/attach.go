@@ -55,6 +55,7 @@ type AttachPoint struct {
 	TunnelMTU            uint16
 	VXLANPort            uint16
 	WgPort               uint16
+	Wg6Port              uint16
 	ExtToServiceConnmark uint32
 	PSNATStart           uint16
 	PSNATEnd             uint16
@@ -389,6 +390,7 @@ func (ap *AttachPoint) ConfigureProgram(m *libbpf.Map) error {
 		PSNatStart:   ap.PSNATStart,
 		PSNatLen:     ap.PSNATEnd,
 		WgPort:       ap.WgPort,
+		Wg6Port:      ap.Wg6Port,
 		NatIn:        ap.NATin,
 		NatOut:       ap.NATout,
 		LogFilterJmp: uint32(ap.LogFilterIdx),
