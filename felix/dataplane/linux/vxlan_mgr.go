@@ -49,19 +49,6 @@ const (
 	VXLANIfaceNameV6 = "vxlan-v6.calico"
 )
 
-// added so that we can shim netlink for tests
-type netlinkHandle interface {
-	LinkByName(name string) (netlink.Link, error)
-	LinkSetMTU(link netlink.Link, mtu int) error
-	LinkSetUp(link netlink.Link) error
-	AddrList(link netlink.Link, family int) ([]netlink.Addr, error)
-	AddrAdd(link netlink.Link, addr *netlink.Addr) error
-	AddrDel(link netlink.Link, addr *netlink.Addr) error
-	LinkList() ([]netlink.Link, error)
-	LinkAdd(netlink.Link) error
-	LinkDel(netlink.Link) error
-}
-
 type vxlanManager struct {
 	// Our dependencies.
 	hostname                  string
@@ -264,7 +251,7 @@ func (m *vxlanManager) OnUpdate(protoBufMsg interface{}) {
 		}
 
 		// Process IPAM blocks that aren't associated to a single or /32 local workload
-		if routeIsLocalVXLANBlock(msg) {
+		if routeIsLocalBlock(msg, proto.IPPoolType_VXLAN) {
 			m.logCtx.WithField("msg", msg).Debug("VXLAN data plane received route update for IPAM block")
 			m.localIPAMBlocks[msg.Dst] = msg
 			m.routesDirty = true
@@ -312,50 +299,6 @@ func (m *vxlanManager) OnUpdate(protoBufMsg interface{}) {
 		m.routesDirty = true
 		m.vtepsDirty = true
 	}
-}
-
-func routeIsLocalVXLANBlock(msg *proto.RouteUpdate) bool {
-	// RouteType_LOCAL_WORKLOAD means "local IPAM block _or_ /32 of workload" in IPv4.
-	// It means "local IPAM block _or_ /128 of workload" in IPv6.
-	if msg.Type != proto.RouteType_LOCAL_WORKLOAD {
-		return false
-	}
-	// Only care about VXLAN blocks.
-	if msg.IpPoolType != proto.IPPoolType_VXLAN {
-		return false
-	}
-	// Ignore routes that we know are from local workload endpoints.
-	if msg.LocalWorkload {
-		return false
-	}
-
-	// Check the valid suffix depending on IP version.
-	cidr, err := ip.CIDRFromString(msg.Dst)
-	if err != nil {
-		logrus.WithError(err).WithField("msg", msg).Warning("Unable to parse destination into a CIDR. Treating block as external.")
-	}
-	if cidr.Version() == 4 {
-		// This is an IPv4 route.
-		// Ignore /32 routes in any case for two reasons:
-		// * If we have a /32 block then our blackhole route would stop the CNI plugin from programming its /32 for a
-		//   newly added workload.
-		// * If this isn't a /32 block then it must be a borrowed /32 from another block.  In that case, we know we're
-		//   racing with CNI, adding a new workload.  We've received the borrowed IP but not the workload endpoint yet.
-		if strings.HasSuffix(msg.Dst, "/32") {
-			return false
-		}
-	} else {
-		// This is an IPv6 route.
-		// Ignore /128 routes in any case for two reasons:
-		// * If we have a /128 block then our blackhole route would stop the CNI plugin from programming its /128 for a
-		//   newly added workload.
-		// * If this isn't a /128 block then it must be a borrowed /128 from another block.  In that case, we know we're
-		//   racing with CNI, adding a new workload.  We've received the borrowed IP but not the workload endpoint yet.
-		if strings.HasSuffix(msg.Dst, "/128") {
-			return false
-		}
-	}
-	return true
 }
 
 func (m *vxlanManager) deleteRoute(dst string) {
@@ -407,25 +350,6 @@ func (m *vxlanManager) GetRouteTableSyncers() []routetable.RouteTableSyncer {
 	}
 
 	return rts
-}
-
-func (m *vxlanManager) blackholeRoutes() []routetable.Target {
-	var rtt []routetable.Target
-	for dst := range m.localIPAMBlocks {
-		cidr, err := ip.CIDRFromString(dst)
-		if err != nil {
-			m.logCtx.WithError(err).Warning(
-				"Error processing IPAM block CIDR: ", dst,
-			)
-			continue
-		}
-		rtt = append(rtt, routetable.Target{
-			Type: routetable.TargetTypeBlackhole,
-			CIDR: cidr,
-		})
-	}
-	m.logCtx.Debug("calculated blackholes ", rtt)
-	return rtt
 }
 
 func (m *vxlanManager) CompleteDeferredWork() error {
@@ -521,10 +445,10 @@ func (m *vxlanManager) CompleteDeferredWork() error {
 			}
 		}
 
-		m.logCtx.WithField("vxlanroutes", vxlanRoutes).Debug("VXLAN manager sending VXLAN L3 updates")
+		m.logCtx.WithField("vxlan routes", vxlanRoutes).Debug("VXLAN manager sending VXLAN L3 updates")
 		m.routeTable.SetRoutes(m.vxlanDevice, vxlanRoutes)
 
-		m.blackholeRouteTable.SetRoutes(routetable.InterfaceNone, m.blackholeRoutes())
+		m.blackholeRouteTable.SetRoutes(routetable.InterfaceNone, blackholeRoutes(m.localIPAMBlocks))
 
 		if m.noEncapRouteTable != nil {
 			m.logCtx.WithField("link", m.parentIfaceName).WithField("routes", noEncapRoutes).Debug(
@@ -535,10 +459,8 @@ func (m *vxlanManager) CompleteDeferredWork() error {
 		}
 
 		m.logCtx.Info("VXLAN Manager completed deferred work")
-
 		m.routesDirty = false
 	}
-
 	return nil
 }
 
