@@ -29,6 +29,7 @@ import (
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
+	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/calico/cni-plugin/pkg/types"
 	api "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
@@ -67,7 +68,7 @@ func (d *linuxDataplane) DoNetworking(
 
 	d.logger.Infof("Setting the host side veth name to %s", hostVethName)
 
-	hostNlHandle, err := netlink.NewHandle()
+	hostNlHandle, err := netlink.NewHandle(unix.NETLINK_ROUTE)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to create host netlink handle: %v", err)
 	}
