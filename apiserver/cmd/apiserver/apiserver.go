@@ -22,6 +22,8 @@ import (
 	"os"
 	"runtime"
 
+	"k8s.io/apiserver/pkg/features"
+	"k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/component-base/cli"
 	"k8s.io/component-base/logs"
 
@@ -35,6 +37,15 @@ import (
 func main() {
 	// Make sure the RNG is seeded.
 	seedrng.EnsureSeeded()
+
+	// The ConsistentListFromCache feature gate requires our resourceStore
+	// to support method RequestWatchProgress, which it does not.  Force-disable
+	// the gate.
+	err := feature.DefaultMutableFeatureGate.SetFromMap(map[string]bool{string(features.ConsistentListFromCache): false})
+	if err != nil {
+		klog.Errorf("Error setting feature gates.")
+		logs.FlushLogs()
+	}
 
 	logs.InitLogs()
 	defer logs.FlushLogs()
