@@ -27,6 +27,8 @@ import (
 	"time"
 
 	"github.com/spf13/pflag"
+	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/kubernetes"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	k8sopenapi "k8s.io/apiserver/pkg/endpoints/openapi"
@@ -109,9 +111,6 @@ func (o *CalicoServerOptions) Config() (*apiserver.Config, error) {
 	// [1] https://kubernetes.io/docs/concepts/cluster-administration/system-traces/#kube-apiserver-traces
 	// [2] https://github.com/kubernetes/kubernetes/blob/bee599726d8f593a23b0e22fcc01e963732ea40b/staging/src/k8s.io/apiserver/pkg/storage/storagebackend/factory/etcd3.go#L300
 	o.RecommendedOptions.Etcd.SkipHealthEndpoints = true
-	if err := o.RecommendedOptions.Etcd.Complete(serverConfig.StorageObjectCountTracker, serverConfig.DrainedNotify(), serverConfig.AddPostStartHook); err != nil {
-		return nil, err
-	}
 	if err := o.RecommendedOptions.Etcd.ApplyTo(&serverConfig.Config); err != nil {
 		return nil, err
 	}
@@ -168,9 +167,24 @@ func (o *CalicoServerOptions) Config() (*apiserver.Config, error) {
 		return nil, err
 	}
 
+	kubeClient, err := kubernetes.NewForConfig(serverConfig.ClientConfig)
+	if err != nil {
+		return nil, err
+	}
+	dynamicClient, err := dynamic.NewForConfig(serverConfig.ClientConfig)
+	if err != nil {
+		return nil, err
+	}
+
 	if initializers, err := o.RecommendedOptions.ExtraAdmissionInitializers(serverConfig); err != nil {
 		return nil, err
-	} else if err := o.RecommendedOptions.Admission.ApplyTo(&serverConfig.Config, serverConfig.SharedInformerFactory, serverConfig.ClientConfig, o.RecommendedOptions.FeatureGate, initializers...); err != nil {
+	} else if err := o.RecommendedOptions.Admission.ApplyTo(
+		&serverConfig.Config,
+		serverConfig.SharedInformerFactory,
+		kubeClient,
+		dynamicClient,
+		o.RecommendedOptions.FeatureGate,
+		initializers...); err != nil {
 		return nil, err
 	}
 
