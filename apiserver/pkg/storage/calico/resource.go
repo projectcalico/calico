@@ -73,6 +73,16 @@ type resourceStore struct {
 	converter         resourceConverter
 }
 
+func (rs *resourceStore) RequestWatchProgress(ctx context.Context) error {
+	// This method is supposed to trigger the client to emit a progress
+	// notification on each active watch but our client doesn't support that
+	// yet.
+	klog.Error("STUB: RequestWatchProgress() not supported by Calico client.")
+	return nil
+}
+
+var _ storage.Interface = (*resourceStore)(nil)
+
 func CreateClientFromConfig() clientv3.Interface {
 	// TODO(doublek): nicer errors returned
 	cfg, err := apiconfig.LoadClientConfig("")
