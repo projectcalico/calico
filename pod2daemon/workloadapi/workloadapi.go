@@ -18,7 +18,7 @@ import (
 	"fmt"
 	"log"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"github.com/projectcalico/calico/pod2daemon/binder"
 	pb "github.com/projectcalico/calico/pod2daemon/protos/udsver_v1"

@@ -20,10 +20,11 @@ import (
 	"fmt"
 	"os/exec"
 
+	"context"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
-	"golang.org/x/net/context"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
