@@ -24,7 +24,7 @@ import (
 	"k8s.io/apiserver/pkg/storage/storagebackend"
 	"k8s.io/klog/v2"
 
-	"golang.org/x/net/context"
+	"context"
 
 	calico "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
