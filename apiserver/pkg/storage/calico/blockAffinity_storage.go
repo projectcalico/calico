@@ -18,8 +18,9 @@ import (
 	"fmt"
 	"reflect"
 
+	"context"
+
 	log "github.com/sirupsen/logrus"
-	"golang.org/x/net/context"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/registry/generic/registry"
 	"k8s.io/apiserver/pkg/storage"
