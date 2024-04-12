@@ -28,15 +28,7 @@ import (
 
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
-
-	"github.com/projectcalico/calico/libcalico-go/lib/seedrng"
 )
-
-func init() {
-	// We use rand for picking a typha, make sure it's seeded; seedrng uses a sync.Once to avoid
-	// doing this multiple times).
-	seedrng.EnsureSeeded()
-}
 
 var ErrServiceNotReady = errors.New("Kubernetes service missing IP or port")
 
