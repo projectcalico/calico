@@ -44,13 +44,9 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
-	"github.com/projectcalico/calico/libcalico-go/lib/seedrng"
 )
 
 func Main(version string) {
-	// Make sure the RNG is seeded.
-	seedrng.EnsureSeeded()
-
 	// Set up logging formatting.
 	logrus.SetFormatter(&logutils.Formatter{})
 

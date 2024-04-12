@@ -34,7 +34,6 @@ import (
 
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
-	"github.com/projectcalico/calico/libcalico-go/lib/seedrng"
 	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 	"github.com/projectcalico/calico/node/pkg/cni"
 )
@@ -119,9 +118,6 @@ func loadConfig() config {
 }
 
 func Install(version string) error {
-	// Make sure the RNG is seeded.
-	seedrng.EnsureSeeded()
-
 	// Configure logging before anything else.
 	logrus.SetFormatter(&logutils.Formatter{Component: "cni-installer"})
 
