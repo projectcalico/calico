@@ -27,29 +27,24 @@ import (
 	"k8s.io/component-base/cli"
 	"k8s.io/component-base/logs"
 
-	"github.com/projectcalico/calico/libcalico-go/lib/seedrng"
-
 	"k8s.io/klog/v2"
 
 	"github.com/projectcalico/calico/apiserver/cmd/apiserver/server"
 )
 
 func main() {
-	// Make sure the RNG is seeded.
-	seedrng.EnsureSeeded()
+	logs.InitLogs()
+	defer logs.FlushLogs()
 
 	// The ConsistentListFromCache feature gate requires our resourceStore
 	// to support method RequestWatchProgress, which it does not.  Force-disable
 	// the gate.
 	err := feature.DefaultMutableFeatureGate.SetFromMap(map[string]bool{string(features.ConsistentListFromCache): false})
 	if err != nil {
-		klog.Errorf("Error setting feature gates.")
+		klog.Errorf("Error setting feature gates: %v.", err)
 		logs.FlushLogs()
 		os.Exit(1)
 	}
-
-	logs.InitLogs()
-	defer logs.FlushLogs()
 
 	if len(os.Getenv("GOMAXPROCS")) == 0 {
 		runtime.GOMAXPROCS(runtime.NumCPU())
@@ -57,7 +52,7 @@ func main() {
 
 	err = server.Version()
 	if err != nil {
-		klog.Errorf("Error printing version info.")
+		klog.Errorf("Error printing version info: %v.", err)
 		logs.FlushLogs()
 	}
 
