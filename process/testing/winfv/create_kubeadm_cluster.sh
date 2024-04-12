@@ -112,7 +112,7 @@ export CALICO_KUBECONFIG=~/.kube/config
 echo "ipam configured"
 
 pushd $ROOT/infra
-./setup.sh
+./setup.sh $CALICO_KUBECONFIG
 if [ "$FV_TYPE" == "tigera-felix" ]; then
   # Latest OS or EE crds is copied from felix's fv/infrastructure/crds.
   kubectl apply -f ee/crd

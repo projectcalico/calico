@@ -1,7 +1,9 @@
-kubectl create ns demo
+#!/bin/bash
+CURRENT_DIR=$(dirname "$0")
+kubectl create ns demo --kubeconfig $1
 
-kubectl apply -f porter.yaml
-kubectl apply -f nginx.yaml
-kubectl apply -f client.yaml
-kubectl apply -f ingress.yaml
-kubectl apply -f egress.yaml
+kubectl apply -f $CURRENT_DIR/porter.yaml --kubeconfig $1
+kubectl apply -f $CURRENT_DIR/nginx.yaml --kubeconfig $1
+kubectl apply -f $CURRENT_DIR/client.yaml --kubeconfig $1
+kubectl apply -f $CURRENT_DIR/ingress.yaml --kubeconfig $1
+kubectl apply -f $CURRENT_DIR/egress.yaml --kubeconfig $1
