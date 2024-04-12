@@ -22,8 +22,6 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/libcalico-go/lib/seedrng"
-
 	"github.com/docopt/docopt-go"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
@@ -72,9 +70,6 @@ func (s *syncerCallbacks) OnUpdates(updates []api.Update) {
 }
 
 func main() {
-	// Go's RNG is not seeded by default.  Do that now.
-	seedrng.EnsureSeeded()
-
 	// Set up logging.
 	logutils.ConfigureEarlyLogging()
 	logutils.ConfigureLogging(&config.Config{
