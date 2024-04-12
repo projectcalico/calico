@@ -26,6 +26,7 @@ type TcGlobalData struct {
 	HostTunnelIPv4 [16]byte
 	Flags          uint32
 	WgPort         uint16
+	Wg6Port        uint16
 	NatIn          uint32
 	NatOut         uint32
 	LogFilterJmp   uint32
