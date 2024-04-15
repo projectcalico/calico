@@ -129,6 +129,7 @@ func main() {
 	s := status.New(statusFile)
 
 	log.Info("Ensuring Calico datastore is initialized")
+	log.Info("Mutex testing draft")
 	s.SetReady("Startup", false, "initialized to false")
 	initCtx, cancelInit := context.WithTimeout(ctx, 60*time.Second)
 	// Loop until context expires or calicoClient is initialized.

@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 
 	log "github.com/sirupsen/logrus"
 	kapiv1 "k8s.io/api/core/v1"
@@ -35,7 +36,9 @@ import (
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
-type defaultWorkloadEndpointConverter struct{}
+type defaultWorkloadEndpointConverter struct {
+	mut *sync.Mutex
+}
 
 // VethNameForWorkload returns a deterministic veth name
 // for the given Kubernetes workload (WEP) name and namespace.
@@ -58,6 +61,8 @@ func (wc defaultWorkloadEndpointConverter) VethNameForWorkload(namespace, podnam
 }
 
 func (wc defaultWorkloadEndpointConverter) PodToWorkloadEndpoints(pod *kapiv1.Pod) ([]*model.KVPair, error) {
+	wc.mut.Lock()
+	defer wc.mut.Unlock()
 	wep, err := wc.podToDefaultWorkloadEndpoint(pod)
 	if err != nil {
 		return nil, err
