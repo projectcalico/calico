@@ -760,6 +760,12 @@ func (m *bpfEndpointManager) updateHostIP(ip net.IP, ipFamily int) {
 			m.dirtyIfaceNames.Add(ifaceName)
 		}
 		m.ifacesLock.Unlock()
+
+		// We use host IP as the source when routing service for the ctlb workaround. We
+		// need to update those routes, so make them all dirty.
+		for svc := range m.services {
+			m.dirtyServices.Add(svc)
+		}
 	} else {
 		log.Warn("Cannot parse hostip, no change applied")
 	}
@@ -3828,19 +3834,21 @@ var (
 )
 
 func (m *bpfEndpointManager) setRoute(cidr ip.CIDR) {
-	if m.v6 != nil && cidr.Version() == 6 {
-		m.routeTableV6.RouteUpdate(bpfInDev, routetable.Target{
-			Type: routetable.TargetTypeGlobalUnicast,
-			CIDR: cidr,
-			GW:   bpfnatGWIPv6,
-		})
+	target := routetable.Target{
+		Type: routetable.TargetTypeGlobalUnicast,
+		CIDR: cidr,
 	}
-	if m.v4 != nil && cidr.Version() == 4 {
-		m.routeTableV4.RouteUpdate(bpfInDev, routetable.Target{
-			Type: routetable.TargetTypeGlobalUnicast,
-			CIDR: cidr,
-			GW:   bpfnatGWIP,
-		})
+
+	if cidr.Version() == 6 {
+		if m.v6 != nil && m.v6.hostIP != nil {
+			target.GW = bpfnatGWIPv6
+			target.Src = ip.FromNetIP(m.v6.hostIP)
+			m.routeTableV6.RouteUpdate(bpfInDev, target)
+		}
+	} else if m.v4 != nil && m.v4.hostIP != nil {
+		target.GW = bpfnatGWIP
+		target.Src = ip.FromNetIP(m.v4.hostIP)
+		m.routeTableV4.RouteUpdate(bpfInDev, target)
 	}
 
 	log.WithFields(log.Fields{
