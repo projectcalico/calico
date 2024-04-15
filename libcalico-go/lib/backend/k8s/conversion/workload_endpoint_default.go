@@ -36,9 +36,9 @@ import (
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
-type defaultWorkloadEndpointConverter struct {
-	mut *sync.Mutex
-}
+var defaultWorkloadEndpointMutex sync.Mutex
+
+type defaultWorkloadEndpointConverter struct{}
 
 // VethNameForWorkload returns a deterministic veth name
 // for the given Kubernetes workload (WEP) name and namespace.
@@ -61,8 +61,9 @@ func (wc defaultWorkloadEndpointConverter) VethNameForWorkload(namespace, podnam
 }
 
 func (wc defaultWorkloadEndpointConverter) PodToWorkloadEndpoints(pod *kapiv1.Pod) ([]*model.KVPair, error) {
-	wc.mut.Lock()
-	defer wc.mut.Unlock()
+
+	defaultWorkloadEndpointMutex.Lock()
+	defer defaultWorkloadEndpointMutex.Unlock()
 	wep, err := wc.podToDefaultWorkloadEndpoint(pod)
 	if err != nil {
 		return nil, err
