@@ -25128,6 +25128,8 @@ kind: ServiceAccount
 metadata:
   name: tigera-operator
   namespace: tigera-operator
+  labels:
+    k8s-app: tigera-operator
 imagePullSecrets:
   []
 ---
@@ -25137,6 +25139,8 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   name: tigera-operator
+  labels:
+    k8s-app: tigera-operator
 rules:
   - apiGroups:
       - ""
@@ -25403,6 +25407,8 @@ kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   name: tigera-operator
+  labels:
+    k8s-app: tigera-operator
 subjects:
 - kind: ServiceAccount
   name: tigera-operator
