@@ -344,20 +344,20 @@ type FelixConfigurationSpec struct {
 	// PrometheusWireGuardMetricsEnabled disables wireguard metrics collection, which the Prometheus client does by default, when
 	// set to false. This reduces the number of metrics reported, reducing Prometheus load. [Default: true]
 	PrometheusWireGuardMetricsEnabled *bool `json:"prometheusWireGuardMetricsEnabled,omitempty"`
-
-	// FailsafeInboundHostPorts is a list of UDP/TCP ports and CIDRs that Felix will allow incoming traffic to host endpoints
-	// on irrespective of the security policy. This is useful to avoid accidentally cutting off a host with incorrect configuration.
-	// For back-compatibility, if the protocol is not specified, it defaults to "tcp". If a CIDR is not specified, it will allow
-	// traffic from all addresses. To disable all inbound host ports, use the value none. The default value allows ssh access
-	// and DHCP.
-	// [Default: tcp:22, udp:68, tcp:179, tcp:2379, tcp:2380, tcp:6443, tcp:6666, tcp:6667]
+	// FailsafeInboundHostPorts is a list of PortProto struct objects including UDP/TCP/SCTP ports and CIDRs that Felix will
+	// allow incoming traffic to host endpoints on irrespective of the security policy. This is useful to avoid accidentally
+	// cutting off a host with incorrect configuration. For backwards compatibility, if the protocol is not specified,
+	// it defaults to "tcp". If a CIDR is not specified, it will allow traffic from all addresses. To disable all inbound host ports,
+	// use the value "[]". The default value allows ssh access, DHCP, BGP, etcd and the Kubernetes API.
+	// [Default: tcp:22, udp:68, tcp:179, tcp:2379, tcp:2380, tcp:5473, tcp:6443, tcp:6666, tcp:6667 ]
 	FailsafeInboundHostPorts *[]ProtoPort `json:"failsafeInboundHostPorts,omitempty"`
-	// FailsafeOutboundHostPorts is a list of UDP/TCP ports and CIDRs that Felix will allow outgoing traffic from host endpoints
-	// to irrespective of the security policy. This is useful to avoid accidentally cutting off a host with incorrect configuration.
-	// For back-compatibility, if the protocol is not specified, it defaults to "tcp". If a CIDR is not specified, it will allow
-	// traffic from all addresses. To disable all outbound host ports, use the value none. The default value opens etcd's standard
-	// ports to ensure that Felix does not get cut off from etcd as well as allowing DHCP and DNS.
-	// [Default: tcp:179, tcp:2379, tcp:2380, tcp:6443, tcp:6666, tcp:6667, udp:53, udp:67]
+	// FailsafeOutboundHostPorts is a list of List of PortProto struct objects including UDP/TCP/SCTP ports and CIDRs that Felix
+	// will allow outgoing traffic from host endpoints to irrespective of the security policy. This is useful to avoid accidentally
+	// cutting off a host with incorrect configuration. For backwards compatibility, if the protocol is not specified, it defaults
+	// to "tcp". If a CIDR is not specified, it will allow traffic from all addresses. To disable all outbound host ports,
+	// use the value "[]". The default value opens etcd's standard ports to ensure that Felix does not get cut off from etcd
+	// as well as allowing DHCP, DNS, BGP and the Kubernetes API.
+	// [Default: udp:53, udp:67, tcp:179, tcp:2379, tcp:2380, tcp:5473, tcp:6443, tcp:6666, tcp:6667 ]
 	FailsafeOutboundHostPorts *[]ProtoPort `json:"failsafeOutboundHostPorts,omitempty"`
 
 	// KubeNodePortRanges holds list of port ranges used for service node ports. Only used if felix detects kube-proxy running in ipvs mode.
