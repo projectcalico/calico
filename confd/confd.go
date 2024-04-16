@@ -10,7 +10,6 @@ import (
 	"github.com/projectcalico/calico/confd/pkg/buildinfo"
 	"github.com/projectcalico/calico/confd/pkg/config"
 	"github.com/projectcalico/calico/confd/pkg/run"
-	"github.com/projectcalico/calico/libcalico-go/lib/seedrng"
 )
 
 var (
@@ -18,9 +17,6 @@ var (
 )
 
 func main() {
-	// Make sure the RNG is seeded.
-	seedrng.EnsureSeeded()
-
 	flag.BoolVar(&printVersion, "version", false, "print version and exit")
 	flag.Parse()
 	if printVersion {

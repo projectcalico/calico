@@ -27,7 +27,6 @@ import (
 	"github.com/pkg/profile"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
-	"github.com/projectcalico/calico/libcalico-go/lib/seedrng"
 	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 
 	log "github.com/sirupsen/logrus"
@@ -64,9 +63,6 @@ var (
 )
 
 func init() {
-	// Make sure the RNG is seeded.
-	seedrng.EnsureSeeded()
-
 	// Add a flag to check the version.
 	flag.BoolVar(&version, "version", false, "Display version")
 	flag.StringVar(&statusFile, "status-file", status.DefaultStatusFile, "File to write status information to")
