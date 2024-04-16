@@ -2,6 +2,8 @@ kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   name: tigera-operator
+  labels:
+    k8s-app: tigera-operator
 subjects:
 - kind: ServiceAccount
   name: tigera-operator
