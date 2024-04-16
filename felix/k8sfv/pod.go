@@ -21,6 +21,7 @@ import (
 	"os/exec"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/containernetworking/plugins/pkg/ns"
