@@ -4,7 +4,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//	 http://www.apache.org/licenses/LICENSE-2.0
+//     http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -33,8 +33,8 @@ import (
 
 // diagCmd is a struct to hold a command, cmd info and filename to run diagnostic on
 type diagCmd struct {
-	info	 string
-	cmd	  string
+	info     string
+	cmd      string
 	filename string
 }
 
@@ -45,10 +45,10 @@ func Diags(args []string) error {
   <BINARY_NAME> node diags [--log-dir=<LOG_DIR>] [--allow-version-mismatch]
 
 Options:
-  -h --help					Show this screen.
-	 --log-dir=<LOG_DIR>	   The directory containing Calico logs.
-							   [default: /var/log/calico]
-	 --allow-version-mismatch  Allow client and cluster versions mismatch.
+  -h --help                    Show this screen.
+     --log-dir=<LOG_DIR>       The directory containing Calico logs.
+                               [default: /var/log/calico]
+     --allow-version-mismatch  Allow client and cluster versions mismatch.
 
 Description:
   This command is used to gather diagnostic information from a Calico node.
@@ -129,7 +129,6 @@ func runDiags(logDir string) error {
 		cmd:	  "ss -a -n",  
 		filename: "ss",  
 	}
-
 	// sometimes socket information is not collected as netstat tool
 	// is obsolete and removed in Ubuntu and other distros. so when
 	// "netstat -a -n " fails, we should use "ss -a -n" instead of it
