@@ -847,7 +847,7 @@ var _ = Describe("CalicoCni", func() {
 				containerID, result, _, _, _, contNs, err := testutils.CreateContainerWithId(netconf, "", testutils.TEST_DEFAULT_NS, "", "meep1337")
 				Expect(err).ShouldNot(HaveOccurred())
 
-				hostNlHandle, err := netlink.NewHandle()
+				hostNlHandle, err := netlink.NewHandle(syscall.NETLINK_ROUTE)
 				Expect(err).ShouldNot(HaveOccurred())
 				defer hostNlHandle.Close()
 
