@@ -126,7 +126,7 @@ func newVXLANManager(
 	ipVersion uint8,
 	featureDetector environment.FeatureDetectorIface,
 ) *vxlanManager {
-	nlHandle, _ := netlink.NewHandle()
+	nlHandle, _ := netlink.NewHandle(syscall.NETLINK_ROUTE)
 
 	blackHoleProto := defaultVXLANProto
 	if dpConfig.DeviceRouteProtocol != syscall.RTPROT_BOOT {
