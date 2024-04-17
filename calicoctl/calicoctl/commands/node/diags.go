@@ -77,7 +77,6 @@ Description:
 
 // runDiags takes logDir and runs a sequence of commands to collect diagnostics
 func runDiags(logDir string) error {
-
 	// Note: in for the cmd field in this struct, it  can't handle args quoted with space in it
 	// For example, you can't add cmd "do this", since after the `strings.Fields` it will become `"do` and `this"`
 	cmds := []diagCmd{
@@ -118,16 +117,16 @@ func runDiags(logDir string) error {
 	}
 	diagsTmpDir := filepath.Join(tmpDir, "diagnostics")
 
-	netstatCmd := diagCmd{  
-		info:	 "Dumping netstat",  
-		cmd:	  "netstat -a -n",  
-		filename: "netstat",  
-	}  
+	netstatCmd := diagCmd{
+		info:     "Dumping netstat",
+		cmd:      "netstat -a -n",
+		filename: "netstat",
+	}
 
-	ssCmd := diagCmd{  
-		info:	 "Dumping ss",  
-		cmd:	  "ss -a -n",  
-		filename: "ss",  
+	ssCmd := diagCmd{
+		info:     "Dumping ss",
+		cmd:      "ss -a -n",
+		filename: "ss",
 	}
 	// sometimes socket information is not collected as netstat tool
 	// is obsolete and removed in Ubuntu and other distros. so when
@@ -205,7 +204,7 @@ func getNodeContainerLogs(logDir string) {
 	containers := re.ReplaceAllString(string(result), "")
 
 	fmt.Println("Copying logs from Calico containers")
-	err = os.WriteFile(logDir+"/"+"container_creation_time", []byte(containers), 0666)
+	err = os.WriteFile(logDir+"/"+"container_creation_time", []byte(containers), 0o666)
 	if err != nil {
 		fmt.Printf("Could not save output of `docker ps` command to container_creation_time: %s\n", err)
 	}
@@ -220,7 +219,7 @@ func getNodeContainerLogs(logDir string) {
 			fmt.Printf("Could not pull log for container %s: %s\n", name, err)
 			continue
 		}
-		err = os.WriteFile(logDir+"/"+name+".log", cLog, 0666)
+		err = os.WriteFile(logDir+"/"+name+".log", cLog, 0o666)
 		if err != nil {
 			fmt.Printf("Failed to write log for container %s to file: %s\n", name, err)
 		}
@@ -230,7 +229,6 @@ func getNodeContainerLogs(logDir string) {
 // writeDiags executes the diagnostic commands and outputs the result in the file
 // with the filename and directory passed as arguments
 func writeDiags(cmds diagCmd, dir string) error {
-
 	if cmds.info != "" {
 		fmt.Println(cmds.info)
 	}
@@ -250,7 +248,7 @@ func writeDiags(cmds diagCmd, dir string) error {
 	}
 
 	fp := filepath.Join(dir, cmds.filename)
-	if err := os.WriteFile(fp, content, 0666); err != nil {
+	if err := os.WriteFile(fp, content, 0o666); err != nil {
 		log.Errorf("Error writing diags to file: %s\n", err)
 	}
 	return nil
