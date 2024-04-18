@@ -21,6 +21,17 @@ COPY ${BIN_DIR}/node-driver-registrar-${TARGETARCH} /usr/bin/node-driver-registr
 
 FROM calico/base
 
+ARG GIT_VERSION=unknown
+ARG UPSTREAM_VER=unknown
+
+LABEL maintainer="maintainers@tigera.io"
+LABEL name="CSI Node driver registrar"
+LABEL release="1"
+LABEL summary="CSI Node driver registrar (repackaged for Calico)"
+LABEL description="CSI Node driver registrar handles registration of CSI drivers with the kubelet. This is the upstream version repackaged for Calico."
+LABEL vendor="Project Calico"
+LABEL version="${UPSTREAM_VER}+calico-${GIT_VERSION}"
+
 COPY --from=source / /
 
 ENTRYPOINT ["/usr/bin/node-driver-registrar"]
