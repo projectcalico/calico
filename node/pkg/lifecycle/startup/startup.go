@@ -349,6 +349,18 @@ func MonitorIPAddressSubnets() {
 	for {
 		<-time.After(pollInterval)
 		log.Debugf("Checking node IP address every %v", pollInterval)
+
+		// Every polling interval, try to get the k8s Node and use the latest K8s node IP to configure.
+		if clientset != nil {
+			curK8sNode, err := clientset.CoreV1().Nodes().Get(ctx, k8sNodeName, metav1.GetOptions{})
+			if err == nil {
+				k8sNode = curK8sNode
+			}
+		}
+
+		// Every polling interval, try to get new node configuration.
+		node = getNode(ctx, cli, nodeName)
+
 		updated := configureAndCheckIPAddressSubnets(ctx, cli, node, k8sNode)
 		if updated {
 			// Apply the updated node resource.
