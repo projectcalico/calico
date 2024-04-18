@@ -18,6 +18,7 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"regexp"
@@ -101,23 +102,12 @@ Description:
 	// Make sure the command is run with super user privileges
 	enforceRoot()
 
-	systemOk := true
-
-	fmt.Print("Checking kernel version...\n")
-	err = checkKernelVersion()
-	if err != nil {
-		systemOk = false
+	fmt.Print("Checking kernel version and kernel modules...\n")
+	if err := checkKernelVersion(); err != nil {
+		return fmt.Errorf("Failed to check kernel version: %v", err)
 	}
-
-	fmt.Print("Checking kernel modules...\n")
-	err = checkKernelModules()
-	if err != nil {
-		systemOk = false
-	}
-
-	// If any of the checks fail, print a message and exit
-	if !systemOk {
-		return fmt.Errorf("System doesn't meet one or more minimum systems requirements to run Calico")
+	if err := checkKernelModules(); err != nil {
+		return fmt.Errorf("Failed to check kernel modules: %v", err)
 	}
 
 	fmt.Printf("System meets minimum system requirements to run Calico!\n")
@@ -264,10 +254,13 @@ func checkModule(filename, module, kernelVersion string, pattern string) error {
 		// Ignoring second output (isPrefix) since it's not necessary
 		buf, _, err := f.ReadLine()
 		if err != nil {
-			// EOF without a match
-			return errors.New("Module not found")
+			// If EOF is reached without finding the module, return an error
+			if err == io.EOF {
+				return fmt.Errorf("module %s not found in file %s", module, filename)
+			}
+			// If there is an error other than EOF, return it
+			return fmt.Errorf("error reading file %s: %v", filename, err)
 		}
-
 		if regex.MatchString(string(buf)) {
 			return nil
 		}
@@ -281,14 +274,14 @@ func findBootFile(kernelVersion string) string {
 	}
 
 	// default locations that we will look for kernelconfig file.
-	possibilePaths := []string{
+	possiblePaths := []string{
 		"/usr/src/linux/.config",
 		"/boot/config-" + kernelVersion,
 		"/usr/src/linux-" + kernelVersion + "/.config",
 		"/usr/src/linux-headers-" + kernelVersion + "/.config",
 		"/lib/modules/" + kernelVersion + "/build/.config"}
 
-	for _, v := range possibilePaths {
+	for _, v := range possiblePaths {
 		_, err := os.Stat(v)
 		if err == nil {
 			return v
