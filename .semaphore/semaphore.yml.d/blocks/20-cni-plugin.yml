@@ -1,18 +1,3 @@
-- name: cni-plugin
-  run:
-    when: "${FORCE_RUN} or change_in(['/*', '/cni-plugin/', '/libcalico-go/', '/hack/test/certs/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
-  task:
-    prologue:
-      commands:
-        - cd cni-plugin
-    jobs:
-      - name: cni-plugin tests
-        commands:
-          - ../.semaphore/run-and-monitor ci.log make ci
-      - name: build windows cni-plugin images
-        commands:
-          - ../.semaphore/run-and-monitor ci.log make image-windows
-
 - name: "cni-plugin: Windows"
   run:
     when: "${FORCE_RUN} or change_in(['/*', '/cni-plugin/', '/libcalico-go/', '/process/testing/winfv/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
