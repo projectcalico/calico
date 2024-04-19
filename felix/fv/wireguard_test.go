@@ -193,6 +193,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 
 				if CurrentGinkgoTestDescription().Failed {
 					for _, felix := range topologyContainers.Felixes {
+						felix.Exec("ip", "link")
 						felix.Exec("ip", "addr")
 						felix.Exec("ip", "rule", "list")
 						felix.Exec("ip", "route", "show", "table", "all")
