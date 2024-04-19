@@ -316,7 +316,6 @@ func MonitorIPAddressSubnets() {
 	ctx := context.Background()
 	_, cli := calicoclient.CreateClient()
 	nodeName := utils.DetermineNodeName()
-	node := getNode(ctx, cli, nodeName)
 
 	pollInterval := getMonitorPollInterval()
 
@@ -324,6 +323,7 @@ func MonitorIPAddressSubnets() {
 	var config *rest.Config
 	var k8sNode *v1.Node
 	var err error
+	var node *libapi.Node
 
 	// Determine the Kubernetes node name. Default to the Calico node name unless an explicit
 	// value is provided.
@@ -338,17 +338,24 @@ func MonitorIPAddressSubnets() {
 			log.WithError(err).Error("Failed to create clientset")
 			return
 		}
-
-		k8sNode, err = clientset.CoreV1().Nodes().Get(ctx, k8sNodeName, metav1.GetOptions{})
-		if err != nil {
-			log.WithError(err).Error("Failed to read Node from datastore")
-			return
-		}
 	}
 
 	for {
 		<-time.After(pollInterval)
 		log.Debugf("Checking node IP address every %v", pollInterval)
+
+		// Every polling interval, try to get the k8s Node and use the latest K8s node IP to configure.
+		if clientset != nil {
+			k8sNode, err = clientset.CoreV1().Nodes().Get(ctx, k8sNodeName, metav1.GetOptions{})
+			if err != nil {
+				log.WithError(err).Error("Failed to read Node from datastore")
+				return
+			}
+		}
+
+		// Every polling interval, try to get new node configuration.
+		node = getNode(ctx, cli, nodeName)
+
 		updated := configureAndCheckIPAddressSubnets(ctx, cli, node, k8sNode)
 		if updated {
 			// Apply the updated node resource.
