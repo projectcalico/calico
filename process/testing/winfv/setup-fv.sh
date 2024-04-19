@@ -86,7 +86,7 @@ CF_FV_STACK_NAME="win-${CLUSTER_NAME}"
 if [ -f "./calico.exe" ]; then
     echo "./calico.exe exists, type cni-plugin"
     FV_TYPE="cni-plugin"
-    cp ./run-fv-cni-plugin.ps1 ./run-fv.ps1
+    cp ./run-fv-cni-plugin.ps1 ./run-fv-song.ps1
 fi
 
 if [ -f "./calico-felix.exe" ]; then
@@ -317,7 +317,7 @@ function show_all_instances() {
 
   CONNECT_FILE="connect"
   echo
-  echo
+  echo "Update to trigger winfv"
   echo
   echo "-------------Connect to Linux Master Instances--------" >> ${CONNECT_FILE}
   echo "${MASTER_CONNECT_COMMAND}" >> ${CONNECT_FILE}
