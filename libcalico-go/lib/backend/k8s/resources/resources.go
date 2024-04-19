@@ -139,8 +139,6 @@ func ConvertCalicoResourceToK8sResource(resIn Resource) (Resource, error) {
 	romCopy.Name = ""
 	romCopy.Namespace = ""
 	romCopy.ResourceVersion = ""
-	romCopy.Labels = nil
-	romCopy.Annotations = nil
 	romCopy.UID = ""
 
 	// Any projectcalico.org/v3 owners need to be translated to their equivalent crd.projectcalico.org/v1 representations.
@@ -167,20 +165,19 @@ func ConvertCalicoResourceToK8sResource(resIn Resource) (Resource, error) {
 	if err != nil {
 		return nil, err
 	}
-	annotations := rom.GetAnnotations()
-	if len(annotations) == 0 {
-		annotations = make(map[string]string)
-	}
+
+	annotations := make(map[string]string)
 	annotations[metadataAnnotation] = string(metadataBytes)
 
 	// Make sure to clear out all of the Calico Metadata out of the ObjectMeta except for
-	// Name, Namespace, ResourceVersion, Labels, and Annotations. Annotations is already
-	// copied so it can be set separately.
+	// Name, Namespace, ResourceVersion, UID, and Annotations (built above).
 	meta := &metav1.ObjectMeta{}
 	meta.Name = rom.GetName()
 	meta.Namespace = rom.GetNamespace()
 	meta.ResourceVersion = rom.GetResourceVersion()
-	meta.Labels = rom.GetLabels()
+
+	// Explicitly nil out the labels on the underlying object so that they are not duplicated.
+	meta.Labels = nil
 
 	if rom.GetUID() != "" {
 		uid, err := conversion.ConvertUID(rom.GetUID())
@@ -254,14 +251,24 @@ func ConvertK8sResourceToCalicoResource(res Resource) error {
 		annotations = nil
 	}
 
+	// Start with the original labels and annotations from the v1 object, and merge in the values from the metadata
+	// annotation. This logic helps maintain labels and annotations on upgrade from older versions, where they were stored
+	// directly in the metadata of the v1 CRD.
+	labels := rom.GetLabels()
+	for k, v := range meta.GetLabels() {
+		if labels == nil {
+			labels = make(map[string]string)
+		}
+		labels[k] = v
+	}
+
 	// Manually write in the data not stored in the annotations: Name, Namespace, ResourceVersion,
-	// Labels, and Annotations so that they do not get overwritten.
+	// so that they do not get overwritten.
 	meta.Name = rom.GetName()
 	meta.Namespace = rom.GetNamespace()
 	meta.ResourceVersion = rom.GetResourceVersion()
-	meta.Labels = rom.GetLabels()
-	meta.Annotations = annotations
 	meta.UID = rom.GetUID()
+	meta.Labels = labels
 
 	// If no creation timestamp was stored in the metadata annotation, use the one from the CR.
 	// The timestamp is normally set in the clientv3 code. However, for objects that bypass
