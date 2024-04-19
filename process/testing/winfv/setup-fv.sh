@@ -317,7 +317,7 @@ function show_all_instances() {
 
   CONNECT_FILE="connect"
   echo
-  echo
+  echo "Update to trigger winfv"
   echo
   echo "-------------Connect to Linux Master Instances--------" >> ${CONNECT_FILE}
   echo "${MASTER_CONNECT_COMMAND}" >> ${CONNECT_FILE}
