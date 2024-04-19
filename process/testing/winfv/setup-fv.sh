@@ -86,7 +86,7 @@ CF_FV_STACK_NAME="win-${CLUSTER_NAME}"
 if [ -f "./calico.exe" ]; then
     echo "./calico.exe exists, type cni-plugin"
     FV_TYPE="cni-plugin"
-    cp ./run-fv-cni-plugin.ps1 ./run-fv-song.ps1
+    cp ./run-fv-cni-plugin.ps1 ./run-fv.ps1
 fi
 
 if [ -f "./calico-felix.exe" ]; then
