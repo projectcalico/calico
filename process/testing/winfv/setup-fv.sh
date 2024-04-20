@@ -317,7 +317,7 @@ function show_all_instances() {
 
   CONNECT_FILE="connect"
   echo
-  echo
+  echo "Update to trigger winfv"
   echo
   echo "-------------Connect to Linux Master Instances--------" >> ${CONNECT_FILE}
   echo "${MASTER_CONNECT_COMMAND}" >> ${CONNECT_FILE}
@@ -424,7 +424,7 @@ function setup_fv() {
   setup_kubeadm_cluster
   #create etcd manually with http protocol
   LOCAL_IP_ENV=${LINUX_PIP}
-  ETCD_CONTAINER=quay.io/coreos/etcd:v3.3.7
+  ETCD_CONTAINER=quay.io/coreos/etcd:v3.4.6
   ${MASTER_CONNECT_COMMAND} docker run --detach -p 2389:2389 --name calico-etcd ${ETCD_CONTAINER}  etcd --advertise-client-urls "http://${LOCAL_IP_ENV}:2389,http://127.0.0.1:2389,http://${LOCAL_IP_ENV}:8001,http://127.0.0.1:8001" --listen-client-urls "http://0.0.0.0:2389,http://0.0.0.0:8001"
 
   echo
