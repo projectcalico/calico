@@ -100,7 +100,7 @@ Start-Sleep -s 15
 mkdir -p C:\\k\\report
 #executes FV test and generate report in report/result.xml
 cd C:\\k
-& .\win-fv.exe --ginkgo.focus "l2bridge network" > C:\k\report\fv-test-l2bridge.log 2>&1
+.\win-fv.exe --ginkgo.focus "l2bridge network" | tee C:\k\report\fv-test-l2bridge.log
 if ( $LastExitCode -ne 0 ){
   echo $LastExitCode > c:\k\report\error-codes
 }
@@ -113,7 +113,7 @@ New-HNSNetwork -Type "Overlay" -AddressPrefix "192.168.255.0/30" -Gateway "192.1
 Start-Sleep -s 20
 
 Set-Item -Path env:REPORT -Value "C:\\k\\report\\report-overlay.xml"
-& .\win-fv.exe --ginkgo.focus "overlay network" > C:\k\report\fv-test-overlay.log 2>&1
+.\win-fv.exe --ginkgo.focus "overlay network" | tee C:\k\report\fv-test-overlay.log
 if ( $LastExitCode -ne 0 ){
   echo $LastExitCode >> c:\k\report\error-codes
 }
