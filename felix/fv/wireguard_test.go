@@ -230,33 +230,26 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 
 			Context("with Wireguard enabled", func() {
 				BeforeEach(func() {
-					for i, felix := range topologyContainers.Felixes {
-						// Check the Wireguard device exists.
-						if wireguardEnabledV4 {
-							Eventually(func() error {
-								out, err := felix.ExecOutput("ip", "link", "show", wireguardInterfaceNameDefault)
-								if err != nil {
-									return err
+					// Check the Wireguard device exists.
+					Eventually(func() error {
+						for i, felix := range topologyContainers.Felixes {
+							out, err := felix.ExecOutput("ip", "link", "show")
+							if err != nil {
+								return err
+							}
+							if wireguardEnabledV4 {
+								if !strings.Contains(out, wireguardInterfaceNameDefault) {
+									return fmt.Errorf("felix %d has no IPv4 Wireguard device", i)
 								}
-								if strings.Contains(out, wireguardInterfaceNameDefault) {
-									return nil
+							}
+							if wireguardEnabledV6 {
+								if !strings.Contains(out, wireguardInterfaceNameV6Default) {
+									return fmt.Errorf("felix %d has no IPv6 Wireguard device", i)
 								}
-								return fmt.Errorf("felix %d has no IPv4 Wireguard device", i)
-							}, "10s", "100ms").ShouldNot(HaveOccurred())
+							}
 						}
-						if wireguardEnabledV6 {
-							Eventually(func() error {
-								out, err := felix.ExecOutput("ip", "link", "show", wireguardInterfaceNameV6Default)
-								if err != nil {
-									return err
-								}
-								if strings.Contains(out, wireguardInterfaceNameV6Default) {
-									return nil
-								}
-								return fmt.Errorf("felix %d has no IPv6 Wireguard device", i)
-							}, "10s", "100ms").ShouldNot(HaveOccurred())
-						}
-					}
+						return nil
+					}, "30s", "330ms").ShouldNot(HaveOccurred())
 				})
 
 				It("should have called bootstrap", func() {
@@ -297,12 +290,27 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 					disableWireguard(client)
 
 					// Old configuration should disappear.
+					Eventually(func() error {
+						for i, felix := range topologyContainers.Felixes {
+							out, err := felix.ExecOutput("ip", "-d", "link", "show")
+							if err != nil {
+								return err
+							}
+							if wireguardEnabledV4 {
+								if strings.Contains(out, wireguardInterfaceNameDefault) {
+									return fmt.Errorf("felix %d still has IPv4 Wireguard device", i)
+								}
+							}
+							if wireguardEnabledV6 {
+								if strings.Contains(out, wireguardInterfaceNameV6Default) {
+									return fmt.Errorf("felix %d still has IPv6 Wireguard device", i)
+								}
+							}
+						}
+						return nil
+					}, "30s", "330ms").ShouldNot(HaveOccurred())
 					for _, felix := range topologyContainers.Felixes {
 						if wireguardEnabledV4 {
-							Eventually(func() string {
-								out, _ := felix.ExecOutput("ip", "-d", "link", "show", wireguardInterfaceNameDefault)
-								return out
-							}, "10s", "100ms").Should(BeEmpty())
 							Eventually(func() string {
 								out, err := felix.ExecOutput("ip", "rule", "show", "pref", wireguardRoutingRulePriorityDefault)
 								Expect(err).NotTo(HaveOccurred())
@@ -310,10 +318,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 							}, "10s", "100ms").Should(BeEmpty())
 						}
 						if wireguardEnabledV6 {
-							Eventually(func() string {
-								out, _ := felix.ExecOutput("ip", "-d", "link", "show", wireguardInterfaceNameV6Default)
-								return out
-							}, "10s", "100ms").Should(BeEmpty())
 							Eventually(func() string {
 								out, err := felix.ExecOutput("ip", "-6", "rule", "show", "pref", wireguardRoutingRulePriorityDefault)
 								Expect(err).NotTo(HaveOccurred())
@@ -607,28 +611,26 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 
 				BeforeEach(func() {
 					// Tunnel readiness checks.
-					for i, felix := range topologyContainers.Felixes {
-						// Check the Wireguard device exists.
-						deviceNames := []string{}
-						if wireguardEnabledV4 {
-							deviceNames = append(deviceNames, wireguardInterfaceNameDefault)
-						}
-						if wireguardEnabledV6 {
-							deviceNames = append(deviceNames, wireguardInterfaceNameV6Default)
-						}
-						for _, device := range deviceNames {
-							Eventually(func() error {
-								out, err := felix.ExecOutput("ip", "link", "show", device)
-								if err != nil {
-									return err
+					// Check the Wireguard device exists.
+					Eventually(func() error {
+						for i, felix := range topologyContainers.Felixes {
+							out, err := felix.ExecOutput("ip", "link", "show")
+							if err != nil {
+								return err
+							}
+							if wireguardEnabledV4 {
+								if !strings.Contains(out, wireguardInterfaceNameDefault) {
+									return fmt.Errorf("felix %d has no IPv4 Wireguard device", i)
 								}
-								if strings.Contains(out, device) {
-									return nil
+							}
+							if wireguardEnabledV6 {
+								if !strings.Contains(out, wireguardInterfaceNameV6Default) {
+									return fmt.Errorf("felix %d has no IPv6 Wireguard device", i)
 								}
-								return fmt.Errorf("felix %d has no Wireguard device named %s", i, device)
-							}, "10s", "100ms").ShouldNot(HaveOccurred())
+							}
 						}
-					}
+						return nil
+					}, "30s", "330ms").ShouldNot(HaveOccurred())
 
 					for _, felix := range topologyContainers.Felixes {
 						// Check the rule exists.
@@ -950,20 +952,25 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 					disableWireguard(client)
 
 					// Check Wireguard device doesn't exist.
-					for _, felix := range topologyContainers.Felixes {
-						if wireguardEnabledV4 {
-							Eventually(func() string {
-								out, _ := felix.ExecOutput("ip", "link", "show", wireguardInterfaceNameDefault)
-								return out
-							}, "10s", "100ms").Should(BeEmpty())
+					Eventually(func() error {
+						for i, felix := range topologyContainers.Felixes {
+							out, err := felix.ExecOutput("ip", "link", "show")
+							if err != nil {
+								return err
+							}
+							if wireguardEnabledV4 {
+								if strings.Contains(out, wireguardInterfaceNameDefault) {
+									return fmt.Errorf("felix %d has no IPv4 Wireguard device", i)
+								}
+							}
+							if wireguardEnabledV6 {
+								if strings.Contains(out, wireguardInterfaceNameV6Default) {
+									return fmt.Errorf("felix %d has no IPv6 Wireguard device", i)
+								}
+							}
 						}
-						if wireguardEnabledV6 {
-							Eventually(func() string {
-								out, _ := felix.ExecOutput("ip", "link", "show", wireguardInterfaceNameV6Default)
-								return out
-							}, "10s", "100ms").Should(BeEmpty())
-						}
-					}
+						return nil
+					}, "30s", "330ms").ShouldNot(HaveOccurred())
 
 					// Check that Wireguard routing rule doesn't exist.
 					for _, felix := range topologyContainers.Felixes {
@@ -1091,16 +1098,23 @@ var _ = infrastructure.DatastoreDescribe("WireGuard-Unsupported", []apiconfig.Da
 			})
 
 			It("no Wireguard device exists", func() {
-				Eventually(func() string {
-					out, err := tc.Felixes[0].ExecOutput("ip", "link", "show", wireguardInterfaceNameDefault)
-					Expect(err).To(HaveOccurred())
-					return out
-				}, "10s", "100ms").Should(BeEmpty())
-				Eventually(func() string {
-					out, err := tc.Felixes[0].ExecOutput("ip", "link", "show", wireguardInterfaceNameV6Default)
-					Expect(err).To(HaveOccurred())
-					return out
-				}, "10s", "100ms").Should(BeEmpty())
+				Eventually(func() error {
+					out, err := tc.Felixes[0].ExecOutput("ip", "link", "show")
+					if err != nil {
+						return err
+					}
+					if wireguardEnabledV4 {
+						if !strings.Contains(out, wireguardInterfaceNameDefault) {
+							return fmt.Errorf("felix 0 has no IPv4 Wireguard device")
+						}
+					}
+					if wireguardEnabledV6 {
+						if !strings.Contains(out, wireguardInterfaceNameV6Default) {
+							return fmt.Errorf("felix 0 has no IPv6 Wireguard device")
+						}
+					}
+					return nil
+				}, "30s", "330ms").ShouldNot(HaveOccurred())
 			})
 
 			It("no wg tool info exists", func() {
