@@ -152,6 +152,7 @@ void bpf_tc_set_globals(struct bpf_map *map,
 			char* host_tunnel_ip6,
 			uint flags,
 			ushort wg_port,
+			ushort wg6_port,
 			uint natin,
 			uint natout,
 			uint log_filter_jmp,
@@ -194,6 +195,8 @@ void bpf_tc_set_globals(struct bpf_map *map,
 	for (i = 0; i < sizeof(v6.jumps)/sizeof(uint); i++) {
 		v6.jumps[i] = jumps6[i];
 	}
+
+	v6.wg_port = wg6_port;
 
 	data.v4 = v4;
 	data.v6 = v6;
