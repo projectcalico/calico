@@ -18,6 +18,8 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net"
+	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -26,6 +28,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	v2 "github.com/projectcalico/calico/felix/bpf/conntrack/v2"
+	v3 "github.com/projectcalico/calico/felix/bpf/conntrack/v3"
 	"github.com/projectcalico/calico/felix/bpf/maps"
 
 	"github.com/docopt/docopt-go"
@@ -49,41 +52,48 @@ func init() {
 }
 
 // conntrackCmd represents the conntrack command
-var conntrackCmd = &cobra.Command{
-	Use:   "conntrack",
-	Short: "Manipulates connection tracking",
-}
+var (
+	conntrackCmd = &cobra.Command{
+		Use:   "conntrack",
+		Short: "Manipulates connection tracking",
+	}
+
+	voidIP4 = net.IPv4(0, 0, 0, 0)
+	voidIP6 = net.ParseIP("::")
+)
 
 type conntrackDumpCmd struct {
 	*cobra.Command
-	Version string `docopt:"--ver"`
-	version string
+	version int
+	raw     bool
+	ipv6    bool
 }
 
 func newConntrackDumpCmd() *cobra.Command {
 	cmd := &conntrackDumpCmd{
 		Command: &cobra.Command{
-			Use:   "dump [--ver=<version>]",
+			Use:   "dump [--ver=<version>] [--raw]",
 			Short: "Dumps connection tracking table",
 		},
 	}
-	cmd.Command.Flags().StringVarP((&cmd.version), "ver", "v", "", "version to dump from")
+
+	var version string
+
+	cmd.Command.Flags().StringVarP((&version), "ver", "v", "", "version to dump from")
+	cmd.Command.Flags().BoolVar((&cmd.raw), "raw", false, "dump the raw conntrack table as is. For version < 3 it is always raw")
 	cmd.Command.Args = cmd.Args
 	cmd.Command.Run = cmd.Run
 
-	return cmd.Command
-}
+	if version != "" {
+		v, err := strconv.Atoi(version)
+		if err != nil {
+			cmd.PrintErr("--ver needs to be a number")
+			os.Exit(-1)
+		}
+		cmd.version = v
+	}
 
-func (cmd *conntrackDumpCmd) Args(c *cobra.Command, args []string) error {
-	a, err := docopt.ParseArgs(makeDocUsage(c), args, "")
-	if err != nil {
-		return errors.New(err.Error())
-	}
-	err = a.Bind(cmd)
-	if err != nil {
-		return errors.New(err.Error())
-	}
-	return nil
+	return cmd.Command
 }
 
 func dumpCtMapV2(ctMap maps.Map) error {
@@ -110,11 +120,17 @@ func dumpCtMapV2(ctMap maps.Map) error {
 
 func (cmd *conntrackDumpCmd) Run(c *cobra.Command, _ []string) {
 	var ctMap maps.Map
+
+	cmd.ipv6 = ipv6 != nil && *ipv6
+	if cmd.version < 3 && cmd.version != 0 {
+		cmd.raw = true
+	}
+
 	switch cmd.version {
-	case "2":
+	case 2:
 		ctMap = conntrack.MapV2()
 	default:
-		if ipv6 != nil && *ipv6 {
+		if cmd.ipv6 {
 			ctMap = conntrack.MapV6()
 		} else {
 			ctMap = conntrack.Map()
@@ -123,7 +139,7 @@ func (cmd *conntrackDumpCmd) Run(c *cobra.Command, _ []string) {
 	if err := ctMap.Open(); err != nil {
 		log.WithError(err).Fatal("Failed to access ConntrackMap")
 	}
-	if cmd.version == "2" {
+	if cmd.version == 2 {
 		err := dumpCtMapV2(ctMap)
 		if err != nil {
 			log.WithError(err).Fatal("Failed to iterate over conntrack entries")
@@ -133,7 +149,7 @@ func (cmd *conntrackDumpCmd) Run(c *cobra.Command, _ []string) {
 
 	keyFromBytes := conntrack.KeyFromBytes
 	valFromBytes := conntrack.ValueFromBytes
-	if ipv6 != nil && *ipv6 {
+	if cmd.ipv6 {
 		keyFromBytes = conntrack.KeyV6FromBytes
 		valFromBytes = conntrack.ValueV6FromBytes
 	}
@@ -142,14 +158,80 @@ func (cmd *conntrackDumpCmd) Run(c *cobra.Command, _ []string) {
 		ctKey := keyFromBytes(k)
 		ctVal := valFromBytes(v)
 
-		fmt.Printf("%v -> %v", ctKey, ctVal)
-		dumpExtra(ctKey, ctVal)
-		fmt.Printf("\n")
+		if cmd.raw {
+			fmt.Printf("%v -> %v", ctKey, ctVal)
+			dumpExtra(ctKey, ctVal)
+			fmt.Printf("\n")
+		} else {
+			cmd.prettyDump(ctKey, ctVal)
+		}
 		return maps.IterNone
 	})
 	if err != nil {
 		log.WithError(err).Fatal("Failed to iterate over conntrack entries")
 	}
+}
+
+func protoStr(proto uint8) string {
+	switch proto {
+	case 6:
+		return "TCP"
+	case 17:
+		return "UDP"
+	case 1:
+		return "ICMP"
+	case 58:
+		return "ICMP6"
+	}
+
+	return "UNKNOWN"
+}
+
+func (cmd *conntrackDumpCmd) prettyDump(k conntrack.KeyInterface, v conntrack.ValueInterface) {
+	d := v.Data()
+
+	switch v.Type() {
+	case conntrack.TypeNormal:
+		if v.Flags()&v3.FlagSrcDstBA != 0 {
+			cmd.Printf("%s %s:%d -> %s:%d ", protoStr(k.Proto()), k.AddrB(), k.PortB(), k.AddrA(), k.PortA())
+		} else {
+			cmd.Printf("%s %s:%d -> %s:%d ", protoStr(k.Proto()), k.AddrA(), k.PortA(), k.AddrB(), k.PortB())
+		}
+	case conntrack.TypeNATForward:
+		return
+	case conntrack.TypeNATReverse:
+		if v.Flags()&v3.FlagSrcDstBA != 0 {
+			cmd.Printf("%s %s:%d -> %s:%d -> %s:%d ",
+				protoStr(k.Proto()), k.AddrB(), k.PortB(), d.OrigDst, d.OrigPort, k.AddrA(), k.PortA())
+		} else {
+			cmd.Printf("%s %s:%d -> %s:%d -> %s:%d ",
+				protoStr(k.Proto()), k.AddrA(), k.PortA(), d.OrigDst, d.OrigPort, k.AddrB(), k.PortB())
+		}
+
+		if (cmd.ipv6 && !d.TunIP.Equal(voidIP6)) || (!cmd.ipv6 && !d.TunIP.Equal(voidIP4)) {
+			cmd.Printf("external client, service forwarded to/from %s ", d.TunIP)
+		}
+	}
+
+	if v.Flags()&v3.FlagHostPSNAT != 0 {
+		cmd.Printf("source port changed from %d ", d.OrigSPort)
+	}
+
+	now := bpf.KTimeNanos()
+	cmd.Printf(" Age: %s Active ago %s",
+		time.Duration(now-v.Created()), time.Duration(now-v.LastSeen()))
+
+	if k.Proto() == 6 {
+		if (v.IsForwardDSR() && d.FINsSeenDSR()) || d.FINsSeen() || d.RSTSeen() {
+			cmd.Printf(" CLOSED")
+		} else if d.Established() {
+			cmd.Printf(" ESTABLISHED")
+		} else {
+			cmd.Printf(" SYN-SENT")
+		}
+	}
+
+	cmd.Printf("\n")
 }
 
 func dumpExtrav2(k v2.Key, v v2.Value) {
@@ -168,7 +250,7 @@ func dumpExtrav2(k v2.Key, v v2.Value) {
 
 	data := v.Data()
 
-	if (v.IsForwardDSR() && data.FINsSeenDSR()) || data.FINsSeen() {
+	if (v.IsForwardDSR() && data.FINsSeenDSR()) || data.FINsSeen() || data.RSTSeen() {
 		fmt.Printf(" CLOSED")
 		return
 	}
