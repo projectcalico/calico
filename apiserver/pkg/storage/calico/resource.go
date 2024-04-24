@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"time"
 
-	"golang.org/x/net/context"
+	"context"
 
 	aapierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"

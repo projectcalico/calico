@@ -21,11 +21,12 @@ import (
 	"strings"
 	"time"
 
+	"context"
+
 	log "github.com/sirupsen/logrus"
 	"go.etcd.io/etcd/client/pkg/v3/srv"
 	"go.etcd.io/etcd/client/pkg/v3/transport"
 	etcd "go.etcd.io/etcd/client/v2"
-	"golang.org/x/net/context"
 
 	v1 "github.com/projectcalico/calico/libcalico-go/lib/apis/v1"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
