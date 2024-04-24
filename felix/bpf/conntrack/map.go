@@ -136,9 +136,10 @@ func MapV2() maps.Map {
 }
 
 const (
-	ProtoICMP = 1
-	ProtoTCP  = 6
-	ProtoUDP  = 17
+	ProtoICMP  = 1
+	ProtoTCP   = 6
+	ProtoUDP   = 17
+	ProtoICMP6 = 58
 )
 
 func KeyFromBytes(k []byte) KeyInterface {
