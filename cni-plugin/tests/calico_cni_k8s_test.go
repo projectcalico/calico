@@ -70,12 +70,14 @@ func ensureNamespace(clientset *kubernetes.Clientset, name string) {
 }
 
 func ensurePodCreated(clientset *kubernetes.Clientset, namespace string, pod *v1.Pod) *v1.Pod {
+	By(fmt.Sprintf("Creating pod '%s'", pod.Name))
 	pod, err := clientset.CoreV1().Pods(namespace).Create(context.Background(), pod, metav1.CreateOptions{})
 	ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
 	// Immediately try to get the pod, and retry until we do. This prevents race
 	// conditions where the API Server has accepted the create, but isn't ready
 	// to find the pod on a get. These races can cause the tests to be flaky.
+	By(fmt.Sprintf("Ensuring pod '%s' is in the datastore", pod.Name))
 	EventuallyWithOffset(1, func() error {
 		_, err := clientset.CoreV1().Pods(namespace).Get(context.Background(), pod.Name, metav1.GetOptions{})
 		return err
@@ -3141,7 +3143,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				  "etcd_endpoints": "http://%s:2379",
 				  "datastore_type": "%s",
            			  "nodename_file_optional": true,
-				  "log_level": "info",
+				  "log_level": "debug",
 				  "readiness_gates": ["%s"],
 			 	  "ipam": {
 				    "type": "calico-ipam"

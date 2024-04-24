@@ -191,7 +191,7 @@ func (p poolAccessor) GetEnabledPools(ipVersion int) ([]v3.IPPool, error) {
 		} else if err != nil {
 			log.Warnf("Failed to parse the IPPool: %s. Ignoring that IPPool", pool.Spec.CIDR)
 		} else {
-			log.Debugf("Ignoring IPPool: %s. IP version is different.", pool.Spec.CIDR)
+			log.Debugf("Ignoring IPPool: %s. Wanted IP-version %d, pool is: %d.", pool.Spec.CIDR, ipVersion, cidr.Version())
 		}
 		return false
 	})
@@ -202,7 +202,7 @@ func (p poolAccessor) getPools(filter func(pool *v3.IPPool) bool) ([]v3.IPPool, 
 	if err != nil {
 		return nil, err
 	}
-	log.Debugf("Got list of all IPPools: %v", pools)
+	log.Debugf("Got list of all IPPools: %+v", pools)
 	var filtered []v3.IPPool
 	for _, pool := range pools.Items {
 		if filter(&pool) {
@@ -316,7 +316,7 @@ func (c client) ensureClusterInformation(ctx context.Context, calicoVersion, clu
 			clusterInfo.Spec.DatastoreReady = &datastoreReady
 			updateNeeded = true
 		} else {
-			log.WithField("DatastoreReady", clusterInfo.Spec.DatastoreReady).Debug("DatastoreReady value already set")
+			log.WithField("DatastoreReady", *clusterInfo.Spec.DatastoreReady).Debug("DatastoreReady value already set")
 		}
 
 		if clusterType != "" {
