@@ -109,7 +109,7 @@ blocks:
         commands:
           - make ci-preflight-checks
 
-- name: cni-plugin
+- name: cni-plugin0
   run:
     when: "true"
   dependencies:
@@ -122,11 +122,8 @@ blocks:
       - name: cni-plugin tests
         commands:
           - ../.semaphore/run-and-monitor ci.log make ci
-      - name: build windows cni-plugin images
-        commands:
-          - ../.semaphore/run-and-monitor ci.log make image-windows
 
-- name: cni-plugin
+- name: cni-plugin1
   run:
     when: "true"
   dependencies:
@@ -139,11 +136,8 @@ blocks:
       - name: cni-plugin tests
         commands:
           - ../.semaphore/run-and-monitor ci.log make ci
-      - name: build windows cni-plugin images
-        commands:
-          - ../.semaphore/run-and-monitor ci.log make image-windows
 
-- name: cni-plugin
+- name: cni-plugin2
   run:
     when: "true"
   dependencies:
@@ -156,11 +150,8 @@ blocks:
       - name: cni-plugin tests
         commands:
           - ../.semaphore/run-and-monitor ci.log make ci
-      - name: build windows cni-plugin images
-        commands:
-          - ../.semaphore/run-and-monitor ci.log make image-windows
 
-- name: cni-plugin
+- name: cni-plugin3
   run:
     when: "true"
   dependencies:
@@ -173,11 +164,8 @@ blocks:
       - name: cni-plugin tests
         commands:
           - ../.semaphore/run-and-monitor ci.log make ci
-      - name: build windows cni-plugin images
-        commands:
-          - ../.semaphore/run-and-monitor ci.log make image-windows
 
-- name: cni-plugin
+- name: cni-plugin4
   run:
     when: "true"
   dependencies:
@@ -190,11 +178,8 @@ blocks:
       - name: cni-plugin tests
         commands:
           - ../.semaphore/run-and-monitor ci.log make ci
-      - name: build windows cni-plugin images
-        commands:
-          - ../.semaphore/run-and-monitor ci.log make image-windows
 
-- name: cni-plugin
+- name: cni-plugin5
   run:
     when: "true"
   dependencies:
@@ -207,11 +192,8 @@ blocks:
       - name: cni-plugin tests
         commands:
           - ../.semaphore/run-and-monitor ci.log make ci
-      - name: build windows cni-plugin images
-        commands:
-          - ../.semaphore/run-and-monitor ci.log make image-windows
 
-- name: cni-plugin
+- name: cni-plugin6
   run:
     when: "true"
   dependencies:
@@ -224,11 +206,8 @@ blocks:
       - name: cni-plugin tests
         commands:
           - ../.semaphore/run-and-monitor ci.log make ci
-      - name: build windows cni-plugin images
-        commands:
-          - ../.semaphore/run-and-monitor ci.log make image-windows
 
-- name: cni-plugin
+- name: cni-plugin7
   run:
     when: "true"
   dependencies:
@@ -241,11 +220,8 @@ blocks:
       - name: cni-plugin tests
         commands:
           - ../.semaphore/run-and-monitor ci.log make ci
-      - name: build windows cni-plugin images
-        commands:
-          - ../.semaphore/run-and-monitor ci.log make image-windows
 
-- name: cni-plugin
+- name: cni-plugin8
   run:
     when: "true"
   dependencies:
@@ -258,11 +234,8 @@ blocks:
       - name: cni-plugin tests
         commands:
           - ../.semaphore/run-and-monitor ci.log make ci
-      - name: build windows cni-plugin images
-        commands:
-          - ../.semaphore/run-and-monitor ci.log make image-windows
 
-- name: cni-plugin
+- name: cni-plugin9
   run:
     when: "true"
   dependencies:
@@ -275,9 +248,6 @@ blocks:
       - name: cni-plugin tests
         commands:
           - ../.semaphore/run-and-monitor ci.log make ci
-      - name: build windows cni-plugin images
-        commands:
-          - ../.semaphore/run-and-monitor ci.log make image-windows
 
 after_pipeline:
   task:
