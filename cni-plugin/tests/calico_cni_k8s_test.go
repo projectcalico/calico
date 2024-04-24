@@ -3142,8 +3142,8 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			netconf = fmt.Sprintf(`
 				{
 				  "cniVersion": "%s",
-				  "type": "calico",
 				  "name": "net10",
+				  "type": "calico",
 				  "etcd_endpoints": "http://%s:2379",
 				  "datastore_type": "%s",
            			  "nodename_file_optional": true,
