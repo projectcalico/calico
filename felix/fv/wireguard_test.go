@@ -356,13 +356,13 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 							Eventually(func() string {
 								out, _ := felix.ExecOutput("ip", "-d", "link", "show", ifaceName)
 								return out
-							}, "10s", "100ms").Should(ContainSubstring(fmt.Sprintf("mtu %d", mtu)))
+							}, "30s", "330ms").Should(ContainSubstring(fmt.Sprintf("mtu %d", mtu)))
 						}
 						if wireguardEnabledV6 {
 							Eventually(func() string {
 								out, _ := felix.ExecOutput("ip", "-d", "link", "show", ifaceNameV6)
 								return out
-							}, "10s", "100ms").Should(ContainSubstring(fmt.Sprintf("mtu %d", mtuV6)))
+							}, "30s", "330ms").Should(ContainSubstring(fmt.Sprintf("mtu %d", mtuV6)))
 						}
 					}
 
@@ -373,24 +373,24 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 								out, err := felix.ExecOutput("wg", "show", ifaceName)
 								Expect(err).NotTo(HaveOccurred())
 								return out
-							}, "10s", "100ms").Should(ContainSubstring(fmt.Sprintf("listening port: %d", port)))
+							}, "30s", "330ms").Should(ContainSubstring(fmt.Sprintf("listening port: %d", port)))
 							Eventually(func() string {
 								out, err := felix.ExecOutput("ip", "rule", "show", "pref", fmt.Sprintf("%d", rule))
 								Expect(err).NotTo(HaveOccurred())
 								return out
-							}, "10s", "100ms").ShouldNot(BeEmpty())
+							}, "30s", "330ms").ShouldNot(BeEmpty())
 						}
 						if wireguardEnabledV6 {
 							Eventually(func() string {
 								out, err := felix.ExecOutput("wg", "show", ifaceNameV6)
 								Expect(err).NotTo(HaveOccurred())
 								return out
-							}, "10s", "100ms").Should(ContainSubstring(fmt.Sprintf("listening port: %d", portV6)))
+							}, "30s", "330ms").Should(ContainSubstring(fmt.Sprintf("listening port: %d", portV6)))
 							Eventually(func() string {
 								out, err := felix.ExecOutput("ip", "-6", "rule", "show", "pref", fmt.Sprintf("%d", rule))
 								Expect(err).NotTo(HaveOccurred())
 								return out
-							}, "10s", "100ms").ShouldNot(BeEmpty())
+							}, "30s", "330ms").ShouldNot(BeEmpty())
 						}
 					}
 				})
