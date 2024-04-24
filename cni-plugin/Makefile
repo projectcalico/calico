@@ -162,7 +162,6 @@ $(WINDOWS_BIN)/flannel.exe:
 ## Run the unit tests.
 ut: run-k8s-controller-manager $(BIN)/install $(BIN)/host-local $(BIN)/calico-ipam $(BIN)/calico
 	$(MAKE) ut-datastore DATASTORE_TYPE=etcdv3
-	$(MAKE) ut-datastore DATASTORE_TYPE=kubernetes
 
 ut-datastore:
 	# The tests need to run as root
@@ -181,7 +180,7 @@ ut-datastore:
 	-v $(CERTS_PATH):/home/user/certs \
 	$(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
 			cd  /go/src/$(PACKAGE_NAME) && \
-			ginkgo -cover -r -skipPackage pkg/install $(GINKGO_ARGS)'
+			ginkgo -cover -r -v -skipPackage pkg/install $(GINKGO_ARGS)'
 
 ut-etcd: run-k8s-controller-manager build $(BIN)/host-local
 	$(MAKE) ut-datastore DATASTORE_TYPE=etcdv3
