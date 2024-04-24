@@ -98,9 +98,7 @@ promotions:
     pipeline_file: license-scanning/fossa-scan.yml
     auto_promote:
       when: "branch =~ 'master|release-.*'"
-
 blocks:
-
 - name: Prerequisites
   dependencies: []
   task:
@@ -248,7 +246,6 @@ blocks:
       - name: cni-plugin tests
         commands:
           - ../.semaphore/run-and-monitor ci.log make ci
-
 after_pipeline:
   task:
     jobs:
