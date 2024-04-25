@@ -169,6 +169,9 @@ func ConvertCalicoResourceToK8sResource(resIn Resource) (Resource, error) {
 	annotations := make(map[string]string)
 	annotations[metadataAnnotation] = string(metadataBytes)
 
+	// Include an annotation warning users that the resource is managed by Calico and should not be edited by users.
+	annotations["projectcalico.org/warning"] = "This resource is managed by Calico. Manual changes may be overwritten. Please use the projectcalico.org/v3 API instead."
+
 	// Make sure to clear out all of the Calico Metadata out of the ObjectMeta except for
 	// Name, Namespace, ResourceVersion, UID, and Annotations (built above).
 	meta := &metav1.ObjectMeta{}
