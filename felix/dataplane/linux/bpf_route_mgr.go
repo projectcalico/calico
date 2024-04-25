@@ -366,8 +366,12 @@ func (m *bpfRouteManager) calculateRoute(cidr ip.CIDR) routes.ValueInterface {
 	case proto.RouteType_REMOTE_HOST:
 		flags |= routes.FlagsRemoteHost
 		if cgRoute.DstNodeIp == "" {
-			log.WithField("node", cgRoute.DstNodeName).Panic(
-				"Remote host route is missing node's IP but its CIDR should equal its IP.")
+			// This may legally happen in dual-stack installation when IPv6 is enabled,
+			// but autodetection for IPv4 (or vice versa) is not enabled and a node has
+			// that IP version regardless. Technically we know the node's IP, but we are
+			// told not to care. No reason to panic.
+			log.WithField("node", cgRoute.DstNodeName).Debug(
+				"Excluding remote host route. It is missing node's IP.")
 			return nil
 		}
 		nodeIP := net.ParseIP(cgRoute.DstNodeIp)
