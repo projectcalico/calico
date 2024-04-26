@@ -15,6 +15,8 @@
 package resources
 
 import (
+	"strings"
+
 	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -177,7 +179,17 @@ func ConvertCalicoResourceToK8sResource(resIn Resource) (Resource, error) {
 	meta.ResourceVersion = rom.GetResourceVersion()
 
 	// Explicitly nil out the labels on the underlying object so that they are not duplicated.
-	meta.Labels = nil
+	// We make an exception for projectcalico.org/ labels, which we own and may use on the v1 API.
+	var v1Labels map[string]string
+	for k, v := range rom.GetLabels() {
+		if strings.Contains(k, "projectcalico.org/") {
+			if v1Labels == nil {
+				v1Labels = map[string]string{}
+			}
+			v1Labels[k] = v
+		}
+	}
+	meta.Labels = v1Labels
 
 	if rom.GetUID() != "" {
 		uid, err := conversion.ConvertUID(rom.GetUID())
