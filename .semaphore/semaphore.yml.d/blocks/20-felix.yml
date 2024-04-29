@@ -73,6 +73,9 @@
         - cd felix
         - cache restore go-pkg-cache
         - cache restore go-mod-cache
+        # We don't have an ARM64 protoc image, but we also know that the 
+        # file is fresh because the pre-flight check verifies that.
+        - touch proto/felixbackend.pb.go
     jobs:
       - name: Build binary
         commands:
