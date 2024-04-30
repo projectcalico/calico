@@ -1243,7 +1243,7 @@ func cleanUpVXLANDevice(deviceName string) {
 
 type Manager interface {
 	// OnUpdate is called for each protobuf message from the datastore.  May either directly
-	// send updates to the IPSets and iptables.Table objects (which will queue the updates
+	// send updates to the IPSets and iptables. Table objects (which will queue the updates
 	// until the main loop instructs them to act) or (for efficiency) may wait until
 	// a call to CompleteDeferredWork() to flush updates to the dataplane.
 	OnUpdate(protoBufMsg interface{})

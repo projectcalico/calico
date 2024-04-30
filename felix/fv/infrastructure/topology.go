@@ -25,6 +25,7 @@ import (
 
 	"github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -130,11 +131,14 @@ func CreateDefaultIPPoolFromOpts(ctx context.Context, client client.Interface, o
 		ipPool.Spec.CIDR = opts.IPPoolCIDR
 
 		// IPIP is only supported on IPv4
-		if opts.IPIPEnabled {
+		logrus.Infof("Kian %v", opts.IPIPMode)
+		ipPool.Spec.IPIPMode = opts.IPIPMode
+		/* opts.IPIPEnabled {
 			ipPool.Spec.IPIPMode = api.IPIPModeAlways
 		} else {
 			ipPool.Spec.IPIPMode = api.IPIPModeNever
-		}
+		}*/
+
 	case 6:
 		ipPool.Name = DefaultIPv6PoolName
 		ipPool.Spec.CIDR = opts.IPv6PoolCIDR
@@ -221,6 +225,11 @@ func StartNNodeTopology(n int, opts TopologyOptions, infra DatastoreInfra) (tc T
 
 	if opts.VXLANMode == "" {
 		opts.VXLANMode = api.VXLANModeNever
+	}
+
+	logrus.Infof("Tofu %v", opts.IPIPMode)
+	if opts.IPIPMode == "" {
+		opts.IPIPMode = api.IPIPModeNever
 	}
 
 	// Get client.
@@ -422,7 +431,8 @@ func StartNNodeTopology(n int, opts TopologyOptions, infra DatastoreInfra) (tc T
 				defer wg.Done()
 				defer ginkgo.GinkgoRecover()
 				jBlock := fmt.Sprintf("%d.%d.%d.0/24", IPv4CIDR.IP[0], IPv4CIDR.IP[1], j)
-				if opts.IPIPMode == api.IPIPModeNever || opts.VXLANMode == api.VXLANModeNever {
+				if (opts.IPIPEnabled && opts.IPIPMode == api.IPIPModeNever) ||
+					(!opts.IPIPEnabled && opts.VXLANMode == api.VXLANModeNever) {
 					// If IPIP is enabled, Felix will program these routes itself.
 					err := iFelix.ExecMayFail("ip", "route", "add", jBlock, "via", jFelix.IP, "dev", "eth0")
 					Expect(err).ToNot(HaveOccurred())

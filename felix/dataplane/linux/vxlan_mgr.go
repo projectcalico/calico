@@ -226,6 +226,7 @@ func newVXLANManagerWithShims(
 }
 
 func (m *vxlanManager) OnUpdate(protoBufMsg interface{}) {
+	logrus.Infof("Pepsi %v", protoBufMsg)
 	switch msg := protoBufMsg.(type) {
 	case *proto.RouteUpdate:
 		// Check to make sure that we are dealing with messages of the correct IP version.

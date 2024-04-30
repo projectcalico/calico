@@ -36,7 +36,6 @@ import (
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/rules"
-	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 const (
@@ -52,14 +51,14 @@ type ipipManager struct {
 	sync.Mutex
 
 	// Our dependencies.
-	hostname                  string
-	hostAddr                  string
-	routeTable                routetable.RouteTableInterface
-	blackholeRouteTable       routetable.RouteTableInterface
-	noEncapRouteTable         routetable.RouteTableInterface
-	parentIfaceName           string
-	lastParentDevUpdate       time.Time
-	previouslyUsedParentNames set.Set[string]
+	hostname            string
+	hostAddr            string
+	routeTable          routetable.RouteTableInterface
+	blackholeRouteTable routetable.RouteTableInterface
+	noEncapRouteTable   routetable.RouteTableInterface
+	//parentIfaceName           string
+	//lastParentDevUpdate       time.Time
+	//previouslyUsedParentNames set.Set[string]
 
 	// activeHostnameToIP maps hostname to string IP address. We don't bother to parse into
 	// net.IPs because we're going to pass them directly to the IPSet API.
