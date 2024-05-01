@@ -161,15 +161,17 @@ bin/ocp.tgz: manifests/ocp/ bin/yq
 
 ## Generates release notes for the given version.
 .PHONY: release-notes
-release-notes:
-ifndef GITHUB_TOKEN
-	$(error GITHUB_TOKEN must be set)
+release-notes: var-require-all-GITHUB_TOKEN-VERSION
+	$(eval RELEASE_BRANCH = $(if $(RELEASE_BRANCH),$(RELEASE_BRANCH),release-$(shell echo "$(VERSION)" | awk -F  "." '{print $$1"."$$2}')))
+	$(eval CURRENT_BRANCH = $(call current-branch))
+ifeq ($(RELEASE_BRANCH),$(CURRENT_BRANCH))
+	$(error Cannot generate release notes for $(VERSION) from $(CURRENT_BRANCH) branch, use $(RELEASE_BRANCH) branch)
 endif
-ifndef VERSION
-	$(error VERSION must be set)
-endif
-	VERSION=$(VERSION) GITHUB_TOKEN=$(GITHUB_TOKEN) python2 ./hack/release/generate-release-notes.py
+	@rm -rf release-notes/$(VERSION)-release-notes.md
+	@python3 -m pip install PyGithub==2.3.0 && \
+		VERSION=$(VERSION) GITHUB_TOKEN=$(GITHUB_TOKEN) ./hack/release/generate-release-notes.py
 
+## Updat
 ## Update the AUTHORS.md file.
 update-authors:
 ifndef GITHUB_TOKEN
