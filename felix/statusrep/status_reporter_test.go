@@ -128,7 +128,6 @@ var updatedHostEPKey = model.HostEndpointStatusKey{
 var _ = Describe("Status", func() {
 	var esr *EndpointStatusReporter
 	var epUpdates chan interface{}
-	var inSyncChan chan bool
 	var datastore *mockDatastore
 	var resyncTicker, rateLimitTicker *mockStoppable
 	var resyncTickerChan, rateLimitTickerChan chan time.Time
@@ -142,7 +141,6 @@ var _ = Describe("Status", func() {
 	JustBeforeEach(func() {
 		log.Info("JustBeforeEach called, creating EndpointStatusReporter")
 		epUpdates = make(chan interface{})
-		inSyncChan = make(chan bool)
 		datastore = newMockDatastore()
 		resyncTicker = &mockStoppable{}
 		rateLimitTicker = &mockStoppable{}
@@ -153,7 +151,6 @@ var _ = Describe("Status", func() {
 			hostname,
 			region,
 			epUpdates,
-			inSyncChan,
 			datastore,
 			resyncTicker,
 			resyncTickerChan,
@@ -174,7 +171,7 @@ var _ = Describe("Status", func() {
 	Describe("with empty datastore", func() {
 		Describe("after sending in-sync message", func() {
 			JustBeforeEach(func() {
-				inSyncChan <- true
+				epUpdates <- &proto.DataplaneInSync{}
 			})
 			It("Should start a resync", func() {
 				resyncTickerChan <- time.Now()
@@ -274,7 +271,7 @@ var _ = Describe("Status", func() {
 		})
 		Describe("after sending in-sync", func() {
 			JustBeforeEach(func() {
-				inSyncChan <- true
+				epUpdates <- &proto.DataplaneInSync{}
 			})
 			It("should only clean up local endpoints", func() {
 				// Kick off the resync.
@@ -293,14 +290,14 @@ var _ = Describe("Status", func() {
 				resyncTickerChan <- time.Now()
 				// Then send a no-op event (so that we block until
 				// the above event finishes).  No cleanup should happen yet.
-				inSyncChan <- true
+				epUpdates <- &proto.DataplaneInSync{}
 				Expect(datastore.numKVs()).To(Equal(4))
 				// Rate limit tick should trigger cleanup.
 				rateLimitTickerChan <- time.Now()
-				inSyncChan <- true
+				epUpdates <- &proto.DataplaneInSync{}
 				Expect(datastore.numKVs()).To(Equal(3))
 				rateLimitTickerChan <- time.Now()
-				inSyncChan <- true
+				epUpdates <- &proto.DataplaneInSync{}
 				Expect(datastore.numKVs()).To(Equal(2))
 			}, 1)
 
@@ -357,9 +354,9 @@ var _ = Describe("Status", func() {
 				It("should retry the deletes", func() {
 					// Kick off the first resync.
 					resyncTickerChan <- time.Now()
-					rateLimitTickerChan <- time.Now() // Triggers first delete.
-					rateLimitTickerChan <- time.Now() // Triggers second.
-					inSyncChan <- false               // Wait for next loop
+					rateLimitTickerChan <- time.Now()     // Triggers first delete.
+					rateLimitTickerChan <- time.Now()     // Triggers second.
+					epUpdates <- &proto.DataplaneInSync{} // Wait for next loop
 					Expect(datastore.numKVs()).To(Equal(4),
 						"datastore should still contain all original keys")
 					// Send in timer ticks to finish retries.
@@ -417,7 +414,7 @@ var _ = Describe("Status", func() {
 		})
 		Describe("after sending in-sync", func() {
 			JustBeforeEach(func() {
-				inSyncChan <- true
+				epUpdates <- &proto.DataplaneInSync{}
 			})
 			It("should only clean up local endpoints", func() {
 				// Kick off the resync.
@@ -448,18 +445,15 @@ var _ = Describe("Status", func() {
 var _ = Describe("Non-mocked EndpointStatusReporter", func() {
 	var esr *EndpointStatusReporter
 	var epUpdates chan interface{}
-	var inSyncChan chan bool
 	var datastore *mockDatastore
 
 	BeforeEach(func() {
 		epUpdates = make(chan interface{})
-		inSyncChan = make(chan bool)
 		datastore = newMockDatastore()
 		esr = NewEndpointStatusReporter(
 			hostname,
 			"",
 			epUpdates,
-			inSyncChan,
 			datastore,
 			10*time.Second,  // Rate limit.
 			100*time.Second, // Resync interval.

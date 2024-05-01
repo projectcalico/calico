@@ -268,7 +268,7 @@ EOF
     # Check that passwords were not logged.
     password_logs="`grep 'password-' $LOGPATH/logd1 || true`"
     echo "$password_logs"
-    if [ "$password_logs"  ]; then
+    if [ "$password_logs" ]; then
         echo "ERROR: passwords were logged"
         return 1
     fi
@@ -1109,7 +1109,7 @@ EOF
     # Check that passwords were not logged.
     password_logs="`grep 'password-' $LOGPATH/logd1 || true`"
     echo "$password_logs"
-    if [ "$password_logs"  ]; then
+    if [ "$password_logs" ]; then
         echo "ERROR: passwords were logged"
         return 1
     fi

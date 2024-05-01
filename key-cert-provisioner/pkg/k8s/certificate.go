@@ -110,7 +110,7 @@ func SubmitCSR(ctx context.Context, config *cfg.Config, restClient *RestClient, 
 		Spec: certV1.CertificateSigningRequestSpec{
 			Request:    x509CSR.CSR,
 			SignerName: config.Signer,
-			Usages:     []certV1.KeyUsage{certV1.UsageServerAuth, certV1.UsageClientAuth, certV1.UsageDigitalSignature, certV1.UsageKeyAgreement},
+			Usages:     []certV1.KeyUsage{certV1.UsageServerAuth, certV1.UsageClientAuth, certV1.UsageDigitalSignature, certV1.UsageKeyAgreement, certV1.UsageKeyEncipherment},
 		},
 	}
 

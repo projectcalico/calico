@@ -79,9 +79,10 @@ sudo pip list || true
 #
 # ------------------------------------------------------------------------------
 
-# Handle current branch name transition from "stable/yoga" to "unmaintained/yoga".  The DevStack
-# repo itself has not transitioned yet.
-if [ "${DEVSTACK_BRANCH}" = stable/yoga ]; then
+# Handle branch name transition from "stable/yoga" to "unmaintained/yoga".  The DevStack repo
+# internally still uses "stable/yoga" for all its defaults even though all the actual branch names
+# have changed to "unmaintained/yoga".
+if [ "${DEVSTACK_BRANCH}" = unmaintained/yoga ]; then
     export CINDER_BRANCH=unmaintained/yoga
     export GLANCE_BRANCH=unmaintained/yoga
     export KEYSTONE_BRANCH=unmaintained/yoga

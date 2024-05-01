@@ -35,6 +35,9 @@ certs:
 # Resource requests and limits for the tigera/operator pod.
 resources: {}
 
+# Common labels for all resources created by this chart
+additionalLabels: {}
+
 # Tolerations for the tigera/operator pod.
 tolerations:
 - effect: NoExecute
@@ -45,6 +48,9 @@ tolerations:
 # NodeSelector for the tigera/operator pod.
 nodeSelector:
   kubernetes.io/os: linux
+
+# Affinity for the tigera/operator pod.
+affinity: {}
 
 # PriorityClassName for the tigera/operator pod.
 priorityClassName: ""

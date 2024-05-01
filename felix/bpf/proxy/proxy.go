@@ -160,13 +160,12 @@ func New(k8s kubernetes.Interface, dp DPSyncer, hostname string, opts ...Option)
 		UID:       types.UID(p.hostname),
 		Namespace: "",
 	}
-	p.healthzServer = healthcheck.NewProxierHealthServer("0.0.0.0:10256", p.minDPSyncPeriod, p.recorder, nodeRef)
-	p.svcHealthServer = healthcheck.NewServiceHealthServer(p.hostname, p.recorder, util.NewNodePortAddresses([]string{"0.0.0.0/0"}), p.healthzServer)
-
 	ipVersion := v1.IPv4Protocol
 	if p.ipFamily != 4 {
 		ipVersion = v1.IPv6Protocol
 	}
+	p.healthzServer = healthcheck.NewProxierHealthServer("0.0.0.0:10256", p.minDPSyncPeriod, p.recorder, nodeRef)
+	p.svcHealthServer = healthcheck.NewServiceHealthServer(p.hostname, p.recorder, util.NewNodePortAddresses(ipVersion, []string{"0.0.0.0/0"}), p.healthzServer)
 
 	p.epsChanges = k8sp.NewEndpointChangeTracker(p.hostname,
 		nil, // change if you want to provide more ctx

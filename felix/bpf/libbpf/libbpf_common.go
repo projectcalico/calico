@@ -26,6 +26,7 @@ type TcGlobalData struct {
 	HostTunnelIPv4 [16]byte
 	Flags          uint32
 	WgPort         uint16
+	Wg6Port        uint16
 	NatIn          uint32
 	NatOut         uint32
 	LogFilterJmp   uint32
@@ -40,4 +41,5 @@ type TcGlobalData struct {
 type XDPGlobalData struct {
 	IfaceName string
 	Jumps     [16]uint32
+	JumpsV6   [16]uint32
 }

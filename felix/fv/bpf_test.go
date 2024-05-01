@@ -380,10 +380,13 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			options.ExtraEnvVars["FELIX_DefaultEndpointToHostAction"] = "ACCEPT"
 			options.ExternalIPs = true
 			options.ExtraEnvVars["FELIX_BPFExtToServiceConnmark"] = "0x80"
+			options.ExtraEnvVars["FELIX_HEALTHENABLED"] = "true"
 			if !testOpts.ipv6 {
 				options.ExtraEnvVars["FELIX_BPFDSROptoutCIDRs"] = "245.245.0.0/16"
+				options.ExtraEnvVars["FELIX_HEALTHHOST"] = "0.0.0.0"
 			} else {
 				options.ExtraEnvVars["FELIX_IPV6SUPPORT"] = "true"
+				options.ExtraEnvVars["FELIX_HEALTHHOST"] = "::"
 			}
 
 			if testOpts.protocol == "tcp" {
@@ -445,7 +448,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						felix.Exec("calico-bpf", "-6", "routes", "dump")
 						felix.Exec("calico-bpf", "-6", "nat", "dump")
 						felix.Exec("calico-bpf", "-6", "nat", "aff")
-						felix.Exec("calico-bpf", "-6", "conntrack", "dump")
+						felix.Exec("calico-bpf", "-6", "conntrack", "dump", "--raw")
 						felix.Exec("calico-bpf", "-6", "arp", "dump")
 					} else {
 						felix.Exec("iptables-save", "-c")
@@ -459,7 +462,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						felix.Exec("calico-bpf", "routes", "dump")
 						felix.Exec("calico-bpf", "nat", "dump")
 						felix.Exec("calico-bpf", "nat", "aff")
-						felix.Exec("calico-bpf", "conntrack", "dump")
+						felix.Exec("calico-bpf", "conntrack", "dump", "--raw")
 						felix.Exec("calico-bpf", "arp", "dump")
 					}
 					felix.Exec("calico-bpf", "counters", "dump")
@@ -1198,6 +1201,13 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			Expect(err).NotTo(HaveOccurred())
 			if !options.TestManagesBPF {
 				ensureAllNodesBPFProgramsAttached(tc.Felixes)
+				felixReady := func(f *infrastructure.Felix) int {
+					return healthStatus(containerIP(f.Container), "9099", "readiness")
+				}
+
+				for _, f := range tc.Felixes {
+					Eventually(felixReady(f), "5s", "100ms").Should(BeGood())
+				}
 			}
 		}
 
@@ -1209,11 +1219,13 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			clusterIP := "10.101.0.10"
 			extIP := "10.1.2.3"
 			excludeSvcIP := "10.101.0.222"
+			loIP := "5.6.5.6"
 
 			if testOpts.ipv6 {
 				clusterIP = "dead:beef::abcd:0:0:10"
 				extIP = "dead:beef::abcd:1:2:3"
 				excludeSvcIP = "dead:beef::abcd:0:0:222"
+				loIP = "dead:beef::abcd:0:5656:5656"
 			}
 
 			if testOpts.protocol == "udp" && testOpts.udpUnConnected {
@@ -1407,42 +1419,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					pol.Spec.Selector = "workload=='regular'"
 
 					pol = createPolicy(pol)
-
-					By("allowing to self via MASQ", func() {
-
-						nets := []string{}
-
-						if testOpts.ipv6 {
-							nets = []string{felixIP(0) + "/128"}
-							switch testOpts.tunnel {
-							case "vxlan":
-								nets = []string{tc.Felixes[0].ExpectedVXLANV6TunnelAddr + "/128"}
-							case "wireguard":
-								nets = []string{tc.Felixes[0].ExpectedWireguardV6TunnelAddr + "/128"}
-							}
-						} else {
-							nets = []string{felixIP(0) + "/32"}
-							switch testOpts.tunnel {
-							case "ipip":
-								nets = []string{tc.Felixes[0].ExpectedIPIPTunnelAddr + "/32"}
-							}
-						}
-
-						pol := api.NewGlobalNetworkPolicy()
-						pol.Namespace = "fv"
-						pol.Name = "self-snat"
-						pol.Spec.Ingress = []api.Rule{
-							{
-								Action: "Allow",
-								Source: api.EntityRule{
-									Nets: nets,
-								},
-							},
-						}
-						pol.Spec.Selector = "name=='" + w[0][0].Name + "'"
-
-						pol = createPolicy(pol)
-					})
 
 					k8sClient = infra.(*infrastructure.K8sDatastoreInfra).K8sClient
 					_ = k8sClient
@@ -1991,6 +1967,27 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						ip := testSvc.Spec.ClusterIP
 						port := uint16(testSvc.Spec.Ports[0].Port)
 
+						w00Expects := []ExpectationOption{ExpectWithPorts(port)}
+						hostW0SrcIP := ExpectWithSrcIPs(felixIP(0))
+						if testOpts.ipv6 {
+							hostW0SrcIP = ExpectWithSrcIPs(felixIP(0))
+							switch testOpts.tunnel {
+							case "vxlan":
+								hostW0SrcIP = ExpectWithSrcIPs(tc.Felixes[0].ExpectedVXLANV6TunnelAddr)
+							case "wireguard":
+								hostW0SrcIP = ExpectWithSrcIPs(tc.Felixes[0].ExpectedWireguardV6TunnelAddr)
+							}
+						}
+						switch testOpts.tunnel {
+						case "ipip":
+							hostW0SrcIP = ExpectWithSrcIPs(tc.Felixes[0].ExpectedIPIPTunnelAddr)
+						}
+
+						if !testOpts.connTimeEnabled {
+							w00Expects = append(w00Expects, hostW0SrcIP)
+						}
+
+						cc.Expect(Some, w[0][0], TargetIP(ip), w00Expects...)
 						cc.ExpectSome(w[0][1], TargetIP(ip), port)
 						cc.ExpectSome(w[1][0], TargetIP(ip), port)
 						cc.ExpectSome(w[1][1], TargetIP(ip), port)
@@ -2392,9 +2389,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						)
 
 						if testOpts.ipv6 {
-							ctDump, err = tc.Felixes[0].ExecOutput("calico-bpf", "conntrack", "-6", "dump")
+							ctDump, err = tc.Felixes[0].ExecOutput("calico-bpf", "conntrack", "-6", "dump", "--raw")
 						} else {
-							ctDump, err = tc.Felixes[0].ExecOutput("calico-bpf", "conntrack", "dump")
+							ctDump, err = tc.Felixes[0].ExecOutput("calico-bpf", "conntrack", "dump", "--raw")
 						}
 						Expect(err).NotTo(HaveOccurred())
 						re := regexp.MustCompile(`LastSeen:\s*(\d+)`)
@@ -2415,9 +2412,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						// entries.
 						numWl0ConntrackEntries := func() int {
 							if testOpts.ipv6 {
-								ctDump, err = tc.Felixes[0].ExecOutput("calico-bpf", "conntrack", "-6", "dump")
+								ctDump, err = tc.Felixes[0].ExecOutput("calico-bpf", "conntrack", "-6", "dump", "--raw")
 							} else {
-								ctDump, err = tc.Felixes[0].ExecOutput("calico-bpf", "conntrack", "dump")
+								ctDump, err = tc.Felixes[0].ExecOutput("calico-bpf", "conntrack", "dump", "--raw")
 							}
 							Expect(err).NotTo(HaveOccurred())
 							return strings.Count(ctDump, w[0][0].IP)
@@ -3048,6 +3045,27 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							exp = None
 						}
 
+						w00Expects := []ExpectationOption{ExpectWithPorts(port)}
+						hostW0SrcIP := ExpectWithSrcIPs(felixIP(0))
+						if testOpts.ipv6 {
+							hostW0SrcIP = ExpectWithSrcIPs(felixIP(0))
+							switch testOpts.tunnel {
+							case "vxlan":
+								hostW0SrcIP = ExpectWithSrcIPs(tc.Felixes[0].ExpectedVXLANV6TunnelAddr)
+							case "wireguard":
+								hostW0SrcIP = ExpectWithSrcIPs(tc.Felixes[0].ExpectedWireguardV6TunnelAddr)
+							}
+						}
+						switch testOpts.tunnel {
+						case "ipip":
+							hostW0SrcIP = ExpectWithSrcIPs(tc.Felixes[0].ExpectedIPIPTunnelAddr)
+						}
+
+						if !testOpts.connTimeEnabled {
+							w00Expects = append(w00Expects, hostW0SrcIP)
+						}
+
+						cc.Expect(Some, w[0][0], TargetIP(clusterIP), w00Expects...)
 						cc.Expect(Some, w[0][1], TargetIP(clusterIP), ExpectWithPorts(port))
 						cc.Expect(exp, w[1][0], TargetIP(clusterIP), ExpectWithPorts(port))
 						cc.Expect(exp, w[1][1], TargetIP(clusterIP), ExpectWithPorts(port))
@@ -3440,7 +3458,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 								switch testOpts.tunnel {
 								case "ipip":
-									hostW0SrcIP = ExpectWithSrcIPs(tc.Felixes[0].ExpectedIPIPTunnelAddr)
+									if testOpts.connTimeEnabled {
+										hostW0SrcIP = ExpectWithSrcIPs(tc.Felixes[0].ExpectedIPIPTunnelAddr)
+									}
 									hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedIPIPTunnelAddr)
 								case "wireguard":
 									if testOpts.ipv6 {
@@ -3473,6 +3493,49 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 									cc.Expect(Some, hostW[0], TargetIPv4AsIPv6(clusterIP), ports, hostW0SrcIP)
 									cc.Expect(Some, hostW[1], TargetIPv4AsIPv6(clusterIP), ports, hostW1SrcIP)
 								}
+
+								cc.CheckConnectivity()
+							})
+
+							It("should have connectivity from all host-networked workloads to workload 0 "+
+								"via clusterIP with non-routable address set on lo", func() {
+								// It only makes sense for turned off CTLB as with CTLB routing
+								// picks the right source IP.
+								if testOpts.connTimeEnabled {
+									return
+								}
+								By("Configuring ip on lo")
+								tc.Felixes[0].Exec("ip", "addr", "add", loIP+"/"+ipMask(), "dev", "lo")
+								tc.Felixes[1].Exec("ip", "addr", "add", loIP+"/"+ipMask(), "dev", "lo")
+
+								By("testing connectivity")
+
+								node0IP := felixIP(0)
+								node1IP := felixIP(1)
+								hostW0SrcIP := ExpectWithSrcIPs(node0IP)
+								hostW1SrcIP := ExpectWithSrcIPs(node1IP)
+
+								switch testOpts.tunnel {
+								case "ipip":
+									hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedIPIPTunnelAddr)
+								case "wireguard":
+									if testOpts.ipv6 {
+										hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedWireguardV6TunnelAddr)
+									} else {
+										hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedWireguardTunnelAddr)
+									}
+								case "vxlan":
+									if testOpts.ipv6 {
+										hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedVXLANV6TunnelAddr)
+									} else {
+										hostW1SrcIP = ExpectWithSrcIPs(tc.Felixes[1].ExpectedVXLANTunnelAddr)
+									}
+								}
+								clusterIP := testSvc.Spec.ClusterIP
+								ports := ExpectWithPorts(uint16(testSvc.Spec.Ports[0].Port))
+
+								cc.Expect(Some, hostW[0], TargetIP(clusterIP), ports, hostW0SrcIP)
+								cc.Expect(Some, hostW[1], TargetIP(clusterIP), ports, hostW1SrcIP)
 
 								cc.CheckConnectivity()
 							})
@@ -4285,6 +4348,28 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				})
 			})
 
+			It("should have connectivity from host-networked pods via service to host-networked backend", func() {
+				By("Setting up the service")
+				hostW[0].ConfigureInInfra(infra)
+				testSvc := k8sService("host-svc", clusterIP, hostW[0], 80, 8055, 0, testOpts.protocol)
+				testSvcNamespace := testSvc.ObjectMeta.Namespace
+				k8sClient := infra.(*infrastructure.K8sDatastoreInfra).K8sClient
+				_, err := k8sClient.CoreV1().Services(testSvcNamespace).Create(context.Background(), testSvc, metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(1),
+					"Service endpoints didn't get created? Is controller-manager happy?")
+
+				By("Testing connectivity")
+				port := uint16(testSvc.Spec.Ports[0].Port)
+
+				hostW0SrcIP := ExpectWithSrcIPs(felixIP(0))
+				hostW1SrcIP := ExpectWithSrcIPs(felixIP(1))
+
+				cc.Expect(Some, hostW[0], TargetIP(clusterIP), ExpectWithPorts(port), hostW0SrcIP)
+				cc.Expect(Some, hostW[1], TargetIP(clusterIP), ExpectWithPorts(port), hostW1SrcIP)
+				cc.CheckConnectivity()
+			})
+
 		})
 
 		Describe("with BPF disabled to begin with", func() {
@@ -5011,24 +5096,32 @@ func ensureBPFProgramsAttachedOffset(offset int, felix *infrastructure.Felix, if
 	}
 
 	expectedIfaces = append(expectedIfaces, ifacesExtra...)
+	ensureBPFProgramsAttachedOffsetWithIPVersion(offset+1, felix,
+		true, felix.TopologyOptions.EnableIPv6,
+		expectedIfaces...)
+}
+
+func ensureBPFProgramsAttachedOffsetWithIPVersion(offset int, felix *infrastructure.Felix, v4, v6 bool, ifaces ...string) {
+	var expFlgs uint32
+
+	if v4 {
+		expFlgs |= ifstate.FlgIPv4Ready
+	}
+	if v6 {
+		expFlgs |= ifstate.FlgIPv6Ready
+	}
 
 	EventuallyWithOffset(offset, func() []string {
 		prog := []string{}
 		m := dumpIfStateMap(felix)
 		for _, v := range m {
 			flags := v.Flags()
-			if felix.TopologyOptions.EnableIPv6 {
-				if (flags & ifstate.FlgIPv6Ready) > 0 {
-					prog = append(prog, v.IfName())
-				}
-			} else {
-				if (flags & ifstate.FlgIPv4Ready) > 0 {
-					prog = append(prog, v.IfName())
-				}
+			if (flags & (ifstate.FlgIPv6Ready | ifstate.FlgIPv4Ready)) == expFlgs {
+				prog = append(prog, v.IfName())
 			}
 		}
 		return prog
-	}, "1m", "1s").Should(ContainElements(expectedIfaces))
+	}, "1m", "1s").Should(ContainElements(ifaces))
 }
 
 func k8sService(name, clusterIP string, w *workload.Workload, port,

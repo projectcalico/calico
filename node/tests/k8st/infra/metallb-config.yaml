@@ -10,3 +10,4 @@ data:
       protocol: bgp
       addresses:
       - 80.15.0.0/24
+      - fdff::/64

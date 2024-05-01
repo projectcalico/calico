@@ -251,7 +251,7 @@ static CALI_BPF_INLINE void ip_dec_ttl(struct iphdr *ip)
 
 #if CALI_F_XDP
 
-extern const volatile struct cali_xdp_globals __globals;
+extern const volatile struct cali_xdp_preamble_globals __globals;
 #define CALI_CONFIGURABLE(name) 1 /* any value will do, it is not configured */
 #define CALI_CONFIGURABLE_IP(name) 1
 

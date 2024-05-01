@@ -65,7 +65,7 @@ func CreateX509CSR(config *cfg.Config) (*X509CSR, error) {
 		return nil, err
 	}
 
-	usageVal, err := marshalKeyUsage(x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature)
+	usageVal, err := marshalKeyUsage(x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature | x509.KeyUsageKeyAgreement)
 	if err != nil {
 		return nil, err
 	}

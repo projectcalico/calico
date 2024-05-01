@@ -104,6 +104,7 @@ type State struct {
 	IPSize              uint16
 	RulesHit            uint32
 	RuleIDs             [MaxRuleIDs]uint64
+	Flags               uint64
 	ConntrackRCFlags    uint32
 	_                   uint32
 	ConntrackNATIPPort  uint64
@@ -113,11 +114,14 @@ type State struct {
 	_                   uint32
 	NATData             uint64
 	ProgStartTime       uint64
-	Flags               uint64
+	SrcAddrMasq         uint32
+	SrcAddrMasq1        uint32
+	SrcAddrMasq2        uint32
+	SrcAddrMasq3        uint32
 	_                   [48]byte // ipv6 padding
 }
 
-const expectedSize = 464
+const expectedSize = 480
 
 func (s *State) AsBytes() []byte {
 	bPtr := (*[expectedSize]byte)(unsafe.Pointer(s))

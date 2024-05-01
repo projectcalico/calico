@@ -4,6 +4,8 @@ dest = "/etc/calico/confd/config/bird6_ipam.cfg"
 prefix = "/calico"
 keys = [
     "/v1/ipam/v6/pool",
+    "/bgp/v1/host//NODENAME",
+    "/bgp/v1/global/svc_loadbalancer_ips",
     "/staticroutesv6",
     "/rejectcidrsv6",
 ]

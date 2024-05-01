@@ -15,10 +15,13 @@
 package resources
 
 import (
+	"strings"
+
 	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/json"
 )
@@ -43,8 +46,10 @@ type ResourceList interface {
 
 // Function signature for conversion function to convert a K8s resource to a
 // KVPair equivalent.
-type ConvertK8sResourceToKVPair func(Resource) (*model.KVPair, error)
-type ConvertK8sResourceToKVPairs func(Resource) ([]*model.KVPair, error)
+type (
+	ConvertK8sResourceToKVPair  func(Resource) (*model.KVPair, error)
+	ConvertK8sResourceToKVPairs func(Resource) ([]*model.KVPair, error)
+)
 
 // ConvertK8sResourceOneToOneAdapter converts a ConvertK8sResourceToKVPair function to a ConvertK8sResourceToKVPairs function
 func ConvertK8sResourceOneToOneAdapter(oneToOne ConvertK8sResourceToKVPair) ConvertK8sResourceToKVPairs {
@@ -130,36 +135,76 @@ func ConvertCalicoResourceToK8sResource(resIn Resource) (Resource, error) {
 	rom := resIn.GetObjectMeta()
 
 	// Make sure to remove data that is passed to Kubernetes so it is not duplicated in
-	// the annotations.
+	// the metadata annotation.
 	romCopy := &metav1.ObjectMeta{}
 	rom.(*metav1.ObjectMeta).DeepCopyInto(romCopy)
 	romCopy.Name = ""
 	romCopy.Namespace = ""
 	romCopy.ResourceVersion = ""
-	romCopy.Labels = nil
-	romCopy.Annotations = nil
+	romCopy.UID = ""
+
+	// Any projectcalico.org/v3 owners need to be translated to their equivalent crd.projectcalico.org/v1 representations.
+	// They will be converted back on read.
+	var err error
+	var refs []metav1.OwnerReference
+	for _, ref := range romCopy.GetOwnerReferences() {
+		// Skip any owners that aren't projectcalico.org/v3. These do not need translation.
+		if ref.APIVersion == "projectcalico.org/v3" {
+			// Update the UID and API version to indicate that the referenced UID is valid
+			// on the crd.projectcalico.org/v1 API.
+			ref.APIVersion = "crd.projectcalico.org/v1"
+			ref.UID, err = conversion.ConvertUID(ref.UID)
+			if err != nil {
+				return nil, err
+			}
+		}
+		refs = append(refs, ref)
+	}
+	romCopy.SetOwnerReferences(refs)
 
 	// Marshal the data and store the json representation in the annotations.
 	metadataBytes, err := json.Marshal(romCopy)
 	if err != nil {
 		return nil, err
 	}
-	annotations := rom.GetAnnotations()
-	if len(annotations) == 0 {
-		annotations = make(map[string]string)
-	}
+
+	annotations := make(map[string]string)
 	annotations[metadataAnnotation] = string(metadataBytes)
 
 	// Make sure to clear out all of the Calico Metadata out of the ObjectMeta except for
-	// Name, Namespace, ResourceVersion, Labels, and Annotations. Annotations is already
-	// copied so it can be set separately.
+	// Name, Namespace, ResourceVersion, UID, and Annotations (built above).
 	meta := &metav1.ObjectMeta{}
 	meta.Name = rom.GetName()
 	meta.Namespace = rom.GetNamespace()
 	meta.ResourceVersion = rom.GetResourceVersion()
-	meta.Labels = rom.GetLabels()
-	meta.UID = rom.GetUID()
 
+	// Explicitly nil out the labels on the underlying object so that they are not duplicated.
+	// We make an exception for projectcalico.org/ labels, which we own and may use on the v1 API.
+	var v1Labels map[string]string
+	for k, v := range rom.GetLabels() {
+		if isOurs(k) {
+			if v1Labels == nil {
+				v1Labels = map[string]string{}
+			}
+			v1Labels[k] = v
+		}
+	}
+	meta.Labels = v1Labels
+
+	// Also maintain any annotations that we own.
+	for k, v := range rom.GetAnnotations() {
+		if isOurs(k) {
+			annotations[k] = v
+		}
+	}
+
+	if rom.GetUID() != "" {
+		uid, err := conversion.ConvertUID(rom.GetUID())
+		if err != nil {
+			return nil, err
+		}
+		meta.UID = uid
+	}
 	resOut := resIn.DeepCopyObject().(Resource)
 	romOut := resOut.GetObjectMeta()
 	meta.DeepCopyInto(romOut.(*metav1.ObjectMeta))
@@ -168,11 +213,27 @@ func ConvertCalicoResourceToK8sResource(resIn Resource) (Resource, error) {
 	return resOut, nil
 }
 
+func isOurs(k string) bool {
+	return strings.Contains(k, "projectcalico.org/") || strings.Contains(k, "operator.tigera.io/")
+}
+
 // Retrieve all of the Calico Metadata from the k8s resource annotations for CRD backed
 // resources. This should remove the relevant Calico Metadata annotation when it has finished.
 func ConvertK8sResourceToCalicoResource(res Resource) error {
 	rom := res.GetObjectMeta()
 	annotations := rom.GetAnnotations()
+
+	if rom.GetUID() != "" {
+		// We NEVER want to use the UID from the underlying CR so that we can guarantee uniqueness.
+		// So, always generate a new one deterministically so that the UID is correct even
+		// if there is no metadata annotation present.
+		uid, err := conversion.ConvertUID(rom.GetUID())
+		if err != nil {
+			return err
+		}
+		rom.SetUID(uid)
+	}
+
 	if len(annotations) == 0 {
 		// Make no changes if there are no annotations to read Calico Metadata out of.
 		return nil
@@ -188,20 +249,56 @@ func ConvertK8sResourceToCalicoResource(res Resource) error {
 		return err
 	}
 
+	// Any crd.projectcalico.org/v1 owners need to be translated to their equivalent projectcalico.org/v3 representations.
+	var refs []metav1.OwnerReference
+	for _, ref := range meta.GetOwnerReferences() {
+		// Skip any owners that aren't crd.projectcalico.org/v1. These do not need translation.
+		// We also need to translate projectcalico.org/v3 owners, if any, since these represent resources that were
+		// written prior to the UID conversion fix.
+		if ref.APIVersion == "crd.projectcalico.org/v1" || ref.APIVersion == "projectcalico.org/v3" {
+			// Update the UID and API version to indicate that the referenced UID is valid
+			// on the projectcalico.org/v3 API.
+			ref.APIVersion = "projectcalico.org/v3"
+			ref.UID, err = conversion.ConvertUID(ref.UID)
+			if err != nil {
+				return err
+			}
+		}
+		refs = append(refs, ref)
+	}
+	meta.SetOwnerReferences(refs)
+
 	// Clear out the annotations
 	delete(annotations, metadataAnnotation)
 	if len(annotations) == 0 {
 		annotations = nil
 	}
 
+	// Start with the original labels and annotations from the v1 object, and merge in the values from the metadata
+	// annotation. This logic helps maintain labels and annotations on upgrade from older versions, where they were stored
+	// directly in the metadata of the v1 CRD.
+	labels := rom.GetLabels()
+	for k, v := range meta.GetLabels() {
+		if labels == nil {
+			labels = make(map[string]string)
+		}
+		labels[k] = v
+	}
+	for k, v := range meta.GetAnnotations() {
+		if annotations == nil {
+			annotations = make(map[string]string)
+		}
+		annotations[k] = v
+	}
+
 	// Manually write in the data not stored in the annotations: Name, Namespace, ResourceVersion,
-	// Labels, and Annotations so that they do not get overwritten.
+	// so that they do not get overwritten.
 	meta.Name = rom.GetName()
 	meta.Namespace = rom.GetNamespace()
 	meta.ResourceVersion = rom.GetResourceVersion()
-	meta.Labels = rom.GetLabels()
-	meta.Annotations = annotations
 	meta.UID = rom.GetUID()
+	meta.Labels = labels
+	meta.Annotations = annotations
 
 	// If no creation timestamp was stored in the metadata annotation, use the one from the CR.
 	// The timestamp is normally set in the clientv3 code. However, for objects that bypass

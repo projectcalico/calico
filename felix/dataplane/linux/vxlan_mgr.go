@@ -111,7 +111,7 @@ func newVXLANManager(
 	opRecorder logutils.OpRecorder,
 	ipVersion uint8,
 ) *vxlanManager {
-	nlHandle, _ := netlink.NewHandle()
+	nlHandle, _ := netlink.NewHandle(syscall.NETLINK_ROUTE)
 	return newVXLANManagerWithShims(
 		ipsetsDataplane,
 		mainRouteTable,

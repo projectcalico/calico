@@ -18,16 +18,16 @@ static CALI_BPF_INLINE int parse_packet_ip_v6(struct cali_tc_ctx *ctx) {
 	 * an initial decision based on Ethernet protocol before parsing packet
 	 * for more headers.
 	 */
-	if (CALI_F_XDP) {
-		if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
-			deny_reason(ctx, CALI_REASON_SHORT);
-			CALI_DEBUG("Too short\n");
-			goto deny;
-		}
-		protocol = bpf_ntohs(eth_hdr(ctx)->h_proto);
-	} else {
-		protocol = bpf_ntohs(ctx->skb->protocol);
+#if CALI_F_XDP
+	if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
+		deny_reason(ctx, CALI_REASON_SHORT);
+		CALI_DEBUG("Too short\n");
+		goto deny;
 	}
+	protocol = bpf_ntohs(eth_hdr(ctx)->h_proto);
+#else
+	protocol = bpf_ntohs(ctx->skb->protocol);
+#endif
 
 	switch (protocol) {
 	case ETH_P_IPV6:

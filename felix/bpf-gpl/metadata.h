@@ -22,8 +22,6 @@ enum cali_metadata_flags {
 // Set metadata to be received by TC programs
 static CALI_BPF_INLINE int xdp2tc_set_metadata(struct cali_tc_ctx *ctx, __u32 flags)
 {
-#ifndef IPVER6
-		/* XXX */
 #ifndef UNITTEST
 		struct cali_metadata *metadata;
 		// Reserve space in-front of xdp_md.meta for metadata.
@@ -52,11 +50,16 @@ static CALI_BPF_INLINE int xdp2tc_set_metadata(struct cali_tc_ctx *ctx, __u32 fl
 		goto error;
 	}
 
+#ifdef IPVER6
+	CALI_DEBUG("IP6 FLOW LBL: %d\n", ip_hdr(ctx)->flow_lbl[2]);
+	ip_hdr(ctx)->flow_lbl[2] |= CALI_META_ACCEPTED_BY_XDP;
+	CALI_DEBUG("Set IP6 FLOW LBL: %d\n", ip_hdr(ctx)->flow_lbl[2]);
+#else
 	CALI_DEBUG("IP TOS: %d\n", ip_hdr(ctx)->tos);
 	ip_hdr(ctx)->tos |= CALI_META_ACCEPTED_BY_XDP;
 	CALI_DEBUG("Set IP TOS: %d\n", ip_hdr(ctx)->tos);
-	goto metadata_ok;
 #endif
+	goto metadata_ok;
 #endif
 
 error:
@@ -69,8 +72,6 @@ metadata_ok:
 
 // Fetch metadata set by XDP program. If not set or on error return 0.
 static CALI_BPF_INLINE __u32 xdp2tc_get_metadata(struct __sk_buff *skb) {
-#ifndef IPVER6
-		/* XXX */
 	struct cali_metadata *metadata;
 #ifndef UNITTEST
 	metadata = (void *)(unsigned long)skb->data_meta;
@@ -93,12 +94,19 @@ static CALI_BPF_INLINE __u32 xdp2tc_get_metadata(struct __sk_buff *skb) {
 		goto no_metadata;
 	}
 
-	CALI_LOG_IF(CALI_LOG_LEVEL_DEBUG, "IP TOS: %d\n", ip_hdr(&ctx)->tos);
 	struct cali_metadata unittest_metadata = {};
+#ifdef IPVER6
+	CALI_LOG_IF(CALI_LOG_LEVEL_DEBUG, "IP6 Flow label: %d\n", ip_hdr(&ctx)->flow_lbl[2]);
+	unittest_metadata.flags = ip_hdr(&ctx)->flow_lbl[2];
+	ip_hdr(&ctx)->flow_lbl[2] &= (~CALI_META_ACCEPTED_BY_XDP);
+	CALI_LOG_IF(CALI_LOG_LEVEL_DEBUG, "Set IP6 Flow label: %d\n", ip_hdr(&ctx)->flow_lbl[2]);
+#else
+	CALI_LOG_IF(CALI_LOG_LEVEL_DEBUG, "IP TOS: %d\n", ip_hdr(&ctx)->tos);
 	unittest_metadata.flags = ip_hdr(&ctx)->tos;
-	metadata = &unittest_metadata;
 	ip_hdr(&ctx)->tos &= (~CALI_META_ACCEPTED_BY_XDP);
 	CALI_LOG_IF(CALI_LOG_LEVEL_DEBUG, "Set IP TOS: %d\n", ip_hdr(&ctx)->tos);
+#endif
+	metadata = &unittest_metadata;
 	goto metadata_ok;
 #endif /* UNITTEST */
 
@@ -107,9 +115,6 @@ no_metadata:
 
 metadata_ok:
 	return metadata->flags;
-#else
-	return 0;
-#endif
 }
 
 #endif /* CALI_F_XDP */

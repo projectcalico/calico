@@ -31,7 +31,6 @@ type EndpointStatusReporter struct {
 	hostname           string
 	region             string
 	endpointUpdates    <-chan interface{}
-	inSync             <-chan bool
 	stop               chan bool
 	datastore          datastore
 	epStatusIDToStatus map[model.Key]string
@@ -48,7 +47,6 @@ type EndpointStatusReporter struct {
 func NewEndpointStatusReporter(hostname string,
 	region string,
 	endpointUpdates <-chan interface{},
-	inSync <-chan bool,
 	datastore datastore,
 	reportingDelay time.Duration,
 	resyncInterval time.Duration) *EndpointStatusReporter {
@@ -60,7 +58,6 @@ func NewEndpointStatusReporter(hostname string,
 		hostname,
 		region,
 		endpointUpdates,
-		inSync,
 		datastore,
 		resyncSchedulingTicker,
 		resyncSchedulingTicker.C,
@@ -76,7 +73,6 @@ func NewEndpointStatusReporter(hostname string,
 func newEndpointStatusReporterWithTickerChans(hostname string,
 	region string,
 	endpointUpdates <-chan interface{},
-	inSync <-chan bool,
 	datastore datastore,
 	resyncTicker stoppable,
 	resyncTickerChan <-chan time.Time,
@@ -89,7 +85,6 @@ func newEndpointStatusReporterWithTickerChans(hostname string,
 		region:             region,
 		endpointUpdates:    endpointUpdates,
 		datastore:          datastore,
-		inSync:             inSync,
 		stop:               make(chan bool),
 		epStatusIDToStatus: make(map[model.Key]string),
 		queuedDirtyIDs:     set.New[model.Key](),
@@ -136,6 +131,8 @@ func (esr *EndpointStatusReporter) loopHandlingEndpointStatusUpdates() {
 loop:
 	for {
 		updatesAllowed := false
+
+	selectUpdates:
 		select {
 		case <-esr.stop:
 			log.Info("Stopping endpoint status reporter")
@@ -147,9 +144,6 @@ loop:
 			resyncRequested = true
 		case <-esr.rateLimitTickerC:
 			updatesAllowed = true
-		case inSync := <-esr.inSync:
-			log.Debug("Datamodel in sync, enabling status resync")
-			datamodelInSync = datamodelInSync || inSync
 		case msg := <-esr.endpointUpdates:
 			var statID model.Key
 			var status string
@@ -182,6 +176,9 @@ loop:
 					Hostname:   esr.hostname,
 					EndpointID: msg.Id.EndpointId,
 				}
+			case *proto.DataplaneInSync:
+				datamodelInSync = true
+				break selectUpdates
 			default:
 				log.Panicf("Unexpected message: %#v", msg)
 			}

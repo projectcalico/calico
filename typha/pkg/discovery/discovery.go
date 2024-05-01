@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
+	"os"
 
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -27,15 +28,7 @@ import (
 
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
-
-	"github.com/projectcalico/calico/libcalico-go/lib/seedrng"
 )
-
-func init() {
-	// We use rand for picking a typha, make sure it's seeded; seedrng uses a sync.Once to avoid
-	// doing this multiple times).
-	seedrng.EnsureSeeded()
-}
 
 var ErrServiceNotReady = errors.New("Kubernetes service missing IP or port")
 
@@ -177,7 +170,7 @@ func (d *Discoverer) discoverTyphaAddrs() ([]Typha, error) {
 	if d.k8sClient == nil && d.inCluster {
 		// Client didn't provide a kube client but we're allowed to create one.
 		logrus.Info("Creating Kubernetes client for Typha discovery...")
-		k8sConf, err := winutils.GetInClusterConfig()
+		k8sConf, err := winutils.BuildConfigFromFlags("", os.Getenv("KUBECONFIG"))
 		if err != nil {
 			logrus.WithError(err).Error("Unable to create in-cluster Kubernetes config.")
 			return nil, err

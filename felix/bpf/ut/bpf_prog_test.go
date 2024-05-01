@@ -187,6 +187,18 @@ var xdpJumpMapIndexes = map[string]map[int]string{
 		tcdefs.ProgIndexAllowed: "calico_xdp_accepted_entrypoint",
 		tcdefs.ProgIndexDrop:    "calico_xdp_drop",
 	},
+	"IPv6": map[int]string{
+		tcdefs.ProgIndexMain:    "calico_xdp_main",
+		tcdefs.ProgIndexPolicy:  "calico_xdp_norm_pol_tail",
+		tcdefs.ProgIndexAllowed: "calico_xdp_accepted_entrypoint",
+		tcdefs.ProgIndexDrop:    "calico_xdp_drop",
+	},
+	"IPv6 debug": map[int]string{
+		tcdefs.ProgIndexMain:    "calico_xdp_main",
+		tcdefs.ProgIndexPolicy:  "calico_xdp_norm_pol_tail",
+		tcdefs.ProgIndexAllowed: "calico_xdp_accepted_entrypoint",
+		tcdefs.ProgIndexDrop:    "calico_xdp_drop",
+	},
 }
 
 var tcJumpMapIndexes = map[string][]int{
@@ -361,7 +373,12 @@ func setupAndRun(logger testLogger, loglevel, section string, rules *polprog.Rul
 	if topts.objname != "" {
 		obj = topts.objname
 	} else if topts.ipv6 {
-		obj += "_v6"
+		if topts.xdp {
+			obj += "_co-re_v6"
+		} else {
+			obj += "_v6"
+		}
+
 	}
 
 	if topts.xdp {
@@ -408,6 +425,9 @@ func setupAndRun(logger testLogger, loglevel, section string, rules *polprog.Rul
 				polprog.WithAllowDenyJumps(tcdefs.ProgIndexAllowed, tcdefs.ProgIndexDrop),
 				polprog.WithPolicyMapIndexAndStride(policyIdx, jump.XDPMaxEntryPoints),
 			)
+			if topts.ipv6 {
+				popts = append(popts, polprog.WithIPv6())
+			}
 			stride = jump.XDPMaxEntryPoints
 		} else {
 			popts = append(popts,
@@ -723,6 +743,11 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 				var globals libbpf.XDPGlobalData
 				for i := 0; i < 16; i++ {
 					globals.Jumps[i] = uint32(i)
+				}
+				if topts.ipv6 {
+					for i := 0; i < 16; i++ {
+						globals.JumpsV6[i] = uint32(i)
+					}
 				}
 
 				if err := xdp.ConfigureProgram(m, bpfIfaceName, &globals); err != nil {

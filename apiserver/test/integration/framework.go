@@ -35,14 +35,9 @@ import (
 
 	"github.com/projectcalico/calico/apiserver/cmd/apiserver/server"
 	"github.com/projectcalico/calico/apiserver/pkg/apiserver"
-	"github.com/projectcalico/calico/libcalico-go/lib/seedrng"
 )
 
 const defaultEtcdPathPrefix = ""
-
-func init() {
-	seedrng.EnsureSeeded()
-}
 
 type TestServerConfig struct {
 	etcdServerList []string

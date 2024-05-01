@@ -152,6 +152,7 @@ void bpf_tc_set_globals(struct bpf_map *map,
 			char* host_tunnel_ip6,
 			uint flags,
 			ushort wg_port,
+			ushort wg6_port,
 			uint natin,
 			uint natout,
 			uint log_filter_jmp,
@@ -194,6 +195,8 @@ void bpf_tc_set_globals(struct bpf_map *map,
 	for (i = 0; i < sizeof(v6.jumps)/sizeof(uint); i++) {
 		v6.jumps[i] = jumps6[i];
 	}
+
+	v6.wg_port = wg6_port;
 
 	data.v4 = v4;
 	data.v6 = v6;
@@ -295,18 +298,23 @@ void bpf_ctlb_set_globals(struct bpf_map *map, uint udp_not_seen_timeo, bool exc
 	set_errno(bpf_map__set_initial_value(map, (void*)(&data), sizeof(data)));
 }
 
-void bpf_xdp_set_globals(struct bpf_map *map, char *iface_name, uint *jumps)
+void bpf_xdp_set_globals(struct bpf_map *map, char *iface_name, uint *jumps, uint *jumpsV6)
 {
-	struct cali_xdp_globals data = {
+	struct cali_xdp_preamble_globals data = {
 	};
 
-	strncpy(data.iface_name, iface_name, sizeof(data.iface_name));
-	data.iface_name[sizeof(data.iface_name)-1] = '\0';
+	strncpy(data.v4.iface_name, iface_name, sizeof(data.v4.iface_name));
+	data.v4.iface_name[sizeof(data.v4.iface_name)-1] = '\0';
+	data.v6 = data.v4;
 	
 	int i;
 
-	for (i = 0; i < sizeof(data.jumps)/sizeof(__u32); i++) {
-		data.jumps[i] = jumps[i];
+	for (i = 0; i < sizeof(data.v4.jumps)/sizeof(__u32); i++) {
+		data.v4.jumps[i] = jumps[i];
+	}
+
+	for (i = 0; i < sizeof(data.v6.jumps)/sizeof(__u32); i++) {
+		data.v6.jumps[i] = jumpsV6[i];
 	}
 
 	set_errno(bpf_map__set_initial_value(map, (void*)(&data), sizeof(data)));

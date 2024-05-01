@@ -15,6 +15,7 @@
 package clientv3_test
 
 import (
+	"context"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -22,8 +23,6 @@ import (
 	. "github.com/onsi/gomega"
 	k8sv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-	"context"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
@@ -37,7 +36,6 @@ import (
 )
 
 var _ = testutils.E2eDatastoreDescribe("BGPPeer tests", testutils.DatastoreAll, func(config apiconfig.CalicoAPIConfig) {
-
 	ctx := context.Background()
 	name1 := "bgppeer-1"
 	name2 := "bgppeer-2"
@@ -54,7 +52,8 @@ var _ = testutils.E2eDatastoreDescribe("BGPPeer tests", testutils.DatastoreAll, 
 		Password: &apiv3.BGPPassword{
 			SecretKeyRef: &k8sv1.SecretKeySelector{
 				LocalObjectReference: k8sv1.LocalObjectReference{
-					Name: "bgp-passwords"},
+					Name: "bgp-passwords",
+				},
 				Key: "p2",
 			},
 		},
@@ -102,7 +101,7 @@ var _ = testutils.E2eDatastoreDescribe("BGPPeer tests", testutils.DatastoreAll, 
 
 			By("Updating the BGPPeer before it is created")
 			_, outError := c.BGPPeers().Update(ctx, &apiv3.BGPPeer{
-				ObjectMeta: metav1.ObjectMeta{Name: name1, ResourceVersion: "1234", CreationTimestamp: metav1.Now(), UID: "test-fail-bgppeer"},
+				ObjectMeta: metav1.ObjectMeta{Name: name1, ResourceVersion: "1234", CreationTimestamp: metav1.Now(), UID: uid},
 				Spec:       spec1,
 			}, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
@@ -183,7 +182,7 @@ var _ = testutils.E2eDatastoreDescribe("BGPPeer tests", testutils.DatastoreAll, 
 
 			By("Attempting to update the BGPPeer without a Creation Timestamp")
 			res, outError = c.BGPPeers().Update(ctx, &apiv3.BGPPeer{
-				ObjectMeta: metav1.ObjectMeta{Name: name1, ResourceVersion: "1234", UID: "test-fail-bgppeer"},
+				ObjectMeta: metav1.ObjectMeta{Name: name1, ResourceVersion: "1234", UID: uid},
 				Spec:       spec1,
 			}, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())

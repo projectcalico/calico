@@ -1271,6 +1271,11 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(v1.Duration)
 		**out = **in
 	}
+	if in.DebugSimulateDataplaneApplyDelay != nil {
+		in, out := &in.DebugSimulateDataplaneApplyDelay, &out.DebugSimulateDataplaneApplyDelay
+		*out = new(v1.Duration)
+		**out = **in
+	}
 	if in.DebugHost != nil {
 		in, out := &in.DebugHost, &out.DebugHost
 		*out = new(string)

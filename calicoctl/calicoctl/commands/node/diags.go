@@ -77,13 +77,11 @@ Description:
 
 // runDiags takes logDir and runs a sequence of commands to collect diagnostics
 func runDiags(logDir string) error {
-
 	// Note: in for the cmd field in this struct, it  can't handle args quoted with space in it
 	// For example, you can't add cmd "do this", since after the `strings.Fields` it will become `"do` and `this"`
 	cmds := []diagCmd{
 		{"", "date", "date"},
 		{"", "hostname", "hostname"},
-		{"Dumping netstat", "netstat -a -n", "netstat"},
 		{"Dumping routes (IPv4)", "ip -4 route", "ipv4_route"},
 		{"Dumping routes (IPv6)", "ip -6 route", "ipv6_route"},
 		{"Dumping interface info (IPv4)", "ip -4 addr", "ipv4_addr"},
@@ -119,24 +117,28 @@ func runDiags(logDir string) error {
 	}
 	diagsTmpDir := filepath.Join(tmpDir, "diagnostics")
 
+	netstatCmd := diagCmd{
+		info:     "Dumping netstat",
+		cmd:      "netstat -a -n",
+		filename: "netstat",
+	}
+
+	ssCmd := diagCmd{
+		info:     "Dumping ss",
+		cmd:      "ss -a -n",
+		filename: "ss",
+	}
+	// sometimes socket information is not collected as netstat tool
+	// is obsolete and removed in Ubuntu and other distros. so when
+	// "netstat -a -n " fails, we should use "ss -a -n" instead of it
+	if _, err := exec.LookPath(netstatCmd.filename); err == nil {
+		cmds = append(cmds, netstatCmd)
+	} else {
+		cmds = append(cmds, ssCmd)
+	}
+
 	for _, v := range cmds {
-		err = writeDiags(v, diagsTmpDir)
-		// sometimes socket information is not collected as netstat tool
-		// is obsolete and removed in Ubuntu and other distros. so when
-		// "netstat -a -n " fails, we should use "ss -a -n" instead of it
-		if err != nil && v.cmd == "netstat -a -n" {
-			parts := []string{"ss", "-a", "-n"}
-			content, err := exec.Command(parts[0], parts[1], parts[2]).CombinedOutput()
-			if err != nil {
-				fmt.Printf("Failed to run command: %s\nError: %s\n", strings.Join(parts, " "), string(content))
-			}
-
-			fp := filepath.Join(diagsTmpDir, parts[0])
-			if err := os.WriteFile(fp, content, 0666); err != nil {
-				log.Errorf("Error writing diags to file: %s\n", err)
-			}
-		}
-
+		_ = writeDiags(v, diagsTmpDir)
 	}
 
 	tmpLogDir := filepath.Join(diagsTmpDir, "logs")
@@ -202,7 +204,7 @@ func getNodeContainerLogs(logDir string) {
 	containers := re.ReplaceAllString(string(result), "")
 
 	fmt.Println("Copying logs from Calico containers")
-	err = os.WriteFile(logDir+"/"+"container_creation_time", []byte(containers), 0666)
+	err = os.WriteFile(logDir+"/"+"container_creation_time", []byte(containers), 0o666)
 	if err != nil {
 		fmt.Printf("Could not save output of `docker ps` command to container_creation_time: %s\n", err)
 	}
@@ -217,7 +219,7 @@ func getNodeContainerLogs(logDir string) {
 			fmt.Printf("Could not pull log for container %s: %s\n", name, err)
 			continue
 		}
-		err = os.WriteFile(logDir+"/"+name+".log", cLog, 0666)
+		err = os.WriteFile(logDir+"/"+name+".log", cLog, 0o666)
 		if err != nil {
 			fmt.Printf("Failed to write log for container %s to file: %s\n", name, err)
 		}
@@ -227,7 +229,6 @@ func getNodeContainerLogs(logDir string) {
 // writeDiags executes the diagnostic commands and outputs the result in the file
 // with the filename and directory passed as arguments
 func writeDiags(cmds diagCmd, dir string) error {
-
 	if cmds.info != "" {
 		fmt.Println(cmds.info)
 	}
@@ -247,7 +248,7 @@ func writeDiags(cmds diagCmd, dir string) error {
 	}
 
 	fp := filepath.Join(dir, cmds.filename)
-	if err := os.WriteFile(fp, content, 0666); err != nil {
+	if err := os.WriteFile(fp, content, 0o666); err != nil {
 		log.Errorf("Error writing diags to file: %s\n", err)
 	}
 	return nil

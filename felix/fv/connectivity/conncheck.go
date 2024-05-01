@@ -276,6 +276,9 @@ func (c *Checker) ExpectedConnectivityPretty() []string {
 				result[i] += fmt.Sprintf(" (client MTU %d -> %d)", exp.clientMTUStart, exp.clientMTUEnd)
 			}
 		}
+		if exp.ipVersion == 6 {
+			result[i] += " (with IPv6)"
+		}
 		if exp.ExpectedPacketLoss.Duration > 0 {
 			if exp.ExpectedPacketLoss.MaxNumber >= 0 {
 				result[i] += fmt.Sprintf(" (maxLoss: %d packets)", exp.ExpectedPacketLoss.MaxNumber)

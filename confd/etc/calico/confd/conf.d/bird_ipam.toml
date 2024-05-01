@@ -5,6 +5,7 @@ prefix = "/calico"
 keys = [
     "/v1/ipam/v4/pool",
     "/bgp/v1/host//NODENAME",
+    "/bgp/v1/global/svc_loadbalancer_ips",
     "/staticroutes",
     "/rejectcidrs",
 ]

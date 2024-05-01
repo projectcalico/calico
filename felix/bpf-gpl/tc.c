@@ -55,6 +55,12 @@ int calico_tc_main(struct __sk_buff *skb)
 	 */
 	skb->mark = SKB_MARK;
 #endif
+
+	if (CALI_F_LO && CALI_F_TO_HOST) {
+		/* Do nothing, it is a packet that just looped around. */
+		return TC_ACT_UNSPEC;
+	}
+
 	/* Optimisation: if another BPF program has already pre-approved the packet,
 	 * skip all processing. */
 	if (CALI_F_FROM_HOST && skb->mark == CALI_SKB_MARK_BYPASS) {
@@ -263,6 +269,16 @@ static CALI_BPF_INLINE void calico_tc_process_ct_lookup(struct cali_tc_ctx *ctx)
 		  skb_mark_equals(ctx->skb, CALI_SKB_MARK_BYPASS_MASK, CALI_SKB_MARK_SKIP_FIB)));
 
 	if (HAS_HOST_CONFLICT_PROG &&
+			/* Do not do conflict resolution for host-self loop. Unlike with
+			 * traffic to another backend, we are not able to tell traffic to
+			 * self via service from straight to self.
+			 */
+			!CALI_F_LO &&
+			/* Do conflict resolution on other device if it clashes with
+			 * traffic looped via the NAT_IF but it hasn't been seen yet and
+			 * is not looped via the NAT_IF, that is, it is from host, but not
+			 * to a service.
+			 */
 			(ctx->state->ct_result.flags & CALI_CT_FLAG_VIA_NAT_IF) &&
 			!(ctx->skb->mark & (CALI_SKB_MARK_FROM_NAT_IFACE_OUT | CALI_SKB_MARK_SEEN))) {
 		CALI_DEBUG("Host source SNAT conflict\n");
@@ -429,7 +445,8 @@ syn_force_policy:
 		}
 	}
 
-	if (CALI_F_TO_WEP && !skb_seen(ctx->skb) &&
+	if (CALI_F_TO_WEP && (!skb_seen(ctx->skb) ||
+			skb_mark_equals(ctx->skb, CALI_SKB_MARK_FROM_NAT_IFACE_OUT, CALI_SKB_MARK_FROM_NAT_IFACE_OUT)) &&
 			cali_rt_flags_local_host(cali_rt_lookup_flags(&ctx->state->ip_src))) {
 		/* Host to workload traffic always allowed.  We discount traffic that was
 		 * seen by another program since it must have come in via another interface.
@@ -440,7 +457,7 @@ syn_force_policy:
 
 	if (CALI_F_FROM_WEP
 #ifdef IPVER6
-			&& ctx->state->ip_proto != IPPROTO_ICMPV6
+			&& !(ctx->state->ip_proto == IPPROTO_ICMPV6 && ip_link_local(ctx->state->ip_src))
 #endif
 		) {
 		struct cali_rt *r = cali_rt_lookup(&ctx->state->ip_src);
@@ -593,6 +610,11 @@ do_policy:
 	}
 #endif
 
+	if (CALI_F_TO_WEP && ctx->skb->mark == CALI_SKB_MARK_MASQ) {
+		CALI_DEBUG("MASQ to self - using dest as source for policy.\n");
+		ctx->state->ip_src_masq = ctx->state->ip_src;
+		ctx->state->ip_src = ctx->state->ip_dst;
+	}
 	CALI_DEBUG("About to jump to policy program.\n");
 	CALI_JUMP_TO_POLICY(ctx);
 	if (CALI_F_HEP) {
@@ -1136,6 +1158,11 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 
 	if (!(ctx->state->flags & CALI_ST_SKIP_POLICY)) {
 		counter_inc(ctx, CALI_REASON_ACCEPTED_BY_POLICY);
+		if (CALI_F_TO_WEP && ctx->skb->mark == CALI_SKB_MARK_MASQ) {
+			/* Restore state->ip_src */
+			CALI_DEBUG("Accepted MASQ to self - restoring source for conntrack.\n");
+			ctx->state->ip_src = ctx->state->ip_src_masq;
+		}
 	}
 
 	if (CALI_F_HEP) {
@@ -1191,7 +1218,6 @@ int calico_tc_skb_new_flow_entrypoint(struct __sk_buff *skb)
 	struct cali_tc_state *state = ctx->state;
 	enum do_nat_res nat_res = NAT_ALLOW;
 	bool is_dnat = false;
-	int ct_rc = ct_result_rc(state->ct_result.rc);
 	__u32 seen_mark = ctx->fwd.mark;
 	bool fib = true;
 
@@ -1346,7 +1372,7 @@ int calico_tc_skb_new_flow_entrypoint(struct __sk_buff *skb)
 	}
 
 	nat_res = do_nat(ctx, skb_iphdr_offset(ctx), l4_csum_off, false,
-			 ct_rc, ct_ctx_nat, &is_dnat, &seen_mark, false);
+			 CALI_CT_NEW, ct_ctx_nat, &is_dnat, &seen_mark, false);
 	if (nat_res == NAT_ICMP_TOO_BIG) {
 		goto icmp_send_reply;
 	}

@@ -1,4 +1,4 @@
-# Copyright (c) 2018 Tigera, Inc. All rights reserved.
+# Copyright (c) 2018-2024 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -905,3 +905,110 @@ EOF
         external_ip = svc_dict['spec']['externalIPs'][0]
         retry_until_success(lambda: self.assertIn(cluster_ip, self.get_routes()))
         retry_until_success(lambda: self.assertIn(external_ip, self.get_routes()))
+
+    def test_single_ip_lb_rr(self):
+        """
+        Tests a /32 LB service with externalTrafficPolicy=Local using a RR
+        """
+        # Create an LB ExternalTrafficPolicy Local service with one endpoint
+        # on node-1
+        kubectl("""apply -f - << EOF
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-rr
+  namespace: bgp-test
+  labels:
+    app: nginx
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nginx
+      run: nginx-rr
+  template:
+    metadata:
+      labels:
+        app: nginx
+        run: nginx-rr
+    spec:
+      containers:
+      - name: nginx-rr
+        image: %s
+        ports:
+        - containerPort: 80
+      nodeSelector:
+        kubernetes.io/os: linux
+        kubernetes.io/hostname: %s
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-rr
+  namespace: bgp-test
+  labels:
+    app: nginx
+    run: nginx-rr
+  annotations:
+    metallb.universe.tf/loadBalancerIPs: 80.15.0.100
+spec:
+  ports:
+  - port: 80
+    targetPort: 80
+  selector:
+    app: nginx
+    run: nginx-rr
+  type: LoadBalancer
+  loadBalancerIP: 80.15.0.100
+  externalTrafficPolicy: Local
+EOF
+""" % (NGINX_IMAGE, self.nodes[1]))
+
+        calicoctl("get nodes -o yaml")
+        calicoctl("get bgppeers -o yaml")
+        calicoctl("get bgpconfigs -o yaml")
+
+        # Update the node-2 to behave as a route-reflector
+        json_str = calicoctl("get node %s -o json" % self.nodes[2])
+        node_dict = json.loads(json_str)
+        node_dict['metadata']['labels']['i-am-a-route-reflector'] = 'true'
+        node_dict['spec']['bgp']['routeReflectorClusterID'] = '224.0.0.1'
+        calicoctl("""apply -f - << EOF
+%s
+EOF
+""" % json.dumps(node_dict))
+
+        # Disable node-to-node mesh, add cluster and external IP CIDRs to
+        # advertise, and configure BGP peering between the cluster nodes and the
+        # RR.  (The BGP peering from the external node to the RR is included in
+        # bird_conf_rr above.)
+        calicoctl("""apply -f - << EOF
+apiVersion: projectcalico.org/v3
+kind: BGPConfiguration
+metadata:
+  name: default
+spec:
+  nodeToNodeMeshEnabled: false
+  asNumber: 64512
+  serviceClusterIPs:
+  - cidr: 10.96.0.0/12
+  serviceLoadBalancerIPs:
+  - cidr: 80.15.0.100/32
+EOF
+""")
+
+        calicoctl("""apply -f - << EOF
+apiVersion: projectcalico.org/v3
+kind: BGPPeer
+metadata: {name: peer-with-rr}
+spec:
+  peerIP: %s
+  asNumber: 64512
+EOF
+""" % self.ips[2])
+        svc_json = kubectl("get svc nginx-rr -n bgp-test -o json")
+        svc_dict = json.loads(svc_json)
+        cluster_ip = svc_dict['spec']['clusterIP']
+        load_balancer_ip = svc_dict['spec']['loadBalancerIP']
+        retry_until_success(lambda: self.assertIn(cluster_ip, self.get_routes()))
+        retry_until_success(lambda: self.assertIn(load_balancer_ip, self.get_routes()))

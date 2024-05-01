@@ -38,6 +38,20 @@ function calico_export_to_bgp_peers(bool internal_peer) {
   if ( net ~ {{$cidr}} ) then { accept; }
   {{- end}}
 {{- end}}
+{{- $rr_cluster_id_key := printf "/bgp/v1/host/%s/rr_cluster_id" (getenv "NODENAME")}}
+{{- $lb_ips := "/bgp/v1/global/svc_loadbalancer_ips"}}
+{{- if exists $rr_cluster_id_key}}{{$rr_cluster_id := getv $rr_cluster_id_key}}
+{{- if and (not (eq $rr_cluster_id "")) (exists $lb_ips)}}
+
+  # Configured as a RR - accept any routes within configured LB service IP ranges
+  {{- range split (getv $lb_ips) ","}}
+    {{- $cidr := .}}
+    {{- if contains $cidr ":"}}
+  if ( net ~ {{$cidr}} ) then { accept; }
+    {{- end}}
+  {{- end}}
+{{- end}}
+{{- end}}
 {{range ls "/v1/ipam/v6/pool"}}{{$data := json (getv (printf "/v1/ipam/v6/pool/%s" .))}}
 {{- if $data.disableBGPExport}}
   # Skip {{$data.cidr}} as BGP export is disabled for it

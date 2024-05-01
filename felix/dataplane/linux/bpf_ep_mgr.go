@@ -54,6 +54,7 @@ import (
 	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/rules"
 
+	logutilslc "github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 
 	"github.com/projectcalico/api/pkg/lib/numorstring"
@@ -278,6 +279,7 @@ type bpfEndpointManager struct {
 	vxlanMTU                int
 	vxlanPort               uint16
 	wgPort                  uint16
+	wg6Port                 uint16
 	dsrEnabled              bool
 	dsrOptoutCidrs          bool
 	bpfExtToServiceConnmark int
@@ -358,7 +360,8 @@ type bpfEndpointManager struct {
 	v4 *bpfEndpointManagerDataplane
 	v6 *bpfEndpointManagerDataplane
 
-	healthAggregator *health.HealthAggregator
+	healthAggregator     *health.HealthAggregator
+	updateRateLimitedLog *logutilslc.RateLimitedLogger
 }
 
 type bpfEndpointManagerDataplane struct {
@@ -465,6 +468,7 @@ func newBPFEndpointManager(
 		vxlanMTU:                config.VXLANMTU,
 		vxlanPort:               uint16(config.VXLANPort),
 		wgPort:                  uint16(config.Wireguard.ListeningPort),
+		wg6Port:                 uint16(config.Wireguard.ListeningPortV6),
 		dsrEnabled:              config.BPFNodePortDSREnabled,
 		dsrOptoutCidrs:          len(config.BPFDSROptoutCIDRs) > 0,
 		bpfExtToServiceConnmark: config.BPFExtToServiceConnmark,
@@ -507,6 +511,11 @@ func newBPFEndpointManager(
 			Detail: "Not yet synced.",
 		})
 	}
+
+	m.updateRateLimitedLog = logutilslc.NewRateLimitedLogger(
+		logutilslc.OptInterval(30*time.Second),
+		logutilslc.OptBurst(10),
+	)
 
 	// Calculate allowed XDP attachment modes.  Note, in BPF mode untracked ingress policy is
 	// _only_ implemented by XDP, so we _should_ fall back to XDPGeneric if necessary in order
@@ -730,6 +739,12 @@ func (m *bpfEndpointManager) updateHostIP(ip net.IP, ipFamily int) {
 			m.dirtyIfaceNames.Add(ifaceName)
 		}
 		m.ifacesLock.Unlock()
+
+		// We use host IP as the source when routing service for the ctlb workaround. We
+		// need to update those routes, so make them all dirty.
+		for svc := range m.services {
+			m.dirtyServices.Add(svc)
+		}
 	} else {
 		log.Warn("Cannot parse hostip, no change applied")
 	}
@@ -878,18 +893,23 @@ func (m *bpfEndpointManager) reclaimPolicyIdx(name string, ipFamily int, iface *
 		}
 		if attachHook != hook.XDP {
 			if err := m.jumpMapAlloc.Put(idx.policyIdx[attachHook], name); err != nil {
-				log.WithError(err).Error(attachHook.String())
-			}
-			if err := m.jumpMapDelete(attachHook, iface.dpState.filterIdx[attachHook]); err != nil {
-				log.WithError(err).Warn("Filter program may leak.")
-			}
-			if err := m.jumpMapAlloc.Put(iface.dpState.filterIdx[attachHook], name); err != nil {
-				log.WithError(err).Error(attachHook.String())
+				log.WithError(err).Errorf("Policy family %d, hook %s", ipFamily, attachHook)
 			}
 		} else {
 			if err := m.xdpJumpMapAlloc.Put(idx.policyIdx[attachHook], name); err != nil {
 				log.WithError(err).Error(attachHook.String())
 			}
+		}
+	}
+}
+
+func (m *bpfEndpointManager) reclaimFilterIdx(name string, iface *bpfInterface) {
+	for _, attachHook := range []hook.Hook{hook.Ingress, hook.Egress} {
+		if err := m.jumpMapDelete(attachHook, iface.dpState.filterIdx[attachHook]); err != nil {
+			log.WithError(err).Warn("Filter program may leak.")
+		}
+		if err := m.jumpMapAlloc.Put(iface.dpState.filterIdx[attachHook], name); err != nil {
+			log.WithError(err).Errorf("Filter hook %s", attachHook)
 		}
 	}
 }
@@ -925,6 +945,7 @@ func (m *bpfEndpointManager) updateIfaceStateMap(name string, iface *bpfInterfac
 		if m.v6 != nil {
 			m.reclaimPolicyIdx(name, 6, iface)
 		}
+		m.reclaimFilterIdx(name, iface)
 		m.ifStateMap.Desired().Delete(k)
 		iface.dpState.clearJumps()
 	}
@@ -1537,6 +1558,10 @@ func (m *bpfEndpointManager) CompleteDeferredWork() error {
 		}
 		m.reportHealth(true, "")
 	} else {
+		m.dirtyIfaceNames.Iter(func(iface string) error {
+			m.updateRateLimitedLog.WithField("name", iface).Info("Interface remains dirty.")
+			return nil
+		})
 		m.reportHealth(false, "Failed to configure some interfaces.")
 	}
 
@@ -1576,6 +1601,7 @@ func (m *bpfEndpointManager) doApplyPolicyToDataIface(iface string) (bpfInterfac
 	if err := m.dataIfaceStateFillJumps(ifaceName, &state); err != nil {
 		return state, err
 	}
+
 	_, err = m.dp.ensureQdisc(iface)
 	if err != nil {
 		return state, err
@@ -1628,18 +1654,16 @@ func (m *bpfEndpointManager) doApplyPolicyToDataIface(iface string) (bpfInterfac
 	}()
 
 	// Attach xdp program.
-	if m.v4 != nil {
-		parallelWG.Add(1)
-		go func() {
-			defer parallelWG.Done()
-			xdpAP := mergeAttachPoints(xdpAP4, xdpAP6)
-			if hepPtr != nil && len(hepPtr.UntrackedTiers) == 1 && xdpAP != nil {
-				_, xdpErr = m.dp.ensureProgramAttached(xdpAP4)
-			} else {
-				xdpErr = m.dp.ensureNoProgram(xdpAP)
-			}
-		}()
-	}
+	parallelWG.Add(1)
+	go func() {
+		defer parallelWG.Done()
+		xdpAP := mergeAttachPoints(xdpAP4, xdpAP6)
+		if hepPtr != nil && len(hepPtr.UntrackedTiers) == 1 && xdpAP != nil {
+			_, xdpErr = m.dp.ensureProgramAttached(xdpAP)
+		} else {
+			xdpErr = m.dp.ensureNoProgram(xdpAP)
+		}
+	}()
 
 	// Attach egress program.
 	egressAP := mergeAttachPoints(egressAP4, egressAP6)
@@ -1659,12 +1683,35 @@ func (m *bpfEndpointManager) doApplyPolicyToDataIface(iface string) (bpfInterfac
 		return state, xdpErr
 	}
 
-	if m.v6 != nil && err6 == nil {
-		state.v6Readiness = ifaceIsReady
+	if err4 != nil && err6 != nil {
+		// This covers the case when we don't have hostIP on both paths.
+		return state, errors.Join(err4, err6)
 	}
-	if m.v4 != nil && err4 == nil {
-		state.v4Readiness = ifaceIsReady
+
+	if m.v6 != nil {
+		if err6 == nil {
+			state.v6Readiness = ifaceIsReady
+		}
+		if m.v6.hostIP == nil {
+			// If we do not have host IP for the IP version, we certainly error.
+			// But that should not prevent the other IP version path from
+			// working correctly.
+			err6 = nil
+		}
 	}
+
+	if m.v4 != nil {
+		if err4 == nil {
+			state.v4Readiness = ifaceIsReady
+		}
+		if m.v4.hostIP == nil {
+			// If we do not have host IP for the IP version, we certainly error.
+			// But that should not prevent the other IP version path from
+			// working correctly.
+			err4 = nil
+		}
+	}
+
 	return state, errors.Join(err4, err6)
 }
 
@@ -1676,6 +1723,11 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 		if !m.isDataIface(iface) && !m.isL3Iface(iface) {
 			log.WithField("iface", iface).Debug(
 				"Ignoring interface that doesn't match the host data/l3 interface regex")
+			if !m.isWorkloadIface(iface) {
+				log.WithField("iface", iface).Debug(
+					"Removing interface that doesn't match the host data/l3 interface and is not workload interface")
+				return set.RemoveItem
+			}
 			return nil
 		}
 
@@ -2073,11 +2125,33 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 	}
 	state.qdisc = ingressQdisc
 
-	if m.v6 != nil && err6 == nil {
-		state.v6Readiness = ifaceIsReady
+	if err4 != nil && err6 != nil {
+		// This covers the case when we don't have hostIP on both paths.
+		return state, errors.Join(err4, err6)
 	}
-	if m.v4 != nil && err4 == nil {
-		state.v4Readiness = ifaceIsReady
+
+	if m.v6 != nil {
+		if err6 == nil {
+			state.v6Readiness = ifaceIsReady
+		}
+		if m.v6.hostIP == nil {
+			// If we do not have host IP for the IP version, we certainly error.
+			// But that should not prevent the other IP version path from
+			// working correctly.
+			err6 = nil
+		}
+	}
+
+	if m.v4 != nil {
+		if err4 == nil {
+			state.v4Readiness = ifaceIsReady
+		}
+		if m.v4.hostIP == nil {
+			// If we do not have host IP for the IP version, we certainly error.
+			// But that should not prevent the other IP version path from
+			// working correctly.
+			err4 = nil
+		}
 	}
 
 	if errors.Join(err4, err6) != nil {
@@ -2140,6 +2214,10 @@ func mergeAttachPoints(ap4, ap6 attachPoint) attachPoint {
 			return apxdpV4
 		} else if apxdpV6 != nil && apxdpV4 == nil {
 			return apxdpV6
+		} else if apxdpV6 != nil && apxdpV4 != nil {
+			apxdpV4.PolicyIdxV6 = apxdpV6.PolicyIdxV6
+			apxdpV4.HookLayoutV6 = apxdpV6.HookLayoutV6
+			return apxdpV4
 		}
 	}
 	return nil
@@ -2340,14 +2418,16 @@ func (d *bpfEndpointManagerDataplane) applyPolicyToDataIface(
 	ep *proto.HostEndpoint,
 	state *bpfInterfaceState,
 	ap *tc.AttachPoint,
-	xdpAP *xdp.AttachPoint,
+	apxdp *xdp.AttachPoint,
 ) (*tc.AttachPoint, *tc.AttachPoint, *xdp.AttachPoint, error) {
 
 	ingressAttachPoint := *ap
 	egressAttachPoint := *ap
+	xdpAttachPoint := *apxdp
 
 	var parallelWG sync.WaitGroup
 	var ingressAP, egressAP *tc.AttachPoint
+	var xdpAP *xdp.AttachPoint
 	var ingressErr, egressErr, xdpErr error
 
 	parallelWG.Add(2)
@@ -2358,12 +2438,7 @@ func (d *bpfEndpointManagerDataplane) applyPolicyToDataIface(
 
 	go func() {
 		defer parallelWG.Done()
-		// XDP IPv6 is not supported yet.
-		if d.ipFamily == proto.IPVersion_IPV4 {
-			xdpErr = d.attachXDPProgram(xdpAP, ep, state)
-		} else {
-			xdpAP = nil
-		}
+		xdpAP, xdpErr = d.attachXDPProgram(&xdpAttachPoint, ep, state)
 	}()
 
 	egressAP, egressErr = d.attachDataIfaceProgram(ifaceName, ep, PolDirnEgress, state, &egressAttachPoint)
@@ -2446,7 +2521,7 @@ func (d *bpfEndpointManagerDataplane) attachDataIfaceProgram(
 	return ap, nil
 }
 
-func (d *bpfEndpointManagerDataplane) attachXDPProgram(ap *xdp.AttachPoint, ep *proto.HostEndpoint, state *bpfInterfaceState) error {
+func (d *bpfEndpointManagerDataplane) attachXDPProgram(ap *xdp.AttachPoint, ep *proto.HostEndpoint, state *bpfInterfaceState) (*xdp.AttachPoint, error) {
 	if d.ipFamily == proto.IPVersion_IPV6 {
 		ap.PolicyIdxV6 = state.v6.policyIdx[hook.XDP]
 	} else {
@@ -2457,21 +2532,21 @@ func (d *bpfEndpointManagerDataplane) attachXDPProgram(ap *xdp.AttachPoint, ep *
 	if ep != nil && len(ep.UntrackedTiers) == 1 {
 		err := m.dp.ensureProgramLoaded(ap, d.ipFamily)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
-		ap.Log().Debugf("Building program for untracked policy hep=%v", ep.Name)
+		ap.Log().Infof("Building program for untracked policy hep=%v, family=%v", ep.Name, d.ipFamily)
 		rules := polprog.Rules{
 			ForHostInterface: true,
 			HostNormalTiers:  m.extractTiers(ep.UntrackedTiers[0], PolDirnIngress, false),
 			ForXDP:           true,
 		}
-		ap.Log().Debugf("Rules: %v", rules)
+		ap.Log().Infof("Rules: %v", rules)
 		err = m.updatePolicyProgramFn(rules, "xdp", ap, d.ipFamily)
 		ap.Log().WithError(err).Debugf("Applied untracked policy hep=%v", ep.Name)
-		return err
+		return ap, err
 	}
-	return nil
+	return ap, nil
 }
 
 // PolDirection is the Calico datamodel direction of policy.  On a host endpoint, ingress is towards the host.
@@ -2561,6 +2636,7 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(ifaceName string) *tc.Attach
 	ap.Type = endpointType
 	if ap.Type != tcdefs.EpTypeWorkload {
 		ap.WgPort = m.wgPort
+		ap.Wg6Port = m.wg6Port
 		ap.NATin = uint32(m.natInIdx)
 		ap.NATout = uint32(m.natOutIdx)
 	} else {
@@ -3192,9 +3268,16 @@ func (m *bpfEndpointManager) ensureProgramLoaded(ap attachPoint, ipFamily proto.
 			LogLevel: apxdp.LogLevel,
 		}
 
+		at.Family = int(ipFamily)
 		pm := m.commonMaps.XDPProgramsMap.(*hook.ProgramsMap)
-		if apxdp.HookLayout, err = pm.LoadObj(at); err != nil {
-			return fmt.Errorf("loading generic xdp hook program: %w", err)
+		if ipFamily == proto.IPVersion_IPV6 {
+			if apxdp.HookLayoutV6, err = pm.LoadObj(at); err != nil {
+				return fmt.Errorf("loading generic xdp hook program: %w", err)
+			}
+		} else {
+			if apxdp.HookLayoutV4, err = pm.LoadObj(at); err != nil {
+				return fmt.Errorf("loading generic xdp hook program: %w", err)
+			}
 		}
 	} else {
 		return fmt.Errorf("unknown attach type")
@@ -3731,19 +3814,21 @@ var (
 )
 
 func (m *bpfEndpointManager) setRoute(cidr ip.CIDR) {
-	if m.v6 != nil && cidr.Version() == 6 {
-		m.routeTableV6.RouteUpdate(bpfInDev, routetable.Target{
-			Type: routetable.TargetTypeGlobalUnicast,
-			CIDR: cidr,
-			GW:   bpfnatGWIPv6,
-		})
+	target := routetable.Target{
+		Type: routetable.TargetTypeGlobalUnicast,
+		CIDR: cidr,
 	}
-	if m.v4 != nil && cidr.Version() == 4 {
-		m.routeTableV4.RouteUpdate(bpfInDev, routetable.Target{
-			Type: routetable.TargetTypeGlobalUnicast,
-			CIDR: cidr,
-			GW:   bpfnatGWIP,
-		})
+
+	if cidr.Version() == 6 {
+		if m.v6 != nil && m.v6.hostIP != nil {
+			target.GW = bpfnatGWIPv6
+			target.Src = ip.FromNetIP(m.v6.hostIP)
+			m.routeTableV6.RouteUpdate(bpfInDev, target)
+		}
+	} else if m.v4 != nil && m.v4.hostIP != nil {
+		target.GW = bpfnatGWIP
+		target.Src = ip.FromNetIP(m.v4.hostIP)
+		m.routeTableV4.RouteUpdate(bpfInDev, target)
 	}
 
 	log.WithFields(log.Fields{

@@ -227,6 +227,7 @@ func sha256OfFile(name string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to open BPF object to calculate its hash: %w", err)
 	}
+	defer f.Close()
 	hasher := sha256.New()
 	_, err = io.Copy(hasher, f)
 	if err != nil {

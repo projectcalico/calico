@@ -3,6 +3,8 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   name: tigera-operator
+  labels:
+    k8s-app: tigera-operator
 rules:
   - apiGroups:
       - ""
@@ -145,6 +147,7 @@ rules:
     - crd.projectcalico.org
     resources:
     - felixconfigurations
+    - ippools
     verbs:
     - create
     - patch
@@ -154,10 +157,21 @@ rules:
   - apiGroups:
     - crd.projectcalico.org
     resources:
-    - ippools
     - kubecontrollersconfigurations
     - bgpconfigurations
     verbs:
+    - get
+    - list
+    - watch
+  - apiGroups:
+    - projectcalico.org
+    resources:
+    - ippools
+    verbs:
+    - create
+    - update
+    - delete
+    - patch
     - get
     - list
     - watch

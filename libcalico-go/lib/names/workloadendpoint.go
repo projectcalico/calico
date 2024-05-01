@@ -20,6 +20,8 @@ import (
 	"reflect"
 	"strings"
 
+	v3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 )
 
@@ -267,4 +269,29 @@ func ParseWorkloadEndpointName(wepName string) (WorkloadEndpointIdentifiers, err
 		}
 	}
 	return weid, nil
+}
+
+func ConvertWorkloadEndpointV3KeyToV1Key(v3key model.ResourceKey) (model.WorkloadEndpointKey, error) {
+	parts := ExtractDashSeparatedParms(v3key.Name, 4)
+	if len(parts) != 4 || v3key.Namespace == "" {
+		return model.WorkloadEndpointKey{}, errors.New("not enough information provided to create v1 Workload Endpoint Key")
+	}
+	return model.WorkloadEndpointKey{
+		Hostname:       parts[0],
+		OrchestratorID: parts[1],
+		WorkloadID:     v3key.Namespace + "/" + parts[2],
+		EndpointID:     parts[3],
+	}, nil
+}
+
+func IdentifiersForV3WorkloadEndpoint(res *v3.WorkloadEndpoint) WorkloadEndpointIdentifiers {
+	wepids := WorkloadEndpointIdentifiers{
+		Node:         res.Spec.Node,
+		Orchestrator: res.Spec.Orchestrator,
+		Endpoint:     res.Spec.Endpoint,
+		Workload:     res.Spec.Workload,
+		Pod:          res.Spec.Pod,
+		ContainerID:  res.Spec.ContainerID,
+	}
+	return wepids
 }

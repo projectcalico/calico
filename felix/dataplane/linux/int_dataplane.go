@@ -28,7 +28,6 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
@@ -182,7 +181,8 @@ type Config struct {
 	WatchdogTimeout    time.Duration
 	RouteTableManager  *idalloc.IndexAllocator
 
-	DebugSimulateDataplaneHangAfter time.Duration
+	DebugSimulateDataplaneHangAfter  time.Duration
+	DebugSimulateDataplaneApplyDelay time.Duration
 
 	ExternalNodesCidrs []string
 
@@ -275,8 +275,9 @@ type UpdateBatchResolver interface {
 // depend on them. For example, it is important that the datastore layer sends an IP set
 // create event before it sends a rule that references that IP set.
 type InternalDataplane struct {
-	toDataplane   chan interface{}
-	fromDataplane chan interface{}
+	toDataplane             chan interface{}
+	fromDataplane           chan interface{}
+	sendDataplaneInSyncOnce sync.Once
 
 	mainRouteTables      []routetable.SyncerInterface
 	allIptablesTables    []*iptables.Table
@@ -327,7 +328,8 @@ type InternalDataplane struct {
 	// check the XDP state in the dataplane.
 	forceXDPRefresh bool
 	// doneFirstApply is set after we finish the first update to the dataplane. It indicates
-	// that the dataplane should now be in sync.
+	// that the dataplane should now be in sync, though it is possible that an error occurred
+	// necessitating a re-apply.
 	doneFirstApply bool
 
 	reschedTimer *time.Timer
@@ -830,8 +832,10 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	dp.RegisterManager(newFloatingIPManager(natTableV4, ruleRenderer, 4, config.FloatingIPsEnabled))
 	dp.RegisterManager(newMasqManager(ipSetsV4, natTableV4, ruleRenderer, config.MaxIPSetSize, 4))
 	if config.RulesConfig.IPIPEnabled {
+		log.Info("IPIP enabled, starting thread to keep tunnel configuration in sync.")
 		// Add a manager to keep the all-hosts IP set up to date.
 		dp.ipipManager = newIPIPManager(ipSetsV4, config.MaxIPSetSize, config.ExternalNodesCidrs)
+		go dp.ipipManager.KeepIPIPDeviceInSync(config.IPIPMTU, config.RulesConfig.IPIPTunnelAddress, dataplaneFeatures.ChecksumOffloadBroken)
 		dp.RegisterManager(dp.ipipManager) // IPv4-only
 	} else {
 		// Only clean up IPIP addresses if IPIP is implicitly disabled (no IPIP pools and not explicitly set in FelixConfig)
@@ -924,6 +928,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 				ipSetsV6,
 				config.MaxIPSetSize))
 			dp.RegisterManager(newPolicyManager(rawTableV6, mangleTableV6, filterTableV6, ruleRenderer, 6))
+		} else {
+			dp.RegisterManager(newRawEgressPolicyManager(rawTableV6, ruleRenderer, 6, ipSetsV6.SetFilter))
 		}
 
 		dp.RegisterManager(newEndpointManager(
@@ -1113,7 +1119,7 @@ func determinePodMTU(config Config) int {
 		// No enabled encapsulation. Just use the host MTU.
 		mtu = config.hostMTU
 	} else if mtu > config.hostMTU {
-		fields := logrus.Fields{"mtu": mtu, "hostMTU": config.hostMTU}
+		fields := log.Fields{"mtu": mtu, "hostMTU": config.hostMTU}
 		log.WithFields(fields).Warn("Configured MTU is larger than detected host interface MTU")
 	}
 	log.WithField("mtu", mtu).Info("Determined pod MTU")
@@ -1445,16 +1451,6 @@ func (d *InternalDataplane) doStaticDataplaneConfig() {
 	} else {
 		d.setUpIptablesNormal()
 	}
-
-	if d.config.RulesConfig.IPIPEnabled {
-		log.Info("IPIP enabled, starting thread to keep tunnel configuration in sync.")
-		go d.ipipManager.KeepIPIPDeviceInSync(
-			d.config.IPIPMTU,
-			d.config.RulesConfig.IPIPTunnelAddress,
-		)
-	} else {
-		log.Info("IPIP disabled. Not starting tunnel update thread.")
-	}
 }
 
 func bpfMarkPreestablishedFlowsRules() []iptables.Rule {
@@ -1554,7 +1550,7 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 				// only go to the host. Make sure that they are not forwarded.
 				fwdRules = append(fwdRules, rules.ICMPv6Filter(d.ruleRenderer.IptablesFilterDenyAction())...)
 			}
-		} else if (t.IPVersion == 6) == (d.config.BPFIpv6Enabled) /* XXX remove condition for dual stack */ {
+		} else {
 			// Let the BPF programs know if Linux conntrack knows about the flow.
 			fwdRules = append(fwdRules, bpfMarkPreestablishedFlowsRules()...)
 			// The packet may be about to go to a local workload.  However, the local workload may not have a BPF
@@ -1612,11 +1608,9 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 		t.InsertOrAppendRules("PREROUTING", []iptables.Rule{{
 			Action: iptables.JumpAction{Target: rules.ChainRawPrerouting},
 		}})
-		if t.IPVersion == 4 {
-			t.InsertOrAppendRules("OUTPUT", []iptables.Rule{{
-				Action: iptables.JumpAction{Target: rules.ChainRawOutput},
-			}})
-		}
+		t.InsertOrAppendRules("OUTPUT", []iptables.Rule{{
+			Action: iptables.JumpAction{Target: rules.ChainRawOutput},
+		}})
 	}
 
 	if d.config.BPFExtToServiceConnmark != 0 {
@@ -1856,6 +1850,10 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 				log.Debug("Applying dataplane updates")
 				applyStart := time.Now()
 
+				if d.config.DebugSimulateDataplaneApplyDelay > 0 {
+					log.WithField("delay", d.config.DebugSimulateDataplaneApplyDelay).Debug("Simulating a dataplane-apply delay")
+					time.Sleep(d.config.DebugSimulateDataplaneApplyDelay)
+				}
 				// Actually apply the changes to the dataplane.
 				d.apply()
 
@@ -1866,6 +1864,10 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 				if d.dataplaneNeedsSync {
 					// Dataplane is still dirty, record an error.
 					countDataplaneSyncErrors.Inc()
+				} else {
+					d.sendDataplaneInSyncOnce.Do(func() {
+						d.fromDataplane <- &proto.DataplaneInSync{}
+					})
 				}
 
 				d.loopSummarizer.EndOfIteration(applyTime)

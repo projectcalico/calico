@@ -223,12 +223,7 @@
                 "waitAfterCompletion": "forever"
               },
               "1-install-bgp4" : {
-                "command" : "powershell.exe -Command \"Start-Sleep 20; Install-RemoteAccess -ErrorAction Ignore -VpnType RoutingOnly\"",
-                "test" : "findstr calico-bgp c:\\k\\backend",
-                "waitAfterCompletion": "0"
-              },
-              "1-install-bgp5" : {
-                "command" : "powershell.exe -Command \"Start-Sleep 20; Install-RemoteAccess -ErrorAction Ignore -VpnType RoutingOnly\"",
+                "command" : "powershell.exe -Command \"Start-Sleep 60; Install-RemoteAccess -ErrorAction Ignore -VpnType RoutingOnly\"",
                 "test" : "findstr calico-bgp c:\\k\\backend",
                 "waitAfterCompletion": "0"
               },

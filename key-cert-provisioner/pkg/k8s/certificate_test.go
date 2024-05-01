@@ -86,7 +86,7 @@ var _ = Describe("Test Certificates", func() {
 			Expect(csr.Spec.Request).To(Equal(csrPem))
 			Expect(csr.Spec.SignerName).To(Equal(signer))
 			Expect(csr.Spec.Usages).To(ConsistOf(certV1.UsageServerAuth, certV1.UsageClientAuth,
-				certV1.UsageDigitalSignature, certV1.UsageKeyAgreement))
+				certV1.UsageDigitalSignature, certV1.UsageKeyAgreement, certV1.UsageKeyEncipherment))
 			Expect(csr.Spec.Usages).NotTo(ConsistOf(certV1beta1.UsageServerAuth, certV1beta1.UsageClientAuth,
 				certV1beta1.UsageDigitalSignature, certV1beta1.UsageKeyAgreement))
 		})

@@ -57,6 +57,10 @@ endif
 
 ###############################################################################
 
+# Our (public) GCP bucket where we mirror any third party files
+# that are flaky to retrieve.
+THIRD_PARTY_DEPS_MIRROR=https://storage.googleapis.com/public-calico-third-party-deps
+
 # Versions and location of dependencies used in the build.
 BIRD_IMAGE ?= calico/bird:$(BIRD_VERSION)-$(ARCH)
 BIRD_SOURCE=filesystem/included-source/bird-$(BIRD_VERSION).tar.gz
@@ -86,6 +90,8 @@ WINDOWS_ARCHIVE_TAG?=$(GIT_VERSION)
 WINDOWS_ARCHIVE := dist/calico-windows-$(WINDOWS_ARCHIVE_TAG).zip
 # Version of NSSM to download.
 WINDOWS_NSSM_VERSION=2.24-103-gdee49fc
+# Original source: https://nssm.cc/ci/nssm-$(WINDOWS_NSSM_VERSION).zip
+WINDOWS_NSSM_URL=$(THIRD_PARTY_DEPS_MIRROR)/nssm/nssm-$(WINDOWS_NSSM_VERSION).zip
 # Explicit list of files that we copy in from the mod cache.  This is required because the copying rules we use are pattern-based
 # and they only work with an explicit rule of the form "$(WINDOWS_MOD_CACHED_FILES): <file path from project root>" (otherwise,
 # make has no way to know that the mod cache target produces the files we need).
@@ -515,7 +521,7 @@ $(WINDOWS_ARCHIVE_ROOT)/libs/hns/License.txt:
 
 ## Download NSSM.
 windows-packaging/nssm.zip:
-	curl -sSf -L --retry 5 -o $@ https://nssm.cc/ci/nssm-$(WINDOWS_NSSM_VERSION).zip
+	curl -sSf -L --retry 5 -o $@ $(WINDOWS_NSSM_URL)
 
 windows-packaging/nssm.exe: windows-packaging/nssm.zip
 	cd windows-packaging && \

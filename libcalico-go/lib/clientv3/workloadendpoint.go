@@ -125,14 +125,7 @@ func (r workloadEndpoints) Watch(ctx context.Context, opts options.ListOptions) 
 // the name against the spec fields.
 func (r workloadEndpoints) assignOrValidateName(res *libapiv3.WorkloadEndpoint) error {
 	// Validate the workload endpoint indices and the name match.
-	wepids := names.WorkloadEndpointIdentifiers{
-		Node:         res.Spec.Node,
-		Orchestrator: res.Spec.Orchestrator,
-		Endpoint:     res.Spec.Endpoint,
-		Workload:     res.Spec.Workload,
-		Pod:          res.Spec.Pod,
-		ContainerID:  res.Spec.ContainerID,
-	}
+	wepids := names.IdentifiersForV3WorkloadEndpoint(res)
 	expectedName, err := wepids.CalculateWorkloadEndpointName(false)
 	if err != nil {
 		return err
