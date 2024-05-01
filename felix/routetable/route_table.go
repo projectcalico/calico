@@ -1109,7 +1109,7 @@ func (r *RouteTable) applyUpdates() error {
 	// synchronously and kick off conntrack deletions for the old interface.
 	// This makes sure that we don't have a window where a new connection
 	// can start using the old interface.
-	r.conntrackTracker.IterMovedRoutesAndStartDeletions(func(kernKey kernelRouteKey, newOwners []int) {
+	r.conntrackTracker.IterMovedRoutesAndStartDeletions(func(kernKey kernelRouteKey) {
 		err := r.deleteRoute(nl, kernKey)
 		if err != nil {
 			deletionErrs[kernKey] = err
