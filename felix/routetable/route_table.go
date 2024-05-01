@@ -177,21 +177,21 @@ type graceInfo struct {
 	GraceExpired bool
 }
 
-type RouteTableOpt func(table *RouteTable)
+type Opt func(table *RouteTable)
 
-func WithLivenessCB(cb func()) RouteTableOpt {
+func WithLivenessCB(cb func()) Opt {
 	return func(table *RouteTable) {
 		table.livenessCallback = cb
 	}
 }
 
-func WithRouteCleanupGracePeriod(routeCleanupGracePeriod time.Duration) RouteTableOpt {
+func WithRouteCleanupGracePeriod(routeCleanupGracePeriod time.Duration) Opt {
 	return func(table *RouteTable) {
 		table.routeCleanupGracePeriod = routeCleanupGracePeriod
 	}
 }
 
-func WithStaticARPEntries(b bool) RouteTableOpt {
+func WithStaticARPEntries(b bool) Opt {
 	return func(table *RouteTable) {
 		if table.ipVersion != 4 {
 			log.Panic("Bug: ARP entries only supported for IPv4.")
@@ -200,25 +200,25 @@ func WithStaticARPEntries(b bool) RouteTableOpt {
 	}
 }
 
-func WithConntrackCleanup(enabled bool) RouteTableOpt {
+func WithConntrackCleanup(enabled bool) Opt {
 	return func(table *RouteTable) {
 		table.conntrackCleanupEnabled = enabled
 	}
 }
 
-func WithTimeShim(shim timeshim.Interface) RouteTableOpt {
+func WithTimeShim(shim timeshim.Interface) Opt {
 	return func(table *RouteTable) {
 		table.time = shim
 	}
 }
 
-func WithConntrackShim(shim conntrackIface) RouteTableOpt {
+func WithConntrackShim(shim conntrackIface) Opt {
 	return func(table *RouteTable) {
 		table.conntrack = shim
 	}
 }
 
-func WithNetlinkHandleShim(newNetlinkHandle func() (netlinkshim.Interface, error)) RouteTableOpt {
+func WithNetlinkHandleShim(newNetlinkHandle func() (netlinkshim.Interface, error)) Opt {
 	return func(table *RouteTable) {
 		table.newNetlinkHandle = newNetlinkHandle
 	}
@@ -252,7 +252,7 @@ func New(
 	tableIndex int,
 	opReporter logutils.OpRecorder,
 	featureDetector environment.FeatureDetectorIface,
-	opts ...RouteTableOpt,
+	opts ...Opt,
 ) *RouteTable {
 	if tableIndex == 0 {
 		// If we set route.Table to 0, what we actually get is a route in RT_TABLE_MAIN.  However,
