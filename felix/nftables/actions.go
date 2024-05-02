@@ -18,8 +18,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/generictables"
 )
@@ -116,7 +114,6 @@ func (g GotoAction) String() string {
 }
 
 func (g GotoAction) ReferencedChain() string {
-	logrus.WithField("referencedChain", g.Target).Info("GotoAction.ReferencedChain")
 	return g.Target
 }
 
