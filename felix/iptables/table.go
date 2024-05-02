@@ -191,6 +191,8 @@ type Table struct {
 	name      string
 	ipVersion uint8
 
+	render generictables.IptablesRenderer
+
 	// featureDetector detects the features of the dataplane.
 	featureDetector environment.FeatureDetectorIface
 
@@ -402,6 +404,7 @@ func NewTable(
 	table := &Table{
 		name:                   name,
 		ipVersion:              ipVersion,
+		render:                 generictables.NewIptablesRenderer(hashPrefix),
 		featureDetector:        featureDetector,
 		chainToInsertedRules:   inserts,
 		chainToAppendedRules:   appends,
@@ -1134,7 +1137,7 @@ func (t *Table) applyUpdates() error {
 			// where only the first replace command sets the rule index.  Work around that by refreshing the
 			// whole chain using a flush.
 			chain, _ := t.desiredStateOfChain(chainName)
-			currentHashes := chain.RuleHashes(renderInner, features)
+			currentHashes := t.render.RuleHashes(chain, features)
 			previousHashes := t.chainToDataplaneHashes[chainName]
 			t.logCxt.WithFields(log.Fields{
 				"previous": previousHashes,
@@ -1173,7 +1176,7 @@ func (t *Table) applyUpdates() error {
 				// In iptables legacy mode, we compare the rules one by one and apply deltas rule by rule.
 				previousHashes = t.chainToDataplaneHashes[chainName]
 			}
-			currentHashes := chain.RuleHashes(renderInner, features)
+			currentHashes := t.render.RuleHashes(chain, features)
 			newHashes[chainName] = currentHashes
 			for i := 0; i < len(previousHashes) || i < len(currentHashes); i++ {
 				var line string
@@ -1183,16 +1186,14 @@ func (t *Table) applyUpdates() error {
 					}
 					// Hash doesn't match, replace the rule.
 					ruleNum := i + 1 // 1-indexed.
-					prefixFrag := t.commentFrag(currentHashes[i])
-					line = chain.Rules[i].RenderReplace(chainName, ruleNum, prefixFrag, renderInner, features)
+					line = t.render.RenderReplace(&chain.Rules[i], chainName, ruleNum, currentHashes[i], features)
 				} else if i < len(previousHashes) {
 					// previousHashes was longer, remove the old rules from the end.
 					ruleNum := len(currentHashes) + 1 // 1-indexed
 					line = t.renderDeleteByIndexLine(chainName, ruleNum)
 				} else {
 					// currentHashes was longer.  Append.
-					prefixFrag := t.commentFrag(currentHashes[i])
-					line = chain.Rules[i].RenderAppend(chainName, prefixFrag, renderInner, features)
+					line = t.render.RenderAppend(&chain.Rules[i], chainName, currentHashes[i], features)
 				}
 				buf.WriteLine(line)
 			}
@@ -1255,8 +1256,7 @@ func (t *Table) applyUpdates() error {
 				// reverse order so that they end up in the correct order in the final
 				// state of the chain.
 				for i := len(rules) - 1; i >= 0; i-- {
-					prefixFrag := t.commentFrag(newInsertedRuleHashes[i])
-					line := rules[i].RenderInsert(chainName, prefixFrag, renderInner, features)
+					line := t.render.RenderInsert(&rules[i], chainName, newInsertedRuleHashes[i], features)
 					buf.WriteLine(line)
 					insertRuleLines[i] = line
 				}
@@ -1264,8 +1264,7 @@ func (t *Table) applyUpdates() error {
 			} else {
 				t.logCxt.Debug("Rendering append rules.")
 				for i := 0; i < len(rules); i++ {
-					prefixFrag := t.commentFrag(newInsertedRuleHashes[i])
-					line := rules[i].RenderAppend(chainName, prefixFrag, renderInner, features)
+					line := t.render.RenderAppend(&rules[i], chainName, newInsertedRuleHashes[i], features)
 					buf.WriteLine(line)
 					insertRuleLines[i] = line
 				}
@@ -1280,8 +1279,7 @@ func (t *Table) applyUpdates() error {
 		if len(rules) > 0 {
 			t.logCxt.Debug("Rendering specific append rules.")
 			for i := 0; i < len(rules); i++ {
-				prefixFrag := t.commentFrag(newAppendedRuleHashes[i])
-				line := rules[i].RenderAppend(chainName, prefixFrag, renderInner, features)
+				line := t.render.RenderAppend(&rules[i], chainName, newAppendedRuleHashes[i], features)
 				buf.WriteLine(line)
 				appendRuleLines[i] = line
 			}
@@ -1489,8 +1487,7 @@ func (t *Table) InsertRulesNow(chain string, rules []generictables.Rule) error {
 	buf := new(RestoreInputBuilder)
 	buf.StartTransaction(t.name)
 	for i, r := range rules {
-		prefixFrag := t.commentFrag(hashes[i])
-		buf.WriteLine(r.RenderInsertAtRuleNumber(chain, i+1, prefixFrag, renderInner, features))
+		buf.WriteLine(t.render.RenderInsertAtRuleNumber(&r, chain, i+1, hashes[i], features))
 	}
 	buf.EndTransaction()
 
@@ -1509,10 +1506,6 @@ func (t *Table) desiredStateOfChain(chainName string) (chain *generictables.Chai
 	}
 	chain, present = t.chainNameToChain[chainName]
 	return
-}
-
-func (t *Table) commentFrag(hash string) string {
-	return fmt.Sprintf(`-m comment --comment "%s%s"`, t.hashCommentPrefix, hash)
 }
 
 // renderDeleteByIndexLine produces a delete line by rule number. This function is used for cali chains.
@@ -1540,7 +1533,7 @@ func CalculateRuleHashes(chainName string, rules []generictables.Rule, features 
 		Name:  chainName,
 		Rules: rules,
 	}
-	return (&chain).RuleHashes(renderInner, features)
+	return generictables.NewIptablesRenderer("").RuleHashes(&chain, features)
 }
 
 func numEmptyStrings(strs []string) int {
@@ -1551,29 +1544,4 @@ func numEmptyStrings(strs []string) int {
 		}
 	}
 	return count
-}
-
-func renderInner(fragments []string, prefixFragment string, match generictables.MatchCriteria, action generictables.Action, comment []string, features *environment.Features) string {
-	if prefixFragment != "" {
-		fragments = append(fragments, prefixFragment)
-	}
-	for _, c := range comment {
-		c = escapeComment(c)
-		c = truncateComment(c)
-		commentFragment := fmt.Sprintf("-m comment --comment \"%s\"", c)
-		fragments = append(fragments, commentFragment)
-	}
-	if match != nil {
-		matchFragment := match.Render()
-		if matchFragment != "" {
-			fragments = append(fragments, matchFragment)
-		}
-	}
-	if action != nil {
-		actionFragment := action.ToFragment(features)
-		if actionFragment != "" {
-			fragments = append(fragments, actionFragment)
-		}
-	}
-	return strings.Join(fragments, " ")
 }

@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ import (
 	"math/bits"
 	"strings"
 
+	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/generictables"
@@ -30,14 +31,17 @@ var Wildcard = "*"
 var _ generictables.MatchCriteria = nftMatch{}
 
 // nftMatch implements the MatchCriteria interface for nftables.
-type nftMatch []string
+type nftMatch struct {
+	clauses []string
+	proto   string
+}
 
 func Match() generictables.MatchCriteria {
 	return new(nftMatch)
 }
 
 func (m nftMatch) Render() string {
-	return strings.Join([]string(m), " ")
+	return strings.Join([]string(m.clauses), " ")
 }
 
 func (m nftMatch) String() string {
@@ -48,14 +52,16 @@ func (m nftMatch) MarkClear(mark uint32) generictables.MatchCriteria {
 	if mark == 0 {
 		log.Panic("Probably bug: zero mark")
 	}
-	return append(m, fmt.Sprintf("meta mark & %#x == 0", mark))
+	m.clauses = append(m.clauses, fmt.Sprintf("meta mark & %#x == 0", mark))
+	return m
 }
 
 func (m nftMatch) MarkNotClear(mark uint32) generictables.MatchCriteria {
 	if mark == 0 {
 		log.Panic("Probably bug: zero mark")
 	}
-	return append(m, fmt.Sprintf("meta mark & %#x != 0", mark))
+	m.clauses = append(m.clauses, fmt.Sprintf("meta mark & %#x != 0", mark))
+	return m
 }
 
 func (m nftMatch) MarkSingleBitSet(mark uint32) generictables.MatchCriteria {
@@ -79,7 +85,8 @@ func (m nftMatch) MarkMatchesWithMask(mark, mask uint32) generictables.MatchCrit
 	if mark&mask != mark {
 		logCxt.Panic("Bug: mark is not contained in mask")
 	}
-	return append(m, fmt.Sprintf("meta mark & %#x == %#x", mask, mark))
+	m.clauses = append(m.clauses, fmt.Sprintf("meta mark & %#x == %#x", mask, mark))
+	return m
 }
 
 func (m nftMatch) NotMarkMatchesWithMask(mark, mask uint32) generictables.MatchCriteria {
@@ -93,26 +100,31 @@ func (m nftMatch) NotMarkMatchesWithMask(mark, mask uint32) generictables.MatchC
 	if mark&mask != mark {
 		logCxt.Panic("Bug: mark is not contained in mask")
 	}
-	return append(m, fmt.Sprintf("meta mark & %#x != %#x", mask, mark))
+	m.clauses = append(m.clauses, fmt.Sprintf("meta mark & %#x != %#x", mask, mark))
+	return m
 }
 
 func (m nftMatch) InInterface(ifaceMatch string) generictables.MatchCriteria {
-	return append(m, fmt.Sprintf("iifname %s", ifaceMatch))
+	m.clauses = append(m.clauses, fmt.Sprintf("iifname %s", ifaceMatch))
+	return m
 }
 
 func (m nftMatch) OutInterface(ifaceMatch string) generictables.MatchCriteria {
-	return append(m, fmt.Sprintf("oifname %s", ifaceMatch))
+	m.clauses = append(m.clauses, fmt.Sprintf("oifname %s", ifaceMatch))
+	return m
 }
 
 func (m nftMatch) RPFCheckPassed(acceptLocal bool) generictables.MatchCriteria {
 	// TODO: acceptLocal is not supported in nftables mode.
-	return append(m, "fib saddr . mark . iif oif != 0")
+	m.clauses = append(m.clauses, "fib saddr . mark . iif oif != 0")
+	return m
 }
 
 func (m nftMatch) RPFCheckFailed(acceptLocal bool) generictables.MatchCriteria {
 	// TODO: acceptLocal is not supported in nftables mode.
 	// https://wiki.nftables.org/wiki-nftables/index.php/Matching_routing_information
-	return append(m, "fib saddr . mark . iif oif 0")
+	m.clauses = append(m.clauses, "fib saddr . mark . iif oif 0")
+	return m
 }
 
 func (m nftMatch) IPVSConnection() generictables.MatchCriteria {
@@ -125,110 +137,142 @@ func (m nftMatch) NotIPVSConnection() generictables.MatchCriteria {
 
 func (m nftMatch) NotSrcAddrType(addrType generictables.AddrType, limitIfaceOut bool) generictables.MatchCriteria {
 	if limitIfaceOut {
-		return append(m, fmt.Sprintf("fib saddr . oif type != %s", strings.ToLower(string(addrType))))
+		m.clauses = append(m.clauses, fmt.Sprintf("fib saddr . oif type != %s", strings.ToLower(string(addrType))))
 	} else {
-		return append(m, fmt.Sprintf("fib saddr type != %s", strings.ToLower(string(addrType))))
+		m.clauses = append(m.clauses, fmt.Sprintf("fib saddr type != %s", strings.ToLower(string(addrType))))
 	}
+	return m
 }
 
 func (m nftMatch) SrcAddrType(addrType generictables.AddrType, limitIfaceOut bool) generictables.MatchCriteria {
 	if limitIfaceOut {
-		return append(m, fmt.Sprintf("fib saddr . oif type %s", strings.ToLower(string(addrType))))
+		m.clauses = append(m.clauses, fmt.Sprintf("fib saddr . oif type %s", strings.ToLower(string(addrType))))
 	} else {
-		return append(m, fmt.Sprintf("fib saddr type %s", strings.ToLower(string(addrType))))
+		m.clauses = append(m.clauses, fmt.Sprintf("fib saddr type %s", strings.ToLower(string(addrType))))
 	}
+	return m
 }
 
 func (m nftMatch) DestAddrType(addrType generictables.AddrType) generictables.MatchCriteria {
-	return append(m, fmt.Sprintf("fib daddr type %s", strings.ToLower(string(addrType))))
+	m.clauses = append(m.clauses, fmt.Sprintf("fib daddr type %s", strings.ToLower(string(addrType))))
+	return m
 }
 
 func (m nftMatch) NotDestAddrType(addrType generictables.AddrType) generictables.MatchCriteria {
-	return append(m, fmt.Sprintf("fib daddr type != %s", strings.ToLower(string(addrType))))
+	m.clauses = append(m.clauses, fmt.Sprintf("fib daddr type != %s", strings.ToLower(string(addrType))))
+	return m
 }
 
 func (m nftMatch) ConntrackStatus(statusNames string) generictables.MatchCriteria {
-	return append(m, fmt.Sprintf("ct status %s", strings.ToLower(statusNames)))
+	m.clauses = append(m.clauses, fmt.Sprintf("ct status %s", strings.ToLower(statusNames)))
+	return m
 }
 
 func (m nftMatch) NotConntrackStatus(statusNames string) generictables.MatchCriteria {
-	return append(m, fmt.Sprintf("ct status != %s", strings.ToLower(statusNames)))
+	m.clauses = append(m.clauses, fmt.Sprintf("ct status != %s", strings.ToLower(statusNames)))
+	return m
 }
 
 func (m nftMatch) ConntrackState(stateNames string) generictables.MatchCriteria {
-	return append(m, fmt.Sprintf("ct state %s", strings.ToLower(stateNames)))
+	m.clauses = append(m.clauses, fmt.Sprintf("ct state %s", strings.ToLower(stateNames)))
+	return m
 }
 
 func (m nftMatch) NotConntrackState(stateNames string) generictables.MatchCriteria {
-	return append(m, fmt.Sprintf("ct state != %s", strings.ToLower(stateNames)))
+	m.clauses = append(m.clauses, fmt.Sprintf("ct state != %s", strings.ToLower(stateNames)))
+	return m
 }
 
 func (m nftMatch) Protocol(name string) generictables.MatchCriteria {
-	return append(m, fmt.Sprintf("ip protocol %s", name))
+	if m.proto != "" {
+		logrus.WithField("protocol", m.proto).Fatal("Protocol already set")
+	}
+	m.proto = name
+	m.clauses = append(m.clauses, fmt.Sprintf("ip protocol %s", name))
+	return m
 }
 
 func (m nftMatch) NotProtocol(name string) generictables.MatchCriteria {
-	return append(m, fmt.Sprintf("ip protocol != %s", name))
+	m.clauses = append(m.clauses, fmt.Sprintf("ip protocol != %s", name))
+	return m
 }
 
 func (m nftMatch) ProtocolNum(num uint8) generictables.MatchCriteria {
-	return append(m, fmt.Sprintf("ip protocol %d", num))
+	m.clauses = append(m.clauses, fmt.Sprintf("ip protocol %d", num))
+	return m
 }
 
 func (m nftMatch) NotProtocolNum(num uint8) generictables.MatchCriteria {
-	return append(m, fmt.Sprintf("ip protocol != %d", num))
+	m.clauses = append(m.clauses, fmt.Sprintf("ip protocol != %d", num))
+	return m
 }
 
 func (m nftMatch) SourceNet(net string) generictables.MatchCriteria {
-	return append(m, fmt.Sprintf("ip saddr %s", net))
+	m.clauses = append(m.clauses, fmt.Sprintf("ip saddr %s", net))
+	return m
 }
 
 func (m nftMatch) NotSourceNet(net string) generictables.MatchCriteria {
-	return append(m, fmt.Sprintf("ip saddr != %s", net))
+	m.clauses = append(m.clauses, fmt.Sprintf("ip saddr != %s", net))
+	return m
 }
 
 func (m nftMatch) DestNet(net string) generictables.MatchCriteria {
-	return append(m, fmt.Sprintf("ip daddr %s", net))
+	m.clauses = append(m.clauses, fmt.Sprintf("ip daddr %s", net))
+	return m
 }
 
 func (m nftMatch) NotDestNet(net string) generictables.MatchCriteria {
-	return append(m, fmt.Sprintf("ip daddr != %s", net))
+	m.clauses = append(m.clauses, fmt.Sprintf("ip daddr != %s", net))
+	return m
 }
 
 func (m nftMatch) SourceIPSet(name string) generictables.MatchCriteria {
-	return append(m, fmt.Sprintf("ip saddr @%s", CanonicalizeSetName(name)))
+	m.clauses = append(m.clauses, fmt.Sprintf("ip saddr @%s", LegalizeSetName(name)))
+	return m
 }
 
 func (m nftMatch) NotSourceIPSet(name string) generictables.MatchCriteria {
-	return append(m, fmt.Sprintf("ip saddr != @%s", CanonicalizeSetName(name)))
+	m.clauses = append(m.clauses, fmt.Sprintf("ip saddr != @%s", LegalizeSetName(name)))
+	return m
 }
 
 func (m nftMatch) SourceIPPortSet(name string) generictables.MatchCriteria {
-	return append(m, fmt.Sprintf("ip saddr @%s tcp sport @%s", name, name))
+	m.removeProtocolMatch()
+	m.clauses = append(m.clauses, fmt.Sprintf("ip saddr . %s sport @%s", m.proto, LegalizeSetName(name)))
+	return m
 }
 
 func (m nftMatch) NotSourceIPPortSet(name string) generictables.MatchCriteria {
-	return append(m, fmt.Sprintf("ip saddr != @%s tcp sport != @%s", name, name))
+	m.removeProtocolMatch()
+	m.clauses = append(m.clauses, fmt.Sprintf("ip saddr . %s sport != @%s", m.proto, LegalizeSetName(name)))
+	return m
 }
 
 func (m nftMatch) DestIPSet(name string) generictables.MatchCriteria {
-	return append(m, fmt.Sprintf("ip daddr @%s", CanonicalizeSetName(name)))
+	m.clauses = append(m.clauses, fmt.Sprintf("ip daddr @%s", LegalizeSetName(name)))
+	return m
 }
 
 func (m nftMatch) NotDestIPSet(name string) generictables.MatchCriteria {
-	return append(m, fmt.Sprintf("ip daddr != @%s", CanonicalizeSetName(name)))
+	m.clauses = append(m.clauses, fmt.Sprintf("ip daddr != @%s", LegalizeSetName(name)))
+	return m
 }
 
 func (m nftMatch) DestIPPortSet(name string) generictables.MatchCriteria {
-	return append(m, fmt.Sprintf("ip daddr @%s tcp dport @%s", name, name))
+	m.removeProtocolMatch()
+	m.clauses = append(m.clauses, fmt.Sprintf("ip daddr . %s dport @%s", m.proto, LegalizeSetName(name)))
+	return m
 }
 
 func (m nftMatch) NotDestIPPortSet(name string) generictables.MatchCriteria {
-	return append(m, fmt.Sprintf("ip daddr != @%s tcp dport != @%s", name, name))
+	m.removeProtocolMatch()
+	m.clauses = append(m.clauses, fmt.Sprintf("ip daddr . %s dport != @%s", m.proto, LegalizeSetName(name)))
+	return m
 }
 
 func (m nftMatch) IPSetNames() (ipSetNames []string) {
-	for _, matchString := range []string(m) {
+	for _, matchString := range []string(m.clauses) {
 		if strings.Contains(matchString, "ip saddr @") {
 			ipSetNames = append(ipSetNames, strings.TrimPrefix(strings.Split(matchString, " ")[2], "@"))
 		}
@@ -246,80 +290,98 @@ func (m nftMatch) IPSetNames() (ipSetNames []string) {
 }
 
 func (m nftMatch) SourcePorts(ports ...uint16) generictables.MatchCriteria {
+	m.removeProtocolMatch()
 	portsString := PortsToMultiport(ports)
-	return append(m, fmt.Sprintf("tcp sport %s", portsString))
+	m.clauses = append(m.clauses, fmt.Sprintf("%s sport %s", m.proto, portsString))
+	return m
 }
 
 func (m nftMatch) NotSourcePorts(ports ...uint16) generictables.MatchCriteria {
+	m.removeProtocolMatch()
 	portsString := PortsToMultiport(ports)
-	return append(m, fmt.Sprintf("tcp sport != %s", portsString))
+	m.clauses = append(m.clauses, fmt.Sprintf("%s sport != %s", m.proto, portsString))
+	return m
 }
 
 func (m nftMatch) DestPorts(ports ...uint16) generictables.MatchCriteria {
-	portsString := PortsToMultiport(ports)
-	return append(m, fmt.Sprintf("tcp dport %s", portsString))
-}
-
-func (m nftMatch) UDPDestPorts(ports ...uint16) generictables.MatchCriteria {
-	portsString := PortsToMultiport(ports)
-	return append(m, fmt.Sprintf("udp dport %s", portsString))
+	m.removeProtocolMatch()
+	m.clauses = append(m.clauses, fmt.Sprintf("%s dport %s", m.proto, PortsToMultiport(ports)))
+	return m
 }
 
 func (m nftMatch) NotDestPorts(ports ...uint16) generictables.MatchCriteria {
+	m.removeProtocolMatch()
 	portsString := PortsToMultiport(ports)
-	return append(m, fmt.Sprintf("tcp dport != %s", portsString))
+	m.clauses = append(m.clauses, fmt.Sprintf("%s dport != %s", m.proto, portsString))
+	return m
 }
 
 func (m nftMatch) SourcePortRanges(ports []*proto.PortRange) generictables.MatchCriteria {
+	m.removeProtocolMatch()
 	portsString := PortRangesToMultiport(ports)
-	return append(m, fmt.Sprintf("tcp sport %s", portsString))
+	m.clauses = append(m.clauses, fmt.Sprintf("%s sport %s", m.proto, portsString))
+	return m
 }
 
 func (m nftMatch) NotSourcePortRanges(ports []*proto.PortRange) generictables.MatchCriteria {
+	m.removeProtocolMatch()
 	portsString := PortRangesToMultiport(ports)
-	return append(m, fmt.Sprintf("tcp sport != %s", portsString))
+	m.clauses = append(m.clauses, fmt.Sprintf("%s sport != %s", m.proto, portsString))
+	return m
 }
 
 func (m nftMatch) DestPortRanges(ports []*proto.PortRange) generictables.MatchCriteria {
+	m.removeProtocolMatch()
 	portsString := PortRangesToMultiport(ports)
-	return append(m, fmt.Sprintf("tcp dport %s", portsString))
+	m.clauses = append(m.clauses, fmt.Sprintf("%s dport %s", m.proto, portsString))
+	return m
 }
 
 func (m nftMatch) NotDestPortRanges(ports []*proto.PortRange) generictables.MatchCriteria {
+	m.removeProtocolMatch()
 	portsString := PortRangesToMultiport(ports)
-	return append(m, fmt.Sprintf("tcp dport != %s", portsString))
+	m.clauses = append(m.clauses, fmt.Sprintf("%s dport != %s", m.proto, portsString))
+	return m
 }
 
 func (m nftMatch) ICMPType(t uint8) generictables.MatchCriteria {
-	return append(m, fmt.Sprintf("icmp type %d", t))
+	m.clauses = append(m.clauses, fmt.Sprintf("icmp type %d", t))
+	return m
 }
 
 func (m nftMatch) NotICMPType(t uint8) generictables.MatchCriteria {
-	return append(m, fmt.Sprintf("icmp type != %d", t))
+	m.clauses = append(m.clauses, fmt.Sprintf("icmp type != %d", t))
+	return m
 }
 
 func (m nftMatch) ICMPTypeAndCode(t, c uint8) generictables.MatchCriteria {
-	return append(m, fmt.Sprintf("icmp type %d code %d", t, c))
+	m.clauses = append(m.clauses, fmt.Sprintf("icmp type %d code %d", t, c))
+	return m
 }
 
 func (m nftMatch) NotICMPTypeAndCode(t, c uint8) generictables.MatchCriteria {
-	return append(m, fmt.Sprintf("icmp type !=%d code !=%d", t, c))
+	m.clauses = append(m.clauses, fmt.Sprintf("icmp type != %d code != %d", t, c))
+	return m
 }
 
 func (m nftMatch) ICMPV6Type(t uint8) generictables.MatchCriteria {
-	return append(m, fmt.Sprintf("icmp type %d", t))
+	m.clauses = append(m.clauses, fmt.Sprintf("icmp type %d", t))
+	return m
 }
 
 func (m nftMatch) NotICMPV6Type(t uint8) generictables.MatchCriteria {
-	return append(m, fmt.Sprintf("icmp type != %d", t))
+	m.clauses = append(m.clauses, fmt.Sprintf("icmp type != %d", t))
+	return m
 }
 
 func (m nftMatch) ICMPV6TypeAndCode(t, c uint8) generictables.MatchCriteria {
-	return append(m, fmt.Sprintf("icmp type %d code %d", t, c))
+	m.clauses = append(m.clauses, fmt.Sprintf("icmp type %d code %d", t, c))
+	return m
 }
 
 func (m nftMatch) NotICMPV6TypeAndCode(t, c uint8) generictables.MatchCriteria {
-	return append(m, fmt.Sprintf("icmp type != %d code != %d", t, c))
+	m.clauses = append(m.clauses, fmt.Sprintf("icmp type != %d code != %d", t, c))
+	return m
 }
 
 // VXLANVNI matches on the VNI contained within the VXLAN header.  It assumes that this is indeed a VXLAN
@@ -332,8 +394,25 @@ func (m nftMatch) VXLANVNI(vni uint32) generictables.MatchCriteria {
 	return m
 }
 
+// removeProtocolMatch removes the "ip protocol" clause from the rule. This is necessary when specifying a port match,
+// since port matches already include the protocol in the match string and nftables rejects specifying it twice.
+func (m *nftMatch) removeProtocolMatch() {
+	if m.proto == "" {
+		logrus.Fatal("BUG: removeProtocolMatch called without a protocol match")
+	}
+	for i := range m.clauses {
+		if strings.Contains(m.clauses[i], "ip protocol ") {
+			m.clauses = append(m.clauses[:i], m.clauses[i+1:]...)
+			return
+		}
+	}
+}
+
 // Converts a list of ports to a multiport set suitable for inline use in nftables rules.
 func PortsToMultiport(ports []uint16) string {
+	if len(ports) == 1 {
+		return fmt.Sprintf("%d", ports[0])
+	}
 	portFragments := make([]string, len(ports))
 	for i, port := range ports {
 		portFragments[i] = fmt.Sprintf("%d", port)

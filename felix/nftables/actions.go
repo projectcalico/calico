@@ -20,7 +20,6 @@ import (
 
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/generictables"
-	"github.com/sirupsen/logrus"
 )
 
 type namespaceable interface {
@@ -115,7 +114,6 @@ func (g GotoAction) String() string {
 }
 
 func (g GotoAction) ReferencedChain() string {
-	logrus.WithField("referencedChain", g.Target).Info("GotoAction.ReferencedChain")
 	return g.Target
 }
 
