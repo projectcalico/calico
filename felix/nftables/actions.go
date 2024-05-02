@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,14 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package iptables
+package nftables
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/generictables"
+	"github.com/sirupsen/logrus"
 )
+
+type namespaceable interface {
+	Namespace(string) generictables.Action
+}
 
 func ActionSet() generictables.ActionSet {
 	return &actionSet{}
@@ -32,7 +38,7 @@ func (s *actionSet) AllowAction() generictables.Action {
 }
 
 func (s *actionSet) GoToAction(target string) generictables.Action {
-	return GotoAction{Target: target}
+	return &GotoAction{Target: target}
 }
 
 func (s *actionSet) ReturnAction() generictables.Action {
@@ -57,7 +63,7 @@ func (s *actionSet) ClearMarkAction(mark uint32) generictables.Action {
 }
 
 func (s *actionSet) JumpAction(target string) generictables.Action {
-	return JumpAction{Target: target}
+	return &JumpAction{Target: target}
 }
 
 func (s *actionSet) NoTrackAction() generictables.Action {
@@ -101,7 +107,7 @@ type GotoAction struct {
 }
 
 func (g GotoAction) ToFragment(features *environment.Features) string {
-	return "--goto " + g.Target
+	return "goto " + g.Target
 }
 
 func (g GotoAction) String() string {
@@ -109,10 +115,24 @@ func (g GotoAction) String() string {
 }
 
 func (g GotoAction) ReferencedChain() string {
+	logrus.WithField("referencedChain", g.Target).Info("GotoAction.ReferencedChain")
 	return g.Target
 }
 
-var _ Referrer = GotoAction{}
+func (g GotoAction) Namespace(ns string) generictables.Action {
+	if strings.HasPrefix(g.Target, ns) {
+		return g
+	}
+
+	n := g
+	n.Target = ns + "-" + g.Target
+	return n
+}
+
+var (
+	_ Referrer      = GotoAction{}
+	_ namespaceable = GotoAction{}
+)
 
 type JumpAction struct {
 	Target   string
@@ -120,7 +140,7 @@ type JumpAction struct {
 }
 
 func (g JumpAction) ToFragment(features *environment.Features) string {
-	return "--jump " + g.Target
+	return "jump " + g.Target
 }
 
 func (g JumpAction) String() string {
@@ -131,14 +151,27 @@ func (g JumpAction) ReferencedChain() string {
 	return g.Target
 }
 
-var _ Referrer = JumpAction{}
+func (g JumpAction) Namespace(ns string) generictables.Action {
+	if strings.HasPrefix(g.Target, ns) {
+		return g
+	}
+
+	n := g
+	n.Target = ns + "-" + g.Target
+	return n
+}
+
+var (
+	_ Referrer      = &JumpAction{}
+	_ namespaceable = &JumpAction{}
+)
 
 type ReturnAction struct {
 	TypeReturn struct{}
 }
 
 func (r ReturnAction) ToFragment(features *environment.Features) string {
-	return "--jump RETURN"
+	return "return"
 }
 
 func (r ReturnAction) String() string {
@@ -150,7 +183,7 @@ type DropAction struct {
 }
 
 func (g DropAction) ToFragment(features *environment.Features) string {
-	return "--jump DROP"
+	return "drop"
 }
 
 func (g DropAction) String() string {
@@ -162,7 +195,7 @@ type RejectAction struct {
 }
 
 func (g RejectAction) ToFragment(features *environment.Features) string {
-	return "--jump REJECT"
+	return "reject"
 }
 
 func (g RejectAction) String() string {
@@ -175,7 +208,7 @@ type LogAction struct {
 }
 
 func (g LogAction) ToFragment(features *environment.Features) string {
-	return fmt.Sprintf(`--jump LOG --log-prefix "%s: " --log-level 5`, g.Prefix)
+	return fmt.Sprintf(`log prefix %s level info`, g.Prefix)
 }
 
 func (g LogAction) String() string {
@@ -187,7 +220,7 @@ type AcceptAction struct {
 }
 
 func (g AcceptAction) ToFragment(features *environment.Features) string {
-	return "--jump ACCEPT"
+	return "accept"
 }
 
 func (g AcceptAction) String() string {
@@ -202,9 +235,9 @@ type DNATAction struct {
 
 func (g DNATAction) ToFragment(features *environment.Features) string {
 	if g.DestPort == 0 {
-		return fmt.Sprintf("--jump DNAT --to-destination %s", g.DestAddr)
+		return fmt.Sprintf("dnat to %s", g.DestAddr)
 	} else {
-		return fmt.Sprintf("--jump DNAT --to-destination %s:%d", g.DestAddr, g.DestPort)
+		return fmt.Sprintf("dnat to %s:%d", g.DestAddr, g.DestPort)
 	}
 }
 
@@ -220,9 +253,9 @@ type SNATAction struct {
 func (g SNATAction) ToFragment(features *environment.Features) string {
 	fullyRand := ""
 	if features.SNATFullyRandom {
-		fullyRand = " --random-fully"
+		fullyRand = " fully-random"
 	}
-	return fmt.Sprintf("--jump SNAT --to-source %s%s", g.ToAddr, fullyRand)
+	return fmt.Sprintf("snat to %s%s", g.ToAddr, fullyRand)
 }
 
 func (g SNATAction) String() string {
@@ -237,12 +270,13 @@ type MasqAction struct {
 func (g MasqAction) ToFragment(features *environment.Features) string {
 	fullyRand := ""
 	if features.MASQFullyRandom {
-		fullyRand = " --random-fully"
+		fullyRand = " fully-random"
 	}
 	if g.ToPorts != "" {
-		return fmt.Sprintf("--jump MASQUERADE --to-ports %s"+fullyRand, g.ToPorts)
+		// e.g., masquerade to :1024-65535
+		return fmt.Sprintf("masquerade to %s"+fullyRand, g.ToPorts)
 	}
-	return "--jump MASQUERADE" + fullyRand
+	return "masquerade" + fullyRand
 }
 
 func (g MasqAction) String() string {
@@ -255,7 +289,7 @@ type ClearMarkAction struct {
 }
 
 func (c ClearMarkAction) ToFragment(features *environment.Features) string {
-	return fmt.Sprintf("--jump MARK --set-mark 0/%#x", c.Mark)
+	return fmt.Sprintf("meta mark set mark & %#x", (c.Mark ^ 0xffffffff))
 }
 
 func (c ClearMarkAction) String() string {
@@ -268,7 +302,7 @@ type SetMarkAction struct {
 }
 
 func (c SetMarkAction) ToFragment(features *environment.Features) string {
-	return fmt.Sprintf("--jump MARK --set-mark %#x/%#x", c.Mark, c.Mark)
+	return fmt.Sprintf("meta mark set %#x", c.Mark)
 }
 
 func (c SetMarkAction) String() string {
@@ -282,7 +316,7 @@ type SetMaskedMarkAction struct {
 }
 
 func (c SetMaskedMarkAction) ToFragment(features *environment.Features) string {
-	return fmt.Sprintf("--jump MARK --set-mark %#x/%#x", c.Mark, c.Mask)
+	return fmt.Sprintf("meta mark set mark or %#x", (c.Mark & c.Mask))
 }
 
 func (c SetMaskedMarkAction) String() string {
@@ -294,7 +328,7 @@ type NoTrackAction struct {
 }
 
 func (g NoTrackAction) ToFragment(features *environment.Features) string {
-	return "--jump NOTRACK"
+	return "notrack"
 }
 
 func (g NoTrackAction) String() string {
@@ -307,14 +341,10 @@ type SaveConnMarkAction struct {
 }
 
 func (c SaveConnMarkAction) ToFragment(features *environment.Features) string {
-	var mask uint32
 	if c.SaveMask == 0 {
-		// If Mask field is ignored, save full mark.
-		mask = 0xffffffff
-	} else {
-		mask = c.SaveMask
+		return "ct mark set mark"
 	}
-	return fmt.Sprintf("--jump CONNMARK --save-mark --mask %#x", mask)
+	return fmt.Sprintf("ct mark set and %#x", c.SaveMask)
 }
 
 func (c SaveConnMarkAction) String() string {
@@ -327,14 +357,11 @@ type RestoreConnMarkAction struct {
 }
 
 func (c RestoreConnMarkAction) ToFragment(features *environment.Features) string {
-	var mask uint32
 	if c.RestoreMask == 0 {
 		// If Mask field is ignored, restore full mark.
-		mask = 0xffffffff
-	} else {
-		mask = c.RestoreMask
+		return "meta mark set ct mark"
 	}
-	return fmt.Sprintf("--jump CONNMARK --restore-mark --mask %#x", mask)
+	return fmt.Sprintf("meta mark set ct mark and %#x", c.RestoreMask)
 }
 
 func (c RestoreConnMarkAction) String() string {
@@ -348,14 +375,12 @@ type SetConnMarkAction struct {
 }
 
 func (c SetConnMarkAction) ToFragment(features *environment.Features) string {
-	var mask uint32
 	if c.Mask == 0 {
 		// If Mask field is ignored, default to full mark.
-		mask = 0xffffffff
-	} else {
-		mask = c.Mask
+		return fmt.Sprintf("ct mark set %#x", c.Mark)
 	}
-	return fmt.Sprintf("--jump CONNMARK --set-mark %#x/%#x", c.Mark, mask)
+	notMask := c.Mask ^ 0xffffffff
+	return fmt.Sprintf("ct mark set ct mark xor %#x and %#x", c.Mark, notMask)
 }
 
 func (c SetConnMarkAction) String() string {
