@@ -59,6 +59,13 @@ for log_file in /home/semaphore/fv.log/*.log; do
     cat ${log_file} | iconv -f UTF-16 -t UTF-8 | sed 's/\r$//g' | grep --line-buffered --perl ${log_regexps} -B 2 -A 15 | sed 's/.*/'"${prefix}"' &/g'
 done;
 
+# Search for the file indicates that the Windows node has completed the FV process
+if [ ! -f /home/semaphore/report/done-marker ];
+then
+    echo "Windows node failed to complete the FV process."
+    exit 1
+fi
+
 # Search for error code file
 if [ -f /home/semaphore/report/error-codes ];
 then

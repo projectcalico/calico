@@ -27,20 +27,19 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/projectcalico/calico/app-policy/checker"
-	"github.com/projectcalico/calico/app-policy/health"
-	"github.com/projectcalico/calico/app-policy/policystore"
-	"github.com/projectcalico/calico/app-policy/proto"
-	"github.com/projectcalico/calico/app-policy/syncher"
-	"github.com/projectcalico/calico/app-policy/uds"
-	"github.com/projectcalico/calico/libcalico-go/lib/seedrng"
-
 	"github.com/docopt/docopt-go"
 	authz_v2 "github.com/envoyproxy/go-control-plane/envoy/service/auth/v2"
 	authz_v2alpha "github.com/envoyproxy/go-control-plane/envoy/service/auth/v2alpha"
 	authz "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
+
+	"github.com/projectcalico/calico/app-policy/checker"
+	"github.com/projectcalico/calico/app-policy/health"
+	"github.com/projectcalico/calico/app-policy/policystore"
+	"github.com/projectcalico/calico/app-policy/proto"
+	"github.com/projectcalico/calico/app-policy/syncher"
+	"github.com/projectcalico/calico/app-policy/uds"
 )
 
 const usage = `Dikastes - the decider.
@@ -60,9 +59,6 @@ Options:
 var VERSION string
 
 func main() {
-	// Make sure the RNG is seeded.
-	seedrng.EnsureSeeded()
-
 	arguments, err := docopt.ParseArgs(usage, nil, VERSION)
 	if err != nil {
 		println(usage)

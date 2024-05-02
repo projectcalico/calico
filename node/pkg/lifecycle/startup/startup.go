@@ -316,7 +316,6 @@ func MonitorIPAddressSubnets() {
 	ctx := context.Background()
 	_, cli := calicoclient.CreateClient()
 	nodeName := utils.DetermineNodeName()
-	node := getNode(ctx, cli, nodeName)
 
 	pollInterval := getMonitorPollInterval()
 
@@ -324,6 +323,7 @@ func MonitorIPAddressSubnets() {
 	var config *rest.Config
 	var k8sNode *v1.Node
 	var err error
+	var node *libapi.Node
 
 	// Determine the Kubernetes node name. Default to the Calico node name unless an explicit
 	// value is provided.
@@ -338,17 +338,24 @@ func MonitorIPAddressSubnets() {
 			log.WithError(err).Error("Failed to create clientset")
 			return
 		}
-
-		k8sNode, err = clientset.CoreV1().Nodes().Get(ctx, k8sNodeName, metav1.GetOptions{})
-		if err != nil {
-			log.WithError(err).Error("Failed to read Node from datastore")
-			return
-		}
 	}
 
 	for {
 		<-time.After(pollInterval)
 		log.Debugf("Checking node IP address every %v", pollInterval)
+
+		// Every polling interval, try to get the k8s Node and use the latest K8s node IP to configure.
+		if clientset != nil {
+			k8sNode, err = clientset.CoreV1().Nodes().Get(ctx, k8sNodeName, metav1.GetOptions{})
+			if err != nil {
+				log.WithError(err).Error("Failed to read Node from datastore")
+				return
+			}
+		}
+
+		// Every polling interval, try to get new node configuration.
+		node = getNode(ctx, cli, nodeName)
+
 		updated := configureAndCheckIPAddressSubnets(ctx, cli, node, k8sNode)
 		if updated {
 			// Apply the updated node resource.
@@ -749,16 +756,33 @@ func configureIPPools(ctx context.Context, client client.Interface, kubeadmConfi
 		return
 	}
 
+	var (
+		ipv4PoolEnabled = true
+		ipv6PoolEnabled = true
+	)
+
+	if ipv4Pool == "none" {
+		log.Info("Skipping IPv4 pool configuration")
+
+		ipv4PoolEnabled = false
+	}
+
+	if ipv6Pool == "none" {
+		log.Info("Skipping IPv6 pool configuration")
+
+		ipv6PoolEnabled = false
+	}
+
 	// If CIDRs weren't specified through the environment variables, check if they're present in kubeadm's
 	// config map.
-	if (len(ipv4Pool) == 0 || len(ipv6Pool) == 0) && kubeadmConfig != nil {
+	if ((ipv4PoolEnabled && len(ipv4Pool) == 0) || (ipv6PoolEnabled && len(ipv6Pool) == 0)) && kubeadmConfig != nil {
 		v4, v6, err := extractKubeadmCIDRs(kubeadmConfig)
 		if err == nil {
-			if len(ipv4Pool) == 0 {
+			if ipv4PoolEnabled && len(ipv4Pool) == 0 {
 				ipv4Pool = v4
 				log.Infof("found v4=%s in the kubeadm config map", ipv4Pool)
 			}
-			if len(ipv6Pool) == 0 {
+			if ipv6PoolEnabled && len(ipv6Pool) == 0 {
 				ipv6Pool = v6
 				log.Infof("found v6=%s in the kubeadm config map", ipv6Pool)
 			}
@@ -767,32 +791,86 @@ func configureIPPools(ctx context.Context, client client.Interface, kubeadmConfi
 		}
 	}
 
-	ipv4IpipModeEnvVar := strings.ToLower(os.Getenv("CALICO_IPV4POOL_IPIP"))
-	ipv4VXLANModeEnvVar := strings.ToLower(os.Getenv("CALICO_IPV4POOL_VXLAN"))
-	ipv6VXLANModeEnvVar := strings.ToLower(os.Getenv("CALICO_IPV6POOL_VXLAN"))
-
 	var (
 		ipv4BlockSize int
 		ipv6BlockSize int
+
+		ipv4IpipModeEnvVar, ipv4VXLANModeEnvVar, ipv4BlockSizeEnvVar string
+		ipv6VXLANModeEnvVar, ipv6BlockSizeEnvVar                     string
+
+		ipv4NodeSelector string
+		ipv6NodeSelector string
+
+		ipv4Cidr *cnet.IPNet
+		ipv6Cidr *cnet.IPNet
+
+		err error
 	)
-	ipv4BlockSizeEnvVar := os.Getenv("CALICO_IPV4POOL_BLOCK_SIZE")
-	if ipv4BlockSizeEnvVar != "" {
-		ipv4BlockSize = parseBlockSizeEnvironment(ipv4BlockSizeEnvVar)
-	} else {
-		ipv4BlockSize = DEFAULT_IPV4_POOL_BLOCK_SIZE
+
+	if ipv4PoolEnabled {
+		ipv4IpipModeEnvVar = strings.ToLower(os.Getenv("CALICO_IPV4POOL_IPIP"))
+		ipv4VXLANModeEnvVar = strings.ToLower(os.Getenv("CALICO_IPV4POOL_VXLAN"))
+		ipv6VXLANModeEnvVar = strings.ToLower(os.Getenv("CALICO_IPV6POOL_VXLAN"))
+
+		ipv4BlockSizeEnvVar = os.Getenv("CALICO_IPV4POOL_BLOCK_SIZE")
+		if ipv4BlockSizeEnvVar != "" {
+			ipv4BlockSize = parseBlockSizeEnvironment(ipv4BlockSizeEnvVar)
+		} else {
+			ipv4BlockSize = DEFAULT_IPV4_POOL_BLOCK_SIZE
+		}
+
+		validateBlockSize(4, ipv4BlockSize)
+
+		ipv4NodeSelector = os.Getenv("CALICO_IPV4POOL_NODE_SELECTOR")
+		validateNodeSelector(4, ipv4NodeSelector)
+
+		// Read IPV4 CIDR from env if set and parse then check it for errors
+		if ipv4Pool == "" {
+			ipv4Pool = DEFAULT_IPV4_POOL_CIDR
+
+			_, preferedNet, _ := net.ParseCIDR(DEFAULT_IPV4_POOL_CIDR)
+			if selectedPool, err := ipv4.GetDefaultIPv4Pool(preferedNet); err == nil {
+				ipv4Pool = selectedPool.String()
+			}
+
+			log.Infof("Selected default IP pool is '%s'", ipv4Pool)
+		}
+		_, ipv4Cidr, err = cnet.ParseCIDR(ipv4Pool)
+		if err != nil || ipv4Cidr.Version() != 4 {
+			log.Errorf("Invalid CIDR specified in CALICO_IPV4POOL_CIDR '%s'", ipv4Pool)
+			utils.Terminate()
+			return // not really needed but allows testing to function
+		}
 	}
-	validateBlockSize(4, ipv4BlockSize)
-	ipv6BlockSizeEnvVar := os.Getenv("CALICO_IPV6POOL_BLOCK_SIZE")
-	if ipv6BlockSizeEnvVar != "" {
-		ipv6BlockSize = parseBlockSizeEnvironment(ipv6BlockSizeEnvVar)
-	} else {
-		ipv6BlockSize = DEFAULT_IPV6_POOL_BLOCK_SIZE
+
+	if ipv6PoolEnabled {
+		ipv6BlockSizeEnvVar = os.Getenv("CALICO_IPV6POOL_BLOCK_SIZE")
+		if ipv6BlockSizeEnvVar != "" {
+			ipv6BlockSize = parseBlockSizeEnvironment(ipv6BlockSizeEnvVar)
+		} else {
+			ipv6BlockSize = DEFAULT_IPV6_POOL_BLOCK_SIZE
+		}
+
+		validateBlockSize(6, ipv6BlockSize)
+
+		ipv6NodeSelector = os.Getenv("CALICO_IPV6POOL_NODE_SELECTOR")
+		validateNodeSelector(6, ipv6NodeSelector)
+
+		// If no IPv6 pool is specified, generate one.
+		if ipv6Pool == "" {
+			ipv6Pool, err = GenerateIPv6ULAPrefix()
+			if err != nil {
+				log.Errorf("Failed to generate an IPv6 default pool")
+				utils.Terminate()
+			}
+		}
+		_, ipv6Cidr, err = cnet.ParseCIDR(ipv6Pool)
+		if err != nil || ipv6Cidr.Version() != 6 {
+			log.Errorf("Invalid CIDR specified in CALICO_IPV6POOL_CIDR '%s'", ipv6Pool)
+			utils.Terminate()
+			return // not really needed but allows testing to function
+		}
 	}
-	validateBlockSize(6, ipv6BlockSize)
-	ipv4NodeSelector := os.Getenv("CALICO_IPV4POOL_NODE_SELECTOR")
-	validateNodeSelector(4, ipv4NodeSelector)
-	ipv6NodeSelector := os.Getenv("CALICO_IPV6POOL_NODE_SELECTOR")
-	validateNodeSelector(6, ipv6NodeSelector)
 
 	// Get a list of all IP Pools
 	poolList, err := client.IPPools().List(ctx, options.ListOptions{})
@@ -819,55 +897,22 @@ func configureIPPools(ctx context.Context, client client.Interface, kubeadmConfi
 		}
 	}
 
-	// Read IPV4 CIDR from env if set and parse then check it for errors
-	if ipv4Pool == "" {
-		ipv4Pool = DEFAULT_IPV4_POOL_CIDR
-
-		_, preferedNet, _ := net.ParseCIDR(DEFAULT_IPV4_POOL_CIDR)
-		if selectedPool, err := ipv4.GetDefaultIPv4Pool(preferedNet); err == nil {
-			ipv4Pool = selectedPool.String()
-		}
-
-		log.Infof("Selected default IP pool is '%s'", ipv4Pool)
-	}
-	_, ipv4Cidr, err := cnet.ParseCIDR(ipv4Pool)
-	if err != nil || ipv4Cidr.Version() != 4 {
-		log.Errorf("Invalid CIDR specified in CALICO_IPV4POOL_CIDR '%s'", ipv4Pool)
-		utils.Terminate()
-		return // not really needed but allows testing to function
-	}
-
-	// If no IPv6 pool is specified, generate one.
-	if ipv6Pool == "" {
-		ipv6Pool, err = GenerateIPv6ULAPrefix()
-		if err != nil {
-			log.Errorf("Failed to generate an IPv6 default pool")
-			utils.Terminate()
-		}
-	}
-	_, ipv6Cidr, err := cnet.ParseCIDR(ipv6Pool)
-	if err != nil || ipv6Cidr.Version() != 6 {
-		log.Errorf("Invalid CIDR specified in CALICO_IPV6POOL_CIDR '%s'", ipv6Pool)
-		utils.Terminate()
-		return // not really needed but allows testing to function
-	}
-
 	// Ensure there are pools created for each IP version.
-	if !ipv4Present {
+	if ipv4PoolEnabled && !ipv4Present {
 		log.Debug("Create default IPv4 IP pool")
 		outgoingNATEnabled := evaluateENVBool("CALICO_IPV4POOL_NAT_OUTGOING", true)
 		bgpExportDisabled := evaluateENVBool("CALICO_IPV4POOL_DISABLE_BGP_EXPORT", false)
 
 		createIPPool(ctx, client, ipv4Cidr, DEFAULT_IPV4_POOL_NAME, ipv4IpipModeEnvVar, ipv4VXLANModeEnvVar, outgoingNATEnabled, ipv4BlockSize, ipv4NodeSelector, bgpExportDisabled)
 	}
-	if !ipv6Present && ipv6Supported() {
+
+	if ipv6PoolEnabled && !ipv6Present && ipv6Supported() {
 		log.Debug("Create default IPv6 IP pool")
 		outgoingNATEnabled := evaluateENVBool("CALICO_IPV6POOL_NAT_OUTGOING", false)
 		bgpExportDisabled := evaluateENVBool("CALICO_IPV6POOL_DISABLE_BGP_EXPORT", false)
 
 		createIPPool(ctx, client, ipv6Cidr, DEFAULT_IPV6_POOL_NAME, string(api.IPIPModeNever), ipv6VXLANModeEnvVar, outgoingNATEnabled, ipv6BlockSize, ipv6NodeSelector, bgpExportDisabled)
 	}
-
 }
 
 // createIPPool creates an IP pool using the specified CIDR.  This

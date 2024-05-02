@@ -28,7 +28,6 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
@@ -1097,7 +1096,7 @@ func determinePodMTU(config Config) int {
 		// No enabled encapsulation. Just use the host MTU.
 		mtu = config.hostMTU
 	} else if mtu > config.hostMTU {
-		fields := logrus.Fields{"mtu": mtu, "hostMTU": config.hostMTU}
+		fields := log.Fields{"mtu": mtu, "hostMTU": config.hostMTU}
 		log.WithFields(fields).Warn("Configured MTU is larger than detected host interface MTU")
 	}
 	log.WithField("mtu", mtu).Info("Determined pod MTU")
@@ -1529,7 +1528,7 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 				// only go to the host. Make sure that they are not forwarded.
 				fwdRules = append(fwdRules, rules.ICMPv6Filter(d.ruleRenderer.IptablesFilterDenyAction())...)
 			}
-		} else if (t.IPVersion == 6) == (d.config.BPFIpv6Enabled) /* XXX remove condition for dual stack */ {
+		} else {
 			// Let the BPF programs know if Linux conntrack knows about the flow.
 			fwdRules = append(fwdRules, bpfMarkPreestablishedFlowsRules()...)
 			// The packet may be about to go to a local workload.  However, the local workload may not have a BPF

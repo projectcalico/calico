@@ -20,7 +20,6 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 
 	apiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
@@ -72,7 +71,7 @@ func (c *nodeLabelController) onUpdate(update bapi.Update) {
 			n := update.KVPair.Value.(*apiv3.Node)
 			kn, err := getK8sNodeName(*n)
 			if err != nil {
-				log.WithError(err).Info("Unable to get corresponding k8s node name, skipping")
+				logrus.WithError(err).Info("Unable to get corresponding k8s node name, skipping")
 			} else if kn != "" {
 				// Create a mapping from Kubernetes node -> Calico node.
 				logrus.Debugf("Mapping k8s node -> calico node. %s -> %s", kn, n.Name)
@@ -116,7 +115,7 @@ func (c *nodeLabelController) OnKubernetesNodeUpdate(obj interface{}) {
 	if n, ok := obj.(*v1.Node); ok {
 		c.syncNodeLabels(n)
 	} else {
-		log.Warnf("Received update that is not a v1.Node: %+v", obj)
+		logrus.Warnf("Received update that is not a v1.Node: %+v", obj)
 	}
 }
 
@@ -140,12 +139,12 @@ func (c *nodeLabelController) syncNodeLabels(node *v1.Node) {
 		name, ok := c.getCalicoNode(node.Name)
 		if !ok {
 			// We haven't learned this Calico node yet.
-			log.Debugf("Skipping update for node with no Calico equivalent")
+			logrus.Debugf("Skipping update for node with no Calico equivalent")
 			return
 		}
 		calNode, err := c.client.Nodes().Get(context.Background(), name, options.GetOptions{})
 		if err != nil {
-			log.WithError(err).Warnf("Failed to get node, retrying")
+			logrus.WithError(err).Warnf("Failed to get node, retrying")
 			time.Sleep(retrySleepTime)
 			continue
 		}
@@ -166,18 +165,18 @@ func (c *nodeLabelController) syncNodeLabels(node *v1.Node) {
 		oldLabels := map[string]string{}
 		if a, ok := calNode.Annotations[nodeLabelAnnotation]; ok {
 			if err = json.Unmarshal([]byte(a), &oldLabels); err != nil {
-				log.WithError(err).Error("Failed to unmarshal node labels")
+				logrus.WithError(err).Error("Failed to unmarshal node labels")
 				return
 			}
 		}
-		log.Debugf("Determined previously synced labels: %s", oldLabels)
+		logrus.Debugf("Determined previously synced labels: %s", oldLabels)
 
 		// We've synced labels before. Determine diffs to apply.
 		// For each k/v in node.Labels, if it isn't present or the value
 		// differs, add it to the node.
 		for k, v := range node.Labels {
 			if v2, ok := calNode.Labels[k]; !ok || v != v2 {
-				log.Debugf("Adding node label %s=%s", k, v)
+				logrus.Debugf("Adding node label %s=%s", k, v)
 				calNode.Labels[k] = v
 				needsUpdate = true
 			}
@@ -188,7 +187,7 @@ func (c *nodeLabelController) syncNodeLabels(node *v1.Node) {
 		for k, v := range oldLabels {
 			if _, ok := node.Labels[k]; !ok {
 				// The old label is no longer present. Remove it.
-				log.Debugf("Deleting node label %s=%s", k, v)
+				logrus.Debugf("Deleting node label %s=%s", k, v)
 				delete(calNode.Labels, k)
 				needsUpdate = true
 			}
@@ -197,7 +196,7 @@ func (c *nodeLabelController) syncNodeLabels(node *v1.Node) {
 		// Set the annotation to the correct values.
 		bytes, err := json.Marshal(node.Labels)
 		if err != nil {
-			log.WithError(err).Errorf("Error marshalling node labels")
+			logrus.WithError(err).Errorf("Error marshalling node labels")
 			return
 		}
 		calNode.Annotations[nodeLabelAnnotation] = string(bytes)
@@ -205,13 +204,13 @@ func (c *nodeLabelController) syncNodeLabels(node *v1.Node) {
 		// Update the node in the datastore.
 		if needsUpdate {
 			if _, err := c.client.Nodes().Update(context.Background(), calNode, options.SetOptions{}); err != nil {
-				log.WithError(err).Warnf("Failed to update node, retrying")
+				logrus.WithError(err).Warnf("Failed to update node, retrying")
 				time.Sleep(retrySleepTime)
 				continue
 			}
-			log.WithField("node", node.ObjectMeta.Name).Info("Successfully synced node labels")
+			logrus.WithField("node", node.ObjectMeta.Name).Info("Successfully synced node labels")
 		}
 		return
 	}
-	log.Errorf("Too many retries when updating node")
+	logrus.Errorf("Too many retries when updating node")
 }

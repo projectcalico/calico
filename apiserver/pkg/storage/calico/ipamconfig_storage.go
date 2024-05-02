@@ -6,7 +6,8 @@ import (
 	"fmt"
 	"reflect"
 
-	"golang.org/x/net/context"
+	"context"
+
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/registry/generic/registry"
 	"k8s.io/apiserver/pkg/storage"

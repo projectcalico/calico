@@ -25,6 +25,7 @@ SEC("tc")
 int  cali_tc_preamble(struct __sk_buff *skb)
 {
 	volatile struct cali_tc_globals *globals = state_get_globals_tc();
+	const volatile struct cali_tc_global_data *globals_data = NULL;
 
 	if (!globals) {
 		return TC_ACT_SHOT;
@@ -32,11 +33,27 @@ int  cali_tc_preamble(struct __sk_buff *skb)
 
 	__u16 protocol = bpf_ntohs(skb->protocol);
 	/* Set the globals for the rest of the prog chain. */
-	if (protocol == ETH_P_IPV6 && (__globals.v6.jumps[PROG_INDEX_MAIN] != (__u32)-1)) {
-		globals->data = __globals.v6;
+	if (protocol == ETH_P_IPV6) {
+		if (__globals.v6.jumps[PROG_INDEX_MAIN] != (__u32)-1) {
+			globals_data = &__globals.v6;
+		} else if (__globals.v4.jumps[PROG_INDEX_MAIN] != (__u32)-1) {
+			globals_data = &__globals.v4;
+		}
 	} else {
-		globals->data = __globals.v4;
+		if (__globals.v4.jumps[PROG_INDEX_MAIN] != (__u32)-1) {
+			globals_data = &__globals.v4;
+		} else if (__globals.v6.jumps[PROG_INDEX_MAIN] != (__u32)-1) {
+			globals_data = &__globals.v6;
+		}
 	}
+
+	if (!globals_data) {
+		CALI_LOG("Main program not loaded for IP packet version %d, DROP\n", protocol);
+		return TC_ACT_SHOT;
+	}
+
+	/* We do the copy once here so keep the program smaller */
+	globals->data = *globals_data;
 
 #if EMIT_LOGS
 	CALI_LOG("tc_preamble iface %s\n", globals->data.iface_name);
