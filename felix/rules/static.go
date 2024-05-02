@@ -274,7 +274,7 @@ func (r *DefaultRuleRenderer) filterInputChain(ipVersion uint8) *generictables.C
 		inputRules = append(inputRules,
 			generictables.Rule{
 				Match: r.NewMatch().ProtocolNum(ProtoUDP).
-					UDPDestPorts(uint16(r.Config.VXLANPort)).
+					DestPorts(uint16(r.Config.VXLANPort)).
 					SourceIPSet(r.IPSetConfigV4.NameForMainIPSet(IPSetIDAllVXLANSourceNets)).
 					DestAddrType(generictables.AddrTypeLocal),
 				Action:  r.filterAllowAction,
@@ -282,7 +282,7 @@ func (r *DefaultRuleRenderer) filterInputChain(ipVersion uint8) *generictables.C
 			},
 			generictables.Rule{
 				Match: r.NewMatch().ProtocolNum(ProtoUDP).
-					UDPDestPorts(uint16(r.Config.VXLANPort)).
+					DestPorts(uint16(r.Config.VXLANPort)).
 					DestAddrType(generictables.AddrTypeLocal),
 				Action:  r.DropAction(),
 				Comment: []string{"Drop IPv4 VXLAN packets from non-allowed hosts"},
@@ -296,7 +296,7 @@ func (r *DefaultRuleRenderer) filterInputChain(ipVersion uint8) *generictables.C
 		inputRules = append(inputRules,
 			generictables.Rule{
 				Match: r.NewMatch().ProtocolNum(ProtoUDP).
-					UDPDestPorts(uint16(r.Config.VXLANPort)).
+					DestPorts(uint16(r.Config.VXLANPort)).
 					SourceIPSet(r.IPSetConfigV6.NameForMainIPSet(IPSetIDAllVXLANSourceNets)).
 					DestAddrType(generictables.AddrTypeLocal),
 				Action:  r.filterAllowAction,
@@ -304,7 +304,7 @@ func (r *DefaultRuleRenderer) filterInputChain(ipVersion uint8) *generictables.C
 			},
 			generictables.Rule{
 				Match: r.NewMatch().ProtocolNum(ProtoUDP).
-					UDPDestPorts(uint16(r.Config.VXLANPort)).
+					DestPorts(uint16(r.Config.VXLANPort)).
 					DestAddrType(generictables.AddrTypeLocal),
 				Action:  r.IptablesFilterDenyAction(),
 				Comment: []string{fmt.Sprintf("%s IPv6 VXLAN packets from non-allowed hosts", r.IptablesFilterDenyAction())},
@@ -766,7 +766,7 @@ func (r *DefaultRuleRenderer) filterOutputChain(ipVersion uint8) *generictables.
 		rules = append(rules,
 			generictables.Rule{
 				Match: r.NewMatch().ProtocolNum(ProtoUDP).
-					UDPDestPorts(uint16(r.Config.VXLANPort)).
+					DestPorts(uint16(r.Config.VXLANPort)).
 					SrcAddrType(generictables.AddrTypeLocal, false).
 					DestIPSet(r.IPSetConfigV4.NameForMainIPSet(IPSetIDAllVXLANSourceNets)),
 				Action:  r.filterAllowAction,
@@ -782,7 +782,7 @@ func (r *DefaultRuleRenderer) filterOutputChain(ipVersion uint8) *generictables.
 		rules = append(rules,
 			generictables.Rule{
 				Match: r.NewMatch().ProtocolNum(ProtoUDP).
-					UDPDestPorts(uint16(r.Config.VXLANPort)).
+					DestPorts(uint16(r.Config.VXLANPort)).
 					SrcAddrType(generictables.AddrTypeLocal, false).
 					DestIPSet(r.IPSetConfigV6.NameForMainIPSet(IPSetIDAllVXLANSourceNets)),
 				Action:  r.filterAllowAction,
@@ -1399,7 +1399,7 @@ func (r *DefaultRuleRenderer) WireguardIncomingMarkChain() *generictables.Chain 
 
 	for _, ifacePrefix := range r.WorkloadIfacePrefixes {
 		rules = append(rules, generictables.Rule{
-			Match:  r.NewMatch().InInterface(fmt.Sprintf("%s*", ifacePrefix)),
+			Match:  r.NewMatch().InInterface(fmt.Sprintf("%s%s", ifacePrefix, r.wildcard)),
 			Action: r.ReturnAction(),
 		})
 	}

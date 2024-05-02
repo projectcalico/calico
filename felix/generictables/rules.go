@@ -17,13 +17,12 @@ package generictables
 import (
 	"crypto/sha256"
 	"encoding/base64"
-	"fmt"
 	"regexp"
-	"strings"
 
-	"github.com/projectcalico/calico/felix/environment"
 	"github.com/sirupsen/logrus"
 	"sigs.k8s.io/knftables"
+
+	"github.com/projectcalico/calico/felix/environment"
 )
 
 var shellUnsafe = regexp.MustCompile(`[^\w @%+=:,./-]`)
@@ -33,7 +32,26 @@ const (
 	// collision-resistance.  16 chars gives us 96 bits of entropy, which is fairly collision
 	// resistant.
 	HashLength = 16
+
+	maxCommentLen = 256
 )
+
+type RuleHasher interface {
+	RuleHashes(c *Chain, features *environment.Features) []string
+}
+
+type NFTRenderer interface {
+	RuleHasher
+	Render(chain string, hash string, rule Rule, features *environment.Features) *knftables.Rule
+}
+
+type IptablesRenderer interface {
+	RuleHasher
+	RenderAppend(rule *Rule, chainName, hash string, features *environment.Features) string
+	RenderInsert(rule *Rule, chainName, hash string, features *environment.Features) string
+	RenderInsertAtRuleNumber(rule *Rule, chainName string, ruleNum int, hash string, features *environment.Features) string
+	RenderReplace(rule *Rule, chainName string, ruleNum int, hash string, features *environment.Features) string
+}
 
 type Rule struct {
 	Match   MatchCriteria
@@ -41,80 +59,35 @@ type Rule struct {
 	Comment []string
 }
 
-// renderFunc takes a list of fragments, a prefix fragment, a MatchCriteria, an Action, a comment, and a set of features
-// and renders them into a string suitable for programming into the dataplane. The way rules are rendered varies between iptables and nftables.
-type renderFunc func(fragments []string, prefixFragment string, match MatchCriteria, action Action, comment []string, features *environment.Features) string
-
-// TODO: This is a bit of a mess. We have distinct Render() for nftables, and RenderX() for iptables which are mutually exclusive.
-// There is probably a better way to structure this.
-func (r Rule) Render(chain string, prefixFragment string, renderInner renderFunc, features *environment.Features) *knftables.Rule {
-	return &knftables.Rule{
-		Chain:   chain,
-		Rule:    renderInner([]string{}, "", r.Match, r.Action, nil, features),
-		Comment: r.comment(prefixFragment),
-	}
-}
-
-func (r Rule) RenderAppend(chainName, prefixFragment string, renderInner renderFunc, features *environment.Features) string {
-	fragments := make([]string, 0, 6)
-	if _, ok := r.Match.(NFTMatchCriteria); ok {
-		// This is an nftables rule. Use nftables syntax instead.
-		fragments = append(fragments, "add rule", chainName)
-	} else {
-		fragments = append(fragments, "-A", chainName)
-	}
-	return renderInner(fragments, prefixFragment, r.Match, r.Action, r.Comment, features)
-}
-
-// TODO: iptables only
-func (r Rule) RenderInsert(chainName, prefixFragment string, renderInner renderFunc, features *environment.Features) string {
-	fragments := make([]string, 0, 6)
-	fragments = append(fragments, "-I", chainName)
-	return renderInner(fragments, prefixFragment, r.Match, r.Action, r.Comment, features)
-}
-
-// TODO: iptables only
-func (r Rule) RenderInsertAtRuleNumber(chainName string, ruleNum int, prefixFragment string, renderInner renderFunc, features *environment.Features) string {
-	fragments := make([]string, 0, 7)
-	fragments = append(fragments, "-I", chainName, fmt.Sprintf("%d", ruleNum))
-	return renderInner(fragments, prefixFragment, r.Match, r.Action, r.Comment, features)
-}
-
-// TODO: iptables only
-func (r Rule) RenderReplace(chainName string, ruleNum int, prefixFragment string, renderInner renderFunc, features *environment.Features) string {
-	fragments := make([]string, 0, 7)
-	fragments = append(fragments, "-R", chainName, fmt.Sprintf("%d", ruleNum))
-	return renderInner(fragments, prefixFragment, r.Match, r.Action, r.Comment, features)
-}
-
-// TODO: This is just for nftables mode.
-func (r Rule) comment(prefixFragment string) *string {
-	// ALways include the prefixFragment, which includes the chain hash.
-	fragments := []string{fmt.Sprintf("%s;", prefixFragment)}
-
-	// Add in any comments.
-	for _, c := range r.Comment {
-		c = escapeComment(c)
-		c = truncateComment(c)
-		fragments = append(fragments, c)
-	}
-	cmt := strings.Join(fragments, " ")
-	if cmt == "" {
-		return nil
-	}
-	return &cmt
-}
-
 type Chain struct {
 	Name  string
 	Rules []Rule
 }
 
-func (c *Chain) RuleHashes(renderInner renderFunc, features *environment.Features) []string {
+func (c *Chain) IPSetNames() (ipSetNames []string) {
+	if c == nil {
+		return nil
+	}
+	for _, rule := range c.Rules {
+		if rule.Match != nil {
+			ipSetNames = append(ipSetNames, rule.Match.IPSetNames()...)
+		}
+	}
+	return
+}
+
+// ruleRenderFn takes a rule within a chain and returns a string that can be used for hashing.
+type ruleRenderFn func(rule *Rule, chain string, features *environment.Features) string
+
+// ruleHashes is a common helper function for generating a slice of hashes from a chain's rules. It relies on
+// the caller passing the implementation appropriate renderFunc in order to render each Rule structure into a hashable string
+// that uniquely identifies the rule.
+func ruleHashes(c *Chain, renderFunc ruleRenderFn, features *environment.Features) []string {
 	if c == nil {
 		return nil
 	}
 	hashes := make([]string, len(c.Rules))
+
 	// First hash the chain name so that identical rules in different chains will get different
 	// hashes.
 	s := sha256.New224()
@@ -139,7 +112,7 @@ func (c *Chain) RuleHashes(renderInner renderFunc, features *environment.Feature
 				"chain":    c.Name,
 			}).WithError(err).Panic("Failed to write suffix to hash.")
 		}
-		ruleForHashing := rule.RenderAppend(c.Name, "HASH", renderInner, features)
+		ruleForHashing := renderFunc(&rule, c.Name, features)
 		_, err = s.Write([]byte(ruleForHashing))
 		if err != nil {
 			logrus.WithFields(logrus.Fields{
@@ -166,18 +139,6 @@ func (c *Chain) RuleHashes(renderInner renderFunc, features *environment.Feature
 	return hashes
 }
 
-func (c *Chain) IPSetNames() (ipSetNames []string) {
-	if c == nil {
-		return nil
-	}
-	for _, rule := range c.Rules {
-		if rule.Match != nil {
-			ipSetNames = append(ipSetNames, rule.Match.IPSetNames()...)
-		}
-	}
-	return
-}
-
 // escapeComment replaces anything other than "safe" shell characters with an
 // underscore (_).  This is a lossy conversion, but the expected use case
 // for this stuff getting all the way to iptables are either
@@ -191,8 +152,6 @@ func (c *Chain) IPSetNames() (ipSetNames []string) {
 func escapeComment(s string) string {
 	return shellUnsafe.ReplaceAllString(s, "_")
 }
-
-const maxCommentLen = 256
 
 func truncateComment(s string) string {
 	if len(s) > maxCommentLen {
