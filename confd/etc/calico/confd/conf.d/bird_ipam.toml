@@ -7,6 +7,5 @@ keys = [
     "/bgp/v1/host//NODENAME",
     "/staticroutes",
     "/rejectcidrs",
-    "/bgp/v1/",
 ]
 reload_cmd = "sv hup bird || true"

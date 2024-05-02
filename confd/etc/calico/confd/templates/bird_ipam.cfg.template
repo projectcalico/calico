@@ -8,18 +8,6 @@ function reject_disabled_pools ()
 {{- end}}
 }
 
-{{- $node_as_key := printf "/host/%s/as_num" (getenv "NODENAME")}}
-{{- $as_key := or (and (exists $node_as_key) $node_as_key) "/global/as_num"}}
-{{- $node_as_num := getv $as_key}}
-function reject_transit ()
-{
-  if (defined(bgp_path)) then {
-    if (bgp_path.last != {{$node_as_num}}) then {
-      reject;
-    }
-  }
-}
-
 function export_static ()
 {
 {{- $static_key := "/staticroutes"}}
@@ -98,10 +86,6 @@ filter calico_export_to_bgp_peers {
   # Export routes programmed into BGPConfiguration:
   # service{Cluster,External,LoadBalancer}IPs and generic prefixAdvertisements.
   export_static();
-
-  # Filter out further propagation of routes redistributed to this node which
-  # haven't originated from this AS nor are static.
-  reject_transit();
 
   export_pools();
 
