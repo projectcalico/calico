@@ -19,6 +19,7 @@ import (
 	"math/bits"
 	"strings"
 
+	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/generictables"
@@ -256,8 +257,25 @@ func (m nftMatch) NotSourcePorts(ports ...uint16) generictables.MatchCriteria {
 }
 
 func (m nftMatch) DestPorts(ports ...uint16) generictables.MatchCriteria {
-	portsString := PortsToMultiport(ports)
-	return append(m, fmt.Sprintf("tcp dport %s", portsString))
+	// Matches on port require a protocol be specified. The MatchCritieria interface exposes these
+	// as two separate functions, but the underlying nftables rule syntax varies based on whether or not a port was specified,
+	// and what type of match is being made. Extract the protocol and use it to build the port match.
+	var protocol string
+	for i := range m {
+		if strings.Contains(m[i], "ip protocol !=") {
+			// Protocol not match is not yet supported.
+			logrus.WithField("match", m[i]).Fatal("Not protocol match on ports is not supported")
+		} else if strings.Contains(m[i], "ip protocol ") {
+			protocol = strings.Split(m[i], " ")[2]
+
+			// Remove the protocol match, and instead include it in the port match. This is because
+			// port match includes the protocol in the match string.
+			m[i] = fmt.Sprintf("%s dport %s", protocol, PortsToMultiport(ports))
+			return m
+		}
+	}
+	logrus.Fatal("Protocol not found in match string, but is required for port match")
+	return nil
 }
 
 func (m nftMatch) UDPDestPorts(ports ...uint16) generictables.MatchCriteria {
@@ -281,8 +299,25 @@ func (m nftMatch) NotSourcePortRanges(ports []*proto.PortRange) generictables.Ma
 }
 
 func (m nftMatch) DestPortRanges(ports []*proto.PortRange) generictables.MatchCriteria {
-	portsString := PortRangesToMultiport(ports)
-	return append(m, fmt.Sprintf("tcp dport %s", portsString))
+	// Matches on port require a protocol be specified. The MatchCritieria interface exposes these
+	// as two separate functions, but the underlying nftables rule syntax varies based on whether or not a port was specified,
+	// and what type of match is being made. Extract the protocol and use it to build the port match.
+	var protocol string
+	for i := range m {
+		if strings.Contains(m[i], "ip protocol !=") {
+			// Protocol not match is not yet supported.
+			logrus.WithField("match", m[i]).Fatal("Not protocol match on port ranges is not supported")
+		} else if strings.Contains(m[i], "ip protocol ") {
+			protocol = strings.Split(m[i], " ")[2]
+
+			// Remove the protocol match, and instead include it in the port match. This is because
+			// port match includes the protocol in the match string.
+			m[i] = fmt.Sprintf("%s dport %s", protocol, PortRangesToMultiport(ports))
+			return m
+		}
+	}
+	logrus.Fatal("Protocol not found in match string, but is required for port ranges match")
+	return nil
 }
 
 func (m nftMatch) NotDestPortRanges(ports []*proto.PortRange) generictables.MatchCriteria {
