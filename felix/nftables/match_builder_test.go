@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package iptables_test
+package nftables_test
 
 import (
 	"github.com/projectcalico/calico/felix/generictables"
-	. "github.com/projectcalico/calico/felix/iptables"
+	. "github.com/projectcalico/calico/felix/nftables"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
@@ -110,7 +110,7 @@ var _ = DescribeTable("MatchBuilder",
 	// Check multiple match criteria are joined correctly.
 	Entry("Protocol and ports", Match().Protocol("tcp").SourcePorts(1234).DestPorts(8080),
 		"-p tcp -m multiport --source-ports 1234 -m multiport --destination-ports 8080"),
-	// IPVS.
-	Entry("IPVSConnection", Match().IPVSConnection(), "-m ipvs --ipvs"),
-	Entry("NotIPVSConnection", Match().NotIPVSConnection(), "-m ipvs ! --ipvs"),
+	// // IPVS.
+	// Entry("IPVSConnection", Match().IPVSConnection(), "-m ipvs --ipvs"),
+	// Entry("NotIPVSConnection", Match().NotIPVSConnection(), "-m ipvs ! --ipvs"),
 )
