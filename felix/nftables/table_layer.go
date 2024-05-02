@@ -5,8 +5,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/projectcalico/calico/felix/generictables"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/felix/generictables"
 )
 
 func NewTableLayer(name string, table generictables.Table) generictables.Table {
