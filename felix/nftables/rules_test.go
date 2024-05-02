@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,11 +15,11 @@
 package nftables
 
 import (
-	"bytes"
 	"strings"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"sigs.k8s.io/knftables"
 
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/generictables"
@@ -27,14 +27,14 @@ import (
 
 var (
 	rules1 = []generictables.Rule{
-		{Match: nftMatch{"-m foobar --foobar baz"}, Action: JumpAction{Target: "biff"}},
+		{Match: nftMatch{clauses: []string{"foobar baz"}}, Action: JumpAction{Target: "biff"}},
 	}
 	rules2 = []generictables.Rule{
-		{Match: nftMatch{"-m foobar --foobar baz"}, Action: JumpAction{Target: "boff"}},
+		{Match: nftMatch{clauses: []string{"foobar baz"}}, Action: JumpAction{Target: "boff"}},
 	}
 	rules3 = []generictables.Rule{
-		{Match: nftMatch{"-m foobar --foobar baz"}, Action: JumpAction{Target: "biff"}},
-		{Match: nftMatch{"-m foobar --foobar baz"}, Action: JumpAction{Target: "boff"}},
+		{Match: nftMatch{clauses: []string{"foobar baz"}}, Action: JumpAction{Target: "biff"}},
+		{Match: nftMatch{clauses: []string{"foobar baz"}}, Action: JumpAction{Target: "boff"}},
 	}
 )
 
@@ -69,58 +69,50 @@ var _ = Describe("Rule hashing tests", func() {
 var _ = Describe("rule comments", func() {
 	Context("Rule with multiple comments", func() {
 		rule := generictables.Rule{
-			Match:   nftMatch{"-m foobar --foobar baz"},
+			Match:   nftMatch{clauses: []string{"foobar baz"}},
 			Action:  JumpAction{Target: "biff"},
 			Comment: []string{"boz", "fizz"},
 		}
 
 		It("should render rule including multiple comments", func() {
-			render := rule.RenderAppend("test", "TEST", renderInner, &environment.Features{})
-			Expect(render).To(ContainSubstring("-m comment --comment \"boz\""))
-			Expect(render).To(ContainSubstring("-m comment --comment \"fizz\""))
+			render := renderRule(rule, &environment.Features{})
+			Expect(render.Comment).NotTo(BeNil())
+			Expect(*render.Comment).To(Equal("cali:TEST; boz fizz"))
 		})
 	})
 
 	Context("Rule with comment with newlines", func() {
 		rule := generictables.Rule{
-			Match:  nftMatch{"-m foobar --foobar baz"},
+			Match:  nftMatch{clauses: []string{"foobar baz"}},
 			Action: JumpAction{Target: "biff"},
 			Comment: []string{`boz
 fizz`},
 		}
 
 		It("should render rule with newline escaped", func() {
-			render := rule.RenderAppend("test", "TEST", renderInner, &environment.Features{})
-			Expect(render).To(ContainSubstring("-m comment --comment \"boz_fizz\""))
+			render := renderRule(rule, &environment.Features{})
+			Expect(render.Comment).NotTo(BeNil())
+			Expect(*render.Comment).To(Equal("cali:TEST; boz_fizz"))
 		})
 	})
 
 	Context("Rule with comment longer than 256 characters", func() {
 		rule := generictables.Rule{
-			Match:   nftMatch{"-m foobar --foobar baz"},
+			Match:   nftMatch{clauses: []string{"foobar baz"}},
 			Action:  JumpAction{Target: "biff"},
 			Comment: []string{strings.Repeat("a", 257)},
 		}
 
 		It("should render rule with comment truncated", func() {
-			render := rule.RenderAppend("test", "TEST", renderInner, &environment.Features{})
-			Expect(render).To(ContainSubstring("-m comment --comment \"" + strings.Repeat("a", 256) + "\""))
+			render := renderRule(rule, &environment.Features{})
+			Expect(render.Comment).NotTo(BeNil())
+			Expect(*render.Comment).To(Equal("cali:TEST; " + strings.Repeat("a", 256)))
 		})
 	})
 })
 
-func newClosableBuf(s string) *withDummyClose {
-	return (*withDummyClose)(bytes.NewBufferString(s))
-}
-
-type withDummyClose bytes.Buffer
-
-func (b *withDummyClose) Read(p []byte) (n int, err error) {
-	return (*bytes.Buffer)(b).Read(p)
-}
-
-func (b *withDummyClose) Close() error {
-	return nil
+func renderRule(rule generictables.Rule, features *environment.Features) *knftables.Rule {
+	return generictables.NewNFTRenderer("cali:").Render("test", "TEST", rule, features)
 }
 
 func calculateHashes(chainName string, rules []generictables.Rule) []string {
@@ -128,5 +120,5 @@ func calculateHashes(chainName string, rules []generictables.Rule) []string {
 		Name:  chainName,
 		Rules: rules,
 	}
-	return chain.RuleHashes(renderInner, &environment.Features{})
+	return generictables.NewNFTRenderer("cali:").RuleHashes(chain, &environment.Features{})
 }
