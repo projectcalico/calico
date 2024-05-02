@@ -18,9 +18,10 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/generictables"
-	"github.com/sirupsen/logrus"
 )
 
 type namespaceable interface {
