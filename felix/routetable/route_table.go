@@ -706,11 +706,11 @@ func (r *RouteTable) QueueResync() {
 }
 
 func (r *RouteTable) Apply() (err error) {
-	err = r.attemptApply()
+	err = r.attemptApply(0)
 	if err != nil {
 		// Do one inline retry with a fresh netlink connection.
 		r.logCxt.WithError(err).Warn("First attempt at updating routing table failed.  Retrying...")
-		err = r.attemptApply()
+		err = r.attemptApply(1)
 		if err != nil {
 			r.logCxt.WithError(err).Error("Second attempt at updating routing table failed. Will retry later.")
 		} else {
@@ -720,7 +720,7 @@ func (r *RouteTable) Apply() (err error) {
 	return err
 }
 
-func (r *RouteTable) attemptApply() (err error) {
+func (r *RouteTable) attemptApply(attempt int) (err error) {
 	defer func() {
 		if err != nil {
 			r.nl.MarkHandleForReopen()
@@ -729,7 +729,7 @@ func (r *RouteTable) attemptApply() (err error) {
 	if err = r.maybeResyncWithDataplane(); err != nil {
 		return err
 	}
-	if err = r.applyUpdates(); err != nil {
+	if err = r.applyUpdates(attempt); err != nil {
 		return err
 	}
 	r.maybeCleanUpGracePeriods()
@@ -1093,7 +1093,7 @@ func routeIsSpecialNoIfRoute(route netlink.Route) bool {
 	return false
 }
 
-func (r *RouteTable) applyUpdates() error {
+func (r *RouteTable) applyUpdates(attempt int) error {
 	nl, err := r.nl.Handle()
 	if err != nil {
 		r.logCxt.Debug("Failed to connect to netlink")
@@ -1110,7 +1110,6 @@ func (r *RouteTable) applyUpdates() error {
 				"route": kernRoute,
 				"dest":  kernKey,
 			}).Debug("Found unexpected route; ignoring due to grace period.")
-			r.ifaceInGracePeriod(kernRoute.Ifindex)
 			return deltatracker.IterActionNoOp
 		}
 
@@ -1175,6 +1174,15 @@ func (r *RouteTable) applyUpdates() error {
 		}).Debug("Replacing route")
 		err := nl.RouteReplace(nlRoute)
 		if err != nil {
+			name, ok := r.ifaceNameForIndex(kRoute.Ifindex)
+			if ok {
+				err = r.filterErrorByIfaceState(
+					name,
+					err,
+					UpdateFailed,
+					attempt == 0,
+				)
+			}
 			updateErrs[kernKey] = err
 			return deltatracker.IterActionNoOp
 		}
