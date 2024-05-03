@@ -42,13 +42,11 @@ import (
 )
 
 var (
-	GetFailed       = errors.New("netlink get operation failed")
 	ConnectFailed   = errors.New("connect to netlink failed")
 	ListFailed      = errors.New("netlink list operation failed")
 	UpdateFailed    = errors.New("netlink update operation failed")
 	IfaceNotPresent = errors.New("interface not present")
 	IfaceDown       = errors.New("interface down")
-	IfaceGrace      = errors.New("interface in cleanup grace period")
 
 	ipV6LinkLocalCIDR = ip.MustParseCIDROrIP("fe80::/64")
 
@@ -114,10 +112,18 @@ const (
 //     a route before we've heard about the interface, or spotting a new
 //     interface index when we do a read back of routes from the kernel.
 //
+//   - The CNI plugin also programs the same routes that we do, so we can race
+//     with it as well.  We may see an interface pop up with a route before we
+//     hear about the corresponding WorkloadEndpoint.  To deal with that, we
+//     implement a grace period before deleting routes that belong to us but
+//     that we don't know about yet.
+//
 //   - When IP addresses move from one interface to another (for example because
 //     a workload has been terminated and a new workload now has the IP) we need
 //     to clean up the conntrack entries from the old workload.  We delegate this
 //     cleanup to the ConntrackTracker; giving it callbacks when routes move.
+//     We do that cleanup in the background to avoid holding up other route
+//     programming.
 type RouteTable struct {
 	logCxt        *log.Entry
 	ipVersion     uint8
@@ -351,7 +357,6 @@ func (r *RouteTable) OnIfaceStateChanged(ifaceName string, ifIndex int, state if
 		"state":   state,
 		"name":    ifaceName,
 	}).Debug("Interface state update.")
-	recheckRoutesOwnership := false
 	if state == ifacemonitor.StateNotPresent {
 		// Interface deleted, clean up.
 		oldIndex := r.ifaceNameToIndex[ifaceName]
@@ -359,10 +364,6 @@ func (r *RouteTable) OnIfaceStateChanged(ifaceName string, ifIndex int, state if
 		delete(r.ifaceIndexToState, oldIndex)
 		delete(r.ifaceNameToIndex, ifaceName)
 		r.ifacesToRescan.Discard(ifaceName)
-
-		// This interface may have had some active routes that were shadowing
-		// routes from another interface.  Make sure we rescan.
-		recheckRoutesOwnership = true
 	} else {
 		// Interface exists, record its details.
 		r.onIfaceSeen(ifIndex)
@@ -372,13 +373,6 @@ func (r *RouteTable) OnIfaceStateChanged(ifaceName string, ifIndex int, state if
 			// Interface renumbered.  For example, deleted and then recreated
 			// with same name.  Clean up old number.
 			delete(r.ifaceIndexToName, oldIfIndex)
-
-			// The interface index is part of the route conflict tie-breaker,
-			// so we need to check if the winner has changed.
-			recheckRoutesOwnership = true
-		} else if !ok {
-			// New interface.
-			recheckRoutesOwnership = true
 		}
 		r.ifaceNameToIndex[ifaceName] = ifIndex
 		r.ifaceIndexToName[ifIndex] = ifaceName
@@ -390,12 +384,9 @@ func (r *RouteTable) OnIfaceStateChanged(ifaceName string, ifIndex int, state if
 		// and its default route disappears.
 		logCxt.Debug("Interface up, marking for route sync")
 		r.ifacesToRescan.Add(ifaceName)
-		recheckRoutesOwnership = true
 	}
 
-	if recheckRoutesOwnership {
-		r.recheckRouteOwnershipsByIface(ifaceName)
-	}
+	r.recheckRouteOwnershipsByIface(ifaceName)
 }
 
 func (r *RouteTable) onIfaceSeen(ifIndex int) {
@@ -831,6 +822,10 @@ func (r *RouteTable) doFullResync(nl netlinkshim.Interface) error {
 }
 
 func (r *RouteTable) resyncIndividualInterfaces(nl netlinkshim.Interface) error {
+	if r.ifacesToRescan.Len() == 0 {
+		return nil
+	}
+	r.opReporter.RecordOperation(fmt.Sprint("partial-resync-routes-v", r.ipVersion))
 	r.ifacesToRescan.Iter(func(ifaceName string) error {
 		err := r.resyncIface(nl, ifaceName)
 		if err != nil {
@@ -844,7 +839,7 @@ func (r *RouteTable) resyncIndividualInterfaces(nl netlinkshim.Interface) error 
 
 // resyncIface checks the current state of a single interface and its routes.
 // It updates the interface state and the dataplane side of the route
-// DeltaTracker.  Note: this method can trigger route recalcualtions
+// DeltaTracker.  Note: this method can trigger route recalculation,
 // so it shouldn't be called while iterating over the delta tracker.  For
 // example, if the interface status check discovers the interface has gone
 // down, that might trigger another route to become active, mutating the
