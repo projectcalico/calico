@@ -120,6 +120,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ routing table tests", []api
 
 			Consistently(errorSeenC, "20s").ShouldNot(BeClosed(),
 				"Expected no errors from route_table.go during interface rename flaps")
+
+			cc.Expect(connectivity.Some, tc.Felixes[0], w[0][0])
+			cc.CheckConnectivity()
 		})
 
 		It("should handle up/down flaps", func() {
@@ -146,6 +149,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ routing table tests", []api
 
 			Consistently(errorSeenC, "20s").ShouldNot(BeClosed(),
 				"Expected no errors from route_table.go during interface up/down flaps")
+
+			cc.Expect(connectivity.Some, tc.Felixes[0], w[0][0])
+			cc.CheckConnectivity()
 		})
 	})
 
