@@ -840,3 +840,7 @@ func (w *Workload) InterfaceIndex() int {
 	log.Infof("%v is ifindex %v", w.InterfaceName, ifIndex)
 	return ifIndex
 }
+
+func (w *Workload) RenameInterface(from, to string) {
+	w.C.Exec("ip", "link", "set", from, "name", to)
+}
