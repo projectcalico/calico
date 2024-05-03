@@ -54,10 +54,17 @@ var (
 		Name: "felix_route_table_list_all_routes_seconds",
 		Help: "Time taken to list all the routes during a resync.",
 	})
+	gaugeVecNumRoutes = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "felix_route_table_num_routes",
+		Help: "Number of routes that Felix is managing in the particular routing table..",
+	}, []string{"table"})
 )
 
 func init() {
-	prometheus.MustRegister(listAllRoutesTime)
+	prometheus.MustRegister(
+		listAllRoutesTime,
+		gaugeVecNumRoutes,
+	)
 }
 
 const (
@@ -177,6 +184,8 @@ type RouteTable struct {
 	conntrack        conntrackIface
 	time             timeshim.Interface
 	newNetlinkHandle func() (netlinkshim.Interface, error)
+
+	gaugeNumRoutes prometheus.Gauge
 }
 
 type graceInfo struct {
@@ -316,6 +325,8 @@ func New(
 		conntrack:        conntrack.New(),
 		time:             timeshim.RealTime(),
 		newNetlinkHandle: netlinkshim.NewRealNetlink,
+
+		gaugeNumRoutes: gaugeVecNumRoutes.WithLabelValues(description),
 	}
 
 	for _, o := range opts {
@@ -585,6 +596,7 @@ func (r *RouteTable) ifaceNameForIndex(ifindex int) (string, bool) {
 }
 
 func (r *RouteTable) recalculateDesiredKernelRoute(cidr ip.CIDR) {
+	defer r.updateGauges()
 	kernKey := r.routeKeyForCIDR(cidr)
 	oldDesiredRoute, _ := r.kernelRoutes.Desired().Get(kernKey)
 
@@ -1448,6 +1460,10 @@ func (r *RouteTable) addStaticARPEntry(
 		r.logCxt.WithField("entry", a).Debug("Adding static ARP entry.")
 	}
 	return nl.NeighSet(a)
+}
+
+func (r *RouteTable) updateGauges() {
+	r.gaugeNumRoutes.Set(float64(r.kernelRoutes.Desired().Len()))
 }
 
 type Target struct {
