@@ -467,11 +467,6 @@ func (t *nftablesTable) InsertOrAppendRules(chainName string, rules []generictab
 	// avoid marking a still-referenced chain as dirty.
 	t.maybeIncrefReferredChains(chainName, rules)
 	t.maybeDecrefReferredChains(chainName, oldRules)
-
-	// Defensive: updates to insert/append is very rare and the top-level
-	// chains are contended with other apps.  Make sure we re-read the state
-	// of the chains before updating them.
-	t.InvalidateDataplaneCache("insertion")
 }
 
 // AppendRules sets the rules to be appended to a given non-Calico chain.
@@ -490,11 +485,6 @@ func (t *nftablesTable) AppendRules(chainName string, rules []generictables.Rule
 	// avoid marking a still-referenced chain as dirty.
 	t.maybeIncrefReferredChains(chainName, rules)
 	t.maybeDecrefReferredChains(chainName, oldRules)
-
-	// Defensive: updates to insert/append is very rare and the top-level
-	// chains are contended with other apps.  Make sure we re-read the state
-	// of the chains before updating them.
-	t.InvalidateDataplaneCache("insertion")
 }
 
 func (t *nftablesTable) UpdateChains(chains []*generictables.Chain) {
@@ -519,12 +509,6 @@ func (t *nftablesTable) UpdateChain(chain *generictables.Chain) {
 	t.gaugeNumRules.Add(float64(numRulesDelta))
 	if t.chainIsReferenced(chain.Name) {
 		t.dirtyChains.Add(chain.Name)
-
-		// Defensive: make sure we re-read the dataplane state before we make updates.  While the
-		// code was originally designed not to need this, we found that other users of
-		// nftables can still clobber our updates so it's safest to re-read the state before
-		// each write.
-		t.InvalidateDataplaneCache("chain update")
 	}
 }
 
@@ -859,11 +843,11 @@ func (t *nftablesTable) InvalidateDataplaneCache(reason string) {
 func (t *nftablesTable) Apply() (rescheduleAfter time.Duration) {
 	now := t.timeNow()
 	defer func() {
-		if time.Since(now) > time.Second {
+		if time.Since(now) > 500*time.Millisecond {
 			t.logCxt.WithFields(log.Fields{
 				"applyTime":      time.Since(now),
 				"reasonForApply": t.reason,
-			}).Info("Updating nftables took >1s")
+			}).Info("Updating nftables took >500ms")
 		}
 	}()
 
@@ -965,14 +949,16 @@ func (t *nftablesTable) applyUpdates() error {
 		if err := t.nft.Run(context.TODO(), tx); err != nil {
 			t.logCxt.WithError(err).Warn("Failed to delete table, continuing anyway")
 		}
-		t.recreateTable = false
 	}
 
 	// Start a new nftables transaction.
 	tx := t.nft.NewTransaction()
 
-	// Add the table, as it must always exist and isn't created by default.
-	tx.Add(&knftables.Table{})
+	// If we don't see any chains, or we've just deleted the table, then we need to create it.
+	if t.recreateTable || len(t.chainToDataplaneHashes) == 0 {
+		tx.Add(&knftables.Table{})
+	}
+	t.recreateTable = false
 
 	// Also make sure our base chains exist.
 	for _, c := range baseChains {
@@ -1136,6 +1122,8 @@ func (t *nftablesTable) applyUpdates() error {
 		// Run the transaction.
 		t.opReporter.RecordOperation(fmt.Sprintf("update-%v-v%d", t.name, t.ipVersion))
 
+		t.logCxt.Infof("Updating nftables: %s", tx.String())
+
 		if err := t.nft.Run(context.TODO(), tx); err != nil {
 			t.logCxt.WithField("tx", tx.String()).Error("Failed to run nft transaction")
 			return fmt.Errorf("error performing nft transaction: %s", err)
@@ -1177,10 +1165,6 @@ func (t *nftablesTable) applyUpdates() error {
 	}
 	t.chainToFullRules = newChainToFullRules
 
-	// We load the dataplane state after each write to ensure we have the correct handles
-	// in-memory for each of the objects we've just written. nftables updates require the handle in order to
-	// update or delete an object.
-	t.loadDataplaneState()
 	return nil
 }
 
