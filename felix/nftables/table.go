@@ -963,7 +963,7 @@ func (t *nftablesTable) applyUpdates() error {
 		tx := t.nft.NewTransaction()
 		tx.Delete(&knftables.Table{})
 		if err := t.nft.Run(context.TODO(), tx); err != nil {
-			return fmt.Errorf("error deleting table: %s", err)
+			t.logCxt.WithError(err).Warn("Failed to delete table, continuing anyway")
 		}
 		t.recreateTable = false
 	}
