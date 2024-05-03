@@ -20,6 +20,7 @@ import (
 	"net"
 	"reflect"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -1179,15 +1180,27 @@ func (r *RouteTable) applyUpdates(attempt int) error {
 				err = r.filterErrorByIfaceState(
 					name,
 					err,
-					UpdateFailed,
+					err,
 					attempt == 0,
 				)
+
+				if errors.Is(err, IfaceDown) || errors.Is(err, IfaceNotPresent) {
+					// Very common race: the interface was taken down/deleted
+					// by the CNI plugin while we were trying to update it.
+					// Mark for a lazy rescan so that we won't try to program
+					// this route again next time (unless the interface shows
+					// up).
+					r.ifacesToRescan.Add(name)
+					return deltatracker.IterActionNoOp
+				}
+				err = fmt.Errorf("%v(%s): %w", kRoute, name,  err)
 			}
+
 			updateErrs[kernKey] = err
 			return deltatracker.IterActionNoOp
 		}
 
-		// Route is gone, clean up the dataplane side of the tracker.
+		// Route is updated, clean up the dataplane side of the tracker.
 		return deltatracker.IterActionUpdateDataplane
 	})
 
@@ -1208,6 +1221,24 @@ func (r *RouteTable) applyUpdates(attempt int) error {
 		for addr, mac := range addrToMAC {
 			err := r.addStaticARPEntry(nl, addr, mac, ifaceIdx)
 			if err != nil {
+				err = r.filterErrorByIfaceState(
+					ifaceName,
+					err,
+					err,
+					attempt == 0,
+				)
+
+				if errors.Is(err, IfaceDown) || errors.Is(err, IfaceNotPresent) {
+					// Very common race: the interface was taken down/deleted
+					// by the CNI plugin while we were trying to update it.
+					// Mark for a lazy rescan so that we won't try to program
+					// this route again next time (unless the interface shows
+					// up).
+					r.ifacesToRescan.Add(ifaceName)
+					err = nil
+				}
+			}
+			if err != nil {
 				log.WithError(err).Debug("Failed to add neighbor entry.")
 				arpErrs[fmt.Sprintf("%s/%s", ifaceName, addr)] = err
 			} else {
@@ -1219,25 +1250,34 @@ func (r *RouteTable) applyUpdates(attempt int) error {
 		}
 	}
 
-	// TODO filter out errors from interfaces that have gone away.
 	err = nil
 	if len(deletionErrs) > 0 {
-		r.logCxt.WithField("errors", deletionErrs).Warn(
+		r.logCxt.WithField("errors", formatErrMap(deletionErrs)).Warn(
 			"Encountered some errors when trying to delete old routes.")
 		err = UpdateFailed
 	}
 	if len(updateErrs) > 0 {
-		r.logCxt.WithField("errors", updateErrs).Warn(
+		r.logCxt.WithField("errors", formatErrMap(updateErrs)).Warn(
 			"Encountered some errors when trying to update routes.  Will retry.")
 		err = UpdateFailed
 	}
 	if len(arpErrs) > 0 {
-		r.logCxt.WithField("errors", arpErrs).Warn(
+		r.logCxt.WithField("errors", formatErrMap(arpErrs)).Warn(
 			"Encountered some errors when trying to add static ARP entries.  Will retry.")
 		err = UpdateFailed
 	}
 
 	return err
+}
+
+// formatErrMap formats a map of errors as a string, ensuring the error
+// messages are included in the output.
+func formatErrMap[K comparable](errs map[K]error) string {
+	parts := make([]string, 0, len(errs))
+	for k, v := range errs {
+		parts = append(parts, fmt.Sprintf("%v: %s", k, v.Error()))
+	}
+	return strings.Join(parts, ", ")
 }
 
 func (r *RouteTable) ifaceInGracePeriod(ifindex int) bool {
@@ -1306,9 +1346,16 @@ func (r *RouteTable) filterErrorByIfaceState(
 		// Current error already tells us that the link was not present.  If we re-check
 		// the status in this case, we open a race where the interface gets created and
 		// we log an error when we're about to re-trigger programming anyway.
-		logCxt.Info("Failed to access interface because it doesn't exist.")
+		logCxt.Info("Interface doesn't exist, perhaps workload is being torn down?")
 		return IfaceNotPresent
 	}
+
+	if errors.Is(currentErr, syscall.ENETDOWN) {
+		// Another clear error: interface is down.
+		logCxt.Info("Interface down, perhaps workload is being torn down?")
+		return IfaceDown
+	}
+
 	// If the current error wasn't clear, try to look up the interface to see if there's a
 	// well-understood reason for the failure.
 	nl, err := r.nl.Handle()
@@ -1329,7 +1376,7 @@ func (r *RouteTable) filterErrorByIfaceState(
 					"Failed to access interface but it appears to be up; retrying...")
 			} else {
 				logCxt.WithField("link", link).Warning(
-					"Failed to access interface but it appears to be up")
+					"Failed to access interface but it appears to be up?")
 			}
 			return defaultErr
 		} else {
