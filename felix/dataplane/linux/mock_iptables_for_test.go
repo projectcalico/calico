@@ -18,25 +18,25 @@ import (
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/felix/iptables"
+	"github.com/projectcalico/calico/felix/generictables"
 )
 
 type mockTable struct {
 	Table          string
-	currentChains  map[string]*iptables.Chain
-	expectedChains map[string]*iptables.Chain
+	currentChains  map[string]*generictables.Chain
+	expectedChains map[string]*generictables.Chain
 	UpdateCalled   bool
 }
 
 func newMockTable(table string) *mockTable {
 	return &mockTable{
 		Table:          table,
-		currentChains:  map[string]*iptables.Chain{},
-		expectedChains: map[string]*iptables.Chain{},
+		currentChains:  map[string]*generictables.Chain{},
+		expectedChains: map[string]*generictables.Chain{},
 	}
 }
 
-func logChains(message string, chains []*iptables.Chain) {
+func logChains(message string, chains []*generictables.Chain) {
 	if chains == nil {
 		log.Debug(message, " with nil chains")
 	} else {
@@ -47,11 +47,11 @@ func logChains(message string, chains []*iptables.Chain) {
 	}
 }
 
-func (t *mockTable) UpdateChain(chain *iptables.Chain) {
-	t.UpdateChains([]*iptables.Chain{chain})
+func (t *mockTable) UpdateChain(chain *generictables.Chain) {
+	t.UpdateChains([]*generictables.Chain{chain})
 }
 
-func (t *mockTable) UpdateChains(chains []*iptables.Chain) {
+func (t *mockTable) UpdateChains(chains []*generictables.Chain) {
 	t.UpdateCalled = true
 	logChains("UpdateChains", chains)
 	for _, chain := range chains {
@@ -59,7 +59,7 @@ func (t *mockTable) UpdateChains(chains []*iptables.Chain) {
 	}
 }
 
-func (t *mockTable) RemoveChains(chains []*iptables.Chain) {
+func (t *mockTable) RemoveChains(chains []*generictables.Chain) {
 	logChains("RemoveChains", chains)
 	for _, chain := range chains {
 		t.RemoveChainByName(chain.Name)
@@ -71,8 +71,8 @@ func (t *mockTable) RemoveChainByName(name string) {
 	delete(t.currentChains, name)
 }
 
-func (t *mockTable) checkChains(expecteds [][]*iptables.Chain) {
-	t.expectedChains = map[string]*iptables.Chain{}
+func (t *mockTable) checkChains(expecteds [][]*generictables.Chain) {
+	t.expectedChains = map[string]*generictables.Chain{}
 	for _, expected := range expecteds {
 		for _, chain := range expected {
 			t.expectedChains[chain.Name] = chain
@@ -86,5 +86,18 @@ func (t *mockTable) checkChainsSameAsBefore() {
 	for _, chain := range t.expectedChains {
 		log.WithField("chain", *chain).Debug("")
 	}
+
+	// Compare chains one-by-one to get a nice diff.
+	for _, chain := range t.currentChains {
+		expected, ok := t.expectedChains[chain.Name]
+		Expect(ok).To(BeTrue(), "Unexpected chain: %v", chain)
+		Expect(*chain).To(Equal(*expected), t.Table+" chain incorrect")
+	}
+	for _, chain := range t.expectedChains {
+		_, ok := t.currentChains[chain.Name]
+		Expect(ok).To(BeTrue(), "Missing expected chain: %v", chain)
+	}
+
+	// Assert the whole map is as expected.
 	ExpectWithOffset(1, t.currentChains).To(Equal(t.expectedChains), t.Table+" chains incorrect")
 }
