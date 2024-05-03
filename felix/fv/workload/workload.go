@@ -26,6 +26,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 
@@ -632,8 +633,10 @@ type PersistentConnectionOpts struct {
 	Timeout             time.Duration
 }
 
-func (w *Workload) StartPersistentConnection(ip string, port int,
-	opts PersistentConnectionOpts) *connectivity.PersistentConnection {
+func (w *Workload) StartPersistentConnection(
+	ip string, port int,
+	opts PersistentConnectionOpts,
+) *connectivity.PersistentConnection {
 
 	pc := &connectivity.PersistentConnection{
 		RuntimeName:         w.C.Name,
@@ -842,5 +845,14 @@ func (w *Workload) InterfaceIndex() int {
 }
 
 func (w *Workload) RenameInterface(from, to string) {
-	w.C.Exec("ip", "link", "set", from, "name", to)
+	var err error
+	for try := 0; try < 5; try++ {
+		// Can fail with EBUSY.
+		err = w.C.ExecMayFail("ip", "link", "set", from, "name", to)
+		if err == nil {
+			return
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	ginkgo.Fail(fmt.Sprintf("Failed to rename interface %s to %s: %s", from, to, err))
 }
