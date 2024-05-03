@@ -91,7 +91,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ routing table tests", []api
 				"10.65.0.2",
 				"8088",
 				"tcp",
-				)
+			)
 			w[0][0].ConfigureInInfra(infra)
 		})
 
@@ -110,11 +110,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ routing table tests", []api
 				for ctx.Err() == nil {
 					logrus.Debug("Flapping interface")
 					w[0][0].RenameInterface(w[0][0].InterfaceName, "somename")
-					time.Sleep(1*time.Millisecond)
-					_ =tc.Felixes[0].ExecMayFail("ip", "r", "del", w[0][0].IP)
+					time.Sleep(1 * time.Millisecond)
+					_ = tc.Felixes[0].ExecMayFail("ip", "r", "del", w[0][0].IP)
 					logrus.Debug("Un-flapping interface")
 					w[0][0].RenameInterface("somename", w[0][0].InterfaceName)
-					time.Sleep(1*time.Millisecond)
+					time.Sleep(1 * time.Millisecond)
 				}
 			}()
 
@@ -137,10 +137,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ routing table tests", []api
 				for ctx.Err() == nil {
 					logrus.Debug("Flapping interface")
 					tc.Felixes[0].Exec("ip", "link", "set", "dev", w[0][0].InterfaceName, "down")
-					time.Sleep(10*time.Millisecond)
+					time.Sleep(10 * time.Millisecond)
 					logrus.Debug("Un-flapping interface")
 					tc.Felixes[0].Exec("ip", "link", "set", "dev", w[0][0].InterfaceName, "up")
-					time.Sleep(100*time.Millisecond)
+					time.Sleep(100 * time.Millisecond)
 				}
 			}()
 
