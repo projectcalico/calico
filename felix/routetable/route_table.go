@@ -709,14 +709,21 @@ func (r *RouteTable) QueueResync() {
 func (r *RouteTable) Apply() (err error) {
 	err = r.attemptApply(0)
 	if err != nil {
-		// Do one inline retry with a fresh netlink connection.
+		// To avoid log spam, only log if there was an unexpected problem.
 		r.logCxt.WithError(err).Warn("First attempt at updating routing table failed.  Retrying...")
+	}
+	if err != nil || r.ifacesToRescan.Len() > 0 {
+		// Do one inline retry with a fresh netlink connection.
 		err = r.attemptApply(1)
 		if err != nil {
 			r.logCxt.WithError(err).Error("Second attempt at updating routing table failed. Will retry later.")
 		} else {
 			r.logCxt.WithError(err).Info("Retry was successful.")
 		}
+	}
+	if r.ifacesToRescan.Len() > 0 {
+		// Make sure the dataplane reschedules us.
+		return fmt.Errorf("some interfaces flapped during route update: %s", r.ifacesToRescan.String())
 	}
 	return err
 }
@@ -825,90 +832,106 @@ func (r *RouteTable) doFullResync(nl netlinkshim.Interface) error {
 
 func (r *RouteTable) resyncIndividualInterfaces(nl netlinkshim.Interface) error {
 	r.ifacesToRescan.Iter(func(ifaceName string) error {
-		// Defensive: we can be out of sync with the interface monitor if this
-		// RouteTable was created after start-of-day.  Refresh the link.
-		err := r.refreshIfaceStateBestEffort(nl, ifaceName)
+		err := r.resyncIface(nl, ifaceName)
 		if err != nil {
-			r.nl.MarkHandleForReopen()
-			return nil
+		r.nl.MarkHandleForReopen()
+		return nil
 		}
-
-		ifIndex, ok := r.ifaceIndexForName(ifaceName)
-		if !ok {
-			r.logCxt.Debug("Ignoring rescan of unknown interface.")
-			return set.RemoveItem
-		}
-
-		routeFilter := &netlink.Route{
-			Table:     r.tableIndex,
-			LinkIndex: ifIndex,
-		}
-		routeFilterFlags := netlink.RT_FILTER_OIF | netlink.RT_FILTER_TABLE
-		netlinkRoutes, err := nl.RouteListFiltered(r.netlinkFamily, routeFilter, routeFilterFlags)
-		if errors.Is(err, unix.ENOENT) {
-			// In strict mode, get this if the routing table doesn't exist; it'll be auto-created
-			// when we add the first route so just treat it as empty.
-			log.WithError(err).Debug("Routing table doesn't exist (yet). Treating as empty.")
-			err = nil
-			netlinkRoutes = nil
-		}
-		if err != nil {
-			// Filter the error so that we don't spam errors if the interface is being torn
-			// down.
-			filteredErr := r.filterErrorByIfaceState(ifaceName, err, ListFailed, false)
-			if errors.Is(filteredErr, ListFailed) {
-				r.logCxt.WithError(err).WithFields(log.Fields{
-					"iface":       ifaceName,
-					"routeFilter": routeFilter,
-					"flags":       routeFilterFlags,
-				}).Error("Error listing routes")
-				r.nl.MarkHandleForReopen()
-				return set.RemoveItem
-			} else {
-				r.logCxt.WithError(filteredErr).WithField("iface", ifaceName).Debug(
-					"Failed to list routes; interface down/gone.")
-				return set.RemoveItem
-			}
-		}
-
-		// Loaded the routes, now update our tracker.  First index the data
-		// we loaded.
-		kernRoutes := map[kernelRouteKey]kernelRoute{}
-		for _, nlRoute := range netlinkRoutes {
-			kernKey, kernRoute, ok := r.netlinkRouteToKernelRoute(nlRoute)
-			if !ok {
-				// Not a route that we're managing, so we don't want it to
-				// be a candidate for us to delete.
-				continue
-			}
-			r.conntrackTracker.AddDataplaneOwner(kernKey, kernRoute.Ifindex)
-			kernRoutes[kernKey] = kernRoute
-		}
-		// Then look for routes that the tracker says are there but are actually
-		// missing.
-		for _, ifaceToRoutes := range r.ifaceToRoutes {
-			for cidr := range ifaceToRoutes[ifaceName] {
-				kernKey := r.routeKeyForCIDR(cidr)
-				if _, ok := kernRoutes[kernKey]; ok {
-					// Route still there; handled below.
-					continue
-				}
-				desKernRoute, ok := r.kernelRoutes.Desired().Get(kernKey)
-				if !ok || desKernRoute.Ifindex != ifIndex {
-					// The interface we're syncing doesn't own this route
-					// so the fact that it's missing is expected.
-					continue
-				}
-				r.kernelRoutes.Dataplane().Delete(kernKey)
-			}
-		}
-		// Update tracker with the routes that we did see.
-		for kk, kr := range kernRoutes {
-			r.kernelRoutes.Dataplane().Set(kk, kr)
-		}
-
 		return set.RemoveItem
 	})
+	return nil
+}
+
+// resyncIface checks the current state of a single interface and its routes.
+// It updates the interface state and the dataplane side of the route
+// DeltaTracker.  Note: this method can trigger route recalcualtions
+// so it shouldn't be called while iterating over the delta tracker.  For
+// example, if the interface status check discovers the interface has gone
+// down, that might trigger another route to become active, mutating the
+// DeltaTracker.
+func (r *RouteTable) resyncIface(nl netlinkshim.Interface, ifaceName string) error {
+	// Defensive: we can be out of sync with the interface monitor if this
+	// RouteTable was created after start-of-day.  Refresh the link.
+	err := r.refreshIfaceStateBestEffort(nl, ifaceName)
+	if err != nil {
+		r.nl.MarkHandleForReopen()
+		return err
+	}
+
+	ifIndex, ok := r.ifaceIndexForName(ifaceName)
+	if !ok {
+		r.logCxt.Debug("Ignoring rescan of unknown interface.")
+		return nil
+	}
+
+	routeFilter := &netlink.Route{
+		Table:     r.tableIndex,
+		LinkIndex: ifIndex,
+	}
+	routeFilterFlags := netlink.RT_FILTER_OIF | netlink.RT_FILTER_TABLE
+	netlinkRoutes, err := nl.RouteListFiltered(r.netlinkFamily, routeFilter, routeFilterFlags)
+	if errors.Is(err, unix.ENOENT) {
+		// In strict mode, get this if the routing table doesn't exist; it'll be auto-created
+		// when we add the first route so just treat it as empty.
+		log.WithError(err).Debug("Routing table doesn't exist (yet). Treating as empty.")
+		err = nil
+		netlinkRoutes = nil
+	}
+	if err != nil {
+		// Filter the error so that we don't spam errors if the interface is being torn
+		// down.
+		filteredErr := r.filterErrorByIfaceState(ifaceName, err, ListFailed, false)
+		if errors.Is(filteredErr, ListFailed) {
+			r.logCxt.WithError(err).WithFields(log.Fields{
+				"iface":       ifaceName,
+				"routeFilter": routeFilter,
+				"flags":       routeFilterFlags,
+			}).Error("Error listing routes")
+			r.nl.MarkHandleForReopen()
+			return nil
+		} else {
+			r.logCxt.WithError(filteredErr).WithField("iface", ifaceName).Debug(
+				"Failed to list routes; interface down/gone.")
+			return nil
+		}
+	}
+
+	// Loaded the routes, now update our tracker.  First index the data
+	// we loaded.
+	kernRoutes := map[kernelRouteKey]kernelRoute{}
+	for _, nlRoute := range netlinkRoutes {
+		kernKey, kernRoute, ok := r.netlinkRouteToKernelRoute(nlRoute)
+		if !ok {
+			// Not a route that we're managing, so we don't want it to
+			// be a candidate for us to delete.
+			continue
+		}
+		r.conntrackTracker.AddDataplaneOwner(kernKey, kernRoute.Ifindex)
+		kernRoutes[kernKey] = kernRoute
+	}
+	// Then look for routes that the tracker says are there but are actually
+	// missing.
+	for _, ifaceToRoutes := range r.ifaceToRoutes {
+		for cidr := range ifaceToRoutes[ifaceName] {
+			kernKey := r.routeKeyForCIDR(cidr)
+			if _, ok := kernRoutes[kernKey]; ok {
+				// Route still there; handled below.
+				continue
+			}
+			desKernRoute, ok := r.kernelRoutes.Desired().Get(kernKey)
+			if !ok || desKernRoute.Ifindex != ifIndex {
+				// The interface we're syncing doesn't own this route
+				// so the fact that it's missing is expected.
+				continue
+			}
+			r.kernelRoutes.Dataplane().Delete(kernKey)
+		}
+	}
+	// Update tracker with the routes that we did see.
+	for kk, kr := range kernRoutes {
+		r.kernelRoutes.Dataplane().Set(kk, kr)
+	}
+
 	return nil
 }
 
