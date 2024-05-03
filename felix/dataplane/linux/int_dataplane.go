@@ -287,6 +287,7 @@ type InternalDataplane struct {
 	ipSets               []common.IPSetsDataplane
 
 	ipipManager *ipipManager
+	ipipParentC chan string
 
 	vxlanManager   *vxlanManager
 	vxlanParentC   chan string
@@ -825,8 +826,10 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			config,
 			dp.loopSummarizer,
 			4,
-			featureDetector)
-		go dp.ipipManager.KeepIPIPDeviceInSync(config.IPIPMTU, config.RulesConfig.IPIPTunnelAddress, dataplaneFeatures.ChecksumOffloadBroken)
+			featureDetector,
+		)
+		dp.ipipParentC = make(chan string, 1)
+		go dp.ipipManager.KeepIPIPDeviceInSync(context.Background(), config.IPIPMTU, config.RulesConfig.IPIPTunnelAddress, dataplaneFeatures.ChecksumOffloadBroken, 10*time.Second, dp.ipipParentC)
 		dp.RegisterManager(dp.ipipManager) // IPv4-only
 	} else {
 		// Only clean up IPIP addresses if IPIP is implicitly disabled (no IPIP pools and not explicitly set in FelixConfig)
@@ -1790,6 +1793,8 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 			d.vxlanManager.OnParentNameUpdate(name)
 		case name := <-d.vxlanParentCV6:
 			d.vxlanManagerV6.OnParentNameUpdate(name)
+		case name := <-d.ipipParentC:
+			d.ipipManager.OnParentNameUpdate(name)
 		case <-ipSetsRefreshC:
 			log.Debug("Refreshing IP sets state")
 			d.forceIPSetsRefresh = true
