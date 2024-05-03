@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 
 	"sigs.k8s.io/knftables"
@@ -240,10 +241,6 @@ type nftablesTable struct {
 	dirtyChains    set.Set[string]
 
 	inSyncWithDataPlane bool
-
-	// recreateTable is set when we encounter a scenario that prevents us from updating the table in place.
-	// When set, this will force the implementation to delete any existing table and recreate it from scratch.
-	recreateTable bool
 
 	// chainToDataplaneHashes contains the rule hashes that we think are in the dataplane.
 	// it is updated when we write to the dataplane but it can also be read back and compared
@@ -611,7 +608,7 @@ func (t *nftablesTable) loadDataplaneState() {
 	t.featureDetector.RefreshFeatures()
 
 	// Load the hashes from the dataplane.
-	t.logCxt.Info("Loading current nftables state and checking it is correct.")
+	t.logCxt.Debug("Loading current nftables state and checking it is correct.")
 	t.opReporter.RecordOperation(fmt.Sprintf("resync-%v-v%d", t.name, t.ipVersion))
 
 	t.lastReadTime = t.timeNow()
@@ -802,28 +799,36 @@ func (t *nftablesTable) attemptToGetHashesAndRulesFromDataplane() (hashes map[st
 	}()
 
 	t.logCxt.Debug("Attmempting to get hashes and rules from nftables")
-	chains, err := t.nft.List(context.TODO(), "chain")
-	if err != nil {
-		return nil, nil, err
-	}
-	countNumSaveCalls.Inc()
 
 	hashes = make(map[string][]string)
 	rules = make(map[string][]*knftables.Rule)
 
-	for _, chain := range chains {
-		hashes[chain] = []string{}
-		rulesInChain, err := t.nft.ListRules(context.TODO(), chain)
-		if err != nil {
-			return nil, nil, err
+	allRules, err := t.nft.ListRules(context.TODO(), "")
+	if err != nil {
+		return nil, nil, err
+	}
+	if len(allRules) == 0 {
+		// No rules, return early.
+		t.logCxt.Warn("No rules found in nftables")
+		return
+	}
+	for _, rule := range allRules {
+		// Add the rule to the list of rules for the chain.
+		if _, ok := rules[rule.Chain]; !ok {
+			rules[rule.Chain] = []*knftables.Rule{}
 		}
-		rules[chain] = rulesInChain
-		for _, rule := range rulesInChain {
-			if rule.Comment != nil {
-				hash := strings.TrimPrefix(strings.Split(*rule.Comment, ";")[0], t.hashCommentPrefix)
-				t.logCxt.WithField("rule", rule).WithField("hash", hash).WithField("handle", rule.Handle).Debug("Found rule")
-				hashes[chain] = append(hashes[chain], hash)
-			}
+		rules[rule.Chain] = append(rules[rule.Chain], rule)
+
+		// Initialize the hashes map for this chain if it doesn't exist.
+		if _, ok := hashes[rule.Chain]; !ok {
+			hashes[rule.Chain] = []string{}
+		}
+
+		// Check if the rule has a comment, and if so, extract the hash.
+		if rule.Comment != nil {
+			hash := strings.TrimPrefix(strings.Split(*rule.Comment, ";")[0], t.hashCommentPrefix)
+			t.logCxt.WithField("rule", rule).WithField("hash", hash).WithField("handle", rule.Handle).Debug("Found rule")
+			hashes[rule.Chain] = append(hashes[rule.Chain], hash)
 		}
 	}
 	return
@@ -883,14 +888,21 @@ func (t *nftablesTable) Apply() (rescheduleAfter time.Duration) {
 
 		if err := t.applyUpdates(); err != nil {
 			if retries > 0 {
+				if retries < 6 {
+					// If we hit multiple failures in a row, trigger a full table rebuild on the next iteration.
+					// This can help in case we are trying to make a change that is incompatible with the current table state.
+					t.logCxt.Warn("Recreating table due to prior nftables programming error")
+					tx := t.nft.NewTransaction()
+					tx.Delete(&knftables.Table{})
+					tx.Add(&knftables.Table{})
+					if err := t.nft.Run(context.TODO(), tx); err != nil {
+						t.logCxt.WithError(err).Warn("Failed to delete table, continuing anyway")
+					}
+				}
+
 				// Reload the data plane state in case we're out of sync.
 				t.loadDataplaneState()
 
-				// If we hit multiple failures in a row, trigger a full table rebuild on the next iteration.
-				// This can help in case we are trying to make a change that is incompatible with the current table state.
-				if retries < 6 {
-					t.recreateTable = true
-				}
 				retries--
 				t.logCxt.WithError(err).Warn("Failed to program nftables, will retry")
 				t.timeSleep(backoffTime)
@@ -913,7 +925,6 @@ func (t *nftablesTable) Apply() (rescheduleAfter time.Duration) {
 		if failedAtLeastOnce {
 			t.logCxt.Warn("Succeeded after retry.")
 		}
-		t.recreateTable = false
 		break
 	}
 
@@ -941,24 +952,13 @@ func (t *nftablesTable) applyUpdates() error {
 	// If needed, detect the dataplane features.
 	features := t.featureDetector.GetFeatures()
 
-	if t.recreateTable {
-		// First, delete the table in its entirety.
-		t.logCxt.Warn("Recreating table due to prior nftables programming error")
-		tx := t.nft.NewTransaction()
-		tx.Delete(&knftables.Table{})
-		if err := t.nft.Run(context.TODO(), tx); err != nil {
-			t.logCxt.WithError(err).Warn("Failed to delete table, continuing anyway")
-		}
-	}
-
 	// Start a new nftables transaction.
 	tx := t.nft.NewTransaction()
 
-	// If we don't see any chains, or we've just deleted the table, then we need to create it.
-	if t.recreateTable || len(t.chainToDataplaneHashes) == 0 {
+	// If we don't see any chains, then we need to create it.
+	if len(t.chainToDataplaneHashes) == 0 {
 		tx.Add(&knftables.Table{})
 	}
-	t.recreateTable = false
 
 	// Also make sure our base chains exist.
 	for _, c := range baseChains {
@@ -1015,7 +1015,6 @@ func (t *nftablesTable) applyUpdates() error {
 					if previousHashes[i] == currentHashes[i] {
 						continue
 					}
-					// Hash doesn't match, replace the rule.
 					prefixFrag := t.commentFrag(currentHashes[i])
 					rendered := chain.Rules[i].Render(chainName, prefixFrag, renderInner, features)
 					rendered.Handle = t.chainToFullRules[chainName][i].Handle
@@ -1122,12 +1121,16 @@ func (t *nftablesTable) applyUpdates() error {
 		// Run the transaction.
 		t.opReporter.RecordOperation(fmt.Sprintf("update-%v-v%d", t.name, t.ipVersion))
 
-		t.logCxt.Infof("Updating nftables: %s", tx.String())
+		if logrus.IsLevelEnabled(logrus.TraceLevel) {
+			t.logCxt.Tracef("Updating nftables: %s", tx.String())
+		}
 
+		start := time.Now()
 		if err := t.nft.Run(context.TODO(), tx); err != nil {
 			t.logCxt.WithField("tx", tx.String()).Error("Failed to run nft transaction")
 			return fmt.Errorf("error performing nft transaction: %s", err)
 		}
+		t.logCxt.WithField("duration", time.Since(start)).Info("nftables transaction completed")
 
 		t.lastWriteTime = t.timeNow()
 		t.postWriteInterval = t.initialPostWriteInterval
@@ -1165,6 +1168,10 @@ func (t *nftablesTable) applyUpdates() error {
 	}
 	t.chainToFullRules = newChainToFullRules
 
+	// We load the dataplane state after each write to ensure we have the correct handles
+	// in-memory for each of the objects we've just written. nftables updates require the handle in order to
+	// update or delete an object.
+	t.loadDataplaneState()
 	return nil
 }
 
