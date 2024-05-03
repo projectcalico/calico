@@ -856,3 +856,11 @@ func (w *Workload) RenameInterface(from, to string) {
 	}
 	ginkgo.Fail(fmt.Sprintf("Failed to rename interface %s to %s: %s", from, to, err))
 }
+
+func (w *Workload) SetInterfaceUp(b bool) {
+	if b {
+		w.C.Exec("ip", "link", "set", "up", w.InterfaceName)
+	} else {
+		w.C.Exec("ip", "link", "set", "down", w.InterfaceName)
+	}
+}

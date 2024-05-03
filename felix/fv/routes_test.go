@@ -199,6 +199,24 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ routing table tests", []api
 				ContainSubstring(w[0][winner].InterfaceName),
 			)
 		})
+
+		It("should resolve when winning interface goes down", func() {
+			// Winner is non-deterministic.
+			winner, loser := waitForInitialRouteProgramming()
+			w[0][winner].SetInterfaceUp(false)
+			Eventually(tc.Felixes[0].ExecOutputFn("ip", "r", "get", "10.65.0.2"), "10s").Should(
+				ContainSubstring(w[0][loser].InterfaceName),
+			)
+		})
+
+		It("should resolve when losing interface goes down", func() {
+			// Winner is non-deterministic.
+			winner, loser := waitForInitialRouteProgramming()
+			w[0][loser].SetInterfaceUp(false)
+			Consistently(tc.Felixes[0].ExecOutputFn("ip", "r", "get", "10.65.0.2"), "5s").Should(
+				ContainSubstring(w[0][winner].InterfaceName),
+			)
+		})
 	})
 
 	Describe("with local/remote conflicting IPs", func() {
