@@ -50,20 +50,35 @@ var (
 
 	ipV6LinkLocalCIDR = ip.MustParseCIDROrIP("fe80::/64")
 
-	listAllRoutesTime = cprometheus.NewSummary(prometheus.SummaryOpts{
-		Name: "felix_route_table_list_all_routes_seconds",
+	resyncTimeSummary = cprometheus.NewSummary(prometheus.SummaryOpts{
+		Name: "felix_route_table_resync_seconds",
 		Help: "Time taken to list all the routes during a resync.",
+	})
+	partialResyncTimeSummary = cprometheus.NewSummary(prometheus.SummaryOpts{
+		Name: "felix_route_table_partial_resync_seconds",
+		Help: "Time taken to resync the routes of a single interface.",
+	})
+	conntrackBlockTimeSummary = cprometheus.NewSummary(prometheus.SummaryOpts{
+		Name: "felix_route_table_conntrack_wait_seconds",
+		Help: "Time waiting for conntrack cleanups to finish.",
 	})
 	gaugeVecNumRoutes = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "felix_route_table_num_routes",
-		Help: "Number of routes that Felix is managing in the particular routing table..",
+		Help: "Number of routes that Felix is managing in the particular routing table.",
+	}, []string{"table"})
+	gaugeVecNumIfaces = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "felix_route_table_num_ifaces",
+		Help: "Number of interfaces that Felix is monitoring for the particular routing table.",
 	}, []string{"table"})
 )
 
 func init() {
 	prometheus.MustRegister(
-		listAllRoutesTime,
+		resyncTimeSummary,
+		partialResyncTimeSummary,
+		conntrackBlockTimeSummary,
 		gaugeVecNumRoutes,
+		gaugeVecNumIfaces,
 	)
 }
 
@@ -186,6 +201,7 @@ type RouteTable struct {
 	newNetlinkHandle func() (netlinkshim.Interface, error)
 
 	gaugeNumRoutes prometheus.Gauge
+	gaugeNumIfaces prometheus.Gauge
 }
 
 type graceInfo struct {
@@ -327,6 +343,7 @@ func New(
 		newNetlinkHandle: netlinkshim.NewRealNetlink,
 
 		gaugeNumRoutes: gaugeVecNumRoutes.WithLabelValues(description),
+		gaugeNumIfaces: gaugeVecNumIfaces.WithLabelValues(description),
 	}
 
 	for _, o := range opts {
@@ -829,7 +846,7 @@ func (r *RouteTable) doFullResync(nl netlinkshim.Interface) error {
 	// We're now in sync.
 	r.ifacesToRescan.Clear()
 	r.fullResyncNeeded = false
-	listAllRoutesTime.Observe(r.time.Since(resyncStartTime).Seconds())
+	resyncTimeSummary.Observe(r.time.Since(resyncStartTime).Seconds())
 	return nil
 }
 
@@ -852,13 +869,14 @@ func (r *RouteTable) resyncIndividualInterfaces(nl netlinkshim.Interface) error 
 // resyncIface checks the current state of a single interface and its routes.
 // It updates the interface state and the dataplane side of the route
 // DeltaTracker.  Note: this method can trigger route recalculation,
-// so it shouldn't be called while iterating over the delta tracker.  For
+// so it shouldn't be called while iterating over the DeltaTracker.  For
 // example, if the interface status check discovers the interface has gone
 // down, that might trigger another route to become active, mutating the
 // DeltaTracker.
 func (r *RouteTable) resyncIface(nl netlinkshim.Interface, ifaceName string) error {
-	// Defensive: we can be out of sync with the interface monitor if this
+	// We can be out of sync with the interface monitor if this
 	// RouteTable was created after start-of-day.  Refresh the link.
+	startTime := time.Now()
 	err := r.refreshIfaceStateBestEffort(nl, ifaceName)
 	if err != nil {
 		r.nl.MarkHandleForReopen()
@@ -938,6 +956,7 @@ func (r *RouteTable) resyncIface(nl netlinkshim.Interface, ifaceName string) err
 	for kk, kr := range kernRoutes {
 		r.kernelRoutes.Dataplane().Set(kk, kr)
 	}
+	partialResyncTimeSummary.Observe(r.time.Since(startTime).Seconds())
 
 	return nil
 }
@@ -1464,6 +1483,7 @@ func (r *RouteTable) addStaticARPEntry(
 
 func (r *RouteTable) updateGauges() {
 	r.gaugeNumRoutes.Set(float64(r.kernelRoutes.Desired().Len()))
+	r.gaugeNumIfaces.Set(float64(len(r.ifaceIndexToName)))
 }
 
 type Target struct {

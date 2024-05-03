@@ -271,10 +271,12 @@ func (c *RealConntrackTracker) DoPeriodicCleanup() {
 func (c *RealConntrackTracker) WaitForPendingDeletion(ipAddr ip.Addr) {
 	ch, ok := c.cleanupDoneChans[ipAddr]
 	if !ok {
+		conntrackBlockTimeSummary.Observe(0)
 		return
 	}
 	// Do a non-blocking read first, to avoid logging a message if the deletion has already
 	// completed.
+	startTime := time.Now()
 	select {
 	case <-ch:
 		goto done
@@ -292,6 +294,7 @@ func (c *RealConntrackTracker) WaitForPendingDeletion(ipAddr ip.Addr) {
 	}
 done:
 	delete(c.cleanupDoneChans, ipAddr)
+	conntrackBlockTimeSummary.Observe(time.Since(startTime).Seconds())
 }
 
 var _ ConntrackTracker = (*RealConntrackTracker)(nil)
