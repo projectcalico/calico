@@ -78,6 +78,8 @@ type DeltaTracker[K comparable, V any] struct {
 	inDataplaneNotDesired map[K]V
 	desiredUpdates        map[K]V
 
+	desiredLen int
+
 	// valuesEqual is the comparison function for the value type, it defaults to
 	// reflect.DeepEqual.
 	valuesEqual func(a, b V) bool
@@ -131,18 +133,25 @@ func (c *DesiredView[K, V]) Set(k K, v V) {
 		// the "not desired" map to the "desired map".
 		c.inDataplaneAndDesired[k] = currentVal
 		delete(c.inDataplaneNotDesired, k)
+		c.desiredLen++
 	} else {
 		// Didn't find the key in the "not-desired" map, check the "desired" map.
 		currentVal, presentInDP = c.inDataplaneAndDesired[k]
 	}
 
 	// Check if we think we need to update the dataplane as a result.
-	if presentInDP && c.valuesEqual(currentVal, v) {
+	if !presentInDP {
+		if _, presentInDesired := c.desiredUpdates[k]; !presentInDesired {
+			// New key, increment our count.
+			c.desiredLen++
+		}
+	} else if c.valuesEqual(currentVal, v) {
 		// Dataplane already agrees with the new value so clear any pending update.
 		c.logCtx.Debug("Set: Key in dataplane already, ignoring.")
 		delete(c.desiredUpdates, k)
 		return
 	}
+
 	// Either key is not in the dataplane, or the value associated with it is not as desired.
 	// Queue up an update.
 	c.desiredUpdates[k] = v
@@ -163,13 +172,23 @@ func (c *DesiredView[K, V]) Delete(k K) {
 	if logrus.GetLevel() >= logrus.DebugLevel {
 		c.logCtx.WithFields(logrus.Fields{"k": k}).Debug("Delete (desired)")
 	}
-	delete(c.desiredUpdates, k)
+	_, presentInDesired := c.desiredUpdates[k]
+	if presentInDesired {
+		// Key was present.
+		delete(c.desiredUpdates, k)
+	}
 
 	// Check if we need to update the dataplane.
-	if currentVal, ok := c.inDataplaneAndDesired[k]; ok {
+	currentVal, presentInDPDesired := c.inDataplaneAndDesired[k]
+	if presentInDPDesired {
 		// Value is in dataplane, move it to pending deletions.
 		c.inDataplaneNotDesired[k] = currentVal
 		delete(c.inDataplaneAndDesired, k)
+	}
+
+	if presentInDesired || presentInDPDesired {
+		// Key was present, decrement the count.
+		c.desiredLen--
 	}
 }
 
@@ -193,6 +212,10 @@ func (c *DesiredView[K, V]) Iter(f func(k K, v V)) {
 		}
 		f(k, v)
 	}
+}
+
+func (c *DesiredView[K, V]) Len() int {
+	return c.desiredLen
 }
 
 type DataplaneView[K comparable, V any] DeltaTracker[K, V]
