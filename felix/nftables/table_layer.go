@@ -5,8 +5,6 @@ import (
 	"strings"
 	"time"
 
-	log "github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/felix/generictables"
 )
 
@@ -34,12 +32,7 @@ func (t *tableLayer) namespaceName(name string) string {
 	if strings.HasPrefix(name, t.name) {
 		return name
 	}
-	n := fmt.Sprintf("%s-%s", t.name, name)
-	log.WithFields(log.Fields{
-		"original":   name,
-		"namespaced": n,
-	}).Info("Namespaced chain name")
-	return n
+	return fmt.Sprintf("%s-%s", t.name, name)
 }
 
 func (t *tableLayer) namespaceRules(rules []generictables.Rule) []generictables.Rule {
