@@ -123,7 +123,7 @@ func newIPIPManager(
 		logrus.Errorf("Hassan %v", err)
 	}
 
-	blackHoleProto := defaultVXLANProto
+	blackHoleProto := defaultRoutingProto
 	if dpConfig.DeviceRouteProtocol != syscall.RTPROT_BOOT {
 		blackHoleProto = dpConfig.DeviceRouteProtocol
 	}
@@ -154,8 +154,7 @@ func newIPIPManager(
 		nlHandle,
 		ipVersion,
 		realIPIPNetlink{},
-		func(
-			interfaceRegexes []string, ipVersion uint8, netlinkTimeout time.Duration,
+		func(interfaceRegexes []string, ipVersion uint8, netlinkTimeout time.Duration,
 			deviceRouteSourceAddress net.IP, deviceRouteProtocol netlink.RouteProtocol,
 			removeExternalRoutes bool,
 		) routetable.RouteTableInterface {
@@ -185,7 +184,7 @@ func newIPIPManagerWithShim(
 		logrus.Errorf("IPIP manager only supports IPv4")
 		return nil
 	}
-	noEncapProtocol := defaultVXLANProto
+	noEncapProtocol := defaultRoutingProto
 	if dpConfig.DeviceRouteProtocol != syscall.RTPROT_BOOT {
 		noEncapProtocol = dpConfig.DeviceRouteProtocol
 	}
@@ -313,20 +312,6 @@ func (m *ipipManager) getLocalHostAddr() string {
 	m.myInfoLock.Lock()
 	defer m.myInfoLock.Unlock()
 	return m.hostAddr
-}
-
-func (m *ipipManager) getNoEncapRouteTable() routetable.RouteTableInterface {
-	m.myInfoLock.Lock()
-	defer m.myInfoLock.Unlock()
-
-	return m.noEncapRouteTable
-}
-
-func (m *ipipManager) setNoEncapRouteTable(rt routetable.RouteTableInterface) {
-	m.myInfoLock.Lock()
-	defer m.myInfoLock.Unlock()
-
-	m.noEncapRouteTable = rt
 }
 
 func (m *ipipManager) GetRouteTableSyncers() []routetable.RouteTableSyncer {

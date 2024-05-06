@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2023 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,12 +19,12 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"golang.org/x/net/context"
 
 	"errors"
 	"fmt"
 	"net"
 
-	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
@@ -79,8 +79,10 @@ var _ = Describe("IpipMgr (tunnel configuration)", func() {
 			&mockIPIPDataplane{},
 			4,
 			dataplane,
-			func(interfacePrefixes []string, ipVersion uint8, vxlan bool, netlinkTimeout time.Duration,
-				deviceRouteSourceAddress net.IP, deviceRouteProtocol netlink.RouteProtocol, removeExternalRoutes bool) routetable.RouteTableInterface {
+			func(interfacePrefixes []string, ipVersion uint8, netlinkTimeout time.Duration,
+				deviceRouteSourceAddress net.IP, deviceRouteProtocol netlink.RouteProtocol,
+				removeExternalRoutes bool,
+			) routetable.RouteTableInterface {
 				return prt
 			},
 		)
@@ -95,6 +97,7 @@ var _ = Describe("IpipMgr (tunnel configuration)", func() {
 		BeforeEach(func() {
 			err = ipipMgr.configureIPIPDevice(1400, ip, false)
 			Expect(err).ToNot(HaveOccurred())
+			ipipMgr.OnParentNameUpdate("eth0")
 		})
 
 		It("should create the interface", func() {
@@ -272,12 +275,13 @@ var _ = Describe("ipipManager IP set updates", func() {
 			},
 			4,
 			dataplane,
-			func(interfacePrefixes []string, ipVersion uint8, vxlan bool, netlinkTimeout time.Duration,
-				deviceRouteSourceAddress net.IP, deviceRouteProtocol netlink.RouteProtocol, removeExternalRoutes bool) routetable.RouteTableInterface {
+			func(interfacePrefixes []string, ipVersion uint8, netlinkTimeout time.Duration,
+				deviceRouteSourceAddress net.IP, deviceRouteProtocol netlink.RouteProtocol,
+				removeExternalRoutes bool,
+			) routetable.RouteTableInterface {
 				return prt
 			},
 		)
-		ipipMgr.setNoEncapRouteTable(prt)
 		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
 			Hostname: "node1",
 			Ipv4Addr: "172.0.0.2",
@@ -446,8 +450,10 @@ var _ = Describe("IPIPManager", func() {
 			},
 			4,
 			dataplane,
-			func(interfacePrefixes []string, ipVersion uint8, vxlan bool, netlinkTimeout time.Duration,
-				deviceRouteSourceAddress net.IP, deviceRouteProtocol netlink.RouteProtocol, removeExternalRoutes bool) routetable.RouteTableInterface {
+			func(interfacePrefixes []string, ipVersion uint8, netlinkTimeout time.Duration,
+				deviceRouteSourceAddress net.IP, deviceRouteProtocol netlink.RouteProtocol,
+				removeExternalRoutes bool,
+			) routetable.RouteTableInterface {
 				return prt
 			},
 		)
@@ -463,10 +469,9 @@ var _ = Describe("IPIPManager", func() {
 			Ipv4Addr: "172.0.12.1",
 		})
 
-		manager.noEncapRouteTable = prt
-
 		err := manager.configureIPIPDevice(50, manager.dpConfig.RulesConfig.IPIPTunnelAddress, false)
 		Expect(err).NotTo(HaveOccurred())
+		manager.OnParentNameUpdate("eth0")
 
 		Expect(manager.noEncapRouteTable).NotTo(BeNil())
 		parent, err := manager.getParentInterface()
@@ -516,16 +521,17 @@ var _ = Describe("IPIPManager", func() {
 		err = manager.CompleteDeferredWork()
 
 		Expect(err).NotTo(HaveOccurred())
-		logrus.Infof("mazdak rt %v", rt.currentRoutes)
-		logrus.Infof("mazdak brt %v", brt.currentRoutes)
-		logrus.Infof("mazdak prt %v", prt.currentRoutes)
 		Expect(rt.currentRoutes["tunl0"]).To(HaveLen(1))
 		Expect(brt.currentRoutes[routetable.InterfaceNone]).To(HaveLen(1))
 		Expect(prt.currentRoutes["eth0"]).NotTo(BeNil())
 	})
 
 	It("adds the route to the default table on next try when the parent route table is not immediately found", func() {
-		go manager.KeepIPIPDeviceInSync(1400, manager.dpConfig.RulesConfig.IPIPTunnelAddress, false)
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		parentNameC := make(chan string)
+		go manager.KeepIPIPDeviceInSync(
+			ctx, 1400, manager.dpConfig.RulesConfig.IPIPTunnelAddress, false, 1*time.Second, parentNameC)
 		manager.OnUpdate(&proto.HostMetadataUpdate{
 			Hostname: "node2",
 			Ipv4Addr: "172.0.12.1/32",
@@ -555,6 +561,7 @@ var _ = Describe("IPIPManager", func() {
 
 		err = manager.configureIPIPDevice(50, manager.dpConfig.RulesConfig.IPIPTunnelAddress, false)
 		Expect(err).NotTo(HaveOccurred())
+		manager.OnParentNameUpdate("eth0")
 
 		Expect(prt.currentRoutes["eth0"]).To(HaveLen(0))
 		err = manager.CompleteDeferredWork()

@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -95,10 +95,6 @@ type vxlanManager struct {
 	logCtx *logrus.Entry
 }
 
-const (
-	defaultVXLANProto netlink.RouteProtocol = 80
-)
-
 type VXLANFDB interface {
 	SetVTEPs(vteps []vxlanfdb.VTEP)
 }
@@ -115,7 +111,7 @@ func newVXLANManager(
 ) *vxlanManager {
 	nlHandle, _ := netlink.NewHandle(syscall.NETLINK_ROUTE)
 
-	blackHoleProto := defaultVXLANProto
+	blackHoleProto := defaultRoutingProto
 	if dpConfig.DeviceRouteProtocol != syscall.RTPROT_BOOT {
 		blackHoleProto = dpConfig.DeviceRouteProtocol
 	}
@@ -189,7 +185,7 @@ func newVXLANManagerWithShims(
 	noEncapRTConstruct func(interfacePrefixes []string, ipVersion uint8, netlinkTimeout time.Duration,
 		deviceRouteSourceAddress net.IP, deviceRouteProtocol netlink.RouteProtocol, removeExternalRoutes bool) routetable.RouteTableInterface,
 ) *vxlanManager {
-	noEncapProtocol := defaultVXLANProto
+	noEncapProtocol := defaultRoutingProto
 	if dpConfig.DeviceRouteProtocol != syscall.RTPROT_BOOT {
 		noEncapProtocol = dpConfig.DeviceRouteProtocol
 	}
