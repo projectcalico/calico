@@ -334,5 +334,5 @@ replace (
 	k8s.io/sample-apiserver => k8s.io/sample-apiserver v0.28.9
 
 	// Replace with forked knftables.
-	sigs.k8s.io/knftables => github.com/caseydavenport/knftables v0.0.0-20240503190130-fef0a870e13b
+	sigs.k8s.io/knftables => github.com/caseydavenport/knftables v0.0.0-20240506175818-e10e126adafd
 )
