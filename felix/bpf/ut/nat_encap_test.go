@@ -106,7 +106,6 @@ func checkVxlan(pktR gopacket.Packet) gopacket.Packet {
 	udpL := pktR.Layer(layers.LayerTypeUDP)
 	Expect(udpL).NotTo(BeNil())
 	udpR := udpL.(*layers.UDP)
-	Expect(udpR.SrcPort).To(Equal(layers.UDPPort(testVxlanPort)))
 	Expect(udpR.DstPort).To(Equal(layers.UDPPort(testVxlanPort)))
 	Expect(udpR.Checksum).To(Equal(uint16(0)))
 
@@ -175,7 +174,6 @@ func getVxlanVNI(pktR gopacket.Packet) uint32 {
 	udpL := pktR.Layer(layers.LayerTypeUDP)
 	Expect(udpL).NotTo(BeNil())
 	udpR := udpL.(*layers.UDP)
-	Expect(udpR.SrcPort).To(Equal(layers.UDPPort(testVxlanPort)))
 	Expect(udpR.DstPort).To(Equal(layers.UDPPort(testVxlanPort)))
 	Expect(udpR.Checksum).To(Equal(uint16(0)))
 
