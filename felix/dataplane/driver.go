@@ -374,6 +374,7 @@ func StartDataplaneDriver(configParams *config.Config,
 			RouteTableManager:                  routeTableIndexAllocator,
 			MTUIfacePattern:                    configParams.MTUIfacePattern,
 			BPFExcludeCIDRsFromNAT:             configParams.BPFExcludeCIDRsFromNAT,
+			BPFInterfaceAutoDetectionEnabled:   configParams.BPFInterfaceAutoDetectionEnabled,
 
 			KubeClientSet: k8sClientSet,
 

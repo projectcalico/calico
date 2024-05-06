@@ -122,6 +122,19 @@ func init() {
 	binary.LittleEndian.PutUint32(jumpMapV6PolicyKey, uint32(tcdefs.ProgIndexPolicy))
 }
 
+type IfaceType int32
+
+const (
+	IfaceTypeWorkload IfaceType = iota
+	IfaceTypeData
+	IfaceTypeL3
+	IfaceTypeTunnel
+	IfaceTypeLoopback
+	IfaceTypeNAT
+	IfaceTypeBond
+	IfaceTypeBondSlaves
+)
+
 type attachPoint interface {
 	IfaceName() string
 	HookName() hook.Hook
@@ -253,8 +266,9 @@ type bpfEndpointManager struct {
 	initUnknownIfaces set.Set[string]
 
 	// Main store of information about interfaces; indexed on interface name.
-	ifacesLock  sync.Mutex
-	nameToIface map[string]bpfInterface
+	ifacesLock      sync.Mutex
+	nameToIface     map[string]bpfInterface
+	nameToIfaceType map[string]IfaceType
 
 	allWEPs        map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint
 	happyWEPs      map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint
@@ -268,26 +282,27 @@ type bpfEndpointManager struct {
 
 	dirtyIfaceNames set.Set[string]
 
-	logFilters              map[string]string
-	bpfLogLevel             string
-	hostname                string
-	fibLookupEnabled        bool
-	dataIfaceRegex          *regexp.Regexp
-	l3IfaceRegex            *regexp.Regexp
-	workloadIfaceRegex      *regexp.Regexp
-	epToHostAction          string
-	vxlanMTU                int
-	vxlanPort               uint16
-	wgPort                  uint16
-	wg6Port                 uint16
-	dsrEnabled              bool
-	dsrOptoutCidrs          bool
-	bpfExtToServiceConnmark int
-	psnatPorts              numorstring.Port
-	commonMaps              *bpfmap.CommonMaps
-	ifStateMap              *cachingmap.CachingMap[ifstate.Key, ifstate.Value]
-	removeOldJumps          bool
-	legacyCleanUp           bool
+	logFilters                    map[string]string
+	bpfLogLevel                   string
+	hostname                      string
+	fibLookupEnabled              bool
+	dataIfaceRegex                *regexp.Regexp
+	l3IfaceRegex                  *regexp.Regexp
+	workloadIfaceRegex            *regexp.Regexp
+	epToHostAction                string
+	vxlanMTU                      int
+	vxlanPort                     uint16
+	wgPort                        uint16
+	wg6Port                       uint16
+	dsrEnabled                    bool
+	dsrOptoutCidrs                bool
+	interfaceAutoDetectionEnabled bool
+	bpfExtToServiceConnmark       int
+	psnatPorts                    numorstring.Port
+	commonMaps                    *bpfmap.CommonMaps
+	ifStateMap                    *cachingmap.CachingMap[ifstate.Key, ifstate.Value]
+	removeOldJumps                bool
+	legacyCleanUp                 bool
 
 	jumpMapAlloc     *jumpMapAlloc
 	xdpJumpMapAlloc  *jumpMapAlloc
@@ -445,33 +460,35 @@ func newBPFEndpointManager(
 	}
 
 	m := &bpfEndpointManager{
-		initUnknownIfaces:       set.New[string](),
-		dp:                      dp,
-		allWEPs:                 map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
-		happyWEPs:               map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
-		happyWEPsDirty:          true,
-		policies:                map[proto.PolicyID]*proto.Policy{},
-		profiles:                map[proto.ProfileID]*proto.Profile{},
-		nameToIface:             map[string]bpfInterface{},
-		policiesToWorkloads:     map[proto.PolicyID]set.Set[any]{},
-		profilesToWorkloads:     map[proto.ProfileID]set.Set[any]{},
-		dirtyIfaceNames:         set.New[string](),
-		bpfLogLevel:             config.BPFLogLevel,
-		hostname:                config.Hostname,
-		fibLookupEnabled:        fibLookupEnabled,
-		dataIfaceRegex:          config.BPFDataIfacePattern,
-		l3IfaceRegex:            config.BPFL3IfacePattern,
-		workloadIfaceRegex:      workloadIfaceRegex,
-		epToHostAction:          config.RulesConfig.EndpointToHostAction,
-		vxlanMTU:                config.VXLANMTU,
-		vxlanPort:               uint16(config.VXLANPort),
-		wgPort:                  uint16(config.Wireguard.ListeningPort),
-		wg6Port:                 uint16(config.Wireguard.ListeningPortV6),
-		dsrEnabled:              config.BPFNodePortDSREnabled,
-		dsrOptoutCidrs:          len(config.BPFDSROptoutCIDRs) > 0,
-		bpfExtToServiceConnmark: config.BPFExtToServiceConnmark,
-		psnatPorts:              config.BPFPSNATPorts,
-		commonMaps:              bpfmaps.CommonMaps,
+		initUnknownIfaces:             set.New[string](),
+		dp:                            dp,
+		allWEPs:                       map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
+		happyWEPs:                     map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
+		happyWEPsDirty:                true,
+		policies:                      map[proto.PolicyID]*proto.Policy{},
+		profiles:                      map[proto.ProfileID]*proto.Profile{},
+		nameToIface:                   map[string]bpfInterface{},
+		nameToIfaceType:               map[string]IfaceType{},
+		policiesToWorkloads:           map[proto.PolicyID]set.Set[any]{},
+		profilesToWorkloads:           map[proto.ProfileID]set.Set[any]{},
+		dirtyIfaceNames:               set.New[string](),
+		bpfLogLevel:                   config.BPFLogLevel,
+		hostname:                      config.Hostname,
+		fibLookupEnabled:              fibLookupEnabled,
+		dataIfaceRegex:                config.BPFDataIfacePattern,
+		l3IfaceRegex:                  config.BPFL3IfacePattern,
+		workloadIfaceRegex:            workloadIfaceRegex,
+		epToHostAction:                config.RulesConfig.EndpointToHostAction,
+		vxlanMTU:                      config.VXLANMTU,
+		vxlanPort:                     uint16(config.VXLANPort),
+		wgPort:                        uint16(config.Wireguard.ListeningPort),
+		wg6Port:                       uint16(config.Wireguard.ListeningPortV6),
+		dsrEnabled:                    config.BPFNodePortDSREnabled,
+		interfaceAutoDetectionEnabled: config.BPFInterfaceAutoDetectionEnabled,
+		dsrOptoutCidrs:                len(config.BPFDSROptoutCIDRs) > 0,
+		bpfExtToServiceConnmark:       config.BPFExtToServiceConnmark,
+		psnatPorts:                    config.BPFPSNATPorts,
+		commonMaps:                    bpfmaps.CommonMaps,
 		ifStateMap: cachingmap.New[ifstate.Key, ifstate.Value](ifstate.MapParams.Name,
 			maps.NewTypedMap[ifstate.Key, ifstate.Value](
 				bpfmaps.CommonMaps.IfStateMap.(maps.MapWithExistsCheck), ifstate.KeyFromBytes, ifstate.ValueFromBytes,
@@ -2684,7 +2701,6 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(ifaceName string) *tc.Attach
 	default:
 		ap.RPFEnforceOption = tcdefs.RPFEnforceOptionDisabled
 	}
-
 	return ap
 }
 
@@ -2831,11 +2847,23 @@ func (m *bpfEndpointManager) isWorkloadIface(iface string) bool {
 }
 
 func (m *bpfEndpointManager) isDataIface(iface string) bool {
+	if m.interfaceAutoDetectionEnabled {
+		if _, ok := m.nameToIfaceType[iface]; !ok {
+			m.updateIfaceType()
+		}
+		return m.nameToIfaceType[iface] == IfaceTypeData
+	}
 	return m.dataIfaceRegex.MatchString(iface) ||
 		(m.hostNetworkedNATMode != hostNetworkedNATDisabled && (iface == bpfOutDev || iface == "lo"))
 }
 
 func (m *bpfEndpointManager) isL3Iface(iface string) bool {
+	if m.interfaceAutoDetectionEnabled {
+		if _, ok := m.nameToIfaceType[iface]; !ok {
+			m.updateIfaceType()
+		}
+		return m.nameToIfaceType[iface] == IfaceTypeL3
+	}
 	if m.l3IfaceRegex == nil {
 		return false
 	}
@@ -3920,6 +3948,62 @@ func (m *bpfEndpointManager) ruleMatchID(dir, action, owner, name string, idx in
 	h := fnv.New64a()
 	h.Write([]byte(action + owner + dir + strconv.Itoa(idx) + name))
 	return h.Sum64()
+}
+
+func (m *bpfEndpointManager) updateIfaceType() {
+	ifas, err := net.Interfaces()
+	if err != nil {
+		return
+	}
+	for _, ifa := range ifas {
+		if _, ok := m.nameToIfaceType[ifa.Name]; ok {
+			continue
+		}
+		if m.isWorkloadIface(ifa.Name) {
+			continue
+		}
+
+		m.nameToIfaceType[ifa.Name] = m.autoDetectInterfaceType(ifa)
+	}
+}
+
+func (m *bpfEndpointManager) autoDetectInterfaceType(intf net.Interface) IfaceType {
+	name := intf.Name
+	if name == "tunl0" {
+		if m.Features.IPIPDeviceIsL3 {
+			return IfaceTypeL3
+		} else {
+			return IfaceTypeData
+		}
+	}
+
+	if name == bpfOutDev {
+		if m.hostNetworkedNATMode != hostNetworkedNATDisabled {
+			return IfaceTypeData
+		}
+		return IfaceTypeNAT
+	}
+
+	if name == bpfInDev {
+		return IfaceTypeNAT
+	}
+
+	if name == "lo" {
+		if m.hostNetworkedNATMode != hostNetworkedNATDisabled {
+			return IfaceTypeData
+		}
+		return IfaceTypeLoopback
+	}
+
+	addrs, _ := intf.Addrs()
+	// Interface has IPv4/IPv6 address but no mac
+	if len(intf.HardwareAddr) == 0 && len(addrs) > 0 {
+		return IfaceTypeL3
+	}
+	// All the other interfaces are data interfaces.
+	// Check if the interface is bond. If so, update the interface type for
+	// slaves, master.
+	return IfaceTypeData
 }
 
 func newJumpMapAlloc(entryPoints int) *jumpMapAlloc {

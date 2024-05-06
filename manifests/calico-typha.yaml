@@ -1121,6 +1121,12 @@ spec:
                 - Enabled
                 - Disabled
                 type: string
+              bpfInterfaceAutoDetectionEnabled:
+                description: 'BPFInterfaceAutoDetectionEnabled, if enabled Felix will
+                  auto-detect the host and L3 tunnel  interfaces. When set to true,
+                  it will override the BPFDataIfacePattern and BPFL3IfacePattern configs.  [Default:
+                  true]'
+                type: boolean
               bpfKubeProxyEndpointSlicesEnabled:
                 description: BPFKubeProxyEndpointSlicesEnabled is deprecated and has
                   no effect. BPF kube-proxy always accepts endpoint slices. This option
