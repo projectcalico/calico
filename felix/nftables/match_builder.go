@@ -197,35 +197,39 @@ func (m nftMatch) NotDestNet(net string) generictables.MatchCriteria {
 }
 
 func (m nftMatch) SourceIPSet(name string) generictables.MatchCriteria {
-	return append(m, fmt.Sprintf("ip saddr @%s", CanonicalizeSetName(name)))
+	return append(m, fmt.Sprintf("ip saddr @%s", LegalizeSetName(name)))
 }
 
 func (m nftMatch) NotSourceIPSet(name string) generictables.MatchCriteria {
-	return append(m, fmt.Sprintf("ip saddr != @%s", CanonicalizeSetName(name)))
+	return append(m, fmt.Sprintf("ip saddr != @%s", LegalizeSetName(name)))
 }
 
 func (m nftMatch) SourceIPPortSet(name string) generictables.MatchCriteria {
-	return append(m, fmt.Sprintf("ip saddr @%s tcp sport @%s", name, name))
+	// TODO: hardcoded tcp
+	return append(m, fmt.Sprintf("ip saddr . tcp sport @%s", LegalizeSetName(name)))
 }
 
 func (m nftMatch) NotSourceIPPortSet(name string) generictables.MatchCriteria {
-	return append(m, fmt.Sprintf("ip saddr != @%s tcp sport != @%s", name, name))
+	// TODO: hardcoded tcp
+	return append(m, fmt.Sprintf("ip saddr . tcp sport != @%s", LegalizeSetName(name)))
 }
 
 func (m nftMatch) DestIPSet(name string) generictables.MatchCriteria {
-	return append(m, fmt.Sprintf("ip daddr @%s", CanonicalizeSetName(name)))
+	return append(m, fmt.Sprintf("ip daddr @%s", LegalizeSetName(name)))
 }
 
 func (m nftMatch) NotDestIPSet(name string) generictables.MatchCriteria {
-	return append(m, fmt.Sprintf("ip daddr != @%s", CanonicalizeSetName(name)))
+	return append(m, fmt.Sprintf("ip daddr != @%s", LegalizeSetName(name)))
 }
 
 func (m nftMatch) DestIPPortSet(name string) generictables.MatchCriteria {
-	return append(m, fmt.Sprintf("ip daddr @%s tcp dport @%s", name, name))
+	// TODO: hardcoded tcp
+	return append(m, fmt.Sprintf("ip daddr . tcp dport @%s", LegalizeSetName(name)))
 }
 
 func (m nftMatch) NotDestIPPortSet(name string) generictables.MatchCriteria {
-	return append(m, fmt.Sprintf("ip daddr != @%s tcp dport != @%s", name, name))
+	// TODO: hardcoded tcp
+	return append(m, fmt.Sprintf("ip daddr . tcp dport != @%s", LegalizeSetName(name)))
 }
 
 func (m nftMatch) IPSetNames() (ipSetNames []string) {

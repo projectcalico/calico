@@ -1004,7 +1004,7 @@ func (t *nftablesTable) applyUpdates() error {
 			// withold installation of chains that reference non-existent maps.
 			for _, setName := range chain.IPSetNames() {
 				tx.Add(&knftables.Set{
-					Name:  CanonicalizeSetName(setName),
+					Name:  LegalizeSetName(setName),
 					Type:  "ipv4_addr",
 					Flags: []knftables.SetFlag{knftables.IntervalFlag},
 				})
