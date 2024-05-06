@@ -335,7 +335,7 @@ func (s *IPSets) tryResync() error {
 	return nil
 }
 
-func CanonicalizeSetName(setName string) string {
+func LegalizeSetName(setName string) string {
 	return strings.Replace(setName, ":", "-", -1)
 }
 
@@ -370,16 +370,39 @@ func (s *IPSets) tryUpdates() error {
 	start := time.Now()
 
 	// Create a new transaction to update the IP sets.
+	//
+	// TODO: Right now, we include every IP set in every transaction. We should instead only include sets that require changes.
+	// Potentially we can also support falling back to modifying single IP sets if needed, so that one problematic set
+	// doesn't prevent the rest from being updated.
 	tx := s.nft.NewTransaction()
 
 	// Make sure the table exists.
+	// TODO: Only need to include this if the table doesn't already exist.
 	tx.Add(&knftables.Table{})
 
 	for _, setName := range dirtyIPSets {
+		metadata, ok := s.setNameToProgrammedMetadata.Desired().Get(setName)
+		if !ok {
+			s.logCxt.WithField("setName", setName).Warn("IP set not found in desired metadata.")
+			continue
+		}
+
+		var setType string
+		switch metadata.Type {
+		case ipsets.IPSetTypeHashNet:
+			setType = "ipv4_addr"
+		case ipsets.IPSetTypeHashIP:
+			setType = "ipv4_addr"
+		case ipsets.IPSetTypeHashIPPort:
+			setType = "ipv4_addr . inet_service"
+		default:
+			s.logCxt.WithField("setType", metadata.Type).Fatal("Unsupported IP set type.")
+		}
+
 		// Create the set.
 		set := &knftables.Set{
-			Name:  CanonicalizeSetName(setName),
-			Type:  "ipv4_addr",
+			Name:  LegalizeSetName(setName),
+			Type:  setType,
 			Flags: []knftables.SetFlag{knftables.IntervalFlag},
 		}
 		tx.Add(set)
@@ -388,16 +411,36 @@ func (s *IPSets) tryUpdates() error {
 		// instead, we should make incremental changes to the set for better performance.
 		tx.Flush(set)
 
+		// TODO: This is a hack. Would be better to support this within the ipset package. Right now
+		// we are using structures intended for ipsets in order to program nftables sets.
+		convertIfNeeded := func(member string) string {
+			if metadata.Type == ipsets.IPSetTypeHashIPPort {
+				// Convert the member who is in format ip,proto:port to the format "ip . port"
+				parts := strings.Split(member, ",")
+				if len(parts) != 2 {
+					s.logCxt.WithField("member", member).Fatal("Invalid member format.")
+				}
+				ip := parts[0]
+				port := strings.Split(parts[1], ":")[1]
+				return fmt.Sprintf("%s . %s", ip, port)
+			}
+			return member
+		}
+
 		// Add desired members to the set.
 		members := s.mainSetNameToMembers[setName]
 		members.Desired().Iter(func(member ipsets.IPSetMember) {
+			s.logCxt.WithField("member", member.String()).Info("Adding member to IP set.")
 			tx.Add(&knftables.Element{
-				Set: CanonicalizeSetName(setName),
-				Key: []string{member.String()},
+				Set: LegalizeSetName(setName),
+				Key: []string{
+					convertIfNeeded(member.String()),
+				},
 			})
 		})
 	}
 	if err := s.nft.Run(context.TODO(), tx); err != nil {
+		s.logCxt.WithError(err).Errorf("Failed to update IP sets. %s", tx.String())
 		return fmt.Errorf("error updating nftables sets: %s", err)
 	}
 
@@ -459,7 +502,7 @@ func (s *IPSets) ApplyDeletions() bool {
 func (s *IPSets) deleteIPSet(setName string) error {
 	s.logCxt.WithField("setName", setName).Info("Deleting IP set.")
 	tx := s.nft.NewTransaction()
-	tx.Delete(&knftables.Set{Name: CanonicalizeSetName(setName)})
+	tx.Delete(&knftables.Set{Name: LegalizeSetName(setName)})
 	if err := s.nft.Run(context.Background(), tx); err != nil {
 		return fmt.Errorf("error deleting nftables set %s: %v", setName, err)
 	}
