@@ -47,11 +47,10 @@ sudo chmod 644 /etc/apt/keyrings/kubernetes-apt-keyring.gpg
 # Add the Kubernetes apt repository
 echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v${KUBE_REPO_VERSION}/deb/ /" | sudo tee /etc/apt/sources.list.d/kubernetes.list
 
-K8S_PKG_VERSION=${KUBE_VERSION}-1.1
-sudo apt-get update && sudo apt-get install -y kubelet=${K8S_PKG_VERSION} kubeadm=${K8S_PKG_VERSION} kubectl=${K8S_PKG_VERSION}
+sudo apt-get update && sudo apt-get install -y kubelet kubeadm kubectl
 sudo swapoff -a
 
-K8S_VERSION=stable-$(echo ${KUBE_VERSION} | cut -d. -f1,2)
+K8S_VERSION=stable-${KUBE_REPO_VERSION}
 sudo kubeadm init --kubernetes-version ${K8S_VERSION} --pod-network-cidr=192.168.0.0/16
 mkdir -p $HOME/.kube
 sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config

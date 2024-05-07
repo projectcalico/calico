@@ -4,7 +4,7 @@ set -e
 set -x
 
 FV_DIR="/home/semaphore/calico/process/testing/winfv"
-CONTAINER_RUNTIME="${CONTAINER_RUNTIME:=docker}"
+CONTAINER_RUNTIME="${CONTAINER_RUNTIME:=containerd}"
 
 pushd ${FV_DIR}
 # Prepare local files

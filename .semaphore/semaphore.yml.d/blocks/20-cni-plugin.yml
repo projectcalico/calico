@@ -65,7 +65,5 @@
         commands:
           - ../.semaphore/run-and-monitor win-fv-containerd.log ./.semaphore/run-win-fv.sh
         env_vars:
-          - name: CONTAINER_RUNTIME
-            value: containerd
           - name: CONTAINERD_VERSION
             value: 1.6.22
