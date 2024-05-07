@@ -15,7 +15,6 @@
 package nftables
 
 import (
-	"bytes"
 	"strings"
 
 	. "github.com/onsi/ginkgo"
@@ -27,14 +26,14 @@ import (
 
 var (
 	rules1 = []generictables.Rule{
-		{Match: nftMatch{"-m foobar --foobar baz"}, Action: JumpAction{Target: "biff"}},
+		{Match: nftMatch{clauses: []string{"-m foobar --foobar baz"}}, Action: JumpAction{Target: "biff"}},
 	}
 	rules2 = []generictables.Rule{
-		{Match: nftMatch{"-m foobar --foobar baz"}, Action: JumpAction{Target: "boff"}},
+		{Match: nftMatch{clauses: []string{"-m foobar --foobar baz"}}, Action: JumpAction{Target: "boff"}},
 	}
 	rules3 = []generictables.Rule{
-		{Match: nftMatch{"-m foobar --foobar baz"}, Action: JumpAction{Target: "biff"}},
-		{Match: nftMatch{"-m foobar --foobar baz"}, Action: JumpAction{Target: "boff"}},
+		{Match: nftMatch{clauses: []string{"-m foobar --foobar baz"}}, Action: JumpAction{Target: "biff"}},
+		{Match: nftMatch{clauses: []string{"-m foobar --foobar baz"}}, Action: JumpAction{Target: "boff"}},
 	}
 )
 
@@ -69,7 +68,7 @@ var _ = Describe("Rule hashing tests", func() {
 var _ = Describe("rule comments", func() {
 	Context("Rule with multiple comments", func() {
 		rule := generictables.Rule{
-			Match:   nftMatch{"-m foobar --foobar baz"},
+			Match:   nftMatch{clauses: []string{"-m foobar --foobar baz"}},
 			Action:  JumpAction{Target: "biff"},
 			Comment: []string{"boz", "fizz"},
 		}
@@ -83,7 +82,7 @@ var _ = Describe("rule comments", func() {
 
 	Context("Rule with comment with newlines", func() {
 		rule := generictables.Rule{
-			Match:  nftMatch{"-m foobar --foobar baz"},
+			Match:  nftMatch{clauses: []string{"-m foobar --foobar baz"}},
 			Action: JumpAction{Target: "biff"},
 			Comment: []string{`boz
 fizz`},
@@ -97,7 +96,7 @@ fizz`},
 
 	Context("Rule with comment longer than 256 characters", func() {
 		rule := generictables.Rule{
-			Match:   nftMatch{"-m foobar --foobar baz"},
+			Match:   nftMatch{clauses: []string{"-m foobar --foobar baz"}},
 			Action:  JumpAction{Target: "biff"},
 			Comment: []string{strings.Repeat("a", 257)},
 		}
@@ -108,20 +107,6 @@ fizz`},
 		})
 	})
 })
-
-func newClosableBuf(s string) *withDummyClose {
-	return (*withDummyClose)(bytes.NewBufferString(s))
-}
-
-type withDummyClose bytes.Buffer
-
-func (b *withDummyClose) Read(p []byte) (n int, err error) {
-	return (*bytes.Buffer)(b).Read(p)
-}
-
-func (b *withDummyClose) Close() error {
-	return nil
-}
 
 func calculateHashes(chainName string, rules []generictables.Rule) []string {
 	chain := &generictables.Chain{
