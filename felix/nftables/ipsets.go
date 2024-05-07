@@ -430,7 +430,6 @@ func (s *IPSets) tryUpdates() error {
 		// Add desired members to the set.
 		members := s.mainSetNameToMembers[setName]
 		members.Desired().Iter(func(member ipsets.IPSetMember) {
-			s.logCxt.WithField("member", member.String()).Info("Adding member to IP set.")
 			tx.Add(&knftables.Element{
 				Set: LegalizeSetName(setName),
 				Key: []string{
