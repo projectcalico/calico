@@ -205,13 +205,15 @@ func (m nftMatch) NotSourceIPSet(name string) generictables.MatchCriteria {
 }
 
 func (m nftMatch) SourceIPPortSet(name string) generictables.MatchCriteria {
-	// TODO: hardcoded tcp
-	return append(m, fmt.Sprintf("ip saddr . tcp sport @%s", LegalizeSetName(name)))
+	i, protocol := m.protocol()
+	m[i] = fmt.Sprintf("ip saddr . %s sport @%s", protocol, LegalizeSetName(name))
+	return m
 }
 
 func (m nftMatch) NotSourceIPPortSet(name string) generictables.MatchCriteria {
-	// TODO: hardcoded tcp
-	return append(m, fmt.Sprintf("ip saddr . tcp sport != @%s", LegalizeSetName(name)))
+	i, protocol := m.protocol()
+	m[i] = fmt.Sprintf("ip saddr . %s sport != @%s", protocol, LegalizeSetName(name))
+	return m
 }
 
 func (m nftMatch) DestIPSet(name string) generictables.MatchCriteria {
@@ -223,13 +225,15 @@ func (m nftMatch) NotDestIPSet(name string) generictables.MatchCriteria {
 }
 
 func (m nftMatch) DestIPPortSet(name string) generictables.MatchCriteria {
-	// TODO: hardcoded tcp
-	return append(m, fmt.Sprintf("ip daddr . tcp dport @%s", LegalizeSetName(name)))
+	i, protocol := m.protocol()
+	m[i] = fmt.Sprintf("ip daddr . %s dport @%s", protocol, LegalizeSetName(name))
+	return m
 }
 
 func (m nftMatch) NotDestIPPortSet(name string) generictables.MatchCriteria {
-	// TODO: hardcoded tcp
-	return append(m, fmt.Sprintf("ip daddr . tcp dport != @%s", LegalizeSetName(name)))
+	i, protocol := m.protocol()
+	m[i] = fmt.Sprintf("ip daddr . %s dport != @%s", protocol, LegalizeSetName(name))
+	return m
 }
 
 func (m nftMatch) IPSetNames() (ipSetNames []string) {
@@ -251,16 +255,22 @@ func (m nftMatch) IPSetNames() (ipSetNames []string) {
 }
 
 func (m nftMatch) SourcePorts(ports ...uint16) generictables.MatchCriteria {
+	i, protocol := m.protocol()
 	portsString := PortsToMultiport(ports)
-	return append(m, fmt.Sprintf("tcp sport %s", portsString))
+	m[i] = fmt.Sprintf("%s sport %s", protocol, portsString)
+	return m
 }
 
 func (m nftMatch) NotSourcePorts(ports ...uint16) generictables.MatchCriteria {
+	i, protocol := m.protocol()
 	portsString := PortsToMultiport(ports)
-	return append(m, fmt.Sprintf("tcp sport != %s", portsString))
+	m[i] = fmt.Sprintf("%s sport != %s", protocol, portsString)
+	return m
 }
 
-func (m nftMatch) DestPorts(ports ...uint16) generictables.MatchCriteria {
+// protocol returns the index of the protocol match in the match string, and the protocol value.
+// Callers can use this to build a port match by replacing the protocol match with a more specific protocol+port match.
+func (m nftMatch) protocol() (int, string) {
 	// Matches on port require a protocol be specified. The MatchCritieria interface exposes these
 	// as two separate functions, but the underlying nftables rule syntax varies based on whether or not a port was specified,
 	// and what type of match is being made. Extract the protocol and use it to build the port match.
@@ -271,15 +281,20 @@ func (m nftMatch) DestPorts(ports ...uint16) generictables.MatchCriteria {
 			logrus.WithField("match", m[i]).Fatal("Not protocol match on ports is not supported")
 		} else if strings.Contains(m[i], "ip protocol ") {
 			protocol = strings.Split(m[i], " ")[2]
-
-			// Remove the protocol match, and instead include it in the port match. This is because
-			// port match includes the protocol in the match string.
-			m[i] = fmt.Sprintf("%s dport %s", protocol, PortsToMultiport(ports))
-			return m
+			return i, protocol
 		}
 	}
 	logrus.Fatal("Protocol not found in match string, but is required for port match")
-	return nil
+	return 0, ""
+}
+
+func (m nftMatch) DestPorts(ports ...uint16) generictables.MatchCriteria {
+	i, protocol := m.protocol()
+
+	// Remove the protocol match, and instead include it in the port match. This is because
+	// port match includes the protocol in the match string.
+	m[i] = fmt.Sprintf("%s dport %s", protocol, PortsToMultiport(ports))
+	return m
 }
 
 func (m nftMatch) UDPDestPorts(ports ...uint16) generictables.MatchCriteria {
@@ -288,45 +303,38 @@ func (m nftMatch) UDPDestPorts(ports ...uint16) generictables.MatchCriteria {
 }
 
 func (m nftMatch) NotDestPorts(ports ...uint16) generictables.MatchCriteria {
+	i, protocol := m.protocol()
 	portsString := PortsToMultiport(ports)
-	return append(m, fmt.Sprintf("tcp dport != %s", portsString))
+	m[i] = fmt.Sprintf("%s dport != %s", protocol, portsString)
+	return m
 }
 
 func (m nftMatch) SourcePortRanges(ports []*proto.PortRange) generictables.MatchCriteria {
+	i, protocol := m.protocol()
 	portsString := PortRangesToMultiport(ports)
-	return append(m, fmt.Sprintf("tcp sport %s", portsString))
+	m[i] = fmt.Sprintf("%s sport %s", protocol, portsString)
+	return m
 }
 
 func (m nftMatch) NotSourcePortRanges(ports []*proto.PortRange) generictables.MatchCriteria {
+	i, protocol := m.protocol()
 	portsString := PortRangesToMultiport(ports)
-	return append(m, fmt.Sprintf("tcp sport != %s", portsString))
+	m[i] = fmt.Sprintf("%s sport != %s", protocol, portsString)
+	return m
 }
 
 func (m nftMatch) DestPortRanges(ports []*proto.PortRange) generictables.MatchCriteria {
-	// Matches on port require a protocol be specified. The MatchCritieria interface exposes these
-	// as two separate functions, but the underlying nftables rule syntax varies based on whether or not a port was specified,
-	// and what type of match is being made. Extract the protocol and use it to build the port match.
-	var protocol string
-	for i := range m {
-		if strings.Contains(m[i], "ip protocol !=") {
-			// Protocol not match is not yet supported.
-			logrus.WithField("match", m[i]).Fatal("Not protocol match on port ranges is not supported")
-		} else if strings.Contains(m[i], "ip protocol ") {
-			protocol = strings.Split(m[i], " ")[2]
-
-			// Remove the protocol match, and instead include it in the port match. This is because
-			// port match includes the protocol in the match string.
-			m[i] = fmt.Sprintf("%s dport %s", protocol, PortRangesToMultiport(ports))
-			return m
-		}
-	}
-	logrus.Fatal("Protocol not found in match string, but is required for port ranges match")
-	return nil
+	i, protocol := m.protocol()
+	portsString := PortRangesToMultiport(ports)
+	m[i] = fmt.Sprintf("%s dport %s", protocol, portsString)
+	return m
 }
 
 func (m nftMatch) NotDestPortRanges(ports []*proto.PortRange) generictables.MatchCriteria {
+	i, protocol := m.protocol()
 	portsString := PortRangesToMultiport(ports)
-	return append(m, fmt.Sprintf("tcp dport != %s", portsString))
+	m[i] = fmt.Sprintf("%s dport != %s", protocol, portsString)
+	return m
 }
 
 func (m nftMatch) ICMPType(t uint8) generictables.MatchCriteria {
