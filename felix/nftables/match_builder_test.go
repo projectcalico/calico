@@ -52,65 +52,72 @@ var _ = DescribeTable("MatchBuilder",
 	func(match generictables.MatchCriteria, expRendering string) {
 		Expect(match.Render()).To(Equal(expRendering))
 	},
+
 	// Marks.
-	Entry("MarkClear", Match().MarkClear(0x400a), "-m mark --mark 0/0x400a"),
-	Entry("MarkClear", Match().MarkNotClear(0x400a), "-m mark ! --mark 0/0x400a"),
-	Entry("MarkSingleBitSet", Match().MarkSingleBitSet(0x4000), "-m mark --mark 0x4000/0x4000"),
-	Entry("MarkMatchesWithMask", Match().MarkMatchesWithMask(0x400a, 0xf00f), "-m mark --mark 0x400a/0xf00f"),
-	Entry("NotMarkMatchesWithMask", Match().NotMarkMatchesWithMask(0x400a, 0xf00f), "-m mark ! --mark 0x400a/0xf00f"),
+	Entry("MarkClear", Match().MarkClear(0x400a), "meta mark & 0x400a == 0"),
+	Entry("MarkClear", Match().MarkNotClear(0x400a), "meta mark & 0x400a != 0"),
+	Entry("MarkSingleBitSet", Match().MarkSingleBitSet(0x4000), "meta mark & 0x4000 == 0x4000"),
+	Entry("MarkMatchesWithMask", Match().MarkMatchesWithMask(0x400a, 0xf00f), "meta mark & 0x400a == 0xf00f"),
+	Entry("NotMarkMatchesWithMask", Match().NotMarkMatchesWithMask(0x400a, 0xf00f), "meta mark & 0x400a != 0xf00f"),
+
 	// Conntrack.
-	Entry("ConntrackState", Match().ConntrackState("INVALID"), "-m conntrack --ctstate INVALID"),
+	Entry("ConntrackState", Match().ConntrackState("INVALID"), "ct state invalid"),
+
 	// Interfaces.
-	Entry("InInterface", Match().InInterface("tap1234abcd"), "--in-interface tap1234abcd"),
-	Entry("OutInterface", Match().OutInterface("tap1234abcd"), "--out-interface tap1234abcd"),
+	Entry("InInterface", Match().InInterface("tap1234abcd"), "iifname tap1234abcd"),
+	Entry("OutInterface", Match().OutInterface("tap1234abcd"), "oifname tap1234abcd"),
+
 	// Address types.
-	Entry("SrcAddrType limit iface", Match().SrcAddrType(generictables.AddrTypeLocal, true), "-m addrtype --src-type LOCAL --limit-iface-out"),
-	Entry("SrcAddrType no limit iface", Match().SrcAddrType(generictables.AddrTypeLocal, false), "-m addrtype --src-type LOCAL"),
-	Entry("NotSrcAddrType limit iface", Match().NotSrcAddrType(generictables.AddrTypeLocal, true), "-m addrtype ! --src-type LOCAL --limit-iface-out"),
-	Entry("NotSrcAddrType no limit iface", Match().NotSrcAddrType(generictables.AddrTypeLocal, false), "-m addrtype ! --src-type LOCAL"),
-	Entry("DestAddrType no limit iface", Match().DestAddrType(generictables.AddrTypeLocal), "-m addrtype --dst-type LOCAL"),
+	Entry("SrcAddrType limit iface", Match().SrcAddrType(generictables.AddrTypeLocal, true), "fib saddr . oif type local"),
+	Entry("SrcAddrType no limit iface", Match().SrcAddrType(generictables.AddrTypeLocal, false), "fib saddr type local"),
+	Entry("NotSrcAddrType limit iface", Match().NotSrcAddrType(generictables.AddrTypeLocal, true), "fib saddr . oif type != local"),
+	Entry("NotSrcAddrType no limit iface", Match().NotSrcAddrType(generictables.AddrTypeLocal, false), "fib saddr type != local"),
+	Entry("DestAddrType no limit iface", Match().DestAddrType(generictables.AddrTypeLocal), "fib daddr type == local"),
+
 	// Protocol.
-	Entry("Protocol", Match().Protocol("tcp"), "-p tcp"),
-	Entry("NotProtocol", Match().NotProtocol("tcp"), "! -p tcp"),
-	Entry("ProtocolNum", Match().ProtocolNum(123), "-p 123"),
-	Entry("NotProtocolNum", Match().NotProtocolNum(123), "! -p 123"),
+	Entry("Protocol", Match().Protocol("tcp"), "ip protocol tcp"),
+	Entry("NotProtocol", Match().NotProtocol("tcp"), "ip protocol != tcp"),
+	Entry("ProtocolNum", Match().ProtocolNum(123), "ip protocol 123"),
+	Entry("NotProtocolNum", Match().NotProtocolNum(123), "ip protocol != 123"),
+
 	// CIDRs.
-	Entry("SourceNet", Match().SourceNet("10.0.0.4"), "--source 10.0.0.4"),
-	Entry("NotSourceNet", Match().NotSourceNet("10.0.0.4"), "! --source 10.0.0.4"),
-	Entry("DestNet", Match().DestNet("10.0.0.4"), "--destination 10.0.0.4"),
-	Entry("NotDestNet", Match().NotDestNet("10.0.0.4"), "! --destination 10.0.0.4"),
+	Entry("SourceNet", Match().SourceNet("10.0.0.4"), "ip saddr 10.0.0.4"),
+	Entry("NotSourceNet", Match().NotSourceNet("10.0.0.4"), "ip saddr != 10.0.0.4"),
+	Entry("DestNet", Match().DestNet("10.0.0.4"), "ip daddr 10.0.0.4"),
+	Entry("NotDestNet", Match().NotDestNet("10.0.0.4"), "ip daddr != 10.0.0.4"),
+
 	// IP sets.
-	Entry("SourceIPSet", Match().SourceIPSet("calits:12345abc-_"), "-m set --match-set calits:12345abc-_ src"),
-	Entry("NotSourceIPSet", Match().NotSourceIPSet("calits:12345abc-_"), "-m set ! --match-set calits:12345abc-_ src"),
-	Entry("DestIPSet", Match().DestIPSet("calits:12345abc-_"), "-m set --match-set calits:12345abc-_ dst"),
-	Entry("NotDestIPSet", Match().NotDestIPSet("calits:12345abc-_"), "-m set ! --match-set calits:12345abc-_ dst"),
+	Entry("SourceIPSet", Match().SourceIPSet("calits:12345abc-_"), "ip saddr @calits-12345abc-_ src"),
+	Entry("NotSourceIPSet", Match().NotSourceIPSet("calits:12345abc-_"), "ip saddr != @calits-12345abc-_ src"),
+	Entry("DestIPSet", Match().DestIPSet("calits:12345abc-_"), "ip daddr @calits-12345abc-_ dst"),
+	Entry("NotDestIPSet", Match().NotDestIPSet("calits:12345abc-_"), "ip daddr != @calits-12345abc-_ dst"),
+
 	// IP,Port IP sets.
-	Entry("SourceIPPortSet", Match().SourceIPPortSet("calitn:12345abc-_"), "-m set --match-set calitn:12345abc-_ src,src"),
-	Entry("NotSourceIPPortSet", Match().NotSourceIPPortSet("calitn:12345abc-_"), "-m set ! --match-set calitn:12345abc-_ src,src"),
-	Entry("DestIPPortSet", Match().DestIPPortSet("calitn:12345abc-_"), "-m set --match-set calitn:12345abc-_ dst,dst"),
-	Entry("NotDestIPPortSet", Match().NotDestIPPortSet("calitn:12345abc-_"), "-m set ! --match-set calitn:12345abc-_ dst,dst"),
+	Entry("SourceIPPortSet", Match().Protocol("tcp").SourceIPPortSet("calitn:12345abc-_"), "ip saddr . tcp sport @calitn-12345abc-_"),
+	Entry("NotSourceIPPortSet", Match().Protocol("tcp").NotSourceIPPortSet("calitn:12345abc-_"), "ip saddr . tcp sport != @calitn-12345abc-_"),
+	Entry("DestIPPortSet", Match().Protocol("tcp").DestIPPortSet("calitn:12345abc-_"), "ip daddr . tcp dport @calitn-12345abc-_"),
+	Entry("NotDestIPPortSet", Match().Protocol("tcp").NotDestIPPortSet("calitn:12345abc-_"), "ip daddr . tcp dport != @calitn-12345abc-_"),
+
 	// Ports.
-	Entry("SourcePorts", Match().SourcePorts(1234, 5678), "-m multiport --source-ports 1234,5678"),
-	Entry("NotSourcePorts", Match().NotSourcePorts(1234, 5678), "-m multiport ! --source-ports 1234,5678"),
-	Entry("DestPorts", Match().DestPorts(1234, 5678), "-m multiport --destination-ports 1234,5678"),
-	Entry("NotDestPorts", Match().NotDestPorts(1234, 5678), "-m multiport ! --destination-ports 1234,5678"),
-	Entry("SourcePortRanges", Match().SourcePortRanges(portRanges), "-m multiport --source-ports 1234,5678:6000"),
-	Entry("NotSourcePortRanges", Match().NotSourcePortRanges(portRanges), "-m multiport ! --source-ports 1234,5678:6000"),
-	Entry("DestPortRanges", Match().DestPortRanges(portRanges), "-m multiport --destination-ports 1234,5678:6000"),
-	Entry("NotDestPortRanges", Match().NotDestPortRanges(portRanges), "-m multiport ! --destination-ports 1234,5678:6000"),
+	Entry("SourcePorts", Match().Protocol("tcp").SourcePorts(1234, 5678), "tcp sport { 1234, 5678 }"),
+	Entry("NotSourcePorts", Match().Protocol("udp").NotSourcePorts(1234, 5678), "tcp sport != { 1234, 5678 }"),
+	Entry("DestPorts", Match().Protocol("tcp").DestPorts(1234, 5678), "tcp dport { 1234, 5678 }"),
+	Entry("NotDestPorts", Match().Protocol("udp").NotDestPorts(1234, 5678), "tcp dport != { 1234, 5678 }"),
+	Entry("SourcePortRanges", Match().Protocol("udp").SourcePortRanges(portRanges), "udp sport { 1234, 5678-6000 }"),
+	Entry("NotSourcePortRanges", Match().Protocol("udp").NotSourcePortRanges(portRanges), "udp sport != { 1234, 5678-6000 }"),
+	Entry("DestPortRanges", Match().Protocol("udp").DestPortRanges(portRanges), "udp dport { 1234, 5678-6000 }"),
+	Entry("NotDestPortRanges", Match().Protocol("udp").NotDestPortRanges(portRanges), "udp dport != { 1234, 5678-6000 }"),
+
 	// ICMP.
-	Entry("ICMPType", Match().ICMPType(123), "-m icmp --icmp-type 123"),
-	Entry("NotICMPType", Match().NotICMPType(123), "-m icmp ! --icmp-type 123"),
-	Entry("ICMPTypeAndCode", Match().ICMPTypeAndCode(123, 5), "-m icmp --icmp-type 123/5"),
-	Entry("NotICMPTypeAndCode", Match().NotICMPTypeAndCode(123, 5), "-m icmp ! --icmp-type 123/5"),
-	Entry("ICMPV6Type", Match().ICMPV6Type(123), "-m icmp6 --icmpv6-type 123"),
-	Entry("NotICMPV6Type", Match().NotICMPV6Type(123), "-m icmp6 ! --icmpv6-type 123"),
-	Entry("ICMPV6TypeAndCode", Match().ICMPV6TypeAndCode(123, 5), "-m icmp6 --icmpv6-type 123/5"),
-	Entry("NotICMPV6TypeAndCode", Match().NotICMPV6TypeAndCode(123, 5), "-m icmp6 ! --icmpv6-type 123/5"),
+	Entry("ICMPType", Match().ICMPType(123), "icmp type 123"),
+	Entry("NotICMPType", Match().NotICMPType(123), "icmp type != 123"),
+	Entry("ICMPTypeAndCode", Match().ICMPTypeAndCode(123, 5), "icmp type 123 code 5"),
+	Entry("NotICMPTypeAndCode", Match().NotICMPTypeAndCode(123, 5), "icmp type != 123 code != 5"),
+	Entry("ICMPV6Type", Match().ICMPV6Type(123), "icmp type 123"),
+	Entry("NotICMPV6Type", Match().NotICMPV6Type(123), "icmp type != 123"),
+	Entry("ICMPV6TypeAndCode", Match().ICMPV6TypeAndCode(123, 5), "icmp type 123 code 5"),
+	Entry("NotICMPV6TypeAndCode", Match().NotICMPV6TypeAndCode(123, 5), "icmp type != 123 code != 5"),
+
 	// Check multiple match criteria are joined correctly.
-	Entry("Protocol and ports", Match().Protocol("tcp").SourcePorts(1234).DestPorts(8080),
-		"-p tcp -m multiport --source-ports 1234 -m multiport --destination-ports 8080"),
-	// // IPVS.
-	// Entry("IPVSConnection", Match().IPVSConnection(), "-m ipvs --ipvs"),
-	// Entry("NotIPVSConnection", Match().NotIPVSConnection(), "-m ipvs ! --ipvs"),
+	Entry("Protocol and ports", Match().Protocol("tcp").SourcePorts(1234).DestPorts(8080), "tcp sport 1234 tcp dport 8080"),
 )
