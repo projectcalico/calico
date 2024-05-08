@@ -26,14 +26,14 @@ import (
 
 var (
 	rules1 = []generictables.Rule{
-		{Match: nftMatch{clauses: []string{"-m foobar --foobar baz"}}, Action: JumpAction{Target: "biff"}},
+		{Match: nftMatch{clauses: []string{"foobar baz"}}, Action: JumpAction{Target: "biff"}},
 	}
 	rules2 = []generictables.Rule{
-		{Match: nftMatch{clauses: []string{"-m foobar --foobar baz"}}, Action: JumpAction{Target: "boff"}},
+		{Match: nftMatch{clauses: []string{"foobar baz"}}, Action: JumpAction{Target: "boff"}},
 	}
 	rules3 = []generictables.Rule{
-		{Match: nftMatch{clauses: []string{"-m foobar --foobar baz"}}, Action: JumpAction{Target: "biff"}},
-		{Match: nftMatch{clauses: []string{"-m foobar --foobar baz"}}, Action: JumpAction{Target: "boff"}},
+		{Match: nftMatch{clauses: []string{"foobar baz"}}, Action: JumpAction{Target: "biff"}},
+		{Match: nftMatch{clauses: []string{"foobar baz"}}, Action: JumpAction{Target: "boff"}},
 	}
 )
 
@@ -68,42 +68,44 @@ var _ = Describe("Rule hashing tests", func() {
 var _ = Describe("rule comments", func() {
 	Context("Rule with multiple comments", func() {
 		rule := generictables.Rule{
-			Match:   nftMatch{clauses: []string{"-m foobar --foobar baz"}},
+			Match:   nftMatch{clauses: []string{"foobar baz"}},
 			Action:  JumpAction{Target: "biff"},
 			Comment: []string{"boz", "fizz"},
 		}
 
 		It("should render rule including multiple comments", func() {
-			render := rule.RenderAppend("test", "TEST", renderInner, &environment.Features{})
-			Expect(render).To(ContainSubstring("-m comment --comment \"boz\""))
-			Expect(render).To(ContainSubstring("-m comment --comment \"fizz\""))
+			render := rule.Render("test", "TEST", renderInner, &environment.Features{})
+			Expect(render.Comment).NotTo(BeNil())
+			Expect(*render.Comment).To(Equal("TEST; boz fizz"))
 		})
 	})
 
 	Context("Rule with comment with newlines", func() {
 		rule := generictables.Rule{
-			Match:  nftMatch{clauses: []string{"-m foobar --foobar baz"}},
+			Match:  nftMatch{clauses: []string{"foobar baz"}},
 			Action: JumpAction{Target: "biff"},
 			Comment: []string{`boz
 fizz`},
 		}
 
 		It("should render rule with newline escaped", func() {
-			render := rule.RenderAppend("test", "TEST", renderInner, &environment.Features{})
-			Expect(render).To(ContainSubstring("-m comment --comment \"boz_fizz\""))
+			render := rule.Render("test", "TEST", renderInner, &environment.Features{})
+			Expect(render.Comment).NotTo(BeNil())
+			Expect(*render.Comment).To(Equal("TEST; boz_fizz"))
 		})
 	})
 
 	Context("Rule with comment longer than 256 characters", func() {
 		rule := generictables.Rule{
-			Match:   nftMatch{clauses: []string{"-m foobar --foobar baz"}},
+			Match:   nftMatch{clauses: []string{"foobar baz"}},
 			Action:  JumpAction{Target: "biff"},
 			Comment: []string{strings.Repeat("a", 257)},
 		}
 
 		It("should render rule with comment truncated", func() {
-			render := rule.RenderAppend("test", "TEST", renderInner, &environment.Features{})
-			Expect(render).To(ContainSubstring("-m comment --comment \"" + strings.Repeat("a", 256) + "\""))
+			render := rule.Render("test", "TEST", renderInner, &environment.Features{})
+			Expect(render.Comment).NotTo(BeNil())
+			Expect(*render.Comment).To(Equal("TEST; " + strings.Repeat("a", 256)))
 		})
 	})
 })
