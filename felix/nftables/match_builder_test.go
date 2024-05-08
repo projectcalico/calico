@@ -57,8 +57,8 @@ var _ = DescribeTable("MatchBuilder",
 	Entry("MarkClear", Match().MarkClear(0x400a), "meta mark & 0x400a == 0"),
 	Entry("MarkClear", Match().MarkNotClear(0x400a), "meta mark & 0x400a != 0"),
 	Entry("MarkSingleBitSet", Match().MarkSingleBitSet(0x4000), "meta mark & 0x4000 == 0x4000"),
-	Entry("MarkMatchesWithMask", Match().MarkMatchesWithMask(0x400a, 0xf00f), "meta mark & 0x400a == 0xf00f"),
-	Entry("NotMarkMatchesWithMask", Match().NotMarkMatchesWithMask(0x400a, 0xf00f), "meta mark & 0x400a != 0xf00f"),
+	Entry("MarkMatchesWithMask", Match().MarkMatchesWithMask(0x400a, 0xf00f), "meta mark & 0xf00f == 0x400a"),
+	Entry("NotMarkMatchesWithMask", Match().NotMarkMatchesWithMask(0x400a, 0xf00f), "meta mark & 0xf00f != 0x400a"),
 
 	// Conntrack.
 	Entry("ConntrackState", Match().ConntrackState("INVALID"), "ct state invalid"),
@@ -72,7 +72,7 @@ var _ = DescribeTable("MatchBuilder",
 	Entry("SrcAddrType no limit iface", Match().SrcAddrType(generictables.AddrTypeLocal, false), "fib saddr type local"),
 	Entry("NotSrcAddrType limit iface", Match().NotSrcAddrType(generictables.AddrTypeLocal, true), "fib saddr . oif type != local"),
 	Entry("NotSrcAddrType no limit iface", Match().NotSrcAddrType(generictables.AddrTypeLocal, false), "fib saddr type != local"),
-	Entry("DestAddrType no limit iface", Match().DestAddrType(generictables.AddrTypeLocal), "fib daddr type == local"),
+	Entry("DestAddrType no limit iface", Match().DestAddrType(generictables.AddrTypeLocal), "fib daddr type local"),
 
 	// Protocol.
 	Entry("Protocol", Match().Protocol("tcp"), "ip protocol tcp"),
@@ -87,10 +87,10 @@ var _ = DescribeTable("MatchBuilder",
 	Entry("NotDestNet", Match().NotDestNet("10.0.0.4"), "ip daddr != 10.0.0.4"),
 
 	// IP sets.
-	Entry("SourceIPSet", Match().SourceIPSet("calits:12345abc-_"), "ip saddr @calits-12345abc-_ src"),
-	Entry("NotSourceIPSet", Match().NotSourceIPSet("calits:12345abc-_"), "ip saddr != @calits-12345abc-_ src"),
-	Entry("DestIPSet", Match().DestIPSet("calits:12345abc-_"), "ip daddr @calits-12345abc-_ dst"),
-	Entry("NotDestIPSet", Match().NotDestIPSet("calits:12345abc-_"), "ip daddr != @calits-12345abc-_ dst"),
+	Entry("SourceIPSet", Match().SourceIPSet("calits:12345abc-_"), "ip saddr @calits-12345abc-_"),
+	Entry("NotSourceIPSet", Match().NotSourceIPSet("calits:12345abc-_"), "ip saddr != @calits-12345abc-_"),
+	Entry("DestIPSet", Match().DestIPSet("calits:12345abc-_"), "ip daddr @calits-12345abc-_"),
+	Entry("NotDestIPSet", Match().NotDestIPSet("calits:12345abc-_"), "ip daddr != @calits-12345abc-_"),
 
 	// IP,Port IP sets.
 	Entry("SourceIPPortSet", Match().Protocol("tcp").SourceIPPortSet("calitn:12345abc-_"), "ip saddr . tcp sport @calitn-12345abc-_"),
@@ -100,9 +100,9 @@ var _ = DescribeTable("MatchBuilder",
 
 	// Ports.
 	Entry("SourcePorts", Match().Protocol("tcp").SourcePorts(1234, 5678), "tcp sport { 1234, 5678 }"),
-	Entry("NotSourcePorts", Match().Protocol("udp").NotSourcePorts(1234, 5678), "tcp sport != { 1234, 5678 }"),
+	Entry("NotSourcePorts", Match().Protocol("udp").NotSourcePorts(1234, 5678), "udp sport != { 1234, 5678 }"),
 	Entry("DestPorts", Match().Protocol("tcp").DestPorts(1234, 5678), "tcp dport { 1234, 5678 }"),
-	Entry("NotDestPorts", Match().Protocol("udp").NotDestPorts(1234, 5678), "tcp dport != { 1234, 5678 }"),
+	Entry("NotDestPorts", Match().Protocol("udp").NotDestPorts(1234, 5678), "udp dport != { 1234, 5678 }"),
 	Entry("SourcePortRanges", Match().Protocol("udp").SourcePortRanges(portRanges), "udp sport { 1234, 5678-6000 }"),
 	Entry("NotSourcePortRanges", Match().Protocol("udp").NotSourcePortRanges(portRanges), "udp sport != { 1234, 5678-6000 }"),
 	Entry("DestPortRanges", Match().Protocol("udp").DestPortRanges(portRanges), "udp dport { 1234, 5678-6000 }"),
