@@ -562,7 +562,7 @@ func (m *ipipManager) configureIPIPDevice(mtu int, address net.IP, xsumBroken bo
 		"device":     m.ipipDevice,
 	})
 	logCxt.Debug("Configuring IPIP tunnel")
-	link, err := m.dataplane.LinkByName(IPIPIfaceName)
+	link, err := m.nlHandle.LinkByName(IPIPIfaceName)
 	if err != nil {
 		m.logCtx.WithError(err).Info("Failed to get IPIP tunnel device, assuming it isn't present")
 		// We call out to "ip tunnel", which takes care of loading the kernel module if
@@ -574,7 +574,7 @@ func (m *ipipManager) configureIPIPDevice(mtu int, address net.IP, xsumBroken bo
 			m.logCtx.WithError(err).Warning("Failed to add IPIP tunnel device")
 			return err
 		}
-		link, err = m.dataplane.LinkByName(IPIPIfaceName)
+		link, err = m.nlHandle.LinkByName(IPIPIfaceName)
 		if err != nil {
 			m.logCtx.WithError(err).Warning("Failed to get tunnel device")
 			return err
@@ -585,7 +585,7 @@ func (m *ipipManager) configureIPIPDevice(mtu int, address net.IP, xsumBroken bo
 	oldMTU := attrs.MTU
 	if oldMTU != mtu {
 		logCxt.WithField("oldMTU", oldMTU).Info("Tunnel device MTU needs to be updated")
-		if err := m.dataplane.LinkSetMTU(link, mtu); err != nil {
+		if err := m.nlHandle.LinkSetMTU(link, mtu); err != nil {
 			m.logCtx.WithError(err).Warn("Failed to set tunnel device MTU")
 			return err
 		}
@@ -601,7 +601,7 @@ func (m *ipipManager) configureIPIPDevice(mtu int, address net.IP, xsumBroken bo
 
 	if attrs.Flags&net.FlagUp == 0 {
 		logCxt.WithField("flags", attrs.Flags).Info("Tunnel wasn't admin up, enabling it")
-		if err := m.dataplane.LinkSetUp(link); err != nil {
+		if err := m.nlHandle.LinkSetUp(link); err != nil {
 			m.logCtx.WithError(err).Warn("Failed to set tunnel device up")
 			return err
 		}
@@ -623,13 +623,13 @@ func (m *ipipManager) setLinkAddressV4(linkName string, address net.IP) error {
 		"addr": address,
 	})
 	logCxt.Debug("Setting local IPv4 address on link.")
-	link, err := m.dataplane.LinkByName(linkName)
+	link, err := m.nlHandle.LinkByName(linkName)
 	if err != nil {
 		m.logCtx.WithError(err).WithField("name", linkName).Warning("Failed to get device")
 		return err
 	}
 
-	addrs, err := m.dataplane.AddrList(link, netlink.FAMILY_V4)
+	addrs, err := m.nlHandle.AddrList(link, netlink.FAMILY_V4)
 	if err != nil {
 		m.logCtx.WithError(err).Warn("Failed to list interface addresses")
 		return err
@@ -643,7 +643,7 @@ func (m *ipipManager) setLinkAddressV4(linkName string, address net.IP) error {
 			continue
 		}
 		logCxt.WithField("oldAddr", oldAddr).Info("Removing old address")
-		if err := m.dataplane.AddrDel(link, &oldAddr); err != nil {
+		if err := m.nlHandle.AddrDel(link, &oldAddr); err != nil {
 			m.logCtx.WithError(err).Warn("Failed to delete address")
 			return err
 		}
@@ -659,7 +659,7 @@ func (m *ipipManager) setLinkAddressV4(linkName string, address net.IP) error {
 		addr := &netlink.Addr{
 			IPNet: &ipNet,
 		}
-		if err := m.dataplane.AddrAdd(link, addr); err != nil {
+		if err := m.nlHandle.AddrAdd(link, addr); err != nil {
 			m.logCtx.WithError(err).WithField("addr", address).Warn("Failed to add address")
 			return err
 		}

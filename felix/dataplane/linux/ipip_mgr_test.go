@@ -286,6 +286,7 @@ var _ = Describe("ipipManager IP set updates", func() {
 			Hostname: "node1",
 			Ipv4Addr: "172.0.0.2",
 		})
+		ipipMgr.OnParentNameUpdate("eth0")
 	})
 
 	It("should not create the IP set until first call to CompleteDeferredWork()", func() {
@@ -360,7 +361,7 @@ var _ = Describe("ipipManager IP set updates", func() {
 							Hostname: "node1",
 						})
 						err := ipipMgr.CompleteDeferredWork()
-						Expect(err.Error()).To(Equal("local address not found, will defer adding routes"))
+						Expect(err).ToNot(HaveOccurred())
 					})
 					It("should remove the IP", func() {
 						Expect(allHostsSet().Len()).To(Equal(1))
