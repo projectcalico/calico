@@ -1121,13 +1121,10 @@ func (t *nftablesTable) applyUpdates() error {
 			t.logCxt.Tracef("Updating nftables: %s", tx.String())
 		}
 
-		start := time.Now()
 		if err := t.nft.Run(context.TODO(), tx); err != nil {
 			t.logCxt.WithField("tx", tx.String()).Error("Failed to run nft transaction")
 			return fmt.Errorf("error performing nft transaction: %s", err)
 		}
-		t.logCxt.WithField("duration", time.Since(start)).Info("nftables transaction completed")
-
 		t.lastWriteTime = t.timeNow()
 		t.postWriteInterval = t.initialPostWriteInterval
 	}
