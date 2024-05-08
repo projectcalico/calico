@@ -32,57 +32,16 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-var _ = Describe("Table with an empty dataplane (nft)", func() {
-	describeEmptyDataplaneTests("nft")
-})
-
-var _ = Describe("Table with an empty dataplane (legacy)", func() {
-	describeEmptyDataplaneTests("legacy")
-
-	It("should find the iptables-legacy-* iptables binaries", func() {
-		dataplane := testutils.NewMockDataplane("filter", map[string][]string{
-			"FORWARD": {},
-			"INPUT":   {},
-			"OUTPUT":  {},
-		}, "legacy")
-		featureDetector := environment.NewFeatureDetector(nil)
-		featureDetector.NewCmd = dataplane.NewCmd
-		featureDetector.GetKernelVersionReader = dataplane.GetKernelVersionReader
-		table := NewTable(
-			"cali-filter",
-			4,
-			rules.RuleHashPrefix,
-			featureDetector,
-			TableOptions{
-				HistoricChainPrefixes: rules.AllHistoricChainNamePrefixes,
-				NewCmdOverride:        dataplane.NewCmd,
-				SleepOverride:         dataplane.Sleep,
-				NowOverride:           dataplane.Now,
-				LookPathOverride:      testutils.LookPathAll,
-				OpRecorder:            logutils.NewSummarizer("test loop"),
-			},
-		)
-
-		table.InsertOrAppendRules("FORWARD", []generictables.Rule{
-			{Match: nftables.Match(), Action: DropAction{}},
-		})
-		table.Apply()
-		Expect(dataplane.CmdNames).To(ConsistOf("iptables", "iptables-legacy-save", "iptables-legacy-restore"))
-	})
-})
-
-func describeEmptyDataplaneTests(dataplaneMode string) {
+var _ = Describe("Table with an empty dataplane", func() {
 	var dataplane *testutils.MockDataplane
 	var table generictables.Table
-	var iptLock *mockMutex
 	var featureDetector *environment.FeatureDetector
 	BeforeEach(func() {
 		dataplane = testutils.NewMockDataplane("filter", map[string][]string{
 			"FORWARD": {},
 			"INPUT":   {},
 			"OUTPUT":  {},
-		}, dataplaneMode)
-		iptLock = &mockMutex{}
+		}, "nft")
 		featureDetector = environment.NewFeatureDetector(nil)
 		featureDetector.NewCmd = dataplane.NewCmd
 		featureDetector.GetKernelVersionReader = dataplane.GetKernelVersionReader
@@ -118,19 +77,10 @@ func describeEmptyDataplaneTests(dataplaneMode string) {
 		Expect(dataplane.CmdNames).To(BeEmpty())
 		table.Apply()
 		// Should only load, since there's nothing to so.
-		if dataplaneMode == "nft" {
-			Expect(dataplane.CmdNames).To(Equal([]string{
-				"iptables",
-				"iptables-nft-save",
-			}))
-		} else {
-			Expect(dataplane.CmdNames).To(Equal([]string{
-				"iptables",
-				"iptables-save",
-			}))
-		}
-		Expect(iptLock.Held).To(BeFalse())
-		Expect(iptLock.WasTaken).To(BeFalse())
+		Expect(dataplane.CmdNames).To(Equal([]string{
+			"iptables",
+			"iptables-nft-save",
+		}))
 	})
 
 	It("should have a refresh scheduled at start-of-day", func() {
@@ -194,12 +144,6 @@ func describeEmptyDataplaneTests(dataplaneMode string) {
 			})
 			table.Apply()
 		})
-		It("should acquire the iptables lock", func() {
-			Expect(iptLock.WasTaken).To(BeTrue())
-		})
-		It("should release the iptables lock", func() {
-			Expect(iptLock.Held).To(BeFalse())
-		})
 		It("should be in the dataplane", func() {
 			Expect(dataplane.Chains).To(Equal(map[string][]string{
 				"FORWARD": {`-m comment --comment "cali:hecdSCslEjdBPBPo" --jump DROP`},
@@ -219,11 +163,7 @@ func describeEmptyDataplaneTests(dataplaneMode string) {
 				"OUTPUT":  {},
 			}))
 			// Should do a save but then figure out that there's nothing to do
-			if dataplaneMode == "nft" {
-				Expect(dataplane.CmdNames).To(ConsistOf("iptables", "iptables-nft-save"))
-			} else {
-				Expect(dataplane.CmdNames).To(ConsistOf("iptables", "iptables-save"))
-			}
+			Expect(dataplane.CmdNames).To(ConsistOf("iptables", "iptables-nft-save"))
 		})
 
 		Describe("after inserting a rule then updating the insertions", func() {
@@ -892,11 +832,7 @@ func describeEmptyDataplaneTests(dataplaneMode string) {
 				"INPUT":  {},
 				"OUTPUT": {},
 			}))
-			if dataplaneMode == "nft" {
-				Expect(dataplane.CmdNames).To(ConsistOf("iptables", "iptables-nft-save", "iptables-nft-restore"))
-			} else {
-				Expect(dataplane.CmdNames).To(ConsistOf("iptables", "iptables-save", "iptables-restore"))
-			}
+			Expect(dataplane.CmdNames).To(ConsistOf("iptables", "iptables-nft-save", "iptables-nft-restore"))
 		})
 		Describe("then inserting the same rules", func() {
 			BeforeEach(func() {
@@ -909,11 +845,7 @@ func describeEmptyDataplaneTests(dataplaneMode string) {
 			})
 			It("should result in no inserts", func() {
 				// Do an iptables-save but not a iptables-restore.
-				if dataplaneMode == "nft" {
-					Expect(dataplane.CmdNames).To(ConsistOf("iptables", "iptables-nft-save"))
-				} else {
-					Expect(dataplane.CmdNames).To(ConsistOf("iptables", "iptables-save"))
-				}
+				Expect(dataplane.CmdNames).To(ConsistOf("iptables", "iptables-nft-save"))
 
 				Expect(dataplane.Chains).To(Equal(map[string][]string{
 					"FORWARD": {
@@ -937,11 +869,7 @@ func describeEmptyDataplaneTests(dataplaneMode string) {
 			})
 			It("should result in modifications", func() {
 				// Do an iptables-save and, this time, an iptables-restore.
-				if dataplaneMode == "nft" {
-					Expect(dataplane.CmdNames).To(ConsistOf("iptables", "iptables-nft-save", "iptables-nft-restore"))
-				} else {
-					Expect(dataplane.CmdNames).To(ConsistOf("iptables", "iptables-save", "iptables-restore"))
-				}
+				Expect(dataplane.CmdNames).To(ConsistOf("iptables", "iptables-nft-save", "iptables-nft-restore"))
 
 				Expect(dataplane.Chains).To(Equal(map[string][]string{
 					"FORWARD": {
@@ -1036,7 +964,7 @@ func describeEmptyDataplaneTests(dataplaneMode string) {
 			})
 		})
 	})
-}
+})
 
 var _ = Describe("Tests of post-update recheck behaviour with refresh timer (nft)", func() {
 	describePostUpdateCheckTests(true, "nft")
@@ -1742,13 +1670,11 @@ var _ = Describe("Table with inserts and a non-Calico chain (nft)", func() {
 func describeInsertAndNonCalicoChainTests(dataplaneMode string) {
 	var dataplane *testutils.MockDataplane
 	var table generictables.Table
-	var iptLock *mockMutex
 	BeforeEach(func() {
 		dataplane = testutils.NewMockDataplane("filter", map[string][]string{
 			"FORWARD":    {},
 			"non-calico": {"-m comment \"foo\""},
 		}, dataplaneMode)
-		iptLock = &mockMutex{}
 		featureDetector := environment.NewFeatureDetector(nil)
 		featureDetector.NewCmd = dataplane.NewCmd
 		featureDetector.GetKernelVersionReader = dataplane.GetKernelVersionReader
@@ -1785,8 +1711,6 @@ func describeInsertAndNonCalicoChainTests(dataplaneMode string) {
 				"FORWARD": {"-m comment --comment \"cali:hecdSCslEjdBPBPo\" --jump DROP"},
 			}
 			dataplane.ResetCmds()
-			iptLock.WasTaken = false
-			iptLock.Held = false
 			table.Apply()
 		})
 
@@ -1797,9 +1721,6 @@ func describeInsertAndNonCalicoChainTests(dataplaneMode string) {
 		})
 		It("should make no changes to the dataplane", func() {
 			Expect(dataplane.CmdNames).To(BeEmpty())
-		})
-		It("should not take the lock", func() {
-			Expect(iptLock.WasTaken).To(BeFalse())
 		})
 	})
 }
