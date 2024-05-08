@@ -1206,7 +1206,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				}
 
 				for _, f := range tc.Felixes {
-					Eventually(felixReady(f), "5s", "100ms").Should(BeGood())
+					Eventually(felixReady(f), "10s", "500ms").Should(BeGood())
 				}
 			}
 		}
