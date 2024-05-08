@@ -1053,12 +1053,22 @@ nat_encap:
 		}
 	}
 
-	if (vxlan_encap(ctx, &STATE->ip_src, &STATE->ip_dst)) {
+	/* Trivial hash to use multiple vxlan flows. Note that any value will do
+	 * as long as it is a constant for this direction of the flow. Does not
+	 * even need to be the same for both directions.
+	 *
+	 * ICMP does not have ports, but there is little to no worries about a
+	 * possible out-of-order processing in relation to the related flow.
+	 */
+	__u16 vxlan_src_port = STATE->sport ^ STATE->dport;
+
+	if (vxlan_encap(ctx, &STATE->ip_src, &STATE->ip_dst, vxlan_src_port)) {
 		deny_reason(ctx, CALI_REASON_ENCAP_FAIL);
 		goto  deny;
 	}
 
-	STATE->sport = STATE->dport = VXLAN_PORT;
+	STATE->sport = vxlan_src_port;
+	STATE->dport = VXLAN_PORT;
 	STATE->ip_proto = IPPROTO_UDP;
 
 	CALI_DEBUG("vxlan return %d ifindex_fwd %d\n",

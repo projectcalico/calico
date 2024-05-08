@@ -19,7 +19,7 @@
 #define VXLAN_ENCAP_SIZE	(sizeof(struct ethhdr) + sizeof(struct iphdr) + \
 				sizeof(struct udphdr) + sizeof(struct vxlanhdr))
 
-static CALI_BPF_INLINE int vxlan_encap(struct cali_tc_ctx *ctx,  __be32 *ip_src, __be32 *ip_dst)
+static CALI_BPF_INLINE int vxlan_encap(struct cali_tc_ctx *ctx,  __be32 *ip_src, __be32 *ip_dst, __u16 src_port)
 {
 	int ret;
 	__wsum csum;
@@ -65,7 +65,8 @@ static CALI_BPF_INLINE int vxlan_encap(struct cali_tc_ctx *ctx,  __be32 *ip_src,
 	ip_hdr(ctx)->check = 0;
 	ip_hdr(ctx)->protocol = IPPROTO_UDP;
 
-	udp->source = udp->dest = bpf_htons(VXLAN_PORT);
+	udp->source = bpf_htons(src_port);
+	udp->dest = bpf_htons(VXLAN_PORT);
 	udp->len = bpf_htons(bpf_ntohs(ip_hdr(ctx)->tot_len) - sizeof(struct iphdr));
 
 	*((__u8*)&vxlan->flags) = 1 << 3; /* set the I flag to make the VNI valid */
