@@ -998,16 +998,12 @@ func (t *nftablesTable) applyUpdates() error {
 			currentHashes := chain.RuleHashes(renderInner, features)
 			newHashes[chainName] = currentHashes
 
-			// Make sure maps are created for the chain, as nft will faill the transaction
-			// if there are unreferenced maps.
-			// TODO: Instead, we should rely on the IP set manager to create the maps, and
-			// withold installation of chains that reference non-existent maps.
+			// Make sure sets are created for the chain, as nft will faill the transaction
+			// if there are unreferenced sets.
 			for _, setName := range chain.IPSetNames() {
-				tx.Add(&knftables.Set{
-					Name:  LegalizeSetName(setName),
-					Type:  "ipv4_addr",
-					Flags: []knftables.SetFlag{knftables.IntervalFlag},
-				})
+				if set := t.IPSetsDataplane.(*IPSets).NFTablesSet(setName); set != nil {
+					tx.Add(set)
+				}
 			}
 
 			for i := 0; i < len(previousHashes) || i < len(currentHashes); i++ {
