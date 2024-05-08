@@ -71,8 +71,8 @@ func NewIPSetsWithShims(ipVersionConfig *ipsets.IPVersionConfig, sleep func(time
 	return &IPSets{
 		IPVersionConfig:      ipVersionConfig,
 		setNameToAllMetadata: map[string]ipsets.IPSetMetadata{},
-		setNameToProgrammedMetadata: deltatracker.New[string, ipsets.IPSetMetadata](
-			deltatracker.WithValuesEqualFn[string, ipsets.IPSetMetadata](func(a, b ipsets.IPSetMetadata) bool {
+		setNameToProgrammedMetadata: deltatracker.New(
+			deltatracker.WithValuesEqualFn[string](func(a, b ipsets.IPSetMetadata) bool {
 				return a == b
 			}),
 			deltatracker.WithLogCtx[string, ipsets.IPSetMetadata](log.WithFields(log.Fields{
@@ -330,13 +330,43 @@ func (s *IPSets) tryResync() error {
 		}).Debug("Finished IPSets resync")
 	}()
 
+	// Load sets from the dataplane.
+
 	// TODO - implement resync.
 
 	return nil
 }
 
+func (s *IPSets) SetProgrammed(name string) bool {
+	_, ok := s.setNameToProgrammedMetadata.Dataplane().Get(name)
+	return ok
+}
+
 func LegalizeSetName(setName string) string {
 	return strings.Replace(setName, ":", "-", -1)
+}
+
+func (s *IPSets) NFTablesSet(name string) *knftables.Set {
+	metadata, ok := s.setNameToAllMetadata[name]
+	if !ok {
+		return nil
+	}
+	setType := ""
+	switch metadata.Type {
+	case ipsets.IPSetTypeHashNet:
+		setType = "ipv4_addr"
+	case ipsets.IPSetTypeHashIP:
+		setType = "ipv4_addr"
+	case ipsets.IPSetTypeHashIPPort:
+		setType = "ipv4_addr . inet_service"
+	default:
+		s.logCxt.WithField("setType", metadata.Type).Fatal("Unsupported IP set type.")
+	}
+	return &knftables.Set{
+		Name:  LegalizeSetName(name),
+		Type:  setType,
+		Flags: []knftables.SetFlag{knftables.IntervalFlag},
+	}
 }
 
 // tryUpdates attempts to create and/or update IP sets.  It attempts to do the updates as a single
@@ -370,15 +400,14 @@ func (s *IPSets) tryUpdates() error {
 	start := time.Now()
 
 	// Create a new transaction to update the IP sets.
-	//
-	// TODO: Right now, we include every IP set in every transaction. We should instead only include sets that require changes.
-	// Potentially we can also support falling back to modifying single IP sets if needed, so that one problematic set
-	// doesn't prevent the rest from being updated.
 	tx := s.nft.NewTransaction()
 
-	// Make sure the table exists.
-	// TODO: Only need to include this if the table doesn't already exist.
-	tx.Add(&knftables.Table{})
+	if s.setNameToProgrammedMetadata.Dataplane().Len() == 0 {
+		// Use the total number of IP sets that we believe we have programmed as a proxy for whether
+		// or not the table exists. If this is the first time we've programmed IP sets, make sure we
+		// create the table as part of the transaction as well.
+		tx.Add(&knftables.Table{})
+	}
 
 	for _, setName := range dirtyIPSets {
 		metadata, ok := s.setNameToProgrammedMetadata.Desired().Get(setName)
@@ -387,29 +416,14 @@ func (s *IPSets) tryUpdates() error {
 			continue
 		}
 
-		var setType string
-		switch metadata.Type {
-		case ipsets.IPSetTypeHashNet:
-			setType = "ipv4_addr"
-		case ipsets.IPSetTypeHashIP:
-			setType = "ipv4_addr"
-		case ipsets.IPSetTypeHashIPPort:
-			setType = "ipv4_addr . inet_service"
-		default:
-			s.logCxt.WithField("setType", metadata.Type).Fatal("Unsupported IP set type.")
+		// If the set is already programmed, we can skip it.
+		// TODO: Support updating set metadata. This requires comparing actual data plane state, and
+		// if necessary deleting and recreating the set. We don't expect to need this in practice.
+		if _, ok := s.setNameToProgrammedMetadata.Dataplane().Get(setName); !ok {
+			if set := s.NFTablesSet(setName); set != nil {
+				tx.Add(set)
+			}
 		}
-
-		// Create the set.
-		set := &knftables.Set{
-			Name:  LegalizeSetName(setName),
-			Type:  setType,
-			Flags: []knftables.SetFlag{knftables.IntervalFlag},
-		}
-		tx.Add(set)
-
-		// TODO: Right now, we're simply flushing the set and then adding all members to the set.
-		// instead, we should make incremental changes to the set for better performance.
-		tx.Flush(set)
 
 		// TODO: This is a hack. Would be better to support this within the ipset package. Right now
 		// we are using structures intended for ipsets in order to program nftables sets.
@@ -430,25 +444,51 @@ func (s *IPSets) tryUpdates() error {
 		// Add desired members to the set.
 		members := s.mainSetNameToMembers[setName]
 		members.Desired().Iter(func(member ipsets.IPSetMember) {
+			if members.Dataplane().Contains(member) {
+				return
+			}
 			tx.Add(&knftables.Element{
 				Set: LegalizeSetName(setName),
-				Key: []string{
-					convertIfNeeded(member.String()),
-				},
+				Key: []string{convertIfNeeded(member.String())},
+			})
+		})
+
+		// Delete an IP set member if it's not in the desired set.
+		// TODO: This doesn't check the actual members in the dataplane, only our in memory
+		// representation. This means that any out-of-band modifications to the IP set may cause
+		// us to get out of sync.
+		members.Dataplane().Iter(func(member ipsets.IPSetMember) {
+			if members.Desired().Contains(member) {
+				return
+			}
+			tx.Delete(&knftables.Element{
+				Set: LegalizeSetName(setName),
+				Key: []string{convertIfNeeded(member.String())},
 			})
 		})
 	}
-	if err := s.nft.Run(context.TODO(), tx); err != nil {
-		s.logCxt.WithError(err).Errorf("Failed to update IP sets. %s", tx.String())
-		return fmt.Errorf("error updating nftables sets: %s", err)
+
+	if len(tx.String()) > 0 {
+		if err := s.nft.Run(context.TODO(), tx); err != nil {
+			s.logCxt.WithError(err).Errorf("Failed to update IP sets. %s", tx.String())
+			return fmt.Errorf("error updating nftables sets: %s", err)
+		}
+
+		// If we get here, the writes were successful, reset the IP sets delta tracking now the
+		// dataplane should be in sync.
+		log.Debugf("Updated %d IPSets in %v", len(dirtyIPSets), time.Since(start))
+		for _, setName := range dirtyIPSets {
+			// Mark all pending updates and memebers handled above as programmed.
+			v, _ := s.setNameToProgrammedMetadata.Desired().Get(setName)
+			s.setNameToProgrammedMetadata.Dataplane().Set(setName, v)
+			members := s.mainSetNameToMembers[setName]
+			members.Dataplane().DeleteAll()
+			members.Desired().Iter(func(member ipsets.IPSetMember) {
+				members.Dataplane().Add(member)
+			})
+		}
+		s.ipSetsWithDirtyMembers.Clear()
 	}
-
-	log.Debugf("Updated %d IPSets in %v", len(dirtyIPSets), time.Since(start))
-
-	// If we get here, the writes were successful, reset the IP sets delta tracking now the
-	// dataplane should be in sync.
-	s.ipSetsWithDirtyMembers.Clear()
-
 	return nil
 }
 
