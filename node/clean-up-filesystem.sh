@@ -61,6 +61,10 @@ bin_allow_list_patterns=(
   ip6tables
   ipset
 
+  # nftables
+  nftables
+  nft
+
   # kmod is a multi-binary backing depmod/insmod/etc; used by iptables
   kmod depmod insmod modinfo modprobe rmmod lsmod
 
@@ -268,11 +272,13 @@ packages_to_keep=(
   libnss
   libpcap
   libpwquality
+  libreadline
   libselinux
   libzstd
   libz
   ncurses
   net-tools
+  nftables
   openssl-libs
   p11-kit-trust
   pcre
@@ -315,9 +321,11 @@ packages_to_remove=$(microdnf repoquery --installed |
 
 
 echo "Removing ${packages_to_remove}"
+
 # Removing one of the packages deletes rc.local, move it out of the way.
 mv /etc/rc.local /etc/rc.local.bak
-rpm -e --nodeps $packages_to_remove
+# rpm -e --nodeps $packages_to_remove
+# CASEY: TODO: Figure out what is removing libreadline.7.so
 mv /etc/rc.local.bak /etc/rc.local
 
 # Sanity check that we didn't remove anything we want to keep.
