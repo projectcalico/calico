@@ -292,7 +292,6 @@ func (m nftMatch) IPSetNames() (ipSetNames []string) {
 func (m nftMatch) SourcePorts(ports ...uint16) generictables.MatchCriteria {
 	m.removeProtocolMatch()
 	portsString := PortsToMultiport(ports)
-	logrus.WithField("clauses", m.clauses).WithField("ports", portsString).Warn("Adding source ports")
 	m.clauses = append(m.clauses, fmt.Sprintf("%s sport %s", m.proto, portsString))
 	return m
 }

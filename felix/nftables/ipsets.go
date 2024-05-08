@@ -330,16 +330,83 @@ func (s *IPSets) tryResync() error {
 		}).Debug("Finished IPSets resync")
 	}()
 
-	// Load sets from the dataplane.
+	// Clear the dataplane metadata view, we'll build it back up again as we scan.
+	s.setNameToProgrammedMetadata.Dataplane().DeleteAll()
 
-	// TODO - implement resync.
+	// Load sets from the dataplane. Update our Dataplane() maps with the actual contents
+	// of the data plane so that the next ApplyUpdates() call will be able to properly make
+	// incremental updates.
+	//
+	// For any set that doesn't match the desired data plane state, we'll queue up an update.
+	sets, err := s.nft.List(context.Background(), "set")
+	if err != nil {
+		return fmt.Errorf("error listing nftables sets: %s", err)
+	}
+	for _, setName := range sets {
+		logCxt := s.logCxt.WithField("setName", setName)
+
+		elems, err := s.nft.ListElements(context.TODO(), "set", setName)
+		if err != nil {
+			return fmt.Errorf("error listing nftables set elements: %s", err)
+		}
+		strElems := []string{}
+		for _, e := range elems {
+			// TODO: Make sure the elements parse correctly. Not all nftables set elements
+			// are currently parsed correctly by filterAndCanonicaliseMembers. e.g., concat types.
+			strElems = append(strElems, e.Key[0])
+		}
+
+		metadata, ok := s.setNameToAllMetadata[setName]
+		if !ok {
+			// Programmed in the data plane, but not in memory. Skip this one - we'll clean up
+			// state for this below.
+			continue
+		}
+		elemsSet := s.filterAndCanonicaliseMembers(metadata.Type, strElems)
+
+		memberTracker := s.getOrCreateMemberTracker(setName)
+		numExtrasExpected := memberTracker.PendingDeletions().Len()
+		err = memberTracker.Dataplane().ReplaceFromIter(func(f func(k ipsets.IPSetMember)) error {
+			elemsSet.Iter(func(item ipsets.IPSetMember) error {
+				f(item)
+				return nil
+			})
+			return nil
+		})
+		if err != nil {
+			return fmt.Errorf("failed to read set memebers: %w", err)
+		}
+
+		if numMissing := memberTracker.PendingUpdates().Len(); numMissing > 0 {
+			logCxt.WithField("numMissing", numMissing).Info(
+				"Resync found members missing from dataplane.")
+		}
+		if numExtras := memberTracker.PendingDeletions().Len() - numExtrasExpected; numExtras > 0 {
+			logCxt.WithField("numExtras", numExtras).Info(
+				"Resync found extra members in dataplane.")
+		}
+		s.updateDirtiness(setName)
+	}
+
+	// Mark any sets that we didn't see as empty.
+	for name, members := range s.mainSetNameToMembers {
+		if _, ok := s.setNameToProgrammedMetadata.Dataplane().Get(name); ok {
+			// In the dataplane, we should have updated its members above.
+			continue
+		}
+		if _, ok := s.setNameToAllMetadata[name]; !ok {
+			// Defensive: this set is not in the dataplane, and it's not
+			// one we are tracking, clean up its member tracker.
+			log.WithField("name", name).Warn("Cleaning up leaked(?) set member tracker.")
+			delete(s.mainSetNameToMembers, name)
+			continue
+		}
+		// We're tracking this set, but we didn't find it in the dataplane;
+		// reset the members set to empty.
+		members.Dataplane().DeleteAll()
+	}
 
 	return nil
-}
-
-func (s *IPSets) SetProgrammed(name string) bool {
-	_, ok := s.setNameToProgrammedMetadata.Dataplane().Get(name)
-	return ok
 }
 
 func LegalizeSetName(setName string) string {
