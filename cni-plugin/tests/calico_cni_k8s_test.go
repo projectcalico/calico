@@ -53,7 +53,7 @@ var counterByPrefix map[string]int
 // pefixName generates a new unique name with the given prefix.
 // We use an incrementing counter to ensure that a unique name
 // is generated each time the function is called.
-func prefixName(prefix string) string {
+func generateName(prefix string) string {
 	if counterByPrefix == nil {
 		counterByPrefix = make(map[string]int)
 	}
@@ -182,8 +182,8 @@ var _ = Describe("Kubernetes CNI tests", func() {
 		testutils.WipeDatastore()
 
 		// Generate a name to use for the test's pod and node.
-		testPodName = prefixName("test-pod")
-		testNodeName = prefixName(hostname)
+		testPodName = generateName("test-pod")
+		testNodeName = generateName(hostname)
 
 		// Create the node for these tests. The IPAM code requires a corresponding Calico node to exist.
 		err = testutils.AddNode(calicoClient, k8sClient, testNodeName)
@@ -689,7 +689,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				unexpectedRoute: regexp.QuoteMeta("10."),
 				numIPv4IPs:      1,
 				numIPv6IPs:      0,
-				nodename:        prefixName(hostname),
+				nodename:        generateName(hostname),
 			},
 			{
 				// This scenario tests IPv4+IPv6 without specifying any routes.
@@ -737,7 +737,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				unexpectedRoute: regexp.QuoteMeta("10."),
 				numIPv4IPs:      1,
 				numIPv6IPs:      1,
-				nodename:        prefixName(hostname),
+				nodename:        generateName(hostname),
 			},
 			{
 				// This scenario tests IPv4+IPv6 without specifying any routes.
@@ -785,7 +785,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				unexpectedRoute: regexp.QuoteMeta("10."),
 				numIPv4IPs:      1,
 				numIPv6IPs:      1,
-				nodename:        prefixName(hostname),
+				nodename:        generateName(hostname),
 			},
 			{
 				// In this scenario, we use a lot more of the host-local IPAM plugin.  Namely:
@@ -848,7 +848,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				unexpectedRoute: "default",
 				numIPv4IPs:      2,
 				numIPv6IPs:      1,
-				nodename:        prefixName(hostname),
+				nodename:        generateName(hostname),
 			},
 			{
 				// In this scenario, we use a lot more of the host-local IPAM plugin.  Namely:
@@ -910,7 +910,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				},
 				numIPv4IPs: 2,
 				numIPv6IPs: 1,
-				nodename:   prefixName(hostname),
+				nodename:   generateName(hostname),
 			},
 		}
 
@@ -3329,7 +3329,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				  "log_level":"debug",
 				  "nodename": "%s"
 				}`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), testNodeName)
-			name = prefixName("test-pod")
+			name = generateName("test-pod")
 		})
 
 		It("annotation containing a valid MAC address", func() {
