@@ -19,7 +19,7 @@
 #define VXLAN_ENCAP_SIZE	(sizeof(struct ethhdr) + sizeof(struct iphdr) + \
 				sizeof(struct udphdr) + sizeof(struct vxlanhdr))
 
-static CALI_BPF_INLINE int vxlan_encap(struct cali_tc_ctx *ctx, ipv6_addr_t *ip_src, ipv6_addr_t *ip_dst)
+static CALI_BPF_INLINE int vxlan_encap(struct cali_tc_ctx *ctx, ipv6_addr_t *ip_src, ipv6_addr_t *ip_dst, __u16 src_port)
 {
 	__u32 new_hdrsz = sizeof(struct ethhdr) + sizeof(struct ipv6hdr) +
 			sizeof(struct udphdr) + sizeof(struct vxlanhdr);
@@ -56,7 +56,8 @@ static CALI_BPF_INLINE int vxlan_encap(struct cali_tc_ctx *ctx, ipv6_addr_t *ip_
 	ip_hdr(ctx)->payload_len = bpf_htons(bpf_ntohs(ip_hdr(ctx)->payload_len) + new_hdrsz);
 	ip_hdr(ctx)->nexthdr = IPPROTO_UDP;
 
-	udp->source = udp->dest = bpf_htons(VXLAN_PORT);
+	udp->source = bpf_htons(src_port);
+	udp->dest = bpf_htons(VXLAN_PORT);
 	udp->len = bpf_htons(bpf_ntohs(ip_hdr(ctx)->payload_len) - sizeof(struct iphdr));
 	/* XXX we leave udp->check == 0 which is not legal in IPv6, but we are
 	 * the only ones parsing that packet!
