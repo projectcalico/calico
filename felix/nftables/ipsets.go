@@ -338,14 +338,16 @@ func (s *IPSets) tryResync() error {
 	// incremental updates.
 	//
 	// For any set that doesn't match the desired data plane state, we'll queue up an update.
-	sets, err := s.nft.List(context.Background(), "set")
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
+	defer cancel()
+	sets, err := s.nft.List(ctx, "set")
 	if err != nil {
 		return fmt.Errorf("error listing nftables sets: %s", err)
 	}
 	for _, setName := range sets {
 		logCxt := s.logCxt.WithField("setName", setName)
 
-		elems, err := s.nft.ListElements(context.TODO(), "set", setName)
+		elems, err := s.nft.ListElements(ctx, "set", setName)
 		if err != nil {
 			return fmt.Errorf("error listing nftables set elements: %s", err)
 		}
@@ -536,7 +538,9 @@ func (s *IPSets) tryUpdates() error {
 	}
 
 	if len(tx.String()) > 0 {
-		if err := s.nft.Run(context.TODO(), tx); err != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
+		defer cancel()
+		if err := s.nft.Run(ctx, tx); err != nil {
 			s.logCxt.WithError(err).Errorf("Failed to update IP sets. %s", tx.String())
 			return fmt.Errorf("error updating nftables sets: %s", err)
 		}
@@ -609,7 +613,9 @@ func (s *IPSets) deleteIPSet(setName string) error {
 	s.logCxt.WithField("setName", setName).Info("Deleting IP set.")
 	tx := s.nft.NewTransaction()
 	tx.Delete(&knftables.Set{Name: LegalizeSetName(setName)})
-	if err := s.nft.Run(context.Background(), tx); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
+	defer cancel()
+	if err := s.nft.Run(ctx, tx); err != nil {
 		return fmt.Errorf("error deleting nftables set %s: %v", setName, err)
 	}
 	s.logCxt.WithField("setName", setName).Info("Deleted IP set")
