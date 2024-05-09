@@ -99,12 +99,23 @@ func (s *IPSets) AddOrReplaceIPSet(setMetadata ipsets.IPSetMetadata, members []s
 	// back from the dataplane.  This also filters out IPs of the incorrect IP version.
 	setID := setMetadata.SetID
 
+	// Use nftables equivalents of IP set types where necessary.
+	var ipSetType ipsets.IPSetType
+	switch setMetadata.Type {
+	case ipsets.IPSetTypeHashIP, ipsets.IPSetTypeHashNet:
+		ipSetType = ipsets.NFTSetTypeAddr
+	case ipsets.IPSetTypeHashIPPort:
+		ipSetType = ipsets.NFTSetTypeAddrPort
+	default:
+		log.Fatalf("Unexpected IP set type: %s", setMetadata.Type)
+	}
+
 	// Mark that we want this IP set to exist and with the correct size etc.
 	// If the IP set exists, but it has the wrong metadata then the
 	// DeltaTracker will catch that and mark it for recreation.
 	mainIPSetName := s.IPVersionConfig.NameForMainIPSet(setID)
 	dpMeta := ipsets.IPSetMetadata{
-		Type:     setMetadata.Type,
+		Type:     ipSetType,
 		MaxSize:  setMetadata.MaxSize,
 		RangeMin: setMetadata.RangeMin,
 		RangeMax: setMetadata.RangeMax,
@@ -113,18 +124,18 @@ func (s *IPSets) AddOrReplaceIPSet(setMetadata ipsets.IPSetMetadata, members []s
 	if s.ipSetNeeded(mainIPSetName) {
 		s.logCxt.WithFields(log.Fields{
 			"setID":   setID,
-			"setType": setMetadata.Type,
+			"setType": ipSetType,
 		}).Info("Queueing IP set for creation")
 		s.setNameToProgrammedMetadata.Desired().Set(mainIPSetName, dpMeta)
 	} else if log.IsLevelEnabled(log.DebugLevel) {
 		s.logCxt.WithFields(log.Fields{
 			"setID":   setID,
-			"setType": setMetadata.Type,
+			"setType": ipSetType,
 		}).Debug("IP set is filtered out, skipping creation.")
 	}
 
 	// Set the desired contents of the IP set.
-	canonMembers := s.filterAndCanonicaliseMembers(setMetadata.Type, members)
+	canonMembers := s.filterAndCanonicaliseMembers(ipSetType, members)
 	memberTracker := s.getOrCreateMemberTracker(mainIPSetName)
 
 	desiredMembers := memberTracker.Desired()
@@ -353,9 +364,10 @@ func (s *IPSets) tryResync() error {
 		}
 		strElems := []string{}
 		for _, e := range elems {
-			// TODO: Make sure the elements parse correctly. Not all nftables set elements
-			// are currently parsed correctly by filterAndCanonicaliseMembers. e.g., concat types.
-			strElems = append(strElems, e.Key[0])
+			// Concat type keys should be separated by " . " in the nftables output, but are
+			// returned with each as a separate element in the list.
+			// Other elements are simply a single string.
+			strElems = append(strElems, strings.Join(e.Key, " . "))
 		}
 
 		metadata, ok := s.setNameToAllMetadata[setName]
@@ -378,6 +390,16 @@ func (s *IPSets) tryResync() error {
 		if err != nil {
 			return fmt.Errorf("failed to read set memebers: %w", err)
 		}
+
+		// Mark us as having seen the programmed IP set.
+		// TODO: Ideally we'd extract this information from the data plane itself, but it's not exposed
+		// via knftables at the moment.
+		s.setNameToProgrammedMetadata.Dataplane().Set(setName, ipsets.IPSetMetadata{
+			Type:     metadata.Type,
+			MaxSize:  metadata.MaxSize,
+			RangeMin: metadata.RangeMin,
+			RangeMax: metadata.RangeMax,
+		})
 
 		if numMissing := memberTracker.PendingUpdates().Len(); numMissing > 0 {
 			logCxt.WithField("numMissing", numMissing).Info(
@@ -420,20 +442,10 @@ func (s *IPSets) NFTablesSet(name string) *knftables.Set {
 	if !ok {
 		return nil
 	}
-	setType := ""
-	switch metadata.Type {
-	case ipsets.IPSetTypeHashNet:
-		setType = "ipv4_addr"
-	case ipsets.IPSetTypeHashIP:
-		setType = "ipv4_addr"
-	case ipsets.IPSetTypeHashIPPort:
-		setType = "ipv4_addr . inet_service"
-	default:
-		s.logCxt.WithField("setType", metadata.Type).Fatal("Unsupported IP set type.")
-	}
+
 	return &knftables.Set{
 		Name:  LegalizeSetName(name),
-		Type:  setType,
+		Type:  metadata.Type.SetType(s.IPVersionConfig.Family.Version()),
 		Flags: []knftables.SetFlag{knftables.IntervalFlag},
 	}
 }
@@ -479,12 +491,6 @@ func (s *IPSets) tryUpdates() error {
 	}
 
 	for _, setName := range dirtyIPSets {
-		metadata, ok := s.setNameToProgrammedMetadata.Desired().Get(setName)
-		if !ok {
-			s.logCxt.WithField("setName", setName).Warn("IP set not found in desired metadata.")
-			continue
-		}
-
 		// If the set is already programmed, we can skip it.
 		// TODO: Support updating set metadata. This requires comparing actual data plane state, and
 		// if necessary deleting and recreating the set. We don't expect to need this in practice.
@@ -494,45 +500,27 @@ func (s *IPSets) tryUpdates() error {
 			}
 		}
 
-		// TODO: This is a hack. Would be better to support this within the ipset package. Right now
-		// we are using structures intended for ipsets in order to program nftables sets.
-		convertIfNeeded := func(member string) string {
-			if metadata.Type == ipsets.IPSetTypeHashIPPort {
-				// Convert the member who is in format ip,proto:port to the format "ip . port"
-				parts := strings.Split(member, ",")
-				if len(parts) != 2 {
-					s.logCxt.WithField("member", member).Fatal("Invalid member format.")
-				}
-				ip := parts[0]
-				port := strings.Split(parts[1], ":")[1]
-				return fmt.Sprintf("%s . %s", ip, port)
-			}
-			return member
-		}
+		// Delete an IP set member if it's not in the desired set. Do this first in case new members conflict.
+		// TODO: This doesn't check the actual members in the dataplane, only our in memory
+		// representation. This means that any out-of-band modifications to the IP set may cause
+		// us to get out of sync.
+		members := s.getOrCreateMemberTracker(setName)
+		members.PendingDeletions().Iter(func(member ipsets.IPSetMember) deltatracker.IterAction {
+			tx.Delete(&knftables.Element{
+				Set: LegalizeSetName(setName),
+				Key: []string{member.String()},
+			})
+			return deltatracker.IterActionNoOp
+		})
 
 		// Add desired members to the set.
-		members := s.mainSetNameToMembers[setName]
 		members.Desired().Iter(func(member ipsets.IPSetMember) {
 			if members.Dataplane().Contains(member) {
 				return
 			}
 			tx.Add(&knftables.Element{
 				Set: LegalizeSetName(setName),
-				Key: []string{convertIfNeeded(member.String())},
-			})
-		})
-
-		// Delete an IP set member if it's not in the desired set.
-		// TODO: This doesn't check the actual members in the dataplane, only our in memory
-		// representation. This means that any out-of-band modifications to the IP set may cause
-		// us to get out of sync.
-		members.Dataplane().Iter(func(member ipsets.IPSetMember) {
-			if members.Desired().Contains(member) {
-				return
-			}
-			tx.Delete(&knftables.Element{
-				Set: LegalizeSetName(setName),
-				Key: []string{convertIfNeeded(member.String())},
+				Key: []string{member.String()},
 			})
 		})
 	}
