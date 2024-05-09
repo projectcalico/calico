@@ -3049,10 +3049,10 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							},
 						},
 					},
-					"bpfInterfaceAutoDetectionEnabled": {
+					"bpfInterfaceAutoDetection": {
 						SchemaProps: spec.SchemaProps{
-							Description: "BPFInterfaceAutoDetectionEnabled, if enabled Felix will auto-detect the host and L3 tunnel  interfaces. When set to true, it will override the BPFDataIfacePattern and BPFL3IfacePattern configs.  [Default: true]",
-							Type:        []string{"boolean"},
+							Description: "BPFInterfaceAutoDetectionEnabled, if enabled Felix will auto-detect the host and L3 tunnel  interfaces. When set to true, it will override the BPFDataIfacePattern and BPFL3IfacePattern configs.  [Default: Enabled]",
+							Type:        []string{"string"},
 							Format:      "",
 						},
 					},

@@ -87,6 +87,14 @@ const (
 )
 
 // +kubebuilder:validation:Enum=Enabled;Disabled
+type BPFInterfaceAutoDetectionType string
+
+const (
+	BPFInterfaceAutoDetectionEnabled  BPFInterfaceAutoDetectionType = "Enabled"
+	BPFInterfaceAutoDetectionDisabled BPFInterfaceAutoDetectionType = "Disabled"
+)
+
+// +kubebuilder:validation:Enum=Enabled;Disabled
 type WindowsManageFirewallRulesMode string
 
 const (
@@ -573,8 +581,8 @@ type FelixConfigurationSpec struct {
 	BPFExcludeCIDRsFromNAT *[]string `json:"bpfExcludeCIDRsFromNAT,omitempty" validate:"omitempty,cidrs"`
 	// BPFInterfaceAutoDetectionEnabled, if enabled Felix will auto-detect the host and
 	// L3 tunnel  interfaces. When set to true, it will override the BPFDataIfacePattern and
-	// BPFL3IfacePattern configs.  [Default: true]
-	BPFInterfaceAutoDetectionEnabled *bool `json:"bpfInterfaceAutoDetectionEnabled,omitempty" validate:"omitempty"`
+	// BPFL3IfacePattern configs.  [Default: Enabled]
+	BPFInterfaceAutoDetection BPFInterfaceAutoDetectionType `json:"bpfInterfaceAutoDetection,omitempty" validate:"omitempty,oneof=Enabled Disabled""`
 
 	// RouteSource configures where Felix gets its routing information.
 	// - WorkloadIPs: use workload endpoints to construct routes.
