@@ -398,9 +398,9 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			logutils.NewSummarizer("test"),
 			&environment.FakeFeatureDetector{},
 			nil,
+			environment.NewFeatureDetector(nil).GetFeatures(),
 		)
 		Expect(err).NotTo(HaveOccurred())
-		bpfEpMgr.Features = environment.NewFeatureDetector(nil).GetFeatures()
 		bpfEpMgr.v4.hostIP = net.ParseIP("1.2.3.4")
 		if ipv6Enabled {
 			bpfEpMgr.v6.hostIP = net.ParseIP("1::4")

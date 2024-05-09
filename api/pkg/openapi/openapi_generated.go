@@ -3049,6 +3049,13 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							},
 						},
 					},
+					"bpfInterfaceAutoDetection": {
+						SchemaProps: spec.SchemaProps{
+							Description: "BPFInterfaceAutoDetectionEnabled, if enabled Felix will auto-detect the host and L3 tunnel  interfaces. When set to true, it will override the BPFDataIfacePattern and BPFL3IfacePattern configs.  [Default: Enabled]",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 					"routeSource": {
 						SchemaProps: spec.SchemaProps{
 							Description: "RouteSource configures where Felix gets its routing information. - WorkloadIPs: use workload endpoints to construct routes. - CalicoIPAM: the default - use IPAM data to construct routes.",

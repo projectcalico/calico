@@ -122,6 +122,18 @@ func init() {
 	binary.LittleEndian.PutUint32(jumpMapV6PolicyKey, uint32(tcdefs.ProgIndexPolicy))
 }
 
+type IfaceType int32
+
+const (
+	IfaceTypeData IfaceType = iota
+	IfaceTypeL3
+	IfaceTypeTunnel
+	IfaceTypeLoopback
+	IfaceTypeNAT
+	IfaceTypeBond
+	IfaceTypeBondSlave
+)
+
 type attachPoint interface {
 	IfaceName() string
 	HookName() hook.Hook
@@ -253,8 +265,9 @@ type bpfEndpointManager struct {
 	initUnknownIfaces set.Set[string]
 
 	// Main store of information about interfaces; indexed on interface name.
-	ifacesLock  sync.Mutex
-	nameToIface map[string]bpfInterface
+	ifacesLock      sync.Mutex
+	nameToIface     map[string]bpfInterface
+	nameToIfaceType map[string]IfaceType
 
 	allWEPs        map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint
 	happyWEPs      map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint
@@ -282,6 +295,7 @@ type bpfEndpointManager struct {
 	wg6Port                 uint16
 	dsrEnabled              bool
 	dsrOptoutCidrs          bool
+	interfaceAutoDetection  string
 	bpfExtToServiceConnmark int
 	psnatPorts              numorstring.Port
 	commonMaps              *bpfmap.CommonMaps
@@ -331,7 +345,7 @@ type bpfEndpointManager struct {
 	ipv6Enabled bool
 
 	// Detected features
-	Features *environment.Features
+	features *environment.Features
 
 	// RPF mode
 	rpfEnforceOption string
@@ -421,6 +435,7 @@ func NewTestEpMgr(
 		logutils.NewSummarizer("test"),
 		new(environment.FakeFeatureDetector),
 		nil,
+		nil,
 	)
 }
 
@@ -439,6 +454,7 @@ func newBPFEndpointManager(
 	opReporter logutils.OpRecorder,
 	featureDetector environment.FeatureDetectorIface,
 	healthAggregator *health.HealthAggregator,
+	dataplanefeatures *environment.Features,
 ) (*bpfEndpointManager, error) {
 	if livenessCallback == nil {
 		livenessCallback = func() {}
@@ -453,6 +469,7 @@ func newBPFEndpointManager(
 		policies:                map[proto.PolicyID]*proto.Policy{},
 		profiles:                map[proto.ProfileID]*proto.Profile{},
 		nameToIface:             map[string]bpfInterface{},
+		nameToIfaceType:         map[string]IfaceType{},
 		policiesToWorkloads:     map[proto.PolicyID]set.Set[any]{},
 		profilesToWorkloads:     map[proto.ProfileID]set.Set[any]{},
 		dirtyIfaceNames:         set.New[string](),
@@ -468,6 +485,7 @@ func newBPFEndpointManager(
 		wgPort:                  uint16(config.Wireguard.ListeningPort),
 		wg6Port:                 uint16(config.Wireguard.ListeningPortV6),
 		dsrEnabled:              config.BPFNodePortDSREnabled,
+		interfaceAutoDetection:  config.BPFInterfaceAutoDetection,
 		dsrOptoutCidrs:          len(config.BPFDSROptoutCIDRs) > 0,
 		bpfExtToServiceConnmark: config.BPFExtToServiceConnmark,
 		psnatPorts:              config.BPFPSNATPorts,
@@ -497,6 +515,7 @@ func newBPFEndpointManager(
 		dirtyRules:             set.New[polprog.RuleMatchID](),
 
 		healthAggregator: healthAggregator,
+		features:         dataplanefeatures,
 	}
 
 	if healthAggregator != nil {
@@ -1037,6 +1056,19 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceStateUpdate) {
 	if update.State == ifacemonitor.StateNotPresent {
 		if err := bpf.ForgetIfaceAttachedProg(update.Name); err != nil {
 			log.WithError(err).Errorf("Error in removing interface %s json file. err=%v", update.Name, err)
+		}
+	}
+
+	if m.interfaceAutoDetection == string(apiv3.BPFInterfaceAutoDetectionEnabled) && !m.isWorkloadIface(update.Name) {
+		if update.State == ifacemonitor.StateNotPresent {
+			delete(m.nameToIfaceType, update.Name)
+		} else {
+			// Interface is going down. Check if the interface was a slave device of a bond interface.
+			// If so, update the iface type because it could have been removed from the bond.
+			val, ok := m.nameToIfaceType[update.Name]
+			if !ok || val == IfaceTypeBondSlave {
+				m.updateIfaceType(update.Name)
+			}
 		}
 	}
 
@@ -2640,7 +2672,7 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(ifaceName string) *tc.Attach
 			ap.UDPOnly = true
 		}
 	} else if ifaceName == "tunl0" {
-		if m.Features.IPIPDeviceIsL3 {
+		if m.features.IPIPDeviceIsL3 {
 			endpointType = tcdefs.EpTypeL3Device
 		} else {
 			endpointType = tcdefs.EpTypeTunnel
@@ -2684,7 +2716,6 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(ifaceName string) *tc.Attach
 	default:
 		ap.RPFEnforceOption = tcdefs.RPFEnforceOptionDisabled
 	}
-
 	return ap
 }
 
@@ -2831,11 +2862,23 @@ func (m *bpfEndpointManager) isWorkloadIface(iface string) bool {
 }
 
 func (m *bpfEndpointManager) isDataIface(iface string) bool {
+	if m.interfaceAutoDetection == string(apiv3.BPFInterfaceAutoDetectionEnabled) {
+		if val, ok := m.nameToIfaceType[iface]; ok {
+			return val == IfaceTypeData || val == IfaceTypeTunnel
+		}
+		return false
+	}
 	return m.dataIfaceRegex.MatchString(iface) ||
 		(m.hostNetworkedNATMode != hostNetworkedNATDisabled && (iface == bpfOutDev || iface == "lo"))
 }
 
 func (m *bpfEndpointManager) isL3Iface(iface string) bool {
+	if m.interfaceAutoDetection == string(apiv3.BPFInterfaceAutoDetectionEnabled) {
+		if val, ok := m.nameToIfaceType[iface]; ok {
+			return val == IfaceTypeL3
+		}
+		return false
+	}
 	if m.l3IfaceRegex == nil {
 		return false
 	}
@@ -3920,6 +3963,53 @@ func (m *bpfEndpointManager) ruleMatchID(dir, action, owner, name string, idx in
 	h := fnv.New64a()
 	h.Write([]byte(action + owner + dir + strconv.Itoa(idx) + name))
 	return h.Sum64()
+}
+
+func (m *bpfEndpointManager) updateIfaceType(ifname string) {
+	ifa, err := net.InterfaceByName(ifname)
+	if err != nil {
+		return
+	}
+	m.nameToIfaceType[ifname] = m.autoDetectInterfaceType(ifa)
+}
+
+func (m *bpfEndpointManager) autoDetectInterfaceType(intf *net.Interface) IfaceType {
+	name := intf.Name
+	if name == "tunl0" {
+		if m.features.IPIPDeviceIsL3 {
+			return IfaceTypeL3
+		} else {
+			return IfaceTypeTunnel
+		}
+	}
+
+	if name == bpfOutDev {
+		if m.hostNetworkedNATMode != hostNetworkedNATDisabled {
+			return IfaceTypeData
+		}
+		return IfaceTypeNAT
+	}
+
+	if name == bpfInDev {
+		return IfaceTypeNAT
+	}
+
+	if name == "lo" {
+		if m.hostNetworkedNATMode != hostNetworkedNATDisabled {
+			return IfaceTypeData
+		}
+		return IfaceTypeLoopback
+	}
+
+	addrs, _ := intf.Addrs()
+	// Interface has IPv4/IPv6 address but no mac
+	if len(intf.HardwareAddr) == 0 && len(addrs) > 0 {
+		return IfaceTypeL3
+	}
+	// All the other interfaces are data interfaces.
+	// Check if the interface is bond. If so, update the interface type for
+	// slaves, master.
+	return IfaceTypeData
 }
 
 func newJumpMapAlloc(entryPoints int) *jumpMapAlloc {
