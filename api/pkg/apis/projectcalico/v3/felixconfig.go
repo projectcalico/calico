@@ -582,7 +582,7 @@ type FelixConfigurationSpec struct {
 	// BPFInterfaceAutoDetectionEnabled, if enabled Felix will auto-detect the host and
 	// L3 tunnel  interfaces. When set to true, it will override the BPFDataIfacePattern and
 	// BPFL3IfacePattern configs.  [Default: Enabled]
-	BPFInterfaceAutoDetection BPFInterfaceAutoDetectionType `json:"bpfInterfaceAutoDetection,omitempty" validate:"omitempty,oneof=Enabled Disabled""`
+	BPFInterfaceAutoDetection *BPFInterfaceAutoDetectionType `json:"bpfInterfaceAutoDetection,omitempty" validate:"omitempty,oneof=Enabled Disabled"`
 
 	// RouteSource configures where Felix gets its routing information.
 	// - WorkloadIPs: use workload endpoints to construct routes.
