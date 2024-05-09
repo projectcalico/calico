@@ -75,11 +75,9 @@ RUN rpm -i ${IPSET_SOURCERPM_URL} && \
 
 # runit is not available in ubi or CentOS repos so build it.
 # get it from the debian repos as the official website doesn't support https
-RUN wget -P /tmp https://ftp.debian.org/debian/pool/main/r/runit/runit_${RUNIT_VER}.orig.tar.gz && \
-    gunzip /tmp/runit_${RUNIT_VER}.orig.tar.gz && \
-    tar -xpf /tmp/runit_${RUNIT_VER}.orig.tar -C /tmp && \
-    cd /tmp/admin/runit-${RUNIT_VER}/ && \
-    package/install
+RUN curl -sfL https://ftp.debian.org/debian/pool/main/r/runit/runit_${RUNIT_VER}.orig.tar.gz | tar xz -C /root && \
+    cd /root/admin/runit-${RUNIT_VER} && \
+    package/compile
 
 FROM ${UBI_IMAGE} as ubi
 
@@ -93,7 +91,7 @@ ARG RUNIT_VER
 RUN microdnf upgrade
 
 # Copy in runit binaries
-COPY --from=centos  /tmp/admin/runit-${RUNIT_VER}/command/* /usr/local/bin/
+COPY --from=centos  /root/admin/runit-${RUNIT_VER}/command/* /usr/local/bin/
 
 # Copy in our rpms
 COPY --from=centos  /root/rpmbuild/RPMS/x86_64/* /tmp/rpms/
