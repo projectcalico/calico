@@ -39,7 +39,7 @@ LABEL version=${GIT_VERSION}
 
 # Enable non-native builds of this image on an amd64 hosts.
 # This must be the first RUN command in this file!
-COPY --from=qemu /usr/bin/qemu-*-static /usr/bin/
+COPY --from=qemu /usr/bin/qemu-s390x-static /usr/bin/qemu-s390x-static
 
 # Install remaining runtime deps required for felix from the global repository
 RUN apk add --no-cache bash ip6tables ipset iputils iproute2 conntrack-tools runit file ca-certificates
@@ -66,5 +66,7 @@ COPY --from=bpftool /bpftool /bin
 
 # Add in top-level license file
 COPY LICENSE /licenses
+
+RUN rm /usr/bin/qemu-s390x-static
 
 CMD ["start_runit"]
