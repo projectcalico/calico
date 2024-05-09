@@ -42,6 +42,7 @@ import (
 const (
 	MaxChainNameLength   = 28
 	minPostWriteInterval = 50 * time.Millisecond
+	defaultTimeout       = 30 * time.Second
 )
 
 var (
@@ -291,6 +292,8 @@ type nftablesTable struct {
 	onStillAlive func()
 	opReporter   logutils.OpRecorder
 	reason       string
+
+	contextTimeout time.Duration
 }
 
 type TableOptions struct {
@@ -429,6 +432,8 @@ func NewTable(
 		gaugeNumRules:         gaugeNumRules.WithLabelValues(fmt.Sprintf("%d", ipVersion), name),
 		countNumLinesExecuted: countNumLinesExecuted.WithLabelValues(fmt.Sprintf("%d", ipVersion), name),
 		opReporter:            options.OpRecorder,
+
+		contextTimeout: defaultTimeout,
 	}
 
 	if options.OnStillAlive != nil {
@@ -803,7 +808,9 @@ func (t *nftablesTable) attemptToGetHashesAndRulesFromDataplane() (hashes map[st
 	hashes = make(map[string][]string)
 	rules = make(map[string][]*knftables.Rule)
 
-	allRules, err := t.nft.ListRules(context.TODO(), "")
+	ctx, cancel := context.WithTimeout(context.Background(), t.contextTimeout)
+	defer cancel()
+	allRules, err := t.nft.ListRules(ctx, "")
 	if err != nil {
 		return nil, nil, err
 	}
@@ -895,7 +902,10 @@ func (t *nftablesTable) Apply() (rescheduleAfter time.Duration) {
 					tx := t.nft.NewTransaction()
 					tx.Delete(&knftables.Table{})
 					tx.Add(&knftables.Table{})
-					if err := t.nft.Run(context.TODO(), tx); err != nil {
+
+					ctx, cancel := context.WithTimeout(context.Background(), t.contextTimeout)
+					defer cancel()
+					if err := t.nft.Run(ctx, tx); err != nil {
 						t.logCxt.WithError(err).Warn("Failed to delete table, continuing anyway")
 					}
 				}
@@ -967,10 +977,6 @@ func (t *nftablesTable) applyUpdates() error {
 		if _, ok := t.chainToDataplaneHashes[baseChain.Name]; !ok {
 			// Chain doesn't exist in dataplane, mark it for creation.
 			tx.Add(&baseChain)
-		} else {
-			// TODO: Chain exists, but updates don't seem to work properly.
-			// Need to look into this. We likely need to handle this by nuking the whole table
-			// and recreating it.
 		}
 	}
 
@@ -1121,7 +1127,9 @@ func (t *nftablesTable) applyUpdates() error {
 			t.logCxt.Tracef("Updating nftables: %s", tx.String())
 		}
 
-		if err := t.nft.Run(context.TODO(), tx); err != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), t.contextTimeout)
+		defer cancel()
+		if err := t.nft.Run(ctx, tx); err != nil {
 			t.logCxt.WithField("tx", tx.String()).Error("Failed to run nft transaction")
 			return fmt.Errorf("error performing nft transaction: %s", err)
 		}
@@ -1205,7 +1213,9 @@ func (t *nftablesTable) InsertRulesNow(chain string, rules []generictables.Rule)
 	}
 
 	// Run the transaction.
-	if err := t.nft.Run(context.TODO(), tx); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), t.contextTimeout)
+	defer cancel()
+	if err := t.nft.Run(ctx, tx); err != nil {
 		t.logCxt.WithField("tx", tx.String()).Error("Failed to run InsertRulesNow nft transaction")
 		return fmt.Errorf("error performing InsertRulesNow nft transaction: %s", err)
 	}
