@@ -46,6 +46,7 @@ var _ = testutils.E2eDatastoreDescribe("FelixConfiguration tests", testutils.Dat
 	fipEnabled := apiv3.FloatingIPsEnabled
 	ctlbEnabled := apiv3.BPFConnectTimeLBEnabled
 	hostNetworkedNATDisabled := apiv3.BPFHostNetworkedNATDisabled
+	autoInterfaceDetectionEnabled := apiv3.BPFInterfaceAutoDetectionEnabled
 	spec1 := apiv3.FelixConfigurationSpec{
 		UseInternalDataplaneDriver:     &ptrTrue,
 		DataplaneDriver:                "test-dataplane-driver1",
@@ -53,6 +54,7 @@ var _ = testutils.E2eDatastoreDescribe("FelixConfiguration tests", testutils.Dat
 		FloatingIPs:                    &fipDisabled,
 		BPFConnectTimeLoadBalancing:    &ctlbEnabled,
 		BPFHostNetworkedNATWithoutCTLB: &hostNetworkedNATDisabled,
+		BPFInterfaceAutoDetection:      &autoInterfaceDetectionEnabled,
 	}
 	spec2 := apiv3.FelixConfigurationSpec{
 		UseInternalDataplaneDriver:     &ptrFalse,
@@ -62,6 +64,7 @@ var _ = testutils.E2eDatastoreDescribe("FelixConfiguration tests", testutils.Dat
 		FloatingIPs:                    &fipEnabled,
 		BPFConnectTimeLoadBalancing:    &ctlbEnabled,
 		BPFHostNetworkedNATWithoutCTLB: &hostNetworkedNATDisabled,
+		BPFInterfaceAutoDetection:      &autoInterfaceDetectionEnabled,
 	}
 
 	DescribeTable("FelixConfiguration e2e CRUD tests",
