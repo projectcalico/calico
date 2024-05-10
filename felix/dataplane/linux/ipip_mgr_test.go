@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,8 +15,11 @@
 package intdataplane
 
 import (
+	"time"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"golang.org/x/net/context"
 
 	"errors"
 	"fmt"
@@ -27,6 +30,8 @@ import (
 
 	"github.com/projectcalico/calico/felix/dataplane/common"
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/felix/routetable"
+	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -37,9 +42,10 @@ var (
 
 var _ = Describe("IpipMgr (tunnel configuration)", func() {
 	var (
-		ipipMgr   *ipipManager
-		ipSets    *common.MockIPSets
-		dataplane *mockIPIPDataplane
+		ipipMgr      *ipipManager
+		ipSets       *common.MockIPSets
+		dataplane    *mockIPIPDataplane
+		rt, brt, prt *mockRouteTable
 	)
 
 	ip, _, err := net.ParseCIDR("10.0.0.1/32")
@@ -54,7 +60,31 @@ var _ = Describe("IpipMgr (tunnel configuration)", func() {
 	BeforeEach(func() {
 		dataplane = &mockIPIPDataplane{}
 		ipSets = common.NewMockIPSets()
-		ipipMgr = newIPIPManagerWithShim(ipSets, 1024, dataplane, nil)
+		rt = &mockRouteTable{
+			currentRoutes: map[string][]routetable.Target{},
+		}
+		brt = &mockRouteTable{
+			currentRoutes: map[string][]routetable.Target{},
+		}
+		prt = &mockRouteTable{
+			currentRoutes: map[string][]routetable.Target{},
+		}
+		ipipMgr = newIPIPManagerWithShim(
+			ipSets, rt, brt, "tunl0",
+			Config{
+				MaxIPSetSize:       1024,
+				Hostname:           "node1",
+				ExternalNodesCidrs: nil,
+			},
+			dataplane,
+			4,
+			func(interfacePrefixes []string, ipVersion uint8, netlinkTimeout time.Duration,
+				deviceRouteSourceAddress net.IP, deviceRouteProtocol netlink.RouteProtocol,
+				removeExternalRoutes bool,
+			) routetable.RouteTableInterface {
+				return prt
+			},
+		)
 	})
 
 	Describe("after calling configureIPIPDevice", func() {
@@ -64,6 +94,7 @@ var _ = Describe("IpipMgr (tunnel configuration)", func() {
 		}
 
 		BeforeEach(func() {
+			ipipMgr.OnParentNameUpdate("eth0")
 			err = ipipMgr.configureIPIPDevice(1400, ip, false)
 			Expect(err).ToNot(HaveOccurred())
 		})
@@ -89,7 +120,7 @@ var _ = Describe("IpipMgr (tunnel configuration)", func() {
 				Expect(err).ToNot(HaveOccurred())
 			})
 			It("should avoid creating the interface", func() {
-				Expect(dataplane.RunCmdCalled).To(BeFalse())
+				Expect(dataplane.LinkAddCalled).To(BeFalse())
 			})
 			It("should avoid setting the interface UP again", func() {
 				Expect(dataplane.LinkSetUpCalled).To(BeFalse())
@@ -110,7 +141,7 @@ var _ = Describe("IpipMgr (tunnel configuration)", func() {
 
 			})
 			It("should avoid creating the interface", func() {
-				Expect(dataplane.RunCmdCalled).To(BeFalse())
+				Expect(dataplane.LinkAddCalled).To(BeFalse())
 			})
 			It("should avoid setting the interface UP again", func() {
 				Expect(dataplane.LinkSetUpCalled).To(BeFalse())
@@ -131,7 +162,7 @@ var _ = Describe("IpipMgr (tunnel configuration)", func() {
 				Expect(err).ToNot(HaveOccurred())
 			})
 			It("should avoid creating the interface", func() {
-				Expect(dataplane.RunCmdCalled).To(BeFalse())
+				Expect(dataplane.LinkAddCalled).To(BeFalse())
 			})
 			It("should avoid setting the interface UP again", func() {
 				Expect(dataplane.LinkSetUpCalled).To(BeFalse())
@@ -205,9 +236,9 @@ var _ = Describe("IpipMgr (tunnel configuration)", func() {
 
 var _ = Describe("ipipManager IP set updates", func() {
 	var (
-		ipipMgr   *ipipManager
-		ipSets    *common.MockIPSets
-		dataplane *mockIPIPDataplane
+		ipipMgr      *ipipManager
+		ipSets       *common.MockIPSets
+		rt, brt, prt *mockRouteTable
 	)
 
 	const (
@@ -215,9 +246,42 @@ var _ = Describe("ipipManager IP set updates", func() {
 	)
 
 	BeforeEach(func() {
-		dataplane = &mockIPIPDataplane{}
 		ipSets = common.NewMockIPSets()
-		ipipMgr = newIPIPManagerWithShim(ipSets, 1024, dataplane, []string{externalCIDR})
+		rt = &mockRouteTable{
+			currentRoutes: map[string][]routetable.Target{},
+		}
+		brt = &mockRouteTable{
+			currentRoutes: map[string][]routetable.Target{},
+		}
+		prt = &mockRouteTable{
+			currentRoutes: map[string][]routetable.Target{},
+		}
+
+		la := netlink.NewLinkAttrs()
+		la.Name = "eth0"
+		ipipMgr = newIPIPManagerWithShim(
+			ipSets, rt, brt, "tunl0",
+			Config{
+				MaxIPSetSize:       1024,
+				Hostname:           "host1",
+				ExternalNodesCidrs: []string{externalCIDR},
+			},
+			&mockIPIPDataplane{
+				links: []netlink.Link{&mockLink{attrs: la}},
+			},
+			4,
+			func(interfacePrefixes []string, ipVersion uint8, netlinkTimeout time.Duration,
+				deviceRouteSourceAddress net.IP, deviceRouteProtocol netlink.RouteProtocol,
+				removeExternalRoutes bool,
+			) routetable.RouteTableInterface {
+				return prt
+			},
+		)
+		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
+			Hostname: "host1",
+			Ipv4Addr: "10.0.0.1",
+		})
+		ipipMgr.OnParentNameUpdate("eth0")
 	})
 
 	It("should not create the IP set until first call to CompleteDeferredWork()", func() {
@@ -345,22 +409,184 @@ var _ = Describe("ipipManager IP set updates", func() {
 	})
 })
 
+var _ = Describe("IPIPManager", func() {
+	var manager *ipipManager
+	var rt, brt, prt *mockRouteTable
+	var ipSets *common.MockIPSets
+
+	BeforeEach(func() {
+		ipSets = common.NewMockIPSets()
+		rt = &mockRouteTable{
+			currentRoutes: map[string][]routetable.Target{},
+		}
+		brt = &mockRouteTable{
+			currentRoutes: map[string][]routetable.Target{},
+		}
+		prt = &mockRouteTable{
+			currentRoutes: map[string][]routetable.Target{},
+		}
+
+		la := netlink.NewLinkAttrs()
+		la.Name = "eth0"
+		manager = newIPIPManagerWithShim(
+			ipSets, rt, brt, "tunl0",
+			Config{
+				MaxIPSetSize:       1024,
+				Hostname:           "host1",
+				ExternalNodesCidrs: []string{"10.10.10.0/24"},
+				RulesConfig: rules.Config{
+					IPIPTunnelAddress: net.ParseIP("192.168.0.1"),
+				},
+			},
+			&mockIPIPDataplane{
+				links: []netlink.Link{&mockLink{attrs: la}},
+			},
+			4,
+			func(interfacePrefixes []string, ipVersion uint8, netlinkTimeout time.Duration,
+				deviceRouteSourceAddress net.IP, deviceRouteProtocol netlink.RouteProtocol,
+				removeExternalRoutes bool,
+			) routetable.RouteTableInterface {
+				return prt
+			},
+		)
+	})
+
+	It("successfully adds a route to the parent interface", func() {
+		manager.OnUpdate(&proto.HostMetadataUpdate{
+			Hostname: "host1",
+			Ipv4Addr: "10.0.0.1",
+		})
+		manager.OnUpdate(&proto.HostMetadataUpdate{
+			Hostname: "host2",
+			Ipv4Addr: "10.0.1.1",
+		})
+
+		err := manager.configureIPIPDevice(50, manager.dpConfig.RulesConfig.IPIPTunnelAddress, false)
+		Expect(err).NotTo(HaveOccurred())
+		manager.OnParentNameUpdate("eth0")
+
+		Expect(manager.hostAddr).NotTo(BeZero())
+		Expect(manager.noEncapRouteTable).NotTo(BeNil())
+		parent, err := manager.getParentInterface()
+
+		Expect(parent).NotTo(BeNil())
+		Expect(err).NotTo(HaveOccurred())
+
+		manager.OnUpdate(&proto.RouteUpdate{
+			Type:        proto.RouteType_REMOTE_WORKLOAD,
+			IpPoolType:  proto.IPPoolType_IPIP,
+			Dst:         "192.168.0.3/26",
+			DstNodeName: "host2",
+			DstNodeIp:   "10.0.1.1",
+			SameSubnet:  true,
+		})
+
+		manager.OnUpdate(&proto.RouteUpdate{
+			Type:        proto.RouteType_REMOTE_WORKLOAD,
+			IpPoolType:  proto.IPPoolType_IPIP,
+			Dst:         "192.168.0.2/26",
+			DstNodeName: "host2",
+			DstNodeIp:   "10.0.1.1",
+		})
+
+		manager.OnUpdate(&proto.RouteUpdate{
+			Type:        proto.RouteType_LOCAL_WORKLOAD,
+			IpPoolType:  proto.IPPoolType_IPIP,
+			Dst:         "192.168.0.100/26",
+			DstNodeName: "host1",
+			DstNodeIp:   "10.0.0.1",
+			SameSubnet:  true,
+		})
+
+		// Borrowed /32 should not be programmed as blackhole.
+		manager.OnUpdate(&proto.RouteUpdate{
+			Type:        proto.RouteType_LOCAL_WORKLOAD,
+			IpPoolType:  proto.IPPoolType_IPIP,
+			Dst:         "192.168.0.10/32",
+			DstNodeName: "host1",
+			DstNodeIp:   "10.0.0.7",
+			SameSubnet:  true,
+		})
+
+		Expect(rt.currentRoutes["tunl0"]).To(HaveLen(0))
+		Expect(brt.currentRoutes[routetable.InterfaceNone]).To(HaveLen(0))
+
+		err = manager.CompleteDeferredWork()
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(rt.currentRoutes["tunl0"]).To(HaveLen(1))
+		Expect(brt.currentRoutes[routetable.InterfaceNone]).To(HaveLen(1))
+		Expect(prt.currentRoutes["eth0"]).NotTo(BeNil())
+	})
+
+	It("adds the route to the default table on next try when the parent route table is not immediately found", func() {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		parentNameC := make(chan string)
+		go manager.KeepIPIPDeviceInSync(
+			ctx, 1400, manager.dpConfig.RulesConfig.IPIPTunnelAddress, false, 1*time.Second, parentNameC)
+
+		manager.OnUpdate(&proto.HostMetadataUpdate{
+			Hostname: "host2",
+			Ipv4Addr: "10.0.1.1/32",
+		})
+
+		manager.OnUpdate(&proto.RouteUpdate{
+			Type:        proto.RouteType_REMOTE_WORKLOAD,
+			IpPoolType:  proto.IPPoolType_IPIP,
+			Dst:         "172.0.0.1/26",
+			DstNodeName: "host2",
+			DstNodeIp:   "172.8.8.8",
+			SameSubnet:  true,
+		})
+
+		err := manager.CompleteDeferredWork()
+		Expect(err).NotTo(BeNil())
+		Expect(err.Error()).To(Equal("no encap route table not set, will defer adding routes"))
+		Expect(manager.routesDirty).To(BeTrue())
+
+		manager.OnUpdate(&proto.HostMetadataUpdate{
+			Hostname: "host1",
+			Ipv4Addr: "10.0.0.1",
+		})
+
+		Expect(manager.hostAddr).NotTo(BeZero())
+
+		// Note: parent name is sent after configuration so this receive
+		// ensures we don't race.
+		Eventually(parentNameC, "2s").Should(Receive(Equal("eth0")))
+		manager.OnParentNameUpdate("eth0")
+
+		err = manager.configureIPIPDevice(50, manager.dpConfig.RulesConfig.IPIPTunnelAddress, false)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(prt.currentRoutes["eth0"]).To(HaveLen(0))
+		err = manager.CompleteDeferredWork()
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(manager.routesDirty).To(BeFalse())
+		Expect(prt.currentRoutes["eth0"]).To(HaveLen(1))
+	})
+})
+
 type mockIPIPDataplane struct {
 	tunnelLink      *mockLink
 	tunnelLinkAttrs *netlink.LinkAttrs
 	addrs           []netlink.Addr
 
-	RunCmdCalled     bool
+	LinkAddCalled    bool
 	LinkSetMTUCalled bool
 	LinkSetUpCalled  bool
 	AddrUpdated      bool
 
 	NumCalls    int
 	ErrorAtCall int
+
+	links []netlink.Link
 }
 
 func (d *mockIPIPDataplane) ResetCalls() {
-	d.RunCmdCalled = false
+	d.LinkAddCalled = false
 	d.LinkSetMTUCalled = false
 	d.LinkSetUpCalled = false
 	d.AddrUpdated = false
@@ -383,6 +609,7 @@ func (d *mockIPIPDataplane) LinkByName(name string) (netlink.Link, error) {
 	}
 
 	Expect(name).To(Equal("tunl0"))
+	log.Infof("Marva :%v", d.tunnelLink)
 	if d.tunnelLink == nil {
 		return nil, notFound
 	}
@@ -413,7 +640,16 @@ func (d *mockIPIPDataplane) AddrList(link netlink.Link, family int) ([]netlink.A
 	if err := d.incCallCount(); err != nil {
 		return nil, err
 	}
-	Expect(link.Attrs().Name).To(Equal("tunl0"))
+
+	name := link.Attrs().Name
+	Expect(name).Should(BeElementOf("tunl0", "eth0"))
+	if name == "eth0" {
+		return []netlink.Addr{{
+			IPNet: &net.IPNet{
+				IP: net.IPv4(10, 0, 0, 1),
+			}},
+		}, nil
+	}
 	return d.addrs, nil
 }
 
@@ -438,15 +674,16 @@ func (d *mockIPIPDataplane) AddrDel(link netlink.Link, addr *netlink.Addr) error
 	return nil
 }
 
-func (d *mockIPIPDataplane) RunCmd(name string, args ...string) error {
-	d.RunCmdCalled = true
+func (d *mockIPIPDataplane) LinkList() ([]netlink.Link, error) {
+	return d.links, nil
+}
+
+func (d *mockIPIPDataplane) LinkAdd(l netlink.Link) error {
+	d.LinkAddCalled = true
 	if err := d.incCallCount(); err != nil {
 		return err
 	}
-	log.WithFields(log.Fields{"name": name, "args": args}).Info("RunCmd called")
-	Expect(name).To(Equal("ip"))
-	Expect(args).To(Equal([]string{"tunnel", "add", "tunl0", "mode", "ipip"}))
-
+	Expect(l.Attrs().Name).To(Equal("tunl0"))
 	if d.tunnelLink == nil {
 		log.Info("Creating tunnel link")
 		link := &mockLink{}
@@ -454,6 +691,10 @@ func (d *mockIPIPDataplane) RunCmd(name string, args ...string) error {
 		d.tunnelLinkAttrs = &link.attrs
 		d.tunnelLink = link
 	}
+	return nil
+}
+
+func (d *mockIPIPDataplane) LinkDel(_ netlink.Link) error {
 	return nil
 }
 
