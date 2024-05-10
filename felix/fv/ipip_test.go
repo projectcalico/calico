@@ -404,7 +404,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 					Consistently(f.BPFRoutes).ShouldNot(ContainSubstring(externalClient.IP))
 				} else {
 					// Make sure that only the internal nodes are present in the ipset
-					Eventually(f.IPSetSizeFn("cali40all-hosts-net"), "5s", "200ms").Should(Equal(2))
+					Eventually(f.IPSetSizeFn("cali40all-hosts-net"), "5s", "200ms").Should(Equal(3))
 				}
 			}
 
