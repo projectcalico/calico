@@ -25,7 +25,6 @@ import (
 
 	"github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -53,7 +52,6 @@ type TopologyOptions struct {
 	TestManagesBPF            bool
 	TyphaLogSeverity          string
 	IPIPEnabled               bool
-	IPIPRoutesEnabled         bool
 	IPIPMode                  api.IPIPMode
 	VXLANMode                 api.VXLANMode
 	WireguardEnabled          bool
@@ -108,7 +106,6 @@ func DefaultTopologyOptions() TopologyOptions {
 		WithFelixTyphaTLS: false,
 		TyphaLogSeverity:  "info",
 		IPIPEnabled:       true,
-		IPIPRoutesEnabled: false,
 		IPPoolCIDR:        DefaultIPPoolCIDR,
 		IPv6PoolCIDR:      DefaultIPv6PoolCIDR,
 		UseIPPools:        true,
@@ -131,17 +128,11 @@ func CreateDefaultIPPoolFromOpts(ctx context.Context, client client.Interface, o
 		ipPool.Spec.CIDR = opts.IPPoolCIDR
 
 		// IPIP is only supported on IPv4
-		logrus.Infof("Kian %v", opts.IPIPMode)
 		ipPool.Spec.IPIPMode = opts.IPIPMode
-		/* opts.IPIPEnabled {
-			ipPool.Spec.IPIPMode = api.IPIPModeAlways
-		} else {
-			ipPool.Spec.IPIPMode = api.IPIPModeNever
-		}*/
-
 	case 6:
 		ipPool.Name = DefaultIPv6PoolName
 		ipPool.Spec.CIDR = opts.IPv6PoolCIDR
+		ipPool.Spec.IPIPMode = api.IPIPModeNever
 	default:
 		log.WithField("ipVersion", ipVersion).Panic("Unknown IP version")
 	}
@@ -227,7 +218,6 @@ func StartNNodeTopology(n int, opts TopologyOptions, infra DatastoreInfra) (tc T
 		opts.VXLANMode = api.VXLANModeNever
 	}
 
-	logrus.Infof("Tofu %v", opts.IPIPMode)
 	if opts.IPIPMode == "" {
 		opts.IPIPMode = api.IPIPModeNever
 	}

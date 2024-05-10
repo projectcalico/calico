@@ -76,7 +76,7 @@ var _ = Describe("IpipMgr (tunnel configuration)", func() {
 				Hostname:           "node1",
 				ExternalNodesCidrs: nil,
 			},
-			&mockIPIPDataplane{},
+			dataplane,
 			4,
 			func(interfacePrefixes []string, ipVersion uint8, netlinkTimeout time.Duration,
 				deviceRouteSourceAddress net.IP, deviceRouteProtocol netlink.RouteProtocol,
@@ -94,9 +94,9 @@ var _ = Describe("IpipMgr (tunnel configuration)", func() {
 		}
 
 		BeforeEach(func() {
+			ipipMgr.OnParentNameUpdate("eth0")
 			err = ipipMgr.configureIPIPDevice(1400, ip, false)
 			Expect(err).ToNot(HaveOccurred())
-			ipipMgr.OnParentNameUpdate("eth0")
 		})
 
 		It("should create the interface", func() {
@@ -263,12 +263,11 @@ var _ = Describe("ipipManager IP set updates", func() {
 			ipSets, rt, brt, "tunl0",
 			Config{
 				MaxIPSetSize:       1024,
-				Hostname:           "node1",
+				Hostname:           "host1",
 				ExternalNodesCidrs: []string{externalCIDR},
 			},
-			&mockVXLANDataplane{
-				links:     []netlink.Link{&mockLink{attrs: la}},
-				ipVersion: 4,
+			&mockIPIPDataplane{
+				links: []netlink.Link{&mockLink{attrs: la}},
 			},
 			4,
 			func(interfacePrefixes []string, ipVersion uint8, netlinkTimeout time.Duration,
@@ -279,8 +278,8 @@ var _ = Describe("ipipManager IP set updates", func() {
 			},
 		)
 		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
-			Hostname: "node1",
-			Ipv4Addr: "172.0.0.2",
+			Hostname: "host1",
+			Ipv4Addr: "10.0.0.1",
 		})
 		ipipMgr.OnParentNameUpdate("eth0")
 	})
@@ -301,28 +300,28 @@ var _ = Describe("ipipManager IP set updates", func() {
 	Describe("after adding an IP for host1", func() {
 		BeforeEach(func() {
 			ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
-				Hostname: "node1",
-				Ipv4Addr: "172.0.0.2",
+				Hostname: "host1",
+				Ipv4Addr: "10.0.0.1",
 			})
 			err := ipipMgr.CompleteDeferredWork()
 			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("should add host1's IP to the IP set", func() {
-			Expect(allHostsSet()).To(Equal(set.From("172.0.0.2", externalCIDR)))
+			Expect(allHostsSet()).To(Equal(set.From("10.0.0.1", externalCIDR)))
 		})
 
 		Describe("after adding an IP for host2", func() {
 			BeforeEach(func() {
 				ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
-					Hostname: "node2",
+					Hostname: "host2",
 					Ipv4Addr: "10.0.0.2",
 				})
 				err := ipipMgr.CompleteDeferredWork()
 				Expect(err).ToNot(HaveOccurred())
 			})
 			It("should add the IP to the IP set", func() {
-				Expect(allHostsSet()).To(Equal(set.From("172.0.0.2", "10.0.0.2", externalCIDR)))
+				Expect(allHostsSet()).To(Equal(set.From("10.0.0.1", "10.0.0.2", externalCIDR)))
 			})
 		})
 
@@ -330,13 +329,13 @@ var _ = Describe("ipipManager IP set updates", func() {
 			BeforeEach(func() {
 				ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
 					Hostname: "host2",
-					Ipv4Addr: "172.0.0.2",
+					Ipv4Addr: "10.0.0.1",
 				})
 				err := ipipMgr.CompleteDeferredWork()
 				Expect(err).ToNot(HaveOccurred())
 			})
 			It("should tolerate the duplicate", func() {
-				Expect(allHostsSet()).To(Equal(set.From("172.0.0.2", externalCIDR)))
+				Expect(allHostsSet()).To(Equal(set.From("10.0.0.1", externalCIDR)))
 			})
 
 			Describe("after removing a duplicate IP", func() {
@@ -348,13 +347,13 @@ var _ = Describe("ipipManager IP set updates", func() {
 					Expect(err).ToNot(HaveOccurred())
 				})
 				It("should keep the IP in the IP set", func() {
-					Expect(allHostsSet()).To(Equal(set.From("172.0.0.2", externalCIDR)))
+					Expect(allHostsSet()).To(Equal(set.From("10.0.0.1", externalCIDR)))
 				})
 
 				Describe("after removing initial copy of IP", func() {
 					BeforeEach(func() {
 						ipipMgr.OnUpdate(&proto.HostMetadataRemove{
-							Hostname: "node1",
+							Hostname: "host1",
 						})
 						err := ipipMgr.CompleteDeferredWork()
 						Expect(err).ToNot(HaveOccurred())
@@ -370,7 +369,7 @@ var _ = Describe("ipipManager IP set updates", func() {
 			BeforeEach(func() {
 				ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
 					Hostname: "host2",
-					Ipv4Addr: "172.0.0.2",
+					Ipv4Addr: "10.0.0.1",
 				})
 				ipipMgr.OnUpdate(&proto.HostMetadataRemove{
 					Hostname: "host2",
@@ -379,14 +378,14 @@ var _ = Describe("ipipManager IP set updates", func() {
 				Expect(err).ToNot(HaveOccurred())
 			})
 			It("should keep the IP in the IP set", func() {
-				Expect(allHostsSet()).To(Equal(set.From("172.0.0.2", externalCIDR)))
+				Expect(allHostsSet()).To(Equal(set.From("10.0.0.1", externalCIDR)))
 			})
 		})
 
-		Describe("after changing IP for node1", func() {
+		Describe("after changing IP for host1", func() {
 			BeforeEach(func() {
 				ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
-					Hostname: "node1",
+					Hostname: "host1",
 					Ipv4Addr: "10.0.0.2",
 				})
 				err := ipipMgr.CompleteDeferredWork()
@@ -433,15 +432,14 @@ var _ = Describe("IPIPManager", func() {
 			ipSets, rt, brt, "tunl0",
 			Config{
 				MaxIPSetSize:       1024,
-				Hostname:           "node1",
-				ExternalNodesCidrs: []string{"10.0.0.0/24"},
+				Hostname:           "host1",
+				ExternalNodesCidrs: []string{"10.10.10.0/24"},
 				RulesConfig: rules.Config{
 					IPIPTunnelAddress: net.ParseIP("192.168.0.1"),
 				},
 			},
-			&mockVXLANDataplane{
-				links:     []netlink.Link{&mockLink{attrs: la}},
-				ipVersion: 4,
+			&mockIPIPDataplane{
+				links: []netlink.Link{&mockLink{attrs: la}},
 			},
 			4,
 			func(interfacePrefixes []string, ipVersion uint8, netlinkTimeout time.Duration,
@@ -455,12 +453,12 @@ var _ = Describe("IPIPManager", func() {
 
 	It("successfully adds a route to the parent interface", func() {
 		manager.OnUpdate(&proto.HostMetadataUpdate{
-			Hostname: "node1",
-			Ipv4Addr: "172.0.0.2",
+			Hostname: "host1",
+			Ipv4Addr: "10.0.0.1",
 		})
 		manager.OnUpdate(&proto.HostMetadataUpdate{
-			Hostname: "node2",
-			Ipv4Addr: "172.0.12.1",
+			Hostname: "host2",
+			Ipv4Addr: "10.0.1.1",
 		})
 
 		err := manager.configureIPIPDevice(50, manager.dpConfig.RulesConfig.IPIPTunnelAddress, false)
@@ -477,8 +475,8 @@ var _ = Describe("IPIPManager", func() {
 			Type:        proto.RouteType_REMOTE_WORKLOAD,
 			IpPoolType:  proto.IPPoolType_IPIP,
 			Dst:         "192.168.0.3/26",
-			DstNodeName: "node2",
-			DstNodeIp:   "172.0.12.1",
+			DstNodeName: "host2",
+			DstNodeIp:   "10.0.1.1",
 			SameSubnet:  true,
 		})
 
@@ -486,16 +484,16 @@ var _ = Describe("IPIPManager", func() {
 			Type:        proto.RouteType_REMOTE_WORKLOAD,
 			IpPoolType:  proto.IPPoolType_IPIP,
 			Dst:         "192.168.0.2/26",
-			DstNodeName: "node2",
-			DstNodeIp:   "172.0.12.1",
+			DstNodeName: "host2",
+			DstNodeIp:   "10.0.1.1",
 		})
 
 		manager.OnUpdate(&proto.RouteUpdate{
 			Type:        proto.RouteType_LOCAL_WORKLOAD,
 			IpPoolType:  proto.IPPoolType_IPIP,
 			Dst:         "192.168.0.100/26",
-			DstNodeName: "node1",
-			DstNodeIp:   "172.0.0.2",
+			DstNodeName: "host1",
+			DstNodeIp:   "10.0.0.1",
 			SameSubnet:  true,
 		})
 
@@ -504,8 +502,8 @@ var _ = Describe("IPIPManager", func() {
 			Type:        proto.RouteType_LOCAL_WORKLOAD,
 			IpPoolType:  proto.IPPoolType_IPIP,
 			Dst:         "192.168.0.10/32",
-			DstNodeName: "node1",
-			DstNodeIp:   "172.0.0.7",
+			DstNodeName: "host1",
+			DstNodeIp:   "10.0.0.7",
 			SameSubnet:  true,
 		})
 
@@ -527,15 +525,15 @@ var _ = Describe("IPIPManager", func() {
 		go manager.KeepIPIPDeviceInSync(
 			ctx, 1400, manager.dpConfig.RulesConfig.IPIPTunnelAddress, false, 1*time.Second, parentNameC)
 		manager.OnUpdate(&proto.HostMetadataUpdate{
-			Hostname: "node2",
-			Ipv4Addr: "172.0.12.1/32",
+			Hostname: "host2",
+			Ipv4Addr: "10.0.1.1/32",
 		})
 
 		manager.OnUpdate(&proto.RouteUpdate{
 			Type:        proto.RouteType_REMOTE_WORKLOAD,
 			IpPoolType:  proto.IPPoolType_IPIP,
 			Dst:         "172.0.0.1/26",
-			DstNodeName: "node2",
+			DstNodeName: "host2",
 			DstNodeIp:   "172.8.8.8",
 			SameSubnet:  true,
 		})
@@ -547,8 +545,8 @@ var _ = Describe("IPIPManager", func() {
 		Expect(manager.routesDirty).To(BeTrue())
 
 		manager.OnUpdate(&proto.HostMetadataUpdate{
-			Hostname: "node1",
-			Ipv4Addr: "172.0.0.2",
+			Hostname: "host1",
+			Ipv4Addr: "10.0.0.1",
 		})
 
 		time.Sleep(2 * time.Second)
@@ -591,7 +589,6 @@ func (d *mockIPIPDataplane) ResetCalls() {
 
 func (d *mockIPIPDataplane) incCallCount() error {
 	d.NumCalls += 1
-	log.Infof("Mazdak current: %v - expected: %v", d.NumCalls, d.ErrorAtCall)
 	if d.NumCalls == d.ErrorAtCall {
 		log.Warn("Simulating an error due to call count")
 		return mockFailure
@@ -607,6 +604,7 @@ func (d *mockIPIPDataplane) LinkByName(name string) (netlink.Link, error) {
 	}
 
 	Expect(name).To(Equal("tunl0"))
+	log.Infof("Marva :%v", d.tunnelLink)
 	if d.tunnelLink == nil {
 		return nil, notFound
 	}
@@ -638,7 +636,15 @@ func (d *mockIPIPDataplane) AddrList(link netlink.Link, family int) ([]netlink.A
 		return nil, err
 	}
 
-	Expect(link.Attrs().Name).To(Equal("tunl0"))
+	name := link.Attrs().Name
+	Expect(name).Should(BeElementOf("tunl0", "eth0"))
+	if name == "eth0" {
+		return []netlink.Addr{{
+			IPNet: &net.IPNet{
+				IP: net.IPv4(10, 0, 0, 1),
+			}},
+		}, nil
+	}
 	return d.addrs, nil
 }
 
@@ -667,10 +673,18 @@ func (d *mockIPIPDataplane) LinkList() ([]netlink.Link, error) {
 	return d.links, nil
 }
 
-func (d *mockIPIPDataplane) LinkAdd(_ netlink.Link) error {
+func (d *mockIPIPDataplane) LinkAdd(l netlink.Link) error {
 	d.LinkAddCalled = true
 	if err := d.incCallCount(); err != nil {
 		return err
+	}
+	Expect(l.Attrs().Name).To(Equal("tunl0"))
+	if d.tunnelLink == nil {
+		log.Info("Creating tunnel link")
+		link := &mockLink{}
+		link.attrs.Name = "tunl0"
+		d.tunnelLinkAttrs = &link.attrs
+		d.tunnelLink = link
 	}
 	return nil
 }

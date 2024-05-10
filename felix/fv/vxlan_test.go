@@ -266,7 +266,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 				cc.CheckConnectivity()
 			})
 
-			It("Marva should have host to host connectivity", func() {
+			It("should have host to host connectivity", func() {
 				cc.ExpectSome(felixes[0], hostW[1])
 				cc.ExpectSome(felixes[1], hostW[0])
 
