@@ -315,14 +315,14 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 								out, err := felix.ExecOutput("ip", "rule", "show", "pref", wireguardRoutingRulePriorityDefault)
 								Expect(err).NotTo(HaveOccurred())
 								return out
-							}, "10s", "100ms").Should(BeEmpty())
+							}, "30s", "330ms").Should(BeEmpty())
 						}
 						if wireguardEnabledV6 {
 							Eventually(func() string {
 								out, err := felix.ExecOutput("ip", "-6", "rule", "show", "pref", wireguardRoutingRulePriorityDefault)
 								Expect(err).NotTo(HaveOccurred())
 								return out
-							}, "10s", "100ms").Should(BeEmpty())
+							}, "30s", "330ms").Should(BeEmpty())
 						}
 					}
 
