@@ -139,9 +139,11 @@ REGISTRAR_CONTAINER_FIPS_CREATED=.csi-registrar.created-$(ARCH)-fips
 
 .PHONY: image calico/pod2daemon-flexvol
 image: $(FLEXVOL_IMAGE) $(CSI_IMAGE) $(REGISTRAR_IMAGE)
-image-all: $(addprefix sub-image-,$(VALIDARCHES))
+image-all: $(addprefix sub-image-,$(VALIDARCHES))  sub-image-fips-amd64
 sub-image-%:
-	$(MAKE) image FIPS=$(FIPS) ARCH=$*
+	$(MAKE) image ARCH=$*
+sub-image-fips-%:
+	$(MAKE) image ARCH=$*	FIPS=true
 
 $(FLEXVOL_IMAGE): $(FLEXVOL_CONTAINER_MARKER)
 $(FLEXVOL_CONTAINER_CREATED): flexvol/docker-image/Dockerfile bin/flexvol-$(ARCH)
@@ -200,7 +202,7 @@ cd: image-all cd-common
 ###############################################################################
 # Release
 ###############################################################################
-release-build: .release-$(VERSION).created 
+release-build: .release-$(VERSION).created
 .release-$(VERSION).created:
 	$(MAKE) clean image-all RELEASE=true
 	$(MAKE) retag-build-images-with-registries IMAGETAG=$(VERSION) RELEASE=true
