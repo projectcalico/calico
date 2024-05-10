@@ -84,7 +84,8 @@ $(BINDIR)/kubectl-$(ARCH):
 ## Builds the controller binary and docker image.
 image-all: $(addprefix sub-image-,$(VALIDARCHES))
 sub-image-%:
-	$(MAKE) image FIPS=$(FIPS) ARCH=$*
+	$(MAKE) image ARCH=$*
+	$(MAKE) image ARCH=$*	FIPS=true
 
 image: $(KUBE_CONTROLLER_CONTAINER_MARKER)
 
