@@ -248,7 +248,8 @@ endif
 ## Create the images for all supported ARCHes
 image-all: $(addprefix sub-image-,$(VALIDARCHES))
 sub-image-%:
-	$(MAKE) image FIPS=$(FIPS) ARCH=$*
+	$(MAKE) image ARCH=$*
+	$(MAKE) image ARCH=$*	FIPS=true
 
 image $(NODE_IMAGE): register $(NODE_CONTAINER_MARKER)
 $(NODE_CONTAINER_CREATED): $(REMOTE_DEPS) ./Dockerfile.$(ARCH) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOURCE) $(NODE_CONTAINER_FILES) $(TOOLS_MOUNTNS_BINARY)

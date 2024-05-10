@@ -57,7 +57,8 @@ $(BINDIR)/test-signer-$(ARCH):
 .PHONY: image-all
 image-all: $(addprefix sub-image-,$(VALIDARCHES))
 sub-image-%:
-	$(MAKE) image FIPS=$(FIPS) ARCH=$*
+	$(MAKE) image ARCH=$*
+	$(MAKE) image ARCH=$*	FIPS=true
 
 SIGNER_CREATED=.signer.created-$(ARCH)
 
