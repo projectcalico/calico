@@ -393,9 +393,9 @@ func (m *ipipManager) CompleteDeferredWork() error {
 		m.logCtx.WithField("ipip routes", ipipRoutes).Debug("IPIP manager sending IPIP L3 updates")
 		m.routeTable.SetRoutes(m.ipipDevice, ipipRoutes)
 
-		blackholeRoutes := blackholeRoutes(m.localIPAMBlocks)
-		m.logCtx.WithField("routes", blackholeRoutes).Debug("IPIP manager sending blackhole updates")
-		m.blackholeRouteTable.SetRoutes(routetable.InterfaceNone, blackholeRoutes)
+		bhRoutes := blackholeRoutes(m.localIPAMBlocks)
+		m.logCtx.WithField("balckhole routes", bhRoutes).Debug("IPIP manager sending blackhole updates")
+		m.blackholeRouteTable.SetRoutes(routetable.InterfaceNone, bhRoutes)
 
 		if m.noEncapRouteTable != nil {
 			m.logCtx.WithField("link", m.parentIfaceName).WithField("routes", noEncapRoutes).Debug(

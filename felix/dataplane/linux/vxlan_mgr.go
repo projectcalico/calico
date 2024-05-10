@@ -443,7 +443,9 @@ func (m *vxlanManager) CompleteDeferredWork() error {
 		m.logCtx.WithField("vxlan routes", vxlanRoutes).Debug("VXLAN manager sending VXLAN L3 updates")
 		m.routeTable.SetRoutes(m.vxlanDevice, vxlanRoutes)
 
-		m.blackholeRouteTable.SetRoutes(routetable.InterfaceNone, blackholeRoutes(m.localIPAMBlocks))
+		bhRoutes := blackholeRoutes(m.localIPAMBlocks)
+		m.logCtx.WithField("blackhole routes", bhRoutes).Debug("VXLAN manager sending blackhole updates")
+		m.blackholeRouteTable.SetRoutes(routetable.InterfaceNone, bhRoutes)
 
 		if m.noEncapRouteTable != nil {
 			m.logCtx.WithField("link", m.parentIfaceName).WithField("routes", noEncapRoutes).Debug(
