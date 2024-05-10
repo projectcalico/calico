@@ -124,7 +124,8 @@ image-windows: $(WINDOWS_IMAGE_REQS)
 image: $(DEPLOY_CONTAINER_MARKER)
 image-all: $(addprefix sub-image-,$(VALIDARCHES))
 sub-image-%:
-	$(MAKE) image FIPS=$(FIPS) ARCH=$*
+	$(MAKE) image ARCH=$*
+	$(MAKE) image ARCH=$*	FIPS=true
 
 # Builds the statically compiled binaries into a container.
 $(DEPLOY_CONTAINER_STATIC_MARKER): Dockerfile build fetch-cni-bins

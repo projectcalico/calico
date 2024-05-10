@@ -104,7 +104,8 @@ image: $(BUILD_IMAGES)
 .PHONY: image-all
 image-all: $(addprefix sub-image-,$(VALIDARCHES))
 sub-image-%:
-	$(MAKE) image FIPS=$(FIPS) ARCH=$*
+	$(MAKE) image ARCH=$*
+	$(MAKE) image ARCH=$*	FIPS=true
 
 # Build the calico/typha docker image, which contains only Typha.
 .PHONY: image $(TYPHA_IMAGE)

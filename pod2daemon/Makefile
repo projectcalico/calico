@@ -141,7 +141,8 @@ REGISTRAR_CONTAINER_FIPS_CREATED=.csi-registrar.created-$(ARCH)-fips
 image: $(FLEXVOL_IMAGE) $(CSI_IMAGE) $(REGISTRAR_IMAGE)
 image-all: $(addprefix sub-image-,$(VALIDARCHES))
 sub-image-%:
-	$(MAKE) image FIPS=$(FIPS) ARCH=$*
+	$(MAKE) image ARCH=$*
+	$(MAKE) image ARCH=$*	FIPS=true
 
 $(FLEXVOL_IMAGE): $(FLEXVOL_CONTAINER_MARKER)
 $(FLEXVOL_CONTAINER_CREATED): flexvol/docker-image/Dockerfile bin/flexvol-$(ARCH)
@@ -200,7 +201,7 @@ cd: image-all cd-common
 ###############################################################################
 # Release
 ###############################################################################
-release-build: .release-$(VERSION).created 
+release-build: .release-$(VERSION).created
 .release-$(VERSION).created:
 	$(MAKE) clean image-all RELEASE=true
 	$(MAKE) retag-build-images-with-registries IMAGETAG=$(VERSION) RELEASE=true
