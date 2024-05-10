@@ -297,6 +297,10 @@ type nftablesTable struct {
 }
 
 type TableOptions struct {
+	// NewDataplane is an optional function to override the creation of the knftables client,
+	// used for testing.
+	NewDataplane func(knftables.Family, string) (knftables.Interface, error)
+
 	HistoricChainPrefixes    []string
 	ExtraCleanupRegexPattern string
 	RefreshInterval          time.Duration
@@ -384,7 +388,14 @@ func NewTable(
 		"table":     name,
 	}
 
-	nft, err := knftables.New(knftables.IPv4Family, name)
+	if options.NewDataplane == nil {
+		options.NewDataplane = knftables.New
+	}
+	fam := knftables.IPv4Family
+	if ipVersion == 6 {
+		fam = knftables.IPv6Family
+	}
+	nft, err := options.NewDataplane(fam, name)
 	if err != nil {
 		log.WithError(err).Panic("Failed to create knftables client")
 	}
@@ -742,7 +753,6 @@ func (t *nftablesTable) expectedHashesForInsertAppendChain(
 		// as insert chain/rules above.
 		ourAppendedHashes = CalculateRuleHashes(chainName+"*appends*", appendedRules, features)
 	}
-	time.Sleep(1 * time.Second)
 	offset := 0
 	for i, hash := range ourInsertedHashes {
 		allHashes[i+offset] = hash
@@ -812,11 +822,26 @@ func (t *nftablesTable) attemptToGetHashesAndRulesFromDataplane() (hashes map[st
 	defer cancel()
 	allRules, err := t.nft.ListRules(ctx, "")
 	if err != nil {
+		if isNotFound(err) {
+			err = nil
+			return
+		}
 		return nil, nil, err
 	}
 	if len(allRules) == 0 {
 		// No rules, return early.
 		t.logCxt.Warn("No rules found in nftables")
+		// If there are no rules, there may still be chains. Query for them
+		// so that we can populate entries for them if they exist.
+		var allChains []string
+		allChains, err = t.nft.List(context.Background(), "chain")
+		if err != nil {
+			return
+		}
+		for _, chain := range allChains {
+			hashes[chain] = []string{}
+			rules[chain] = []*knftables.Rule{}
+		}
 		return
 	}
 	for _, rule := range allRules {
@@ -839,6 +864,12 @@ func (t *nftablesTable) attemptToGetHashesAndRulesFromDataplane() (hashes map[st
 		}
 	}
 	return
+}
+
+// isNotFound helps distinguish errors resulting from the table not yet being programmed.
+func isNotFound(err error) bool {
+	return strings.Contains(err.Error(), "no such table") ||
+		strings.Contains(err.Error(), "No such file or directory")
 }
 
 func (t *nftablesTable) InvalidateDataplaneCache(reason string) {
@@ -985,9 +1016,15 @@ func (t *nftablesTable) applyUpdates() error {
 	t.dirtyChains.Iter(func(chainName string) error {
 		if _, present := t.desiredStateOfChain(chainName); !present {
 			// About to delete this chain, flush it first to sever dependencies.
+			t.logCxt.WithFields(logrus.Fields{
+				"chainName": chainName,
+			}).Debug("Flushing chain before deletion")
 			tx.Flush(&knftables.Chain{Name: chainName})
 		} else if _, ok := t.chainToDataplaneHashes[chainName]; !ok {
 			// Chain doesn't exist in dataplane, mark it for creation.
+			t.logCxt.WithFields(logrus.Fields{
+				"chainName": chainName,
+			}).Debug("Adding chain")
 			tx.Add(&knftables.Chain{Name: chainName})
 		}
 		return nil
@@ -1020,15 +1057,25 @@ func (t *nftablesTable) applyUpdates() error {
 					prefixFrag := t.commentFrag(currentHashes[i])
 					rendered := chain.Rules[i].Render(chainName, prefixFrag, renderInner, features)
 					rendered.Handle = t.chainToFullRules[chainName][i].Handle
+					t.logCxt.WithFields(logrus.Fields{
+						"chainName": chainName,
+						"handle":    *rendered.Handle,
+					}).Debug("Replacing rule in chain")
 					tx.Replace(rendered)
 				} else if i < len(previousHashes) {
 					// previousHashes was longer, remove the old rules from the end.
+					t.logCxt.WithFields(logrus.Fields{
+						"chainName": chainName,
+					}).Debug("Deleting old rule from end of chain")
 					tx.Delete(&knftables.Rule{
 						Chain:  chainName,
 						Handle: t.chainToFullRules[chainName][i].Handle,
 					})
 				} else {
 					// currentHashes was longer.  Append.
+					t.logCxt.WithFields(logrus.Fields{
+						"chainName": chainName,
+					}).Debug("Appending rule to chain")
 					prefixFrag := t.commentFrag(currentHashes[i])
 					tx.Add(chain.Rules[i].Render(chainName, prefixFrag, renderInner, features))
 				}
@@ -1111,6 +1158,9 @@ func (t *nftablesTable) applyUpdates() error {
 	t.dirtyChains.Iter(func(chainName string) error {
 		if _, ok := t.desiredStateOfChain(chainName); !ok {
 			// Chain deletion
+			t.logCxt.WithFields(logrus.Fields{
+				"chainName": chainName,
+			}).Debug("Deleting chain that is no longer needed")
 			tx.Delete(&knftables.Chain{Name: chainName})
 			newHashes[chainName] = nil
 		}
