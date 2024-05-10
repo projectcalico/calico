@@ -91,7 +91,8 @@ CONTAINER_FIPS_CREATED=.apiserver.created-$(ARCH)-fips
 image: $(API_SERVER_IMAGE)
 image-all: $(addprefix sub-image-,$(VALIDARCHES))
 sub-image-%:
-	$(MAKE) image FIPS=$(FIPS) ARCH=$*
+	$(MAKE) image ARCH=$*
+	$(MAKE) image ARCH=$*	FIPS=true
 
 $(API_SERVER_IMAGE): $(CONTAINER_MARKER)
 $(CONTAINER_CREATED): Dockerfile $(BINDIR)/apiserver-$(ARCH)
