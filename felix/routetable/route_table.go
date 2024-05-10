@@ -799,7 +799,7 @@ func (r *RouteTable) createL3Route(linkAttrs *netlink.LinkAttrs, target Target) 
 		route.Gw = target.GW.AsNetIP()
 	}
 
-	if target.Type == TargetTypeVXLAN || target.Type == TargetTypeNoEncap {
+	if target.Type == TargetTypeVXLAN || target.Type == TargetTypeNoEncap || target.Type == TargetTypeOnLink {
 		route.Scope = netlink.SCOPE_UNIVERSE
 		route.SetFlag(syscall.RTNH_F_ONLINK)
 	}
