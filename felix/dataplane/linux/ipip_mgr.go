@@ -68,9 +68,6 @@ type ipipManager struct {
 	activeHostnameToIP map[string]string
 	ipSetDirty         bool
 
-	// Dataplane shim.
-	dataplane ipipDataplane
-
 	// Hold pending updates.
 	routesByDest    map[string]*proto.RouteUpdate
 	localIPAMBlocks map[string]*proto.RouteUpdate
@@ -153,7 +150,6 @@ func newIPIPManager(
 		dpConfig,
 		nlHandle,
 		ipVersion,
-		realIPIPNetlink{},
 		func(interfaceRegexes []string, ipVersion uint8, netlinkTimeout time.Duration,
 			deviceRouteSourceAddress net.IP, deviceRouteProtocol netlink.RouteProtocol,
 			removeExternalRoutes bool,
@@ -173,7 +169,6 @@ func newIPIPManagerWithShim(
 	dpConfig Config,
 	nlHandle netlinkHandle,
 	ipVersion uint8,
-	dataplane ipipDataplane,
 	noEncapRTConstruct func(
 		interfacePrefixes []string, ipVersion uint8, netlinkTimeout time.Duration,
 		deviceRouteSourceAddress net.IP, deviceRouteProtocol netlink.RouteProtocol,
@@ -192,7 +187,6 @@ func newIPIPManagerWithShim(
 		ipsetsDataplane:    ipsetsDataplane,
 		activeHostnameToIP: map[string]string{},
 		myInfoChangedC:     make(chan struct{}, 1),
-		dataplane:          dataplane,
 		ipSetMetadata: ipsets.IPSetMetadata{
 			MaxSize: dpConfig.MaxIPSetSize,
 			SetID:   rules.IPSetIDAllHostNets,
@@ -562,18 +556,28 @@ func (m *ipipManager) configureIPIPDevice(mtu int, address net.IP, xsumBroken bo
 		"device":     m.ipipDevice,
 	})
 	logCxt.Debug("Configuring IPIP tunnel")
+
+	la := netlink.NewLinkAttrs()
+	la.Name = m.ipipDevice
+	ipip := &netlink.Iptun{
+		LinkAttrs: la,
+	}
+
 	link, err := m.nlHandle.LinkByName(IPIPIfaceName)
 	if err != nil {
 		m.logCtx.WithError(err).Info("Failed to get IPIP tunnel device, assuming it isn't present")
+
 		// We call out to "ip tunnel", which takes care of loading the kernel module if
 		// needed.  The tunl0 device is actually created automatically by the kernel
 		// module.
-		// TODO: fix this:
-		err := m.dataplane.RunCmd("ip", "tunnel", "add", IPIPIfaceName, "mode", "ipip")
-		if err != nil {
-			m.logCtx.WithError(err).Warning("Failed to add IPIP tunnel device")
+		if err := m.nlHandle.LinkAdd(ipip); err == syscall.EEXIST {
+			// Device already exists - likely a race.
+			m.logCtx.Debug("VXLAN device already exists, likely created by someone else.")
+		} else if err != nil {
+			// Error other than "device exists" - return it.
 			return err
 		}
+
 		link, err = m.nlHandle.LinkByName(IPIPIfaceName)
 		if err != nil {
 			m.logCtx.WithError(err).Warning("Failed to get tunnel device")
@@ -594,7 +598,7 @@ func (m *ipipManager) configureIPIPDevice(mtu int, address net.IP, xsumBroken bo
 
 	// If required, disable checksum offload.
 	if xsumBroken {
-		if err := ethtool.EthtoolTXOff("tunl0"); err != nil {
+		if err := ethtool.EthtoolTXOff(IPIPIfaceName); err != nil {
 			return fmt.Errorf("failed to disable checksum offload: %s", err)
 		}
 	}

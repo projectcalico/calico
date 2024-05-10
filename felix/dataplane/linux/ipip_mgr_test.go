@@ -78,7 +78,6 @@ var _ = Describe("IpipMgr (tunnel configuration)", func() {
 			},
 			&mockIPIPDataplane{},
 			4,
-			dataplane,
 			func(interfacePrefixes []string, ipVersion uint8, netlinkTimeout time.Duration,
 				deviceRouteSourceAddress net.IP, deviceRouteProtocol netlink.RouteProtocol,
 				removeExternalRoutes bool,
@@ -121,7 +120,7 @@ var _ = Describe("IpipMgr (tunnel configuration)", func() {
 				Expect(err).ToNot(HaveOccurred())
 			})
 			It("should avoid creating the interface", func() {
-				Expect(dataplane.RunCmdCalled).To(BeFalse())
+				Expect(dataplane.LinkAddCalled).To(BeFalse())
 			})
 			It("should avoid setting the interface UP again", func() {
 				Expect(dataplane.LinkSetUpCalled).To(BeFalse())
@@ -142,7 +141,7 @@ var _ = Describe("IpipMgr (tunnel configuration)", func() {
 
 			})
 			It("should avoid creating the interface", func() {
-				Expect(dataplane.RunCmdCalled).To(BeFalse())
+				Expect(dataplane.LinkAddCalled).To(BeFalse())
 			})
 			It("should avoid setting the interface UP again", func() {
 				Expect(dataplane.LinkSetUpCalled).To(BeFalse())
@@ -163,7 +162,7 @@ var _ = Describe("IpipMgr (tunnel configuration)", func() {
 				Expect(err).ToNot(HaveOccurred())
 			})
 			It("should avoid creating the interface", func() {
-				Expect(dataplane.RunCmdCalled).To(BeFalse())
+				Expect(dataplane.LinkAddCalled).To(BeFalse())
 			})
 			It("should avoid setting the interface UP again", func() {
 				Expect(dataplane.LinkSetUpCalled).To(BeFalse())
@@ -239,7 +238,6 @@ var _ = Describe("ipipManager IP set updates", func() {
 	var (
 		ipipMgr      *ipipManager
 		ipSets       *common.MockIPSets
-		dataplane    *mockIPIPDataplane
 		rt, brt, prt *mockRouteTable
 	)
 
@@ -248,7 +246,6 @@ var _ = Describe("ipipManager IP set updates", func() {
 	)
 
 	BeforeEach(func() {
-		dataplane = &mockIPIPDataplane{}
 		ipSets = common.NewMockIPSets()
 		rt = &mockRouteTable{
 			currentRoutes: map[string][]routetable.Target{},
@@ -274,7 +271,6 @@ var _ = Describe("ipipManager IP set updates", func() {
 				ipVersion: 4,
 			},
 			4,
-			dataplane,
 			func(interfacePrefixes []string, ipVersion uint8, netlinkTimeout time.Duration,
 				deviceRouteSourceAddress net.IP, deviceRouteProtocol netlink.RouteProtocol,
 				removeExternalRoutes bool,
@@ -417,11 +413,9 @@ var _ = Describe("ipipManager IP set updates", func() {
 var _ = Describe("IPIPManager", func() {
 	var manager *ipipManager
 	var rt, brt, prt *mockRouteTable
-	var dataplane *mockIPIPDataplane
 	var ipSets *common.MockIPSets
 
 	BeforeEach(func() {
-		dataplane = &mockIPIPDataplane{}
 		ipSets = common.NewMockIPSets()
 		rt = &mockRouteTable{
 			currentRoutes: map[string][]routetable.Target{},
@@ -450,7 +444,6 @@ var _ = Describe("IPIPManager", func() {
 				ipVersion: 4,
 			},
 			4,
-			dataplane,
 			func(interfacePrefixes []string, ipVersion uint8, netlinkTimeout time.Duration,
 				deviceRouteSourceAddress net.IP, deviceRouteProtocol netlink.RouteProtocol,
 				removeExternalRoutes bool,
@@ -578,7 +571,7 @@ type mockIPIPDataplane struct {
 	tunnelLinkAttrs *netlink.LinkAttrs
 	addrs           []netlink.Addr
 
-	RunCmdCalled     bool
+	LinkAddCalled    bool
 	LinkSetMTUCalled bool
 	LinkSetUpCalled  bool
 	AddrUpdated      bool
@@ -590,7 +583,7 @@ type mockIPIPDataplane struct {
 }
 
 func (d *mockIPIPDataplane) ResetCalls() {
-	d.RunCmdCalled = false
+	d.LinkAddCalled = false
 	d.LinkSetMTUCalled = false
 	d.LinkSetUpCalled = false
 	d.AddrUpdated = false
@@ -598,6 +591,7 @@ func (d *mockIPIPDataplane) ResetCalls() {
 
 func (d *mockIPIPDataplane) incCallCount() error {
 	d.NumCalls += 1
+	log.Infof("Mazdak current: %v - expected: %v", d.NumCalls, d.ErrorAtCall)
 	if d.NumCalls == d.ErrorAtCall {
 		log.Warn("Simulating an error due to call count")
 		return mockFailure
@@ -674,29 +668,14 @@ func (d *mockIPIPDataplane) LinkList() ([]netlink.Link, error) {
 }
 
 func (d *mockIPIPDataplane) LinkAdd(_ netlink.Link) error {
+	d.LinkAddCalled = true
+	if err := d.incCallCount(); err != nil {
+		return err
+	}
 	return nil
 }
 
 func (d *mockIPIPDataplane) LinkDel(_ netlink.Link) error {
-	return nil
-}
-
-func (d *mockIPIPDataplane) RunCmd(name string, args ...string) error {
-	d.RunCmdCalled = true
-	if err := d.incCallCount(); err != nil {
-		return err
-	}
-	log.WithFields(log.Fields{"name": name, "args": args}).Info("RunCmd called")
-	Expect(name).To(Equal("ip"))
-	Expect(args).To(Equal([]string{"tunnel", "add", "tunl0", "mode", "ipip"}))
-
-	if d.tunnelLink == nil {
-		log.Info("Creating tunnel link")
-		link := &mockLink{}
-		link.attrs.Name = "tunl0"
-		d.tunnelLinkAttrs = &link.attrs
-		d.tunnelLink = link
-	}
 	return nil
 }
 
