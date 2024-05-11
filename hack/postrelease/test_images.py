@@ -10,11 +10,11 @@ OPERATOR_IMAGE = "quay.io/tigera/operator:%s" % OPERATOR_VERSION
 # Architectures we expect to be present in multi-arch image manifests.
 EXPECTED_ARCHS = ["amd64", "arm64", "arm", "ppc64le"]
 
-# Images we expect to exist as part of a Calico release, without 
+# Images we expect to exist as part of a Calico release, without
 # a registry assigned.
 EXPECTED_IMAGES = [
   "calico/node",
-  "calico/ctl", 
+  "calico/ctl",
   "calico/apiserver",
   "calico/typha",
   "calico/cni",
@@ -25,6 +25,7 @@ EXPECTED_IMAGES = [
   "calico/pilot-webhook",
   "calico/pod2daemon-flexvol",
   "calico/csi",
+  "calico/key-cert-provisioner",
   "calico/cni-windows",
   "calico/node-windows",
 ]
@@ -71,7 +72,7 @@ def test_gcr_release_tag_present():
             'docker manifest inspect gcr.io/projectcalico-org/%s:%s | jq -r "."'
             % (gcr_name, RELEASE_VERSION)
         )
-        
+
         req = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE)
         try:
             metadata = json.loads(req.stdout.read())
@@ -83,7 +84,7 @@ def test_gcr_release_tag_present():
         found_archs = []
         for platform in metadata["manifests"]:
             found_archs.append(platform["platform"]["architecture"])
-        
+
         assert EXPECTED_ARCHS.sort() == found_archs.sort()
 
 
@@ -95,16 +96,16 @@ def test_docker_release_tag_present():
                 image_name,
                 RELEASE_VERSION,
             )
-    
+
             req = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE)
             metadata = json.loads(req.stdout.read())
             found_archs = []
             print("[INFO] metadata: %s" % metadata)
             for platform in metadata["manifests"]:
                 found_archs.append(platform["platform"]["architecture"])
-    
+
             assert EXPECTED_ARCHS.sort() == found_archs.sort()
-    
+
     for image in VPP_IMAGES:
         print("[INFO] checking %s:%s" % (image_name, RELEASE_VERSION))
         image_name = "%s:%s-calico%s" % (image, VPP_VERSION, RELEASE_VERSION,)
@@ -116,7 +117,7 @@ def test_docker_release_tag_present():
 
 def test_operator_images():
     """
-    This test verifies that the images reported by the given operator 
+    This test verifies that the images reported by the given operator
     match the expected Calico version.
     """
 
