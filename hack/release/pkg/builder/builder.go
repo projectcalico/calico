@@ -68,6 +68,7 @@ func releaseImages(version, operatorVersion string) []string {
 		fmt.Sprintf("calico/dikastes:%s", version),
 		fmt.Sprintf("calico/pod2daemon-flexvol:%s", version),
 		fmt.Sprintf("calico/csi:%s", version),
+		fmt.Sprintf("calico/key-cert-provisioner:%s", version),
 		fmt.Sprintf("calico/node-driver-registrar:%s", version),
 		fmt.Sprintf("calico/cni-windows:%s", version),
 		fmt.Sprintf("calico/node-windows:%s", version),
