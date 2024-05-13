@@ -308,6 +308,10 @@ func (rg *routeGenerator) setRoutesForKey(key string, routes []string) {
 // isAllowedExternalIP determines if the given IP is in the list of
 // allowed External IP CIDRs given in the default bgpconfiguration.
 func (rg *routeGenerator) isAllowedExternalIP(externalIP string) bool {
+	if externalIP == "" {
+		log.Debug("Skip empty service External IP")
+		return false
+	}
 	ip := net.ParseIP(externalIP)
 	if ip == nil {
 		log.Errorf("Could not parse service External IP: %s", externalIP)
@@ -327,6 +331,10 @@ func (rg *routeGenerator) isAllowedExternalIP(externalIP string) bool {
 // isAllowedLoadBalancerIP determines if the given IP is in the list of
 // allowed LoadBalancer CIDRs given in the default bgpconfiguration.
 func (rg *routeGenerator) isAllowedLoadBalancerIP(loadBalancerIP string) bool {
+	if loadBalancerIP == "" {
+		log.Debug("Skip empty service LB IP")
+		return false
+	}
 	ip := net.ParseIP(loadBalancerIP)
 	if ip == nil {
 		log.Errorf("Could not parse service LB IP: %s", loadBalancerIP)
