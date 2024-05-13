@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -810,8 +811,12 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		var routeTableIPIP routetable.RouteTableInterface
 		if !config.RouteSyncDisabled {
 			log.Debug("RouteSyncDisabled is false.")
+			ipipEncapProto := defaultRoutingProto
+			if config.DeviceRouteProtocol != syscall.RTPROT_BOOT {
+				ipipEncapProto = config.DeviceRouteProtocol
+			}
 			routeTableIPIP = routetable.New([]string{"^" + IPIPIfaceName + "$"}, 4, config.NetlinkTimeout,
-				config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, true, unix.RT_TABLE_MAIN,
+				config.DeviceRouteSourceAddress, ipipEncapProto, true, unix.RT_TABLE_MAIN,
 				dp.loopSummarizer, featureDetector, routetable.WithLivenessCB(dp.reportHealth))
 		} else {
 			log.Info("RouteSyncDisabled is true, using DummyTable.")

@@ -115,10 +115,7 @@ func newIPIPManager(
 		logrus.Errorf("IPIP manager only supports IPv4")
 		return nil
 	}
-	nlHandle, err := netlink.NewHandle()
-	if err != nil {
-		logrus.Errorf("Hassan %v", err)
-	}
+	nlHandle, _ := netlink.NewHandle()
 
 	blackHoleProto := defaultRoutingProto
 	if dpConfig.DeviceRouteProtocol != syscall.RTPROT_BOOT {
