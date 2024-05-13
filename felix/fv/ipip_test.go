@@ -394,7 +394,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 			externalClient.Stop()
 		})
 
-		It("should allow IPIP to external client iff it is in ExternalNodesCIDRList", func() {
+		It("Mazdak should allow IPIP to external client if it is in ExternalNodesCIDRList", func() {
 
 			By("testing that ext client ipip does not work if not part of ExternalNodesCIDRList")
 
@@ -448,6 +448,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 			}
 
 			By("testing that the ext client can connect via ipip")
+			time.Sleep(time.Minute * 60)
 			cc.ResetExpectations()
 			cc.ExpectSome(externalClient, w[0])
 			cc.CheckConnectivity()
