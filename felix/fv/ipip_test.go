@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -39,6 +39,8 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
+	"github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -55,8 +57,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 		infra      infrastructure.DatastoreInfra
 		tc         infrastructure.TopologyContainers
 		client     client.Interface
-		w          [2]*workload.Workload
-		hostW      [2]*workload.Workload
+		w          [3]*workload.Workload
+		hostW      [3]*workload.Workload
 		cc         *connectivity.Checker
 	)
 
@@ -65,39 +67,13 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 		if BPFMode() && getDataStoreType(infra) == "etcdv3" {
 			Skip("Skipping BPF test for etcdv3 backend.")
 		}
-		tc, client = infrastructure.StartNNodeTopology(2, infrastructure.DefaultTopologyOptions(), infra)
+		opts := infrastructure.DefaultTopologyOptions()
+		opts.IPIPEnabled = true
+		opts.VXLANMode = api.VXLANModeNever
+		opts.IPIPMode = api.IPIPModeAlways
+		tc, client = infrastructure.StartNNodeTopology(3, opts, infra)
 
-		// Install a default profile that allows all ingress and egress, in the absence of any Policy.
-		infra.AddDefaultAllow()
-
-		// Wait until the tunl0 device appears; it is created when felix inserts the ipip module
-		// into the kernel.
-		Eventually(func() error {
-			links, err := netlink.LinkList()
-			if err != nil {
-				return err
-			}
-			for _, link := range links {
-				if link.Attrs().Name == "tunl0" {
-					return nil
-				}
-			}
-			return errors.New("tunl0 wasn't auto-created")
-		}).Should(BeNil())
-
-		// Create workloads, using that profile.  One on each "host".
-		for ii := range w {
-			wIP := fmt.Sprintf("10.65.%d.2", ii)
-			wName := fmt.Sprintf("w%d", ii)
-			w[ii] = workload.Run(tc.Felixes[ii], wName, "default", wIP, "8055", "tcp")
-			w[ii].ConfigureInInfra(infra)
-
-			hostW[ii] = workload.Run(tc.Felixes[ii], fmt.Sprintf("host%d", ii), "", tc.Felixes[ii].IP, "8055", "tcp")
-		}
-
-		if bpfEnabled {
-			ensureAllNodesBPFProgramsAttached(tc.Felixes)
-		}
+		w, hostW = setupIPIPWorkloads(infra, tc, opts, client)
 
 		cc = &connectivity.Checker{}
 	})
@@ -418,7 +394,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 			externalClient.Stop()
 		})
 
-		It("should allow IPIP to external client iff it is in ExternalNodesCIDRList", func() {
+		It("Mazdak should allow IPIP to external client if it is in ExternalNodesCIDRList", func() {
 
 			By("testing that ext client ipip does not work if not part of ExternalNodesCIDRList")
 
@@ -428,7 +404,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 					Consistently(f.BPFRoutes).ShouldNot(ContainSubstring(externalClient.IP))
 				} else {
 					// Make sure that only the internal nodes are present in the ipset
-					Eventually(f.IPSetSizeFn("cali40all-hosts-net"), "5s", "200ms").Should(Equal(2))
+					Eventually(f.IPSetSizeFn("cali40all-hosts-net"), "5s", "200ms").Should(Equal(3))
 				}
 			}
 
@@ -472,6 +448,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 			}
 
 			By("testing that the ext client can connect via ipip")
+			time.Sleep(time.Minute * 60)
 			cc.ResetExpectations()
 			cc.ExpectSome(externalClient, w[0])
 			cc.CheckConnectivity()
@@ -514,4 +491,52 @@ func getDataStoreType(infra infrastructure.DatastoreInfra) string {
 	default:
 		return "kubernetes"
 	}
+}
+
+func setupIPIPWorkloads(infra infrastructure.DatastoreInfra, tc infrastructure.TopologyContainers, to infrastructure.TopologyOptions, client client.Interface) (w, hostW [3]*workload.Workload) {
+	// Install a default profile that allows all ingress and egress, in the absence of any Policy.
+	infra.AddDefaultAllow()
+
+	// Wait until the tunl0 device appears; it is created when felix inserts the ipip module
+	// into the kernel.
+	Eventually(func() error {
+		links, err := netlink.LinkList()
+		if err != nil {
+			return err
+		}
+		for _, link := range links {
+			if link.Attrs().Name == "tunl0" {
+				return nil
+			}
+		}
+		return errors.New("tunl0 wasn't auto-created")
+	}).Should(BeNil())
+
+	// Create workloads, using that profile.  One on each "host".
+	_, IPv4CIDR, err := net.ParseCIDR(to.IPPoolCIDR)
+	Expect(err).To(BeNil())
+	for ii := range w {
+		wIP := fmt.Sprintf("%d.%d.%d.2", IPv4CIDR.IP[0], IPv4CIDR.IP[1], ii)
+		wName := fmt.Sprintf("w%d", ii)
+		err := client.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
+			IP:       net.MustParseIP(wIP),
+			HandleID: &wName,
+			Attrs: map[string]string{
+				ipam.AttributeNode: tc.Felixes[ii].Hostname,
+			},
+			Hostname: tc.Felixes[ii].Hostname,
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		w[ii] = workload.Run(tc.Felixes[ii], wName, "default", wIP, "8055", "tcp")
+		w[ii].ConfigureInInfra(infra)
+
+		hostW[ii] = workload.Run(tc.Felixes[ii], fmt.Sprintf("host%d", ii), "", tc.Felixes[ii].IP, "8055", "tcp")
+	}
+
+	if BPFMode() {
+		ensureAllNodesBPFProgramsAttached(tc.Felixes)
+	}
+
+	return
 }
