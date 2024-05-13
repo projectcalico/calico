@@ -132,6 +132,7 @@ const (
 	IfaceTypeNAT
 	IfaceTypeBond
 	IfaceTypeBondSlave
+	IfaceTypeUnknown
 )
 
 type attachPoint interface {
@@ -956,13 +957,30 @@ func (m *bpfEndpointManager) reclaimFilterIdx(name string, iface *bpfInterface) 
 	}
 }
 
+func (m *bpfEndpointManager) getIfTypeFlags(name string) uint32 {
+	flags := uint32(0)
+	if m.isWorkloadIface(name) {
+		flags |= ifstate.FlgWEP
+	} else if m.interfaceAutoDetection == string(apiv3.BPFInterfaceAutoDetectionEnabled) {
+		val := m.nameToIfaceType[name]
+		switch val {
+		case IfaceTypeData:
+			flags |= ifstate.FlgHost
+		case IfaceTypeTunnel:
+			flags |= ifstate.FlgTunnel
+		case IfaceTypeBond:
+			flags |= ifstate.FlgBond
+		case IfaceTypeBondSlave:
+			flags |= ifstate.FlgBondSlave
+		}
+	}
+	return flags
+}
+
 func (m *bpfEndpointManager) updateIfaceStateMap(name string, iface *bpfInterface) {
 	k := ifstate.NewKey(uint32(iface.info.ifIndex))
 	if iface.info.ifaceIsUp() {
-		flags := uint32(0)
-		if m.isWorkloadIface(name) {
-			flags |= ifstate.FlgWEP
-		}
+		flags := m.getIfTypeFlags(name)
 		if iface.dpState.v4Readiness != ifaceNotReady {
 			flags |= ifstate.FlgIPv4Ready
 		}
@@ -1025,24 +1043,29 @@ func (m *bpfEndpointManager) cleanupOldAttach(iface string, ai bpf.EPAttachInfo)
 		}
 	}
 	if ai.Ingress != 0 || ai.Egress != 0 {
-		ap := tc.AttachPoint{
-			AttachPoint: bpf.AttachPoint{
-				Iface: iface,
-				Hook:  hook.Egress,
-			},
-		}
-
-		if err := m.dp.ensureNoProgram(&ap); err != nil {
-			return fmt.Errorf("tc egress: %w", err)
-		}
-
-		ap.Hook = hook.Ingress
-
-		if err := m.dp.ensureNoProgram(&ap); err != nil {
-			return fmt.Errorf("tc ingress: %w", err)
-		}
+		return m.cleanupTcProgram(iface)
 	}
 
+	return nil
+}
+
+func (m *bpfEndpointManager) cleanupTcProgram(iface string) error {
+	ap := tc.AttachPoint{
+		AttachPoint: bpf.AttachPoint{
+			Iface: iface,
+			Hook:  hook.Egress,
+		},
+	}
+
+	if err := m.dp.ensureNoProgram(&ap); err != nil {
+		return fmt.Errorf("tc egress: %w", err)
+	}
+
+	ap.Hook = hook.Ingress
+
+	if err := m.dp.ensureNoProgram(&ap); err != nil {
+		return fmt.Errorf("tc ingress: %w", err)
+	}
 	return nil
 }
 
@@ -1060,14 +1083,38 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceStateUpdate) {
 	}
 
 	if m.interfaceAutoDetection == string(apiv3.BPFInterfaceAutoDetectionEnabled) && !m.isWorkloadIface(update.Name) {
+		// If the interface is deleted, remove the iface from the map.
 		if update.State == ifacemonitor.StateNotPresent {
 			delete(m.nameToIfaceType, update.Name)
 		} else {
-			// Interface is going down. Check if the interface was a slave device of a bond interface.
-			// If so, update the iface type because it could have been removed from the bond.
-			val, ok := m.nameToIfaceType[update.Name]
-			if !ok || val == IfaceTypeBondSlave {
-				m.updateIfaceType(update.Name)
+			curIfType := IfaceTypeUnknown
+			if val, ok := m.nameToIfaceType[update.Name]; ok {
+				curIfType = val
+			}
+			// Update the iface type
+			m.updateIfaceType(update.Name)
+			// Bonds can be created dynamically. An interface can be added or removed from the bond dynamically.
+			// When an interface is added to the bond, clean up the tc program attached and remove the entry from the
+			// ifstate map.
+			if curIfType != IfaceTypeBondSlave && m.nameToIfaceType[update.Name] == IfaceTypeBondSlave {
+				err := m.cleanupTcProgram(update.Name)
+				if err != nil {
+					log.WithError(err).Warnf("Failed to detach old programs from now unused device '%s'", update.Name)
+				}
+				m.withIface(update.Name, func(iface *bpfInterface) (forceDiry bool) {
+					if m.wildcardExists && reflect.DeepEqual(m.hostIfaceToEpMap[update.Name], m.wildcardHostEndpoint) {
+						log.Debugf("Unmap host-* endpoint for %v", update.Name)
+						m.removeHEPFromIndexes(update.Name, &m.wildcardHostEndpoint)
+						delete(m.hostIfaceToEpMap, update.Name)
+					}
+					m.deleteIfaceCounters(update.Name, iface.info.ifIndex)
+					iface.dpState.v4Readiness = ifaceNotReady
+					iface.dpState.v6Readiness = ifaceNotReady
+					iface.info.isUP = false
+					m.updateIfaceStateMap(update.Name, iface)
+					iface.info.ifIndex = 0
+					return false
+				})
 			}
 		}
 	}
@@ -2864,7 +2911,7 @@ func (m *bpfEndpointManager) isWorkloadIface(iface string) bool {
 func (m *bpfEndpointManager) isDataIface(iface string) bool {
 	if m.interfaceAutoDetection == string(apiv3.BPFInterfaceAutoDetectionEnabled) {
 		if val, ok := m.nameToIfaceType[iface]; ok {
-			return val == IfaceTypeData || val == IfaceTypeTunnel
+			return val == IfaceTypeData || val == IfaceTypeTunnel || val == IfaceTypeBond
 		}
 		return false
 	}
@@ -4001,6 +4048,14 @@ func (m *bpfEndpointManager) autoDetectInterfaceType(intf *net.Interface) IfaceT
 		return IfaceTypeLoopback
 	}
 
+	if isBondSlaveIface(name) {
+		return IfaceTypeBondSlave
+	}
+
+	if isBondIface(name) {
+		return IfaceTypeBond
+	}
+
 	addrs, _ := intf.Addrs()
 	// Interface has IPv4/IPv6 address but no mac
 	if len(intf.HardwareAddr) == 0 && len(addrs) > 0 {
@@ -4010,6 +4065,22 @@ func (m *bpfEndpointManager) autoDetectInterfaceType(intf *net.Interface) IfaceT
 	// Check if the interface is bond. If so, update the interface type for
 	// slaves, master.
 	return IfaceTypeData
+}
+
+func isBondSlaveIface(name string) bool {
+	bonding_slave := fmt.Sprintf("/sys/class/net/%s/bonding_slave", name)
+	if _, err := os.Stat(bonding_slave); err == nil {
+		return true
+	}
+	return false
+}
+
+func isBondIface(name string) bool {
+	bonding := fmt.Sprintf("/sys/class/net/%s/bonding", name)
+	if _, err := os.Stat(bonding); err == nil {
+		return true
+	}
+	return false
 }
 
 func newJumpMapAlloc(entryPoints int) *jumpMapAlloc {
