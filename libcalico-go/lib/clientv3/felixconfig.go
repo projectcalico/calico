@@ -113,6 +113,10 @@ func setDefaults(fc *apiv3.FelixConfiguration) {
 		disabled := apiv3.FloatingIPsDisabled
 		fc.Spec.FloatingIPs = &disabled
 	}
+	if fc.Spec.BPFInterfaceAutoDetection == nil {
+		enabled := apiv3.BPFInterfaceAutoDetectionEnabled
+		fc.Spec.BPFInterfaceAutoDetection = &enabled
+	}
 	if fc.Spec.BPFConnectTimeLoadBalancing == nil {
 		tcp := apiv3.BPFConnectTimeLBTCP
 		fc.Spec.BPFConnectTimeLoadBalancing = &tcp
