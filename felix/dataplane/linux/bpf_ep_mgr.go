@@ -972,6 +972,8 @@ func (m *bpfEndpointManager) getIfTypeFlags(name string) uint32 {
 			flags |= ifstate.FlgBond
 		case IfaceTypeBondSlave:
 			flags |= ifstate.FlgBondSlave
+		case IfaceTypeL3:
+			flags |= ifstate.FlgL3
 		}
 	}
 	return flags

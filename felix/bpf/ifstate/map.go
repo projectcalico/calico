@@ -46,7 +46,8 @@ const (
 	FlgBond      = uint32(0x10)
 	FlgBondSlave = uint32(0x20)
 	FlgTunnel    = uint32(0x40)
-	FlgMax       = uint32(0x7f)
+	FlgL3        = uint32(0x80)
+	FlgMax       = uint32(0xff)
 )
 
 var flagsToStr = map[uint32]string{
@@ -57,6 +58,7 @@ var flagsToStr = map[uint32]string{
 	FlgBond:      "bond",
 	FlgBondSlave: "bondslave",
 	FlgTunnel:    "tunnel",
+	FlgL3:        "l3",
 }
 
 var MapParams = maps.MapParameters{
