@@ -53,7 +53,7 @@ blocks:
     task:
       agent:
         machine:
-          type: s1-aws-arm64-2
+          type: s1-aws-arm64-4
       jobs:
         - name: Linux arm64
           commands:
