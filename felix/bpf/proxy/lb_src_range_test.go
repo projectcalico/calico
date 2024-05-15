@@ -68,7 +68,7 @@ func testfn(makeIPs func(ips []string) proxy.K8sServicePortOption) {
 			),
 		},
 		EpsMap: k8sp.EndpointsMap{
-			svcKey: []k8sp.Endpoint{proxy.NewEndpointInfo("", 0, "10.1.0.1:5555", false, false, false, false, nil)},
+			svcKey: []k8sp.Endpoint{proxy.NewEndpointInfo("10.1.0.1", 5555, false, false, false, false, nil)},
 		},
 	}
 	makestep := func(step func()) func() {
