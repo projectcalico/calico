@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -131,6 +131,12 @@ var selectorTests = []selectorTest{
 	{`global()`, []map[string]string{{}}, []map[string]string{}},
 	{` global()`, []map[string]string{{}}, []map[string]string{}},
 	{` global()`, []map[string]string{{"a": "b"}}, []map[string]string{}},
+	{`self()`, []map[string]string{{}}, []map[string]string{}},
+	{` self()`, []map[string]string{{}}, []map[string]string{}},
+	{` self()`, []map[string]string{{"a": "b"}}, []map[string]string{}},
+	{`notself()`, []map[string]string{{}}, []map[string]string{}},
+	{` notself()`, []map[string]string{{}}, []map[string]string{}},
+	{` notself()`, []map[string]string{{"a": "b"}}, []map[string]string{}},
 
 	{`a == 'a'`, []map[string]string{}, []map[string]string{{"a": "b"}}},
 	{`a == 'a'`, []map[string]string{}, []map[string]string{{}}},
