@@ -46,7 +46,7 @@ func makeSvcEpsPair(svcIdx, epCnt, port int, opts ...K8sServicePortOption) (k8sp
 
 	eps := make([]k8sp.Endpoint, epCnt)
 	for j := 0; j < epCnt; j++ {
-		eps[j] = NewEndpointInfo("", 0, fmt.Sprintf("11.1.1.1:%d", j+1), false, false, false, false, nil)
+		eps[j] = NewEndpointInfo("11.1.1.1", j+1, false, false, false, false, nil)
 	}
 
 	return svc, eps
