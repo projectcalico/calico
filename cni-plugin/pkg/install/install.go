@@ -183,6 +183,7 @@ func Install(version string) error {
 	// Place the new binaries if the directory is writeable.
 	dirs := []string{winutils.GetHostPath("/host/opt/cni/bin"), winutils.GetHostPath("/host/secondary-bin-dir")}
 	binsWritten := false
+	calicoBinaryOK := false
 	for _, d := range dirs {
 		if err := fileutil.IsDirWriteable(d); err != nil {
 			logrus.Infof("%s is not writeable, skipping", d)
@@ -215,6 +216,15 @@ func Install(version string) error {
 				logrus.WithError(err).Errorf("Failed to install %s", target)
 				os.Exit(1)
 			}
+			// Verify if the binary was installed successfully, exit (to retry) otherwise
+			binaryOK, err := destinationUptoDate(source, target)
+			if err != nil || !binaryOK {
+				logrus.WithError(err).Errorf("Failed to verify installed binary %s", target)
+				os.Exit(1)
+			}
+			if binary.Name() == "calico" || binary.Name() == "calico.exe" {
+				calicoBinaryOK = true
+			}
 			logrus.Infof("Installed %s", target)
 		}
 
@@ -222,17 +232,7 @@ func Install(version string) error {
 		logrus.Infof("Wrote Calico CNI binaries to %s\n", d)
 		binsWritten = true
 
-		// Instead of executing 'calico -v', check if the calico binary was copied successfully
-		calicoBinaryName := "calico"
-		if runtime.GOOS == "windows" {
-			calicoBinaryName = "calico.exe"
-		}
-		calicoBinaryOK, err := destinationUptoDate(containerBinDir+"/"+calicoBinaryName, d+"/"+calicoBinaryName)
-		if err != nil {
-			logrus.WithError(err).Warnf("Failed verifying installed binary, exiting")
-			return err
-		}
-		// Print version number successful
+		// Print version number if it was successfully installed
 		if calicoBinaryOK {
 			logrus.Infof("CNI plugin version: %s", version)
 		}
