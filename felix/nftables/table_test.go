@@ -22,6 +22,7 @@ import (
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/iptables/testutils"
 	"github.com/projectcalico/calico/felix/logutils"
+	"github.com/projectcalico/calico/felix/nftables"
 	. "github.com/projectcalico/calico/felix/nftables"
 	"sigs.k8s.io/knftables"
 
@@ -51,11 +52,11 @@ var expectedBaseChains = []string{
 var _ = Describe("Table with an empty dataplane", func() {
 	var table generictables.Table
 	var featureDetector *environment.FeatureDetector
-	var nft *knftables.Fake
+	var f *fakeNFT
 	BeforeEach(func() {
 		newDataplane := func(fam knftables.Family, name string) (knftables.Interface, error) {
-			nft = knftables.NewFake(fam, name)
-			return nft, nil
+			f = NewFake(fam, name)
+			return f, nil
 		}
 		featureDetector = environment.NewFeatureDetector(nil)
 		table = NewTable(
@@ -76,7 +77,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 		Expect(table.Apply()).To(BeNumerically("<", 100*time.Millisecond))
 
 		// Expect our base chains to have been created.
-		chains, err := nft.List(context.TODO(), "chain")
+		chains, err := f.List(context.TODO(), "chain")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(chains)).To(Equal(14))
 	})
@@ -89,9 +90,10 @@ var _ = Describe("Table with an empty dataplane", func() {
 		Expect(table.Apply()).To(BeNumerically("<", 100*time.Millisecond))
 
 		// The chain isn't referenced yet, so shouldn't show up.
-		chains, err := nft.List(context.TODO(), "chain")
+		chains, err := f.List(context.TODO(), "chain")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(chains).To(ConsistOf(expectedBaseChains))
+		Expect(f.transactions).To(HaveLen(1))
 
 		// Add a rule to a base chain that references it. This should trigger programming.
 		jumpChain := generictables.Chain{
@@ -105,12 +107,211 @@ var _ = Describe("Table with an empty dataplane", func() {
 		}
 		table.UpdateChain(&jumpChain)
 		Expect(table.Apply()).To(BeNumerically("<", 100*time.Millisecond))
+		Expect(f.transactions).To(HaveLen(2))
 
 		// We should see the new chain appear now.
-		chains, err = nft.List(context.TODO(), "chain")
+		chains, err = f.List(context.TODO(), "chain")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(chains).To(ConsistOf(append(expectedBaseChains, chain.Name)))
+
+		// Delete the rule and confirm it is removed.
+		jumpChainCp := jumpChain
+		jumpChainCp.Rules = nil
+		table.UpdateChain(&jumpChainCp)
+		Expect(table.Apply()).To(BeNumerically("<", 100*time.Millisecond))
+		Expect(f.transactions).To(HaveLen(3))
+
+		// We should see the chain removed since it is no longer referenced.
+		chains, err = f.List(context.TODO(), "chain")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(chains).NotTo(ContainElement(chain.Name))
 	})
+
+	It("should ignore delete of nonexistent chain", func() {
+		// Apply the base chains.
+		table.Apply()
+		Expect(f.transactions).To(HaveLen(1))
+
+		// Remove a non-existent chain. It should not trigger any new updates.
+		table.RemoveChains([]*generictables.Chain{
+			{Name: "cali-foobar", Rules: []generictables.Rule{{Match: nftables.Match(), Action: AcceptAction{}}}},
+		})
+		table.Apply()
+		Expect(f.transactions).To(HaveLen(1))
+	})
+
+	It("Should defer updates until Apply is called", func() {
+		table.InsertOrAppendRules("filter-FORWARD", []generictables.Rule{
+			{Match: nftables.Match(), Action: DropAction{}},
+		})
+		table.UpdateChains([]*generictables.Chain{
+			{Name: "cali-foobar", Rules: []generictables.Rule{{Match: nftables.Match(), Action: AcceptAction{}}}},
+		})
+		Expect(f.transactions).To(BeEmpty())
+		table.Apply()
+		Expect(f.transactions).NotTo(BeEmpty())
+	})
+
+	It("Should panic on nft failures", func() {
+		// Insert rules into a non-existent chain.
+		table.InsertOrAppendRules("badchain", []generictables.Rule{
+			{Match: nftables.Match(), Action: DropAction{}},
+		})
+		Expect(func() {
+			table.Apply()
+		}).To(Panic())
+	})
+
+	Describe("after inserting a rule", func() {
+		BeforeEach(func() {
+			table.InsertOrAppendRules("filter-FORWARD", []generictables.Rule{
+				{Match: nftables.Match(), Action: DropAction{}},
+			})
+			table.Apply()
+			Expect(f.transactions).To(HaveLen(1))
+		})
+
+		It("should be in the dataplane", func() {
+			rules, err := f.ListRules(context.TODO(), "filter-FORWARD")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(rules).To(HaveLen(1))
+			Expect(rules).To(ContainRule(knftables.Rule{
+				Chain:   "filter-FORWARD",
+				Rule:    "counter drop",
+				Comment: ptr("cali:TLSb4S0a53EKxjpX;"),
+			}))
+		})
+
+		It("further inserts should be idempotent", func() {
+			table.InsertOrAppendRules("filter-FORWARD", []generictables.Rule{
+				{Match: nftables.Match(), Action: DropAction{}},
+			})
+			table.Apply()
+
+			rules, err := f.ListRules(context.TODO(), "filter-FORWARD")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(rules).To(HaveLen(1))
+			Expect(rules).To(ContainRule(knftables.Rule{
+				Chain:   "filter-FORWARD",
+				Rule:    "counter drop",
+				Comment: ptr("cali:TLSb4S0a53EKxjpX;"),
+			}))
+		})
+
+		Describe("after inserting a rule then updating the insertions", func() {
+			BeforeEach(func() {
+				table.InsertOrAppendRules("filter-FORWARD", []generictables.Rule{
+					{Match: nftables.Match(), Action: DropAction{}},
+					{Match: nftables.Match(), Action: AcceptAction{}},
+					{Match: nftables.Match(), Action: DropAction{}},
+					{Match: nftables.Match(), Action: AcceptAction{}},
+				})
+				table.Apply()
+				Expect(f.transactions).To(HaveLen(2))
+			})
+
+			It("should update the dataplane", func() {
+				rules, err := f.ListRules(context.TODO(), "filter-FORWARD")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(rules).To(HaveLen(4))
+				Expect(rules).To(EqualRules([]knftables.Rule{
+					{Chain: "filter-FORWARD", Rule: "counter drop", Comment: ptr("cali:TLSb4S0a53EKxjpX;")},
+					{Chain: "filter-FORWARD", Rule: "counter accept", Comment: ptr("cali:d1SpgHRrivJCC5tn;")},
+					{Chain: "filter-FORWARD", Rule: "counter drop", Comment: ptr("cali:PGo0WoUKFrh-veBf;")},
+					{Chain: "filter-FORWARD", Rule: "counter accept", Comment: ptr("cali:KoxH5YgfppiUxhXz;")},
+				}))
+			})
+
+			Describe("after another process removes the insertion (empty chain)", func() {
+				BeforeEach(func() {
+					// Remove the chains out-of-band from the Table.
+					rules, err := f.ListRules(context.TODO(), "filter-FORWARD")
+					Expect(err).NotTo(HaveOccurred())
+					tx := f.NewTransaction()
+					for _, r := range rules {
+						tx.Delete(r)
+					}
+					Expect(f.Run(context.TODO(), tx)).NotTo(HaveOccurred())
+					rules, err = f.ListRules(context.TODO(), "filter-FORWARD")
+					Expect(err).NotTo(HaveOccurred())
+					Expect(rules).To(HaveLen(0), "Failed to clean up rules!")
+				})
+
+				expectDataplaneFixed := func() {
+					rules, err := f.ListRules(context.TODO(), "filter-FORWARD")
+					Expect(err).NotTo(HaveOccurred())
+					Expect(rules).To(EqualRules([]knftables.Rule{
+						{
+							Chain:   "filter-FORWARD",
+							Rule:    "counter drop",
+							Comment: ptr("cali:TLSb4S0a53EKxjpX;"),
+						},
+					}))
+				}
+				// expectDataplaneUntouched := func() {
+				// 	rules, err := f.ListRules(context.TODO(), "filter-FORWARD")
+				// 	Expect(err).NotTo(HaveOccurred())
+				// 	Expect(rules).To(EqualRules([]knftables.Rule{}))
+				// }
+
+				It("should put it back on the next explicit refresh", func() {
+					table.InvalidateDataplaneCache("test")
+					table.Apply()
+					expectDataplaneFixed()
+				})
+				// shouldNotBeFixedAfter := func(delay time.Duration) func() {
+				// 	return func() {
+				// 		dataplane.AdvanceTimeBy(delay)
+				// 		table.Apply()
+				// 		expectDataplaneUntouched()
+				// 	}
+				// }
+				// shouldBeFixedAfter := func(delay time.Duration) func() {
+				// 	return func() {
+				// 		dataplane.AdvanceTimeBy(delay)
+				// 		table.Apply()
+				// 		expectDataplaneFixed()
+				// 	}
+				// }
+				// It("should defer recheck of the dataplane until after first recheck time",
+				// 	shouldNotBeFixedAfter(49*time.Millisecond))
+				// It("should recheck the dataplane if time has advanced far enough",
+				// 	shouldBeFixedAfter(50*time.Millisecond))
+				// It("should recheck the dataplane even if one of the recheck steps was missed",
+				// 	shouldBeFixedAfter(500*time.Millisecond))
+				// It("should recheck the dataplane even if one of the recheck steps was missed",
+				// 	shouldBeFixedAfter(2000*time.Millisecond))
+			})
+		})
+	})
+
+	// Describe("after another process replaces the insertion (non-empty chain)", func() {
+	// 	BeforeEach(func() {
+	// 		dataplane.Chains = map[string][]string{
+	// 			"FORWARD": {
+	// 				`-A FORWARD -j ufw-before-logging-forward`,
+	// 				`-A FORWARD -j ufw-before-forward`,
+	// 				`-A FORWARD -j ufw-after-forward`,
+	// 			},
+	// 			"INPUT":  {},
+	// 			"OUTPUT": {},
+	// 		}
+	// 	})
+	// 	It("should put it back on the next refresh", func() {
+	// 		table.InvalidateDataplaneCache("test")
+	// 		table.Apply()
+	// 		Expect(dataplane.Chains).To(Equal(map[string][]string{
+	// 			"FORWARD": {
+	// 				`-m comment --comment "cali:hecdSCslEjdBPBPo" --jump DROP`,
+	// 				`-A FORWARD -j ufw-before-logging-forward`,
+	// 				`-A FORWARD -j ufw-before-forward`,
+	// 				`-A FORWARD -j ufw-after-forward`,
+	// 			},
+	// 			"INPUT":  {},
+	// 			"OUTPUT": {},
+	// 		}))
+	// 	})
+	// })
 })
 
 // 	Describe("with nftables returning an nft error", func() {
@@ -125,201 +326,9 @@ var _ = Describe("Table with an empty dataplane", func() {
 // 		})
 // 	})
 //
-// 	It("should load the dataplane state on first Apply()", func() {
-// 		Expect(dataplane.CmdNames).To(BeEmpty())
-// 		table.Apply()
-// 		// Should only load, since there's nothing to so.
-// 		Expect(dataplane.CmdNames).To(Equal([]string{
-// 			"iptables",
-// 			"iptables-nft-save",
-// 		}))
-// 	})
 //
-// 	It("should have a refresh scheduled at start-of-day", func() {
-// 		Expect(table.Apply()).To(Equal(50 * time.Millisecond))
-// 	})
 //
-// 	It("Should defer updates until Apply is called", func() {
-// 		table.InsertOrAppendRules("FORWARD", []generictables.Rule{
-// 			{Match: nftables.Match(), Action: DropAction{}},
-// 		})
-// 		table.UpdateChains([]*generictables.Chain{
-// 			{Name: "cali-foobar", Rules: []generictables.Rule{{Match: nftables.Match(), Action: AcceptAction{}}}},
-// 		})
-// 		Expect(dataplane.CmdNames).To(BeEmpty())
-// 		table.Apply()
-// 		if dataplaneMode == "nft" {
-// 			Expect(dataplane.CmdNames).To(Equal([]string{
-// 				"iptables",
-// 				"iptables-nft-save",
-// 				"iptables-nft-restore",
-// 			}))
-// 		} else {
-// 			Expect(dataplane.CmdNames).To(Equal([]string{
-// 				"iptables",
-// 				"iptables-save",
-// 				"iptables-restore",
-// 			}))
-// 		}
-// 	})
 //
-// 	It("should ignore delete of nonexistent chain", func() {
-// 		table.RemoveChains([]*generictables.Chain{
-// 			{Name: "cali-foobar", Rules: []generictables.Rule{{Match: nftables.Match(), Action: AcceptAction{}}}},
-// 		})
-// 		table.Apply()
-// 		Expect(dataplane.DeletedChains).To(BeEmpty())
-// 	})
-//
-// 	It("should police the insert mode", func() {
-// 		Expect(func() {
-// 			NewTable(
-// 				"filter",
-// 				4,
-// 				rules.RuleHashPrefix,
-// 				featureDetector,
-// 				TableOptions{
-// 					HistoricChainPrefixes: rules.AllHistoricChainNamePrefixes,
-// 					NewCmdOverride:        dataplane.NewCmd,
-// 					SleepOverride:         dataplane.Sleep,
-// 					LookPathOverride:      testutils.LookPathAll,
-// 					OpRecorder:            logutils.NewSummarizer("test loop"),
-// 				},
-// 			)
-// 		}).To(Panic())
-// 	})
-//
-// 	Describe("after inserting a rule", func() {
-// 		BeforeEach(func() {
-// 			table.InsertOrAppendRules("FORWARD", []generictables.Rule{
-// 				{Match: nftables.Match(), Action: DropAction{}},
-// 			})
-// 			table.Apply()
-// 		})
-// 		It("should be in the dataplane", func() {
-// 			Expect(dataplane.Chains).To(Equal(map[string][]string{
-// 				"FORWARD": {`-m comment --comment "cali:hecdSCslEjdBPBPo" --jump DROP`},
-// 				"INPUT":   {},
-// 				"OUTPUT":  {},
-// 			}))
-// 		})
-// 		It("further inserts should be idempotent", func() {
-// 			table.InsertOrAppendRules("FORWARD", []generictables.Rule{
-// 				{Match: nftables.Match(), Action: DropAction{}},
-// 			})
-// 			dataplane.ResetCmds()
-// 			table.Apply()
-// 			Expect(dataplane.Chains).To(Equal(map[string][]string{
-// 				"FORWARD": {`-m comment --comment "cali:hecdSCslEjdBPBPo" --jump DROP`},
-// 				"INPUT":   {},
-// 				"OUTPUT":  {},
-// 			}))
-// 			// Should do a save but then figure out that there's nothing to do
-// 			Expect(dataplane.CmdNames).To(ConsistOf("iptables", "iptables-nft-save"))
-// 		})
-//
-// 		Describe("after inserting a rule then updating the insertions", func() {
-// 			BeforeEach(func() {
-// 				table.InsertOrAppendRules("FORWARD", []generictables.Rule{
-// 					{Match: nftables.Match(), Action: DropAction{}},
-// 					{Match: nftables.Match(), Action: AcceptAction{}},
-// 					{Match: nftables.Match(), Action: DropAction{}},
-// 					{Match: nftables.Match(), Action: AcceptAction{}},
-// 				})
-// 				table.Apply()
-// 			})
-// 			It("should update the dataplane", func() {
-// 				Expect(dataplane.Chains).To(Equal(map[string][]string{
-// 					"FORWARD": {
-// 						"-m comment --comment \"cali:hecdSCslEjdBPBPo\" --jump DROP",
-// 						"-m comment --comment \"cali:plvr29-ZiKUwbzDV\" --jump ACCEPT",
-// 						"-m comment --comment \"cali:BMJ7gfua-eMLZ8Gu\" --jump DROP",
-// 						"-m comment --comment \"cali:rmnR1gc8haxMy_0W\" --jump ACCEPT",
-// 					},
-// 					"INPUT":  {},
-// 					"OUTPUT": {},
-// 				}))
-// 			})
-// 		})
-//
-// 		Describe("after another process removes the insertion (empty chain)", func() {
-// 			BeforeEach(func() {
-// 				dataplane.Chains = map[string][]string{
-// 					"FORWARD": {},
-// 					"INPUT":   {},
-// 					"OUTPUT":  {},
-// 				}
-// 			})
-// 			expectDataplaneFixed := func() {
-// 				Expect(dataplane.Chains).To(Equal(map[string][]string{
-// 					"FORWARD": {`-m comment --comment "cali:hecdSCslEjdBPBPo" --jump DROP`},
-// 					"INPUT":   {},
-// 					"OUTPUT":  {},
-// 				}))
-// 			}
-// 			expectDataplaneUntouched := func() {
-// 				Expect(dataplane.Chains).To(Equal(map[string][]string{
-// 					"FORWARD": {},
-// 					"INPUT":   {},
-// 					"OUTPUT":  {},
-// 				}))
-// 			}
-// 			It("should put it back on the next explicit refresh", func() {
-// 				table.InvalidateDataplaneCache("test")
-// 				table.Apply()
-// 				expectDataplaneFixed()
-// 			})
-// 			shouldNotBeFixedAfter := func(delay time.Duration) func() {
-// 				return func() {
-// 					dataplane.AdvanceTimeBy(delay)
-// 					table.Apply()
-// 					expectDataplaneUntouched()
-// 				}
-// 			}
-// 			shouldBeFixedAfter := func(delay time.Duration) func() {
-// 				return func() {
-// 					dataplane.AdvanceTimeBy(delay)
-// 					table.Apply()
-// 					expectDataplaneFixed()
-// 				}
-// 			}
-// 			It("should defer recheck of the dataplane until after first recheck time",
-// 				shouldNotBeFixedAfter(49*time.Millisecond))
-// 			It("should recheck the dataplane if time has advanced far enough",
-// 				shouldBeFixedAfter(50*time.Millisecond))
-// 			It("should recheck the dataplane even if one of the recheck steps was missed",
-// 				shouldBeFixedAfter(500*time.Millisecond))
-// 			It("should recheck the dataplane even if one of the recheck steps was missed",
-// 				shouldBeFixedAfter(2000*time.Millisecond))
-// 		})
-// 		Describe("after another process replaces the insertion (non-empty chain)", func() {
-// 			BeforeEach(func() {
-// 				dataplane.Chains = map[string][]string{
-// 					"FORWARD": {
-// 						`-A FORWARD -j ufw-before-logging-forward`,
-// 						`-A FORWARD -j ufw-before-forward`,
-// 						`-A FORWARD -j ufw-after-forward`,
-// 					},
-// 					"INPUT":  {},
-// 					"OUTPUT": {},
-// 				}
-// 			})
-// 			It("should put it back on the next refresh", func() {
-// 				table.InvalidateDataplaneCache("test")
-// 				table.Apply()
-// 				Expect(dataplane.Chains).To(Equal(map[string][]string{
-// 					"FORWARD": {
-// 						`-m comment --comment "cali:hecdSCslEjdBPBPo" --jump DROP`,
-// 						`-A FORWARD -j ufw-before-logging-forward`,
-// 						`-A FORWARD -j ufw-before-forward`,
-// 						`-A FORWARD -j ufw-after-forward`,
-// 					},
-// 					"INPUT":  {},
-// 					"OUTPUT": {},
-// 				}))
-// 			})
-// 		})
-// 	})
 //
 // 	Describe("after adding a couple of chains", func() {
 // 		BeforeEach(func() {

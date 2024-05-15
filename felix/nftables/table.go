@@ -514,6 +514,7 @@ func (t *nftablesTable) UpdateChain(chain *generictables.Chain) {
 	// avoid marking a still-referenced chain as dirty.
 	t.maybeIncrefReferredChains(chain.Name, chain.Rules)
 	if oldChain := t.chainNameToChain[chain.Name]; oldChain != nil {
+		t.logCxt.WithField("chain", chain.Name).WithField("oldChain", oldChain).Info("CASEY: MAYBE DECREF")
 		oldNumRules = len(oldChain.Rules)
 		t.maybeDecrefReferredChains(chain.Name, oldChain.Rules)
 	}
