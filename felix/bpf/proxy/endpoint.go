@@ -21,6 +21,9 @@
 package proxy
 
 import (
+	"net"
+	"strconv"
+
 	"k8s.io/apimachinery/pkg/util/sets"
 	k8sp "k8s.io/kubernetes/pkg/proxy"
 )
@@ -55,8 +58,17 @@ type endpointInfo struct {
 var _ k8sp.Endpoint = &endpointInfo{}
 
 // NewEndpointInfo creates a new endpointInfo, returning it as a k8s proxy Endpoint.
-func NewEndpointInfo(ip string, port int, endpoint string, isLocal, ready, serving, terminating bool, zoneHints sets.Set[string]) k8sp.Endpoint {
-	return &endpointInfo{ip, port, endpoint, isLocal, ready, serving, terminating, zoneHints}
+func NewEndpointInfo(ip string, port int, isLocal, ready, serving, terminating bool, zoneHints sets.Set[string]) k8sp.Endpoint {
+	return &endpointInfo{
+		ip:          ip,
+		port:        port,
+		endpoint:    net.JoinHostPort(ip, strconv.Itoa(port)),
+		isLocal:     isLocal,
+		ready:       ready,
+		serving:     serving,
+		terminating: terminating,
+		zoneHints:   zoneHints,
+	}
 }
 
 // String is part of proxy.Endpoint interface.
