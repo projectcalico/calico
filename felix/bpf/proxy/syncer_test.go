@@ -610,9 +610,9 @@ var _ = Describe("BPF Syncer", func() {
 			)
 
 			state.EpsMap[svcKey2] = []k8sp.Endpoint{
-				proxy.NewEndpointInfo("",  0, "10.2.1.1:2222", false, true, false, false, nil ),
-				proxy.NewEndpointInfo("",  0, "10.2.2.1:2222", true, true, false, false, nil ), // isLocal == true.
-				proxy.NewEndpointInfo("",  0, "10.2.3.1:2222", false, true, false, false, nil ),
+				proxy.NewEndpointInfo("", 0, "10.2.1.1:2222", false, true, false, false, nil),
+				proxy.NewEndpointInfo("", 0, "10.2.2.1:2222", true, true, false, false, nil), // isLocal == true.
+				proxy.NewEndpointInfo("", 0, "10.2.3.1:2222", false, true, false, false, nil),
 			}
 
 			err := s.Apply(state)
