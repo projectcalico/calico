@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"net"
 	"reflect"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -369,10 +368,7 @@ func (s *Syncer) startupBuildPrev(state DPSyncerState) error {
 				break
 			}
 			s.prevEpsMap[svckey.sname] = append(s.prevEpsMap[svckey.sname],
-				&endpointInfo{
-					endpoint: net.JoinHostPort(ep.Addr().String(), strconv.Itoa(int(ep.Port()))),
-					// IsLocal is not important here
-				},
+				NewEndpointInfo(ep.Addr().String(), int(ep.Port()), false, false, false, false, nil),
 			)
 		}
 	})
