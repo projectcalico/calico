@@ -839,22 +839,13 @@ func (t *nftablesTable) attemptToGetHashesAndRulesFromDataplane() (hashes map[st
 		}
 		return nil, nil, err
 	}
-	if len(allRules) == 0 {
-		// No rules, return early.
-		t.logCxt.Warn("No rules found in nftables")
-		// If there are no rules, there may still be chains. Query for them
-		// so that we can populate entries for them if they exist.
-		var allChains []string
-		allChains, err = t.nft.List(context.Background(), "chain")
-		if err != nil {
-			return
-		}
-		for _, chain := range allChains {
-			hashes[chain] = []string{}
-			rules[chain] = []*knftables.Rule{}
-		}
-		return
+
+	// Our base chains are always present, even if they have no rules.
+	for _, chain := range baseChains {
+		hashes[chain.Name] = []string{}
+		rules[chain.Name] = []*knftables.Rule{}
 	}
+
 	for _, rule := range allRules {
 		// Add the rule to the list of rules for the chain.
 		if _, ok := rules[rule.Chain]; !ok {
@@ -867,10 +858,14 @@ func (t *nftablesTable) attemptToGetHashesAndRulesFromDataplane() (hashes map[st
 			hashes[rule.Chain] = []string{}
 		}
 
-		// Check if the rule has a comment, and if so, extract the hash.
 		if rule.Comment != nil {
+			// The rule has a comment, extract the hash.
 			hash := strings.TrimPrefix(strings.Split(*rule.Comment, ";")[0], t.hashCommentPrefix)
 			hashes[rule.Chain] = append(hashes[rule.Chain], hash)
+		} else {
+			// Otherwise, this rule has no hash and may not be ours. We don't expect these in our chains,
+			// but might appear if someone else has modified our table.
+			hashes[rule.Chain] = append(hashes[rule.Chain], "")
 		}
 	}
 	return
