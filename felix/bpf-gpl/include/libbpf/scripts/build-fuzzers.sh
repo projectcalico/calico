@@ -41,14 +41,14 @@ fi
 # due to https://bugs.gentoo.org/794601) so let's just point the script to
 # commits referring to versions of libelf that actually can be built
 rm -rf elfutils
-git clone git://sourceware.org/git/elfutils.git
+git clone https://sourceware.org/git/elfutils.git
 (
 cd elfutils
-git checkout e9f3045caa5c4498f371383e5519151942d48b6d
+git checkout 67a187d4c1790058fc7fd218317851cb68bb087c
 git log --oneline -1
 
 # ASan isn't compatible with -Wl,--no-undefined: https://github.com/google/sanitizers/issues/380
-find -name Makefile.am | xargs sed -i 's/,--no-undefined//'
+sed -i 's/^\(NO_UNDEFINED=\).*/\1/' configure.ac
 
 # ASan isn't compatible with -Wl,-z,defs either:
 # https://clang.llvm.org/docs/AddressSanitizer.html#usage
@@ -62,6 +62,7 @@ fi
 
 autoreconf -i -f
 if ! ./configure --enable-maintainer-mode --disable-debuginfod --disable-libdebuginfod \
+            --disable-demangler --without-bzlib --without-lzma --without-zstd \
 	    CC="$CC" CFLAGS="-Wno-error $CFLAGS" CXX="$CXX" CXXFLAGS="-Wno-error $CXXFLAGS" LDFLAGS="$CFLAGS"; then
     cat config.log
     exit 1
