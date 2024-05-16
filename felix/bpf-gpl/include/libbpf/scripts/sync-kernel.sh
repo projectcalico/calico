@@ -295,6 +295,22 @@ Latest changes to BPF helper definitions.
 " -- src/bpf_helper_defs.h
 fi
 
+echo "Regenerating .mailmap..."
+cd_to "${LINUX_REPO}"
+git checkout "${TIP_SYM_REF}"
+cd_to "${LIBBPF_REPO}"
+"${LIBBPF_REPO}"/scripts/mailmap-update.sh "${LIBBPF_REPO}" "${LINUX_REPO}"
+# if anything changed, commit it
+mailmap_changes=$(git status --porcelain .mailmap | wc -l)
+if ((${mailmap_changes} == 1)); then
+	git add .mailmap
+	git commit -s -m "sync: update .mailmap
+
+Update .mailmap based on libbpf's list of contributors and on the latest
+.mailmap version in the upstream repository.
+" -- .mailmap
+fi
+
 # Use generated cover-letter as a template for "sync commit" with
 # baseline and checkpoint commits from kernel repo (and leave summary
 # from cover letter intact, of course)
