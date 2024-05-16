@@ -63,6 +63,10 @@ func (e *equalRulesMatcher) Match(actual interface{}) (success bool, err error) 
 		return false, fmt.Errorf("Expected []*knftables.Rule, but got: %+v", reflect.TypeOf(actual).String())
 	}
 
+	if len(rules) != len(e.expected) {
+		return false, nil
+	}
+
 	for i := range rules {
 		cp := *rules[i]
 		cp.Handle = nil
