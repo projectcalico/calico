@@ -188,6 +188,12 @@ endif
 		bash -c '/usr/local/bin/python hack/release/get-contributors.py >> /code/AUTHORS.md'
 
 ###############################################################################
+# API repository update
+###############################################################################
+create-api-pr:
+	$(MAKE) -f Makefile.api
+
+###############################################################################
 # Post-release validation
 ###############################################################################
 POSTRELEASE_IMAGE=calico/postrelease
@@ -205,3 +211,5 @@ postrelease-checks: $(POSTRELEASE_IMAGE_CREATED)
 		-e OPERATOR_VERSION=$(OPERATOR_VERSION) \
 		$(POSTRELEASE_IMAGE) \
 		sh -c "nosetests hack/postrelease -e "$(EXCLUDE_REGEX)" -s -v --with-xunit --xunit-file='postrelease-checks.xml' --with-timer $(EXTRA_NOSE_ARGS)"
+
+
