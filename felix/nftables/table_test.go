@@ -174,7 +174,6 @@ var _ = Describe("Table with an empty dataplane", func() {
 		It("should be in the dataplane", func() {
 			rules, err := f.ListRules(context.TODO(), "filter-FORWARD")
 			Expect(err).NotTo(HaveOccurred())
-			Expect(rules).To(HaveLen(1))
 			Expect(rules).To(ContainRule(knftables.Rule{
 				Chain:   "filter-FORWARD",
 				Rule:    "counter drop",
@@ -190,7 +189,6 @@ var _ = Describe("Table with an empty dataplane", func() {
 
 			rules, err := f.ListRules(context.TODO(), "filter-FORWARD")
 			Expect(err).NotTo(HaveOccurred())
-			Expect(rules).To(HaveLen(1))
 			Expect(rules).To(ContainRule(knftables.Rule{
 				Chain:   "filter-FORWARD",
 				Rule:    "counter drop",
@@ -213,7 +211,6 @@ var _ = Describe("Table with an empty dataplane", func() {
 			It("should update the dataplane", func() {
 				rules, err := f.ListRules(context.TODO(), "filter-FORWARD")
 				Expect(err).NotTo(HaveOccurred())
-				Expect(rules).To(HaveLen(4))
 				Expect(rules).To(EqualRules([]knftables.Rule{
 					{Chain: "filter-FORWARD", Rule: "counter drop", Comment: ptr("cali:TLSb4S0a53EKxjpX;")},
 					{Chain: "filter-FORWARD", Rule: "counter accept", Comment: ptr("cali:d1SpgHRrivJCC5tn;")},
@@ -460,6 +457,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 						{Action: JumpAction{Target: "cali-foobar"}},
 					})
 					table.Apply()
+					Expect(f.transactions).To(HaveLen(2))
 				})
 
 				It("it should get programmed", func() {
@@ -470,7 +468,6 @@ var _ = Describe("Table with an empty dataplane", func() {
 					// Assert the rules are correct.
 					rules, err := f.ListRules(context.TODO(), "cali-foobar")
 					Expect(err).NotTo(HaveOccurred())
-					Expect(rules).To(HaveLen(2))
 					Expect(rules).To(EqualRules([]knftables.Rule{
 						{Chain: "cali-foobar", Rule: "counter accept", Comment: ptr("cali:FLxYtC7zksT3lyZX;")},
 						{Chain: "cali-foobar", Rule: "counter drop", Comment: ptr("cali:MBS3lNnXUbG-jJdL;")},
@@ -481,6 +478,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 					BeforeEach(func() {
 						table.InsertOrAppendRules("filter-FORWARD", []generictables.Rule{})
 						table.Apply()
+						Expect(f.transactions).To(HaveLen(3))
 					})
 
 					It("it should get removed", func() {
@@ -500,149 +498,128 @@ var _ = Describe("Table with an empty dataplane", func() {
 							}},
 						})
 						table.Apply()
+						Expect(f.transactions).To(HaveLen(3))
 					})
 
 					It("should be updated", func() {
 						rules, err := f.ListRules(context.TODO(), "cali-foobar")
 						Expect(err).NotTo(HaveOccurred())
-						Expect(rules).To(HaveLen(2))
 						Expect(rules).To(EqualRules([]knftables.Rule{
 							{Chain: "cali-foobar", Rule: "counter drop", Comment: ptr("cali:bSr2dr6L16W9j9Cc;")},
 							{Chain: "cali-foobar", Rule: "counter accept", Comment: ptr("cali:NNWPljx6Ir5jETmt;")},
 						}))
 					})
 
-					// It("shouldn't get written more than once", func() {
-					// 	dataplane.ResetCmds()
-					// 	table.Apply()
-					// 	Expect(dataplane.CmdNames).To(BeEmpty())
-					// })
+					It("shouldn't get written more than once", func() {
+						table.Apply()
+						Expect(f.transactions).To(HaveLen(3))
+					})
 
-					// It("should squash idempotent updates", func() {
-					// 	table.UpdateChains([]*generictables.Chain{
-					// 		{Name: "cali-foobar", Rules: []generictables.Rule{
-					// 			// Same data as above.
-					// 			{Action: DropAction{}},
-					// 			{Action: AcceptAction{}},
-					// 		}},
-					// 	})
-					// 	dataplane.ResetCmds()
-					// 	table.Apply()
-					// 	// Should do a save but then figure out that there's nothing to do
-					// 	if dataplaneMode == "nft" {
-					// 		Expect(dataplane.CmdNames).To(ConsistOf("iptables", "iptables-nft-save"))
-					// 	} else {
-					// 		Expect(dataplane.CmdNames).To(ConsistOf("iptables", "iptables-save"))
-					// 	}
-					// })
+					It("should squash idempotent updates", func() {
+						table.UpdateChains([]*generictables.Chain{
+							{Name: "cali-foobar", Rules: []generictables.Rule{
+								// Same data as above.
+								{Action: DropAction{}},
+								{Action: AcceptAction{}},
+							}},
+						})
+						Expect(f.transactions).To(HaveLen(3))
+						table.Apply()
+						Expect(f.transactions).To(HaveLen(3))
+					})
 				})
 
-				// Describe("then extending the chain", func() {
-				// 	BeforeEach(func() {
-				// 		table.UpdateChains([]*generictables.Chain{
-				// 			{Name: "cali-foobar", Rules: []generictables.Rule{
-				// 				{Action: AcceptAction{}},
-				// 				{Action: DropAction{}},
-				// 				{Action: ReturnAction{}},
-				// 			}},
-				// 		})
-				// 		table.Apply()
-				// 	})
-				// 	It("should be updated", func() {
-				// 		Expect(dataplane.Chains).To(Equal(map[string][]string{
-				// 			"FORWARD": {
-				// 				"-m comment --comment \"cali:JttcEuxbGad9jG6N\" --jump cali-foobar",
-				// 			},
-				// 			"INPUT":  {},
-				// 			"OUTPUT": {},
-				// 			"cali-foobar": {
-				// 				"-m comment --comment \"cali:42h7Q64_2XDzpwKe\" --jump ACCEPT",
-				// 				"-m comment --comment \"cali:0sUFHicPNNqNyNx8\" --jump DROP",
-				// 				"-m comment --comment \"cali:yilSOZ62PxMhMnS9\" --jump RETURN",
-				// 			},
-				// 		}))
-				// 	})
-				//
-				// 	Describe("then truncating the chain", func() {
-				// 		BeforeEach(func() {
-				// 			table.UpdateChains([]*generictables.Chain{
-				// 				{Name: "cali-foobar", Rules: []generictables.Rule{
-				// 					{Action: AcceptAction{}},
-				// 				}},
-				// 			})
-				// 			table.Apply()
-				// 		})
-				// 		It("should be updated", func() {
-				// 			Expect(dataplane.Chains).To(Equal(map[string][]string{
-				// 				"FORWARD": {
-				// 					"-m comment --comment \"cali:JttcEuxbGad9jG6N\" --jump cali-foobar",
-				// 				},
-				// 				"INPUT":  {},
-				// 				"OUTPUT": {},
-				// 				"cali-foobar": {
-				// 					"-m comment --comment \"cali:42h7Q64_2XDzpwKe\" --jump ACCEPT",
-				// 				},
-				// 			}))
-				// 		})
-				// 	})
-				// 	Describe("then replacing the chain", func() {
-				// 		BeforeEach(func() {
-				// 			table.UpdateChains([]*generictables.Chain{
-				// 				{Name: "cali-foobar", Rules: []generictables.Rule{
-				// 					{Action: ReturnAction{}},
-				// 				}},
-				// 			})
-				// 			table.Apply()
-				// 		})
-				// 		It("should be updated", func() {
-				// 			Expect(dataplane.Chains).To(Equal(map[string][]string{
-				// 				"FORWARD": {
-				// 					"-m comment --comment \"cali:JttcEuxbGad9jG6N\" --jump cali-foobar",
-				// 				},
-				// 				"INPUT":  {},
-				// 				"OUTPUT": {},
-				// 				"cali-foobar": {
-				// 					"-m comment --comment \"cali:ZqwJQBzCmuABAOQt\" --jump RETURN",
-				// 				},
-				// 			}))
-				// 		})
-				// 	})
-				// })
-				// Describe("then removing the chain by name", func() {
-				// 	BeforeEach(func() {
-				// 		table.RemoveChainByName("cali-foobar")
-				// 		table.Apply()
-				// 	})
-				// 	It("should be gone from the dataplane", func() {
-				// 		Expect(dataplane.Chains).To(Equal(map[string][]string{
-				// 			"FORWARD": {
-				// 				"-m comment --comment \"cali:JttcEuxbGad9jG6N\" --jump cali-foobar",
-				// 			},
-				// 			"INPUT":  {},
-				// 			"OUTPUT": {},
-				// 		}))
-				// 	})
-				// })
-				// Describe("then removing the chain", func() {
-				// 	BeforeEach(func() {
-				// 		table.RemoveChains([]*generictables.Chain{
-				// 			{Name: "cali-foobar", Rules: []generictables.Rule{
-				// 				{Action: AcceptAction{}},
-				// 				{Action: DropAction{}},
-				// 			}},
-				// 		})
-				// 		table.Apply()
-				// 	})
-				// 	It("should be gone from the dataplane", func() {
-				// 		Expect(dataplane.Chains).To(Equal(map[string][]string{
-				// 			"FORWARD": {
-				// 				"-m comment --comment \"cali:JttcEuxbGad9jG6N\" --jump cali-foobar",
-				// 			},
-				// 			"INPUT":  {},
-				// 			"OUTPUT": {},
-				// 		}))
-				// 	})
-				// })
+				Describe("then extending the chain", func() {
+					BeforeEach(func() {
+						table.UpdateChains([]*generictables.Chain{
+							{Name: "cali-foobar", Rules: []generictables.Rule{
+								{Action: AcceptAction{}},
+								{Action: DropAction{}},
+								{Action: ReturnAction{}},
+							}},
+						})
+						table.Apply()
+						Expect(f.transactions).To(HaveLen(3))
+					})
+
+					It("should be updated", func() {
+						rules, err := f.ListRules(context.TODO(), "cali-foobar")
+						Expect(err).NotTo(HaveOccurred())
+						Expect(rules).To(EqualRules([]knftables.Rule{
+							{Chain: "cali-foobar", Rule: "counter accept", Comment: ptr("cali:FLxYtC7zksT3lyZX;")},
+							{Chain: "cali-foobar", Rule: "counter drop", Comment: ptr("cali:MBS3lNnXUbG-jJdL;")},
+							{Chain: "cali-foobar", Rule: "counter return", Comment: ptr("cali:ZsPcl7DEA7ky-rb2;")},
+						}))
+					})
+
+					Describe("then truncating the chain", func() {
+						BeforeEach(func() {
+							table.UpdateChains([]*generictables.Chain{
+								{Name: "cali-foobar", Rules: []generictables.Rule{
+									{Action: AcceptAction{}},
+								}},
+							})
+							table.Apply()
+							Expect(f.transactions).To(HaveLen(4))
+						})
+
+						It("should be updated", func() {
+							rules, err := f.ListRules(context.TODO(), "cali-foobar")
+							Expect(err).NotTo(HaveOccurred())
+							Expect(rules).To(EqualRules([]knftables.Rule{
+								{Chain: "cali-foobar", Rule: "counter accept", Comment: ptr("cali:FLxYtC7zksT3lyZX;")},
+							}))
+						})
+					})
+
+					Describe("then replacing the chain", func() {
+						BeforeEach(func() {
+							table.UpdateChains([]*generictables.Chain{
+								{Name: "cali-foobar", Rules: []generictables.Rule{
+									{Action: ReturnAction{}},
+								}},
+							})
+							table.Apply()
+							Expect(f.transactions).To(HaveLen(4))
+						})
+						It("should be updated", func() {
+							rules, err := f.ListRules(context.TODO(), "cali-foobar")
+							Expect(err).NotTo(HaveOccurred())
+							Expect(rules).To(EqualRules([]knftables.Rule{
+								{Chain: "cali-foobar", Rule: "counter return", Comment: ptr("cali:K9xtL-eqf9SmzPPa;")},
+							}))
+						})
+					})
+				})
+
+				Describe("then removing the chain by name", func() {
+					BeforeEach(func() {
+						table.RemoveChainByName("cali-foobar")
+						table.Apply()
+						Expect(f.transactions).To(HaveLen(3))
+					})
+
+					It("should be gone from the dataplane", func() {
+						_, err := f.ListRules(context.TODO(), "cali-foobar")
+						Expect(err).To(HaveOccurred())
+					})
+				})
+
+				Describe("then removing the chain", func() {
+					BeforeEach(func() {
+						table.RemoveChains([]*generictables.Chain{
+							{Name: "cali-foobar", Rules: []generictables.Rule{
+								{Action: AcceptAction{}},
+								{Action: DropAction{}},
+							}},
+						})
+						table.Apply()
+					})
+					It("should be gone from the dataplane", func() {
+						_, err := f.ListRules(context.TODO(), "cali-foobar")
+						Expect(err).To(HaveOccurred())
+					})
+				})
 			})
 		})
 	})
