@@ -221,6 +221,7 @@ type nftablesTable struct {
 	// featureDetector detects the features of the dataplane.
 	featureDetector environment.FeatureDetectorIface
 
+	// TODO: There are no kernel chains in nftables. We should simplify this for nftables.
 	// chainToInsertedRules maps from chain name to a list of rules to be inserted at the start
 	// of that chain.  Rules are written with rule hash comments.  The Table cleans up inserted
 	// rules with unknown hashes.
@@ -345,12 +346,17 @@ func NewTable(
 	// clean up any chains that we hooked on a previous run.
 	inserts := map[string][]generictables.Rule{}
 	appends := map[string][]generictables.Rule{}
+	chainNameToChain := map[string]*generictables.Chain{}
 	dirtyInsertAppend := set.New[string]()
 	refcounts := map[string]int{}
 
 	for _, baseChain := range baseChains {
 		inserts[baseChain.Name] = []generictables.Rule{}
 		appends[baseChain.Name] = []generictables.Rule{}
+		chainNameToChain[baseChain.Name] = &generictables.Chain{
+			Name:  baseChain.Name,
+			Rules: []generictables.Rule{},
+		}
 		dirtyInsertAppend.Add(baseChain.Name)
 
 		// Base chains are referred to by definition.
@@ -411,7 +417,7 @@ func NewTable(
 		chainToInsertedRules:   inserts,
 		chainToAppendedRules:   appends,
 		dirtyInsertAppend:      dirtyInsertAppend,
-		chainNameToChain:       map[string]*generictables.Chain{},
+		chainNameToChain:       chainNameToChain,
 		chainRefCounts:         refcounts,
 		dirtyChains:            set.New[string](),
 		chainToDataplaneHashes: map[string][]string{},
@@ -465,7 +471,7 @@ func (n *nftablesTable) IPVersion() uint8 {
 }
 
 // InsertOrAppendRules sets the rules that should be inserted into or appended
-// to the given non-Calico chain (depending on the chain insert mode).  See
+// to the given base chain (depending on the chain insert mode).  See
 // also AppendRules, which can be used to record additional rules that are
 // always appended.
 func (t *nftablesTable) InsertOrAppendRules(chainName string, rules []generictables.Rule) {
@@ -475,6 +481,11 @@ func (t *nftablesTable) InsertOrAppendRules(chainName string, rules []generictab
 	numRulesDelta := len(rules) - len(oldRules)
 	t.gaugeNumRules.Add(float64(numRulesDelta))
 	t.dirtyInsertAppend.Add(chainName)
+
+	// Update the chain with the new rules.
+	if chain := t.chainNameToChain[chainName]; chain != nil {
+		chain.Rules = rules
+	}
 
 	// Incref any newly-referenced chains, then decref the old ones.  By incrementing first we
 	// avoid marking a still-referenced chain as dirty.
@@ -514,7 +525,6 @@ func (t *nftablesTable) UpdateChain(chain *generictables.Chain) {
 	// avoid marking a still-referenced chain as dirty.
 	t.maybeIncrefReferredChains(chain.Name, chain.Rules)
 	if oldChain := t.chainNameToChain[chain.Name]; oldChain != nil {
-		t.logCxt.WithField("chain", chain.Name).WithField("oldChain", oldChain).Info("CASEY: MAYBE DECREF")
 		oldNumRules = len(oldChain.Rules)
 		t.maybeDecrefReferredChains(chain.Name, oldChain.Rules)
 	}
@@ -860,7 +870,6 @@ func (t *nftablesTable) attemptToGetHashesAndRulesFromDataplane() (hashes map[st
 		// Check if the rule has a comment, and if so, extract the hash.
 		if rule.Comment != nil {
 			hash := strings.TrimPrefix(strings.Split(*rule.Comment, ";")[0], t.hashCommentPrefix)
-			t.logCxt.WithField("rule", rule).WithField("hash", hash).WithField("handle", rule.Handle).Debug("Found rule")
 			hashes[rule.Chain] = append(hashes[rule.Chain], hash)
 		}
 	}
@@ -1050,6 +1059,11 @@ func (t *nftablesTable) applyUpdates() error {
 				}
 			}
 
+			t.logCxt.WithFields(logrus.Fields{
+				"chainName": chainName,
+				"previous":  previousHashes,
+				"current":   currentHashes,
+			}).Debug("Comparing chain hashes")
 			for i := 0; i < len(previousHashes) || i < len(currentHashes); i++ {
 				if i < len(previousHashes) && i < len(currentHashes) {
 					if previousHashes[i] == currentHashes[i] {
