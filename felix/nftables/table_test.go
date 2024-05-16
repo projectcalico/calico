@@ -221,67 +221,69 @@ var _ = Describe("Table with an empty dataplane", func() {
 					{Chain: "filter-FORWARD", Rule: "counter accept", Comment: ptr("cali:KoxH5YgfppiUxhXz;")},
 				}))
 			})
+		})
 
-			Describe("after another process removes the insertion (empty chain)", func() {
-				BeforeEach(func() {
-					// Remove the chains out-of-band from the Table.
-					rules, err := f.ListRules(context.TODO(), "filter-FORWARD")
-					Expect(err).NotTo(HaveOccurred())
-					tx := f.NewTransaction()
-					for _, r := range rules {
-						tx.Delete(r)
-					}
-					Expect(f.Run(context.TODO(), tx)).NotTo(HaveOccurred())
-					rules, err = f.ListRules(context.TODO(), "filter-FORWARD")
-					Expect(err).NotTo(HaveOccurred())
-					Expect(rules).To(HaveLen(0), "Failed to clean up rules!")
-				})
-
-				expectDataplaneFixed := func() {
-					rules, err := f.ListRules(context.TODO(), "filter-FORWARD")
-					Expect(err).NotTo(HaveOccurred())
-					Expect(rules).To(EqualRules([]knftables.Rule{
-						{
-							Chain:   "filter-FORWARD",
-							Rule:    "counter drop",
-							Comment: ptr("cali:TLSb4S0a53EKxjpX;"),
-						},
-					}))
+		Describe("after another process removes the insertion (empty chain)", func() {
+			BeforeEach(func() {
+				// Remove the chains out-of-band from the Table.
+				By("Deleting the rules from filter-FORWARD out-of-band")
+				rules, err := f.ListRules(context.TODO(), "filter-FORWARD")
+				Expect(err).NotTo(HaveOccurred())
+				tx := f.NewTransaction()
+				for _, r := range rules {
+					cp := *r
+					tx.Delete(&cp)
 				}
-				// expectDataplaneUntouched := func() {
-				// 	rules, err := f.ListRules(context.TODO(), "filter-FORWARD")
-				// 	Expect(err).NotTo(HaveOccurred())
-				// 	Expect(rules).To(EqualRules([]knftables.Rule{}))
-				// }
-
-				It("should put it back on the next explicit refresh", func() {
-					table.InvalidateDataplaneCache("test")
-					table.Apply()
-					expectDataplaneFixed()
-				})
-				// shouldNotBeFixedAfter := func(delay time.Duration) func() {
-				// 	return func() {
-				// 		dataplane.AdvanceTimeBy(delay)
-				// 		table.Apply()
-				// 		expectDataplaneUntouched()
-				// 	}
-				// }
-				// shouldBeFixedAfter := func(delay time.Duration) func() {
-				// 	return func() {
-				// 		dataplane.AdvanceTimeBy(delay)
-				// 		table.Apply()
-				// 		expectDataplaneFixed()
-				// 	}
-				// }
-				// It("should defer recheck of the dataplane until after first recheck time",
-				// 	shouldNotBeFixedAfter(49*time.Millisecond))
-				// It("should recheck the dataplane if time has advanced far enough",
-				// 	shouldBeFixedAfter(50*time.Millisecond))
-				// It("should recheck the dataplane even if one of the recheck steps was missed",
-				// 	shouldBeFixedAfter(500*time.Millisecond))
-				// It("should recheck the dataplane even if one of the recheck steps was missed",
-				// 	shouldBeFixedAfter(2000*time.Millisecond))
+				Expect(f.Run(context.TODO(), tx)).NotTo(HaveOccurred())
+				rules, err = f.ListRules(context.TODO(), "filter-FORWARD")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(rules).To(HaveLen(0), "Failed to clean up rules!")
 			})
+
+			expectDataplaneFixed := func() {
+				rules, err := f.ListRules(context.TODO(), "filter-FORWARD")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(rules).To(EqualRules([]knftables.Rule{
+					{
+						Chain:   "filter-FORWARD",
+						Rule:    "counter drop",
+						Comment: ptr("cali:TLSb4S0a53EKxjpX;"),
+					},
+				}))
+			}
+			// expectDataplaneUntouched := func() {
+			// 	rules, err := f.ListRules(context.TODO(), "filter-FORWARD")
+			// 	Expect(err).NotTo(HaveOccurred())
+			// 	Expect(rules).To(EqualRules([]knftables.Rule{}))
+			// }
+
+			It("should put it back on the next explicit refresh", func() {
+				table.InvalidateDataplaneCache("test")
+				table.Apply()
+				expectDataplaneFixed()
+			})
+			// shouldNotBeFixedAfter := func(delay time.Duration) func() {
+			// 	return func() {
+			// 		dataplane.AdvanceTimeBy(delay)
+			// 		table.Apply()
+			// 		expectDataplaneUntouched()
+			// 	}
+			// }
+			// shouldBeFixedAfter := func(delay time.Duration) func() {
+			// 	return func() {
+			// 		dataplane.AdvanceTimeBy(delay)
+			// 		table.Apply()
+			// 		expectDataplaneFixed()
+			// 	}
+			// }
+			// It("should defer recheck of the dataplane until after first recheck time",
+			// 	shouldNotBeFixedAfter(49*time.Millisecond))
+			// It("should recheck the dataplane if time has advanced far enough",
+			// 	shouldBeFixedAfter(50*time.Millisecond))
+			// It("should recheck the dataplane even if one of the recheck steps was missed",
+			// 	shouldBeFixedAfter(500*time.Millisecond))
+			// It("should recheck the dataplane even if one of the recheck steps was missed",
+			// 	shouldBeFixedAfter(2000*time.Millisecond))
 		})
 	})
 
