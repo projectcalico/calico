@@ -229,7 +229,7 @@ type nftablesTable struct {
 	// chainToAppendRules maps from chain name to a list of rules to be appended at the end
 	// of that chain.
 	chainToAppendedRules map[string][]generictables.Rule
-	dirtyInsertAppend    set.Set[string]
+	dirtyBaseChains      set.Set[string]
 
 	// chainNameToChain contains the desired state of our chains, indexed by
 	// chain name.
@@ -328,7 +328,7 @@ func NewTable(
 	featureDetector environment.FeatureDetectorIface,
 	options TableOptions,
 ) generictables.Table {
-	ourChainsRegexp := regexp.MustCompile("^(nat|filter|mangle|raw)-.*")
+	ourChainsRegexp := regexp.MustCompile("^(cali|nat|filter|mangle|raw)-.*")
 
 	oldInsertRegexpParts := []string{}
 	for _, prefix := range options.HistoricChainPrefixes {
@@ -347,7 +347,7 @@ func NewTable(
 	inserts := map[string][]generictables.Rule{}
 	appends := map[string][]generictables.Rule{}
 	chainNameToChain := map[string]*generictables.Chain{}
-	dirtyInsertAppend := set.New[string]()
+	dirtyBaseChains := set.New[string]()
 	refcounts := map[string]int{}
 
 	for _, baseChain := range baseChains {
@@ -357,7 +357,7 @@ func NewTable(
 			Name:  baseChain.Name,
 			Rules: []generictables.Rule{},
 		}
-		dirtyInsertAppend.Add(baseChain.Name)
+		dirtyBaseChains.Add(baseChain.Name)
 
 		// Base chains are referred to by definition.
 		refcounts[baseChain.Name] += 1
@@ -416,7 +416,7 @@ func NewTable(
 		featureDetector:        featureDetector,
 		chainToInsertedRules:   inserts,
 		chainToAppendedRules:   appends,
-		dirtyInsertAppend:      dirtyInsertAppend,
+		dirtyBaseChains:        dirtyBaseChains,
 		chainNameToChain:       chainNameToChain,
 		chainRefCounts:         refcounts,
 		dirtyChains:            set.New[string](),
@@ -480,7 +480,7 @@ func (t *nftablesTable) InsertOrAppendRules(chainName string, rules []generictab
 	t.chainToInsertedRules[chainName] = rules
 	numRulesDelta := len(rules) - len(oldRules)
 	t.gaugeNumRules.Add(float64(numRulesDelta))
-	t.dirtyInsertAppend.Add(chainName)
+	t.dirtyBaseChains.Add(chainName)
 
 	// Update the chain with the new rules.
 	if chain := t.chainNameToChain[chainName]; chain != nil {
@@ -503,7 +503,7 @@ func (t *nftablesTable) AppendRules(chainName string, rules []generictables.Rule
 	t.chainToAppendedRules[chainName] = rules
 	numRulesDelta := len(rules) - len(oldRules)
 	t.gaugeNumRules.Add(float64(numRulesDelta))
-	t.dirtyInsertAppend.Add(chainName)
+	t.dirtyBaseChains.Add(chainName)
 
 	// Incref any newly-referenced chains, then decref the old ones.  By incrementing first we
 	// avoid marking a still-referenced chain as dirty.
@@ -646,7 +646,7 @@ func (t *nftablesTable) loadDataplaneState() {
 	// chains for refresh.
 	for chainName, expectedHashes := range t.chainToDataplaneHashes {
 		logCxt := t.logCxt.WithField("chainName", chainName)
-		if t.dirtyChains.Contains(chainName) || t.dirtyInsertAppend.Contains(chainName) {
+		if t.dirtyChains.Contains(chainName) || t.dirtyBaseChains.Contains(chainName) {
 			// Already an update pending for this chain; no point in flagging it as
 			// out-of-sync.
 			logCxt.Debug("Skipping known-dirty chain")
@@ -670,7 +670,7 @@ func (t *nftablesTable) loadDataplaneState() {
 				if dataplaneHasInserts {
 					logCxt.WithField("actualRuleIDs", dpHashes).Warn(
 						"Chain had unexpected inserts, marking for resync")
-					t.dirtyInsertAppend.Add(chainName)
+					t.dirtyBaseChains.Add(chainName)
 				}
 				continue
 			}
@@ -687,7 +687,7 @@ func (t *nftablesTable) loadDataplaneState() {
 					"expectedRuleIDs": expectedHashes,
 					"actualRuleIDs":   dpHashes,
 				}).Warn("Detected out-of-sync inserts, marking for resync")
-				t.dirtyInsertAppend.Add(chainName)
+				t.dirtyBaseChains.Add(chainName)
 			}
 		} else {
 			// One of our chains, should match exactly.
@@ -705,7 +705,7 @@ func (t *nftablesTable) loadDataplaneState() {
 	t.logCxt.Debug("Scanning for unexpected nftables chains")
 	for chainName, dataplaneHashes := range dataplaneHashes {
 		logCxt := t.logCxt.WithField("chainName", chainName)
-		if t.dirtyChains.Contains(chainName) || t.dirtyInsertAppend.Contains(chainName) {
+		if t.dirtyChains.Contains(chainName) || t.dirtyBaseChains.Contains(chainName) {
 			// Already an update pending for this chain.
 			logCxt.Debug("Skipping known-dirty chain")
 			continue
@@ -723,7 +723,7 @@ func (t *nftablesTable) loadDataplaneState() {
 			for _, hash := range dataplaneHashes {
 				if hash != "" {
 					logCxt.WithField("hash", hash).Info("Found unexpected insert, marking for cleanup")
-					t.dirtyInsertAppend.Add(chainName)
+					t.dirtyBaseChains.Add(chainName)
 					break
 				}
 			}
@@ -1099,7 +1099,7 @@ func (t *nftablesTable) applyUpdates() error {
 		return nil // Delay clearing the set until we've programmed nftables.
 	})
 
-	// Make a copy of our full rules map and keep track of all changes made while processing dirtyInsertAppend.
+	// Make a copy of our full rules map and keep track of all changes made while processing dirtyBaseChains.
 	// When we've successfully updated nftables, we'll update our cache of chainToFullRules with this map.
 	newChainToFullRules := map[string][]*knftables.Rule{}
 	for chain, rules := range t.chainToFullRules {
@@ -1107,8 +1107,9 @@ func (t *nftablesTable) applyUpdates() error {
 		copy(newChainToFullRules[chain], rules)
 	}
 
+	// TODO: Should these be treated any differently in nftables mode? They are owned by us.
 	// Now calculate nftables updates for our inserted and appended rules, which are used to hook top-level chains.
-	t.dirtyInsertAppend.Iter(func(chainName string) error {
+	t.dirtyBaseChains.Iter(func(chainName string) error {
 		previousHashes := t.chainToDataplaneHashes[chainName]
 		newRules := newChainToFullRules[chainName]
 
@@ -1217,7 +1218,7 @@ func (t *nftablesTable) applyUpdates() error {
 	// found there was nothing to do above, since we may have found out that a dirty chain
 	// was actually a no-op update.
 	t.dirtyChains = set.New[string]()
-	t.dirtyInsertAppend = set.New[string]()
+	t.dirtyBaseChains = set.New[string]()
 
 	// Store off the updates.
 	for chainName, hashes := range newHashes {

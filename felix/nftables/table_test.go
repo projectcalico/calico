@@ -291,432 +291,363 @@ var _ = Describe("Table with an empty dataplane", func() {
 				}))
 			})
 		})
+
+		Describe("after adding a couple of chains", func() {
+			BeforeEach(func() {
+				table.UpdateChains([]*generictables.Chain{
+					{Name: "cali-foobar", Rules: []generictables.Rule{
+						{Action: AcceptAction{}},
+						{Action: DropAction{}},
+					}},
+					{Name: "cali-bazzbiff", Rules: []generictables.Rule{
+						{Action: AcceptAction{}},
+						{Action: DropAction{}},
+					}},
+				})
+				table.Apply()
+			})
+
+			It("nothing should get programmed due to lack of references", func() {
+				chains, err := f.List(context.TODO(), "chain")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(chains).To(ConsistOf(expectedBaseChains))
+			})
+
+			Describe("after adding a reference from another unreferenced chain", func() {
+				BeforeEach(func() {
+					table.UpdateChain(&generictables.Chain{
+						Name: "cali-FORWARD",
+						Rules: []generictables.Rule{
+							{Action: JumpAction{Target: "cali-foobar"}},
+						},
+					})
+					table.Apply()
+				})
+
+				It("nothing should get programmed due to having no path back to root chain", func() {
+					chains, err := f.List(context.TODO(), "chain")
+					Expect(err).NotTo(HaveOccurred())
+					Expect(chains).To(ConsistOf(expectedBaseChains))
+				})
+
+				Describe("after adding an indirect reference from a base chain", func() {
+					BeforeEach(func() {
+						table.InsertOrAppendRules("filter-FORWARD", []generictables.Rule{
+							{Action: JumpAction{Target: "cali-FORWARD"}},
+						})
+						table.Apply()
+					})
+
+					It("both chains should be programmed", func() {
+						chains, err := f.List(context.TODO(), "chain")
+						Expect(err).NotTo(HaveOccurred())
+						Expect(chains).To(ConsistOf(append(expectedBaseChains, "cali-FORWARD", "cali-foobar")))
+					})
+
+					Describe("after deleting the rule from the base chain", func() {
+						BeforeEach(func() {
+							table.InsertOrAppendRules("filter-FORWARD", nil)
+							table.Apply()
+						})
+
+						It("should clean up both chains", func() {
+							chains, err := f.List(context.TODO(), "chain")
+							Expect(err).NotTo(HaveOccurred())
+							Expect(chains).To(ConsistOf(expectedBaseChains))
+						})
+					})
+
+					Describe("after switching the intermediate rule", func() {
+						BeforeEach(func() {
+							table.UpdateChain(&generictables.Chain{
+								Name: "cali-FORWARD",
+								Rules: []generictables.Rule{
+									{Action: JumpAction{Target: "cali-bazzbiff"}},
+								},
+							})
+							table.Apply()
+						})
+
+						It("correct chain should be swapped in", func() {
+							chains, err := f.List(context.TODO(), "chain")
+							Expect(err).NotTo(HaveOccurred())
+							Expect(chains).To(ConsistOf(append(expectedBaseChains, "cali-FORWARD", "cali-bazzbiff")))
+						})
+					})
+
+					Describe("after removing the reference", func() {
+						BeforeEach(func() {
+							table.UpdateChain(&generictables.Chain{
+								Name:  "cali-FORWARD",
+								Rules: []generictables.Rule{},
+							})
+							table.Apply()
+						})
+
+						It("should clean up referred chain", func() {
+							chains, err := f.List(context.TODO(), "chain")
+							Expect(err).NotTo(HaveOccurred())
+							Expect(chains).To(ConsistOf(append(expectedBaseChains, "cali-FORWARD")))
+						})
+					})
+				})
+			})
+
+			Describe("after adding a reference from another referenced chain", func() {
+				BeforeEach(func() {
+					table.InsertOrAppendRules("filter-FORWARD", []generictables.Rule{
+						{Action: JumpAction{Target: "cali-FORWARD"}},
+					})
+					table.UpdateChain(&generictables.Chain{
+						Name: "cali-FORWARD",
+						Rules: []generictables.Rule{
+							{Action: JumpAction{Target: "cali-foobar"}},
+						},
+					})
+					table.Apply()
+				})
+
+				It("it should get programmed", func() {
+					chains, err := f.List(context.TODO(), "chain")
+					Expect(err).NotTo(HaveOccurred())
+					Expect(chains).To(ConsistOf(append(expectedBaseChains, "cali-FORWARD", "cali-foobar")))
+				})
+
+				Describe("after adding a reference from an insert", func() {
+					BeforeEach(func() {
+						table.InsertOrAppendRules("filter-FORWARD", []generictables.Rule{
+							{Action: JumpAction{Target: "cali-foobar"}},
+						})
+						table.Apply()
+					})
+
+					It("intermediate chain should be removed", func() {
+						chains, err := f.List(context.TODO(), "chain")
+						Expect(err).NotTo(HaveOccurred())
+						Expect(chains).To(ConsistOf(append(expectedBaseChains, "cali-foobar")))
+					})
+
+					Describe("after deleting the intermediate chain", func() {
+						BeforeEach(func() {
+							table.RemoveChainByName("cali-FORWARD")
+							table.Apply()
+						})
+
+						It("should make no change", func() {
+							chains, err := f.List(context.TODO(), "chain")
+							Expect(err).NotTo(HaveOccurred())
+							Expect(chains).To(ConsistOf(append(expectedBaseChains, "cali-foobar")))
+						})
+
+						Describe("after removing the insert", func() {
+							BeforeEach(func() {
+								table.InsertOrAppendRules("filter-FORWARD", []generictables.Rule{})
+								table.Apply()
+							})
+							It("chain should be removed", func() {
+								chains, err := f.List(context.TODO(), "chain")
+								Expect(err).NotTo(HaveOccurred())
+								Expect(chains).To(ConsistOf(expectedBaseChains))
+							})
+						})
+					})
+				})
+			})
+
+			Describe("after adding a reference from a base chain", func() {
+				BeforeEach(func() {
+					table.InsertOrAppendRules("filter-FORWARD", []generictables.Rule{
+						{Action: JumpAction{Target: "cali-foobar"}},
+					})
+					table.Apply()
+				})
+
+				It("it should get programmed", func() {
+					chains, err := f.List(context.TODO(), "chain")
+					Expect(err).NotTo(HaveOccurred())
+					Expect(chains).To(ConsistOf(append(expectedBaseChains, "cali-foobar")))
+
+					// Assert the rules are correct.
+					rules, err := f.ListRules(context.TODO(), "cali-foobar")
+					Expect(err).NotTo(HaveOccurred())
+					Expect(rules).To(HaveLen(2))
+					Expect(rules).To(EqualRules([]knftables.Rule{
+						{Chain: "cali-foobar", Rule: "counter accept", Comment: ptr("cali:FLxYtC7zksT3lyZX;")},
+						{Chain: "cali-foobar", Rule: "counter drop", Comment: ptr("cali:MBS3lNnXUbG-jJdL;")},
+					}))
+				})
+
+				Describe("after removing the reference", func() {
+					BeforeEach(func() {
+						table.InsertOrAppendRules("filter-FORWARD", []generictables.Rule{})
+						table.Apply()
+					})
+
+					It("it should get removed", func() {
+						chains, err := f.List(context.TODO(), "chain")
+						Expect(err).NotTo(HaveOccurred())
+						Expect(chains).To(ConsistOf(expectedBaseChains))
+					})
+				})
+
+				Describe("then updating the chain", func() {
+					BeforeEach(func() {
+						table.UpdateChains([]*generictables.Chain{
+							{Name: "cali-foobar", Rules: []generictables.Rule{
+								// We swap the rules.
+								{Action: DropAction{}},
+								{Action: AcceptAction{}},
+							}},
+						})
+						table.Apply()
+					})
+
+					It("should be updated", func() {
+						rules, err := f.ListRules(context.TODO(), "cali-foobar")
+						Expect(err).NotTo(HaveOccurred())
+						Expect(rules).To(HaveLen(2))
+						Expect(rules).To(EqualRules([]knftables.Rule{
+							{Chain: "cali-foobar", Rule: "counter drop", Comment: ptr("cali:bSr2dr6L16W9j9Cc;")},
+							{Chain: "cali-foobar", Rule: "counter accept", Comment: ptr("cali:NNWPljx6Ir5jETmt;")},
+						}))
+					})
+
+					// It("shouldn't get written more than once", func() {
+					// 	dataplane.ResetCmds()
+					// 	table.Apply()
+					// 	Expect(dataplane.CmdNames).To(BeEmpty())
+					// })
+
+					// It("should squash idempotent updates", func() {
+					// 	table.UpdateChains([]*generictables.Chain{
+					// 		{Name: "cali-foobar", Rules: []generictables.Rule{
+					// 			// Same data as above.
+					// 			{Action: DropAction{}},
+					// 			{Action: AcceptAction{}},
+					// 		}},
+					// 	})
+					// 	dataplane.ResetCmds()
+					// 	table.Apply()
+					// 	// Should do a save but then figure out that there's nothing to do
+					// 	if dataplaneMode == "nft" {
+					// 		Expect(dataplane.CmdNames).To(ConsistOf("iptables", "iptables-nft-save"))
+					// 	} else {
+					// 		Expect(dataplane.CmdNames).To(ConsistOf("iptables", "iptables-save"))
+					// 	}
+					// })
+				})
+
+				// Describe("then extending the chain", func() {
+				// 	BeforeEach(func() {
+				// 		table.UpdateChains([]*generictables.Chain{
+				// 			{Name: "cali-foobar", Rules: []generictables.Rule{
+				// 				{Action: AcceptAction{}},
+				// 				{Action: DropAction{}},
+				// 				{Action: ReturnAction{}},
+				// 			}},
+				// 		})
+				// 		table.Apply()
+				// 	})
+				// 	It("should be updated", func() {
+				// 		Expect(dataplane.Chains).To(Equal(map[string][]string{
+				// 			"FORWARD": {
+				// 				"-m comment --comment \"cali:JttcEuxbGad9jG6N\" --jump cali-foobar",
+				// 			},
+				// 			"INPUT":  {},
+				// 			"OUTPUT": {},
+				// 			"cali-foobar": {
+				// 				"-m comment --comment \"cali:42h7Q64_2XDzpwKe\" --jump ACCEPT",
+				// 				"-m comment --comment \"cali:0sUFHicPNNqNyNx8\" --jump DROP",
+				// 				"-m comment --comment \"cali:yilSOZ62PxMhMnS9\" --jump RETURN",
+				// 			},
+				// 		}))
+				// 	})
+				//
+				// 	Describe("then truncating the chain", func() {
+				// 		BeforeEach(func() {
+				// 			table.UpdateChains([]*generictables.Chain{
+				// 				{Name: "cali-foobar", Rules: []generictables.Rule{
+				// 					{Action: AcceptAction{}},
+				// 				}},
+				// 			})
+				// 			table.Apply()
+				// 		})
+				// 		It("should be updated", func() {
+				// 			Expect(dataplane.Chains).To(Equal(map[string][]string{
+				// 				"FORWARD": {
+				// 					"-m comment --comment \"cali:JttcEuxbGad9jG6N\" --jump cali-foobar",
+				// 				},
+				// 				"INPUT":  {},
+				// 				"OUTPUT": {},
+				// 				"cali-foobar": {
+				// 					"-m comment --comment \"cali:42h7Q64_2XDzpwKe\" --jump ACCEPT",
+				// 				},
+				// 			}))
+				// 		})
+				// 	})
+				// 	Describe("then replacing the chain", func() {
+				// 		BeforeEach(func() {
+				// 			table.UpdateChains([]*generictables.Chain{
+				// 				{Name: "cali-foobar", Rules: []generictables.Rule{
+				// 					{Action: ReturnAction{}},
+				// 				}},
+				// 			})
+				// 			table.Apply()
+				// 		})
+				// 		It("should be updated", func() {
+				// 			Expect(dataplane.Chains).To(Equal(map[string][]string{
+				// 				"FORWARD": {
+				// 					"-m comment --comment \"cali:JttcEuxbGad9jG6N\" --jump cali-foobar",
+				// 				},
+				// 				"INPUT":  {},
+				// 				"OUTPUT": {},
+				// 				"cali-foobar": {
+				// 					"-m comment --comment \"cali:ZqwJQBzCmuABAOQt\" --jump RETURN",
+				// 				},
+				// 			}))
+				// 		})
+				// 	})
+				// })
+				// Describe("then removing the chain by name", func() {
+				// 	BeforeEach(func() {
+				// 		table.RemoveChainByName("cali-foobar")
+				// 		table.Apply()
+				// 	})
+				// 	It("should be gone from the dataplane", func() {
+				// 		Expect(dataplane.Chains).To(Equal(map[string][]string{
+				// 			"FORWARD": {
+				// 				"-m comment --comment \"cali:JttcEuxbGad9jG6N\" --jump cali-foobar",
+				// 			},
+				// 			"INPUT":  {},
+				// 			"OUTPUT": {},
+				// 		}))
+				// 	})
+				// })
+				// Describe("then removing the chain", func() {
+				// 	BeforeEach(func() {
+				// 		table.RemoveChains([]*generictables.Chain{
+				// 			{Name: "cali-foobar", Rules: []generictables.Rule{
+				// 				{Action: AcceptAction{}},
+				// 				{Action: DropAction{}},
+				// 			}},
+				// 		})
+				// 		table.Apply()
+				// 	})
+				// 	It("should be gone from the dataplane", func() {
+				// 		Expect(dataplane.Chains).To(Equal(map[string][]string{
+				// 			"FORWARD": {
+				// 				"-m comment --comment \"cali:JttcEuxbGad9jG6N\" --jump cali-foobar",
+				// 			},
+				// 			"INPUT":  {},
+				// 			"OUTPUT": {},
+				// 		}))
+				// 	})
+				// })
+			})
+		})
 	})
 })
 
-// 	Describe("with nftables returning an nft error", func() {
-// 		BeforeEach(func() {
-// 			dataplane.Prologue = "# Table `nat' is incompatible, use 'nft' tool.\n"
-// 		})
-//
-// 		It("should fail", func() {
-// 			Expect(func() {
-// 				table.Apply()
-// 			}).To(Panic())
-// 		})
-// 	})
-//
-//
-//
-//
-//
-// 	Describe("after adding a couple of chains", func() {
-// 		BeforeEach(func() {
-// 			table.UpdateChains([]*generictables.Chain{
-// 				{Name: "cali-foobar", Rules: []generictables.Rule{
-// 					{Action: AcceptAction{}},
-// 					{Action: DropAction{}},
-// 				}},
-// 				{Name: "cali-bazzbiff", Rules: []generictables.Rule{
-// 					{Action: AcceptAction{}},
-// 					{Action: DropAction{}},
-// 				}},
-// 			})
-// 			table.Apply()
-// 		})
-//
-// 		It("nothing should get programmed due to lack of references", func() {
-// 			Expect(dataplane.Chains).To(Equal(map[string][]string{
-// 				"FORWARD": {},
-// 				"INPUT":   {},
-// 				"OUTPUT":  {},
-// 			}))
-// 		})
-//
-// 		Describe("after adding a reference from another unreferenced chain", func() {
-// 			BeforeEach(func() {
-// 				table.UpdateChain(&generictables.Chain{
-// 					Name: "cali-FORWARD",
-// 					Rules: []generictables.Rule{
-// 						{Action: JumpAction{Target: "cali-foobar"}},
-// 					},
-// 				})
-// 				table.Apply()
-// 			})
-//
-// 			It("nothing should get programmed due to having no path back to root chain", func() {
-// 				Expect(dataplane.Chains).To(Equal(map[string][]string{
-// 					"FORWARD": {},
-// 					"INPUT":   {},
-// 					"OUTPUT":  {},
-// 				}))
-// 			})
-//
-// 			Describe("after adding an indirect reference from an insert", func() {
-// 				BeforeEach(func() {
-// 					table.InsertOrAppendRules("FORWARD", []generictables.Rule{
-// 						{Action: JumpAction{Target: "cali-FORWARD"}},
-// 					})
-// 					table.Apply()
-// 				})
-// 				It("both chains should be programmed", func() {
-// 					Expect(dataplane.Chains).To(Equal(map[string][]string{
-// 						"FORWARD": {
-// 							"-m comment --comment \"cali:wUHhoiAYhphO9Mso\" --jump cali-FORWARD",
-// 						},
-// 						"INPUT":  {},
-// 						"OUTPUT": {},
-// 						"cali-FORWARD": {
-// 							"-m comment --comment \"cali:WiiHgeRwfPX6Ol7d\" --jump cali-foobar",
-// 						},
-// 						"cali-foobar": {
-// 							"-m comment --comment \"cali:42h7Q64_2XDzpwKe\" --jump ACCEPT",
-// 							"-m comment --comment \"cali:0sUFHicPNNqNyNx8\" --jump DROP",
-// 						},
-// 					}))
-// 				})
-//
-// 				Describe("after deleting the inserted rule", func() {
-// 					BeforeEach(func() {
-// 						table.InsertOrAppendRules("FORWARD", nil)
-// 						table.Apply()
-// 					})
-// 					It("should clean up both chains", func() {
-// 						Expect(dataplane.Chains).To(Equal(map[string][]string{
-// 							"FORWARD": {},
-// 							"INPUT":   {},
-// 							"OUTPUT":  {},
-// 						}))
-// 					})
-// 				})
-//
-// 				Describe("after switching the intermediate rule", func() {
-// 					BeforeEach(func() {
-// 						table.UpdateChain(&generictables.Chain{
-// 							Name: "cali-FORWARD",
-// 							Rules: []generictables.Rule{
-// 								{Action: JumpAction{Target: "cali-bazzbiff"}},
-// 							},
-// 						})
-// 						table.Apply()
-// 					})
-// 					It("correct chain should be swapped in", func() {
-// 						Expect(dataplane.Chains).To(Equal(map[string][]string{
-// 							"FORWARD": {
-// 								"-m comment --comment \"cali:wUHhoiAYhphO9Mso\" --jump cali-FORWARD",
-// 							},
-// 							"INPUT":  {},
-// 							"OUTPUT": {},
-// 							"cali-FORWARD": {
-// 								"-m comment --comment \"cali:1pGUEVtqm3p-zY1p\" --jump cali-bazzbiff",
-// 							},
-// 							"cali-bazzbiff": {
-// 								"-m comment --comment \"cali:wQBCfaMfDn3BVJmT\" --jump ACCEPT",
-// 								"-m comment --comment \"cali:Ry8HbkntbrghgQKU\" --jump DROP",
-// 							},
-// 						}))
-// 					})
-// 				})
-//
-// 				Describe("after removing the reference", func() {
-// 					BeforeEach(func() {
-// 						table.UpdateChain(&generictables.Chain{
-// 							Name:  "cali-FORWARD",
-// 							Rules: []generictables.Rule{},
-// 						})
-// 						table.Apply()
-// 					})
-// 					It("should clean up referred chain", func() {
-// 						Expect(dataplane.Chains).To(Equal(map[string][]string{
-// 							"FORWARD": {
-// 								"-m comment --comment \"cali:wUHhoiAYhphO9Mso\" --jump cali-FORWARD",
-// 							},
-// 							"INPUT":        {},
-// 							"OUTPUT":       {},
-// 							"cali-FORWARD": {},
-// 						}))
-// 					})
-// 				})
-// 			})
-// 		})
-//
-// 		Describe("after adding a reference from another referenced chain", func() {
-// 			BeforeEach(func() {
-// 				table.InsertOrAppendRules("FORWARD", []generictables.Rule{
-// 					{Action: JumpAction{Target: "cali-FORWARD"}},
-// 				})
-// 				table.UpdateChain(&generictables.Chain{
-// 					Name: "cali-FORWARD",
-// 					Rules: []generictables.Rule{
-// 						{Action: JumpAction{Target: "cali-foobar"}},
-// 					},
-// 				})
-// 				table.Apply()
-// 			})
-// 			It("it should get programmed", func() {
-// 				Expect(dataplane.Chains).To(Equal(map[string][]string{
-// 					"FORWARD": {
-// 						"-m comment --comment \"cali:wUHhoiAYhphO9Mso\" --jump cali-FORWARD",
-// 					},
-// 					"INPUT":  {},
-// 					"OUTPUT": {},
-// 					"cali-FORWARD": {
-// 						"-m comment --comment \"cali:WiiHgeRwfPX6Ol7d\" --jump cali-foobar",
-// 					},
-// 					"cali-foobar": {
-// 						"-m comment --comment \"cali:42h7Q64_2XDzpwKe\" --jump ACCEPT",
-// 						"-m comment --comment \"cali:0sUFHicPNNqNyNx8\" --jump DROP",
-// 					},
-// 				}))
-// 			})
-//
-// 			Describe("after adding a reference from an insert", func() {
-// 				BeforeEach(func() {
-// 					table.InsertOrAppendRules("FORWARD", []generictables.Rule{
-// 						{Action: JumpAction{Target: "cali-foobar"}},
-// 					})
-// 					table.Apply()
-// 				})
-// 				It("intermediate chain should be removed", func() {
-// 					Expect(dataplane.Chains).To(Equal(map[string][]string{
-// 						"FORWARD": {
-// 							"-m comment --comment \"cali:JttcEuxbGad9jG6N\" --jump cali-foobar",
-// 						},
-// 						"INPUT":  {},
-// 						"OUTPUT": {},
-// 						"cali-foobar": {
-// 							"-m comment --comment \"cali:42h7Q64_2XDzpwKe\" --jump ACCEPT",
-// 							"-m comment --comment \"cali:0sUFHicPNNqNyNx8\" --jump DROP",
-// 						},
-// 					}))
-// 				})
-//
-// 				Describe("after deleting the intermediate chain", func() {
-// 					BeforeEach(func() {
-// 						table.RemoveChainByName("cali-FORWARD")
-// 						table.Apply()
-// 					})
-// 					It("should make no change", func() {
-// 						Expect(dataplane.Chains).To(Equal(map[string][]string{
-// 							"FORWARD": {
-// 								"-m comment --comment \"cali:JttcEuxbGad9jG6N\" --jump cali-foobar",
-// 							},
-// 							"INPUT":  {},
-// 							"OUTPUT": {},
-// 							"cali-foobar": {
-// 								"-m comment --comment \"cali:42h7Q64_2XDzpwKe\" --jump ACCEPT",
-// 								"-m comment --comment \"cali:0sUFHicPNNqNyNx8\" --jump DROP",
-// 							},
-// 						}))
-// 					})
-//
-// 					Describe("after removing the insert", func() {
-// 						BeforeEach(func() {
-// 							table.InsertOrAppendRules("FORWARD", []generictables.Rule{})
-// 							table.Apply()
-// 						})
-// 						It("chain should be removed", func() {
-// 							Expect(dataplane.Chains).To(Equal(map[string][]string{
-// 								"FORWARD": {},
-// 								"INPUT":   {},
-// 								"OUTPUT":  {},
-// 							}))
-// 						})
-// 					})
-// 				})
-// 			})
-// 		})
-//
-// 		Describe("after adding a reference from an insert", func() {
-// 			BeforeEach(func() {
-// 				table.InsertOrAppendRules("FORWARD", []generictables.Rule{
-// 					{Action: JumpAction{Target: "cali-foobar"}},
-// 				})
-// 				table.Apply()
-// 			})
-// 			It("it should get programmed", func() {
-// 				Expect(dataplane.Chains).To(Equal(map[string][]string{
-// 					"FORWARD": {
-// 						"-m comment --comment \"cali:JttcEuxbGad9jG6N\" --jump cali-foobar",
-// 					},
-// 					"INPUT":  {},
-// 					"OUTPUT": {},
-// 					"cali-foobar": {
-// 						"-m comment --comment \"cali:42h7Q64_2XDzpwKe\" --jump ACCEPT",
-// 						"-m comment --comment \"cali:0sUFHicPNNqNyNx8\" --jump DROP",
-// 					},
-// 				}))
-// 			})
-//
-// 			Describe("after removing the reference", func() {
-// 				BeforeEach(func() {
-// 					table.InsertOrAppendRules("FORWARD", []generictables.Rule{})
-// 					table.Apply()
-// 				})
-// 				It("it should get removed", func() {
-// 					Expect(dataplane.Chains).To(Equal(map[string][]string{
-// 						"FORWARD": {},
-// 						"INPUT":   {},
-// 						"OUTPUT":  {},
-// 					}))
-// 				})
-// 			})
-//
-// 			Describe("then updating the chain", func() {
-// 				BeforeEach(func() {
-// 					table.UpdateChains([]*generictables.Chain{
-// 						{Name: "cali-foobar", Rules: []generictables.Rule{
-// 							// We swap the rules.
-// 							{Action: DropAction{}},
-// 							{Action: AcceptAction{}},
-// 						}},
-// 					})
-// 					table.Apply()
-// 				})
-// 				It("should be updated", func() {
-// 					Expect(dataplane.Chains).To(Equal(map[string][]string{
-// 						"FORWARD": {
-// 							"-m comment --comment \"cali:JttcEuxbGad9jG6N\" --jump cali-foobar",
-// 						},
-// 						"INPUT":  {},
-// 						"OUTPUT": {},
-// 						"cali-foobar": {
-// 							"-m comment --comment \"cali:I9LKcIJU9vtw4suw\" --jump DROP",
-// 							"-m comment --comment \"cali:2XsaWB87aQT7Fxgc\" --jump ACCEPT",
-// 						},
-// 					}))
-// 				})
-// 				It("shouldn't get written more than once", func() {
-// 					dataplane.ResetCmds()
-// 					table.Apply()
-// 					Expect(dataplane.CmdNames).To(BeEmpty())
-// 				})
-// 				It("should squash idempotent updates", func() {
-// 					table.UpdateChains([]*generictables.Chain{
-// 						{Name: "cali-foobar", Rules: []generictables.Rule{
-// 							// Same data as above.
-// 							{Action: DropAction{}},
-// 							{Action: AcceptAction{}},
-// 						}},
-// 					})
-// 					dataplane.ResetCmds()
-// 					table.Apply()
-// 					// Should do a save but then figure out that there's nothing to do
-// 					if dataplaneMode == "nft" {
-// 						Expect(dataplane.CmdNames).To(ConsistOf("iptables", "iptables-nft-save"))
-// 					} else {
-// 						Expect(dataplane.CmdNames).To(ConsistOf("iptables", "iptables-save"))
-// 					}
-// 				})
-// 			})
-// 			Describe("then extending the chain", func() {
-// 				BeforeEach(func() {
-// 					table.UpdateChains([]*generictables.Chain{
-// 						{Name: "cali-foobar", Rules: []generictables.Rule{
-// 							{Action: AcceptAction{}},
-// 							{Action: DropAction{}},
-// 							{Action: ReturnAction{}},
-// 						}},
-// 					})
-// 					table.Apply()
-// 				})
-// 				It("should be updated", func() {
-// 					Expect(dataplane.Chains).To(Equal(map[string][]string{
-// 						"FORWARD": {
-// 							"-m comment --comment \"cali:JttcEuxbGad9jG6N\" --jump cali-foobar",
-// 						},
-// 						"INPUT":  {},
-// 						"OUTPUT": {},
-// 						"cali-foobar": {
-// 							"-m comment --comment \"cali:42h7Q64_2XDzpwKe\" --jump ACCEPT",
-// 							"-m comment --comment \"cali:0sUFHicPNNqNyNx8\" --jump DROP",
-// 							"-m comment --comment \"cali:yilSOZ62PxMhMnS9\" --jump RETURN",
-// 						},
-// 					}))
-// 				})
-//
-// 				Describe("then truncating the chain", func() {
-// 					BeforeEach(func() {
-// 						table.UpdateChains([]*generictables.Chain{
-// 							{Name: "cali-foobar", Rules: []generictables.Rule{
-// 								{Action: AcceptAction{}},
-// 							}},
-// 						})
-// 						table.Apply()
-// 					})
-// 					It("should be updated", func() {
-// 						Expect(dataplane.Chains).To(Equal(map[string][]string{
-// 							"FORWARD": {
-// 								"-m comment --comment \"cali:JttcEuxbGad9jG6N\" --jump cali-foobar",
-// 							},
-// 							"INPUT":  {},
-// 							"OUTPUT": {},
-// 							"cali-foobar": {
-// 								"-m comment --comment \"cali:42h7Q64_2XDzpwKe\" --jump ACCEPT",
-// 							},
-// 						}))
-// 					})
-// 				})
-// 				Describe("then replacing the chain", func() {
-// 					BeforeEach(func() {
-// 						table.UpdateChains([]*generictables.Chain{
-// 							{Name: "cali-foobar", Rules: []generictables.Rule{
-// 								{Action: ReturnAction{}},
-// 							}},
-// 						})
-// 						table.Apply()
-// 					})
-// 					It("should be updated", func() {
-// 						Expect(dataplane.Chains).To(Equal(map[string][]string{
-// 							"FORWARD": {
-// 								"-m comment --comment \"cali:JttcEuxbGad9jG6N\" --jump cali-foobar",
-// 							},
-// 							"INPUT":  {},
-// 							"OUTPUT": {},
-// 							"cali-foobar": {
-// 								"-m comment --comment \"cali:ZqwJQBzCmuABAOQt\" --jump RETURN",
-// 							},
-// 						}))
-// 					})
-// 				})
-// 			})
-// 			Describe("then removing the chain by name", func() {
-// 				BeforeEach(func() {
-// 					table.RemoveChainByName("cali-foobar")
-// 					table.Apply()
-// 				})
-// 				It("should be gone from the dataplane", func() {
-// 					Expect(dataplane.Chains).To(Equal(map[string][]string{
-// 						"FORWARD": {
-// 							"-m comment --comment \"cali:JttcEuxbGad9jG6N\" --jump cali-foobar",
-// 						},
-// 						"INPUT":  {},
-// 						"OUTPUT": {},
-// 					}))
-// 				})
-// 			})
-// 			Describe("then removing the chain", func() {
-// 				BeforeEach(func() {
-// 					table.RemoveChains([]*generictables.Chain{
-// 						{Name: "cali-foobar", Rules: []generictables.Rule{
-// 							{Action: AcceptAction{}},
-// 							{Action: DropAction{}},
-// 						}},
-// 					})
-// 					table.Apply()
-// 				})
-// 				It("should be gone from the dataplane", func() {
-// 					Expect(dataplane.Chains).To(Equal(map[string][]string{
-// 						"FORWARD": {
-// 							"-m comment --comment \"cali:JttcEuxbGad9jG6N\" --jump cali-foobar",
-// 						},
-// 						"INPUT":  {},
-// 						"OUTPUT": {},
-// 					}))
-// 				})
-// 			})
-// 		})
-// 	})
 //
 // 	Describe("applying updates when underlying iptables have changed in a approved chain", func() {
 // 		BeforeEach(func() {
@@ -1847,3 +1778,19 @@ var _ = Describe("Table with an empty dataplane", func() {
 // 		Expect(res).To(HaveLen(2))
 // 	})
 // }
+
+// 	Describe("with nftables returning an nft error", func() {
+// 		BeforeEach(func() {
+// 			dataplane.Prologue = "# Table `nat' is incompatible, use 'nft' tool.\n"
+// 		})
+//
+// 		It("should fail", func() {
+// 			Expect(func() {
+// 				table.Apply()
+// 			}).To(Panic())
+// 		})
+// 	})
+//
+//
+//
+//
