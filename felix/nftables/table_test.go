@@ -226,7 +226,6 @@ var _ = Describe("Table with an empty dataplane", func() {
 		Describe("after another process removes the insertion (empty chain)", func() {
 			BeforeEach(func() {
 				// Remove the chains out-of-band from the Table.
-				By("Deleting the rules from filter-FORWARD out-of-band")
 				rules, err := f.ListRules(context.TODO(), "filter-FORWARD")
 				Expect(err).NotTo(HaveOccurred())
 				tx := f.NewTransaction()
@@ -240,7 +239,9 @@ var _ = Describe("Table with an empty dataplane", func() {
 				Expect(rules).To(HaveLen(0), "Failed to clean up rules!")
 			})
 
-			expectDataplaneFixed := func() {
+			It("should put it back on the next explicit refresh", func() {
+				table.InvalidateDataplaneCache("test")
+				table.Apply()
 				rules, err := f.ListRules(context.TODO(), "filter-FORWARD")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(rules).To(EqualRules([]knftables.Rule{
@@ -250,70 +251,47 @@ var _ = Describe("Table with an empty dataplane", func() {
 						Comment: ptr("cali:TLSb4S0a53EKxjpX;"),
 					},
 				}))
-			}
-			// expectDataplaneUntouched := func() {
-			// 	rules, err := f.ListRules(context.TODO(), "filter-FORWARD")
-			// 	Expect(err).NotTo(HaveOccurred())
-			// 	Expect(rules).To(EqualRules([]knftables.Rule{}))
-			// }
+			})
+		})
 
-			It("should put it back on the next explicit refresh", func() {
+		Describe("after another process replaces the insertion (non-empty chain)", func() {
+			BeforeEach(func() {
+				// Remove the chains out-of-band from the Table.
+				rules, err := f.ListRules(context.TODO(), "filter-FORWARD")
+				Expect(err).NotTo(HaveOccurred())
+				tx := f.NewTransaction()
+				for _, r := range rules {
+					cp := *r
+					tx.Delete(&cp)
+				}
+				// Add a few rules to the chain as well.
+				tx.Add(&knftables.Chain{Name: "ufw-before-logging-forward"})
+				tx.Add(&knftables.Chain{Name: "ufw-before-forward"})
+				tx.Add(&knftables.Chain{Name: "ufw-after-forward"})
+				tx.Add(&knftables.Rule{Chain: "filter-FORWARD", Rule: "jump ufw-before-logging-forward"})
+				tx.Add(&knftables.Rule{Chain: "filter-FORWARD", Rule: "jump ufw-before-forward"})
+				tx.Add(&knftables.Rule{Chain: "filter-FORWARD", Rule: "jump ufw-after-forward"})
+				Expect(f.Run(context.TODO(), tx)).NotTo(HaveOccurred())
+				rules, err = f.ListRules(context.TODO(), "filter-FORWARD")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(rules).To(HaveLen(3), "Failed to replace rules!")
+			})
+
+			It("should put it back on the next refresh", func() {
 				table.InvalidateDataplaneCache("test")
 				table.Apply()
-				expectDataplaneFixed()
+				rules, err := f.ListRules(context.TODO(), "filter-FORWARD")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(rules).To(EqualRules([]knftables.Rule{
+					{
+						Chain:   "filter-FORWARD",
+						Rule:    "counter drop",
+						Comment: ptr("cali:TLSb4S0a53EKxjpX;"),
+					},
+				}))
 			})
-			// shouldNotBeFixedAfter := func(delay time.Duration) func() {
-			// 	return func() {
-			// 		dataplane.AdvanceTimeBy(delay)
-			// 		table.Apply()
-			// 		expectDataplaneUntouched()
-			// 	}
-			// }
-			// shouldBeFixedAfter := func(delay time.Duration) func() {
-			// 	return func() {
-			// 		dataplane.AdvanceTimeBy(delay)
-			// 		table.Apply()
-			// 		expectDataplaneFixed()
-			// 	}
-			// }
-			// It("should defer recheck of the dataplane until after first recheck time",
-			// 	shouldNotBeFixedAfter(49*time.Millisecond))
-			// It("should recheck the dataplane if time has advanced far enough",
-			// 	shouldBeFixedAfter(50*time.Millisecond))
-			// It("should recheck the dataplane even if one of the recheck steps was missed",
-			// 	shouldBeFixedAfter(500*time.Millisecond))
-			// It("should recheck the dataplane even if one of the recheck steps was missed",
-			// 	shouldBeFixedAfter(2000*time.Millisecond))
 		})
 	})
-
-	// Describe("after another process replaces the insertion (non-empty chain)", func() {
-	// 	BeforeEach(func() {
-	// 		dataplane.Chains = map[string][]string{
-	// 			"FORWARD": {
-	// 				`-A FORWARD -j ufw-before-logging-forward`,
-	// 				`-A FORWARD -j ufw-before-forward`,
-	// 				`-A FORWARD -j ufw-after-forward`,
-	// 			},
-	// 			"INPUT":  {},
-	// 			"OUTPUT": {},
-	// 		}
-	// 	})
-	// 	It("should put it back on the next refresh", func() {
-	// 		table.InvalidateDataplaneCache("test")
-	// 		table.Apply()
-	// 		Expect(dataplane.Chains).To(Equal(map[string][]string{
-	// 			"FORWARD": {
-	// 				`-m comment --comment "cali:hecdSCslEjdBPBPo" --jump DROP`,
-	// 				`-A FORWARD -j ufw-before-logging-forward`,
-	// 				`-A FORWARD -j ufw-before-forward`,
-	// 				`-A FORWARD -j ufw-after-forward`,
-	// 			},
-	// 			"INPUT":  {},
-	// 			"OUTPUT": {},
-	// 		}))
-	// 	})
-	// })
 })
 
 // 	Describe("with nftables returning an nft error", func() {
