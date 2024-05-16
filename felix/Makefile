@@ -156,7 +156,7 @@ bin/calico-felix: bin/calico-felix-$(ARCH)
 	ln -f bin/calico-felix-$(ARCH) bin/calico-felix
 
 libbpf: $(LIBBPF_A)
-$(LIBBPF_A): $(shell find bpf-gpl/include/libbpf -type f ! -name "*.a")
+$(LIBBPF_A): $(shell find bpf-gpl/include/libbpf -type f -name '*.[ch]')
 	mkdir -p bpf-gpl/include/libbpf/src/$(ARCH)
 	$(MAKE) register ARCH=$(ARCH)
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c "make -j 16 -C bpf-gpl/include/libbpf/src BUILD_STATIC_ONLY=1 OBJDIR=$(ARCH)"
