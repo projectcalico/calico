@@ -429,6 +429,12 @@ func (rg *routeGenerator) advertiseThisService(svc *v1.Service, ep *v1.Endpoints
 		return true
 	}
 
+	// we need to announce LoadBalancers with externalTrafficPolicy Cluster if we are not advertising the aggregated routes
+	if svc.Spec.Type == v1.ServiceTypeLoadBalancer && svc.Spec.ExternalTrafficPolicy == v1.ServiceExternalTrafficPolicyTypeCluster && !rg.client.LoadBalancerIPRouteAggregationEnabled() {
+		logc.Debug("Advertising load balancer of type cluster because aggregated route advertising is not enabled")
+		return true
+	}
+
 	// we only need to advertise local services, since we advertise the entire cluster IP range.
 	if svc.Spec.ExternalTrafficPolicy != v1.ServiceExternalTrafficPolicyTypeLocal {
 		logc.Debugf("Skipping service with non-local external traffic policy '%s'", svc.Spec.ExternalTrafficPolicy)
