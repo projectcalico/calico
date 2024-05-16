@@ -22,6 +22,10 @@ UBI_VERSION=8.9
 # Configuration for Semaphore integration.
 ORGANIZATION = projectcalico
 
+# Configuration for Github repositories
+REPOSITORY_NAME=projectcalico/calico
+API_REPOSITORY=projectcalico/api
+
 # Configure git to access repositories using SSH.
 GIT_USE_SSH = true
 

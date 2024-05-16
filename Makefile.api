@@ -1,0 +1,40 @@
+# This Makefile includes rules and targets for updating
+# the API repository and creating a Github PR for it.
+
+include metadata.mk
+
+# metadata.mk sets ORGANIZATION, API_REPOSITORY, and REPOSITORY_NAME
+
+LOCAL_REPOSITORY_REVISION := $(shell git describe --tags)
+GIT_BRANCH := $(shell git branch --show-current)
+PR_BRANCH := auto_api_update_$(shell git branch --show-current | sed -E -e 's/release-(calient)?-//')
+
+# This is the makefile rule that we should be running by default.
+update-remote-api: clone-remote-api fetch-remote-api commit-remote-api clean
+
+# This clones the remote API repository at $(API_REPOSITORY). If it exists,
+# we fail because something likely broke halfway through the last run.
+clone-remote-api:
+	@git clone -b $(GIT_BRANCH) git@github.com:$(API_REPOSITORY) __api_update
+
+# At this point, __api_update will be the repository from $(API_REPOSITORY),
+# and so we run their Makefile rules to do the updates. This will (pointlessly)
+# clone this very repo again, but we can refactor that later.
+fetch-remote-api:
+	$(MAKE) -C __api_update -f Makefile.local update
+
+# This set of commands requires the `gh` command to be configured correctly with
+# a user which has the appropriate permissions on the $(API_REPOSITORY) repo. This
+# will likely break in Semaphore the first time.
+commit-remote-api:
+	cd __api_update && \
+	git switch -C $(PR_BRANCH) && \
+	git commit -am "Automatic API update from $(REPOSITORY_NAME) $(LOCAL_REPOSITORY_REVISION)" && \
+	git push -f origin $(PR_BRANCH) && \
+	gh pr create --assignee '@me' --base $(GIT_BRANCH) --head $(ORGANIZATION):$(PR_BRANCH) \
+		--reviewer "danudey" \
+		--fill \
+		--draft
+
+clean:
+	$(RM) -r __api_update
