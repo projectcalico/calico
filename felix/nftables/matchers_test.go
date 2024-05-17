@@ -48,12 +48,23 @@ func ContainRule(rule knftables.Rule) types.GomegaMatcher {
 }
 
 type equalRulesMatcher struct {
-	expected []knftables.Rule
+	expectComments bool
+	expected       []knftables.Rule
+}
+
+// EqualRulesFuzzy is a matcher that compares two slices of knftables.Rule. It ignores the Handle field and the Comment field,
+// since we don't need to verify the comments on every single test, and this makes writing and reading tests easier.
+func EqualRulesFuzzy(expected []knftables.Rule) types.GomegaMatcher {
+	return &equalRulesMatcher{
+		expectComments: false,
+		expected:       expected,
+	}
 }
 
 func EqualRules(expected []knftables.Rule) types.GomegaMatcher {
 	return &equalRulesMatcher{
-		expected: expected,
+		expectComments: true,
+		expected:       expected,
 	}
 }
 
@@ -68,9 +79,13 @@ func (e *equalRulesMatcher) Match(actual interface{}) (success bool, err error) 
 	}
 
 	for i := range rules {
+		exp := e.expected[i]
 		cp := *rules[i]
 		cp.Handle = nil
-		if !reflect.DeepEqual(cp, e.expected[i]) {
+		if !e.expectComments {
+			cp.Comment = nil
+		}
+		if !reflect.DeepEqual(cp, exp) {
 			return false, nil
 		}
 	}
