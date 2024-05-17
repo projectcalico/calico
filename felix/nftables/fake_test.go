@@ -67,5 +67,5 @@ func (f *fakeNFT) ListRules(ctx context.Context, chain string) ([]*knftables.Rul
 // be "set" or "map".) If the set/map exists but contains no elements, this will
 // return an empty list and no error.
 func (f *fakeNFT) ListElements(ctx context.Context, objectType string, name string) ([]*knftables.Element, error) {
-	return f.ListElements(ctx, objectType, name)
+	return f.fake.ListElements(ctx, objectType, name)
 }
