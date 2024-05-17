@@ -622,297 +622,129 @@ var _ = Describe("Table with an empty dataplane", func() {
 				})
 			})
 		})
+
+		Describe("applying updates when underlying rules have changed in a approved chain", func() {
+			BeforeEach(func() {
+				table.InsertOrAppendRules("filter-FORWARD", []generictables.Rule{
+					{Action: AcceptAction{}},
+					{Action: DropAction{}},
+					{Action: JumpAction{Target: "cali-foobar"}},
+				})
+				table.UpdateChains([]*generictables.Chain{
+					{Name: "cali-foobar", Rules: []generictables.Rule{
+						{Action: AcceptAction{}},
+						{Action: DropAction{}},
+					}},
+				})
+				table.Apply()
+				Expect(f.transactions).To(HaveLen(2))
+			})
+
+			It("should be in the dataplane", func() {
+				chains, err := f.List(context.TODO(), "chain")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(chains).To(ConsistOf(append(expectedBaseChains, "cali-foobar")))
+
+				// Assert the rules are correct.
+				rules, err := f.ListRules(context.TODO(), "cali-foobar")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(rules).To(EqualRulesFuzzy([]knftables.Rule{
+					{Chain: "cali-foobar", Rule: "counter accept"},
+					{Chain: "cali-foobar", Rule: "counter drop"},
+				}))
+				rules, err = f.ListRules(context.TODO(), "filter-FORWARD")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(rules).To(EqualRulesFuzzy([]knftables.Rule{
+					{Chain: "filter-FORWARD", Rule: "counter accept"},
+					{Chain: "filter-FORWARD", Rule: "counter drop"},
+					{Chain: "filter-FORWARD", Rule: "counter jump cali-foobar"},
+				}))
+			})
+
+			Describe("inserting and appending into a base chain results in the expected writes", func() {
+				BeforeEach(func() {
+					table.AppendRules("filter-FORWARD", []generictables.Rule{
+						{Action: DropAction{}, Comment: []string{"append drop rule"}},
+						{Action: AcceptAction{}, Comment: []string{"append accept rule"}},
+					})
+					table.InsertOrAppendRules("filter-FORWARD", []generictables.Rule{
+						{Action: DropAction{}, Comment: []string{"insert drop rule"}},
+						{Action: AcceptAction{}, Comment: []string{"insert accept rule"}},
+					})
+
+					table.Apply()
+					Expect(f.transactions).To(HaveLen(3))
+				})
+
+				It("should update the dataplane", func() {
+					rules, err := f.ListRules(context.TODO(), "filter-FORWARD")
+					Expect(err).NotTo(HaveOccurred())
+					Expect(rules).To(EqualRules([]knftables.Rule{
+						{Chain: "filter-FORWARD", Rule: "counter drop", Comment: ptr("cali:dnJtghS1A5Unt-BW; insert drop rule")},
+						{Chain: "filter-FORWARD", Rule: "counter accept", Comment: ptr("cali:8d4n9mdzwn5qEtRG; insert accept rule")},
+						{Chain: "filter-FORWARD", Rule: "counter drop", Comment: ptr("cali:OOBTdzvkqxGW2K8g; append drop rule")},
+						{Chain: "filter-FORWARD", Rule: "counter accept", Comment: ptr("cali:cIvWMNaWDMUSreTo; append accept rule")},
+					}))
+				})
+
+				Describe("then appending the same rules", func() {
+					BeforeEach(func() {
+						table.AppendRules("filter-FORWARD", []generictables.Rule{
+							{Action: DropAction{}, Comment: []string{"append drop rule"}},
+							{Action: AcceptAction{}, Comment: []string{"append accept rule"}},
+						})
+						table.Apply()
+
+						// No changes should be made.
+						Expect(f.transactions).To(HaveLen(3))
+					})
+
+					It("should result in no inserts", func() {
+						rules, err := f.ListRules(context.TODO(), "filter-FORWARD")
+						Expect(err).NotTo(HaveOccurred())
+						Expect(rules).To(EqualRulesFuzzy([]knftables.Rule{
+							{Chain: "filter-FORWARD", Rule: "counter drop"},
+							{Chain: "filter-FORWARD", Rule: "counter accept"},
+							{Chain: "filter-FORWARD", Rule: "counter drop"},
+							{Chain: "filter-FORWARD", Rule: "counter accept"},
+						}))
+					})
+				})
+
+				Describe("then inserting and appending different rules", func() {
+					BeforeEach(func() {
+						table.InsertOrAppendRules("filter-FORWARD", []generictables.Rule{
+							{Action: DropAction{}, Comment: []string{"insert drop rule"}},
+							{Action: AcceptAction{}, Comment: []string{"insert accept rule"}},
+							{Action: DropAction{}, Comment: []string{"second insert drop rule"}},
+						})
+						table.AppendRules("filter-FORWARD", []generictables.Rule{
+							{Action: DropAction{}, Comment: []string{"append drop rule"}},
+							{Action: AcceptAction{}, Comment: []string{"append accept rule"}},
+							{Action: DropAction{}, Comment: []string{"second append drop rule"}},
+						})
+						table.Apply()
+						Expect(f.transactions).To(HaveLen(4))
+					})
+
+					It("should result in modifications", func() {
+						rules, err := f.ListRules(context.TODO(), "filter-FORWARD")
+						Expect(err).NotTo(HaveOccurred())
+						Expect(rules).To(EqualRules([]knftables.Rule{
+							{Chain: "filter-FORWARD", Rule: "counter drop", Comment: ptr("cali:dnJtghS1A5Unt-BW; insert drop rule")},
+							{Chain: "filter-FORWARD", Rule: "counter accept", Comment: ptr("cali:8d4n9mdzwn5qEtRG; insert accept rule")},
+							{Chain: "filter-FORWARD", Rule: "counter drop", Comment: ptr("cali:AJNsMMmBbo9PNQU5; second insert drop rule")},
+							{Chain: "filter-FORWARD", Rule: "counter drop", Comment: ptr("cali:OOBTdzvkqxGW2K8g; append drop rule")},
+							{Chain: "filter-FORWARD", Rule: "counter accept", Comment: ptr("cali:cIvWMNaWDMUSreTo; append accept rule")},
+							{Chain: "filter-FORWARD", Rule: "counter drop", Comment: ptr("cali:vft2JD3IpnnaMOqp; second append drop rule")},
+						}))
+					})
+				})
+			})
+		})
 	})
 })
 
-//
-// 	Describe("applying updates when underlying iptables have changed in a approved chain", func() {
-// 		BeforeEach(func() {
-// 			table.InsertOrAppendRules("FORWARD", []generictables.Rule{
-// 				{Action: AcceptAction{}},
-// 				{Action: DropAction{}},
-// 				{Action: JumpAction{Target: "cali-foobar"}},
-// 			})
-// 			table.UpdateChains([]*generictables.Chain{
-// 				{Name: "cali-foobar", Rules: []generictables.Rule{
-// 					{Action: AcceptAction{}},
-// 					{Action: DropAction{}},
-// 				}},
-// 			})
-// 			table.Apply()
-// 		})
-// 		It("should be in the dataplane", func() {
-// 			Expect(dataplane.Chains).To(Equal(map[string][]string{
-// 				"FORWARD": {
-// 					"-m comment --comment \"cali:3gUkOfVeYRgMeHF4\" --jump ACCEPT",
-// 					"-m comment --comment \"cali:8MgbRleZ5Rc5cBEf\" --jump DROP",
-// 					"-m comment --comment \"cali:Ox1x6pjEMCqtMxFb\" --jump cali-foobar",
-// 				},
-// 				"INPUT":  {},
-// 				"OUTPUT": {},
-// 				"cali-foobar": {
-// 					"-m comment --comment \"cali:42h7Q64_2XDzpwKe\" --jump ACCEPT",
-// 					"-m comment --comment \"cali:0sUFHicPNNqNyNx8\" --jump DROP",
-// 				},
-// 			}))
-// 		})
-// 		Describe("then truncating the chain, with the iptables changed before iptables-restore", func() {
-// 			BeforeEach(func() {
-// 				dataplane.OnPreRestore = func() {
-// 					log.Warn("Simulating an insert in FORWARD chain before iptables-restore happens")
-// 					if chain, found := dataplane.Chains["FORWARD"]; found {
-// 						log.Warn("FORWARD chain exists; inserting random rule in FORWARD chain")
-// 						lines := testutils.PrependLine(chain, "-j randomly-inserted-rule")
-// 						dataplane.Chains["FORWARD"] = lines
-// 					}
-// 				}
-//
-// 				table.InsertOrAppendRules("FORWARD", []generictables.Rule{
-// 					{Action: DropAction{}, Comment: []string{"new drop rule"}},
-// 					{Action: JumpAction{Target: "cali-foobar"}},
-// 				})
-// 				table.Apply()
-// 			})
-// 			It("should be updated", func() {
-// 				Expect(dataplane.Chains).To(Equal(map[string][]string{
-// 					"FORWARD": {
-// 						"-m comment --comment \"cali:67cGS74-1PBXlOtK\" -m comment --comment \"new drop rule\" --jump DROP",
-// 						"-m comment --comment \"cali:RA5Tbu3HSwkGWuZM\" --jump cali-foobar",
-// 						"-j randomly-inserted-rule",
-// 					},
-// 					"INPUT":  {},
-// 					"OUTPUT": {},
-// 					"cali-foobar": {
-// 						"-m comment --comment \"cali:42h7Q64_2XDzpwKe\" --jump ACCEPT",
-// 						"-m comment --comment \"cali:0sUFHicPNNqNyNx8\" --jump DROP",
-// 					},
-// 				}))
-// 			})
-// 		})
-// 	})
-//
-// 	Describe("applying updates when underlying iptables have changed in a non-approved chain", func() {
-// 		BeforeEach(func() {
-// 			table.InsertOrAppendRules("FORWARD", []generictables.Rule{
-// 				{Action: JumpAction{Target: "non-cali-chain"}},
-// 				{Action: JumpAction{Target: "cali-foobar"}},
-// 			})
-// 			table.UpdateChains([]*generictables.Chain{
-// 				{Name: "non-cali-chain", Rules: []generictables.Rule{
-// 					{Action: AcceptAction{}, Comment: []string{"non-cali 1"}},
-// 					{Action: DropAction{}, Comment: []string{"non-cali 2"}},
-// 				}},
-// 				{Name: "cali-foobar", Rules: []generictables.Rule{
-// 					{Action: AcceptAction{}, Comment: []string{"cali 1"}},
-// 					{Action: DropAction{}, Comment: []string{"cali 2"}},
-// 				}},
-// 			})
-// 			table.Apply()
-// 		})
-// 		It("should be in the dataplane", func() {
-// 			Expect(dataplane.Chains).To(Equal(map[string][]string{
-// 				"FORWARD": {
-// 					"-m comment --comment \"cali:ta5MhgrxEtcvsaNe\" --jump non-cali-chain",
-// 					"-m comment --comment \"cali:jBG6MfhPnbAhthUp\" --jump cali-foobar",
-// 				},
-// 				"INPUT":  {},
-// 				"OUTPUT": {},
-// 				"non-cali-chain": {
-// 					"-m comment --comment \"cali:Z-OWODLe_LbHxmqg\" -m comment --comment \"non-cali 1\" --jump ACCEPT",
-// 					"-m comment --comment \"cali:tq-yEo1_1XQHZnMs\" -m comment --comment \"non-cali 2\" --jump DROP",
-// 				},
-// 				"cali-foobar": {
-// 					"-m comment --comment \"cali:cxE-1zsuD12R9YEG\" -m comment --comment \"cali 1\" --jump ACCEPT",
-// 					"-m comment --comment \"cali:1cpbPOGLTROlH4Sj\" -m comment --comment \"cali 2\" --jump DROP",
-// 				},
-// 			}))
-// 		})
-// 		Describe("then truncating the chain, with the iptables changed before iptables-restore", func() {
-// 			BeforeEach(func() {
-// 				dataplane.OnPreRestore = func() {
-// 					log.Warn("Simulating an insert in non-cali-chain before iptables-restore happens")
-// 					if chain, found := dataplane.Chains["non-cali-chain"]; found {
-// 						log.Warn("non-cali-chain exists; inserting random rule in non-cali-chain")
-// 						lines := testutils.PrependLine(chain, "-j randomly-inserted-rule")
-// 						dataplane.Chains["non-cali-chain"] = lines
-// 					}
-// 				}
-//
-// 				table.InsertOrAppendRules("non-cali-chain", []generictables.Rule{
-// 					{Action: DropAction{}, Comment: []string{"new drop rule"}},
-// 				})
-// 				table.Apply()
-// 			})
-// 			It("should be updated", func() {
-// 				Expect(dataplane.Chains).To(Equal(map[string][]string{
-// 					"FORWARD": {
-// 						"-m comment --comment \"cali:ta5MhgrxEtcvsaNe\" --jump non-cali-chain",
-// 						"-m comment --comment \"cali:jBG6MfhPnbAhthUp\" --jump cali-foobar",
-// 					},
-// 					"INPUT":  {},
-// 					"OUTPUT": {},
-// 					"non-cali-chain": {
-// 						"-m comment --comment \"cali:O9yEP97Dd2y-EskM\" -m comment --comment \"new drop rule\" --jump DROP",
-// 						"-j randomly-inserted-rule",
-// 					},
-// 					"cali-foobar": {
-// 						"-m comment --comment \"cali:cxE-1zsuD12R9YEG\" -m comment --comment \"cali 1\" --jump ACCEPT",
-// 						"-m comment --comment \"cali:1cpbPOGLTROlH4Sj\" -m comment --comment \"cali 2\" --jump DROP",
-// 					},
-// 				}))
-// 			})
-// 		})
-// 	})
-//
-// 	Describe("inserting into a non-Calico chain results in the expected writes", func() {
-// 		BeforeEach(func() {
-// 			table.InsertOrAppendRules("FORWARD", []generictables.Rule{
-// 				{Action: DropAction{}, Comment: []string{"a drop rule"}},
-// 				{Action: AcceptAction{}, Comment: []string{"an accept rule"}},
-// 			})
-// 			table.Apply()
-// 		})
-// 		It("should update the dataplane", func() {
-// 			Expect(dataplane.Chains).To(Equal(map[string][]string{
-// 				"FORWARD": {
-// 					"-m comment --comment \"cali:upaItQyFMdN7MTTl\" -m comment --comment \"a drop rule\" --jump DROP",
-// 					"-m comment --comment \"cali:EpCg3AYNp_DftVFS\" -m comment --comment \"an accept rule\" --jump ACCEPT",
-// 				},
-// 				"INPUT":  {},
-// 				"OUTPUT": {},
-// 			}))
-// 			Expect(dataplane.CmdNames).To(ConsistOf("iptables", "iptables-nft-save", "iptables-nft-restore"))
-// 		})
-// 		Describe("then inserting the same rules", func() {
-// 			BeforeEach(func() {
-// 				table.InsertOrAppendRules("FORWARD", []generictables.Rule{
-// 					{Action: DropAction{}, Comment: []string{"a drop rule"}},
-// 					{Action: AcceptAction{}, Comment: []string{"an accept rule"}},
-// 				})
-// 				dataplane.ResetCmds()
-// 				table.Apply()
-// 			})
-// 			It("should result in no inserts", func() {
-// 				// Do an iptables-save but not a iptables-restore.
-// 				Expect(dataplane.CmdNames).To(ConsistOf("iptables", "iptables-nft-save"))
-//
-// 				Expect(dataplane.Chains).To(Equal(map[string][]string{
-// 					"FORWARD": {
-// 						"-m comment --comment \"cali:upaItQyFMdN7MTTl\" -m comment --comment \"a drop rule\" --jump DROP",
-// 						"-m comment --comment \"cali:EpCg3AYNp_DftVFS\" -m comment --comment \"an accept rule\" --jump ACCEPT",
-// 					},
-// 					"INPUT":  {},
-// 					"OUTPUT": {},
-// 				}))
-// 			})
-// 		})
-// 		Describe("then inserting different rules", func() {
-// 			BeforeEach(func() {
-// 				table.InsertOrAppendRules("FORWARD", []generictables.Rule{
-// 					{Action: DropAction{}, Comment: []string{"a drop rule"}},
-// 					{Action: AcceptAction{}, Comment: []string{"an accept rule"}},
-// 					{Action: DropAction{}, Comment: []string{"a second drop rule"}},
-// 				})
-// 				dataplane.ResetCmds()
-// 				table.Apply()
-// 			})
-// 			It("should result in modifications", func() {
-// 				// Do an iptables-save and, this time, an iptables-restore.
-// 				Expect(dataplane.CmdNames).To(ConsistOf("iptables", "iptables-nft-save", "iptables-nft-restore"))
-//
-// 				Expect(dataplane.Chains).To(Equal(map[string][]string{
-// 					"FORWARD": {
-// 						"-m comment --comment \"cali:upaItQyFMdN7MTTl\" -m comment --comment \"a drop rule\" --jump DROP",
-// 						"-m comment --comment \"cali:EpCg3AYNp_DftVFS\" -m comment --comment \"an accept rule\" --jump ACCEPT",
-// 						"-m comment --comment \"cali:-rA8o5kyVSTHJMe8\" -m comment --comment \"a second drop rule\" --jump DROP",
-// 					},
-// 					"INPUT":  {},
-// 					"OUTPUT": {},
-// 				}))
-// 			})
-// 		})
-// 	})
-//
-// 	Describe("inserting and appending into a non-Calico chain results in the expected writes", func() {
-// 		BeforeEach(func() {
-// 			table.AppendRules("FORWARD", []generictables.Rule{
-// 				{Action: DropAction{}, Comment: []string{"append drop rule"}},
-// 				{Action: AcceptAction{}, Comment: []string{"append accept rule"}},
-// 			})
-// 			table.InsertOrAppendRules("FORWARD", []generictables.Rule{
-// 				{Action: DropAction{}, Comment: []string{"insert drop rule"}},
-// 				{Action: AcceptAction{}, Comment: []string{"insert accept rule"}},
-// 			})
-//
-// 			table.Apply()
-// 		})
-// 		It("should update the dataplane", func() {
-// 			Expect(dataplane.Chains).To(Equal(map[string][]string{
-// 				"FORWARD": {
-// 					"-m comment --comment \"cali:sP8Ctm6vRqum19h-\" -m comment --comment \"insert drop rule\" --jump DROP",
-// 					"-m comment --comment \"cali:b-zvHycxSRrp53xL\" -m comment --comment \"insert accept rule\" --jump ACCEPT",
-// 					"-m comment --comment \"cali:qNsBylRkftPwO3XF\" -m comment --comment \"append drop rule\" --jump DROP",
-// 					"-m comment --comment \"cali:IQ9H0Scq00rF0w4S\" -m comment --comment \"append accept rule\" --jump ACCEPT",
-// 				},
-// 				"INPUT":  {},
-// 				"OUTPUT": {},
-// 			}))
-// 		})
-//
-// 		Describe("then appending the same rules", func() {
-// 			BeforeEach(func() {
-// 				table.AppendRules("FORWARD", []generictables.Rule{
-// 					{Action: DropAction{}, Comment: []string{"append drop rule"}},
-// 					{Action: AcceptAction{}, Comment: []string{"append accept rule"}},
-// 				})
-// 				dataplane.ResetCmds()
-// 				table.Apply()
-// 			})
-// 			It("should result in no inserts", func() {
-// 				Expect(dataplane.Chains).To(Equal(map[string][]string{
-// 					"FORWARD": {
-// 						"-m comment --comment \"cali:sP8Ctm6vRqum19h-\" -m comment --comment \"insert drop rule\" --jump DROP",
-// 						"-m comment --comment \"cali:b-zvHycxSRrp53xL\" -m comment --comment \"insert accept rule\" --jump ACCEPT",
-// 						"-m comment --comment \"cali:qNsBylRkftPwO3XF\" -m comment --comment \"append drop rule\" --jump DROP",
-// 						"-m comment --comment \"cali:IQ9H0Scq00rF0w4S\" -m comment --comment \"append accept rule\" --jump ACCEPT",
-// 					},
-// 					"INPUT":  {},
-// 					"OUTPUT": {},
-// 				}))
-// 			})
-// 		})
-//
-// 		Describe("then inserting and appending different rules", func() {
-// 			BeforeEach(func() {
-// 				table.InsertOrAppendRules("FORWARD", []generictables.Rule{
-// 					{Action: DropAction{}, Comment: []string{"insert drop rule"}},
-// 					{Action: AcceptAction{}, Comment: []string{"insert accept rule"}},
-// 					{Action: DropAction{}, Comment: []string{"second insert drop rule"}},
-// 				})
-// 				table.AppendRules("FORWARD", []generictables.Rule{
-// 					{Action: DropAction{}, Comment: []string{"append drop rule"}},
-// 					{Action: AcceptAction{}, Comment: []string{"append accept rule"}},
-// 					{Action: DropAction{}, Comment: []string{"second append drop rule"}},
-// 				})
-// 				dataplane.ResetCmds()
-// 				table.Apply()
-// 			})
-// 			It("should result in modifications", func() {
-// 				Expect(dataplane.Chains).To(Equal(map[string][]string{
-// 					"FORWARD": {
-// 						"-m comment --comment \"cali:sP8Ctm6vRqum19h-\" -m comment --comment \"insert drop rule\" --jump DROP",
-// 						"-m comment --comment \"cali:b-zvHycxSRrp53xL\" -m comment --comment \"insert accept rule\" --jump ACCEPT",
-// 						"-m comment --comment \"cali:qvt6MzuJGZqS1aQt\" -m comment --comment \"second insert drop rule\" --jump DROP",
-// 						"-m comment --comment \"cali:qNsBylRkftPwO3XF\" -m comment --comment \"append drop rule\" --jump DROP",
-// 						"-m comment --comment \"cali:IQ9H0Scq00rF0w4S\" -m comment --comment \"append accept rule\" --jump ACCEPT",
-// 						"-m comment --comment \"cali:Ss37kzq4-zQ2tbFp\" -m comment --comment \"second append drop rule\" --jump DROP",
-// 					},
-// 					"INPUT":  {},
-// 					"OUTPUT": {},
-// 				}))
-// 			})
-// 		})
-// 	})
 // })
 //
 // var _ = Describe("Tests of post-update recheck behaviour with refresh timer (nft)", func() {

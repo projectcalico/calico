@@ -277,11 +277,6 @@ func (m matchCriteria) DestPorts(ports ...uint16) generictables.MatchCriteria {
 	return append(m, fmt.Sprintf("-m multiport --destination-ports %s", portsString))
 }
 
-func (m matchCriteria) UDPDestPorts(ports ...uint16) generictables.MatchCriteria {
-	// iptables uses the same match syntax for dest ports recgardless of protocol.
-	return m.DestPorts(ports...)
-}
-
 func (m matchCriteria) NotDestPorts(ports ...uint16) generictables.MatchCriteria {
 	portsString := PortsToMultiport(ports)
 	return append(m, fmt.Sprintf("-m multiport ! --destination-ports %s", portsString))
