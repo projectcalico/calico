@@ -18,13 +18,14 @@ import (
 	"context"
 	"time"
 
+	"sigs.k8s.io/knftables"
+
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/iptables/testutils"
 	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/nftables"
 	. "github.com/projectcalico/calico/felix/nftables"
-	"sigs.k8s.io/knftables"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
