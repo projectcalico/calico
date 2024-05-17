@@ -1024,8 +1024,7 @@ func (t *nftablesTable) applyUpdates() error {
 		if chain, ok := t.desiredStateOfChain(chainName); ok {
 			// Chain update or creation.  Scan the chain against its previous hashes
 			// and replace/append/delete as appropriate.
-			var previousHashes []string
-			previousHashes = t.chainToDataplaneHashes[chainName]
+			previousHashes := t.chainToDataplaneHashes[chainName]
 			currentHashes := chain.RuleHashes(renderInner, features)
 			newHashes[chainName] = currentHashes
 
