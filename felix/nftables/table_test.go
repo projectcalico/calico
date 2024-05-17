@@ -65,10 +65,9 @@ var _ = Describe("Table with an empty dataplane", func() {
 			rules.RuleHashPrefix,
 			featureDetector,
 			TableOptions{
-				NewDataplane:          newDataplane,
-				HistoricChainPrefixes: rules.AllHistoricChainNamePrefixes,
-				LookPathOverride:      testutils.LookPathNoLegacy,
-				OpRecorder:            logutils.NewSummarizer("test loop"),
+				NewDataplane:     newDataplane,
+				LookPathOverride: testutils.LookPathNoLegacy,
+				OpRecorder:       logutils.NewSummarizer("test loop"),
 			},
 		)
 	})
