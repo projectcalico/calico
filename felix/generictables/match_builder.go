@@ -44,7 +44,6 @@ type MatchCriteria interface {
 	SourcePorts(ports ...uint16) MatchCriteria
 	NotSourcePorts(ports ...uint16) MatchCriteria
 	DestPorts(ports ...uint16) MatchCriteria
-	UDPDestPorts(ports ...uint16) MatchCriteria
 	NotDestPorts(ports ...uint16) MatchCriteria
 	SourcePortRanges(ports []*proto.PortRange) MatchCriteria
 	NotSourcePortRanges(ports []*proto.PortRange) MatchCriteria
