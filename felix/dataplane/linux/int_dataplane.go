@@ -440,12 +440,11 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		OpRecorder:            dp.loopSummarizer,
 	}
 	nftablesOptions := nftables.TableOptions{
-		HistoricChainPrefixes: rules.AllHistoricChainNamePrefixes,
-		RefreshInterval:       config.IptablesRefreshInterval,
-		PostWriteInterval:     config.IptablesPostWriteCheckInterval,
-		LookPathOverride:      config.LookPathOverride,
-		OnStillAlive:          dp.reportHealth,
-		OpRecorder:            dp.loopSummarizer,
+		RefreshInterval:   config.IptablesRefreshInterval,
+		PostWriteInterval: config.IptablesPostWriteCheckInterval,
+		LookPathOverride:  config.LookPathOverride,
+		OnStillAlive:      dp.reportHealth,
+		OpRecorder:        dp.loopSummarizer,
 	}
 
 	if config.BPFEnabled && config.BPFKubeProxyIptablesCleanupEnabled {
