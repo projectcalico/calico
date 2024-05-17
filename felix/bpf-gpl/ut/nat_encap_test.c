@@ -35,5 +35,5 @@ static CALI_BPF_INLINE int calico_unittest_entry (struct __sk_buff *skb)
 	__u32 a = HOST_IP;
 	__u32 b = 0x02020202;
 
-	return vxlan_encap(ctx, &a, &b);
+	return vxlan_encap(ctx, &a, &b, 0xdead);
 }

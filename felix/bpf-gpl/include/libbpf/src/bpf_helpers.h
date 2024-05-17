@@ -13,6 +13,7 @@
 #define __uint(name, val) int (*name)[val]
 #define __type(name, val) typeof(val) *name
 #define __array(name, val) typeof(val) *name[]
+#define __ulong(name, val) enum { ___bpf_concat(__unique_value, __COUNTER__) = val } name
 
 /*
  * Helper macro to place programs, maps, license in
@@ -77,16 +78,21 @@
 /*
  * Helper macros to manipulate data structures
  */
-#ifndef offsetof
-#define offsetof(TYPE, MEMBER)	((unsigned long)&((TYPE *)0)->MEMBER)
-#endif
-#ifndef container_of
+
+/* offsetof() definition that uses __builtin_offset() might not preserve field
+ * offset CO-RE relocation properly, so force-redefine offsetof() using
+ * old-school approach which works with CO-RE correctly
+ */
+#undef offsetof
+#define offsetof(type, member)	((unsigned long)&((type *)0)->member)
+
+/* redefined container_of() to ensure we use the above offsetof() macro */
+#undef container_of
 #define container_of(ptr, type, member)				\
 	({							\
 		void *__mptr = (void *)(ptr);			\
 		((type *)(__mptr - offsetof(type, member)));	\
 	})
-#endif
 
 /*
  * Compiler (optimization) barrier.
@@ -131,7 +137,8 @@
 /*
  * Helper function to perform a tail call with a constant/immediate map slot.
  */
-#if __clang_major__ >= 8 && defined(__bpf__)
+#if (defined(__clang__) && __clang_major__ >= 8) || (!defined(__clang__) && __GNUC__ > 12)
+#if defined(__bpf__)
 static __always_inline void
 bpf_tail_call_static(void *ctx, const void *map, const __u32 slot)
 {
@@ -159,6 +166,7 @@ bpf_tail_call_static(void *ctx, const void *map, const __u32 slot)
 		     : "r0", "r1", "r2", "r3", "r4", "r5");
 }
 #endif
+#endif
 
 enum libbpf_pin_type {
 	LIBBPF_PIN_NONE,
@@ -176,11 +184,29 @@ enum libbpf_tristate {
 #define __ksym __attribute__((section(".ksyms")))
 #define __kptr_untrusted __attribute__((btf_type_tag("kptr_untrusted")))
 #define __kptr __attribute__((btf_type_tag("kptr")))
+#define __percpu_kptr __attribute__((btf_type_tag("percpu_kptr")))
 
-#define bpf_ksym_exists(sym) ({									\
-	_Static_assert(!__builtin_constant_p(!!sym), #sym " should be marked as __weak");	\
-	!!sym;											\
+#if defined (__clang__)
+#define bpf_ksym_exists(sym) ({						\
+	_Static_assert(!__builtin_constant_p(!!sym),			\
+		       #sym " should be marked as __weak");		\
+	!!sym;								\
 })
+#elif __GNUC__ > 8
+#define bpf_ksym_exists(sym) ({						\
+	_Static_assert(__builtin_has_attribute (*sym, __weak__),	\
+		       #sym " should be marked as __weak");		\
+	!!sym;								\
+})
+#else
+#define bpf_ksym_exists(sym) !!sym
+#endif
+
+#define __arg_ctx __attribute__((btf_decl_tag("arg:ctx")))
+#define __arg_nonnull __attribute((btf_decl_tag("arg:nonnull")))
+#define __arg_nullable __attribute((btf_decl_tag("arg:nullable")))
+#define __arg_trusted __attribute((btf_decl_tag("arg:trusted")))
+#define __arg_arena __attribute((btf_decl_tag("arg:arena")))
 
 #ifndef ___bpf_concat
 #define ___bpf_concat(a, b) a ## b

@@ -54,7 +54,6 @@ func logrusLevel() logrus.Level {
 	return logrus.ErrorLevel
 }
 
-// NewCommandStartMaster provides a CLI handler for 'start master' command
 func NewCommandStartCalicoServer(out io.Writer) (*cobra.Command, error) {
 	//	o := NewCalicoServerOptions(out, errOut)
 

@@ -158,11 +158,12 @@ bin:
 
 %.d: %.c
 	set -e; rm -f $@; \
-		$(CC) -M $(CFLAGS) $< > $@.$$$$ || { rm -f $@.$$$$; false; } ; \
+		$(CC) -M -MT $(subst .c,.o,$<) -I. $(CFLAGS) $< > $@.$$$$ || { rm -f $@.$$$$; false; } ; \
 		sed 's,\($*\)\.o[ :]*,\1.o $@ : ,g' < $@.$$$$ > $@; \
 		rm -f $@.$$$$
 
 D_FILES=$(C_FILES:.c=.d)
+D_FILES+=$(UT_C_FILES:.c=.d)
 
 ifneq ($(MAKECMDGOALS),clean)
 include $(D_FILES)

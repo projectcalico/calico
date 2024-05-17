@@ -57,7 +57,9 @@ blocks:
       jobs:
         - name: Linux arm64
           commands:
-            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C node cd ARCHES=arm64 CONFIRM=true; fi
+            # Don't call `make -C node cd ARCHES=arm64` here because node image-all also builds
+            # FIPS images that will fail on native arm64 runners. They are built in the previous block.
+            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C node image cd-common ARCH=arm64 VALIDARCHES=arm64 CONFIRM=true; fi
   - name: Publish node multi-arch manifests
     dependencies:
       - Publish node images

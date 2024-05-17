@@ -767,6 +767,8 @@ func TestNATNodePort(t *testing.T) {
 
 	dumpCTMap(ctMap)
 
+	var vxlanSrcPort layers.UDPPort
+
 	skbMark = 0
 	// Another pkt arriving at node 1 - uses existing CT entries
 	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
@@ -783,7 +785,42 @@ func TestNATNodePort(t *testing.T) {
 		Expect(ipv4R.SrcIP.String()).To(Equal(hostIP.String()))
 		Expect(ipv4R.DstIP.String()).To(Equal(node2ip.String()))
 
+		udpL := pktR.Layer(layers.LayerTypeUDP)
+		Expect(udpL).NotTo(BeNil())
+		udpR := udpL.(*layers.UDP)
+
+		Expect(udpR.SrcPort).To(Equal(udp.SrcPort ^ udp.DstPort))
+		vxlanSrcPort = udpR.SrcPort
+
 		checkVxlanEncap(pktR, false, ipv4, udp, payload)
+	})
+
+	skbMark = 0
+	// Another pkt iwith a different source port arriving at node 1
+	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
+
+		// Change the source port
+		pktBytes[14+(20+8)] = 0xde
+		pktBytes[14+(20+8)+1] = 0xad
+
+		res, err := bpfrun(pktBytes)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+
+		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
+		fmt.Printf("pktR = %+v\n", pktR)
+
+		ipv4L := pktR.Layer(layers.LayerTypeIPv4)
+		Expect(ipv4L).NotTo(BeNil())
+		ipv4R := ipv4L.(*layers.IPv4)
+		Expect(ipv4R.SrcIP.String()).To(Equal(hostIP.String()))
+		Expect(ipv4R.DstIP.String()).To(Equal(node2ip.String()))
+
+		udpL := pktR.Layer(layers.LayerTypeUDP)
+		Expect(udpL).NotTo(BeNil())
+		udpR := udpL.(*layers.UDP)
+
+		Expect(udpR.SrcPort).NotTo(Equal(vxlanSrcPort))
 	})
 
 	expectMark(tcdefs.MarkSeenBypassForward)
