@@ -1399,7 +1399,7 @@ func (r *DefaultRuleRenderer) WireguardIncomingMarkChain() *generictables.Chain 
 
 	for _, ifacePrefix := range r.WorkloadIfacePrefixes {
 		rules = append(rules, generictables.Rule{
-			Match:  r.NewMatch().InInterface(fmt.Sprintf("%s*", ifacePrefix)),
+			Match:  r.NewMatch().InInterface(fmt.Sprintf("%s%s", ifacePrefix, r.wildcard)),
 			Action: r.ReturnAction(),
 		})
 	}
