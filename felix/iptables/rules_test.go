@@ -214,7 +214,7 @@ var _ = Describe("rule comments", func() {
 		}
 
 		It("should render rule including multiple comments", func() {
-			render := rule.RenderAppend("test", "TEST", renderInner, &environment.Features{})
+			render := rule.RenderAppend("test", "TEST", RenderInner, &environment.Features{})
 			Expect(render).To(ContainSubstring("-m comment --comment \"boz\""))
 			Expect(render).To(ContainSubstring("-m comment --comment \"fizz\""))
 		})
@@ -229,7 +229,7 @@ fizz`},
 		}
 
 		It("should render rule with newline escaped", func() {
-			render := rule.RenderAppend("test", "TEST", renderInner, &environment.Features{})
+			render := rule.RenderAppend("test", "TEST", RenderInner, &environment.Features{})
 			Expect(render).To(ContainSubstring("-m comment --comment \"boz_fizz\""))
 		})
 	})
@@ -242,7 +242,7 @@ fizz`},
 		}
 
 		It("should render rule with comment truncated", func() {
-			render := rule.RenderAppend("test", "TEST", renderInner, &environment.Features{})
+			render := rule.RenderAppend("test", "TEST", RenderInner, &environment.Features{})
 			Expect(render).To(ContainSubstring("-m comment --comment \"" + strings.Repeat("a", 256) + "\""))
 		})
 	})
@@ -267,5 +267,5 @@ func calculateHashes(chainName string, rules []generictables.Rule) []string {
 		Name:  chainName,
 		Rules: rules,
 	}
-	return chain.RuleHashes(renderInner, &environment.Features{})
+	return chain.RuleHashes(RenderInner, &environment.Features{})
 }

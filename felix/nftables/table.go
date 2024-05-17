@@ -226,10 +226,12 @@ type nftablesTable struct {
 	// of that chain.  Rules are written with rule hash comments.  The Table cleans up inserted
 	// rules with unknown hashes.
 	chainToInsertedRules map[string][]generictables.Rule
+
 	// chainToAppendRules maps from chain name to a list of rules to be appended at the end
 	// of that chain.
 	chainToAppendedRules map[string][]generictables.Rule
-	dirtyBaseChains      set.Set[string]
+
+	dirtyBaseChains set.Set[string]
 
 	// chainNameToChain contains the desired state of our chains, indexed by
 	// chain name.
@@ -287,9 +289,6 @@ type nftablesTable struct {
 	timeSleep func(d time.Duration)
 	timeNow   func() time.Time
 
-	// lookPath is a shim for exec.LookPath.
-	lookPath func(file string) (string, error)
-
 	onStillAlive func()
 	opReporter   logutils.OpRecorder
 	reason       string
@@ -302,21 +301,21 @@ type TableOptions struct {
 	// used for testing.
 	NewDataplane func(knftables.Family, string) (knftables.Interface, error)
 
-	HistoricChainPrefixes    []string
-	ExtraCleanupRegexPattern string
-	RefreshInterval          time.Duration
-	PostWriteInterval        time.Duration
+	RefreshInterval   time.Duration
+	PostWriteInterval time.Duration
 
-	// NewCmdOverride for tests, if non-nil, factory to use instead of the real exec.Command()
-	NewCmdOverride cmdshim.CmdFactory
 	// SleepOverride for tests, if non-nil, replacement for time.Sleep()
 	SleepOverride func(d time.Duration)
+
 	// NowOverride for tests, if non-nil, replacement for time.Now()
 	NowOverride func() time.Time
+
 	// LookPathOverride for tests, if non-nil, replacement for exec.LookPath()
 	LookPathOverride func(file string) (string, error)
+
 	// Thunk to call periodically when doing a long-running operation.
 	OnStillAlive func()
+
 	// OpRecorder to tell when we do resyncs etc.
 	OpRecorder logutils.OpRecorder
 }
@@ -328,19 +327,9 @@ func NewTable(
 	featureDetector environment.FeatureDetectorIface,
 	options TableOptions,
 ) generictables.Table {
+	// Match the chain names that we program dynamically, which all start with "cali",
+	// as well as the base chains that we program which start with "nat", "filter", "mangle", "raw".
 	ourChainsRegexp := regexp.MustCompile("^(cali|nat|filter|mangle|raw)-.*")
-
-	oldInsertRegexpParts := []string{}
-	for _, prefix := range options.HistoricChainPrefixes {
-		part := fmt.Sprintf("(?:-j|--jump) %s", prefix)
-		oldInsertRegexpParts = append(oldInsertRegexpParts, part)
-	}
-	if options.ExtraCleanupRegexPattern != "" {
-		oldInsertRegexpParts = append(oldInsertRegexpParts,
-			options.ExtraCleanupRegexPattern)
-	}
-	oldInsertPattern := strings.Join(oldInsertRegexpParts, "|")
-	log.WithField("pattern", oldInsertPattern).Info("Calculated old-insert detection regex.")
 
 	// Pre-populate the insert and append table with empty lists for each kernel chain.  Ensures that we
 	// clean up any chains that we hooked on a previous run.
@@ -373,9 +362,6 @@ func NewTable(
 
 	// Allow override of exec.Command() and time.Sleep() for test purposes.
 	newCmd := cmdshim.NewRealCmd
-	if options.NewCmdOverride != nil {
-		newCmd = options.NewCmdOverride
-	}
 	sleep := time.Sleep
 	if options.SleepOverride != nil {
 		sleep = options.SleepOverride
@@ -383,10 +369,6 @@ func NewTable(
 	now := time.Now
 	if options.NowOverride != nil {
 		now = options.NowOverride
-	}
-	lookPath := exec.LookPath
-	if options.LookPathOverride != nil {
-		lookPath = options.LookPathOverride
 	}
 
 	logFields := log.Fields{
@@ -397,16 +379,18 @@ func NewTable(
 	if options.NewDataplane == nil {
 		options.NewDataplane = knftables.New
 	}
-	fam := knftables.IPv4Family
+
+	nftFamily := knftables.IPv4Family
+	ipsetFamily := ipsets.IPFamilyV4
 	if ipVersion == 6 {
-		fam = knftables.IPv6Family
+		nftFamily = knftables.IPv6Family
+		ipsetFamily = ipsets.IPFamilyV6
 	}
-	nft, err := options.NewDataplane(fam, name)
+	nft, err := options.NewDataplane(nftFamily, name)
 	if err != nil {
 		log.WithError(err).Panic("Failed to create knftables client")
 	}
-
-	ipv := ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, ipsets.IPSetNamePrefix, nil, nil)
+	ipv := ipsets.NewIPVersionConfig(ipsetFamily, ipsets.IPSetNamePrefix, nil, nil)
 
 	table := &nftablesTable{
 		IPSetsDataplane:        NewIPSets(ipv, nft),
@@ -443,7 +427,6 @@ func NewTable(
 		newCmd:    newCmd,
 		timeSleep: sleep,
 		timeNow:   now,
-		lookPath:  lookPath,
 
 		gaugeNumChains:        gaugeNumChains.WithLabelValues(fmt.Sprintf("%d", ipVersion), name),
 		gaugeNumRules:         gaugeNumRules.WithLabelValues(fmt.Sprintf("%d", ipVersion), name),

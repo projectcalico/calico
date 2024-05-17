@@ -1134,7 +1134,7 @@ func (t *Table) applyUpdates() error {
 			// where only the first replace command sets the rule index.  Work around that by refreshing the
 			// whole chain using a flush.
 			chain, _ := t.desiredStateOfChain(chainName)
-			currentHashes := chain.RuleHashes(renderInner, features)
+			currentHashes := chain.RuleHashes(RenderInner, features)
 			previousHashes := t.chainToDataplaneHashes[chainName]
 			t.logCxt.WithFields(log.Fields{
 				"previous": previousHashes,
@@ -1173,7 +1173,7 @@ func (t *Table) applyUpdates() error {
 				// In iptables legacy mode, we compare the rules one by one and apply deltas rule by rule.
 				previousHashes = t.chainToDataplaneHashes[chainName]
 			}
-			currentHashes := chain.RuleHashes(renderInner, features)
+			currentHashes := chain.RuleHashes(RenderInner, features)
 			newHashes[chainName] = currentHashes
 			for i := 0; i < len(previousHashes) || i < len(currentHashes); i++ {
 				var line string
@@ -1184,7 +1184,7 @@ func (t *Table) applyUpdates() error {
 					// Hash doesn't match, replace the rule.
 					ruleNum := i + 1 // 1-indexed.
 					prefixFrag := t.commentFrag(currentHashes[i])
-					line = chain.Rules[i].RenderReplace(chainName, ruleNum, prefixFrag, renderInner, features)
+					line = chain.Rules[i].RenderReplace(chainName, ruleNum, prefixFrag, RenderInner, features)
 				} else if i < len(previousHashes) {
 					// previousHashes was longer, remove the old rules from the end.
 					ruleNum := len(currentHashes) + 1 // 1-indexed
@@ -1192,7 +1192,7 @@ func (t *Table) applyUpdates() error {
 				} else {
 					// currentHashes was longer.  Append.
 					prefixFrag := t.commentFrag(currentHashes[i])
-					line = chain.Rules[i].RenderAppend(chainName, prefixFrag, renderInner, features)
+					line = chain.Rules[i].RenderAppend(chainName, prefixFrag, RenderInner, features)
 				}
 				buf.WriteLine(line)
 			}
@@ -1256,7 +1256,7 @@ func (t *Table) applyUpdates() error {
 				// state of the chain.
 				for i := len(rules) - 1; i >= 0; i-- {
 					prefixFrag := t.commentFrag(newInsertedRuleHashes[i])
-					line := rules[i].RenderInsert(chainName, prefixFrag, renderInner, features)
+					line := rules[i].RenderInsert(chainName, prefixFrag, RenderInner, features)
 					buf.WriteLine(line)
 					insertRuleLines[i] = line
 				}
@@ -1265,7 +1265,7 @@ func (t *Table) applyUpdates() error {
 				t.logCxt.Debug("Rendering append rules.")
 				for i := 0; i < len(rules); i++ {
 					prefixFrag := t.commentFrag(newInsertedRuleHashes[i])
-					line := rules[i].RenderAppend(chainName, prefixFrag, renderInner, features)
+					line := rules[i].RenderAppend(chainName, prefixFrag, RenderInner, features)
 					buf.WriteLine(line)
 					insertRuleLines[i] = line
 				}
@@ -1281,7 +1281,7 @@ func (t *Table) applyUpdates() error {
 			t.logCxt.Debug("Rendering specific append rules.")
 			for i := 0; i < len(rules); i++ {
 				prefixFrag := t.commentFrag(newAppendedRuleHashes[i])
-				line := rules[i].RenderAppend(chainName, prefixFrag, renderInner, features)
+				line := rules[i].RenderAppend(chainName, prefixFrag, RenderInner, features)
 				buf.WriteLine(line)
 				appendRuleLines[i] = line
 			}
@@ -1490,7 +1490,7 @@ func (t *Table) InsertRulesNow(chain string, rules []generictables.Rule) error {
 	buf.StartTransaction(t.name)
 	for i, r := range rules {
 		prefixFrag := t.commentFrag(hashes[i])
-		buf.WriteLine(r.RenderInsertAtRuleNumber(chain, i+1, prefixFrag, renderInner, features))
+		buf.WriteLine(r.RenderInsertAtRuleNumber(chain, i+1, prefixFrag, RenderInner, features))
 	}
 	buf.EndTransaction()
 
@@ -1540,7 +1540,7 @@ func CalculateRuleHashes(chainName string, rules []generictables.Rule, features 
 		Name:  chainName,
 		Rules: rules,
 	}
-	return (&chain).RuleHashes(renderInner, features)
+	return (&chain).RuleHashes(RenderInner, features)
 }
 
 func numEmptyStrings(strs []string) int {
@@ -1553,7 +1553,7 @@ func numEmptyStrings(strs []string) int {
 	return count
 }
 
-func renderInner(fragments []string, prefixFragment string, match generictables.MatchCriteria, action generictables.Action, comment []string, features *environment.Features) string {
+func RenderInner(fragments []string, prefixFragment string, match generictables.MatchCriteria, action generictables.Action, comment []string, features *environment.Features) string {
 	if prefixFragment != "" {
 		fragments = append(fragments, prefixFragment)
 	}
