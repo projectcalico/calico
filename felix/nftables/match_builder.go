@@ -309,12 +309,6 @@ func (m nftMatch) DestPorts(ports ...uint16) generictables.MatchCriteria {
 	return m
 }
 
-func (m nftMatch) UDPDestPorts(ports ...uint16) generictables.MatchCriteria {
-	portsString := PortsToMultiport(ports)
-	m.clauses = append(m.clauses, fmt.Sprintf("udp dport %s", portsString))
-	return m
-}
-
 func (m nftMatch) NotDestPorts(ports ...uint16) generictables.MatchCriteria {
 	m.removeProtocolMatch()
 	portsString := PortsToMultiport(ports)
