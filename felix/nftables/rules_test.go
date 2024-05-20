@@ -19,6 +19,7 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"sigs.k8s.io/knftables"
 
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/generictables"
@@ -74,9 +75,9 @@ var _ = Describe("rule comments", func() {
 		}
 
 		It("should render rule including multiple comments", func() {
-			render := rule.Render("test", "TEST", renderInner, &environment.Features{})
+			render := renderRule(rule, &environment.Features{})
 			Expect(render.Comment).NotTo(BeNil())
-			Expect(*render.Comment).To(Equal("TEST; boz fizz"))
+			Expect(*render.Comment).To(Equal("cali:TEST; boz fizz"))
 		})
 	})
 
@@ -89,9 +90,9 @@ fizz`},
 		}
 
 		It("should render rule with newline escaped", func() {
-			render := rule.Render("test", "TEST", renderInner, &environment.Features{})
+			render := renderRule(rule, &environment.Features{})
 			Expect(render.Comment).NotTo(BeNil())
-			Expect(*render.Comment).To(Equal("TEST; boz_fizz"))
+			Expect(*render.Comment).To(Equal("cali:TEST; boz_fizz"))
 		})
 	})
 
@@ -103,17 +104,21 @@ fizz`},
 		}
 
 		It("should render rule with comment truncated", func() {
-			render := rule.Render("test", "TEST", renderInner, &environment.Features{})
+			render := renderRule(rule, &environment.Features{})
 			Expect(render.Comment).NotTo(BeNil())
-			Expect(*render.Comment).To(Equal("TEST; " + strings.Repeat("a", 256)))
+			Expect(*render.Comment).To(Equal("cali:TEST; " + strings.Repeat("a", 256)))
 		})
 	})
 })
+
+func renderRule(rule generictables.Rule, features *environment.Features) *knftables.Rule {
+	return generictables.NewNFTRenderer("cali:").Render("test", "TEST", rule, features)
+}
 
 func calculateHashes(chainName string, rules []generictables.Rule) []string {
 	chain := &generictables.Chain{
 		Name:  chainName,
 		Rules: rules,
 	}
-	return chain.RuleHashes(renderInner, &environment.Features{})
+	return generictables.NewNFTRenderer("cali:").RuleHashes(chain, &environment.Features{})
 }
