@@ -138,8 +138,6 @@ RUN microdnf --enablerepo=baseos install \
 RUN rpm --force -i /tmp/rpms/iptables-libs-${IPTABLES_VER}.el8.x86_64.rpm && \
     rpm --force -i /tmp/rpms/iptables-legacy-libs-${IPTABLES_VER}.el8.2.x86_64.rpm && \
     # Install compatible libnftnl version with selected iptables version
-    # rpm --force -i /tmp/rpms/libnftnl-${LIBNFTNL_VER}.el8.x86_64.rpm && \
-    # Install both and select at runtime.
     rpm -i /tmp/rpms/iptables-legacy-${IPTABLES_VER}.el8.2.x86_64.rpm && \
     rpm -i /tmp/rpms/iptables-nft-${IPTABLES_VER}.el8.x86_64.rpm && \
     # Install ipset version
