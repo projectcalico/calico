@@ -218,6 +218,9 @@ type nftablesTable struct {
 	ipVersion uint8
 	nft       knftables.Interface
 
+	// For rendering rules and chains.
+	render generictables.NFTRenderer
+
 	// featureDetector detects the features of the dataplane.
 	featureDetector environment.FeatureDetectorIface
 
@@ -396,6 +399,7 @@ func NewTable(
 		IPSetsDataplane:        NewIPSets(ipv, nft),
 		name:                   name,
 		nft:                    nft,
+		render:                 generictables.NewNFTRenderer(hashPrefix),
 		ipVersion:              ipVersion,
 		featureDetector:        featureDetector,
 		chainToInsertedRules:   inserts,
@@ -1025,7 +1029,7 @@ func (t *nftablesTable) applyUpdates() error {
 			// Chain update or creation.  Scan the chain against its previous hashes
 			// and replace/append/delete as appropriate.
 			previousHashes := t.chainToDataplaneHashes[chainName]
-			currentHashes := chain.RuleHashes(renderInner, features)
+			currentHashes := t.render.RuleHashes(chain, features)
 			newHashes[chainName] = currentHashes
 
 			// Make sure sets are created for the chain, as nft will faill the transaction
@@ -1046,8 +1050,7 @@ func (t *nftablesTable) applyUpdates() error {
 					if previousHashes[i] == currentHashes[i] {
 						continue
 					}
-					prefixFrag := t.commentFrag(currentHashes[i])
-					rendered := chain.Rules[i].Render(chainName, prefixFrag, renderInner, features)
+					rendered := t.render.Render(chainName, currentHashes[i], chain.Rules[i], features)
 					rendered.Handle = t.chainToFullRules[chainName][i].Handle
 					t.logCxt.WithFields(logrus.Fields{
 						"chainName": chainName,
@@ -1068,8 +1071,7 @@ func (t *nftablesTable) applyUpdates() error {
 					t.logCxt.WithFields(logrus.Fields{
 						"chainName": chainName,
 					}).Debug("Appending rule to chain")
-					prefixFrag := t.commentFrag(currentHashes[i])
-					tx.Add(chain.Rules[i].Render(chainName, prefixFrag, renderInner, features))
+					tx.Add(t.render.Render(chainName, currentHashes[i], chain.Rules[i], features))
 				}
 			}
 
@@ -1122,8 +1124,7 @@ func (t *nftablesTable) applyUpdates() error {
 		if len(rules) > 0 {
 			t.logCxt.Debug("Rendering rules.")
 			for i := 0; i < len(rules); i++ {
-				prefixFrag := t.commentFrag(newInsertedRuleHashes[i])
-				tx.Add(rules[i].Render(chainName, prefixFrag, renderInner, features))
+				tx.Add(t.render.Render(chainName, newInsertedRuleHashes[i], rules[i], features))
 			}
 		}
 
@@ -1132,8 +1133,7 @@ func (t *nftablesTable) applyUpdates() error {
 		if len(rules) > 0 {
 			t.logCxt.Debug("Rendering specific append rules.")
 			for i := 0; i < len(rules); i++ {
-				prefixFrag := t.commentFrag(newAppendedRuleHashes[i])
-				tx.Add(rules[i].Render(chainName, prefixFrag, renderInner, features))
+				tx.Add(t.render.Render(chainName, newAppendedRuleHashes[i], rules[i], features))
 			}
 		}
 
@@ -1251,8 +1251,7 @@ func (t *nftablesTable) InsertRulesNow(chain string, rules []generictables.Rule)
 	tx := t.nft.NewTransaction()
 	tx.Add(&knftables.Table{})
 	for i, r := range rules {
-		prefixFrag := t.commentFrag(hashes[i])
-		tx.Insert(r.Render(chain, prefixFrag, renderInner, features))
+		tx.Insert(t.render.Render(chain, hashes[i], r, features))
 	}
 
 	// Run the transaction.
@@ -1276,16 +1275,12 @@ func (t *nftablesTable) desiredStateOfChain(chainName string) (chain *generictab
 	return
 }
 
-func (t *nftablesTable) commentFrag(hash string) string {
-	return fmt.Sprintf(`%s%s`, t.hashCommentPrefix, hash)
-}
-
 func CalculateRuleHashes(chainName string, rules []generictables.Rule, features *environment.Features) []string {
 	chain := generictables.Chain{
 		Name:  chainName,
 		Rules: rules,
 	}
-	return (&chain).RuleHashes(renderInner, features)
+	return generictables.NewNFTRenderer("").RuleHashes(&chain, features)
 }
 
 func numEmptyStrings(strs []string) int {
@@ -1296,35 +1291,4 @@ func numEmptyStrings(strs []string) int {
 		}
 	}
 	return count
-}
-
-func renderInner(fragments []string, prefixFragment string, match generictables.MatchCriteria, action generictables.Action, comment []string, features *environment.Features) string {
-	if prefixFragment != "" {
-		fragments = append(fragments, prefixFragment)
-	}
-
-	if match != nil {
-		matchFragment := match.Render()
-		if matchFragment != "" {
-			fragments = append(fragments, matchFragment)
-		}
-	}
-
-	if action != nil {
-		// Include a counter action on all rules.
-		fragments = append(fragments, "counter")
-
-		// Render other actions.
-		actionFragment := action.ToFragment(features)
-		if actionFragment != "" {
-			fragments = append(fragments, actionFragment)
-		}
-	}
-	inner := strings.Join(fragments, " ")
-	if len(inner) == 0 {
-		// If the rule is empty, it will cause nft to fail with a cryptic error message.
-		// Instead, we'll just use a counter.
-		return "counter"
-	}
-	return inner
 }

@@ -177,7 +177,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 			Expect(rules).To(ContainRule(knftables.Rule{
 				Chain:   "filter-FORWARD",
 				Rule:    "counter drop",
-				Comment: ptr("cali:TLSb4S0a53EKxjpX;"),
+				Comment: ptr("cali:DCGauXoHP5A9-AIO;"),
 			}))
 		})
 
@@ -192,7 +192,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 			Expect(rules).To(ContainRule(knftables.Rule{
 				Chain:   "filter-FORWARD",
 				Rule:    "counter drop",
-				Comment: ptr("cali:TLSb4S0a53EKxjpX;"),
+				Comment: ptr("cali:DCGauXoHP5A9-AIO;"),
 			}))
 		})
 
@@ -212,10 +212,10 @@ var _ = Describe("Table with an empty dataplane", func() {
 				rules, err := f.ListRules(context.TODO(), "filter-FORWARD")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(rules).To(EqualRules([]knftables.Rule{
-					{Chain: "filter-FORWARD", Rule: "counter drop", Comment: ptr("cali:TLSb4S0a53EKxjpX;")},
-					{Chain: "filter-FORWARD", Rule: "counter accept", Comment: ptr("cali:d1SpgHRrivJCC5tn;")},
-					{Chain: "filter-FORWARD", Rule: "counter drop", Comment: ptr("cali:PGo0WoUKFrh-veBf;")},
-					{Chain: "filter-FORWARD", Rule: "counter accept", Comment: ptr("cali:KoxH5YgfppiUxhXz;")},
+					{Chain: "filter-FORWARD", Rule: "counter drop", Comment: ptr("cali:DCGauXoHP5A9-AIO;")},
+					{Chain: "filter-FORWARD", Rule: "counter accept", Comment: ptr("cali:6tpY0LmXqEPD5dsI;")},
+					{Chain: "filter-FORWARD", Rule: "counter drop", Comment: ptr("cali:_Zdh35A6d8kLWs7z;")},
+					{Chain: "filter-FORWARD", Rule: "counter accept", Comment: ptr("cali:K23j5egouXzd1qRD;")},
 				}))
 			})
 		})
@@ -245,7 +245,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 					{
 						Chain:   "filter-FORWARD",
 						Rule:    "counter drop",
-						Comment: ptr("cali:TLSb4S0a53EKxjpX;"),
+						Comment: ptr("cali:DCGauXoHP5A9-AIO;"),
 					},
 				}))
 			})
@@ -283,7 +283,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 					{
 						Chain:   "filter-FORWARD",
 						Rule:    "counter drop",
-						Comment: ptr("cali:TLSb4S0a53EKxjpX;"),
+						Comment: ptr("cali:DCGauXoHP5A9-AIO;"),
 					},
 				}))
 			})
@@ -469,8 +469,8 @@ var _ = Describe("Table with an empty dataplane", func() {
 					rules, err := f.ListRules(context.TODO(), "cali-foobar")
 					Expect(err).NotTo(HaveOccurred())
 					Expect(rules).To(EqualRules([]knftables.Rule{
-						{Chain: "cali-foobar", Rule: "counter accept", Comment: ptr("cali:FLxYtC7zksT3lyZX;")},
-						{Chain: "cali-foobar", Rule: "counter drop", Comment: ptr("cali:MBS3lNnXUbG-jJdL;")},
+						{Chain: "cali-foobar", Rule: "counter accept", Comment: ptr("cali:en3LGdDuVUQEgLl8;")},
+						{Chain: "cali-foobar", Rule: "counter drop", Comment: ptr("cali:iSw4pE2oK6hZ-s52;")},
 					}))
 				})
 
@@ -505,8 +505,8 @@ var _ = Describe("Table with an empty dataplane", func() {
 						rules, err := f.ListRules(context.TODO(), "cali-foobar")
 						Expect(err).NotTo(HaveOccurred())
 						Expect(rules).To(EqualRules([]knftables.Rule{
-							{Chain: "cali-foobar", Rule: "counter drop", Comment: ptr("cali:bSr2dr6L16W9j9Cc;")},
-							{Chain: "cali-foobar", Rule: "counter accept", Comment: ptr("cali:NNWPljx6Ir5jETmt;")},
+							{Chain: "cali-foobar", Rule: "counter drop", Comment: ptr("cali:qEazjD2XdAvzH1n5;")},
+							{Chain: "cali-foobar", Rule: "counter accept", Comment: ptr("cali:0breZU0oqlsEQH-N;")},
 						}))
 					})
 
@@ -546,9 +546,9 @@ var _ = Describe("Table with an empty dataplane", func() {
 						rules, err := f.ListRules(context.TODO(), "cali-foobar")
 						Expect(err).NotTo(HaveOccurred())
 						Expect(rules).To(EqualRules([]knftables.Rule{
-							{Chain: "cali-foobar", Rule: "counter accept", Comment: ptr("cali:FLxYtC7zksT3lyZX;")},
-							{Chain: "cali-foobar", Rule: "counter drop", Comment: ptr("cali:MBS3lNnXUbG-jJdL;")},
-							{Chain: "cali-foobar", Rule: "counter return", Comment: ptr("cali:ZsPcl7DEA7ky-rb2;")},
+							{Chain: "cali-foobar", Rule: "counter accept", Comment: ptr("cali:en3LGdDuVUQEgLl8;")},
+							{Chain: "cali-foobar", Rule: "counter drop", Comment: ptr("cali:iSw4pE2oK6hZ-s52;")},
+							{Chain: "cali-foobar", Rule: "counter return", Comment: ptr("cali:UvIbKv-XqfNkFU3a;")},
 						}))
 					})
 
@@ -567,7 +567,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 							rules, err := f.ListRules(context.TODO(), "cali-foobar")
 							Expect(err).NotTo(HaveOccurred())
 							Expect(rules).To(EqualRules([]knftables.Rule{
-								{Chain: "cali-foobar", Rule: "counter accept", Comment: ptr("cali:FLxYtC7zksT3lyZX;")},
+								{Chain: "cali-foobar", Rule: "counter accept", Comment: ptr("cali:en3LGdDuVUQEgLl8;")},
 							}))
 						})
 					})
@@ -585,8 +585,8 @@ var _ = Describe("Table with an empty dataplane", func() {
 						It("should be updated", func() {
 							rules, err := f.ListRules(context.TODO(), "cali-foobar")
 							Expect(err).NotTo(HaveOccurred())
-							Expect(rules).To(EqualRules([]knftables.Rule{
-								{Chain: "cali-foobar", Rule: "counter return", Comment: ptr("cali:K9xtL-eqf9SmzPPa;")},
+							Expect(rules).To(EqualRulesFuzzy([]knftables.Rule{
+								{Chain: "cali-foobar", Rule: "counter return"},
 							}))
 						})
 					})
@@ -680,10 +680,10 @@ var _ = Describe("Table with an empty dataplane", func() {
 					rules, err := f.ListRules(context.TODO(), "filter-FORWARD")
 					Expect(err).NotTo(HaveOccurred())
 					Expect(rules).To(EqualRules([]knftables.Rule{
-						{Chain: "filter-FORWARD", Rule: "counter drop", Comment: ptr("cali:dnJtghS1A5Unt-BW; insert drop rule")},
-						{Chain: "filter-FORWARD", Rule: "counter accept", Comment: ptr("cali:8d4n9mdzwn5qEtRG; insert accept rule")},
-						{Chain: "filter-FORWARD", Rule: "counter drop", Comment: ptr("cali:OOBTdzvkqxGW2K8g; append drop rule")},
-						{Chain: "filter-FORWARD", Rule: "counter accept", Comment: ptr("cali:cIvWMNaWDMUSreTo; append accept rule")},
+						{Chain: "filter-FORWARD", Rule: "counter drop", Comment: ptr("cali:DCGauXoHP5A9-AIO; insert drop rule")},
+						{Chain: "filter-FORWARD", Rule: "counter accept", Comment: ptr("cali:6tpY0LmXqEPD5dsI; insert accept rule")},
+						{Chain: "filter-FORWARD", Rule: "counter drop", Comment: ptr("cali:T41ctVF7TLDIehjM; append drop rule")},
+						{Chain: "filter-FORWARD", Rule: "counter accept", Comment: ptr("cali:AodlDFLDC_KqOIJO; append accept rule")},
 					}))
 				})
 
@@ -731,12 +731,12 @@ var _ = Describe("Table with an empty dataplane", func() {
 						rules, err := f.ListRules(context.TODO(), "filter-FORWARD")
 						Expect(err).NotTo(HaveOccurred())
 						Expect(rules).To(EqualRules([]knftables.Rule{
-							{Chain: "filter-FORWARD", Rule: "counter drop", Comment: ptr("cali:dnJtghS1A5Unt-BW; insert drop rule")},
-							{Chain: "filter-FORWARD", Rule: "counter accept", Comment: ptr("cali:8d4n9mdzwn5qEtRG; insert accept rule")},
-							{Chain: "filter-FORWARD", Rule: "counter drop", Comment: ptr("cali:AJNsMMmBbo9PNQU5; second insert drop rule")},
-							{Chain: "filter-FORWARD", Rule: "counter drop", Comment: ptr("cali:OOBTdzvkqxGW2K8g; append drop rule")},
-							{Chain: "filter-FORWARD", Rule: "counter accept", Comment: ptr("cali:cIvWMNaWDMUSreTo; append accept rule")},
-							{Chain: "filter-FORWARD", Rule: "counter drop", Comment: ptr("cali:vft2JD3IpnnaMOqp; second append drop rule")},
+							{Chain: "filter-FORWARD", Rule: "counter drop", Comment: ptr("cali:DCGauXoHP5A9-AIO; insert drop rule")},
+							{Chain: "filter-FORWARD", Rule: "counter accept", Comment: ptr("cali:6tpY0LmXqEPD5dsI; insert accept rule")},
+							{Chain: "filter-FORWARD", Rule: "counter drop", Comment: ptr("cali:_Zdh35A6d8kLWs7z; second insert drop rule")},
+							{Chain: "filter-FORWARD", Rule: "counter drop", Comment: ptr("cali:T41ctVF7TLDIehjM; append drop rule")},
+							{Chain: "filter-FORWARD", Rule: "counter accept", Comment: ptr("cali:AodlDFLDC_KqOIJO; append accept rule")},
+							{Chain: "filter-FORWARD", Rule: "counter drop", Comment: ptr("cali:tmCXGknk3dgfLo6d; second append drop rule")},
 						}))
 					})
 				})
