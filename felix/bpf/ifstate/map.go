@@ -42,13 +42,23 @@ const (
 	FlgWEP       = uint32(0x1)
 	FlgIPv4Ready = uint32(0x2)
 	FlgIPv6Ready = uint32(0x4)
-	FlgMax       = uint32(0x7)
+	FlgHost      = uint32(0x8)
+	FlgBond      = uint32(0x10)
+	FlgBondSlave = uint32(0x20)
+	FlgTunnel    = uint32(0x40)
+	FlgL3        = uint32(0x80)
+	FlgMax       = uint32(0xff)
 )
 
 var flagsToStr = map[uint32]string{
 	FlgWEP:       "workload",
 	FlgIPv4Ready: "v4Ready",
 	FlgIPv6Ready: "v6Ready",
+	FlgHost:      "host",
+	FlgBond:      "bond",
+	FlgBondSlave: "bondslave",
+	FlgTunnel:    "tunnel",
+	FlgL3:        "l3",
 }
 
 var MapParams = maps.MapParameters{
