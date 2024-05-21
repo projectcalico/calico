@@ -163,7 +163,7 @@ func lockSockmapTest() {
 		"dir":      dir,
 		"lockfile": n,
 	}).Info("About to lock")
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		log.WithFields(log.Fields{
 			"dir":      dir,
 			"lockfile": n,
@@ -175,7 +175,7 @@ func lockSockmapTest() {
 		"lockfile": n,
 	}).Info("Dir for lock is there")
 	for {
-		f, err := os.OpenFile(n, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0640)
+		f, err := os.OpenFile(n, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0o640)
 		if err == nil {
 			log.WithFields(log.Fields{
 				"dir":      dir,
@@ -321,7 +321,7 @@ var _ = infrastructure.DatastoreDescribe("[SOCKMAP] with Felix using sockmap", [
 		infra.Stop()
 	})
 
-	It("should put the IP of the host in sockmap endpoints map", func() {
+	It("CASEY should put the IP of the host in sockmap endpoints map", func() {
 		hexen := testIPToHex(ip)
 		log.WithFields(log.Fields{
 			"ip":    ip,
