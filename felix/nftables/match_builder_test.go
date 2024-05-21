@@ -75,10 +75,10 @@ var _ = DescribeTable("MatchBuilder",
 	Entry("DestAddrType no limit iface", Match().DestAddrType(generictables.AddrTypeLocal), "fib daddr type local"),
 
 	// Protocol.
-	Entry("Protocol", Match().Protocol("tcp"), "ip protocol tcp"),
-	Entry("NotProtocol", Match().NotProtocol("tcp"), "ip protocol != tcp"),
-	Entry("ProtocolNum", Match().ProtocolNum(123), "ip protocol 123"),
-	Entry("NotProtocolNum", Match().NotProtocolNum(123), "ip protocol != 123"),
+	Entry("Protocol", Match().Protocol("tcp"), "meta l4proto tcp"),
+	Entry("NotProtocol", Match().NotProtocol("tcp"), "meta l4proto != tcp"),
+	Entry("ProtocolNum", Match().ProtocolNum(123), "meta l4proto 123"),
+	Entry("NotProtocolNum", Match().NotProtocolNum(123), "meta l4proto != 123"),
 
 	// CIDRs.
 	Entry("SourceNet", Match().SourceNet("10.0.0.4"), "ip saddr 10.0.0.4"),
@@ -99,14 +99,14 @@ var _ = DescribeTable("MatchBuilder",
 	Entry("NotDestIPPortSet", Match().Protocol("tcp").NotDestIPPortSet("calitn:12345abc-_"), "ip daddr . tcp dport != @calitn-12345abc-_"),
 
 	// Ports.
-	Entry("SourcePorts", Match().Protocol("tcp").SourcePorts(1234, 5678), "tcp sport { 1234, 5678 }"),
-	Entry("NotSourcePorts", Match().Protocol("udp").NotSourcePorts(1234, 5678), "udp sport != { 1234, 5678 }"),
-	Entry("DestPorts", Match().Protocol("tcp").DestPorts(1234, 5678), "tcp dport { 1234, 5678 }"),
-	Entry("NotDestPorts", Match().Protocol("udp").NotDestPorts(1234, 5678), "udp dport != { 1234, 5678 }"),
-	Entry("SourcePortRanges", Match().Protocol("udp").SourcePortRanges(portRanges), "udp sport { 1234, 5678-6000 }"),
-	Entry("NotSourcePortRanges", Match().Protocol("udp").NotSourcePortRanges(portRanges), "udp sport != { 1234, 5678-6000 }"),
-	Entry("DestPortRanges", Match().Protocol("udp").DestPortRanges(portRanges), "udp dport { 1234, 5678-6000 }"),
-	Entry("NotDestPortRanges", Match().Protocol("udp").NotDestPortRanges(portRanges), "udp dport != { 1234, 5678-6000 }"),
+	Entry("SourcePorts", Match().Protocol("tcp").SourcePorts(1234, 5678), "meta l4proto tcp tcp sport { 1234, 5678 }"),
+	Entry("NotSourcePorts", Match().Protocol("udp").NotSourcePorts(1234, 5678), "meta l4proto udp udp sport != { 1234, 5678 }"),
+	Entry("DestPorts", Match().Protocol("tcp").DestPorts(1234, 5678), "meta l4proto tcp tcp dport { 1234, 5678 }"),
+	Entry("NotDestPorts", Match().Protocol("udp").NotDestPorts(1234, 5678), "meta l4proto udp udp dport != { 1234, 5678 }"),
+	Entry("SourcePortRanges", Match().Protocol("udp").SourcePortRanges(portRanges), "meta l4proto udp udp sport { 1234, 5678-6000 }"),
+	Entry("NotSourcePortRanges", Match().Protocol("udp").NotSourcePortRanges(portRanges), "meta l4proto udp udp sport != { 1234, 5678-6000 }"),
+	Entry("DestPortRanges", Match().Protocol("udp").DestPortRanges(portRanges), "meta l4proto udp udp dport { 1234, 5678-6000 }"),
+	Entry("NotDestPortRanges", Match().Protocol("udp").NotDestPortRanges(portRanges), "meta l4proto udp udp dport != { 1234, 5678-6000 }"),
 
 	// ICMP.
 	Entry("ICMPType", Match().ICMPType(123), "icmp type 123"),
@@ -119,5 +119,5 @@ var _ = DescribeTable("MatchBuilder",
 	Entry("NotICMPV6TypeAndCode", Match().NotICMPV6TypeAndCode(123, 5), "icmp type != 123 code != 5"),
 
 	// Check multiple match criteria are joined correctly.
-	Entry("Protocol and ports", Match().Protocol("tcp").SourcePorts(1234).DestPorts(8080), "tcp sport 1234 tcp dport 8080"),
+	Entry("Protocol and ports", Match().Protocol("tcp").SourcePorts(1234).DestPorts(8080), "meta l4proto tcp tcp sport 1234 tcp dport 8080"),
 )
