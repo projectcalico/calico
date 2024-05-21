@@ -61,7 +61,7 @@ func (m nftMatch) protocol() string {
 		}
 		return fmt.Sprintf("%d", m.protoNum)
 	}
-	logrus.Fatal("Probably bug: No protocol set")
+	logrus.Panicf("Probably bug: No protocol set: %s", m.clauses)
 	return ""
 }
 
