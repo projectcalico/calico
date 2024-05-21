@@ -78,6 +78,8 @@ type MatchCriteria interface {
 type NFTMatchCriteria interface {
 	MatchCriteria
 
+	IPVersion(version uint8) MatchCriteria
+
 	ConntrackStatus(statusNames string) MatchCriteria
 	NotConntrackStatus(statusNames string) MatchCriteria
 }

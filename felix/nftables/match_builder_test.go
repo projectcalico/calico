@@ -79,6 +79,7 @@ var _ = DescribeTable("MatchBuilder",
 	Entry("NotProtocol", Match().NotProtocol("tcp"), "meta l4proto != tcp"),
 	Entry("ProtocolNum", Match().ProtocolNum(123), "meta l4proto 123"),
 	Entry("NotProtocolNum", Match().NotProtocolNum(123), "meta l4proto != 123"),
+	Entry("ProtocolNum IPIP", Match().ProtocolNum(4), "meta l4proto ipencap"),
 
 	// CIDRs.
 	Entry("SourceNet", Match().SourceNet("10.0.0.4"), "ip saddr 10.0.0.4"),
@@ -93,10 +94,10 @@ var _ = DescribeTable("MatchBuilder",
 	Entry("NotDestIPSet", Match().NotDestIPSet("calits:12345abc-_"), "ip daddr != @calits-12345abc-_"),
 
 	// IP,Port IP sets.
-	Entry("SourceIPPortSet", Match().Protocol("tcp").SourceIPPortSet("calitn:12345abc-_"), "ip saddr . tcp sport @calitn-12345abc-_"),
-	Entry("NotSourceIPPortSet", Match().Protocol("tcp").NotSourceIPPortSet("calitn:12345abc-_"), "ip saddr . tcp sport != @calitn-12345abc-_"),
-	Entry("DestIPPortSet", Match().Protocol("tcp").DestIPPortSet("calitn:12345abc-_"), "ip daddr . tcp dport @calitn-12345abc-_"),
-	Entry("NotDestIPPortSet", Match().Protocol("tcp").NotDestIPPortSet("calitn:12345abc-_"), "ip daddr . tcp dport != @calitn-12345abc-_"),
+	Entry("SourceIPPortSet", Match().SourceIPPortSet("calitn:12345abc-_"), "ip saddr . meta l4proto . th sport @calitn-12345abc-_"),
+	Entry("NotSourceIPPortSet", Match().NotSourceIPPortSet("calitn:12345abc-_"), "ip saddr . meta l4proto . th sport != @calitn-12345abc-_"),
+	Entry("DestIPPortSet", Match().DestIPPortSet("calitn:12345abc-_"), "ip daddr . meta l4proto . th dport @calitn-12345abc-_"),
+	Entry("NotDestIPPortSet", Match().NotDestIPPortSet("calitn:12345abc-_"), "ip daddr . meta l4proto . th dport != @calitn-12345abc-_"),
 
 	// Ports.
 	Entry("SourcePorts", Match().Protocol("tcp").SourcePorts(1234, 5678), "meta l4proto tcp tcp sport { 1234, 5678 }"),
@@ -113,11 +114,38 @@ var _ = DescribeTable("MatchBuilder",
 	Entry("NotICMPType", Match().NotICMPType(123), "icmp type != 123"),
 	Entry("ICMPTypeAndCode", Match().ICMPTypeAndCode(123, 5), "icmp type 123 code 5"),
 	Entry("NotICMPTypeAndCode", Match().NotICMPTypeAndCode(123, 5), "icmp type != 123 code != 5"),
-	Entry("ICMPV6Type", Match().ICMPV6Type(123), "icmp type 123"),
-	Entry("NotICMPV6Type", Match().NotICMPV6Type(123), "icmp type != 123"),
-	Entry("ICMPV6TypeAndCode", Match().ICMPV6TypeAndCode(123, 5), "icmp type 123 code 5"),
-	Entry("NotICMPV6TypeAndCode", Match().NotICMPV6TypeAndCode(123, 5), "icmp type != 123 code != 5"),
+	Entry("ICMPV6Type", Match().ICMPV6Type(123), "icmpv6 type 123"),
+	Entry("NotICMPV6Type", Match().NotICMPV6Type(123), "icmpv6 type != 123"),
+	Entry("ICMPV6TypeAndCode", Match().ICMPV6TypeAndCode(123, 5), "icmpv6 type 123 code 5"),
+	Entry("NotICMPV6TypeAndCode", Match().NotICMPV6TypeAndCode(123, 5), "icmpv6 type != 123 code != 5"),
 
 	// Check multiple match criteria are joined correctly.
 	Entry("Protocol and ports", Match().Protocol("tcp").SourcePorts(1234).DestPorts(8080), "meta l4proto tcp tcp sport 1234 tcp dport 8080"),
+)
+
+var _ = DescribeTable("IPSetNames",
+	func(match generictables.MatchCriteria, exp []string) {
+		Expect(match.IPSetNames()).To(ConsistOf(exp))
+	},
+
+	// Valid IP set matches.
+	Entry("SourceIPSet", Match().SourceIPSet("calits:12345abc-_"), []string{"calits-12345abc-_"}),
+	Entry("NotSourceIPSet", Match().NotSourceIPSet("calits:12345abc-_"), []string{"calits-12345abc-_"}),
+	Entry("DestIPSet", Match().DestIPSet("calits:12345abc-_"), []string{"calits-12345abc-_"}),
+	Entry("NotDestIPSet", Match().NotDestIPSet("calits:12345abc-_"), []string{"calits-12345abc-_"}),
+
+	// Valid IPPort set matches.
+	Entry("SourceIPPortSet", Match().SourceIPPortSet("calits:12345abc-_"), []string{"calits-12345abc-_"}),
+	Entry("NotSourceIPPortSet", Match().NotSourceIPPortSet("calits:12345abc-_"), []string{"calits-12345abc-_"}),
+	Entry("DestIPPortSet", Match().DestIPPortSet("calits:12345abc-_"), []string{"calits-12345abc-_"}),
+	Entry("NotDestIPPortSet", Match().NotDestIPPortSet("calits:12345abc-_"), []string{"calits-12345abc-_"}),
+
+	// No IP set matches.
+	Entry("empty match", Match(), nil),
+	Entry("ICMPType", Match().ICMPType(123), nil),
+	Entry("SourceNet", Match().SourceNet("10.0.0.0/24"), nil),
+
+	// Multiple IP set matches.
+	Entry("Multiple matches", Match().SourceIPSet("calits:12345abc-_").DestIPSet("calits:54321cba-_"), []string{"calits-12345abc-_", "calits-54321cba-_"}),
+	Entry("Duplicate matches", Match().SourceIPPortSet("calits:12345abc-_").DestIPPortSet("calits:12345abc-_"), []string{"calits-12345abc-_"}),
 )

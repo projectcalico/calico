@@ -23,13 +23,17 @@ import (
 	"github.com/projectcalico/calico/felix/environment"
 )
 
-func NewNFTRenderer(hashCommentPrefix string) NFTRenderer {
+const maxNftablesCommentLength = 128
+
+func NewNFTRenderer(hashCommentPrefix string, ipv uint8) NFTRenderer {
 	return &nftRenderer{
+		ipv:               ipv,
 		hashCommentPrefix: hashCommentPrefix,
 	}
 }
 
 type nftRenderer struct {
+	ipv               uint8
 	hashCommentPrefix string
 }
 
@@ -52,7 +56,7 @@ func (r *nftRenderer) renderRule(rule *Rule, features *environment.Features) str
 	fragments := []string{}
 
 	if rule.Match != nil {
-		matchFragment := rule.Match.Render()
+		matchFragment := rule.Match.(NFTMatchCriteria).IPVersion(r.ipv).Render()
 		if matchFragment != "" {
 			fragments = append(fragments, matchFragment)
 		}
@@ -86,15 +90,28 @@ func (r *nftRenderer) comment(hash string, rule Rule) *string {
 		fragments = append(fragments, fmt.Sprintf(`%s%s;`, r.hashCommentPrefix, hash))
 	}
 
-	// Add in any comments.
-	for _, c := range rule.Comment {
-		c = escapeComment(c)
-		c = truncateComment(c)
-		fragments = append(fragments, c)
+	// Add in any comments. Each individual comment must be small enough such that the
+	// total comment is less than 128 characters.
+	if len(rule.Comment) > 0 {
+		maxPerComment := (maxNftablesCommentLength - len(strings.Join(fragments, " "))) / len(rule.Comment)
+		for _, c := range rule.Comment {
+			c = escapeComment(c)
+			c = r.truncateComment(c, maxPerComment)
+			fragments = append(fragments, c)
+		}
 	}
-	cmt := strings.Join(fragments, " ")
+
+	// Truncate the entire comment if needed.
+	cmt := r.truncateComment(strings.Join(fragments, " "), maxNftablesCommentLength)
 	if cmt == "" {
 		return nil
 	}
 	return &cmt
+}
+
+func (r *nftRenderer) truncateComment(s string, size int) string {
+	if len(s) > size {
+		return s[0:size]
+	}
+	return s
 }

@@ -117,7 +117,7 @@ func (d *FeatureDetector) RefreshFeatures() {
 
 func (d *FeatureDetector) refreshFeaturesLockHeld() {
 	// Get the versions.  If we fail to detect a version for some reason, we use a safe default.
-	log.Debug("Refreshing detected iptables features")
+	log.Debug("Refreshing detected dataplane features")
 
 	iptV := d.getIptablesVersion()
 	kerV := d.getKernelVersion()
