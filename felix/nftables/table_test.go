@@ -286,6 +286,11 @@ var _ = Describe("Table with an empty dataplane", func() {
 						Comment: ptr("cali:DCGauXoHP5A9-AIO;"),
 					},
 				}))
+
+				// The other chains that don't belong to us should be removed.
+				chains, err := f.List(context.TODO(), "chain")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(chains).To(ConsistOf(expectedBaseChains))
 			})
 		})
 

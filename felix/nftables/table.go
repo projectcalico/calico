@@ -126,91 +126,8 @@ func init() {
 	prometheus.MustRegister(countNumLinesExecuted)
 }
 
-// nftablesTable represents a single nftable table i.e. "raw", "nat", "filter", etc.  It
-// caches the desired state of that table, then attempts to bring it into sync when Apply() is
-// called.
-//
-// # API Model
-//
-// nftablesTable supports two classes of operation:  "rule insertions" and "full chain updates".
-//
-// As the name suggests, rule insertions allow for inserting one or more rules into a preexisting
-// chain.  Rule insertions are intended to be used to hook kernel chains (such as "FORWARD") in
-// order to direct them to a Felix-owned chain.  It is important to minimise the use of rule
-// insertions because the top-level chains are shared resources, which can be modified by other
-// applications.  In addition, rule insertions are harder to clean up after an upgrade to a new
-// version of Felix (because we need a way to recognise our rules in a crowded chain).
-//
-// Full chain updates replace the entire contents of a Felix-owned chain with a new set of rules.
-// Limiting the operation to "replace whole chain" in this way significantly simplifies the API.
-// Although the API operates on full chains, the dataplane write logic tries to avoid rewriting
-// a whole chain if only part of it has changed (this was not the case in Felix 1.4).  This
-// prevents counters from being reset unnecessarily.
-//
-// In either case, the actual dataplane updates are deferred until the next call to Apply() so
-// chain updates and insertions may occur in any order as long as they are consistent (i.e. there
-// are no references to nonexistent chains) by the time Apply() is called.
-//
-// # Design
-//
-// We had several goals in designing the iptables machinery in 2.0.0:
-//
-// (1) High performance. Felix needs to handle high churn of endpoints and rules.
-//
-// (2) Ability to restore rules, even if other applications accidentally break them: we found that
-// other applications sometimes misuse iptables-save and iptables-restore to do a read, modify,
-// write cycle. That behaviour is not safe under concurrent modification.
-//
-// (3) Avoid rewriting rules that haven't changed so that we don't reset iptables counters.
-//
-// (4) Avoid parsing iptables commands (for example, the output from iptables/iptables-save).
-// This is very hard to do robustly because iptables rules do not necessarily round-trip through
-// the kernel in the same form.  In addition, the format could easily change due to changes or
-// fixes in the iptables/iptables-save command.
-//
-// (5) Support for graceful restart.  I.e. deferring potentially incorrect updates until we're
-// in-sync with the datastore.  For example, if we have 100 endpoints on a host, after a restart
-// we don't want to write a "dispatch" chain when we learn about the first endpoint (possibly
-// replacing an existing one that had all 100 endpoints in place and causing traffic to glitch);
-// instead, we want to defer until we've seen all 100 and then do the write.
-//
-// (6) Improved handling of rule inserts vs Felix 1.4.x.  Previous versions of Felix sometimes
-// inserted special-case rules that were not marked as Calico rules in any sensible way making
-// cleanup of those rules after an upgrade difficult.
-//
-// # Implementation
-//
-// For high performance (goal 1), we use iptables-restore to do bulk updates to iptables.  This is
-// much faster than individual iptables calls.
-//
-// To allow us to restore rules after they are clobbered by another process (goal 2), we cache
-// them at this layer.  This means that we don't need a mechanism to ask the other layers of Felix
-// to do a resync.  Note: nftablesTable doesn't start a thread of its own so it relies on the main event
-// loop to trigger any dataplane resync polls.
-//
-// There is tension between goals 3 and 4.  In order to avoid full rewrites (goal 3), we need to
-// know what rules are in place, but we also don't want to parse them to find out (goal 4)!  As
-// a compromise, we deterministically calculate an ID for each rule and store it in an iptables
-// comment.  Then, when we want to know what rules are in place, we _do_ parse the output from
-// iptables-save, but only to read back the rule IDs.  That limits the amount of parsing we need
-// to do and keeps it manageable/robust.
-//
-// To support graceful restart (goal 5), we defer updates to the dataplane until Apply() is called,
-// then we do an atomic update using iptables-restore.  As long as the first Apply() call is
-// after we're in sync, the dataplane won't be touched until the right time.  Felix 1.4.x had a
-// more complex mechanism to support partial updates during the graceful restart period but
-// Felix 2.0.0 resyncs so quickly that the added complexity is not justified.
-//
-// To make it easier to manage rule insertions (goal 6), we add rule IDs to those too.  With
-// rule IDs in place, we can easily distinguish Calico rules from non-Calico rules without needing
-// to know exactly which rules to expect.  To deal with cleanup after upgrade from older versions
-// that did not write rule IDs, we support special-case regexes to detect our old rules.
-//
-// # Thread safety
-//
-// nftablesTable doesn't do any internal synchronization, its methods should only be called from one
-// thread.  To avoid conflicts in the dataplane itself, there should only be one instance of
-// nftablesTable for each table in an application.
+// nftablesTable is an implementation of the generictables.Table interface that programs nftables. It represents a
+// single nftables table.
 type nftablesTable struct {
 	common.IPSetsDataplane
 
@@ -639,45 +556,14 @@ func (t *nftablesTable) loadDataplaneState() {
 			logCxt.Debug("Skipping known-dirty chain")
 			continue
 		}
-		dpHashes := dataplaneHashes[chainName]
 		if !t.ourChainsRegexp.MatchString(chainName) {
-			// Not one of our chains, or any Calico table's chains - so it may be one that we're inserting rules into.
-			insertedRules := t.chainToInsertedRules[chainName]
-			if len(insertedRules) == 0 {
-				// This chain shouldn't have any inserts, make sure that's the
-				// case.  This case also covers the case where a chain was removed,
-				// making dpHashes nil.
-				dataplaneHasInserts := false
-				for _, hash := range dpHashes {
-					if hash != "" {
-						dataplaneHasInserts = true
-						break
-					}
-				}
-				if dataplaneHasInserts {
-					logCxt.WithField("actualRuleIDs", dpHashes).Warn(
-						"Chain had unexpected inserts, marking for resync")
-					t.dirtyBaseChains.Add(chainName)
-				}
-				continue
-			}
-
-			// Re-calculate the expected rule insertions based on the current length
-			// of the chain (since other processes may have inserted/removed rules
-			// from the chain, throwing off the numbers).
-			expectedHashes, _, _ = t.expectedHashesForInsertAppendChain(
-				chainName,
-				numEmptyStrings(dpHashes),
-			)
-			if !reflect.DeepEqual(dpHashes, expectedHashes) {
-				logCxt.WithFields(log.Fields{
-					"expectedRuleIDs": expectedHashes,
-					"actualRuleIDs":   dpHashes,
-				}).Warn("Detected out-of-sync inserts, marking for resync")
-				t.dirtyBaseChains.Add(chainName)
-			}
+			// This doesn't match the regex for chains programmed by us. Mark it as dirty so
+			// that we clean it up on the next apply.
+			logCxt.WithField("chain", chainName).Warn("Found chain that doesn't belong to us, marking for cleanup")
+			t.dirtyChains.Add(chainName)
 		} else {
 			// One of our chains, should match exactly.
+			dpHashes := dataplaneHashes[chainName]
 			if !reflect.DeepEqual(dpHashes, expectedHashes) {
 				logCxt.WithFields(log.Fields{
 					"dpHashes":       dpHashes,
@@ -690,7 +576,7 @@ func (t *nftablesTable) loadDataplaneState() {
 
 	// Now scan for chains that shouldn't be there and mark for deletion.
 	t.logCxt.Debug("Scanning for unexpected nftables chains")
-	for chainName, dataplaneHashes := range dataplaneHashes {
+	for chainName := range dataplaneHashes {
 		logCxt := t.logCxt.WithField("chainName", chainName)
 		if t.dirtyChains.Contains(chainName) || t.dirtyBaseChains.Contains(chainName) {
 			// Already an update pending for this chain.
@@ -700,20 +586,6 @@ func (t *nftablesTable) loadDataplaneState() {
 		if _, ok := t.chainToDataplaneHashes[chainName]; ok {
 			// Chain expected, we'll have checked its contents above.
 			logCxt.Debug("Skipping expected chain")
-			continue
-		}
-		if !t.ourChainsRegexp.MatchString(chainName) {
-			// Non-calico chain that is not tracked in chainToDataplaneHashes. We
-			// haven't seen the chain before and we haven't been asked to insert
-			// anything into it.  Check that it doesn't have an rule insertions in it
-			// from a previous run of Felix.
-			for _, hash := range dataplaneHashes {
-				if hash != "" {
-					logCxt.WithField("hash", hash).Info("Found unexpected insert, marking for cleanup")
-					t.dirtyBaseChains.Add(chainName)
-					break
-				}
-			}
 			continue
 		}
 
@@ -818,7 +690,9 @@ func (t *nftablesTable) attemptToGetHashesAndRulesFromDataplane() (hashes map[st
 
 	ctx, cancel := context.WithTimeout(context.Background(), t.contextTimeout)
 	defer cancel()
-	allRules, err := t.nft.ListRules(ctx, "")
+
+	// Add chains. We need to query this separately, as chains may exist without rules.
+	allChains, err := t.nft.List(ctx, "chain")
 	if err != nil {
 		if isNotFound(err) {
 			err = nil
@@ -826,11 +700,19 @@ func (t *nftablesTable) attemptToGetHashesAndRulesFromDataplane() (hashes map[st
 		}
 		return nil, nil, err
 	}
+	for _, chain := range allChains {
+		hashes[chain] = []string{}
+		rules[chain] = []*knftables.Rule{}
+	}
 
-	// Our base chains are always present, even if they have no rules.
-	for _, chain := range baseChains {
-		hashes[chain.Name] = []string{}
-		rules[chain.Name] = []*knftables.Rule{}
+	// List rules and extract the hashes.
+	allRules, err := t.nft.ListRules(ctx, "")
+	if err != nil {
+		if isNotFound(err) {
+			err = nil
+			return
+		}
+		return nil, nil, err
 	}
 
 	for _, rule := range allRules {
@@ -894,17 +776,8 @@ func (t *nftablesTable) Apply() (rescheduleAfter time.Duration) {
 		t.InvalidateDataplaneCache("refresh timer")
 	}
 
-	// Retry until we succeed.  There are several reasons that updating nftables may fail:
-	//
-	// - A concurrent write may invalidate compare-and-swap; this manifests
-	//   as a failure on the COMMIT line.
-	// - Another process may have clobbered some of our state, resulting in inconsistencies
-	//   in what we try to program.  This could manifest in a number of ways depending on what
-	//   the other process did.
-	// - Random transient failure.
-	//
-	// It's also possible that we're bugged and trying to write bad data so we give up
-	// eventually.
+	// Retry until we succeed. This could be a transient programming error. It's also possible that we're bugged
+	// and trying to write bad data so we give up eventually.
 	retries := 10
 	backoffTime := 1 * time.Millisecond
 	failedAtLeastOnce := false
@@ -1006,6 +879,7 @@ func (t *nftablesTable) applyUpdates() error {
 	// Make a pass over the dirty chains and generate a forward reference for any that we're about to update.
 	// Writing a forward reference ensures that the chain exists and that it is empty.
 	t.dirtyChains.Iter(func(chainName string) error {
+		t.logCxt.WithField("chainName", chainName).Debug("Checking dirty chain")
 		if _, present := t.desiredStateOfChain(chainName); !present {
 			// About to delete this chain, flush it first to sever dependencies.
 			t.logCxt.WithFields(logrus.Fields{
@@ -1073,11 +947,6 @@ func (t *nftablesTable) applyUpdates() error {
 					}).Debug("Appending rule to chain")
 					tx.Add(t.render.Render(chainName, currentHashes[i], chain.Rules[i], features))
 				}
-			}
-
-			if len(chain.Rules) == 0 {
-				// Add a basic counter role if there are no others.
-				tx.Add(&knftables.Rule{Chain: chainName, Rule: "counter"})
 			}
 		}
 		return nil // Delay clearing the set until we've programmed nftables.
