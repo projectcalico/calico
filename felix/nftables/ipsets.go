@@ -457,10 +457,24 @@ func (s *IPSets) NFTablesSet(name string) *knftables.Set {
 		return nil
 	}
 
+	flags := make([]knftables.SetFlag, 0, 1)
+	autoMerge := false
+	switch metadata.Type {
+	case ipsets.NFTSetTypeAddrPort:
+		// IP and port sets don't support the interval flag.
+	default:
+		flags = append(flags, knftables.IntervalFlag)
+		autoMerge = true
+	}
+
 	return &knftables.Set{
 		Name:  LegalizeSetName(name),
 		Type:  metadata.Type.SetType(s.IPVersionConfig.Family.Version()),
-		Flags: []knftables.SetFlag{knftables.IntervalFlag},
+		Flags: flags,
+
+		// AutoMerge automatically condenses overlapping ranges into a single range.
+		// Without this, a single set with 10.0.0.0/24 and 10.0.0.1/32 would error.
+		AutoMerge: &autoMerge,
 	}
 }
 
