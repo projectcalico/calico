@@ -116,8 +116,10 @@ func (s *IPSets) AddOrReplaceIPSet(setMetadata ipsets.IPSetMetadata, members []s
 	// Use nftables equivalents of IP set types where necessary.
 	var ipSetType ipsets.IPSetType
 	switch setMetadata.Type {
-	case ipsets.IPSetTypeHashIP, ipsets.IPSetTypeHashNet:
+	case ipsets.IPSetTypeHashIP:
 		ipSetType = ipsets.NFTSetTypeAddr
+	case ipsets.IPSetTypeHashNet:
+		ipSetType = ipsets.NFTSetTypeNet
 	case ipsets.IPSetTypeHashIPPort:
 		ipSetType = ipsets.NFTSetTypeAddrPort
 	default:
@@ -127,7 +129,7 @@ func (s *IPSets) AddOrReplaceIPSet(setMetadata ipsets.IPSetMetadata, members []s
 	// Mark that we want this IP set to exist and with the correct size etc.
 	// If the IP set exists, but it has the wrong metadata then the
 	// DeltaTracker will catch that and mark it for recreation.
-	mainIPSetName := s.IPVersionConfig.NameForMainIPSet(setID)
+	mainIPSetName := s.nameForMainIPSet(setID)
 	dpMeta := ipsets.IPSetMetadata{
 		Type:     ipSetType,
 		MaxSize:  setMetadata.MaxSize,
@@ -378,10 +380,13 @@ func (s *IPSets) tryResync() error {
 		}
 		strElems := []string{}
 		for _, e := range elems {
-			// Concat type keys should be separated by " . " in the nftables output, but are
-			// returned with each as a separate element in the list.
-			// Other elements are simply a single string.
-			strElems = append(strElems, strings.Join(e.Key, " . "))
+			if len(e.Key) == 3 {
+				// This is a concatination of IP, protocol and port. Format it back into Felix's internal representation.
+				strElems = append(strElems, fmt.Sprintf("%s,%s:%s", e.Key[0], e.Key[1], e.Key[2]))
+			} else {
+				// This is just an IP address / CIDR.
+				strElems = append(strElems, e.Key[0])
+			}
 		}
 
 		metadata, ok := s.setNameToAllMetadata[setName]
@@ -458,23 +463,22 @@ func (s *IPSets) NFTablesSet(name string) *knftables.Set {
 	}
 
 	flags := make([]knftables.SetFlag, 0, 1)
-	autoMerge := false
 	switch metadata.Type {
 	case ipsets.NFTSetTypeAddrPort:
 		// IP and port sets don't support the interval flag.
-	default:
+	case ipsets.NFTSetTypeAddr:
+		// IP addr sets don't use the interval flag.
+	case ipsets.NFTSetTypeNet:
+		// Net sets require the interval flag.
 		flags = append(flags, knftables.IntervalFlag)
-		autoMerge = true
+	default:
+		log.WithField("type", metadata.Type).Panic("Unexpected IP set type")
 	}
 
 	return &knftables.Set{
 		Name:  LegalizeSetName(name),
 		Type:  metadata.Type.SetType(s.IPVersionConfig.Family.Version()),
 		Flags: flags,
-
-		// AutoMerge automatically condenses overlapping ranges into a single range.
-		// Without this, a single set with 10.0.0.0/24 and 10.0.0.1/32 would error.
-		AutoMerge: &autoMerge,
 	}
 }
 

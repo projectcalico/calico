@@ -32,8 +32,6 @@ const (
 	// collision-resistance.  16 chars gives us 96 bits of entropy, which is fairly collision
 	// resistant.
 	HashLength = 16
-
-	maxCommentLen = 256
 )
 
 type RuleHasher interface {
@@ -151,11 +149,4 @@ func ruleHashes(c *Chain, renderFunc ruleRenderFn, features *environment.Feature
 // which break iptables-restore.
 func escapeComment(s string) string {
 	return shellUnsafe.ReplaceAllString(s, "_")
-}
-
-func truncateComment(s string) string {
-	if len(s) > maxCommentLen {
-		return s[0:maxCommentLen]
-	}
-	return s
 }

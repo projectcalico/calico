@@ -93,6 +93,8 @@ func (t IPSetType) SetType(ipVersion int) string {
 	switch t {
 	case NFTSetTypeAddr:
 		return fmt.Sprintf(NFTSetTypeAddr, ipVersion)
+	case NFTSetTypeNet:
+		return fmt.Sprintf("ipv%d_addr", ipVersion)
 	case NFTSetTypeAddrPort:
 		return fmt.Sprintf(NFTSetTypeAddrPort, ipVersion)
 	}
@@ -127,12 +129,9 @@ func (p Port) String() string {
 
 func (t IPSetType) IsMemberIPV6(member string) bool {
 	switch t {
-	case IPSetTypeHashIP, IPSetTypeHashNet, NFTSetTypeAddr:
+	case IPSetTypeHashIP, IPSetTypeHashNet, NFTSetTypeAddr, NFTSetTypeNet:
 		return strings.Contains(member, ":")
-	case NFTSetTypeAddrPort:
-		// Format: "ip . port"
-		return strings.Contains(strings.Split(member, " ")[0], ":")
-	case IPSetTypeHashIPPort:
+	case IPSetTypeHashIPPort, NFTSetTypeAddrPort:
 		return strings.Contains(strings.Split(member, ",")[0], ":")
 	case IPSetTypeHashNetNet:
 		cidrs := strings.Split(member, ",")
@@ -158,7 +157,7 @@ func (t IPSetType) IsMemberIPV6(member string) bool {
 // object of some kind.  The object is required to by hashable.
 func (t IPSetType) CanonicaliseMember(member string) IPSetMember {
 	switch t {
-	case IPSetTypeHashIP:
+	case IPSetTypeHashIP, NFTSetTypeAddr:
 		// Convert the string into our ip.Addr type, which is backed by an array.
 		ipAddr := ip.FromIPOrCIDRString(member)
 		if ipAddr == nil {
@@ -166,19 +165,22 @@ func (t IPSetType) CanonicaliseMember(member string) IPSetMember {
 			log.WithField("ip", member).Panic("Failed to parse IP")
 		}
 		return ipAddr
-	case NFTSetTypeAddr:
-		return ip.MustParseCIDROrIP(member)
 	case NFTSetTypeAddrPort:
-		// The member should be of the format <IP> . <port number>
-		parts := strings.Split(member, " . ")
+		// The member should be of the format "IP,protocol:port"
+		parts := strings.Split(member, ",")
 		if len(parts) != 2 {
-			log.WithField("member", member).Panic("Failed to parse IP . port set member")
+			log.WithField("member", member).Panic("Failed to parse IP,proto:port set member")
 		}
 		ipAddr := ip.FromIPOrCIDRString(parts[0])
 		if ipAddr == nil {
 			// This should be prevented by validation.
 			log.WithField("member", member).Panic("Failed to parse IP part of IP,port member")
 		}
+		parts = strings.Split(parts[1], ":")
+		if len(parts) != 2 {
+			log.WithField("member", member).Panic("Failed to parse IP part of IP,port member")
+		}
+		proto := parts[0]
 		port, err := strconv.Atoi(parts[1])
 		if err != nil {
 			log.WithField("member", member).WithError(err).Panic("Bad port")
@@ -191,13 +193,15 @@ func (t IPSetType) CanonicaliseMember(member string) IPSetMember {
 		// because we store many IP set members.
 		if ipAddr.Version() == 4 {
 			return V4NFTIPPort{
-				IP:   ipAddr.(ip.V4Addr),
-				Port: uint16(port),
+				IP:       ipAddr.(ip.V4Addr),
+				Port:     uint16(port),
+				Protocol: proto,
 			}
 		} else {
 			return V6NFTIPPort{
-				IP:   ipAddr.(ip.V6Addr),
-				Port: uint16(port),
+				IP:       ipAddr.(ip.V6Addr),
+				Port:     uint16(port),
+				Protocol: proto,
 			}
 		}
 	case IPSetTypeHashIPPort:
@@ -247,7 +251,7 @@ func (t IPSetType) CanonicaliseMember(member string) IPSetMember {
 				Protocol: proto,
 			}
 		}
-	case IPSetTypeHashNet:
+	case IPSetTypeHashNet, NFTSetTypeNet:
 		// Convert the string into our ip.CIDR type, which is backed by a struct.  When
 		// pretty-printing, the hash:net ipset type prints IPs with no "/32" or "/128"
 		// suffix.
