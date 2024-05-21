@@ -579,10 +579,6 @@ type FelixConfigurationSpec struct {
 	// resolution so that host can handle them. A typical usecase is node local
 	// DNS cache.
 	BPFExcludeCIDRsFromNAT *[]string `json:"bpfExcludeCIDRsFromNAT,omitempty" validate:"omitempty,cidrs"`
-	// BPFInterfaceAutoDetection if enabled, Felix will auto-detect the interface type without needing the user to configure the
-	// regex pattern. When set to Enabled, it will override the BPFDataIfacePattern and
-	// BPFL3IfacePattern configs.  [Default: Enabled]
-	BPFInterfaceAutoDetection *BPFInterfaceAutoDetectionType `json:"bpfInterfaceAutoDetection,omitempty" validate:"omitempty,oneof=Enabled Disabled"`
 
 	// RouteSource configures where Felix gets its routing information.
 	// - WorkloadIPs: use workload endpoints to construct routes.

@@ -47,9 +47,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf reattach object",
 			FelixLogSeverity: "debug",
 			DelayFelixStart:  true,
 			ExtraEnvVars: map[string]string{
-				"FELIX_BPFENABLED":                "true",
-				"FELIX_DEBUGDISABLELOGDROPPING":   "true",
-				"FELIX_BPFINTERFACEAUTODETECTION": "Disabled",
+				"FELIX_BPFENABLED":              "true",
+				"FELIX_DEBUGDISABLELOGDROPPING": "true",
 			},
 			IPPoolCIDR:   infrastructure.DefaultIPPoolCIDR,
 			IPv6PoolCIDR: infrastructure.DefaultIPv6PoolCIDR,
@@ -94,44 +93,13 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf reattach object",
 			return out
 		}, "15s", "1s").ShouldNot(ContainSubstring("eth0"))
 	})
-})
-
-var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf attach object to bond devices", []apiconfig.DatastoreType{apiconfig.EtcdV3}, func(getInfra infrastructure.InfraFactory) {
-
-	if os.Getenv("FELIX_FV_ENABLE_BPF") != "true" {
-		// Non-BPF run.
-		return
-	}
-
-	var (
-		infra infrastructure.DatastoreInfra
-		tc    infrastructure.TopologyContainers
-		felix *infrastructure.Felix
-	)
-
-	BeforeEach(func() {
-		infra = getInfra()
-		opts := infrastructure.DefaultTopologyOptions()
-		tc, _ = infrastructure.StartNNodeTopology(1, opts, infra)
-		felix = tc.Felixes[0]
-
-		err := infra.AddAllowToDatastore("host-endpoint=='true'")
-		Expect(err).NotTo(HaveOccurred())
-	})
-
-	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
-			infra.DumpErrorData()
-		}
-
-		tc.Stop()
-		infra.Stop()
-	})
 
 	It("should attach programs to the bond interfaces", func() {
+		By("Starting Felix")
+		felix.TriggerDelayedStart()
 		By("Check that dummy interfaces has a program")
-		tc.Felixes[0].Exec("ip", "link", "add", "dummy0", "type", "dummy")
-		tc.Felixes[0].Exec("ip", "link", "add", "dummy1", "type", "dummy")
+		tc.Felixes[0].Exec("ip", "link", "add", "eth10", "type", "dummy")
+		tc.Felixes[0].Exec("ip", "link", "add", "eth20", "type", "dummy")
 
 		getBPFNet := func() []string {
 			out, _ := felix.ExecOutput("bpftool", "-jp", "net")
@@ -151,28 +119,44 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf attach object to 
 		}
 
 		// Bring up the interfaces
-		tc.Felixes[0].Exec("ifconfig", "dummy0", "up")
-		tc.Felixes[0].Exec("ifconfig", "dummy1", "up")
+		tc.Felixes[0].Exec("ifconfig", "eth10", "up")
+		tc.Felixes[0].Exec("ifconfig", "eth20", "up")
 
-		Eventually(getBPFNet, "15s", "1s").Should(ContainElements("dummy0", "dummy1"))
-		ensureRightIFStateFlags(tc.Felixes[0], ifstate.FlgIPv4Ready|ifstate.FlgHost, map[string]uint32{"dummy0": ifstate.FlgIPv4Ready | ifstate.FlgHost, "dummy1": ifstate.FlgIPv4Ready | ifstate.FlgHost})
+		Eventually(getBPFNet, "15s", "1s").Should(ContainElements("eth10", "eth20"))
+		ensureRightIFStateFlags(tc.Felixes[0], ifstate.FlgIPv4Ready|ifstate.FlgHost, map[string]uint32{"eth10": ifstate.FlgIPv4Ready | ifstate.FlgHost, "eth20": ifstate.FlgIPv4Ready | ifstate.FlgHost})
 
-		By("Creating a bond interface and dummy0, dummy1 to the bond")
+		By("Creating a bond interface and eth10, eth20 to the bond")
 		tc.Felixes[0].Exec("ip", "link", "add", "bond0", "type", "bond", "mode", "802.3ad")
-		tc.Felixes[0].Exec("ifconfig", "dummy0", "down")
-		tc.Felixes[0].Exec("ifconfig", "dummy1", "down")
-		tc.Felixes[0].Exec("ip", "link", "set", "dummy0", "master", "bond0")
-		tc.Felixes[0].Exec("ip", "link", "set", "dummy1", "master", "bond0")
+		tc.Felixes[0].Exec("ifconfig", "eth10", "down")
+		tc.Felixes[0].Exec("ifconfig", "eth20", "down")
+		tc.Felixes[0].Exec("ip", "link", "set", "eth10", "master", "bond0")
+		tc.Felixes[0].Exec("ip", "link", "set", "eth20", "master", "bond0")
 		tc.Felixes[0].Exec("ifconfig", "bond0", "up")
-		Eventually(getBPFNet, "15s", "1s").ShouldNot(ContainElements("dummy0", "dummy1"))
+		Eventually(getBPFNet, "15s", "1s").ShouldNot(ContainElements("eth10", "eth20"))
 		Eventually(getBPFNet, "15s", "1s").Should(ContainElement("bond0"))
 		ensureRightIFStateFlags(tc.Felixes[0], ifstate.FlgIPv4Ready|ifstate.FlgHost, map[string]uint32{"bond0": ifstate.FlgIPv4Ready | ifstate.FlgBond})
 
-		By("Removing dummy0 from bond")
-		tc.Felixes[0].Exec("ip", "link", "set", "dummy0", "nomaster")
-		tc.Felixes[0].Exec("ifconfig", "dummy0", "up")
-		Eventually(getBPFNet, "15s", "1s").ShouldNot(ContainElement("dummy1"))
-		Eventually(getBPFNet, "15s", "1s").Should(ContainElements("bond0", "dummy0"))
-		ensureRightIFStateFlags(tc.Felixes[0], ifstate.FlgIPv4Ready|ifstate.FlgHost, map[string]uint32{"bond0": ifstate.FlgIPv4Ready | ifstate.FlgBond, "dummy0": ifstate.FlgIPv4Ready | ifstate.FlgHost})
+		By("Removing eth10 from bond")
+		tc.Felixes[0].Exec("ip", "link", "set", "eth10", "nomaster")
+		tc.Felixes[0].Exec("ifconfig", "eth10", "up")
+		Eventually(getBPFNet, "15s", "1s").ShouldNot(ContainElement("eth20"))
+		Eventually(getBPFNet, "15s", "1s").Should(ContainElements("bond0", "eth10"))
+		ensureRightIFStateFlags(tc.Felixes[0], ifstate.FlgIPv4Ready|ifstate.FlgHost, map[string]uint32{"bond0": ifstate.FlgIPv4Ready | ifstate.FlgBond, "eth10": ifstate.FlgIPv4Ready | ifstate.FlgHost})
+
+		By("Removing eth20 from bond")
+		tc.Felixes[0].Exec("ip", "link", "set", "eth20", "nomaster")
+		tc.Felixes[0].Exec("ifconfig", "eth20", "up")
+		Eventually(getBPFNet, "15s", "1s").Should(ContainElements("bond0", "eth10", "eth20"))
+		ensureRightIFStateFlags(tc.Felixes[0], ifstate.FlgIPv4Ready|ifstate.FlgHost, map[string]uint32{"eth10": ifstate.FlgIPv4Ready | ifstate.FlgHost, "eth20": ifstate.FlgIPv4Ready | ifstate.FlgHost})
+
+		By("Creating a bond interface which does match BPFDataIfacePattern")
+		tc.Felixes[0].Exec("ip", "link", "add", "foo0", "type", "bond", "mode", "802.3ad")
+		tc.Felixes[0].Exec("ifconfig", "eth10", "down")
+		tc.Felixes[0].Exec("ifconfig", "eth20", "down")
+
+		tc.Felixes[0].Exec("ip", "link", "set", "eth10", "master", "foo0")
+		tc.Felixes[0].Exec("ip", "link", "set", "eth20", "master", "foo0")
+		tc.Felixes[0].Exec("ifconfig", "foo0", "up")
+		Eventually(getBPFNet, "15s", "1s").ShouldNot(ContainElements("eth10", "eth20", "foo0"))
 	})
 })

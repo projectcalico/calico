@@ -1434,11 +1434,6 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 			copy(*out, *in)
 		}
 	}
-	if in.BPFInterfaceAutoDetection != nil {
-		in, out := &in.BPFInterfaceAutoDetection, &out.BPFInterfaceAutoDetection
-		*out = new(BPFInterfaceAutoDetectionType)
-		**out = **in
-	}
 	if in.RouteTableRanges != nil {
 		in, out := &in.RouteTableRanges, &out.RouteTableRanges
 		*out = new(RouteTableRanges)
