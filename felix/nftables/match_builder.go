@@ -20,7 +20,6 @@ import (
 	"strings"
 
 	"github.com/sirupsen/logrus"
-	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/proto"
@@ -30,10 +29,40 @@ var Wildcard = "*"
 
 var _ generictables.MatchCriteria = nftMatch{}
 
+const (
+	ProtoIPIP   = 4
+	ProtoTCP    = 6
+	ProtoUDP    = 17
+	ProtoICMPv6 = 58
+)
+
 // nftMatch implements the MatchCriteria interface for nftables.
 type nftMatch struct {
 	clauses []string
-	proto   string
+
+	proto    string
+	protoNum uint8
+}
+
+func (m nftMatch) protocol() string {
+	if m.proto != "" {
+		return m.proto
+	}
+	if m.protoNum != 0 {
+		switch m.protoNum {
+		case ProtoIPIP:
+			return "ipip"
+		case ProtoTCP:
+			return "tcp"
+		case ProtoUDP:
+			return "udp"
+		case ProtoICMPv6:
+			return "icmpv6"
+		}
+		return fmt.Sprintf("%d", m.protoNum)
+	}
+	logrus.Fatal("Probably bug: No protocol set")
+	return ""
 }
 
 func Match() generictables.MatchCriteria {
@@ -41,7 +70,7 @@ func Match() generictables.MatchCriteria {
 }
 
 func (m nftMatch) Render() string {
-	return strings.Join([]string(m.clauses), " ")
+	return strings.Join(m.clauses, " ")
 }
 
 func (m nftMatch) String() string {
@@ -50,7 +79,7 @@ func (m nftMatch) String() string {
 
 func (m nftMatch) MarkClear(mark uint32) generictables.MatchCriteria {
 	if mark == 0 {
-		log.Panic("Probably bug: zero mark")
+		logrus.Panic("Probably bug: zero mark")
 	}
 	m.clauses = append(m.clauses, fmt.Sprintf("meta mark & %#x == 0", mark))
 	return m
@@ -58,7 +87,7 @@ func (m nftMatch) MarkClear(mark uint32) generictables.MatchCriteria {
 
 func (m nftMatch) MarkNotClear(mark uint32) generictables.MatchCriteria {
 	if mark == 0 {
-		log.Panic("Probably bug: zero mark")
+		logrus.Panic("Probably bug: zero mark")
 	}
 	m.clauses = append(m.clauses, fmt.Sprintf("meta mark & %#x != 0", mark))
 	return m
@@ -69,13 +98,13 @@ func (m nftMatch) MarkSingleBitSet(mark uint32) generictables.MatchCriteria {
 		// Disallow multi-bit matches to force user to think about the mask they should use.
 		// For example, if you are storing a number in the mark then you likely want to match on its
 		// 0-bits too
-		log.WithField("mark", mark).Panic("MarkSingleBitSet() should only be used with a single mark bit")
+		logrus.WithField("mark", mark).Panic("MarkSingleBitSet() should only be used with a single mark bit")
 	}
 	return m.MarkMatchesWithMask(mark, mark)
 }
 
 func (m nftMatch) MarkMatchesWithMask(mark, mask uint32) generictables.MatchCriteria {
-	logCxt := log.WithFields(log.Fields{
+	logCxt := logrus.WithFields(logrus.Fields{
 		"mark": mark,
 		"mask": mask,
 	})
@@ -90,7 +119,7 @@ func (m nftMatch) MarkMatchesWithMask(mark, mask uint32) generictables.MatchCrit
 }
 
 func (m nftMatch) NotMarkMatchesWithMask(mark, mask uint32) generictables.MatchCriteria {
-	logCxt := log.WithFields(log.Fields{
+	logCxt := logrus.WithFields(logrus.Fields{
 		"mark": mark,
 		"mask": mask,
 	})
@@ -186,24 +215,40 @@ func (m nftMatch) NotConntrackState(stateNames string) generictables.MatchCriter
 func (m nftMatch) Protocol(name string) generictables.MatchCriteria {
 	if m.proto != "" {
 		logrus.WithField("protocol", m.proto).Fatal("Protocol already set")
+	} else if m.protoNum != 0 {
+		logrus.WithField("protocol", m.protoNum).Fatal("Protocol already set")
 	}
 	m.proto = name
-	m.clauses = append(m.clauses, fmt.Sprintf("ip protocol %s", name))
+
+	// The "meta l4proto" matches on nftables metadata about the packet, which allows this
+	// match to work for both IPv4 and IPv6 packets.  The "ip protocol" match only works for
+	// IPv4 packets.
+	m.clauses = append(m.clauses, fmt.Sprintf("meta l4proto %s", name))
 	return m
 }
 
 func (m nftMatch) NotProtocol(name string) generictables.MatchCriteria {
-	m.clauses = append(m.clauses, fmt.Sprintf("ip protocol != %s", name))
+	m.clauses = append(m.clauses, fmt.Sprintf("meta l4proto != %s", name))
 	return m
 }
 
 func (m nftMatch) ProtocolNum(num uint8) generictables.MatchCriteria {
-	m.clauses = append(m.clauses, fmt.Sprintf("ip protocol %d", num))
+	if m.proto != "" {
+		logrus.WithField("protocol", m.proto).Fatal("Protocol already set")
+	} else if m.protoNum != 0 {
+		logrus.WithField("protocol", m.protoNum).Fatal("Protocol already set")
+	}
+	m.protoNum = num
+
+	// The "meta l4proto" matches on nftables metadata about the packet, which allows this
+	// match to work for both IPv4 and IPv6 packets.  The "ip protocol" match only works for
+	// IPv4 packets.
+	m.clauses = append(m.clauses, fmt.Sprintf("meta l4proto %d", num))
 	return m
 }
 
 func (m nftMatch) NotProtocolNum(num uint8) generictables.MatchCriteria {
-	m.clauses = append(m.clauses, fmt.Sprintf("ip protocol != %d", num))
+	m.clauses = append(m.clauses, fmt.Sprintf("meta l4proto != %d", num))
 	return m
 }
 
@@ -238,14 +283,12 @@ func (m nftMatch) NotSourceIPSet(name string) generictables.MatchCriteria {
 }
 
 func (m nftMatch) SourceIPPortSet(name string) generictables.MatchCriteria {
-	m.removeProtocolMatch()
-	m.clauses = append(m.clauses, fmt.Sprintf("ip saddr . %s sport @%s", m.proto, LegalizeSetName(name)))
+	m.clauses = append(m.clauses, fmt.Sprintf("ip saddr . meta l4proto . sport @%s", LegalizeSetName(name)))
 	return m
 }
 
 func (m nftMatch) NotSourceIPPortSet(name string) generictables.MatchCriteria {
-	m.removeProtocolMatch()
-	m.clauses = append(m.clauses, fmt.Sprintf("ip saddr . %s sport != @%s", m.proto, LegalizeSetName(name)))
+	m.clauses = append(m.clauses, fmt.Sprintf("ip saddr . %s sport != @%s", m.protocol(), LegalizeSetName(name)))
 	return m
 }
 
@@ -260,14 +303,12 @@ func (m nftMatch) NotDestIPSet(name string) generictables.MatchCriteria {
 }
 
 func (m nftMatch) DestIPPortSet(name string) generictables.MatchCriteria {
-	m.removeProtocolMatch()
-	m.clauses = append(m.clauses, fmt.Sprintf("ip daddr . %s dport @%s", m.proto, LegalizeSetName(name)))
+	m.clauses = append(m.clauses, fmt.Sprintf("ip daddr . %s dport @%s", m.protocol(), LegalizeSetName(name)))
 	return m
 }
 
 func (m nftMatch) NotDestIPPortSet(name string) generictables.MatchCriteria {
-	m.removeProtocolMatch()
-	m.clauses = append(m.clauses, fmt.Sprintf("ip daddr . %s dport != @%s", m.proto, LegalizeSetName(name)))
+	m.clauses = append(m.clauses, fmt.Sprintf("ip daddr . %s dport != @%s", m.protocol(), LegalizeSetName(name)))
 	return m
 }
 
@@ -290,57 +331,49 @@ func (m nftMatch) IPSetNames() (ipSetNames []string) {
 }
 
 func (m nftMatch) SourcePorts(ports ...uint16) generictables.MatchCriteria {
-	m.removeProtocolMatch()
 	portsString := PortsToMultiport(ports)
-	m.clauses = append(m.clauses, fmt.Sprintf("%s sport %s", m.proto, portsString))
+	m.clauses = append(m.clauses, fmt.Sprintf("%s sport %s", m.protocol(), portsString))
 	return m
 }
 
 func (m nftMatch) NotSourcePorts(ports ...uint16) generictables.MatchCriteria {
-	m.removeProtocolMatch()
 	portsString := PortsToMultiport(ports)
-	m.clauses = append(m.clauses, fmt.Sprintf("%s sport != %s", m.proto, portsString))
+	m.clauses = append(m.clauses, fmt.Sprintf("%s sport != %s", m.protocol(), portsString))
 	return m
 }
 
 func (m nftMatch) DestPorts(ports ...uint16) generictables.MatchCriteria {
-	m.removeProtocolMatch()
-	m.clauses = append(m.clauses, fmt.Sprintf("%s dport %s", m.proto, PortsToMultiport(ports)))
+	m.clauses = append(m.clauses, fmt.Sprintf("%s dport %s", m.protocol(), PortsToMultiport(ports)))
 	return m
 }
 
 func (m nftMatch) NotDestPorts(ports ...uint16) generictables.MatchCriteria {
-	m.removeProtocolMatch()
 	portsString := PortsToMultiport(ports)
-	m.clauses = append(m.clauses, fmt.Sprintf("%s dport != %s", m.proto, portsString))
+	m.clauses = append(m.clauses, fmt.Sprintf("%s dport != %s", m.protocol(), portsString))
 	return m
 }
 
 func (m nftMatch) SourcePortRanges(ports []*proto.PortRange) generictables.MatchCriteria {
-	m.removeProtocolMatch()
 	portsString := PortRangesToMultiport(ports)
-	m.clauses = append(m.clauses, fmt.Sprintf("%s sport %s", m.proto, portsString))
+	m.clauses = append(m.clauses, fmt.Sprintf("%s sport %s", m.protocol(), portsString))
 	return m
 }
 
 func (m nftMatch) NotSourcePortRanges(ports []*proto.PortRange) generictables.MatchCriteria {
-	m.removeProtocolMatch()
 	portsString := PortRangesToMultiport(ports)
-	m.clauses = append(m.clauses, fmt.Sprintf("%s sport != %s", m.proto, portsString))
+	m.clauses = append(m.clauses, fmt.Sprintf("%s sport != %s", m.protocol(), portsString))
 	return m
 }
 
 func (m nftMatch) DestPortRanges(ports []*proto.PortRange) generictables.MatchCriteria {
-	m.removeProtocolMatch()
 	portsString := PortRangesToMultiport(ports)
-	m.clauses = append(m.clauses, fmt.Sprintf("%s dport %s", m.proto, portsString))
+	m.clauses = append(m.clauses, fmt.Sprintf("%s dport %s", m.protocol(), portsString))
 	return m
 }
 
 func (m nftMatch) NotDestPortRanges(ports []*proto.PortRange) generictables.MatchCriteria {
-	m.removeProtocolMatch()
 	portsString := PortRangesToMultiport(ports)
-	m.clauses = append(m.clauses, fmt.Sprintf("%s dport != %s", m.proto, portsString))
+	m.clauses = append(m.clauses, fmt.Sprintf("%s dport != %s", m.protocol(), portsString))
 	return m
 }
 
@@ -392,20 +425,6 @@ func (m nftMatch) NotICMPV6TypeAndCode(t, c uint8) generictables.MatchCriteria {
 func (m nftMatch) VXLANVNI(vni uint32) generictables.MatchCriteria {
 	// TODO: Not supported in nftables mode.
 	return m
-}
-
-// removeProtocolMatch removes the "ip protocol" clause from the rule. This is necessary when specifying a port match,
-// since port matches already include the protocol in the match string and nftables rejects specifying it twice.
-func (m *nftMatch) removeProtocolMatch() {
-	if m.proto == "" {
-		logrus.Fatal("BUG: removeProtocolMatch called without a protocol match")
-	}
-	for i := range m.clauses {
-		if strings.Contains(m.clauses[i], "ip protocol ") {
-			m.clauses = append(m.clauses[:i], m.clauses[i+1:]...)
-			return
-		}
-	}
 }
 
 // Converts a list of ports to a multiport set suitable for inline use in nftables rules.
