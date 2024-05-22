@@ -96,7 +96,12 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 			AfterEach(func() {
 				if CurrentGinkgoTestDescription().Failed {
 					for _, felix := range felixes {
-						felix.Exec("iptables-save", "-c")
+						if NFTMode() {
+							felix.Exec("nft", "list", "table", "calico")
+						} else {
+							felix.Exec("iptables-save", "-c")
+							felix.Exec("ipset", "list")
+						}
 						felix.Exec("ipset", "list")
 						felix.Exec("ip", "r")
 						felix.Exec("ip", "a")
@@ -137,15 +142,24 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 					}, "10s", "100ms").Should(ContainSubstring("tx-checksumming: on"))
 				})
 			}
-			It("should use the --random-fully flag in the MASQUERADE rules", func() {
-				for _, felix := range felixes {
-					Eventually(func() string {
-						out, _ := felix.ExecOutput("iptables-save", "-c")
-						return out
-					}, "10s", "100ms").Should(ContainSubstring("--random-fully"))
+			It("should fully randomize MASQUERADE rules", func() {
+				if NFTMode() {
+					for _, felix := range felixes {
+						Eventually(func() string {
+							out, _ := felix.ExecOutput("nft", "list", "table", "calico")
+							return out
+						}, "10s", "100ms").Should(ContainSubstring("fully-random"))
+					}
+				} else {
+					for _, felix := range felixes {
+						Eventually(func() string {
+							out, _ := felix.ExecOutput("iptables-save", "-c")
+							return out
+						}, "10s", "100ms").Should(ContainSubstring("--random-fully"))
+					}
 				}
 			})
-			It("should have workload to workload connectivity", func() {
+			It("CASEY should have workload to workload connectivity", func() {
 				cc.ExpectSome(w[0], w[1])
 				cc.ExpectSome(w[1], w[0])
 
@@ -776,7 +790,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 
 					}
 				}
-
 			})
 
 			It("should delete the vxlan device when vxlan is disabled", func() {
