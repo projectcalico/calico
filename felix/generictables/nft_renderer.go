@@ -23,13 +23,15 @@ import (
 	"github.com/projectcalico/calico/felix/environment"
 )
 
-func NewNFTRenderer(hashCommentPrefix string) NFTRenderer {
+func NewNFTRenderer(hashCommentPrefix string, ipv6 bool) NFTRenderer {
 	return &nftRenderer{
+		ipv6:              ipv6,
 		hashCommentPrefix: hashCommentPrefix,
 	}
 }
 
 type nftRenderer struct {
+	ipv6              bool
 	hashCommentPrefix string
 }
 
@@ -74,6 +76,13 @@ func (r *nftRenderer) renderRule(rule *Rule, features *environment.Features) str
 		// If the rule is empty, it will cause nft to fail with a cryptic error message.
 		// Instead, we'll just use a counter.
 		return "counter"
+	}
+
+	// HACK: CASEY: nftables requires the use of the "ip6" keyword in place of "ip" when
+	// specifying IPv6 matches.	We need to replace "ip" with "ip6" in the rule.
+	// This should probably be done within the matchers themselves, but it's easier to do here for now.
+	if r.ipv6 {
+		inner = strings.Replace(inner, "ip ", "ip6 ", -1)
 	}
 	return inner
 }
