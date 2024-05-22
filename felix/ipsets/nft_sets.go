@@ -11,6 +11,7 @@ import (
 const (
 	NFTSetTypeAddr     = "ipv%d_addr"
 	NFTSetTypeAddrPort = "ipv%d_addr . inet_proto . inet_service"
+	NFTSetTypeNet      = "nft_net"
 )
 
 type V4NFTIPPort struct {
