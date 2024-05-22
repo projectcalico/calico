@@ -316,7 +316,7 @@ func NewTable(
 		IPSetsDataplane:        NewIPSets(ipv, nft),
 		name:                   name,
 		nft:                    nft,
-		render:                 generictables.NewNFTRenderer(hashPrefix),
+		render:                 generictables.NewNFTRenderer(hashPrefix, ipVersion == 6),
 		ipVersion:              ipVersion,
 		featureDetector:        featureDetector,
 		chainToInsertedRules:   inserts,
@@ -1149,7 +1149,7 @@ func CalculateRuleHashes(chainName string, rules []generictables.Rule, features 
 		Name:  chainName,
 		Rules: rules,
 	}
-	return generictables.NewNFTRenderer("").RuleHashes(&chain, features)
+	return generictables.NewNFTRenderer("", false).RuleHashes(&chain, features)
 }
 
 func numEmptyStrings(strs []string) int {
