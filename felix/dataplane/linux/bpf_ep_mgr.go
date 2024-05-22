@@ -1047,29 +1047,24 @@ func (m *bpfEndpointManager) cleanupOldAttach(iface string, ai bpf.EPAttachInfo)
 		}
 	}
 	if ai.Ingress != 0 || ai.Egress != 0 {
-		return m.cleanupTcProgram(iface)
+		ap := tc.AttachPoint{
+			AttachPoint: bpf.AttachPoint{
+				Iface: iface,
+				Hook:  hook.Egress,
+			},
+		}
+
+		if err := m.dp.ensureNoProgram(&ap); err != nil {
+			return fmt.Errorf("tc egress: %w", err)
+		}
+
+		ap.Hook = hook.Ingress
+
+		if err := m.dp.ensureNoProgram(&ap); err != nil {
+			return fmt.Errorf("tc ingress: %w", err)
+		}
 	}
 
-	return nil
-}
-
-func (m *bpfEndpointManager) cleanupTcProgram(iface string) error {
-	ap := tc.AttachPoint{
-		AttachPoint: bpf.AttachPoint{
-			Iface: iface,
-			Hook:  hook.Egress,
-		},
-	}
-
-	if err := m.dp.ensureNoProgram(&ap); err != nil {
-		return fmt.Errorf("tc egress: %w", err)
-	}
-
-	ap.Hook = hook.Ingress
-
-	if err := m.dp.ensureNoProgram(&ap); err != nil {
-		return fmt.Errorf("tc ingress: %w", err)
-	}
 	return nil
 }
 
@@ -1119,9 +1114,13 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceStateUpdate) {
 			if prevIfaceType != curIfaceType {
 				if curIfaceType == IfaceTypeBondSlave {
 					// Remove the Tc program.
-					err := m.cleanupTcProgram(update.Name)
+					ai, err := bpf.ListCalicoAttached()
 					if err != nil {
-						log.WithError(err).Warnf("Failed to detach old programs from now unused device '%s'", update.Name)
+						log.WithError(err).Warn("Failed to list attached programs")
+					} else {
+						if err := m.cleanupOldAttach(update.Name, ai[update.Name]); err != nil {
+							log.WithError(err).Warnf("Failed to detach old programs from now bonding device '%s'", update.Name)
+						}
 					}
 					// Check if the master device matches the regex.
 					masterIfa, err := net.InterfaceByIndex(masterIndex)
