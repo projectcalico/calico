@@ -379,10 +379,13 @@ func (s *IPSets) tryResync() error {
 		}
 		strElems := []string{}
 		for _, e := range elems {
-			// Concat type keys should be separated by " . " in the nftables output, but are
-			// returned with each as a separate element in the list.
-			// Other elements are simply a single string.
-			strElems = append(strElems, strings.Join(e.Key, " . "))
+			if len(e.Key) == 3 {
+				// This is a concatination of IP, protocol and port. Format it back into Felix's internal representation.
+				strElems = append(strElems, fmt.Sprintf("%s,%s:%s", e.Key[0], e.Key[1], e.Key[2]))
+			} else {
+				// This is just an IP address / CIDR.
+				strElems = append(strElems, e.Key[0])
+			}
 		}
 
 		metadata, ok := s.setNameToAllMetadata[setName]
