@@ -49,20 +49,24 @@ func (m nftMatch) protocol() string {
 		return m.proto
 	}
 	if m.protoNum != 0 {
-		switch m.protoNum {
-		case ProtoIPIP:
-			return "ipip"
-		case ProtoTCP:
-			return "tcp"
-		case ProtoUDP:
-			return "udp"
-		case ProtoICMPv6:
-			return "icmpv6"
-		}
-		return fmt.Sprintf("%d", m.protoNum)
+		return protoNumToName(m.protoNum)
 	}
 	logrus.Panicf("Probably bug: No protocol set: %s", m.clauses)
 	return ""
+}
+
+func protoNumToName(protoNum uint8) string {
+	switch protoNum {
+	case ProtoIPIP:
+		return "ipip"
+	case ProtoTCP:
+		return "tcp"
+	case ProtoUDP:
+		return "udp"
+	case ProtoICMPv6:
+		return "icmp"
+	}
+	return fmt.Sprintf("%d", protoNum)
 }
 
 func Match() generictables.MatchCriteria {
@@ -243,12 +247,12 @@ func (m nftMatch) ProtocolNum(num uint8) generictables.MatchCriteria {
 	// The "meta l4proto" matches on nftables metadata about the packet, which allows this
 	// match to work for both IPv4 and IPv6 packets.  The "ip protocol" match only works for
 	// IPv4 packets.
-	m.clauses = append(m.clauses, fmt.Sprintf("meta l4proto %d", num))
+	m.clauses = append(m.clauses, fmt.Sprintf("meta l4proto %s", protoNumToName(num)))
 	return m
 }
 
 func (m nftMatch) NotProtocolNum(num uint8) generictables.MatchCriteria {
-	m.clauses = append(m.clauses, fmt.Sprintf("meta l4proto != %d", num))
+	m.clauses = append(m.clauses, fmt.Sprintf("meta l4proto != %s", protoNumToName(num)))
 	return m
 }
 

@@ -116,10 +116,11 @@ func (s *IPSets) AddOrReplaceIPSet(setMetadata ipsets.IPSetMetadata, members []s
 	// Use nftables equivalents of IP set types where necessary.
 	var ipSetType ipsets.IPSetType
 	switch setMetadata.Type {
-	case ipsets.IPSetTypeHashIP, ipsets.IPSetTypeHashNet:
+	case ipsets.IPSetTypeHashIP:
 		ipSetType = ipsets.NFTSetTypeAddr
+	case ipsets.IPSetTypeHashNet:
+		ipSetType = ipsets.NFTSetTypeNet
 	case ipsets.IPSetTypeHashIPPort:
-		// members=[]string{"10.65.0.11,sctp:1001"}
 		ipSetType = ipsets.NFTSetTypeAddrPort
 	default:
 		log.Fatalf("Unexpected IP set type: %s", setMetadata.Type)
@@ -462,23 +463,22 @@ func (s *IPSets) NFTablesSet(name string) *knftables.Set {
 	}
 
 	flags := make([]knftables.SetFlag, 0, 1)
-	autoMerge := false
 	switch metadata.Type {
 	case ipsets.NFTSetTypeAddrPort:
 		// IP and port sets don't support the interval flag.
-	default:
+	case ipsets.NFTSetTypeAddr:
+		// IP addr sets don't use the interval flag.
+	case ipsets.NFTSetTypeNet:
+		// Net sets require the interval flag.
 		flags = append(flags, knftables.IntervalFlag)
-		autoMerge = true
+	default:
+		log.WithField("type", metadata.Type).Panic("Unexpected IP set type")
 	}
 
 	return &knftables.Set{
 		Name:  LegalizeSetName(name),
 		Type:  metadata.Type.SetType(s.IPVersionConfig.Family.Version()),
 		Flags: flags,
-
-		// AutoMerge automatically condenses overlapping ranges into a single range.
-		// Without this, a single set with 10.0.0.0/24 and 10.0.0.1/32 would error.
-		AutoMerge: &autoMerge,
 	}
 }
 
