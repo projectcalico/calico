@@ -169,16 +169,21 @@ func (t IPSetType) CanonicaliseMember(member string) IPSetMember {
 	case NFTSetTypeAddr:
 		return ip.MustParseCIDROrIP(member)
 	case NFTSetTypeAddrPort:
-		// The member should be of the format <IP> . <port number>
-		parts := strings.Split(member, " . ")
+		// The member should be of the format "IP,protocol:port"
+		parts := strings.Split(member, ",")
 		if len(parts) != 2 {
-			log.WithField("member", member).Panic("Failed to parse IP . port set member")
+			log.WithField("member", member).Panic("Failed to parse IP,proto:port set member")
 		}
 		ipAddr := ip.FromIPOrCIDRString(parts[0])
 		if ipAddr == nil {
 			// This should be prevented by validation.
 			log.WithField("member", member).Panic("Failed to parse IP part of IP,port member")
 		}
+		parts = strings.Split(parts[1], ":")
+		if len(parts) != 2 {
+			log.WithField("member", member).Panic("Failed to parse IP part of IP,port member")
+		}
+		proto := parts[0]
 		port, err := strconv.Atoi(parts[1])
 		if err != nil {
 			log.WithField("member", member).WithError(err).Panic("Bad port")
@@ -191,13 +196,15 @@ func (t IPSetType) CanonicaliseMember(member string) IPSetMember {
 		// because we store many IP set members.
 		if ipAddr.Version() == 4 {
 			return V4NFTIPPort{
-				IP:   ipAddr.(ip.V4Addr),
-				Port: uint16(port),
+				IP:       ipAddr.(ip.V4Addr),
+				Port:     uint16(port),
+				Protocol: proto,
 			}
 		} else {
 			return V6NFTIPPort{
-				IP:   ipAddr.(ip.V6Addr),
-				Port: uint16(port),
+				IP:       ipAddr.(ip.V6Addr),
+				Port:     uint16(port),
+				Protocol: proto,
 			}
 		}
 	case IPSetTypeHashIPPort:
