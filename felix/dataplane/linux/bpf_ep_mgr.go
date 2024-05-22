@@ -969,6 +969,12 @@ func (m *bpfEndpointManager) getIfTypeFlags(name string) uint32 {
 			flags |= ifstate.FlgBondSlave
 		case IfaceTypeL3:
 			flags |= ifstate.FlgL3
+		case IfaceTypeWireguard:
+			flags |= ifstate.FlgWireguard
+		case IfaceTypeVXLAN:
+			flags |= ifstate.FlgVxlan
+		case IfaceTypeIPIP:
+			flags |= ifstate.FlgIPIP
 		}
 	}
 	return flags
@@ -1826,18 +1832,6 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 				"Ignoring interface that doesn't match the host data/l3 interface regex")
 			return set.RemoveItem
 		}
-		/*
-			if !m.isDataIface(iface) && !m.isL3Iface(iface) {
-				log.WithField("iface", iface).Debug(
-					"Ignoring interface that doesn't match the host data/l3 interface regex")
-				if !m.isWorkloadIface(iface) {
-					log.WithField("iface", iface).Debug(
-						"Removing interface that doesn't match the host data/l3 interface and is not workload interface")
-					return set.RemoveItem
-				}
-				return nil
-			}*/
-
 		m.opReporter.RecordOperation("update-data-iface")
 
 		wg.Add(1)

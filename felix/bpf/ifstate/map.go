@@ -45,9 +45,11 @@ const (
 	FlgHost      = uint32(0x8)
 	FlgBond      = uint32(0x10)
 	FlgBondSlave = uint32(0x20)
-	FlgTunnel    = uint32(0x40)
-	FlgL3        = uint32(0x80)
-	FlgMax       = uint32(0xff)
+	FlgVxlan     = uint32(0x40)
+	FlgIPIP      = uint32(0x80)
+	FlgWireguard = uint32(0x100)
+	FlgL3        = uint32(0x200)
+	FlgMax       = uint32(0x3ff)
 )
 
 var flagsToStr = map[uint32]string{
@@ -57,7 +59,9 @@ var flagsToStr = map[uint32]string{
 	FlgHost:      "host",
 	FlgBond:      "bond",
 	FlgBondSlave: "bondslave",
-	FlgTunnel:    "tunnel",
+	FlgVxlan:     "vxlan",
+	FlgIPIP:      "ipip",
+	FlgWireguard: "wg",
 	FlgL3:        "l3",
 }
 

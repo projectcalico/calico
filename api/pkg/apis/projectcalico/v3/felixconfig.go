@@ -87,14 +87,6 @@ const (
 )
 
 // +kubebuilder:validation:Enum=Enabled;Disabled
-type BPFInterfaceAutoDetectionType string
-
-const (
-	BPFInterfaceAutoDetectionEnabled  BPFInterfaceAutoDetectionType = "Enabled"
-	BPFInterfaceAutoDetectionDisabled BPFInterfaceAutoDetectionType = "Disabled"
-)
-
-// +kubebuilder:validation:Enum=Enabled;Disabled
 type WindowsManageFirewallRulesMode string
 
 const (
