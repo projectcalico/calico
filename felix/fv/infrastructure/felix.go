@@ -108,11 +108,6 @@ func (f *Felix) TriggerDelayedStart() {
 }
 
 func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
-	// TODO: CASEY Skip v6 tests for nftables mode for now, since it's broken.
-	if os.Getenv("FELIX_FV_NFTABLES") == "true" {
-		options.EnableIPv6 = false
-	}
-
 	log.Info("Starting felix")
 	ipv6Enabled := fmt.Sprint(options.EnableIPv6)
 	bpfEnableIPv6 := fmt.Sprint(options.BPFEnableIPv6)
