@@ -169,6 +169,10 @@ func (m *mockDataplane) setRPFilter(iface string, val int) error {
 	return nil
 }
 
+func (m *mockDataplane) getIfaceType(name string) (IfaceType, int, error) {
+	return IfaceTypeData, 0, nil
+}
+
 func (m *mockDataplane) getRules(key string) *polprog.Rules {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()

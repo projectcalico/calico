@@ -175,6 +175,7 @@ type bpfDataplane interface {
 	loadTCLogFilter(ap *tc.AttachPoint) (fileDescriptor, int, error)
 	interfaceByIndex(int) (*net.Interface, error)
 	queryClassifier(int, int, int, bool) (int, error)
+	getIfaceType(string) (IfaceType, int, error)
 }
 
 type hasLoadPolicyProgram interface {
@@ -1107,15 +1108,14 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceStateUpdate) {
 		// Determine the type of interface.
 		// These include host, bond, slave, ipip, wireguard, l3.
 		// update the nameToIfaceTypeMap
-		link, err := netlink.LinkByName(update.Name)
-		if err != nil {
+		curIfaceType, masterIndex, err := m.dp.getIfaceType(update.Name)
+		if err != nil || curIfaceType == IfaceTypeUnknown {
 			log.Panicf("Failed to get interface information via netlink '%s'", update.Name)
 		} else {
 			prevIfaceType := IfaceTypeUnknown
 			if val, ok := m.nameToIfaceType[update.Name]; ok {
 				prevIfaceType = val
 			}
-			curIfaceType := m.detectIfaceType(link)
 			if prevIfaceType != curIfaceType {
 				if curIfaceType == IfaceTypeBondSlave {
 					// Remove the Tc program.
@@ -1124,7 +1124,7 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceStateUpdate) {
 						log.WithError(err).Warnf("Failed to detach old programs from now unused device '%s'", update.Name)
 					}
 					// Check if the master device matches the regex.
-					masterIfa, err := net.InterfaceByIndex(link.Attrs().MasterIndex)
+					masterIfa, err := net.InterfaceByIndex(masterIndex)
 					if err != nil {
 						log.Debugf("Failed to get master interface details for '%s'", update.Name)
 					}
@@ -1823,14 +1823,22 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 	errs := map[string]error{}
 	var wg sync.WaitGroup
 	m.dirtyIfaceNames.Iter(func(iface string) error {
-		if m.isWorkloadIface(iface) {
-			return nil
-		}
-		val, ok := m.nameToIfaceType[iface]
-		if !ok || val == IfaceTypeBondSlave {
+		if !m.isDataIface(iface) && !m.isL3Iface(iface) {
 			log.WithField("iface", iface).Debug(
 				"Ignoring interface that doesn't match the host data/l3 interface regex")
-			return set.RemoveItem
+			if !m.isWorkloadIface(iface) {
+				log.WithField("iface", iface).Debug(
+					"Removing interface that doesn't match the host data/l3 interface and is not workload interface")
+				return set.RemoveItem
+			}
+			return nil
+		}
+		if val, ok := m.nameToIfaceType[iface]; ok {
+			if val == IfaceTypeBondSlave {
+				log.WithField("iface", iface).Debug(
+					"Ignoring bonding slave interface")
+				return set.RemoveItem
+			}
 		}
 		m.opReporter.RecordOperation("update-data-iface")
 
@@ -4007,7 +4015,16 @@ func (m *bpfEndpointManager) ruleMatchID(dir, action, owner, name string, idx in
 	return h.Sum64()
 }
 
-func (m *bpfEndpointManager) detectIfaceType(link netlink.Link) IfaceType {
+func (m *bpfEndpointManager) getIfaceType(name string) (IfaceType, int, error) {
+	link, err := netlink.LinkByName(name)
+	if err != nil {
+		return IfaceTypeUnknown, -1, err
+	}
+	ifaceType := m.getIfaceTypeFromLink(link)
+	return ifaceType, link.Attrs().MasterIndex, nil
+}
+
+func (m *bpfEndpointManager) getIfaceTypeFromLink(link netlink.Link) IfaceType {
 	attrs := link.Attrs()
 	if attrs.Slave != nil && attrs.Slave.SlaveType() == "bond" {
 		return IfaceTypeBondSlave
