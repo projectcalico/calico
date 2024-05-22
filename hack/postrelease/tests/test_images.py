@@ -14,13 +14,15 @@ EXPECTED_ARCHS = ["amd64", "arm64", "armv7", "ppc64le", "s390x"]
 # a registry assigned.
 EXPECTED_IMAGES = [
     "calico/node",
+    "calico/node-windows",
     "calico/ctl",
     "calico/apiserver",
     "calico/typha",
     "calico/cni",
+    "calico/cni-windows",
+    "calico/key-cert-provisioner",
     "calico/kube-controllers",
     "calico/upgrade",
-    "calico/windows",
     "calico/flannel-migration-controller",
     "calico/dikastes",
     "calico/pilot-webhook",
