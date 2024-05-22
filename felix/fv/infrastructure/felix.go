@@ -168,6 +168,11 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 		}
 	}
 
+	if os.Getenv("FELIX_FV_NFTABLES") == "true" {
+		log.Info("FELIX_FV_NFTABLES=true, enabling nftables with env var")
+		envVars["FELIX_NFTABLESENABLED"] = "true"
+	}
+
 	if options.DelayFelixStart {
 		envVars["DELAY_FELIX_START"] = "true"
 	}
@@ -282,7 +287,7 @@ func (f *Felix) RestartWithDelayedStartup() func() {
 func (f *Felix) SetEnv(env map[string]string) {
 	fn := "extra-env.sh"
 
-	file, err := os.OpenFile("./"+fn, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
+	file, err := os.OpenFile("./"+fn, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0o644)
 	Expect(err).NotTo(HaveOccurred())
 
 	fw := bufio.NewWriter(file)
