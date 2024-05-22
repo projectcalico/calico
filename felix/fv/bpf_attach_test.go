@@ -158,5 +158,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf reattach object",
 		tc.Felixes[0].Exec("ip", "link", "set", "eth20", "master", "foo0")
 		tc.Felixes[0].Exec("ifconfig", "foo0", "up")
 		Eventually(getBPFNet, "15s", "1s").ShouldNot(ContainElements("eth10", "eth20", "foo0"))
+
 	})
 })

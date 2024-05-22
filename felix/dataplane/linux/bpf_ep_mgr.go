@@ -4045,6 +4045,7 @@ func (m *bpfEndpointManager) getIfaceTypeFromLink(link netlink.Link) IfaceType {
 		if attrs.Flags&net.FlagLoopback > 0 {
 			return IfaceTypeData
 		}
+
 		ifa, err := net.InterfaceByName(attrs.Name)
 		if err == nil {
 			addrs, err := ifa.Addrs()
@@ -4057,11 +4058,8 @@ func (m *bpfEndpointManager) getIfaceTypeFromLink(link netlink.Link) IfaceType {
 		if m.isL3Iface(attrs.Name) {
 			return IfaceTypeL3
 		}
-		if m.isDataIface(attrs.Name) {
-			return IfaceTypeData
-		}
 	}
-	return IfaceTypeUnknown
+	return IfaceTypeData
 }
 
 func newJumpMapAlloc(entryPoints int) *jumpMapAlloc {
