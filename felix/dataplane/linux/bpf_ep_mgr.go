@@ -2714,9 +2714,7 @@ func (m *bpfEndpointManager) getEndpointType(ifaceName string) tcdefs.EndpointTy
 	}
 	ifaceType := m.nameToIfaceType[ifaceName]
 	switch ifaceType {
-	case IfaceTypeData:
-	case IfaceTypeVXLAN:
-	case IfaceTypeBond:
+	case IfaceTypeData, IfaceTypeVXLAN, IfaceTypeBond:
 		if ifaceName == "lo" {
 			return tcdefs.EpTypeLO
 		}
@@ -2724,8 +2722,7 @@ func (m *bpfEndpointManager) getEndpointType(ifaceName string) tcdefs.EndpointTy
 			return tcdefs.EpTypeNAT
 		}
 		return tcdefs.EpTypeHost
-	case IfaceTypeWireguard:
-	case IfaceTypeL3:
+	case IfaceTypeWireguard, IfaceTypeL3:
 		return tcdefs.EpTypeL3Device
 	case IfaceTypeIPIP:
 		if m.features.IPIPDeviceIsL3 {
@@ -4044,6 +4041,10 @@ func (m *bpfEndpointManager) getIfaceTypeFromLink(link netlink.Link) IfaceType {
 			return IfaceTypeL3
 		}
 	default:
+		// Loopback device.
+		if attrs.Flags&net.FlagLoopback > 0 {
+			return IfaceTypeData
+		}
 		ifa, err := net.InterfaceByName(attrs.Name)
 		if err == nil {
 			addrs, err := ifa.Addrs()
