@@ -283,12 +283,18 @@ func (m nftMatch) NotSourceIPSet(name string) generictables.MatchCriteria {
 }
 
 func (m nftMatch) SourceIPPortSet(name string) generictables.MatchCriteria {
-	m.clauses = append(m.clauses, fmt.Sprintf("ip saddr . meta l4proto . sport @%s", LegalizeSetName(name)))
+	// IPPort sets include the IP, protocol, and port, in that order.
+	// Note that "th dport" is only compatible with protocols that have their destination port in
+	// the same location within the header, i.e., TCP, UDP, and SCTP.
+	m.clauses = append(m.clauses, fmt.Sprintf("ip saddr . meta l4proto . th sport @%s", LegalizeSetName(name)))
 	return m
 }
 
 func (m nftMatch) NotSourceIPPortSet(name string) generictables.MatchCriteria {
-	m.clauses = append(m.clauses, fmt.Sprintf("ip saddr . %s sport != @%s", m.protocol(), LegalizeSetName(name)))
+	// IPPort sets include the IP, protocol, and port, in that order.
+	// Note that "th dport" is only compatible with protocols that have their destination port in
+	// the same location within the header, i.e., TCP, UDP, and SCTP.
+	m.clauses = append(m.clauses, fmt.Sprintf("ip saddr . meta l4proto . th sport != @%s", LegalizeSetName(name)))
 	return m
 }
 
@@ -303,12 +309,18 @@ func (m nftMatch) NotDestIPSet(name string) generictables.MatchCriteria {
 }
 
 func (m nftMatch) DestIPPortSet(name string) generictables.MatchCriteria {
-	m.clauses = append(m.clauses, fmt.Sprintf("ip daddr . %s dport @%s", m.protocol(), LegalizeSetName(name)))
+	// IPPort sets include the IP, protocol, and port, in that order.
+	// Note that "th dport" is only compatible with protocols that have their destination port in
+	// the same location within the header, i.e., TCP, UDP, and SCTP.
+	m.clauses = append(m.clauses, fmt.Sprintf("ip daddr . meta l4proto . th dport @%s", LegalizeSetName(name)))
 	return m
 }
 
 func (m nftMatch) NotDestIPPortSet(name string) generictables.MatchCriteria {
-	m.clauses = append(m.clauses, fmt.Sprintf("ip daddr . %s dport != @%s", m.protocol(), LegalizeSetName(name)))
+	// IPPort sets include the IP, protocol, and port, in that order.
+	// Note that "th dport" is only compatible with protocols that have their destination port in
+	// the same location within the header, i.e., TCP, UDP, and SCTP.
+	m.clauses = append(m.clauses, fmt.Sprintf("ip daddr . meta l4proto . th dport != @%s", LegalizeSetName(name)))
 	return m
 }
 
