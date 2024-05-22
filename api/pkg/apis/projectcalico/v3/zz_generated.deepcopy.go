@@ -1301,6 +1301,11 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(bool)
 		**out = **in
 	}
+	if in.NFTablesEnabled != nil {
+		in, out := &in.NFTablesEnabled, &out.NFTablesEnabled
+		*out = new(bool)
+		**out = **in
+	}
 	if in.BPFEnabled != nil {
 		in, out := &in.BPFEnabled, &out.BPFEnabled
 		*out = new(bool)
