@@ -119,6 +119,7 @@ func (s *IPSets) AddOrReplaceIPSet(setMetadata ipsets.IPSetMetadata, members []s
 	case ipsets.IPSetTypeHashIP, ipsets.IPSetTypeHashNet:
 		ipSetType = ipsets.NFTSetTypeAddr
 	case ipsets.IPSetTypeHashIPPort:
+		// members=[]string{"10.65.0.11,sctp:1001"}
 		ipSetType = ipsets.NFTSetTypeAddrPort
 	default:
 		log.Fatalf("Unexpected IP set type: %s", setMetadata.Type)

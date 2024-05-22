@@ -93,10 +93,10 @@ var _ = DescribeTable("MatchBuilder",
 	Entry("NotDestIPSet", Match().NotDestIPSet("calits:12345abc-_"), "ip daddr != @calits-12345abc-_"),
 
 	// IP,Port IP sets.
-	Entry("SourceIPPortSet", Match().Protocol("tcp").SourceIPPortSet("calitn:12345abc-_"), "ip saddr . tcp sport @calitn-12345abc-_"),
-	Entry("NotSourceIPPortSet", Match().Protocol("tcp").NotSourceIPPortSet("calitn:12345abc-_"), "ip saddr . tcp sport != @calitn-12345abc-_"),
-	Entry("DestIPPortSet", Match().Protocol("tcp").DestIPPortSet("calitn:12345abc-_"), "ip daddr . tcp dport @calitn-12345abc-_"),
-	Entry("NotDestIPPortSet", Match().Protocol("tcp").NotDestIPPortSet("calitn:12345abc-_"), "ip daddr . tcp dport != @calitn-12345abc-_"),
+	Entry("SourceIPPortSet", Match().SourceIPPortSet("calitn:12345abc-_"), "ip saddr . meta l4proto . th sport @calitn-12345abc-_"),
+	Entry("NotSourceIPPortSet", Match().NotSourceIPPortSet("calitn:12345abc-_"), "ip saddr . meta l4proto . th sport != @calitn-12345abc-_"),
+	Entry("DestIPPortSet", Match().DestIPPortSet("calitn:12345abc-_"), "ip daddr . meta l4proto . th dport @calitn-12345abc-_"),
+	Entry("NotDestIPPortSet", Match().NotDestIPPortSet("calitn:12345abc-_"), "ip daddr . meta l4proto . th dport != @calitn-12345abc-_"),
 
 	// Ports.
 	Entry("SourcePorts", Match().Protocol("tcp").SourcePorts(1234, 5678), "meta l4proto tcp tcp sport { 1234, 5678 }"),
