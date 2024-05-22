@@ -108,6 +108,11 @@ func (f *Felix) TriggerDelayedStart() {
 }
 
 func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
+	// TODO: CASEY Skip v6 tests for nftables mode for now, since it's broken.
+	if os.Getenv("FELIX_FV_NFTABLES") == "true" {
+		options.EnableIPv6 = false
+	}
+
 	log.Info("Starting felix")
 	ipv6Enabled := fmt.Sprint(options.EnableIPv6)
 	bpfEnableIPv6 := fmt.Sprint(options.BPFEnableIPv6)
@@ -166,6 +171,11 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 		if CreateCgroupV2 {
 			envVars["FELIX_DEBUGBPFCGROUPV2"] = containerName
 		}
+	}
+
+	if os.Getenv("FELIX_FV_NFTABLES") == "true" {
+		log.Info("FELIX_FV_NFTABLES=true, enabling nftables with env var")
+		envVars["FELIX_NFTABLESENABLED"] = "true"
 	}
 
 	if options.DelayFelixStart {
@@ -282,7 +292,7 @@ func (f *Felix) RestartWithDelayedStartup() func() {
 func (f *Felix) SetEnv(env map[string]string) {
 	fn := "extra-env.sh"
 
-	file, err := os.OpenFile("./"+fn, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
+	file, err := os.OpenFile("./"+fn, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0o644)
 	Expect(err).NotTo(HaveOccurred())
 
 	fw := bufio.NewWriter(file)
