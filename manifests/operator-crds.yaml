@@ -20939,8 +20939,9 @@ spec:
                   type: object
                 type: array
               serviceLoadBalancerRouteAggregationEnabled:
-                description: ServiceLoadBalancerRouteAggregationEnabled sets whether
-                  aggregated LoadBalancerIP routes should be advertised on every node
+                description: 'ServiceLoadBalancerRouteAggregationEnabled sets whether
+                  aggregated LoadBalancerIP routes should be advertised on every node.
+                  [Default: true]'
                 type: boolean
             type: object
         type: object
