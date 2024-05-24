@@ -358,7 +358,7 @@ func (c *Container) copyOutputToLog(streamName string, stream io.Reader, done *s
 	// We do this for all containers because we already have the machinery here.
 	foundDataRace := false
 	dataRaceText := ""
-	dataRaceFile, err := os.OpenFile("data-races.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	dataRaceFile, err := os.OpenFile("data-races.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
 		log.WithError(err).Error("Failed to open data race log file.")
 	}

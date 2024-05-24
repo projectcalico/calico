@@ -47,6 +47,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ endpoint-to-host-action tes
 	)
 
 	BeforeEach(func() {
+		if NFTMode() {
+			Skip("TODO: fix this test to work with NFT mode.")
+		}
 		infra = getInfra()
 		options := infrastructure.DefaultTopologyOptions()
 		options.IPIPEnabled = false

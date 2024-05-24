@@ -18,11 +18,77 @@ import (
 	"fmt"
 
 	"github.com/projectcalico/calico/felix/environment"
+	"github.com/projectcalico/calico/felix/generictables"
 )
 
-type Action interface {
-	ToFragment(features *environment.Features) string
-	String() string
+func ActionSet() generictables.ActionSet {
+	return &actionSet{}
+}
+
+type actionSet struct{}
+
+func (s *actionSet) AllowAction() generictables.Action {
+	return AcceptAction{}
+}
+
+func (s *actionSet) GoToAction(target string) generictables.Action {
+	return GotoAction{Target: target}
+}
+
+func (s *actionSet) ReturnAction() generictables.Action {
+	return ReturnAction{}
+}
+
+func (s *actionSet) SetMaskedMarkAction(mark, mask uint32) generictables.Action {
+	return SetMaskedMarkAction{
+		Mark: mark,
+		Mask: mask,
+	}
+}
+
+func (s *actionSet) SetMarkAction(mark uint32) generictables.Action {
+	return SetMarkAction{
+		Mark: mark,
+	}
+}
+
+func (s *actionSet) ClearMarkAction(mark uint32) generictables.Action {
+	return ClearMarkAction{Mark: mark}
+}
+
+func (s *actionSet) JumpAction(target string) generictables.Action {
+	return JumpAction{Target: target}
+}
+
+func (s *actionSet) NoTrackAction() generictables.Action {
+	return NoTrackAction{}
+}
+
+func (s *actionSet) LogAction(prefix string) generictables.Action {
+	return LogAction{Prefix: prefix}
+}
+
+func (s *actionSet) SNATAction(ip string) generictables.Action {
+	return SNATAction{ToAddr: ip}
+}
+
+func (s *actionSet) DNATAction(ip string, port uint16) generictables.Action {
+	return DNATAction{DestAddr: ip, DestPort: port}
+}
+
+func (s *actionSet) MasqAction(toPorts string) generictables.Action {
+	return MasqAction{ToPorts: toPorts}
+}
+
+func (s *actionSet) DropAction() generictables.Action {
+	return DropAction{}
+}
+
+func (s *actionSet) SetConnmarkAction(mark, mask uint32) generictables.Action {
+	return SetConnMarkAction{
+		Mark: mark,
+		Mask: mask,
+	}
 }
 
 type Referrer interface {
