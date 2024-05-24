@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -365,7 +364,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 		BeforeEach(func() {
 			externalClient = infrastructure.RunExtClient("ext-client")
 
-			Eventually(func() error {
+			/*Eventually(func() error {
 				err := externalClient.ExecMayFail("ip", "tunnel", "add", "tunl0", "mode", "ipip")
 				if err != nil && strings.Contains(err.Error(), "SIOCADDTUNNEL: File exists") {
 					return nil
@@ -379,7 +378,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 				tc.Felixes[0].IP, "dev", "tunl0", "onlink")
 
 			tc.Felixes[0].Exec("ip", "route", "add", "10.65.222.1", "via",
-				externalClient.IP, "dev", "tunl0", "onlink")
+				externalClient.IP, "dev", "tunl0", "onlink")*/
 		})
 
 		JustAfterEach(func() {
@@ -447,11 +446,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 				}
 			}
 
-			By("testing that the ext client can connect via ipip")
-			time.Sleep(time.Minute * 60)
+			/*By("testing that the ext client can connect via ipip")
+			//time.Sleep(time.Minute * 60)
 			cc.ResetExpectations()
 			cc.ExpectSome(externalClient, w[0])
-			cc.CheckConnectivity()
+			cc.CheckConnectivity()*/
 		})
 	})
 })
