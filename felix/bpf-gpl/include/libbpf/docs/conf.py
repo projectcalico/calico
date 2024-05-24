@@ -18,6 +18,7 @@ extensions = [
     'sphinx.ext.viewcode',
     'sphinx.ext.imgmath',
     'sphinx.ext.todo',
+    'sphinx_rtd_theme',
     'breathe',
 ]
 
