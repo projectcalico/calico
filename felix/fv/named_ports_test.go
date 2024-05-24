@@ -47,6 +47,7 @@ import (
 var _ = Context("_BPF-SAFE_ TCP: Destination named ports: with initialized Felix, etcd datastore, 3 workloads, allow-all profile", func() {
 	describeNamedPortTests(false, "tcp")
 })
+
 var _ = Context("_BPF-SAFE_ TCP: Source named ports: with initialized Felix, etcd datastore, 3 workloads, allow-all profile", func() {
 	describeNamedPortTests(true, "tcp")
 })
@@ -54,6 +55,7 @@ var _ = Context("_BPF-SAFE_ TCP: Source named ports: with initialized Felix, etc
 var _ = Context("_BPF-SAFE_ UDP: Destination named ports: with initialized Felix, etcd datastore, 3 workloads, allow-all profile", func() {
 	describeNamedPortTests(false, "udp")
 })
+
 var _ = Context("_BPF-SAFE_ UDP: Source named ports: with initialized Felix, etcd datastore, 3 workloads, allow-all profile", func() {
 	describeNamedPortTests(true, "udp")
 })
@@ -61,6 +63,7 @@ var _ = Context("_BPF-SAFE_ UDP: Source named ports: with initialized Felix, etc
 var _ = Context("SCTP: Destination named ports: with initialized Felix, etcd datastore, 3 workloads, allow-all profile", func() {
 	describeNamedPortTests(false, "sctp")
 })
+
 var _ = Context("SCTP: Source named ports: with initialized Felix, etcd datastore, 3 workloads, allow-all profile", func() {
 	describeNamedPortTests(true, "sctp")
 })
@@ -76,7 +79,6 @@ var _ = Context("SCTP: Source named ports: with initialized Felix, etcd datastor
 //   - The policy generation is parameterized to move the match criteria from destination port
 //     to source port (and from ingress/egress to the opposite) if the flag is set.
 func describeNamedPortTests(testSourcePorts bool, protocol string) {
-
 	var (
 		etcd   *containers.Container
 		tc     infrastructure.TopologyContainers
@@ -153,9 +155,19 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 		if CurrentGinkgoTestDescription().Failed {
 			log.Warn("Test failed, dumping diags...")
 			utils.Run("docker", "logs", tc.Felixes[0].Name)
-			utils.Run("docker", "exec", tc.Felixes[0].Name, "iptables-save", "-c")
-			utils.Run("docker", "exec", tc.Felixes[0].Name, "ipset", "list")
-			utils.Run("docker", "exec", tc.Felixes[0].Name, "ip", "r")
+
+			if NFTMode() {
+				logNFTDiags(tc.Felixes[0])
+			} else {
+				if NFTMode() {
+					logNFTDiags(tc.Felixes[0])
+				} else {
+					utils.Run("docker", "exec", tc.Felixes[0].Name, "iptables-save", "-c")
+					utils.Run("docker", "exec", tc.Felixes[0].Name, "ipset", "list")
+				}
+				utils.Run("docker", "exec", tc.Felixes[0].Name, "ipset", "list")
+				utils.Run("docker", "exec", tc.Felixes[0].Name, "ip", "r")
+			}
 
 			profiles, err := client.Profiles().List(context.Background(), options.ListOptions{})
 			if err == nil {
@@ -810,8 +822,13 @@ var _ = Describe("TCP: named port with a simulated kubernetes nginx and client",
 		if CurrentGinkgoTestDescription().Failed {
 			log.Warn("Test failed, dumping diags...")
 			utils.Run("docker", "logs", tc.Felixes[0].Name)
-			utils.Run("docker", "exec", tc.Felixes[0].Name, "iptables-save", "-c")
-			utils.Run("docker", "exec", tc.Felixes[0].Name, "ipset", "list")
+
+			if NFTMode() {
+				logNFTDiags(tc.Felixes[0])
+			} else {
+				utils.Run("docker", "exec", tc.Felixes[0].Name, "iptables-save", "-c")
+				utils.Run("docker", "exec", tc.Felixes[0].Name, "ipset", "list")
+			}
 			utils.Run("docker", "exec", tc.Felixes[0].Name, "ip", "r")
 		}
 
@@ -916,8 +933,12 @@ func describeNamedPortHostEndpointTests(getInfra infrastructure.InfraFactory, na
 	AfterEach(func() {
 		if CurrentGinkgoTestDescription().Failed {
 			for _, felix := range tc.Felixes {
-				felix.Exec("iptables-save", "-c")
-				felix.Exec("ipset", "list")
+				if NFTMode() {
+					logNFTDiags(felix)
+				} else {
+					felix.Exec("iptables-save", "-c")
+					felix.Exec("ipset", "list")
+				}
 				felix.Exec("ip", "r")
 				felix.Exec("ip", "a")
 			}
@@ -1126,8 +1147,12 @@ var _ = Describe("tests with mixed TCP/UDP", func() {
 		if CurrentGinkgoTestDescription().Failed {
 			log.Warn("Test failed, dumping diags...")
 			utils.Run("docker", "logs", tc.Felixes[0].Name)
-			utils.Run("docker", "exec", tc.Felixes[0].Name, "iptables-save", "-c")
-			utils.Run("docker", "exec", tc.Felixes[0].Name, "ipset", "list")
+			if NFTMode() {
+				logNFTDiags(tc.Felixes[0])
+			} else {
+				utils.Run("docker", "exec", tc.Felixes[0].Name, "iptables-save", "-c")
+				utils.Run("docker", "exec", tc.Felixes[0].Name, "ipset", "list")
+			}
 			utils.Run("docker", "exec", tc.Felixes[0].Name, "ip", "r")
 		}
 
@@ -1169,7 +1194,8 @@ var _ = Describe("tests with mixed TCP/UDP", func() {
 
 func dumpResource(pol interface {
 	GetName() string
-}) string {
+},
+) string {
 	jsonPol, _ := json.MarshalIndent(pol, "\t", "  ")
 	polDump := fmt.Sprintf("Active policy:\n\tName: %+v\n\tObject: %+v\n\tJSON:\n\t%s",
 		pol.GetName(), pol, string(jsonPol))
