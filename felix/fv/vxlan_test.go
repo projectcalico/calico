@@ -80,8 +80,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 			BeforeEach(func() {
 				infra = getInfra()
 
-				if getDataStoreType(infra) == "etcdv3" && BPFMode() {
-					Skip("Skipping BPF tests for etcdv3 backend.")
+				if (NFTMode() || BPFMode()) && getDataStoreType(infra) == "etcdv3" {
+					Skip("Skipping NFT / BPF tests for etcdv3 backend.")
 				}
 
 				topologyOptions = createBaseTopologyOptions(vxlanMode, enableIPv6, routeSource, brokenXSum)
@@ -159,7 +159,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 					}
 				}
 			})
-			It("CASEY should have workload to workload connectivity", func() {
+			It("should have workload to workload connectivity", func() {
 				cc.ExpectSome(w[0], w[1])
 				cc.ExpectSome(w[1], w[0])
 
