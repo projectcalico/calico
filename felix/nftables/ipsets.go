@@ -129,7 +129,7 @@ func (s *IPSets) AddOrReplaceIPSet(setMetadata ipsets.IPSetMetadata, members []s
 	// Mark that we want this IP set to exist and with the correct size etc.
 	// If the IP set exists, but it has the wrong metadata then the
 	// DeltaTracker will catch that and mark it for recreation.
-	mainIPSetName := s.IPVersionConfig.NameForMainIPSet(setID)
+	mainIPSetName := s.nameForMainIPSet(setID)
 	dpMeta := ipsets.IPSetMetadata{
 		Type:     ipSetType,
 		MaxSize:  setMetadata.MaxSize,

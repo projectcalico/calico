@@ -131,10 +131,7 @@ func (t IPSetType) IsMemberIPV6(member string) bool {
 	switch t {
 	case IPSetTypeHashIP, IPSetTypeHashNet, NFTSetTypeAddr, NFTSetTypeNet:
 		return strings.Contains(member, ":")
-	case NFTSetTypeAddrPort:
-		// Format: "ip . port"
-		return strings.Contains(strings.Split(member, " ")[0], ":")
-	case IPSetTypeHashIPPort:
+	case IPSetTypeHashIPPort, NFTSetTypeAddrPort:
 		return strings.Contains(strings.Split(member, ",")[0], ":")
 	case IPSetTypeHashNetNet:
 		cidrs := strings.Split(member, ",")
