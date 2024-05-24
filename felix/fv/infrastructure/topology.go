@@ -412,6 +412,16 @@ func StartNNodeTopology(n int, opts TopologyOptions, infra DatastoreInfra) (tc T
 	// Set up routes between the hosts, note: we're not using BGP here but we set up similar
 	// CIDR-based routes.
 	for i, iFelix := range tc.Felixes {
+		// If this is nftables mode, we also need to configure iptables to accept traffic, since
+		// otherwise the default DROP policy will override any verdict made by nftables.
+		if os.Getenv("FELIX_FV_NFTABLES") == "true" {
+			wg.Add(1)
+			go func(f *Felix) {
+				defer wg.Done()
+				f.Exec("iptables", "--policy", "FORWARD", "ACCEPT")
+			}(iFelix)
+		}
+
 		for j, jFelix := range tc.Felixes {
 			if i == j {
 				continue
@@ -446,6 +456,7 @@ func StartNNodeTopology(n int, opts TopologyOptions, infra DatastoreInfra) (tc T
 			}(i, j, iFelix, jFelix)
 		}
 	}
+
 	wg.Wait()
 	success = true
 	return
