@@ -89,8 +89,12 @@ func describeHostEndpointTests(getInfra infrastructure.InfraFactory, allInterfac
 	AfterEach(func() {
 		if CurrentGinkgoTestDescription().Failed {
 			for _, felix := range tc.Felixes {
-				felix.Exec("iptables-save", "-c")
-				felix.Exec("ipset", "list")
+				if NFTMode() {
+					logNFTDiags(felix)
+				} else {
+					felix.Exec("iptables-save", "-c")
+					felix.Exec("ipset", "list")
+				}
 				felix.Exec("ip", "r")
 				felix.Exec("ip", "a")
 			}
@@ -227,7 +231,6 @@ func describeHostEndpointTests(getInfra infrastructure.InfraFactory, allInterfac
 
 	Context("_BPF-SAFE_ with no policies and no profiles on the host endpoints", func() {
 		BeforeEach(func() {
-
 			// Install a default profile that allows all pod ingress and egress, in the absence of any policy.
 			infra.AddDefaultAllow()
 
@@ -505,7 +508,6 @@ func describeHostEndpointTests(getInfra infrastructure.InfraFactory, allInterfac
 		})
 
 		It("should deny forwarded traffic from felixes[0] to felixes[1] if an AOF policy denies it", func() {
-
 			// Create an apply-on-forward policy selecting felix[1] that
 			// - only allows ingress from its own pod
 			// - allows all egress

@@ -108,11 +108,6 @@ func (f *Felix) TriggerDelayedStart() {
 }
 
 func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
-	// TODO: CASEY Skip v6 tests for nftables mode for now, since it's broken.
-	// if os.Getenv("FELIX_FV_NFTABLES") == "true" {
-	// 	options.EnableIPv6 = false
-	// }
-
 	log.Info("Starting felix")
 	ipv6Enabled := fmt.Sprint(options.EnableIPv6)
 	bpfEnableIPv6 := fmt.Sprint(options.BPFEnableIPv6)
@@ -228,16 +223,25 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 		c.Exec("sysctl", "-w", "net.ipv6.conf.all.forwarding=0")
 	}
 
-	// Configure our model host to drop forwarded traffic by default.  Modern
-	// Kubernetes/Docker hosts now have this setting, and the consequence is that
-	// whenever Calico policy intends to allow a packet, it must explicitly ACCEPT
-	// that packet, not just allow it to pass through cali-FORWARD and assume it will
-	// be accepted by the rest of the chain.  Establishing that setting in this FV
-	// allows us to test that.
-	c.Exec("iptables",
-		"-w", "10", // Retry this for 10 seconds, e.g. if something else is holding the lock
-		"-W", "100000", // How often to probe the lock in microsecs.
-		"-P", "FORWARD", "DROP")
+	if os.Getenv("FELIX_FV_NFTABLES") == "true" {
+		// nftables mode requires that ipatbles be configured to allow by default. Otherwise, a default
+		// drop action will override any accept verdict made by nftables.
+		c.Exec("iptables",
+			"-w", "10", // Retry this for 10 seconds, e.g. if something else is holding the lock
+			"-W", "100000", // How often to probe the lock in microsecs.
+			"-P", "FORWARD", "ACCEPT")
+	} else {
+		// Configure our model host to drop forwarded traffic by default.  Modern
+		// Kubernetes/Docker hosts now have this setting, and the consequence is that
+		// whenever Calico policy intends to allow a packet, it must explicitly ACCEPT
+		// that packet, not just allow it to pass through cali-FORWARD and assume it will
+		// be accepted by the rest of the chain.  Establishing that setting in this FV
+		// allows us to test that.
+		c.Exec("iptables",
+			"-w", "10", // Retry this for 10 seconds, e.g. if something else is holding the lock
+			"-W", "100000", // How often to probe the lock in microsecs.
+			"-P", "FORWARD", "DROP")
+	}
 
 	return &Felix{
 		Container:       c,
