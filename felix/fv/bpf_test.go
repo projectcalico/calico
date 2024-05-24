@@ -452,7 +452,11 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						felix.Exec("calico-bpf", "-6", "conntrack", "dump", "--raw")
 						felix.Exec("calico-bpf", "-6", "arp", "dump")
 					} else {
-						felix.Exec("iptables-save", "-c")
+						if NFTMode() {
+							logNFTDiags(felix)
+						} else {
+							felix.Exec("iptables-save", "-c")
+						}
 						felix.Exec("ip", "link")
 						felix.Exec("ip", "addr")
 						felix.Exec("ip", "rule")
@@ -4269,6 +4273,10 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			})
 
 			It("should have connectivity when DNAT redirects to-host traffic to a local pod.", func() {
+				if NFTMode() {
+					Skip("NFT does not support third-party rules")
+				}
+
 				protocol := "tcp"
 				if testOpts.protocol == "udp" {
 					protocol = "udp"
@@ -4463,6 +4471,10 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			Describe("CNI installs NAT outgoing iptable rules", func() {
 				var extWorkload *workload.Workload
 				BeforeEach(func() {
+					if NFTMode() {
+						Skip("NFT does not support third-party rules")
+					}
+
 					c := infrastructure.RunExtClient("ext-workload")
 					extWorkload = &workload.Workload{
 						C:        c,

@@ -105,7 +105,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 		if CurrentGinkgoTestDescription().Failed {
 			for _, felix := range tc.Felixes {
 				if NFTMode() {
-					felix.Exec("nft", "list", "table", "calico")
+					logNFTDiags(felix)
 				} else {
 					felix.Exec("iptables-save", "-c")
 					felix.Exec("ipset", "list")

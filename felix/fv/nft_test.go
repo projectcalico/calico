@@ -16,8 +16,16 @@
 
 package fv_test
 
-import "os"
+import (
+	"os"
+
+	"github.com/projectcalico/calico/felix/fv/infrastructure"
+)
 
 func NFTMode() bool {
 	return os.Getenv("FELIX_FV_NFTABLES") == "true"
+}
+
+func logNFTDiags(f *infrastructure.Felix) {
+	f.Exec("nft", "list", "ruleset")
 }

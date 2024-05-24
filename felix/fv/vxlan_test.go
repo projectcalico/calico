@@ -97,7 +97,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 				if CurrentGinkgoTestDescription().Failed {
 					for _, felix := range felixes {
 						if NFTMode() {
-							felix.Exec("nft", "list", "table", "calico")
+							logNFTDiags(felix)
 						} else {
 							felix.Exec("iptables-save", "-c")
 							felix.Exec("ipset", "list")
