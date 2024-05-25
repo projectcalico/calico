@@ -1470,34 +1470,48 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 	l3_csum_off = skb_iphdr_offset(ctx) + offsetof(struct iphdr, check);
 #endif
 
-	if (ct_related) {
+	/* I CALI_CT_FLAG_NP_FWD is set, we need to forward the related response
+	 * to the node that has the backend and will deal with the rest.
+	 */
+	if (ct_related && !(ctx->state->ct_result.flags & CALI_CT_FLAG_NP_FWD)) {
 		if (ctx->state->ip_proto == IPPROTO_ICMP_46) {
-			bool outer_ip_snat;
+			bool outer_ip_nat = false;
+			ipv46_addr_t *addr;
 
-			/* if we do SNAT ... */
-			outer_ip_snat = ct_rc == CALI_CT_ESTABLISHED_SNAT;
-			/* ... there is a return path to the tunnel ... */
-			outer_ip_snat = outer_ip_snat && !ip_void(state->ct_result.tun_ip);
-			/* ... and should do encap and it is not DSR or it is leaving host
-			 * and either DSR from WEP or originated at host ... */
-			outer_ip_snat = outer_ip_snat &&
-				((dnat_return_should_encap() && !CALI_F_DSR) ||
-				 (CALI_F_TO_HEP &&
-				  ((CALI_F_DSR && skb_seen(ctx->skb)) || !skb_seen(ctx->skb))));
+			if (ct_rc == CALI_CT_ESTABLISHED_SNAT) {
+				/* if we do SNAT ... */
+				outer_ip_nat = ct_rc == CALI_CT_ESTABLISHED_SNAT;
+				/* ... there is a return path to the tunnel ... */
+				outer_ip_nat = outer_ip_nat && !ip_void(state->ct_result.tun_ip);
+				/* ... and should do encap and it is not DSR or it is leaving host
+				 * and either DSR from WEP or originated at host ... */
+				outer_ip_nat = outer_ip_nat &&
+					((dnat_return_should_encap() && !CALI_F_DSR) ||
+					 (CALI_F_TO_HEP &&
+					  ((CALI_F_DSR && skb_seen(ctx->skb)) || !skb_seen(ctx->skb))));
+				if (outer_ip_nat) {
+					addr = &STATE->ip_src;
+					ip_hdr_set_ip(ctx, saddr, state->ct_result.nat_ip);
+					CALI_DEBUG("ICMP related: outer IP SNAT to %x\n",
+							debug_ip(state->ct_result.nat_ip));
+				}
+			} if (ct_rc == CALI_CT_ESTABLISHED_DNAT) {
+				outer_ip_nat = true;
+				addr = &STATE->ip_dst;
+				ip_hdr_set_ip(ctx, daddr, state->ct_result.nat_ip);
+				CALI_DEBUG("ICMP related: outer IP DNAT to %x\n",
+						debug_ip(state->ct_result.nat_ip));
+			}
 
 			/* ... then fix the outer header IP first */
-			if (outer_ip_snat) {
-				ip_hdr_set_ip(ctx, saddr, state->ct_result.nat_ip);
+			if (outer_ip_nat) {
 #ifdef IPVER6
 				/* ... icmp6 has checksum now, fix it! */
 				l4_csum_off = skb_l4hdr_offset(ctx) + offsetof(struct icmp6hdr, icmp6_cksum);
 
 				__wsum csum = 0;
-				csum = bpf_csum_diff((__u32*)&STATE->ip_src, sizeof(ipv6_addr_t),
+				csum = bpf_csum_diff((__u32*)addr, sizeof(ipv6_addr_t),
 						     (__u32*)&STATE->ct_result.nat_ip, sizeof(ipv6_addr_t),
-						     csum);
-				csum = bpf_csum_diff((__u32*)&STATE->ip_dst, sizeof(ipv6_addr_t),
-						     (__u32*)&STATE->ct_result.nat_sip, sizeof(ipv6_addr_t),
 						     csum);
 				int res = bpf_l4_csum_replace(ctx->skb, l4_csum_off, 0, csum,  BPF_F_PSEUDO_HDR);
 				if (res) {
@@ -1506,14 +1520,12 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 				}
 #else
 				int res = bpf_l3_csum_replace(ctx->skb, l3_csum_off,
-						state->ip_src, state->ct_result.nat_ip, 4);
+						*addr, state->ct_result.nat_ip, 4);
 				if (res) {
 					deny_reason(ctx, CALI_REASON_CSUM_FAIL);
 					goto deny;
 				}
 #endif
-				CALI_DEBUG("ICMP related: outer IP SNAT to %x\n",
-						debug_ip(state->ct_result.nat_ip));
 			}
 
 			/* Related ICMP traffic must be an error response so it should include inner IP
@@ -1924,9 +1936,9 @@ allow:
 	ctx->state->flags |= CALI_ST_SKIP_POLICY;
 	CALI_JUMP_TO(ctx, PROG_INDEX_ALLOWED);
 	/* should not reach here */
-	CALI_DEBUG("Failed to jump to allow program.");
+	CALI_DEBUG("Failed to jump to allow program.\n");
 
 deny:
-	CALI_DEBUG("DENY due to policy");
+	CALI_DEBUG("DENY due to policy\n");
 	return TC_ACT_SHOT;
 }
