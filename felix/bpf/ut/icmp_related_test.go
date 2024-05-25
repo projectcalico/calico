@@ -67,6 +67,7 @@ func TestICMPRelatedPlain(t *testing.T) {
 	defer func() { bpfIfaceName = "" }()
 
 	defer resetBPFMaps()
+	hostIP = node1ip
 
 	_, ipv4, l4, _, pktBytes, err := testPacketUDPDefault()
 	Expect(err).NotTo(HaveOccurred())
@@ -125,6 +126,7 @@ func TestICMPRelatedNATPodPod(t *testing.T) {
 	RegisterTestingT(t)
 
 	defer resetBPFMaps()
+	hostIP = node1ip
 
 	_, ipv4, l4, _, pktBytes, err := testPacketUDPDefault()
 	Expect(err).NotTo(HaveOccurred())
@@ -195,6 +197,7 @@ func TestICMPRelatedFromHost(t *testing.T) {
 	RegisterTestingT(t)
 
 	defer resetBPFMaps()
+	hostIP = node1ip
 
 	_, ipv4, l4, _, pktBytes, err := testPacketUDPDefault()
 	Expect(err).NotTo(HaveOccurred())
@@ -230,6 +233,7 @@ func TestICMPRelatedFromHostBeforeNAT(t *testing.T) {
 	RegisterTestingT(t)
 
 	defer resetBPFMaps()
+	hostIP = node1ip
 
 	_, ipv4, l4, _, pktBytes, err := testPacketUDPDefault()
 	Expect(err).NotTo(HaveOccurred())
@@ -297,8 +301,10 @@ func TestICMPRelatedFromHostBeforeNAT(t *testing.T) {
 }
 
 func makeICMPError(ipInner *layers.IPv4, l4 gopacket.SerializableLayer, icmpType, icmpCode uint8) []byte {
-	hostIP = node1ip
+	return makeICMPErrorFrom(node1ip, ipInner, l4, icmpType, icmpCode)
+}
 
+func makeICMPErrorFrom(from net.IP, ipInner *layers.IPv4, l4 gopacket.SerializableLayer, icmpType, icmpCode uint8) []byte {
 	payloadBuf := gopacket.NewSerializeBuffer()
 	err := gopacket.SerializeLayers(payloadBuf, gopacket.SerializeOptions{}, ipInner, l4)
 	Expect(err).NotTo(HaveOccurred())
@@ -317,7 +323,7 @@ func makeICMPError(ipInner *layers.IPv4, l4 gopacket.SerializableLayer, icmpType
 		IHL:      5,
 		TTL:      64,
 		Flags:    layers.IPv4DontFragment,
-		SrcIP:    hostIP,
+		SrcIP:    from,
 		DstIP:    ipInner.SrcIP,
 		Protocol: layers.IPProtocolICMPv4,
 		Length:   uint16(20 + 8 + len(payload)),
