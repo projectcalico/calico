@@ -175,7 +175,7 @@ type bpfDataplane interface {
 	loadTCLogFilter(ap *tc.AttachPoint) (fileDescriptor, int, error)
 	interfaceByIndex(int) (*net.Interface, error)
 	queryClassifier(int, int, int, bool) (int, error)
-	getIfaceType(string) (IfaceType, int, error)
+	getIfaceLink(string) (netlink.Link, error)
 }
 
 type hasLoadPolicyProgram interface {
@@ -212,9 +212,11 @@ var zeroIface bpfInterface = func() bpfInterface {
 }()
 
 type bpfInterfaceInfo struct {
-	ifIndex    int
-	isUP       bool
-	endpointID *proto.WorkloadEndpointID
+	ifIndex       int
+	isUP          bool
+	endpointID    *proto.WorkloadEndpointID
+	ifaceType     IfaceType
+	masterIfIndex int
 }
 
 func (i bpfInterfaceInfo) ifaceIsUp() bool {
@@ -267,9 +269,8 @@ type bpfEndpointManager struct {
 	initUnknownIfaces set.Set[string]
 
 	// Main store of information about interfaces; indexed on interface name.
-	ifacesLock      sync.Mutex
-	nameToIface     map[string]bpfInterface
-	nameToIfaceType map[string]IfaceType
+	ifacesLock  sync.Mutex
+	nameToIface map[string]bpfInterface
 
 	allWEPs        map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint
 	happyWEPs      map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint
@@ -469,7 +470,6 @@ func newBPFEndpointManager(
 		policies:                map[proto.PolicyID]*proto.Policy{},
 		profiles:                map[proto.ProfileID]*proto.Profile{},
 		nameToIface:             map[string]bpfInterface{},
-		nameToIfaceType:         map[string]IfaceType{},
 		policiesToWorkloads:     map[proto.PolicyID]set.Set[any]{},
 		profilesToWorkloads:     map[proto.ProfileID]set.Set[any]{},
 		dirtyIfaceNames:         set.New[string](),
@@ -955,13 +955,12 @@ func (m *bpfEndpointManager) reclaimFilterIdx(name string, iface *bpfInterface) 
 	}
 }
 
-func (m *bpfEndpointManager) getIfTypeFlags(name string) uint32 {
+func (m *bpfEndpointManager) getIfTypeFlags(name string, ifaceType IfaceType) uint32 {
 	flags := uint32(0)
 	if m.isWorkloadIface(name) {
 		flags |= ifstate.FlgWEP
 	} else {
-		val := m.nameToIfaceType[name]
-		switch val {
+		switch ifaceType {
 		case IfaceTypeData:
 			flags |= ifstate.FlgHost
 		case IfaceTypeBond:
@@ -984,7 +983,7 @@ func (m *bpfEndpointManager) getIfTypeFlags(name string) uint32 {
 func (m *bpfEndpointManager) updateIfaceStateMap(name string, iface *bpfInterface) {
 	k := ifstate.NewKey(uint32(iface.info.ifIndex))
 	if iface.info.ifaceIsUp() {
-		flags := m.getIfTypeFlags(name)
+		flags := m.getIfTypeFlags(name, iface.info.ifaceType)
 		if iface.dpState.v4Readiness != ifaceNotReady {
 			flags |= ifstate.FlgIPv4Ready
 		}
@@ -1079,7 +1078,6 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceStateUpdate) {
 		if err := bpf.ForgetIfaceAttachedProg(update.Name); err != nil {
 			log.WithError(err).Errorf("Error in removing interface %s json file. err=%v", update.Name, err)
 		}
-		delete(m.nameToIfaceType, update.Name)
 	}
 
 	if !m.isDataIface(update.Name) && !m.isWorkloadIface(update.Name) && !m.isL3Iface(update.Name) {
@@ -1099,45 +1097,41 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceStateUpdate) {
 		return
 	}
 
-	if !m.isWorkloadIface(update.Name) {
+	masterIfIndex := 0
+	curIfaceType := IfaceTypeUnknown
+	if update.State != ifacemonitor.StateNotPresent && !m.isWorkloadIface(update.Name) {
 		// Determine the type of interface.
 		// These include host, bond, slave, ipip, wireguard, l3.
-		// update the nameToIfaceTypeMap
-		curIfaceType, masterIndex, err := m.dp.getIfaceType(update.Name)
-		if err != nil || curIfaceType == IfaceTypeUnknown {
+		// update the ifaceType, master ifindex if bond slave.
+		link, err := m.dp.getIfaceLink(update.Name)
+		if err != nil {
 			log.Panicf("Failed to get interface information via netlink '%s'", update.Name)
-		} else {
-			prevIfaceType := IfaceTypeUnknown
-			if val, ok := m.nameToIfaceType[update.Name]; ok {
-				prevIfaceType = val
-			}
-			if prevIfaceType != curIfaceType {
-				if curIfaceType == IfaceTypeBondSlave {
-					// Remove the Tc program.
-					ai, err := bpf.ListCalicoAttached()
-					if err != nil {
-						log.WithError(err).Warn("Failed to list attached programs")
-					} else {
-						if err := m.cleanupOldAttach(update.Name, ai[update.Name]); err != nil {
-							log.WithError(err).Warnf("Failed to detach old programs from now bonding device '%s'", update.Name)
-						}
-					}
-					// Check if the master device matches the regex.
-					masterIfa, err := net.InterfaceByIndex(masterIndex)
-					if err != nil {
-						log.Debugf("Failed to get master interface details for '%s'", update.Name)
-					}
-					if !m.isDataIface(masterIfa.Name) {
-						log.Warnf("Master interface '%s' ignored. Add it to the config", masterIfa.Name)
+		}
+		curIfaceType = m.getIfaceTypeFromLink(link)
+		masterIfIndex = link.Attrs().MasterIndex
+		prevIfaceType := IfaceTypeUnknown
+		if val, ok := m.nameToIface[update.Name]; ok {
+			prevIfaceType = val.info.ifaceType
+		}
+		if prevIfaceType != curIfaceType {
+			if curIfaceType == IfaceTypeBondSlave {
+				// Remove the Tc program.
+				ai, err := bpf.ListCalicoAttached()
+				if err != nil {
+					log.WithError(err).Warn("Failed to list attached programs")
+				} else {
+					if err := m.cleanupOldAttach(update.Name, ai[update.Name]); err != nil {
+						log.WithError(err).Warnf("Failed to detach old programs from now bonding device '%s'", update.Name)
 					}
 				}
-				m.nameToIfaceType[update.Name] = curIfaceType
 			}
 		}
 	}
 
 	m.withIface(update.Name, func(iface *bpfInterface) (forceDirty bool) {
 		ifaceIsUp := update.State == ifacemonitor.StateUp
+		iface.info.masterIfIndex = masterIfIndex
+		iface.info.ifaceType = curIfaceType
 		// Note, only need to handle the mapping and unmapping of the host-* endpoint here.
 		// For specific host endpoints OnHEPUpdate doesn't depend on iface state, and has
 		// already stored and mapped as needed.
@@ -1832,11 +1826,21 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 			}
 			return nil
 		}
-		if val, ok := m.nameToIfaceType[iface]; ok {
-			if val == IfaceTypeBondSlave {
-				log.WithField("iface", iface).Debug(
-					"Ignoring bonding slave interface")
-				return set.RemoveItem
+		if val, ok := m.nameToIface[iface]; ok {
+			if val.info.ifaceType == IfaceTypeBondSlave {
+				// Check if the master device matches the regex.
+				// If it does, ignore slave devices. If not,
+				// throw a warning and continue to attach to slave.
+				masterIfa, err := m.dp.interfaceByIndex(val.info.masterIfIndex)
+				if err != nil {
+					log.Debugf("Failed to get master interface details for '%s'. Continuing to attach program", iface)
+				} else if !m.isDataIface(masterIfa.Name) {
+					log.Warnf("Master interface '%s' ignored. Add it to the config", masterIfa.Name)
+				} else {
+					log.WithField("iface", iface).Debug(
+						"Ignoring bonding slave interface")
+					return set.RemoveItem
+				}
 			}
 		}
 		m.opReporter.RecordOperation("update-data-iface")
@@ -2711,9 +2715,9 @@ func (m *bpfEndpointManager) getEndpointType(ifaceName string) tcdefs.EndpointTy
 	if m.isWorkloadIface(ifaceName) {
 		return tcdefs.EpTypeWorkload
 	}
-	ifaceType := m.nameToIfaceType[ifaceName]
+	ifaceType := m.nameToIface[ifaceName].info.ifaceType
 	switch ifaceType {
-	case IfaceTypeData, IfaceTypeVXLAN, IfaceTypeBond:
+	case IfaceTypeData, IfaceTypeVXLAN, IfaceTypeBond, IfaceTypeBondSlave:
 		if ifaceName == "lo" {
 			return tcdefs.EpTypeLO
 		}
@@ -4011,13 +4015,12 @@ func (m *bpfEndpointManager) ruleMatchID(dir, action, owner, name string, idx in
 	return h.Sum64()
 }
 
-func (m *bpfEndpointManager) getIfaceType(name string) (IfaceType, int, error) {
+func (m *bpfEndpointManager) getIfaceLink(name string) (netlink.Link, error) {
 	link, err := netlink.LinkByName(name)
 	if err != nil {
-		return IfaceTypeUnknown, -1, err
+		return nil, err
 	}
-	ifaceType := m.getIfaceTypeFromLink(link)
-	return ifaceType, link.Attrs().MasterIndex, nil
+	return link, nil
 }
 
 func (m *bpfEndpointManager) getIfaceTypeFromLink(link netlink.Link) IfaceType {
