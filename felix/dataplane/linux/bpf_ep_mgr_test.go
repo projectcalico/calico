@@ -201,11 +201,12 @@ func (m *mockDataplane) createIface(name string, index int, linkType string) err
 	attr := netlink.NewLinkAttrs()
 	attr.Name = name
 	attr.Index = index
-	bond := netlink.GenericLink{
+
+	iface := netlink.GenericLink{
 		LinkAttrs: attr,
 		LinkType:  linkType,
 	}
-	return m.netlinkShim.LinkAdd(&bond)
+	return m.netlinkShim.LinkAdd(&iface)
 }
 
 func (m *mockDataplane) createBondSlaves(name string, index, masterIndex int) error {
@@ -639,6 +640,33 @@ var _ = Describe("BPF Endpoint Manager", func() {
 				Expect(caliE.HostNormalTiers[0].Policies).To(HaveLen(1))
 				Expect(caliE.SuppressNormalHostPolicy).To(BeTrue())
 			})
+		})
+	})
+
+	Context("Ifacetype detection", func() {
+		JustBeforeEach(func() {
+			err := dp.createIface("vxlan0", 10, "vxlan")
+			Expect(err).NotTo(HaveOccurred())
+
+			err = dp.createIface("wg0", 11, "wireguard")
+			Expect(err).NotTo(HaveOccurred())
+
+			dataIfacePattern = "^eth|bond|vxlan|wg*"
+			newBpfEpMgr(false)
+		})
+		It("should detect the correct type of iface", func() {
+			genIfaceUpdate("vxlan0", ifacemonitor.StateUp, 10)()
+			genIfaceUpdate("wg0", ifacemonitor.StateUp, 11)()
+			genIfaceUpdate("tun0", ifacemonitor.StateUp, 12)()
+
+			Expect(dp.programAttached("vxlan0:ingress")).To(BeTrue())
+			Expect(dp.programAttached("vxlan0:egress")).To(BeTrue())
+			checkIfState(10, "vxlan0", ifstate.FlgIPv4Ready|ifstate.FlgVxlan)
+
+			Expect(dp.programAttached("wg0:ingress")).To(BeTrue())
+			Expect(dp.programAttached("wg0:egress")).To(BeTrue())
+			checkIfState(11, "wg0", ifstate.FlgIPv4Ready|ifstate.FlgWireguard)
+
 		})
 	})
 
