@@ -1,11 +1,18 @@
 import os
 import re
 
+import warnings
 
 def get_var_or_error(var_name):
     var = os.getenv(var_name)
     if var is None:
         raise RuntimeError(f"{var_name} environment variable must be set")
+    return var
+
+def get_var_or_warn(var_name, message):
+    var = os.getenv(var_name)
+    if var is None:
+        warnings.warn(f"{var_name} is not set; {message}")
     return var
 
 
@@ -32,7 +39,7 @@ FLANNEL_VERSION = get_var_or_error("FLANNEL_VERSION")
 OPERATOR_VERSION = get_var_or_error("OPERATOR_VERSION")
 
 # Quay.io API token
-QUAY_TOKEN = get_var_or_error("QUAY_TOKEN")
+QUAY_TOKEN = get_var_or_warn("QUAY_TOKEN", "this may result in being rate-limited by quay.io")
 
 
 def test_variables_provided():
@@ -40,7 +47,6 @@ def test_variables_provided():
     assert RELEASE_STREAM
     assert FLANNEL_VERSION
     assert OPERATOR_VERSION
-    assert QUAY_TOKEN
 
 
 test_variables_provided()
