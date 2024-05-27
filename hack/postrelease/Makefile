@@ -4,9 +4,18 @@ include variables.mk
 
 .PHONY: create_docker_container clean
 
-all: create_docker_container run_pytests_docker clean_docker_container
+all: create_docker_container require-quay-token run_pytests_docker clean_docker_container
 
 ## Setting up
+
+ifndef QUAY_TOKEN
+require-quay-token:
+	$(warning The environment variable QUAY_TOKEN is not set; this may result in being rate-limited by quay.io)
+	@true
+else
+require-quay-token:
+	@true
+endif
 
 create_docker_container: .docker_container.stamp
 
