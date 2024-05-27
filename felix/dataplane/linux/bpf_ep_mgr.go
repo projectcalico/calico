@@ -1826,7 +1826,10 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 			}
 			return nil
 		}
-		if val, ok := m.nameToIface[iface]; ok {
+		m.ifacesLock.Lock()
+		val, ok := m.nameToIface[iface]
+		m.ifacesLock.Unlock()
+		if ok {
 			if val.info.ifaceType == IfaceTypeBondSlave {
 				// Check if the master device matches the regex.
 				// If it does, ignore slave devices. If not,
@@ -2715,7 +2718,9 @@ func (m *bpfEndpointManager) getEndpointType(ifaceName string) tcdefs.EndpointTy
 	if m.isWorkloadIface(ifaceName) {
 		return tcdefs.EpTypeWorkload
 	}
+	m.ifacesLock.Lock()
 	ifaceType := m.nameToIface[ifaceName].info.ifaceType
+	m.ifacesLock.Unlock()
 	switch ifaceType {
 	case IfaceTypeData, IfaceTypeVXLAN, IfaceTypeBond, IfaceTypeBondSlave:
 		if ifaceName == "lo" {
