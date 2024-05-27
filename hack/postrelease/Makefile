@@ -22,6 +22,7 @@ create_docker_container: .docker_container.stamp
 .docker_container.stamp: Dockerfile requirements.txt config.json
 	$(info +++ Building docker container with Calico $(CALICO_VERSION), Operator $(OPERATOR_VERSION), Flannel $(FLANNEL_VERSION))
 	docker buildx build \
+		--load                                           \
 		-t $(CALICO_POSTRELEASE_TEST_IMAGE)              \
 		--build-arg VERSION=$(CALICO_VERSION)            \
 		--build-arg FLANNEL_VERSION=$(FLANNEL_VERSION)   \
