@@ -4,15 +4,25 @@ include variables.mk
 
 .PHONY: create_docker_container clean
 
-all: create_docker_container run_pytests_docker clean_docker_container
+all: create_docker_container require-quay-token run_pytests_docker clean_docker_container
 
 ## Setting up
+
+ifndef QUAY_TOKEN
+require-quay-token:
+	$(warning The environment variable QUAY_TOKEN is not set; this may result in being rate-limited by quay.io)
+	@true
+else
+require-quay-token:
+	@true
+endif
 
 create_docker_container: .docker_container.stamp
 
 .docker_container.stamp: Dockerfile requirements.txt config.json
 	$(info +++ Building docker container with Calico $(CALICO_VERSION), Operator $(OPERATOR_VERSION), Flannel $(FLANNEL_VERSION))
 	docker buildx build \
+		--load                                           \
 		-t $(CALICO_POSTRELEASE_TEST_IMAGE)              \
 		--build-arg VERSION=$(CALICO_VERSION)            \
 		--build-arg FLANNEL_VERSION=$(FLANNEL_VERSION)   \
@@ -27,6 +37,7 @@ run_pytests_docker: create_docker_container
 	@docker run -it --rm                         \
 		-v .:/code                           \
 		-v /run/docker.sock:/run/docker.sock \
+		-v ~/.docker:/root/.docker           \
 		-e QUAY_TOKEN                        \
 		$(CALICO_POSTRELEASE_TEST_IMAGE)     \
 		pytest -v --junitxml=xunit.xml tests
