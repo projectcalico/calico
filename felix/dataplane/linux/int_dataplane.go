@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -287,6 +288,7 @@ type InternalDataplane struct {
 	ipSets               []common.IPSetsDataplane
 
 	ipipManager *ipipManager
+	ipipParentC chan string
 
 	vxlanManager   *vxlanManager
 	vxlanParentC   chan string
@@ -806,10 +808,33 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	dp.RegisterManager(newFloatingIPManager(natTableV4, ruleRenderer, 4, config.FloatingIPsEnabled))
 	dp.RegisterManager(newMasqManager(ipSetsV4, natTableV4, ruleRenderer, config.MaxIPSetSize, 4))
 	if config.RulesConfig.IPIPEnabled {
+		var routeTableIPIP routetable.RouteTableInterface
+		if !config.RouteSyncDisabled {
+			log.Debug("RouteSyncDisabled is false.")
+			ipipEncapProto := defaultRoutingProto
+			if config.DeviceRouteProtocol != syscall.RTPROT_BOOT {
+				ipipEncapProto = config.DeviceRouteProtocol
+			}
+			routeTableIPIP = routetable.New([]string{"^" + IPIPIfaceName + "$"}, 4, config.NetlinkTimeout,
+				config.DeviceRouteSourceAddress, ipipEncapProto, true, unix.RT_TABLE_MAIN,
+				dp.loopSummarizer, featureDetector, routetable.WithLivenessCB(dp.reportHealth))
+		} else {
+			log.Info("RouteSyncDisabled is true, using DummyTable.")
+			routeTableIPIP = &routetable.DummyTable{}
+		}
 		log.Info("IPIP enabled, starting thread to keep tunnel configuration in sync.")
 		// Add a manager to keep the all-hosts IP set up to date.
-		dp.ipipManager = newIPIPManager(ipSetsV4, config.MaxIPSetSize, config.ExternalNodesCidrs)
-		go dp.ipipManager.KeepIPIPDeviceInSync(config.IPIPMTU, config.RulesConfig.IPIPTunnelAddress, dataplaneFeatures.ChecksumOffloadBroken)
+		dp.ipipManager = newIPIPManager(
+			ipSetsV4,
+			routeTableIPIP,
+			IPIPIfaceName,
+			config,
+			dp.loopSummarizer,
+			4,
+			featureDetector,
+		)
+		dp.ipipParentC = make(chan string, 1)
+		go dp.ipipManager.KeepIPIPDeviceInSync(context.Background(), config.IPIPMTU, config.RulesConfig.IPIPTunnelAddress, dataplaneFeatures.ChecksumOffloadBroken, 10*time.Second, dp.ipipParentC)
 		dp.RegisterManager(dp.ipipManager) // IPv4-only
 	} else {
 		// Only clean up IPIP addresses if IPIP is implicitly disabled (no IPIP pools and not explicitly set in FelixConfig)
@@ -1225,7 +1250,7 @@ func cleanUpVXLANDevice(deviceName string) {
 
 type Manager interface {
 	// OnUpdate is called for each protobuf message from the datastore.  May either directly
-	// send updates to the IPSets and iptables.Table objects (which will queue the updates
+	// send updates to the IPSets and iptables. Table objects (which will queue the updates
 	// until the main loop instructs them to act) or (for efficiency) may wait until
 	// a call to CompleteDeferredWork() to flush updates to the dataplane.
 	OnUpdate(protoBufMsg interface{})
@@ -1773,6 +1798,8 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 			d.vxlanManager.OnParentNameUpdate(name)
 		case name := <-d.vxlanParentCV6:
 			d.vxlanManagerV6.OnParentNameUpdate(name)
+		case name := <-d.ipipParentC:
+			d.ipipManager.OnParentNameUpdate(name)
 		case <-ipSetsRefreshC:
 			log.Debug("Refreshing IP sets state")
 			d.forceIPSetsRefresh = true
