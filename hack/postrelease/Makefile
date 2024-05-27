@@ -37,6 +37,7 @@ run_pytests_docker: create_docker_container
 	@docker run -it --rm                         \
 		-v .:/code                           \
 		-v /run/docker.sock:/run/docker.sock \
+		-v ~/.docker:/root/.docker           \
 		-e QUAY_TOKEN                        \
 		$(CALICO_POSTRELEASE_TEST_IMAGE)     \
 		pytest -v --junitxml=xunit.xml tests
