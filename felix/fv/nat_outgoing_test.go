@@ -48,6 +48,12 @@ var _ = infrastructure.DatastoreDescribe("NATOutgoing rule rendering test", []ap
 
 		dumpedDiags = false
 		opts := infrastructure.DefaultTopologyOptions()
+
+		if NFTMode() {
+			// CASEY: TODO: Update this when nftables gets its own config option.
+			Skip("NFT mode not supported in this test")
+		}
+
 		opts.ExtraEnvVars = map[string]string{
 			"FELIX_IptablesNATOutgoingInterfaceFilter": "eth+",
 		}
@@ -93,7 +99,7 @@ var _ = infrastructure.DatastoreDescribe("NATOutgoing rule rendering test", []ap
 			Eventually(func() string {
 				output, _ := tc.Felixes[0].ExecOutput("nft", "list", "chain", "ip", "calico", "nat-cali-nat-outgoing")
 				return output
-			}, 5*time.Second, 100*time.Millisecond).Should(MatchRegexp(".* oif eth\\+"))
+			}, 5*time.Second, 100*time.Millisecond).Should(MatchRegexp(".* oifname eth\\+"))
 		} else {
 			Eventually(func() string {
 				output, _ := tc.Felixes[0].ExecOutput("iptables-save", "-t", "nat")
