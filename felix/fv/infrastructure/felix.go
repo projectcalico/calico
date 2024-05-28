@@ -224,6 +224,11 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 	}
 
 	if os.Getenv("FELIX_FV_NFTABLES") == "true" {
+		// Flush all rules to make sure iptables doesn't interfere with nftables.
+		for _, table := range []string{"filter", "nat", "mangle", "raw"} {
+			c.Exec("iptables", "-F", "-t", table)
+		}
+
 		// nftables mode requires that ipatbles be configured to allow by default. Otherwise, a default
 		// drop action will override any accept verdict made by nftables.
 		c.Exec("iptables",
@@ -338,6 +343,39 @@ func (f *Felix) ProgramIptablesDNAT(serviceIP, targetIP, chain string, ipv6 bool
 			"-j", "DNAT", "--to-destination", targetIP,
 		)
 	}
+}
+
+func (f *Felix) ProgramNftablesDNAT(serviceIP, targetIP string, chain string, ipv6 bool) {
+	// Configure where this DNAT should be applied.
+	var hook string
+	var prio string
+	switch chain {
+	case "OUTPUT":
+		hook = "output"
+		prio = "100"
+	case "PREROUTING":
+		hook = "prerouting"
+		prio = "-100"
+	default:
+		Expect(true).To(BeFalse(), "DNAT programming not supoorted for chain %s", chain)
+	}
+
+	// Create the table if needed.
+	if _, err := f.ExecOutput("nft", "list", "table", "inet", "services"); err != nil {
+		f.Exec("nft", "create", "table", "inet", "services")
+	}
+
+	// Create the base chain if needed.
+	if _, err := f.ExecOutput("nft", "list", "chain", "inet", "services", chain); err != nil {
+		f.Exec("nft", "add", "chain", "inet", "services", chain, fmt.Sprintf("{ type nat hook %s priority %s; }", hook, prio))
+	}
+
+	// Add the DNAT rule.
+	ipv := "ip"
+	if ipv6 {
+		ipv = "ip6"
+	}
+	f.Exec("nft", "add", "rule", "inet", "services", chain, ipv, "daddr", serviceIP, "counter dnat to", targetIP)
 }
 
 type BPFIfState struct {
