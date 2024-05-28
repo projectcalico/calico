@@ -59,7 +59,6 @@ import (
 )
 
 var _ = Describe("_HEALTH_ _BPF-SAFE_ health tests", func() {
-
 	var k8sInfra *infrastructure.K8sDatastoreInfra
 	var felix *infrastructure.Felix
 
@@ -93,7 +92,6 @@ var _ = Describe("_HEALTH_ _BPF-SAFE_ health tests", func() {
 		})
 
 		Describe("with normal Felix startup", func() {
-
 			It("should become ready and stay ready", func() {
 				Eventually(felixReady, "5s", "100ms").Should(BeGood())
 				Consistently(felixReady, "10s", "1s").Should(BeGood())
@@ -117,6 +115,11 @@ var _ = Describe("_HEALTH_ _BPF-SAFE_ health tests", func() {
 
 		Describe("after removing iptables-restore", func() {
 			BeforeEach(func() {
+				if NFTMode() {
+					// TODO: CASEY: Write equivalent test for NFT mode.
+					Skip("Not applicable in NFT mode")
+				}
+
 				// Wait until felix gets into steady state.
 				Eventually(felixReady, "5s", "100ms").Should(BeGood())
 
@@ -136,6 +139,11 @@ var _ = Describe("_HEALTH_ _BPF-SAFE_ health tests", func() {
 
 		Describe("after replacing iptables with a slow version", func() {
 			BeforeEach(func() {
+				if NFTMode() {
+					// TODO: CASEY: Write equivalent test for NFT mode.
+					Skip("Not applicable in NFT mode")
+				}
+
 				// Wait until felix gets into steady state.
 				Eventually(felixReady, "5s", "100ms").Should(BeGood())
 
@@ -351,9 +359,7 @@ var _ = Describe("_HEALTH_ _BPF-SAFE_ health tests", func() {
 	})
 
 	Describe("with datastore not ready (20s timeout)", func() {
-		var (
-			info *v3.ClusterInformation
-		)
+		var info *v3.ClusterInformation
 
 		BeforeEach(func() {
 			var err error
