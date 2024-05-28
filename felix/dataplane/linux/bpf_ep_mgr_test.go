@@ -323,6 +323,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		fibLookupEnabled     bool
 		endpointToHostAction string
 		dataIfacePattern     string
+		l3IfacePattern       string
 		workloadIfaceRegex   string
 		ipSetIDAllocatorV4   *idalloc.IDAllocator
 		ipSetIDAllocatorV6   *idalloc.IDAllocator
@@ -347,6 +348,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		endpointToHostAction = "DROP"
 		dataIfacePattern = "^eth0"
 		workloadIfaceRegex = "cali"
+		l3IfacePattern = "^l30"
 		ipSetIDAllocatorV4 = idalloc.New()
 		ipSetIDAllocatorV6 = idalloc.New()
 		vxlanMTU = 0
@@ -428,6 +430,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 				Hostname:              "uthost",
 				BPFLogLevel:           "info",
 				BPFDataIfacePattern:   regexp.MustCompile(dataIfacePattern),
+				BPFL3IfacePattern:     regexp.MustCompile(l3IfacePattern),
 				VXLANMTU:              vxlanMTU,
 				VXLANPort:             rrConfigNormal.VXLANPort,
 				BPFNodePortDSREnabled: nodePortDSR,
@@ -666,7 +669,19 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			Expect(dp.programAttached("wg0:ingress")).To(BeTrue())
 			Expect(dp.programAttached("wg0:egress")).To(BeTrue())
 			checkIfState(11, "wg0", ifstate.FlgIPv4Ready|ifstate.FlgWireguard)
+		})
 
+		It("should attach to iface even if netlink fails", func() {
+			genIfaceUpdate("eth10", ifacemonitor.StateUp, 13)()
+
+			Expect(dp.programAttached("eth10:ingress")).To(BeTrue())
+			Expect(dp.programAttached("eth10:egress")).To(BeTrue())
+			checkIfState(13, "eth10", ifstate.FlgIPv4Ready|ifstate.FlgHEP)
+
+			genIfaceUpdate("l30", ifacemonitor.StateUp, 14)()
+			Expect(dp.programAttached("l30:ingress")).To(BeTrue())
+			Expect(dp.programAttached("l30:egress")).To(BeTrue())
+			checkIfState(14, "l30", ifstate.FlgIPv4Ready|ifstate.FlgL3)
 		})
 	})
 
@@ -704,15 +719,6 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			genIfaceUpdate("eth20", ifacemonitor.StateUp, 30)()
 		})
 
-		JustAfterEach(func() {
-			err := dp.deleteIface("bond0")
-			Expect(err).NotTo(HaveOccurred())
-			err = dp.deleteIface("eth10")
-			Expect(err).NotTo(HaveOccurred())
-			err = dp.deleteIface("eth20")
-			Expect(err).NotTo(HaveOccurred())
-		})
-
 		Context("with dataIfacePattern changed to include bond0", func() {
 			It("should attach to bond0", func() {
 				Expect(dp.programAttached("bond0:ingress")).To(BeTrue())
@@ -738,7 +744,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 				Expect(dp.programAttached("eth10:ingress")).To(BeTrue())
 				Expect(dp.programAttached("eth10:egress")).To(BeTrue())
-				checkIfState(20, "eth10", ifstate.FlgIPv4Ready|ifstate.FlgHost)
+				checkIfState(20, "eth10", ifstate.FlgIPv4Ready|ifstate.FlgHEP)
 				Expect(dp.programAttached("eth20:ingress")).To(BeFalse())
 				Expect(dp.programAttached("eth20:egress")).To(BeFalse())
 			})

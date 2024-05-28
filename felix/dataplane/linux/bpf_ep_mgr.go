@@ -962,7 +962,7 @@ func (m *bpfEndpointManager) getIfTypeFlags(name string, ifaceType IfaceType) ui
 	} else {
 		switch ifaceType {
 		case IfaceTypeData:
-			flags |= ifstate.FlgHost
+			flags |= ifstate.FlgHEP
 		case IfaceTypeBond:
 			flags |= ifstate.FlgBond
 		case IfaceTypeBondSlave:
@@ -1105,10 +1105,15 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceStateUpdate) {
 		// update the ifaceType, master ifindex if bond slave.
 		link, err := m.dp.getIfaceLink(update.Name)
 		if err != nil {
-			log.Panicf("Failed to get interface information via netlink '%s'", update.Name)
+			log.Errorf("Failed to get interface information via netlink '%s'", update.Name)
+			curIfaceType = IfaceTypeL3
+			if m.isDataIface(update.Name) {
+				curIfaceType = IfaceTypeData
+			}
+		} else {
+			curIfaceType = m.getIfaceTypeFromLink(link)
+			masterIfIndex = link.Attrs().MasterIndex
 		}
-		curIfaceType = m.getIfaceTypeFromLink(link)
-		masterIfIndex = link.Attrs().MasterIndex
 		prevIfaceType := IfaceTypeUnknown
 		if val, ok := m.nameToIface[update.Name]; ok {
 			prevIfaceType = val.info.ifaceType
@@ -1836,9 +1841,9 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 				// throw a warning and continue to attach to slave.
 				masterIfa, err := m.dp.interfaceByIndex(val.info.masterIfIndex)
 				if err != nil {
-					log.Debugf("Failed to get master interface details for '%s'. Continuing to attach program", iface)
+					log.Warnf("Failed to get master interface details for '%s'. Continuing to attach program", iface)
 				} else if !m.isDataIface(masterIfa.Name) {
-					log.Warnf("Master interface '%s' ignored. Add it to the config", masterIfa.Name)
+					log.Warnf("Master interface '%s' ignored. Add it to the bpfDataIfacePattern config", masterIfa.Name)
 				} else {
 					log.WithField("iface", iface).Debug(
 						"Ignoring bonding slave interface")
