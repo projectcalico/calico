@@ -534,7 +534,7 @@ func removeIPv6Address(k8sClient *kubernetes.Clientset, felix *infrastructure.Fe
 
 func ensureRightIFStateFlags(felix *infrastructure.Felix, ready uint32, additionalInterfaces map[string]uint32) {
 	expectedIfacesToFlags := map[string]uint32{
-		"eth0": ifstate.FlgHost | ready,
+		"eth0": ifstate.FlgHEP | ready,
 	}
 
 	if additionalInterfaces != nil {
