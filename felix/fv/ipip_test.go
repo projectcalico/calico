@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
@@ -69,7 +68,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 
 		Describe(fmt.Sprintf("IPIP mode set to %s, routeSource %s, brokenXSum: %v", ipipMode, routeSource, brokenXSum), func() {
 			var (
-				bpfEnabled      = os.Getenv("FELIX_FV_ENABLE_BPF") == "true"
 				infra           infrastructure.DatastoreInfra
 				tc              infrastructure.TopologyContainers
 				felixes         []*infrastructure.Felix
@@ -447,48 +445,98 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 				})
 			})
 
-			Context("Mazdak after removing BGP address from nodes", func() {
-				// Simulate having a host send IPIP traffic from an unknown source, should get blocked.
+			Context("after removing BGP address from third node", func() {
+				// Simulate having a host send VXLAN traffic from an unknown source, should get blocked.
 				BeforeEach(func() {
+					for _, f := range felixes {
+						if BPFMode() {
+							Eventually(func() int {
+								return strings.Count(f.BPFRoutes(), "host")
+							}).Should(Equal(len(felixes)*2),
+								"Expected one host and one host tunneled route per node")
+						} else {
+							Eventually(f.IPSetSizeFn("cali40all-hosts-net"), "10s", "200ms").Should(Equal(len(felixes)))
+						}
+					}
+
+					// Pause felix[2], so it can't touch the dataplane; we want to
+					// test that felix[0] blocks the traffic.
+					pid := felixes[2].GetFelixPID()
+					felixes[2].Exec("kill", "-STOP", fmt.Sprint(pid))
+
 					ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 					defer cancel()
-					if bpfEnabled {
-						infra.RemoveNodeAddresses(tc.Felixes[0])
-					} else {
-						for _, f := range tc.Felixes {
-							infra.RemoveNodeAddresses(f)
-						}
-					}
-
-					listOptions := options.ListOptions{}
-					if bpfEnabled {
-						listOptions.Name = tc.Felixes[0].Hostname
-					}
-					l, err := client.Nodes().List(ctx, listOptions)
+					infra.RemoveNodeAddresses(felixes[2])
+					node, err := client.Nodes().Get(ctx, felixes[2].Hostname, options.GetOptions{})
 					Expect(err).NotTo(HaveOccurred())
-					for _, node := range l.Items {
-						node.Spec.BGP = nil
-						_, err := client.Nodes().Update(ctx, &node, options.SetOptions{})
-						Expect(err).NotTo(HaveOccurred())
-					}
 
-					if bpfEnabled {
-						Eventually(tc.Felixes[1].NumTCBPFProgsEth0, "5s", "200ms").Should(Equal(2))
-					} else {
-						for _, f := range tc.Felixes {
-							// Removing the BGP config triggers a Felix restart and Felix has a 2s timer during
-							// a config restart to ensure that it doesn't tight loop.  Wait for the ipset to be
-							// updated as a signal that Felix has restarted.
-							Eventually(f.IPSetSizeFn("cali40all-hosts-net"), "5s", "200ms").Should(BeZero())
-						}
-					}
+					node.Spec.BGP = nil
+					_, err = client.Nodes().Update(ctx, node, options.SetOptions{})
 				})
 
-				It("should have no workload to workload connectivity", func() {
-					cc.ExpectNone(w[0], w[1])
-					cc.ExpectNone(w[1], w[0])
+				It("should have no connectivity from third felix and expected number of IPs in allow list", func() {
+					if BPFMode() {
+						Eventually(func() int {
+							return strings.Count(felixes[0].BPFRoutes(), "host")
+						}).Should(Equal((len(felixes)-1)*2),
+							"Expected one host and one host tunneled route per node, not: "+felixes[0].BPFRoutes())
+					} else {
+						Eventually(felixes[0].IPSetSizeFn("cali40all-hosts-net"), "5s", "200ms").Should(Equal(len(felixes) - 1))
+					}
+
+					cc.ExpectSome(w[0], w[1])
+					cc.ExpectSome(w[1], w[0])
+					cc.ExpectNone(w[0], w[2])
+					cc.ExpectNone(w[1], w[2])
+					cc.ExpectNone(w[2], w[0])
+					cc.ExpectNone(w[2], w[1])
 					cc.CheckConnectivity()
 				})
+			})
+
+			// Explicitly verify that the IPIP allow-list IP set is doing its job (since Felix makes multiple dataplane
+			// changes when the BGP IP disappears, and we want to make sure that it's the rule that's causing the
+			// connectivity to drop).
+			Context("after removing BGP address from third node, all felixes paused", func() {
+				// Simulate having a host send VXLAN traffic from an unknown source, should get blocked.
+				BeforeEach(func() {
+					if BPFMode() {
+						Skip("Skipping due to manual removal of host from ipset not breaking connectivity in BPF mode")
+						return
+					}
+
+					// Check we initially have the expected number of entries.
+					for _, f := range felixes {
+						// Wait for Felix to set up the allow list.
+						Eventually(f.IPSetSizeFn("cali40all-hosts-net"), "5s", "200ms").Should(Equal(len(felixes)))
+					}
+
+					// Wait until dataplane has settled.
+					cc.ExpectSome(w[0], w[1])
+					cc.ExpectSome(w[0], w[2])
+					cc.ExpectSome(w[1], w[2])
+					cc.CheckConnectivity()
+					cc.ResetExpectations()
+
+					// Then pause all the felixes.
+					for _, f := range felixes {
+						pid := f.GetFelixPID()
+						f.Exec("kill", "-STOP", fmt.Sprint(pid))
+					}
+				})
+
+				// BPF mode doesn't use the IP set.
+				if ipipMode == api.IPIPModeAlways && !BPFMode() {
+					It("after manually removing third node from allow list should have expected connectivity", func() {
+						felixes[0].Exec("ipset", "del", "cali40all-hosts-net", felixes[2].IP)
+
+						cc.ExpectSome(w[0], w[1])
+						cc.ExpectSome(w[1], w[0])
+						cc.ExpectSome(w[1], w[2])
+						cc.ExpectNone(w[2], w[0])
+						cc.CheckConnectivity()
+					})
+				}
 			})
 
 			It("should configure the tunl0 device correctly", func() {
@@ -552,7 +600,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 				BeforeEach(func() {
 					externalClient = infrastructure.RunExtClient("ext-client")
 
-					/*Eventually(func() error {
+					Eventually(func() error {
 						err := externalClient.ExecMayFail("ip", "tunnel", "add", "tunl0", "mode", "ipip")
 						if err != nil && strings.Contains(err.Error(), "SIOCADDTUNNEL: File exists") {
 							return nil
@@ -564,9 +612,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 					externalClient.Exec("ip", "addr", "add", "dev", "tunl0", "10.65.222.1")
 					externalClient.Exec("ip", "route", "add", "10.65.0.0/24", "via",
 						tc.Felixes[0].IP, "dev", "tunl0", "onlink")
-
-					tc.Felixes[0].Exec("ip", "route", "add", "10.65.222.1", "via",
-						externalClient.IP, "dev", "tunl0", "onlink")*/
 				})
 
 				JustAfterEach(func() {
@@ -630,15 +675,22 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 							Expect(f.IPSetSize("cali40all-hosts-net")).To(BeZero(),
 								"BPF mode shouldn't program IP sets")
 						} else {
-							Eventually(f.IPSetSizeFn("cali40all-hosts-net"), "15s", "200ms").Should(Equal(3))
+							Eventually(f.IPSetSizeFn("cali40all-hosts-net"), "15s", "200ms").Should(Equal(4))
 						}
 					}
 
-					/*By("testing that the ext client can connect via ipip")
-					//time.Sleep(time.Minute * 60)
+					// Pause felix[2], so it can't touch the dataplane; we want to
+					// test that felix[0] blocks the traffic.
+					pid := felixes[0].GetFelixPID()
+					felixes[0].Exec("kill", "-STOP", fmt.Sprint(pid))
+
+					tc.Felixes[0].Exec("ip", "route", "add", "10.65.222.1", "via",
+						externalClient.IP, "dev", "tunl0", "onlink", "proto", "90")
+
+					By("testing that the ext client can connect via ipip")
 					cc.ResetExpectations()
 					cc.ExpectSome(externalClient, w[0])
-					cc.CheckConnectivity()*/
+					cc.CheckConnectivity()
 				})
 			})
 		})
