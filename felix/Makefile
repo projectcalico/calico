@@ -335,7 +335,7 @@ fv-no-prereqs:
 	  CERTS_PATH=$(CERTS_PATH) \
 	  PRIVATE_KEY=`pwd`/private.key \
 	  GINKGO_ARGS='$(GINKGO_ARGS)' \
-	  GINKGO_FOCUS="$(GINKGO_FOCUS)" \
+	  GINKGO_FOCUS="should report expected prometheus stats with various policies" \
 	  ARCH=$(ARCH) \
 	  FELIX_FV_ENABLE_BPF="$(FELIX_FV_ENABLE_BPF)" \
 	  FV_RACE_DETECTOR_ENABLED=$(FV_RACE_DETECTOR_ENABLED) \

@@ -221,7 +221,6 @@ func (kds *K8sDatastoreInfra) runK8sApiserver() {
 		"--client-ca-file=/home/user/certs/ca.pem",
 		"--tls-cert-file=/home/user/certs/kubernetes.pem",
 		"--tls-private-key-file=/home/user/certs/kubernetes-key.pem",
-		"--enable-priority-and-fairness=false",
 		"--max-mutating-requests-inflight=0",
 		"--max-requests-inflight=0",
 	}
