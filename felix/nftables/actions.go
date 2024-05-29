@@ -300,7 +300,7 @@ type SetMarkAction struct {
 }
 
 func (c SetMarkAction) ToFragment(features *environment.Features) string {
-	return fmt.Sprintf("meta mark set %#x", c.Mark)
+	return fmt.Sprintf("meta mark set mark or %#x", c.Mark)
 }
 
 func (c SetMarkAction) String() string {
