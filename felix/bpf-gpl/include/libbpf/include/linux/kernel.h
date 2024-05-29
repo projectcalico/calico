@@ -3,6 +3,8 @@
 #ifndef __LINUX_KERNEL_H
 #define __LINUX_KERNEL_H
 
+#include <linux/compiler.h>
+
 #ifndef offsetof
 #define offsetof(TYPE, MEMBER) ((size_t) &((TYPE *)0)->MEMBER)
 #endif

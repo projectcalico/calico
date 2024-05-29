@@ -1,1 +1,13 @@
 decap_sanity  # weird failure with decap_sanity_ns netns already existing, TBD
+empty_skb # waiting the fix in bpf tree to make it to bpf-next
+bpf_nf/tc-bpf-ct # test consistently failing on x86: https://github.com/libbpf/libbpf/pull/698#issuecomment-1590341200
+bpf_nf/xdp-ct   # test consistently failing on x86: https://github.com/libbpf/libbpf/pull/698#issuecomment-1590341200
+kprobe_multi_bench_attach # suspected to cause crashes in CI
+find_vma # test consistently fails on latest kernel, see https://github.com/libbpf/libbpf/issues/754 for details
+bpf_cookie/perf_event
+send_signal/send_signal_nmi
+send_signal/send_signal_nmi_thread
+
+lwt_reroute # crashes kernel, fix pending upstream
+tc_links_ingress # fails, same fix is pending upstream
+tc_redirect		  # enough is enough, banned for life for flakiness

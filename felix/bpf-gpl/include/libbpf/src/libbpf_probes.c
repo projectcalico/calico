@@ -38,7 +38,7 @@ static __u32 get_ubuntu_kernel_version(void)
 	if (faccessat(AT_FDCWD, ubuntu_kver_file, R_OK, AT_EACCESS) != 0)
 		return 0;
 
-	f = fopen(ubuntu_kver_file, "r");
+	f = fopen(ubuntu_kver_file, "re");
 	if (!f)
 		return 0;
 
@@ -181,6 +181,9 @@ static int probe_prog_load(enum bpf_prog_type prog_type,
 	case BPF_PROG_TYPE_FLOW_DISSECTOR:
 	case BPF_PROG_TYPE_CGROUP_SYSCTL:
 		break;
+	case BPF_PROG_TYPE_NETFILTER:
+		opts.expected_attach_type = BPF_NETFILTER;
+		break;
 	default:
 		return -EOPNOTSUPP;
 	}
@@ -216,7 +219,8 @@ int libbpf_probe_bpf_prog_type(enum bpf_prog_type prog_type, const void *opts)
 }
 
 int libbpf__load_raw_btf(const char *raw_types, size_t types_len,
-			 const char *str_sec, size_t str_len)
+			 const char *str_sec, size_t str_len,
+			 int token_fd)
 {
 	struct btf_header hdr = {
 		.magic = BTF_MAGIC,
@@ -226,6 +230,10 @@ int libbpf__load_raw_btf(const char *raw_types, size_t types_len,
 		.str_off = types_len,
 		.str_len = str_len,
 	};
+	LIBBPF_OPTS(bpf_btf_load_opts, opts,
+		.token_fd = token_fd,
+		.btf_flags = token_fd ? BPF_F_TOKEN_FD : 0,
+	);
 	int btf_fd, btf_len;
 	__u8 *raw_btf;
 
@@ -238,7 +246,7 @@ int libbpf__load_raw_btf(const char *raw_types, size_t types_len,
 	memcpy(raw_btf + hdr.hdr_len, raw_types, hdr.type_len);
 	memcpy(raw_btf + hdr.hdr_len + hdr.type_len, str_sec, hdr.str_len);
 
-	btf_fd = bpf_btf_load(raw_btf, btf_len, NULL);
+	btf_fd = bpf_btf_load(raw_btf, btf_len, &opts);
 
 	free(raw_btf);
 	return btf_fd;
@@ -268,7 +276,7 @@ static int load_local_storage_btf(void)
 	};
 
 	return libbpf__load_raw_btf((char *)types, sizeof(types),
-				     strs, sizeof(strs));
+				     strs, sizeof(strs), 0);
 }
 
 static int probe_map_create(enum bpf_map_type map_type)
@@ -323,11 +331,19 @@ static int probe_map_create(enum bpf_map_type map_type)
 	case BPF_MAP_TYPE_STRUCT_OPS:
 		/* we'll get -ENOTSUPP for invalid BTF type ID for struct_ops */
 		opts.btf_vmlinux_value_type_id = 1;
+		opts.value_type_btf_obj_fd = -1;
 		exp_err = -524; /* -ENOTSUPP */
 		break;
 	case BPF_MAP_TYPE_BLOOM_FILTER:
 		key_size = 0;
 		max_entries = 1;
+		break;
+	case BPF_MAP_TYPE_ARENA:
+		key_size	= 0;
+		value_size	= 0;
+		max_entries	= 1; /* one page */
+		opts.map_extra	= 0; /* can mmap() at any address */
+		opts.map_flags	= BPF_F_MMAPABLE;
 		break;
 	case BPF_MAP_TYPE_HASH:
 	case BPF_MAP_TYPE_ARRAY:
@@ -432,7 +448,8 @@ int libbpf_probe_bpf_helper(enum bpf_prog_type prog_type, enum bpf_func_id helpe
 	/* If BPF verifier doesn't recognize BPF helper ID (enum bpf_func_id)
 	 * at all, it will emit something like "invalid func unknown#181".
 	 * If BPF verifier recognizes BPF helper but it's not supported for
-	 * given BPF program type, it will emit "unknown func bpf_sys_bpf#166".
+	 * given BPF program type, it will emit "unknown func bpf_sys_bpf#166"
+	 * or "program of this type cannot use helper bpf_sys_bpf#166".
 	 * In both cases, provided combination of BPF program type and BPF
 	 * helper is not supported by the kernel.
 	 * In all other cases, probe_prog_load() above will either succeed (e.g.,
@@ -441,7 +458,8 @@ int libbpf_probe_bpf_helper(enum bpf_prog_type prog_type, enum bpf_func_id helpe
 	 * that), or we'll get some more specific BPF verifier error about
 	 * some unsatisfied conditions.
 	 */
-	if (ret == 0 && (strstr(buf, "invalid func ") || strstr(buf, "unknown func ")))
+	if (ret == 0 && (strstr(buf, "invalid func ") || strstr(buf, "unknown func ") ||
+			 strstr(buf, "program of this type cannot use helper ")))
 		return 0;
 	return 1; /* assume supported */
 }
