@@ -53,7 +53,6 @@ func (c latencyConfig) workloadIP(workloadIdx int) string {
 }
 
 var _ = Context("_BPF-SAFE_ Latency tests with initialized Felix and etcd datastore", func() {
-
 	var (
 		etcd   *containers.Container
 		tc     infrastructure.TopologyContainers
@@ -72,7 +71,7 @@ var _ = Context("_BPF-SAFE_ Latency tests with initialized Felix and etcd datast
 		_ = tc.Felixes[0].GetFelixPID()
 
 		var err error
-		resultsFile, err = os.OpenFile("latency.log", os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644)
+		resultsFile, err = os.OpenFile("latency.log", os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0o644)
 		Expect(err).NotTo(HaveOccurred())
 	})
 
@@ -83,7 +82,11 @@ var _ = Context("_BPF-SAFE_ Latency tests with initialized Felix and etcd datast
 		}
 
 		if CurrentGinkgoTestDescription().Failed {
-			tc.Felixes[0].Exec("iptables-save", "-c")
+			if NFTMode() {
+				logNFTDiags(tc.Felixes[0])
+			} else {
+				tc.Felixes[0].Exec("iptables-save", "-c")
+			}
 		}
 		tc.Stop()
 
