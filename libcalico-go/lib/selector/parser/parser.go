@@ -1,4 +1,4 @@
-// Copyright (c) 2016, 2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -149,6 +149,12 @@ func parseOperation(tokens []tokenizer.Token) (sel node, remTokens []tokenizer.T
 		remTokens = tokens[1:]
 	case tokenizer.TokGlobal:
 		sel = &GlobalNode{}
+		remTokens = tokens[1:]
+	case tokenizer.TokSelf:
+		sel = &SelfNode{}
+		remTokens = tokens[1:]
+	case tokenizer.TokNotSelf:
+		sel = &NotSelfNode{}
 		remTokens = tokens[1:]
 	case tokenizer.TokLabel:
 		// should have an operator and a literal.

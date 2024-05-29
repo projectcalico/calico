@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,11 +15,13 @@
 package conversion
 
 const (
-	NamespaceLabelPrefix            = "pcns."
-	NamespaceProfileNamePrefix      = "kns."
-	K8sNetworkPolicyNamePrefix      = "knp.default."
-	ServiceAccountLabelPrefix       = "pcsa."
-	ServiceAccountProfileNamePrefix = "ksa."
+	K8sAdminNetworkPolicyNamePrefix     = "kanp"
+	K8sBaselineAdminNetworkPolicyPrefix = "kbanp"
+	NamespaceLabelPrefix                = "pcns."
+	NamespaceProfileNamePrefix          = "kns."
+	K8sNetworkPolicyNamePrefix          = "knp.default."
+	ServiceAccountLabelPrefix           = "pcsa."
+	ServiceAccountProfileNamePrefix     = "ksa."
 
 	// AnnotationPodIP is an annotation we apply to pods when assigning them an IP.  It
 	// duplicates the value of the Pod.Status.PodIP field, which is set by kubelet but,
