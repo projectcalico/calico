@@ -237,6 +237,12 @@ var _ = Context("_INGRESS-EGRESS_ (iptables-only) with initialized Felix, etcd d
 		tc, etcd, client, infra = infrastructure.StartSingleNodeEtcdTopology(opts)
 		infrastructure.CreateDefaultProfile(client, "default", map[string]string{"default": ""}, "default == ''")
 
+		if NFTMode() {
+			listCmd = []string{"nft", "list", "table", "calico"}
+		} else {
+			listCmd = []string{"iptables-save"}
+		}
+
 		// Create three workloads, using that profile.
 		for ii := range w {
 			iiStr := strconv.Itoa(ii)
@@ -255,12 +261,6 @@ var _ = Context("_INGRESS-EGRESS_ (iptables-only) with initialized Felix, etcd d
 				tc.Felixes[0].Exec("iptables-save", "-c")
 			}
 			tc.Felixes[0].Exec("ip", "r")
-		}
-
-		if NFTMode() {
-			listCmd = []string{"nft", "list", "table", "calico"}
-		} else {
-			listCmd = []string{"iptables-save"}
 		}
 
 		for ii := range w {
@@ -294,7 +294,7 @@ var _ = Context("_INGRESS-EGRESS_ (iptables-only) with initialized Felix, etcd d
 			cc.CheckConnectivity()
 		})
 
-		It("should have the expected comment in iptables", func() {
+		It("should have the expected comment in the dataplane", func() {
 			Eventually(func() string {
 				out, _ := tc.Felixes[0].ExecOutput(listCmd...)
 				return out
@@ -319,7 +319,7 @@ var _ = Context("_INGRESS-EGRESS_ (iptables-only) with initialized Felix, etcd d
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		It("should have the expected comment in iptables", func() {
+		It("should have the expected comment in the dataplane", func() {
 			Eventually(func() string {
 				out, _ := tc.Felixes[0].ExecOutput(listCmd...)
 				return out
