@@ -39,7 +39,6 @@ import (
 )
 
 var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ do-not-track policy tests; with 2 nodes", []apiconfig.DatastoreType{apiconfig.EtcdV3, apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
-
 	var (
 		infra          infrastructure.DatastoreInfra
 		tc             infrastructure.TopologyContainers
@@ -96,8 +95,12 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ do-not-track policy tests; 
 	JustAfterEach(func() {
 		if CurrentGinkgoTestDescription().Failed {
 			for _, felix := range tc.Felixes {
-				felix.Exec("iptables-save", "-c")
-				felix.Exec("ip6tables-save", "-c")
+				if NFTMode() {
+					logNFTDiags(felix)
+				} else {
+					felix.Exec("iptables-save", "-c")
+					felix.Exec("ip6tables-save", "-c")
+				}
 				felix.Exec("ip", "r")
 				felix.Exec("calico-bpf", "policy", "dump", "eth0", "all", "--asm")
 				felix.Exec("calico-bpf", "-6", "policy", "dump", "eth0", "all", "--asm")
