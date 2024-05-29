@@ -17,12 +17,14 @@ package nftables
 import (
 	"fmt"
 	"math/bits"
+	"regexp"
 	"strings"
 
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 var Wildcard = "*"
@@ -30,6 +32,9 @@ var Wildcard = "*"
 var (
 	_ generictables.MatchCriteria    = nftMatch{}
 	_ generictables.NFTMatchCriteria = nftMatch{}
+
+	// ipSetMatch matches clauses that contain an IP set reference.
+	ipSetMatch = regexp.MustCompile("IPV.*@(.*)")
 )
 
 const (
@@ -345,22 +350,19 @@ func (m nftMatch) NotDestIPPortSet(name string) generictables.MatchCriteria {
 	return m
 }
 
-func (m nftMatch) IPSetNames() (ipSetNames []string) {
-	for _, matchString := range []string(m.clauses) {
-		if strings.Contains(matchString, "IPV saddr @") {
-			ipSetNames = append(ipSetNames, strings.TrimPrefix(strings.Split(matchString, " ")[2], "@"))
-		}
-		if strings.Contains(matchString, "IPV daddr @") {
-			ipSetNames = append(ipSetNames, strings.TrimPrefix(strings.Split(matchString, " ")[2], "@"))
-		}
-		if strings.Contains(matchString, "IPV saddr != @") {
-			ipSetNames = append(ipSetNames, strings.TrimPrefix(strings.Split(matchString, " ")[3], "@"))
-		}
-		if strings.Contains(matchString, "IPV daddr != @") {
-			ipSetNames = append(ipSetNames, strings.TrimPrefix(strings.Split(matchString, " ")[3], "@"))
+func (m nftMatch) IPSetNames() []string {
+	// Uset a set to deduplicate the names.
+	ipSetNames := set.New[string]()
+	for _, clause := range []string(m.clauses) {
+		match := ipSetMatch.FindStringSubmatch(clause)
+		if len(match) > 2 {
+			logrus.WithField("clause", clause).Panic("Probably bug: multiple IP set names found")
+		} else if len(match) == 2 {
+			// Found a match.
+			ipSetNames.Add(match[1])
 		}
 	}
-	return
+	return ipSetNames.Slice()
 }
 
 func (m nftMatch) SourcePorts(ports ...uint16) generictables.MatchCriteria {
