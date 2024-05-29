@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@ import (
 	kapiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/network-policy-api/apis/v1alpha1"
 
 	discovery "k8s.io/api/discovery/v1"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -59,6 +60,8 @@ type Converter interface {
 	HasIPAddress(pod *kapiv1.Pod) bool
 	StagedKubernetesNetworkPolicyToStagedName(stagedK8sName string) string
 	K8sNetworkPolicyToCalico(np *networkingv1.NetworkPolicy) (*model.KVPair, error)
+	K8sAdminNetworkPolicyToGNP(anp *v1alpha1.AdminNetworkPolicy) (*model.KVPair, error)
+	K8sBaselineAdminNetworkPolicyToGNP(anp *v1alpha1.BaselineAdminNetworkPolicy) (*model.KVPair, error)
 	EndpointSliceToKVP(svc *discovery.EndpointSlice) (*model.KVPair, error)
 	ServiceToKVP(service *kapiv1.Service) (*model.KVPair, error)
 	ProfileNameToNamespace(profileName string) (string, error)
@@ -380,6 +383,18 @@ func (c converter) K8sNetworkPolicyToCalico(np *networkingv1.NetworkPolicy) (*mo
 
 	// Return the KVPair with conversion errors if applicable
 	return kvp, errorTracker.GetError()
+}
+
+// K8sAdminNetworkPolicyToGNP converts a k8s AdminNetworkPolicy to a model.KVPair.
+func (c converter) K8sAdminNetworkPolicyToGNP(anp *v1alpha1.AdminNetworkPolicy) (*model.KVPair, error) {
+	// Pull out important fields.
+	policyName := fmt.Sprintf(K8sAdminNetworkPolicyNamePrefix + anp.Name)
+	return nil, nil
+}
+
+// K8sBaselineAdminNetworkPolicyToGNP converts a k8s BaselineAdminNetworkPolicy to a model.KVPair.
+func (c converter) K8sBaselineAdminNetworkPolicyToGNP(banp *v1alpha1.BaselineAdminNetworkPolicy) (*model.KVPair, error) {
+	return nil, nil
 }
 
 // k8sSelectorToCalico takes a namespaced k8s label selector and returns the Calico
