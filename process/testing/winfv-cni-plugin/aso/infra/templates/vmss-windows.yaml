@@ -1,0 +1,55 @@
+apiVersion: compute.azure.com/v1api20220301
+kind: VirtualMachineScaleSet
+metadata:
+  name: vmss-windows
+  namespace: winfv
+spec:
+  location: {{.Env.AZURE_LOCATION}}
+  owner:
+    name: {{.Env.AZURE_RESOURCE_GROUP}}
+  platformFaultDomainCount: 1
+  singlePlacementGroup: false
+  sku:
+    capacity: {{.Env.WINDOWS_NODE_COUNT}}
+    name: Standard_D4s_v3 
+  upgradePolicy:
+    mode: Automatic
+  virtualMachineProfile:
+    extensionProfile:
+      extensions:
+      - name: WindowsOpenSSH
+        publisher: Microsoft.Azure.OpenSSH 
+        type: WindowsOpenSSH
+        typeHandlerVersion: "3.0"
+      - name: mycustomextension
+        publisher: Microsoft.Compute
+        settings:
+          commandToExecute: powershell -command "echo \"{{.Env.PUBLIC_KEY}}\" | Add-Content 'C:\ProgramData\ssh\administrators_authorized_keys' -Encoding UTF8;icacls.exe 'C:\ProgramData\ssh\administrators_authorized_keys' /inheritance:r /grant 'Administrators:F' /grant 'SYSTEM:F'"
+        type: CustomScriptExtension
+        typeHandlerVersion: "1.9"
+    networkProfile:
+      networkInterfaceConfigurations:
+      - ipConfigurations:
+        - name: myipconfiguration
+          subnet:
+            reference:
+              group: network.azure.com
+              kind: VirtualNetworksSubnet
+              name: subnet-winfv
+          publicIPAddressConfiguration:
+            idleTimeoutInMinutes: 30
+            name: winfv
+        name: mynicconfig
+        primary: true
+    osProfile:
+      computerNamePrefix: winfv
+      adminUsername: winfv
+      adminPassword:
+        key: password
+        name: winfv-secret-windows
+    storageProfile:
+      imageReference:
+        publisher: MicrosoftWindowsServer
+        offer: WindowsServer
+        sku: {{.Env.AZURE_WINDOWS_IMAGE_SKU}}
+        version: {{.Env.AZURE_WINDOWS_IMAGE_VERSION}}
