@@ -106,7 +106,7 @@ func CreateClientFromConfig() clientv3.Interface {
 	return c
 }
 
-// Versioner returns the versioner associated with this interface
+// Versioned returns the versioned associated with this interface
 func (rs *resourceStore) Versioner() storage.Versioner {
 	return rs.versioner
 }
