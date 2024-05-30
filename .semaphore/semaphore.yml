@@ -201,7 +201,7 @@ blocks:
     prologue:
       commands:
         # Prepare azure configuration.
-        - az login --service-principal -u "${AZ_SP_ID}" -p "${AZ_SP_PASSWORD}" --tenant "${AZ_TENANT_ID}"
+        - az login --service-principal -u "${AZ_SP_ID}" -p "${AZ_SP_PASSWORD}" --tenant "${AZ_TENANT_ID}" --output none
         - export AZURE_SUBSCRIPTION_ID=$AZ_SUBSCRIPTION_ID
         - export AZURE_TENANT_ID=$AZ_TENANT_ID
         - export AZURE_CLIENT_ID=$AZ_SP_ID
