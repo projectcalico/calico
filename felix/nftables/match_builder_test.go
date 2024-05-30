@@ -79,6 +79,7 @@ var _ = DescribeTable("MatchBuilder",
 	Entry("NotProtocol", Match().NotProtocol("tcp"), "meta l4proto != tcp"),
 	Entry("ProtocolNum", Match().ProtocolNum(123), "meta l4proto 123"),
 	Entry("NotProtocolNum", Match().NotProtocolNum(123), "meta l4proto != 123"),
+	Entry("ProtocolNum IPIP", Match().ProtocolNum(4), "meta l4proto ipencap"),
 
 	// CIDRs.
 	Entry("SourceNet", Match().SourceNet("10.0.0.4"), "ip saddr 10.0.0.4"),

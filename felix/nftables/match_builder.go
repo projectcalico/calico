@@ -68,7 +68,7 @@ func (m nftMatch) protocol() string {
 func protoNumToName(protoNum uint8) string {
 	switch protoNum {
 	case ProtoIPIP:
-		return "ipip"
+		return "ipencap"
 	case ProtoTCP:
 		return "tcp"
 	case ProtoUDP:
