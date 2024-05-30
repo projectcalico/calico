@@ -77,8 +77,13 @@ var _ = infrastructure.DatastoreDescribe("IPv6 iptables/nftables tests", []apico
 	JustAfterEach(func() {
 		if CurrentGinkgoTestDescription().Failed {
 			for _, felix := range tc.Felixes {
+				if NFTMode() {
+					logNFTDiags(felix)
+				}
+				for _, table := range []string{"filter", "mangle", "raw", "nat"} {
+					felix.Exec("ip6tables-save", "-c", "-t", table)
+				}
 				felix.Exec("conntrack", "-L")
-				felix.Exec("ip6tables-save", "-c")
 				felix.Exec("ip", "-6", "link")
 				felix.Exec("ip", "-6", "addr")
 				felix.Exec("ip", "-6", "rule")
