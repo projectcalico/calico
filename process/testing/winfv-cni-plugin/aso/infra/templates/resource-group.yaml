@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: winfv
+
+---
+apiVersion: resources.azure.com/v1api20200601
+kind: ResourceGroup
+metadata:
+  name: {{.Env.AZURE_RESOURCE_GROUP}}
+  namespace: winfv
+spec:
+  location: {{.Env.AZURE_LOCATION}}
