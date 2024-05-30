@@ -23,9 +23,6 @@
   task:
     prologue:
       commands:
-        # Load the github access secrets.  First fix the permissions.
-        - chmod 0600 ~/.keys/*
-        - ssh-add ~/.keys/*
         # Prepare azure configuration.
         - az login --service-principal -u "${AZ_SP_ID}" -p "${AZ_SP_PASSWORD}" --tenant "${AZ_TENANT_ID}"
         - export AZURE_SUBSCRIPTION_ID=$AZ_SUBSCRIPTION_ID
