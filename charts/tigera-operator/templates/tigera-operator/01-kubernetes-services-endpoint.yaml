@@ -6,5 +6,5 @@ metadata:
   namespace: {{.Release.Namespace}}
 data:
   KUBERNETES_SERVICE_HOST: {{ .Values.kubernetesServiceEndpoint.host }}
-  KUBERNETES_SERVICE_PORT: {{ .Values.kubernetesServiceEndpoint.port }}
+  KUBERNETES_SERVICE_PORT: {{ .Values.kubernetesServiceEndpoint.port | quote }}
 {{- end }}
