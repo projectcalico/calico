@@ -119,7 +119,7 @@ func (p Protocol) NumValue() (uint8, error) {
 	return (Uint8OrString)(p).NumValue()
 }
 
-// SupportsPorts returns whether this protocol supports ports.  This returns true if
+// SupportsProtocols returns whether this protocol supports ports.  This returns true if
 // the numerical or string version of the protocol indicates TCP (6), UDP (17), or SCTP (132).
 func (p Protocol) SupportsPorts() bool {
 	num, err := p.NumValue()
