@@ -1,0 +1,47 @@
+apiVersion: network.azure.com/v1api20201101
+kind: NetworkSecurityGroup
+metadata:
+  name: winfv-sg
+  namespace: winfv
+spec:
+  location: {{.Env.AZURE_LOCATION}}
+  owner:
+    name: {{.Env.AZURE_RESOURCE_GROUP}}
+
+---
+apiVersion: network.azure.com/v1api20201101
+kind: NetworkSecurityGroupsSecurityRule
+metadata:
+  name: winfv-sgrule-allow-ssh
+  namespace: winfv
+spec:
+  owner:
+    name: winfv-sg
+  protocol: Tcp
+  sourcePortRange: "*"
+  destinationPortRange: "22"
+  sourceAddressPrefix: "*"
+  destinationAddressPrefix: "*"
+  access: Allow
+  priority: 1000
+  direction: Inbound
+  description: Allow ssh access
+
+---
+apiVersion: network.azure.com/v1api20201101
+kind: NetworkSecurityGroupsSecurityRule
+metadata:
+  name: winfv-sgrule-allow-rdp
+  namespace: winfv
+spec:
+  owner:
+    name: winfv-sg
+  protocol: Tcp
+  sourcePortRange: "*"
+  destinationPortRange: "3389"
+  sourceAddressPrefix: "*"
+  destinationAddressPrefix: "*"
+  access: Allow
+  priority: 1001
+  direction: Inbound
+  description: Allow RDP access
