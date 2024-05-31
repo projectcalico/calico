@@ -3,11 +3,11 @@
 set -e
 set -x
 
-FV_DIR="~/$SEMAPHORE_GIT_DIR/process/testing/winfv-cni-plugin/aso"
+FV_DIR="$HOME/$SEMAPHORE_GIT_DIR/process/testing/winfv-cni-plugin/aso"
 pushd ${FV_DIR}
 
 # Prepare local files
-cp ~/$SEMAPHORE_GIT_DIR/cni-plugin/bin/windows/*.exe ./windows
+cp $HOME/$SEMAPHORE_GIT_DIR/cni-plugin/bin/windows/*.exe ./windows
 
 # Run FV.
 make run-fv | tee run-fv.log
