@@ -202,11 +202,10 @@ blocks:
     prologue:
       commands:
         # Prepare azure configuration.
-        - sleep 120
-        - az login --service-principal -u "${AZ_SUBSCRIPTION_ID}" -p "${AZ_PASS}" --tenant "${AZ_TENANT}" --output none
+        - az login --service-principal -u "${AZ_USER}" -p "${AZ_PASS}" --tenant "${AZ_TENANT}" --output none
         - export AZURE_SUBSCRIPTION_ID=$AZ_SUBSCRIPTION_ID
         - export AZURE_TENANT_ID=$AZ_TENANT
-        - export AZURE_CLIENT_ID=$AZ_SUBSCRIPTION_ID
+        - export AZURE_CLIENT_ID=$AZ_USER
         - export AZURE_CLIENT_SECRET=$AZ_PASS
         - export REPORT_DIR=/home/semaphore/calico/process/testing/winfv-cni-plugin/report
         - export LOGS_DIR=~/fv.log
