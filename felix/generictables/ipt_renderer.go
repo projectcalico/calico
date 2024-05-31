@@ -21,6 +21,8 @@ import (
 	"github.com/projectcalico/calico/felix/environment"
 )
 
+const maxIptablesCommentLength = 256
+
 func NewIptablesRenderer(hashCommentPrefix string) IptablesRenderer {
 	return &iptablesRenderer{
 		hashCommentPrefix: hashCommentPrefix,
@@ -83,7 +85,7 @@ func (i *iptablesRenderer) renderInner(fragments []string, hashCommentFragment s
 	}
 	for _, c := range comment {
 		c = escapeComment(c)
-		c = truncateComment(c)
+		c = i.truncateComment(c)
 		commentFragment := fmt.Sprintf("-m comment --comment \"%s\"", c)
 		fragments = append(fragments, commentFragment)
 	}
@@ -100,4 +102,11 @@ func (i *iptablesRenderer) renderInner(fragments []string, hashCommentFragment s
 		}
 	}
 	return strings.Join(fragments, " ")
+}
+
+func (i *iptablesRenderer) truncateComment(s string) string {
+	if len(s) > maxIptablesCommentLength {
+		return s[0:maxIptablesCommentLength]
+	}
+	return s
 }
