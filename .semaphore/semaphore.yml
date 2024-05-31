@@ -198,6 +198,8 @@ blocks:
   dependencies:
     - cni-plugin
   task:
+    secrets:
+      - name: azure-dev-ci
     prologue:
       commands:
         # Prepare azure configuration.
