@@ -53,6 +53,11 @@ var _ = Describe("Rule Metadata tests", func() {
 	})
 
 	AfterEach(func() {
+		if CurrentGinkgoTestDescription().Failed {
+			for _, felix := range tc.Felixes {
+				logNFTDiags(felix)
+			}
+		}
 		wl0.Stop()
 		wl1.Stop()
 		tc.Stop()
@@ -195,7 +200,7 @@ func getIPTables(name string) func() string {
 
 func getNFTables(f *infrastructure.Felix) func() string {
 	return func() string {
-		out, err := f.ExecOutput("nft", "list", "table", "calico")
+		out, err := f.ExecOutput("nft", "list", "table", "ip", "calico")
 		Expect(err).ToNot(HaveOccurred())
 		return string(out)
 	}

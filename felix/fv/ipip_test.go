@@ -430,11 +430,13 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 			By("testing that ext client ipip does not work if not part of ExternalNodesCIDRList")
 
 			for _, f := range tc.Felixes {
+				// Make sure that only the internal nodes are present in the ipset
 				if BPFMode() {
 					Eventually(f.BPFRoutes, "10s").Should(ContainSubstring(f.IP))
 					Consistently(f.BPFRoutes).ShouldNot(ContainSubstring(externalClient.IP))
+				} else if NFTMode() {
+					Eventually(f.NFTSetSizeFn("cali40all-hosts-net"), "5s", "200ms").Should(Equal(2))
 				} else {
-					// Make sure that only the internal nodes are present in the ipset
 					Eventually(f.IPSetSizeFn("cali40all-hosts-net"), "5s", "200ms").Should(Equal(2))
 				}
 			}
@@ -473,6 +475,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 					Eventually(f.BPFRoutes, "10s").Should(ContainSubstring(externalClient.IP))
 					Expect(f.IPSetSize("cali40all-hosts-net")).To(BeZero(),
 						"BPF mode shouldn't program IP sets")
+				} else if NFTMode() {
+					Eventually(f.NFTSetSizeFn("cali40all-hosts-net"), "15s", "200ms").Should(Equal(3))
 				} else {
 					Eventually(f.IPSetSizeFn("cali40all-hosts-net"), "15s", "200ms").Should(Equal(3))
 				}

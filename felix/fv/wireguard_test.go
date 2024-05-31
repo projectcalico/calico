@@ -1024,7 +1024,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 					}
 				})
 
-				It("workload connectivity remains but uses un-encrypted tunnel", func() {
+				It("CASEY workload connectivity remains but uses un-encrypted tunnel", func() {
 					if wireguardEnabledV4 {
 						cc.ExpectSome(wlsV4[0], wlsV4[1])
 						cc.ExpectSome(wlsV4[1], wlsV4[0])
