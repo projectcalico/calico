@@ -195,14 +195,14 @@ blocks:
 - name: "cni-plugin: Windows"
   run:
     when: "false or change_in(['/*', '/cni-plugin/', '/libcalico-go/', '/process/testing/winfv-cni-plugin/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
-  dependencies:
-    - cni-plugin
+  dependencies: []
   task:
     secrets:
       - name: azure-dev-ci
     prologue:
       commands:
         # Prepare azure configuration.
+        - sleep 120
         - az login --service-principal -u "${AZ_SUBSCRIPTION_ID}" -p "${AZ_PASS}" --tenant "${AZ_TENANT}" --output none
         - export AZURE_SUBSCRIPTION_ID=$AZ_SUBSCRIPTION_ID
         - export AZURE_TENANT_ID=$AZ_TENANT
