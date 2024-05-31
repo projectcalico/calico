@@ -1,0 +1,24 @@
+apiVersion: network.azure.com/v1api20201101
+kind: VirtualNetwork
+metadata:
+  name: vnet-winfv
+  namespace: winfv
+spec:
+  addressSpace:
+    addressPrefixes:
+    - 10.0.0.0/16
+  location: {{.Env.AZURE_LOCATION}}
+  owner:
+    name: {{.Env.AZURE_RESOURCE_GROUP}}
+
+---
+apiVersion: network.azure.com/v1api20201101
+kind: VirtualNetworksSubnet
+metadata:
+  name: subnet-winfv
+  namespace: winfv
+spec:
+  addressPrefix: 10.0.0.0/24
+  owner:
+    name: vnet-winfv
+  privateLinkServiceNetworkPolicies: Disabled
