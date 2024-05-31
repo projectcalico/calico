@@ -3,7 +3,7 @@
 set -e
 set -x
 
-FV_DIR="/home/semaphore/calico-private/process/testing/winfv-cni-plugin/aso"
+FV_DIR="~/$SEMAPHORE_GIT_DIR/process/testing/winfv-cni-plugin/aso"
 pushd ${FV_DIR}
 
 # Prepare local files
