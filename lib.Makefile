@@ -1123,7 +1123,7 @@ endif
 # Check if the codebase is dirty or not.
 check-dirty:
 	@if [ "$$(git --no-pager diff --stat)" != "" ]; then \
-	echo "The following files are dirty"; git --no-pager diff --stat; exit 1; fi
+	echo "The following files are dirty"; git --no-pager diff; exit 1; fi
 
 bin/yq:
 	mkdir -p bin
