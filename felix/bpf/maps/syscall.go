@@ -1,4 +1,4 @@
-// Copyright (c) 2023 Tigera, Inc. All rights reserved.
+// Copyright (c) 2023-2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,6 +24,11 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+// Modern Linux has switched to use unsigned long long for u64 in the kernel.
+// To avoid disturbing userspace, ppc64le continued to use unsigned long
+// in userspace. Define __SANE_USERSPACE_TYPES__ to get int-ll64.h included.
+
+// #cgo ppc64le CFLAGS: -D__SANE_USERSPACE_TYPES__
 // #include "syscall.h"
 import "C"
 
