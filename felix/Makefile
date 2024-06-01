@@ -59,9 +59,9 @@ EXTRA_DOCKER_ARGS+=--init -v $(CURDIR)/../pod2daemon:/go/src/github.com/projectc
 include ../lib.Makefile
 
 # Set the platform correctly for building docker images.
-ifeq ($(ARCH),arm64)
-# Required for eBPF support in ARM64.
-# We need to force ARM64 build image to be used in a crosscompilation run.
+ifeq ($(ARCH),$(filter $(ARCH),arm64 ppc64le))
+# Required for eBPF support.
+# We need to force target arch build image to be used in a crosscompilation run.
 CALICO_BUILD:=$(CALICO_BUILD)-$(ARCH)
 endif
 
@@ -129,7 +129,7 @@ clean-generated:
 ###############################################################################
 BUILD_TARGETS:=bin/calico-felix
 
-ifeq ($(ARCH),$(filter $(ARCH),amd64 arm64))
+ifeq ($(ARCH),$(filter $(ARCH),amd64 arm64 ppc64le))
 # Currently CGO can be enabled in ARM64 and AMD64 builds.
 CGO_ENABLED=1
 CGO_LDFLAGS="-L$(LIBBPF_CONTAINER_PATH)/$(ARCH) -lbpf -lelf -lz"
@@ -168,7 +168,7 @@ bin/calico-felix-$(ARCH): $(LIBBPF_A) $(SRC_FILES)
 ifeq ($(FIPS),true)
 	$(call build_cgo_boring_binary, $(PACKAGE_NAME)/cmd/calico-felix, $@)
 else
-ifeq ($(ARCH),$(filter $(ARCH),amd64 arm64))
+ifeq ($(ARCH),$(filter $(ARCH),amd64 arm64 ppc64le))
 	$(call build_cgo_binary, $(PACKAGE_NAME)/cmd/calico-felix, $@)
 else
 	$(call build_binary, $(PACKAGE_NAME)/cmd/calico-felix, $@)
@@ -213,8 +213,8 @@ build-bpf: $(ALL_BPF_PROGS)
 # all target files".
 $(ALL_BPF_PROGS) &: $(shell find bpf-gpl bpf-apache -name '*.[ch]') bpf-gpl/Makefile bpf-apache/Makefile
 	$(MAKE) register ARCH=$(ARCH)
-	$(DOCKER_GO_BUILD) sh -c "make -j 16 -C bpf-apache all && \
-	                          make -j 16 -C bpf-gpl all ut-objs"
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -c "make -j 16 -C bpf-apache all && \
+	                                     make -j 16 -C bpf-gpl all ut-objs"
 	rm -rf bin/bpf
 	mkdir -p bin/bpf
 	touch -c $(ALL_BPF_PROGS)
