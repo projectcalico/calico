@@ -49,9 +49,9 @@ NODE_CONTAINER_MARKER=$(NODE_CONTAINER_CREATED)
 endif
 
 # Set the platform correctly for building docker images.
-ifeq ($(ARCH),arm64)
-# Required for eBPF support in ARM64.
-# We need to force ARM64 build image to be used in a crosscompilation run.
+ifeq ($(ARCH),$(filter $(ARCH),arm64 ppc64le))
+# Required for eBPF support.
+# We need to force target arch build image to be used in a crosscompilation run.
 CALICO_BUILD:=$(CALICO_BUILD)-$(ARCH)
 endif
 
@@ -535,7 +535,7 @@ windows-packaging/nssm.exe: windows-packaging/nssm.zip
 $(WINDOWS_ARCHIVE): build-windows-archive
 
 .PHONY: build-windows-archive
-build-windows-archive: build $(WINDOWS_ARCHIVE_FILES) windows-packaging/nssm.zip
+build-windows-archive: $(WINDOWS_ARCHIVE_FILES) windows-packaging/nssm.zip
 	# To be as atomic as possible, we re-do work like unpacking NSSM here.
 	-rm -f "$(WINDOWS_ARCHIVE)"
 	-rm -rf $(WINDOWS_ARCHIVE_ROOT)/nssm
