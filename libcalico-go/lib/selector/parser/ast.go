@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -644,4 +644,42 @@ func (node *GlobalNode) AcceptVisitor(v Visitor) {
 
 func (node *GlobalNode) collectFragments(fragments []string) []string {
 	return append(fragments, "global()")
+}
+
+type SelfNode struct {
+}
+
+func (node *SelfNode) LabelRestrictions() map[string]LabelRestriction {
+	return nil
+}
+
+func (node *SelfNode) Evaluate(labels Labels) bool {
+	return true
+}
+
+func (node *SelfNode) AcceptVisitor(v Visitor) {
+	v.Visit(node)
+}
+
+func (node *SelfNode) collectFragments(fragments []string) []string {
+	return append(fragments, "self()")
+}
+
+type NotSelfNode struct {
+}
+
+func (node *NotSelfNode) LabelRestrictions() map[string]LabelRestriction {
+	return nil
+}
+
+func (node *NotSelfNode) Evaluate(labels Labels) bool {
+	return true
+}
+
+func (node *NotSelfNode) AcceptVisitor(v Visitor) {
+	v.Visit(node)
+}
+
+func (node *NotSelfNode) collectFragments(fragments []string) []string {
+	return append(fragments, "notself()")
 }
