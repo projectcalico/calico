@@ -842,10 +842,14 @@ static CALI_BPF_INLINE enum do_nat_res do_nat(struct cali_tc_ctx *ctx,
 		}
 
 #ifndef IPVER6
-		if (bpf_l3_csum_replace(ctx->skb, l3_csum_off, STATE->ip_src, STATE->ct_result.nat_sip, 4) ||
-				bpf_l3_csum_replace(ctx->skb, l3_csum_off, STATE->ip_dst, STATE->post_nat_ip_dst, 4)) {
-			deny_reason(ctx, CALI_REASON_CSUM_FAIL);
-			goto deny;
+		if (!inner_icmp) {
+			if (bpf_l3_csum_replace(ctx->skb, l3_csum_off, STATE->ip_src,
+					STATE->ct_result.nat_sip, 4) ||
+				bpf_l3_csum_replace(ctx->skb, l3_csum_off,
+					STATE->ip_dst, STATE->post_nat_ip_dst, 4)) {
+				deny_reason(ctx, CALI_REASON_CSUM_FAIL);
+				goto deny;
+			}
 		}
 #endif
 		/* From now on, the packet has a new source IP */
@@ -954,7 +958,7 @@ static CALI_BPF_INLINE enum do_nat_res do_nat(struct cali_tc_ctx *ctx,
 				goto deny;
 			}
 
-			if (bpf_skb_store_bytes(ctx->skb, ip_hdr_offset + ctx->ipheader_len, ctx->scratch->l4, 8, 0)) {
+			if (bpf_skb_store_bytes(ctx->skb, ip_hdr_offset + ctx->ipheader_len, ctx->nh, 8, 0)) {
 				CALI_DEBUG("Too short\n");
 				deny_reason(ctx, CALI_REASON_SHORT);
 				goto deny;
@@ -962,15 +966,17 @@ static CALI_BPF_INLINE enum do_nat_res do_nat(struct cali_tc_ctx *ctx,
 		}
 
 #ifndef IPVER6
-		CALI_VERB("L3 checksum update (csum is at %d) port from %x to %x\n",
-				l3_csum_off, STATE->ip_src, STATE->ct_result.nat_ip);
+		if (!inner_icmp) {
+			CALI_VERB("L3 checksum update (csum is at %d) port from %x to %x\n",
+					l3_csum_off, STATE->ip_src, STATE->ct_result.nat_ip);
 
-		if (bpf_l3_csum_replace(ctx->skb, l3_csum_off,
-						  STATE->ip_src, STATE->ct_result.nat_ip, 4) ||
-			bpf_l3_csum_replace(ctx->skb, l3_csum_off,
-						  STATE->ip_dst, STATE->ct_result.nat_sip, 4)) {
-			deny_reason(ctx, CALI_REASON_CSUM_FAIL);
-			goto deny;
+			if (bpf_l3_csum_replace(ctx->skb, l3_csum_off,
+					  STATE->ip_src, STATE->ct_result.nat_ip, 4) ||
+				bpf_l3_csum_replace(ctx->skb, l3_csum_off,
+					  STATE->ip_dst, STATE->ct_result.nat_sip, 4)) {
+				deny_reason(ctx, CALI_REASON_CSUM_FAIL);
+				goto deny;
+			}
 		}
 #endif
 
@@ -1489,7 +1495,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 			if (outer_ip_snat) {
 				ip_hdr_set_ip(ctx, saddr, state->ct_result.nat_ip);
 #ifdef IPVER6
-				/* ... icmp6 has checksum now, fix it! */
+				/* ... icmp6 checksum now includes pseudo header, fix it! */
 				l4_csum_off = skb_l4hdr_offset(ctx) + offsetof(struct icmp6hdr, icmp6_cksum);
 
 				__wsum csum = 0;
@@ -1517,7 +1523,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 			}
 
 			/* Related ICMP traffic must be an error response so it should include inner IP
-			 * and 8 bytes as payload. */
+			 * and at least 8 bytes as payload. */
 			if (skb_refresh_validate_ptrs(ctx, ICMP_SIZE + sizeof(struct iphdr) + 8)) {
 				deny_reason(ctx, CALI_REASON_SHORT);
 				CALI_DEBUG("Failed to revalidate packet size\n");
@@ -1657,6 +1663,8 @@ int calico_tc_skb_icmp_inner_nat(struct __sk_buff *skb)
 
 #ifdef IPVER6
 	icmp_csum_off = skb_l4hdr_offset(ctx) + offsetof(struct icmp6hdr, icmp6_cksum);
+#else
+	icmp_csum_off = skb_l4hdr_offset(ctx) + offsetof(struct icmphdr, checksum);
 #endif
 
 	__u8 pkt[IP_SIZE] = { /* zero it to shut up verifier */ };
