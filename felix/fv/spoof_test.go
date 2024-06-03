@@ -38,8 +38,13 @@ var _ = Describe("Spoof tests", func() {
 	teardownInfra := func() {
 		if CurrentGinkgoTestDescription().Failed {
 			for _, felix := range tc.Felixes {
-				felix.Exec("iptables-save", "-c")
-				felix.Exec("ip6tables-save", "-c")
+				if NFTMode() {
+					logNFTDiags(felix)
+				} else {
+
+					felix.Exec("iptables-save", "-c")
+					felix.Exec("ip6tables-save", "-c")
+				}
 				felix.Exec("ipset", "list")
 				felix.Exec("ip", "r")
 				felix.Exec("ip", "-6", "r")
@@ -58,7 +63,7 @@ var _ = Describe("Spoof tests", func() {
 	}
 
 	spoofTests := func() {
-		It("should drop spoofed traffic", func() {
+		It("CASEY should drop spoofed traffic", func() {
 			cc = &connectivity.Checker{}
 			// Setup a spoofed workload. Make w[0] spoof w[2] by making it
 			// use w[2]'s IP to test connections.
@@ -77,7 +82,7 @@ var _ = Describe("Spoof tests", func() {
 			cc.CheckConnectivity()
 		})
 
-		It("should allow workload's traffic if workload spoofs its own IP", func() {
+		It("CASEY should allow workload's traffic if workload spoofs its own IP", func() {
 			cc = &connectivity.Checker{}
 			// Setup a "spoofed" workload. Make w[0] spoof itself.
 			spoofed := &workload.SpoofedWorkload{

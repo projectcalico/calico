@@ -97,7 +97,6 @@ func (c netsetsConfig) workloadFullLengthCIDR(workloadIdx int, namespaced bool) 
 }
 
 var _ = Context("_NET_SETS_ Network sets tests with initialized Felix and etcd datastore", func() {
-
 	var (
 		etcd     *containers.Container
 		tc       infrastructure.TopologyContainers
@@ -114,7 +113,11 @@ var _ = Context("_NET_SETS_ Network sets tests with initialized Felix and etcd d
 
 	AfterEach(func() {
 		if CurrentGinkgoTestDescription().Failed {
-			tc.Felixes[0].Exec("iptables-save", "-c")
+			if NFTMode() {
+				logNFTDiags(tc.Felixes[0])
+			} else {
+				tc.Felixes[0].Exec("iptables-save", "-c")
+			}
 		}
 		tc.Stop()
 
@@ -581,8 +584,7 @@ var _ = Context("_NET_SETS_ Network sets tests with initialized Felix and etcd d
 
 			Describe("after updating rules to allow some traffic based on workload labels", func() {
 				BeforeEach(func() {
-					pol.Spec.Ingress[0].Source.Selector =
-						"has(allow-as-source) || name in {'" + nw[3].Name + "', '" + nw[0].Name + "'}"
+					pol.Spec.Ingress[0].Source.Selector = "has(allow-as-source) || name in {'" + nw[3].Name + "', '" + nw[0].Name + "'}"
 					pol = updatePolicy(pol)
 				})
 
@@ -999,8 +1001,7 @@ var _ = Context("_NET_SETS_ Network sets tests with initialized Felix and etcd d
 
 			Describe("after updating rules to allow some traffic based on workload labels", func() {
 				BeforeEach(func() {
-					pol.Spec.Ingress[0].Source.Selector =
-						"has(allow-as-source) || name in {'" + w[3].Name + "', '" + w[0].Name + "'}"
+					pol.Spec.Ingress[0].Source.Selector = "has(allow-as-source) || name in {'" + w[3].Name + "', '" + w[0].Name + "'}"
 					pol = updatePolicy(pol)
 				})
 
@@ -1117,7 +1118,8 @@ var _ = Context("_NET_SETS_ Network sets tests with initialized Felix and etcd d
 							Action: "Allow",
 							Source: api.EntityRule{
 								Selector: fmt.Sprintf("label == '%d'", i),
-							}},
+							},
+						},
 					},
 				}
 				policies = append(policies, pol)
