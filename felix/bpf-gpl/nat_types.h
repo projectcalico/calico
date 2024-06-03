@@ -12,6 +12,7 @@ typedef enum calico_nat_lookup_result {
 	NAT_FE_LOOKUP_DROP,
 	NAT_NO_BACKEND,
 	NAT_EXCLUDE,
+	NAT_BLACKHOLE,
 } nat_lookup_result;
 
 

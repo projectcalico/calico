@@ -406,6 +406,26 @@ static CALI_BPF_INLINE void calico_tc_process_ct_lookup(struct cali_tc_ctx *ctx)
 		deny_reason(ctx, CALI_REASON_UNAUTH_SOURCE);
 		goto deny;
 	}
+	if (nat_res == NAT_BLACKHOLE) {
+		if (GLOBAL_FLAGS & CALI_GLOBALS_SVC_LOOP_DROP) {
+			CALI_DEBUG("Packet hit a black hole route: DROP\n");
+			deny_reason(ctx, CALI_REASON_BLACK_HOLE);
+			goto deny;
+		}
+		if (GLOBAL_FLAGS & CALI_GLOBALS_SVC_LOOP_REJECT) {
+			CALI_DEBUG("Packet hit a black hole route: REJECT\n");
+			deny_reason(ctx, CALI_REASON_BLACK_HOLE);
+#ifdef IPVER6
+			ctx->state->icmp_type = ICMPV6_DEST_UNREACH;
+			ctx->state->icmp_code = ICMPV6_PORT_UNREACH;
+#else
+			ctx->state->icmp_type = ICMP_DEST_UNREACH;
+			ctx->state->icmp_code = ICMP_PORT_UNREACH;
+#endif
+			ip_set_void(ctx->state->tun_ip);
+			goto icmp_send_reply;
+		}
+	}
 	if (ctx->nat_dest != NULL) {
 		ctx->state->post_nat_ip_dst = ctx->nat_dest->addr;
 		ctx->state->post_nat_dport = ctx->nat_dest->port;

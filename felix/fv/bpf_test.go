@@ -5509,16 +5509,20 @@ func bpfWaitForPolicy(felix *infrastructure.Felix, iface, hook, policy string) s
 }
 
 func bpfDumpRoutes(felix *infrastructure.Felix) string {
-	var (
-		out string
-		err error
-	)
-
 	if felix.TopologyOptions.EnableIPv6 {
-		out, err = felix.ExecOutput("calico-bpf", "-6", "routes", "dump")
-	} else {
-		out, err = felix.ExecOutput("calico-bpf", "routes", "dump")
+		return bpfDumpRoutesV6(felix)
 	}
+	return bpfDumpRoutesV4(felix)
+}
+
+func bpfDumpRoutesV4(felix *infrastructure.Felix) string {
+	out, err := felix.ExecOutput("calico-bpf", "routes", "dump")
+	Expect(err).NotTo(HaveOccurred())
+	return out
+}
+
+func bpfDumpRoutesV6(felix *infrastructure.Felix) string {
+	out, err := felix.ExecOutput("calico-bpf", "-6", "routes", "dump")
 	Expect(err).NotTo(HaveOccurred())
 	return out
 }
