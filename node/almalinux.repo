@@ -1,0 +1,10 @@
+# almalinux.repo
+
+[baseos]
+name=AlmaLinux $releasever - BaseOS
+mirrorlist=https://mirrors.almalinux.org/mirrorlist/$releasever/baseos
+# baseurl=https://repo.almalinux.org/almalinux/$releasever/BaseOS/$basearch/os/
+enabled=0
+gpgcheck=0
+countme=1
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-AlmaLinux
