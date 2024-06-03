@@ -255,6 +255,7 @@ packages_to_keep=(
   langpacks
   libacl
   libattr
+  libbpf
   libcap
   libcrypto
   libelf
