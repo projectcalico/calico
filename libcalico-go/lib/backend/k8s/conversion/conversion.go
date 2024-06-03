@@ -385,18 +385,6 @@ func (c converter) K8sNetworkPolicyToCalico(np *networkingv1.NetworkPolicy) (*mo
 	return kvp, errorTracker.GetError()
 }
 
-// K8sAdminNetworkPolicyToGNP converts a k8s AdminNetworkPolicy to a model.KVPair.
-func (c converter) K8sAdminNetworkPolicyToGNP(anp *v1alpha1.AdminNetworkPolicy) (*model.KVPair, error) {
-	// Pull out important fields.
-	policyName := fmt.Sprintf(K8sAdminNetworkPolicyNamePrefix + anp.Name)
-	return nil, nil
-}
-
-// K8sBaselineAdminNetworkPolicyToGNP converts a k8s BaselineAdminNetworkPolicy to a model.KVPair.
-func (c converter) K8sBaselineAdminNetworkPolicyToGNP(banp *v1alpha1.BaselineAdminNetworkPolicy) (*model.KVPair, error) {
-	return nil, nil
-}
-
 // k8sSelectorToCalico takes a namespaced k8s label selector and returns the Calico
 // equivalent.
 func (c converter) k8sSelectorToCalico(s *metav1.LabelSelector, selectorType selectorType) string {
@@ -576,6 +564,179 @@ func (c converter) k8sRuleToCalico(rPeers []networkingv1.NetworkPolicyPeer, rPor
 		}
 	}
 	return rules, nil
+}
+
+// K8sAdminNetworkPolicyToGNP converts a k8s AdminNetworkPolicy to a model.KVPair.
+func (c converter) K8sAdminNetworkPolicyToGNP(anp *v1alpha1.AdminNetworkPolicy) (*model.KVPair, error) {
+	// Pull out important fields.
+	policyName := fmt.Sprintf(K8sAdminNetworkPolicyNamePrefix + anp.Name)
+
+	// Current speficition, defines 1000 as the maximum value for priority. This maximum might change
+	// in future. Priority 0 to 999 is allocated for GNPs, and 1000 to 2000 for ANP.
+	order := float64(1000 + anp.Spec.Priority)
+
+	errorTracker := cerrors.ErrorPolicyConversion{PolicyName: anp.Name}
+
+	// Generate the ingress rules list.
+	var ingressRules []apiv3.Rule
+	for _, r := range anp.Spec.Ingress {
+		rules, err := c.k8sANPIngressRuleToGNP(r.From, r.Ports)
+		if err != nil {
+			log.WithError(err).Warn("dropping k8s rule that couldn't be converted.")
+			// Add rule to conversion error slice
+			errorTracker.BadIngressRule(&r, fmt.Sprintf("k8s rule couldn't be converted: %s", err))
+		} else {
+			ingressRules = append(ingressRules, rules...)
+		}
+	}
+
+	// Generate the egress rules list.
+	var egressRules []apiv3.Rule
+	for _, r := range anp.Spec.Egress {
+		rules, err := c.k8sANPRuleToGNP(r.To, r.Ports, false)
+		if err != nil {
+			log.WithError(err).Warn("dropping k8s rule that couldn't be converted")
+			// Add rule to conversion error slice
+			errorTracker.BadEgressRule(&r, fmt.Sprintf("k8s rule couldn't be converted: %s", err))
+		} else {
+			egressRules = append(egressRules, rules...)
+		}
+	}
+
+	return nil, nil
+}
+
+func (c converter) k8sANPIngressRuleToGNP(rPeers []v1alpha1.AdminNetworkPolicyIngressPeer, rPorts []v1alpha1.AdminNetworkPolicyPort) ([]apiv3.Rule, error) {
+	rules := []apiv3.Rule{}
+	peers := []*v1alpha1.AdminNetworkPolicyIngressPeer{}
+	ports := []*v1alpha1.AdminNetworkPolicyPort{}
+
+	// Built up a list of the sources and a list of the destinations.
+	for _, f := range rPeers {
+		// We need to add a copy of the peer so all the rules don't
+		// point to the same location.
+		peers = append(peers, &v1alpha1.AdminNetworkPolicyIngressPeer{
+			Namespaces: f.Namespaces,
+			Pods:       f.Pods,
+		})
+	}
+	for _, p := range rPorts {
+		// We need to add a copy of the port so all the rules don't
+		// point to the same location.
+		port := v1alpha1.AdminNetworkPolicyPort{}
+		if p.Port != nil {
+			portval := intstr.FromString(p.Port.String())
+			port.Port = &portval
+		}
+		if p.Protocol != nil {
+			protval := kapiv1.Protocol(fmt.Sprintf("%s", *p.Protocol))
+			port.Protocol = &protval
+		} else {
+			// TCP is the implicit default (as per the definition of NetworkPolicyPort).
+			// Make the default explicit here because our data-model always requires
+			// the protocol to be specified if we're doing a port match.
+			port.Protocol = &protoTCP
+		}
+
+		if p.EndPort != nil {
+			port.EndPort = p.EndPort
+		}
+		ports = append(ports, &port)
+	}
+
+	// If there no peers, or no ports, represent that as nil.
+	if len(peers) == 0 {
+		peers = []*networkingv1.NetworkPolicyPeer{nil}
+	}
+	if len(ports) == 0 {
+		ports = []*networkingv1.NetworkPolicyPort{nil}
+	}
+
+	protocolPorts := map[string][]numorstring.Port{}
+
+	for _, port := range ports {
+		protocol, calicoPorts, err := c.k8sPortToCalicoFields(port)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse k8s port: %s", err)
+		}
+
+		if protocol == nil && calicoPorts == nil {
+			// If nil, no ports were specified, or an empty port struct was provided, which we translate to allowing all.
+			// We want to use a nil protocol and a nil list of ports, which will allow any destination (for ingress).
+			// Given we're gonna allow all, we may as well break here and keep only this rule
+			protocolPorts = map[string][]numorstring.Port{"": nil}
+			break
+		}
+
+		pStr := protocol.String()
+		// treat nil as 'all ports'
+		if calicoPorts == nil {
+			protocolPorts[pStr] = nil
+		} else if _, ok := protocolPorts[pStr]; !ok || len(protocolPorts[pStr]) > 0 {
+			// don't overwrite a nil (allow all ports) if present; if no ports yet for this protocol
+			// or 1+ ports which aren't 'all ports', then add the present ports
+			protocolPorts[pStr] = append(protocolPorts[pStr], calicoPorts...)
+		}
+	}
+
+	protocols := make([]string, 0, len(protocolPorts))
+	for k := range protocolPorts {
+		protocols = append(protocols, k)
+	}
+	// Ensure deterministic output
+	sort.Strings(protocols)
+
+	// Combine destinations with sources to generate rules. We generate one rule per protocol,
+	// with each rule containing all the allowed ports.
+	for _, protocolStr := range protocols {
+		calicoPorts := protocolPorts[protocolStr]
+		calicoPorts = SimplifyPorts(calicoPorts)
+
+		var protocol *numorstring.Protocol
+		if protocolStr != "" {
+			p := numorstring.ProtocolFromString(protocolStr)
+			protocol = &p
+		}
+
+		for _, peer := range peers {
+			selector, nsSelector, nets, notNets := c.k8sPeerToCalicoFields(peer, ns)
+			if ingress {
+				// Build inbound rule and append to list.
+				rules = append(rules, apiv3.Rule{
+					Action:   "Allow",
+					Protocol: protocol,
+					Source: apiv3.EntityRule{
+						Selector:          selector,
+						NamespaceSelector: nsSelector,
+						Nets:              nets,
+						NotNets:           notNets,
+					},
+					Destination: apiv3.EntityRule{
+						Ports: calicoPorts,
+					},
+				})
+			} else {
+				// Build outbound rule and append to list.
+				rules = append(rules, apiv3.Rule{
+					Action:   "Allow",
+					Protocol: protocol,
+					Destination: apiv3.EntityRule{
+						Ports:             calicoPorts,
+						Selector:          selector,
+						NamespaceSelector: nsSelector,
+						Nets:              nets,
+						NotNets:           notNets,
+					},
+				})
+			}
+		}
+	}
+	return rules, nil
+}
+
+// K8sBaselineAdminNetworkPolicyToGNP converts a k8s BaselineAdminNetworkPolicy to a model.KVPair.
+func (c converter) K8sBaselineAdminNetworkPolicyToGNP(banp *v1alpha1.BaselineAdminNetworkPolicy) (*model.KVPair, error) {
+	return nil, nil
 }
 
 // SimplifyPorts calculates a minimum set of port ranges that cover the given set of ports.
