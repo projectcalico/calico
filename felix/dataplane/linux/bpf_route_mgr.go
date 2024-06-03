@@ -95,8 +95,9 @@ type bpfRouteManager struct {
 
 	opReporter logutils.OpRecorder
 
-	wgEnabled bool
-	ipFamily  proto.IPVersion
+	wgEnabled    bool
+	ipFamily     proto.IPVersion
+	blockedCIDRs set.Set[ip.CIDR]
 }
 
 func newBPFRouteManager(config *Config, maps *bpfmap.IPMaps, ipFamily proto.IPVersion,
@@ -105,6 +106,7 @@ func newBPFRouteManager(config *Config, maps *bpfmap.IPMaps, ipFamily proto.IPVe
 	// Record the external node CIDRs and pre-mark them as dirty.  These can only change with a config update,
 	// which would restart Felix.
 	extCIDRs := set.New[ip.CIDR]()
+
 	dirtyCIDRs := set.New[ip.CIDR]()
 	for _, cidrStr := range config.ExternalNodesCidrs {
 		if strings.Contains(cidrStr, ":") {
@@ -132,6 +134,7 @@ func newBPFRouteManager(config *Config, maps *bpfmap.IPMaps, ipFamily proto.IPVe
 			log.WithField("cidr", cidrStr).Debug("Ignoring IPv6 DSR optout CIDR")
 			continue
 		}
+
 		cidr, err := ip.ParseCIDROrIP(cidrStr)
 		if err != nil {
 			log.WithError(err).WithField("cidr", cidr).Error(
@@ -159,6 +162,7 @@ func newBPFRouteManager(config *Config, maps *bpfmap.IPMaps, ipFamily proto.IPVe
 		externalNodeCIDRs: extCIDRs,
 		dirtyCIDRs:        dirtyCIDRs,
 		dsrOptoutCIDRs:    noDsrCIDRs,
+		blockedCIDRs:      set.New[ip.CIDR](),
 
 		desiredRoutes: map[routes.KeyInterface]routes.ValueInterface{},
 		routeMap:      maps.RouteMap,
@@ -211,6 +215,8 @@ func (m *bpfRouteManager) OnUpdate(msg interface{}) {
 		m.onWorkloadEndpointUpdate(msg)
 	case *proto.WorkloadEndpointRemove:
 		m.onWorkloadEndpointRemove(msg)
+	case *proto.GlobalBGPConfigUpdate:
+		m.onBGPConfigUpdate(msg)
 	}
 }
 
@@ -379,11 +385,15 @@ func (m *bpfRouteManager) calculateRoute(cidr ip.CIDR) routes.ValueInterface {
 	case proto.RouteType_REMOTE_TUNNEL:
 		flags |= routes.FlagsRemoteTunneledHost
 		route = m.bpfOps.NewValueWithNextHop(flags, cidr.Addr())
-	case proto.RouteType_LOCAL_HOST:
+	case proto.RouteType_LOCAL_HOST, proto.RouteType_BLACK_HOLE:
 		// It may be a localhost IP that is not assigned to a device like an
 		// k8s ExternalIP. Route resolver knew that it was assigned to our
 		// hostname.
-		flags |= routes.FlagsLocalHost
+		if cgRoute.Type == proto.RouteType_LOCAL_HOST {
+			flags |= routes.FlagsLocalHost
+		} else {
+			flags = routes.FlagBlackHole
+		}
 		fallthrough
 	default: // proto.RouteType_CIDR_INFO / LOCAL_HOST or no route at all
 		if flags != 0 {
@@ -643,6 +653,44 @@ func (m *bpfRouteManager) addWEP(update *proto.WorkloadEndpointUpdate) {
 
 func (m *bpfRouteManager) onWorkloadEndpointRemove(update *proto.WorkloadEndpointRemove) {
 	m.removeWEP(update.Id)
+}
+
+func (m *bpfRouteManager) onBGPConfigUpdate(update *proto.GlobalBGPConfigUpdate) {
+	blockedCIDRs := []string{}
+	blockedCIDRs = append(blockedCIDRs, update.GetServiceClusterCidrs()...)
+	blockedCIDRs = append(blockedCIDRs, update.GetServiceExternalCidrs()...)
+	blockedCIDRs = append(blockedCIDRs, update.GetServiceLoadbalancerCidrs()...)
+
+	cidrsToDel := set.New[ip.CIDR]()
+	cidrsToDel.AddSet(m.blockedCIDRs)
+	m.blockedCIDRs.Clear()
+
+	for _, cidrStr := range blockedCIDRs {
+		cidr, err := ip.ParseCIDROrIP(cidrStr)
+		if err != nil {
+			log.WithError(err).WithField("cidr", cidr).Error(
+				"Failed to parse cidr.")
+		}
+		if uint8(m.ipFamily) != cidr.Version() {
+			continue
+		}
+
+		if _, ok := m.cidrToRoute[cidr]; ok {
+			continue
+		}
+		m.cidrToRoute[cidr] = proto.RouteUpdate{Type: proto.RouteType_BLACK_HOLE}
+		m.dirtyCIDRs.Add(cidr)
+		m.blockedCIDRs.Add(cidr)
+		cidrsToDel.Discard(cidr)
+	}
+	// Delete the unused routes.
+	cidrsToDel.Iter(func(cidr ip.CIDR) error {
+		if _, ok := m.cidrToRoute[cidr]; ok {
+			delete(m.cidrToRoute, cidr)
+			m.dirtyCIDRs.Add(cidr)
+		}
+		return set.RemoveItem
+	})
 }
 
 func (m *bpfRouteManager) removeWEP(id *proto.WorkloadEndpointID) {
