@@ -25,7 +25,7 @@ FROM ${BIRD_IMAGE} as bird
 # Use this build stage to build iptables rpm and runit binaries.
 # We need to rebuild the iptables rpm because the prepackaged rpm does not have legacy iptables binaries.
 # We need to build runit because there aren't any rpms for it in CentOS or ubi repositories.
-FROM quay.io/centos/centos:stream8 as centos
+FROM almalinux:8 as almalinux
 
 ARG IPTABLES_VER
 ARG LIBNFTNL_VER
@@ -93,30 +93,21 @@ ARG RUNIT_VER
 RUN microdnf upgrade
 
 # Copy in runit binaries
-COPY --from=centos  /tmp/admin/runit-${RUNIT_VER}/command/* /usr/local/bin/
+COPY --from=almalinux /tmp/admin/runit-${RUNIT_VER}/command/* /usr/local/bin/
 
 # Copy in our rpms
-COPY --from=centos  /root/rpmbuild/RPMS/x86_64/* /tmp/rpms/
+COPY --from=almalinux /root/rpmbuild/RPMS/x86_64/* /tmp/rpms/
 
 # Install a subset of packages from UBI prior to removing the UBI repo below.
 # We do this because the UBI repo has updated versions with CVE fixes. We can remove
 # this once the CentOS repo updates the version of these packages.
 # gzip >= 1.9-13.el8_5
 # cryptsetup-libs >= 2.3.3-4.el8_5.1
-RUN microdnf install gzip cryptsetup-libs
-
-# Install the necessary packages, making sure that we're using only CentOS repos.
-# Since the ubi repos do not contain all the packages we need (they're missing conntrack-tools),
-# we're using CentOS repos for all our packages. Using packages from a single source (CentOS) makes
-# it less likely we'll run into package dependency version mismatches.
-#
-# NOTE: new packages need to be added to the keep-list in clean-up-filesystem.sh.
-COPY centos.repo /etc/yum.repos.d/
-RUN rm /etc/yum.repos.d/ubi.repo && \
-    touch /in-the-container && \
-    microdnf install \
+RUN microdnf install \
     # Don't install copious docs.
     --setopt=tsflags=nodocs \
+    gzip \
+    cryptsetup-libs \
     # Needed for iptables
     libpcap libmnl libnfnetlink libnetfilter_conntrack \
     iputils \
@@ -127,18 +118,24 @@ RUN rm /etc/yum.repos.d/ubi.repo && \
     # Also needed (provides utilities for browsing procfs like ps)
     procps \
     iproute \
-    iproute-tc \
-    # Needed for conntrack
-    libnetfilter_cthelper libnetfilter_cttimeout libnetfilter_queue \
-    conntrack-tools \
     # Needed for runit startup script
     which \
     # Needed for the cleanup script
-    findutils && \
-    microdnf clean all && \
-    # Install iptables via rpms. The libs must be force installed because the iptables source RPM has the release
-    # version '9.el8_0.1' while the existing iptables-libs (pulled in by the iputils package) has version '9.el8.1'.
-    rpm --force -i /tmp/rpms/iptables-libs-${IPTABLES_VER}.el8.x86_64.rpm && \
+    findutils
+
+# Since the ubi repos do not contain all the packages we need (they're missing conntrack-tools),
+# we're using AlmaLinux repos for missing packages.
+COPY almalinux.repo /etc/yum.repos.d/almalinux.repo
+
+RUN microdnf --enablerepo=baseos install \
+    iproute-tc \
+    # Needed for conntrack
+    libnetfilter_cthelper libnetfilter_cttimeout libnetfilter_queue \
+    conntrack-tools
+
+# Install iptables via rpms. The libs must be force installed because the iptables source RPM has the release
+# version '1.8.8-6.el8' conflicts with iptables-libs (pulled in by the iputils package) '1.8.5-11.el8_9'.
+RUN rpm --force -i /tmp/rpms/iptables-libs-${IPTABLES_VER}.el8.x86_64.rpm && \
     rpm --force -i /tmp/rpms/iptables-legacy-libs-${IPTABLES_VER}.el8.2.x86_64.rpm && \
     # Install compatible libnftnl version with selected iptables version
     rpm --force -i /tmp/rpms/libnftnl-${LIBNFTNL_VER}.el8.x86_64.rpm && \
@@ -152,9 +149,7 @@ RUN rm /etc/yum.repos.d/ubi.repo && \
     alternatives --install /usr/sbin/iptables iptables /usr/sbin/iptables-legacy 1 && \
     alternatives --install /usr/sbin/ip6tables ip6tables /usr/sbin/ip6tables-legacy 1
 
-# Add mitigation for https://access.redhat.com/security/cve/CVE-2019-15718
-# This can be removed once we update to ubi:8.1
-RUN systemctl disable systemd-resolved
+RUN touch /in-the-container && microdnf clean all
 
 # Change the permissions for ipset so it can be run by any container user.
 RUN chgrp 0 /usr/sbin/ipset && \
