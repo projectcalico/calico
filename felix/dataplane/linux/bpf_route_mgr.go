@@ -16,7 +16,6 @@ package intdataplane
 
 import (
 	"net"
-	"strings"
 	"sync"
 	"time"
 
@@ -107,10 +106,6 @@ func newBPFRouteManager(config *Config, maps *bpfmap.IPMaps, ipFamily proto.IPVe
 	extCIDRs := set.New[ip.CIDR]()
 	dirtyCIDRs := set.New[ip.CIDR]()
 	for _, cidrStr := range config.ExternalNodesCidrs {
-		if strings.Contains(cidrStr, ":") {
-			log.WithField("cidr", cidrStr).Debug("Ignoring IPv6 external CIDR")
-			continue
-		}
 		cidr, err := ip.ParseCIDROrIP(cidrStr)
 		if err != nil {
 			log.WithError(err).WithField("cidr", cidr).Error(
@@ -128,10 +123,6 @@ func newBPFRouteManager(config *Config, maps *bpfmap.IPMaps, ipFamily proto.IPVe
 	noDsrCIDRs := ip.NewCIDRTrie()
 	something := new(struct{})
 	for _, cidrStr := range config.BPFDSROptoutCIDRs {
-		if strings.Contains(cidrStr, ":") {
-			log.WithField("cidr", cidrStr).Debug("Ignoring IPv6 DSR optout CIDR")
-			continue
-		}
 		cidr, err := ip.ParseCIDROrIP(cidrStr)
 		if err != nil {
 			log.WithError(err).WithField("cidr", cidr).Error(
