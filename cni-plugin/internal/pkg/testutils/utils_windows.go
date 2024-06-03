@@ -136,7 +136,7 @@ func createContainerUsingContainerd(containerId string) (string, string, error) 
 	// networking.
 	image := "k8s.gcr.io/pause:3.5"
 
-	command := fmt.Sprintf(`& 'C:\Program Files\containerd\ctr.exe' images pull %v`, image)
+	command := fmt.Sprintf(`& 'C:\Program Files\containerd\bin\ctr.exe' images pull %v`, image)
 	cmd := exec.Command("powershell.exe", command)
 
 	log.Infof("Running powershell command: %v", command)
@@ -144,7 +144,7 @@ func createContainerUsingContainerd(containerId string) (string, string, error) 
 	if err != nil {
 		return "", "", errors.New(fmt.Sprintf("failed to pull image: %v", err))
 	}
-	command = fmt.Sprintf(`& 'C:\Program Files\containerd\ctr.exe' run --detach %v %v`, image, containerId)
+	command = fmt.Sprintf(`& 'C:\Program Files\containerd\bin\ctr.exe' run --detach %v %v`, image, containerId)
 	cmd = exec.Command("powershell.exe", command)
 
 	log.Infof("Running powershell command: %v", command)
@@ -177,8 +177,8 @@ func DeleteRunningContainer(containerId string) error {
 
 	// Delete the running task and container with ctr.exe that is shipped with containerd.
 	cmds := []string{
-		fmt.Sprintf(`& 'C:\Program Files\containerd\ctr.exe' tasks kill %v`, containerId),
-		fmt.Sprintf(`& 'C:\Program Files\containerd\ctr.exe' containers delete %v`, containerId),
+		fmt.Sprintf(`& 'C:\Program Files\containerd\bin\ctr.exe' tasks kill %v`, containerId),
+		fmt.Sprintf(`& 'C:\Program Files\containerd\bin\ctr.exe' containers delete %v`, containerId),
 	}
 
 	for _, c := range cmds {
