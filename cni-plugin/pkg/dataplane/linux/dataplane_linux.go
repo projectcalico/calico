@@ -67,7 +67,7 @@ func (d *linuxDataplane) DoNetworking(
 
 	d.logger.Infof("Setting the host side veth name to %s", hostVethName)
 
-	hostNlHandle, err := netlink.NewHandle()
+	hostNlHandle, err := netlink.NewHandle(syscall.NETLINK_ROUTE)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to create host netlink handle: %v", err)
 	}
