@@ -74,7 +74,7 @@ func protoNumToName(protoNum uint8) string {
 	case ProtoUDP:
 		return "udp"
 	case ProtoICMPv6:
-		return "icmp"
+		return "ipv6-icmp"
 	}
 	return fmt.Sprintf("%d", protoNum)
 }
@@ -433,22 +433,22 @@ func (m nftMatch) NotICMPTypeAndCode(t, c uint8) generictables.MatchCriteria {
 }
 
 func (m nftMatch) ICMPV6Type(t uint8) generictables.MatchCriteria {
-	m.clauses = append(m.clauses, fmt.Sprintf("icmp type %d", t))
+	m.clauses = append(m.clauses, fmt.Sprintf("icmpv6 type %d", t))
 	return m
 }
 
 func (m nftMatch) NotICMPV6Type(t uint8) generictables.MatchCriteria {
-	m.clauses = append(m.clauses, fmt.Sprintf("icmp type != %d", t))
+	m.clauses = append(m.clauses, fmt.Sprintf("icmpv6 type != %d", t))
 	return m
 }
 
 func (m nftMatch) ICMPV6TypeAndCode(t, c uint8) generictables.MatchCriteria {
-	m.clauses = append(m.clauses, fmt.Sprintf("icmp type %d code %d", t, c))
+	m.clauses = append(m.clauses, fmt.Sprintf("icmpv6 type %d code %d", t, c))
 	return m
 }
 
 func (m nftMatch) NotICMPV6TypeAndCode(t, c uint8) generictables.MatchCriteria {
-	m.clauses = append(m.clauses, fmt.Sprintf("icmp type != %d code != %d", t, c))
+	m.clauses = append(m.clauses, fmt.Sprintf("icmpv6 type != %d code != %d", t, c))
 	return m
 }
 

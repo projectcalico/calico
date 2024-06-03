@@ -164,9 +164,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 				cc.ExpectSome(w[1], w[0])
 
 				if enableIPv6 {
-					// CASEY: IPv6 not working yet.
-					// cc.ExpectSome(w6[0], w6[1])
-					// cc.ExpectSome(w6[1], w6[0])
+					cc.ExpectSome(w6[0], w6[1])
+					cc.ExpectSome(w6[1], w6[0])
 				}
 
 				cc.CheckConnectivity()
