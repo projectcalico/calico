@@ -96,17 +96,17 @@ fizz`},
 		})
 	})
 
-	Context("Rule with comment longer than 256 characters", func() {
+	Context("Rule with comment longer than 128 characters", func() {
 		rule := generictables.Rule{
 			Match:   nftMatch{clauses: []string{"foobar baz"}},
 			Action:  JumpAction{Target: "biff"},
-			Comment: []string{strings.Repeat("a", 257)},
+			Comment: []string{strings.Repeat("a", 129)},
 		}
 
 		It("should render rule with comment truncated", func() {
 			render := renderRule(rule, &environment.Features{})
 			Expect(render.Comment).NotTo(BeNil())
-			Expect(*render.Comment).To(Equal("cali:TEST; " + strings.Repeat("a", 256)))
+			Expect(*render.Comment).To(Equal("cali:TEST; " + strings.Repeat("a", 117)))
 		})
 	})
 })
