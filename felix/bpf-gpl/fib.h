@@ -173,9 +173,12 @@ skip_redir_ifindex:
 			.tot_len = 0,
 			.ifindex = CALI_F_TO_HOST ? ctx->skb->ingress_ifindex : ctx->skb->ifindex,
 			.l4_protocol = state->ip_proto,
-			.sport = bpf_htons(state->sport),
-			.dport = bpf_htons(state->dport),
 		};
+
+		if (state->ip_proto != IPPROTO_ICMP_46) {
+			fib_params(ctx)->sport = bpf_htons(state->sport);
+			fib_params(ctx)->dport = bpf_htons(state->dport);
+		}
 
 		/* set the ipv4 here, otherwise the ipv4/6 unions do not get
 		 * zeroed properly
@@ -190,7 +193,6 @@ skip_redir_ifindex:
 #endif
 
 		CALI_DEBUG("FIB family=%d\n", fib_params(ctx)->family);
-		CALI_DEBUG("FIB tot_len=%d\n", fib_params(ctx)->tot_len);
 		CALI_DEBUG("FIB ifindex=%d\n", fib_params(ctx)->ifindex);
 		CALI_DEBUG("FIB l4_protocol=%d\n", fib_params(ctx)->l4_protocol);
 		CALI_DEBUG("FIB sport=%d\n", bpf_ntohs(fib_params(ctx)->sport));
@@ -350,6 +352,11 @@ skip_fib:
 			 */
 			ctx->fwd.mark |= CALI_SKB_MARK_FROM_NAT_IFACE_OUT;
 			CALI_DEBUG("marking CALI_SKB_MARK_FROM_NAT_IFACE_OUT\n");
+		}
+
+		if (ct_result_is_related(state->ct_result.rc)) {
+			CALI_DEBUG("Related traffic, marking with CALI_SKB_MARK_RELATED_RESOLVED\n");
+			ctx->fwd.mark |= CALI_SKB_MARK_RELATED_RESOLVED;
 		}
 
 		CALI_DEBUG("Traffic is towards host namespace, marking with 0x%x.\n", ctx->fwd.mark);
