@@ -311,6 +311,8 @@ spec:
             # Auto-detect the BGP IP address.
             - name: IP
               value: "autodetect"
+            - name: IP6
+              value: "autodetect"
             # {{- if .Values.bpf }} For best performance, disable {{- else }} Enable {{- end }} IPIP
             - name: CALICO_IPV4POOL_IPIP
               value: "{{- if .Values.bpf -}} Never {{- else if .Values.vxlan -}} Never {{- else -}} Always {{- end -}}"
