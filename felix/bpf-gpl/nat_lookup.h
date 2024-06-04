@@ -61,19 +61,21 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_nat_lookup(ipv46_addr_t *i
 		struct cali_rt *rt = cali_rt_lookup(ip_dst);
 
 		CALI_DEBUG("NAT: Miss.\n");
+
+		/* If the traffic is from outside the cluster, to a blocked cidr, drop the packet to
+		 * prevent the packet from looping.
+		 */
+		if (CALI_F_FROM_HEP && !from_tun && rt && cali_rt_is_blackhole(rt)) {
+			CALI_DEBUG("NAT: route dest is a blackhole route\n");
+			*res = NAT_BLACKHOLE;
+			return NULL;
+		}
 		/* If the traffic originates at the node (workload or host)
 		 * check whether the destination is a remote nodeport to do a
 		 * straight NAT and avoid a possible extra hop.
 		 */
 		if (!(CALI_F_FROM_WEP || CALI_F_TO_HEP || CALI_F_CGROUP ||
 					(CALI_F_FROM_HEP && from_tun)) || ip_equal(*ip_dst, NP_SPECIAL_IP)) {
-			/* If the traffic is from outside the cluster, to a blocked cidr, drop the packet to
-			 * prevent the packet from looping.
-			 */
-			if (!(CALI_F_FROM_HEP && from_tun) && rt && cali_rt_is_blackhole(rt)) {
-				CALI_DEBUG("NAT: route dest is a blackhole route\n");
-				*res = NAT_BLACKHOLE;
-			}
 			return NULL;
 		}
 
