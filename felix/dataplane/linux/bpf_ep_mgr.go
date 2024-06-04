@@ -351,6 +351,9 @@ type bpfEndpointManager struct {
 	// RPF mode
 	rpfEnforceOption string
 
+	// ServiceLoopPrevention
+	svcLoopPrevention string
+
 	// BPF Disable GRO ifaces map
 	bpfDisableGROForIfaces *regexp.Regexp
 
@@ -508,6 +511,7 @@ func newBPFEndpointManager(
 		// TODO: set ipv6Enabled to config.Ipv6Enabled when IPv6 support is complete
 		ipv6Enabled:            config.BPFIpv6Enabled,
 		rpfEnforceOption:       config.BPFEnforceRPF,
+		svcLoopPrevention:      config.ServiceLoopPrevention,
 		bpfDisableGROForIfaces: config.BPFDisableGROForIfaces,
 		bpfPolicyDebugEnabled:  config.BPFPolicyDebugEnabled,
 		polNameToMatchIDs:      map[string]set.Set[polprog.RuleMatchID]{},
@@ -2787,6 +2791,15 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(ifaceName string) *tc.Attach
 		ap.RPFEnforceOption = tcdefs.RPFEnforceOptionLoose
 	default:
 		ap.RPFEnforceOption = tcdefs.RPFEnforceOptionDisabled
+	}
+
+	switch m.svcLoopPrevention {
+	case "Drop":
+		ap.SVCLoopPrevention = tcdefs.SVCLoopPreventionDrop
+	case "Reject":
+		ap.SVCLoopPrevention = tcdefs.SVCLoopPreventionReject
+	default:
+		ap.SVCLoopPrevention = tcdefs.SVCLoopPreventionDisabled
 	}
 	return ap
 }
