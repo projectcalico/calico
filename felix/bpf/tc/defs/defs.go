@@ -75,6 +75,12 @@ const (
 	RPFEnforceOptionLoose
 )
 
+const (
+	SVCLoopPreventionDisabled = iota
+	SVCLoopPreventionDrop
+	SVCLoopPreventionReject
+)
+
 var ProgramNames = []string{
 	/* ipv4 */
 	"calico_tc_main",
