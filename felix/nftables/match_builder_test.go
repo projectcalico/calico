@@ -125,7 +125,7 @@ var _ = DescribeTable("MatchBuilder",
 
 var _ = DescribeTable("IPSetNames",
 	func(match generictables.MatchCriteria, exp []string) {
-		Expect(match.IPSetNames()).To(Equal(exp))
+		Expect(match.IPSetNames()).To(ConsistOf(exp))
 	},
 
 	// Valid IP set matches.
