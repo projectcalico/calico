@@ -61,6 +61,7 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_nat_lookup(ipv46_addr_t *i
 		struct cali_rt *rt;
 
 		CALI_DEBUG("NAT: Miss.\n");
+
 		/* If the traffic originates at the node (workload or host)
 		 * check whether the destination is a remote nodeport to do a
 		 * straight NAT and avoid a possible extra hop.

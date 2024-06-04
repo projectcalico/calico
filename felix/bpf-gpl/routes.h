@@ -30,6 +30,7 @@ enum cali_rt_flags {
 	CALI_RT_SAME_SUBNET = 0x20,
 	CALI_RT_TUNNELED    = 0x40,
 	CALI_RT_NO_DSR      = 0x80,
+	CALI_RT_BLACKHOLE  = 0x100,
 };
 
 struct cali_rt {
@@ -76,6 +77,7 @@ static CALI_BPF_INLINE enum cali_rt_flags cali_rt_lookup_flags(ipv46_addr_t *add
 #define cali_rt_is_host(rt)	((rt)->flags & CALI_RT_HOST)
 #define cali_rt_is_workload(rt)	((rt)->flags & CALI_RT_WORKLOAD)
 #define cali_rt_is_tunneled(rt)	((rt)->flags & CALI_RT_TUNNELED)
+#define cali_rt_is_blackhole(rt) ((rt)->flags & CALI_RT_BLACKHOLE)
 
 #define cali_rt_flags_host(t) (((t) & CALI_RT_HOST) == CALI_RT_HOST)
 #define cali_rt_flags_local_host(t) (((t) & (CALI_RT_LOCAL | CALI_RT_HOST)) == (CALI_RT_LOCAL | CALI_RT_HOST))
