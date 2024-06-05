@@ -221,16 +221,18 @@ func TestSVCLoopPrevention(t *testing.T) {
 	err = rtMapV6.Update(rtKeyV6, rtValV6)
 	Expect(err).NotTo(HaveOccurred())
 
-        // Insert a reverse route for the source workload.
+	// Insert a reverse route for the source workload.
 	rtKeyW := routes.NewKey(srcV4CIDR).AsBytes()
 	rtValW := routes.NewValueWithIfIndex(routes.FlagsLocalWorkload|routes.FlagInIPAMPool, 1).AsBytes()
-        err = rtMap.Update(rtKeyW, rtValW)
-        Expect(err).NotTo(HaveOccurred())
+	err = rtMap.Update(rtKeyW, rtValW)
+	Expect(err).NotTo(HaveOccurred())
 
 	defer func() {
 		err := rtMap.Delete(rtKey)
 		Expect(err).NotTo(HaveOccurred())
 		err = rtMapV6.Delete(rtKeyV6)
+		Expect(err).NotTo(HaveOccurred())
+		err = rtMap.Delete(rtKeyW)
 		Expect(err).NotTo(HaveOccurred())
 	}()
 
