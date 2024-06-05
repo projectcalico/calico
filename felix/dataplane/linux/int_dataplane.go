@@ -221,6 +221,7 @@ type Config struct {
 	BPFExcludeCIDRsFromNAT             []string
 	KubeProxyMinSyncPeriod             time.Duration
 	SidecarAccelerationEnabled         bool
+	ServiceLoopPrevention              string
 
 	LookPathOverride func(file string) (string, error)
 
