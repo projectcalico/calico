@@ -310,6 +310,8 @@ type SelectorAndNamedPortIndex struct {
 	OnMemberAdded   NamedPortMatchCallback
 	OnMemberRemoved NamedPortMatchCallback
 
+	deduplicator *memberDeduplicator
+
 	OnAlive        func()
 	lastLiveReport time.Time
 }
@@ -324,6 +326,7 @@ func NewSelectorAndNamedPortIndex() *SelectorAndNamedPortIndex {
 				gaugeSelectorsOpt,
 				gaugeSelectorsNonOpt,
 			)),
+		deduplicator: NewMemberDeduplicator(),
 
 		// Callback functions
 		OnMemberAdded:   func(ipSetID string, member IPSetMember) {},
@@ -506,7 +509,7 @@ func (idx *SelectorAndNamedPortIndex) UpdateIPSet(ipSetID string, sel selector.S
 			// Emit deletion events for the members.  We don't need to do that
 			// for the expected, non-test code path because it's handled
 			// en-masse.
-			idx.OnMemberRemoved(ipSetID, m)
+			idx.onMemberRemoved(ipSetID, m)
 		}
 		idx.DeleteIPSet(ipSetID)
 	}
@@ -546,7 +549,7 @@ func (idx *SelectorAndNamedPortIndex) UpdateIPSet(ipSetID string, sel selector.S
 				if log.GetLevel() >= log.DebugLevel {
 					logCxt.WithField("member", member).Debug("New IP set member")
 				}
-				idx.OnMemberAdded(ipSetID, member)
+				idx.onMemberAdded(ipSetID, member)
 			}
 			newIPSetData.memberToRefCount[member] = refCount + 1
 		}
@@ -658,6 +661,53 @@ func (idx *SelectorAndNamedPortIndex) UpdateEndpointOrSet(
 	gaugeNumEndpoints.Set(float64(idx.endpointKVIdx.Len()))
 }
 
+// onMemberAdded is a wrapper around the OnMemberAdded callback that allows us to
+// deduplicate any members that are masked by another member of the set, sending any necessary IPSet member
+// removals for previously sent members that are now masked.
+// For example, we don't need to send updates for both 10.0.0.0/24 and 10.0.0.1/32.
+func (idx *SelectorAndNamedPortIndex) onMemberAdded(ipSetID string, member IPSetMember) {
+	if member.Protocol == 0 && member.PortNumber == 0 {
+		// We only deduplicate for IP set members that are CIDRs. Named port members are always unique.
+		add, removes := idx.deduplicator.Add(ipSetID, member.CIDR)
+		if add != nil {
+			idx.OnMemberAdded(ipSetID, IPSetMember{CIDR: add})
+		}
+		for _, r := range removes {
+			log.WithField("ipSetID", ipSetID).
+				WithField("cidr", r).
+				WithField("reason", member.CIDR).
+				Debug("Removing now-masked CIDR from IP set.")
+			idx.OnMemberRemoved(ipSetID, IPSetMember{CIDR: r})
+		}
+	} else {
+		// No need to de-duplicate.
+		idx.OnMemberAdded(ipSetID, member)
+	}
+}
+
+// onMemberRemoved is a wrapper around the OnMemberRemoved callback that allows us to
+// deduplicate any members that are masked by another member of the set, sending any necessary IPSet member
+// IPSet member adds for members that were previously masked by the removed member.
+func (idx *SelectorAndNamedPortIndex) onMemberRemoved(ipSetID string, member IPSetMember) {
+	if member.Protocol == 0 && member.PortNumber == 0 {
+		// We only deduplicate for IP set members that are CIDRs. Named port members are always unique.
+		rem, adds := idx.deduplicator.Remove(ipSetID, member.CIDR)
+		if rem != nil {
+			idx.OnMemberRemoved(ipSetID, IPSetMember{CIDR: rem})
+		}
+		for _, a := range adds {
+			log.WithField("ipSetID", ipSetID).
+				WithField("cidr", a).
+				WithField("reason", member.CIDR).
+				Debug("Adding previously masked CIDR to IP set.")
+			idx.OnMemberAdded(ipSetID, IPSetMember{CIDR: a})
+		}
+	} else {
+		// No need to de-duplicate.
+		idx.OnMemberRemoved(ipSetID, member)
+	}
+}
+
 func (idx *SelectorAndNamedPortIndex) scanEndpointAgainstIPSets(
 	epData *endpointData,
 	oldIPSetContributions map[string][]IPSetMember,
@@ -691,7 +741,7 @@ func (idx *SelectorAndNamedPortIndex) scanEndpointAgainstIPSets(
 				newRefCount := ipSetData.memberToRefCount[newMember] + 1
 				if newRefCount == 1 {
 					// New member in the IP set.
-					idx.OnMemberAdded(ipSetID, newMember)
+					idx.onMemberAdded(ipSetID, newMember)
 				}
 				ipSetData.memberToRefCount[newMember] = newRefCount
 			}
@@ -708,7 +758,7 @@ func (idx *SelectorAndNamedPortIndex) scanEndpointAgainstIPSets(
 			if newRefCount == 0 {
 				// Member no longer in the IP set.  Emit event and clean up the old reference
 				// count.
-				idx.OnMemberRemoved(ipSetID, oldMember)
+				idx.onMemberRemoved(ipSetID, oldMember)
 				delete(ipSetData.memberToRefCount, oldMember)
 			} else {
 				ipSetData.memberToRefCount[oldMember] = newRefCount
@@ -736,7 +786,7 @@ func (idx *SelectorAndNamedPortIndex) DeleteEndpoint(id any) {
 			if newRefCount == 0 {
 				// Member no longer in the IP set.  Emit event and clean up the old reference
 				// count.
-				idx.OnMemberRemoved(ipSetID, oldMember)
+				idx.onMemberRemoved(ipSetID, oldMember)
 				delete(ipSetData.memberToRefCount, oldMember)
 			} else {
 				ipSetData.memberToRefCount[oldMember] = newRefCount
@@ -978,4 +1028,58 @@ func (idx *SelectorAndNamedPortIndex) estimateParentEndpointScanCount(s labelnam
 		return total
 	}
 	return (total*s.EstimatedItemsToScan() + maxNumToScan - 1) / maxNumToScan
+}
+
+func NewMemberDeduplicator() *memberDeduplicator {
+	return &memberDeduplicator{
+		tries: map[string]*ip.CIDRTrie{},
+	}
+}
+
+type memberDeduplicator struct {
+	tries map[string]*ip.CIDRTrie
+}
+
+func (t *memberDeduplicator) getTrie(set string) *ip.CIDRTrie {
+	trie, ok := t.tries[set]
+	if !ok {
+		trie = ip.NewCIDRTrie()
+		t.tries[set] = trie
+	}
+	return trie
+}
+
+// Add adds the given CIDR to the trie. It returns a CIDR to add and a slice of CIDRs to remove if applicable.
+func (t *memberDeduplicator) Add(set string, cidr ip.CIDR) (ip.CIDR, []ip.CIDR) {
+	trie := t.getTrie(set)
+
+	// Check if this IP is already covered by another entry in the trie.
+	covered := trie.Covers(cidr)
+
+	// Add to the trie.
+	trie.Update(cidr, cidr)
+
+	if covered {
+		return nil, nil
+	}
+
+	// This is a new CIDR - we need to check to see if it masks any other CIDRs we have already sent.
+	// Get the node and check if it has any children. If it does, those children are masked by this new CIDR
+	// and need to be withdrawn.
+	masked := trie.Descendants(cidr)
+	return cidr, masked
+}
+
+// Remove removes the given CIDR from the trie. It returns a CIDR to remove and a slice of CIDRs to add back if applicable.
+func (t *memberDeduplicator) Remove(set string, cidr ip.CIDR) (ip.CIDR, []ip.CIDR) {
+	trie := t.getTrie(set)
+
+	// If this node has children that are masked by this CIDR, we need to
+	// advertise them against as part of this deletion.
+	masked := trie.Descendants(cidr)
+
+	// Remove from the trie.
+	trie.Delete(cidr)
+
+	return cidr, masked
 }
