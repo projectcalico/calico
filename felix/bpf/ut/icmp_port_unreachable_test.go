@@ -221,6 +221,12 @@ func TestSVCLoopPrevention(t *testing.T) {
 	err = rtMapV6.Update(rtKeyV6, rtValV6)
 	Expect(err).NotTo(HaveOccurred())
 
+        // Insert a reverse route for the source workload.
+	rtKeyW := routes.NewKey(srcV4CIDR).AsBytes()
+	rtValW := routes.NewValueWithIfIndex(routes.FlagsLocalWorkload|routes.FlagInIPAMPool, 1).AsBytes()
+        err = rtMap.Update(rtKeyW, rtValW)
+        Expect(err).NotTo(HaveOccurred())
+
 	defer func() {
 		err := rtMap.Delete(rtKey)
 		Expect(err).NotTo(HaveOccurred())
@@ -242,6 +248,19 @@ func TestSVCLoopPrevention(t *testing.T) {
 		Expect(int(bpfCounters[counters.DroppedBlackholeRoute])).To(Equal(1))
 	}, withSvcLoopPrevention("drop"))
 
+	skbMark = 0
+	runBpfTest(t, "calico_from_workload_ep", nil, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(pktBytesV4)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.RetvalStr()).To(Equal("TC_ACT_SHOT"), "expected program to return TC_ACT_SHOT")
+
+		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
+		fmt.Printf("pktR = %+v\n", pktR)
+		bpfCounters, err := counters.Read(countersMap, 1, 0)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(int(bpfCounters[counters.DroppedBlackholeRoute])).To(Equal(2))
+	}, withSvcLoopPrevention("drop"))
+
 	// Test with action = reject
 	skbMark = 0
 	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
@@ -255,7 +274,7 @@ func TestSVCLoopPrevention(t *testing.T) {
 		checkICMPPortUnreachable(pktR, ipv4)
 		bpfCounters, err := counters.Read(countersMap, 1, 0)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(int(bpfCounters[counters.DroppedBlackholeRoute])).To(Equal(2))
+		Expect(int(bpfCounters[counters.DroppedBlackholeRoute])).To(Equal(3))
 	}, withSvcLoopPrevention("reject"))
 
 	skbMark = 0
@@ -270,6 +289,6 @@ func TestSVCLoopPrevention(t *testing.T) {
 		checkICMPv6PortUnreachable(pktR, ipv6)
 		bpfCounters, err := counters.Read(countersMap, 1, 0)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(int(bpfCounters[counters.DroppedBlackholeRoute])).To(Equal(3))
+		Expect(int(bpfCounters[counters.DroppedBlackholeRoute])).To(Equal(4))
 	}, withSvcLoopPrevention("reject"), withIPv6())
 }
