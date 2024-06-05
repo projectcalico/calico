@@ -205,6 +205,9 @@ type Config struct {
 	BPFDisableGROForIfaces             *regexp.Regexp    `config:"regexp;"`
 	BPFExcludeCIDRsFromNAT             []string          `config:"cidr-list;;"`
 
+	// CgroupV2Path is not used by Felix, but its init container
+	CgroupV2Path string `config:"string;;"`
+
 	// DebugBPFCgroupV2 controls the cgroup v2 path that we apply the connect-time load balancer to.  Most distros
 	// are configured for cgroup v1, which prevents all but the root cgroup v2 from working so this is only useful
 	// for development right now.
