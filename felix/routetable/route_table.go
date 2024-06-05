@@ -891,19 +891,19 @@ func (r *RouteTable) fullResyncRoutesForLink(logCxt *log.Entry, ifaceName string
 			continue
 		}
 		logCxt := logCxt.WithField("cidr", cidr)
-		logCxt.Info("Deleting from expected targets")
+		logCxt.Debug("Deleting from expected targets")
 		delete(expectedTargets, cidr)
 
 		// If we do not have an update that supersedes this entry, then add it back in as an update so that we add
 		// the route.
 		if pendingTarget, ok := pendingDeltaTargets[cidr]; !ok {
-			logCxt.Info("No pending target update, adding back in as an update")
+			logCxt.Debug("No pending target update, adding back in as an update")
 			pendingDeltaTargets[cidr] = safeTargetPointer(target)
 		} else if pendingTarget == nil {
-			logCxt.Info("Pending target deletion, removing delete update")
+			logCxt.Debug("Pending target deletion, removing delete update")
 			delete(pendingDeltaTargets, cidr)
 		} else {
-			logCxt.Info("Pending target update, no changes to deltas required")
+			logCxt.Debug("Pending target update, no changes to deltas required")
 		}
 	}
 
