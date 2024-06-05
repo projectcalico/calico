@@ -185,6 +185,15 @@ func (n *CIDRNode) lookupPath(buffer []CIDRTrieEntry, cidr CIDR) []CIDRTrieEntry
 }
 
 func (n *CIDRNode) get(cidr CIDR) interface{} {
+	node := n.getNode(cidr)
+	if n.data == nil {
+		// CIDR is an intermediate node with no data so CIDR isn't actually in the trie.
+		return nil
+	}
+	return node.data
+}
+
+func (n *CIDRNode) getNode(cidr CIDR) *CIDRNode {
 	if n == nil {
 		return nil
 	}
@@ -199,18 +208,14 @@ func (n *CIDRNode) get(cidr CIDR) interface{} {
 	}
 
 	if cidr == n.cidr {
-		if n.data == nil {
-			// CIDR is an intermediate node with no data so CIDR isn't actually in the trie.
-			return nil
-		}
-		return n.data
+		return n
 	}
 
 	// If we get here, then this node is a parent of the CIDR we're looking for.
 	// Figure out which child to recurse on.
 	childIdx := cidr.Addr().NthBit(uint(n.cidr.Prefix() + 1))
 	child := n.children[childIdx]
-	return child.get(cidr)
+	return child.getNode(cidr)
 }
 
 func (t *CIDRTrie) CoveredBy(cidr CIDR) bool {
@@ -312,6 +317,32 @@ func (t *CIDRTrie) ToSlice() []CIDRTrieEntry {
 
 func (t *CIDRTrie) Visit(f func(cidr CIDR, data interface{}) bool) {
 	t.root.visit(f)
+}
+
+// Descendants returns a list of CIDRs representing the closest descentents of the given CIDR in the trie that
+// have data associated with them.
+func (t *CIDRTrie) Descendants(parent CIDR) []CIDR {
+	// Get the node representing this CIDR.
+	node := t.root.getNode(parent)
+	if node == nil {
+		return nil
+	}
+	children := make([]CIDR, 0, 2)
+
+	// For each sub-node, add it to the list of children.
+	for _, child := range node.children {
+		if child != nil {
+			if child.data != nil {
+				// This is a "real" child node. Consider is a child.
+				children = append(children, child.cidr)
+			} else {
+				// This is an aggregate node that exists only to hold other nodes. Skip it, and
+				// instead recursively check its children until we find a hit.
+				children = append(children, t.Descendants(child.cidr)...)
+			}
+		}
+	}
+	return children
 }
 
 func (t *CIDRTrie) Update(cidr CIDR, value interface{}) {
@@ -472,4 +503,53 @@ func V6CommonPrefix(a, b V6CIDR) V6CIDR {
 	}
 
 	return result
+}
+
+func NewTrieMasker() *TrieMasker {
+	return &TrieMasker{
+		t: NewCIDRTrie(),
+	}
+}
+
+type TrieMasker struct {
+	t *CIDRTrie
+}
+
+// Add adds the given CIDR to the trie. It returns a CIDR to add and a list of CIDRs to remove if applicable.
+func (t *TrieMasker) Add(cidr CIDR) (CIDR, []CIDR) {
+	// Check if this IP is already covered in the trie.
+	covered := t.t.Covers(cidr)
+
+	// Add to the trie.
+	t.t.Update(cidr, cidr)
+
+	if covered {
+		logrus.Debugf("CIDR %v is already covered", cidr)
+		return nil, nil
+	}
+
+	// This is a new CIDR - we need to check to see if it masks any other CIDRs we have already sent.
+	logrus.Debugf("New CIDR %v is not covered", cidr)
+
+	// Get the node and check if it has any children. If it does, those children are masked by this new CIDR
+	// and need to be withdrawn.
+	masked := t.t.Descendants(cidr)
+	if len(masked) > 0 {
+		logrus.Debugf("- %v masks existing CIDR %v", cidr, masked)
+	}
+	return cidr, masked
+}
+
+func (t *TrieMasker) Remove(cidr CIDR) (CIDR, []CIDR) {
+	// If this node has children that are masked by this CIDR, we need to
+	// advertise them against as part of this deletion.
+	masked := t.t.Descendants(cidr)
+
+	// Remove from the trie.
+	t.t.Delete(cidr)
+
+	if len(masked) > 0 {
+		logrus.Debugf("CIDR %v masked a CIDR that needs to be sent %v", cidr, masked)
+	}
+	return cidr, masked
 }
