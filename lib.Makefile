@@ -998,7 +998,7 @@ ifdef EXPECTED_RELEASE_TAG
 		@echo "Failed to verify release tag$(comma) expected release version is $(EXPECTED_RELEASE_TAG)$(comma) actual is $(RELEASE_TAG)."\
 		&& exit 1)
 endif
-	$(eval NEXT_RELEASE_VERSION = $(shell echo "$(call git-release-tag-from-dev-tag)" | awk -F  "." '{print $$1"."$$2"."$$3+1}'))
+	$(eval NEXT_RELEASE_VERSION = $(shell echo "$(call git-release-tag-from-dev-tag)" | awk '{ split($0,tag,"-"); if (tag[2] ~ /^1\./) { split(tag[2],subver,"."); print tag[1]"-"subver[1]+1".0" } else { split(tag[1],ver,"."); print ver[1]"."ver[2]"."ver[3]+1 } }'))
 ifndef IMAGE_ONLY
 	$(MAKE) maybe-tag-release maybe-push-release-tag\
 		RELEASE_TAG=$(RELEASE_TAG) BRANCH=$(RELEASE_BRANCH) DEV_TAG=$(DEV_TAG)
