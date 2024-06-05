@@ -140,7 +140,7 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		}
 
 		hostep1State = ifstateMap[ifstate.NewKey(uint32(host1.Attrs().Index))]
-		Expect(hostep1State.Flags()).To(Equal(ifstate.FlgIPv4Ready))
+		Expect(hostep1State.Flags()).To(Equal(ifstate.FlgIPv4Ready | ifstate.FlgHEP))
 
 		if ipv6Enabled {
 			// IPv6 address update
@@ -216,7 +216,7 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 			Expect(hostep1State.IngressPolicyV6()).NotTo(Equal(-1))
 			Expect(hostep1State.EgressPolicyV6()).NotTo(Equal(-1))
 			Expect(hostep1State.XDPPolicyV6()).NotTo(Equal(-1))
-			Expect(hostep1State.Flags()).To(Equal(ifstate.FlgIPv4Ready | ifstate.FlgIPv6Ready))
+			Expect(hostep1State.Flags()).To(Equal(ifstate.FlgIPv4Ready | ifstate.FlgIPv6Ready | ifstate.FlgHEP))
 			Expect(ifstateMap).To(HaveKey(ifstate.NewKey(uint32(workload0.Attrs().Index))))
 			workloadep0State := ifstateMap[ifstate.NewKey(uint32(workload0.Attrs().Index))]
 			Expect(workloadep0State.Flags()).To(Equal(ifstate.FlgWEP | ifstate.FlgIPv4Ready | ifstate.FlgIPv6Ready))
