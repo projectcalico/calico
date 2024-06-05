@@ -564,25 +564,22 @@ syn_force_policy:
 	 */
 	if (cali_rt_is_blackhole(dest_rt) && !(ctx->state->flags & CALI_ST_SKIP_FIB)) {
 		if (CALI_F_FROM_HEP && !(cali_rt_lookup(&ctx->state->ip_src))) {
-			struct cali_rt *src_rt = cali_rt_lookup(&ctx->state->ip_src);
-			if (!src_rt) {
-				if (GLOBAL_FLAGS & CALI_GLOBALS_SVC_LOOP_DROP) {
-					CALI_DEBUG("Packet hit a black hole route: DROP\n");
-					deny_reason(ctx, CALI_REASON_BLACK_HOLE);
-					goto deny;
-				}
-				if (GLOBAL_FLAGS & CALI_GLOBALS_SVC_LOOP_REJECT) {
-					CALI_DEBUG("Packet hit a black hole route: REJECT\n");
-					deny_reason(ctx, CALI_REASON_BLACK_HOLE);
+			if (GLOBAL_FLAGS & CALI_GLOBALS_SVC_LOOP_DROP) {
+				CALI_DEBUG("Packet hit a black hole route: DROP\n");
+				deny_reason(ctx, CALI_REASON_BLACK_HOLE);
+				goto deny;
+			}
+			if (GLOBAL_FLAGS & CALI_GLOBALS_SVC_LOOP_REJECT) {
+				CALI_DEBUG("Packet hit a black hole route: REJECT\n");
+				deny_reason(ctx, CALI_REASON_BLACK_HOLE);
 #ifdef IPVER6
-					ctx->state->icmp_type = ICMPV6_DEST_UNREACH;
-					ctx->state->icmp_code = ICMPV6_PORT_UNREACH;
+				ctx->state->icmp_type = ICMPV6_DEST_UNREACH;
+				ctx->state->icmp_code = ICMPV6_PORT_UNREACH;
 #else
-					ctx->state->icmp_type = ICMP_DEST_UNREACH;
-					ctx->state->icmp_code = ICMP_PORT_UNREACH;
+				ctx->state->icmp_type = ICMP_DEST_UNREACH;
+				ctx->state->icmp_code = ICMP_PORT_UNREACH;
 #endif
-					goto icmp_send_reply;
-				}
+				goto icmp_send_reply;
 			}
 		}
 	}

@@ -222,7 +222,6 @@ func TestSVCLoopPrevention(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 
 	defer func() {
-		fmt.Println("sridhar defer")
 		err := rtMap.Delete(rtKey)
 		Expect(err).NotTo(HaveOccurred())
 		err = rtMapV6.Delete(rtKeyV6)

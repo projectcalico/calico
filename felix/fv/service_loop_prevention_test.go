@@ -18,7 +18,6 @@ package fv_test
 
 import (
 	"context"
-	"encoding/json"
 	"regexp"
 	"strings"
 	"time"
@@ -28,7 +27,6 @@ import (
 
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
-	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
@@ -39,10 +37,9 @@ import (
 var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ service loop prevention; with 2 nodes", []apiconfig.DatastoreType{apiconfig.EtcdV3, apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
 
 	var (
-		infra    infrastructure.DatastoreInfra
-		tc       infrastructure.TopologyContainers
-		client   client.Interface
-		tcProgID [2]int
+		infra  infrastructure.DatastoreInfra
+		tc     infrastructure.TopologyContainers
+		client client.Interface
 	)
 
 	BeforeEach(func() {
@@ -56,9 +53,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ service loop prevention; wi
 		tc, client = infrastructure.StartNNodeTopology(2, options, infra)
 		if BPFMode() {
 			ensureAllNodesBPFProgramsAttached(tc.Felixes)
-			for id, felix := range tc.Felixes {
-				tcProgID[id] = getTcProgID(felix, "eth0")
-			}
 		}
 	})
 
@@ -77,24 +71,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ service loop prevention; wi
 		}
 		infra.Stop()
 	})
-
-	updateFelixConfig := func(deltaFn func(*api.FelixConfiguration)) {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		cfg, err := client.FelixConfigurations().Get(ctx, "default", options.GetOptions{})
-		if _, doesNotExist := err.(errors.ErrorResourceDoesNotExist); doesNotExist {
-			cfg = api.NewFelixConfiguration()
-			cfg.Name = "default"
-			deltaFn(cfg)
-			_, err = client.FelixConfigurations().Create(ctx, cfg, options.SetOptions{})
-			Expect(err).NotTo(HaveOccurred())
-		} else {
-			Expect(err).NotTo(HaveOccurred())
-			deltaFn(cfg)
-			_, err = client.FelixConfigurations().Update(ctx, cfg, options.SetOptions{})
-			Expect(err).NotTo(HaveOccurred())
-		}
-	}
 
 	updateBGPConfig := func(deltaFn func(*api.BGPConfiguration)) {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -184,7 +160,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ service loop prevention; wi
 		}
 	}
 
-	It("programs iptables/routes as expected to block service routing loops", func() {
+	It("programs dataplane as expected to block service routing loops", func() {
 		By("configuring service cluster IPs")
 		updateBGPConfig(func(cfg *api.BGPConfiguration) {
 			cfg.Spec.ServiceClusterIPs = []api.ServiceClusterIPBlock{
@@ -223,20 +199,14 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ service loop prevention; wi
 		tryRoutingLoop(false, 1)
 
 		By("configuring ServiceLoopPrevention=Reject")
-		updateFelixConfig(func(cfg *api.FelixConfiguration) {
-			cfg.Spec.ServiceLoopPrevention = "Reject"
-		})
+		setSvcLoopPrevention(tc, "Reject")
 
 		// Expect to see rules in cali-cidr-block chains with REJECT.  (Allowing time for a
 		// Felix restart.)
-		for id, felix := range tc.Felixes {
-			if BPFMode() {
-				curId := tcProgID[id]
-				Eventually(func() int {
-					tcProgID[id] = getTcProgID(felix, "eth0")
-					return tcProgID[id]
-				}, "15s", "1s").ShouldNot(BeNumerically("==", curId))
-			} else {
+		if BPFMode() {
+			ensureAllNodesBPFProgramsAttached(tc.Felixes)
+		} else {
+			for _, felix := range tc.Felixes {
 				Eventually(getCIDRBlockRules(felix, "iptables-save"), "8s", "0.5s").Should(ConsistOf(
 					MatchRegexp("-A cali-cidr-block -d 10\\.96\\.0\\.0/17 .* -j REJECT"),
 				))
@@ -251,22 +221,15 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ service loop prevention; wi
 		}
 
 		By("configuring ServiceLoopPrevention=Disabled")
-		updateFelixConfig(func(cfg *api.FelixConfiguration) {
-			cfg.Spec.ServiceLoopPrevention = "Disabled"
-		})
+		setSvcLoopPrevention(tc, "Disabled")
 
+		if BPFMode() {
+			ensureAllNodesBPFProgramsAttached(tc.Felixes)
+		}
 		// Expect to see empty cali-cidr-block chains.  (Allowing time for a Felix restart.)
-		for id, felix := range tc.Felixes {
-			if BPFMode() {
-				curId := tcProgID[id]
-				Eventually(func() int {
-					tcProgID[id] = getTcProgID(felix, "eth0")
-					return tcProgID[id]
-				}, "15s", "1s").ShouldNot(BeNumerically("==", curId))
-			} else {
-				Eventually(getCIDRBlockRules(felix, "iptables-save"), "8s", "0.5s").Should(BeEmpty())
-				Eventually(getCIDRBlockRules(felix, "ip6tables-save"), "8s", "0.5s").Should(BeEmpty())
-			}
+		for _, felix := range tc.Felixes {
+			Eventually(getCIDRBlockRules(felix, "iptables-save"), "8s", "0.5s").Should(BeEmpty())
+			Eventually(getCIDRBlockRules(felix, "ip6tables-save"), "8s", "0.5s").Should(BeEmpty())
 		}
 
 		By("test that we DO get a routing loop")
@@ -274,22 +237,14 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ service loop prevention; wi
 		tryRoutingLoop(true, 64)
 
 		By("configuring ServiceLoopPrevention=Drop")
-		updateFelixConfig(func(cfg *api.FelixConfiguration) {
-			cfg.Spec.ServiceLoopPrevention = "Drop"
-		})
+		setSvcLoopPrevention(tc, "Drop")
 
 		// Expect to see rules in cali-cidr-block chains with DROP.  (Allowing time for a
 		// Felix restart.)
-		for _, felix := range tc.Felixes {
-			if BPFMode() {
-				Eventually(func() string {
-					return bpfDumpRoutesV4(felix)
-				}, "5s", "1s").Should(ContainSubstring("10.96.0.0/17: blackhole"))
-
-				Eventually(func() string {
-					return bpfDumpRoutesV6(felix)
-				}, "5s", "1s").Should(ContainSubstring("fd5f::/119: blackhole"))
-			} else {
+		if BPFMode() {
+			ensureAllNodesBPFProgramsAttached(tc.Felixes)
+		} else {
+			for _, felix := range tc.Felixes {
 				Eventually(getCIDRBlockRules(felix, "iptables-save"), "8s", "0.5s").Should(ConsistOf(
 					MatchRegexp("-A cali-cidr-block -d 10\\.96\\.0\\.0/17 .* -j DROP"),
 				))
@@ -364,21 +319,15 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ service loop prevention; wi
 		tryRoutingLoop(false, 1)
 
 		By("configuring ServiceLoopPrevention=Disabled")
-		updateFelixConfig(func(cfg *api.FelixConfiguration) {
-			cfg.Spec.ServiceLoopPrevention = "Disabled"
-		})
+		setSvcLoopPrevention(tc, "Disabled")
 
 		// Expect to see empty cali-cidr-block chains.  (Allowing time for a Felix
 		// restart.)  This ensures that the cali-cidr-block chain has been cleared
 		// before we try a test ping.
-		for id, felix := range tc.Felixes {
-			if BPFMode() {
-				curId := tcProgID[id]
-				Eventually(func() int {
-					tcProgID[id] = getTcProgID(felix, "eth0")
-					return tcProgID[id]
-				}, "15s", "1s").ShouldNot(BeNumerically("==", curId))
-			} else {
+		if BPFMode() {
+			ensureAllNodesBPFProgramsAttached(tc.Felixes)
+		} else {
+			for _, felix := range tc.Felixes {
 				Eventually(getCIDRBlockRules(felix, "iptables-save"), "8s", "0.5s").Should(BeEmpty())
 			}
 		}
@@ -407,21 +356,15 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ service loop prevention; wi
 		tryRoutingLoop(false, 1)
 
 		By("configuring ServiceLoopPrevention=Disabled")
-		updateFelixConfig(func(cfg *api.FelixConfiguration) {
-			cfg.Spec.ServiceLoopPrevention = "Disabled"
-		})
+		setSvcLoopPrevention(tc, "Disabled")
 
 		// Expect to see empty cali-cidr-block chains.  (Allowing time for a Felix
 		// restart.)  This ensures that the cali-cidr-block chain has been cleared
 		// before we try a test ping.
-		for id, felix := range tc.Felixes {
-			if BPFMode() {
-				curId := tcProgID[id]
-				Eventually(func() int {
-					tcProgID[id] = getTcProgID(felix, "eth0")
-					return tcProgID[id]
-				}, "15s", "1s").ShouldNot(BeNumerically("==", curId))
-			} else {
+		if BPFMode() {
+			ensureAllNodesBPFProgramsAttached(tc.Felixes)
+		} else {
+			for _, felix := range tc.Felixes {
 				Eventually(getCIDRBlockRules(felix, "iptables-save"), "8s", "0.5s").Should(BeEmpty())
 			}
 		}
@@ -438,13 +381,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ service loop prevention; wi
 
 })
 
-func getTcProgID(felix *infrastructure.Felix, iface string) int {
-	var attached []struct {
-		TC bpf.TcList `json:"tc"`
+func setSvcLoopPrevention(tc infrastructure.TopologyContainers, value string) {
+	for _, felix := range tc.Felixes {
+		felix.SetEnv(map[string]string{"FELIX_SERVICELOOPPREVENTION": value})
+		felix.SetEnv(map[string]string{"FELIX_SERVICELOOPPREVENTION": value})
+		felix.Restart()
 	}
-	out, err := felix.ExecOutput("bpftool", "-j", "net", "show", "dev", iface)
-	Expect(err).NotTo(HaveOccurred())
-	err = json.Unmarshal([]byte(out), &attached)
-	Expect(err).NotTo(HaveOccurred())
-	return attached[0].TC[0].ID
 }

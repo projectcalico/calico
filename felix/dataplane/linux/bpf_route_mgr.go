@@ -385,23 +385,18 @@ func (m *bpfRouteManager) calculateRoute(cidr ip.CIDR) routes.ValueInterface {
 	case proto.RouteType_REMOTE_TUNNEL:
 		flags |= routes.FlagsRemoteTunneledHost
 		route = m.bpfOps.NewValueWithNextHop(flags, cidr.Addr())
-	case proto.RouteType_LOCAL_HOST, proto.RouteType_BLACK_HOLE:
+	case proto.RouteType_LOCAL_HOST:
 		// It may be a localhost IP that is not assigned to a device like an
 		// k8s ExternalIP. Route resolver knew that it was assigned to our
 		// hostname.
-		if cgRoute.Type == proto.RouteType_LOCAL_HOST {
-			flags |= routes.FlagsLocalHost
-		} else {
-			flags = routes.FlagBlackHole
-		}
-		fallthrough
-	default: // proto.RouteType_CIDR_INFO / LOCAL_HOST or no route at all
-		if flags != 0 {
-			// We have something to say about this route.
-			route = m.bpfOps.NewValue(flags)
-		}
+		flags |= routes.FlagsLocalHost
+	case proto.RouteType_BLACK_HOLE:
+		flags = routes.FlagBlackHole
 	}
 
+	if route == nil && flags != 0 {
+		route = m.bpfOps.NewValue(flags)
+	}
 	return route
 }
 
@@ -675,8 +670,11 @@ func (m *bpfRouteManager) onBGPConfigUpdate(update *proto.GlobalBGPConfigUpdate)
 			continue
 		}
 
-		if _, ok := m.cidrToRoute[cidr]; ok {
-			continue
+		if rt, ok := m.cidrToRoute[cidr]; ok {
+			if rt.Type == proto.RouteType_BLACK_HOLE {
+				cidrsToDel.Discard(cidr)
+				continue
+			}
 		}
 		m.cidrToRoute[cidr] = proto.RouteUpdate{Type: proto.RouteType_BLACK_HOLE}
 		m.dirtyCIDRs.Add(cidr)
