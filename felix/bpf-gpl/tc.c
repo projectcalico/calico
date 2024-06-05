@@ -559,8 +559,10 @@ syn_force_policy:
 		goto do_policy;
 	}
 
-	/* If the dest route is a blackhole route and packet is from an external source,
-	 * drop the packet, if service loop prevention is configured to either DROP or REJECT.
+	/* If the dest route is a blackhole route, drop the packet,
+	 * if service loop prevention is configured to either DROP or REJECT.
+	 * If we know that that there was a NAT hit but we don't want to resolve (such as node local DNS)
+	 * allow the packet even if we hit a blackhole route.
 	 */
 	if (cali_rt_is_blackhole(dest_rt) && !(CALI_F_TO_HOST && nat_res == NAT_EXCLUDE)) {
 		if (GLOBAL_FLAGS & CALI_GLOBALS_SVC_LOOP_DROP) {
