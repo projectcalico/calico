@@ -80,6 +80,7 @@ const (
 	FlagSameSubnet  Flags = 0x20
 	FlagTunneled    Flags = 0x40
 	FlagNoDSR       Flags = 0x80
+	FlagBlackHole   Flags = 0x100
 
 	FlagsUnknown            Flags = 0
 	FlagsRemoteWorkload           = FlagWorkload
@@ -136,7 +137,7 @@ func (v Value) String() string {
 
 	if typeFlags&FlagLocal != 0 {
 		parts = append(parts, "local")
-	} else {
+	} else if typeFlags&FlagBlackHole == 0 {
 		parts = append(parts, "remote")
 	}
 
@@ -172,6 +173,10 @@ func (v Value) String() string {
 
 	if typeFlags&FlagLocal == 0 && typeFlags&FlagWorkload != 0 {
 		parts = append(parts, "nh", fmt.Sprint(v.NextHop()))
+	}
+
+	if typeFlags&FlagBlackHole != 0 {
+		parts = append(parts, "blackhole")
 	}
 
 	if len(parts) == 0 {

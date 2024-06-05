@@ -63,6 +63,7 @@ type AttachPoint struct {
 	NATin                uint32
 	NATout               uint32
 	UDPOnly              bool
+	SVCLoopPrevention    uint8
 }
 
 var ErrDeviceNotFound = errors.New("device not found")
@@ -416,6 +417,13 @@ func (ap *AttachPoint) ConfigureProgram(m *libbpf.Map) error {
 		globalData.Flags |= libbpf.GlobalsRPFOptionStrict
 	case tcdefs.RPFEnforceOptionLoose:
 		globalData.Flags |= libbpf.GlobalsRPFOptionEnabled
+	}
+
+	switch ap.SVCLoopPrevention {
+	case tcdefs.SVCLoopPreventionDrop:
+		globalData.Flags |= libbpf.GlobalsSVCLoopDrop
+	case tcdefs.SVCLoopPreventionReject:
+		globalData.Flags |= libbpf.GlobalsSVCLoopReject
 	}
 
 	if ap.UDPOnly {
