@@ -764,6 +764,13 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 					LogFilterJmp: 0xffffffff,
 				}
 
+				if topts.svcLoopPrevention == "reject" {
+					globals.Flags |= libbpf.GlobalsSVCLoopReject
+				}
+				if topts.svcLoopPrevention == "drop" {
+					globals.Flags |= libbpf.GlobalsSVCLoopDrop
+				}
+
 				copy(globals.HostTunnelIPv6[:], node1tunIPV6.To16())
 				copy(globals.HostIPv6[:], hostIP.To16())
 				copy(globals.IntfIPv6[:], intfIPV6.To16())
@@ -772,7 +779,7 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 					globals.JumpsV6[i] = uint32(i)
 				}
 
-				log.WithField("globals", globals).Debugf("configure program")
+				log.WithField("globals", globals).Debugf("configure program v6")
 
 				if err := tc.ConfigureProgram(m, ifaceLog, &globals); err != nil {
 					return nil, fmt.Errorf("failed to configure tc program: %w", err)
@@ -789,6 +796,11 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 					LogFilterJmp: 0xffffffff,
 				}
 
+				if topts.svcLoopPrevention == "reject" {
+					globals.Flags |= libbpf.GlobalsSVCLoopReject
+				} else if topts.svcLoopPrevention == "drop" {
+					globals.Flags |= libbpf.GlobalsSVCLoopDrop
+				}
 				copy(globals.HostIPv4[0:4], hostIP)
 				copy(globals.IntfIPv4[0:4], intfIP)
 				copy(globals.HostTunnelIPv4[0:4], node1tunIP.To4())
@@ -1110,16 +1122,17 @@ func runBpfUnitTest(t *testing.T, source string, testFn func(bpfProgRunFn), opts
 }
 
 type testOpts struct {
-	description   string
-	subtests      bool
-	logLevel      log.Level
-	xdp           bool
-	psnaStart     uint32
-	psnatEnd      uint32
-	hostNetworked bool
-	progLog       string
-	ipv6          bool
-	objname       string
+	description       string
+	subtests          bool
+	logLevel          log.Level
+	xdp               bool
+	psnaStart         uint32
+	psnatEnd          uint32
+	hostNetworked     bool
+	progLog           string
+	ipv6              bool
+	objname           string
+	svcLoopPrevention string
 }
 
 type testOption func(opts *testOpts)
@@ -1174,6 +1187,12 @@ func withObjName(name string) testOption {
 func withDescription(desc string) testOption {
 	return func(o *testOpts) {
 		o.description = desc
+	}
+}
+
+func withSvcLoopPrevention(action string) testOption {
+	return func(o *testOpts) {
+		o.svcLoopPrevention = action
 	}
 }
 
