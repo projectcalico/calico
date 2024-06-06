@@ -221,6 +221,15 @@ rules:
   - get
   - list
   - watch
+- apiGroups:
+  - flowcontrol.apiserver.k8s.io
+  resources:
+  - flowschemas
+  - prioritylevelconfigurations
+  verbs:
+  - get
+  - list
+  - watch
 
 ---
 
