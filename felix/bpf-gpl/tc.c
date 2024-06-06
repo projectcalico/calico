@@ -564,14 +564,12 @@ syn_force_policy:
 	 * If we know that that there was a NAT hit but we don't want to resolve (such as node local DNS)
 	 * allow the packet even if we hit a blackhole route.
 	 */
-	//if (CALI_F_TO_HOST && (nat_res != NAT_EXCLUDE)) {
 	if (!(CALI_F_TO_HOST && (nat_res == NAT_EXCLUDE))) {
 		if (cali_rt_is_blackhole_drop(dest_rt)) {
 			CALI_DEBUG("Packet hit a black hole route: DROP\n");
 			deny_reason(ctx, CALI_REASON_BLACK_HOLE);
 			goto deny;
 		}
-#if 0
 		if (cali_rt_is_blackhole_reject(dest_rt)) {
 			CALI_DEBUG("Packet hit a black hole route: REJECT\n");
 			deny_reason(ctx, CALI_REASON_BLACK_HOLE);
@@ -584,7 +582,6 @@ syn_force_policy:
 #endif
 			goto icmp_send_reply;
 		}
-#endif
 	}
 
 	if (cali_rt_flags_local_host(dest_rt->flags)) {
