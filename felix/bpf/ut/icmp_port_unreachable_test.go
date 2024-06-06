@@ -210,14 +210,14 @@ func TestSVCLoopPrevention(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 	_ = ipv4
 	rtKey := routes.NewKey(dstV4CIDR).AsBytes()
-	rtVal := routes.NewValueWithIfIndex(routes.FlagBlackHole, 1).AsBytes()
+	rtVal := routes.NewValueWithIfIndex(routes.FlagBlackHoleDrop, 1).AsBytes()
 	err = rtMap.Update(rtKey, rtVal)
 	Expect(err).NotTo(HaveOccurred())
 	_, ipv6, _, _, pktBytesV6, err := testPacketV6(nil, ipv6Default, nil, nil)
 	Expect(err).NotTo(HaveOccurred())
 
 	rtKeyV6 := routes.NewKeyV6(dstV6CIDR).AsBytes()
-	rtValV6 := routes.NewValueV6WithIfIndex(routes.FlagBlackHole, 1).AsBytes()
+	rtValV6 := routes.NewValueV6WithIfIndex(routes.FlagBlackHoleReject, 1).AsBytes()
 	err = rtMapV6.Update(rtKeyV6, rtValV6)
 	Expect(err).NotTo(HaveOccurred())
 
@@ -248,7 +248,7 @@ func TestSVCLoopPrevention(t *testing.T) {
 		bpfCounters, err := counters.Read(countersMap, 1, 0)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(int(bpfCounters[counters.DroppedBlackholeRoute])).To(Equal(1))
-	}, withSvcLoopPrevention("drop"))
+	})
 
 	skbMark = 0
 	runBpfTest(t, "calico_from_workload_ep", nil, func(bpfrun bpfProgRunFn) {
@@ -261,7 +261,11 @@ func TestSVCLoopPrevention(t *testing.T) {
 		bpfCounters, err := counters.Read(countersMap, 1, 0)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(int(bpfCounters[counters.DroppedBlackholeRoute])).To(Equal(2))
-	}, withSvcLoopPrevention("drop"))
+	})
+
+	rtVal = routes.NewValueWithIfIndex(routes.FlagBlackHoleReject, 1).AsBytes()
+	err = rtMap.Update(rtKey, rtVal)
+	Expect(err).NotTo(HaveOccurred())
 
 	// Test with action = reject
 	skbMark = 0
@@ -277,7 +281,7 @@ func TestSVCLoopPrevention(t *testing.T) {
 		bpfCounters, err := counters.Read(countersMap, 1, 0)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(int(bpfCounters[counters.DroppedBlackholeRoute])).To(Equal(3))
-	}, withSvcLoopPrevention("reject"))
+	})
 
 	skbMark = 0
 	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
@@ -292,5 +296,5 @@ func TestSVCLoopPrevention(t *testing.T) {
 		bpfCounters, err := counters.Read(countersMap, 1, 0)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(int(bpfCounters[counters.DroppedBlackholeRoute])).To(Equal(4))
-	}, withSvcLoopPrevention("reject"), withIPv6())
+	}, withIPv6())
 }

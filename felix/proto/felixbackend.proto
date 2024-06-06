@@ -573,7 +573,6 @@ enum RouteType {
   LOCAL_HOST = 4;
   REMOTE_TUNNEL = 5;
   LOCAL_TUNNEL = 6;
-  BLACK_HOLE = 7;
 }
 
 enum IPPoolType {

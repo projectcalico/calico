@@ -381,8 +381,6 @@ const (
 	GlobalsRPFOptionStrict  uint32 = C.CALI_GLOBALS_RPF_OPTION_STRICT
 	GlobalsNoDSRCidrs       uint32 = C.CALI_GLOBALS_NO_DSR_CIDRS
 	GlobalsLoUDPOnly        uint32 = C.CALI_GLOBALS_LO_UDP_ONLY
-	GlobalsSVCLoopDrop      uint32 = C.CALI_GLOBALS_SVC_LOOP_DROP
-	GlobalsSVCLoopReject    uint32 = C.CALI_GLOBALS_SVC_LOOP_REJECT
 )
 
 func TcSetGlobals(

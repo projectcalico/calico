@@ -72,15 +72,16 @@ func (k Key) AsBytes() []byte {
 type Flags uint32
 
 const (
-	FlagInIPAMPool  Flags = 0x01
-	FlagNATOutgoing Flags = 0x02
-	FlagWorkload    Flags = 0x04
-	FlagLocal       Flags = 0x08
-	FlagHost        Flags = 0x10
-	FlagSameSubnet  Flags = 0x20
-	FlagTunneled    Flags = 0x40
-	FlagNoDSR       Flags = 0x80
-	FlagBlackHole   Flags = 0x100
+	FlagInIPAMPool      Flags = 0x01
+	FlagNATOutgoing     Flags = 0x02
+	FlagWorkload        Flags = 0x04
+	FlagLocal           Flags = 0x08
+	FlagHost            Flags = 0x10
+	FlagSameSubnet      Flags = 0x20
+	FlagTunneled        Flags = 0x40
+	FlagNoDSR           Flags = 0x80
+	FlagBlackHoleDrop   Flags = 0x100
+	FlagBlackHoleReject Flags = 0x200
 
 	FlagsUnknown            Flags = 0
 	FlagsRemoteWorkload           = FlagWorkload
@@ -137,7 +138,7 @@ func (v Value) String() string {
 
 	if typeFlags&FlagLocal != 0 {
 		parts = append(parts, "local")
-	} else if typeFlags&FlagBlackHole == 0 {
+	} else if typeFlags&FlagBlackHoleDrop == 0 && typeFlags&FlagBlackHoleReject == 0 {
 		parts = append(parts, "remote")
 	}
 
@@ -175,8 +176,12 @@ func (v Value) String() string {
 		parts = append(parts, "nh", fmt.Sprint(v.NextHop()))
 	}
 
-	if typeFlags&FlagBlackHole != 0 {
-		parts = append(parts, "blackhole")
+	if typeFlags&FlagBlackHoleDrop != 0 {
+		parts = append(parts, "blackhole-drop")
+	}
+
+	if typeFlags&FlagBlackHoleReject != 0 {
+		parts = append(parts, "blackhole-reject")
 	}
 
 	if len(parts) == 0 {

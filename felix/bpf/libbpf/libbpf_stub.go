@@ -136,8 +136,6 @@ const (
 	GlobalsRPFOptionStrict  uint32 = 32
 	GlobalsNoDSRCidrs       uint32 = 12345
 	GlobalsLoUDPOnly        uint32 = 12345
-	GlobalsSVCLoopDrop      uint32 = 12345
-	GlobalsSVCLoopReject    uint32 = 12345
 )
 
 func TcSetGlobals(_ *Map, globalData *TcGlobalData) error {

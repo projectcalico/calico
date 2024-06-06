@@ -95,9 +95,10 @@ type bpfRouteManager struct {
 
 	opReporter logutils.OpRecorder
 
-	wgEnabled    bool
-	ipFamily     proto.IPVersion
-	blockedCIDRs set.Set[ip.CIDR]
+	wgEnabled         bool
+	ipFamily          proto.IPVersion
+	blockedCIDRs      set.Set[ip.CIDR]
+	svcLoopPrevention string
 }
 
 func newBPFRouteManager(config *Config, maps *bpfmap.IPMaps, ipFamily proto.IPVersion,
@@ -172,8 +173,9 @@ func newBPFRouteManager(config *Config, maps *bpfmap.IPMaps, ipFamily proto.IPVe
 
 		opReporter: opReporter,
 
-		wgEnabled: config.Wireguard.Enabled || config.Wireguard.EnabledV6,
-		ipFamily:  ipFamily,
+		wgEnabled:         config.Wireguard.Enabled || config.Wireguard.EnabledV6,
+		ipFamily:          ipFamily,
+		svcLoopPrevention: config.ServiceLoopPrevention,
 	}
 
 	if ipFamily == proto.IPVersion_IPV6 {
@@ -305,6 +307,15 @@ func (m *bpfRouteManager) calculateRoute(cidr ip.CIDR) routes.ValueInterface {
 		flags |= routes.FlagNoDSR
 	}
 
+	if m.blockedCIDRs.Contains(cidr) {
+		log.WithField("cidr", cidr).Debug("CIDR is blocked.")
+		if m.svcLoopPrevention == "Drop" {
+			flags |= routes.FlagBlackHoleDrop
+		} else if m.svcLoopPrevention == "Reject" {
+			flags |= routes.FlagBlackHoleReject
+		}
+	}
+
 	cgRoute, cgRouteExists := m.cidrToRoute[cidr]
 	if cgRouteExists {
 		// Collect flags that are shared by all route types.
@@ -390,8 +401,6 @@ func (m *bpfRouteManager) calculateRoute(cidr ip.CIDR) routes.ValueInterface {
 		// k8s ExternalIP. Route resolver knew that it was assigned to our
 		// hostname.
 		flags |= routes.FlagsLocalHost
-	case proto.RouteType_BLACK_HOLE:
-		flags = routes.FlagBlackHole
 	}
 
 	if route == nil && flags != 0 {
@@ -670,14 +679,10 @@ func (m *bpfRouteManager) onBGPConfigUpdate(update *proto.GlobalBGPConfigUpdate)
 			continue
 		}
 
-		if rt, ok := m.cidrToRoute[cidr]; ok {
-			if rt.Type == proto.RouteType_BLACK_HOLE {
-				cidrsToDel.Discard(cidr)
-				continue
-			}
+		m.cidrToRoute[cidr] = proto.RouteUpdate{Type: proto.RouteType_CIDR_INFO}
+		if m.svcLoopPrevention != "Disabled" {
+			m.dirtyCIDRs.Add(cidr)
 		}
-		m.cidrToRoute[cidr] = proto.RouteUpdate{Type: proto.RouteType_BLACK_HOLE}
-		m.dirtyCIDRs.Add(cidr)
 		m.blockedCIDRs.Add(cidr)
 		cidrsToDel.Discard(cidr)
 	}
