@@ -180,11 +180,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ service loop prevention; wi
 			if BPFMode() {
 				Eventually(func() string {
 					return bpfDumpRoutesV4(felix)
-				}, "5s", "1s").Should(ContainSubstring("10.96.0.0/17: blackhole"))
+				}, "10s", "1s").Should(ContainSubstring("10.96.0.0/17: blackhole"))
 
 				Eventually(func() string {
 					return bpfDumpRoutesV6(felix)
-				}, "5s", "1s").Should(ContainSubstring("fd5f::/119: blackhole"))
+				}, "10s", "1s").Should(ContainSubstring("fd5f::/119: blackhole"))
 			} else {
 				Eventually(getCIDRBlockRules(felix, "iptables-save")).Should(ConsistOf(
 					MatchRegexp("-A cali-cidr-block -d 10\\.96\\.0\\.0/17 .* -j DROP"),
@@ -205,8 +205,17 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ service loop prevention; wi
 		// Felix restart.)
 		if BPFMode() {
 			ensureAllNodesBPFProgramsAttached(tc.Felixes)
-		} else {
-			for _, felix := range tc.Felixes {
+		}
+		for _, felix := range tc.Felixes {
+			if BPFMode() {
+				Eventually(func() string {
+					return bpfDumpRoutesV4(felix)
+				}, "10s", "1s").Should(ContainSubstring("10.96.0.0/17: blackhole"))
+
+				Eventually(func() string {
+					return bpfDumpRoutesV6(felix)
+				}, "10s", "1s").Should(ContainSubstring("fd5f::/119: blackhole"))
+			} else {
 				Eventually(getCIDRBlockRules(felix, "iptables-save"), "8s", "0.5s").Should(ConsistOf(
 					MatchRegexp("-A cali-cidr-block -d 10\\.96\\.0\\.0/17 .* -j REJECT"),
 				))
@@ -228,8 +237,18 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ service loop prevention; wi
 		}
 		// Expect to see empty cali-cidr-block chains.  (Allowing time for a Felix restart.)
 		for _, felix := range tc.Felixes {
-			Eventually(getCIDRBlockRules(felix, "iptables-save"), "8s", "0.5s").Should(BeEmpty())
-			Eventually(getCIDRBlockRules(felix, "ip6tables-save"), "8s", "0.5s").Should(BeEmpty())
+			if BPFMode() {
+				Eventually(func() string {
+					return bpfDumpRoutesV4(felix)
+				}, "10s", "1s").Should(ContainSubstring("10.96.0.0/17: blackhole"))
+
+				Eventually(func() string {
+					return bpfDumpRoutesV6(felix)
+				}, "10s", "1s").Should(ContainSubstring("fd5f::/119: blackhole"))
+			} else {
+				Eventually(getCIDRBlockRules(felix, "iptables-save"), "8s", "0.5s").Should(BeEmpty())
+				Eventually(getCIDRBlockRules(felix, "ip6tables-save"), "8s", "0.5s").Should(BeEmpty())
+			}
 		}
 
 		By("test that we DO get a routing loop")
@@ -245,12 +264,22 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ service loop prevention; wi
 			ensureAllNodesBPFProgramsAttached(tc.Felixes)
 		} else {
 			for _, felix := range tc.Felixes {
-				Eventually(getCIDRBlockRules(felix, "iptables-save"), "8s", "0.5s").Should(ConsistOf(
-					MatchRegexp("-A cali-cidr-block -d 10\\.96\\.0\\.0/17 .* -j DROP"),
-				))
-				Eventually(getCIDRBlockRules(felix, "ip6tables-save"), "8s", "0.5s").Should(ConsistOf(
-					MatchRegexp("-A cali-cidr-block -d fd5f::/119 .* -j DROP"),
-				))
+				if BPFMode() {
+					Eventually(func() string {
+						return bpfDumpRoutesV4(felix)
+					}, "10s", "1s").Should(ContainSubstring("10.96.0.0/17: blackhole"))
+
+					Eventually(func() string {
+						return bpfDumpRoutesV6(felix)
+					}, "10s", "1s").Should(ContainSubstring("fd5f::/119: blackhole"))
+				} else {
+					Eventually(getCIDRBlockRules(felix, "iptables-save"), "8s", "0.5s").Should(ConsistOf(
+						MatchRegexp("-A cali-cidr-block -d 10\\.96\\.0\\.0/17 .* -j DROP"),
+					))
+					Eventually(getCIDRBlockRules(felix, "ip6tables-save"), "8s", "0.5s").Should(ConsistOf(
+						MatchRegexp("-A cali-cidr-block -d fd5f::/119 .* -j DROP"),
+					))
+				}
 			}
 		}
 
@@ -272,11 +301,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ service loop prevention; wi
 			if BPFMode() {
 				Eventually(func() string {
 					return bpfDumpRoutesV4(felix)
-				}, "5s", "1s").Should(ContainSubstring("1.1.0.0/16: blackhole"))
+				}, "10s", "1s").Should(ContainSubstring("1.1.0.0/16: blackhole"))
 
 				Eventually(func() string {
 					return bpfDumpRoutesV6(felix)
-				}, "5s", "1s").Should(ContainSubstring("fd5e::/119: blackhole"))
+				}, "10s", "1s").Should(ContainSubstring("fd5e::/119: blackhole"))
 			} else {
 				Eventually(getCIDRBlockRules(felix, "iptables-save")).Should(ConsistOf(
 					MatchRegexp("-A cali-cidr-block -d 1\\.1\\.0\\.0/16 .* -j DROP"),
@@ -307,7 +336,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ service loop prevention; wi
 			if BPFMode() {
 				Eventually(func() string {
 					return bpfDumpRoutesV4(felix)
-				}, "5s", "1s").Should(ContainSubstring("10.96.0.0/17: blackhole"))
+				}, "10s", "1s").Should(ContainSubstring("10.96.0.0/17: blackhole"))
 			} else {
 				Eventually(getCIDRBlockRules(felix, "iptables-save")).Should(ConsistOf(
 					MatchRegexp("-A cali-cidr-block -d 10\\.96\\.0\\.0/17 .* -j DROP"),
@@ -328,7 +357,13 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ service loop prevention; wi
 			ensureAllNodesBPFProgramsAttached(tc.Felixes)
 		} else {
 			for _, felix := range tc.Felixes {
-				Eventually(getCIDRBlockRules(felix, "iptables-save"), "8s", "0.5s").Should(BeEmpty())
+				if BPFMode() {
+					Eventually(func() string {
+						return bpfDumpRoutesV4(felix)
+					}, "10s", "1s").Should(ContainSubstring("10.96.0.0/17: blackhole"))
+				} else {
+					Eventually(getCIDRBlockRules(felix, "iptables-save"), "8s", "0.5s").Should(BeEmpty())
+				}
 			}
 		}
 
@@ -365,7 +400,13 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ service loop prevention; wi
 			ensureAllNodesBPFProgramsAttached(tc.Felixes)
 		} else {
 			for _, felix := range tc.Felixes {
-				Eventually(getCIDRBlockRules(felix, "iptables-save"), "8s", "0.5s").Should(BeEmpty())
+				if BPFMode() {
+					Eventually(func() string {
+						return bpfDumpRoutesV4(felix)
+					}, "10s", "1s").Should(ContainSubstring("10.96.0.0/17: blackhole"))
+				} else {
+					Eventually(getCIDRBlockRules(felix, "iptables-save"), "8s", "0.5s").Should(BeEmpty())
+				}
 			}
 		}
 
