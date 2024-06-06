@@ -26,7 +26,7 @@ FROM ${BIRD_IMAGE} as bird
 
 # Use this build stage to build iptables rpm and runit binaries.
 # We need to rebuild the iptables rpm because the prepackaged rpm does not have legacy iptables binaries.
-# We need to build runit because there aren't any rpms for it in CentOS or ubi repositories.
+# We need to build runit because there aren't any rpms for it in AlmaLinux or ubi repositories.
 FROM almalinux:8 as almalinux
 
 # Enable non-native builds of this image on an amd64 hosts.
@@ -55,7 +55,7 @@ RUN dnf install -y 'dnf-command(config-manager)' && \
     yum -y update-minimal --security
 
 # In order to rebuild the iptables RPM, we first need to rebuild the libnftnl RPM because building
-# iptables requires libnftnl-devel but libnftnl-devel is not available on ubi or CentOS repos.
+# iptables requires libnftnl-devel but libnftnl-devel is not available on ubi or AlmaLinux repos.
 # (Note: it's not in RHEL8.1 either https://bugzilla.redhat.com/show_bug.cgi?id=1711361).
 # Rebuilding libnftnl will give us libnftnl-devel too.
 RUN rpm -i ${LIBNFTNL_SOURCERPM_URL} && \
@@ -79,7 +79,7 @@ RUN rpm -i ${IPSET_SOURCERPM_URL} && \
     yum-builddep -y --spec /root/rpmbuild/SPECS/ipset.spec && \
     rpmbuild -bb /root/rpmbuild/SPECS/ipset.spec
 
-# runit is not available in ubi or CentOS repos so build it.
+# runit is not available in ubi or AlmaLinux repos so build it.
 # get it from the debian repos as the official website doesn't support https
 RUN curl -sfL https://ftp.debian.org/debian/pool/main/r/runit/runit_${RUNIT_VER}.orig.tar.gz | tar xz -C /root && \
     cd /root/admin/runit-${RUNIT_VER} && \
@@ -97,7 +97,7 @@ ARG RUNIT_VER
 # This must be the first RUN command in this file!
 COPY --from=qemu /usr/bin/qemu-aarch64-static /usr/bin/qemu-aarch64-static
 
-# Update base packages to pick up security updates.  Must do this before adding the centos repo.
+# Update base packages to pick up security updates.  Must do this before adding the AlmaLinux repo.
 RUN microdnf upgrade
 
 # Copy in runit binaries
@@ -108,7 +108,7 @@ COPY --from=almalinux /root/rpmbuild/RPMS/aarch64/* /tmp/rpms/
 
 # Install a subset of packages from UBI prior to removing the UBI repo below.
 # We do this because the UBI repo has updated versions with CVE fixes. We can remove
-# this once the CentOS repo updates the version of these packages.
+# this once the AlmaLinux repo updates the version of these packages.
 # gzip >= 1.9-13.el8_5
 # cryptsetup-libs >= 2.3.3-4.el8_5.1
 RUN microdnf install \
@@ -157,7 +157,7 @@ RUN rpm --force -i /tmp/rpms/iptables-libs-${IPTABLES_VER}.el8.aarch64.rpm && \
     alternatives --install /usr/sbin/iptables iptables /usr/sbin/iptables-legacy 1 && \
     alternatives --install /usr/sbin/ip6tables ip6tables /usr/sbin/ip6tables-legacy 1
 
-RUN touch /in-the-container && microdnf clean all
+RUN microdnf clean all
 
 # Change the permissions for ipset so it can be run by any container user.
 RUN chgrp 0 /usr/sbin/ipset && \
@@ -205,7 +205,7 @@ RUN chmod u+s /bin/mountns
 COPY clean-up-filesystem.sh /clean-up-filesystem.sh
 # Allowing qemu binaries to persist.
 RUN sed -i 's#zmore#zmore\n\tqemu\n#m' /clean-up-filesystem.sh
-RUN /clean-up-filesystem.sh
+RUN touch /in-the-container && /clean-up-filesystem.sh
 
 # Delete qemu binaries
 RUN rm /usr/bin/qemu-aarch64-static
