@@ -559,6 +559,31 @@ syn_force_policy:
 		goto do_policy;
 	}
 
+	/* If the dest route is a blackhole route, drop the packet,
+	 * if service loop prevention is configured to either DROP or REJECT.
+	 * If we know that that there was a NAT hit but we don't want to resolve (such as node local DNS)
+	 * allow the packet even if we hit a blackhole route.
+	 */
+	if (cali_rt_is_blackhole(dest_rt) && !(CALI_F_TO_HOST && nat_res == NAT_EXCLUDE)) {
+		if (GLOBAL_FLAGS & CALI_GLOBALS_SVC_LOOP_DROP) {
+			CALI_DEBUG("Packet hit a black hole route: DROP\n");
+			deny_reason(ctx, CALI_REASON_BLACK_HOLE);
+			goto deny;
+		}
+		if (GLOBAL_FLAGS & CALI_GLOBALS_SVC_LOOP_REJECT) {
+			CALI_DEBUG("Packet hit a black hole route: REJECT\n");
+			deny_reason(ctx, CALI_REASON_BLACK_HOLE);
+#ifdef IPVER6
+			ctx->state->icmp_type = ICMPV6_DEST_UNREACH;
+			ctx->state->icmp_code = ICMPV6_PORT_UNREACH;
+#else
+			ctx->state->icmp_type = ICMP_DEST_UNREACH;
+			ctx->state->icmp_code = ICMP_PORT_UNREACH;
+#endif
+			goto icmp_send_reply;
+		}
+	}
+
 	if (cali_rt_flags_local_host(dest_rt->flags)) {
 		CALI_DEBUG("Post-NAT dest IP is local host.\n");
 		if (CALI_F_FROM_HEP && is_failsafe_in(ctx->state->ip_proto, ctx->state->post_nat_dport, ctx->state->ip_src)) {
