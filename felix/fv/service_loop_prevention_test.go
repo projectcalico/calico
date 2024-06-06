@@ -34,7 +34,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
-var _ = infrastructure.DatastoreDescribe("service loop prevention; with 2 nodes", []apiconfig.DatastoreType{apiconfig.EtcdV3, apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
+var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ service loop prevention; with 2 nodes", []apiconfig.DatastoreType{apiconfig.EtcdV3, apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
 
 	var (
 		infra  infrastructure.DatastoreInfra
@@ -46,8 +46,14 @@ var _ = infrastructure.DatastoreDescribe("service loop prevention; with 2 nodes"
 		infra = getInfra()
 
 		options := infrastructure.DefaultTopologyOptions()
+		if BPFMode() {
+			options.EnableIPv6 = true
+		}
 		options.IPIPEnabled = false
 		tc, client = infrastructure.StartNNodeTopology(2, options, infra)
+		if BPFMode() {
+			ensureAllNodesBPFProgramsAttached(tc.Felixes)
+		}
 	})
 
 	AfterEach(func() {
@@ -65,24 +71,6 @@ var _ = infrastructure.DatastoreDescribe("service loop prevention; with 2 nodes"
 		}
 		infra.Stop()
 	})
-
-	updateFelixConfig := func(deltaFn func(*api.FelixConfiguration)) {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		cfg, err := client.FelixConfigurations().Get(ctx, "default", options.GetOptions{})
-		if _, doesNotExist := err.(errors.ErrorResourceDoesNotExist); doesNotExist {
-			cfg = api.NewFelixConfiguration()
-			cfg.Name = "default"
-			deltaFn(cfg)
-			_, err = client.FelixConfigurations().Create(ctx, cfg, options.SetOptions{})
-			Expect(err).NotTo(HaveOccurred())
-		} else {
-			Expect(err).NotTo(HaveOccurred())
-			deltaFn(cfg)
-			_, err = client.FelixConfigurations().Update(ctx, cfg, options.SetOptions{})
-			Expect(err).NotTo(HaveOccurred())
-		}
-	}
 
 	updateBGPConfig := func(deltaFn func(*api.BGPConfiguration)) {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -116,7 +104,7 @@ var _ = infrastructure.DatastoreDescribe("service loop prevention; with 2 nodes"
 		}
 	}
 
-	tryRoutingLoop := func(expectLoop bool) {
+	tryRoutingLoop := func(expectLoop bool, count int) {
 
 		// Run containers to model a default gateway, and an external client connecting to
 		// services within the cluster via that gateway.
@@ -166,14 +154,15 @@ var _ = infrastructure.DatastoreDescribe("service loop prevention; with 2 nodes"
 			// gateway, resulting in MORE THAN 2 packets.
 			Eventually(countServiceIPPackets).Should(BeNumerically(">", 2))
 		} else {
-			// Tcpdump should see just 1 packet, the request, with no response (because
+			// Tcpdump should see just 1 or 2 packets based on the ServiceLoopPrevention config.
+			// If set to Drop, we see 1 packet the request, with no response (because
 			// we DROP) and no looping.
-			Eventually(countServiceIPPackets).Should(BeNumerically("==", 1))
+			// If set to Reject, we see 2 packets, the request, ICMP unreachable.
+			Eventually(countServiceIPPackets).Should(BeNumerically("==", count))
 		}
 	}
 
-	It("programs iptables as expected to block service routing loops", func() {
-
+	It("programs dataplane as expected to block service routing loops", func() {
 		By("configuring service cluster IPs")
 		updateBGPConfig(func(cfg *api.BGPConfiguration) {
 			cfg.Spec.ServiceClusterIPs = []api.ServiceClusterIPBlock{
@@ -190,62 +179,100 @@ var _ = infrastructure.DatastoreDescribe("service loop prevention; with 2 nodes"
 		// chains with DROP.  (Felix handles BGPConfiguration without restarting, so this
 		// should be quick.)
 		for _, felix := range tc.Felixes {
-			Eventually(getCIDRBlockRules(felix, "iptables-save")).Should(ConsistOf(
-				MatchRegexp("-A cali-cidr-block -d 10\\.96\\.0\\.0/17 .* -j DROP"),
-			))
-			Eventually(getCIDRBlockRules(felix, "ip6tables-save")).Should(ConsistOf(
-				MatchRegexp("-A cali-cidr-block -d fd5f::/119 .* -j DROP"),
-			))
+			if BPFMode() {
+				Eventually(func() string {
+					return bpfDumpRoutesV4(felix)
+				}, "10s", "1s").Should(ContainSubstring("10.96.0.0/17: blackhole-drop"))
+
+				Eventually(func() string {
+					return bpfDumpRoutesV6(felix)
+				}, "10s", "1s").Should(ContainSubstring("fd5f::/119: blackhole-drop"))
+			} else {
+				Eventually(getCIDRBlockRules(felix, "iptables-save")).Should(ConsistOf(
+					MatchRegexp("-A cali-cidr-block -d 10\\.96\\.0\\.0/17 .* -j DROP"),
+				))
+				Eventually(getCIDRBlockRules(felix, "ip6tables-save")).Should(ConsistOf(
+					MatchRegexp("-A cali-cidr-block -d fd5f::/119 .* -j DROP"),
+				))
+			}
 		}
 
 		By("test that we don't get a routing loop")
-		tryRoutingLoop(false)
+		tryRoutingLoop(false, 1)
 
 		By("configuring ServiceLoopPrevention=Reject")
-		updateFelixConfig(func(cfg *api.FelixConfiguration) {
-			cfg.Spec.ServiceLoopPrevention = "Reject"
-		})
+		setSvcLoopPrevention(tc, "Reject")
 
 		// Expect to see rules in cali-cidr-block chains with REJECT.  (Allowing time for a
 		// Felix restart.)
 		for _, felix := range tc.Felixes {
-			Eventually(getCIDRBlockRules(felix, "iptables-save"), "8s", "0.5s").Should(ConsistOf(
-				MatchRegexp("-A cali-cidr-block -d 10\\.96\\.0\\.0/17 .* -j REJECT"),
-			))
-			Eventually(getCIDRBlockRules(felix, "ip6tables-save"), "8s", "0.5s").Should(ConsistOf(
-				MatchRegexp("-A cali-cidr-block -d fd5f::/119 .* -j REJECT"),
-			))
+			if BPFMode() {
+				Eventually(func() string {
+					return bpfDumpRoutesV4(felix)
+				}, "10s", "1s").Should(ContainSubstring("10.96.0.0/17: blackhole-reject"))
+
+				Eventually(func() string {
+					return bpfDumpRoutesV6(felix)
+				}, "10s", "1s").Should(ContainSubstring("fd5f::/119: blackhole-reject"))
+			} else {
+				Eventually(getCIDRBlockRules(felix, "iptables-save"), "8s", "0.5s").Should(ConsistOf(
+					MatchRegexp("-A cali-cidr-block -d 10\\.96\\.0\\.0/17 .* -j REJECT"),
+				))
+				Eventually(getCIDRBlockRules(felix, "ip6tables-save"), "8s", "0.5s").Should(ConsistOf(
+					MatchRegexp("-A cali-cidr-block -d fd5f::/119 .* -j REJECT"),
+				))
+			}
+		}
+		By("test that we don't get a routing loop and ICMP back to the sender")
+		if BPFMode() {
+			tryRoutingLoop(false, 2)
 		}
 
 		By("configuring ServiceLoopPrevention=Disabled")
-		updateFelixConfig(func(cfg *api.FelixConfiguration) {
-			cfg.Spec.ServiceLoopPrevention = "Disabled"
-		})
+		setSvcLoopPrevention(tc, "Disabled")
 
 		// Expect to see empty cali-cidr-block chains.  (Allowing time for a Felix restart.)
 		for _, felix := range tc.Felixes {
-			Eventually(getCIDRBlockRules(felix, "iptables-save"), "8s", "0.5s").Should(BeEmpty())
-			Eventually(getCIDRBlockRules(felix, "ip6tables-save"), "8s", "0.5s").Should(BeEmpty())
+			if BPFMode() {
+				Eventually(func() string {
+					return bpfDumpRoutesV4(felix)
+				}, "10s", "1s").ShouldNot(ContainSubstring("10.96.0.0/17: blackhole"))
+
+				Eventually(func() string {
+					return bpfDumpRoutesV6(felix)
+				}, "10s", "1s").ShouldNot(ContainSubstring("fd5f::/119: blackhole"))
+			} else {
+				Eventually(getCIDRBlockRules(felix, "iptables-save"), "8s", "0.5s").Should(BeEmpty())
+				Eventually(getCIDRBlockRules(felix, "ip6tables-save"), "8s", "0.5s").Should(BeEmpty())
+			}
 		}
 
 		By("test that we DO get a routing loop")
 		// (In order to test that the tryRoutingLoop setup is genuine.)
-		tryRoutingLoop(true)
+		tryRoutingLoop(true, 64)
 
 		By("configuring ServiceLoopPrevention=Drop")
-		updateFelixConfig(func(cfg *api.FelixConfiguration) {
-			cfg.Spec.ServiceLoopPrevention = "Drop"
-		})
+		setSvcLoopPrevention(tc, "Drop")
 
 		// Expect to see rules in cali-cidr-block chains with DROP.  (Allowing time for a
 		// Felix restart.)
 		for _, felix := range tc.Felixes {
-			Eventually(getCIDRBlockRules(felix, "iptables-save"), "8s", "0.5s").Should(ConsistOf(
-				MatchRegexp("-A cali-cidr-block -d 10\\.96\\.0\\.0/17 .* -j DROP"),
-			))
-			Eventually(getCIDRBlockRules(felix, "ip6tables-save"), "8s", "0.5s").Should(ConsistOf(
-				MatchRegexp("-A cali-cidr-block -d fd5f::/119 .* -j DROP"),
-			))
+			if BPFMode() {
+				Eventually(func() string {
+					return bpfDumpRoutesV4(felix)
+				}, "10s", "1s").Should(ContainSubstring("10.96.0.0/17: blackhole-drop"))
+
+				Eventually(func() string {
+					return bpfDumpRoutesV6(felix)
+				}, "10s", "1s").Should(ContainSubstring("fd5f::/119: blackhole-drop"))
+			} else {
+				Eventually(getCIDRBlockRules(felix, "iptables-save"), "8s", "0.5s").Should(ConsistOf(
+					MatchRegexp("-A cali-cidr-block -d 10\\.96\\.0\\.0/17 .* -j DROP"),
+				))
+				Eventually(getCIDRBlockRules(felix, "ip6tables-save"), "8s", "0.5s").Should(ConsistOf(
+					MatchRegexp("-A cali-cidr-block -d fd5f::/119 .* -j DROP"),
+				))
+			}
 		}
 
 		By("updating the service CIDRs")
@@ -263,12 +290,22 @@ var _ = infrastructure.DatastoreDescribe("service loop prevention; with 2 nodes"
 		// Expect to see rules in cali-cidr-block chains with DROP and the updated CIDRs.
 		// (BGPConfiguration change is handled without needing a restart.)
 		for _, felix := range tc.Felixes {
-			Eventually(getCIDRBlockRules(felix, "iptables-save")).Should(ConsistOf(
-				MatchRegexp("-A cali-cidr-block -d 1\\.1\\.0\\.0/16 .* -j DROP"),
-			))
-			Eventually(getCIDRBlockRules(felix, "ip6tables-save")).Should(ConsistOf(
-				MatchRegexp("-A cali-cidr-block -d fd5e::/119 .* -j DROP"),
-			))
+			if BPFMode() {
+				Eventually(func() string {
+					return bpfDumpRoutesV4(felix)
+				}, "10s", "1s").Should(ContainSubstring("1.1.0.0/16: blackhole-drop"))
+
+				Eventually(func() string {
+					return bpfDumpRoutesV6(felix)
+				}, "10s", "1s").Should(ContainSubstring("fd5e::/119: blackhole-drop"))
+			} else {
+				Eventually(getCIDRBlockRules(felix, "iptables-save")).Should(ConsistOf(
+					MatchRegexp("-A cali-cidr-block -d 1\\.1\\.0\\.0/16 .* -j DROP"),
+				))
+				Eventually(getCIDRBlockRules(felix, "ip6tables-save")).Should(ConsistOf(
+					MatchRegexp("-A cali-cidr-block -d fd5e::/119 .* -j DROP"),
+				))
+			}
 		}
 
 		By("resetting BGP config")
@@ -287,24 +324,40 @@ var _ = infrastructure.DatastoreDescribe("service loop prevention; with 2 nodes"
 			}
 		})
 
+		for _, felix := range tc.Felixes {
+			if BPFMode() {
+				Eventually(func() string {
+					return bpfDumpRoutesV4(felix)
+				}, "10s", "1s").Should(ContainSubstring("10.96.0.0/17: blackhole-drop"))
+			} else {
+				Eventually(getCIDRBlockRules(felix, "iptables-save")).Should(ConsistOf(
+					MatchRegexp("-A cali-cidr-block -d 10\\.96\\.0\\.0/17 .* -j DROP"),
+				))
+			}
+		}
+
 		By("test that we don't get a routing loop")
-		tryRoutingLoop(false)
+		tryRoutingLoop(false, 1)
 
 		By("configuring ServiceLoopPrevention=Disabled")
-		updateFelixConfig(func(cfg *api.FelixConfiguration) {
-			cfg.Spec.ServiceLoopPrevention = "Disabled"
-		})
+		setSvcLoopPrevention(tc, "Disabled")
 
 		// Expect to see empty cali-cidr-block chains.  (Allowing time for a Felix
 		// restart.)  This ensures that the cali-cidr-block chain has been cleared
 		// before we try a test ping.
 		for _, felix := range tc.Felixes {
-			Eventually(getCIDRBlockRules(felix, "iptables-save"), "8s", "0.5s").Should(BeEmpty())
+			if BPFMode() {
+				Eventually(func() string {
+					return bpfDumpRoutesV4(felix)
+				}, "10s", "1s").ShouldNot(ContainSubstring("10.96.0.0/17: blackhole"))
+			} else {
+				Eventually(getCIDRBlockRules(felix, "iptables-save"), "8s", "0.5s").Should(BeEmpty())
+			}
 		}
 
 		By("test that we DO get a routing loop")
 		// (In order to test that the tryRoutingLoop setup is genuine.)
-		tryRoutingLoop(true)
+		tryRoutingLoop(true, 64)
 
 		By("resetting BGP config")
 		updateBGPConfig(func(cfg *api.BGPConfiguration) {
@@ -323,23 +376,27 @@ var _ = infrastructure.DatastoreDescribe("service loop prevention; with 2 nodes"
 		})
 
 		By("test that we don't get a routing loop")
-		tryRoutingLoop(false)
+		tryRoutingLoop(false, 1)
 
 		By("configuring ServiceLoopPrevention=Disabled")
-		updateFelixConfig(func(cfg *api.FelixConfiguration) {
-			cfg.Spec.ServiceLoopPrevention = "Disabled"
-		})
+		setSvcLoopPrevention(tc, "Disabled")
 
 		// Expect to see empty cali-cidr-block chains.  (Allowing time for a Felix
 		// restart.)  This ensures that the cali-cidr-block chain has been cleared
 		// before we try a test ping.
 		for _, felix := range tc.Felixes {
-			Eventually(getCIDRBlockRules(felix, "iptables-save"), "8s", "0.5s").Should(BeEmpty())
+			if BPFMode() {
+				Eventually(func() string {
+					return bpfDumpRoutesV4(felix)
+				}, "10s", "1s").ShouldNot(ContainSubstring("10.96.0.0/17: blackhole"))
+			} else {
+				Eventually(getCIDRBlockRules(felix, "iptables-save"), "8s", "0.5s").Should(BeEmpty())
+			}
 		}
 
 		By("test that we DO get a routing loop")
 		// (In order to test that the tryRoutingLoop setup is genuine.)
-		tryRoutingLoop(true)
+		tryRoutingLoop(true, 64)
 
 		By("resetting BGP config")
 		updateBGPConfig(func(cfg *api.BGPConfiguration) {
@@ -348,3 +405,11 @@ var _ = infrastructure.DatastoreDescribe("service loop prevention; with 2 nodes"
 	})
 
 })
+
+func setSvcLoopPrevention(tc infrastructure.TopologyContainers, value string) {
+	for _, felix := range tc.Felixes {
+		felix.SetEnv(map[string]string{"FELIX_SERVICELOOPPREVENTION": value})
+		felix.SetEnv(map[string]string{"FELIX_SERVICELOOPPREVENTION": value})
+		felix.Restart()
+	}
+}
