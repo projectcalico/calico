@@ -154,8 +154,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ service loop prevention; wi
 			// gateway, resulting in MORE THAN 2 packets.
 			Eventually(countServiceIPPackets).Should(BeNumerically(">", 2))
 		} else {
-			// Tcpdump should see just 1 packet, the request, with no response (because
+			// Tcpdump should see just 1 or 2 packets based on the ServiceLoopPrevention config.
+			// If set to Drop, we see 1 packet the request, with no response (because
 			// we DROP) and no looping.
+			// If set to Reject, we see 2 packets, the request, ICMP unreachable.
 			Eventually(countServiceIPPackets).Should(BeNumerically("==", count))
 		}
 	}

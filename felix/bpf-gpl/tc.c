@@ -544,6 +544,8 @@ syn_force_policy:
 	}
 
 	struct cali_rt *dest_rt = NULL;
+	// Route lookup is not done for those packets which are nat excluded, where there
+	// is a nat hit, but we don't resolve (such as node local DNS cache).
 	if (!(ctx->state->flags & CALI_ST_NAT_EXCLUDE)) {
 		dest_rt = cali_rt_lookup(&ctx->state->post_nat_ip_dst);
 	}
@@ -562,10 +564,11 @@ syn_force_policy:
 		goto do_policy;
 	}
 
-	/* If the dest route is a blackhole route, drop the packet,
-	 * if service loop prevention is configured to either DROP or REJECT.
-	 * If we know that that there was a NAT hit but we don't want to resolve (such as node local DNS)
-	 * allow the packet even if we hit a blackhole route.
+	/* If the dest route is a blackhole route, drop/reject the packet.
+	 * This is based on the service loop prevention configuration.
+	 * If ServiceLoopPrevention = Drop, route is a blackhole drop route.
+	 * If ServiceLoopPrevention = Reject, route is a blackhole reject route.
+	 * If ServiceLoopPrevention = Disabled, these routes are not programmed.
 	 */
 	if (CALI_F_TO_HOST) {
 		if (cali_rt_is_blackhole_drop(dest_rt)) {
