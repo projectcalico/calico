@@ -82,7 +82,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf reattach object",
 
 		By("Changing env and restarting felix")
 
-		felix.SetEvn(map[string]string{"FELIX_BPFDataIfacePattern": "eth1"})
+		felix.SetEnv(map[string]string{"FELIX_BPFDataIfacePattern": "eth1"})
 		felix.Restart()
 
 		By("Checking that eth0 does not have a program anymore")
