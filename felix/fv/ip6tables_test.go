@@ -166,7 +166,7 @@ var _ = infrastructure.DatastoreDescribe("IPv6 iptables/nftables tests", []apico
 			setupCluster()
 		})
 
-		It("CASEY should have connectivity from all workloads via workload 0's main IP when ICMPv6 is blocked", func() {
+		It("should have connectivity from all workloads via workload 0's main IP when ICMPv6 is blocked", func() {
 			nets := []string{"::/0"}
 			icmpProto := numorstring.ProtocolFromString("icmpv6")
 
