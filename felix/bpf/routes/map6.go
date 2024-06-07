@@ -77,7 +77,7 @@ func (v ValueV6) String() string {
 
 	if typeFlags&FlagLocal != 0 {
 		parts = append(parts, "local")
-	} else {
+	} else if typeFlags&FlagBlackHoleDrop == 0 && typeFlags&FlagBlackHoleReject == 0 {
 		parts = append(parts, "remote")
 	}
 
@@ -105,6 +105,14 @@ func (v ValueV6) String() string {
 
 	if typeFlags&FlagTunneled != 0 {
 		parts = append(parts, "tunneled")
+	}
+
+	if typeFlags&FlagBlackHoleDrop != 0 {
+		parts = append(parts, "blackhole-drop")
+	}
+
+	if typeFlags&FlagBlackHoleReject != 0 {
+		parts = append(parts, "blackhole-reject")
 	}
 
 	if typeFlags&FlagLocal != 0 && typeFlags&FlagWorkload != 0 {

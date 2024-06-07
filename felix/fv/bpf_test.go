@@ -5521,9 +5521,22 @@ func bpfDumpRoutes(felix *infrastructure.Felix) string {
 
 	if felix.TopologyOptions.EnableIPv6 {
 		out, err = felix.ExecOutput("calico-bpf", "-6", "routes", "dump")
+		ExpectWithOffset(1, err).NotTo(HaveOccurred())
 	} else {
 		out, err = felix.ExecOutput("calico-bpf", "routes", "dump")
+		ExpectWithOffset(1, err).NotTo(HaveOccurred())
 	}
+	return out
+}
+
+func bpfDumpRoutesV4(felix *infrastructure.Felix) string {
+	out, err := felix.ExecOutput("calico-bpf", "routes", "dump")
+	Expect(err).NotTo(HaveOccurred())
+	return out
+}
+
+func bpfDumpRoutesV6(felix *infrastructure.Felix) string {
+	out, err := felix.ExecOutput("calico-bpf", "-6", "routes", "dump")
 	Expect(err).NotTo(HaveOccurred())
 	return out
 }
