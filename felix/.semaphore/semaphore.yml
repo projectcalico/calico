@@ -165,6 +165,13 @@ blocks:
       - make check-wireguard
       - make fv FV_BATCHES_TO_RUN="${SEMAPHORE_JOB_INDEX}" FV_NUM_BATCHES=${SEMAPHORE_JOB_COUNT}
       parallelism: 3
+    - name: NFT FV Test matrix
+      execution_time_limit:
+        minutes: 120
+      commands:
+      - make check-wireguard
+      - make fv-nft FV_BATCHES_TO_RUN="${SEMAPHORE_JOB_INDEX}" FV_NUM_BATCHES=${SEMAPHORE_JOB_COUNT}
+      parallelism: 3
     epilogue:
       always:
         commands:

@@ -185,6 +185,15 @@ func (n *CIDRNode) lookupPath(buffer []CIDRTrieEntry, cidr CIDR) []CIDRTrieEntry
 }
 
 func (n *CIDRNode) get(cidr CIDR) interface{} {
+	node := n.getNode(cidr)
+	if n.data == nil {
+		// CIDR is an intermediate node with no data so CIDR isn't actually in the trie.
+		return nil
+	}
+	return node.data
+}
+
+func (n *CIDRNode) getNode(cidr CIDR) *CIDRNode {
 	if n == nil {
 		return nil
 	}
@@ -199,18 +208,14 @@ func (n *CIDRNode) get(cidr CIDR) interface{} {
 	}
 
 	if cidr == n.cidr {
-		if n.data == nil {
-			// CIDR is an intermediate node with no data so CIDR isn't actually in the trie.
-			return nil
-		}
-		return n.data
+		return n
 	}
 
 	// If we get here, then this node is a parent of the CIDR we're looking for.
 	// Figure out which child to recurse on.
 	childIdx := cidr.Addr().NthBit(uint(n.cidr.Prefix() + 1))
 	child := n.children[childIdx]
-	return child.get(cidr)
+	return child.getNode(cidr)
 }
 
 func (t *CIDRTrie) CoveredBy(cidr CIDR) bool {
@@ -312,6 +317,32 @@ func (t *CIDRTrie) ToSlice() []CIDRTrieEntry {
 
 func (t *CIDRTrie) Visit(f func(cidr CIDR, data interface{}) bool) {
 	t.root.visit(f)
+}
+
+// Descendants returns a list of CIDRs representing the closest descentents of the given CIDR in the trie that
+// have data associated with them.
+func (t *CIDRTrie) Descendants(parent CIDR) []CIDR {
+	// Get the node representing this CIDR.
+	node := t.root.getNode(parent)
+	if node == nil {
+		return nil
+	}
+	children := make([]CIDR, 0, 2)
+
+	// For each sub-node, add it to the list of children.
+	for _, child := range node.children {
+		if child != nil {
+			if child.data != nil {
+				// This is a "real" child node. Consider is a child.
+				children = append(children, child.cidr)
+			} else {
+				// This is an aggregate node that exists only to hold other nodes. Skip it, and
+				// instead recursively check its children until we find a hit.
+				children = append(children, t.Descendants(child.cidr)...)
+			}
+		}
+	}
+	return children
 }
 
 func (t *CIDRTrie) Update(cidr CIDR, value interface{}) {
