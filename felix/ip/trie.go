@@ -185,15 +185,13 @@ func (n *CIDRNode) lookupPath(buffer []CIDRTrieEntry, cidr CIDR) []CIDRTrieEntry
 }
 
 func (n *CIDRNode) get(cidr CIDR) interface{} {
-	node := n.getNode(cidr)
-	if n.data == nil {
-		// CIDR is an intermediate node with no data so CIDR isn't actually in the trie.
-		return nil
-	}
-	return node.data
+	return n.getNode(cidr, false).data
 }
 
-func (n *CIDRNode) getNode(cidr CIDR) *CIDRNode {
+// getNode returns the CIDRNode that contains the given CIDR.  If includeIntermediates is true then it will return,
+// and intermediate nodes that don't have data associated with them.  If includeIntermediates is false then it will
+// only return nodes that have data associated with them.
+func (n *CIDRNode) getNode(cidr CIDR, includeIntermediates bool) *CIDRNode {
 	if n == nil {
 		return nil
 	}
@@ -208,6 +206,10 @@ func (n *CIDRNode) getNode(cidr CIDR) *CIDRNode {
 	}
 
 	if cidr == n.cidr {
+		if !includeIntermediates && n.data == nil {
+			// CIDR is an intermediate node with no data so CIDR isn't actually in the trie.
+			return nil
+		}
 		return n
 	}
 
@@ -215,7 +217,7 @@ func (n *CIDRNode) getNode(cidr CIDR) *CIDRNode {
 	// Figure out which child to recurse on.
 	childIdx := cidr.Addr().NthBit(uint(n.cidr.Prefix() + 1))
 	child := n.children[childIdx]
-	return child.getNode(cidr)
+	return child.getNode(cidr, includeIntermediates)
 }
 
 func (t *CIDRTrie) CoveredBy(cidr CIDR) bool {
@@ -322,8 +324,9 @@ func (t *CIDRTrie) Visit(f func(cidr CIDR, data interface{}) bool) {
 // Descendants returns a list of CIDRs representing the closest descentents of the given CIDR in the trie that
 // have data associated with them.
 func (t *CIDRTrie) Descendants(parent CIDR) []CIDR {
-	// Get the node representing this CIDR.
-	node := t.root.getNode(parent)
+	// Get the node representing this CIDR. We include intermediate nodes so that
+	// we can traverse them to find the closest descendants.
+	node := t.root.getNode(parent, true)
 	if node == nil {
 		return nil
 	}
