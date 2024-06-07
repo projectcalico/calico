@@ -428,6 +428,7 @@ static CALI_BPF_INLINE void calico_tc_process_ct_lookup(struct cali_tc_ctx *ctx)
 			 * usecase of this is node-local-dns.
 			 */
 			ctx->state->flags |= CALI_ST_SKIP_FIB;
+			ctx->state->flags |= CALI_ST_NAT_EXCLUDE;
 		}
 	}
 
@@ -542,8 +543,12 @@ syn_force_policy:
 		ctx->state->flags |= CALI_ST_SRC_IS_HOST;
 	}
 
-	struct cali_rt *dest_rt = cali_rt_lookup(&ctx->state->post_nat_ip_dst);
-
+	struct cali_rt *dest_rt = NULL;
+	// Route lookup is not done for those packets which are nat excluded, where there
+	// is a nat hit, but we don't resolve (such as node local DNS cache).
+	if (!(ctx->state->flags & CALI_ST_NAT_EXCLUDE)) {
+		dest_rt = cali_rt_lookup(&ctx->state->post_nat_ip_dst);
+	}
 	if (!dest_rt) {
 		CALI_DEBUG("No route for post DNAT dest %x\n", debug_ip(ctx->state->post_nat_ip_dst));
 		if (CALI_F_FROM_HEP) {
@@ -557,6 +562,32 @@ syn_force_policy:
 			ctx->state->flags |= CALI_ST_SKIP_FIB;
 		}
 		goto do_policy;
+	}
+
+	/* If the dest route is a blackhole route, drop/reject the packet.
+	 * This is based on the service loop prevention configuration.
+	 * If ServiceLoopPrevention = Drop, route is a blackhole drop route.
+	 * If ServiceLoopPrevention = Reject, route is a blackhole reject route.
+	 * If ServiceLoopPrevention = Disabled, these routes are not programmed.
+	 */
+	if (CALI_F_TO_HOST) {
+		if (cali_rt_is_blackhole_drop(dest_rt)) {
+			CALI_DEBUG("Packet hit a black hole route: DROP\n");
+			deny_reason(ctx, CALI_REASON_BLACK_HOLE);
+			goto deny;
+		}
+		if (cali_rt_is_blackhole_reject(dest_rt)) {
+			CALI_DEBUG("Packet hit a black hole route: REJECT\n");
+			deny_reason(ctx, CALI_REASON_BLACK_HOLE);
+#ifdef IPVER6
+			ctx->state->icmp_type = ICMPV6_DEST_UNREACH;
+			ctx->state->icmp_code = ICMPV6_PORT_UNREACH;
+#else
+			ctx->state->icmp_type = ICMP_DEST_UNREACH;
+			ctx->state->icmp_code = ICMP_PORT_UNREACH;
+#endif
+			goto icmp_send_reply;
+		}
 	}
 
 	if (cali_rt_flags_local_host(dest_rt->flags)) {
