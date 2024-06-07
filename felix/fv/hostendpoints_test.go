@@ -297,9 +297,6 @@ func describeHostEndpointTests(getInfra infrastructure.InfraFactory, allInterfac
 			expectPodToPodTraffic()
 			expectHostToOwnPodTraffic()
 			if !NFTMode() {
-				// CASEY: TODO: Fix this for NFT mode.
-				// For some reason, host's are failing to talk to local pods via service IPs. Unclear if it's a problem
-				// with the FV code's NAT rules or Felix's rules.
 				expectHostToOwnPodViaServiceTraffic()
 			}
 			expectDenyHostToRemotePodViaServiceTraffic()
