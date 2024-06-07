@@ -23,10 +23,10 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/format"
 
-	. "github.com/projectcalico/calico/felix/rules"
-
+	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/ipsets"
 	. "github.com/projectcalico/calico/felix/iptables"
+	. "github.com/projectcalico/calico/felix/rules"
 )
 
 var _ = Describe("Endpoints", func() {
@@ -38,7 +38,7 @@ var _ = Describe("Endpoints", func() {
 	)
 
 	for _, trueOrFalse := range []bool{true, false} {
-		var denyAction Action
+		var denyAction generictables.Action
 		denyAction = DropAction{}
 		denyActionCommand := "DROP"
 		denyActionString := "Drop"
@@ -49,7 +49,7 @@ var _ = Describe("Endpoints", func() {
 		}
 
 		kubeIPVSEnabled := trueOrFalse
-		var rrConfigNormalMangleReturn = Config{
+		rrConfigNormalMangleReturn := Config{
 			IPIPEnabled:                 true,
 			IPIPTunnelAddress:           nil,
 			IPSetConfigV4:               ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
@@ -67,7 +67,7 @@ var _ = Describe("Endpoints", func() {
 			VXLANVNI:                    4096,
 		}
 
-		var rrConfigConntrackDisabledReturnAction = Config{
+		rrConfigConntrackDisabledReturnAction := Config{
 			IPIPEnabled:                 true,
 			IPIPTunnelAddress:           nil,
 			IPSetConfigV4:               ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
@@ -89,13 +89,13 @@ var _ = Describe("Endpoints", func() {
 		var renderer RuleRenderer
 		var epMarkMapper EndpointMarkMapper
 
-		dropVXLANRule := Rule{
+		dropVXLANRule := generictables.Rule{
 			Match: Match().ProtocolNum(ProtoUDP).
 				DestPorts(uint16(VXLANPort)),
 			Action:  denyAction,
 			Comment: []string{fmt.Sprintf("%s VXLAN encapped packets originating in workloads", denyActionString)},
 		}
-		dropIPIPRule := Rule{
+		dropIPIPRule := generictables.Rule{
 			Match:   Match().ProtocolNum(ProtoIPIP),
 			Action:  denyAction,
 			Comment: []string{fmt.Sprintf("%s IPinIP encapped packets originating in workloads", denyActionString)},
@@ -114,41 +114,64 @@ var _ = Describe("Endpoints", func() {
 					true,
 					nil,
 					nil,
-					nil)).To(Equal(trimSMChain(kubeIPVSEnabled, []*Chain{
+					nil)).To(Equal(trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 					{
 						Name: "cali-tw-cali1234",
-						Rules: []Rule{
+						Rules: []generictables.Rule{
 							// conntrack rules.
-							{Match: Match().ConntrackState("RELATED,ESTABLISHED"),
-								Action: AcceptAction{}},
-							{Match: Match().ConntrackState("INVALID"),
-								Action: denyAction},
+							{
+								Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
+								Action: AcceptAction{},
+							},
+							{
+								Match:  Match().ConntrackState("INVALID"),
+								Action: denyAction,
+							},
 
-							{Action: ClearMarkAction{Mark: 0x18}},
-							{Action: denyAction,
-								Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)}},
+							{
+								Match:  Match(),
+								Action: ClearMarkAction{Mark: 0x18},
+							},
+							{
+								Match:   Match(),
+								Action:  denyAction,
+								Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)},
+							},
 						},
 					},
 					{
 						Name: "cali-fw-cali1234",
-						Rules: []Rule{
+						Rules: []generictables.Rule{
 							// conntrack rules.
-							{Match: Match().ConntrackState("RELATED,ESTABLISHED"),
-								Action: AcceptAction{}},
-							{Match: Match().ConntrackState("INVALID"),
-								Action: denyAction},
+							{
+								Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
+								Action: AcceptAction{},
+							},
+							{
+								Match:  Match().ConntrackState("INVALID"),
+								Action: denyAction,
+							},
 
-							{Action: ClearMarkAction{Mark: 0x18}},
+							{
+								Match:  Match(),
+								Action: ClearMarkAction{Mark: 0x18},
+							},
 							dropVXLANRule,
 							dropIPIPRule,
-							{Action: denyAction,
-								Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)}},
+							{
+								Match:   Match(),
+								Action:  denyAction,
+								Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)},
+							},
 						},
 					},
 					{
 						Name: "cali-sm-cali1234",
-						Rules: []Rule{
-							{Action: SetMaskedMarkAction{Mark: 0xd400, Mask: 0xff00}},
+						Rules: []generictables.Rule{
+							{
+								Match:  Match(),
+								Action: SetMaskedMarkAction{Mark: 0xd400, Mask: 0xff00},
+							},
 						},
 					},
 				})))
@@ -161,25 +184,34 @@ var _ = Describe("Endpoints", func() {
 					nil,
 					nil,
 					nil,
-				)).To(Equal(trimSMChain(kubeIPVSEnabled, []*Chain{
+				)).To(Equal(trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 					{
 						Name: "cali-tw-cali1234",
-						Rules: []Rule{
-							{Action: denyAction,
-								Comment: []string{"Endpoint admin disabled"}},
+						Rules: []generictables.Rule{
+							{
+								Match:   Match(),
+								Action:  denyAction,
+								Comment: []string{"Endpoint admin disabled"},
+							},
 						},
 					},
 					{
 						Name: "cali-fw-cali1234",
-						Rules: []Rule{
-							{Action: denyAction,
-								Comment: []string{"Endpoint admin disabled"}},
+						Rules: []generictables.Rule{
+							{
+								Match:   Match(),
+								Action:  denyAction,
+								Comment: []string{"Endpoint admin disabled"},
+							},
 						},
 					},
 					{
 						Name: "cali-sm-cali1234",
-						Rules: []Rule{
-							{Action: SetMaskedMarkAction{Mark: 0xd400, Mask: 0xff00}},
+						Rules: []generictables.Rule{
+							{
+								Match:  Match(),
+								Action: SetMaskedMarkAction{Mark: 0xd400, Mask: 0xff00},
+							},
 						},
 					},
 				})))
@@ -193,89 +225,152 @@ var _ = Describe("Endpoints", func() {
 					singlePolicyGroups([]string{"ai", "bi"}),
 					singlePolicyGroups([]string{"ae", "be"}),
 					[]string{"prof1", "prof2"},
-				)).To(Equal(trimSMChain(kubeIPVSEnabled, []*Chain{
+				)).To(Equal(trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 					{
 						Name: "cali-tw-cali1234",
-						Rules: []Rule{
+						Rules: []generictables.Rule{
 							// conntrack rules.
-							{Match: Match().ConntrackState("RELATED,ESTABLISHED"),
-								Action: AcceptAction{}},
-							{Match: Match().ConntrackState("INVALID"),
-								Action: denyAction},
+							{
+								Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
+								Action: AcceptAction{},
+							},
+							{
+								Match:  Match().ConntrackState("INVALID"),
+								Action: denyAction,
+							},
 
-							{Action: ClearMarkAction{Mark: 0x18}},
+							{
+								Match:  Match(),
+								Action: ClearMarkAction{Mark: 0x18},
+							},
 
-							{Match: Match().MarkClear(0x10),
-								Action: JumpAction{Target: "cali-pi-ai"}},
-							{Match: Match().MarkSingleBitSet(0x8),
+							{
+								Match:  Match().MarkClear(0x10),
+								Action: JumpAction{Target: "cali-pi-ai"},
+							},
+							{
+								Match:   Match().MarkSingleBitSet(0x8),
 								Action:  ReturnAction{},
-								Comment: []string{"Return if policy accepted"}},
-							{Match: Match().MarkClear(0x10),
-								Action: JumpAction{Target: "cali-pi-bi"}},
-							{Match: Match().MarkSingleBitSet(0x8),
+								Comment: []string{"Return if policy accepted"},
+							},
+							{
+								Match:  Match().MarkClear(0x10),
+								Action: JumpAction{Target: "cali-pi-bi"},
+							},
+							{
+								Match:   Match().MarkSingleBitSet(0x8),
 								Action:  ReturnAction{},
-								Comment: []string{"Return if policy accepted"}},
-							{Match: Match().MarkClear(0x10),
+								Comment: []string{"Return if policy accepted"},
+							},
+							{
+								Match:   Match().MarkClear(0x10),
 								Action:  denyAction,
-								Comment: []string{fmt.Sprintf("%s if no policies passed packet", denyActionString)}},
+								Comment: []string{fmt.Sprintf("%s if no policies passed packet", denyActionString)},
+							},
 
-							{Action: JumpAction{Target: "cali-pri-prof1"}},
-							{Match: Match().MarkSingleBitSet(0x8),
+							{
+								Match:  Match(),
+								Action: JumpAction{Target: "cali-pri-prof1"},
+							},
+							{
+								Match:   Match().MarkSingleBitSet(0x8),
 								Action:  ReturnAction{},
-								Comment: []string{"Return if profile accepted"}},
-							{Action: JumpAction{Target: "cali-pri-prof2"}},
-							{Match: Match().MarkSingleBitSet(0x8),
+								Comment: []string{"Return if profile accepted"},
+							},
+							{
+								Match:  Match(),
+								Action: JumpAction{Target: "cali-pri-prof2"},
+							},
+							{
+								Match:   Match().MarkSingleBitSet(0x8),
 								Action:  ReturnAction{},
-								Comment: []string{"Return if profile accepted"}},
+								Comment: []string{"Return if profile accepted"},
+							},
 
-							{Action: denyAction,
-								Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)}},
+							{
+								Match:   Match(),
+								Action:  denyAction,
+								Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)},
+							},
 						},
 					},
 					{
 						Name: "cali-fw-cali1234",
-						Rules: []Rule{
+						Rules: []generictables.Rule{
 							// conntrack rules.
-							{Match: Match().ConntrackState("RELATED,ESTABLISHED"),
-								Action: AcceptAction{}},
-							{Match: Match().ConntrackState("INVALID"),
-								Action: denyAction},
+							{
+								Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
+								Action: AcceptAction{},
+							},
+							{
+								Match:  Match().ConntrackState("INVALID"),
+								Action: denyAction,
+							},
 
-							{Action: ClearMarkAction{Mark: 0x18}},
+							{
+								Match:  Match(),
+								Action: ClearMarkAction{Mark: 0x18},
+							},
 							dropVXLANRule,
 							dropIPIPRule,
 
-							{Match: Match().MarkClear(0x10),
-								Action: JumpAction{Target: "cali-po-ae"}},
-							{Match: Match().MarkSingleBitSet(0x8),
+							{
+								Match:  Match().MarkClear(0x10),
+								Action: JumpAction{Target: "cali-po-ae"},
+							},
+							{
+								Match:   Match().MarkSingleBitSet(0x8),
 								Action:  ReturnAction{},
-								Comment: []string{"Return if policy accepted"}},
-							{Match: Match().MarkClear(0x10),
-								Action: JumpAction{Target: "cali-po-be"}},
-							{Match: Match().MarkSingleBitSet(0x8),
+								Comment: []string{"Return if policy accepted"},
+							},
+							{
+								Match:  Match().MarkClear(0x10),
+								Action: JumpAction{Target: "cali-po-be"},
+							},
+							{
+								Match:   Match().MarkSingleBitSet(0x8),
 								Action:  ReturnAction{},
-								Comment: []string{"Return if policy accepted"}},
-							{Match: Match().MarkClear(0x10),
+								Comment: []string{"Return if policy accepted"},
+							},
+							{
+								Match:   Match().MarkClear(0x10),
 								Action:  denyAction,
-								Comment: []string{fmt.Sprintf("%s if no policies passed packet", denyActionString)}},
+								Comment: []string{fmt.Sprintf("%s if no policies passed packet", denyActionString)},
+							},
 
-							{Action: JumpAction{Target: "cali-pro-prof1"}},
-							{Match: Match().MarkSingleBitSet(0x8),
+							{
+								Match:  Match(),
+								Action: JumpAction{Target: "cali-pro-prof1"},
+							},
+							{
+								Match:   Match().MarkSingleBitSet(0x8),
 								Action:  ReturnAction{},
-								Comment: []string{"Return if profile accepted"}},
-							{Action: JumpAction{Target: "cali-pro-prof2"}},
-							{Match: Match().MarkSingleBitSet(0x8),
+								Comment: []string{"Return if profile accepted"},
+							},
+							{
+								Match:  Match(),
+								Action: JumpAction{Target: "cali-pro-prof2"},
+							},
+							{
+								Match:   Match().MarkSingleBitSet(0x8),
 								Action:  ReturnAction{},
-								Comment: []string{"Return if profile accepted"}},
+								Comment: []string{"Return if profile accepted"},
+							},
 
-							{Action: denyAction,
-								Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)}},
+							{
+								Match:   Match(),
+								Action:  denyAction,
+								Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)},
+							},
 						},
 					},
 					{
 						Name: "cali-sm-cali1234",
-						Rules: []Rule{
-							{Action: SetMaskedMarkAction{Mark: 0xd400, Mask: 0xff00}},
+						Rules: []generictables.Rule{
+							{
+								Match:  Match(),
+								Action: SetMaskedMarkAction{Mark: 0xd400, Mask: 0xff00},
+							},
 						},
 					},
 				})))
@@ -322,89 +417,152 @@ var _ = Describe("Endpoints", func() {
 						polGrpOutDE,
 					},
 					[]string{"prof1", "prof2"},
-				)).To(Equal(trimSMChain(kubeIPVSEnabled, []*Chain{
+				)).To(Equal(trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 					{
 						Name: "cali-tw-cali1234",
-						Rules: []Rule{
+						Rules: []generictables.Rule{
 							// conntrack rules.
-							{Match: Match().ConntrackState("RELATED,ESTABLISHED"),
-								Action: AcceptAction{}},
-							{Match: Match().ConntrackState("INVALID"),
-								Action: denyAction},
+							{
+								Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
+								Action: AcceptAction{},
+							},
+							{
+								Match:  Match().ConntrackState("INVALID"),
+								Action: denyAction,
+							},
 
-							{Action: ClearMarkAction{Mark: 0x18}},
+							{
+								Match:  Match(),
+								Action: ClearMarkAction{Mark: 0x18},
+							},
 
-							{Match: Match().MarkClear(0x10),
-								Action: JumpAction{Target: polGrpInABC.ChainName()}},
-							{Match: Match().MarkSingleBitSet(0x8),
+							{
+								Match:  Match().MarkClear(0x10),
+								Action: JumpAction{Target: polGrpInABC.ChainName()},
+							},
+							{
+								Match:   Match().MarkSingleBitSet(0x8),
 								Action:  ReturnAction{},
-								Comment: []string{"Return if policy accepted"}},
-							{Match: Match().MarkClear(0x10),
-								Action: JumpAction{Target: polGrpInEF.ChainName()}},
-							{Match: Match().MarkSingleBitSet(0x8),
+								Comment: []string{"Return if policy accepted"},
+							},
+							{
+								Match:  Match().MarkClear(0x10),
+								Action: JumpAction{Target: polGrpInEF.ChainName()},
+							},
+							{
+								Match:   Match().MarkSingleBitSet(0x8),
 								Action:  ReturnAction{},
-								Comment: []string{"Return if policy accepted"}},
-							{Match: Match().MarkClear(0x10),
+								Comment: []string{"Return if policy accepted"},
+							},
+							{
+								Match:   Match().MarkClear(0x10),
 								Action:  denyAction,
-								Comment: []string{fmt.Sprintf("%s if no policies passed packet", denyActionString)}},
+								Comment: []string{fmt.Sprintf("%s if no policies passed packet", denyActionString)},
+							},
 
-							{Action: JumpAction{Target: "cali-pri-prof1"}},
-							{Match: Match().MarkSingleBitSet(0x8),
+							{
+								Match:  Match(),
+								Action: JumpAction{Target: "cali-pri-prof1"},
+							},
+							{
+								Match:   Match().MarkSingleBitSet(0x8),
 								Action:  ReturnAction{},
-								Comment: []string{"Return if profile accepted"}},
-							{Action: JumpAction{Target: "cali-pri-prof2"}},
-							{Match: Match().MarkSingleBitSet(0x8),
+								Comment: []string{"Return if profile accepted"},
+							},
+							{
+								Match:  Match(),
+								Action: JumpAction{Target: "cali-pri-prof2"},
+							},
+							{
+								Match:   Match().MarkSingleBitSet(0x8),
 								Action:  ReturnAction{},
-								Comment: []string{"Return if profile accepted"}},
+								Comment: []string{"Return if profile accepted"},
+							},
 
-							{Action: denyAction,
-								Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)}},
+							{
+								Match:   Match(),
+								Action:  denyAction,
+								Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)},
+							},
 						},
 					},
 					{
 						Name: "cali-fw-cali1234",
-						Rules: []Rule{
+						Rules: []generictables.Rule{
 							// conntrack rules.
-							{Match: Match().ConntrackState("RELATED,ESTABLISHED"),
-								Action: AcceptAction{}},
-							{Match: Match().ConntrackState("INVALID"),
-								Action: denyAction},
+							{
+								Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
+								Action: AcceptAction{},
+							},
+							{
+								Match:  Match().ConntrackState("INVALID"),
+								Action: denyAction,
+							},
 
-							{Action: ClearMarkAction{Mark: 0x18}},
+							{
+								Match:  Match(),
+								Action: ClearMarkAction{Mark: 0x18},
+							},
 							dropVXLANRule,
 							dropIPIPRule,
 
-							{Match: Match().MarkClear(0x10),
-								Action: JumpAction{Target: polGrpOutAB.ChainName()}},
-							{Match: Match().MarkSingleBitSet(0x8),
+							{
+								Match:  Match().MarkClear(0x10),
+								Action: JumpAction{Target: polGrpOutAB.ChainName()},
+							},
+							{
+								Match:   Match().MarkSingleBitSet(0x8),
 								Action:  ReturnAction{},
-								Comment: []string{"Return if policy accepted"}},
-							{Match: Match().MarkClear(0x10),
-								Action: JumpAction{Target: polGrpOutDE.ChainName()}},
-							{Match: Match().MarkSingleBitSet(0x8),
+								Comment: []string{"Return if policy accepted"},
+							},
+							{
+								Match:  Match().MarkClear(0x10),
+								Action: JumpAction{Target: polGrpOutDE.ChainName()},
+							},
+							{
+								Match:   Match().MarkSingleBitSet(0x8),
 								Action:  ReturnAction{},
-								Comment: []string{"Return if policy accepted"}},
-							{Match: Match().MarkClear(0x10),
+								Comment: []string{"Return if policy accepted"},
+							},
+							{
+								Match:   Match().MarkClear(0x10),
 								Action:  denyAction,
-								Comment: []string{fmt.Sprintf("%s if no policies passed packet", denyActionString)}},
+								Comment: []string{fmt.Sprintf("%s if no policies passed packet", denyActionString)},
+							},
 
-							{Action: JumpAction{Target: "cali-pro-prof1"}},
-							{Match: Match().MarkSingleBitSet(0x8),
+							{
+								Match:  Match(),
+								Action: JumpAction{Target: "cali-pro-prof1"},
+							},
+							{
+								Match:   Match().MarkSingleBitSet(0x8),
 								Action:  ReturnAction{},
-								Comment: []string{"Return if profile accepted"}},
-							{Action: JumpAction{Target: "cali-pro-prof2"}},
-							{Match: Match().MarkSingleBitSet(0x8),
+								Comment: []string{"Return if profile accepted"},
+							},
+							{
+								Match:  Match(),
+								Action: JumpAction{Target: "cali-pro-prof2"},
+							},
+							{
+								Match:   Match().MarkSingleBitSet(0x8),
 								Action:  ReturnAction{},
-								Comment: []string{"Return if profile accepted"}},
+								Comment: []string{"Return if profile accepted"},
+							},
 
-							{Action: denyAction,
-								Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)}},
+							{
+								Match:   Match(),
+								Action:  denyAction,
+								Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)},
+							},
 						},
 					},
 					{
 						Name: "cali-sm-cali1234",
-						Rules: []Rule{
-							{Action: SetMaskedMarkAction{Mark: 0xd400, Mask: 0xff00}},
+						Rules: []generictables.Rule{
+							{
+								Match:  Match(),
+								Action: SetMaskedMarkAction{Mark: 0xd400, Mask: 0xff00},
+							},
 						},
 					},
 				})))
@@ -415,145 +573,248 @@ var _ = Describe("Endpoints", func() {
 					epMarkMapper,
 					singlePolicyGroups([]string{"ai", "bi"}), singlePolicyGroups([]string{"ae", "be"}),
 					singlePolicyGroups([]string{"afi", "bfi"}), singlePolicyGroups([]string{"afe", "bfe"}),
-					[]string{"prof1", "prof2"})).To(Equal(trimSMChain(kubeIPVSEnabled, []*Chain{
+					[]string{"prof1", "prof2"})).To(Equal(trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 					{
 						Name: "cali-th-eth0",
-						Rules: []Rule{
+						Rules: []generictables.Rule{
 							// conntrack rules.
-							{Match: Match().ConntrackState("RELATED,ESTABLISHED"),
-								Action: AcceptAction{}},
-							{Match: Match().ConntrackState("INVALID"),
-								Action: denyAction},
+							{
+								Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
+								Action: AcceptAction{},
+							},
+							{
+								Match:  Match().ConntrackState("INVALID"),
+								Action: denyAction,
+							},
 
 							// Host endpoints get extra failsafe rules.
-							{Action: JumpAction{Target: "cali-failsafe-out"}},
+							{
+								Match:  Match(),
+								Action: JumpAction{Target: "cali-failsafe-out"},
+							},
 
-							{Action: ClearMarkAction{Mark: 0x18}},
+							{
+								Match:  Match(),
+								Action: ClearMarkAction{Mark: 0x18},
+							},
 
-							{Match: Match().MarkClear(0x10),
-								Action: JumpAction{Target: "cali-po-ae"}},
-							{Match: Match().MarkSingleBitSet(0x8),
+							{
+								Match:  Match().MarkClear(0x10),
+								Action: JumpAction{Target: "cali-po-ae"},
+							},
+							{
+								Match:   Match().MarkSingleBitSet(0x8),
 								Action:  ReturnAction{},
-								Comment: []string{"Return if policy accepted"}},
-							{Match: Match().MarkClear(0x10),
-								Action: JumpAction{Target: "cali-po-be"}},
-							{Match: Match().MarkSingleBitSet(0x8),
+								Comment: []string{"Return if policy accepted"},
+							},
+							{
+								Match:  Match().MarkClear(0x10),
+								Action: JumpAction{Target: "cali-po-be"},
+							},
+							{
+								Match:   Match().MarkSingleBitSet(0x8),
 								Action:  ReturnAction{},
-								Comment: []string{"Return if policy accepted"}},
-							{Match: Match().MarkClear(0x10),
+								Comment: []string{"Return if policy accepted"},
+							},
+							{
+								Match:   Match().MarkClear(0x10),
 								Action:  denyAction,
-								Comment: []string{fmt.Sprintf("%s if no policies passed packet", denyActionString)}},
+								Comment: []string{fmt.Sprintf("%s if no policies passed packet", denyActionString)},
+							},
 
-							{Action: JumpAction{Target: "cali-pro-prof1"}},
-							{Match: Match().MarkSingleBitSet(0x8),
+							{
+								Match:  Match(),
+								Action: JumpAction{Target: "cali-pro-prof1"},
+							},
+							{
+								Match:   Match().MarkSingleBitSet(0x8),
 								Action:  ReturnAction{},
-								Comment: []string{"Return if profile accepted"}},
-							{Action: JumpAction{Target: "cali-pro-prof2"}},
-							{Match: Match().MarkSingleBitSet(0x8),
+								Comment: []string{"Return if profile accepted"},
+							},
+							{
+								Match:  Match(),
+								Action: JumpAction{Target: "cali-pro-prof2"},
+							},
+							{
+								Match:   Match().MarkSingleBitSet(0x8),
 								Action:  ReturnAction{},
-								Comment: []string{"Return if profile accepted"}},
+								Comment: []string{"Return if profile accepted"},
+							},
 
-							{Action: denyAction,
-								Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)}},
+							{
+								Match:   Match(),
+								Action:  denyAction,
+								Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)},
+							},
 						},
 					},
 					{
 						Name: "cali-fh-eth0",
-						Rules: []Rule{
+						Rules: []generictables.Rule{
 							// conntrack rules.
-							{Match: Match().ConntrackState("RELATED,ESTABLISHED"),
-								Action: AcceptAction{}},
-							{Match: Match().ConntrackState("INVALID"),
-								Action: denyAction},
+							{
+								Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
+								Action: AcceptAction{},
+							},
+							{
+								Match:  Match().ConntrackState("INVALID"),
+								Action: denyAction,
+							},
 
 							// Host endpoints get extra failsafe rules.
-							{Action: JumpAction{Target: "cali-failsafe-in"}},
+							{
+								Match:  Match(),
+								Action: JumpAction{Target: "cali-failsafe-in"},
+							},
 
-							{Action: ClearMarkAction{Mark: 0x18}},
+							{
+								Match:  Match(),
+								Action: ClearMarkAction{Mark: 0x18},
+							},
 
-							{Match: Match().MarkClear(0x10),
-								Action: JumpAction{Target: "cali-pi-ai"}},
-							{Match: Match().MarkSingleBitSet(0x8),
+							{
+								Match:  Match().MarkClear(0x10),
+								Action: JumpAction{Target: "cali-pi-ai"},
+							},
+							{
+								Match:   Match().MarkSingleBitSet(0x8),
 								Action:  ReturnAction{},
-								Comment: []string{"Return if policy accepted"}},
-							{Match: Match().MarkClear(0x10),
-								Action: JumpAction{Target: "cali-pi-bi"}},
-							{Match: Match().MarkSingleBitSet(0x8),
+								Comment: []string{"Return if policy accepted"},
+							},
+							{
+								Match:  Match().MarkClear(0x10),
+								Action: JumpAction{Target: "cali-pi-bi"},
+							},
+							{
+								Match:   Match().MarkSingleBitSet(0x8),
 								Action:  ReturnAction{},
-								Comment: []string{"Return if policy accepted"}},
-							{Match: Match().MarkClear(0x10),
+								Comment: []string{"Return if policy accepted"},
+							},
+							{
+								Match:   Match().MarkClear(0x10),
 								Action:  denyAction,
-								Comment: []string{fmt.Sprintf("%s if no policies passed packet", denyActionString)}},
+								Comment: []string{fmt.Sprintf("%s if no policies passed packet", denyActionString)},
+							},
 
-							{Action: JumpAction{Target: "cali-pri-prof1"}},
-							{Match: Match().MarkSingleBitSet(0x8),
+							{
+								Match:  Match(),
+								Action: JumpAction{Target: "cali-pri-prof1"},
+							},
+							{
+								Match:   Match().MarkSingleBitSet(0x8),
 								Action:  ReturnAction{},
-								Comment: []string{"Return if profile accepted"}},
-							{Action: JumpAction{Target: "cali-pri-prof2"}},
-							{Match: Match().MarkSingleBitSet(0x8),
+								Comment: []string{"Return if profile accepted"},
+							},
+							{
+								Match:  Match(),
+								Action: JumpAction{Target: "cali-pri-prof2"},
+							},
+							{
+								Match:   Match().MarkSingleBitSet(0x8),
 								Action:  ReturnAction{},
-								Comment: []string{"Return if profile accepted"}},
+								Comment: []string{"Return if profile accepted"},
+							},
 
-							{Action: denyAction,
-								Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)}},
+							{
+								Match:   Match(),
+								Action:  denyAction,
+								Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)},
+							},
 						},
 					},
 					{
 						Name: "cali-thfw-eth0",
-						Rules: []Rule{
+						Rules: []generictables.Rule{
 							// conntrack rules.
-							{Match: Match().ConntrackState("RELATED,ESTABLISHED"),
-								Action: AcceptAction{}},
-							{Match: Match().ConntrackState("INVALID"),
-								Action: denyAction},
+							{
+								Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
+								Action: AcceptAction{},
+							},
+							{
+								Match:  Match().ConntrackState("INVALID"),
+								Action: denyAction,
+							},
 
-							{Action: ClearMarkAction{Mark: 0x18}},
+							{
+								Match:  Match(),
+								Action: ClearMarkAction{Mark: 0x18},
+							},
 
-							{Match: Match().MarkClear(0x10),
-								Action: JumpAction{Target: "cali-po-afe"}},
-							{Match: Match().MarkSingleBitSet(0x8),
+							{
+								Match:  Match().MarkClear(0x10),
+								Action: JumpAction{Target: "cali-po-afe"},
+							},
+							{
+								Match:   Match().MarkSingleBitSet(0x8),
 								Action:  ReturnAction{},
-								Comment: []string{"Return if policy accepted"}},
-							{Match: Match().MarkClear(0x10),
-								Action: JumpAction{Target: "cali-po-bfe"}},
-							{Match: Match().MarkSingleBitSet(0x8),
+								Comment: []string{"Return if policy accepted"},
+							},
+							{
+								Match:  Match().MarkClear(0x10),
+								Action: JumpAction{Target: "cali-po-bfe"},
+							},
+							{
+								Match:   Match().MarkSingleBitSet(0x8),
 								Action:  ReturnAction{},
-								Comment: []string{"Return if policy accepted"}},
-							{Match: Match().MarkClear(0x10),
+								Comment: []string{"Return if policy accepted"},
+							},
+							{
+								Match:   Match().MarkClear(0x10),
 								Action:  denyAction,
-								Comment: []string{fmt.Sprintf("%s if no policies passed packet", denyActionString)}},
+								Comment: []string{fmt.Sprintf("%s if no policies passed packet", denyActionString)},
+							},
 						},
 					},
 					{
 						Name: "cali-fhfw-eth0",
-						Rules: []Rule{
+						Rules: []generictables.Rule{
 							// conntrack rules.
-							{Match: Match().ConntrackState("RELATED,ESTABLISHED"),
-								Action: AcceptAction{}},
-							{Match: Match().ConntrackState("INVALID"),
-								Action: denyAction},
+							{
+								Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
+								Action: AcceptAction{},
+							},
+							{
+								Match:  Match().ConntrackState("INVALID"),
+								Action: denyAction,
+							},
 
-							{Action: ClearMarkAction{Mark: 0x18}},
+							{
+								Match:  Match(),
+								Action: ClearMarkAction{Mark: 0x18},
+							},
 
-							{Match: Match().MarkClear(0x10),
-								Action: JumpAction{Target: "cali-pi-afi"}},
-							{Match: Match().MarkSingleBitSet(0x8),
+							{
+								Match:  Match().MarkClear(0x10),
+								Action: JumpAction{Target: "cali-pi-afi"},
+							},
+							{
+								Match:   Match().MarkSingleBitSet(0x8),
 								Action:  ReturnAction{},
-								Comment: []string{"Return if policy accepted"}},
-							{Match: Match().MarkClear(0x10),
-								Action: JumpAction{Target: "cali-pi-bfi"}},
-							{Match: Match().MarkSingleBitSet(0x8),
+								Comment: []string{"Return if policy accepted"},
+							},
+							{
+								Match:  Match().MarkClear(0x10),
+								Action: JumpAction{Target: "cali-pi-bfi"},
+							},
+							{
+								Match:   Match().MarkSingleBitSet(0x8),
 								Action:  ReturnAction{},
-								Comment: []string{"Return if policy accepted"}},
-							{Match: Match().MarkClear(0x10),
+								Comment: []string{"Return if policy accepted"},
+							},
+							{
+								Match:   Match().MarkClear(0x10),
 								Action:  denyAction,
-								Comment: []string{fmt.Sprintf("%s if no policies passed packet", denyActionString)}},
+								Comment: []string{fmt.Sprintf("%s if no policies passed packet", denyActionString)},
+							},
 						},
 					},
 					{
 						Name: "cali-sm-eth0",
-						Rules: []Rule{
-							{Action: SetMaskedMarkAction{Mark: 0xa200, Mask: 0xff00}},
+						Rules: []generictables.Rule{
+							{
+								Match:  Match(),
+								Action: SetMaskedMarkAction{Mark: 0xa200, Mask: 0xff00},
+							},
 						},
 					},
 				})))
@@ -562,43 +823,67 @@ var _ = Describe("Endpoints", func() {
 			It("should render host endpoint raw chains with untracked policies", func() {
 				Expect(renderer.HostEndpointToRawChains("eth0",
 					singlePolicyGroups([]string{"c"}),
-					singlePolicyGroups([]string{"c"}))).To(Equal([]*Chain{
+					singlePolicyGroups([]string{"c"}))).To(Equal([]*generictables.Chain{
 					{
 						Name: "cali-th-eth0",
-						Rules: []Rule{
+						Rules: []generictables.Rule{
 							// Host endpoints get extra failsafe rules.
-							{Action: JumpAction{Target: "cali-failsafe-out"}},
+							{
+								Match:  Match(),
+								Action: JumpAction{Target: "cali-failsafe-out"},
+							},
 
-							{Action: ClearMarkAction{Mark: 0x18}},
+							{
+								Match:  Match(),
+								Action: ClearMarkAction{Mark: 0x18},
+							},
 
-							{Match: Match().MarkClear(0x10),
-								Action: JumpAction{Target: "cali-po-c"}},
+							{
+								Match:  Match().MarkClear(0x10),
+								Action: JumpAction{Target: "cali-po-c"},
+							},
 							// Extra NOTRACK action before returning in raw table.
-							{Match: Match().MarkSingleBitSet(0x8),
-								Action: NoTrackAction{}},
-							{Match: Match().MarkSingleBitSet(0x8),
+							{
+								Match:  Match().MarkSingleBitSet(0x8),
+								Action: NoTrackAction{},
+							},
+							{
+								Match:   Match().MarkSingleBitSet(0x8),
 								Action:  ReturnAction{},
-								Comment: []string{"Return if policy accepted"}},
+								Comment: []string{"Return if policy accepted"},
+							},
 
 							// No drop actions or profiles in raw table.
 						},
 					},
 					{
 						Name: "cali-fh-eth0",
-						Rules: []Rule{
+						Rules: []generictables.Rule{
 							// Host endpoints get extra failsafe rules.
-							{Action: JumpAction{Target: "cali-failsafe-in"}},
+							{
+								Match:  Match(),
+								Action: JumpAction{Target: "cali-failsafe-in"},
+							},
 
-							{Action: ClearMarkAction{Mark: 0x18}},
+							{
+								Match:  Match(),
+								Action: ClearMarkAction{Mark: 0x18},
+							},
 
-							{Match: Match().MarkClear(0x10),
-								Action: JumpAction{Target: "cali-pi-c"}},
+							{
+								Match:  Match().MarkClear(0x10),
+								Action: JumpAction{Target: "cali-pi-c"},
+							},
 							// Extra NOTRACK action before returning in raw table.
-							{Match: Match().MarkSingleBitSet(0x8),
-								Action: NoTrackAction{}},
-							{Match: Match().MarkSingleBitSet(0x8),
+							{
+								Match:  Match().MarkSingleBitSet(0x8),
+								Action: NoTrackAction{},
+							},
+							{
+								Match:   Match().MarkSingleBitSet(0x8),
 								Action:  ReturnAction{},
-								Comment: []string{"Return if policy accepted"}},
+								Comment: []string{"Return if policy accepted"},
+							},
 
 							// No drop actions or profiles in raw table.
 						},
@@ -610,28 +895,44 @@ var _ = Describe("Endpoints", func() {
 				Expect(renderer.HostEndpointToMangleIngressChains(
 					"eth0",
 					singlePolicyGroups([]string{"c"}),
-				)).To(Equal([]*Chain{
+				)).To(Equal([]*generictables.Chain{
 					{
 						Name: "cali-fh-eth0",
-						Rules: []Rule{
+						Rules: []generictables.Rule{
 							// conntrack rules.
-							{Match: Match().ConntrackState("RELATED,ESTABLISHED"),
-								Action: SetMarkAction{Mark: 0x8}},
-							{Match: Match().ConntrackState("RELATED,ESTABLISHED"),
-								Action: ReturnAction{}},
-							{Match: Match().ConntrackState("INVALID"),
-								Action: denyAction},
+							{
+								Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
+								Action: SetMarkAction{Mark: 0x8},
+							},
+							{
+								Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
+								Action: ReturnAction{},
+							},
+							{
+								Match:  Match().ConntrackState("INVALID"),
+								Action: denyAction,
+							},
 
 							// Host endpoints get extra failsafe rules.
-							{Action: JumpAction{Target: "cali-failsafe-in"}},
+							{
+								Match:  Match(),
+								Action: JumpAction{Target: "cali-failsafe-in"},
+							},
 
-							{Action: ClearMarkAction{Mark: 0x18}},
+							{
+								Match:  Match(),
+								Action: ClearMarkAction{Mark: 0x18},
+							},
 
-							{Match: Match().MarkClear(0x10),
-								Action: JumpAction{Target: "cali-pi-c"}},
-							{Match: Match().MarkSingleBitSet(0x8),
+							{
+								Match:  Match().MarkClear(0x10),
+								Action: JumpAction{Target: "cali-pi-c"},
+							},
+							{
+								Match:   Match().MarkSingleBitSet(0x8),
 								Action:  ReturnAction{},
-								Comment: []string{"Return if policy accepted"}},
+								Comment: []string{"Return if policy accepted"},
+							},
 
 							// No drop actions or profiles in raw table.
 						},
@@ -655,43 +956,66 @@ var _ = Describe("Endpoints", func() {
 					nil,
 					nil,
 					nil,
-				)).To(Equal(trimSMChain(kubeIPVSEnabled, []*Chain{
+				)).To(Equal(trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 					{
 						Name: "cali-tw-cali1234",
-						Rules: []Rule{
+						Rules: []generictables.Rule{
 							// conntrack rules.
-							{Match: Match().ConntrackState("RELATED,ESTABLISHED"),
-								Action: SetMarkAction{Mark: 0x8}},
-							{Match: Match().ConntrackState("RELATED,ESTABLISHED"),
-								Action: ReturnAction{}},
+							{
+								Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
+								Action: SetMarkAction{Mark: 0x8},
+							},
+							{
+								Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
+								Action: ReturnAction{},
+							},
 
-							{Action: ClearMarkAction{Mark: 0x18}},
+							{
+								Match:  Match(),
+								Action: ClearMarkAction{Mark: 0x18},
+							},
 
-							{Action: denyAction,
-								Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)}},
+							{
+								Match:   Match(),
+								Action:  denyAction,
+								Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)},
+							},
 						},
 					},
 					{
 						Name: "cali-fw-cali1234",
-						Rules: []Rule{
+						Rules: []generictables.Rule{
 							// conntrack rules.
-							{Match: Match().ConntrackState("RELATED,ESTABLISHED"),
-								Action: SetMarkAction{Mark: 0x8}},
-							{Match: Match().ConntrackState("RELATED,ESTABLISHED"),
-								Action: ReturnAction{}},
+							{
+								Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
+								Action: SetMarkAction{Mark: 0x8},
+							},
+							{
+								Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
+								Action: ReturnAction{},
+							},
 
-							{Action: ClearMarkAction{Mark: 0x18}},
+							{
+								Match:  Match(),
+								Action: ClearMarkAction{Mark: 0x18},
+							},
 							dropVXLANRule,
 							dropIPIPRule,
 
-							{Action: denyAction,
-								Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)}},
+							{
+								Match:   Match(),
+								Action:  denyAction,
+								Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)},
+							},
 						},
 					},
 					{
 						Name: "cali-sm-cali1234",
-						Rules: []Rule{
-							{Action: SetMaskedMarkAction{Mark: 0xd400, Mask: 0xff00}},
+						Rules: []generictables.Rule{
+							{
+								Match:  Match(),
+								Action: SetMaskedMarkAction{Mark: 0xd400, Mask: 0xff00},
+							},
 						},
 					},
 				})))
@@ -701,24 +1025,36 @@ var _ = Describe("Endpoints", func() {
 				Expect(renderer.HostEndpointToMangleIngressChains(
 					"eth0",
 					singlePolicyGroups([]string{"c"}),
-				)).To(Equal([]*Chain{
+				)).To(Equal([]*generictables.Chain{
 					{
 						Name: "cali-fh-eth0",
-						Rules: []Rule{
+						Rules: []generictables.Rule{
 							// conntrack rules.
-							{Match: Match().ConntrackState("RELATED,ESTABLISHED"),
-								Action: AcceptAction{}},
+							{
+								Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
+								Action: AcceptAction{},
+							},
 
 							// Host endpoints get extra failsafe rules.
-							{Action: JumpAction{Target: "cali-failsafe-in"}},
+							{
+								Match:  Match(),
+								Action: JumpAction{Target: "cali-failsafe-in"},
+							},
 
-							{Action: ClearMarkAction{Mark: 0x18}},
+							{
+								Match:  Match(),
+								Action: ClearMarkAction{Mark: 0x18},
+							},
 
-							{Match: Match().MarkClear(0x10),
-								Action: JumpAction{Target: "cali-pi-c"}},
-							{Match: Match().MarkSingleBitSet(0x8),
+							{
+								Match:  Match().MarkClear(0x10),
+								Action: JumpAction{Target: "cali-pi-c"},
+							},
+							{
+								Match:   Match().MarkSingleBitSet(0x8),
 								Action:  ReturnAction{},
-								Comment: []string{"Return if policy accepted"}},
+								Comment: []string{"Return if policy accepted"},
+							},
 
 							// No drop actions or profiles in raw table.
 						},
@@ -739,40 +1075,61 @@ var _ = Describe("Endpoints", func() {
 						nil,
 						nil,
 						nil,
-					)).To(Equal(trimSMChain(kubeIPVSEnabled, []*Chain{
+					)).To(Equal(trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 						{
 							Name: "cali-tw-cali1234",
-							Rules: []Rule{
+							Rules: []generictables.Rule{
 								// conntrack rules.
-								{Match: Match().ConntrackState("RELATED,ESTABLISHED"),
-									Action: AcceptAction{}},
-								{Match: Match().ConntrackState("INVALID"),
-									Action: denyAction},
-
-								{Action: ClearMarkAction{Mark: 0x18}},
-								{Action: denyAction,
-									Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)}},
+								{
+									Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
+									Action: AcceptAction{},
+								},
+								{
+									Match:  Match().ConntrackState("INVALID"),
+									Action: denyAction,
+								},
+								{
+									Match:  Match(),
+									Action: ClearMarkAction{Mark: 0x18},
+								},
+								{
+									Match:   Match(),
+									Action:  denyAction,
+									Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)},
+								},
 							},
 						},
 						{
 							Name: "cali-fw-cali1234",
-							Rules: []Rule{
+							Rules: []generictables.Rule{
 								// conntrack rules.
-								{Match: Match().ConntrackState("RELATED,ESTABLISHED"),
-									Action: AcceptAction{}},
-								{Match: Match().ConntrackState("INVALID"),
-									Action: denyAction},
-
-								{Action: ClearMarkAction{Mark: 0x18}},
+								{
+									Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
+									Action: AcceptAction{},
+								},
+								{
+									Match:  Match().ConntrackState("INVALID"),
+									Action: denyAction,
+								},
+								{
+									Match:  Match(),
+									Action: ClearMarkAction{Mark: 0x18},
+								},
 								dropIPIPRule,
-								{Action: denyAction,
-									Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)}},
+								{
+									Match:   Match(),
+									Action:  denyAction,
+									Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)},
+								},
 							},
 						},
 						{
 							Name: "cali-sm-cali1234",
-							Rules: []Rule{
-								{Action: SetMaskedMarkAction{Mark: 0xd400, Mask: 0xff00}},
+							Rules: []generictables.Rule{
+								{
+									Match:  Match(),
+									Action: SetMaskedMarkAction{Mark: 0xd400, Mask: 0xff00},
+								},
 							},
 						},
 					})))
@@ -790,40 +1147,61 @@ var _ = Describe("Endpoints", func() {
 						nil,
 						nil,
 						nil,
-					)).To(Equal(trimSMChain(kubeIPVSEnabled, []*Chain{
+					)).To(Equal(trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 						{
 							Name: "cali-tw-cali1234",
-							Rules: []Rule{
+							Rules: []generictables.Rule{
 								// conntrack rules.
-								{Match: Match().ConntrackState("RELATED,ESTABLISHED"),
-									Action: AcceptAction{}},
-								{Match: Match().ConntrackState("INVALID"),
-									Action: denyAction},
-
-								{Action: ClearMarkAction{Mark: 0x18}},
-								{Action: denyAction,
-									Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)}},
+								{
+									Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
+									Action: AcceptAction{},
+								},
+								{
+									Match:  Match().ConntrackState("INVALID"),
+									Action: denyAction,
+								},
+								{
+									Match:  Match(),
+									Action: ClearMarkAction{Mark: 0x18},
+								},
+								{
+									Match:   Match(),
+									Action:  denyAction,
+									Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)},
+								},
 							},
 						},
 						{
 							Name: "cali-fw-cali1234",
-							Rules: []Rule{
+							Rules: []generictables.Rule{
 								// conntrack rules.
-								{Match: Match().ConntrackState("RELATED,ESTABLISHED"),
-									Action: AcceptAction{}},
-								{Match: Match().ConntrackState("INVALID"),
-									Action: denyAction},
-
-								{Action: ClearMarkAction{Mark: 0x18}},
+								{
+									Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
+									Action: AcceptAction{},
+								},
+								{
+									Match:  Match().ConntrackState("INVALID"),
+									Action: denyAction,
+								},
+								{
+									Match:  Match(),
+									Action: ClearMarkAction{Mark: 0x18},
+								},
 								dropVXLANRule,
-								{Action: denyAction,
-									Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)}},
+								{
+									Match:   Match(),
+									Action:  denyAction,
+									Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)},
+								},
 							},
 						},
 						{
 							Name: "cali-sm-cali1234",
-							Rules: []Rule{
-								{Action: SetMaskedMarkAction{Mark: 0xd400, Mask: 0xff00}},
+							Rules: []generictables.Rule{
+								{
+									Match:  Match(),
+									Action: SetMaskedMarkAction{Mark: 0xd400, Mask: 0xff00},
+								},
 							},
 						},
 					})))
@@ -842,39 +1220,60 @@ var _ = Describe("Endpoints", func() {
 						nil,
 						nil,
 						nil,
-					)).To(Equal(trimSMChain(kubeIPVSEnabled, []*Chain{
+					)).To(Equal(trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 						{
 							Name: "cali-tw-cali1234",
-							Rules: []Rule{
+							Rules: []generictables.Rule{
 								// conntrack rules.
-								{Match: Match().ConntrackState("RELATED,ESTABLISHED"),
-									Action: AcceptAction{}},
-								{Match: Match().ConntrackState("INVALID"),
-									Action: denyAction},
-
-								{Action: ClearMarkAction{Mark: 0x18}},
-								{Action: denyAction,
-									Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)}},
+								{
+									Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
+									Action: AcceptAction{},
+								},
+								{
+									Match:  Match().ConntrackState("INVALID"),
+									Action: denyAction,
+								},
+								{
+									Match:  Match(),
+									Action: ClearMarkAction{Mark: 0x18},
+								},
+								{
+									Match:   Match(),
+									Action:  denyAction,
+									Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)},
+								},
 							},
 						},
 						{
 							Name: "cali-fw-cali1234",
-							Rules: []Rule{
+							Rules: []generictables.Rule{
 								// conntrack rules.
-								{Match: Match().ConntrackState("RELATED,ESTABLISHED"),
-									Action: AcceptAction{}},
-								{Match: Match().ConntrackState("INVALID"),
-									Action: denyAction},
-
-								{Action: ClearMarkAction{Mark: 0x18}},
-								{Action: denyAction,
-									Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)}},
+								{
+									Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
+									Action: AcceptAction{},
+								},
+								{
+									Match:  Match().ConntrackState("INVALID"),
+									Action: denyAction,
+								},
+								{
+									Match:  Match(),
+									Action: ClearMarkAction{Mark: 0x18},
+								},
+								{
+									Match:   Match(),
+									Action:  denyAction,
+									Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)},
+								},
 							},
 						},
 						{
 							Name: "cali-sm-cali1234",
-							Rules: []Rule{
-								{Action: SetMaskedMarkAction{Mark: 0xd400, Mask: 0xff00}},
+							Rules: []generictables.Rule{
+								{
+									Match:  Match(),
+									Action: SetMaskedMarkAction{Mark: 0xd400, Mask: 0xff00},
+								},
 							},
 						},
 					})))
@@ -888,8 +1287,8 @@ var _ = Describe("Endpoints", func() {
 	}
 })
 
-func trimSMChain(ipvsEnable bool, chains []*Chain) []*Chain {
-	result := []*Chain{}
+func trimSMChain(ipvsEnable bool, chains []*generictables.Chain) []*generictables.Chain {
+	result := []*generictables.Chain{}
 	for _, chain := range chains {
 		if !ipvsEnable && strings.HasPrefix(chain.Name, "cali-sm") {
 			continue
@@ -981,7 +1380,7 @@ var _ = Describe("PolicyGroups", func() {
 })
 
 var _ = table.DescribeTable("PolicyGroup chains",
-	func(group PolicyGroup, expectedRules []Rule) {
+	func(group PolicyGroup, expectedRules []generictables.Rule) {
 		renderer := NewRenderer(Config{
 			IptablesMarkAccept:   0x8,
 			IptablesMarkPass:     0x10,
@@ -1002,8 +1401,9 @@ var _ = table.DescribeTable("PolicyGroup chains",
 			PolicyNames: []string{"a"},
 			Selector:    "all()",
 		},
-		[]Rule{
+		[]generictables.Rule{
 			{
+				Match:  Match(),
 				Action: JumpAction{Target: "cali-pi-a"},
 			},
 		},
@@ -1015,8 +1415,9 @@ var _ = table.DescribeTable("PolicyGroup chains",
 			PolicyNames: []string{"a", "b"},
 			Selector:    "all()",
 		},
-		[]Rule{
+		[]generictables.Rule{
 			{
+				Match:  Match(),
 				Action: JumpAction{Target: "cali-pi-a"},
 			},
 			{
@@ -1032,8 +1433,9 @@ var _ = table.DescribeTable("PolicyGroup chains",
 			PolicyNames: []string{"a", "b", "c"},
 			Selector:    "all()",
 		},
-		[]Rule{
+		[]generictables.Rule{
 			{
+				Match:  Match(),
 				Action: JumpAction{Target: "cali-pi-a"},
 			},
 			{
@@ -1053,8 +1455,9 @@ var _ = table.DescribeTable("PolicyGroup chains",
 			PolicyNames: []string{"a", "b", "c", "d"},
 			Selector:    "all()",
 		},
-		[]Rule{
+		[]generictables.Rule{
 			{
+				Match:  Match(),
 				Action: JumpAction{Target: "cali-pi-a"},
 			},
 			{
@@ -1078,8 +1481,9 @@ var _ = table.DescribeTable("PolicyGroup chains",
 			PolicyNames: []string{"a", "b", "c", "d", "e"},
 			Selector:    "all()",
 		},
-		[]Rule{
+		[]generictables.Rule{
 			{
+				Match:  Match(),
 				Action: JumpAction{Target: "cali-pi-a"},
 			},
 			{
@@ -1107,8 +1511,9 @@ var _ = table.DescribeTable("PolicyGroup chains",
 			PolicyNames: []string{"a", "b", "c", "d", "e", "f"},
 			Selector:    "all()",
 		},
-		[]Rule{
+		[]generictables.Rule{
 			{
+				Match:  Match(),
 				Action: JumpAction{Target: "cali-pi-a"},
 			},
 			{
@@ -1135,6 +1540,7 @@ var _ = table.DescribeTable("PolicyGroup chains",
 				Comment: []string{"Return on verdict"},
 			},
 			{
+				Match:  Match(),
 				Action: JumpAction{Target: "cali-pi-f"},
 			},
 		},
@@ -1146,8 +1552,9 @@ var _ = table.DescribeTable("PolicyGroup chains",
 			PolicyNames: []string{"a", "b", "c", "d", "e", "f", "g"},
 			Selector:    "all()",
 		},
-		[]Rule{
+		[]generictables.Rule{
 			{
+				Match:  Match(),
 				Action: JumpAction{Target: "cali-po-a"},
 			},
 			{
@@ -1172,6 +1579,7 @@ var _ = table.DescribeTable("PolicyGroup chains",
 				Comment: []string{"Return on verdict"},
 			},
 			{
+				Match:  Match(),
 				Action: JumpAction{Target: "cali-po-f"},
 			},
 			{
@@ -1182,7 +1590,7 @@ var _ = table.DescribeTable("PolicyGroup chains",
 	),
 )
 
-func polGroupEntry(group PolicyGroup, rules []Rule) table.TableEntry {
+func polGroupEntry(group PolicyGroup, rules []generictables.Rule) table.TableEntry {
 	return table.Entry(
 		fmt.Sprintf("%v", group),
 		group,

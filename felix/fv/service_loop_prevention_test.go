@@ -35,7 +35,6 @@ import (
 )
 
 var _ = infrastructure.DatastoreDescribe("service loop prevention; with 2 nodes", []apiconfig.DatastoreType{apiconfig.EtcdV3, apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
-
 	var (
 		infra  infrastructure.DatastoreInfra
 		tc     infrastructure.TopologyContainers
@@ -43,6 +42,9 @@ var _ = infrastructure.DatastoreDescribe("service loop prevention; with 2 nodes"
 	)
 
 	BeforeEach(func() {
+		if NFTMode() {
+			Skip("TODO: Make this test work in nftables mode")
+		}
 		infra = getInfra()
 
 		options := infrastructure.DefaultTopologyOptions()
@@ -53,8 +55,12 @@ var _ = infrastructure.DatastoreDescribe("service loop prevention; with 2 nodes"
 	AfterEach(func() {
 		if CurrentGinkgoTestDescription().Failed {
 			for _, felix := range tc.Felixes {
-				felix.Exec("iptables-save", "-c")
-				felix.Exec("ipset", "list")
+				if NFTMode() {
+					logNFTDiags(felix)
+				} else {
+					felix.Exec("iptables-save", "-c")
+					felix.Exec("ipset", "list")
+				}
 				felix.Exec("ip", "r")
 				felix.Exec("ip", "a")
 			}
@@ -117,7 +123,6 @@ var _ = infrastructure.DatastoreDescribe("service loop prevention; with 2 nodes"
 	}
 
 	tryRoutingLoop := func(expectLoop bool) {
-
 		// Run containers to model a default gateway, and an external client connecting to
 		// services within the cluster via that gateway.
 		externalGW := infrastructure.RunExtClient("ext-gw")
@@ -173,7 +178,6 @@ var _ = infrastructure.DatastoreDescribe("service loop prevention; with 2 nodes"
 	}
 
 	It("programs iptables as expected to block service routing loops", func() {
-
 		By("configuring service cluster IPs")
 		updateBGPConfig(func(cfg *api.BGPConfiguration) {
 			cfg.Spec.ServiceClusterIPs = []api.ServiceClusterIPBlock{
@@ -346,5 +350,4 @@ var _ = infrastructure.DatastoreDescribe("service loop prevention; with 2 nodes"
 			cfg.Spec.ServiceLoadBalancerIPs = nil
 		})
 	})
-
 })
