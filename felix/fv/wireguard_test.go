@@ -722,6 +722,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 					desc := "wireguard traffic is allowed with a blocking host endpoint policy" +
 						" (using " + tc.hep + " HostEndpoint, " + tc.iptablesPolicy + ")"
 					It(desc, func() {
+						if NFTMode() && tc.iptablesPolicy != "ACCEPT" {
+							Skip("iptables policies other than ACCEPT are not supported in NFT mode")
+						}
+
 						By("Creating policy to deny wireguard port on main felix host endpoint.")
 						policy := api.NewGlobalNetworkPolicy()
 						policy.Name = "deny-wg-port"
@@ -1020,7 +1024,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 					}
 				})
 
-				It("workload connectivity remains but uses un-encrypted tunnel", func() {
+				It("CASEY workload connectivity remains but uses un-encrypted tunnel", func() {
 					if wireguardEnabledV4 {
 						cc.ExpectSome(wlsV4[0], wlsV4[1])
 						cc.ExpectSome(wlsV4[1], wlsV4[0])
@@ -1527,9 +1531,14 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported 3-node 
 				felix.Exec("ip", "route", "show", "table", "all")
 				felix.Exec("ip", "route", "show", "cached")
 				felix.Exec("wg")
-				felix.Exec("iptables-save", "-c", "-t", "raw")
-				felix.Exec("iptables", "-L", "-vx")
 				felix.Exec("cat", "/proc/sys/net/ipv4/conf/all/src_valid_mark")
+
+				if NFTMode() {
+					logNFTDiags(felix)
+				} else {
+					felix.Exec("iptables-save", "-c", "-t", "raw")
+					felix.Exec("iptables", "-L", "-vx")
+				}
 			}
 		}
 
@@ -1596,12 +1605,22 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported 3-node 
 			}, "10s", "100ms").Should(ContainElements(matchers))
 		}
 
-		By("Checking the iptables raw chain cali-wireguard-incoming-mark exists")
-		for _, felix := range tc.Felixes {
-			Eventually(func() string {
-				s, _ := felix.ExecCombinedOutput("iptables", "-L", "cali-wireguard-incoming-mark", "-t", "raw")
-				return s
-			}, "10s", "100ms").Should(ContainSubstring("Chain cali-wireguard-incoming-mark"))
+		if NFTMode() {
+			By("Checking the nftables raw chain cali-wireguard-incoming-mark exists")
+			for _, felix := range tc.Felixes {
+				Eventually(func() string {
+					s, _ := felix.ExecCombinedOutput("nft", "list", "table", "ip", "calico")
+					return s
+				}, "10s", "100ms").Should(ContainSubstring("raw-cali-wireguard-incoming-mark"))
+			}
+		} else {
+			By("Checking the iptables raw chain cali-wireguard-incoming-mark exists")
+			for _, felix := range tc.Felixes {
+				Eventually(func() string {
+					s, _ := felix.ExecCombinedOutput("iptables", "-L", "cali-wireguard-incoming-mark", "-t", "raw")
+					return s
+				}, "10s", "100ms").Should(ContainSubstring("Chain cali-wireguard-incoming-mark"))
+			}
 		}
 
 		By("Checking the proc/sys src valid mark entries")
@@ -1813,8 +1832,8 @@ func createWorkloadWithAssignedIP(
 	infraOpts *infrastructure.TopologyOptions,
 	client *clientv3.Interface,
 	wlIP, wlName string,
-	felix *infrastructure.Felix) *workload.Workload {
-
+	felix *infrastructure.Felix,
+) *workload.Workload {
 	ip := net.MustParseIP(wlIP)
 	mtu := wireguardMTUDefault
 	if ip.To4() == nil {

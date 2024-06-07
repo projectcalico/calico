@@ -34,7 +34,6 @@ import (
 )
 
 var _ = Context("_IPSets_ Tests for IPset rendering", func() {
-
 	var (
 		etcd     *containers.Container
 		tc       infrastructure.TopologyContainers

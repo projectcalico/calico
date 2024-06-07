@@ -39,6 +39,7 @@ import (
 	"time"
 
 	"github.com/projectcalico/calico/felix/ethtool"
+	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -80,7 +81,6 @@ import (
 	"github.com/projectcalico/calico/felix/idalloc"
 	"github.com/projectcalico/calico/felix/ifacemonitor"
 	"github.com/projectcalico/calico/felix/ip"
-	"github.com/projectcalico/calico/felix/iptables"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
 )
@@ -389,7 +389,7 @@ type bpfEndpointManagerDataplane struct {
 
 	// IP of the tunnel / overlay device
 	tunnelIP            net.IP
-	iptablesFilterTable IptablesTable
+	iptablesFilterTable Table
 	ipSetIDAlloc        *idalloc.IDAllocator
 }
 
@@ -399,7 +399,7 @@ type serviceKey struct {
 }
 
 type bpfAllowChainRenderer interface {
-	WorkloadInterfaceAllowChains(endpoints map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint) []*iptables.Chain
+	WorkloadInterfaceAllowChains(endpoints map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint) []*generictables.Chain
 }
 
 type ManagerWithHEPUpdate interface {
@@ -430,8 +430,8 @@ func NewTestEpMgr(
 			VXLANPort:                   4789,
 			VXLANVNI:                    4096,
 		}),
-		iptables.NewNoopTable(),
-		iptables.NewNoopTable(),
+		generictables.NewNoopTable(),
+		generictables.NewNoopTable(),
 		nil,
 		logutils.NewSummarizer("test"),
 		new(environment.FakeFeatureDetector),
@@ -449,8 +449,8 @@ func newBPFEndpointManager(
 	ipSetIDAllocV4 *idalloc.IDAllocator,
 	ipSetIDAllocV6 *idalloc.IDAllocator,
 	iptablesRuleRenderer bpfAllowChainRenderer,
-	iptablesFilterTableV4 IptablesTable,
-	iptablesFilterTableV6 IptablesTable,
+	iptablesFilterTableV4 Table,
+	iptablesFilterTableV6 Table,
 	livenessCallback func(),
 	opReporter logutils.OpRecorder,
 	featureDetector environment.FeatureDetectorIface,
@@ -599,7 +599,7 @@ func newBPFEndpointManager(
 		m.dirtyServices = set.New[serviceKey]()
 		m.natExcludedCIDRs = ip.NewCIDRTrie()
 
-		var excludeCIDRsMatch = 1
+		excludeCIDRsMatch := 1
 
 		for _, c := range config.BPFExcludeCIDRsFromNAT {
 			cidr, err := ip.CIDRFromString(c)
@@ -669,11 +669,10 @@ func newBPFEndpointManager(
 func newBPFEndpointManagerDataplane(
 	ipFamily proto.IPVersion,
 	ipMaps *bpfmap.IPMaps,
-	iptablesFilterTable IptablesTable,
+	iptablesFilterTable Table,
 	ipSetIDAlloc *idalloc.IDAllocator,
 	epMgr *bpfEndpointManager,
 ) *bpfEndpointManagerDataplane {
-
 	return &bpfEndpointManagerDataplane{
 		ipFamily:            ipFamily,
 		ifaceToIpMap:        map[string]net.IP{},
@@ -688,7 +687,7 @@ var _ hasLoadPolicyProgram = (*bpfEndpointManager)(nil)
 
 func (m *bpfEndpointManager) repinJumpMaps() error {
 	oldBase := path.Join(bpfdefs.GlobalPinDir, "old_jumps")
-	err := os.Mkdir(oldBase, 0700)
+	err := os.Mkdir(oldBase, 0o700)
 	if err != nil && !os.IsExist(err) {
 		return fmt.Errorf("cannot create %s: %w", oldBase, err)
 	}
@@ -1469,7 +1468,7 @@ func (m *bpfEndpointManager) syncIfaceProperties() error {
 	if m.bpfDisableGROForIfaces != nil {
 		expr := m.bpfDisableGROForIfaces.String()
 		if len(expr) > 0 {
-			var config = map[string]bool{
+			config := map[string]bool{
 				ethtool.EthtoolRxGRO: false,
 			}
 
@@ -1501,7 +1500,6 @@ func (m *bpfEndpointManager) syncIfaceProperties() error {
 
 		return maps.IterNone
 	})
-
 	if err != nil {
 		return fmt.Errorf("iterating over counters map failed")
 	}
@@ -1680,7 +1678,6 @@ func (m *bpfEndpointManager) reportHealth(ready bool, detail string) {
 }
 
 func (m *bpfEndpointManager) doApplyPolicyToDataIface(iface string) (bpfInterfaceState, error) {
-
 	var (
 		err   error
 		up    bool
@@ -2212,7 +2209,7 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 		attachPreamble = v4Readiness != ifaceIsReady
 	}
 
-	//Attach preamble TC program
+	// Attach preamble TC program
 	if attachPreamble {
 		wg.Add(1)
 		go func() {
@@ -2356,8 +2353,8 @@ func isLinkNotFoundError(err error) bool {
 var calicoRouterIP = net.IPv4(169, 254, 1, 1).To4()
 
 func (d *bpfEndpointManagerDataplane) wepTCAttachPoint(ap *tc.AttachPoint, policyIdx, filterIdx int,
-	polDirection PolDirection) *tc.AttachPoint {
-
+	polDirection PolDirection,
+) *tc.AttachPoint {
 	ap = d.configureTCAttachPoint(polDirection, ap, false)
 	ifaceName := ap.IfaceName()
 	if d.ipFamily == proto.IPVersion_IPV6 {
@@ -2381,8 +2378,8 @@ func (d *bpfEndpointManagerDataplane) wepTCAttachPoint(ap *tc.AttachPoint, polic
 }
 
 func (d *bpfEndpointManagerDataplane) wepApplyPolicyToDirection(readiness ifaceReadiness, state *bpfInterfaceState,
-	endpoint *proto.WorkloadEndpoint, polDirection PolDirection, ap *tc.AttachPoint) (*tc.AttachPoint, error) {
-
+	endpoint *proto.WorkloadEndpoint, polDirection PolDirection, ap *tc.AttachPoint,
+) (*tc.AttachPoint, error) {
 	var policyIdx, filterIdx int
 
 	if d.hostIP == nil {
@@ -2437,8 +2434,8 @@ func (m *bpfEndpointManager) loadFilterProgram(ap attachPoint) {
 }
 
 func (d *bpfEndpointManagerDataplane) wepApplyPolicy(ap *tc.AttachPoint,
-	endpoint *proto.WorkloadEndpoint, polDirection PolDirection) error {
-
+	endpoint *proto.WorkloadEndpoint, polDirection PolDirection,
+) error {
 	var profileIDs []string
 	var tier *proto.TierInfo
 	if endpoint != nil {
@@ -2483,7 +2480,6 @@ func (d *bpfEndpointManagerDataplane) wepApplyPolicy(ap *tc.AttachPoint,
 }
 
 func (m *bpfEndpointManager) addHostPolicy(rules *polprog.Rules, hostEndpoint *proto.HostEndpoint, polDirection PolDirection) {
-
 	// When there is applicable pre-DNAT policy that does not explicitly Allow or Deny traffic,
 	// we continue on to subsequent tiers and normal or AoF policy.
 	if len(hostEndpoint.PreDnatTiers) == 1 {
@@ -2511,7 +2507,6 @@ func (d *bpfEndpointManagerDataplane) applyPolicyToWeps(
 	endpoint *proto.WorkloadEndpoint,
 	ap *tc.AttachPoint,
 ) (*tc.AttachPoint, *tc.AttachPoint, error) {
-
 	ingressAttachPoint := *ap
 	egressAttachPoint := *ap
 
@@ -2540,7 +2535,6 @@ func (d *bpfEndpointManagerDataplane) applyPolicyToDataIface(
 	ap *tc.AttachPoint,
 	apxdp *xdp.AttachPoint,
 ) (*tc.AttachPoint, *tc.AttachPoint, *xdp.AttachPoint, error) {
-
 	ingressAttachPoint := *ap
 	egressAttachPoint := *ap
 	xdpAttachPoint := *apxdp
@@ -2574,7 +2568,6 @@ func (d *bpfEndpointManagerDataplane) attachDataIfaceProgram(
 	state *bpfInterfaceState,
 	ap *tc.AttachPoint,
 ) (*tc.AttachPoint, error) {
-
 	if d.hostIP == nil {
 		// Do not bother and wait
 		return nil, fmt.Errorf("unknown host IP")
@@ -2828,8 +2821,10 @@ func (d *bpfEndpointManagerDataplane) configureTCAttachPoint(policyDirection Pol
 	return ap
 }
 
-const EndTierDrop = true
-const NoEndTierDrop = false
+const (
+	EndTierDrop   = true
+	NoEndTierDrop = false
+)
 
 func (m *bpfEndpointManager) extractTiers(tier *proto.TierInfo, direction PolDirection, endTierDrop bool) (rTiers []polprog.Tier) {
 	dir := direction.RuleDir()
@@ -3456,7 +3451,7 @@ func (m *bpfEndpointManager) writePolicyDebugInfo(insns []asm.Insns, ifaceName s
 	if !m.bpfPolicyDebugEnabled {
 		return nil
 	}
-	if err := os.MkdirAll(bpf.RuntimePolDir, 0600); err != nil {
+	if err := os.MkdirAll(bpf.RuntimePolDir, 0o600); err != nil {
 		return err
 	}
 
@@ -3490,7 +3485,7 @@ func (m *bpfEndpointManager) writePolicyDebugInfo(insns []asm.Insns, ifaceName s
 		return err
 	}
 
-	if err := os.WriteFile(filename, buffer.Bytes(), 0600); err != nil {
+	if err := os.WriteFile(filename, buffer.Bytes(), 0o600); err != nil {
 		return err
 	}
 	log.Debugf("Policy iface %s hook %s written to %s", ifaceName, h, filename)
@@ -3498,7 +3493,6 @@ func (m *bpfEndpointManager) writePolicyDebugInfo(insns []asm.Insns, ifaceName s
 }
 
 func (m *bpfEndpointManager) updatePolicyProgram(rules polprog.Rules, polDir string, ap attachPoint, ipFamily proto.IPVersion) error {
-
 	progName := policyProgramName(ap.IfaceName(), polDir, proto.IPVersion(ipFamily))
 
 	var opts []polprog.Option
@@ -3541,7 +3535,6 @@ func (m *bpfEndpointManager) loadTCLogFilter(ap *tc.AttachPoint) (fileDescriptor
 
 	fd, err := bpf.LoadBPFProgramFromInsns(logFilter, "calico_log_filter",
 		"Apache-2.0", uint32(unix.BPF_PROG_TYPE_SCHED_CLS))
-
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to load BPF log filter program: %w", err)
 	}
@@ -4011,8 +4004,8 @@ func (m *bpfEndpointManager) updatePolicyCache(name string, owner string, inboun
 }
 
 func (m *bpfEndpointManager) addRuleInfo(rule *proto.Rule, idx int,
-	owner string, direction PolDirection, polName string) polprog.RuleMatchID {
-
+	owner string, direction PolDirection, polName string,
+) polprog.RuleMatchID {
 	matchID := m.dp.ruleMatchID(direction.RuleDir(), rule.Action, owner, polName, idx)
 	m.dirtyRules.Discard(matchID)
 

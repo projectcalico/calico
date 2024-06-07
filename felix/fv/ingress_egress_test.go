@@ -35,7 +35,6 @@ import (
 )
 
 var _ = Context("_INGRESS-EGRESS_ _BPF-SAFE_ with initialized Felix, etcd datastore, 3 workloads", func() {
-
 	var (
 		etcd   *containers.Container
 		tc     infrastructure.TopologyContainers
@@ -61,9 +60,12 @@ var _ = Context("_INGRESS-EGRESS_ _BPF-SAFE_ with initialized Felix, etcd datast
 	})
 
 	AfterEach(func() {
-
 		if CurrentGinkgoTestDescription().Failed {
-			tc.Felixes[0].Exec("iptables-save", "-c")
+			if NFTMode() {
+				logNFTDiags(tc.Felixes[0])
+			} else {
+				tc.Felixes[0].Exec("iptables-save", "-c")
+			}
 			tc.Felixes[0].Exec("ip", "r")
 		}
 
@@ -88,7 +90,6 @@ var _ = Context("_INGRESS-EGRESS_ _BPF-SAFE_ with initialized Felix, etcd datast
 	})
 
 	Context("with ingress-only restriction for workload 0", func() {
-
 		BeforeEach(func() {
 			policy := api.NewNetworkPolicy()
 			policy.Namespace = "fv"
@@ -115,7 +116,6 @@ var _ = Context("_INGRESS-EGRESS_ _BPF-SAFE_ with initialized Felix, etcd datast
 	})
 
 	Context("with egress-only restriction for workload 0", func() {
-
 		BeforeEach(func() {
 			policy := api.NewNetworkPolicy()
 			policy.Namespace = "fv"
@@ -142,7 +142,6 @@ var _ = Context("_INGRESS-EGRESS_ _BPF-SAFE_ with initialized Felix, etcd datast
 	})
 
 	Context("with ingress rules and types [ingress,egress]", func() {
-
 		BeforeEach(func() {
 			policy := api.NewNetworkPolicy()
 			policy.Namespace = "fv"
@@ -223,20 +222,26 @@ var _ = Context("_INGRESS-EGRESS_ _BPF-SAFE_ with initialized Felix, etcd datast
 })
 
 var _ = Context("_INGRESS-EGRESS_ (iptables-only) with initialized Felix, etcd datastore, 3 workloads", func() {
-
 	var (
-		etcd   *containers.Container
-		tc     infrastructure.TopologyContainers
-		client client.Interface
-		infra  infrastructure.DatastoreInfra
-		w      [3]*workload.Workload
-		cc     *connectivity.Checker
+		etcd    *containers.Container
+		tc      infrastructure.TopologyContainers
+		client  client.Interface
+		infra   infrastructure.DatastoreInfra
+		w       [3]*workload.Workload
+		cc      *connectivity.Checker
+		listCmd []string
 	)
 
 	BeforeEach(func() {
 		opts := infrastructure.DefaultTopologyOptions()
 		tc, etcd, client, infra = infrastructure.StartSingleNodeEtcdTopology(opts)
 		infrastructure.CreateDefaultProfile(client, "default", map[string]string{"default": ""}, "default == ''")
+
+		if NFTMode() {
+			listCmd = []string{"nft", "list", "table", "calico"}
+		} else {
+			listCmd = []string{"iptables-save"}
+		}
 
 		// Create three workloads, using that profile.
 		for ii := range w {
@@ -249,9 +254,12 @@ var _ = Context("_INGRESS-EGRESS_ (iptables-only) with initialized Felix, etcd d
 	})
 
 	AfterEach(func() {
-
 		if CurrentGinkgoTestDescription().Failed {
-			tc.Felixes[0].Exec("iptables-save", "-c")
+			if NFTMode() {
+				logNFTDiags(tc.Felixes[0])
+			} else {
+				tc.Felixes[0].Exec("iptables-save", "-c")
+			}
 			tc.Felixes[0].Exec("ip", "r")
 		}
 
@@ -286,16 +294,15 @@ var _ = Context("_INGRESS-EGRESS_ (iptables-only) with initialized Felix, etcd d
 			cc.CheckConnectivity()
 		})
 
-		It("should have the expected comment in iptables", func() {
+		It("should have the expected comment in the dataplane", func() {
 			Eventually(func() string {
-				out, _ := tc.Felixes[0].ExecOutput("iptables-save")
+				out, _ := tc.Felixes[0].ExecOutput(listCmd...)
 				return out
 			}).Should(ContainSubstring("Policy fv/default.policy-1 ingress"))
 		})
 	})
 
 	Context("with egress-only restriction for workload 0", func() {
-
 		BeforeEach(func() {
 			policy := api.NewNetworkPolicy()
 			policy.Namespace = "fv"
@@ -312,9 +319,9 @@ var _ = Context("_INGRESS-EGRESS_ (iptables-only) with initialized Felix, etcd d
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		It("should have the expected comment in iptables", func() {
+		It("should have the expected comment in the dataplane", func() {
 			Eventually(func() string {
-				out, _ := tc.Felixes[0].ExecOutput("iptables-save")
+				out, _ := tc.Felixes[0].ExecOutput(listCmd...)
 				return out
 			}).Should(ContainSubstring("Policy fv/default.policy-1 egress"))
 		})
@@ -322,7 +329,6 @@ var _ = Context("_INGRESS-EGRESS_ (iptables-only) with initialized Felix, etcd d
 })
 
 var _ = Context("with Typha and Felix-Typha TLS", func() {
-
 	var (
 		etcd   *containers.Container
 		tc     infrastructure.TopologyContainers
@@ -350,9 +356,12 @@ var _ = Context("with Typha and Felix-Typha TLS", func() {
 	})
 
 	AfterEach(func() {
-
 		if CurrentGinkgoTestDescription().Failed {
-			tc.Felixes[0].Exec("iptables-save", "-c")
+			if NFTMode() {
+				logNFTDiags(tc.Felixes[0])
+			} else {
+				tc.Felixes[0].Exec("iptables-save", "-c")
+			}
 			tc.Felixes[0].Exec("ip", "r")
 		}
 
@@ -377,7 +386,6 @@ var _ = Context("with Typha and Felix-Typha TLS", func() {
 	})
 
 	Context("with ingress-only restriction for workload 0", func() {
-
 		BeforeEach(func() {
 			policy := api.NewNetworkPolicy()
 			policy.Namespace = "fv"
