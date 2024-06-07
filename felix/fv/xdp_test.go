@@ -221,7 +221,7 @@ func xdpTest(getInfra infrastructure.InfraFactory, proto string) {
 		}
 	})
 
-	Context("CASEY with XDP blocklist on felix[srvr] blocking felixes[clnt]", func() {
+	Context("CASEY FOCUS with XDP blocklist on felix[srvr] blocking felixes[clnt]", func() {
 		BeforeEach(func() {
 			order := float64(20)
 
