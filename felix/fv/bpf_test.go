@@ -1090,7 +1090,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				It("should cleanup after we disable eBPF", func() {
 					By("Waiting for dp to get setup up")
 
-					ensureAllNodesBPFProgramsAttached(tc.Felixes)
+					ensureBPFProgramsAttached(tc.Felixes[0], "bpfout.cali")
 
 					By("Changing env and restarting felix")
 
@@ -1112,6 +1112,11 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						out, _ := tc.Felixes[0].ExecOutput("bpftool", "-jp", "map", "show")
 						return out
 					}, "15s", "1s").ShouldNot(Or(ContainSubstring("cali_"), ContainSubstring("xdp_cali_")))
+
+					out, _ := tc.Felixes[0].ExecCombinedOutput("ip", "link", "show", "dev", "bpfin.cali")
+					Expect(out).To(Equal("Device \"bpfin.cali\" does not exist.\n"))
+					out, _ = tc.Felixes[0].ExecCombinedOutput("ip", "link", "show", "dev", "bpfout.cali")
+					Expect(out).To(Equal("Device \"bpfout.cali\" does not exist.\n"))
 				})
 			}
 		})
