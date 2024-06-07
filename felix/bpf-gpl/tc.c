@@ -1502,7 +1502,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 					CALI_DEBUG("ICMP related: outer IP SNAT to %x\n",
 							debug_ip(state->ct_result.nat_ip));
 				}
-			} if (ct_rc == CALI_CT_ESTABLISHED_DNAT) {
+			} else if (ct_rc == CALI_CT_ESTABLISHED_DNAT) {
 				outer_ip_nat = true;
 				addr = &STATE->ip_dst;
 				ip_hdr_set_ip(ctx, daddr, state->ct_result.nat_ip);

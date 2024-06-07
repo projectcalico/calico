@@ -812,7 +812,7 @@ func TestNATNodePort(t *testing.T) {
 	var icmpEncaped []byte
 
 	skbMark = 0
-	// ICMP to big response from internet towards the backend on node1 from some middle box
+	// ICMP too big response from internet towards the backend on node1 from some middle box
 	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
 		pktR := gopacket.NewPacket(icmpMTUTooBig, layers.LayerTypeEthernet, gopacket.Default)
 		fmt.Printf("pktR = %+v\n", pktR)
