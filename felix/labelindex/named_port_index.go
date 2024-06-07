@@ -310,7 +310,7 @@ type SelectorAndNamedPortIndex struct {
 	OnMemberAdded   NamedPortMatchCallback
 	OnMemberRemoved NamedPortMatchCallback
 
-	deduplicator *memberDeduplicator
+	deduplicator MemberDeduplicator
 
 	OnAlive        func()
 	lastLiveReport time.Time
@@ -1030,28 +1030,42 @@ func (idx *SelectorAndNamedPortIndex) estimateParentEndpointScanCount(s labelnam
 	return (total*s.EstimatedItemsToScan() + maxNumToScan - 1) / maxNumToScan
 }
 
-func NewMemberDeduplicator() *memberDeduplicator {
+func NewMemberDeduplicator() MemberDeduplicator {
 	return &memberDeduplicator{
-		tries: map[string]*ip.CIDRTrie{},
+		v4tries: map[string]*ip.CIDRTrie{},
+		v6tries: map[string]*ip.CIDRTrie{},
 	}
 }
 
-type memberDeduplicator struct {
-	tries map[string]*ip.CIDRTrie
+type MemberDeduplicator interface {
+	Add(set string, cidr ip.CIDR) (ip.CIDR, []ip.CIDR)
+	Remove(set string, cidr ip.CIDR) (ip.CIDR, []ip.CIDR)
 }
 
-func (t *memberDeduplicator) getTrie(set string) *ip.CIDRTrie {
-	trie, ok := t.tries[set]
+type memberDeduplicator struct {
+	v4tries map[string]*ip.CIDRTrie
+	v6tries map[string]*ip.CIDRTrie
+}
+
+func (t *memberDeduplicator) getTrie(set string, v6 bool) *ip.CIDRTrie {
+	var tries map[string]*ip.CIDRTrie
+	if v6 {
+		tries = t.v6tries
+	} else {
+		tries = t.v4tries
+	}
+	trie, ok := tries[set]
 	if !ok {
 		trie = ip.NewCIDRTrie()
-		t.tries[set] = trie
+		tries[set] = trie
 	}
 	return trie
 }
 
 // Add adds the given CIDR to the trie. It returns a CIDR to add and a slice of CIDRs to remove if applicable.
 func (t *memberDeduplicator) Add(set string, cidr ip.CIDR) (ip.CIDR, []ip.CIDR) {
-	trie := t.getTrie(set)
+	v6 := strings.Contains(cidr.String(), ":")
+	trie := t.getTrie(set, v6)
 
 	// Check if this IP is already covered by another entry in the trie.
 	covered := trie.Covers(cidr)
@@ -1072,7 +1086,8 @@ func (t *memberDeduplicator) Add(set string, cidr ip.CIDR) (ip.CIDR, []ip.CIDR) 
 
 // Remove removes the given CIDR from the trie. It returns a CIDR to remove and a slice of CIDRs to add back if applicable.
 func (t *memberDeduplicator) Remove(set string, cidr ip.CIDR) (ip.CIDR, []ip.CIDR) {
-	trie := t.getTrie(set)
+	v6 := strings.Contains(cidr.String(), ":")
+	trie := t.getTrie(set, v6)
 
 	// If this node has children that are masked by this CIDR, we need to
 	// advertise them against as part of this deletion.
