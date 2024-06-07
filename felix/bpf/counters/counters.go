@@ -72,6 +72,7 @@ const (
 	DroppedFailedDecap
 	DroppedUnauthSource
 	DroppedUnknownRoute
+	DroppedBlackholeRoute
 )
 
 type Description struct {
@@ -149,6 +150,10 @@ var descriptions DescList = DescList{
 	{
 		Counter:  DroppedUnknownRoute,
 		Category: "Dropped", Caption: "packets with unknown route",
+	},
+	{
+		Counter:  DroppedBlackholeRoute,
+		Category: "Dropped", Caption: "packets hitting blackhole route",
 	},
 }
 
