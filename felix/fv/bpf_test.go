@@ -4045,13 +4045,13 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								tcpdump.Start("-vvv", "icmp", "or", "icmp6")
 								defer tcpdump.Stop()
 
-								ipRouteFlushlushCache := []string{"ip", "route", "flush", "cache"}
+								ipRouteFlushCache := []string{"ip", "route", "flush", "cache"}
 								if testOpts.ipv6 {
-									ipRouteFlushlushCache = []string{"ip", "-6", "route", "flush", "cache"}
+									ipRouteFlushCache = []string{"ip", "-6", "route", "flush", "cache"}
 								}
 
 								By("Trying directly to pod")
-								w[0][0].Exec(ipRouteFlushlushCache...)
+								w[0][0].Exec(ipRouteFlushCache...)
 								cc.Expect(Some, remoteWL, w[0][0], ExpectWithPorts(8055), ExpectWithRecvLen(1350))
 								cc.CheckConnectivity()
 								Eventually(tcpdump.MatchCountFn("mtu-1300"), "5s", "330ms").Should(BeNumerically("==", 1))
@@ -4059,7 +4059,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								By("Trying directly to node with pod")
 								cc.ResetExpectations()
 								tcpdump.ResetCount("mtu-1300")
-								w[0][0].Exec(ipRouteFlushlushCache...)
+								w[0][0].Exec(ipRouteFlushCache...)
 								cc.Expect(Some, remoteWL, TargetIP(felixIP(0)), ExpectWithPorts(npPort), ExpectWithRecvLen(1350))
 								cc.CheckConnectivity()
 								Eventually(tcpdump.MatchCountFn("mtu-1300"), "5s", "330ms").Should(BeNumerically("==", 1))
@@ -4067,7 +4067,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								By("Trying to node without pod")
 								cc.ResetExpectations()
 								tcpdump.ResetCount("mtu-1300")
-								w[0][0].Exec(ipRouteFlushlushCache...)
+								w[0][0].Exec(ipRouteFlushCache...)
 								cc.Expect(Some, remoteWL, TargetIP(felixIP(1)), ExpectWithPorts(npPort), ExpectWithRecvLen(1350))
 								cc.CheckConnectivity()
 								Eventually(tcpdump.MatchCountFn("mtu-1300"), "5s", "330ms").Should(BeNumerically("==", 1))
