@@ -685,8 +685,10 @@ func (m *bpfRouteManager) onBGPConfigUpdate(update *proto.GlobalBGPConfigUpdate)
 			log.WithError(err).WithField("cidr", cidr).Error(
 				"Failed to parse cidr.")
 		}
-		if uint8(m.ipFamily) != cidr.Version() {
-			continue
+		if !m.ipv6Enabled {
+			if _, ok := cidr.(ip.V4CIDR); !ok {
+				continue
+			}
 		}
 
 		m.cidrToRoute[cidr] = proto.RouteUpdate{Type: proto.RouteType_CIDR_INFO}
