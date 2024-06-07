@@ -95,8 +95,8 @@ type bpfRouteManager struct {
 
 	opReporter logutils.OpRecorder
 
-	wgEnabled   bool
-	ipv6Enabled bool
+	wgEnabled         bool
+	ipv6Enabled       bool
 	blockedCIDRs      set.Set[ip.CIDR]
 	svcLoopPrevention string
 }
@@ -174,8 +174,8 @@ func newBPFRouteManager(config *Config, maps *bpfmap.Maps,
 
 		opReporter: opReporter,
 
-		wgEnabled:   config.Wireguard.Enabled || config.Wireguard.EnabledV6,
-		ipv6Enabled: config.BPFIpv6Enabled,
+		wgEnabled:         config.Wireguard.Enabled || config.Wireguard.EnabledV6,
+		ipv6Enabled:       config.BPFIpv6Enabled,
 		svcLoopPrevention: config.ServiceLoopPrevention,
 	}
 
