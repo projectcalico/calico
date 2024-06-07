@@ -50,7 +50,6 @@ var _ = infrastructure.DatastoreDescribe("NATOutgoing rule rendering test", []ap
 		opts := infrastructure.DefaultTopologyOptions()
 
 		if NFTMode() {
-			// CASEY: TODO: Update this when nftables gets its own config option.
 			Skip("NFT mode not supported in this test")
 		}
 
