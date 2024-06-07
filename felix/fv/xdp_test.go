@@ -404,8 +404,8 @@ func xdpTest(getInfra infrastructure.InfraFactory, proto string) {
 
 				expectBlocked(cc)
 
+				// The only rule that refers to a cali40-prefixed ipset should have 0 packets/bytes
 				if !BPFMode() && !NFTMode() {
-					// the only rule that refers to a cali40-prefixed ipset should have 0 packets/bytes
 					Eventually(func() string {
 						out, _ := tc.Felixes[srvr].ExecOutput("iptables", "-t", "raw", "-v", "-n", "-L",
 							"cali-pi-default.xdp-filter")
@@ -415,7 +415,7 @@ func xdpTest(getInfra infrastructure.InfraFactory, proto string) {
 					Eventually(func() string {
 						out, _ := tc.Felixes[srvr].ExecOutput("nft", "list", "chain", "ip", "calico", "raw-cali-pi-default.xdp-filter")
 						return out
-					}).Should(MatchRegexp(`(?m)^\s+0\s+0.*cali40s-`))
+					}).Should(MatchRegexp(`packets 0 bytes 0`))
 				}
 			})
 
