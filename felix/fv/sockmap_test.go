@@ -321,7 +321,7 @@ var _ = infrastructure.DatastoreDescribe("[SOCKMAP] with Felix using sockmap", [
 		infra.Stop()
 	})
 
-	It("CASEY should put the IP of the host in sockmap endpoints map", func() {
+	It("should put the IP of the host in sockmap endpoints map", func() {
 		hexen := testIPToHex(ip)
 		log.WithFields(log.Fields{
 			"ip":    ip,

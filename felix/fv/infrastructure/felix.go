@@ -171,7 +171,6 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 	if os.Getenv("FELIX_FV_NFTABLES") == "true" {
 		log.Info("FELIX_FV_NFTABLES=true, enabling nftables with env var")
 		envVars["FELIX_NFTABLESENABLED"] = "true"
-		envVars["FELIX_XDPENABLED"] = "false"
 	}
 
 	if options.DelayFelixStart {
