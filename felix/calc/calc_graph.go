@@ -311,6 +311,7 @@ func NewCalculationGraph(callbacks PipelineCallbacks, conf *config.Config, liveC
 		callbacks.OnIPSetRemoved(ipSet.UniqueID())
 		gaugeNumActiveSelectors.Dec()
 	}
+
 	// Send the IP set member index's outputs to the dataplane.
 	ipsetMemberIndex.OnMemberAdded = func(ipSetID string, member labelindex.IPSetMember) {
 		if log.GetLevel() >= log.DebugLevel {
