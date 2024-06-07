@@ -23,10 +23,18 @@ import (
 	"github.com/projectcalico/calico/felix/fv/utils"
 )
 
+type ExtClientOpts struct {
+	IPv6Enabled bool
+}
+
 func RunExtClient(namePrefix string) *containers.Container {
+	return RunExtClientWithOpts(namePrefix, ExtClientOpts{})
+}
+
+func RunExtClientWithOpts(namePrefix string, opts ExtClientOpts) *containers.Container {
 	wd, err := os.Getwd()
 	Expect(err).NotTo(HaveOccurred(), "failed to get working directory")
-	externalClient := containers.Run(
+	c := containers.Run(
 		namePrefix,
 		containers.RunOpts{
 			AutoRemove: true,
@@ -35,5 +43,13 @@ func RunExtClient(namePrefix string) *containers.Container {
 		"-v", wd+"/../bin:/usr/local/bin", // Map in the test-connectivity binary etc.
 		utils.Config.BusyboxImage,
 		"/bin/sh", "-c", "sleep 1000")
-	return externalClient
+
+	if opts.IPv6Enabled {
+		c.Exec("sysctl", "-w", "net.ipv6.conf.all.disable_ipv6=0")
+		c.Exec("sysctl", "-w", "net.ipv6.conf.default.disable_ipv6=0")
+		c.Exec("sysctl", "-w", "net.ipv6.conf.lo.disable_ipv6=0")
+		c.Exec("sysctl", "-w", "net.ipv6.conf.all.forwarding=1")
+	}
+
+	return c
 }
