@@ -95,8 +95,10 @@ type bpfRouteManager struct {
 
 	opReporter logutils.OpRecorder
 
-	wgEnabled   bool
-	ipv6Enabled bool
+	wgEnabled         bool
+	ipv6Enabled       bool
+	blockedCIDRs      set.Set[ip.CIDR]
+	svcLoopPrevention string
 }
 
 func newBPFRouteManager(config *Config, maps *bpfmap.Maps,
@@ -105,6 +107,7 @@ func newBPFRouteManager(config *Config, maps *bpfmap.Maps,
 	// Record the external node CIDRs and pre-mark them as dirty.  These can only change with a config update,
 	// which would restart Felix.
 	extCIDRs := set.New[ip.CIDR]()
+
 	dirtyCIDRs := set.New[ip.CIDR]()
 	for _, cidrStr := range config.ExternalNodesCidrs {
 		if strings.Contains(cidrStr, ":") {
@@ -132,6 +135,7 @@ func newBPFRouteManager(config *Config, maps *bpfmap.Maps,
 			log.WithField("cidr", cidrStr).Debug("Ignoring IPv6 DSR optout CIDR")
 			continue
 		}
+
 		cidr, err := ip.ParseCIDROrIP(cidrStr)
 		if err != nil {
 			log.WithError(err).WithField("cidr", cidr).Error(
@@ -160,6 +164,7 @@ func newBPFRouteManager(config *Config, maps *bpfmap.Maps,
 		externalNodeCIDRs: extCIDRs,
 		dirtyCIDRs:        dirtyCIDRs,
 		dsrOptoutCIDRs:    noDsrCIDRs,
+		blockedCIDRs:      set.New[ip.CIDR](),
 
 		desiredRoutes: map[routes.KeyInterface]routes.ValueInterface{},
 		routeMap:      maps.RouteMap,
@@ -169,8 +174,9 @@ func newBPFRouteManager(config *Config, maps *bpfmap.Maps,
 
 		opReporter: opReporter,
 
-		wgEnabled:   config.Wireguard.Enabled || config.Wireguard.EnabledV6,
-		ipv6Enabled: config.BPFIpv6Enabled,
+		wgEnabled:         config.Wireguard.Enabled || config.Wireguard.EnabledV6,
+		ipv6Enabled:       config.BPFIpv6Enabled,
+		svcLoopPrevention: config.ServiceLoopPrevention,
 	}
 
 	if m.ipv6Enabled {
@@ -212,6 +218,8 @@ func (m *bpfRouteManager) OnUpdate(msg interface{}) {
 		m.onWorkloadEndpointUpdate(msg)
 	case *proto.WorkloadEndpointRemove:
 		m.onWorkloadEndpointRemove(msg)
+	case *proto.GlobalBGPConfigUpdate:
+		m.onBGPConfigUpdate(msg)
 	}
 }
 
@@ -306,6 +314,15 @@ func (m *bpfRouteManager) calculateRoute(cidr ip.CIDR) routes.ValueInterface {
 		flags |= routes.FlagNoDSR
 	}
 
+	if m.blockedCIDRs.Contains(cidr) {
+		log.WithField("cidr", cidr).Debug("CIDR is blocked.")
+		if m.svcLoopPrevention == "Drop" {
+			flags |= routes.FlagBlackHoleDrop
+		} else if m.svcLoopPrevention == "Reject" {
+			flags |= routes.FlagBlackHoleReject
+		}
+	}
+
 	cgRoute, cgRouteExists := m.cidrToRoute[cidr]
 	if cgRouteExists {
 		// Collect flags that are shared by all route types.
@@ -387,14 +404,11 @@ func (m *bpfRouteManager) calculateRoute(cidr ip.CIDR) routes.ValueInterface {
 		// k8s ExternalIP. Route resolver knew that it was assigned to our
 		// hostname.
 		flags |= routes.FlagsLocalHost
-		fallthrough
-	default: // proto.RouteType_CIDR_INFO / LOCAL_HOST or no route at all
-		if flags != 0 {
-			// We have something to say about this route.
-			route = m.bpfOps.NewValue(flags)
-		}
 	}
 
+	if route == nil && flags != 0 {
+		route = m.bpfOps.NewValue(flags)
+	}
 	return route
 }
 
@@ -653,6 +667,45 @@ func (m *bpfRouteManager) addWEP(update *proto.WorkloadEndpointUpdate) {
 
 func (m *bpfRouteManager) onWorkloadEndpointRemove(update *proto.WorkloadEndpointRemove) {
 	m.removeWEP(update.Id)
+}
+
+func (m *bpfRouteManager) onBGPConfigUpdate(update *proto.GlobalBGPConfigUpdate) {
+	blockedCIDRs := []string{}
+	blockedCIDRs = append(blockedCIDRs, update.GetServiceClusterCidrs()...)
+	blockedCIDRs = append(blockedCIDRs, update.GetServiceExternalCidrs()...)
+	blockedCIDRs = append(blockedCIDRs, update.GetServiceLoadbalancerCidrs()...)
+
+	cidrsToDel := set.New[ip.CIDR]()
+	cidrsToDel.AddSet(m.blockedCIDRs)
+	m.blockedCIDRs.Clear()
+
+	for _, cidrStr := range blockedCIDRs {
+		cidr, err := ip.ParseCIDROrIP(cidrStr)
+		if err != nil {
+			log.WithError(err).WithField("cidr", cidr).Error(
+				"Failed to parse cidr.")
+		}
+		if !m.ipv6Enabled {
+			if _, ok := cidr.(ip.V4CIDR); !ok {
+				continue
+			}
+		}
+
+		m.cidrToRoute[cidr] = proto.RouteUpdate{Type: proto.RouteType_CIDR_INFO}
+		if m.svcLoopPrevention != "Disabled" {
+			m.dirtyCIDRs.Add(cidr)
+		}
+		m.blockedCIDRs.Add(cidr)
+		cidrsToDel.Discard(cidr)
+	}
+	// Delete the unused routes.
+	cidrsToDel.Iter(func(cidr ip.CIDR) error {
+		if _, ok := m.cidrToRoute[cidr]; ok {
+			delete(m.cidrToRoute, cidr)
+			m.dirtyCIDRs.Add(cidr)
+		}
+		return set.RemoveItem
+	})
 }
 
 func (m *bpfRouteManager) removeWEP(id *proto.WorkloadEndpointID) {
