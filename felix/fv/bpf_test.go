@@ -1199,7 +1199,11 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			// We will use this container to model an external client trying to connect into
 			// workloads on a host.  Create a route in the container for the workload CIDR.
 			// TODO: Copied from another test
-			externalClient = infrastructure.RunExtClient("ext-client")
+			externalClient = infrastructure.RunExtClientWithOpts("ext-client",
+				infrastructure.ExtClientOpts{
+					IPv6Enabled: testOpts.ipv6,
+				},
+			)
 			_ = externalClient
 
 			err := infra.AddDefaultDeny()
@@ -3970,6 +3974,106 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 				Context("with test-service being a nodeport @ "+strconv.Itoa(int(npPort)), func() {
 					nodePortsTest(false, false)
+
+					if !testOpts.connTimeEnabled && testOpts.tunnel == "none" &&
+						testOpts.protocol == "tcp" && !testOpts.dsr {
+						Context("with small MTU between remote client and cluster", func() {
+							var remoteWL *workload.Workload
+
+							BeforeEach(func() {
+								remoteWL = &workload.Workload{
+									C:             externalClient,
+									Name:          "remoteWL",
+									InterfaceName: "ethwl",
+									Protocol:      testOpts.protocol,
+									MTU:           1500,
+								}
+
+								remoteWLIP := "192.168.15.15"
+								remoteWL.IP = remoteWLIP
+								if testOpts.ipv6 {
+									remoteWLIP = "dead:beef:1515::1515"
+									remoteWL.IP6 = remoteWLIP
+								}
+
+								err := remoteWL.Start()
+								Expect(err).NotTo(HaveOccurred())
+
+								if testOpts.ipv6 {
+									externalClient.Exec("ip", "-6", "route", "add", remoteWLIP, "dev",
+										remoteWL.InterfaceName, "scope", "link")
+									externalClient.Exec("ip", "-6", "route", "add", w[0][0].IP, "via", tc.Felixes[0].IPv6, "dev", "eth0")
+									externalClient.Exec("ip", "addr", "add", "169.254.169.254", "dev", remoteWL.InterfaceName)
+									// Need to change the MTU on the host side of the veth. If
+									// we change it on the eth0 of the docker iface, not ICMP
+									// is generated.
+									externalClient.Exec("ip", "link", "set", "ethwl", "mtu", "1300")
+									for _, f := range tc.Felixes {
+										f.Exec("ip", "-6", "route", "add", remoteWLIP,
+											"via", externalClient.IPv6, "dev", "eth0")
+									}
+								} else {
+									externalClient.Exec("ip", "route", "add", remoteWLIP, "dev",
+										remoteWL.InterfaceName, "scope", "link")
+									externalClient.Exec("ip", "route", "add", w[0][0].IP, "via", tc.Felixes[0].IP, "dev", "eth0")
+									externalClient.Exec("ip", "addr", "add", "169.254.169.254", "dev", remoteWL.InterfaceName)
+									// Need to change the MTU on the host side of the veth. If
+									// we change it on the eth0 of the docker iface, not ICMP
+									// is generated.
+									externalClient.Exec("ip", "link", "set", "ethwl", "mtu", "1300")
+									for _, f := range tc.Felixes {
+										f.Exec("ip", "route", "add", remoteWLIP,
+											"via", externalClient.IP, "dev", "eth0")
+									}
+								}
+
+								pol.Spec.Ingress = []api.Rule{
+									{
+										Action: "Allow",
+										Source: api.EntityRule{
+											Nets: []string{remoteWLIP + "/" + ipMask()},
+										},
+									},
+								}
+								pol = updatePolicy(pol)
+							})
+
+							It("should have connectivity to service backend", func() {
+								tcpdump := tc.Felixes[0].AttachTCPDump(w[0][0].InterfaceName)
+								tcpdump.SetLogEnabled(true)
+								tcpdump.AddMatcher("mtu-1300", regexp.MustCompile("mtu 1300"))
+								tcpdump.Start("-vvv", "icmp", "or", "icmp6")
+								defer tcpdump.Stop()
+
+								ipRouteFlushCache := []string{"ip", "route", "flush", "cache"}
+								if testOpts.ipv6 {
+									ipRouteFlushCache = []string{"ip", "-6", "route", "flush", "cache"}
+								}
+
+								By("Trying directly to pod")
+								w[0][0].Exec(ipRouteFlushCache...)
+								cc.Expect(Some, remoteWL, w[0][0], ExpectWithPorts(8055), ExpectWithRecvLen(1350))
+								cc.CheckConnectivity()
+								Eventually(tcpdump.MatchCountFn("mtu-1300"), "5s", "330ms").Should(BeNumerically("==", 1))
+
+								By("Trying directly to node with pod")
+								cc.ResetExpectations()
+								tcpdump.ResetCount("mtu-1300")
+								w[0][0].Exec(ipRouteFlushCache...)
+								cc.Expect(Some, remoteWL, TargetIP(felixIP(0)), ExpectWithPorts(npPort), ExpectWithRecvLen(1350))
+								cc.CheckConnectivity()
+								Eventually(tcpdump.MatchCountFn("mtu-1300"), "5s", "330ms").Should(BeNumerically("==", 1))
+
+								By("Trying to node without pod")
+								cc.ResetExpectations()
+								tcpdump.ResetCount("mtu-1300")
+								w[0][0].Exec(ipRouteFlushCache...)
+								cc.Expect(Some, remoteWL, TargetIP(felixIP(1)), ExpectWithPorts(npPort), ExpectWithRecvLen(1350))
+								cc.CheckConnectivity()
+								Eventually(tcpdump.MatchCountFn("mtu-1300"), "5s", "330ms").Should(BeNumerically("==", 1))
+							})
+						})
+					}
 				})
 
 				// FIXME connect time shares the same NAT table and it is a lottery which one it gets
