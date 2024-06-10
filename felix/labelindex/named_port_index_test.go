@@ -1231,6 +1231,17 @@ var _ = Describe("MemberDeduplicator", func() {
 		Expect(removes).To(HaveLen(0))
 	})
 
+	It("should support deleting an IP set", func() {
+		ip1 := ip.MustParseCIDROrIP("10.0.0.1/32")
+		add, removes := d.Add("setA", ip1)
+		Expect(add).To(Equal(ip1))
+		Expect(removes).To(HaveLen(0))
+		d.DeleteIPSet("setA")
+		add, removes = d.Add("setA", ip1)
+		Expect(add).To(Equal(ip1))
+		Expect(removes).To(HaveLen(0))
+	})
+
 	It("should handle multiple IP set with overlapping members", func() {
 		ip1 := ip.MustParseCIDROrIP("10.0.0.1/32")
 		ip2 := ip.MustParseCIDROrIP("10.0.0.2/32")
