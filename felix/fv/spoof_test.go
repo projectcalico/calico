@@ -123,15 +123,14 @@ var _ = Describe("Spoof tests", func() {
 	})
 
 	Context("IPv6", func() {
-		if BPFMode() && !BPFIPv6Support() {
-			return
-		}
-
 		BeforeEach(func() {
 			var err error
 			infra, err = infrastructure.GetEtcdDatastoreInfra()
 			Expect(err).NotTo(HaveOccurred())
 			opts := infrastructure.DefaultTopologyOptions()
+			opts.EnableIPv6 = true
+			opts.IPIPEnabled = false
+			opts.ExtraEnvVars["FELIX_IPV6SUPPORT"] = "true"
 
 			// The IPv4 tests had each workload running on an individual
 			// felix, but our current topology setup tooling doesn't yet
