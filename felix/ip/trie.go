@@ -185,7 +185,11 @@ func (n *CIDRNode) lookupPath(buffer []CIDRTrieEntry, cidr CIDR) []CIDRTrieEntry
 }
 
 func (n *CIDRNode) get(cidr CIDR) interface{} {
-	return n.getNode(cidr, false).data
+	node := n.getNode(cidr, false)
+	if node == nil {
+		return nil
+	}
+	return node.data
 }
 
 // getNode returns the CIDRNode that contains the given CIDR.  If includeIntermediates is true then it will return,

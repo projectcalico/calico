@@ -579,6 +579,7 @@ func (idx *SelectorAndNamedPortIndex) DeleteIPSet(setID string) {
 
 	delete(idx.ipSetDataByID, setID)
 	idx.selectorCandidatesIdx.DeleteSelector(setID)
+	idx.deduplicator.DeleteIPSet(setID)
 }
 
 func (idx *SelectorAndNamedPortIndex) UpdateEndpointOrSet(
@@ -666,7 +667,7 @@ func (idx *SelectorAndNamedPortIndex) UpdateEndpointOrSet(
 // removals for previously sent members that are now masked.
 // For example, we don't need to send updates for both 10.0.0.0/24 and 10.0.0.1/32.
 func (idx *SelectorAndNamedPortIndex) onMemberAdded(ipSetID string, member IPSetMember) {
-	if member.Protocol == 0 && member.PortNumber == 0 {
+	if member.Protocol == ProtocolNone && member.PortNumber == 0 {
 		// We only deduplicate for IP set members that are CIDRs. Named port members are always unique.
 		add, removes := idx.deduplicator.Add(ipSetID, member.CIDR)
 		if add != nil {
@@ -689,7 +690,7 @@ func (idx *SelectorAndNamedPortIndex) onMemberAdded(ipSetID string, member IPSet
 // deduplicate any members that are masked by another member of the set, sending any necessary IPSet member
 // IPSet member adds for members that were previously masked by the removed member.
 func (idx *SelectorAndNamedPortIndex) onMemberRemoved(ipSetID string, member IPSetMember) {
-	if member.Protocol == 0 && member.PortNumber == 0 {
+	if member.Protocol == ProtocolNone && member.PortNumber == 0 {
 		// We only deduplicate for IP set members that are CIDRs. Named port members are always unique.
 		rem, adds := idx.deduplicator.Remove(ipSetID, member.CIDR)
 		if rem != nil {
@@ -1040,6 +1041,7 @@ func NewMemberDeduplicator() MemberDeduplicator {
 type MemberDeduplicator interface {
 	Add(set string, cidr ip.CIDR) (ip.CIDR, []ip.CIDR)
 	Remove(set string, cidr ip.CIDR) (ip.CIDR, []ip.CIDR)
+	DeleteIPSet(set string)
 }
 
 type memberDeduplicator struct {
@@ -1097,4 +1099,9 @@ func (t *memberDeduplicator) Remove(set string, cidr ip.CIDR) (ip.CIDR, []ip.CID
 	trie.Delete(cidr)
 
 	return cidr, masked
+}
+
+func (t *memberDeduplicator) DeleteIPSet(set string) {
+	delete(t.v4tries, set)
+	delete(t.v6tries, set)
 }
