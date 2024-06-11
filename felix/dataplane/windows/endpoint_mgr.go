@@ -193,7 +193,7 @@ func (m *endpointManager) RefreshHnsEndpointCache(forceRefresh bool) error {
 		// We need to filter out inactive endpoints that do not attach to any container.
 		
 		// Use Endpoint State instead of SharedContainers to determine state endpoints. 
-		// Endpoint State 2 ensures an "Attached endpoint" 
+		// Endpoint State 2 ensures an "Attached endpoint" state.
 		if endpoint.State != 2 {
 			log.WithFields(log.Fields{
 				"id":   endpoint.Id,
