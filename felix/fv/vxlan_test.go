@@ -568,6 +568,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 								return strings.Count(f.BPFRoutes(), "host")
 							}).Should(Equal(len(felixes)*2),
 								"Expected one host and one host tunneled route per node")
+						} else if NFTMode() {
+							Eventually(f.NFTSetSizeFn("cali40all-vxlan-net"), "10s", "200ms").Should(Equal(len(felixes) - 1))
 						} else {
 							Eventually(f.IPSetSizeFn("cali40all-vxlan-net"), "10s", "200ms").Should(Equal(len(felixes) - 1))
 						}
@@ -594,6 +596,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 							return strings.Count(felixes[0].BPFRoutes(), "host")
 						}).Should(Equal((len(felixes)-1)*2),
 							"Expected one host and one host tunneled route per node, not: "+felixes[0].BPFRoutes())
+					} else if NFTMode() {
+						Eventually(felixes[0].NFTSetSizeFn("cali40all-vxlan-net"), "5s", "200ms").Should(Equal(len(felixes) - 2))
 					} else {
 						Eventually(felixes[0].IPSetSizeFn("cali40all-vxlan-net"), "5s", "200ms").Should(Equal(len(felixes) - 2))
 					}
@@ -631,7 +635,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 					// Check we initially have the expected number of entries.
 					for _, f := range felixes {
 						// Wait for Felix to set up the allow list.
-						Eventually(f.IPSetSizeFn("cali40all-vxlan-net"), "5s", "200ms").Should(Equal(len(felixes) - 1))
+						if NFTMode() {
+							Eventually(f.NFTSetSizeFn("cali40all-vxlan-net"), "5s", "200ms").Should(Equal(len(felixes) - 1))
+						} else {
+							Eventually(f.IPSetSizeFn("cali40all-vxlan-net"), "5s", "200ms").Should(Equal(len(felixes) - 1))
+						}
 					}
 
 					// Wait until dataplane has settled.
