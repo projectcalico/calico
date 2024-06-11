@@ -5,8 +5,8 @@
 !filesystem
 !dist/bin
 !vendor/github.com/kelseyhightower/confd/etc/calico/confd
-# - AlmaLinux repository file and our license
-!almalinux.repo
+# - CentOS repository file and our license
+!centos.repo
 !LICENSE
 # - Files used in the windows image
 !windows-packaging/CalicoWindows/libs

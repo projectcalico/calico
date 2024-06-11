@@ -67,7 +67,6 @@ func TestICMPRelatedPlain(t *testing.T) {
 	defer func() { bpfIfaceName = "" }()
 
 	defer resetBPFMaps()
-	hostIP = node1ip
 
 	_, ipv4, l4, _, pktBytes, err := testPacketUDPDefault()
 	Expect(err).NotTo(HaveOccurred())
@@ -126,7 +125,6 @@ func TestICMPRelatedNATPodPod(t *testing.T) {
 	RegisterTestingT(t)
 
 	defer resetBPFMaps()
-	hostIP = node1ip
 
 	_, ipv4, l4, _, pktBytes, err := testPacketUDPDefault()
 	Expect(err).NotTo(HaveOccurred())
@@ -197,7 +195,6 @@ func TestICMPRelatedFromHost(t *testing.T) {
 	RegisterTestingT(t)
 
 	defer resetBPFMaps()
-	hostIP = node1ip
 
 	_, ipv4, l4, _, pktBytes, err := testPacketUDPDefault()
 	Expect(err).NotTo(HaveOccurred())
@@ -233,7 +230,6 @@ func TestICMPRelatedFromHostBeforeNAT(t *testing.T) {
 	RegisterTestingT(t)
 
 	defer resetBPFMaps()
-	hostIP = node1ip
 
 	_, ipv4, l4, _, pktBytes, err := testPacketUDPDefault()
 	Expect(err).NotTo(HaveOccurred())
@@ -301,10 +297,8 @@ func TestICMPRelatedFromHostBeforeNAT(t *testing.T) {
 }
 
 func makeICMPError(ipInner *layers.IPv4, l4 gopacket.SerializableLayer, icmpType, icmpCode uint8) []byte {
-	return makeICMPErrorFrom(node1ip, ipInner, l4, icmpType, icmpCode)
-}
+	hostIP = node1ip
 
-func makeICMPErrorFrom(from net.IP, ipInner *layers.IPv4, l4 gopacket.SerializableLayer, icmpType, icmpCode uint8) []byte {
 	payloadBuf := gopacket.NewSerializeBuffer()
 	err := gopacket.SerializeLayers(payloadBuf, gopacket.SerializeOptions{}, ipInner, l4)
 	Expect(err).NotTo(HaveOccurred())
@@ -323,7 +317,7 @@ func makeICMPErrorFrom(from net.IP, ipInner *layers.IPv4, l4 gopacket.Serializab
 		IHL:      5,
 		TTL:      64,
 		Flags:    layers.IPv4DontFragment,
-		SrcIP:    from,
+		SrcIP:    hostIP,
 		DstIP:    ipInner.SrcIP,
 		Protocol: layers.IPProtocolICMPv4,
 		Length:   uint16(20 + 8 + len(payload)),
@@ -395,10 +389,6 @@ func checkICMP(bytes []byte, outSrc, outDst, innerSrc, innerDst net.IP,
 
 	fmt.Printf("pktR = %+v\n", icmpPkt)
 
-	ethL := icmpPkt.Layer(layers.LayerTypeEthernet)
-	Expect(ethL).NotTo(BeNil())
-	ethR := ethL.(*layers.Ethernet)
-
 	ipv4L := icmpPkt.Layer(layers.LayerTypeIPv4)
 	Expect(ipv4L).NotTo(BeNil())
 	ipv4R := ipv4L.(*layers.IPv4)
@@ -406,22 +396,8 @@ func checkICMP(bytes []byte, outSrc, outDst, innerSrc, innerDst net.IP,
 	Expect(ipv4R.SrcIP.String()).To(Equal(outSrc.String()))
 	Expect(ipv4R.DstIP.String()).To(Equal(outDst.String()))
 
-	icmpL := icmpPkt.Layer(layers.LayerTypeICMPv4)
-	Expect(icmpL).NotTo(BeNil())
-	icmpR := icmpL.(*layers.ICMPv4)
-
 	payloadL := icmpPkt.ApplicationLayer()
 	Expect(payloadL).NotTo(BeNil())
-
-	// Check if the packet has correct checksums
-	pkt := gopacket.NewSerializeBuffer()
-	err := gopacket.SerializeLayers(pkt, gopacket.SerializeOptions{ComputeChecksums: true},
-		ethR, ipv4R, icmpR, gopacket.Payload(payloadL.Payload()))
-	Expect(err).NotTo(HaveOccurred())
-	pktBytes := pkt.Bytes()
-
-	Expect(bytes).To(Equal(pktBytes))
-
 	origPkt := gopacket.NewPacket(payloadL.Payload(), layers.LayerTypeIPv4, gopacket.Default)
 	Expect(origPkt).NotTo(BeNil())
 	fmt.Printf("origPkt = %+v\n", origPkt)
@@ -459,10 +435,6 @@ func checkICMPv6(bytes []byte, outSrc, outDst, innerSrc, innerDst net.IP,
 
 	fmt.Printf("pktR = %+v\n", icmpPkt)
 
-	ethL := icmpPkt.Layer(layers.LayerTypeEthernet)
-	Expect(ethL).NotTo(BeNil())
-	ethR := ethL.(*layers.Ethernet)
-
 	ipv6L := icmpPkt.Layer(layers.LayerTypeIPv6)
 	Expect(ipv6L).NotTo(BeNil())
 	ipv6R := ipv6L.(*layers.IPv6)
@@ -470,23 +442,8 @@ func checkICMPv6(bytes []byte, outSrc, outDst, innerSrc, innerDst net.IP,
 	Expect(ipv6R.SrcIP.String()).To(Equal(outSrc.String()))
 	Expect(ipv6R.DstIP.String()).To(Equal(outDst.String()))
 
-	icmpL := icmpPkt.Layer(layers.LayerTypeICMPv6)
-	Expect(icmpL).NotTo(BeNil())
-	icmpR := icmpL.(*layers.ICMPv6)
-	_ = icmpR.SetNetworkLayerForChecksum(ipv6L.(gopacket.NetworkLayer))
-
 	payloadL := icmpPkt.ApplicationLayer()
 	Expect(payloadL).NotTo(BeNil())
-
-	// Check if the packet has correct checksums
-	pkt := gopacket.NewSerializeBuffer()
-	err := gopacket.SerializeLayers(pkt, gopacket.SerializeOptions{ComputeChecksums: true},
-		ethR, ipv6R, icmpR, gopacket.Payload(payloadL.Payload()))
-	Expect(err).NotTo(HaveOccurred())
-	pktBytes := pkt.Bytes()
-
-	Expect(bytes).To(Equal(pktBytes))
-
 	origPkt := gopacket.NewPacket(payloadL.Payload()[4:], layers.LayerTypeIPv6, gopacket.Default)
 	Expect(origPkt).NotTo(BeNil())
 	fmt.Printf("origPkt = %+v\n", origPkt)

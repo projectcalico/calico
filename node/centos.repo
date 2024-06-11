@@ -1,0 +1,13 @@
+[centos-8-base-os]
+name = CentOS - BaseOS
+baseurl = http://linuxsoft.cern.ch/centos-vault/8.4.2105/BaseOS/x86_64/os/
+enabled = 1
+gpgkey = https://www.centos.org/keys/RPM-GPG-KEY-CentOS-Official
+gpgcheck = 1
+
+[centos-8-appstream]
+name = CentOS - AppStream
+baseurl = http://linuxsoft.cern.ch/centos-vault/8.4.2105/AppStream/x86_64/os/
+enabled = 1
+gpgkey = https://www.centos.org/keys/RPM-GPG-KEY-CentOS-Official
+gpgcheck = 1
