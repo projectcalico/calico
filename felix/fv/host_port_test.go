@@ -99,7 +99,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ host-port tests", []apiconf
 	AfterEach(func() {
 		if CurrentGinkgoTestDescription().Failed {
 			infra.DumpErrorData()
-			tc.Felixes[0].Exec("iptables-save", "-c")
+			if NFTMode() {
+				logNFTDiags(tc.Felixes[0])
+			} else {
+				tc.Felixes[0].Exec("iptables-save", "-c")
+			}
 			tc.Felixes[0].Exec("ip", "r")
 			tc.Felixes[0].Exec("ip", "a")
 		}

@@ -30,7 +30,6 @@ import (
 )
 
 var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ iptables cleanup tests", []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
-
 	var (
 		infra   infrastructure.DatastoreInfra
 		tc      infrastructure.TopologyContainers
@@ -46,6 +45,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ iptables cleanup tests", []
 
 	Describe("with a range of rules in iptables", func() {
 		BeforeEach(func() {
+			if NFTMode() {
+				Skip("This test is not yet supported in nftables mode")
+			}
 			err := tc.Felixes[0].CopyFileIntoContainer("iptables-dump.txt", "/iptables-dump.txt")
 			Expect(err).ToNot(HaveOccurred(), "Failed to copy iptables dump into felix container")
 			Eventually(func() error {

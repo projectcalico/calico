@@ -1611,6 +1611,10 @@ spec:
               netlinkTimeout:
                 pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                 type: string
+              nftablesEnabled:
+                description: 'NFTablesEnabled enables nftables in Felix. When false,
+                  iptables is used. [Default: false]'
+                type: boolean
               openstackRegion:
                 description: 'OpenstackRegion is the name of the region that a particular
                   Felix belongs to. In a multi-region Calico/OpenStack deployment,
