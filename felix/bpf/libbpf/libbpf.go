@@ -1,4 +1,4 @@
-// Copyright (c) 2021-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,8 +27,10 @@ import (
 )
 
 // #cgo CFLAGS: -I${SRCDIR}/../../bpf-gpl/include/libbpf/src -I${SRCDIR}/../../bpf-gpl/include/libbpf/include/uapi -I${SRCDIR}/../../bpf-gpl -Werror
+// #cgo ppc64le CFLAGS: -D__SANE_USERSPACE_TYPES__
 // #cgo amd64 LDFLAGS: -L${SRCDIR}/../../bpf-gpl/include/libbpf/src/amd64 -lbpf -lelf -lz
 // #cgo arm64 LDFLAGS: -L${SRCDIR}/../../bpf-gpl/include/libbpf/src/arm64 -lbpf -lelf -lz
+// #cgo ppc64le LDFLAGS: -L${SRCDIR}/../../bpf-gpl/include/libbpf/src/ppc64le -lbpf -lelf -lz
 // #include "libbpf_api.h"
 import "C"
 
