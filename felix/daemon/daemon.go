@@ -23,6 +23,7 @@ import (
 	"os/signal"
 	"reflect"
 	"runtime"
+	"runtime/debug"
 	"sync"
 	"syscall"
 	"time"
@@ -350,6 +351,8 @@ configRetry:
 		// a failure to load config, restart felix to avoid leaking connections.
 		exitWithCustomRC(configChangedRC, "Restarting to avoid leaking datastore connections")
 	}
+
+	doGoRuntimeSetup(configParams)
 
 	if configParams.BPFEnabled {
 		// Check for BPF dataplane support before we do anything that relies on the flag being set one way or another.
@@ -693,6 +696,20 @@ configRetry:
 	// Now monitor the worker process and our worker threads and shut
 	// down the process gracefully if they fail.
 	monitorAndManageShutdown(failureReportChan, dpDriverCmd, stopSignalChans)
+}
+
+func doGoRuntimeSetup(params *config.Config) {
+	if params.FieldHasExplicitValue("GoGCThreshold") {
+		// Only set the value if the user has been explicit so that the GOGC
+		// env var still works.
+		debug.SetGCPercent(params.GoGCThreshold)
+	}
+	if params.GoMemoryLimitMB > -1 {
+		memLimit := int64(params.GoMemoryLimitMB) * 1024 * 1024
+		debug.SetMemoryLimit(memLimit)
+	} else if params.GoGCThreshold < 0 {
+		log.Warn("GC is disabled, but no memory limit set.  Expect OOMs!")
+	}
 }
 
 func monitorAndManageShutdown(failureReportChan <-chan string, driverCmd *exec.Cmd, stopSignalChans []chan<- *sync.WaitGroup) {
