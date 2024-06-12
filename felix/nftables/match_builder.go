@@ -355,6 +355,7 @@ func (m nftMatch) IPSetNames() []string {
 	ipSetNames := set.New[string]()
 	for _, clause := range []string(m.clauses) {
 		match := ipSetMatch.FindStringSubmatch(clause)
+		logrus.WithField("clause", clause).WithField("match", match).Info("CASEY IPSetnames")
 		if len(match) > 2 {
 			logrus.WithField("clause", clause).Panic("Probably bug: multiple IP set names found")
 		} else if len(match) == 2 {

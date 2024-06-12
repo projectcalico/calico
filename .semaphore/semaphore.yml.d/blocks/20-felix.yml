@@ -203,6 +203,8 @@
         env_vars:
         - name: FELIX_FV_NFTABLES
           value: "true"
+        - name: GINKGO_FOCUS
+          value: "IP sets flapping"
         commands:
           - make check-wireguard
           - ../.semaphore/run-and-monitor fv-${SEMAPHORE_JOB_INDEX}.log make fv-no-prereqs FV_BATCHES_TO_RUN="${SEMAPHORE_JOB_INDEX}" FV_NUM_BATCHES=${SEMAPHORE_JOB_COUNT}
