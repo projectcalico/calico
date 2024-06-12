@@ -17,7 +17,7 @@ package intdataplane
 import (
 	"reflect"
 
-	"github.com/projectcalico/calico/felix/iptables"
+	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/rules"
 )
@@ -35,16 +35,16 @@ type serviceLoopManager struct {
 	ipVersion uint8
 
 	// Our dependencies.
-	filterTable  IptablesTable
+	filterTable  Table
 	ruleRenderer rules.RuleRenderer
 
 	// Internal state.
-	activeFilterChains     []*iptables.Chain
+	activeFilterChains     []*generictables.Chain
 	pendingGlobalBGPConfig *proto.GlobalBGPConfigUpdate
 }
 
 func newServiceLoopManager(
-	filterTable IptablesTable,
+	filterTable Table,
 	ruleRenderer rules.RuleRenderer,
 	ipVersion uint8,
 ) *serviceLoopManager {
@@ -52,7 +52,7 @@ func newServiceLoopManager(
 		ipVersion:              ipVersion,
 		filterTable:            filterTable,
 		ruleRenderer:           ruleRenderer,
-		activeFilterChains:     []*iptables.Chain{},
+		activeFilterChains:     []*generictables.Chain{},
 		pendingGlobalBGPConfig: &proto.GlobalBGPConfigUpdate{},
 	}
 }
