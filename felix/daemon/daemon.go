@@ -23,7 +23,6 @@ import (
 	"os/signal"
 	"reflect"
 	"runtime"
-	"runtime/debug"
 	"sync"
 	"syscall"
 	"time"
@@ -70,12 +69,6 @@ import (
 )
 
 const (
-	// Our default value for GOGC if it is not set.  This is the percentage that heap usage must
-	// grow by to trigger a garbage collection.  Go's default is 100, meaning that 50% of the
-	// heap can be lost to garbage.  We reduce it to this value to trade increased CPU usage for
-	// lower occupancy.
-	defaultGCPercent = 20
-
 	// String sent on the failure report channel to indicate we're shutting down for config
 	// change.
 	reasonConfigChanged      = "config changed"
@@ -122,14 +115,6 @@ func Run(configFile string, gitVersion string, buildDate string, gitRevision str
 	logutils.ConfigureEarlyLogging()
 
 	ctx := context.Background()
-
-	if os.Getenv("GOGC") == "" {
-		// Tune the GC to trade off a little extra CPU usage for significantly lower
-		// occupancy at high scale.  This is worthwhile because Felix runs per-host so
-		// any occupancy improvement is multiplied by the number of hosts.
-		log.Debugf("No GOGC value set, defaulting to %d%%.", defaultGCPercent)
-		debug.SetGCPercent(defaultGCPercent)
-	}
 
 	if len(buildinfo.GitVersion) == 0 && len(gitVersion) != 0 {
 		buildinfo.GitVersion = gitVersion
