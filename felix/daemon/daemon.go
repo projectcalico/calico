@@ -23,6 +23,7 @@ import (
 	"os/signal"
 	"reflect"
 	"runtime"
+	"runtime/debug"
 	"sync"
 	"syscall"
 	"time"
@@ -350,6 +351,8 @@ configRetry:
 		// a failure to load config, restart felix to avoid leaking connections.
 		exitWithCustomRC(configChangedRC, "Restarting to avoid leaking datastore connections")
 	}
+
+	doGoRuntimeSetup(configParams)
 
 	if configParams.BPFEnabled {
 		// Check for BPF dataplane support before we do anything that relies on the flag being set one way or another.
@@ -693,6 +696,33 @@ configRetry:
 	// Now monitor the worker process and our worker threads and shut
 	// down the process gracefully if they fail.
 	monitorAndManageShutdown(failureReportChan, dpDriverCmd, stopSignalChans)
+}
+
+func doGoRuntimeSetup(params *config.Config) {
+	var effectiveGOGC int
+	if os.Getenv("GOGC") == "" {
+		log.WithField("GOGC", params.GoGCThreshold).Info("Setting GOGC from configuration.")
+		debug.SetGCPercent(params.GoGCThreshold)
+		effectiveGOGC = params.GoGCThreshold
+	} else {
+		// Doesn't seem to be a way to get the current value without also
+		// setting it...
+		effectiveGOGC = debug.SetGCPercent(-1)
+		debug.SetGCPercent(effectiveGOGC)
+		log.WithField("GOGC", effectiveGOGC).Info("GOGC already set, not changing.")
+	}
+	limitFromEnv := os.Getenv("GOMEMLIMIT")
+	if limitFromEnv != "" {
+		log.WithField("GOMEMLIMIT", limitFromEnv).Info("Memory limit already set with GOMEMLIMIT, not changing.")
+		return
+	}
+	if params.GoMemoryLimitMB > -1 {
+		log.WithField("GoMemoryLimitMB", params.GoMemoryLimitMB).Info("Setting memory limit from configuration.")
+		memLimit := int64(params.GoMemoryLimitMB) * 1024 * 1024
+		debug.SetMemoryLimit(memLimit)
+	} else if effectiveGOGC < 0 {
+		log.Warn("GC is disabled and no memory limit is set.  Expect to run out of memory!")
+	}
 }
 
 func monitorAndManageShutdown(failureReportChan <-chan string, driverCmd *exec.Cmd, stopSignalChans []chan<- *sync.WaitGroup) {
