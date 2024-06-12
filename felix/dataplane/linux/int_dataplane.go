@@ -280,6 +280,7 @@ type InternalDataplane struct {
 	fromDataplane           chan interface{}
 	sendDataplaneInSyncOnce sync.Once
 
+	mainRouteTables      []routetable.SyncerInterface
 	allIptablesTables    []*iptables.Table
 	iptablesMangleTables []*iptables.Table
 	iptablesNATTables    []*iptables.Table
@@ -506,30 +507,67 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	dp.iptablesFilterTables = append(dp.iptablesFilterTables, filterTableV4)
 	dp.ipSets = append(dp.ipSets, ipSetsV4)
 
-	if config.RulesConfig.VXLANEnabled {
-		var routeTableVXLAN routetable.RouteTableInterface
-		if !config.RouteSyncDisabled {
-			log.Debug("RouteSyncDisabled is false.")
-			routeTableVXLAN = routetable.New([]string{"^" + VXLANIfaceNameV4 + "$"}, 4, config.NetlinkTimeout,
-				config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, true, unix.RT_TABLE_MAIN,
-				dp.loopSummarizer, featureDetector, routetable.WithLivenessCB(dp.reportHealth))
-		} else {
-			log.Info("RouteSyncDisabled is true, using DummyTable.")
-			routeTableVXLAN = &routetable.DummyTable{}
-		}
+	var routeTableV4 routetable.Interface
+	var routeTableV6 routetable.Interface
 
+	if !config.RouteSyncDisabled {
+		log.Debug("Route management is enabled.")
+		routeTableV4 = routetable.New(
+			mainRoutingTableOwnershipPolicy(config, 4),
+			4,
+			config.NetlinkTimeout,
+			config.DeviceRouteSourceAddress,
+			config.DeviceRouteProtocol,
+			config.RemoveExternalRoutes,
+			unix.RT_TABLE_MAIN,
+			dp.loopSummarizer,
+			featureDetector,
+			routetable.WithStaticARPEntries(true),
+			routetable.WithLivenessCB(dp.reportHealth),
+			routetable.WithRouteCleanupGracePeriod(routeCleanupGracePeriod),
+		)
+		if config.IPv6Enabled {
+			routeTableV6 = routetable.New(
+				mainRoutingTableOwnershipPolicy(config, 6),
+				6,
+				config.NetlinkTimeout,
+				config.DeviceRouteSourceAddressIPv6,
+				config.DeviceRouteProtocol,
+				config.RemoveExternalRoutes,
+				unix.RT_TABLE_MAIN,
+				dp.loopSummarizer,
+				featureDetector,
+				// Note: deliberately not including:
+				// - Static neighbor entries: we've never supported these for IPv6;
+				//   we let the kernel populate them.
+				routetable.WithLivenessCB(dp.reportHealth),
+				routetable.WithRouteCleanupGracePeriod(routeCleanupGracePeriod),
+			)
+		}
+	} else {
+		log.Info("Route management is disabled, using DummyTables.")
+		routeTableV4 = &routetable.DummyTable{}
+		if config.IPv6Enabled {
+			routeTableV6 = &routetable.DummyTable{}
+		}
+	}
+	dp.mainRouteTables = append(dp.mainRouteTables, routeTableV4)
+	if routeTableV6 != nil {
+		dp.mainRouteTables = append(dp.mainRouteTables, routeTableV6)
+	}
+
+	if config.RulesConfig.VXLANEnabled {
 		vxlanFDB := vxlanfdb.New(netlink.FAMILY_V4, VXLANIfaceNameV4, featureDetector, config.NetlinkTimeout)
 		dp.vxlanFDBs = append(dp.vxlanFDBs, vxlanFDB)
 
 		dp.vxlanManager = newVXLANManager(
 			ipSetsV4,
-			routeTableVXLAN,
+			routeTableV4,
 			vxlanFDB,
 			VXLANIfaceNameV4,
 			config,
 			dp.loopSummarizer,
 			4,
-			featureDetector,
 		)
 		dp.vxlanParentC = make(chan string, 1)
 		go dp.vxlanManager.KeepVXLANDeviceInSync(context.Background(), config.VXLANMTU, dataplaneFeatures.ChecksumOffloadBroken, 10*time.Second, dp.vxlanParentC)
@@ -713,7 +751,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			filterTableV6,
 			dp.reportHealth,
 			dp.loopSummarizer,
-			featureDetector,
+			routeTableV4,
+			routeTableV6,
 			config.HealthAggregator,
 			dataplaneFeatures,
 		)
@@ -770,19 +809,6 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 				log.WithError(err).Warn("Failed to detach connect-time load balancer. Ignoring.")
 			}
 		}
-	}
-
-	var routeTableV4 routetable.RouteTableInterface
-
-	if !config.RouteSyncDisabled {
-		log.Debug("RouteSyncDisabled is false.")
-		routeTableV4 = routetable.New(interfaceRegexes, 4, config.NetlinkTimeout,
-			config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, config.RemoveExternalRoutes, unix.RT_TABLE_MAIN,
-			dp.loopSummarizer, featureDetector, routetable.WithLivenessCB(dp.reportHealth),
-			routetable.WithRouteCleanupGracePeriod(routeCleanupGracePeriod))
-	} else {
-		log.Info("RouteSyncDisabled is true, using DummyTable.")
-		routeTableV4 = &routetable.DummyTable{}
 	}
 
 	epManager := newEndpointManager(
@@ -874,29 +900,17 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.iptablesFilterTables = append(dp.iptablesFilterTables, filterTableV6)
 
 		if config.RulesConfig.VXLANEnabledV6 {
-			var routeTableVXLANV6 routetable.RouteTableInterface
-			if !config.RouteSyncDisabled {
-				log.Debug("RouteSyncDisabled is false.")
-				routeTableVXLANV6 = routetable.New([]string{"^" + VXLANIfaceNameV6 + "$"}, 6, config.NetlinkTimeout,
-					config.DeviceRouteSourceAddressIPv6, config.DeviceRouteProtocol, true, unix.RT_TABLE_MAIN,
-					dp.loopSummarizer, featureDetector, routetable.WithLivenessCB(dp.reportHealth))
-			} else {
-				log.Debug("RouteSyncDisabled is true, using DummyTable for routeTableVXLANV6.")
-				routeTableVXLANV6 = &routetable.DummyTable{}
-			}
-
 			vxlanFDBV6 := vxlanfdb.New(netlink.FAMILY_V6, VXLANIfaceNameV6, featureDetector, config.NetlinkTimeout)
 			dp.vxlanFDBs = append(dp.vxlanFDBs, vxlanFDBV6)
 
 			dp.vxlanManagerV6 = newVXLANManager(
 				ipSetsV6,
-				routeTableVXLANV6,
+				routeTableV6,
 				vxlanFDBV6,
 				VXLANIfaceNameV6,
 				config,
 				dp.loopSummarizer,
 				6,
-				featureDetector,
 			)
 			dp.vxlanParentCV6 = make(chan string, 1)
 			go dp.vxlanManagerV6.KeepVXLANDeviceInSync(context.Background(), config.VXLANMTUV6, dataplaneFeatures.ChecksumOffloadBroken, 10*time.Second, dp.vxlanParentCV6)
@@ -904,19 +918,6 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		} else {
 			// Start a cleanup goroutine not to block felix if it needs to retry
 			go cleanUpVXLANDevice(VXLANIfaceNameV6)
-		}
-
-		var routeTableV6 routetable.RouteTableInterface
-		if !config.RouteSyncDisabled {
-			log.Debug("RouteSyncDisabled is false.")
-			routeTableV6 = routetable.New(
-				interfaceRegexes, 6, config.NetlinkTimeout,
-				config.DeviceRouteSourceAddressIPv6, config.DeviceRouteProtocol, config.RemoveExternalRoutes,
-				unix.RT_TABLE_MAIN, dp.loopSummarizer, featureDetector, routetable.WithLivenessCB(dp.reportHealth),
-				routetable.WithRouteCleanupGracePeriod(routeCleanupGracePeriod))
-		} else {
-			log.Debug("RouteSyncDisabled is true, using DummyTable for routeTableV6.")
-			routeTableV6 = &routetable.DummyTable{}
 		}
 
 		ipsetsManagerV6.AddDataplane(ipSetsV6)
@@ -1237,7 +1238,7 @@ type Manager interface {
 
 type ManagerWithRouteTables interface {
 	Manager
-	GetRouteTableSyncers() []routetable.RouteTableSyncer
+	GetRouteTableSyncers() []routetable.SyncerInterface
 }
 
 type ManagerWithRouteRules interface {
@@ -1252,12 +1253,11 @@ type routeRules interface {
 	Apply() error
 }
 
-func (d *InternalDataplane) routeTableSyncers() []routetable.RouteTableSyncer {
-	var rts []routetable.RouteTableSyncer
+func (d *InternalDataplane) routeTableSyncers() []routetable.SyncerInterface {
+	rts := d.mainRouteTables
 	for _, mrts := range d.managersWithRouteTables {
 		rts = append(rts, mrts.GetRouteTableSyncers()...)
 	}
-
 	return rts
 }
 
@@ -1953,9 +1953,12 @@ func (d *InternalDataplane) processIfaceStateUpdate(ifaceUpdate *ifaceStateUpdat
 		fdb.OnIfaceStateChanged(ifaceUpdate.Name, ifaceUpdate.State)
 	}
 
+	for _, rt := range d.mainRouteTables {
+		rt.OnIfaceStateChanged(ifaceUpdate.Name, ifaceUpdate.Index, ifaceUpdate.State)
+	}
 	for _, mgr := range d.managersWithRouteTables {
 		for _, routeTable := range mgr.GetRouteTableSyncers() {
-			routeTable.OnIfaceStateChanged(ifaceUpdate.Name, ifaceUpdate.State)
+			routeTable.OnIfaceStateChanged(ifaceUpdate.Name, ifaceUpdate.Index, ifaceUpdate.State)
 		}
 	}
 }
@@ -2148,7 +2151,7 @@ func (d *InternalDataplane) apply() {
 	var routesWG sync.WaitGroup
 	for _, r := range d.routeTableSyncers() {
 		routesWG.Add(1)
-		go func(r routetable.RouteTableSyncer) {
+		go func(r routetable.SyncerInterface) {
 			err := r.Apply()
 			if err != nil {
 				log.Warn("Failed to synchronize routing table, will retry...")
