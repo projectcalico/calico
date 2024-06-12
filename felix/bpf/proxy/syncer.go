@@ -828,10 +828,6 @@ func (s *Syncer) writeSvcBackend(svcID uint32, idx uint32, ep k8sp.Endpoint) err
 	key := nat.NewNATBackendKey(svcID, uint32(idx))
 
 	tgtPort := ep.Port()
-	// REVIEWER TODO: is this likely correct? Port() func no longer returns error.
-	if tgtPort < 1 {
-		return errors.Errorf("no port for endpoint %q", ep)
-	}
 	val := s.newBackendValue(ip, uint16(tgtPort))
 	s.bpfEps.Desired().Set(key, val)
 
