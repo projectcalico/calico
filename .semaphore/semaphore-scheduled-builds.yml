@@ -434,7 +434,7 @@ blocks:
   run:
     when: "true or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
   dependencies:
-    - "Felix: Build"
+    - Prerequisites
   task:
     prologue:
       commands:
@@ -471,13 +471,18 @@ blocks:
         # routing in that first felix container chooses different source IPs than the tests are expecting.
         - sudo modprobe ipip
     jobs:
-      - name: FV Test matrix
+      - name: nftables FV Test matrix
         execution_time_limit:
           minutes: 120
+        env_vars:
+        - name: FELIX_FV_NFTABLES
+          value: "true"
+        - name: GINKGO_FOCUS
+          value: "IP sets flapping"
         commands:
           - make check-wireguard
           - ../.semaphore/run-and-monitor fv-${SEMAPHORE_JOB_INDEX}.log make fv-no-prereqs FV_BATCHES_TO_RUN="${SEMAPHORE_JOB_INDEX}" FV_NUM_BATCHES=${SEMAPHORE_JOB_COUNT}
-        parallelism: 3
+        parallelism: 1
     epilogue:
       always:
         commands:
