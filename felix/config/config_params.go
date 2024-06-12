@@ -174,6 +174,10 @@ type Config struct {
 	WireguardHostEncryptionEnabled bool          `config:"bool;false"`
 	WireguardPersistentKeepAlive   time.Duration `config:"seconds;0"`
 
+	// nftables configuration.
+	NFTablesEnabled bool `config:"bool;false"`
+
+	// BPF configuration.
 	BPFEnabled                         bool              `config:"bool;false"`
 	BPFDisableUnprivileged             bool              `config:"bool;true"`
 	BPFLogLevel                        string            `config:"oneof(off,info,debug);off;non-zero"`

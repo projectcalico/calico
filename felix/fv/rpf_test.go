@@ -39,7 +39,6 @@ var _ = infrastructure.DatastoreDescribe(
 	"_BPF-SAFE_ RPF tests",
 	[]apiconfig.DatastoreType{apiconfig.Kubernetes},
 	func(getInfra infrastructure.InfraFactory) {
-
 		// Only BPF mode enforces strict RPF by default.
 		if os.Getenv("FELIX_FV_ENABLE_BPF") != "true" {
 			// Non-BPF run.
@@ -126,13 +125,16 @@ var _ = infrastructure.DatastoreDescribe(
 				cc.Expect(Some, external, w)
 				cc.CheckConnectivity()
 			})
-
 		})
 
 		JustAfterEach(func() {
 			if CurrentGinkgoTestDescription().Failed {
 				for _, felix := range tc.Felixes {
-					felix.Exec("iptables-save", "-c")
+					if NFTMode() {
+						logNFTDiags(felix)
+					} else {
+						felix.Exec("iptables-save", "-c")
+					}
 					felix.Exec("ip", "link")
 					felix.Exec("ip", "addr")
 					felix.Exec("ip", "rule")
@@ -279,5 +281,4 @@ var _ = infrastructure.DatastoreDescribe(
 					Should(BeNumerically("==", 0), "Wl - "+matcherWl)
 			})
 		})
-
 	})

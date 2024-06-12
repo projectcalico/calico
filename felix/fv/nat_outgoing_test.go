@@ -34,7 +34,6 @@ import (
 )
 
 var _ = infrastructure.DatastoreDescribe("NATOutgoing rule rendering test", []apiconfig.DatastoreType{apiconfig.EtcdV3, apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
-
 	var (
 		infra          infrastructure.DatastoreInfra
 		tc             infrastructure.TopologyContainers
@@ -49,6 +48,11 @@ var _ = infrastructure.DatastoreDescribe("NATOutgoing rule rendering test", []ap
 
 		dumpedDiags = false
 		opts := infrastructure.DefaultTopologyOptions()
+
+		if NFTMode() {
+			Skip("NFT mode not supported in this test")
+		}
+
 		opts.ExtraEnvVars = map[string]string{
 			"FELIX_IptablesNATOutgoingInterfaceFilter": "eth+",
 		}
@@ -70,9 +74,13 @@ var _ = infrastructure.DatastoreDescribe("NATOutgoing rule rendering test", []ap
 		if !CurrentGinkgoTestDescription().Failed || dumpedDiags {
 			return
 		}
-		iptSave, err := tc.Felixes[0].ExecOutput("iptables-save", "-c")
-		if err == nil {
-			log.Info("iptables-save:\n" + iptSave)
+		if NFTMode() {
+			logNFTDiags(tc.Felixes[0])
+		} else {
+			iptSave, err := tc.Felixes[0].ExecOutput("iptables-save", "-c")
+			if err == nil {
+				log.Info("iptables-save:\n" + iptSave)
+			}
 		}
 		dumpedDiags = true
 		infra.DumpErrorData()
@@ -86,9 +94,16 @@ var _ = infrastructure.DatastoreDescribe("NATOutgoing rule rendering test", []ap
 	})
 
 	It("should have expected restriction on the nat outgoing rule", func() {
-		Eventually(func() string {
-			output, _ := tc.Felixes[0].ExecOutput("iptables-save", "-t", "nat")
-			return output
-		}, 5*time.Second, 100*time.Millisecond).Should(MatchRegexp("-A cali-nat-outgoing .*-o eth\\+ "))
+		if NFTMode() {
+			Eventually(func() string {
+				output, _ := tc.Felixes[0].ExecOutput("nft", "list", "chain", "ip", "calico", "nat-cali-nat-outgoing")
+				return output
+			}, 5*time.Second, 100*time.Millisecond).Should(MatchRegexp(".* oifname eth\\+"))
+		} else {
+			Eventually(func() string {
+				output, _ := tc.Felixes[0].ExecOutput("iptables-save", "-t", "nat")
+				return output
+			}, 5*time.Second, 100*time.Millisecond).Should(MatchRegexp("-A cali-nat-outgoing .*-o eth\\+ "))
+		}
 	})
 })
