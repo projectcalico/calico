@@ -77,7 +77,7 @@ var _ = Describe("BPF Syncer", func() {
 
 		s, _ = proxy.NewSyncer(4, nodeIPs, svcs, eps, aff, rt, nil)
 
-		ep := proxy.NewEndpointInfo("10.1.0.1", 5555, false, true, false, false, nil)
+		ep := proxy.NewEndpointInfo("10.1.0.1", 5555, proxy.EndpointInfoOptIsReady(true))
 		state = proxy.DPSyncerState{
 			SvcMap: k8sp.ServicePortMap{
 				svcKey: proxy.NewK8sServicePort(
@@ -147,10 +147,10 @@ var _ = Describe("BPF Syncer", func() {
 				v1.ProtocolTCP,
 			)
 			state.EpsMap[svcKey2] = []k8sp.Endpoint{
-				proxy.NewEndpointInfo("10.2.0.0", 1111, false, false, false, false, nil),
-				proxy.NewEndpointInfo("10.2.0.1", 1111, false, true, false, false, nil),
-				proxy.NewEndpointInfo("10.2.0.1", 2222, false, true, false, false, nil),
-				proxy.NewEndpointInfo("10.2.0.3", 1111, false, false, false, false, nil),
+				proxy.NewEndpointInfo("10.2.0.0", 1111),
+				proxy.NewEndpointInfo("10.2.0.1", 1111, proxy.EndpointInfoOptIsReady(true)),
+				proxy.NewEndpointInfo("10.2.0.1", 2222, proxy.EndpointInfoOptIsReady(true)),
+				proxy.NewEndpointInfo("10.2.0.3", 1111),
 			}
 
 			err := s.Apply(state)
@@ -230,7 +230,7 @@ var _ = Describe("BPF Syncer", func() {
 
 		By("deleting one second-service backend", makestep(func() {
 			state.EpsMap[svcKey2] = []k8sp.Endpoint{
-				proxy.NewEndpointInfo("10.2.0.1", 2222, false, true, false, false, nil),
+				proxy.NewEndpointInfo("10.2.0.1", 2222, proxy.EndpointInfoOptIsReady(true)),
 			}
 
 			err := s.Apply(state)
@@ -248,7 +248,7 @@ var _ = Describe("BPF Syncer", func() {
 
 		By("terminating second-service backend", makestep(func() {
 			state.EpsMap[svcKey2] = []k8sp.Endpoint{
-				proxy.NewEndpointInfo("10.2.0.1", 2222, false, false, false, true, nil),
+				proxy.NewEndpointInfo("10.2.0.1", 2222, proxy.EndpointInfoOptIsTerminating(true)),
 			}
 
 			err := s.Apply(state)
@@ -265,7 +265,7 @@ var _ = Describe("BPF Syncer", func() {
 		// Just that the rest of the test has the expected conditions.
 		By("reviving one second-service backend", makestep(func() {
 			state.EpsMap[svcKey2] = []k8sp.Endpoint{
-				proxy.NewEndpointInfo("10.2.0.1", 2222, false, true, false, false, nil),
+				proxy.NewEndpointInfo("10.2.0.1", 2222, proxy.EndpointInfoOptIsReady(true)),
 			}
 
 			err := s.Apply(state)
@@ -309,7 +309,7 @@ var _ = Describe("BPF Syncer", func() {
 			}
 
 			state.EpsMap[nosvcKey] = []k8sp.Endpoint{
-				proxy.NewEndpointInfo("10.2.0.1", 6666, false, true, false, false, nil),
+				proxy.NewEndpointInfo("10.2.0.1", 6666, proxy.EndpointInfoOptIsReady(true)),
 			}
 
 			err := s.Apply(state)
@@ -464,7 +464,7 @@ var _ = Describe("BPF Syncer", func() {
 				proxy.K8sSvcWithNodePort(3232),
 			)
 			state.EpsMap[svcKey3] = []k8sp.Endpoint{
-				proxy.NewEndpointInfo("10.3.0.1", 3434, false, true, false, false, nil),
+				proxy.NewEndpointInfo("10.3.0.1", 3434, proxy.EndpointInfoOptIsReady(true)),
 			}
 
 			err := s.Apply(state)
@@ -498,7 +498,7 @@ var _ = Describe("BPF Syncer", func() {
 				proxy.K8sSvcWithNodePort(3232),
 			)
 			state.EpsMap[svcKey3] = []k8sp.Endpoint{
-				proxy.NewEndpointInfo("10.3.0.1", 3434, false, true, false, false, nil),
+				proxy.NewEndpointInfo("10.3.0.1", 3434, proxy.EndpointInfoOptIsReady(true)),
 			}
 
 			err := s.Apply(state)
@@ -530,7 +530,7 @@ var _ = Describe("BPF Syncer", func() {
 				proxy.K8sSvcWithNodePort(1212),
 			)
 			state.EpsMap[svcKey3] = []k8sp.Endpoint{
-				proxy.NewEndpointInfo("10.3.0.1", 3434, false, true, false, false, nil),
+				proxy.NewEndpointInfo("10.3.0.1", 3434, proxy.EndpointInfoOptIsReady(true)),
 			}
 
 			err := s.Apply(state)
@@ -610,9 +610,9 @@ var _ = Describe("BPF Syncer", func() {
 			)
 
 			state.EpsMap[svcKey2] = []k8sp.Endpoint{
-				proxy.NewEndpointInfo("10.2.1.1", 2222, false, true, false, false, nil),
-				proxy.NewEndpointInfo("10.2.2.1", 2222, true, true, false, false, nil), // isLocal == true.
-				proxy.NewEndpointInfo("10.2.3.1", 2222, false, true, false, false, nil),
+				proxy.NewEndpointInfo("10.2.1.1", 2222, proxy.EndpointInfoOptIsReady(true)),
+				proxy.NewEndpointInfo("10.2.2.1", 2222, proxy.EndpointInfoOptIsLocal(true), proxy.EndpointInfoOptIsReady(true)), // isLocal == true.
+				proxy.NewEndpointInfo("10.2.3.1", 2222, proxy.EndpointInfoOptIsReady(true)),
 			}
 
 			err := s.Apply(state)
@@ -763,10 +763,10 @@ var _ = Describe("BPF Syncer", func() {
 			)
 
 			state.EpsMap[svcKey2] = []k8sp.Endpoint{
-				proxy.NewEndpointInfo("10.2.1.1", 2222, false, true, false, false, nil),
-				proxy.NewEndpointInfo("10.2.2.1", 2222, false, true, false, false, nil),
-				proxy.NewEndpointInfo("10.2.2.2", 2222, false, true, false, false, nil),
-				proxy.NewEndpointInfo("10.2.3.1", 2222, false, true, false, false, nil),
+				proxy.NewEndpointInfo("10.2.1.1", 2222, proxy.EndpointInfoOptIsReady(true)),
+				proxy.NewEndpointInfo("10.2.2.1", 2222, proxy.EndpointInfoOptIsReady(true)),
+				proxy.NewEndpointInfo("10.2.2.2", 2222, proxy.EndpointInfoOptIsReady(true)),
+				proxy.NewEndpointInfo("10.2.3.1", 2222, proxy.EndpointInfoOptIsReady(true)),
 			}
 
 			rt.Update(
@@ -850,10 +850,10 @@ var _ = Describe("BPF Syncer", func() {
 			)
 
 			state.EpsMap[svcKey2] = []k8sp.Endpoint{
-				proxy.NewEndpointInfo("10.2.0.1", 2222, false, true, false, false, nil),
-				proxy.NewEndpointInfo("10.3.0.1", 2222, true, true, false, false, nil),
-				proxy.NewEndpointInfo("10.4.0.1", 2222, false, true, false, false, nil),
-				proxy.NewEndpointInfo("10.5.0.1", 2222, true, true, false, false, nil),
+				proxy.NewEndpointInfo("10.2.0.1", 2222, proxy.EndpointInfoOptIsReady(true)),
+				proxy.NewEndpointInfo("10.3.0.1", 2222, proxy.EndpointInfoOptIsLocal(true), proxy.EndpointInfoOptIsReady(true)),
+				proxy.NewEndpointInfo("10.4.0.1", 2222, proxy.EndpointInfoOptIsReady(true)),
+				proxy.NewEndpointInfo("10.5.0.1", 2222, proxy.EndpointInfoOptIsLocal(true), proxy.EndpointInfoOptIsReady(true)),
 			}
 
 			err := s.Apply(state)
@@ -917,7 +917,7 @@ var _ = Describe("BPF Syncer", func() {
 			)
 
 			state.EpsMap[svcKey2] = []k8sp.Endpoint{
-				proxy.NewEndpointInfo("10.2.0.1", 2222, false, true, false, false, nil),
+				proxy.NewEndpointInfo("10.2.0.1", 2222, proxy.EndpointInfoOptIsReady(true)),
 			}
 
 			err := s.Apply(state)
@@ -933,8 +933,8 @@ var _ = Describe("BPF Syncer", func() {
 
 		By("inserting another ep for service with affinity v1.ServiceAffinityClientIP", makestep(func() {
 			state.EpsMap[svcKey2] = []k8sp.Endpoint{
-				proxy.NewEndpointInfo("10.2.0.1", 2222, false, true, false, false, nil),
-				proxy.NewEndpointInfo("10.3.0.1", 3333, false, true, false, false, nil),
+				proxy.NewEndpointInfo("10.2.0.1", 2222, proxy.EndpointInfoOptIsReady(true)),
+				proxy.NewEndpointInfo("10.3.0.1", 3333, proxy.EndpointInfoOptIsReady(true)),
 			}
 
 			// add active affinity entry
@@ -974,7 +974,7 @@ var _ = Describe("BPF Syncer", func() {
 
 		By("deleting an ep for service with affinity v1.ServiceAffinityClientIP", makestep(func() {
 			state.EpsMap[svcKey2] = []k8sp.Endpoint{
-				proxy.NewEndpointInfo("10.3.0.1", 3333, false, true, false, false, nil),
+				proxy.NewEndpointInfo("10.3.0.1", 3333, proxy.EndpointInfoOptIsReady(true)),
 			}
 
 			err := aff.Update(
@@ -1067,8 +1067,8 @@ var _ = Describe("BPF Syncer", func() {
 				proxy.K8sSvcWithHintsAnnotation("auto"),
 			)
 			state.EpsMap[svcKey] = []k8sp.Endpoint{
-				proxy.NewEndpointInfo("10.1.0.1", 5555, false, true, false, false, sets.New[string]("us-west-2a")),
-				proxy.NewEndpointInfo("10.2.0.2", 5555, false, true, false, false, sets.New[string]("us-west-2b")),
+				proxy.NewEndpointInfo("10.1.0.1", 5555, proxy.EndpointInfoOptIsReady(true), proxy.EndpointInfoOptZoneHints(sets.New[string]("us-west-2a"))),
+				proxy.NewEndpointInfo("10.2.0.2", 5555, proxy.EndpointInfoOptIsReady(true), proxy.EndpointInfoOptZoneHints(sets.New[string]("us-west-2b"))),
 			}
 			state.NodeZone = "us-west-2a"
 
@@ -1085,8 +1085,8 @@ var _ = Describe("BPF Syncer", func() {
 				proxy.K8sSvcWithHintsAnnotation("auto"),
 			)
 			state.EpsMap[svcKey] = []k8sp.Endpoint{
-				proxy.NewEndpointInfo("10.1.0.1", 5555, false, true, false, false, sets.New[string]("us-west-2a")),
-				proxy.NewEndpointInfo("10.2.0.2", 5555, false, true, false, false, sets.New[string]("us-west-2b")),
+				proxy.NewEndpointInfo("10.1.0.1", 5555, proxy.EndpointInfoOptIsReady(true), proxy.EndpointInfoOptZoneHints(sets.New[string]("us-west-2a"))),
+				proxy.NewEndpointInfo("10.2.0.2", 5555, proxy.EndpointInfoOptIsReady(true), proxy.EndpointInfoOptZoneHints(sets.New[string]("us-west-2b"))),
 			}
 			state.NodeZone = "us-west-2b"
 
@@ -1103,8 +1103,8 @@ var _ = Describe("BPF Syncer", func() {
 				proxy.K8sSvcWithHintsAnnotation("disabled"),
 			)
 			state.EpsMap[svcKey] = []k8sp.Endpoint{
-				proxy.NewEndpointInfo("10.1.0.1", 5555, false, true, false, false, sets.New[string]("us-west-2a")),
-				proxy.NewEndpointInfo("10.2.0.2", 5555, false, true, false, false, sets.New[string]("us-west-2b")),
+				proxy.NewEndpointInfo("10.1.0.1", 5555, proxy.EndpointInfoOptIsReady(true), proxy.EndpointInfoOptZoneHints(sets.New[string]("us-west-2a"))),
+				proxy.NewEndpointInfo("10.2.0.2", 5555, proxy.EndpointInfoOptIsReady(true), proxy.EndpointInfoOptZoneHints(sets.New[string]("us-west-2b"))),
 			}
 			state.NodeZone = "us-west-2b"
 
@@ -1120,8 +1120,8 @@ var _ = Describe("BPF Syncer", func() {
 				v1.ProtocolTCP,
 			)
 			state.EpsMap[svcKey] = []k8sp.Endpoint{
-				proxy.NewEndpointInfo("10.1.0.1", 5555, false, true, false, false, sets.New[string]("us-west-2a")),
-				proxy.NewEndpointInfo("10.2.0.2", 5555, false, true, false, false, sets.New[string]("us-west-2b")),
+				proxy.NewEndpointInfo("10.1.0.1", 5555, proxy.EndpointInfoOptIsReady(true), proxy.EndpointInfoOptZoneHints(sets.New[string]("us-west-2a"))),
+				proxy.NewEndpointInfo("10.2.0.2", 5555, proxy.EndpointInfoOptIsReady(true), proxy.EndpointInfoOptZoneHints(sets.New[string]("us-west-2b"))),
 			}
 			state.NodeZone = "us-west-2b"
 
@@ -1138,8 +1138,8 @@ var _ = Describe("BPF Syncer", func() {
 				proxy.K8sSvcWithHintsAnnotation("auto"),
 			)
 			state.EpsMap[svcKey] = []k8sp.Endpoint{
-				proxy.NewEndpointInfo("10.1.0.1", 5555, false, true, false, false, sets.New[string]("us-west-2a")),
-				proxy.NewEndpointInfo("10.2.0.2", 5555, false, true, false, false, sets.New[string]("us-west-2b")),
+				proxy.NewEndpointInfo("10.1.0.1", 5555, proxy.EndpointInfoOptIsReady(true), proxy.EndpointInfoOptZoneHints(sets.New[string]("us-west-2a"))),
+				proxy.NewEndpointInfo("10.2.0.2", 5555, proxy.EndpointInfoOptIsReady(true), proxy.EndpointInfoOptZoneHints(sets.New[string]("us-west-2b"))),
 			}
 			state.NodeZone = ""
 
@@ -1165,9 +1165,9 @@ var _ = Describe("BPF Syncer", func() {
 				v1.ProtocolTCP,
 			)
 			state.EpsMap[svcKey4] = []k8sp.Endpoint{
-				proxy.NewEndpointInfo("10.1.0.1", 5555, false, true, false, false, nil),
-				proxy.NewEndpointInfo("10.1.0.2", 6666, false, false, false, true, nil),
-				proxy.NewEndpointInfo("10.1.0.3", 7777, false, true, false, false, nil),
+				proxy.NewEndpointInfo("10.1.0.1", 5555, proxy.EndpointInfoOptIsReady(true)),
+				proxy.NewEndpointInfo("10.1.0.2", 6666, proxy.EndpointInfoOptIsTerminating(true)),
+				proxy.NewEndpointInfo("10.1.0.3", 7777, proxy.EndpointInfoOptIsReady(true)),
 			}
 
 			// Expect 2x new map entries for Ready pods only; Terminating pods not added to map.
@@ -1218,8 +1218,8 @@ var _ = Describe("BPF Syncer", func() {
 			},
 			EpsMap: k8sp.EndpointsMap{
 				svcKey: []k8sp.Endpoint{
-					proxy.NewEndpointInfo("10.1.0.1", 5555, false, true, false, false, nil),
-					proxy.NewEndpointInfo("10.1.0.2", 5555, false, false, false, true, nil),
+					proxy.NewEndpointInfo("10.1.0.1", 5555, proxy.EndpointInfoOptIsReady(true)),
+					proxy.NewEndpointInfo("10.1.0.2", 5555, proxy.EndpointInfoOptIsTerminating(true)),
 				},
 			},
 		}
@@ -1255,8 +1255,8 @@ var _ = Describe("BPF Syncer", func() {
 			},
 			EpsMap: k8sp.EndpointsMap{
 				svcKey: []k8sp.Endpoint{
-					proxy.NewEndpointInfo("10.1.0.1", 5555, false, true, false, false, nil),
-					proxy.NewEndpointInfo("10.1.0.2", 5555, false, false, false, true, nil),
+					proxy.NewEndpointInfo("10.1.0.1", 5555, proxy.EndpointInfoOptIsReady(true)),
+					proxy.NewEndpointInfo("10.1.0.2", 5555, proxy.EndpointInfoOptIsTerminating(true)),
 				},
 			},
 		}
