@@ -446,6 +446,7 @@ func StartNNodeTopology(n int, opts TopologyOptions, infra DatastoreInfra) (tc T
 			}(i, j, iFelix, jFelix)
 		}
 	}
+
 	wg.Wait()
 	success = true
 	return
