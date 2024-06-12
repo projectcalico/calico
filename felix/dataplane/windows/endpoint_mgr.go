@@ -192,9 +192,8 @@ func (m *endpointManager) RefreshHnsEndpointCache(forceRefresh bool) error {
 		// In that case, it is possible Felix sees multiple endpoints with the same IP.
 		// We need to filter out inactive endpoints that do not attach to any container.
 		
-		// Use Endpoint State instead of SharedContainers to determine state endpoints. 
-		// Endpoint State 2 ensures an "Attached endpoint" state.
-		if endpoint.State != 2 {
+		// Use Endpoint State instead of SharedContainers to determine stale endpoints. 
+		if endpoint.State == 2 {
 			log.WithFields(log.Fields{
 				"id":   endpoint.Id,
 				"name": endpoint.Name,
