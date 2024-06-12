@@ -5,7 +5,7 @@
       lintAllTheThings:
         runs-on: ubuntu-latest
         steps:
-          - uses: actions/checkout@v3
+          - uses: actions/checkout@v4
           - id: yaml-lint
             uses: ibiqlik/action-yamllint@v3
             with:
@@ -14,7 +14,7 @@
     
           - run: echo ${{ steps.yaml-lint.outputs.logfile }}
     
-          - uses: actions/upload-artifact@v2
+          - uses: actions/upload-artifact@v4
             if: always()
             with:
               name: yamllint-logfile
