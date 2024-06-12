@@ -659,9 +659,17 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 				// BPF mode doesn't use the IP set.
 				if vxlanMode == api.VXLANModeAlways && !BPFMode() {
 					It("after manually removing third node from allow list should have expected connectivity", func() {
-						felixes[0].Exec("ipset", "del", "cali40all-vxlan-net", felixes[2].IP)
-						if enableIPv6 {
-							felixes[0].Exec("ipset", "del", "cali60all-vxlan-net", felixes[2].IPv6)
+						if NFTMode() {
+							ip := "ip"
+							if enableIPv6 {
+								ip = "ip6"
+							}
+							felixes[0].Exec("nft", "delete", "element", ipv, "calico", "cali40all-vxlan-net", fmt.Sprintf("{ %s }", felixes[2].IP))
+						} else {
+							felixes[0].Exec("ipset", "del", "cali40all-vxlan-net", felixes[2].IP)
+							if enableIPv6 {
+								felixes[0].Exec("ipset", "del", "cali60all-vxlan-net", felixes[2].IPv6)
+							}
 						}
 
 						cc.ExpectSome(w[0], w[1])
