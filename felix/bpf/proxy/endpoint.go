@@ -57,18 +57,56 @@ type endpointInfo struct {
 
 var _ k8sp.Endpoint = &endpointInfo{}
 
+type EndpoiontInfoOpt func(*endpointInfo)
+
+// EndpointInfoOptIsLocal applies the given bool to the endpoint's isLocal field.
+func EndpointInfoOptIsLocal(b bool) EndpoiontInfoOpt {
+	return func(ep *endpointInfo) {
+		ep.isLocal = b
+	}
+}
+
+// EndpointInfoOptIsReady applies the given bool to the endpoint's ready field.
+func EndpointInfoOptIsReady(b bool) EndpoiontInfoOpt {
+	return func(ep *endpointInfo) {
+		ep.ready = b
+	}
+}
+
+// EndpointInfoOptIsServing applies the given bool to the endpoint's serving field.
+func EndpointInfoOptIsServing(b bool) EndpoiontInfoOpt {
+	return func(ep *endpointInfo) {
+		ep.serving = b
+	}
+}
+
+// EndpointInfoOptIsTerminating applies the given bool to the endpoint's terminating field.
+func EndpointInfoOptIsTerminating(b bool) EndpoiontInfoOpt {
+	return func(ep *endpointInfo) {
+		ep.terminating = b
+	}
+}
+
+// EndpointInfoOptZoneHints applies the given set to the endpoint's zoneHints field.
+func EndpointInfoOptZoneHints(b sets.Set[string]) EndpoiontInfoOpt {
+	return func(ep *endpointInfo) {
+		ep.zoneHints = b
+	}
+}
+
 // NewEndpointInfo creates a new endpointInfo, returning it as a k8s proxy Endpoint.
-func NewEndpointInfo(ip string, port int, isLocal, ready, serving, terminating bool, zoneHints sets.Set[string]) k8sp.Endpoint {
-	return &endpointInfo{
+func NewEndpointInfo(ip string, port int, opts... EndpoiontInfoOpt) k8sp.Endpoint {
+	ep := &endpointInfo{
 		ip:          ip,
 		port:        port,
 		endpoint:    net.JoinHostPort(ip, strconv.Itoa(port)),
-		isLocal:     isLocal,
-		ready:       ready,
-		serving:     serving,
-		terminating: terminating,
-		zoneHints:   zoneHints,
 	}
+
+	for _, opt := range opts {
+		opt(ep)
+	}
+
+	return ep
 }
 
 // String is part of proxy.Endpoint interface.

@@ -368,7 +368,7 @@ func (s *Syncer) startupBuildPrev(state DPSyncerState) error {
 				break
 			}
 			s.prevEpsMap[svckey.sname] = append(s.prevEpsMap[svckey.sname],
-				NewEndpointInfo(ep.Addr().String(), int(ep.Port()), false, false, false, false, nil),
+				NewEndpointInfo(ep.Addr().String(), int(ep.Port())),
 			)
 		}
 	})
