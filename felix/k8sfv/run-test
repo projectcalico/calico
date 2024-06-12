@@ -240,6 +240,7 @@ docker run --detach --privileged --name ${prefix}-felix \
        -e FELIX_PROMETHEUSMETRICSENABLED=true \
        -e FELIX_USAGEREPORTINGENABLED=false \
        -e FELIX_DEBUGMEMORYPROFILEPATH="heap-<timestamp>" \
+       -e FELIX_NFTABLESENABLED=${FELIX_FV_NFTABLES} \
        -e K8S_API_ENDPOINT=${k8s_api_endpoint} \
        -e K8S_INSECURE_SKIP_TLS_VERIFY=true \
        -e K8SFV_LOG_LEVEL=${K8SFV_LOG_LEVEL} \
