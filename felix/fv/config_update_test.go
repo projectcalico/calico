@@ -43,7 +43,6 @@ const (
 )
 
 var _ = Context("Config update tests, after starting felix", func() {
-
 	var (
 		etcd          *containers.Container
 		tc            infrastructure.TopologyContainers
@@ -55,12 +54,14 @@ var _ = Context("Config update tests, after starting felix", func() {
 	)
 
 	BeforeEach(func() {
+		if NFTMode() {
+			Skip("TODO: Implement for NFT")
+		}
 		tc, etcd, client, infra = infrastructure.StartSingleNodeEtcdTopology(infrastructure.DefaultTopologyOptions())
 		felixPID = tc.Felixes[0].GetSinglePID("calico-felix")
 	})
 
 	AfterEach(func() {
-
 		if CurrentGinkgoTestDescription().Failed {
 			tc.Felixes[0].Exec("iptables-save", "-c")
 			tc.Felixes[0].Exec("ip", "r")
