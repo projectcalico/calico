@@ -911,11 +911,16 @@ func (t *nftablesTable) applyUpdates() error {
 			currentHashes := t.render.RuleHashes(chain, features)
 			newHashes[chainName] = currentHashes
 
-			// Make sure sets are created for the chain, as nft will faill the transaction
+			// Make sure sets are created for the chain, as nft will fail the transaction
 			// if there are unreferenced sets.
 			for _, setName := range chain.IPSetNames() {
 				if set := t.IPSetsDataplane.(*IPSets).NFTablesSet(setName); set != nil {
 					tx.Add(set)
+				} else {
+					t.logCxt.WithFields(logrus.Fields{
+						"chain": chainName,
+						"set":   setName,
+					}).Warn("IP Set for chain has not yet been received by data plane")
 				}
 			}
 

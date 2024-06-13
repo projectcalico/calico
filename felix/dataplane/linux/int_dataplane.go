@@ -691,7 +691,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	dp.RegisterManager(ipsetsManager)
 
 	if !config.BPFEnabled {
-		// BPF mode disabled, create the iptables-only managers.
+		// BPF mode disabled, create the iptables/nftables-only managers.
 		dp.ipsetsSourceV4 = ipsetsManager
 		// TODO Connect host IP manager to BPF
 		dp.RegisterManager(newHostIPManager(
