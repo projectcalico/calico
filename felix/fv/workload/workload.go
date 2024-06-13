@@ -18,6 +18,7 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"math/rand"
 	"os"
 	"os/exec"
 	"regexp"
@@ -846,15 +847,21 @@ func (w *Workload) InterfaceIndex() int {
 
 func (w *Workload) RenameInterface(from, to string) {
 	var err error
-	for try := 0; try < 5; try++ {
+	sleep := 100 * time.Millisecond
+	for try := 0; try < 40; try++ {
 		// Can fail with EBUSY.
 		err = w.C.ExecMayFail("ip", "link", "set", from, "name", to)
 		if err == nil {
 			return
 		}
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(sleep)
+		sleep = time.Duration(float64(sleep) * (1.5 + rand.Float64()))
+		const maxSleep = 2 * time.Second
+		if sleep > maxSleep {
+			sleep = maxSleep
+		}
 	}
-	ginkgo.Fail(fmt.Sprintf("Failed to rename interface %s to %s: %s", from, to, err))
+	ginkgo.Fail(fmt.Sprintf("Failed to rename interface %s to %s after several retries: %s", from, to, err))
 }
 
 func (w *Workload) SetInterfaceUp(b bool) {
