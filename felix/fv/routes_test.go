@@ -96,6 +96,12 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ routing table tests", []api
 		})
 
 		It("should handle interface rename flaps", func() {
+			if !BPFMode() {
+				// This passes locally but, in Semaphore, it hits EBUSY in iptables mode
+				// every time.  Since we're testing routing, not our ability to rename
+				// an interface(!) let's rely on the BPF-mode test only.
+				Skip("Renaming interfaces regularly hits EBUSY in iptables mode")
+			}
 			var wg sync.WaitGroup
 			defer wg.Wait()
 			wg.Add(1)
@@ -120,6 +126,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ routing table tests", []api
 
 			Consistently(errorSeenC, "20s").ShouldNot(BeClosed(),
 				"Expected no errors from route_table.go during interface rename flaps")
+			cancel()
 
 			cc.Expect(connectivity.Some, tc.Felixes[0], w[0][0])
 			cc.CheckConnectivity()
@@ -149,6 +156,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ routing table tests", []api
 
 			Consistently(errorSeenC, "20s").ShouldNot(BeClosed(),
 				"Expected no errors from route_table.go during interface up/down flaps")
+			cancel()
 
 			cc.Expect(connectivity.Some, tc.Felixes[0], w[0][0])
 			cc.CheckConnectivity()
