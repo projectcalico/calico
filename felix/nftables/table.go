@@ -903,6 +903,7 @@ func (t *nftablesTable) applyUpdates() error {
 
 	// Make a second pass over the dirty chains.  This time, we write out the rule changes.
 	newHashes := map[string][]string{}
+	skippedChains := set.New[string]()
 	t.dirtyChains.Iter(func(chainName string) error {
 		if chain, ok := t.desiredStateOfChain(chainName); ok {
 			// Chain update or creation.  Scan the chain against its previous hashes
@@ -921,6 +922,8 @@ func (t *nftablesTable) applyUpdates() error {
 						"chain": chainName,
 						"set":   setName,
 					}).Warn("IP Set for chain has not yet been received by data plane")
+					skippedChains.Add(chainName)
+					continue
 				}
 			}
 
@@ -1035,6 +1038,7 @@ func (t *nftablesTable) applyUpdates() error {
 			}).Debug("Deleting chain that is no longer needed")
 			tx.Delete(&knftables.Chain{Name: chainName})
 			newHashes[chainName] = nil
+			skippedChains.Discard(chainName)
 		}
 		return nil // Delay clearing the set until we've programmed nftables.
 	})
@@ -1078,7 +1082,7 @@ func (t *nftablesTable) applyUpdates() error {
 	// Now we've successfully updated nftables, clear the dirty sets.  We do this even if we
 	// found there was nothing to do above, since we may have found out that a dirty chain
 	// was actually a no-op update.
-	t.dirtyChains = set.New[string]()
+	t.dirtyChains = skippedChains
 	t.dirtyBaseChains = set.New[string]()
 
 	// Store off the updates.

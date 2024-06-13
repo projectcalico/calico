@@ -65,7 +65,7 @@ var _ = Context("_IPSets_ Tests for IPset rendering", func() {
 		infra.Stop()
 	})
 
-	It("should handle thousands of IP sets flapping", func() {
+	It("FOCUS should handle thousands of IP sets flapping", func() {
 		// This test activates thousands of selectors all at once, simulating
 		// a very large policy set that applies to all pods.
 		//
