@@ -59,8 +59,10 @@ clean: clean-windows
 	find . -name '.*.published*' -type f -delete
 	rm -rf $(BIN) bin $(DEPLOY_CONTAINER_MARKER) .go-pkg-cache pkg/install/install.test
 	rm -f *.created
-	rm -rf config/
-	rm -rf dist/
+	rm -rf bin $(DEPLOY_CONTAINER_MARKER) pkg/install/install.test
+	rm -rf config/ dist/
+	-docker image rm -f $$(docker images $(CNI_PLUGIN_IMAGE) -a -q)
+	rm -rf containernetworking-plugins .containernetworking-plugins.created
 
 clean-windows: clean-windows-builder
 	rm -rf $(WINDOWS_BIN) $(WINDOWS_DIST)
@@ -140,13 +142,31 @@ $(DEPLOY_CONTAINER_FIPS_MARKER): Dockerfile.$(ARCH) build fetch-cni-bins
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
 	touch $@
 
+CN_FLAGS=-ldflags "-X github.com/containernetworking/plugins/pkg/utils/buildversion.BuildVersion=$(GIT_VERSION)"
+
+CONTAINERNETWORKING_PLUGINS_CREATED=.containernetworking-plugins-$(ARCH).created
+CONTAINERNETWORKING_PLUGINS_CLONED=.containernetworking-plugins.cloned
+
+$(CONTAINERNETWORKING_PLUGINS_CLONED):
+	git clone --single-branch --branch $(CNI_VERSION) https://github.com/projectcalico/containernetworking-plugins.git
+	touch $@
+
+$(CONTAINERNETWORKING_PLUGINS_CREATED): $(CONTAINERNETWORKING_PLUGINS_CLONED)
+	docker run \
+		-v $(CURDIR)/containernetworking-plugins:/go/src/github.com/containernetworking/plugins:z \
+		-e LOCAL_USER_ID=$(LOCAL_USER_ID) -w /go/src/github.com/containernetworking/plugins --rm $(CALICO_BUILD) \
+		/bin/sh -xe -c ' \
+			GOFLAGS='-buildvcs=false' CGO_ENABLED=0 GOARCH=$(ARCH) ./build_linux.sh $(CN_FLAGS)'
+	mv containernetworking-plugins/bin containernetworking-plugins/bin-$(ARCH)
+	touch $@
+
 .PHONY: fetch-cni-bins fetch-win-cni-bins
-fetch-cni-bins: $(BIN)/flannel $(BIN)/loopback $(BIN)/host-local $(BIN)/portmap $(BIN)/tuning $(BIN)/bandwidth
+fetch-cni-bins: $(BIN)/loopback $(BIN)/host-local $(BIN)/portmap $(BIN)/tuning $(BIN)/bandwidth
 fetch-win-cni-bins: $(WINDOWS_BIN)/flannel.exe
 
-$(BIN)/loopback $(BIN)/host-local $(BIN)/portmap $(BIN)/tuning $(BIN)/bandwidth:
+$(BIN)/host-local $(BIN)/loopback $(BIN)/portmap $(BIN)/tuning $(BIN)/bandwidth: $(CONTAINERNETWORKING_PLUGINS_CREATED)
 	-mkdir -p $(BIN)
-	$(CURL) -L --retry 5 $(CNI_ARTIFACTS_URL)/$(CNI_VERSION)/cni-plugins-linux-$(subst v7,,$(ARCH))-$(CNI_VERSION).tgz | tar -xz -C $(BIN) ./loopback ./host-local ./portmap ./tuning ./bandwidth
+	cp containernetworking-plugins/bin-$(ARCH)/$(subst $(BIN)/,,$@) $@
 
 $(BIN)/flannel:
 	-mkdir -p $(BIN)
@@ -184,7 +204,7 @@ ut-datastore:
 	-v $(CERTS_PATH):/home/user/certs \
 	$(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
 			cd  /go/src/$(PACKAGE_NAME) && \
-			ginkgo -cover -r -skipPackage pkg/install $(GINKGO_ARGS)'
+			ginkgo -cover -r -skipPackage pkg/install,containernetworking-plugins $(GINKGO_ARGS)'
 
 ut-etcd: run-k8s-controller-manager build $(BIN)/host-local
 	$(MAKE) ut-datastore DATASTORE_TYPE=etcdv3

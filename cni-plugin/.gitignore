@@ -18,3 +18,5 @@ report/*.xml
 crds.yaml
 Makefile.common*
 config/
+.containernetworking-plugins.*
+containernetworking-plugins/
