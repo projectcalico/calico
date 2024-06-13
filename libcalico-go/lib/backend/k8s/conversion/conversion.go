@@ -25,7 +25,6 @@ import (
 	kapiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/network-policy-api/apis/v1alpha1"
 
 	discovery "k8s.io/api/discovery/v1"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -60,8 +59,8 @@ type Converter interface {
 	HasIPAddress(pod *kapiv1.Pod) bool
 	StagedKubernetesNetworkPolicyToStagedName(stagedK8sName string) string
 	K8sNetworkPolicyToCalico(np *networkingv1.NetworkPolicy) (*model.KVPair, error)
-	K8sAdminNetworkPolicyToGNP(anp *v1alpha1.AdminNetworkPolicy) (*model.KVPair, error)
-	K8sBaselineAdminNetworkPolicyToGNP(anp *v1alpha1.BaselineAdminNetworkPolicy) (*model.KVPair, error)
+	//K8sAdminNetworkPolicyToGNP(anp *v1alpha1.AdminNetworkPolicy) (*model.KVPair, error)
+	//K8sBaselineAdminNetworkPolicyToGNP(anp *v1alpha1.BaselineAdminNetworkPolicy) (*model.KVPair, error)
 	EndpointSliceToKVP(svc *discovery.EndpointSlice) (*model.KVPair, error)
 	ServiceToKVP(service *kapiv1.Service) (*model.KVPair, error)
 	ProfileNameToNamespace(profileName string) (string, error)
@@ -566,6 +565,7 @@ func (c converter) k8sRuleToCalico(rPeers []networkingv1.NetworkPolicyPeer, rPor
 	return rules, nil
 }
 
+/*
 // K8sAdminNetworkPolicyToGNP converts a k8s AdminNetworkPolicy to a model.KVPair.
 func (c converter) K8sAdminNetworkPolicyToGNP(anp *v1alpha1.AdminNetworkPolicy) (*model.KVPair, error) {
 	// Pull out important fields.
@@ -737,7 +737,7 @@ func (c converter) k8sANPIngressRuleToGNP(rPeers []v1alpha1.AdminNetworkPolicyIn
 // K8sBaselineAdminNetworkPolicyToGNP converts a k8s BaselineAdminNetworkPolicy to a model.KVPair.
 func (c converter) K8sBaselineAdminNetworkPolicyToGNP(banp *v1alpha1.BaselineAdminNetworkPolicy) (*model.KVPair, error) {
 	return nil, nil
-}
+}*/
 
 // SimplifyPorts calculates a minimum set of port ranges that cover the given set of ports.
 // For example, if the input was [80, 81, 82, 9090, "foo"] the output would consist of
