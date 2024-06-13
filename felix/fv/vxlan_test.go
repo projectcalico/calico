@@ -662,7 +662,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 						if NFTMode() {
 							felixes[0].Exec("nft", "delete", "element", "ip", "calico", "cali40all-vxlan-net", fmt.Sprintf("{ %s }", felixes[2].IP))
 							if enableIPv6 {
-								felixes[0].Exec("nft", "delete", "element", "ip6", "calico", "cali40all-vxlan-net", fmt.Sprintf("{ %s }", felixes[2].IPv6))
+								felixes[0].Exec("nft", "delete", "element", "ip6", "calico", "cali60all-vxlan-net", fmt.Sprintf("{ %s }", felixes[2].IPv6))
 							}
 						} else {
 							felixes[0].Exec("ipset", "del", "cali40all-vxlan-net", felixes[2].IP)
