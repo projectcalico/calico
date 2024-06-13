@@ -2693,6 +2693,14 @@ spec:
                 description: ServiceAccountSelector is an optional field for an expression
                   used to select a pod based on service accounts.
                 type: string
+              tier:
+                description: The name of the tier that this policy belongs to.  If
+                  this is omitted, the default tier (name is "default") is assumed.  The
+                  specified tier must exist in order to create security policies within
+                  the tier, the "default" tier is created automatically if it does
+                  not exist, this means for deployments requiring only a single Tier,
+                  the tier name may be omitted on all policy management requests.
+                type: string
               types:
                 description: "Types indicates whether this policy applies to ingress,
                   or to egress, or to both.  When not explicitly specified (and so

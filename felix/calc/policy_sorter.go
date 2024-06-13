@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ import (
 	"strings"
 
 	"github.com/google/btree"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -26,16 +27,30 @@ import (
 )
 
 type PolicySorter struct {
-	Tier *TierInfo
+	tiers       map[string]*TierInfo
+	sortedTiers *btree.BTreeG[tierInfoKey]
 }
 
 func NewPolicySorter() *PolicySorter {
 	return &PolicySorter{
-		Tier: &TierInfo{
-			Name:           "default",
-			Policies:       make(map[model.PolicyKey]*model.Policy),
-			SortedPolicies: btree.NewG[PolKV](2, PolKVLess),
+		tiers: map[string]*TierInfo{
+			"adminNetworkPolicy": &TierInfo{
+				Name:           "adminNetworkPolicy",
+				Policies:       make(map[model.PolicyKey]*model.Policy),
+				SortedPolicies: btree.NewG[PolKV](2, PolKVLess),
+			},
+			"default": &TierInfo{
+				Name:           "default",
+				Policies:       make(map[model.PolicyKey]*model.Policy),
+				SortedPolicies: btree.NewG[PolKV](2, PolKVLess),
+			},
+			"PolicyBaseline": &TierInfo{
+				Name:           "policyBaseline",
+				Policies:       make(map[model.PolicyKey]*model.Policy),
+				SortedPolicies: btree.NewG[PolKV](2, PolKVLess),
+			},
 		},
+		sortedTiers: btree.NewG(2, TierLess),
 	}
 }
 
@@ -51,13 +66,29 @@ func policyTypesEqual(pol1, pol2 *model.Policy) bool {
 	return types1.Equals(types2)
 }
 
-func (poc *PolicySorter) Sorted() *TierInfo {
-	poc.Tier.OrderedPolicies = make([]PolKV, 0, len(poc.Tier.Policies))
-	poc.Tier.SortedPolicies.Ascend(func(kv PolKV) bool {
-		poc.Tier.OrderedPolicies = append(poc.Tier.OrderedPolicies, kv)
-		return true
-	})
-	return poc.Tier
+func (poc *PolicySorter) Sorted() []*TierInfo {
+	var tiers []*TierInfo
+	if poc.sortedTiers.Len() > 0 {
+		tiers = make([]*TierInfo, 0, len(poc.tiers))
+		poc.sortedTiers.Ascend(func(t tierInfoKey) bool {
+			if ti := poc.tiers[t.Name]; ti != nil {
+				if ti.SortedPolicies != nil {
+					ti.OrderedPolicies = make([]PolKV, 0, len(ti.Policies))
+					ti.SortedPolicies.Ascend(func(kv PolKV) bool {
+						ti.OrderedPolicies = append(ti.OrderedPolicies, kv)
+						return true
+					})
+				}
+				tiers = append(tiers, ti)
+				return true
+			} else {
+				// A key for a tier that isn't found in the map is highly unexpected so panic
+				log.WithField("name", t.Name).Panic("Bug: tier present in map but not the sorted tree.")
+				return false
+			}
+		})
+	}
+	return tiers
 }
 
 func (poc *PolicySorter) OnUpdate(update api.Update) (dirty bool) {
@@ -74,12 +105,34 @@ func (poc *PolicySorter) OnUpdate(update api.Update) (dirty bool) {
 	return
 }
 
-func (poc *PolicySorter) HasPolicy(key model.PolicyKey) (found bool) {
-	_, found = poc.Tier.Policies[key]
+func TierLess(i, j tierInfoKey) bool {
+	if !i.Valid && j.Valid {
+		return false
+	} else if i.Valid && !j.Valid {
+		return true
+	}
+	if i.Order == nil && j.Order != nil {
+		return false
+	} else if i.Order != nil && j.Order == nil {
+		return true
+	}
+	if i.Order == j.Order || *i.Order == *j.Order {
+		return i.Name < j.Name
+	}
+	return *i.Order < *j.Order
+}
+
+func (poc *PolicySorter) HasPolicy(key model.PolicyKey) bool {
+	var tierInfo *TierInfo
+	var found bool
+	if tierInfo, found = poc.tiers[key.Tier]; found {
+		_, found = tierInfo.Policies[key]
+	}
 	return found
 }
 
 func (poc *PolicySorter) UpdatePolicy(key model.PolicyKey, newPolicy *model.Policy) (dirty bool) {
+	tierInfo := poc.tiers[key.Tier]
 	oldPolicy := poc.Tier.Policies[key]
 	if newPolicy != nil {
 		if oldPolicy == nil ||
@@ -182,6 +235,12 @@ func PolKVLess(i, j PolKV) bool {
 
 	// Otherwise, use numeric comparison.
 	return *i.Value.Order < *j.Value.Order
+}
+
+type tierInfoKey struct {
+	Name  string
+	Valid bool
+	Order *float64
 }
 
 type TierInfo struct {
