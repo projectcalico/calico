@@ -26,6 +26,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 
@@ -632,8 +633,10 @@ type PersistentConnectionOpts struct {
 	Timeout             time.Duration
 }
 
-func (w *Workload) StartPersistentConnection(ip string, port int,
-	opts PersistentConnectionOpts) *connectivity.PersistentConnection {
+func (w *Workload) StartPersistentConnection(
+	ip string, port int,
+	opts PersistentConnectionOpts,
+) *connectivity.PersistentConnection {
 
 	pc := &connectivity.PersistentConnection{
 		RuntimeName:         w.C.Name,
@@ -839,4 +842,27 @@ func (w *Workload) InterfaceIndex() int {
 	Expect(err).NotTo(HaveOccurred())
 	log.Infof("%v is ifindex %v", w.InterfaceName, ifIndex)
 	return ifIndex
+}
+
+func (w *Workload) RenameInterface(from, to string) {
+	var err error
+	sleep := 100*time.Millisecond
+	for try := 0; try < 6; try++ {
+		// Can fail with EBUSY.
+		err = w.C.ExecMayFail("ip", "link", "set", from, "name", to)
+		if err == nil {
+			return
+		}
+		time.Sleep(sleep)
+		sleep*=2
+	}
+	ginkgo.Fail(fmt.Sprintf("Failed to rename interface %s to %s after several retries: %s", from, to, err))
+}
+
+func (w *Workload) SetInterfaceUp(b bool) {
+	if b {
+		w.C.Exec("ip", "link", "set", "up", w.InterfaceName)
+	} else {
+		w.C.Exec("ip", "link", "set", "down", w.InterfaceName)
+	}
 }
