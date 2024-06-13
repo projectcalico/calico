@@ -846,15 +846,17 @@ func (w *Workload) InterfaceIndex() int {
 
 func (w *Workload) RenameInterface(from, to string) {
 	var err error
-	for try := 0; try < 5; try++ {
+	sleep := 100 * time.Millisecond
+	for try := 0; try < 6; try++ {
 		// Can fail with EBUSY.
 		err = w.C.ExecMayFail("ip", "link", "set", from, "name", to)
 		if err == nil {
 			return
 		}
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(sleep)
+		sleep *= 2
 	}
-	ginkgo.Fail(fmt.Sprintf("Failed to rename interface %s to %s: %s", from, to, err))
+	ginkgo.Fail(fmt.Sprintf("Failed to rename interface %s to %s after several retries: %s", from, to, err))
 }
 
 func (w *Workload) SetInterfaceUp(b bool) {
