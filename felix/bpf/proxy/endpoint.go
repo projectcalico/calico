@@ -95,11 +95,11 @@ func EndpointInfoOptZoneHints(b sets.Set[string]) EndpoiontInfoOpt {
 }
 
 // NewEndpointInfo creates a new endpointInfo, returning it as a k8s proxy Endpoint.
-func NewEndpointInfo(ip string, port int, opts... EndpoiontInfoOpt) k8sp.Endpoint {
+func NewEndpointInfo(ip string, port int, opts ...EndpoiontInfoOpt) k8sp.Endpoint {
 	ep := &endpointInfo{
-		ip:          ip,
-		port:        port,
-		endpoint:    net.JoinHostPort(ip, strconv.Itoa(port)),
+		ip:       ip,
+		port:     port,
+		endpoint: net.JoinHostPort(ip, strconv.Itoa(port)),
 	}
 
 	for _, opt := range opts {
