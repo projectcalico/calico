@@ -284,10 +284,12 @@ func (p *proxy) invokeDPSyncer() {
 }
 
 func (p *proxy) OnServiceAdd(svc *v1.Service) {
+	log.WithField("svc", svc).Debug("Add service")
 	p.OnServiceUpdate(nil, svc)
 }
 
 func (p *proxy) OnServiceUpdate(old, curr *v1.Service) {
+	log.WithFields(log.Fields{"old": old, "curr": curr}).Debug("Update service")
 	if p.svcChanges.Update(old, curr) && p.isInitialized() {
 		p.syncDP()
 	}
@@ -298,6 +300,7 @@ func (p *proxy) OnServiceDelete(svc *v1.Service) {
 }
 
 func (p *proxy) OnServiceSynced() {
+	log.Debug("Services cache synced. Forcing dataplane sync...")
 	p.setSvcsSynced()
 	p.forceSyncDP()
 }
@@ -306,6 +309,7 @@ func (p *proxy) OnEndpointSliceAdd(eps *discovery.EndpointSlice) {
 	if p.IPFamily() != eps.AddressType {
 		return
 	}
+	log.WithField("eps", eps).Debug("EndpointSlice add")
 	if p.epsChanges.EndpointSliceUpdate(eps, false) && p.isInitialized() {
 		p.syncDP()
 	}
@@ -315,6 +319,7 @@ func (p *proxy) OnEndpointSliceUpdate(_, eps *discovery.EndpointSlice) {
 	if p.IPFamily() != eps.AddressType {
 		return
 	}
+	log.WithField("eps", eps).Debug("EndpointSlice update")
 	if p.epsChanges.EndpointSliceUpdate(eps, false) && p.isInitialized() {
 		p.syncDP()
 	}
@@ -324,12 +329,15 @@ func (p *proxy) OnEndpointSliceDelete(eps *discovery.EndpointSlice) {
 	if p.IPFamily() != eps.AddressType {
 		return
 	}
+	log.WithField("eps", eps).Debug("EndpointSlice delete")
 	if p.epsChanges.EndpointSliceUpdate(eps, true) && p.isInitialized() {
 		p.syncDP()
 	}
 }
 
 func (p *proxy) OnEndpointSlicesSynced() {
+	log.Debug("EndpointSlices synced")
+
 	p.setEpsSynced()
 	p.forceSyncDP()
 }
