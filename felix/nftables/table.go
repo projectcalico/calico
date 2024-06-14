@@ -923,7 +923,7 @@ func (t *nftablesTable) applyUpdates() error {
 						"set":   setName,
 					}).Warn("IP Set for chain has not yet been received by data plane")
 					skippedChains.Add(chainName)
-					continue
+					return nil
 				}
 			}
 
