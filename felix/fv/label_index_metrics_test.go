@@ -95,7 +95,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ label index metrics tests",
 		pol, err := client.GlobalNetworkPolicies().Create(context.TODO(), pol, options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
-		Eventually(metrics.GetFelixMetricIntFn(tc.Felixes[0].IP, "felix_label_index_strategy_evals{strategy=\"endpoint-single-value\"}")).Should(BeNumerically("==", 1))
+		Eventually(metrics.GetFelixMetricIntFn(tc.Felixes[0].IP, "felix_label_index_strategy_evals{strategy=\"endpoint-single-value\"}"), "5s").Should(BeNumerically("==", 1))
 		Expect(metrics.GetFelixMetricInt(tc.Felixes[0].IP, "felix_label_index_selector_evals{result=\"true\"}")).To(BeNumerically(">", 0))
 		Expect(metrics.GetFelixMetricInt(tc.Felixes[0].IP, "felix_label_index_selector_evals{result=\"false\"}")).To(BeNumerically("==", 0))
 		Expect(metrics.GetFelixMetricInt(tc.Felixes[0].IP, "felix_label_index_num_active_selectors{optimized=\"false\"}")).To(BeNumerically("==", 0))
