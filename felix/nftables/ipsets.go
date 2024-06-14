@@ -586,25 +586,28 @@ func (s *IPSets) tryUpdates() error {
 // ApplyDeletions tries to delete any IP sets that are no longer needed.
 // Failures are ignored, deletions will be retried the next time we do a resync.
 func (s *IPSets) ApplyDeletions() bool {
-	numDeletions := 0
+	// We rate limit the number of sets we delete in one go to avoid blocking the main loop for too long.
+	// nftables supports deleting multiple sets in a single transactions, which means we delete more at once
+	// than the iptables dataplane which deletes one at a time.
+	maxDeletions := 500
+
+	tx := s.nft.NewTransaction()
+	deletedSets := set.New[string]()
 	s.setNameToProgrammedMetadata.PendingDeletions().Iter(func(setName string) deltatracker.IterAction {
-		if numDeletions >= ipsets.MaxIPSetDeletionsPerIteration {
+		if deletedSets.Len() >= maxDeletions {
 			// Deleting IP sets is slow (40ms) and serialised in the kernel.  Avoid holding up the main loop
 			// for too long.  We'll leave the remaining sets pending deletion and mop them up next time.
-			log.Debugf("Deleted batch of %d IP sets, rate limiting further IP set deletions.", ipsets.MaxIPSetDeletionsPerIteration)
+			log.Debugf("Deleted batch of %d IP sets, rate limiting further IP set deletions.", maxDeletions)
 			// Leave the item in the set, so we'll do another batch of deletions next time around the loop.
 			return deltatracker.IterActionNoOpStopIteration
 		}
+
+		// Add to the transaction.
 		logCxt := s.logCxt.WithField("setName", setName)
-		logCxt.Info("Deleting IP set.")
-		if err := s.deleteIPSet(setName); err != nil {
-			// Note: we used to set the resyncRequired flag on this path but that can lead to excessive retries if
-			// the problem isn't something that we can fix (for example an external app has made a reference to
-			// our IP set).  Instead, wait for the next timed resync.
-			logCxt.WithError(err).Warning("Failed to delete IP set. Will retry on next resync.")
-			return deltatracker.IterActionNoOp
-		}
-		numDeletions++
+		logCxt.Info("Deleting IP set in next transaction.")
+		tx.Delete(&knftables.Set{Name: LegalizeSetName(setName)})
+		deletedSets.Add(setName)
+
 		if _, ok := s.setNameToAllMetadata[setName]; !ok {
 			// IP set is not just filtered out, clean up the members cache.
 			logCxt.Debug("IP set now gone from dataplane, removing from members tracker.")
@@ -616,30 +619,36 @@ func (s *IPSets) ApplyDeletions() bool {
 				"tracking its members (it is filtered out).")
 			s.mainSetNameToMembers[setName].Dataplane().DeleteAll()
 		}
-		return deltatracker.IterActionUpdateDataplane
+		return deltatracker.IterActionNoOp
 	})
+
+	if deletedSets.Len() > 0 {
+		s.logCxt.WithField("numSets", deletedSets.Len()).Info("Deleting IP sets.")
+		ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
+		defer cancel()
+		if err := s.nft.Run(ctx, tx); err != nil {
+			s.logCxt.WithError(err).Errorf("Failed to delete IP sets. %s", tx.String())
+			return true
+		}
+	}
+
+	// We need to clear pending deletions now that we have successfully deleted the sets.
+	s.setNameToProgrammedMetadata.PendingDeletions().Iter(func(setName string) deltatracker.IterAction {
+		if deletedSets.Contains(setName) {
+			return deltatracker.IterActionUpdateDataplane
+		}
+		return deltatracker.IterActionNoOp
+	})
+
 	// ApplyDeletions() marks the end of the two-phase "apply". Piggyback on that to
 	// update the gauge that records how many IP sets we own.
 	numDeletionsPending := s.setNameToProgrammedMetadata.Dataplane().Len()
-	if numDeletions == 0 {
+	if deletedSets.Len() == 0 {
 		// We had nothing to delete, or we only encountered errors, don't
 		// ask to be rescheduled.
 		return false
 	}
 	return numDeletionsPending > 0 // Reschedule if we have sets left to delete.
-}
-
-func (s *IPSets) deleteIPSet(setName string) error {
-	s.logCxt.WithField("setName", setName).Info("Deleting IP set.")
-	tx := s.nft.NewTransaction()
-	tx.Delete(&knftables.Set{Name: LegalizeSetName(setName)})
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
-	defer cancel()
-	if err := s.nft.Run(ctx, tx); err != nil {
-		return fmt.Errorf("error deleting nftables set %s: %v", setName, err)
-	}
-	s.logCxt.WithField("setName", setName).Info("Deleted IP set")
-	return nil
 }
 
 func (s *IPSets) updateDirtiness(name string) {
