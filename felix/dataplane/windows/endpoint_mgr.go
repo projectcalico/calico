@@ -191,7 +191,8 @@ func (m *endpointManager) RefreshHnsEndpointCache(forceRefresh bool) error {
 		// Some CNI plugins do not clear endpoint properly when a pod has been torn down.
 		// In that case, it is possible Felix sees multiple endpoints with the same IP.
 		// We need to filter out inactive endpoints that do not attach to any container.
-		if len(endpoint.SharedContainers) == 0 {
+		// Updating the logic to use State to define stale containers. If a container is in state Attached or AttachedSharing it is active.
+		if (endpoint.State != 2 && endpoint.State != 3) {
 			log.WithFields(log.Fields{
 				"id":   endpoint.Id,
 				"name": endpoint.Name,
