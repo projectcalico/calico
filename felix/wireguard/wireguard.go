@@ -64,10 +64,6 @@ var (
 	zeroKey = wgtypes.Key{}
 )
 
-type noOpConnTrack struct{}
-
-func (*noOpConnTrack) RemoveConntrackFlows(ipVersion uint8, ipAddr net.IP) {}
-
 type nodeData struct {
 	endpointAddr          ip.Addr
 	publicKey             wgtypes.Key
@@ -157,7 +153,7 @@ type Wireguard struct {
 	publicKeyToNodeNames map[wgtypes.Key]set.Set[string]
 
 	// Wireguard routing table and rule managers
-	routetable routetable.RouteTableInterface
+	routetable *routetable.ClassView
 	routerule  *routerule.RouteRules
 
 	// Callback function used to notify of public key updates for the local nodeData
@@ -226,23 +222,31 @@ func NewWithShims(
 	}
 
 	// Create routetable. We provide dummy callbacks for ARP and conntrack processing.
-	var rt routetable.RouteTableInterface
+	var rt routetable.Interface
 	if !config.RouteSyncDisabled {
 		logCtx.Debug("RouteSyncDisabled is false.")
-		rt = routetable.NewWithShims(
-			[]string{"^" + interfaceName + "$", routetable.InterfaceNone},
+		rt = routetable.New(
+			&routetable.InterfaceOwnershipPolicy{
+				InterfaceNames: []string{interfaceName},
+			},
 			ipVersion,
-			newRoutetableNetlink,
 			netlinkTimeout,
-			func(cidr ip.CIDR, destMAC net.HardwareAddr, ifaceName string) error { return nil }, // addStaticARPEntry
-			&noOpConnTrack{},
-			timeShim,
 			nil, // deviceRouteSourceAddress
 			deviceRouteProtocol,
 			true, // removeExternalRoutes
 			config.RoutingTableIndex,
 			opRecorder,
 			featureDetector,
+			// Note: deliberately not including:
+			// - Static neighbor entries: wireguard devices are L3.
+			// - Grace period: wireguard routes should be cleaned up immediately.
+
+			// Wireguard works as an alternative higher-priority route to the
+			// same destination, so we don't want to delete conntrack entries
+			// when moving a route to the wiregaurd interface.
+			routetable.WithConntrackCleanup(false),
+			routetable.WithTimeShim(timeShim),
+			routetable.WithNetlinkHandleShim(newRoutetableNetlink),
 		)
 	} else {
 		logCtx.Info("RouteSyncDisabled is true, using DummyTable.")
@@ -279,7 +283,7 @@ func NewWithShims(
 		cidrToNodeName:       map[ip.CIDR]string{},
 		publicKeyToNodeNames: map[wgtypes.Key]set.Set[string]{},
 		nodeUpdates:          map[string]*nodeUpdateData{},
-		routetable:           rt,
+		routetable:           routetable.NewClassView(routetable.RouteClassWireguard, rt),
 		routerule:            rr,
 		statusCallback:       statusCallback,
 		localIPs:             set.New[ip.Addr](),
@@ -291,7 +295,7 @@ func NewWithShims(
 	}
 }
 
-func (w *Wireguard) OnIfaceStateChanged(ifaceName string, state ifacemonitor.State) {
+func (w *Wireguard) OnIfaceStateChanged(ifaceName string, ifIndex int, state ifacemonitor.State) {
 	logCtx := w.logCtx.WithField("wireguardIfaceName", w.interfaceName)
 	if w.interfaceName != ifaceName {
 		logCtx.WithField("ifaceName", ifaceName).Debug("Ignoring interface state change, not the wireguard interface.")
@@ -310,7 +314,7 @@ func (w *Wireguard) OnIfaceStateChanged(ifaceName string, state ifacemonitor.Sta
 	}
 
 	// Notify the wireguard routetable module.
-	w.routetable.OnIfaceStateChanged(ifaceName, state)
+	w.routetable.OnIfaceStateChanged(ifaceName, ifIndex, state)
 }
 
 // EndpointUpdate is called when a wireguard endpoint (a node) is updated. This controls which peers to configure.
