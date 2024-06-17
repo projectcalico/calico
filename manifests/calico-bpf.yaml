@@ -1384,6 +1384,28 @@ spec:
                   is not recommended since it doesn''t provide better performance
                   than iptables. [Default: false]'
                 type: boolean
+              goGCThreshold:
+                description: "GoGCThreshold overrides the default Go garbage collection
+                  threshold percentage. This is useful for tuning Felix's memory usage.
+                  \ Go's default is to trigger GC after the heap grows by 100%. Lower
+                  values will trigger GC more frequently (and hence use more CPU),
+                  higher values will trigger GC less frequently, (using less CPU).
+                  \ The relationship is non-linear; setting the value too small can
+                  trigger GC thrashing, where the runtime spends more time garbage
+                  collecting than executing the application.  A special value of -1
+                  can be used to disable GC entirely; this should only be used in
+                  conjunction with the GoMemoryLimitMB setting. \n [Default: 100]"
+                type: integer
+              goMemoryLimitMB:
+                description: "GoMemoryLimitMB sets a (soft) memory limit for the Go
+                  runtime.  The Go runtime will try to keep its memory usage under
+                  the limit by triggering GC as needed.  To avoid thrashing, it will
+                  exceed the limit if GC starts to take more than 50% of the process's
+                  CPU time. \n Note that the memory limit, if used, must be considerably
+                  less than any hard resource limit set at the container or pod level.
+                  \ This is because felix is not the only process that must run in
+                  the container or pod."
+                type: integer
               healthEnabled:
                 type: boolean
               healthHost:
