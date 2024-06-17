@@ -716,6 +716,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			dp.loopSummarizer,
 			featureDetector,
 			config.HealthAggregator,
+			dataplaneFeatures,
 		)
 
 		if err != nil {
@@ -723,8 +724,6 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		}
 
 		dp.RegisterManager(bpfEndpointManager)
-
-		bpfEndpointManager.Features = dataplaneFeatures
 
 		// HostNetworkedNAT is Enabled and CTLB enabled.
 		// HostNetworkedNAT is Disabled and CTLB is either disabled/TCP.
