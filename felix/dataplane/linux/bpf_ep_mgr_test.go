@@ -30,6 +30,8 @@ import (
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 
+	"github.com/vishvananda/netlink"
+
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/asm"
 	"github.com/projectcalico/calico/felix/bpf/bpfmap"
@@ -52,17 +54,20 @@ import (
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/logutils"
+	"github.com/projectcalico/calico/felix/netlinkshim"
+	mocknetlink "github.com/projectcalico/calico/felix/netlinkshim/mocknetlink"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 type mockDataplane struct {
-	mutex      sync.Mutex
-	lastProgID int
-	progs      map[string]int
-	policy     map[string]polprog.Rules
-	routes     map[ip.CIDR]struct{}
+	mutex       sync.Mutex
+	lastProgID  int
+	progs       map[string]int
+	policy      map[string]polprog.Rules
+	routes      map[ip.CIDR]struct{}
+	netlinkShim netlinkshim.Interface
 
 	ensureStartedFn    func()
 	ensureQdiscFn      func(string) (bool, error)
@@ -70,11 +75,17 @@ type mockDataplane struct {
 }
 
 func newMockDataplane() *mockDataplane {
+	dp := mocknetlink.New()
+	netlinkShim, err := dp.NewMockNetlink()
+	if err != nil {
+		log.Panicf("failed to create mock netlink dp %v", err)
+	}
 	return &mockDataplane{
-		lastProgID: 5,
-		progs:      map[string]int{},
-		policy:     map[string]polprog.Rules{},
-		routes:     map[ip.CIDR]struct{}{},
+		lastProgID:  5,
+		progs:       map[string]int{},
+		policy:      map[string]polprog.Rules{},
+		routes:      map[ip.CIDR]struct{}{},
+		netlinkShim: netlinkShim,
 	}
 }
 
@@ -167,6 +178,48 @@ func (m *mockDataplane) setAcceptLocal(iface string, val bool) error {
 
 func (m *mockDataplane) setRPFilter(iface string, val int) error {
 	return nil
+}
+
+func (m *mockDataplane) getIfaceLink(name string) (netlink.Link, error) {
+	link, err := m.netlinkShim.LinkByName(name)
+	if err != nil {
+		return nil, err
+	}
+	return link, err
+}
+
+func (m *mockDataplane) deleteIface(name string) error {
+	attr := netlink.NewLinkAttrs()
+	attr.Name = name
+	link := netlink.GenericLink{
+		LinkAttrs: attr,
+	}
+	return m.netlinkShim.LinkDel(&link)
+}
+
+func (m *mockDataplane) createIface(name string, index int, linkType string) error {
+	attr := netlink.NewLinkAttrs()
+	attr.Name = name
+	attr.Index = index
+
+	iface := netlink.GenericLink{
+		LinkAttrs: attr,
+		LinkType:  linkType,
+	}
+	return m.netlinkShim.LinkAdd(&iface)
+}
+
+func (m *mockDataplane) createBondSlaves(name string, index, masterIndex int) error {
+	attr := netlink.NewLinkAttrs()
+	attr.Name = name
+	attr.Index = index
+	attr.Slave = &netlink.BondSlave{}
+	attr.MasterIndex = masterIndex
+	slv := netlink.GenericLink{
+		LinkAttrs: attr,
+		LinkType:  "device",
+	}
+	return m.netlinkShim.LinkAdd(&slv)
 }
 
 func (m *mockDataplane) getRules(key string) *polprog.Rules {
@@ -270,6 +323,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		fibLookupEnabled     bool
 		endpointToHostAction string
 		dataIfacePattern     string
+		l3IfacePattern       string
 		workloadIfaceRegex   string
 		ipSetIDAllocatorV4   *idalloc.IDAllocator
 		ipSetIDAllocatorV6   *idalloc.IDAllocator
@@ -294,6 +348,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		endpointToHostAction = "DROP"
 		dataIfacePattern = "^eth0"
 		workloadIfaceRegex = "cali"
+		l3IfacePattern = "^l30"
 		ipSetIDAllocatorV4 = idalloc.New()
 		ipSetIDAllocatorV6 = idalloc.New()
 		vxlanMTU = 0
@@ -375,6 +430,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 				Hostname:              "uthost",
 				BPFLogLevel:           "info",
 				BPFDataIfacePattern:   regexp.MustCompile(dataIfacePattern),
+				BPFL3IfacePattern:     regexp.MustCompile(l3IfacePattern),
 				VXLANMTU:              vxlanMTU,
 				VXLANPort:             rrConfigNormal.VXLANPort,
 				BPFNodePortDSREnabled: nodePortDSR,
@@ -398,9 +454,9 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			logutils.NewSummarizer("test"),
 			&environment.FakeFeatureDetector{},
 			nil,
+			environment.NewFeatureDetector(nil).GetFeatures(),
 		)
 		Expect(err).NotTo(HaveOccurred())
-		bpfEpMgr.Features = environment.NewFeatureDetector(nil).GetFeatures()
 		bpfEpMgr.v4.hostIP = net.ParseIP("1.2.3.4")
 		if ipv6Enabled {
 			bpfEpMgr.v6.hostIP = net.ParseIP("1::4")
@@ -513,6 +569,10 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		dp = newMockDataplane()
 		mockDP = dp
 		newBpfEpMgr(false)
+		err := dp.createIface("eth0", 3, "dummy")
+		Expect(err).NotTo(HaveOccurred())
+		err = dp.createIface("eth1", 4, "dummy")
+		Expect(err).NotTo(HaveOccurred())
 	})
 
 	It("exists", func() {
@@ -582,6 +642,132 @@ var _ = Describe("BPF Endpoint Manager", func() {
 				Expect(caliE.HostNormalTiers).To(HaveLen(1))
 				Expect(caliE.HostNormalTiers[0].Policies).To(HaveLen(1))
 				Expect(caliE.SuppressNormalHostPolicy).To(BeTrue())
+			})
+		})
+	})
+
+	Context("Ifacetype detection", func() {
+		JustBeforeEach(func() {
+			err := dp.createIface("vxlan0", 10, "vxlan")
+			Expect(err).NotTo(HaveOccurred())
+
+			err = dp.createIface("wg0", 11, "wireguard")
+			Expect(err).NotTo(HaveOccurred())
+
+			dataIfacePattern = "^eth|bond|vxlan|wg*"
+			newBpfEpMgr(false)
+		})
+		It("should detect the correct type of iface", func() {
+			genIfaceUpdate("vxlan0", ifacemonitor.StateUp, 10)()
+			genIfaceUpdate("wg0", ifacemonitor.StateUp, 11)()
+			genIfaceUpdate("tun0", ifacemonitor.StateUp, 12)()
+
+			Expect(dp.programAttached("vxlan0:ingress")).To(BeTrue())
+			Expect(dp.programAttached("vxlan0:egress")).To(BeTrue())
+			checkIfState(10, "vxlan0", ifstate.FlgIPv4Ready|ifstate.FlgVxlan)
+
+			Expect(dp.programAttached("wg0:ingress")).To(BeTrue())
+			Expect(dp.programAttached("wg0:egress")).To(BeTrue())
+			checkIfState(11, "wg0", ifstate.FlgIPv4Ready|ifstate.FlgWireguard)
+		})
+
+		It("should attach to iface even if netlink fails", func() {
+			genIfaceUpdate("eth10", ifacemonitor.StateUp, 13)()
+
+			Expect(dp.programAttached("eth10:ingress")).To(BeTrue())
+			Expect(dp.programAttached("eth10:egress")).To(BeTrue())
+			checkIfState(13, "eth10", ifstate.FlgIPv4Ready|ifstate.FlgHEP)
+
+			genIfaceUpdate("l30", ifacemonitor.StateUp, 14)()
+			Expect(dp.programAttached("l30:ingress")).To(BeTrue())
+			Expect(dp.programAttached("l30:egress")).To(BeTrue())
+			checkIfState(14, "l30", ifstate.FlgIPv4Ready|ifstate.FlgL3)
+		})
+	})
+
+	Context("with bond iface", func() {
+		JustBeforeEach(func() {
+			dp.interfaceByIndexFn = func(ifindex int) (*net.Interface, error) {
+				if ifindex == 10 {
+					return &net.Interface{
+						Name:  "bond0",
+						Index: 10,
+						Flags: net.FlagUp,
+					}, nil
+				}
+				if ifindex == 11 {
+					return &net.Interface{
+						Name:  "foo0",
+						Index: 11,
+						Flags: net.FlagUp,
+					}, nil
+				}
+				return nil, errors.New("no such network interface")
+			}
+
+			err := dp.createIface("bond0", 10, "bond")
+			Expect(err).NotTo(HaveOccurred())
+			err = dp.createBondSlaves("eth10", 20, 10)
+			Expect(err).NotTo(HaveOccurred())
+			err = dp.createBondSlaves("eth20", 30, 10)
+			Expect(err).NotTo(HaveOccurred())
+			genPolicy("default", "mypolicy")()
+			dataIfacePattern = "^eth|bond*"
+			newBpfEpMgr(false)
+			genIfaceUpdate("bond0", ifacemonitor.StateUp, 10)()
+			genIfaceUpdate("eth10", ifacemonitor.StateUp, 20)()
+			genIfaceUpdate("eth20", ifacemonitor.StateUp, 30)()
+		})
+
+		Context("with dataIfacePattern changed to include bond0", func() {
+			It("should attach to bond0", func() {
+				Expect(dp.programAttached("bond0:ingress")).To(BeTrue())
+				Expect(dp.programAttached("bond0:egress")).To(BeTrue())
+				checkIfState(10, "bond0", ifstate.FlgIPv4Ready|ifstate.FlgBond)
+			})
+			It("should not attach to bond slaves", func() {
+				Expect(dp.programAttached("eth10:ingress")).To(BeFalse())
+				Expect(dp.programAttached("eth10:egress")).To(BeFalse())
+				Expect(dp.programAttached("eth20:ingress")).To(BeFalse())
+				Expect(dp.programAttached("eth20:egress")).To(BeFalse())
+			})
+
+			It("should attach to interfaces when it is removed from bond", func() {
+				err := dp.deleteIface("eth10")
+				Expect(err).NotTo(HaveOccurred())
+				err = dp.createIface("eth10", 20, "dummy")
+				Expect(err).NotTo(HaveOccurred())
+				genIfaceUpdate("eth10", ifacemonitor.StateUp, 20)()
+
+				Expect(dp.programAttached("bond0:ingress")).To(BeTrue())
+				Expect(dp.programAttached("bond0:egress")).To(BeTrue())
+
+				Expect(dp.programAttached("eth10:ingress")).To(BeTrue())
+				Expect(dp.programAttached("eth10:egress")).To(BeTrue())
+				checkIfState(20, "eth10", ifstate.FlgIPv4Ready|ifstate.FlgHEP)
+				Expect(dp.programAttached("eth20:ingress")).To(BeFalse())
+				Expect(dp.programAttached("eth20:egress")).To(BeFalse())
+			})
+
+			It("should attach to slave interface if master doesn't match regex", func() {
+				err := dp.createIface("foo0", 11, "bond")
+				Expect(err).NotTo(HaveOccurred())
+				err = dp.createBondSlaves("eth11", 21, 11)
+				Expect(err).NotTo(HaveOccurred())
+				genIfaceUpdate("foo0", ifacemonitor.StateUp, 11)()
+				genIfaceUpdate("eth11", ifacemonitor.StateUp, 21)()
+
+				Expect(dp.programAttached("foo0:ingress")).To(BeFalse())
+				Expect(dp.programAttached("foo0:egress")).To(BeFalse())
+				Expect(dp.programAttached("eth11:ingress")).To(BeTrue())
+				Expect(dp.programAttached("eth11:egress")).To(BeTrue())
+				checkIfState(21, "eth11", ifstate.FlgIPv4Ready|ifstate.FlgBondSlave)
+				err = dp.deleteIface("eth11")
+				Expect(err).NotTo(HaveOccurred())
+				err = dp.deleteIface("foo0")
+				Expect(err).NotTo(HaveOccurred())
+				genIfaceUpdate("eth11", ifacemonitor.StateNotPresent, 21)()
+				genIfaceUpdate("foo0", ifacemonitor.StateNotPresent, 11)()
 			})
 		})
 	})
