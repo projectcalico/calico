@@ -7,7 +7,7 @@ import variables
 PPA_VER = variables.RELEASE_STREAM.replace("v", "calico-")
 COMP_VER = variables.RELEASE_VERSION.replace("v", "")
 
-UBUNTU_VERSIONS = ["bionic", "focal", "trusty", "xenial", "jammy"]
+UBUNTU_VERSIONS = ["focal", "jammy"]
 
 RPM_URL_TEMPL = (
     # e.g. http://binaries.projectcalico.org/rpm/calico-3.19/x86_64/calico-felix-3.19.2-1.el7.x86_64.rpm"

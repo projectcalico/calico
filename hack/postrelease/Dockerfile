@@ -20,10 +20,10 @@ RUN --mount=type=tmpfs,target=/var/cache/apk apk add --no-cache \
     curl            \
     jq
 
-RUN mkdir -p /root/.docker /code
-COPY config.json /root/.docker/
+RUN mkdir -p /code
 COPY requirements.txt /requirements.txt
-RUN pip install --break-system-packages --no-cache-dir -r /requirements.txt
+RUN --mount=type=bind,source=requirements.txt,target=/requirements.txt \
+    pip install --break-system-packages --no-cache-dir -r /requirements.txt
 
 # The container is used by mounting the code-under-test to /code
 WORKDIR /code/

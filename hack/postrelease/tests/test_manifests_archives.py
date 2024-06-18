@@ -14,8 +14,6 @@ manifest_list = [
     "calico-bpf.yaml",
     "calico-typha.yaml",
     "calico-vxlan.yaml",
-    "calico-windows-bgp.yaml",
-    "calico-windows-vxlan.yaml",
     "calicoctl.yaml",
     "calicoctl-etcd.yaml",
     "canal.yaml",
