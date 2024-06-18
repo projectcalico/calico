@@ -143,6 +143,11 @@ func (r *ReleaseBuilder) BuildRelease() error {
 		return err
 	}
 
+	err = r.assertReleaseNotesPresent(ver)
+	if err != nil {
+		return err
+	}
+
 	// Assert that manifests are using the correct version.
 	err = r.assertManifestVersions(ver)
 	if err != nil {
@@ -589,6 +594,25 @@ func (r *ReleaseBuilder) publishContainerImages(ver string) error {
 			logrus.Info(out)
 			break
 		}
+	}
+	return nil
+}
+
+func (r *ReleaseBuilder) assertReleaseNotesPresent(ver string) error {
+	// Validate that the release notes for this version are present,
+	// fail if not.
+
+	releaseNotesPath := fmt.Sprintf("release-notes/%s-release-notes.md", ver)
+	releaseNotesStat, err := os.Stat(releaseNotesPath)
+
+	// If we got an error, handle that?
+	if err != nil {
+		return fmt.Errorf("release notes file is invalid: %s", err.Error())
+	}
+	if releaseNotesStat.Size() == 0 {
+		return fmt.Errorf("release notes file is invalid: file is 0 bytes")
+	} else if releaseNotesStat.IsDir() {
+		return fmt.Errorf("release notes file is invalid: %s is a directory", releaseNotesPath)
 	}
 	return nil
 }
