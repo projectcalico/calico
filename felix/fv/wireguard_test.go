@@ -97,6 +97,12 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 		wireguardEnabledV4 := testConfig.WireguardEnabledV4
 		wireguardEnabledV6 := testConfig.WireguardEnabledV6
 
+		JustBeforeEach(func() {
+			if BPFMode() {
+				ensureAllNodesBPFProgramsAttached(topologyContainers.Felixes)
+			}
+		})
+
 		Describe(fmt.Sprintf("wireguardEnabledV4: %v, wireguardEnabledV6: %v, ", wireguardEnabledV4, wireguardEnabledV6), func() {
 			BeforeEach(func() {
 				// Run these tests only when the Host has Wireguard kernel module installed.
@@ -818,10 +824,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 						}
 
 						By("Waiting for the policy to apply")
-						// XXX this is lame, but will have to do until we have a way do
-						// XXX to confirm policy applied in BPF. Then we will fix both
-						// XXX iptables and BPF properly.
-						time.Sleep(30 * time.Second)
+						if BPFMode() {
+							for _, felix := range topologyContainers.Felixes {
+								bpfWaitForPolicy(felix, "eth0", "egress", "default.deny-wg-port")
+							}
+						}
 
 						By("Checking there is eventually and consistently connectivity between the workloads using wg")
 						Eventually(checkConn, "5s", "100ms").ShouldNot(HaveOccurred())
