@@ -701,11 +701,12 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 			} else if topts.ipv6 {
 				ifaceLog := topts.progLog + "-" + bpfIfaceName
 				globals := libbpf.TcGlobalData6{
-					Tmtu:         natTunnelMTU,
-					VxlanPort:    testVxlanPort,
-					PSNatStart:   uint16(topts.psnaStart),
-					PSNatLen:     uint16(topts.psnatEnd-topts.psnaStart) + 1,
-					Flags:        libbpf.GlobalsIPv6Enabled | libbpf.GlobalsNoDSRCidrs,
+					Tmtu:       natTunnelMTU,
+					VxlanPort:  testVxlanPort,
+					PSNatStart: uint16(topts.psnaStart),
+					PSNatLen:   uint16(topts.psnatEnd-topts.psnaStart) + 1,
+					Flags: libbpf.GlobalsIPv6Enabled | libbpf.GlobalsNoDSRCidrs |
+						libbpf.GlobalsRPFOptionStrict,
 					LogFilterJmp: 0xffffffff,
 				}
 
