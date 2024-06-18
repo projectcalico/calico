@@ -17,6 +17,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"math"
 	"net"
 	"os"
 	"reflect"
@@ -25,8 +26,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/projectcalico/api/pkg/lib/numorstring"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/api/pkg/lib/numorstring"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 
@@ -52,12 +54,6 @@ var (
 	IfaceParamRegexp         = regexp.MustCompile(`^[a-zA-Z0-9:._+-]{1,15}$`)
 	// Hostname  have to be valid ipv4, ipv6 or strings up to 64 characters.
 	HostAddressRegexp = regexp.MustCompile(`^[a-zA-Z0-9:._+-]{1,64}$`)
-)
-
-const (
-	maxUint = ^uint(0)
-	maxInt  = int(maxUint >> 1)
-	minInt  = -maxInt - 1
 )
 
 // Source of a config value.  Values from higher-numbered sources override
@@ -401,6 +397,13 @@ type Config struct {
 	GenericXDPEnabled          bool `config:"bool;false"`
 
 	Variant string `config:"string;Calico"`
+
+	// GoGCThreshold sets the Go runtime's GC threshold.  It is overridden by the GOGC env var if that is also
+	// specified. A value of -1 disables GC.
+	GoGCThreshold int `config:"int(-1,);40"`
+	// GoMemoryLimitMB sets the Go runtime's memory limit.  It is overridden by the GOMEMLIMIT env var if that is
+	// also specified. A value of -1 disables the limit.
+	GoMemoryLimitMB int `config:"int(-1,);-1"`
 
 	// Configures MTU auto-detection.
 	MTUIfacePattern *regexp.Regexp `config:"regexp;^((en|wl|ww|sl|ib)[Pcopsvx].*|(eth|wlan|wwan).*)"`
@@ -746,8 +749,8 @@ func SafeParamsEqual(a any, b any) bool {
 }
 
 func (config *Config) setBy(name string, source Source) bool {
-	_, set := config.sourceToRawConfig[source][name]
-	return set
+	_, isSet := config.sourceToRawConfig[source][name]
+	return isSet
 }
 
 func (config *Config) setByConfigFileOrEnvironment(name string) bool {
@@ -883,27 +886,20 @@ func loadParams() {
 		defaultStr := captures[3] // Default value e.g "1.0"
 		flags := captures[4]
 		var param param
-		var err error
 		switch kind {
 		case "bool":
 			param = &BoolParam{}
 		case "*bool":
 			param = &BoolPtrParam{}
 		case "int":
-			min := minInt
-			max := maxInt
+			paramMin := math.MinInt
+			paramMax := math.MaxInt
 			if kindParams != "" {
 				minAndMax := strings.Split(kindParams, ",")
-				min, err = strconv.Atoi(minAndMax[0])
-				if err != nil {
-					log.Panicf("Failed to parse min value for %v", field.Name)
-				}
-				max, err = strconv.Atoi(minAndMax[1])
-				if err != nil {
-					log.Panicf("Failed to parse max value for %v", field.Name)
-				}
+				paramMin = mustParseOptionalInt(minAndMax[0], math.MinInt, field.Name)
+				paramMax = mustParseOptionalInt(minAndMax[1], math.MaxInt, field.Name)
 			}
-			param = &IntParam{Min: min, Max: max}
+			param = &IntParam{Min: paramMin, Max: paramMax}
 		case "int32":
 			param = &Int32Param{}
 		case "mark-bitmask":
@@ -1001,6 +997,7 @@ func loadParams() {
 			param = &KeyDurationListParam{}
 		default:
 			log.Panicf("Unknown type of parameter: %v", kind)
+			panic("Unknown type of parameter") // Unreachable, keep the linter happy.
 		}
 
 		metadata := param.GetMetadata()
@@ -1034,6 +1031,20 @@ func loadParams() {
 		}
 		knownParams[strings.ToLower(field.Name)] = param
 	}
+}
+
+// mustParseOptionalInt returns defaultVal if the given value is empty, otherwise parses the value as an int.
+// Panics if the value is not a valid int.
+func mustParseOptionalInt(rawValue string, defaultVal int, fieldName string) int {
+	rawValue = strings.TrimSpace(rawValue)
+	if rawValue == "" {
+		return defaultVal
+	}
+	value, err := strconv.Atoi(rawValue)
+	if err != nil {
+		log.Panicf("Failed to parse value %q for %v", rawValue, fieldName)
+	}
+	return value
 }
 
 func (config *Config) SetUseNodeResourceUpdates(b bool) {
