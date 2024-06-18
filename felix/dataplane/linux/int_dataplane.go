@@ -716,6 +716,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			featureDetector,
 			config.HealthAggregator,
 			dataplaneFeatures,
+			hostMTU,
 		)
 
 		if err != nil {
