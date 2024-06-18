@@ -1033,18 +1033,18 @@ func loadParams() {
 	}
 }
 
-// mustParseOptionalInt returns dflt if the given value is empty, otherwise parses the value as an int.
+// mustParseOptionalInt returns defaultVal if the given value is empty, otherwise parses the value as an int.
 // Panics if the value is not a valid int.
-func mustParseOptionalInt(rawValue string, dflt int, fieldName string) int {
+func mustParseOptionalInt(rawValue string, defaultVal int, fieldName string) int {
 	rawValue = strings.TrimSpace(rawValue)
 	if rawValue == "" {
-		return dflt
+		return defaultVal
 	}
-	paramMin, err := strconv.Atoi(rawValue)
+	value, err := strconv.Atoi(rawValue)
 	if err != nil {
-		log.Panicf("Failed to parse min value for %v", fieldName)
+		log.Panicf("Failed to parse value %q for %v", rawValue, fieldName)
 	}
-	return paramMin
+	return value
 }
 
 func (config *Config) SetUseNodeResourceUpdates(b bool) {

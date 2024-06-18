@@ -651,7 +651,7 @@ type FelixConfigurationSpec struct {
 
 	// GoGCThreshold Sets the Go runtime's garbage collection threshold.  I.e. the percentage that the heap is
 	// allowed to grow before garbage collection is triggered.  In general, doubling the value halves the CPU time
-	// spent doing GC, but it also increases memory usage by 50%.  A special value of -1 can be used
+	// spent doing GC, but it also doubles peak GC memory overhead.  A special value of -1 can be used
 	// to disable GC entirely; this should only be used in conjunction with the GoMemoryLimitMB setting.
 	//
 	// This setting is overridden by the GOGC environment variable.
