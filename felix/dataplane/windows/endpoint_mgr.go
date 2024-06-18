@@ -192,7 +192,7 @@ func (m *endpointManager) RefreshHnsEndpointCache(forceRefresh bool) error {
 		// In that case, it is possible Felix sees multiple endpoints with the same IP.
 		// We need to filter out inactive endpoints that do not attach to any container.
 		// An endpoint is considered to be active if its state is Attached or AttachedSharing.
-		if (endpoint.State.String() != "Attached" && endpoint.State.String() != "AttachedSharing") {
+		if endpoint.State.String() != "Attached" && endpoint.State.String() != "AttachedSharing" {
 			log.WithFields(log.Fields{
 				"id":   endpoint.Id,
 				"name": endpoint.Name,
