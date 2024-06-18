@@ -192,8 +192,8 @@ func (n *CIDRNode) get(cidr CIDR) interface{} {
 	return node.data
 }
 
-// getNode returns the CIDRNode that contains the given CIDR.  If includeIntermediates is true then it will return,
-// and intermediate nodes that don't have data associated with them.  If includeIntermediates is false then it will
+// getNode returns the CIDRNode that contains the given CIDR.  If includeIntermediates is true then it will return
+// any intermediate nodes that don't have data associated with them.  If includeIntermediates is false then it will
 // only return nodes that have data associated with them.
 func (n *CIDRNode) getNode(cidr CIDR, includeIntermediates bool) *CIDRNode {
 	if n == nil {
@@ -325,31 +325,56 @@ func (t *CIDRTrie) Visit(f func(cidr CIDR, data interface{}) bool) {
 	t.root.visit(f)
 }
 
-// Descendants returns a list of CIDRs representing the closest descentents of the given CIDR in the trie that
-// have data associated with them.
-func (t *CIDRTrie) Descendants(parent CIDR) []CIDR {
-	// Get the node representing this CIDR. We include intermediate nodes so that
-	// we can traverse them to find the closest descendants.
+// ClosestDescendants returns a list of CIDRs representing the closest descendants of the given CIDR in the trie that
+// have data associated with them. It does not return a full list of all descendants - only any descendants that are tied for
+// being the closest to the given CIDR.
+//
+// For example, given the following trie, where * indicates an intermediate node with no data associated with it:
+//
+//	  		  10.0.0.0/16
+//	  		       |
+//	  		+--------------+
+//	  	  |	   			     |
+//
+//	 10.0.1.0/24    10.0.2.0/24*
+//
+//	  	|                |
+//
+//	10.0.1.1/32     10.0.2.1/32
+//
+// ClosestDescendants(10.0.0.0/16) => [10.0.1.0/24, 10.0.2.1/32]
+// ClosestDescendants(10.0.1.0/24) => [10.0.1.1/32]
+// ClosestDescendants(10.0.2.0/24) => [10.0.2.1/32]
+//
+// The caller may pass in a buffer to store the results, which will be appended to and returned. If the buffer is nil, a new
+// slice will be created and returned.
+func (t *CIDRTrie) ClosestDescendants(buf []CIDR, parent CIDR) []CIDR {
+	// Get the node representing this CIDR. Include the node even if it has no associated data, so that
+	// we can traverse it to find the closest descendants.
 	node := t.root.getNode(parent, true)
 	if node == nil {
 		return nil
 	}
-	children := make([]CIDR, 0, 2)
+	if buf == nil {
+		buf = make([]CIDR, 0)
+	}
 
 	// For each sub-node, add it to the list of children.
 	for _, child := range node.children {
-		if child != nil {
-			if child.data != nil {
-				// This is a "real" child node. Consider is a child.
-				children = append(children, child.cidr)
-			} else {
-				// This is an aggregate node that exists only to hold other nodes. Skip it, and
-				// instead recursively check its children until we find a hit.
-				children = append(children, t.Descendants(child.cidr)...)
-			}
+		if child == nil {
+			continue
+		}
+
+		if child.data != nil {
+			// This is a "real" child node.
+			buf = append(buf, child.cidr)
+		} else {
+			// This is an aggregate node that exists only to hold other nodes. Skip it, and
+			// instead recursively check its children until we find a hit.
+			buf = t.ClosestDescendants(buf, child.cidr)
 		}
 	}
-	return children
+	return buf
 }
 
 func (t *CIDRTrie) Update(cidr CIDR, value interface{}) {

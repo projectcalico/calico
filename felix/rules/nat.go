@@ -76,23 +76,23 @@ func (r *DefaultRuleRenderer) makeNATOutgoingRuleIPTables(ipVersion uint8, proto
 func (r *DefaultRuleRenderer) NATOutgoingChain(natOutgoingActive bool, ipVersion uint8) *Chain {
 	var rules []Rule
 	if natOutgoingActive {
-		var defaultSnatRule Action = r.MasqAction("")
+		var defaultSnatRule Action = r.Masq("")
 		if r.Config.NATOutgoingAddress != nil {
-			defaultSnatRule = r.SNATAction(r.Config.NATOutgoingAddress.String())
+			defaultSnatRule = r.SNAT(r.Config.NATOutgoingAddress.String())
 		}
 
 		if r.Config.NATPortRange.MaxPort > 0 {
 			toPorts := fmt.Sprintf("%d-%d", r.Config.NATPortRange.MinPort, r.Config.NATPortRange.MaxPort)
-			var portRangeSnatRule Action = r.MasqAction(toPorts)
+			var portRangeSnatRule Action = r.Masq(toPorts)
 			if r.Config.NATOutgoingAddress != nil {
 				toAddress := fmt.Sprintf("%s:%s", r.Config.NATOutgoingAddress.String(), toPorts)
-				portRangeSnatRule = r.SNATAction(toAddress)
+				portRangeSnatRule = r.SNAT(toAddress)
 			}
 			rules = []Rule{
 				r.MakeNatOutgoingRule("tcp", portRangeSnatRule, ipVersion),
-				r.MakeNatOutgoingRule("tcp", r.ReturnAction(), ipVersion),
+				r.MakeNatOutgoingRule("tcp", r.Return(), ipVersion),
 				r.MakeNatOutgoingRule("udp", portRangeSnatRule, ipVersion),
-				r.MakeNatOutgoingRule("udp", r.ReturnAction(), ipVersion),
+				r.MakeNatOutgoingRule("udp", r.Return(), ipVersion),
 				r.MakeNatOutgoingRule("", defaultSnatRule, ipVersion),
 			}
 		} else {
@@ -120,7 +120,7 @@ func (r *DefaultRuleRenderer) DNATsToIptablesChains(dnats map[string]string) []*
 		intIp := dnats[extIp]
 		rules = append(rules, Rule{
 			Match:  r.NewMatch().DestNet(extIp),
-			Action: r.DNATAction(intIp, 0),
+			Action: r.DNAT(intIp, 0),
 		})
 	}
 	return []*Chain{{
@@ -142,7 +142,7 @@ func (r *DefaultRuleRenderer) SNATsToIptablesChains(snats map[string]string) []*
 		extIp := snats[intIp]
 		rules = append(rules, Rule{
 			Match:  r.NewMatch().DestNet(intIp).SourceNet(intIp),
-			Action: r.SNATAction(extIp),
+			Action: r.SNAT(extIp),
 		})
 	}
 	return []*Chain{{

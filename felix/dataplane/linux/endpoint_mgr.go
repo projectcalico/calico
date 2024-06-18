@@ -136,7 +136,7 @@ type endpointManager struct {
 	osStat       func(path string) (os.FileInfo, error)
 	epMarkMapper rules.EndpointMarkMapper
 	newMatch     func() generictables.MatchCriteria
-	actions      generictables.ActionSet
+	actions      generictables.ActionFactory
 
 	// Pending updates, cleared in CompleteDeferredWork as the data is copied to the activeXYZ
 	// fields.
@@ -277,10 +277,10 @@ func newEndpointManagerWithShims(
 	wlIfacesRegexp := regexp.MustCompile(wlIfacesPattern)
 
 	newMatchFn := iptables.Match
-	actions := iptables.ActionSet()
+	actions := iptables.Actions()
 	if nft {
 		newMatchFn = nftables.Match
-		actions = nftables.ActionSet()
+		actions = nftables.Actions()
 	}
 
 	return &endpointManager{
@@ -911,7 +911,7 @@ func (m *endpointManager) updateRPFSkipChain() {
 		for _, addr := range addresses {
 			chain.Rules = append(chain.Rules, generictables.Rule{
 				Match:  m.newMatch().InInterface(interfaceName).SourceNet(addr),
-				Action: m.actions.AllowAction(),
+				Action: m.actions.Allow(),
 			})
 		}
 	}

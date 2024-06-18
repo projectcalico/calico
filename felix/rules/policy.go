@@ -24,7 +24,6 @@ import (
 	"github.com/projectcalico/calico/felix/hashutils"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/iptables"
-	"github.com/projectcalico/calico/felix/nftables"
 	"github.com/projectcalico/calico/felix/proto"
 )
 
@@ -62,9 +61,7 @@ func (r *DefaultRuleRenderer) ProtoRulesToIptablesRules(protoRules []*proto.Rule
 	// Strip off any return rules at the end of the chain.  No matter their
 	// match criteria, they're effectively no-ops.
 	for len(rules) > 0 {
-		if _, ok := rules[len(rules)-1].Action.(nftables.ReturnAction); ok {
-			rules = rules[:len(rules)-1]
-		} else if _, ok := rules[len(rules)-1].Action.(iptables.ReturnAction); ok {
+		if _, ok := rules[len(rules)-1].Action.(generictables.ReturnActionMarker); ok {
 			rules = rules[:len(rules)-1]
 		} else {
 			break
@@ -196,7 +193,7 @@ func (r *DefaultRuleRenderer) ProtoRuleToIptablesRules(pRule *proto.Rule, ipVers
 	//
 	// The matchBlockBuilder wraps up the above logic:
 	matchBlockBuilder := matchBlockBuilder{
-		actions:           r.ActionSet,
+		actions:           r.ActionFactory,
 		newMatch:          r.NewMatch,
 		markAllBlocksPass: r.IptablesMarkScratch0,
 		markThisBlockPass: r.IptablesMarkScratch1,
@@ -288,7 +285,7 @@ func (r *DefaultRuleRenderer) ProtoRuleToIptablesRules(pRule *proto.Rule, ipVers
 		// matches, then render the actions as separate rules below.
 		rs = append(rs, generictables.Rule{
 			Match:  match,
-			Action: r.SetMarkAction(markBit),
+			Action: r.SetMark(markBit),
 		})
 		match = r.NewMatch().MarkSingleBitSet(markBit)
 	}
@@ -317,7 +314,7 @@ type matchBlockBuilder struct {
 	markThisBlockPass uint32
 
 	newMatch func() generictables.MatchCriteria
-	actions  generictables.ActionSet
+	actions  generictables.ActionFactory
 
 	Rules []generictables.Rule
 }
@@ -345,7 +342,7 @@ func (r *matchBlockBuilder) AppendPortMatchBlock(
 		m = srcOrDst.AppendMatchPorts(m, split)
 		r.Rules = append(r.Rules, generictables.Rule{
 			Match:  m,
-			Action: r.actions.SetMarkAction(markToSet),
+			Action: r.actions.SetMark(markToSet),
 		})
 	}
 
@@ -353,7 +350,7 @@ func (r *matchBlockBuilder) AppendPortMatchBlock(
 		ipsetName := ipSetConfig.NameForMainIPSet(namedPortIPSetID)
 		r.Rules = append(r.Rules, generictables.Rule{
 			Match:  srcOrDst.MatchIPPortIPSet(r.newMatch(), ipsetName),
-			Action: r.actions.SetMarkAction(markToSet),
+			Action: r.actions.SetMark(markToSet),
 		})
 	}
 
@@ -371,7 +368,7 @@ func (r *matchBlockBuilder) AppendCIDRMatchBlock(cidrs []string, srcOrDst srcOrD
 	for _, cidr := range cidrs {
 		r.Rules = append(r.Rules, generictables.Rule{
 			Match:  srcOrDst.MatchNet(r.newMatch(), cidr),
-			Action: r.actions.SetMarkAction(markToSet),
+			Action: r.actions.SetMark(markToSet),
 		})
 	}
 
@@ -390,7 +387,7 @@ func (r *matchBlockBuilder) AppendNegatedCIDRMatchBlock(cidrs []string, srcOrDst
 		r.Rules = append(r.Rules,
 			generictables.Rule{
 				Match:  srcOrDst.MatchNet(r.newMatch(), cidr),
-				Action: r.actions.ClearMarkAction(r.markAllBlocksPass),
+				Action: r.actions.ClearMark(r.markAllBlocksPass),
 			},
 		)
 	}
@@ -402,7 +399,7 @@ func (r *matchBlockBuilder) maybeAppendInitialRule(markBitsToSetInitially uint32
 	}
 	r.Rules = append(r.Rules,
 		generictables.Rule{
-			Action: r.actions.SetMaskedMarkAction(
+			Action: r.actions.SetMaskedMark(
 				markBitsToSetInitially,
 				r.markAllBlocksPass|r.markThisBlockPass,
 			),
@@ -448,7 +445,7 @@ func (r *matchBlockBuilder) finishPositiveBlock() {
 	//
 	r.Rules = append(r.Rules, generictables.Rule{
 		Match:  r.newMatch().MarkClear(r.markThisBlockPass),
-		Action: r.actions.ClearMarkAction(r.markAllBlocksPass),
+		Action: r.actions.ClearMark(r.markAllBlocksPass),
 	})
 }
 
@@ -534,18 +531,18 @@ func (r *DefaultRuleRenderer) CalculateActions(pRule *proto.Rule, ipVersion uint
 		// Allow needs to set the accept mark, and then return to the calling chain for
 		// further processing.
 		mark = r.IptablesMarkAccept
-		actions = append(actions, r.ReturnAction())
+		actions = append(actions, r.Return())
 	case "next-tier", "pass":
 		// pass (called next-tier in the API for historical reasons) needs to set the pass
 		// mark, and then return to the calling chain for further processing.
 		mark = r.IptablesMarkPass
-		actions = append(actions, r.ReturnAction())
+		actions = append(actions, r.Return())
 	case "deny":
 		// Deny maps to DROP/REJECT.
 		actions = append(actions, r.IptablesFilterDenyAction())
 	case "log":
 		// This rule should log.
-		actions = append(actions, r.LogAction(r.IptablesLogPrefix))
+		actions = append(actions, r.Log(r.IptablesLogPrefix))
 	default:
 		log.WithField("action", pRule.Action).Panic("Unknown rule action")
 	}

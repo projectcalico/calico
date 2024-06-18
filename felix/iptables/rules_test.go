@@ -263,7 +263,7 @@ func (b *withDummyClose) Close() error {
 }
 
 func renderAppend(rule generictables.Rule) string {
-	return generictables.NewIptablesRenderer("").RenderAppend(&rule, "test", "TEST", &environment.Features{})
+	return NewIptablesRenderer("").RenderAppend(&rule, "test", "TEST", &environment.Features{})
 }
 
 func calculateHashes(chainName string, rules []generictables.Rule) []string {
@@ -271,5 +271,5 @@ func calculateHashes(chainName string, rules []generictables.Rule) []string {
 		Name:  chainName,
 		Rules: rules,
 	}
-	return generictables.NewIptablesRenderer("").RuleHashes(chain, &environment.Features{})
+	return NewIptablesRenderer("").RuleHashes(chain, &environment.Features{})
 }

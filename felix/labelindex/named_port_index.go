@@ -316,22 +316,26 @@ type SelectorAndNamedPortIndex struct {
 	lastLiveReport time.Time
 }
 
-func NewSelectorAndNamedPortIndex() *SelectorAndNamedPortIndex {
+func NewSelectorAndNamedPortIndex(deduplicate bool) *SelectorAndNamedPortIndex {
 	inheritIdx := SelectorAndNamedPortIndex{
 		endpointKVIdx: labelnamevalueindex.New[any, *endpointData]("endpoints"),
 		parentKVIdx:   labelnamevalueindex.New[string, *npParentData]("parents"),
 		ipSetDataByID: map[string]*ipSetData{},
-		selectorCandidatesIdx: labelrestrictionindex.New[string](
+		selectorCandidatesIdx: labelrestrictionindex.New(
 			labelrestrictionindex.WithGauges[string](
 				gaugeSelectorsOpt,
 				gaugeSelectorsNonOpt,
 			)),
-		deduplicator: NewMemberDeduplicator(),
 
 		// Callback functions
 		OnMemberAdded:   func(ipSetID string, member IPSetMember) {},
 		OnMemberRemoved: func(ipSetID string, member IPSetMember) {},
 		OnAlive:         func() {},
+	}
+	if deduplicate {
+		inheritIdx.deduplicator = NewMemberDeduplicator()
+	} else {
+		inheritIdx.deduplicator = NewNoopMemberDeduplicator()
 	}
 	return &inheritIdx
 }
@@ -1038,15 +1042,38 @@ func NewMemberDeduplicator() MemberDeduplicator {
 	}
 }
 
+func NewNoopMemberDeduplicator() MemberDeduplicator {
+	return &noopMemberDeduplicator{}
+}
+
 type MemberDeduplicator interface {
 	Add(set string, cidr ip.CIDR) (ip.CIDR, []ip.CIDR)
 	Remove(set string, cidr ip.CIDR) (ip.CIDR, []ip.CIDR)
 	DeleteIPSet(set string)
 }
 
+// noopMemberDeduplicator is a MemberDeduplicator that doesn't deduplicate members. Can be used
+// when deduplication is not required.
+type noopMemberDeduplicator struct{}
+
+func (n *noopMemberDeduplicator) Add(set string, cidr ip.CIDR) (ip.CIDR, []ip.CIDR) {
+	return cidr, nil
+}
+
+func (n *noopMemberDeduplicator) Remove(set string, cidr ip.CIDR) (ip.CIDR, []ip.CIDR) {
+	return cidr, nil
+}
+
+func (n *noopMemberDeduplicator) DeleteIPSet(set string) {
+}
+
+// memberDeduplicator is a MemberDeduplicator that deduplicates members that are masked by other members.
 type memberDeduplicator struct {
 	v4tries map[string]*ip.CIDRTrie
 	v6tries map[string]*ip.CIDRTrie
+
+	// buf is a buffer used internally by the memberDeduplicator to minimize slice allocations.
+	buf []ip.CIDR
 }
 
 func (t *memberDeduplicator) getTrie(set string, v6 bool) *ip.CIDRTrie {
@@ -1082,7 +1109,8 @@ func (t *memberDeduplicator) Add(set string, cidr ip.CIDR) (ip.CIDR, []ip.CIDR) 
 	// This is a new CIDR - we need to check to see if it masks any other CIDRs we have already sent.
 	// Get the node and check if it has any children. If it does, those children are masked by this new CIDR
 	// and need to be withdrawn.
-	masked := trie.Descendants(cidr)
+	t.buf = t.buf[:0]
+	masked := trie.ClosestDescendants(t.buf, cidr)
 	return cidr, masked
 }
 
@@ -1093,7 +1121,8 @@ func (t *memberDeduplicator) Remove(set string, cidr ip.CIDR) (ip.CIDR, []ip.CID
 
 	// If this node has children that are masked by this CIDR, we need to
 	// advertise them against as part of this deletion.
-	masked := trie.Descendants(cidr)
+	t.buf = t.buf[:0]
+	masked := trie.ClosestDescendants(t.buf, cidr)
 
 	// Remove from the trie.
 	trie.Delete(cidr)

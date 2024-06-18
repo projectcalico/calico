@@ -87,7 +87,7 @@ func (r *DefaultRuleRenderer) WorkloadInterfaceAllowChains(
 		WorkloadPfxSpecialAllow,
 		func(name string) generictables.MatchCriteria { return r.NewMatch().OutInterface(name) },
 		func(pfx, name string) generictables.Action {
-			return r.AllowAction()
+			return r.Allow()
 		},
 		endRules,
 	)
@@ -178,13 +178,13 @@ func (r *DefaultRuleRenderer) hostDispatchChains(
 		fromEndRules = []generictables.Rule{
 			{
 				Match:  r.NewMatch(),
-				Action: r.GoToAction(EndpointChainName(HostFromEndpointPfx, defaultIfaceName)),
+				Action: r.GoTo(EndpointChainName(HostFromEndpointPfx, defaultIfaceName, r.maxNameLength)),
 			},
 		}
 		fromEndForwardRules = []generictables.Rule{
 			{
 				Match:  r.NewMatch(),
-				Action: r.GoToAction(EndpointChainName(HostFromEndpointForwardPfx, defaultIfaceName)),
+				Action: r.GoTo(EndpointChainName(HostFromEndpointForwardPfx, defaultIfaceName, r.maxNameLength)),
 			},
 		}
 
@@ -197,7 +197,7 @@ func (r *DefaultRuleRenderer) hostDispatchChains(
 				ifaceMatch := prefix + r.wildcard
 				toEndRules = append(toEndRules, generictables.Rule{
 					Match:   r.NewMatch().OutInterface(ifaceMatch),
-					Action:  r.ReturnAction(),
+					Action:  r.Return(),
 					Comment: []string{"Skip egress WHEP policy for traffic to local workload"},
 				})
 			}
@@ -205,12 +205,12 @@ func (r *DefaultRuleRenderer) hostDispatchChains(
 
 		toEndRules = append(toEndRules, generictables.Rule{
 			Match:  r.NewMatch(),
-			Action: r.GoToAction(EndpointChainName(HostToEndpointPfx, defaultIfaceName)),
+			Action: r.GoTo(EndpointChainName(HostToEndpointPfx, defaultIfaceName, r.maxNameLength)),
 		})
 		toEndForwardRules = []generictables.Rule{
 			{
 				Match:  r.NewMatch(),
-				Action: r.GoToAction(EndpointChainName(HostToEndpointForwardPfx, defaultIfaceName)),
+				Action: r.GoTo(EndpointChainName(HostToEndpointForwardPfx, defaultIfaceName, r.maxNameLength)),
 			},
 		}
 	}
@@ -299,7 +299,7 @@ func (r *DefaultRuleRenderer) interfaceNameDispatchChains(
 			fromEndpointPfx,
 			func(name string) generictables.MatchCriteria { return r.NewMatch().InInterface(name) },
 			func(pfx, name string) generictables.Action {
-				return r.GoToAction(EndpointChainName(pfx, name))
+				return r.GoTo(EndpointChainName(pfx, name, r.maxNameLength))
 			},
 			fromEndRules,
 		)
@@ -317,7 +317,7 @@ func (r *DefaultRuleRenderer) interfaceNameDispatchChains(
 			toEndpointPfx,
 			func(name string) generictables.MatchCriteria { return r.NewMatch().OutInterface(name) },
 			func(pfx, name string) generictables.Action {
-				return r.GoToAction(EndpointChainName(pfx, name))
+				return r.GoTo(EndpointChainName(pfx, name, r.maxNameLength))
 			},
 			toEndRules,
 		)
@@ -362,7 +362,7 @@ func (r *DefaultRuleRenderer) endpointMarkDispatchChains(
 				setMarkPfx,
 				func(name string) generictables.MatchCriteria { return r.NewMatch().InInterface(name) },
 				func(pfx, name string) generictables.Action {
-					return r.GoToAction(EndpointChainName(pfx, name))
+					return r.GoTo(EndpointChainName(pfx, name, r.maxNameLength))
 				},
 				nil,
 			)
@@ -388,7 +388,7 @@ func (r *DefaultRuleRenderer) endpointMarkDispatchChains(
 	// whose incoming interface is neither a workload nor a host endpoint.
 	rootSetMarkRules = append(rootSetMarkRules, generictables.Rule{
 		Match: r.NewMatch(),
-		Action: r.SetMaskedMarkAction(
+		Action: r.SetMaskedMark(
 			r.IptablesMarkNonCaliEndpoint,
 			epMarkMapper.GetMask(),
 		),
@@ -415,7 +415,7 @@ func (r *DefaultRuleRenderer) endpointMarkDispatchChains(
 				log.WithField("ifaceName", name).Debug("Adding rule to from mark chain")
 				rootFromMarkRules = append(rootFromMarkRules, generictables.Rule{
 					Match:  r.NewMatch().MarkMatchesWithMask(endPointMark, epMarkMapper.GetMask()),
-					Action: r.GoToAction(EndpointChainName(fromMarkPrefixes[index], name)),
+					Action: r.GoTo(EndpointChainName(fromMarkPrefixes[index], name, r.maxNameLength)),
 				})
 			}
 			lastName = name
@@ -484,7 +484,7 @@ func (r *DefaultRuleRenderer) buildSingleDispatchChains(
 				// Note: we use a goto here, which means that packets will not
 				// return to this chain.  This prevents packets from traversing the
 				// rest of the root chain once we've found their prefix.
-				Action: r.GoToAction(childChainName),
+				Action: r.GoTo(childChainName),
 			})
 
 			// ...and child chains.

@@ -916,7 +916,7 @@ func TestNamedPortIndex(t *testing.T) {
 		// First run each base test as-is: just apply its inputs and
 		// check that we get the right output.
 		t.Run(state.Name, func(t *testing.T) {
-			idx := NewSelectorAndNamedPortIndex()
+			idx := NewSelectorAndNamedPortIndex(false)
 			RegisterTestingT(t)
 			rec := newRecorder()
 			idx.OnMemberAdded = rec.OnMemberAdded
@@ -945,7 +945,7 @@ func TestNamedPortIndex(t *testing.T) {
 			t.Run(fmt.Sprintf("%s (%s)", strings.Join(names, " THEN "), applyStrategy),
 				func(t *testing.T) {
 					RegisterTestingT(t)
-					idx := NewSelectorAndNamedPortIndex()
+					idx := NewSelectorAndNamedPortIndex(false)
 					rec := newRecorder()
 					idx.OnMemberAdded = rec.OnMemberAdded
 					idx.OnMemberRemoved = rec.OnMemberRemoved
@@ -1265,6 +1265,37 @@ var _ = Describe("MemberDeduplicator", func() {
 		Expect(add).To(Equal(maskingCIDR))
 		Expect(removes).To(ConsistOf(ip2))
 	})
+
+	It("should handle descendants on different tiers of the underlying trie", func() {
+		ip1 := ip.MustParseCIDROrIP("10.0.1.1/32")         // End of the trie
+		ip2 := ip.MustParseCIDROrIP("10.0.2.1/32")         // End of the trie
+		ip3 := ip.MustParseCIDROrIP("10.0.1.0/24")         // Masks ip1
+		maskingCIDR := ip.MustParseCIDROrIP("10.0.0.0/16") // Masks all of the above.
+
+		// Add each IP to the same set.
+		add, removes := d.Add("setA", ip1)
+		Expect(add).To(Equal(ip1))
+		Expect(removes).To(HaveLen(0))
+		add, removes = d.Add("setA", ip2)
+		Expect(add).To(Equal(ip2))
+		Expect(removes).To(HaveLen(0))
+		add, removes = d.Add("setA", ip3)
+		Expect(add).To(Equal(ip3))
+		Expect(removes).To(ConsistOf(ip1)) // ip1 is masked by ip3.
+		add, removes = d.Add("setA", maskingCIDR)
+		Expect(add).To(Equal(maskingCIDR))
+		Expect(removes).To(ConsistOf(ip2, ip3)) // ip2 and ip3 are masked by maskingCIDR, ip1 is already masked.
+
+		// Removing the masking CIDR should bring back ip2 and ip3.
+		remove, adds := d.Remove("setA", maskingCIDR)
+		Expect(remove).To(Equal(maskingCIDR))
+		Expect(adds).To(ConsistOf(ip2, ip3))
+
+		// Removing ip3 should bring back ip1.
+		remove, adds = d.Remove("setA", ip3)
+		Expect(remove).To(Equal(ip3))
+		Expect(adds).To(ConsistOf(ip1))
+	})
 })
 
 var _ = Describe("SelectorAndNamedPortIndex", func() {
@@ -1272,7 +1303,7 @@ var _ = Describe("SelectorAndNamedPortIndex", func() {
 	var recorder *testRecorder
 
 	BeforeEach(func() {
-		uut = NewSelectorAndNamedPortIndex()
+		uut = NewSelectorAndNamedPortIndex(false)
 		recorder = newRecorder()
 		uut.OnMemberAdded = recorder.OnMemberAdded
 		uut.OnMemberRemoved = recorder.OnMemberRemoved

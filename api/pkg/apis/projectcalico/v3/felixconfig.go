@@ -52,6 +52,13 @@ const (
 	IptablesBackendAuto        = "Auto"
 )
 
+type NFTablesMode string
+
+const (
+	NFTablesModeEnabled  = "Enabled"
+	NFTablesModeDisabled = "Disabled"
+)
+
 // +kubebuilder:validation:Enum=DoNothing;Enable;Disable
 type AWSSrcDstCheckOption string
 
@@ -439,8 +446,8 @@ type FelixConfigurationSpec struct {
 	// iptables. [Default: false]
 	GenericXDPEnabled *bool `json:"genericXDPEnabled,omitempty" confignamev1:"GenericXDPEnabled"`
 
-	// NFTablesEnabled enables nftables in Felix. When false, iptables is used. [Default: false]
-	NFTablesEnabled *bool `json:"nftablesEnabled,omitempty"`
+	// NFTablesMode configures nftables support in Felix. [Default: Disabled]
+	NFTablesMode *NFTablesMode `json:"nftablesMode,omitempty"`
 
 	// BPFEnabled, if enabled Felix will use the BPF dataplane. [Default: false]
 	BPFEnabled *bool `json:"bpfEnabled,omitempty" validate:"omitempty"`

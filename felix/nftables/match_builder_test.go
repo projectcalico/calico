@@ -120,7 +120,7 @@ var _ = DescribeTable("MatchBuilder",
 	Entry("NotICMPV6TypeAndCode", Match().NotICMPV6TypeAndCode(123, 5), "icmpv6 type != 123 code != 5"),
 
 	// Check multiple match criteria are joined correctly.
-	Entry("Protocol and ports", Match().Protocol("tcp").SourcePorts(1234).DestPorts(8080), "meta l4proto tcp tcp sport 1234 tcp dport 8080"),
+	Entry("Protocol and ports", Match().Protocol("tcp").SourcePorts(1234).DestPorts(8080), "meta l4proto tcp tcp sport { 1234 } tcp dport { 8080 }"),
 )
 
 var _ = DescribeTable("IPSetNames",

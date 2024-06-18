@@ -16,24 +16,29 @@ package generictables
 
 import "github.com/projectcalico/calico/felix/environment"
 
-type ActionSet interface {
-	AllowAction() Action
-	DropAction() Action
-	GoToAction(target string) Action
-	ReturnAction() Action
-	SetMarkAction(mark uint32) Action
-	SetMaskedMarkAction(mark, mask uint32) Action
-	ClearMarkAction(mark uint32) Action
-	JumpAction(target string) Action
-	NoTrackAction() Action
-	LogAction(prefix string) Action
-	SNATAction(ip string) Action
-	DNATAction(ip string, port uint16) Action
-	MasqAction(toPorts string) Action
-	SetConnmarkAction(mark, mask uint32) Action
+type ActionFactory interface {
+	Allow() Action
+	Drop() Action
+	GoTo(target string) Action
+	Return() Action
+	SetMark(mark uint32) Action
+	SetMaskedMark(mark, mask uint32) Action
+	ClearMark(mark uint32) Action
+	Jump(target string) Action
+	NoTrack() Action
+	Log(prefix string) Action
+	SNAT(ip string) Action
+	DNAT(ip string, port uint16) Action
+	Masq(toPorts string) Action
+	SetConnmark(mark, mask uint32) Action
 }
 
 type Action interface {
 	ToFragment(features *environment.Features) string
 	String() string
+}
+
+// ReturnActionMarker is a marker interface for actions that return from a chain.
+type ReturnActionMarker interface {
+	IsReturnAction()
 }

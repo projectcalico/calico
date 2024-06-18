@@ -14,33 +14,27 @@
 
 package nftables_test
 
-// import (
-// 	"context"
-//
-// 	"sigs.k8s.io/knftables"
-//
-// 	. "github.com/onsi/ginkgo"
-// 	. "github.com/onsi/gomega"
-//
-// 	"github.com/projectcalico/calico/felix/ipsets"
-// 	. "github.com/projectcalico/calico/felix/nftables"
-// )
-//
-// var _ = Describe("IPSets with empty data plane", func() {
-// 	var s *IPSets
-// 	var f *fakeNFT
-// 	BeforeEach(func() {
-// 		f = NewFake(knftables.IPv4Family, "calico")
-// 		ipv := ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil)
-// 		s = NewIPSets(ipv, f)
-// 	})
-//
-// 	It("should Apply() on an empty state)", func() {
-// 		Expect(s.ApplyUpdates).NotTo(Panic())
-//
-// 		// Expect our base chains to have been created.
-// 		chains, err := f.List(context.TODO(), "chain")
-// 		Expect(err).NotTo(HaveOccurred())
-// 		Expect(len(chains)).To(Equal(14))
-// 	})
-// })
+import (
+	"sigs.k8s.io/knftables"
+
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
+
+	"github.com/projectcalico/calico/felix/ipsets"
+	"github.com/projectcalico/calico/felix/logutils"
+	. "github.com/projectcalico/calico/felix/nftables"
+)
+
+var _ = Describe("IPSets with empty data plane", func() {
+	var s *IPSets
+	var f *fakeNFT
+	BeforeEach(func() {
+		f = NewFake(knftables.IPv4Family, "calico")
+		ipv := ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil)
+		s = NewIPSets(ipv, f, logutils.NewSummarizer("test loop"))
+	})
+
+	It("should Apply() on an empty state)", func() {
+		Expect(s.ApplyUpdates).NotTo(Panic())
+	})
+})

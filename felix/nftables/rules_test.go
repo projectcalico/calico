@@ -112,7 +112,7 @@ fizz`},
 })
 
 func renderRule(rule generictables.Rule, features *environment.Features) *knftables.Rule {
-	return generictables.NewNFTRenderer("cali:", 4).Render("test", "TEST", rule, features)
+	return NewNFTRenderer("cali:", 4).Render("test", "TEST", rule, features)
 }
 
 func calculateHashes(chainName string, rules []generictables.Rule) []string {
@@ -120,5 +120,5 @@ func calculateHashes(chainName string, rules []generictables.Rule) []string {
 		Name:  chainName,
 		Rules: rules,
 	}
-	return generictables.NewNFTRenderer("cali:", 4).RuleHashes(chain, &environment.Features{})
+	return NewNFTRenderer("cali:", 4).RuleHashes(chain, &environment.Features{})
 }

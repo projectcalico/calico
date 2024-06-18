@@ -12,18 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package generictables
+package nftables
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 
-	"sigs.k8s.io/knftables"
-
 	"github.com/projectcalico/calico/felix/environment"
+	"github.com/projectcalico/calico/felix/generictables"
+	"sigs.k8s.io/knftables"
 )
 
-const maxNftablesCommentLength = 128
+var shellUnsafe = regexp.MustCompile(`[^\w @%+=:,./-]`)
+
+type NFTRenderer interface {
+	generictables.RuleHasher
+	Render(chain string, hash string, rule generictables.Rule, features *environment.Features) *knftables.Rule
+}
 
 func NewNFTRenderer(hashCommentPrefix string, ipv uint8) NFTRenderer {
 	return &nftRenderer{
@@ -37,7 +43,7 @@ type nftRenderer struct {
 	hashCommentPrefix string
 }
 
-func (r *nftRenderer) Render(chain string, hash string, rule Rule, features *environment.Features) *knftables.Rule {
+func (r *nftRenderer) Render(chain string, hash string, rule generictables.Rule, features *environment.Features) *knftables.Rule {
 	return &knftables.Rule{
 		Chain:   chain,
 		Rule:    r.renderRule(&rule, features),
@@ -45,14 +51,14 @@ func (r *nftRenderer) Render(chain string, hash string, rule Rule, features *env
 	}
 }
 
-func (r *nftRenderer) RuleHashes(c *Chain, features *environment.Features) []string {
-	rf := func(rule *Rule, chain string, features *environment.Features) string {
+func (r *nftRenderer) RuleHashes(c *generictables.Chain, features *environment.Features) []string {
+	rf := func(rule *generictables.Rule, chain string, features *environment.Features) string {
 		return r.renderRule(rule, features)
 	}
-	return ruleHashes(c, rf, features)
+	return generictables.RuleHashes(c, rf, features)
 }
 
-func (r *nftRenderer) renderRule(rule *Rule, features *environment.Features) string {
+func (r *nftRenderer) renderRule(rule *generictables.Rule, features *environment.Features) string {
 	fragments := []string{}
 
 	if rule.Match != nil {
@@ -82,7 +88,7 @@ func (r *nftRenderer) renderRule(rule *Rule, features *environment.Features) str
 	return inner
 }
 
-func (r *nftRenderer) comment(hash string, rule Rule) *string {
+func (r *nftRenderer) comment(hash string, rule generictables.Rule) *string {
 	fragments := []string{}
 
 	if r.hashCommentPrefix != "" && hash != "" {
@@ -93,7 +99,7 @@ func (r *nftRenderer) comment(hash string, rule Rule) *string {
 	// Add in any comments. Each individual comment must be small enough such that the
 	// total comment is less than 128 characters.
 	if len(rule.Comment) > 0 {
-		maxPerComment := (maxNftablesCommentLength - len(strings.Join(fragments, " "))) / len(rule.Comment)
+		maxPerComment := (knftables.CommentLengthMax - len(strings.Join(fragments, " "))) / len(rule.Comment)
 		for _, c := range rule.Comment {
 			c = escapeComment(c)
 			c = r.truncateComment(c, maxPerComment)
@@ -102,7 +108,7 @@ func (r *nftRenderer) comment(hash string, rule Rule) *string {
 	}
 
 	// Truncate the entire comment if needed.
-	cmt := r.truncateComment(strings.Join(fragments, " "), maxNftablesCommentLength)
+	cmt := r.truncateComment(strings.Join(fragments, " "), knftables.CommentLengthMax)
 	if cmt == "" {
 		return nil
 	}
@@ -114,4 +120,8 @@ func (r *nftRenderer) truncateComment(s string, size int) string {
 		return s[0:size]
 	}
 	return s
+}
+
+func escapeComment(s string) string {
+	return shellUnsafe.ReplaceAllString(s, "_")
 }

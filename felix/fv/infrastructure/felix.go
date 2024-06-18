@@ -228,7 +228,7 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 			c.Exec("iptables", "-F", "-t", table)
 		}
 
-		// nftables mode requires that ipatbles be configured to allow by default. Otherwise, a default
+		// nftables mode requires that iptables be configured to allow by default. Otherwise, a default
 		// drop action will override any accept verdict made by nftables.
 		c.Exec("iptables",
 			"-w", "10", // Retry this for 10 seconds, e.g. if something else is holding the lock

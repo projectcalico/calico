@@ -175,7 +175,7 @@ type Config struct {
 	WireguardPersistentKeepAlive   time.Duration `config:"seconds;0"`
 
 	// nftables configuration.
-	NFTablesEnabled bool `config:"bool;false"`
+	NFTablesMode string `config:"oneof(Enabled,Disabled);Disabled"`
 
 	// BPF configuration.
 	BPFEnabled                         bool              `config:"bool;false"`

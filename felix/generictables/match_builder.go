@@ -71,17 +71,6 @@ type MatchCriteria interface {
 	NotICMPV6Type(t uint8) MatchCriteria
 	ICMPV6TypeAndCode(t, c uint8) MatchCriteria
 	NotICMPV6TypeAndCode(t, c uint8) MatchCriteria
-	VXLANVNI(vni uint32) MatchCriteria
-}
-
-// NFTMatchCriteria extends the generictables.MatchCriteria interface with nftables-specific methods.
-type NFTMatchCriteria interface {
-	MatchCriteria
-
-	IPVersion(version uint8) MatchCriteria
-
-	ConntrackStatus(statusNames string) MatchCriteria
-	NotConntrackStatus(statusNames string) MatchCriteria
 }
 
 type AddrType string

@@ -23,6 +23,7 @@ import (
 	"github.com/projectcalico/calico/felix/dataplane/common"
 	"github.com/projectcalico/calico/felix/deltatracker"
 	"github.com/projectcalico/calico/felix/ipsets"
+	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 
 	log "github.com/sirupsen/logrus"
@@ -59,6 +60,8 @@ type IPSets struct {
 	mainSetNameToMembers   map[string]*deltatracker.SetDeltaTracker[ipsets.IPSetMember]
 	ipSetsWithDirtyMembers set.Set[string]
 
+	opReporter logutils.OpRecorder
+
 	sleep func(time.Duration)
 
 	resyncRequired bool
@@ -72,19 +75,21 @@ type IPSets struct {
 	nft knftables.Interface
 }
 
-func NewIPSets(ipVersionConfig *ipsets.IPVersionConfig, nft knftables.Interface) *IPSets {
+func NewIPSets(ipVersionConfig *ipsets.IPVersionConfig, nft knftables.Interface, recorder logutils.OpRecorder) *IPSets {
 	return NewIPSetsWithShims(
 		ipVersionConfig,
 		time.Sleep,
 		nft,
+		recorder,
 	)
 }
 
 // NewIPSetsWithShims is an internal test constructor.
-func NewIPSetsWithShims(ipVersionConfig *ipsets.IPVersionConfig, sleep func(time.Duration), nft knftables.Interface) *IPSets {
+func NewIPSetsWithShims(ipVersionConfig *ipsets.IPVersionConfig, sleep func(time.Duration), nft knftables.Interface, recorder logutils.OpRecorder) *IPSets {
 	return &IPSets{
 		IPVersionConfig:      ipVersionConfig,
 		setNameToAllMetadata: map[string]ipsets.IPSetMetadata{},
+		opReporter:           recorder,
 		setNameToProgrammedMetadata: deltatracker.New(
 			deltatracker.WithValuesEqualFn[string](func(a, b ipsets.IPSetMetadata) bool {
 				return a == b
@@ -316,7 +321,7 @@ func (s *IPSets) ApplyUpdates() {
 			// Compare our in-memory state against the dataplane and queue up
 			// modifications to fix any inconsistencies.
 			s.logCxt.Debug("Resyncing ipsets with dataplane.")
-			// s.opReporter.RecordOperation(fmt.Sprint("resync-ipsets-v", s.IPVersionConfig.Family.Version()))
+			s.opReporter.RecordOperation(fmt.Sprint("resync-nft-sets-v", s.IPVersionConfig.Family.Version()))
 
 			if err := s.tryResync(); err != nil {
 				s.logCxt.WithError(err).Warning("Failed to resync with dataplane")
@@ -330,7 +335,6 @@ func (s *IPSets) ApplyUpdates() {
 			// Update failures may mean that our iptables updates fail.  We need to do an immediate resync.
 			s.logCxt.WithError(err).Warning("Failed to update IP sets. Marking dataplane for resync.")
 			s.resyncRequired = true
-			// countNumIPSetErrors.Inc()
 			backOff()
 			continue
 		}
@@ -369,6 +373,10 @@ func (s *IPSets) tryResync() error {
 	defer cancel()
 	sets, err := s.nft.List(ctx, "set")
 	if err != nil {
+		if knftables.IsNotFound(err) {
+			// Table doesn't exist - nothing to resync.
+			return nil
+		}
 		return fmt.Errorf("error listing nftables sets: %s", err)
 	}
 	for _, setName := range sets {
@@ -482,11 +490,7 @@ func (s *IPSets) NFTablesSet(name string) *knftables.Set {
 	}
 }
 
-// tryUpdates attempts to create and/or update IP sets.  It attempts to do the updates as a single
-// 'ipset restore' session in order to minimise process forking overhead.  Note: unlike
-// 'iptables-restore', 'ipset restore' is not atomic, updates are applied individually.
-// This function updates the set of programmed IPs - that is the IPs that were added or replaced in the IPSets
-// included by the ipsetFilter.
+// tryUpdates attempts to apply any pending updates to the dataplane.
 func (s *IPSets) tryUpdates() error {
 	var dirtyIPSets []string
 
@@ -524,8 +528,6 @@ func (s *IPSets) tryUpdates() error {
 
 	for _, setName := range dirtyIPSets {
 		// If the set is already programmed, we can skip it.
-		// TODO: Support updating set metadata. This requires comparing actual data plane state, and
-		// if necessary deleting and recreating the set. We don't expect to need this in practice.
 		if _, ok := s.setNameToProgrammedMetadata.Dataplane().Get(setName); !ok {
 			if set := s.NFTablesSet(setName); set != nil {
 				tx.Add(set)

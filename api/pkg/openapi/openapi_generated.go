@@ -2808,10 +2808,10 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Format:      "",
 						},
 					},
-					"nftablesEnabled": {
+					"nftablesMode": {
 						SchemaProps: spec.SchemaProps{
-							Description: "NFTablesEnabled enables nftables in Felix. When false, iptables is used. [Default: false]",
-							Type:        []string{"boolean"},
+							Description: "NFTablesMode configures nftables support in Felix. [Default: Disabled]",
+							Type:        []string{"string"},
 							Format:      "",
 						},
 					},

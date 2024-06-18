@@ -191,7 +191,7 @@ type Table struct {
 	name      string
 	ipVersion uint8
 
-	render generictables.IptablesRenderer
+	render IptablesRenderer
 
 	// featureDetector detects the features of the dataplane.
 	featureDetector environment.FeatureDetectorIface
@@ -404,7 +404,7 @@ func NewTable(
 	table := &Table{
 		name:                   name,
 		ipVersion:              ipVersion,
-		render:                 generictables.NewIptablesRenderer(hashPrefix),
+		render:                 NewIptablesRenderer(hashPrefix),
 		featureDetector:        featureDetector,
 		chainToInsertedRules:   inserts,
 		chainToAppendedRules:   appends,
@@ -1533,7 +1533,7 @@ func CalculateRuleHashes(chainName string, rules []generictables.Rule, features 
 		Name:  chainName,
 		Rules: rules,
 	}
-	return generictables.NewIptablesRenderer("").RuleHashes(&chain, features)
+	return NewIptablesRenderer("").RuleHashes(&chain, features)
 }
 
 func numEmptyStrings(strs []string) int {

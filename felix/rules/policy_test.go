@@ -334,7 +334,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			iptRules := renderer.ProtoRuleToIptablesRules(&pRule, 4)
 			rendered := []string{}
 			for _, ir := range iptRules {
-				s := generictables.NewIptablesRenderer("").RenderAppend(&ir, "test", "", &environment.Features{})
+				s := iptables.NewIptablesRenderer("").RenderAppend(&ir, "test", "", &environment.Features{})
 				rendered = append(rendered, s)
 			}
 			Expect(rendered).To(Equal(expected))
@@ -450,7 +450,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			iptRules := renderer.ProtoRuleToIptablesRules(&pRule, 4)
 			rendered := []string{}
 			for _, ir := range iptRules {
-				s := generictables.NewIptablesRenderer("").RenderAppend(&ir, "test", "", &environment.Features{})
+				s := iptables.NewIptablesRenderer("").RenderAppend(&ir, "test", "", &environment.Features{})
 				rendered = append(rendered, s)
 			}
 			Expect(rendered).To(Equal(expected))

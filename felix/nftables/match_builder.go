@@ -30,8 +30,8 @@ import (
 var Wildcard = "*"
 
 var (
-	_ generictables.MatchCriteria    = nftMatch{}
-	_ generictables.NFTMatchCriteria = nftMatch{}
+	_ generictables.MatchCriteria = nftMatch{}
+	_ NFTMatchCriteria            = nftMatch{}
 
 	// ipSetMatch matches clauses that contain an IP set reference.
 	ipSetMatch = regexp.MustCompile("IPV.*@(.*)")
@@ -43,6 +43,16 @@ const (
 	ProtoUDP    = 17
 	ProtoICMPv6 = 58
 )
+
+// NFTMatchCriteria extends the generictables.MatchCriteria interface with nftables-specific methods.
+type NFTMatchCriteria interface {
+	generictables.MatchCriteria
+
+	IPVersion(version uint8) generictables.MatchCriteria
+
+	ConntrackStatus(statusNames string) generictables.MatchCriteria
+	NotConntrackStatus(statusNames string) generictables.MatchCriteria
+}
 
 // nftMatch implements the MatchCriteria interface for nftables.
 type nftMatch struct {
@@ -310,7 +320,7 @@ func (m nftMatch) NotSourceIPSet(name string) generictables.MatchCriteria {
 
 func (m nftMatch) SourceIPPortSet(name string) generictables.MatchCriteria {
 	// IPPort sets include the IP, protocol, and port, in that order.
-	// Note that "th dport" is only compatible with protocols that have their destination port in
+	// Note that "th sport" is only compatible with protocols that have their destination port in
 	// the same location within the header, i.e., TCP, UDP, and SCTP.
 	m.clauses = append(m.clauses, fmt.Sprintf("IPV saddr . meta l4proto . th sport @%s", LegalizeSetName(name)))
 	return m
@@ -318,7 +328,7 @@ func (m nftMatch) SourceIPPortSet(name string) generictables.MatchCriteria {
 
 func (m nftMatch) NotSourceIPPortSet(name string) generictables.MatchCriteria {
 	// IPPort sets include the IP, protocol, and port, in that order.
-	// Note that "th dport" is only compatible with protocols that have their destination port in
+	// Note that "th sport" is only compatible with protocols that have their destination port in
 	// the same location within the header, i.e., TCP, UDP, and SCTP.
 	m.clauses = append(m.clauses, fmt.Sprintf("IPV saddr . meta l4proto . th sport != @%s", LegalizeSetName(name)))
 	return m
@@ -452,21 +462,8 @@ func (m nftMatch) NotICMPV6TypeAndCode(t, c uint8) generictables.MatchCriteria {
 	return m
 }
 
-// VXLANVNI matches on the VNI contained within the VXLAN header.  It assumes that this is indeed a VXLAN
-// packet; i.e. it should be used with a protocol==UDP and port==VXLAN port match.
-//
-// Note: the -m u32 option is not supported on iptables in NFT mode.
-// https://wiki.nftables.org/wiki-nftables/index.php/Supported_features_compared_to_xtables#u32
-func (m nftMatch) VXLANVNI(vni uint32) generictables.MatchCriteria {
-	// TODO: Not supported in nftables mode.
-	return m
-}
-
-// Converts a list of ports to a multiport set suitable for inline use in nftables rules.
+// PortsToMultiport converts a list of ports to a multiport set suitable for inline use in nftables rules.
 func PortsToMultiport(ports []uint16) string {
-	if len(ports) == 1 {
-		return fmt.Sprintf("%d", ports[0])
-	}
 	portFragments := make([]string, len(ports))
 	for i, port := range ports {
 		portFragments[i] = fmt.Sprintf("%d", port)

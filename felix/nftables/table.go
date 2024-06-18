@@ -40,7 +40,7 @@ import (
 )
 
 const (
-	MaxChainNameLength   = 28
+	MaxChainNameLength   = knftables.NameLengthMax
 	minPostWriteInterval = 50 * time.Millisecond
 	defaultTimeout       = 30 * time.Second
 )
@@ -116,7 +116,7 @@ var (
 		Help: "Number of active nftables rules.",
 	}, []string{"ip_version", "table"})
 	countNumLinesExecuted = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: "felix_nftables_lines_executed",
+		Name: "felix_nft_lines_executed",
 		Help: "Number of nftables rule updates executed.",
 	}, []string{"ip_version", "table"})
 )
@@ -141,7 +141,7 @@ type nftablesTable struct {
 	nft       knftables.Interface
 
 	// For rendering rules and chains.
-	render generictables.NFTRenderer
+	render NFTRenderer
 
 	// featureDetector detects the features of the dataplane.
 	featureDetector environment.FeatureDetectorIface
@@ -318,10 +318,10 @@ func NewTable(
 	ipv := ipsets.NewIPVersionConfig(ipsetFamily, ipsets.IPSetNamePrefix, nil, nil)
 
 	table := &nftablesTable{
-		IPSetsDataplane:        NewIPSets(ipv, nft),
+		IPSetsDataplane:        NewIPSets(ipv, nft, options.OpRecorder),
 		name:                   name,
 		nft:                    nft,
-		render:                 generictables.NewNFTRenderer(hashPrefix, ipVersion),
+		render:                 NewNFTRenderer(hashPrefix, ipVersion),
 		ipVersion:              ipVersion,
 		featureDetector:        featureDetector,
 		chainToInsertedRules:   inserts,
@@ -459,12 +459,6 @@ func (t *nftablesTable) RemoveChainByName(name string) {
 		delete(t.chainNameToChain, name)
 		if t.chainIsReferenced(name) {
 			t.dirtyChains.Add(name)
-
-			// Defensive: make sure we re-read the dataplane state before we make updates.  While the
-			// code was originally designed not to need this, we found that other users of
-			// nftables can still clobber out updates so it's safest to re-read the state before
-			// each write.
-			t.InvalidateDataplaneCache("chain removal")
 		}
 	}
 }
@@ -722,15 +716,7 @@ func (t *nftablesTable) attemptToGetHashesAndRulesFromDataplane() (hashes map[st
 
 	for _, rule := range allRules {
 		// Add the rule to the list of rules for the chain.
-		if _, ok := rules[rule.Chain]; !ok {
-			rules[rule.Chain] = []*knftables.Rule{}
-		}
 		rules[rule.Chain] = append(rules[rule.Chain], rule)
-
-		// Initialize the hashes map for this chain if it doesn't exist.
-		if _, ok := hashes[rule.Chain]; !ok {
-			hashes[rule.Chain] = []string{}
-		}
 
 		if rule.Comment != nil {
 			// The rule has a comment, extract the hash.
@@ -848,11 +834,11 @@ func (t *nftablesTable) Apply() (rescheduleAfter time.Duration) {
 		rescheduleAfter = t.refreshInterval - lastReadToNow
 	}
 	if t.postWriteInterval < time.Hour {
-		postWriteReached := t.lastWriteTime.Add(t.postWriteInterval).Sub(now)
-		if postWriteReached <= 0 {
+		postWriteResched := t.lastWriteTime.Add(t.postWriteInterval).Sub(now)
+		if postWriteResched <= 0 {
 			rescheduleAfter = 1 * time.Millisecond
-		} else if t.refreshInterval <= 0 || postWriteReached < rescheduleAfter {
-			rescheduleAfter = postWriteReached
+		} else if t.refreshInterval <= 0 || postWriteResched < rescheduleAfter {
+			rescheduleAfter = postWriteResched
 		}
 	}
 
@@ -1024,9 +1010,7 @@ func (t *nftablesTable) applyUpdates() error {
 
 	// Do deletions at the end.  This ensures that we don't try to delete any chains that
 	// are still referenced (because we'll have removed the references in the modify pass
-	// above).  Note: if a chain is being deleted at the same time as a chain that it refers to
-	// then we'll issue a create+flush instruction in the very first pass, which will sever the
-	// references.
+	// above).
 	t.dirtyChains.Iter(func(chainName string) error {
 		if _, ok := t.desiredStateOfChain(chainName); !ok {
 			// Chain deletion
@@ -1091,10 +1075,10 @@ func (t *nftablesTable) applyUpdates() error {
 	}
 	t.chainToFullRules = newChainToFullRules
 
-	// We load the dataplane state after each write to ensure we have the correct handles
-	// in-memory for each of the objects we've just written. nftables updates require the handle in order to
-	// update or delete an object.
-	t.loadDataplaneState()
+	// Invalidate the in-memory dataplane state so that we reload on the next write. This ensures we have the correct handles
+	// in-memory for each of the objects we've just written. nftables requires an object's handle in order to
+	// perform update or delete operations.
+	t.InvalidateDataplaneCache("post-write")
 	return nil
 }
 
@@ -1159,7 +1143,7 @@ func CalculateRuleHashes(chainName string, rules []generictables.Rule, features 
 		Name:  chainName,
 		Rules: rules,
 	}
-	return generictables.NewNFTRenderer("", 4).RuleHashes(&chain, features)
+	return NewNFTRenderer("", 4).RuleHashes(&chain, features)
 }
 
 func numEmptyStrings(strs []string) int {

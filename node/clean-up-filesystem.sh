@@ -323,22 +323,16 @@ packages_to_remove=$(microdnf repoquery --installed |
 
 echo "Removing ${packages_to_remove}"
 
-# TODO: This is tedious to maintain and will need updates whenever the underlying
-# library versions change. Is there a better way?
+# Removing one of the packages deletes some files that shouldn't be removed.
+# Move them out of the way first, then restore them.
 files_to_save=(
   /etc/rc.local
 
   # These are all used by the nft binary.
-  /usr/lib64/libreadline.so.7
-  /usr/lib64/libreadline.so.7.0
-  /usr/lib64/libgmp.so.10
-  /usr/lib64/libgmp.so.10.3.2
-  /usr/lib64/libjansson.so.4
-  /usr/lib64/libjansson.so.4.14.0
+  /usr/lib64/libreadline.so.*
+  /usr/lib64/libgmp.so.*
+  /usr/lib64/libjansson.so.*
 )
-
-# Removing one of the packages deletes some files that shouldn't be removed.
-# Move them out of the way first, then restore them.
 for file in "${files_to_save[@]}"; do
   fn=$(basename ${file})
   echo "Moving ${file} -> /etc/${fn}.bak"

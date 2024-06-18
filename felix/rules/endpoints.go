@@ -202,7 +202,7 @@ func (r *DefaultRuleRenderer) HostEndpointToMangleEgressChains(
 			ChainFailsafeOut,
 			chainTypeNormal,
 			true, // Host endpoints are always admin up.
-			r.ReturnAction(),
+			r.Return(),
 			alwaysAllowVXLANEncap,
 			alwaysAllowIPIPEncap,
 		),
@@ -224,7 +224,7 @@ func (r *DefaultRuleRenderer) HostEndpointToRawEgressChain(
 		ChainFailsafeOut,
 		chainTypeUntracked,
 		true, // Host endpoints are always admin up.
-		r.AllowAction(),
+		r.Allow(),
 		alwaysAllowVXLANEncap,
 		alwaysAllowIPIPEncap,
 	)
@@ -250,7 +250,7 @@ func (r *DefaultRuleRenderer) HostEndpointToRawChains(
 			ChainFailsafeIn,
 			chainTypeUntracked,
 			true, // Host endpoints are always admin up.
-			r.AllowAction(),
+			r.Allow(),
 			alwaysAllowVXLANEncap,
 			alwaysAllowIPIPEncap,
 		),
@@ -297,11 +297,11 @@ func (r *DefaultRuleRenderer) endpointSetMarkChain(
 	endpointPrefix string,
 ) *generictables.Chain {
 	rules := []generictables.Rule{}
-	chainName := EndpointChainName(endpointPrefix, name)
+	chainName := EndpointChainName(endpointPrefix, name, r.maxNameLength)
 
 	if endPointMark, err := epMarkMapper.GetEndpointMark(name); err == nil {
 		// Set endpoint mark.
-		rules = append(rules, generictables.Rule{Match: r.NewMatch(), Action: r.SetMaskedMarkAction(endPointMark, epMarkMapper.GetMask())})
+		rules = append(rules, generictables.Rule{Match: r.NewMatch(), Action: r.SetMaskedMark(endPointMark, epMarkMapper.GetMask())})
 	}
 	return &generictables.Chain{
 		Name:  chainName,
@@ -327,7 +327,7 @@ func (r *DefaultRuleRenderer) PolicyGroupToIptablesChains(group *PolicyGroup) []
 			// to continue processing in the same chain on a pass rule.
 			rules = append(rules, generictables.Rule{
 				Match:   r.NewMatch().MarkNotClear(r.IptablesMarkPass | r.IptablesMarkAccept),
-				Action:  r.ReturnAction(),
+				Action:  r.Return(),
 				Comment: []string{"Return on verdict"},
 			})
 		}
@@ -349,7 +349,7 @@ func (r *DefaultRuleRenderer) PolicyGroupToIptablesChains(group *PolicyGroup) []
 		)
 		rules = append(rules, generictables.Rule{
 			Match:  match,
-			Action: r.JumpAction(chainToJumpTo),
+			Action: r.Jump(chainToJumpTo),
 		})
 	}
 	return []*generictables.Chain{{
@@ -374,7 +374,7 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 ) *generictables.Chain {
 	rules := []generictables.Rule{}
 
-	chainName := EndpointChainName(endpointPrefix, name)
+	chainName := EndpointChainName(endpointPrefix, name, r.maxNameLength)
 
 	if !adminUp {
 		// Endpoint is admin-down, drop all traffic to/from it.
@@ -399,7 +399,7 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 	if failsafeChain != "" {
 		rules = append(rules, generictables.Rule{
 			Match:  r.NewMatch(),
-			Action: r.JumpAction(failsafeChain),
+			Action: r.Jump(failsafeChain),
 		})
 	}
 
@@ -408,7 +408,7 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 	// there's no match).
 	rules = append(rules, generictables.Rule{
 		Match:  r.NewMatch(),
-		Action: r.ClearMarkAction(r.IptablesMarkAccept | r.IptablesMarkPass),
+		Action: r.ClearMark(r.IptablesMarkAccept | r.IptablesMarkPass),
 	})
 
 	if !allowVXLANEncap {
@@ -448,7 +448,7 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 				// If a previous policy/group didn't set the "pass" mark, jump to the policy.
 				rules = append(rules, generictables.Rule{
 					Match:  r.NewMatch().MarkClear(r.IptablesMarkPass),
-					Action: r.JumpAction(chainToJumpTo),
+					Action: r.Jump(chainToJumpTo),
 				})
 				// If policy marked packet as accepted, it returns, setting the accept
 				// mark bit.
@@ -456,14 +456,14 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 					// For an untracked policy, map allow to "NOTRACK and ALLOW".
 					rules = append(rules, generictables.Rule{
 						Match:  r.NewMatch().MarkSingleBitSet(r.IptablesMarkAccept),
-						Action: r.NoTrackAction(),
+						Action: r.NoTrack(),
 					})
 				}
 				// If accept bit is set, return from this chain.  We don't immediately
 				// accept because there may be other policy still to apply.
 				rules = append(rules, generictables.Rule{
 					Match:   r.NewMatch().MarkSingleBitSet(r.IptablesMarkAccept),
-					Action:  r.ReturnAction(),
+					Action:  r.Return(),
 					Comment: []string{"Return if policy accepted"},
 				})
 			}
@@ -487,12 +487,12 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 		// applyOnForward that apply to this endpoint (and in this direction).
 		rules = append(rules, generictables.Rule{
 			Match:   r.NewMatch(),
-			Action:  r.SetMarkAction(r.IptablesMarkAccept),
+			Action:  r.SetMark(r.IptablesMarkAccept),
 			Comment: []string{"Allow forwarded traffic by default"},
 		})
 		rules = append(rules, generictables.Rule{
 			Match:   r.NewMatch(),
-			Action:  r.ReturnAction(),
+			Action:  r.Return(),
 			Comment: []string{"Return for accepted forward traffic"},
 		})
 	}
@@ -502,12 +502,12 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 		for _, profileID := range profileIds {
 			profChainName := ProfileChainName(profilePrefix, &proto.ProfileID{Name: profileID})
 			rules = append(rules,
-				generictables.Rule{Match: r.NewMatch(), Action: r.JumpAction(profChainName)},
+				generictables.Rule{Match: r.NewMatch(), Action: r.Jump(profChainName)},
 				// If policy marked packet as accepted, it returns, setting the
 				// accept mark bit.  If that is set, return from this chain.
 				generictables.Rule{
 					Match:   r.NewMatch().MarkSingleBitSet(r.IptablesMarkAccept),
-					Action:  r.ReturnAction(),
+					Action:  r.Return(),
 					Comment: []string{"Return if profile accepted"},
 				})
 		}
@@ -534,13 +534,13 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 
 func (r *DefaultRuleRenderer) appendConntrackRules(rules []generictables.Rule, allowAction generictables.Action) []generictables.Rule {
 	// Allow return packets for established connections.
-	if allowAction != (r.AllowAction()) {
+	if allowAction != (r.Allow()) {
 		// If we've been asked to return instead of accept the packet immediately,
 		// make sure we flag the packet as allowed.
 		rules = append(rules,
 			generictables.Rule{
 				Match:  r.NewMatch().ConntrackState("RELATED,ESTABLISHED"),
-				Action: r.SetMarkAction(r.IptablesMarkAccept),
+				Action: r.SetMark(r.IptablesMarkAccept),
 			},
 		)
 	}
@@ -561,11 +561,11 @@ func (r *DefaultRuleRenderer) appendConntrackRules(rules []generictables.Rule, a
 	return rules
 }
 
-func EndpointChainName(prefix string, ifaceName string) string {
+func EndpointChainName(prefix string, ifaceName string, maxLen int) string {
 	return hashutils.GetLengthLimitedID(
 		prefix,
 		ifaceName,
-		iptables.MaxChainNameLength, // TODO: This is the max chain name length for iptables, but we should use the max for the implementation.
+		maxLen,
 	)
 }
 

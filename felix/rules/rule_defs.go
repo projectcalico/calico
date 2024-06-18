@@ -255,7 +255,7 @@ type RuleRenderer interface {
 }
 
 type DefaultRuleRenderer struct {
-	generictables.ActionSet
+	generictables.ActionFactory
 
 	Config
 	inputAcceptActions       []generictables.Action
@@ -268,6 +268,9 @@ type DefaultRuleRenderer struct {
 
 	// wildcard is the symbol to use for wildcard matches.
 	wildcard string
+
+	// maxNameLength is the maximum length of a chain name.
+	maxNameLength int
 }
 
 func (r *DefaultRuleRenderer) IptablesFilterDenyAction() generictables.Action {
@@ -400,14 +403,14 @@ func NewRenderer(config Config) RuleRenderer {
 	log.WithField("config", config).Info("Creating rule renderer.")
 	config.validate()
 
-	actions := iptables.ActionSet()
+	actions := iptables.Actions()
 	var reject generictables.Action = iptables.RejectAction{}
 	var accept generictables.Action = iptables.AcceptAction{}
 	var drop generictables.Action = iptables.DropAction{}
 	var ret generictables.Action = iptables.ReturnAction{}
 
 	if config.NFTables {
-		actions = nftables.ActionSet()
+		actions = nftables.Actions()
 		reject = nftables.RejectAction{}
 		accept = nftables.AcceptAction{}
 		drop = nftables.DropAction{}
@@ -482,14 +485,16 @@ func NewRenderer(config Config) RuleRenderer {
 		log.Info("Packets to unknown service IPs will be allowed to loop")
 	}
 
+	maxNameLength := iptables.MaxChainNameLength
 	wildcard := iptables.Wildcard
 	if config.NFTables {
 		wildcard = nftables.Wildcard
+		maxNameLength = nftables.MaxChainNameLength
 	}
 
 	return &DefaultRuleRenderer{
 		Config:                   config,
-		ActionSet:                actions,
+		ActionFactory:            actions,
 		NewMatch:                 newMatchFn,
 		inputAcceptActions:       inputAcceptActions,
 		filterAllowAction:        filterAllowAction,
@@ -497,5 +502,6 @@ func NewRenderer(config Config) RuleRenderer {
 		blockCIDRAction:          blockCIDRAction,
 		iptablesFilterDenyAction: iptablesFilterDenyAction,
 		wildcard:                 wildcard,
+		maxNameLength:            maxNameLength,
 	}
 }
