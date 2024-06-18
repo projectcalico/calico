@@ -30,15 +30,22 @@ Wait-ForCalicoInit
 
 Write-Host "Using configured nodename: $env:NODENAME DNS: $env:DNS_NAME_SERVERS"
 
-Write-Host "Auto-detecting node IP, looking for interface named like '$InterfaceName' ..."
-$na = Get-NetAdapter | ? Name -Like "$InterfaceName" | ? Status -EQ Up
-while ($na -EQ $null) {
-    Write-Host "Waiting for interface named like '$InterfaceName' ..."
-    Start-Sleep 3
+if ($NodeIp -EQ "")
+{
+    Write-Host "Auto-detecting node IP, looking for interface named like '$InterfaceName' ..."
     $na = Get-NetAdapter | ? Name -Like "$InterfaceName" | ? Status -EQ Up
+    while ($na -EQ $null) {
+        Write-Host "Waiting for interface named like '$InterfaceName' ..."
+        Start-Sleep 3
+        $na = Get-NetAdapter | ? Name -Like "$InterfaceName" | ? Status -EQ Up
+    }
+    $NodeIp = (Get-NetIPAddress -InterfaceAlias $na.ifAlias -AddressFamily IPv4).IPAddress
+    Write-Host "Detected node IP: $NodeIp."
 }
-$NodeIp = (Get-NetIPAddress -InterfaceAlias $na.ifAlias -AddressFamily IPv4).IPAddress
-Write-Host "Detected node IP: $NodeIp."
+else
+{
+    Write-Host "Specific node IP: $NodeIp."
+}
 
 $argList = @(`
     "--hostname-override=$env:NODENAME", `
