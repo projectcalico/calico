@@ -147,6 +147,8 @@ enum cali_state_flags {
 	CALI_ST_CT_NP_LOOP	  = 0x80,
 	/* CALI_ST_CT_NP_REMOTE is set when host is accessing a remote nodeport. */
 	CALI_ST_CT_NP_REMOTE	  = 0x100,
+	/* CALI_ST_NAT_EXCLUDE is set when there is a NAT hit, but we don't want to resolve (such as node local DNS). */
+	CALI_ST_NAT_EXCLUDE       = 0x200,
 };
 
 struct fwd {

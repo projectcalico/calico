@@ -190,14 +190,19 @@ enum calico_skb_mark {
 	CALI_SKB_MARK_CT_ESTABLISHED         = 0x08000000,
 	CALI_SKB_MARK_CT_ESTABLISHED_MASK    = 0x08000000,
 
-       /* CALI_SKB_MARK_TO_NAT_IFACE_OUT signals to routing that this packet should to
-        * to the bpfnatout interface.
-        */
-       CALI_SKB_MARK_TO_NAT_IFACE_OUT        = 0x41000000,
-       /* CALI_SKB_MARK_FROM_NAT_IFACE_OUT signals to the next hop that the packet passed
-	* through bpfnatout so that it can set its conntrack correctly.
-	*/
-       CALI_SKB_MARK_FROM_NAT_IFACE_OUT      = 0x81000000,
+	CALI_SKB_MARK_RESERVED                = 0x11000000,
+	/* CALI_SKB_MARK_RELATED_RESOLVED mean it is related traffic, we already
+	 * know that and we have resolved NAT etc.
+	 */
+	CALI_SKB_MARK_RELATED_RESOLVED        = 0x21000000,
+	/* CALI_SKB_MARK_TO_NAT_IFACE_OUT signals to routing that this packet should to
+	 * to the bpfnatout interface.
+	 */
+	CALI_SKB_MARK_TO_NAT_IFACE_OUT        = 0x41000000,
+	/* CALI_SKB_MARK_FROM_NAT_IFACE_OUT signals to the next hop that the packet passed
+	 * through bpfnatout so that it can set its conntrack correctly.
+	 */
+	CALI_SKB_MARK_FROM_NAT_IFACE_OUT      = 0x81000000,
 
 };
 

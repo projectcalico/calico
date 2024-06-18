@@ -535,7 +535,7 @@ windows-packaging/nssm.exe: windows-packaging/nssm.zip
 $(WINDOWS_ARCHIVE): build-windows-archive
 
 .PHONY: build-windows-archive
-build-windows-archive: build $(WINDOWS_ARCHIVE_FILES) windows-packaging/nssm.zip
+build-windows-archive: $(WINDOWS_ARCHIVE_FILES) windows-packaging/nssm.zip
 	# To be as atomic as possible, we re-do work like unpacking NSSM here.
 	-rm -f "$(WINDOWS_ARCHIVE)"
 	-rm -rf $(WINDOWS_ARCHIVE_ROOT)/nssm

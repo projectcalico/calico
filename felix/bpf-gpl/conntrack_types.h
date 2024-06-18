@@ -204,10 +204,11 @@ enum calico_ct_result_type {
 #define CT_RES_SYN		0x1000
 #define CT_RES_CONFIRMED	0x2000
 
-#define ct_result_rc(rc)		((rc) & 0xff)
-#define ct_result_flags(rc)		((rc) & ~0xff)
-#define ct_result_set_rc(val, rc)	((val) = ct_result_flags(val) | (rc))
-#define ct_result_set_flag(val, flags)	((val) |= (flags))
+#define ct_result_rc(rc)			((rc) & 0xff)
+#define ct_result_flags(rc)			((rc) & ~0xff)
+#define ct_result_set_rc(val, rc)		((val) = ct_result_flags(val) | (rc))
+#define ct_result_set_flag(val, flags)		((val) |= (flags))
+#define ct_result_clear_flag(val, flags)	((val) &= ~(flags))
 
 #define ct_result_is_related(rc)	((rc) & CT_RES_RELATED)
 #define ct_result_rpf_failed(rc)	((rc) & CT_RES_RPF_FAILED)

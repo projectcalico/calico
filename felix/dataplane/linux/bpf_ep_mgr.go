@@ -4176,3 +4176,19 @@ func (pa *jumpMapAlloc) checkFreeLockHeld(idx int) {
 		}).Panic("jumpMapAlloc: Free set and free stack got out of sync")
 	}
 }
+
+func removeBPFSpecialDevices() {
+	bpfin, err := netlink.LinkByName(bpfInDev)
+	if err != nil {
+		if errors.Is(err, netlink.LinkNotFoundError{}) {
+			return
+		}
+		log.WithError(err).Warnf("Failed to make sure that %s/%s device is (not) present.", bpfInDev, bpfOutDev)
+		return
+	}
+
+	err = netlink.LinkDel(bpfin)
+	if err != nil {
+		log.WithError(err).Warnf("Failed to remove %s/%s device.", bpfInDev, bpfOutDev)
+	}
+}
