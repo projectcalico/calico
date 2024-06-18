@@ -16,6 +16,7 @@ package rules_test
 
 import (
 	"github.com/projectcalico/calico/felix/environment"
+	"github.com/projectcalico/calico/felix/generictables"
 	. "github.com/projectcalico/calico/felix/rules"
 
 	. "github.com/onsi/ginkgo"
@@ -184,7 +185,7 @@ var ruleTestData = []TableEntry{
 }
 
 var _ = Describe("Protobuf rule to iptables rule conversion", func() {
-	var rrConfigNormal = Config{
+	rrConfigNormal := Config{
 		IPIPEnabled:          true,
 		IPIPTunnelAddress:    nil,
 		IPSetConfigV4:        ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
@@ -207,7 +208,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			Expect(len(rules)).To(Equal(2))
 			Expect(rules[0].Match.Render()).To(Equal(expMatch))
 			Expect(rules[0].Action).To(Equal(iptables.SetMarkAction{Mark: 0x80}))
-			Expect(rules[1]).To(Equal(iptables.Rule{
+			Expect(rules[1]).To(Equal(generictables.Rule{
 				Match:  iptables.Match().MarkSingleBitSet(0x80),
 				Action: iptables.ReturnAction{},
 			}))
@@ -233,7 +234,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 				Expect(len(rules)).To(Equal(2))
 				Expect(rules[0].Match.Render()).To(Equal(expMatch))
 				Expect(rules[0].Action).To(Equal(iptables.SetMarkAction{Mark: 0x100}))
-				Expect(rules[1]).To(Equal(iptables.Rule{
+				Expect(rules[1]).To(Equal(generictables.Rule{
 					Match:  iptables.Match().MarkSingleBitSet(0x100),
 					Action: iptables.ReturnAction{},
 				}))
@@ -333,7 +334,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			iptRules := renderer.ProtoRuleToIptablesRules(&pRule, 4)
 			rendered := []string{}
 			for _, ir := range iptRules {
-				s := ir.RenderAppend("test", "", &environment.Features{})
+				s := iptables.NewIptablesRenderer("").RenderAppend(&ir, "test", "", &environment.Features{})
 				rendered = append(rendered, s)
 			}
 			Expect(rendered).To(Equal(expected))
@@ -449,7 +450,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			iptRules := renderer.ProtoRuleToIptablesRules(&pRule, 4)
 			rendered := []string{}
 			for _, ir := range iptRules {
-				s := ir.RenderAppend("test", "", &environment.Features{})
+				s := iptables.NewIptablesRenderer("").RenderAppend(&ir, "test", "", &environment.Features{})
 				rendered = append(rendered, s)
 			}
 			Expect(rendered).To(Equal(expected))
@@ -1093,11 +1094,11 @@ var _ = Describe("rule metadata tests", func() {
 			4,
 		)
 		Expect(chains).To(ConsistOf(
-			&iptables.Chain{
+			&generictables.Chain{
 				Name: "cali-pi-_ffOMcf6pikpiZ6hgKcW",
-				Rules: []iptables.Rule{
+				Rules: []generictables.Rule{
 					{
-						Match:  nil,
+						Match:  iptables.Match(),
 						Action: iptables.SetMarkAction{Mark: 0x80},
 						Comment: []string{
 							"Policy long-policy-name-that-gets-hashed ingress",
@@ -1105,9 +1106,9 @@ var _ = Describe("rule metadata tests", func() {
 					},
 				},
 			},
-			&iptables.Chain{
+			&generictables.Chain{
 				Name: "cali-po-_ffOMcf6pikpiZ6hgKcW",
-				Rules: []iptables.Rule{
+				Rules: []generictables.Rule{
 					{
 						Comment: []string{
 							"Policy long-policy-name-that-gets-hashed egress",
@@ -1128,12 +1129,12 @@ var _ = Describe("rule metadata tests", func() {
 			},
 			4,
 		)
-		Expect([]*iptables.Chain{inbound, outbound}).To(ConsistOf(
-			&iptables.Chain{
+		Expect([]*generictables.Chain{inbound, outbound}).To(ConsistOf(
+			&generictables.Chain{
 				Name: "cali-pri-_ffOMcf6pikpiZ6hgKc",
-				Rules: []iptables.Rule{
+				Rules: []generictables.Rule{
 					{
-						Match:  nil,
+						Match:  iptables.Match(),
 						Action: iptables.SetMarkAction{Mark: 0x80},
 						Comment: []string{
 							"Profile long-policy-name-that-gets-hashed ingress",
@@ -1141,9 +1142,9 @@ var _ = Describe("rule metadata tests", func() {
 					},
 				},
 			},
-			&iptables.Chain{
+			&generictables.Chain{
 				Name: "cali-pro-_ffOMcf6pikpiZ6hgKc",
-				Rules: []iptables.Rule{
+				Rules: []generictables.Rule{
 					{
 						Comment: []string{
 							"Profile long-policy-name-that-gets-hashed egress",

@@ -2808,6 +2808,13 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Format:      "",
 						},
 					},
+					"nftablesMode": {
+						SchemaProps: spec.SchemaProps{
+							Description: "NFTablesMode configures nftables support in Felix. [Default: Disabled]",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 					"bpfEnabled": {
 						SchemaProps: spec.SchemaProps{
 							Description: "BPFEnabled, if enabled Felix will use the BPF dataplane. [Default: false]",
