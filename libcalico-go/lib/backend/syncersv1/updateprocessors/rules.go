@@ -29,14 +29,14 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/selector/parser"
 )
 
-func RulesAPIV2ToBackend(ars []apiv3.Rule, ns string) []model.Rule {
+func RulesAPIV3ToBackend(ars []apiv3.Rule, ns string) []model.Rule {
 	if len(ars) == 0 {
 		return nil
 	}
 
 	brs := make([]model.Rule, len(ars))
 	for idx, ar := range ars {
-		brs[idx] = RuleAPIV2ToBackend(ar, ns)
+		brs[idx] = RuleAPIV3ToBackend(ar, ns)
 	}
 	return brs
 }
@@ -127,7 +127,7 @@ func getEndpointSelector(namespaceSelector, endpointSelector, serviceAccountSele
 }
 
 // RuleAPIToBackend converts an API Rule structure to a Backend Rule structure.
-func RuleAPIV2ToBackend(ar apiv3.Rule, ns string) model.Rule {
+func RuleAPIV3ToBackend(ar apiv3.Rule, ns string) model.Rule {
 	var icmpCode, icmpType, notICMPCode, notICMPType *int
 	if ar.ICMP != nil {
 		icmpCode = ar.ICMP.Code
