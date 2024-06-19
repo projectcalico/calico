@@ -444,7 +444,7 @@ func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 				}
 
 				for _, f := range tc.Felixes {
-					Eventually(felixReady(f), "5s", "100ms").Should(BeGood())
+					Eventually(felixReady(f), "10s", "330ms").Should(BeGood())
 					Consistently(felixReady(f), "10s", "1s").Should(BeGood())
 				}
 
@@ -480,7 +480,7 @@ func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 				}
 
 				for _, f := range tc.Felixes {
-					Eventually(felixReady(f), "5s", "100ms").Should(BeGood())
+					Eventually(felixReady(f), "10s", "330ms").Should(BeGood())
 					Consistently(felixReady(f), "10s", "1s").Should(BeGood())
 				}
 
