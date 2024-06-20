@@ -17,7 +17,7 @@ HELM_VERSION=v3.11.3
 KINDEST_NODE_VERSION=v1.27.11
 KIND_VERSION=v0.22.0
 PROTOC_VER=v0.1
-UBI_VERSION=8.9
+UBI_VERSION=8.10
 
 # Configuration for Semaphore integration.
 ORGANIZATION = projectcalico

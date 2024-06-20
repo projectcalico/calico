@@ -106,7 +106,13 @@ func Main(version string) {
 		os.Exit(0)
 	}
 
-	skel.PluginMain(cmdAdd, nil, cmdDel,
+	funcs := skel.CNIFuncs{
+		Add:   cmdAdd,
+		Check: nil,
+		Del:   cmdDel,
+	}
+
+	skel.PluginMainFuncs(funcs,
 		cniSpecVersion.PluginSupports("0.1.0", "0.2.0", "0.3.0", "0.3.1", "0.4.0", "1.0.0"),
 		"Calico CNI IPAM "+version)
 }
