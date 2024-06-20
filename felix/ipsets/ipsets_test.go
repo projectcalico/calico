@@ -45,9 +45,7 @@ const (
 	v4MainIPSetName3 = "cali40u:qMt7iLlGDhvLnCjM0l9nzxb"
 )
 
-var (
-	v4Members1And2 = []string{"10.0.0.1", "10.0.0.2"}
-)
+var v4Members1And2 = []string{"10.0.0.1", "10.0.0.2"}
 
 var exampleMembersByType = map[IPSetType][]string{
 	IPSetTypeHashIP:     {"10.0.0.1", "10.0.0.2", "10.0.1.0"},
@@ -74,7 +72,7 @@ var _ = Describe("IPSetType", func() {
 
 var _ = Describe("IPSetTypeHashIPPort", func() {
 	It("should return its string form from SetType()", func() {
-		Expect(IPSetTypeHashIPPort.SetType()).To(Equal("hash:ip,port"))
+		Expect(IPSetTypeHashIPPort.SetType(4)).To(Equal("hash:ip,port"))
 	})
 	It("should canonicalise an IPv4 IP,port", func() {
 		Expect(IPSetTypeHashIPPort.CanonicaliseMember("10.0.0.1,TCP:1234")).
@@ -371,7 +369,7 @@ var _ = Describe("IP sets dataplane", func() {
 		}
 
 		ipSetType := ipSetType
-		Describe("Resync re-use tests for "+ipSetType.SetType(), func() {
+		Describe("Resync re-use tests for "+ipSetType.SetType(4), func() {
 			members := exampleMembersByType[ipSetType]
 
 			BeforeEach(func() {
@@ -432,7 +430,7 @@ var _ = Describe("IP sets dataplane", func() {
 					v4MainIPSetName: {members[0]},
 				})
 				Expect(dataplane.LinesExecuted).To(Equal([]string{
-					"create cali4t0 " + ipSetType.SetType() + " " + headerStr,
+					"create cali4t0 " + ipSetType.SetType(4) + " " + headerStr,
 					"add cali4t0 " + members[0],
 					"swap " + v4MainIPSetName + " cali4t0",
 					"COMMIT",
@@ -734,8 +732,7 @@ var _ = Describe("IP sets dataplane", func() {
 
 			Describe("after another process modifies an IP set", func() {
 				BeforeEach(func() {
-					dataplane.IPSetMembers[v4MainIPSetName] =
-						set.From("10.0.0.1", "10.0.0.3", "10.0.0.4")
+					dataplane.IPSetMembers[v4MainIPSetName] = set.From("10.0.0.1", "10.0.0.3", "10.0.0.4")
 				})
 
 				It("should be detected and fixed by a resync", func() {
@@ -764,8 +761,7 @@ var _ = Describe("IP sets dataplane", func() {
 
 		Describe("after another process modifies the IP set", func() {
 			BeforeEach(func() {
-				dataplane.IPSetMembers[v4MainIPSetName] =
-					set.From("10.0.0.1", "10.0.0.3", "10.0.0.4")
+				dataplane.IPSetMembers[v4MainIPSetName] = set.From("10.0.0.1", "10.0.0.3", "10.0.0.4")
 			})
 
 			It("should be detected and fixed by a resync", func() {
@@ -836,8 +832,7 @@ var _ = Describe("IP sets dataplane", func() {
 		})
 		Describe("with various transient list failures queued up", func() {
 			BeforeEach(func() {
-				dataplane.IPSetMembers[v4MainIPSetName] =
-					set.From("10.0.0.1", "10.0.0.3", "10.0.0.4")
+				dataplane.IPSetMembers[v4MainIPSetName] = set.From("10.0.0.1", "10.0.0.3", "10.0.0.4")
 				dataplane.ListOpFailures = []string{"pipe", "start", "read", "read-member", "member", "rc"}
 			})
 
@@ -853,8 +848,7 @@ var _ = Describe("IP sets dataplane", func() {
 		describeResyncFailureTests := func(failures ...string) func() {
 			return func() {
 				BeforeEach(func() {
-					dataplane.IPSetMembers[v4MainIPSetName] =
-						set.From("10.0.0.1", "10.0.0.3", "10.0.0.4")
+					dataplane.IPSetMembers[v4MainIPSetName] = set.From("10.0.0.1", "10.0.0.3", "10.0.0.4")
 					dataplane.ListOpFailures = failures
 				})
 				AfterEach(func() {
@@ -1019,10 +1013,8 @@ var _ = Describe("IP sets dataplane", func() {
 		dataplane.ExpectMembers(map[string][]string{"noncali": v4Members1And2})
 	})
 	It("CalicoIPSets() should ignore non-calico IP sets", func() {
-		dataplane.IPSetMembers["noncali"] =
-			set.From("10.0.0.1", "10.0.0.2")
-		dataplane.IPSetMembers[v4MainIPSetName] =
-			set.From("10.0.0.1", "10.0.0.3", "10.0.0.4")
+		dataplane.IPSetMembers["noncali"] = set.From("10.0.0.1", "10.0.0.2")
+		dataplane.IPSetMembers[v4MainIPSetName] = set.From("10.0.0.1", "10.0.0.3", "10.0.0.4")
 
 		ipsets, err := ipsets.CalicoIPSets()
 		Expect(err).NotTo(HaveOccurred())

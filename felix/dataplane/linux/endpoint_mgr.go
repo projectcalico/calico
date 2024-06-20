@@ -27,9 +27,11 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/dataplane/common"
+	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/ifacemonitor"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/iptables"
+	"github.com/projectcalico/calico/felix/nftables"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/rules"
@@ -110,7 +112,7 @@ func (c *endpointManagerCallbacks) InvokeRemoveWorkload(old *proto.WorkloadEndpo
 // endpointManager manages the dataplane resources that belong to each endpoint as well as
 // the "dispatch chains" that fan out packets to the right per-endpoint chain.
 //
-// It programs the relevant iptables chains (via the iptables.Table objects) along with
+// It programs the relevant iptables chains (via the generictables.Table objects) along with
 // per-endpoint routes (via the RouteTable).
 //
 // Since calculating the dispatch chains is fairly expensive, the main OnUpdate method
@@ -125,14 +127,16 @@ type endpointManager struct {
 	floatingIPsEnabled     bool
 
 	// Our dependencies.
-	rawTable     IptablesTable
-	mangleTable  IptablesTable
-	filterTable  IptablesTable
+	rawTable     Table
+	mangleTable  Table
+	filterTable  Table
 	ruleRenderer rules.RuleRenderer
 	routeTable   routetable.RouteTableInterface
 	writeProcSys procSysWriter
 	osStat       func(path string) (os.FileInfo, error)
 	epMarkMapper rules.EndpointMarkMapper
+	newMatch     func() generictables.MatchCriteria
+	actions      generictables.ActionFactory
 
 	// Pending updates, cleared in CompleteDeferredWork as the data is copied to the activeXYZ
 	// fields.
@@ -144,9 +148,9 @@ type endpointManager struct {
 	activeWlEndpoints                map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint
 	activeWlIfaceNameToID            map[string]proto.WorkloadEndpointID
 	activeUpIfaces                   set.Set[string]
-	activeWlIDToChains               map[proto.WorkloadEndpointID][]*iptables.Chain
-	activeWlDispatchChains           map[string]*iptables.Chain
-	activeEPMarkDispatchChains       map[string]*iptables.Chain
+	activeWlIDToChains               map[proto.WorkloadEndpointID][]*generictables.Chain
+	activeWlDispatchChains           map[string]*generictables.Chain
+	activeEPMarkDispatchChains       map[string]*generictables.Chain
 	ifaceNameToPolicyGroupChainNames map[string][]string /*chain name*/
 
 	activePolicySelectors map[proto.PolicyID]string
@@ -181,14 +185,14 @@ type endpointManager struct {
 	// hostEndpointsDirty is set to true when host endpoints are updated.
 	hostEndpointsDirty bool
 	// activeHostIfaceToChains maps host interface name to the chains that we've programmed.
-	activeHostIfaceToRawChains           map[string][]*iptables.Chain
-	activeHostIfaceToFiltChains          map[string][]*iptables.Chain
-	activeHostIfaceToMangleIngressChains map[string][]*iptables.Chain
-	activeHostIfaceToMangleEgressChains  map[string][]*iptables.Chain
+	activeHostIfaceToRawChains           map[string][]*generictables.Chain
+	activeHostIfaceToFiltChains          map[string][]*generictables.Chain
+	activeHostIfaceToMangleIngressChains map[string][]*generictables.Chain
+	activeHostIfaceToMangleEgressChains  map[string][]*generictables.Chain
 	// Dispatch chains that we've programmed for host endpoints.
-	activeHostRawDispatchChains    map[string]*iptables.Chain
-	activeHostFilterDispatchChains map[string]*iptables.Chain
-	activeHostMangleDispatchChains map[string]*iptables.Chain
+	activeHostRawDispatchChains    map[string]*generictables.Chain
+	activeHostFilterDispatchChains map[string]*generictables.Chain
+	activeHostMangleDispatchChains map[string]*generictables.Chain
 	// activeHostEpIDToIfaceNames records which interfaces we resolved each host endpoint to.
 	activeHostEpIDToIfaceNames map[proto.HostEndpointID][]string
 	// activeIfaceNameToHostEpID records which endpoint we resolved each host interface to.
@@ -210,9 +214,9 @@ type EndpointStatusUpdateCallback func(ipVersion uint8, id interface{}, status s
 type procSysWriter func(path, value string) error
 
 func newEndpointManager(
-	rawTable IptablesTable,
-	mangleTable IptablesTable,
-	filterTable IptablesTable,
+	rawTable Table,
+	mangleTable Table,
+	filterTable Table,
 	ruleRenderer rules.RuleRenderer,
 	routeTable routetable.RouteTableInterface,
 	ipVersion uint8,
@@ -225,6 +229,7 @@ func newEndpointManager(
 	bpfEndpointManager hepListener,
 	callbacks *common.Callbacks,
 	floatingIPsEnabled bool,
+	nft bool,
 ) *endpointManager {
 	return newEndpointManagerWithShims(
 		rawTable,
@@ -244,13 +249,14 @@ func newEndpointManager(
 		bpfEndpointManager,
 		callbacks,
 		floatingIPsEnabled,
+		nft,
 	)
 }
 
 func newEndpointManagerWithShims(
-	rawTable IptablesTable,
-	mangleTable IptablesTable,
-	filterTable IptablesTable,
+	rawTable Table,
+	mangleTable Table,
+	filterTable Table,
 	ruleRenderer rules.RuleRenderer,
 	routeTable routetable.RouteTableInterface,
 	ipVersion uint8,
@@ -265,9 +271,17 @@ func newEndpointManagerWithShims(
 	bpfEndpointManager hepListener,
 	callbacks *common.Callbacks,
 	floatingIPsEnabled bool,
+	nft bool,
 ) *endpointManager {
 	wlIfacesPattern := "^(" + strings.Join(wlInterfacePrefixes, "|") + ").*"
 	wlIfacesRegexp := regexp.MustCompile(wlIfacesPattern)
+
+	newMatchFn := iptables.Match
+	actions := iptables.Actions()
+	if nft {
+		newMatchFn = nftables.Match
+		actions = nftables.Actions()
+	}
 
 	return &endpointManager{
 		ipVersion:              ipVersion,
@@ -276,6 +290,9 @@ func newEndpointManagerWithShims(
 		bpfEnabled:             bpfEnabled,
 		bpfEndpointManager:     bpfEndpointManager,
 		floatingIPsEnabled:     floatingIPsEnabled,
+
+		newMatch: newMatchFn,
+		actions:  actions,
 
 		rawTable:     rawTable,
 		mangleTable:  mangleTable,
@@ -296,7 +313,7 @@ func newEndpointManagerWithShims(
 
 		activeWlEndpoints:                map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
 		activeWlIfaceNameToID:            map[string]proto.WorkloadEndpointID{},
-		activeWlIDToChains:               map[proto.WorkloadEndpointID][]*iptables.Chain{},
+		activeWlIDToChains:               map[proto.WorkloadEndpointID][]*generictables.Chain{},
 		ifaceNameToPolicyGroupChainNames: map[string][]string{},
 
 		activePolicySelectors: map[proto.PolicyID]string{},
@@ -316,18 +333,18 @@ func newEndpointManagerWithShims(
 		rawHostEndpoints:   map[proto.HostEndpointID]*proto.HostEndpoint{},
 		hostEndpointsDirty: true,
 
-		activeHostIfaceToRawChains:           map[string][]*iptables.Chain{},
-		activeHostIfaceToFiltChains:          map[string][]*iptables.Chain{},
-		activeHostIfaceToMangleIngressChains: map[string][]*iptables.Chain{},
-		activeHostIfaceToMangleEgressChains:  map[string][]*iptables.Chain{},
+		activeHostIfaceToRawChains:           map[string][]*generictables.Chain{},
+		activeHostIfaceToFiltChains:          map[string][]*generictables.Chain{},
+		activeHostIfaceToMangleIngressChains: map[string][]*generictables.Chain{},
+		activeHostIfaceToMangleEgressChains:  map[string][]*generictables.Chain{},
 
 		// Caches of the current dispatch chains indexed by chain name.  We use these to
 		// calculate deltas when we need to update the chains.
-		activeWlDispatchChains:         map[string]*iptables.Chain{},
-		activeHostFilterDispatchChains: map[string]*iptables.Chain{},
-		activeHostMangleDispatchChains: map[string]*iptables.Chain{},
-		activeHostRawDispatchChains:    map[string]*iptables.Chain{},
-		activeEPMarkDispatchChains:     map[string]*iptables.Chain{},
+		activeWlDispatchChains:         map[string]*generictables.Chain{},
+		activeHostFilterDispatchChains: map[string]*generictables.Chain{},
+		activeHostMangleDispatchChains: map[string]*generictables.Chain{},
+		activeHostRawDispatchChains:    map[string]*generictables.Chain{},
+		activeEPMarkDispatchChains:     map[string]*generictables.Chain{},
 		needToCheckDispatchChains:      true, // Need to do start-of-day update.
 		needToCheckEndpointMarkChains:  true, // Need to do start-of-day update.
 
@@ -886,15 +903,15 @@ func (m *endpointManager) hasSourceSpoofingConfiguration(interfaceName string) b
 
 func (m *endpointManager) updateRPFSkipChain() {
 	log.Debug("Updating RPF skip chain")
-	chain := &iptables.Chain{
+	chain := &generictables.Chain{
 		Name:  rules.ChainRpfSkip,
-		Rules: make([]iptables.Rule, 0),
+		Rules: make([]generictables.Rule, 0),
 	}
 	for interfaceName, addresses := range m.sourceSpoofingConfig {
 		for _, addr := range addresses {
-			chain.Rules = append(chain.Rules, iptables.Rule{
-				Match:  iptables.Match().InInterface(interfaceName).SourceNet(addr),
-				Action: iptables.AcceptAction{},
+			chain.Rules = append(chain.Rules, generictables.Rule{
+				Match:  m.newMatch().InInterface(interfaceName).SourceNet(addr),
+				Action: m.actions.Allow(),
 			})
 		}
 	}
@@ -1094,8 +1111,8 @@ func (m *endpointManager) updateHostEndpoints() {
 
 	if !m.bpfEnabled {
 		// Build iptables chains for normal and apply-on-forward host endpoint policy.
-		newHostIfaceFiltChains := map[string][]*iptables.Chain{}
-		newHostIfaceMangleEgressChains := map[string][]*iptables.Chain{}
+		newHostIfaceFiltChains := map[string][]*generictables.Chain{}
+		newHostIfaceMangleEgressChains := map[string][]*generictables.Chain{}
 		for ifaceName, id := range newIfaceNameToHostEpID {
 			log.WithField("id", id).Info("Updating host endpoint normal policy chains.")
 			hostEp := m.rawHostEndpoints[id]
@@ -1150,7 +1167,7 @@ func (m *endpointManager) updateHostEndpoints() {
 		}
 
 		// Build iptables chains for pre-DNAT host endpoint policy.
-		newHostIfaceMangleIngressChains := map[string][]*iptables.Chain{}
+		newHostIfaceMangleIngressChains := map[string][]*generictables.Chain{}
 		for ifaceName, id := range newPreDNATIfaceNameToHostEpID {
 			log.WithField("id", id).Info("Updating host endpoint mangle ingress chains.")
 			hostEp := m.rawHostEndpoints[id]
@@ -1199,7 +1216,7 @@ func (m *endpointManager) updateHostEndpoints() {
 	}
 
 	// Build iptables chains for untracked host endpoint policy.
-	newHostIfaceRawChains := map[string][]*iptables.Chain{}
+	newHostIfaceRawChains := map[string][]*generictables.Chain{}
 	for ifaceName, id := range newUntrackedIfaceNameToHostEpID {
 		log.WithField("id", id).Info("Updating host endpoint raw chains.")
 		hostEp := m.rawHostEndpoints[id]
@@ -1210,7 +1227,7 @@ func (m *endpointManager) updateHostEndpoints() {
 			ingressPolicyNames = hostEp.UntrackedTiers[0].IngressPolicies
 			egressPolicyNames = hostEp.UntrackedTiers[0].EgressPolicies
 		}
-		var rawChains []*iptables.Chain
+		var rawChains []*generictables.Chain
 		if m.bpfEnabled {
 			egressGroups := m.groupPolicies("default", egressPolicyNames, rules.PolicyDirectionOutbound)
 			addPolicyGroups(ifaceName, egressGroups)
@@ -1269,7 +1286,7 @@ func (m *endpointManager) updateHostEndpoints() {
 	// Rewrite the raw dispatch chains if they've changed.  Note, we use iptables for untracked
 	// egress policy even in BPF mode.
 	log.WithField("resolvedHostEpIds", newUntrackedIfaceNameToHostEpID).Debug("Rewrite raw dispatch chains?")
-	var newRawDispatchChains []*iptables.Chain
+	var newRawDispatchChains []*generictables.Chain
 	if m.bpfEnabled {
 		newRawDispatchChains = m.ruleRenderer.ToHostDispatchChains(newUntrackedIfaceNameToHostEpID, "")
 	} else {
@@ -1316,13 +1333,13 @@ func (m *endpointManager) updateHostEndpoints() {
 }
 
 // updateDispatchChains updates one of the sets of dispatch chains.  It sends the changes to the
-// given iptables.Table and records the updates in the activeChains map.
+// given generictables.Table and records the updates in the activeChains map.
 //
 // Calculating the minimum update prevents log spam and reduces the work needed in the Table.
 func (m *endpointManager) updateDispatchChains(
-	activeChains map[string]*iptables.Chain,
-	newChains []*iptables.Chain,
-	table IptablesTable,
+	activeChains map[string]*generictables.Chain,
+	newChains []*generictables.Chain,
+	table Table,
 ) {
 	seenChains := set.New[string]()
 	for _, newChain := range newChains {
