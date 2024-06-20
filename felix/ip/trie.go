@@ -331,14 +331,14 @@ func (t *CIDRTrie) Visit(f func(cidr CIDR, data interface{}) bool) {
 //
 // For example, given the following trie, where * indicates an intermediate node with no data associated with it:
 //
-//	  		  10.0.0.0/16
-//	  		       |
-//	  		+--------------+
-//	  	  |	   			     |
+//	       10.0.0.0/16
+//	            |
+//	   +----------------+
+//	   |                |
 //
-//	 10.0.1.0/24    10.0.2.0/24*
+//	10.0.1.0/24    10.0.2.0/24*
 //
-//	  	|                |
+//	   |                |
 //
 //	10.0.1.1/32     10.0.2.1/32
 //
@@ -354,9 +354,6 @@ func (t *CIDRTrie) ClosestDescendants(buf []CIDR, parent CIDR) []CIDR {
 	node := t.root.getNode(parent, true)
 	if node == nil {
 		return nil
-	}
-	if buf == nil {
-		buf = make([]CIDR, 0)
 	}
 
 	// For each sub-node, add it to the list of children.

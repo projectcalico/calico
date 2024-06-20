@@ -19,9 +19,10 @@ import (
 	"regexp"
 	"strings"
 
+	"sigs.k8s.io/knftables"
+
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/generictables"
-	"sigs.k8s.io/knftables"
 )
 
 var shellUnsafe = regexp.MustCompile(`[^\w @%+=:,./-]`)

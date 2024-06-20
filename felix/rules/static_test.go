@@ -138,7 +138,7 @@ var _ = Describe("Static", func() {
 								Action: AcceptAction{},
 							},
 							{
-								Match:  Match().MarkSingleBitSet(0x40).RPFCheckFailed(false),
+								Match:  Match().MarkSingleBitSet(0x40).RPFCheckFailed(),
 								Action: denyAction,
 							},
 							{
@@ -167,7 +167,7 @@ var _ = Describe("Static", func() {
 								Action: JumpAction{Target: ChainRpfSkip},
 							},
 							{
-								Match:  Match().MarkSingleBitSet(0x40).RPFCheckFailed(false),
+								Match:  Match().MarkSingleBitSet(0x40).RPFCheckFailed(),
 								Action: denyAction,
 							},
 							{
@@ -537,7 +537,7 @@ var _ = Describe("Static", func() {
 							Action: JumpAction{Target: ChainRpfSkip},
 						},
 						{
-							Match:  Match().MarkSingleBitSet(0x40).RPFCheckFailed(false),
+							Match:  Match().MarkSingleBitSet(0x40).RPFCheckFailed(),
 							Action: denyAction,
 						},
 						{
@@ -565,7 +565,7 @@ var _ = Describe("Static", func() {
 							Action: JumpAction{Target: ChainRpfSkip},
 						},
 						{
-							Match:  Match().MarkSingleBitSet(0x40).RPFCheckFailed(false),
+							Match:  Match().MarkSingleBitSet(0x40).RPFCheckFailed(),
 							Action: denyAction,
 						},
 						{
@@ -1681,7 +1681,7 @@ var _ = Describe("Static", func() {
 								Action: JumpAction{Target: ChainRpfSkip},
 							},
 							{
-								Match:  Match().MarkMatchesWithMask(0x40, 0x40).RPFCheckFailed(false),
+								Match:  Match().MarkMatchesWithMask(0x40, 0x40).RPFCheckFailed(),
 								Action: DropAction{},
 							},
 							{

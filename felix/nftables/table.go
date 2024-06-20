@@ -600,19 +600,13 @@ func (t *nftablesTable) loadDataplaneState() {
 }
 
 // expectedHashesForInsertAppendChain calculates the expected hashes for a whole top-level chain
-// given our inserts and appends.
-// Hashes for inserted rules are calculated first. If we're in append mode, that consists of numNonCalicoRules empty strings
-// followed by our inserted hashes; in insert mode, the opposite way round. Hashes for appended rules are calculated and
-// appended at the end.
+// given our inserts and appends. Hashes for inserted rules are calculated first.
 // To avoid recalculation, it returns the inserted rule hashes as a second output and appended rule hashes
 // a third output.
-func (t *nftablesTable) expectedHashesForInsertAppendChain(
-	chainName string,
-	numNonCalicoRules int,
-) (allHashes, ourInsertedHashes, ourAppendedHashes []string) {
+func (t *nftablesTable) expectedHashesForInsertAppendChain(chainName string) (allHashes, ourInsertedHashes, ourAppendedHashes []string) {
 	insertedRules := t.chainToInsertedRules[chainName]
 	appendedRules := t.chainToAppendedRules[chainName]
-	allHashes = make([]string, len(insertedRules)+len(appendedRules)+numNonCalicoRules)
+	allHashes = make([]string, len(insertedRules)+len(appendedRules))
 	features := t.featureDetector.GetFeatures()
 	if len(insertedRules) > 0 {
 		ourInsertedHashes = CalculateRuleHashes(chainName, insertedRules, features)
@@ -627,7 +621,7 @@ func (t *nftablesTable) expectedHashesForInsertAppendChain(
 		allHashes[i+offset] = hash
 	}
 
-	offset = len(insertedRules) + numNonCalicoRules
+	offset = len(insertedRules)
 	for i, hash := range ourAppendedHashes {
 		allHashes[i+offset] = hash
 	}
@@ -751,11 +745,11 @@ func (t *nftablesTable) InvalidateDataplaneCache(reason string) {
 func (t *nftablesTable) Apply() (rescheduleAfter time.Duration) {
 	now := t.timeNow()
 	defer func() {
-		if time.Since(now) > 500*time.Millisecond {
+		if time.Since(now) > time.Second {
 			t.logCxt.WithFields(log.Fields{
 				"applyTime":      time.Since(now),
 				"reasonForApply": t.reason,
-			}).Info("Updating nftables took >500ms")
+			}).Info("Updating nftables took >1s")
 		}
 	}()
 
@@ -790,9 +784,7 @@ func (t *nftablesTable) Apply() (rescheduleAfter time.Duration) {
 					tx.Delete(&knftables.Table{})
 					tx.Add(&knftables.Table{})
 
-					ctx, cancel := context.WithTimeout(context.Background(), t.contextTimeout)
-					defer cancel()
-					if err := t.nft.Run(ctx, tx); err != nil {
+					if err := t.runTransaction(tx); err != nil {
 						t.logCxt.WithError(err).Warn("Failed to delete table, continuing anyway")
 					}
 				}
@@ -963,7 +955,7 @@ func (t *nftablesTable) applyUpdates() error {
 		newRules := newChainToFullRules[chainName]
 
 		// Calculate the hashes for our inserted and appended rules.
-		newChainHashes, newInsertedRuleHashes, newAppendedRuleHashes := t.expectedHashesForInsertAppendChain(chainName, numEmptyStrings(previousHashes))
+		newChainHashes, newInsertedRuleHashes, newAppendedRuleHashes := t.expectedHashesForInsertAppendChain(chainName)
 
 		if reflect.DeepEqual(newChainHashes, previousHashes) {
 			// Chain is in sync, skip to next one.
@@ -1033,9 +1025,7 @@ func (t *nftablesTable) applyUpdates() error {
 			t.logCxt.Tracef("Updating nftables: %s", tx.String())
 		}
 
-		ctx, cancel := context.WithTimeout(context.Background(), t.contextTimeout)
-		defer cancel()
-		if err := t.nft.Run(ctx, tx); err != nil {
+		if err := t.runTransaction(tx); err != nil {
 			t.logCxt.WithField("tx", tx.String()).Error("Failed to run nft transaction")
 			return fmt.Errorf("error performing nft transaction: %s", err)
 		}
@@ -1050,11 +1040,10 @@ func (t *nftablesTable) applyUpdates() error {
 		dynamicMinPostWriteInterval := (t.peakNftablesReadTime + t.peakNftablesWriteTime) * 2
 		if t.postWriteInterval < dynamicMinPostWriteInterval {
 			t.logCxt.WithFields(log.Fields{
-				"dynamicMin":  dynamicMinPostWriteInterval,
-				"peakSave":    t.peakNftablesReadTime,
-				"peakRestore": t.peakNftablesWriteTime,
-			}).Debug(
-				"Post write interval shorter than time to read/write nftables, applying dynamic minimum.")
+				"dynamicMin": dynamicMinPostWriteInterval,
+				"peakRead":   t.peakNftablesReadTime,
+				"peakWrite":  t.peakNftablesWriteTime,
+			}).Debug("Post write interval shorter than time to read/write nftables, applying dynamic minimum.")
 			t.postWriteInterval = dynamicMinPostWriteInterval
 		}
 	}
@@ -1080,6 +1069,22 @@ func (t *nftablesTable) applyUpdates() error {
 	// perform update or delete operations.
 	t.InvalidateDataplaneCache("post-write")
 	return nil
+}
+
+func (t *nftablesTable) runTransaction(tx *knftables.Transaction) error {
+	startTime := t.timeNow()
+	defer func() {
+		restoreDuration := t.timeNow().Sub(startTime)
+		t.peakNftablesWriteTime = t.peakNftablesWriteTime * 99 / 100
+		if restoreDuration > t.peakNftablesWriteTime {
+			log.WithField("duration", restoreDuration).Debug("Updating nftables write-time peak duration.")
+			t.peakNftablesWriteTime = restoreDuration
+		}
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), t.contextTimeout)
+	defer cancel()
+	return t.nft.Run(ctx, tx)
 }
 
 // CheckRulesPresent returns list of rules with the hashes that are already
@@ -1113,14 +1118,15 @@ func (t *nftablesTable) InsertRulesNow(chain string, rules []generictables.Rule)
 
 	tx := t.nft.NewTransaction()
 	tx.Add(&knftables.Table{})
+	if baseChain, ok := baseChains[chain]; ok {
+		tx.Add(&baseChain)
+	}
 	for i, r := range rules {
 		tx.Insert(t.render.Render(chain, hashes[i], r, features))
 	}
 
 	// Run the transaction.
-	ctx, cancel := context.WithTimeout(context.Background(), t.contextTimeout)
-	defer cancel()
-	if err := t.nft.Run(ctx, tx); err != nil {
+	if err := t.runTransaction(tx); err != nil {
 		t.logCxt.WithField("tx", tx.String()).Error("Failed to run InsertRulesNow nft transaction")
 		return fmt.Errorf("error performing InsertRulesNow nft transaction: %s", err)
 	}
@@ -1144,14 +1150,4 @@ func CalculateRuleHashes(chainName string, rules []generictables.Rule, features 
 		Rules: rules,
 	}
 	return NewNFTRenderer("", 4).RuleHashes(&chain, features)
-}
-
-func numEmptyStrings(strs []string) int {
-	count := 0
-	for _, s := range strs {
-		if s == "" {
-			count++
-		}
-	}
-	return count
 }

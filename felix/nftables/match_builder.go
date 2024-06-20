@@ -179,15 +179,7 @@ func (m nftMatch) OutInterface(ifaceMatch string) generictables.MatchCriteria {
 	return m
 }
 
-func (m nftMatch) RPFCheckPassed(acceptLocal bool) generictables.MatchCriteria {
-	// TODO: acceptLocal is not supported in nftables mode.
-	m.clauses = append(m.clauses, "fib saddr . mark . iif oif != 0")
-	return m
-}
-
-func (m nftMatch) RPFCheckFailed(acceptLocal bool) generictables.MatchCriteria {
-	// TODO: acceptLocal is not supported in nftables mode.
-	// https://wiki.nftables.org/wiki-nftables/index.php/Matching_routing_information
+func (m nftMatch) RPFCheckFailed() generictables.MatchCriteria {
 	m.clauses = append(m.clauses, "fib saddr . mark . iif oif 0")
 	return m
 }

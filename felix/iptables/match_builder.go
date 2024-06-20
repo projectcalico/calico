@@ -103,19 +103,8 @@ func (m matchCriteria) OutInterface(ifaceMatch string) generictables.MatchCriter
 	return append(m, fmt.Sprintf("--out-interface %s", ifaceMatch))
 }
 
-func (m matchCriteria) RPFCheckPassed(acceptLocal bool) generictables.MatchCriteria {
-	ret := append(m, "-m rpfilter --validmark")
-	if acceptLocal {
-		ret = append(ret, "--accept-local")
-	}
-	return ret
-}
-
-func (m matchCriteria) RPFCheckFailed(acceptLocal bool) generictables.MatchCriteria {
+func (m matchCriteria) RPFCheckFailed() generictables.MatchCriteria {
 	ret := append(m, "-m rpfilter --invert --validmark")
-	if acceptLocal {
-		ret = append(ret, "--accept-local")
-	}
 	return ret
 }
 

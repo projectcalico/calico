@@ -16,7 +16,9 @@ package nftables_test
 
 import (
 	"context"
+	"time"
 
+	"github.com/sirupsen/logrus"
 	"sigs.k8s.io/knftables"
 )
 
@@ -24,17 +26,50 @@ func ptr[A any](v A) *A { return &v }
 
 func NewFake(fam knftables.Family, name string) *fakeNFT {
 	return &fakeNFT{
-		fake:         knftables.NewFake(fam, name),
-		transactions: make([]knftables.Transaction, 0),
+		family:          fam,
+		name:            name,
+		fake:            knftables.NewFake(fam, name),
+		transactions:    make([]knftables.Transaction, 0),
+		Time:            time.Unix(0, 0),
+		CumulativeSleep: 0,
 	}
 }
 
 type fakeNFT struct {
 	// Wrap a knftables fake instance.
-	fake *knftables.Fake
+	fake   *knftables.Fake
+	family knftables.Family
+	name   string
 
 	// Also track other information.
 	transactions []knftables.Transaction
+
+	// Track the current time.
+	Time            time.Time
+	CumulativeSleep time.Duration
+
+	// Allow execution of code in the path of various nftables methods.
+	PreWrite func()
+	PreList  func()
+}
+
+func (f *fakeNFT) Reset() {
+	f.transactions = make([]knftables.Transaction, 0)
+}
+
+func (f *fakeNFT) Sleep(duration time.Duration) {
+	f.CumulativeSleep += duration
+	f.Time = f.Time.Add(duration)
+	logrus.WithField("time", f.Time).Info("Updated current time after sleep")
+}
+
+func (f *fakeNFT) Now() time.Time {
+	return f.Time
+}
+
+func (f *fakeNFT) AdvanceTimeBy(amount time.Duration) {
+	f.Time = f.Time.Add(amount)
+	logrus.WithField("time", f.Time).Info("Updated current time")
 }
 
 func (f *fakeNFT) Fake() *knftables.Fake {
@@ -48,6 +83,11 @@ func (f *fakeNFT) NewTransaction() *knftables.Transaction {
 // Run runs a Transaction and returns the result. The IsNotFound and
 // IsAlreadyExists methods can be used to test the result.
 func (f *fakeNFT) Run(ctx context.Context, tx *knftables.Transaction) error {
+	if f.PreWrite != nil {
+		logrus.Info("Calling PreWrite")
+		f.PreWrite()
+		f.PreWrite = nil
+	}
 	f.transactions = append(f.transactions, *tx)
 	return f.fake.Run(ctx, tx)
 }
@@ -63,6 +103,11 @@ func (f *fakeNFT) Check(ctx context.Context, tx *knftables.Transaction) error {
 // or "map") in the table. If there are no such objects, this will return an empty
 // list and no error.
 func (f *fakeNFT) List(ctx context.Context, objectType string) ([]string, error) {
+	if f.PreList != nil {
+		logrus.Info("Calling PreList")
+		f.PreList()
+		f.PreList = nil
+	}
 	return f.fake.List(ctx, objectType)
 }
 

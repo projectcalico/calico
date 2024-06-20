@@ -32,6 +32,8 @@ import (
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/felix/fv/workload"
+	"github.com/projectcalico/calico/felix/iptables"
+	"github.com/projectcalico/calico/felix/nftables"
 	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
@@ -211,12 +213,12 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ apply on forward tests; wit
 						} else if NFTMode() {
 							out, err := f.ExecOutput("nft", "list", "table", "calico")
 							Expect(err).NotTo(HaveOccurred())
-							expectedName := rules.EndpointChainName("cali-thfw-", "any-interface-at-all")
+							expectedName := rules.EndpointChainName("cali-thfw-", "any-interface-at-all", nftables.MaxChainNameLength)
 							return (strings.Count(out, expectedName) > 0)
 						} else {
 							out, err := f.ExecOutput("iptables-save", "-t", "filter")
 							Expect(err).NotTo(HaveOccurred())
-							expectedName := rules.EndpointChainName("cali-thfw-", "any-interface-at-all")
+							expectedName := rules.EndpointChainName("cali-thfw-", "any-interface-at-all", iptables.MaxChainNameLength)
 							return (strings.Count(out, expectedName) > 0)
 						}
 					}

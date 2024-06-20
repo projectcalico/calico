@@ -1308,7 +1308,7 @@ func (r *DefaultRuleRenderer) StaticRawPreroutingChain(ipVersion uint8) *generic
 	// workloads from spoofing their IPs.  Note: non-privileged containers can't
 	// usually spoof but privileged containers and VMs can.
 	rules = append(rules,
-		r.RPFilter(ipVersion, markFromWorkload, markFromWorkload, r.OpenStackSpecialCasesEnabled, false, r.IptablesFilterDenyAction())...)
+		r.RPFilter(ipVersion, markFromWorkload, markFromWorkload, r.OpenStackSpecialCasesEnabled, r.IptablesFilterDenyAction())...)
 
 	rules = append(rules,
 		// Send non-workload traffic to the untracked policy chains.
@@ -1332,7 +1332,7 @@ func (r *DefaultRuleRenderer) StaticRawPreroutingChain(ipVersion uint8) *generic
 }
 
 // RPFilter returns rules that implement RPF
-func (r *DefaultRuleRenderer) RPFilter(ipVersion uint8, mark, mask uint32, openStackSpecialCasesEnabled, acceptLocal bool, dropActionOverride generictables.Action) []generictables.Rule {
+func (r *DefaultRuleRenderer) RPFilter(ipVersion uint8, mark, mask uint32, openStackSpecialCasesEnabled bool, dropActionOverride generictables.Action) []generictables.Rule {
 	rules := make([]generictables.Rule, 0, 2)
 
 	// For OpenStack, allow DHCP v4 packets with source 0.0.0.0.  These must be allowed before
@@ -1368,7 +1368,7 @@ func (r *DefaultRuleRenderer) RPFilter(ipVersion uint8, mark, mask uint32, openS
 	}
 
 	rules = append(rules, generictables.Rule{
-		Match:  r.NewMatch().MarkMatchesWithMask(mark, mask).RPFCheckFailed(acceptLocal),
+		Match:  r.NewMatch().MarkMatchesWithMask(mark, mask).RPFCheckFailed(),
 		Action: dropActionOverride,
 	})
 

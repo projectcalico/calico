@@ -4445,11 +4445,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				})
 			})
 
-			It("should have connectivity when DNAT redirects to-host traffic to a local pod.", func() {
-				if NFTMode() {
-					Skip("NFT does not support third-party rules")
-				}
-
+			It("FOCUS should have connectivity when DNAT redirects to-host traffic to a local pod.", func() {
 				protocol := "tcp"
 				if testOpts.protocol == "udp" {
 					protocol = "udp"
@@ -4458,16 +4454,19 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				hostIP0 := TargetIP(felixIP(0))
 				hostPort := uint16(8080)
 				var (
-					target string
-					tool   string
+					target    string
+					tool      string
+					nftFamily string
 				)
 
 				if testOpts.ipv6 {
 					target = fmt.Sprintf("[%s]:8055", w[0][0].IP)
 					tool = "ip6tables"
+					nftFamily = "ip6"
 				} else {
 					target = fmt.Sprintf("%s:8055", w[0][0].IP)
 					tool = "iptables"
+					nftFamily = "ip"
 				}
 
 				policy := api.NewNetworkPolicy()
@@ -4496,22 +4495,32 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 				By("installing 3rd party DNAT rules", func() {
 					// Install a DNAT in first felix
-					tc.Felixes[0].Exec(
-						tool, "-w", "10", "-W", "100000", "-t", "nat", "-A", "PREROUTING", "-p", protocol, "-m", protocol,
-						"--dport", fmt.Sprintf("%d", hostPort), "-j", "DNAT", "--to-destination", target)
+					if NFTMode() {
+						tc.Felixes[0].Exec("nft", "create", "table", nftFamily, "destnat")
+						tc.Felixes[0].Exec("nft", "add", "chain", nftFamily, "destnat", "prerouting", "{ type nat hook prerouting priority dstnat; }")
+						tc.Felixes[0].Exec("nft", "add", "rule", nftFamily, "destnat", "prerouting", protocol, "dport", fmt.Sprintf("%d", hostPort), "dnat", target)
+					} else {
+						tc.Felixes[0].Exec(
+							tool, "-w", "10", "-W", "100000", "-t", "nat", "-A", "PREROUTING", "-p", protocol, "-m", protocol,
+							"--dport", fmt.Sprintf("%d", hostPort), "-j", "DNAT", "--to-destination", target)
 
-					cc.ResetExpectations()
-					cc.ExpectSome(tc.Felixes[1], hostIP0, hostPort)
-					cc.ExpectSome(externalClient, hostIP0, hostPort)
-					cc.ExpectSome(w[1][0], hostIP0, hostPort)
-					cc.CheckConnectivity()
-					cc.ResetExpectations()
+						cc.ResetExpectations()
+						cc.ExpectSome(tc.Felixes[1], hostIP0, hostPort)
+						cc.ExpectSome(externalClient, hostIP0, hostPort)
+						cc.ExpectSome(w[1][0], hostIP0, hostPort)
+						cc.CheckConnectivity()
+						cc.ResetExpectations()
+					}
 				})
 
 				By("removing 3rd party rules and check connectivity is back to normal again", func() {
-					tc.Felixes[0].Exec(
-						tool, "-w", "10", "-W", "100000", "-t", "nat", "-D", "PREROUTING", "-p", protocol, "-m", protocol,
-						"--dport", fmt.Sprintf("%d", hostPort), "-j", "DNAT", "--to-destination", target)
+					if NFTMode() {
+						tc.Felixes[0].Exec("nft", "delete", "table", nftFamily, "destnat")
+					} else {
+						tc.Felixes[0].Exec(
+							tool, "-w", "10", "-W", "100000", "-t", "nat", "-D", "PREROUTING", "-p", protocol, "-m", protocol,
+							"--dport", fmt.Sprintf("%d", hostPort), "-j", "DNAT", "--to-destination", target)
+					}
 
 					expectNormalConnectivity()
 				})

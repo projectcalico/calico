@@ -310,13 +310,13 @@ type SelectorAndNamedPortIndex struct {
 	OnMemberAdded   NamedPortMatchCallback
 	OnMemberRemoved NamedPortMatchCallback
 
-	deduplicator MemberDeduplicator
+	deduplicator OverlapSuppressor
 
 	OnAlive        func()
 	lastLiveReport time.Time
 }
 
-func NewSelectorAndNamedPortIndex(deduplicate bool) *SelectorAndNamedPortIndex {
+func NewSelectorAndNamedPortIndex(supressOverlaps bool) *SelectorAndNamedPortIndex {
 	inheritIdx := SelectorAndNamedPortIndex{
 		endpointKVIdx: labelnamevalueindex.New[any, *endpointData]("endpoints"),
 		parentKVIdx:   labelnamevalueindex.New[string, *npParentData]("parents"),
@@ -332,10 +332,10 @@ func NewSelectorAndNamedPortIndex(deduplicate bool) *SelectorAndNamedPortIndex {
 		OnMemberRemoved: func(ipSetID string, member IPSetMember) {},
 		OnAlive:         func() {},
 	}
-	if deduplicate {
-		inheritIdx.deduplicator = NewMemberDeduplicator()
+	if supressOverlaps {
+		inheritIdx.deduplicator = NewMemberOverlapSuppressor()
 	} else {
-		inheritIdx.deduplicator = NewNoopMemberDeduplicator()
+		inheritIdx.deduplicator = NewNoopMemberOverlapSuppressor()
 	}
 	return &inheritIdx
 }
@@ -1035,18 +1035,18 @@ func (idx *SelectorAndNamedPortIndex) estimateParentEndpointScanCount(s labelnam
 	return (total*s.EstimatedItemsToScan() + maxNumToScan - 1) / maxNumToScan
 }
 
-func NewMemberDeduplicator() MemberDeduplicator {
+func NewMemberOverlapSuppressor() OverlapSuppressor {
 	return &memberDeduplicator{
 		v4tries: map[string]*ip.CIDRTrie{},
 		v6tries: map[string]*ip.CIDRTrie{},
 	}
 }
 
-func NewNoopMemberDeduplicator() MemberDeduplicator {
+func NewNoopMemberOverlapSuppressor() OverlapSuppressor {
 	return &noopMemberDeduplicator{}
 }
 
-type MemberDeduplicator interface {
+type OverlapSuppressor interface {
 	Add(set string, cidr ip.CIDR) (ip.CIDR, []ip.CIDR)
 	Remove(set string, cidr ip.CIDR) (ip.CIDR, []ip.CIDR)
 	DeleteIPSet(set string)

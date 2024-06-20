@@ -28,8 +28,7 @@ type MatchCriteria interface {
 	NotMarkMatchesWithMask(mark, mask uint32) MatchCriteria
 	InInterface(ifaceMatch string) MatchCriteria
 	OutInterface(ifaceMatch string) MatchCriteria
-	RPFCheckPassed(acceptLocal bool) MatchCriteria
-	RPFCheckFailed(acceptLocal bool) MatchCriteria
+	RPFCheckFailed() MatchCriteria
 	IPVSConnection() MatchCriteria
 	NotIPVSConnection() MatchCriteria
 	NotSrcAddrType(addrType AddrType, limitIfaceOut bool) MatchCriteria

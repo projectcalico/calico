@@ -1171,9 +1171,9 @@ func applyStateTransition(idx *SelectorAndNamedPortIndex, rec *testRecorder, s1,
 }
 
 var _ = Describe("MemberDeduplicator", func() {
-	var d MemberDeduplicator
+	var d OverlapSuppressor
 	BeforeEach(func() {
-		d = NewMemberDeduplicator()
+		d = NewMemberOverlapSuppressor()
 	})
 
 	It("should handle adding, masking, and removing members in the same IP set", func() {
