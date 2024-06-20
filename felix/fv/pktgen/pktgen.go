@@ -30,7 +30,9 @@ import (
 const usage = `pktgen: generates packets for Felix FV testing.
 
 Usage:
-  pktgen <ip_src> <ip_dst> <proto> [--ip-id=<ip_id>] [--port-src=<port_src>] [--port-dst=<port_dst>]`
+  pktgen <ip_src> <ip_dst> <proto> [--ip-id=<ip_id>] [--port-src=<port_src>] [--port-dst=<port_dst>]
+         [--tcp-syn] [--tcp-ack] [--tcp-fin] [--tcp-rst] [--tcp-ack-no=<ack_no>] [--tcp-seq-no=<seq_no>]
+`
 
 func main() {
 	log.SetLevel(log.InfoLevel)
@@ -97,6 +99,8 @@ func main() {
 	switch args["<proto>"] {
 	case "udp":
 		proto = layers.IPProtocolUDP
+	case "tcp":
+		proto = layers.IPProtocolTCP
 	default:
 		log.Fatal("unsupported protocol")
 	}
@@ -146,6 +150,60 @@ func main() {
 			iphdr.(*layers.IPv4).Length += udp.Length
 		} else {
 			iphdr.(*layers.IPv6).Length += udp.Length
+		}
+	case layers.IPProtocolTCP:
+		ack := uint32(0)
+		if args["--tcp-ack-no"] != nil {
+			a, err := strconv.Atoi(args["--tcp-ack-no"].(string))
+			if err != nil {
+				log.WithError(err).Fatal("tcp ack no not a number")
+			}
+			if a > math.MaxUint32 || a < 0 {
+				log.Fatal("Ack no must be an unsigned 32-bit integer")
+			}
+			ack = uint32(a)
+		}
+		seq := uint32(0)
+		if args["--tcp-seq-no"] != nil {
+			s, err := strconv.Atoi(args["--tcp-seq-no"].(string))
+			if err != nil {
+				log.WithError(err).Fatal("tcp seq no not a number")
+			}
+			if s > math.MaxUint32 || s < 0 {
+				log.Fatal("Seq no must be an unsigned 32-bit integer")
+			}
+			seq = uint32(s)
+		}
+		tcp := &layers.TCP{
+			SrcPort:    layers.TCPPort(sport),
+			DstPort:    layers.TCPPort(dport),
+			Ack:        ack,
+			Seq:        seq,
+			DataOffset: 5,
+		}
+
+		if args["--tcp-syn"] != nil {
+			tcp.SYN = args["--tcp-syn"].(bool)
+		}
+		if args["--tcp-ack"] != nil {
+			tcp.ACK = args["--tcp-ack"].(bool)
+		}
+		if args["--tcp-fin"] != nil {
+			tcp.FIN = args["--tcp-fin"].(bool)
+		}
+		if args["--tcp-rst"] != nil {
+			tcp.RST = args["--tcp-rst"].(bool)
+		}
+
+		if err := tcp.SetNetworkLayerForChecksum(iphdr.(gopacket.NetworkLayer)); err != nil {
+			log.WithError(err).Fatal("cannot checksum tcp")
+		}
+
+		l4 = tcp
+		if family == 4 {
+			iphdr.(*layers.IPv4).Length += uint16(int(tcp.DataOffset*4) + len(payload))
+		} else {
+			iphdr.(*layers.IPv6).Length += uint16(int(tcp.DataOffset*4) + len(payload))
 		}
 	}
 
