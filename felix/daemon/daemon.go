@@ -70,12 +70,6 @@ import (
 )
 
 const (
-	// Our default value for GOGC if it is not set.  This is the percentage that heap usage must
-	// grow by to trigger a garbage collection.  Go's default is 100, meaning that 50% of the
-	// heap can be lost to garbage.  We reduce it to this value to trade increased CPU usage for
-	// lower occupancy.
-	defaultGCPercent = 20
-
 	// String sent on the failure report channel to indicate we're shutting down for config
 	// change.
 	reasonConfigChanged      = "config changed"
@@ -122,14 +116,6 @@ func Run(configFile string, gitVersion string, buildDate string, gitRevision str
 	logutils.ConfigureEarlyLogging()
 
 	ctx := context.Background()
-
-	if os.Getenv("GOGC") == "" {
-		// Tune the GC to trade off a little extra CPU usage for significantly lower
-		// occupancy at high scale.  This is worthwhile because Felix runs per-host so
-		// any occupancy improvement is multiplied by the number of hosts.
-		log.Debugf("No GOGC value set, defaulting to %d%%.", defaultGCPercent)
-		debug.SetGCPercent(defaultGCPercent)
-	}
 
 	if len(buildinfo.GitVersion) == 0 && len(gitVersion) != 0 {
 		buildinfo.GitVersion = gitVersion
@@ -365,6 +351,8 @@ configRetry:
 		// a failure to load config, restart felix to avoid leaking connections.
 		exitWithCustomRC(configChangedRC, "Restarting to avoid leaking datastore connections")
 	}
+
+	doGoRuntimeSetup(configParams)
 
 	if configParams.BPFEnabled {
 		// Check for BPF dataplane support before we do anything that relies on the flag being set one way or another.
@@ -708,6 +696,33 @@ configRetry:
 	// Now monitor the worker process and our worker threads and shut
 	// down the process gracefully if they fail.
 	monitorAndManageShutdown(failureReportChan, dpDriverCmd, stopSignalChans)
+}
+
+func doGoRuntimeSetup(params *config.Config) {
+	var effectiveGOGC int
+	if os.Getenv("GOGC") == "" {
+		log.WithField("GOGC", params.GoGCThreshold).Info("Setting GOGC from configuration.")
+		debug.SetGCPercent(params.GoGCThreshold)
+		effectiveGOGC = params.GoGCThreshold
+	} else {
+		// Doesn't seem to be a way to get the current value without also
+		// setting it...
+		effectiveGOGC = debug.SetGCPercent(-1)
+		debug.SetGCPercent(effectiveGOGC)
+		log.WithField("GOGC", effectiveGOGC).Info("GOGC already set, not changing.")
+	}
+	limitFromEnv := os.Getenv("GOMEMLIMIT")
+	if limitFromEnv != "" {
+		log.WithField("GOMEMLIMIT", limitFromEnv).Info("Memory limit already set with GOMEMLIMIT, not changing.")
+		return
+	}
+	if params.GoMemoryLimitMB > -1 {
+		log.WithField("GoMemoryLimitMB", params.GoMemoryLimitMB).Info("Setting memory limit from configuration.")
+		memLimit := int64(params.GoMemoryLimitMB) * 1024 * 1024
+		debug.SetMemoryLimit(memLimit)
+	} else if effectiveGOGC < 0 {
+		log.Warn("GC is disabled and no memory limit is set.  Expect to run out of memory!")
+	}
 }
 
 func monitorAndManageShutdown(failureReportChan <-chan string, driverCmd *exec.Cmd, stopSignalChans []chan<- *sync.WaitGroup) {

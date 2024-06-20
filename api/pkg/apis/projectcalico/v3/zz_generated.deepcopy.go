@@ -1513,6 +1513,16 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(WindowsManageFirewallRulesMode)
 		**out = **in
 	}
+	if in.GoGCThreshold != nil {
+		in, out := &in.GoGCThreshold, &out.GoGCThreshold
+		*out = new(int)
+		**out = **in
+	}
+	if in.GoMemoryLimitMB != nil {
+		in, out := &in.GoMemoryLimitMB, &out.GoMemoryLimitMB
+		*out = new(int)
+		**out = **in
+	}
 	return
 }
 
