@@ -760,6 +760,10 @@ func (t *nftablesTable) Apply() (rescheduleAfter time.Duration) {
 		// Too long since we've forced a refresh.
 		t.InvalidateDataplaneCache("refresh timer")
 	}
+	for t.postWriteInterval != 0 && t.postWriteInterval < time.Hour && !now.Before(t.lastWriteTime.Add(t.postWriteInterval)) {
+		t.postWriteInterval *= 2
+		t.logCxt.WithField("newPostWriteInterval", t.postWriteInterval).Debug("Updating post-write interval")
+	}
 
 	// Retry until we succeed. This could be a transient programming error. It's also possible that we're bugged
 	// and trying to write bad data so we give up eventually.

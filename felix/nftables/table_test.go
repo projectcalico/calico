@@ -837,102 +837,26 @@ func describePostUpdateCheckTests(enableRefresh bool) {
 				BeforeEach(resetAndAdvance(5 * time.Millisecond))
 				It("should request correct delay", assertDelayMillis(2000))
 
-				// Describe("after dataplane speeds up again", func() {
-				// 	BeforeEach(func() {
-				// 		table.InsertOrAppendRules("filter-FORWARD", []generictables.Rule{
-				// 			{Action: DropAction{}},
-				// 		})
-				// 	})
-				// 	BeforeEach(resetAndAdvance(0))
-				//
-				// 	It("should request correct delay", func() {
-				// 		// After the first call, time won't advance any more so
-				// 		// the peak values will start to decay with each call.
-				// 		const decayedReadTime = readTime * 99 / 100 * 99 / 100
-				// 		const decayedWriteTime = writeTime * 99 / 100
-				// 		const expectedDelay = 2 * (decayedReadTime + decayedWriteTime)
-				// 		Expect(requestedDelay).To(Equal(expectedDelay))
-				// 	})
-				// })
+				Describe("after dataplane speeds up again", func() {
+					BeforeEach(func() {
+						table.InsertOrAppendRules("filter-FORWARD", []generictables.Rule{
+							{Action: DropAction{}},
+						})
+					})
+					BeforeEach(resetAndAdvance(0))
+
+					It("should request correct delay", func() {
+						// After the first call, time won't advance any more so
+						// the peak values will start to decay with each call.
+						const decayedReadTime = readTime * 99 / 100 * 99 / 100 * 99 / 100
+						const decayedWriteTime = writeTime * 99 / 100
+						const expectedDelay = 2 * (decayedReadTime + decayedWriteTime)
+						Expect(requestedDelay).To(Equal(expectedDelay))
+					})
+				})
 			})
 		})
 	})
-
-	// Describe("after advancing time 49ms", func() {
-	// 	BeforeEach(resetAndAdvance(49 * time.Millisecond))
-	// 	It("should not recheck", assertNoCheck)
-	// 	It("should request correct delay", assertDelayMillis(1))
-	//
-	// 	Describe("after advancing time to 50ms", func() {
-	// 		BeforeEach(resetAndAdvance(1 * time.Millisecond))
-	// 		It("should recheck", assertRecheck)
-	// 		It("should request correct delay", assertDelayMillis(50))
-	//
-	// 		Describe("after advancing time to 51ms", func() {
-	// 			BeforeEach(resetAndAdvance(1 * time.Millisecond))
-	// 			It("should not recheck", assertNoCheck)
-	// 			It("should request correct delay", assertDelayMillis(49))
-	//
-	// 			Describe("after advancing time to 100ms", func() {
-	// 				BeforeEach(resetAndAdvance(49 * time.Millisecond))
-	// 				It("should recheck", assertRecheck)
-	// 				It("should request correct delay", assertDelayMillis(100))
-	// 			})
-	// 		})
-	// 	})
-	// 	Describe("after advancing time to 999ms", func() {
-	// 		BeforeEach(resetAndAdvance(950 * time.Millisecond))
-	// 		It("should recheck", assertRecheck)
-	// 		It("should request correct delay", assertDelayMillis(601)) // i.e. at 1.6s
-	//
-	// 		if enableRefresh {
-	// 			Describe("after advancing time 60s", func() {
-	// 				BeforeEach(resetAndAdvance(60 * time.Second))
-	// 				It("should recheck", assertRecheck)
-	//
-	// 				// Now waiting for the next refresh interval.
-	// 				It("should request correct delay", assertDelayMillis(30000))
-	// 			})
-	// 			Describe("after advancing time by an hour", func() {
-	// 				BeforeEach(resetAndAdvance(time.Hour))
-	// 				It("should recheck", assertRecheck)
-	//
-	// 				// Now waiting for the next refresh interval.
-	// 				It("should request correct delay", assertDelayMillis(30000))
-	//
-	// 				Describe("after advancing time by an hour", func() {
-	// 					BeforeEach(resetAndAdvance(time.Hour))
-	// 					It("should recheck", assertRecheck)
-	//
-	// 					// Now waiting for the next refresh interval.
-	// 					It("should request correct delay", assertDelayMillis(30000))
-	// 				})
-	// 			})
-	// 		} else {
-	// 			Describe("after advancing time 60s", func() {
-	// 				BeforeEach(resetAndAdvance(60 * time.Second))
-	// 				It("should recheck", assertRecheck)
-	//
-	// 				// Refresh disabled, it just keeps increasing
-	// 				It("should request correct delay", assertDelayMillis(41401))
-	// 			})
-	// 			Describe("after advancing time by an hour", func() {
-	// 				BeforeEach(resetAndAdvance(time.Hour))
-	// 				// Last recheck due to the post-write check.
-	// 				It("should recheck", assertRecheck)
-	//
-	// 				// Then, it should give up.
-	// 				It("should request correct delay", assertDelayMillis(0))
-	//
-	// 				Describe("after advancing time by an hour", func() {
-	// 					BeforeEach(resetAndAdvance(time.Hour))
-	// 					It("should not recheck", assertNoCheck)
-	// 					It("should request correct delay", assertDelayMillis(0))
-	// 				})
-	// 			})
-	// 		}
-	// 	})
-	// })
 }
 
 var _ = Describe("Insert early rules", func() {
