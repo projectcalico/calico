@@ -23,7 +23,7 @@ import (
 )
 
 func NFTMode() bool {
-	return os.Getenv("FELIX_FV_NFTABLES") == "true"
+	return os.Getenv("FELIX_FV_NFTABLES") == "Enabled"
 }
 
 func logNFTDiags(f *infrastructure.Felix) {

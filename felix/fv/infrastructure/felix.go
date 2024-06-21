@@ -168,9 +168,9 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 		}
 	}
 
-	if os.Getenv("FELIX_FV_NFTABLES") == "true" {
-		log.Info("FELIX_FV_NFTABLES=true, enabling nftables with env var")
-		envVars["FELIX_NFTABLESENABLED"] = "true"
+	if os.Getenv("FELIX_FV_NFTABLES") == "Enabled" {
+		log.Info("Enabling nftables with env var")
+		envVars["FELIX_NFTABLESMODE"] = "Enabled"
 	}
 
 	if options.DelayFelixStart {
@@ -222,7 +222,7 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 		c.Exec("sysctl", "-w", "net.ipv6.conf.all.forwarding=0")
 	}
 
-	if os.Getenv("FELIX_FV_NFTABLES") == "true" {
+	if os.Getenv("FELIX_FV_NFTABLES") == "Enabled" {
 		// Flush all rules to make sure iptables doesn't interfere with nftables.
 		for _, table := range []string{"filter", "nat", "mangle", "raw"} {
 			c.Exec("iptables", "-F", "-t", table)

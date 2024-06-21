@@ -804,7 +804,7 @@ func (c *Container) NumNFTSetMembers(ipVersion int, setName string) int {
 }
 
 func (c *Container) IPSetNames() []string {
-	if os.Getenv("FELIX_FV_NFTABLES") == "true" {
+	if os.Getenv("FELIX_FV_NFTABLES") == "Enabled" {
 		return c.nftablesSetNames()
 	}
 

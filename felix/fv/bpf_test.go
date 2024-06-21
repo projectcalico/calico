@@ -4445,7 +4445,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				})
 			})
 
-			It("FOCUS should have connectivity when DNAT redirects to-host traffic to a local pod.", func() {
+			It("should have connectivity when DNAT redirects to-host traffic to a local pod.", func() {
 				protocol := "tcp"
 				if testOpts.protocol == "udp" {
 					protocol = "udp"

@@ -354,7 +354,7 @@ fv-bpf:
 	$(MAKE) fv FELIX_FV_ENABLE_BPF=true
 
 fv-nft:
-	$(MAKE) fv FELIX_FV_NFTABLES=true
+	$(MAKE) fv FELIX_FV_NFTABLES=Enabled
 
 check-wireguard:
 	fv/wireguard-available || ( echo "WireGuard not available."; exit 1 )
