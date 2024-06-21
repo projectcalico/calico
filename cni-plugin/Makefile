@@ -167,7 +167,7 @@ $(BIN)/host-local $(BIN)/loopback $(BIN)/portmap $(BIN)/tuning $(BIN)/bandwidth 
 	cp containernetworking-plugins/bin/bandwidth $(BIN)
 
 .PHONY: fetch-cni-bins fetch-win-cni-bins
-fetch-cni-bins: $(BIN)/loopback $(BIN)/host-local $(BIN)/portmap $(BIN)/tuning $(BIN)/bandwidth
+fetch-cni-bins: $(BIN)/flannel $(BIN)/loopback $(BIN)/host-local $(BIN)/portmap $(BIN)/tuning $(BIN)/bandwidth
 fetch-win-cni-bins: $(WINDOWS_BIN)/flannel.exe
 
 $(BIN)/flannel:
