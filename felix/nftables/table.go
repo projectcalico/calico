@@ -40,9 +40,8 @@ import (
 )
 
 const (
-	MaxChainNameLength   = knftables.NameLengthMax
-	minPostWriteInterval = 50 * time.Millisecond
-	defaultTimeout       = 30 * time.Second
+	MaxChainNameLength = knftables.NameLengthMax
+	defaultTimeout     = 30 * time.Second
 )
 
 var (
@@ -188,11 +187,8 @@ type nftablesTable struct {
 
 	// Record when we did our most recent reads and writes of the table.  We use these to
 	// calculate the next time we should force a refresh.
-	lastReadTime             time.Time
-	lastWriteTime            time.Time
-	initialPostWriteInterval time.Duration
-	postWriteInterval        time.Duration
-	refreshInterval          time.Duration
+	lastReadTime    time.Time
+	refreshInterval time.Duration
 
 	// Estimates for the time taken to do an nftables read / write.
 	// When an nft command exceeds the one of these we update them immediately.
@@ -226,8 +222,7 @@ type TableOptions struct {
 	// used for testing.
 	NewDataplane func(knftables.Family, string) (knftables.Interface, error)
 
-	RefreshInterval   time.Duration
-	PostWriteInterval time.Duration
+	RefreshInterval time.Duration
 
 	// SleepOverride for tests, if non-nil, replacement for time.Sleep()
 	SleepOverride func(d time.Duration)
@@ -275,14 +270,6 @@ func NewTable(
 
 		// Base chains are referred to by definition.
 		refcounts[baseChain.Name] += 1
-	}
-
-	if options.PostWriteInterval <= minPostWriteInterval {
-		log.WithFields(log.Fields{
-			"setValue": options.PostWriteInterval,
-			"default":  minPostWriteInterval,
-		}).Info("PostWriteInterval too small, defaulting.")
-		options.PostWriteInterval = minPostWriteInterval
 	}
 
 	// Allow override of exec.Command() and time.Sleep() for test purposes.
@@ -339,14 +326,6 @@ func NewTable(
 		).WithFields(logFields),
 		hashCommentPrefix: hashPrefix,
 		ourChainsRegexp:   ourChainsRegexp,
-
-		// Initialise the write tracking as if we'd just done a write, this will trigger
-		// us to recheck the dataplane at exponentially increasing intervals at startup.
-		// Note: if we didn't do this, the calculation logic would need to be modified
-		// to cope with zero values for these fields.
-		lastWriteTime:            now(),
-		initialPostWriteInterval: options.PostWriteInterval,
-		postWriteInterval:        options.PostWriteInterval,
 
 		refreshInterval: options.RefreshInterval,
 
@@ -760,10 +739,6 @@ func (t *nftablesTable) Apply() (rescheduleAfter time.Duration) {
 		// Too long since we've forced a refresh.
 		t.InvalidateDataplaneCache("refresh timer")
 	}
-	for t.postWriteInterval != 0 && t.postWriteInterval < time.Hour && !now.Before(t.lastWriteTime.Add(t.postWriteInterval)) {
-		t.postWriteInterval *= 2
-		t.logCxt.WithField("newPostWriteInterval", t.postWriteInterval).Debug("Updating post-write interval")
-	}
 
 	// Retry until we succeed. This could be a transient programming error. It's also possible that we're bugged
 	// and trying to write bad data so we give up eventually.
@@ -825,19 +800,15 @@ func (t *nftablesTable) Apply() (rescheduleAfter time.Duration) {
 
 	// Check whether we need to be rescheduled and how soon.
 	if t.refreshInterval > 0 {
-		// Refresh interval is set, start with that.
 		lastReadToNow = now.Sub(t.lastReadTime)
+
+		// Refresh interval is set, start with that.
+		logrus.WithFields(logrus.Fields{
+			"lastReadToNow":   lastReadToNow,
+			"refreshInterval": t.refreshInterval,
+		}).Debug("Calculating reschedule time")
 		rescheduleAfter = t.refreshInterval - lastReadToNow
 	}
-	if t.postWriteInterval < time.Hour {
-		postWriteResched := t.lastWriteTime.Add(t.postWriteInterval).Sub(now)
-		if postWriteResched <= 0 {
-			rescheduleAfter = 1 * time.Millisecond
-		} else if t.refreshInterval <= 0 || postWriteResched < rescheduleAfter {
-			rescheduleAfter = postWriteResched
-		}
-	}
-
 	return
 }
 
@@ -1032,23 +1003,6 @@ func (t *nftablesTable) applyUpdates() error {
 		if err := t.runTransaction(tx); err != nil {
 			t.logCxt.WithField("tx", tx.String()).Error("Failed to run nft transaction")
 			return fmt.Errorf("error performing nft transaction: %s", err)
-		}
-		t.lastWriteTime = t.timeNow()
-		t.postWriteInterval = t.initialPostWriteInterval
-	}
-
-	if t.postWriteInterval != 0 {
-		// If nft is taking a long time (as measured by
-		// the peakNftables fields), make sure that we don't try to
-		// recheck the nftables state too soon.
-		dynamicMinPostWriteInterval := (t.peakNftablesReadTime + t.peakNftablesWriteTime) * 2
-		if t.postWriteInterval < dynamicMinPostWriteInterval {
-			t.logCxt.WithFields(log.Fields{
-				"dynamicMin": dynamicMinPostWriteInterval,
-				"peakRead":   t.peakNftablesReadTime,
-				"peakWrite":  t.peakNftablesWriteTime,
-			}).Debug("Post write interval shorter than time to read/write nftables, applying dynamic minimum.")
-			t.postWriteInterval = dynamicMinPostWriteInterval
 		}
 	}
 

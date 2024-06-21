@@ -16,7 +16,6 @@ package nftables_test
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"sigs.k8s.io/knftables"
@@ -750,114 +749,6 @@ var _ = Describe("Table with an empty dataplane", func() {
 		})
 	})
 })
-
-var _ = Describe("Tests of post-update recheck behaviour with refresh timer", func() {
-	describePostUpdateCheckTests(true)
-})
-
-//	var _ = Describe("Tests of post-update recheck behaviour with no refresh timer (nft)", func() {
-//		describePostUpdateCheckTests(false, "nft")
-//	})
-func describePostUpdateCheckTests(enableRefresh bool) {
-	var table generictables.Table
-	var requestedDelay time.Duration
-	var featureDetector *environment.FeatureDetector
-	var f *fakeNFT
-
-	BeforeEach(func() {
-		f = NewFake(knftables.IPv4Family, "calico")
-		newDataplane := func(_ knftables.Family, _ string) (knftables.Interface, error) {
-			return f, nil
-		}
-		featureDetector = environment.NewFeatureDetector(nil)
-		options := TableOptions{
-			NewDataplane:     newDataplane,
-			SleepOverride:    f.Sleep,
-			NowOverride:      f.Now,
-			LookPathOverride: testutils.LookPathNoLegacy,
-			OpRecorder:       logutils.NewSummarizer("test loop"),
-		}
-		if enableRefresh {
-			options.RefreshInterval = 30 * time.Second
-		}
-		table = NewTable(
-			"calico",
-			4,
-			rules.RuleHashPrefix,
-			featureDetector,
-			options,
-		)
-		table.InsertOrAppendRules("filter-FORWARD", []generictables.Rule{
-			{Action: DropAction{}},
-		})
-		table.Apply()
-	})
-
-	resetAndAdvance := func(amount time.Duration) func() {
-		return func() {
-			f.Reset()
-			By(fmt.Sprintf("Advancing time by %v", amount))
-			f.AdvanceTimeBy(amount)
-			requestedDelay = table.Apply()
-		}
-	}
-	assertDelayMillis := func(delay int64) func() {
-		return func() {
-			Expect(requestedDelay).To(Equal(time.Duration(delay) * time.Millisecond))
-		}
-	}
-
-	Describe("with slow dataplane", func() {
-		const readTime = 200 * time.Millisecond
-		const writeTime = 800 * time.Millisecond
-
-		BeforeEach(func() {
-			f.PreList = func() {
-				By(fmt.Sprintf("Advancing time by %v to simulate a slow List call", readTime))
-				f.AdvanceTimeBy(readTime)
-			}
-			f.PreWrite = func() {
-				By(fmt.Sprintf("Advancing time by %v to simulate a slow transaction", writeTime))
-				f.AdvanceTimeBy(writeTime)
-			}
-
-			// Just a random change to trigger a save/restore.
-			table.InsertOrAppendRules("filter-FORWARD", []generictables.Rule{
-				{Action: AcceptAction{}},
-			})
-			table.Apply()
-		})
-
-		// Recheck will be delayed to at least (save time + restore time) * 2.
-		Describe("after advancing time 1995ms", func() {
-			BeforeEach(resetAndAdvance(1995 * time.Millisecond))
-			It("should request correct delay", assertDelayMillis(5))
-
-			Describe("after advancing time to 2s", func() {
-				BeforeEach(resetAndAdvance(5 * time.Millisecond))
-				It("should request correct delay", assertDelayMillis(2000))
-
-				Describe("after dataplane speeds up again", func() {
-					BeforeEach(func() {
-						table.InsertOrAppendRules("filter-FORWARD", []generictables.Rule{
-							{Action: DropAction{}},
-						})
-					})
-					BeforeEach(resetAndAdvance(0))
-
-					It("should request correct delay", func() {
-						// After the first call, time won't advance any more so
-						// the peak values will start to decay with each call.
-						const decayedReadTime = readTime * 99 / 100 * 99 / 100 * 99 / 100
-						const decayedWriteTime = writeTime * 99 / 100
-						const expectedDelay = 2 * (decayedReadTime + decayedWriteTime)
-						Expect(requestedDelay).To(Equal(expectedDelay))
-					})
-				})
-			})
-		})
-	})
-}
 
 var _ = Describe("Insert early rules", func() {
 	var table generictables.Table
