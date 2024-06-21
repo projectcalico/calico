@@ -142,15 +142,14 @@ $(DEPLOY_CONTAINER_FIPS_MARKER): Dockerfile build fetch-cni-bins
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
 	touch $@
 
-CN_FLAGS=-ldflags "-X github.com/containernetworking/plugins/pkg/utils/buildversion.BuildVersion=$(GIT_VERSION)"
-
-CONTAINERNETWORKING_PLUGINS_CREATED=.containernetworking-plugins-$(CNI_VERSION)-$(ARCH).created
 CONTAINERNETWORKING_PLUGINS_CLONED=.containernetworking-plugins-$(CNI_VERSION).cloned
 
 $(CONTAINERNETWORKING_PLUGINS_CLONED):
 	rm -rf containernetworking-plugins .containernetworking-plugins-*.cloned
 	git clone --single-branch --branch $(CNI_VERSION) https://github.com/projectcalico/containernetworking-plugins.git
 	touch $@
+
+CN_FLAGS=-ldflags "-X github.com/containernetworking/plugins/pkg/utils/buildversion.BuildVersion=$(GIT_VERSION)"
 
 $(BIN)/host-local $(BIN)/loopback $(BIN)/portmap $(BIN)/tuning $(BIN)/bandwidth &: $(CONTAINERNETWORKING_PLUGINS_CLONED)
 	docker run \
