@@ -36,12 +36,6 @@ func NewGoBuild() GoBuildImage {
 	}
 }
 
-// WithVersion sets the version of the GoBuildImage
-func (g GoBuildImage) WithVersion(version string) GoBuildImage {
-	g.imageVersion = version
-	return g
-}
-
 // Image returns the image name and version
 // i.e "calico/go-build:<version>"
 func (g GoBuildImage) Image() string {
@@ -69,6 +63,8 @@ type GoBuildRunner struct {
 
 // NewGoBuildRunner returns a new GoBuildRunner
 func NewGoBuildRunner(packageName string) *GoBuildRunner {
+	currentUser, _ := user.Current()
+	gomodCacheDir := goModCacheDir(currentUser)
 	goBuild := NewGoBuild()
 	return &GoBuildRunner{
 		GoBuildImage: goBuild,
@@ -88,7 +84,9 @@ func NewGoBuildRunner(packageName string) *GoBuildRunner {
 		},
 		hostConfig: &container.HostConfig{
 			NetworkMode: "host",
-			Binds:       []string{},
+			Binds: []string{
+				fmt.Sprintf("%s:%s:rw", gomodCacheDir, modCacheDir),
+			},
 		},
 	}
 }
@@ -98,6 +96,10 @@ func (g *GoBuildRunner) WithVersion(version string) *GoBuildRunner {
 	g.imageVersion = version
 	g.containerConfig.Image = g.Image()
 	return g
+}
+
+func (g *GoBuildRunner) Version() string {
+	return g.imageVersion
 }
 
 // WithEnv sets the environment variables for the container
@@ -114,6 +116,17 @@ func (g *GoBuildRunner) getBindMountSource(targetPath string) string {
 		}
 	}
 	return ""
+}
+
+func (g *GoBuildRunner) hasBind(bind string) bool {
+	_parts := strings.Split(bind, ":")
+	for _, mount := range g.hostConfig.Binds {
+		parts := strings.Split(mount, ":")
+		if len(parts) >= 2 && parts[0] == _parts[0] && parts[1] == _parts[1] {
+			return true
+		}
+	}
+	return false
 }
 
 func (g *GoBuildRunner) hasBindMount(targetPath string) bool {
@@ -133,7 +146,12 @@ func (g *GoBuildRunner) removeBindMount(targetPath string) {
 
 // WithVolume sets the volume for the container
 func (g *GoBuildRunner) WithVolume(volume ...string) *GoBuildRunner {
-	g.hostConfig.Binds = append(g.hostConfig.Binds, volume...)
+	for _, v := range volume {
+		if g.hasBind(v) {
+			logrus.WithField("volume", v).Fatal("volume already exists")
+		}
+		g.hostConfig.Binds = append(g.hostConfig.Binds, v)
+	}
 	return g
 }
 
@@ -177,10 +195,7 @@ func (g *GoBuildRunner) Run() {
 		g.WithEnv("LOCAL_USER_ID=" + currentUser.Uid)
 	}
 
-	if !g.hasBindMount(modCacheDir) {
-		g.UsingGoModCache(goModCacheDir(currentUser))
-	}
-	goModCache := g.getBindMountSource("/go/pkg/mod")
+	goModCache := g.getBindMountSource(modCacheDir)
 	dirs := []string{"bin", ".go-pkg-cache", goModCache}
 	for _, dir := range dirs {
 		err := file.CreateDirIfNotExist(dir)
@@ -209,7 +224,7 @@ func (g *GoBuildRunner) Run() {
 // If GOPATH is set and uses multiple paths,
 // use the first path in GOPATH as that is the default used by go module.
 func goModCacheDir(currentUser *user.User) string {
-	dir := currentUser.HomeDir + "/go/pkg/mod"
+	dir := currentUser.HomeDir + modCacheDir
 	if os.Getenv("GOPATH") != "" {
 		gopaths := strings.Split(os.Getenv("GOPATH"), ":")
 		dir = gopaths[0] + "/pkg/mod"

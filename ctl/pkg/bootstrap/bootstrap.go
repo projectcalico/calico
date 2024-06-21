@@ -3,16 +3,24 @@ package bootstrap
 import (
 	"github.com/goyek/goyek/v2"
 	"github.com/goyek/x/boot"
+	"github.com/projectcalico/ctl/pkg/ctl"
 )
 
 var packageName *string
 
-func GetPackageName() string {
+// getPackageName returns the package name.
+func getPackageName() string {
 	return *packageName
 }
 
+// setPackageName sets the package name.
 func setPackageName(name string) {
 	packageName = &name
+}
+
+// NewGoBuildRunner returns a new instance of the GoBuildRunner.
+func NewGoBuildRunner() *ctl.GoBuildRunner {
+	return ctl.NewGoBuildRunner(getPackageName())
 }
 
 // Main is the entrypoint for the goyek build system.
