@@ -1,11 +1,11 @@
 package main
 
 import (
-	goyekCommon "github.com/projectcalico/ctl/goyek"
+	"github.com/projectcalico/ctl/pkg/bootstrap"
 )
 
 const packageName = "github.com/projectcalico/ctl"
 
 func main() {
-	goyekCommon.Main(packageName)
+	bootstrap.Main(packageName)
 }
