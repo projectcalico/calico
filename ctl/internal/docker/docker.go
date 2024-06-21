@@ -52,6 +52,35 @@ func (d *DockerRunner) PullImage() {
 	}
 }
 
+func (d *DockerRunner) RemoveImage() {
+	if d.image == "" {
+		logrus.Fatal("image is not set")
+	}
+	logrus.Debug("Checking if ", d.image, " image exists")
+	images, err := d.dockerClient.ImageList(context.Background(), types.ImageListOptions{
+		Filters: filters.NewArgs(filters.Arg("reference", d.image)),
+	})
+	if err != nil {
+		logrus.WithError(err).Fatal("failed to list images")
+	}
+	if len(images) == 0 {
+		logrus.Debug(d.image, " image does not exist")
+		return
+	}
+
+	for _, image := range images {
+		logrus.WithField("image", image.ID).Debug("Removing image")
+		_, err := d.dockerClient.ImageRemove(context.Background(), image.ID, types.ImageRemoveOptions{
+			Force:         true,
+			PruneChildren: true,
+		})
+		if err != nil {
+			logrus.WithField("image", image.ID).WithError(err).Fatal("failed to remove image")
+		}
+		logrus.WithField("image", image.ID).Debug("Image removed")
+	}
+}
+
 func (d *DockerRunner) RunContainer(containerConfig *container.Config, hostConfig *container.HostConfig) container.CreateResponse {
 	logrus.Debug("Creating container")
 	response, err := d.dockerClient.ContainerCreate(context.Background(), containerConfig, hostConfig, nil, nil, "")
