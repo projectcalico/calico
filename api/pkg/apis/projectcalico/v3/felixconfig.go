@@ -648,6 +648,30 @@ type FelixConfigurationSpec struct {
 	// WindowsManageFirewallRules configures whether or not Felix will program Windows Firewall rules. (to allow inbound access to its own metrics ports) [Default: Disabled]
 	// +optional
 	WindowsManageFirewallRules *WindowsManageFirewallRulesMode `json:"windowsManageFirewallRules,omitempty" validate:"omitempty,oneof=Enabled Disabled"`
+
+	// GoGCThreshold Sets the Go runtime's garbage collection threshold.  I.e. the percentage that the heap is
+	// allowed to grow before garbage collection is triggered.  In general, doubling the value halves the CPU time
+	// spent doing GC, but it also doubles peak GC memory overhead.  A special value of -1 can be used
+	// to disable GC entirely; this should only be used in conjunction with the GoMemoryLimitMB setting.
+	//
+	// This setting is overridden by the GOGC environment variable.
+	//
+	// [Default: 40]
+	// +optional
+	GoGCThreshold *int `json:"goGCThreshold,omitempty" validate:"omitempty,gte=-1"`
+
+	// GoMemoryLimitMB sets a (soft) memory limit for the Go runtime in MB.  The Go runtime will try to keep its memory
+	// usage under the limit by triggering GC as needed.  To avoid thrashing, it will exceed the limit if GC starts to
+	// take more than 50% of the process's CPU time.  A value of -1 disables the memory limit.
+	//
+	// Note that the memory limit, if used, must be considerably less than any hard resource limit set at the container
+	// or pod level.  This is because felix is not the only process that must run in the container or pod.
+	//
+	// This setting is overridden by the GOMEMLIMIT environment variable.
+	//
+	// [Default: -1]
+	// +optional
+	GoMemoryLimitMB *int `json:"goMemoryLimitMB,omitempty" validate:"omitempty,gte=-1"`
 }
 
 type HealthTimeoutOverride struct {
