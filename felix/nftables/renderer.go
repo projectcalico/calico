@@ -83,8 +83,8 @@ func (r *nftRenderer) renderRule(rule *generictables.Rule, features *environment
 	inner := strings.Join(fragments, " ")
 	if len(inner) == 0 {
 		// If the rule is empty, it will cause nft to fail with a cryptic error message.
-		// Instead, we'll just use a counter.
-		return "counter"
+		// Instead, we'll just use a continue action to make the rule a no-op.
+		return "continue"
 	}
 	return inner
 }

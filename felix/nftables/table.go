@@ -145,7 +145,6 @@ type nftablesTable struct {
 	// featureDetector detects the features of the dataplane.
 	featureDetector environment.FeatureDetectorIface
 
-	// TODO: There are no kernel chains in nftables. We should simplify this for nftables.
 	// chainToInsertedRules maps from chain name to a list of rules to be inserted at the start
 	// of that chain.  Rules are written with rule hash comments.  The Table cleans up inserted
 	// rules with unknown hashes.
@@ -666,7 +665,7 @@ func (t *nftablesTable) attemptToGetHashesAndRulesFromDataplane() (hashes map[st
 	// Add chains. We need to query this separately, as chains may exist without rules.
 	allChains, err := t.nft.List(ctx, "chain")
 	if err != nil {
-		if isNotFound(err) {
+		if knftables.IsNotFound(err) {
 			err = nil
 			return
 		}
@@ -680,7 +679,7 @@ func (t *nftablesTable) attemptToGetHashesAndRulesFromDataplane() (hashes map[st
 	// List rules and extract the hashes.
 	allRules, err := t.nft.ListRules(ctx, "")
 	if err != nil {
-		if isNotFound(err) {
+		if knftables.IsNotFound(err) {
 			err = nil
 			return
 		}
@@ -702,12 +701,6 @@ func (t *nftablesTable) attemptToGetHashesAndRulesFromDataplane() (hashes map[st
 		}
 	}
 	return
-}
-
-// isNotFound helps distinguish errors resulting from the table not yet being programmed.
-func isNotFound(err error) bool {
-	return strings.Contains(err.Error(), "no such table") ||
-		strings.Contains(err.Error(), "No such file or directory")
 }
 
 func (t *nftablesTable) InvalidateDataplaneCache(reason string) {
@@ -923,7 +916,6 @@ func (t *nftablesTable) applyUpdates() error {
 		copy(newChainToFullRules[chain], rules)
 	}
 
-	// TODO: Should these be treated any differently in nftables mode? They are owned by us.
 	// Now calculate nftables updates for our inserted and appended rules, which are used to hook top-level chains.
 	t.dirtyBaseChains.Iter(func(chainName string) error {
 		previousHashes := t.chainToDataplaneHashes[chainName]
@@ -990,7 +982,7 @@ func (t *nftablesTable) applyUpdates() error {
 		return nil // Delay clearing the set until we've programmed nftables.
 	})
 
-	if len(tx.String()) == 0 {
+	if tx.NumOperations() == 0 {
 		t.logCxt.Debug("Update ended up being no-op, skipping call to nftables.")
 	} else {
 		// Run the transaction.

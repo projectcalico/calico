@@ -559,7 +559,7 @@ func (s *IPSets) tryUpdates() error {
 		})
 	}
 
-	if len(tx.String()) > 0 {
+	if tx.NumOperations() > 0 {
 		ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 		defer cancel()
 		if err := s.nft.Run(ctx, tx); err != nil {
