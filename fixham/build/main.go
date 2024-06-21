@@ -2,10 +2,11 @@ package main
 
 import (
 	"github.com/goyek/goyek/v2"
-	"github.com/projectcalico/ctl/pkg/bootstrap"
+
+	"github.com/projectcalico/fixham/pkg/bootstrap"
 )
 
-const packageName = "github.com/projectcalico/ctl"
+const packageName = "github.com/projectcalico/fixham"
 
 var _ = bootstrap.DefineCleanTask([]string{"./bin/*"}, nil, nil)
 

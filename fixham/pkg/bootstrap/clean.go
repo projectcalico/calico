@@ -8,7 +8,7 @@ import (
 	"github.com/goyek/goyek/v2"
 	"github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/ctl/pkg/ctl"
+	"github.com/projectcalico/fixham/pkg/ctl"
 )
 
 var Clean *goyek.DefinedTask

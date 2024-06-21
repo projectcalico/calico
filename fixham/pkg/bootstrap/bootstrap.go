@@ -3,7 +3,8 @@ package bootstrap
 import (
 	"github.com/goyek/goyek/v2"
 	"github.com/goyek/x/boot"
-	"github.com/projectcalico/ctl/pkg/ctl"
+
+	"github.com/projectcalico/fixham/pkg/ctl"
 )
 
 var packageName *string

@@ -1,8 +1,8 @@
 package ctl
 
 import (
-	"github.com/projectcalico/ctl/internal/client"
-	"github.com/projectcalico/ctl/internal/docker"
+	"github.com/projectcalico/fixham/internal/client"
+	"github.com/projectcalico/fixham/internal/docker"
 )
 
 // Client is used to interact with the ctl package.

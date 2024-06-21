@@ -10,7 +10,7 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/ctl/internal/file"
+	"github.com/projectcalico/fixham/internal/file"
 )
 
 const (

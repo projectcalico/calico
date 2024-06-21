@@ -7,7 +7,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/ctl/internal/docker"
+	"github.com/projectcalico/fixham/internal/docker"
 )
 
 type Client struct {

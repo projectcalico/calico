@@ -2,7 +2,8 @@ package bootstrap
 
 import (
 	"github.com/goyek/goyek/v2"
-	"github.com/projectcalico/ctl/pkg/ctl"
+
+	"github.com/projectcalico/fixham/pkg/ctl"
 )
 
 // Lint is a goyek task that runs the linter using golangci-lint.
