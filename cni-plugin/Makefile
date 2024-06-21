@@ -25,7 +25,8 @@ WINFV_SRCFILES=$(shell find win_tests -name '*.go')
 # fail if unable to download
 CURL=curl -C - -sSf
 
-# Use forked CNI plugin URL and corresponding tagged artifacts.
+# The CNI plugin code that will be cloned and rebuilt with this repo's go-build image
+# whenever the cni-plugin image is created.
 CNI_VERSION=v1.1.1-calico+go-1.22.3
 CNI_ARTIFACTS_URL=https://github.com/projectcalico/containernetworking-plugins/releases/download
 FLANNEL_ARTIFACTS_URL=https://github.com/projectcalico/flannel-cni-plugin/releases/download
@@ -61,7 +62,7 @@ clean: clean-windows
 	rm -rf bin $(DEPLOY_CONTAINER_MARKER) pkg/install/install.test
 	rm -rf config/ dist/
 	-docker image rm -f $$(docker images $(CNI_PLUGIN_IMAGE) -a -q)
-	rm -rf containernetworking-plugins .containernetworking-plugins.created
+	rm -rf containernetworking-plugins .containernetworking-plugins-*
 
 clean-windows: clean-windows-builder
 	rm -rf $(WINDOWS_BIN) $(WINDOWS_DIST)
@@ -143,29 +144,30 @@ $(DEPLOY_CONTAINER_FIPS_MARKER): Dockerfile build fetch-cni-bins
 
 CN_FLAGS=-ldflags "-X github.com/containernetworking/plugins/pkg/utils/buildversion.BuildVersion=$(GIT_VERSION)"
 
-CONTAINERNETWORKING_PLUGINS_CREATED=.containernetworking-plugins-$(ARCH).created
-CONTAINERNETWORKING_PLUGINS_CLONED=.containernetworking-plugins.cloned
+CONTAINERNETWORKING_PLUGINS_CREATED=.containernetworking-plugins-$(CNI_VERSION)-$(ARCH).created
+CONTAINERNETWORKING_PLUGINS_CLONED=.containernetworking-plugins-$(CNI_VERSION).cloned
 
 $(CONTAINERNETWORKING_PLUGINS_CLONED):
+	rm -rf containernetworking-plugins .containernetworking-plugins-*.cloned
 	git clone --single-branch --branch $(CNI_VERSION) https://github.com/projectcalico/containernetworking-plugins.git
 	touch $@
 
-$(CONTAINERNETWORKING_PLUGINS_CREATED): $(CONTAINERNETWORKING_PLUGINS_CLONED)
+$(BIN)/host-local $(BIN)/loopback $(BIN)/portmap $(BIN)/tuning $(BIN)/bandwidth &: $(CONTAINERNETWORKING_PLUGINS_CLONED)
 	docker run \
 		-v $(CURDIR)/containernetworking-plugins:/go/src/github.com/containernetworking/plugins:z \
 		-e LOCAL_USER_ID=$(LOCAL_USER_ID) -w /go/src/github.com/containernetworking/plugins --rm $(CALICO_BUILD) \
 		/bin/sh -xe -c ' \
 			GOFLAGS='-buildvcs=false' CGO_ENABLED=0 GOARCH=$(ARCH) ./build_linux.sh $(CN_FLAGS)'
-	mv containernetworking-plugins/bin containernetworking-plugins/bin-$(ARCH)
-	touch $@
+	-mkdir -p $(BIN)
+	cp containernetworking-plugins/bin/host-local $(BIN)
+	cp containernetworking-plugins/bin/loopback $(BIN)
+	cp containernetworking-plugins/bin/portmap $(BIN)
+	cp containernetworking-plugins/bin/tuning $(BIN)
+	cp containernetworking-plugins/bin/bandwidth $(BIN)
 
 .PHONY: fetch-cni-bins fetch-win-cni-bins
 fetch-cni-bins: $(BIN)/loopback $(BIN)/host-local $(BIN)/portmap $(BIN)/tuning $(BIN)/bandwidth
 fetch-win-cni-bins: $(WINDOWS_BIN)/flannel.exe
-
-$(BIN)/host-local $(BIN)/loopback $(BIN)/portmap $(BIN)/tuning $(BIN)/bandwidth: $(CONTAINERNETWORKING_PLUGINS_CREATED)
-	-mkdir -p $(BIN)
-	cp containernetworking-plugins/bin-$(ARCH)/$(subst $(BIN)/,,$@) $@
 
 $(BIN)/flannel:
 	-mkdir -p $(BIN)
