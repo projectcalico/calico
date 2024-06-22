@@ -6,13 +6,17 @@ import (
 	"github.com/projectcalico/fixham/pkg/ctl"
 )
 
+func clientInstance() *ctl.Client {
+	return ctl.NewClient(*pkgName).WithRoot(*rootBind)
+}
+
 // Lint is a goyek task that runs the linter using golangci-lint.
 var Lint = goyek.Define(goyek.Task{
-	Name:  "golangci-lint",
+	Name:  "lint",
 	Usage: "Run linter",
 	Action: func(a *goyek.A) {
 		a.Log("Running linter")
-		ctl.NewClient(*packageName).Lint()
+		clientInstance().Lint()
 	},
 	Parallel: true,
 })
@@ -23,7 +27,7 @@ var Fmt = goyek.Define(goyek.Task{
 	Usage: "Check code formatting",
 	Action: func(a *goyek.A) {
 		a.Log("Checking code formatting.  Any listed files don't match goimports:")
-		ctl.NewClient(*packageName).CheckFmt()
+		clientInstance().CheckFmt()
 	},
 	Parallel: true,
 })
@@ -33,7 +37,7 @@ var FixFmt = goyek.Define(goyek.Task{
 	Name:  "fix-fmt",
 	Usage: "Fix code formatting",
 	Action: func(a *goyek.A) {
-		ctl.NewClient(*packageName).FixFmt()
+		clientInstance().FixFmt()
 	},
 })
 

@@ -3,6 +3,7 @@ package docker
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"os/user"
 	"runtime"
 	"strings"
@@ -18,6 +19,7 @@ const (
 	defaultGoBuildVersion = "v0.91"
 
 	modCacheDir = "/go/pkg/mod"
+	goCacheDir  = "/go-cache"
 )
 
 // GoBuildImage is the struct for the go-build image
@@ -57,6 +59,7 @@ type GoBuildRunner struct {
 	DockerRunner
 	cmd             []string
 	packageName     string
+	repoVolume      string
 	containerConfig *container.Config
 	hostConfig      *container.HostConfig
 }
@@ -64,9 +67,14 @@ type GoBuildRunner struct {
 // NewGoBuildRunner returns a new GoBuildRunner
 func NewGoBuildRunner(packageName string) *GoBuildRunner {
 	currentUser, _ := user.Current()
+	repoRootCmd := exec.Command("git", "rev-parse", "--show-toplevel")
+	repoRootDir, err := repoRootCmd.Output()
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to get repo root dir")
+	}
 	gomodCacheDir := goModCacheDir(currentUser)
 	goBuild := NewGoBuild()
-	return &GoBuildRunner{
+	g := &GoBuildRunner{
 		GoBuildImage: goBuild,
 		DockerRunner: *NewDockerRunner(goBuild.Image()),
 		packageName:  packageName,
@@ -86,9 +94,16 @@ func NewGoBuildRunner(packageName string) *GoBuildRunner {
 			NetworkMode: "host",
 			Binds: []string{
 				fmt.Sprintf("%s:%s:rw", gomodCacheDir, modCacheDir),
+				fmt.Sprintf("%s/.go-pkg-cache:%s:rw", repoRootDir, goCacheDir),
 			},
 		},
 	}
+	if currentUser.Uid == "0" {
+		g.WithEnv("RUN_AS_ROOT='true'")
+	} else {
+		g.WithEnv("LOCAL_USER_ID=" + currentUser.Uid)
+	}
+	return g
 }
 
 // WithVersion sets the version for the go-build image in GoBuildRunner
@@ -155,6 +170,13 @@ func (g *GoBuildRunner) WithVolume(volume ...string) *GoBuildRunner {
 	return g
 }
 
+// WithRepoVolume sets the volume for the repository
+func (g *GoBuildRunner) WithRepoVolume(volume string) *GoBuildRunner {
+	g.repoVolume = volume
+	g.WithVolume(g.repoVolume)
+	return g
+}
+
 // WithBashCmd runs the command in the container using bash
 func (g *GoBuildRunner) WithBashCmd(cmd string) *GoBuildRunner {
 	g.containerConfig.Cmd = []string{"bash"}
@@ -185,26 +207,19 @@ func (g *GoBuildRunner) Run() {
 	if g.cmd == nil {
 		logrus.Fatal("command is required")
 	}
-
-	currentDir, _ := os.Getwd()
-	currentUser, _ := user.Current()
-
-	if currentUser.Uid == "0" {
-		g.WithEnv("RUN_AS_ROOT='true'")
-	} else {
-		g.WithEnv("LOCAL_USER_ID=" + currentUser.Uid)
+	if g.repoVolume == "" {
+		logrus.Fatal("repository is required")
 	}
 
 	goModCache := g.getBindMountSource(modCacheDir)
-	dirs := []string{"bin", ".go-pkg-cache", goModCache}
+	goPkgCache := g.getBindMountSource(goCacheDir)
+	dirs := []string{"bin", goPkgCache, goModCache}
 	for _, dir := range dirs {
 		err := file.CreateDirIfNotExist(dir)
 		if err != nil {
 			logrus.WithError(err).Fatal("failed to create directory ", dir)
 		}
 	}
-	g.WithVolume(fmt.Sprintf("%s:/go/src/%s:rw", currentDir, g.packageName),
-		fmt.Sprintf("%s/.go-pkg-cache:/go-cache:rw", currentDir))
 
 	g.PullImage()
 	resp := g.RunContainer(g.containerConfig, g.hostConfig)

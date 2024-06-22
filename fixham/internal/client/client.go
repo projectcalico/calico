@@ -27,6 +27,11 @@ func (c *Client) WithGoBuildVersion(version string) *Client {
 	return c
 }
 
+func (c *Client) WithRoot(root string) *Client {
+	c.goBuildRunner.WithRepoVolume(root)
+	return c
+}
+
 func (c *Client) Lint(args ...string) {
 	gitConfigSSH := ""
 	if os.Getenv("GIT_USE_SSH") == "true" {

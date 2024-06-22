@@ -17,5 +17,5 @@ var _ = bootstrap.DefineUt(func(a *goyek.A) {
 }, nil, false)
 
 func main() {
-	bootstrap.Main(packageName)
+	bootstrap.Main(packageName, "")
 }
