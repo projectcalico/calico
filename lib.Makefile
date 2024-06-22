@@ -567,6 +567,10 @@ static-checks: $(LOCAL_CHECKS)
 
 LINT_ARGS ?= --max-issues-per-linter 0 --max-same-issues 0 --timeout 8m
 
+.PHONY: pilchard
+pilchard:
+	go run ./pilchard lint
+
 .PHONY: golangci-lint
 golangci-lint: $(GENERATED_FILES)
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) golangci-lint run $(LINT_ARGS)'
