@@ -61,6 +61,10 @@ bin_allow_list_patterns=(
   ip6tables
   ipset
 
+  # nftables
+  nftables
+  nft
+
   # kmod is a multi-binary backing depmod/insmod/etc; used by iptables
   kmod depmod insmod modinfo modprobe rmmod lsmod
 
@@ -269,11 +273,13 @@ packages_to_keep=(
   libnss
   libpcap
   libpwquality
+  libreadline
   libselinux
   libzstd
   libz
   ncurses
   net-tools
+  nftables
   openssl-libs
   p11-kit-trust
   pcre
@@ -316,10 +322,30 @@ packages_to_remove=$(microdnf repoquery --installed |
 
 
 echo "Removing ${packages_to_remove}"
-# Removing one of the packages deletes rc.local, move it out of the way.
-mv /etc/rc.local /etc/rc.local.bak
+
+# Removing one of the packages deletes some files that shouldn't be removed.
+# Move them out of the way first, then restore them.
+files_to_save=(
+  /etc/rc.local
+
+  # These are all used by the nft binary.
+  /usr/lib64/libreadline.so.*
+  /usr/lib64/libgmp.so.*
+  /usr/lib64/libjansson.so.*
+)
+for file in "${files_to_save[@]}"; do
+  fn=$(basename ${file})
+  echo "Moving ${file} -> /etc/${fn}.bak"
+  mv $file /etc/$fn.bak
+done
+
 rpm -e --nodeps $packages_to_remove
-mv /etc/rc.local.bak /etc/rc.local
+
+for file in "${files_to_save[@]}"; do
+  fn=$(basename ${file})
+  echo "Restoring /etc/${fn}.bak -> ${file}"
+  mv /etc/$fn.bak $file
+done
 
 # Sanity check that we didn't remove anything we want to keep.
 for path in "${!binaries_to_keep[@]}"; do
