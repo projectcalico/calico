@@ -97,6 +97,12 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 		wireguardEnabledV4 := testConfig.WireguardEnabledV4
 		wireguardEnabledV6 := testConfig.WireguardEnabledV6
 
+		JustBeforeEach(func() {
+			if BPFMode() {
+				ensureAllNodesBPFProgramsAttached(topologyContainers.Felixes)
+			}
+		})
+
 		Describe(fmt.Sprintf("wireguardEnabledV4: %v, wireguardEnabledV6: %v, ", wireguardEnabledV4, wireguardEnabledV6), func() {
 			BeforeEach(func() {
 				// Run these tests only when the Host has Wireguard kernel module installed.
@@ -818,10 +824,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 						}
 
 						By("Waiting for the policy to apply")
-						// XXX this is lame, but will have to do until we have a way do
-						// XXX to confirm policy applied in BPF. Then we will fix both
-						// XXX iptables and BPF properly.
-						time.Sleep(30 * time.Second)
+						if BPFMode() {
+							for _, felix := range topologyContainers.Felixes {
+								bpfWaitForPolicy(felix, "eth0", "egress", "default.deny-wg-port")
+							}
+						}
 
 						By("Checking there is eventually and consistently connectivity between the workloads using wg")
 						Eventually(checkConn, "5s", "100ms").ShouldNot(HaveOccurred())
@@ -950,6 +957,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 			Context("with Wireguard disabled", func() {
 				BeforeEach(func() {
 					disableWireguard(client)
+
+					for _, felix := range topologyContainers.Felixes {
+						felix.ExpectedWireguardTunnelAddr = ""
+						felix.ExpectedWireguardV6TunnelAddr = ""
+					}
 
 					// Check Wireguard device doesn't exist.
 					Eventually(func() error {
@@ -1141,6 +1153,12 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported 3 node 
 		tcpdumps []*tcpdump.TCPDump
 	)
 
+	JustBeforeEach(func() {
+		if BPFMode() {
+			ensureAllNodesBPFProgramsAttached(tc.Felixes)
+		}
+	})
+
 	BeforeEach(func() {
 		// TODO: add IPv6 coverage when enabling this back
 		Skip("Skipping WireGuard tests for now due to unreliability.")
@@ -1264,6 +1282,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported 3 node 
 		BeforeEach(func() {
 			// Disable WireGuard on felix-2.
 			disableWireguardForFelix(client, "node."+tc.Felixes[2].Hostname)
+			tc.Felixes[2].ExpectedWireguardTunnelAddr = ""
+			tc.Felixes[2].ExpectedWireguardV6TunnelAddr = ""
 
 			// Check felix-2 is ready with WireGuard disabled.
 			Eventually(func() string {
