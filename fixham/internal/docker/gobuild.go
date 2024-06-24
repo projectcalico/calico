@@ -10,8 +10,6 @@ import (
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/sirupsen/logrus"
-
-	"github.com/projectcalico/fixham/internal/file"
 )
 
 const (
@@ -31,10 +29,13 @@ type GoBuildImage struct {
 
 // NewGoBuild returns a new GoBuildImage
 // with default image name and version
-func NewGoBuild() GoBuildImage {
+func NewGoBuild(version string) GoBuildImage {
+	if version == "" {
+		version = defaultGoBuildVersion
+	}
 	return GoBuildImage{
 		imageName:    defaultGoBuildName,
-		imageVersion: defaultGoBuildVersion,
+		imageVersion: version,
 	}
 }
 
@@ -57,7 +58,6 @@ func (g GoBuildImage) Image() string {
 type GoBuildRunner struct {
 	GoBuildImage
 	DockerRunner
-	cmd             []string
 	packageName     string
 	repoVolume      string
 	containerConfig *container.Config
@@ -65,7 +65,7 @@ type GoBuildRunner struct {
 }
 
 // NewGoBuildRunner returns a new GoBuildRunner
-func NewGoBuildRunner(packageName string) *GoBuildRunner {
+func NewGoBuildRunner(packageName string, version string) (g *GoBuildRunner, err error) {
 	currentUser, _ := user.Current()
 	repoRootCmd := exec.Command("git", "rev-parse", "--show-toplevel")
 	repoRootDir, err := repoRootCmd.Output()
@@ -73,10 +73,14 @@ func NewGoBuildRunner(packageName string) *GoBuildRunner {
 		logrus.WithError(err).Fatal("Failed to get repo root dir")
 	}
 	gomodCacheDir := goModCacheDir(currentUser)
-	goBuild := NewGoBuild()
-	g := &GoBuildRunner{
+	goBuild := NewGoBuild(version)
+	dockerRunner, err := NewDockerRunner()
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to create docker runner")
+	}
+	g = &GoBuildRunner{
 		GoBuildImage: goBuild,
-		DockerRunner: *NewDockerRunner(goBuild.Image()),
+		DockerRunner: *dockerRunner,
 		packageName:  packageName,
 		containerConfig: &container.Config{
 			Image: goBuild.Image(),
@@ -103,7 +107,7 @@ func NewGoBuildRunner(packageName string) *GoBuildRunner {
 	} else {
 		g.WithEnv("LOCAL_USER_ID=" + currentUser.Uid)
 	}
-	return g
+	return
 }
 
 // WithVersion sets the version for the go-build image in GoBuildRunner
@@ -177,20 +181,6 @@ func (g *GoBuildRunner) WithRepoVolume(volume string) *GoBuildRunner {
 	return g
 }
 
-// WithBashCmd runs the command in the container using bash
-func (g *GoBuildRunner) WithBashCmd(cmd string) *GoBuildRunner {
-	g.containerConfig.Cmd = []string{"bash"}
-	g.cmd = []string{"bash", "-c", cmd}
-	return g
-}
-
-// WithBashCmd runs the command in the container using sh
-func (g *GoBuildRunner) WithShCmd(cmd string) *GoBuildRunner {
-	g.containerConfig.Cmd = []string{"sh"}
-	g.cmd = []string{"sh", "-c", cmd}
-	return g
-}
-
 // UsingGoModCache sets the volume for go mod cache
 func (g *GoBuildRunner) UsingGoModCache(dir string) *GoBuildRunner {
 	if g.hasBindMount(modCacheDir) {
@@ -200,38 +190,43 @@ func (g *GoBuildRunner) UsingGoModCache(dir string) *GoBuildRunner {
 	return g
 }
 
-func (g *GoBuildRunner) Run() {
-	if g.packageName == "" {
-		logrus.Fatal("package name is required")
-	}
-	if g.cmd == nil {
-		logrus.Fatal("command is required")
-	}
-	if g.repoVolume == "" {
-		logrus.Fatal("repository is required")
-	}
+func (g *GoBuildRunner) RunBashCmd(cmd string) error {
+	return g.Run([]string{"bash", "-c", cmd})
+}
 
+func (g *GoBuildRunner) RunShCmd(cmd string) error {
+	return g.Run([]string{"sh", "-c", cmd})
+}
+
+func (g *GoBuildRunner) Run(cmd []string) error {
 	goModCache := g.getBindMountSource(modCacheDir)
 	goPkgCache := g.getBindMountSource(goCacheDir)
 	dirs := []string{"bin", goPkgCache, goModCache}
 	for _, dir := range dirs {
-		err := file.CreateDirIfNotExist(dir)
+		err := os.MkdirAll(dir, os.ModePerm)
 		if err != nil {
 			logrus.WithError(err).Fatal("failed to create directory ", dir)
+			return err
 		}
 	}
 
-	g.PullImage()
-	resp := g.RunContainer(g.containerConfig, g.hostConfig)
+	g.PullImage(g.Image())
+	resp, err := g.RunContainer(g.containerConfig, g.hostConfig)
+	if err != nil {
+		logrus.WithError(err).Fatal("failed to run container")
+		return err
+	}
 	defer g.RemoveContainer(resp.ID)
-	inspect := g.ExecInContainer(resp.ID, g.cmd...)
+	inspect, err := g.ExecInContainer(resp.ID, cmd...)
+	if err != nil {
+		logrus.WithField("cmd", cmd).Error("executing failed")
+		return err
+	}
 	g.StopContainer(resp.ID)
 	if inspect.ExitCode != 0 {
-		logrus.WithFields(logrus.Fields{
-			"cmd":      g.cmd,
-			"exitCode": inspect.ExitCode,
-		}).Fatal("executing failed")
+		return fmt.Errorf("command failed with exit code %d", inspect.ExitCode)
 	}
+	return nil
 }
 
 // goModCacheDir returns the directory for gopath
