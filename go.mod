@@ -96,7 +96,7 @@ require (
 	k8s.io/component-base v0.27.8
 	k8s.io/klog/v2 v2.90.1
 	k8s.io/kube-openapi v0.0.0-20230501164219-8b0f38b5fd1f
-	k8s.io/kubernetes v1.27.8
+	k8s.io/kubernetes v1.27.15
 	k8s.io/utils v0.0.0-20230313181309-38a27ef9d749
 	modernc.org/memory v1.7.1
 	sigs.k8s.io/kind v0.20.0
@@ -260,10 +260,10 @@ require (
 	go.uber.org/zap v1.21.0 // indirect
 	golang.org/x/crypto v0.22.0 // indirect
 	golang.org/x/exp v0.0.0-20230905200255-921286631fa9 // indirect
-	golang.org/x/mod v0.12.0 // indirect
+	golang.org/x/mod v0.14.0 // indirect
 	golang.org/x/oauth2 v0.15.0 // indirect
 	golang.org/x/term v0.19.0 // indirect
-	golang.org/x/tools v0.13.0 // indirect
+	golang.org/x/tools v0.16.1 // indirect
 	golang.zx2c4.com/wireguard v0.0.20200121 // indirect
 	google.golang.org/api v0.153.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
@@ -324,7 +324,7 @@ replace (
 	// Need replacements for all the k8s subsidiary projects that are pulled in indirectly because
 	// the kubernets repo pulls them in via a replacement to its own vendored copies, which doesn't work for
 	// transient imports.
-	k8s.io/kubernetes => k8s.io/kubernetes v1.27.8
+	k8s.io/kubernetes => k8s.io/kubernetes v1.27.15
 	k8s.io/legacy-cloud-providers => k8s.io/legacy-cloud-providers v0.27.8
 	k8s.io/metrics => k8s.io/metrics v0.27.8
 	k8s.io/mount-utils => k8s.io/mount-utils v0.27.8
