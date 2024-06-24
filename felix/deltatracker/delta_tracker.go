@@ -43,6 +43,11 @@ import (
 // keys that are in the dataplane map but not in the desired map.  The
 // pending maps are exposed via the IterPendingUpdates and IterPendingDeletions
 // methods.
+//
+// Note that values should, in general, be immutable.  If you must mutate a
+// value, then it should be copied, mutated and re-inserted.  Or, it must be
+// deleted from _both_ Desired() and Dataplane() sides of the map for the
+// duration of the mutation.
 type DeltaTracker[K comparable, V any] struct {
 	// To reduce occupancy, we treat the set of KVs in the dataplane and in the
 	// desired state like a Venn diagram, and we only store each region once
@@ -100,6 +105,14 @@ func WithLogCtx[K comparable, V any](lc *logrus.Entry) Option[K, V] {
 }
 
 func New[K comparable, V any](opts ...Option[K, V]) *DeltaTracker[K, V] {
+	var valueZero V
+	if reflect.TypeOf(valueZero).Kind() == reflect.Map {
+		// Storing a map as the value is particularly confusing.  Even if
+		// the caller does Desired().Delete(k) to remove the mapping, we may
+		// keep hold of the same map in the inDataplaneNotDesired map resulting
+		// in aliasing.
+		logrus.Panic("Map values should not be used in a DeltaTracker. Use an immutable.Map instead.")
+	}
 	cm := &DeltaTracker[K, V]{
 		inDataplaneAndDesired: make(map[K]V),
 		inDataplaneNotDesired: make(map[K]V),
@@ -411,6 +424,7 @@ func (c *PendingUpdatesView[K, V]) Iter(f func(k K, v V) IterAction) {
 		case IterActionUpdateDataplane:
 			delete(c.desiredUpdates, k)
 			c.inDataplaneAndDesired[k] = v
+		case IterActionNoOpStopIteration: break
 		}
 	}
 }
