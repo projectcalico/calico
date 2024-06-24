@@ -22,6 +22,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/deltatracker"
 	"github.com/projectcalico/calico/felix/ip"
+	"github.com/projectcalico/calico/libcalico-go/lib/immutable"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -62,7 +63,7 @@ type RouteOwnershipTracker interface {
 // the same interface but the priority changes).
 type ConntrackCleanupManager struct {
 	ipVersion      uint8
-	possibleOwners *deltatracker.DeltaTracker[ip.Addr, map[kernelRouteKey][]int]
+	possibleOwners *deltatracker.DeltaTracker[ip.Addr, immutable.CopyingMap[kernelRouteKey, []int]]
 
 	// perIPDoneChans contains a channel for the most recent conntrack cleanup
 	// for a given IP.  This allows us to block until the cleanup is done.
@@ -78,28 +79,19 @@ type ConntrackCleanupManager struct {
 func NewConntrackCleanupManager(ipVersion uint8, conntrack conntrackIface) *ConntrackCleanupManager {
 	return &ConntrackCleanupManager{
 		ipVersion:      ipVersion,
-		possibleOwners: deltatracker.New[ip.Addr, map[kernelRouteKey][]int](),
+		possibleOwners: deltatracker.New[ip.Addr, immutable.CopyingMap[kernelRouteKey, []int]](),
 		perIPDoneChans: map[ip.Addr]chan struct{}{},
 		cleanupDoneC:   make(chan ip.Addr),
 		conntrack:      conntrack,
 	}
 }
 
-// SetAllowedOwner records that the given interface is allowed to own the given route.
-// I.e. it is one of the interfaces that the datastore says the IP should belong to.
-// There may be more than one interface allowed to own the route, for example, if the
-// same IP is manually assigned to two workloads.
+// SetAllowedOwner records that the given interface is the one that's allowed
+// to own the given route.
 func (c *ConntrackCleanupManager) SetAllowedOwner(kernKey kernelRouteKey, idx int) {
 	addr := kernKey.CIDR.Addr()
-	ipOwners, ok := c.possibleOwners.Desired().Get(addr)
-	if !ok {
-		ipOwners = map[kernelRouteKey][]int{}
-	} else {
-		// Delete to avoid mutating the map while still in the DeltaTracker.
-		c.possibleOwners.Desired().Delete(addr)
-	}
-	ipOwners[kernKey] = []int{idx}
-
+	ipOwners, _ := c.possibleOwners.Desired().Get(addr)
+	ipOwners = ipOwners.WithKey(kernKey, []int{idx})
 	c.possibleOwners.Desired().Set(addr, ipOwners)
 }
 
@@ -110,11 +102,11 @@ func (c *ConntrackCleanupManager) RemoveAllowedOwner(kernKey kernelRouteKey) {
 	if !ok {
 		return
 	}
-	// Delete to avoid mutating the map while still in the DeltaTracker.
-	c.possibleOwners.Desired().Delete(addr)
-	delete(ipOwners, kernKey)
-	if len(ipOwners) > 0 {
+	ipOwners = ipOwners.WithKeyDeleted(kernKey)
+	if ipOwners.Len() > 0 {
 		c.possibleOwners.Desired().Set(addr, ipOwners)
+	} else {
+		c.possibleOwners.Desired().Delete(addr)
 	}
 }
 
@@ -123,20 +115,18 @@ func (c *ConntrackCleanupManager) RemoveAllowedOwner(kernKey kernelRouteKey) {
 // and seen that this interface has a route for the given IP.
 func (c *ConntrackCleanupManager) AddDataplaneOwner(kernKey kernelRouteKey, ifindex int) {
 	addr := kernKey.CIDR.Addr()
-	owners, _ := c.possibleOwners.Dataplane().Get(addr)
-	for _, o := range owners[kernKey] {
+	ipOwners, _ := c.possibleOwners.Dataplane().Get(addr)
+	ifaces, _ := ipOwners.Get(kernKey)
+	for _, o := range ifaces {
 		if o == ifindex {
 			return
 		}
 	}
-	if owners == nil {
-		owners = map[kernelRouteKey][]int{}
-	} else {
-		// Delete to avoid mutating the map while still in the DeltaTracker.
-		c.possibleOwners.Dataplane().Delete(addr)
-	}
-	owners[kernKey] = append(owners[kernKey], ifindex)
-	c.possibleOwners.Dataplane().Set(addr, owners)
+	newOwners := make([]int, len(ifaces)+1)
+	copy(newOwners, ifaces)
+	newOwners[len(ifaces)] = ifindex
+	ipOwners = ipOwners.WithKey(kernKey, newOwners)
+	c.possibleOwners.Dataplane().Set(addr, ipOwners)
 }
 
 // SetSingleDataplaneOwner records that the given interface is now the sole
@@ -144,15 +134,9 @@ func (c *ConntrackCleanupManager) AddDataplaneOwner(kernKey kernelRouteKey, ifin
 // route from other interfaces and there is now a single owner in the dataplane.
 func (c *ConntrackCleanupManager) SetSingleDataplaneOwner(kernKey kernelRouteKey, idx int) {
 	addr := kernKey.CIDR.Addr()
-	owners, ok := c.possibleOwners.Dataplane().Get(addr)
-	if !ok {
-		owners = map[kernelRouteKey][]int{}
-	} else {
-		// Delete to avoid mutating the map while still in the DeltaTracker.
-		c.possibleOwners.Dataplane().Delete(addr)
-	}
-	owners[kernKey] = []int{idx}
-	c.possibleOwners.Dataplane().Set(addr, owners)
+	ipOwners, _ := c.possibleOwners.Dataplane().Get(addr)
+	ipOwners = ipOwners.WithKey(kernKey, []int{idx})
+	c.possibleOwners.Dataplane().Set(addr, ipOwners)
 }
 
 // StartDeletionsForDeletedRoutes starts the deletion of conntrack entries for
@@ -176,7 +160,7 @@ func (c *ConntrackCleanupManager) IterMovedRoutesAndStartDeletions(f func(kernKe
 	keysToCleanUp := set.New[kernelRouteKey]()
 	c.possibleOwners.PendingUpdates().Iter(func(
 		addr ip.Addr,
-		desiredOwners map[kernelRouteKey][]int,
+		desiredOwners immutable.CopyingMap[kernelRouteKey, []int],
 	) deltatracker.IterAction {
 		oldOwners, ok := c.possibleOwners.Dataplane().Get(addr)
 		if !ok {
@@ -193,32 +177,34 @@ func (c *ConntrackCleanupManager) IterMovedRoutesAndStartDeletions(f func(kernKe
 		// so this loop is very likely to find only TOS 0 routes.
 		allTOSes := set.New[int]()
 		oldTOSToWinningRoute := map[int]kernelRouteKey{}
-		for k := range oldOwners {
+		oldOwners.Iter(func(k kernelRouteKey, _ []int) bool {
 			bestSoFar, ok := oldTOSToWinningRoute[k.TOS]
 			if !ok || bestSoFar.Priority < k.Priority {
 				oldTOSToWinningRoute[k.TOS] = k
 				allTOSes.Add(k.TOS)
 			}
-		}
+			return true
+		})
 		newTOSToWinningRoute := map[int]kernelRouteKey{}
-		for k := range desiredOwners {
+		desiredOwners.Iter(func(k kernelRouteKey, _ []int) bool {
 			bestSoFar, ok := newTOSToWinningRoute[k.TOS]
 			if !ok || bestSoFar.Priority < k.Priority {
 				newTOSToWinningRoute[k.TOS] = k
 				allTOSes.Add(k.TOS)
 			}
-		}
+			return true
+		})
 		moveDetected := false
 		allTOSes.Iter(func(tos int) error {
 			oldKey := oldTOSToWinningRoute[tos]
-			oldIfaces := oldOwners[oldKey]
+			oldIfaces, _ := oldOwners.Get(oldKey)
 			if len(oldIfaces) == 0 {
 				// No old owners for this TOS so there should be nothing to
 				// clean up.
 				return nil
 			}
 			newKey := newTOSToWinningRoute[tos]
-			newIfaces := desiredOwners[newKey]
+			newIfaces, _ := desiredOwners.Get(newKey)
 			if reflect.DeepEqual(oldIfaces, newIfaces) {
 				// No change for this TOS.
 				return nil
@@ -237,13 +223,14 @@ func (c *ConntrackCleanupManager) IterMovedRoutesAndStartDeletions(f func(kernKe
 			// sure that we can't uncover an unexpected route and produce some
 			// stray conntrack entries in the window before the RouteTable
 			// inserts the new routes.
-			for k := range oldOwners {
+			oldOwners.Iter(func(k kernelRouteKey, _ []int) bool {
 				if k.TOS != tos {
-					continue
+					return true
 				}
 				f(oldKey)
 				keysToCleanUp.Add(oldKey)
-			}
+				return true
+			})
 			return nil
 		})
 
@@ -256,14 +243,19 @@ func (c *ConntrackCleanupManager) IterMovedRoutesAndStartDeletions(f func(kernKe
 	// Clean up the entries we removed after the iteration so that we don't
 	// mutate values in the DeltaTracker while iterating.
 	keysToCleanUp.Iter(func(k kernelRouteKey) error {
-		oldOwners, ok := c.possibleOwners.Dataplane().Get(k.CIDR.Addr())
+		addr := k.CIDR.Addr()
+		oldOwners, ok := c.possibleOwners.Dataplane().Get(addr)
 		if !ok {
 			return nil
 		}
-		c.possibleOwners.Dataplane().Delete(k.CIDR.Addr())
-		delete(oldOwners, k)
-		if len(oldOwners) > 0 {
-			c.possibleOwners.Dataplane().Set(k.CIDR.Addr(), oldOwners)
+		if _, ok := oldOwners.Get(k); !ok {
+			return nil
+		}
+		oldOwners = oldOwners.WithKeyDeleted(k)
+		if oldOwners.Len() > 0 {
+			c.possibleOwners.Dataplane().Set(addr, oldOwners)
+		} else {
+			c.possibleOwners.Dataplane().Delete(addr)
 		}
 		return nil
 	})

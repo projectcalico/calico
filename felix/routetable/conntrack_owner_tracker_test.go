@@ -95,7 +95,7 @@ func TestConntrackCleanupManager_NewRoute(t *testing.T) {
 	Expect(conntrack.NumPendingRemovals()).To(Equal(0))
 	// Then, iterate over mutations.
 	ccm.IterMovedRoutesAndStartDeletions(func(kernKey kernelRouteKey) {
-		t.Fatalf("Unexpected routereturned by IterMovedRoutesAndStartDeletions: %v", kernKey)
+		t.Fatalf("Unexpected route returned by IterMovedRoutesAndStartDeletions: %v", kernKey)
 	})
 	// If there's a deletion to do, wait for it (should not be one).
 	addr := cidr1.Addr()
@@ -104,12 +104,56 @@ func TestConntrackCleanupManager_NewRoute(t *testing.T) {
 	ccm.SetSingleDataplaneOwner(key1, 10)
 
 	// On the next apply, there should still be nothing to do...
+	expectNothingToDo(t, ccm, conntrack)
+	expectWaitForPendingDeletionToReturnImmediately(ccm, addr)
+}
+
+func TestConntrackCleanupManager_MovedRoute(t *testing.T) {
+	ccm, conntrack, cancel := setup(t)
+	defer cancel()
+
+	// Call methods in the same order as the RouteTable would.
+
+	// Initially, the route is owned by interface 10.
+	t.Log("Setting initial owner.")
+	ccm.SetAllowedOwner(key1, 10)
+	ccm.SetSingleDataplaneOwner(key1, 10)
+
+	// Then, the exact same route moves to interface 11.
+	t.Log("Setting new owner.")
+	ccm.SetAllowedOwner(key1, 11)
+
+	// Do the apply steps in order; first trigger deletions (there are none to do)
 	ccm.StartDeletionsForDeletedRoutes() // Should be no-op.
 	Expect(conntrack.NumPendingRemovals()).To(Equal(0))
+
+	// Then, iterate over mutations.]
+	count := 0
 	ccm.IterMovedRoutesAndStartDeletions(func(kernKey kernelRouteKey) {
-		t.Fatalf("Unexpected routereturned by IterMovedRoutesAndStartDeletions: %v", kernKey)
+		// Should get called once about the single route.
+		// The real routing table deletes the route from this callback.
+		Expect(kernKey).To(Equal(key1))
+		Expect(count).To(Equal(0))
+		count++
 	})
+
+	// Should see a background deletion.
+	addr := cidr1.Addr()
+	expectWaitForPendingDeletionToDelay(ccm, conntrack, addr)
+	// Then tell the tracker that we have updated the dataplane.
+	ccm.SetSingleDataplaneOwner(key1, 11)
+
+	// On the next apply, there should be nothing to do...
+	expectNothingToDo(t, ccm, conntrack)
 	expectWaitForPendingDeletionToReturnImmediately(ccm, addr)
+}
+
+func expectNothingToDo(t *testing.T, ccm *ConntrackCleanupManager, conntrack *mockConntrack) {
+	ccm.StartDeletionsForDeletedRoutes() // Should be no-op.
+	ExpectWithOffset(1, conntrack.NumPendingRemovals()).To(Equal(0), "Expected no pending removals.")
+	ccm.IterMovedRoutesAndStartDeletions(func(kernKey kernelRouteKey) {
+		t.Fatalf("Unexpected route returned by IterMovedRoutesAndStartDeletions: %v", kernKey)
+	})
 }
 
 func TestConntrackCleanupManager_DeletedRoute(t *testing.T) {
@@ -130,11 +174,14 @@ func TestConntrackCleanupManager_DeletedRoute(t *testing.T) {
 	Eventually(conntrack.NumPendingRemovals).Should(Equal(1))
 	// Then, iterate over mutations.
 	ccm.IterMovedRoutesAndStartDeletions(func(kernKey kernelRouteKey) {
-		t.Fatalf("Unexpected routereturned by IterMovedRoutesAndStartDeletions: %v", kernKey)
+		t.Fatalf("Unexpected route returned by IterMovedRoutesAndStartDeletions: %v", kernKey)
 	})
 
 	addr := cidr1.Addr()
 	expectWaitForPendingDeletionToDelay(ccm, conntrack, addr)
+
+	// Should be nothing to do on the next apply.
+	expectNothingToDo(t, ccm, conntrack)
 }
 
 func setup(t *testing.T) (*ConntrackCleanupManager, *mockConntrack, context.CancelFunc) {
