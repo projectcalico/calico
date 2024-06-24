@@ -143,7 +143,7 @@ const (
 //   - When IP addresses move from one interface to another (for example because
 //     a workload has been terminated and a new workload now has the IP) we need
 //     to clean up the conntrack entries from the old workload.  We delegate this
-//     cleanup to the ConntrackTracker; giving it callbacks when routes move.
+//     cleanup to the RouteOwnershipTracker; giving it callbacks when routes move.
 //     We do that cleanup in the background to avoid holding up other route
 //     programming.
 type RouteTable struct {
@@ -182,9 +182,9 @@ type RouteTable struct {
 	ifaceIndexToGraceInfo map[int]graceInfo
 
 	conntrackCleanupEnabled bool
-	// conntrackTracker is a RealConntrackTracker or a DummyConntrackTracker
+	// conntrackTracker is a ConntrackCleanupManager or a NoOpRouteTracker
 	// Depending on whether conntrack cleanup is enabled or not.
-	conntrackTracker ConntrackTracker
+	conntrackTracker RouteOwnershipTracker
 
 	nl *handlemgr.HandleManager
 
@@ -357,9 +357,9 @@ func New(
 	)
 
 	if rt.conntrackCleanupEnabled {
-		rt.conntrackTracker = NewRealConntrackTracker(ipVersion, rt.conntrack)
+		rt.conntrackTracker = NewConntrackCleanupManager(ipVersion, rt.conntrack)
 	} else {
-		rt.conntrackTracker = NewDummyConntrackTracker()
+		rt.conntrackTracker = NewNoOpRouteTracker()
 	}
 
 	return rt

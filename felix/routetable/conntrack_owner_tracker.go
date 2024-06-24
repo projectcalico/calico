@@ -25,7 +25,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
-type ConntrackTracker interface {
+type RouteOwnershipTracker interface {
 	SetAllowedOwner(key kernelRouteKey, idx int)
 	RemoveAllowedOwner(key kernelRouteKey)
 	AddDataplaneOwner(kernKey kernelRouteKey, ifindex int)
@@ -38,26 +38,58 @@ type ConntrackTracker interface {
 	DoPeriodicCleanup()
 }
 
-func NewRealConntrackTracker(ipVersion uint8, conntrack conntrackIface) *RealConntrackTracker {
-	return &RealConntrackTracker{
-		ipVersion:        ipVersion,
-		possibleOwners:   deltatracker.New[ip.Addr, map[kernelRouteKey][]int](),
-		cleanupDoneChans: map[ip.Addr]chan struct{}{},
-		conntrack:        conntrack,
-	}
-}
-
-type RealConntrackTracker struct {
+// ConntrackCleanupManager handles cleaning up conntrack entries on behalf of
+// a RouteTable when routes are moved or deleted .  It:
+//
+//   - Tracks which interfaces own which IP addresses; i.e. which interfaces
+//     should be allowed to have conntrack entries for the given IP address.
+//     This tracking affects the "Desired" side of a DeltaTracker but cleanup
+//     is only triggered when IterMovedRoutesAndStartDeletions is called.
+//   - Tracks which interfaces actually have routes programmed for the IP address.
+//     this is tracked in the "Dataplane" side of a DeltaTracker.
+//   - Initiates background cleanup of conntrack entries when an IP address was
+//     assigned to one interface and then that assignment was removed.
+//   - Blocks programming of new routes for the given IP address until the
+//     cleanup is finished.  Since IPAM avoids re-using IPs right away, this
+//     should be rare.
+//
+// A complicating factor is that the kernel keys routes using CIDR, ToS and
+// priority, whereas conntrack only uses the CIDR part of the route.  To deal
+// with that, we calculate the union of all the interfaces that have a route
+// for a particular IP.  While we don't currently do anything with ToS, IPv6
+// routes do typically have a non-0 priority so we do need to handle that
+// (and in particular we want to avoid cleaning up conntrack if the IP stays on
+// the same interface but the priority changes).
+type ConntrackCleanupManager struct {
 	ipVersion      uint8
 	possibleOwners *deltatracker.DeltaTracker[ip.Addr, map[kernelRouteKey][]int]
 
-	cleanupDoneChans map[ip.Addr]chan struct{}
-	conntrack        conntrackIface
+	// perIPDoneChans contains a channel for the most recent conntrack cleanup
+	// for a given IP.  This allows us to block until the cleanup is done.
+	perIPDoneChans map[ip.Addr]chan struct{}
+	// cleanupDoneC is used to manage cleanup of the entries in perIPDoneChans.
+	// The background goroutine sends the IP address that it cleaned up on this
+	// channel after it closes its individual "done" channel.
+	cleanupDoneC     chan ip.Addr
+
+	conntrack conntrackIface
+}
+
+func NewConntrackCleanupManager(ipVersion uint8, conntrack conntrackIface) *ConntrackCleanupManager {
+	return &ConntrackCleanupManager{
+		ipVersion:      ipVersion,
+		possibleOwners: deltatracker.New[ip.Addr, map[kernelRouteKey][]int](),
+		perIPDoneChans: map[ip.Addr]chan struct{}{},
+		cleanupDoneC:   make(chan ip.Addr),
+		conntrack:      conntrack,
+	}
 }
 
 // SetAllowedOwner records that the given interface is allowed to own the given route.
-// I.e. it is one of hte interfaces that the datapstore says the IP should belong to.
-func (c *RealConntrackTracker) SetAllowedOwner(kernKey kernelRouteKey, idx int) {
+// I.e. it is one of the interfaces that the datastore says the IP should belong to.
+// There may be more than one interface allowed to own the route, for example, if the
+// same IP is manually assigned to two workloads.
+func (c *ConntrackCleanupManager) SetAllowedOwner(kernKey kernelRouteKey, idx int) {
 	addr := kernKey.CIDR.Addr()
 	ipOwners, ok := c.possibleOwners.Desired().Get(addr)
 	if !ok {
@@ -72,7 +104,7 @@ func (c *RealConntrackTracker) SetAllowedOwner(kernKey kernelRouteKey, idx int) 
 }
 
 // RemoveAllowedOwner removes the given interface from the list of allowed owners for the given route.
-func (c *RealConntrackTracker) RemoveAllowedOwner(kernKey kernelRouteKey) {
+func (c *ConntrackCleanupManager) RemoveAllowedOwner(kernKey kernelRouteKey) {
 	addr := kernKey.CIDR.Addr()
 	ipOwners, ok := c.possibleOwners.Desired().Get(addr)
 	if !ok {
@@ -87,9 +119,9 @@ func (c *RealConntrackTracker) RemoveAllowedOwner(kernKey kernelRouteKey) {
 }
 
 // AddDataplaneOwner records that the given interface currently has a route for the
-// given IP address.  For example, the RouteTable may ahve read back the routes
+// given IP address.  For example, the RouteTable may have read back the routes
 // and seen that this interface has a route for the given IP.
-func (c *RealConntrackTracker) AddDataplaneOwner(kernKey kernelRouteKey, ifindex int) {
+func (c *ConntrackCleanupManager) AddDataplaneOwner(kernKey kernelRouteKey, ifindex int) {
 	addr := kernKey.CIDR.Addr()
 	owners, _ := c.possibleOwners.Dataplane().Get(addr)
 	for _, o := range owners[kernKey] {
@@ -110,7 +142,7 @@ func (c *RealConntrackTracker) AddDataplaneOwner(kernKey kernelRouteKey, ifindex
 // SetSingleDataplaneOwner records that the given interface is now the sole
 // owner of the route.  I.e. the RouteTable has removed all other copies of the
 // route from other interfaces and there is now a single owner in the dataplane.
-func (c *RealConntrackTracker) SetSingleDataplaneOwner(kernKey kernelRouteKey, idx int) {
+func (c *ConntrackCleanupManager) SetSingleDataplaneOwner(kernKey kernelRouteKey, idx int) {
 	addr := kernKey.CIDR.Addr()
 	owners, ok := c.possibleOwners.Dataplane().Get(addr)
 	if !ok {
@@ -126,7 +158,7 @@ func (c *RealConntrackTracker) SetSingleDataplaneOwner(kernKey kernelRouteKey, i
 // StartDeletionsForDeletedRoutes starts the deletion of conntrack entries for
 // addresses that have been completely deleted from all routes. Conntrack
 // cleanup happens in the background.
-func (c *RealConntrackTracker) StartDeletionsForDeletedRoutes() {
+func (c *ConntrackCleanupManager) StartDeletionsForDeletedRoutes() {
 	// Clean up any conntrack entries for routes that have been deleted.
 	c.possibleOwners.PendingDeletions().Iter(func(addr ip.Addr) deltatracker.IterAction {
 		logrus.WithField("addr", addr).Debug(
@@ -140,9 +172,12 @@ func (c *RealConntrackTracker) StartDeletionsForDeletedRoutes() {
 // owners and starts the deletion of conntrack entries for the old owners.
 // The RouteTable is intended to delete the old routes from the dataplane
 // after it gets a callback from this function.
-func (c *RealConntrackTracker) IterMovedRoutesAndStartDeletions(f func(kernKey kernelRouteKey)) {
+func (c *ConntrackCleanupManager) IterMovedRoutesAndStartDeletions(f func(kernKey kernelRouteKey)) {
 	keysToCleanUp := set.New[kernelRouteKey]()
-	c.possibleOwners.PendingUpdates().Iter(func(addr ip.Addr, desiredOwners map[kernelRouteKey][]int) deltatracker.IterAction {
+	c.possibleOwners.PendingUpdates().Iter(func(
+		addr ip.Addr,
+		desiredOwners map[kernelRouteKey][]int,
+	) deltatracker.IterAction {
 		oldOwners, ok := c.possibleOwners.Dataplane().Get(addr)
 		if !ok {
 			// We don't have any owners recorded in the dataplane.  This is the
@@ -235,41 +270,54 @@ func (c *RealConntrackTracker) IterMovedRoutesAndStartDeletions(f func(kernKey k
 }
 
 // startDeletion starts the deletion of conntrack entries for the given CIDR in the background.  Pending
-// deletions are tracked in the cleanupDoneChans map so we can block waiting for them later.
+// deletions are tracked in the perIPDoneChans map so we can block waiting for them later.
 //
 // It's important to do the conntrack deletions in the background because scanning the conntrack
 // table is very slow if there are a lot of entries.  Previously, we did the deletion synchronously
 // but that led to lengthy Apply() calls on the critical path.
-func (c *RealConntrackTracker) startDeletion(ipAddr ip.Addr) {
+func (c *ConntrackCleanupManager) startDeletion(ipAddr ip.Addr) {
 	logrus.WithField("ip", ipAddr).Debug("Starting goroutine to delete conntrack entries")
 	done := make(chan struct{})
-	c.cleanupDoneChans[ipAddr] = done
+	c.perIPDoneChans[ipAddr] = done
 	go func() {
+		defer func() {
+			c.cleanupDoneC <- ipAddr
+		}()
 		defer close(done)
 		c.conntrack.RemoveConntrackFlows(c.ipVersion, ipAddr.AsNetIP())
 		logrus.WithField("ip", ipAddr).Debug("Deleted conntrack entries")
 	}()
 }
 
-// DoPeriodicCleanup scans the cleanupDoneChans map for completed entries and removes them.
-func (c *RealConntrackTracker) DoPeriodicCleanup() {
-	for ipAddr, ch := range c.cleanupDoneChans {
+// DoPeriodicCleanup scans the perIPDoneChans map for completed entries and removes them.
+func (c *ConntrackCleanupManager) DoPeriodicCleanup() {
+	for {
 		select {
-		case <-ch:
-			logrus.WithField("ip", ipAddr).Debug(
-				"Background goroutine finished deleting conntrack entries")
-			delete(c.cleanupDoneChans, ipAddr)
+		case ipAddr := <-c.cleanupDoneC:
+			c.cleanUpExpiredChan(ipAddr)
 		default:
-			logrus.WithField("ip", ipAddr).Debug(
-				"Background goroutine yet to finish deleting conntrack entries")
-			continue
+			return
 		}
 	}
 }
 
+func (c *ConntrackCleanupManager) cleanUpExpiredChan(ipAddr ip.Addr) {
+	ch := c.perIPDoneChans[ipAddr]
+	select {
+	case <-ch:
+		logrus.WithField("ip", ipAddr).Debug(
+			"Background goroutine finished deleting conntrack entries")
+		delete(c.perIPDoneChans, ipAddr)
+	default:
+		// Can get here if there was >1 deletion started for the same IP.
+		logrus.WithField("ip", ipAddr).Debug(
+			"Background goroutine yet to finish deleting conntrack entries")
+	}
+}
+
 // WaitForPendingDeletion waits for any pending conntrack deletions (if any) for the given IP to complete.
-func (c *RealConntrackTracker) WaitForPendingDeletion(ipAddr ip.Addr) {
-	ch, ok := c.cleanupDoneChans[ipAddr]
+func (c *ConntrackCleanupManager) WaitForPendingDeletion(ipAddr ip.Addr) {
+	ch, ok := c.perIPDoneChans[ipAddr]
 	if !ok {
 		conntrackBlockTimeSummary.Observe(0)
 		return
@@ -293,28 +341,28 @@ func (c *RealConntrackTracker) WaitForPendingDeletion(ipAddr ip.Addr) {
 		}
 	}
 done:
-	delete(c.cleanupDoneChans, ipAddr)
+	delete(c.perIPDoneChans, ipAddr)
 	conntrackBlockTimeSummary.Observe(time.Since(startTime).Seconds())
 }
 
-var _ ConntrackTracker = (*RealConntrackTracker)(nil)
+var _ RouteOwnershipTracker = (*ConntrackCleanupManager)(nil)
 
-// DummyConntrackTracker is a dummy implementation of ConntrackTracker that does nothing.
-type DummyConntrackTracker struct {
+// NoOpRouteTracker is a dummy implementation of RouteOwnershipTracker that does nothing.
+type NoOpRouteTracker struct {
 }
 
-func NewDummyConntrackTracker() DummyConntrackTracker {
-	return DummyConntrackTracker{}
+func NewNoOpRouteTracker() NoOpRouteTracker {
+	return NoOpRouteTracker{}
 }
 
-func (d DummyConntrackTracker) AddDataplaneOwner(kernKey kernelRouteKey, ifindex int) {}
-func (d DummyConntrackTracker) StartDeletionsForDeletedRoutes()                       {}
-func (d DummyConntrackTracker) IterMovedRoutesAndStartDeletions(f func(kernKey kernelRouteKey)) {
+func (d NoOpRouteTracker) AddDataplaneOwner(kernKey kernelRouteKey, ifindex int) {}
+func (d NoOpRouteTracker) StartDeletionsForDeletedRoutes()                       {}
+func (d NoOpRouteTracker) IterMovedRoutesAndStartDeletions(f func(kernKey kernelRouteKey)) {
 }
-func (d DummyConntrackTracker) WaitForPendingDeletion(ipAddr ip.Addr)           {}
-func (d DummyConntrackTracker) RemoveAllowedOwner(_ kernelRouteKey)             {}
-func (d DummyConntrackTracker) SetAllowedOwner(_ kernelRouteKey, _ int)         {}
-func (d DummyConntrackTracker) SetSingleDataplaneOwner(_ kernelRouteKey, _ int) {}
-func (d DummyConntrackTracker) DoPeriodicCleanup()                              {}
+func (d NoOpRouteTracker) WaitForPendingDeletion(ipAddr ip.Addr)           {}
+func (d NoOpRouteTracker) RemoveAllowedOwner(_ kernelRouteKey)             {}
+func (d NoOpRouteTracker) SetAllowedOwner(_ kernelRouteKey, _ int)         {}
+func (d NoOpRouteTracker) SetSingleDataplaneOwner(_ kernelRouteKey, _ int) {}
+func (d NoOpRouteTracker) DoPeriodicCleanup()                              {}
 
-var _ ConntrackTracker = (*DummyConntrackTracker)(nil)
+var _ RouteOwnershipTracker = (*NoOpRouteTracker)(nil)
