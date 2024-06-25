@@ -6,12 +6,12 @@ import (
 )
 
 type Fixham struct {
-	api.Component
+	api.Builder
 }
 
 func main() {
 	f := &Fixham{
-		Component: *api.NewComponent("fixham", "github.com/projectcalico/fixham"),
+		Builder: *api.NewBuilder("fixham", "github.com/projectcalico/fixham"),
 	}
 	f.AddTask(tasks.DefineCleanTask([]string{"bin"}, nil, nil))
 	f.AddTask(tasks.DefineStaticChecksTasks(f.DockerGoBuildRunner(), f.Config())...)
