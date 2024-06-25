@@ -118,7 +118,7 @@ func NewGoBuildRunner(version string, packageName string, rootDir string) (g *Go
 
 // MustGoBuildRunner returns a new GoBuildRunner
 func MustGoBuildRunner(version string, packageName string, rootDir string) *GoBuildRunner {
-	g, err := NewGoBuildRunner(version, packageName, "")
+	g, err := NewGoBuildRunner(version, packageName, rootDir)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to create GoBuildRunner")
 	}
@@ -180,31 +180,38 @@ func (g *GoBuildRunner) removeBindMount(targetPath string) {
 }
 
 // WithVolume sets the volume for the container
-func (g *GoBuildRunner) WithVolume(volume ...string) *GoBuildRunner {
+func (g *GoBuildRunner) WithVolume(volume ...string) (runner *GoBuildRunner, err error) {
 	for _, v := range volume {
 		if g.hasBind(v) {
-			logrus.WithField("volume", v).Fatal("volume already exists")
+			logrus.WithField("volume", v).Error("volume already exists")
+			return g, fmt.Errorf("volume already exists")
 		}
 		g.hostConfig.Binds = append(g.hostConfig.Binds, v)
 	}
-	return g
+	return g, nil
 }
 
 // UsingGoModCache sets the volume for go mod cache
-func (g *GoBuildRunner) UsingGoModCache(dir string) *GoBuildRunner {
+func (g *GoBuildRunner) UsingGoModCache(dir string) (*GoBuildRunner, error) {
 	if g.hasBindMount(modCacheDir) {
 		g.removeBindMount(modCacheDir)
 	}
-	g.WithVolume(fmt.Sprintf("%s:%s:rw", dir, modCacheDir))
-	return g
+	if _, err := g.WithVolume(fmt.Sprintf("%s:%s:rw", dir, modCacheDir)); err != nil {
+		return g, err
+	}
+	return g, nil
 }
 
 func (g *GoBuildRunner) RunBashCmd(cmd string) error {
-	return g.Run([]string{"bash", "-c", cmd})
+	bashCmd := []string{"bash"}
+	g.containerConfig.Cmd = bashCmd
+	return g.Run(append(bashCmd, "-c", cmd))
 }
 
 func (g *GoBuildRunner) RunShCmd(cmd string) error {
-	return g.Run([]string{"sh", "-c", cmd})
+	shCmd := []string{"sh"}
+	g.containerConfig.Cmd = shCmd
+	return g.Run(append(shCmd, "-c", cmd))
 }
 
 func (g *GoBuildRunner) Run(cmd []string) error {
@@ -220,19 +227,28 @@ func (g *GoBuildRunner) Run(cmd []string) error {
 		}
 	}
 
-	g.PullImage(g.Image())
-	resp, err := g.RunContainer(g.containerConfig, g.hostConfig)
+	err := g.PullImage(g.Image())
 	if err != nil {
-		logrus.WithError(err).Fatal("failed to run container")
+		logrus.WithError(err).Error("failed to pull image")
 		return err
 	}
-	defer g.RemoveContainer(resp.ID)
+	resp, err := g.RunContainer(g.containerConfig, g.hostConfig)
+	if err != nil {
+		logrus.WithError(err).Error("failed to run container")
+		return err
+	}
 	inspect, err := g.ExecInContainer(resp.ID, cmd...)
 	if err != nil {
 		logrus.WithField("cmd", cmd).Error("executing failed")
 		return err
 	}
-	g.StopContainer(resp.ID)
+	err = g.StopContainer(resp.ID)
+	if err != nil {
+		logrus.WithError(err).Error("failed to stop container")
+	} else {
+		_ = g.RemoveContainer(resp.ID)
+	}
+
 	if inspect.ExitCode != 0 {
 		return fmt.Errorf("command failed with exit code %d", inspect.ExitCode)
 	}
