@@ -8,7 +8,7 @@ GO_BUILD_VER = v0.89
 ACK_GINKGO=ACK_GINKGO_DEPRECATIONS=1.16.5
 
 # Version of Kubernetes to use for tests, bitnami/kubectl, and kubectl binary release.
-K8S_VERSION=v1.27.8
+K8S_VERSION=v1.27.15
 
 # Version of various tools used in the build and tests.
 COREDNS_VERSION=1.5.2
@@ -17,7 +17,7 @@ ETCD_VERSION=v3.5.1
 # tests to timeout or fail.
 KINDEST_NODE_VERSION=v1.24.7
 PROTOC_VER=v0.1
-UBI_VERSION=8.9
+UBI_VERSION=8.10
 
 # Configuration for Semaphore integration.
 ORGANIZATION = projectcalico
