@@ -2,14 +2,11 @@ package main
 
 import (
 	"github.com/projectcalico/fixham/pkg/api"
+	"github.com/projectcalico/fixham/pkg/tasks"
 )
 
-// APIServer is a struct that represents APIServer
-type APIServer struct {
-	api.CalicoComponent
-}
-
 func main() {
-	c := api.NewCalicoComponent("apiserver")
+	c := api.NewCalicoBuilder("apiserver")
+	c.AddTask(tasks.DefineCleanTask([]string{c.Config().BinDir, ".generate_execs", ".lint-cache"}, nil, nil))
 	c.Register()
 }
