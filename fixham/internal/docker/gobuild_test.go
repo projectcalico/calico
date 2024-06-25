@@ -61,8 +61,9 @@ func TestGoBuildRunnerWithEnv(t *testing.T) {
 
 func TestGoBuildRunnergetBindMountSource(t *testing.T) {
 	runner := MustGoBuildRunner("", "github.com/example/repo", "")
-	dir := "/go/pkg/mod"
-	runner.UsingGoModCache(dir)
+	dir := modCacheDir
+	_, err := runner.UsingGoModCache(dir)
+	assert.Nil(t, err, "Unexpected error")
 	assert.Equal(t, dir, runner.getBindMountSource(modCacheDir), "Unexpected bind mount source")
 }
 
@@ -70,13 +71,6 @@ func TestGoBuildRunnergetBindMountSourceNone(t *testing.T) {
 	runner := MustGoBuildRunner("", "github.com/example/repo", "")
 	target := "/container/path"
 	assert.Equal(t, "", runner.getBindMountSource(target), "Unexpected bind mount source")
-}
-
-func TestGoBuildRunnerhasBind(t *testing.T) {
-	runner := MustGoBuildRunner("", "github.com/example/repo", "")
-	bind := "/host/path:/container/path"
-	runner.WithVolume(bind)
-	assert.True(t, runner.hasBind(bind), "expected bind mount")
 }
 
 func TestGoBuildRunnerhasBindNot(t *testing.T) {
@@ -87,8 +81,9 @@ func TestGoBuildRunnerhasBindNot(t *testing.T) {
 
 func TestGoBuildRunnerremoveBindMount(t *testing.T) {
 	runner := MustGoBuildRunner("", "github.com/example/repo", "")
-	dir := "/go/pkg/mod"
-	runner.UsingGoModCache(dir)
+	dir := modCacheDir
+	_, err := runner.UsingGoModCache(dir)
+	assert.Nil(t, err, "Unexpected error")
 	runner.removeBindMount(modCacheDir)
 	assert.NotContains(t, runner.hostConfig.Binds, dir, "Unexpected bind mount source")
 }
@@ -98,21 +93,25 @@ func TestGoBuildRunnerWithVolume(t *testing.T) {
 	volumes := []string{"/host/path:/container/path"}
 	expectedVolumes := runner.hostConfig.Binds
 	expectedVolumes = append(expectedVolumes, volumes...)
-	runner.WithVolume(volumes...)
+	_, err := runner.WithVolume(volumes...)
+	assert.Nil(t, err, "Unexpected error")
 	assert.Equal(t, expectedVolumes, runner.hostConfig.Binds, "Unexpected volumes")
 }
 
 func TestGoBuildRunnerUsingGoModCache(t *testing.T) {
 	runner := MustGoBuildRunner("", "github.com/example/repo", "")
-	dir := "/go/pkg/mod"
-	runner.UsingGoModCache(dir)
+	dir := modCacheDir
+	_, err := runner.UsingGoModCache(dir)
+	assert.Nil(t, err, "Unexpected error")
 	assert.Equal(t, dir, runner.getBindMountSource(modCacheDir), "Unexpected bind mount source")
 }
 
 func TestGoBuildRunnerUsingGoModCacheMultiple(t *testing.T) {
 	runner := MustGoBuildRunner("", "github.com/example/repo", "")
-	dir := "/go/pkg/mod"
-	runner.UsingGoModCache(dir)
-	runner.UsingGoModCache(dir)
+	dir := modCacheDir
+	_, err := runner.UsingGoModCache(dir)
+	assert.Nil(t, err, "Unexpected error")
+	_, err = runner.UsingGoModCache(dir)
+	assert.Nil(t, err, "Unexpected error")
 	assert.Equal(t, dir, runner.getBindMountSource(modCacheDir), "Unexpected bind mount source")
 }

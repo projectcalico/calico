@@ -1,21 +1,20 @@
 package main
 
 import (
-	"github.com/goyek/goyek/v2"
-
-	"github.com/projectcalico/fixham/pkg/bootstrap"
+	"github.com/projectcalico/fixham/pkg/api"
+	"github.com/projectcalico/fixham/pkg/tasks"
 )
 
-const packageName = "github.com/projectcalico/fixham"
-
-var _ = bootstrap.DefineCleanTask([]string{"./bin/*"}, nil, nil)
-
-var _ = bootstrap.DefineUt(func(a *goyek.A) {
-	bootstrap.NewGoBuildRunner().
-		WithBashCmd("go test -timeout 30s -coverprofile=coverage.txt -covermode=atomic ./... -v -failfast").
-		Run()
-}, nil, false)
+type Fixham struct {
+	api.Component
+}
 
 func main() {
-	bootstrap.Main(packageName, "")
+	f := &Fixham{
+		Component: *api.NewComponent("fixham", "github.com/projectcalico/fixham"),
+	}
+	f.AddTask(tasks.DefineCleanTask([]string{"bin"}, nil, nil))
+	f.AddTask(tasks.DefineStaticChecksTasks(f.DockerGoBuildRunner(), f.Config())...)
+	f.AddTask(f.TestTasks()...)
+	f.Register()
 }
