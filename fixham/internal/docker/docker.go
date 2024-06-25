@@ -12,10 +12,12 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// DockerRunner is a struct for running docker commands
 type DockerRunner struct {
 	dockerClient *client.Client
 }
 
+// NewDockerRunner returns a new DockerRunner
 func NewDockerRunner() (d *DockerRunner, err error) {
 	dockerClient, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
@@ -25,6 +27,15 @@ func NewDockerRunner() (d *DockerRunner, err error) {
 	return &DockerRunner{
 		dockerClient: dockerClient,
 	}, nil
+}
+
+// MustDockerRunner returns a new DockerRunner or exits the program
+func MustDockerRunner() *DockerRunner {
+	d, err := NewDockerRunner()
+	if err != nil {
+		logrus.WithError(err).Fatal("failed to create docker runner")
+	}
+	return d
 }
 
 // PullImage pulls the image if it does not exist
@@ -83,6 +94,7 @@ func (d *DockerRunner) RemoveImage(image string) error {
 	return nil
 }
 
+// RunContainer runs a container with the given config and host config
 func (d *DockerRunner) RunContainer(containerConfig *container.Config, hostConfig *container.HostConfig) (container.CreateResponse, error) {
 	logrus.Debug("Creating container")
 	response, err := d.dockerClient.ContainerCreate(context.Background(), containerConfig, hostConfig, nil, nil, "")
@@ -99,6 +111,7 @@ func (d *DockerRunner) RunContainer(containerConfig *container.Config, hostConfi
 	return response, nil
 }
 
+// ExecInContainer executes a command in the container
 func (d *DockerRunner) ExecInContainer(containerID string, cmd ...string) (types.ContainerExecInspect, error) {
 	logrus.Debug("Create exec instance")
 	logrus.WithFields(logrus.Fields{
@@ -138,6 +151,7 @@ func (d *DockerRunner) ExecInContainer(containerID string, cmd ...string) (types
 	return inspect, nil
 }
 
+// StopContainer stops the container
 func (d *DockerRunner) StopContainer(containerID string) error {
 	if err := d.dockerClient.ContainerStop(context.Background(), containerID, container.StopOptions{}); err != nil {
 		logrus.WithError(err).Error("failed to stop container")
@@ -146,6 +160,7 @@ func (d *DockerRunner) StopContainer(containerID string) error {
 	return nil
 }
 
+// RemoveContainer removes the container
 func (d *DockerRunner) RemoveContainer(containerID string) error {
 	if err := d.dockerClient.ContainerRemove(context.Background(), containerID, container.RemoveOptions{}); err != nil {
 		logrus.WithError(err).Error("failed to remove container")

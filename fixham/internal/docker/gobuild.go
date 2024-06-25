@@ -59,13 +59,18 @@ type GoBuildRunner struct {
 	GoBuildImage
 	DockerRunner
 	packageName     string
-	repoVolume      string
 	containerConfig *container.Config
 	hostConfig      *container.HostConfig
 }
 
 // NewGoBuildRunner returns a new GoBuildRunner
-func NewGoBuildRunner(packageName string, version string) (g *GoBuildRunner, err error) {
+//
+// version: version of the go-build image
+//
+// packageName: package name for the component
+//
+// rootDir: root directory for the component package. This is used to bind mount the package
+func NewGoBuildRunner(version string, packageName string, rootDir string) (g *GoBuildRunner, err error) {
 	currentUser, _ := user.Current()
 	repoRootCmd := exec.Command("git", "rev-parse", "--show-toplevel")
 	repoRootDir, err := repoRootCmd.Output()
@@ -97,6 +102,7 @@ func NewGoBuildRunner(packageName string, version string) (g *GoBuildRunner, err
 		hostConfig: &container.HostConfig{
 			NetworkMode: "host",
 			Binds: []string{
+				fmt.Sprintf("%s:/go/src/%s:rw", rootDir, packageName),
 				fmt.Sprintf("%s:%s:rw", gomodCacheDir, modCacheDir),
 				fmt.Sprintf("%s/.go-pkg-cache:%s:rw", repoRootDir, goCacheDir),
 			},
@@ -110,6 +116,15 @@ func NewGoBuildRunner(packageName string, version string) (g *GoBuildRunner, err
 	return
 }
 
+// MustGoBuildRunner returns a new GoBuildRunner
+func MustGoBuildRunner(version string, packageName string, rootDir string) *GoBuildRunner {
+	g, err := NewGoBuildRunner(version, packageName, "")
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to create GoBuildRunner")
+	}
+	return g
+}
+
 // WithVersion sets the version for the go-build image in GoBuildRunner
 func (g *GoBuildRunner) WithVersion(version string) *GoBuildRunner {
 	g.imageVersion = version
@@ -117,6 +132,7 @@ func (g *GoBuildRunner) WithVersion(version string) *GoBuildRunner {
 	return g
 }
 
+// Version returns the version of the go-build image
 func (g *GoBuildRunner) Version() string {
 	return g.imageVersion
 }
@@ -174,13 +190,6 @@ func (g *GoBuildRunner) WithVolume(volume ...string) *GoBuildRunner {
 	return g
 }
 
-// WithRepoVolume sets the volume for the repository
-func (g *GoBuildRunner) WithRepoVolume(volume string) *GoBuildRunner {
-	g.repoVolume = volume
-	g.WithVolume(g.repoVolume)
-	return g
-}
-
 // UsingGoModCache sets the volume for go mod cache
 func (g *GoBuildRunner) UsingGoModCache(dir string) *GoBuildRunner {
 	if g.hasBindMount(modCacheDir) {
@@ -199,6 +208,7 @@ func (g *GoBuildRunner) RunShCmd(cmd string) error {
 }
 
 func (g *GoBuildRunner) Run(cmd []string) error {
+	// TODO: Add logger warning if not using latest calico/go-build image
 	goModCache := g.getBindMountSource(modCacheDir)
 	goPkgCache := g.getBindMountSource(goCacheDir)
 	dirs := []string{"bin", goPkgCache, goModCache}
