@@ -6,6 +6,7 @@ require (
 	github.com/docker/docker v26.1.4+incompatible
 	github.com/goyek/goyek/v2 v2.1.0
 	github.com/goyek/x v0.1.7
+	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.9.0
 )
