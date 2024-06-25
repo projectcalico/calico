@@ -7,8 +7,10 @@ type Config struct {
 	LintArgs       string `envconfig:"LINT_ARGS" default:"--max-issues-per-linter 0 --max-same-issues 0 --timeout 8m"`
 }
 
-func (c *Config) SetPackageName(packageName string) {
-	c.packageName = packageName
+func NewConfig(packageName string) *Config {
+	return &Config{
+		packageName: packageName,
+	}
 }
 
 func (c *Config) PackageName() string {
