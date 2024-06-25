@@ -6,8 +6,8 @@ import (
 	"github.com/goyek/goyek/v2"
 	"github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/fixham/internal/config"
 	"github.com/projectcalico/fixham/internal/docker"
-	"github.com/projectcalico/fixham/pkg/config"
 )
 
 func lintTask(runner *docker.GoBuildRunner, cfg *config.Config) goyek.Task {

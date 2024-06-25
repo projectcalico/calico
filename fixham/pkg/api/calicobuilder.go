@@ -5,28 +5,29 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/projectcalico/fixham/pkg/tasks"
 	"github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/fixham/pkg/tasks"
 )
 
 const (
 	calicoPackageName = "github.com/projectcalico/calico"
 )
 
-// CalicoComponent is a component in the Calico project
-type CalicoComponent struct {
-	Component
+// CalicoBuilder is a component in the Calico project
+type CalicoBuilder struct {
+	Builder
 }
 
-// NewCalicoComponent returns a new CalicoComponent
-func NewCalicoComponent(name string) *CalicoComponent {
-	return &CalicoComponent{
-		Component: *NewComponent(name, calicoPackageName),
+// NewCalicoBuilder returns a new CalicoComponent
+func NewCalicoBuilder(name string) *CalicoBuilder {
+	return &CalicoBuilder{
+		Builder: *NewBuilder(name, calicoPackageName),
 	}
 }
 
 // Path returns the path used for Calico component
-func (c *CalicoComponent) Path() string {
+func (c *CalicoBuilder) Path() string {
 	repoRootCmd := exec.Command("git", "rev-parse", "--show-toplevel")
 	var out bytes.Buffer
 	repoRootCmd.Stdout = &out
@@ -38,7 +39,7 @@ func (c *CalicoComponent) Path() string {
 	return strings.TrimSpace(out.String())
 }
 
-func (c *CalicoComponent) Register() {
+func (c *CalicoBuilder) Register() {
 	c.AddTask(tasks.DefineStaticChecksTasks(c.DockerGoBuildRunner(), c.Config())...)
-	c.Component.Register()
+	c.Builder.Register()
 }

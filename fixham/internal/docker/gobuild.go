@@ -13,8 +13,7 @@ import (
 )
 
 const (
-	defaultGoBuildName    = "calico/go-build"
-	defaultGoBuildVersion = "v0.91"
+	defaultGoBuildName = "calico/go-build"
 
 	modCacheDir = "/go/pkg/mod"
 	goCacheDir  = "/go-cache"
@@ -31,7 +30,7 @@ type GoBuildImage struct {
 // with default image name and version
 func NewGoBuild(version string) GoBuildImage {
 	if version == "" {
-		version = defaultGoBuildVersion
+		logrus.Fatal("version is required")
 	}
 	return GoBuildImage{
 		imageName:    defaultGoBuildName,
@@ -47,10 +46,12 @@ func (g GoBuildImage) Image() string {
 		name = defaultGoBuildName
 	}
 	version := g.imageVersion
-	if version == "" {
-		version = defaultGoBuildVersion
-	}
 	return name + ":" + version
+}
+
+func (g GoBuildImage) WithGoBuildImageName(name string) GoBuildImage {
+	g.imageName = name
+	return g
 }
 
 // GoBuildRunner is the struct for running go-build image
@@ -122,13 +123,6 @@ func MustGoBuildRunner(version string, packageName string, rootDir string) *GoBu
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to create GoBuildRunner")
 	}
-	return g
-}
-
-// WithVersion sets the version for the go-build image in GoBuildRunner
-func (g *GoBuildRunner) WithVersion(version string) *GoBuildRunner {
-	g.imageVersion = version
-	g.containerConfig.Image = g.Image()
 	return g
 }
 
