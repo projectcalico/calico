@@ -116,12 +116,18 @@ var _ = Context("_IPSets_ Tests for IPset rendering", func() {
 		timeToRecreateAll := time.Since(startTime)
 		By(fmt.Sprint("All IP sets programmed after ", timeToRecreateAll))
 
-		Expect(timeToCreateAll).To(BeNumerically("<", 30*time.Second),
+		timeout := 30 * time.Second
+		if NFTMode() {
+			// nftables takes longer to program ipsets.
+			timeout = 240 * time.Second
+		}
+
+		Expect(timeToCreateAll).To(BeNumerically("<", timeout),
 			"Creating IP sets succeeded but slower than expected")
 
 		// Before we rate limited deletions, this would take 80s+.  Now it takes
 		// 10s so 20s should give some headroom.
-		Expect(timeToRecreateAll).To(BeNumerically("<", 30*time.Second),
+		Expect(timeToRecreateAll).To(BeNumerically("<", timeout),
 			"Recreating IP sets succeeded but slower than expected")
 	})
 })
