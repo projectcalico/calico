@@ -310,16 +310,18 @@ type SelectorAndNamedPortIndex struct {
 	OnMemberAdded   NamedPortMatchCallback
 	OnMemberRemoved NamedPortMatchCallback
 
+	suppressor OverlapSuppressor
+
 	OnAlive        func()
 	lastLiveReport time.Time
 }
 
-func NewSelectorAndNamedPortIndex() *SelectorAndNamedPortIndex {
+func NewSelectorAndNamedPortIndex(supressOverlaps bool) *SelectorAndNamedPortIndex {
 	inheritIdx := SelectorAndNamedPortIndex{
 		endpointKVIdx: labelnamevalueindex.New[any, *endpointData]("endpoints"),
 		parentKVIdx:   labelnamevalueindex.New[string, *npParentData]("parents"),
 		ipSetDataByID: map[string]*ipSetData{},
-		selectorCandidatesIdx: labelrestrictionindex.New[string](
+		selectorCandidatesIdx: labelrestrictionindex.New(
 			labelrestrictionindex.WithGauges[string](
 				gaugeSelectorsOpt,
 				gaugeSelectorsNonOpt,
@@ -329,6 +331,11 @@ func NewSelectorAndNamedPortIndex() *SelectorAndNamedPortIndex {
 		OnMemberAdded:   func(ipSetID string, member IPSetMember) {},
 		OnMemberRemoved: func(ipSetID string, member IPSetMember) {},
 		OnAlive:         func() {},
+	}
+	if supressOverlaps {
+		inheritIdx.suppressor = NewMemberOverlapSuppressor()
+	} else {
+		inheritIdx.suppressor = NewNoopMemberOverlapSuppressor()
 	}
 	return &inheritIdx
 }
@@ -506,7 +513,7 @@ func (idx *SelectorAndNamedPortIndex) UpdateIPSet(ipSetID string, sel selector.S
 			// Emit deletion events for the members.  We don't need to do that
 			// for the expected, non-test code path because it's handled
 			// en-masse.
-			idx.OnMemberRemoved(ipSetID, m)
+			idx.onMemberRemoved(ipSetID, m)
 		}
 		idx.DeleteIPSet(ipSetID)
 	}
@@ -546,7 +553,7 @@ func (idx *SelectorAndNamedPortIndex) UpdateIPSet(ipSetID string, sel selector.S
 				if log.GetLevel() >= log.DebugLevel {
 					logCxt.WithField("member", member).Debug("New IP set member")
 				}
-				idx.OnMemberAdded(ipSetID, member)
+				idx.onMemberAdded(ipSetID, member)
 			}
 			newIPSetData.memberToRefCount[member] = refCount + 1
 		}
@@ -576,6 +583,7 @@ func (idx *SelectorAndNamedPortIndex) DeleteIPSet(setID string) {
 
 	delete(idx.ipSetDataByID, setID)
 	idx.selectorCandidatesIdx.DeleteSelector(setID)
+	idx.suppressor.DeleteIPSet(setID)
 }
 
 func (idx *SelectorAndNamedPortIndex) UpdateEndpointOrSet(
@@ -658,6 +666,53 @@ func (idx *SelectorAndNamedPortIndex) UpdateEndpointOrSet(
 	gaugeNumEndpoints.Set(float64(idx.endpointKVIdx.Len()))
 }
 
+// onMemberAdded is a wrapper around the OnMemberAdded callback that allows us to
+// deduplicate any members that are masked by another member of the set, sending any necessary IPSet member
+// removals for previously sent members that are now masked.
+// For example, we don't need to send updates for both 10.0.0.0/24 and 10.0.0.1/32.
+func (idx *SelectorAndNamedPortIndex) onMemberAdded(ipSetID string, member IPSetMember) {
+	if member.Protocol == ProtocolNone && member.PortNumber == 0 {
+		// We only deduplicate for IP set members that are CIDRs. Named port members are always unique.
+		add, removes := idx.suppressor.Add(ipSetID, member.CIDR)
+		if add != nil {
+			idx.OnMemberAdded(ipSetID, IPSetMember{CIDR: add})
+		}
+		for _, r := range removes {
+			log.WithField("ipSetID", ipSetID).
+				WithField("cidr", r).
+				WithField("reason", member.CIDR).
+				Debug("Removing now-masked CIDR from IP set.")
+			idx.OnMemberRemoved(ipSetID, IPSetMember{CIDR: r})
+		}
+	} else {
+		// No need to de-duplicate.
+		idx.OnMemberAdded(ipSetID, member)
+	}
+}
+
+// onMemberRemoved is a wrapper around the OnMemberRemoved callback that allows us to
+// deduplicate any members that are masked by another member of the set, sending any necessary IPSet member
+// IPSet member adds for members that were previously masked by the removed member.
+func (idx *SelectorAndNamedPortIndex) onMemberRemoved(ipSetID string, member IPSetMember) {
+	if member.Protocol == ProtocolNone && member.PortNumber == 0 {
+		// We only deduplicate for IP set members that are CIDRs. Named port members are always unique.
+		rem, adds := idx.suppressor.Remove(ipSetID, member.CIDR)
+		if rem != nil {
+			idx.OnMemberRemoved(ipSetID, IPSetMember{CIDR: rem})
+		}
+		for _, a := range adds {
+			log.WithField("ipSetID", ipSetID).
+				WithField("cidr", a).
+				WithField("reason", member.CIDR).
+				Debug("Adding previously masked CIDR to IP set.")
+			idx.OnMemberAdded(ipSetID, IPSetMember{CIDR: a})
+		}
+	} else {
+		// No need to de-duplicate.
+		idx.OnMemberRemoved(ipSetID, member)
+	}
+}
+
 func (idx *SelectorAndNamedPortIndex) scanEndpointAgainstIPSets(
 	epData *endpointData,
 	oldIPSetContributions map[string][]IPSetMember,
@@ -691,7 +746,7 @@ func (idx *SelectorAndNamedPortIndex) scanEndpointAgainstIPSets(
 				newRefCount := ipSetData.memberToRefCount[newMember] + 1
 				if newRefCount == 1 {
 					// New member in the IP set.
-					idx.OnMemberAdded(ipSetID, newMember)
+					idx.onMemberAdded(ipSetID, newMember)
 				}
 				ipSetData.memberToRefCount[newMember] = newRefCount
 			}
@@ -708,7 +763,7 @@ func (idx *SelectorAndNamedPortIndex) scanEndpointAgainstIPSets(
 			if newRefCount == 0 {
 				// Member no longer in the IP set.  Emit event and clean up the old reference
 				// count.
-				idx.OnMemberRemoved(ipSetID, oldMember)
+				idx.onMemberRemoved(ipSetID, oldMember)
 				delete(ipSetData.memberToRefCount, oldMember)
 			} else {
 				ipSetData.memberToRefCount[oldMember] = newRefCount
@@ -736,7 +791,7 @@ func (idx *SelectorAndNamedPortIndex) DeleteEndpoint(id any) {
 			if newRefCount == 0 {
 				// Member no longer in the IP set.  Emit event and clean up the old reference
 				// count.
-				idx.OnMemberRemoved(ipSetID, oldMember)
+				idx.onMemberRemoved(ipSetID, oldMember)
 				delete(ipSetData.memberToRefCount, oldMember)
 			} else {
 				ipSetData.memberToRefCount[oldMember] = newRefCount
@@ -978,4 +1033,104 @@ func (idx *SelectorAndNamedPortIndex) estimateParentEndpointScanCount(s labelnam
 		return total
 	}
 	return (total*s.EstimatedItemsToScan() + maxNumToScan - 1) / maxNumToScan
+}
+
+func NewMemberOverlapSuppressor() OverlapSuppressor {
+	return &memberDeduplicator{
+		v4tries: map[string]*ip.CIDRTrie{},
+		v6tries: map[string]*ip.CIDRTrie{},
+	}
+}
+
+func NewNoopMemberOverlapSuppressor() OverlapSuppressor {
+	return &noopMemberDeduplicator{}
+}
+
+type OverlapSuppressor interface {
+	Add(set string, cidr ip.CIDR) (ip.CIDR, []ip.CIDR)
+	Remove(set string, cidr ip.CIDR) (ip.CIDR, []ip.CIDR)
+	DeleteIPSet(set string)
+}
+
+// noopMemberDeduplicator is a MemberDeduplicator that doesn't deduplicate members. Can be used
+// when deduplication is not required.
+type noopMemberDeduplicator struct{}
+
+func (n *noopMemberDeduplicator) Add(set string, cidr ip.CIDR) (ip.CIDR, []ip.CIDR) {
+	return cidr, nil
+}
+
+func (n *noopMemberDeduplicator) Remove(set string, cidr ip.CIDR) (ip.CIDR, []ip.CIDR) {
+	return cidr, nil
+}
+
+func (n *noopMemberDeduplicator) DeleteIPSet(set string) {
+}
+
+// memberDeduplicator is a MemberDeduplicator that deduplicates members that are masked by other members.
+type memberDeduplicator struct {
+	v4tries map[string]*ip.CIDRTrie
+	v6tries map[string]*ip.CIDRTrie
+
+	// buf is a buffer used internally by the memberDeduplicator to minimize slice allocations.
+	buf []ip.CIDR
+}
+
+func (t *memberDeduplicator) getTrie(set string, v6 bool) *ip.CIDRTrie {
+	var tries map[string]*ip.CIDRTrie
+	if v6 {
+		tries = t.v6tries
+	} else {
+		tries = t.v4tries
+	}
+	trie, ok := tries[set]
+	if !ok {
+		trie = ip.NewCIDRTrie()
+		tries[set] = trie
+	}
+	return trie
+}
+
+// Add adds the given CIDR to the trie. It returns a CIDR to add and a slice of CIDRs to remove if applicable.
+func (t *memberDeduplicator) Add(set string, cidr ip.CIDR) (ip.CIDR, []ip.CIDR) {
+	v6 := strings.Contains(cidr.String(), ":")
+	trie := t.getTrie(set, v6)
+
+	// Check if this IP is already covered by another entry in the trie.
+	covered := trie.Covers(cidr)
+
+	// Add to the trie.
+	trie.Update(cidr, cidr)
+
+	if covered {
+		return nil, nil
+	}
+
+	// This is a new CIDR - we need to check to see if it masks any other CIDRs we have already sent.
+	// Get the node and check if it has any children. If it does, those children are masked by this new CIDR
+	// and need to be withdrawn.
+	t.buf = t.buf[:0]
+	masked := trie.ClosestDescendants(t.buf, cidr)
+	return cidr, masked
+}
+
+// Remove removes the given CIDR from the trie. It returns a CIDR to remove and a slice of CIDRs to add back if applicable.
+func (t *memberDeduplicator) Remove(set string, cidr ip.CIDR) (ip.CIDR, []ip.CIDR) {
+	v6 := strings.Contains(cidr.String(), ":")
+	trie := t.getTrie(set, v6)
+
+	// If this node has children that are masked by this CIDR, we need to
+	// advertise them against as part of this deletion.
+	t.buf = t.buf[:0]
+	masked := trie.ClosestDescendants(t.buf, cidr)
+
+	// Remove from the trie.
+	trie.Delete(cidr)
+
+	return cidr, masked
+}
+
+func (t *memberDeduplicator) DeleteIPSet(set string) {
+	delete(t.v4tries, set)
+	delete(t.v6tries, set)
 }
