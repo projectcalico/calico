@@ -62,7 +62,7 @@ func (c *Builder) DockerRunner() *docker.DockerRunner {
 
 // DockerGoBuildRunner returns a GoBuildRunner to be used in the component
 func (c *Builder) DockerGoBuildRunner() *docker.GoBuildRunner {
-	runner := docker.MustGoBuildRunner(c.Config().GoBuildVersion, c.packageName, c.Path())
+	runner := docker.MustGoBuildRunner(c.Config().GoBuildVersion(), c.packageName, c.Path())
 	if c.Config().GoBuildImageName != "" {
 		runner = runner.WithGoBuildImageName(c.Config().GoBuildImageName)
 	}

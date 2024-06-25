@@ -3,13 +3,14 @@ package docker
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"os/user"
 	"runtime"
 	"strings"
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/fixham/internal/config"
 )
 
 const (
@@ -73,11 +74,7 @@ type GoBuildRunner struct {
 // rootDir: root directory for the component package. This is used to bind mount the package
 func NewGoBuildRunner(version string, packageName string, rootDir string) (g *GoBuildRunner, err error) {
 	currentUser, _ := user.Current()
-	repoRootCmd := exec.Command("git", "rev-parse", "--show-toplevel")
-	repoRootDir, err := repoRootCmd.Output()
-	if err != nil {
-		logrus.WithError(err).Fatal("Failed to get repo root dir")
-	}
+	repoRootDir := config.MustReadGitRepoPath()
 	gomodCacheDir := goModCacheDir(currentUser)
 	goBuild := NewGoBuild(version)
 	dockerRunner, err := NewDockerRunner()

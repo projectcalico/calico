@@ -1,12 +1,6 @@
 package api
 
 import (
-	"bytes"
-	"os/exec"
-	"strings"
-
-	"github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/fixham/pkg/tasks"
 )
 
@@ -28,15 +22,7 @@ func NewCalicoBuilder(name string) *CalicoBuilder {
 
 // Path returns the path used for Calico component
 func (c *CalicoBuilder) Path() string {
-	repoRootCmd := exec.Command("git", "rev-parse", "--show-toplevel")
-	var out bytes.Buffer
-	repoRootCmd.Stdout = &out
-	err := repoRootCmd.Run()
-	if err != nil {
-		logrus.WithError(err).Fatal("Failed to get repo root")
-		return ""
-	}
-	return strings.TrimSpace(out.String())
+	return c.Config().RepoRootDir
 }
 
 func (c *CalicoBuilder) Register() {
