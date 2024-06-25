@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2016 Tigera, Inc. All rights reserved.
+# Copyright (c) 2015-2016,2024 Tigera, Inc. All rights reserved.
 # Copyright IBM Corp. 2017
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,7 +18,7 @@ ARG BIRD_IMAGE
 FROM ${QEMU_IMAGE} as qemu
 FROM ${BIRD_IMAGE} as bird
 
-FROM calico/bpftool:v5.3-s390x as bpftool
+FROM calico/bpftool:v7.4.0 as bpftool
 
 FROM s390x/alpine:3.18 as base
 
