@@ -310,7 +310,7 @@ type SelectorAndNamedPortIndex struct {
 	OnMemberAdded   NamedPortMatchCallback
 	OnMemberRemoved NamedPortMatchCallback
 
-	deduplicator OverlapSuppressor
+	suppressor OverlapSuppressor
 
 	OnAlive        func()
 	lastLiveReport time.Time
@@ -333,9 +333,9 @@ func NewSelectorAndNamedPortIndex(supressOverlaps bool) *SelectorAndNamedPortInd
 		OnAlive:         func() {},
 	}
 	if supressOverlaps {
-		inheritIdx.deduplicator = NewMemberOverlapSuppressor()
+		inheritIdx.suppressor = NewMemberOverlapSuppressor()
 	} else {
-		inheritIdx.deduplicator = NewNoopMemberOverlapSuppressor()
+		inheritIdx.suppressor = NewNoopMemberOverlapSuppressor()
 	}
 	return &inheritIdx
 }
@@ -583,7 +583,7 @@ func (idx *SelectorAndNamedPortIndex) DeleteIPSet(setID string) {
 
 	delete(idx.ipSetDataByID, setID)
 	idx.selectorCandidatesIdx.DeleteSelector(setID)
-	idx.deduplicator.DeleteIPSet(setID)
+	idx.suppressor.DeleteIPSet(setID)
 }
 
 func (idx *SelectorAndNamedPortIndex) UpdateEndpointOrSet(
@@ -673,7 +673,7 @@ func (idx *SelectorAndNamedPortIndex) UpdateEndpointOrSet(
 func (idx *SelectorAndNamedPortIndex) onMemberAdded(ipSetID string, member IPSetMember) {
 	if member.Protocol == ProtocolNone && member.PortNumber == 0 {
 		// We only deduplicate for IP set members that are CIDRs. Named port members are always unique.
-		add, removes := idx.deduplicator.Add(ipSetID, member.CIDR)
+		add, removes := idx.suppressor.Add(ipSetID, member.CIDR)
 		if add != nil {
 			idx.OnMemberAdded(ipSetID, IPSetMember{CIDR: add})
 		}
@@ -696,7 +696,7 @@ func (idx *SelectorAndNamedPortIndex) onMemberAdded(ipSetID string, member IPSet
 func (idx *SelectorAndNamedPortIndex) onMemberRemoved(ipSetID string, member IPSetMember) {
 	if member.Protocol == ProtocolNone && member.PortNumber == 0 {
 		// We only deduplicate for IP set members that are CIDRs. Named port members are always unique.
-		rem, adds := idx.deduplicator.Remove(ipSetID, member.CIDR)
+		rem, adds := idx.suppressor.Remove(ipSetID, member.CIDR)
 		if rem != nil {
 			idx.OnMemberRemoved(ipSetID, IPSetMember{CIDR: rem})
 		}

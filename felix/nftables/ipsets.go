@@ -190,13 +190,14 @@ func (s *IPSets) RemoveIPSet(setID string) {
 	// until we actually delete the IP set.  We clean up mainSetNameToMembers only when we actually
 	// delete it.
 	setName := s.nameForMainIPSet(setID)
+
 	delete(s.setNameToAllMetadata, setName)
 	s.setNameToProgrammedMetadata.Desired().Delete(setName)
 	if _, ok := s.setNameToProgrammedMetadata.Dataplane().Get(setName); ok {
 		// Set is currently in the dataplane, clear its desired members but
 		// we keep the member tracker until we actually delete the IP set
 		// from the dataplane later.
-		s.logCxt.WithField("setID", setID).Info("Queueing IP set for removal")
+		s.logCxt.WithField("setID", setName).Info("Queueing IP set for removal")
 		s.mainSetNameToMembers[setName].Desired().DeleteAll()
 	} else {
 		// If it's not in the dataplane, clean it up immediately.
@@ -206,8 +207,10 @@ func (s *IPSets) RemoveIPSet(setID string) {
 	s.updateDirtiness(setName)
 }
 
+// nameForMainIPSet takes the given set ID and returns the name of the IP set as seen in nftables. This
+// helper should be used to sanitize any set IDs, ensuring they are a consistent format.
 func (s *IPSets) nameForMainIPSet(setID string) string {
-	return s.IPVersionConfig.NameForMainIPSet(setID)
+	return LegalizeSetName(s.IPVersionConfig.NameForMainIPSet(setID))
 }
 
 // AddMembers adds the given members to the IP set.  Filters out members that are of the incorrect
@@ -484,7 +487,7 @@ func (s *IPSets) NFTablesSet(name string) *knftables.Set {
 	}
 
 	return &knftables.Set{
-		Name:  LegalizeSetName(name),
+		Name:  name,
 		Type:  metadata.Type.SetType(s.IPVersionConfig.Family.Version()),
 		Flags: flags,
 	}
@@ -541,7 +544,7 @@ func (s *IPSets) tryUpdates() error {
 		members := s.getOrCreateMemberTracker(setName)
 		members.PendingDeletions().Iter(func(member ipsets.IPSetMember) deltatracker.IterAction {
 			tx.Delete(&knftables.Element{
-				Set: LegalizeSetName(setName),
+				Set: setName,
 				Key: []string{member.String()},
 			})
 			return deltatracker.IterActionNoOp
@@ -553,7 +556,7 @@ func (s *IPSets) tryUpdates() error {
 				return
 			}
 			tx.Add(&knftables.Element{
-				Set: LegalizeSetName(setName),
+				Set: setName,
 				Key: []string{member.String()},
 			})
 		})
@@ -607,7 +610,7 @@ func (s *IPSets) ApplyDeletions() bool {
 		// Add to the transaction.
 		logCxt := s.logCxt.WithField("setName", setName)
 		logCxt.Info("Deleting IP set in next transaction.")
-		tx.Delete(&knftables.Set{Name: LegalizeSetName(setName)})
+		tx.Delete(&knftables.Set{Name: setName})
 		deletedSets.Add(setName)
 
 		if _, ok := s.setNameToAllMetadata[setName]; !ok {
@@ -617,8 +620,7 @@ func (s *IPSets) ApplyDeletions() bool {
 		} else {
 			// We're still tracking this IP set in case it needs to be recreated.
 			// Record that the dataplane is now empty.
-			logCxt.Debug("IP set now gone from dataplane but still " +
-				"tracking its members (it is filtered out).")
+			logCxt.Debug("IP set now gone from dataplane but still tracking its members (it is filtered out).")
 			s.mainSetNameToMembers[setName].Dataplane().DeleteAll()
 		}
 		return deltatracker.IterActionNoOp
