@@ -1,12 +1,6 @@
 package api
 
-import (
-	"github.com/projectcalico/fixham/pkg/tasks"
-)
-
-const (
-	calicoPackageName = "github.com/projectcalico/calico"
-)
+import "github.com/projectcalico/fixham/pkg/goyek"
 
 // CalicoBuilder is a component in the Calico project
 type CalicoBuilder struct {
@@ -14,9 +8,9 @@ type CalicoBuilder struct {
 }
 
 // NewCalicoBuilder returns a new CalicoComponent
-func NewCalicoBuilder(name string) *CalicoBuilder {
+func NewCalicoBuilder() *CalicoBuilder {
 	return &CalicoBuilder{
-		Builder: *NewBuilder(name, calicoPackageName),
+		Builder: *NewBuilder(),
 	}
 }
 
@@ -25,7 +19,11 @@ func (c *CalicoBuilder) Path() string {
 	return c.Config().RepoRootDir
 }
 
-func (c *CalicoBuilder) Register() {
-	c.AddTask(tasks.DefineStaticChecksTasks(c.DockerGoBuildRunner(), c.Config())...)
-	c.Builder.Register(c.GetTask("build"))
+func (f *CalicoBuilder) Tasks() map[string]*goyek.GoyekTask {
+	f.AddTask(goyek.Lint(f.DockerGoBuildRunner(), f.Config()),
+		goyek.CheckFmt(f.DockerGoBuildRunner(), f.Config()),
+		goyek.FixFmt(f.DockerGoBuildRunner(), f.Config()),
+		goyek.StaticChecks(f.DockerGoBuildRunner(), f.Config()))
+	tasks := f.Builder.Tasks()
+	return tasks
 }

@@ -2,13 +2,15 @@ package main
 
 import (
 	"github.com/projectcalico/fixham/pkg/api"
-	"github.com/projectcalico/fixham/pkg/tasks"
+	"github.com/projectcalico/fixham/pkg/goyek"
 )
 
 func main() {
-	f := api.NewBuilder("fixham", "github.com/projectcalico/fixham")
-	f.AddTask(tasks.DefineCleanTask([]string{f.Config().BinDir}, nil, nil))
-	f.AddTask(tasks.DefineStaticChecksTasks(f.DockerGoBuildRunner(), f.Config())...)
-	f.AddTask(TestTasks(f)...)
-	f.Register(f.GetTask("static-checks"))
+	f := api.NewBuilder()
+	f.AddTask(goyek.Clean([]string{f.Config().BinDir}, nil))
+	f.AddTask(goyek.Lint(f.DockerGoBuildRunner(), f.Config()),
+		goyek.CheckFmt(f.DockerGoBuildRunner(), f.Config()),
+		goyek.FixFmt(f.DockerGoBuildRunner(), f.Config()),
+		goyek.StaticChecks(f.DockerGoBuildRunner(), f.Config()))
+	f.Register()
 }

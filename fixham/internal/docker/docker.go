@@ -8,6 +8,7 @@ import (
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
+	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/client"
 	"github.com/sirupsen/logrus"
 )
@@ -39,18 +40,18 @@ func MustDockerRunner() *DockerRunner {
 }
 
 // PullImage pulls the image if it does not exist
-func (d *DockerRunner) PullImage(image string) error {
-	logrus.WithField("image", image).Debug("Checking if image exists")
-	imageSummary, err := d.dockerClient.ImageList(context.Background(), types.ImageListOptions{
-		Filters: filters.NewArgs(filters.Arg("reference", image)),
+func (d *DockerRunner) PullImage(img string) error {
+	logrus.WithField("image", img).Debug("Checking if image exists")
+	imageSummary, err := d.dockerClient.ImageList(context.Background(), image.ListOptions{
+		Filters: filters.NewArgs(filters.Arg("reference", img)),
 	})
 	if err != nil {
 		logrus.WithError(err).Error("failed to list images")
 		return err
 	}
 	if len(imageSummary) == 0 {
-		logrus.WithField("image", image).Debug("Image does not exist, pulling...")
-		reader, err := d.dockerClient.ImagePull(context.Background(), image, types.ImagePullOptions{})
+		logrus.WithField("image", img).Debug("Image does not exist, pulling...")
+		reader, err := d.dockerClient.ImagePull(context.Background(), img, image.PullOptions{})
 		if err != nil {
 			logrus.WithError(err).Error("failed to pull image")
 			return err
@@ -65,31 +66,31 @@ func (d *DockerRunner) PullImage(image string) error {
 }
 
 // RemoveImage removes the image if it exists
-func (d *DockerRunner) RemoveImage(image string) error {
-	logrus.WithField("image", image).Debug("Checking if image exists")
-	images, err := d.dockerClient.ImageList(context.Background(), types.ImageListOptions{
-		Filters: filters.NewArgs(filters.Arg("reference", image)),
+func (d *DockerRunner) RemoveImage(img string) error {
+	logrus.WithField("image", img).Debug("Checking if image exists")
+	images, err := d.dockerClient.ImageList(context.Background(), image.ListOptions{
+		Filters: filters.NewArgs(filters.Arg("reference", img)),
 	})
 	if err != nil {
 		logrus.WithError(err).Error("failed to list images")
 		return err
 	}
 	if len(images) == 0 {
-		logrus.Debug(image, " image does not exist")
+		logrus.Debug(img, " image does not exist")
 		return nil
 	}
 
-	for _, image := range images {
-		logrus.WithField("image", image.ID).Debug("Removing image")
-		_, err := d.dockerClient.ImageRemove(context.Background(), image.ID, types.ImageRemoveOptions{
+	for _, img := range images {
+		logrus.WithField("image", img.ID).Debug("Removing image")
+		_, err := d.dockerClient.ImageRemove(context.Background(), img.ID, image.RemoveOptions{
 			Force:         true,
 			PruneChildren: true,
 		})
 		if err != nil {
-			logrus.WithField("image", image.ID).WithError(err).Error("failed to remove image")
+			logrus.WithField("image", img.ID).WithError(err).Error("failed to remove image")
 			return err
 		}
-		logrus.WithField("image", image.ID).Debug("Image removed")
+		logrus.WithField("image", img.ID).Debug("Image removed")
 	}
 	return nil
 }

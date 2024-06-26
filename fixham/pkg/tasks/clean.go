@@ -5,7 +5,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/goyek/goyek/v2"
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/fixham/internal/docker"
@@ -19,7 +18,7 @@ func removePath(path string) {
 
 }
 
-func cleanFiles(paths ...string) {
+func CleanFiles(paths ...string) {
 	for _, p := range paths {
 		if strings.Contains(p, "*?[") {
 			matches, err := filepath.Glob(p)
@@ -35,7 +34,7 @@ func cleanFiles(paths ...string) {
 	}
 }
 
-func cleanImages(images ...string) {
+func CleanImages(images ...string) {
 	for _, image := range images {
 		runner := docker.MustDockerRunner()
 		err := runner.RemoveImage(image)
@@ -45,16 +44,7 @@ func cleanImages(images ...string) {
 	}
 }
 
-func DefineCleanTask(paths []string, images []string, deps goyek.Deps) *goyek.DefinedTask {
-	return RegisterTask(goyek.Task{
-		Name:  "clean",
-		Usage: "Clean the project",
-		Action: func(a *goyek.A) {
-			logrus.Debug("Cleaning project")
-			cleanFiles(paths...)
-			cleanImages(images...)
-		},
-		Deps:     deps,
-		Parallel: false,
-	})
+func Clean(paths []string, images []string) {
+	CleanFiles(paths...)
+	CleanImages(images...)
 }

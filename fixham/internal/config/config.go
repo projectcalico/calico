@@ -1,38 +1,29 @@
 package config
 
+import "github.com/kelseyhightower/envconfig"
+
 type Config struct {
-	packageName string
+	Name         string `envconfig:"NAME"`
+	PackageName  string `envconfig:"PACKAGE_NAME" required:"true"`
+	Organization string `envconfig:"ORGANIZATION"`
 	// GoBuildImageName is the name of the go-build image
 	// if wanting to override calico/go-build
-	GoBuildImageName string `envconfig:"GO_BUILD_IMAGE" default:""`
+	GoBuildImageName string `envconfig:"GO_BUILD_IMAGE" default:"calico/go-build"`
 	// GoBuildVersion is the version of the go-build image
-	goBuildVersion string //`envconfig:"GO_BUILD_VER" default:"v0.91"`
+	GoBuildVersion string `envconfig:"GO_BUILD_VER" required:"true"`
 	// GitUseSSH is a flag to use SSH for git operations
-	GitUseSSH bool `envconfig:"GIT_USE_SSH" default:"false"`
+	GitUseSSH bool `envconfig:"GIT_USE_SSH"`
 	// RepoRootDir is the root directory for the repository
 	// it is used for git operations
-	RepoRootDir string
+	RepoRootDir string `envconfig:"REPO_ROOT" required:"true"`
 	// LintArgs are the arguments to pass to the linter
 	LintArgs string `envconfig:"LINT_ARGS" default:"--max-issues-per-linter 0 --max-same-issues 0 --timeout 8m"`
 	// BinDir is the directory to store binaries
-	BinDir string `envconfig:"BIN_DIR" default:"bin"`
+	BinDir string `envconfig:"BIN_DIR"`
 }
 
-func NewConfig(packageName string) *Config {
-	repoRootDir := MustReadGitRepoPath()
-	// TODO: update to use envconfig for goBuildVersion
-	goBuildVersion := MustReadMakefileValue(repoRootDir+"/"+makefileConfigFile, "GO_BUILD_VER")
-	return &Config{
-		packageName:    packageName,
-		RepoRootDir:    repoRootDir,
-		goBuildVersion: goBuildVersion,
-	}
-}
-
-func (c *Config) PackageName() string {
-	return c.packageName
-}
-
-func (c *Config) GoBuildVersion() string {
-	return c.goBuildVersion
+func LoadConfig() *Config {
+	config := &Config{}
+	envconfig.MustProcess("", config)
+	return config
 }
