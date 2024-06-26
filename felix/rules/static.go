@@ -1152,17 +1152,22 @@ func (r *DefaultRuleRenderer) StaticBPFModeRawChains(ipVersion uint8,
 			Action:  GotoAction{Target: ChainRawBPFUntrackedPolicy},
 			Comment: []string{"Jump to target for packets with Bypass mark"},
 		},
-		Rule{
-			Match:   Match().DestAddrType(AddrTypeLocal),
-			Action:  SetMaskedMarkAction{Mark: tcdefs.MarkSeenSkipFIB, Mask: tcdefs.MarkSeenSkipFIB},
-			Comment: []string{"Mark traffic towards the host - it is TRACKed"},
-		},
-		Rule{
-			Match:   Match().NotDestAddrType(AddrTypeLocal),
-			Action:  GotoAction{Target: ChainRawUntrackedFlows},
-			Comment: []string{"Check if forwarded traffic needs to be TRACKed"},
-		},
 	)
+
+	if bypassHostConntrack {
+		rawRules = append(rawRules,
+			Rule{
+				Match:   Match().DestAddrType(AddrTypeLocal),
+				Action:  SetMaskedMarkAction{Mark: tcdefs.MarkSeenSkipFIB, Mask: tcdefs.MarkSeenSkipFIB},
+				Comment: []string{"Mark traffic towards the host - it is TRACKed"},
+			},
+			Rule{
+				Match:   Match().NotDestAddrType(AddrTypeLocal),
+				Action:  GotoAction{Target: ChainRawUntrackedFlows},
+				Comment: []string{"Check if forwarded traffic needs to be TRACKed"},
+			},
+		)
+	}
 
 	rawPreroutingChain := &Chain{
 		Name:  ChainRawPrerouting,
