@@ -20,10 +20,10 @@ import (
 	"strings"
 
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
-	"github.com/projectcalico/calico/felix/iptables"
+	. "github.com/projectcalico/calico/felix/generictables"
 )
 
-func (r *DefaultRuleRenderer) MakeNatOutgoingRule(protocol string, action iptables.Action, ipVersion uint8) iptables.Rule {
+func (r *DefaultRuleRenderer) MakeNatOutgoingRule(protocol string, action Action, ipVersion uint8) Rule {
 	if r.Config.BPFEnabled {
 		return r.makeNATOutgoingRuleBPF(ipVersion, protocol, action)
 	} else {
@@ -31,8 +31,8 @@ func (r *DefaultRuleRenderer) MakeNatOutgoingRule(protocol string, action iptabl
 	}
 }
 
-func (r *DefaultRuleRenderer) makeNATOutgoingRuleBPF(version uint8, protocol string, action iptables.Action) iptables.Rule {
-	match := iptables.Match().MarkMatchesWithMask(tcdefs.MarkSeenNATOutgoing, tcdefs.MarkSeenNATOutgoingMask)
+func (r *DefaultRuleRenderer) makeNATOutgoingRuleBPF(version uint8, protocol string, action Action) Rule {
+	match := r.NewMatch().MarkMatchesWithMask(tcdefs.MarkSeenNATOutgoing, tcdefs.MarkSeenNATOutgoingMask)
 
 	if protocol != "" {
 		match = match.Protocol(protocol)
@@ -42,19 +42,19 @@ func (r *DefaultRuleRenderer) makeNATOutgoingRuleBPF(version uint8, protocol str
 		match = match.OutInterface(r.Config.IptablesNATOutgoingInterfaceFilter)
 	}
 
-	rule := iptables.Rule{
+	rule := Rule{
 		Action: action,
 		Match:  match,
 	}
 	return rule
 }
 
-func (r *DefaultRuleRenderer) makeNATOutgoingRuleIPTables(ipVersion uint8, protocol string, action iptables.Action) iptables.Rule {
+func (r *DefaultRuleRenderer) makeNATOutgoingRuleIPTables(ipVersion uint8, protocol string, action Action) Rule {
 	ipConf := r.ipSetConfig(ipVersion)
 	allIPsSetName := ipConf.NameForMainIPSet(IPSetIDNATOutgoingAllPools)
 	masqIPsSetName := ipConf.NameForMainIPSet(IPSetIDNATOutgoingMasqPools)
 
-	match := iptables.Match().
+	match := r.NewMatch().
 		SourceIPSet(masqIPsSetName).
 		NotDestIPSet(allIPsSetName)
 
@@ -66,48 +66,48 @@ func (r *DefaultRuleRenderer) makeNATOutgoingRuleIPTables(ipVersion uint8, proto
 		match = match.OutInterface(r.Config.IptablesNATOutgoingInterfaceFilter)
 	}
 
-	rule := iptables.Rule{
+	rule := Rule{
 		Action: action,
 		Match:  match,
 	}
 	return rule
 }
 
-func (r *DefaultRuleRenderer) NATOutgoingChain(natOutgoingActive bool, ipVersion uint8) *iptables.Chain {
-	var rules []iptables.Rule
+func (r *DefaultRuleRenderer) NATOutgoingChain(natOutgoingActive bool, ipVersion uint8) *Chain {
+	var rules []Rule
 	if natOutgoingActive {
-		var defaultSnatRule iptables.Action = iptables.MasqAction{}
+		var defaultSnatRule Action = r.Masq("")
 		if r.Config.NATOutgoingAddress != nil {
-			defaultSnatRule = iptables.SNATAction{ToAddr: r.Config.NATOutgoingAddress.String()}
+			defaultSnatRule = r.SNAT(r.Config.NATOutgoingAddress.String())
 		}
 
 		if r.Config.NATPortRange.MaxPort > 0 {
 			toPorts := fmt.Sprintf("%d-%d", r.Config.NATPortRange.MinPort, r.Config.NATPortRange.MaxPort)
-			var portRangeSnatRule iptables.Action = iptables.MasqAction{ToPorts: toPorts}
+			var portRangeSnatRule Action = r.Masq(toPorts)
 			if r.Config.NATOutgoingAddress != nil {
 				toAddress := fmt.Sprintf("%s:%s", r.Config.NATOutgoingAddress.String(), toPorts)
-				portRangeSnatRule = iptables.SNATAction{ToAddr: toAddress}
+				portRangeSnatRule = r.SNAT(toAddress)
 			}
-			rules = []iptables.Rule{
+			rules = []Rule{
 				r.MakeNatOutgoingRule("tcp", portRangeSnatRule, ipVersion),
-				r.MakeNatOutgoingRule("tcp", iptables.ReturnAction{}, ipVersion),
+				r.MakeNatOutgoingRule("tcp", r.Return(), ipVersion),
 				r.MakeNatOutgoingRule("udp", portRangeSnatRule, ipVersion),
-				r.MakeNatOutgoingRule("udp", iptables.ReturnAction{}, ipVersion),
+				r.MakeNatOutgoingRule("udp", r.Return(), ipVersion),
 				r.MakeNatOutgoingRule("", defaultSnatRule, ipVersion),
 			}
 		} else {
-			rules = []iptables.Rule{
+			rules = []Rule{
 				r.MakeNatOutgoingRule("", defaultSnatRule, ipVersion),
 			}
 		}
 	}
-	return &iptables.Chain{
+	return &Chain{
 		Name:  ChainNATOutgoing,
 		Rules: rules,
 	}
 }
 
-func (r *DefaultRuleRenderer) DNATsToIptablesChains(dnats map[string]string) []*iptables.Chain {
+func (r *DefaultRuleRenderer) DNATsToIptablesChains(dnats map[string]string) []*Chain {
 	// Extract and sort map keys so we can program rules in a determined order.
 	sortedExtIps := make([]string, 0, len(dnats))
 	for extIp := range dnats {
@@ -115,21 +115,21 @@ func (r *DefaultRuleRenderer) DNATsToIptablesChains(dnats map[string]string) []*
 	}
 	sort.Strings(sortedExtIps)
 
-	rules := []iptables.Rule{}
+	rules := []Rule{}
 	for _, extIp := range sortedExtIps {
 		intIp := dnats[extIp]
-		rules = append(rules, iptables.Rule{
-			Match:  iptables.Match().DestNet(extIp),
-			Action: iptables.DNATAction{DestAddr: intIp},
+		rules = append(rules, Rule{
+			Match:  r.NewMatch().DestNet(extIp),
+			Action: r.DNAT(intIp, 0),
 		})
 	}
-	return []*iptables.Chain{{
+	return []*Chain{{
 		Name:  ChainFIPDnat,
 		Rules: rules,
 	}}
 }
 
-func (r *DefaultRuleRenderer) SNATsToIptablesChains(snats map[string]string) []*iptables.Chain {
+func (r *DefaultRuleRenderer) SNATsToIptablesChains(snats map[string]string) []*Chain {
 	// Extract and sort map keys so we can program rules in a determined order.
 	sortedIntIps := make([]string, 0, len(snats))
 	for intIp := range snats {
@@ -137,35 +137,35 @@ func (r *DefaultRuleRenderer) SNATsToIptablesChains(snats map[string]string) []*
 	}
 	sort.Strings(sortedIntIps)
 
-	rules := []iptables.Rule{}
+	rules := []Rule{}
 	for _, intIp := range sortedIntIps {
 		extIp := snats[intIp]
-		rules = append(rules, iptables.Rule{
-			Match:  iptables.Match().DestNet(intIp).SourceNet(intIp),
-			Action: iptables.SNATAction{ToAddr: extIp},
+		rules = append(rules, Rule{
+			Match:  r.NewMatch().DestNet(intIp).SourceNet(intIp),
+			Action: r.SNAT(extIp),
 		})
 	}
-	return []*iptables.Chain{{
+	return []*Chain{{
 		Name:  ChainFIPSnat,
 		Rules: rules,
 	}}
 }
 
-func (r *DefaultRuleRenderer) BlockedCIDRsToIptablesChains(cidrs []string, ipVersion uint8) []*iptables.Chain {
-	rules := []iptables.Rule{}
+func (r *DefaultRuleRenderer) BlockedCIDRsToIptablesChains(cidrs []string, ipVersion uint8) []*Chain {
+	rules := []Rule{}
 	if r.blockCIDRAction != nil {
 		// Sort CIDRs so we can program rules in a determined order.
 		sort.Strings(cidrs)
 		for _, cidr := range cidrs {
 			if strings.Contains(cidr, ":") == (ipVersion == 6) {
-				rules = append(rules, iptables.Rule{
-					Match:  iptables.Match().DestNet(cidr),
+				rules = append(rules, Rule{
+					Match:  r.NewMatch().DestNet(cidr),
 					Action: r.blockCIDRAction,
 				})
 			}
 		}
 	}
-	return []*iptables.Chain{{
+	return []*Chain{{
 		Name:  ChainCIDRBlock,
 		Rules: rules,
 	}}
