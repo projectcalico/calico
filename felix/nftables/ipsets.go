@@ -17,11 +17,14 @@ package nftables
 import (
 	"context"
 	"fmt"
+	"math"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/projectcalico/calico/felix/dataplane/common"
 	"github.com/projectcalico/calico/felix/deltatracker"
+	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
@@ -118,25 +121,12 @@ func (s *IPSets) AddOrReplaceIPSet(setMetadata ipsets.IPSetMetadata, members []s
 	// back from the dataplane.  This also filters out IPs of the incorrect IP version.
 	setID := setMetadata.SetID
 
-	// Use nftables equivalents of IP set types where necessary.
-	var ipSetType ipsets.IPSetType
-	switch setMetadata.Type {
-	case ipsets.IPSetTypeHashIP:
-		ipSetType = ipsets.NFTSetTypeAddr
-	case ipsets.IPSetTypeHashNet:
-		ipSetType = ipsets.NFTSetTypeNet
-	case ipsets.IPSetTypeHashIPPort:
-		ipSetType = ipsets.NFTSetTypeAddrPort
-	default:
-		log.Fatalf("Unexpected IP set type: %s", setMetadata.Type)
-	}
-
 	// Mark that we want this IP set to exist and with the correct size etc.
 	// If the IP set exists, but it has the wrong metadata then the
 	// DeltaTracker will catch that and mark it for recreation.
 	mainIPSetName := s.nameForMainIPSet(setID)
 	dpMeta := ipsets.IPSetMetadata{
-		Type:     ipSetType,
+		Type:     setMetadata.Type,
 		MaxSize:  setMetadata.MaxSize,
 		RangeMin: setMetadata.RangeMin,
 		RangeMax: setMetadata.RangeMax,
@@ -145,18 +135,18 @@ func (s *IPSets) AddOrReplaceIPSet(setMetadata ipsets.IPSetMetadata, members []s
 	if s.ipSetNeeded(mainIPSetName) {
 		s.logCxt.WithFields(log.Fields{
 			"setID":   setID,
-			"setType": ipSetType,
+			"setType": setMetadata.Type,
 		}).Info("Queueing IP set for creation")
 		s.setNameToProgrammedMetadata.Desired().Set(mainIPSetName, dpMeta)
 	} else if log.IsLevelEnabled(log.DebugLevel) {
 		s.logCxt.WithFields(log.Fields{
 			"setID":   setID,
-			"setType": ipSetType,
+			"setType": setMetadata.Type,
 		}).Debug("IP set is filtered out, skipping creation.")
 	}
 
 	// Set the desired contents of the IP set.
-	canonMembers := s.filterAndCanonicaliseMembers(ipSetType, members)
+	canonMembers := s.filterAndCanonicaliseMembers(setMetadata.Type, members)
 	memberTracker := s.getOrCreateMemberTracker(mainIPSetName)
 
 	desiredMembers := memberTracker.Desired()
@@ -282,7 +272,7 @@ func (s *IPSets) filterAndCanonicaliseMembers(ipSetType ipsets.IPSetType, member
 		if wantIPV6 != isIPV6 {
 			continue
 		}
-		filtered.Add(ipSetType.CanonicaliseMember(member))
+		filtered.Add(CanonicaliseMember(ipSetType, member))
 	}
 	return filtered
 }
@@ -475,11 +465,11 @@ func (s *IPSets) NFTablesSet(name string) *knftables.Set {
 
 	flags := make([]knftables.SetFlag, 0, 1)
 	switch metadata.Type {
-	case ipsets.NFTSetTypeAddrPort:
+	case ipsets.IPSetTypeHashIPPort:
 		// IP and port sets don't support the interval flag.
-	case ipsets.NFTSetTypeAddr:
+	case ipsets.IPSetTypeHashIP:
 		// IP addr sets don't use the interval flag.
-	case ipsets.NFTSetTypeNet:
+	case ipsets.IPSetTypeHashNet:
 		// Net sets require the interval flag.
 		flags = append(flags, knftables.IntervalFlag)
 	default:
@@ -488,7 +478,7 @@ func (s *IPSets) NFTablesSet(name string) *knftables.Set {
 
 	return &knftables.Set{
 		Name:  name,
-		Type:  metadata.Type.SetType(s.IPVersionConfig.Family.Version()),
+		Type:  setType(metadata.Type, s.IPVersionConfig.Family.Version()),
 		Flags: flags,
 	}
 }
@@ -698,4 +688,111 @@ func (s *IPSets) ipSetNeeded(name string) bool {
 
 	// We are filtering down, so compare against the needed set.
 	return s.neededIPSetNames.Contains(name)
+}
+
+// CanonicaliseMember converts the string representation of an nftables set member to a canonical
+// object of some kind that implements the IPSetMember interface.  The object is required to by hashable.
+func CanonicaliseMember(t ipsets.IPSetType, member string) ipsets.IPSetMember {
+	switch t {
+	case ipsets.IPSetTypeHashIP:
+		// Convert the string into our ip.Addr type, which is backed by an array.
+		ipAddr := ip.FromIPOrCIDRString(member)
+		if ipAddr == nil {
+			// This should be prevented by validation in libcalico-go.
+			log.WithField("ip", member).Panic("Failed to parse IP")
+		}
+		return ipAddr
+	case ipsets.IPSetTypeHashIPPort:
+		// The member should be of the format "IP,protocol:port"
+		parts := strings.Split(member, ",")
+		if len(parts) != 2 {
+			log.WithField("member", member).Panic("Failed to parse IP,proto:port set member")
+		}
+		ipAddr := ip.FromIPOrCIDRString(parts[0])
+		if ipAddr == nil {
+			// This should be prevented by validation.
+			log.WithField("member", member).Panic("Failed to parse IP part of IP,port member")
+		}
+		parts = strings.Split(parts[1], ":")
+		if len(parts) != 2 {
+			log.WithField("member", member).Panic("Failed to parse IP part of IP,port member")
+		}
+		proto := parts[0]
+		port, err := strconv.Atoi(parts[1])
+		if err != nil {
+			log.WithField("member", member).WithError(err).Panic("Bad port")
+		}
+		if port > math.MaxUint16 || port < 0 {
+			log.WithField("member", member).Panic("Bad port range (should be between 0 and 65535)")
+		}
+		// Return a dedicated struct for V4 or V6.  This slightly reduces occupancy over storing
+		// the address as an interface by storing one fewer interface headers.  That is worthwhile
+		// because we store many IP set members.
+		if ipAddr.Version() == 4 {
+			return v4NFTIPPort{
+				IP:       ipAddr.(ip.V4Addr),
+				Port:     uint16(port),
+				Protocol: proto,
+			}
+		} else {
+			return v6NFTIPPort{
+				IP:       ipAddr.(ip.V6Addr),
+				Port:     uint16(port),
+				Protocol: proto,
+			}
+		}
+	case ipsets.IPSetTypeHashNet:
+		// Convert the string into our ip.CIDR type, which is backed by a struct.  When
+		// pretty-printing, the hash:net ipset type prints IPs with no "/32" or "/128"
+		// suffix.
+		return ip.MustParseCIDROrIP(member)
+	case ipsets.IPSetTypeBitmapPort:
+		// Trim the family if it exists
+		if member[0] == 'v' {
+			member = member[3:]
+		}
+		port, err := strconv.Atoi(member)
+		if err == nil && port >= 0 && port <= 0xffff {
+			return ipsets.Port(port)
+		}
+	}
+	log.WithField("type", string(t)).Warn("Unknown IPSetType")
+	return nil
+}
+
+// v4NFTIPPort is a struct that represents an IPv4 address, protocol and port for IPv4, and implements
+// the ipsets.IPSetMember interface.
+type v4NFTIPPort struct {
+	IP       ip.V4Addr
+	Port     uint16
+	Protocol string
+}
+
+func (p v4NFTIPPort) String() string {
+	return fmt.Sprintf("%s . %s . %d", p.IP.String(), p.Protocol, p.Port)
+}
+
+// v6NFTIPPort is a struct that represents an IPv6 address, protocol and port for IPv6, and implements
+// the ipsets.IPSetMember interface.
+type v6NFTIPPort struct {
+	IP       ip.V6Addr
+	Port     uint16
+	Protocol string
+}
+
+func (p v6NFTIPPort) String() string {
+	return fmt.Sprintf("%s . %s . %d", p.IP.String(), p.Protocol, p.Port)
+}
+
+// setType returns the nftables type to use for the given IPSetType and IP version.
+func setType(t ipsets.IPSetType, ipVersion int) string {
+	switch t {
+	case ipsets.IPSetTypeHashIP:
+		return fmt.Sprintf("ipv%d_addr", ipVersion)
+	case ipsets.IPSetTypeHashNet:
+		return fmt.Sprintf("ipv%d_addr", ipVersion)
+	case ipsets.IPSetTypeHashIPPort:
+		return fmt.Sprintf("ipv%d_addr . inet_proto . inet_service", ipVersion)
+	}
+	return string(t)
 }
