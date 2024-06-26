@@ -1424,13 +1424,15 @@ func (c *client) onLoadBalancerIPsUpdate(lbIPs []string) {
 	// which should instead be advertised from only a subset of nodes.
 	// So, we handle advertisement of any single-addresses found in the config on a per-service basis from within the routeGenerator.
 	var globalLbIPs []string
-	for _, lbIP := range lbIPs {
-		if strings.Contains(lbIP, ":") {
-			if !strings.HasSuffix(lbIP, "/128") {
+	if c.LoadBalancerIPRouteAggregationEnabled() {
+		for _, lbIP := range lbIPs {
+			if strings.Contains(lbIP, ":") {
+				if !strings.HasSuffix(lbIP, "/128") {
+					globalLbIPs = append(globalLbIPs, lbIP)
+				}
+			} else if !strings.HasSuffix(lbIP, "/32") {
 				globalLbIPs = append(globalLbIPs, lbIP)
 			}
-		} else if !strings.HasSuffix(lbIP, "/32") {
-			globalLbIPs = append(globalLbIPs, lbIP)
 		}
 	}
 	if err := c.updateGlobalRoutes(globalLbIPs, c.LoadBalancerIPRouteIndex); err == nil {
@@ -1872,4 +1874,11 @@ func (c *client) isSensitive(path string) bool {
 		return true
 	}
 	return false
+}
+
+func (c *client) LoadBalancerIPRouteAggregationEnabled() bool {
+	if c.globalBGPConfig.Spec.ServiceLoadBalancerRouteAggregationEnabled != nil && !*c.globalBGPConfig.Spec.ServiceLoadBalancerRouteAggregationEnabled {
+		return false
+	}
+	return true
 }

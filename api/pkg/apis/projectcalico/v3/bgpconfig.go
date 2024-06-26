@@ -69,6 +69,9 @@ type BGPConfigurationSpec struct {
 	// Kubernetes Service status.LoadBalancer.Ingress IPs will only be advertised if they are within one of these blocks.
 	ServiceLoadBalancerIPs []ServiceLoadBalancerIPBlock `json:"serviceLoadBalancerIPs,omitempty" validate:"omitempty,dive" confignamev1:"svc_loadbalancer_ips"`
 
+	// ServiceLoadBalancerRouteAggregationEnabled sets whether aggregated LoadBalancerIP routes should be advertised on every node. [Default: true]
+	ServiceLoadBalancerRouteAggregationEnabled *bool `json:"serviceLoadBalancerRouteAggregationEnabled,omitempty" validate:"omitempty" confignamev1:"svc_loadbalancer_route_aggregation"`
+
 	// ServiceExternalIPs are the CIDR blocks for Kubernetes Service External IPs.
 	// Kubernetes Service ExternalIPs will only be advertised if they are within one of these blocks.
 	ServiceExternalIPs []ServiceExternalIPBlock `json:"serviceExternalIPs,omitempty" validate:"omitempty,dive" confignamev1:"svc_external_ips"`

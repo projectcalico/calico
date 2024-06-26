@@ -108,6 +108,11 @@ func (in *BGPConfigurationSpec) DeepCopyInto(out *BGPConfigurationSpec) {
 		*out = make([]ServiceLoadBalancerIPBlock, len(*in))
 		copy(*out, *in)
 	}
+	if in.ServiceLoadBalancerRouteAggregationEnabled != nil {
+		in, out := &in.ServiceLoadBalancerRouteAggregationEnabled, &out.ServiceLoadBalancerRouteAggregationEnabled
+		*out = new(bool)
+		**out = **in
+	}
 	if in.ServiceExternalIPs != nil {
 		in, out := &in.ServiceExternalIPs, &out.ServiceExternalIPs
 		*out = make([]ServiceExternalIPBlock, len(*in))
