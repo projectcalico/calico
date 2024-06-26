@@ -462,6 +462,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					felix.Exec("conntrack", "-L")
 					felix.Exec("calico-bpf", "policy", "dump", "cali8d1e69e5f89", "all", "--asm")
 					if testOpts.ipv6 {
+						felix.Exec("conntrack", "-L", "-f", "ipv6")
 						felix.Exec("ip6tables-save", "-c")
 						felix.Exec("ip", "-6", "link")
 						felix.Exec("ip", "-6", "addr")
