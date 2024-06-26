@@ -3,7 +3,7 @@
 #################################################################################################
 
 # The version of github.com/projectcalico/go-build to use.
-GO_BUILD_VER=v0.91
+export GO_BUILD_VER=v0.91
 # Env var to ACK Ginkgo deprecation warnings, may need updating with go-build.
 ACK_GINKGO=ACK_GINKGO_DEPRECATIONS=1.16.5
 
@@ -21,6 +21,8 @@ UBI_VERSION=8.10
 
 # Configuration for Semaphore integration.
 ORGANIZATION = projectcalico
+
+export REPO_ROOT := $(shell git rev-parse --show-toplevel)
 
 # Configure git to access repositories using SSH.
 GIT_USE_SSH = true
