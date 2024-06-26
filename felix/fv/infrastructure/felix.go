@@ -168,6 +168,11 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 		}
 	}
 
+	if os.Getenv("FELIX_FV_NFTABLES") == "Enabled" {
+		log.Info("Enabling nftables with env var")
+		envVars["FELIX_NFTABLESMODE"] = "Enabled"
+	}
+
 	if options.DelayFelixStart {
 		envVars["DELAY_FELIX_START"] = "true"
 	}
@@ -217,16 +222,30 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 		c.Exec("sysctl", "-w", "net.ipv6.conf.all.forwarding=0")
 	}
 
-	// Configure our model host to drop forwarded traffic by default.  Modern
-	// Kubernetes/Docker hosts now have this setting, and the consequence is that
-	// whenever Calico policy intends to allow a packet, it must explicitly ACCEPT
-	// that packet, not just allow it to pass through cali-FORWARD and assume it will
-	// be accepted by the rest of the chain.  Establishing that setting in this FV
-	// allows us to test that.
-	c.Exec("iptables",
-		"-w", "10", // Retry this for 10 seconds, e.g. if something else is holding the lock
-		"-W", "100000", // How often to probe the lock in microsecs.
-		"-P", "FORWARD", "DROP")
+	if os.Getenv("FELIX_FV_NFTABLES") == "Enabled" {
+		// Flush all rules to make sure iptables doesn't interfere with nftables.
+		for _, table := range []string{"filter", "nat", "mangle", "raw"} {
+			c.Exec("iptables", "-F", "-t", table)
+		}
+
+		// nftables mode requires that iptables be configured to allow by default. Otherwise, a default
+		// drop action will override any accept verdict made by nftables.
+		c.Exec("iptables",
+			"-w", "10", // Retry this for 10 seconds, e.g. if something else is holding the lock
+			"-W", "100000", // How often to probe the lock in microsecs.
+			"-P", "FORWARD", "ACCEPT")
+	} else {
+		// Configure our model host to drop forwarded traffic by default.  Modern
+		// Kubernetes/Docker hosts now have this setting, and the consequence is that
+		// whenever Calico policy intends to allow a packet, it must explicitly ACCEPT
+		// that packet, not just allow it to pass through cali-FORWARD and assume it will
+		// be accepted by the rest of the chain.  Establishing that setting in this FV
+		// allows us to test that.
+		c.Exec("iptables",
+			"-w", "10", // Retry this for 10 seconds, e.g. if something else is holding the lock
+			"-W", "100000", // How often to probe the lock in microsecs.
+			"-P", "FORWARD", "DROP")
+	}
 
 	return &Felix{
 		Container:       c,
@@ -282,7 +301,7 @@ func (f *Felix) RestartWithDelayedStartup() func() {
 func (f *Felix) SetEnv(env map[string]string) {
 	fn := "extra-env.sh"
 
-	file, err := os.OpenFile("./"+fn, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
+	file, err := os.OpenFile("./"+fn, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0o644)
 	Expect(err).NotTo(HaveOccurred())
 
 	fw := bufio.NewWriter(file)
@@ -323,6 +342,39 @@ func (f *Felix) ProgramIptablesDNAT(serviceIP, targetIP, chain string, ipv6 bool
 			"-j", "DNAT", "--to-destination", targetIP,
 		)
 	}
+}
+
+func (f *Felix) ProgramNftablesDNAT(serviceIP, targetIP string, chain string, ipv6 bool) {
+	// Configure where this DNAT should be applied.
+	var hook string
+	var prio string
+	switch chain {
+	case "OUTPUT":
+		hook = "output"
+		prio = "100"
+	case "PREROUTING":
+		hook = "prerouting"
+		prio = "-100"
+	default:
+		Expect(true).To(BeFalse(), "DNAT programming not supoorted for chain %s", chain)
+	}
+
+	// Create the table if needed.
+	if _, err := f.ExecOutput("nft", "list", "table", "inet", "services"); err != nil {
+		f.Exec("nft", "create", "table", "inet", "services")
+	}
+
+	// Create the base chain if needed.
+	if _, err := f.ExecOutput("nft", "list", "chain", "inet", "services", chain); err != nil {
+		f.Exec("nft", "add", "chain", "inet", "services", chain, fmt.Sprintf("{ type nat hook %s priority %s; }", hook, prio))
+	}
+
+	// Add the DNAT rule.
+	ipv := "ip"
+	if ipv6 {
+		ipv = "ip6"
+	}
+	f.Exec("nft", "add", "rule", "inet", "services", chain, ipv, "daddr", serviceIP, "counter dnat to", targetIP)
 }
 
 type BPFIfState struct {
