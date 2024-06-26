@@ -5,6 +5,6 @@ import (
 )
 
 func main() {
-	c := api.NewBuilder("projectcalico", "github.com/projectcalico/calico")
-	c.Register(nil) // TODO: Define task to use as default
+	c := api.NewBuilder()
+	c.Register()
 }

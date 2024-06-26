@@ -9,13 +9,9 @@ import (
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/sirupsen/logrus"
-
-	"github.com/projectcalico/fixham/internal/config"
 )
 
 const (
-	defaultGoBuildName = "calico/go-build"
-
 	modCacheDir = "/go/pkg/mod"
 	goCacheDir  = "/go-cache"
 )
@@ -29,12 +25,15 @@ type GoBuildImage struct {
 
 // NewGoBuild returns a new GoBuildImage
 // with default image name and version
-func NewGoBuild(version string) GoBuildImage {
+func NewGoBuild(name string, version string) GoBuildImage {
+	if name == "" {
+		logrus.Fatal("name is required")
+	}
 	if version == "" {
 		logrus.Fatal("version is required")
 	}
 	return GoBuildImage{
-		imageName:    defaultGoBuildName,
+		imageName:    name,
 		imageVersion: version,
 	}
 }
@@ -42,17 +41,7 @@ func NewGoBuild(version string) GoBuildImage {
 // Image returns the image name and version
 // i.e "calico/go-build:<version>"
 func (g GoBuildImage) Image() string {
-	name := g.imageName
-	if name == "" {
-		name = defaultGoBuildName
-	}
-	version := g.imageVersion
-	return name + ":" + version
-}
-
-func (g GoBuildImage) WithGoBuildImageName(name string) GoBuildImage {
-	g.imageName = name
-	return g
+	return fmt.Sprintf("%s:%s", g.imageName, g.imageVersion)
 }
 
 // GoBuildRunner is the struct for running go-build image
@@ -72,11 +61,10 @@ type GoBuildRunner struct {
 // packageName: package name for the component
 //
 // rootDir: root directory for the component package. This is used to bind mount the package
-func NewGoBuildRunner(version string, packageName string, rootDir string) (g *GoBuildRunner, err error) {
+func NewGoBuildRunner(name, version, packageName, wd, repoRootDir string) (g *GoBuildRunner, err error) {
 	currentUser, _ := user.Current()
-	repoRootDir := config.MustReadGitRepoPath()
 	gomodCacheDir := goModCacheDir(currentUser)
-	goBuild := NewGoBuild(version)
+	goBuild := NewGoBuild(name, version)
 	dockerRunner, err := NewDockerRunner()
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to create docker runner")
@@ -100,7 +88,7 @@ func NewGoBuildRunner(version string, packageName string, rootDir string) (g *Go
 		hostConfig: &container.HostConfig{
 			NetworkMode: "host",
 			Binds: []string{
-				fmt.Sprintf("%s:/go/src/%s:rw", rootDir, packageName),
+				fmt.Sprintf("%s:/go/src/%s:rw", wd, packageName),
 				fmt.Sprintf("%s:%s:rw", gomodCacheDir, modCacheDir),
 				fmt.Sprintf("%s/.go-pkg-cache:%s:rw", repoRootDir, goCacheDir),
 			},
@@ -115,16 +103,11 @@ func NewGoBuildRunner(version string, packageName string, rootDir string) (g *Go
 }
 
 // MustGoBuildRunner returns a new GoBuildRunner
-func MustGoBuildRunner(version string, packageName string, rootDir string) *GoBuildRunner {
-	g, err := NewGoBuildRunner(version, packageName, rootDir)
+func MustGoBuildRunner(name, version, packageName, wd string, repoRootDir string) *GoBuildRunner {
+	g, err := NewGoBuildRunner(name, version, packageName, wd, repoRootDir)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to create GoBuildRunner")
 	}
-	return g
-}
-
-func (g *GoBuildRunner) WithGoBuildImageName(name string) *GoBuildRunner {
-	g.GoBuildImage = g.GoBuildImage.WithGoBuildImageName(name)
 	return g
 }
 

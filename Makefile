@@ -1,3 +1,4 @@
+NAME = projectcalico
 PACKAGE_NAME = github.com/projectcalico/calico
 
 include metadata.mk
@@ -18,6 +19,10 @@ DOCKER_RUN := mkdir -p ./.go-pkg-cache bin $(GOMOD_CACHE) && \
 		-v $(CURDIR):/go/src/github.com/projectcalico/calico:rw \
 		-v $(CURDIR)/.go-pkg-cache:/go-cache:rw \
 		-w /go/src/$(PACKAGE_NAME)
+
+.PHONY: fixham
+fixham:
+	go run ./build --help
 
 clean:
 	$(MAKE) -C api clean
