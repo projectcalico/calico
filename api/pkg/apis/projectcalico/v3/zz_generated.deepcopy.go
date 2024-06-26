@@ -1523,6 +1523,11 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(int)
 		**out = **in
 	}
+	if in.GoMaxProcs != nil {
+		in, out := &in.GoMaxProcs, &out.GoMaxProcs
+		*out = new(int)
+		**out = **in
+	}
 	return
 }
 
