@@ -1606,7 +1606,9 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 				// only go to the host. Make sure that they are not forwarded.
 				fwdRules = append(fwdRules, d.ruleRenderer.ICMPv6Filter(d.ruleRenderer.IptablesFilterDenyAction())...)
 			}
-		} else {
+		}
+
+		if t.IPVersion == 4 || d.config.BPFIpv6Enabled {
 			// Let the BPF programs know if Linux conntrack knows about the flow.
 			fwdRules = append(fwdRules, d.bpfMarkPreestablishedFlowsRules()...)
 			// The packet may be about to go to a local workload.  However, the local workload may not have a BPF
