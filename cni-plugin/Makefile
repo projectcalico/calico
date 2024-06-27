@@ -143,10 +143,15 @@ $(DEPLOY_CONTAINER_FIPS_MARKER): Dockerfile.$(ARCH) build fetch-cni-bins
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
 	touch $@
 
+
+# These are the files that we need to copy from the containernetworking-plugins project to our image.
+CN_FILES :=  host-local portmap loopback tuning bandwidth
+
 CONTAINERNETWORKING_PLUGINS_CLONED=.containernetworking-plugins-$(CNI_VERSION).cloned
 
 $(CONTAINERNETWORKING_PLUGINS_CLONED):
 	rm -rf containernetworking-plugins .containernetworking-plugins-*.cloned
+	@$(foreach file,$(CN_FILES),find bin -name $(file) -type f -delete;)
 	git clone --single-branch --branch $(CNI_VERSION) https://github.com/projectcalico/containernetworking-plugins.git
 	touch $@
 
@@ -159,11 +164,7 @@ $(BIN)/host-local $(BIN)/loopback $(BIN)/portmap $(BIN)/tuning $(BIN)/bandwidth 
 		/bin/sh -xe -c ' \
 			GOFLAGS='-buildvcs=false' CGO_ENABLED=0 GOARCH=$(ARCH) ./build_linux.sh $(CN_FLAGS)'
 	-mkdir -p $(BIN)
-	cp containernetworking-plugins/bin/host-local $(BIN)
-	cp containernetworking-plugins/bin/loopback $(BIN)
-	cp containernetworking-plugins/bin/portmap $(BIN)
-	cp containernetworking-plugins/bin/tuning $(BIN)
-	cp containernetworking-plugins/bin/bandwidth $(BIN)
+	@$(foreach file,$(CN_FILES),cp containernetworking-plugins/bin/$(file) $(BIN);)
 
 .PHONY: fetch-cni-bins fetch-win-cni-bins
 fetch-cni-bins: $(BIN)/flannel $(BIN)/loopback $(BIN)/host-local $(BIN)/portmap $(BIN)/tuning $(BIN)/bandwidth
