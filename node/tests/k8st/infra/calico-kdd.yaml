@@ -47,7 +47,7 @@ data:
   # Typha is disabled.
   typha_service_name: "none"
   # Configure the backend to use.
-  calico_backend: "bird"
+  calico_backend: "ipip"
 
   # Configure the MTU to use for workload interfaces and tunnels.
   # By default, MTU is auto-detected, and explicitly setting this field should not be required.
@@ -654,7 +654,6 @@ spec:
               command:
               - /bin/calico-node
               - -felix-live
-              - -bird-live
             periodSeconds: 10
             initialDelaySeconds: 10
             failureThreshold: 6
@@ -664,7 +663,6 @@ spec:
               command:
               - /bin/calico-node
               - -felix-ready
-              - -bird-ready
             periodSeconds: 10
             timeoutSeconds: 10
           volumeMounts:
