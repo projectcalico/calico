@@ -26,13 +26,15 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/onsi/gomega/types"
+	gomegatypes "github.com/onsi/gomega/types"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
+	googleproto "google.golang.org/protobuf/proto"
 
 	"github.com/projectcalico/calico/felix/policysync"
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/felix/types"
 	"github.com/projectcalico/calico/pod2daemon/binder"
 )
 
@@ -123,39 +125,45 @@ var _ = Describe("Processor", func() {
 
 				Context("on new join", func() {
 					var output chan proto.ToDataplane
-					var accounts [3]proto.ServiceAccountID
+					var accounts [3]types.ServiceAccountID
 
 					BeforeEach(func() {
 						output, _ = join("test", 1)
 						for i := 0; i < 3; i++ {
 							msg := <-output
-							accounts[i] = *msg.GetServiceAccountUpdate().Id
+							accounts[i] = types.ProtoToServiceAccountID(
+								msg.GetServiceAccountUpdate().GetId(),
+							)
 						}
 					})
 
 					It("should get 3 updates", func() {
-						Expect(accounts).To(ContainElement(proto.ServiceAccountID{
+						Expect(accounts).To(ContainElement(types.ServiceAccountID{
 							Name: "test_serviceaccount0", Namespace: "test_namespace0"}))
-						Expect(accounts).To(ContainElement(proto.ServiceAccountID{
+						Expect(accounts).To(ContainElement(types.ServiceAccountID{
 							Name: "test_serviceaccount0", Namespace: "test_namespace1"}))
-						Expect(accounts).To(ContainElement(proto.ServiceAccountID{
+						Expect(accounts).To(ContainElement(types.ServiceAccountID{
 							Name: "test_serviceaccount1", Namespace: "test_namespace0"}))
 					})
 
 					It("should pass updates", func() {
 						updateServiceAccount("t0", "t5")
 						msg := <-output
-						Expect(msg.GetServiceAccountUpdate().GetId()).To(Equal(
-							&proto.ServiceAccountID{Name: "t0", Namespace: "t5"},
-						))
+						equal := googleproto.Equal(
+							msg.GetServiceAccountUpdate().GetId(), &proto.ServiceAccountID{Name: "t0", Namespace: "t5"},
+						)
+						Expect(equal).To(BeTrue())
+
 					})
 
 					It("should pass removes", func() {
 						removeServiceAccount("test_serviceaccount0", "test_namespace0")
 						msg := <-output
-						Expect(msg.GetServiceAccountRemove().GetId()).To(Equal(&proto.ServiceAccountID{
-							Name: "test_serviceaccount0", Namespace: "test_namespace0"},
-						))
+						equal := googleproto.Equal(
+							msg.GetServiceAccountRemove().GetId(),
+							&proto.ServiceAccountID{Name: "test_serviceaccount0", Namespace: "test_namespace0"},
+						)
+						Expect(equal).To(BeTrue())
 					})
 				})
 			})
@@ -166,12 +174,12 @@ var _ = Describe("Processor", func() {
 				BeforeEach(func() {
 					for i := 0; i < 2; i++ {
 						w := fmt.Sprintf("test%d", i)
-						d := testId(w)
+						d := types.WorkloadEndpointIDToProto(testId(w))
 						output[i], _ = join(w, uint64(i))
 
 						// Ensure the joins are completed by sending a workload endpoint for each.
 						updates <- &proto.WorkloadEndpointUpdate{
-							Id:       &d,
+							Id:       d,
 							Endpoint: &proto.WorkloadEndpoint{},
 						}
 						<-output[i]
@@ -238,32 +246,36 @@ var _ = Describe("Processor", func() {
 
 				Context("on new join", func() {
 					var output chan proto.ToDataplane
-					var accounts [3]proto.NamespaceID
+					var accounts [3]types.NamespaceID
 
 					BeforeEach(func() {
 						output, _ = join("test", 1)
 						for i := 0; i < 3; i++ {
 							msg := <-output
-							accounts[i] = *msg.GetNamespaceUpdate().Id
+							accounts[i] = types.ProtoToNamespaceID(
+								msg.GetNamespaceUpdate().GetId(),
+							)
 						}
 					})
 
 					It("should get 3 updates", func() {
-						Expect(accounts).To(ContainElement(proto.NamespaceID{Name: "test_namespace0"}))
-						Expect(accounts).To(ContainElement(proto.NamespaceID{Name: "test_namespace1"}))
-						Expect(accounts).To(ContainElement(proto.NamespaceID{Name: "test_namespace2"}))
+						Expect(accounts).To(ContainElement(types.NamespaceID{Name: "test_namespace0"}))
+						Expect(accounts).To(ContainElement(types.NamespaceID{Name: "test_namespace1"}))
+						Expect(accounts).To(ContainElement(types.NamespaceID{Name: "test_namespace2"}))
 					})
 
 					It("should pass updates", func() {
 						updateNamespace("t0")
 						msg := <-output
-						Expect(msg.GetNamespaceUpdate().GetId()).To(Equal(&proto.NamespaceID{Name: "t0"}))
+						equal := googleproto.Equal(msg.GetNamespaceUpdate().GetId(), &proto.NamespaceID{Name: "t0"})
+						Expect(equal).To(BeTrue())
 					})
 
 					It("should pass removes", func() {
 						removeNamespace("test_namespace0")
 						msg := <-output
-						Expect(msg.GetNamespaceRemove().GetId()).To(Equal(&proto.NamespaceID{Name: "test_namespace0"}))
+						equal := googleproto.Equal(msg.GetNamespaceRemove().GetId(), &proto.NamespaceID{Name: "test_namespace0"})
+						Expect(equal).To(BeTrue())
 					})
 				})
 			})
@@ -274,12 +286,12 @@ var _ = Describe("Processor", func() {
 				BeforeEach(func() {
 					for i := 0; i < 2; i++ {
 						w := fmt.Sprintf("test%d", i)
-						d := testId(w)
+						d := types.WorkloadEndpointIDToProto(testId(w))
 						output[i], _ = join(w, uint64(i))
 
 						// Ensure the joins are completed by sending a workload endpoint for each.
 						updates <- &proto.WorkloadEndpointUpdate{
-							Id:       &d,
+							Id:       d,
 							Endpoint: &proto.WorkloadEndpoint{},
 						}
 						<-output[i]
@@ -322,8 +334,8 @@ var _ = Describe("Processor", func() {
 			Context("with two joined endpoints, one with active profile", func() {
 				var refdOutput chan proto.ToDataplane
 				var unrefdOutput chan proto.ToDataplane
-				var refdId proto.WorkloadEndpointID
-				var unrefdId proto.WorkloadEndpointID
+				var refdId types.WorkloadEndpointID
+				var unrefdId types.WorkloadEndpointID
 				var assertInactiveNoUpdate func()
 				var proUpd *proto.ActiveProfileUpdate
 				var ipSetUpd *proto.IPSetUpdate
@@ -336,19 +348,21 @@ var _ = Describe("Processor", func() {
 
 					// Ensure the joins are completed by sending a workload endpoint for each.
 					refUpd := &proto.WorkloadEndpointUpdate{
-						Id:       &refdId,
+						Id:       types.WorkloadEndpointIDToProto(refdId),
 						Endpoint: &proto.WorkloadEndpoint{},
 					}
 					updates <- refUpd
 					g := <-refdOutput
-					Expect(&g).To(HavePayload(refUpd))
+					equal := googleproto.Equal(g.GetWorkloadEndpointUpdate(), refUpd)
+					Expect(equal).To(BeTrue())
 					unrefUpd := &proto.WorkloadEndpointUpdate{
-						Id:       &unrefdId,
+						Id:       types.WorkloadEndpointIDToProto(unrefdId),
 						Endpoint: &proto.WorkloadEndpoint{},
 					}
 					updates <- unrefUpd
 					g = <-unrefdOutput
-					Expect(&g).To(HavePayload(unrefUpd))
+					equal = googleproto.Equal(g.GetWorkloadEndpointUpdate(), unrefUpd)
+					Expect(equal).To(BeTrue())
 
 					// Send the IPSet, a Profile referring to it, and a WEP update referring to the
 					// Profile. This "activates" the WEP relative to the IPSet
@@ -365,29 +379,33 @@ var _ = Describe("Processor", func() {
 					}
 					updates <- proUpd
 					wepUpd := &proto.WorkloadEndpointUpdate{
-						Id:       &refdId,
+						Id:       types.WorkloadEndpointIDToProto(unrefdId),
 						Endpoint: &proto.WorkloadEndpoint{ProfileIds: []string{ProfileName}},
 					}
 					updates <- wepUpd
 					// All three updates get pushed to the active endpoint (1)
 					g = <-refdOutput
-					Expect(&g).To(HavePayload(ipSetUpd))
+					equal = googleproto.Equal(g.GetIpsetUpdate(), ipSetUpd)
+					Expect(equal).To(BeTrue())
 					g = <-refdOutput
-					Expect(&g).To(HavePayload(proUpd))
+					equal = googleproto.Equal(g.GetActiveProfileUpdate(), proUpd)
+					Expect(equal).To(BeTrue())
 					g = <-refdOutput
-					Expect(&g).To(HavePayload(wepUpd))
+					equal = googleproto.Equal(g.GetWorkloadEndpointUpdate(), wepUpd)
+					Expect(equal).To(BeTrue())
 
 					assertInactiveNoUpdate = func() {
 						// Send a WEP update for the inactive and check we get it from the output
 						// channel. This ensures that the inactive endpoint didn't get the IPSetUpdate
 						// without having to wait for a timeout.
 						u := &proto.WorkloadEndpointUpdate{
-							Id:       &unrefdId,
+							Id:       types.WorkloadEndpointIDToProto(unrefdId),
 							Endpoint: &proto.WorkloadEndpoint{},
 						}
 						updates <- u
 						g := <-unrefdOutput
-						Expect(&g).To(HavePayload(u))
+						equal = googleproto.Equal(g.GetWorkloadEndpointUpdate(), u)
+						Expect(equal).To(BeTrue())
 					}
 
 					close(done)
@@ -397,7 +415,8 @@ var _ = Describe("Processor", func() {
 					msg := updateIpSet(IPSetName, 2)
 					updates <- msg
 					g := <-refdOutput
-					Expect(g).To(Equal(proto.ToDataplane{Payload: &proto.ToDataplane_IpsetUpdate{IpsetUpdate: msg}}))
+					equal := googleproto.Equal(&g, &proto.ToDataplane{Payload: &proto.ToDataplane_IpsetUpdate{IpsetUpdate: msg}})
+					Expect(equal).To(BeTrue())
 
 					assertInactiveNoUpdate()
 					close(done)
@@ -411,8 +430,9 @@ var _ = Describe("Processor", func() {
 					msg2 := deltaUpdateIpSet(IPSetName, 2, 2)
 					updates <- msg2
 					g := <-refdOutput
-					Expect(g).To(Equal(proto.ToDataplane{
-						Payload: &proto.ToDataplane_IpsetDeltaUpdate{IpsetDeltaUpdate: msg2}}))
+					equal := googleproto.Equal(&g, &proto.ToDataplane{
+						Payload: &proto.ToDataplane_IpsetDeltaUpdate{IpsetDeltaUpdate: msg2}})
+					Expect(equal).To(BeTrue())
 
 					msg2 = deltaUpdateIpSet(IPSetName, 2, 0)
 					updates <- msg2
@@ -437,34 +457,42 @@ var _ = Describe("Processor", func() {
 
 				It("should send IPSetUpdate when endpoint newly refs wep update", func(done Done) {
 					wepUpd := &proto.WorkloadEndpointUpdate{
-						Id:       &unrefdId,
+						Id:       types.WorkloadEndpointIDToProto(unrefdId),
 						Endpoint: &proto.WorkloadEndpoint{ProfileIds: []string{ProfileName}},
 					}
 					updates <- wepUpd
 					g := <-unrefdOutput
-					Expect(&g).To(HavePayload(ipSetUpd))
+					equal := googleproto.Equal(g.GetWorkloadEndpointUpdate(), wepUpd)
+					Expect(equal).To(BeTrue())
 
 					g = <-unrefdOutput
-					Expect(&g).To(HavePayload(proUpd))
+					equal = googleproto.Equal(g.GetActiveProfileUpdate(), proUpd)
+					Expect(equal).To(BeTrue())
 
 					g = <-unrefdOutput
-					Expect(&g).To(HavePayload(wepUpd))
+					equal = googleproto.Equal(g.GetIpsetUpdate(), ipSetUpd)
+					Expect(equal).To(BeTrue())
 
 					close(done)
 				})
 
 				It("should send IPSetRemove when endpoint stops ref wep update", func(done Done) {
 					wepUpd := &proto.WorkloadEndpointUpdate{
-						Id:       &refdId,
+						Id:       types.WorkloadEndpointIDToProto(unrefdId),
 						Endpoint: &proto.WorkloadEndpoint{ProfileIds: []string{}},
 					}
 					updates <- wepUpd
 					g := <-refdOutput
-					Expect(&g).To(HavePayload(wepUpd))
+					equal := googleproto.Equal(g.GetWorkloadEndpointUpdate(), wepUpd)
+					Expect(equal).To(BeTrue())
 					g = <-refdOutput
-					Expect(&g).To(HavePayload(&proto.ActiveProfileRemove{Id: &proto.ProfileID{Name: ProfileName}}))
+					equal = googleproto.Equal(
+						g.GetActiveProfileRemove(), &proto.ActiveProfileRemove{Id: &proto.ProfileID{Name: ProfileName}},
+					)
+					Expect(equal).To(BeTrue())
 					g = <-refdOutput
-					Expect(&g).To(HavePayload(&proto.IPSetRemove{Id: IPSetName}))
+					equal = googleproto.Equal(g.GetIpsetRemove(), &proto.IPSetRemove{Id: IPSetName})
+					Expect(equal).To(BeTrue())
 
 					// Remove the IPSet since nothing references it.
 					updates <- removeIpSet(IPSetName)
@@ -472,7 +500,8 @@ var _ = Describe("Processor", func() {
 					// Send & receive a repeat WEPUpdate to ensure we didn't get a second remove.
 					updates <- wepUpd
 					g = <-refdOutput
-					Expect(&g).To(HavePayload(wepUpd))
+					equal = googleproto.Equal(g.GetWorkloadEndpointUpdate(), wepUpd)
+					Expect(equal).To(BeTrue())
 
 					assertInactiveNoUpdate()
 					close(done)
@@ -497,7 +526,8 @@ var _ = Describe("Processor", func() {
 					Expect(g.GetIpsetUpdate().GetMembers()).To(HaveLen(6))
 
 					g = <-refdOutput
-					Expect(&g).To(HavePayload(pu))
+					equal := googleproto.Equal(g.GetActiveProfileUpdate(), pu)
+					Expect(equal).To(BeTrue())
 
 					assertInactiveNoUpdate()
 
@@ -569,7 +599,7 @@ var _ = Describe("Processor", func() {
 					}
 					updates <- pu
 					wepu := &proto.WorkloadEndpointUpdate{
-						Id: &unrefdId,
+						Id: types.WorkloadEndpointIDToProto(unrefdId),
 						Endpoint: &proto.WorkloadEndpoint{
 							Tiers: []*proto.TierInfo{
 								{
@@ -634,7 +664,7 @@ var _ = Describe("Processor", func() {
 					}
 					updates <- pu
 					wepu := &proto.WorkloadEndpointUpdate{
-						Id: &unrefdId,
+						Id: types.WorkloadEndpointIDToProto(unrefdId),
 						Endpoint: &proto.WorkloadEndpoint{
 							Tiers: []*proto.TierInfo{
 								{
@@ -718,7 +748,7 @@ var _ = Describe("Processor", func() {
 				})
 
 				Context("with joined, active endpoint", func() {
-					var wepId proto.WorkloadEndpointID
+					var wepId types.WorkloadEndpointID
 					var syncClient proto.PolicySyncClient
 					var clientConn *grpc.ClientConn
 					var syncContext context.Context
@@ -752,7 +782,7 @@ var _ = Describe("Processor", func() {
 						}
 						updates <- pu
 						wepUpd := &proto.WorkloadEndpointUpdate{
-							Id:       &wepId,
+							Id:       types.WorkloadEndpointIDToProto(wepId),
 							Endpoint: &proto.WorkloadEndpoint{ProfileIds: []string{ProfileName}},
 						}
 						updates <- wepUpd
@@ -764,10 +794,12 @@ var _ = Describe("Processor", func() {
 						Expect(g.GetIpsetUpdate().GetMembers()).To(HaveLen(0))
 						g, err = syncStream.Recv()
 						Expect(err).ToNot(HaveOccurred())
-						Expect(g).To(HavePayload(pu))
+						equal := googleproto.Equal(g.GetActiveProfileUpdate(), pu)
+						Expect(equal).To(BeTrue())
 						g, err = syncStream.Recv()
 						Expect(err).ToNot(HaveOccurred())
-						Expect(g).To(HavePayload(wepUpd))
+						equal = googleproto.Equal(g.GetWorkloadEndpointUpdate(), wepUpd)
+						Expect(equal).To(BeTrue())
 
 						close(done)
 					}, 2)
@@ -867,13 +899,13 @@ var _ = Describe("Processor", func() {
 
 			Context("with two joined endpoints", func() {
 				var output [2]chan proto.ToDataplane
-				var wepID [2]proto.WorkloadEndpointID
+				var wepID [2]types.WorkloadEndpointID
 				var assertNoUpdate func(i int)
 
 				BeforeEach(func() {
 					assertNoUpdate = func(i int) {
 						wepu := &proto.WorkloadEndpointUpdate{
-							Id:       &wepID[i],
+							Id:       types.WorkloadEndpointIDToProto(wepID[i]),
 							Endpoint: &proto.WorkloadEndpoint{},
 						}
 						updates <- wepu
@@ -905,19 +937,20 @@ var _ = Describe("Processor", func() {
 
 					It("should add & remove profile when ref'd or not by WEP", func(done Done) {
 						msg := &proto.WorkloadEndpointUpdate{
-							Id:       &wepID[0],
+							Id:       types.WorkloadEndpointIDToProto(wepID[0]),
 							Endpoint: &proto.WorkloadEndpoint{ProfileIds: []string{ProfileName}},
 						}
 						updates <- msg
 						g := <-output[0]
-						Expect(&g).To(HavePayload(proUpdate))
+						equal := googleproto.Equal(g.GetActiveProfileUpdate(), proUpdate)
+						Expect(equal).To(BeTrue())
 
 						g = <-output[0]
 						Expect(&g).To(HavePayload(msg))
 
 						// Remove reference
 						msg = &proto.WorkloadEndpointUpdate{
-							Id:       &wepID[0],
+							Id:       types.WorkloadEndpointIDToProto(wepID[0]),
 							Endpoint: &proto.WorkloadEndpoint{ProfileIds: []string{}},
 						}
 						updates <- msg
@@ -925,7 +958,8 @@ var _ = Describe("Processor", func() {
 						g = <-output[0]
 						Expect(&g).To(HavePayload(msg))
 						g = <-output[0]
-						Expect(&g).To(HavePayload(&proto.ActiveProfileRemove{Id: &profileID}))
+						equal = googleproto.Equal(g.GetActiveProfileRemove(), &proto.ActiveProfileRemove{Id: &profileID})
+						Expect(equal).To(BeTrue())
 
 						assertNoUpdate(1)
 
@@ -948,31 +982,34 @@ var _ = Describe("Processor", func() {
 						updates <- msg
 
 						msg2 := &proto.WorkloadEndpointUpdate{
-							Id:       &wepID[0],
+							Id:       types.WorkloadEndpointIDToProto(wepID[0]),
 							Endpoint: &proto.WorkloadEndpoint{ProfileIds: []string{ProfileName}},
 						}
 						updates <- msg2
 						g := <-output[0]
-						Expect(&g).To(HavePayload(proUpdate))
+						equal := googleproto.Equal(g.GetActiveProfileUpdate(), proUpdate)
+						Expect(equal).To(BeTrue())
 
 						g = <-output[0]
 						Expect(&g).To(HavePayload(msg2))
 
 						// Switch profiles
 						msg2 = &proto.WorkloadEndpointUpdate{
-							Id:       &wepID[0],
+							Id:       types.WorkloadEndpointIDToProto(wepID[0]),
 							Endpoint: &proto.WorkloadEndpoint{ProfileIds: []string{newName}},
 						}
 						updates <- msg2
 
 						g = <-output[0]
-						Expect(&g).To(HavePayload(msg))
+						equal = googleproto.Equal(g.GetActiveProfileUpdate(), msg)
+						Expect(equal).To(BeTrue())
 
 						g = <-output[0]
 						Expect(&g).To(HavePayload(msg2))
 
 						g = <-output[0]
-						Expect(&g).To(HavePayload(&proto.ActiveProfileRemove{Id: &profileID}))
+						equal = googleproto.Equal(g.GetActiveProfileRemove(), &proto.ActiveProfileRemove{Id: &profileID})
+						Expect(equal).To(BeTrue())
 
 						assertNoUpdate(1)
 
@@ -1001,7 +1038,7 @@ var _ = Describe("Processor", func() {
 
 					It("should add & remove policy when ref'd or not by WEP", func(done Done) {
 						msg := &proto.WorkloadEndpointUpdate{
-							Id: &wepID[0],
+							Id: types.WorkloadEndpointIDToProto(wepID[0]),
 							Endpoint: &proto.WorkloadEndpoint{Tiers: []*proto.TierInfo{
 								{
 									Name:            TierName,
@@ -1011,14 +1048,15 @@ var _ = Describe("Processor", func() {
 						}
 						updates <- msg
 						g := <-output[0]
-						Expect(&g).To(HavePayload(polUpd))
+						equal := googleproto.Equal(g.GetActivePolicyUpdate(), polUpd)
+						Expect(equal).To(BeTrue())
 
 						g = <-output[0]
 						Expect(&g).To(HavePayload(msg))
 
 						// Remove reference
 						msg = &proto.WorkloadEndpointUpdate{
-							Id: &wepID[0],
+							Id: types.WorkloadEndpointIDToProto(wepID[0]),
 							Endpoint: &proto.WorkloadEndpoint{Tiers: []*proto.TierInfo{
 								{
 									Name: TierName,
@@ -1030,7 +1068,8 @@ var _ = Describe("Processor", func() {
 						g = <-output[0]
 						Expect(&g).To(HavePayload(msg))
 						g = <-output[0]
-						Expect(&g).To(HavePayload(&proto.ActivePolicyRemove{Id: &policyID}))
+						equal = googleproto.Equal(g.GetActivePolicyRemove(), &proto.ActivePolicyRemove{Id: &policyID})
+						Expect(equal).To(BeTrue())
 
 						assertNoUpdate(1)
 
@@ -1053,7 +1092,7 @@ var _ = Describe("Processor", func() {
 						updates <- msg
 
 						msg2 := &proto.WorkloadEndpointUpdate{
-							Id: &wepID[0],
+							Id: types.WorkloadEndpointIDToProto(wepID[0]),
 							Endpoint: &proto.WorkloadEndpoint{Tiers: []*proto.TierInfo{
 								{
 									Name:           TierName,
@@ -1063,14 +1102,15 @@ var _ = Describe("Processor", func() {
 						}
 						updates <- msg2
 						g := <-output[0]
-						Expect(&g).To(HavePayload(polUpd))
+						equal := googleproto.Equal(g.GetActivePolicyUpdate(), polUpd)
+						Expect(equal).To(BeTrue())
 
 						g = <-output[0]
 						Expect(&g).To(HavePayload(msg2))
 
 						// Switch profiles
 						msg2 = &proto.WorkloadEndpointUpdate{
-							Id: &wepID[0],
+							Id: types.WorkloadEndpointIDToProto(wepID[0]),
 							Endpoint: &proto.WorkloadEndpoint{Tiers: []*proto.TierInfo{
 								{
 									Name:           TierName,
@@ -1081,13 +1121,15 @@ var _ = Describe("Processor", func() {
 						updates <- msg2
 
 						g = <-output[0]
-						Expect(&g).To(HavePayload(msg))
+						equal = googleproto.Equal(g.GetActivePolicyUpdate(), msg)
+						Expect(equal).To(BeTrue())
 
 						g = <-output[0]
 						Expect(&g).To(HavePayload(msg2))
 
 						g = <-output[0]
-						Expect(&g).To(HavePayload(&proto.ActivePolicyRemove{Id: &policyID}))
+						equal = googleproto.Equal(g.GetActivePolicyRemove(), &proto.ActivePolicyRemove{Id: &policyID})
+						Expect(equal).To(BeTrue())
 
 						// Calc graph removes the old policy.
 						updates <- &proto.ActivePolicyRemove{Id: &policyID}
@@ -1114,7 +1156,7 @@ var _ = Describe("Processor", func() {
 						Id: &profileID,
 					}
 					wepUpd = &proto.WorkloadEndpointUpdate{
-						Id:       &wepId,
+						Id:       types.WorkloadEndpointIDToProto(wepId),
 						Endpoint: &proto.WorkloadEndpoint{ProfileIds: []string{ProfileName}},
 					}
 					updates <- proUpdate
@@ -1125,10 +1167,12 @@ var _ = Describe("Processor", func() {
 					output, _ := join("test", 1)
 
 					g := <-output
-					Expect(&g).To(HavePayload(proUpdate))
+					equal := googleproto.Equal(g.GetActiveProfileUpdate(), proUpdate)
+					Expect(equal).To(BeTrue())
 
 					g = <-output
-					Expect(&g).To(HavePayload(wepUpd))
+					equal = googleproto.Equal(g.GetWorkloadEndpointUpdate(), wepUpd)
+					Expect(equal).To(BeTrue())
 
 					close(done)
 				})
@@ -1136,18 +1180,22 @@ var _ = Describe("Processor", func() {
 				It("should resync profile & wep", func(done Done) {
 					output, jm := join("test", 1)
 					g := <-output
-					Expect(&g).To(HavePayload(proUpdate))
+					equal := googleproto.Equal(g.GetActiveProfileUpdate(), proUpdate)
+					Expect(equal).To(BeTrue())
 					g = <-output
-					Expect(&g).To(HavePayload(wepUpd))
+					equal = googleproto.Equal(g.GetWorkloadEndpointUpdate(), wepUpd)
+					Expect(equal).To(BeTrue())
 
 					// Leave
 					leave(jm)
 
 					output, _ = join("test", 2)
 					g = <-output
-					Expect(&g).To(HavePayload(proUpdate))
+					equal = googleproto.Equal(g.GetActiveProfileUpdate(), proUpdate)
+					Expect(equal).To(BeTrue())
 					g = <-output
-					Expect(&g).To(HavePayload(wepUpd))
+					equal = googleproto.Equal(g.GetWorkloadEndpointUpdate(), wepUpd)
+					Expect(equal).To(BeTrue())
 
 					close(done)
 				})
@@ -1155,23 +1203,26 @@ var _ = Describe("Processor", func() {
 				It("should not resync removed profile", func(done Done) {
 					output, jm := join("test", 1)
 					g := <-output
-					Expect(&g).To(HavePayload(proUpdate))
+					equal := googleproto.Equal(g.GetActiveProfileUpdate(), proUpdate)
+					Expect(equal).To(BeTrue())
 					g = <-output
-					Expect(&g).To(HavePayload(wepUpd))
+					equal = googleproto.Equal(g.GetWorkloadEndpointUpdate(), wepUpd)
+					Expect(equal).To(BeTrue())
 
 					// Leave
 					leave(jm)
 
 					// Remove reference to profile from WEP
 					wepUpd2 := &proto.WorkloadEndpointUpdate{
-						Id:       &wepId,
+						Id:       types.WorkloadEndpointIDToProto(wepId),
 						Endpoint: &proto.WorkloadEndpoint{ProfileIds: []string{}},
 					}
 					updates <- wepUpd2
 
 					output, _ = join("test", 2)
 					g = <-output
-					Expect(&g).To(HavePayload(wepUpd2))
+					equal = googleproto.Equal(g.GetWorkloadEndpointUpdate(), wepUpd2)
+					Expect(equal).To(BeTrue())
 
 					close(done)
 				})
@@ -1190,7 +1241,7 @@ var _ = Describe("Processor", func() {
 					}
 					updates <- polUpd
 					wepUpd = &proto.WorkloadEndpointUpdate{
-						Id: &wepId,
+						Id: types.WorkloadEndpointIDToProto(wepId),
 						Endpoint: &proto.WorkloadEndpoint{Tiers: []*proto.TierInfo{
 							{
 								Name:           TierName,
@@ -1205,10 +1256,12 @@ var _ = Describe("Processor", func() {
 					output, _ := join("test", 1)
 
 					g := <-output
-					Expect(&g).To(HavePayload(polUpd))
+					equal := googleproto.Equal(g.GetActivePolicyUpdate(), polUpd)
+					Expect(equal).To(BeTrue())
 
 					g = <-output
-					Expect(&g).To(HavePayload(wepUpd))
+					equal = googleproto.Equal(g.GetWorkloadEndpointUpdate(), wepUpd)
+					Expect(equal).To(BeTrue())
 
 					close(done)
 				})
@@ -1216,18 +1269,22 @@ var _ = Describe("Processor", func() {
 				It("should resync policy & wep", func(done Done) {
 					output, jm := join("test", 1)
 					g := <-output
-					Expect(&g).To(HavePayload(polUpd))
+					equal := googleproto.Equal(g.GetActivePolicyUpdate(), polUpd)
+					Expect(equal).To(BeTrue())
 					g = <-output
-					Expect(&g).To(HavePayload(wepUpd))
+					equal = googleproto.Equal(g.GetWorkloadEndpointUpdate(), wepUpd)
+					Expect(equal).To(BeTrue())
 
 					// Leave
 					leave(jm)
 
 					output, _ = join("test", 2)
 					g = <-output
-					Expect(&g).To(HavePayload(polUpd))
+					equal = googleproto.Equal(g.GetActivePolicyUpdate(), polUpd)
+					Expect(equal).To(BeTrue())
 					g = <-output
-					Expect(&g).To(HavePayload(wepUpd))
+					equal = googleproto.Equal(g.GetWorkloadEndpointUpdate(), wepUpd)
+					Expect(equal).To(BeTrue())
 
 					close(done)
 				})
@@ -1235,16 +1292,18 @@ var _ = Describe("Processor", func() {
 				It("should not resync removed policy", func(done Done) {
 					output, jm := join("test", 1)
 					g := <-output
-					Expect(&g).To(HavePayload(polUpd))
+					equal := googleproto.Equal(g.GetActivePolicyUpdate(), polUpd)
+					Expect(equal).To(BeTrue())
 					g = <-output
-					Expect(&g).To(HavePayload(wepUpd))
+					equal = googleproto.Equal(g.GetWorkloadEndpointUpdate(), wepUpd)
+					Expect(equal).To(BeTrue())
 
 					// Leave
 					leave(jm)
 
 					// Remove reference to policy from WEP
 					wepUpd2 := &proto.WorkloadEndpointUpdate{
-						Id: &wepId,
+						Id: types.WorkloadEndpointIDToProto(wepId),
 					}
 					updates <- wepUpd2
 
@@ -1265,7 +1324,7 @@ var _ = Describe("Processor", func() {
 
 				BeforeEach(func() {
 					wepUpd = &proto.WorkloadEndpointUpdate{
-						Id: &wepId,
+						Id: types.WorkloadEndpointIDToProto(wepId),
 					}
 					updates <- wepUpd
 				})
@@ -1309,7 +1368,7 @@ var _ = Describe("Processor", func() {
 					g := <-c
 					Expect(&g).To(HavePayload(wepUpd))
 
-					rm := &proto.WorkloadEndpointRemove{Id: &wepId}
+					rm := &proto.WorkloadEndpointRemove{Id: types.WorkloadEndpointIDToProto(wepId)}
 					updates <- rm
 					g = <-c
 					Expect(&g).To(HavePayload(rm))
@@ -1339,7 +1398,8 @@ var _ = Describe("Processor", func() {
 				updates <- is
 				for i := 0; i < 2; i++ {
 					g := <-c[i]
-					Expect(&g).To(HavePayload(is))
+					equal := googleproto.Equal(g.GetInSync(), is)
+					Expect(equal).To(BeTrue())
 				}
 				close(done)
 			})
@@ -1347,8 +1407,8 @@ var _ = Describe("Processor", func() {
 	})
 })
 
-func testId(w string) proto.WorkloadEndpointID {
-	return proto.WorkloadEndpointID{
+func testId(w string) types.WorkloadEndpointID {
+	return types.WorkloadEndpointID{
 		OrchestratorId: policysync.OrchestratorId,
 		WorkloadId:     w,
 		EndpointId:     policysync.EndpointId,
@@ -1452,12 +1512,12 @@ func (t testCreds) Clone() credentials.TransportCredentials {
 
 func (t testCreds) OverrideServerName(string) error { return nil }
 
-func HavePayload(expected interface{}) types.GomegaMatcher {
+func HavePayload(expected interface{}) gomegatypes.GomegaMatcher {
 	return &payloadMatcher{equal: Equal(expected)}
 }
 
 type payloadMatcher struct {
-	equal   types.GomegaMatcher
+	equal   gomegatypes.GomegaMatcher
 	payload interface{}
 }
 

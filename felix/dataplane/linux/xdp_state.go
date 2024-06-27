@@ -26,6 +26,7 @@ import (
 	"github.com/projectcalico/calico/felix/dataplane/common"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/felix/types"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -144,11 +145,13 @@ func (x *xdpState) OnUpdate(protoBufMsg interface{}) {
 		log.WithField("ipSetId", msg.Id).Debug("IP set remove")
 		x.ipV4State.removeIPSet(msg.Id)
 	case *proto.ActivePolicyUpdate:
+		id := types.ProtoToPolicyID(msg.GetId())
 		log.WithField("id", msg.Id).Debug("Updating policy chains")
-		x.ipV4State.updatePolicy(*msg.Id, msg.Policy)
+		x.ipV4State.updatePolicy(id, msg.Policy)
 	case *proto.ActivePolicyRemove:
+		id := types.ProtoToPolicyID(msg.GetId())
 		log.WithField("id", msg.Id).Debug("Removing policy chains")
-		x.ipV4State.removePolicy(*msg.Id)
+		x.ipV4State.removePolicy(id)
 	}
 }
 
@@ -1099,7 +1102,7 @@ func (s *xdpIPState) processPendingDiffState(epSource endpointsSource) {
 	// CHANGES IN HOST ENDPOINTS
 
 	// Host Endpoints that were updated
-	pds.UpdatedHostEndpoints.Iter(func(hepID proto.HostEndpointID) error {
+	pds.UpdatedHostEndpoints.Iter(func(hepID types.HostEndpointID) error {
 		s.logCxt.WithField("hostEpId", hepID.String()).Debug("Host endpoint has changed.")
 		for ifaceName, data := range cs.IfaceNameToData {
 			if processedIfaces.Contains(ifaceName) {
@@ -1123,7 +1126,7 @@ func (s *xdpIPState) processPendingDiffState(epSource endpointsSource) {
 	})
 
 	// Host Endpoints that were removed
-	pds.RemovedHostEndpoints.Iter(func(hepID proto.HostEndpointID) error {
+	pds.RemovedHostEndpoints.Iter(func(hepID types.HostEndpointID) error {
 		// XXX do nothing
 		return nil
 	})
@@ -1131,7 +1134,7 @@ func (s *xdpIPState) processPendingDiffState(epSource endpointsSource) {
 	// CHANGES IN POLICIES
 
 	// Policies that should be removed
-	pds.PoliciesToRemove.Iter(func(policyID proto.PolicyID) error {
+	pds.PoliciesToRemove.Iter(func(policyID types.PolicyID) error {
 		delete(newCs.XDPEligiblePolicies, policyID)
 		return nil
 	})
@@ -1282,8 +1285,8 @@ func dumpSetToString(s set.Set[string]) string {
 	return strings.Join(strs, ", ")
 }
 
-func (s *xdpIPState) processHostEndpointChange(ifaceName string, oldData *xdpIfaceData, newHepID proto.HostEndpointID, newEP *proto.HostEndpoint, changeInMaps map[string]map[string]int) {
-	policiesToSetIDs := make(map[proto.PolicyID]set.Set[string] /*<string>*/)
+func (s *xdpIPState) processHostEndpointChange(ifaceName string, oldData *xdpIfaceData, newHepID types.HostEndpointID, newEP *proto.HostEndpoint, changeInMaps map[string]map[string]int) {
+	policiesToSetIDs := make(map[types.PolicyID]set.Set[string] /*<string>*/)
 	oldSetIDs := make(map[string]int)
 	for _, setIDs := range oldData.PoliciesToSetIDs {
 		setIDs.Iter(func(setID string) error {
@@ -1353,12 +1356,12 @@ func (s *xdpIPState) processHostEndpointChange(ifaceName string, oldData *xdpIfa
 	}
 }
 
-func getPolicyIDs(hep *proto.HostEndpoint) []proto.PolicyID {
-	var policyIDs []proto.PolicyID
+func getPolicyIDs(hep *proto.HostEndpoint) []types.PolicyID {
+	var policyIDs []types.PolicyID
 	// we handle Untracked policy only
 	for _, tier := range hep.GetUntrackedTiers() {
 		for _, policyName := range tier.IngressPolicies {
-			policyID := proto.PolicyID{
+			policyID := types.PolicyID{
 				Tier: tier.Name,
 				Name: policyName,
 			}
@@ -1386,7 +1389,7 @@ func getSetIDs(rules *xdpRules) set.Set[string] /*<string>*/ {
 	return setIDs
 }
 
-func (s *xdpIPState) getLatestRulesForPolicyID(policyID proto.PolicyID) *xdpRules {
+func (s *xdpIPState) getLatestRulesForPolicyID(policyID types.PolicyID) *xdpRules {
 	logCxt := s.logCxt.WithField("policyID", policyID.String())
 	rules, ok := s.pendingDiffState.PoliciesToUpdate[policyID]
 	if ok {
@@ -1407,7 +1410,7 @@ func (s *xdpIPState) getLatestRulesForPolicyID(policyID proto.PolicyID) *xdpRule
 	}
 }
 
-func (s *xdpIPState) updatePolicy(policyID proto.PolicyID, policy *proto.Policy) {
+func (s *xdpIPState) updatePolicy(policyID types.PolicyID, policy *proto.Policy) {
 	s.logCxt.WithFields(log.Fields{
 		"policyID": policyID,
 		"policy":   policy,
@@ -1422,7 +1425,7 @@ func (s *xdpIPState) updatePolicy(policyID proto.PolicyID, policy *proto.Policy)
 	}
 }
 
-func (s *xdpIPState) removePolicy(policyID proto.PolicyID) {
+func (s *xdpIPState) removePolicy(policyID types.PolicyID) {
 	s.logCxt.WithField("policyID", policyID).Debug("removePolicy callback called.")
 	delete(s.pendingDiffState.PoliciesToUpdate, policyID)
 	s.pendingDiffState.PoliciesToRemove.Add(policyID)
@@ -1558,7 +1561,7 @@ func (s *xdpIPState) isSetIDInCurrentState(setID string) bool {
 	return false
 }
 
-func (s *xdpIPState) addInterface(ifaceName string, hostEPID proto.HostEndpointID) {
+func (s *xdpIPState) addInterface(ifaceName string, hostEPID types.HostEndpointID) {
 	s.logCxt.WithFields(log.Fields{
 		"ifaceName": ifaceName,
 		"hostEPID":  hostEPID,
@@ -1573,7 +1576,7 @@ func (s *xdpIPState) removeInterface(ifaceName string) {
 	s.pendingDiffState.IfaceNamesToDrop.Add(ifaceName)
 }
 
-func (s *xdpIPState) updateInterface(ifaceName string, newHostEPID proto.HostEndpointID) {
+func (s *xdpIPState) updateInterface(ifaceName string, newHostEPID types.HostEndpointID) {
 	s.logCxt.WithFields(log.Fields{
 		"ifaceName":   ifaceName,
 		"newHostEPID": newHostEPID,
@@ -1582,7 +1585,7 @@ func (s *xdpIPState) updateInterface(ifaceName string, newHostEPID proto.HostEnd
 	s.pendingDiffState.IfaceEpIDChange[ifaceName] = newHostEPID
 }
 
-func (s *xdpIPState) updateHostEndpoint(hostEPID proto.HostEndpointID) {
+func (s *xdpIPState) updateHostEndpoint(hostEPID types.HostEndpointID) {
 	s.logCxt.WithField("hostEPID", hostEPID).Debug("updateHostEndpoint callback called.")
 
 	s.pendingDiffState.RemovedHostEndpoints.Discard(hostEPID)
@@ -1661,7 +1664,7 @@ func (s *xdpIPState) getAffectedIfaces(setID string) map[string]uint32 {
 	return ifacesToRefCounts
 }
 
-func (s *xdpIPState) isHostEndpointIDInCurrentState(hep proto.HostEndpointID) bool {
+func (s *xdpIPState) isHostEndpointIDInCurrentState(hep types.HostEndpointID) bool {
 	for _, data := range s.currentState.IfaceNameToData {
 		if data.EpID == hep {
 			return true
@@ -1670,7 +1673,7 @@ func (s *xdpIPState) isHostEndpointIDInCurrentState(hep proto.HostEndpointID) bo
 	return false
 }
 
-func (s *xdpIPState) removeHostEndpoint(hostEPID proto.HostEndpointID) {
+func (s *xdpIPState) removeHostEndpoint(hostEPID types.HostEndpointID) {
 	s.logCxt.WithField("hostEPID", hostEPID).Debug("removeHostEndpoint callback called.")
 
 	s.pendingDiffState.RemovedHostEndpoints.Add(hostEPID)
@@ -1688,20 +1691,20 @@ type xdpSystemState struct {
 	IfaceNameToData map[string]xdpIfaceData
 	// a cache of all the policies that could be implemented with
 	// XDP, even those that currently are not
-	XDPEligiblePolicies map[proto.PolicyID]xdpRules
+	XDPEligiblePolicies map[types.PolicyID]xdpRules
 }
 
 func newXDPSystemState() *xdpSystemState {
 	return &xdpSystemState{
 		IfaceNameToData:     make(map[string]xdpIfaceData),
-		XDPEligiblePolicies: make(map[proto.PolicyID]xdpRules),
+		XDPEligiblePolicies: make(map[types.PolicyID]xdpRules),
 	}
 }
 
 func (s *xdpSystemState) Copy() *xdpSystemState {
 	newState := xdpSystemState{
 		IfaceNameToData:     make(map[string]xdpIfaceData),
-		XDPEligiblePolicies: make(map[proto.PolicyID]xdpRules),
+		XDPEligiblePolicies: make(map[types.PolicyID]xdpRules),
 	}
 
 	for k, v := range s.IfaceNameToData {
@@ -1716,24 +1719,24 @@ func (s *xdpSystemState) Copy() *xdpSystemState {
 }
 
 type xdpPendingDiffState struct {
-	NewIfaceNameToHostEpID map[string]proto.HostEndpointID
+	NewIfaceNameToHostEpID map[string]types.HostEndpointID
 	IfaceNamesToDrop       set.Set[string] // <string>
-	IfaceEpIDChange        map[string]proto.HostEndpointID
-	UpdatedHostEndpoints   set.Set[proto.HostEndpointID] // <proto.HostEndpointID>
-	RemovedHostEndpoints   set.Set[proto.HostEndpointID] // <proto.HostEndpointID>
-	PoliciesToRemove       set.Set[proto.PolicyID]       // <PolicyID>
-	PoliciesToUpdate       map[proto.PolicyID]*xdpRules
+	IfaceEpIDChange        map[string]types.HostEndpointID
+	UpdatedHostEndpoints   set.Set[types.HostEndpointID] // <types.HostEndpointID>
+	RemovedHostEndpoints   set.Set[types.HostEndpointID] // <types.HostEndpointID>
+	PoliciesToRemove       set.Set[types.PolicyID]       // <PolicyID>
+	PoliciesToUpdate       map[types.PolicyID]*xdpRules
 }
 
 func newXDPPendingDiffState() *xdpPendingDiffState {
 	return &xdpPendingDiffState{
-		NewIfaceNameToHostEpID: make(map[string]proto.HostEndpointID),
+		NewIfaceNameToHostEpID: make(map[string]types.HostEndpointID),
 		IfaceNamesToDrop:       set.New[string](),
-		IfaceEpIDChange:        make(map[string]proto.HostEndpointID),
-		UpdatedHostEndpoints:   set.New[proto.HostEndpointID](),
-		RemovedHostEndpoints:   set.New[proto.HostEndpointID](),
-		PoliciesToRemove:       set.New[proto.PolicyID](),
-		PoliciesToUpdate:       make(map[proto.PolicyID]*xdpRules),
+		IfaceEpIDChange:        make(map[string]types.HostEndpointID),
+		UpdatedHostEndpoints:   set.New[types.HostEndpointID](),
+		RemovedHostEndpoints:   set.New[types.HostEndpointID](),
+		PoliciesToRemove:       set.New[types.PolicyID](),
+		PoliciesToUpdate:       make(map[types.PolicyID]*xdpRules),
 	}
 }
 
@@ -2111,13 +2114,13 @@ func processMemberDeletions(memberCache *xdpMemberCache, iface string, mi member
 }
 
 type xdpIfaceData struct {
-	EpID             proto.HostEndpointID
-	PoliciesToSetIDs map[proto.PolicyID]set.Set[string]
+	EpID             types.HostEndpointID
+	PoliciesToSetIDs map[types.PolicyID]set.Set[string]
 }
 
 func (data xdpIfaceData) Copy() xdpIfaceData {
 	new := data
-	new.PoliciesToSetIDs = make(map[proto.PolicyID]set.Set[string], len(data.PoliciesToSetIDs))
+	new.PoliciesToSetIDs = make(map[types.PolicyID]set.Set[string], len(data.PoliciesToSetIDs))
 	for k, v := range data.PoliciesToSetIDs {
 		// this makes shallow copy, but fortunately these are
 		// just strings
@@ -2155,7 +2158,7 @@ type xdpRule struct {
 }
 
 type endpointsSource interface {
-	GetRawHostEndpoints() map[proto.HostEndpointID]*proto.HostEndpoint
+	GetRawHostEndpoints() map[types.HostEndpointID]*proto.HostEndpoint
 }
 
 var _ endpointsSource = &endpointManager{}

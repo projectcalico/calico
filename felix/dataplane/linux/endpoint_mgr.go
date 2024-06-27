@@ -33,6 +33,7 @@ import (
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/rules"
+	"github.com/projectcalico/calico/felix/types"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -74,7 +75,7 @@ func newEndpointManagerCallbacks(callbacks *common.Callbacks, ipVersion uint8) e
 	}
 }
 
-func (c *endpointManagerCallbacks) InvokeInterfaceCallbacks(old, new map[string]proto.HostEndpointID) {
+func (c *endpointManagerCallbacks) InvokeInterfaceCallbacks(old, new map[string]types.HostEndpointID) {
 	for ifaceName, oldEpID := range old {
 		if newEpID, ok := new[ifaceName]; ok {
 			if oldEpID != newEpID {
@@ -91,11 +92,11 @@ func (c *endpointManagerCallbacks) InvokeInterfaceCallbacks(old, new map[string]
 	}
 }
 
-func (c *endpointManagerCallbacks) InvokeUpdateHostEndpoint(hostEpID proto.HostEndpointID) {
+func (c *endpointManagerCallbacks) InvokeUpdateHostEndpoint(hostEpID types.HostEndpointID) {
 	c.updateHostEndpoint.Invoke(hostEpID)
 }
 
-func (c *endpointManagerCallbacks) InvokeRemoveHostEndpoint(hostEpID proto.HostEndpointID) {
+func (c *endpointManagerCallbacks) InvokeRemoveHostEndpoint(hostEpID types.HostEndpointID) {
 	c.removeHostEndpoint.Invoke(hostEpID)
 }
 
@@ -136,25 +137,25 @@ type endpointManager struct {
 
 	// Pending updates, cleared in CompleteDeferredWork as the data is copied to the activeXYZ
 	// fields.
-	pendingWlEpUpdates  map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint
+	pendingWlEpUpdates  map[types.WorkloadEndpointID]*proto.WorkloadEndpoint
 	pendingIfaceUpdates map[string]ifacemonitor.State
-	dirtyPolicyIDs      set.Set[proto.PolicyID]
+	dirtyPolicyIDs      set.Set[types.PolicyID]
 
 	// Active state, updated in CompleteDeferredWork.
-	activeWlEndpoints                map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint
-	activeWlIfaceNameToID            map[string]proto.WorkloadEndpointID
+	activeWlEndpoints                map[types.WorkloadEndpointID]*proto.WorkloadEndpoint
+	activeWlIfaceNameToID            map[string]types.WorkloadEndpointID
 	activeUpIfaces                   set.Set[string]
-	activeWlIDToChains               map[proto.WorkloadEndpointID][]*iptables.Chain
+	activeWlIDToChains               map[types.WorkloadEndpointID][]*iptables.Chain
 	activeWlDispatchChains           map[string]*iptables.Chain
 	activeEPMarkDispatchChains       map[string]*iptables.Chain
 	ifaceNameToPolicyGroupChainNames map[string][]string /*chain name*/
 
-	activePolicySelectors map[proto.PolicyID]string
+	activePolicySelectors map[types.PolicyID]string
 	policyChainRefCounts  map[string]int // Chain name to count.
 
 	// Workload endpoints that would be locally active but are 'shadowed' by other endpoints
 	// with the same interface name.
-	shadowedWlEndpoints map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint
+	shadowedWlEndpoints map[types.WorkloadEndpointID]*proto.WorkloadEndpoint
 
 	// wlIfaceNamesToReconfigure contains names of workload interfaces that need to have
 	// their configuration (sysctls etc.) refreshed.
@@ -177,7 +178,7 @@ type endpointManager struct {
 	// from the dataplane).
 	hostIfaceToAddrs map[string]set.Set[string]
 	// rawHostEndpoints contains the raw (i.e. not resolved to interface) host endpoints.
-	rawHostEndpoints map[proto.HostEndpointID]*proto.HostEndpoint
+	rawHostEndpoints map[types.HostEndpointID]*proto.HostEndpoint
 	// hostEndpointsDirty is set to true when host endpoints are updated.
 	hostEndpointsDirty bool
 	// activeHostIfaceToChains maps host interface name to the chains that we've programmed.
@@ -190,10 +191,10 @@ type endpointManager struct {
 	activeHostFilterDispatchChains map[string]*iptables.Chain
 	activeHostMangleDispatchChains map[string]*iptables.Chain
 	// activeHostEpIDToIfaceNames records which interfaces we resolved each host endpoint to.
-	activeHostEpIDToIfaceNames map[proto.HostEndpointID][]string
+	activeHostEpIDToIfaceNames map[types.HostEndpointID][]string
 	// activeIfaceNameToHostEpID records which endpoint we resolved each host interface to.
-	activeIfaceNameToHostEpID map[string]proto.HostEndpointID
-	newIfaceNameToHostEpID    map[string]proto.HostEndpointID
+	activeIfaceNameToHostEpID map[string]types.HostEndpointID
+	newIfaceNameToHostEpID    map[string]types.HostEndpointID
 
 	needToCheckDispatchChains     bool
 	needToCheckEndpointMarkChains bool
@@ -288,21 +289,21 @@ func newEndpointManagerWithShims(
 
 		// Pending updates, we store these up as OnUpdate is called, then process them
 		// in CompleteDeferredWork and transfer the important data to the activeXYX fields.
-		pendingWlEpUpdates:  map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
+		pendingWlEpUpdates:  map[types.WorkloadEndpointID]*proto.WorkloadEndpoint{},
 		pendingIfaceUpdates: map[string]ifacemonitor.State{},
-		dirtyPolicyIDs:      set.New[proto.PolicyID](),
+		dirtyPolicyIDs:      set.New[types.PolicyID](),
 
 		activeUpIfaces: set.New[string](),
 
-		activeWlEndpoints:                map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
-		activeWlIfaceNameToID:            map[string]proto.WorkloadEndpointID{},
-		activeWlIDToChains:               map[proto.WorkloadEndpointID][]*iptables.Chain{},
+		activeWlEndpoints:                map[types.WorkloadEndpointID]*proto.WorkloadEndpoint{},
+		activeWlIfaceNameToID:            map[string]types.WorkloadEndpointID{},
+		activeWlIDToChains:               map[types.WorkloadEndpointID][]*iptables.Chain{},
 		ifaceNameToPolicyGroupChainNames: map[string][]string{},
 
-		activePolicySelectors: map[proto.PolicyID]string{},
+		activePolicySelectors: map[types.PolicyID]string{},
 		policyChainRefCounts:  map[string]int{},
 
-		shadowedWlEndpoints: map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
+		shadowedWlEndpoints: map[types.WorkloadEndpointID]*proto.WorkloadEndpoint{},
 
 		wlIfaceNamesToReconfigure: set.New[string](),
 
@@ -313,7 +314,7 @@ func newEndpointManagerWithShims(
 		defaultRPFilter:      defaultRPFilter,
 
 		hostIfaceToAddrs:   map[string]set.Set[string]{},
-		rawHostEndpoints:   map[proto.HostEndpointID]*proto.HostEndpoint{},
+		rawHostEndpoints:   map[types.HostEndpointID]*proto.HostEndpoint{},
 		hostEndpointsDirty: true,
 
 		activeHostIfaceToRawChains:           map[string][]*iptables.Chain{},
@@ -340,19 +341,23 @@ func (m *endpointManager) OnUpdate(protoBufMsg interface{}) {
 	log.WithField("msg", protoBufMsg).Debug("Received message")
 	switch msg := protoBufMsg.(type) {
 	case *proto.WorkloadEndpointUpdate:
-		m.pendingWlEpUpdates[*msg.Id] = msg.Endpoint
+		id := types.ProtoToWorkloadEndpointID(msg.GetId())
+		m.pendingWlEpUpdates[id] = msg.Endpoint
 	case *proto.WorkloadEndpointRemove:
-		m.pendingWlEpUpdates[*msg.Id] = nil
+		id := types.ProtoToWorkloadEndpointID(msg.GetId())
+		m.pendingWlEpUpdates[id] = nil
 	case *proto.HostEndpointUpdate:
 		log.WithField("msg", msg).Debug("Host endpoint update")
-		m.callbacks.InvokeUpdateHostEndpoint(*msg.Id)
-		m.rawHostEndpoints[*msg.Id] = msg.Endpoint
+		id := types.ProtoToHostEndpointID(msg.GetId())
+		m.callbacks.InvokeUpdateHostEndpoint(id)
+		m.rawHostEndpoints[id] = msg.Endpoint
 		m.hostEndpointsDirty = true
 		m.epIDsToUpdateStatus.Add(*msg.Id)
 	case *proto.HostEndpointRemove:
 		log.WithField("msg", msg).Debug("Host endpoint removed")
-		m.callbacks.InvokeRemoveHostEndpoint(*msg.Id)
-		delete(m.rawHostEndpoints, *msg.Id)
+		id := types.ProtoToHostEndpointID(msg.GetId())
+		m.callbacks.InvokeRemoveHostEndpoint(id)
+		delete(m.rawHostEndpoints, id)
 		m.hostEndpointsDirty = true
 		m.epIDsToUpdateStatus.Add(*msg.Id)
 	case *ifaceStateUpdate:
@@ -372,7 +377,8 @@ func (m *endpointManager) OnUpdate(protoBufMsg interface{}) {
 		m.hostEndpointsDirty = true
 	case *proto.ActivePolicyUpdate:
 		newSel := msg.Policy.OriginalSelector
-		if oldSel, ok := m.activePolicySelectors[*msg.Id]; ok && oldSel == newSel {
+		id := types.ProtoToPolicyID(msg.GetId())
+		if oldSel, ok := m.activePolicySelectors[id]; ok && oldSel == newSel {
 			// No change that we care about.
 			return
 		} else if ok {
@@ -381,18 +387,19 @@ func (m *endpointManager) OnUpdate(protoBufMsg interface{}) {
 			// need to do that for new policies because the calc graph guarantees
 			// that we'll see an endpoint update after any new policies are
 			// added to an endpoint.
-			m.dirtyPolicyIDs.Add(*msg.Id)
+			m.dirtyPolicyIDs.Add(id)
 		}
 		log.WithFields(log.Fields{
 			"id":       *msg.Id,
 			"selector": newSel,
 		}).Debug("Active policy selector new/updated.")
-		m.activePolicySelectors[*msg.Id] = newSel
+		m.activePolicySelectors[id] = newSel
 	case *proto.ActivePolicyRemove:
 		// We can only get a remove after no endpoints are using this policy
 		// so we no longer need to track it at all.
-		m.dirtyPolicyIDs.Discard(*msg.Id)
-		delete(m.activePolicySelectors, *msg.Id)
+		id := types.ProtoToPolicyID(msg.GetId())
+		m.dirtyPolicyIDs.Discard(id)
+		delete(m.activePolicySelectors, id)
 	}
 }
 
@@ -467,7 +474,7 @@ wepLoop:
 		for _, t := range wep.Tiers {
 			for _, pols := range [][]string{t.IngressPolicies, t.EgressPolicies} {
 				for _, p := range pols {
-					polID := proto.PolicyID{
+					polID := types.PolicyID{
 						Tier: t.Name,
 						Name: p,
 					}
@@ -504,7 +511,7 @@ func (m *endpointManager) tiersUseDirtyPolicy(tiers []*proto.TierInfo) bool {
 	for _, t := range tiers {
 		for _, pols := range [][]string{t.IngressPolicies, t.EgressPolicies} {
 			for _, p := range pols {
-				polID := proto.PolicyID{
+				polID := types.PolicyID{
 					Tier: t.Name,
 					Name: p,
 				}
@@ -541,10 +548,10 @@ func (m *endpointManager) updateEndpointStatuses() {
 	log.WithField("dirtyEndpoints", m.epIDsToUpdateStatus).Debug("Reporting endpoint status.")
 	m.epIDsToUpdateStatus.Iter(func(item interface{}) error {
 		switch id := item.(type) {
-		case proto.WorkloadEndpointID:
+		case types.WorkloadEndpointID:
 			status := m.calculateWorkloadEndpointStatus(id)
 			m.OnEndpointStatusUpdate(m.ipVersion, id, status)
-		case proto.HostEndpointID:
+		case types.HostEndpointID:
 			status := m.calculateHostEndpointStatus(id)
 			m.OnEndpointStatusUpdate(m.ipVersion, id, status)
 		}
@@ -553,7 +560,7 @@ func (m *endpointManager) updateEndpointStatuses() {
 	})
 }
 
-func (m *endpointManager) calculateWorkloadEndpointStatus(id proto.WorkloadEndpointID) string {
+func (m *endpointManager) calculateWorkloadEndpointStatus(id types.WorkloadEndpointID) string {
 	logCxt := log.WithField("workloadEndpointID", id)
 	logCxt.Debug("Re-evaluating workload endpoint status")
 	var operUp, adminUp, failed bool
@@ -587,7 +594,7 @@ func (m *endpointManager) calculateWorkloadEndpointStatus(id proto.WorkloadEndpo
 	return status
 }
 
-func (m *endpointManager) calculateHostEndpointStatus(id proto.HostEndpointID) (status string) {
+func (m *endpointManager) calculateHostEndpointStatus(id types.HostEndpointID) (status string) {
 	logCxt := log.WithField("hostEndpointID", id)
 	logCxt.Debug("Re-evaluating host endpoint status")
 	var resolved, operUp bool
@@ -643,7 +650,7 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 		m.needToCheckDispatchChains = true
 	}
 
-	removeActiveWorkload := func(logCxt *log.Entry, oldWorkload *proto.WorkloadEndpoint, id proto.WorkloadEndpointID) {
+	removeActiveWorkload := func(logCxt *log.Entry, oldWorkload *proto.WorkloadEndpoint, id types.WorkloadEndpointID) {
 		m.callbacks.InvokeRemoveWorkload(oldWorkload)
 		m.filterTable.RemoveChains(m.activeWlIDToChains[id])
 		delete(m.activeWlIDToChains, id)
@@ -797,7 +804,7 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 				if oldWorkload != nil {
 					// Check for another endpoint with the same interface name,
 					// that should now become active.
-					bestShadowedId := proto.WorkloadEndpointID{}
+					bestShadowedId := types.WorkloadEndpointID{}
 					for sId, sWorkload := range m.shadowedWlEndpoints {
 						logCxt.Infof("Old workload %v", oldWorkload)
 						logCxt.Infof("Shadowed workload %v", sWorkload)
@@ -845,7 +852,7 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 }
 
 func (m *endpointManager) updateWorkloadEndpointChains(
-	id proto.WorkloadEndpointID,
+	id types.WorkloadEndpointID,
 	workload *proto.WorkloadEndpoint,
 	ingressPolicyNames []string,
 	egressPolicyNames []string,
@@ -867,7 +874,7 @@ func (m *endpointManager) updateWorkloadEndpointChains(
 	m.activeWlIDToChains[id] = chains
 }
 
-func wlIdsAscending(id1, id2 *proto.WorkloadEndpointID) bool {
+func wlIdsAscending(id1, id2 *types.WorkloadEndpointID) bool {
 	if id1.OrchestratorId == id2.OrchestratorId {
 		// Need to compare WorkloadId.
 		if id1.WorkloadId == id2.WorkloadId {
@@ -911,7 +918,7 @@ func (m *endpointManager) resolveEndpointMarks() {
 	m.updateDispatchChains(m.activeEPMarkDispatchChains, newEndpointMarkDispatchChains, m.filterTable)
 }
 
-func (m *endpointManager) resolveHostEndpoints() map[string]proto.HostEndpointID {
+func (m *endpointManager) resolveHostEndpoints() map[string]types.HostEndpointID {
 	// Host endpoint resolution
 	// ------------------------
 	//
@@ -938,13 +945,13 @@ func (m *endpointManager) resolveHostEndpoints() map[string]proto.HostEndpointID
 	// own.  Rather it is looking at the set of local non-workload interfaces and
 	// seeing which of them are matched by the current set of HostEndpoints as a
 	// whole.
-	newIfaceNameToHostEpID := map[string]proto.HostEndpointID{}
+	newIfaceNameToHostEpID := map[string]types.HostEndpointID{}
 	for ifaceName, ifaceAddrs := range m.hostIfaceToAddrs {
 		ifaceCxt := log.WithFields(log.Fields{
 			"ifaceName":  ifaceName,
 			"ifaceAddrs": ifaceAddrs,
 		})
-		bestHostEpId := proto.HostEndpointID{}
+		bestHostEpId := types.HostEndpointID{}
 	HostEpLoop:
 		for id, hostEp := range m.rawHostEndpoints {
 			logCxt := ifaceCxt.WithField("id", id)
@@ -996,7 +1003,7 @@ func (m *endpointManager) resolveHostEndpoints() map[string]proto.HostEndpointID
 	}
 
 	// Similar loop to find the best all-interfaces host endpoint.
-	bestHostEpId := proto.HostEndpointID{}
+	bestHostEpId := types.HostEndpointID{}
 	for id, hostEp := range m.rawHostEndpoints {
 		logCxt := log.WithField("id", id)
 		if !forAllInterfaces(hostEp) {
@@ -1037,9 +1044,9 @@ func (m *endpointManager) updateHostEndpoints() {
 	// Calculate filtered name/id maps for untracked and pre-DNAT policy, and a reverse map from
 	// each active host endpoint to the interfaces it is in use for.
 	newIfaceNameToHostEpID := m.newIfaceNameToHostEpID
-	newPreDNATIfaceNameToHostEpID := map[string]proto.HostEndpointID{}
-	newUntrackedIfaceNameToHostEpID := map[string]proto.HostEndpointID{}
-	newHostEpIDToIfaceNames := map[proto.HostEndpointID][]string{}
+	newPreDNATIfaceNameToHostEpID := map[string]types.HostEndpointID{}
+	newUntrackedIfaceNameToHostEpID := map[string]types.HostEndpointID{}
+	newHostEpIDToIfaceNames := map[types.HostEndpointID][]string{}
 	for ifaceName, id := range newIfaceNameToHostEpID {
 		logCxt := log.WithField("id", id).WithField("ifaceName", ifaceName)
 		ep := m.rawHostEndpoints[id]
@@ -1480,7 +1487,7 @@ func forAllInterfaces(hep *proto.HostEndpoint) bool {
 }
 
 // for implementing the endpointsSource interface
-func (m *endpointManager) GetRawHostEndpoints() map[proto.HostEndpointID]*proto.HostEndpoint {
+func (m *endpointManager) GetRawHostEndpoints() map[types.HostEndpointID]*proto.HostEndpoint {
 	return m.rawHostEndpoints
 }
 
@@ -1492,14 +1499,14 @@ func (m *endpointManager) groupPolicies(tierName string, names []string, directi
 		Tier:        tierName,
 		Direction:   direction,
 		PolicyNames: []string{names[0]},
-		Selector: m.activePolicySelectors[proto.PolicyID{
+		Selector: m.activePolicySelectors[types.PolicyID{
 			Tier: tierName,
 			Name: names[0],
 		}],
 	}
 	groups := []*rules.PolicyGroup{group}
 	for _, name := range names[1:] {
-		sel := m.activePolicySelectors[proto.PolicyID{
+		sel := m.activePolicySelectors[types.PolicyID{
 			Tier: tierName,
 			Name: name,
 		}]
