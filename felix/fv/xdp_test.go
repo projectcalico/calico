@@ -438,7 +438,7 @@ func xdpTest(getInfra infrastructure.InfraFactory, proto string) {
 					return
 				}
 
-				It("FOCUS resync should've handled the external change of a BPF map", func() {
+				It("resync should've handled the external change of a BPF map", func() {
 					args := append([]string{"bpftool", "map", "lookup", "pinned", "/sys/fs/bpf/calico/xdp/eth0_ipv4_v1_blacklist", "key", "hex"}, hostHexCIDR...)
 					Eventually(tc.Felixes[srvr].ExecOutputFn(args...), "10s").Should(ContainSubstring("value:"))
 

@@ -55,12 +55,12 @@ var _ = Context("_IPSets_ Tests for IPset rendering", func() {
 	})
 
 	AfterEach(func() {
-		w.Stop()
-		tc.Stop()
-
 		if CurrentGinkgoTestDescription().Failed {
 			etcd.Exec("etcdctl", "get", "/", "--prefix", "--keys-only")
 		}
+
+		w.Stop()
+		tc.Stop()
 		etcd.Stop()
 		infra.Stop()
 	})
@@ -118,8 +118,9 @@ var _ = Context("_IPSets_ Tests for IPset rendering", func() {
 
 		timeout := 30 * time.Second
 		if NFTMode() {
-			// nftables takes longer to program ipsets.
-			timeout = 240 * time.Second
+			// nftables takes slightly longer to program ipsets due to inefficient resync logic.
+			// Once we fix that, we can reduce the timeout.
+			timeout = 60 * time.Second
 		}
 
 		Expect(timeToCreateAll).To(BeNumerically("<", timeout),

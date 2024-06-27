@@ -372,22 +372,52 @@ func (s *IPSets) tryResync() error {
 		}
 		return fmt.Errorf("error listing nftables sets: %s", err)
 	}
-	for _, setName := range sets {
-		logCxt := s.logCxt.WithField("setName", setName)
 
-		elems, err := s.nft.ListElements(ctx, "set", setName)
-		if err != nil {
-			return fmt.Errorf("error listing nftables set elements: %s", err)
-		}
-		strElems := []string{}
-		for _, e := range elems {
-			if len(e.Key) == 3 {
-				// This is a concatination of IP, protocol and port. Format it back into Felix's internal representation.
-				strElems = append(strElems, fmt.Sprintf("%s,%s:%s", e.Key[0], e.Key[1], e.Key[2]))
-			} else {
-				// This is just an IP address / CIDR.
-				strElems = append(strElems, e.Key[0])
+	// We'll process each set in parallel, so we need a struct to hold the results.
+	// Once knftables is augmented to support reading many sets at once, we can remove this.
+	type setData struct {
+		setName string
+		elems   []string
+		err     error
+	}
+	setsChan := make(chan setData)
+	defer close(setsChan)
+
+	// Start a goroutine to list the elements of each set.
+	for _, setName := range sets {
+		go func(name string) {
+			elems, err := s.nft.ListElements(ctx, "set", name)
+			if err != nil {
+				setsChan <- setData{setName: name, err: err}
 			}
+			strElems := []string{}
+			for _, e := range elems {
+				if len(e.Key) == 3 {
+					// This is a concatination of IP, protocol and port. Format it back into Felix's internal representation.
+					strElems = append(strElems, fmt.Sprintf("%s,%s:%s", e.Key[0], e.Key[1], e.Key[2]))
+				} else {
+					// This is just an IP address / CIDR.
+					strElems = append(strElems, e.Key[0])
+				}
+			}
+			setsChan <- setData{setName: name, elems: strElems}
+		}(setName)
+	}
+
+	// We expect a response for every set we asked for.
+	responses := make([]setData, len(sets))
+	for range sets {
+		setData := <-setsChan
+		responses = append(responses, setData)
+	}
+
+	for _, setData := range responses {
+		setName := setData.setName
+		strElems := setData.elems
+		logCxt := s.logCxt.WithField("setName", setName)
+		if setData.err != nil {
+			logCxt.WithError(err).Error("Failed to list set elements.")
+			return err
 		}
 
 		metadata, ok := s.setNameToAllMetadata[setName]
