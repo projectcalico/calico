@@ -242,10 +242,10 @@ class TestIPIP(TestBase):
             self.assert_ipip_routing(host1, workload_host1, workload_host2,
                                      True)
 
-            # Toggle the IPIP mode between being expecting IPIP and not.  Only the mode
-            # "Always" should result in IPIP tunnel being used in these tests.
+            # Toggle the IPIP mode between being expecting IPIP and not.
+            # "Always" and "CrossSubnet" should result in IPIP tunnel being used in these tests.
             modes = ["Always"]
-            for mode in ["CrossSubnet", "Always", "Never", "Always"]:
+            for mode in ["Never", "CrossSubnet", "Never", "Always"]:
                 # At the start of this loop we should have connectivity.
                 logger.info("New mode setting: %s" % mode)
                 logger.info("Previous mode settings: %s" % modes)
