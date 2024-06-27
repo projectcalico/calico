@@ -28,6 +28,7 @@ includeCRDs: false
 
 datastore: kubernetes
 network: calico
+ipip: true
 ipam: calico-ipam
 mtu: "1440"
 imagePullPolicy: Never
