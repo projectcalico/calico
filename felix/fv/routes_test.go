@@ -17,11 +17,16 @@
 package fv_test
 
 import (
+	"context"
 	"fmt"
+	"regexp"
 	"strings"
+	"sync"
+	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/sirupsen/logrus"
 
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
@@ -78,6 +83,86 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ routing table tests", []api
 		infra.Stop()
 	})
 
+	Describe("with a workload", func() {
+		BeforeEach(func() {
+			w[0][0] = workload.Run(tc.Felixes[0],
+				fmt.Sprintf("w%d", 0),
+				"default",
+				"10.65.0.2",
+				"8088",
+				"tcp",
+			)
+			w[0][0].ConfigureInInfra(infra)
+		})
+
+		It("should handle interface rename flaps", func() {
+			if !BPFMode() {
+				// This passes locally but, in Semaphore, it hits EBUSY in iptables mode
+				// every time.  Since we're testing routing, not our ability to rename
+				// an interface(!) let's rely on the BPF-mode test only.
+				Skip("Renaming interfaces regularly hits EBUSY in iptables mode")
+			}
+			var wg sync.WaitGroup
+			defer wg.Wait()
+			wg.Add(1)
+
+			errorSeenC := tc.Felixes[0].WatchStdoutFor(regexp.MustCompile(`(ERROR|WARN).*felix/route_table.go`))
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			go func() {
+				defer GinkgoRecover()
+				defer wg.Done()
+				for ctx.Err() == nil {
+					logrus.Debug("Flapping interface")
+					w[0][0].RenameInterface(w[0][0].InterfaceName, "somename")
+					time.Sleep(1 * time.Millisecond)
+					_ = tc.Felixes[0].ExecMayFail("ip", "r", "del", w[0][0].IP)
+					logrus.Debug("Un-flapping interface")
+					w[0][0].RenameInterface("somename", w[0][0].InterfaceName)
+					time.Sleep(1 * time.Millisecond)
+				}
+			}()
+
+			Consistently(errorSeenC, "20s").ShouldNot(BeClosed(),
+				"Expected no errors from route_table.go during interface rename flaps")
+			cancel()
+
+			cc.Expect(connectivity.Some, tc.Felixes[0], w[0][0])
+			cc.CheckConnectivity()
+		})
+
+		It("should handle up/down flaps", func() {
+			var wg sync.WaitGroup
+			defer wg.Wait()
+			wg.Add(1)
+
+			errorSeenC := tc.Felixes[0].WatchStdoutFor(regexp.MustCompile(`(ERROR|WARN).*felix/route_table.go`))
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			go func() {
+				defer GinkgoRecover()
+				defer wg.Done()
+				for ctx.Err() == nil {
+					logrus.Debug("Flapping interface")
+					tc.Felixes[0].Exec("ip", "link", "set", "dev", w[0][0].InterfaceName, "down")
+					time.Sleep(10 * time.Millisecond)
+					logrus.Debug("Un-flapping interface")
+					tc.Felixes[0].Exec("ip", "link", "set", "dev", w[0][0].InterfaceName, "up")
+					time.Sleep(100 * time.Millisecond)
+				}
+			}()
+
+			Consistently(errorSeenC, "20s").ShouldNot(BeClosed(),
+				"Expected no errors from route_table.go during interface up/down flaps")
+			cancel()
+
+			cc.Expect(connectivity.Some, tc.Felixes[0], w[0][0])
+			cc.CheckConnectivity()
+		})
+	})
+
 	Describe("with locally conflicting IPs", func() {
 		BeforeEach(func() {
 			// Start two local workloads with the same IP >:)
@@ -118,6 +203,24 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ routing table tests", []api
 			// Winner is non-deterministic.
 			winner, loser := waitForInitialRouteProgramming()
 			w[0][loser].RemoveFromInfra(infra)
+			Consistently(tc.Felixes[0].ExecOutputFn("ip", "r", "get", "10.65.0.2"), "5s").Should(
+				ContainSubstring(w[0][winner].InterfaceName),
+			)
+		})
+
+		It("should resolve when winning interface goes down", func() {
+			// Winner is non-deterministic.
+			winner, loser := waitForInitialRouteProgramming()
+			w[0][winner].SetInterfaceUp(false)
+			Eventually(tc.Felixes[0].ExecOutputFn("ip", "r", "get", "10.65.0.2"), "10s").Should(
+				ContainSubstring(w[0][loser].InterfaceName),
+			)
+		})
+
+		It("should resolve when losing interface goes down", func() {
+			// Winner is non-deterministic.
+			winner, loser := waitForInitialRouteProgramming()
+			w[0][loser].SetInterfaceUp(false)
 			Consistently(tc.Felixes[0].ExecOutputFn("ip", "r", "get", "10.65.0.2"), "5s").Should(
 				ContainSubstring(w[0][winner].InterfaceName),
 			)

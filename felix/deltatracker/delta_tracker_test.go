@@ -47,6 +47,7 @@ func TestDeltaTracker_Empty(t *testing.T) {
 		t.Errorf("IterPendingDeletions unexpectedly called func with %v", k)
 		return IterActionNoOp
 	})
+	Expect(dt.Desired().Len()).To(BeZero())
 }
 
 // TestDeltaTracker_CleanUp verifies cleaning up of a whole map.
@@ -62,6 +63,7 @@ func TestDeltaTracker_CleanUp(t *testing.T) {
 		"1": "A1",
 		"2": "B1",
 	}))
+	Expect(dt.Desired().Len()).To(Equal(0))
 }
 
 func pendingDeletions(dt *DeltaTracker[string, string], action IterAction) map[string]string {
@@ -127,12 +129,14 @@ func TestDeltaTracker_GetDesired(t *testing.T) {
 	} else if v != "A1" {
 		t.Errorf("DeltaTracker returned incorrect value: %q", v)
 	}
+	Expect(dt.Desired().Len()).To(Equal(1))
 
 	// Delete it again.  Should no longer be returned.
 	dt.Desired().Delete("1")
 	if _, ok := dt.Desired().Get("1"); ok {
 		t.Fatal("Delete had no effect?")
 	}
+	Expect(dt.Desired().Len()).To(Equal(0))
 
 	// Recreate, so we can test adding the value to the dataplane.
 	dt.Desired().Set("1", "A1")
@@ -141,6 +145,7 @@ func TestDeltaTracker_GetDesired(t *testing.T) {
 	} else if v != "A1" {
 		t.Errorf("DeltaTracker returned incorrect value: %q", v)
 	}
+	Expect(dt.Desired().Len()).To(Equal(1))
 
 	// Adding to the dataplane shouldn't affect the desired state.
 	dt.Dataplane().Set("1", "A1")
@@ -149,6 +154,7 @@ func TestDeltaTracker_GetDesired(t *testing.T) {
 	} else if v != "A1" {
 		t.Errorf("DeltaTracker returned incorrect value once it was also in DP: %q", v)
 	}
+	Expect(dt.Desired().Len()).To(Equal(1))
 
 	// Delete the desired while the value is in the dataplane.  Again, should be independent
 	// of whether it's in the dataplane.
@@ -156,6 +162,7 @@ func TestDeltaTracker_GetDesired(t *testing.T) {
 	if _, ok := dt.Desired().Get("1"); ok {
 		t.Fatal("Delete had no effect?")
 	}
+	Expect(dt.Desired().Len()).To(Equal(0))
 
 	// Recreate the desired key while it is in the dataplane.
 	dt.Desired().Set("1", "A1")
@@ -164,6 +171,7 @@ func TestDeltaTracker_GetDesired(t *testing.T) {
 	} else if v != "A1" {
 		t.Errorf("DeltaTracker returned incorrect value: %q", v)
 	}
+	Expect(dt.Desired().Len()).To(Equal(1))
 
 	// Delete from dataplane while the key is in the desired map, should not impact desired.
 	dt.Dataplane().Delete("1")
@@ -172,6 +180,7 @@ func TestDeltaTracker_GetDesired(t *testing.T) {
 	} else if v != "A1" {
 		t.Errorf("DeltaTracker returned incorrect value after deleting from DP: %q", v)
 	}
+	Expect(dt.Desired().Len()).To(Equal(1))
 
 	// Adding a different value to the dataplane shouldn't affect desired.
 	dt.Dataplane().Set("1", "A2")
@@ -191,6 +200,7 @@ func TestDeltaTracker_GetDesired(t *testing.T) {
 	} else if v != "A2" {
 		t.Fatal("Delete changed dataplane key")
 	}
+	Expect(dt.Desired().Len()).To(Equal(0))
 
 	// Recreate while there's a different dataplane key...
 	dt.Desired().Set("1", "A1")
@@ -199,6 +209,7 @@ func TestDeltaTracker_GetDesired(t *testing.T) {
 	} else if v != "A1" {
 		t.Errorf("DeltaTracker returned incorrect value: %q", v)
 	}
+	Expect(dt.Desired().Len()).To(Equal(1))
 }
 
 func TestDeltaTracker_DesiredDeleteAll(t *testing.T) {
@@ -207,6 +218,7 @@ func TestDeltaTracker_DesiredDeleteAll(t *testing.T) {
 	dt.Desired().Set("1", "A1") // Same value for existing key.
 	dt.Desired().Set("2", "B1") // New value for existing key.
 	dt.Desired().Set("4", "D1") // New K/V
+	Expect(dt.Desired().Len()).To(Equal(3))
 	Expect(pendingUpdates(dt, IterActionNoOp)).To(Equal(map[string]string{
 		"1": "A1",
 		"2": "B1",
@@ -215,6 +227,7 @@ func TestDeltaTracker_DesiredDeleteAll(t *testing.T) {
 	Expect(pendingDeletions(dt, IterActionNoOp)).To(BeEmpty())
 
 	dt.Desired().DeleteAll()
+	Expect(dt.Desired().Len()).To(Equal(0))
 
 	Expect(pendingUpdates(dt, IterActionNoOp)).To(BeEmpty())
 	Expect(pendingDeletions(dt, IterActionNoOp)).To(BeEmpty())
@@ -281,6 +294,7 @@ func TestDeltaTracker_UpdateThenReplaceDataplaneCacheFromIter(t *testing.T) {
 	dt.Desired().Set("1", "A1") // Same value for existing key.
 	dt.Desired().Set("2", "B1") // New value for existing key.
 	dt.Desired().Set("4", "D1") // New K/V
+	Expect(dt.Desired().Len()).To(Equal(3))
 	Expect(pendingUpdates(dt, IterActionNoOp)).To(Equal(map[string]string{
 		"1": "A1",
 		"2": "B1",
@@ -318,6 +332,7 @@ func TestDeltaTracker_UpdateThenReplaceDataplaneCacheFromIter(t *testing.T) {
 	Expect(pendingDeletions(dt, IterActionNoOp)).To(Equal(map[string]string{
 		"5": "E1",
 	}))
+	Expect(dt.Desired().Len()).To(Equal(3))
 }
 
 func TestDeltaTracker_DataplaneDeleteAll(t *testing.T) {
@@ -334,6 +349,7 @@ func TestDeltaTracker_DataplaneDeleteAll(t *testing.T) {
 	dt.Desired().Set("1", "A1") // Same value for existing key.
 	dt.Desired().Set("2", "B1") // New value for existing key.
 	dt.Desired().Set("4", "D1") // New K/V
+	Expect(dt.Desired().Len()).To(Equal(3))
 	Expect(pendingUpdates(dt, IterActionNoOp)).To(Equal(map[string]string{
 		"2": "B1",
 		"4": "D1",
@@ -353,6 +369,7 @@ func TestDeltaTracker_DataplaneDeleteAll(t *testing.T) {
 		"4": "D1",
 	}))
 	Expect(pendingDeletions(dt, IterActionNoOp)).To(BeEmpty())
+	Expect(dt.Desired().Len()).To(Equal(3))
 }
 
 func TestDeltaTracker_ReplaceDataplaneCacheFromIterThenUpdate(t *testing.T) {
@@ -369,6 +386,7 @@ func TestDeltaTracker_ReplaceDataplaneCacheFromIterThenUpdate(t *testing.T) {
 	dt.Desired().Set("1", "A1") // Same value for existing key.
 	dt.Desired().Set("2", "B1") // New value for existing key.
 	dt.Desired().Set("4", "D1") // New K/V
+	Expect(dt.Desired().Len()).To(Equal(3))
 
 	Expect(pendingUpdates(dt, IterActionNoOp)).To(Equal(map[string]string{
 		"2": "B1",
@@ -416,6 +434,7 @@ func TestDeltaTracker_ReplaceDataplaneCacheFromIterThenUpdate(t *testing.T) {
 	Expect(pendingDeletions(dt, IterActionNoOp)).To(Equal(map[string]string{
 		"3": "C3",
 	}))
+	Expect(dt.Desired().Len()).To(Equal(3))
 }
 
 func TestDeltaTracker_IterPendingActions(t *testing.T) {
@@ -424,6 +443,7 @@ func TestDeltaTracker_IterPendingActions(t *testing.T) {
 	dt.Desired().Set("1", "A1") // Same value for existing key.
 	dt.Desired().Set("2", "B1") // New value for existing key.
 	dt.Desired().Set("4", "D1") // New K/V
+	Expect(dt.Desired().Len()).To(Equal(3))
 	dpContents := map[string]string{
 		"1": "A1",
 		"2": "B2",
@@ -466,6 +486,7 @@ func TestDeltaTracker_IterPendingActions(t *testing.T) {
 		"2": "B1",
 		"4": "D1",
 	}))
+	Expect(dt.Desired().Len()).To(Equal(3))
 }
 
 // TestDeltaTracker_ReplaceDataplaneCacheFromIterErrors tests error handling of
@@ -477,6 +498,7 @@ func TestDeltaTracker_ReplaceDataplaneCacheFromIterErrors(t *testing.T) {
 	dt.Desired().Set("1", "A1") // Same value for existing key.
 	dt.Desired().Set("2", "B1") // New value for existing key.
 	dt.Desired().Set("4", "D1") // New K/V
+	Expect(dt.Desired().Len()).To(Equal(3))
 
 	// Do a dataplane resync but fail after 2 keys have been produced.
 	err := dt.Dataplane().ReplaceAllIter(func(f func(k string, v string)) error {
@@ -555,6 +577,7 @@ func TestDeltaTracker_ReplaceDataplaneCacheFromIterErrors(t *testing.T) {
 	Expect(pendingDeletions(dt, IterActionNoOp)).To(Equal(map[string]string{
 		"3": "C1",
 	}))
+	Expect(dt.Desired().Len()).To(Equal(3))
 }
 
 func TestDeltaTracker_IterDesired(t *testing.T) {
