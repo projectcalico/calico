@@ -338,6 +338,7 @@ fv-no-prereqs:
 	  GINKGO_FOCUS="$(GINKGO_FOCUS)" \
 	  ARCH=$(ARCH) \
 	  FELIX_FV_ENABLE_BPF="$(FELIX_FV_ENABLE_BPF)" \
+	  FELIX_FV_NFTABLES="$(FELIX_FV_NFTABLES)" \
 	  FV_RACE_DETECTOR_ENABLED=$(FV_RACE_DETECTOR_ENABLED) \
 	  FV_BINARY=$(FV_BINARY) \
 	  FELIX_FV_WIREGUARD_AVAILABLE=`./wireguard-available >/dev/null && echo true || echo false` \
@@ -351,6 +352,9 @@ fv-no-prereqs:
 
 fv-bpf:
 	$(MAKE) fv FELIX_FV_ENABLE_BPF=true
+
+fv-nft:
+	$(MAKE) fv FELIX_FV_NFTABLES=Enabled
 
 check-wireguard:
 	fv/wireguard-available || ( echo "WireGuard not available."; exit 1 )
@@ -391,6 +395,7 @@ k8sfv-test: $(REMOTE_DEPS) $(FELIX_CONTAINER_CREATED) $(FV_BINARY) bin/k8sfv.tes
 	FV_FELIXIMAGE=$(FV_FELIXIMAGE) \
 	FV_K8SIMAGE=$(FV_K8SIMAGE) \
 	FV_BINARY=$(FV_BINARY) \
+	FELIX_FV_NFTABLES=$(FELIX_FV_NFTABLES) \
 	CERTS_PATH=$(CERTS_PATH) \
 	PRIVATE_KEY=`pwd`/fv/private.key \
 	k8sfv/run-test
