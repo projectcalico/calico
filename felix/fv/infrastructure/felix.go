@@ -134,6 +134,14 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 		"FELIX_BPFIPV6SUPPORT":           bpfEnableIPv6,
 		// Disable log dropping, because it can cause flakes in tests that look for particular logs.
 		"FELIX_DEBUGDISABLELOGDROPPING": "true",
+
+		// Currently there is a race between pre-BPF networking being programmed
+		// and APIServer comms, which causes conntracks for APIServer comms not to appear,
+		// in-turn causing APIServer watches to hang. This manifests as FV's timing out,
+		// and can be diagnosed by seeing the test pass again after adding a gross timeout
+		// to the failing assertion (e.g. 1m).
+		"HTTP2_READ_IDLE_TIMEOUT_SECONDS": "10",
+		"HTTP2_PING_TIMEOUT_SECONDS":      "10",
 	}
 	// Collect the volumes for this container.
 	wd, err := os.Getwd()
