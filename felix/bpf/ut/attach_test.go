@@ -674,7 +674,7 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 func TestAttach(t *testing.T) {
 	RegisterTestingT(t)
 	runAttachTest(t, false)
-	//runAttachTest(t, true)
+	runAttachTest(t, true)
 }
 
 func ifstateMapDump(m maps.Map) ifstate.MapMem {
