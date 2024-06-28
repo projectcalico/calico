@@ -346,6 +346,10 @@ configRetry:
 		break configRetry
 	}
 
+	// If we get here, we've loaded the configuration successfully.
+	// Update log levels before we do anything else.
+	logutils.ConfigureLogging(configParams)
+
 	if numClientsCreated > 2 {
 		// We don't have a way to close datastore connection so, if we reconnected after
 		// a failure to load config, restart felix to avoid leaking connections.
@@ -371,9 +375,6 @@ configRetry:
 	// Enable or disable the health HTTP server according to coalesced config.
 	healthAggregator.ServeHTTP(configParams.HealthEnabled, configParams.HealthHost, configParams.HealthPort)
 
-	// If we get here, we've loaded the configuration successfully.
-	// Update log levels before we do anything else.
-	logutils.ConfigureLogging(configParams)
 	// Since we may have enabled more logging, log with the build context
 	// again.
 	buildInfoLogCxt.WithField("config", configParams).Info(
