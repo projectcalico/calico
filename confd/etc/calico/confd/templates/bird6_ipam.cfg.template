@@ -10,11 +10,10 @@ function reject_disabled_pools ()
 
 function reject_tunnel_routes () {
   # Don't export tunnel routes to other nodes, Felix programs them.
-  # IPIP routes are handled by Bird, and it does not re-advertise them.
   if (defined(ifname)) then {
-     if ((ifname ~ "*.cali") || (ifname ~ "*.calico")) then {
-        reject;
-     }
+    if ((ifname ~ "*.cali") || (ifname ~ "*.calico") || (ifname ~ "tunl0")) then {
+      reject;
+    }
   }
 }
 
@@ -66,19 +65,17 @@ function calico_export_to_bgp_peers(bool internal_peer) {
 filter calico_kernel_programming {
 {{- $reject_key := "/rejectcidrsv6"}}
 {{- if ls $reject_key}}
-
   # Don't program static routes into kernel.
   {{- range ls $reject_key}}
     {{- $parts := split . "-"}}
     {{- $cidr := join $parts "/"}}
   if ( net ~ {{$cidr}} ) then { reject; }
   {{- end}}
-
 {{- end}}
 {{range ls "/v1/ipam/v6/pool"}}{{$data := json (getv (printf "/v1/ipam/v6/pool/%s" .))}}
-{{- if $data.vxlan_mode}}
+{{- if or ($data.vxlan_mode) ($data.ipip_mode)}}
   if ( net ~ {{$data.cidr}} ) then {
-    # Don't program VXLAN routes into the kernel - these are handled by Felix.
+    # Don't program VXLAN or IPIP routes into the kernel - these are handled by Felix.
     reject;
   }
 {{- end}}{{/* End of '$data.vxlan_mode' */}}

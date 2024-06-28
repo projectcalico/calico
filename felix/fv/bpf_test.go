@@ -368,13 +368,11 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			options.AutoHEPsEnabled = true
 			// override IPIP being enabled by default
 			options.IPIPEnabled = false
-			options.IPIPRoutesEnabled = false
 			switch testOpts.tunnel {
 			case "none":
 				// nothing
 			case "ipip":
 				options.IPIPEnabled = true
-				options.IPIPRoutesEnabled = true
 			case "vxlan":
 				options.VXLANMode = api.VXLANModeAlways
 			case "wireguard":

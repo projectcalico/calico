@@ -406,7 +406,7 @@ spec:
               command:
               - /bin/calico-node
               - -felix-live
-{{- if and (eq .Values.network "calico") (not .Values.flannel_migration) (not .Values.vxlan) }}
+{{- if and (eq .Values.network "calico") (not .Values.flannel_migration) (not .Values.vxlan) (not .Values.ipip) }}
               - -bird-live
 {{- end }}
             periodSeconds: 10
@@ -419,7 +419,7 @@ spec:
               command:
               - /bin/calico-node
               - -felix-ready
-{{- if and (not .Values.flannel_migration) (not .Values.vxlan) }}
+{{- if and (not .Values.flannel_migration) (not .Values.vxlan) (not .Values.ipip) }}
               - -bird-ready
 {{- end }}
 {{- else if eq .Values.network "flannel" }}
