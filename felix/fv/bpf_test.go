@@ -693,11 +693,11 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 			mustGetMapIDByPath := func(felix *infrastructure.Felix, filename string) int {
 				var mapID int
-				Eventually(func() error {
+				EventuallyWithOffset(1, func() error {
 					var err error
 					mapID, err = getMapIDByPath(felix, filename)
 					return err
-				}, "10s").ShouldNot(HaveOccurred())
+				}, "10s", "300ms").ShouldNot(HaveOccurred())
 				return mapID
 			}
 
