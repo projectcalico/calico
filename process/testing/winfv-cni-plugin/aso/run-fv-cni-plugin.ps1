@@ -1,11 +1,12 @@
 Param(
   [parameter(Mandatory = $true)] $Backend,
-  [parameter(Mandatory = $false)] $LinuxPIP="{{.Env.LINUX_PIP}}"
+  [parameter(Mandatory = $false)] $LinuxPIP="{{.Env.LINUX_PIP}}",
+  [parameter(Mandatory = $false)] $LinuxAPIServerPort="{{.Env.APISERVER_PORT}}"
 )
 
 #Setting up Environment Variable
 Set-Item -Path env:KUBECONFIG -Value "C:\\k\\config"
-Set-Item -Path env:KUBERNETES_MASTER -Value "https://${LinuxPIP}:32769"
+Set-Item -Path env:KUBERNETES_MASTER -Value "https://${LinuxPIP}:${LinuxAPIServerPort}"
 Set-Item -Path env:ETCD_ENDPOINTS -Value "http://${LinuxPIP}:2389"
 Set-Item -Path env:BIN -Value "C:\\k"
 Set-Item -Path env:PLUGIN -Value "calico"
