@@ -47,6 +47,13 @@ var _ = Context("_IPSets_ Tests for IPset rendering", func() {
 		topologyOptions := infrastructure.DefaultTopologyOptions()
 		topologyOptions.FelixLogSeverity = "Info"
 		topologyOptions.EnableIPv6 = false
+		if NFTMode() {
+			// Nftables resyncs are currently ineffeicient and can cause delays in normal IP set programming.
+			// We can remove this override once we have a more efficient resync mechanism.
+			topologyOptions.ExtraEnvVars = map[string]string{
+				"FELIX_IPSETSREFRESHINTERVAL": "120",
+			}
+		}
 		logrus.SetLevel(logrus.InfoLevel)
 		tc, etcd, client, infra = infrastructure.StartSingleNodeEtcdTopology(topologyOptions)
 		felixPID = tc.Felixes[0].GetFelixPID()
@@ -116,19 +123,12 @@ var _ = Context("_IPSets_ Tests for IPset rendering", func() {
 		timeToRecreateAll := time.Since(startTime)
 		By(fmt.Sprint("All IP sets programmed after ", timeToRecreateAll))
 
-		timeout := 30 * time.Second
-		if NFTMode() {
-			// nftables takes slightly longer to program ipsets due to inefficient resync logic.
-			// Once we fix that, we can reduce the timeout.
-			timeout = 60 * time.Second
-		}
-
-		Expect(timeToCreateAll).To(BeNumerically("<", timeout),
+		Expect(timeToCreateAll).To(BeNumerically("<", 30*time.Second),
 			"Creating IP sets succeeded but slower than expected")
 
 		// Before we rate limited deletions, this would take 80s+.  Now it takes
 		// 10s so 20s should give some headroom.
-		Expect(timeToRecreateAll).To(BeNumerically("<", timeout),
+		Expect(timeToRecreateAll).To(BeNumerically("<", 30*time.Second),
 			"Recreating IP sets succeeded but slower than expected")
 	})
 })
