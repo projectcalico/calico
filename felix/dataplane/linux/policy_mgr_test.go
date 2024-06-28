@@ -24,6 +24,7 @@ import (
 	"github.com/projectcalico/calico/felix/iptables"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/rules"
+	"github.com/projectcalico/calico/felix/types"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -399,7 +400,7 @@ func (m *ipSetsMatcher) NegatedFailureMessage(actual interface{}) (message strin
 type mockPolRenderer struct {
 }
 
-func (r *mockPolRenderer) PolicyToIptablesChains(policyID *proto.PolicyID, policy *proto.Policy, ipVersion uint8) []*iptables.Chain {
+func (r *mockPolRenderer) PolicyToIptablesChains(policyID *types.PolicyID, policy *proto.Policy, ipVersion uint8) []*iptables.Chain {
 	inName := rules.PolicyChainName(rules.PolicyInboundPfx, policyID)
 	outName := rules.PolicyChainName(rules.PolicyOutboundPfx, policyID)
 	return []*iptables.Chain{
@@ -407,7 +408,7 @@ func (r *mockPolRenderer) PolicyToIptablesChains(policyID *proto.PolicyID, polic
 		{Name: outName},
 	}
 }
-func (r *mockPolRenderer) ProfileToIptablesChains(profID *proto.ProfileID, policy *proto.Profile, ipVersion uint8) (inbound, outbound *iptables.Chain) {
+func (r *mockPolRenderer) ProfileToIptablesChains(profID *types.ProfileID, policy *proto.Profile, ipVersion uint8) (inbound, outbound *iptables.Chain) {
 	inbound = &iptables.Chain{
 		Name: rules.ProfileChainName(rules.ProfileInboundPfx, profID),
 	}

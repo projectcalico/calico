@@ -35,6 +35,7 @@ import (
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/felix/testutils"
+	"github.com/projectcalico/calico/felix/types"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -877,7 +878,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 
 				It("should report id1 up", func() {
 					Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
-						proto.HostEndpointID{EndpointId: "id1"}: "up",
+						types.HostEndpointID{EndpointId: "id1"}: "up",
 					}))
 				})
 
@@ -901,7 +902,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 				It("should have expected chains", expectChainsFor("eth0_polA"))
 				It("should report id1 up", func() {
 					Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
-						proto.HostEndpointID{EndpointId: "id1"}: "up",
+						types.HostEndpointID{EndpointId: "id1"}: "up",
 					}))
 				})
 
@@ -920,8 +921,8 @@ func endpointManagerTests(ipVersion uint8) func() {
 					It("should have expected chains", expectChainsFor("eth0_polA"))
 					It("should report id1 up, but id2 now in error", func() {
 						Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
-							proto.HostEndpointID{EndpointId: "id1"}: "up",
-							proto.HostEndpointID{EndpointId: "id2"}: "error",
+							types.HostEndpointID{EndpointId: "id1"}: "up",
+							types.HostEndpointID{EndpointId: "id2"}: "error",
 						}))
 					})
 
@@ -936,7 +937,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 						It("should have expected chains", expectChainsFor("eth0_polB"))
 						It("should report id2 up only", func() {
 							Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
-								proto.HostEndpointID{EndpointId: "id2"}: "up",
+								types.HostEndpointID{EndpointId: "id2"}: "up",
 							}))
 						})
 
@@ -966,8 +967,8 @@ func endpointManagerTests(ipVersion uint8) func() {
 					It("should have expected chains", expectChainsFor("eth0_polB"))
 					It("should report id0 up, but id1 now in error", func() {
 						Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
-							proto.HostEndpointID{EndpointId: "id0"}: "up",
-							proto.HostEndpointID{EndpointId: "id1"}: "error",
+							types.HostEndpointID{EndpointId: "id0"}: "up",
+							types.HostEndpointID{EndpointId: "id1"}: "error",
 						}))
 					})
 
@@ -982,7 +983,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 						It("should have expected chains", expectChainsFor("eth0_polB"))
 						It("should report id0 up only", func() {
 							Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
-								proto.HostEndpointID{EndpointId: "id0"}: "up",
+								types.HostEndpointID{EndpointId: "id0"}: "up",
 							}))
 						})
 
@@ -1235,7 +1236,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 				It("should have expected chains", expectChainsFor("eth0"))
 				It("should report id1 up", func() {
 					Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
-						proto.HostEndpointID{EndpointId: "id1"}: "up",
+						types.HostEndpointID{EndpointId: "id1"}: "up",
 					}))
 				})
 
@@ -1255,7 +1256,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 					It("should have expected chains", expectChainsFor("eth0"))
 					It("should report id1 up", func() {
 						Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
-							proto.HostEndpointID{EndpointId: "id1"}: "up",
+							types.HostEndpointID{EndpointId: "id1"}: "up",
 						}))
 					})
 
@@ -1267,8 +1268,8 @@ func endpointManagerTests(ipVersion uint8) func() {
 						It("should have expected chains", expectChainsFor("eth0", "eth1"))
 						It("should report id1 and id22 up", func() {
 							Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
-								proto.HostEndpointID{EndpointId: "id1"}:  "up",
-								proto.HostEndpointID{EndpointId: "id22"}: "up",
+								types.HostEndpointID{EndpointId: "id1"}:  "up",
+								types.HostEndpointID{EndpointId: "id22"}: "up",
 							}))
 						})
 					})
@@ -1285,8 +1286,8 @@ func endpointManagerTests(ipVersion uint8) func() {
 						// unused, and so reported as in error.
 						It("should report id1 error and id0 up", func() {
 							Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
-								proto.HostEndpointID{EndpointId: "id1"}: "error",
-								proto.HostEndpointID{EndpointId: "id0"}: "up",
+								types.HostEndpointID{EndpointId: "id1"}: "error",
+								types.HostEndpointID{EndpointId: "id0"}: "up",
 							}))
 						})
 					})
@@ -1299,8 +1300,8 @@ func endpointManagerTests(ipVersion uint8) func() {
 						It("should have expected chains", expectChainsFor("eth0", "eth1"))
 						It("should report id1 and id22 up", func() {
 							Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
-								proto.HostEndpointID{EndpointId: "id1"}:  "up",
-								proto.HostEndpointID{EndpointId: "id22"}: "up",
+								types.HostEndpointID{EndpointId: "id1"}:  "up",
+								types.HostEndpointID{EndpointId: "id22"}: "up",
 							}))
 						})
 					})
@@ -1315,7 +1316,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 				It("should have empty dispatch chains", expectEmptyChains())
 				It("should report endpoint in error", func() {
 					Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
-						proto.HostEndpointID{EndpointId: "id3"}: "error",
+						types.HostEndpointID{EndpointId: "id3"}: "error",
 					}))
 				})
 			})
@@ -1328,7 +1329,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 				It("should have expected chains", expectChainsFor("eth0"))
 				It("should report id4 up", func() {
 					Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
-						proto.HostEndpointID{EndpointId: "id4"}: "up",
+						types.HostEndpointID{EndpointId: "id4"}: "up",
 					}))
 				})
 			})
@@ -1341,7 +1342,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 				It("should have expected chains", expectChainsFor("eth0"))
 				It("should report id5 up", func() {
 					Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
-						proto.HostEndpointID{EndpointId: "id5"}: "up",
+						types.HostEndpointID{EndpointId: "id5"}: "up",
 					}))
 				})
 			})
@@ -1355,7 +1356,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 				It("should have expected chains", expectChainsFor("eth0"))
 				It("should report id3 up", func() {
 					Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
-						proto.HostEndpointID{EndpointId: "id3"}: "up",
+						types.HostEndpointID{EndpointId: "id3"}: "up",
 					}))
 				})
 			})
@@ -1369,7 +1370,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 				It("should have expected chains", expectChainsFor("eth0"))
 				It("should report id3 up", func() {
 					Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
-						proto.HostEndpointID{EndpointId: "id3"}: "up",
+						types.HostEndpointID{EndpointId: "id3"}: "up",
 					}))
 				})
 			})
@@ -1383,7 +1384,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 				It("should have empty dispatch chains", expectEmptyChains())
 				It("should report id3 error", func() {
 					Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
-						proto.HostEndpointID{EndpointId: "id3"}: "error",
+						types.HostEndpointID{EndpointId: "id3"}: "error",
 					}))
 				})
 			})
@@ -1397,7 +1398,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 				It("should have empty dispatch chains", expectEmptyChains())
 				It("should report id3 error", func() {
 					Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
-						proto.HostEndpointID{EndpointId: "id3"}: "error",
+						types.HostEndpointID{EndpointId: "id3"}: "error",
 					}))
 				})
 			})
@@ -1410,7 +1411,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 				It("should have empty dispatch chains", expectEmptyChains())
 				It("should report id4 error", func() {
 					Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
-						proto.HostEndpointID{EndpointId: "id4"}: "error",
+						types.HostEndpointID{EndpointId: "id4"}: "error",
 					}))
 				})
 			})
@@ -1423,7 +1424,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 				It("should have empty dispatch chains", expectEmptyChains())
 				It("should report id5 error", func() {
 					Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
-						proto.HostEndpointID{EndpointId: "id5"}: "error",
+						types.HostEndpointID{EndpointId: "id5"}: "error",
 					}))
 				})
 			})
@@ -1437,7 +1438,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 			It("should have empty dispatch chains", expectEmptyChains())
 			It("should report id3 error", func() {
 				Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
-					proto.HostEndpointID{EndpointId: "id3"}: "error",
+					types.HostEndpointID{EndpointId: "id3"}: "error",
 				}))
 			})
 
@@ -1456,7 +1457,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 				It("should have expected chains", expectChainsFor("eth0"))
 				It("should report id3 up", func() {
 					Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
-						proto.HostEndpointID{EndpointId: "id3"}: "up",
+						types.HostEndpointID{EndpointId: "id3"}: "up",
 					}))
 				})
 			})

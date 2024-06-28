@@ -56,7 +56,7 @@ var _ = Describe("Server", func() {
 				}()
 				j := <-joins
 				jr := j.(policysync.JoinRequest)
-				Expect(jr.EndpointID.GetWorkloadId()).To(Equal(WorkloadID))
+				Expect(jr.EndpointID.WorkloadId).To(Equal(WorkloadID))
 				updates = jr.C
 				close(done)
 			})
@@ -97,7 +97,7 @@ var _ = Describe("Server", func() {
 						}
 						j := <-joins
 						lr := j.(policysync.LeaveRequest)
-						Expect(lr.EndpointID.GetWorkloadId()).To(Equal(WorkloadID))
+						Expect(lr.EndpointID.WorkloadId).To(Equal(WorkloadID))
 						close(updates)
 						<-syncDone
 						close(done)
@@ -116,7 +116,7 @@ var _ = Describe("Server", func() {
 						}
 						j := <-joins
 						lr := j.(policysync.LeaveRequest)
-						Expect(lr.EndpointID.GetWorkloadId()).To(Equal(WorkloadID))
+						Expect(lr.EndpointID.WorkloadId).To(Equal(WorkloadID))
 						<-syncDone
 						close(done)
 					})

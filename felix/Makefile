@@ -49,7 +49,7 @@ SRC_FILES:=$(shell find . $(foreach dir,$(NON_FELIX_DIRS) fv,-path ./$(dir) -pru
 # Add Felix cgo files
 SRC_FILES += $(shell find bpf/ -name '*.[ch]')
 FV_SRC_FILES:=$(shell find fv -type f -name '*.go' -print)
-EXTRA_DOCKER_ARGS+=--init -v $(CURDIR)/../pod2daemon:/go/src/github.com/projectcalico/calico/pod2daemon:rw
+EXTRA_DOCKER_ARGS+=-v $(CURDIR)/../pod2daemon:/go/src/github.com/projectcalico/calico/pod2daemon:rw
 
 ###############################################################################
 # Download and include ../lib.Makefile
@@ -67,7 +67,7 @@ endif
 
 FV_ETCDIMAGE?=$(ETCD_IMAGE)
 FV_TYPHAIMAGE?=felix-test/typha:latest-$(BUILDARCH)
-FV_K8SIMAGE=calico/go-build:$(GO_BUILD_VER)
+FV_K8SIMAGE=jha48/go-build:$(GO_BUILD_VER)
 FV_FELIXIMAGE?=$(FELIX_IMAGE):latest-$(ARCH)
 
 # Total number of batches to split the tests into.  In CI we set this to say 5 batches,
@@ -185,11 +185,9 @@ bin/calico-felix-race-$(ARCH): $(LIBBPF_A) $(SRC_FILES) ../go.mod
 
 # Generate the protobuf bindings for go. The proto/felixbackend.pb.go file is included in SRC_FILES
 protobuf proto/felixbackend.pb.go: proto/felixbackend.proto
-	docker run --rm --user $(LOCAL_USER_ID):$(LOCAL_GROUP_ID) \
-		  -v $(CURDIR):/code -v $(CURDIR)/proto:/src:rw \
-		      $(PROTOC_CONTAINER) \
-		      --gogofaster_out=plugins=grpc:. \
-		      felixbackend.proto
+	$(DOCKER_RUN) -v $(CURDIR)/proto:/proto:rw \
+		$(CALICO_BUILD) \
+			sh -c 'protoc --proto_path=/proto --go_out=/proto --go-grpc_out=. --go_opt=paths=source_relative felixbackend.proto'
 	# Make sure the generated code won't cause a static-checks failure.
 	$(MAKE) fix
 

@@ -27,6 +27,7 @@ import (
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/iptables"
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/felix/types"
 )
 
 const (
@@ -189,21 +190,21 @@ type RuleRenderer interface {
 	StaticMangleTableChains(ipVersion uint8) []*iptables.Chain
 	StaticFilterForwardAppendRules() []iptables.Rule
 
-	WorkloadDispatchChains(map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint) []*iptables.Chain
+	WorkloadDispatchChains(map[types.WorkloadEndpointID]*proto.WorkloadEndpoint) []*iptables.Chain
 	WorkloadEndpointToIptablesChains(ifaceName string, epMarkMapper EndpointMarkMapper, adminUp bool, ingressPolicies []*PolicyGroup, egressPolicies []*PolicyGroup, profileIDs []string) []*iptables.Chain
 	PolicyGroupToIptablesChains(group *PolicyGroup) []*iptables.Chain
 
-	WorkloadInterfaceAllowChains(endpoints map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint) []*iptables.Chain
+	WorkloadInterfaceAllowChains(endpoints map[types.WorkloadEndpointID]*proto.WorkloadEndpoint) []*iptables.Chain
 
 	EndpointMarkDispatchChains(
 		epMarkMapper EndpointMarkMapper,
-		wlEndpoints map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint,
-		hepEndpoints map[string]proto.HostEndpointID,
+		wlEndpoints map[types.WorkloadEndpointID]*proto.WorkloadEndpoint,
+		hepEndpoints map[string]types.HostEndpointID,
 	) []*iptables.Chain
 
-	HostDispatchChains(map[string]proto.HostEndpointID, string, bool) []*iptables.Chain
-	FromHostDispatchChains(map[string]proto.HostEndpointID, string) []*iptables.Chain
-	ToHostDispatchChains(map[string]proto.HostEndpointID, string) []*iptables.Chain
+	HostDispatchChains(map[string]types.HostEndpointID, string, bool) []*iptables.Chain
+	FromHostDispatchChains(map[string]types.HostEndpointID, string) []*iptables.Chain
+	ToHostDispatchChains(map[string]types.HostEndpointID, string) []*iptables.Chain
 	HostEndpointToFilterChains(
 		ifaceName string,
 		epMarkMapper EndpointMarkMapper,
@@ -232,8 +233,8 @@ type RuleRenderer interface {
 		preDNATPolicies []*PolicyGroup,
 	) []*iptables.Chain
 
-	PolicyToIptablesChains(policyID *proto.PolicyID, policy *proto.Policy, ipVersion uint8) []*iptables.Chain
-	ProfileToIptablesChains(profileID *proto.ProfileID, policy *proto.Profile, ipVersion uint8) (inbound, outbound *iptables.Chain)
+	PolicyToIptablesChains(policyID *types.PolicyID, policy *proto.Policy, ipVersion uint8) []*iptables.Chain
+	ProfileToIptablesChains(profileID *types.ProfileID, policy *proto.Profile, ipVersion uint8) (inbound, outbound *iptables.Chain)
 	ProtoRuleToIptablesRules(pRule *proto.Rule, ipVersion uint8) []iptables.Rule
 
 	MakeNatOutgoingRule(protocol string, action iptables.Action, ipVersion uint8) iptables.Rule

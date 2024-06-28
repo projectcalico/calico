@@ -58,6 +58,7 @@ import (
 	mocknetlink "github.com/projectcalico/calico/felix/netlinkshim/mocknetlink"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/rules"
+	"github.com/projectcalico/calico/felix/types"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -853,7 +854,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 			It("stores host endpoint for eth0", func() {
 				Expect(bpfEpMgr.hostIfaceToEpMap["eth0"]).To(Equal(hostEp))
-				Expect(bpfEpMgr.policiesToWorkloads[proto.PolicyID{
+				Expect(bpfEpMgr.policiesToWorkloads[types.PolicyID{
 					Tier: "default",
 					Name: "mypolicy",
 				}]).To(HaveKey("eth0"))
@@ -903,7 +904,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 			It("stores host endpoint for eth0", func() {
 				Expect(bpfEpMgr.hostIfaceToEpMap["eth0"]).To(Equal(hostEp))
-				Expect(bpfEpMgr.policiesToWorkloads[proto.PolicyID{
+				Expect(bpfEpMgr.policiesToWorkloads[types.PolicyID{
 					Tier: "default",
 					Name: "mypolicy",
 				}]).To(HaveKey("eth0"))
@@ -922,7 +923,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 			It("stores host endpoint for eth0", func() {
 				Expect(bpfEpMgr.hostIfaceToEpMap["eth0"]).To(Equal(hostEp))
-				Expect(bpfEpMgr.policiesToWorkloads[proto.PolicyID{
+				Expect(bpfEpMgr.policiesToWorkloads[types.PolicyID{
 					Tier: "default",
 					Name: "mypolicy",
 				}]).To(HaveKey("eth0"))
@@ -941,7 +942,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 			It("stores host endpoint for eth0", func() {
 				Expect(bpfEpMgr.hostIfaceToEpMap["eth0"]).To(Equal(hostEp))
-				Expect(bpfEpMgr.policiesToWorkloads[proto.PolicyID{
+				Expect(bpfEpMgr.policiesToWorkloads[types.PolicyID{
 					Tier: "default",
 					Name: "mypolicy",
 				}]).To(HaveKey("eth0"))
@@ -952,7 +953,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 				It("clears host endpoint for eth0", func() {
 					Expect(bpfEpMgr.hostIfaceToEpMap).To(BeEmpty())
-					Expect(bpfEpMgr.policiesToWorkloads[proto.PolicyID{
+					Expect(bpfEpMgr.policiesToWorkloads[types.PolicyID{
 						Tier: "default",
 						Name: "mypolicy",
 					}]).NotTo(HaveKey("eth0"))
@@ -963,7 +964,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 				It("clears host endpoint for eth0", func() {
 					Expect(bpfEpMgr.hostIfaceToEpMap).To(BeEmpty())
-					Expect(bpfEpMgr.policiesToWorkloads[proto.PolicyID{
+					Expect(bpfEpMgr.policiesToWorkloads[types.PolicyID{
 						Tier: "default",
 						Name: "mypolicy",
 					}]).NotTo(HaveKey("eth0"))
