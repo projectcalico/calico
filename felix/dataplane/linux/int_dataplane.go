@@ -786,6 +786,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			featureDetector,
 			config.HealthAggregator,
 			dataplaneFeatures,
+			podMTU,
 		)
 		if err != nil {
 			log.WithError(err).Panic("Failed to create BPF endpoint manager.")
