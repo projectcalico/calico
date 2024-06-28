@@ -34,7 +34,6 @@ import (
 )
 
 var _ = Context("_IPSets_ Tests for IPset rendering", func() {
-
 	var (
 		etcd     *containers.Container
 		tc       infrastructure.TopologyContainers
@@ -48,6 +47,13 @@ var _ = Context("_IPSets_ Tests for IPset rendering", func() {
 		topologyOptions := infrastructure.DefaultTopologyOptions()
 		topologyOptions.FelixLogSeverity = "Info"
 		topologyOptions.EnableIPv6 = false
+		if NFTMode() {
+			// Nftables resyncs are currently ineffeicient and can cause delays in normal IP set programming.
+			// We can remove this override once we have a more efficient resync mechanism.
+			topologyOptions.ExtraEnvVars = map[string]string{
+				"FELIX_IPSETSREFRESHINTERVAL": "120",
+			}
+		}
 		logrus.SetLevel(logrus.InfoLevel)
 		tc, etcd, client, infra = infrastructure.StartSingleNodeEtcdTopology(topologyOptions)
 		felixPID = tc.Felixes[0].GetFelixPID()
@@ -56,12 +62,12 @@ var _ = Context("_IPSets_ Tests for IPset rendering", func() {
 	})
 
 	AfterEach(func() {
-		w.Stop()
-		tc.Stop()
-
 		if CurrentGinkgoTestDescription().Failed {
 			etcd.Exec("etcdctl", "get", "/", "--prefix", "--keys-only")
 		}
+
+		w.Stop()
+		tc.Stop()
 		etcd.Stop()
 		infra.Stop()
 	})
