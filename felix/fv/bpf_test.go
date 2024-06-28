@@ -5229,9 +5229,9 @@ func dumpIfStateMap(felix *infrastructure.Felix) ifstate.MapMem {
 	return m
 }
 
-func ensureAllNodesBPFProgramsAttached(felixes []*infrastructure.Felix) {
+func ensureAllNodesBPFProgramsAttached(felixes []*infrastructure.Felix, ifacesExtra ...string) {
 	for _, felix := range felixes {
-		ensureBPFProgramsAttachedOffset(2, felix)
+		ensureBPFProgramsAttachedOffset(2, felix, ifacesExtra...)
 	}
 }
 
