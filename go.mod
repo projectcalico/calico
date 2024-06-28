@@ -102,6 +102,7 @@ require (
 	modernc.org/memory v1.7.2
 	sigs.k8s.io/controller-runtime v0.15.3
 	sigs.k8s.io/kind v0.22.0
+	sigs.k8s.io/knftables v0.0.15
 	sigs.k8s.io/yaml v1.4.0
 )
 
@@ -331,4 +332,7 @@ replace (
 	k8s.io/mount-utils => k8s.io/mount-utils v0.28.9
 	k8s.io/pod-security-admission => k8s.io/pod-security-admission v0.28.9
 	k8s.io/sample-apiserver => k8s.io/sample-apiserver v0.28.9
+
+	// Use an untagged knftables version that has changes we need.
+	sigs.k8s.io/knftables => sigs.k8s.io/knftables v0.0.17-0.20240627140917-8d2660d78107
 )
