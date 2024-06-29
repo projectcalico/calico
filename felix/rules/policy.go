@@ -25,11 +25,12 @@ import (
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/iptables"
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/felix/types"
 )
 
 // ruleRenderer defined in rules_defs.go.
 
-func (r *DefaultRuleRenderer) PolicyToIptablesChains(policyID *proto.PolicyID, policy *proto.Policy, ipVersion uint8) []*generictables.Chain {
+func (r *DefaultRuleRenderer) PolicyToIptablesChains(policyID *types.PolicyID, policy *proto.Policy, ipVersion uint8) []*generictables.Chain {
 	inbound := generictables.Chain{
 		Name:  PolicyChainName(PolicyInboundPfx, policyID),
 		Rules: r.ProtoRulesToIptablesRules(policy.InboundRules, ipVersion, fmt.Sprintf("Policy %s ingress", policyID.Name)),
@@ -41,7 +42,7 @@ func (r *DefaultRuleRenderer) PolicyToIptablesChains(policyID *proto.PolicyID, p
 	return []*generictables.Chain{&inbound, &outbound}
 }
 
-func (r *DefaultRuleRenderer) ProfileToIptablesChains(profileID *proto.ProfileID, profile *proto.Profile, ipVersion uint8) (inbound, outbound *generictables.Chain) {
+func (r *DefaultRuleRenderer) ProfileToIptablesChains(profileID *types.ProfileID, profile *proto.Profile, ipVersion uint8) (inbound, outbound *generictables.Chain) {
 	inbound = &generictables.Chain{
 		Name:  ProfileChainName(ProfileInboundPfx, profileID),
 		Rules: r.ProtoRulesToIptablesRules(profile.InboundRules, ipVersion, fmt.Sprintf("Profile %s ingress", profileID.Name)),
@@ -795,7 +796,7 @@ func (r *DefaultRuleRenderer) CalculateRuleMatch(pRule *proto.Rule, ipVersion ui
 	return match
 }
 
-func PolicyChainName(prefix PolicyChainNamePrefix, polID *proto.PolicyID) string {
+func PolicyChainName(prefix PolicyChainNamePrefix, polID *types.PolicyID) string {
 	return hashutils.GetLengthLimitedID(
 		string(prefix),
 		polID.Name,
@@ -803,7 +804,7 @@ func PolicyChainName(prefix PolicyChainNamePrefix, polID *proto.PolicyID) string
 	)
 }
 
-func ProfileChainName(prefix ProfileChainNamePrefix, profID *proto.ProfileID) string {
+func ProfileChainName(prefix ProfileChainNamePrefix, profID *types.ProfileID) string {
 	return hashutils.GetLengthLimitedID(
 		string(prefix),
 		profID.Name,
