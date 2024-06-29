@@ -23,6 +23,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"testing"
 
 	. "github.com/onsi/gomega"
@@ -237,7 +238,7 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		Expect(err).NotTo(HaveOccurred())
 		hasXDP := false
 		for _, p := range progs {
-			if p.Name == "cali_xdp_preamb" {
+			if strings.Contains(p.Name, "cali_xdp_preamb") {
 				hasXDP = true
 				break
 			}

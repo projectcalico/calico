@@ -17,7 +17,7 @@ package health
 import (
 	"context"
 
-	"github.com/projectcalico/calico/app-policy/proto"
+	dikastesproto "github.com/projectcalico/calico/app-policy/proto"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -36,13 +36,13 @@ func NewHealthCheckService(h ReadinessReporter) *healthCheckService {
 	return &healthCheckService{reporter: h}
 }
 
-func (h healthCheckService) CheckReadiness(_ context.Context, request *proto.HealthCheckRequest) (*proto.HealthCheckResponse, error) {
+func (h healthCheckService) CheckReadiness(_ context.Context, request *dikastesproto.HealthCheckRequest) (*dikastesproto.HealthCheckResponse, error) {
 	r := h.reporter.Readiness()
 	log.Debugf("health service: returning readiness %t", r)
-	return &proto.HealthCheckResponse{Healthy: r}, nil
+	return &dikastesproto.HealthCheckResponse{Healthy: r}, nil
 }
 
-func (h healthCheckService) CheckLiveness(_ context.Context, request *proto.HealthCheckRequest) (*proto.HealthCheckResponse, error) {
+func (h healthCheckService) CheckLiveness(_ context.Context, request *dikastesproto.HealthCheckRequest) (*dikastesproto.HealthCheckResponse, error) {
 	log.Debugf("health service: checking liveness")
-	return &proto.HealthCheckResponse{Healthy: true}, nil
+	return &dikastesproto.HealthCheckResponse{Healthy: true}, nil
 }

@@ -155,7 +155,6 @@ func (ap *AttachPoint) AttachProgram() (bpf.AttachResult, error) {
 				globals.Jumps[tcdefs.ProgIndexPolicy] = uint32(ap.PolicyIdxV4)
 			}
 			if ap.HookLayoutV6 != nil {
-				log.Infof("Sridhar layout6 %+v", ap.HookLayoutV6)
 				for p, i := range ap.HookLayoutV6 {
 					globals.JumpsV6[p] = uint32(i)
 				}
