@@ -56,7 +56,8 @@ var _ = Describe("NAT", func() {
 					Action: MasqAction{},
 					Match: Match().
 						SourceIPSet("cali40masq-ipam-pools").
-						NotDestIPSet("cali40all-ipam-pools"),
+						NotDestIPSet("cali40all-ipam-pools").
+						NotDestIPSet("cali40all-hosts-net"),
 				},
 			},
 		}))
@@ -74,7 +75,8 @@ var _ = Describe("NAT", func() {
 					Action: SNATAction{ToAddr: snatAddress},
 					Match: Match().
 						SourceIPSet("cali40masq-ipam-pools").
-						NotDestIPSet("cali40all-ipam-pools"),
+						NotDestIPSet("cali40all-ipam-pools").
+						NotDestIPSet("cali40all-hosts-net"),
 				},
 			},
 		}))
@@ -92,31 +94,36 @@ var _ = Describe("NAT", func() {
 					Action: MasqAction{ToPorts: "99-100"},
 					Match: Match().
 						SourceIPSet("cali40masq-ipam-pools").
-						NotDestIPSet("cali40all-ipam-pools").Protocol("tcp"),
+						NotDestIPSet("cali40all-ipam-pools").
+						NotDestIPSet("cali40all-hosts-net").Protocol("tcp"),
 				},
 				{
 					Action: ReturnAction{},
 					Match: Match().
 						SourceIPSet("cali40masq-ipam-pools").
-						NotDestIPSet("cali40all-ipam-pools").Protocol("tcp"),
+						NotDestIPSet("cali40all-ipam-pools").
+						NotDestIPSet("cali40all-hosts-net").Protocol("tcp"),
 				},
 				{
 					Action: MasqAction{ToPorts: "99-100"},
 					Match: Match().
 						SourceIPSet("cali40masq-ipam-pools").
-						NotDestIPSet("cali40all-ipam-pools").Protocol("udp"),
+						NotDestIPSet("cali40all-ipam-pools").
+						NotDestIPSet("cali40all-hosts-net").Protocol("udp"),
 				},
 				{
 					Action: ReturnAction{},
 					Match: Match().
 						SourceIPSet("cali40masq-ipam-pools").
-						NotDestIPSet("cali40all-ipam-pools").Protocol("udp"),
+						NotDestIPSet("cali40all-ipam-pools").
+						NotDestIPSet("cali40all-hosts-net").Protocol("udp"),
 				},
 				{
 					Action: MasqAction{},
 					Match: Match().
 						SourceIPSet("cali40masq-ipam-pools").
-						NotDestIPSet("cali40all-ipam-pools"),
+						NotDestIPSet("cali40all-ipam-pools").
+						NotDestIPSet("cali40all-hosts-net"),
 				},
 			},
 		}))
@@ -135,28 +142,32 @@ var _ = Describe("NAT", func() {
 					Action: MasqAction{ToPorts: "99-100"},
 					Match: Match().
 						SourceIPSet("cali40masq-ipam-pools").
-						NotDestIPSet("cali40all-ipam-pools").Protocol("tcp").
+						NotDestIPSet("cali40all-ipam-pools").
+						NotDestIPSet("cali40all-hosts-net").Protocol("tcp").
 						OutInterface("cali-123"),
 				},
 				{
 					Action: ReturnAction{},
 					Match: Match().
 						SourceIPSet("cali40masq-ipam-pools").
-						NotDestIPSet("cali40all-ipam-pools").Protocol("tcp").
+						NotDestIPSet("cali40all-ipam-pools").
+						NotDestIPSet("cali40all-hosts-net").Protocol("tcp").
 						OutInterface("cali-123"),
 				},
 				{
 					Action: MasqAction{ToPorts: "99-100"},
 					Match: Match().
 						SourceIPSet("cali40masq-ipam-pools").
-						NotDestIPSet("cali40all-ipam-pools").Protocol("udp").
+						NotDestIPSet("cali40all-ipam-pools").
+						NotDestIPSet("cali40all-hosts-net").Protocol("udp").
 						OutInterface("cali-123"),
 				},
 				{
 					Action: ReturnAction{},
 					Match: Match().
 						SourceIPSet("cali40masq-ipam-pools").
-						NotDestIPSet("cali40all-ipam-pools").Protocol("udp").
+						NotDestIPSet("cali40all-ipam-pools").
+						NotDestIPSet("cali40all-hosts-net").Protocol("udp").
 						OutInterface("cali-123"),
 				},
 				{
@@ -164,6 +175,7 @@ var _ = Describe("NAT", func() {
 					Match: Match().
 						SourceIPSet("cali40masq-ipam-pools").
 						NotDestIPSet("cali40all-ipam-pools").
+						NotDestIPSet("cali40all-hosts-net").
 						OutInterface("cali-123"),
 				},
 			},
@@ -186,31 +198,36 @@ var _ = Describe("NAT", func() {
 					Action: SNATAction{ToAddr: expectedAddress},
 					Match: Match().
 						SourceIPSet("cali40masq-ipam-pools").
-						NotDestIPSet("cali40all-ipam-pools").Protocol("tcp"),
+						NotDestIPSet("cali40all-ipam-pools").
+						NotDestIPSet("cali40all-hosts-net").Protocol("tcp"),
 				},
 				{
 					Action: ReturnAction{},
 					Match: Match().
 						SourceIPSet("cali40masq-ipam-pools").
-						NotDestIPSet("cali40all-ipam-pools").Protocol("tcp"),
+						NotDestIPSet("cali40all-ipam-pools").
+						NotDestIPSet("cali40all-hosts-net").Protocol("tcp"),
 				},
 				{
 					Action: SNATAction{ToAddr: expectedAddress},
 					Match: Match().
 						SourceIPSet("cali40masq-ipam-pools").
-						NotDestIPSet("cali40all-ipam-pools").Protocol("udp"),
+						NotDestIPSet("cali40all-ipam-pools").
+						NotDestIPSet("cali40all-hosts-net").Protocol("udp"),
 				},
 				{
 					Action: ReturnAction{},
 					Match: Match().
 						SourceIPSet("cali40masq-ipam-pools").
-						NotDestIPSet("cali40all-ipam-pools").Protocol("udp"),
+						NotDestIPSet("cali40all-ipam-pools").
+						NotDestIPSet("cali40all-hosts-net").Protocol("udp"),
 				},
 				{
 					Action: SNATAction{ToAddr: snatAddress},
 					Match: Match().
 						SourceIPSet("cali40masq-ipam-pools").
-						NotDestIPSet("cali40all-ipam-pools"),
+						NotDestIPSet("cali40all-ipam-pools").
+						NotDestIPSet("cali40all-hosts-net"),
 				},
 			},
 		}))
