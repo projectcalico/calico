@@ -50,7 +50,7 @@ var _ = Describe("Processor", func() {
 	var removeServiceAccount func(name, namespace string)
 	var updateNamespace func(name string)
 	var removeNamespace func(name string)
-	var join func(w string, jid uint64) (chan proto.ToDataplane, policysync.JoinMetadata)
+	var join func(w string, jid uint64) (chan *proto.ToDataplane, policysync.JoinMetadata)
 	var leave func(jm policysync.JoinMetadata)
 
 	BeforeEach(func() {
@@ -81,9 +81,9 @@ var _ = Describe("Processor", func() {
 			}
 			updates <- msg
 		}
-		join = func(w string, jid uint64) (chan proto.ToDataplane, policysync.JoinMetadata) {
+		join = func(w string, jid uint64) (chan *proto.ToDataplane, policysync.JoinMetadata) {
 			// Buffer outputs so that Processor won't block.
-			output := make(chan proto.ToDataplane, 100)
+			output := make(chan *proto.ToDataplane, 100)
 			joinMeta := policysync.JoinMetadata{
 				EndpointID: testId(w),
 				JoinUID:    jid,
@@ -124,7 +124,7 @@ var _ = Describe("Processor", func() {
 				})
 
 				Context("on new join", func() {
-					var output chan proto.ToDataplane
+					var output chan *proto.ToDataplane
 					var accounts [3]types.ServiceAccountID
 
 					BeforeEach(func() {
@@ -169,7 +169,7 @@ var _ = Describe("Processor", func() {
 			})
 
 			Context("with two joined endpoints", func() {
-				var output [2]chan proto.ToDataplane
+				var output [2]chan *proto.ToDataplane
 
 				BeforeEach(func() {
 					for i := 0; i < 2; i++ {
@@ -245,7 +245,7 @@ var _ = Describe("Processor", func() {
 				})
 
 				Context("on new join", func() {
-					var output chan proto.ToDataplane
+					var output chan *proto.ToDataplane
 					var accounts [3]types.NamespaceID
 
 					BeforeEach(func() {
@@ -281,7 +281,7 @@ var _ = Describe("Processor", func() {
 			})
 
 			Context("with two joined endpoints", func() {
-				var output [2]chan proto.ToDataplane
+				var output [2]chan *proto.ToDataplane
 
 				BeforeEach(func() {
 					for i := 0; i < 2; i++ {
@@ -332,8 +332,8 @@ var _ = Describe("Processor", func() {
 		Describe("IP Set updates", func() {
 
 			Context("with two joined endpoints, one with active profile", func() {
-				var refdOutput chan proto.ToDataplane
-				var unrefdOutput chan proto.ToDataplane
+				var refdOutput chan *proto.ToDataplane
+				var unrefdOutput chan *proto.ToDataplane
 				var refdId types.WorkloadEndpointID
 				var unrefdId types.WorkloadEndpointID
 				var assertInactiveNoUpdate func()
@@ -404,7 +404,6 @@ var _ = Describe("Processor", func() {
 						}
 						updates <- u
 						g := <-unrefdOutput
-						fmt.Println(">>>>>>>>> <-unrefdOutput is done")
 						equal = googleproto.Equal(g.GetWorkloadEndpointUpdate(), u)
 						Expect(equal).To(BeTrue())
 					}
@@ -416,7 +415,7 @@ var _ = Describe("Processor", func() {
 					msg := updateIpSet(IPSetName, 2)
 					updates <- msg
 					g := <-refdOutput
-					equal := googleproto.Equal(&g, &proto.ToDataplane{Payload: &proto.ToDataplane_IpsetUpdate{IpsetUpdate: msg}})
+					equal := googleproto.Equal(g, &proto.ToDataplane{Payload: &proto.ToDataplane_IpsetUpdate{IpsetUpdate: msg}})
 					Expect(equal).To(BeTrue())
 
 					assertInactiveNoUpdate()
@@ -431,7 +430,7 @@ var _ = Describe("Processor", func() {
 					msg2 := deltaUpdateIpSet(IPSetName, 2, 2)
 					updates <- msg2
 					g := <-refdOutput
-					equal := googleproto.Equal(&g, &proto.ToDataplane{
+					equal := googleproto.Equal(g, &proto.ToDataplane{
 						Payload: &proto.ToDataplane_IpsetDeltaUpdate{IpsetDeltaUpdate: msg2}})
 					Expect(equal).To(BeTrue())
 
@@ -899,7 +898,7 @@ var _ = Describe("Processor", func() {
 		Describe("Profile & Policy updates", func() {
 
 			Context("with two joined endpoints", func() {
-				var output [2]chan proto.ToDataplane
+				var output [2]chan *proto.ToDataplane
 				var wepID [2]types.WorkloadEndpointID
 				var assertNoUpdate func(i int)
 
@@ -1391,7 +1390,7 @@ var _ = Describe("Processor", func() {
 
 		Describe("InSync processing", func() {
 			It("should send InSync on all open outputs", func(done Done) {
-				var c [2]chan proto.ToDataplane
+				var c [2]chan *proto.ToDataplane
 				for i := 0; i < 2; i++ {
 					c[i], _ = join(fmt.Sprintf("test%d", i), uint64(i))
 				}

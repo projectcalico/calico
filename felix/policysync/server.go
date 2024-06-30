@@ -77,7 +77,7 @@ func (s *Server) Sync(_ *proto.SyncRequest, stream proto.PolicySync_SyncServer) 
 	logCxt.Info("New policy sync connection identified")
 
 	// Send a join request to the processor to ask it to start sending us updates.
-	updates := make(chan proto.ToDataplane, OutputQueueLen)
+	updates := make(chan *proto.ToDataplane, OutputQueueLen)
 	epID := types.WorkloadEndpointID{
 		OrchestratorId: OrchestratorId,
 		EndpointId:     EndpointId,
@@ -120,7 +120,7 @@ func (s *Server) Sync(_ *proto.SyncRequest, stream proto.PolicySync_SyncServer) 
 	}()
 
 	for update := range updates {
-		err := stream.Send(&update)
+		err := stream.Send(update)
 		if err != nil {
 			logCxt.WithError(err).Warn("Failed to send update to policy sync client")
 			return err
