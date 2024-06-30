@@ -45,7 +45,7 @@ type Processor struct {
 
 type EndpointInfo struct {
 	// The channel to send updates for this workload to.
-	output         chan<- proto.ToDataplane
+	output         chan<- *proto.ToDataplane
 	currentJoinUID uint64
 	endpointUpd    *proto.WorkloadEndpointUpdate
 	syncedPolicies map[types.PolicyID]bool
@@ -66,7 +66,7 @@ type JoinRequest struct {
 	// C is the channel to send updates to the policy sync client.  Processor closes the channel when the
 	// workload endpoint is removed, or when a new JoinRequest is received for the same endpoint.  If nil, indicates
 	// the client wants to stop receiving updates.
-	C chan<- proto.ToDataplane
+	C chan<- *proto.ToDataplane
 }
 
 type LeaveRequest struct {
@@ -144,7 +144,7 @@ func (p *Processor) handleJoin(joinReq JoinRequest) {
 
 	if p.receivedInSync {
 		log.WithField("channel", ei.output).Debug("Already in sync with the datastore, sending in-sync message to client")
-		ei.output <- proto.ToDataplane{
+		ei.output <- &proto.ToDataplane{
 			Payload: &proto.ToDataplane_InSync{InSync: &proto.InSync{}}}
 	}
 	logCxt.Debug("Done with join")
@@ -223,7 +223,7 @@ func (p *Processor) handleInSync(update *proto.InSync) {
 	log.Info("Now in sync with the calculation graph")
 	p.receivedInSync = true
 	for _, ei := range p.updateableEndpoints() {
-		ei.output <- proto.ToDataplane{
+		ei.output <- &proto.ToDataplane{
 			Payload: &proto.ToDataplane_InSync{InSync: &proto.InSync{}}}
 	}
 }
@@ -262,7 +262,7 @@ func (p *Processor) maybeSyncEndpoint(ei *EndpointInfo) {
 	doAdd()
 	p.syncAddedPolicies(ei)
 	p.syncAddedProfiles(ei)
-	ei.output <- proto.ToDataplane{
+	ei.output <- &proto.ToDataplane{
 		Payload: &proto.ToDataplane_WorkloadEndpointUpdate{WorkloadEndpointUpdate: ei.endpointUpd}}
 	p.syncRemovedPolicies(ei)
 	p.syncRemovedProfiles(ei)
@@ -275,7 +275,7 @@ func (p *Processor) handleWorkloadEndpointRemove(update *proto.WorkloadEndpointR
 	ei := p.endpointsByID[epID]
 	if ei.output != nil {
 		// Send update and close down.
-		ei.output <- proto.ToDataplane{Payload: &proto.ToDataplane_WorkloadEndpointRemove{WorkloadEndpointRemove: update}}
+		ei.output <- &proto.ToDataplane{Payload: &proto.ToDataplane_WorkloadEndpointRemove{WorkloadEndpointRemove: update}}
 		close(ei.output)
 	}
 	delete(p.endpointsByID, epID)
@@ -292,7 +292,7 @@ func (p *Processor) handleActiveProfileUpdate(update *proto.ActiveProfileUpdate)
 			if other == pId {
 				doAdd, doDel := p.getIPSetsSync(ei)
 				doAdd()
-				ei.output <- proto.ToDataplane{Payload: &proto.ToDataplane_ActiveProfileUpdate{ActiveProfileUpdate: update}}
+				ei.output <- &proto.ToDataplane{Payload: &proto.ToDataplane_ActiveProfileUpdate{ActiveProfileUpdate: update}}
 				ei.syncedProfiles[pId] = true
 				doDel()
 				return true
@@ -325,7 +325,7 @@ func (p *Processor) handleActivePolicyUpdate(update *proto.ActivePolicyUpdate) {
 			if other == pId {
 				doAdd, doDel := p.getIPSetsSync(ei)
 				doAdd()
-				ei.output <- proto.ToDataplane{Payload: &proto.ToDataplane_ActivePolicyUpdate{ActivePolicyUpdate: update}}
+				ei.output <- &proto.ToDataplane{Payload: &proto.ToDataplane_ActivePolicyUpdate{ActivePolicyUpdate: update}}
 				ei.syncedPolicies[pId] = true
 				doDel()
 				return true
@@ -350,7 +350,7 @@ func (p *Processor) handleServiceAccountUpdate(update *proto.ServiceAccountUpdat
 	log.WithField("ServiceAccountID", id).Debug("Processing ServiceAccountUpdate")
 
 	for _, ei := range p.updateableEndpoints() {
-		ei.output <- proto.ToDataplane{Payload: &proto.ToDataplane_ServiceAccountUpdate{ServiceAccountUpdate: update}}
+		ei.output <- &proto.ToDataplane{Payload: &proto.ToDataplane_ServiceAccountUpdate{ServiceAccountUpdate: update}}
 	}
 	p.serviceAccountByID[id] = update
 }
@@ -360,7 +360,7 @@ func (p *Processor) handleServiceAccountRemove(update *proto.ServiceAccountRemov
 	log.WithField("ServiceAccountID", id).Debug("Processing ServiceAccountRemove")
 
 	for _, ei := range p.updateableEndpoints() {
-		ei.output <- proto.ToDataplane{Payload: &proto.ToDataplane_ServiceAccountRemove{ServiceAccountRemove: update}}
+		ei.output <- &proto.ToDataplane{Payload: &proto.ToDataplane_ServiceAccountRemove{ServiceAccountRemove: update}}
 	}
 	delete(p.serviceAccountByID, id)
 }
@@ -370,7 +370,7 @@ func (p *Processor) handleNamespaceUpdate(update *proto.NamespaceUpdate) {
 	log.WithField("NamespaceID", id).Debug("Processing NamespaceUpdate")
 
 	for _, ei := range p.updateableEndpoints() {
-		ei.output <- proto.ToDataplane{Payload: &proto.ToDataplane_NamespaceUpdate{NamespaceUpdate: update}}
+		ei.output <- &proto.ToDataplane{Payload: &proto.ToDataplane_NamespaceUpdate{NamespaceUpdate: update}}
 	}
 	p.namespaceByID[id] = update
 }
@@ -380,7 +380,7 @@ func (p *Processor) handleNamespaceRemove(update *proto.NamespaceRemove) {
 	log.WithField("NamespaceID", id).Debug("Processing NamespaceRemove")
 
 	for _, ei := range p.updateableEndpoints() {
-		ei.output <- proto.ToDataplane{Payload: &proto.ToDataplane_NamespaceRemove{NamespaceRemove: update}}
+		ei.output <- &proto.ToDataplane{Payload: &proto.ToDataplane_NamespaceRemove{NamespaceRemove: update}}
 	}
 	delete(p.namespaceByID, id)
 }
@@ -448,7 +448,7 @@ func (p *Processor) syncAddedPolicies(ei *EndpointInfo) {
 		if !ei.syncedPolicies[pId] {
 			policy := p.policyByID[pId].p
 			ppId := types.PolicyIDToProto(pId)
-			ei.output <- proto.ToDataplane{Payload: &proto.ToDataplane_ActivePolicyUpdate{
+			ei.output <- &proto.ToDataplane{Payload: &proto.ToDataplane_ActivePolicyUpdate{
 				ActivePolicyUpdate: &proto.ActivePolicyUpdate{
 					Id:     ppId,
 					Policy: policy,
@@ -483,7 +483,7 @@ func (p *Processor) syncRemovedPolicies(ei *EndpointInfo) {
 	// oldSyncedPolicies now contains only policies that are no longer needed by this endpoint.
 	for polID := range oldSyncedPolicies {
 		ppolID := types.PolicyIDToProto(polID)
-		ei.output <- proto.ToDataplane{Payload: &proto.ToDataplane_ActivePolicyRemove{
+		ei.output <- &proto.ToDataplane{Payload: &proto.ToDataplane_ActivePolicyRemove{
 			ActivePolicyRemove: &proto.ActivePolicyRemove{Id: ppolID},
 		}}
 	}
@@ -494,7 +494,7 @@ func (p *Processor) syncAddedProfiles(ei *EndpointInfo) {
 		if !ei.syncedProfiles[pId] {
 			profile := p.profileByID[pId].p
 			ppId := types.ProfileIDToProto(pId)
-			ei.output <- proto.ToDataplane{Payload: &proto.ToDataplane_ActiveProfileUpdate{
+			ei.output <- &proto.ToDataplane{Payload: &proto.ToDataplane_ActiveProfileUpdate{
 				ActiveProfileUpdate: &proto.ActiveProfileUpdate{
 					Id:      ppId,
 					Profile: profile,
@@ -526,7 +526,7 @@ func (p *Processor) syncRemovedProfiles(ei *EndpointInfo) {
 	// oldSyncedProfiles now contains only policies that are no longer needed by this endpoint.
 	for polID := range oldSyncedProfiles {
 		ppolID := types.ProfileIDToProto(polID)
-		ei.output <- proto.ToDataplane{Payload: &proto.ToDataplane_ActiveProfileRemove{
+		ei.output <- &proto.ToDataplane{Payload: &proto.ToDataplane_ActiveProfileRemove{
 			ActiveProfileRemove: &proto.ActiveProfileRemove{Id: ppolID},
 		}}
 	}
@@ -539,7 +539,7 @@ func (p *Processor) sendServiceAccounts(ei *EndpointInfo) {
 			"serviceAccount": update.Id,
 			"endpoint":       ei.endpointUpd.GetEndpoint(),
 		}).Debug("sending ServiceAccountUpdate")
-		ei.output <- proto.ToDataplane{Payload: &proto.ToDataplane_ServiceAccountUpdate{ServiceAccountUpdate: update}}
+		ei.output <- &proto.ToDataplane{Payload: &proto.ToDataplane_ServiceAccountUpdate{ServiceAccountUpdate: update}}
 	}
 }
 
@@ -550,7 +550,7 @@ func (p *Processor) sendNamespaces(ei *EndpointInfo) {
 			"namespace": update.Id,
 			"endpoint":  ei.endpointUpd.GetEndpoint(),
 		}).Debug("sending NamespaceUpdate")
-		ei.output <- proto.ToDataplane{Payload: &proto.ToDataplane_NamespaceUpdate{NamespaceUpdate: update}}
+		ei.output <- &proto.ToDataplane{Payload: &proto.ToDataplane_NamespaceUpdate{NamespaceUpdate: update}}
 	}
 }
 
@@ -646,7 +646,7 @@ func (p *Processor) sendIPSetUpdate(ei *EndpointInfo, id string) {
 }
 
 func (p *Processor) sendIPSetRemove(ei *EndpointInfo, id string) {
-	ei.output <- proto.ToDataplane{Payload: &proto.ToDataplane_IpsetRemove{IpsetRemove: &proto.IPSetRemove{Id: id}}}
+	ei.output <- &proto.ToDataplane{Payload: &proto.ToDataplane_IpsetRemove{IpsetRemove: &proto.IPSetRemove{Id: id}}}
 }
 
 // Perform the action on every policy on the Endpoint, breaking if the action returns true.
@@ -687,36 +687,40 @@ func (ei *EndpointInfo) iterateProfiles(action func(id types.ProfileID) (stop bo
 }
 
 // splitIPSetUpdate splits updates that would not fit into a single gRPC message into several smaller ones.
-func splitIPSetUpdate(update *proto.IPSetUpdate) []proto.ToDataplane {
+func splitIPSetUpdate(update *proto.IPSetUpdate) []*proto.ToDataplane {
 	mPerMsg := splitMembers(update.GetMembers())
 	numMsg := len(mPerMsg)
-	out := make([]proto.ToDataplane, numMsg)
+	out := make([]*proto.ToDataplane, numMsg)
 
 	// First message is always IPSetUpdate, and always is included.
-	out[0].Payload = &proto.ToDataplane_IpsetUpdate{IpsetUpdate: &proto.IPSetUpdate{
-		Id:      update.Id,
-		Type:    update.Type,
-		Members: mPerMsg[0],
-	}}
+	out[0] = &proto.ToDataplane{
+		Payload: &proto.ToDataplane_IpsetUpdate{IpsetUpdate: &proto.IPSetUpdate{
+			Id:      update.Id,
+			Type:    update.Type,
+			Members: mPerMsg[0],
+		}},
+	}
 
 	// If there are additional messages, they are IPSetDeltaUpdates
 	for i := 1; i < numMsg; i++ {
-		out[i].Payload = &proto.ToDataplane_IpsetDeltaUpdate{IpsetDeltaUpdate: &proto.IPSetDeltaUpdate{
-			Id:           update.Id,
-			AddedMembers: mPerMsg[i],
-		}}
+		out[i] = &proto.ToDataplane{
+			Payload: &proto.ToDataplane_IpsetDeltaUpdate{IpsetDeltaUpdate: &proto.IPSetDeltaUpdate{
+				Id:           update.Id,
+				AddedMembers: mPerMsg[i],
+			}},
+		}
 	}
 	return out
 }
 
 // splitIPSetDeltaUpdate splits updates that would not fit into a single gRPC message into smaller ones.
-func splitIPSetDeltaUpdate(update *proto.IPSetDeltaUpdate) []proto.ToDataplane {
+func splitIPSetDeltaUpdate(update *proto.IPSetDeltaUpdate) []*proto.ToDataplane {
 	adds := splitMembers(update.GetAddedMembers())
 	dels := splitMembers(update.GetRemovedMembers())
 
-	var out []proto.ToDataplane
+	var out []*proto.ToDataplane
 	for len(adds)+len(dels) > 0 {
-		msg := proto.ToDataplane{Payload: &proto.ToDataplane_IpsetDeltaUpdate{
+		msg := &proto.ToDataplane{Payload: &proto.ToDataplane_IpsetDeltaUpdate{
 			IpsetDeltaUpdate: &proto.IPSetDeltaUpdate{Id: update.GetId()}}}
 		out = append(out, msg)
 		update := msg.GetIpsetDeltaUpdate()

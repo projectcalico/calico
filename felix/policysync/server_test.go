@@ -15,19 +15,19 @@
 package policysync_test
 
 import (
+	"context"
 	"errors"
 	"time"
-
-	"github.com/projectcalico/calico/felix/policysync"
-	"github.com/projectcalico/calico/felix/proto"
-	"github.com/projectcalico/calico/pod2daemon/binder"
-
-	"context"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
+	googleproto "google.golang.org/protobuf/proto"
+
+	"github.com/projectcalico/calico/felix/policysync"
+	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/pod2daemon/binder"
 )
 
 var _ = Describe("Server", func() {
@@ -43,7 +43,7 @@ var _ = Describe("Server", func() {
 
 		Context("after calling Sync and joining", func() {
 			var stream *testSyncStream
-			var updates chan<- proto.ToDataplane
+			var updates chan<- *proto.ToDataplane
 			var output chan *proto.ToDataplane
 			syncDone := make(chan bool)
 
@@ -62,14 +62,14 @@ var _ = Describe("Server", func() {
 			})
 
 			It("should stream messages", func(done Done) {
-				msgs := []proto.ToDataplane{
+				msgs := []*proto.ToDataplane{
 					{Payload: &proto.ToDataplane_WorkloadEndpointUpdate{}},
 					{Payload: &proto.ToDataplane_InSync{}},
 				}
 				for _, msg := range msgs {
 					updates <- msg
 					g := <-output
-					Expect(g).To(Equal(&msg))
+					googleproto.Equal(g, msg)
 				}
 
 				close(done)
@@ -79,7 +79,7 @@ var _ = Describe("Server", func() {
 				BeforeEach(func(done Done) {
 					// Queue up 10 messages. This should not block because the updates channel should be buffered.
 					for i := 0; i < 10; i++ {
-						updates <- proto.ToDataplane{}
+						updates <- &proto.ToDataplane{}
 					}
 					close(done)
 				})
@@ -93,7 +93,7 @@ var _ = Describe("Server", func() {
 
 					It("should drain updates channel, send leave request and end Sync", func(done Done) {
 						for i := 0; i < 10; i++ {
-							updates <- proto.ToDataplane{}
+							updates <- &proto.ToDataplane{}
 						}
 						j := <-joins
 						lr := j.(policysync.LeaveRequest)
