@@ -18,11 +18,77 @@ import (
 	"fmt"
 
 	"github.com/projectcalico/calico/felix/environment"
+	"github.com/projectcalico/calico/felix/generictables"
 )
 
-type Action interface {
-	ToFragment(features *environment.Features) string
-	String() string
+func Actions() generictables.ActionFactory {
+	return &actionSet{}
+}
+
+type actionSet struct{}
+
+func (s *actionSet) Allow() generictables.Action {
+	return AcceptAction{}
+}
+
+func (s *actionSet) GoTo(target string) generictables.Action {
+	return GotoAction{Target: target}
+}
+
+func (s *actionSet) Return() generictables.Action {
+	return ReturnAction{}
+}
+
+func (s *actionSet) SetMaskedMark(mark, mask uint32) generictables.Action {
+	return SetMaskedMarkAction{
+		Mark: mark,
+		Mask: mask,
+	}
+}
+
+func (s *actionSet) SetMark(mark uint32) generictables.Action {
+	return SetMarkAction{
+		Mark: mark,
+	}
+}
+
+func (s *actionSet) ClearMark(mark uint32) generictables.Action {
+	return ClearMarkAction{Mark: mark}
+}
+
+func (s *actionSet) Jump(target string) generictables.Action {
+	return JumpAction{Target: target}
+}
+
+func (s *actionSet) NoTrack() generictables.Action {
+	return NoTrackAction{}
+}
+
+func (s *actionSet) Log(prefix string) generictables.Action {
+	return LogAction{Prefix: prefix}
+}
+
+func (s *actionSet) SNAT(ip string) generictables.Action {
+	return SNATAction{ToAddr: ip}
+}
+
+func (s *actionSet) DNAT(ip string, port uint16) generictables.Action {
+	return DNATAction{DestAddr: ip, DestPort: port}
+}
+
+func (s *actionSet) Masq(toPorts string) generictables.Action {
+	return MasqAction{ToPorts: toPorts}
+}
+
+func (s *actionSet) Drop() generictables.Action {
+	return DropAction{}
+}
+
+func (s *actionSet) SetConnmark(mark, mask uint32) generictables.Action {
+	return SetConnMarkAction{
+		Mark: mark,
+		Mask: mask,
+	}
 }
 
 type Referrer interface {
@@ -65,10 +131,16 @@ func (g JumpAction) ReferencedChain() string {
 	return g.Target
 }
 
-var _ Referrer = JumpAction{}
+var (
+	_ Referrer                         = JumpAction{}
+	_ generictables.ReturnActionMarker = ReturnAction{}
+)
 
 type ReturnAction struct {
 	TypeReturn struct{}
+}
+
+func (r ReturnAction) IsReturnAction() {
 }
 
 func (r ReturnAction) ToFragment(features *environment.Features) string {
