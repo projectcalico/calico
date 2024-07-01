@@ -16,6 +16,7 @@ package nftables_test
 
 import (
 	"github.com/projectcalico/calico/felix/generictables"
+	"github.com/projectcalico/calico/felix/nftables"
 	. "github.com/projectcalico/calico/felix/nftables"
 
 	. "github.com/onsi/ginkgo"
@@ -79,7 +80,7 @@ var _ = DescribeTable("MatchBuilder",
 	Entry("NotProtocol", Match().NotProtocol("tcp"), "meta l4proto != tcp"),
 	Entry("ProtocolNum", Match().ProtocolNum(123), "meta l4proto 123"),
 	Entry("NotProtocolNum", Match().NotProtocolNum(123), "meta l4proto != 123"),
-	Entry("ProtocolNum IPIP", Match().ProtocolNum(4), "meta l4proto ipencap"),
+	Entry("ProtocolNum IPIP", Match().ProtocolNum(4), "meta l4proto 4"),
 
 	// CIDRs.
 	Entry("SourceNet", Match().SourceNet("10.0.0.4"), "ip saddr 10.0.0.4"),
@@ -108,6 +109,16 @@ var _ = DescribeTable("MatchBuilder",
 	Entry("NotSourcePortRanges", Match().Protocol("udp").NotSourcePortRanges(portRanges), "meta l4proto udp udp sport != { 1234, 5678-6000 }"),
 	Entry("DestPortRanges", Match().Protocol("udp").DestPortRanges(portRanges), "meta l4proto udp udp dport { 1234, 5678-6000 }"),
 	Entry("NotDestPortRanges", Match().Protocol("udp").NotDestPortRanges(portRanges), "meta l4proto udp udp dport != { 1234, 5678-6000 }"),
+
+	// Ports using protocol number.
+	Entry("ProtocolNum.SourcePorts", Match().ProtocolNum(nftables.ProtoTCP).SourcePorts(1234, 5678), "meta l4proto 6 tcp sport { 1234, 5678 }"),
+	Entry("ProtocolNum.NotSourcePorts", Match().ProtocolNum(nftables.ProtoUDP).NotSourcePorts(1234, 5678), "meta l4proto 17 udp sport != { 1234, 5678 }"),
+	Entry("ProtocolNum.DestPorts", Match().ProtocolNum(nftables.ProtoTCP).DestPorts(1234, 5678), "meta l4proto 6 tcp dport { 1234, 5678 }"),
+	Entry("ProtocolNum.NotDestPorts", Match().ProtocolNum(nftables.ProtoUDP).NotDestPorts(1234, 5678), "meta l4proto 17 udp dport != { 1234, 5678 }"),
+	Entry("ProtocolNum.SourcePortRanges", Match().ProtocolNum(nftables.ProtoUDP).SourcePortRanges(portRanges), "meta l4proto 17 udp sport { 1234, 5678-6000 }"),
+	Entry("ProtocolNum.NotSourcePortRanges", Match().ProtocolNum(nftables.ProtoUDP).NotSourcePortRanges(portRanges), "meta l4proto 17 udp sport != { 1234, 5678-6000 }"),
+	Entry("ProtocolNum.DestPortRanges", Match().ProtocolNum(nftables.ProtoUDP).DestPortRanges(portRanges), "meta l4proto 17 udp dport { 1234, 5678-6000 }"),
+	Entry("ProtocolNum.NotDestPortRanges", Match().ProtocolNum(nftables.ProtoUDP).NotDestPortRanges(portRanges), "meta l4proto 17 udp dport != { 1234, 5678-6000 }"),
 
 	// ICMP.
 	Entry("ICMPType", Match().ICMPType(123), "icmp type 123"),
