@@ -15,12 +15,12 @@
 ARG QEMU_IMAGE
 ARG BIRD_IMAGE
 
-FROM ${QEMU_IMAGE} as qemu
-FROM ${BIRD_IMAGE} as bird
+FROM ${QEMU_IMAGE} AS qemu
+FROM ${BIRD_IMAGE} AS bird
 
-FROM calico/bpftool:v7.4.0 as bpftool
+FROM calico/bpftool:v7.4.0 AS bpftool
 
-FROM s390x/alpine:3.18 as base
+FROM s390x/alpine:3.18 AS base
 
 ARG ARCH=s390x
 ARG GIT_VERSION
