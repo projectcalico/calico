@@ -51,7 +51,7 @@ var _ = Context("_IPSets_ Tests for IPset rendering", func() {
 			// Nftables resyncs are currently ineffeicient and can cause delays in normal IP set programming.
 			// We can remove this override once we have a more efficient resync mechanism.
 			topologyOptions.ExtraEnvVars = map[string]string{
-				"FELIX_IPSETSREFRESHINTERVAL": "120",
+				"FELIX_IPSETSREFRESHINTERVAL": "0",
 			}
 		}
 		logrus.SetLevel(logrus.InfoLevel)
