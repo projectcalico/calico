@@ -819,7 +819,7 @@ func (c *Container) IPSetNames() []string {
 
 func (c *Container) nftablesSetNames() []string {
 	out, err := c.ExecOutput("nft", "list", "sets", "ip")
-	Expect(err).NotTo(HaveOccurred())
+	Expect(err).NotTo(HaveOccurred(), out)
 	var names []string
 	for _, line := range strings.Split(out, "\n") {
 		line = strings.TrimSpace(line)
