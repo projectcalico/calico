@@ -1,5 +1,5 @@
 ARG QEMU_IMAGE
-FROM --platform=linux/arm/v7 ${QEMU_IMAGE} as qemu
+FROM --platform=linux/arm/v7 ${QEMU_IMAGE} AS qemu
 
 FROM arm32v7/alpine:3.12
 # Enable non-native builds of this image on an amd64 hosts.

@@ -15,7 +15,7 @@
 ARG GIT_VERSION=unknown
 ARG UBI_IMAGE
 
-FROM ${UBI_IMAGE} as ubi
+FROM ${UBI_IMAGE} AS ubi
 
 # Since our binary isn't designed to run as PID 1, run it via the tini init daemon.
 ENV TINI_VERSION v0.18.0

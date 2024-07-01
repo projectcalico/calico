@@ -14,7 +14,7 @@
 
 ARG UBI_IMAGE
 
-FROM ${UBI_IMAGE} as ubi
+FROM ${UBI_IMAGE} AS ubi
 
 ADD flexvol/docker/clean.sh /usr/local/bin/clean.sh
 ADD flexvol/docker/flexvol.sh /usr/local/bin/flexvol.sh

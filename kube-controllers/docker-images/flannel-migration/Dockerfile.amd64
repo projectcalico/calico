@@ -15,7 +15,7 @@
 ARG GIT_VERSION=unknown
 ARG UBI_IMAGE
 
-FROM ${UBI_IMAGE} as ubi
+FROM ${UBI_IMAGE} AS ubi
 
 # Add in top-level license file
 RUN mkdir /licenses

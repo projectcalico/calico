@@ -13,9 +13,9 @@
 # limitations under the License.
 
 ARG QEMU_IMAGE=calico/go-build:latest
-FROM ${QEMU_IMAGE} as qemu
+FROM ${QEMU_IMAGE} AS qemu
 
-FROM arm64v8/debian:9.8-slim as base
+FROM arm64v8/debian:9.8-slim AS base
 MAINTAINER Shaun Crampton <shaun@tigera.io>
 
 # Enable non-native builds of this image on an amd64 hosts.

@@ -1,14 +1,14 @@
 ARG QEMU_IMAGE
 
-FROM ${QEMU_IMAGE} as qemu
-FROM s390x/ubuntu:focal as wgtool
+FROM ${QEMU_IMAGE} AS qemu
+FROM s390x/ubuntu:focal AS wgtool
 # Enable non-native builds of this image on an amd64 hosts.
 # This must be the first RUN command in this file!
 COPY --from=qemu /usr/bin/qemu-*-static /usr/bin/
 RUN apt-get update && \
     apt-get install --no-install-recommends wireguard-tools -y
 
-FROM calico/bpftool:v5.3-s390x as bpftool
+FROM calico/bpftool:v5.3-s390x AS bpftool
 
 FROM s390x/debian:10-slim
 LABEL maintainer="Shaun Crampton <shaun@tigera.io>"
