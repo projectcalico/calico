@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM scratch as source
+FROM scratch AS source
 
 ARG BIN_DIR
 ARG TARGETARCH
