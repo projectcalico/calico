@@ -17,12 +17,12 @@
 # This ensures that testing of Felix in this repository is done in the same
 # userspace environment as it will be deployed in calico/node.
 
-FROM ubuntu:focal as wgtool
+FROM ubuntu:focal AS wgtool
 
 RUN apt-get update && \
     apt-get install --no-install-recommends wireguard-tools -y
 
-FROM calico/bpftool:v7.4.0 as bpftool
+FROM calico/bpftool:v7.4.0 AS bpftool
 
 FROM debian:10-slim
 LABEL maintainer="Shaun Crampton <shaun@tigera.io>"

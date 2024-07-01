@@ -15,9 +15,9 @@
 ARG QEMU_IMAGE
 ARG UBI_IMAGE
 
-FROM ${QEMU_IMAGE} as qemu
+FROM ${QEMU_IMAGE} AS qemu
 
-FROM --platform=linux/arm64 ${UBI_IMAGE} as ubi
+FROM --platform=linux/arm64 ${UBI_IMAGE} AS ubi
 
 # Enable non-native builds of this image on an amd64 hosts.
 # This must be the first RUN command in this file!

@@ -16,8 +16,8 @@ ARG GIT_VERSION=unknown
 ARG UBI_IMAGE
 ARG QEMU_IMAGE
 
-FROM ${QEMU_IMAGE} as qemu
-FROM ${UBI_IMAGE} as ubi
+FROM ${QEMU_IMAGE} AS qemu
+FROM ${UBI_IMAGE} AS ubi
 
 COPY --from=qemu /usr/bin/qemu-*-static /usr/bin/
 
