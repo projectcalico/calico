@@ -93,9 +93,13 @@ func (g DropAction) String() string {
 
 type RejectAction struct {
 	TypeReject struct{}
+	With       string
 }
 
 func (g RejectAction) ToFragment(features *environment.Features) string {
+	if g.With != "" {
+		return fmt.Sprintf("--jump REJECT --reject-with %s", g.With)
+	}
 	return "--jump REJECT"
 }
 

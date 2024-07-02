@@ -1454,8 +1454,15 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 				Action:  iptables.AcceptAction{},
 			},
 			iptables.Rule{
+				Match: iptables.Match().
+					MarkMatchesWithMask(tcdefs.MarkSeenFallThrough, tcdefs.MarkSeenFallThroughMask).
+					Protocol("tcp"),
+				Comment: []string{"REJECT/rst packets from unknown TCP flows."},
+				Action:  iptables.RejectAction{With: "tcp-reset"},
+			},
+			iptables.Rule{
 				Match:   iptables.Match().MarkMatchesWithMask(tcdefs.MarkSeenFallThrough, tcdefs.MarkSeenFallThroughMask),
-				Comment: []string{fmt.Sprintf("%s packets from unknown flows.", d.ruleRenderer.IptablesFilterDenyAction())},
+				Comment: []string{fmt.Sprintf("%s packets from unknown non-TCP flows.", d.ruleRenderer.IptablesFilterDenyAction())},
 				Action:  d.ruleRenderer.IptablesFilterDenyAction(),
 			},
 		)

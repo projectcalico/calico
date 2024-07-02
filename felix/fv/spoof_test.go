@@ -18,11 +18,15 @@ package fv_test
 
 import (
 	"fmt"
+	"regexp"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
+	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+
 	"github.com/projectcalico/calico/felix/fv/connectivity"
+	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/workload"
 )
@@ -89,6 +93,36 @@ var _ = Describe("Spoof tests", func() {
 			cc.ExpectSome(w[1], spoofed)
 			cc.CheckConnectivity()
 		})
+
+		Context("with external client", func() {
+			var (
+				externalClient *containers.Container
+			)
+			BeforeEach(func() {
+				externalClient = infrastructure.RunExtClient("ext-client")
+				err := externalClient.CopyFileIntoContainer("../bin/pktgen", "pktgen")
+				Expect(err).NotTo(HaveOccurred())
+			})
+			AfterEach(func() {
+				externalClient.Stop()
+			})
+
+			It("should send RST for a stray TCP packet", func() {
+				tcpdump := tc.Felixes[0].AttachTCPDump("eth0")
+				tcpdump.SetLogEnabled(true)
+				pattern := fmt.Sprintf(`IP %s\.1234 > %s\.3434: Flags \[R\], seq 123`, tc.Felixes[0].IP, externalClient.IP)
+				tcpdump.AddMatcher("RST", regexp.MustCompile(pattern))
+				tcpdump.Start("tcp", "port", "1234")
+				defer tcpdump.Stop()
+
+				err := externalClient.ExecMayFail("pktgen", externalClient.IP, tc.Felixes[0].IP, "tcp",
+					"--port-src", "3434", "--port-dst", "1234", "--tcp-ack", "--tcp-ack-no=123", "--tcp-seq-no=111")
+				Expect(err).NotTo(HaveOccurred())
+				Eventually(tcpdump.MatchCountFn("RST"), "5s", "200ms").Should(
+					BeNumerically("==", 1),
+					"We should see RST to a packet from an unknown flow")
+			})
+		})
 	}
 
 	Context("_BPF-SAFE_ IPv4", func() {
@@ -97,6 +131,8 @@ var _ = Describe("Spoof tests", func() {
 			infra, err = infrastructure.GetEtcdDatastoreInfra()
 			Expect(err).NotTo(HaveOccurred())
 			opts := infrastructure.DefaultTopologyOptions()
+			opts.ExtraEnvVars["FELIX_BPFConnectTimeLoadBalancing"] = string(api.BPFConnectTimeLBDisabled)
+			opts.ExtraEnvVars["FELIX_BPFHostNetworkedNATWithoutCTLB"] = string(api.BPFHostNetworkedNATEnabled)
 			tc, _ = infrastructure.StartNNodeTopology(3, opts, infra)
 			// Install a default profile allowing all ingress and egress,
 			// in the absence of policy.
@@ -123,15 +159,16 @@ var _ = Describe("Spoof tests", func() {
 	})
 
 	Context("IPv6", func() {
-		if BPFMode() && !BPFIPv6Support() {
-			return
-		}
-
 		BeforeEach(func() {
 			var err error
 			infra, err = infrastructure.GetEtcdDatastoreInfra()
 			Expect(err).NotTo(HaveOccurred())
 			opts := infrastructure.DefaultTopologyOptions()
+			opts.EnableIPv6 = true
+			opts.IPIPEnabled = false
+			opts.ExtraEnvVars["FELIX_BPFConnectTimeLoadBalancing"] = string(api.BPFConnectTimeLBDisabled)
+			opts.ExtraEnvVars["FELIX_BPFHostNetworkedNATWithoutCTLB"] = string(api.BPFHostNetworkedNATEnabled)
+			opts.ExtraEnvVars["FELIX_IPV6SUPPORT"] = "true"
 
 			// The IPv4 tests had each workload running on an individual
 			// felix, but our current topology setup tooling doesn't yet
