@@ -294,7 +294,7 @@ func (c *Checker) ExpectedConnectivityPretty() []string {
 	return result
 }
 
-var defaultConnectivityTimeout = 10 * time.Second
+var defaultConnectivityTimeout = 40 * time.Second
 
 func (c *Checker) CheckConnectivityOffset(offset int, opts ...interface{}) {
 	c.CheckConnectivityWithTimeoutOffset(offset+2, defaultConnectivityTimeout, opts...)

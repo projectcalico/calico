@@ -83,7 +83,7 @@ type proxy struct {
 	k8s      kubernetes.Interface
 	ipFamily int
 
-	epsChanges *k8sp.EndpointChangeTracker
+	epsChanges *k8sp.EndpointsChangeTracker
 	svcChanges *k8sp.ServiceChangeTracker
 
 	svcMap k8sp.ServicePortMap
@@ -105,7 +105,7 @@ type proxy struct {
 	// event recorder to update node events
 	recorder        events.EventRecorder
 	svcHealthServer healthcheck.ServiceHealthServer
-	healthzServer   healthcheck.ProxierHealthUpdater
+	healthzServer   *healthcheck.ProxierHealthServer
 
 	stopCh   chan struct{}
 	stopWg   sync.WaitGroup
@@ -154,20 +154,11 @@ func New(k8s kubernetes.Interface, dp DPSyncer, hostname string, opts ...Option)
 		p.invokeDPSyncer, p.minDPSyncPeriod, time.Hour /* XXX might be infinite? */, 1)
 	dp.SetTriggerFn(p.runner.Run)
 
-	nodeRef := &v1.ObjectReference{
-		Kind:      "Node",
-		Name:      p.hostname,
-		UID:       types.UID(p.hostname),
-		Namespace: "",
-	}
-	ipVersion := v1.IPv4Protocol
-	if p.ipFamily != 4 {
-		ipVersion = v1.IPv6Protocol
-	}
-	p.healthzServer = healthcheck.NewProxierHealthServer("0.0.0.0:10256", p.minDPSyncPeriod, p.recorder, nodeRef)
+	ipVersion := p.v1IPFamily()
+	p.healthzServer = healthcheck.NewProxierHealthServer("0.0.0.0:10256", p.minDPSyncPeriod)
 	p.svcHealthServer = healthcheck.NewServiceHealthServer(p.hostname, p.recorder, util.NewNodePortAddresses(ipVersion, []string{"0.0.0.0/0"}), p.healthzServer)
 
-	p.epsChanges = k8sp.NewEndpointChangeTracker(p.hostname,
+	p.epsChanges = k8sp.NewEndpointsChangeTracker(p.hostname,
 		nil, // change if you want to provide more ctx
 		ipVersion,
 		p.recorder,
@@ -211,6 +202,15 @@ func New(k8s kubernetes.Interface, dp DPSyncer, hostname string, opts ...Option)
 	p.startRoutine(func() { svcConfig.Run(p.stopCh) })
 
 	return p, nil
+}
+
+func (p *proxy) v1IPFamily() v1.IPFamily {
+	pr := v1.IPv4Protocol
+	if p.ipFamily != 4 {
+		pr = v1.IPv6Protocol
+	}
+
+	return pr
 }
 
 func (p *proxy) setIpFamily(ipFamily int) {
@@ -279,15 +279,17 @@ func (p *proxy) invokeDPSyncer() {
 	}
 
 	if p.healthzServer != nil {
-		p.healthzServer.Updated()
+		p.healthzServer.Updated(p.v1IPFamily())
 	}
 }
 
 func (p *proxy) OnServiceAdd(svc *v1.Service) {
+	log.WithField("svc", svc).Debug("Add service")
 	p.OnServiceUpdate(nil, svc)
 }
 
 func (p *proxy) OnServiceUpdate(old, curr *v1.Service) {
+	log.WithFields(log.Fields{"old": old, "curr": curr}).Debug("Update service")
 	if p.svcChanges.Update(old, curr) && p.isInitialized() {
 		p.syncDP()
 	}
@@ -298,29 +300,35 @@ func (p *proxy) OnServiceDelete(svc *v1.Service) {
 }
 
 func (p *proxy) OnServiceSynced() {
+	log.Debug("Services cache synced. Forcing dataplane sync...")
 	p.setSvcsSynced()
 	p.forceSyncDP()
 }
 
 func (p *proxy) OnEndpointSliceAdd(eps *discovery.EndpointSlice) {
+	log.WithField("eps", eps).Debug("EndpointSlice add")
 	if p.epsChanges.EndpointSliceUpdate(eps, false) && p.isInitialized() {
 		p.syncDP()
 	}
 }
 
 func (p *proxy) OnEndpointSliceUpdate(_, eps *discovery.EndpointSlice) {
+	log.WithField("eps", eps).Debug("EndpointSlice update")
 	if p.epsChanges.EndpointSliceUpdate(eps, false) && p.isInitialized() {
 		p.syncDP()
 	}
 }
 
 func (p *proxy) OnEndpointSliceDelete(eps *discovery.EndpointSlice) {
+	log.WithField("eps", eps).Debug("EndpointSlice delete")
 	if p.epsChanges.EndpointSliceUpdate(eps, true) && p.isInitialized() {
 		p.syncDP()
 	}
 }
 
 func (p *proxy) OnEndpointSlicesSynced() {
+	log.Debug("EndpointSlices synced")
+
 	p.setEpsSynced()
 	p.forceSyncDP()
 }

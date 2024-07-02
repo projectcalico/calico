@@ -71,6 +71,7 @@ func withConfigGetFreshApiserverServerAndClient(
 	t.Logf("Starting server on port: %d", securePort)
 	ro := genericoptions.NewRecommendedOptions(defaultEtcdPathPrefix, apiserver.Codecs.LegacyCodec(v3.SchemeGroupVersion))
 	ro.Etcd.StorageConfig.Transport.ServerList = serverConfig.etcdServerList
+	ro.Features.EnablePriorityAndFairness = false
 	options := &server.CalicoServerOptions{
 		RecommendedOptions: ro,
 		DisableAuth:        true,

@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"net"
 	"reflect"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -369,10 +368,7 @@ func (s *Syncer) startupBuildPrev(state DPSyncerState) error {
 				break
 			}
 			s.prevEpsMap[svckey.sname] = append(s.prevEpsMap[svckey.sname],
-				&k8sp.BaseEndpointInfo{
-					Endpoint: net.JoinHostPort(ep.Addr().String(), strconv.Itoa(int(ep.Port()))),
-					// IsLocal is not important here
-				},
+				NewEndpointInfo(ep.Addr().String(), int(ep.Port())),
 			)
 		}
 	})
@@ -443,7 +439,7 @@ func (s *Syncer) addActiveEps(id uint32, svc Service, eps []k8sp.Endpoint) {
 		if ep.IsTerminating() && svc.Protocol() == v1.ProtocolUDP && svc.ReapTerminatingUDP() {
 			continue // do not add this endpoint, treat it as if does not exist anymore
 		}
-		port, _ := ep.Port() // it is error free by this point
+		port := ep.Port() // it is error free by this point
 		epsmap[ipPort{
 			ip:   ep.IP(),
 			port: port,
@@ -609,7 +605,7 @@ func (s *Syncer) apply(state DPSyncerState) error {
 
 		eps := make([]k8sp.Endpoint, 0, len(state.EpsMap[sname]))
 		for _, ep := range state.EpsMap[sname] {
-			zoneHints := ep.GetZoneHints()
+			zoneHints := ep.ZoneHints()
 			if ep.IsReady() || ep.IsTerminating() {
 				if ShouldAppendTopologyAwareEndpoint(nodeZone, hintsAnnotation, zoneHints) {
 					eps = append(eps, ep)
@@ -628,7 +624,7 @@ func (s *Syncer) apply(state DPSyncerState) error {
 			return err
 		}
 
-		for _, lbIP := range svc.LoadBalancerIPStrings() {
+		for _, lbIP := range svc.LoadBalancerVIPStrings() {
 			if lbIP != "" {
 				extInfo := serviceInfoFromK8sServicePort(svc)
 				extInfo.clusterIP = net.ParseIP(lbIP)
@@ -763,7 +759,7 @@ func (s *Syncer) updateService(skey svcKey, sinfo Service, id uint32, eps []k8sp
 	}
 
 	for _, ep := range eps {
-		if !ep.GetIsLocal() {
+		if !ep.IsLocal() {
 			continue
 		}
 
@@ -780,7 +776,7 @@ func (s *Syncer) updateService(skey svcKey, sinfo Service, id uint32, eps []k8sp
 	}
 
 	for _, ep := range eps {
-		if ep.GetIsLocal() {
+		if ep.IsLocal() {
 			continue
 		}
 
@@ -831,10 +827,7 @@ func (s *Syncer) writeSvcBackend(svcID uint32, idx uint32, ep k8sp.Endpoint) err
 
 	key := nat.NewNATBackendKey(svcID, uint32(idx))
 
-	tgtPort, err := ep.Port()
-	if err != nil {
-		return errors.Errorf("no port for endpoint %q: %s", ep, err)
-	}
+	tgtPort := ep.Port()
 	val := s.newBackendValue(ip, uint16(tgtPort))
 	s.bpfEps.Desired().Set(key, val)
 
@@ -1064,7 +1057,7 @@ func (s *Syncer) matchBpfSvc(bpfSvc nat.FrontendKeyInterface, k8sSvc k8sp.Servic
 		}
 	}
 
-	for _, lbip := range k8sInfo.LoadBalancerIPStrings() {
+	for _, lbip := range k8sInfo.LoadBalancerVIPStrings() {
 		if lbip != "" {
 			if bpfSvc.Addr().String() == lbip {
 				if matchLBSrcIP() {
@@ -1303,14 +1296,13 @@ func serviceInfoFromK8sServicePort(sport k8sp.ServicePort) *serviceInfo {
 	sinfo.sessionAffinityType = sport.SessionAffinityType()
 	sinfo.stickyMaxAgeSeconds = sport.StickyMaxAgeSeconds()
 	sinfo.externalIPs = sport.ExternalIPStrings()
-	sinfo.loadBalancerIPStrings = sport.LoadBalancerIPStrings()
+	sinfo.loadBalancerVIPStrings = sport.LoadBalancerVIPStrings()
 	sinfo.loadBalancerSourceRanges = sport.LoadBalancerSourceRanges()
 	sinfo.healthCheckNodePort = sport.HealthCheckNodePort()
 	sinfo.nodeLocalExternal = sport.ExternalPolicyLocal()
 	sinfo.nodeLocalInternal = sport.InternalPolicyLocal()
 	sinfo.hintsAnnotation = sport.HintsAnnotation()
 	sinfo.internalTrafficPolicy = sport.InternalTrafficPolicy()
-
 	sinfo.servicePortAnnotations = sport.(*servicePort).servicePortAnnotations
 
 	return sinfo
@@ -1325,7 +1317,7 @@ type serviceInfo struct {
 	stickyMaxAgeSeconds      int
 	externalIPs              []string
 	loadBalancerSourceRanges []string
-	loadBalancerIPStrings    []string
+	loadBalancerVIPStrings   []string
 	healthCheckNodePort      int
 	nodeLocalExternal        bool
 	nodeLocalInternal        bool
@@ -1338,7 +1330,7 @@ type serviceInfo struct {
 // ExternallyAccessible returns true if the service port is reachable via something
 // other than ClusterIP (NodePort/ExternalIP/LoadBalancer)
 func (info *serviceInfo) ExternallyAccessible() bool {
-	return info.NodePort() != 0 || len(info.LoadBalancerIPStrings()) != 0 || len(info.ExternalIPStrings()) != 0
+	return info.NodePort() != 0 || len(info.LoadBalancerVIPStrings()) != 0 || len(info.ExternalIPStrings()) != 0
 }
 
 // UsesClusterEndpoints returns true if the service port ever sends traffic to
@@ -1407,8 +1399,8 @@ func (info *serviceInfo) ExternalIPStrings() []string {
 }
 
 // LoadBalancerIPStrings is part of ServicePort interface.
-func (info *serviceInfo) LoadBalancerIPStrings() []string {
-	return info.loadBalancerIPStrings
+func (info *serviceInfo) LoadBalancerVIPStrings() []string {
+	return info.loadBalancerVIPStrings
 }
 
 // ExternalPolicyLocal returns if a service has only node local endpoints for external traffic.
@@ -1469,7 +1461,7 @@ func ServicePortEqual(a, b k8sp.ServicePort) bool {
 		a.HintsAnnotation() == b.HintsAnnotation() &&
 		a.InternalTrafficPolicy() == b.InternalTrafficPolicy() &&
 		stringsEqual(a.ExternalIPStrings(), b.ExternalIPStrings()) &&
-		stringsEqual(a.LoadBalancerIPStrings(), b.LoadBalancerIPStrings()) &&
+		stringsEqual(a.LoadBalancerVIPStrings(), b.LoadBalancerVIPStrings()) &&
 		stringsEqual(a.LoadBalancerSourceRanges(), b.LoadBalancerSourceRanges())
 }
 
@@ -1500,7 +1492,7 @@ func stringsEqual(a, b []string) bool {
 // K8sSvcWithLoadBalancerIPs set LoadBalancerIPStrings
 func K8sSvcWithLoadBalancerIPs(ips []string) K8sServicePortOption {
 	return func(s interface{}) {
-		s.(*servicePort).ServicePort.(*serviceInfo).loadBalancerIPStrings = ips
+		s.(*servicePort).ServicePort.(*serviceInfo).loadBalancerVIPStrings = ips
 	}
 }
 

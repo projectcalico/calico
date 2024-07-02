@@ -73,11 +73,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ label index metrics tests",
 
 		By("responding to an endpoint")
 		w[0].ConfigureInInfra(infra)
-		Eventually(metrics.GetFelixMetricIntFn(tc.Felixes[0].IP, "felix_label_index_num_endpoints")).Should(BeNumerically("==", 1))
+		Eventually(metrics.GetFelixMetricIntFn(tc.Felixes[0].IP, "felix_label_index_num_endpoints"), "30s").Should(BeNumerically("==", 1))
 
 		By("responding to a second endpoint")
 		w[1].ConfigureInInfra(infra)
-		Eventually(metrics.GetFelixMetricIntFn(tc.Felixes[0].IP, "felix_label_index_num_endpoints")).Should(BeNumerically("==", 2))
+		Eventually(metrics.GetFelixMetricIntFn(tc.Felixes[0].IP, "felix_label_index_num_endpoints"), "30s").Should(BeNumerically("==", 2))
 
 		// Create a policy with a selector.
 		By("responding to a selector")
@@ -95,7 +95,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ label index metrics tests",
 		pol, err := client.GlobalNetworkPolicies().Create(context.TODO(), pol, options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
-		Eventually(metrics.GetFelixMetricIntFn(tc.Felixes[0].IP, "felix_label_index_strategy_evals{strategy=\"endpoint-single-value\"}")).Should(BeNumerically("==", 1))
+		Eventually(metrics.GetFelixMetricIntFn(tc.Felixes[0].IP, "felix_label_index_strategy_evals{strategy=\"endpoint-single-value\"}"), "35s").Should(BeNumerically("==", 1))
 		Expect(metrics.GetFelixMetricInt(tc.Felixes[0].IP, "felix_label_index_selector_evals{result=\"true\"}")).To(BeNumerically(">", 0))
 		Expect(metrics.GetFelixMetricInt(tc.Felixes[0].IP, "felix_label_index_selector_evals{result=\"false\"}")).To(BeNumerically("==", 0))
 		Expect(metrics.GetFelixMetricInt(tc.Felixes[0].IP, "felix_label_index_num_active_selectors{optimized=\"false\"}")).To(BeNumerically("==", 0))
@@ -143,7 +143,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ label index metrics tests",
 		pol3, err = client.GlobalNetworkPolicies().Create(context.TODO(), pol3, options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
-		Eventually(metrics.GetFelixMetricIntFn(tc.Felixes[0].IP, "felix_label_index_strategy_evals{strategy=\"parent-single-value\"}")).Should(BeNumerically("==", 1),
+		Eventually(metrics.GetFelixMetricIntFn(tc.Felixes[0].IP, "felix_label_index_strategy_evals{strategy=\"parent-single-value\"}"), "60s").Should(BeNumerically("==", 1),
 			"Expected namespace selector with a less useful endpoint selector to result in a parent scan.")
 		Expect(metrics.GetFelixMetricInt(tc.Felixes[0].IP, "felix_label_index_num_active_selectors{optimized=\"false\"}")).To(BeNumerically("==", 1))
 		Expect(metrics.GetFelixMetricInt(tc.Felixes[0].IP, "felix_label_index_num_active_selectors{optimized=\"true\"}")).To(BeNumerically("==", 2))

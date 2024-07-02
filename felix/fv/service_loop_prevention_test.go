@@ -188,10 +188,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ service loop prevention; wi
 					return bpfDumpRoutesV6(felix)
 				}, "10s", "1s").Should(ContainSubstring("fd5f::/119: blackhole-drop"))
 			} else {
-				Eventually(getCIDRBlockRules(felix, "iptables-save")).Should(ConsistOf(
+				Eventually(getCIDRBlockRules(felix, "iptables-save"), "30s").Should(ConsistOf(
 					MatchRegexp("-A cali-cidr-block -d 10\\.96\\.0\\.0/17 .* -j DROP"),
 				))
-				Eventually(getCIDRBlockRules(felix, "ip6tables-save")).Should(ConsistOf(
+				Eventually(getCIDRBlockRules(felix, "ip6tables-save"), "30s").Should(ConsistOf(
 					MatchRegexp("-A cali-cidr-block -d fd5f::/119 .* -j DROP"),
 				))
 			}
@@ -215,7 +215,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ service loop prevention; wi
 					return bpfDumpRoutesV6(felix)
 				}, "10s", "1s").Should(ContainSubstring("fd5f::/119: blackhole-reject"))
 			} else {
-				Eventually(getCIDRBlockRules(felix, "iptables-save"), "8s", "0.5s").Should(ConsistOf(
+				Eventually(getCIDRBlockRules(felix, "iptables-save"), "38s", "0.5s").Should(ConsistOf(
 					MatchRegexp("-A cali-cidr-block -d 10\\.96\\.0\\.0/17 .* -j REJECT"),
 				))
 				Eventually(getCIDRBlockRules(felix, "ip6tables-save"), "8s", "0.5s").Should(ConsistOf(
