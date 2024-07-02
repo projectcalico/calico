@@ -180,7 +180,7 @@ bin/calico-felix-race-$(ARCH): $(LIBBPF_A) $(SRC_FILES) ../go.mod
 	mkdir -p bin
 	if [ "$(SEMAPHORE)" != "true" -o ! -e $@ ] ; then \
 	  $(DOCKER_GO_BUILD_CGO) sh -c '$(GIT_CONFIG_SSH) \
-	     go build -v -race -o $@ -v -buildvcs=false -ldflags "$(LDFLAGS)" "$(PACKAGE_NAME)/cmd/calico-felix"'; \
+	     go build -v -race -o $@ -v -buildvcs=false -ldflags "$(LDFLAGS) -s -w" "$(PACKAGE_NAME)/cmd/calico-felix"'; \
 	fi
 
 # Generate the protobuf bindings for go. The proto/felixbackend.pb.go file is included in SRC_FILES

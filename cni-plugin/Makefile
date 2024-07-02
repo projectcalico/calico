@@ -269,7 +269,7 @@ release-verify-fips:
 	rm -rf .tmp && mkdir -p .tmp
 	# Copy binaries from the image so we can analyze them.
 	sh -c "docker create --name calico-cni-verify $(IMAGE); docker cp calico-cni-verify:/opt/cni/bin/install .tmp/calico; docker rm -f calico-cni-verify"
-	go tool nm .tmp/calico | grep '_Cfunc__goboringcrypto_' 1> /dev/null || echo "ERROR: Binary in image '$(IMAGE)' is missing expected goboring symbols"
+	strings .tmp/calico | grep '_Cfunc__goboringcrypto_' 1>/dev/null || echo "ERROR: Binary in image '$(IMAGE)' is missing expected goboring symbols"
 	rm -rf .tmp
 
 release-publish: release-prereqs .release-$(VERSION).published
