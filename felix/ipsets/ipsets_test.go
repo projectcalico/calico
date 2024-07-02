@@ -45,9 +45,7 @@ const (
 	v4MainIPSetName3 = "cali40u:qMt7iLlGDhvLnCjM0l9nzxb"
 )
 
-var (
-	v4Members1And2 = []string{"10.0.0.1", "10.0.0.2"}
-)
+var v4Members1And2 = []string{"10.0.0.1", "10.0.0.2"}
 
 var exampleMembersByType = map[IPSetType][]string{
 	IPSetTypeHashIP:     {"10.0.0.1", "10.0.0.2", "10.0.1.0"},
@@ -73,11 +71,8 @@ var _ = Describe("IPSetType", func() {
 })
 
 var _ = Describe("IPSetTypeHashIPPort", func() {
-	It("should return its string form from SetType()", func() {
-		Expect(IPSetTypeHashIPPort.SetType()).To(Equal("hash:ip,port"))
-	})
 	It("should canonicalise an IPv4 IP,port", func() {
-		Expect(IPSetTypeHashIPPort.CanonicaliseMember("10.0.0.1,TCP:1234")).
+		Expect(CanonicaliseMember(IPSetTypeHashIPPort, "10.0.0.1,TCP:1234")).
 			To(Equal(V4IPPort{
 				IP:       ip.FromString("10.0.0.1").(ip.V4Addr),
 				Protocol: labelindex.ProtocolTCP,
@@ -85,7 +80,7 @@ var _ = Describe("IPSetTypeHashIPPort", func() {
 			}))
 	})
 	It("should canonicalise an IPv4 SCTP IP,port", func() {
-		Expect(IPSetTypeHashIPPort.CanonicaliseMember("10.0.0.1,SCTP:1234")).
+		Expect(CanonicaliseMember(IPSetTypeHashIPPort, "10.0.0.1,SCTP:1234")).
 			To(Equal(V4IPPort{
 				IP:       ip.FromString("10.0.0.1").(ip.V4Addr),
 				Protocol: labelindex.ProtocolSCTP,
@@ -93,7 +88,7 @@ var _ = Describe("IPSetTypeHashIPPort", func() {
 			}))
 	})
 	It("should canonicalise an IPv6 IP,port", func() {
-		Expect(IPSetTypeHashIPPort.CanonicaliseMember("feed:0::beef,uDp:3456")).
+		Expect(CanonicaliseMember(IPSetTypeHashIPPort, "feed:0::beef,uDp:3456")).
 			To(Equal(V6IPPort{
 				IP:       ip.FromString("feed::beef").(ip.V6Addr),
 				Protocol: labelindex.ProtocolUDP,
@@ -101,19 +96,19 @@ var _ = Describe("IPSetTypeHashIPPort", func() {
 			}))
 	})
 	It("should panic on bad IP,port", func() {
-		Expect(func() { IPSetTypeHashIPPort.CanonicaliseMember("foobar") }).To(Panic())
+		Expect(func() { CanonicaliseMember(IPSetTypeHashIPPort, "foobar") }).To(Panic())
 	})
 	It("should panic on bad IP,port (IP)", func() {
-		Expect(func() { IPSetTypeHashIPPort.CanonicaliseMember("foobar,tcp:1234") }).To(Panic())
+		Expect(func() { CanonicaliseMember(IPSetTypeHashIPPort, "foobar,tcp:1234") }).To(Panic())
 	})
 	It("should panic on bad IP,port (protocol)", func() {
-		Expect(func() { IPSetTypeHashIPPort.CanonicaliseMember("10.0.0.1,foo:1234") }).To(Panic())
+		Expect(func() { CanonicaliseMember(IPSetTypeHashIPPort, "10.0.0.1,foo:1234") }).To(Panic())
 	})
 	It("should panic on bad IP,port (port)", func() {
-		Expect(func() { IPSetTypeHashIPPort.CanonicaliseMember("10.0.0.1,tcp:bar") }).To(Panic())
+		Expect(func() { CanonicaliseMember(IPSetTypeHashIPPort, "10.0.0.1,tcp:bar") }).To(Panic())
 	})
 	It("should panic on bad IP,port (too long)", func() {
-		Expect(func() { IPSetTypeHashIPPort.CanonicaliseMember("10.0.0.1,tcp:1234,5") }).To(Panic())
+		Expect(func() { CanonicaliseMember(IPSetTypeHashIPPort, "10.0.0.1,tcp:1234,5") }).To(Panic())
 	})
 	It("should detect IPv6 for an IP,port", func() {
 		Expect(IPSetTypeHashIPPort.IsMemberIPV6("feed:beef::,tcp:1234")).To(BeTrue())
@@ -131,52 +126,52 @@ var _ = Describe("IPSetTypeHashIPPort", func() {
 
 var _ = Describe("IPSetTypeHashIP", func() {
 	It("should canonicalise an IPv4", func() {
-		Expect(IPSetTypeHashIP.CanonicaliseMember("10.0.0.1")).
+		Expect(CanonicaliseMember(IPSetTypeHashIP, "10.0.0.1")).
 			To(Equal(ip.FromString("10.0.0.1")))
 	})
 	It("should canonicalise an IPv6", func() {
-		Expect(IPSetTypeHashIP.CanonicaliseMember("feed:0::beef")).
+		Expect(CanonicaliseMember(IPSetTypeHashIP, "feed:0::beef")).
 			To(Equal(ip.FromString("feed::beef")))
 	})
 	It("should panic on bad IP", func() {
-		Expect(func() { IPSetTypeHashIP.CanonicaliseMember("foobar") }).To(Panic())
+		Expect(func() { CanonicaliseMember(IPSetTypeHashIP, "foobar") }).To(Panic())
 	})
 })
 
 var _ = Describe("IPSetTypeHashIP", func() {
 	It("should canonicalise a raw port", func() {
-		Expect(IPSetTypeBitmapPort.CanonicaliseMember("10")).
+		Expect(CanonicaliseMember(IPSetTypeBitmapPort, "10")).
 			To(Equal(Port(10)))
 	})
 	It("should canonicalise an IPv4 port", func() {
-		Expect(IPSetTypeBitmapPort.CanonicaliseMember("v4,10")).
+		Expect(CanonicaliseMember(IPSetTypeBitmapPort, "v4,10")).
 			To(Equal(Port(10)))
 	})
 	It("should canonicalise an IPv6 port", func() {
-		Expect(IPSetTypeBitmapPort.CanonicaliseMember("v6,10")).
+		Expect(CanonicaliseMember(IPSetTypeBitmapPort, "v6,10")).
 			To(Equal(Port(10)))
 	})
 })
 
 var _ = Describe("IPSetTypeHashNet", func() {
 	It("should canonicalise an IPv4 CIDR", func() {
-		Expect(IPSetTypeHashNet.CanonicaliseMember("10.0.0.1/24")).
+		Expect(CanonicaliseMember(IPSetTypeHashNet, "10.0.0.1/24")).
 			To(Equal(ip.MustParseCIDROrIP("10.0.0.0/24")))
 	})
 	It("should canonicalise an IPv6 CIDR", func() {
-		Expect(IPSetTypeHashNet.CanonicaliseMember("feed::beef/24")).
+		Expect(CanonicaliseMember(IPSetTypeHashNet, "feed::beef/24")).
 			To(Equal(ip.MustParseCIDROrIP("feed::/24")))
 	})
 	It("should canonicalise an IPv4 IP as a CIDR", func() {
-		Expect(IPSetTypeHashNet.CanonicaliseMember("10.0.0.1")).
+		Expect(CanonicaliseMember(IPSetTypeHashNet, "10.0.0.1")).
 			To(Equal(ip.MustParseCIDROrIP("10.0.0.1/32")))
 	})
 	It("should canonicalise an IPv6 IP as a CIDR", func() {
-		Expect(IPSetTypeHashNet.CanonicaliseMember("feed::beef")).
+		Expect(CanonicaliseMember(IPSetTypeHashNet, "feed::beef")).
 			To(Equal(ip.MustParseCIDROrIP("feed::beef/128")))
 	})
 	It("should panic on bad CIDR", func() {
-		Expect(func() { IPSetTypeHashNet.CanonicaliseMember("foobar") }).To(Panic())
+		Expect(func() { CanonicaliseMember(IPSetTypeHashNet, "foobar") }).To(Panic())
 	})
 })
 
@@ -371,7 +366,7 @@ var _ = Describe("IP sets dataplane", func() {
 		}
 
 		ipSetType := ipSetType
-		Describe("Resync re-use tests for "+ipSetType.SetType(), func() {
+		Describe("Resync re-use tests for "+string(ipSetType), func() {
 			members := exampleMembersByType[ipSetType]
 
 			BeforeEach(func() {
@@ -432,7 +427,7 @@ var _ = Describe("IP sets dataplane", func() {
 					v4MainIPSetName: {members[0]},
 				})
 				Expect(dataplane.LinesExecuted).To(Equal([]string{
-					"create cali4t0 " + ipSetType.SetType() + " " + headerStr,
+					"create cali4t0 " + string(ipSetType) + " " + headerStr,
 					"add cali4t0 " + members[0],
 					"swap " + v4MainIPSetName + " cali4t0",
 					"COMMIT",
@@ -734,8 +729,7 @@ var _ = Describe("IP sets dataplane", func() {
 
 			Describe("after another process modifies an IP set", func() {
 				BeforeEach(func() {
-					dataplane.IPSetMembers[v4MainIPSetName] =
-						set.From("10.0.0.1", "10.0.0.3", "10.0.0.4")
+					dataplane.IPSetMembers[v4MainIPSetName] = set.From("10.0.0.1", "10.0.0.3", "10.0.0.4")
 				})
 
 				It("should be detected and fixed by a resync", func() {
@@ -764,8 +758,7 @@ var _ = Describe("IP sets dataplane", func() {
 
 		Describe("after another process modifies the IP set", func() {
 			BeforeEach(func() {
-				dataplane.IPSetMembers[v4MainIPSetName] =
-					set.From("10.0.0.1", "10.0.0.3", "10.0.0.4")
+				dataplane.IPSetMembers[v4MainIPSetName] = set.From("10.0.0.1", "10.0.0.3", "10.0.0.4")
 			})
 
 			It("should be detected and fixed by a resync", func() {
@@ -836,8 +829,7 @@ var _ = Describe("IP sets dataplane", func() {
 		})
 		Describe("with various transient list failures queued up", func() {
 			BeforeEach(func() {
-				dataplane.IPSetMembers[v4MainIPSetName] =
-					set.From("10.0.0.1", "10.0.0.3", "10.0.0.4")
+				dataplane.IPSetMembers[v4MainIPSetName] = set.From("10.0.0.1", "10.0.0.3", "10.0.0.4")
 				dataplane.ListOpFailures = []string{"pipe", "start", "read", "read-member", "member", "rc"}
 			})
 
@@ -853,8 +845,7 @@ var _ = Describe("IP sets dataplane", func() {
 		describeResyncFailureTests := func(failures ...string) func() {
 			return func() {
 				BeforeEach(func() {
-					dataplane.IPSetMembers[v4MainIPSetName] =
-						set.From("10.0.0.1", "10.0.0.3", "10.0.0.4")
+					dataplane.IPSetMembers[v4MainIPSetName] = set.From("10.0.0.1", "10.0.0.3", "10.0.0.4")
 					dataplane.ListOpFailures = failures
 				})
 				AfterEach(func() {
@@ -1019,10 +1010,8 @@ var _ = Describe("IP sets dataplane", func() {
 		dataplane.ExpectMembers(map[string][]string{"noncali": v4Members1And2})
 	})
 	It("CalicoIPSets() should ignore non-calico IP sets", func() {
-		dataplane.IPSetMembers["noncali"] =
-			set.From("10.0.0.1", "10.0.0.2")
-		dataplane.IPSetMembers[v4MainIPSetName] =
-			set.From("10.0.0.1", "10.0.0.3", "10.0.0.4")
+		dataplane.IPSetMembers["noncali"] = set.From("10.0.0.1", "10.0.0.2")
+		dataplane.IPSetMembers[v4MainIPSetName] = set.From("10.0.0.1", "10.0.0.3", "10.0.0.4")
 
 		ipsets, err := ipsets.CalicoIPSets()
 		Expect(err).NotTo(HaveOccurred())

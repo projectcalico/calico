@@ -49,7 +49,6 @@ import (
 )
 
 var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding host IPs to IP sets", []apiconfig.DatastoreType{apiconfig.EtcdV3, apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
-
 	var (
 		bpfEnabled = os.Getenv("FELIX_FV_ENABLE_BPF") == "true"
 		infra      infrastructure.DatastoreInfra
@@ -62,8 +61,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 
 	BeforeEach(func() {
 		infra = getInfra()
-		if BPFMode() && getDataStoreType(infra) == "etcdv3" {
-			Skip("Skipping BPF test for etcdv3 backend.")
+		if (NFTMode() || BPFMode()) && getDataStoreType(infra) == "etcdv3" {
+			Skip("Skipping NFT / BPF test for etcdv3 backend.")
 		}
 		tc, client = infrastructure.StartNNodeTopology(2, infrastructure.DefaultTopologyOptions(), infra)
 
@@ -105,8 +104,12 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 	AfterEach(func() {
 		if CurrentGinkgoTestDescription().Failed {
 			for _, felix := range tc.Felixes {
-				felix.Exec("iptables-save", "-c")
-				felix.Exec("ipset", "list")
+				if NFTMode() {
+					logNFTDiags(felix)
+				} else {
+					felix.Exec("iptables-save", "-c")
+					felix.Exec("ipset", "list")
+				}
 				felix.Exec("ip", "r")
 				felix.Exec("ip", "a")
 				if BPFMode() {
@@ -129,12 +132,19 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 		infra.Stop()
 	})
 
-	It("should use the --random-fully flag in the MASQUERADE rules", func() {
+	It("should fully randomize MASQUERADE rules", func() {
 		for _, felix := range tc.Felixes {
-			Eventually(func() string {
-				out, _ := felix.ExecOutput("iptables-save", "-c")
-				return out
-			}, "10s", "100ms").Should(ContainSubstring("--random-fully"))
+			if NFTMode() {
+				Eventually(func() string {
+					out, _ := felix.ExecOutput("nft", "list", "table", "calico")
+					return out
+				}, "10s", "100ms").Should(ContainSubstring("fully-random"))
+			} else {
+				Eventually(func() string {
+					out, _ := felix.ExecOutput("iptables-save", "-c")
+					return out
+				}, "10s", "100ms").Should(ContainSubstring("--random-fully"))
+			}
 		}
 	})
 
@@ -383,7 +393,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 	})
 
 	Context("external nodes configured", func() {
-
 		var externalClient *containers.Container
 
 		BeforeEach(func() {
@@ -412,22 +421,22 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 				externalClient.Exec("ip", "l")
 				externalClient.Exec("ip", "a")
 			}
-
 		})
 		AfterEach(func() {
 			externalClient.Stop()
 		})
 
 		It("should allow IPIP to external client iff it is in ExternalNodesCIDRList", func() {
-
 			By("testing that ext client ipip does not work if not part of ExternalNodesCIDRList")
 
 			for _, f := range tc.Felixes {
+				// Make sure that only the internal nodes are present in the ipset
 				if BPFMode() {
 					Eventually(f.BPFRoutes, "10s").Should(ContainSubstring(f.IP))
 					Consistently(f.BPFRoutes).ShouldNot(ContainSubstring(externalClient.IP))
+				} else if NFTMode() {
+					Eventually(f.NFTSetSizeFn("cali40all-hosts-net"), "5s", "200ms").Should(Equal(2))
 				} else {
-					// Make sure that only the internal nodes are present in the ipset
 					Eventually(f.IPSetSizeFn("cali40all-hosts-net"), "5s", "200ms").Should(Equal(2))
 				}
 			}
@@ -466,6 +475,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 					Eventually(f.BPFRoutes, "10s").Should(ContainSubstring(externalClient.IP))
 					Expect(f.IPSetSize("cali40all-hosts-net")).To(BeZero(),
 						"BPF mode shouldn't program IP sets")
+				} else if NFTMode() {
+					Eventually(f.NFTSetSizeFn("cali40all-hosts-net"), "15s", "200ms").Should(Equal(3))
 				} else {
 					Eventually(f.IPSetSizeFn("cali40all-hosts-net"), "15s", "200ms").Should(Equal(3))
 				}
@@ -502,7 +513,12 @@ func createK8sServiceWithoutKubeProxy(args createK8sServiceWithoutKubeProxyArgs)
 		Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(1),
 			"Service endpoints didn't get created? Is controller-manager happy?")
 	}
-	args.felix.ProgramIptablesDNAT(args.serviceIP, args.targetIP, args.chain, args.ipv6)
+
+	if NFTMode() {
+		args.felix.ProgramNftablesDNAT(args.serviceIP, args.targetIP, args.chain, args.ipv6)
+	} else {
+		args.felix.ProgramIptablesDNAT(args.serviceIP, args.targetIP, args.chain, args.ipv6)
+	}
 }
 
 func getDataStoreType(infra infrastructure.DatastoreInfra) string {
