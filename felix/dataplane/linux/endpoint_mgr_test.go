@@ -171,6 +171,7 @@ func chainsForIfaces(ifaceMetadata []string,
 		ProtoUDP  = 17
 		ProtoIPIP = 4
 		VXLANPort = 4789
+		VXLANVNI  = 4096
 	)
 
 	log.WithFields(log.Fields{
@@ -195,7 +196,8 @@ func chainsForIfaces(ifaceMetadata []string,
 	dropEncapRules := []iptables.Rule{
 		{
 			Match: iptables.Match().ProtocolNum(ProtoUDP).
-				DestPorts(uint16(VXLANPort)),
+				DestPorts(VXLANPort).
+				VXLANVNI(VXLANVNI),
 			Action:  iptables.DropAction{},
 			Comment: []string{"Drop VXLAN encapped packets originating in workloads"},
 		},
