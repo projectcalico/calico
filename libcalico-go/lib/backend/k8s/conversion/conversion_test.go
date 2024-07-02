@@ -1148,7 +1148,7 @@ var _ = Describe("Test Pod conversion", func() {
 				Annotations: map[string]string{
 					"k8s.v1.cni.cncf.io/network-status": `
 					[{
-						"name": "k8s-pod-network",
+						"name": "calico",
 						"ips": [
 							"172.16.166.191"
 						],
@@ -1167,7 +1167,7 @@ var _ = Describe("Test Pod conversion", func() {
 
 		Expect(wep.Value.(*libapiv3.WorkloadEndpoint).Annotations).Should(HaveKeyWithValue("k8s.v1.cni.cncf.io/network-status", `
 					[{
-						"name": "k8s-pod-network",
+						"name": "calico",
 						"ips": [
 							"172.16.166.191"
 						],

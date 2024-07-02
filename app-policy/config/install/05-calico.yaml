@@ -130,7 +130,7 @@ data:
   # The CNI network configuration to install on each node.
   cni_network_config: |-
     {
-      "name": "k8s-pod-network",
+      "name": "calico",
       "cniVersion": "0.3.0",
       "plugins": [
         {

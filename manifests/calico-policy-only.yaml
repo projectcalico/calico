@@ -72,7 +72,7 @@ data:
   # values in this config will be automatically populated.
   cni_network_config: |-
     {
-      "name": "k8s-pod-network",
+      "name": "calico",
       "cniVersion": "0.3.1",
       "plugins": [
         {
