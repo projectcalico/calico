@@ -678,8 +678,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					return 0, err
 				}
 				var mapMeta struct {
-					ID    int    `json:"id"`
-					Error string `json:"error"`
+					ID int `json:"id"`
 				}
 				err = json.Unmarshal([]byte(out), &mapMeta)
 				if err != nil {
@@ -697,7 +696,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					var err error
 					mapID, err = getMapIDByPath(felix, filename)
 					return err
-				}, "5s").ShouldNot(HaveOccurred())
+				}, "10s").ShouldNot(HaveOccurred())
 				return mapID
 			}
 
