@@ -4,8 +4,8 @@ import (
 	goyekAutomation "github.com/goyek/goyek/v2"
 	"github.com/goyek/x/boot"
 
-	"github.com/projectcalico/fixham/internal/config"
-	"github.com/projectcalico/fixham/pkg/goyek"
+	"github.com/projectcalico/calico/fixham/internal/config"
+	"github.com/projectcalico/calico/fixham/pkg/goyek"
 )
 
 type Package interface {

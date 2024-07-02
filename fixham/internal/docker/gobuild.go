@@ -12,8 +12,9 @@ import (
 )
 
 const (
-	modCacheDir = "/go/pkg/mod"
-	goCacheDir  = "/go-cache"
+	modCacheDir             = "/go/pkg/mod"
+	goCacheDir              = "/go-cache"
+	defaultGoBuildImageName = "calico/go-build"
 )
 
 // GoBuildImage is the struct for the go-build image
@@ -27,10 +28,10 @@ type GoBuildImage struct {
 // with default image name and version
 func NewGoBuild(name string, version string) GoBuildImage {
 	if name == "" {
-		logrus.Fatal("name is required")
+		logrus.Fatal("name of the go-build image is required i.e. calico/go-build")
 	}
 	if version == "" {
-		logrus.Fatal("version is required")
+		logrus.Fatal("version of the go-build image is required i.e. latest")
 	}
 	return GoBuildImage{
 		imageName:    name,
@@ -44,6 +45,11 @@ func (g GoBuildImage) Image() string {
 	return fmt.Sprintf("%s:%s", g.imageName, g.imageVersion)
 }
 
+// Version returns the version of the go-build image
+func (g GoBuildImage) Version() string {
+	return g.imageVersion
+}
+
 // GoBuildRunner is the struct for running go-build image
 // for a specific package name
 type GoBuildRunner struct {
@@ -55,20 +61,12 @@ type GoBuildRunner struct {
 }
 
 // NewGoBuildRunner returns a new GoBuildRunner
-//
-// version: version of the go-build image
-//
-// packageName: package name for the component
-//
-// rootDir: root directory for the component package. This is used to bind mount the package
+// with the given name, version, package name, working directory and repo root directorys
 func NewGoBuildRunner(name, version, packageName, wd, repoRootDir string) (g *GoBuildRunner, err error) {
 	currentUser, _ := user.Current()
 	gomodCacheDir := goModCacheDir(currentUser)
 	goBuild := NewGoBuild(name, version)
-	dockerRunner, err := NewDockerRunner()
-	if err != nil {
-		logrus.WithError(err).Fatal("Failed to create docker runner")
-	}
+	dockerRunner := MustDockerRunner()
 	g = &GoBuildRunner{
 		GoBuildImage: goBuild,
 		DockerRunner: *dockerRunner,
@@ -99,7 +97,7 @@ func NewGoBuildRunner(name, version, packageName, wd, repoRootDir string) (g *Go
 	} else {
 		g.WithEnv("LOCAL_USER_ID=" + currentUser.Uid)
 	}
-	return
+	return g, nil
 }
 
 // MustGoBuildRunner returns a new GoBuildRunner
@@ -109,11 +107,6 @@ func MustGoBuildRunner(name, version, packageName, wd string, repoRootDir string
 		logrus.WithError(err).Fatal("Failed to create GoBuildRunner")
 	}
 	return g
-}
-
-// Version returns the version of the go-build image
-func (g *GoBuildRunner) Version() string {
-	return g.imageVersion
 }
 
 // WithEnv sets the environment variables for the container
@@ -143,21 +136,6 @@ func (g *GoBuildRunner) hasBind(bind string) bool {
 	return false
 }
 
-func (g *GoBuildRunner) hasBindMount(targetPath string) bool {
-	return g.getBindMountSource(targetPath) != ""
-}
-
-func (g *GoBuildRunner) removeBindMount(targetPath string) {
-	source := g.getBindMountSource(targetPath)
-	for i, mount := range g.hostConfig.Binds {
-		parts := strings.Split(mount, ":")
-		if len(parts) >= 2 && parts[1] == targetPath && parts[0] == source {
-			g.hostConfig.Binds = append(g.hostConfig.Binds[:i], g.hostConfig.Binds[i+1:]...)
-			return
-		}
-	}
-}
-
 // WithVolume sets the volume for the container
 func (g *GoBuildRunner) WithVolume(volume ...string) (runner *GoBuildRunner, err error) {
 	for _, v := range volume {
@@ -166,17 +144,6 @@ func (g *GoBuildRunner) WithVolume(volume ...string) (runner *GoBuildRunner, err
 			return g, fmt.Errorf("volume already exists")
 		}
 		g.hostConfig.Binds = append(g.hostConfig.Binds, v)
-	}
-	return g, nil
-}
-
-// UsingGoModCache sets the volume for go mod cache
-func (g *GoBuildRunner) UsingGoModCache(dir string) (*GoBuildRunner, error) {
-	if g.hasBindMount(modCacheDir) {
-		g.removeBindMount(modCacheDir)
-	}
-	if _, err := g.WithVolume(fmt.Sprintf("%s:%s:rw", dir, modCacheDir)); err != nil {
-		return g, err
 	}
 	return g, nil
 }
@@ -194,7 +161,11 @@ func (g *GoBuildRunner) RunShCmd(cmd string) error {
 }
 
 func (g *GoBuildRunner) Run(cmd []string) error {
-	// TODO: Add logger warning if not using latest calico/go-build image
+	if g.imageName == defaultGoBuildImageName {
+		// TODO: Check if the version is the latest
+	} else {
+		logrus.Warn("Using non-default go-build image ", g.imageName)
+	}
 	goModCache := g.getBindMountSource(modCacheDir)
 	goPkgCache := g.getBindMountSource(goCacheDir)
 	dirs := []string{"bin", goPkgCache, goModCache}

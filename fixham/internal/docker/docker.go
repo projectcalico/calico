@@ -13,6 +13,12 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// TagsResponse is a struct for the response from the docker registry API for tags
+type TagsResponse struct {
+	Name string   `json:"name"`
+	Tags []string `json:"tags"`
+}
+
 // DockerRunner is a struct for running docker commands
 type DockerRunner struct {
 	dockerClient *client.Client
@@ -144,7 +150,7 @@ func (d *DockerRunner) ExecInContainer(containerID string, cmd ...string) (types
 		return types.ContainerExecInspect{}, err
 	}
 
-	logrus.WithField("cmd", cmd).Print("printing output...\n", string(output), "\n...end of output")
+	logrus.WithField("cmd", cmd).Infof("printing output...\n%s\n...end of output", string(output))
 
 	inspect, err := d.dockerClient.ContainerExecInspect(context.Background(), exec.ID)
 	if err != nil {

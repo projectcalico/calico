@@ -3,7 +3,7 @@ package goyek
 import (
 	"github.com/goyek/goyek/v2"
 
-	"github.com/projectcalico/fixham/pkg/tasks"
+	"github.com/projectcalico/calico/fixham/pkg/tasks"
 )
 
 func Clean(paths []string, images []string) *GoyekTask {
