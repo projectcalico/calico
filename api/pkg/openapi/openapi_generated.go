@@ -3215,6 +3215,13 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Format:      "int32",
 						},
 					},
+					"goMaxProcs": {
+						SchemaProps: spec.SchemaProps{
+							Description: "GoMaxProcs sets the maximum number of CPUs that the Go runtime will use concurrently.  A value of -1 means \"use the system default\"; typically the number of real CPUs on the system.\n\nthis setting is overridden by the GOMAXPROCS environment variable.\n\n[Default: -1]",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
 				},
 			},
 		},

@@ -404,6 +404,9 @@ type Config struct {
 	// GoMemoryLimitMB sets the Go runtime's memory limit.  It is overridden by the GOMEMLIMIT env var if that is
 	// also specified. A value of -1 disables the limit.
 	GoMemoryLimitMB int `config:"int(-1,);-1"`
+	// GoMaxProcs sets the Go runtime's GOMAXPROCS.  It is overridden by the GOMAXPROCS env var if that is also
+	// set. A value of -1 disables the override and uses the runtime default.
+	GoMaxProcs int `config:"int(-1,);-1"`
 
 	// Configures MTU auto-detection.
 	MTUIfacePattern *regexp.Regexp `config:"regexp;^((en|wl|ww|sl|ib)[Pcopsvx].*|(eth|wlan|wwan).*)"`

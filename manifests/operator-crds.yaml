@@ -22061,6 +22061,13 @@ spec:
                   setting. \n This setting is overridden by the GOGC environment variable.
                   \n [Default: 40]"
                 type: integer
+              goMaxProcs:
+                description: "GoMaxProcs sets the maximum number of CPUs that the
+                  Go runtime will use concurrently.  A value of -1 means \"use the
+                  system default\"; typically the number of real CPUs on the system.
+                  \n this setting is overridden by the GOMAXPROCS environment variable.
+                  \n [Default: -1]"
+                type: integer
               goMemoryLimitMB:
                 description: "GoMemoryLimitMB sets a (soft) memory limit for the Go
                   runtime in MB.  The Go runtime will try to keep its memory usage
