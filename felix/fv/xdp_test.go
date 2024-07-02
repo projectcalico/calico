@@ -119,7 +119,11 @@ func xdpTest(getInfra infrastructure.InfraFactory, proto string) {
 		if CurrentGinkgoTestDescription().Failed {
 			infra.DumpErrorData()
 			for _, felix := range tc.Felixes {
-				felix.Exec("iptables-save", "-c")
+				if NFTMode() {
+					logNFTDiags(felix)
+				} else {
+					felix.Exec("iptables-save", "-c")
+				}
 			}
 		}
 
@@ -165,7 +169,6 @@ func xdpTest(getInfra infrastructure.InfraFactory, proto string) {
 	}
 
 	expectSourceFailsafePortBlocked := func(cc *connectivity.Checker) {
-
 		fsPort := &workload.Port{
 			Workload: hostW[clnt],
 			Port:     1234, // a source failsafe port
@@ -333,7 +336,7 @@ func xdpTest(getInfra infrastructure.InfraFactory, proto string) {
 				Expect(utils.LastRunOutput).To(ContainSubstring(`100% packet loss`))
 				Expect(doHping()).To(HaveOccurred())
 
-				if !BPFMode() {
+				if !BPFMode() && !NFTMode() {
 					output, err := tc.Felixes[srvr].ExecOutput("iptables", "-t", "raw", "-v", "-n", "-L", "cali-pi-default.xdp-filter")
 					// the only rule that refers to a cali40-prefixed ipset should
 					// have 0 packets/bytes because the raw small packets should've been
@@ -366,7 +369,7 @@ func xdpTest(getInfra infrastructure.InfraFactory, proto string) {
 				Expect(utils.LastRunOutput).To(ContainSubstring(`100% packet loss`))
 				Expect(doPing()).To(HaveOccurred())
 
-				if !BPFMode() {
+				if !BPFMode() && !NFTMode() {
 					output, err := tc.Felixes[srvr].ExecOutput("iptables", "-t", "raw", "-v", "-n", "-L", "cali-pi-default.xdp-filter")
 					// the only rule that refers to a cali40-prefixed ipset should
 					// have 0 packets/bytes because the icmp packets should've been
@@ -401,14 +404,18 @@ func xdpTest(getInfra infrastructure.InfraFactory, proto string) {
 
 				expectBlocked(cc)
 
-				if !BPFMode() {
-					// the only rule that refers to a cali40-prefixed ipset should have 0 packets/bytes
+				// The only rule that refers to a cali40-prefixed ipset should have 0 packets/bytes
+				if !BPFMode() && !NFTMode() {
 					Eventually(func() string {
 						out, _ := tc.Felixes[srvr].ExecOutput("iptables", "-t", "raw", "-v", "-n", "-L",
 							"cali-pi-default.xdp-filter")
 						return out
-
 					}).Should(MatchRegexp(`(?m)^\s+0\s+0.*cali40s:`))
+				} else if NFTMode() {
+					Eventually(func() string {
+						out, _ := tc.Felixes[srvr].ExecOutput("nft", "list", "chain", "ip", "calico", "raw-cali-pi-default.xdp-filter")
+						return out
+					}).Should(MatchRegexp(`packets 0 bytes 0`))
 				}
 			})
 
@@ -426,7 +433,6 @@ func xdpTest(getInfra infrastructure.InfraFactory, proto string) {
 			})
 
 			Context("messing up with BPF maps", func() {
-
 				if BPFMode() {
 					// BPF mode's use of XDP doesn't resync in the ways expected by the following tests.
 					return
@@ -436,6 +442,7 @@ func xdpTest(getInfra infrastructure.InfraFactory, proto string) {
 					args := append([]string{"bpftool", "map", "lookup", "pinned", "/sys/fs/bpf/calico/xdp/eth0_ipv4_v1_blacklist", "key", "hex"}, hostHexCIDR...)
 					Eventually(tc.Felixes[srvr].ExecOutputFn(args...), "10s").Should(ContainSubstring("value:"))
 
+					By("Deleting the BPF map entry manually")
 					tc.Felixes[srvr].Exec(append([]string{"bpftool", "map", "delete", "pinned", "/sys/fs/bpf/calico/xdp/eth0_ipv4_v1_blacklist", "key", "hex"}, hostHexCIDR...)...)
 
 					Eventually(tc.Felixes[srvr].ExecOutputFn(args...), resyncPeriod).Should(ContainSubstring("value:"))
@@ -475,8 +482,10 @@ func xdpTest(getInfra infrastructure.InfraFactory, proto string) {
 				Eventually(tc.Felixes[srvr].ExecOutputFn(args...), "10s").Should(ContainSubstring("value:"))
 
 				AdditionalHostHexCIDR := applyGlobalNetworkSets("xdpblocklist", "1.2.3.4", "/32", true)
-				args = append([]string{"bpftool", "map", "lookup", "pinned",
-					"/sys/fs/bpf/calico/xdp/eth0_ipv4_v1_blacklist", "key", "hex"}, AdditionalHostHexCIDR...)
+				args = append([]string{
+					"bpftool", "map", "lookup", "pinned",
+					"/sys/fs/bpf/calico/xdp/eth0_ipv4_v1_blacklist", "key", "hex",
+				}, AdditionalHostHexCIDR...)
 				Eventually(tc.Felixes[srvr].ExecOutputFn(args...), "5s").Should(ContainSubstring("value:"))
 			})
 		})
@@ -490,8 +499,10 @@ func xdpTest(getInfra infrastructure.InfraFactory, proto string) {
 
 			if !BPFMode() {
 				It("should have expected felixes[clnt] CIDR in BPF blocklist", func() {
-					args := append([]string{"bpftool", "map", "lookup", "pinned",
-						"/sys/fs/bpf/calico/xdp/eth0_ipv4_v1_blacklist", "key", "hex"}, hostHexCIDR...)
+					args := append([]string{
+						"bpftool", "map", "lookup", "pinned",
+						"/sys/fs/bpf/calico/xdp/eth0_ipv4_v1_blacklist", "key", "hex",
+					}, hostHexCIDR...)
 					Eventually(tc.Felixes[srvr].ExecOutputFn(args...), "10s").Should(ContainSubstring("value:"))
 				})
 			}
@@ -510,13 +521,12 @@ func xdpTest(getInfra infrastructure.InfraFactory, proto string) {
 
 				expectBlocked(cc)
 
-				if !BPFMode() {
+				if !BPFMode() && !NFTMode() {
 					// the only rule that refers to a cali40-prefixed ipset should have 0 packets/bytes
 					Eventually(func() string {
 						out, _ := tc.Felixes[srvr].ExecOutput("iptables", "-t", "raw", "-v", "-n", "-L",
 							"cali-pi-default.xdp-filter")
 						return out
-
 					}).Should(MatchRegexp(`(?m)^\s+0\s+0.*cali40s:`))
 				}
 			})

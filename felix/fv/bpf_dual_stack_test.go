@@ -17,14 +17,14 @@
 package fv_test
 
 import (
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
-
 	"context"
 	"fmt"
 	"net"
 	"regexp"
 	"strconv"
+
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -48,9 +48,11 @@ import (
 	options2 "github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
-var _ = describeBPFDualStackTests(false, true)
-var _ = describeBPFDualStackTests(true, true)
-var _ = describeBPFDualStackTests(false, false)
+var (
+	_ = describeBPFDualStackTests(false, true)
+	_ = describeBPFDualStackTests(true, true)
+	_ = describeBPFDualStackTests(false, false)
+)
 
 func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 	if !BPFMode() {
@@ -58,7 +60,6 @@ func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 	}
 	desc := fmt.Sprintf("_BPF-SAFE_ BPF dual stack basic in-cluster connectivity tests (ct = %v)", ctlbEnabled)
 	return infrastructure.DatastoreDescribe(desc, []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
-
 		var (
 			infra        infrastructure.DatastoreInfra
 			tc           infrastructure.TopologyContainers
@@ -79,9 +80,11 @@ func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 		}
 
 		BeforeEach(func() {
-			iOpts := []infrastructure.CreateOption{infrastructure.K8sWithDualStack(),
+			iOpts := []infrastructure.CreateOption{
+				infrastructure.K8sWithDualStack(),
 				infrastructure.K8sWithAPIServerBindAddress("::"),
-				infrastructure.K8sWithServiceClusterIPRange("dead:beef::abcd:0:0:0/112,10.101.0.0/16")}
+				infrastructure.K8sWithServiceClusterIPRange("dead:beef::abcd:0:0:0/112,10.101.0.0/16"),
+			}
 			infra = getInfra(iOpts...)
 			cc = &Checker{
 				CheckSNAT: true,
@@ -207,8 +210,14 @@ func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 				currBpfsvcs, currBpfeps = dumpNATmaps(tc.Felixes)
 
 				for i, felix := range tc.Felixes {
+					if NFTMode() {
+						logNFTDiags(felix)
+					} else {
+						felix.Exec("ip6tables-save", "-c")
+						felix.Exec("iptables-save", "-c")
+					}
+
 					felix.Exec("conntrack", "-L")
-					felix.Exec("ip6tables-save", "-c")
 					felix.Exec("ip", "-6", "link")
 					felix.Exec("ip", "-6", "addr")
 					felix.Exec("ip", "-6", "rule")
@@ -220,7 +229,6 @@ func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 					felix.Exec("calico-bpf", "-6", "nat", "aff")
 					felix.Exec("calico-bpf", "-6", "conntrack", "dump")
 					felix.Exec("calico-bpf", "-6", "arp", "dump")
-					felix.Exec("iptables-save", "-c")
 					felix.Exec("ip", "link")
 					felix.Exec("ip", "addr")
 					felix.Exec("ip", "rule")
@@ -421,7 +429,6 @@ func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 				Eventually(func() int { return tcpdump.MatchCount("ICMP") }).
 					Should(BeNumerically(">", 0), matcher)
 				externalClient.Stop()
-
 			})
 		}
 
@@ -571,7 +578,8 @@ func ensureRightIFStateFlags(felix *infrastructure.Felix, ready uint32, addition
 }
 
 func k8sServiceForDualStack(name string, clusterIPs []string, w *workload.Workload, port,
-	tgtPort int, nodePort int32, protocol string) *v1.Service {
+	tgtPort int, nodePort int32, protocol string,
+) *v1.Service {
 	k8sProto := v1.ProtocolTCP
 	if protocol == "udp" {
 		k8sProto = v1.ProtocolUDP
