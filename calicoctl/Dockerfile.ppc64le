@@ -1,5 +1,5 @@
 ARG QEMU_IMAGE
-FROM ${QEMU_IMAGE} as qemu
+FROM ${QEMU_IMAGE} AS qemu
 
 FROM ppc64le/alpine:3.10
 # Enable non-native builds of this image on an amd64 hosts.

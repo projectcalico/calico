@@ -14,10 +14,10 @@
 ARG QEMU_IMAGE=calico/go-build:latest
 ARG BIRD_IMAGE=calico/bird:latest
 
-FROM ${QEMU_IMAGE} as qemu
-FROM ${BIRD_IMAGE} as bird
+FROM ${QEMU_IMAGE} AS qemu
+FROM ${BIRD_IMAGE} AS bird
 
-FROM arm32v7/alpine:3.18 as base
+FROM arm32v7/alpine:3.18 AS base
 MAINTAINER Marc Crébassa <aalaesar@gmail.com>
 
 ARG ARCH=armv7

@@ -1,7 +1,7 @@
 ARG QEMU_IMAGE
 # Copying qemu binary files from amd64 container.
 # latest `go-build` containers got no candidate for `s390x` architecture.
-FROM --platform=linux/amd64 ${QEMU_IMAGE} as qemu
+FROM --platform=linux/amd64 ${QEMU_IMAGE} AS qemu
 
 FROM s390x/alpine:3.10
 # Enable non-native builds of this image on an amd64 hosts.
