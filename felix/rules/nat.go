@@ -52,11 +52,13 @@ func (r *DefaultRuleRenderer) makeNATOutgoingRuleBPF(version uint8, protocol str
 func (r *DefaultRuleRenderer) makeNATOutgoingRuleIPTables(ipVersion uint8, protocol string, action iptables.Action) iptables.Rule {
 	ipConf := r.ipSetConfig(ipVersion)
 	allIPsSetName := ipConf.NameForMainIPSet(IPSetIDNATOutgoingAllPools)
+	allHostsIPsSetName := ipConf.NameForMainIPSet(IPSetIDAllHostNets)
 	masqIPsSetName := ipConf.NameForMainIPSet(IPSetIDNATOutgoingMasqPools)
 
 	match := iptables.Match().
 		SourceIPSet(masqIPsSetName).
-		NotDestIPSet(allIPsSetName)
+		NotDestIPSet(allIPsSetName).
+		NotDestIPSet(allHostsIPsSetName)
 
 	if protocol != "" {
 		match = match.Protocol(protocol)
