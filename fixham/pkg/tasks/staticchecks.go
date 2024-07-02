@@ -5,8 +5,8 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/fixham/internal/config"
-	"github.com/projectcalico/fixham/internal/docker"
+	"github.com/projectcalico/calico/fixham/internal/config"
+	"github.com/projectcalico/calico/fixham/internal/docker"
 )
 
 func Lint(runner *docker.GoBuildRunner, cfg *config.Config) {

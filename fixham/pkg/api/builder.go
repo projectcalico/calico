@@ -3,9 +3,9 @@ package api
 import (
 	"os"
 
-	"github.com/projectcalico/fixham/internal/config"
-	"github.com/projectcalico/fixham/internal/docker"
-	"github.com/projectcalico/fixham/pkg/goyek"
+	"github.com/projectcalico/calico/fixham/internal/config"
+	"github.com/projectcalico/calico/fixham/internal/docker"
+	"github.com/projectcalico/calico/fixham/pkg/goyek"
 )
 
 // Builder is a struct that represents a component of the project.
@@ -14,7 +14,7 @@ type Builder struct {
 	tasks  map[string]*goyek.GoyekTask
 }
 
-// NewBuilder returns a new Component
+// NewBuilder returns a new Builder
 func NewBuilder() *Builder {
 	return &Builder{
 		config: config.LoadConfig(),
