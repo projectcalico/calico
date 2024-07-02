@@ -3,9 +3,9 @@ package goyek
 import (
 	"github.com/goyek/goyek/v2"
 
-	"github.com/projectcalico/fixham/internal/config"
-	"github.com/projectcalico/fixham/internal/docker"
-	"github.com/projectcalico/fixham/pkg/tasks"
+	"github.com/projectcalico/calico/fixham/internal/config"
+	"github.com/projectcalico/calico/fixham/internal/docker"
+	"github.com/projectcalico/calico/fixham/pkg/tasks"
 )
 
 func Lint(runner *docker.GoBuildRunner, cfg *config.Config) *GoyekTask {

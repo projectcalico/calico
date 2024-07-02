@@ -1,8 +1,8 @@
 package main
 
 import (
-	"github.com/projectcalico/fixham/pkg/api"
-	"github.com/projectcalico/fixham/pkg/goyek"
+	"github.com/projectcalico/calico/fixham/pkg/api"
+	"github.com/projectcalico/calico/fixham/pkg/goyek"
 )
 
 func main() {

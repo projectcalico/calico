@@ -1,6 +1,6 @@
 package api
 
-import "github.com/projectcalico/fixham/pkg/goyek"
+import "github.com/projectcalico/calico/fixham/pkg/goyek"
 
 // CalicoBuilder is a component in the Calico project
 type CalicoBuilder struct {

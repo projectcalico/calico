@@ -56,7 +56,6 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/pkg/profile v1.7.0
 	github.com/projectcalico/api v0.0.0-00010101000000-000000000000
-	github.com/projectcalico/fixham v0.0.0-00010101000000-000000000000
 	github.com/projectcalico/go-json v0.0.0-20161128004156-6219dc7339ba
 	github.com/projectcalico/go-yaml-wrapper v0.0.0-20191112210931-090425220c54
 	github.com/prometheus/client_golang v1.18.0
@@ -309,7 +308,6 @@ require (
 
 replace (
 	github.com/projectcalico/api => ./api
-	github.com/projectcalico/fixham => ./fixham
 
 	k8s.io/api => k8s.io/api v0.28.9
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.28.9
