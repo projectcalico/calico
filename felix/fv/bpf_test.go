@@ -684,9 +684,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				if err != nil {
 					return 0, err
 				}
-				if mapMeta.Error != "" {
-					return 0, errors.New(mapMeta.Error)
-				}
 				return mapMeta.ID, nil
 			}
 
