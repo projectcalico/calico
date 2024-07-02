@@ -125,9 +125,9 @@ var _ = Context("_IPSets_ Tests for IPset rendering", func() {
 
 		// nftables mode is a bit slower here, so use a longer timeout
 		// until we can optimize nftables set programming.
-		timout := 30 * time.Second
+		timeout := 30 * time.Second
 		if NFTMode() {
-			timout = 90 * time.Second
+			timeout = 90 * time.Second
 		}
 		Expect(timeToCreateAll).To(BeNumerically("<", timeout),
 			"Creating IP sets succeeded but slower than expected")
