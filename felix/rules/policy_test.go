@@ -17,6 +17,7 @@ package rules_test
 import (
 	"github.com/projectcalico/calico/felix/environment"
 	. "github.com/projectcalico/calico/felix/rules"
+	"github.com/projectcalico/calico/felix/types"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
@@ -1084,7 +1085,7 @@ var _ = Describe("rule metadata tests", func() {
 	It("should include a chain name comment", func() {
 		renderer := NewRenderer(rrConfigNormal)
 		chains := renderer.PolicyToIptablesChains(
-			&proto.PolicyID{
+			&types.PolicyID{
 				Name: "long-policy-name-that-gets-hashed",
 			},
 			&proto.Policy{
@@ -1120,7 +1121,7 @@ var _ = Describe("rule metadata tests", func() {
 	It("should include a chain name comment", func() {
 		renderer := NewRenderer(rrConfigNormal)
 		inbound, outbound := renderer.ProfileToIptablesChains(
-			&proto.ProfileID{
+			&types.ProfileID{
 				Name: "long-policy-name-that-gets-hashed",
 			},
 			&proto.Profile{

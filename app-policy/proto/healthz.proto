@@ -1,6 +1,6 @@
 syntax = "proto3";
 package dikastes;
-option go_package = "proto";
+option go_package = "./proto";
 
 // Healthz reports readiness and liveness.
 service Healthz {

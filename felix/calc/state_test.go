@@ -22,6 +22,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/dataplane/mock"
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/felix/types"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
@@ -35,10 +36,10 @@ type State struct {
 	// than a map to give us a deterministic ordering of injection.
 	DatastoreState                       []model.KVPair
 	ExpectedIPSets                       map[string]set.Set[string]
-	ExpectedPolicyIDs                    set.Set[proto.PolicyID]
-	ExpectedUntrackedPolicyIDs           set.Set[proto.PolicyID]
-	ExpectedPreDNATPolicyIDs             set.Set[proto.PolicyID]
-	ExpectedProfileIDs                   set.Set[proto.ProfileID]
+	ExpectedPolicyIDs                    set.Set[types.PolicyID]
+	ExpectedUntrackedPolicyIDs           set.Set[types.PolicyID]
+	ExpectedPreDNATPolicyIDs             set.Set[types.PolicyID]
+	ExpectedProfileIDs                   set.Set[types.ProfileID]
 	ExpectedRoutes                       set.Set[proto.RouteUpdate]
 	ExpectedVTEPs                        set.Set[proto.VXLANTunnelEndpointUpdate]
 	ExpectedWireguardEndpoints           set.Set[proto.WireguardEndpointUpdate]
@@ -62,10 +63,10 @@ func NewState() State {
 	return State{
 		DatastoreState:                       []model.KVPair{},
 		ExpectedIPSets:                       make(map[string]set.Set[string]),
-		ExpectedPolicyIDs:                    set.New[proto.PolicyID](),
-		ExpectedUntrackedPolicyIDs:           set.New[proto.PolicyID](),
-		ExpectedPreDNATPolicyIDs:             set.New[proto.PolicyID](),
-		ExpectedProfileIDs:                   set.New[proto.ProfileID](),
+		ExpectedPolicyIDs:                    set.New[types.PolicyID](),
+		ExpectedUntrackedPolicyIDs:           set.New[types.PolicyID](),
+		ExpectedPreDNATPolicyIDs:             set.New[types.PolicyID](),
+		ExpectedProfileIDs:                   set.New[types.ProfileID](),
 		ExpectedRoutes:                       set.New[proto.RouteUpdate](),
 		ExpectedVTEPs:                        set.New[proto.VXLANTunnelEndpointUpdate](),
 		ExpectedWireguardEndpoints:           set.New[proto.WireguardEndpointUpdate](),
@@ -188,9 +189,9 @@ func (s State) withName(name string) (newState State) {
 	return newState
 }
 
-func (s State) withActivePolicies(ids ...proto.PolicyID) (newState State) {
+func (s State) withActivePolicies(ids ...types.PolicyID) (newState State) {
 	newState = s.Copy()
-	newState.ExpectedPolicyIDs = set.New[proto.PolicyID]()
+	newState.ExpectedPolicyIDs = set.New[types.PolicyID]()
 	for _, id := range ids {
 		newState.ExpectedPolicyIDs.Add(id)
 	}
@@ -203,27 +204,27 @@ func (s State) withTotalALPPolicies(count int) (newState State) {
 	return newState
 }
 
-func (s State) withUntrackedPolicies(ids ...proto.PolicyID) (newState State) {
+func (s State) withUntrackedPolicies(ids ...types.PolicyID) (newState State) {
 	newState = s.Copy()
-	newState.ExpectedUntrackedPolicyIDs = set.New[proto.PolicyID]()
+	newState.ExpectedUntrackedPolicyIDs = set.New[types.PolicyID]()
 	for _, id := range ids {
 		newState.ExpectedUntrackedPolicyIDs.Add(id)
 	}
 	return newState
 }
 
-func (s State) withPreDNATPolicies(ids ...proto.PolicyID) (newState State) {
+func (s State) withPreDNATPolicies(ids ...types.PolicyID) (newState State) {
 	newState = s.Copy()
-	newState.ExpectedPreDNATPolicyIDs = set.New[proto.PolicyID]()
+	newState.ExpectedPreDNATPolicyIDs = set.New[types.PolicyID]()
 	for _, id := range ids {
 		newState.ExpectedPreDNATPolicyIDs.Add(id)
 	}
 	return newState
 }
 
-func (s State) withActiveProfiles(ids ...proto.ProfileID) (newState State) {
+func (s State) withActiveProfiles(ids ...types.ProfileID) (newState State) {
 	newState = s.Copy()
-	newState.ExpectedProfileIDs = set.New[proto.ProfileID]()
+	newState.ExpectedProfileIDs = set.New[types.ProfileID]()
 	for _, id := range ids {
 		newState.ExpectedProfileIDs.Add(id)
 	}
