@@ -20,14 +20,14 @@ ARG BIRD_IMAGE=calico/bird:latest
 ARG QEMU_IMAGE
 ARG UBI_IMAGE
 
-FROM calico/bpftool:v7.4.0 as bpftool
-FROM ${QEMU_IMAGE} as qemu
-FROM ${BIRD_IMAGE} as bird
+FROM calico/bpftool:v7.4.0 AS bpftool
+FROM ${QEMU_IMAGE} AS qemu
+FROM ${BIRD_IMAGE} AS bird
 
 # Use this build stage to build iptables rpm and runit binaries.
 # We need to rebuild the iptables rpm because the prepackaged rpm does not have legacy iptables binaries.
 # We need to build runit because there aren't any rpms for it in AlmaLinux or ubi repositories.
-FROM almalinux:8 as almalinux
+FROM almalinux:8 AS almalinux
 
 # Enable non-native builds of this image on an amd64 hosts.
 # This must be the first RUN command in this file!
@@ -85,7 +85,7 @@ RUN curl -sfL https://ftp.debian.org/debian/pool/main/r/runit/runit_${RUNIT_VER}
     cd /root/admin/runit-${RUNIT_VER} && \
     package/compile
 
-FROM ${UBI_IMAGE} as ubi
+FROM ${UBI_IMAGE} AS ubi
 
 ARG GIT_VERSION
 ARG IPTABLES_VER
