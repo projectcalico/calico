@@ -25,9 +25,6 @@ WINFV_SRCFILES=$(shell find win_tests -name '*.go')
 # fail if unable to download
 CURL=curl -C - -sSf
 
-# The CNI plugin code that will be cloned and rebuilt with this repo's go-build image
-# whenever the cni-plugin image is created.
-CNI_VERSION=v1.1.1-calico+go-1.22.5
 CNI_ARTIFACTS_URL=https://github.com/projectcalico/containernetworking-plugins/releases/download
 FLANNEL_ARTIFACTS_URL=https://github.com/projectcalico/flannel-cni-plugin/releases/download
 FLANNEL_VERSION=v1.2.0-flannel2-go1.22.5
