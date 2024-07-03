@@ -39,7 +39,7 @@ func (s *actionFactory) Return() generictables.Action {
 	return ReturnAction{}
 }
 
-func (s *actionFactory) Reject(with string) generictables.Action {
+func (s *actionFactory) Reject(with generictables.RejectWith) generictables.Action {
 	return RejectAction{With: with}
 }
 
@@ -169,7 +169,7 @@ func (g DropAction) String() string {
 
 type RejectAction struct {
 	TypeReject struct{}
-	With       string
+	With       generictables.RejectWith
 }
 
 func (g RejectAction) ToFragment(features *environment.Features) string {

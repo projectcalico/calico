@@ -31,8 +31,12 @@ type ActionFactory interface {
 	DNAT(ip string, port uint16) Action
 	Masq(toPorts string) Action
 	SetConnmark(mark, mask uint32) Action
-	Reject(with string) Action
+	Reject(with RejectWith) Action
 }
+
+type RejectWith string
+
+const RejectWithTCPReset RejectWith = "tcp-reset"
 
 type Action interface {
 	ToFragment(features *environment.Features) string

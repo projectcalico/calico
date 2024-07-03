@@ -20,6 +20,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/generictables"
+	"github.com/sirupsen/logrus"
 )
 
 type namespaceable interface {
@@ -44,7 +45,15 @@ func (s *actionSet) Return() generictables.Action {
 	return ReturnAction{}
 }
 
-func (s *actionSet) Reject() generictables.Action {
+func (s *actionSet) Reject(with generictables.RejectWith) generictables.Action {
+	// Convert the RejectWith to a string valid in nftables.
+	switch with {
+	case generictables.RejectWithTCPReset:
+		return RejectAction{With: "tcp reset"}
+	}
+	if with != "" {
+		logrus.WithField("reject-with", with).Panic("Unknown reject-with value")
+	}
 	return RejectAction{}
 }
 
