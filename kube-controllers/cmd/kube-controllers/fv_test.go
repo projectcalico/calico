@@ -17,6 +17,7 @@ package main_test
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"os"
 	"os/exec"
 	"strings"
@@ -29,6 +30,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/kube-controllers/tests/testutils"
@@ -165,6 +167,105 @@ var _ = Describe("[etcd] kube-controllers health check FV tests", func() {
 				return stdoutStderr
 			}, 20*time.Second, 500*time.Millisecond).Should(ContainSubstring("Error verifying datastore"))
 		})
+	})
+})
+
+var _ = Describe("kube-controllers metrics and pprof FV tests", func() {
+	var (
+		etcd      *containers.Container
+		kubectrls *containers.Container
+		apiserver *containers.Container
+	)
+
+	BeforeEach(func() {
+		// Run etcd.
+		etcd = testutils.RunEtcd()
+
+		// Run apiserver.
+		apiserver = testutils.RunK8sApiserver(etcd.IP)
+
+		// Write out a kubeconfig file
+		kconfigfile, err := os.CreateTemp("", "ginkgo-policycontroller")
+		Expect(err).NotTo(HaveOccurred())
+		defer os.Remove(kconfigfile.Name())
+		data := testutils.BuildKubeconfig(apiserver.IP)
+		_, err = kconfigfile.Write([]byte(data))
+		Expect(err).NotTo(HaveOccurred())
+
+		// Make the kubeconfig readable by the container.
+		Expect(kconfigfile.Chmod(os.ModePerm)).NotTo(HaveOccurred())
+
+		// Create some clients.
+		client := testutils.GetCalicoClient(apiconfig.Kubernetes, "", kconfigfile.Name())
+		k8sClient, err := testutils.GetK8sClient(kconfigfile.Name())
+		Expect(err).NotTo(HaveOccurred())
+
+		// Wait for the apiserver to be available.
+		Eventually(func() error {
+			_, err := k8sClient.CoreV1().Namespaces().List(context.Background(), metav1.ListOptions{})
+			return err
+		}, 30*time.Second, 1*time.Second).Should(BeNil())
+
+		// Apply the necessary CRDs. There can sometimes be a delay between starting
+		// the API server and when CRDs are apply-able, so retry here.
+		apply := func() error {
+			out, err := apiserver.ExecOutput("kubectl", "apply", "-f", "/crds/")
+			if err != nil {
+				return fmt.Errorf("%s: %s", err, out)
+			}
+			return nil
+		}
+		By("Applying CRDs")
+		Eventually(apply, 10*time.Second).ShouldNot(HaveOccurred())
+
+		// Enable metrics and pprof ports for these tests.
+		Eventually(func() error {
+			kcfg := v3.NewKubeControllersConfiguration()
+			kcfg.Name = "default"
+			metricsPort := 9094
+			kcfg.Spec.PrometheusMetricsPort = &metricsPort
+			profilePort := int32(9095)
+			kcfg.Spec.DebugProfilePort = &profilePort
+			_, err = client.KubeControllersConfiguration().Create(context.Background(), kcfg, options.SetOptions{})
+			return err
+		}, 10*time.Second).Should(Succeed())
+
+		// Run the controller. We don't need to run any controllers for these tests, but
+		// we do need to run something, so just run the node controller.
+		kubectrls = testutils.RunPolicyController(apiconfig.Kubernetes, etcd.IP, kconfigfile.Name(), "node")
+	})
+
+	AfterEach(func() {
+		kubectrls.Stop()
+		apiserver.Stop()
+		etcd.Stop()
+	})
+
+	get := func(server, path string) error {
+		httpClient := http.Client{Timeout: 2 * time.Second}
+		url := server + path
+		resp, err := httpClient.Get(url)
+		if err != nil {
+			return err
+		}
+		defer func() { _ = resp.Body.Close() }()
+		if resp.StatusCode != 200 {
+			return fmt.Errorf("bad status code for %q: %d", url, resp.StatusCode)
+		}
+		return nil
+	}
+
+	It("should not expose pprof endpoints on the prometheus port", func() {
+		// By checking that prometheus metrics are available on the default port.
+		metricsEndpoint := fmt.Sprintf("http://%s:9094", kubectrls.IP)
+		Expect(get(metricsEndpoint, "/metrics")).To(Succeed())
+
+		// By checking that pprof endpoints are not available on the prometheus port.
+		Expect(get(metricsEndpoint, "/debug/pprof/profile?seconds=1")).NotTo(Succeed())
+
+		// By checking that pprof endpoints are available on the pprof port.
+		pprofEndpoint := fmt.Sprintf("http://%s:9095", kubectrls.IP)
+		Expect(get(pprofEndpoint, "/debug/pprof/profile?seconds=1")).To(Succeed())
 	})
 })
 

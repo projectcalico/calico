@@ -44,6 +44,10 @@ func (s *actionSet) Return() generictables.Action {
 	return ReturnAction{}
 }
 
+func (s *actionSet) Reject() generictables.Action {
+	return RejectAction{}
+}
+
 func (s *actionSet) SetMaskedMark(mark, mask uint32) generictables.Action {
 	return SetMaskedMarkAction{
 		Mark: mark,
@@ -195,9 +199,13 @@ func (g DropAction) String() string {
 
 type RejectAction struct {
 	TypeReject struct{}
+	With       string
 }
 
 func (g RejectAction) ToFragment(features *environment.Features) string {
+	if g.With != "" {
+		return fmt.Sprintf("reject with %s", g.With)
+	}
 	return "reject"
 }
 

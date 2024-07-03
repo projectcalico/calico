@@ -31,6 +31,7 @@ type ActionFactory interface {
 	DNAT(ip string, port uint16) Action
 	Masq(toPorts string) Action
 	SetConnmark(mark, mask uint32) Action
+	Reject(with string) Action
 }
 
 type Action interface {

@@ -22,69 +22,73 @@ import (
 )
 
 func Actions() generictables.ActionFactory {
-	return &actionSet{}
+	return &actionFactory{}
 }
 
-type actionSet struct{}
+type actionFactory struct{}
 
-func (s *actionSet) Allow() generictables.Action {
+func (s *actionFactory) Allow() generictables.Action {
 	return AcceptAction{}
 }
 
-func (s *actionSet) GoTo(target string) generictables.Action {
+func (s *actionFactory) GoTo(target string) generictables.Action {
 	return GotoAction{Target: target}
 }
 
-func (s *actionSet) Return() generictables.Action {
+func (s *actionFactory) Return() generictables.Action {
 	return ReturnAction{}
 }
 
-func (s *actionSet) SetMaskedMark(mark, mask uint32) generictables.Action {
+func (s *actionFactory) Reject(with string) generictables.Action {
+	return RejectAction{With: with}
+}
+
+func (s *actionFactory) SetMaskedMark(mark, mask uint32) generictables.Action {
 	return SetMaskedMarkAction{
 		Mark: mark,
 		Mask: mask,
 	}
 }
 
-func (s *actionSet) SetMark(mark uint32) generictables.Action {
+func (s *actionFactory) SetMark(mark uint32) generictables.Action {
 	return SetMarkAction{
 		Mark: mark,
 	}
 }
 
-func (s *actionSet) ClearMark(mark uint32) generictables.Action {
+func (s *actionFactory) ClearMark(mark uint32) generictables.Action {
 	return ClearMarkAction{Mark: mark}
 }
 
-func (s *actionSet) Jump(target string) generictables.Action {
+func (s *actionFactory) Jump(target string) generictables.Action {
 	return JumpAction{Target: target}
 }
 
-func (s *actionSet) NoTrack() generictables.Action {
+func (s *actionFactory) NoTrack() generictables.Action {
 	return NoTrackAction{}
 }
 
-func (s *actionSet) Log(prefix string) generictables.Action {
+func (s *actionFactory) Log(prefix string) generictables.Action {
 	return LogAction{Prefix: prefix}
 }
 
-func (s *actionSet) SNAT(ip string) generictables.Action {
+func (s *actionFactory) SNAT(ip string) generictables.Action {
 	return SNATAction{ToAddr: ip}
 }
 
-func (s *actionSet) DNAT(ip string, port uint16) generictables.Action {
+func (s *actionFactory) DNAT(ip string, port uint16) generictables.Action {
 	return DNATAction{DestAddr: ip, DestPort: port}
 }
 
-func (s *actionSet) Masq(toPorts string) generictables.Action {
+func (s *actionFactory) Masq(toPorts string) generictables.Action {
 	return MasqAction{ToPorts: toPorts}
 }
 
-func (s *actionSet) Drop() generictables.Action {
+func (s *actionFactory) Drop() generictables.Action {
 	return DropAction{}
 }
 
-func (s *actionSet) SetConnmark(mark, mask uint32) generictables.Action {
+func (s *actionFactory) SetConnmark(mark, mask uint32) generictables.Action {
 	return SetConnMarkAction{
 		Mark: mark,
 		Mask: mask,
@@ -165,9 +169,13 @@ func (g DropAction) String() string {
 
 type RejectAction struct {
 	TypeReject struct{}
+	With       string
 }
 
 func (g RejectAction) ToFragment(features *environment.Features) string {
+	if g.With != "" {
+		return fmt.Sprintf("--jump REJECT --reject-with %s", g.With)
+	}
 	return "--jump REJECT"
 }
 

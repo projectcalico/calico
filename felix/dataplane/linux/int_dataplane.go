@@ -357,8 +357,8 @@ type InternalDataplane struct {
 	linkUpdateBatchSize  int
 	addrsUpdateBatchSize int
 
-	actionSet generictables.ActionFactory
-	newMatch  func() generictables.MatchCriteria
+	actions  generictables.ActionFactory
+	newMatch func() generictables.MatchCriteria
 }
 
 const (
@@ -417,7 +417,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		config:         config,
 		applyThrottle:  throttle.New(10),
 		loopSummarizer: logutils.NewSummarizer("dataplane reconciliation loops"),
-		actionSet:      actionSet,
+		actions:        actionSet,
 		newMatch:       newMatchFn,
 	}
 	dp.applyThrottle.Refill() // Allow the first apply() immediately.
@@ -1509,7 +1509,7 @@ func (d *InternalDataplane) bpfMarkPreestablishedFlowsRules() []generictables.Ru
 	return []generictables.Rule{{
 		Match:   d.newMatch().ConntrackState("ESTABLISHED,RELATED"),
 		Comment: []string{"Mark pre-established flows."},
-		Action: d.actionSet.SetMaskedMark(
+		Action: d.actions.SetMaskedMark(
 			tcdefs.MarkLinuxConntrackEstablished,
 			tcdefs.MarkLinuxConntrackEstablishedMask,
 		),
@@ -1531,7 +1531,7 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 				// by the program at both ingress and egress.
 				Comment: []string{"Pre-approved by BPF programs."},
 				Match:   d.newMatch().MarkMatchesWithMask(tcdefs.MarkSeenBypass, tcdefs.MarkSeenBypassMask),
-				Action:  d.actionSet.Allow(),
+				Action:  d.actions.Allow(),
 			},
 		}
 
@@ -1545,11 +1545,18 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 					MarkMatchesWithMask(tcdefs.MarkSeenFallThrough, tcdefs.MarkSeenFallThroughMask).
 					ConntrackState("ESTABLISHED,RELATED"),
 				Comment: []string{"Accept packets from flows that pre-date BPF."},
-				Action:  d.actionSet.Allow(),
+				Action:  d.actions.Allow(),
+			},
+			generictables.Rule{
+				Match: d.newMatch().
+					MarkMatchesWithMask(tcdefs.MarkSeenFallThrough, tcdefs.MarkSeenFallThroughMask).
+					Protocol("tcp"),
+				Comment: []string{"REJECT/rst packets from unknown TCP flows."},
+				Action:  d.actions.Reject("tcp-reset"),
 			},
 			generictables.Rule{
 				Match:   d.newMatch().MarkMatchesWithMask(tcdefs.MarkSeenFallThrough, tcdefs.MarkSeenFallThroughMask),
-				Comment: []string{fmt.Sprintf("%s packets from unknown flows.", d.ruleRenderer.IptablesFilterDenyAction())},
+				Comment: []string{fmt.Sprintf("%s packets from unknown non-TCP flows.", d.ruleRenderer.IptablesFilterDenyAction())},
 				Action:  d.ruleRenderer.IptablesFilterDenyAction(),
 			},
 		)
@@ -1572,7 +1579,7 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 				// RETURN would be a no-op since there's nothing to RETURN from.
 				inputRules = append(inputRules, generictables.Rule{
 					Match:  d.newMatch().InInterface(prefix+wildcard).MarkMatchesWithMask(tcdefs.MarkSeen, tcdefs.MarkSeenMask),
-					Action: d.actionSet.Allow(),
+					Action: d.actions.Allow(),
 				})
 			}
 
@@ -1588,7 +1595,7 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 			// SEEN traffic, so it was policed and accepted at a HEP. If the default INPUT
 			// chain policy was DROP, it would get dropped now, therefore an explicit accept
 			// is needed.
-			inputRules = append(inputRules, d.ruleRenderer.FilterInputChainAllowWG(t.IPVersion(), rulesConfig, d.actionSet.Allow())...)
+			inputRules = append(inputRules, d.ruleRenderer.FilterInputChainAllowWG(t.IPVersion(), rulesConfig, d.actions.Allow())...)
 		}
 
 		if t.IPVersion() == 6 {
@@ -1620,7 +1627,7 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 				fwdRules = append(fwdRules,
 					generictables.Rule{
 						Match:   d.newMatch().OutInterface(prefix + wildcard),
-						Action:  d.actionSet.Jump(rules.ChainToWorkloadDispatch),
+						Action:  d.actions.Jump(rules.ChainToWorkloadDispatch),
 						Comment: []string{"To workload, check workload is known."},
 					},
 				)
@@ -1634,7 +1641,7 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 				fwdRules = append(fwdRules,
 					generictables.Rule{
 						Match:   d.newMatch().InInterface(prefix + wildcard),
-						Action:  d.actionSet.Allow(),
+						Action:  d.actions.Allow(),
 						Comment: []string{"To workload, mark has already been verified."},
 					},
 				)
@@ -1642,7 +1649,7 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 			fwdRules = append(fwdRules,
 				generictables.Rule{
 					Match:   d.newMatch().InInterface(bpfOutDev),
-					Action:  d.actionSet.Allow(),
+					Action:  d.actions.Allow(),
 					Comment: []string{"From ", bpfOutDev, " device, mark verified, accept."},
 				},
 			)
@@ -1657,7 +1664,7 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 		t.UpdateChains(d.ruleRenderer.StaticNATPostroutingChains(t.IPVersion()))
 		t.InsertOrAppendRules("POSTROUTING", []generictables.Rule{{
 			Match:  d.newMatch(),
-			Action: d.actionSet.Jump(rules.ChainNATPostrouting),
+			Action: d.actions.Jump(rules.ChainNATPostrouting),
 		}})
 	}
 
@@ -1667,11 +1674,11 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 		))
 		t.InsertOrAppendRules("PREROUTING", []generictables.Rule{{
 			Match:  d.newMatch(),
-			Action: d.actionSet.Jump(rules.ChainRawPrerouting),
+			Action: d.actions.Jump(rules.ChainRawPrerouting),
 		}})
 		t.InsertOrAppendRules("OUTPUT", []generictables.Rule{{
 			Match:  d.newMatch(),
-			Action: d.actionSet.Jump(rules.ChainRawOutput),
+			Action: d.actions.Jump(rules.ChainRawOutput),
 		}})
 	}
 
@@ -1684,7 +1691,7 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 					tcdefs.MarkSeenMask|mark,
 				),
 				Comment: []string{"Mark connections with ExtToServiceConnmark"},
-				Action:  d.actionSet.SetConnmark(mark, mark),
+				Action:  d.actions.SetConnmark(mark, mark),
 			}})
 		}
 	}
@@ -1732,11 +1739,11 @@ func (d *InternalDataplane) setUpIptablesNormal() {
 		t.UpdateChains(rawChains)
 		t.InsertOrAppendRules("PREROUTING", []generictables.Rule{{
 			Match:  d.newMatch(),
-			Action: d.actionSet.Jump(rules.ChainRawPrerouting),
+			Action: d.actions.Jump(rules.ChainRawPrerouting),
 		}})
 		t.InsertOrAppendRules("OUTPUT", []generictables.Rule{{
 			Match:  d.newMatch(),
-			Action: d.actionSet.Jump(rules.ChainRawOutput),
+			Action: d.actions.Jump(rules.ChainRawOutput),
 		}})
 	}
 	for _, t := range d.filterTables {
@@ -1744,15 +1751,15 @@ func (d *InternalDataplane) setUpIptablesNormal() {
 		t.UpdateChains(filterChains)
 		t.InsertOrAppendRules("FORWARD", []generictables.Rule{{
 			Match:  d.newMatch(),
-			Action: d.actionSet.Jump(rules.ChainFilterForward),
+			Action: d.actions.Jump(rules.ChainFilterForward),
 		}})
 		t.InsertOrAppendRules("INPUT", []generictables.Rule{{
 			Match:  d.newMatch(),
-			Action: d.actionSet.Jump(rules.ChainFilterInput),
+			Action: d.actions.Jump(rules.ChainFilterInput),
 		}})
 		t.InsertOrAppendRules("OUTPUT", []generictables.Rule{{
 			Match:  d.newMatch(),
-			Action: d.actionSet.Jump(rules.ChainFilterOutput),
+			Action: d.actions.Jump(rules.ChainFilterOutput),
 		}})
 
 		// Include rules which should be appended to the filter table forward chain.
@@ -1762,26 +1769,26 @@ func (d *InternalDataplane) setUpIptablesNormal() {
 		t.UpdateChains(d.ruleRenderer.StaticNATTableChains(t.IPVersion()))
 		t.InsertOrAppendRules("PREROUTING", []generictables.Rule{{
 			Match:  d.newMatch(),
-			Action: d.actionSet.Jump(rules.ChainNATPrerouting),
+			Action: d.actions.Jump(rules.ChainNATPrerouting),
 		}})
 		t.InsertOrAppendRules("POSTROUTING", []generictables.Rule{{
 			Match:  d.newMatch(),
-			Action: d.actionSet.Jump(rules.ChainNATPostrouting),
+			Action: d.actions.Jump(rules.ChainNATPostrouting),
 		}})
 		t.InsertOrAppendRules("OUTPUT", []generictables.Rule{{
 			Match:  d.newMatch(),
-			Action: d.actionSet.Jump(rules.ChainNATOutput),
+			Action: d.actions.Jump(rules.ChainNATOutput),
 		}})
 	}
 	for _, t := range d.mangleTables {
 		t.UpdateChains(d.ruleRenderer.StaticMangleTableChains(t.IPVersion()))
 		t.InsertOrAppendRules("PREROUTING", []generictables.Rule{{
 			Match:  d.newMatch(),
-			Action: d.actionSet.Jump(rules.ChainManglePrerouting),
+			Action: d.actions.Jump(rules.ChainManglePrerouting),
 		}})
 		t.InsertOrAppendRules("POSTROUTING", []generictables.Rule{{
 			Match:  d.newMatch(),
-			Action: d.actionSet.Jump(rules.ChainManglePostrouting),
+			Action: d.actions.Jump(rules.ChainManglePostrouting),
 		}})
 	}
 	if d.xdpState != nil {
