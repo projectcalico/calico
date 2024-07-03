@@ -125,6 +125,9 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 		// Tell the wrapper to set the core file name pattern so we can find the dump.
 		"SET_CORE_PATTERN": "true",
 
+		"HTTP2_PING_TIMEOUT_SECONDS":      "1",
+		"HTTP2_READ_IDLE_TIMEOUT_SECONDS": "1",
+
 		"FELIX_LOGSEVERITYSCREEN":        options.FelixLogSeverity,
 		"FELIX_LogDebugFilenameRegex":    options.FelixDebugFilenameRegex,
 		"FELIX_PROMETHEUSMETRICSENABLED": "true",
