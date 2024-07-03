@@ -251,6 +251,10 @@ func (m MatchCriteria) DestPorts(ports ...uint16) MatchCriteria {
 	return append(m, fmt.Sprintf("-m multiport --destination-ports %s", portsString))
 }
 
+func (m MatchCriteria) DestPort(port uint16) MatchCriteria {
+	return append(m, fmt.Sprintf("-dport %v", port))
+}
+
 func (m MatchCriteria) NotDestPorts(ports ...uint16) MatchCriteria {
 	portsString := PortsToMultiport(ports)
 	return append(m, fmt.Sprintf("-m multiport ! --destination-ports %s", portsString))
