@@ -478,6 +478,16 @@ blocks:
           - make check-wireguard
           - ../.semaphore/run-and-monitor fv-${SEMAPHORE_JOB_INDEX}.log make fv-no-prereqs FV_BATCHES_TO_RUN="${SEMAPHORE_JOB_INDEX}" FV_NUM_BATCHES=${SEMAPHORE_JOB_COUNT}
         parallelism: 3
+      - name: nftables FV Test matrix
+        execution_time_limit:
+          minutes: 120
+        env_vars:
+        - name: FELIX_FV_NFTABLES
+          value: "Enabled"
+        commands:
+          - make check-wireguard
+          - ../.semaphore/run-and-monitor fv-${SEMAPHORE_JOB_INDEX}.log make fv-no-prereqs FV_BATCHES_TO_RUN="${SEMAPHORE_JOB_INDEX}" FV_NUM_BATCHES=${SEMAPHORE_JOB_COUNT}
+        parallelism: 3
     epilogue:
       always:
         commands:

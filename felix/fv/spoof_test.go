@@ -42,8 +42,13 @@ var _ = Describe("Spoof tests", func() {
 	teardownInfra := func() {
 		if CurrentGinkgoTestDescription().Failed {
 			for _, felix := range tc.Felixes {
-				felix.Exec("iptables-save", "-c")
-				felix.Exec("ip6tables-save", "-c")
+				if NFTMode() {
+					logNFTDiags(felix)
+				} else {
+
+					felix.Exec("iptables-save", "-c")
+					felix.Exec("ip6tables-save", "-c")
+				}
 				felix.Exec("ipset", "list")
 				felix.Exec("ip", "r")
 				felix.Exec("ip", "-6", "r")
