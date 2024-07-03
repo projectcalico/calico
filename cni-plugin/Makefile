@@ -57,9 +57,8 @@ clean: clean-windows
 	find . -name '.*.published*' -type f -delete
 	rm -rf $(BIN) bin $(DEPLOY_CONTAINER_MARKER) .go-pkg-cache pkg/install/install.test
 	rm -f *.created
-	rm -rf bin $(DEPLOY_CONTAINER_MARKER) pkg/install/install.test
-	rm -rf config/ dist/
-	-docker image rm -f $$(docker images $(CNI_PLUGIN_IMAGE) -a -q)
+	rm -rf config/
+	rm -rf dist/
 	rm -rf containernetworking-plugins .containernetworking-plugins-*
 
 clean-windows: clean-windows-builder
