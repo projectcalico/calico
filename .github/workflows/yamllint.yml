@@ -9,7 +9,7 @@
           - id: yaml-lint
             uses: ibiqlik/action-yamllint@v3
             with:
-              file_or_dir: .semaphore/**/*.yml
+              file_or_dir: .semaphore/**/*.yml .semaphore/**/*.yml.tpl
               config_file: .semaphore/.yamllint.yml
     
           - run: echo ${{ steps.yaml-lint.outputs.logfile }}
