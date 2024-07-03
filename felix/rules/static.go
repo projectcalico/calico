@@ -1293,6 +1293,17 @@ func (r *DefaultRuleRenderer) StaticRawPreroutingChain(ipVersion uint8) *generic
 		})
 	}
 
+	// Ensure VXLAN UDP Flows are not tracked in conntrack.
+	// VXLAN uses different source ports in each direction so
+	// tracking results in unreplied flows.
+	if r.VXLANEnabled || r.VXLANEnabledV6 {
+		log.Debug("Adding VXLAN NOTRACK iptables rule to PREROUTING chain")
+		rules = append(rules, generictables.Rule{
+			Match:  r.NewMatch().Protocol("udp").DestPort(uint16(r.VXLANPort)),
+			Action: r.NoTrack(),
+		})
+	}
+
 	// Set a mark on the packet if it's from a workload interface.
 	markFromWorkload := r.IptablesMarkScratch0
 	for _, ifacePrefix := range r.WorkloadIfacePrefixes {
@@ -1429,6 +1440,16 @@ func (r *DefaultRuleRenderer) StaticRawOutputChain(tcBypassMark uint32) *generic
 		// return here without the mark bit set if the interface wasn't one that
 		// we're policing.
 	}
+
+	// Ensure VXLAN UDP Flows are not tracked in conntrack.
+	if r.VXLANEnabled || r.VXLANEnabledV6 {
+		log.Debug("Adding VXLAN NOTRACK iptables rule")
+		rules = append(rules, generictables.Rule{
+			Match:  r.NewMatch().Protocol("udp").DestPort(uint16(r.VXLANPort)),
+			Action: r.NoTrack(),
+		})
+	}
+
 	if tcBypassMark == 0 {
 		rules = append(rules, []generictables.Rule{
 			{
