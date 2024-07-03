@@ -129,7 +129,10 @@ RUN microdnf install \
     # Needed for runit startup script
     which \
     # Needed for the cleanup script
-    findutils
+    findutils \
+    # nftables
+    nftables
+
 
 # Since the ubi repos do not contain all the packages we need (they're missing conntrack-tools),
 # we're using AlmaLinux repos for missing packages.

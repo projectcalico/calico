@@ -2175,8 +2175,10 @@ type ipsetsSource interface {
 	GetIPSetMembers(setID string) (set.Set[string], error)
 }
 
-var _ ipsetsSource = &common.IPSetsManager{}
-var _ ipsetsSource = &nilIPSetsSource{}
+var (
+	_ ipsetsSource = &common.IPSetsManager{}
+	_ ipsetsSource = &nilIPSetsSource{}
+)
 
 type xdpMemberCache struct {
 	family                 bpf.IPFamily
@@ -2294,5 +2296,7 @@ type memberIter interface {
 	Len() int
 }
 
-var _ memberIter = &memberIterSet{}
-var _ memberIter = &memberIterMap{}
+var (
+	_ memberIter = &memberIterSet{}
+	_ memberIter = &memberIterMap{}
+)
