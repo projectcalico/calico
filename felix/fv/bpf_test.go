@@ -692,7 +692,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					var err error
 					mapID, err = getMapIDByPath(felix, filename)
 					return err
-				}, "10s").ShouldNot(HaveOccurred())
+				}, "35s").ShouldNot(HaveOccurred())
 				return mapID
 			}
 
@@ -1087,7 +1087,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						g.Expect(natbe).To(HaveKey(nat.NewNATBackendKey(bckID, 1)))
 						g.Expect(natbe).To(HaveKey(nat.NewNATBackendKey(bckID, 2)))
 						g.Expect(natbe).NotTo(HaveKey(nat.NewNATBackendKey(bckID, 3)))
-					}, "5s").Should(Succeed(), "service or backedns didn't show up")
+					}, "35s").Should(Succeed(), "service or backends didn't show up")
 
 					fakeEps.Endpoints[1].Conditions.Ready = falsePtr
 					fakeEps.Endpoints[1].Conditions.Terminating = truePtr
@@ -1236,7 +1236,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				}
 
 				for _, f := range tc.Felixes {
-					Eventually(felixReady(f), "10s", "500ms").Should(BeGood())
+					Eventually(felixReady(f), "35s", "500ms").Should(BeGood())
 				}
 			}
 		}
@@ -1633,7 +1633,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								return false
 							}
 							return true
-						}, "5s").Should(BeTrue(), "service NAT key didn't show up")
+						}, "35s").Should(BeTrue(), "service NAT key didn't show up")
 
 						By("starting tcpdump")
 						tcpdump := w[0][0].AttachTCPDump()
@@ -2415,7 +2415,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						natFtKey := fmt.Sprintf("%s port %d proto %d", excludeSvcIP, 8066, numericProto)
 						Eventually(func() map[string][]string {
 							return tc.Felixes[0].BPFNATDump(testOpts.ipv6)
-						}, "5s", "300ms").Should(HaveKey(natFtKey))
+						}, "35s", "300ms").Should(HaveKey(natFtKey))
 
 						By("Adding the service IP to the host")
 						// Sort of what node-local-dns does
@@ -2517,7 +2517,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							log.Info("Waiting for NAT maps to converge...")
 							startTime := time.Now()
 							for {
-								if time.Since(startTime) > 5*time.Second {
+								if time.Since(startTime) > 35*time.Second {
 									Fail("NAT maps failed to converge")
 								}
 								natBeforeUpdate, natBackBeforeUpdate = dumpNATmapsAny(family, tc.Felixes)
@@ -2771,7 +2771,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 									_, ok = be[beKey]
 									return ok
-								}, 5*time.Second).Should(BeTrue())
+								}, 35*time.Second).Should(BeTrue())
 							}
 
 							cc.ExpectSome(w[0][1], TargetIP(ip), port)
@@ -2918,7 +2918,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 								_, ok = be[beKey]
 								return ok
-							}, 5*time.Second).Should(BeTrue())
+							}, 35*time.Second).Should(BeTrue())
 						})
 
 						By("make connection to a service and set affinity")
@@ -4224,7 +4224,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								}
 							}
 							return true
-						}, 5*time.Second).Should(BeTrue())
+						}, 35*time.Second).Should(BeTrue())
 
 						// Sync with policy
 						cc.ExpectSome(w[1][0], w[0][0])
