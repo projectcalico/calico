@@ -49,4 +49,4 @@ WINDOWS_VERSIONS ?= 1809 ltsc2022
 
 # The CNI plugin code that will be cloned and rebuilt with this repo's go-build image
 # whenever the cni-plugin image is created.
-CNI_VERSION=v1.1.1-calico+go-1.22.3
+CNI_VERSION=v1.1.1-calico+go-1.22.5
