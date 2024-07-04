@@ -330,9 +330,11 @@ var _ = Describe("Kubernetes CNI tests", func() {
 
 			// Assume the first IP is the IPv4 address
 			Expect(contAddresses[0].IP.String()).Should(Equal(ip))
+			_, defaultCIDR, _ := net.ParseCIDR("0.0.0.0/0")
 			Expect(contRoutes).Should(SatisfyAll(
 				ContainElement(netlink.Route{
 					LinkIndex: contVeth.Attrs().Index,
+					Dst:       defaultCIDR,
 					Gw:        net.IPv4(169, 254, 1, 1).To4(),
 					Protocol:  syscall.RTPROT_BOOT,
 					Table:     syscall.RT_TABLE_MAIN,
