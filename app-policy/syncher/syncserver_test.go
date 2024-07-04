@@ -22,14 +22,14 @@ import (
 	"testing"
 	"time"
 
+	envoyapi "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	. "github.com/onsi/gomega"
+	"google.golang.org/grpc"
 
 	"github.com/projectcalico/calico/app-policy/policystore"
 	"github.com/projectcalico/calico/app-policy/uds"
 	"github.com/projectcalico/calico/felix/proto"
-
-	envoyapi "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
-	"google.golang.org/grpc"
+	"github.com/projectcalico/calico/felix/types"
 )
 
 const addr1Ip = "3.4.6.8"
@@ -294,19 +294,21 @@ func TestActiveProfileUpdateNonExist(t *testing.T) {
 		Profile: profile1,
 	}
 	processActiveProfileUpdate(store, update)
-	Expect(store.ProfileByID[id]).To(BeIdenticalTo(profile1))
+	tid := types.ProtoToProfileID(&id)
+	Expect(store.ProfileByID[tid]).To(BeIdenticalTo(profile1))
 }
 
 // ActiveProfileUpdate with an existing ID
 func TestActiveProfileUpdateExist(t *testing.T) {
 	RegisterTestingT(t)
 
-	id := proto.ProfileID{Name: "test_id"}
+	id := types.ProfileID{Name: "test_id"}
 	store := policystore.NewPolicyStore()
 	store.ProfileByID[id] = profile2
 
+	pid := types.ProfileIDToProto(id)
 	update := &proto.ActiveProfileUpdate{
-		Id:      &id,
+		Id:      pid,
 		Profile: profile1,
 	}
 	processActiveProfileUpdate(store, update)
@@ -351,18 +353,20 @@ func TestActiveProfileRemoveNonExist(t *testing.T) {
 
 	update := &proto.ActiveProfileRemove{Id: &id}
 	processActiveProfileRemove(store, update)
-	Expect(store.ProfileByID[id]).To(BeNil())
+	tid := types.ProtoToProfileID(&id)
+	Expect(store.ProfileByID[tid]).To(BeNil())
 }
 
 // ActiveProfileRemove with existing id
 func TestActiveProfileRemoveExist(t *testing.T) {
 	RegisterTestingT(t)
 
-	id := proto.ProfileID{Name: "test_id"}
+	id := types.ProfileID{Name: "test_id"}
 	store := policystore.NewPolicyStore()
 	store.ProfileByID[id] = profile1
 
-	update := &proto.ActiveProfileRemove{Id: &id}
+	pid := types.ProfileIDToProto(id)
+	update := &proto.ActiveProfileRemove{Id: pid}
 	processActiveProfileRemove(store, update)
 	Expect(store.ProfileByID[id]).To(BeNil())
 }
@@ -403,19 +407,21 @@ func TestActivePolicyUpdateNonExist(t *testing.T) {
 		Policy: policy1,
 	}
 	processActivePolicyUpdate(store, update)
-	Expect(store.PolicyByID[id]).To(BeIdenticalTo(policy1))
+	tid := types.ProtoToPolicyID(&id)
+	Expect(store.PolicyByID[tid]).To(BeIdenticalTo(policy1))
 }
 
 // ActivePolicyUpdate for an existing id
 func TestActivePolicyUpdateExist(t *testing.T) {
 	RegisterTestingT(t)
 
-	id := proto.PolicyID{Tier: "test_tier", Name: "test_id"}
+	id := types.PolicyID{Tier: "test_tier", Name: "test_id"}
 	store := policystore.NewPolicyStore()
 	store.PolicyByID[id] = policy2
 
+	pid := types.PolicyIDToProto(id)
 	update := &proto.ActivePolicyUpdate{
-		Id:     &id,
+		Id:     pid,
 		Policy: policy1,
 	}
 	processActivePolicyUpdate(store, update)
@@ -460,18 +466,20 @@ func TestActivePolicyRemoveNonExist(t *testing.T) {
 
 	update := &proto.ActivePolicyRemove{Id: &id}
 	processActivePolicyRemove(store, update)
-	Expect(store.PolicyByID[id]).To(BeNil())
+	tid := types.ProtoToPolicyID(&id)
+	Expect(store.PolicyByID[tid]).To(BeNil())
 }
 
 // ActivePolicyRemove with existing id
 func TestActivePolicyRemoveExist(t *testing.T) {
 	RegisterTestingT(t)
 
-	id := proto.PolicyID{Tier: "test_tier", Name: "test_id"}
+	id := types.PolicyID{Tier: "test_tier", Name: "test_id"}
 	store := policystore.NewPolicyStore()
 	store.PolicyByID[id] = policy1
 
-	update := &proto.ActivePolicyRemove{Id: &id}
+	pid := types.PolicyIDToProto(id)
+	update := &proto.ActivePolicyRemove{Id: pid}
 	processActivePolicyRemove(store, update)
 	Expect(store.PolicyByID[id]).To(BeNil())
 }
@@ -558,8 +566,8 @@ func TestServiceAccountUpdateDispatch(t *testing.T) {
 	update := &proto.ToDataplane{Payload: &proto.ToDataplane_ServiceAccountUpdate{ServiceAccountUpdate: serviceAccount1}}
 
 	Expect(func() { processUpdate(store, inSync, update) }).ToNot(Panic())
-	Expect(store.ServiceAccountByID).To(Equal(map[proto.ServiceAccountID]*proto.ServiceAccountUpdate{
-		*serviceAccount1.Id: serviceAccount1,
+	Expect(store.ServiceAccountByID).To(Equal(map[types.ServiceAccountID]*proto.ServiceAccountUpdate{
+		types.ProtoToServiceAccountID(serviceAccount1.GetId()): serviceAccount1,
 	}))
 }
 
@@ -573,13 +581,14 @@ func TestServiceAccountUpdateNilId(t *testing.T) {
 func TestServiceAccountRemoveDispatch(t *testing.T) {
 	RegisterTestingT(t)
 	store := policystore.NewPolicyStore()
-	store.ServiceAccountByID[*serviceAccount1.Id] = serviceAccount1
+	id := types.ProtoToServiceAccountID(serviceAccount1.GetId())
+	store.ServiceAccountByID[id] = serviceAccount1
 	inSync := make(chan struct{})
 
 	remove := &proto.ToDataplane{Payload: &proto.ToDataplane_ServiceAccountRemove{
 		ServiceAccountRemove: &proto.ServiceAccountRemove{Id: serviceAccount1.Id}}}
 	Expect(func() { processUpdate(store, inSync, remove) }).ToNot(Panic())
-	Expect(store.ServiceAccountByID).To(Equal(map[proto.ServiceAccountID]*proto.ServiceAccountUpdate{}))
+	Expect(store.ServiceAccountByID).To(Equal(map[types.ServiceAccountID]*proto.ServiceAccountUpdate{}))
 }
 
 func TestServiceAccountRemoveNilId(t *testing.T) {
@@ -596,8 +605,8 @@ func TestNamespaceUpdateDispatch(t *testing.T) {
 
 	update := &proto.ToDataplane{Payload: &proto.ToDataplane_NamespaceUpdate{NamespaceUpdate: namespace1}}
 	Expect(func() { processUpdate(store, inSync, update) }).ToNot(Panic())
-	Expect(store.NamespaceByID).To(Equal(map[proto.NamespaceID]*proto.NamespaceUpdate{
-		*namespace1.Id: namespace1,
+	Expect(store.NamespaceByID).To(Equal(map[types.NamespaceID]*proto.NamespaceUpdate{
+		types.ProtoToNamespaceID(namespace1.GetId()): namespace1,
 	}))
 }
 
@@ -611,13 +620,14 @@ func TestNamespaceUpdateNilId(t *testing.T) {
 func TestNamespaceRemoveDispatch(t *testing.T) {
 	RegisterTestingT(t)
 	store := policystore.NewPolicyStore()
-	store.NamespaceByID[*namespace1.Id] = namespace1
+	id := types.ProtoToNamespaceID(namespace1.GetId())
+	store.NamespaceByID[id] = namespace1
 	inSync := make(chan struct{})
 
 	remove := &proto.ToDataplane{Payload: &proto.ToDataplane_NamespaceRemove{
 		NamespaceRemove: &proto.NamespaceRemove{Id: namespace1.Id}}}
 	Expect(func() { processUpdate(store, inSync, remove) }).ToNot(Panic())
-	Expect(store.NamespaceByID).To(Equal(map[proto.NamespaceID]*proto.NamespaceUpdate{}))
+	Expect(store.NamespaceByID).To(Equal(map[types.NamespaceID]*proto.NamespaceUpdate{}))
 }
 
 func TestNamespaceRemoveNilId(t *testing.T) {
@@ -772,6 +782,7 @@ func TestSyncServerCancelBeforeInSync(t *testing.T) {
 }
 
 type testSyncServer struct {
+	proto.UnimplementedPolicySyncServer
 	context    context.Context
 	updates    chan proto.ToDataplane
 	path       string
