@@ -208,13 +208,13 @@ function do_felix {
     rm -f Makefile
     # Override dpkg's default file exclusions, otherwise our binaries won't get included (and some
     # generated files will).
-    # Build rpm first and then deb because we need to patchelf bin/calico-felix for Debian.
+    # Build deb first and then rpm because we need to patchelf bin/calico-felix for RHEL.
     PKG_NAME=felix \
 	    NAME=Felix \
 	    RPM_TAR_ARGS='--exclude=bin/calico-felix-* --exclude=.gitignore --exclude=*.d --exclude=*.ll --exclude=.go-pkg-cache --exclude=vendor --exclude=report' \
 	    DPKG_EXCL="-I'bin/calico-felix-*' -I.git -I.gitignore -I'*.d' -I'*.ll' -I.go-pkg-cache -I.git -Ivendor -Ireport" \
 	    DEB_EPOCH=2: \
-	    ${rootdir}/hack/release/packaging/utils/make-packages.sh rpm deb
+	    ${rootdir}/hack/release/packaging/utils/make-packages.sh deb rpm
     git checkout Makefile
 
 
