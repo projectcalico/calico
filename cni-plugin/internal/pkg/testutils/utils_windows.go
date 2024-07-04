@@ -134,7 +134,7 @@ func createContainerUsingContainerd(containerId string) (string, string, error) 
 	// Create the container with ctr.exe that is shipped with containerd.
 	// When 'ctr run' is invoked, a running container is started with no
 	// networking.
-	image := "k8s.gcr.io/pause:3.5"
+	image := "k8s.gcr.io/pause:3.9"
 
 	command := fmt.Sprintf(`& 'C:\Program Files\containerd\bin\ctr.exe' images pull %v`, image)
 	cmd := exec.Command("powershell.exe", command)
