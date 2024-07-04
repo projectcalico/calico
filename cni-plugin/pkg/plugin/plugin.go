@@ -38,7 +38,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 
-	"github.com/projectcalico/calico/libcalico-go/lib/seedrng"
 	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -691,9 +690,6 @@ func cmdDummyCheck(args *skel.CmdArgs) (err error) {
 }
 
 func Main(version string) {
-	// Make sure the RNG is seeded.
-	seedrng.EnsureSeeded()
-
 	// Set up logging formatting.
 	logrus.SetFormatter(&logutils.Formatter{})
 
@@ -753,7 +749,12 @@ func Main(version string) {
 		os.Exit(1)
 	}
 
-	skel.PluginMain(cmdAdd, cmdDummyCheck, cmdDel,
+	funcs := skel.CNIFuncs{
+		Add:   cmdAdd,
+		Del:   cmdDel,
+		Check: cmdDummyCheck,
+	}
+	skel.PluginMainFuncs(funcs,
 		cniSpecVersion.PluginSupports("0.1.0", "0.2.0", "0.3.0", "0.3.1", "0.4.0", "1.0.0"),
 		"Calico CNI plugin "+version)
 }

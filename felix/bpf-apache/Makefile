@@ -1,4 +1,4 @@
-# Copyright (c) 2020 Tigera, Inc. All rights reserved.
+# Copyright (c) 2020-2024 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -25,13 +25,14 @@ CFLAGS +=  \
 	-fno-stack-protector \
 	-O2 \
 	-target bpf \
-	-emit-llvm
+	-emit-llvm \
+	-g
 
 # Workaround for Ubuntu placing "asm/types.h" in /usr/include/x86_64-linux-gnu
 TRIPLET := $(shell gcc -dumpmachine)
 CFLAGS += -I/usr/include/$(TRIPLET)
 
-CC := clang-16
+CC := clang-17
 LD := llc
 
 C_FILES:=filter.c redir.c sockops.c

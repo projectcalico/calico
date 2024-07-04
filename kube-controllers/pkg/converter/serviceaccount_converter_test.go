@@ -28,7 +28,6 @@ import (
 )
 
 var _ = Describe("ServiceAccount conversion tests", func() {
-
 	saConverter := converter.NewServiceAccountConverter()
 
 	It("should parse a Service Account to a Profile", func() {
@@ -40,6 +39,7 @@ var _ = Describe("ServiceAccount conversion tests", func() {
 					"roger":       "rabbit",
 				},
 				Annotations: map[string]string{},
+				UID:         "aa844ac0-87c8-440a-b270-307cdba8fd25",
 			},
 		}
 
@@ -73,6 +73,7 @@ var _ = Describe("ServiceAccount conversion tests", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:        "serviceaccount",
 				Annotations: map[string]string{},
+				UID:         "aa844ac0-87c8-440a-b270-307cdba8fd25",
 			},
 		}
 		p, err := saConverter.Convert(&sa)
@@ -107,6 +108,7 @@ var _ = Describe("ServiceAccount conversion tests", func() {
 				Name:        "serviceaccount",
 				Namespace:   "foo",
 				Annotations: map[string]string{},
+				UID:         "aa844ac0-87c8-440a-b270-307cdba8fd25",
 			},
 		}
 		p, err := saConverter.Convert(&sa)
@@ -142,6 +144,7 @@ var _ = Describe("ServiceAccount conversion tests", func() {
 				ObjectMeta: metav1.ObjectMeta{
 					Name:        "serviceaccount",
 					Annotations: map[string]string{},
+					UID:         "aa844ac0-87c8-440a-b270-307cdba8fd25",
 				},
 			},
 		}
@@ -199,6 +202,5 @@ var _ = Describe("ServiceAccount conversion tests", func() {
 			Expect(sa).To(Equal(""))
 			Expect(name).To(Equal("ksa.default.serviceaccount"))
 		})
-
 	})
 })

@@ -3,12 +3,12 @@
 #################################################################################################
 
 # The version of github.com/projectcalico/go-build to use.
-GO_BUILD_VER=v0.90
+GO_BUILD_VER=v0.91
 # Env var to ACK Ginkgo deprecation warnings, may need updating with go-build.
 ACK_GINKGO=ACK_GINKGO_DEPRECATIONS=1.16.5
 
 # Version of Kubernetes to use for tests, bitnami/kubectl, and kubectl binary release.
-K8S_VERSION=v1.27.11
+K8S_VERSION=v1.28.7
 
 # Version of various tools used in the build and tests.
 COREDNS_VERSION=1.5.2
@@ -17,7 +17,7 @@ HELM_VERSION=v3.11.3
 KINDEST_NODE_VERSION=v1.27.11
 KIND_VERSION=v0.22.0
 PROTOC_VER=v0.1
-UBI_VERSION=8.9
+UBI_VERSION=8.10
 
 # Configuration for Semaphore integration.
 ORGANIZATION = projectcalico
@@ -46,3 +46,7 @@ WINDOWS_DIST = dist/windows
 WINDOWS_HPC_VERSION ?= v1.0.0
 # The Windows versions used as base for Calico Windows images
 WINDOWS_VERSIONS ?= 1809 ltsc2022
+
+# The CNI plugin code that will be cloned and rebuilt with this repo's go-build image
+# whenever the cni-plugin image is created.
+CNI_VERSION=v1.1.1-calico+go-1.22.5

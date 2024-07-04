@@ -38,7 +38,7 @@ metadata:
 ---
 # Source: calico/templates/calico-etcd-secrets.yaml
 # The following contains k8s Secrets for use with a TLS enabled etcd cluster.
-# For information on populating Secrets, see http://kubernetes.io/docs/user-guide/secrets/
+# For information on populating Secrets, see https://kubernetes.io/docs/concepts/configuration/secret/
 apiVersion: v1
 kind: Secret
 type: Opaque
@@ -223,7 +223,7 @@ rules:
 ---
 # Source: calico/templates/calico-node-rbac.yaml
 # Flannel ClusterRole
-# Pulled from https://github.com/coreos/flannel/blob/master/Documentation/kube-flannel-rbac.yml
+# Pulled from https://github.com/flannel-io/flannel/blob/master/Documentation/k8s-old-manifests/kube-flannel-rbac.yml
 kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
@@ -374,6 +374,9 @@ spec:
         - effect: NoExecute
           operator: Exists
       serviceAccountName: canal-node
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       # Minimize downtime during a rolling upgrade or deletion; tell Kubernetes to do a "force
       # deletion": https://kubernetes.io/docs/concepts/workloads/pods/pod/#termination-of-pods.
       terminationGracePeriodSeconds: 0
@@ -684,9 +687,11 @@ spec:
         - name: var-run-calico
           hostPath:
             path: /var/run/calico
+            type: DirectoryOrCreate
         - name: var-lib-calico
           hostPath:
             path: /var/lib/calico
+            type: DirectoryOrCreate
         - name: xtables-lock
           hostPath:
             path: /run/xtables.lock
@@ -714,6 +719,7 @@ spec:
         - name: cni-bin-dir
           hostPath:
             path: /opt/cni/bin
+            type: DirectoryOrCreate
         - name: cni-net-dir
           hostPath:
             path: /etc/cni/net.d
@@ -768,6 +774,9 @@ spec:
         - key: node-role.kubernetes.io/control-plane
           effect: NoSchedule
       serviceAccountName: calico-kube-controllers
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       priorityClassName: system-cluster-critical
       # The controllers must run in the host network namespace so that
       # it isn't governed by policy that would prevent it from working.

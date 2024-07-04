@@ -175,7 +175,7 @@ func (t *Timeouts) EntryExpired(nowNanos int64, proto uint8, entry ValueInterfac
 			}
 		}
 		return "", false
-	case ProtoICMP:
+	case ProtoICMP, ProtoICMP6:
 		if age > t.ICMPLastSeen {
 			return "no traffic on ICMP flow for too long", true
 		}

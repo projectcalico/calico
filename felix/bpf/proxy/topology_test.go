@@ -29,7 +29,7 @@ func TestShouldAppendTopologyAwareEndpoint(t *testing.T) {
 		nodeZone        string
 		hintsAnnotation string
 		//nolint:staticcheck // Ignore SA1019 deprecated until kubernetes/pkg/proxy/types.go fixes sets.String
-		zoneHints sets.String
+		zoneHints sets.Set[string]
 		expect    bool
 		actual    bool
 	}{{
@@ -60,25 +60,25 @@ func TestShouldAppendTopologyAwareEndpoint(t *testing.T) {
 		description:     "node zone us-west-2a, hints annotation auto, zone hints us-west-2a, expect should append topology aware endpoint true",
 		nodeZone:        "us-west-2a",
 		hintsAnnotation: "auto",
-		zoneHints:       sets.NewString("us-west-2a"),
+		zoneHints:       sets.New[string]("us-west-2a"),
 		expect:          true,
 	}, {
 		description:     "node zone us-west-2a, hints annotation auto, zone hints us-west-2b, expect should append topology aware endpoint false",
 		nodeZone:        "us-west-2a",
 		hintsAnnotation: "auto",
-		zoneHints:       sets.NewString("us-west-2b"),
+		zoneHints:       sets.New[string]("us-west-2b"),
 		expect:          false,
 	}, {
 		description:     "node zone us-west-2a, hints annotation disabled, zone hints us-west-2b, expect should append topology aware endpoint true",
 		nodeZone:        "us-west-2a",
 		hintsAnnotation: "disabled",
-		zoneHints:       sets.NewString("us-west-2b"),
+		zoneHints:       sets.New[string]("us-west-2b"),
 		expect:          true,
 	}, {
 		description:     "node zone us-west-2a, hints annotation dummy, zone hints us-west-2b, expect should append topology aware endpoint true",
 		nodeZone:        "us-west-2a",
 		hintsAnnotation: "dummy",
-		zoneHints:       sets.NewString("us-west-2b"),
+		zoneHints:       sets.New[string]("us-west-2b"),
 		expect:          true,
 	}}
 

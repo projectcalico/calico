@@ -2,7 +2,7 @@
 #ifndef __BPF_TRACING_H__
 #define __BPF_TRACING_H__
 
-#include <bpf/bpf_helpers.h>
+#include "bpf_helpers.h"
 
 /* Scan the ARCH passed in from ARCH env variable (see Makefile) */
 #if defined(__TARGET_ARCH_x86)
@@ -351,6 +351,7 @@ struct pt_regs___arm64 {
  * https://github.com/riscv-non-isa/riscv-elf-psabi-doc/blob/master/riscv-cc.adoc#risc-v-calling-conventions
  */
 
+/* riscv provides struct user_regs_struct instead of struct pt_regs to userspace */
 #define __PT_REGS_CAST(x) ((const struct user_regs_struct *)(x))
 #define __PT_PARM1_REG a0
 #define __PT_PARM2_REG a1
@@ -361,8 +362,6 @@ struct pt_regs___arm64 {
 #define __PT_PARM7_REG a6
 #define __PT_PARM8_REG a7
 
-/* riscv does not select ARCH_HAS_SYSCALL_WRAPPER. */
-#define PT_REGS_SYSCALL_REGS(ctx) ctx
 #define __PT_PARM1_SYSCALL_REG __PT_PARM1_REG
 #define __PT_PARM2_SYSCALL_REG __PT_PARM2_REG
 #define __PT_PARM3_SYSCALL_REG __PT_PARM3_REG
@@ -383,7 +382,7 @@ struct pt_regs___arm64 {
  * https://raw.githubusercontent.com/wiki/foss-for-synopsys-dwc-arc-processors/toolchain/files/ARCv2_ABI.pdf
  */
 
-/* arc provides struct user_pt_regs instead of struct pt_regs to userspace */
+/* arc provides struct user_regs_struct instead of struct pt_regs to userspace */
 #define __PT_REGS_CAST(x) ((const struct user_regs_struct *)(x))
 #define __PT_PARM1_REG scratch.r0
 #define __PT_PARM2_REG scratch.r1
@@ -634,18 +633,18 @@ struct pt_regs;
 #endif
 
 #define ___bpf_ctx_cast0()            ctx
-#define ___bpf_ctx_cast1(x)           ___bpf_ctx_cast0(), (void *)ctx[0]
-#define ___bpf_ctx_cast2(x, args...)  ___bpf_ctx_cast1(args), (void *)ctx[1]
-#define ___bpf_ctx_cast3(x, args...)  ___bpf_ctx_cast2(args), (void *)ctx[2]
-#define ___bpf_ctx_cast4(x, args...)  ___bpf_ctx_cast3(args), (void *)ctx[3]
-#define ___bpf_ctx_cast5(x, args...)  ___bpf_ctx_cast4(args), (void *)ctx[4]
-#define ___bpf_ctx_cast6(x, args...)  ___bpf_ctx_cast5(args), (void *)ctx[5]
-#define ___bpf_ctx_cast7(x, args...)  ___bpf_ctx_cast6(args), (void *)ctx[6]
-#define ___bpf_ctx_cast8(x, args...)  ___bpf_ctx_cast7(args), (void *)ctx[7]
-#define ___bpf_ctx_cast9(x, args...)  ___bpf_ctx_cast8(args), (void *)ctx[8]
-#define ___bpf_ctx_cast10(x, args...) ___bpf_ctx_cast9(args), (void *)ctx[9]
-#define ___bpf_ctx_cast11(x, args...) ___bpf_ctx_cast10(args), (void *)ctx[10]
-#define ___bpf_ctx_cast12(x, args...) ___bpf_ctx_cast11(args), (void *)ctx[11]
+#define ___bpf_ctx_cast1(x)           ___bpf_ctx_cast0(), ctx[0]
+#define ___bpf_ctx_cast2(x, args...)  ___bpf_ctx_cast1(args), ctx[1]
+#define ___bpf_ctx_cast3(x, args...)  ___bpf_ctx_cast2(args), ctx[2]
+#define ___bpf_ctx_cast4(x, args...)  ___bpf_ctx_cast3(args), ctx[3]
+#define ___bpf_ctx_cast5(x, args...)  ___bpf_ctx_cast4(args), ctx[4]
+#define ___bpf_ctx_cast6(x, args...)  ___bpf_ctx_cast5(args), ctx[5]
+#define ___bpf_ctx_cast7(x, args...)  ___bpf_ctx_cast6(args), ctx[6]
+#define ___bpf_ctx_cast8(x, args...)  ___bpf_ctx_cast7(args), ctx[7]
+#define ___bpf_ctx_cast9(x, args...)  ___bpf_ctx_cast8(args), ctx[8]
+#define ___bpf_ctx_cast10(x, args...) ___bpf_ctx_cast9(args), ctx[9]
+#define ___bpf_ctx_cast11(x, args...) ___bpf_ctx_cast10(args), ctx[10]
+#define ___bpf_ctx_cast12(x, args...) ___bpf_ctx_cast11(args), ctx[11]
 #define ___bpf_ctx_cast(args...)      ___bpf_apply(___bpf_ctx_cast, ___bpf_narg(args))(args)
 
 /*
@@ -787,14 +786,14 @@ ____##name(unsigned long long *ctx ___bpf_ctx_decl(args))
 struct pt_regs;
 
 #define ___bpf_kprobe_args0()           ctx
-#define ___bpf_kprobe_args1(x)          ___bpf_kprobe_args0(), (void *)PT_REGS_PARM1(ctx)
-#define ___bpf_kprobe_args2(x, args...) ___bpf_kprobe_args1(args), (void *)PT_REGS_PARM2(ctx)
-#define ___bpf_kprobe_args3(x, args...) ___bpf_kprobe_args2(args), (void *)PT_REGS_PARM3(ctx)
-#define ___bpf_kprobe_args4(x, args...) ___bpf_kprobe_args3(args), (void *)PT_REGS_PARM4(ctx)
-#define ___bpf_kprobe_args5(x, args...) ___bpf_kprobe_args4(args), (void *)PT_REGS_PARM5(ctx)
-#define ___bpf_kprobe_args6(x, args...) ___bpf_kprobe_args5(args), (void *)PT_REGS_PARM6(ctx)
-#define ___bpf_kprobe_args7(x, args...) ___bpf_kprobe_args6(args), (void *)PT_REGS_PARM7(ctx)
-#define ___bpf_kprobe_args8(x, args...) ___bpf_kprobe_args7(args), (void *)PT_REGS_PARM8(ctx)
+#define ___bpf_kprobe_args1(x)          ___bpf_kprobe_args0(), (unsigned long long)PT_REGS_PARM1(ctx)
+#define ___bpf_kprobe_args2(x, args...) ___bpf_kprobe_args1(args), (unsigned long long)PT_REGS_PARM2(ctx)
+#define ___bpf_kprobe_args3(x, args...) ___bpf_kprobe_args2(args), (unsigned long long)PT_REGS_PARM3(ctx)
+#define ___bpf_kprobe_args4(x, args...) ___bpf_kprobe_args3(args), (unsigned long long)PT_REGS_PARM4(ctx)
+#define ___bpf_kprobe_args5(x, args...) ___bpf_kprobe_args4(args), (unsigned long long)PT_REGS_PARM5(ctx)
+#define ___bpf_kprobe_args6(x, args...) ___bpf_kprobe_args5(args), (unsigned long long)PT_REGS_PARM6(ctx)
+#define ___bpf_kprobe_args7(x, args...) ___bpf_kprobe_args6(args), (unsigned long long)PT_REGS_PARM7(ctx)
+#define ___bpf_kprobe_args8(x, args...) ___bpf_kprobe_args7(args), (unsigned long long)PT_REGS_PARM8(ctx)
 #define ___bpf_kprobe_args(args...)     ___bpf_apply(___bpf_kprobe_args, ___bpf_narg(args))(args)
 
 /*
@@ -822,7 +821,7 @@ static __always_inline typeof(name(0))					    \
 ____##name(struct pt_regs *ctx, ##args)
 
 #define ___bpf_kretprobe_args0()       ctx
-#define ___bpf_kretprobe_args1(x)      ___bpf_kretprobe_args0(), (void *)PT_REGS_RC(ctx)
+#define ___bpf_kretprobe_args1(x)      ___bpf_kretprobe_args0(), (unsigned long long)PT_REGS_RC(ctx)
 #define ___bpf_kretprobe_args(args...) ___bpf_apply(___bpf_kretprobe_args, ___bpf_narg(args))(args)
 
 /*
@@ -846,24 +845,24 @@ static __always_inline typeof(name(0)) ____##name(struct pt_regs *ctx, ##args)
 
 /* If kernel has CONFIG_ARCH_HAS_SYSCALL_WRAPPER, read pt_regs directly */
 #define ___bpf_syscall_args0()           ctx
-#define ___bpf_syscall_args1(x)          ___bpf_syscall_args0(), (void *)PT_REGS_PARM1_SYSCALL(regs)
-#define ___bpf_syscall_args2(x, args...) ___bpf_syscall_args1(args), (void *)PT_REGS_PARM2_SYSCALL(regs)
-#define ___bpf_syscall_args3(x, args...) ___bpf_syscall_args2(args), (void *)PT_REGS_PARM3_SYSCALL(regs)
-#define ___bpf_syscall_args4(x, args...) ___bpf_syscall_args3(args), (void *)PT_REGS_PARM4_SYSCALL(regs)
-#define ___bpf_syscall_args5(x, args...) ___bpf_syscall_args4(args), (void *)PT_REGS_PARM5_SYSCALL(regs)
-#define ___bpf_syscall_args6(x, args...) ___bpf_syscall_args5(args), (void *)PT_REGS_PARM6_SYSCALL(regs)
-#define ___bpf_syscall_args7(x, args...) ___bpf_syscall_args6(args), (void *)PT_REGS_PARM7_SYSCALL(regs)
+#define ___bpf_syscall_args1(x)          ___bpf_syscall_args0(), (unsigned long long)PT_REGS_PARM1_SYSCALL(regs)
+#define ___bpf_syscall_args2(x, args...) ___bpf_syscall_args1(args), (unsigned long long)PT_REGS_PARM2_SYSCALL(regs)
+#define ___bpf_syscall_args3(x, args...) ___bpf_syscall_args2(args), (unsigned long long)PT_REGS_PARM3_SYSCALL(regs)
+#define ___bpf_syscall_args4(x, args...) ___bpf_syscall_args3(args), (unsigned long long)PT_REGS_PARM4_SYSCALL(regs)
+#define ___bpf_syscall_args5(x, args...) ___bpf_syscall_args4(args), (unsigned long long)PT_REGS_PARM5_SYSCALL(regs)
+#define ___bpf_syscall_args6(x, args...) ___bpf_syscall_args5(args), (unsigned long long)PT_REGS_PARM6_SYSCALL(regs)
+#define ___bpf_syscall_args7(x, args...) ___bpf_syscall_args6(args), (unsigned long long)PT_REGS_PARM7_SYSCALL(regs)
 #define ___bpf_syscall_args(args...)     ___bpf_apply(___bpf_syscall_args, ___bpf_narg(args))(args)
 
 /* If kernel doesn't have CONFIG_ARCH_HAS_SYSCALL_WRAPPER, we have to BPF_CORE_READ from pt_regs */
 #define ___bpf_syswrap_args0()           ctx
-#define ___bpf_syswrap_args1(x)          ___bpf_syswrap_args0(), (void *)PT_REGS_PARM1_CORE_SYSCALL(regs)
-#define ___bpf_syswrap_args2(x, args...) ___bpf_syswrap_args1(args), (void *)PT_REGS_PARM2_CORE_SYSCALL(regs)
-#define ___bpf_syswrap_args3(x, args...) ___bpf_syswrap_args2(args), (void *)PT_REGS_PARM3_CORE_SYSCALL(regs)
-#define ___bpf_syswrap_args4(x, args...) ___bpf_syswrap_args3(args), (void *)PT_REGS_PARM4_CORE_SYSCALL(regs)
-#define ___bpf_syswrap_args5(x, args...) ___bpf_syswrap_args4(args), (void *)PT_REGS_PARM5_CORE_SYSCALL(regs)
-#define ___bpf_syswrap_args6(x, args...) ___bpf_syswrap_args5(args), (void *)PT_REGS_PARM6_CORE_SYSCALL(regs)
-#define ___bpf_syswrap_args7(x, args...) ___bpf_syswrap_args6(args), (void *)PT_REGS_PARM7_CORE_SYSCALL(regs)
+#define ___bpf_syswrap_args1(x)          ___bpf_syswrap_args0(), (unsigned long long)PT_REGS_PARM1_CORE_SYSCALL(regs)
+#define ___bpf_syswrap_args2(x, args...) ___bpf_syswrap_args1(args), (unsigned long long)PT_REGS_PARM2_CORE_SYSCALL(regs)
+#define ___bpf_syswrap_args3(x, args...) ___bpf_syswrap_args2(args), (unsigned long long)PT_REGS_PARM3_CORE_SYSCALL(regs)
+#define ___bpf_syswrap_args4(x, args...) ___bpf_syswrap_args3(args), (unsigned long long)PT_REGS_PARM4_CORE_SYSCALL(regs)
+#define ___bpf_syswrap_args5(x, args...) ___bpf_syswrap_args4(args), (unsigned long long)PT_REGS_PARM5_CORE_SYSCALL(regs)
+#define ___bpf_syswrap_args6(x, args...) ___bpf_syswrap_args5(args), (unsigned long long)PT_REGS_PARM6_CORE_SYSCALL(regs)
+#define ___bpf_syswrap_args7(x, args...) ___bpf_syswrap_args6(args), (unsigned long long)PT_REGS_PARM7_CORE_SYSCALL(regs)
 #define ___bpf_syswrap_args(args...)     ___bpf_apply(___bpf_syswrap_args, ___bpf_narg(args))(args)
 
 /*

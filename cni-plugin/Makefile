@@ -25,10 +25,9 @@ WINFV_SRCFILES=$(shell find win_tests -name '*.go')
 # fail if unable to download
 CURL=curl -C - -sSf
 
-# Use forked CNI plugin URL and corresponding tagged artifacts.
-CNI_VERSION=v1.1.1-calico+go-1.21.4
 CNI_ARTIFACTS_URL=https://github.com/projectcalico/containernetworking-plugins/releases/download
-FLANNEL_VERSION=v1.2.0
+FLANNEL_ARTIFACTS_URL=https://github.com/projectcalico/flannel-cni-plugin/releases/download
+FLANNEL_VERSION=v1.2.0-flannel2-go1.22.2
 
 # By default set the CNI_SPEC_VERSION to 0.3.1 for tests.
 CNI_SPEC_VERSION?=0.3.1
@@ -60,6 +59,7 @@ clean: clean-windows
 	rm -rf bin $(DEPLOY_CONTAINER_MARKER) pkg/install/install.test
 	rm -rf config/ dist/
 	-docker image rm -f $$(docker images $(CNI_PLUGIN_IMAGE) -a -q)
+	rm -rf containernetworking-plugins .containernetworking-plugins-*
 
 clean-windows: clean-windows-builder
 	rm -rf $(WINDOWS_BIN) $(WINDOWS_DIST)
@@ -121,9 +121,11 @@ image-windows: $(WINDOWS_IMAGE_REQS)
 # Building the image
 ###############################################################################
 image: $(DEPLOY_CONTAINER_MARKER)
-image-all: $(addprefix sub-image-,$(VALIDARCHES))
+image-all: $(addprefix sub-image-,$(VALIDARCHES)) sub-image-fips-amd64
 sub-image-%:
-	$(MAKE) image FIPS=$(FIPS) ARCH=$*
+	$(MAKE) image ARCH=$*
+sub-image-fips-%:
+	$(MAKE) image FIPS=true ARCH=$*
 
 # Builds the statically compiled binaries into a container.
 $(DEPLOY_CONTAINER_STATIC_MARKER): Dockerfile build fetch-cni-bins
@@ -137,22 +139,41 @@ $(DEPLOY_CONTAINER_FIPS_MARKER): Dockerfile build fetch-cni-bins
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
 	touch $@
 
+
+# These are the files that we need to copy from the containernetworking-plugins project to our image.
+CN_FILES :=  host-local portmap loopback tuning bandwidth
+
+CONTAINERNETWORKING_PLUGINS_CLONED=.containernetworking-plugins-$(CNI_VERSION).cloned
+
+$(CONTAINERNETWORKING_PLUGINS_CLONED):
+	rm -rf containernetworking-plugins .containernetworking-plugins-*.cloned
+	@$(foreach file,$(CN_FILES),find bin -name $(file) -type f -delete;)
+	git clone --single-branch --branch $(CNI_VERSION) https://github.com/projectcalico/containernetworking-plugins.git
+	touch $@
+
+CN_FLAGS=-ldflags "-X github.com/containernetworking/plugins/pkg/utils/buildversion.BuildVersion=$(GIT_VERSION)"
+
+$(BIN)/host-local $(BIN)/loopback $(BIN)/portmap $(BIN)/tuning $(BIN)/bandwidth &: $(CONTAINERNETWORKING_PLUGINS_CLONED)
+	docker run \
+		-v $(CURDIR)/containernetworking-plugins:/go/src/github.com/containernetworking/plugins:z \
+		-e LOCAL_USER_ID=$(LOCAL_USER_ID) -w /go/src/github.com/containernetworking/plugins --rm $(CALICO_BUILD) \
+		/bin/sh -xe -c ' \
+			GOFLAGS='-buildvcs=false' CGO_ENABLED=0 GOARCH=$(ARCH) ./build_linux.sh $(CN_FLAGS)'
+	-mkdir -p $(BIN)
+	@$(foreach file,$(CN_FILES),cp containernetworking-plugins/bin/$(file) $(BIN);)
+
 .PHONY: fetch-cni-bins fetch-win-cni-bins
 fetch-cni-bins: $(BIN)/flannel $(BIN)/loopback $(BIN)/host-local $(BIN)/portmap $(BIN)/tuning $(BIN)/bandwidth
 fetch-win-cni-bins: $(WINDOWS_BIN)/flannel.exe
 
-$(BIN)/loopback $(BIN)/host-local $(BIN)/portmap $(BIN)/tuning $(BIN)/bandwidth:
-	-mkdir -p $(BIN)
-	$(CURL) -L --retry 5 $(CNI_ARTIFACTS_URL)/$(CNI_VERSION)/cni-plugins-linux-$(subst v7,,$(ARCH))-$(CNI_VERSION).tgz | tar -xz -C $(BIN) ./loopback ./host-local ./portmap ./tuning ./bandwidth
-
 $(BIN)/flannel:
 	-mkdir -p $(BIN)
-	$(CURL) -L --retry 5 https://github.com/flannel-io/cni-plugin/releases/download/$(FLANNEL_VERSION)/cni-plugin-flannel-linux-$(subst v7,,$(ARCH))-$(FLANNEL_VERSION).tgz | tar -xz -C $(BIN) flannel-$(subst v7,,$(ARCH))
+	$(CURL) -L --retry 5 $(FLANNEL_ARTIFACTS_URL)/$(FLANNEL_VERSION)/cni-plugin-flannel-linux-$(subst v7,,$(ARCH))-$(FLANNEL_VERSION).tgz | tar -xz -C $(BIN) flannel-$(subst v7,,$(ARCH))
 	mv $(BIN)/flannel-$(subst v7,,$(ARCH)) $@
 
 $(WINDOWS_BIN)/flannel.exe:
 	-mkdir -p $(WINDOWS_BIN)
-	$(CURL) -L --retry 5 https://github.com/flannel-io/cni-plugin/releases/download/$(FLANNEL_VERSION)/cni-plugin-flannel-windows-amd64-$(FLANNEL_VERSION).tgz | tar -xz -C $(WINDOWS_BIN) flannel-amd64.exe
+	$(CURL) -L --retry 5 $(FLANNEL_ARTIFACTS_URL)/$(FLANNEL_VERSION)/cni-plugin-flannel-windows-amd64-$(FLANNEL_VERSION).tgz | tar -xz -C $(WINDOWS_BIN) flannel-amd64.exe
 	mv $(WINDOWS_BIN)/flannel-amd64.exe $@
 
 ###############################################################################
@@ -180,7 +201,7 @@ ut-datastore:
 	-v $(CERTS_PATH):/home/user/certs \
 	$(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
 			cd  /go/src/$(PACKAGE_NAME) && \
-			ginkgo -cover -r -skipPackage pkg/install $(GINKGO_ARGS)'
+			ginkgo -cover -r -skipPackage pkg/install,containernetworking-plugins $(GINKGO_ARGS)'
 
 ut-etcd: run-k8s-controller-manager build $(BIN)/host-local
 	$(MAKE) ut-datastore DATASTORE_TYPE=etcdv3

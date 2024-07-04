@@ -38,6 +38,9 @@ spec:
         - effect: NoExecute
           operator: Exists
       serviceAccountName: {{include "nodeName" . }}
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       # Minimize downtime during a rolling upgrade or deletion; tell Kubernetes to do a "force
       # deletion": https://kubernetes.io/docs/concepts/workloads/pods/pod/#termination-of-pods.
       terminationGracePeriodSeconds: 0
@@ -586,9 +589,11 @@ spec:
         - name: var-run-calico
           hostPath:
             path: /var/run/calico
+            type: DirectoryOrCreate
         - name: var-lib-calico
           hostPath:
             path: /var/lib/calico
+            type: DirectoryOrCreate
         - name: xtables-lock
           hostPath:
             path: /run/xtables.lock
@@ -623,6 +628,7 @@ spec:
         - name: cni-bin-dir
           hostPath:
             path: /opt/cni/bin
+            type: DirectoryOrCreate
         - name: cni-net-dir
           hostPath:
             path: /etc/cni/net.d

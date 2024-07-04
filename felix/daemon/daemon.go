@@ -28,10 +28,11 @@ import (
 	"syscall"
 	"time"
 
-	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
+
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/felix/buildinfo"
 	"github.com/projectcalico/calico/felix/calc"
@@ -61,7 +62,6 @@ import (
 	lclogutils "github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/metricsserver"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
-	"github.com/projectcalico/calico/libcalico-go/lib/seedrng"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 	"github.com/projectcalico/calico/pod2daemon/binder"
@@ -70,12 +70,6 @@ import (
 )
 
 const (
-	// Our default value for GOGC if it is not set.  This is the percentage that heap usage must
-	// grow by to trigger a garbage collection.  Go's default is 100, meaning that 50% of the
-	// heap can be lost to garbage.  We reduce it to this value to trade increased CPU usage for
-	// lower occupancy.
-	defaultGCPercent = 20
-
 	// String sent on the failure report channel to indicate we're shutting down for config
 	// change.
 	reasonConfigChanged      = "config changed"
@@ -117,22 +111,11 @@ const (
 // main config parameters by exiting and allowing itself to be restarted by the init
 // daemon.
 func Run(configFile string, gitVersion string, buildDate string, gitRevision string) {
-	// Go's RNG is not seeded by default.  Make sure that's done.
-	seedrng.EnsureSeeded()
-
 	// Special-case handling for environment variable-configured logging:
 	// Initialise early so we can trace out config parsing.
 	logutils.ConfigureEarlyLogging()
 
 	ctx := context.Background()
-
-	if os.Getenv("GOGC") == "" {
-		// Tune the GC to trade off a little extra CPU usage for significantly lower
-		// occupancy at high scale.  This is worthwhile because Felix runs per-host so
-		// any occupancy improvement is multiplied by the number of hosts.
-		log.Debugf("No GOGC value set, defaulting to %d%%.", defaultGCPercent)
-		debug.SetGCPercent(defaultGCPercent)
-	}
 
 	if len(buildinfo.GitVersion) == 0 && len(gitVersion) != 0 {
 		buildinfo.GitVersion = gitVersion
@@ -308,7 +291,7 @@ configRetry:
 		} else {
 			// Not using KDD, fall back on trying to get a Kubernetes client from the environment.
 			log.Info("Not using Kubernetes datastore driver, trying to get a Kubernetes client...")
-			k8sconf, err := winutils.GetInClusterConfig()
+			k8sconf, err := winutils.BuildConfigFromFlags("", os.Getenv("KUBECONFIG"))
 			if err != nil {
 				log.WithError(err).Info("Kubernetes in-cluster config not available. " +
 					"Assuming we're not in a Kubernetes deployment.")
@@ -368,6 +351,8 @@ configRetry:
 		// a failure to load config, restart felix to avoid leaking connections.
 		exitWithCustomRC(configChangedRC, "Restarting to avoid leaking datastore connections")
 	}
+
+	doGoRuntimeSetup(configParams)
 
 	if configParams.BPFEnabled {
 		// Check for BPF dataplane support before we do anything that relies on the flag being set one way or another.
@@ -653,7 +638,6 @@ configRetry:
 			configParams.FelixHostname,
 			configParams.OpenstackRegion,
 			fromDataplaneC,
-			dpConnector.InSync,
 			dpConnector.datastore,
 			delay,
 			delay*180,
@@ -712,6 +696,33 @@ configRetry:
 	// Now monitor the worker process and our worker threads and shut
 	// down the process gracefully if they fail.
 	monitorAndManageShutdown(failureReportChan, dpDriverCmd, stopSignalChans)
+}
+
+func doGoRuntimeSetup(params *config.Config) {
+	var effectiveGOGC int
+	if os.Getenv("GOGC") == "" {
+		log.WithField("GOGC", params.GoGCThreshold).Info("Setting GOGC from configuration.")
+		debug.SetGCPercent(params.GoGCThreshold)
+		effectiveGOGC = params.GoGCThreshold
+	} else {
+		// Doesn't seem to be a way to get the current value without also
+		// setting it...
+		effectiveGOGC = debug.SetGCPercent(-1)
+		debug.SetGCPercent(effectiveGOGC)
+		log.WithField("GOGC", effectiveGOGC).Info("GOGC already set, not changing.")
+	}
+	limitFromEnv := os.Getenv("GOMEMLIMIT")
+	if limitFromEnv != "" {
+		log.WithField("GOMEMLIMIT", limitFromEnv).Info("Memory limit already set with GOMEMLIMIT, not changing.")
+		return
+	}
+	if params.GoMemoryLimitMB > -1 {
+		log.WithField("GoMemoryLimitMB", params.GoMemoryLimitMB).Info("Setting memory limit from configuration.")
+		memLimit := int64(params.GoMemoryLimitMB) * 1024 * 1024
+		debug.SetMemoryLimit(memLimit)
+	} else if effectiveGOGC < 0 {
+		log.Warn("GC is disabled and no memory limit is set.  Expect to run out of memory!")
+	}
 }
 
 func monitorAndManageShutdown(failureReportChan <-chan string, driverCmd *exec.Cmd, stopSignalChans []chan<- *sync.WaitGroup) {
@@ -987,7 +998,6 @@ type DataplaneConnector struct {
 	dataplane         dp.DataplaneDriver
 	datastore         bapi.Client
 	datastorev3       client.Interface
-	datastoreInSync   bool
 
 	firstStatusReportSent bool
 
@@ -1013,12 +1023,9 @@ func newConnector(configParams *config.Config,
 		ToDataplane:                         make(chan interface{}),
 		statusUpdatesFromDataplane:          make(chan interface{}),
 		statusUpdatesFromDataplaneConsumers: nil,
-		// InSync should be buffered as it will always be sent a single
-		// message, regardless of any downstream consumers.
-		InSync:                           make(chan bool, 1),
-		failureReportChan:                failureReportChan,
-		dataplane:                        dataplane,
-		wireguardStatUpdateFromDataplane: make(chan *proto.WireguardStatusUpdate, 1),
+		failureReportChan:                   failureReportChan,
+		dataplane:                           dataplane,
+		wireguardStatUpdateFromDataplane:    make(chan *proto.WireguardStatusUpdate, 1),
 	}
 
 	fromDataplaneDispatcher, err := dispatcher.NewBlockingDispatcher[interface{}](felixConn.statusUpdatesFromDataplane)
@@ -1249,11 +1256,6 @@ func (fc *DataplaneConnector) sendMessagesToDataplaneDriver() {
 		switch msg := msg.(type) {
 		case *proto.InSync:
 			log.Info("Datastore now in sync.")
-			if !fc.datastoreInSync {
-				log.Info("Datastore in sync for first time, sending message to status reporter.")
-				fc.datastoreInSync = true
-				fc.InSync <- true
-			}
 		case *proto.ConfigUpdate:
 			fc.handleConfigUpdate(msg)
 		case *calc.DatastoreNotReady:

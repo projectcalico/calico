@@ -28,7 +28,6 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
@@ -222,6 +221,7 @@ type Config struct {
 	BPFExcludeCIDRsFromNAT             []string
 	KubeProxyMinSyncPeriod             time.Duration
 	SidecarAccelerationEnabled         bool
+	ServiceLoopPrevention              string
 
 	LookPathOverride func(file string) (string, error)
 
@@ -634,6 +634,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			log.WithError(err).Info("Failed to remove BPF connect-time load balancer, ignoring.")
 		}
 		tc.CleanUpProgramsAndPins()
+		removeBPFSpecialDevices()
 	} else {
 		// In BPF mode we still use iptables for raw egress policy.
 		dp.RegisterManager(newRawEgressPolicyManager(rawTableV4, ruleRenderer, 4, ipSetsV4.SetFilter))
@@ -714,6 +715,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			dp.loopSummarizer,
 			featureDetector,
 			config.HealthAggregator,
+			dataplaneFeatures,
+			podMTU,
 		)
 
 		if err != nil {
@@ -721,8 +724,6 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		}
 
 		dp.RegisterManager(bpfEndpointManager)
-
-		bpfEndpointManager.Features = dataplaneFeatures
 
 		// HostNetworkedNAT is Enabled and CTLB enabled.
 		// HostNetworkedNAT is Disabled and CTLB is either disabled/TCP.
@@ -807,8 +808,10 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	dp.RegisterManager(newFloatingIPManager(natTableV4, ruleRenderer, 4, config.FloatingIPsEnabled))
 	dp.RegisterManager(newMasqManager(ipSetsV4, natTableV4, ruleRenderer, config.MaxIPSetSize, 4))
 	if config.RulesConfig.IPIPEnabled {
+		log.Info("IPIP enabled, starting thread to keep tunnel configuration in sync.")
 		// Add a manager to keep the all-hosts IP set up to date.
 		dp.ipipManager = newIPIPManager(ipSetsV4, config.MaxIPSetSize, config.ExternalNodesCidrs)
+		go dp.ipipManager.KeepIPIPDeviceInSync(config.IPIPMTU, config.RulesConfig.IPIPTunnelAddress, dataplaneFeatures.ChecksumOffloadBroken)
 		dp.RegisterManager(dp.ipipManager) // IPv4-only
 	} else {
 		// Only clean up IPIP addresses if IPIP is implicitly disabled (no IPIP pools and not explicitly set in FelixConfig)
@@ -1078,7 +1081,7 @@ func determinePodMTU(config Config) int {
 		// No enabled encapsulation. Just use the host MTU.
 		mtu = config.hostMTU
 	} else if mtu > config.hostMTU {
-		fields := logrus.Fields{"mtu": mtu, "hostMTU": config.hostMTU}
+		fields := log.Fields{"mtu": mtu, "hostMTU": config.hostMTU}
 		log.WithFields(fields).Warn("Configured MTU is larger than detected host interface MTU")
 	}
 	log.WithField("mtu", mtu).Info("Determined pod MTU")
@@ -1411,16 +1414,6 @@ func (d *InternalDataplane) doStaticDataplaneConfig() {
 	} else {
 		d.setUpIptablesNormal()
 	}
-
-	if d.config.RulesConfig.IPIPEnabled {
-		log.Info("IPIP enabled, starting thread to keep tunnel configuration in sync.")
-		go d.ipipManager.KeepIPIPDeviceInSync(
-			d.config.IPIPMTU,
-			d.config.RulesConfig.IPIPTunnelAddress,
-		)
-	} else {
-		log.Info("IPIP disabled. Not starting tunnel update thread.")
-	}
 }
 
 func bpfMarkPreestablishedFlowsRules() []iptables.Rule {
@@ -1461,8 +1454,15 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 				Action:  iptables.AcceptAction{},
 			},
 			iptables.Rule{
+				Match: iptables.Match().
+					MarkMatchesWithMask(tcdefs.MarkSeenFallThrough, tcdefs.MarkSeenFallThroughMask).
+					Protocol("tcp"),
+				Comment: []string{"REJECT/rst packets from unknown TCP flows."},
+				Action:  iptables.RejectAction{With: "tcp-reset"},
+			},
+			iptables.Rule{
 				Match:   iptables.Match().MarkMatchesWithMask(tcdefs.MarkSeenFallThrough, tcdefs.MarkSeenFallThroughMask),
-				Comment: []string{fmt.Sprintf("%s packets from unknown flows.", d.ruleRenderer.IptablesFilterDenyAction())},
+				Comment: []string{fmt.Sprintf("%s packets from unknown non-TCP flows.", d.ruleRenderer.IptablesFilterDenyAction())},
 				Action:  d.ruleRenderer.IptablesFilterDenyAction(),
 			},
 		)
@@ -1520,7 +1520,9 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 				// only go to the host. Make sure that they are not forwarded.
 				fwdRules = append(fwdRules, rules.ICMPv6Filter(d.ruleRenderer.IptablesFilterDenyAction())...)
 			}
-		} else if (t.IPVersion == 6) == (d.config.BPFIpv6Enabled) /* XXX remove condition for dual stack */ {
+		}
+
+		if t.IPVersion == 4 || d.config.BPFIpv6Enabled {
 			// Let the BPF programs know if Linux conntrack knows about the flow.
 			fwdRules = append(fwdRules, bpfMarkPreestablishedFlowsRules()...)
 			// The packet may be about to go to a local workload.  However, the local workload may not have a BPF

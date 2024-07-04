@@ -1929,6 +1929,7 @@ static int btf_dump_int_data(struct btf_dump *d,
 			if (d->typed_dump->is_array_terminated)
 				break;
 			if (*(char *)data == '\0') {
+				btf_dump_type_values(d, "'\\0'");
 				d->typed_dump->is_array_terminated = true;
 				break;
 			}
@@ -2031,6 +2032,7 @@ static int btf_dump_array_data(struct btf_dump *d,
 	__u32 i, elem_type_id;
 	__s64 elem_size;
 	bool is_array_member;
+	bool is_array_terminated;
 
 	elem_type_id = array->type;
 	elem_type = skip_mods_and_typedefs(d->btf, elem_type_id, NULL);
@@ -2066,12 +2068,15 @@ static int btf_dump_array_data(struct btf_dump *d,
 	 */
 	is_array_member = d->typed_dump->is_array_member;
 	d->typed_dump->is_array_member = true;
+	is_array_terminated = d->typed_dump->is_array_terminated;
+	d->typed_dump->is_array_terminated = false;
 	for (i = 0; i < array->nelems; i++, data += elem_size) {
 		if (d->typed_dump->is_array_terminated)
 			break;
 		btf_dump_dump_type_data(d, NULL, elem_type, elem_type_id, data, 0, 0);
 	}
 	d->typed_dump->is_array_member = is_array_member;
+	d->typed_dump->is_array_terminated = is_array_terminated;
 	d->typed_dump->depth--;
 	btf_dump_data_pfx(d);
 	btf_dump_type_values(d, "]");
@@ -2250,9 +2255,25 @@ static int btf_dump_type_data_check_overflow(struct btf_dump *d,
 					     const struct btf_type *t,
 					     __u32 id,
 					     const void *data,
-					     __u8 bits_offset)
+					     __u8 bits_offset,
+					     __u8 bit_sz)
 {
-	__s64 size = btf__resolve_size(d->btf, id);
+	__s64 size;
+
+	if (bit_sz) {
+		/* bits_offset is at most 7. bit_sz is at most 128. */
+		__u8 nr_bytes = (bits_offset + bit_sz + 7) / 8;
+
+		/* When bit_sz is non zero, it is called from
+		 * btf_dump_struct_data() where it only cares about
+		 * negative error value.
+		 * Return nr_bytes in success case to make it
+		 * consistent as the regular integer case below.
+		 */
+		return data + nr_bytes > d->typed_dump->data_end ? -E2BIG : nr_bytes;
+	}
+
+	size = btf__resolve_size(d->btf, id);
 
 	if (size < 0 || size >= INT_MAX) {
 		pr_warn("unexpected size [%zu] for id [%u]\n",
@@ -2407,7 +2428,7 @@ static int btf_dump_dump_type_data(struct btf_dump *d,
 {
 	int size, err = 0;
 
-	size = btf_dump_type_data_check_overflow(d, t, id, data, bits_offset);
+	size = btf_dump_type_data_check_overflow(d, t, id, data, bits_offset, bit_sz);
 	if (size < 0)
 		return size;
 	err = btf_dump_type_data_check_zero(d, t, id, data, bits_offset, bit_sz);

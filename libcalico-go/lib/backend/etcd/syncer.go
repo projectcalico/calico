@@ -20,10 +20,11 @@ import (
 	"strconv"
 	"time"
 
+	"context"
+
 	log "github.com/sirupsen/logrus"
 	"go.etcd.io/etcd/client/v2"
 	etcd "go.etcd.io/etcd/client/v2"
-	"golang.org/x/net/context"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"

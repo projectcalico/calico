@@ -136,7 +136,7 @@ endif
 # the one for the host should contain all the necessary cross-compilation tools
 # we do not need to use the arch since go-build:v0.15 now is multi-arch manifest
 GO_BUILD_IMAGE ?= calico/go-build
-CALICO_BUILD    = $(GO_BUILD_IMAGE):$(GO_BUILD_VER)-$(BUILDARCH)
+CALICO_BUILD    = $(GO_BUILD_IMAGE):$(GO_BUILD_VER)
 
 
 # We use BoringCrypto as FIPS validated cryptography in order to allow users to run in FIPS Mode (amd64 only).
@@ -998,7 +998,7 @@ ifdef EXPECTED_RELEASE_TAG
 		@echo "Failed to verify release tag$(comma) expected release version is $(EXPECTED_RELEASE_TAG)$(comma) actual is $(RELEASE_TAG)."\
 		&& exit 1)
 endif
-	$(eval NEXT_RELEASE_VERSION = $(shell echo "$(call git-release-tag-from-dev-tag)" | awk -F  "." '{print $$1"."$$2"."$$3+1}'))
+	$(eval NEXT_RELEASE_VERSION = $(shell echo "$(call git-release-tag-from-dev-tag)" | awk '{ split($0,tag,"-"); if (tag[2] ~ /^1\./) { split(tag[2],subver,"."); print tag[1]"-"subver[1]+1".0" } else { split(tag[1],ver,"."); print ver[1]"."ver[2]"."ver[3]+1 } }'))
 ifndef IMAGE_ONLY
 	$(MAKE) maybe-tag-release maybe-push-release-tag\
 		RELEASE_TAG=$(RELEASE_TAG) BRANCH=$(RELEASE_BRANCH) DEV_TAG=$(DEV_TAG)
@@ -1123,7 +1123,7 @@ endif
 # Check if the codebase is dirty or not.
 check-dirty:
 	@if [ "$$(git --no-pager diff --stat)" != "" ]; then \
-	echo "The following files are dirty"; git --no-pager diff --stat; exit 1; fi
+	echo "The following files are dirty"; git --no-pager diff; exit 1; fi
 
 bin/yq:
 	mkdir -p bin

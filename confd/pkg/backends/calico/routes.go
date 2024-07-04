@@ -1,4 +1,4 @@
-// Copyright (c) 2018,2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -72,12 +72,6 @@ func NewRouteGenerator(c *client) (rg *routeGenerator, err error) {
 	// set up k8s client
 	// attempt 1: KUBECONFIG env var
 	cfgFile := os.Getenv("KUBECONFIG")
-	// Host env vars may override the container on Windows HPC, so $env:KUBECONFIG cannot
-	// be trusted in this case
-	// FIXME: this will no longer be needed when containerd v1.6 is EOL'd
-	if winutils.InHostProcessContainer() {
-		cfgFile = ""
-	}
 	cfg, err := winutils.BuildConfigFromFlags("", cfgFile)
 	if err != nil {
 		log.WithError(err).Info("KUBECONFIG environment variable not found, attempting in-cluster")
@@ -314,6 +308,10 @@ func (rg *routeGenerator) setRoutesForKey(key string, routes []string) {
 // isAllowedExternalIP determines if the given IP is in the list of
 // allowed External IP CIDRs given in the default bgpconfiguration.
 func (rg *routeGenerator) isAllowedExternalIP(externalIP string) bool {
+	if externalIP == "" {
+		log.Debug("Skip empty service External IP")
+		return false
+	}
 	ip := net.ParseIP(externalIP)
 	if ip == nil {
 		log.Errorf("Could not parse service External IP: %s", externalIP)
@@ -333,6 +331,10 @@ func (rg *routeGenerator) isAllowedExternalIP(externalIP string) bool {
 // isAllowedLoadBalancerIP determines if the given IP is in the list of
 // allowed LoadBalancer CIDRs given in the default bgpconfiguration.
 func (rg *routeGenerator) isAllowedLoadBalancerIP(loadBalancerIP string) bool {
+	if loadBalancerIP == "" {
+		log.Debug("Skip empty service LB IP")
+		return false
+	}
 	ip := net.ParseIP(loadBalancerIP)
 	if ip == nil {
 		log.Errorf("Could not parse service LB IP: %s", loadBalancerIP)
@@ -353,7 +355,10 @@ func (rg *routeGenerator) isAllowedLoadBalancerIP(loadBalancerIP string) bool {
 // allowed LoadBalancer CIDRs given in the default bgpconfiguration
 // and is a single IP entry (/32 for IPV4 or /128 for IPV6)
 func (rg *routeGenerator) isSingleLoadBalancerIP(loadBalancerIP string) bool {
-
+	if loadBalancerIP == "" {
+		log.Debug("Skip empty service LB IP")
+		return false
+	}
 	ip := net.ParseIP(loadBalancerIP)
 	if ip == nil {
 		log.Errorf("Could not parse service LB IP: %s", loadBalancerIP)

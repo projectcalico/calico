@@ -54,6 +54,7 @@ import (
 	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/rules"
 
+	logutilslc "github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 
 	"github.com/projectcalico/api/pkg/lib/numorstring"
@@ -121,6 +122,19 @@ func init() {
 	binary.LittleEndian.PutUint32(jumpMapV6PolicyKey, uint32(tcdefs.ProgIndexPolicy))
 }
 
+type IfaceType int32
+
+const (
+	IfaceTypeData IfaceType = iota
+	IfaceTypeWireguard
+	IfaceTypeIPIP
+	IfaceTypeVXLAN
+	IfaceTypeL3
+	IfaceTypeBond
+	IfaceTypeBondSlave
+	IfaceTypeUnknown
+)
+
 type attachPoint interface {
 	IfaceName() string
 	HookName() hook.Hook
@@ -161,6 +175,7 @@ type bpfDataplane interface {
 	loadTCLogFilter(ap *tc.AttachPoint) (fileDescriptor, int, error)
 	interfaceByIndex(int) (*net.Interface, error)
 	queryClassifier(int, int, int, bool) (int, error)
+	getIfaceLink(string) (netlink.Link, error)
 }
 
 type hasLoadPolicyProgram interface {
@@ -197,9 +212,11 @@ var zeroIface bpfInterface = func() bpfInterface {
 }()
 
 type bpfInterfaceInfo struct {
-	ifIndex    int
-	isUP       bool
-	endpointID *proto.WorkloadEndpointID
+	ifIndex       int
+	isUP          bool
+	endpointID    *proto.WorkloadEndpointID
+	ifaceType     IfaceType
+	masterIfIndex int
 }
 
 func (i bpfInterfaceInfo) ifaceIsUp() bool {
@@ -278,6 +295,7 @@ type bpfEndpointManager struct {
 	vxlanMTU                int
 	vxlanPort               uint16
 	wgPort                  uint16
+	wg6Port                 uint16
 	dsrEnabled              bool
 	dsrOptoutCidrs          bool
 	bpfExtToServiceConnmark int
@@ -319,7 +337,6 @@ type bpfEndpointManager struct {
 	// UT-able BPF dataplane interface.
 	dp bpfDataplane
 
-	//ifaceToIpMap map[string]net.IP
 	opReporter logutils.OpRecorder
 
 	// XDP
@@ -329,7 +346,7 @@ type bpfEndpointManager struct {
 	ipv6Enabled bool
 
 	// Detected features
-	Features *environment.Features
+	features *environment.Features
 
 	// RPF mode
 	rpfEnforceOption string
@@ -352,13 +369,15 @@ type bpfEndpointManager struct {
 	polNameToMatchIDs map[string]set.Set[polprog.RuleMatchID]
 	dirtyRules        set.Set[polprog.RuleMatchID]
 
-	natInIdx  int
-	natOutIdx int
+	natInIdx    int
+	natOutIdx   int
+	bpfIfaceMTU int
 
 	v4 *bpfEndpointManagerDataplane
 	v6 *bpfEndpointManagerDataplane
 
-	healthAggregator *health.HealthAggregator
+	healthAggregator     *health.HealthAggregator
+	updateRateLimitedLog *logutilslc.RateLimitedLogger
 }
 
 type bpfEndpointManagerDataplane struct {
@@ -418,6 +437,8 @@ func NewTestEpMgr(
 		logutils.NewSummarizer("test"),
 		new(environment.FakeFeatureDetector),
 		nil,
+		nil,
+		1500,
 	)
 }
 
@@ -436,6 +457,8 @@ func newBPFEndpointManager(
 	opReporter logutils.OpRecorder,
 	featureDetector environment.FeatureDetectorIface,
 	healthAggregator *health.HealthAggregator,
+	dataplanefeatures *environment.Features,
+	bpfIfaceMTU int,
 ) (*bpfEndpointManager, error) {
 	if livenessCallback == nil {
 		livenessCallback = func() {}
@@ -463,6 +486,7 @@ func newBPFEndpointManager(
 		vxlanMTU:                config.VXLANMTU,
 		vxlanPort:               uint16(config.VXLANPort),
 		wgPort:                  uint16(config.Wireguard.ListeningPort),
+		wg6Port:                 uint16(config.Wireguard.ListeningPortV6),
 		dsrEnabled:              config.BPFNodePortDSREnabled,
 		dsrOptoutCidrs:          len(config.BPFDSROptoutCIDRs) > 0,
 		bpfExtToServiceConnmark: config.BPFExtToServiceConnmark,
@@ -493,6 +517,7 @@ func newBPFEndpointManager(
 		dirtyRules:             set.New[polprog.RuleMatchID](),
 
 		healthAggregator: healthAggregator,
+		features:         dataplanefeatures,
 	}
 
 	if healthAggregator != nil {
@@ -505,6 +530,11 @@ func newBPFEndpointManager(
 			Detail: "Not yet synced.",
 		})
 	}
+
+	m.updateRateLimitedLog = logutilslc.NewRateLimitedLogger(
+		logutilslc.OptInterval(30*time.Second),
+		logutilslc.OptBurst(10),
+	)
 
 	// Calculate allowed XDP attachment modes.  Note, in BPF mode untracked ingress policy is
 	// _only_ implemented by XDP, so we _should_ fall back to XDPGeneric if necessary in order
@@ -596,6 +626,7 @@ func newBPFEndpointManager(
 			}
 		}
 
+		m.bpfIfaceMTU = bpfIfaceMTU
 		if err := m.dp.ensureBPFDevices(); err != nil {
 			return nil, fmt.Errorf("ensure BPF devices: %w", err)
 		} else {
@@ -753,6 +784,12 @@ func (m *bpfEndpointManager) updateHostIP(ip net.IP, ipFamily int) {
 			m.dirtyIfaceNames.Add(ifaceName)
 		}
 		m.ifacesLock.Unlock()
+
+		// We use host IP as the source when routing service for the ctlb workaround. We
+		// need to update those routes, so make them all dirty.
+		for svc := range m.services {
+			m.dirtyServices.Add(svc)
+		}
 	} else {
 		log.Warn("Cannot parse hostip, no change applied")
 	}
@@ -901,13 +938,7 @@ func (m *bpfEndpointManager) reclaimPolicyIdx(name string, ipFamily int, iface *
 		}
 		if attachHook != hook.XDP {
 			if err := m.jumpMapAlloc.Put(idx.policyIdx[attachHook], name); err != nil {
-				log.WithError(err).Error(attachHook.String())
-			}
-			if err := m.jumpMapDelete(attachHook, iface.dpState.filterIdx[attachHook]); err != nil {
-				log.WithError(err).Warn("Filter program may leak.")
-			}
-			if err := m.jumpMapAlloc.Put(iface.dpState.filterIdx[attachHook], name); err != nil {
-				log.WithError(err).Error(attachHook.String())
+				log.WithError(err).Errorf("Policy family %d, hook %s", ipFamily, attachHook)
 			}
 		} else {
 			if err := m.xdpJumpMapAlloc.Put(idx.policyIdx[attachHook], name); err != nil {
@@ -917,13 +948,46 @@ func (m *bpfEndpointManager) reclaimPolicyIdx(name string, ipFamily int, iface *
 	}
 }
 
+func (m *bpfEndpointManager) reclaimFilterIdx(name string, iface *bpfInterface) {
+	for _, attachHook := range []hook.Hook{hook.Ingress, hook.Egress} {
+		if err := m.jumpMapDelete(attachHook, iface.dpState.filterIdx[attachHook]); err != nil {
+			log.WithError(err).Warn("Filter program may leak.")
+		}
+		if err := m.jumpMapAlloc.Put(iface.dpState.filterIdx[attachHook], name); err != nil {
+			log.WithError(err).Errorf("Filter hook %s", attachHook)
+		}
+	}
+}
+
+func (m *bpfEndpointManager) getIfTypeFlags(name string, ifaceType IfaceType) uint32 {
+	flags := uint32(0)
+	if m.isWorkloadIface(name) {
+		flags |= ifstate.FlgWEP
+	} else {
+		switch ifaceType {
+		case IfaceTypeData:
+			flags |= ifstate.FlgHEP
+		case IfaceTypeBond:
+			flags |= ifstate.FlgBond
+		case IfaceTypeBondSlave:
+			flags |= ifstate.FlgBondSlave
+		case IfaceTypeL3:
+			flags |= ifstate.FlgL3
+		case IfaceTypeWireguard:
+			flags |= ifstate.FlgWireguard
+		case IfaceTypeVXLAN:
+			flags |= ifstate.FlgVxlan
+		case IfaceTypeIPIP:
+			flags |= ifstate.FlgIPIP
+		}
+	}
+	return flags
+}
+
 func (m *bpfEndpointManager) updateIfaceStateMap(name string, iface *bpfInterface) {
 	k := ifstate.NewKey(uint32(iface.info.ifIndex))
 	if iface.info.ifaceIsUp() {
-		flags := uint32(0)
-		if m.isWorkloadIface(name) {
-			flags |= ifstate.FlgWEP
-		}
+		flags := m.getIfTypeFlags(name, iface.info.ifaceType)
 		if iface.dpState.v4Readiness != ifaceNotReady {
 			flags |= ifstate.FlgIPv4Ready
 		}
@@ -948,6 +1012,7 @@ func (m *bpfEndpointManager) updateIfaceStateMap(name string, iface *bpfInterfac
 		if m.v6 != nil {
 			m.reclaimPolicyIdx(name, 6, iface)
 		}
+		m.reclaimFilterIdx(name, iface)
 		m.ifStateMap.Desired().Delete(k)
 		iface.dpState.clearJumps()
 	}
@@ -1036,8 +1101,46 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceStateUpdate) {
 		return
 	}
 
+	masterIfIndex := 0
+	curIfaceType := IfaceTypeUnknown
+	if update.State != ifacemonitor.StateNotPresent && !m.isWorkloadIface(update.Name) {
+		// Determine the type of interface.
+		// These include host, bond, slave, ipip, wireguard, l3.
+		// update the ifaceType, master ifindex if bond slave.
+		link, err := m.dp.getIfaceLink(update.Name)
+		if err != nil {
+			log.Errorf("Failed to get interface information via netlink '%s'", update.Name)
+			curIfaceType = IfaceTypeL3
+			if m.isDataIface(update.Name) {
+				curIfaceType = IfaceTypeData
+			}
+		} else {
+			curIfaceType = m.getIfaceTypeFromLink(link)
+			masterIfIndex = link.Attrs().MasterIndex
+		}
+		prevIfaceType := IfaceTypeUnknown
+		if val, ok := m.nameToIface[update.Name]; ok {
+			prevIfaceType = val.info.ifaceType
+		}
+		if prevIfaceType != curIfaceType {
+			if curIfaceType == IfaceTypeBondSlave {
+				// Remove the Tc program.
+				ai, err := bpf.ListCalicoAttached()
+				if err != nil {
+					log.WithError(err).Warn("Failed to list attached programs")
+				} else {
+					if err := m.cleanupOldAttach(update.Name, ai[update.Name]); err != nil {
+						log.WithError(err).Warnf("Failed to detach old programs from now bonding device '%s'", update.Name)
+					}
+				}
+			}
+		}
+	}
+
 	m.withIface(update.Name, func(iface *bpfInterface) (forceDirty bool) {
 		ifaceIsUp := update.State == ifacemonitor.StateUp
+		iface.info.masterIfIndex = masterIfIndex
+		iface.info.ifaceType = curIfaceType
 		// Note, only need to handle the mapping and unmapping of the host-* endpoint here.
 		// For specific host endpoints OnHEPUpdate doesn't depend on iface state, and has
 		// already stored and mapped as needed.
@@ -1560,6 +1663,10 @@ func (m *bpfEndpointManager) CompleteDeferredWork() error {
 		}
 		m.reportHealth(true, "")
 	} else {
+		m.dirtyIfaceNames.Iter(func(iface string) error {
+			m.updateRateLimitedLog.WithField("name", iface).Info("Interface remains dirty.")
+			return nil
+		})
 		m.reportHealth(false, "Failed to configure some interfaces.")
 	}
 
@@ -1681,12 +1788,35 @@ func (m *bpfEndpointManager) doApplyPolicyToDataIface(iface string) (bpfInterfac
 		return state, xdpErr
 	}
 
-	if m.v6 != nil && err6 == nil {
-		state.v6Readiness = ifaceIsReady
+	if err4 != nil && err6 != nil {
+		// This covers the case when we don't have hostIP on both paths.
+		return state, errors.Join(err4, err6)
 	}
-	if m.v4 != nil && err4 == nil {
-		state.v4Readiness = ifaceIsReady
+
+	if m.v6 != nil {
+		if err6 == nil {
+			state.v6Readiness = ifaceIsReady
+		}
+		if m.v6.hostIP == nil {
+			// If we do not have host IP for the IP version, we certainly error.
+			// But that should not prevent the other IP version path from
+			// working correctly.
+			err6 = nil
+		}
 	}
+
+	if m.v4 != nil {
+		if err4 == nil {
+			state.v4Readiness = ifaceIsReady
+		}
+		if m.v4.hostIP == nil {
+			// If we do not have host IP for the IP version, we certainly error.
+			// But that should not prevent the other IP version path from
+			// working correctly.
+			err4 = nil
+		}
+	}
+
 	return state, errors.Join(err4, err6)
 }
 
@@ -1698,9 +1828,33 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 		if !m.isDataIface(iface) && !m.isL3Iface(iface) {
 			log.WithField("iface", iface).Debug(
 				"Ignoring interface that doesn't match the host data/l3 interface regex")
+			if !m.isWorkloadIface(iface) {
+				log.WithField("iface", iface).Debug(
+					"Removing interface that doesn't match the host data/l3 interface and is not workload interface")
+				return set.RemoveItem
+			}
 			return nil
 		}
-
+		m.ifacesLock.Lock()
+		val, ok := m.nameToIface[iface]
+		m.ifacesLock.Unlock()
+		if ok {
+			if val.info.ifaceType == IfaceTypeBondSlave {
+				// Check if the master device matches the regex.
+				// If it does, ignore slave devices. If not,
+				// throw a warning and continue to attach to slave.
+				masterIfa, err := m.dp.interfaceByIndex(val.info.masterIfIndex)
+				if err != nil {
+					log.Warnf("Failed to get master interface details for '%s'. Continuing to attach program", iface)
+				} else if !m.isDataIface(masterIfa.Name) {
+					log.Warnf("Master interface '%s' ignored. Add it to the bpfDataIfacePattern config", masterIfa.Name)
+				} else {
+					log.WithField("iface", iface).Debug(
+						"Ignoring bonding slave interface")
+					return set.RemoveItem
+				}
+			}
+		}
 		m.opReporter.RecordOperation("update-data-iface")
 
 		wg.Add(1)
@@ -2095,11 +2249,33 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 	}
 	state.qdisc = ingressQdisc
 
-	if m.v6 != nil && err6 == nil {
-		state.v6Readiness = ifaceIsReady
+	if err4 != nil && err6 != nil {
+		// This covers the case when we don't have hostIP on both paths.
+		return state, errors.Join(err4, err6)
 	}
-	if m.v4 != nil && err4 == nil {
-		state.v4Readiness = ifaceIsReady
+
+	if m.v6 != nil {
+		if err6 == nil {
+			state.v6Readiness = ifaceIsReady
+		}
+		if m.v6.hostIP == nil {
+			// If we do not have host IP for the IP version, we certainly error.
+			// But that should not prevent the other IP version path from
+			// working correctly.
+			err6 = nil
+		}
+	}
+
+	if m.v4 != nil {
+		if err4 == nil {
+			state.v4Readiness = ifaceIsReady
+		}
+		if m.v4.hostIP == nil {
+			// If we do not have host IP for the IP version, we certainly error.
+			// But that should not prevent the other IP version path from
+			// working correctly.
+			err4 = nil
+		}
 	}
 
 	if errors.Join(err4, err6) != nil {
@@ -2547,6 +2723,36 @@ func (m *bpfEndpointManager) apLogFilter(ap *tc.AttachPoint, iface string) (stri
 	return m.bpfLogLevel, exp
 }
 
+func (m *bpfEndpointManager) getEndpointType(ifaceName string) tcdefs.EndpointType {
+	if m.isWorkloadIface(ifaceName) {
+		return tcdefs.EpTypeWorkload
+	}
+	m.ifacesLock.Lock()
+	ifaceType := m.nameToIface[ifaceName].info.ifaceType
+	m.ifacesLock.Unlock()
+	switch ifaceType {
+	case IfaceTypeData, IfaceTypeVXLAN, IfaceTypeBond, IfaceTypeBondSlave:
+		if ifaceName == "lo" {
+			return tcdefs.EpTypeLO
+		}
+		if ifaceName == bpfInDev || ifaceName == bpfOutDev {
+			return tcdefs.EpTypeNAT
+		}
+		return tcdefs.EpTypeHost
+	case IfaceTypeWireguard, IfaceTypeL3:
+		return tcdefs.EpTypeL3Device
+	case IfaceTypeIPIP:
+		if m.features.IPIPDeviceIsL3 {
+			return tcdefs.EpTypeL3Device
+		}
+		return tcdefs.EpTypeTunnel
+	default:
+		log.Panicf("Unsupported ifaceName %v", ifaceName)
+
+	}
+	return tcdefs.EpTypeHost
+}
+
 func (m *bpfEndpointManager) calculateTCAttachPoint(ifaceName string) *tc.AttachPoint {
 	ap := &tc.AttachPoint{
 		AttachPoint: bpf.AttachPoint{
@@ -2554,36 +2760,14 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(ifaceName string) *tc.Attach
 		},
 	}
 
-	var endpointType tcdefs.EndpointType
+	ap.Type = m.getEndpointType(ifaceName)
 
-	// Determine endpoint type.
-	if m.isWorkloadIface(ifaceName) {
-		endpointType = tcdefs.EpTypeWorkload
-	} else if ifaceName == "lo" {
-		endpointType = tcdefs.EpTypeLO
-		if m.hostNetworkedNATMode == hostNetworkedNATUDPOnly {
-			ap.UDPOnly = true
-		}
-	} else if ifaceName == "tunl0" {
-		if m.Features.IPIPDeviceIsL3 {
-			endpointType = tcdefs.EpTypeL3Device
-		} else {
-			endpointType = tcdefs.EpTypeTunnel
-		}
-	} else if ifaceName == "wireguard.cali" || ifaceName == "wg-v6.cali" || m.isL3Iface(ifaceName) {
-		endpointType = tcdefs.EpTypeL3Device
-	} else if ifaceName == bpfInDev || ifaceName == bpfOutDev {
-		endpointType = tcdefs.EpTypeNAT
-	} else if m.isDataIface(ifaceName) {
-		endpointType = tcdefs.EpTypeHost
-		ap.NATin = uint32(m.natInIdx)
-		ap.NATout = uint32(m.natOutIdx)
-	} else {
-		log.Panicf("Unsupported ifaceName %v", ifaceName)
+	if ap.Type == tcdefs.EpTypeLO && m.hostNetworkedNATMode == hostNetworkedNATUDPOnly {
+		ap.UDPOnly = true
 	}
-	ap.Type = endpointType
 	if ap.Type != tcdefs.EpTypeWorkload {
 		ap.WgPort = m.wgPort
+		ap.Wg6Port = m.wg6Port
 		ap.NATin = uint32(m.natInIdx)
 		ap.NATout = uint32(m.natOutIdx)
 	} else {
@@ -2608,7 +2792,6 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(ifaceName string) *tc.Attach
 	default:
 		ap.RPFEnforceOption = tcdefs.RPFEnforceOptionDisabled
 	}
-
 	return ap
 }
 
@@ -3013,6 +3196,7 @@ func (m *bpfEndpointManager) ensureBPFDevices() error {
 	if err != nil {
 		la := netlink.NewLinkAttrs()
 		la.Name = bpfInDev
+		la.MTU = m.bpfIfaceMTU
 		nat := &netlink.Veth{
 			LinkAttrs: la,
 			PeerName:  bpfOutDev,
@@ -3025,6 +3209,7 @@ func (m *bpfEndpointManager) ensureBPFDevices() error {
 			return fmt.Errorf("missing %s after add: %w", bpfInDev, err)
 		}
 	}
+
 	if state := bpfin.Attrs().OperState; state != netlink.OperUp {
 		log.WithField("state", state).Info(bpfInDev)
 		if err := netlink.LinkSetUp(bpfin); err != nil {
@@ -3040,6 +3225,15 @@ func (m *bpfEndpointManager) ensureBPFDevices() error {
 		if err := netlink.LinkSetUp(bpfout); err != nil {
 			return fmt.Errorf("failed to set %s up: %w", bpfOutDev, err)
 		}
+	}
+
+	err = netlink.LinkSetMTU(bpfin, m.bpfIfaceMTU)
+	if err != nil {
+		return fmt.Errorf("failed to set MTU to %d on %s: %w", m.bpfIfaceMTU, bpfInDev, err)
+	}
+	err = netlink.LinkSetMTU(bpfout, m.bpfIfaceMTU)
+	if err != nil {
+		return fmt.Errorf("failed to set MTU to %d on %s: %w", m.bpfIfaceMTU, bpfOutDev, err)
 	}
 
 	m.natInIdx = bpfin.Attrs().Index
@@ -3761,19 +3955,21 @@ var (
 )
 
 func (m *bpfEndpointManager) setRoute(cidr ip.CIDR) {
-	if m.v6 != nil && cidr.Version() == 6 {
-		m.routeTableV6.RouteUpdate(bpfInDev, routetable.Target{
-			Type: routetable.TargetTypeGlobalUnicast,
-			CIDR: cidr,
-			GW:   bpfnatGWIPv6,
-		})
+	target := routetable.Target{
+		Type: routetable.TargetTypeGlobalUnicast,
+		CIDR: cidr,
 	}
-	if m.v4 != nil && cidr.Version() == 4 {
-		m.routeTableV4.RouteUpdate(bpfInDev, routetable.Target{
-			Type: routetable.TargetTypeGlobalUnicast,
-			CIDR: cidr,
-			GW:   bpfnatGWIP,
-		})
+
+	if cidr.Version() == 6 {
+		if m.v6 != nil && m.v6.hostIP != nil {
+			target.GW = bpfnatGWIPv6
+			target.Src = ip.FromNetIP(m.v6.hostIP)
+			m.routeTableV6.RouteUpdate(bpfInDev, target)
+		}
+	} else if m.v4 != nil && m.v4.hostIP != nil {
+		target.GW = bpfnatGWIP
+		target.Src = ip.FromNetIP(m.v4.hostIP)
+		m.routeTableV4.RouteUpdate(bpfInDev, target)
 	}
 
 	log.WithFields(log.Fields{
@@ -3842,6 +4038,55 @@ func (m *bpfEndpointManager) ruleMatchID(dir, action, owner, name string, idx in
 	h := fnv.New64a()
 	h.Write([]byte(action + owner + dir + strconv.Itoa(idx) + name))
 	return h.Sum64()
+}
+
+func (m *bpfEndpointManager) getIfaceLink(name string) (netlink.Link, error) {
+	link, err := netlink.LinkByName(name)
+	if err != nil {
+		return nil, err
+	}
+	return link, nil
+}
+
+func (m *bpfEndpointManager) getIfaceTypeFromLink(link netlink.Link) IfaceType {
+	attrs := link.Attrs()
+	if attrs.Slave != nil && attrs.Slave.SlaveType() == "bond" {
+		return IfaceTypeBondSlave
+	}
+
+	switch link.Type() {
+	case "ipip":
+		return IfaceTypeIPIP
+	case "wireguard":
+		return IfaceTypeWireguard
+	case "vxlan":
+		return IfaceTypeVXLAN
+	case "bond":
+		return IfaceTypeBond
+	case "tuntap":
+		if link.(*netlink.Tuntap).Mode == netlink.TUNTAP_MODE_TUN {
+			return IfaceTypeL3
+		}
+	default:
+		// Loopback device.
+		if attrs.Flags&net.FlagLoopback > 0 {
+			return IfaceTypeData
+		}
+
+		ifa, err := net.InterfaceByName(attrs.Name)
+		if err == nil {
+			addrs, err := ifa.Addrs()
+			if err == nil {
+				if len(attrs.HardwareAddr) == 0 && len(addrs) > 0 {
+					return IfaceTypeL3
+				}
+			}
+		}
+		if m.isL3Iface(attrs.Name) {
+			return IfaceTypeL3
+		}
+	}
+	return IfaceTypeData
 }
 
 func newJumpMapAlloc(entryPoints int) *jumpMapAlloc {
@@ -3944,5 +4189,21 @@ func (pa *jumpMapAlloc) checkFreeLockHeld(idx int) {
 			"set":       pa.free,
 			"stack":     pa.freeStack,
 		}).Panic("jumpMapAlloc: Free set and free stack got out of sync")
+	}
+}
+
+func removeBPFSpecialDevices() {
+	bpfin, err := netlink.LinkByName(bpfInDev)
+	if err != nil {
+		if errors.Is(err, netlink.LinkNotFoundError{}) {
+			return
+		}
+		log.WithError(err).Warnf("Failed to make sure that %s/%s device is (not) present.", bpfInDev, bpfOutDev)
+		return
+	}
+
+	err = netlink.LinkDel(bpfin)
+	if err != nil {
+		log.WithError(err).Warnf("Failed to remove %s/%s device.", bpfInDev, bpfOutDev)
 	}
 }

@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2024 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,9 +23,9 @@ struct sock_key {
 	__u32 envoy_side;
 };
 
-struct bpf_map_def __attribute__((section("maps"))) calico_sock_map = {
-	.type           = BPF_MAP_TYPE_SOCKHASH,
-	.key_size       = sizeof(struct sock_key),
-	.value_size     = sizeof(__u32),
-	.max_entries    = 65535,
-};
+struct {
+    __uint(type, BPF_MAP_TYPE_SOCKHASH);
+    __type(key, struct sock_key);
+    __type(value, __u32);
+    __uint(max_entries, 65535);
+} calico_sock_map SEC(".maps");

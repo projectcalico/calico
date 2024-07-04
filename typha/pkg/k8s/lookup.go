@@ -16,6 +16,7 @@ package k8s
 
 import (
 	"context"
+	"os"
 
 	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -38,7 +39,7 @@ type RealK8sAPI struct {
 func (r *RealK8sAPI) clientSet() (*kubernetes.Clientset, error) {
 	if r.cachedClientSet == nil {
 		// TODO Typha: support Typha lookup without using rest.InClusterConfig().
-		k8sconf, err := winutils.GetInClusterConfig()
+		k8sconf, err := winutils.BuildConfigFromFlags("", os.Getenv("KUBECONFIG"))
 		if err != nil {
 			log.WithError(err).Error("Unable to create Kubernetes config.")
 			return nil, err

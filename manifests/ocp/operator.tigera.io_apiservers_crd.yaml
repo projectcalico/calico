@@ -1157,8 +1157,9 @@ spec:
                                     API server Deployment container.
                                   properties:
                                     name:
-                                      description: Name is an enum which identifies
+                                      description: 'Name is an enum which identifies
                                         the API server Deployment container by name.
+                                        Supported values are: calico-apiserver, tigera-queryserver'
                                       enum:
                                       - calico-apiserver
                                       - tigera-queryserver
@@ -1223,7 +1224,8 @@ spec:
                                             If Requests is omitted for a container,
                                             it defaults to Limits if that is explicitly
                                             specified, otherwise to an implementation-defined
-                                            value. More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
+                                            value. Requests cannot exceed Limits.
+                                            More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
                                           type: object
                                       type: object
                                   required:
@@ -1241,9 +1243,9 @@ spec:
                                     an API server Deployment init container.
                                   properties:
                                     name:
-                                      description: Name is an enum which identifies
+                                      description: 'Name is an enum which identifies
                                         the API server Deployment init container by
-                                        name.
+                                        name. Supported values are: calico-apiserver-certs-key-cert-provisioner'
                                       enum:
                                       - calico-apiserver-certs-key-cert-provisioner
                                       type: string
@@ -1305,7 +1307,8 @@ spec:
                                             If Requests is omitted for a container,
                                             it defaults to Limits if that is explicitly
                                             specified, otherwise to an implementation-defined
-                                            value. More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
+                                            value. Requests cannot exceed Limits.
+                                            More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
                                           type: object
                                       type: object
                                   required:
@@ -1449,16 +1452,21 @@ spec:
                                       type: object
                                       x-kubernetes-map-type: atomic
                                     matchLabelKeys:
-                                      description: MatchLabelKeys is a set of pod
+                                      description: "MatchLabelKeys is a set of pod
                                         label keys to select the pods over which spreading
                                         will be calculated. The keys are used to lookup
                                         values from the incoming pod labels, those
                                         key-value labels are ANDed with labelSelector
                                         to select the group of existing pods over
                                         which spreading will be calculated for the
-                                        incoming pod. Keys that don't exist in the
-                                        incoming pod labels will be ignored. A null
-                                        or empty list means only match against labelSelector.
+                                        incoming pod. The same key is forbidden to
+                                        exist in both MatchLabelKeys and LabelSelector.
+                                        MatchLabelKeys cannot be set when LabelSelector
+                                        isn't set. Keys that don't exist in the incoming
+                                        pod labels will be ignored. A null or empty
+                                        list means only match against labelSelector.
+                                        \n This is a beta field and requires the MatchLabelKeysInPodTopologySpread
+                                        feature gate to be enabled (enabled by default)."
                                       items:
                                         type: string
                                       type: array

@@ -384,7 +384,70 @@ type getnextEntry struct {
 type mapEntry struct {
 	Key   []string `json:"key"`
 	Value []string `json:"value"`
-	Err   string   `json:"error"`
+}
+
+func (me *mapEntry) UnmarshalJSON(data []byte) error {
+	type entry struct {
+		Key   []string `json:"key"`
+		Value any      `json:"value"`
+	}
+
+	if string(data) == "null" {
+		return nil
+	}
+
+	var e entry
+	err := json.Unmarshal(data, &e)
+	if err != nil {
+		// bad json
+		return err
+	}
+
+	v, ok := e.Value.([]any)
+	if !ok {
+		// the value is not what it should be, likely an error like the entry is
+		// now missing (race) so we just ignore it. It is still a valid json.
+		// Return an empty entry which we will filter out.
+		return nil
+	}
+
+	hexbytes := make([]string, len(v))
+	for i, x := range v {
+		hexbytes[i] = x.(string)
+	}
+
+	*me = mapEntry{
+		Key:   e.Key,
+		Value: hexbytes,
+	}
+
+	return nil
+}
+
+type hexMap []mapEntry
+
+func (hm *hexMap) UnmarshalJSON(data []byte) error {
+	if string(data) == "null" {
+		return nil
+	}
+
+	var m []mapEntry
+	err := json.Unmarshal(data, &m)
+	if err != nil {
+		return err
+	}
+
+	var res hexMap
+
+	for _, v := range m {
+		if len(v.Key) != 0 {
+			res = append(res, v)
+		}
+	}
+
+	*hm = res
+
+	return nil
 }
 
 type perCpuMapEntry []struct {
@@ -500,7 +563,7 @@ func (b *BPFLib) DumpFailsafeMap() ([]ProtoPort, error) {
 		return nil, fmt.Errorf("failed to dump map (%s): %s\n%s", mapPath, err, output)
 	}
 
-	l := []mapEntry{}
+	l := hexMap{}
 	err = json.Unmarshal(output, &l)
 	if err != nil {
 		return nil, fmt.Errorf("cannot parse json output: %v\n%s", err, output)
@@ -587,9 +650,6 @@ func (b *BPFLib) LookupFailsafeMap(proto uint8, port uint16) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("cannot parse json output: %v\n%s", err, output)
 	}
-	if l.Err != "" {
-		return false, fmt.Errorf("%s", l.Err)
-	}
 
 	return true, err
 }
@@ -632,9 +692,6 @@ func (b *BPFLib) LookupCIDRMap(ifName string, family IPFamily, ip net.IP, mask i
 	err = json.Unmarshal(output, &l)
 	if err != nil {
 		return 0, fmt.Errorf("cannot parse json output: %v\n%s", err, output)
-	}
-	if l.Err != "" {
-		return 0, fmt.Errorf("%s", l.Err)
 	}
 
 	val, err := hexToCIDRMapValue(l.Value)
@@ -705,7 +762,7 @@ func (b *BPFLib) DumpCIDRMap(ifName string, family IPFamily) (map[CIDRMapKey]uin
 		return nil, fmt.Errorf("failed to dump in map (%s): %s\n%s", mapName, err, output)
 	}
 
-	var al []mapEntry
+	var al hexMap
 	err = json.Unmarshal(output, &al)
 	if err != nil {
 		return nil, fmt.Errorf("cannot parse json output: %v\n%s", err, output)
@@ -2020,7 +2077,7 @@ func (b *BPFLib) DumpSockmapEndpointsMap(family IPFamily) ([]CIDRMapKey, error) 
 		return nil, fmt.Errorf("failed to dump in map (%s): %s\n%s", sockmapEndpointsMapName, err, output)
 	}
 
-	var al []mapEntry
+	var al hexMap
 	err = json.Unmarshal(output, &al)
 	if err != nil {
 		return nil, fmt.Errorf("cannot parse json output: %v\n%s", err, output)
@@ -2076,9 +2133,6 @@ func (b *BPFLib) LookupSockmapEndpointsMap(ip net.IP, mask int) (bool, error) {
 	err = json.Unmarshal(output, &l)
 	if err != nil {
 		return false, fmt.Errorf("cannot parse json output: %v\n%s", err, output)
-	}
-	if l.Err != "" {
-		return false, fmt.Errorf("%s", l.Err)
 	}
 
 	return true, err
@@ -2249,7 +2303,7 @@ func ListTcXDPAttachedProgs(dev ...string) (TcList, XDPList, error) {
 
 // IterMapCmdOutput iterates over the output of a command obtained by DumpMapCmd
 func IterMapCmdOutput(output []byte, f func(k, v []byte)) error {
-	var mp []mapEntry
+	var mp hexMap
 	err := json.Unmarshal(output, &mp)
 	if err != nil {
 		return fmt.Errorf("cannot parse json output: %w\n%s", err, output)

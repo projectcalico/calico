@@ -760,7 +760,7 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 					VxlanPort:    testVxlanPort,
 					PSNatStart:   uint16(topts.psnaStart),
 					PSNatLen:     uint16(topts.psnatEnd-topts.psnaStart) + 1,
-					Flags:        libbpf.GlobalsNoDSRCidrs,
+					Flags:        libbpf.GlobalsNoDSRCidrs | libbpf.GlobalsRPFOptionStrict,
 					LogFilterJmp: 0xffffffff,
 				}
 
@@ -772,7 +772,7 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 					globals.JumpsV6[i] = uint32(i)
 				}
 
-				log.WithField("globals", globals).Debugf("configure program")
+				log.WithField("globals", globals).Debugf("configure program v6")
 
 				if err := tc.ConfigureProgram(m, ifaceLog, &globals); err != nil {
 					return nil, fmt.Errorf("failed to configure tc program: %w", err)

@@ -52,10 +52,14 @@ endif
 ifeq ($(ARCH),arm64)
 # Required for eBPF support in ARM64.
 # We need to force ARM64 build image to be used in a crosscompilation run.
-CALICO_BUILD:=$(GO_BUILD_IMAGE):$(GO_BUILD_VER)-$(ARCH)
+CALICO_BUILD:=$(CALICO_BUILD)-$(ARCH)
 endif
 
 ###############################################################################
+
+# Our (public) GCP bucket where we mirror any third party files
+# that are flaky to retrieve.
+THIRD_PARTY_DEPS_MIRROR=https://storage.googleapis.com/public-calico-third-party-deps
 
 # Versions and location of dependencies used in the build.
 BIRD_IMAGE ?= calico/bird:$(BIRD_VERSION)-$(ARCH)
@@ -86,6 +90,8 @@ WINDOWS_ARCHIVE_TAG?=$(GIT_VERSION)
 WINDOWS_ARCHIVE := dist/calico-windows-$(WINDOWS_ARCHIVE_TAG).zip
 # Version of NSSM to download.
 WINDOWS_NSSM_VERSION=2.24-103-gdee49fc
+# Original source: https://nssm.cc/ci/nssm-$(WINDOWS_NSSM_VERSION).zip
+WINDOWS_NSSM_URL=$(THIRD_PARTY_DEPS_MIRROR)/nssm/nssm-$(WINDOWS_NSSM_VERSION).zip
 # Explicit list of files that we copy in from the mod cache.  This is required because the copying rules we use are pattern-based
 # and they only work with an explicit rule of the form "$(WINDOWS_MOD_CACHED_FILES): <file path from project root>" (otherwise,
 # make has no way to know that the mod cache target produces the files we need).
@@ -246,9 +252,11 @@ endif
 # Building the image
 ###############################################################################
 ## Create the images for all supported ARCHes
-image-all: $(addprefix sub-image-,$(VALIDARCHES))
+image-all: $(addprefix sub-image-,$(VALIDARCHES)) sub-image-fips-amd64
 sub-image-%:
-	$(MAKE) image FIPS=$(FIPS) ARCH=$*
+	$(MAKE) image ARCH=$*
+sub-image-fips-%:
+	$(MAKE) image FIPS=true ARCH=$*
 
 image $(NODE_IMAGE): register $(NODE_CONTAINER_MARKER)
 $(NODE_CONTAINER_CREATED): $(REMOTE_DEPS) ./Dockerfile.$(ARCH) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOURCE) $(NODE_CONTAINER_FILES) $(TOOLS_MOUNTNS_BINARY)
@@ -515,7 +523,7 @@ $(WINDOWS_ARCHIVE_ROOT)/libs/hns/License.txt:
 
 ## Download NSSM.
 windows-packaging/nssm.zip:
-	curl -sSf -L --retry 5 -o $@ https://github.com/projectcalico/calico/releases/download/v3.27.0-$(WINDOWS_NSSM_VERSION).zip
+	curl -sSf -L --retry 5 -o $@ $(WINDOWS_NSSM_URL)
 
 windows-packaging/nssm.exe: windows-packaging/nssm.zip
 	cd windows-packaging && \
@@ -527,7 +535,7 @@ windows-packaging/nssm.exe: windows-packaging/nssm.zip
 $(WINDOWS_ARCHIVE): build-windows-archive
 
 .PHONY: build-windows-archive
-build-windows-archive: build $(WINDOWS_ARCHIVE_FILES) windows-packaging/nssm.zip
+build-windows-archive: $(WINDOWS_ARCHIVE_FILES) windows-packaging/nssm.zip
 	# To be as atomic as possible, we re-do work like unpacking NSSM here.
 	-rm -f "$(WINDOWS_ARCHIVE)"
 	-rm -rf $(WINDOWS_ARCHIVE_ROOT)/nssm

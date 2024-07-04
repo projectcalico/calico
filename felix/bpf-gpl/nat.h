@@ -119,6 +119,11 @@ static CALI_BPF_INLINE int skb_nat_l4_csum(struct cali_tc_ctx *ctx, size_t off,
 
 	/* If the IPs have changed we must replace it as part of the pseudo header that is
 	 * used to calculate L4 csum.
+	 *
+	 * If we are fixing inner ICMP payload, we do not change L4 csum for the payload
+	 * (no need for that, it is just a fraction of the packet), but the L4 here is the
+	 * ICMP itself since its payload has changed. ICMPv4 does not include the pseudo
+	 * header in the csum and v6 had it already fixed when we modified the outer IP.
 	 */
 	if (csum_update) {
 		ret = bpf_l4_csum_replace(skb, off, 0, csum, flags | (inner_icmp ? 0 : BPF_F_PSEUDO_HDR));

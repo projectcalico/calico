@@ -1219,15 +1219,17 @@ spec:
                   type: string
                 type: array
               failsafeInboundHostPorts:
-                description: 'FailsafeInboundHostPorts is a list of UDP/TCP ports
-                  and CIDRs that Felix will allow incoming traffic to host endpoints
-                  on irrespective of the security policy. This is useful to avoid
-                  accidentally cutting off a host with incorrect configuration. For
-                  back-compatibility, if the protocol is not specified, it defaults
-                  to "tcp". If a CIDR is not specified, it will allow traffic from
-                  all addresses. To disable all inbound host ports, use the value
-                  none. The default value allows ssh access and DHCP. [Default: tcp:22,
-                  udp:68, tcp:179, tcp:2379, tcp:2380, tcp:6443, tcp:6666, tcp:6667]'
+                description: 'FailsafeInboundHostPorts is a list of PortProto struct
+                  objects including UDP/TCP/SCTP ports and CIDRs that Felix will allow
+                  incoming traffic to host endpoints on irrespective of the security
+                  policy. This is useful to avoid accidentally cutting off a host
+                  with incorrect configuration. For backwards compatibility, if the
+                  protocol is not specified, it defaults to "tcp". If a CIDR is not
+                  specified, it will allow traffic from all addresses. To disable
+                  all inbound host ports, use the value "[]". The default value allows
+                  ssh access, DHCP, BGP, etcd and the Kubernetes API. [Default: tcp:22,
+                  udp:68, tcp:179, tcp:2379, tcp:2380, tcp:5473, tcp:6443, tcp:6666,
+                  tcp:6667 ]'
                 items:
                   description: ProtoPort is combination of protocol, port, and CIDR.
                     Protocol and port must be specified.
@@ -1244,17 +1246,18 @@ spec:
                   type: object
                 type: array
               failsafeOutboundHostPorts:
-                description: 'FailsafeOutboundHostPorts is a list of UDP/TCP ports
-                  and CIDRs that Felix will allow outgoing traffic from host endpoints
-                  to irrespective of the security policy. This is useful to avoid
-                  accidentally cutting off a host with incorrect configuration. For
-                  back-compatibility, if the protocol is not specified, it defaults
-                  to "tcp". If a CIDR is not specified, it will allow traffic from
-                  all addresses. To disable all outbound host ports, use the value
-                  none. The default value opens etcd''s standard ports to ensure that
-                  Felix does not get cut off from etcd as well as allowing DHCP and
-                  DNS. [Default: tcp:179, tcp:2379, tcp:2380, tcp:6443, tcp:6666,
-                  tcp:6667, udp:53, udp:67]'
+                description: 'FailsafeOutboundHostPorts is a list of List of PortProto
+                  struct objects including UDP/TCP/SCTP ports and CIDRs that Felix
+                  will allow outgoing traffic from host endpoints to irrespective
+                  of the security policy. This is useful to avoid accidentally cutting
+                  off a host with incorrect configuration. For backwards compatibility,
+                  if the protocol is not specified, it defaults to "tcp". If a CIDR
+                  is not specified, it will allow traffic from all addresses. To disable
+                  all outbound host ports, use the value "[]". The default value opens
+                  etcd''s standard ports to ensure that Felix does not get cut off
+                  from etcd as well as allowing DHCP, DNS, BGP and the Kubernetes
+                  API. [Default: udp:53, udp:67, tcp:179, tcp:2379, tcp:2380, tcp:5473,
+                  tcp:6443, tcp:6666, tcp:6667 ]'
                 items:
                   description: ProtoPort is combination of protocol, port, and CIDR.
                     Protocol and port must be specified.
@@ -1298,6 +1301,28 @@ spec:
                   is not recommended since it doesn''t provide better performance
                   than iptables. [Default: false]'
                 type: boolean
+              goGCThreshold:
+                description: "GoGCThreshold Sets the Go runtime's garbage collection
+                  threshold.  I.e. the percentage that the heap is allowed to grow
+                  before garbage collection is triggered.  In general, doubling the
+                  value halves the CPU time spent doing GC, but it also doubles peak
+                  GC memory overhead.  A special value of -1 can be used to disable
+                  GC entirely; this should only be used in conjunction with the GoMemoryLimitMB
+                  setting. \n This setting is overridden by the GOGC environment variable.
+                  \n [Default: 40]"
+                type: integer
+              goMemoryLimitMB:
+                description: "GoMemoryLimitMB sets a (soft) memory limit for the Go
+                  runtime in MB.  The Go runtime will try to keep its memory usage
+                  under the limit by triggering GC as needed.  To avoid thrashing,
+                  it will exceed the limit if GC starts to take more than 50% of the
+                  process's CPU time.  A value of -1 disables the memory limit. \n
+                  Note that the memory limit, if used, must be considerably less than
+                  any hard resource limit set at the container or pod level.  This
+                  is because felix is not the only process that must run in the container
+                  or pod. \n This setting is overridden by the GOMEMLIMIT environment
+                  variable. \n [Default: -1]"
+                type: integer
               healthEnabled:
                 type: boolean
               healthHost:
@@ -5516,8 +5541,9 @@ spec:
                                     API server Deployment container.
                                   properties:
                                     name:
-                                      description: Name is an enum which identifies
+                                      description: 'Name is an enum which identifies
                                         the API server Deployment container by name.
+                                        Supported values are: calico-apiserver, tigera-queryserver'
                                       enum:
                                       - calico-apiserver
                                       - tigera-queryserver
@@ -5582,7 +5608,8 @@ spec:
                                             If Requests is omitted for a container,
                                             it defaults to Limits if that is explicitly
                                             specified, otherwise to an implementation-defined
-                                            value. More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
+                                            value. Requests cannot exceed Limits.
+                                            More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
                                           type: object
                                       type: object
                                   required:
@@ -5600,9 +5627,9 @@ spec:
                                     an API server Deployment init container.
                                   properties:
                                     name:
-                                      description: Name is an enum which identifies
+                                      description: 'Name is an enum which identifies
                                         the API server Deployment init container by
-                                        name.
+                                        name. Supported values are: calico-apiserver-certs-key-cert-provisioner'
                                       enum:
                                       - calico-apiserver-certs-key-cert-provisioner
                                       type: string
@@ -5664,7 +5691,8 @@ spec:
                                             If Requests is omitted for a container,
                                             it defaults to Limits if that is explicitly
                                             specified, otherwise to an implementation-defined
-                                            value. More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
+                                            value. Requests cannot exceed Limits.
+                                            More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
                                           type: object
                                       type: object
                                   required:
@@ -5808,16 +5836,21 @@ spec:
                                       type: object
                                       x-kubernetes-map-type: atomic
                                     matchLabelKeys:
-                                      description: MatchLabelKeys is a set of pod
+                                      description: "MatchLabelKeys is a set of pod
                                         label keys to select the pods over which spreading
                                         will be calculated. The keys are used to lookup
                                         values from the incoming pod labels, those
                                         key-value labels are ANDed with labelSelector
                                         to select the group of existing pods over
                                         which spreading will be calculated for the
-                                        incoming pod. Keys that don't exist in the
-                                        incoming pod labels will be ignored. A null
-                                        or empty list means only match against labelSelector.
+                                        incoming pod. The same key is forbidden to
+                                        exist in both MatchLabelKeys and LabelSelector.
+                                        MatchLabelKeys cannot be set when LabelSelector
+                                        isn't set. Keys that don't exist in the incoming
+                                        pod labels will be ignored. A null or empty
+                                        list means only match against labelSelector.
+                                        \n This is a beta field and requires the MatchLabelKeysInPodTopologySpread
+                                        feature gate to be enabled (enabled by default)."
                                       items:
                                         type: string
                                       type: array
@@ -7279,9 +7312,9 @@ spec:
                                     is a calico-kube-controllers Deployment container.
                                   properties:
                                     name:
-                                      description: Name is an enum which identifies
+                                      description: 'Name is an enum which identifies
                                         the calico-kube-controllers Deployment container
-                                        by name.
+                                        by name. Supported values are: calico-kube-controllers'
                                       enum:
                                       - calico-kube-controllers
                                       type: string
@@ -7346,7 +7379,8 @@ spec:
                                             If Requests is omitted for a container,
                                             it defaults to Limits if that is explicitly
                                             specified, otherwise to an implementation-defined
-                                            value. More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
+                                            value. Requests cannot exceed Limits.
+                                            More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
                                           type: object
                                       type: object
                                   required:
@@ -7461,6 +7495,13 @@ spec:
                       specified. If omitted, a single pool will be configured if needed.
                     items:
                       properties:
+                        allowedUses:
+                          description: AllowedUse controls what the IP pool will be
+                            used for.  If not specified or empty, defaults to ["Tunnel",
+                            "Workload"] for back-compatibility
+                          items:
+                            type: string
+                          type: array
                         blockSize:
                           description: 'BlockSize specifies the CIDR prefex length
                             to use when allocating per-node IP blocks from the main
@@ -7487,6 +7528,10 @@ spec:
                           - VXLANCrossSubnet
                           - None
                           type: string
+                        name:
+                          description: Name is the name of the IP pool. If omitted,
+                            this will be generated.
+                          type: string
                         natOutgoing:
                           description: 'NATOutgoing specifies if NAT will be enabled
                             or disabled for outgoing traffic. Default: Enabled'
@@ -7501,6 +7546,7 @@ spec:
                       required:
                       - cidr
                       type: object
+                    maxItems: 25
                     type: array
                   linuxDataplane:
                     description: 'LinuxDataplane is used to select the dataplane used
@@ -7513,6 +7559,15 @@ spec:
                     - BPF
                     - VPP
                     type: string
+                  linuxPolicySetupTimeoutSeconds:
+                    description: "LinuxPolicySetupTimeoutSeconds delays new pods from
+                      running containers until their policy has been programmed in
+                      the dataplane. The specified delay defines the maximum amount
+                      of time that the Calico CNI plugin will wait for policy to be
+                      programmed. \n Only applies to pods created on Linux nodes.
+                      \n * A value of 0 disables pod startup delays. \n Default: 0"
+                    format: int32
+                    type: integer
                   mtu:
                     description: MTU specifies the maximum transmission unit to use
                       on the pod network. If not specified, Calico will perform MTU
@@ -7600,6 +7655,23 @@ spec:
                           on interfaces that do not match the given regex.
                         type: string
                     type: object
+                  sysctl:
+                    description: Sysctl configures sysctl parameters for tuning plugin
+                    items:
+                      properties:
+                        key:
+                          enum:
+                          - net.ipv4.tcp_keepalive_intvl
+                          - net.ipv4.tcp_keepalive_probes
+                          - net.ipv4.tcp_keepalive_time
+                          type: string
+                        value:
+                          type: string
+                      required:
+                      - key
+                      - value
+                      type: object
+                    type: array
                   windowsDataplane:
                     description: 'WindowsDataplane is used to select the dataplane
                       used for Windows nodes. In particular, it causes the operator
@@ -8733,8 +8805,9 @@ spec:
                                     DaemonSet container.
                                   properties:
                                     name:
-                                      description: Name is an enum which identifies
+                                      description: 'Name is an enum which identifies
                                         the calico-node DaemonSet container by name.
+                                        Supported values are: calico-node'
                                       enum:
                                       - calico-node
                                       type: string
@@ -8798,7 +8871,8 @@ spec:
                                             If Requests is omitted for a container,
                                             it defaults to Limits if that is explicitly
                                             specified, otherwise to an implementation-defined
-                                            value. More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
+                                            value. Requests cannot exceed Limits.
+                                            More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
                                           type: object
                                       type: object
                                   required:
@@ -8816,9 +8890,11 @@ spec:
                                     a calico-node DaemonSet init container.
                                   properties:
                                     name:
-                                      description: Name is an enum which identifies
+                                      description: 'Name is an enum which identifies
                                         the calico-node DaemonSet init container by
-                                        name.
+                                        name. Supported values are: install-cni, hostpath-init,
+                                        flexvol-driver, mount-bpffs, node-certs-key-cert-provisioner,
+                                        calico-node-prometheus-server-tls-key-cert-provisioner'
                                       enum:
                                       - install-cni
                                       - hostpath-init
@@ -8887,7 +8963,8 @@ spec:
                                             If Requests is omitted for a container,
                                             it defaults to Limits if that is explicitly
                                             specified, otherwise to an implementation-defined
-                                            value. More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
+                                            value. Requests cannot exceed Limits.
+                                            More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
                                           type: object
                                       type: object
                                   required:
@@ -10086,9 +10163,9 @@ spec:
                                     is a calico-node-windows DaemonSet container.
                                   properties:
                                     name:
-                                      description: Name is an enum which identifies
+                                      description: 'Name is an enum which identifies
                                         the calico-node-windows DaemonSet container
-                                        by name.
+                                        by name. Supported values are: calico-node-windows'
                                       enum:
                                       - calico-node-windows
                                       type: string
@@ -10152,7 +10229,8 @@ spec:
                                             If Requests is omitted for a container,
                                             it defaults to Limits if that is explicitly
                                             specified, otherwise to an implementation-defined
-                                            value. More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
+                                            value. Requests cannot exceed Limits.
+                                            More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
                                           type: object
                                       type: object
                                   required:
@@ -10170,9 +10248,11 @@ spec:
                                     is a calico-node-windows DaemonSet init container.
                                   properties:
                                     name:
-                                      description: Name is an enum which identifies
+                                      description: 'Name is an enum which identifies
                                         the calico-node-windows DaemonSet init container
-                                        by name.
+                                        by name. Supported values are: install-cni;hostpath-init,
+                                        flexvol-driver, mount-bpffs, node-certs-key-cert-provisioner,
+                                        calico-node-windows-prometheus-server-tls-key-cert-provisioner'
                                       enum:
                                       - install-cni
                                       - hostpath-init
@@ -10242,7 +10322,8 @@ spec:
                                             If Requests is omitted for a container,
                                             it defaults to Limits if that is explicitly
                                             specified, otherwise to an implementation-defined
-                                            value. More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
+                                            value. Requests cannot exceed Limits.
+                                            More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
                                           type: object
                                       type: object
                                   required:
@@ -11509,7 +11590,8 @@ spec:
                                             If Requests is omitted for a container,
                                             it defaults to Limits if that is explicitly
                                             specified, otherwise to an implementation-defined
-                                            value. More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
+                                            value. Requests cannot exceed Limits.
+                                            More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
                                           type: object
                                       type: object
                                   required:
@@ -11744,8 +11826,8 @@ spec:
                           description: 'Requests describes the minimum amount of compute
                             resources required. If Requests is omitted for a container,
                             it defaults to Limits if that is explicitly specified,
-                            otherwise to an implementation-defined value. More info:
-                            https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
+                            otherwise to an implementation-defined value. Requests
+                            cannot exceed Limits. More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
                           type: object
                       type: object
                   required:
@@ -12930,9 +13012,9 @@ spec:
                                     a csi-node-driver DaemonSet container.
                                   properties:
                                     name:
-                                      description: Name is an enum which identifies
+                                      description: 'Name is an enum which identifies
                                         the csi-node-driver DaemonSet container by
-                                        name.
+                                        name. Supported values are: csi-node-driver'
                                       enum:
                                       - csi-node-driver
                                       type: string
@@ -12994,7 +13076,8 @@ spec:
                                             If Requests is omitted for a container,
                                             it defaults to Limits if that is explicitly
                                             specified, otherwise to an implementation-defined
-                                            value. More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
+                                            value. Requests cannot exceed Limits.
+                                            More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
                                           type: object
                                       type: object
                                   required:
@@ -13141,6 +13224,7 @@ spec:
                 - OpenShift
                 - DockerEnterprise
                 - RKE2
+                - TKG
                 type: string
               logging:
                 description: Logging Configuration for Components
@@ -14648,8 +14732,9 @@ spec:
                                     Deployment container.
                                   properties:
                                     name:
-                                      description: Name is an enum which identifies
-                                        the typha Deployment container by name.
+                                      description: 'Name is an enum which identifies
+                                        the typha Deployment container by name. Supported
+                                        values are: calico-typha'
                                       enum:
                                       - calico-typha
                                       type: string
@@ -14713,7 +14798,8 @@ spec:
                                             If Requests is omitted for a container,
                                             it defaults to Limits if that is explicitly
                                             specified, otherwise to an implementation-defined
-                                            value. More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
+                                            value. Requests cannot exceed Limits.
+                                            More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
                                           type: object
                                       type: object
                                   required:
@@ -14731,8 +14817,9 @@ spec:
                                     Deployment init container.
                                   properties:
                                     name:
-                                      description: Name is an enum which identifies
+                                      description: 'Name is an enum which identifies
                                         the typha Deployment init container by name.
+                                        Supported values are: typha-certs-key-cert-provisioner'
                                       enum:
                                       - typha-certs-key-cert-provisioner
                                       type: string
@@ -14796,7 +14883,8 @@ spec:
                                             If Requests is omitted for a container,
                                             it defaults to Limits if that is explicitly
                                             specified, otherwise to an implementation-defined
-                                            value. More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
+                                            value. Requests cannot exceed Limits.
+                                            More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
                                           type: object
                                       type: object
                                   required:
@@ -14949,16 +15037,21 @@ spec:
                                       type: object
                                       x-kubernetes-map-type: atomic
                                     matchLabelKeys:
-                                      description: MatchLabelKeys is a set of pod
+                                      description: "MatchLabelKeys is a set of pod
                                         label keys to select the pods over which spreading
                                         will be calculated. The keys are used to lookup
                                         values from the incoming pod labels, those
                                         key-value labels are ANDed with labelSelector
                                         to select the group of existing pods over
                                         which spreading will be calculated for the
-                                        incoming pod. Keys that don't exist in the
-                                        incoming pod labels will be ignored. A null
-                                        or empty list means only match against labelSelector.
+                                        incoming pod. The same key is forbidden to
+                                        exist in both MatchLabelKeys and LabelSelector.
+                                        MatchLabelKeys cannot be set when LabelSelector
+                                        isn't set. Keys that don't exist in the incoming
+                                        pod labels will be ignored. A null or empty
+                                        list means only match against labelSelector.
+                                        \n This is a beta field and requires the MatchLabelKeysInPodTopologySpread
+                                        feature gate to be enabled (enabled by default)."
                                       items:
                                         type: string
                                       type: array
@@ -16371,9 +16464,10 @@ spec:
                                         is a calico-kube-controllers Deployment container.
                                       properties:
                                         name:
-                                          description: Name is an enum which identifies
+                                          description: 'Name is an enum which identifies
                                             the calico-kube-controllers Deployment
-                                            container by name.
+                                            container by name. Supported values are:
+                                            calico-kube-controllers'
                                           enum:
                                           - calico-kube-controllers
                                           type: string
@@ -16439,7 +16533,8 @@ spec:
                                                 a container, it defaults to Limits
                                                 if that is explicitly specified, otherwise
                                                 to an implementation-defined value.
-                                                More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
+                                                Requests cannot exceed Limits. More
+                                                info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
                                               type: object
                                           type: object
                                       required:
@@ -16560,6 +16655,13 @@ spec:
                           if needed.
                         items:
                           properties:
+                            allowedUses:
+                              description: AllowedUse controls what the IP pool will
+                                be used for.  If not specified or empty, defaults
+                                to ["Tunnel", "Workload"] for back-compatibility
+                              items:
+                                type: string
+                              type: array
                             blockSize:
                               description: 'BlockSize specifies the CIDR prefex length
                                 to use when allocating per-node IP blocks from the
@@ -16587,6 +16689,10 @@ spec:
                               - VXLANCrossSubnet
                               - None
                               type: string
+                            name:
+                              description: Name is the name of the IP pool. If omitted,
+                                this will be generated.
+                              type: string
                             natOutgoing:
                               description: 'NATOutgoing specifies if NAT will be enabled
                                 or disabled for outgoing traffic. Default: Enabled'
@@ -16601,6 +16707,7 @@ spec:
                           required:
                           - cidr
                           type: object
+                        maxItems: 25
                         type: array
                       linuxDataplane:
                         description: 'LinuxDataplane is used to select the dataplane
@@ -16613,6 +16720,16 @@ spec:
                         - BPF
                         - VPP
                         type: string
+                      linuxPolicySetupTimeoutSeconds:
+                        description: "LinuxPolicySetupTimeoutSeconds delays new pods
+                          from running containers until their policy has been programmed
+                          in the dataplane. The specified delay defines the maximum
+                          amount of time that the Calico CNI plugin will wait for
+                          policy to be programmed. \n Only applies to pods created
+                          on Linux nodes. \n * A value of 0 disables pod startup delays.
+                          \n Default: 0"
+                        format: int32
+                        type: integer
                       mtu:
                         description: MTU specifies the maximum transmission unit to
                           use on the pod network. If not specified, Calico will perform
@@ -16702,6 +16819,24 @@ spec:
                               on interfaces that do not match the given regex.
                             type: string
                         type: object
+                      sysctl:
+                        description: Sysctl configures sysctl parameters for tuning
+                          plugin
+                        items:
+                          properties:
+                            key:
+                              enum:
+                              - net.ipv4.tcp_keepalive_intvl
+                              - net.ipv4.tcp_keepalive_probes
+                              - net.ipv4.tcp_keepalive_time
+                              type: string
+                            value:
+                              type: string
+                          required:
+                          - key
+                          - value
+                          type: object
+                        type: array
                       windowsDataplane:
                         description: 'WindowsDataplane is used to select the dataplane
                           used for Windows nodes. In particular, it causes the operator
@@ -17930,9 +18065,9 @@ spec:
                                         a calico-node DaemonSet container.
                                       properties:
                                         name:
-                                          description: Name is an enum which identifies
+                                          description: 'Name is an enum which identifies
                                             the calico-node DaemonSet container by
-                                            name.
+                                            name. Supported values are: calico-node'
                                           enum:
                                           - calico-node
                                           type: string
@@ -17998,7 +18133,8 @@ spec:
                                                 a container, it defaults to Limits
                                                 if that is explicitly specified, otherwise
                                                 to an implementation-defined value.
-                                                More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
+                                                Requests cannot exceed Limits. More
+                                                info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
                                               type: object
                                           type: object
                                       required:
@@ -18016,9 +18152,11 @@ spec:
                                         is a calico-node DaemonSet init container.
                                       properties:
                                         name:
-                                          description: Name is an enum which identifies
+                                          description: 'Name is an enum which identifies
                                             the calico-node DaemonSet init container
-                                            by name.
+                                            by name. Supported values are: install-cni,
+                                            hostpath-init, flexvol-driver, mount-bpffs,
+                                            node-certs-key-cert-provisioner, calico-node-prometheus-server-tls-key-cert-provisioner'
                                           enum:
                                           - install-cni
                                           - hostpath-init
@@ -18089,7 +18227,8 @@ spec:
                                                 a container, it defaults to Limits
                                                 if that is explicitly specified, otherwise
                                                 to an implementation-defined value.
-                                                More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
+                                                Requests cannot exceed Limits. More
+                                                info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
                                               type: object
                                           type: object
                                       required:
@@ -19384,9 +19523,9 @@ spec:
                                         is a calico-node-windows DaemonSet container.
                                       properties:
                                         name:
-                                          description: Name is an enum which identifies
+                                          description: 'Name is an enum which identifies
                                             the calico-node-windows DaemonSet container
-                                            by name.
+                                            by name. Supported values are: calico-node-windows'
                                           enum:
                                           - calico-node-windows
                                           type: string
@@ -19452,7 +19591,8 @@ spec:
                                                 a container, it defaults to Limits
                                                 if that is explicitly specified, otherwise
                                                 to an implementation-defined value.
-                                                More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
+                                                Requests cannot exceed Limits. More
+                                                info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
                                               type: object
                                           type: object
                                       required:
@@ -19471,9 +19611,12 @@ spec:
                                         is a calico-node-windows DaemonSet init container.
                                       properties:
                                         name:
-                                          description: Name is an enum which identifies
+                                          description: 'Name is an enum which identifies
                                             the calico-node-windows DaemonSet init
-                                            container by name.
+                                            container by name. Supported values are:
+                                            install-cni;hostpath-init, flexvol-driver,
+                                            mount-bpffs, node-certs-key-cert-provisioner,
+                                            calico-node-windows-prometheus-server-tls-key-cert-provisioner'
                                           enum:
                                           - install-cni
                                           - hostpath-init
@@ -19544,7 +19687,8 @@ spec:
                                                 a container, it defaults to Limits
                                                 if that is explicitly specified, otherwise
                                                 to an implementation-defined value.
-                                                More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
+                                                Requests cannot exceed Limits. More
+                                                info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
                                               type: object
                                           type: object
                                       required:
@@ -20907,7 +21051,8 @@ spec:
                                                 a container, it defaults to Limits
                                                 if that is explicitly specified, otherwise
                                                 to an implementation-defined value.
-                                                More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
+                                                Requests cannot exceed Limits. More
+                                                info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
                                               type: object
                                           type: object
                                       required:
@@ -21153,7 +21298,7 @@ spec:
                                 of compute resources required. If Requests is omitted
                                 for a container, it defaults to Limits if that is
                                 explicitly specified, otherwise to an implementation-defined
-                                value. More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
+                                value. Requests cannot exceed Limits. More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
                               type: object
                           type: object
                       required:
@@ -22433,9 +22578,9 @@ spec:
                                         is a csi-node-driver DaemonSet container.
                                       properties:
                                         name:
-                                          description: Name is an enum which identifies
+                                          description: 'Name is an enum which identifies
                                             the csi-node-driver DaemonSet container
-                                            by name.
+                                            by name. Supported values are: csi-node-driver'
                                           enum:
                                           - csi-node-driver
                                           type: string
@@ -22499,7 +22644,8 @@ spec:
                                                 a container, it defaults to Limits
                                                 if that is explicitly specified, otherwise
                                                 to an implementation-defined value.
-                                                More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
+                                                Requests cannot exceed Limits. More
+                                                info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
                                               type: object
                                           type: object
                                       required:
@@ -22649,6 +22795,7 @@ spec:
                     - OpenShift
                     - DockerEnterprise
                     - RKE2
+                    - TKG
                     type: string
                   logging:
                     description: Logging Configuration for Components
@@ -24267,8 +24414,9 @@ spec:
                                         Deployment container.
                                       properties:
                                         name:
-                                          description: Name is an enum which identifies
+                                          description: 'Name is an enum which identifies
                                             the typha Deployment container by name.
+                                            Supported values are: calico-typha'
                                           enum:
                                           - calico-typha
                                           type: string
@@ -24334,7 +24482,8 @@ spec:
                                                 a container, it defaults to Limits
                                                 if that is explicitly specified, otherwise
                                                 to an implementation-defined value.
-                                                More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
+                                                Requests cannot exceed Limits. More
+                                                info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
                                               type: object
                                           type: object
                                       required:
@@ -24352,9 +24501,9 @@ spec:
                                         a typha Deployment init container.
                                       properties:
                                         name:
-                                          description: Name is an enum which identifies
+                                          description: 'Name is an enum which identifies
                                             the typha Deployment init container by
-                                            name.
+                                            name. Supported values are: typha-certs-key-cert-provisioner'
                                           enum:
                                           - typha-certs-key-cert-provisioner
                                           type: string
@@ -24420,7 +24569,8 @@ spec:
                                                 a container, it defaults to Limits
                                                 if that is explicitly specified, otherwise
                                                 to an implementation-defined value.
-                                                More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
+                                                Requests cannot exceed Limits. More
+                                                info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
                                               type: object
                                           type: object
                                       required:
@@ -24582,7 +24732,7 @@ spec:
                                           type: object
                                           x-kubernetes-map-type: atomic
                                         matchLabelKeys:
-                                          description: MatchLabelKeys is a set of
+                                          description: "MatchLabelKeys is a set of
                                             pod label keys to select the pods over
                                             which spreading will be calculated. The
                                             keys are used to lookup values from the
@@ -24590,9 +24740,16 @@ spec:
                                             are ANDed with labelSelector to select
                                             the group of existing pods over which
                                             spreading will be calculated for the incoming
-                                            pod. Keys that don't exist in the incoming
-                                            pod labels will be ignored. A null or
-                                            empty list means only match against labelSelector.
+                                            pod. The same key is forbidden to exist
+                                            in both MatchLabelKeys and LabelSelector.
+                                            MatchLabelKeys cannot be set when LabelSelector
+                                            isn't set. Keys that don't exist in the
+                                            incoming pod labels will be ignored. A
+                                            null or empty list means only match against
+                                            labelSelector. \n This is a beta field
+                                            and requires the MatchLabelKeysInPodTopologySpread
+                                            feature gate to be enabled (enabled by
+                                            default)."
                                           items:
                                             type: string
                                           type: array
@@ -24996,6 +25153,8 @@ kind: ServiceAccount
 metadata:
   name: tigera-operator
   namespace: tigera-operator
+  labels:
+    k8s-app: tigera-operator
 imagePullSecrets:
   []
 ---
@@ -25005,6 +25164,8 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   name: tigera-operator
+  labels:
+    k8s-app: tigera-operator
 rules:
   - apiGroups:
       - ""
@@ -25147,6 +25308,7 @@ rules:
     - crd.projectcalico.org
     resources:
     - felixconfigurations
+    - ippools
     verbs:
     - create
     - patch
@@ -25156,10 +25318,21 @@ rules:
   - apiGroups:
     - crd.projectcalico.org
     resources:
-    - ippools
     - kubecontrollersconfigurations
     - bgpconfigurations
     verbs:
+    - get
+    - list
+    - watch
+  - apiGroups:
+    - projectcalico.org
+    resources:
+    - ippools
+    verbs:
+    - create
+    - update
+    - delete
+    - patch
     - get
     - list
     - watch
@@ -25259,6 +25432,8 @@ kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   name: tigera-operator
+  labels:
+    k8s-app: tigera-operator
 subjects:
 - kind: ServiceAccount
   name: tigera-operator

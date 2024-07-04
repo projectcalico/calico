@@ -146,7 +146,7 @@ Distributions packaging libbpf from this mirror:
   - [Gentoo](https://packages.gentoo.org/packages/dev-libs/libbpf)
   - [Debian](https://packages.debian.org/source/sid/libbpf)
   - [Arch](https://archlinux.org/packages/core/x86_64/libbpf/)
-  - [Ubuntu](https://packages.ubuntu.com/source/impish/libbpf)
+  - [Ubuntu](https://packages.ubuntu.com/source/jammy/libbpf)
   - [Alpine](https://pkgs.alpinelinux.org/packages?name=libbpf)
 
 Benefits of packaging from the mirror over packaging from kernel sources:

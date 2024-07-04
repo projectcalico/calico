@@ -2618,7 +2618,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"failsafeInboundHostPorts": {
 						SchemaProps: spec.SchemaProps{
-							Description: "FailsafeInboundHostPorts is a list of UDP/TCP ports and CIDRs that Felix will allow incoming traffic to host endpoints on irrespective of the security policy. This is useful to avoid accidentally cutting off a host with incorrect configuration. For back-compatibility, if the protocol is not specified, it defaults to \"tcp\". If a CIDR is not specified, it will allow traffic from all addresses. To disable all inbound host ports, use the value none. The default value allows ssh access and DHCP. [Default: tcp:22, udp:68, tcp:179, tcp:2379, tcp:2380, tcp:6443, tcp:6666, tcp:6667]",
+							Description: "FailsafeInboundHostPorts is a list of PortProto struct objects including UDP/TCP/SCTP ports and CIDRs that Felix will allow incoming traffic to host endpoints on irrespective of the security policy. This is useful to avoid accidentally cutting off a host with incorrect configuration. For backwards compatibility, if the protocol is not specified, it defaults to \"tcp\". If a CIDR is not specified, it will allow traffic from all addresses. To disable all inbound host ports, use the value \"[]\". The default value allows ssh access, DHCP, BGP, etcd and the Kubernetes API. [Default: tcp:22, udp:68, tcp:179, tcp:2379, tcp:2380, tcp:5473, tcp:6443, tcp:6666, tcp:6667 ]",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -2632,7 +2632,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"failsafeOutboundHostPorts": {
 						SchemaProps: spec.SchemaProps{
-							Description: "FailsafeOutboundHostPorts is a list of UDP/TCP ports and CIDRs that Felix will allow outgoing traffic from host endpoints to irrespective of the security policy. This is useful to avoid accidentally cutting off a host with incorrect configuration. For back-compatibility, if the protocol is not specified, it defaults to \"tcp\". If a CIDR is not specified, it will allow traffic from all addresses. To disable all outbound host ports, use the value none. The default value opens etcd's standard ports to ensure that Felix does not get cut off from etcd as well as allowing DHCP and DNS. [Default: tcp:179, tcp:2379, tcp:2380, tcp:6443, tcp:6666, tcp:6667, udp:53, udp:67]",
+							Description: "FailsafeOutboundHostPorts is a list of List of PortProto struct objects including UDP/TCP/SCTP ports and CIDRs that Felix will allow outgoing traffic from host endpoints to irrespective of the security policy. This is useful to avoid accidentally cutting off a host with incorrect configuration. For backwards compatibility, if the protocol is not specified, it defaults to \"tcp\". If a CIDR is not specified, it will allow traffic from all addresses. To disable all outbound host ports, use the value \"[]\". The default value opens etcd's standard ports to ensure that Felix does not get cut off from etcd as well as allowing DHCP, DNS, BGP and the Kubernetes API. [Default: udp:53, udp:67, tcp:179, tcp:2379, tcp:2380, tcp:5473, tcp:6443, tcp:6666, tcp:6667 ]",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -3199,6 +3199,20 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Description: "WindowsManageFirewallRules configures whether or not Felix will program Windows Firewall rules. (to allow inbound access to its own metrics ports) [Default: Disabled]",
 							Type:        []string{"string"},
 							Format:      "",
+						},
+					},
+					"goGCThreshold": {
+						SchemaProps: spec.SchemaProps{
+							Description: "GoGCThreshold Sets the Go runtime's garbage collection threshold.  I.e. the percentage that the heap is allowed to grow before garbage collection is triggered.  In general, doubling the value halves the CPU time spent doing GC, but it also doubles peak GC memory overhead.  A special value of -1 can be used to disable GC entirely; this should only be used in conjunction with the GoMemoryLimitMB setting.\n\nThis setting is overridden by the GOGC environment variable.\n\n[Default: 40]",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"goMemoryLimitMB": {
+						SchemaProps: spec.SchemaProps{
+							Description: "GoMemoryLimitMB sets a (soft) memory limit for the Go runtime in MB.  The Go runtime will try to keep its memory usage under the limit by triggering GC as needed.  To avoid thrashing, it will exceed the limit if GC starts to take more than 50% of the process's CPU time.  A value of -1 disables the memory limit.\n\nNote that the memory limit, if used, must be considerably less than any hard resource limit set at the container or pod level.  This is because felix is not the only process that must run in the container or pod.\n\nThis setting is overridden by the GOMEMLIMIT environment variable.\n\n[Default: -1]",
+							Type:        []string{"integer"},
+							Format:      "int32",
 						},
 					},
 				},
