@@ -42,13 +42,6 @@ for package_type in "$@"; do
     case ${package_type} in
 
 	deb )
-	    if [ "${PKG_NAME}" = felix ]; then
-	        # Felix is built with RHEL/UBI and links against libpcap.so.1. We need this patchelf
-	        # until Debian changes the soname from .0.8 to .1.
-	        # FIXME remove the following patchelf command once Debian dependency is updated.
-	        patchelf --replace-needed libpcap.so.1 libpcap.so.0.8 bin/calico-felix
-	    fi
-
 	    # The Debian version that we are about to generate.
 	    debver=${FORCE_VERSION_DEB:-`git_version_to_deb ${version}`}
 	    debver=`strip_v ${debver}`
@@ -87,6 +80,13 @@ EOF
 	    ;;
 
 	rpm )
+	    if [ "${PKG_NAME}" = felix ]; then
+	        # Felix is built with Debian based toolchain and links against libpcap.so.0.8.
+			# We need this patchelf for felix to run on RHEL distros. This is not needed
+			# with our RHEL based toolchain.
+	        patchelf --replace-needed libpcap.so.0.8 libpcap.so.1 bin/calico-felix
+	    fi
+
 	    rpm_spec=rpm/${PKG_NAME}.spec
 	    if [ -f ${rpm_spec}.in ]; then
 		debver=${FORCE_VERSION_RPM:-`git_version_to_rpm ${version}`}
