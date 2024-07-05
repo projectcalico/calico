@@ -40,10 +40,10 @@ type State struct {
 	ExpectedUntrackedPolicyIDs           set.Set[types.PolicyID]
 	ExpectedPreDNATPolicyIDs             set.Set[types.PolicyID]
 	ExpectedProfileIDs                   set.Set[types.ProfileID]
-	ExpectedRoutes                       set.Set[proto.RouteUpdate]
-	ExpectedVTEPs                        set.Set[proto.VXLANTunnelEndpointUpdate]
-	ExpectedWireguardEndpoints           set.Set[proto.WireguardEndpointUpdate]
-	ExpectedWireguardV6Endpoints         set.Set[proto.WireguardEndpointV6Update]
+	ExpectedRoutes                       set.Set[types.RouteUpdate]
+	ExpectedVTEPs                        set.Set[types.VXLANTunnelEndpointUpdate]
+	ExpectedWireguardEndpoints           set.Set[types.WireguardEndpointUpdate]
+	ExpectedWireguardV6Endpoints         set.Set[types.WireguardEndpointV6Update]
 	ExpectedEndpointPolicyOrder          map[string][]mock.TierInfo
 	ExpectedUntrackedEndpointPolicyOrder map[string][]mock.TierInfo
 	ExpectedPreDNATEndpointPolicyOrder   map[string][]mock.TierInfo
@@ -67,10 +67,10 @@ func NewState() State {
 		ExpectedUntrackedPolicyIDs:           set.New[types.PolicyID](),
 		ExpectedPreDNATPolicyIDs:             set.New[types.PolicyID](),
 		ExpectedProfileIDs:                   set.New[types.ProfileID](),
-		ExpectedRoutes:                       set.New[proto.RouteUpdate](),
-		ExpectedVTEPs:                        set.New[proto.VXLANTunnelEndpointUpdate](),
-		ExpectedWireguardEndpoints:           set.New[proto.WireguardEndpointUpdate](),
-		ExpectedWireguardV6Endpoints:         set.New[proto.WireguardEndpointV6Update](),
+		ExpectedRoutes:                       set.New[types.RouteUpdate](),
+		ExpectedVTEPs:                        set.New[types.VXLANTunnelEndpointUpdate](),
+		ExpectedWireguardEndpoints:           set.New[types.WireguardEndpointUpdate](),
+		ExpectedWireguardV6Endpoints:         set.New[types.WireguardEndpointV6Update](),
 		ExpectedEndpointPolicyOrder:          make(map[string][]mock.TierInfo),
 		ExpectedUntrackedEndpointPolicyOrder: make(map[string][]mock.TierInfo),
 		ExpectedPreDNATEndpointPolicyOrder:   make(map[string][]mock.TierInfo),
@@ -231,13 +231,13 @@ func (s State) withActiveProfiles(ids ...types.ProfileID) (newState State) {
 	return newState
 }
 
-func (s State) withVTEPs(vteps ...proto.VXLANTunnelEndpointUpdate) (newState State) {
+func (s State) withVTEPs(vteps ...types.VXLANTunnelEndpointUpdate) (newState State) {
 	newState = s.Copy()
 	newState.ExpectedVTEPs = set.FromArray(vteps)
 	return newState
 }
 
-func (s State) withRoutes(routes ...proto.RouteUpdate) (newState State) {
+func (s State) withRoutes(routes ...types.RouteUpdate) (newState State) {
 	newState = s.Copy()
 	newState.ExpectedRoutes = set.FromArray(routes)
 	return newState
@@ -258,13 +258,13 @@ func (s State) withExpectedEncapsulation(encap proto.Encapsulation) (newState St
 	return newState
 }
 
-func (s State) withWireguardEndpoints(endpoints ...proto.WireguardEndpointUpdate) (newState State) {
+func (s State) withWireguardEndpoints(endpoints ...types.WireguardEndpointUpdate) (newState State) {
 	newState = s.Copy()
 	newState.ExpectedWireguardEndpoints = set.FromArray(endpoints)
 	return newState
 }
 
-func (s State) withWireguardV6Endpoints(endpoints ...proto.WireguardEndpointV6Update) (newState State) {
+func (s State) withWireguardV6Endpoints(endpoints ...types.WireguardEndpointV6Update) (newState State) {
 	newState = s.Copy()
 	newState.ExpectedWireguardV6Endpoints = set.FromArray(endpoints)
 	return newState

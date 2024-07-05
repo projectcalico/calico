@@ -25,6 +25,7 @@ import (
 	"github.com/projectcalico/calico/felix/calc"
 	"github.com/projectcalico/calico/felix/config"
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/felix/types"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 )
@@ -240,13 +241,13 @@ var _ = Describe("ServiceAccount update/remove", func() {
 			Id:     &proto.ServiceAccountID{Name: "test", Namespace: "test"},
 			Labels: map[string]string{"k1": "v1"},
 		})
-		uut.OnServiceAccountRemove(proto.ServiceAccountID{Name: "test", Namespace: "test"})
+		uut.OnServiceAccountRemove(types.ServiceAccountID{Name: "test", Namespace: "test"})
 		uut.Flush()
 		Expect(recorder.Messages).To(BeNil())
 	})
 
 	It("should coalesce remove + add", func() {
-		uut.OnServiceAccountRemove(proto.ServiceAccountID{Name: "test", Namespace: "test"})
+		uut.OnServiceAccountRemove(types.ServiceAccountID{Name: "test", Namespace: "test"})
 		uut.OnServiceAccountUpdate(&proto.ServiceAccountUpdate{
 			Id:     &proto.ServiceAccountID{Name: "test", Namespace: "test"},
 			Labels: map[string]string{"k1": "v1"},
@@ -271,7 +272,7 @@ var _ = Describe("ServiceAccount update/remove", func() {
 		// Clear messages
 		recorder.Messages = make([]interface{}, 0)
 
-		uut.OnServiceAccountRemove(proto.ServiceAccountID{Name: "test", Namespace: "test"})
+		uut.OnServiceAccountRemove(types.ServiceAccountID{Name: "test", Namespace: "test"})
 		uut.Flush()
 		Expect(recorder.Messages).To(Equal([]interface{}{&proto.ServiceAccountRemove{
 			Id: &proto.ServiceAccountID{Name: "test", Namespace: "test"},
@@ -311,13 +312,13 @@ var _ = Describe("Namespace update/remove", func() {
 			Id:     &proto.NamespaceID{Name: "test"},
 			Labels: map[string]string{"k1": "v1"},
 		})
-		uut.OnNamespaceRemove(proto.NamespaceID{Name: "test"})
+		uut.OnNamespaceRemove(types.NamespaceID{Name: "test"})
 		uut.Flush()
 		Expect(recorder.Messages).To(BeNil())
 	})
 
 	It("should coalesce remove + add", func() {
-		uut.OnNamespaceRemove(proto.NamespaceID{Name: "test"})
+		uut.OnNamespaceRemove(types.NamespaceID{Name: "test"})
 		uut.OnNamespaceUpdate(&proto.NamespaceUpdate{
 			Id:     &proto.NamespaceID{Name: "test"},
 			Labels: map[string]string{"k1": "v1"},
@@ -342,7 +343,7 @@ var _ = Describe("Namespace update/remove", func() {
 		// Clear messages
 		recorder.Messages = make([]interface{}, 0)
 
-		uut.OnNamespaceRemove(proto.NamespaceID{Name: "test"})
+		uut.OnNamespaceRemove(types.NamespaceID{Name: "test"})
 		uut.Flush()
 		Expect(recorder.Messages).To(Equal([]interface{}{&proto.NamespaceRemove{
 			Id: &proto.NamespaceID{Name: "test"},
