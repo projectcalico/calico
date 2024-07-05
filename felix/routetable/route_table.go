@@ -1168,6 +1168,7 @@ func (r *RouteTable) applyUpdates(attempt int) error {
 			deletionErrs[kernKey] = err
 			return deltatracker.IterActionNoOp
 		}
+		r.conntrackTracker.RemoveDataplaneOwners(kernKey)
 		// Route is gone, clean up the dataplane side of the tracker.
 		r.logCxt.WithField("route", kernKey).Debug("Deleted route.")
 		return deltatracker.IterActionUpdateDataplane
@@ -1181,14 +1182,21 @@ func (r *RouteTable) applyUpdates(attempt int) error {
 	// synchronously and kick off conntrack deletions for the old interface.
 	// This makes sure that we don't have a window where a new connection
 	// can start using the old interface.
+	var conntrackKeysToCleanUp []kernelRouteKey
 	r.conntrackTracker.IterMovedRoutesAndStartDeletions(func(kernKey kernelRouteKey) {
 		err := r.deleteRoute(nl, kernKey)
 		if err != nil {
 			deletionErrs[kernKey] = err
 		} else {
 			r.kernelRoutes.Dataplane().Delete(kernKey)
+			conntrackKeysToCleanUp = append(conntrackKeysToCleanUp, kernKey)
 		}
 	})
+	// Defensive: do the deletion after the iteration to avoid modifying the
+	// tracker while iterating over it.
+	for _, kernKey := range conntrackKeysToCleanUp {
+		r.conntrackTracker.RemoveDataplaneOwners(kernKey)
+	}
 
 	updateErrs := map[kernelRouteKey]error{}
 	r.kernelRoutes.PendingUpdates().Iter(func(kernKey kernelRouteKey, kRoute kernelRoute) deltatracker.IterAction {

@@ -30,6 +30,7 @@ type RouteOwnershipTracker interface {
 	SetAllowedOwner(key kernelRouteKey, idx int)
 	RemoveAllowedOwner(key kernelRouteKey)
 	AddDataplaneOwner(kernKey kernelRouteKey, ifindex int)
+	RemoveDataplaneOwners(kernKey kernelRouteKey)
 	SetSingleDataplaneOwner(key kernelRouteKey, idx int)
 
 	StartDeletionsForDeletedRoutes()
@@ -127,6 +128,17 @@ func (c *ConntrackCleanupManager) AddDataplaneOwner(kernKey kernelRouteKey, ifin
 	newOwners[len(ifaces)] = ifindex
 	ipOwners = ipOwners.WithKey(kernKey, newOwners)
 	c.possibleOwners.Dataplane().Set(addr, ipOwners)
+}
+
+func (c *ConntrackCleanupManager) RemoveDataplaneOwners(kernKey kernelRouteKey) {
+	addr := kernKey.CIDR.Addr()
+	ipOwners, _ := c.possibleOwners.Dataplane().Get(addr)
+	ipOwners = ipOwners.WithKeyDeleted(kernKey)
+	if ipOwners.Len() > 0 {
+		c.possibleOwners.Dataplane().Set(addr, ipOwners)
+	} else {
+		c.possibleOwners.Dataplane().Delete(addr)
+	}
 }
 
 // SetSingleDataplaneOwner records that the given interface is now the sole
