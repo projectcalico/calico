@@ -306,9 +306,9 @@ func TestActiveProfileUpdateExist(t *testing.T) {
 	store := policystore.NewPolicyStore()
 	store.ProfileByID[id] = profile2
 
-	pid := types.ProfileIDToProto(id)
+	protoID := types.ProfileIDToProto(id)
 	update := &proto.ActiveProfileUpdate{
-		Id:      pid,
+		Id:      protoID,
 		Profile: profile1,
 	}
 	processActiveProfileUpdate(store, update)
@@ -365,8 +365,8 @@ func TestActiveProfileRemoveExist(t *testing.T) {
 	store := policystore.NewPolicyStore()
 	store.ProfileByID[id] = profile1
 
-	pid := types.ProfileIDToProto(id)
-	update := &proto.ActiveProfileRemove{Id: pid}
+	protoID := types.ProfileIDToProto(id)
+	update := &proto.ActiveProfileRemove{Id: protoID}
 	processActiveProfileRemove(store, update)
 	Expect(store.ProfileByID[id]).To(BeNil())
 }
@@ -419,9 +419,9 @@ func TestActivePolicyUpdateExist(t *testing.T) {
 	store := policystore.NewPolicyStore()
 	store.PolicyByID[id] = policy2
 
-	pid := types.PolicyIDToProto(id)
+	protoID := types.PolicyIDToProto(id)
 	update := &proto.ActivePolicyUpdate{
-		Id:     pid,
+		Id:     protoID,
 		Policy: policy1,
 	}
 	processActivePolicyUpdate(store, update)
@@ -478,8 +478,8 @@ func TestActivePolicyRemoveExist(t *testing.T) {
 	store := policystore.NewPolicyStore()
 	store.PolicyByID[id] = policy1
 
-	pid := types.PolicyIDToProto(id)
-	update := &proto.ActivePolicyRemove{Id: pid}
+	protoID := types.PolicyIDToProto(id)
+	update := &proto.ActivePolicyRemove{Id: protoID}
 	processActivePolicyRemove(store, update)
 	Expect(store.PolicyByID[id]).To(BeNil())
 }

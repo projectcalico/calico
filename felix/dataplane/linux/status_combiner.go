@@ -87,31 +87,31 @@ func (e *endpointStatusCombiner) Apply() {
 			logCxt.Info("Reporting endpoint removed.")
 			switch id := id.(type) {
 			case types.WorkloadEndpointID:
-				pid := types.WorkloadEndpointIDToProto(id)
+				protoID := types.WorkloadEndpointIDToProto(id)
 				e.fromDataplane <- &proto.WorkloadEndpointStatusRemove{
-					Id: pid,
+					Id: protoID,
 				}
 			case types.HostEndpointID:
-				pid := types.HostEndpointIDToProto(id)
+				protoID := types.HostEndpointIDToProto(id)
 				e.fromDataplane <- &proto.HostEndpointStatusRemove{
-					Id: pid,
+					Id: protoID,
 				}
 			}
 		} else {
 			logCxt.WithField("status", statusToReport).Info("Reporting combined status.")
 			switch id := id.(type) {
 			case types.WorkloadEndpointID:
-				pid := types.WorkloadEndpointIDToProto(id)
+				protoID := types.WorkloadEndpointIDToProto(id)
 				e.fromDataplane <- &proto.WorkloadEndpointStatusUpdate{
-					Id: pid,
+					Id: protoID,
 					Status: &proto.EndpointStatus{
 						Status: statusToReport,
 					},
 				}
 			case types.HostEndpointID:
-				pid := types.HostEndpointIDToProto(id)
+				protoID := types.HostEndpointIDToProto(id)
 				e.fromDataplane <- &proto.HostEndpointStatusUpdate{
-					Id: pid,
+					Id: protoID,
 					Status: &proto.EndpointStatus{
 						Status: statusToReport,
 					},

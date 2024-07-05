@@ -99,15 +99,15 @@ func TestInitPeerStoreLabels(t *testing.T) {
 	}}
 	store := policystore.NewPolicyStore()
 	id := types.ServiceAccountID{Name: "bacon", Namespace: "sandwich"}
-	pid := types.ServiceAccountIDToProto(id)
+	protoID := types.ServiceAccountIDToProto(id)
 	store.ServiceAccountByID[id] = &proto.ServiceAccountUpdate{
-		Id:     pid,
+		Id:     protoID,
 		Labels: map[string]string{"k5": "v5", "k6": "v6"},
 	}
 	id = types.ServiceAccountID{Name: "ham", Namespace: "sub"}
-	pid = types.ServiceAccountIDToProto(id)
+	protoID = types.ServiceAccountIDToProto(id)
 	store.ServiceAccountByID[id] = &proto.ServiceAccountUpdate{
-		Id:     pid,
+		Id:     protoID,
 		Labels: map[string]string{"k7": "v7", "k8": "v8"},
 	}
 	uut, err := NewRequestCache(store, req)
@@ -135,15 +135,15 @@ func TestInitPeerBothLabels(t *testing.T) {
 	}}
 	store := policystore.NewPolicyStore()
 	id := types.ServiceAccountID{Name: "bacon", Namespace: "sandwich"}
-	pid := types.ServiceAccountIDToProto(id)
+	protoID := types.ServiceAccountIDToProto(id)
 	store.ServiceAccountByID[id] = &proto.ServiceAccountUpdate{
-		Id:     pid,
+		Id:     protoID,
 		Labels: map[string]string{"k5": "v5", "k6": "v6"},
 	}
 	id = types.ServiceAccountID{Name: "ham", Namespace: "sub"}
-	pid = types.ServiceAccountIDToProto(id)
+	protoID = types.ServiceAccountIDToProto(id)
 	store.ServiceAccountByID[id] = &proto.ServiceAccountUpdate{
-		Id:     pid,
+		Id:     protoID,
 		Labels: map[string]string{"k7": "v7", "k8": "v8"},
 	}
 	uut, err := NewRequestCache(store, req)
@@ -185,15 +185,15 @@ func TestNamespaceLabels(t *testing.T) {
 	}}
 	store := policystore.NewPolicyStore()
 	id := types.NamespaceID{Name: "sandwich"}
-	pid := types.NamespaceIDToProto(id)
+	protoID := types.NamespaceIDToProto(id)
 	store.NamespaceByID[id] = &proto.NamespaceUpdate{
-		Id:     pid,
+		Id:     protoID,
 		Labels: map[string]string{"k5": "v5", "k6": "v6"},
 	}
 	id = types.NamespaceID{Name: "sub"}
-	pid = types.NamespaceIDToProto(id)
+	protoID = types.NamespaceIDToProto(id)
 	store.NamespaceByID[id] = &proto.NamespaceUpdate{
-		Id:     pid,
+		Id:     protoID,
 		Labels: map[string]string{"k7": "v7", "k8": "v8"},
 	}
 	uut, err := NewRequestCache(store, req)

@@ -353,11 +353,11 @@ func TestMatchRuleNamespaceSelectors(t *testing.T) {
 
 	store := policystore.NewPolicyStore()
 	id := types.NamespaceID{Name: "src"}
-	pid := types.NamespaceIDToProto(id)
-	store.NamespaceByID[id] = &proto.NamespaceUpdate{Id: pid, Labels: map[string]string{"place": "src"}}
+	protoID := types.NamespaceIDToProto(id)
+	store.NamespaceByID[id] = &proto.NamespaceUpdate{Id: protoID, Labels: map[string]string{"place": "src"}}
 	id = types.NamespaceID{Name: "dst"}
-	pid = types.NamespaceIDToProto(id)
-	store.NamespaceByID[id] = &proto.NamespaceUpdate{Id: pid, Labels: map[string]string{"place": "dst"}}
+	protoID = types.NamespaceIDToProto(id)
+	store.NamespaceByID[id] = &proto.NamespaceUpdate{Id: protoID, Labels: map[string]string{"place": "dst"}}
 	reqCache, err := NewRequestCache(store, req)
 	Expect(err).To(Succeed())
 	Expect(match(rule, reqCache, "")).To(BeTrue())

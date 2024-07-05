@@ -56,23 +56,23 @@ func (p *ProfileDecoder) OnUpdate(update api.Update) (filterOut bool) {
 	case nil:
 		log.WithField("key", key.String()).Debug("Ignoring Profile labels")
 	case types.ServiceAccountID:
-		pid := types.ServiceAccountIDToProto(id)
+		protoID := types.ServiceAccountIDToProto(id)
 		if update.Value == nil {
 			p.callbacks.OnServiceAccountRemove(id)
 		} else {
 			labels := update.Value.(*apiv3.Profile).Spec.LabelsToApply
 			msg := proto.ServiceAccountUpdate{
-				Id: pid, Labels: decodeLabels(conversion.ServiceAccountLabelPrefix, labels)}
+				Id: protoID, Labels: decodeLabels(conversion.ServiceAccountLabelPrefix, labels)}
 			p.callbacks.OnServiceAccountUpdate(&msg)
 		}
 	case types.NamespaceID:
-		pid := types.NamespaceIDToProto(id)
+		protoID := types.NamespaceIDToProto(id)
 		if update.Value == nil {
 			p.callbacks.OnNamespaceRemove(id)
 		} else {
 			labels := update.Value.(*apiv3.Profile).Spec.LabelsToApply
 			msg := proto.NamespaceUpdate{
-				Id: pid, Labels: decodeLabels(conversion.NamespaceLabelPrefix, labels)}
+				Id: protoID, Labels: decodeLabels(conversion.NamespaceLabelPrefix, labels)}
 			p.callbacks.OnNamespaceUpdate(&msg)
 		}
 	}
