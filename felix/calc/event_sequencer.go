@@ -910,8 +910,8 @@ func (buf *EventSequencer) OnServiceAccountRemove(id types.ServiceAccountID) {
 func (buf *EventSequencer) flushServiceAccounts() {
 	// Order doesn't matter, but send removes first to reduce max occupancy
 	buf.pendingServiceAccountDeletes.Iter(func(id types.ServiceAccountID) error {
-		pid := types.ServiceAccountIDToProto(id)
-		msg := proto.ServiceAccountRemove{Id: pid}
+		protoID := types.ServiceAccountIDToProto(id)
+		msg := proto.ServiceAccountRemove{Id: protoID}
 		buf.Callback(&msg)
 		buf.sentServiceAccounts.Discard(id)
 		return nil
@@ -984,8 +984,8 @@ func (buf *EventSequencer) OnGlobalBGPConfigUpdate(cfg *v3.BGPConfiguration) {
 func (buf *EventSequencer) flushNamespaces() {
 	// Order doesn't matter, but send removes first to reduce max occupancy
 	buf.pendingNamespaceDeletes.Iter(func(id types.NamespaceID) error {
-		pid := types.NamespaceIDToProto(id)
-		msg := proto.NamespaceRemove{Id: pid}
+		protoID := types.NamespaceIDToProto(id)
+		msg := proto.NamespaceRemove{Id: protoID}
 		buf.Callback(&msg)
 		buf.sentNamespaces.Discard(id)
 		return nil
