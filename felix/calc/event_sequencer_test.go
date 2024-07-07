@@ -15,12 +15,11 @@
 package calc_test
 
 import (
-	"fmt"
-	"reflect"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
+
+	googleproto "google.golang.org/protobuf/proto"
 
 	"github.com/projectcalico/calico/felix/calc"
 	"github.com/projectcalico/calico/felix/config"
@@ -31,9 +30,9 @@ import (
 )
 
 var _ = DescribeTable("ModelWorkloadEndpointToProto",
-	func(in model.WorkloadEndpoint, expected proto.WorkloadEndpoint) {
+	func(in model.WorkloadEndpoint, expected *proto.WorkloadEndpoint) {
 		out := calc.ModelWorkloadEndpointToProto(&in, []*proto.TierInfo{})
-		Expect(*out).To(Equal(expected))
+		Expect(out).To(Equal(expected))
 	},
 	Entry("workload endpoint with NAT", model.WorkloadEndpoint{
 		State:      "up",
@@ -49,7 +48,7 @@ var _ = DescribeTable("ModelWorkloadEndpointToProto",
 			},
 		},
 		IPv6NAT: []model.IPNAT{},
-	}, proto.WorkloadEndpoint{
+	}, &proto.WorkloadEndpoint{
 		State:      "up",
 		Name:       "bill",
 		Mac:        "01:02:03:04:05:06",
@@ -70,7 +69,7 @@ var _ = DescribeTable("ModelWorkloadEndpointToProto",
 		State:                      "up",
 		Name:                       "bill",
 		AllowSpoofedSourcePrefixes: []net.IPNet{net.MustParseCIDR("8.8.8.8/32")},
-	}, proto.WorkloadEndpoint{
+	}, &proto.WorkloadEndpoint{
 		State:                      "up",
 		Name:                       "bill",
 		Ipv4Nets:                   []string{},
@@ -117,16 +116,14 @@ var _ = Describe("ParsedRulesToActivePolicyUpdate", func() {
 		// all filled in.  If any are still at their zero value, either the test is out of date
 		// or we forgot to add conversion logic for that field.
 		protoUpdate := calc.ParsedRulesToActivePolicyUpdate(model.PolicyKey{Name: "a-policy"}, &fullyLoadedParsedRules)
-		protoPolicy := *protoUpdate.Policy
-		protoPolicyValue := reflect.ValueOf(protoPolicy)
-		numFields := protoPolicyValue.NumField()
-		for i := 0; i < numFields; i++ {
-			field := protoPolicyValue.Field(i)
-			fieldName := reflect.TypeOf(protoPolicy).Field(i).Name
-			Expect(field.Interface()).NotTo(Equal(reflect.Zero(field.Type()).Interface()),
-				fmt.Sprintf("Field %s in the protobuf struct was still at its zero value; "+
-					"missing from conversion or fully-loaded rule?", fieldName))
+		protoPolicy := protoUpdate.GetPolicy()
+		if googleproto.Equal(protoPolicy, &proto.Policy{}) {
+			return
 		}
+		Expect(protoPolicy.GetNamespace()).NotTo(BeNil())
+		Expect(protoPolicy.GetInboundRules()).NotTo(BeNil())
+		Expect(protoPolicy.GetOutboundRules()).NotTo(BeNil())
+		Expect(protoPolicy.GetOriginalSelector()).NotTo(BeNil())
 	})
 
 	It("should convert the fully-loaded rule", func() {
@@ -140,14 +137,15 @@ var _ = Describe("ParsedRulesToActivePolicyUpdate", func() {
 			Expect(r.RuleId).ToNot(Equal(""))
 			r.RuleId = ""
 		}
-		Expect(protoUpdate).To(Equal(&fullyLoadedProtoRules))
+		equal := googleproto.Equal(protoUpdate, &fullyLoadedProtoRules)
+		Expect(equal).To(BeTrue())
 	})
 })
 
 var _ = DescribeTable("ModelHostEndpointToProto",
-	func(in model.HostEndpoint, tiers, untrackedTiers []*proto.TierInfo, forwardTiers []*proto.TierInfo, expected proto.HostEndpoint) {
+	func(in model.HostEndpoint, tiers, untrackedTiers []*proto.TierInfo, forwardTiers []*proto.TierInfo, expected *proto.HostEndpoint) {
 		out := calc.ModelHostEndpointToProto(&in, tiers, untrackedTiers, nil, forwardTiers)
-		Expect(*out).To(Equal(expected))
+		Expect(out).To(Equal(expected))
 	},
 	Entry("minimal endpoint",
 		model.HostEndpoint{
@@ -156,7 +154,7 @@ var _ = DescribeTable("ModelHostEndpointToProto",
 		nil,
 		nil,
 		nil,
-		proto.HostEndpoint{
+		&proto.HostEndpoint{
 			ExpectedIpv4Addrs: []string{"10.28.0.13"},
 			ExpectedIpv6Addrs: []string{},
 		},
@@ -174,7 +172,7 @@ var _ = DescribeTable("ModelHostEndpointToProto",
 		[]*proto.TierInfo{{Name: "a", IngressPolicies: []string{"b", "c"}}},
 		[]*proto.TierInfo{{Name: "d", IngressPolicies: []string{"e", "f"}}},
 		[]*proto.TierInfo{{Name: "g", IngressPolicies: []string{"h", "i"}}},
-		proto.HostEndpoint{
+		&proto.HostEndpoint{
 			Name:              "eth0",
 			ExpectedIpv4Addrs: []string{"10.28.0.13", "10.28.0.14"},
 			ExpectedIpv6Addrs: []string{"dead::beef", "dead::bee5"},
@@ -197,7 +195,7 @@ var _ = DescribeTable("ModelHostEndpointToProto",
 		[]*proto.TierInfo{{Name: "a", IngressPolicies: []string{"b"}}},
 		[]*proto.TierInfo{{Name: "a", EgressPolicies: []string{"c"}}},
 		[]*proto.TierInfo{{Name: "a", EgressPolicies: []string{"d"}}},
-		proto.HostEndpoint{
+		&proto.HostEndpoint{
 			Name:              "eth0",
 			ExpectedIpv4Addrs: []string{"10.28.0.13", "10.28.0.14"},
 			ExpectedIpv6Addrs: []string{"dead::beef", "dead::bee5"},

@@ -20,6 +20,8 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	googleproto "google.golang.org/protobuf/proto"
+
 	"github.com/projectcalico/calico/felix/dataplane/mock"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/types"
@@ -47,9 +49,9 @@ type State struct {
 	ExpectedEndpointPolicyOrder          map[string][]mock.TierInfo
 	ExpectedUntrackedEndpointPolicyOrder map[string][]mock.TierInfo
 	ExpectedPreDNATEndpointPolicyOrder   map[string][]mock.TierInfo
-	ExpectedHostMetadataV4V6             map[string]proto.HostMetadataV4V6Update
+	ExpectedHostMetadataV4V6             map[string]*proto.HostMetadataV4V6Update
 	ExpectedNumberOfALPPolicies          int
-	ExpectedEncapsulation                proto.Encapsulation
+	ExpectedEncapsulation                *proto.Encapsulation
 }
 
 func (s State) String() string {
@@ -74,7 +76,8 @@ func NewState() State {
 		ExpectedEndpointPolicyOrder:          make(map[string][]mock.TierInfo),
 		ExpectedUntrackedEndpointPolicyOrder: make(map[string][]mock.TierInfo),
 		ExpectedPreDNATEndpointPolicyOrder:   make(map[string][]mock.TierInfo),
-		ExpectedHostMetadataV4V6:             make(map[string]proto.HostMetadataV4V6Update),
+		ExpectedHostMetadataV4V6:             make(map[string]*proto.HostMetadataV4V6Update),
+		ExpectedEncapsulation:                &proto.Encapsulation{},
 	}
 }
 
@@ -106,7 +109,7 @@ func (s State) Copy() State {
 	cpy.ExpectedWireguardEndpoints = s.ExpectedWireguardEndpoints.Copy()
 	cpy.ExpectedWireguardV6Endpoints = s.ExpectedWireguardV6Endpoints.Copy()
 	cpy.ExpectedNumberOfALPPolicies = s.ExpectedNumberOfALPPolicies
-	cpy.ExpectedEncapsulation = s.ExpectedEncapsulation
+	cpy.ExpectedEncapsulation = googleproto.Clone(s.ExpectedEncapsulation).(*proto.Encapsulation)
 
 	cpy.Name = s.Name
 	return cpy
@@ -243,18 +246,18 @@ func (s State) withRoutes(routes ...types.RouteUpdate) (newState State) {
 	return newState
 }
 
-func (s State) withHostMetadataV4V6(hostMetas ...proto.HostMetadataV4V6Update) (newState State) {
+func (s State) withHostMetadataV4V6(hostMetas ...*proto.HostMetadataV4V6Update) (newState State) {
 	newState = s.Copy()
-	newState.ExpectedHostMetadataV4V6 = make(map[string]proto.HostMetadataV4V6Update)
+	newState.ExpectedHostMetadataV4V6 = make(map[string]*proto.HostMetadataV4V6Update)
 	for _, v := range hostMetas {
 		newState.ExpectedHostMetadataV4V6[v.Hostname] = v
 	}
 	return newState
 }
 
-func (s State) withExpectedEncapsulation(encap proto.Encapsulation) (newState State) {
+func (s State) withExpectedEncapsulation(encap *proto.Encapsulation) (newState State) {
 	newState = s.Copy()
-	newState.ExpectedEncapsulation = encap
+	newState.ExpectedEncapsulation = googleproto.Clone(encap).(*proto.Encapsulation)
 	return newState
 }
 
