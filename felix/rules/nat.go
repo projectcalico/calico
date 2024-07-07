@@ -52,13 +52,16 @@ func (r *DefaultRuleRenderer) makeNATOutgoingRuleBPF(version uint8, protocol str
 func (r *DefaultRuleRenderer) makeNATOutgoingRuleIPTables(ipVersion uint8, protocol string, action Action) Rule {
 	ipConf := r.ipSetConfig(ipVersion)
 	allIPsSetName := ipConf.NameForMainIPSet(IPSetIDNATOutgoingAllPools)
-	allHostsIPsSetName := ipConf.NameForMainIPSet(IPSetIDAllHostNets)
 	masqIPsSetName := ipConf.NameForMainIPSet(IPSetIDNATOutgoingMasqPools)
 
 	match := r.NewMatch().
 		SourceIPSet(masqIPsSetName).
-		NotDestIPSet(allIPsSetName).
-		NotDestIPSet(allHostsIPsSetName)
+		NotDestIPSet(allIPsSetName)
+
+	if !r.Config.DisableHostSubnetNATExclusion {
+		allHostsIPsSetName := ipConf.NameForMainIPSet(IPSetIDAllHostNets)
+		match = match.NotDestIPSet(allHostsIPsSetName)
+	}
 
 	if protocol != "" {
 		match = match.Protocol(protocol)

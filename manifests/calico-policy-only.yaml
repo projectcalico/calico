@@ -1293,6 +1293,12 @@ spec:
                 type: string
               disableConntrackInvalidCheck:
                 type: boolean
+              disableHostSubnetNATExclusion:
+                description: 'When set to true and ip pool setting `natOutgoing` is
+                  true, packets sent from Calico networked containers in this pool
+                  to cluster host subnet will not be excluded from being masqueraded.  [Default:
+                  false]'
+                type: boolean
               endpointReportingDelay:
                 pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                 type: string

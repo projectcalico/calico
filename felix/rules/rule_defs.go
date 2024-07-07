@@ -352,6 +352,7 @@ type Config struct {
 	IptablesNATOutgoingInterfaceFilter string
 
 	NATOutgoingAddress             net.IP
+	DisableHostSubnetNATExclusion  bool
 	BPFEnabled                     bool
 	BPFForceTrackPacketsFromIfaces []string
 	ServiceLoopPrevention          string

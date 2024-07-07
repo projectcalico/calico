@@ -396,6 +396,10 @@ type FelixConfigurationSpec struct {
 	// (ie it uses the iptables MASQUERADE target)
 	NATOutgoingAddress string `json:"natOutgoingAddress,omitempty"`
 
+	// When set to true and ip pool setting `natOutgoing` is true, packets sent from Calico networked containers in this pool
+	// to cluster host subnet will not be excluded from being masqueraded.  [Default: false]
+	DisableHostSubnetNATExclusion bool `json:"disableHostSubnetNATExclusion,omitempty"`
+
 	// This is the IPv4 source address to use on programmed device routes. By default the source address is left blank,
 	// leaving the kernel to choose the source address used.
 	DeviceRouteSourceAddress string `json:"deviceRouteSourceAddress,omitempty"`

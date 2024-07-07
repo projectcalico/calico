@@ -2697,6 +2697,13 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Format:      "",
 						},
 					},
+					"disableHostSubnetNATExclusion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "When set to true and ip pool setting `natOutgoing` is true, packets sent from Calico networked containers in this pool to cluster host subnet will not be excluded from being masqueraded.  [Default: false]",
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
 					"deviceRouteSourceAddress": {
 						SchemaProps: spec.SchemaProps{
 							Description: "This is the IPv4 source address to use on programmed device routes. By default the source address is left blank, leaving the kernel to choose the source address used.",
