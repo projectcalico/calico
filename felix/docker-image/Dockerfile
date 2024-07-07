@@ -19,11 +19,11 @@
 
 ARG QEMU_IMAGE
 
-FROM ${QEMU_IMAGE} as qemu
+FROM ${QEMU_IMAGE} AS qemu
 
-FROM calico/bpftool:v7.4.0 as bpftool
+FROM calico/bpftool:v7.4.0 AS bpftool
 
-FROM debian:11-slim as source
+FROM debian:11-slim AS source
 
 LABEL maintainer="Shaun Crampton <shaun@tigera.io>"
 
