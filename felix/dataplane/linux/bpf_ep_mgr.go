@@ -3120,14 +3120,14 @@ func (m *bpfEndpointManager) addHEPToIndexes(ifaceName string, ep *proto.HostEnd
 }
 
 func (m *bpfEndpointManager) removeHEPFromIndexes(ifaceName string, ep *proto.HostEndpoint) {
-	for _, tiers := range [][]*proto.TierInfo{ep.Tiers, ep.UntrackedTiers, ep.PreDnatTiers, ep.ForwardTiers} {
+	for _, tiers := range [][]*proto.TierInfo{ep.GetTiers(), ep.GetUntrackedTiers(), ep.GetPreDnatTiers(), ep.GetForwardTiers()} {
 		for _, t := range tiers {
 			m.removePolicyToEPMappings(t.IngressPolicies, ifaceName)
 			m.removePolicyToEPMappings(t.EgressPolicies, ifaceName)
 		}
 	}
 
-	m.removeProfileToEPMappings(ep.ProfileIds, ifaceName)
+	m.removeProfileToEPMappings(ep.GetProfileIds(), ifaceName)
 }
 
 // Dataplane code.

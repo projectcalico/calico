@@ -29,6 +29,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
+	googleproto "google.golang.org/protobuf/proto"
 
 	"github.com/vishvananda/netlink"
 
@@ -546,7 +547,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		}
 	}
 
-	hostEp := proto.HostEndpoint{
+	hostEp := &proto.HostEndpoint{
 		Name: "uthost-eth0",
 		PreDnatTiers: []*proto.TierInfo{
 			&proto.TierInfo{
@@ -556,7 +557,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		},
 	}
 
-	hostEpNorm := proto.HostEndpoint{
+	hostEpNorm := &proto.HostEndpoint{
 		Name: "uthost-eth0",
 		Tiers: []*proto.TierInfo{
 			&proto.TierInfo{
@@ -877,7 +878,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 				By("adding untracked policy")
 				genUntracked("default", "untracked1")()
-				newHEP := hostEp
+				newHEP := googleproto.Clone(hostEp).(*proto.HostEndpoint)
 				newHEP.UntrackedTiers = []*proto.TierInfo{{
 					Name:            "default",
 					IngressPolicies: []string{"untracked1"},
@@ -2097,7 +2098,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			genIfaceUpdate("eth0", ifacemonitor.StateUp, 10)()
 			genUntracked("default", "untracked1")()
 			genPolicy("default", "mypolicy")()
-			hostEp := hostEpNorm
+			hostEp := googleproto.Clone(hostEpNorm).(*proto.HostEndpoint)
 			hostEp.UntrackedTiers = []*proto.TierInfo{{
 				Name:            "default",
 				IngressPolicies: []string{"untracked1"},

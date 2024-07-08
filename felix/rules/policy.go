@@ -19,6 +19,7 @@ import (
 	"strings"
 
 	log "github.com/sirupsen/logrus"
+	googleproto "google.golang.org/protobuf/proto"
 
 	"github.com/projectcalico/calico/felix/hashutils"
 	"github.com/projectcalico/calico/felix/ipsets"
@@ -112,7 +113,7 @@ func FilterRuleToIPVersion(ipVersion uint8, pRule *proto.Rule) *proto.Rule {
 	// rules of the form "allow from 10.0.0.1,feed::beef to 10.0.0.2" will get filtered out,
 	// and only for IPv6, where there's no obvious meaning to the rule.
 
-	ruleCopy := *pRule
+	ruleCopy := googleproto.Clone(pRule).(*proto.Rule)
 	var filteredAll bool
 
 	logCxt := log.WithFields(log.Fields{
@@ -141,7 +142,7 @@ func FilterRuleToIPVersion(ipVersion uint8, pRule *proto.Rule) *proto.Rule {
 	if filteredAll {
 		return nil
 	}
-	return &ruleCopy
+	return ruleCopy
 }
 
 func (r *DefaultRuleRenderer) ProtoRuleToIptablesRules(pRule *proto.Rule, ipVersion uint8) []iptables.Rule {

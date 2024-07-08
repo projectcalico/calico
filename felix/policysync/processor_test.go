@@ -791,7 +791,7 @@ var _ = Describe("Processor", func() {
 
 						opts := getDialOptions()
 						var err error
-						clientConn, err = grpc.Dial(path.Join(socketDir, ListenerSocket), opts...)
+						clientConn, err = grpc.NewClient(path.Join(socketDir, ListenerSocket), opts...)
 						Expect(err).ToNot(HaveOccurred())
 
 						syncClient = proto.NewPolicySyncClient(clientConn)
