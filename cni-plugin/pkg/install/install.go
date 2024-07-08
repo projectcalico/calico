@@ -381,7 +381,7 @@ func writeCNIConfig(c config) {
 	// Write out the file.
 	name := getEnv("CNI_CONF_NAME", "10-calico.conflist")
 	path := winutils.GetHostPath(fmt.Sprintf("/host/etc/cni/net.d/%s", name))
-	err = os.WriteFile(path, []byte(netconf), 0o644)
+	err = os.WriteFile(path, []byte(netconf), 0o600)
 	if err != nil {
 		logrus.Fatal(err)
 	}
