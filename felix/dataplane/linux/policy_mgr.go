@@ -21,18 +21,18 @@ import (
 
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 
-	"github.com/projectcalico/calico/felix/iptables"
+	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/felix/types"
 )
 
-// policyManager simply renders policy/profile updates into iptables.Chain objects and sends
+// policyManager simply renders policy/profile updates into generictables.Chain objects and sends
 // them to the dataplane layer.
 type policyManager struct {
-	rawTable         IptablesTable
-	mangleTable      IptablesTable
-	filterTable      IptablesTable
+	rawTable         Table
+	mangleTable      Table
+	filterTable      Table
 	ruleRenderer     policyRenderer
 	ipVersion        uint8
 	rawEgressOnly    bool
@@ -46,7 +46,7 @@ type policyRenderer interface {
 	ProfileToIptablesChains(profileID *types.ProfileID, policy *proto.Profile, ipVersion uint8) (inbound, outbound *iptables.Chain)
 }
 
-func newPolicyManager(rawTable, mangleTable, filterTable IptablesTable, ruleRenderer policyRenderer, ipVersion uint8) *policyManager {
+func newPolicyManager(rawTable, mangleTable, filterTable Table, ruleRenderer policyRenderer, ipVersion uint8) *policyManager {
 	return &policyManager{
 		rawTable:     rawTable,
 		mangleTable:  mangleTable,
@@ -56,12 +56,13 @@ func newPolicyManager(rawTable, mangleTable, filterTable IptablesTable, ruleRend
 	}
 }
 
-func newRawEgressPolicyManager(rawTable IptablesTable, ruleRenderer policyRenderer, ipVersion uint8,
-	ipSetsCallback func(neededIPSets set.Set[string])) *policyManager {
+func newRawEgressPolicyManager(rawTable Table, ruleRenderer policyRenderer, ipVersion uint8,
+	ipSetsCallback func(neededIPSets set.Set[string]),
+) *policyManager {
 	return &policyManager{
 		rawTable:      rawTable,
-		mangleTable:   iptables.NewNoopTable(),
-		filterTable:   iptables.NewNoopTable(),
+		mangleTable:   generictables.NewNoopTable(),
+		filterTable:   generictables.NewNoopTable(),
 		ruleRenderer:  ruleRenderer,
 		ipVersion:     ipVersion,
 		rawEgressOnly: true,
@@ -85,7 +86,7 @@ func (m *policyManager) OnUpdate(msg interface{}) {
 		chains := m.ruleRenderer.PolicyToIptablesChains(&id, msg.Policy, m.ipVersion)
 		if m.rawEgressOnly {
 			neededIPSets := set.New[string]()
-			filteredChains := []*iptables.Chain(nil)
+			filteredChains := []*generictables.Chain(nil)
 			for _, chain := range chains {
 				if strings.Contains(chain.Name, string(rules.PolicyOutboundPfx)) {
 					filteredChains = append(filteredChains, chain)

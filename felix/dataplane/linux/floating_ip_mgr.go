@@ -21,7 +21,7 @@ import (
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
-	"github.com/projectcalico/calico/felix/iptables"
+	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/felix/types"
@@ -71,10 +71,11 @@ type floatingIPManager struct {
 	ipVersion uint8
 
 	// Our dependencies.
-	natTable     IptablesTable
+	natTable     Table
 	ruleRenderer rules.RuleRenderer
 
 	// Internal state.
+
 	activeDNATChains []*iptables.Chain
 	activeSNATChains []*iptables.Chain
 	natInfo          map[types.WorkloadEndpointID][]*proto.NatInfo
@@ -83,7 +84,7 @@ type floatingIPManager struct {
 }
 
 func newFloatingIPManager(
-	natTable IptablesTable,
+	natTable Table,
 	ruleRenderer rules.RuleRenderer,
 	ipVersion uint8,
 	enabled bool,

@@ -59,7 +59,6 @@ import (
 )
 
 var _ = Describe("_HEALTH_ _BPF-SAFE_ health tests", func() {
-
 	var k8sInfra *infrastructure.K8sDatastoreInfra
 	var felix *infrastructure.Felix
 
@@ -93,7 +92,6 @@ var _ = Describe("_HEALTH_ _BPF-SAFE_ health tests", func() {
 		})
 
 		Describe("with normal Felix startup", func() {
-
 			It("should become ready and stay ready", func() {
 				Eventually(felixReady, "5s", "100ms").Should(BeGood())
 				Consistently(felixReady, "10s", "1s").Should(BeGood())
@@ -115,13 +113,18 @@ var _ = Describe("_HEALTH_ _BPF-SAFE_ health tests", func() {
 			pod.ConfigureInInfra(k8sInfra)
 		}
 
-		Describe("after removing iptables-restore", func() {
+		Describe("after removing iptables-restore/nft", func() {
 			BeforeEach(func() {
 				// Wait until felix gets into steady state.
 				Eventually(felixReady, "5s", "100ms").Should(BeGood())
 
+				bin := "/usr/sbin/iptables-legacy-restore"
+				if NFTMode() {
+					bin = "/usr/sbin/nft"
+				}
+
 				// Then remove iptables-restore.
-				err := felix.ExecMayFail("rm", "/usr/sbin/iptables-legacy-restore")
+				err := felix.ExecMayFail("rm", bin)
 				Expect(err).NotTo(HaveOccurred())
 
 				// Make an update that will force felix to run iptables-restore.
@@ -134,25 +137,31 @@ var _ = Describe("_HEALTH_ _BPF-SAFE_ health tests", func() {
 			})
 		})
 
-		Describe("after replacing iptables with a slow version", func() {
+		Describe("after replacing iptables/nftables with a slow version", func() {
 			BeforeEach(func() {
 				// Wait until felix gets into steady state.
 				Eventually(felixReady, "5s", "100ms").Should(BeGood())
+
+				toReplace := "/usr/sbin/iptables-legacy-restore"
+				slowBinary := "slow-iptables-restore"
+				if NFTMode() {
+					toReplace = "/usr/sbin/nft"
+					slowBinary = "slow-nft"
+				}
 
 				// Then replace iptables-restore with the bad version:
 
 				// We need to delete the file first since it's a symlink and "docker cp"
 				// follows the link and overwrites the wrong file if we don't.
-				err := felix.ExecMayFail("rm", "/usr/sbin/iptables-legacy-restore")
+				err := felix.ExecMayFail("rm", toReplace)
 				Expect(err).NotTo(HaveOccurred())
 
 				// Copy in the nobbled iptables command.
-				err = felix.CopyFileIntoContainer("slow-iptables-restore",
-					"/usr/sbin/iptables-legacy-restore")
+				err = felix.CopyFileIntoContainer(slowBinary, toReplace)
 				Expect(err).NotTo(HaveOccurred())
 
 				// Make it executable.
-				err = felix.ExecMayFail("chmod", "+x", "/usr/sbin/iptables-legacy-restore")
+				err = felix.ExecMayFail("chmod", "+x", toReplace)
 				Expect(err).NotTo(HaveOccurred())
 
 				// Make an update that will force felix to run iptables-restore.
@@ -351,9 +360,7 @@ var _ = Describe("_HEALTH_ _BPF-SAFE_ health tests", func() {
 	})
 
 	Describe("with datastore not ready (20s timeout)", func() {
-		var (
-			info *v3.ClusterInformation
-		)
+		var info *v3.ClusterInformation
 
 		BeforeEach(func() {
 			var err error

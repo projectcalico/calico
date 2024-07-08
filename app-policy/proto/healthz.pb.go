@@ -4,11 +4,24 @@
 // 	protoc        v4.25.2
 // source: healthz.proto
 
+/*
+Package proto is a generated protocol buffer package.
+
+It is generated from these files:
+
+	healthz.proto
+
+It has these top-level messages:
+
+	HealthCheckRequest
+	HealthCheckResponse
+*/
 package proto
 
 import (
 	reflect "reflect"
 	sync "sync"
+
 
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
@@ -20,6 +33,12 @@ const (
 	// Verify that runtime/protoimpl is sufficiently up-to-date.
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
+
+// This is a compile-time assertion to ensure that this generated file
+// is compatible with the proto package it is being compiled against.
+// A compilation error at this line likely means your copy of the
+// proto package needs to be updated.
+const _ = proto1.GoGoProtoPackageIsVersion2 // please upgrade the proto package
 
 type HealthCheckRequest struct {
 	state         protoimpl.MessageState
