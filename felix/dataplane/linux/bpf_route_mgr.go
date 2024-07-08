@@ -61,7 +61,7 @@ type bpfRouteManager struct {
 	// cidrToRoute maps from CIDR to the calculation graph's routes.  These cover IP pools, local
 	// and remote workloads and hosts.  For local routes, we're missing some information that we
 	// need from the dataplane.
-	cidrToRoute map[ip.CIDR]proto.RouteUpdate
+	cidrToRoute map[ip.CIDR]*proto.RouteUpdate
 	// cidrToLocalIfaces maps from (/32) CIDR to the set of interfaces that have that CIDR
 	cidrToLocalIfaces map[ip.CIDR]set.Set[string]
 	localIfaceToCIDRs map[string]set.Set[ip.CIDR]
@@ -145,7 +145,7 @@ func newBPFRouteManager(config *Config, maps *bpfmap.IPMaps, ipFamily proto.IPVe
 
 	m := &bpfRouteManager{
 		myNodename:        config.Hostname,
-		cidrToRoute:       map[ip.CIDR]proto.RouteUpdate{},
+		cidrToRoute:       map[ip.CIDR]*proto.RouteUpdate{},
 		cidrToLocalIfaces: map[ip.CIDR]set.Set[string]{},
 		localIfaceToCIDRs: map[string]set.Set[ip.CIDR]{},
 		cidrToWEPIDs:      map[ip.CIDR]set.Set[types.WorkloadEndpointID]{},
@@ -601,11 +601,11 @@ func (m *bpfRouteManager) onRouteUpdate(update *proto.RouteUpdate) {
 	}
 
 	cur := m.cidrToRoute[cidr]
-	if googleproto.Equal(&cur, update) {
+	if googleproto.Equal(cur, update) {
 		return
 	}
 
-	m.cidrToRoute[cidr] = *update
+	m.cidrToRoute[cidr] = update
 	m.dirtyCIDRs.Add(cidr)
 }
 
@@ -676,7 +676,7 @@ func (m *bpfRouteManager) onBGPConfigUpdate(update *proto.GlobalBGPConfigUpdate)
 			continue
 		}
 
-		m.cidrToRoute[cidr] = proto.RouteUpdate{Type: proto.RouteType_CIDR_INFO}
+		m.cidrToRoute[cidr] = &proto.RouteUpdate{Type: proto.RouteType_CIDR_INFO}
 		if m.svcLoopPrevention != "Disabled" {
 			m.dirtyCIDRs.Add(cidr)
 		}

@@ -1661,7 +1661,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 				})
 				It("should report endpoint down", func() {
 					Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
-						wlEPID1: "down",
+						types.ProtoToWorkloadEndpointID(&wlEPID1): "down",
 					}))
 				})
 
@@ -1680,7 +1680,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 					})
 					It("should report the interface in error", func() {
 						Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
-							wlEPID1: "error",
+							types.ProtoToWorkloadEndpointID(&wlEPID1): "error",
 						}))
 					})
 				})
@@ -1701,7 +1701,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 					It("should have expected chains", expectWlChainsFor("cali12345-ab"))
 					It("should report endpoint up", func() {
 						Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
-							wlEPID1: "up",
+							types.ProtoToWorkloadEndpointID(&wlEPID1): "up",
 						}))
 					})
 
@@ -1889,7 +1889,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 						})
 						It("should report endpoint up", func() {
 							Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
-								wlEPID1: "up",
+								types.ProtoToWorkloadEndpointID(&wlEPID1): "up",
 							}))
 						})
 
