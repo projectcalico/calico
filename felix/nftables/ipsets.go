@@ -22,13 +22,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/projectcalico/calico/felix/dataplane/common"
 	"github.com/projectcalico/calico/felix/deltatracker"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
-	"github.com/prometheus/client_golang/prometheus"
 
 	log "github.com/sirupsen/logrus"
 	"sigs.k8s.io/knftables"
