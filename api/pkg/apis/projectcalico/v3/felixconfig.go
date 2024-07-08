@@ -672,6 +672,15 @@ type FelixConfigurationSpec struct {
 	// [Default: -1]
 	// +optional
 	GoMemoryLimitMB *int `json:"goMemoryLimitMB,omitempty" validate:"omitempty,gte=-1"`
+
+	// GoMaxProcs sets the maximum number of CPUs that the Go runtime will use concurrently.  A value of -1 means
+	// "use the system default"; typically the number of real CPUs on the system.
+	//
+	// this setting is overridden by the GOMAXPROCS environment variable.
+	//
+	// [Default: -1]
+	// +optional
+	GoMaxProcs *int `json:"goMaxProcs,omitempty" validate:"omitempty,gte=-1"`
 }
 
 type HealthTimeoutOverride struct {

@@ -1,4 +1,4 @@
-FROM scratch as source
+FROM scratch AS source
 
 ARG BIN_DIR
 ARG TARGETARCH

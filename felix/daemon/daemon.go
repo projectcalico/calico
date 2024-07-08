@@ -723,6 +723,14 @@ func doGoRuntimeSetup(params *config.Config) {
 	} else if effectiveGOGC < 0 {
 		log.Warn("GC is disabled and no memory limit is set.  Expect to run out of memory!")
 	}
+	defaultGoMaxProcs := runtime.GOMAXPROCS(-1)
+	logCtx := log.WithField("default", defaultGoMaxProcs)
+	if os.Getenv("GOMAXPROCS") == "" && params.GoMaxProcs > 0 {
+		logCtx.WithField("config", params.GoMaxProcs).Info("Setting GOMAXPROCS from configuration.")
+		runtime.GOMAXPROCS(params.GoMaxProcs)
+	} else {
+		logCtx.Info("Using runtime default GOMAXPROCS.")
+	}
 }
 
 func monitorAndManageShutdown(failureReportChan <-chan string, driverCmd *exec.Cmd, stopSignalChans []chan<- *sync.WaitGroup) {
