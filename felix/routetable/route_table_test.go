@@ -392,6 +392,48 @@ var _ = Describe("RouteTable", func() {
 				Expect(dataplane.RouteKeyToRoute[mocknetlink.KeyForRoute(&updateRoute)]).To(Equal(fixedRoute))
 				Expect(dataplane.HasStaticArpEntry(ip.MustParseCIDROrIP("10.0.0.5/32"), mac1, "cali5")).To(BeTrue())
 			})
+
+			It("should not delete route with source address if target has the same source", func() {
+				noopLink := dataplane.AddIface(7, "cali7", true, true)
+				noopRoute := netlink.Route{
+					LinkIndex: noopLink.LinkAttrs.Index,
+					Dst:       mustParseCIDR("10.0.0.5/32"),
+					Type:      syscall.RTN_UNICAST,
+					Protocol:  FelixRouteProtocol,
+					Scope:     netlink.SCOPE_LINK,
+					Src:       net.ParseIP("192.168.0.2"),
+					Table:     unix.RT_TABLE_MAIN,
+				}
+				rt.SetRoutes(noopLink.LinkAttrs.Name, []Target{
+					{CIDR: ip.MustParseCIDROrIP("10.0.0.5"), DestMAC: mac1, Src: ip.FromString("192.168.0.2")},
+				})
+				dataplane.AddMockRoute(&noopRoute)
+				err := rt.Apply()
+				Expect(err).ToNot(HaveOccurred())
+				Expect(dataplane.DeletedRouteKeys).ToNot(HaveKey(mocknetlink.KeyForRoute(&noopRoute)))
+				Expect(dataplane.UpdatedRouteKeys).ToNot(HaveKey(mocknetlink.KeyForRoute(&noopRoute)))
+			})
+
+			It("should delete route with different source address", func() {
+				noopLink := dataplane.AddIface(8, "cali8", true, true)
+				noopRoute := netlink.Route{
+					LinkIndex: noopLink.LinkAttrs.Index,
+					Dst:       mustParseCIDR("10.0.0.5/32"),
+					Type:      syscall.RTN_UNICAST,
+					Protocol:  FelixRouteProtocol,
+					Scope:     netlink.SCOPE_LINK,
+					Src:       net.ParseIP("192.168.0.2"),
+					Table:     unix.RT_TABLE_MAIN,
+				}
+				rt.SetRoutes(noopLink.LinkAttrs.Name, []Target{
+					{CIDR: ip.MustParseCIDROrIP("10.0.0.5"), DestMAC: mac1, Src: ip.FromString("192.168.0.3")},
+				})
+				dataplane.AddMockRoute(&noopRoute)
+				err := rt.Apply()
+				Expect(err).ToNot(HaveOccurred())
+				Expect(dataplane.DeletedRouteKeys).To(HaveKey(mocknetlink.KeyForRoute(&noopRoute)))
+			})
+
 		})
 
 		Describe("With a device route protocol set", func() {
