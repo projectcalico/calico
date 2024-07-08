@@ -79,7 +79,7 @@ func (d *grpcDataplane) DoNetworking(
 	annotations map[string]string,
 ) (ifName, contTapMAC string, err error) {
 	d.logger.Infof("Connecting to GRPC backend server at %s", d.socket)
-	conn, err := grpc.Dial(d.socket, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(d.socket, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return "", "", fmt.Errorf("cannot connect to grpc dataplane: %v", err)
 	}
@@ -142,7 +142,7 @@ func (d *grpcDataplane) DoNetworking(
 
 func (d *grpcDataplane) CleanUpNamespace(args *skel.CmdArgs) error {
 	d.logger.Infof("Connecting to GRPC backend server at %s", d.socket)
-	conn, err := grpc.Dial(d.socket, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(d.socket, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return fmt.Errorf("cannot connect to grpc dataplane: %v", err)
 	}

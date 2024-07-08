@@ -169,7 +169,7 @@ func runClient(arguments map[string]interface{}) {
 	method := arguments["<method>"].(string)
 
 	opts := uds.GetDialOptions()
-	conn, err := grpc.Dial(dial, opts...)
+	conn, err := grpc.NewClient(dial, opts...)
 	if err != nil {
 		log.Fatalf("fail to dial: %v", err)
 	}
