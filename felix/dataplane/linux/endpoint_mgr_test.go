@@ -3156,7 +3156,7 @@ type testHEPListener struct {
 	state map[string]string
 }
 
-func (t *testHEPListener) OnHEPUpdate(hostIfaceToEpMap map[string]proto.HostEndpoint) {
+func (t *testHEPListener) OnHEPUpdate(hostIfaceToEpMap map[string]*proto.HostEndpoint) {
 	log.Infof("OnHEPUpdate: %v", hostIfaceToEpMap)
 	t.state = map[string]string{}
 	stringify := func(tiers []*proto.TierInfo) string {

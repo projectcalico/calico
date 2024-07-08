@@ -128,6 +128,10 @@ func testAllProtoRuleFieldsAreKnown() {
 	t := reflect.TypeOf(proto.Rule{})
 	for i := 0; i < t.NumField(); i++ {
 		name := t.Field(i).Name
+		// skip protobuf fields
+		if name == "state" || name == "sizeCache" || name == "unknownFields" {
+			continue
+		}
 		Expect(knownProtoRuleFields.Contains(name)).To(BeTrue(), "It looks like that the field %s is a new addition to the proto.Rule struct. Please check if it affects XDP optimizations in any way, update the isValidRuleForXDP function and the \"invalid policies\" unit test if needed, and then add the name to the knownProtoRuleFields slice above. Please DO NOT blindly add the field to the slice without checking its influence on the XDP optimization.", name)
 	}
 }

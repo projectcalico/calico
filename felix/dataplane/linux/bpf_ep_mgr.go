@@ -331,8 +331,8 @@ type bpfEndpointManager struct {
 	updatePolicyProgramFn func(rules polprog.Rules, polDir string, ap attachPoint, ipFamily proto.IPVersion) error
 
 	// HEP processing.
-	hostIfaceToEpMap     map[string]proto.HostEndpoint
-	wildcardHostEndpoint proto.HostEndpoint
+	hostIfaceToEpMap     map[string]*proto.HostEndpoint
+	wildcardHostEndpoint *proto.HostEndpoint
 	wildcardExists       bool
 
 	// UT-able BPF dataplane interface.
@@ -406,7 +406,7 @@ type bpfAllowChainRenderer interface {
 
 type ManagerWithHEPUpdate interface {
 	Manager
-	OnHEPUpdate(hostIfaceToEpMap map[string]proto.HostEndpoint)
+	OnHEPUpdate(hostIfaceToEpMap map[string]*proto.HostEndpoint)
 }
 
 func NewTestEpMgr(
@@ -505,7 +505,7 @@ func newBPFEndpointManager(
 		xdpJumpMapAlloc:  newJumpMapAlloc(jump.XDPMaxEntryPoints),
 		ruleRenderer:     iptablesRuleRenderer,
 		onStillAlive:     livenessCallback,
-		hostIfaceToEpMap: map[string]proto.HostEndpoint{},
+		hostIfaceToEpMap: map[string]*proto.HostEndpoint{},
 		opReporter:       opReporter,
 		// ipv6Enabled Should be set to config.Ipv6Enabled, but for now it is better
 		// to set it to BPFIpv6Enabled which is a dedicated flag for development of IPv6.
@@ -1166,7 +1166,7 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceStateUpdate) {
 
 			if _, hostEpConfigured := m.hostIfaceToEpMap[update.Name]; m.wildcardExists && !hostEpConfigured {
 				log.Debugf("Map host-* endpoint for %v", update.Name)
-				m.addHEPToIndexes(update.Name, &m.wildcardHostEndpoint)
+				m.addHEPToIndexes(update.Name, m.wildcardHostEndpoint)
 				m.hostIfaceToEpMap[update.Name] = m.wildcardHostEndpoint
 			}
 			iface.info.ifIndex = update.Index
@@ -1175,7 +1175,7 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceStateUpdate) {
 		} else {
 			if m.wildcardExists && reflect.DeepEqual(m.hostIfaceToEpMap[update.Name], m.wildcardHostEndpoint) {
 				log.Debugf("Unmap host-* endpoint for %v", update.Name)
-				m.removeHEPFromIndexes(update.Name, &m.wildcardHostEndpoint)
+				m.removeHEPFromIndexes(update.Name, m.wildcardHostEndpoint)
 				delete(m.hostIfaceToEpMap, update.Name)
 			}
 			m.deleteIfaceCounters(update.Name, iface.info.ifIndex)
@@ -1714,7 +1714,7 @@ func (m *bpfEndpointManager) doApplyPolicyToDataIface(iface string) (bpfInterfac
 	}
 	var hepPtr *proto.HostEndpoint
 	if hep, hepExists := m.hostIfaceToEpMap[iface]; hepExists {
-		hepPtr = &hep
+		hepPtr = hep
 	}
 
 	var parallelWG sync.WaitGroup
@@ -2463,7 +2463,7 @@ func (d *bpfEndpointManagerDataplane) wepApplyPolicy(ap *tc.AttachPoint,
 
 	// If host-* endpoint is configured, add in its policy.
 	if m.wildcardExists {
-		m.addHostPolicy(&rules, &d.mgr.wildcardHostEndpoint, polDirection.Inverse())
+		m.addHostPolicy(&rules, d.mgr.wildcardHostEndpoint, polDirection.Inverse())
 	}
 
 	// Intentionally leaving this code here until the *-hep takes precedence.
@@ -3034,7 +3034,7 @@ func (m *bpfEndpointManager) removeProfileToEPMappings(profileIds []string, id a
 	}
 }
 
-func (m *bpfEndpointManager) OnHEPUpdate(hostIfaceToEpMap map[string]proto.HostEndpoint) {
+func (m *bpfEndpointManager) OnHEPUpdate(hostIfaceToEpMap map[string]*proto.HostEndpoint) {
 	if m == nil {
 		return
 	}
@@ -3064,10 +3064,10 @@ func (m *bpfEndpointManager) OnHEPUpdate(hostIfaceToEpMap map[string]proto.HostE
 	// If the host-* endpoint is changing, mark all workload interfaces as dirty.
 	if (wildcardExists != m.wildcardExists) || !reflect.DeepEqual(wildcardHostEndpoint, m.wildcardHostEndpoint) {
 		log.Infof("Host-* endpoint is changing; was %v, now %v", m.wildcardHostEndpoint, wildcardHostEndpoint)
-		m.removeHEPFromIndexes(allInterfaces, &m.wildcardHostEndpoint)
+		m.removeHEPFromIndexes(allInterfaces, m.wildcardHostEndpoint)
 		m.wildcardHostEndpoint = wildcardHostEndpoint
 		m.wildcardExists = wildcardExists
-		m.addHEPToIndexes(allInterfaces, &wildcardHostEndpoint)
+		m.addHEPToIndexes(allInterfaces, wildcardHostEndpoint)
 		for ifaceName := range m.nameToIface {
 			if m.isWorkloadIface(ifaceName) {
 				log.Info("Mark WEP iface dirty, for host-* endpoint change")
@@ -3082,10 +3082,10 @@ func (m *bpfEndpointManager) OnHEPUpdate(hostIfaceToEpMap map[string]proto.HostE
 		if stillExists && reflect.DeepEqual(newEp, existingEp) {
 			log.Debugf("No change to host endpoint for ifaceName=%v", ifaceName)
 		} else {
-			m.removeHEPFromIndexes(ifaceName, &existingEp)
+			m.removeHEPFromIndexes(ifaceName, existingEp)
 			if stillExists {
 				log.Infof("Host endpoint changing for ifaceName=%v", ifaceName)
-				m.addHEPToIndexes(ifaceName, &newEp)
+				m.addHEPToIndexes(ifaceName, newEp)
 				m.hostIfaceToEpMap[ifaceName] = newEp
 			} else {
 				log.Infof("Host endpoint deleted for ifaceName=%v", ifaceName)
@@ -3103,7 +3103,7 @@ func (m *bpfEndpointManager) OnHEPUpdate(hostIfaceToEpMap map[string]proto.HostE
 			continue
 		}
 		log.Infof("Host endpoint added for ifaceName=%v", ifaceName)
-		m.addHEPToIndexes(ifaceName, &newEp)
+		m.addHEPToIndexes(ifaceName, newEp)
 		m.hostIfaceToEpMap[ifaceName] = newEp
 		m.dirtyIfaceNames.Add(ifaceName)
 	}

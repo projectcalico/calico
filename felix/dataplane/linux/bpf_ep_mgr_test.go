@@ -489,10 +489,10 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 	genHEPUpdate := func(heps ...interface{}) func() {
 		return func() {
-			hostIfaceToEp := make(map[string]proto.HostEndpoint)
+			hostIfaceToEp := make(map[string]*proto.HostEndpoint)
 			for i := 0; i < len(heps); i += 2 {
 				log.Infof("%v = %v", heps[i], heps[i+1])
-				hostIfaceToEp[heps[i].(string)] = heps[i+1].(proto.HostEndpoint)
+				hostIfaceToEp[heps[i].(string)] = heps[i+1].(*proto.HostEndpoint)
 			}
 			log.Infof("2 hostIfaceToEp = %v", hostIfaceToEp)
 			bpfEpMgr.OnHEPUpdate(hostIfaceToEp)
