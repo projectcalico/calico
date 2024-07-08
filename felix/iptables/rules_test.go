@@ -25,19 +25,20 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/felix/environment"
+	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/iptables/cmdshim"
 )
 
 var (
-	rules1 = []Rule{
-		{Match: MatchCriteria{"-m foobar --foobar baz"}, Action: JumpAction{Target: "biff"}},
+	rules1 = []generictables.Rule{
+		{Match: matchCriteria{"-m foobar --foobar baz"}, Action: JumpAction{Target: "biff"}},
 	}
-	rules2 = []Rule{
-		{Match: MatchCriteria{"-m foobar --foobar baz"}, Action: JumpAction{Target: "boff"}},
+	rules2 = []generictables.Rule{
+		{Match: matchCriteria{"-m foobar --foobar baz"}, Action: JumpAction{Target: "boff"}},
 	}
-	rules3 = []Rule{
-		{Match: MatchCriteria{"-m foobar --foobar baz"}, Action: JumpAction{Target: "biff"}},
-		{Match: MatchCriteria{"-m foobar --foobar baz"}, Action: JumpAction{Target: "boff"}},
+	rules3 = []generictables.Rule{
+		{Match: matchCriteria{"-m foobar --foobar baz"}, Action: JumpAction{Target: "biff"}},
+		{Match: matchCriteria{"-m foobar --foobar baz"}, Action: JumpAction{Target: "boff"}},
 	}
 )
 
@@ -202,55 +203,49 @@ var _ = Describe("Hash extraction tests", func() {
 			},
 		}))
 	})
-
 })
 
 var _ = Describe("rule comments", func() {
-
 	Context("Rule with multiple comments", func() {
-
-		rule := Rule{
-			Match:   MatchCriteria{"-m foobar --foobar baz"},
+		rule := generictables.Rule{
+			Match:   matchCriteria{"-m foobar --foobar baz"},
 			Action:  JumpAction{Target: "biff"},
 			Comment: []string{"boz", "fizz"},
 		}
 
 		It("should render rule including multiple comments", func() {
-			render := rule.RenderAppend("test", "TEST", &environment.Features{})
+			render := renderAppend(rule)
 			Expect(render).To(ContainSubstring("-m comment --comment \"boz\""))
 			Expect(render).To(ContainSubstring("-m comment --comment \"fizz\""))
 		})
 	})
 
 	Context("Rule with comment with newlines", func() {
-
-		rule := Rule{
-			Match:  MatchCriteria{"-m foobar --foobar baz"},
+		rule := generictables.Rule{
+			Match:  matchCriteria{"-m foobar --foobar baz"},
 			Action: JumpAction{Target: "biff"},
 			Comment: []string{`boz
 fizz`},
 		}
 
 		It("should render rule with newline escaped", func() {
-			render := rule.RenderAppend("test", "TEST", &environment.Features{})
+			render := renderAppend(rule)
 			Expect(render).To(ContainSubstring("-m comment --comment \"boz_fizz\""))
 		})
 	})
 
 	Context("Rule with comment longer than 256 characters", func() {
-
-		rule := Rule{
-			Match:   MatchCriteria{"-m foobar --foobar baz"},
+		rule := generictables.Rule{
+			Match:   matchCriteria{"-m foobar --foobar baz"},
 			Action:  JumpAction{Target: "biff"},
 			Comment: []string{strings.Repeat("a", 257)},
 		}
 
 		It("should render rule with comment truncated", func() {
-			render := rule.RenderAppend("test", "TEST", &environment.Features{})
+			render := renderAppend(rule)
 			Expect(render).To(ContainSubstring("-m comment --comment \"" + strings.Repeat("a", 256) + "\""))
 		})
 	})
-
 })
 
 func newClosableBuf(s string) *withDummyClose {
@@ -267,10 +262,14 @@ func (b *withDummyClose) Close() error {
 	return nil
 }
 
-func calculateHashes(chainName string, rules []Rule) []string {
-	chain := &Chain{
+func renderAppend(rule generictables.Rule) string {
+	return NewIptablesRenderer("").RenderAppend(&rule, "test", "TEST", &environment.Features{})
+}
+
+func calculateHashes(chainName string, rules []generictables.Rule) []string {
+	chain := &generictables.Chain{
 		Name:  chainName,
 		Rules: rules,
 	}
-	return chain.RuleHashes(&environment.Features{})
+	return NewIptablesRenderer("").RuleHashes(chain, &environment.Features{})
 }
