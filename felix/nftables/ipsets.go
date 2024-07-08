@@ -410,8 +410,15 @@ func (s *IPSets) tryResync() error {
 	setsChan := make(chan setData)
 	defer close(setsChan)
 
-	// Start a goroutine to list the elements of each set.
+	// Start a goroutine to list the elements of each set. Limit to 100 concurrent set reads to
+	// avoid spawning too many goroutines if there are a large number of sets.
+	routineLimit := make(chan struct{}, 100)
+	defer close(routineLimit)
 	for _, setName := range sets {
+		// Wait for room in the limiting channel.
+		routineLimit <- struct{}{}
+
+		// Start a goroutine to read this set.
 		go func(name string) {
 			elems, err := s.nft.ListElements(ctx, "set", name)
 			if err != nil {
@@ -428,6 +435,8 @@ func (s *IPSets) tryResync() error {
 				}
 			}
 			setsChan <- setData{setName: name, elems: strElems}
+			// Indicate that we're done by removing ourselves from the limiter channel.
+			<-routineLimit
 		}(setName)
 	}
 
