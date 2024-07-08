@@ -56,8 +56,8 @@ func StartDataplaneDriver(configParams *config.Config,
 	healthAggregator *health.HealthAggregator,
 	configChangedRestartCallback func(),
 	fatalErrorCallback func(error),
-	k8sClientSet *kubernetes.Clientset) (DataplaneDriver, *exec.Cmd) {
-
+	k8sClientSet *kubernetes.Clientset,
+) (DataplaneDriver, *exec.Cmd) {
 	if !configParams.IsLeader() {
 		// Return an inactive dataplane, since we're not the leader.
 		log.Info("Not the leader, using an inactive dataplane")
@@ -207,6 +207,7 @@ func StartDataplaneDriver(configParams *config.Config,
 				NetlinkTimeout:    configParams.NetlinkTimeoutSecs,
 			},
 			RulesConfig: rules.Config{
+				NFTables:              configParams.NFTablesMode == "Enabled",
 				WorkloadIfacePrefixes: configParams.InterfacePrefixes(),
 
 				IPSetConfigV4: ipsets.NewIPVersionConfig(
