@@ -40,7 +40,7 @@ import (
 )
 
 type hepListener interface {
-	OnHEPUpdate(hostIfaceToEpMap map[string]proto.HostEndpoint)
+	OnHEPUpdate(hostIfaceToEpMap map[string]*proto.HostEndpoint)
 }
 
 type endpointManagerCallbacks struct {
@@ -369,14 +369,14 @@ func (m *endpointManager) OnUpdate(protoBufMsg interface{}) {
 		m.callbacks.InvokeUpdateHostEndpoint(id)
 		m.rawHostEndpoints[id] = msg.Endpoint
 		m.hostEndpointsDirty = true
-		m.epIDsToUpdateStatus.Add(*msg.Id)
+		m.epIDsToUpdateStatus.Add(types.ProtoToHostEndpointID(msg.GetId()))
 	case *proto.HostEndpointRemove:
 		log.WithField("msg", msg).Debug("Host endpoint removed")
 		id := types.ProtoToHostEndpointID(msg.GetId())
 		m.callbacks.InvokeRemoveHostEndpoint(id)
 		delete(m.rawHostEndpoints, id)
 		m.hostEndpointsDirty = true
-		m.epIDsToUpdateStatus.Add(*msg.Id)
+		m.epIDsToUpdateStatus.Add(types.ProtoToHostEndpointID(msg.GetId()))
 	case *ifaceStateUpdate:
 		log.WithField("update", msg).Debug("Interface state changed.")
 		m.pendingIfaceUpdates[msg.Name] = msg.State
@@ -407,7 +407,7 @@ func (m *endpointManager) OnUpdate(protoBufMsg interface{}) {
 			m.dirtyPolicyIDs.Add(id)
 		}
 		log.WithFields(log.Fields{
-			"id":       *msg.Id,
+			"id":       types.ProtoToPolicyID(msg.GetId()),
 			"selector": newSel,
 		}).Debug("Active policy selector new/updated.")
 		m.activePolicySelectors[id] = newSel
@@ -1045,11 +1045,11 @@ func (m *endpointManager) resolveHostEndpoints() map[string]types.HostEndpointID
 	if m.bpfEndpointManager != nil {
 		// Construct map of interface names to host endpoints, and pass to the BPF endpoint
 		// manager.
-		hostIfaceToEpMap := map[string]proto.HostEndpoint{}
+		hostIfaceToEpMap := map[string]*proto.HostEndpoint{}
 		for ifaceName, id := range newIfaceNameToHostEpID {
 			// Note, dereference the proto.HostEndpoint here so that the data lifetime
 			// is decoupled from the validity of the pointer here.
-			hostIfaceToEpMap[ifaceName] = *m.rawHostEndpoints[id]
+			hostIfaceToEpMap[ifaceName] = m.rawHostEndpoints[id]
 		}
 		m.bpfEndpointManager.OnHEPUpdate(hostIfaceToEpMap)
 	}
