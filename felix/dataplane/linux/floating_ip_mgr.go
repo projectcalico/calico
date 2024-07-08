@@ -76,8 +76,8 @@ type floatingIPManager struct {
 
 	// Internal state.
 
-	activeDNATChains []*iptables.Chain
-	activeSNATChains []*iptables.Chain
+	activeDNATChains []*generictables.Chain
+	activeSNATChains []*generictables.Chain
 	natInfo          map[types.WorkloadEndpointID][]*proto.NatInfo
 	dirtyNATInfo     bool
 	enabled          bool
@@ -94,8 +94,8 @@ func newFloatingIPManager(
 		ruleRenderer: ruleRenderer,
 		ipVersion:    ipVersion,
 
-		activeDNATChains: []*iptables.Chain{},
-		activeSNATChains: []*iptables.Chain{},
+		activeDNATChains: []*generictables.Chain{},
+		activeSNATChains: []*generictables.Chain{},
 		natInfo:          map[types.WorkloadEndpointID][]*proto.NatInfo{},
 		dirtyNATInfo:     true,
 		enabled:          enabled,

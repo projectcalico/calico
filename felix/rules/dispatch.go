@@ -27,7 +27,7 @@ import (
 
 func (r *DefaultRuleRenderer) WorkloadDispatchChains(
 	endpoints map[types.WorkloadEndpointID]*proto.WorkloadEndpoint,
-) []*Chain {
+) []*generictables.Chain {
 	// Extract endpoint names.
 	log.WithField("numEndpoints", len(endpoints)).Debug("Rendering workload dispatch chains")
 	names := make([]string, 0, len(endpoints))
@@ -57,7 +57,7 @@ func (r *DefaultRuleRenderer) WorkloadDispatchChains(
 
 func (r *DefaultRuleRenderer) WorkloadInterfaceAllowChains(
 	endpoints map[types.WorkloadEndpointID]*proto.WorkloadEndpoint,
-) []*Chain {
+) []*generictables.Chain {
 	// Extract endpoint names.
 	log.WithField("numEndpoints", len(endpoints)).Debug("Rendering workload interface allow chain")
 	names := make([]string, 0, len(endpoints))
@@ -106,7 +106,7 @@ func (r *DefaultRuleRenderer) EndpointMarkDispatchChains(
 	epMarkMapper EndpointMarkMapper,
 	wlEndpoints map[types.WorkloadEndpointID]*proto.WorkloadEndpoint,
 	hepEndpoints map[string]types.HostEndpointID,
-) []*Chain {
+) []*generictables.Chain {
 	// Extract endpoint names.
 	logCxt := log.WithFields(log.Fields{
 		"numWorkloadEndpoint": len(wlEndpoints),

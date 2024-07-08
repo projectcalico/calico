@@ -25,7 +25,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/hashutils"
-	. "github.com/projectcalico/calico/felix/iptables"
+	"github.com/projectcalico/calico/felix/iptables"
 	"github.com/projectcalico/calico/felix/types"
 )
 

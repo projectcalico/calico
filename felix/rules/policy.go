@@ -31,8 +31,8 @@ import (
 
 // ruleRenderer defined in rules_defs.go.
 
-func (r *DefaultRuleRenderer) PolicyToIptablesChains(policyID *types.PolicyID, policy *proto.Policy, ipVersion uint8) []*iptables.Chain {
-	inbound := iptables.Chain{
+func (r *DefaultRuleRenderer) PolicyToIptablesChains(policyID *types.PolicyID, policy *proto.Policy, ipVersion uint8) []*generictables.Chain {
+	inbound := generictables.Chain{
 		Name:  PolicyChainName(PolicyInboundPfx, policyID),
 		Rules: r.ProtoRulesToIptablesRules(policy.InboundRules, ipVersion, fmt.Sprintf("Policy %s ingress", policyID.Name)),
 	}
@@ -43,8 +43,8 @@ func (r *DefaultRuleRenderer) PolicyToIptablesChains(policyID *types.PolicyID, p
 	return []*generictables.Chain{&inbound, &outbound}
 }
 
-func (r *DefaultRuleRenderer) ProfileToIptablesChains(profileID *types.ProfileID, profile *proto.Profile, ipVersion uint8) (inbound, outbound *iptables.Chain) {
-	inbound = &iptables.Chain{
+func (r *DefaultRuleRenderer) ProfileToIptablesChains(profileID *types.ProfileID, profile *proto.Profile, ipVersion uint8) (inbound, outbound *generictables.Chain) {
+	inbound = &generictables.Chain{
 		Name:  ProfileChainName(ProfileInboundPfx, profileID),
 		Rules: r.ProtoRulesToIptablesRules(profile.InboundRules, ipVersion, fmt.Sprintf("Profile %s ingress", profileID.Name)),
 	}

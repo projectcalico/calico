@@ -149,9 +149,9 @@ type endpointManager struct {
 	activeWlEndpoints                map[types.WorkloadEndpointID]*proto.WorkloadEndpoint
 	activeWlIfaceNameToID            map[string]types.WorkloadEndpointID
 	activeUpIfaces                   set.Set[string]
-	activeWlIDToChains               map[types.WorkloadEndpointID][]*iptables.Chain
-	activeWlDispatchChains           map[string]*iptables.Chain
-	activeEPMarkDispatchChains       map[string]*iptables.Chain
+	activeWlIDToChains               map[types.WorkloadEndpointID][]*generictables.Chain
+	activeWlDispatchChains           map[string]*generictables.Chain
+	activeEPMarkDispatchChains       map[string]*generictables.Chain
 	ifaceNameToPolicyGroupChainNames map[string][]string /*chain name*/
 
 	activePolicySelectors map[types.PolicyID]string
@@ -312,10 +312,9 @@ func newEndpointManagerWithShims(
 
 		activeUpIfaces: set.New[string](),
 
-
 		activeWlEndpoints:                map[types.WorkloadEndpointID]*proto.WorkloadEndpoint{},
 		activeWlIfaceNameToID:            map[string]types.WorkloadEndpointID{},
-		activeWlIDToChains:               map[types.WorkloadEndpointID][]*iptables.Chain{},
+		activeWlIDToChains:               map[types.WorkloadEndpointID][]*generictables.Chain{},
 		ifaceNameToPolicyGroupChainNames: map[string][]string{},
 
 		activePolicySelectors: map[types.PolicyID]string{},

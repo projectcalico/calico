@@ -39,6 +39,7 @@ import (
 	"time"
 
 	"github.com/projectcalico/calico/felix/ethtool"
+	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/types"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
 
@@ -400,7 +401,7 @@ type serviceKey struct {
 }
 
 type bpfAllowChainRenderer interface {
-	WorkloadInterfaceAllowChains(endpoints map[types.WorkloadEndpointID]*proto.WorkloadEndpoint) []*iptables.Chain
+	WorkloadInterfaceAllowChains(endpoints map[types.WorkloadEndpointID]*proto.WorkloadEndpoint) []*generictables.Chain
 }
 
 type ManagerWithHEPUpdate interface {

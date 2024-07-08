@@ -399,7 +399,7 @@ func (m *ipSetsMatcher) NegatedFailureMessage(actual interface{}) (message strin
 
 type mockPolRenderer struct{}
 
-func (r *mockPolRenderer) PolicyToIptablesChains(policyID *types.PolicyID, policy *proto.Policy, ipVersion uint8) []*iptables.Chain {
+func (r *mockPolRenderer) PolicyToIptablesChains(policyID *types.PolicyID, policy *proto.Policy, ipVersion uint8) []*generictables.Chain {
 	inName := rules.PolicyChainName(rules.PolicyInboundPfx, policyID)
 	outName := rules.PolicyChainName(rules.PolicyOutboundPfx, policyID)
 	return []*generictables.Chain{
@@ -408,8 +408,8 @@ func (r *mockPolRenderer) PolicyToIptablesChains(policyID *types.PolicyID, polic
 	}
 }
 
-func (r *mockPolRenderer) ProfileToIptablesChains(profID *types.ProfileID, policy *proto.Profile, ipVersion uint8) (inbound, outbound *iptables.Chain) {
-	inbound = &iptables.Chain{
+func (r *mockPolRenderer) ProfileToIptablesChains(profID *types.ProfileID, policy *proto.Profile, ipVersion uint8) (inbound, outbound *generictables.Chain) {
+	inbound = &generictables.Chain{
 
 		Name: rules.ProfileChainName(rules.ProfileInboundPfx, profID),
 	}

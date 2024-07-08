@@ -21,7 +21,6 @@ import (
 	"fmt"
 
 	"github.com/projectcalico/calico/felix/generictables"
-	. "github.com/projectcalico/calico/felix/rules"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
@@ -85,7 +84,7 @@ var _ = Describe("Dispatch chains", func() {
 		})
 
 		DescribeTable("workload rendering tests",
-			func(names []string, expectedChains map[bool][]*iptables.Chain) {
+			func(names []string, expectedChains map[bool][]*generictables.Chain) {
 				var input map[types.WorkloadEndpointID]*proto.WorkloadEndpoint
 				if names != nil {
 					input = map[types.WorkloadEndpointID]*proto.WorkloadEndpoint{}
@@ -501,7 +500,7 @@ var _ = Describe("Dispatch chains", func() {
 		)
 
 		Describe("host endpoint rendering tests", func() {
-			convertToInput := func(names []string, expectedChains []*iptables.Chain) map[string]types.HostEndpointID {
+			convertToInput := func(names []string, expectedChains []*generictables.Chain) map[string]types.HostEndpointID {
 				var input map[string]types.HostEndpointID
 				if names != nil {
 					input = map[string]types.HostEndpointID{}
