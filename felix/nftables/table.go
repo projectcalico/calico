@@ -90,44 +90,39 @@ var (
 	}
 
 	// Prometheus metrics.
-	countNumRestoreCalls = prometheus.NewCounter(prometheus.CounterOpts{
+	countNumTransactions = prometheus.NewCounter(prometheus.CounterOpts{
 		Name: "felix_nft_calls",
-		Help: "Number of nft calls.",
+		Help: "Number of nft rule write transactions.",
 	})
-	countNumRestoreErrors = prometheus.NewCounter(prometheus.CounterOpts{
+	countNumTransactionErrors = prometheus.NewCounter(prometheus.CounterOpts{
 		Name: "felix_nft_errors",
-		Help: "Number of nft errors.",
+		Help: "Number of nft errors when writing rules.",
 	})
-	countNumSaveCalls = prometheus.NewCounter(prometheus.CounterOpts{
+	countNumListCalls = prometheus.NewCounter(prometheus.CounterOpts{
 		Name: "felix_nft_list_calls",
 		Help: "Number of nft list calls.",
 	})
-	countNumSaveErrors = prometheus.NewCounter(prometheus.CounterOpts{
+	countNumListErrors = prometheus.NewCounter(prometheus.CounterOpts{
 		Name: "felix_nft_list_errors",
 		Help: "Number of nft list errors.",
 	})
 	gaugeNumChains = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "felix_nft_chains",
-		Help: "Number of active nft chains.",
-	}, []string{"ip_version", "table"})
+		Help: "Number of active nft chains in the Calico table.",
+	}, []string{"ip_version"})
 	gaugeNumRules = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "felix_nft_rules",
-		Help: "Number of active nftables rules.",
-	}, []string{"ip_version", "table"})
-	countNumLinesExecuted = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: "felix_nft_lines_executed",
-		Help: "Number of nftables rule updates executed.",
-	}, []string{"ip_version", "table"})
+		Help: "Number of active nftables rules in the Calico table.",
+	}, []string{"ip_version"})
 )
 
 func init() {
-	prometheus.MustRegister(countNumRestoreCalls)
-	prometheus.MustRegister(countNumRestoreErrors)
-	prometheus.MustRegister(countNumSaveCalls)
-	prometheus.MustRegister(countNumSaveErrors)
+	prometheus.MustRegister(countNumTransactions)
+	prometheus.MustRegister(countNumTransactionErrors)
+	prometheus.MustRegister(countNumListCalls)
+	prometheus.MustRegister(countNumListErrors)
 	prometheus.MustRegister(gaugeNumChains)
 	prometheus.MustRegister(gaugeNumRules)
-	prometheus.MustRegister(countNumLinesExecuted)
 }
 
 // nftablesTable is an implementation of the generictables.Table interface that programs nftables. It represents a
@@ -198,9 +193,8 @@ type nftablesTable struct {
 	logCxt               *log.Entry
 	updateRateLimitedLog *logutilslc.RateLimitedLogger
 
-	gaugeNumChains        prometheus.Gauge
-	gaugeNumRules         prometheus.Gauge
-	countNumLinesExecuted prometheus.Counter
+	gaugeNumChains prometheus.Gauge
+	gaugeNumRules  prometheus.Gauge
 
 	// Factory for making commands, used by UTs to shim exec.Command().
 	newCmd cmdshim.CmdFactory
@@ -332,10 +326,9 @@ func NewTable(
 		timeSleep: sleep,
 		timeNow:   now,
 
-		gaugeNumChains:        gaugeNumChains.WithLabelValues(fmt.Sprintf("%d", ipVersion), name),
-		gaugeNumRules:         gaugeNumRules.WithLabelValues(fmt.Sprintf("%d", ipVersion), name),
-		countNumLinesExecuted: countNumLinesExecuted.WithLabelValues(fmt.Sprintf("%d", ipVersion), name),
-		opReporter:            options.OpRecorder,
+		gaugeNumChains: gaugeNumChains.WithLabelValues(fmt.Sprintf("%d", ipVersion)),
+		gaugeNumRules:  gaugeNumRules.WithLabelValues(fmt.Sprintf("%d", ipVersion)),
+		opReporter:     options.OpRecorder,
 
 		contextTimeout: defaultTimeout,
 	}
@@ -622,7 +615,7 @@ func (t *nftablesTable) getHashesAndRulesFromDataplane() (hashes map[string][]st
 		t.onStillAlive()
 		hashes, rules, err := t.attemptToGetHashesAndRulesFromDataplane()
 		if err != nil {
-			countNumSaveErrors.Inc()
+			countNumListErrors.Inc()
 			var stderr string
 			if ee, ok := err.(*exec.ExitError); ok {
 				stderr = string(ee.Stderr)
@@ -663,12 +656,14 @@ func (t *nftablesTable) attemptToGetHashesAndRulesFromDataplane() (hashes map[st
 	defer cancel()
 
 	// Add chains. We need to query this separately, as chains may exist without rules.
+	countNumListCalls.Inc()
 	allChains, err := t.nft.List(ctx, "chain")
 	if err != nil {
 		if knftables.IsNotFound(err) {
 			err = nil
 			return
 		}
+		countNumListErrors.Inc()
 		return nil, nil, err
 	}
 	for _, chain := range allChains {
@@ -1034,7 +1029,12 @@ func (t *nftablesTable) runTransaction(tx *knftables.Transaction) error {
 
 	ctx, cancel := context.WithTimeout(context.Background(), t.contextTimeout)
 	defer cancel()
-	return t.nft.Run(ctx, tx)
+	countNumTransactions.Inc()
+	err := t.nft.Run(ctx, tx)
+	if err != nil {
+		countNumTransactionErrors.Inc()
+	}
+	return err
 }
 
 // CheckRulesPresent returns list of rules with the hashes that are already
