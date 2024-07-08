@@ -716,6 +716,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			featureDetector,
 			config.HealthAggregator,
 			dataplaneFeatures,
+			podMTU,
 		)
 
 		if err != nil {
@@ -1453,8 +1454,15 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 				Action:  iptables.AcceptAction{},
 			},
 			iptables.Rule{
+				Match: iptables.Match().
+					MarkMatchesWithMask(tcdefs.MarkSeenFallThrough, tcdefs.MarkSeenFallThroughMask).
+					Protocol("tcp"),
+				Comment: []string{"REJECT/rst packets from unknown TCP flows."},
+				Action:  iptables.RejectAction{With: "tcp-reset"},
+			},
+			iptables.Rule{
 				Match:   iptables.Match().MarkMatchesWithMask(tcdefs.MarkSeenFallThrough, tcdefs.MarkSeenFallThroughMask),
-				Comment: []string{fmt.Sprintf("%s packets from unknown flows.", d.ruleRenderer.IptablesFilterDenyAction())},
+				Comment: []string{fmt.Sprintf("%s packets from unknown non-TCP flows.", d.ruleRenderer.IptablesFilterDenyAction())},
 				Action:  d.ruleRenderer.IptablesFilterDenyAction(),
 			},
 		)
@@ -1512,7 +1520,9 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 				// only go to the host. Make sure that they are not forwarded.
 				fwdRules = append(fwdRules, rules.ICMPv6Filter(d.ruleRenderer.IptablesFilterDenyAction())...)
 			}
-		} else {
+		}
+
+		if t.IPVersion == 4 || d.config.BPFIpv6Enabled {
 			// Let the BPF programs know if Linux conntrack knows about the flow.
 			fwdRules = append(fwdRules, bpfMarkPreestablishedFlowsRules()...)
 			// The packet may be about to go to a local workload.  However, the local workload may not have a BPF

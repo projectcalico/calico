@@ -33,7 +33,6 @@ import (
 	"github.com/davecgh/go-spew/spew"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	discovery "k8s.io/api/discovery/v1"
@@ -462,6 +461,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					felix.Exec("conntrack", "-L")
 					felix.Exec("calico-bpf", "policy", "dump", "cali8d1e69e5f89", "all", "--asm")
 					if testOpts.ipv6 {
+						felix.Exec("conntrack", "-L", "-f", "ipv6")
 						felix.Exec("ip6tables-save", "-c")
 						felix.Exec("ip", "-6", "link")
 						felix.Exec("ip", "-6", "addr")
@@ -677,15 +677,11 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					return 0, err
 				}
 				var mapMeta struct {
-					ID    int    `json:"id"`
-					Error string `json:"error"`
+					ID int `json:"id"`
 				}
 				err = json.Unmarshal([]byte(out), &mapMeta)
 				if err != nil {
 					return 0, err
-				}
-				if mapMeta.Error != "" {
-					return 0, errors.New(mapMeta.Error)
 				}
 				return mapMeta.ID, nil
 			}
@@ -696,7 +692,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					var err error
 					mapID, err = getMapIDByPath(felix, filename)
 					return err
-				}, "5s").ShouldNot(HaveOccurred())
+				}, "10s").ShouldNot(HaveOccurred())
 				return mapID
 			}
 
@@ -4579,15 +4575,14 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					fc.Spec.BPFEnabled = &bpfEnabled
 					_, err := calicoClient.FelixConfigurations().Update(context.Background(), fc, options2.SetOptions{})
 					Expect(err).NotTo(HaveOccurred())
-					return
+				} else {
+					// Fall back on creating it...
+					fc = api.NewFelixConfiguration()
+					fc.Name = "default"
+					fc.Spec.BPFEnabled = &bpfEnabled
+					fc, err = calicoClient.FelixConfigurations().Create(context.Background(), fc, options2.SetOptions{})
+					Expect(err).NotTo(HaveOccurred())
 				}
-
-				// Fall back on creating it...
-				fc = api.NewFelixConfiguration()
-				fc.Name = "default"
-				fc.Spec.BPFEnabled = &bpfEnabled
-				fc, err = calicoClient.FelixConfigurations().Create(context.Background(), fc, options2.SetOptions{})
-				Expect(err).NotTo(HaveOccurred())
 
 				// Wait for BPF to be active.
 				ensureAllNodesBPFProgramsAttached(tc.Felixes)
@@ -4601,7 +4596,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				log.Info("Pongs received")
 			}
 
-			if testOpts.protocol == "tcp" && testOpts.dsr {
+			if testOpts.protocol == "tcp" && (testOpts.dsr || testOpts.ipv6) {
 				verifyConnectivityWhileEnablingBPF := func(from, to *workload.Workload) {
 					By("Starting persistent connection")
 					pc = from.StartPersistentConnection(to.IP, 8055, workload.PersistentConnectionOpts{
@@ -5229,9 +5224,9 @@ func dumpIfStateMap(felix *infrastructure.Felix) ifstate.MapMem {
 	return m
 }
 
-func ensureAllNodesBPFProgramsAttached(felixes []*infrastructure.Felix) {
+func ensureAllNodesBPFProgramsAttached(felixes []*infrastructure.Felix, ifacesExtra ...string) {
 	for _, felix := range felixes {
-		ensureBPFProgramsAttachedOffset(2, felix)
+		ensureBPFProgramsAttachedOffset(2, felix, ifacesExtra...)
 	}
 }
 

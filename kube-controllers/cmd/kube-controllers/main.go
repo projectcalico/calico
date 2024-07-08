@@ -19,14 +19,13 @@ import (
 	"flag"
 	"fmt"
 	"net/http"
-	_ "net/http/pprof"
 	"os"
 	"strings"
 	"time"
 
-	"github.com/pkg/profile"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
+	"github.com/projectcalico/calico/libcalico-go/lib/debugserver"
 	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 
 	log "github.com/sirupsen/logrus"
@@ -210,8 +209,9 @@ func main() {
 		// Serve prometheus metrics.
 		log.Infof("Starting Prometheus metrics server on port %d", runCfg.PrometheusPort)
 		go func() {
-			http.Handle("/metrics", promhttp.Handler())
-			err := http.ListenAndServe(fmt.Sprintf(":%d", runCfg.PrometheusPort), nil)
+			mux := http.NewServeMux()
+			mux.Handle("/metrics", promhttp.Handler())
+			err := http.ListenAndServe(fmt.Sprintf(":%d", runCfg.PrometheusPort), mux)
 			if err != nil {
 				log.WithError(err).Fatal("Failed to serve prometheus metrics")
 			}
@@ -219,15 +219,7 @@ func main() {
 	}
 
 	if runCfg.DebugProfilePort != 0 {
-		// Run a webserver to expose memory profiling.
-		setPathOption := profile.ProfilePath("/profiles")
-		defer profile.Start(profile.CPUProfile, profile.MemProfile, setPathOption).Stop()
-		go func() {
-			err := http.ListenAndServe(fmt.Sprintf(":%d", runCfg.DebugProfilePort), nil)
-			if err != nil {
-				log.WithError(err).Fatal("Failed to start debug profiling")
-			}
-		}()
+		debugserver.StartDebugPprofServer("0.0.0.0", int(runCfg.DebugProfilePort))
 	}
 
 	// Run the controllers. This runs until a config change triggers a restart
