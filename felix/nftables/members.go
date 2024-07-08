@@ -19,9 +19,10 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/ipsets"
-	"github.com/sirupsen/logrus"
 )
 
 // SetMember represents a member of an nftables set.
