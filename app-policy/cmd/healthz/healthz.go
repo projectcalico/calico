@@ -35,7 +35,7 @@ func main() {
 	flag.Parse()
 
 	opts := uds.GetDialOptions()
-	conn, err := grpc.Dial(dialPath, opts...)
+	conn, err := grpc.NewClient(dialPath, opts...)
 	if err != nil {
 		log.Fatalf("fail to dial: %v", err)
 	}

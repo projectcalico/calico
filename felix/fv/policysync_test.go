@@ -215,7 +215,7 @@ var _ = Context("_POL-SYNC_ _BPF-SAFE_ policy sync API tests", func() {
 					opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 					opts = append(opts, grpc.WithDialer(unixDialer))
 					var conn *grpc.ClientConn
-					conn, err = grpc.Dial(hostWlSocketPath[i], opts...)
+					conn, err = grpc.NewClient(hostWlSocketPath[i], opts...)
 					Expect(err).NotTo(HaveOccurred())
 					wlClient := proto.NewPolicySyncClient(conn)
 					return conn, wlClient
