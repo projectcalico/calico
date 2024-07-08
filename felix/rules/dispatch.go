@@ -105,7 +105,7 @@ func (r *DefaultRuleRenderer) WorkloadInterfaceAllowChains(
 func (r *DefaultRuleRenderer) EndpointMarkDispatchChains(
 	epMarkMapper EndpointMarkMapper,
 	wlEndpoints map[types.WorkloadEndpointID]*proto.WorkloadEndpoint,
-	hepEndpoints map[string]proto.HostEndpointID,
+	hepEndpoints map[string]types.HostEndpointID,
 ) []*generictables.Chain {
 	// Extract endpoint names.
 	logCxt := log.WithFields(log.Fields{

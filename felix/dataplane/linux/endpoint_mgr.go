@@ -313,7 +313,7 @@ func newEndpointManagerWithShims(
 		activeUpIfaces: set.New[string](),
 
 		activeWlEndpoints:                map[types.WorkloadEndpointID]*proto.WorkloadEndpoint{},
-		activeWlIfaceNameToID:            map[string]proto.WorkloadEndpointID{},
+		activeWlIfaceNameToID:            map[string]types.WorkloadEndpointID{},
 		activeWlIDToChains:               map[types.WorkloadEndpointID][]*generictables.Chain{},
 		ifaceNameToPolicyGroupChainNames: map[string][]string{},
 
