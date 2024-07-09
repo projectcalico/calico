@@ -399,7 +399,7 @@ var _ = Context("_POL-SYNC_ _BPF-SAFE_ policy sync API tests", func() {
 								Expect(r.RuleId).NotTo(Equal(""))
 								r.RuleId = ""
 							}
-							Expect(protoPol).To(Equal(
+							equal := googleproto.Equal(protoPol,
 								&proto.Policy{
 									Namespace: "", // Global policy has no namespace
 									InboundRules: []*proto.Rule{
@@ -423,8 +423,8 @@ var _ = Context("_POL-SYNC_ _BPF-SAFE_ policy sync API tests", func() {
 										},
 									},
 									OriginalSelector: selector.Normalise(policy.Spec.Selector),
-								},
-							))
+								})
+							Expect(equal).To(BeTrue())
 						})
 
 						It("should handle a deletion", func() {
@@ -514,12 +514,12 @@ var _ = Context("_POL-SYNC_ _BPF-SAFE_ policy sync API tests", func() {
 
 						It("should sync service account to each workload", func() {
 							for _, c := range mockWlClient {
-								Eventually(c.ServiceAccounts).Should(Equal(map[types.ServiceAccountID]*proto.ServiceAccountUpdate{
-									saID: {
-										Id:     types.ServiceAccountIDToProto(saID),
-										Labels: map[string]string{"key.1": "value.1", "key_2": "value-2"},
-									},
-								}))
+								Eventually(c.ServiceAccounts[saID]).ShouldNot(BeNil())
+								equal := googleproto.Equal(c.ServiceAccounts[saID], &proto.ServiceAccountUpdate{
+									Id:     types.ServiceAccountIDToProto(saID),
+									Labels: map[string]string{"key.1": "value.1", "key_2": "value-2"},
+								})
+								Expect(equal).To(BeTrue())
 							}
 						})
 					})
@@ -543,12 +543,12 @@ var _ = Context("_POL-SYNC_ _BPF-SAFE_ policy sync API tests", func() {
 
 						It("should sync namespace to each workload", func() {
 							for _, c := range mockWlClient {
-								Eventually(c.Namespaces).Should(Equal(map[types.NamespaceID]*proto.NamespaceUpdate{
-									nsID: {
-										Id:     types.NamespaceIDToProto(nsID),
-										Labels: map[string]string{"key.1": "value.1", "key_2": "value-2"},
-									},
-								}))
+								Eventually(c.Namespaces[nsID]).ShouldNot(BeNil())
+								equal := googleproto.Equal(c.Namespaces[nsID], &proto.NamespaceUpdate{
+									Id:     types.NamespaceIDToProto(nsID),
+									Labels: map[string]string{"key.1": "value.1", "key_2": "value-2"},
+								})
+								Expect(equal).To(BeTrue())
 							}
 						})
 					})
