@@ -24,7 +24,9 @@ import (
 	pb "github.com/projectcalico/calico/pod2daemon/protos/udsver_v1"
 )
 
-type WlServer struct{}
+type WlServer struct {
+	pb.UnimplementedVerifyServer
+}
 
 func NewWlAPIServer() pb.VerifyServer {
 	return &WlServer{}
