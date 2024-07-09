@@ -285,6 +285,12 @@ var _ = Describe("ParsedRule", func() {
 				// RuleId only in proto rule.
 				continue
 			}
+			if strings.Contains(name, "state") ||
+				strings.Contains(name, "unknownfields") ||
+				strings.Contains(name, "sizecache") {
+				// protobuf fields.
+				continue
+			}
 			protoFields = append(protoFields, name)
 		}
 		Expect(len(prFields)).To(BeNumerically(">", 0))
