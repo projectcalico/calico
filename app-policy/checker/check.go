@@ -17,13 +17,14 @@ package checker
 import (
 	"strings"
 
-	"github.com/projectcalico/calico/app-policy/policystore"
-	"github.com/projectcalico/calico/felix/proto"
-
 	authz "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/genproto/googleapis/rpc/code"
 	"google.golang.org/genproto/googleapis/rpc/status"
+
+	"github.com/projectcalico/calico/app-policy/policystore"
+	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/felix/types"
 )
 
 var OK = int32(code.Code_OK)
@@ -76,7 +77,7 @@ func checkStore(store *policystore.PolicyStore, req *authz.CheckRequest) (s stat
 		action := NO_MATCH
 	Policy:
 		for i, name := range policies {
-			pID := proto.PolicyID{Tier: tier.GetName(), Name: name}
+			pID := types.PolicyID{Tier: tier.GetName(), Name: name}
 			policy := store.PolicyByID[pID]
 			action = checkPolicy(policy, reqCache)
 			log.WithFields(log.Fields{
@@ -112,7 +113,7 @@ func checkStore(store *policystore.PolicyStore, req *authz.CheckRequest) (s stat
 	// If we reach here, there were either no tiers, or a policy PASSed the request.
 	if len(ep.ProfileIds) > 0 {
 		for i, name := range ep.ProfileIds {
-			pID := proto.ProfileID{Name: name}
+			pID := types.ProfileID{Name: name}
 			profile := store.ProfileByID[pID]
 			action := checkProfile(profile, reqCache)
 			log.WithFields(log.Fields{
