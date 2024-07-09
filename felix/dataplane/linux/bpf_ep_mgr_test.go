@@ -121,7 +121,7 @@ func (m *mockDataplane) ensureProgramLoaded(ap attachPoint, ipFamily proto.IPVer
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
-	//var res tc.AttachResult // we don't care about the values
+	// var res tc.AttachResult // we don't care about the values
 
 	if apxdp, ok := ap.(*xdp.AttachPoint); ok {
 		apxdp.HookLayoutV4 = hook.Layout{
@@ -316,7 +316,6 @@ func (f mockFD) FD() uint32 {
 }
 
 var _ = Describe("BPF Endpoint Manager", func() {
-
 	var (
 		bpfEpMgr             *bpfEndpointManager
 		dp                   *mockDataplane
@@ -336,8 +335,8 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		commonMaps           *bpfmap.CommonMaps
 		rrConfigNormal       rules.Config
 		ruleRenderer         rules.RuleRenderer
-		filterTableV4        IptablesTable
-		filterTableV6        IptablesTable
+		filterTableV4        Table
+		filterTableV6        Table
 		ifStateMap           *mock.Map
 		countersMap          *mock.Map
 		jumpMap              *mock.Map
@@ -457,6 +456,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			&routetable.DummyTable{}, // FIXME test the routes.
 			nil,
 			environment.NewFeatureDetector(nil).GetFeatures(),
+			1250,
 		)
 		Expect(err).NotTo(HaveOccurred())
 		bpfEpMgr.v4.hostIP = net.ParseIP("1.2.3.4")
@@ -549,7 +549,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 	hostEp := proto.HostEndpoint{
 		Name: "uthost-eth0",
 		PreDnatTiers: []*proto.TierInfo{
-			&proto.TierInfo{
+			{
 				Name:            "default",
 				IngressPolicies: []string{"mypolicy"},
 			},
@@ -559,7 +559,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 	hostEpNorm := proto.HostEndpoint{
 		Name: "uthost-eth0",
 		Tiers: []*proto.TierInfo{
-			&proto.TierInfo{
+			{
 				Name:            "default",
 				IngressPolicies: []string{"mypolicy"},
 				EgressPolicies:  []string{"mypolicy"},
@@ -795,7 +795,6 @@ var _ = Describe("BPF Endpoint Manager", func() {
 						"eth0": {Ingress: 12345},
 					}
 				}
-
 			})
 
 			It("should detach from eth0 when eth0 up before first CompleteDeferredWork()", func() {
@@ -1039,7 +1038,6 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			binary.LittleEndian.PutUint64(k, ingDenyRuleMatchId)
 			_, err = rcMap.Get(k)
 			Expect(err).To(HaveOccurred())
-
 		})
 
 		It("should cleanup the bpf map after restart", func() {

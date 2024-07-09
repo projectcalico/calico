@@ -192,7 +192,6 @@ func (d *linuxDataplane) DoNetworking(
 		d.logger.WithField("MAC", contVethMAC).Debug("Found MAC for container veth")
 
 		// At this point, the virtual ethernet pair has been created, and both ends have the right names.
-		// Both ends of the veth are still in the container's network namespace.
 
 		// Do the per-IP version set-up.  Add gateway routes etc.
 		if hasIPv4 {

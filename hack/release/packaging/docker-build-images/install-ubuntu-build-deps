@@ -2,27 +2,30 @@
 
 # shellcheck disable=SC1091
 
-set -x      # Print commands as they're run
-set -e      # Exit immediately if a command returns non-zero
+set -x # Print commands as they're run
+set -e # Exit immediately if a command returns non-zero
 
 apt-get -q update
-DEBIAN_FRONTEND=noninteractive \
-apt-get install -y -q build-essential  \
-                   devscripts \
-                   debhelper \
-                   dh-python \
-                   python-all \
-                   python-setuptools \
-                   python3-all \
-                   python3-setuptools \
-                   libyajl2 \
-                   libdatrie1 \
-                   git \
-                   libnetfilter-conntrack-dev \
-                   libidn11-dev \
-                   libdbus-1-dev \
-                   libgmp-dev \
-                   nettle-dev \
-                   m4 \
-                   texinfo
+
+DEBIAN_FRONTEND=noninteractive apt-get install -y -q \
+    build-essential \
+    debhelper \
+    devscripts \
+    dh-python \
+    git \
+    libdatrie1 \
+    libdbus-1-dev \
+    libgmp-dev \
+    libidn11-dev \
+    libnetfilter-conntrack-dev \
+    libpcap-dev \
+    libyajl2 \
+    m4 \
+    nettle-dev \
+    python-all \
+    python-setuptools \
+    python3-all \
+    python3-setuptools \
+    texinfo
+
 apt-get clean -y

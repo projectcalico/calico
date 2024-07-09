@@ -2808,6 +2808,13 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Format:      "",
 						},
 					},
+					"nftablesMode": {
+						SchemaProps: spec.SchemaProps{
+							Description: "NFTablesMode configures nftables support in Felix. [Default: Disabled]",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 					"bpfEnabled": {
 						SchemaProps: spec.SchemaProps{
 							Description: "BPFEnabled, if enabled Felix will use the BPF dataplane. [Default: false]",
@@ -3199,6 +3206,27 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Description: "WindowsManageFirewallRules configures whether or not Felix will program Windows Firewall rules. (to allow inbound access to its own metrics ports) [Default: Disabled]",
 							Type:        []string{"string"},
 							Format:      "",
+						},
+					},
+					"goGCThreshold": {
+						SchemaProps: spec.SchemaProps{
+							Description: "GoGCThreshold Sets the Go runtime's garbage collection threshold.  I.e. the percentage that the heap is allowed to grow before garbage collection is triggered.  In general, doubling the value halves the CPU time spent doing GC, but it also doubles peak GC memory overhead.  A special value of -1 can be used to disable GC entirely; this should only be used in conjunction with the GoMemoryLimitMB setting.\n\nThis setting is overridden by the GOGC environment variable.\n\n[Default: 40]",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"goMemoryLimitMB": {
+						SchemaProps: spec.SchemaProps{
+							Description: "GoMemoryLimitMB sets a (soft) memory limit for the Go runtime in MB.  The Go runtime will try to keep its memory usage under the limit by triggering GC as needed.  To avoid thrashing, it will exceed the limit if GC starts to take more than 50% of the process's CPU time.  A value of -1 disables the memory limit.\n\nNote that the memory limit, if used, must be considerably less than any hard resource limit set at the container or pod level.  This is because felix is not the only process that must run in the container or pod.\n\nThis setting is overridden by the GOMEMLIMIT environment variable.\n\n[Default: -1]",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"goMaxProcs": {
+						SchemaProps: spec.SchemaProps{
+							Description: "GoMaxProcs sets the maximum number of CPUs that the Go runtime will use concurrently.  A value of -1 means \"use the system default\"; typically the number of real CPUs on the system.\n\nthis setting is overridden by the GOMAXPROCS environment variable.\n\n[Default: -1]",
+							Type:        []string{"integer"},
+							Format:      "int32",
 						},
 					},
 				},

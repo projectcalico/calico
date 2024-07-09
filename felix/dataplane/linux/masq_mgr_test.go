@@ -19,6 +19,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/felix/dataplane/common"
+	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/iptables"
 	"github.com/projectcalico/calico/felix/proto"
@@ -89,9 +90,9 @@ var _ = Describe("Masquerade manager", func() {
 		})
 		It("should program the chain", func() {
 			Expect(natTable.UpdateCalled).To(BeTrue())
-			natTable.checkChains([][]*iptables.Chain{{{
+			natTable.checkChains([][]*generictables.Chain{{{
 				Name: "cali-nat-outgoing",
-				Rules: []iptables.Rule{
+				Rules: []generictables.Rule{
 					{
 						Action: iptables.MasqAction{},
 						Match: iptables.Match().
@@ -139,9 +140,9 @@ var _ = Describe("Masquerade manager", func() {
 					"10.0.0.0/16", "10.2.0.0/16")))
 			})
 			It("should program the chain", func() {
-				natTable.checkChains([][]*iptables.Chain{{{
+				natTable.checkChains([][]*generictables.Chain{{{
 					Name: "cali-nat-outgoing",
-					Rules: []iptables.Rule{
+					Rules: []generictables.Rule{
 						{
 							Action: iptables.MasqAction{},
 							Match: iptables.Match().
@@ -168,7 +169,7 @@ var _ = Describe("Masquerade manager", func() {
 						"10.2.0.0/16")))
 				})
 				It("should program empty chain", func() {
-					natTable.checkChains([][]*iptables.Chain{{{
+					natTable.checkChains([][]*generictables.Chain{{{
 						Name:  "cali-nat-outgoing",
 						Rules: nil,
 					}}})
@@ -189,7 +190,7 @@ var _ = Describe("Masquerade manager", func() {
 						Expect(ipSets.Members["all-ipam-pools"]).To(Equal(set.New[string]()))
 					})
 					It("should program empty chain", func() {
-						natTable.checkChains([][]*iptables.Chain{{{
+						natTable.checkChains([][]*generictables.Chain{{{
 							Name:  "cali-nat-outgoing",
 							Rules: nil,
 						}}})
@@ -219,7 +220,7 @@ var _ = Describe("Masquerade manager", func() {
 			Expect(ipSets.Members["all-ipam-pools"]).To(Equal(set.From("10.0.0.0/16")))
 		})
 		It("should program empty chain", func() {
-			natTable.checkChains([][]*iptables.Chain{{{
+			natTable.checkChains([][]*generictables.Chain{{{
 				Name:  "cali-nat-outgoing",
 				Rules: nil,
 			}}})

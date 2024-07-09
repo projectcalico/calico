@@ -1173,7 +1173,6 @@ func (r *RouteTable) applyUpdates(attempt int) error {
 		return deltatracker.IterActionUpdateDataplane
 	})
 
-
 	// Now do a first pass of the routes that we want to create/update and
 	// trigger any necessary conntrack cleanups for moved routes.
 	r.kernelRoutes.PendingUpdates().Iter(func(kernKey kernelRouteKey, kernRoute kernelRoute) deltatracker.IterAction {

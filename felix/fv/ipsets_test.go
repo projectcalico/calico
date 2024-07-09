@@ -34,7 +34,6 @@ import (
 )
 
 var _ = Context("_IPSets_ Tests for IPset rendering", func() {
-
 	var (
 		etcd     *containers.Container
 		tc       infrastructure.TopologyContainers
@@ -48,6 +47,13 @@ var _ = Context("_IPSets_ Tests for IPset rendering", func() {
 		topologyOptions := infrastructure.DefaultTopologyOptions()
 		topologyOptions.FelixLogSeverity = "Info"
 		topologyOptions.EnableIPv6 = false
+		if NFTMode() {
+			// Nftables resyncs are currently ineffeicient and can cause delays in normal IP set programming.
+			// We can remove this override once we have a more efficient resync mechanism.
+			topologyOptions.ExtraEnvVars = map[string]string{
+				"FELIX_IPSETSREFRESHINTERVAL": "0",
+			}
+		}
 		logrus.SetLevel(logrus.InfoLevel)
 		tc, etcd, client, infra = infrastructure.StartSingleNodeEtcdTopology(topologyOptions)
 		felixPID = tc.Felixes[0].GetFelixPID()
@@ -56,12 +62,12 @@ var _ = Context("_IPSets_ Tests for IPset rendering", func() {
 	})
 
 	AfterEach(func() {
-		w.Stop()
-		tc.Stop()
-
 		if CurrentGinkgoTestDescription().Failed {
 			etcd.Exec("etcdctl", "get", "/", "--prefix", "--keys-only")
 		}
+
+		w.Stop()
+		tc.Stop()
 		etcd.Stop()
 		infra.Stop()
 	})
@@ -117,12 +123,18 @@ var _ = Context("_IPSets_ Tests for IPset rendering", func() {
 		timeToRecreateAll := time.Since(startTime)
 		By(fmt.Sprint("All IP sets programmed after ", timeToRecreateAll))
 
-		Expect(timeToCreateAll).To(BeNumerically("<", 30*time.Second),
+		// nftables mode is a bit slower here, so use a longer timeout
+		// until we can optimize nftables set programming.
+		timeout := 30 * time.Second
+		if NFTMode() {
+			timeout = 90 * time.Second
+		}
+		Expect(timeToCreateAll).To(BeNumerically("<", timeout),
 			"Creating IP sets succeeded but slower than expected")
 
 		// Before we rate limited deletions, this would take 80s+.  Now it takes
 		// 10s so 20s should give some headroom.
-		Expect(timeToRecreateAll).To(BeNumerically("<", 30*time.Second),
+		Expect(timeToRecreateAll).To(BeNumerically("<", timeout),
 			"Recreating IP sets succeeded but slower than expected")
 	})
 })

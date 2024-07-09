@@ -28,8 +28,8 @@ type RouteOwnershipTracker interface {
 	UpdateCIDROwner(addr ip.CIDR, ifaceIdx int, routeClass RouteClass)
 	RemoveCIDROwner(addr ip.CIDR)
 
-	OnDataplaneRouteDeleted(cidr ip.CIDR, ifindex int)
 	CIDRNeedsCleanup(cidr ip.CIDR) bool
+	OnDataplaneRouteDeleted(cidr ip.CIDR, ifindex int)
 	StartConntrackCleanupAndReset()
 
 	WaitForPendingDeletion(cidr ip.CIDR)
@@ -51,16 +51,16 @@ type conntrackOwner struct {
 //   - Uses the interface index and route class on that callback to decide
 //     if the route being deleted needs a conntrack cleanup.
 //   - Provides a lookup function to check if an updated route needs a cleanup.
-//     - Updates that don't change the interface index don't need cleanup.
-//     - Updates from remote to remote don't need cleanup.  For example, a route
-//       moving from VXLAN to VXLAN-same-subnet.
-//     - Updates where there was no previous route don't need cleanup.
+//   - Updates that don't change the interface index don't need cleanup.
+//   - Updates from remote to remote don't need cleanup.  For example, a route
+//     moving from VXLAN to VXLAN-same-subnet.
+//   - Updates where there was no previous route don't need cleanup.
 //
 // A complicating factor is that the kernel keys routes using CIDR, ToS and
 // priority whereas conntrack entries are keyed on 5-tuple only.  We sidestep
 // that by assuming the RouteTable only allows one route per CIDR in its final
 // state.  [Shaun] I tried to handle multiple routes per CIDR, but the
-// complexity spiralled and it wasn't clear what should be done in a lot of
+// complexity spiralled, and it wasn't clear what should be done in a lot of
 // the corner cases.  I'm hoping that, should we add function that uses multiple
 // ToSes or priorities, the right way to handle conflicts will be clear at that
 // time!
@@ -71,7 +71,7 @@ type ConntrackCleanupManager struct {
 	// the Desired() side immediately as the RouteTable gives us update.  The
 	// Dataplane() side is updated to record the "previous state" as soon as
 	// we've started conntrack cleanups.
-	addrOwners   *deltatracker.DeltaTracker[ip.Addr, conntrackOwner]
+	addrOwners *deltatracker.DeltaTracker[ip.Addr, conntrackOwner]
 
 	// addrsToCleanUp tracks which IP addresses need conntrack cleanup.  We
 	// don't start the cleanup immediately in case there are multiple routes
@@ -277,10 +277,10 @@ func NewNoOpRouteTracker() NoOpRouteTracker {
 }
 
 func (n NoOpRouteTracker) UpdateCIDROwner(addr ip.CIDR, ifaceIdx int, routeClass RouteClass) {}
-func (n NoOpRouteTracker) RemoveCIDROwner(addr ip.CIDR) {}
-func (n NoOpRouteTracker) OnDataplaneRouteDeleted(cidr ip.CIDR, ifindex int) {}
-func (n NoOpRouteTracker) CIDRNeedsCleanup(cidr ip.CIDR) bool  {return false}
-func (n NoOpRouteTracker) StartConntrackCleanupAndReset()      {}
-func (n NoOpRouteTracker) WaitForPendingDeletion(cidr ip.CIDR) {}
+func (n NoOpRouteTracker) RemoveCIDROwner(addr ip.CIDR)                                      {}
+func (n NoOpRouteTracker) OnDataplaneRouteDeleted(cidr ip.CIDR, ifindex int)                 {}
+func (n NoOpRouteTracker) CIDRNeedsCleanup(cidr ip.CIDR) bool                                { return false }
+func (n NoOpRouteTracker) StartConntrackCleanupAndReset()                                    {}
+func (n NoOpRouteTracker) WaitForPendingDeletion(cidr ip.CIDR)                               {}
 
 var _ RouteOwnershipTracker = (*NoOpRouteTracker)(nil)

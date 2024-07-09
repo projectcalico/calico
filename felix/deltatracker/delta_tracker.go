@@ -424,7 +424,8 @@ func (c *PendingUpdatesView[K, V]) Iter(f func(k K, v V) IterAction) {
 		case IterActionUpdateDataplane:
 			delete(c.desiredUpdates, k)
 			c.inDataplaneAndDesired[k] = v
-		case IterActionNoOpStopIteration: break
+		case IterActionNoOpStopIteration:
+			break
 		}
 	}
 }
