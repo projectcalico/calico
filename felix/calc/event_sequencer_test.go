@@ -117,9 +117,6 @@ var _ = Describe("ParsedRulesToActivePolicyUpdate", func() {
 		// or we forgot to add conversion logic for that field.
 		protoUpdate := calc.ParsedRulesToActivePolicyUpdate(model.PolicyKey{Name: "a-policy"}, &fullyLoadedParsedRules)
 		protoPolicy := protoUpdate.GetPolicy()
-		if googleproto.Equal(protoPolicy, &proto.Policy{}) {
-			return
-		}
 		Expect(protoPolicy.GetNamespace()).NotTo(BeNil())
 		Expect(protoPolicy.GetInboundRules()).NotTo(BeNil())
 		Expect(protoPolicy.GetOutboundRules()).NotTo(BeNil())
