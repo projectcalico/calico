@@ -31,14 +31,14 @@ import (
 )
 
 type TestServer struct {
+	pb.UnimplementedCniDataplaneServer
+
 	retval   bool
 	contMac  string
 	Received chan interface{}
 
 	lis        net.Listener
 	grpcServer *grpc.Server
-
-	pb.UnimplementedCniDataplaneServer
 }
 
 func (s *TestServer) Add(ctx context.Context, in *pb.AddRequest) (*pb.AddReply, error) {
