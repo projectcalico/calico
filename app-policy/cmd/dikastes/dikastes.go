@@ -33,6 +33,7 @@ import (
 	authz "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/resolver"
 
 	"github.com/projectcalico/calico/app-policy/checker"
 	"github.com/projectcalico/calico/app-policy/health"
@@ -169,6 +170,7 @@ func runClient(arguments map[string]interface{}) {
 	method := arguments["<method>"].(string)
 
 	opts := uds.GetDialOptions()
+	resolver.SetDefaultScheme("passthrough")
 	conn, err := grpc.NewClient(dial, opts...)
 	if err != nil {
 		log.Fatalf("fail to dial: %v", err)
