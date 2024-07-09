@@ -66,7 +66,7 @@ func fillInRuleIDs(rules []*proto.Rule, ruleIDSeed string) {
 		rule.RuleId = ""
 		data, err := googleproto.Marshal(rule)
 		if err != nil {
-			log.WithError(err).WithField("rule", rule).Panic("Failed to marshal rule")
+			log.WithError(err).WithField("rule", rule.String()).Panic("Failed to marshal rule")
 		}
 		_, err = s.Write(data)
 		if err != nil {
