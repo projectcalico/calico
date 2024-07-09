@@ -30,6 +30,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/resolver"
 	googleproto "google.golang.org/protobuf/proto"
 
 	"github.com/projectcalico/calico/felix/policysync"
@@ -789,6 +790,7 @@ var _ = Describe("Processor", func() {
 					BeforeEach(func(done Done) {
 						wepId = testId("default/withsync")
 
+						resolver.SetDefaultScheme("passthrough")
 						opts := getDialOptions()
 						var err error
 						clientConn, err = grpc.NewClient(path.Join(socketDir, ListenerSocket), opts...)

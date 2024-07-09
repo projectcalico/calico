@@ -25,6 +25,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/resolver"
 )
 
 const DefaultDialPath = "/var/run/dikastes/dikastes.sock"
@@ -35,6 +36,7 @@ func main() {
 	flag.Parse()
 
 	opts := uds.GetDialOptions()
+	resolver.SetDefaultScheme("passthrough")
 	conn, err := grpc.NewClient(dialPath, opts...)
 	if err != nil {
 		log.Fatalf("fail to dial: %v", err)
