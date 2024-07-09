@@ -174,7 +174,7 @@ $(BIN)/flannel: $(FLANNEL_CNI_PLUGIN_CLONED)
 		-v $(CURDIR)/flannel-cni-plugin:/go/src/github.com/flannel-io/cni-plugin:z \
 		-e LOCAL_USER_ID=$(LOCAL_USER_ID) -w /go/src/github.com/flannel-io/cni-plugin --rm $(CALICO_BUILD) \
 		/bin/sh -xe -c ' \
-			ARCH=$(ARCH) VERSION=$(FLANNEL_VERSION) make build_linux'
+			ARCH=$(subst v7,,$(ARCH)) VERSION=$(FLANNEL_VERSION) make build_linux'
 	-mkdir -p $(BIN)
 	cp flannel-cni-plugin/dist/flannel-$(ARCH) $(BIN)/flannel
 
@@ -183,7 +183,7 @@ $(WINDOWS_BIN)/flannel.exe: $(FLANNEL_CNI_PLUGIN_CLONED)
 		-v $(CURDIR)/flannel-cni-plugin:/go/src/github.com/flannel-io/cni-plugin:z \
 		-e LOCAL_USER_ID=$(LOCAL_USER_ID) -w /go/src/github.com/flannel-io/cni-plugin --rm $(CALICO_BUILD) \
 		/bin/sh -xe -c ' \
-			ARCH=$(ARCH) VERSION=$(FLANNEL_VERSION) make build_windows'
+			ARCH=$(subst v7,,$(ARCH)) VERSION=$(FLANNEL_VERSION) make build_windows'
 	-mkdir -p $(WINDOWS_BIN)
 	cp flannel-cni-plugin/dist/flannel-$(ARCH).exe $(WINDOWS_BIN)/flannel.exe
 
