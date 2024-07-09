@@ -619,7 +619,7 @@ func (r *RouteTable) recalculateDesiredKernelRoute(cidr ip.CIDR) {
 
 	cleanUpKernelRoutes := func() {
 		r.kernelRoutes.Desired().Delete(kernKey)
-		r.conntrackTracker.RemoveAllowedOwner(kernKey)
+		r.conntrackTracker.RemoveCIDROwner(cidr)
 	}
 
 	var bestTarget Target
@@ -718,7 +718,7 @@ func (r *RouteTable) recalculateDesiredKernelRoute(cidr ip.CIDR) {
 	}
 
 	r.kernelRoutes.Desired().Set(kernKey, kernRoute)
-	r.conntrackTracker.SetAllowedOwner(kernKey, bestIfaceIdx)
+	r.conntrackTracker.UpdateCIDROwner(cidr, bestIfaceIdx, bestRouteClass)
 }
 
 func (r *RouteTable) QueueResync() {
@@ -761,7 +761,6 @@ func (r *RouteTable) attemptApply(attempt int) (err error) {
 		return err
 	}
 	r.maybeCleanUpGracePeriods()
-	r.conntrackTracker.DoPeriodicCleanup()
 	return nil
 }
 
@@ -825,8 +824,6 @@ func (r *RouteTable) doFullResync(nl netlinkshim.Interface) error {
 		return fmt.Errorf("failed to list all routes for resync: %w", err)
 	}
 
-	r.conntrackTracker.ClearAllDataplaneOwners()
-
 	err = r.kernelRoutes.Dataplane().ReplaceAllIter(func(f func(k kernelRouteKey, v kernelRoute)) error {
 		for _, route := range allRoutes {
 			r.onIfaceSeen(route.LinkIndex)
@@ -835,7 +832,6 @@ func (r *RouteTable) doFullResync(nl netlinkshim.Interface) error {
 				// Not a route that we're managing.
 				continue
 			}
-			r.conntrackTracker.AddDataplaneOwner(kernKey, kernRoute.Ifindex)
 			f(kernKey, kernRoute)
 		}
 		return nil
@@ -933,7 +929,6 @@ func (r *RouteTable) resyncIface(nl netlinkshim.Interface, ifaceName string) err
 			// be a candidate for us to delete.
 			continue
 		}
-		r.conntrackTracker.AddDataplaneOwner(kernKey, kernRoute.Ifindex)
 		kernRoutes[kernKey] = kernRoute
 	}
 	// Then look for routes that the tracker says are there but are actually
@@ -1171,25 +1166,32 @@ func (r *RouteTable) applyUpdates(attempt int) error {
 			deletionErrs[kernKey] = err
 			return deltatracker.IterActionNoOp
 		}
+		r.conntrackTracker.OnDataplaneRouteDeleted(kernKey.CIDR, kernRoute.Ifindex)
+
 		// Route is gone, clean up the dataplane side of the tracker.
 		r.logCxt.WithField("route", kernKey).Debug("Deleted route.")
 		return deltatracker.IterActionUpdateDataplane
 	})
 
-	// If we're tracking conntrack owners, we need to correctly interlock with
-	// the tracker.  Instead of doing RouteReplace() directly, we need to
-	// delete routes that are moving from one interface to another and then
-	// let the tracker clean up the conntrack entries before we recreate the
-	// route below.  (The no-op tracker does nothing here, so we'll just fall
-	// through and use RouteReplace directly.)
-	r.conntrackTracker.IterMovedRoutesAndStartCleanups(func(kernKey kernelRouteKey) {
-		err := r.deleteRoute(nl, kernKey)
-		if err != nil {
-			deletionErrs[kernKey] = err
-		} else {
-			r.kernelRoutes.Dataplane().Delete(kernKey)
+
+	// Now do a first pass of the routes that we want to create/update and
+	// trigger any necessary conntrack cleanups for moved routes.
+	r.kernelRoutes.PendingUpdates().Iter(func(kernKey kernelRouteKey, kernRoute kernelRoute) deltatracker.IterAction {
+		cidr := kernKey.CIDR
+		if r.conntrackTracker.CIDRNeedsCleanup(cidr) {
+			err := r.deleteRoute(nl, kernKey)
+			if err != nil {
+				deletionErrs[kernKey] = err
+				return deltatracker.IterActionNoOp
+			}
+			r.conntrackTracker.OnDataplaneRouteDeleted(kernKey.CIDR, kernRoute.Ifindex)
 		}
+		return deltatracker.IterActionNoOp
 	})
+
+	// Start any deferred conntrack cleanups and reset the tracking for next
+	// time.
+	r.conntrackTracker.StartConntrackCleanupAndReset()
 
 	updateErrs := map[kernelRouteKey]error{}
 	r.kernelRoutes.PendingUpdates().Iter(func(kernKey kernelRouteKey, kRoute kernelRoute) deltatracker.IterAction {
@@ -1199,8 +1201,7 @@ func (r *RouteTable) applyUpdates(attempt int) error {
 			flags = unix.RTNH_F_ONLINK
 		}
 
-		r.conntrackTracker.WaitForPendingDeletion(kernKey.CIDR.Addr())
-		r.conntrackTracker.SetSingleDataplaneOwner(kernKey, kRoute.Ifindex)
+		r.conntrackTracker.WaitForPendingDeletion(kernKey.CIDR)
 
 		nlRoute := &netlink.Route{
 			Family: r.netlinkFamily,

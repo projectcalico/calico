@@ -31,3 +31,12 @@ const (
 
 	RouteClassMax
 )
+
+func routeClassIsRemote(class RouteClass) bool {
+	switch class {
+	case RouteClassVXLANTunnel, RouteClassVXLANSameSubnet, RouteClassWireguard:
+		return true
+	default:
+		return false
+	}
+}
