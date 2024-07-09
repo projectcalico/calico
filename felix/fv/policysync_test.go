@@ -413,7 +413,7 @@ var _ = Context("_POL-SYNC_ _BPF-SAFE_ policy sync API tests", func() {
 												Selector: "foo == 'bar'",
 											},
 											HttpMatch: &proto.HTTPMatch{Methods: []string{"GET"},
-												Paths: []*proto.HTTPMatch_PathMatch{{&proto.HTTPMatch_PathMatch_Exact{Exact: "/path"}}},
+												Paths: []*proto.HTTPMatch_PathMatch{{PathMatch: &proto.HTTPMatch_PathMatch_Exact{Exact: "/path"}}},
 											},
 										},
 									},
@@ -516,7 +516,7 @@ var _ = Context("_POL-SYNC_ _BPF-SAFE_ policy sync API tests", func() {
 							for _, c := range mockWlClient {
 								Eventually(c.ServiceAccounts).Should(Equal(map[types.ServiceAccountID]*proto.ServiceAccountUpdate{
 									saID: {
-										Id:     &saID,
+										Id:     types.ServiceAccountIDToProto(saID),
 										Labels: map[string]string{"key.1": "value.1", "key_2": "value-2"},
 									},
 								}))
@@ -545,7 +545,7 @@ var _ = Context("_POL-SYNC_ _BPF-SAFE_ policy sync API tests", func() {
 							for _, c := range mockWlClient {
 								Eventually(c.Namespaces).Should(Equal(map[types.NamespaceID]*proto.NamespaceUpdate{
 									nsID: {
-										Id:     &nsID,
+										Id:     types.ServiceAccountIDToProto(nsID),
 										Labels: map[string]string{"key.1": "value.1", "key_2": "value-2"},
 									},
 								}))
