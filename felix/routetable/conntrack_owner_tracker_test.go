@@ -49,7 +49,7 @@ func TestConntrackCleanupManager_NewRoute(t *testing.T) {
 	ccm.SetAllowedOwner(key1, 10)
 
 	// Do the apply steps in order; first trigger deletions (there are none to do)
-	ccm.StartDeletionsForDeletedRoutes() // Should be no-op.
+	ccm.StartCleanupForDeletedRoutes() // Should be no-op.
 	Expect(conntrack.NumPendingRemovals()).To(Equal(0))
 	// There should be no mutations to do.
 	expectNoMutations(t, ccm)
@@ -80,12 +80,12 @@ func TestConntrackCleanupManager_MovedRoute(t *testing.T) {
 	ccm.SetAllowedOwner(key1, 11)
 
 	// Do the apply steps in order; first trigger deletions (there are none to do)
-	ccm.StartDeletionsForDeletedRoutes() // Should be no-op.
+	ccm.StartCleanupForDeletedRoutes() // Should be no-op.
 	Expect(conntrack.NumPendingRemovals()).To(Equal(0))
 
 	// Then, iterate over mutations.  There should be one for the moved route.
 	count := 0
-	ccm.IterMovedRoutesAndStartDeletions(func(kernKey kernelRouteKey) {
+	ccm.IterMovedRoutesAndStartCleanups(func(kernKey kernelRouteKey) {
 		// Should get called once about the single route.
 		// The real routing table deletes the route from this callback.
 		Expect(kernKey).To(Equal(key1))
@@ -119,7 +119,7 @@ func TestConntrackCleanupManager_ChangeOfPriority(t *testing.T) {
 	ccm.SetAllowedOwner(key1, 10)
 
 	// There should be no deletions because the IP address isn't moving.
-	ccm.StartDeletionsForDeletedRoutes() // Should be no-op.
+	ccm.StartCleanupForDeletedRoutes() // Should be no-op.
 	Expect(conntrack.NumPendingRemovals()).To(Equal(0))
 
 	// There should be no mutations because the IP hasn't moved.
@@ -136,21 +136,21 @@ func TestConntrackCleanupManager_ChangeOfPriority(t *testing.T) {
 
 	// Removing the route should trigger cleanup.
 	ccm.RemoveAllowedOwner(key1)
-	ccm.StartDeletionsForDeletedRoutes()
+	ccm.StartCleanupForDeletedRoutes()
 	Eventually(conntrack.NumPendingRemovals).Should(Equal(1))
 }
 
 func expectNoMutations(t *testing.T, ccm *ConntrackCleanupManager) {
-	ccm.IterMovedRoutesAndStartDeletions(func(kernKey kernelRouteKey) {
-		t.Fatalf("Unexpected route returned by IterMovedRoutesAndStartDeletions: %v", kernKey)
+	ccm.IterMovedRoutesAndStartCleanups(func(kernKey kernelRouteKey) {
+		t.Fatalf("Unexpected route returned by IterMovedRoutesAndStartCleanups: %v", kernKey)
 	})
 }
 
 func expectNothingToDo(t *testing.T, ccm *ConntrackCleanupManager, conntrack *mockConntrack) {
-	ccm.StartDeletionsForDeletedRoutes() // Should be no-op.
+	ccm.StartCleanupForDeletedRoutes() // Should be no-op.
 	ExpectWithOffset(1, conntrack.NumPendingRemovals()).To(Equal(0), "Expected no pending removals.")
-	ccm.IterMovedRoutesAndStartDeletions(func(kernKey kernelRouteKey) {
-		t.Fatalf("Unexpected route returned by IterMovedRoutesAndStartDeletions: %v", kernKey)
+	ccm.IterMovedRoutesAndStartCleanups(func(kernKey kernelRouteKey) {
+		t.Fatalf("Unexpected route returned by IterMovedRoutesAndStartCleanups: %v", kernKey)
 	})
 }
 
@@ -168,11 +168,11 @@ func TestConntrackCleanupManager_DeletedRoute(t *testing.T) {
 	ccm.RemoveAllowedOwner(key1)
 
 	// Do the apply steps in order; first trigger deletions
-	ccm.StartDeletionsForDeletedRoutes()
+	ccm.StartCleanupForDeletedRoutes()
 	Eventually(conntrack.NumPendingRemovals).Should(Equal(1))
 	// Then, iterate over mutations.
-	ccm.IterMovedRoutesAndStartDeletions(func(kernKey kernelRouteKey) {
-		t.Fatalf("Unexpected route returned by IterMovedRoutesAndStartDeletions: %v", kernKey)
+	ccm.IterMovedRoutesAndStartCleanups(func(kernKey kernelRouteKey) {
+		t.Fatalf("Unexpected route returned by IterMovedRoutesAndStartCleanups: %v", kernKey)
 	})
 
 	addr := cidr1.Addr()

@@ -33,11 +33,11 @@ type RouteOwnershipTracker interface {
 	RemoveDataplaneOwners(kernKey kernelRouteKey)
 	SetSingleDataplaneOwner(key kernelRouteKey, idx int)
 
-	StartDeletionsForDeletedRoutes()
-	IterMovedRoutesAndStartDeletions(f func(kernKey kernelRouteKey))
+	IterMovedRoutesAndStartCleanups(f func(kernKey kernelRouteKey))
 	WaitForPendingDeletion(ipAddr ip.Addr)
 
 	DoPeriodicCleanup()
+	ClearAllDataplaneOwners()
 }
 
 // ConntrackCleanupManager handles cleaning up conntrack entries on behalf of
@@ -151,24 +151,17 @@ func (c *ConntrackCleanupManager) SetSingleDataplaneOwner(kernKey kernelRouteKey
 	c.possibleOwners.Dataplane().Set(addr, ipOwners)
 }
 
-// StartDeletionsForDeletedRoutes starts the deletion of conntrack entries for
-// addresses that have been completely deleted from all routes. Conntrack
-// cleanup happens in the background.
-func (c *ConntrackCleanupManager) StartDeletionsForDeletedRoutes() {
-	// Clean up any conntrack entries for routes that have been deleted.
-	c.possibleOwners.PendingDeletions().Iter(func(addr ip.Addr) deltatracker.IterAction {
-		logrus.WithField("addr", addr).Debug(
-			"All routes for this IP deleted, starting conntrack deletion.")
-		c.startDeletion(addr)
-		return deltatracker.IterActionUpdateDataplane
-	})
+func (c *ConntrackCleanupManager) ClearAllDataplaneOwners() {
+	c.possibleOwners.Dataplane().ReplaceAllMap(nil)
 }
 
-// IterMovedRoutesAndStartDeletions iterates over routes that have moved to new
-// owners and starts the deletion of conntrack entries for the old owners.
+// IterMovedRoutesAndStartCleanups iterates over routes that have moved to new
+// owners and, after issuing each callback, it starts the deletion of conntrack
+// entries for the old owners.
+//
 // The RouteTable is intended to delete the old routes from the dataplane
-// after it gets a callback from this function.
-func (c *ConntrackCleanupManager) IterMovedRoutesAndStartDeletions(f func(kernKey kernelRouteKey)) {
+// within the callback function.
+func (c *ConntrackCleanupManager) IterMovedRoutesAndStartCleanups(f func(kernKey kernelRouteKey)) {
 	keysToCleanUp := set.New[kernelRouteKey]()
 	c.possibleOwners.PendingUpdates().Iter(func(
 		addr ip.Addr,
@@ -180,6 +173,8 @@ func (c *ConntrackCleanupManager) IterMovedRoutesAndStartDeletions(f func(kernKe
 			// mainline case when we're adding a route for the first time (or
 			// it has been long enough since the last time this CIDR was used
 			// that the cleanup is all done).
+			//
+			// No need to call back, this isn't a moved route.
 			return deltatracker.IterActionNoOp
 		}
 
@@ -231,7 +226,7 @@ func (c *ConntrackCleanupManager) IterMovedRoutesAndStartDeletions(f func(kernKe
 			}).Info("Conntrack owners updated, starting conntrack deletion.")
 			moveDetected = true
 			// Tell the RouteTable to remove all the old routes for this ToS.
-			// In practice, probably only one route(!) but this should make
+			// In practice, probably only one route(!).  This should make
 			// sure that we can't uncover an unexpected route and produce some
 			// stray conntrack entries in the window before the RouteTable
 			// inserts the new routes.
@@ -254,22 +249,17 @@ func (c *ConntrackCleanupManager) IterMovedRoutesAndStartDeletions(f func(kernKe
 
 	// Clean up the entries we removed after the iteration so that we don't
 	// mutate values in the DeltaTracker while iterating.
-	keysToCleanUp.Iter(func(k kernelRouteKey) error {
-		addr := k.CIDR.Addr()
-		oldOwners, ok := c.possibleOwners.Dataplane().Get(addr)
-		if !ok {
-			return nil
-		}
-		if _, ok := oldOwners.Get(k); !ok {
-			return nil
-		}
-		oldOwners = oldOwners.WithKeyDeleted(k)
-		if oldOwners.Len() > 0 {
-			c.possibleOwners.Dataplane().Set(addr, oldOwners)
-		} else {
-			c.possibleOwners.Dataplane().Delete(addr)
-		}
+	keysToCleanUp.Iter(func(key kernelRouteKey) error {
+		c.RemoveDataplaneOwners(key)
 		return nil
+	})
+
+	// Clean up any conntrack entries for routes that have been deleted.
+	c.possibleOwners.PendingDeletions().Iter(func(addr ip.Addr) deltatracker.IterAction {
+		logrus.WithField("addr", addr).Debug(
+			"All routes for this IP deleted, starting conntrack deletion.")
+		c.startDeletion(addr)
+		return deltatracker.IterActionUpdateDataplane
 	})
 }
 
@@ -359,14 +349,15 @@ func NewNoOpRouteTracker() NoOpRouteTracker {
 	return NoOpRouteTracker{}
 }
 
+func (d NoOpRouteTracker) RemoveDataplaneOwners(kernKey kernelRouteKey) {}
 func (d NoOpRouteTracker) AddDataplaneOwner(kernKey kernelRouteKey, ifindex int) {}
-func (d NoOpRouteTracker) StartDeletionsForDeletedRoutes()                       {}
-func (d NoOpRouteTracker) IterMovedRoutesAndStartDeletions(f func(kernKey kernelRouteKey)) {
+func (d NoOpRouteTracker) IterMovedRoutesAndStartCleanups(f func(kernKey kernelRouteKey)) {
 }
 func (d NoOpRouteTracker) WaitForPendingDeletion(ipAddr ip.Addr)           {}
 func (d NoOpRouteTracker) RemoveAllowedOwner(_ kernelRouteKey)             {}
 func (d NoOpRouteTracker) SetAllowedOwner(_ kernelRouteKey, _ int)         {}
 func (d NoOpRouteTracker) SetSingleDataplaneOwner(_ kernelRouteKey, _ int) {}
 func (d NoOpRouteTracker) DoPeriodicCleanup()                              {}
+func (d NoOpRouteTracker) ClearAllDataplaneOwners()                        {}
 
 var _ RouteOwnershipTracker = (*NoOpRouteTracker)(nil)

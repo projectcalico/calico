@@ -113,8 +113,8 @@ const (
 //     often into the same table.  It is possible for different components to
 //     try to program conflicting routes for the same CIDR (for example, if a
 //     local and remote endpoint share the same IP address).  To deal with this
-//     we assign a RouteClass to each type of route and use that to resolve
-//     conflicts.
+//     we assign a RouteClass to each potential source of routes and break
+//     ties on that value.
 //
 //   - Most Calico components only deal with CIDRs and interfaces, but the
 //     kernel routing table is indexed by CIDR, metric and ToS field.  To handle
@@ -825,6 +825,8 @@ func (r *RouteTable) doFullResync(nl netlinkshim.Interface) error {
 		return fmt.Errorf("failed to list all routes for resync: %w", err)
 	}
 
+	r.conntrackTracker.ClearAllDataplaneOwners()
+
 	err = r.kernelRoutes.Dataplane().ReplaceAllIter(func(f func(k kernelRouteKey, v kernelRoute)) error {
 		for _, route := range allRoutes {
 			r.onIfaceSeen(route.LinkIndex)
@@ -949,6 +951,7 @@ func (r *RouteTable) resyncIface(nl netlinkshim.Interface, ifaceName string) err
 				// so the fact that it's missing is expected.
 				continue
 			}
+			// FIXME what about the conntrack owner tracker?
 			r.kernelRoutes.Dataplane().Delete(kernKey)
 		}
 	}
@@ -981,7 +984,7 @@ func (r *RouteTable) refreshAllIfaceStates(nl netlinkshim.Interface) error {
 				"ifaceName": link.Attrs().Name,
 				"oldIdx":    oldIdx,
 				"newIdx":    link.Attrs().Index,
-			}).Debug("Spotted interface had changed index during resync.")
+			}).Info("Spotted interface had changed index during resync.")
 			r.OnIfaceStateChanged(link.Attrs().Name, oldIdx, ifacemonitor.StateNotPresent)
 		}
 		oldName, ok := r.ifaceIndexToName[link.Attrs().Index]
@@ -991,7 +994,7 @@ func (r *RouteTable) refreshAllIfaceStates(nl netlinkshim.Interface) error {
 				"ifaceName": link.Attrs().Name,
 				"oldName":   oldName,
 				"newName":   link.Attrs().Name,
-			}).Debug("Spotted interface had changed name during resync.")
+			}).Info("Spotted interface had changed name during resync.")
 			r.OnIfaceStateChanged(oldName, link.Attrs().Index, ifacemonitor.StateNotPresent)
 		}
 	}
@@ -1031,7 +1034,7 @@ func (r *RouteTable) refreshAllIfaceStates(nl netlinkshim.Interface) error {
 			continue
 		}
 		if debug {
-			r.logCxt.WithField("ifaceName", name).Debug("Spotted interface not present during full resync.  Cleaning up.")
+			r.logCxt.WithField("ifaceName", name).Info("Spotted interface not present during full resync.  Cleaning up.")
 		}
 		r.OnIfaceStateChanged(name, 0, ifacemonitor.StateNotPresent)
 	}
@@ -1168,35 +1171,25 @@ func (r *RouteTable) applyUpdates(attempt int) error {
 			deletionErrs[kernKey] = err
 			return deltatracker.IterActionNoOp
 		}
-		r.conntrackTracker.RemoveDataplaneOwners(kernKey)
 		// Route is gone, clean up the dataplane side of the tracker.
 		r.logCxt.WithField("route", kernKey).Debug("Deleted route.")
 		return deltatracker.IterActionUpdateDataplane
 	})
 
-	// Start background conntrack deletions for routes that have been removed.
-	// We only wait for these to finish one-by-one if we need to move the route
-	// to a new interface.
-	r.conntrackTracker.StartDeletionsForDeletedRoutes()
-	// For routes that are moving to a new interface, delete the old route
-	// synchronously and kick off conntrack deletions for the old interface.
-	// This makes sure that we don't have a window where a new connection
-	// can start using the old interface.
-	var conntrackKeysToCleanUp []kernelRouteKey
-	r.conntrackTracker.IterMovedRoutesAndStartDeletions(func(kernKey kernelRouteKey) {
+	// If we're tracking conntrack owners, we need to correctly interlock with
+	// the tracker.  Instead of doing RouteReplace() directly, we need to
+	// delete routes that are moving from one interface to another and then
+	// let the tracker clean up the conntrack entries before we recreate the
+	// route below.  (The no-op tracker does nothing here, so we'll just fall
+	// through and use RouteReplace directly.)
+	r.conntrackTracker.IterMovedRoutesAndStartCleanups(func(kernKey kernelRouteKey) {
 		err := r.deleteRoute(nl, kernKey)
 		if err != nil {
 			deletionErrs[kernKey] = err
 		} else {
 			r.kernelRoutes.Dataplane().Delete(kernKey)
-			conntrackKeysToCleanUp = append(conntrackKeysToCleanUp, kernKey)
 		}
 	})
-	// Defensive: do the deletion after the iteration to avoid modifying the
-	// tracker while iterating over it.
-	for _, kernKey := range conntrackKeysToCleanUp {
-		r.conntrackTracker.RemoveDataplaneOwners(kernKey)
-	}
 
 	updateErrs := map[kernelRouteKey]error{}
 	r.kernelRoutes.PendingUpdates().Iter(func(kernKey kernelRouteKey, kRoute kernelRoute) deltatracker.IterAction {
