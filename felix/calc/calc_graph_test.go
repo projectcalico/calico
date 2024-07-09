@@ -67,22 +67,21 @@ var _ = DescribeTable("Calculation graph pass-through tests",
 			},
 		})
 		eb.Flush()
-		equal := false
 		switch messageReceived.(type) {
 		case *proto.IPAMPoolUpdate:
-			equal = googleproto.Equal(messageReceived.(*proto.IPAMPoolUpdate), expUpdate.(*proto.IPAMPoolUpdate))
+			equal := googleproto.Equal(messageReceived.(*proto.IPAMPoolUpdate), expUpdate.(*proto.IPAMPoolUpdate))
 			Expect(equal).To(BeTrue())
 		case *proto.HostMetadataUpdate:
-			equal = googleproto.Equal(messageReceived.(*proto.HostMetadataUpdate), expUpdate.(*proto.HostMetadataUpdate))
+			equal := googleproto.Equal(messageReceived.(*proto.HostMetadataUpdate), expUpdate.(*proto.HostMetadataUpdate))
 			Expect(equal).To(BeTrue())
 		case *proto.GlobalBGPConfigUpdate:
-			equal = googleproto.Equal(messageReceived.(*proto.GlobalBGPConfigUpdate), expUpdate.(*proto.GlobalBGPConfigUpdate))
+			equal := googleproto.Equal(messageReceived.(*proto.GlobalBGPConfigUpdate), expUpdate.(*proto.GlobalBGPConfigUpdate))
 			Expect(equal).To(BeTrue())
 		case *proto.WireguardEndpointUpdate:
-			equal = googleproto.Equal(messageReceived.(*proto.WireguardEndpointUpdate), expUpdate.(*proto.WireguardEndpointUpdate))
+			equal := googleproto.Equal(messageReceived.(*proto.WireguardEndpointUpdate), expUpdate.(*proto.WireguardEndpointUpdate))
 			Expect(equal).To(BeTrue())
 		case *proto.ServiceUpdate:
-			equal = googleproto.Equal(messageReceived.(*proto.ServiceUpdate), expUpdate.(*proto.ServiceUpdate))
+			equal := googleproto.Equal(messageReceived.(*proto.ServiceUpdate), expUpdate.(*proto.ServiceUpdate))
 			Expect(equal).To(BeTrue())
 		}
 		_, err := extdataplane.WrapPayloadWithEnvelope(messageReceived, 0)
@@ -99,22 +98,21 @@ var _ = DescribeTable("Calculation graph pass-through tests",
 			},
 		})
 		eb.Flush()
-		equal = false
 		switch messageReceived.(type) {
 		case *proto.IPAMPoolRemove:
-			equal = googleproto.Equal(messageReceived.(*proto.IPAMPoolRemove), expRemove.(*proto.IPAMPoolRemove))
+			equal := googleproto.Equal(messageReceived.(*proto.IPAMPoolRemove), expRemove.(*proto.IPAMPoolRemove))
 			Expect(equal).To(BeTrue())
 		case *proto.HostMetadataRemove:
-			equal = googleproto.Equal(messageReceived.(*proto.HostMetadataRemove), expRemove.(*proto.HostMetadataRemove))
+			equal := googleproto.Equal(messageReceived.(*proto.HostMetadataRemove), expRemove.(*proto.HostMetadataRemove))
 			Expect(equal).To(BeTrue())
 		case *proto.GlobalBGPConfigUpdate:
-			equal = googleproto.Equal(messageReceived.(*proto.GlobalBGPConfigUpdate), expRemove.(*proto.GlobalBGPConfigUpdate))
+			equal := googleproto.Equal(messageReceived.(*proto.GlobalBGPConfigUpdate), expRemove.(*proto.GlobalBGPConfigUpdate))
 			Expect(equal).To(BeTrue())
 		case *proto.WireguardEndpointRemove:
-			equal = googleproto.Equal(messageReceived.(*proto.WireguardEndpointRemove), expRemove.(*proto.WireguardEndpointRemove))
+			equal := googleproto.Equal(messageReceived.(*proto.WireguardEndpointRemove), expRemove.(*proto.WireguardEndpointRemove))
 			Expect(equal).To(BeTrue())
 		case *proto.ServiceRemove:
-			equal = googleproto.Equal(messageReceived.(*proto.ServiceRemove), expRemove.(*proto.ServiceRemove))
+			equal := googleproto.Equal(messageReceived.(*proto.ServiceRemove), expRemove.(*proto.ServiceRemove))
 			Expect(equal).To(BeTrue())
 		}
 		_, err = extdataplane.WrapPayloadWithEnvelope(messageReceived, 0)
