@@ -22,6 +22,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/projectcalico/calico/felix/dataplane/common"
 	"github.com/projectcalico/calico/felix/deltatracker"
 	"github.com/projectcalico/calico/felix/ip"
@@ -34,6 +36,27 @@ import (
 )
 
 var _ common.IPSetsDataplane = &IPSets{}
+
+var (
+	gaugeVecNumSets = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "felix_nft_sets",
+		Help: "Number of active Calico nftables sets.",
+	}, []string{"ip_version"})
+	countNumSetTransactions = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "felix_nft_set_calls",
+		Help: "Number of nftables set transactions executed.",
+	})
+	countNumSetErrors = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "felix_nft_set_errors",
+		Help: "Number of nftables set transaction failures.",
+	})
+)
+
+func init() {
+	prometheus.MustRegister(gaugeVecNumSets)
+	prometheus.MustRegister(countNumSetTransactions)
+	prometheus.MustRegister(countNumSetErrors)
+}
 
 // IPSets manages a whole "plane" of IP sets, i.e. all the IPv4 sets, or all the IPv6 IP sets.
 type IPSets struct {
@@ -63,6 +86,8 @@ type IPSets struct {
 	mainSetNameToMembers   map[string]*deltatracker.SetDeltaTracker[ipsets.IPSetMember]
 	ipSetsWithDirtyMembers set.Set[string]
 
+	gaugeNumSets prometheus.Gauge
+
 	opReporter logutils.OpRecorder
 
 	sleep func(time.Duration)
@@ -89,6 +114,7 @@ func NewIPSets(ipVersionConfig *ipsets.IPVersionConfig, nft knftables.Interface,
 
 // NewIPSetsWithShims is an internal test constructor.
 func NewIPSetsWithShims(ipVersionConfig *ipsets.IPVersionConfig, sleep func(time.Duration), nft knftables.Interface, recorder logutils.OpRecorder) *IPSets {
+	familyStr := string(ipVersionConfig.Family)
 	return &IPSets{
 		IPVersionConfig:      ipVersionConfig,
 		setNameToAllMetadata: map[string]ipsets.IPSetMetadata{},
@@ -107,8 +133,9 @@ func NewIPSetsWithShims(ipVersionConfig *ipsets.IPVersionConfig, sleep func(time
 		logCxt: log.WithFields(log.Fields{
 			"family": ipVersionConfig.Family,
 		}),
-		sleep: sleep,
-		nft:   nft,
+		gaugeNumSets: gaugeVecNumSets.WithLabelValues(familyStr),
+		sleep:        sleep,
+		nft:          nft,
 	}
 }
 
@@ -585,7 +612,7 @@ func (s *IPSets) tryUpdates() error {
 	if tx.NumOperations() > 0 {
 		ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 		defer cancel()
-		if err := s.nft.Run(ctx, tx); err != nil {
+		if err := s.runTransaction(ctx, tx); err != nil {
 			s.logCxt.WithError(err).Errorf("Failed to update IP sets. %s", tx.String())
 			return fmt.Errorf("error updating nftables sets: %s", err)
 		}
@@ -650,7 +677,7 @@ func (s *IPSets) ApplyDeletions() bool {
 		s.logCxt.WithField("numSets", deletedSets.Len()).Info("Deleting IP sets.")
 		ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 		defer cancel()
-		if err := s.nft.Run(ctx, tx); err != nil {
+		if err := s.runTransaction(ctx, tx); err != nil {
 			s.logCxt.WithError(err).Errorf("Failed to delete IP sets. %s", tx.String())
 			return true
 		}
@@ -667,12 +694,22 @@ func (s *IPSets) ApplyDeletions() bool {
 	// ApplyDeletions() marks the end of the two-phase "apply". Piggyback on that to
 	// update the gauge that records how many IP sets we own.
 	numDeletionsPending := s.setNameToProgrammedMetadata.Dataplane().Len()
+	s.gaugeNumSets.Set(float64(numDeletionsPending))
 	if deletedSets.Len() == 0 {
 		// We had nothing to delete, or we only encountered errors, don't
 		// ask to be rescheduled.
 		return false
 	}
 	return numDeletionsPending > 0 // Reschedule if we have sets left to delete.
+}
+
+func (s *IPSets) runTransaction(ctx context.Context, tx *knftables.Transaction) error {
+	countNumSetTransactions.Inc()
+	err := s.nft.Run(ctx, tx)
+	if err != nil {
+		countNumSetErrors.Inc()
+	}
+	return err
 }
 
 func (s *IPSets) updateDirtiness(name string) {
