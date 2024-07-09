@@ -25163,7 +25163,7 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: tigera-operator
-  namespace: tigera-operator
+  namespace: default
   labels:
     k8s-app: tigera-operator
 imagePullSecrets:
@@ -25448,7 +25448,7 @@ metadata:
 subjects:
 - kind: ServiceAccount
   name: tigera-operator
-  namespace: tigera-operator
+  namespace: default
 roleRef:
   kind: ClusterRole
   name: tigera-operator
@@ -25459,7 +25459,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: tigera-operator
-  namespace: tigera-operator
+  namespace: default
   labels:
     k8s-app: tigera-operator
 spec:

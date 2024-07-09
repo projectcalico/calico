@@ -2,7 +2,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: calico-resources
-  namespace: tigera-operator
+  namespace: default
   labels:
     k8s-app: tigera-operator
 data:
