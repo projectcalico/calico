@@ -617,11 +617,6 @@ func (r *RouteTable) recalculateDesiredKernelRoute(cidr ip.CIDR) {
 	kernKey := r.routeKeyForCIDR(cidr)
 	oldDesiredRoute, _ := r.kernelRoutes.Desired().Get(kernKey)
 
-	cleanUpKernelRoutes := func() {
-		r.kernelRoutes.Desired().Delete(kernKey)
-		r.conntrackTracker.RemoveCIDROwner(cidr)
-	}
-
 	var bestTarget Target
 	bestRouteClass := RouteClassMax
 	bestIface := ""
@@ -681,7 +676,10 @@ func (r *RouteTable) recalculateDesiredKernelRoute(cidr ip.CIDR) {
 				"candidates": candidates,
 			}).Debug("No valid route for this CIDR (all candidate routes missing iface index).")
 		}
-		cleanUpKernelRoutes()
+
+		// Clean up the old entries.
+		r.kernelRoutes.Desired().Delete(kernKey)
+		r.conntrackTracker.RemoveCIDROwner(cidr)
 		return
 	}
 

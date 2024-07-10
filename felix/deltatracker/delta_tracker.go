@@ -44,10 +44,15 @@ import (
 // pending maps are exposed via the IterPendingUpdates and IterPendingDeletions
 // methods.
 //
-// Note that values should, in general, be immutable.  If you must mutate a
-// value, then it should be copied, mutated and re-inserted.  Or, it must be
-// deleted from _both_ Desired() and Dataplane() sides of the map for the
-// duration of the mutation.
+// It's not recommended to use mutable objects in a DeltaTracker.  Updating a
+// mutable object while it is in the DeltaTracker will corrupt its internal
+// state.  By design, the DeltaTracker aliases the Desired and Dataplane values
+// if they happen to be equal. So, to safely mutate a value, you must
+// take a copy, mutate the copy and then re-insert the value.  Note: it is not
+// safe to delete the object from one side of the tracker, mutate it and
+// re-insert it.  Deleting an object that is in-sync from the Dataplane side
+// moves the object from the inDataplaneAndDesired map to the desiredUpdates
+// map, keeping a reference.
 type DeltaTracker[K comparable, V any] struct {
 	// To reduce occupancy, we treat the set of KVs in the dataplane and in the
 	// desired state like a Venn diagram, and we only store each region once
