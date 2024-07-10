@@ -226,7 +226,7 @@ func NewWithShims(
 	if !config.RouteSyncDisabled {
 		logCtx.Debug("RouteSyncDisabled is false.")
 		rt = routetable.New(
-			&routetable.InterfaceOwnershipPolicy{
+			&routetable.InterfaceNameOwnershipPolicy{
 				InterfaceNames: []string{interfaceName},
 			},
 			ipVersion,

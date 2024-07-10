@@ -18,22 +18,22 @@ import (
 	"github.com/vishvananda/netlink"
 )
 
-type InterfaceOwnershipPolicy struct {
+type InterfaceNameOwnershipPolicy struct {
 	InterfaceNames []string
 }
 
-func (d *InterfaceOwnershipPolicy) IfaceShouldHaveARPEntries(ifaceName string) bool {
-	// Returning true so that we defer to the RouteTable's main grace period
+func (d *InterfaceNameOwnershipPolicy) IfaceShouldHaveARPEntries(ifaceName string) bool {
+	// Returning true so that we defer to the RouteTable's main ARP
 	// configuration.
 	return true
 }
-func (d *InterfaceOwnershipPolicy) IfaceShouldHaveGracePeriod(ifaceName string) bool {
+func (d *InterfaceNameOwnershipPolicy) IfaceShouldHaveGracePeriod(ifaceName string) bool {
 	// Returning true so that we defer to the RouteTable's main grace period
 	// configuration.
 	return true
 }
 
-func (d *InterfaceOwnershipPolicy) IfaceIsOurs(ifaceName string) bool {
+func (d *InterfaceNameOwnershipPolicy) IfaceIsOurs(ifaceName string) bool {
 	if d.InterfaceNames == nil {
 		return true
 	}
@@ -48,6 +48,6 @@ func (d *InterfaceOwnershipPolicy) IfaceIsOurs(ifaceName string) bool {
 	return false
 }
 
-func (d *InterfaceOwnershipPolicy) RouteIsOurs(ifaceName string, route *netlink.Route) bool {
+func (d *InterfaceNameOwnershipPolicy) RouteIsOurs(ifaceName string, route *netlink.Route) bool {
 	return true
 }

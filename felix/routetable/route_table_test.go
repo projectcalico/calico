@@ -1270,7 +1270,7 @@ var _ = Describe("RouteTable (table 100)", func() {
 		// disables the grace period for these tests.
 		t.SetAutoIncrement(11 * time.Second)
 		rt = New(
-			&InterfaceOwnershipPolicy{},
+			&InterfaceNameOwnershipPolicy{},
 			4,
 			10*time.Second,
 			nil,
