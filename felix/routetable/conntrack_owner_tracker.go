@@ -28,7 +28,7 @@ type RouteOwnershipTracker interface {
 	UpdateCIDROwner(addr ip.CIDR, ifaceIdx int, routeClass RouteClass)
 	RemoveCIDROwner(addr ip.CIDR)
 
-	CIDRNeedsCleanup(cidr ip.CIDR) bool
+	CIDRIsMovingInterface(cidr ip.CIDR, oldIface int) bool
 	OnDataplaneRouteDeleted(cidr ip.CIDR, ifindex int)
 	StartConntrackCleanupAndReset()
 
@@ -131,7 +131,7 @@ func (c *ConntrackCleanupManager) OnDataplaneRouteDeleted(cidr ip.CIDR, ifindex 
 			return
 		}
 		previousRoute, _ := c.addrOwners.Dataplane().Get(addr)
-		if previousRoute == desiredRoute {
+		if previousRoute.ifaceIdx == desiredRoute.ifaceIdx {
 			// We've already processed this route in a previous round so the
 			// RouteTable must be deleting a stray newly added route.
 			// Not safe to clean up conntrack entries.
@@ -144,19 +144,22 @@ func (c *ConntrackCleanupManager) OnDataplaneRouteDeleted(cidr ip.CIDR, ifindex 
 	c.addrsToCleanUp.Add(addr)
 }
 
-func (c *ConntrackCleanupManager) CIDRNeedsCleanup(cidr ip.CIDR) bool {
+func (c *ConntrackCleanupManager) CIDRIsMovingInterface(cidr ip.CIDR, oldIface int) bool {
 	if !cidr.IsSingleAddress() {
 		return false
 	}
 	addr := cidr.Addr()
-	desiredRoute, _ := c.addrOwners.Desired().Get(addr)
+	desiredRoute, desiredExists := c.addrOwners.Desired().Get(addr)
 	dataplaneRoute, dataplaneExists := c.addrOwners.Dataplane().Get(addr)
-	if !dataplaneExists {
-		// New route, nothing to clean up.
-		logrus.WithField("ip", addr).Debug("New route, no need to clean up.")
+	if dataplaneExists && desiredExists && desiredRoute.ifaceIdx == dataplaneRoute.ifaceIdx {
+		// The desired route is already in place from a previous run so this
+		// route must be some sort of stray route being cleaned up after the
+		// fact.  We don't want to kill conntrack for the already-programmed
+		// good route.
+		logrus.WithField("ip", addr).Debug("Dataplane already has correct route, not cleaning up.")
 		return false
 	}
-	if desiredRoute.ifaceIdx == dataplaneRoute.ifaceIdx {
+	if desiredExists && desiredRoute.ifaceIdx == oldIface {
 		// Route isn't actually moving, just a ToS/priority update?
 		logrus.WithField("ip", addr).Debug("Route staying on same iface, no need to clean up.")
 		return false
@@ -279,7 +282,7 @@ func NewNoOpRouteTracker() NoOpRouteTracker {
 func (n NoOpRouteTracker) UpdateCIDROwner(addr ip.CIDR, ifaceIdx int, routeClass RouteClass) {}
 func (n NoOpRouteTracker) RemoveCIDROwner(addr ip.CIDR)                                      {}
 func (n NoOpRouteTracker) OnDataplaneRouteDeleted(cidr ip.CIDR, ifindex int)                 {}
-func (n NoOpRouteTracker) CIDRNeedsCleanup(cidr ip.CIDR) bool                                { return false }
+func (n NoOpRouteTracker) CIDRIsMovingInterface(cidr ip.CIDR, ifindex int) bool              { return false }
 func (n NoOpRouteTracker) StartConntrackCleanupAndReset()                                    {}
 func (n NoOpRouteTracker) WaitForPendingDeletion(cidr ip.CIDR)                               {}
 

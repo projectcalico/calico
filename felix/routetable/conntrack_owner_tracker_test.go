@@ -30,188 +30,154 @@ import (
 
 var (
 	cidr1 = ip.MustParseCIDROrIP("10.0.0.1")
-	key1 = kernelRouteKey{
-		CIDR:     cidr1,
-	}
-	key1P100 = kernelRouteKey{
-		CIDR:     cidr1,
-		Priority: 100,
-	}
 )
 
 func TestConntrackCleanupManager_NewRoute(t *testing.T) {
-	ccm, conntrack, cancel := setup(t)
-	defer cancel()
+	h := setupConntrackTrackerTest(t)
 
 	// Call methods in the same order as the RouteTable would.
 
 	// Set the new owner for a previously-unknown IP.
-	ccm.SetAllowedOwner(key1, 10)
+	h.ccm.UpdateCIDROwner(cidr1, 10, RouteClassLocalWorkload)
 
-	// Do the apply steps in order; first trigger deletions (there are none to do)
-	ccm.StartCleanupForDeletedRoutes() // Should be no-op.
-	Expect(conntrack.NumPendingRemovals()).To(Equal(0))
-	// There should be no mutations to do.
-	expectNoMutations(t, ccm)
-	// If there's a deletion to do, wait for it (should not be one).
-	addr := cidr1.Addr()
-	expectWaitForPendingDeletionToReturnImmediately(ccm, addr)
-	// Then tell the tracker that we have updated the dataplane.
-	ccm.SetSingleDataplaneOwner(key1, 10)
+	h.ccm.StartConntrackCleanupAndReset()
 
-	// On the next apply, there should still be nothing to do...
-	expectNothingToDo(t, ccm, conntrack)
-	expectWaitForPendingDeletionToReturnImmediately(ccm, addr)
+	Consistently(h.conntrack.NumPendingRemovals, "10ms").Should(Equal(0))
+	expectWaitForPendingDeletionToReturnImmediately(h.ccm, cidr1)
+
+	expectInSyncAtEnd(h.ccm)
 }
 
 func TestConntrackCleanupManager_MovedRoute(t *testing.T) {
-	ccm, conntrack, cancel := setup(t)
-	defer cancel()
+	h := setupConntrackTrackerTest(t)
 
 	// Call methods in the same order as the RouteTable would.
 
 	// Initially, the route is owned by interface 10.
 	t.Log("Setting initial owner.")
-	ccm.SetAllowedOwner(key1, 10)
-	ccm.SetSingleDataplaneOwner(key1, 10)
+	h.ccm.UpdateCIDROwner(cidr1, 10, RouteClassLocalWorkload)
+	// Commit that change.
+	h.ccm.StartConntrackCleanupAndReset()
 
 	// Then, the exact same route moves to interface 11.
 	t.Log("Setting new owner.")
-	ccm.SetAllowedOwner(key1, 11)
+	h.ccm.UpdateCIDROwner(cidr1, 11, RouteClassLocalWorkload)
 
-	// Do the apply steps in order; first trigger deletions (there are none to do)
-	ccm.StartCleanupForDeletedRoutes() // Should be no-op.
-	Expect(conntrack.NumPendingRemovals()).To(Equal(0))
+	// RouteTable won't have any deletions to do, so move on to the first
+	// pass over the updated routes.
+	Expect(h.ccm.CIDRIsMovingInterface(cidr1, 10)).To(BeTrue(),
+		"Moved CIDR should need cleanup.")
+	// RouteTable tells us that it deleted the old route.
+	h.ccm.OnDataplaneRouteDeleted(cidr1, 10)
 
-	// Then, iterate over mutations.  There should be one for the moved route.
-	count := 0
-	ccm.IterMovedRoutesAndStartCleanups(func(kernKey kernelRouteKey) {
-		// Should get called once about the single route.
-		// The real routing table deletes the route from this callback.
-		Expect(kernKey).To(Equal(key1))
-		Expect(count).To(Equal(0))
-		count++
-	})
+	// Then, asks us to clean up conntrack.
+	h.ccm.StartConntrackCleanupAndReset()
+	Eventually(h.conntrack.NumPendingRemovals).Should(Equal(1),
+		"Expected one pending removal after moving route.")
+	expectWaitForPendingDeletionToDelay(h.ccm, h.conntrack, cidr1)
 
-	// Should see a background deletion.
-	addr := cidr1.Addr()
-	expectWaitForPendingDeletionToDelay(ccm, conntrack, addr)
-	// Then tell the tracker that we have updated the dataplane.
-	ccm.SetSingleDataplaneOwner(key1, 11)
-
-	// On the next apply, there should be nothing to do...
-	expectNothingToDo(t, ccm, conntrack)
-	expectWaitForPendingDeletionToReturnImmediately(ccm, addr)
+	expectInSyncAtEnd(h.ccm)
 }
 
-func TestConntrackCleanupManager_ChangeOfPriority(t *testing.T) {
-	ccm, conntrack, cancel := setup(t)
-	defer cancel()
+func TestConntrackCleanupManager_ChangeOfPrioritySameInterface(t *testing.T) {
+	h := setupConntrackTrackerTest(t)
 
 	// This mimics what happens if the CNI plugin adds a route with one priority
 	// and then Felix updates it to a different priority.
 	t.Log("Setting initial owner.")
-	ccm.SetSingleDataplaneOwner(key1P100, 10)
 
-	// RouteTable now wants to create a route with the same CIDR and a different
-	// priority.
-	t.Log("Setting new owner.")
-	ccm.SetAllowedOwner(key1, 10)
+	// RouteTable spots the p=100 route, but it just queues it up for deletion.
+	// Meanwhile, it tells us about the route it wants to program.
+	h.ccm.UpdateCIDROwner(cidr1, 10, RouteClassLocalWorkload)
+	// Then the deletion.
+	h.ccm.OnDataplaneRouteDeleted(cidr1, 10)
+	// Which should be ignored due to the prior update to signal intent to
+	// create that route.
+	Expect(h.ccm.CIDRIsMovingInterface(cidr1, 10)).To(BeFalse(),
+		"CIDR on same interface should not need cleanup.")
 
-	// There should be no deletions because the IP address isn't moving.
-	ccm.StartCleanupForDeletedRoutes() // Should be no-op.
-	Expect(conntrack.NumPendingRemovals()).To(Equal(0))
+	h.ccm.StartConntrackCleanupAndReset()
+	Consistently(h.conntrack.NumPendingRemovals, "10ms").Should(Equal(0))
+	expectWaitForPendingDeletionToReturnImmediately(h.ccm, cidr1)
 
-	// There should be no mutations because the IP hasn't moved.
-	expectNoMutations(t, ccm)
-
-	// Then tell the tracker that we have updated the dataplane.
-	ccm.SetSingleDataplaneOwner(key1, 10)
-
-	// On the next apply, there should be nothing to do...
-	expectNothingToDo(t, ccm, conntrack)
-	expectWaitForPendingDeletionToReturnImmediately(ccm, cidr1.Addr())
-
-	// FIXME the second route hangs around in the delta tracker
-
-	// Removing the route should trigger cleanup.
-	ccm.RemoveAllowedOwner(key1)
-	ccm.StartCleanupForDeletedRoutes()
-	Eventually(conntrack.NumPendingRemovals).Should(Equal(1))
+	expectInSyncAtEnd(h.ccm)
 }
 
-func expectNoMutations(t *testing.T, ccm *ConntrackCleanupManager) {
-	ccm.IterMovedRoutesAndStartCleanups(func(kernKey kernelRouteKey) {
-		t.Fatalf("Unexpected route returned by IterMovedRoutesAndStartCleanups: %v", kernKey)
-	})
-}
+func TestConntrackCleanupManager_ChangeOfPriorityDifferentInterface(t *testing.T) {
+	h := setupConntrackTrackerTest(t)
 
-func expectNothingToDo(t *testing.T, ccm *ConntrackCleanupManager, conntrack *mockConntrack) {
-	ccm.StartCleanupForDeletedRoutes() // Should be no-op.
-	ExpectWithOffset(1, conntrack.NumPendingRemovals()).To(Equal(0), "Expected no pending removals.")
-	ccm.IterMovedRoutesAndStartCleanups(func(kernKey kernelRouteKey) {
-		t.Fatalf("Unexpected route returned by IterMovedRoutesAndStartCleanups: %v", kernKey)
-	})
+	// This mimics what happens if the CNI plugin adds a route with one priority
+	// and then Felix updates it to a different priority.
+	t.Log("Setting initial owner.")
+
+	// RouteTable spots the p=100 route, but it just queues it up for deletion.
+	// Meanwhile, it tells us about the route it wants to program.
+	h.ccm.UpdateCIDROwner(cidr1, 10, RouteClassLocalWorkload)
+	// Then the deletion on a different interface.
+	h.ccm.OnDataplaneRouteDeleted(cidr1, 11)
+
+	h.ccm.StartConntrackCleanupAndReset()
+	Eventually(h.conntrack.NumPendingRemovals).Should(Equal(1))
+	expectWaitForPendingDeletionToDelay(h.ccm, h.conntrack, cidr1)
+
+	expectInSyncAtEnd(h.ccm)
 }
 
 func TestConntrackCleanupManager_DeletedRoute(t *testing.T) {
-	ccm, conntrack, cancel := setup(t)
-	defer cancel()
+	h := setupConntrackTrackerTest(t)
 
-	// Call methods in the same order as the RouteTable would.
+	// Tell the CCM about the route.
+	h.ccm.UpdateCIDROwner(cidr1, 10, RouteClassLocalWorkload)
+	h.ccm.StartConntrackCleanupAndReset() // Commit to the delta tracker.
+	Consistently(h.conntrack.NumPendingRemovals, "10ms").Should(Equal(0))
 
-	// Tell the tracker that the route is there in the dataplane.
-	ccm.SetAllowedOwner(key1, 10)
-	ccm.SetSingleDataplaneOwner(key1, 10)
-
-	// Then tell it that it is deleted.
-	ccm.RemoveAllowedOwner(key1)
-
-	// Do the apply steps in order; first trigger deletions
-	ccm.StartCleanupForDeletedRoutes()
-	Eventually(conntrack.NumPendingRemovals).Should(Equal(1))
-	// Then, iterate over mutations.
-	ccm.IterMovedRoutesAndStartCleanups(func(kernKey kernelRouteKey) {
-		t.Fatalf("Unexpected route returned by IterMovedRoutesAndStartCleanups: %v", kernKey)
-	})
-
-	addr := cidr1.Addr()
-	expectWaitForPendingDeletionToDelay(ccm, conntrack, addr)
-
-	// Should be nothing to do on the next apply.
-	expectNothingToDo(t, ccm, conntrack)
+	// Then, the route is deleted.
+	h.ccm.RemoveCIDROwner(cidr1)
+	h.ccm.OnDataplaneRouteDeleted(cidr1, 10)
+	h.ccm.StartConntrackCleanupAndReset()
+	Eventually(h.conntrack.NumPendingRemovals).Should(Equal(1))
+	expectWaitForPendingDeletionToDelay(h.ccm, h.conntrack, cidr1)
 }
 
-func setup(t *testing.T) (*ConntrackCleanupManager, *mockConntrack, context.CancelFunc) {
+type conntrackTrackerHarness struct {
+	ccm       *ConntrackCleanupManager
+	conntrack *mockConntrack
+}
+
+func setupConntrackTrackerTest(t *testing.T) *conntrackTrackerHarness {
 	RegisterTestingT(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	conntrack := newMockConntrack(ctx)
 	ccm := NewConntrackCleanupManager(4, conntrack)
-	return ccm, conntrack, cancel
+	t.Cleanup(cancel)
+	return &conntrackTrackerHarness{ccm, conntrack}
 }
 
-func expectWaitForPendingDeletionToReturnImmediately(ccm *ConntrackCleanupManager, addr ip.Addr) {
+func expectWaitForPendingDeletionToReturnImmediately(ccm *ConntrackCleanupManager, cidr ip.CIDR) {
 	delStart := time.Now()
-	ccm.WaitForPendingDeletion(addr)
+	ccm.WaitForPendingDeletion(cidr)
 	ExpectWithOffset(1, time.Since(delStart)).To(BeNumerically("<", 10*time.Millisecond),
-		fmt.Sprintf("WaitForPendingDeletion(%v) should return immediately.", addr))
+		fmt.Sprintf("WaitForPendingDeletion(%v) should return immediately.", cidr))
 }
 
-func expectWaitForPendingDeletionToDelay(ccm *ConntrackCleanupManager, conntrack *mockConntrack, addr ip.Addr) {
+func expectWaitForPendingDeletionToDelay(ccm *ConntrackCleanupManager, conntrack *mockConntrack, cidr ip.CIDR) {
+	delStart := time.Now()
 	go func() {
 		time.Sleep(10 * time.Millisecond)
-		conntrack.SignalPendingDeletionComplete(addr)
+		conntrack.SignalPendingDeletionComplete(cidr.Addr())
 	}()
-	delStart := time.Now()
-	ccm.WaitForPendingDeletion(addr)
+	ccm.WaitForPendingDeletion(cidr)
 	delay := time.Since(delStart)
 	ExpectWithOffset(1, delay).To(BeNumerically(">=", 10*time.Millisecond),
-		fmt.Sprintf("WaitForPendingDeletion(%v) should return after 10ms.", addr))
+		fmt.Sprintf("WaitForPendingDeletion(%v) should return after 10ms.", cidr))
 	ExpectWithOffset(1, delay).To(BeNumerically("<", 20*time.Millisecond),
-		fmt.Sprintf("WaitForPendingDeletion(%v) should return before 20ms.", addr))
+		fmt.Sprintf("WaitForPendingDeletion(%v) should return before 20ms.", cidr))
 }
 
-
+func expectInSyncAtEnd(ccm *ConntrackCleanupManager) {
+	ExpectWithOffset(1, ccm.addrOwners.InSync()).To(BeTrue(), "Expected delta tracker to be in sync at end of test.")
+	ExpectWithOffset(1, ccm.addrsToCleanUp).To(BeEmpty(), "Leaked addresses in addrsToCleanUp?")
+}
 
 type mockConntrack struct {
 	lock sync.Mutex

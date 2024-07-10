@@ -453,7 +453,7 @@ var _ = Describe("RouteTable", func() {
 					Src:       net.ParseIP("192.168.0.2"),
 					Table:     unix.RT_TABLE_MAIN,
 				}
-				rt.SetRoutes(noopLink.LinkAttrs.Name, []Target{
+				rt.SetRoutes(RouteClassLocalWorkload, noopLink.LinkAttrs.Name, []Target{
 					{CIDR: ip.MustParseCIDROrIP("10.0.0.5"), DestMAC: mac1, Src: ip.FromString("192.168.0.2")},
 				})
 				dataplane.AddMockRoute(&noopRoute)
@@ -474,13 +474,15 @@ var _ = Describe("RouteTable", func() {
 					Src:       net.ParseIP("192.168.0.2"),
 					Table:     unix.RT_TABLE_MAIN,
 				}
-				rt.SetRoutes(noopLink.LinkAttrs.Name, []Target{
+				rt.SetRoutes(RouteClassLocalWorkload, noopLink.LinkAttrs.Name, []Target{
 					{CIDR: ip.MustParseCIDROrIP("10.0.0.5"), DestMAC: mac1, Src: ip.FromString("192.168.0.3")},
 				})
 				dataplane.AddMockRoute(&noopRoute)
 				err := rt.Apply()
 				Expect(err).ToNot(HaveOccurred())
-				Expect(dataplane.DeletedRouteKeys).To(HaveKey(mocknetlink.KeyForRoute(&noopRoute)))
+				routeKey := mocknetlink.KeyForRoute(&noopRoute)
+				Expect(dataplane.UpdatedRouteKeys).To(HaveKey(routeKey))
+				Expect(dataplane.RouteKeyToRoute[routeKey].Src).To(Equal(net.ParseIP("192.168.0.3").To4()))
 			})
 
 		})

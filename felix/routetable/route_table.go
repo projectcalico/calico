@@ -824,22 +824,24 @@ func (r *RouteTable) doFullResync(nl netlinkshim.Interface) error {
 		return fmt.Errorf("failed to list all routes for resync: %w", err)
 	}
 
-	err = r.kernelRoutes.Dataplane().ReplaceAllIter(func(f func(k kernelRouteKey, v kernelRoute)) error {
-		for _, route := range allRoutes {
-			r.onIfaceSeen(route.LinkIndex)
-			kernKey, kernRoute, ok := r.netlinkRouteToKernelRoute(route)
-			if !ok {
-				// Not a route that we're managing.
-				continue
-			}
-			f(kernKey, kernRoute)
+	seenKeys := set.New[kernelRouteKey]()
+	for _, route := range allRoutes {
+		r.onIfaceSeen(route.LinkIndex)
+		kernKey, kernRoute, ok := r.netlinkRouteToKernelRoute(route)
+		if !ok {
+			// Not a route that we're managing.
+			continue
 		}
-		return nil
-	})
-	if err != nil {
-		// Should be impossible unless we return an error from the iterator.
-		return fmt.Errorf("failed to update delta tracker: %w", err)
+		r.kernelRoutes.Dataplane().Set(kernKey, kernRoute)
+		seenKeys.Add(kernKey)
 	}
+
+	r.kernelRoutes.Dataplane().Iter(func(kernKey kernelRouteKey, kernRoute kernelRoute) {
+		if !seenKeys.Contains(kernKey) {
+			r.kernelRoutes.Dataplane().Delete(kernKey)
+			r.conntrackTracker.OnDataplaneRouteDeleted(kernKey.CIDR, kernRoute.Ifindex)
+		}
+	})
 
 	// We're now in sync.
 	r.ifacesToRescan.Clear()
@@ -946,7 +948,6 @@ func (r *RouteTable) resyncIface(nl netlinkshim.Interface, ifaceName string) err
 				// so the fact that it's missing is expected.
 				continue
 			}
-			// FIXME what about the conntrack owner tracker?
 			r.kernelRoutes.Dataplane().Delete(kernKey)
 		}
 	}
@@ -1177,13 +1178,14 @@ func (r *RouteTable) applyUpdates(attempt int) error {
 	// trigger any necessary conntrack cleanups for moved routes.
 	r.kernelRoutes.PendingUpdates().Iter(func(kernKey kernelRouteKey, kernRoute kernelRoute) deltatracker.IterAction {
 		cidr := kernKey.CIDR
-		if r.conntrackTracker.CIDRNeedsCleanup(cidr) {
+		dataplaneRoute, dataplaneExists := r.kernelRoutes.Dataplane().Get(kernKey)
+		if dataplaneExists && r.conntrackTracker.CIDRIsMovingInterface(cidr, dataplaneRoute.Ifindex) {
 			err := r.deleteRoute(nl, kernKey)
 			if err != nil {
 				deletionErrs[kernKey] = err
 				return deltatracker.IterActionNoOp
 			}
-			r.conntrackTracker.OnDataplaneRouteDeleted(kernKey.CIDR, kernRoute.Ifindex)
+			r.conntrackTracker.OnDataplaneRouteDeleted(kernKey.CIDR, dataplaneRoute.Ifindex)
 		}
 		return deltatracker.IterActionNoOp
 	})
