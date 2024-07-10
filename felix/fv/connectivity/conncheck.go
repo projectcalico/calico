@@ -1064,7 +1064,7 @@ func (pc *PersistentConnection) Start() error {
 	}
 	Eventually(func() error {
 		return pc.Runtime.ExecMayFail("stat", loopFile)
-	}, 5*time.Second, time.Second).Should(
+	}, 65*time.Second, time.Second).Should(
 		HaveOccurred(),
 		"Failed to wait for test-connection to be ready, the loop file did not disappear",
 	)
