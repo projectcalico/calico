@@ -27,6 +27,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/dataplane/windows/hns"
+	"github.com/projectcalico/calico/felix/types"
 
 	"github.com/projectcalico/calico/felix/dataplane/windows/policysets"
 	"github.com/projectcalico/calico/felix/proto"
@@ -62,9 +63,9 @@ type endpointManager struct {
 	// the policysets dataplane to be used when looking up endpoint policies/profiles.
 	policysetsDataplane policysets.PolicySetsDataplane
 	// pendingWlEpUpdates stores any pending updates to be performed per endpoint.
-	pendingWlEpUpdates map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint
+	pendingWlEpUpdates map[types.WorkloadEndpointID]*proto.WorkloadEndpoint
 	// activeWlEndpoints stores the active/current state that was applied per endpoint
-	activeWlEndpoints map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint
+	activeWlEndpoints map[types.WorkloadEndpointID]*proto.WorkloadEndpoint
 	// addressToEndpointId serves as a hns endpoint id cache. It enables us to lookup the hns
 	// endpoint id for a given endpoint ip address.
 	addressToEndpointId map[string]string
@@ -115,8 +116,8 @@ func newEndpointManager(hns hnsInterface, policysets policysets.PolicySetsDatapl
 		hnsNetworkRegexp:    networkNameRegexp,
 		policysetsDataplane: policysets,
 		addressToEndpointId: make(map[string]string),
-		activeWlEndpoints:   map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
-		pendingWlEpUpdates:  map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
+		activeWlEndpoints:   map[types.WorkloadEndpointID]*proto.WorkloadEndpoint{},
+		pendingWlEpUpdates:  map[types.WorkloadEndpointID]*proto.WorkloadEndpoint{},
 		pendingIPSetUpdate:  set.New[string](),
 		hostAddrs:           hostIPv4s,
 	}
@@ -136,10 +137,12 @@ func (m *endpointManager) OnUpdate(msg interface{}) {
 	switch msg := msg.(type) {
 	case *proto.WorkloadEndpointUpdate:
 		log.WithField("workloadEndpointId", msg.Id).Info("Processing WorkloadEndpointUpdate")
-		m.pendingWlEpUpdates[*msg.Id] = msg.Endpoint
+		id := types.ProtoToWorkloadEndpointID(msg.GetId())
+		m.pendingWlEpUpdates[id] = msg.Endpoint
 	case *proto.WorkloadEndpointRemove:
 		log.WithField("workloadEndpointId", msg.Id).Info("Processing WorkloadEndpointRemove")
-		m.pendingWlEpUpdates[*msg.Id] = nil
+		id := types.ProtoToWorkloadEndpointID(msg.GetId())
+		m.pendingWlEpUpdates[id] = nil
 	case *proto.ActivePolicyUpdate:
 		log.WithField("policyID", msg.Id).Info("Processing ActivePolicyUpdate")
 		m.ProcessPolicyProfileUpdate(policysets.PolicyNamePrefix + msg.Id.Name)
@@ -432,7 +435,7 @@ func (m *endpointManager) markAllEndpointForRefresh() {
 
 // applyRules gathers all of the rules for the specified policies and sends them to hns
 // as an endpoint policy update (this actually applies the rules to the dataplane).
-func (m *endpointManager) applyRules(workloadId proto.WorkloadEndpointID, endpointId string, inboundPolicyIds []string, outboundPolicyIds []string) error {
+func (m *endpointManager) applyRules(workloadId types.WorkloadEndpointID, endpointId string, inboundPolicyIds []string, outboundPolicyIds []string) error {
 	logCxt := log.WithFields(log.Fields{"id": workloadId, "endpointId": endpointId})
 	logCxt.WithFields(log.Fields{
 		"inboundPolicyIds":  inboundPolicyIds,
