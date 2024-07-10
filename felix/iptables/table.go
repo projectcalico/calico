@@ -880,7 +880,11 @@ func (t *Table) attemptToGetHashesAndRulesFromDataplane() (hashes map[string][]s
 	}
 	waitErr := cmd.Wait()
 	if waitErr != nil {
-		log.WithError(waitErr).Warn("iptables save failed")
+		if log.IsLevelEnabled(log.DebugLevel) {
+			t.logCxt.WithFields(log.Fields{"cmd": t.iptablesSaveCmd}).Warn("iptables save failed")
+		} else {
+			log.WithError(waitErr).Warn("iptables save failed")
+		}
 		if err == nil {
 			err = waitErr
 		}
