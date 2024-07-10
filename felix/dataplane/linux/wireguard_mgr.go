@@ -203,6 +203,6 @@ func (m *wireguardManager) CompleteDeferredWork() error {
 	return nil
 }
 
-func (m *wireguardManager) GetRouteTableSyncers() []routetable.RouteTableSyncer {
-	return []routetable.RouteTableSyncer{m.wireguardRouteTable}
+func (m *wireguardManager) GetRouteTableSyncers() []routetable.SyncerInterface {
+	return []routetable.SyncerInterface{m.wireguardRouteTable}
 }
