@@ -111,7 +111,7 @@ func New[K comparable, V any](opts ...Option[K, V]) *DeltaTracker[K, V] {
 		// the caller does Desired().Delete(k) to remove the mapping, we may
 		// keep hold of the same map in the inDataplaneNotDesired map resulting
 		// in aliasing.
-		logrus.Panic("Map values should not be used in a DeltaTracker. Use an immutable.Map instead.")
+		logrus.Panic("Map values should not be used in a DeltaTracker.")
 	}
 	cm := &DeltaTracker[K, V]{
 		inDataplaneAndDesired: make(map[K]V),
