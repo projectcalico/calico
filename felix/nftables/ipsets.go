@@ -434,7 +434,7 @@ func (s *IPSets) tryResync() error {
 
 	// We expect a response for every set we asked for.
 	responses := make([]setData, len(sets))
-	for i := range sets {
+	for i := range responses {
 		setData := <-setsChan
 		responses[i] = setData
 	}
