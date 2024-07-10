@@ -33,6 +33,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/resolver"
+	googleproto "google.golang.org/protobuf/proto"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/selector"
 
@@ -514,8 +515,8 @@ var _ = Context("_POL-SYNC_ _BPF-SAFE_ policy sync API tests", func() {
 
 						It("should sync service account to each workload", func() {
 							for _, c := range mockWlClient {
-								Eventually(c.ServiceAccounts[saID]).ShouldNot(BeNil())
-								equal := googleproto.Equal(c.ServiceAccounts[saID], &proto.ServiceAccountUpdate{
+								v := c.ServiceAccounts()
+								equal := googleproto.Equal(v[saID], &proto.ServiceAccountUpdate{
 									Id:     types.ServiceAccountIDToProto(saID),
 									Labels: map[string]string{"key.1": "value.1", "key_2": "value-2"},
 								})
@@ -543,8 +544,8 @@ var _ = Context("_POL-SYNC_ _BPF-SAFE_ policy sync API tests", func() {
 
 						It("should sync namespace to each workload", func() {
 							for _, c := range mockWlClient {
-								Eventually(c.Namespaces[nsID]).ShouldNot(BeNil())
-								equal := googleproto.Equal(c.Namespaces[nsID], &proto.NamespaceUpdate{
+								v := c.Namespaces()
+								equal := googleproto.Equal(v[nsID], &proto.NamespaceUpdate{
 									Id:     types.NamespaceIDToProto(nsID),
 									Labels: map[string]string{"key.1": "value.1", "key_2": "value-2"},
 								})
