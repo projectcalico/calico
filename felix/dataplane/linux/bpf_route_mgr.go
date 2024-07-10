@@ -324,7 +324,7 @@ func (m *bpfRouteManager) calculateRoute(cidr ip.CIDR) routes.ValueInterface {
 
 	var route routes.ValueInterface
 
-	switch cgRoute.Type {
+	switch cgRoute.GetType() {
 	case proto.RouteType_LOCAL_WORKLOAD:
 		if !cgRoute.LocalWorkload {
 			// Just the local IPAM block, not an actual workload.
