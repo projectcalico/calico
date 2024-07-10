@@ -389,6 +389,7 @@ func (s *IPSets) tryResync() error {
 			elems, err := s.nft.ListElements(ctx, "set", name)
 			if err != nil {
 				setsChan <- setData{setName: name, err: err}
+				return
 			}
 			setsChan <- setData{setName: name, elems: elems}
 		}(setName)
