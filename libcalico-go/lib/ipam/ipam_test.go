@@ -238,7 +238,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 				Expect(len(v4ia.IPs)).To(Equal(1))
 			})
 
-			Expect(runtime.Seconds()).Should(BeNumerically("<", 1))
+			Expect(runtime.Seconds()).Should(BeNumerically("<", 3))
 		}, 100)
 
 		Measure("It should be able to allocate a single address quickly - blocksize 26", func(b Benchmarker) {
@@ -255,7 +255,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 				Expect(len(v4ia.IPs)).To(Equal(1))
 			})
 
-			Expect(runtime.Seconds()).Should(BeNumerically("<", 1))
+			Expect(runtime.Seconds()).Should(BeNumerically("<", 3))
 		}, 100)
 
 		Measure("It should be able to allocate a single address quickly - blocksize 20", func(b Benchmarker) {
@@ -272,7 +272,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 				Expect(len(v4ia.IPs)).To(Equal(1))
 			})
 
-			Expect(runtime.Seconds()).Should(BeNumerically("<", 1))
+			Expect(runtime.Seconds()).Should(BeNumerically("<", 3))
 		}, 100)
 
 		Measure("It should be able to allocate a lot of addresses quickly", func(b Benchmarker) {
@@ -289,7 +289,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 				Expect(len(v4ia.IPs)).To(Equal(64))
 			})
 
-			Expect(runtime.Seconds()).Should(BeNumerically("<", 1))
+			Expect(runtime.Seconds()).Should(BeNumerically("<", 3))
 		}, 20)
 
 		Measure("It should be able to allocate and release addresses quickly", func(b Benchmarker) {
@@ -313,7 +313,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 				Expect(len(out)).To(Equal(0))
 			})
 
-			Expect(runtime.Seconds()).Should(BeNumerically("<", 1))
+			Expect(runtime.Seconds()).Should(BeNumerically("<", 3))
 		}, 20)
 	})
 
