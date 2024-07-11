@@ -111,7 +111,8 @@ func WithLogCtx[K comparable, V any](lc *logrus.Entry) Option[K, V] {
 
 func New[K comparable, V any](opts ...Option[K, V]) *DeltaTracker[K, V] {
 	var valueZero V
-	if reflect.TypeOf(valueZero).Kind() == reflect.Map {
+	valType := reflect.TypeOf(valueZero)
+	if valType != nil && valType.Kind() == reflect.Map {
 		// Storing a map as the value is particularly confusing.  Even if
 		// the caller does Desired().Delete(k) to remove the mapping, we may
 		// keep hold of the same map in the inDataplaneNotDesired map resulting
