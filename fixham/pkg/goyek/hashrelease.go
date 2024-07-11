@@ -24,7 +24,7 @@ func PinnedVersion(cfg *config.Config) *GoyekTask {
 func OperatorHashreleaseBuild(runner *docker.DockerRunner, cfg *config.Config) *GoyekTask {
 	return &GoyekTask{
 		Task: _goyek.Task{
-			Name:  "operator/hashrelease/build",
+			Name:  "operator/build",
 			Usage: "Build and tag operator hashrelease",
 			Action: func(a *_goyek.A) {
 				tasks.OperatorHashreleaseBuild(runner, cfg)
@@ -38,41 +38,41 @@ func OperatorHashreleaseBuild(runner *docker.DockerRunner, cfg *config.Config) *
 func OperatorHashrelease(runner *docker.DockerRunner, cfg *config.Config) *GoyekTask {
 	return &GoyekTask{
 		Task: _goyek.Task{
-			Name:  "operator/hashrelease",
+			Name:  "operator",
 			Usage: "Build and publish operator hashrelease",
 			Action: func(a *_goyek.A) {
 				tasks.OperatorHashreleasePush(runner, cfg)
 			},
 			Parallel: false,
 		},
-		Deps: []string{"operator/hashrelease/build"},
+		Deps: []string{"operator/build"},
 	}
 }
 
 func HashreleaseBuild(cfg *config.Config) *GoyekTask {
 	return &GoyekTask{
 		Task: _goyek.Task{
-			Name:  "hashrelease/build",
+			Name:  "build",
 			Usage: "Build hashrelease",
 			Action: func(a *_goyek.A) {
 				tasks.HashreleaseBuild(cfg)
 			},
 			Parallel: false,
 		},
-		Deps: []string{"operator/hashrelease"},
+		Deps: []string{"operator"},
 	}
 }
 
 func Hashrelease(cfg *config.Config) *GoyekTask {
 	return &GoyekTask{
 		Task: _goyek.Task{
-			Name:  "hashrelease",
+			Name:  "publish",
 			Usage: "Build and publish hashrelease",
 			Action: func(a *_goyek.A) {
 				tasks.HashreleasePush(cfg)
 			},
 			Parallel: false,
 		},
-		Deps: []string{"hashrelease/build"},
+		Deps: []string{"build"},
 	}
 }
