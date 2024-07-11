@@ -371,6 +371,42 @@ blocks:
           - cd felix
           - make bin/calico-felix.exe fv/win-fv.exe
 
+- name: "Felix: Windows FV capz"
+  run:
+    when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/node', '/hack/test/certs/', '/process/testing/winfv/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+  dependencies: ["Felix: Build Windows binaries"]
+  task:
+    secrets:
+      - name: banzai-secrets
+      - name: private-repo
+    prologue:
+      commands:
+        - export REPORT_DIR=/home/semaphore/calico/process/testing/winfv/report
+        - export AZURE_SUBSCRIPTION_ID=$AZ_SUBSCRIPTION_ID
+        - export AZURE_TENANT_ID=$AZ_TENANT_ID
+        - export AZURE_CLIENT_ID=$AZ_SP_ID
+        - export AZURE_CLIENT_SECRET=$AZ_SP_PASSWORD
+        - export AZURE_SUBSCRIPTION_ID_B64="$(echo -n "$AZ_SUBSCRIPTION_ID" | base64 | tr -d '\n')"
+        - export AZURE_TENANT_ID_B64="$(echo -n "$AZ_TENANT_ID" | base64 | tr -d '\n')"
+        - export AZURE_CLIENT_ID_B64="$(echo -n "$AZ_SP_ID" | base64 | tr -d '\n')"
+        - export AZURE_CLIENT_SECRET_B64="$(echo -n "$AZ_SP_PASSWORD" | base64 | tr -d '\n')"
+        - cd felix
+    epilogue:
+      always:
+        commands:
+          - artifact push job ${REPORT_DIR} --destination semaphore/test-results --expire-in ${SEMAPHORE_ARTIFACT_EXPIRY} || true
+    env_vars:
+      - name: FV_PROVISIONER
+        value: "capz"
+      - name: FV_TYPE
+        value: "calico-felix"
+      - name: SEMAPHORE_ARTIFACT_EXPIRY
+        value: 2w
+    jobs:
+      - name: CAPZ - Windows FV
+        commands:
+          - ./.semaphore/run-win-fv
+
 - name: "Felix: Windows FV"
   run:
     when: "true or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/node', '/hack/test/certs/', '/process/testing/winfv/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
@@ -416,6 +452,8 @@ blocks:
         value: 1.22.1
       - name: WINDOWS_VERSION
         value: "1809"
+      - name: FV_PROVISIONER
+        value: aws
     jobs:
       - name: VXLAN - Windows FV
         commands:
