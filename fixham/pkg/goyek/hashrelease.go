@@ -70,6 +70,7 @@ func Hashrelease(cfg *config.Config) *GoyekTask {
 			Usage: "Build and publish hashrelease",
 			Action: func(a *_goyek.A) {
 				tasks.HashreleasePush(cfg)
+				tasks.HashreleaseClean(cfg)
 			},
 			Parallel: false,
 		},
