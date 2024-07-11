@@ -456,7 +456,7 @@ func (s *IPSets) tryResync() error {
 		logCxt := s.logCxt.WithField("setName", setName)
 		if setData.err != nil {
 			logCxt.WithError(err).Error("Failed to list set elements.")
-			return err
+			return setData.err
 		}
 
 		metadata, ok := s.setNameToAllMetadata[setName]
