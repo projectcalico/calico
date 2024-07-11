@@ -18,7 +18,6 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -413,7 +412,7 @@ func (s *IPSets) tryResync() error {
 
 	// Start a goroutine to list the elements of each set. Limit to GOMAXPROCS concurrent set reads to
 	// avoid spawning too many goroutines if there are a large number of sets.
-	routineLimit := make(chan struct{}, runtime.GOMAXPROCS(0))
+	routineLimit := make(chan struct{}, 100)
 	defer close(routineLimit)
 	for _, setName := range sets {
 		// Wait for room in the limiting channel.
