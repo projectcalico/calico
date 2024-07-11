@@ -3,11 +3,12 @@ Param(
     [parameter(Mandatory = $false)] $KubeVersion="<your kube version>",
     [parameter(Mandatory = $false)] $OSVersion="<your os version>",
     [parameter(Mandatory = $false)] $ContainerRuntime="<your container runtime>",
-    [parameter(Mandatory = $false)] $ContainerdVersion="<your containerd version>"
+    [parameter(Mandatory = $false)] $ContainerdVersion="<your containerd version>",
+    [parameter(Mandatory = $false)] $WinFvExecutable="win-fv.exe"
 )
 
 # Force powershell to run in 64-bit mode .
-if (\$env:PROCESSOR_ARCHITEW6432 -eq "AMD64") {
+if ([Environment]::Is64BitProcess -eq $false) {
     write-warning "This script requires PowerShell 64-bit, relaunching..."
     if (\$myInvocation.Line) {
         &"\$env:SystemRoot\sysnative\windowspowershell\v1.0\powershell.exe" -NonInteractive -NoProfile \$myInvocation.Line
@@ -22,7 +23,7 @@ Set-Item -Path env:KUBECONFIG -Value "C:\\k\\config"
 Set-Item -Path env:KUBERNETES_MASTER -Value "https://${LinuxPIP}:6443"
 Set-Item -Path env:ETCD_ENDPOINTS -Value "http://${LinuxPIP}:2389"
 Set-Item -Path env:BIN -Value "C:\\k"
-Set-Item -Path env:PLUGIN -Value "calico"
+Set-Item -Path env:PLUGIN -Value "calico.exe"
 Set-Item -Path env:DATASTORE_TYPE -Value "etcdv3"
 Set-Item -Path env:CONTAINER_RUNTIME -Value "$ContainerRuntime"
 Set-Item -Path env:CNI_VERSION -Value "0.3.0"
@@ -71,7 +72,10 @@ if ($ContainerRuntime -EQ "containerd")
      C:\bin\ctr.exe -n k8s.io images pull mcr.microsoft.com/windows/servercore:1809 | Out-Null
   } elseif ( "$OSVersion" -eq "Windows1903container" ) {
      C:\bin\ctr.exe -n k8s.io images pull mcr.microsoft.com/windows/servercore/insider:10.0.18317.1000 | Out-Null
+  } elseif ( "$OSVersion" -eq "Windows2022") {
+     ctr -n k8s.io images pull mcr.microsoft.com/windows/servercore:ltsc2022 | Out-Null
   }
+
 }
 else
 {
@@ -79,6 +83,8 @@ else
      docker pull mcr.microsoft.com/windows/servercore:1809
   } elseif ( "$OSVersion" -eq "Windows1903container" ) {
      docker pull mcr.microsoft.com/windows/servercore/insider:10.0.18317.1000
+  } elseif ( "$OSVersion" -eq "Windows2022") {
+     docker pull mcr.microsoft.com/windows/servercore:ltsc2022 | Out-Null
   }
 }
 
@@ -97,10 +103,10 @@ New-HNSNetwork -Type "L2Bridge" -AddressPrefix "10.244.10.0/24" -Gateway "10.244
 Start-Sleep -s 15
 
 #create report directory to generate result
-mkdir -p C:\\k\\report
+mkdir -force C:\\k\\report
 #executes FV test and generate report in report/result.xml
 cd C:\\k
-& .\win-fv.exe --ginkgo.focus "l2bridge network" > C:\k\report\fv-test-l2bridge.log 2>&1
+& .\$WinFvExecutable --ginkgo.focus "l2bridge network" > C:\k\report\fv-test-l2bridge.log 2>&1
 if ( $LastExitCode -ne 0 ){
   echo $LastExitCode > c:\k\report\error-codes
 }
@@ -113,7 +119,7 @@ New-HNSNetwork -Type "Overlay" -AddressPrefix "192.168.255.0/30" -Gateway "192.1
 Start-Sleep -s 20
 
 Set-Item -Path env:REPORT -Value "C:\\k\\report\\report-overlay.xml"
-& .\win-fv.exe --ginkgo.focus "overlay network" > C:\k\report\fv-test-overlay.log 2>&1
+& .\$WinFvExecutable --ginkgo.focus "overlay network" > C:\k\report\fv-test-overlay.log 2>&1
 if ( $LastExitCode -ne 0 ){
   echo $LastExitCode >> c:\k\report\error-codes
 }
