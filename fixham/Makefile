@@ -1,5 +1,4 @@
 include ../metadata.mk
-include ../lib.Makefile
 
 NAME = fixham
 PACKAGE_NAME = github.com/projectcalico/calico/fixham
