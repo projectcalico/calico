@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -410,12 +411,23 @@ func (s *IPSets) tryResync() error {
 	setsChan := make(chan setData)
 	defer close(setsChan)
 
-	// Start a goroutine to list the elements of each set.
+	// Start a goroutine to list the elements of each set. Limit to GOMAXPROCS concurrent set reads to
+	// avoid spawning too many goroutines if there are a large number of sets.
+	routineLimit := make(chan struct{}, runtime.GOMAXPROCS(0))
+	defer close(routineLimit)
 	for _, setName := range sets {
+		// Wait for room in the limiting channel.
+		routineLimit <- struct{}{}
+
+		// Start a goroutine to read this set.
 		go func(name string) {
+			// Make sure to indicate that we're done by removing ourselves from the limiter channel.
+			defer func() { <-routineLimit }()
+
 			elems, err := s.nft.ListElements(ctx, "set", name)
 			if err != nil {
 				setsChan <- setData{setName: name, err: err}
+				return
 			}
 			strElems := []string{}
 			for _, e := range elems {
@@ -444,7 +456,7 @@ func (s *IPSets) tryResync() error {
 		logCxt := s.logCxt.WithField("setName", setName)
 		if setData.err != nil {
 			logCxt.WithError(err).Error("Failed to list set elements.")
-			return err
+			return setData.err
 		}
 
 		metadata, ok := s.setNameToAllMetadata[setName]
