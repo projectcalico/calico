@@ -51,6 +51,9 @@ type fakeNFT struct {
 	// Allow execution of code in the path of various nftables methods.
 	PreWrite func()
 	PreList  func()
+
+	// Allow overriding the next ListElements response for one or more sets to be an error.
+	ListElementsErrors map[string]error
 }
 
 func (f *fakeNFT) Reset() {
@@ -126,5 +129,10 @@ func (f *fakeNFT) ListRules(ctx context.Context, chain string) ([]*knftables.Rul
 // be "set" or "map".) If the set/map exists but contains no elements, this will
 // return an empty list and no error.
 func (f *fakeNFT) ListElements(ctx context.Context, objectType string, name string) ([]*knftables.Element, error) {
+	if err := f.ListElementsErrors[name]; err != nil {
+		logrus.WithError(err).WithField("name", name).Info("Returning test error from ListElements")
+		delete(f.ListElementsErrors, name)
+		return nil, err
+	}
 	return f.fake.ListElements(ctx, objectType, name)
 }
