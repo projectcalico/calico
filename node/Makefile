@@ -57,6 +57,10 @@ endif
 
 ###############################################################################
 
+# Our (public) GCP bucket where we mirror any third party files
+# that are flaky to retrieve.
+THIRD_PARTY_DEPS_MIRROR=https://storage.googleapis.com/public-calico-third-party-deps
+
 # Versions and location of dependencies used in the build.
 BIRD_IMAGE ?= calico/bird:$(BIRD_VERSION)-$(ARCH)
 BIRD_SOURCE=filesystem/included-source/bird-$(BIRD_VERSION).tar.gz
@@ -84,6 +88,8 @@ WINDOWS_ARCHIVE_ROOT := windows-packaging/CalicoWindows
 WINDOWS_ARCHIVE_BINARY := $(WINDOWS_ARCHIVE_ROOT)/calico-node.exe
 WINDOWS_ARCHIVE_TAG?=$(GIT_VERSION)
 WINDOWS_ARCHIVE := dist/calico-windows-$(WINDOWS_ARCHIVE_TAG).zip
+# Original source: https://nssm.cc/ci/nssm-$(WINDOWS_NSSM_VERSION).zip
+WINDOWS_NSSM_URL=$(THIRD_PARTY_DEPS_MIRROR)/nssm/nssm-$(WINDOWS_NSSM_VERSION).zip
 # Version of NSSM to download.
 WINDOWS_NSSM_VERSION=2.24-103-gdee49fc
 # Explicit list of files that we copy in from the mod cache.  This is required because the copying rules we use are pattern-based
