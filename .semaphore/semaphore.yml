@@ -323,6 +323,10 @@ blocks:
   dependencies:
     - "Felix: Build"
   task:
+    agent:
+      machine:
+        type: e1-standard-4
+        os_image: ubuntu2004
     prologue:
       commands:
         - cd felix
@@ -621,7 +625,7 @@ blocks:
   task:
     agent:
       machine:
-        type: e1-standard-4
+        type: e1-standard-8
         os_image: ubuntu2004
     prologue:
       commands:
@@ -635,12 +639,6 @@ blocks:
               - s390x
         commands:
           - ../.semaphore/run-and-monitor image-$ARCH.log make image ARCH=$ARCH
-      - name: Build Windows archive
-        commands:
-          - ../.semaphore/run-and-monitor build-windows-archive.log make build-windows-archive
-      - name: Build Windows image
-        commands:
-          - ../.semaphore/run-and-monitor build-windows-image.log make image-windows
 
 - name: "Node: Build - native arm64 runner"
   run:
@@ -658,6 +656,23 @@ blocks:
       - name: Build image
         commands:
           - ../.semaphore/run-and-monitor build-arm64.log make image ARCH=arm64
+
+- name: "Node: Windows build"
+  run:
+    when: "false or change_in(['/felix/', '/confd/', '/node/'])"
+  dependencies:
+    - "Node: Build"
+  task:
+    prologue:
+      commands:
+        - cd node
+    jobs:
+      - name: Build Windows archive
+        commands:
+          - ../.semaphore/run-and-monitor build-windows-archive.log make build-windows-archive
+      - name: Build Windows image
+        commands:
+          - ../.semaphore/run-and-monitor build-windows-image.log make image-windows
 
 - name: "Node: kind-cluster tests"
   run:
