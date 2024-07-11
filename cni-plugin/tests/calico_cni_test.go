@@ -174,14 +174,16 @@ var _ = Describe("CalicoCni", func() {
 
 			// Assume the first IP is the IPv4 address
 			Expect(contAddresses[0].IP.String()).Should(Equal(ip))
-			Expect(contRoutes).Should(SatisfyAll(ContainElement(netlink.Route{
-				LinkIndex: contVeth.Attrs().Index,
-				Gw:        net.IPv4(169, 254, 1, 1).To4(),
-				Protocol:  syscall.RTPROT_BOOT,
-				Table:     syscall.RT_TABLE_MAIN,
-				Type:      syscall.RTN_UNICAST,
-				Family:    syscall.AF_INET,
-			}),
+			Expect(contRoutes).Should(SatisfyAll(
+				ContainElement(netlink.Route{
+					LinkIndex: contVeth.Attrs().Index,
+					Dst:       netlinkDefaultCIDR(),
+					Gw:        net.IPv4(169, 254, 1, 1).To4(),
+					Protocol:  syscall.RTPROT_BOOT,
+					Table:     syscall.RT_TABLE_MAIN,
+					Type:      syscall.RTN_UNICAST,
+					Family:    syscall.AF_INET,
+				}),
 				ContainElement(netlink.Route{
 					LinkIndex: contVeth.Attrs().Index,
 					Scope:     netlink.SCOPE_LINK,
@@ -931,3 +933,9 @@ var _ = Describe("CalicoCni", func() {
 
 	})
 })
+
+func netlinkDefaultCIDR() *net.IPNet {
+	_, defaultCIDR, _ := net.ParseCIDR("0.0.0.0/0")
+	defaultCIDR.IP = defaultCIDR.IP.To16() // Netlink returns a v6-formed IP.
+	return defaultCIDR
+}
