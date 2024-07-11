@@ -119,7 +119,12 @@ func HashreleaseBuild(cfg *config.Config) {
 }
 
 func HashreleasePush(cfg *config.Config) {
-	host := cfg.DocsHost
+	sshConfig := &docs.SSHConfig{
+		Host:    cfg.DocsHost,
+		User:    cfg.DocsUser,
+		KeyPath: cfg.DocsKey,
+		Port:    cfg.DocsPort,
+	}
 	if host == "" {
 		logrus.Fatal("Docs host is not set")
 	}
@@ -139,7 +144,7 @@ func HashreleasePush(cfg *config.Config) {
 	// TODO: send image to image scan server
 	// TODO: ensure release does not exist in server
 	logrus.WithField("note", note).Info("Publishing hashrelease")
-	if err := docs.PublishHashrelease(name, _releaseVersion.Stream(), hashreleaseDir(cfg.RepoRootDir), host); err != nil {
+	if err := docs.PublishHashrelease(name, _releaseVersion.Stream(), hashreleaseDir(cfg.RepoRootDir), sshConfig); err != nil {
 		logrus.WithError(err).Fatal("Failed to publish hashrelease")
 	}
 }

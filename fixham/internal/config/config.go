@@ -58,6 +58,9 @@ type Config struct {
 	ValidArchs []string `envconfig:"VALID_ARCHES" default:"amd64,arm64,ppc64le,s390x"`
 
 	DocsHost string `envconfig:"DOCS_HOST"`
+	DocsPort string `envconfig:"DOCS_PORT"`
+	DocsUser string `envconfig:"DOCS_USER"`
+	DocsKey  string `envconfig:"DOCS_KEY"`
 }
 
 // LoadConfig loads the configuration from the environment
