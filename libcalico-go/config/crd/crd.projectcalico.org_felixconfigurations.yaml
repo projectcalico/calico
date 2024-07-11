@@ -440,6 +440,35 @@ spec:
                   is not recommended since it doesn''t provide better performance
                   than iptables. [Default: false]'
                 type: boolean
+              goGCThreshold:
+                description: "GoGCThreshold Sets the Go runtime's garbage collection
+                  threshold.  I.e. the percentage that the heap is allowed to grow
+                  before garbage collection is triggered.  In general, doubling the
+                  value halves the CPU time spent doing GC, but it also doubles peak
+                  GC memory overhead.  A special value of -1 can be used to disable
+                  GC entirely; this should only be used in conjunction with the GoMemoryLimitMB
+                  setting. \n This setting is overridden by the GOGC environment variable.
+                  \n [Default: 40]"
+                type: integer
+              goMaxProcs:
+                description: "GoMaxProcs sets the maximum number of CPUs that the
+                  Go runtime will use concurrently.  A value of -1 means \"use the
+                  system default\"; typically the number of real CPUs on the system.
+                  \n this setting is overridden by the GOMAXPROCS environment variable.
+                  \n [Default: -1]"
+                type: integer
+              goMemoryLimitMB:
+                description: "GoMemoryLimitMB sets a (soft) memory limit for the Go
+                  runtime in MB.  The Go runtime will try to keep its memory usage
+                  under the limit by triggering GC as needed.  To avoid thrashing,
+                  it will exceed the limit if GC starts to take more than 50% of the
+                  process's CPU time.  A value of -1 disables the memory limit. \n
+                  Note that the memory limit, if used, must be considerably less than
+                  any hard resource limit set at the container or pod level.  This
+                  is because felix is not the only process that must run in the container
+                  or pod. \n This setting is overridden by the GOMEMLIMIT environment
+                  variable. \n [Default: -1]"
+                type: integer
               healthEnabled:
                 type: boolean
               healthHost:
@@ -656,6 +685,10 @@ spec:
                 x-kubernetes-int-or-string: true
               netlinkTimeout:
                 pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
+                type: string
+              nftablesMode:
+                description: 'NFTablesMode configures nftables support in Felix. [Default:
+                  Disabled]'
                 type: string
               openstackRegion:
                 description: 'OpenstackRegion is the name of the region that a particular

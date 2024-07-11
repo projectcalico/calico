@@ -29,6 +29,9 @@ function setup_minikube_cluster() {
   ${MASTER_CONNECT_COMMAND} sudo chmod +x /home/winfv/create-minikube-cluster.sh
   ${MASTER_CONNECT_COMMAND} bash /home/winfv/create-minikube-cluster.sh ${LINUX_PIP}
 
+  APISERVER_PORT=$(${MASTER_CONNECT_COMMAND} cat /home/winfv/port_info)
+  export APISERVER_PORT
+
     #create etcd manually with http protocol
   LOCAL_IP_ENV=${LINUX_PIP}
   ETCD_CONTAINER=quay.io/coreos/etcd:v3.4.6

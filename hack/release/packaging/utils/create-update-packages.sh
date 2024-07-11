@@ -198,10 +198,6 @@ function do_felix {
     # RPM golang build dependencies that is exactly equivalent to our
     # containerized builds.
     make bin/calico-felix
-    # Felix is built with RHEL/UBI and links against libpcap.so.1. We need this patchelf
-    # until Debian changes the soname from .0.8 to .1.
-    # FIXME remove the following patchelf command once Debian dependency is updated.
-    patchelf --replace-needed libpcap.so.1 libpcap.so.0.8 bin/calico-felix
     # Remove all the files that were added by that build, except for the
     # bin/calico-felix binary.
     rm -f bin/calico-felix-amd64
@@ -212,12 +208,13 @@ function do_felix {
     rm -f Makefile
     # Override dpkg's default file exclusions, otherwise our binaries won't get included (and some
     # generated files will).
+    # Build rpm first and then deb because we need to patchelf bin/calico-felix for Debian.
     PKG_NAME=felix \
 	    NAME=Felix \
 	    RPM_TAR_ARGS='--exclude=bin/calico-felix-* --exclude=.gitignore --exclude=*.d --exclude=*.ll --exclude=.go-pkg-cache --exclude=vendor --exclude=report' \
 	    DPKG_EXCL="-I'bin/calico-felix-*' -I.git -I.gitignore -I'*.d' -I'*.ll' -I.go-pkg-cache -I.git -Ivendor -Ireport" \
 	    DEB_EPOCH=2: \
-	    ${rootdir}/hack/release/packaging/utils/make-packages.sh deb rpm
+	    ${rootdir}/hack/release/packaging/utils/make-packages.sh rpm deb
     git checkout Makefile
 
 

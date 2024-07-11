@@ -559,13 +559,9 @@ func (c *CIDRListParam) Parse(raw string) (result interface{}, err error) {
 		if len(val) == 0 {
 			continue
 		}
-		ip, net, e := cnet.ParseCIDROrIP(val)
+		_, net, e := cnet.ParseCIDROrIP(val)
 		if e != nil {
 			err = c.parseFailed(in, "invalid CIDR or IP "+val)
-			return
-		}
-		if ip.Version() != 4 {
-			err = c.parseFailed(in, "invalid CIDR or IP (not v4)")
 			return
 		}
 		resultSlice = append(resultSlice, net.String())

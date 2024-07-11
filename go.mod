@@ -5,7 +5,7 @@ go 1.22.3
 require (
 	github.com/BurntSushi/toml v1.3.2
 	github.com/Masterminds/semver/v3 v3.2.1
-	github.com/Microsoft/hcsshim v0.11.4
+	github.com/Microsoft/hcsshim v0.11.6
 	github.com/apparentlymart/go-cidr v1.1.0
 	github.com/aws/aws-sdk-go-v2 v1.25.0
 	github.com/aws/aws-sdk-go-v2/config v1.27.0
@@ -60,7 +60,6 @@ require (
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/pkg/errors v0.9.1
-	github.com/pkg/profile v1.7.0
 	github.com/projectcalico/api v0.0.0-00010101000000-000000000000
 	github.com/projectcalico/go-json v0.0.0-20161128004156-6219dc7339ba
 	github.com/projectcalico/go-yaml-wrapper v0.0.0-20191112210931-090425220c54
@@ -108,6 +107,7 @@ require (
 	modernc.org/memory v1.7.2
 	sigs.k8s.io/controller-runtime v0.15.3
 	sigs.k8s.io/kind v0.22.0
+	sigs.k8s.io/knftables v0.0.15
 	sigs.k8s.io/yaml v1.4.0
 )
 
@@ -125,7 +125,7 @@ require (
 	github.com/Azure/go-autorest/tracing v0.6.0 // indirect
 	github.com/GoogleCloudPlatform/k8s-cloud-provider v1.18.1-0.20220218231025-f11817397a1b // indirect
 	github.com/JeffAshton/win_pdh v0.0.0-20161109143554-76bb4ee9f0ab // indirect
-	github.com/Microsoft/go-winio v0.6.1 // indirect
+	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/NYTimes/gziphandler v1.1.1 // indirect
 	github.com/StackExchange/wmi v0.0.0-20181212234831-e0a55b97c705 // indirect
 	github.com/alessio/shellescape v1.4.1 // indirect
@@ -168,7 +168,6 @@ require (
 	github.com/evanphx/json-patch v4.12.0+incompatible // indirect
 	github.com/evanphx/json-patch/v5 v5.6.0 // indirect
 	github.com/fatih/color v1.16.0 // indirect
-	github.com/felixge/fgprof v0.9.3 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/ghodss/yaml v1.0.0 // indirect
 	github.com/go-errors/errors v1.4.2 // indirect
@@ -342,4 +341,7 @@ replace (
 	k8s.io/mount-utils => k8s.io/mount-utils v0.28.9
 	k8s.io/pod-security-admission => k8s.io/pod-security-admission v0.28.9
 	k8s.io/sample-apiserver => k8s.io/sample-apiserver v0.28.9
+
+	// Use an untagged knftables version that has changes we need.
+	sigs.k8s.io/knftables => sigs.k8s.io/knftables v0.0.17-0.20240627140917-8d2660d78107
 )

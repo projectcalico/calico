@@ -845,7 +845,11 @@ func (r *RouteTable) fullResyncRoutesForLink(logCxt *log.Entry, ifaceName string
 			routeProblems = append(routeProblems, "unexpected route")
 		}
 		if dest != ipV6LinkLocalCIDR {
-			if !r.deviceRouteSourceAddress.Equal(route.Src) {
+			expectedSrc := r.deviceRouteSourceAddress
+			if expectedTargetFound && expectedTarget.Src != nil {
+				expectedSrc = expectedTarget.Src.AsNetIP()
+			}
+			if !expectedSrc.Equal(route.Src) {
 				routeProblems = append(routeProblems, "incorrect source address")
 			}
 			if r.deviceRouteProtocol != route.Protocol {
