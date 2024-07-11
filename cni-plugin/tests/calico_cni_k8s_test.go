@@ -333,6 +333,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			Expect(contRoutes).Should(SatisfyAll(
 				ContainElement(netlink.Route{
 					LinkIndex: contVeth.Attrs().Index,
+					Dst:       netlinkDefaultCIDR(),
 					Gw:        net.IPv4(169, 254, 1, 1).To4(),
 					Protocol:  syscall.RTPROT_BOOT,
 					Table:     syscall.RT_TABLE_MAIN,
