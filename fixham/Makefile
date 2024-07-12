@@ -18,3 +18,18 @@ bin/release:
 bin/hashrelease:
 	@mkdir -p bin
 	@go build -o bin/hashrelease ./hashrelease
+
+###############################################################################
+# CI/CD
+###############################################################################
+.PHONY: ci
+ci: static-checks
+
+###############################################################################
+# Hashrelease
+###############################################################################
+hashrelease: bin/hashrelease
+	@NAME=calico \
+	GO_BUILD_VER=$(GO_BUILD_VER) \
+	REPO_ROOT=$(REPO_ROOT) \
+	bin/hashrelease publish
