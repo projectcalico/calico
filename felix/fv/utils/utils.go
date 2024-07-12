@@ -139,6 +139,9 @@ func GetCommandOutput(command string, args ...string) (string, error) {
 	cmd := Command(command, args...)
 	log.Infof("Running '%s %s'", cmd.Path, strings.Join(cmd.Args, " "))
 	output, err := cmd.CombinedOutput()
+	if err != nil {
+		err = fmt.Errorf("command failed %q: %w", cmd, err)
+	}
 	return string(output), err
 }
 
@@ -150,7 +153,6 @@ func RunCommand(command string, args ...string) error {
 
 func Command(name string, args ...string) *exec.Cmd {
 	log.Debugf("Creating Command [%s].", formatCommand(name, args))
-
 	return exec.Command(name, args...)
 }
 
