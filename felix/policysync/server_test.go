@@ -69,7 +69,7 @@ var _ = Describe("Server", func() {
 				for _, msg := range msgs {
 					updates <- msg
 					g := <-output
-					googleproto.Equal(g, msg)
+					Expect(googleproto.Equal(g, msg)).To(BeTrue())
 				}
 
 				close(done)
