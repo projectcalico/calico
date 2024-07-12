@@ -21,6 +21,7 @@ import (
 	"strings"
 
 	"github.com/docopt/docopt-go"
+	"github.com/sirupsen/logrus"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -33,6 +34,7 @@ import (
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/common"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/constants"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/util"
+	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 )
@@ -151,15 +153,15 @@ Description:
 	}
 
 	// Check that the datastore configured datastore is etcd
-	// cfg, err := clientmgr.LoadClientConfig(cf)
-	// if err != nil {
-	// 	log.Info("Error loading config")
-	// 	return err
-	// }
-	//
-	// if cfg.Spec.DatastoreType != apiconfig.EtcdV3 {
-	// 	return fmt.Errorf("Invalid datastore type: %s to export from for datastore migration. Datastore type must be etcdv3", cfg.Spec.DatastoreType)
-	// }
+	cfg, err := clientmgr.LoadClientConfig(cf)
+	if err != nil {
+		logrus.Info("Error loading config")
+		return err
+	}
+
+	if cfg.Spec.DatastoreType != apiconfig.EtcdV3 {
+		return fmt.Errorf("Invalid datastore type: %s to export from for datastore migration. Datastore type must be etcdv3", cfg.Spec.DatastoreType)
+	}
 
 	rp := common.ResourcePrinterYAML{}
 	etcdToKddNodeMap := make(map[string]string)
