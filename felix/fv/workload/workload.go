@@ -27,6 +27,7 @@ import (
 	"time"
 
 	. "github.com/onsi/gomega"
+	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 
 	api "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
@@ -501,8 +502,9 @@ func (w *Workload) LatencyTo(ip, port string) (time.Duration, string) {
 	}
 	out, err := w.ExecOutput("hping3", "-p", port, "-c", "20", "--fast", "-S", "-n", ip)
 	stderr := ""
-	if err, ok := err.(*exec.ExitError); ok {
-		stderr = string(err.Stderr)
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		stderr = string(exitErr.Stderr)
 	}
 	Expect(err).NotTo(HaveOccurred(), stderr)
 
@@ -537,8 +539,9 @@ func (w *Workload) SendPacketsTo(ip string, count int, size int) (error, string)
 	s := fmt.Sprintf("%d", size)
 	_, err := w.ExecOutput("ping", "-c", c, "-W", "1", "-s", s, ip)
 	stderr := ""
-	if err, ok := err.(*exec.ExitError); ok {
-		stderr = string(err.Stderr)
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		stderr = string(exitErr.Stderr)
 	}
 	return err, stderr
 }
