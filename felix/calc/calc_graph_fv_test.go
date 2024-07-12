@@ -718,8 +718,7 @@ func expectCorrectDataplaneState(mockDataplane *mock.MockDataplane, state State)
 		"Active IPv6 Wireguard Endpoints were incorrect after moving to state: %v",
 		state.Name)
 	for key, protoHostMetadataV4V6 := range mockDataplane.ActiveHostMetadataV4V6() {
-		equal := googleproto.Equal(protoHostMetadataV4V6, state.ExpectedHostMetadataV4V6[key])
-		Expect(equal).To(BeTrue(),
+		Expect(googleproto.Equal(protoHostMetadataV4V6, state.ExpectedHostMetadataV4V6[key])).To(BeTrue(),
 			"Active Host MetadataV4V6 were incorrect after moving to state: %v",
 			state.Name)
 	}
@@ -745,8 +744,7 @@ func expectCorrectDataplaneState(mockDataplane *mock.MockDataplane, state State)
 	Expect(mockDataplane.ActivePreDNATPolicies()).To(Equal(state.ExpectedPreDNATPolicyIDs),
 		"PreDNAT policies incorrect after moving to state: %v",
 		state.Name)
-	equal := googleproto.Equal(mockDataplane.Encapsulation(), state.ExpectedEncapsulation)
-	Expect(equal).To(BeTrue(),
+	Expect(googleproto.Equal(mockDataplane.Encapsulation(), state.ExpectedEncapsulation)).To(BeTrue(),
 		"Encapsulation incorrect after moving to state: %v",
 		state.Name)
 }

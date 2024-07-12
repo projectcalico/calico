@@ -134,8 +134,7 @@ var _ = Describe("ParsedRulesToActivePolicyUpdate", func() {
 			Expect(r.RuleId).ToNot(Equal(""))
 			r.RuleId = ""
 		}
-		equal := googleproto.Equal(protoUpdate, &fullyLoadedProtoRules)
-		Expect(equal).To(BeTrue())
+		Expect(googleproto.Equal(protoUpdate, &fullyLoadedProtoRules)).To(BeTrue())
 	})
 })
 

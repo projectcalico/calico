@@ -400,7 +400,7 @@ var _ = Context("_POL-SYNC_ _BPF-SAFE_ policy sync API tests", func() {
 								Expect(r.RuleId).NotTo(Equal(""))
 								r.RuleId = ""
 							}
-							equal := googleproto.Equal(protoPol,
+							Expect(googleproto.Equal(protoPol,
 								&proto.Policy{
 									Namespace: "", // Global policy has no namespace
 									InboundRules: []*proto.Rule{
@@ -424,8 +424,7 @@ var _ = Context("_POL-SYNC_ _BPF-SAFE_ policy sync API tests", func() {
 										},
 									},
 									OriginalSelector: selector.Normalise(policy.Spec.Selector),
-								})
-							Expect(equal).To(BeTrue())
+								})).To(BeTrue())
 						})
 
 						It("should handle a deletion", func() {

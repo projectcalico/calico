@@ -69,20 +69,15 @@ var _ = DescribeTable("Calculation graph pass-through tests",
 		eb.Flush()
 		switch messageReceived.(type) {
 		case *proto.IPAMPoolUpdate:
-			equal := googleproto.Equal(messageReceived.(*proto.IPAMPoolUpdate), expUpdate.(*proto.IPAMPoolUpdate))
-			Expect(equal).To(BeTrue())
+			Expect(googleproto.Equal(messageReceived.(*proto.IPAMPoolUpdate), expUpdate.(*proto.IPAMPoolUpdate))).To(BeTrue())
 		case *proto.HostMetadataUpdate:
-			equal := googleproto.Equal(messageReceived.(*proto.HostMetadataUpdate), expUpdate.(*proto.HostMetadataUpdate))
-			Expect(equal).To(BeTrue())
+			Expect(googleproto.Equal(messageReceived.(*proto.HostMetadataUpdate), expUpdate.(*proto.HostMetadataUpdate))).To(BeTrue())
 		case *proto.GlobalBGPConfigUpdate:
-			equal := googleproto.Equal(messageReceived.(*proto.GlobalBGPConfigUpdate), expUpdate.(*proto.GlobalBGPConfigUpdate))
-			Expect(equal).To(BeTrue())
+			Expect(googleproto.Equal(messageReceived.(*proto.GlobalBGPConfigUpdate), expUpdate.(*proto.GlobalBGPConfigUpdate))).To(BeTrue())
 		case *proto.WireguardEndpointUpdate:
-			equal := googleproto.Equal(messageReceived.(*proto.WireguardEndpointUpdate), expUpdate.(*proto.WireguardEndpointUpdate))
-			Expect(equal).To(BeTrue())
+			Expect(googleproto.Equal(messageReceived.(*proto.WireguardEndpointUpdate), expUpdate.(*proto.WireguardEndpointUpdate))).To(BeTrue())
 		case *proto.ServiceUpdate:
-			equal := googleproto.Equal(messageReceived.(*proto.ServiceUpdate), expUpdate.(*proto.ServiceUpdate))
-			Expect(equal).To(BeTrue())
+			Expect(googleproto.Equal(messageReceived.(*proto.ServiceUpdate), expUpdate.(*proto.ServiceUpdate))).To(BeTrue())
 		}
 		_, err := extdataplane.WrapPayloadWithEnvelope(messageReceived, 0)
 		Expect(err).To(BeNil())
@@ -100,20 +95,15 @@ var _ = DescribeTable("Calculation graph pass-through tests",
 		eb.Flush()
 		switch messageReceived.(type) {
 		case *proto.IPAMPoolRemove:
-			equal := googleproto.Equal(messageReceived.(*proto.IPAMPoolRemove), expRemove.(*proto.IPAMPoolRemove))
-			Expect(equal).To(BeTrue())
+			Expect(googleproto.Equal(messageReceived.(*proto.IPAMPoolRemove), expRemove.(*proto.IPAMPoolRemove))).To(BeTrue())
 		case *proto.HostMetadataRemove:
-			equal := googleproto.Equal(messageReceived.(*proto.HostMetadataRemove), expRemove.(*proto.HostMetadataRemove))
-			Expect(equal).To(BeTrue())
+			Expect(googleproto.Equal(messageReceived.(*proto.HostMetadataRemove), expRemove.(*proto.HostMetadataRemove))).To(BeTrue())
 		case *proto.GlobalBGPConfigUpdate:
-			equal := googleproto.Equal(messageReceived.(*proto.GlobalBGPConfigUpdate), expRemove.(*proto.GlobalBGPConfigUpdate))
-			Expect(equal).To(BeTrue())
+			Expect(googleproto.Equal(messageReceived.(*proto.GlobalBGPConfigUpdate), expRemove.(*proto.GlobalBGPConfigUpdate))).To(BeTrue())
 		case *proto.WireguardEndpointRemove:
-			equal := googleproto.Equal(messageReceived.(*proto.WireguardEndpointRemove), expRemove.(*proto.WireguardEndpointRemove))
-			Expect(equal).To(BeTrue())
+			Expect(googleproto.Equal(messageReceived.(*proto.WireguardEndpointRemove), expRemove.(*proto.WireguardEndpointRemove))).To(BeTrue())
 		case *proto.ServiceRemove:
-			equal := googleproto.Equal(messageReceived.(*proto.ServiceRemove), expRemove.(*proto.ServiceRemove))
-			Expect(equal).To(BeTrue())
+			Expect(googleproto.Equal(messageReceived.(*proto.ServiceRemove), expRemove.(*proto.ServiceRemove))).To(BeTrue())
 		}
 		_, err = extdataplane.WrapPayloadWithEnvelope(messageReceived, 0)
 		Expect(err).To(BeNil())
@@ -272,12 +262,11 @@ var _ = Describe("Host IP duplicate squashing test", func() {
 			},
 		})
 		eb.Flush()
-		Expect(len(messagesReceived)).To(Equal(1))
-		equal := googleproto.Equal(messagesReceived[0].(*proto.HostMetadataUpdate), &proto.HostMetadataUpdate{
+		Expect(messagesReceived).To(HaveLen(1))
+		Expect(googleproto.Equal(messagesReceived[0].(*proto.HostMetadataUpdate), &proto.HostMetadataUpdate{
 			Hostname: "foo",
 			Ipv4Addr: "10.0.0.1",
-		})
-		Expect(equal).To(BeTrue())
+		})).To(BeTrue())
 	})
 	It("should pass on genuine changes", func() {
 		cg.OnUpdate(api.Update{
@@ -296,17 +285,15 @@ var _ = Describe("Host IP duplicate squashing test", func() {
 			},
 		})
 		eb.Flush()
-		Expect(len(messagesReceived)).To(Equal(2))
-		equal := googleproto.Equal(messagesReceived[0].(*proto.HostMetadataUpdate), &proto.HostMetadataUpdate{
+		Expect(messagesReceived).To(HaveLen(2))
+		Expect(googleproto.Equal(messagesReceived[0].(*proto.HostMetadataUpdate), &proto.HostMetadataUpdate{
 			Hostname: "foo",
 			Ipv4Addr: "10.0.0.1",
-		})
-		Expect(equal).To(BeTrue())
-		equal = googleproto.Equal(messagesReceived[1].(*proto.HostMetadataUpdate), &proto.HostMetadataUpdate{
+		})).To(BeTrue())
+		Expect(googleproto.Equal(messagesReceived[1].(*proto.HostMetadataUpdate), &proto.HostMetadataUpdate{
 			Hostname: "foo",
 			Ipv4Addr: "10.0.0.2",
-		})
-		Expect(equal).To(BeTrue())
+		})).To(BeTrue())
 	})
 	It("should pass on delete and recreate", func() {
 		cg.OnUpdate(api.Update{
@@ -332,21 +319,18 @@ var _ = Describe("Host IP duplicate squashing test", func() {
 			},
 		})
 		eb.Flush()
-		Expect(len(messagesReceived)).To(Equal(3))
-		equal := googleproto.Equal(messagesReceived[0].(*proto.HostMetadataUpdate), &proto.HostMetadataUpdate{
+		Expect(messagesReceived).To(HaveLen(3))
+		Expect(googleproto.Equal(messagesReceived[0].(*proto.HostMetadataUpdate), &proto.HostMetadataUpdate{
 			Hostname: "foo",
 			Ipv4Addr: "10.0.0.1",
-		})
-		Expect(equal).To(BeTrue())
-		equal = googleproto.Equal(messagesReceived[1].(*proto.HostMetadataRemove), &proto.HostMetadataRemove{
+		})).To(BeTrue())
+		Expect(googleproto.Equal(messagesReceived[1].(*proto.HostMetadataRemove), &proto.HostMetadataRemove{
 			Hostname: "foo",
-		})
-		Expect(equal).To(BeTrue())
-		equal = googleproto.Equal(messagesReceived[2].(*proto.HostMetadataUpdate), &proto.HostMetadataUpdate{
+		})).To(BeTrue())
+		Expect(googleproto.Equal(messagesReceived[2].(*proto.HostMetadataUpdate), &proto.HostMetadataUpdate{
 			Hostname: "foo",
 			Ipv4Addr: "10.0.0.1",
-		})
-		Expect(equal).To(BeTrue())
+		})).To(BeTrue())
 	})
 })
 
