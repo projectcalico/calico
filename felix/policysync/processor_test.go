@@ -44,6 +44,10 @@ const ProfileName = "testpro"
 const TierName = "testtier"
 const PolicyName = "testpolicy"
 
+func init() {
+	resolver.SetDefaultScheme("passthrough")
+}
+
 var _ = Describe("Processor", func() {
 	var uut *policysync.Processor
 	var updates chan interface{}
@@ -747,7 +751,6 @@ var _ = Describe("Processor", func() {
 					BeforeEach(func(done Done) {
 						wepId = testId("default/withsync")
 
-						resolver.SetDefaultScheme("passthrough")
 						opts := getDialOptions()
 						var err error
 						clientConn, err = grpc.NewClient(path.Join(socketDir, ListenerSocket), opts...)

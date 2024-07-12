@@ -46,6 +46,10 @@ type grpcDataplane struct {
 	options           map[string]string
 }
 
+func init() {
+	resolver.SetDefaultScheme("passthrough")
+}
+
 func NewGrpcDataplane(conf types.NetConf, logger *logrus.Entry) (*grpcDataplane, error) {
 	socket, ok := conf.DataplaneOptions["socket"].(string)
 	if !ok {
@@ -80,7 +84,6 @@ func (d *grpcDataplane) DoNetworking(
 	annotations map[string]string,
 ) (ifName, contTapMAC string, err error) {
 	d.logger.Infof("Connecting to GRPC backend server at %s", d.socket)
-	resolver.SetDefaultScheme("passthrough")
 	conn, err := grpc.NewClient(d.socket, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return "", "", fmt.Errorf("cannot connect to grpc dataplane: %v", err)
@@ -144,7 +147,6 @@ func (d *grpcDataplane) DoNetworking(
 
 func (d *grpcDataplane) CleanUpNamespace(args *skel.CmdArgs) error {
 	d.logger.Infof("Connecting to GRPC backend server at %s", d.socket)
-	resolver.SetDefaultScheme("passthrough")
 	conn, err := grpc.NewClient(d.socket, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return fmt.Errorf("cannot connect to grpc dataplane: %v", err)
