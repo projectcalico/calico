@@ -20,7 +20,12 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/resolver"
 )
+
+func init() {
+	resolver.SetDefaultScheme("passthrough")
+}
 
 func getDialer(proto string) func(context.Context, string) (net.Conn, error) {
 	d := &net.Dialer{}

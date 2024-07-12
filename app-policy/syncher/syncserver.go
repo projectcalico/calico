@@ -21,7 +21,6 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/resolver"
 
 	"github.com/projectcalico/calico/app-policy/health"
 	"github.com/projectcalico/calico/app-policy/policystore"
@@ -91,7 +90,6 @@ func (s *syncClient) Sync(cxt context.Context, stores chan<- *policystore.Policy
 
 func (s *syncClient) syncStore(cxt context.Context, store *policystore.PolicyStore, inSync chan<- struct{}, done chan<- struct{}) {
 	defer close(done)
-	resolver.SetDefaultScheme("passthrough")
 	conn, err := grpc.NewClient(s.target, s.dialOpts...)
 	if err != nil {
 		log.Warnf("fail to dial Policy Sync server: %v", err)
