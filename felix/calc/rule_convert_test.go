@@ -173,9 +173,8 @@ var _ = DescribeTable("ParsedRulesToProtoRules",
 		// Zero the rule ID so we can compare the other fields.
 		ruleID := rule.RuleId
 		rule.RuleId = ""
-		equal := googleproto.Equal(rule, expected)
-		Expect(equal).To(BeTrue(), "Expected:\n%v\nActual:\n%v", expected, rule)
-		Expect(len(ruleID)).To(Equal(16))
+		Expect(googleproto.Equal(rule, expected)).To(BeTrue(), "Expected:\n%v\nActual:\n%v", expected, rule)
+		Expect(ruleID).To(HaveLen(16))
 		Expect(ruleID).To(MatchRegexp("^[a-zA-Z0-9_-]+$"))
 	},
 	Entry("empty", ParsedRule{}, &proto.Rule{}),
