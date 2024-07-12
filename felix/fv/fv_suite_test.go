@@ -44,7 +44,11 @@ func init() {
 
 func TestFv(t *testing.T) {
 	RegisterFailHandler(Fail)
-	junitReporter := reporters.NewJUnitReporter("../report/fv_suite.xml")
+	reportName := "fv_suite"
+	if NFTMode() {
+		reportName = "fv_nft_suite"
+	}
+	junitReporter := reporters.NewJUnitReporter(fmt.Sprintf("../report/%s.xml", reportName))
 	RunSpecsWithDefaultAndCustomReporters(t, "FV Suite", []Reporter{junitReporter})
 }
 
