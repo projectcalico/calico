@@ -346,6 +346,14 @@ configRetry:
 		break configRetry
 	}
 
+	// If we get here, we've loaded the configuration successfully.
+	// Update log levels before we do anything else.
+	logutils.ConfigureLogging(configParams)
+	// Since we may have enabled more logging, log with the build context
+	// again.
+	buildInfoLogCxt.WithField("config", configParams).Info(
+		"Successfully loaded configuration.")
+
 	if numClientsCreated > 2 {
 		// We don't have a way to close datastore connection so, if we reconnected after
 		// a failure to load config, restart felix to avoid leaking connections.
@@ -370,14 +378,6 @@ configRetry:
 
 	// Enable or disable the health HTTP server according to coalesced config.
 	healthAggregator.ServeHTTP(configParams.HealthEnabled, configParams.HealthHost, configParams.HealthPort)
-
-	// If we get here, we've loaded the configuration successfully.
-	// Update log levels before we do anything else.
-	logutils.ConfigureLogging(configParams)
-	// Since we may have enabled more logging, log with the build context
-	// again.
-	buildInfoLogCxt.WithField("config", configParams).Info(
-		"Successfully loaded configuration.")
 
 	// Configure Windows firewall rules if appropriate
 	winutils.MaybeConfigureWindowsFirewallRules(configParams.WindowsManageFirewallRules, configParams.PrometheusMetricsEnabled, configParams.PrometheusMetricsPort)
@@ -722,6 +722,14 @@ func doGoRuntimeSetup(params *config.Config) {
 		debug.SetMemoryLimit(memLimit)
 	} else if effectiveGOGC < 0 {
 		log.Warn("GC is disabled and no memory limit is set.  Expect to run out of memory!")
+	}
+	defaultGoMaxProcs := runtime.GOMAXPROCS(-1)
+	logCtx := log.WithField("default", defaultGoMaxProcs)
+	if os.Getenv("GOMAXPROCS") == "" && params.GoMaxProcs > 0 {
+		logCtx.WithField("config", params.GoMaxProcs).Info("Setting GOMAXPROCS from configuration.")
+		runtime.GOMAXPROCS(params.GoMaxProcs)
+	} else {
+		logCtx.Info("Using runtime default GOMAXPROCS.")
 	}
 }
 

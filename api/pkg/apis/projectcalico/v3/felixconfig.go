@@ -52,6 +52,13 @@ const (
 	IptablesBackendAuto        = "Auto"
 )
 
+type NFTablesMode string
+
+const (
+	NFTablesModeEnabled  = "Enabled"
+	NFTablesModeDisabled = "Disabled"
+)
+
 // +kubebuilder:validation:Enum=DoNothing;Enable;Disable
 type AWSSrcDstCheckOption string
 
@@ -439,6 +446,9 @@ type FelixConfigurationSpec struct {
 	// iptables. [Default: false]
 	GenericXDPEnabled *bool `json:"genericXDPEnabled,omitempty" confignamev1:"GenericXDPEnabled"`
 
+	// NFTablesMode configures nftables support in Felix. [Default: Disabled]
+	NFTablesMode *NFTablesMode `json:"nftablesMode,omitempty"`
+
 	// BPFEnabled, if enabled Felix will use the BPF dataplane. [Default: false]
 	BPFEnabled *bool `json:"bpfEnabled,omitempty" validate:"omitempty"`
 	// BPFDisableUnprivileged, if enabled, Felix sets the kernel.unprivileged_bpf_disabled sysctl to disable
@@ -672,6 +682,15 @@ type FelixConfigurationSpec struct {
 	// [Default: -1]
 	// +optional
 	GoMemoryLimitMB *int `json:"goMemoryLimitMB,omitempty" validate:"omitempty,gte=-1"`
+
+	// GoMaxProcs sets the maximum number of CPUs that the Go runtime will use concurrently.  A value of -1 means
+	// "use the system default"; typically the number of real CPUs on the system.
+	//
+	// this setting is overridden by the GOMAXPROCS environment variable.
+	//
+	// [Default: -1]
+	// +optional
+	GoMaxProcs *int `json:"goMaxProcs,omitempty" validate:"omitempty,gte=-1"`
 }
 
 type HealthTimeoutOverride struct {

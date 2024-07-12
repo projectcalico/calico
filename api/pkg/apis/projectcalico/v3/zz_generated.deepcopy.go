@@ -1301,6 +1301,11 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(bool)
 		**out = **in
 	}
+	if in.NFTablesMode != nil {
+		in, out := &in.NFTablesMode, &out.NFTablesMode
+		*out = new(NFTablesMode)
+		**out = **in
+	}
 	if in.BPFEnabled != nil {
 		in, out := &in.BPFEnabled, &out.BPFEnabled
 		*out = new(bool)
@@ -1520,6 +1525,11 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 	}
 	if in.GoMemoryLimitMB != nil {
 		in, out := &in.GoMemoryLimitMB, &out.GoMemoryLimitMB
+		*out = new(int)
+		**out = **in
+	}
+	if in.GoMaxProcs != nil {
+		in, out := &in.GoMaxProcs, &out.GoMaxProcs
 		*out = new(int)
 		**out = **in
 	}

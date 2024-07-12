@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -81,7 +81,7 @@ var _ = Describe("Test the NetworkPolicy update processor", func() {
 				Value: &model.Policy{
 					Namespace:      ns1,
 					Selector:       "projectcalico.org/namespace == 'namespace1'",
-					ApplyOnForward: true,
+					ApplyOnForward: false,
 				},
 				Revision: testRev,
 			}))
@@ -193,7 +193,7 @@ var (
 				Order:          &testDefaultPolicyOrder,
 				Selector:       "(projectcalico.org/orchestrator == 'k8s') && projectcalico.org/namespace == 'default'",
 				Types:          []string{"egress"},
-				ApplyOnForward: true,
+				ApplyOnForward: false,
 				OutboundRules: []model.Rule{
 					{
 						Action:      "allow",
@@ -238,7 +238,7 @@ var expected2 = []*model.KVPair{
 			Order:          &testDefaultPolicyOrder,
 			Selector:       "(projectcalico.org/orchestrator == 'k8s') && projectcalico.org/namespace == 'default'",
 			Types:          []string{"ingress"},
-			ApplyOnForward: true,
+			ApplyOnForward: false,
 			InboundRules: []model.Rule{
 				{
 					Action:                       "allow",

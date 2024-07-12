@@ -39,6 +39,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/calc"
 	"github.com/projectcalico/calico/felix/ipsets"
+	"github.com/projectcalico/calico/felix/nftables"
 	"github.com/projectcalico/calico/felix/rules"
 )
 
@@ -229,6 +230,11 @@ func IPSetNameForSelector(ipVersion int, rawSelector string) string {
 	return ipVerConf.NameForMainIPSet(setID)
 }
 
+func NFTSetNameForSelector(ipVersion int, rawSelector string) string {
+	base := IPSetNameForSelector(ipVersion, rawSelector)
+	return nftables.LegalizeSetName(base)
+}
+
 // HasSyscallConn represents objects that can return a syscall.RawConn
 type HasSyscallConn interface {
 	SyscallConn() (syscall.RawConn, error)
@@ -247,7 +253,6 @@ func ConnMTU(hsc HasSyscallConn) (int, error) {
 	err = c.Control(func(fd uintptr) {
 		mtu, sysErr = syscall.GetsockoptInt(int(fd), syscall.IPPROTO_IP, syscall.IP_MTU)
 	})
-
 	if err != nil {
 		return 0, err
 	}

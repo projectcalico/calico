@@ -15,10 +15,10 @@
 ARG QEMU_IMAGE
 ARG BIRD_IMAGE=calico/bird:latest
 
-FROM ${QEMU_IMAGE} as qemu
-FROM ${BIRD_IMAGE} as bird
+FROM ${QEMU_IMAGE} AS qemu
+FROM ${BIRD_IMAGE} AS bird
 
-FROM calico/bpftool:v7.4.0 as bpftool
+FROM calico/bpftool:v7.4.0 AS bpftool
 
 FROM ppc64le/alpine:3.18
 

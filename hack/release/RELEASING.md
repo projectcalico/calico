@@ -282,3 +282,15 @@ Release notes for a Calico release contain notable changes across Calico reposit
    ```
    git add release-notes/
    ```
+
+# API Repository update
+
+The `projectcalico/api` repository needs to be updated to stay in sync with the Calico API. The following steps will ensure that:
+
+1. Ensure that you have the `gh` tool installed, configured, and authenticated. Instructions are here: https://cli.github.com/manual/
+1. Clone the repository: `git clone -b release-v3.29 git@github.com:projectcalico/api.git calico-api-v3.29`
+2. `cd` into the repository and run the `pr` make target from `Makefile.local`: `make -f Makefile.local pr CALICO_GIT_REF=<release tag name>`. `CALICO_GIT_REF` should be the tag for this release, e.g. `CALICO_GIT_REF=v3.29.0` if that's the version you just released.
+3. The script will clone the upstream repository (i.e. `projectcalico/calico`), import the updated files, commit them, and create a PR for them
+7. Once this is done, it will output a URL for a PR, which you can then review and get approved.
+
+Note that if an auto-api PR already exists for this minor version, it will print an error about the PR existing already; this is fine, and the script will have updated the PR instead. Go to Github, find the PR manually, and review it to ensure everything looks correct, then have it merged.
