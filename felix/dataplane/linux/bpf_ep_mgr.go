@@ -4188,7 +4188,8 @@ func (pa *jumpMapAlloc) checkFreeLockHeld(idx int) {
 func removeBPFSpecialDevices() {
 	bpfin, err := netlink.LinkByName(bpfInDev)
 	if err != nil {
-		if errors.Is(err, netlink.LinkNotFoundError{}) {
+		var lnf netlink.LinkNotFoundError
+		if errors.As(err, &lnf) {
 			return
 		}
 		log.WithError(err).Warnf("Failed to make sure that %s/%s device is (not) present.", bpfInDev, bpfOutDev)
