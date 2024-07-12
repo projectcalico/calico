@@ -38,7 +38,7 @@ func OperatorHashreleaseBuild(runner *docker.DockerRunner, cfg *config.Config) {
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to generate components.yaml")
 	}
-	operatorVersion, err := calico.GetPinnedOperatorVersion(cfg.RepoRootDir)
+	operatorVersion, err := calico.RetrievePinnedOperatorVersion(cfg.RepoRootDir)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get operator version")
 	}
@@ -68,7 +68,7 @@ func OperatorHashreleaseBuild(runner *docker.DockerRunner, cfg *config.Config) {
 }
 
 func OperatorHashreleasePush(runner *docker.DockerRunner, cfg *config.Config) {
-	operatorVersion, err := calico.GetPinnedOperatorVersion(cfg.RepoRootDir)
+	operatorVersion, err := calico.RetrievePinnedOperatorVersion(cfg.RepoRootDir)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get operator version")
 	}
@@ -94,11 +94,11 @@ func HashreleaseBuild(cfg *config.Config) {
 	if err := os.MkdirAll(hashreleaseDir(cfg.RepoRootDir), os.ModePerm); err != nil {
 		logrus.WithError(err).Fatal("Failed to create hashrelease directory")
 	}
-	releaseVersion, err := calico.GetPinnedVersion(cfg.RepoRootDir)
+	releaseVersion, err := calico.RetrievePinnedCalicoVersion(cfg.RepoRootDir)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get candidate name")
 	}
-	operatorVersion, err := calico.GetPinnedOperatorVersion(cfg.RepoRootDir)
+	operatorVersion, err := calico.RetrievePinnedOperatorVersion(cfg.RepoRootDir)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get operator version")
 	}
@@ -119,45 +119,35 @@ func HashreleaseBuild(cfg *config.Config) {
 }
 
 func HashreleasePush(cfg *config.Config) {
-	sshConfig := &docs.SSHConfig{
-		Host:    cfg.DocsHost,
-		User:    cfg.DocsUser,
-		KeyPath: cfg.DocsKey,
-		Port:    cfg.DocsPort,
-	}
-	if host == "" {
-		logrus.Fatal("Docs host is not set")
-	}
-	name, err := calico.GetReleaseName(cfg.RepoRootDir)
+	sshConfig := command.NewSSHConfig(cfg.DocsHost, cfg.DocsUser, cfg.DocsKey, cfg.DocsPort)
+	name, err := calico.RetrieveReleaseName(cfg.RepoRootDir)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get release name")
 	}
-	note, err := calico.GetPinnedVersionNote(cfg.RepoRootDir)
+	note, err := calico.RetrievePinnedVersionNote(cfg.RepoRootDir)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get pinned version note")
 	}
-	releaseVersion, err := calico.GetPinnedVersion(cfg.RepoRootDir)
+	releaseVersion, err := calico.RetrievePinnedCalicoVersion(cfg.RepoRootDir)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get candidate name")
 	}
-	_releaseVersion := version.Version(releaseVersion)
 	// TODO: send image to image scan server
-	// TODO: ensure release does not exist in server
+	releaseHash, err := calico.RetrievePinnedVersionHash(cfg.RepoRootDir)
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to get release hash")
+	}
+	_releaseVersion := version.Version(releaseVersion)
 	logrus.WithField("note", note).Info("Publishing hashrelease")
-	if err := docs.PublishHashrelease(name, _releaseVersion.Stream(), hashreleaseDir(cfg.RepoRootDir), sshConfig); err != nil {
+	if err := docs.PublishHashrelease(name, releaseHash, note, _releaseVersion.Stream(), hashreleaseDir(cfg.RepoRootDir), sshConfig); err != nil {
 		logrus.WithError(err).Fatal("Failed to publish hashrelease")
 	}
 }
 
 func HashreleaseClean(cfg *config.Config) {
-	sshConfig := &docs.SSHConfig{
-		Host:    cfg.DocsHost,
-		User:    cfg.DocsUser,
-		KeyPath: cfg.DocsKey,
-		Port:    cfg.DocsPort,
-	}
+	sshConfig := command.NewSSHConfig(cfg.DocsHost, cfg.DocsUser, cfg.DocsKey, cfg.DocsPort)
 	logrus.Info("Cleaning up old hashreleases")
-	if err := docs.DeleteOldHashreleases(sshConfig); err != nil {
+	if err := docs.DeleteOldHashreleases(sshConfig, -1); err != nil {
 		logrus.WithError(err).Fatal("Failed to delete old hashreleases")
 	}
 }

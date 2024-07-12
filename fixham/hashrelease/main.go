@@ -12,6 +12,7 @@ func main() {
 		goyek.OperatorHashrelease(b.DockerRunner(), b.Config()),
 		goyek.HashreleaseBuild(b.Config()),
 		goyek.Hashrelease(b.Config()),
+		goyek.HashreleaseClean(b.Config()),
 	)
 	b.Register()
 }

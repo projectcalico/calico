@@ -77,3 +77,16 @@ func Hashrelease(cfg *config.Config) *GoyekTask {
 		Deps: []string{"build"},
 	}
 }
+
+func HashreleaseClean(cfg *config.Config) *GoyekTask {
+	return &GoyekTask{
+		Task: _goyek.Task{
+			Name:  "clean",
+			Usage: "Clean up older hashreleases",
+			Action: func(a *_goyek.A) {
+				tasks.HashreleaseClean(cfg)
+			},
+			Parallel: false,
+		},
+	}
+}

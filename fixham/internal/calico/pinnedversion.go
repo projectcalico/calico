@@ -31,11 +31,13 @@ type PinnedVersionData struct {
 	CalicoVersion string
 	Operator      Component
 	Note          string
+	Hash          string
 }
 
 type PinnedVersion struct {
 	Title          string               `yaml:"title"`
 	ReleaseName    string               `yaml:"release_name"`
+	Hash           string               `yaml:"full_hash"`
 	Note           string               `yaml:"note"`
 	ManifestURL    string               `yaml:"manifest_url"`
 	TigeraOperator Component            `yaml:"tigera-operator"`
@@ -81,6 +83,7 @@ func GeneratePinnedVersion(rootDir, devTagSuffix string) (string, error) {
 			Version: operatorVersion + "-" + releaseName,
 			Image:   operator.ImageName,
 		},
+		Hash: calicoVersion + "-" + operatorVersion,
 		Note: fmt.Sprintf("%s - generated at %s using %s release branch with %s operator branch",
 			releaseName, time.Now().Format(time.RFC1123), calicoBranch, operatorBranch),
 	}
@@ -119,7 +122,7 @@ func GeneratePinnedVersionForOperator(rootDir string) (string, error) {
 	return operatorComponentsPath, nil
 }
 
-func GetPinnedOperatorVersion(rootDir string) (string, error) {
+func RetrievePinnedOperatorVersion(rootDir string) (string, error) {
 	operatorComponentsPath := rootDir + operatorComponentsPath
 	logrus.WithField("operator components file", operatorComponentsPath).Debug("Reading components.yaml")
 	operatorComponentsData, err := os.ReadFile(operatorComponentsPath)
@@ -133,7 +136,7 @@ func GetPinnedOperatorVersion(rootDir string) (string, error) {
 	return pinnedVersion.TigeraOperator.Version, nil
 }
 
-func GetReleaseName(rootDir string) (string, error) {
+func RetrieveReleaseName(rootDir string) (string, error) {
 	pinnedVersionPath := rootDir + pinnedVersionOutputPath
 	var pinnedversion = []PinnedVersion{}
 	if pinnedVersionData, err := os.ReadFile(pinnedVersionPath); err != nil {
@@ -144,7 +147,7 @@ func GetReleaseName(rootDir string) (string, error) {
 	return pinnedversion[0].ReleaseName, nil
 }
 
-func GetPinnedVersion(rootDir string) (string, error) {
+func RetrievePinnedCalicoVersion(rootDir string) (string, error) {
 	pinnedVersionPath := rootDir + pinnedVersionOutputPath
 	var pinnedversion = []PinnedVersion{}
 	if pinnedVersionData, err := os.ReadFile(pinnedVersionPath); err != nil {
@@ -155,7 +158,7 @@ func GetPinnedVersion(rootDir string) (string, error) {
 	return pinnedversion[0].Title, nil
 }
 
-func GetPinnedVersionNote(rootDir string) (string, error) {
+func RetrievePinnedVersionNote(rootDir string) (string, error) {
 	pinnedVersionPath := rootDir + pinnedVersionOutputPath
 	var pinnedversion = []PinnedVersion{}
 	if pinnedVersionData, err := os.ReadFile(pinnedVersionPath); err != nil {
@@ -164,4 +167,15 @@ func GetPinnedVersionNote(rootDir string) (string, error) {
 		return "", err
 	}
 	return pinnedversion[0].Note, nil
+}
+
+func RetrievePinnedVersionHash(rootDir string) (string, error) {
+	pinnedVersionPath := rootDir + pinnedVersionOutputPath
+	var pinnedversion = []PinnedVersion{}
+	if pinnedVersionData, err := os.ReadFile(pinnedVersionPath); err != nil {
+		return "", err
+	} else if err := yaml.Unmarshal([]byte(pinnedVersionData), &pinnedversion); err != nil {
+		return "", err
+	}
+	return pinnedversion[0].Hash, nil
 }
