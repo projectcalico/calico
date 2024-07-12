@@ -16,6 +16,7 @@ package common
 
 import (
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/felix/types"
 )
 
 type Callbacks struct {
@@ -51,13 +52,13 @@ type CbID struct {
 	dropper func()
 }
 
-type AddInterfaceFunc func(ifaceName string, hostEPID proto.HostEndpointID)
+type AddInterfaceFunc func(ifaceName string, hostEPID types.HostEndpointID)
 
 type AddInterfaceFuncs struct {
 	fs AddInterfaceFunc
 }
 
-func (fs *AddInterfaceFuncs) Invoke(ifaceName string, hostEPID proto.HostEndpointID) {
+func (fs *AddInterfaceFuncs) Invoke(ifaceName string, hostEPID types.HostEndpointID) {
 	if fs.fs != nil {
 		fs.fs(ifaceName, hostEPID)
 	}
@@ -103,13 +104,13 @@ func (fs *RemoveInterfaceFuncs) Append(f RemoveInterfaceFunc) *CbID {
 	}
 }
 
-type UpdateInterfaceFunc func(ifaceName string, newHostEPID proto.HostEndpointID)
+type UpdateInterfaceFunc func(ifaceName string, newHostEPID types.HostEndpointID)
 
 type UpdateInterfaceFuncs struct {
 	fs UpdateInterfaceFunc
 }
 
-func (fs *UpdateInterfaceFuncs) Invoke(ifaceName string, newHostEPID proto.HostEndpointID) {
+func (fs *UpdateInterfaceFuncs) Invoke(ifaceName string, newHostEPID types.HostEndpointID) {
 	if fs.fs != nil {
 		fs.fs(ifaceName, newHostEPID)
 	}
@@ -129,13 +130,13 @@ func (fs *UpdateInterfaceFuncs) Append(f UpdateInterfaceFunc) *CbID {
 	}
 }
 
-type UpdateHostEndpointFunc func(hostEPID proto.HostEndpointID)
+type UpdateHostEndpointFunc func(hostEPID types.HostEndpointID)
 
 type UpdateHostEndpointFuncs struct {
 	fs UpdateHostEndpointFunc
 }
 
-func (fs *UpdateHostEndpointFuncs) Invoke(hostEPID proto.HostEndpointID) {
+func (fs *UpdateHostEndpointFuncs) Invoke(hostEPID types.HostEndpointID) {
 	if fs.fs != nil {
 		fs.fs(hostEPID)
 	}
@@ -155,13 +156,13 @@ func (fs *UpdateHostEndpointFuncs) Append(f UpdateHostEndpointFunc) *CbID {
 	}
 }
 
-type RemoveHostEndpointFunc func(hostEPID proto.HostEndpointID)
+type RemoveHostEndpointFunc func(hostEPID types.HostEndpointID)
 
 type RemoveHostEndpointFuncs struct {
 	fs RemoveHostEndpointFunc
 }
 
-func (fs *RemoveHostEndpointFuncs) Invoke(hostEPID proto.HostEndpointID) {
+func (fs *RemoveHostEndpointFuncs) Invoke(hostEPID types.HostEndpointID) {
 	if fs.fs != nil {
 		fs.fs(hostEPID)
 	}

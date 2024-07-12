@@ -20,6 +20,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/felix/types"
 )
 
 var (
@@ -48,10 +49,10 @@ var _ = Describe("StatusCombiner", func() {
 				done := make(chan bool)
 				go func() {
 					statusCombiner.OnEndpointStatusUpdate(
-						4, epID, v4Status,
+						4, types.ProtoToWorkloadEndpointID(&epID), v4Status,
 					)
 					statusCombiner.OnEndpointStatusUpdate(
-						6, epID, v6Status,
+						6, types.ProtoToWorkloadEndpointID(&epID), v6Status,
 					)
 					statusCombiner.Apply()
 					done <- true
@@ -71,10 +72,10 @@ var _ = Describe("StatusCombiner", func() {
 				// Then remove the status, should get cleaned up.
 				go func() {
 					statusCombiner.OnEndpointStatusUpdate(
-						4, epID, "",
+						4, types.ProtoToWorkloadEndpointID(&epID), "",
 					)
 					statusCombiner.OnEndpointStatusUpdate(
-						6, epID, "",
+						6, types.ProtoToWorkloadEndpointID(&epID), "",
 					)
 					statusCombiner.Apply()
 				}()
@@ -111,7 +112,7 @@ var _ = Describe("StatusCombiner", func() {
 				done := make(chan bool)
 				go func() {
 					statusCombiner.OnEndpointStatusUpdate(
-						4, epID, v4Status,
+						4, types.ProtoToWorkloadEndpointID(&epID), v4Status,
 					)
 					statusCombiner.Apply()
 					done <- true
@@ -131,7 +132,7 @@ var _ = Describe("StatusCombiner", func() {
 				// Then remove the status, should get cleaned up.
 				go func() {
 					statusCombiner.OnEndpointStatusUpdate(
-						4, epID, "",
+						4, types.ProtoToWorkloadEndpointID(&epID), "",
 					)
 					statusCombiner.Apply()
 				}()

@@ -20,11 +20,11 @@ import (
 	"fmt"
 	"os"
 
-	dikastesproto "github.com/projectcalico/calico/app-policy/proto"
-	"github.com/projectcalico/calico/app-policy/uds"
-
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
+
+	dikastesproto "github.com/projectcalico/calico/app-policy/proto"
+	"github.com/projectcalico/calico/app-policy/uds"
 )
 
 const DefaultDialPath = "/var/run/dikastes/dikastes.sock"
@@ -35,7 +35,7 @@ func main() {
 	flag.Parse()
 
 	opts := uds.GetDialOptions()
-	conn, err := grpc.Dial(dialPath, opts...)
+	conn, err := grpc.NewClient(dialPath, opts...)
 	if err != nil {
 		log.Fatalf("fail to dial: %v", err)
 	}
