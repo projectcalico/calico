@@ -61,6 +61,9 @@ type Config struct {
 	DocsPort string `envconfig:"DOCS_PORT"`
 	DocsUser string `envconfig:"DOCS_USER"`
 	DocsKey  string `envconfig:"DOCS_KEY"`
+
+	// GithubToken is the token for the GitHub API
+	GithubToken string `envconfig:"GITHUB_TOKEN"`
 }
 
 // LoadConfig loads the configuration from the environment

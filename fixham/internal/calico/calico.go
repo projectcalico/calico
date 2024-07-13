@@ -8,6 +8,10 @@ import (
 	"github.com/projectcalico/calico/fixham/internal/command"
 )
 
+const (
+	ProductName = "calico"
+)
+
 func GitBranch(dir string) (string, error) {
 	return command.GitInDir(dir, "rev-parse", "--abbrev-ref", "HEAD")
 }

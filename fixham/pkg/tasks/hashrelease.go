@@ -16,7 +16,7 @@ import (
 )
 
 func hashreleaseDir(rootDir string) string {
-	return rootDir + "/hashrelease"
+	return rootDir + "/calico/hashrelease"
 }
 
 func PinnedVersion(cfg *config.Config) {
@@ -150,4 +150,8 @@ func HashreleaseClean(cfg *config.Config) {
 	if err := docs.DeleteOldHashreleases(sshConfig, -1); err != nil {
 		logrus.WithError(err).Fatal("Failed to delete old hashreleases")
 	}
+}
+
+func HashreleaseNotes(cfg *config.Config) {
+	generateReleaseNotes(cfg, hashreleaseDir(cfg.RepoRootDir))
 }

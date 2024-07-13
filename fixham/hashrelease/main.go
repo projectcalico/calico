@@ -13,6 +13,7 @@ func main() {
 		goyek.HashreleaseBuild(b.Config()),
 		goyek.Hashrelease(b.Config()),
 		goyek.HashreleaseClean(b.Config()),
+		goyek.HashreleaseNotes(b.Config()),
 	)
 	b.Register()
 }

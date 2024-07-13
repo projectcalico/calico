@@ -5,6 +5,10 @@ import (
 	"strings"
 
 	"github.com/Masterminds/semver/v3"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
+
+	"github.com/projectcalico/calico/fixham/internal/calico"
 )
 
 type Version string
@@ -27,6 +31,11 @@ func (v *Version) FormattedString() string {
 		return ""
 	}
 	return fmt.Sprintf("v%v", *v)
+}
+
+func (v *Version) Milestone() string {
+	_v := semver.MustParse(string(*v))
+	return fmt.Sprintf("%s v%d.%d.%d", cases.Title(language.English).String(calico.ProductName), _v.Major(), _v.Minor(), _v.Patch())
 }
 
 func (v *Version) Stream() string {
