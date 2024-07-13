@@ -44,7 +44,7 @@ import (
 )
 
 const (
-	IPIPIfaceName = "tunl0"
+	IPIPIfaceName = "ipip.calico"
 )
 
 // ipipManager manages the all-hosts IP set, which is used by some rules in our static chains
@@ -554,10 +554,18 @@ func (m *ipipManager) configureIPIPDevice(mtu int, address net.IP, xsumBroken bo
 	})
 	logCxt.Debug("Configuring IPIP tunnel")
 
+	localAddr := m.getLocalHostAddr()
+	// TODO: fix this
+	if localAddr == "" {
+		m.logCtx.Debug("Missing local address information, retrying...")
+		return fmt.Errorf("Not found device")
+	}
+
 	la := netlink.NewLinkAttrs()
 	la.Name = m.ipipDevice
 	ipip := &netlink.Iptun{
 		LinkAttrs: la,
+		Local:     net.ParseIP(localAddr),
 	}
 
 	link, err := m.nlHandle.LinkByName(IPIPIfaceName)
@@ -569,7 +577,7 @@ func (m *ipipManager) configureIPIPDevice(mtu int, address net.IP, xsumBroken bo
 		// module.
 		if err := m.nlHandle.LinkAdd(ipip); err == syscall.EEXIST {
 			// Device already exists - likely a race.
-			m.logCtx.Debug("VXLAN device already exists, likely created by someone else.")
+			m.logCtx.Debug("IPIP device already exists, likely created by someone else.")
 		} else if err != nil {
 			// Error other than "device exists" - return it.
 			return err

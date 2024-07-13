@@ -127,7 +127,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 			if brokenXSum {
 				It("should disable checksum offload", func() {
 					Eventually(func() string {
-						out, err := felixes[0].ExecOutput("ethtool", "-k", "tunl0")
+						out, err := felixes[0].ExecOutput("ethtool", "-k", "ipip.calico")
 						if err != nil {
 							return fmt.Sprintf("ERROR: %v", err)
 						}
@@ -137,7 +137,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 			} else {
 				It("should not disable checksum offload", func() {
 					Eventually(func() string {
-						out, err := felixes[0].ExecOutput("ethtool", "-k", "tunl0")
+						out, err := felixes[0].ExecOutput("ethtool", "-k", "ipip.calico")
 						if err != nil {
 							return fmt.Sprintf("ERROR: %v", err)
 						}
@@ -162,9 +162,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 				}
 			})
 
-			It("should have workload to workload connectivity", func() {
+			It("Mazdak should have workload to workload connectivity", func() {
 				cc.ExpectSome(w[0], w[1])
 				cc.ExpectSome(w[1], w[0])
+				//time.Sleep(time.Minute * 60)
 				cc.CheckConnectivity()
 			})
 
@@ -556,7 +557,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 				mtuStr := "mtu 1480"
 				for _, felix := range felixes {
 					Eventually(func() string {
-						out, _ := felix.ExecOutput("ip", "-d", "link", "show", "tunl0")
+						out, _ := felix.ExecOutput("ip", "-d", "link", "show", "ipip.calico")
 						return out
 					}, "60s", "500ms").Should(ContainSubstring(mtuStr))
 				}
@@ -575,7 +576,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 				for _, felix := range felixes {
 					// Felix checks host MTU every 30s
 					Eventually(func() string {
-						out, _ := felix.ExecOutput("ip", "-d", "link", "show", "tunl0")
+						out, _ := felix.ExecOutput("ip", "-d", "link", "show", "ipip.calico")
 						return out
 					}, "60s", "500ms").Should(ContainSubstring(mtuStr))
 
@@ -598,7 +599,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 				for _, felix := range felixes {
 					// Felix checks host MTU every 30s
 					Eventually(func() string {
-						out, _ := felix.ExecOutput("ip", "-d", "link", "show", "tunl0")
+						out, _ := felix.ExecOutput("ip", "-d", "link", "show", "ipip.calico")
 						return out
 					}, "60s", "500ms").Should(ContainSubstring("mtu 1300"))
 				}
@@ -692,13 +693,13 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 						}
 					}
 
-					// Pause felix[2], so it can't touch the dataplane; we want to
+					// Pause felix[0], so it can't touch the dataplane; we want to
 					// test that felix[0] blocks the traffic.
 					pid := felixes[0].GetFelixPID()
 					felixes[0].Exec("kill", "-STOP", fmt.Sprint(pid))
 
 					tc.Felixes[0].Exec("ip", "route", "add", "10.65.222.1", "via",
-						externalClient.IP, "dev", "tunl0", "onlink", "proto", "90")
+						externalClient.IP, "dev", "ipip.calico", "onlink", "proto", "90")
 
 					By("testing that the ext client can connect via ipip")
 					cc.ResetExpectations()
