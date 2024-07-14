@@ -222,6 +222,14 @@ func (m *InterfaceMonitor) handleNetlinkRouteUpdate(update netlink.RouteUpdate) 
 	if update.Dst == nil {
 		return
 	}
+	if update.Dst.IP.IsUnspecified() {
+		if ones, _ := update.Dst.Mask.Size(); ones == 0 {
+			// Default route, ignore.  These used to be filtered out by the
+			// nil check above, but the netlink library was changed to return
+			// an explicit unspecified CIDR in that case.
+			return
+		}
+	}
 
 	addr := update.Dst.IP.String()
 	exists := update.Type == unix.RTM_NEWROUTE
