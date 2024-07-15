@@ -24,7 +24,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 
-	"github.com/projectcalico/calico/felix/dataplane/common"
+	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
 	"github.com/projectcalico/calico/felix/deltatracker"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/ipsets"
@@ -35,7 +35,7 @@ import (
 	"sigs.k8s.io/knftables"
 )
 
-var _ common.IPSetsDataplane = &IPSets{}
+var _ dpsets.IPSetsDataplane = &IPSets{}
 
 var (
 	gaugeVecNumSets = prometheus.NewGaugeVec(prometheus.GaugeOpts{
