@@ -29,10 +29,12 @@ var expected_images = []string{
 	"calico/csi",
 }
 
-var expected_windows_tags = []string{
-	"windows-ltsc2022",
-	"windows-1809",
-}
+// Commenting these out because we don't currently tag the
+// individual windows images. Should we?
+// var expected_windows_tags = []string{
+// 	"windows-ltsc2022",
+// 	"windows-1809",
+// }
 
 var expected_windows_images = []string{
 	"calico/cni-windows",
