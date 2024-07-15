@@ -732,8 +732,10 @@ func (s *IPSets) ApplyDeletions() bool {
 
 	// ApplyDeletions() marks the end of the two-phase "apply". Piggyback on that to
 	// update the gauge that records how many IP sets we own.
+	s.gaugeNumSets.Set(float64(s.setNameToProgrammedMetadata.Dataplane().Len()))
+
+	// Determine if we need to be rescheduled.
 	numDeletionsPending := s.setNameToProgrammedMetadata.PendingDeletions().Len()
-	s.gaugeNumSets.Set(float64(numDeletionsPending))
 	if deletedSets.Len() == 0 {
 		// We had nothing to delete, or we only encountered errors, don't
 		// ask to be rescheduled.
