@@ -197,7 +197,10 @@ while ($True)
                 if ($LastExitCode -EQ 0)
                 {
                     Write-Host "Calico node initialisation succeeded; monitoring kubelet for restarts..."
-                    Restart-TokenRefresher
+                    # Token refresher only needs to run in hostprocess containers
+                    if ($env:CONTAINER_SANDBOX_MOUNT_POINT) {
+                        Restart-TokenRefresher
+                    }
                     break
                 }
 
@@ -212,19 +215,10 @@ while ($True)
         $kubeletPid = -1
     }
 
-    # Upgrade service is not needed if node is running in a hostprocess container.
-    if (-not $env:CONTAINER_SANDBOX_MOUNT_POINT) {
-        if (!(Get-UpgradeService)) {
-            # If upgrade service has not been running, check if we should run upgrade service.
-            .\calico-node.exe -should-install-windows-upgrade
-            if ($LastExitCode -EQ 0) {
-                Install-UpgradeService
-                Start-Service CalicoUpgrade
-            }
-        }
+    # Token refresher only needs to run in hostprocess containers
+    if ($env:CONTAINER_SANDBOX_MOUNT_POINT) {
+        Ensure-TokenRefresher
     }
-
-    Ensure-TokenRefresher
 
     Start-Sleep 10
 }
