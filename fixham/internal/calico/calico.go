@@ -31,7 +31,9 @@ func GitVersionDirty(dir, devTagSuffix string) (string, error) {
 }
 
 func ReleaseWindowsArchive(rootDir, version, outDir string) error {
-	if _, err := command.MakeInDir(rootDir+"/node", []string{"release-windows-archive"}, []string{"VERSION=" + version}); err != nil {
+	env := os.Environ()
+	env = append(env, "VERSION="+version)
+	if _, err := command.MakeInDir(rootDir+"/node", []string{"release-windows-archive"}, env); err != nil {
 		logrus.WithError(err).Error("Failed to make release-windows-archive")
 		return err
 	}
@@ -54,7 +56,7 @@ func HelmArchive(rootDir, version, operatorVersion, outDir string) error {
 		logrus.WithError(err).Error("Failed to update operator version in values.yaml")
 		return err
 	}
-	if _, err := command.MakeInDir(rootDir, []string{"chart"}, nil); err != nil {
+	if _, err := command.MakeInDir(rootDir, []string{"chart"}, os.Environ()); err != nil {
 		logrus.WithError(err).Error("Failed to make helm chart")
 		return err
 	}
@@ -71,7 +73,10 @@ func HelmArchive(rootDir, version, operatorVersion, outDir string) error {
 }
 
 func GenerateManifests(rootDir, version, operatorVersion, outDir string) error {
-	if _, err := command.MakeInDir(rootDir, []string{"gen-manifests"}, []string{"CALICO_VERSION=" + version, "OPERATOR_VERSION=" + operatorVersion}); err != nil {
+	env := os.Environ()
+	env = append(env, "CALICO_VERSION="+version)
+	env = append(env, "OPERATOR_VERSION="+operatorVersion)
+	if _, err := command.MakeInDir(rootDir, []string{"gen-manifests"}, env); err != nil {
 		logrus.WithError(err).Error("Failed to make manifests")
 		return err
 	}
@@ -79,7 +84,7 @@ func GenerateManifests(rootDir, version, operatorVersion, outDir string) error {
 		logrus.WithError(err).Error("Failed to copy manifests to output directory")
 		return err
 	}
-	if _, err := command.MakeInDir(rootDir, []string{"bin/ocp.tgz"}, nil); err != nil {
+	if _, err := command.MakeInDir(rootDir, []string{"bin/ocp.tgz"}, os.Environ()); err != nil {
 		logrus.WithError(err).Error("Failed to make openshift manifests archive")
 		return err
 	}

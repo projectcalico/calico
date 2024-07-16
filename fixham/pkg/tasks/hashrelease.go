@@ -102,7 +102,6 @@ func HashreleaseBuild(cfg *config.Config) {
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get operator version")
 	}
-	// TODO: generate release notes to hashrelease/release-notes
 	if err := calico.ReleaseWindowsArchive(cfg.RepoRootDir, releaseVersion, hashreleaseDir(cfg.RepoRootDir)+"/files/windows"); err != nil {
 		logrus.WithError(err).Fatal("Failed to release windows archive")
 	}

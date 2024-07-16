@@ -2,6 +2,7 @@ package operator
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/projectcalico/calico/fixham/internal/command"
@@ -12,22 +13,29 @@ const (
 )
 
 func GenVersion(rootDir, componentsVersionPath string) error {
-	if _, err := command.MakeInDir(operatorDir(rootDir), []string{"gen-versions"},
-		[]string{"OS_VERSIONS=" + componentsVersionPath, "COMMON_VERSIONS=" + componentsVersionPath}); err != nil {
+	env := os.Environ()
+	env = append(env, "OS_VERSIONS="+componentsVersionPath)
+	env = append(env, "COMMON_VERSIONS="+componentsVersionPath)
+	if _, err := command.MakeInDir(operatorDir(rootDir), []string{"gen-versions"}, env); err != nil {
 		return err
 	}
 	return nil
 }
 
 func ImageAll(archs []string, version string) error {
-	if _, err := command.Make([]string{"image-all"}, []string{fmt.Sprintf("ARCHES=\"%s\"" + strings.Join(archs, " ")), "VERSION=" + version}); err != nil {
+	env := os.Environ()
+	env = append(env, fmt.Sprintf("ARCHES=\"%s\"", strings.Join(archs, " ")))
+	env = append(env, "VERSION="+version)
+	if _, err := command.Make([]string{"image-all"}, env); err != nil {
 		return err
 	}
 	return nil
 }
 
 func InitImage(version string) error {
-	if _, err := command.Make([]string{"image-init"}, []string{"VERSION=" + version}); err != nil {
+	env := os.Environ()
+	env = append(env, "VERSION="+version)
+	if _, err := command.Make([]string{"image-init"}, env); err != nil {
 		return err
 	}
 	return nil
