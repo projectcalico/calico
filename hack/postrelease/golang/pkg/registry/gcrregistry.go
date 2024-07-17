@@ -26,7 +26,7 @@ func NewGCRRegistry(hostname string) GCRRegistry {
 }
 
 var mutex sync.Mutex
-var cache = make(map[string][]string)
+var cache2 = make(map[string][]string)
 
 var setAccessToken sync.Once
 
@@ -94,7 +94,7 @@ func (reg GCRRegistry) CheckImageExists(Image container.Image) error {
 	// Lock our mutex so that we can make sure we're the only
 	// ones actually fetching this result from the API
 	mutex.Lock()
-	if imageManifestTagsCache, ok := cache[cache_key]; ok {
+	if imageManifestTagsCache, ok := cache2[cache_key]; ok {
 		imageManifestTags = imageManifestTagsCache
 	} else {
 		imageManifestResults, err := reg.GetImageTagsList(reg.HostName, ImageBaseName)
@@ -102,7 +102,7 @@ func (reg GCRRegistry) CheckImageExists(Image container.Image) error {
 			return fmt.Errorf("unable to get tags: %v", err)
 		}
 		imageManifestTags = imageManifestResults
-		cache[cache_key] = imageManifestTags
+		cache2[cache_key] = imageManifestTags
 	}
 	// All done, unlock for the next test to run
 	mutex.Unlock()
@@ -119,7 +119,7 @@ func (reg GCRRegistry) CheckImageExistsOld(Image container.Image) error {
 	var cache_key = fmt.Sprintf("%s-%s", reg.HostName, ImageBaseName)
 	var imageManifestTags []string
 
-	if imageManifestTagsCache, ok := cache[cache_key]; ok {
+	if imageManifestTagsCache, ok := cache2[cache_key]; ok {
 		// fmt.Printf("Got value from cache key %s\n", cache_key)
 		imageManifestTags = imageManifestTagsCache
 	} else {
@@ -167,7 +167,7 @@ func (reg GCRRegistry) CheckImageExistsOld(Image container.Image) error {
 
 		imageManifestTags = data.Tags
 
-		cache[cache_key] = imageManifestTags
+		cache2[cache_key] = imageManifestTags
 
 	}
 

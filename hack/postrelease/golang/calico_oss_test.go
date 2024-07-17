@@ -11,22 +11,32 @@ import (
 )
 
 var release_tag = "v3.27.4"
+var operator_release_version = "v1.32.4"
+
+var release_hosts = []string{
+	"docker.io",
+	"quay.io",
+	"gcr.io",
+	"us.gcr.io",
+	"asia.gcr.io",
+	"eu.gcr.io",
+}
 
 var expected_arches = []string{"amd64", "arm64", "s390x", "ppc64le"}
 
 var expected_images = []string{
-	"calico/node",
-	"calico/ctl",
-	"calico/apiserver",
-	"calico/typha",
-	"calico/cni",
-	"calico/kube-controllers",
-	// "calico/upgrade",
-	"calico/flannel-migration-controller",
-	"calico/dikastes",
-	// "calico/pilot-webhook",
-	"calico/pod2daemon-flexvol",
-	"calico/csi",
+	"node",
+	"ctl",
+	"apiserver",
+	"typha",
+	"cni",
+	"kube-controllers",
+	// "upgrade",
+	"flannel-migration-controller",
+	"dikastes",
+	// "pilot-webhook",
+	"pod2daemon-flexvol",
+	"csi",
 }
 
 // Commenting these out because we don't currently tag the
@@ -37,8 +47,8 @@ var expected_images = []string{
 // }
 
 var expected_windows_images = []string{
-	"calico/cni-windows",
-	"calico/node-windows",
+	"cni-windows",
+	"node-windows",
 }
 
 func TestGolang(t *testing.T) {
@@ -46,87 +56,87 @@ func TestGolang(t *testing.T) {
 	RunSpecs(t, "Calico OSS Postrelease Test Suite")
 }
 
+var regCheck registry.RegistryChecker
+var err error
+var imagesToTest []container.Image
+
+var _ = BeforeSuite(func() {
+	regCheck, err = registry.New()
+	if err != nil {
+		fmt.Println("I guess something failed")
+		panic(err)
+	}
+	imagesToTest = make([]container.Image, 400)
+
+	imagesToTest = append(imagesToTest, container.Image{
+		Name:     "operator",
+		Tag:      operator_release_version,
+		HostName: "quay.io",
+	})
+
+})
+
+var _ = AfterSuite(func() {
+	if cacheHits, found := regCheck.Cache.Get("CacheHit"); found {
+		fmt.Printf("Cache hits: %v\n", cacheHits)
+	}
+	if cacheMiss, found := regCheck.Cache.Get("CacheMiss"); found {
+		fmt.Printf("Cache misses: %v\n", cacheMiss)
+	}
+})
+
 var _ = Describe(
-	"Validate Container Image Publishing",
+	"Validate published image",
 	func() {
-		var operatorImage container.Image
-		var quayRegistry registry.QuayRegistry = registry.NewQuayRegistry()
-		var gcrRegistries = []registry.GCRRegistry{
-			registry.NewGCRRegistry("gcr.io"),
-			registry.NewGCRRegistry("us.gcr.io"),
-			registry.NewGCRRegistry("asia.gcr.io"),
-			registry.NewGCRRegistry("us.gcr.io"),
-		}
-		var imagesToTest = make([]container.Image, 0)
+		for _, host_name := range release_hosts {
+			Context(fmt.Sprintf("at registry %s", host_name), func() {
 
-		for _, image_name := range expected_images {
-			for _, arch_name := range expected_arches {
-				image_name := image_name
-				arch_name := arch_name
-				var containerImage = container.Image{
-					Name: image_name,
-					Tag:  fmt.Sprintf("%s-%s", release_tag, arch_name),
-				}
-				imagesToTest = append(imagesToTest, containerImage)
-			}
-		}
-
-		for _, image_name := range expected_windows_images {
-			var containerImage = container.Image{
-				Name: image_name,
-				Tag:  release_tag,
-			}
-			imagesToTest = append(imagesToTest, containerImage)
-			// Comment this out because we don't tag windows-revision-specific
-			// images when we publish a release (maybe we should?)
-			//
-			// 	for _, windows_tag := range expected_windows_tags {
-			// 		image_name := image_name
-			// 		windows_tag := windows_tag
-			// 		var containerImage = container.Image{
-			// 			Name: image_name,
-			// 			Tag:  fmt.Sprintf("%s-%s", release_tag, windows_tag),
-			// 		}
-			// 		images_to_test = append(imagesToTest, containerImage)
-
-			// 	}
-		}
-
-		BeforeEach(func() {
-			operatorImage = container.Image{
-				Name: "tigera/operator",
-				Tag:  "v1.32.3",
-			}
-
-		})
-
-		Describe("Checking Image Presence", func() {
-			Context("The operator image", func() {
-				It("should exist", func() {
-					Expect(quayRegistry.CheckImageExists(operatorImage)).NotTo(HaveOccurred())
-				})
-			})
-
-			// Context("The Quay.io repository", func() {
-			// 	for _, containerImage := range imagesToTest {
-			// 		// fmt.Println(containerImage)
-			// 		var image_path = fmt.Sprintf("%s:%s", containerImage.Name, containerImage.Tag)
-			// 		It(fmt.Sprintf("should contain %s", image_path), func() {
-			// 			Expect(quayRegistry.CheckImageExists(containerImage)).NotTo(HaveOccurred())
-			// 		})
-			// 	}
-
-			// })
-
-			for _, gcrRegistry := range gcrRegistries {
-				Context(fmt.Sprintf("The GCR Repository %s", gcrRegistry.HostName), func() {
-					for _, containerImage := range imagesToTest {
-						var image_path = fmt.Sprintf("%s:%s", containerImage.Name, containerImage.Tag)
-						It(fmt.Sprintf("should contain %s", image_path), func() {
-							Expect(gcrRegistry.CheckImageExists(containerImage)).NotTo(HaveOccurred())
+				for _, image_name := range expected_images {
+					Context(fmt.Sprintf("image %s", image_name), func() {
+						var containerImage = container.Image{
+							Name:     image_name,
+							Tag:      release_tag,
+							HostName: host_name,
+						}
+						It("should exist", func() {
+							Expect(regCheck.CheckImageTagExists(containerImage)).NotTo(HaveOccurred())
 						})
-					}
-				})
-			}
-		})
+					})
+				}
+				for _, image_name := range expected_images {
+					Context(fmt.Sprintf("image %s", image_name), func() {
+						for _, arch_name := range expected_arches {
+							image_name := image_name
+							arch_name := arch_name
+							var containerImage = container.Image{
+								Name:     image_name,
+								Tag:      fmt.Sprintf("%s-%s", release_tag, arch_name),
+								HostName: host_name,
+							}
+							Context(arch_name, Ordered, func() {
+								It("should exist", func() {
+									Expect(regCheck.CheckImageTagExists(containerImage)).NotTo(HaveOccurred())
+								})
+							})
+						}
+					})
+				}
+
+				for _, image_name := range expected_windows_images {
+					Context(fmt.Sprintf("arch-specific image %s", image_name), func() {
+						var containerImage = container.Image{
+							Name:     image_name,
+							Tag:      release_tag,
+							HostName: host_name,
+						}
+						It("should exist", func() {
+							Expect(regCheck.CheckImageTagExists(containerImage)).NotTo(HaveOccurred())
+						})
+					})
+
+				}
+
+			})
+		}
+
 	})
