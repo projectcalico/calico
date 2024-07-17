@@ -3,18 +3,32 @@ package container
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
 )
 
 type Image struct {
-	Name string
-	Tag  string
+	HostName string
+	Name     string
+	Tag      string
 }
 
 func (i Image) FullPath() string {
-	return fmt.Sprintf("%s:%s", i.Name, i.Tag)
+	var registryPath string
+
+	if strings.HasSuffix(i.HostName, "gcr.io") {
+		registryPath = "projectcalico-org"
+	} else {
+		registryPath = "calico"
+	}
+
+	return fmt.Sprintf("%s/%s/%s", i.HostName, registryPath, i.Name)
+}
+
+func (i Image) FullPathWithTag() string {
+	return fmt.Sprintf("%s:%s", i.FullPath(), i.Tag)
 }
 
 func (i Image) NameWithTag() string {
