@@ -42,12 +42,6 @@ import (
 )
 
 var (
-	ConnectFailed   = errors.New("connect to netlink failed")
-	ListFailed      = errors.New("netlink list operation failed")
-	UpdateFailed    = errors.New("netlink update operation failed")
-	IfaceNotPresent = errors.New("interface not present")
-	IfaceDown       = errors.New("interface down")
-
 	ipV6LinkLocalCIDR = ip.MustParseCIDROrIP("fe80::/64")
 
 	resyncTimeSummary = cprometheus.NewSummary(prometheus.SummaryOpts{
@@ -81,28 +75,6 @@ func init() {
 		gaugeVecNumIfaces,
 	)
 }
-
-const (
-	// Use this for targets with no outbound interface.
-	InterfaceNone = "*NoOIF*"
-)
-
-type TargetType string
-
-const (
-	TargetTypeLocal            TargetType = "local"
-	TargetTypeVXLAN            TargetType = "vxlan"
-	TargetTypeNoEncap          TargetType = "noencap"
-	TargetTypeOnLink           TargetType = "onlink"
-	TargetTypeGlobalUnicast    TargetType = "global-unicast"
-	TargetTypeLinkLocalUnicast TargetType = "local-unicast"
-
-	// The following target types should be used with InterfaceNone.
-	TargetTypeBlackhole   TargetType = "blackhole"
-	TargetTypeProhibit    TargetType = "prohibit"
-	TargetTypeThrow       TargetType = "throw"
-	TargetTypeUnreachable TargetType = "unreachable"
-)
 
 // RouteTable manages the Calico routes for a specific kernel routing table.
 //
@@ -1177,12 +1149,13 @@ func (r *RouteTable) applyUpdates(attempt int) error {
 	r.kernelRoutes.PendingUpdates().Iter(func(kernKey kernelRouteKey, kernRoute kernelRoute) deltatracker.IterAction {
 		cidr := kernKey.CIDR
 		dataplaneRoute, dataplaneExists := r.kernelRoutes.Dataplane().Get(kernKey)
-		if dataplaneExists && r.conntrackTracker.CIDRIsMovingInterface(cidr, dataplaneRoute.Ifindex) {
+		if dataplaneExists && r.conntrackTracker.CIDRNeedsEarlyCleanup(cidr, dataplaneRoute.Ifindex) {
 			err := r.deleteRoute(nl, kernKey)
 			if err != nil {
 				deletionErrs[kernKey] = err
 				return deltatracker.IterActionNoOp
 			}
+			// This will queue the route for conntrack cleanup.
 			r.conntrackTracker.OnDataplaneRouteDeleted(kernKey.CIDR, dataplaneRoute.Ifindex)
 		}
 		return deltatracker.IterActionNoOp
@@ -1200,6 +1173,7 @@ func (r *RouteTable) applyUpdates(attempt int) error {
 			flags = unix.RTNH_F_ONLINK
 		}
 
+		// In case we're moving a route, wait for the cleanup to finish.
 		r.conntrackTracker.WaitForPendingDeletion(kernKey.CIDR)
 
 		nlRoute := &netlink.Route{
@@ -1485,70 +1459,6 @@ func (r *RouteTable) addStaticARPEntry(
 func (r *RouteTable) updateGauges() {
 	r.gaugeNumRoutes.Set(float64(r.kernelRoutes.Desired().Len()))
 	r.gaugeNumIfaces.Set(float64(len(r.ifaceIndexToName)))
-}
-
-type Target struct {
-	Type     TargetType
-	CIDR     ip.CIDR
-	GW       ip.Addr
-	Src      ip.Addr
-	DestMAC  net.HardwareAddr
-	Protocol netlink.RouteProtocol
-}
-
-func (t Target) Equal(t2 Target) bool {
-	return reflect.DeepEqual(t, t2)
-}
-
-func (t Target) RouteType() int {
-	switch t.Type {
-	case TargetTypeLocal:
-		return unix.RTN_LOCAL
-	case TargetTypeThrow:
-		return unix.RTN_THROW
-	case TargetTypeBlackhole:
-		return unix.RTN_BLACKHOLE
-	case TargetTypeProhibit:
-		return unix.RTN_PROHIBIT
-	case TargetTypeUnreachable:
-		return unix.RTN_UNREACHABLE
-	default:
-		return unix.RTN_UNICAST
-	}
-}
-
-func (t Target) RouteScope() netlink.Scope {
-	switch t.Type {
-	case TargetTypeLocal:
-		return netlink.SCOPE_HOST
-	case TargetTypeLinkLocalUnicast:
-		return netlink.SCOPE_LINK
-	case TargetTypeGlobalUnicast:
-		return netlink.SCOPE_UNIVERSE
-	case TargetTypeNoEncap:
-		return netlink.SCOPE_UNIVERSE
-	case TargetTypeVXLAN:
-		return netlink.SCOPE_UNIVERSE
-	case TargetTypeThrow:
-		return netlink.SCOPE_UNIVERSE
-	case TargetTypeBlackhole:
-		return netlink.SCOPE_UNIVERSE
-	case TargetTypeProhibit:
-		return netlink.SCOPE_UNIVERSE
-	case TargetTypeOnLink:
-		return netlink.SCOPE_LINK
-	default:
-		return netlink.SCOPE_LINK
-	}
-}
-
-func (t Target) Flags() netlink.NextHopFlag {
-	switch t.Type {
-	case TargetTypeVXLAN, TargetTypeNoEncap, TargetTypeOnLink:
-		return unix.RTNH_F_ONLINK
-	default:
-		return 0
-	}
 }
 
 // kernelRouteKey represents the kernel's FIB key.  The kernel allows routes
