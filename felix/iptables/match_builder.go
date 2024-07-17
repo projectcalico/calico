@@ -32,7 +32,8 @@ var _ generictables.MatchCriteria = matchCriteria{}
 type matchCriteria []string
 
 func Match() generictables.MatchCriteria {
-	return new(matchCriteria)
+	var m matchCriteria
+	return m
 }
 
 func (m matchCriteria) Render() string {

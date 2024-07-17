@@ -18,7 +18,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	"github.com/projectcalico/calico/felix/dataplane/common"
+	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/iptables"
@@ -31,12 +31,12 @@ var _ = Describe("Masquerade manager", func() {
 	var (
 		masqMgr      *masqManager
 		natTable     *mockTable
-		ipSets       *common.MockIPSets
+		ipSets       *dpsets.MockIPSets
 		ruleRenderer rules.RuleRenderer
 	)
 
 	BeforeEach(func() {
-		ipSets = common.NewMockIPSets()
+		ipSets = dpsets.NewMockIPSets()
 		natTable = newMockTable("nat")
 		ruleRenderer = rules.NewRenderer(rules.Config{
 			IPSetConfigV4: ipsets.NewIPVersionConfig(

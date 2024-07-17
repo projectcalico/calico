@@ -31,7 +31,7 @@ import (
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
 
-	"github.com/projectcalico/calico/felix/dataplane/common"
+	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/ethtool"
 	"github.com/projectcalico/calico/felix/ip"
@@ -91,7 +91,7 @@ type vxlanManager struct {
 
 	// Indicates if configuration has changed since the last apply.
 	routesDirty       bool
-	ipsetsDataplane   common.IPSetsDataplane
+	ipsetsDataplane   dpsets.IPSetsDataplane
 	ipSetMetadata     ipsets.IPSetMetadata
 	externalNodeCIDRs []string
 	vtepsDirty        bool
@@ -117,7 +117,7 @@ type VXLANFDB interface {
 }
 
 func newVXLANManager(
-	ipsetsDataplane common.IPSetsDataplane,
+	ipsetsDataplane dpsets.IPSetsDataplane,
 	rt routetable.RouteTableInterface,
 	fdb VXLANFDB,
 	deviceName string,
@@ -192,7 +192,7 @@ func newVXLANManager(
 }
 
 func newVXLANManagerWithShims(
-	ipsetsDataplane common.IPSetsDataplane,
+	ipsetsDataplane dpsets.IPSetsDataplane,
 	rt, brt routetable.RouteTableInterface,
 	fdb VXLANFDB,
 	deviceName string,

@@ -53,6 +53,7 @@ import (
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 	"github.com/projectcalico/calico/felix/config"
 	"github.com/projectcalico/calico/felix/dataplane/common"
+	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/idalloc"
@@ -287,7 +288,7 @@ type InternalDataplane struct {
 	natTables    []generictables.Table
 	rawTables    []generictables.Table
 	filterTables []generictables.Table
-	ipSets       []common.IPSetsDataplane
+	ipSets       []dpsets.IPSetsDataplane
 
 	ipipManager *ipipManager
 
@@ -497,7 +498,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 	var nftablesV4RootTable generictables.Table
 	var mangleTableV4, natTableV4, rawTableV4, filterTableV4 generictables.Table
-	var ipSetsV4 common.IPSetsDataplane
+	var ipSetsV4 dpsets.IPSetsDataplane
 
 	if config.RulesConfig.NFTables {
 		// Create the underlying table.
@@ -516,7 +517,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		filterTableV4 = nftables.NewTableLayer("filter", nftablesV4RootTable)
 
 		// We use the root table for IP sets as well.
-		ipSetsV4 = nftablesV4RootTable.(common.IPSetsDataplane)
+		ipSetsV4 = nftablesV4RootTable.(dpsets.IPSetsDataplane)
 	} else {
 		// iptables mode
 		mangleTableV4 = iptables.NewTable(
@@ -661,8 +662,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		// bpffs so there's nothing to clean up
 	}
 
-	ipsetsManager := common.NewIPSetsManager("ipv4", ipSetsV4, config.MaxIPSetSize)
-	ipsetsManagerV6 := common.NewIPSetsManager("ipv6", nil, config.MaxIPSetSize)
+	ipsetsManager := dpsets.NewIPSetsManager("ipv4", ipSetsV4, config.MaxIPSetSize)
+	ipsetsManagerV6 := dpsets.NewIPSetsManager("ipv6", nil, config.MaxIPSetSize)
 
 	var mangleTableV6, natTableV6, rawTableV6, filterTableV6 generictables.Table
 	var nftablesV6RootTable generictables.Table
@@ -912,14 +913,14 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 	if config.IPv6Enabled {
 		ipSetsConfigV6 := config.RulesConfig.IPSetConfigV6
-		var ipSetsV6 common.IPSetsDataplane
+		var ipSetsV6 dpsets.IPSetsDataplane
 
 		if config.RulesConfig.NFTables {
 			mangleTableV6 = nftables.NewTableLayer("mangle", nftablesV6RootTable)
 			natTableV6 = nftables.NewTableLayer("nat", nftablesV6RootTable)
 			rawTableV6 = nftables.NewTableLayer("raw", nftablesV6RootTable)
 
-			ipSetsV6 = nftablesV6RootTable.(common.IPSetsDataplane)
+			ipSetsV6 = nftablesV6RootTable.(dpsets.IPSetsDataplane)
 		} else {
 			mangleTableV6 = iptables.NewTable(
 				"mangle",
@@ -2238,7 +2239,7 @@ func (d *InternalDataplane) apply() {
 	var ipSetsWG sync.WaitGroup
 	for _, ipSets := range d.ipSets {
 		ipSetsWG.Add(1)
-		go func(ipSets common.IPSetsDataplane) {
+		go func(ipSets dpsets.IPSetsDataplane) {
 			ipSets.ApplyUpdates()
 			d.reportHealth()
 			ipSetsWG.Done()
@@ -2318,7 +2319,7 @@ func (d *InternalDataplane) apply() {
 	var ipSetsNeedsReschedule atomic.Bool
 	for _, ipSets := range d.ipSets {
 		ipSetsWG.Add(1)
-		go func(s common.IPSetsDataplane) {
+		go func(s dpsets.IPSetsDataplane) {
 			defer ipSetsWG.Done()
 			reschedule := s.ApplyDeletions()
 			if reschedule {
@@ -2432,7 +2433,7 @@ func startBPFDataplaneComponents(ipFamily proto.IPVersion,
 	bpfmaps *bpfmap.IPMaps,
 	ipSetIDAllocator *idalloc.IDAllocator,
 	config Config,
-	ipSetsMgr *common.IPSetsManager,
+	ipSetsMgr *dpsets.IPSetsManager,
 	dp *InternalDataplane,
 ) {
 	ipSetConfig := config.RulesConfig.IPSetConfigV4
