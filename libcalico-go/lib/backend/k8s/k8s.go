@@ -347,9 +347,11 @@ func CreateKubernetesClientset(ca *apiconfig.CalicoAPIConfigSpec) (*rest.Config,
 	config.AcceptContentTypes = strings.Join([]string{runtime.ContentTypeProtobuf, runtime.ContentTypeJSON}, ",")
 	config.ContentType = runtime.ContentTypeProtobuf
 
-	// Overwrite the QPS if provided. Default QPS is 5.
+	// Overwrite the QPS if provided or set default QPS
 	if ca.K8sClientQPS != float32(0) {
 		config.QPS = ca.K8sClientQPS
+	} else {
+		config.QPS = 50
 	}
 
 	// Create the clientset. We increase the burst so that the IPAM code performs
