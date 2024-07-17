@@ -912,6 +912,10 @@ func addNeighs(neighMap map[NeighKey]*netlink.Neigh, neighs []netlink.Neigh) {
 }
 
 func (d *MockNetlinkDataplane) ExpectNeighs(family int, neighs ...netlink.Neigh) {
+	if len(neighs) == 0 {
+		ExpectWithOffset(1, d.NeighsByFamily[family]).To(HaveLen(0))
+		return
+	}
 	nm := map[NeighKey]*netlink.Neigh{}
 	addNeighs(nm, neighs)
 	ExpectWithOffset(1, d.NeighsByFamily[family]).To(Equal(nm))

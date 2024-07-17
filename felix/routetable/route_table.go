@@ -432,13 +432,8 @@ func (r *RouteTable) SetRoutes(routeClass RouteClass, ifaceName string, targets 
 	if len(newTargets) == 0 {
 		r.logCxt.Debug("No routes for this interface, removing from map.")
 		delete(r.ifaceToRoutes[routeClass], ifaceName)
-		delete(r.pendingARPs, ifaceName)
 	} else {
 		r.ifaceToRoutes[routeClass][ifaceName] = newTargets
-		if r.makeARPEntries {
-			r.logCxt.Debug("Cleaning ARP map for interface.")
-			delete(r.pendingARPs, ifaceName)
-		}
 	}
 
 	// Clean up the old CIDRs.
@@ -448,6 +443,8 @@ func (r *RouteTable) SetRoutes(routeClass RouteClass, ifaceName string, targets 
 		r.recalculateDesiredKernelRoute(cidr)
 	}
 
+	// Clean out the pending ARP list, then recalculate it below.
+	delete(r.pendingARPs, ifaceName)
 	for cidr, target := range newTargets {
 		r.recalculateDesiredKernelRoute(cidr)
 		r.updatePendingARP(ifaceName, cidr.Addr(), target.DestMAC)
@@ -746,6 +743,8 @@ func (r *RouteTable) maybeCleanUpGracePeriods() {
 			continue // Iface still exists, don't want to reset its grace period.
 		}
 		delete(r.ifaceIndexToGraceInfo, k)
+
+		r.livenessCallback()
 	}
 }
 
@@ -804,6 +803,7 @@ func (r *RouteTable) doFullResync(nl netlinkshim.Interface) error {
 		}
 		r.kernelRoutes.Dataplane().Set(kernKey, kernRoute)
 		seenKeys.Add(kernKey)
+		r.livenessCallback()
 	}
 
 	r.kernelRoutes.Dataplane().Iter(func(kernKey kernelRouteKey, kernRoute kernelRoute) {
@@ -811,6 +811,7 @@ func (r *RouteTable) doFullResync(nl netlinkshim.Interface) error {
 			r.kernelRoutes.Dataplane().Delete(kernKey)
 			r.conntrackTracker.OnDataplaneRouteDeleted(kernKey.CIDR, kernRoute.Ifindex)
 		}
+		r.livenessCallback()
 	})
 
 	// We're now in sync.
@@ -826,6 +827,7 @@ func (r *RouteTable) resyncIndividualInterfaces(nl netlinkshim.Interface) error 
 	}
 	r.opReporter.RecordOperation(fmt.Sprint("partial-resync-routes-v", r.ipVersion))
 	r.ifacesToRescan.Iter(func(ifaceName string) error {
+		r.livenessCallback()
 		err := r.resyncIface(nl, ifaceName)
 		if err != nil {
 			r.nl.MarkHandleForReopen()
@@ -963,6 +965,7 @@ func (r *RouteTable) refreshAllIfaceStates(nl netlinkshim.Interface) error {
 			}).Info("Spotted interface had changed name during resync.")
 			r.OnIfaceStateChanged(oldName, link.Attrs().Index, ifacemonitor.StateNotPresent)
 		}
+		r.livenessCallback()
 	}
 
 	// Second pass, update the state of any changed interfaces.
@@ -992,6 +995,7 @@ func (r *RouteTable) refreshAllIfaceStates(nl netlinkshim.Interface) error {
 			}
 			r.OnIfaceStateChanged(link.Attrs().Name, link.Attrs().Index, newState)
 		}
+		r.livenessCallback()
 	}
 
 	// Third pass, remove any interfaces that have disappeared.
@@ -1003,6 +1007,7 @@ func (r *RouteTable) refreshAllIfaceStates(nl netlinkshim.Interface) error {
 			r.logCxt.WithField("ifaceName", name).Info("Spotted interface not present during full resync.  Cleaning up.")
 		}
 		r.OnIfaceStateChanged(name, 0, ifacemonitor.StateNotPresent)
+		r.livenessCallback()
 	}
 	return nil
 }
@@ -1122,6 +1127,7 @@ func (r *RouteTable) applyUpdates(attempt int) error {
 	// First clean up any old routes.
 	deletionErrs := map[kernelRouteKey]error{}
 	r.kernelRoutes.PendingDeletions().Iter(func(kernKey kernelRouteKey) deltatracker.IterAction {
+		r.livenessCallback()
 		kernRoute, _ := r.kernelRoutes.PendingDeletions().Get(kernKey)
 		if r.ifaceInGracePeriod(kernRoute.Ifindex) {
 			// Don't remove unexpected routes from interfaces created recently.
@@ -1147,6 +1153,7 @@ func (r *RouteTable) applyUpdates(attempt int) error {
 	// Now do a first pass of the routes that we want to create/update and
 	// trigger any necessary conntrack cleanups for moved routes.
 	r.kernelRoutes.PendingUpdates().Iter(func(kernKey kernelRouteKey, kernRoute kernelRoute) deltatracker.IterAction {
+		r.livenessCallback()
 		cidr := kernKey.CIDR
 		dataplaneRoute, dataplaneExists := r.kernelRoutes.Dataplane().Get(kernKey)
 		if dataplaneExists && r.conntrackTracker.CIDRNeedsEarlyCleanup(cidr, dataplaneRoute.Ifindex) {
@@ -1167,6 +1174,7 @@ func (r *RouteTable) applyUpdates(attempt int) error {
 
 	updateErrs := map[kernelRouteKey]error{}
 	r.kernelRoutes.PendingUpdates().Iter(func(kernKey kernelRouteKey, kRoute kernelRoute) deltatracker.IterAction {
+		r.livenessCallback()
 		dst := kernKey.CIDR.ToIPNet()
 		flags := 0
 		if kRoute.OnLink {
@@ -1243,6 +1251,7 @@ func (r *RouteTable) applyUpdates(attempt int) error {
 			continue
 		}
 		for addr, mac := range addrToMAC {
+			r.livenessCallback()
 			err := r.addStaticARPEntry(nl, addr, mac, ifaceIdx)
 			if err != nil {
 				err = r.filterErrorByIfaceState(
@@ -1362,7 +1371,7 @@ func (r *RouteTable) filterErrorByIfaceState(
 	logCxt := r.logCxt.WithFields(log.Fields{"ifaceName": ifaceName, "error": currentErr})
 	if ifaceName == InterfaceNone {
 		// Short circuit the no-OIF interface name.
-		logCxt.Info("No interface on route.")
+		logCxt.Debug("No interface on route.")
 		return defaultErr
 	}
 
@@ -1370,13 +1379,13 @@ func (r *RouteTable) filterErrorByIfaceState(
 		// Current error already tells us that the link was not present.  If we re-check
 		// the status in this case, we open a race where the interface gets created and
 		// we log an error when we're about to re-trigger programming anyway.
-		logCxt.Info("Interface doesn't exist, perhaps workload is being torn down?")
+		logCxt.Debug("Interface doesn't exist, perhaps workload is being torn down?")
 		return IfaceNotPresent
 	}
 
 	if errors.Is(currentErr, syscall.ENETDOWN) {
 		// Another clear error: interface is down.
-		logCxt.Info("Interface down, perhaps workload is being torn down?")
+		logCxt.Debug("Interface down, perhaps workload is being torn down?")
 		return IfaceDown
 	}
 
