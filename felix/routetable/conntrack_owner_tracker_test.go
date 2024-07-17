@@ -65,7 +65,7 @@ func TestConntrackCleanupManager_MovedRoute(t *testing.T) {
 
 	// RouteTable won't have any deletions to do, so move on to the first
 	// pass over the updated routes.
-	Expect(h.ccm.CIDRIsMovingInterface(cidr1, 10)).To(BeTrue(),
+	Expect(h.ccm.CIDRNeedsEarlyCleanup(cidr1, 10)).To(BeTrue(),
 		"Moved CIDR should need cleanup.")
 	// RouteTable tells us that it deleted the old route.
 	h.ccm.OnDataplaneRouteDeleted(cidr1, 10)
@@ -93,7 +93,7 @@ func TestConntrackCleanupManager_ChangeOfPrioritySameInterface(t *testing.T) {
 	h.ccm.OnDataplaneRouteDeleted(cidr1, 10)
 	// Which should be ignored due to the prior update to signal intent to
 	// create that route.
-	Expect(h.ccm.CIDRIsMovingInterface(cidr1, 10)).To(BeFalse(),
+	Expect(h.ccm.CIDRNeedsEarlyCleanup(cidr1, 10)).To(BeFalse(),
 		"CIDR on same interface should not need cleanup.")
 
 	h.ccm.StartConntrackCleanupAndReset()
