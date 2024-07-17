@@ -21,7 +21,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/felix/dataplane/common"
+	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
@@ -103,6 +103,7 @@ func (m *mockVXLANDataplane) LinkList() ([]netlink.Link, error) {
 func (m *mockVXLANDataplane) LinkAdd(netlink.Link) error {
 	return nil
 }
+
 func (m *mockVXLANDataplane) LinkDel(netlink.Link) error {
 	return nil
 }
@@ -141,7 +142,7 @@ var _ = Describe("VXLANManager", func() {
 		la := netlink.NewLinkAttrs()
 		la.Name = "eth0"
 		manager = newVXLANManagerWithShims(
-			common.NewMockIPSets(),
+			dpsets.NewMockIPSets(),
 			rt, brt,
 			fdb,
 			"vxlan.calico",
@@ -168,7 +169,7 @@ var _ = Describe("VXLANManager", func() {
 		)
 
 		managerV6 = newVXLANManagerWithShims(
-			common.NewMockIPSets(),
+			dpsets.NewMockIPSets(),
 			rt, brt,
 			fdb,
 			"vxlan-v6.calico",
