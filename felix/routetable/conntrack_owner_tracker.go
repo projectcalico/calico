@@ -28,7 +28,7 @@ type RouteOwnershipTracker interface {
 	UpdateCIDROwner(addr ip.CIDR, ifaceIdx int, routeClass RouteClass)
 	RemoveCIDROwner(addr ip.CIDR)
 
-	CIDRIsMovingInterface(cidr ip.CIDR, oldIface int) bool
+	CIDRNeedsEarlyCleanup(cidr ip.CIDR, oldIface int) bool
 	OnDataplaneRouteDeleted(cidr ip.CIDR, ifindex int)
 	StartConntrackCleanupAndReset()
 
@@ -47,13 +47,19 @@ type conntrackOwner struct {
 //     told us own which IP addresses.  We assume that the RouteTable only
 //     allows one route per CIDR (even though it understands how to clean up
 //     routes for other ToS and priority values).
+//
 //   - Expects a callback from the RouteTable when a route is deleted.
+//
 //   - Uses the interface index and route class on that callback to decide
 //     if the route being deleted needs a conntrack cleanup.
+//
 //   - Provides a lookup function to check if an updated route needs a cleanup.
+//
 //   - Updates that don't change the interface index don't need cleanup.
+//
 //   - Updates from remote to remote don't need cleanup.  For example, a route
 //     moving from VXLAN to VXLAN-same-subnet.
+//
 //   - Updates where there was no previous route don't need cleanup.
 //
 // A complicating factor is that the kernel keys routes using CIDR, ToS and
@@ -102,19 +108,35 @@ func NewConntrackCleanupManager(ipVersion uint8, conntrack conntrackIface) *Conn
 	}
 }
 
+// UpdateCIDROwner is called when the new owner of a CIDR is calculated.
+// It updates the "desired" next state, so multiple calls for the same CIDR
+// are effectively coalesced; only the most recent update is remembered.
+// the actual cleanup is triggered later by calls to OnDataplaneRouteDeleted and
+// StartConntrackCleanupAndReset.
 func (c *ConntrackCleanupManager) UpdateCIDROwner(cidr ip.CIDR, ifaceIdx int, routeClass RouteClass) {
 	// We can't currently handle non-32-bit IPv4 or non-128-bit IPv6 CIDRs.
 	// To do so, we'd need to handle longest-prefix match.
 	if !cidr.IsSingleAddress() {
 		return
 	}
-	c.addrOwners.Desired().Set(cidr.Addr(), conntrackOwner{ifaceIdx, routeClass})
+	c.addrOwners.Desired().Set(cidr.Addr(), conntrackOwner{ifaceIdx: ifaceIdx, routeClass: routeClass})
 }
 
+// RemoveCIDROwner is called when there is no longer an owner for the given
+// CIDR.  Like UpdateCIDROwner, it updates the "desired" next state so
+// a call to UpdateCIDROwner for the same CIDR before the cleanup is triggered
+// will undo the removal.
 func (c *ConntrackCleanupManager) RemoveCIDROwner(cidr ip.CIDR) {
 	c.addrOwners.Desired().Delete(cidr.Addr())
 }
 
+// OnDataplaneRouteDeleted is called when the RouteTable tells us that a route
+// has been removed from the dataplane on the given interface.  In most cases,
+// this will queue the CIDR for conntrack cleanup at the next call to
+// StartConntrackCleanupAndReset.
+//
+// No cleanup is triggered if there is a desired route for the given CIDR
+// and that desirec route is staying on this interface.
 func (c *ConntrackCleanupManager) OnDataplaneRouteDeleted(cidr ip.CIDR, ifindex int) {
 	if !cidr.IsSingleAddress() {
 		return
@@ -144,7 +166,9 @@ func (c *ConntrackCleanupManager) OnDataplaneRouteDeleted(cidr ip.CIDR, ifindex 
 	c.addrsToCleanUp.Add(addr)
 }
 
-func (c *ConntrackCleanupManager) CIDRIsMovingInterface(cidr ip.CIDR, oldIface int) bool {
+// CIDRNeedsEarlyCleanup is called by the RouteTable to check if a route should
+// be deleted early, to allow for conntrack cleanup to be properly sequenced.
+func (c *ConntrackCleanupManager) CIDRNeedsEarlyCleanup(cidr ip.CIDR, oldIface int) bool {
 	if !cidr.IsSingleAddress() {
 		return false
 	}
@@ -164,7 +188,7 @@ func (c *ConntrackCleanupManager) CIDRIsMovingInterface(cidr ip.CIDR, oldIface i
 		logrus.WithField("ip", addr).Debug("Route staying on same iface, no need to clean up.")
 		return false
 	}
-	if routeClassIsRemote(desiredRoute.routeClass) && routeClassIsRemote(dataplaneRoute.routeClass) {
+	if desiredRoute.routeClass.IsRemote() && dataplaneRoute.routeClass.IsRemote() {
 		// Moving between different kinds of tunnel, not safe to clean up, it
 		// may still be same remote workload.
 		logrus.WithField("ip", addr).Debug("Route moving from remote->remote, skipping cleanup.")
@@ -174,6 +198,8 @@ func (c *ConntrackCleanupManager) CIDRIsMovingInterface(cidr ip.CIDR, oldIface i
 	return true
 }
 
+// StartConntrackCleanupAndReset starts all pending conntrack cleanups and
+// resets the tracker to prepare for the next round of updates.
 func (c *ConntrackCleanupManager) StartConntrackCleanupAndReset() {
 	c.addrsToCleanUp.Iter(func(addr ip.Addr) error {
 		c.startDeletion(addr)
@@ -237,7 +263,9 @@ func (c *ConntrackCleanupManager) cleanUpExpiredChan(ipAddr ip.Addr) {
 	}
 }
 
-// WaitForPendingDeletion waits for any pending conntrack deletions (if any) for the given IP to complete.
+// WaitForPendingDeletion waits for any pending conntrack deletions (if any)
+// for the given IP to complete. Returns immediately if there's no pending
+// deletion.
 func (c *ConntrackCleanupManager) WaitForPendingDeletion(cidr ip.CIDR) {
 	if !cidr.IsSingleAddress() {
 		return
@@ -282,7 +310,7 @@ func NewNoOpRouteTracker() NoOpRouteTracker {
 func (n NoOpRouteTracker) UpdateCIDROwner(addr ip.CIDR, ifaceIdx int, routeClass RouteClass) {}
 func (n NoOpRouteTracker) RemoveCIDROwner(addr ip.CIDR)                                      {}
 func (n NoOpRouteTracker) OnDataplaneRouteDeleted(cidr ip.CIDR, ifindex int)                 {}
-func (n NoOpRouteTracker) CIDRIsMovingInterface(cidr ip.CIDR, ifindex int) bool              { return false }
+func (n NoOpRouteTracker) CIDRNeedsEarlyCleanup(cidr ip.CIDR, ifindex int) bool              { return false }
 func (n NoOpRouteTracker) StartConntrackCleanupAndReset()                                    {}
 func (n NoOpRouteTracker) WaitForPendingDeletion(cidr ip.CIDR)                               {}
 
