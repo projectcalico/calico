@@ -78,6 +78,32 @@ func TestConntrackCleanupManager_MovedRoute(t *testing.T) {
 
 	expectInSyncAtEnd(h.ccm)
 }
+func TestConntrackCleanupManager_MovedRouteRemoteToRemote(t *testing.T) {
+	h := setupConntrackTrackerTest(t)
+
+	// Call methods in the same order as the RouteTable would.
+
+	// Initially, the route is owned by interface 10.
+	t.Log("Setting initial owner.")
+	h.ccm.UpdateCIDROwner(cidr1, 10, RouteClassVXLANTunnel)
+	// Commit that change.
+	h.ccm.StartConntrackCleanupAndReset()
+
+	// Then, the exact same route moves to interface 11.
+	t.Log("Setting new owner.")
+	h.ccm.UpdateCIDROwner(cidr1, 11, RouteClassVXLANSameSubnet)
+
+	// RouteTable won't have any deletions to do, so move on to the first
+	// pass over the updated routes.
+	Expect(h.ccm.CIDRNeedsEarlyCleanup(cidr1, 10)).To(BeFalse(),
+		"Remote to remote moves houldn't trigger cleanup.")
+
+	h.ccm.StartConntrackCleanupAndReset()
+	Consistently(h.conntrack.NumPendingRemovals, "10ms").Should(Equal(0))
+	expectWaitForPendingDeletionToReturnImmediately(h.ccm, cidr1)
+
+	expectInSyncAtEnd(h.ccm)
+}
 
 func TestConntrackCleanupManager_ChangeOfPrioritySameInterface(t *testing.T) {
 	h := setupConntrackTrackerTest(t)
@@ -137,6 +163,20 @@ func TestConntrackCleanupManager_DeletedRoute(t *testing.T) {
 	h.ccm.StartConntrackCleanupAndReset()
 	Eventually(h.conntrack.NumPendingRemovals).Should(Equal(1))
 	expectWaitForPendingDeletionToDelay(h.ccm, h.conntrack, cidr1)
+}
+
+func TestConntrackCleanupManager_DeletedStaleRoute(t *testing.T) {
+	h := setupConntrackTrackerTest(t)
+
+	// Tell the CCM about the route.
+	h.ccm.UpdateCIDROwner(cidr1, 10, RouteClassLocalWorkload)
+	h.ccm.StartConntrackCleanupAndReset() // Commit to the delta tracker.
+	Consistently(h.conntrack.NumPendingRemovals, "10ms").Should(Equal(0))
+
+	// Then, the route is deleted from a different interface.
+	h.ccm.OnDataplaneRouteDeleted(cidr1, 11)
+	h.ccm.StartConntrackCleanupAndReset()
+	Consistently(h.conntrack.NumPendingRemovals, "10ms").Should(Equal(0))
 }
 
 type conntrackTrackerHarness struct {

@@ -85,6 +85,26 @@ var _ = Describe("RouteTable v6", func() {
 		Expect(rt).ToNot(BeNil())
 	})
 
+	It("should use interface index 1 for no-iface routes", func() {
+		rt.RouteUpdate(RouteClassWireguard, InterfaceNone, Target{
+			CIDR: ip.MustParseCIDROrIP("f00f::/128"),
+			Type: TargetTypeThrow,
+		})
+		err := rt.Apply()
+		Expect(err).ToNot(HaveOccurred())
+		Expect(dataplane.RouteKeyToRoute["254-f00f::/128"]).To(Equal(
+			netlink.Route{
+				Family:    netlink.FAMILY_V6,
+				LinkIndex: 1,
+				Dst:       mustParseCIDR("f00f::/128"),
+				Type:      syscall.RTN_THROW,
+				Protocol:  syscall.RTPROT_BOOT,
+				Scope:     netlink.SCOPE_UNIVERSE,
+				Table:     unix.RT_TABLE_MAIN,
+			},
+		))
+	})
+
 	It("should not remove the IPv6 link local route", func() {
 		// Route that should be left alone
 		noopLink := dataplane.AddIface(4, "cali4", true, true)
@@ -337,6 +357,33 @@ var _ = Describe("RouteTable", func() {
 					IP:           cidr.IP,
 					HardwareAddr: mac1,
 				})
+			})
+			It("Should skip adding an ARP entry if route is deleted via SetRoutes before sync", func() {
+				// Route that needs to be added
+				link := dataplane.AddIface(6, "cali6", true, true)
+				rt.SetRoutes(RouteClassLocalWorkload, link.LinkAttrs.Name, []Target{
+					{CIDR: ip.MustParseCIDROrIP("10.0.0.6"), DestMAC: mac1},
+				})
+				rt.SetRoutes(RouteClassLocalWorkload, link.LinkAttrs.Name, nil)
+				err := rt.Apply()
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(dataplane.RouteKeyToRoute).NotTo(HaveKey("254-10.0.0.6/32"))
+				dataplane.ExpectNeighs(unix.AF_INET)
+			})
+			It("Should skip adding an ARP entry if route is deleted via RouteRemove before sync", func() {
+				// Route that needs to be added
+				link := dataplane.AddIface(6, "cali6", true, true)
+				cidr := ip.MustParseCIDROrIP("10.0.0.6")
+				rt.SetRoutes(RouteClassLocalWorkload, link.LinkAttrs.Name, []Target{
+					{CIDR: cidr, DestMAC: mac1},
+				})
+				rt.RouteRemove(RouteClassLocalWorkload, link.LinkAttrs.Name, cidr)
+				err := rt.Apply()
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(dataplane.RouteKeyToRoute).NotTo(HaveKey("254-10.0.0.6/32"))
+				dataplane.ExpectNeighs(unix.AF_INET)
 			})
 			It("Should not remove routes with a source address", func() {
 				// Route that should be left alone
