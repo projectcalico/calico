@@ -83,7 +83,7 @@ type IPSets struct {
 	// Desired() side of the tracker contains the members that we've been told
 	// about.  Otherwise, Desired() is empty.  The Dataplane() side of the
 	// tracker contains the members that are thought to be in the dataplane.
-	mainSetNameToMembers   map[string]*deltatracker.SetDeltaTracker[ipsets.IPSetMember]
+	mainSetNameToMembers   map[string]*deltatracker.SetDeltaTracker[SetMember]
 	ipSetsWithDirtyMembers set.Set[string]
 
 	gaugeNumSets prometheus.Gauge
@@ -127,7 +127,7 @@ func NewIPSetsWithShims(ipVersionConfig *ipsets.IPVersionConfig, sleep func(time
 				"ipsetFamily": ipVersionConfig.Family,
 			})),
 		),
-		mainSetNameToMembers:   map[string]*deltatracker.SetDeltaTracker[ipsets.IPSetMember]{},
+		mainSetNameToMembers:   map[string]*deltatracker.SetDeltaTracker[SetMember]{},
 		ipSetsWithDirtyMembers: set.New[string](),
 		resyncRequired:         true,
 		logCxt: log.WithFields(log.Fields{
@@ -177,24 +177,24 @@ func (s *IPSets) AddOrReplaceIPSet(setMetadata ipsets.IPSetMetadata, members []s
 	memberTracker := s.getOrCreateMemberTracker(mainIPSetName)
 
 	desiredMembers := memberTracker.Desired()
-	desiredMembers.Iter(func(k ipsets.IPSetMember) {
+	desiredMembers.Iter(func(k SetMember) {
 		if canonMembers.Contains(k) {
 			canonMembers.Discard(k)
 		} else {
 			desiredMembers.Delete(k)
 		}
 	})
-	canonMembers.Iter(func(m ipsets.IPSetMember) error {
+	canonMembers.Iter(func(m SetMember) error {
 		desiredMembers.Add(m)
 		return nil
 	})
 	s.updateDirtiness(mainIPSetName)
 }
 
-func (s *IPSets) getOrCreateMemberTracker(mainIPSetName string) *deltatracker.SetDeltaTracker[ipsets.IPSetMember] {
+func (s *IPSets) getOrCreateMemberTracker(mainIPSetName string) *deltatracker.SetDeltaTracker[SetMember] {
 	dt := s.mainSetNameToMembers[mainIPSetName]
 	if dt == nil {
-		dt = deltatracker.NewSetDeltaTracker[ipsets.IPSetMember]()
+		dt = deltatracker.NewSetDeltaTracker[SetMember]()
 		s.mainSetNameToMembers[mainIPSetName] = dt
 	}
 	return dt
@@ -244,7 +244,7 @@ func (s *IPSets) AddMembers(setID string, newMembers []string) {
 		return
 	}
 	membersTracker := s.mainSetNameToMembers[setName]
-	canonMembers.Iter(func(member ipsets.IPSetMember) error {
+	canonMembers.Iter(func(member SetMember) error {
 		membersTracker.Desired().Add(member)
 		return nil
 	})
@@ -265,7 +265,7 @@ func (s *IPSets) RemoveMembers(setID string, removedMembers []string) {
 		return
 	}
 	membersTracker := s.mainSetNameToMembers[setName]
-	canonMembers.Iter(func(member ipsets.IPSetMember) error {
+	canonMembers.Iter(func(member SetMember) error {
 		membersTracker.Desired().Delete(member)
 		return nil
 	})
@@ -291,8 +291,8 @@ func (s *IPSets) GetTypeOf(setID string) (ipsets.IPSetType, error) {
 	return setMeta.Type, nil
 }
 
-func (s *IPSets) filterAndCanonicaliseMembers(ipSetType ipsets.IPSetType, members []string) set.Set[ipsets.IPSetMember] {
-	filtered := set.New[ipsets.IPSetMember]()
+func (s *IPSets) filterAndCanonicaliseMembers(ipSetType ipsets.IPSetType, members []string) set.Set[SetMember] {
+	filtered := set.New[SetMember]()
 	wantIPV6 := s.IPVersionConfig.Family == ipsets.IPFamilyV6
 	for _, member := range members {
 		isIPV6 := ipSetType.IsMemberIPV6(member)
@@ -317,7 +317,7 @@ func (s *IPSets) GetDesiredMembers(setID string) (set.Set[string], error) {
 		return nil, fmt.Errorf("ipset %s not found in members tracker", setID)
 	}
 	strs := set.New[string]()
-	memberTracker.Desired().Iter(func(k ipsets.IPSetMember) {
+	memberTracker.Desired().Iter(func(k SetMember) {
 		strs.Add(k.String())
 	})
 	return strs, nil
@@ -404,7 +404,7 @@ func (s *IPSets) tryResync() error {
 	// Once knftables is augmented to support reading many sets at once, we can remove this.
 	type setData struct {
 		setName string
-		elems   []string
+		elems   []*knftables.Element
 		err     error
 	}
 	setsChan := make(chan setData)
@@ -428,48 +428,79 @@ func (s *IPSets) tryResync() error {
 				setsChan <- setData{setName: name, err: err}
 				return
 			}
-			strElems := []string{}
-			for _, e := range elems {
-				if len(e.Key) == 3 {
-					// This is a concatination of IP, protocol and port. Format it back into Felix's internal representation.
-					strElems = append(strElems, fmt.Sprintf("%s,%s:%s", e.Key[0], e.Key[1], e.Key[2]))
-				} else {
-					// This is just an IP address / CIDR.
-					strElems = append(strElems, e.Key[0])
-				}
-			}
-			setsChan <- setData{setName: name, elems: strElems}
+			setsChan <- setData{setName: name, elems: elems}
 		}(setName)
 	}
 
 	// We expect a response for every set we asked for.
 	responses := make([]setData, len(sets))
-	for range sets {
+	for i := range responses {
 		setData := <-setsChan
-		responses = append(responses, setData)
+		responses[i] = setData
 	}
 
 	for _, setData := range responses {
 		setName := setData.setName
-		strElems := setData.elems
 		logCxt := s.logCxt.WithField("setName", setName)
 		if setData.err != nil {
 			logCxt.WithError(err).Error("Failed to list set elements.")
 			return setData.err
 		}
 
+		// TODO: We need to be able to extract the set type from the dataplane, otherwise we cannot
+		// tell whether or not an IP set has the correct type.
 		metadata, ok := s.setNameToAllMetadata[setName]
 		if !ok {
 			// Programmed in the data plane, but not in memory. Skip this one - we'll clean up
 			// state for this below.
+			s.setNameToProgrammedMetadata.Dataplane().Set(setName, ipsets.IPSetMetadata{})
 			continue
 		}
+		// At this point, we know what type the set is and so we can parse the elements.
+		// Any IP sets that this version of Felix cannot parse will be deleted below.
+		// In theory, it is possible that the same IP set will contain differently formatted members
+		// if programmed by different versions of Felix. This can be detected by looking at the programmed
+		// set metadata and extracting the type. However, knftables does not yet support this operation. For now,
+		// assume that we haven't modified the type of an IP set across Felix versions.
+
+		// Build a set of canonicalized elements in the set by first converting to Felix's internal string representation,
+		// and then canonicalizing the members to match the format that we use in the desired state.
+		strElems := []string{}
+		unknownElems := set.New[SetMember]()
+		for _, e := range setData.elems {
+			switch metadata.Type {
+			case ipsets.IPSetTypeHashIP, ipsets.IPSetTypeHashNet:
+				if len(e.Key) == 1 {
+					// These types are just IP addresses / CIDRs.
+					strElems = append(strElems, e.Key[0])
+				} else {
+					unknownElems.Add(UnknownMember(e.Key))
+				}
+			case ipsets.IPSetTypeHashIPPort:
+				if len(e.Key) == 3 {
+					// This is a concatination of IP, protocol and port. Format it back into Felix's internal representation.
+					strElems = append(strElems, fmt.Sprintf("%s,%s:%s", e.Key[0], e.Key[1], e.Key[2]))
+				} else {
+					unknownElems.Add(UnknownMember(e.Key))
+				}
+			case ipsets.IPSetTypeBitmapPort:
+				if len(e.Key) == 1 {
+					// A single port.
+					strElems = append(strElems, e.Key[0])
+				} else {
+					unknownElems.Add(UnknownMember(e.Key))
+				}
+			default:
+				unknownElems.Add(UnknownMember(e.Key))
+			}
+		}
 		elemsSet := s.filterAndCanonicaliseMembers(metadata.Type, strElems)
+		elemsSet.AddAll(unknownElems.Slice())
 
 		memberTracker := s.getOrCreateMemberTracker(setName)
 		numExtrasExpected := memberTracker.PendingDeletions().Len()
-		err = memberTracker.Dataplane().ReplaceFromIter(func(f func(k ipsets.IPSetMember)) error {
-			elemsSet.Iter(func(item ipsets.IPSetMember) error {
+		err = memberTracker.Dataplane().ReplaceFromIter(func(f func(k SetMember)) error {
+			elemsSet.Iter(func(item SetMember) error {
 				f(item)
 				return nil
 			})
@@ -596,26 +627,23 @@ func (s *IPSets) tryUpdates() error {
 		}
 
 		// Delete an IP set member if it's not in the desired set. Do this first in case new members conflict.
-		// TODO: This doesn't check the actual members in the dataplane, only our in memory
-		// representation. This means that any out-of-band modifications to the IP set may cause
-		// us to get out of sync.
 		members := s.getOrCreateMemberTracker(setName)
-		members.PendingDeletions().Iter(func(member ipsets.IPSetMember) deltatracker.IterAction {
+		members.PendingDeletions().Iter(func(member SetMember) deltatracker.IterAction {
 			tx.Delete(&knftables.Element{
 				Set: setName,
-				Key: []string{member.String()},
+				Key: member.Key(),
 			})
 			return deltatracker.IterActionNoOp
 		})
 
 		// Add desired members to the set.
-		members.Desired().Iter(func(member ipsets.IPSetMember) {
+		members.Desired().Iter(func(member SetMember) {
 			if members.Dataplane().Contains(member) {
 				return
 			}
 			tx.Add(&knftables.Element{
 				Set: setName,
-				Key: []string{member.String()},
+				Key: member.Key(),
 			})
 		})
 	}
@@ -637,7 +665,7 @@ func (s *IPSets) tryUpdates() error {
 			s.setNameToProgrammedMetadata.Dataplane().Set(setName, v)
 			members := s.mainSetNameToMembers[setName]
 			members.Dataplane().DeleteAll()
-			members.Desired().Iter(func(member ipsets.IPSetMember) {
+			members.Desired().Iter(func(member SetMember) {
 				members.Dataplane().Add(member)
 			})
 		}
@@ -704,8 +732,10 @@ func (s *IPSets) ApplyDeletions() bool {
 
 	// ApplyDeletions() marks the end of the two-phase "apply". Piggyback on that to
 	// update the gauge that records how many IP sets we own.
-	numDeletionsPending := s.setNameToProgrammedMetadata.Dataplane().Len()
-	s.gaugeNumSets.Set(float64(numDeletionsPending))
+	s.gaugeNumSets.Set(float64(s.setNameToProgrammedMetadata.Dataplane().Len()))
+
+	// Determine if we need to be rescheduled.
+	numDeletionsPending := s.setNameToProgrammedMetadata.PendingDeletions().Len()
 	if deletedSets.Len() == 0 {
 		// We had nothing to delete, or we only encountered errors, don't
 		// ask to be rescheduled.
@@ -770,7 +800,7 @@ func (s *IPSets) ipSetNeeded(name string) bool {
 
 // CanonicaliseMember converts the string representation of an nftables set member to a canonical
 // object of some kind that implements the IPSetMember interface.  The object is required to by hashable.
-func CanonicaliseMember(t ipsets.IPSetType, member string) ipsets.IPSetMember {
+func CanonicaliseMember(t ipsets.IPSetType, member string) SetMember {
 	switch t {
 	case ipsets.IPSetTypeHashIP:
 		// Convert the string into our ip.Addr type, which is backed by an array.
@@ -779,7 +809,7 @@ func CanonicaliseMember(t ipsets.IPSetType, member string) ipsets.IPSetMember {
 			// This should be prevented by validation in libcalico-go.
 			log.WithField("ip", member).Panic("Failed to parse IP")
 		}
-		return ipAddr
+		return simpleMember(ipAddr.String())
 	case ipsets.IPSetTypeHashIPPort:
 		// The member should be of the format "IP,protocol:port"
 		parts := strings.Split(member, ",")
@@ -803,17 +833,18 @@ func CanonicaliseMember(t ipsets.IPSetType, member string) ipsets.IPSetMember {
 		if port > math.MaxUint16 || port < 0 {
 			log.WithField("member", member).Panic("Bad port range (should be between 0 and 65535)")
 		}
+
 		// Return a dedicated struct for V4 or V6.  This slightly reduces occupancy over storing
 		// the address as an interface by storing one fewer interface headers.  That is worthwhile
 		// because we store many IP set members.
 		if ipAddr.Version() == 4 {
-			return v4NFTIPPort{
+			return v4IPPortMember{
 				IP:       ipAddr.(ip.V4Addr),
 				Port:     uint16(port),
 				Protocol: proto,
 			}
 		} else {
-			return v6NFTIPPort{
+			return v6IPPortMember{
 				IP:       ipAddr.(ip.V6Addr),
 				Port:     uint16(port),
 				Protocol: proto,
@@ -823,7 +854,7 @@ func CanonicaliseMember(t ipsets.IPSetType, member string) ipsets.IPSetMember {
 		// Convert the string into our ip.CIDR type, which is backed by a struct.  When
 		// pretty-printing, the hash:net ipset type prints IPs with no "/32" or "/128"
 		// suffix.
-		return ip.MustParseCIDROrIP(member)
+		return simpleMember(ip.MustParseCIDROrIP(member).String())
 	case ipsets.IPSetTypeBitmapPort:
 		// Trim the family if it exists
 		if member[0] == 'v' {
@@ -831,35 +862,11 @@ func CanonicaliseMember(t ipsets.IPSetType, member string) ipsets.IPSetMember {
 		}
 		port, err := strconv.Atoi(member)
 		if err == nil && port >= 0 && port <= 0xffff {
-			return ipsets.Port(port)
+			return simpleMember(member)
 		}
 	}
 	log.WithField("type", string(t)).Warn("Unknown IPSetType")
 	return nil
-}
-
-// v4NFTIPPort is a struct that represents an IPv4 address, protocol and port for IPv4, and implements
-// the ipsets.IPSetMember interface.
-type v4NFTIPPort struct {
-	IP       ip.V4Addr
-	Port     uint16
-	Protocol string
-}
-
-func (p v4NFTIPPort) String() string {
-	return fmt.Sprintf("%s . %s . %d", p.IP.String(), p.Protocol, p.Port)
-}
-
-// v6NFTIPPort is a struct that represents an IPv6 address, protocol and port for IPv6, and implements
-// the ipsets.IPSetMember interface.
-type v6NFTIPPort struct {
-	IP       ip.V6Addr
-	Port     uint16
-	Protocol string
-}
-
-func (p v6NFTIPPort) String() string {
-	return fmt.Sprintf("%s . %s . %d", p.IP.String(), p.Protocol, p.Port)
 }
 
 // setType returns the nftables type to use for the given IPSetType and IP version.
