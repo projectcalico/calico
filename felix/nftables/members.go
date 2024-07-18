@@ -36,7 +36,30 @@ var (
 	_ SetMember = simpleMember("")
 	_ SetMember = v4IPPortMember{}
 	_ SetMember = v6IPPortMember{}
+	_ SetMember = netNet{}
+	_ SetMember = unknownMember{}
 )
+
+type netNet struct {
+	net1, net2 ip.CIDR
+}
+
+func (n netNet) Key() []string {
+	// nftables doesn't support interval types (CIDRs) on concatenation sets, and thus we
+	// can only represent the set as a concatenation of IP addresses. Conveniently, the only
+	// current use of this type is for WorkloadEndpoint IP addresses which are always /32 or /128.
+	if n.net1.Version() == 4 && n.net1.Prefix() != 32 || n.net1.Version() == 6 && n.net1.Prefix() != 128 {
+		logrus.WithField("cidr", n.net1).Panic("Unexpected CIDR prefix")
+	}
+	if n.net2.Version() == 4 && n.net2.Prefix() != 32 || n.net2.Version() == 6 && n.net2.Prefix() != 128 {
+		logrus.WithField("cidr", n.net2).Panic("Unexpected CIDR prefix")
+	}
+	return []string{n.net1.Addr().String(), n.net2.Addr().String()}
+}
+
+func (n netNet) String() string {
+	return fmt.Sprintf("%s . %s", n.net1, n.net2)
+}
 
 // simpleMember represents a member of a simple, non-concatenated nftables set that is a single element.
 type simpleMember string

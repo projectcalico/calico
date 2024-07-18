@@ -365,7 +365,7 @@ func (c SaveConnMarkAction) ToFragment(features *environment.Features) string {
 	if c.SaveMask == 0 {
 		return "ct mark set mark"
 	}
-	return fmt.Sprintf("ct mark set and %#x", c.SaveMask)
+	return fmt.Sprintf("ct mark set mark & %#x", c.SaveMask)
 }
 
 func (c SaveConnMarkAction) String() string {
@@ -382,7 +382,7 @@ func (c RestoreConnMarkAction) ToFragment(features *environment.Features) string
 		// If Mask field is ignored, restore full mark.
 		return "meta mark set ct mark"
 	}
-	return fmt.Sprintf("meta mark set ct mark and %#x", c.RestoreMask)
+	return fmt.Sprintf("meta mark set ct mark & %#x", c.RestoreMask)
 }
 
 func (c RestoreConnMarkAction) String() string {
@@ -401,7 +401,7 @@ func (c SetConnMarkAction) ToFragment(features *environment.Features) string {
 		return fmt.Sprintf("ct mark set %#x", c.Mark)
 	}
 	notMask := c.Mask ^ 0xffffffff
-	return fmt.Sprintf("ct mark set ct mark xor %#x and %#x", c.Mark, notMask)
+	return fmt.Sprintf("ct mark set ct mark xor %#x & %#x", c.Mark, notMask)
 }
 
 func (c SetConnMarkAction) String() string {

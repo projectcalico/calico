@@ -490,6 +490,13 @@ func (s *IPSets) tryResync() error {
 				} else {
 					unknownElems.Add(UnknownMember(e.Key))
 				}
+			case ipsets.IPSetTypeHashNetNet:
+				if len(e.Key) == 2 {
+					// This is a concatination of two CIDRs. Format it back into Felix's internal representation.
+					strElems = append(strElems, fmt.Sprintf("%s,%s", e.Key[0], e.Key[1]))
+				} else {
+					unknownElems.Add(UnknownMember(e.Key))
+				}
 			default:
 				unknownElems.Add(UnknownMember(e.Key))
 			}
@@ -568,6 +575,10 @@ func (s *IPSets) NFTablesSet(name string) *knftables.Set {
 		// IP and port sets don't support the interval flag.
 	case ipsets.IPSetTypeHashIP:
 		// IP addr sets don't use the interval flag.
+	case ipsets.IPSetTypeBitmapPort:
+		// Bitmap port sets don't use the interval flag.
+	case ipsets.IPSetTypeHashNetNet:
+		// Net sets don't use the interval flag.
 	case ipsets.IPSetTypeHashNet:
 		// Net sets require the interval flag.
 		flags = append(flags, knftables.IntervalFlag)
@@ -855,6 +866,12 @@ func CanonicaliseMember(t ipsets.IPSetType, member string) SetMember {
 		// pretty-printing, the hash:net ipset type prints IPs with no "/32" or "/128"
 		// suffix.
 		return simpleMember(ip.MustParseCIDROrIP(member).String())
+	case ipsets.IPSetTypeHashNetNet:
+		cidrs := strings.Split(member, ",")
+		return netNet{
+			net1: ip.MustParseCIDROrIP(cidrs[0]),
+			net2: ip.MustParseCIDROrIP(cidrs[1]),
+		}
 	case ipsets.IPSetTypeBitmapPort:
 		// Trim the family if it exists
 		if member[0] == 'v' {
@@ -876,8 +893,14 @@ func setType(t ipsets.IPSetType, ipVersion int) string {
 		return fmt.Sprintf("ipv%d_addr", ipVersion)
 	case ipsets.IPSetTypeHashNet:
 		return fmt.Sprintf("ipv%d_addr", ipVersion)
+	case ipsets.IPSetTypeHashNetNet:
+		return fmt.Sprintf("ipv%d_addr . ipv%d_addr", ipVersion, ipVersion)
 	case ipsets.IPSetTypeHashIPPort:
 		return fmt.Sprintf("ipv%d_addr . inet_proto . inet_service", ipVersion)
+	case ipsets.IPSetTypeBitmapPort:
+		return "inet_service"
+	default:
+		log.WithField("type", string(t)).Panic("Unknown IPSetType")
 	}
-	return string(t)
+	return ""
 }
