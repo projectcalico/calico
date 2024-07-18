@@ -17,7 +17,6 @@
 package maps
 
 import (
-	"reflect"
 	"runtime"
 	"unsafe"
 
@@ -260,11 +259,11 @@ func (m *Iterator) Next() (k, v []byte, err error) {
 			unsafe.Pointer(uintptr(m.keys)+uintptr(m.keyStride*(m.numEntriesLoaded-1))), (C.size_t)(m.keySize))
 	}
 
-	currentKeyPtr := unsafe.Pointer(uintptr(m.keys) + uintptr(m.keyStride*(m.entryIdx)))
-	currentValPtr := unsafe.Pointer(uintptr(m.values) + uintptr(m.valueStride*(m.entryIdx)))
+	currentKeyPtr := (*byte)(unsafe.Pointer(uintptr(m.keys) + uintptr(m.keyStride*(m.entryIdx))))
+	currentValPtr := (*byte)(unsafe.Pointer(uintptr(m.values) + uintptr(m.valueStride*(m.entryIdx))))
 
-	k = ptrToSlice(currentKeyPtr, m.keySize)
-	v = ptrToSlice(currentValPtr, m.valueSize)
+	k = unsafe.Slice(currentKeyPtr, m.keySize)
+	v = unsafe.Slice(currentValPtr, m.valueSize)
 
 	m.entryIdx++
 	m.numEntriesVisited++
@@ -275,14 +274,6 @@ func (m *Iterator) Next() (k, v []byte, err error) {
 		return
 	}
 
-	return
-}
-
-func ptrToSlice(ptr unsafe.Pointer, size int) (b []byte) {
-	keySliceHdr := (*reflect.SliceHeader)(unsafe.Pointer(&b))
-	keySliceHdr.Data = uintptr(ptr)
-	keySliceHdr.Cap = size
-	keySliceHdr.Len = size
 	return
 }
 
