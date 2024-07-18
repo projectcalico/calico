@@ -24,6 +24,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/dataplane/common"
+	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
@@ -2176,7 +2177,7 @@ type ipsetsSource interface {
 }
 
 var (
-	_ ipsetsSource = &common.IPSetsManager{}
+	_ ipsetsSource = &dpsets.IPSetsManager{}
 	_ ipsetsSource = &nilIPSetsSource{}
 )
 

@@ -102,7 +102,8 @@ func (m nftMatch) transportProto() string {
 }
 
 func Match() generictables.MatchCriteria {
-	return new(nftMatch)
+	var m nftMatch
+	return m
 }
 
 func (m nftMatch) IPVersion(ipVersion uint8) generictables.MatchCriteria {
