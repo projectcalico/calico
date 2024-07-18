@@ -568,10 +568,11 @@ func (s *IPSets) NFTablesSet(name string) *knftables.Set {
 		// IP and port sets don't support the interval flag.
 	case ipsets.IPSetTypeHashIP:
 		// IP addr sets don't use the interval flag.
-	case ipsets.IPSetTypeHashNet:
-		// Net sets require the interval flag.
-		flags = append(flags, knftables.IntervalFlag)
+	case ipsets.IPSetTypeBitmapPort:
+		// Bitmap port sets don't use the interval flag.
 	case ipsets.IPSetTypeHashNetNet:
+		// Net sets don't use the interval flag.
+	case ipsets.IPSetTypeHashNet:
 		// Net sets require the interval flag.
 		flags = append(flags, knftables.IntervalFlag)
 	default:
@@ -889,6 +890,10 @@ func setType(t ipsets.IPSetType, ipVersion int) string {
 		return fmt.Sprintf("ipv%d_addr . ipv%d_addr", ipVersion, ipVersion)
 	case ipsets.IPSetTypeHashIPPort:
 		return fmt.Sprintf("ipv%d_addr . inet_proto . inet_service", ipVersion)
+	case ipsets.IPSetTypeBitmapPort:
+		return fmt.Sprintf("inet_service")
+	default:
+		log.WithField("type", string(t)).Panic("Unknown IPSetType")
 	}
-	return string(t)
+	return ""
 }
