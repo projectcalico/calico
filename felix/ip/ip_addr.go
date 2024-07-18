@@ -187,6 +187,9 @@ type CIDR interface {
 	ToIPNet() net.IPNet
 	AsBinary() string
 	Contains(addr Addr) bool
+	// IsSingleAddress returns true if the CIDR represents a single address.
+	// I.e. a /32 for IPv4 or a /128 for IPv6.
+	IsSingleAddress() bool
 }
 
 type V4CIDR struct {
@@ -242,6 +245,10 @@ func (c V4CIDR) AsBinary() string {
 	}
 
 	return ipInBinary[0 : c.prefix+4]
+}
+
+func (c V4CIDR) IsSingleAddress() bool {
+	return c.prefix == 32
 }
 
 type V6CIDR struct {
@@ -304,6 +311,10 @@ func (c V6CIDR) AsBinary() string {
 	return ipInBinary[0 : c.prefix+4]
 }
 
+func (c V6CIDR) IsSingleAddress() bool {
+	return c.prefix == 128
+}
+
 func FromString(s string) Addr {
 	return FromNetIP(net.ParseIP(s))
 }
@@ -355,7 +366,12 @@ func FromCalicoIP(ip calinet.IP) Addr {
 	return FromNetIP(ip.IP)
 }
 
+// CIDRFromIPNet converts a *net.IPNet to a CIDR; if passed nil,
+// returns nil.
 func CIDRFromIPNet(ipNet *net.IPNet) CIDR {
+	if ipNet == nil {
+		return nil
+	}
 	ones, _ := ipNet.Mask.Size()
 	// Mask the IP before creating the CIDR so that we have it in canonical format.
 	ip := FromNetIP(ipNet.IP.Mask(ipNet.Mask))
