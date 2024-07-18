@@ -133,7 +133,7 @@ RUN microdnf --enablerepo=baseos install \
     conntrack-tools
 
 # Install iptables-libs via rpm. The libs must installed before installing iproute-tc and nftables via 'microdnf install'
-# otherwise they will pull an outdated version of iptables-libs (1.8.5-11.el8_9) as a dependency.
+# otherwise they will pull a different version of iptables-libs as a dependency.
 RUN rpm -i /tmp/rpms/iptables-libs-${IPTABLES_VER}.el8.x86_64.rpm && \
     rpm -i /tmp/rpms/iptables-legacy-libs-${IPTABLES_VER}.el8.2.x86_64.rpm
 
