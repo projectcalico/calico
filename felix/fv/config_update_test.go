@@ -244,7 +244,7 @@ func waitForFelixInSync(felix *infrastructure.Felix) {
 	// The datastore should transition to in-sync.
 	Eventually(func() (int, error) {
 		return metrics.GetFelixMetricInt(felix.IP, "felix_resync_state")
-	}).Should(Equal(3 /* in-sync */))
+	}, "2s").Should(Equal(3 /* in-sync */))
 	// And then we should see at least one apply to the dataplane.
 	Eventually(func() (int, error) {
 		return metrics.GetFelixMetricInt(felix.IP, "felix_int_dataplane_apply_time_seconds_count")
