@@ -571,6 +571,9 @@ func (s *IPSets) NFTablesSet(name string) *knftables.Set {
 	case ipsets.IPSetTypeHashNet:
 		// Net sets require the interval flag.
 		flags = append(flags, knftables.IntervalFlag)
+	case ipsets.IPSetTypeHashNetNet:
+		// Net sets require the interval flag.
+		flags = append(flags, knftables.IntervalFlag)
 	default:
 		log.WithField("type", metadata.Type).Panic("Unexpected IP set type")
 	}
@@ -855,6 +858,12 @@ func CanonicaliseMember(t ipsets.IPSetType, member string) SetMember {
 		// pretty-printing, the hash:net ipset type prints IPs with no "/32" or "/128"
 		// suffix.
 		return simpleMember(ip.MustParseCIDROrIP(member).String())
+	case ipsets.IPSetTypeHashNetNet:
+		cidrs := strings.Split(member, ",")
+		return netNet{
+			net1: ip.MustParseCIDROrIP(cidrs[0]),
+			net2: ip.MustParseCIDROrIP(cidrs[1]),
+		}
 	case ipsets.IPSetTypeBitmapPort:
 		// Trim the family if it exists
 		if member[0] == 'v' {
@@ -876,6 +885,8 @@ func setType(t ipsets.IPSetType, ipVersion int) string {
 		return fmt.Sprintf("ipv%d_addr", ipVersion)
 	case ipsets.IPSetTypeHashNet:
 		return fmt.Sprintf("ipv%d_addr", ipVersion)
+	case ipsets.IPSetTypeHashNetNet:
+		return fmt.Sprintf("ipv%d_addr . ipv%d_addr", ipVersion, ipVersion)
 	case ipsets.IPSetTypeHashIPPort:
 		return fmt.Sprintf("ipv%d_addr . inet_proto . inet_service", ipVersion)
 	}
