@@ -36,7 +36,21 @@ var (
 	_ SetMember = simpleMember("")
 	_ SetMember = v4IPPortMember{}
 	_ SetMember = v6IPPortMember{}
+	_ SetMember = netNet{}
+	_ SetMember = unknownMember{}
 )
+
+type netNet struct {
+	net1, net2 ip.CIDR
+}
+
+func (n netNet) Key() []string {
+	return []string{n.net1.String(), n.net2.String()}
+}
+
+func (n netNet) String() string {
+	return fmt.Sprintf("%s . %s", n.net1, n.net2)
+}
 
 // simpleMember represents a member of a simple, non-concatenated nftables set that is a single element.
 type simpleMember string
