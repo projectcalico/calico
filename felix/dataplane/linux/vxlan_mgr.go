@@ -32,6 +32,7 @@ import (
 	"golang.org/x/sys/unix"
 
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
+	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/ethtool"
 	"github.com/projectcalico/calico/felix/ip"
@@ -42,11 +43,6 @@ import (
 	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/felix/vxlanfdb"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
-)
-
-const (
-	VXLANIfaceNameV4 = "vxlan.calico"
-	VXLANIfaceNameV6 = "vxlan-v6.calico"
 )
 
 // added so that we can shim netlink for tests
@@ -108,10 +104,6 @@ type vxlanManager struct {
 	logCtx *logrus.Entry
 }
 
-const (
-	defaultVXLANProto netlink.RouteProtocol = 80
-)
-
 type VXLANFDB interface {
 	SetVTEPs(vteps []vxlanfdb.VTEP)
 }
@@ -128,7 +120,7 @@ func newVXLANManager(
 ) *vxlanManager {
 	nlHandle, _ := netlink.NewHandle(syscall.NETLINK_ROUTE)
 
-	blackHoleProto := defaultVXLANProto
+	blackHoleProto := dataplanedefs.VXLANDefaultProto
 	if dpConfig.DeviceRouteProtocol != syscall.RTPROT_BOOT {
 		blackHoleProto = dpConfig.DeviceRouteProtocol
 	}
@@ -202,7 +194,7 @@ func newVXLANManagerWithShims(
 	noEncapRTConstruct func(interfacePrefixes []string, ipVersion uint8, netlinkTimeout time.Duration,
 		deviceRouteSourceAddress net.IP, deviceRouteProtocol netlink.RouteProtocol, removeExternalRoutes bool) routetable.RouteTableInterface,
 ) *vxlanManager {
-	noEncapProtocol := defaultVXLANProto
+	noEncapProtocol := dataplanedefs.VXLANDefaultProto
 	if dpConfig.DeviceRouteProtocol != syscall.RTPROT_BOOT {
 		noEncapProtocol = dpConfig.DeviceRouteProtocol
 	}
