@@ -568,6 +568,8 @@ func (s *IPSets) NFTablesSet(name string) *knftables.Set {
 		// IP and port sets don't support the interval flag.
 	case ipsets.IPSetTypeHashIP:
 		// IP addr sets don't use the interval flag.
+	case ipsets.IPSetTypeBitmapPort:
+		// Bitmap port sets don't use the interval flag.
 	case ipsets.IPSetTypeHashNet:
 		// Net sets require the interval flag.
 		flags = append(flags, knftables.IntervalFlag)
