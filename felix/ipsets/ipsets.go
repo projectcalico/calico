@@ -958,10 +958,13 @@ func (s *IPSets) ApplyDeletions() bool {
 		}
 		return deltatracker.IterActionUpdateDataplane
 	})
+
 	// ApplyDeletions() marks the end of the two-phase "apply". Piggyback on that to
 	// update the gauge that records how many IP sets we own.
-	numDeletionsPending := s.setNameToProgrammedMetadata.Dataplane().Len()
-	s.gaugeNumIpsets.Set(float64(numDeletionsPending))
+	s.gaugeNumIpsets.Set(float64(s.setNameToProgrammedMetadata.Dataplane().Len()))
+
+	// Determine if we need to be rescheduled.
+	numDeletionsPending := s.setNameToProgrammedMetadata.PendingDeletions().Len()
 	if numDeletions == 0 {
 		// We had nothing to delete, or we only encountered errors, don't
 		// ask to be rescheduled.
