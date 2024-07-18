@@ -898,7 +898,7 @@ func setType(t ipsets.IPSetType, ipVersion int) string {
 	case ipsets.IPSetTypeHashIPPort:
 		return fmt.Sprintf("ipv%d_addr . inet_proto . inet_service", ipVersion)
 	case ipsets.IPSetTypeBitmapPort:
-		return fmt.Sprintf("inet_service")
+		return "inet_service"
 	default:
 		log.WithField("type", string(t)).Panic("Unknown IPSetType")
 	}
