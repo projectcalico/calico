@@ -37,6 +37,7 @@ var expected_images = []string{
 	// "pilot-webhook",
 	"pod2daemon-flexvol",
 	"csi",
+	"qwerty",
 }
 
 // Commenting these out because we don't currently tag the
@@ -77,12 +78,12 @@ var _ = BeforeSuite(func() {
 })
 
 var _ = AfterSuite(func() {
-	if cacheHits, found := regCheck.Cache.Get("CacheHit"); found {
-		fmt.Printf("Cache hits: %v\n", cacheHits)
-	}
-	if cacheMiss, found := regCheck.Cache.Get("CacheMiss"); found {
-		fmt.Printf("Cache misses: %v\n", cacheMiss)
-	}
+	// if cacheHits, found := regCheck.Cache.Get("CacheHit"); found {
+	// 	fmt.Printf("Cache hits: %v\n", cacheHits)
+	// }
+	// if cacheMiss, found := regCheck.Cache.Get("CacheMiss"); found {
+	// 	fmt.Printf("Cache misses: %v\n", cacheMiss)
+	// }
 })
 
 var _ = Describe(
@@ -104,22 +105,22 @@ var _ = Describe(
 					})
 				}
 				for _, image_name := range expected_images {
-					Context(fmt.Sprintf("image %s", image_name), func() {
-						for _, arch_name := range expected_arches {
-							image_name := image_name
-							arch_name := arch_name
-							var containerImage = container.Image{
-								Name:     image_name,
-								Tag:      fmt.Sprintf("%s-%s", release_tag, arch_name),
-								HostName: host_name,
-							}
-							Context(arch_name, Ordered, func() {
-								It("should exist", func() {
+					Describe(fmt.Sprintf("image %s", image_name),
+						func() {
+							for _, arch_name := range expected_arches {
+								image_name := image_name
+								host_name := host_name
+								arch_name := arch_name
+								var containerImage = container.Image{
+									Name:     image_name,
+									Tag:      fmt.Sprintf("%s-%s", release_tag, arch_name),
+									HostName: host_name,
+								}
+								It(fmt.Sprintf("Should have %s", arch_name), func() {
 									Expect(regCheck.CheckImageTagExists(containerImage)).NotTo(HaveOccurred())
 								})
-							})
-						}
-					})
+							}
+						})
 				}
 
 				for _, image_name := range expected_windows_images {

@@ -7,6 +7,7 @@ import (
 	"slices"
 	"sync"
 
+	. "github.com/onsi/ginkgo/v2"
 	"github.com/patrickmn/go-cache"
 	"github.com/regclient/regclient"
 	"github.com/regclient/regclient/types/ref"
@@ -84,7 +85,9 @@ func (reg RegistryChecker) CheckImageTagExists(ContainerImage container.Image) e
 		// fmt.Printf("Getting image data from server for %s", ContainerImage.FullPath())
 		x, err := reg.fetchImageTagInfo(ImagePath)
 		if err != nil {
-			return fmt.Errorf("failed to fetch image tag info: %w", err)
+			var errmsg = fmt.Sprintf("failed to fetch image tag info for %s", ImagePath)
+			Fail(errmsg)
+			return fmt.Errorf("%s: %w", errmsg, err)
 		}
 		TagList = x
 		reg.Cache.Add(ImagePath, TagList, cache.NoExpiration)
@@ -94,28 +97,8 @@ func (reg RegistryChecker) CheckImageTagExists(ContainerImage container.Image) e
 	if slices.Contains(TagList, ContainerImage.Tag) {
 		return nil
 	} else {
-		return fmt.Errorf("tag %s not found in tag list for %s", ContainerImage.Tag, ImagePath)
+		var errmsg = fmt.Sprintf("tag %s not found in tag list for %s", ContainerImage.Tag, ImagePath)
+		Fail(errmsg)
+		return fmt.Errorf(errmsg)
 	}
 }
-
-// func validateImages() {
-// 	ctx := context.Background()
-// 	rc := regclient.New()
-
-// 	// create a reference for an image
-// 	r, err := ref.New("asia.gcr.io/projectcalico-org/pod2daemon-flexvol")
-// 	if err != nil {
-// 		fmt.Printf("failed to create ref: %v\n", err)
-// 		return
-// 	}
-// 	defer rc.Close(ctx, r)
-// 	// get a manifest (or call other regclient methods)
-// 	m, err := rc.TagList(ctx, r)
-// 	if err != nil {
-// 		fmt.Printf("failed to get manifest: %v\n", err)
-// 		return
-// 	}
-
-// 	fmt.Println(slices.Contains(m.Tags, "v3.28.0"))
-
-// }
