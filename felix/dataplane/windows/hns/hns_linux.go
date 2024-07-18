@@ -119,6 +119,26 @@ type Policy struct {
 
 // Types from hnsendpoint.go.
 
+// EndpointState represents the states of an HNS Endpoint lifecycle.
+type EndpointState uint16
+
+const (
+	Uninitialized   EndpointState = iota
+	Created         EndpointState = 1
+	Attached        EndpointState = 2
+	AttachedSharing EndpointState = 3
+	Detached        EndpointState = 4
+	Degraded        EndpointState = 5
+	Destroyed       EndpointState = 6
+)
+
+// EndpointState const
+// The lifecycle of an Endpoint goes through created, attached, AttachedSharing - endpoint is being shared with other containers,
+// detached, after being attached, degraded and finally destroyed.
+func (es EndpointState) String() string {
+	return [...]string{"Uninitialized", "Attached", "AttachedSharing", "Detached", "Degraded", "Destroyed"}[es]
+}
+
 // HNSEndpoint represents a network endpoint in HNS
 type HNSEndpoint struct {
 	Id                 string            `json:"ID,omitempty"`
@@ -141,8 +161,9 @@ type HNSEndpoint struct {
 	IsRemoteEndpoint   bool              `json:",omitempty"`
 	EnableLowMetric    bool              `json:",omitempty"`
 	//Namespace          *Namespace        `json:",omitempty"`
-	EncapOverhead    uint16   `json:",omitempty"`
-	SharedContainers []string `json:",omitempty"`
+	EncapOverhead    uint16        `json:",omitempty"`
+	SharedContainers []string      `json:",omitempty"`
+	State            EndpointState `json:",omitempty"`
 }
 
 // ApplyACLPolicy applies a set of ACL Policies on the Endpoint
