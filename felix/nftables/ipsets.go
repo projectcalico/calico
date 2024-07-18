@@ -490,6 +490,13 @@ func (s *IPSets) tryResync() error {
 				} else {
 					unknownElems.Add(UnknownMember(e.Key))
 				}
+			case ipsets.IPSetTypeHashNetNet:
+				if len(e.Key) == 2 {
+					// This is a concatination of two CIDRs. Format it back into Felix's internal representation.
+					strElems = append(strElems, fmt.Sprintf("%s,%s", e.Key[0], e.Key[1]))
+				} else {
+					unknownElems.Add(UnknownMember(e.Key))
+				}
 			default:
 				unknownElems.Add(UnknownMember(e.Key))
 			}

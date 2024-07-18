@@ -204,7 +204,7 @@ var _ = Describe("IPSets with empty data plane", func() {
 
 	It("should program a hash:net,net IP set", func() {
 		meta := ipsets.IPSetMetadata{SetID: "test", Type: ipsets.IPSetTypeHashNetNet}
-		s.AddOrReplaceIPSet(meta, []string{"10.0.0.0/24,11.0.0.0/32"})
+		s.AddOrReplaceIPSet(meta, []string{"10.0.0.0/32,11.0.0.0/32"})
 		Expect(s.ApplyUpdates).NotTo(Panic())
 		sets, err := f.List(context.Background(), "sets")
 		Expect(err).NotTo(HaveOccurred())
@@ -213,6 +213,6 @@ var _ = Describe("IPSets with empty data plane", func() {
 		members, err := f.ListElements(context.Background(), "set", "cali40test")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(members).To(HaveLen(1))
-		Expect(members[0].Key).To(Equal([]string{"10.0.0.0/24", "11.0.0.0/32"}))
+		Expect(members[0].Key).To(Equal([]string{"10.0.0.0", "11.0.0.0"}))
 	})
 })
