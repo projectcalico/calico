@@ -625,9 +625,6 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 	struct cali_tc_state *state = ctx->state;
 	int rc = TC_ACT_UNSPEC;
 	bool fib = true;
-	//this is suppressing a variable set and never used clang warning. Maybe dangerous? 
-	//Is actually used at fwd_fib_set(&fwd, fib) but maybe new clang realizes thats unreachable.
-	CALI_DEBUG("fib=%t", fib);
 	struct ct_create_ctx ct_ctx_nat = {};
 	int ct_rc = ct_result_rc(state->ct_result.rc);
 	bool ct_related = ct_result_is_related(state->ct_result.rc);
@@ -1330,6 +1327,7 @@ encap_allow:
 	}
 
 deny:
+	(void)fib; //this is suppressing a variable set and never used clang warning.
 	{
 		struct fwd fwd = {
 			.res = TC_ACT_SHOT,
