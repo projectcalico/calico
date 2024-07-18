@@ -115,23 +115,51 @@ type Policy struct {
 
 // Types from hnsendpoint.go.
 
+// EndpointState represents the states of an HNS Endpoint lifecycle.
+type EndpointState uint16
+
+const (
+	Uninitialized   EndpointState = iota
+	Created         EndpointState = 1
+	Attached        EndpointState = 2
+	AttachedSharing EndpointState = 3
+	Detached        EndpointState = 4
+	Degraded        EndpointState = 5
+	Destroyed       EndpointState = 6
+)
+
+// EndpointState const
+// The lifecycle of an Endpoint goes through created, attached, AttachedSharing - endpoint is being shared with other containers,
+// detached, after being attached, degraded and finally destroyed.
+func (es EndpointState) String() string {
+	return [...]string{"Uninitialized", "Attached", "AttachedSharing", "Detached", "Degraded", "Destroyed"}[es]
+}
+
 // HNSEndpoint represents a network endpoint in HNS
 type HNSEndpoint struct {
-	Id                 string
-	Name               string
-	VirtualNetwork     string
-	VirtualNetworkName string
-	Policies           []json.RawMessage
-	MacAddress         string
-	IPAddress          net.IP
-	DNSSuffix          string
-	DNSServerList      string
-	GatewayAddress     string
-	EnableInternalDNS  bool
-	DisableICC         bool
-	PrefixLength       uint8
-	IsRemoteEndpoint   bool
-	// Namespace          *Namespace
+	Id                 string            `json:"ID,omitempty"`
+	Name               string            `json:",omitempty"`
+	VirtualNetwork     string            `json:",omitempty"`
+	VirtualNetworkName string            `json:",omitempty"`
+	Policies           []json.RawMessage `json:",omitempty"`
+	MacAddress         string            `json:",omitempty"`
+	IPAddress          net.IP            `json:",omitempty"`
+	IPv6Address        net.IP            `json:",omitempty"`
+	DNSSuffix          string            `json:",omitempty"`
+	DNSServerList      string            `json:",omitempty"`
+	DNSDomain          string            `json:",omitempty"`
+	GatewayAddress     string            `json:",omitempty"`
+	GatewayAddressV6   string            `json:",omitempty"`
+	EnableInternalDNS  bool              `json:",omitempty"`
+	DisableICC         bool              `json:",omitempty"`
+	PrefixLength       uint8             `json:",omitempty"`
+	IPv6PrefixLength   uint8             `json:",omitempty"`
+	IsRemoteEndpoint   bool              `json:",omitempty"`
+	EnableLowMetric    bool              `json:",omitempty"`
+	//Namespace          *Namespace        `json:",omitempty"`
+	EncapOverhead    uint16        `json:",omitempty"`
+	SharedContainers []string      `json:",omitempty"`
+	State            EndpointState `json:",omitempty"`
 }
 
 // ApplyACLPolicy applies a set of ACL Policies on the Endpoint
