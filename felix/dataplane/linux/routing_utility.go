@@ -16,10 +16,12 @@ package intdataplane
 
 import (
 	"strings"
+	"syscall"
 
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
+	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
@@ -87,4 +89,35 @@ func blackholeRoutes(localIPAMBlocks map[string]*proto.RouteUpdate) []routetable
 		})
 	}
 	return rtt
+}
+
+func noEncapRoute(cidr ip.CIDR, r *proto.RouteUpdate) *routetable.Target {
+	if !r.GetSameSubnet() {
+		return nil
+	}
+	if r.DstNodeIp == "" {
+		return nil
+	}
+	noEncapRoute := routetable.Target{
+		Type: routetable.TargetTypeNoEncap,
+		CIDR: cidr,
+		GW:   ip.FromString(r.DstNodeIp),
+	}
+	return &noEncapRoute
+}
+
+func calculateRouteProtocol(dpConfig Config) netlink.RouteProtocol {
+	// For same-subnet and blackhole routes, we need a unique protocol
+	// to attach to the routes.  If the global DeviceRouteProtocol is set to
+	// a usable value, use that; otherwise, pick a safer default.  (For back
+	// compatibility, our DeviceRouteProtocol defaults to RTPROT_BOOT, which
+	// can also be used by other processes.)
+	//
+	// Routes to the VXLAN tunnel device itself are identified by their target
+	// interface.  We don't need to worry about their protocol.
+	routeProtocol := dataplanedefs.DefaultRoutingProto
+	if dpConfig.DeviceRouteProtocol != syscall.RTPROT_BOOT {
+		routeProtocol = dpConfig.DeviceRouteProtocol
+	}
+	return routeProtocol
 }

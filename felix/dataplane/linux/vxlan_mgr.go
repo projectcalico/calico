@@ -32,7 +32,6 @@ import (
 	"golang.org/x/sys/unix"
 
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
-	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/ethtool"
 	"github.com/projectcalico/calico/felix/ip"
@@ -106,11 +105,7 @@ func newVXLANManager(
 	featureDetector environment.FeatureDetectorIface,
 ) *vxlanManager {
 	nlHandle, _ := netlink.NewHandle(syscall.NETLINK_ROUTE)
-
-	blackHoleProto := dataplanedefs.DefaultRoutingProto
-	if dpConfig.DeviceRouteProtocol != syscall.RTPROT_BOOT {
-		blackHoleProto = dpConfig.DeviceRouteProtocol
-	}
+	blackHoleProto := calculateRouteProtocol(dpConfig)
 
 	var brt routetable.RouteTableInterface
 	if !dpConfig.RouteSyncDisabled {
@@ -206,26 +201,10 @@ func newVXLANManagerWithShims(
 		vtepsDirty:                true,
 		dpConfig:                  dpConfig,
 		nlHandle:                  nlHandle,
-		noEncapProtocol:           calculateNonEncapRouteProtocol(dpConfig),
+		noEncapProtocol:           calculateRouteProtocol(dpConfig),
 		noEncapRTConstruct:        noEncapRTConstruct,
 		logCtx:                    logrus.WithField("ipVersion", ipVersion),
 	}
-}
-
-func calculateNonEncapRouteProtocol(dpConfig Config) netlink.RouteProtocol {
-	// For same-subnet and blackhole routes, we need a unique protocol
-	// to attach to the routes.  If the global DeviceRouteProtocol is set to
-	// a usable value, use that; otherwise, pick a safer default.  (For back
-	// compatibility, our DeviceRouteProtocol defaults to RTPROT_BOOT, which
-	// can also be used by other processes.)
-	//
-	// Routes to the VXLAN tunnel device itself are identified by their target
-	// interface.  We don't need to worry about their protocol.
-	noEncapProtocol := dataplanedefs.DefaultRoutingProto
-	if dpConfig.DeviceRouteProtocol != syscall.RTPROT_BOOT {
-		noEncapProtocol = dpConfig.DeviceRouteProtocol
-	}
-	return noEncapProtocol
 }
 
 func (m *vxlanManager) OnUpdate(protoBufMsg interface{}) {
@@ -355,11 +334,13 @@ func (m *vxlanManager) GetRouteTableSyncers() []routetable.RouteTableSyncer {
 }
 
 func (m *vxlanManager) CompleteDeferredWork() error {
+	if !m.vtepsDirty && !m.routesDirty {
+		return nil
+	}
 	if m.vtepsDirty {
 		m.updateNeighborsAndAllowedSources()
 		m.vtepsDirty = false
 	}
-
 	if m.routesDirty {
 		err := m.updateRoutes()
 		if err != nil {
@@ -367,6 +348,7 @@ func (m *vxlanManager) CompleteDeferredWork() error {
 		}
 		m.routesDirty = false
 	}
+	m.logCtx.Info("VXLAN Manager completed deferred work")
 	return nil
 }
 
@@ -418,7 +400,7 @@ func (m *vxlanManager) updateRoutes() error {
 			continue
 		}
 
-		if noEncapRoute := m.noEncapRoute(cidr, r); noEncapRoute != nil {
+		if noEncapRoute := noEncapRoute(cidr, r); noEncapRoute != nil {
 			// We've got everything we need to program this route as a no-encap route.
 			noEncapRoutes = append(noEncapRoutes, *noEncapRoute)
 			logCtx.WithField("route", r).Debug("Destination in same subnet, using no-encap route.")
@@ -434,7 +416,7 @@ func (m *vxlanManager) updateRoutes() error {
 	m.routeTable.SetRoutes(m.vxlanDevice, vxlanRoutes)
 
 	bhRoutes := blackholeRoutes(m.localIPAMBlocks)
-	m.logCtx.WithField("balckhole routes", bhRoutes).Debug("VXLAN manager sending blackhole routes")
+	m.logCtx.WithField("balckhole routes", bhRoutes).Debug("VXLAN manager setting blackhole routes")
 	m.blackholeRouteTable.SetRoutes(routetable.InterfaceNone, bhRoutes)
 
 	if m.noEncapRouteTable != nil {
@@ -445,23 +427,7 @@ func (m *vxlanManager) updateRoutes() error {
 		return errors.New("no encap route table not set, will defer adding routes")
 	}
 
-	m.logCtx.Info("VXLAN Manager completed deferred work")
 	return nil
-}
-
-func (m *vxlanManager) noEncapRoute(cidr ip.CIDR, r *proto.RouteUpdate) *routetable.Target {
-	if !r.GetSameSubnet() {
-		return nil
-	}
-	if r.DstNodeIp == "" {
-		return nil
-	}
-	noEncapRoute := routetable.Target{
-		Type: routetable.TargetTypeNoEncap,
-		CIDR: cidr,
-		GW:   ip.FromString(r.DstNodeIp),
-	}
-	return &noEncapRoute
 }
 
 func (m *vxlanManager) tunneledRoute(cidr ip.CIDR, r *proto.RouteUpdate) *routetable.Target {

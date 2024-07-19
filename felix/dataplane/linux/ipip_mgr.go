@@ -32,7 +32,6 @@ import (
 	"golang.org/x/sys/unix"
 
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
-	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/ethtool"
 	"github.com/projectcalico/calico/felix/ip"
@@ -112,12 +111,8 @@ func newIPIPManager(
 		logrus.Errorf("IPIP manager only supports IPv4")
 		return nil
 	}
-	nlHandle, _ := netlink.NewHandle()
-
-	blackHoleProto := dataplanedefs.DefaultRoutingProto
-	if dpConfig.DeviceRouteProtocol != syscall.RTPROT_BOOT {
-		blackHoleProto = dpConfig.DeviceRouteProtocol
-	}
+	nlHandle, _ := netlink.NewHandle(syscall.NETLINK_ROUTE)
+	blackHoleProto := calculateRouteProtocol(dpConfig)
 
 	var brt routetable.RouteTableInterface
 	if !dpConfig.RouteSyncDisabled {
@@ -173,10 +168,6 @@ func newIPIPManagerWithShim(
 		logrus.Errorf("IPIP manager only supports IPv4")
 		return nil
 	}
-	noEncapProtocol := dataplanedefs.DefaultRoutingProto
-	if dpConfig.DeviceRouteProtocol != syscall.RTPROT_BOOT {
-		noEncapProtocol = dpConfig.DeviceRouteProtocol
-	}
 	return &ipipManager{
 		ipsetsDataplane:    ipsetsDataplane,
 		activeHostnameToIP: map[string]string{},
@@ -199,7 +190,7 @@ func newIPIPManagerWithShim(
 		ipSetDirty:                true,
 		dpConfig:                  dpConfig,
 		nlHandle:                  nlHandle,
-		noEncapProtocol:           noEncapProtocol,
+		noEncapProtocol:           calculateRouteProtocol(dpConfig),
 		noEncapRTConstruct:        noEncapRTConstruct,
 		logCtx:                    logrus.WithField("ipVersion", ipVersion),
 	}
@@ -318,92 +309,96 @@ func (m *ipipManager) GetRouteTableSyncers() []routetable.RouteTableSyncer {
 }
 
 func (m *ipipManager) CompleteDeferredWork() error {
-	if !m.routesDirty {
-		m.logCtx.Debug("No change since last application, nothing to do")
+	if !m.ipSetDirty && !m.routesDirty {
 		return nil
 	}
 	if m.ipSetDirty {
-		// For simplicity (and on the assumption that host add/removes are rare) rewrite
-		// the whole IP set whenever we get a change. To replace this with delta handling
-		// would require reference counting the IPs because it's possible for two hosts
-		// to (at least transiently) share an IP. That would add occupancy and make the
-		// code more complex.
-		m.logCtx.Info("All-hosts IP set out-of sync, refreshing it.")
-		members := make([]string, 0, len(m.activeHostnameToIP)+len(m.externalNodeCIDRs))
-		for _, ip := range m.activeHostnameToIP {
-			members = append(members, ip)
-		}
-		members = append(members, m.externalNodeCIDRs...)
-		m.ipsetsDataplane.AddOrReplaceIPSet(m.ipSetMetadata, members)
+		m.updateAllHostsIPSet()
 		m.ipSetDirty = false
 	}
 	if m.routesDirty {
-		// Iterate through all of our L3 routes and send them through to the route table.
-		var ipipRoutes []routetable.Target
-		var noEncapRoutes []routetable.Target
-		for _, r := range m.routesByDest {
-			logCtx := m.logCtx.WithField("route", r)
-			cidr, err := ip.CIDRFromString(r.Dst)
-			if err != nil {
-				// Don't block programming of other routes if somehow we receive one with a bad dst.
-				logCtx.WithError(err).Warn("Failed to parse IPIP route destination")
-				continue
-			}
-
-			if r.GetSameSubnet() {
-				if r.DstNodeIp == "" {
-					logCtx.Debug("Can't program non-encap route since host IP is not known.")
-					continue
-				}
-
-				defaultRoute := routetable.Target{
-					Type: routetable.TargetTypeNoEncap,
-					CIDR: cidr,
-					GW:   ip.FromString(r.DstNodeIp),
-				}
-
-				noEncapRoutes = append(noEncapRoutes, defaultRoute)
-				logCtx.WithField("route", r).Debug("adding no encap route to list for addition")
-			} else {
-				// Extract the gateway addr for this route based on its remote address.
-				remoteAddr, ok := m.activeHostnameToIP[r.DstNodeName]
-				if !ok {
-					// When the local address arrives, it'll set routesDirty=true so this loop will execute again.
-					logCtx.Debug("Dataplane has route with no corresponding local address")
-					continue
-				}
-
-				ipipRoute := routetable.Target{
-					Type: routetable.TargetTypeOnLink,
-					CIDR: cidr,
-					GW:   ip.FromString(remoteAddr),
-				}
-
-				ipipRoutes = append(ipipRoutes, ipipRoute)
-				logCtx.WithField("route", ipipRoute).Debug("adding ipip route to list for addition")
-			}
+		err := m.updateRoutes()
+		if err != nil {
+			return err
 		}
-
-		m.logCtx.WithField("ipip routes", ipipRoutes).Debug("IPIP manager sending IPIP L3 updates")
-		m.routeTable.SetRoutes(m.ipipDevice, ipipRoutes)
-
-		bhRoutes := blackholeRoutes(m.localIPAMBlocks)
-		m.logCtx.WithField("balckhole routes", bhRoutes).Debug("IPIP manager sending blackhole routes")
-		m.blackholeRouteTable.SetRoutes(routetable.InterfaceNone, bhRoutes)
-
-		if m.noEncapRouteTable != nil {
-			m.logCtx.WithField("link", m.parentIfaceName).WithField("routes", noEncapRoutes).Debug(
-				"IPIP manager sending unencapsulated L3 updates")
-			m.noEncapRouteTable.SetRoutes(m.parentIfaceName, noEncapRoutes)
-		} else {
-			return errors.New("no encap route table not set, will defer adding routes")
-		}
-
-		m.logCtx.Info("IPIP Manager completed deferred work")
 		m.routesDirty = false
+	}
+	m.logCtx.Info("IPIP Manager completed deferred work")
+	return nil
+}
+
+func (m *ipipManager) updateAllHostsIPSet() {
+	// For simplicity (and on the assumption that host add/removes are rare) rewrite
+	// the whole IP set whenever we get a change. To replace this with delta handling
+	// would require reference counting the IPs because it's possible for two hosts
+	// to (at least transiently) share an IP. That would add occupancy and make the
+	// code more complex.
+	m.logCtx.Info("All-hosts IP set out-of sync, refreshing it.")
+	members := make([]string, 0, len(m.activeHostnameToIP)+len(m.externalNodeCIDRs))
+	for _, ip := range m.activeHostnameToIP {
+		members = append(members, ip)
+	}
+	members = append(members, m.externalNodeCIDRs...)
+	m.ipsetsDataplane.AddOrReplaceIPSet(m.ipSetMetadata, members)
+}
+
+func (m *ipipManager) updateRoutes() error {
+	// Iterate through all of our L3 routes and send them through to the route table.
+	var ipipRoutes []routetable.Target
+	var noEncapRoutes []routetable.Target
+	for _, r := range m.routesByDest {
+		logCtx := m.logCtx.WithField("route", r)
+		cidr, err := ip.CIDRFromString(r.Dst)
+		if err != nil {
+			// Don't block programming of other routes if somehow we receive one with a bad dst.
+			logCtx.WithError(err).Warn("Failed to parse IPIP route destination")
+			continue
+		}
+
+		if noEncapRoute := noEncapRoute(cidr, r); noEncapRoute != nil {
+			// We've got everything we need to program this route as a no-encap route.
+			noEncapRoutes = append(noEncapRoutes, *noEncapRoute)
+			logCtx.WithField("route", r).Debug("Destination in same subnet, using no-encap route.")
+		} else if ipipRoute := m.tunneledRoute(cidr, r); ipipRoute != nil {
+			ipipRoutes = append(ipipRoutes, *ipipRoute)
+			logCtx.WithField("route", ipipRoute).Debug("adding ipip route to list for addition")
+		} else {
+			logCtx.Debug("Not enough information to program route; missing target host address?")
+		}
+	}
+
+	m.logCtx.WithField("ipipRoutes", ipipRoutes).Debug("IPIP manager setting IPIP tunnled routes")
+	m.routeTable.SetRoutes(m.ipipDevice, ipipRoutes)
+
+	bhRoutes := blackholeRoutes(m.localIPAMBlocks)
+	m.logCtx.WithField("balckhole routes", bhRoutes).Debug("IPIP manager setting blackhole routes")
+	m.blackholeRouteTable.SetRoutes(routetable.InterfaceNone, bhRoutes)
+
+	if m.noEncapRouteTable != nil {
+		m.logCtx.WithField("link", m.parentIfaceName).WithField("routes", noEncapRoutes).Debug(
+			"IPIP manager sending unencapsulated L3 updates")
+		m.noEncapRouteTable.SetRoutes(m.parentIfaceName, noEncapRoutes)
+	} else {
+		return errors.New("no encap route table not set, will defer adding routes")
 	}
 
 	return nil
+}
+
+func (m *ipipManager) tunneledRoute(cidr ip.CIDR, r *proto.RouteUpdate) *routetable.Target {
+	// Extract the gateway addr for this route based on its remote address.
+	remoteAddr, ok := m.activeHostnameToIP[r.DstNodeName]
+	if !ok {
+		// When the local address arrives, it'll set routesDirty=true so this loop will execute again.
+		return nil
+	}
+
+	ipipRoute := routetable.Target{
+		Type: routetable.TargetTypeOnLink,
+		CIDR: cidr,
+		GW:   ip.FromString(remoteAddr),
+	}
+	return &ipipRoute
 }
 
 func (m *ipipManager) OnParentNameUpdate(name string) {

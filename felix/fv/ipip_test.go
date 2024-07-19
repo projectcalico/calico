@@ -35,6 +35,7 @@ import (
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 
+	dpdefs "github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
@@ -127,7 +128,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 			if brokenXSum {
 				It("should disable checksum offload", func() {
 					Eventually(func() string {
-						out, err := felixes[0].ExecOutput("ethtool", "-k", "ipip.calico")
+						out, err := felixes[0].ExecOutput("ethtool", "-k", dpdefs.IPIPIfaceNameV4)
 						if err != nil {
 							return fmt.Sprintf("ERROR: %v", err)
 						}
@@ -137,7 +138,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 			} else {
 				It("should not disable checksum offload", func() {
 					Eventually(func() string {
-						out, err := felixes[0].ExecOutput("ethtool", "-k", "ipip.calico")
+						out, err := felixes[0].ExecOutput("ethtool", "-k", dpdefs.IPIPIfaceNameV4)
 						if err != nil {
 							return fmt.Sprintf("ERROR: %v", err)
 						}
@@ -551,13 +552,13 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 				}
 			})
 
-			It("should configure the tunl0 device correctly", func() {
-				// The tunl0 device should appear with default MTU, etc. FV environment uses MTU 1500,
+			It("should configure the ipip device correctly", func() {
+				// The ipip device should appear with default MTU, etc. FV environment uses MTU 1500,
 				// which means that we should expect 1480 after subtracting IPIP overhead for IPv4.
 				mtuStr := "mtu 1480"
 				for _, felix := range felixes {
 					Eventually(func() string {
-						out, _ := felix.ExecOutput("ip", "-d", "link", "show", "ipip.calico")
+						out, _ := felix.ExecOutput("ip", "-d", "link", "show", dpdefs.IPIPIfaceNameV4)
 						return out
 					}, "60s", "500ms").Should(ContainSubstring(mtuStr))
 				}
@@ -576,7 +577,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 				for _, felix := range felixes {
 					// Felix checks host MTU every 30s
 					Eventually(func() string {
-						out, _ := felix.ExecOutput("ip", "-d", "link", "show", "ipip.calico")
+						out, _ := felix.ExecOutput("ip", "-d", "link", "show", dpdefs.IPIPIfaceNameV4)
 						return out
 					}, "60s", "500ms").Should(ContainSubstring(mtuStr))
 
@@ -599,7 +600,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 				for _, felix := range felixes {
 					// Felix checks host MTU every 30s
 					Eventually(func() string {
-						out, _ := felix.ExecOutput("ip", "-d", "link", "show", "ipip.calico")
+						out, _ := felix.ExecOutput("ip", "-d", "link", "show", dpdefs.IPIPIfaceNameV4)
 						return out
 					}, "60s", "500ms").Should(ContainSubstring("mtu 1300"))
 				}
@@ -699,7 +700,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 					felixes[0].Exec("kill", "-STOP", fmt.Sprint(pid))
 
 					tc.Felixes[0].Exec("ip", "route", "add", "10.65.222.1", "via",
-						externalClient.IP, "dev", "ipip.calico", "onlink", "proto", "90")
+						externalClient.IP, "dev", dpdefs.IPIPIfaceNameV4, "onlink", "proto", "90")
 
 					By("testing that the ext client can connect via ipip")
 					cc.ResetExpectations()
@@ -771,7 +772,7 @@ func setupIPIPWorkloads(infra infrastructure.DatastoreInfra, tc infrastructure.T
 	// Install a default profile that allows all ingress and egress, in the absence of any Policy.
 	infra.AddDefaultAllow()
 
-	// Wait until the tunl0 device appears; it is created when felix inserts the ipip module
+	// Wait until the ipip device appears; it is created when felix inserts the ipip module
 	// into the kernel.
 	Eventually(func() error {
 		links, err := netlink.LinkList()
