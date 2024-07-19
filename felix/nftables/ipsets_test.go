@@ -86,7 +86,7 @@ var _ = Describe("IPSets with empty data plane", func() {
 	})
 
 	// Add base test cases to test the programing of simple IP sets.
-	for _, t := range []ipsets.IPSetType{ipsets.IPSetTypeHashIP, ipsets.IPSetTypeHashNet, ipsets.IPSetTypeHashIPPort} {
+	for _, t := range []ipsets.IPSetType{ipsets.IPSetTypeHashIP, ipsets.IPSetTypeHashNet, ipsets.IPSetTypeHashIPPort, ipsets.IPSetTypeHashNetNet} {
 		It(fmt.Sprintf("should program IP sets of type %s", t), func() {
 			meta := ipsets.IPSetMetadata{SetID: "test", Type: t}
 			s.AddOrReplaceIPSet(meta, []string{})
@@ -200,5 +200,19 @@ var _ = Describe("IPSets with empty data plane", func() {
 		Expect(elements).To(ConsistOf(
 			&knftables.Element{Set: "cali40unsupported-set", Key: []string{"10.0.0.1"}},
 		))
+	})
+
+	It("should program a hash:net,net IP set", func() {
+		meta := ipsets.IPSetMetadata{SetID: "test", Type: ipsets.IPSetTypeHashNetNet}
+		s.AddOrReplaceIPSet(meta, []string{"10.0.0.0/32,11.0.0.0/32"})
+		Expect(s.ApplyUpdates).NotTo(Panic())
+		sets, err := f.List(context.Background(), "sets")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(sets).To(Equal([]string{"cali40test"}))
+
+		members, err := f.ListElements(context.Background(), "set", "cali40test")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(members).To(HaveLen(1))
+		Expect(members[0].Key).To(Equal([]string{"10.0.0.0", "11.0.0.0"}))
 	})
 })

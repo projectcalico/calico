@@ -76,7 +76,7 @@ func (r *nftRenderer) renderRule(rule *generictables.Rule, features *environment
 		// Render other actions.
 		actionFragment := rule.Action.ToFragment(features)
 		if actionFragment != "" {
-			fragments = append(fragments, actionFragment)
+			fragments = append(fragments, insertIPVersion(actionFragment, r.ipv))
 		}
 	}
 
