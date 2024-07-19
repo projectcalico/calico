@@ -1,4 +1,4 @@
-package calico
+package utils
 
 import (
 	"fmt"
@@ -9,7 +9,6 @@ import (
 	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
 
-	"github.com/projectcalico/calico/fixham/internal/dict"
 	"github.com/projectcalico/calico/fixham/internal/operator"
 )
 
@@ -45,17 +44,18 @@ type PinnedVersion struct {
 }
 
 func GeneratePinnedVersion(rootDir, devTagSuffix string) (string, error) {
-	// TODO: check if the file exists
+	pinnedVersionPath := rootDir + pinnedVersionOutputPath
+	if _, err := os.Stat(pinnedVersionPath); err == nil {
+		logrus.WithField("pinned version file", pinnedVersionPath).Info("Pinned version file already exists")
+		return pinnedVersionPath, fmt.Errorf("pinned version file already exists")
+	}
 	pinnedVersionTemplatePath := rootDir + pinnedVersionTemplatePath
 	logrus.WithField("pinned version template", pinnedVersionTemplatePath).Debug("Reading pinned-version.yaml.tmpl")
 	pinnedVersionTemplateData, err := os.ReadFile(pinnedVersionTemplatePath)
 	if err != nil {
 		return "", err
 	}
-	releaseName, err := dict.GetCandidateName(rootDir)
-	if err != nil {
-		return "", err
-	}
+	releaseName := fmt.Sprintf("%s-%s", time.Now().Format("2006-01-02"), RandomWord())
 	calicoBranch, err := GitBranch(rootDir)
 	if err != nil {
 		return "", err
@@ -87,7 +87,6 @@ func GeneratePinnedVersion(rootDir, devTagSuffix string) (string, error) {
 		Note: fmt.Sprintf("%s - generated at %s using %s release branch with %s operator branch",
 			releaseName, time.Now().Format(time.RFC1123), calicoBranch, operatorBranch),
 	}
-	pinnedVersionPath := rootDir + pinnedVersionOutputPath
 	logrus.WithField("pinned version file", pinnedVersionPath).Info("Generating pinned-version.yaml")
 	pinnedVersionFile, err := os.Create(pinnedVersionPath)
 	if err != nil {

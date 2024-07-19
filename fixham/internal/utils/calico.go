@@ -1,4 +1,4 @@
-package calico
+package utils
 
 import (
 	"os"
