@@ -105,7 +105,7 @@ else
 fi
 
 echo "Wait for Calico to be ready on Linux nodes..."
-timeout --foreground 600 bash -c "while ! ${KCAPZ} wait pod -l k8s-app=calico-node --for=condition=Ready -n calico-system --timeout=600s; do sleep 5; done"
+timeout --foreground 600 bash -c "while ! ${KCAPZ} wait pod -l k8s-app=calico-node --for=condition=Ready -n calico-system --timeout=30s; do sleep 5; done"
 echo "Calico is ready on Linux nodes"
 
 # Install Calico on Windows nodes
@@ -132,7 +132,7 @@ EOF
 ${KCAPZ} patch installation default --type merge --patch='{"spec": {"serviceCIDRs": ["10.96.0.0/12"], "calicoNetwork": {"windowsDataplane": "HNS"}}}'
 
 echo "Wait for Calico to be ready on Windows nodes..."
-timeout --foreground 600 bash -c "while ! ${KCAPZ} wait pod -l k8s-app=calico-node-windows --for=condition=Ready -n calico-system --timeout=600s; do sleep 5; done"
+timeout --foreground 600 bash -c "while ! ${KCAPZ} wait pod -l k8s-app=calico-node-windows --for=condition=Ready -n calico-system --timeout=30s; do sleep 5; done"
 echo "Calico is ready on Windows nodes"
 
 # Create the kube-proxy-windows daemonset
@@ -141,5 +141,5 @@ for iter in {1..5};do
 done;
 
 echo "Wait for kube-proxy to be ready on Windows nodes..."
-timeout --foreground 600 bash -c "while ! ${KCAPZ} wait pod -l k8s-app=kube-proxy-windows --for=condition=Ready -n kube-system --timeout=600s; do sleep 5; done"
+timeout --foreground 600 bash -c "while ! ${KCAPZ} wait pod -l k8s-app=kube-proxy-windows --for=condition=Ready -n kube-system --timeout=30s; do sleep 5; done"
 echo "kube-proxy is ready on Windows nodes"
