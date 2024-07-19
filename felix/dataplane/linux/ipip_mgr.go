@@ -31,7 +31,8 @@ import (
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
 
-	"github.com/projectcalico/calico/felix/dataplane/common"
+	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
+	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/ethtool"
 	"github.com/projectcalico/calico/felix/ip"
@@ -41,10 +42,6 @@ import (
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
-)
-
-const (
-	IPIPIfaceName = "ipip.calico"
 )
 
 // ipipManager manages the all-hosts IP set, which is used by some rules in our static chains
@@ -65,6 +62,7 @@ type ipipManager struct {
 	// net.IPs because we're going to pass them directly to the IPSet API.
 	activeHostnameToIP map[string]string
 	ipSetDirty         bool
+	ipsetsDataplane    dpsets.IPSetsDataplane
 
 	// Hold pending updates.
 	routesByDest    map[string]*proto.RouteUpdate
@@ -81,8 +79,7 @@ type ipipManager struct {
 	myAddrChangedC chan struct{}
 
 	// Indicates if configuration has changed since the last apply.
-	routesDirty     bool
-	ipsetsDataplane common.IPSetsDataplane
+	routesDirty bool
 	// Config for creating/refreshing the IP set.
 	ipSetMetadata ipsets.IPSetMetadata
 	// Configured list of external node ip cidr's to be added to the ipset.
@@ -103,7 +100,7 @@ type ipipManager struct {
 }
 
 func newIPIPManager(
-	ipsetsDataplane common.IPSetsDataplane,
+	ipsetsDataplane dpsets.IPSetsDataplane,
 	rt routetable.RouteTableInterface,
 	deviceName string,
 	dpConfig Config,
@@ -117,7 +114,7 @@ func newIPIPManager(
 	}
 	nlHandle, _ := netlink.NewHandle()
 
-	blackHoleProto := defaultRoutingProto
+	blackHoleProto := dataplanedefs.DefaultRoutingProto
 	if dpConfig.DeviceRouteProtocol != syscall.RTPROT_BOOT {
 		blackHoleProto = dpConfig.DeviceRouteProtocol
 	}
@@ -160,7 +157,7 @@ func newIPIPManager(
 }
 
 func newIPIPManagerWithShim(
-	ipsetsDataplane common.IPSetsDataplane,
+	ipsetsDataplane dpsets.IPSetsDataplane,
 	rt, brt routetable.RouteTableInterface,
 	deviceName string,
 	dpConfig Config,
@@ -176,7 +173,7 @@ func newIPIPManagerWithShim(
 		logrus.Errorf("IPIP manager only supports IPv4")
 		return nil
 	}
-	noEncapProtocol := defaultRoutingProto
+	noEncapProtocol := dataplanedefs.DefaultRoutingProto
 	if dpConfig.DeviceRouteProtocol != syscall.RTPROT_BOOT {
 		noEncapProtocol = dpConfig.DeviceRouteProtocol
 	}
@@ -554,21 +551,13 @@ func (m *ipipManager) configureIPIPDevice(mtu int, address net.IP, xsumBroken bo
 	})
 	logCxt.Debug("Configuring IPIP tunnel")
 
-	localAddr := m.getLocalHostAddr()
-	// TODO: fix this
-	if localAddr == "" {
-		m.logCtx.Debug("Missing local address information, retrying...")
-		return fmt.Errorf("Not found device")
-	}
-
 	la := netlink.NewLinkAttrs()
 	la.Name = m.ipipDevice
 	ipip := &netlink.Iptun{
 		LinkAttrs: la,
-		Local:     net.ParseIP(localAddr),
 	}
 
-	link, err := m.nlHandle.LinkByName(IPIPIfaceName)
+	link, err := m.nlHandle.LinkByName(m.ipipDevice)
 	if err != nil {
 		m.logCtx.WithError(err).Info("Failed to get IPIP tunnel device, assuming it isn't present")
 
@@ -583,7 +572,7 @@ func (m *ipipManager) configureIPIPDevice(mtu int, address net.IP, xsumBroken bo
 			return err
 		}
 
-		link, err = m.nlHandle.LinkByName(IPIPIfaceName)
+		link, err = m.nlHandle.LinkByName(m.ipipDevice)
 		if err != nil {
 			m.logCtx.WithError(err).Warning("Failed to get tunnel device")
 			return err
@@ -603,7 +592,7 @@ func (m *ipipManager) configureIPIPDevice(mtu int, address net.IP, xsumBroken bo
 
 	// If required, disable checksum offload.
 	if xsumBroken {
-		if err := ethtool.EthtoolTXOff(IPIPIfaceName); err != nil {
+		if err := ethtool.EthtoolTXOff(m.ipipDevice); err != nil {
 			return fmt.Errorf("failed to disable checksum offload: %s", err)
 		}
 	}
@@ -617,7 +606,7 @@ func (m *ipipManager) configureIPIPDevice(mtu int, address net.IP, xsumBroken bo
 		logCxt.Info("Set tunnel admin up")
 	}
 
-	if err := m.setLinkAddressV4(IPIPIfaceName, address); err != nil {
+	if err := m.setLinkAddressV4(m.ipipDevice, address); err != nil {
 		m.logCtx.WithError(err).Warn("Failed to set tunnel device IP")
 		return err
 	}

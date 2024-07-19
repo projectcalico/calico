@@ -15,20 +15,20 @@
 package intdataplane
 
 import (
+	"context"
+	"errors"
+	"fmt"
+	"net"
 	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"golang.org/x/net/context"
-
-	"errors"
-	"fmt"
-	"net"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
-	"github.com/projectcalico/calico/felix/dataplane/common"
+	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
+	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/rules"
@@ -43,7 +43,7 @@ var (
 var _ = Describe("IpipMgr (tunnel configuration)", func() {
 	var (
 		ipipMgr      *ipipManager
-		ipSets       *common.MockIPSets
+		ipSets       *dpsets.MockIPSets
 		dataplane    *mockIPIPDataplane
 		rt, brt, prt *mockRouteTable
 	)
@@ -59,7 +59,7 @@ var _ = Describe("IpipMgr (tunnel configuration)", func() {
 
 	BeforeEach(func() {
 		dataplane = &mockIPIPDataplane{}
-		ipSets = common.NewMockIPSets()
+		ipSets = dpsets.NewMockIPSets()
 		rt = &mockRouteTable{
 			currentRoutes: map[string][]routetable.Target{},
 		}
@@ -70,7 +70,7 @@ var _ = Describe("IpipMgr (tunnel configuration)", func() {
 			currentRoutes: map[string][]routetable.Target{},
 		}
 		ipipMgr = newIPIPManagerWithShim(
-			ipSets, rt, brt, "tunl0",
+			ipSets, rt, brt, dataplanedefs.IPIPIfaceNameV4,
 			Config{
 				MaxIPSetSize:       1024,
 				Hostname:           "node1",
@@ -138,7 +138,6 @@ var _ = Describe("IpipMgr (tunnel configuration)", func() {
 				dataplane.ResetCalls()
 				err = ipipMgr.configureIPIPDevice(1500, ip2, false)
 				Expect(err).ToNot(HaveOccurred())
-
 			})
 			It("should avoid creating the interface", func() {
 				Expect(dataplane.LinkAddCalled).To(BeFalse())
@@ -237,7 +236,7 @@ var _ = Describe("IpipMgr (tunnel configuration)", func() {
 var _ = Describe("ipipManager IP set updates", func() {
 	var (
 		ipipMgr      *ipipManager
-		ipSets       *common.MockIPSets
+		ipSets       *dpsets.MockIPSets
 		rt, brt, prt *mockRouteTable
 	)
 
@@ -246,7 +245,7 @@ var _ = Describe("ipipManager IP set updates", func() {
 	)
 
 	BeforeEach(func() {
-		ipSets = common.NewMockIPSets()
+		ipSets = dpsets.NewMockIPSets()
 		rt = &mockRouteTable{
 			currentRoutes: map[string][]routetable.Target{},
 		}
@@ -260,7 +259,7 @@ var _ = Describe("ipipManager IP set updates", func() {
 		la := netlink.NewLinkAttrs()
 		la.Name = "eth0"
 		ipipMgr = newIPIPManagerWithShim(
-			ipSets, rt, brt, "tunl0",
+			ipSets, rt, brt, dataplanedefs.IPIPIfaceNameV4,
 			Config{
 				MaxIPSetSize:       1024,
 				Hostname:           "host1",
@@ -412,10 +411,10 @@ var _ = Describe("ipipManager IP set updates", func() {
 var _ = Describe("IPIPManager", func() {
 	var manager *ipipManager
 	var rt, brt, prt *mockRouteTable
-	var ipSets *common.MockIPSets
+	var ipSets *dpsets.MockIPSets
 
 	BeforeEach(func() {
-		ipSets = common.NewMockIPSets()
+		ipSets = dpsets.NewMockIPSets()
 		rt = &mockRouteTable{
 			currentRoutes: map[string][]routetable.Target{},
 		}
@@ -429,7 +428,7 @@ var _ = Describe("IPIPManager", func() {
 		la := netlink.NewLinkAttrs()
 		la.Name = "eth0"
 		manager = newIPIPManagerWithShim(
-			ipSets, rt, brt, "tunl0",
+			ipSets, rt, brt, dataplanedefs.IPIPIfaceNameV4,
 			Config{
 				MaxIPSetSize:       1024,
 				Hostname:           "host1",
@@ -508,13 +507,13 @@ var _ = Describe("IPIPManager", func() {
 			SameSubnet:  true,
 		})
 
-		Expect(rt.currentRoutes["tunl0"]).To(HaveLen(0))
+		Expect(rt.currentRoutes[dataplanedefs.IPIPIfaceNameV4]).To(HaveLen(0))
 		Expect(brt.currentRoutes[routetable.InterfaceNone]).To(HaveLen(0))
 
 		err = manager.CompleteDeferredWork()
 
 		Expect(err).NotTo(HaveOccurred())
-		Expect(rt.currentRoutes["tunl0"]).To(HaveLen(1))
+		Expect(rt.currentRoutes[dataplanedefs.IPIPIfaceNameV4]).To(HaveLen(1))
 		Expect(brt.currentRoutes[routetable.InterfaceNone]).To(HaveLen(1))
 		Expect(prt.currentRoutes["eth0"]).NotTo(BeNil())
 	})
@@ -608,8 +607,7 @@ func (d *mockIPIPDataplane) LinkByName(name string) (netlink.Link, error) {
 		return nil, err
 	}
 
-	Expect(name).To(Equal("tunl0"))
-	log.Infof("Marva :%v", d.tunnelLink)
+	Expect(name).To(Equal(dataplanedefs.IPIPIfaceNameV4))
 	if d.tunnelLink == nil {
 		return nil, notFound
 	}
@@ -621,7 +619,7 @@ func (d *mockIPIPDataplane) LinkSetMTU(link netlink.Link, mtu int) error {
 	if err := d.incCallCount(); err != nil {
 		return err
 	}
-	Expect(link.Attrs().Name).To(Equal("tunl0"))
+	Expect(link.Attrs().Name).To(Equal(dataplanedefs.IPIPIfaceNameV4))
 	d.tunnelLinkAttrs.MTU = mtu
 	return nil
 }
@@ -631,7 +629,7 @@ func (d *mockIPIPDataplane) LinkSetUp(link netlink.Link) error {
 	if err := d.incCallCount(); err != nil {
 		return err
 	}
-	Expect(link.Attrs().Name).To(Equal("tunl0"))
+	Expect(link.Attrs().Name).To(Equal(dataplanedefs.IPIPIfaceNameV4))
 	d.tunnelLinkAttrs.Flags |= net.FlagUp
 	return nil
 }
@@ -642,7 +640,7 @@ func (d *mockIPIPDataplane) AddrList(link netlink.Link, family int) ([]netlink.A
 	}
 
 	name := link.Attrs().Name
-	Expect(name).Should(BeElementOf("tunl0", "eth0"))
+	Expect(name).Should(BeElementOf(dataplanedefs.IPIPIfaceNameV4, "eth0"))
 	if name == "eth0" {
 		return []netlink.Addr{{
 			IPNet: &net.IPNet{
@@ -683,11 +681,11 @@ func (d *mockIPIPDataplane) LinkAdd(l netlink.Link) error {
 	if err := d.incCallCount(); err != nil {
 		return err
 	}
-	Expect(l.Attrs().Name).To(Equal("tunl0"))
+	Expect(l.Attrs().Name).To(Equal(dataplanedefs.IPIPIfaceNameV4))
 	if d.tunnelLink == nil {
 		log.Info("Creating tunnel link")
 		link := &mockLink{}
-		link.attrs.Name = "tunl0"
+		link.attrs.Name = dataplanedefs.IPIPIfaceNameV4
 		d.tunnelLinkAttrs = &link.attrs
 		d.tunnelLink = link
 	}

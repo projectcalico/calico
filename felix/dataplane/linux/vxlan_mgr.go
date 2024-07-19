@@ -31,7 +31,8 @@ import (
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
 
-	"github.com/projectcalico/calico/felix/dataplane/common"
+	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
+	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/ethtool"
 	"github.com/projectcalico/calico/felix/ip"
@@ -42,11 +43,6 @@ import (
 	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/felix/vxlanfdb"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
-)
-
-const (
-	VXLANIfaceNameV4 = "vxlan.calico"
-	VXLANIfaceNameV6 = "vxlan-v6.calico"
 )
 
 type vxlanManager struct {
@@ -78,7 +74,7 @@ type vxlanManager struct {
 
 	// Indicates if configuration has changed since the last apply.
 	routesDirty       bool
-	ipsetsDataplane   common.IPSetsDataplane
+	ipsetsDataplane   dpsets.IPSetsDataplane
 	ipSetMetadata     ipsets.IPSetMetadata
 	externalNodeCIDRs []string
 	vtepsDirty        bool
@@ -100,7 +96,7 @@ type VXLANFDB interface {
 }
 
 func newVXLANManager(
-	ipsetsDataplane common.IPSetsDataplane,
+	ipsetsDataplane dpsets.IPSetsDataplane,
 	rt routetable.RouteTableInterface,
 	fdb VXLANFDB,
 	deviceName string,
@@ -111,7 +107,7 @@ func newVXLANManager(
 ) *vxlanManager {
 	nlHandle, _ := netlink.NewHandle(syscall.NETLINK_ROUTE)
 
-	blackHoleProto := defaultRoutingProto
+	blackHoleProto := dataplanedefs.DefaultRoutingProto
 	if dpConfig.DeviceRouteProtocol != syscall.RTPROT_BOOT {
 		blackHoleProto = dpConfig.DeviceRouteProtocol
 	}
@@ -175,7 +171,7 @@ func newVXLANManager(
 }
 
 func newVXLANManagerWithShims(
-	ipsetsDataplane common.IPSetsDataplane,
+	ipsetsDataplane dpsets.IPSetsDataplane,
 	rt, brt routetable.RouteTableInterface,
 	fdb VXLANFDB,
 	deviceName string,
@@ -185,7 +181,7 @@ func newVXLANManagerWithShims(
 	noEncapRTConstruct func(interfacePrefixes []string, ipVersion uint8, netlinkTimeout time.Duration,
 		deviceRouteSourceAddress net.IP, deviceRouteProtocol netlink.RouteProtocol, removeExternalRoutes bool) routetable.RouteTableInterface,
 ) *vxlanManager {
-	noEncapProtocol := defaultRoutingProto
+	noEncapProtocol := dataplanedefs.DefaultRoutingProto
 	if dpConfig.DeviceRouteProtocol != syscall.RTPROT_BOOT {
 		noEncapProtocol = dpConfig.DeviceRouteProtocol
 	}

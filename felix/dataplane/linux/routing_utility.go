@@ -25,10 +25,6 @@ import (
 	"github.com/projectcalico/calico/felix/routetable"
 )
 
-const (
-	defaultRoutingProto netlink.RouteProtocol = 80
-)
-
 // added so that we can shim netlink for tests
 type netlinkHandle interface {
 	LinkByName(name string) (netlink.Link, error)
