@@ -3,7 +3,7 @@
 #################################################################################################
 
 # The version of github.com/projectcalico/go-build to use.
-GO_BUILD_VER = v0.88
+GO_BUILD_VER = v0.89
 
 # Version of Kubernetes to use for tests, bitnami/kubectl, and kubectl binary release.
 K8S_VERSION=v1.26.8
@@ -15,7 +15,7 @@ ETCD_VERSION=v3.5.1
 # tests to timeout or fail.
 KINDEST_NODE_VERSION=v1.24.7
 PROTOC_VER=v0.1
-UBI_VERSION=8.9
+UBI_VERSION=8.10
 
 # Configuration for Semaphore integration.
 ORGANIZATION = projectcalico
