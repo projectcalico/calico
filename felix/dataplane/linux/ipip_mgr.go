@@ -388,7 +388,7 @@ func (m *ipipManager) CompleteDeferredWork() error {
 		m.routeTable.SetRoutes(m.ipipDevice, ipipRoutes)
 
 		bhRoutes := blackholeRoutes(m.localIPAMBlocks)
-		m.logCtx.WithField("balckhole routes", bhRoutes).Debug("IPIP manager sending blackhole updates")
+		m.logCtx.WithField("balckhole routes", bhRoutes).Debug("IPIP manager sending blackhole routes")
 		m.blackholeRouteTable.SetRoutes(routetable.InterfaceNone, bhRoutes)
 
 		if m.noEncapRouteTable != nil {
