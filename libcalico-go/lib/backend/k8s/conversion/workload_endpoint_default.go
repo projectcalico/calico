@@ -121,9 +121,9 @@ func (wc defaultWorkloadEndpointConverter) podToDefaultWorkloadEndpoint(pod *kap
 
 	// Build the labels map.  Start with the pod labels, and append two additional labels for
 	// namespace and orchestrator matches.
-	labels := pod.Labels
-	if labels == nil {
-		labels = make(map[string]string, 2)
+	labels := make(map[string]string)
+	for k, v := range pod.Labels {
+		labels[k] = v
 	}
 	labels[apiv3.LabelNamespace] = pod.Namespace
 	labels[apiv3.LabelOrchestrator] = apiv3.OrchestratorKubernetes
@@ -136,7 +136,6 @@ func (wc defaultWorkloadEndpointConverter) podToDefaultWorkloadEndpoint(pod *kap
 	// Pull out floating IP annotation
 	var floatingIPs []libapiv3.IPNAT
 	if annotation, ok := pod.Annotations["cni.projectcalico.org/floatingIPs"]; ok && len(podIPNets) > 0 {
-
 		// Parse Annotation data
 		var ips []string
 		err := json.Unmarshal([]byte(annotation), &ips)
