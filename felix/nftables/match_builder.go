@@ -111,14 +111,17 @@ func (m nftMatch) IPVersion(ipVersion uint8) generictables.MatchCriteria {
 	return m
 }
 
+// insertIPVersion replaces instances of IPV with the correct IP version.
+func insertIPVersion(s string, ipVersion uint8) string {
+	if ipVersion == 6 {
+		return strings.ReplaceAll(s, "<IPV>", "ip6")
+	}
+	return strings.ReplaceAll(s, "<IPV>", "ip")
+}
+
 func (m nftMatch) Render() string {
 	joined := strings.Join(m.clauses, " ")
-	// Replace instances of IPV with the correct IP version.
-	if m.ipVersion == 6 {
-		joined = strings.ReplaceAll(joined, "<IPV>", "ip6")
-	} else {
-		joined = strings.ReplaceAll(joined, "<IPV>", "ip")
-	}
+	joined = insertIPVersion(joined, m.ipVersion)
 	return joined
 }
 
