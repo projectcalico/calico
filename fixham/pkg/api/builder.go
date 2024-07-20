@@ -1,7 +1,7 @@
 package api
 
 import (
-	"os"
+	goyekv2 "github.com/goyek/goyek/v2"
 
 	"github.com/projectcalico/calico/fixham/internal/config"
 	"github.com/projectcalico/calico/fixham/internal/docker"
@@ -24,8 +24,11 @@ func NewBuilder() *Builder {
 
 // Path returns the path used for the component
 func (c *Builder) Path() string {
-	currentDir, _ := os.Getwd()
-	return currentDir
+	return c.config.RepoRootDir
+}
+
+func (c *Builder) Output() string {
+	return c.config.RepoRootDir + "/fixham/output"
 }
 
 // Name returns the name of the component
@@ -68,5 +71,17 @@ func (c *Builder) Tasks() map[string]*goyek.GoyekTask {
 
 // Register
 func (c *Builder) Register() {
-	Register(c)
+	definedTaskMap := make(map[string]*goyekv2.DefinedTask, len(c.Tasks()))
+	for name, task := range c.Tasks() {
+		definedTaskMap[name] = goyekv2.Define(task.Task)
+	}
+	for _, task := range c.Tasks() {
+		if task.Deps != nil {
+			deps := goyekv2.Deps{}
+			for _, dep := range task.Deps {
+				deps = append(deps, definedTaskMap[dep])
+			}
+			definedTaskMap[task.Name].SetDeps(deps)
+		}
+	}
 }

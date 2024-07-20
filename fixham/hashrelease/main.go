@@ -6,7 +6,7 @@ import (
 )
 
 func main() {
-	b := api.NewCalicoBuilder()
+	b := api.NewBuilder()
 	b.AddTask(goyek.PinnedVersion(b.Config()),
 		goyek.OperatorHashreleaseBuild(b.DockerRunner(), b.Config()),
 		goyek.OperatorHashrelease(b.DockerRunner(), b.Config()),

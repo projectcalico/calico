@@ -6,7 +6,7 @@ import (
 )
 
 func main() {
-	b := api.NewCalicoBuilder()
+	b := api.NewBuilder()
 	b.AddTask(goyek.ReleaseNotes(b.Config()))
 	b.Register()
 }
