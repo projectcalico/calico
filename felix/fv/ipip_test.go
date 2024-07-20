@@ -52,20 +52,26 @@ import (
 
 var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding host IPs to IP sets", []apiconfig.DatastoreType{apiconfig.EtcdV3, apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
 	type testConf struct {
-		IPIPMode    api.IPIPMode
-		RouteSource string
-		BrokenXSum  bool
+		IPIPMode          api.IPIPMode
+		RouteSource       string
+		BrokenXSum        bool
+		ProgramIPIPRoutes bool
 	}
 	for _, testConfig := range []testConf{
-		{api.IPIPModeCrossSubnet, "CalicoIPAM", true},
-		{api.IPIPModeCrossSubnet, "WorkloadIPs", false},
+		{api.IPIPModeCrossSubnet, "CalicoIPAM", true, true},
+		{api.IPIPModeCrossSubnet, "WorkloadIPs", false, true},
+		{api.IPIPModeCrossSubnet, "CalicoIPAM", true, false},
+		{api.IPIPModeCrossSubnet, "WorkloadIPs", false, false},
 
-		{api.IPIPModeAlways, "CalicoIPAM", true},
-		{api.IPIPModeAlways, "WorkloadIPs", false},
+		{api.IPIPModeAlways, "CalicoIPAM", true, true},
+		{api.IPIPModeAlways, "WorkloadIPs", false, true},
+		{api.IPIPModeAlways, "CalicoIPAM", true, false},
+		{api.IPIPModeAlways, "WorkloadIPs", false, false},
 	} {
 		ipipMode := testConfig.IPIPMode
 		routeSource := testConfig.RouteSource
 		brokenXSum := testConfig.BrokenXSum
+		programRoutes := testConfig.ProgramIPIPRoutes
 
 		Describe(fmt.Sprintf("IPIP mode set to %s, routeSource %s, brokenXSum: %v", ipipMode, routeSource, brokenXSum), func() {
 			var (
@@ -85,7 +91,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 					Skip("Skipping NFT / BPF test for etcdv3 backend.")
 				}
 
-				topologyOptions = createIPIPBaseTopologyOptions(ipipMode, routeSource, brokenXSum)
+				topologyOptions = createIPIPBaseTopologyOptions(ipipMode, routeSource, brokenXSum, programRoutes)
 				tc, client = infrastructure.StartNNodeTopology(3, topologyOptions, infra)
 
 				w, hostW = setupIPIPWorkloads(infra, tc, topologyOptions, client)
@@ -754,7 +760,12 @@ func getDataStoreType(infra infrastructure.DatastoreInfra) string {
 	}
 }
 
-func createIPIPBaseTopologyOptions(ipipMode api.IPIPMode, routeSource string, brokenXSum bool) infrastructure.TopologyOptions {
+func createIPIPBaseTopologyOptions(
+	ipipMode api.IPIPMode,
+	routeSource string,
+	brokenXSum bool,
+	programRoutes bool,
+) infrastructure.TopologyOptions {
 	topologyOptions := infrastructure.DefaultTopologyOptions()
 	topologyOptions.IPIPEnabled = true
 	topologyOptions.VXLANMode = api.VXLANModeNever
@@ -765,6 +776,9 @@ func createIPIPBaseTopologyOptions(ipipMode api.IPIPMode, routeSource string, br
 	// tested but we can verify the state with ethtool.
 	topologyOptions.ExtraEnvVars["FELIX_FeatureDetectOverride"] = fmt.Sprintf("ChecksumOffloadBroken=%t", brokenXSum)
 
+	if programRoutes {
+		topologyOptions.ExtraEnvVars["FELIX_IPIPRouteMode"] = "Felix"
+	}
 	return topologyOptions
 }
 

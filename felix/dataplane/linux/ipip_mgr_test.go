@@ -436,6 +436,7 @@ var _ = Describe("IPIPManager", func() {
 				RulesConfig: rules.Config{
 					IPIPTunnelAddress: net.ParseIP("192.168.0.1"),
 				},
+				ProgramIPIPRoutes: true,
 			},
 			&mockIPIPDataplane{
 				links: []netlink.Link{&mockLink{attrs: la}},

@@ -25,7 +25,6 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
-	"syscall"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -144,10 +143,13 @@ type Config struct {
 	NodeZone             string
 	IPv6Enabled          bool
 	RuleRendererOverride rules.RuleRenderer
-	IPIPMTU              int
-	VXLANMTU             int
-	VXLANMTUV6           int
-	VXLANPort            int
+
+	IPIPMTU           int
+	ProgramIPIPRoutes bool
+
+	VXLANMTU   int
+	VXLANMTUV6 int
+	VXLANPort  int
 
 	MaxIPSetSize int
 
@@ -886,12 +888,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		var routeTableIPIP routetable.RouteTableInterface
 		if !config.RouteSyncDisabled {
 			log.Debug("RouteSyncDisabled is false.")
-			ipipEncapProto := dataplanedefs.DefaultRoutingProto
-			if config.DeviceRouteProtocol != syscall.RTPROT_BOOT {
-				ipipEncapProto = config.DeviceRouteProtocol
-			}
 			routeTableIPIP = routetable.New([]string{"^" + dataplanedefs.IPIPIfaceNameV4 + "$"}, 4, config.NetlinkTimeout,
-				config.DeviceRouteSourceAddress, ipipEncapProto, true, unix.RT_TABLE_MAIN,
+				config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, true, unix.RT_TABLE_MAIN,
 				dp.loopSummarizer, featureDetector, routetable.WithLivenessCB(dp.reportHealth))
 		} else {
 			log.Info("RouteSyncDisabled is true, using DummyTable.")

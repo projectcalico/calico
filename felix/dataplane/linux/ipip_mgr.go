@@ -309,14 +309,15 @@ func (m *ipipManager) GetRouteTableSyncers() []routetable.RouteTableSyncer {
 }
 
 func (m *ipipManager) CompleteDeferredWork() error {
-	if !m.ipSetDirty && !m.routesDirty {
+	if !m.ipSetDirty && !m.routesAreDirty() {
 		return nil
 	}
 	if m.ipSetDirty {
 		m.updateAllHostsIPSet()
 		m.ipSetDirty = false
 	}
-	if m.routesDirty {
+	m.logCtx.Infof("here")
+	if m.routesAreDirty() {
 		err := m.updateRoutes()
 		if err != nil {
 			return err
@@ -660,4 +661,8 @@ func (m *ipipManager) setLinkAddressV4(linkName string, address net.IP) error {
 	logCxt.Debug("Address set.")
 
 	return nil
+}
+
+func (m *ipipManager) routesAreDirty() bool {
+	return m.dpConfig.ProgramIPIPRoutes && m.routesDirty
 }
