@@ -6,20 +6,20 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/fixham/internal/calico"
 	"github.com/projectcalico/calico/fixham/internal/command"
 	"github.com/projectcalico/calico/fixham/internal/config"
 	"github.com/projectcalico/calico/fixham/internal/docker"
 	"github.com/projectcalico/calico/fixham/internal/docs"
 	"github.com/projectcalico/calico/fixham/internal/operator"
+	"github.com/projectcalico/calico/fixham/internal/release"
 	"github.com/projectcalico/calico/fixham/internal/version"
 )
 
-func hashreleaseDir(rootDir string) string {
-	return rootDir + "/calico/hashrelease"
+// hashreleaseDir returns the path to where hashrelease directory
+func hashreleaseDir(outputDir string) string {
+	return outputDir + "/hashrelease"
 }
 
-func PinnedVersion(cfg *config.Config) {
 	if err := operator.Clone(cfg.RepoRootDir, cfg.OperatorBranchName); err != nil {
 		logrus.WithFields(logrus.Fields{
 			"root directory":  cfg.RepoRootDir,
@@ -151,6 +151,12 @@ func HashreleaseClean(cfg *config.Config) {
 	}
 }
 
-func HashreleaseNotes(cfg *config.Config) {
-	generateReleaseNotes(cfg, hashreleaseDir(cfg.RepoRootDir))
+// HashreleaseNotes generates the release notes for the hashrelease
+func HashreleaseNotes(cfg *config.Config, outputDir string) {
+	filePath, err := release.GenerateReleaseNotes(cfg.Organization, cfg.GithubToken, cfg.RepoRootDir, hashreleaseDir(outputDir))
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to generate release notes")
+	}
+	logrus.WithField("release notes", filePath).Info("Generated release notes")
+	logrus.Info("Please review for accuracy, and ensure properly formatted before relase time.")
 }
