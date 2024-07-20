@@ -59,6 +59,13 @@ const (
 	NFTablesModeDisabled = "Disabled"
 )
 
+type IPIPRouteMode string
+
+const (
+	IPIPRouteModeBIRD  = "Bird"
+	IPIPRouteModeFelix = "Felix"
+)
+
 // +kubebuilder:validation:Enum=DoNothing;Enable;Disable
 type AWSSrcDstCheckOption string
 
@@ -278,6 +285,8 @@ type FelixConfigurationSpec struct {
 	IPIPEnabled *bool `json:"ipipEnabled,omitempty" confignamev1:"IpInIpEnabled"`
 	// IPIPMTU is the MTU to set on the tunnel device. See Configuring MTU [Default: 1440]
 	IPIPMTU *int `json:"ipipMTU,omitempty" confignamev1:"IpInIpMtu"`
+	// IPIPRouteMode selects whether Felix should program IPIP routes instead of BIRD. [Default: Bird]
+	IPIPRouteMode *IPIPRouteMode `json:"ipipRoutes,omitempty" validate:"omitempty,oneof=Bird Felix"`
 
 	// VXLANEnabled overrides whether Felix should create the VXLAN tunnel device for IPv4 VXLAN networking. Optional as Felix determines this based on the existing IP pools. [Default: nil (unset)]
 	VXLANEnabled *bool `json:"vxlanEnabled,omitempty" confignamev1:"VXLANEnabled"`
