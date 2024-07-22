@@ -1,4 +1,4 @@
-package utils
+package hashrelease
 
 import (
 	"math/rand"

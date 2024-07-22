@@ -2,45 +2,39 @@ package version
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/Masterminds/semver/v3"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 
-	"github.com/projectcalico/calico/fixham/internal/calico"
+	"github.com/projectcalico/calico/fixham/internal/utils"
 )
 
 type Version string
 
-func (v *Version) Set(value string) error {
-	_v, err := semver.NewVersion(strings.TrimPrefix(value, "v"))
-	if err != nil {
-		return err
-	}
-	*v = Version(_v.String())
-	return nil
-}
-
 func (v *Version) String() string {
-	return string(*v)
+	ver, err := semver.NewVersion(strings.TrimPrefix(string(*v), "v"))
+	if err != nil {
+		return ""
+	}
+	return ver.String()
 }
 
 func (v *Version) FormattedString() string {
-	if *v == "" {
-		return ""
-	}
-	return fmt.Sprintf("v%v", *v)
+	ver := v.String()
+	return fmt.Sprintf("v%v", ver)
 }
 
 func (v *Version) Milestone() string {
-	_v := semver.MustParse(string(*v))
-	return fmt.Sprintf("%s v%d.%d.%d", cases.Title(language.English).String(calico.ProductName), _v.Major(), _v.Minor(), _v.Patch())
+	ver := semver.MustParse(string(*v))
+	return fmt.Sprintf("%s v%d.%d.%d", cases.Title(language.English).String(utils.ProductName), ver.Major(), ver.Minor(), ver.Patch())
 }
 
 func (v *Version) Stream() string {
-	_v := semver.MustParse(string(*v))
-	return fmt.Sprintf("v%d.%d", _v.Major(), _v.Minor())
+	ver := semver.MustParse(string(*v))
+	return fmt.Sprintf("v%d.%d", ver.Major(), ver.Minor())
 }
 
 func (v *Version) ReleaseBranch(releaseBranchPrefix string) string {
@@ -55,25 +49,20 @@ func (v *Version) ReleaseBranch(releaseBranchPrefix string) string {
 }
 
 func (v *Version) NextVersion() Version {
-	_v := semver.MustParse(string(*v))
-	if _v.Prerelease() != "" && strings.HasPrefix(_v.Prerelease(), "1.") {
-		prerelease := semver.MustParse(_v.Prerelease())
+	ver := semver.MustParse(string(*v))
+	if ver.Prerelease() != "" && strings.HasPrefix(ver.Prerelease(), "1.") {
+		prerelease := semver.MustParse(ver.Prerelease())
 		nextPrerelease := prerelease.IncMajor()
 		vNextPrerelease := fmt.Sprintf("%v.%v", nextPrerelease.Major(), nextPrerelease.Minor())
-		vNext := semver.New(_v.Major(), _v.Minor(), _v.Patch(), vNextPrerelease, "")
+		vNext := semver.New(ver.Major(), ver.Minor(), ver.Patch(), vNextPrerelease, "")
 		return Version(vNext.String())
 	}
-	return Version(_v.IncMinor().String())
+	return Version(ver.IncMinor().String())
 }
 
-func NextBranch(currentVersion string, devTagSuffix, releaseBranchPrefix string) string {
-	curr := Version(strings.Split(currentVersion, devTagSuffix)[0])
-	next := curr.NextVersion()
-	return next.ReleaseBranch(releaseBranchPrefix)
-}
-
-func NextVersion(currentVersion, devTagSuffix string) string {
-	curr := Version(strings.Split(currentVersion, devTagSuffix)[0])
-	next := curr.NextVersion()
-	return next.FormattedString()
+func IsDevVersion(ver, devTag string) bool {
+	v := Version(ver)
+	pattern := fmt.Sprintf(`^v\d+\.\d+\.\d+(-\d+\.\d+)?%s-\d+-g[0-9a-f]{12}$`, devTag)
+	re := regexp.MustCompile(pattern)
+	return re.MatchString(v.FormattedString())
 }

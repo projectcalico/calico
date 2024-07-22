@@ -136,7 +136,7 @@ func extractReleaseNote(repo string, issues []*github.Issue) ([]*ReleaseNoteIssu
 
 func outputReleaseNotes(issueDataList []*ReleaseNoteIssueData, templateFilePath, outputFilePath string) error {
 	dir := filepath.Dir(outputFilePath)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := utils.CreateDir(dir); err != nil {
 		logrus.WithError(err).Errorf("Failed to create release notes folder %s", dir)
 		return err
 	}
@@ -179,7 +179,7 @@ func GenerateReleaseNotes(owner, githubToken, repoRootDir, outputDir string) (st
 		logrus.Warn("No directory is set, using current directory")
 		outputDir = "."
 	}
-	gitVersion, err := utils.GitVersion(repoRootDir, "")
+	gitVersion, err := utils.GitVersion(repoRootDir)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to get git version")
 		return "", err

@@ -7,7 +7,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/fixham/internal/docker"
+	"github.com/projectcalico/calico/fixham/internal/registry"
 )
 
 func removePath(path string) {
@@ -36,7 +36,7 @@ func CleanFiles(paths ...string) {
 
 func CleanImages(images ...string) {
 	for _, image := range images {
-		runner := docker.MustDockerRunner()
+		runner := registry.MustDockerRunner()
 		err := runner.RemoveImage(image)
 		if err != nil {
 			logrus.WithField("image", image).WithError(err).Fatal("removing image failed")

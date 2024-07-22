@@ -10,12 +10,13 @@ build: bin/hashrelease bin/release
 
 clean:
 	@rm -rf ./bin
+	@rm -rf ./output
 
-bin/release:
+bin/release: $(shell find . -name "*.go")
 	@mkdir -p bin
 	@go build -o bin/release ./release
 
-bin/hashrelease:
+bin/hashrelease: $(shell find . -name "*.go")
 	@mkdir -p bin
 	@go build -o bin/hashrelease ./hashrelease
 
@@ -29,7 +30,6 @@ ci: static-checks
 # Hashrelease
 ###############################################################################
 hashrelease: bin/hashrelease
-	@NAME=calico \
-	GO_BUILD_VER=$(GO_BUILD_VER) \
+	@ORGANIZATION=$(ORGANIZATION) \
 	REPO_ROOT=$(REPO_ROOT) \
 	bin/hashrelease publish
