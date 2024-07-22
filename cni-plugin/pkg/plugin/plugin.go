@@ -33,10 +33,11 @@ import (
 	cniSpecVersion "github.com/containernetworking/cni/pkg/version"
 	"github.com/containernetworking/plugins/pkg/ipam"
 	"github.com/mcuadros/go-version"
-	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
+
+	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 
@@ -691,10 +692,7 @@ func cmdDummyCheck(args *skel.CmdArgs) (err error) {
 
 func Main(version string) {
 	// Set up logging formatting.
-	logrus.SetFormatter(&logutils.Formatter{})
-
-	// Install a hook that adds file/line no information.
-	logrus.AddHook(&logutils.ContextHook{})
+	logutils.ConfigureFormatter("cni-plugin")
 
 	// Use a new flag set so as not to conflict with existing libraries which use "flag"
 	flagSet := flag.NewFlagSet("Calico", flag.ExitOnError)

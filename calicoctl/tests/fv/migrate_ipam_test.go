@@ -24,8 +24,6 @@ import (
 
 	. "github.com/onsi/gomega"
 
-	log "github.com/sirupsen/logrus"
-
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	. "github.com/projectcalico/calico/calicoctl/tests/fv/utils"
@@ -39,8 +37,8 @@ import (
 )
 
 func init() {
-	log.AddHook(logutils.ContextHook{})
-	log.SetFormatter(&logutils.Formatter{})
+	// Set up logging formatting.
+	logutils.ConfigureFormatter("test")
 }
 
 func TestDatastoreMigrationIPAM(t *testing.T) {
