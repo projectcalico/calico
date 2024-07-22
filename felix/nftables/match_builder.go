@@ -395,6 +395,11 @@ func (m nftMatch) NotSourcePorts(ports ...uint16) generictables.MatchCriteria {
 	return m
 }
 
+func (m nftMatch) DestPort(port uint16) generictables.MatchCriteria {
+	m.clauses = append(m.clauses, fmt.Sprintf("%s dport %v", m.transportProto(), port))
+	return m
+}
+
 func (m nftMatch) DestPorts(ports ...uint16) generictables.MatchCriteria {
 	m.clauses = append(m.clauses, fmt.Sprintf("%s dport %s", m.transportProto(), PortsToMultiport(ports)))
 	return m
