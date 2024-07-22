@@ -12,24 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package conntrack_test
+package logutils
 
 import (
 	"testing"
 
-	. "github.com/onsi/ginkgo"
-	"github.com/onsi/ginkgo/reporters"
-	. "github.com/onsi/gomega"
-
-	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
+	"github.com/sirupsen/logrus"
 )
 
-func init() {
-	testutils.HookLogrusForGinkgo()
-}
+func BenchmarkLogWithOurFormat(b *testing.B) {
+	logger := logrus.New()
+	logger.SetFormatter(&Formatter{})
+	logger.SetReportCaller(true)
+	logger.SetOutput(&NullWriter{})
 
-func TestBPFConntrack(t *testing.T) {
-	RegisterFailHandler(Fail)
-	junitReporter := reporters.NewJUnitReporter("../../report/bpf_conntrack_suite.xml")
-	RunSpecsWithDefaultAndCustomReporters(t, "BPF Conntrack Suite", []Reporter{junitReporter})
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		logger.Info("Test log")
+	}
 }
