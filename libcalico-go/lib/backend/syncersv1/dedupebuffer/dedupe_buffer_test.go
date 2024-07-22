@@ -28,8 +28,8 @@ import (
 )
 
 func init() {
-	logrus.AddHook(&logutils.ContextHook{})
-	logrus.SetFormatter(&logutils.Formatter{})
+	// Set up logging formatting.
+	logutils.ConfigureFormatter("test")
 	logrus.SetLevel(logrus.DebugLevel)
 }
 

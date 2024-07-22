@@ -15,22 +15,17 @@
 package idalloc_test
 
 import (
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
-
 	"testing"
 
+	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
-	"github.com/sirupsen/logrus"
+	. "github.com/onsi/gomega"
 
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
 )
 
 func init() {
 	testutils.HookLogrusForGinkgo()
-	logrus.AddHook(&logutils.ContextHook{})
-	logrus.SetFormatter(&logutils.Formatter{})
 }
 
 func TestCalculationGraph(t *testing.T) {

@@ -17,20 +17,15 @@ package conntrack_test
 import (
 	"testing"
 
-	"github.com/onsi/ginkgo/reporters"
-	"github.com/sirupsen/logrus"
-
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
-	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
-
 	. "github.com/onsi/ginkgo"
+	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
+
+	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
 )
 
 func init() {
 	testutils.HookLogrusForGinkgo()
-	logrus.AddHook(&logutils.ContextHook{})
-	logrus.SetFormatter(&logutils.Formatter{})
 }
 
 func TestBPFConntrack(t *testing.T) {
