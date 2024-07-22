@@ -22,8 +22,6 @@ UBI_VERSION=8.10
 # Configuration for Semaphore integration.
 ORGANIZATION = projectcalico
 
-REPO_ROOT := $(shell git rev-parse --show-toplevel)
-
 # Configure git to access repositories using SSH.
 GIT_USE_SSH = true
 

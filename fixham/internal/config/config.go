@@ -10,28 +10,12 @@ import (
 )
 
 type Config struct {
-	// Name is the name of the component/repository
-	Name string `envconfig:"NAME"`
-
-	// PackageName is the name of the package
-	PackageName string `envconfig:"PACKAGE_NAME" default:"github.com/projectcalico/calico"`
-
 	// Organization is the name of the organization
 	Organization string `envconfig:"ORGANIZATION" default:"projectcalico"`
-
-	// GoBuildImageName is the name of the go-build image
-	// if wanting to override calico/go-build
-	GoBuildImageName string `envconfig:"GO_BUILD_IMAGE" default:"calico/go-build"`
-
-	// GoBuildVersion is the version of the go-build image
-	GoBuildVersion string `envconfig:"GO_BUILD_VER" default:"v0.90"`
 
 	// RepoRootDir is the root directory for the repository
 	// it is used for git operations
 	RepoRootDir string `envconfig:"REPO_ROOT"`
-
-	// RepoDefaultBranch is the default branch for repositories
-	RepoDefaultBranch string `envconfig:"DEFAULT_BRANCH" default:"master"`
 
 	// DevTagSuffix is the suffix for the development tag
 	DevTagSuffix string `envconfig:"DEV_TAG_SUFFIX" default:"-0.dev"`

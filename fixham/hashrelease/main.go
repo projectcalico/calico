@@ -7,13 +7,15 @@ import (
 
 func main() {
 	b := api.NewBuilder()
-	b.AddTask(goyek.PinnedVersion(b.Config()),
-		goyek.OperatorHashreleaseBuild(b.DockerRunner(), b.Config()),
-		goyek.OperatorHashrelease(b.DockerRunner(), b.Config()),
-		goyek.HashreleaseBuild(b.Config()),
-		goyek.Hashrelease(b.Config()),
-		goyek.HashreleaseClean(b.Config()),
-		goyek.HashreleaseNotes(b.Config()),
+	b.AddTask(goyek.PinnedVersion(b.Config(), b.Output()),
+		goyek.OperatorHashreleaseBuild(b.DockerRunner(), b.Config(), b.Output()),
+		goyek.OperatorHashrelease(b.DockerRunner(), b.Config(), b.Output()),
+		goyek.HashreleaseBuild(b.Config(), b.Output()),
+		goyek.HashreleaseValidate(b.Config(), b.Output()),
+		goyek.Hashrelease(b.Config(), b.Output()),
+		goyek.HashreleaseClean(b.Output()),
+		goyek.HashreleaseGarbageCollect(b.Config()),
+		goyek.HashreleaseNotes(b.Config(), b.Output()),
 	)
 	b.Register()
 }

@@ -16,17 +16,11 @@ func GitBranch(dir string) (string, error) {
 	return command.GitInDir(dir, "rev-parse", "--abbrev-ref", "HEAD")
 }
 
-func GitVersion(dir, devTagSuffix string) (string, error) {
-	// if devTagSuffix != "" {
-	// 	return git.GitVersionDev(dir, devTagSuffix, false)
-	// }
+func GitVersion(dir string) (string, error) {
 	return command.GitVersion(dir, false)
 }
 
 func GitVersionDirty(dir, devTagSuffix string) (string, error) {
-	// if devTagSuffix != "" {
-	// 	return command.GitVersionDev(dir, devTagSuffix, true)
-	// }
 	return command.GitVersion(dir, true)
 }
 
@@ -37,7 +31,7 @@ func ReleaseWindowsArchive(rootDir, version, outDir string) error {
 		logrus.WithError(err).Error("Failed to make release-windows-archive")
 		return err
 	}
-	if err := os.MkdirAll(outDir, os.ModePerm); err != nil {
+	if err := CreateDir(outDir); err != nil {
 		logrus.WithError(err).Error("Failed to create windows output directory")
 	}
 	if _, err := command.Run("mv", []string{rootDir + "/node/dist/calico-windows-" + version + ".zip", outDir}); err != nil {

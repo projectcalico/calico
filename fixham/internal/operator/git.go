@@ -10,12 +10,12 @@ const (
 	operatorRepo = "git@github.com:tigera/operator.git"
 )
 
-func operatorDir(repoRootDir string) string {
-	return repoRootDir + "/operator"
+func operatorDir(outDir string) string {
+	return outDir + "/operator"
 }
 
-func Clone(repoRootDir, branchName string) error {
-	clonePath := operatorDir(repoRootDir)
+func Clone(dir, branchName string) error {
+	clonePath := operatorDir(dir)
 	if _, err := os.Stat(clonePath); !os.IsNotExist(err) {
 		_, err := command.GitInDir(clonePath, "checkout", branchName)
 		if err == nil {
@@ -23,21 +23,15 @@ func Clone(repoRootDir, branchName string) error {
 			return err
 		}
 	}
-	_, err := command.GitInDir(repoRootDir, "clone", operatorRepo, "--branch", branchName)
+	_, err := command.GitInDir(dir, "clone", operatorRepo, "--branch", branchName)
 	return err
 }
 
-func GitVersion(repoRootDir, devTagSuffix string) (string, error) {
-	// if devTagSuffix != "" {
-	// 	return git.GitVersionDev(operatorDir(repoRootDir), devTagSuffix, false)
-	// }
+func GitVersion(repoRootDir string) (string, error) {
 	return command.GitVersion(operatorDir(repoRootDir), false)
 }
 
-func GitVersionDirty(repoRootDir, devTagSuffix string) (string, error) {
-	// if devTagSuffix != "" {
-	// 	return command.GitVersionDev(operatorDir(repoRootDir), devTagSuffix, true)
-	// }
+func GitVersionDirty(repoRootDir string) (string, error) {
 	return command.GitVersion(operatorDir(repoRootDir), true)
 }
 

@@ -12,7 +12,7 @@ const (
 	ImageName = "tigera/operator"
 )
 
-func GenVersion(rootDir, componentsVersionPath string) error {
+func GenVersions(rootDir, componentsVersionPath string) error {
 	env := os.Environ()
 	env = append(env, "OS_VERSIONS="+componentsVersionPath)
 	env = append(env, "COMMON_VERSIONS="+componentsVersionPath)

@@ -2,16 +2,16 @@ package tasks
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/fixham/internal/command"
 	"github.com/projectcalico/calico/fixham/internal/config"
-	"github.com/projectcalico/calico/fixham/internal/docker"
-	"github.com/projectcalico/calico/fixham/internal/docs"
+	"github.com/projectcalico/calico/fixham/internal/hashrelease"
 	"github.com/projectcalico/calico/fixham/internal/operator"
+	"github.com/projectcalico/calico/fixham/internal/registry"
 	"github.com/projectcalico/calico/fixham/internal/release"
+	"github.com/projectcalico/calico/fixham/internal/utils"
 	"github.com/projectcalico/calico/fixham/internal/version"
 )
 
@@ -20,135 +20,205 @@ func hashreleaseDir(outputDir string) string {
 	return outputDir + "/hashrelease"
 }
 
-	if err := operator.Clone(cfg.RepoRootDir, cfg.OperatorBranchName); err != nil {
+// PinnedVersion generates pinned-version.yaml
+//
+// It clones the operator repository,
+// then call GeneratePinnedVersion to generate the pinned-version.yaml file.
+// The location of the pinned-version.yaml file is logged.
+func PinnedVersion(cfg *config.Config, outputDir string) {
+	if err := utils.CreateDir(outputDir); err != nil {
+		logrus.WithError(err).Fatal("Failed to create output directory")
+	}
+	if err := operator.Clone(outputDir, cfg.OperatorBranchName); err != nil {
 		logrus.WithFields(logrus.Fields{
-			"root directory":  cfg.RepoRootDir,
+			"directory":       outputDir,
 			"operator branch": cfg.OperatorBranchName,
 		}).WithError(err).Fatal("Failed to clone operator repository")
 	}
-	pinnedVersionFilePath, err := calico.GeneratePinnedVersion(cfg.RepoRootDir, cfg.DevTagSuffix)
+	pinnedVersionFilePath, err := hashrelease.GeneratePinnedVersion(cfg.RepoRootDir, cfg.DevTagSuffix, outputDir)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to generate pinned-version.yaml")
 	}
 	logrus.WithField("pinned version file", pinnedVersionFilePath).Info("Generated pinned-version.yaml")
 }
 
-func OperatorHashreleaseBuild(runner *docker.DockerRunner, cfg *config.Config) {
-	componentsVersionPath, err := calico.GeneratePinnedVersionForOperator(cfg.RepoRootDir)
+// OperatorHashreleaseBuild builds the operator images for the hashrelease.
+// As images are build with the latest tag, they are re-tagged with the hashrelease version
+func OperatorHashreleaseBuild(runner *registry.DockerRunner, cfg *config.Config, outputDir string) {
+	componentsVersionPath, err := hashrelease.GeneratePinnedVersionForOperator(cfg.RepoRootDir, outputDir)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to generate components.yaml")
 	}
-	operatorVersion, err := calico.RetrievePinnedOperatorVersion(cfg.RepoRootDir)
+	operatorVersion, err := hashrelease.RetrievePinnedOperatorVersion(outputDir)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get operator version")
 	}
-	if err := operator.GenVersion(cfg.RepoRootDir, componentsVersionPath); err != nil {
+	if err := operator.GenVersions(cfg.RepoRootDir, componentsVersionPath); err != nil {
 		logrus.WithError(err).Fatal("Failed to generate versions")
 	}
 	logrus.Info("Building operator images")
-	if err := operator.ImageAll(cfg.ValidArchs, cfg.GoBuildVersion); err != nil {
+	if err := operator.ImageAll(cfg.ValidArchs, operatorVersion); err != nil {
 		logrus.WithError(err).Fatal("Failed to build images")
 	}
 	logrus.Info("Building operator init image")
-	if err := operator.InitImage(cfg.GoBuildVersion); err != nil {
+	if err := operator.InitImage(operatorVersion); err != nil {
 		logrus.WithError(err).Fatal("Failed to init images")
 	}
-	logrus.Info("Publishing operator images")
 	for _, arch := range cfg.ValidArchs {
-		if err := runner.TagImage(fmt.Sprintf("%s:latest-%s", operator.ImageName, arch),
-			fmt.Sprintf("%s/%s:%s-%s", calico.QuayRegistry, operator.ImageName, operatorVersion, arch)); err != nil {
-			logrus.WithField("arch", arch).WithError(err).Fatal("Failed to tag operator image")
+		currentTag := fmt.Sprintf("%s:latest-%s", operator.ImageName, arch)
+		newTag := fmt.Sprintf("%s/%s:%s-%s", registry.QuayRegistry, operator.ImageName, operatorVersion, arch)
+		logrus.WithFields(logrus.Fields{
+			"current tag": currentTag,
+			"new tag":     newTag,
+		}).Info("Re-tagging operator image")
+		if err := runner.TagImage(currentTag, newTag); err != nil {
+			logrus.WithField("image", currentTag).WithError(err).Fatal("Failed to re-tag operator image")
 		}
 	}
-	logrus.Info("Publishing operator init image")
+	logrus.Info("Re-tag operator init image")
 	if err := runner.TagImage(fmt.Sprintf("%s-init:latest", operator.ImageName),
-		fmt.Sprintf("%s/%s-init:%s", calico.QuayRegistry, operator.ImageName, operatorVersion)); err != nil {
+		fmt.Sprintf("%s/%s-init:%s", registry.QuayRegistry, operator.ImageName, operatorVersion)); err != nil {
 		logrus.WithError(err).Fatal("Failed to tag operator init image")
 	}
 }
 
-func OperatorHashreleasePush(runner *docker.DockerRunner, cfg *config.Config) {
-	operatorVersion, err := calico.RetrievePinnedOperatorVersion(cfg.RepoRootDir)
+// OperatorHashreleasePush pushes the operator images to the registry
+//
+// It does this by retrieving the pinned operator version,
+// pushing the operator images to the registry,
+// then pushing a manifest list of the operator images to the registry.
+func OperatorHashreleasePush(runner *registry.DockerRunner, cfg *config.Config, outputDir string) {
+	operatorVersion, err := hashrelease.RetrievePinnedOperatorVersion(outputDir)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get operator version")
 	}
 	var imageList []string
 	for _, arch := range cfg.ValidArchs {
-		imgName := fmt.Sprintf("%s/%s:%s-%s", calico.QuayRegistry, operator.ImageName, operatorVersion, arch)
+		imgName := fmt.Sprintf("%s/%s:%s-%s", registry.QuayRegistry, operator.ImageName, operatorVersion, arch)
 		if err := runner.PushImage(imgName); err != nil {
 			logrus.WithField("arch", arch).WithError(err).Fatal("Failed to push operator image")
 		}
 		imageList = append(imageList, imgName)
 	}
-	manifestListName := fmt.Sprintf("%s/%s:%s", calico.QuayRegistry, operator.ImageName, operatorVersion)
+	manifestListName := fmt.Sprintf("%s/%s:%s", registry.QuayRegistry, operator.ImageName, operatorVersion)
 	if err = runner.ManifestPush(manifestListName, imageList, true); err != nil {
 		logrus.WithField("manifest list", manifestListName).WithError(err).Fatal("Failed to push operator manifest")
 	}
-	if err := runner.PushImage(fmt.Sprintf("%s/%s-init:%s", calico.QuayRegistry, operator.ImageName, operatorVersion)); err != nil {
+	if err := runner.PushImage(fmt.Sprintf("%s/%s-init:%s", registry.QuayRegistry, operator.ImageName, operatorVersion)); err != nil {
 		logrus.WithError(err).Fatal("Failed to push operator init image")
 	}
 }
 
-func HashreleaseBuild(cfg *config.Config) {
+// HashreleaseBuild builds the artificts hashrelease
+//
+// This includes the windows archive, helm archive, and manifests.
+func HashreleaseBuild(cfg *config.Config, outputDir string) {
+	hashreleaseOutputDir := hashreleaseDir(outputDir)
 	// TODO: ensure no changes in branch
-	if err := os.MkdirAll(hashreleaseDir(cfg.RepoRootDir), os.ModePerm); err != nil {
+	if err := utils.CreateDir(hashreleaseOutputDir); err != nil {
 		logrus.WithError(err).Fatal("Failed to create hashrelease directory")
 	}
-	releaseVersion, err := calico.RetrievePinnedCalicoVersion(cfg.RepoRootDir)
+	releaseVersion, err := hashrelease.RetrievePinnedCalicoVersion(outputDir)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get candidate name")
 	}
-	operatorVersion, err := calico.RetrievePinnedOperatorVersion(cfg.RepoRootDir)
+	operatorVersion, err := hashrelease.RetrievePinnedOperatorVersion(outputDir)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get operator version")
 	}
-	if err := calico.ReleaseWindowsArchive(cfg.RepoRootDir, releaseVersion, hashreleaseDir(cfg.RepoRootDir)+"/files/windows"); err != nil {
+	if err := utils.ReleaseWindowsArchive(cfg.RepoRootDir, releaseVersion, hashreleaseOutputDir+"/files/windows"); err != nil {
 		logrus.WithError(err).Fatal("Failed to release windows archive")
 	}
-	if err := calico.HelmArchive(cfg.RepoRootDir, releaseVersion, operatorVersion, hashreleaseDir(cfg.RepoRootDir)); err != nil {
+	if err := utils.HelmArchive(cfg.RepoRootDir, releaseVersion, operatorVersion, hashreleaseOutputDir); err != nil {
 		logrus.WithError(err).Fatal("Failed to release helm archive")
 	}
-	if err := calico.GenerateManifests(cfg.RepoRootDir, releaseVersion, operatorVersion, hashreleaseDir(cfg.RepoRootDir)); err != nil {
+	if err := utils.GenerateManifests(cfg.RepoRootDir, releaseVersion, operatorVersion, hashreleaseOutputDir); err != nil {
 		logrus.WithError(err).Fatal("Failed to generate manifests")
 	}
 
-	if err := command.Metadata(hashreleaseDir(cfg.RepoRootDir), releaseVersion, operatorVersion); err != nil {
+	if err := command.Metadata(hashreleaseOutputDir, releaseVersion, operatorVersion); err != nil {
 		logrus.WithError(err).Fatal("Failed to generate metadata")
 	}
 }
 
-func HashreleasePush(cfg *config.Config) {
+type result struct {
+	exists bool
+	err    error
+}
+
+func imgExists(imageName, imageRegistry string, ch chan result) {
+	r := result{}
+	exists, err := registry.ImageExists(imageName, imageRegistry)
+	r.exists = exists
+	r.err = err
+	ch <- r
+}
+
+// HashreleaseValidate validates the images in the hashrelease.
+// These images are checked to ensure they exist in the registry
+// as they should have been pushed in the standard build process.
+func HashreleaseValidate(cfg *config.Config, outputDir string) {
+	pinnedVersion, err := hashrelease.RetrievePinnedVersion(outputDir)
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to get pinned version")
+	}
+	images := pinnedVersion.Components
+	images["operator"] = pinnedVersion.TigeraOperator
+	results := make(map[string]result, len(images))
+
+	for name, component := range images {
+		ch := make(chan result)
+		imgExists(component.Image+":"+component.Version, component.Registry, ch)
+		results[name] = <-ch
+	}
+	failed := false
+	for name, r := range results {
+		logrus.WithField("image", name).WithField("exists", r.exists).Debug("Validating image")
+		if r.err != nil {
+			logrus.WithError(r.err).WithField("image", name).Error("Failed to check image")
+			failed = true
+		}
+	}
+	if failed {
+		logrus.Fatal("Failed to validate images, see above for details")
+	}
+}
+
+// HashreleaseValidate publishes the hashrelease
+func HashreleasePush(cfg *config.Config, outputDir string) {
 	sshConfig := command.NewSSHConfig(cfg.DocsHost, cfg.DocsUser, cfg.DocsKey, cfg.DocsPort)
-	name, err := calico.RetrieveReleaseName(cfg.RepoRootDir)
+	name, err := hashrelease.RetrieveReleaseName(outputDir)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get release name")
 	}
-	note, err := calico.RetrievePinnedVersionNote(cfg.RepoRootDir)
+	note, err := hashrelease.RetrievePinnedVersionNote(outputDir)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get pinned version note")
 	}
-	releaseVersion, err := calico.RetrievePinnedCalicoVersion(cfg.RepoRootDir)
+	calicoVersion, err := hashrelease.RetrievePinnedCalicoVersion(outputDir)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get candidate name")
 	}
 	// TODO: send image to image scan server
-	releaseHash, err := calico.RetrievePinnedVersionHash(cfg.RepoRootDir)
+	releaseHash, err := hashrelease.RetrievePinnedVersionHash(outputDir)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get release hash")
 	}
-	_releaseVersion := version.Version(releaseVersion)
+	releaseVersion := version.Version(calicoVersion)
 	logrus.WithField("note", note).Info("Publishing hashrelease")
-	if err := docs.PublishHashrelease(name, releaseHash, note, _releaseVersion.Stream(), hashreleaseDir(cfg.RepoRootDir), sshConfig); err != nil {
+	if err := hashrelease.PublishHashrelease(name, releaseHash, note, releaseVersion.Stream(), hashreleaseDir(outputDir), sshConfig); err != nil {
 		logrus.WithError(err).Fatal("Failed to publish hashrelease")
 	}
 }
 
-func HashreleaseClean(cfg *config.Config) {
+// HashreleaseCleanRemote cleans up old hashreleases on the docs host
+func HashreleaseCleanRemote(cfg *config.Config) {
 	sshConfig := command.NewSSHConfig(cfg.DocsHost, cfg.DocsUser, cfg.DocsKey, cfg.DocsPort)
 	logrus.Info("Cleaning up old hashreleases")
-	if err := docs.DeleteOldHashreleases(sshConfig, -1); err != nil {
+	if err := hashrelease.DeleteOldHashreleases(sshConfig, -1); err != nil {
 		logrus.WithError(err).Fatal("Failed to delete old hashreleases")
 	}
+	// TODO: Consider cleaning up images in the release library file (NEW!)
 }
 
 // HashreleaseNotes generates the release notes for the hashrelease

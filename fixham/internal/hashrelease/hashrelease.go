@@ -1,4 +1,4 @@
-package docs
+package hashrelease
 
 import (
 	"fmt"
@@ -24,6 +24,7 @@ type hashrelease struct {
 	Time time.Time
 }
 
+// hasHashrelease checks if a hashrelease exists in the server
 func hasHashrelease(releaseHash string, sshConfig *command.SSHConfig) bool {
 	if out, err := command.RunSSHCommand(sshConfig, fmt.Sprintf("cat %s | grep %s", releasesLibraryPath, releaseHash)); err == nil {
 		return strings.Contains(out, releaseHash)
@@ -31,6 +32,7 @@ func hasHashrelease(releaseHash string, sshConfig *command.SSHConfig) bool {
 	return false
 }
 
+// PublishHashrelease publishes a hashrelease to the server
 func PublishHashrelease(name, hash, note, stream, dir string, sshConfig *command.SSHConfig) error {
 	if hasHashrelease(hash, sshConfig) {
 		// TODO: determine if we should return an error here
@@ -55,6 +57,8 @@ func PublishHashrelease(name, hash, note, stream, dir string, sshConfig *command
 	return nil
 }
 
+// DeleteOldHashreleases deletes old hashreleases from the server.
+// The limit parameter specifies the number of hashreleases to keep
 func DeleteOldHashreleases(sshConfig *command.SSHConfig, limit int) error {
 	if limit < 1 {
 		limit = 400
