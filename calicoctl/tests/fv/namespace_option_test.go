@@ -19,7 +19,6 @@ import (
 	"testing"
 
 	. "github.com/onsi/gomega"
-	log "github.com/sirupsen/logrus"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
@@ -31,8 +30,8 @@ import (
 )
 
 func init() {
-	log.AddHook(logutils.ContextHook{})
-	log.SetFormatter(&logutils.Formatter{})
+	// Set up logging formatting.
+	logutils.ConfigureFormatter("test")
 }
 
 func TestMultiOption(t *testing.T) {

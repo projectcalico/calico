@@ -18,8 +18,6 @@ import (
 	"strings"
 	"testing"
 
-	log "github.com/sirupsen/logrus"
-
 	. "github.com/onsi/gomega"
 
 	. "github.com/projectcalico/calico/calicoctl/tests/fv/utils"
@@ -27,8 +25,8 @@ import (
 )
 
 func init() {
-	log.AddHook(logutils.ContextHook{})
-	log.SetFormatter(&logutils.Formatter{})
+	// Set up logging formatting.
+	logutils.ConfigureFormatter("test")
 }
 
 func TestMultiCluster(t *testing.T) {

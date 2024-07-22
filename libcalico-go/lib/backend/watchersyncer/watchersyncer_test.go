@@ -23,10 +23,12 @@ import (
 	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+
 	log "github.com/sirupsen/logrus"
 
-	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
+
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
