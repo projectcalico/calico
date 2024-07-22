@@ -21,6 +21,7 @@ import (
 	"io"
 	"os"
 	"regexp"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -30,6 +31,7 @@ import (
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 	"github.com/prometheus/client_golang/prometheus"
+
 	log "github.com/sirupsen/logrus"
 
 	. "github.com/projectcalico/calico/libcalico-go/lib/logutils"
@@ -47,29 +49,15 @@ func init() {
 }
 
 var _ = Describe("Logutils", func() {
-	ourHook := ContextHook{}
 	var savedWriter io.Writer
 	var buf *bytes.Buffer
 	BeforeEach(func() {
-		log.AddHook(ourHook)
 		savedWriter = log.StandardLogger().Out
 		buf = &bytes.Buffer{}
 		log.StandardLogger().Out = buf
 	})
 	AfterEach(func() {
 		log.StandardLogger().Out = savedWriter
-		levelHooks := log.StandardLogger().Hooks
-		for level, hooks := range levelHooks {
-			j := 0
-			for _, hook := range hooks {
-				if hook == ourHook {
-					continue
-				}
-				hooks[j] = hook
-				j += 1
-			}
-			levelHooks[level] = hooks[:len(hooks)-1]
-		}
 	})
 
 	It("Should add correct file when invoked via log.Info", func() {
@@ -102,9 +90,11 @@ var _ = DescribeTable("Formatter",
 		log.Entry{
 			Level: log.InfoLevel,
 			Time:  theTime(),
+			Caller: &runtime.Frame{
+				File: "biff.com/bar/foo.go",
+				Line: 123,
+			},
 			Data: log.Fields{
-				"__file__":  "foo.go",
-				"__line__":  123,
 				"__flush__": true, // Internal value, should be ignored.
 			},
 			Message: "The answer is 42.",
@@ -116,13 +106,15 @@ var _ = DescribeTable("Formatter",
 		log.Entry{
 			Level: log.WarnLevel,
 			Time:  theTime(),
+			Caller: &runtime.Frame{
+				File: "biff.com/bar/foo.go",
+				Line: 123,
+			},
 			Data: log.Fields{
-				"__file__": "foo.go",
-				"__line__": 123,
-				"a":        10,
-				"b":        "foobar",
-				"c":        theTime(),
-				"err":      errors.New("an error"),
+				"a":   10,
+				"b":   "foobar",
+				"c":   theTime(),
+				"err": errors.New("an error"),
 			},
 			Message: "The answer is 42.",
 		},
@@ -178,7 +170,7 @@ var _ = Describe("BackgroundHook log flushing tests", func() {
 		bh = NewBackgroundHook(log.AllLevels, log.DebugLevel, []*Destination{testDest}, counter, hookOpts...)
 
 		logger = log.New()
-		logger.AddHook(ContextHook{})
+		logger.SetReportCaller(true)
 		logger.AddHook(bh)
 		logger.SetLevel(log.DebugLevel)
 
@@ -570,5 +562,18 @@ func BenchmarkRegexpStar(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		BenchOut = BenchOut != re.MatchString("endpoint_mgr.go")
+	}
+}
+
+func BenchmarkLogWithOurFormat(b *testing.B) {
+	logger := log.New()
+	logger.SetFormatter(&Formatter{})
+	logger.SetReportCaller(true)
+	logger.SetOutput(&NullWriter{})
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		logger.Info("Test log")
 	}
 }

@@ -28,7 +28,6 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/debugserver"
 	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 
-	log "github.com/sirupsen/logrus"
 	"go.etcd.io/etcd/client/pkg/v3/srv"
 	"go.etcd.io/etcd/client/pkg/v3/transport"
 	clientv3 "go.etcd.io/etcd/client/v3"
@@ -37,6 +36,8 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
+
+	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
@@ -84,11 +85,8 @@ func main() {
 		os.Exit(0)
 	}
 
-	// Configure log formatting.
-	log.SetFormatter(&logutils.Formatter{})
-
-	// Install a hook that adds file/line no information.
-	log.AddHook(&logutils.ContextHook{})
+	// Set up logging formatting.
+	logutils.ConfigureFormatter("kube-controllers")
 
 	// Attempt to load configuration.
 	cfg := new(config.Config)

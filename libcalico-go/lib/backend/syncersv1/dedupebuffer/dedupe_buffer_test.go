@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	. "github.com/onsi/gomega"
+
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
@@ -28,8 +29,8 @@ import (
 )
 
 func init() {
-	logrus.AddHook(&logutils.ContextHook{})
-	logrus.SetFormatter(&logutils.Formatter{})
+	// Set up logging formatting.
+	logutils.ConfigureFormatter("test")
 	logrus.SetLevel(logrus.DebugLevel)
 }
 

@@ -27,8 +27,9 @@ import (
 	"github.com/fsnotify/fsnotify"
 	"github.com/kelseyhightower/envconfig"
 	"github.com/nmrshll/go-cp"
-	"github.com/sirupsen/logrus"
 	"go.etcd.io/etcd/client/pkg/v3/fileutil"
+
+	"github.com/sirupsen/logrus"
 
 	"k8s.io/client-go/rest"
 
@@ -118,11 +119,8 @@ func loadConfig() config {
 }
 
 func Install(version string) error {
-	// Configure logging before anything else.
-	logrus.SetFormatter(&logutils.Formatter{Component: "cni-installer"})
-
-	// Install a hook that adds file/line no information.
-	logrus.AddHook(&logutils.ContextHook{})
+	// Set up logging formatting.
+	logutils.ConfigureFormatter("cni-installer")
 
 	// Clean up any existing binaries / config / assets.
 	if err := os.RemoveAll(winutils.GetHostPath("/host/etc/cni/net.d/calico-tls")); err != nil && !os.IsNotExist(err) {
