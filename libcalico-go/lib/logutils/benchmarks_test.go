@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019,2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,24 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package ip_test
+package logutils
 
 import (
 	"testing"
 
-	. "github.com/onsi/ginkgo"
-	"github.com/onsi/ginkgo/reporters"
-	. "github.com/onsi/gomega"
-
-	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
+	"github.com/sirupsen/logrus"
 )
 
-func TestIp(t *testing.T) {
-	RegisterFailHandler(Fail)
-	junitReporter := reporters.NewJUnitReporter("../report/ip_suite.xml")
-	RunSpecsWithDefaultAndCustomReporters(t, "IP Suite", []Reporter{junitReporter})
-}
+func BenchmarkLogWithOurFormat(b *testing.B) {
+	logger := logrus.New()
+	logger.SetFormatter(&Formatter{})
+	logger.SetReportCaller(true)
+	logger.SetOutput(&NullWriter{})
 
-func init() {
-	testutils.HookLogrusForGinkgo()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		logger.Info("Test log")
+	}
 }

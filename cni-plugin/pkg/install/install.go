@@ -27,10 +27,8 @@ import (
 	"github.com/fsnotify/fsnotify"
 	"github.com/kelseyhightower/envconfig"
 	"github.com/nmrshll/go-cp"
-	"go.etcd.io/etcd/client/pkg/v3/fileutil"
-
 	"github.com/sirupsen/logrus"
-
+	"go.etcd.io/etcd/client/pkg/v3/fileutil"
 	"k8s.io/client-go/rest"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
