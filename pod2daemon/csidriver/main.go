@@ -27,10 +27,8 @@ import (
 func main() {
 	// Set the log output to stdout to prevent some components from interpreting logs as errors (e.g. fluentd).
 	log.SetOutput(os.Stdout)
-	// Install a hook that adds file/line no information
-	log.AddHook(&logutils.ContextHook{})
-	// Set up log formatting to reference this component.
-	log.SetFormatter(&logutils.Formatter{Component: "csi-driver"})
+	// Set up logging formatting.
+	logutils.ConfigureFormatter("csi-driver")
 	// Set the preliminary log level
 	log.SetLevel(log.WarnLevel)
 
