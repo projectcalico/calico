@@ -91,6 +91,11 @@ func CreateClientFromConfig() clientv3.Interface {
 		os.Exit(1)
 	}
 
+	// if QPS not set in config, set default QPS
+	if cfg.Spec.K8sClientQPS == float32(0) {
+		cfg.Spec.K8sClientQPS = 50
+	}
+
 	c, err := clientv3.New(*cfg)
 	if err != nil {
 		klog.Errorf("Failed creating client: %q", err)
