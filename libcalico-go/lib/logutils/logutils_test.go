@@ -564,3 +564,16 @@ func BenchmarkRegexpStar(b *testing.B) {
 		BenchOut = BenchOut != re.MatchString("endpoint_mgr.go")
 	}
 }
+
+func BenchmarkLogWithOurFormat(b *testing.B) {
+	logger := log.New()
+	logger.SetFormatter(&Formatter{})
+	logger.SetReportCaller(true)
+	logger.SetOutput(&NullWriter{})
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		logger.Info("Test log")
+	}
+}
