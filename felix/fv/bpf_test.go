@@ -5518,7 +5518,7 @@ func checkServiceRoute(felix *infrastructure.Felix, ip string) bool {
 		err error
 	)
 
-	if felix.TopologyOptions.EnableIPv6 {
+	if strings.Contains(ip, ":") && felix.TopologyOptions.EnableIPv6 {
 		out, err = felix.ExecOutput("ip", "-6", "route")
 	} else {
 		out, err = felix.ExecOutput("ip", "route")
