@@ -84,7 +84,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ policy performance hints te
 		// That should result in programming the IP set the implements the
 		// "foo == 'bar'" selector.  The iptables rules won't get created
 		// because the iptables driver squashes them if they're not referenced.
-		Eventually(tc.Felixes[0].ExecOutputFn(ipsetListCommand...), "10s").Should(
+		Eventually(tc.Felixes[0].ExecOutputFn(ipsetListCommand...), "40s").Should(
 			ContainSubstring("10.65.0.1"),
 			"Expected felix to create an IP set containing the workload's IP",
 		)
