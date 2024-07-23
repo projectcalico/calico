@@ -45,4 +45,5 @@ var _ = DescribeTable("Actions",
 	Entry("RestoreConnMarkAction", environment.Features{}, RestoreConnMarkAction{RestoreMask: 0x100}, "meta mark set ct mark & 0x100"),
 	Entry("SaveConnMarkAction", environment.Features{}, SaveConnMarkAction{}, "ct mark set mark"),
 	Entry("RestoreConnMarkAction", environment.Features{}, RestoreConnMarkAction{}, "meta mark set ct mark"),
+	Entry("SetConnMarkAction", environment.Features{}, SetConnMarkAction{Mark: 0x1000, Mask: 0xf000}, "ct mark set ct mark & 0xffff0fff ^ 0x1000"),
 )
