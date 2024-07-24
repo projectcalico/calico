@@ -27,14 +27,14 @@ func Clone(dir, branchName string) error {
 	return err
 }
 
-func GitVersion(repoRootDir string) (string, error) {
-	return command.GitVersion(operatorDir(repoRootDir), false)
+func GitVersion(outDir string) (string, error) {
+	return command.GitVersion(operatorDir(outDir), false)
 }
 
-func GitVersionDirty(repoRootDir string) (string, error) {
-	return command.GitVersion(operatorDir(repoRootDir), true)
+func GitVersionDirty(outDir string) (string, error) {
+	return command.GitVersion(operatorDir(outDir), true)
 }
 
-func GitBranch(repoRootDir string) (string, error) {
-	return command.GitInDir(operatorDir(repoRootDir), "rev-parse", "--abbrev-ref", "HEAD")
+func GitBranch(outDir string) (string, error) {
+	return command.GitInDir(operatorDir(outDir), "rev-parse", "--abbrev-ref", "HEAD")
 }
