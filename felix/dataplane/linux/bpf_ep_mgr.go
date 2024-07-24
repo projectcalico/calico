@@ -3867,8 +3867,8 @@ func (m *bpfEndpointManager) onServiceUpdate(update *proto.ServiceUpdate) {
 	}).Info("Service Update")
 
 	ipstr := make([]string, 0, 2)
-	if update.ClusterIp != "" {
-		ipstr = append(ipstr, update.ClusterIp)
+	if len(update.ClusterIps) > 0 {
+		ipstr = append(ipstr, update.ClusterIps...)
 	}
 	if update.LoadbalancerIp != "" {
 		ipstr = append(ipstr, update.LoadbalancerIp)
