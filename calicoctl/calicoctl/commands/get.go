@@ -15,17 +15,18 @@
 package commands
 
 import (
-	"github.com/docopt/docopt-go"
-
 	"fmt"
 	"os"
 	"strings"
+
+	"github.com/docopt/docopt-go"
 
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/argutils"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/common"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/constants"
+	"github.com/projectcalico/calico/calicoctl/calicoctl/resourcemgr"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/util"
 )
 
@@ -74,21 +75,7 @@ Description:
 
   Valid resource types are:
 
-    * bgpConfiguration
-    * bgpPeer
-    * felixConfiguration
-    * globalNetworkPolicy
-    * globalNetworkSet
-    * hostEndpoint
-    * ipPool
-    * ipReservation
-    * kubeControllersConfiguration
-    * networkPolicy
-    * networkSet
-    * node
-    * profile
-    * workloadEndpoint
-
+<RESOURCE_LIST>
   The resource type is case-insensitive and may be pluralized.
 
   Attempting to get resources that do not exist will simply return no results.
@@ -126,6 +113,14 @@ Description:
 	// Replace all instances of BINARY_NAME with the name of the binary.
 	name, _ := util.NameAndDescription()
 	doc = strings.ReplaceAll(doc, "<BINARY_NAME>", name)
+
+	// Replace <RESOURCE_LIST> with the list of resource types.
+	kinds := resourcemgr.ValidResources()
+	resourceList := ""
+	for _, r := range kinds {
+		resourceList += fmt.Sprintf("    - %s\n", r)
+	}
+	doc = strings.Replace(doc, "<RESOURCE_LIST>", resourceList, 1)
 
 	// -a option Backward compatibility
 	for k, v := range args {

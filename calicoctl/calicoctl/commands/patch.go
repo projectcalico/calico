@@ -24,6 +24,7 @@ import (
 
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/common"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/constants"
+	"github.com/projectcalico/calico/calicoctl/calicoctl/resourcemgr"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/util"
 )
 
@@ -60,21 +61,7 @@ Description:
 
   Valid resource types are:
 
-    * bgpConfiguration
-    * bgpPeer
-    * felixConfiguration
-    * globalNetworkPolicy
-    * globalNetworkSet
-    * hostEndpoint
-    * ipPool
-    * ipReservation
-    * kubeControllersConfiguration
-    * networkPolicy
-    * networkSet
-    * node
-    * profile
-    * workloadEndpoint
-
+<RESOURCE_LIST>
   The resource type is case-insensitive and may be pluralized.
 
   Attempting to patch a resource that does not exists is treated as a
@@ -89,6 +76,14 @@ Description:
 	// Replace all instances of BINARY_NAME with the name of the binary.
 	name, _ := util.NameAndDescription()
 	doc = strings.ReplaceAll(doc, "<BINARY_NAME>", name)
+
+	// Replace <RESOURCE_LIST> with the list of resource types.
+	kinds := resourcemgr.ValidResources()
+	resourceList := ""
+	for _, r := range kinds {
+		resourceList += fmt.Sprintf("    - %s\n", r)
+	}
+	doc = strings.Replace(doc, "<RESOURCE_LIST>", resourceList, 1)
 
 	parsedArgs, err := docopt.ParseArgs(doc, args, "")
 	if err != nil {
