@@ -14,6 +14,14 @@ import (
 
 type Version string
 
+func (v *Version) Set() string {
+	ver, err := semver.NewVersion(strings.TrimPrefix(string(*v), "v"))
+	if err != nil {
+		return ""
+	}
+	return ver.String()
+}
+
 func (v *Version) String() string {
 	ver, err := semver.NewVersion(strings.TrimPrefix(string(*v), "v"))
 	if err != nil {
