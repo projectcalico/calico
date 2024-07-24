@@ -81,7 +81,7 @@ for log_file in /home/semaphore/fv.log/*.log; do
 done;
 
 # Search for error code file
-if [[ -f /home/semaphore/report/error-codes || $ERROR_CODE != 0 ]];
+if [[ -f /home/semaphore/calico/process/testing/winfv/report/error-codes || $ERROR_CODE != 0 ]];
 then
     echo "Windows FV returned error(s)."
     exit 1
