@@ -400,8 +400,7 @@ func (c SetConnMarkAction) ToFragment(features *environment.Features) string {
 		// If Mask field is ignored, default to full mark.
 		return fmt.Sprintf("ct mark set %#x", c.Mark)
 	}
-	notMask := c.Mask ^ 0xffffffff
-	return fmt.Sprintf("ct mark set ct mark xor %#x & %#x", c.Mark, notMask)
+	return fmt.Sprintf("ct mark set ct mark & %#x ^ %#x", (c.Mask ^ 0xffffffff), c.Mark)
 }
 
 func (c SetConnMarkAction) String() string {
