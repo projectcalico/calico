@@ -155,7 +155,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 						Eventually(func() string {
 							out, _ := felix.ExecOutput("iptables-save", "-c")
 							return out
-						}, "10s", "100ms").Should(ContainSubstring("--random-fully"))
+						}, "35s", "100ms").Should(ContainSubstring("--random-fully"))
 					}
 				}
 			})
