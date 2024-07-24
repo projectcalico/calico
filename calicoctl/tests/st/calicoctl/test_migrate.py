@@ -150,6 +150,14 @@ class TestCalicoctlMigrate(TestBase):
         rc = calicoctl("get node %s -o yaml" % name(node_name5_rev1))
         rc.assert_data(node_name5_rev1)
 
+        # Create an IP reservation.
+        rc = calicoctl("create", data=ipresv_name1_rev1_v4)
+        rc.assert_no_error()
+
+        # Create a BGPFilter.
+        rc = calicoctl("create", data=bgpfilter_name1_rev1)
+        rc.assert_no_error()
+
         # TODO: Pull code or modify tests to create IPAM objects for this test
         # since they cannot be created via calicoctl.
 
@@ -195,6 +203,10 @@ class TestCalicoctlMigrate(TestBase):
         rc = calicoctl("delete node %s" % name(node_name4_rev1))
         rc.assert_no_error()
         rc = calicoctl("delete node %s" % name(node_name5_rev1))
+        rc.assert_no_error()
+        rc = calicoctl("delete ipreservation %s" % name(ipresv_name1_rev1_v4))
+        rc.assert_no_error()
+        rc = calicoctl("delete bgpfilter %s" % name(bgpfilter_name1_rev1))
         rc.assert_no_error()
 
         # Attempt and fail to import the data into an etcd datastore
@@ -244,6 +256,10 @@ class TestCalicoctlMigrate(TestBase):
         rc.assert_error(text=NOT_FOUND)
         rc = calicoctl("get clusterinfo %s -o yaml" % name(clusterinfo_name1_rev1), kdd=True)
         rc.assert_no_error()
+        rc = calicoctl("get ipreservation %s -o yaml" % name(ipresv_name1_rev1_v4), kdd=True)
+        rc.assert_no_error()
+        rc = calicoctl("get bgpfilter %s -o yaml" % name(bgpfilter_name1_rev1), kdd=True)
+        rc.assert_no_error()
 
         # Unlock the datastore
         rc = calicoctl("datastore migrate unlock", kdd=True)
@@ -275,4 +291,8 @@ class TestCalicoctlMigrate(TestBase):
         rc = calicoctl("delete networkset %s" % name(networkset_name1_rev1), kdd=True)
         rc.assert_no_error()
         rc = calicoctl("delete networkset %s -n %s" % (name(networkset_name2_rev1), namespace(networkset_name2_rev1)), kdd=True)
+        rc.assert_no_error()
+        rc = calicoctl("delete ipreservation %s" % name(ipresv_name1_rev1_v4), kdd=True)
+        rc.assert_no_error()
+        rc = calicoctl("delete bgpfilter %s" % name(bgpfilter_name1_rev1), kdd=True)
         rc.assert_no_error()
