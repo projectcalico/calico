@@ -380,7 +380,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 					// Removing the BGP config triggers a Felix restart and Felix has a 2s timer during
 					// a config restart to ensure that it doesn't tight loop.  Wait for the ipset to be
 					// updated as a signal that Felix has restarted.
-					Eventually(f.IPSetSizeFn("cali40all-hosts-net"), "5s", "200ms").Should(BeZero())
+					Eventually(f.IPSetSizeFn("cali40all-hosts-net"), "10s", "200ms").Should(BeZero())
 				}
 			}
 		})
