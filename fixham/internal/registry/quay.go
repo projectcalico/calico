@@ -12,7 +12,7 @@ func (q *Quay) URL() string {
 }
 
 func (q *Quay) TokenURL(repository string) string {
-	return q.URL() + "/oauth/token?service=quay.io&scope=repository:" + repository + ":pull"
+	return fmt.Sprintf("https://quay.io/v2/auth?scope=repository:%s:pull", repository)
 }
 
 func (q *Quay) ManifestURL(img Image) string {
