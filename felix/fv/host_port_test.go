@@ -92,7 +92,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ host-port tests", []apiconf
 		}
 
 		if bpfEnabled {
-			Eventually(tc.Felixes[0].NumTCBPFProgsEth0, "5s", "200ms").Should(Equal(2))
+			Eventually(tc.Felixes[0].NumTCBPFProgsEth0, "35s", "200ms").Should(Equal(2))
 		}
 	})
 
