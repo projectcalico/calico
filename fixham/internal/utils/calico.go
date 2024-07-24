@@ -35,7 +35,8 @@ func ReleaseWindowsArchive(rootDir, calicoVersion, outDir string) error {
 	if err := CreateDir(outDir); err != nil {
 		logrus.WithError(err).Error("Failed to create windows output directory")
 	}
-	if _, err := command.Run("mv", []string{rootDir + "/node/dist/calico-windows-" + calicoVersion + ".zip", outDir}); err != nil {
+	fileName := fmt.Sprintf("calico-windows-%s.zip", calicoVersion)
+	if err := MoveFile(rootDir+"/node/dist/"+fileName, outDir+"/"+fileName); err != nil {
 		logrus.WithError(err).Error("Failed to move generated windows archive to output directory")
 		return err
 	}
@@ -43,11 +44,11 @@ func ReleaseWindowsArchive(rootDir, calicoVersion, outDir string) error {
 }
 
 func HelmArchive(rootDir, calicoVersion, operatorVersion, outDir string) error {
-	if _, err := command.Run("sed", []string{"-i", fmt.Sprintf("'s/version: .*/version: %s/g'", operatorVersion), rootDir + "/charts/tigera-operator/values.yaml"}); err != nil {
+	if _, err := command.Run("sed", []string{"-i", fmt.Sprintf(`s/version: .*/version: %s/g`, operatorVersion), rootDir + "/charts/tigera-operator/values.yaml"}); err != nil {
 		logrus.WithError(err).Error("Failed to update operator version in values.yaml")
 		return err
 	}
-	if _, err := command.Run("sed", []string{"-i", fmt.Sprintf("'s/tag: .*/tag: %s/g'", calicoVersion), rootDir + "/charts/tigera-operator/values.yaml"}); err != nil {
+	if _, err := command.Run("sed", []string{"-i", fmt.Sprintf(`s/tag: .*/tag: %s/g`, calicoVersion), rootDir + "/charts/tigera-operator/values.yaml"}); err != nil {
 		logrus.WithError(err).Error("Failed to update calicoctl version in values.yaml")
 		return err
 	}
@@ -55,7 +56,7 @@ func HelmArchive(rootDir, calicoVersion, operatorVersion, outDir string) error {
 		logrus.WithError(err).Error("Failed to make helm chart")
 		return err
 	}
-	if _, err := command.Run("mv", []string{rootDir + "bin/tigera-operator-v*.tgz", outDir + "/tigera-operator-v*.tgz"}); err != nil {
+	if err := MoveFile(fmt.Sprintf(`%s/bin/tigera-operator-v*.tgz`, rootDir), outDir+"/tigera-operator.tgz"); err != nil {
 		logrus.WithError(err).Error("Failed to move generated helm chart to output directory")
 		return err
 	}
@@ -75,7 +76,7 @@ func GenerateManifests(rootDir, calicoVersion, operatorVersion, outDir string) e
 		logrus.WithError(err).Error("Failed to make manifests")
 		return err
 	}
-	if _, err := command.Run("mv", []string{rootDir + "/manifests", outDir}); err != nil {
+	if _, err := command.Run("cp", []string{"-r", rootDir + "/manifests", outDir}); err != nil {
 		logrus.WithError(err).Error("Failed to copy manifests to output directory")
 		return err
 	}
@@ -83,7 +84,8 @@ func GenerateManifests(rootDir, calicoVersion, operatorVersion, outDir string) e
 		logrus.WithError(err).Error("Failed to make openshift manifests archive")
 		return err
 	}
-	if _, err := command.Run("mv", []string{rootDir + "/bin/ocp.tgz", outDir + "/manifests"}); err != nil {
+	fileName := "ocp.tgz"
+	if err := MoveFile(rootDir+"/bin/"+fileName, outDir+"/manifests/"+fileName); err != nil {
 		logrus.WithError(err).Error("Failed to copy openshift manifests archive to output directory")
 		return err
 	}

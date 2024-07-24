@@ -36,12 +36,14 @@ type ReleaseNoteIssueData struct {
 	Author string
 }
 
+// ReleaseNoteData represents the data for release notes
 type ReleaseNoteData struct {
 	Date         string
 	BugFixes     []*ReleaseNoteIssueData
 	OtherChanges []*ReleaseNoteIssueData
 }
 
+// milestoneNumber returns the milestone number for a given milestone
 func milestoneNumber(client *github.Client, owner, repo, milestone string) (int, error) {
 	for {
 		milestones, resp, err := client.Issues.ListMilestones(context.Background(), owner, repo, nil)
@@ -60,6 +62,7 @@ func milestoneNumber(client *github.Client, owner, repo, milestone string) (int,
 	return -1, fmt.Errorf("milestone not found")
 }
 
+// prIssuesByRepo returns all the PR issues for a given repo
 func prIssuesByRepo(client *github.Client, owner, repo string, opts *github.IssueListByRepoOptions) ([]*github.Issue, error) {
 	prIssues := []*github.Issue{}
 	for {
@@ -80,11 +83,9 @@ func prIssuesByRepo(client *github.Client, owner, repo string, opts *github.Issu
 	return prIssues, nil
 }
 
-func releaseNoteFilePath(dir, milestone string) string {
-	version := strings.Split(milestone, " ")[1]
-	return fmt.Sprintf("%s/%s/%s-release-notes.md", dir, releaseNotesFolder, version)
-}
-
+// extractReleaseNoteFromIssue extracts release notes from an issue.
+// It looks for the release note block in the issue body and returns the content
+// between the start and end markers.
 func extractReleaseNoteFromIssue(issue *github.Issue) ([]string, error) {
 	body := issue.GetBody()
 	startMarker := "```release-note"
@@ -105,6 +106,7 @@ func extractReleaseNoteFromIssue(issue *github.Issue) ([]string, error) {
 	return strings.Split(notes, "\n"), nil
 }
 
+// extractReleaseNote extracts release notes from a list of issues
 func extractReleaseNote(repo string, issues []*github.Issue) ([]*ReleaseNoteIssueData, error) {
 	issueDataList := []*ReleaseNoteIssueData{}
 	for _, issue := range issues {
@@ -134,6 +136,7 @@ func extractReleaseNote(repo string, issues []*github.Issue) ([]*ReleaseNoteIssu
 	return issueDataList, nil
 }
 
+// outputReleaseNotes outputs the release notes to a file
 func outputReleaseNotes(issueDataList []*ReleaseNoteIssueData, templateFilePath, outputFilePath string) error {
 	dir := filepath.Dir(outputFilePath)
 	if err := utils.CreateDir(dir); err != nil {
@@ -216,7 +219,7 @@ func GenerateReleaseNotes(owner, githubToken, repoRootDir, outputDir string) (st
 		logrus.WithField("milestone", milestone).Error("No issues found for milestone")
 		return "", fmt.Errorf("no issues found for milestone %s", milestone)
 	}
-	releaseNoteFilePath := releaseNoteFilePath(outputDir, milestone)
+	releaseNoteFilePath := fmt.Sprintf("%s/%s/%s-release-notes.md", outputDir, releaseNotesFolder, releaseVersion.FormattedString())
 	if err := outputReleaseNotes(issueDataList, repoRootDir+"/"+releaseNoteTemplatePath, releaseNoteFilePath); err != nil {
 		logrus.WithError(err).Error("Failed to output release notes")
 		return "", err
