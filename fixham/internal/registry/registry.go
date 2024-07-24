@@ -5,9 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-
-	"github.com/docker/cli/cli/config"
-	"github.com/docker/cli/cli/config/types"
 )
 
 const (
@@ -21,6 +18,7 @@ type Image string
 // Repository returns the repository part of the image.
 func (d Image) Repository() string {
 	parts := strings.Split(string(d), ":")
+	parts = strings.Split(parts[0], "/")
 	return parts[0]
 }
 
@@ -52,24 +50,13 @@ func GetRegistry(registry string) Registry {
 	}
 }
 
-// retrieveLocalAuthConfig retrieves the local auth config to use for the image.
-func retrieveLocalAuthConfig(imageName string) (types.AuthConfig, error) {
-	dockerConfigFile := config.LoadDefaultConfigFile(nil)
-	registryAuth, err := dockerConfigFile.GetAuthConfig(imageName)
-	if err != nil {
-		return types.AuthConfig{}, err
-	}
-	return registryAuth, nil
-}
-
 // getBearerToken retrieves a bearer token to use for the image.
-func getBearerToken(authConfig types.AuthConfig, registry Registry, img Image) (string, error) {
+func getBearerToken(registry Registry, img Image) (string, error) {
 	tokenURL := registry.TokenURL(img.Repository())
 	req, err := http.NewRequest(http.MethodGet, tokenURL, nil)
 	if err != nil {
 		return "", err
 	}
-	req.SetBasicAuth(authConfig.Username, authConfig.Password)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return "", err
@@ -91,11 +78,7 @@ func getBearerToken(authConfig types.AuthConfig, registry Registry, img Image) (
 func ImageExists(imageName, registryURL string) (bool, error) {
 	registry := GetRegistry(registryURL)
 	img := Image(imageName)
-	localAuth, err := retrieveLocalAuthConfig(imageName)
-	if err != nil {
-		return false, err
-	}
-	token, err := getBearerToken(localAuth, registry, img)
+	token, err := getBearerToken(registry, img)
 	if err != nil {
 		return false, err
 	}

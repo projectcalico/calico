@@ -12,6 +12,7 @@ import (
 const (
 	pinnedVersionTaskName             = "pinned-version"
 	operatorBuildTaskName             = "operator/build"
+	operatorPublishTaskName           = "operator/publish"
 	operatorTaskName                  = "operator"
 	hashreleaseBuildTaskName          = "build"
 	hashreleaseValidateTaskName       = "validate"
@@ -47,17 +48,31 @@ func OperatorHashreleaseBuild(runner *registry.DockerRunner, cfg *config.Config,
 	}
 }
 
-func OperatorHashrelease(runner *registry.DockerRunner, cfg *config.Config, outputDir string) *GoyekTask {
+func OperatorHashreleasePublish(runner *registry.DockerRunner, cfg *config.Config, outputDir string) *GoyekTask {
 	return &GoyekTask{
 		Task: goyekv2.Task{
-			Name:  operatorTaskName,
-			Usage: "Build and publish operator hashrelease",
+			Name:  operatorPublishTaskName,
+			Usage: "Publish operator hashrelease",
 			Action: func(a *goyekv2.A) {
 				tasks.OperatorHashreleasePush(runner, cfg, outputDir)
 			},
 			Parallel: false,
 		},
 		Deps: []string{operatorBuildTaskName},
+	}
+}
+
+func OperatorHashrelease(runner *registry.DockerRunner, cfg *config.Config, outputDir string) *GoyekTask {
+	return &GoyekTask{
+		Task: goyekv2.Task{
+			Name:     operatorTaskName,
+			Usage:    "Build & publish operator hashrelease",
+			Parallel: false,
+			Action: func(a *goyekv2.A) {
+				logrus.Info("Operator hashrelease build and publish complete")
+			},
+		},
+		Deps: []string{operatorBuildTaskName, operatorPublishTaskName},
 	}
 }
 
@@ -73,7 +88,7 @@ func HashreleaseBuild(cfg *config.Config, outputDir string) *GoyekTask {
 			},
 			Parallel: false,
 		},
-		Deps: []string{operatorTaskName},
+		Deps: []string{operatorBuildTaskName},
 	}
 }
 
@@ -87,7 +102,7 @@ func HashreleaseValidate(cfg *config.Config, outputDir string) *GoyekTask {
 			},
 			Parallel: false,
 		},
-		Deps: []string{hashreleaseBuildTaskName},
+		Deps: []string{operatorPublishTaskName},
 	}
 
 }
@@ -103,7 +118,7 @@ func Hashrelease(cfg *config.Config, outputDir string) *GoyekTask {
 			},
 			Parallel: false,
 		},
-		Deps: []string{hashreleaseValidateTaskName},
+		Deps: []string{hashreleaseValidateTaskName, hashreleaseBuildTaskName},
 	}
 }
 

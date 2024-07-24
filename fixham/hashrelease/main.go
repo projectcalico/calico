@@ -9,6 +9,7 @@ func main() {
 	b := api.NewBuilder()
 	b.AddTask(goyek.PinnedVersion(b.Config(), b.Output()),
 		goyek.OperatorHashreleaseBuild(b.DockerRunner(), b.Config(), b.Output()),
+		goyek.OperatorHashreleasePublish(b.DockerRunner(), b.Config(), b.Output()),
 		goyek.OperatorHashrelease(b.DockerRunner(), b.Config(), b.Output()),
 		goyek.HashreleaseBuild(b.Config(), b.Output()),
 		goyek.HashreleaseValidate(b.Config(), b.Output()),

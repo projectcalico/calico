@@ -11,7 +11,7 @@ func (d *Docker) URL() string {
 }
 
 func (d *Docker) TokenURL(repository string) string {
-	return "https://auth." + d.URL() + "/token?service=registry.docker.io&scope=repository:" + repository + ":pull"
+	return fmt.Sprintf("https://auth.%s/token?service=registry.docker.io&scope=repository:%s:pull", d.URL(), repository)
 }
 
 func (d *Docker) ManifestURL(img Image) string {

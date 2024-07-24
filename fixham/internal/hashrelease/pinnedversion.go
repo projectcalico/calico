@@ -36,13 +36,15 @@ type PinnedVersionData struct {
 
 type PinnedVersion struct {
 	Title          string               `yaml:"title"`
-	ReleaseName    string               `yaml:"release_name"`
-	Hash           string               `yaml:"full_hash"`
-	Note           string               `yaml:"note"`
 	ManifestURL    string               `yaml:"manifest_url"`
+	ReleaseName    string               `yaml:"release_name"`
+	Note           string               `yaml:"note"`
+	Hash           string               `yaml:"full_hash"`
 	TigeraOperator Component            `yaml:"tigera-operator"`
 	Components     map[string]Component `yaml:"components"`
 }
+
+type PinnedVersionYAML []PinnedVersion
 
 func pinnedVersionFilePath(outputDir string) string {
 	return outputDir + "/" + pinnedVersionFileName
@@ -76,11 +78,11 @@ func GeneratePinnedVersion(rootDir, devTagSuffix, outputDir string) (string, err
 	if !version.IsDevVersion(calicoVersion, devTagSuffix) {
 		return "", fmt.Errorf("calico version %s does not have dev tag %s", calicoVersion, devTagSuffix)
 	}
-	operatorBranch, err := operator.GitBranch(rootDir)
+	operatorBranch, err := operator.GitBranch(outputDir)
 	if err != nil {
 		return "", err
 	}
-	operatorVersion, err := operator.GitVersion(rootDir)
+	operatorVersion, err := operator.GitVersion(outputDir)
 	if err != nil {
 		return "", err
 	}
@@ -118,7 +120,7 @@ func GeneratePinnedVersion(rootDir, devTagSuffix, outputDir string) (string, err
 func GeneratePinnedVersionForOperator(rootDir, outputDir string) (string, error) {
 	pinnedVersionPath := pinnedVersionFilePath(outputDir)
 	logrus.WithField("pinned version file", pinnedVersionPath).Info("Generating components-version.yaml for operator")
-	var pinnedversion = []PinnedVersion{}
+	var pinnedversion PinnedVersionYAML
 	if pinnedVersionData, err := os.ReadFile(pinnedVersionPath); err != nil {
 		return "", err
 	} else if err := yaml.Unmarshal([]byte(pinnedVersionData), &pinnedversion); err != nil {
@@ -138,13 +140,13 @@ func GeneratePinnedVersionForOperator(rootDir, outputDir string) (string, error)
 
 func RetrievePinnedVersion(outputDir string) (PinnedVersion, error) {
 	pinnedVersionPath := pinnedVersionFilePath(outputDir)
-	var pinnedversion PinnedVersion
+	var pinnedversion PinnedVersionYAML
 	if pinnedVersionData, err := os.ReadFile(pinnedVersionPath); err != nil {
-		return pinnedversion, err
+		return PinnedVersion{}, err
 	} else if err := yaml.Unmarshal([]byte(pinnedVersionData), &pinnedversion); err != nil {
-		return pinnedversion, err
+		return PinnedVersion{}, err
 	}
-	return pinnedversion, nil
+	return pinnedversion[0], nil
 }
 
 func RetrievePinnedOperatorVersion(outputDir string) (string, error) {
@@ -162,7 +164,7 @@ func RetrievePinnedOperatorVersion(outputDir string) (string, error) {
 
 func RetrieveReleaseName(outputDir string) (string, error) {
 	pinnedVersionPath := pinnedVersionFilePath(outputDir)
-	var pinnedversion = []PinnedVersion{}
+	var pinnedversion PinnedVersionYAML
 	if pinnedVersionData, err := os.ReadFile(pinnedVersionPath); err != nil {
 		return "", err
 	} else if err := yaml.Unmarshal([]byte(pinnedVersionData), &pinnedversion); err != nil {
@@ -173,7 +175,7 @@ func RetrieveReleaseName(outputDir string) (string, error) {
 
 func RetrievePinnedCalicoVersion(outputDir string) (string, error) {
 	pinnedVersionPath := pinnedVersionFilePath(outputDir)
-	var pinnedversion = []PinnedVersion{}
+	var pinnedversion PinnedVersionYAML
 	if pinnedVersionData, err := os.ReadFile(pinnedVersionPath); err != nil {
 		return "", err
 	} else if err := yaml.Unmarshal([]byte(pinnedVersionData), &pinnedversion); err != nil {
@@ -184,7 +186,7 @@ func RetrievePinnedCalicoVersion(outputDir string) (string, error) {
 
 func RetrievePinnedVersionNote(outputDir string) (string, error) {
 	pinnedVersionPath := pinnedVersionFilePath(outputDir)
-	var pinnedversion = []PinnedVersion{}
+	var pinnedversion PinnedVersionYAML
 	if pinnedVersionData, err := os.ReadFile(pinnedVersionPath); err != nil {
 		return "", err
 	} else if err := yaml.Unmarshal([]byte(pinnedVersionData), &pinnedversion); err != nil {
@@ -195,7 +197,7 @@ func RetrievePinnedVersionNote(outputDir string) (string, error) {
 
 func RetrievePinnedVersionHash(outputDir string) (string, error) {
 	pinnedVersionPath := pinnedVersionFilePath(outputDir)
-	var pinnedversion = []PinnedVersion{}
+	var pinnedversion PinnedVersionYAML
 	if pinnedVersionData, err := os.ReadFile(pinnedVersionPath); err != nil {
 		return "", err
 	} else if err := yaml.Unmarshal([]byte(pinnedVersionData), &pinnedversion); err != nil {

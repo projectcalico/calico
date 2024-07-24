@@ -2,6 +2,7 @@ package tasks
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/sirupsen/logrus"
 
@@ -53,15 +54,15 @@ func OperatorHashreleaseBuild(runner *registry.DockerRunner, cfg *config.Config,
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get operator version")
 	}
-	if err := operator.GenVersions(cfg.RepoRootDir, componentsVersionPath); err != nil {
+	if err := operator.GenVersions(outputDir, componentsVersionPath); err != nil {
 		logrus.WithError(err).Fatal("Failed to generate versions")
 	}
-	logrus.Info("Building operator images")
-	if err := operator.ImageAll(cfg.ValidArchs, operatorVersion); err != nil {
+	logrus.Infof("Building operator images for %v", cfg.ValidArchs)
+	if err := operator.ImageAll(cfg.ValidArchs, operatorVersion, outputDir); err != nil {
 		logrus.WithError(err).Fatal("Failed to build images")
 	}
 	logrus.Info("Building operator init image")
-	if err := operator.InitImage(operatorVersion); err != nil {
+	if err := operator.InitImage(operatorVersion, outputDir); err != nil {
 		logrus.WithError(err).Fatal("Failed to init images")
 	}
 	for _, arch := range cfg.ValidArchs {
@@ -168,19 +169,22 @@ func HashreleaseValidate(cfg *config.Config, outputDir string) {
 
 	for name, component := range images {
 		ch := make(chan result)
-		imgExists(component.Image+":"+component.Version, component.Registry, ch)
+		go imgExists(component.Image+":"+component.Version, component.Registry, ch)
 		results[name] = <-ch
 	}
-	failed := false
+	failedImages := []string{}
 	for name, r := range results {
-		logrus.WithField("image", name).WithField("exists", r.exists).Debug("Validating image")
+		logrus.WithField("image", name).WithField("exists", r.exists).Info("Validating image")
 		if r.err != nil {
 			logrus.WithError(r.err).WithField("image", name).Error("Failed to check image")
-			failed = true
+			failedImages = append(failedImages, name)
+		} else {
+			logrus.WithField("image", name).Info("Image exists")
 		}
 	}
-	if failed {
-		logrus.Fatal("Failed to validate images, see above for details")
+	failedCount := len(failedImages)
+	if failedCount > 0 {
+		logrus.WithField("failed images", strings.Join(failedImages, ",")).Fatalf("Failed to validate %d images, see above for details", failedCount)
 	}
 }
 

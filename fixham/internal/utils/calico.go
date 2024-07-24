@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/sirupsen/logrus"
@@ -24,9 +25,9 @@ func GitVersionDirty(dir, devTagSuffix string) (string, error) {
 	return command.GitVersion(dir, true)
 }
 
-func ReleaseWindowsArchive(rootDir, version, outDir string) error {
+func ReleaseWindowsArchive(rootDir, calicoVersion, outDir string) error {
 	env := os.Environ()
-	env = append(env, "VERSION="+version)
+	env = append(env, "VERSION="+calicoVersion)
 	if _, err := command.MakeInDir(rootDir+"/node", []string{"release-windows-archive"}, env); err != nil {
 		logrus.WithError(err).Error("Failed to make release-windows-archive")
 		return err
@@ -34,20 +35,20 @@ func ReleaseWindowsArchive(rootDir, version, outDir string) error {
 	if err := CreateDir(outDir); err != nil {
 		logrus.WithError(err).Error("Failed to create windows output directory")
 	}
-	if _, err := command.Run("mv", []string{rootDir + "/node/dist/calico-windows-" + version + ".zip", outDir}); err != nil {
+	if _, err := command.Run("mv", []string{rootDir + "/node/dist/calico-windows-" + calicoVersion + ".zip", outDir}); err != nil {
 		logrus.WithError(err).Error("Failed to move generated windows archive to output directory")
 		return err
 	}
 	return nil
 }
 
-func HelmArchive(rootDir, version, operatorVersion, outDir string) error {
-	if _, err := command.Run("sed", []string{"-i", "'s/version: .*/version: " + operatorVersion + "/g'", rootDir + "/charts/tigera-operator/values.yaml"}); err != nil {
+func HelmArchive(rootDir, calicoVersion, operatorVersion, outDir string) error {
+	if _, err := command.Run("sed", []string{"-i", fmt.Sprintf("'s/version: .*/version: %s/g'", operatorVersion), rootDir + "/charts/tigera-operator/values.yaml"}); err != nil {
 		logrus.WithError(err).Error("Failed to update operator version in values.yaml")
 		return err
 	}
-	if _, err := command.Run("sed", []string{"-i", "'s/tag: .*/tag: " + version + "/g'", rootDir + "/charts/tigera-operator/values.yaml"}); err != nil {
-		logrus.WithError(err).Error("Failed to update operator version in values.yaml")
+	if _, err := command.Run("sed", []string{"-i", fmt.Sprintf("'s/tag: .*/tag: %s/g'", calicoVersion), rootDir + "/charts/tigera-operator/values.yaml"}); err != nil {
+		logrus.WithError(err).Error("Failed to update calicoctl version in values.yaml")
 		return err
 	}
 	if _, err := command.MakeInDir(rootDir, []string{"chart"}, os.Environ()); err != nil {
@@ -66,9 +67,9 @@ func HelmArchive(rootDir, version, operatorVersion, outDir string) error {
 	return nil
 }
 
-func GenerateManifests(rootDir, version, operatorVersion, outDir string) error {
+func GenerateManifests(rootDir, calicoVersion, operatorVersion, outDir string) error {
 	env := os.Environ()
-	env = append(env, "CALICO_VERSION="+version)
+	env = append(env, "CALICO_VERSION="+calicoVersion)
 	env = append(env, "OPERATOR_VERSION="+operatorVersion)
 	if _, err := command.MakeInDir(rootDir, []string{"gen-manifests"}, env); err != nil {
 		logrus.WithError(err).Error("Failed to make manifests")
