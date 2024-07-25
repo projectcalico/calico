@@ -316,7 +316,6 @@ func (m *ipipManager) CompleteDeferredWork() error {
 		m.updateAllHostsIPSet()
 		m.ipSetDirty = false
 	}
-	m.logCtx.Infof("here")
 	if m.routesAreDirty() {
 		err := m.updateRoutes()
 		if err != nil {

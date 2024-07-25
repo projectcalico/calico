@@ -52,6 +52,7 @@ type TopologyOptions struct {
 	TestManagesBPF            bool
 	TyphaLogSeverity          string
 	IPIPEnabled               bool
+	IPIPRoutesEnabled         bool
 	IPIPMode                  api.IPIPMode
 	VXLANMode                 api.VXLANMode
 	WireguardEnabled          bool
@@ -106,6 +107,8 @@ func DefaultTopologyOptions() TopologyOptions {
 		WithFelixTyphaTLS: false,
 		TyphaLogSeverity:  "info",
 		IPIPEnabled:       true,
+		IPIPMode:          api.IPIPModeAlways,
+		IPIPRoutesEnabled: true,
 		IPPoolCIDR:        DefaultIPPoolCIDR,
 		IPv6PoolCIDR:      DefaultIPv6PoolCIDR,
 		UseIPPools:        true,
@@ -421,9 +424,15 @@ func StartNNodeTopology(n int, opts TopologyOptions, infra DatastoreInfra) (tc T
 				defer wg.Done()
 				defer ginkgo.GinkgoRecover()
 				jBlock := fmt.Sprintf("%d.%d.%d.0/24", IPv4CIDR.IP[0], IPv4CIDR.IP[1], j)
-				if (opts.IPIPEnabled && opts.IPIPMode == api.IPIPModeNever) ||
-					(!opts.IPIPEnabled && opts.VXLANMode == api.VXLANModeNever) {
-					// If IPIP is enabled, Felix will program these routes itself.
+				if opts.IPIPEnabled && opts.IPIPRoutesEnabled {
+					// Can get "Nexthop device is not up" error here if tunl0 device is
+					// not ready yet, which can happen especially if Felix start was
+					// delayed.
+					Eventually(func() error {
+						return iFelix.ExecMayFail("ip", "route", "add", jBlock, "via", jFelix.IP, "dev", "tunl0", "onlink")
+					}, "10s", "1s").ShouldNot(HaveOccurred())
+				} else if opts.VXLANMode == api.VXLANModeNever {
+					// If VXLAN is enabled, Felix will program these routes itself.
 					err := iFelix.ExecMayFail("ip", "route", "add", jBlock, "via", jFelix.IP, "dev", "eth0")
 					Expect(err).ToNot(HaveOccurred())
 				}
