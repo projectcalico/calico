@@ -59,7 +59,9 @@ func FilterLevels(maxLevel log.Level) []log.Level {
 }
 
 func ConfigureFormatter(componentName string) {
-	log.SetFormatter(&Formatter{Component: componentName})
+	formatter := &Formatter{Component: componentName}
+	formatter.init()
+	log.SetFormatter(formatter)
 }
 
 // Formatter is our custom log formatter designed to balance ease of machine processing
@@ -82,24 +84,99 @@ type Formatter struct {
 	// multiple components are logging to the same file (e.g., calico/node) for distinguishing
 	// which component sourced the log.
 	Component string
+
+	initOnce                sync.Once
+	preComputedInfixByLevel []string
 }
 
+var maxLevel = log.Level(len(log.AllLevels))
+
+func (f *Formatter) init() {
+	f.initOnce.Do(func() {
+		f.preComputedInfixByLevel = make([]string, len(log.AllLevels))
+		for _, level := range log.AllLevels {
+			var buf bytes.Buffer
+			f.computeInfix(&buf, level)
+			f.preComputedInfixByLevel[level] = buf.String()
+		}
+	})
+}
+
+const desiredTimeFormat = "2006-01-02 15:04:05.000"
+const desiredTimeLen = len(desiredTimeFormat)
+
 func (f *Formatter) Format(entry *log.Entry) ([]byte, error) {
-	stamp := entry.Time.Format("2006-01-02 15:04:05.000")
-	levelStr := strings.ToUpper(entry.Level.String())
-	pid := os.Getpid()
-	fileName, lineNo := getFileInfo(entry)
+	f.init()
+
 	b := entry.Buffer
 	if b == nil {
-		b = &bytes.Buffer{}
+		var buf bytes.Buffer
+		b = &buf
 	}
-	if f.Component != "" {
-		_, _ = fmt.Fprintf(b, "%s [%s][%d] %s/%v %v: %v", stamp, levelStr, pid, f.Component, fileName, lineNo, entry.Message)
+
+	fileName, lineNo := getFileInfo(entry)
+
+	b.Grow(desiredTimeLen + 32 + len(fileName) + len(entry.Message) + len(entry.Data)*32)
+	appendTime(b, entry)
+	f.writeInfix(b, entry.Level)
+	b.WriteString(fileName)
+	b.WriteByte(' ')
+	if lineNo == 0 {
+		b.WriteString(FileNameUnknown)
 	} else {
-		_, _ = fmt.Fprintf(b, "%s [%s][%d] %v %v: %v", stamp, levelStr, pid, fileName, lineNo, entry.Message)
+		buf := b.AvailableBuffer()
+		buf = strconv.AppendInt(buf, int64(lineNo), 10)
+		_, _ = b.Write(buf)
 	}
-	appendKVsAndNewLine(b, entry)
+	b.WriteString(": ")
+	b.WriteString(entry.Message)
+	appendKVsAndNewLine(b, entry.Data)
+
 	return b.Bytes(), nil
+}
+
+func (f *Formatter) writeInfix(b *bytes.Buffer, level log.Level) {
+	if level >= maxLevel {
+		// Slow path for unknown log levels.
+		f.computeInfix(b, level)
+	}
+	_, _ = b.WriteString(f.preComputedInfixByLevel[level])
+}
+
+func (f *Formatter) computeInfix(b *bytes.Buffer, level log.Level) {
+	_, _ = fmt.Fprintf(b, " [%s][%d] ", strings.ToUpper(level.String()), os.Getpid())
+	if f.Component != "" {
+		_, _ = fmt.Fprintf(b, "%s/", f.Component)
+	}
+}
+
+func appendTime(b *bytes.Buffer, entry *log.Entry) {
+	// Want "2006-01-02 15:04:05.000" but the formatter has an optimised
+	// impl of RFC3339Nano, which we can easily tweak into our format.
+	buf := b.AvailableBuffer()
+	const tPos = len("2006-01-02T") - 1
+	buf = entry.Time.UTC().AppendFormat(buf, time.RFC3339Nano)
+	if len(buf) > desiredTimeLen {
+		buf = buf[:desiredTimeLen]
+	} else {
+		for i := len(buf) - 1; i >= 0; i-- {
+			if buf[i] == 'Z' {
+				buf = buf[:i]
+				buf = append(buf, ".000"[i+4-desiredTimeLen:]...)
+				break
+			}
+		}
+	}
+	buf[tPos] = ' '
+	_, _ = b.Write(buf)
+}
+
+var preComputedInfixByLevelSyslog = make([]string, len(log.AllLevels))
+
+func init() {
+	for _, level := range log.AllLevels {
+		preComputedInfixByLevelSyslog[level] = strings.ToUpper(level.String()) + " "
+	}
 }
 
 // FormatForSyslog formats logs in a way tailored for syslog.  It avoids logging information that is
@@ -109,30 +186,65 @@ func (f *Formatter) Format(entry *log.Entry) ([]byte, error) {
 //	INFO endpoint_mgr.go 434: Skipping configuration of interface because it is oper down.
 //	ifaceName="cali1234"
 func FormatForSyslog(entry *log.Entry) string {
-	levelStr := strings.ToUpper(entry.Level.String())
-	fileName, lineNo := getFileInfo(entry)
 	b := entry.Buffer
 	if b == nil {
-		b = &bytes.Buffer{}
+		var buf bytes.Buffer
+		b = &buf
 	}
-	_, _ = fmt.Fprintf(b, "%s %v %v: %v", levelStr, fileName, lineNo, entry.Message)
-	appendKVsAndNewLine(b, entry)
+
+	fileName, lineNo := getFileInfo(entry)
+
+	b.Grow(desiredTimeLen + 32 + len(fileName) + len(entry.Message) + len(entry.Data)*32)
+	if entry.Level < maxLevel {
+		b.WriteString(preComputedInfixByLevelSyslog[entry.Level])
+	} else {
+		b.WriteString(strings.ToUpper(entry.Level.String()))
+		b.WriteByte(' ')
+	}
+	b.WriteString(fileName)
+	b.WriteByte(' ')
+	if lineNo == 0 {
+		b.WriteString(FileNameUnknown)
+	} else {
+		buf := b.AvailableBuffer()
+		buf = strconv.AppendInt(buf, int64(lineNo), 10)
+		_, _ = b.Write(buf)
+	}
+	b.WriteString(": ")
+	b.WriteString(entry.Message)
+	appendKVsAndNewLine(b, entry.Data)
+
 	return b.String()
 }
 
-func getFileInfo(entry *log.Entry) (string, string) {
+func getFileInfo(entry *log.Entry) (string, int) {
 	if entry.Caller == nil {
-		return FileNameUnknown, FileNameUnknown
+		return FileNameUnknown, 0
 	}
-	return path.Base(entry.Caller.File), strconv.Itoa(entry.Caller.Line)
+	return path.Base(entry.Caller.File), entry.Caller.Line
 }
 
 // appendKeysAndNewLine writes the KV pairs attached to the entry to the end of the buffer, then
 // finishes it with a newline.
-func appendKVsAndNewLine(b *bytes.Buffer, entry *log.Entry) {
+func appendKVsAndNewLine(b *bytes.Buffer, data log.Fields) {
+	if len(data) == 0 {
+		b.WriteByte('\n')
+		return
+	}
+
 	// Sort the keys for consistent output.
-	var keys []string = make([]string, 0, len(entry.Data))
-	for k := range entry.Data {
+	var keys []string
+	const arrSize = 16
+	if len(data) < arrSize {
+		// Optimisation: avoid an allocation if the number of keys is small.
+		// make(...) always spills to the heap if the slice size is not known at
+		// compile time.
+		var dataArr [arrSize]string
+		keys = dataArr[:0]
+	} else {
+		keys = make([]string, 0, len(data))
+	}
+	for k := range data {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
@@ -141,22 +253,25 @@ func appendKVsAndNewLine(b *bytes.Buffer, entry *log.Entry) {
 		if key == FieldForceFlush {
 			continue
 		}
-		var value interface{} = entry.Data[key]
-		var stringifiedValue string
-		if err, ok := value.(error); ok {
-			stringifiedValue = err.Error()
-		} else if stringer, ok := value.(fmt.Stringer); ok {
-			// Trust the value's String() method.
-			stringifiedValue = stringer.String()
-		} else {
-			// No string method, use %#v to get a more thorough dump.
-			_, _ = fmt.Fprintf(b, " %v=%#v", key, value)
-			continue
-		}
+		var value = data[key]
 		b.WriteByte(' ')
 		b.WriteString(key)
 		b.WriteByte('=')
-		b.WriteString(stringifiedValue)
+
+		switch value := value.(type) {
+		case string:
+			buf := b.AvailableBuffer()
+			buf = strconv.AppendQuote(buf, value)
+			b.Write(buf)
+		case error:
+			b.WriteString(value.Error())
+		case fmt.Stringer:
+			// Trust the value's String() method.
+			b.WriteString(value.String())
+		default:
+			// No string method, use %#v to get a more thorough dump.
+			_, _ = fmt.Fprintf(b, "%#v", value)
+		}
 	}
 	b.WriteByte('\n')
 }
