@@ -34,7 +34,10 @@ func (r *RealCommandRunner) RunInDir(dir, name string, args []string, env []stri
 	var outb, errb bytes.Buffer
 	cmd.Stdout = io.MultiWriter(os.Stdout, &outb)
 	cmd.Stderr = io.MultiWriter(os.Stderr, &errb)
-	logrus.WithField("cmd", cmd.String()).Infof("Running %s command", name)
+	logrus.WithFields(logrus.Fields{
+		"cmd": cmd.String(),
+		"dir": dir,
+	}).Infof("Running %s command", name)
 	err := cmd.Run()
 	logrus.Debug(outb.String())
 	if err != nil {
@@ -51,7 +54,10 @@ func (r *RealCommandRunner) RunInDirNoCapture(dir, name string, args []string, e
 	cmd.Dir = dir
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	logrus.WithField("cmd", cmd.String()).Infof("Running %s command", name)
+	logrus.WithFields(logrus.Fields{
+		"cmd": cmd.String(),
+		"dir": dir,
+	}).Infof("Running %s command", name)
 	err := cmd.Run()
 	return err
 }
