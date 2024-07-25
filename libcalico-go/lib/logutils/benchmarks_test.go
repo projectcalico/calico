@@ -27,8 +27,70 @@ func BenchmarkLogWithOurFormat(b *testing.B) {
 	logger.SetOutput(&NullWriter{})
 
 	b.ResetTimer()
+	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
 		logger.Info("Test log")
+	}
+}
+
+func BenchmarkLogWithOurFormatFixedFields(b *testing.B) {
+	logger := logrus.New()
+	logger.SetFormatter(&Formatter{})
+	logger.SetReportCaller(true)
+	logger.SetOutput(&NullWriter{})
+
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	entry := logger.WithFields(logrus.Fields{
+		"a": "b",
+		"c": "d",
+		"e": "f",
+		"g": "h",
+	})
+
+	for i := 0; i < b.N; i++ {
+		entry.Info("Test log")
+	}
+}
+
+func BenchmarkLogWithFieldOurFormat(b *testing.B) {
+	logger := logrus.New()
+	logger.SetFormatter(&Formatter{})
+	logger.SetReportCaller(true)
+	logger.SetOutput(&NullWriter{})
+
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	entry := logger.WithFields(logrus.Fields{
+		"a": "b",
+		"c": "d",
+		"e": "f",
+		"g": "h",
+	})
+
+	for i := 0; i < b.N; i++ {
+		entry.WithField("f", "g").Info("Test log")
+	}
+}
+
+func BenchmarkLogWithFieldsOurFormat(b *testing.B) {
+	logger := logrus.New()
+	logger.SetFormatter(&Formatter{})
+	logger.SetReportCaller(true)
+	logger.SetOutput(&NullWriter{})
+
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	for i := 0; i < b.N; i++ {
+		logger.WithFields(logrus.Fields{
+			"a": "b",
+			"c": "d",
+			"e": "f",
+			"g": "h",
+		}).Info("Test log")
 	}
 }
