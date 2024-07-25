@@ -305,6 +305,7 @@ type Config struct {
 	IpInIpEnabled    *bool  `config:"*bool;"`
 	IpInIpMtu        int    `config:"int;0"`
 	IpInIpTunnelAddr net.IP `config:"ipv4;"`
+	IPIPRouteMode    string `config:"oneof(Bird,Felix);Bird"`
 
 	// Feature enablement.  Can be either "Enabled" or "Disabled".  Note, this governs the
 	// programming of NAT mappings derived from Kubernetes pod annotations.  OpenStack floating
@@ -1101,6 +1102,10 @@ func (config *Config) RouteTableIndices() []idalloc.IndexRange {
 		log.Warn("Both `RouteTableRanges` and deprecated `RouteTableRange` options are set. `RouteTableRanges` value will be given precedence.")
 	}
 	return config.RouteTableRanges
+}
+
+func (config *Config) ProgramIPIPRoutes() bool {
+	return config.IPIPRouteMode == "Felix"
 }
 
 func New() *Config {

@@ -526,6 +526,10 @@ spec:
                 description: 'IPIPMTU is the MTU to set on the tunnel device. See
                   Configuring MTU [Default: 1440]'
                 type: integer
+              ipipRoutes:
+                description: 'IPIPRouteMode selects whether Felix should program IPIP
+                  routes instead of BIRD. [Default: Bird]'
+                type: string
               ipsetsRefreshInterval:
                 description: 'IpsetsRefreshInterval is the period at which Felix re-checks
                   all iptables state to ensure that no other process has accidentally
