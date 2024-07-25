@@ -337,7 +337,7 @@ type SetMaskedMarkAction struct {
 }
 
 func (c SetMaskedMarkAction) ToFragment(features *environment.Features) string {
-	return fmt.Sprintf("meta mark set mark or %#x", (c.Mark & c.Mask))
+	return fmt.Sprintf("meta mark set mark & %#x ^ %#x", (c.Mask ^ 0xffffffff), c.Mark)
 }
 
 func (c SetMaskedMarkAction) String() string {
@@ -400,8 +400,7 @@ func (c SetConnMarkAction) ToFragment(features *environment.Features) string {
 		// If Mask field is ignored, default to full mark.
 		return fmt.Sprintf("ct mark set %#x", c.Mark)
 	}
-	notMask := c.Mask ^ 0xffffffff
-	return fmt.Sprintf("ct mark set ct mark xor %#x & %#x", c.Mark, notMask)
+	return fmt.Sprintf("ct mark set ct mark & %#x ^ %#x", (c.Mask ^ 0xffffffff), c.Mark)
 }
 
 func (c SetConnMarkAction) String() string {

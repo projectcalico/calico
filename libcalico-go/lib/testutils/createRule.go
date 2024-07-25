@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -54,7 +54,7 @@ func CreateRule(ipv, icmpType, icmpCode int, proto, cidrStr, tag, selector, inAc
 	src := api.EntityRule{
 		Tag: tag,
 		Net: &cnet.IPNet{
-			*cidr,
+			IPNet: *cidr,
 		},
 		Selector: selector,
 	}

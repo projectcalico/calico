@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@ import (
 	"os"
 
 	"github.com/prometheus/client_golang/prometheus"
+
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
@@ -52,12 +53,8 @@ func ConfigureEarlyLogging() {
 	// Log to stdout.  This prevents fluentd, for example, from interpreting all our logs as errors by default.
 	log.SetOutput(os.Stdout)
 
-	// Replace logrus' formatter with a custom one using our time format,
-	// shared with the Python code.
-	log.SetFormatter(&logutils.Formatter{})
-
-	// Install a hook that adds file/line no information.
-	log.AddHook(&logutils.ContextHook{})
+	// Set up logging formatting.
+	logutils.ConfigureFormatter("typha")
 
 	// First try the early-only environment variable.  Since the normal
 	// config processing doesn't know about that variable, normal config

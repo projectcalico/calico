@@ -198,7 +198,7 @@ func kubernetesServiceToProto(s *kapiv1.Service) *proto.ServiceUpdate {
 		Name:           s.Name,
 		Namespace:      s.Namespace,
 		Type:           string(s.Spec.Type),
-		ClusterIp:      s.Spec.ClusterIP,
+		ClusterIps:     s.Spec.ClusterIPs,
 		LoadbalancerIp: s.Spec.LoadBalancerIP,
 		ExternalIps:    s.Spec.ExternalIPs,
 	}
