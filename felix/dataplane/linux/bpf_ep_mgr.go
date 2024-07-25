@@ -475,6 +475,7 @@ func newBPFEndpointManager(
 		profilesToWorkloads:     map[proto.ProfileID]set.Set[any]{},
 		dirtyIfaceNames:         set.New[string](),
 		bpfLogLevel:             config.BPFLogLevel,
+		logFilters:              config.BPFLogFilters,
 		hostname:                config.Hostname,
 		fibLookupEnabled:        fibLookupEnabled,
 		dataIfaceRegex:          config.BPFDataIfacePattern,
