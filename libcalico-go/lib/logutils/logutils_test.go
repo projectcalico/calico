@@ -30,6 +30,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega/format"
 	"github.com/prometheus/client_golang/prometheus"
 
 	log "github.com/sirupsen/logrus"
@@ -46,6 +47,7 @@ var (
 
 func init() {
 	prometheus.MustRegister(testCounter)
+	format.TruncatedDiff = false
 }
 
 var _ = Describe("Logutils", func() {
@@ -71,6 +73,12 @@ var _ = Describe("Logutils", func() {
 	It("Should add correct file when invoked via log.WithField(...).Info", func() {
 		log.WithField("foo", "bar").Info("Test log")
 		Expect(buf.String()).To(ContainSubstring("logutils_test.go"))
+	})
+	It("requires logrus.AllLevels to be consistent/in order", func() {
+		// Formatter.init() pre-computes various strings on this assumption.
+		for idx, level := range log.AllLevels {
+			Expect(int(level)).To(Equal(idx))
+		}
 	})
 })
 
