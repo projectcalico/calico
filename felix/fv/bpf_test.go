@@ -369,11 +369,13 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			options.AutoHEPsEnabled = true
 			// override IPIP being enabled by default
 			options.IPIPEnabled = false
+			options.IPIPRoutesEnabled = false
 			switch testOpts.tunnel {
 			case "none":
 				// nothing
 			case "ipip":
 				options.IPIPEnabled = true
+				options.IPIPRoutesEnabled = true
 			case "vxlan":
 				options.VXLANMode = api.VXLANModeAlways
 			case "wireguard":
@@ -5591,7 +5593,7 @@ func checkServiceRoute(felix *infrastructure.Felix, ip string) bool {
 		err error
 	)
 
-	if strings.Contains(ip, ":") && felix.TopologyOptions.EnableIPv6 {
+	if felix.TopologyOptions.EnableIPv6 {
 		out, err = felix.ExecOutput("ip", "-6", "route")
 	} else {
 		out, err = felix.ExecOutput("ip", "route")
