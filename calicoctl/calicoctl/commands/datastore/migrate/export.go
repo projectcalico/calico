@@ -21,7 +21,7 @@ import (
 	"strings"
 
 	"github.com/docopt/docopt-go"
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -57,6 +57,8 @@ var allV3Resources []string = []string{
 	"nodes",
 	"bgpconfigs",
 	"felixconfigs",
+	"ipreservations",
+	"bgpfilters",
 }
 
 var resourceDisplayMap map[string]string = map[string]string{
@@ -65,7 +67,7 @@ var resourceDisplayMap map[string]string = map[string]string{
 	"ipamhandles":            "IPAMHandles",
 	"ipamconfigs":            "IPAMConfigurations",
 	"ippools":                "IPPools",
-	"bgpconfig":              "BGPConfigurations",
+	"bgpconfigs":             "BGPConfigurations",
 	"bgppeers":               "BGPPeers",
 	"clusterinfos":           "ClusterInformations",
 	"felixconfigs":           "FelixConfigurations",
@@ -76,11 +78,13 @@ var resourceDisplayMap map[string]string = map[string]string{
 	"networkpolicies":        "NetworkPolicies",
 	"networksets":            "Networksets",
 	"nodes":                  "Nodes",
+	"ipreservations":         "IPReservations",
+	"bgpfilters":             "BGPFilters",
 }
 
 var namespacedResources map[string]struct{} = map[string]struct{}{
-	"networkpolicies": struct{}{},
-	"networksets":     struct{}{},
+	"networkpolicies": {},
+	"networksets":     {},
 }
 
 func Export(args []string) error {
@@ -99,31 +103,25 @@ Description:
   in yaml and json format. Save the results of this command to a file for
   later use with the import command.
 
-  The resources exported include the following:
-    - IPAMBlocks
-    - BlockAffinities
-    - IPAMHandles
-    - IPAMConfigurations
-    - IPPools
-    - BGPConfigurations
-    - BGPPeers
-    - ClusterInformations
-    - FelixConfigurations
-    - GlobalNetworkPolicies
-    - GlobalNetworkSets
-    - HostEndpoints
-    - KubeControllersConfigurations
-    - NetworkPolicies
-    - Networksets
-    - Nodes
+  The following resources are exported:
+
+<RESOURCE_LIST>
 
   The following resources are not exported:
+
     - WorkloadEndpoints
     - Profiles
 `
 	// Replace all instances of BINARY_NAME with the name of the binary.
 	name, _ := util.NameAndDescription()
 	doc = strings.ReplaceAll(doc, "<BINARY_NAME>", name)
+
+	// Replace <RESOURCE_LIST> with the list of resources that will be exported.
+	resourceList := ""
+	for _, r := range allV3Resources {
+		resourceList += fmt.Sprintf("    - %s\n", resourceDisplayMap[r])
+	}
+	doc = strings.Replace(doc, "<RESOURCE_LIST>", resourceList, 1)
 
 	parsedArgs, err := docopt.ParseArgs(doc, args, "")
 	if err != nil {
@@ -157,7 +155,7 @@ Description:
 	// Check that the datastore configured datastore is etcd
 	cfg, err := clientmgr.LoadClientConfig(cf)
 	if err != nil {
-		log.Info("Error loading config")
+		logrus.Info("Error loading config")
 		return err
 	}
 
