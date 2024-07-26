@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -152,13 +151,14 @@ func getRegistryURL(cli *client.Client) (string, error) {
 	return info.RegistryConfig.IndexConfigs["docker.io"].Mirrors[0], nil
 }
 
+// ManifestCreate creates a manifest list with the given images
 func (d *DockerRunner) ManifestCreate(manifestListName Image, images ...string) error {
-	logrus.WithField("manifest list", manifestListName).Debug("Creating manifest list")
+	logrus.WithField("manifest", manifestListName).Debug("Creating manifest list")
 	var manifests []manifestlist.ManifestDescriptor
 	for _, img := range images {
 		inspect, _, err := d.dockerClient.ImageInspectWithRaw(context.Background(), img)
 		if err != nil {
-			logrus.WithField("img", img).WithError(err).Error("failed to inspect image")
+			logrus.WithField("image", img).WithError(err).Error("failed to inspect image")
 			return err
 		}
 		manifests = append(manifests, manifestlist.ManifestDescriptor{
@@ -209,6 +209,7 @@ func (d *DockerRunner) ManifestCreate(manifestListName Image, images ...string) 
 	return nil
 }
 
+// ManifestPush pushes the manifest list to the registry
 func (d *DockerRunner) ManifestPush(manifestListName string, images []string, purge bool) error {
 	if err := d.ManifestCreate(Image(manifestListName), images...); err != nil {
 		logrus.WithError(err).Error("Failed to create manifest list")
@@ -223,38 +224,6 @@ func (d *DockerRunner) ManifestPush(manifestListName string, images []string, pu
 		}
 	}
 	return nil
-}
-
-// ManifestInspect inspects the manifest list
-func (d *DockerRunner) ManifestInspect(imageName Image) (*ManifestList, error) {
-	var imgManifest ManifestList
-	registryURL, err := getRegistryURL(d.dockerClient)
-	if err != nil {
-		logrus.WithError(err).Error("failed to get registry URL")
-		return nil, err
-	}
-	requestURL := fmt.Sprintf("https://%s/v2/%s/manifests/%s", registryURL, imageName.Repository(), imageName.Tag())
-	req, err := http.NewRequest(http.MethodGet, requestURL, nil)
-	if err != nil {
-		logrus.WithError(err).Error("failed to create request")
-		return nil, err
-	}
-	req.Header.Set("Accept", manifestlist.MediaTypeManifestList)
-	resp, err := d.dockerClient.HTTPClient().Do(req.WithContext(context.Background()))
-	if err != nil {
-		logrus.WithError(err).Error("failed to send request")
-		return nil, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		logrus.WithField("status", resp.Status).Error("failed to get manifest list")
-		return nil, err
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&imgManifest); err != nil {
-		logrus.WithError(err).Error("failed to decode manifest list")
-		return nil, err
-	}
-	return &imgManifest, nil
 }
 
 // RunContainer runs a container with the given config and host config

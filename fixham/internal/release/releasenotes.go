@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"text/template"
@@ -18,14 +19,17 @@ import (
 )
 
 const (
-	releaseNoteLabel        = "release-note-required"
-	releaseNotesFolder      = "release-notes"
-	releaseNoteTemplatePath = "/fixham/assets/release-note.md.tmpl"
+	releaseNoteRequiredLabel = "release-note-required"
+	releaseNotesFolderName   = "release-notes"
+	closedState              = issueState("closed")
+	openState                = issueState("open")
 )
 
 var (
 	repos = []string{"calico", "bird"}
 )
+
+type issueState string
 
 // ReleaseNoteIssueData represents the data for an release note issue
 type ReleaseNoteIssueData struct {
@@ -43,10 +47,14 @@ type ReleaseNoteData struct {
 	OtherChanges []*ReleaseNoteIssueData
 }
 
+func releaseNoteTemplatePath(repoRootDir string) string {
+	return filepath.Join(repoRootDir, utils.ReleaseFolderName, "assets", "release-note.md.tmpl")
+}
+
 // milestoneNumber returns the milestone number for a given milestone
-func milestoneNumber(client *github.Client, owner, repo, milestone string) (int, error) {
+func milestoneNumber(client *github.Client, owner, repo, milestone string, opts *github.MilestoneListOptions) (int, error) {
 	for {
-		milestones, resp, err := client.Issues.ListMilestones(context.Background(), owner, repo, nil)
+		milestones, resp, err := client.Issues.ListMilestones(context.Background(), owner, repo, opts)
 		if err != nil {
 			return -1, err
 		}
@@ -58,6 +66,7 @@ func milestoneNumber(client *github.Client, owner, repo, milestone string) (int,
 		if resp.NextPage == 0 {
 			break
 		}
+		opts.Page = resp.NextPage
 	}
 	return -1, fmt.Errorf("milestone not found")
 }
@@ -88,22 +97,19 @@ func prIssuesByRepo(client *github.Client, owner, repo string, opts *github.Issu
 // between the start and end markers.
 func extractReleaseNoteFromIssue(issue *github.Issue) ([]string, error) {
 	body := issue.GetBody()
-	startMarker := "```release-note"
-	endMarker := "```"
-	startIndex := strings.Index(body, startMarker)
-	if startIndex == -1 {
-		return []string{issue.GetTitle()}, fmt.Errorf("start marker not found")
-	}
-	startIndex += len(startMarker)
-	endIndex := strings.Index(body[startIndex:], endMarker)
-	if endIndex == -1 {
-		return nil, fmt.Errorf("end marker not found")
-	}
-	notes := strings.TrimSpace(body[startIndex : startIndex+endIndex])
-	if len(notes) == 0 {
+	pattern := "```release-note(.*?)```"
+	re := regexp.MustCompile(pattern)
+	matches := re.FindAllStringSubmatch(body, -1)
+	if len(matches) == 0 {
 		return []string{issue.GetTitle()}, fmt.Errorf("no release notes found")
 	}
-	return strings.Split(notes, "\n"), nil
+	var notes []string
+	for _, match := range matches {
+		if len(match) > 1 {
+			notes = append(notes, match[1])
+		}
+	}
+	return notes, nil
 }
 
 // extractReleaseNote extracts release notes from a list of issues
@@ -116,8 +122,8 @@ func extractReleaseNote(repo string, issues []*github.Issue) ([]*ReleaseNoteIssu
 			return nil, err
 		}
 		for _, note := range notes {
-			_note := strings.TrimSpace(note)
-			if _note == "TBD" {
+			note = strings.TrimSpace(note)
+			if note == "TBD" {
 				logrus.WithFields(logrus.Fields{
 					"url":    issue.GetHTMLURL(),
 					"author": issue.GetUser().GetLogin(),
@@ -125,7 +131,7 @@ func extractReleaseNote(repo string, issues []*github.Issue) ([]*ReleaseNoteIssu
 			}
 			issueData := &ReleaseNoteIssueData{
 				ID:     issue.GetNumber(),
-				Note:   _note,
+				Note:   note,
 				Repo:   repo,
 				URL:    issue.GetHTMLURL(),
 				Author: issue.GetUser().GetLogin(),
@@ -139,7 +145,7 @@ func extractReleaseNote(repo string, issues []*github.Issue) ([]*ReleaseNoteIssu
 // outputReleaseNotes outputs the release notes to a file
 func outputReleaseNotes(issueDataList []*ReleaseNoteIssueData, templateFilePath, outputFilePath string) error {
 	dir := filepath.Dir(outputFilePath)
-	if err := utils.CreateDir(dir); err != nil {
+	if err := os.MkdirAll(dir, os.ModeDir); err != nil {
 		logrus.WithError(err).Errorf("Failed to create release notes folder %s", dir)
 		return err
 	}
@@ -190,17 +196,20 @@ func GenerateReleaseNotes(owner, githubToken, repoRootDir, outputDir string) (st
 	releaseVersion := version.Version(gitVersion)
 	milestone := releaseVersion.Milestone()
 	githubClient := github.NewTokenClient(context.Background(), githubToken)
-	issueDataList := []*ReleaseNoteIssueData{}
+	releaseNoteDataList := []*ReleaseNoteIssueData{}
+	opts := &github.MilestoneListOptions{
+		State: string(openState),
+	}
 	for _, repo := range repos {
-		milestoneNumber, error := milestoneNumber(githubClient, owner, repo, milestone)
+		milestoneNumber, error := milestoneNumber(githubClient, owner, repo, milestone, opts)
 		if error != nil {
 			logrus.WithError(error).Warnf("Failed to retrieve milestone for %s", repo)
 			continue
 		}
 		opts := &github.IssueListByRepoOptions{
 			Milestone: strconv.Itoa(milestoneNumber),
-			State:     "closed",
-			Labels:    []string{releaseNoteLabel},
+			State:     string(closedState),
+			Labels:    []string{releaseNoteRequiredLabel},
 		}
 		logrus.WithField("repo", repo).Debug("Getting issues")
 		prIssues, err := prIssuesByRepo(githubClient, owner, repo, opts)
@@ -208,19 +217,19 @@ func GenerateReleaseNotes(owner, githubToken, repoRootDir, outputDir string) (st
 			logrus.WithError(err).Errorf("Failed to get issues for %s", repo)
 			return "", err
 		}
-		_issueDataList, err := extractReleaseNote(repo, prIssues)
+		relNoteDataList, err := extractReleaseNote(repo, prIssues)
 		if err != nil {
 			logrus.WithError(err).Error("Failed to extract release notes")
 			return "", err
 		}
-		issueDataList = append(issueDataList, _issueDataList...)
+		releaseNoteDataList = append(releaseNoteDataList, relNoteDataList...)
 	}
-	if len(issueDataList) == 0 {
+	if len(releaseNoteDataList) == 0 {
 		logrus.WithField("milestone", milestone).Error("No issues found for milestone")
 		return "", fmt.Errorf("no issues found for milestone %s", milestone)
 	}
-	releaseNoteFilePath := fmt.Sprintf("%s/%s/%s-release-notes.md", outputDir, releaseNotesFolder, releaseVersion.FormattedString())
-	if err := outputReleaseNotes(issueDataList, repoRootDir+"/"+releaseNoteTemplatePath, releaseNoteFilePath); err != nil {
+	releaseNoteFilePath := filepath.Join(outputDir, releaseNotesFolderName, fmt.Sprintf("%s-release-notes.md", releaseVersion.FormattedString()))
+	if err := outputReleaseNotes(releaseNoteDataList, releaseNoteTemplatePath(repoRootDir), releaseNoteFilePath); err != nil {
 		logrus.WithError(err).Error("Failed to output release notes")
 		return "", err
 	}

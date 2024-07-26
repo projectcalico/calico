@@ -6,15 +6,9 @@ import (
 	"path/filepath"
 )
 
-// CreateDir creates a directory if it does not exist.
-func CreateDir(dir string) error {
-	if _, err := os.Stat(dir); os.IsNotExist(err) {
-		if err := os.MkdirAll(dir, 0755); err != nil {
-			return fmt.Errorf("failed to create directory: %w", err)
-		}
-	}
-	return nil
-}
+const (
+	ReleaseFolderName = "fixham"
+)
 
 // MoveFile moves a file from srcPattern to dstFile.
 // srcPattern should match exactly one file.
