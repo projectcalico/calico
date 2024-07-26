@@ -1,0 +1,18 @@
+{{.Date}}
+
+#### Headline feature 1
+
+#### Headline feature 2
+
+#### Bug fixes
+{{if .BugFixes -}}
+{{range .BugFixes}}
+- {{.Note}} [{{.Repo}} {{.ID}}]({{.URL}}) (@{{.Author}})
+{{- end}}
+{{- end}}
+#### Other changes
+{{if .OtherChanges -}}
+{{range .OtherChanges}}
+- {{.Note}} [{{.Repo}} {{.ID}}]({{.URL}}) (@{{.Author}})
+{{- end}}
+{{- end}}
