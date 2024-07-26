@@ -154,18 +154,18 @@ func HashreleaseBuild(cfg *config.Config) {
 }
 
 type imageExistsResult struct {
+	name   string
+	image  string
 	exists bool
 	err    error
-	name   string
 }
 
 func imgExists(name string, component hashrelease.Component, ch chan imageExistsResult) {
-	r := imageExistsResult{}
-	if component.Image == "" {
-		component.Image = name
+	r := imageExistsResult{
+		name:  name,
+		image: component.String(),
 	}
-	exists, err := registry.ImageExists(component.ImageWithTag(), component.Registry)
-	r.name = component.String()
+	exists, err := registry.ImageExists(component.Repository(), component.Registry)
 	r.exists = exists
 	r.err = err
 	ch <- r
@@ -175,12 +175,10 @@ func imgExists(name string, component hashrelease.Component, ch chan imageExists
 // These images are checked to ensure they exist in the registry
 // as they should have been pushed in the standard build process.
 func HashreleaseValidate(cfg *config.Config) {
-	pinnedVersion, err := hashrelease.RetrievePinnedVersion(cfg.OutputDir)
+	images, err := hashrelease.RetrieveComponentsToValidate(cfg.OutputDir)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get pinned version")
 	}
-	images := pinnedVersion.Components
-	images["operator"] = pinnedVersion.TigeraOperator
 	results := make(map[string]imageExistsResult, len(images))
 
 	ch := make(chan imageExistsResult)
@@ -194,21 +192,20 @@ func HashreleaseValidate(cfg *config.Config) {
 	failedImages := []string{}
 	for name, r := range results {
 		logrus.WithFields(logrus.Fields{
-			"image":  name,
+			"image":  r.image,
 			"exists": r.exists,
 		}).Info("Image validation")
-		if r.exists {
-			logrus.WithField("image", name).Info("Image exists")
-		} else {
-			if r.err != nil {
-				logrus.WithError(r.err).WithField("image", name).Error("Error checking image")
-			}
+		if r.err != nil || !r.exists {
+			logrus.WithError(r.err).WithField("image", name).Error("Error checking image")
 			failedImages = append(failedImages, name)
+		} else {
+			logrus.WithField("image", name).Info("Image exists")
 		}
 	}
 	failedCount := len(failedImages)
 	if failedCount > 0 {
-		logrus.WithField("images", strings.Join(failedImages, ", ")).Fatalf("Failed to validate %d images, see above for details", failedCount)
+		logrus.WithField("images", strings.Join(failedImages, ", ")).
+			Fatalf("Failed to validate %d images, see above for details", failedCount)
 	}
 }
 
