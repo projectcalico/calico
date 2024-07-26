@@ -8,11 +8,12 @@ func runner() builder.CommandRunner {
 	return &builder.RealCommandRunner{}
 }
 
-func Run(command string, args []string) (string, error) {
-	return runner().Run(command, args, nil)
+// Builder returns a new release builder.
+func Builder() *builder.ReleaseBuilder {
+	return builder.NewReleaseBuilder(runner())
 }
 
-func Metadata(dir, calicoVersion, operatorVersion string) error {
-	r := builder.NewReleaseBuilder(runner())
-	return r.BuildMetadataWithVersions(dir, calicoVersion, operatorVersion)
+// Run runs a command with arguments.
+func Run(command string, args []string) (string, error) {
+	return runner().Run(command, args, nil)
 }

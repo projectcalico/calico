@@ -21,26 +21,26 @@ const (
 	cleanTaskName                     = "clean"
 )
 
-func PinnedVersion(cfg *config.Config, outputDir string) *GoyekTask {
+func PinnedVersion(cfg *config.Config) *GoyekTask {
 	return &GoyekTask{
 		Task: goyekv2.Task{
 			Name:  pinnedVersionTaskName,
 			Usage: "Generate pinned version file",
 			Action: func(a *goyekv2.A) {
-				tasks.PinnedVersion(cfg, outputDir)
+				tasks.PinnedVersion(cfg)
 			},
 			Parallel: false,
 		},
 	}
 }
 
-func OperatorHashreleaseBuild(runner *registry.DockerRunner, cfg *config.Config, outputDir string) *GoyekTask {
+func OperatorHashreleaseBuild(runner *registry.DockerRunner, cfg *config.Config) *GoyekTask {
 	return &GoyekTask{
 		Task: goyekv2.Task{
 			Name:  operatorBuildTaskName,
 			Usage: "Build and tag operator hashrelease",
 			Action: func(a *goyekv2.A) {
-				tasks.OperatorHashreleaseBuild(runner, cfg, outputDir)
+				tasks.OperatorHashreleaseBuild(runner, cfg)
 			},
 			Parallel: false,
 		},
@@ -48,13 +48,13 @@ func OperatorHashreleaseBuild(runner *registry.DockerRunner, cfg *config.Config,
 	}
 }
 
-func OperatorHashreleasePublish(runner *registry.DockerRunner, cfg *config.Config, outputDir string) *GoyekTask {
+func OperatorHashreleasePublish(runner *registry.DockerRunner, cfg *config.Config) *GoyekTask {
 	return &GoyekTask{
 		Task: goyekv2.Task{
 			Name:  operatorPublishTaskName,
 			Usage: "Publish operator hashrelease",
 			Action: func(a *goyekv2.A) {
-				tasks.OperatorHashreleasePush(runner, cfg, outputDir)
+				tasks.OperatorHashreleasePush(runner, cfg)
 			},
 			Parallel: false,
 		},
@@ -62,7 +62,7 @@ func OperatorHashreleasePublish(runner *registry.DockerRunner, cfg *config.Confi
 	}
 }
 
-func OperatorHashrelease(runner *registry.DockerRunner, cfg *config.Config, outputDir string) *GoyekTask {
+func OperatorHashrelease() *GoyekTask {
 	return &GoyekTask{
 		Task: goyekv2.Task{
 			Name:     operatorTaskName,
@@ -76,14 +76,14 @@ func OperatorHashrelease(runner *registry.DockerRunner, cfg *config.Config, outp
 	}
 }
 
-func HashreleaseBuild(cfg *config.Config, outputDir string) *GoyekTask {
+func HashreleaseBuild(cfg *config.Config) *GoyekTask {
 	return &GoyekTask{
 		Task: goyekv2.Task{
 			Name:  hashreleaseBuildTaskName,
 			Usage: "Build hashrelease",
 			Action: func(a *goyekv2.A) {
-				tasks.HashreleaseBuild(cfg, outputDir)
-				tasks.HashreleaseNotes(cfg, outputDir)
+				tasks.HashreleaseBuild(cfg)
+				tasks.HashreleaseNotes(cfg)
 				logrus.Info("Hashrelease build complete, run 'validate' to check the hashrelease.")
 			},
 			Parallel: false,
@@ -92,13 +92,13 @@ func HashreleaseBuild(cfg *config.Config, outputDir string) *GoyekTask {
 	}
 }
 
-func HashreleaseValidate(cfg *config.Config, outputDir string) *GoyekTask {
+func HashreleaseValidate(cfg *config.Config) *GoyekTask {
 	return &GoyekTask{
 		Task: goyekv2.Task{
 			Name:  hashreleaseValidateTaskName,
 			Usage: "Validate hashrelease",
 			Action: func(a *goyekv2.A) {
-				tasks.HashreleaseValidate(cfg, outputDir)
+				tasks.HashreleaseValidate(cfg)
 			},
 			Parallel: false,
 		},
@@ -107,13 +107,13 @@ func HashreleaseValidate(cfg *config.Config, outputDir string) *GoyekTask {
 
 }
 
-func Hashrelease(cfg *config.Config, outputDir string) *GoyekTask {
+func Hashrelease(cfg *config.Config) *GoyekTask {
 	return &GoyekTask{
 		Task: goyekv2.Task{
 			Name:  hashreleaseTaskName,
 			Usage: "Build and publish hashrelease",
 			Action: func(a *goyekv2.A) {
-				tasks.HashreleasePush(cfg, outputDir)
+				tasks.HashreleasePush(cfg)
 				tasks.HashreleaseCleanRemote(cfg)
 			},
 			Parallel: false,
@@ -135,26 +135,26 @@ func HashreleaseGarbageCollect(cfg *config.Config) *GoyekTask {
 	}
 }
 
-func HashreleaseNotes(cfg *config.Config, outputDir string) *GoyekTask {
+func HashreleaseNotes(cfg *config.Config) *GoyekTask {
 	return &GoyekTask{
 		Task: goyekv2.Task{
 			Name:  releaseNotesTaskName,
 			Usage: "Generate release notes",
 			Action: func(a *goyekv2.A) {
-				tasks.HashreleaseNotes(cfg, outputDir)
+				tasks.HashreleaseNotes(cfg)
 			},
 			Parallel: false,
 		},
 	}
 }
 
-func HashreleaseClean(outputPath string) *GoyekTask {
+func HashreleaseClean(cfg *config.Config) *GoyekTask {
 	return &GoyekTask{
 		Task: goyekv2.Task{
 			Name:  cleanTaskName,
 			Usage: "Clean up hashrelease artifacts",
 			Action: func(a *goyekv2.A) {
-				tasks.Clean([]string{outputPath}, nil)
+				tasks.Clean([]string{cfg.OutputDir}, nil)
 			},
 		},
 	}

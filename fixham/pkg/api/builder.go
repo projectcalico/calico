@@ -23,10 +23,6 @@ func NewBuilder() *Builder {
 	}
 }
 
-func (c *Builder) Output() string {
-	return c.config.RepoRootDir + "/fixham/output"
-}
-
 // Config returns the configuration of the component
 func (c *Builder) Config() *config.Config {
 	return c.config
@@ -50,7 +46,7 @@ func (c *Builder) Tasks() map[string]*goyek.GoyekTask {
 	return c.tasks
 }
 
-// Register
+// Register registers the tasks for the component
 func (c *Builder) Register() {
 	definedTaskMap := make(map[string]*goyekv2.DefinedTask, 0)
 	for name, task := range c.Tasks() {
