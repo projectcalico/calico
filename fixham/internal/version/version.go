@@ -12,16 +12,10 @@ import (
 	"github.com/projectcalico/calico/fixham/internal/utils"
 )
 
+// Version represents a version.
 type Version string
 
-func (v *Version) Set() string {
-	ver, err := semver.NewVersion(strings.TrimPrefix(string(*v), "v"))
-	if err != nil {
-		return ""
-	}
-	return ver.String()
-}
-
+// String returns the string representation of the version.
 func (v *Version) String() string {
 	ver, err := semver.NewVersion(strings.TrimPrefix(string(*v), "v"))
 	if err != nil {
@@ -30,21 +24,25 @@ func (v *Version) String() string {
 	return ver.String()
 }
 
+// FormattedString returns the formatted string representation of the version.
 func (v *Version) FormattedString() string {
 	ver := v.String()
 	return fmt.Sprintf("v%v", ver)
 }
 
+// Milestone returns the milestone of the version.
 func (v *Version) Milestone() string {
 	ver := semver.MustParse(string(*v))
 	return fmt.Sprintf("%s v%d.%d.%d", cases.Title(language.English).String(utils.ProductName), ver.Major(), ver.Minor(), ver.Patch())
 }
 
+// Stream returns the stream of the version.
 func (v *Version) Stream() string {
 	ver := semver.MustParse(string(*v))
 	return fmt.Sprintf("v%d.%d", ver.Major(), ver.Minor())
 }
 
+// ReleaseBranch returns the release branch of the version.
 func (v *Version) ReleaseBranch(releaseBranchPrefix string) string {
 	branch := fmt.Sprintf("%s-%s", releaseBranchPrefix, v.Stream())
 	prerelese := semver.MustParse(string(*v)).Prerelease()
@@ -56,6 +54,7 @@ func (v *Version) ReleaseBranch(releaseBranchPrefix string) string {
 	return branch
 }
 
+// NextVersion returns the next version.
 func (v *Version) NextVersion() Version {
 	ver := semver.MustParse(string(*v))
 	if ver.Prerelease() != "" && strings.HasPrefix(ver.Prerelease(), "1.") {
@@ -68,6 +67,7 @@ func (v *Version) NextVersion() Version {
 	return Version(ver.IncMinor().String())
 }
 
+// IsDevVersion returns true if the version is a dev version.
 func IsDevVersion(ver, devTag string) bool {
 	v := Version(ver)
 	pattern := fmt.Sprintf(`^v\d+\.\d+\.\d+(-\d+\.\d+)?%s-\d+-g[0-9a-f]{12}$`, devTag)

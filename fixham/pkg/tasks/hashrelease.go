@@ -2,6 +2,8 @@ package tasks
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -18,7 +20,7 @@ import (
 
 // hashreleaseDir returns the path to where hashrelease directory
 func hashreleaseDir(outputDir string) string {
-	return outputDir + "/hashrelease"
+	return filepath.Join(outputDir, "hashrelease")
 }
 
 // PinnedVersion generates pinned-version.yaml
@@ -26,27 +28,30 @@ func hashreleaseDir(outputDir string) string {
 // It clones the operator repository,
 // then call GeneratePinnedVersion to generate the pinned-version.yaml file.
 // The location of the pinned-version.yaml file is logged.
-func PinnedVersion(cfg *config.Config, outputDir string) {
-	if err := utils.CreateDir(outputDir); err != nil {
+func PinnedVersion(cfg *config.Config) {
+	outputDir := cfg.OutputDir
+	if err := os.MkdirAll(outputDir, 0755); err != nil {
 		logrus.WithError(err).Fatal("Failed to create output directory")
 	}
-	if err := operator.Clone(outputDir, cfg.OperatorBranchName); err != nil {
+	if err := operator.Clone(cfg.RepoRootDir, cfg.OperatorBranchName); err != nil {
 		logrus.WithFields(logrus.Fields{
 			"directory":       outputDir,
 			"operator branch": cfg.OperatorBranchName,
 		}).WithError(err).Fatal("Failed to clone operator repository")
 	}
-	pinnedVersionFilePath, err := hashrelease.GeneratePinnedVersion(cfg.RepoRootDir, cfg.DevTagSuffix, outputDir)
+	pinnedVersionFilePath, err := hashrelease.GeneratePinnedVersionFile(cfg.RepoRootDir, cfg.DevTagSuffix, outputDir)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to generate pinned-version.yaml")
 	}
-	logrus.WithField("pinned version file", pinnedVersionFilePath).Info("Generated pinned-version.yaml")
+	logrus.WithField("file", pinnedVersionFilePath).Info("Generated pinned-version.yaml")
 }
 
 // OperatorHashreleaseBuild builds the operator images for the hashrelease.
 // As images are build with the latest tag, they are re-tagged with the hashrelease version
-func OperatorHashreleaseBuild(runner *registry.DockerRunner, cfg *config.Config, outputDir string) {
-	componentsVersionPath, err := hashrelease.GeneratePinnedVersionForOperator(cfg.RepoRootDir, outputDir)
+func OperatorHashreleaseBuild(runner *registry.DockerRunner, cfg *config.Config) {
+	outputDir := cfg.OutputDir
+	repoRootDir := cfg.RepoRootDir
+	componentsVersionPath, err := hashrelease.GenerateComponentsVersionFile(repoRootDir, outputDir)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to generate components.yaml")
 	}
@@ -54,15 +59,15 @@ func OperatorHashreleaseBuild(runner *registry.DockerRunner, cfg *config.Config,
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get operator version")
 	}
-	if err := operator.GenVersions(outputDir, componentsVersionPath); err != nil {
+	if err := operator.GenVersions(repoRootDir, componentsVersionPath); err != nil {
 		logrus.WithError(err).Fatal("Failed to generate versions")
 	}
 	logrus.Infof("Building operator images for %v", cfg.ValidArchs)
-	if err := operator.ImageAll(cfg.ValidArchs, operatorVersion, outputDir); err != nil {
+	if err := operator.ImageAll(cfg.ValidArchs, operatorVersion, repoRootDir); err != nil {
 		logrus.WithError(err).Fatal("Failed to build images")
 	}
 	logrus.Info("Building operator init image")
-	if err := operator.InitImage(operatorVersion, outputDir); err != nil {
+	if err := operator.InitImage(operatorVersion, repoRootDir); err != nil {
 		logrus.WithError(err).Fatal("Failed to init images")
 	}
 	for _, arch := range cfg.ValidArchs {
@@ -88,8 +93,8 @@ func OperatorHashreleaseBuild(runner *registry.DockerRunner, cfg *config.Config,
 // It does this by retrieving the pinned operator version,
 // pushing the operator images to the registry,
 // then pushing a manifest list of the operator images to the registry.
-func OperatorHashreleasePush(runner *registry.DockerRunner, cfg *config.Config, outputDir string) {
-	operatorVersion, err := hashrelease.RetrievePinnedOperatorVersion(outputDir)
+func OperatorHashreleasePush(runner *registry.DockerRunner, cfg *config.Config) {
+	operatorVersion, err := hashrelease.RetrievePinnedOperatorVersion(cfg.OutputDir)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get operator version")
 	}
@@ -103,7 +108,7 @@ func OperatorHashreleasePush(runner *registry.DockerRunner, cfg *config.Config, 
 	}
 	manifestListName := fmt.Sprintf("%s/%s:%s", registry.QuayRegistry, operator.ImageName, operatorVersion)
 	if err = runner.ManifestPush(manifestListName, imageList, true); err != nil {
-		logrus.WithField("manifest list", manifestListName).WithError(err).Fatal("Failed to push operator manifest")
+		logrus.WithField("manifest", manifestListName).WithError(err).Fatal("Failed to push operator manifest")
 	}
 	if err := runner.PushImage(fmt.Sprintf("%s/%s-init:%s", registry.QuayRegistry, operator.ImageName, operatorVersion)); err != nil {
 		logrus.WithError(err).Fatal("Failed to push operator init image")
@@ -113,10 +118,16 @@ func OperatorHashreleasePush(runner *registry.DockerRunner, cfg *config.Config, 
 // HashreleaseBuild builds the artificts hashrelease
 //
 // This includes the windows archive, helm archive, and manifests.
-func HashreleaseBuild(cfg *config.Config, outputDir string) {
+func HashreleaseBuild(cfg *config.Config) {
+	outputDir := cfg.OutputDir
 	hashreleaseOutputDir := hashreleaseDir(outputDir)
-	// TODO: ensure no changes in branch
-	if err := utils.CreateDir(hashreleaseOutputDir); err != nil {
+	dirty, err := utils.GitIsDirty(cfg.RepoRootDir)
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to check if git is dirty")
+	} else if dirty {
+		logrus.Fatal("There are uncommitted changes in the repository, please commit or stash them before building the hashrelease")
+	}
+	if err := os.MkdirAll(hashreleaseOutputDir, 0755); err != nil {
 		logrus.WithError(err).Fatal("Failed to create hashrelease directory")
 	}
 	releaseVersion, err := hashrelease.RetrievePinnedCalicoVersion(outputDir)
@@ -127,7 +138,7 @@ func HashreleaseBuild(cfg *config.Config, outputDir string) {
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get operator version")
 	}
-	if err := utils.ReleaseWindowsArchive(cfg.RepoRootDir, releaseVersion, hashreleaseOutputDir+"/files/windows"); err != nil {
+	if err := utils.ReleaseWindowsArchive(cfg.RepoRootDir, releaseVersion, hashreleaseOutputDir); err != nil {
 		logrus.WithError(err).Fatal("Failed to release windows archive")
 	}
 	if err := utils.HelmArchive(cfg.RepoRootDir, releaseVersion, operatorVersion, hashreleaseOutputDir); err != nil {
@@ -137,19 +148,24 @@ func HashreleaseBuild(cfg *config.Config, outputDir string) {
 		logrus.WithError(err).Fatal("Failed to generate manifests")
 	}
 
-	if err := command.Metadata(hashreleaseOutputDir, releaseVersion, operatorVersion); err != nil {
+	if err := release.Metadata(hashreleaseOutputDir, releaseVersion, operatorVersion); err != nil {
 		logrus.WithError(err).Fatal("Failed to generate metadata")
 	}
 }
 
-type result struct {
+type imageExistsResult struct {
 	exists bool
 	err    error
+	name   string
 }
 
-func imgExists(imageName, imageRegistry string, ch chan result) {
-	r := result{}
-	exists, err := registry.ImageExists(imageName, imageRegistry)
+func imgExists(name string, component hashrelease.Component, ch chan imageExistsResult) {
+	r := imageExistsResult{}
+	if component.Image == "" {
+		component.Image = name
+	}
+	exists, err := registry.ImageExists(component.ImageWithTag(), component.Registry)
+	r.name = component.String()
 	r.exists = exists
 	r.err = err
 	ch <- r
@@ -158,38 +174,47 @@ func imgExists(imageName, imageRegistry string, ch chan result) {
 // HashreleaseValidate validates the images in the hashrelease.
 // These images are checked to ensure they exist in the registry
 // as they should have been pushed in the standard build process.
-func HashreleaseValidate(cfg *config.Config, outputDir string) {
-	pinnedVersion, err := hashrelease.RetrievePinnedVersion(outputDir)
+func HashreleaseValidate(cfg *config.Config) {
+	pinnedVersion, err := hashrelease.RetrievePinnedVersion(cfg.OutputDir)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get pinned version")
 	}
 	images := pinnedVersion.Components
 	images["operator"] = pinnedVersion.TigeraOperator
-	results := make(map[string]result, len(images))
+	results := make(map[string]imageExistsResult, len(images))
 
+	ch := make(chan imageExistsResult)
 	for name, component := range images {
-		ch := make(chan result)
-		go imgExists(component.Image+":"+component.Version, component.Registry, ch)
-		results[name] = <-ch
+		go imgExists(name, component, ch)
+	}
+	for range images {
+		res := <-ch
+		results[res.name] = res
 	}
 	failedImages := []string{}
 	for name, r := range results {
-		logrus.WithField("image", name).WithField("exists", r.exists).Info("Validating image")
-		if r.err != nil {
-			logrus.WithError(r.err).WithField("image", name).Error("Failed to check image")
-			failedImages = append(failedImages, name)
-		} else {
+		logrus.WithFields(logrus.Fields{
+			"image":  name,
+			"exists": r.exists,
+		}).Info("Image validation")
+		if r.exists {
 			logrus.WithField("image", name).Info("Image exists")
+		} else {
+			if r.err != nil {
+				logrus.WithError(r.err).WithField("image", name).Error("Error checking image")
+			}
+			failedImages = append(failedImages, name)
 		}
 	}
 	failedCount := len(failedImages)
 	if failedCount > 0 {
-		logrus.WithField("failed images", strings.Join(failedImages, ",")).Fatalf("Failed to validate %d images, see above for details", failedCount)
+		logrus.WithField("images", strings.Join(failedImages, ", ")).Fatalf("Failed to validate %d images, see above for details", failedCount)
 	}
 }
 
 // HashreleaseValidate publishes the hashrelease
-func HashreleasePush(cfg *config.Config, outputDir string) {
+func HashreleasePush(cfg *config.Config) {
+	outputDir := cfg.OutputDir
 	sshConfig := command.NewSSHConfig(cfg.DocsHost, cfg.DocsUser, cfg.DocsKey, cfg.DocsPort)
 	name, err := hashrelease.RetrieveReleaseName(outputDir)
 	if err != nil {
@@ -226,11 +251,11 @@ func HashreleaseCleanRemote(cfg *config.Config) {
 }
 
 // HashreleaseNotes generates the release notes for the hashrelease
-func HashreleaseNotes(cfg *config.Config, outputDir string) {
-	filePath, err := release.GenerateReleaseNotes(cfg.Organization, cfg.GithubToken, cfg.RepoRootDir, hashreleaseDir(outputDir))
+func HashreleaseNotes(cfg *config.Config) {
+	filePath, err := release.GenerateReleaseNotes(cfg.Organization, cfg.GithubToken, cfg.RepoRootDir, hashreleaseDir(cfg.OutputDir))
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to generate release notes")
 	}
-	logrus.WithField("release notes", filePath).Info("Generated release notes")
+	logrus.WithField("file", filePath).Info("Generated release notes")
 	logrus.Info("Please review for accuracy, and ensure properly formatted before relase time.")
 }

@@ -10,15 +10,15 @@ build: bin/hashrelease bin/release
 
 clean:
 	@rm -rf ./bin
-	@rm -rf ./output
+	@rm -rf ./output ./tmp
 
 bin/release: $(shell find . -name "*.go")
-	@mkdir -p bin
-	@go build -o bin/release ./release
+	@mkdir -p bin && \
+	$(call build_binary, ./release, bin/release)
 
 bin/hashrelease: $(shell find . -name "*.go")
-	@mkdir -p bin
-	@go build -o bin/hashrelease ./hashrelease
+	@mkdir -p bin && \
+	$(call build_binary, ./hashrelease, bin/hashrelease)
 
 ###############################################################################
 # CI/CD
@@ -33,3 +33,12 @@ hashrelease: bin/hashrelease
 	@ORGANIZATION=$(ORGANIZATION) \
 	REPO_ROOT=$(REPO_ROOT) \
 	bin/hashrelease publish
+
+###############################################################################
+# Release
+###############################################################################
+.PHONY: release-notes
+release-notes: bin/release var-require-all-GITHUB_TOKEN
+	@ORGANIZATION=$(ORGANIZATION) \
+	REPO_ROOT=$(REPO_ROOT) \
+	bin/release release-notes

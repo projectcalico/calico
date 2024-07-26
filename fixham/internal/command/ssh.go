@@ -2,6 +2,7 @@ package command
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"strings"
 	"time"
@@ -9,6 +10,7 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
+// SSHConfig holds the configuration for an SSH connection
 type SSHConfig struct {
 	Host    string
 	User    string
@@ -16,6 +18,7 @@ type SSHConfig struct {
 	Port    string
 }
 
+// NewSSHConfig creates a new SSHConfig
 func NewSSHConfig(host, user, keyPath, port string) *SSHConfig {
 	return &SSHConfig{
 		Host:    host,
@@ -25,15 +28,21 @@ func NewSSHConfig(host, user, keyPath, port string) *SSHConfig {
 	}
 }
 
-// Args returns the ssh command string
+// Args returns the ssh command string arguments
 func (s *SSHConfig) Args() string {
 	str := []string{"-i", s.KeyPath, "-p", s.Port, "-q", "-o StrictHostKeyChecking=no", "-o UserKnownHostsFile=/dev/null"}
 	return strings.Join(str, " ")
 }
 
+// HostString returns the host string in the format user@host
 func (s *SSHConfig) HostString() string {
 	return s.User + "@" + s.Host
 
+}
+
+// Address returns the address in the format host:port
+func (s *SSHConfig) Address() string {
+	return fmt.Sprintf("%s:%s", s.Host, s.Port)
 }
 
 func connect(sshConfig *SSHConfig) (*ssh.Session, error) {
@@ -53,7 +62,7 @@ func connect(sshConfig *SSHConfig) (*ssh.Session, error) {
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 		Timeout:         10 * time.Second,
 	}
-	client, err := ssh.Dial("tcp", sshConfig.Host+":"+sshConfig.Port, config)
+	client, err := ssh.Dial("tcp", sshConfig.Address(), config)
 	if err != nil {
 		return nil, err
 	}
@@ -64,6 +73,7 @@ func connect(sshConfig *SSHConfig) (*ssh.Session, error) {
 	return session, nil
 }
 
+// RunSSHCommand runs an a command on a remote host and returns the output
 func RunSSHCommand(sshConfig *SSHConfig, command string) (string, error) {
 	session, err := connect(sshConfig)
 	if err != nil {
