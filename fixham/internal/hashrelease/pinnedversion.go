@@ -32,8 +32,8 @@ type Component struct {
 	Registry string `yaml:"registry,omitempty"`
 }
 
-// ImageWithTag returns the image with the tag appended.
-func (c Component) ImageWithTag() string {
+// Repository returns the image with the tag appended.
+func (c Component) Repository() string {
 	return fmt.Sprintf("%s:%s", c.Image, c.Version)
 }
 
@@ -234,4 +234,42 @@ func RetrievePinnedVersionHash(outputDir string) (string, error) {
 		return "", err
 	}
 	return pinnedversion[0].Hash, nil
+}
+
+var imageMap = map[string]string{
+	"typha":                     "calico/typha",
+	"calicoctl":                 "calico/ctl",
+	"flannel":                   "coreos/flannel",
+	"flexvol":                   "calico/pod2daemon-flexvol",
+	"key-cert-provisioner":      "calico/key-cert-provisioner",
+	"csi-node-driver-registrar": "calico/node-driver-registrar",
+}
+
+// RetrieveComponentsToValidate retrieves the components to validate from the pinned version file.
+func RetrieveComponentsToValidate(outputDir string) (map[string]Component, error) {
+	pinnedVersionPath := pinnedVersionFilePath(outputDir)
+	var pinnedversion PinnedVersionFile
+	if pinnedVersionData, err := os.ReadFile(pinnedVersionPath); err != nil {
+		return nil, err
+	} else if err := yaml.Unmarshal([]byte(pinnedVersionData), &pinnedversion); err != nil {
+		return nil, err
+	}
+	components := pinnedversion[0].Components
+	components["tigera-operator"] = pinnedversion[0].TigeraOperator
+	for name, component := range components {
+		if name == "calico" || name == "networking-calico" {
+			delete(components, name)
+			continue
+		}
+		if component.Image == "" {
+			img := imageMap[name]
+			if img == "" {
+				delete(components, name)
+				continue
+			}
+			component.Image = img
+			components[name] = component
+		}
+	}
+	return components, nil
 }
