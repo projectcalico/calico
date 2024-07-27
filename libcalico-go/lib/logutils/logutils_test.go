@@ -30,6 +30,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega/format"
 	"github.com/prometheus/client_golang/prometheus"
 
 	log "github.com/sirupsen/logrus"
@@ -46,6 +47,7 @@ var (
 
 func init() {
 	prometheus.MustRegister(testCounter)
+	format.TruncatedDiff = false
 }
 
 var _ = Describe("Logutils", func() {
@@ -71,6 +73,12 @@ var _ = Describe("Logutils", func() {
 	It("Should add correct file when invoked via log.WithField(...).Info", func() {
 		log.WithField("foo", "bar").Info("Test log")
 		Expect(buf.String()).To(ContainSubstring("logutils_test.go"))
+	})
+	It("requires logrus.AllLevels to be consistent/in order", func() {
+		// Formatter.init() pre-computes various strings on this assumption.
+		for idx, level := range log.AllLevels {
+			Expect(int(level)).To(Equal(idx))
+		}
 	})
 })
 
@@ -563,4 +571,53 @@ func BenchmarkRegexpStar(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		BenchOut = BenchOut != re.MatchString("endpoint_mgr.go")
 	}
+}
+
+// FuzzAppendTime fuzzes AppendTime against the stdlib time.Time.AppendFormat
+// to make sure they agree.
+func FuzzAppendTime(f *testing.F) {
+	pool := sync.Pool{
+		New: func() any {
+			return &bytes.Buffer{}
+		},
+	}
+
+	tFormat := "2006-01-02 15:04:05.000"
+	var zeroTime time.Time
+	f.Add(int(zeroTime.Unix()), int(zeroTime.Nanosecond()))
+	f.Add(0, 0)
+	// time.Now() at time of writing with various nanos.
+	f.Add(1257894000, 0)
+	f.Add(1257894000, 1)
+	f.Add(1257894000, 100)
+	f.Add(1257894000, 1000)
+	f.Add(1257894000, 10000)
+	f.Add(1257894000, 100000)
+	f.Add(1257894000, 112345)
+	f.Fuzz(func(t *testing.T, secs, nanos int) {
+		timeVal := time.Unix(int64(secs), int64(nanos))
+		buf1 := pool.Get().(*bytes.Buffer)
+		buf2 := pool.Get().(*bytes.Buffer)
+		{
+			buf1.Write(timeVal.AppendFormat(buf1.AvailableBuffer(), tFormat))
+			AppendTime(buf2, timeVal)
+			if !bytes.Equal(buf1.Bytes(), buf2.Bytes()) {
+				t.Fatalf("Expected %s, got %s", buf1.String(), buf2.String())
+			}
+			buf1.Reset()
+			buf2.Reset()
+		}
+		{
+			utc := timeVal.UTC()
+			buf1.Write(utc.AppendFormat(buf1.AvailableBuffer(), tFormat))
+			AppendTime(buf2, utc)
+			if !bytes.Equal(buf1.Bytes(), buf2.Bytes()) {
+				t.Fatalf("UTC: Expected %s, got %s", buf1.String(), buf2.String())
+			}
+			buf1.Reset()
+			buf2.Reset()
+		}
+		pool.Put(buf1)
+		pool.Put(buf2)
+	})
 }
