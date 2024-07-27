@@ -431,7 +431,7 @@ func StartNNodeTopology(n int, opts TopologyOptions, infra DatastoreInfra) (tc T
 					Eventually(func() error {
 						return iFelix.ExecMayFail("ip", "route", "add", jBlock, "via", jFelix.IP, "dev", "tunl0", "onlink")
 					}, "10s", "1s").ShouldNot(HaveOccurred())
-				} else if opts.VXLANMode == api.VXLANModeNever {
+				} else if !opts.IPIPEnabled && opts.VXLANMode == api.VXLANModeNever {
 					// If VXLAN is enabled, Felix will program these routes itself.
 					err := iFelix.ExecMayFail("ip", "route", "add", jBlock, "via", jFelix.IP, "dev", "eth0")
 					Expect(err).ToNot(HaveOccurred())

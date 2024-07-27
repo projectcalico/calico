@@ -305,7 +305,7 @@ type Config struct {
 	IpInIpEnabled    *bool  `config:"*bool;"`
 	IpInIpMtu        int    `config:"int;0"`
 	IpInIpTunnelAddr net.IP `config:"ipv4;"`
-	IPIPRouteMode    string `config:"oneof(Bird,Felix);Bird"`
+	ProgramRoutes    string `config:"oneof(None,IPIP);None"`
 
 	// Feature enablement.  Can be either "Enabled" or "Disabled".  Note, this governs the
 	// programming of NAT mappings derived from Kubernetes pod annotations.  OpenStack floating
@@ -1105,7 +1105,7 @@ func (config *Config) RouteTableIndices() []idalloc.IndexRange {
 }
 
 func (config *Config) ProgramIPIPRoutes() bool {
-	return config.IPIPRouteMode == "Felix"
+	return config.ProgramRoutes == "IPIP"
 }
 
 func New() *Config {

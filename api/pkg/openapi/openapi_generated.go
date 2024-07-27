@@ -2452,9 +2452,9 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Format:      "int32",
 						},
 					},
-					"ipipRoutes": {
+					"programRoutes": {
 						SchemaProps: spec.SchemaProps{
-							Description: "IPIPRouteMode selects whether Felix should program IPIP routes instead of BIRD. [Default: Bird]",
+							Description: "ProgramRoutes specifies what type of routes Felix should program. [Default: None]. [Default: None]",
 							Type:        []string{"string"},
 							Format:      "",
 						},

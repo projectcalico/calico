@@ -151,10 +151,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with BIRD pro
 		}
 	})
 
-	It("Marva should have workload to workload connectivity", func() {
+	It("should have workload to workload connectivity", func() {
 		cc.ExpectSome(w[0], w[1])
 		cc.ExpectSome(w[1], w[0])
-		time.Sleep(time.Minute * 60)
 		cc.CheckConnectivity()
 	})
 
@@ -607,10 +606,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with Felix pr
 				}
 			})
 
-			It("Mazdak should have workload to workload connectivity", func() {
+			It("should have workload to workload connectivity", func() {
 				cc.ExpectSome(w[0], w[1])
 				cc.ExpectSome(w[1], w[0])
-				//time.Sleep(time.Minute * 60)
 				cc.CheckConnectivity()
 			})
 
@@ -902,7 +900,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with Felix pr
 				})
 			})
 
-			Context("Pepper after removing BGP address from third node", func() {
+			Context("after removing BGP address from third node", func() {
 				// Simulate having a host send VXLAN traffic from an unknown source, should get blocked.
 				BeforeEach(func() {
 					for _, f := range felixes {

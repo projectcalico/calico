@@ -437,6 +437,7 @@ var _ = Describe("IPIPManager", func() {
 					IPIPTunnelAddress: net.ParseIP("192.168.0.1"),
 				},
 				ProgramIPIPRoutes: true,
+				IPIPMTU:           1400,
 			},
 			&mockIPIPDataplane{
 				links: []netlink.Link{&mockLink{attrs: la}},
@@ -523,8 +524,7 @@ var _ = Describe("IPIPManager", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 		parentNameC := make(chan string)
-		go manager.KeepIPIPDeviceInSync(
-			ctx, 1400, manager.dpConfig.RulesConfig.IPIPTunnelAddress, false, 1*time.Second, parentNameC)
+		go manager.KeepCalicoIPIPDeviceInSync(ctx, false, 1*time.Second, parentNameC)
 
 		manager.OnUpdate(&proto.HostMetadataUpdate{
 			Hostname: "host2",

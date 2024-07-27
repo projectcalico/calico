@@ -115,22 +115,24 @@ func newIPIPManager(
 	blackHoleProto := calculateRouteProtocol(dpConfig)
 
 	var brt routetable.RouteTableInterface
-	if !dpConfig.RouteSyncDisabled {
-		logrus.Debug("RouteSyncDisabled is false.")
-		brt = routetable.New(
-			[]string{routetable.InterfaceNone},
-			4,
-			dpConfig.NetlinkTimeout,
-			dpConfig.DeviceRouteSourceAddress,
-			blackHoleProto,
-			false,
-			unix.RT_TABLE_MAIN,
-			opRecorder,
-			featureDetector,
-		)
-	} else {
-		logrus.Info("RouteSyncDisabled is true, using DummyTable.")
-		brt = &routetable.DummyTable{}
+	if dpConfig.ProgramIPIPRoutes {
+		if !dpConfig.RouteSyncDisabled {
+			logrus.Debug("RouteSyncDisabled is false.")
+			brt = routetable.New(
+				[]string{routetable.InterfaceNone},
+				4,
+				dpConfig.NetlinkTimeout,
+				dpConfig.DeviceRouteSourceAddress,
+				blackHoleProto,
+				false,
+				unix.RT_TABLE_MAIN,
+				opRecorder,
+				featureDetector,
+			)
+		} else {
+			logrus.Info("RouteSyncDisabled is true, using DummyTable.")
+			brt = &routetable.DummyTable{}
+		}
 	}
 	return newIPIPManagerWithShim(
 		ipsetsDataplane,
@@ -294,7 +296,13 @@ func (m *ipipManager) getLocalHostAddr() string {
 }
 
 func (m *ipipManager) GetRouteTableSyncers() []routetable.RouteTableSyncer {
-	rts := []routetable.RouteTableSyncer{m.routeTable, m.blackholeRouteTable}
+	var rts []routetable.RouteTableSyncer
+	if m.routeTable != nil {
+		rts = append(rts, m.routeTable)
+	}
+	if m.blackholeRouteTable != nil {
+		rts = append(rts, m.blackholeRouteTable)
+	}
 
 	if time.Since(m.lastParentDevUpdate) > 5*time.Minute && m.previouslyUsedParentNames.Len() > 1 {
 		// Make sure the set of names doesn't grow forever.
@@ -436,12 +444,15 @@ func (m *ipipManager) OnParentNameUpdate(name string) {
 
 // KeepIPIPDeviceInSync is a goroutine that configures the IPIP tunnel device, then periodically
 // checks that it is still correctly configured.
-func (m *ipipManager) KeepIPIPDeviceInSync(ctx context.Context, mtu int, address net.IP, xsumBroken bool, wait time.Duration, parentNameC chan string) {
+func (m *ipipManager) KeepCalicoIPIPDeviceInSync(ctx context.Context, xsumBroken bool, wait time.Duration, parentNameC chan string) {
+	mtu := m.dpConfig.IPIPMTU
+	address := m.dpConfig.RulesConfig.IPIPTunnelAddress
 	m.logCtx.WithFields(logrus.Fields{
+		"device":     m.ipipDevice,
 		"mtu":        mtu,
 		"xsumBroken": xsumBroken,
 		"wait":       wait,
-	}).Info("IPIP tunnel device thread started.")
+	}).Info("IPIP device thread started.")
 	logNextSuccess := true
 	parentName := ""
 
@@ -472,7 +483,6 @@ func (m *ipipManager) KeepIPIPDeviceInSync(ctx context.Context, mtu int, address
 			continue
 		}
 
-		// TODO: we are sending passed in address here
 		m.logCtx.WithField("localAddr", address).Debug("Configuring IPIP device")
 		err = m.configureIPIPDevice(mtu, address, xsumBroken)
 		if err != nil {
@@ -505,6 +515,21 @@ func (m *ipipManager) KeepIPIPDeviceInSync(ctx context.Context, mtu int, address
 		sleepMonitoringChans(wait)
 	}
 	m.logCtx.Info("KeepIPIPDeviceInSync exiting due to context.")
+}
+
+// KeepIPIPDeviceInSync is a goroutine that configures the IPIP tunnel device, then periodically
+// checks that it is still correctly configured.
+func (m *ipipManager) KeepIPIPDeviceInSync(xsumBroken bool) {
+	log.WithField("device", m.ipipDevice).Info("IPIP device thread started.")
+	for {
+		err := m.configureIPIPDevice(m.dpConfig.IPIPMTU, m.dpConfig.RulesConfig.IPIPTunnelAddress, xsumBroken)
+		if err != nil {
+			log.WithError(err).Warn("Failed configure IPIP tunnel device, retrying...")
+			time.Sleep(1 * time.Second)
+			continue
+		}
+		time.Sleep(10 * time.Second)
+	}
 }
 
 // getParentInterface returns the parent interface for the given local address. This link returned is nil
