@@ -1203,7 +1203,6 @@ func createIPIPBaseTopologyOptions(
 ) infrastructure.TopologyOptions {
 	topologyOptions := infrastructure.DefaultTopologyOptions()
 	topologyOptions.IPIPEnabled = true
-	topologyOptions.VXLANMode = api.VXLANModeNever
 	topologyOptions.IPIPMode = ipipMode
 	topologyOptions.IPIPRoutesEnabled = false
 	topologyOptions.ExtraEnvVars["FELIX_IPIPRouteMode"] = "Felix"

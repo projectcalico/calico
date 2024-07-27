@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -92,7 +92,7 @@ func (c *TopologyContainers) TriggerDelayedStart() {
 }
 
 func DefaultTopologyOptions() TopologyOptions {
-	felixLogLevel := "Debug"
+	felixLogLevel := "Info"
 	if envLogLevel := os.Getenv("FV_FELIX_LOG_LEVEL"); envLogLevel != "" {
 		log.WithField("level", envLogLevel).Info("FV_FELIX_LOG_LEVEL env var set; overriding felix log level")
 		felixLogLevel = envLogLevel
@@ -107,7 +107,6 @@ func DefaultTopologyOptions() TopologyOptions {
 		WithFelixTyphaTLS: false,
 		TyphaLogSeverity:  "info",
 		IPIPEnabled:       true,
-		IPIPMode:          api.IPIPModeAlways,
 		IPIPRoutesEnabled: true,
 		IPPoolCIDR:        DefaultIPPoolCIDR,
 		IPv6PoolCIDR:      DefaultIPv6PoolCIDR,
