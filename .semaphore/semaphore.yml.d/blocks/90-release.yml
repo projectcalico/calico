@@ -1,0 +1,19 @@
+- name: release
+  run:
+    when: "${FORCE_RUN} or change_in(['/*', '/release/'], {exclude: ['/**/.gitignore', '/**/*.md', '/**/LICENSE']})"
+  execution_time_limit:
+    minutes: 30
+  dependencies:
+    - Prerequisites
+  task:
+    prologue:
+      commands:
+        - cd release
+    jobs:
+      - name: make ci
+        commands:
+          - ../.semaphore/run-and-monitor release-ci.log make ci
+      - name: Build binary
+        commands:
+          - ../.semaphore/run-and-monitor release-build.log make build
+          - cache store release-${SEMAPHORE_GIT_SHA} bin

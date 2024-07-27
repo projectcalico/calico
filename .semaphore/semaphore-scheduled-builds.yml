@@ -729,9 +729,9 @@ blocks:
           - mkdir logs
           - sudo journalctl > logs/journalctl.txt
           - artifact push job --expire-in 1d logs
-- name: fixham
+- name: release
   run:
-    when: "true or change_in(['/*', '/fixham/'], {exclude: ['/**/.gitignore', '/**/*.md', '/**/LICENSE']})"
+    when: "true or change_in(['/*', '/release/'], {exclude: ['/**/.gitignore', '/**/*.md', '/**/LICENSE']})"
   execution_time_limit:
     minutes: 30
   dependencies:
@@ -739,15 +739,15 @@ blocks:
   task:
     prologue:
       commands:
-        - cd fixham
+        - cd release
     jobs:
       - name: make ci
         commands:
-          - ../.semaphore/run-and-monitor fixham-ci.log make ci
+          - ../.semaphore/run-and-monitor release-ci.log make ci
       - name: Build binary
         commands:
-          - ../.semaphore/run-and-monitor fixham-build.log make build
-          - cache store fixham-${SEMAPHORE_GIT_SHA} bin
+          - ../.semaphore/run-and-monitor release-build.log make build
+          - cache store release-${SEMAPHORE_GIT_SHA} bin
 after_pipeline:
   task:
     jobs:
