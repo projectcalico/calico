@@ -29,10 +29,12 @@ blocks:
       jobs:
         - name: Create hashrelease
           commands:
-            - ./fixham/bin/hashrelease publish
+            - ./release/bin/release publish
       prologue:
         commands:
-          - cache restore fixham-${SEMAPHORE_GIT_SHA}
+          - cache restore release-${SEMAPHORE_GIT_SHA}
       env_vars:
         - name: OPERATOR_BRANCH
           value: master
+        - name: IS_HASHRELEASE
+          value: true
