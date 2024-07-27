@@ -162,7 +162,7 @@ bin/ocp.tgz: manifests/ocp/ bin/yq
 ## Generates release notes for the given version.
 .PHONY: release-notes
 release-notes:
-	@$(MAKE) -C fixham release-notes
+	@$(MAKE) -C release release-notes
 
 ## Update the AUTHORS.md file.
 update-authors:
