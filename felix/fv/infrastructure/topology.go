@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -53,6 +53,7 @@ type TopologyOptions struct {
 	TyphaLogSeverity          string
 	IPIPEnabled               bool
 	IPIPRoutesEnabled         bool
+	IPIPMode                  api.IPIPMode
 	VXLANMode                 api.VXLANMode
 	WireguardEnabled          bool
 	WireguardEnabledV6        bool
@@ -129,14 +130,11 @@ func CreateDefaultIPPoolFromOpts(ctx context.Context, client client.Interface, o
 		ipPool.Spec.CIDR = opts.IPPoolCIDR
 
 		// IPIP is only supported on IPv4
-		if opts.IPIPEnabled {
-			ipPool.Spec.IPIPMode = api.IPIPModeAlways
-		} else {
-			ipPool.Spec.IPIPMode = api.IPIPModeNever
-		}
+		ipPool.Spec.IPIPMode = opts.IPIPMode
 	case 6:
 		ipPool.Name = DefaultIPv6PoolName
 		ipPool.Spec.CIDR = opts.IPv6PoolCIDR
+		ipPool.Spec.IPIPMode = api.IPIPModeNever
 	default:
 		log.WithField("ipVersion", ipVersion).Panic("Unknown IP version")
 	}
@@ -220,6 +218,10 @@ func StartNNodeTopology(n int, opts TopologyOptions, infra DatastoreInfra) (tc T
 
 	if opts.VXLANMode == "" {
 		opts.VXLANMode = api.VXLANModeNever
+	}
+
+	if opts.IPIPMode == "" {
+		opts.IPIPMode = api.IPIPModeNever
 	}
 
 	// Get client.
@@ -428,7 +430,7 @@ func StartNNodeTopology(n int, opts TopologyOptions, infra DatastoreInfra) (tc T
 					Eventually(func() error {
 						return iFelix.ExecMayFail("ip", "route", "add", jBlock, "via", jFelix.IP, "dev", "tunl0", "onlink")
 					}, "10s", "1s").ShouldNot(HaveOccurred())
-				} else if opts.VXLANMode == api.VXLANModeNever {
+				} else if !opts.IPIPEnabled && opts.VXLANMode == api.VXLANModeNever {
 					// If VXLAN is enabled, Felix will program these routes itself.
 					err := iFelix.ExecMayFail("ip", "route", "add", jBlock, "via", jFelix.IP, "dev", "eth0")
 					Expect(err).ToNot(HaveOccurred())
