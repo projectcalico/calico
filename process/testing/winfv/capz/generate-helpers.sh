@@ -31,14 +31,14 @@ SCP_FILE="scp-to-node.sh"
 echo "#---------Copy files to Instance--------" | tee ${SCP_FILE}
 echo "#usage: ./scp-to-node.sh 6 kubeconfig c:\\\\k\\\\kubeconfig -- copy kubeconfig to 10.1.0.6" | tee -a ${SCP_FILE}
 echo "#usage: ./scp-to-node.sh 6 images/ebpf-for-windows-c-temp.zip 'c:\\' -- copy temp zip to 10.1.0.6" | tee -a ${SCP_FILE}
-echo scp -i $LOCAL_PATH/.sshkey -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o \'ProxyCommand ssh -i $LOCAL_PATH/.sshkey -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -W %h:%p capi@${APISERVER}\' \$2 capi@10.1.0.\$1:\$3 | tee -a ${SCP_FILE}
+echo scp -O -i $LOCAL_PATH/.sshkey -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o \'ProxyCommand ssh -i $LOCAL_PATH/.sshkey -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -W %h:%p capi@${APISERVER}\' \$2 capi@10.1.0.\$1:\$3 | tee -a ${SCP_FILE}
 chmod +x ${SCP_FILE}
 echo
 
 SCP_FROM_NODE="scp-from-node.sh"
-echo "#---------Copy files to Instance--------" | tee ${SCP_FROM_NODE}
+echo "#---------Copy files from Instance--------" | tee ${SCP_FROM_NODE}
 echo "#usage: ./scp-from-node.sh 6 c:/k/calico.log ./calico.log" | tee -a ${SCP_FROM_NODE}
-echo scp -r -i $LOCAL_PATH/.sshkey -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o \'ProxyCommand ssh -i $LOCAL_PATH/.sshkey -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -W %h:%p capi@${APISERVER}\' capi@10.1.0.\$1:\$2 \$3 | tee -a ${SCP_FROM_NODE}
+echo scp -O -r -i $LOCAL_PATH/.sshkey -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o \'ProxyCommand ssh -i $LOCAL_PATH/.sshkey -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -W %h:%p capi@${APISERVER}\' capi@10.1.0.\$1:\$2 \$3 | tee -a ${SCP_FROM_NODE}
 chmod +x ${SCP_FROM_NODE}
 
 # Update env file with Windows ips
