@@ -7,6 +7,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/registry"
 )
 
@@ -47,4 +48,11 @@ func CleanImages(images ...string) {
 func Clean(paths []string, images []string) {
 	CleanFiles(paths...)
 	CleanImages(images...)
+}
+
+func ResetRepo(dir string) {
+	_, err := command.GitInDir(dir, "checkout", "HEAD")
+	if err != nil {
+		logrus.WithError(err).Fatal("failed to reset repo")
+	}
 }

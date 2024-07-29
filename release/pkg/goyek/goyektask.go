@@ -4,7 +4,6 @@ import (
 	goyekv2 "github.com/goyek/goyek/v2"
 	"github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/config"
 	"github.com/projectcalico/calico/release/pkg/tasks"
 )
@@ -84,7 +83,7 @@ func Reset(cfg *config.Config) *GoyekTask {
 			Usage: "Reset repo for release",
 			Action: func(a *goyekv2.A) {
 				tasks.Clean([]string{cfg.OutputDir, cfg.TmpFolderPath()}, nil)
-				command.GitInDir(cfg.RepoRootDir, "checkout", "HEAD")
+				tasks.ResetRepo(cfg.RepoRootDir)
 			},
 		},
 	}

@@ -256,18 +256,17 @@ func RetrieveComponentsToValidate(outputDir string) (map[string]Component, error
 	components["tigera-operator"] = pinnedversion[0].TigeraOperator
 	for name, component := range components {
 		if name == "calico" || name == "networking-calico" {
+			// Skip calico and networking-calico as they do not have images.
 			delete(components, name)
 			continue
 		}
-		if component.Image == "" {
-			img := imageMap[name]
-			if img == "" {
-				delete(components, name)
-				continue
-			}
+		img := imageMap[name]
+		if img != "" {
 			component.Image = img
-			components[name] = component
+		} else if component.Image == "" {
+			component.Image = name
 		}
+		components[name] = component
 	}
 	return components, nil
 }
