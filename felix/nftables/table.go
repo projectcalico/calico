@@ -57,19 +57,20 @@ var (
 	routeType  = knftables.RouteType
 
 	// Each type of hook requires a specific filterPriority in order to be executed in the correct order.
-	filterPriority = knftables.FilterPriority
-	rawPriority    = knftables.RawPriority
-	manglePriority = knftables.ManglePriority
-	snatPriority   = knftables.SNATPriority
-	dnatPriority   = knftables.DNATPriority
+	filterInsertPriority = knftables.FilterPriority
+	filterAppendPriority = filterInsertPriority + "+5"
+	rawPriority          = knftables.RawPriority
+	manglePriority       = knftables.ManglePriority
+	snatPriority         = knftables.SNATPriority
+	dnatPriority         = knftables.DNATPriority
 
 	// Calico uses a single nftables with a variety of hooks.
 	// The top level base chains are laid out below.
-	baseChains = map[string]knftables.Chain{
+	appendBaseChains = map[string]knftables.Chain{
 		// Filter hook.
-		"filter-INPUT":   {Name: "filter-INPUT", Hook: &inputHook, Type: &filterType, Priority: &filterPriority},
-		"filter-FORWARD": {Name: "filter-FORWARD", Hook: &forwardHook, Type: &filterType, Priority: &filterPriority},
-		"filter-OUTPUT":  {Name: "filter-OUTPUT", Hook: &outputHook, Type: &filterType, Priority: &filterPriority},
+		"filter-INPUT":   {Name: "filter-INPUT", Hook: &inputHook, Type: &filterType, Priority: &filterAppendPriority},
+		"filter-FORWARD": {Name: "filter-FORWARD", Hook: &forwardHook, Type: &filterType, Priority: &filterAppendPriority},
+		"filter-OUTPUT":  {Name: "filter-OUTPUT", Hook: &outputHook, Type: &filterType, Priority: &filterAppendPriority},
 
 		// NAT hooks.
 		"nat-PREROUTING":  {Name: "nat-PREROUTING", Hook: &preroutingHook, Type: &natType, Priority: &dnatPriority},
@@ -87,6 +88,14 @@ var (
 		// Raw hooks.
 		"raw-PREROUTING": {Name: "raw-PREROUTING", Hook: &preroutingHook, Type: &filterType, Priority: &rawPriority},
 		"raw-OUTPUT":     {Name: "raw-OUTPUT", Hook: &outputHook, Type: &filterType, Priority: &rawPriority},
+	}
+
+	// Base chains for insertions. These are hooked slightly earlier, allowing for
+	// user defined tables to be hooked between the insertions and appended chains.
+	// This is a map of base chain name to its corresponding "insert" chain.
+	insertBaseChains = map[string]knftables.Chain{
+		"filter-INPUT":   {Name: "filter-INPUT-insert", Hook: &inputHook, Type: &filterType, Priority: &filterInsertPriority},
+		"filter-FORWARD": {Name: "filter-FORWARD-insert", Hook: &forwardHook, Type: &filterType, Priority: &filterInsertPriority},
 	}
 
 	// Prometheus metrics.
@@ -233,6 +242,17 @@ type TableOptions struct {
 	OpRecorder logutils.OpRecorder
 }
 
+func baseChains() []knftables.Chain {
+	var chains []knftables.Chain
+	for _, chain := range appendBaseChains {
+		chains = append(chains, chain)
+	}
+	for _, chain := range insertBaseChains {
+		chains = append(chains, chain)
+	}
+	return chains
+}
+
 func NewTable(
 	name string,
 	ipVersion uint8,
@@ -252,7 +272,8 @@ func NewTable(
 	dirtyBaseChains := set.New[string]()
 	refcounts := map[string]int{}
 
-	for _, baseChain := range baseChains {
+	// Logic to register a base chain.
+	for _, baseChain := range baseChains() {
 		inserts[baseChain.Name] = []generictables.Rule{}
 		appends[baseChain.Name] = []generictables.Rule{}
 		chainNameToChain[baseChain.Name] = &generictables.Chain{
@@ -350,11 +371,20 @@ func (n *nftablesTable) IPVersion() uint8 {
 	return n.ipVersion
 }
 
-// InsertOrAppendRules sets the rules that should be inserted into or appended
-// to the given base chain (depending on the chain insert mode).  See
-// also AppendRules, which can be used to record additional rules that are
-// always appended.
+func (t *nftablesTable) hasInsertChain(chainName string) (string, bool) {
+	_, ok := insertBaseChains[chainName]
+	return insertBaseChains[chainName].Name, ok
+}
+
+// InsertOrAppendRules sets the rules that should be inserted to the given base chain.
+// In nftables mode, this function always inserts rules. Users can insert their own rules via a separate table.
+// See also AppendRules, which can be used to record additional rules that are always appended.
 func (t *nftablesTable) InsertOrAppendRules(chainName string, rules []generictables.Rule) {
+	// For base chains, we use a different hook depending on the chain insert mode.
+	if insertName, ok := t.hasInsertChain(chainName); ok {
+		chainName = insertName
+	}
+
 	t.logCxt.WithField("chainName", chainName).Debug("Updating rule insertions")
 	oldRules := t.chainToInsertedRules[chainName]
 	t.chainToInsertedRules[chainName] = rules
@@ -813,7 +843,7 @@ func (t *nftablesTable) applyUpdates() error {
 	}
 
 	// Also make sure our base chains exist.
-	for _, c := range baseChains {
+	for _, c := range baseChains() {
 		// Make a copy.
 		baseChain := c
 		if _, ok := t.chainToDataplaneHashes[baseChain.Name]; !ok {
@@ -1062,17 +1092,27 @@ func (t *nftablesTable) CheckRulesPresent(chain string, rules []generictables.Ru
 // InsertRulesNow insets the given rules immediately without removing or syncing
 // other rules. This is primarily useful when bootstrapping and we cannot wait
 // until we have the full state.
-func (t *nftablesTable) InsertRulesNow(chain string, rules []generictables.Rule) error {
+func (t *nftablesTable) InsertRulesNow(chainName string, rules []generictables.Rule) error {
+	// For base chains, we use a different hook depending on the chain insert mode.
+	var baseChain knftables.Chain
+	var isBaseChain bool
+	if insertName, ok := t.hasInsertChain(chainName); ok {
+		chainName = insertName
+		baseChain, isBaseChain = insertBaseChains[chainName]
+	} else {
+		baseChain, isBaseChain = appendBaseChains[chainName]
+	}
+
 	features := t.featureDetector.GetFeatures()
-	hashes := CalculateRuleHashes(chain, rules, features)
+	hashes := CalculateRuleHashes(chainName, rules, features)
 
 	tx := t.nft.NewTransaction()
 	tx.Add(&knftables.Table{})
-	if baseChain, ok := baseChains[chain]; ok {
+	if isBaseChain {
 		tx.Add(&baseChain)
 	}
 	for i, r := range rules {
-		tx.Insert(t.render.Render(chain, hashes[i], r, features))
+		tx.Insert(t.render.Render(chainName, hashes[i], r, features))
 	}
 
 	// Run the transaction.
