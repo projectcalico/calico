@@ -235,6 +235,10 @@ func (m matchCriteria) NotSourcePorts(ports ...uint16) generictables.MatchCriter
 	return append(m, fmt.Sprintf("-m multiport ! --source-ports %s", portsString))
 }
 
+func (m matchCriteria) DestPort(port uint16) generictables.MatchCriteria {
+	return append(m, fmt.Sprintf("--dport %v", port))
+}
+
 func (m matchCriteria) DestPorts(ports ...uint16) generictables.MatchCriteria {
 	portsString := PortsToMultiport(ports)
 	return append(m, fmt.Sprintf("-m multiport --destination-ports %s", portsString))
