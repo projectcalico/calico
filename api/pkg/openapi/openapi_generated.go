@@ -2369,8 +2369,9 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"maxIpsetSize": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"integer"},
-							Format: "int32",
+							Description: "MaxIpsetSize is the maximum number of IP addresses that can be stored in an IP set. Not applicable if using the nftables backend.",
+							Type:        []string{"integer"},
+							Format:      "int32",
 						},
 					},
 					"iptablesBackend": {
@@ -2875,6 +2876,38 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Description: "NFTablesMode configures nftables support in Felix. [Default: Disabled]",
 							Type:        []string{"string"},
 							Format:      "",
+						},
+					},
+					"nftablesRefreshInterval": {
+						SchemaProps: spec.SchemaProps{
+							Description: "NftablesRefreshInterval controls the interval at which Felix periodically refreshes the nftables rules. [Default: 90s]",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+						},
+					},
+					"nftablesFilterAllowAction": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"nftablesMangleAllowAction": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"nftablesFilterDenyAction": {
+						SchemaProps: spec.SchemaProps{
+							Description: "FilterDenyAction controls what happens to traffic that is denied by network policy. By default Calico blocks traffic with a \"drop\" action. If you want to use a \"reject\" action instead you can configure it here.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"nftablesMarkMask": {
+						SchemaProps: spec.SchemaProps{
+							Description: "MarkMask is the mask that Felix selects its nftables Mark bits from. Should be a 32 bit hexadecimal number with at least 8 bits set, none of which clash with any other mark bits in use on the system. [Default: 0xff000000]",
+							Type:        []string{"integer"},
+							Format:      "int64",
 						},
 					},
 					"bpfEnabled": {
