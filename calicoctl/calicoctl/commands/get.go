@@ -26,7 +26,6 @@ import (
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/argutils"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/common"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/constants"
-	"github.com/projectcalico/calico/calicoctl/calicoctl/resourcemgr"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/util"
 )
 
@@ -115,12 +114,7 @@ Description:
 	doc = strings.ReplaceAll(doc, "<BINARY_NAME>", name)
 
 	// Replace <RESOURCE_LIST> with the list of resource types.
-	kinds := resourcemgr.ValidResources()
-	resourceList := ""
-	for _, r := range kinds {
-		resourceList += fmt.Sprintf("    - %s\n", r)
-	}
-	doc = strings.Replace(doc, "<RESOURCE_LIST>", resourceList, 1)
+	doc = strings.Replace(doc, "<RESOURCE_LIST>", util.Resources(), 1)
 
 	// -a option Backward compatibility
 	for k, v := range args {

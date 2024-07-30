@@ -22,7 +22,6 @@ import (
 	"io"
 	"os"
 	"reflect"
-	"sort"
 	"strings"
 	"time"
 
@@ -114,8 +113,8 @@ var (
 	allKinds  = []string{}
 )
 
+// ValidResources returns all registered resource kinds.
 func ValidResources() []string {
-	sort.Strings(allKinds)
 	return allKinds
 }
 
