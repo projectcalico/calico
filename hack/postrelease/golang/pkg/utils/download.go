@@ -55,7 +55,7 @@ func MaybeDownloadFile(url string, filepath string) error {
 			// We already have the file
 			return nil
 		} else if stat.Size() < downloadSize {
-			fmt.Printf("Need to resume from %s\n", stat.Size())
+			fmt.Printf("Need to resume from %v\n", stat.Size())
 
 		}
 
