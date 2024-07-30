@@ -1,20 +1,19 @@
+// Package container contains universal functionality for container images
 package container
 
 import (
-	"context"
 	"fmt"
 	"strings"
-
-	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/client"
 )
 
+// Image is an object to represent a Docker/OCI image with tag on a specific docker host
 type Image struct {
 	HostName string
 	Name     string
 	Tag      string
 }
 
+// FullPath will combine the HostName, Name, and Tag into a full URI for the container
 func (i Image) FullPath() string {
 	var registryPath string
 
@@ -25,28 +24,4 @@ func (i Image) FullPath() string {
 	}
 
 	return fmt.Sprintf("%s/%s/%s", i.HostName, registryPath, i.Name)
-}
-
-func (i Image) FullPathWithTag() string {
-	return fmt.Sprintf("%s:%s", i.FullPath(), i.Tag)
-}
-
-func (i Image) NameWithTag() string {
-	return fmt.Sprintf("%s:%s", i.Name, i.Tag)
-}
-
-func (i Image) GetManifest() string {
-	cli, err := client.NewClientWithOpts(client.FromEnv)
-	if err != nil {
-		panic(err)
-	}
-	containers, err := cli.ContainerList(context.Background(), container.ListOptions{})
-	if err != nil {
-		panic(err)
-	}
-
-	for _, ctr := range containers {
-		fmt.Printf("%s %s\n", ctr.ID, ctr.Image)
-	}
-	return "food"
 }

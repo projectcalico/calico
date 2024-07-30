@@ -115,7 +115,7 @@ func TestGolang(t *testing.T) {
 }
 
 var (
-	regCheck     registry.RegistryChecker
+	regCheck     registry.Checker
 	err          error
 	imagesToTest []container.Image
 )
@@ -148,49 +148,46 @@ var _ = Describe(
 	"Validate published image",
 	Label("docker"),
 	func() {
-		for _, host_name := range dockerReleaseHosts {
+		for _, hostName := range dockerReleaseHosts {
 			Context(
-				fmt.Sprintf("at registry %s", host_name),
-				Label(host_name),
+				fmt.Sprintf("at registry %s", hostName),
+				Label(hostName),
 				func() {
-					for _, image_name := range expectedCalicoImages {
-						Context(fmt.Sprintf("image %s", image_name), Label(image_name), func() {
+					for _, imageName := range expectedCalicoImages {
+						Context(fmt.Sprintf("image %s", imageName), Label(imageName), func() {
 							containerImage := container.Image{
-								Name:     image_name,
+								Name:     imageName,
 								Tag:      calicoReleaseTag,
-								HostName: host_name,
+								HostName: hostName,
 							}
 							It("should exist", func() {
 								Expect(regCheck.CheckImageTagExists(containerImage)).NotTo(HaveOccurred())
 							})
 						})
 					}
-					for _, image_name := range expectedCalicoImages {
-						Describe(fmt.Sprintf("image %s", image_name),
-							Label("image_name"),
+					for _, imageName := range expectedCalicoImages {
+						Describe(fmt.Sprintf("image %s", imageName),
+							Label("imageName"),
 							func() {
-								for _, arch_name := range expectedCalicoArches {
-									image_name := image_name
-									host_name := host_name
-									arch_name := arch_name
+								for _, archName := range expectedCalicoArches {
 									containerImage := container.Image{
-										Name:     image_name,
-										Tag:      fmt.Sprintf("%s-%s", calicoReleaseTag, arch_name),
-										HostName: host_name,
+										Name:     imageName,
+										Tag:      fmt.Sprintf("%s-%s", calicoReleaseTag, archName),
+										HostName: hostName,
 									}
-									It(fmt.Sprintf("Should have %s", arch_name), Label(arch_name), func() {
+									It(fmt.Sprintf("Should have %s", archName), Label(archName), func() {
 										Expect(regCheck.CheckImageTagExists(containerImage)).NotTo(HaveOccurred())
 									})
 								}
 							})
 					}
 
-					for _, image_name := range expectedWindowsImages {
-						Context(fmt.Sprintf("arch-specific image %s", image_name), func() {
+					for _, imageName := range expectedWindowsImages {
+						Context(fmt.Sprintf("arch-specific image %s", imageName), func() {
 							containerImage := container.Image{
-								Name:     image_name,
+								Name:     imageName,
 								Tag:      calicoReleaseTag,
-								HostName: host_name,
+								HostName: hostName,
 							}
 							It("should exist", func() {
 								Expect(regCheck.CheckImageTagExists(containerImage)).NotTo(HaveOccurred())
@@ -286,7 +283,7 @@ var _ = Describe(
 					fmt.Sprintf("should have published %s %s for %s", packageObj.Component, packageObj.Version, packageObj.OSVersion),
 					Label(packageObj.Component),
 					func() {
-						resp, err := packageObj.Get()
+						resp, err := packageObj.Head()
 						if err != nil {
 							Fail("Failed to fetch package")
 						}
@@ -305,7 +302,7 @@ var _ = Describe(
 	func() {
 		Context("the latest helm chart", func() {
 			It("should be in the published index", func() {
-				index, err := helm.GetHelmIndex()
+				index, err := helm.GetIndex()
 				if err != nil {
 					Fail(fmt.Sprintf("could not fetch helm index: %s", err))
 				}
@@ -314,7 +311,7 @@ var _ = Describe(
 				}
 			})
 			It("should be fetchable and load-able by helm", func() {
-				err := helm.LoadHelmArchiveForVersion(calicoReleaseTag)
+				err := helm.LoadArchiveForVersion(calicoReleaseTag)
 				if err != nil {
 					Fail(fmt.Sprintf("%s", err))
 				}
