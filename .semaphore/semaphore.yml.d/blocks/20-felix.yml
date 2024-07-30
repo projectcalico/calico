@@ -100,7 +100,7 @@
       - name: private-repo
     prologue:
       commands:
-        - export REPORT_DIR=/home/semaphore/calico/process/testing/winfv/report
+        - export REPORT_DIR=/home/semaphore/report
         - export AZURE_SUBSCRIPTION_ID=$AZ_SUBSCRIPTION_ID
         - export AZURE_TENANT_ID=$AZ_TENANT_ID
         - export AZURE_CLIENT_ID=$AZ_SP_ID
