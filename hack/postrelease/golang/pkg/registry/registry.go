@@ -1,11 +1,12 @@
 package registry
 
 import (
-	"calico_postrelease/pkg/container"
 	"context"
 	"fmt"
 	"slices"
 	"sync"
+
+	"calico_postrelease/pkg/container"
 
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/patrickmn/go-cache"
@@ -45,7 +46,7 @@ func New() (RegistryChecker, error) {
 	reg.Context = context.Background()
 	reg.Registry = *regclient.New()
 
-	var lock = sync.Mutex{}
+	lock := sync.Mutex{}
 	reg.Lock = &lock
 
 	reg.Cache.Add("CacheHit", 0, cache.NoExpiration)
@@ -74,7 +75,7 @@ func (reg RegistryChecker) CheckImageTagExists(ContainerImage container.Image) e
 	reg.Lock.Lock()
 	var TagList []string
 
-	var ImagePath = ContainerImage.FullPath()
+	ImagePath := ContainerImage.FullPath()
 
 	if x, found := reg.Cache.Get(ImagePath); found {
 		reg.Cache.IncrementInt("CacheHit", 1)
@@ -85,7 +86,7 @@ func (reg RegistryChecker) CheckImageTagExists(ContainerImage container.Image) e
 		// fmt.Printf("Getting image data from server for %s", ContainerImage.FullPath())
 		x, err := reg.fetchImageTagInfo(ImagePath)
 		if err != nil {
-			var errmsg = fmt.Sprintf("failed to fetch image tag info for %s", ImagePath)
+			errmsg := fmt.Sprintf("failed to fetch image tag info for %s", ImagePath)
 			Fail(errmsg)
 			return fmt.Errorf("%s: %w", errmsg, err)
 		}
@@ -97,7 +98,7 @@ func (reg RegistryChecker) CheckImageTagExists(ContainerImage container.Image) e
 	if slices.Contains(TagList, ContainerImage.Tag) {
 		return nil
 	} else {
-		var errmsg = fmt.Sprintf("tag %s not found in tag list for %s", ContainerImage.Tag, ImagePath)
+		errmsg := fmt.Sprintf("tag %s not found in tag list for %s", ContainerImage.Tag, ImagePath)
 		Fail(errmsg)
 		return fmt.Errorf(errmsg)
 	}
