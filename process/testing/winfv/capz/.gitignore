@@ -1,0 +1,10 @@
+.calico_installed
+.cluster_created
+.sshkey
+.sshkey.pub
+kubeconfig
+scp-from-node.sh
+scp-to-node.sh
+ssh-node.sh
+tigera-operator.yaml
+win-capz.yaml

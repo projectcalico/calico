@@ -3,7 +3,15 @@
 set -e
 LOCAL_PATH="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )"
 
-: ${KUBECTL:=$LOCAL_PATH/bin/kubectl}
+# scp from OpenSSH versions 8.8 and newer requires a '-O' flag in order to work correctly
+# with windows ssh servers, but older versions don't know about that flag. Only use
+# it when necessary (i.e. supported).
+OFLAG="-O "
+if scp -O 2>&1 | grep -q "unknown option -- O"; then
+    OFLAG=""
+fi
+
+: ${KUBECTL:=${LOCAL_PATH}/bin/kubectl}
 
 KCAPZ="${KUBECTL} --kubeconfig=./kubeconfig"
 
@@ -23,7 +31,7 @@ CONNECT_FILE="ssh-node.sh"
 echo "#---------Connect to Instance--------" | tee ${CONNECT_FILE}
 echo "#usage: ./ssh-node.sh 6 to ssh into 10.1.0.6" | tee -a ${CONNECT_FILE}
 echo "#usage: ./ssh-node.sh 6 'Get-Service -Name kubelet' > output" | tee -a ${CONNECT_FILE}
-echo ssh -t -i $LOCAL_PATH/.sshkey -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o \'ProxyCommand ssh -i $LOCAL_PATH/.sshkey -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -W %h:%p capi@${APISERVER}\' capi@10.1.0.\$1 \$2 | tee -a ${CONNECT_FILE}
+echo ssh -t -i ${LOCAL_PATH}/.sshkey -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o \'ProxyCommand ssh -i ${LOCAL_PATH}/.sshkey -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -W %h:%p capi@${APISERVER}\' capi@10.1.0.\$1 \$2 | tee -a ${CONNECT_FILE}
 chmod +x ${CONNECT_FILE}
 echo
 
@@ -31,14 +39,14 @@ SCP_FILE="scp-to-node.sh"
 echo "#---------Copy files to Instance--------" | tee ${SCP_FILE}
 echo "#usage: ./scp-to-node.sh 6 kubeconfig c:\\\\k\\\\kubeconfig -- copy kubeconfig to 10.1.0.6" | tee -a ${SCP_FILE}
 echo "#usage: ./scp-to-node.sh 6 images/ebpf-for-windows-c-temp.zip 'c:\\' -- copy temp zip to 10.1.0.6" | tee -a ${SCP_FILE}
-echo scp -i $LOCAL_PATH/.sshkey -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o \'ProxyCommand ssh -i $LOCAL_PATH/.sshkey -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -W %h:%p capi@${APISERVER}\' \$2 capi@10.1.0.\$1:\$3 | tee -a ${SCP_FILE}
+echo scp ${OFLAG} -i ${LOCAL_PATH}/.sshkey -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o \'ProxyCommand ssh -i ${LOCAL_PATH}/.sshkey -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -W %h:%p capi@${APISERVER}\' \$2 capi@10.1.0.\$1:\$3 | tee -a ${SCP_FILE}
 chmod +x ${SCP_FILE}
 echo
 
 SCP_FROM_NODE="scp-from-node.sh"
-echo "#---------Copy files to Instance--------" | tee ${SCP_FROM_NODE}
+echo "#---------Copy files from Instance--------" | tee ${SCP_FROM_NODE}
 echo "#usage: ./scp-from-node.sh 6 c:/k/calico.log ./calico.log" | tee -a ${SCP_FROM_NODE}
-echo scp -r -i $LOCAL_PATH/.sshkey -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o \'ProxyCommand ssh -i $LOCAL_PATH/.sshkey -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -W %h:%p capi@${APISERVER}\' capi@10.1.0.\$1:\$2 \$3 | tee -a ${SCP_FROM_NODE}
+echo scp ${OFLAG} -r -i ${LOCAL_PATH}/.sshkey -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o \'ProxyCommand ssh -i ${LOCAL_PATH}/.sshkey -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -W %h:%p capi@${APISERVER}\' capi@10.1.0.\$1:\$2 \$3 | tee -a ${SCP_FROM_NODE}
 chmod +x ${SCP_FROM_NODE}
 
 # Update env file with Windows ips
