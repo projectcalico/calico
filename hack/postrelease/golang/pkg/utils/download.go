@@ -39,7 +39,6 @@ func (wc *WriteCounter) Write(p []byte) (int, error) {
 }
 
 func MaybeDownloadFile(url string, filepath string) error {
-
 	if stat, err := os.Stat(filepath + ".tmp"); err == nil {
 		resp, err := http.Head(url)
 		if err != nil {
@@ -56,7 +55,6 @@ func MaybeDownloadFile(url string, filepath string) error {
 			return nil
 		} else if stat.Size() < downloadSize {
 			fmt.Printf("Need to resume from %v\n", stat.Size())
-
 		}
 
 	} else if errors.Is(err, os.ErrNotExist) {

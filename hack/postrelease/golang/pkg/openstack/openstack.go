@@ -24,7 +24,7 @@ func (pr PackageRevision) toURL() (string, error) {
 }
 
 func (pr PackageRevision) Get() (*http.Response, error) {
-	var url, err = pr.toURL()
+	url, err := pr.toURL()
 	if err != nil {
 		panic(fmt.Errorf("could not generate url: %w", err))
 	}
@@ -59,9 +59,11 @@ var UrlTemplates = map[string]map[string]string{
 
 var dnsmasqVersion string = "2.79_calico1-2"
 
-var ubuntuTemplate = `{{ .BaseUrl }}/{{ .Component }}_{{ .Version }}-{{ .OSVersion }}_{{ .Arch }}.deb`
-var rhelTemplate = `{{ .BaseUrl }}/{{ .Component }}-{{ .Version }}.{{ .OSVersion }}.{{ .Arch }}.rpm`
-var dnsmasqTemplate = `{{ .BaseUrl }}/{{ .Component }}-{{ .Version }}.{{ .OSVersion }}.2.{{ .Arch }}.rpm`
+var (
+	ubuntuTemplate  = `{{ .BaseUrl }}/{{ .Component }}_{{ .Version }}-{{ .OSVersion }}_{{ .Arch }}.deb`
+	rhelTemplate    = `{{ .BaseUrl }}/{{ .Component }}-{{ .Version }}.{{ .OSVersion }}.{{ .Arch }}.rpm`
+	dnsmasqTemplate = `{{ .BaseUrl }}/{{ .Component }}-{{ .Version }}.{{ .OSVersion }}.2.{{ .Arch }}.rpm`
+)
 
 var rhelVersions = [...]string{
 	"el7",
@@ -123,7 +125,7 @@ func GetPackages(releaseStream string) []PackageRevision {
 		panic(err)
 	}
 
-	var packageList = make([]PackageRevision, 0)
+	packageList := make([]PackageRevision, 0)
 
 	for _, rpmArch := range rpmArches {
 		for _, rhelVersion := range rhelVersions {
