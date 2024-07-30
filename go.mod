@@ -317,7 +317,7 @@ replace (
 	// Need replacements for all the k8s subsidiary projects that are pulled in indirectly because
 	// the kubernets repo pulls them in via a replacement to its own vendored copies, which doesn't work for
 	// transient imports.
-	k8s.io/kubernetes => k8s.io/kubernetes v1.26.8
+	k8s.io/kubernetes => k8s.io/kubernetes v1.26.15
 	k8s.io/legacy-cloud-providers => k8s.io/legacy-cloud-providers v0.26.15
 	k8s.io/metrics => k8s.io/metrics v0.26.15
 	k8s.io/mount-utils => k8s.io/mount-utils v0.26.15
