@@ -44,8 +44,10 @@ func (hi HelmIndex) CheckVersionIsPublished(version string) bool {
 	return false
 }
 
-var helmChartUrl = "https://projectcalico.docs.tigera.io/charts/index.yaml"
-var operatorBundleUrl = "https://github.com/projectcalico/calico/releases/download/%s/tigera-operator-%s.tgz"
+var (
+	helmChartUrl      = "https://projectcalico.docs.tigera.io/charts/index.yaml"
+	operatorBundleUrl = "https://github.com/projectcalico/calico/releases/download/%s/tigera-operator-%s.tgz"
+)
 
 func GetHelmIndex() (HelmIndex, error) {
 	chartIndex := HelmIndex{}
@@ -122,7 +124,7 @@ func LoadHelmArchiveForVersion(version string) error {
 			log.Fatal(err)
 		}
 		fullPath := filepath.Join(tempDirPath, header.Name)
-		if err := os.MkdirAll(filepath.Dir(fullPath), 0700); err != nil {
+		if err := os.MkdirAll(filepath.Dir(fullPath), 0o700); err != nil {
 			return err
 		}
 		outfile, err := os.Create(fullPath)
@@ -138,5 +140,4 @@ func LoadHelmArchiveForVersion(version string) error {
 	}
 
 	return nil
-
 }
