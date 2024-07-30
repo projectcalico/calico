@@ -1,27 +1,32 @@
 package oss
 
 import (
-	"calico_postrelease/pkg/container"
-	"calico_postrelease/pkg/github"
-	"calico_postrelease/pkg/helm"
-	"calico_postrelease/pkg/openstack"
-	"calico_postrelease/pkg/registry"
 	"fmt"
 	"os"
 	"slices"
 	"strings"
 	"testing"
 
+	"calico_postrelease/pkg/container"
+	"calico_postrelease/pkg/github"
+	"calico_postrelease/pkg/helm"
+	"calico_postrelease/pkg/openstack"
+	"calico_postrelease/pkg/registry"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 
-var calicoReleaseTag = os.Getenv("CALICO_VERSION")
-var operatorReleaseVersion = os.Getenv("OPERATOR_VERSION")
-var calicoProjectName = "projectcalico/calico"
+var (
+	calicoReleaseTag       = os.Getenv("CALICO_VERSION")
+	operatorReleaseVersion = os.Getenv("OPERATOR_VERSION")
+	calicoProjectName      = "projectcalico/calico"
+)
 
-var flannelProjectName = "coreos/flannel"
-var flannelReleaseTag = os.Getenv("FLANNEL_VERSION")
+var (
+	flannelProjectName = "coreos/flannel"
+	flannelReleaseTag  = os.Getenv("FLANNEL_VERSION")
+)
 
 var dockerReleaseHosts = []string{
 	"docker.io",
@@ -109,9 +114,11 @@ func TestGolang(t *testing.T) {
 	RunSpecs(t, "Calico OSS Postrelease Test Suite")
 }
 
-var regCheck registry.RegistryChecker
-var err error
-var imagesToTest []container.Image
+var (
+	regCheck     registry.RegistryChecker
+	err          error
+	imagesToTest []container.Image
+)
 
 var _ = BeforeSuite(func() {
 	regCheck, err = registry.New()
@@ -146,10 +153,9 @@ var _ = Describe(
 				fmt.Sprintf("at registry %s", host_name),
 				Label(host_name),
 				func() {
-
 					for _, image_name := range expectedCalicoImages {
 						Context(fmt.Sprintf("image %s", image_name), Label(image_name), func() {
-							var containerImage = container.Image{
+							containerImage := container.Image{
 								Name:     image_name,
 								Tag:      calicoReleaseTag,
 								HostName: host_name,
@@ -167,7 +173,7 @@ var _ = Describe(
 									image_name := image_name
 									host_name := host_name
 									arch_name := arch_name
-									var containerImage = container.Image{
+									containerImage := container.Image{
 										Name:     image_name,
 										Tag:      fmt.Sprintf("%s-%s", calicoReleaseTag, arch_name),
 										HostName: host_name,
@@ -181,7 +187,7 @@ var _ = Describe(
 
 					for _, image_name := range expectedWindowsImages {
 						Context(fmt.Sprintf("arch-specific image %s", image_name), func() {
-							var containerImage = container.Image{
+							containerImage := container.Image{
 								Name:     image_name,
 								Tag:      calicoReleaseTag,
 								HostName: host_name,
@@ -190,13 +196,10 @@ var _ = Describe(
 								Expect(regCheck.CheckImageTagExists(containerImage)).NotTo(HaveOccurred())
 							})
 						})
-
 					}
-
 				},
 			)
 		}
-
 	})
 
 var _ = Describe(
@@ -230,7 +233,6 @@ var _ = Describe(
 							}
 						})
 					}
-
 				},
 			)
 		})
@@ -268,7 +270,6 @@ var _ = Describe(
 							}
 						})
 					}
-
 				},
 			)
 		})
@@ -278,7 +279,7 @@ var _ = Describe(
 	"Validate Openstack publishing",
 	Label("openstack"),
 	func() {
-		var packageList = openstack.GetPackages(calicoReleaseTag)
+		packageList := openstack.GetPackages(calicoReleaseTag)
 		Context("check openstack files", func() {
 			for _, packageObj := range packageList {
 				It(
@@ -292,7 +293,6 @@ var _ = Describe(
 						if resp.StatusCode != 200 {
 							Fail(fmt.Sprintf("Caught unexpected HTTP status code %v", resp.StatusCode))
 						}
-
 					},
 				)
 			}
