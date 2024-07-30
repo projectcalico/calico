@@ -1,3 +1,4 @@
+// Package github contains functionality for interacting with the Github API
 package github
 
 import (
@@ -9,13 +10,15 @@ import (
 	"github.com/google/go-github/v63/github"
 )
 
-var GITHUB_TOKEN = os.Getenv("GITHUB_TOKEN")
+var githubToken = os.Getenv("githubToken")
 
+// GetGithubClient returns an instance of github.Client using a token from the environment.
 func GetGithubClient() *github.Client {
-	ghClient := github.NewClient(nil).WithAuthToken(GITHUB_TOKEN)
+	ghClient := github.NewClient(nil).WithAuthToken(githubToken)
 	return ghClient
 }
 
+// GetProjectReleaseByTag fetches the release object for `releaseTag` from project `project`
 func GetProjectReleaseByTag(project string, releaseTag string) (*github.RepositoryRelease, error) {
 	names := strings.Split(project, "/")
 	orgName := names[0]
@@ -31,6 +34,7 @@ func GetProjectReleaseByTag(project string, releaseTag string) (*github.Reposito
 	return release, nil
 }
 
+// GetProjectReleaseArtifacts gets a list of release asset objects from a given release of a project
 func GetProjectReleaseArtifacts(project string, releaseTag string) ([]*github.ReleaseAsset, error) {
 	var assets []*github.ReleaseAsset
 
@@ -44,6 +48,7 @@ func GetProjectReleaseArtifacts(project string, releaseTag string) ([]*github.Re
 	return assets, nil
 }
 
+// GetProjectReleaseArtifactNames gets a list of asset filenames for a given release of a project
 func GetProjectReleaseArtifactNames(project string, releaseTag string) ([]string, error) {
 	var assetNames []string
 
