@@ -199,6 +199,14 @@ func StartDataplaneDriver(configParams *config.Config,
 			felixNodeZone = felixNode.Labels[coreV1.LabelTopologyZone]
 		}
 
+		// Configure some fields depending on dataplane mode.
+		tableRefreshInterval := configParams.IptablesRefreshInterval
+
+		nftablesEnabled := configParams.NFTablesMode == "Enabled"
+		if nftablesEnabled {
+			tableRefreshInterval = configParams.NFTablesRefreshInterval
+		}
+
 		dpConfig := intdataplane.Config{
 			Hostname:           felixHostname,
 			NodeZone:           felixNodeZone,
@@ -209,7 +217,7 @@ func StartDataplaneDriver(configParams *config.Config,
 				NetlinkTimeout:    configParams.NetlinkTimeoutSecs,
 			},
 			RulesConfig: rules.Config{
-				NFTables:              configParams.NFTablesMode == "Enabled",
+				NFTables:              nftablesEnabled,
 				WorkloadIfacePrefixes: configParams.InterfacePrefixes(),
 
 				IPSetConfigV4: ipsets.NewIPVersionConfig(
@@ -304,7 +312,7 @@ func StartDataplaneDriver(configParams *config.Config,
 			VXLANMTUV6:                     configParams.VXLANMTUV6,
 			VXLANPort:                      configParams.VXLANPort,
 			IptablesBackend:                configParams.IptablesBackend,
-			IptablesRefreshInterval:        configParams.IptablesRefreshInterval,
+			TableRefreshInterval:           configParams.IptablesRefreshInterval,
 			RouteSyncDisabled:              configParams.RouteSyncDisabled,
 			RouteRefreshInterval:           configParams.RouteRefreshInterval,
 			DeviceRouteSourceAddress:       configParams.DeviceRouteSourceAddress,

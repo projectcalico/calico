@@ -28,6 +28,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
@@ -417,6 +418,9 @@ type Config struct {
 
 	// Encapsulation information calculated from IP Pools and FelixConfiguration (VXLANEnabled and IpInIpEnabled)
 	Encapsulation Encapsulation
+
+	// NFTables contains information about nftables configuration.
+	NFTables *v3.NFTables
 
 	// State tracking.
 
