@@ -1,3 +1,4 @@
+// Package openstack contains functionality for calculating and validating openstack package releases
 package openstack
 
 import (
@@ -8,8 +9,9 @@ import (
 	"strings"
 )
 
+// PackageRevision represents a package with all its various permutations
 type PackageRevision struct {
-	BaseUrl   string
+	BaseURL   string
 	Component string
 	Version   string
 	OSVersion string
@@ -23,7 +25,8 @@ func (pr PackageRevision) toURL() (string, error) {
 	return buf.String(), err
 }
 
-func (pr PackageRevision) Get() (*http.Response, error) {
+// Head fetches and returns the HTTP HEAD response for a given PackageRevision
+func (pr PackageRevision) Head() (*http.Response, error) {
 	url, err := pr.toURL()
 	if err != nil {
 		panic(fmt.Errorf("could not generate url: %w", err))
@@ -36,17 +39,19 @@ func (pr PackageRevision) Get() (*http.Response, error) {
 	return response, err
 }
 
-type RhelComponent struct {
+// rhelComponent represents a component which we publish for RHEL
+type rhelComponent struct {
 	Name   string
 	Native bool
 }
 
-type UbuntuComponent struct {
+// ubuntuComponent represents a component which we publish for Ubuntu
+type ubuntuComponent struct {
 	Name          string
 	ComponentName string
 }
 
-var UrlTemplates = map[string]map[string]string{
+var urlTemplates = map[string]map[string]string{
 	"ubuntu": {
 		"felix":             "http://ppa.launchpad.net/project-calico/%s/ubuntu/pool/main/f/felix",
 		"networking-calico": "http://ppa.launchpad.net/project-calico/%s/ubuntu/pool/main/n/networking-calico",
@@ -57,7 +62,7 @@ var UrlTemplates = map[string]map[string]string{
 	},
 }
 
-var dnsmasqVersion string = "2.79_calico1-2"
+var dnsmasqVersion = "2.79_calico1-2"
 
 var (
 	ubuntuTemplate  = `{{ .BaseUrl }}/{{ .Component }}_{{ .Version }}-{{ .OSVersion }}_{{ .Arch }}.deb`
@@ -78,7 +83,7 @@ var ubuntuVersions = [...]string{
 	"jammy",
 }
 
-var rpmComponents = [...]RhelComponent{
+var rpmComponents = [...]rhelComponent{
 	// 'Native' components built for their specific architecture
 	{Name: "calico-common", Native: true},
 	{Name: "calico-felix", Native: true},
@@ -96,7 +101,7 @@ var rpmComponents = [...]RhelComponent{
 	{Name: "networking-calico", Native: false},
 }
 
-var ubuntuComponents = [...]UbuntuComponent{
+var ubuntuComponents = [...]ubuntuComponent{
 	// Components filed under 'networking-calico' on the PPA
 	{Name: "calico-compute", ComponentName: "networking-calico"},
 	{Name: "calico-control", ComponentName: "networking-calico"},
@@ -107,9 +112,10 @@ var ubuntuComponents = [...]UbuntuComponent{
 	{Name: "calico-felix", ComponentName: "felix"},
 }
 
+// GetPackages calculates and returns the expected packages for a given calico release
 func GetPackages(releaseStream string) []PackageRevision {
-	var ppaVersion string = strings.Replace(releaseStream[0:5], "v", "calico-", 1)
-	var calicoComponentVersion string = strings.Replace(releaseStream, "v", "", 1)
+	var ppaVersion = strings.Replace(releaseStream[0:5], "v", "calico-", 1)
+	var calicoComponentVersion = strings.Replace(releaseStream, "v", "", 1)
 
 	ubuntuTmpl, err := template.New("ubuntuTemplate").Parse(ubuntuTemplate)
 	if err != nil {
@@ -146,7 +152,7 @@ func GetPackages(releaseStream string) []PackageRevision {
 					template = rhelTmpl
 				}
 				component := PackageRevision{
-					BaseUrl:   fmt.Sprintf(UrlTemplates["rpm"][arch], ppaVersion),
+					BaseURL:   fmt.Sprintf(urlTemplates["rpm"][arch], ppaVersion),
 					Component: rpmComponent.Name,
 					Version:   componentVersion,
 					OSVersion: rhelVersion,
@@ -168,7 +174,7 @@ func GetPackages(releaseStream string) []PackageRevision {
 
 		for _, ubuntuVersion := range ubuntuVersions {
 			component := PackageRevision{
-				BaseUrl:   fmt.Sprintf(UrlTemplates["ubuntu"][ubuntuComponent.ComponentName], ppaVersion),
+				BaseURL:   fmt.Sprintf(urlTemplates["ubuntu"][ubuntuComponent.ComponentName], ppaVersion),
 				Component: ubuntuComponent.Name,
 				Version:   calicoComponentVersion,
 				OSVersion: ubuntuVersion,

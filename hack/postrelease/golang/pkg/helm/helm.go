@@ -1,3 +1,4 @@
+// Package helm contains functionality and data structures for interacting with helm charts
 package helm
 
 import (
@@ -16,7 +17,8 @@ import (
 	"helm.sh/helm/v3/pkg/chart/loader"
 )
 
-type HelmIndex struct {
+// Index represents a helm index yaml file and all of its entries
+type Index struct {
 	APIVersion string `yaml:"apiVersion"`
 	Entries    struct {
 		TigeraOperator []struct {
@@ -35,7 +37,8 @@ type HelmIndex struct {
 	} `yaml:"entries"`
 }
 
-func (hi HelmIndex) CheckVersionIsPublished(version string) bool {
+// CheckVersionIsPublished ensures that this Index contains the version specified
+func (hi Index) CheckVersionIsPublished(version string) bool {
 	for _, operator := range hi.Entries.TigeraOperator {
 		if operator.AppVersion == version {
 			return true
@@ -45,16 +48,17 @@ func (hi HelmIndex) CheckVersionIsPublished(version string) bool {
 }
 
 var (
-	helmChartUrl      = "https://projectcalico.docs.tigera.io/charts/index.yaml"
-	operatorBundleUrl = "https://github.com/projectcalico/calico/releases/download/%s/tigera-operator-%s.tgz"
+	helmChartURL      = "https://projectcalico.docs.tigera.io/charts/index.yaml"
+	operatorBundleURL = "https://github.com/projectcalico/calico/releases/download/%s/tigera-operator-%s.tgz"
 )
 
-func GetHelmIndex() (HelmIndex, error) {
-	chartIndex := HelmIndex{}
+// GetIndex fetches and returns the projectcalico helm chart index
+func GetIndex() (Index, error) {
+	chartIndex := Index{}
 
 	buf := &bytes.Buffer{}
 
-	resp, err := http.Get(helmChartUrl)
+	resp, err := http.Get(helmChartURL)
 	if err != nil {
 		return chartIndex, fmt.Errorf("could not fetch helm chart: %w", err)
 	}
@@ -73,26 +77,11 @@ func GetHelmIndex() (HelmIndex, error) {
 	return chartIndex, nil
 }
 
-func CheckLatestHelmIndex(version string) error {
-	chartIndex, err := GetHelmIndex()
-	if err != nil {
-		panic(err)
-	}
+// LoadArchiveForVersion downloads, unpacks, and loads a helm chart from an operator tarball
+func LoadArchiveForVersion(version string) error {
+	targetOperatorURL := fmt.Sprintf(operatorBundleURL, version, version)
 
-	operatorUrl := chartIndex.Entries.TigeraOperator[0].Urls[0]
-
-	targetOperatorUrl := fmt.Sprintf(operatorBundleUrl, version, version)
-
-	if operatorUrl != targetOperatorUrl {
-		return fmt.Errorf("chart URL %s does not match expected url %s", operatorUrl, targetOperatorUrl)
-	}
-	return nil
-}
-
-func LoadHelmArchiveForVersion(version string) error {
-	targetOperatorUrl := fmt.Sprintf(operatorBundleUrl, version, version)
-
-	resp, err := http.Get(targetOperatorUrl)
+	resp, err := http.Get(targetOperatorURL)
 	if err != nil {
 		return fmt.Errorf("could not fetch helm chart: %w", err)
 	}
