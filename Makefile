@@ -168,7 +168,7 @@ endif
 ifndef VERSION
 	$(error VERSION must be set)
 endif
-	VERSION=$(VERSION) GITHUB_TOKEN=$(GITHUB_TOKEN) python2 ./hack/release/generate-release-notes.py
+	@VERSION=$(VERSION) GITHUB_TOKEN=$(GITHUB_TOKEN) python3 ./hack/release/generate-release-notes.py
 
 ## Update the AUTHORS.md file.
 update-authors:
