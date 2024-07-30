@@ -57,10 +57,6 @@ var UrlTemplates = map[string]map[string]string{
 	},
 }
 
-var releaseStream string = "v3.28.0"
-var ppaVersion string = strings.Replace(releaseStream[0:5], "v", "calico-", 1)
-var calicoComponentVersion string = strings.Replace(releaseStream, "v", "", 1)
-
 var dnsmasqVersion string = "2.79_calico1-2"
 
 var ubuntuTemplate = `{{ .BaseUrl }}/{{ .Component }}_{{ .Version }}-{{ .OSVersion }}_{{ .Arch }}.deb`
@@ -109,7 +105,10 @@ var ubuntuComponents = [...]UbuntuComponent{
 	{Name: "calico-felix", ComponentName: "felix"},
 }
 
-func GetPackages() []PackageRevision {
+func GetPackages(releaseStream string) []PackageRevision {
+	var ppaVersion string = strings.Replace(releaseStream[0:5], "v", "calico-", 1)
+	var calicoComponentVersion string = strings.Replace(releaseStream, "v", "", 1)
+
 	ubuntuTmpl, err := template.New("ubuntuTemplate").Parse(ubuntuTemplate)
 	if err != nil {
 		panic(err)
