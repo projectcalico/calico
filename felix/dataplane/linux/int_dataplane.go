@@ -158,7 +158,7 @@ type Config struct {
 	DeviceRouteSourceAddressIPv6   net.IP
 	DeviceRouteProtocol            netlink.RouteProtocol
 	RemoveExternalRoutes           bool
-	IptablesRefreshInterval        time.Duration
+	TableRefreshInterval           time.Duration
 	IptablesPostWriteCheckInterval time.Duration
 	IptablesInsertMode             string
 	IptablesLockFilePath           string
@@ -434,7 +434,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	iptablesOptions := iptables.TableOptions{
 		HistoricChainPrefixes: rules.AllHistoricChainNamePrefixes,
 		InsertMode:            config.IptablesInsertMode,
-		RefreshInterval:       config.IptablesRefreshInterval,
+		RefreshInterval:       config.TableRefreshInterval,
 		PostWriteInterval:     config.IptablesPostWriteCheckInterval,
 		LockTimeout:           config.IptablesLockTimeout,
 		LockProbeInterval:     config.IptablesLockProbeInterval,
@@ -444,7 +444,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		OpRecorder:            dp.loopSummarizer,
 	}
 	nftablesOptions := nftables.TableOptions{
-		RefreshInterval:  config.IptablesRefreshInterval,
+		RefreshInterval:  config.TableRefreshInterval,
 		LookPathOverride: config.LookPathOverride,
 		OnStillAlive:     dp.reportHealth,
 		OpRecorder:       dp.loopSummarizer,

@@ -83,6 +83,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.KubeControllersConfigurationList":   schema_pkg_apis_projectcalico_v3_KubeControllersConfigurationList(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.KubeControllersConfigurationSpec":   schema_pkg_apis_projectcalico_v3_KubeControllersConfigurationSpec(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.KubeControllersConfigurationStatus": schema_pkg_apis_projectcalico_v3_KubeControllersConfigurationStatus(ref),
+		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.NFTables":                           schema_pkg_apis_projectcalico_v3_NFTables(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.NamespaceControllerConfig":          schema_pkg_apis_projectcalico_v3_NamespaceControllerConfig(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.NetworkPolicy":                      schema_pkg_apis_projectcalico_v3_NetworkPolicy(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.NetworkPolicyList":                  schema_pkg_apis_projectcalico_v3_NetworkPolicyList(ref),
@@ -2306,8 +2307,9 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"maxIpsetSize": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"integer"},
-							Format: "int32",
+							Description: "MaxIpsetSize is the maximum number of IP addresses that can be stored in an IP set. Not applicable if using the nftables backend.",
+							Type:        []string{"integer"},
+							Format:      "int32",
 						},
 					},
 					"iptablesBackend": {
@@ -3229,11 +3231,17 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Format:      "int32",
 						},
 					},
+					"nftables": {
+						SchemaProps: spec.SchemaProps{
+							Description: "NFTables contains configuration for the nftables dataplane.",
+							Ref:         ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.NFTables"),
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.HealthTimeoutOverride", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.ProtoPort", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.RouteTableIDRange", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.RouteTableRange", "github.com/projectcalico/api/pkg/lib/numorstring.Port", "k8s.io/apimachinery/pkg/apis/meta/v1.Duration"},
+			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.HealthTimeoutOverride", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.NFTables", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.ProtoPort", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.RouteTableIDRange", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.RouteTableRange", "github.com/projectcalico/api/pkg/lib/numorstring.Port", "k8s.io/apimachinery/pkg/apis/meta/v1.Duration"},
 	}
 }
 
@@ -4490,6 +4498,52 @@ func schema_pkg_apis_projectcalico_v3_KubeControllersConfigurationStatus(ref com
 		},
 		Dependencies: []string{
 			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.KubeControllersConfigurationSpec"},
+	}
+}
+
+func schema_pkg_apis_projectcalico_v3_NFTables(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"tableRefreshInterval": {
+						SchemaProps: spec.SchemaProps{
+							Description: "TableRefreshInterval controls the interval at which Felix periodically refreshes the nftables rules. [Default: 90s]",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+						},
+					},
+					"filterAllowAction": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"mangleAllowAction": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"filterDenyAction": {
+						SchemaProps: spec.SchemaProps{
+							Description: "FilterDenyAction controls what happens to traffic that is denied by network policy. By default Calico blocks traffic with a \"drop\" action. If you want to use a \"reject\" action instead you can configure it here.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"markMask": {
+						SchemaProps: spec.SchemaProps{
+							Description: "MarkMask is the mask that Felix selects its nftables Mark bits from. Should be a 32 bit hexadecimal number with at least 8 bits set, none of which clash with any other mark bits in use on the system. [Default: 0xff000000]",
+							Type:        []string{"integer"},
+							Format:      "int64",
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/apimachinery/pkg/apis/meta/v1.Duration"},
 	}
 }
 
