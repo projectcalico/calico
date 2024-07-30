@@ -1,3 +1,4 @@
+// Package registry contains helper functionality for interacting with docker registries
 package registry
 
 import (
@@ -14,34 +15,17 @@ import (
 	"github.com/regclient/regclient/types/ref"
 )
 
-type Registry interface {
-	CheckImageExists() error
-}
-
-type RegistryChecker struct {
+// Checker manages references to registries and caches API results
+type Checker struct {
 	Cache    *cache.Cache
 	Lock     *sync.Mutex
 	Context  context.Context
 	Registry regclient.RegClient
 }
 
-type DockerV2APIResponse struct {
-	Child     []any                                     `json:"child"`
-	Manifests map[string]DockerV2APIImageRepresentation `json:"manifest"`
-	Name      string                                    `json:"name"`
-	Tags      []string                                  `json:"tags"`
-}
-type DockerV2APIImageRepresentation struct {
-	ImageSizeBytes string   `json:"imageSizeBytes"`
-	LayerID        string   `json:"layerId"`
-	MediaType      string   `json:"mediaType"`
-	Tag            []string `json:"tag"`
-	TimeCreatedMs  string   `json:"timeCreatedMs"`
-	TimeUploadedMs string   `json:"timeUploadedMs"`
-}
-
-func New() (RegistryChecker, error) {
-	reg := RegistryChecker{}
+// New creates and configures a RegistryChecker instance
+func New() (Checker, error) {
+	reg := Checker{}
 	reg.Cache = cache.New(cache.NoExpiration, cache.NoExpiration)
 	reg.Context = context.Background()
 	reg.Registry = *regclient.New()
@@ -55,7 +39,7 @@ func New() (RegistryChecker, error) {
 	return reg, nil
 }
 
-func (reg RegistryChecker) fetchImageTagInfo(ImageName string) ([]string, error) {
+func (reg Checker) fetchImageTagInfo(ImageName string) ([]string, error) {
 	imageRef, err := ref.New(ImageName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create ref: %w", err)
@@ -71,7 +55,8 @@ func (reg RegistryChecker) fetchImageTagInfo(ImageName string) ([]string, error)
 	return TagList.Tags, nil
 }
 
-func (reg RegistryChecker) CheckImageTagExists(ContainerImage container.Image) error {
+// CheckImageTagExists validates that the image tag exists, fetching and caching image data if necessary
+func (reg Checker) CheckImageTagExists(ContainerImage container.Image) error {
 	reg.Lock.Lock()
 	var TagList []string
 
@@ -97,9 +82,8 @@ func (reg RegistryChecker) CheckImageTagExists(ContainerImage container.Image) e
 
 	if slices.Contains(TagList, ContainerImage.Tag) {
 		return nil
-	} else {
-		errmsg := fmt.Sprintf("tag %s not found in tag list for %s", ContainerImage.Tag, ImagePath)
-		Fail(errmsg)
-		return fmt.Errorf(errmsg)
 	}
+	errmsg := fmt.Sprintf("tag %s not found in tag list for %s", ContainerImage.Tag, ImagePath)
+	Fail(errmsg)
+	return fmt.Errorf(errmsg)
 }

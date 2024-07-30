@@ -1,3 +1,4 @@
+// Package utils contains functions that don't have a place anywhere else
 package utils
 
 import (
@@ -11,6 +12,8 @@ import (
 	"github.com/cheggaaa/pb/v3"
 )
 
+// WriteCounter is a Writer which provides a progress bar (instead
+// of writing data! Use an `io.TeeReader` or similar.)
 type WriteCounter struct {
 	Total        uint64
 	DownloadSize uint64
@@ -31,6 +34,7 @@ func (wc WriteCounter) PrintProgress() {
 	wc.ProgressBar.Increment()
 }
 
+// Counts "written" bytes and updates the progress counter
 func (wc *WriteCounter) Write(p []byte) (int, error) {
 	n := len(p)
 	wc.Total = uint64(n)
@@ -38,6 +42,7 @@ func (wc *WriteCounter) Write(p []byte) (int, error) {
 	return n, nil
 }
 
+// MaybeDownloadFile downloads or resumes a download
 func MaybeDownloadFile(url string, filepath string) error {
 	if stat, err := os.Stat(filepath + ".tmp"); err == nil {
 		resp, err := http.Head(url)
@@ -67,6 +72,7 @@ func MaybeDownloadFile(url string, filepath string) error {
 	return nil
 }
 
+// DownloadFile downloads a url to a filepath via a temporary file
 func DownloadFile(url string, filepath string) error {
 	// Create the file with .tmp extension, so that we won't overwrite a
 	// file until it's downloaded fully
