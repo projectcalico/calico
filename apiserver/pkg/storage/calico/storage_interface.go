@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2024 Tigera, Inc. All rights reserved.
 
 package calico
 
@@ -17,6 +17,8 @@ func NewStorage(opts Options) (registry.DryRunnableStorage, factory.DestroyFunc)
 		return NewNetworkPolicyStorage(opts)
 	case "projectcalico.org/globalnetworkpolicies":
 		return NewGlobalNetworkPolicyStorage(opts)
+	case "projectcalico.org/tiers":
+		return NewTierStorage(opts)
 	case "projectcalico.org/globalnetworksets":
 		return NewGlobalNetworkSetStorage(opts)
 	case "projectcalico.org/networksets":
