@@ -110,8 +110,8 @@ func init() {
 	prometheus.MustRegister(gaugeNumChains)
 	prometheus.MustRegister(gaugeNumRules)
 
-	// Calico uses a single nftables with a variety of hooks.
-	// The top level base chains are laid out below.
+	// Configure the base hook chains needed by Calico. These are split into two parts - the chains we insert into,
+	// and the chains we append to. This is to allow for intermediate rules to be inserted between the rules we program.
 	insertBaseChains = map[string]knftables.Chain{
 		// Filter hook.
 		"filter-INPUT":   {Name: "filter-INPUT", Hook: &inputHook, Type: &filterType, Priority: &filterPriority},
@@ -287,7 +287,7 @@ func NewTable(
 	dirtyBaseChains := set.New[string]()
 	refcounts := map[string]int{}
 
-	// Logic to register a base chain.
+	// Register all base chains.
 	for _, baseChain := range baseChains() {
 		inserts[baseChain.Name] = []generictables.Rule{}
 		appends[baseChain.Name] = []generictables.Rule{}
@@ -390,9 +390,8 @@ func (n *nftablesTable) IPVersion() uint8 {
 // For base chains, we use separate chains for insert / append. For all others, this
 // just returns the chain name.
 func (t *nftablesTable) getAppendChain(chainName string) string {
-	_, ok := appendBaseChains[chainName]
-	if ok {
-		return appendBaseChains[chainName].Name
+	if chain, ok := appendBaseChains[chainName]; ok {
+		return chain.Name
 	}
 	return chainName
 }
