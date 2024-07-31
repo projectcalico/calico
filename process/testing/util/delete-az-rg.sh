@@ -17,8 +17,8 @@
 RESOURCE_GROUP=$1
 
 if ! az group show --name "${RESOURCE_GROUP}" 2>&1 | grep ResourceGroupNotFound; then
-  echo "Deleting azure resource group ${AZURE_RESOURCE_GROUP}"
-  az group delete --name AZURE_RESOURCE_GROUP --yes
+  echo "Deleting azure resource group ${RESOURCE_GROUP}"
+  az group delete --name RESOURCE_GROUP --yes
 else
-  echo "No resource group ${AZURE_RESOURCE_GROUP} found. Doing nothing"
+  echo "No resource group ${RESOURCE_GROUP} found. Doing nothing"
 fi
