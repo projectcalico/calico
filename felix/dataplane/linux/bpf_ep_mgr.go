@@ -1892,7 +1892,7 @@ func (m *bpfEndpointManager) wepApplyPolicyToDirection(readiness ifaceReadiness,
 
 	if m.hostIP == nil {
 		// Do not bother and wait
-		return qdisc, fmt.Errorf("unknown host IP")
+		return qDiscInfo{}, fmt.Errorf("unknown host IP")
 	}
 
 	ap := m.wepTCAttachPoint(ifaceName, policyIdx, filterIdx, polDirection)
@@ -1901,10 +1901,7 @@ func (m *bpfEndpointManager) wepApplyPolicyToDirection(readiness ifaceReadiness,
 	if readiness != ifaceIsReady {
 		res, err := m.wepAttachProgram(ap)
 		if err != nil {
-			qdisc.valid = false
-			qdisc.prio = 0
-			qdisc.handle = 0
-			return qdisc, fmt.Errorf("attaching program to wep: %w", err)
+			return qDiscInfo{}, fmt.Errorf("attaching program to wep: %w", err)
 		}
 		qdisc.valid = true
 		qdisc.prio = res.(tc.AttachResult).Prio()
