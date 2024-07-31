@@ -94,7 +94,7 @@ else
 endif
 
 UPSTREAM_REGISTRAR_PROJECT ?= kubernetes-csi/$(REGISTRAR_IMAGE)
-UPSTREAM_REGISTRAR_TAG     ?= v2.9.4
+UPSTREAM_REGISTRAR_TAG     ?= v2.10.1
 
 ifeq ($(ARCH), $(filter $(ARCH),amd64))
 REGISTRAR_TIGERA_BUILD_CMD_LDFLAGS = -ldflags '-linkmode external -extldflags -static'
@@ -145,6 +145,8 @@ clone-registrar-upstream:
 ifeq ("$(wildcard ./$(REGISTRAR_IMAGE))", "")
 	@echo "Directory does not exist."
 	git clone --depth 1 --branch $(UPSTREAM_REGISTRAR_TAG) --single-branch https://github.com/$(UPSTREAM_REGISTRAR_PROJECT).git
+	patch -d node-driver-registrar -p1 < patches/0001-Update-x-net.patch
+	rm -rf node-driver-registrar/vendor
 else
 	@echo "Upstream repo already cloned."
 endif
