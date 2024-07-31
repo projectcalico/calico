@@ -138,7 +138,7 @@ func init() {
 
 	appendBaseChains = map[string]knftables.Chain{}
 	for _, chain := range insertBaseChains {
-		// Insert the append chains slightly after the inert chains, allowing for intermediate rules.
+		// Hook the append chains slightly after the insert chains, allowing for intermediate rules.
 		prio := appendPriorities[*chain.Priority]
 		appendBaseChains[chain.Name] = knftables.Chain{
 			Name:     chain.Name + "-append",
