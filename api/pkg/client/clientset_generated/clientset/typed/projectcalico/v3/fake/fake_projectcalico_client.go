@@ -82,6 +82,10 @@ func (c *FakeProjectcalicoV3) Profiles() v3.ProfileInterface {
 	return &FakeProfiles{c}
 }
 
+func (c *FakeProjectcalicoV3) Tiers() v3.TierInterface {
+	return &FakeTiers{c}
+}
+
 // RESTClient returns a RESTClient that is used to communicate
 // with API server by this client implementation.
 func (c *FakeProjectcalicoV3) RESTClient() rest.Interface {

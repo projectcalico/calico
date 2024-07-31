@@ -1229,6 +1229,7 @@ func (m *bpfEndpointManager) onPolicyUpdate(msg *proto.ActivePolicyUpdate) {
 	polID := *msg.Id
 	log.WithField("id", polID).Debug("Policy update")
 	m.policies[polID] = msg.Policy
+	// Note, polID includes the tier name as well as the policy name.
 	m.markEndpointsDirty(m.policiesToWorkloads[polID], "policy")
 	if m.bpfPolicyDebugEnabled {
 		m.updatePolicyCache(polID.Name, "Policy", m.policies[polID].InboundRules, m.policies[polID].OutboundRules)
@@ -1240,6 +1241,7 @@ func (m *bpfEndpointManager) onPolicyUpdate(msg *proto.ActivePolicyUpdate) {
 func (m *bpfEndpointManager) onPolicyRemove(msg *proto.ActivePolicyRemove) {
 	polID := *msg.Id
 	log.WithField("id", polID).Debug("Policy removed")
+	// Note, polID includes the tier name as well as the policy name.
 	m.markEndpointsDirty(m.policiesToWorkloads[polID], "policy")
 	delete(m.policies, polID)
 	delete(m.policiesToWorkloads, polID)
@@ -2440,12 +2442,10 @@ func (d *bpfEndpointManagerDataplane) wepApplyPolicy(ap *tc.AttachPoint,
 	endpoint *proto.WorkloadEndpoint, polDirection PolDirection,
 ) error {
 	var profileIDs []string
-	var tier *proto.TierInfo
+	var tiers []*proto.TierInfo
 	if endpoint != nil {
 		profileIDs = endpoint.ProfileIds
-		if len(endpoint.Tiers) != 0 {
-			tier = endpoint.Tiers[0]
-		}
+		tiers = endpoint.Tiers
 	} else {
 		log.WithField("name", ap.IfaceName()).Debug(
 			"Workload interface with no endpoint in datastore, installing default-drop program.")
@@ -2454,7 +2454,7 @@ func (d *bpfEndpointManagerDataplane) wepApplyPolicy(ap *tc.AttachPoint,
 	m := d.mgr
 	// If tier or profileIDs is nil, this will return an empty set of rules but updatePolicyProgram appends a
 	// drop rule, giving us default drop behaviour in that case.
-	rules := m.extractRules(tier, profileIDs, polDirection)
+	rules := m.extractRules(tiers, profileIDs, polDirection)
 
 	// If host-* endpoint is configured, add in its policy.
 	if m.wildcardExists {
@@ -2485,21 +2485,15 @@ func (d *bpfEndpointManagerDataplane) wepApplyPolicy(ap *tc.AttachPoint,
 func (m *bpfEndpointManager) addHostPolicy(rules *polprog.Rules, hostEndpoint *proto.HostEndpoint, polDirection PolDirection) {
 	// When there is applicable pre-DNAT policy that does not explicitly Allow or Deny traffic,
 	// we continue on to subsequent tiers and normal or AoF policy.
-	if len(hostEndpoint.PreDnatTiers) == 1 {
-		rules.HostPreDnatTiers = m.extractTiers(hostEndpoint.PreDnatTiers[0], polDirection, NoEndTierDrop)
-	}
+	rules.HostPreDnatTiers = m.extractTiers(hostEndpoint.PreDnatTiers, polDirection, NoEndTierDrop)
 
 	// When there is applicable apply-on-forward policy that does not explicitly Allow or Deny
 	// traffic, traffic is dropped.
-	if len(hostEndpoint.ForwardTiers) == 1 {
-		rules.HostForwardTiers = m.extractTiers(hostEndpoint.ForwardTiers[0], polDirection, EndTierDrop)
-	}
+	rules.HostForwardTiers = m.extractTiers(hostEndpoint.ForwardTiers, polDirection, EndTierDrop)
 
 	// When there is applicable normal policy that does not explicitly Allow or Deny traffic,
 	// traffic is dropped.
-	if len(hostEndpoint.Tiers) == 1 {
-		rules.HostNormalTiers = m.extractTiers(hostEndpoint.Tiers[0], polDirection, EndTierDrop)
-	}
+	rules.HostNormalTiers = m.extractTiers(hostEndpoint.Tiers, polDirection, EndTierDrop)
 	rules.HostProfiles = m.extractProfiles(hostEndpoint.ProfileIds, polDirection)
 }
 
@@ -2654,7 +2648,7 @@ func (d *bpfEndpointManagerDataplane) attachXDPProgram(ap *xdp.AttachPoint, ep *
 		ap.Log().Infof("Building program for untracked policy hep=%v, family=%v", ep.Name, d.ipFamily)
 		rules := polprog.Rules{
 			ForHostInterface: true,
-			HostNormalTiers:  m.extractTiers(ep.UntrackedTiers[0], PolDirnIngress, false),
+			HostNormalTiers:  m.extractTiers(ep.UntrackedTiers, PolDirnIngress, false),
 			ForXDP:           true,
 		}
 		ap.Log().Infof("Rules: %v", rules)
@@ -2669,17 +2663,17 @@ func (d *bpfEndpointManagerDataplane) attachXDPProgram(ap *xdp.AttachPoint, ep *
 // On a workload endpoint, ingress is towards the workload.
 type PolDirection int
 
+const (
+	PolDirnIngress PolDirection = iota
+	PolDirnEgress
+)
+
 func (polDirection PolDirection) RuleDir() string {
 	if polDirection == PolDirnIngress {
 		return "Ingress"
 	}
 	return "Egress"
 }
-
-const (
-	PolDirnIngress PolDirection = iota
-	PolDirnEgress
-)
 
 func (polDirection PolDirection) Inverse() PolDirection {
 	if polDirection == PolDirnIngress {
@@ -2829,57 +2823,59 @@ const (
 	NoEndTierDrop = false
 )
 
-func (m *bpfEndpointManager) extractTiers(tier *proto.TierInfo, direction PolDirection, endTierDrop bool) (rTiers []polprog.Tier) {
+// Given a slice of TierInfo - as present on workload and host endpoints - that actually consists
+// only of tier and policy NAMEs, build and return a slice of tier data that includes all of the
+// implied policy rules as well.
+func (m *bpfEndpointManager) extractTiers(tiers []*proto.TierInfo, direction PolDirection, endTierDrop bool) (rTiers []polprog.Tier) {
 	dir := direction.RuleDir()
-	if tier == nil {
-		return
-	}
-
-	directionalPols := tier.IngressPolicies
-	if direction == PolDirnEgress {
-		directionalPols = tier.EgressPolicies
-	}
-
-	if len(directionalPols) > 0 {
-		polTier := polprog.Tier{
-			Name:     tier.Name,
-			Policies: make([]polprog.Policy, len(directionalPols)),
+	for _, tier := range tiers {
+		directionalPols := tier.IngressPolicies
+		if direction == PolDirnEgress {
+			directionalPols = tier.EgressPolicies
 		}
 
-		for i, polName := range directionalPols {
-			pol := m.policies[proto.PolicyID{Tier: tier.Name, Name: polName}]
-			if pol == nil {
-				log.WithField("tier", tier).Warn("Tier refers to unknown policy!")
-				continue
-			}
-			var prules []*proto.Rule
-			if direction == PolDirnIngress {
-				prules = pol.InboundRules
-			} else {
-				prules = pol.OutboundRules
-			}
-			policy := polprog.Policy{
-				Name:  polName,
-				Rules: make([]polprog.Rule, len(prules)),
+		if len(directionalPols) > 0 {
+
+			polTier := polprog.Tier{
+				Name:     tier.Name,
+				Policies: make([]polprog.Policy, len(directionalPols)),
 			}
 
-			for ri, r := range prules {
-				policy.Rules[ri] = polprog.Rule{
-					Rule:    r,
-					MatchID: m.ruleMatchID(dir, r.Action, "Policy", polName, ri),
+			for i, polName := range directionalPols {
+				pol := m.policies[proto.PolicyID{Tier: tier.Name, Name: polName}]
+				if pol == nil {
+					log.WithField("tier", tier).Warn("Tier refers to unknown policy!")
+					continue
 				}
+				var prules []*proto.Rule
+				if direction == PolDirnIngress {
+					prules = pol.InboundRules
+				} else {
+					prules = pol.OutboundRules
+				}
+				policy := polprog.Policy{
+					Name:  polName,
+					Rules: make([]polprog.Rule, len(prules)),
+				}
+
+				for ri, r := range prules {
+					policy.Rules[ri] = polprog.Rule{
+						Rule:    r,
+						MatchID: m.ruleMatchID(dir, r.Action, "Policy", polName, ri),
+					}
+				}
+
+				polTier.Policies[i] = policy
 			}
 
-			polTier.Policies[i] = policy
-		}
+			if endTierDrop {
+				polTier.EndAction = polprog.TierEndDeny
+			} else {
+				polTier.EndAction = polprog.TierEndPass
+			}
 
-		if endTierDrop {
-			polTier.EndAction = polprog.TierEndDeny
-		} else {
-			polTier.EndAction = polprog.TierEndPass
+			rTiers = append(rTiers, polTier)
 		}
-
-		rTiers = append(rTiers, polTier)
 	}
 	return
 }
@@ -2915,15 +2911,13 @@ func (m *bpfEndpointManager) extractProfiles(profileNames []string, direction Po
 	return
 }
 
-func (m *bpfEndpointManager) extractRules(tier *proto.TierInfo, profileNames []string, direction PolDirection) polprog.Rules {
+func (m *bpfEndpointManager) extractRules(tiers []*proto.TierInfo, profileNames []string, direction PolDirection) polprog.Rules {
 	var r polprog.Rules
 
 	// When there is applicable normal policy that does not explicitly Allow or Deny traffic,
 	// traffic is dropped.
-	r.Tiers = m.extractTiers(tier, direction, EndTierDrop)
-
+	r.Tiers = m.extractTiers(tiers, direction, EndTierDrop)
 	r.Profiles = m.extractProfiles(profileNames, direction)
-
 	return r
 }
 
@@ -2945,18 +2939,15 @@ func (m *bpfEndpointManager) isL3Iface(iface string) bool {
 
 func (m *bpfEndpointManager) addWEPToIndexes(wlID proto.WorkloadEndpointID, wl *proto.WorkloadEndpoint) {
 	for _, t := range wl.Tiers {
-		m.addPolicyToEPMappings(t.IngressPolicies, wlID)
-		m.addPolicyToEPMappings(t.EgressPolicies, wlID)
+		m.addPolicyToEPMappings(t.Name, t.IngressPolicies, wlID)
+		m.addPolicyToEPMappings(t.Name, t.EgressPolicies, wlID)
 	}
 	m.addProfileToEPMappings(wl.ProfileIds, wlID)
 }
 
-func (m *bpfEndpointManager) addPolicyToEPMappings(polNames []string, id interface{}) {
+func (m *bpfEndpointManager) addPolicyToEPMappings(tier string, polNames []string, id interface{}) {
 	for _, pol := range polNames {
-		polID := proto.PolicyID{
-			Tier: "default",
-			Name: pol,
-		}
+		polID := proto.PolicyID{Tier: tier, Name: pol}
 		if m.policiesToWorkloads[polID] == nil {
 			m.policiesToWorkloads[polID] = set.New[any]()
 		}
@@ -2982,8 +2973,8 @@ func (m *bpfEndpointManager) removeWEPFromIndexes(wlID proto.WorkloadEndpointID,
 	}
 
 	for _, t := range wep.Tiers {
-		m.removePolicyToEPMappings(t.IngressPolicies, wlID)
-		m.removePolicyToEPMappings(t.EgressPolicies, wlID)
+		m.removePolicyToEPMappings(t.Name, t.IngressPolicies, wlID)
+		m.removePolicyToEPMappings(t.Name, t.EgressPolicies, wlID)
 	}
 
 	m.removeProfileToEPMappings(wep.ProfileIds, wlID)
@@ -2994,12 +2985,9 @@ func (m *bpfEndpointManager) removeWEPFromIndexes(wlID proto.WorkloadEndpointID,
 	})
 }
 
-func (m *bpfEndpointManager) removePolicyToEPMappings(polNames []string, id interface{}) {
+func (m *bpfEndpointManager) removePolicyToEPMappings(tier string, polNames []string, id interface{}) {
 	for _, pol := range polNames {
-		polID := proto.PolicyID{
-			Tier: "default",
-			Name: pol,
-		}
+		polID := proto.PolicyID{Tier: tier, Name: pol}
 		polSet := m.policiesToWorkloads[polID]
 		if polSet == nil {
 			continue
@@ -3105,8 +3093,8 @@ func (m *bpfEndpointManager) OnHEPUpdate(hostIfaceToEpMap map[string]proto.HostE
 func (m *bpfEndpointManager) addHEPToIndexes(ifaceName string, ep *proto.HostEndpoint) {
 	for _, tiers := range [][]*proto.TierInfo{ep.Tiers, ep.UntrackedTiers, ep.PreDnatTiers, ep.ForwardTiers} {
 		for _, t := range tiers {
-			m.addPolicyToEPMappings(t.IngressPolicies, ifaceName)
-			m.addPolicyToEPMappings(t.EgressPolicies, ifaceName)
+			m.addPolicyToEPMappings(t.Name, t.IngressPolicies, ifaceName)
+			m.addPolicyToEPMappings(t.Name, t.EgressPolicies, ifaceName)
 		}
 	}
 	m.addProfileToEPMappings(ep.ProfileIds, ifaceName)
@@ -3115,8 +3103,8 @@ func (m *bpfEndpointManager) addHEPToIndexes(ifaceName string, ep *proto.HostEnd
 func (m *bpfEndpointManager) removeHEPFromIndexes(ifaceName string, ep *proto.HostEndpoint) {
 	for _, tiers := range [][]*proto.TierInfo{ep.Tiers, ep.UntrackedTiers, ep.PreDnatTiers, ep.ForwardTiers} {
 		for _, t := range tiers {
-			m.removePolicyToEPMappings(t.IngressPolicies, ifaceName)
-			m.removePolicyToEPMappings(t.EgressPolicies, ifaceName)
+			m.removePolicyToEPMappings(t.Name, t.IngressPolicies, ifaceName)
+			m.removePolicyToEPMappings(t.Name, t.EgressPolicies, ifaceName)
 		}
 	}
 
