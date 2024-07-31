@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 
 	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/utils"
 )
 
 const (
@@ -18,7 +19,7 @@ func Dir(dir string) string {
 // Clone clones the operator repo into a path from the repoRootDir.
 func Clone(operatorDir, branchName string) error {
 	clonePath := filepath.Dir(operatorDir)
-	if err := os.MkdirAll(clonePath, 0755); err != nil {
+	if err := os.MkdirAll(clonePath, utils.DirPerms); err != nil {
 		return err
 	}
 	if _, err := os.Stat(operatorDir); !os.IsNotExist(err) {

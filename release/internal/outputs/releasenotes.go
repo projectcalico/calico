@@ -2,6 +2,7 @@ package outputs
 
 import (
 	"context"
+	_ "embed"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -26,7 +27,9 @@ const (
 )
 
 var (
-	repos = []string{"calico", "bird"}
+	//go:embed templates/release-note.md.gotmpl
+	releaseNoteTemplate string
+	repos               = []string{"calico", "bird"}
 )
 
 type issueState string
@@ -45,10 +48,6 @@ type ReleaseNoteData struct {
 	Date         string
 	BugFixes     []*ReleaseNoteIssueData
 	OtherChanges []*ReleaseNoteIssueData
-}
-
-func releaseNoteTemplatePath(repoRootDir string) string {
-	return filepath.Join(repoRootDir, utils.ReleaseFolderName, "assets", "release-note.md.tmpl")
 }
 
 // milestoneNumber returns the milestone number for a given milestone
@@ -143,18 +142,14 @@ func extractReleaseNote(repo string, issues []*github.Issue) ([]*ReleaseNoteIssu
 }
 
 // outputReleaseNotes outputs the release notes to a file
-func outputReleaseNotes(issueDataList []*ReleaseNoteIssueData, templateFilePath, outputFilePath string) error {
+func outputReleaseNotes(issueDataList []*ReleaseNoteIssueData, outputFilePath string) error {
 	dir := filepath.Dir(outputFilePath)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		logrus.WithError(err).Errorf("Failed to create release notes folder %s", dir)
 		return err
 	}
-	releaseNoteTemplate, err := os.ReadFile(templateFilePath)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to read release note template")
-		return err
-	}
-	tmpl, err := template.New("release-note").Parse(string(releaseNoteTemplate))
+	logrus.WithField("template", releaseNoteTemplate).Info("Parsing release note template")
+	tmpl, err := template.New("release-note").Parse(releaseNoteTemplate)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to parse release note template")
 		return err
@@ -229,7 +224,7 @@ func ReleaseNotes(owner, githubToken, repoRootDir, outputDir string) (string, er
 		return "", fmt.Errorf("no issues found for milestone %s", milestone)
 	}
 	releaseNoteFilePath := filepath.Join(outputDir, releaseNotesFolderName, fmt.Sprintf("%s-release-notes.md", releaseVersion.FormattedString()))
-	if err := outputReleaseNotes(releaseNoteDataList, releaseNoteTemplatePath(repoRootDir), releaseNoteFilePath); err != nil {
+	if err := outputReleaseNotes(releaseNoteDataList, releaseNoteFilePath); err != nil {
 		logrus.WithError(err).Error("Failed to output release notes")
 		return "", err
 	}

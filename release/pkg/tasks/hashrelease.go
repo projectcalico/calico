@@ -23,7 +23,7 @@ import (
 // The location of the pinned-version.yaml file is logged.
 func PinnedVersion(cfg *config.Config) {
 	outputDir := cfg.OutputDir
-	if err := os.MkdirAll(outputDir, 0755); err != nil {
+	if err := os.MkdirAll(outputDir, utils.DirPerms); err != nil {
 		logrus.WithError(err).Fatal("Failed to create output directory")
 	}
 	operatorDir := operator.Dir(cfg.TmpFolderPath())
@@ -52,7 +52,7 @@ func HashreleaseBuild(cfg *config.Config) {
 	} else if dirty {
 		logrus.Fatal("There are uncommitted changes in the repository, please commit or stash them before building the hashrelease")
 	}
-	if err := os.MkdirAll(hashreleaseOutputDir, 0755); err != nil {
+	if err := os.MkdirAll(hashreleaseOutputDir, utils.DirPerms); err != nil {
 		logrus.WithError(err).Fatal("Failed to create hashrelease directory")
 	}
 	releaseVersion, err := hashrelease.RetrievePinnedCalicoVersion(outputDir)
@@ -90,9 +90,7 @@ func imgExists(name string, component hashrelease.Component, ch chan imageExists
 		name:  name,
 		image: component.String(),
 	}
-	exists, err := registry.ImageExists(component.Repository(), component.Registry)
-	r.exists = exists
-	r.err = err
+	r.exists, r.err = registry.ImageExists(component.Repository(), component.Registry)
 	ch <- r
 }
 
@@ -100,7 +98,6 @@ func imgExists(name string, component hashrelease.Component, ch chan imageExists
 // These images are checked to ensure they exist in the registry
 // as they should have been pushed in the standard build process.
 func HashreleaseValidate(cfg *config.Config) {
-	// TODO: Consider checking if hashreleae already exists first (NEW!)
 	images, err := hashrelease.RetrieveComponentsToValidate(cfg.OutputDir)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get pinned version")
@@ -151,7 +148,6 @@ func HashreleasePush(cfg *config.Config) {
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get candidate name")
 	}
-	// TODO: send image to image scan server
 	releaseHash, err := hashrelease.RetrievePinnedVersionHash(outputDir)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get release hash")
@@ -167,8 +163,7 @@ func HashreleasePush(cfg *config.Config) {
 func HashreleaseCleanRemote(cfg *config.Config) {
 	sshConfig := command.NewSSHConfig(cfg.DocsHost, cfg.DocsUser, cfg.DocsKey, cfg.DocsPort)
 	logrus.Info("Cleaning up old hashreleases")
-	if err := hashrelease.DeleteOldHashreleases(sshConfig, -1); err != nil {
+	if err := hashrelease.DeleteOldHashreleases(sshConfig); err != nil {
 		logrus.WithError(err).Fatal("Failed to delete old hashreleases")
 	}
-	// TODO: Consider cleaning up images in the release library file (NEW!)
 }

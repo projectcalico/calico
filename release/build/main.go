@@ -12,7 +12,7 @@ func main() {
 		goyek.OperatorPublish(b.DockerRunner(), b.Config()),
 		goyek.Operator(b.Config()),
 		goyek.Build(b.Config()),
-		goyek.Validate(b.Config()),
+		goyek.PrePublishValidate(b.Config()),
 		goyek.Hashrelease(b.Config()),
 		goyek.Reset(b.Config()),
 		goyek.HashreleaseGarbageCollect(b.Config()),

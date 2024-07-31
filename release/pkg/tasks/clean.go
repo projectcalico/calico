@@ -8,17 +8,12 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/release/internal/command"
-	"github.com/projectcalico/calico/release/internal/registry"
 )
 
-func removePath(path string) {
-	err := os.RemoveAll(path)
-	if err != nil {
-		logrus.WithField("path", path).WithError(err).Warn("removing file failed")
-	}
-
-}
-
+// CleanFiles removes the files at the given paths.
+// If a path contains a wildcard, it will be expanded.
+// If a path is a directory, it will be removed recursively.
+// If a path is a file, it will be removed.
 func CleanFiles(paths ...string) {
 	for _, p := range paths {
 		if strings.Contains(p, "*?[") {
@@ -26,30 +21,22 @@ func CleanFiles(paths ...string) {
 			if err != nil {
 				logrus.WithField("path", p).WithError(err).Warn("expanding wildcard failed")
 			}
-			for _, m := range matches {
-				removePath(m)
+			for _, path := range matches {
+				err := os.RemoveAll(path)
+				if err != nil {
+					logrus.WithField("path", path).WithError(err).Warn("removing file failed")
+				}
 			}
 		} else {
-			removePath(p)
+			err := os.RemoveAll(p)
+			if err != nil {
+				logrus.WithField("path", p).WithError(err).Warn("removing file(s) failed")
+			}
 		}
 	}
 }
 
-func CleanImages(images ...string) {
-	for _, image := range images {
-		runner := registry.MustDockerRunner()
-		err := runner.RemoveImage(image)
-		if err != nil {
-			logrus.WithField("image", image).WithError(err).Fatal("removing image failed")
-		}
-	}
-}
-
-func Clean(paths []string, images []string) {
-	CleanFiles(paths...)
-	CleanImages(images...)
-}
-
+// ResetRepo resets the git repo at the given directory.
 func ResetRepo(dir string) {
 	_, err := command.GitInDir(dir, "checkout", "HEAD")
 	if err != nil {
