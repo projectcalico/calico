@@ -1,6 +1,7 @@
 package hashrelease
 
 import (
+	_ "embed"
 	"fmt"
 	"html/template"
 	"os"
@@ -16,14 +17,13 @@ import (
 	"github.com/projectcalico/calico/release/internal/version"
 )
 
+//go:embed templates/pinned-version.yaml.gotmpl
+var pinnedVersionTemplateData string
+
 const (
 	pinnedVersionFileName      = "pinned-version.yaml"
 	operatorComponentsFileName = "components.yaml"
 )
-
-func pinnedVersionTemplatePath(repoRootDir string) string {
-	return filepath.Join(repoRootDir, utils.ReleaseFolderName, "assets", "pinned-version.yaml.tmpl")
-}
 
 // Component represents a component in the pinned version file.
 type Component struct {
@@ -51,6 +51,8 @@ type PinnedVersionData struct {
 	Operator      Component
 	Note          string
 	Hash          string
+	Registry      string
+	ReleaseBranch string
 }
 
 // PinnedVersion represents an entry in pinned version file.
@@ -76,17 +78,11 @@ func operatorComponentsFilePath(outputDir string) string {
 }
 
 // GeneratePinnedVersionFile generates the pinned version file.
-func GeneratePinnedVersionFile(rootDir, operatorDir, devTagSuffix, outputDir string) (string, error) {
+func GeneratePinnedVersionFile(rootDir, operatorDir, devTagSuffix, registry, outputDir string) (string, error) {
 	pinnedVersionPath := pinnedVersionFilePath(outputDir)
 	if _, err := os.Stat(pinnedVersionPath); err == nil {
 		logrus.WithField("file", pinnedVersionPath).Info("Pinned version file already exists")
 		return pinnedVersionPath, fmt.Errorf("pinned version file already exists")
-	}
-	pinnedVersionTemplatePath := pinnedVersionTemplatePath(rootDir)
-	logrus.WithField("template", pinnedVersionTemplatePath).Debug("Reading pinned-version.yaml.tmpl")
-	pinnedVersionTemplateData, err := os.ReadFile(pinnedVersionTemplatePath)
-	if err != nil {
-		return "", err
 	}
 	calicoBranch, err := utils.GitBranch(rootDir)
 	if err != nil {
@@ -112,7 +108,7 @@ func GeneratePinnedVersionFile(rootDir, operatorDir, devTagSuffix, outputDir str
 	if !version.IsDevVersion(operatorVersion, devTagSuffix) {
 		return "", fmt.Errorf("operator version %s does not have dev tag %s", operatorVersion, devTagSuffix)
 	}
-	tmpl, err := template.New("pinnedversion").Parse(string(pinnedVersionTemplateData))
+	tmpl, err := template.New("pinnedversion").Parse(pinnedVersionTemplateData)
 	if err != nil {
 		return "", err
 	}
@@ -126,6 +122,11 @@ func GeneratePinnedVersionFile(rootDir, operatorDir, devTagSuffix, outputDir str
 		Hash: calicoVersion + "-" + operatorVersion,
 		Note: fmt.Sprintf("%s - generated at %s using %s release branch with %s operator branch",
 			releaseName, time.Now().Format(time.RFC1123), calicoBranch, operatorBranch),
+		ReleaseBranch: calicoBranch,
+	}
+	if registry != "" {
+		data.Operator.Registry = registry
+		data.Registry = registry
 	}
 	logrus.WithField("file", pinnedVersionPath).Info("Generating pinned-version.yaml")
 	pinnedVersionFile, err := os.Create(pinnedVersionPath)

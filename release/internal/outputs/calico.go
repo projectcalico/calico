@@ -20,7 +20,7 @@ func ReleaseWindowsArchive(rootDir, calicoVersion, outDir string) error {
 		logrus.WithError(err).Error("Failed to make release-windows-archive")
 		return err
 	}
-	if err := os.MkdirAll(outDir, 0755); err != nil {
+	if err := os.MkdirAll(outDir, utils.DirPerms); err != nil {
 		logrus.WithError(err).Error("Failed to create windows output directory")
 	}
 	fileName := fmt.Sprintf("calico-windows-%s.zip", calicoVersion)

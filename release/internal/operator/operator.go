@@ -6,10 +6,12 @@ import (
 	"strings"
 
 	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/registry"
 )
 
 const (
 	ImageName = "tigera/operator"
+	Registry  = registry.QuayRegistry
 )
 
 // GenVersions generates the versions for operator.

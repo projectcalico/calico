@@ -6,7 +6,7 @@
   tigera-operator:
     version: {{.Operator.Version}}
     image: {{.Operator.Image}}
-    registry: quay.io
+    registry: {{if .Operator.Registry -}}{{.Operator.Registry}}{{else}}quay.io{{end}}
   components:
     calico:
       version: {{.CalicoVersion}}
@@ -26,7 +26,7 @@
     calico/api:
       version: {{.CalicoVersion}}
     networking-calico:
-      version: master
+      version: {{.ReleaseBranch}}
     flannel:
       version: v0.12.0
       registry: quay.io

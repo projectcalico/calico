@@ -27,11 +27,17 @@ type Config struct {
 	// RepoReleaseBranchPrefix is the suffix for the release tag
 	RepoReleaseBranchPrefix string `envconfig:"RELEASE_BRANCH_PREFIX" default:"release-"`
 
+	// RepoReleaseBranchPrefix is the suffix for the release tag
+	RepoDefaultBranch string `envconfig:"DEFAULT_BRANCH" default:"master"`
+
 	// OperatorRepo is the repository for the operator
 	OperatorBranchName string `envconfig:"OPERATOR_BRANCH" default:"master"`
 
 	// ValidArchs are the OS architectures supported for multi-arch build
 	ValidArchs []string `envconfig:"VALID_ARCHES" default:"amd64,arm64,ppc64le,s390x"`
+
+	// Registry is the registry to publish images
+	Registry string `envconfig:"REGISTRY"`
 
 	// DocsHost is the host for the hashrelease docs
 	DocsHost string `envconfig:"DOCS_HOST"`

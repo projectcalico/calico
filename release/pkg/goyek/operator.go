@@ -47,7 +47,7 @@ func OperatorPublish(runner *registry.DockerRunner, cfg *config.Config) *GoyekTa
 			},
 			Parallel: false,
 		},
-		Deps: []string{operatorBuildTaskName},
+		Deps: []string{preReleaseTask, operatorBuildTaskName},
 	}
 }
 

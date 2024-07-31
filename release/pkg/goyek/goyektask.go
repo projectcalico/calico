@@ -9,10 +9,9 @@ import (
 )
 
 const (
+	buildTaskName        = "build"
 	resetTaskName        = "reset"
 	releaseNotesTaskName = "release-notes"
-	buildTaskName        = "build"
-	validateTaskName     = "validate"
 )
 
 // GoyekTask represents a Goyek task.
@@ -23,6 +22,7 @@ type GoyekTask struct {
 	Deps []string
 }
 
+// Build creates a Goyek task for building a release
 func Build(cfg *config.Config) *GoyekTask {
 	return &GoyekTask{
 		Task: goyekv2.Task{
@@ -43,26 +43,7 @@ func Build(cfg *config.Config) *GoyekTask {
 	}
 }
 
-func Validate(cfg *config.Config) *GoyekTask {
-	// TODO: Rename task as a pre-release build validation w/ a new task for post-release validation
-	return &GoyekTask{
-		Task: goyekv2.Task{
-			Name:  validateTaskName,
-			Usage: "Validate release",
-			Action: func(a *goyekv2.A) {
-				if cfg.IsHashrelease {
-					tasks.HashreleaseValidate(cfg)
-				} else {
-					logrus.Fatal("Only hashrelease is currently supported")
-				}
-			},
-			Parallel: false,
-		},
-		Deps: []string{operatorPublishTaskName},
-	}
-
-}
-
+// ReleaseNotes creates a Goyek task for generating release notes
 func ReleaseNotes(cfg *config.Config) *GoyekTask {
 	return &GoyekTask{
 		Task: goyekv2.Task{
@@ -76,13 +57,14 @@ func ReleaseNotes(cfg *config.Config) *GoyekTask {
 	}
 }
 
+// Reset creates a Goyek task for resetting the repo for release
 func Reset(cfg *config.Config) *GoyekTask {
 	return &GoyekTask{
 		Task: goyekv2.Task{
 			Name:  resetTaskName,
 			Usage: "Reset repo for release",
 			Action: func(a *goyekv2.A) {
-				tasks.Clean([]string{cfg.OutputDir, cfg.TmpFolderPath()}, nil)
+				tasks.CleanFiles([]string{cfg.OutputDir, cfg.TmpFolderPath()}...)
 				tasks.ResetRepo(cfg.RepoRootDir)
 			},
 		},

@@ -1,6 +1,7 @@
 package hashrelease
 
 import (
+	"bufio"
 	"fmt"
 	"path/filepath"
 	"sort"
@@ -13,7 +14,11 @@ import (
 )
 
 const (
-	remoteReleasesPath = "/files"
+	// remoteReleasesPath is the path to the hashrelease folder in the server
+	remoteReleasesPath = "/home/core/disk/docs-preview/files"
+
+	// maxHashreleasesToKeep is the number of hashreleases to keep in the server
+	maxHashreleasesToKeep = 400
 )
 
 // hashrelease represents a hashrelease folder in server
@@ -40,7 +45,6 @@ func hasHashrelease(releaseHash string, sshConfig *command.SSHConfig) bool {
 // PublishHashrelease publishes a hashrelease to the server
 func PublishHashrelease(name, hash, note, stream, dir string, sshConfig *command.SSHConfig) error {
 	if hasHashrelease(hash, sshConfig) {
-		// TODO: determine if we should return an error here
 		logrus.WithFields(logrus.Fields{
 			"hash": hash,
 			"note": note,
@@ -51,23 +55,19 @@ func PublishHashrelease(name, hash, note, stream, dir string, sshConfig *command
 		logrus.WithError(err).Error("Failed to publish hashrelease")
 		return err
 	}
-	if _, err := command.RunSSHCommand(sshConfig, fmt.Sprintf("echo \"https://%s.docs.eng.tigera.net\" > /files/latest-os/%s.txt", name, stream)); err != nil {
-		logrus.WithError(err).Error("Failed to publish hashrelease")
-		return err
-	}
-	if _, err := command.RunSSHCommand(sshConfig, fmt.Sprintf(`echo %s >> %s`, name, remoteReleasesLibraryPath())); err != nil {
-		logrus.WithError(err).Error("Failed to publish hashrelease")
+	if _, err := command.RunSSHCommand(sshConfig, fmt.Sprintf(`echo \"https://%s.docs.eng.tigera.net\" > /files/latest-os/%s.txt && echo %s >> %s`, name, stream, name, remoteReleasesLibraryPath())); err != nil {
+		logrus.WithError(err).Error("Failed to update latest hashrelease and hashrelease library")
 		return err
 	}
 	return nil
 }
 
-// ListHashreleases lists all hashreleases in the server
-func ListHashreleases(sshConfig *command.SSHConfig) ([]hashrelease, error) {
+// listHashreleases lists all hashreleases in the server
+func listHashreleases(sshConfig *command.SSHConfig) ([]hashrelease, error) {
 	cmd := fmt.Sprintf("ls -lt --time-style=+'%%Y-%%m-%%d %%H:%%M:%%S' %s", remoteReleasesPath)
 	out, err := command.RunSSHCommand(sshConfig, cmd)
 	if err != nil {
-		logrus.WithError(err).Error("Failed to list hashreleases")
+		logrus.WithError(err).Error("Failed to get list of hashreleases")
 		return nil, err
 	}
 	lines := strings.Split(out, "\n")
@@ -97,25 +97,63 @@ func ListHashreleases(sshConfig *command.SSHConfig) ([]hashrelease, error) {
 	return folders, nil
 }
 
+func getHashreleaseLibrary(sshConfig *command.SSHConfig) (string, error) {
+	out, err := command.RunSSHCommand(sshConfig, fmt.Sprintf("cat %s", remoteReleasesLibraryPath()))
+	if err != nil {
+		logrus.WithError(err).Error("Failed to get hashrelease library")
+		return "", err
+	}
+	return out, nil
+}
+
+func cleanHashreleaseLibrary(sshConfig *command.SSHConfig, hashreleaseNames []string) error {
+	library, err := getHashreleaseLibrary(sshConfig)
+	if err != nil {
+		return err
+	}
+	scanner := bufio.NewScanner(strings.NewReader(library))
+	var newLibrary []string
+	for scanner.Scan() {
+		line := scanner.Text()
+		for _, name := range hashreleaseNames {
+			if !strings.Contains(line, name) {
+				newLibrary = append(newLibrary, line)
+			}
+		}
+	}
+
+	if _, err := command.RunSSHCommand(sshConfig, fmt.Sprintf("echo \"%s\" > %s", strings.Join(newLibrary, "\n"), remoteReleasesLibraryPath())); err != nil {
+		logrus.WithError(err).Error("Failed to update hashrelease library")
+		return err
+	}
+	return nil
+}
+
 // DeleteOldHashreleases deletes old hashreleases from the server.
 // The limit parameter specifies the number of hashreleases to keep
-func DeleteOldHashreleases(sshConfig *command.SSHConfig, keepLimit int) error {
-	if keepLimit < 1 {
-		keepLimit = 400
-	}
-	folders, err := ListHashreleases(sshConfig)
+func DeleteOldHashreleases(sshConfig *command.SSHConfig) error {
+	folders, err := listHashreleases(sshConfig)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to list hashreleases")
 		return err
 	}
-	if len(folders) > keepLimit {
-		for i := 0; i < len(folders)-keepLimit; i++ {
-			folderName := folders[i].Name
-			if _, err := command.RunSSHCommand(sshConfig, fmt.Sprintf("rm -rf %s", folderName)); err != nil {
-				logrus.WithField("folder", folderName).WithError(err).Error("Failed to delete old hashrelease")
-				continue
-			}
+	foldersToDelete := []string{}
+	if len(folders) > maxHashreleasesToKeep {
+		for i := 0; i < len(folders)-maxHashreleasesToKeep; i++ {
+			foldersToDelete = append(foldersToDelete, folders[i].Name)
 		}
+	}
+	if len(foldersToDelete) == 0 {
+		logrus.Info("No hashreleases to delete")
+		return nil
+	}
+	if _, err := command.RunSSHCommand(sshConfig, fmt.Sprintf("sudo rm -rf %s", strings.Join(foldersToDelete, " "))); err != nil {
+		logrus.WithField("folder", strings.Join(foldersToDelete, ", ")).WithError(err).Error("Failed to delete old hashrelease")
+		return err
+	}
+	logrus.WithField("folders", strings.Join(foldersToDelete, ", ")).Info("Deleted old hashreleases")
+	if err := cleanHashreleaseLibrary(sshConfig, foldersToDelete); err != nil {
+		logrus.WithError(err).Warn("Failed to clean hashrelease library")
 	}
 	return nil
 }

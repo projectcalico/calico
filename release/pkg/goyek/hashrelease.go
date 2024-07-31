@@ -14,6 +14,8 @@ const (
 	hashreleaseGarbageCollectTaskName = "hashrelease/garbage-collect"
 )
 
+// PinVersion creates a Goyek task for generating a pinned version file.
+// This is used by hashreleases for tracking the versions of the components.
 func PinnedVersion(cfg *config.Config) *GoyekTask {
 	return &GoyekTask{
 		Task: goyekv2.Task{
@@ -27,9 +29,11 @@ func PinnedVersion(cfg *config.Config) *GoyekTask {
 			},
 			Parallel: false,
 		},
+		Deps: []string{preReleaseTask},
 	}
 }
 
+// Hashrelease creates a Goyek task for building and publishing a hashrelease.
 func Hashrelease(cfg *config.Config) *GoyekTask {
 	return &GoyekTask{
 		Task: goyekv2.Task{
@@ -44,10 +48,11 @@ func Hashrelease(cfg *config.Config) *GoyekTask {
 			},
 			Parallel: false,
 		},
-		Deps: []string{validateTaskName, buildTaskName},
+		Deps: []string{prePublishTask, buildTaskName},
 	}
 }
 
+// HashreleaseGarbageCollect creates a Goyek task for cleaning up older hashreleases.
 func HashreleaseGarbageCollect(cfg *config.Config) *GoyekTask {
 	return &GoyekTask{
 		Task: goyekv2.Task{

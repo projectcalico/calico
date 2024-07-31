@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"time"
 
+	"github.com/sirupsen/logrus"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -37,7 +37,6 @@ func (s *SSHConfig) Args() string {
 // HostString returns the host string in the format user@host
 func (s *SSHConfig) HostString() string {
 	return s.User + "@" + s.Host
-
 }
 
 // Address returns the address in the format host:port
@@ -48,6 +47,7 @@ func (s *SSHConfig) Address() string {
 func connect(sshConfig *SSHConfig) (*ssh.Session, error) {
 	key, err := os.ReadFile(sshConfig.KeyPath)
 	if err != nil {
+		logrus.WithField("key", sshConfig.KeyPath).WithError(err).Error("Unable to read ssh key")
 		return nil, err
 	}
 	signer, err := ssh.ParsePrivateKey(key)
@@ -60,7 +60,6 @@ func connect(sshConfig *SSHConfig) (*ssh.Session, error) {
 			ssh.PublicKeys(signer),
 		},
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-		Timeout:         10 * time.Second,
 	}
 	client, err := ssh.Dial("tcp", sshConfig.Address(), config)
 	if err != nil {
@@ -77,11 +76,13 @@ func connect(sshConfig *SSHConfig) (*ssh.Session, error) {
 func RunSSHCommand(sshConfig *SSHConfig, command string) (string, error) {
 	session, err := connect(sshConfig)
 	if err != nil {
+		logrus.WithError(err).Error("Failed to connect to remote host")
 		return "", err
 	}
 	defer session.Close()
 	var stdoutBuf bytes.Buffer
 	session.Stdout = &stdoutBuf
+	logrus.WithField("command", command).Info("Running command in remote host")
 	if err := session.Run(command); err != nil {
 		return "", err
 	}
