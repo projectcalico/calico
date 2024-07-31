@@ -348,6 +348,7 @@ type bpfAllowChainRenderer interface {
 type ManagerWithHEPUpdate interface {
 	Manager
 	OnHEPUpdate(hostIfaceToEpMap map[string]proto.HostEndpoint)
+	GetIfaceQDiscInfo(ifaceName string) (bool, int, int)
 }
 
 func NewTestEpMgr(config *Config, bpfmaps *bpfmap.Maps, workloadIfaceRegex *regexp.Regexp) (ManagerWithHEPUpdate, error) {
@@ -644,6 +645,11 @@ func (m *bpfEndpointManager) withIface(ifaceName string, fn func(iface *bpfInter
 
 	logCtx.Debug("Marking iface dirty.")
 	m.dirtyIfaceNames.Add(ifaceName)
+}
+
+func (m *bpfEndpointManager) GetIfaceQDiscInfo(ifaceName string) (bool, int, int) {
+	qdisc := m.nameToIface[ifaceName].dpState.qdisc
+	return qdisc.valid, qdisc.prio, qdisc.handle
 }
 
 func (m *bpfEndpointManager) updateHostIP(ip net.IP) {
@@ -1792,7 +1798,7 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 			}
 		}
 		ingressQdisc, ingressErr = m.wepApplyPolicyToDirection(readiness, ifaceName,
-			state.policyIdx[hook.Ingress], state.filterIdx[hook.Ingress], wep, PolDirnIngress)
+			state.policyIdx[hook.Ingress], state.filterIdx[hook.Ingress], wep, PolDirnIngress, state.qdisc)
 	}()
 	go func() {
 		defer wg.Done()
@@ -1803,7 +1809,7 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 			}
 		}
 		egressQdisc, egressErr = m.wepApplyPolicyToDirection(readiness, ifaceName,
-			state.policyIdx[hook.Egress], state.filterIdx[hook.Egress], wep, PolDirnEgress)
+			state.policyIdx[hook.Egress], state.filterIdx[hook.Egress], wep, PolDirnEgress, state.qdisc)
 	}()
 	wg.Wait()
 
@@ -1882,13 +1888,11 @@ func (m *bpfEndpointManager) wepTCAttachPoint(ifaceName string, policyIdx, filte
 }
 
 func (m *bpfEndpointManager) wepApplyPolicyToDirection(readiness ifaceReadiness, ifaceName string, policyIdx,
-	filterIdx int, endpoint *proto.WorkloadEndpoint, polDirection PolDirection) (qDiscInfo, error) {
-
-	var qdisc qDiscInfo
+	filterIdx int, endpoint *proto.WorkloadEndpoint, polDirection PolDirection, qdisc qDiscInfo) (qDiscInfo, error) {
 
 	if m.hostIP == nil {
 		// Do not bother and wait
-		return qdisc, fmt.Errorf("unknown host IP")
+		return qDiscInfo{}, fmt.Errorf("unknown host IP")
 	}
 
 	ap := m.wepTCAttachPoint(ifaceName, policyIdx, filterIdx, polDirection)
@@ -1897,7 +1901,7 @@ func (m *bpfEndpointManager) wepApplyPolicyToDirection(readiness ifaceReadiness,
 	if readiness != ifaceIsReady {
 		res, err := m.wepAttachProgram(ap)
 		if err != nil {
-			return qdisc, fmt.Errorf("attaching program to wep: %w", err)
+			return qDiscInfo{}, fmt.Errorf("attaching program to wep: %w", err)
 		}
 		qdisc.valid = true
 		qdisc.prio = res.(tc.AttachResult).Prio()
