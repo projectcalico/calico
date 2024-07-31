@@ -57,46 +57,23 @@ var (
 	routeType  = knftables.RouteType
 
 	// Each type of hook requires a specific filterPriority in order to be executed in the correct order.
-	filterInsertPriority = knftables.FilterPriority
-	filterAppendPriority = filterInsertPriority + "+5"
-	rawPriority          = knftables.RawPriority
-	manglePriority       = knftables.ManglePriority
-	snatPriority         = knftables.SNATPriority
-	dnatPriority         = knftables.DNATPriority
+	filterPriority = knftables.FilterPriority // 0
+	rawPriority    = knftables.RawPriority    // -300
+	manglePriority = knftables.ManglePriority // -150
+	snatPriority   = knftables.SNATPriority   // 100
+	dnatPriority   = knftables.DNATPriority   // -100
 
-	// Calico uses a single nftables with a variety of hooks.
-	// The top level base chains are laid out below.
-	appendBaseChains = map[string]knftables.Chain{
-		// Filter hook.
-		"filter-INPUT":   {Name: "filter-INPUT", Hook: &inputHook, Type: &filterType, Priority: &filterAppendPriority},
-		"filter-FORWARD": {Name: "filter-FORWARD", Hook: &forwardHook, Type: &filterType, Priority: &filterAppendPriority},
-		"filter-OUTPUT":  {Name: "filter-OUTPUT", Hook: &outputHook, Type: &filterType, Priority: &filterAppendPriority},
-
-		// NAT hooks.
-		"nat-PREROUTING":  {Name: "nat-PREROUTING", Hook: &preroutingHook, Type: &natType, Priority: &dnatPriority},
-		"nat-INPUT":       {Name: "nat-INPUT", Hook: &inputHook, Type: &natType, Priority: &dnatPriority},
-		"nat-OUTPUT":      {Name: "nat-OUTPUT", Hook: &outputHook, Type: &natType, Priority: &snatPriority},
-		"nat-POSTROUTING": {Name: "nat-POSTROUTING", Hook: &postroutingHook, Type: &natType, Priority: &snatPriority},
-
-		// Mangle hooks.
-		"mangle-PREROUTING":  {Name: "mangle-PREROUTING", Hook: &preroutingHook, Type: &filterType, Priority: &manglePriority},
-		"mangle-INPUT":       {Name: "mangle-INPUT", Hook: &inputHook, Type: &filterType, Priority: &manglePriority},
-		"mangle-FORWARD":     {Name: "mangle-FORWARD", Hook: &forwardHook, Type: &filterType, Priority: &manglePriority},
-		"mangle-OUTPUT":      {Name: "mangle-OUTPUT", Hook: &outputHook, Type: &routeType, Priority: &manglePriority},
-		"mangle-POSTROUTING": {Name: "mangle-POSTROUTING", Hook: &postroutingHook, Type: &filterType, Priority: &manglePriority},
-
-		// Raw hooks.
-		"raw-PREROUTING": {Name: "raw-PREROUTING", Hook: &preroutingHook, Type: &filterType, Priority: &rawPriority},
-		"raw-OUTPUT":     {Name: "raw-OUTPUT", Hook: &outputHook, Type: &filterType, Priority: &rawPriority},
+	// Append priorities are 10 higher than the insert priorities, to allow for intermediate rules.
+	appendPriorities = map[knftables.BaseChainPriority]knftables.BaseChainPriority{
+		filterPriority: knftables.BaseChainPriority("10"),
+		rawPriority:    knftables.BaseChainPriority("-290"),
+		manglePriority: knftables.BaseChainPriority("-140"),
+		snatPriority:   knftables.BaseChainPriority("110"),
+		dnatPriority:   knftables.BaseChainPriority("-90"),
 	}
 
-	// Base chains for insertions. These are hooked slightly earlier, allowing for
-	// user defined tables to be hooked between the insertions and appended chains.
-	// This is a map of base chain name to its corresponding "insert" chain.
-	insertBaseChains = map[string]knftables.Chain{
-		"filter-INPUT":   {Name: "filter-INPUT-insert", Hook: &inputHook, Type: &filterType, Priority: &filterInsertPriority},
-		"filter-FORWARD": {Name: "filter-FORWARD-insert", Hook: &forwardHook, Type: &filterType, Priority: &filterInsertPriority},
-	}
+	appendBaseChains map[string]knftables.Chain
+	insertBaseChains map[string]knftables.Chain
 
 	// Prometheus metrics.
 	countNumTransactions = prometheus.NewCounter(prometheus.CounterOpts{
@@ -132,6 +109,44 @@ func init() {
 	prometheus.MustRegister(countNumListErrors)
 	prometheus.MustRegister(gaugeNumChains)
 	prometheus.MustRegister(gaugeNumRules)
+
+	// Calico uses a single nftables with a variety of hooks.
+	// The top level base chains are laid out below.
+	insertBaseChains = map[string]knftables.Chain{
+		// Filter hook.
+		"filter-INPUT":   {Name: "filter-INPUT", Hook: &inputHook, Type: &filterType, Priority: &filterPriority},
+		"filter-FORWARD": {Name: "filter-FORWARD", Hook: &forwardHook, Type: &filterType, Priority: &filterPriority},
+		"filter-OUTPUT":  {Name: "filter-OUTPUT", Hook: &outputHook, Type: &filterType, Priority: &filterPriority},
+
+		// NAT hooks.
+		"nat-PREROUTING":  {Name: "nat-PREROUTING", Hook: &preroutingHook, Type: &natType, Priority: &dnatPriority},
+		"nat-INPUT":       {Name: "nat-INPUT", Hook: &inputHook, Type: &natType, Priority: &dnatPriority},
+		"nat-OUTPUT":      {Name: "nat-OUTPUT", Hook: &outputHook, Type: &natType, Priority: &snatPriority},
+		"nat-POSTROUTING": {Name: "nat-POSTROUTING", Hook: &postroutingHook, Type: &natType, Priority: &snatPriority},
+
+		// Mangle hooks.
+		"mangle-PREROUTING":  {Name: "mangle-PREROUTING", Hook: &preroutingHook, Type: &filterType, Priority: &manglePriority},
+		"mangle-INPUT":       {Name: "mangle-INPUT", Hook: &inputHook, Type: &filterType, Priority: &manglePriority},
+		"mangle-FORWARD":     {Name: "mangle-FORWARD", Hook: &forwardHook, Type: &filterType, Priority: &manglePriority},
+		"mangle-OUTPUT":      {Name: "mangle-OUTPUT", Hook: &outputHook, Type: &routeType, Priority: &manglePriority},
+		"mangle-POSTROUTING": {Name: "mangle-POSTROUTING", Hook: &postroutingHook, Type: &filterType, Priority: &manglePriority},
+
+		// Raw hooks.
+		"raw-PREROUTING": {Name: "raw-PREROUTING", Hook: &preroutingHook, Type: &filterType, Priority: &rawPriority},
+		"raw-OUTPUT":     {Name: "raw-OUTPUT", Hook: &outputHook, Type: &filterType, Priority: &rawPriority},
+	}
+
+	appendBaseChains = map[string]knftables.Chain{}
+	for _, chain := range insertBaseChains {
+		// Insert the append chains slightly after the inert chains, allowing for intermediate rules.
+		prio := appendPriorities[*chain.Priority]
+		appendBaseChains[chain.Name] = knftables.Chain{
+			Name:     chain.Name + "-append",
+			Hook:     chain.Hook,
+			Type:     chain.Type,
+			Priority: &prio,
+		}
+	}
 }
 
 // nftablesTable is an implementation of the generictables.Table interface that programs nftables. It represents a
@@ -371,20 +386,21 @@ func (n *nftablesTable) IPVersion() uint8 {
 	return n.ipVersion
 }
 
-func (t *nftablesTable) hasInsertChain(chainName string) (string, bool) {
-	_, ok := insertBaseChains[chainName]
-	return insertBaseChains[chainName].Name, ok
+// getAppendChain returns the chain name to use for appends to the given chain.
+// For base chains, we use separate chains for insert / append. For all others, this
+// just returns the chain name.
+func (t *nftablesTable) getAppendChain(chainName string) string {
+	_, ok := appendBaseChains[chainName]
+	if ok {
+		return appendBaseChains[chainName].Name
+	}
+	return chainName
 }
 
 // InsertOrAppendRules sets the rules that should be inserted to the given base chain.
 // In nftables mode, this function always inserts rules. Users can insert their own rules via a separate table.
 // See also AppendRules, which can be used to record additional rules that are always appended.
 func (t *nftablesTable) InsertOrAppendRules(chainName string, rules []generictables.Rule) {
-	// For base chains, we use a different hook depending on the chain insert mode.
-	if insertName, ok := t.hasInsertChain(chainName); ok {
-		chainName = insertName
-	}
-
 	t.logCxt.WithField("chainName", chainName).Debug("Updating rule insertions")
 	oldRules := t.chainToInsertedRules[chainName]
 	t.chainToInsertedRules[chainName] = rules
@@ -408,6 +424,8 @@ func (t *nftablesTable) InsertOrAppendRules(chainName string, rules []generictab
 // If chain insert mode is "append", these rules are appended after any
 // rules added with InsertOrAppendRules.
 func (t *nftablesTable) AppendRules(chainName string, rules []generictables.Rule) {
+	chainName = t.getAppendChain(chainName)
+
 	t.logCxt.WithField("chainName", chainName).Debug("Updating rule appends")
 	oldRules := t.chainToAppendedRules[chainName]
 	t.chainToAppendedRules[chainName] = rules
@@ -1093,22 +1111,12 @@ func (t *nftablesTable) CheckRulesPresent(chain string, rules []generictables.Ru
 // other rules. This is primarily useful when bootstrapping and we cannot wait
 // until we have the full state.
 func (t *nftablesTable) InsertRulesNow(chainName string, rules []generictables.Rule) error {
-	// For base chains, we use a different hook depending on the chain insert mode.
-	var baseChain knftables.Chain
-	var isBaseChain bool
-	if insertName, ok := t.hasInsertChain(chainName); ok {
-		chainName = insertName
-		baseChain, isBaseChain = insertBaseChains[chainName]
-	} else {
-		baseChain, isBaseChain = appendBaseChains[chainName]
-	}
-
 	features := t.featureDetector.GetFeatures()
 	hashes := CalculateRuleHashes(chainName, rules, features)
 
 	tx := t.nft.NewTransaction()
 	tx.Add(&knftables.Table{})
-	if isBaseChain {
+	if baseChain, ok := insertBaseChains[chainName]; ok {
 		tx.Add(&baseChain)
 	}
 	for i, r := range rules {
