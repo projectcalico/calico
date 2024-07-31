@@ -675,10 +675,21 @@ func (c *listCmd) main() {
 	defer func() {
 		log.WithField("result", result).Info("list command main exiting")
 		if c.Stdout != nil {
-			c.Stdout.Close()
+			err := c.Stdout.Close()
+			if err != nil && result == nil {
+				result = err
+			}
 		}
 		c.resultC <- result
 	}()
+
+	writef := func(s string, args ...any) {
+		_, err := fmt.Fprintf(c.Stdout, s, args...)
+		if err != nil && result == nil {
+			log.WithError(err).Info("List command hit write error.")
+			result = err
+		}
+	}
 
 	if c.Dataplane.FailAllLists {
 		log.Info("Simulating persistent failure of ipset list")
@@ -715,7 +726,7 @@ func (c *listCmd) main() {
 		result = fmt.Errorf("ipset %v does not exists", c.SetName)
 		return
 	}
-	fmt.Fprintf(c.Stdout, "Name: %s\n", c.SetName)
+	writef("Name: %s\n", c.SetName)
 	meta, ok := c.Dataplane.IPSetMetadata[c.SetName]
 	if !ok {
 		// Default metadata for IP sets created by tests.
@@ -726,18 +737,18 @@ func (c *listCmd) main() {
 			MaxSize: 1234,
 		}
 	}
-	fmt.Fprintf(c.Stdout, "Type: %s\n", meta.Type)
+	writef("Type: %s\n", meta.Type)
 	if meta.Type == IPSetTypeBitmapPort {
-		fmt.Fprintf(c.Stdout, "Header: family %s range %d-%d\n", meta.Family, meta.RangeMin, meta.RangeMax)
+		writef("Header: family %s range %d-%d\n", meta.Family, meta.RangeMin, meta.RangeMax)
 	} else if meta.Type == "unknown:type" {
-		fmt.Fprintf(c.Stdout, "Header: floop\n")
+		writef("Header: floop\n")
 	} else {
-		fmt.Fprintf(c.Stdout, "Header: family %s hashsize 1024 maxelem %d\n", meta.Family, meta.MaxSize)
+		writef("Header: family %s hashsize 1024 maxelem %d\n", meta.Family, meta.MaxSize)
 	}
-	fmt.Fprint(c.Stdout, "Field: foobar\n") // Dummy field, should get ignored.
-	fmt.Fprint(c.Stdout, "Members:\n")
+	writef("Field: foobar\n") // Dummy field, should get ignored.
+	writef("Members:\n")
 	members.Iter(func(member string) error {
-		fmt.Fprintf(c.Stdout, "%s\n", member)
+		writef("%s\n", member)
 		return nil
 	})
 }
