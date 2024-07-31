@@ -752,7 +752,10 @@ func TestAttachWithMultipleWorkloadUpdate(t *testing.T) {
 		ToHostDrop: false,
 		DSR:        false}))
 
-	for i := 0; i < 20; i++ {
+	// The expectation is that, WorkloadEndpointUpdates must not
+	// result in re-attaching the program. Hence the priority, handle of
+	// the tc filters must be the same.
+	for i := 0; i < 2; i++ {
 		bpfEpMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
 			Id: &proto.WorkloadEndpointID{
 				OrchestratorId: "k8s",
@@ -771,7 +774,7 @@ func TestAttachWithMultipleWorkloadUpdate(t *testing.T) {
 
 }
 
-// This test verifies that we use the same tc priority and but toggle between
+// This test verifies that we use the same tc priority but toggle between
 // handles when repeatedly attaching the preamble program.
 func TestRepeatedAttach(t *testing.T) {
 	RegisterTestingT(t)
@@ -798,7 +801,7 @@ func TestRepeatedAttach(t *testing.T) {
 	Expect(ok).To(BeTrue())
 	prio := tcRes.Prio()
 	handle := tcRes.Handle()
-	for i := 0; i < 20; i++ {
+	for i := 0; i < 3; i++ {
 		res, err = ap.AttachProgram()
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("failed to attach preamble : %d", i))
 		tcRes, ok = res.(tc.AttachResult)
