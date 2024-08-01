@@ -32,9 +32,9 @@ type Component struct {
 	Registry string `yaml:"registry,omitempty"`
 }
 
-// Repository returns the image with the tag appended.
-func (c Component) Repository() string {
-	return fmt.Sprintf("%s:%s", c.Image, c.Version)
+// ImageRef returns the image reference of the component.
+func (c Component) ImageRef() registry.ImageRef {
+	return registry.ParseImage(c.String())
 }
 
 // String returns the string representation of the component.
@@ -235,15 +235,6 @@ func RetrievePinnedVersionHash(outputDir string) (string, error) {
 	return pinnedversion[0].Hash, nil
 }
 
-var imageMap = map[string]string{
-	"typha":                     "calico/typha",
-	"calicoctl":                 "calico/ctl",
-	"flannel":                   "coreos/flannel",
-	"flexvol":                   "calico/pod2daemon-flexvol",
-	"key-cert-provisioner":      "calico/key-cert-provisioner",
-	"csi-node-driver-registrar": "calico/node-driver-registrar",
-}
-
 // RetrieveComponentsToValidate retrieves the components to validate from the pinned version file.
 func RetrieveComponentsToValidate(outputDir string) (map[string]Component, error) {
 	pinnedVersionPath := pinnedVersionFilePath(outputDir)
@@ -261,7 +252,7 @@ func RetrieveComponentsToValidate(outputDir string) (map[string]Component, error
 			delete(components, name)
 			continue
 		}
-		img := imageMap[name]
+		img := registry.ImageMap[name]
 		if img != "" {
 			component.Image = img
 		} else if component.Image == "" {
