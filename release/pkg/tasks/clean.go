@@ -2,8 +2,6 @@ package tasks
 
 import (
 	"os"
-	"path/filepath"
-	"strings"
 
 	"github.com/sirupsen/logrus"
 
@@ -16,22 +14,9 @@ import (
 // If a path is a file, it will be removed.
 func CleanFiles(paths ...string) {
 	for _, p := range paths {
-		if strings.Contains(p, "*?[") {
-			matches, err := filepath.Glob(p)
-			if err != nil {
-				logrus.WithField("path", p).WithError(err).Warn("expanding wildcard failed")
-			}
-			for _, path := range matches {
-				err := os.RemoveAll(path)
-				if err != nil {
-					logrus.WithField("path", path).WithError(err).Warn("removing file failed")
-				}
-			}
-		} else {
-			err := os.RemoveAll(p)
-			if err != nil {
-				logrus.WithField("path", p).WithError(err).Warn("removing file(s) failed")
-			}
+		err := os.RemoveAll(p)
+		if err != nil {
+			logrus.WithField("path", p).WithError(err).Fatal("removing file(s) failed")
 		}
 	}
 }

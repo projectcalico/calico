@@ -27,7 +27,7 @@ type Config struct {
 	// RepoReleaseBranchPrefix is the suffix for the release tag
 	RepoReleaseBranchPrefix string `envconfig:"RELEASE_BRANCH_PREFIX" default:"release-"`
 
-	// RepoReleaseBranchPrefix is the suffix for the release tag
+	// RepoDefaultBranch is the default branch for the repository
 	RepoDefaultBranch string `envconfig:"DEFAULT_BRANCH" default:"master"`
 
 	// OperatorRepo is the repository for the operator

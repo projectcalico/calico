@@ -144,7 +144,7 @@ func extractReleaseNote(repo string, issues []*github.Issue) ([]*ReleaseNoteIssu
 // outputReleaseNotes outputs the release notes to a file
 func outputReleaseNotes(issueDataList []*ReleaseNoteIssueData, outputFilePath string) error {
 	dir := filepath.Dir(outputFilePath)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, utils.DirPerms); err != nil {
 		logrus.WithError(err).Errorf("Failed to create release notes folder %s", dir)
 		return err
 	}

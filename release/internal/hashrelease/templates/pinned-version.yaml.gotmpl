@@ -6,7 +6,7 @@
   tigera-operator:
     version: {{.Operator.Version}}
     image: {{.Operator.Image}}
-    registry: {{if .Operator.Registry -}}{{.Operator.Registry}}{{else}}quay.io{{end}}
+    registry: {{.Operator.Registry}}
   components:
     calico:
       version: {{.CalicoVersion}}

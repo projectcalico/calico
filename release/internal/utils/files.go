@@ -9,6 +9,7 @@ import (
 const (
 	// ReleaseFolderName is the name of the release tool in this repository.
 	ReleaseFolderName = "release"
+
 	// DirPerms is the permissions for directories.
 	DirPerms os.FileMode = 0o755
 )
