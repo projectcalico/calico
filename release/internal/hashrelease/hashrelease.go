@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -51,11 +52,11 @@ func PublishHashrelease(name, hash, note, stream, dir string, sshConfig *command
 		}).Warn("Hashrelease already exists, skipping publish")
 		return nil
 	}
-	if _, err := command.Run("rsync", []string{"--stats", "-az", "--delete", fmt.Sprintf(`-e 'ssh %s'`, sshConfig.Args()), dir, fmt.Sprintf("%s:/files/%s", sshConfig.HostString(), name)}); err != nil {
+	if _, err := command.Run("rsync", []string{"--stats", "-az", "--delete", fmt.Sprintf(`-e 'ssh %s'`, sshConfig.Args()), dir, fmt.Sprintf("%s:%s/%s", sshConfig.HostString(), remoteReleasesPath, name)}); err != nil {
 		logrus.WithError(err).Error("Failed to publish hashrelease")
 		return err
 	}
-	if _, err := command.RunSSHCommand(sshConfig, fmt.Sprintf(`echo \"https://%s.docs.eng.tigera.net\" > /files/latest-os/%s.txt && echo %s >> %s`, name, stream, name, remoteReleasesLibraryPath())); err != nil {
+	if _, err := command.RunSSHCommand(sshConfig, fmt.Sprintf(`echo "https://%s.docs.eng.tigera.net" > %s/latest-os/%s.txt && echo %s >> %s`, name, remoteReleasesPath, stream, name, remoteReleasesLibraryPath())); err != nil {
 		logrus.WithError(err).Error("Failed to update latest hashrelease and hashrelease library")
 		return err
 	}
@@ -72,6 +73,8 @@ func listHashreleases(sshConfig *command.SSHConfig) ([]hashrelease, error) {
 	}
 	lines := strings.Split(out, "\n")
 	var folders []hashrelease
+	// Limit to folders name which have the format YYYY-MM-DD-vX.Y-<word>
+	re := regexp.MustCompile(`^[0-9]{4}-[0-9]{2}-[0-9]{2}-v[0-9]+\.[0-9]+-.*$`)
 	for _, line := range lines {
 		if len(line) == 0 {
 			continue
@@ -86,10 +89,12 @@ func listHashreleases(sshConfig *command.SSHConfig) ([]hashrelease, error) {
 		if err != nil {
 			continue
 		}
-		folders = append(folders, hashrelease{
-			Name: filepath.Join(remoteReleasesPath, name),
-			Time: time,
-		})
+		if re.MatchString(name) {
+			folders = append(folders, hashrelease{
+				Name: filepath.Join(remoteReleasesPath, name),
+				Time: time,
+			})
+		}
 		sort.Slice(folders, func(i, j int) bool {
 			return folders[i].Time.Before(folders[j].Time)
 		})
@@ -147,7 +152,7 @@ func DeleteOldHashreleases(sshConfig *command.SSHConfig) error {
 		logrus.Info("No hashreleases to delete")
 		return nil
 	}
-	if _, err := command.RunSSHCommand(sshConfig, fmt.Sprintf("sudo rm -rf %s", strings.Join(foldersToDelete, " "))); err != nil {
+	if _, err := command.RunSSHCommand(sshConfig, fmt.Sprintf("rm -rf %s", strings.Join(foldersToDelete, " "))); err != nil {
 		logrus.WithField("folder", strings.Join(foldersToDelete, ", ")).WithError(err).Error("Failed to delete old hashrelease")
 		return err
 	}

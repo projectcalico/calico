@@ -1,16 +1,20 @@
 package registry
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/docker/distribution"
 	"github.com/docker/distribution/manifest/manifestlist"
 	"github.com/docker/distribution/manifest/schema2"
+	"github.com/docker/distribution/reference"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/image"
@@ -97,19 +101,43 @@ func (d *DockerRunner) TagImage(currentTag, newTag string) error {
 	return nil
 }
 
+type errorMessage struct {
+	Error string
+}
+
 // PushImage pushes the image to the registry
-func (d *DockerRunner) PushImage(img string) error {
+func (d *DockerRunner) PushImage(img string, accessAuth string) error {
 	logrus.WithField("image", img).Debug("Pushing image")
-	reader, err := d.dockerClient.ImagePush(context.Background(), img, image.PushOptions{})
+	registryAuth, err := registryAuthStr(accessAuth, Image(img).Registry())
 	if err != nil {
-		logrus.WithError(err).Error("failed to push image")
+		logrus.WithError(err).Error("failed to get registry auth")
+		return err
+	}
+	reader, err := d.dockerClient.ImagePush(context.Background(), img, image.PushOptions{
+		RegistryAuth: registryAuth,
+	})
+	if err != nil {
+		logrus.WithField("image", img).WithError(err).Error("failed to push image")
 		return err
 	}
 	defer reader.Close()
-	if _, err := io.Copy(os.Stdout, reader); err != nil {
-		logrus.WithError(err).Error("failed to copy image push output")
-		return err
+	var errorMessage errorMessage
+	buffIOReader := bufio.NewReader(reader)
+	for {
+		stream, err := buffIOReader.ReadBytes('\n')
+		if err == io.EOF {
+			break
+		}
+		if err := json.Unmarshal(stream, &errorMessage); err != nil {
+			logrus.WithError(err).Error("failed to unmarshal push response")
+			return err
+		}
+		if errorMessage.Error != "" {
+			logrus.WithField("error", errorMessage).Error("failed to push image")
+			return fmt.Errorf(errorMessage.Error)
+		}
 	}
+	logrus.WithField("image", img).Debug("Image pushed")
 	return nil
 }
 
@@ -143,17 +171,9 @@ func (d *DockerRunner) RemoveImage(img string) error {
 	return nil
 }
 
-func getRegistryURL(cli *client.Client) (string, error) {
-	info, err := cli.Info(context.Background())
-	if err != nil {
-		return "", err
-	}
-	return info.RegistryConfig.IndexConfigs["docker.io"].Mirrors[0], nil
-}
-
-// ManifestCreate creates a manifest list with the given images
-func (d *DockerRunner) ManifestCreate(manifestListName Image, images ...string) error {
-	logrus.WithField("manifest", manifestListName).Debug("Creating manifest list")
+// ManifestPush pushes the manifest list to the registry
+func (d *DockerRunner) ManifestPush(manifestListName string, images []string, accessAuth string) error {
+	logrus.WithField("manifest", manifestListName).Info("Creating manifest list")
 	var manifests []manifestlist.ManifestDescriptor
 	for _, img := range images {
 		inspect, _, err := d.dockerClient.ImageInspectWithRaw(context.Background(), img)
@@ -172,56 +192,48 @@ func (d *DockerRunner) ManifestCreate(manifestListName Image, images ...string) 
 				Digest:    digest.Digest(inspect.ID),
 			},
 		})
-
-		manifestList := ManifestList{
-			SchemaVersion: 2,
-			MediaType:     manifestlist.MediaTypeManifestList,
-			Manifests:     manifests,
-		}
-		body, err := json.Marshal(manifestList)
-		if err != nil {
-			logrus.WithError(err).Error("failed to marshal manifest list")
-			return err
-		}
-		registryURL, err := getRegistryURL(d.dockerClient)
-		if err != nil {
-			logrus.WithError(err).Error("failed to get registry URL")
-			return err
-		}
-		url := registryURL + "/v2/" + manifestListName.Repository() + "/manifests/" + manifestListName.Tag()
-		req, err := http.NewRequest(http.MethodPut, url, bytes.NewBuffer(body))
-		if err != nil {
-			logrus.WithError(err).Error("failed to create request")
-			return err
-		}
-		req.Header.Set("Content-Type", manifestlist.MediaTypeManifestList)
-		resp, err := d.dockerClient.HTTPClient().Do(req)
-		if err != nil {
-			logrus.WithError(err).Error("failed to send request")
-			return err
-		}
-		defer resp.Body.Close()
-		if resp.StatusCode != http.StatusCreated {
-			logrus.WithField("status", resp.Status).Error("failed to create manifest list")
-			return err
-		}
 	}
-	return nil
-}
 
-// ManifestPush pushes the manifest list to the registry
-func (d *DockerRunner) ManifestPush(manifestListName string, images []string, purge bool) error {
-	if err := d.ManifestCreate(Image(manifestListName), images...); err != nil {
-		logrus.WithError(err).Error("Failed to create manifest list")
+	manifestList := manifestlist.ManifestList{
+		Versioned: manifestlist.SchemaVersion,
+		Manifests: manifests,
+	}
+	manifestListBytes, err := json.Marshal(manifestList)
+	if err != nil {
+		logrus.WithError(err).Error("failed to marshal manifest list")
 		return err
 	}
-	if purge {
-		if _, err := d.dockerClient.ImageRemove(context.Background(), manifestListName, image.RemoveOptions{
-			Force: true,
-		}); err != nil {
-			logrus.WithError(err).Error("Failed to remove manifest list")
-			return err
-		}
+	logrus.WithField("manifest", manifestListName).WithField("body", string(manifestListBytes)).Info("Pushing manifest list")
+	ref, err := reference.ParseNormalizedNamed(manifestListName)
+	if err != nil {
+		logrus.WithError(err).Error("failed to parse manifest list name")
+		return err
+	}
+	registry := reference.Domain(ref)
+	repository := reference.Path(ref)
+	tag := reference.TagNameOnly(ref).(reference.NamedTagged).Tag()
+	registryURL := fmt.Sprintf("https://%s/v2/%s/manifests/%s", registry, repository, tag)
+	req, err := http.NewRequest(http.MethodPut, registryURL, bytes.NewReader(manifestListBytes))
+	if err != nil {
+		logrus.WithError(err).Error("failed to create request")
+		return err
+	}
+	req.Header.Set("Content-Type", manifestlist.MediaTypeManifestList)
+	parts := strings.Split(accessAuth, ":")
+	req.SetBasicAuth(parts[0], parts[1])
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		logrus.WithError(err).Error("failed to push manifest list")
+		return err
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusCreated {
+		body, _ := io.ReadAll(res.Body)
+		logrus.WithFields(logrus.Fields{
+			"status":   res.Status,
+			"manifest": manifestListName,
+		}).Error("failed to push manifest list")
+		return fmt.Errorf("failed to push manifest list: %s", string(body))
 	}
 	return nil
 }

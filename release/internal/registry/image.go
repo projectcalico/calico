@@ -27,11 +27,16 @@ func (d Image) Tag() string {
 	return "latest"
 }
 
+func (d Image) Registry() Registry {
+	parts := strings.Split(string(d), "/")
+	return GetRegistry(parts[0])
+}
+
 // ImageExists checks if an image exists in a registry.
 func ImageExists(image, registryURL string) (bool, error) {
 	registry := GetRegistry(registryURL)
 	img := Image(image)
-	token, err := getBearerToken(registry, img)
+	token, err := getBearerToken(registry, fmt.Sprintf("repository:%s:pull", img.Repository()))
 	if err != nil {
 		return false, err
 	}
