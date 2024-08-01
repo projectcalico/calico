@@ -5,6 +5,6 @@ metadata:
   name: kubernetes-services-endpoint
   namespace: {{.Release.Namespace}}
 data:
-  KUBERNETES_SERVICE_HOST: {{ .Values.kubernetesServiceEndpoint.host }}
+  KUBERNETES_SERVICE_HOST: {{ .Values.kubernetesServiceEndpoint.host | quote }}
   KUBERNETES_SERVICE_PORT: {{ .Values.kubernetesServiceEndpoint.port | quote }}
 {{- end }}

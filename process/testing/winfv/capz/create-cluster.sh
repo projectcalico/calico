@@ -118,19 +118,19 @@ ${CLUSTERCTL} generate cluster ${CLUSTER_NAME_CAPZ} \
   --flavor machinepool-windows \
   > win-capz.yaml
 
-retry_command 900 "${KUBECTL} apply -f win-capz.yaml"
+retry_command 600 "${KUBECTL} apply -f win-capz.yaml"
 
 # Wait for CAPZ deployments
 ${KUBECTL} wait --for=condition=Available --timeout=5m -n capz-system deployment -l cluster.x-k8s.io/provider=infrastructure-azure
 
 # Wait for the kubeconfig to become available.
-timeout --foreground 900 bash -c "while ! ${KUBECTL} get secrets | grep ${CLUSTER_NAME_CAPZ}-kubeconfig; do sleep 5; done"
+timeout --foreground 600 bash -c "while ! ${KUBECTL} get secrets | grep ${CLUSTER_NAME_CAPZ}-kubeconfig; do sleep 5; done"
 # Get kubeconfig and store it locally.
 ${CLUSTERCTL} get kubeconfig ${CLUSTER_NAME_CAPZ} > ./kubeconfig
-timeout --foreground 900 bash -c "while ! ${KUBECTL} --kubeconfig=./kubeconfig get nodes | grep control-plane; do sleep 5; done"
-echo "Cluster config is ready at ./kubeconfig. Run \'${KUBECTL} --kubeconfig=./kubeconfig ...\' to work with the new target cluster"
+timeout --foreground 600 bash -c "while ! ${KUBECTL} --kubeconfig=./kubeconfig get nodes | grep control-plane; do sleep 5; done"
+echo "Cluster config is ready at ./kubeconfig. Run '${KUBECTL} --kubeconfig=./kubeconfig ...' to work with the new target cluster"
 echo "Waiting for ${TOTAL_NODES} nodes to have been provisioned..."
-timeout --foreground 900 bash -c "while ! ${KCAPZ} get nodes | grep ${KUBE_VERSION} | wc -l | grep ${TOTAL_NODES}; do sleep 5; done"
+timeout --foreground 600 bash -c "while ! ${KCAPZ} get nodes | grep ${KUBE_VERSION} | wc -l | grep ${TOTAL_NODES}; do sleep 5; done"
 echo "Seen all ${TOTAL_NODES} nodes"
 
 # Do NOT instal Azure cloud provider (clear taint instead)
@@ -140,9 +140,9 @@ retry_command 300 "${KCAPZ} taint nodes --selector=!node-role.kubernetes.io/cont
 
 echo "Done creating cluster"
 
-ID0=`${KCAPZ} get node -o wide | grep win-p-win000000 | awk '{print $6}' | awk -F '.' '{print $4}'`
+ID0=$(${KCAPZ} get node -o wide | grep win-p-win000000 | awk '{print $6}' | awk -F '.' '{print $4}')
 echo "ID0: $ID0"
 if [[ ${WIN_NODE_COUNT} -gt 1 ]]; then
-  ID1=`${KCAPZ} get node -o wide | grep win-p-win000001 | awk '{print $6}' | awk -F '.' '{print $4}'`
+    ID1=$(${KCAPZ} get node -o wide | grep win-p-win000001 | awk '{print $6}' | awk -F '.' '{print $4}')
   echo "ID1:$ID1"
 fi
