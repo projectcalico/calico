@@ -1774,7 +1774,23 @@ func (d *InternalDataplane) setUpIptablesNormal() {
 			Match:  d.newMatch(),
 			Action: d.actions.Jump(rules.ChainNATPrerouting),
 		}})
-		t.InsertOrAppendRules("POSTROUTING", []generictables.Rule{{
+		// We must go last to avoid a conflict if both kube-proxy and Calico
+		// decide to MASQ the traffic.
+		//
+		// This is because kube-proxy uses a mark bit to trigger its MASQ and
+		// we need the mark bit to get cleared by kube-proxy's chain.  If we
+		// go first, our MASQ rule terminates further processing, and the
+		// mark bit remains set on the packet.
+		//
+		// Leaving the mark set on the packet is a problem when the packet
+		// gets encapped because the mark is copied to the outer encap packet.
+		// The outer packet then gets MASQed by kube-proxy's rule.  In turn,
+		// that MASQ triggers a checksum offload bug in the kernel resulting
+		// in corrupted packets.
+		//
+		// N.B. ChainFIPSnat does not do MASQ, but does not collide with k8s
+		// service, namely nodeports.
+		t.AppendRules("POSTROUTING", []generictables.Rule{{
 			Match:  d.newMatch(),
 			Action: d.actions.Jump(rules.ChainNATPostrouting),
 		}})
