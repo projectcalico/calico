@@ -9,8 +9,7 @@ const (
 type Registry interface {
 	URL() string
 	TokenURL(scope string) string
-	AuthTokenURL(auth, scope string) string
-	ManifestURL(img Image) string
+	ManifestURL(img ImageRef) string
 }
 
 // GetRegistry returns a Registry based on the registry string.

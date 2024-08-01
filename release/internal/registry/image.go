@@ -4,32 +4,37 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"strings"
 
+	"github.com/docker/distribution/reference"
 	"github.com/sirupsen/logrus"
 )
 
-// Image represents a container image.
-type Image string
+// ImageRef represents a container image.
+type ImageRef struct {
+	ref reference.Named
+}
 
 // Repository returns the repository part of the image.
-func (d Image) Repository() string {
-	parts := strings.Split(string(d), ":")
-	return parts[0]
+func (i ImageRef) Repository() string {
+	return reference.Path(i.ref)
 }
 
 // Tag returns the tag part of the image.
-func (d Image) Tag() string {
-	parts := strings.Split(string(d), ":")
-	if len(parts) > 1 {
-		return parts[1]
-	}
-	return "latest"
+func (i ImageRef) Tag() string {
+	return reference.TagNameOnly(i.ref).(reference.NamedTagged).Tag()
 }
 
-func (d Image) Registry() Registry {
-	parts := strings.Split(string(d), "/")
-	return GetRegistry(parts[0])
+func (i ImageRef) Registry() Registry {
+	domain := reference.Domain(i.ref)
+	return GetRegistry(domain)
+}
+
+func ParseImage(img string) ImageRef {
+	ref, err := reference.ParseNormalizedNamed(img)
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to parse image")
+	}
+	return ImageRef{ref}
 }
 
 // ImageExists checks if an image exists in a registry.
