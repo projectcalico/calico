@@ -785,7 +785,6 @@ func (m *bpfEndpointManager) updateHostIP(ipAddr string, ipFamily int) {
 		// Should be safe without the lock since there shouldn't be any active background threads
 		// but taking it now makes us robust to refactoring.
 		m.ifacesLock.Lock()
-		defer m.ifacesLock.Unlock()
 		for ifaceName := range m.nameToIface {
 			m.withIface(ifaceName, func(iface *bpfInterface) (forceDirty bool) {
 				iface.dpState.v4Readiness = ifaceNotReady
@@ -793,6 +792,7 @@ func (m *bpfEndpointManager) updateHostIP(ipAddr string, ipFamily int) {
 				return true
 			})
 		}
+		m.ifacesLock.Unlock()
 		// We use host IP as the source when routing service for the ctlb workaround. We
 		// need to update those routes, so make them all dirty.
 		for svc := range m.services {
