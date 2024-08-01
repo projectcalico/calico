@@ -116,8 +116,9 @@ func GeneratePinnedVersionFile(rootDir, operatorDir, devTagSuffix, registry, out
 		ReleaseName:   releaseName,
 		CalicoVersion: calicoVersion,
 		Operator: Component{
-			Version: operatorVersion + "-" + releaseName,
-			Image:   operator.ImageName,
+			Version:  operatorVersion + "-" + releaseName,
+			Image:    operator.ImageName,
+			Registry: operator.Registry,
 		},
 		Hash: calicoVersion + "-" + operatorVersion,
 		Note: fmt.Sprintf("%s - generated at %s using %s release branch with %s operator branch",
