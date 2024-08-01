@@ -1774,7 +1774,17 @@ func (d *InternalDataplane) setUpIptablesNormal() {
 			Match:  d.newMatch(),
 			Action: d.actions.Jump(rules.ChainNATPrerouting),
 		}})
-		t.InsertOrAppendRules("POSTROUTING", []generictables.Rule{{
+		// We must go last not to conflict with kube-proxy MASQ rules. All we do
+		// is MASQ anyway, but if kube-proxy set a mark to do MASQ, we must let it to
+		// clean it up so not to execute some rules after say a tunnel (vxlan)
+		// device - which should not happen.
+		//
+		// MASQ is a terminating target so once one is hit, no other rule gets
+		// executed.
+		//
+		// N.B. ChainFIPSnat does not do MASQ, but does not collide with k8s
+		// service, namely nodeports.
+		t.AppendRules("POSTROUTING", []generictables.Rule{{
 			Match:  d.newMatch(),
 			Action: d.actions.Jump(rules.ChainNATPostrouting),
 		}})
