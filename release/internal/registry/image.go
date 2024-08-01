@@ -4,45 +4,49 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"strings"
 
+	"github.com/docker/distribution/reference"
 	"github.com/sirupsen/logrus"
 )
 
-// Image represents a container image.
-type Image string
+// ImageRef represents a container image.
+type ImageRef struct {
+	ref reference.Named
+}
 
 // Repository returns the repository part of the image.
-func (d Image) Repository() string {
-	parts := strings.Split(string(d), ":")
-	return parts[0]
+func (i ImageRef) Repository() string {
+	return reference.Path(i.ref)
 }
 
 // Tag returns the tag part of the image.
-func (d Image) Tag() string {
-	parts := strings.Split(string(d), ":")
-	if len(parts) > 1 {
-		return parts[1]
-	}
-	return "latest"
+func (i ImageRef) Tag() string {
+	return reference.TagNameOnly(i.ref).(reference.NamedTagged).Tag()
 }
 
-func (d Image) Registry() Registry {
-	parts := strings.Split(string(d), "/")
-	return GetRegistry(parts[0])
+func (i ImageRef) Registry() Registry {
+	domain := reference.Domain(i.ref)
+	return GetRegistry(domain)
+}
+
+func ParseImage(img string) ImageRef {
+	ref, err := reference.ParseNormalizedNamed(img)
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to parse image")
+	}
+	return ImageRef{ref}
 }
 
 // ImageExists checks if an image exists in a registry.
-func ImageExists(image, registryURL string) (bool, error) {
-	registry := GetRegistry(registryURL)
-	img := Image(image)
+func ImageExists(img ImageRef) (bool, error) {
+	registry := img.Registry()
 	token, err := getBearerToken(registry, fmt.Sprintf("repository:%s:pull", img.Repository()))
 	if err != nil {
 		return false, err
 	}
 	manifestURL := registry.ManifestURL(img)
 	logrus.WithFields(logrus.Fields{
-		"image":       image,
+		"image":       img,
 		"manifestURL": manifestURL,
 	}).Debug("Checking if image exists")
 	req, err := http.NewRequest(http.MethodHead, manifestURL, nil)

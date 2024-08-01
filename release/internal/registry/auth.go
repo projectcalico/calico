@@ -21,15 +21,14 @@ func getBearerToken(registry Registry, scope string) (string, error) {
 
 // getAuthenticatedBearerToken retrieves a bearer token to use for the image with authentication.
 func getAuthenticatedBearerToken(auth string, registry Registry, scope string) (string, error) {
-	var tokenURL string
-	if auth != "" {
-		tokenURL = registry.AuthTokenURL(auth, scope)
-	} else {
-		tokenURL = registry.TokenURL(scope)
-	}
+	tokenURL := registry.TokenURL(scope)
 	req, err := http.NewRequest(http.MethodGet, tokenURL, nil)
 	if err != nil {
 		return "", err
+	}
+	if auth != "" {
+		parts := strings.Split(auth, ":")
+		req.SetBasicAuth(parts[0], parts[1])
 	}
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {

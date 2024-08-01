@@ -90,7 +90,7 @@ func imgExists(name string, component hashrelease.Component, ch chan imageExists
 		name:  name,
 		image: component.String(),
 	}
-	r.exists, r.err = registry.ImageExists(component.Repository(), component.Registry)
+	r.exists, r.err = registry.ImageExists(component.ImageRef(name))
 	ch <- r
 }
 
@@ -117,7 +117,7 @@ func HashreleaseValidate(cfg *config.Config) {
 		logrus.WithFields(logrus.Fields{
 			"image":  r.image,
 			"exists": r.exists,
-		}).Info("Image validation")
+		}).Info("Validating image")
 		if r.err != nil || !r.exists {
 			logrus.WithError(r.err).WithField("image", name).Error("Error checking image")
 			failedImages = append(failedImages, name)
