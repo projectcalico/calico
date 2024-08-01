@@ -21,8 +21,8 @@ import (
 	"os"
 	"path"
 	"regexp"
-	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -37,11 +37,15 @@ const (
 	// message.  It can be used as follows: logrus.WithField(FieldForceFlush, true).Info("...")
 	FieldForceFlush = "__flush__"
 
-	// fieldFileName is a reserved field name used to pass the filename from the ContextHook to our Formatter.
-	fieldFileName = "__file__"
-	// fieldLineNumber is a reserved field name used to pass the line number from the ContextHook to our Formatter.
-	fieldLineNumber = "__line__"
+	// FileNameUnknown is the string used in logs if the filename/line number
+	// cannot be determined.
+	FileNameUnknown = "<nil>"
 )
+
+func init() {
+	// We need logrus to record the caller on each log entry for us.
+	log.SetReportCaller(true)
+}
 
 // FilterLevels returns all the logrus.Level values <= maxLevel.
 func FilterLevels(maxLevel log.Level) []log.Level {
@@ -52,6 +56,12 @@ func FilterLevels(maxLevel log.Level) []log.Level {
 		}
 	}
 	return levels
+}
+
+func ConfigureFormatter(componentName string) {
+	formatter := &Formatter{Component: componentName}
+	formatter.init()
+	log.SetFormatter(formatter)
 }
 
 // Formatter is our custom log formatter designed to balance ease of machine processing
@@ -74,25 +84,107 @@ type Formatter struct {
 	// multiple components are logging to the same file (e.g., calico/node) for distinguishing
 	// which component sourced the log.
 	Component string
+
+	initOnce                sync.Once
+	preComputedInfixByLevel []string
 }
 
+var maxLevel = log.Level(len(log.AllLevels))
+
+func (f *Formatter) init() {
+	f.initOnce.Do(func() {
+		f.preComputedInfixByLevel = make([]string, len(log.AllLevels))
+		for _, level := range log.AllLevels {
+			var buf bytes.Buffer
+			f.computeInfix(&buf, level)
+			f.preComputedInfixByLevel[level] = buf.String()
+		}
+	})
+}
+
+const TimeFormat = "2006-01-02 15:04:05.000"
+const timeFormatLen = len(TimeFormat)
+
 func (f *Formatter) Format(entry *log.Entry) ([]byte, error) {
-	stamp := entry.Time.Format("2006-01-02 15:04:05.000")
-	levelStr := strings.ToUpper(entry.Level.String())
-	pid := os.Getpid()
-	fileName := entry.Data[fieldFileName]
-	lineNo := entry.Data[fieldLineNumber]
+	f.init()
+
 	b := entry.Buffer
 	if b == nil {
 		b = &bytes.Buffer{}
 	}
-	if f.Component != "" {
-		fmt.Fprintf(b, "%s [%s][%d] %s/%v %v: %v", stamp, levelStr, pid, f.Component, fileName, lineNo, entry.Message)
+
+	fileName, lineNo := getFileInfo(entry)
+
+	b.Grow(timeFormatLen + 32 + len(fileName) + len(entry.Message) + len(entry.Data)*32)
+	AppendTime(b, entry.Time)
+	f.writeInfix(b, entry.Level)
+	b.WriteString(fileName)
+	b.WriteByte(' ')
+	if lineNo == 0 {
+		b.WriteString(FileNameUnknown)
 	} else {
-		fmt.Fprintf(b, "%s [%s][%d] %v %v: %v", stamp, levelStr, pid, fileName, lineNo, entry.Message)
+		buf := b.AvailableBuffer()
+		buf = strconv.AppendInt(buf, int64(lineNo), 10)
+		_, _ = b.Write(buf)
 	}
-	appendKVsAndNewLine(b, entry)
+	b.WriteString(": ")
+	b.WriteString(entry.Message)
+	appendKVsAndNewLine(b, entry.Data)
+
 	return b.Bytes(), nil
+}
+
+func (f *Formatter) writeInfix(b *bytes.Buffer, level log.Level) {
+	if level >= maxLevel {
+		// Slow path for unknown log levels.
+		f.computeInfix(b, level)
+	}
+	_, _ = b.WriteString(f.preComputedInfixByLevel[level])
+}
+
+func (f *Formatter) computeInfix(b *bytes.Buffer, level log.Level) {
+	_, _ = fmt.Fprintf(b, " [%s][%d] ", strings.ToUpper(level.String()), os.Getpid())
+	if f.Component != "" {
+		_, _ = fmt.Fprintf(b, "%s/", f.Component)
+	}
+}
+
+// AppendTime appends a time to the buffer in our format
+// "2006-01-02 15:04:05.000".
+func AppendTime(b *bytes.Buffer, t time.Time) {
+	// Want "2006-01-02 15:04:05.000" but the formatter has an optimised
+	// impl of RFC3339Nano, which we can easily tweak into our format.
+	b.Grow(timeFormatLen)
+	buf := b.AvailableBuffer()
+	buf = t.AppendFormat(buf, time.RFC3339Nano)
+	buf = buf[:timeFormatLen]
+	const tPos = len("2006-01-02T") - 1
+	buf[tPos] = ' '
+	const dotPos = len("2006-01-02T15:04:05.") - 1
+
+	// RFC3339Nano truncates the fractional seconds if zero, put the dot in
+	// place if it isn't already and overwrite any non-digit characters with
+	// zeros to replace the timezone or 'Z' that RFC3339Nano might have added.
+	overwrite := false
+	if buf[dotPos] != '.' {
+		buf[dotPos] = '.'
+		overwrite = true
+	}
+	for i := dotPos + 1; i < len(buf); i++ {
+		if overwrite || buf[i] < '0' || buf[i] > '9' {
+			buf[i] = '0'
+			overwrite = true
+		}
+	}
+	_, _ = b.Write(buf)
+}
+
+var preComputedInfixByLevelSyslog = make([]string, len(log.AllLevels))
+
+func init() {
+	for _, level := range log.AllLevels {
+		preComputedInfixByLevelSyslog[level] = strings.ToUpper(level.String()) + " "
+	}
 }
 
 // FormatForSyslog formats logs in a way tailored for syslog.  It avoids logging information that is
@@ -102,48 +194,91 @@ func (f *Formatter) Format(entry *log.Entry) ([]byte, error) {
 //	INFO endpoint_mgr.go 434: Skipping configuration of interface because it is oper down.
 //	ifaceName="cali1234"
 func FormatForSyslog(entry *log.Entry) string {
-	levelStr := strings.ToUpper(entry.Level.String())
-	fileName := entry.Data[fieldFileName]
-	lineNo := entry.Data[fieldLineNumber]
 	b := entry.Buffer
 	if b == nil {
 		b = &bytes.Buffer{}
 	}
-	fmt.Fprintf(b, "%s %v %v: %v", levelStr, fileName, lineNo, entry.Message)
-	appendKVsAndNewLine(b, entry)
+
+	fileName, lineNo := getFileInfo(entry)
+
+	b.Grow(timeFormatLen + 32 + len(fileName) + len(entry.Message) + len(entry.Data)*32)
+	if entry.Level < maxLevel {
+		b.WriteString(preComputedInfixByLevelSyslog[entry.Level])
+	} else {
+		b.WriteString(strings.ToUpper(entry.Level.String()))
+		b.WriteByte(' ')
+	}
+	b.WriteString(fileName)
+	b.WriteByte(' ')
+	if lineNo == 0 {
+		b.WriteString(FileNameUnknown)
+	} else {
+		buf := b.AvailableBuffer()
+		buf = strconv.AppendInt(buf, int64(lineNo), 10)
+		_, _ = b.Write(buf)
+	}
+	b.WriteString(": ")
+	b.WriteString(entry.Message)
+	appendKVsAndNewLine(b, entry.Data)
+
 	return b.String()
 }
 
-// appendKeysAndNewLine writes the KV pairs attached to the entry to the end of the buffer, then
-// finishes it with a newline.
-func appendKVsAndNewLine(b *bytes.Buffer, entry *log.Entry) {
+func getFileInfo(entry *log.Entry) (string, int) {
+	if entry.Caller == nil {
+		return FileNameUnknown, 0
+	}
+	return path.Base(entry.Caller.File), entry.Caller.Line
+}
+
+// appendKeysAndNewLine writes the entry's KV pairs to the end of the buffer,
+// followed by a newline.  Entries are written in sorted order.
+func appendKVsAndNewLine(b *bytes.Buffer, data log.Fields) {
+	if len(data) == 0 {
+		b.WriteByte('\n')
+		return
+	}
+
 	// Sort the keys for consistent output.
-	var keys []string = make([]string, 0, len(entry.Data))
-	for k := range entry.Data {
+	var keys []string
+	const arrSize = 16
+	if len(data) < arrSize {
+		// Optimisation: avoid an allocation if the number of keys is small.
+		// make(...) always spills to the heap if the slice size is not known at
+		// compile time.
+		var dataArr [arrSize]string
+		keys = dataArr[:0]
+	} else {
+		keys = make([]string, 0, len(data))
+	}
+	for k := range data {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
 
 	for _, key := range keys {
-		if key == fieldFileName || key == fieldLineNumber || key == FieldForceFlush {
+		if key == FieldForceFlush {
 			continue
 		}
-		var value interface{} = entry.Data[key]
-		var stringifiedValue string
-		if err, ok := value.(error); ok {
-			stringifiedValue = err.Error()
-		} else if stringer, ok := value.(fmt.Stringer); ok {
-			// Trust the value's String() method.
-			stringifiedValue = stringer.String()
-		} else {
-			// No string method, use %#v to get a more thorough dump.
-			fmt.Fprintf(b, " %v=%#v", key, value)
-			continue
-		}
+		var value = data[key]
 		b.WriteByte(' ')
 		b.WriteString(key)
 		b.WriteByte('=')
-		b.WriteString(stringifiedValue)
+
+		switch value := value.(type) {
+		case string:
+			buf := b.AvailableBuffer()
+			buf = strconv.AppendQuote(buf, value)
+			b.Write(buf)
+		case error:
+			b.WriteString(value.Error())
+		case fmt.Stringer:
+			// Trust the value's String() method.
+			b.WriteString(value.String())
+		default:
+			// No string method, use %#v to get a more thorough dump.
+			_, _ = fmt.Fprintf(b, "%#v", value)
+		}
 	}
 	b.WriteByte('\n')
 }
@@ -153,77 +288,6 @@ type NullWriter struct{}
 
 func (w *NullWriter) Write(p []byte) (int, error) {
 	return len(p), nil
-}
-
-type ContextHook struct {
-}
-
-func (hook ContextHook) Levels() []log.Level {
-	return log.AllLevels
-}
-
-func (hook ContextHook) Fire(entry *log.Entry) error {
-	// We used to do runtime.Callers(6, pcs) here so that we'd skip straight to the expected
-	// frame.  However, if an intermediate frame gets inlined we can skip too many frames in
-	// that case.  The only safe option is to use skip=1 and then let CallersFrames() deal
-	// with any inlining.
-	pcs := make([]uintptr, 20)
-	if numEntries := runtime.Callers(0, pcs); numEntries > 0 {
-		pcs = pcs[:numEntries]
-		frames := runtime.CallersFrames(pcs)
-		for {
-			frame, more := frames.Next()
-			if !shouldSkipFrame(frame) {
-				// We found the frame we were looking for.  Record its file/line number.
-				entry.Data[fieldFileName] = path.Base(frame.File)
-				entry.Data[fieldLineNumber] = frame.Line
-				break
-			}
-			if !more {
-				entry.Data[fieldFileName] = "filename-lookup-failed"
-				entry.Data[fieldLineNumber] = -1
-				break
-			}
-		}
-	} else {
-		entry.Data[fieldFileName] = "filename-lookup-failed"
-		entry.Data[fieldLineNumber] = -2
-	}
-	return nil
-}
-
-// shouldSkipFrame returns true if the given frame belongs to the logging library (or this utility package).
-// Note: this is on the critical path for every log, if you need to update it, make sure to run the
-// benchmarks.
-//
-// Some things we've tried that were worse than strings.HasSuffix():
-//
-// - using a regexp:            ~100x slower
-// - using strings.LastIndex(): ~10x slower
-// - omitting the package:      no benefit
-func shouldSkipFrame(frame runtime.Frame) bool {
-	if strings.Contains(frame.File, "runtime/extern.go") {
-		return true
-	}
-	if strings.HasSuffix(frame.File, "/hooks.go") ||
-		strings.HasSuffix(frame.File, "/entry.go") ||
-		strings.HasSuffix(frame.File, "/logger.go") ||
-		strings.HasSuffix(frame.File, "/exported.go") {
-		if strings.Contains(frame.File, "/logrus") {
-			return true
-		}
-	}
-	if strings.HasSuffix(frame.File, "/lib/logutils/logutils.go") {
-		if strings.Contains(frame.File, "/libcalico-go") {
-			return true
-		}
-	}
-	if strings.HasSuffix(frame.File, "/lib/logutils/ratelimitedlogger.go") {
-		if strings.Contains(frame.File, "/libcalico-go") {
-			return true
-		}
-	}
-	return false
 }
 
 type QueuedLog struct {
@@ -255,7 +319,7 @@ func NewStreamDestination(
 		Channel: c,
 		writeLog: func(ql QueuedLog) error {
 			if ql.NumSkippedLogs > 0 {
-				fmt.Fprintf(writer, "... dropped %d logs ...\n",
+				_, _ = fmt.Fprintf(writer, "... dropped %d logs ...\n",
 					ql.NumSkippedLogs)
 			}
 			_, err := writer.Write(ql.Message)
@@ -278,7 +342,7 @@ func NewSyslogDestination(
 		Channel: c,
 		writeLog: func(ql QueuedLog) error {
 			if ql.NumSkippedLogs > 0 {
-				writer.Warning(fmt.Sprintf("... dropped %d logs ...\n",
+				_ = writer.Warning(fmt.Sprintf("... dropped %d logs ...\n",
 					ql.NumSkippedLogs))
 			}
 			err := writeToSyslog(writer, ql)
@@ -341,7 +405,6 @@ func (d *Destination) LoopWritingLogs() {
 		if err != nil {
 			// Increment the number of errors while trying to write to log
 			d.counter.Inc()
-			fmt.Fprintf(os.Stderr, "Failed to write to log: %v", err)
 		}
 		ql.OnLogDone()
 	}
@@ -441,7 +504,8 @@ func (h *BackgroundHook) Fire(entry *log.Entry) (err error) {
 
 	if entry.Level >= log.DebugLevel && h.debugFileNameRE != nil {
 		// This is a debug log, check if debug logging is enabled for this file.
-		if fileName, ok := entry.Data[fieldFileName]; !ok || !h.debugFileNameRE.MatchString(fileName.(string)) {
+		fileName, _ := getFileInfo(entry)
+		if fileName == FileNameUnknown || !h.debugFileNameRE.MatchString(fileName) {
 			return nil
 		}
 	}
@@ -557,7 +621,6 @@ var confForTestingOnce sync.Once
 func ConfigureLoggingForTestingT(t *testing.T) {
 	confForTestingOnce.Do(func() {
 		log.SetFormatter(&Formatter{Component: "test"})
-		log.AddHook(ContextHook{})
 	})
 	t.Cleanup(RedirectLogrusToTestingT(t))
 }

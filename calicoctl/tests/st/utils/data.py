@@ -225,6 +225,28 @@ ipresv_name1_rev1_v4_long = {
 }
 
 #
+# BGP filters
+#
+
+bgpfilter_name1_rev1 = {
+    'apiVersion': API_VERSION,
+    'kind': 'BGPFilter',
+    'metadata': {
+        'name': 'bgpfilter-name1'
+    },
+    'spec': {
+        'exportv4': [
+            {
+                'cidr': '10.0.0.0/16',
+                'matchOperator': 'Equal',
+                'action': 'Accept',
+            },
+        ],
+    }
+}
+
+
+#
 # BGPPeers
 #
 bgppeer_name1_rev1_v4 = {

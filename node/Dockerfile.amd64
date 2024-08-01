@@ -119,26 +119,27 @@ RUN microdnf install \
     # Needed for runit startup script
     which \
     # Needed for the cleanup script
-    findutils \
-    # nftables
-    nftables
+    findutils
 
 # Since the ubi repos do not contain all the packages we need (they're missing conntrack-tools),
 # we're using AlmaLinux repos for missing packages.
 COPY almalinux.repo /etc/yum.repos.d/almalinux.repo
 
 RUN microdnf --enablerepo=baseos install \
-    iproute-tc \
     # Needed for conntrack
     libnetfilter_cthelper libnetfilter_cttimeout libnetfilter_queue \
     conntrack-tools
 
-# Install iptables via rpms. The libs must be force installed because the iptables source RPM has the release
-# version '1.8.8-6.el8' conflicts with iptables-libs (pulled in by the iputils package) '1.8.5-11.el8_9'.
-RUN rpm --force -i /tmp/rpms/iptables-libs-${IPTABLES_VER}.el8.x86_64.rpm && \
-    rpm --force -i /tmp/rpms/iptables-legacy-libs-${IPTABLES_VER}.el8.2.x86_64.rpm && \
-    # Install compatible libnftnl version with selected iptables version
-    rpm -i /tmp/rpms/iptables-legacy-${IPTABLES_VER}.el8.2.x86_64.rpm && \
+# Install iptables-libs via rpm. The libs must installed before installing iproute-tc and nftables via 'microdnf install'
+# otherwise they will pull a different version of iptables-libs as a dependency.
+RUN rpm -i /tmp/rpms/iptables-libs-${IPTABLES_VER}.el8.x86_64.rpm && \
+    rpm -i /tmp/rpms/iptables-legacy-libs-${IPTABLES_VER}.el8.2.x86_64.rpm
+
+# iproute-tc and nftables depend on iptables-libs and should be installed after it.
+RUN microdnf --enablerepo=baseos install iproute-tc nftables
+
+# Install iptables via rpm. Install compatible libnftnl version with the selected iptables version
+RUN rpm -i /tmp/rpms/iptables-legacy-${IPTABLES_VER}.el8.2.x86_64.rpm && \
     rpm -i /tmp/rpms/iptables-nft-${IPTABLES_VER}.el8.x86_64.rpm && \
     # Install ipset version
     rpm --force -i /tmp/rpms/ipset-libs-${IPSET_VER}.el8.x86_64.rpm && \

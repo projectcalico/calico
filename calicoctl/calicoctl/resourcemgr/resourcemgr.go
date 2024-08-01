@@ -69,8 +69,10 @@ type ResourceListObject interface {
 	v1.ListMetaAccessor
 }
 
-type ResourceActionCommand func(context.Context, client.Interface, ResourceObject) (ResourceObject, error)
-type ResourceListActionCommand func(context.Context, client.Interface, ResourceObject) (ResourceListObject, error)
+type (
+	ResourceActionCommand     func(context.Context, client.Interface, ResourceObject) (ResourceObject, error)
+	ResourceListActionCommand func(context.Context, client.Interface, ResourceObject) (ResourceListObject, error)
+)
 
 // ResourceHelper encapsulates details about a specific version of a specific resource:
 //
@@ -100,19 +102,26 @@ type resourceHelper struct {
 func (rh resourceHelper) String() string {
 	if !rh.isList {
 		return fmt.Sprintf("Resource(%s %s)", rh.resource.GetObjectKind(), rh.resource.GetObjectKind().GroupVersionKind())
-
 	}
 	return fmt.Sprintf("Resource(%s %s)", rh.listResource.GetObjectKind(), rh.listResource.GetListMeta().GetResourceVersion())
 }
 
 // Store a resourceHelper for each resource.
-var helpers map[schema.GroupVersionKind]resourceHelper
-var kindToRes = make(map[string]ResourceObject)
+var (
+	helpers   map[schema.GroupVersionKind]resourceHelper
+	kindToRes = make(map[string]ResourceObject)
+	allKinds  = []string{}
+)
+
+// ValidResources returns all registered resource kinds.
+func ValidResources() []string {
+	return allKinds
+}
 
 func registerResource(res ResourceObject, resList ResourceListObject, isNamespaced bool, names []string,
 	tableHeadings []string, tableHeadingsWide []string, headingsMap map[string]string,
-	create, update, delete, get ResourceActionCommand, list ResourceListActionCommand) {
-
+	create, update, delete, get ResourceActionCommand, list ResourceListActionCommand,
+) {
 	if helpers == nil {
 		helpers = make(map[schema.GroupVersionKind]resourceHelper)
 	}
@@ -146,6 +155,7 @@ func registerResource(res ResourceObject, resList ResourceListObject, isNamespac
 	for _, v := range names {
 		kindToRes[v] = res
 	}
+	allKinds = append(allKinds, res.GetObjectKind().GroupVersionKind().Kind)
 }
 
 func (rh resourceHelper) GetObjectType() reflect.Type {
