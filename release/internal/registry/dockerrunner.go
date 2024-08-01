@@ -9,12 +9,10 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"strings"
 
 	"github.com/docker/distribution"
 	"github.com/docker/distribution/manifest/manifestlist"
 	"github.com/docker/distribution/manifest/schema2"
-	"github.com/docker/distribution/reference"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/image"
@@ -108,7 +106,7 @@ type errorMessage struct {
 // PushImage pushes the image to the registry
 func (d *DockerRunner) PushImage(img string, accessAuth string) error {
 	logrus.WithField("image", img).Debug("Pushing image")
-	registryAuth, err := registryAuthStr(accessAuth, Image(img).Registry())
+	registryAuth, err := registryAuthStr(accessAuth, ParseImage(img).Registry())
 	if err != nil {
 		logrus.WithError(err).Error("failed to get registry auth")
 		return err
@@ -203,24 +201,21 @@ func (d *DockerRunner) ManifestPush(manifestListName string, images []string, ac
 		logrus.WithError(err).Error("failed to marshal manifest list")
 		return err
 	}
-	logrus.WithField("manifest", manifestListName).WithField("body", string(manifestListBytes)).Info("Pushing manifest list")
-	ref, err := reference.ParseNormalizedNamed(manifestListName)
-	if err != nil {
-		logrus.WithError(err).Error("failed to parse manifest list name")
-		return err
-	}
-	registry := reference.Domain(ref)
-	repository := reference.Path(ref)
-	tag := reference.TagNameOnly(ref).(reference.NamedTagged).Tag()
-	registryURL := fmt.Sprintf("https://%s/v2/%s/manifests/%s", registry, repository, tag)
+	logrus.WithField("manifest", manifestListName).WithField("body", string(manifestListBytes)).Debug("Pushing manifest list")
+	img := ParseImage(manifestListName)
+	registryURL := img.Registry().ManifestURL(img)
 	req, err := http.NewRequest(http.MethodPut, registryURL, bytes.NewReader(manifestListBytes))
 	if err != nil {
 		logrus.WithError(err).Error("failed to create request")
 		return err
 	}
+	token, err := getAuthenticatedBearerToken(accessAuth, img.Registry(), fmt.Sprintf("repository:%s:pull,push", img.Repository()))
+	if err != nil {
+		logrus.WithError(err).Error("failed to get bearer token")
+		return err
+	}
 	req.Header.Set("Content-Type", manifestlist.MediaTypeManifestList)
-	parts := strings.Split(accessAuth, ":")
-	req.SetBasicAuth(parts[0], parts[1])
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		logrus.WithError(err).Error("failed to push manifest list")

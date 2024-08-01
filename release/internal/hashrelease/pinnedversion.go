@@ -32,9 +32,12 @@ type Component struct {
 	Registry string `yaml:"registry,omitempty"`
 }
 
-// Repository returns the image with the tag appended.
-func (c Component) Repository() string {
-	return fmt.Sprintf("%s:%s", c.Image, c.Version)
+// ImageRef returns the image reference of the component.
+func (c Component) ImageRef(name string) registry.ImageRef {
+	if c.Image == "" {
+		c.Image = name
+	}
+	return registry.ParseImage(c.Image)
 }
 
 // String returns the string representation of the component.
