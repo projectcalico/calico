@@ -1204,8 +1204,9 @@ func createIPIPBaseTopologyOptions(
 	topologyOptions := infrastructure.DefaultTopologyOptions()
 	topologyOptions.IPIPEnabled = true
 	topologyOptions.IPIPMode = ipipMode
+	topologyOptions.VXLANMode = api.VXLANModeNever
 	topologyOptions.IPIPRoutesEnabled = false
-	topologyOptions.ExtraEnvVars["FELIX_IPIPRouteMode"] = "Felix"
+	topologyOptions.ExtraEnvVars["FELIX_ProgramRoutes"] = "IPIP"
 	topologyOptions.ExtraEnvVars["FELIX_ROUTESOURCE"] = routeSource
 	// We force the broken checksum handling on or off so that we're not dependent on kernel version
 	// for these tests.  Since we're testing in containers anyway, checksum offload can't really be

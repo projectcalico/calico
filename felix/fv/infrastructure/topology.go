@@ -128,9 +128,16 @@ func CreateDefaultIPPoolFromOpts(ctx context.Context, client client.Interface, o
 	case 4:
 		ipPool.Name = DefaultIPPoolName
 		ipPool.Spec.CIDR = opts.IPPoolCIDR
-
 		// IPIP is only supported on IPv4
-		ipPool.Spec.IPIPMode = opts.IPIPMode
+		if opts.IPIPEnabled {
+			if opts.IPIPRoutesEnabled {
+				ipPool.Spec.IPIPMode = api.IPIPModeAlways
+			} else {
+				ipPool.Spec.IPIPMode = opts.IPIPMode
+			}
+		} else {
+			ipPool.Spec.IPIPMode = api.IPIPModeNever
+		}
 	case 6:
 		ipPool.Name = DefaultIPv6PoolName
 		ipPool.Spec.CIDR = opts.IPv6PoolCIDR
