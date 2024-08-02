@@ -58,11 +58,12 @@ import (
 )
 
 type mockDataplane struct {
-	mutex      sync.Mutex
-	lastProgID int
-	progs      map[string]int
-	policy     map[string]polprog.Rules
-	routes     map[ip.CIDR]struct{}
+	mutex       sync.Mutex
+	lastProgID  int
+	progs       map[string]int
+	numAttaches map[string]int
+	policy      map[string]polprog.Rules
+	routes      map[ip.CIDR]struct{}
 
 	ensureStartedFn    func()
 	ensureQdiscFn      func(string) (bool, error)
@@ -71,10 +72,11 @@ type mockDataplane struct {
 
 func newMockDataplane() *mockDataplane {
 	return &mockDataplane{
-		lastProgID: 5,
-		progs:      map[string]int{},
-		policy:     map[string]polprog.Rules{},
-		routes:     map[ip.CIDR]struct{}{},
+		lastProgID:  5,
+		progs:       map[string]int{},
+		numAttaches: map[string]int{},
+		policy:      map[string]polprog.Rules{},
+		routes:      map[ip.CIDR]struct{}{},
 	}
 }
 
@@ -114,6 +116,7 @@ func (m *mockDataplane) ensureProgramAttached(ap attachPoint) (bpf.AttachResult,
 	}
 
 	key := ap.IfaceName() + ":" + ap.HookName().String()
+	m.numAttaches[key] = m.numAttaches[key] + 1
 	if _, exists := m.progs[key]; exists {
 		return res, nil
 	}
@@ -187,6 +190,12 @@ func (m *mockDataplane) programAttached(key string) bool {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 	return m.progs[key] != 0
+}
+
+func (m *mockDataplane) numOfAttaches(key string) int {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	return m.numAttaches[key]
 }
 
 func (m *mockDataplane) setRoute(cidr ip.CIDR) {
@@ -439,6 +448,17 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		}
 	}
 
+	genHostMetadataUpdate := func(ip string) func() {
+		return func() {
+			bpfEpMgr.OnUpdate(&proto.HostMetadataUpdate{
+				Hostname: "uthost",
+				Ipv4Addr: ip,
+			})
+			err := bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+		}
+	}
+
 	hostEp := proto.HostEndpoint{
 		Name: "uthost-eth0",
 		PreDnatTiers: []*proto.TierInfo{
@@ -534,6 +554,26 @@ var _ = Describe("BPF Endpoint Manager", func() {
 				Expect(caliE.HostNormalTiers[0].Policies).To(HaveLen(1))
 				Expect(caliE.SuppressNormalHostPolicy).To(BeTrue())
 			})
+		})
+	})
+
+	Context("with workload endpoints", func() {
+		JustBeforeEach(func() {
+			genWLUpdate("cali12345")()
+			genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
+		})
+
+		It("must re-attach programs when hostIP changes", func() {
+			Expect(dp.programAttached("cali12345:ingress")).To(BeTrue())
+			Expect(dp.programAttached("cali12345:egress")).To(BeTrue())
+			Expect(dp.numOfAttaches("cali12345:ingress")).To(Equal(1))
+			Expect(dp.numOfAttaches("cali12345:egress")).To(Equal(1))
+			genHostMetadataUpdate("5.6.7.8/32")()
+			Expect(dp.numOfAttaches("cali12345:ingress")).To(Equal(2))
+			Expect(dp.numOfAttaches("cali12345:egress")).To(Equal(2))
+			genHostMetadataUpdate("1.2.3.4")()
+			Expect(dp.numOfAttaches("cali12345:ingress")).To(Equal(3))
+			Expect(dp.numOfAttaches("cali12345:egress")).To(Equal(3))
 		})
 	})
 
