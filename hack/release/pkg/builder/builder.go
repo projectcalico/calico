@@ -75,16 +75,19 @@ func releaseImages(version, operatorVersion string) []string {
 }
 
 func (r *ReleaseBuilder) BuildMetadata(dir string) error {
+	// Determine the versions to use based on the manifests, which should
+	// have already been updated with the correct tags.
+	calicoVersion, operatorVersion := r.getVersionsFromManifests()
+	return r.BuildMetadataWithVersions(dir, calicoVersion, operatorVersion)
+}
+
+func (r *ReleaseBuilder) BuildMetadataWithVersions(dir, calicoVersion, operatorVersion string) error {
 	type metadata struct {
 		Version          string   `json:"version"`
 		OperatorVersion  string   `json:"operator_version" yaml:"operatorVersion"`
 		Images           []string `json:"images"`
 		HelmChartVersion string   `json:"helm_chart_version" yaml:"helmChartVersion"`
 	}
-
-	// Determine the versions to use based on the manifests, which should
-	// have already been updated with the correct tags.
-	calicoVersion, operatorVersion := r.getVersionsFromManifests()
 
 	m := metadata{
 		Version:          calicoVersion,
