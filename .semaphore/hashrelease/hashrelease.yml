@@ -1,0 +1,40 @@
+version: v1.0
+name: Create hashrelease
+agent:
+  machine:
+    type: e1-standard-4
+    os_image: ubuntu2004
+execution_time_limit:
+  hours: 4
+
+global_job_config:
+  secrets:
+    - name: docs-ssh
+    - name: gcloud-registry-access
+    - name: hashrelease-docker-auth
+    - name: iss-image-scanning
+  prologue:
+    commands:
+      - chmod 0600 ~/.keys/*
+      - ssh-add ~/.keys/*
+      # Credentials for accessing gcloud, needed to push images to gcr
+      - export GOOGLE_APPLICATION_CREDENTIALS=${HOME}/keys/.registry-viewer-serviceaccount.json
+      - gcloud auth activate-service-account --key-file=${GOOGLE_APPLICATION_CREDENTIALS}
+      - docker login
+      - checkout
+
+blocks:
+  - name: Publish hashrelease
+    task:
+      jobs:
+        - name: Create hashrelease
+          commands:
+            - ./release/bin/release publish
+      prologue:
+        commands:
+          - cache restore release-${SEMAPHORE_GIT_SHA}
+      env_vars:
+        - name: OPERATOR_BRANCH
+          value: master
+        - name: IS_HASHRELEASE
+          value: true
