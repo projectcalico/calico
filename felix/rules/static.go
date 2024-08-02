@@ -1143,7 +1143,7 @@ func (r *DefaultRuleRenderer) StaticRawTableChains(ipVersion uint8) []*genericta
 		r.failsafeOutChain("raw", ipVersion),
 		r.StaticRawPreroutingChain(ipVersion),
 		r.WireguardIncomingMarkChain(),
-		r.StaticRawOutputChain(0),
+		r.StaticRawOutputChain(0, ipVersion),
 	}
 }
 
@@ -1270,7 +1270,7 @@ func (r *DefaultRuleRenderer) StaticBPFModeRawChains(ipVersion uint8,
 	}
 
 	chains = append(chains,
-		r.StaticRawOutputChain(tcdefs.MarkSeenBypass))
+		r.StaticRawOutputChain(tcdefs.MarkSeenBypass, ipVersion))
 
 	return chains
 }
@@ -1290,6 +1290,17 @@ func (r *DefaultRuleRenderer) StaticRawPreroutingChain(ipVersion uint8) *generic
 		rules = append(rules, generictables.Rule{
 			Match:  nil,
 			Action: r.Jump(ChainSetWireguardIncomingMark),
+		})
+	}
+
+	// Ensure VXLAN UDP Flows are not tracked in conntrack.
+	// VXLAN uses different source ports in each direction so
+	// tracking results in unreplied flows.
+	if (ipVersion == 4 && r.VXLANEnabled) || (ipVersion == 6 && r.VXLANEnabledV6) {
+		log.Debug("Adding VXLAN NOTRACK iptables rule to PREROUTING chain")
+		rules = append(rules, generictables.Rule{
+			Match:  r.NewMatch().Protocol("udp").DestPort(uint16(r.VXLANPort)),
+			Action: r.NoTrack(),
 		})
 	}
 
@@ -1418,7 +1429,7 @@ func (r *DefaultRuleRenderer) WireguardIncomingMarkChain() *generictables.Chain 
 	}
 }
 
-func (r *DefaultRuleRenderer) StaticRawOutputChain(tcBypassMark uint32) *generictables.Chain {
+func (r *DefaultRuleRenderer) StaticRawOutputChain(tcBypassMark uint32, ipVersion uint8) *generictables.Chain {
 	rules := []generictables.Rule{
 		// For safety, clear all our mark bits before we start.  (We could be in
 		// append mode and another process' rules could have left the mark bit set.)
@@ -1429,6 +1440,16 @@ func (r *DefaultRuleRenderer) StaticRawOutputChain(tcBypassMark uint32) *generic
 		// return here without the mark bit set if the interface wasn't one that
 		// we're policing.
 	}
+
+	// Ensure VXLAN UDP Flows are not tracked in conntrack.
+	if (ipVersion == 4 && r.VXLANEnabled) || (ipVersion == 6 && r.VXLANEnabledV6) {
+		log.Debug("Adding VXLAN NOTRACK iptables rule")
+		rules = append(rules, generictables.Rule{
+			Match:  r.NewMatch().Protocol("udp").DestPort(uint16(r.VXLANPort)),
+			Action: r.NoTrack(),
+		})
+	}
+
 	if tcBypassMark == 0 {
 		rules = append(rules, []generictables.Rule{
 			{

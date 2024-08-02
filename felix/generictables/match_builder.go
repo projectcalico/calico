@@ -56,6 +56,7 @@ type MatchCriteria interface {
 	IPSetNames() (ipSetNames []string)
 	SourcePorts(ports ...uint16) MatchCriteria
 	NotSourcePorts(ports ...uint16) MatchCriteria
+	DestPort(port uint16) MatchCriteria
 	DestPorts(ports ...uint16) MatchCriteria
 	NotDestPorts(ports ...uint16) MatchCriteria
 	SourcePortRanges(ports []*proto.PortRange) MatchCriteria

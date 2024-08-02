@@ -29,7 +29,7 @@ import (
 
 	"sigs.k8s.io/knftables"
 
-	"github.com/projectcalico/calico/felix/dataplane/common"
+	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/ipsets"
@@ -128,7 +128,7 @@ func init() {
 // nftablesTable is an implementation of the generictables.Table interface that programs nftables. It represents a
 // single nftables table.
 type nftablesTable struct {
-	common.IPSetsDataplane
+	dpsets.IPSetsDataplane
 
 	name      string
 	ipVersion uint8

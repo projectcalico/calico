@@ -381,7 +381,7 @@ blocks:
       - name: private-repo
     prologue:
       commands:
-        - export REPORT_DIR=/home/semaphore/calico/process/testing/winfv/report
+        - export REPORT_DIR=/home/semaphore/report
         - export AZURE_SUBSCRIPTION_ID=$AZ_SUBSCRIPTION_ID
         - export AZURE_TENANT_ID=$AZ_TENANT_ID
         - export AZURE_CLIENT_ID=$AZ_SP_ID
@@ -471,6 +471,7 @@ blocks:
           - ./.semaphore/collect-artifacts
           - ./.semaphore/publish-artifacts
           - test-results publish /home/semaphore/calico/felix/report/fv_suite.xml --name "felix-fv-${SEMAPHORE_JOB_INDEX}" || true
+          - test-results publish /home/semaphore/calico/felix/report/fv_nft_suite.xml --name "felix-fv-nft-${SEMAPHORE_JOB_INDEX}" || true
 
 - name: "Felix: BPF UT/FV tests on new kernel"
   run:

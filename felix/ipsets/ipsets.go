@@ -651,6 +651,12 @@ func (s *IPSets) runIPSetList(arg string, parsingFunc func(*bufio.Scanner) error
 	// Use a scanner to chunk the input into lines.
 	scanner := bufio.NewScanner(out)
 	parsingErr := parsingFunc(scanner)
+	if parsingErr == nil {
+		// In case the parsingFunc stopped early, drain stdout fully.
+		for scanner.Scan() {
+		}
+		parsingErr = scanner.Err()
+	}
 	closeErr := out.Close()
 	err = cmd.Wait()
 	logCxt := s.logCxt.WithField("stderr", stderr.String())
@@ -814,6 +820,13 @@ func (s *IPSets) writeUpdates(setName string, w io.Writer) (err error) {
 	// If the metadata needs to change then we have to write to a temporary IP
 	// set and swap it into place.
 	needTempIPSet := dpExists && dpMeta != desiredMeta
+	if needTempIPSet {
+		log.WithFields(log.Fields{
+			"desired":   desiredMeta,
+			"dataplane": dpMeta,
+			"setName":   setName,
+		}).Info("IP set metadata change, need to use a temporary IP set.")
+	}
 	// If the IP set doesn't exist yet, we need to create it.
 	needCreate := !dpExists
 
@@ -958,10 +971,13 @@ func (s *IPSets) ApplyDeletions() bool {
 		}
 		return deltatracker.IterActionUpdateDataplane
 	})
+
 	// ApplyDeletions() marks the end of the two-phase "apply". Piggyback on that to
 	// update the gauge that records how many IP sets we own.
-	numDeletionsPending := s.setNameToProgrammedMetadata.Dataplane().Len()
-	s.gaugeNumIpsets.Set(float64(numDeletionsPending))
+	s.gaugeNumIpsets.Set(float64(s.setNameToProgrammedMetadata.Dataplane().Len()))
+
+	// Determine if we need to be rescheduled.
+	numDeletionsPending := s.setNameToProgrammedMetadata.PendingDeletions().Len()
 	if numDeletions == 0 {
 		// We had nothing to delete, or we only encountered errors, don't
 		// ask to be rescheduled.

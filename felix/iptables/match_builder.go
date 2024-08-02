@@ -32,7 +32,8 @@ var _ generictables.MatchCriteria = matchCriteria{}
 type matchCriteria []string
 
 func Match() generictables.MatchCriteria {
-	return new(matchCriteria)
+	var m matchCriteria
+	return m
 }
 
 func (m matchCriteria) Render() string {
@@ -232,6 +233,10 @@ func (m matchCriteria) SourcePorts(ports ...uint16) generictables.MatchCriteria 
 func (m matchCriteria) NotSourcePorts(ports ...uint16) generictables.MatchCriteria {
 	portsString := PortsToMultiport(ports)
 	return append(m, fmt.Sprintf("-m multiport ! --source-ports %s", portsString))
+}
+
+func (m matchCriteria) DestPort(port uint16) generictables.MatchCriteria {
+	return append(m, fmt.Sprintf("--dport %v", port))
 }
 
 func (m matchCriteria) DestPorts(ports ...uint16) generictables.MatchCriteria {

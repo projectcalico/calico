@@ -22,6 +22,7 @@ import (
 	"net"
 	"regexp"
 	"strconv"
+	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -429,6 +430,25 @@ func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 				Eventually(func() int { return tcpdump.MatchCount("ICMP") }).
 					Should(BeNumerically(">", 0), matcher)
 				externalClient.Stop()
+			})
+
+			It("should have both IPv4 and IPv6 routes for a dual stack UDP service", func() {
+				tc.TriggerDelayedStart()
+				ensureAllNodesBPFProgramsAttached(tc.Felixes)
+				k8sClient = infra.(*infrastructure.K8sDatastoreInfra).K8sClient
+				_ = k8sClient
+				testSvc = k8sServiceForDualStack("test-svc", clusterIPs, w[0][0], 80, 8055, int32(npPort), "udp")
+				testSvcNamespace = testSvc.ObjectMeta.Namespace
+				_, err := k8sClient.CoreV1().Services(testSvcNamespace).Create(context.Background(), testSvc, metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(1),
+					"Service endpoints didn't get created? Is controller-manager happy?")
+				Eventually(func() bool {
+					return checkServiceRoute(tc.Felixes[0], testSvc.Spec.ClusterIPs[0])
+				}, 10*time.Second, 300*time.Millisecond).Should(BeTrue(), "Failed to sync with udp service")
+				Eventually(func() bool {
+					return checkServiceRoute(tc.Felixes[0], testSvc.Spec.ClusterIPs[1])
+				}, 10*time.Second, 300*time.Millisecond).Should(BeTrue(), "Failed to sync with udp service")
 			})
 		}
 
