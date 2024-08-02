@@ -229,10 +229,10 @@ Follow [the tigera/operator release instructions](https://github.com/tigera/oper
 ### Post-release verification
 
 1. Run the post-release checks. The release validation checks will run - they check for the presence of all the required binaries tarballs, tags, etc.
-   
+
    ```
    make VERSION=... FLANNEL_VERSION=... OPERATOR_VERSION=... postrelease-checks
-   ```   
+   ```
 
 1. Check the output of the tests - if any test failed, dig in and understand why.
 
@@ -263,9 +263,6 @@ Release notes for a Calico release contain notable changes across Calico reposit
    ```
 
    A file called `release-notes/<VERSION>-release-notes.md` will be created with the raw release note content.
-
-   > **NOTE**: If you receive a ratelimit error, you can specify a `GITHUB_TOKEN` in the above command to
-   > increase the number of allowed API calls. [See here for details](https://help.github.com/articles/creating-a-personal-access-token-for-the-command-line/).
 
 1. Edit the generated file.
 
