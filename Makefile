@@ -162,13 +162,7 @@ bin/ocp.tgz: manifests/ocp/ bin/yq
 ## Generates release notes for the given version.
 .PHONY: release-notes
 release-notes:
-ifndef GITHUB_TOKEN
-	$(error GITHUB_TOKEN must be set)
-endif
-ifndef VERSION
-	$(error VERSION must be set)
-endif
-	VERSION=$(VERSION) GITHUB_TOKEN=$(GITHUB_TOKEN) python2 ./hack/release/generate-release-notes.py
+	@$(MAKE) -C release release-notes
 
 ## Update the AUTHORS.md file.
 update-authors:
