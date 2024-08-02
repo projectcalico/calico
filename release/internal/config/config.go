@@ -56,6 +56,9 @@ type Config struct {
 	OutputDir string `envconfig:"OUTPUT_DIR"`
 }
 
+// ReleaseType returns the type of release.
+// If IsHashrelease is true, it returns "hashrelease" (internal release).
+// Otherwise, it returns "release" (public release).
 func (c *Config) ReleaseType() string {
 	relType := "release"
 	if c.IsHashrelease {
@@ -64,10 +67,13 @@ func (c *Config) ReleaseType() string {
 	return cases.Title(language.English).String(relType)
 }
 
+// HashreleaseDir returns the directory for the hashrelease
 func (c *Config) HashreleaseDir() string {
 	return filepath.Join(c.OutputDir, "hashrelease")
 }
 
+// TmpFolderPath returns the temporary folder path.
+// This is used for temporary files during the release process
 func (c *Config) TmpFolderPath() string {
 	return filepath.Join(c.RepoRootDir, utils.ReleaseFolderName, "tmp")
 }
