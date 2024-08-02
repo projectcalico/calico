@@ -652,14 +652,21 @@ func (m *bpfEndpointManager) GetIfaceQDiscInfo(ifaceName string) (bool, int, int
 	return qdisc.valid, qdisc.prio, qdisc.handle
 }
 
-func (m *bpfEndpointManager) updateHostIP(ip net.IP) {
+func (m *bpfEndpointManager) updateHostIP(ipAddr string) {
+	ip, _, err := net.ParseCIDR(ipAddr)
+	if err != nil {
+		ip = net.ParseIP(ipAddr)
+	}
 	if ip != nil {
 		m.hostIP = ip
 		// Should be safe without the lock since there shouldn't be any active background threads
 		// but taking it now makes us robust to refactoring.
 		m.ifacesLock.Lock()
 		for ifaceName := range m.nameToIface {
-			m.dirtyIfaceNames.Add(ifaceName)
+			m.withIface(ifaceName, func(iface *bpfInterface) (forceDirty bool) {
+				iface.dpState.readiness = ifaceNotReady
+				return true
+			})
 		}
 		m.ifacesLock.Unlock()
 	} else {
@@ -697,12 +704,12 @@ func (m *bpfEndpointManager) OnUpdate(msg interface{}) {
 	case *proto.HostMetadataUpdate:
 		if !m.ipv6Enabled && msg.Hostname == m.hostname {
 			log.WithField("HostMetadataUpdate", msg).Infof("Host IP changed: %s", msg.Ipv4Addr)
-			m.updateHostIP(net.ParseIP(msg.Ipv4Addr))
+			m.updateHostIP(msg.Ipv4Addr)
 		}
 	case *proto.HostMetadataV6Update:
 		if m.ipv6Enabled && msg.Hostname == m.hostname {
 			log.WithField("HostMetadataV6Update", msg).Infof("Host IPv6 changed: %s", msg.Ipv6Addr)
-			m.updateHostIP(net.ParseIP(msg.Ipv6Addr))
+			m.updateHostIP(msg.Ipv6Addr)
 		}
 	case *proto.HostMetadataV4V6Update:
 		if msg.Hostname != m.hostname {
@@ -710,10 +717,10 @@ func (m *bpfEndpointManager) OnUpdate(msg interface{}) {
 		}
 		if m.ipv6Enabled {
 			log.WithField("HostMetadataV4V6Update", msg).Infof("Host IPv6 changed: %s", msg.Ipv6Addr)
-			m.updateHostIP(net.ParseIP(msg.Ipv6Addr))
+			m.updateHostIP(msg.Ipv6Addr)
 		} else {
 			log.WithField("HostMetadataV4V6Update", msg).Infof("Host IP changed: %s", msg.Ipv4Addr)
-			m.updateHostIP(net.ParseIP(msg.Ipv4Addr))
+			m.updateHostIP(msg.Ipv4Addr)
 		}
 	case *proto.ServiceUpdate:
 		m.onServiceUpdate(msg)
