@@ -2198,6 +2198,10 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 			v4Readiness = ifaceNotReady
 			v6Readiness = ifaceNotReady
 		}
+		if _, err := m.dp.queryClassifier(ifindex, state.qdisc.handle, state.qdisc.prio, false); err != nil {
+			v4Readiness = ifaceNotReady
+			v6Readiness = ifaceNotReady
+		}
 	}
 
 	ap := m.calculateTCAttachPoint(ifaceName)
