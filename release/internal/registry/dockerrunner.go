@@ -169,15 +169,17 @@ func (d *DockerRunner) RemoveImage(img string) error {
 	return nil
 }
 
-// ManifestPush pushes the manifest list to the registry
-func (d *DockerRunner) ManifestPush(manifestListName string, images []string, accessAuth string) error {
+// createManifestList creates a manifest list from the images.
+// This allows creating the body of the manifest list to be pushed to the registry
+// similar to https://distribution.github.io/distribution/spec/manifest-v2-2/#example-manifest-list
+func createManifestList(cli *client.Client, manifestListName string, images []string) (manifestlist.ManifestList, error) {
 	logrus.WithField("manifest", manifestListName).Info("Creating manifest list")
 	var manifests []manifestlist.ManifestDescriptor
 	for _, img := range images {
-		inspect, _, err := d.dockerClient.ImageInspectWithRaw(context.Background(), img)
+		inspect, _, err := cli.ImageInspectWithRaw(context.Background(), img)
 		if err != nil {
 			logrus.WithField("image", img).WithError(err).Error("failed to inspect image")
-			return err
+			return manifestlist.ManifestList{}, err
 		}
 		manifests = append(manifests, manifestlist.ManifestDescriptor{
 			Platform: manifestlist.PlatformSpec{
@@ -196,19 +198,30 @@ func (d *DockerRunner) ManifestPush(manifestListName string, images []string, ac
 		Versioned: manifestlist.SchemaVersion,
 		Manifests: manifests,
 	}
+	return manifestList, nil
+}
+
+// ManifestPush pushes the manifest list to the registry.
+//
+// Since "docker manifest create/push" is considered experimental, it is not supported in the docker client library.
+// As a workaround, we create the manifest list manually and push it to the registry using the registry API.
+// See https://distribution.github.io/distribution/spec/api/ for more information on the registry API.
+func (d *DockerRunner) ManifestPush(manifestListName string, images []string, accessAuth string) error {
+	manifestList, err := createManifestList(d.dockerClient, manifestListName, images)
+	if err != nil {
+		logrus.WithError(err).Error("failed to create manifest list")
+		return err
+	}
 	manifestListBytes, err := json.Marshal(manifestList)
 	if err != nil {
 		logrus.WithError(err).Error("failed to marshal manifest list")
 		return err
 	}
-	logrus.WithField("manifest", manifestListName).WithField("body", string(manifestListBytes)).Debug("Pushing manifest list")
+	logrus.WithFields(logrus.Fields{
+		"manifest": manifestListName,
+		"body":     string(manifestListBytes),
+	}).Debug("Pushing manifest list")
 	img := ParseImage(manifestListName)
-	registryURL := img.Registry().ManifestURL(img)
-	req, err := http.NewRequest(http.MethodPut, registryURL, bytes.NewReader(manifestListBytes))
-	if err != nil {
-		logrus.WithError(err).Error("failed to create request")
-		return err
-	}
 	var token string
 	scope := fmt.Sprintf("repository:%s:pull,push", img.Repository())
 	if accessAuth == "" {
@@ -218,6 +231,11 @@ func (d *DockerRunner) ManifestPush(manifestListName string, images []string, ac
 	}
 	if err != nil {
 		logrus.WithError(err).Error("failed to get bearer token")
+		return err
+	}
+	req, err := http.NewRequest(http.MethodPut, img.Registry().ManifestURL(img), bytes.NewReader(manifestListBytes))
+	if err != nil {
+		logrus.WithError(err).Error("failed to create request")
 		return err
 	}
 	req.Header.Set("Content-Type", manifestlist.MediaTypeManifestList)
@@ -236,6 +254,7 @@ func (d *DockerRunner) ManifestPush(manifestListName string, images []string, ac
 		}).Error("failed to push manifest list")
 		return fmt.Errorf("failed to push manifest list: %s", string(body))
 	}
+	logrus.WithField("manifest", manifestListName).Info("Manifest list pushed")
 	return nil
 }
 
