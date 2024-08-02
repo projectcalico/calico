@@ -146,7 +146,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sts v1.27.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/blang/semver/v4 v4.0.0 // indirect
-	github.com/boombuler/barcode v1.0.1-0.20190219062509-6c824513bacc // indirect
+	github.com/boombuler/barcode v1.0.1 // indirect
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/checkpoint-restore/go-criu/v5 v5.3.0 // indirect
@@ -313,6 +313,8 @@ require (
 
 replace (
 	github.com/projectcalico/api => ./api
+
+	google.golang.org/grpc => google.golang.org/grpc v1.61.1
 
 	k8s.io/api => k8s.io/api v0.28.9
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.28.9
