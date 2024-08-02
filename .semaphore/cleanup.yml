@@ -27,3 +27,21 @@ blocks:
       - ./.semaphore/clean-up-vms ${VM_PREFIX}
     secrets:
     - name: google-service-account-for-gce
+
+- name: Clean up windows resources
+  dependencies: []
+  task:
+    prologue:
+      commands:
+        - checkout
+        - az login --service-principal -u "${AZ_SP_ID}" -p "${AZ_SP_PASSWORD}" --tenant "${AZ_TENANT_ID}" --output none
+        - cd process/testing/util
+    jobs:
+      - name: Clean up windows felix resources
+        commands:
+          - ./delete-az-rg.sh ${USER}-capz-win-felix-${SEMAPHORE_WORKFLOW_ID:0:8}-rg
+      - name: Clean up windows cni resources
+        commands:
+          - ./delete-az-rg.sh ${USER}-capz-win-cni-${SEMAPHORE_WORKFLOW_ID:0:8}-rg
+    secrets:
+    - name: banzai-secrets
