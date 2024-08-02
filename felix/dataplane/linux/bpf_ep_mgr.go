@@ -404,6 +404,7 @@ type bpfAllowChainRenderer interface {
 type ManagerWithHEPUpdate interface {
 	Manager
 	OnHEPUpdate(hostIfaceToEpMap map[string]proto.HostEndpoint)
+	GetIfaceQDiscInfo(ifaceName string) (bool, int, int)
 }
 
 func NewTestEpMgr(
@@ -768,7 +769,16 @@ func (m *bpfEndpointManager) withIface(ifaceName string, fn func(iface *bpfInter
 	m.dirtyIfaceNames.Add(ifaceName)
 }
 
-func (m *bpfEndpointManager) updateHostIP(ip net.IP, ipFamily int) {
+func (m *bpfEndpointManager) GetIfaceQDiscInfo(ifaceName string) (bool, int, int) {
+	qdisc := m.nameToIface[ifaceName].dpState.qdisc
+	return qdisc.valid, qdisc.prio, qdisc.handle
+}
+
+func (m *bpfEndpointManager) updateHostIP(ipAddr string, ipFamily int) {
+	ip, _, err := net.ParseCIDR(ipAddr)
+	if err != nil {
+		ip = net.ParseIP(ipAddr)
+	}
 	if ip != nil {
 		if ipFamily == 4 {
 			m.v4.hostIP = ip
@@ -779,10 +789,13 @@ func (m *bpfEndpointManager) updateHostIP(ip net.IP, ipFamily int) {
 		// but taking it now makes us robust to refactoring.
 		m.ifacesLock.Lock()
 		for ifaceName := range m.nameToIface {
-			m.dirtyIfaceNames.Add(ifaceName)
+			m.withIface(ifaceName, func(iface *bpfInterface) (forceDirty bool) {
+				iface.dpState.v4Readiness = ifaceNotReady
+				iface.dpState.v6Readiness = ifaceNotReady
+				return true
+			})
 		}
 		m.ifacesLock.Unlock()
-
 		// We use host IP as the source when routing service for the ctlb workaround. We
 		// need to update those routes, so make them all dirty.
 		for svc := range m.services {
@@ -823,12 +836,12 @@ func (m *bpfEndpointManager) OnUpdate(msg interface{}) {
 	case *proto.HostMetadataUpdate:
 		if m.v4 != nil && msg.Hostname == m.hostname {
 			log.WithField("HostMetadataUpdate", msg).Infof("Host IP changed: %s", msg.Ipv4Addr)
-			m.updateHostIP(net.ParseIP(msg.Ipv4Addr), 4)
+			m.updateHostIP(msg.Ipv4Addr, 4)
 		}
 	case *proto.HostMetadataV6Update:
 		if m.v6 != nil && msg.Hostname == m.hostname {
 			log.WithField("HostMetadataV6Update", msg).Infof("Host IPv6 changed: %s", msg.Ipv6Addr)
-			m.updateHostIP(net.ParseIP(msg.Ipv6Addr), 6)
+			m.updateHostIP(msg.Ipv6Addr, 6)
 		}
 	case *proto.HostMetadataV4V6Update:
 		if msg.Hostname != m.hostname {
@@ -836,11 +849,11 @@ func (m *bpfEndpointManager) OnUpdate(msg interface{}) {
 		}
 		if m.v4 != nil {
 			log.WithField("HostMetadataV4V6Update", msg).Infof("Host IP changed: %s", msg.Ipv4Addr)
-			m.updateHostIP(net.ParseIP(msg.Ipv4Addr), 4)
+			m.updateHostIP(msg.Ipv4Addr, 4)
 		}
 		if m.v6 != nil {
 			log.WithField("HostMetadataV4V6Update", msg).Infof("Host IPv6 changed: %s", msg.Ipv6Addr)
-			m.updateHostIP(net.ParseIP(msg.Ipv6Addr), 6)
+			m.updateHostIP(msg.Ipv6Addr, 6)
 		}
 	case *proto.ServiceUpdate:
 		m.onServiceUpdate(msg)
@@ -2186,6 +2199,10 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 			v4Readiness = ifaceNotReady
 			v6Readiness = ifaceNotReady
 		}
+		if _, err := m.dp.queryClassifier(ifindex, state.qdisc.handle, state.qdisc.prio, false); err != nil {
+			v4Readiness = ifaceNotReady
+			v6Readiness = ifaceNotReady
+		}
 	}
 
 	ap := m.calculateTCAttachPoint(ifaceName)
@@ -2243,7 +2260,10 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 		return state, fmt.Errorf("ingress qdisc info (%v) does not equal egress qdisc info (%v)",
 			ingressQdisc, egressQdisc)
 	}
-	state.qdisc = ingressQdisc
+
+	if attachPreamble {
+		state.qdisc = ingressQdisc
+	}
 
 	if err4 != nil && err6 != nil {
 		// This covers the case when we don't have hostIP on both paths.
@@ -2290,7 +2310,7 @@ func (m *bpfEndpointManager) ensureProgramAttached(ap attachPoint) (qDiscInfo, e
 	if err != nil {
 		return qdisc, err
 	}
-	if tcRes, ok := res.(*tc.AttachResult); ok {
+	if tcRes, ok := res.(tc.AttachResult); ok {
 		qdisc.valid = true
 		qdisc.prio = tcRes.Prio()
 		qdisc.handle = tcRes.Handle()
@@ -2384,7 +2404,6 @@ func (d *bpfEndpointManagerDataplane) wepApplyPolicyToDirection(readiness ifaceR
 	endpoint *proto.WorkloadEndpoint, polDirection PolDirection, ap *tc.AttachPoint,
 ) (*tc.AttachPoint, error) {
 	var policyIdx, filterIdx int
-
 	if d.hostIP == nil {
 		// Do not bother and wait
 		return nil, fmt.Errorf("unknown host IP")
