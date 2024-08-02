@@ -22,13 +22,10 @@ type Config struct {
 	IsHashrelease bool `envconfig:"IS_HASHRELEASE" default:"true"`
 
 	// DevTagSuffix is the suffix for the development tag
-	DevTagSuffix string `envconfig:"DEV_TAG_SUFFIX" default:"-0.dev"`
+	DevTagSuffix string `envconfig:"DEV_TAG_SUFFIX" default:"0.dev"`
 
 	// RepoReleaseBranchPrefix is the suffix for the release tag
-	RepoReleaseBranchPrefix string `envconfig:"RELEASE_BRANCH_PREFIX" default:"release-"`
-
-	// RepoDefaultBranch is the default branch for the repository
-	RepoDefaultBranch string `envconfig:"DEFAULT_BRANCH" default:"master"`
+	RepoReleaseBranchPrefix string `envconfig:"RELEASE_BRANCH_PREFIX" default:"release"`
 
 	// OperatorRepo is the repository for the operator
 	OperatorBranchName string `envconfig:"OPERATOR_BRANCH" default:"master"`
@@ -36,7 +33,8 @@ type Config struct {
 	// ValidArchs are the OS architectures supported for multi-arch build
 	ValidArchs []string `envconfig:"VALID_ARCHES" default:"amd64,arm64,ppc64le,s390x"`
 
-	// Registry is the registry to publish images
+	// Registry is the registry to publish images.
+	// This is only required if not on a release branch.
 	Registry string `envconfig:"REGISTRY"`
 
 	// DocsHost is the host for the hashrelease docs

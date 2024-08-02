@@ -13,6 +13,7 @@ const (
 	preReleaseTask = "pre-validate/start"
 )
 
+// PreReleaseValidate creates a Goyek task for validating a release before starting
 func PreReleaseValidate(cfg *config.Config) *GoyekTask {
 	return &GoyekTask{
 		Task: goyekv2.Task{

@@ -68,9 +68,10 @@ func (v *Version) NextVersion() Version {
 }
 
 // IsDevVersion returns true if the version is a dev version.
+// A dev version is in the format of v1.2.3-<devTag>-1-g123456789012.
 func IsDevVersion(ver, devTag string) bool {
 	v := Version(ver)
-	pattern := fmt.Sprintf(`^v\d+\.\d+\.\d+(-\d+\.\d+)?%s-\d+-g[0-9a-f]{12}$`, devTag)
+	pattern := fmt.Sprintf(`^v\d+\.\d+\.\d+(-\d+\.\d+)?-%s-\d+-g[0-9a-f]{12}$`, devTag)
 	re := regexp.MustCompile(pattern)
 	return re.MatchString(v.FormattedString())
 }

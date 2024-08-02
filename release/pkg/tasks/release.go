@@ -11,6 +11,7 @@ import (
 	"github.com/projectcalico/calico/release/internal/utils"
 )
 
+// ReleaseNotes generates release notes for the current release.
 func ReleaseNotes(cfg *config.Config) {
 	outDir := cfg.RepoRootDir
 	if cfg.IsHashrelease {
@@ -24,12 +25,13 @@ func ReleaseNotes(cfg *config.Config) {
 	logrus.Info("Please review for accuracy, and format appropriately before releasing.")
 }
 
+// PreReleaseValidate validates release configuration before starting a release.
 func PreReleaseValidate(cfg *config.Config) {
 	releaseBranch, err := utils.GitBranch(cfg.RepoRootDir)
 	if err != nil {
 		logrus.WithError(err).Fatal("unable to get git branch")
 	}
-	match := fmt.Sprintf(`^(%s|%s-v\d+\.\d+(?:-\d+)?)$`, cfg.RepoDefaultBranch, cfg.RepoReleaseBranchPrefix)
+	match := fmt.Sprintf(`^(%s|%s-v\d+\.\d+(?:-\d+)?)$`, utils.DefaultBranch, cfg.RepoReleaseBranchPrefix)
 	re := regexp.MustCompile(match)
 	if !re.MatchString(releaseBranch) {
 		if cfg.Registry == "" {

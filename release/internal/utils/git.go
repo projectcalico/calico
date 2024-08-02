@@ -7,7 +7,11 @@ import (
 )
 
 const (
+	// ProductName is the name of the product.
 	ProductName = "calico"
+
+	// DefaultBranch is the default branch of the repository.
+	DefaultBranch = "master"
 )
 
 // GitBranch returns the current git branch of the repository.
