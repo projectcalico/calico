@@ -774,7 +774,11 @@ func (m *bpfEndpointManager) GetIfaceQDiscInfo(ifaceName string) (bool, int, int
 	return qdisc.valid, qdisc.prio, qdisc.handle
 }
 
-func (m *bpfEndpointManager) updateHostIP(ip net.IP, ipFamily int) {
+func (m *bpfEndpointManager) updateHostIP(ipAddr string, ipFamily int) {
+	ip, _, err := net.ParseCIDR(ipAddr)
+	if err != nil {
+		ip = net.ParseIP(ipAddr)
+	}
 	if ip != nil {
 		if ipFamily == 4 {
 			m.v4.hostIP = ip
@@ -785,10 +789,13 @@ func (m *bpfEndpointManager) updateHostIP(ip net.IP, ipFamily int) {
 		// but taking it now makes us robust to refactoring.
 		m.ifacesLock.Lock()
 		for ifaceName := range m.nameToIface {
-			m.dirtyIfaceNames.Add(ifaceName)
+			m.withIface(ifaceName, func(iface *bpfInterface) (forceDirty bool) {
+				iface.dpState.v4Readiness = ifaceNotReady
+				iface.dpState.v6Readiness = ifaceNotReady
+				return true
+			})
 		}
 		m.ifacesLock.Unlock()
-
 		// We use host IP as the source when routing service for the ctlb workaround. We
 		// need to update those routes, so make them all dirty.
 		for svc := range m.services {
@@ -829,12 +836,12 @@ func (m *bpfEndpointManager) OnUpdate(msg interface{}) {
 	case *proto.HostMetadataUpdate:
 		if m.v4 != nil && msg.Hostname == m.hostname {
 			log.WithField("HostMetadataUpdate", msg).Infof("Host IP changed: %s", msg.Ipv4Addr)
-			m.updateHostIP(net.ParseIP(msg.Ipv4Addr), 4)
+			m.updateHostIP(msg.Ipv4Addr, 4)
 		}
 	case *proto.HostMetadataV6Update:
 		if m.v6 != nil && msg.Hostname == m.hostname {
 			log.WithField("HostMetadataV6Update", msg).Infof("Host IPv6 changed: %s", msg.Ipv6Addr)
-			m.updateHostIP(net.ParseIP(msg.Ipv6Addr), 6)
+			m.updateHostIP(msg.Ipv6Addr, 6)
 		}
 	case *proto.HostMetadataV4V6Update:
 		if msg.Hostname != m.hostname {
@@ -842,11 +849,11 @@ func (m *bpfEndpointManager) OnUpdate(msg interface{}) {
 		}
 		if m.v4 != nil {
 			log.WithField("HostMetadataV4V6Update", msg).Infof("Host IP changed: %s", msg.Ipv4Addr)
-			m.updateHostIP(net.ParseIP(msg.Ipv4Addr), 4)
+			m.updateHostIP(msg.Ipv4Addr, 4)
 		}
 		if m.v6 != nil {
 			log.WithField("HostMetadataV4V6Update", msg).Infof("Host IPv6 changed: %s", msg.Ipv6Addr)
-			m.updateHostIP(net.ParseIP(msg.Ipv6Addr), 6)
+			m.updateHostIP(msg.Ipv6Addr, 6)
 		}
 	case *proto.ServiceUpdate:
 		m.onServiceUpdate(msg)
