@@ -82,18 +82,18 @@ func OperatorHashreleasePush(runner *registry.DockerRunner, cfg *config.Config) 
 	var imageList []string
 	for _, arch := range cfg.ValidArchs {
 		imgName := fmt.Sprintf("%s/%s:%s-%s", registry, imageName, operatorVersion, arch)
-		if err := runner.PushImage(imgName, cfg.DockerAccessAuth); err != nil {
+		if err := runner.PushImage(imgName); err != nil {
 			logrus.WithField("image", imgName).WithError(err).Fatal("Failed to push operator image")
 		}
 		logrus.WithField("image", imgName).Info("Pushed operator image")
 		imageList = append(imageList, imgName)
 	}
 	manifestListName := fmt.Sprintf("%s/%s:%s", registry, imageName, operatorVersion)
-	if err = runner.ManifestPush(manifestListName, imageList, cfg.DockerAccessAuth); err != nil {
+	if err = runner.ManifestPush(manifestListName, imageList); err != nil {
 		logrus.WithField("manifest", manifestListName).WithError(err).Fatal("Failed to push operator manifest")
 	}
 	imgName := fmt.Sprintf("%s/%s-init:%s", registry, imageName, operatorVersion)
-	if err := runner.PushImage(imgName, cfg.DockerAccessAuth); err != nil {
+	if err := runner.PushImage(imgName); err != nil {
 		logrus.WithField("image", imgName).WithError(err).Fatal("Failed to push operator init image")
 	}
 }

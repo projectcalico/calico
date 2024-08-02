@@ -39,10 +39,6 @@ type Config struct {
 	// Registry is the registry to publish images
 	Registry string `envconfig:"REGISTRY"`
 
-	// DockerAccessAuth is the access auth for the docker registry
-	// The format is expected to be "username:password"
-	DockerAccessAuth string `envconfig:"DOCKER_ACCESS_AUTH"`
-
 	// DocsHost is the host for the hashrelease docs
 	DocsHost string `envconfig:"DOCS_HOST"`
 

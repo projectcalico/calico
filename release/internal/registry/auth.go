@@ -105,22 +105,9 @@ func getBearerTokenWithAuth(auth string, registry Registry, scope string) (strin
 	return resp["token"].(string), nil
 }
 
-// getRegistryAuthConfig retrieves the registry auth config.
-func getRegistryAuthConfig(accessAuth, registryURL string) (registry.AuthConfig, error) {
-	if accessAuth != "" {
-		parts := strings.Split(accessAuth, ":")
-		return registry.AuthConfig{
-			Username:      parts[0],
-			Password:      parts[1],
-			ServerAddress: registryURL,
-		}, nil
-	}
-	return getAuthFromDockerConfig(registryURL)
-}
-
 // registryAuthStr returns the base64 encoded registry auth string.
-func registryAuthStr(accessAuth string, registry Registry) (string, error) {
-	registryAuthConfig, err := getRegistryAuthConfig(accessAuth, registry.URL())
+func registryAuthStr(registry Registry) (string, error) {
+	registryAuthConfig, err := getAuthFromDockerConfig(registry.URL())
 	if err != nil {
 		logrus.WithError(err).Error("failed to get auth config")
 		return "", err
