@@ -47,7 +47,7 @@ data:
   # Typha is disabled.
   typha_service_name: "none"
   # Configure the backend to use.
-  calico_backend: "vxlan"
+  calico_backend: "ipip"
 
   # Configure the MTU to use for workload interfaces and tunnels.
   # By default, MTU is auto-detected, and explicitly setting this field should not be required.
@@ -4816,8 +4816,6 @@ spec:
     spec:
       nodeSelector:
         kubernetes.io/os: linux
-        # Only run Calico on nodes that have been migrated.
-        projectcalico.org/node-network-during-migration: calico
       hostNetwork: true
       tolerations:
         # Make sure calico-node gets scheduled on all nodes.
@@ -4980,7 +4978,7 @@ spec:
               value: "Never"
             # Set if Felix should program IPIP routes or not.
             - name: FELIX_PROGRAMROUTES
-              value: "None"
+              value: "IPIP"
             # Set MTU for tunnel device used if ipip is enabled
             - name: FELIX_IPINIPMTU
               valueFrom:
