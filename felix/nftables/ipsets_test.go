@@ -21,6 +21,7 @@ import (
 	"sigs.k8s.io/knftables"
 
 	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/felix/ipsets"
@@ -201,18 +202,169 @@ var _ = Describe("IPSets with empty data plane", func() {
 			&knftables.Element{Set: "cali40unsupported-set", Key: []string{"10.0.0.1"}},
 		))
 	})
+})
 
-	It("should program a hash:net,net IP set", func() {
-		meta := ipsets.IPSetMetadata{SetID: "test", Type: ipsets.IPSetTypeHashNetNet}
-		s.AddOrReplaceIPSet(meta, []string{"10.0.0.0/32,11.0.0.0/32"})
+var _ = DescribeTable("IPSets programming v4",
+	func(meta ipsets.IPSetMetadata, members []string, expected []*knftables.Element) {
+		f := NewFake(knftables.IPv4Family, "calico")
+		ipv := ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil)
+		s := NewIPSets(ipv, f, logutils.NewSummarizer("test loop"))
+		s.AddOrReplaceIPSet(meta, members)
 		Expect(s.ApplyUpdates).NotTo(Panic())
+
+		// Read it back.
 		sets, err := f.List(context.Background(), "sets")
 		Expect(err).NotTo(HaveOccurred())
-		Expect(sets).To(Equal([]string{"cali40test"}))
+		Expect(sets).To(Equal([]string{"cali40" + meta.SetID}))
 
-		members, err := f.ListElements(context.Background(), "set", "cali40test")
+		m, err := f.ListElements(context.Background(), "set", "cali40"+meta.SetID)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(members).To(HaveLen(1))
-		Expect(members[0].Key).To(Equal([]string{"10.0.0.0", "11.0.0.0"}))
-	})
-})
+		Expect(m).To(ContainElements(expected))
+
+		// Trigger a resync to make sure we can handle it.
+		s.QueueResync()
+		Expect(s.ApplyUpdates).NotTo(Panic())
+
+		// Read it back again.
+		m, err = f.ListElements(context.Background(), "set", "cali40"+meta.SetID)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(m).To(ContainElements(expected))
+	},
+
+	Entry(
+		ipsets.IPSetTypeHashIP,
+		ipsets.IPSetMetadata{SetID: "test", Type: ipsets.IPSetTypeHashIP}, []string{"10.0.0.1"},
+		[]*knftables.Element{{Set: "cali40test", Key: []string{"10.0.0.1"}}},
+	),
+	Entry(
+		ipsets.IPSetTypeHashNet,
+		ipsets.IPSetMetadata{SetID: "test", Type: ipsets.IPSetTypeHashNet}, []string{"10.0.0.0/24"},
+		[]*knftables.Element{{Set: "cali40test", Key: []string{"10.0.0.0/24"}}},
+	),
+	Entry(
+		ipsets.IPSetTypeHashIPPort,
+		ipsets.IPSetMetadata{SetID: "test", Type: ipsets.IPSetTypeHashIPPort}, []string{"1.2.3.4,tcp:81"},
+		[]*knftables.Element{{Set: "cali40test", Key: []string{"1.2.3.4", "tcp", "81"}}},
+	),
+	Entry(
+		ipsets.IPSetTypeHashNetNet,
+		ipsets.IPSetMetadata{SetID: "test", Type: ipsets.IPSetTypeHashNetNet}, []string{"10.0.0.0/32,10.0.0.0/32"},
+		[]*knftables.Element{{Set: "cali40test", Key: []string{"10.0.0.0", "10.0.0.0"}}},
+	),
+	Entry(
+		ipsets.IPSetTypeBitmapPort,
+		ipsets.IPSetMetadata{SetID: "test", Type: ipsets.IPSetTypeBitmapPort}, []string{"v4,80"},
+		[]*knftables.Element{{Set: "cali40test", Key: []string{"80"}}},
+	),
+)
+
+var _ = DescribeTable("IPSets programming v6",
+	func(meta ipsets.IPSetMetadata, members []string, expected []*knftables.Element) {
+		f := NewFake(knftables.IPv4Family, "calico")
+		ipv := ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil)
+		s := NewIPSets(ipv, f, logutils.NewSummarizer("test loop"))
+		s.AddOrReplaceIPSet(meta, members)
+		Expect(s.ApplyUpdates).NotTo(Panic())
+
+		// Read it back.
+		sets, err := f.List(context.Background(), "sets")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(sets).To(Equal([]string{"cali60" + meta.SetID}))
+
+		m, err := f.ListElements(context.Background(), "set", "cali60"+meta.SetID)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(m).To(ContainElements(expected))
+
+		// Trigger a resync to make sure we can handle it.
+		s.QueueResync()
+		Expect(s.ApplyUpdates).NotTo(Panic())
+
+		// Read it back again.
+		m, err = f.ListElements(context.Background(), "set", "cali60"+meta.SetID)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(m).To(ContainElements(expected))
+	},
+
+	Entry(
+		ipsets.IPSetTypeHashIP,
+		ipsets.IPSetMetadata{SetID: "test", Type: ipsets.IPSetTypeHashIP}, []string{"2001:db8::1"},
+		[]*knftables.Element{{Set: "cali60test", Key: []string{"2001:db8::1"}}},
+	),
+	Entry(
+		ipsets.IPSetTypeHashNet,
+		ipsets.IPSetMetadata{SetID: "test", Type: ipsets.IPSetTypeHashNet}, []string{"2001:db8::/64"},
+		[]*knftables.Element{{Set: "cali60test", Key: []string{"2001:db8::/64"}}},
+	),
+	Entry(
+		ipsets.IPSetTypeHashIPPort,
+		ipsets.IPSetMetadata{SetID: "test", Type: ipsets.IPSetTypeHashIPPort}, []string{"2001:db8::1,tcp:81"},
+		[]*knftables.Element{{Set: "cali60test", Key: []string{"2001:db8::1", "tcp", "81"}}},
+	),
+	Entry(
+		ipsets.IPSetTypeHashNetNet,
+		ipsets.IPSetMetadata{SetID: "test", Type: ipsets.IPSetTypeHashNetNet}, []string{"2001:db8::/128,2001:db8::/128"},
+		[]*knftables.Element{{Set: "cali60test", Key: []string{"2001:db8::", "2001:db8::"}}},
+	),
+	Entry(
+		ipsets.IPSetTypeBitmapPort,
+		ipsets.IPSetMetadata{SetID: "test", Type: ipsets.IPSetTypeBitmapPort}, []string{"v6,80"},
+		[]*knftables.Element{{Set: "cali60test", Key: []string{"80"}}},
+	),
+)
+
+var _ = DescribeTable("CanonicalizeMember",
+	func(setType ipsets.IPSetType, member string, strVal string, key []string) {
+		canon := CanonicaliseMember(setType, member)
+		Expect(canon.String()).To(Equal(strVal))
+		Expect(canon.Key()).To(Equal(key))
+	},
+
+	Entry(ipsets.IPSetTypeHashIP, ipsets.IPSetTypeHashIP, "192.168.0.1/32", "192.168.0.1", []string{"192.168.0.1"}),
+	Entry(ipsets.IPSetTypeHashIP, ipsets.IPSetTypeHashIP, "fe80::1/128", "fe80::1", []string{"fe80::1"}),
+	Entry(ipsets.IPSetTypeHashNet, ipsets.IPSetTypeHashNet, "10.0.0.0/24", "10.0.0.0/24", []string{"10.0.0.0/24"}),
+	Entry(ipsets.IPSetTypeHashNet, ipsets.IPSetTypeHashNet, "2001:db8::/64", "2001:db8::/64", []string{"2001:db8::/64"}),
+	Entry(ipsets.IPSetTypeHashIPPort, ipsets.IPSetTypeHashIPPort, "192.168.0.1,tcp:80", "192.168.0.1,tcp:80", []string{"192.168.0.1", "tcp", "80"}),
+	Entry(ipsets.IPSetTypeHashIPPort, ipsets.IPSetTypeHashIPPort, "fe80::1,udp:53", "fe80::1,udp:53", []string{"fe80::1", "udp", "53"}),
+	Entry(ipsets.IPSetTypeHashNetNet, ipsets.IPSetTypeHashNetNet, "10.0.0.1/32,10.0.0.1/32", "10.0.0.1/32 . 10.0.0.1/32", []string{"10.0.0.1", "10.0.0.1"}),
+	Entry(ipsets.IPSetTypeHashNetNet, ipsets.IPSetTypeHashNetNet, "2001:db8::1/128,2001:db8::1/128", "2001:db8::1/128 . 2001:db8::1/128", []string{"2001:db8::1", "2001:db8::1"}),
+	Entry(ipsets.IPSetTypeBitmapPort, ipsets.IPSetTypeBitmapPort, "v4,80", "80", []string{"80"}),
+	Entry(ipsets.IPSetTypeBitmapPort, ipsets.IPSetTypeBitmapPort, "v6,80", "80", []string{"80"}),
+	Entry(ipsets.IPSetTypeBitmapPort, ipsets.IPSetTypeBitmapPort, "80", "80", []string{"80"}),
+)
+
+var _ = DescribeTable("NFTablesSet",
+	func(meta ipsets.IPSetMetadata, exp *knftables.Set) {
+		f := NewFake(knftables.IPv4Family, "calico")
+		ipv := ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil)
+		s := NewIPSets(ipv, f, logutils.NewSummarizer("test loop"))
+		s.AddOrReplaceIPSet(meta, []string{})
+		Expect(s.ApplyUpdates).NotTo(Panic())
+		Expect(s.NFTablesSet(fmt.Sprintf("cali40%s", meta.SetID))).To(Equal(exp))
+	},
+
+	Entry(
+		ipsets.IPSetTypeHashIP,
+		ipsets.IPSetMetadata{SetID: "test", Type: ipsets.IPSetTypeHashIP},
+		&knftables.Set{Name: "cali40test", Type: "ipv4_addr"},
+	),
+	Entry(
+		ipsets.IPSetTypeHashNet,
+		ipsets.IPSetMetadata{SetID: "test", Type: ipsets.IPSetTypeHashNet},
+		&knftables.Set{Name: "cali40test", Type: "ipv4_addr", Flags: []knftables.SetFlag{knftables.IntervalFlag}},
+	),
+	Entry(
+		ipsets.IPSetTypeHashIPPort,
+		ipsets.IPSetMetadata{SetID: "test", Type: ipsets.IPSetTypeHashIPPort},
+		&knftables.Set{Name: "cali40test", Type: "ipv4_addr . inet_proto . inet_service"},
+	),
+	Entry(
+		ipsets.IPSetTypeHashNetNet,
+		ipsets.IPSetMetadata{SetID: "test", Type: ipsets.IPSetTypeHashNetNet},
+		&knftables.Set{Name: "cali40test", Type: "ipv4_addr . ipv4_addr"},
+	),
+	Entry(
+		ipsets.IPSetTypeBitmapPort,
+		ipsets.IPSetMetadata{SetID: "test", Type: ipsets.IPSetTypeBitmapPort},
+		&knftables.Set{Name: "cali40test", Type: "inet_service"},
+	),
+)
