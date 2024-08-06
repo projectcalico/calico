@@ -86,13 +86,13 @@ require (
 	gopkg.in/go-playground/validator.v9 v9.30.2
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 	gopkg.in/yaml.v2 v2.4.0
-	k8s.io/api v0.29.4
+	k8s.io/api v0.29.7
 	k8s.io/apiextensions-apiserver v0.29.4
-	k8s.io/apimachinery v0.29.4
+	k8s.io/apimachinery v0.29.7
 	k8s.io/apiserver v0.29.4
-	k8s.io/client-go v0.29.4
+	k8s.io/client-go v0.29.7
 	k8s.io/code-generator v0.29.4
-	k8s.io/component-base v0.29.4
+	k8s.io/component-base v0.29.7
 	k8s.io/klog/v2 v2.120.1
 	k8s.io/kube-aggregator v0.29.4
 	k8s.io/kube-openapi v0.0.0-20231010175941-2dd684a91f00
@@ -284,7 +284,7 @@ require (
 	k8s.io/csi-translation-lib v0.28.9 // indirect
 	k8s.io/dynamic-resource-allocation v0.28.9 // indirect
 	k8s.io/gengo v0.0.0-20230829151522-9cce18d56c01 // indirect
-	k8s.io/kms v0.29.4 // indirect
+	k8s.io/kms v0.29.7 // indirect
 	k8s.io/kube-scheduler v0.0.0 // indirect
 	k8s.io/kubectl v0.0.0 // indirect
 	k8s.io/kubelet v0.28.9 // indirect
