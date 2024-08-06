@@ -226,6 +226,27 @@ ipresv_name1_rev1_v4_long = {
 }
 
 #
+# BGP filters
+#
+
+bgpfilter_name1_rev1 = {
+    'apiVersion': API_VERSION,
+    'kind': 'BGPFilter',
+    'metadata': {
+        'name': 'bgpfilter-name1'
+    },
+    'spec': {
+        'exportv4': [
+            {
+                'cidr': '10.0.0.0/16',
+                'matchOperator': 'Equal',
+                'action': 'Accept',
+            },
+        ],
+    }
+}
+
+#
 # BGPPeers
 #
 bgppeer_name1_rev1_v4 = {
@@ -736,10 +757,6 @@ globalnetworkset_name1_rev1 = {
             "feed:beef::1",
             "dead:beef::96",
         ],
-        'allowedEgressDomains': [
-            "microsoft.com",
-            "www.microsoft.com",
-        ],
     }
 }
 
@@ -1149,45 +1166,6 @@ bgpconfig_name4_rev1 = {
     },
     'spec': {
         'logSeverityScreen': 'Debug',
-    }
-}
-
-#
-# Remote cluster configs
-#
-rcc_rev1 = {
-    'apiVersion': API_VERSION,
-    'kind': 'RemoteClusterConfiguration',
-    'metadata': {
-        'name': 'rcc1',
-    },
-    'spec': {
-        'datastoreType': 'kubernetes',
-        'kubeconfig' : 'yes- this is a valid path!'
-    }
-}
-
-rcc_rev2 = {
-    'apiVersion': API_VERSION,
-    'kind': 'RemoteClusterConfiguration',
-    'metadata': {
-        'name': 'rcc1',
-    },
-    'spec': {
-        'datastoreType': 'kubernetes',
-        'kubeconfig' : '/more/normal'
-    }
-}
-
-rcc_rev3 = {
-    'apiVersion': API_VERSION,
-    'kind': 'RemoteClusterConfiguration',
-    'metadata': {
-        'name': 'rcc1',
-    },
-    'spec': {
-        'datastoreType': 'kubernetes',
-        'kubeconfig' : '/etc/config/kubeconfig'
     }
 }
 

@@ -467,7 +467,7 @@ data['do_not_track'] = {
 data['prednat_policy'] = {
     'apiVersion': 'v1',
     'kind': 'policy',
-    'metadata': {'name': 'allow-cluster-internal-ingress'},
+    'metadata': {'name': 'default.allow-cluster-internal-ingress'},
     'spec': {'ingress': [{'action': 'allow',
                           'source': {'nets': ['10.240.0.0/16',
                                               '192.168.0.0/16']}}],
