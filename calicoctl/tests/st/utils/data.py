@@ -563,8 +563,6 @@ globalnetworkpolicy_name1_rev1 = {
                 'action': 'Allow',
                 'source': {
                     'selector': "type=='application'"},
-                'destination': {
-                    'domains': ["microsoft.com", "www.microsoft.com"]},
             },
         ],
         'ingress': [
