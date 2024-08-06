@@ -336,6 +336,7 @@ func xdpTest(getInfra infrastructure.InfraFactory, proto string) {
 				Expect(utils.LastRunOutput).To(ContainSubstring(`100% packet loss`))
 				Expect(doHping()).To(HaveOccurred())
 
+				time.Sleep(time.Minute * 60)
 				if !BPFMode() && !NFTMode() {
 					output, err := tc.Felixes[srvr].ExecOutput("iptables", "-t", "raw", "-v", "-n", "-L", "cali-pi-default.xdp-filter")
 					// the only rule that refers to a cali40-prefixed ipset should
