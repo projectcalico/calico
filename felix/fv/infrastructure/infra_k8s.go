@@ -211,6 +211,7 @@ func (kds *K8sDatastoreInfra) runK8sApiserver() {
 		utils.Config.K8sImage,
 		"kube-apiserver",
 		"--v=0",
+		"--feature-gates=UnauthenticatedHTTP2DOSMitigation=false",
 		"--service-cluster-ip-range=" + kds.serviceClusterIPRange,
 		"--authorization-mode=RBAC",
 		fmt.Sprintf("--etcd-servers=http://%s:2379", kds.containerGetIPForURL(kds.etcdContainer)),
