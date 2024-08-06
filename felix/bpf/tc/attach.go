@@ -149,6 +149,7 @@ func (ap *AttachPoint) AttachProgram() (bpf.AttachResult, error) {
 		return nil, err
 	}
 
+	prio := findFilterPriority(progsToClean)
 	obj, err := ap.loadObject(binaryToLoad)
 	if err != nil {
 		logCxt.Warn("Failed to load program")
@@ -156,7 +157,7 @@ func (ap *AttachPoint) AttachProgram() (bpf.AttachResult, error) {
 	}
 	defer obj.Close()
 
-	res.progId, res.prio, res.handle, err = obj.AttachClassifier("cali_tc_preamble", ap.Iface, ap.Hook == hook.Ingress)
+	res.progId, res.prio, res.handle, err = obj.AttachClassifier("cali_tc_preamble", ap.Iface, ap.Hook == hook.Ingress, prio)
 	if err != nil {
 		logCxt.Warnf("Failed to attach to TC section cali_tc_preamble")
 		return nil, err
@@ -376,6 +377,21 @@ func RemoveQdisc(ifaceName string) error {
 	}
 
 	return libbpf.RemoveQDisc(ifaceName)
+}
+
+func findFilterPriority(progsToClean []attachedProg) int {
+	prio := 0
+	for _, p := range progsToClean {
+		pref, err := strconv.Atoi(p.pref)
+		if err != nil {
+			continue
+		}
+
+		if pref > prio {
+			prio = pref
+		}
+	}
+	return prio
 }
 
 func (ap *AttachPoint) Config() string {
