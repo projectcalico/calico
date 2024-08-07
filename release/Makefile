@@ -11,7 +11,7 @@ clean:
 	@rm -rf ./bin
 	@rm -rf ./output ./tmp
 
-bin/release: $(shell find . -name "*.go")
+bin/release: $(shell find . -name "*.go") $(shell find ../hack/release -name "*.go")
 	@mkdir -p bin && \
 	$(call build_binary, ./build, bin/release)
 
