@@ -42,8 +42,16 @@ func NewFelixConfigUpdateProcessor() watchersyncer.SyncerUpdateProcessor {
 			"RouteTableRange":           routeTableRangeToString,
 			"RouteTableRanges":          routeTableRangeListToString,
 			"HealthTimeoutOverrides":    healthTimeoutOverridesToString,
+			"NFTables":                  passthroughConverter,
 		},
 	)
+}
+
+// passthroughConverter is a converter that simply passes through the value without modification.
+// This is useful for complex types that are already in the correct format, and for which we want to
+// by pass the default "stringification" behavior of the ConfigUpdateProcessor.
+func passthroughConverter(value interface{}) interface{} {
+	return value
 }
 
 // Convert a slice of ProtoPorts to the string representation required by Felix.
