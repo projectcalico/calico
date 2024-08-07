@@ -28,7 +28,7 @@ func main() {
 	app.Commands = append(app.Commands, &cli.Command{
 		Name:        "hashrelease",
 		Aliases:     []string{"hr"},
-		Usage:       "Build and publish hashreleases",
+		Usage:       "Build and publish hashreleases.",
 		Subcommands: hashrelaseSubCommands(cfg, runner),
 	})
 
