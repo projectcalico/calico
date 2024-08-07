@@ -11,8 +11,10 @@ import (
 	"github.com/projectcalico/calico/hack/release/pkg/builder"
 )
 
-var create, publish, newBranch, meta bool
-var dir string
+var (
+	create, publish, newBranch, meta bool
+	dir                              string
+)
 
 func init() {
 	flag.BoolVar(&create, "create", false, "Create a release from the current commit")
