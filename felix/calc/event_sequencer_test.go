@@ -129,7 +129,7 @@ var _ = Describe("ParsedRulesToActivePolicyUpdate", func() {
 	})
 
 	It("should convert the fully-loaded rule", func() {
-		protoUpdate := calc.ParsedRulesToActivePolicyUpdate(model.PolicyKey{Name: "a-policy"}, &fullyLoadedParsedRules)
+		protoUpdate := calc.ParsedRulesToActivePolicyUpdate(model.PolicyKey{Tier: "default", Name: "a-policy"}, &fullyLoadedParsedRules)
 		// Check the rule IDs are filled in but ignore them for comparisons.
 		for _, r := range protoUpdate.Policy.InboundRules {
 			Expect(r.RuleId).ToNot(Equal(""))

@@ -1,0 +1,270 @@
+make run-etcd
+make[1]: Entering directory '/home/mazdak/src/calico-private/calicoctl'
+Error response from daemon: No such container: calico-etcd
+docker run --detach \
+	--net=host \
+	--entrypoint=/usr/local/bin/etcd \
+	--name calico-etcd quay.io/coreos/etcd:v3.5.6 \
+	--enable-v2 \
+	--advertise-client-urls "http://172.16.129.8:2379,http://127.0.0.1:2379,http://172.16.129.8:4001,http://127.0.0.1:4001" \
+	--listen-client-urls "http://0.0.0.0:2379,http://0.0.0.0:4001"
+0c19d5e379324409d3369421c2559e13871097a19a098b2674c8def74d3769db
+make[1]: Leaving directory '/home/mazdak/src/calico-private/calicoctl'
+# We start two API servers in order to test multiple kubeconfig support
+make run-kubernetes-master KUBE_APISERVER_PORT=6443 KUBE_MOCK_NODE_MANIFEST=mock-node.yaml
+make[1]: Entering directory '/home/mazdak/src/calico-private/calicoctl'
+# Delete the cluster role binding.
+docker exec st-apiserver-6443 kubectl delete clusterrolebinding anonymous-admin
+Error response from daemon: No such container: st-apiserver-6443
+make[1]: [Makefile:234: stop-kubernetes-master] Error 1 (ignored)
+# Stop master components.
+docker rm -f st-apiserver-6443 st-controller-manager-6443
+Error response from daemon: No such container: st-apiserver-6443
+Error response from daemon: No such container: st-controller-manager-6443
+# Run a Kubernetes apiserver using Docker.
+docker run --net=host --detach \
+	--name st-apiserver-6443 \
+	-v /home/mazdak/src/calico-private/calicoctl:/code \
+	-v /home/mazdak/src/calico-private/calicoctl/../:/go/src/github.com/projectcalico/calico \
+	-v /home/mazdak/src/calico-private/hack/test/certs:/home/user/certs \
+	-e KUBECONFIG=/home/user/certs/kubeconfig \
+	calico/go-build:v0.91 kube-apiserver \
+		--secure-port=6443 \
+		--admission-control=NamespaceLifecycle,LimitRanger,DefaultStorageClass,ResourceQuota \
+		--etcd-servers=http://172.16.129.8:2379 \
+                        --service-cluster-ip-range=10.101.0.0/16 \
+                        --authorization-mode=RBAC \
+                        --service-account-key-file=/home/user/certs/service-account.pem \
+                        --service-account-signing-key-file=/home/user/certs/service-account-key.pem \
+                        --service-account-issuer=https://localhost:443 \
+                        --api-audiences=kubernetes.default \
+                        --client-ca-file=/home/user/certs/ca.pem \
+                        --tls-cert-file=/home/user/certs/kubernetes.pem \
+                        --tls-private-key-file=/home/user/certs/kubernetes-key.pem \
+                        --enable-priority-and-fairness=false \
+                        --max-mutating-requests-inflight=0 \
+                        --max-requests-inflight=0
+f6bcee8bcc75d63e00ac554da3803e88876c0c048f7d767316ba5cf7744f2897
+# Wait until the apiserver is accepting requests.
+while ! docker exec st-apiserver-6443 kubectl --server=https://127.0.0.1:6443 get nodes; do echo "Waiting for apiserver to come up..."; sleep 2; done
+No resources found
+# And run the controller manager.
+docker run --detach --net=host \
+  --name st-controller-manager-6443 \
+  -v /home/mazdak/src/calico-private/hack/test/certs:/home/user/certs \
+  calico/go-build:v0.91 kube-controller-manager \
+    --master=https://127.0.0.1:6443 \
+            --kubeconfig=/home/user/certs/kube-controller-manager.kubeconfig \
+            --min-resync-period=3m \
+            --allocate-node-cidrs=true \
+            --cluster-cidr=10.10.0.0/16 \
+            --v=5 \
+            --service-account-private-key-file=/home/user/certs/service-account-key.pem \
+            --root-ca-file=/home/user/certs/ca.pem
+667f7e3b7f19300edb43c7f00bd582fb6bf9692f2b85f0ea3b06a36868024b7a
+# Create a Node in the API for the tests to use.
+while ! docker exec -ti st-apiserver-6443 kubectl \
+	--server=https://127.0.0.1:6443 \
+	apply -f /code/tests/st/manifests/mock-node.yaml; \
+	do echo "Waiting for node to apply successfully..."; sleep 2; done
+node/node4 created
+# Apply CRDs because the tests require them.
+while ! docker exec -ti st-apiserver-6443 kubectl \
+	--server=https://127.0.0.1:6443 \
+	apply -f /go/src/github.com/projectcalico/calico/libcalico-go/config/crd; \
+	do echo "Waiting for ClusterInformation CRD to apply successfully..."; sleep 2; done
+customresourcedefinition.apiextensions.k8s.io/alertexceptions.crd.projectcalico.org created
+customresourcedefinition.apiextensions.k8s.io/bgpconfigurations.crd.projectcalico.org created
+customresourcedefinition.apiextensions.k8s.io/bgpfilters.crd.projectcalico.org created
+customresourcedefinition.apiextensions.k8s.io/bgppeers.crd.projectcalico.org created
+customresourcedefinition.apiextensions.k8s.io/blockaffinities.crd.projectcalico.org created
+customresourcedefinition.apiextensions.k8s.io/caliconodestatuses.crd.projectcalico.org created
+customresourcedefinition.apiextensions.k8s.io/clusterinformations.crd.projectcalico.org created
+customresourcedefinition.apiextensions.k8s.io/deeppacketinspections.crd.projectcalico.org created
+customresourcedefinition.apiextensions.k8s.io/egressgatewaypolicies.crd.projectcalico.org created
+customresourcedefinition.apiextensions.k8s.io/externalnetworks.crd.projectcalico.org created
+customresourcedefinition.apiextensions.k8s.io/felixconfigurations.crd.projectcalico.org created
+customresourcedefinition.apiextensions.k8s.io/globalalerts.crd.projectcalico.org created
+customresourcedefinition.apiextensions.k8s.io/globalalerttemplates.crd.projectcalico.org created
+customresourcedefinition.apiextensions.k8s.io/globalnetworkpolicies.crd.projectcalico.org created
+customresourcedefinition.apiextensions.k8s.io/globalnetworksets.crd.projectcalico.org created
+customresourcedefinition.apiextensions.k8s.io/globalreports.crd.projectcalico.org created
+customresourcedefinition.apiextensions.k8s.io/globalreporttypes.crd.projectcalico.org created
+customresourcedefinition.apiextensions.k8s.io/globalthreatfeeds.crd.projectcalico.org created
+customresourcedefinition.apiextensions.k8s.io/hostendpoints.crd.projectcalico.org created
+customresourcedefinition.apiextensions.k8s.io/ipamblocks.crd.projectcalico.org created
+customresourcedefinition.apiextensions.k8s.io/ipamconfigs.crd.projectcalico.org created
+customresourcedefinition.apiextensions.k8s.io/ipamhandles.crd.projectcalico.org created
+customresourcedefinition.apiextensions.k8s.io/ippools.crd.projectcalico.org created
+customresourcedefinition.apiextensions.k8s.io/ipreservations.crd.projectcalico.org created
+customresourcedefinition.apiextensions.k8s.io/kubecontrollersconfigurations.crd.projectcalico.org created
+customresourcedefinition.apiextensions.k8s.io/licensekeys.crd.projectcalico.org created
+customresourcedefinition.apiextensions.k8s.io/managedclusters.crd.projectcalico.org created
+customresourcedefinition.apiextensions.k8s.io/networkpolicies.crd.projectcalico.org created
+customresourcedefinition.apiextensions.k8s.io/networksets.crd.projectcalico.org created
+customresourcedefinition.apiextensions.k8s.io/packetcaptures.crd.projectcalico.org created
+customresourcedefinition.apiextensions.k8s.io/policyrecommendationscopes.crd.projectcalico.org created
+customresourcedefinition.apiextensions.k8s.io/remoteclusterconfigurations.crd.projectcalico.org created
+customresourcedefinition.apiextensions.k8s.io/securityeventwebhooks.crd.projectcalico.org created
+customresourcedefinition.apiextensions.k8s.io/stagedglobalnetworkpolicies.crd.projectcalico.org created
+customresourcedefinition.apiextensions.k8s.io/stagedkubernetesnetworkpolicies.crd.projectcalico.org created
+customresourcedefinition.apiextensions.k8s.io/stagednetworkpolicies.crd.projectcalico.org created
+customresourcedefinition.apiextensions.k8s.io/tiers.crd.projectcalico.org created
+customresourcedefinition.apiextensions.k8s.io/uisettings.crd.projectcalico.org created
+customresourcedefinition.apiextensions.k8s.io/uisettingsgroups.crd.projectcalico.org created
+customresourcedefinition.apiextensions.k8s.io/licenseusagereports.usage.tigera.io created
+# Create a namespace in the API for the tests to use.
+docker exec -ti st-apiserver-6443 kubectl \
+	--server=https://127.0.0.1:6443 \
+	create namespace test
+namespace/test created
+make[1]: Leaving directory '/home/mazdak/src/calico-private/calicoctl'
+make run-kubernetes-master KUBE_APISERVER_PORT=6444 KUBE_MOCK_NODE_MANIFEST=mock-node-second.yaml
+make[1]: Entering directory '/home/mazdak/src/calico-private/calicoctl'
+# Delete the cluster role binding.
+docker exec st-apiserver-6444 kubectl delete clusterrolebinding anonymous-admin
+Error response from daemon: No such container: st-apiserver-6444
+make[1]: [Makefile:234: stop-kubernetes-master] Error 1 (ignored)
+# Stop master components.
+docker rm -f st-apiserver-6444 st-controller-manager-6444
+Error response from daemon: No such container: st-apiserver-6444
+Error response from daemon: No such container: st-controller-manager-6444
+# Run a Kubernetes apiserver using Docker.
+docker run --net=host --detach \
+	--name st-apiserver-6444 \
+	-v /home/mazdak/src/calico-private/calicoctl:/code \
+	-v /home/mazdak/src/calico-private/calicoctl/../:/go/src/github.com/projectcalico/calico \
+	-v /home/mazdak/src/calico-private/hack/test/certs:/home/user/certs \
+	-e KUBECONFIG=/home/user/certs/kubeconfig \
+	calico/go-build:v0.91 kube-apiserver \
+		--secure-port=6444 \
+		--admission-control=NamespaceLifecycle,LimitRanger,DefaultStorageClass,ResourceQuota \
+		--etcd-servers=http://172.16.129.8:2379 \
+                        --service-cluster-ip-range=10.101.0.0/16 \
+                        --authorization-mode=RBAC \
+                        --service-account-key-file=/home/user/certs/service-account.pem \
+                        --service-account-signing-key-file=/home/user/certs/service-account-key.pem \
+                        --service-account-issuer=https://localhost:443 \
+                        --api-audiences=kubernetes.default \
+                        --client-ca-file=/home/user/certs/ca.pem \
+                        --tls-cert-file=/home/user/certs/kubernetes.pem \
+                        --tls-private-key-file=/home/user/certs/kubernetes-key.pem \
+                        --enable-priority-and-fairness=false \
+                        --max-mutating-requests-inflight=0 \
+                        --max-requests-inflight=0
+06a88c28269a35e5b7dd15118e39631382137d0606b50bdb7ecd613ad49c485e
+# Wait until the apiserver is accepting requests.
+while ! docker exec st-apiserver-6444 kubectl --server=https://127.0.0.1:6444 get nodes; do echo "Waiting for apiserver to come up..."; sleep 2; done
+NAME    STATUS    ROLES    AGE   VERSION
+node4   Unknown   <none>   2s    
+# And run the controller manager.
+docker run --detach --net=host \
+  --name st-controller-manager-6444 \
+  -v /home/mazdak/src/calico-private/hack/test/certs:/home/user/certs \
+  calico/go-build:v0.91 kube-controller-manager \
+    --master=https://127.0.0.1:6444 \
+            --kubeconfig=/home/user/certs/kube-controller-manager.kubeconfig \
+            --min-resync-period=3m \
+            --allocate-node-cidrs=true \
+            --cluster-cidr=10.10.0.0/16 \
+            --v=5 \
+            --service-account-private-key-file=/home/user/certs/service-account-key.pem \
+            --root-ca-file=/home/user/certs/ca.pem
+5910eff9d1dcabeae972b33df579a8f16ca86f475e2025f201d30e47c885d6c4
+# Create a Node in the API for the tests to use.
+while ! docker exec -ti st-apiserver-6444 kubectl \
+	--server=https://127.0.0.1:6444 \
+	apply -f /code/tests/st/manifests/mock-node-second.yaml; \
+	do echo "Waiting for node to apply successfully..."; sleep 2; done
+node/node8 created
+# Apply CRDs because the tests require them.
+while ! docker exec -ti st-apiserver-6444 kubectl \
+	--server=https://127.0.0.1:6444 \
+	apply -f /go/src/github.com/projectcalico/calico/libcalico-go/config/crd; \
+	do echo "Waiting for ClusterInformation CRD to apply successfully..."; sleep 2; done
+customresourcedefinition.apiextensions.k8s.io/alertexceptions.crd.projectcalico.org configured
+customresourcedefinition.apiextensions.k8s.io/bgpconfigurations.crd.projectcalico.org configured
+customresourcedefinition.apiextensions.k8s.io/bgpfilters.crd.projectcalico.org configured
+customresourcedefinition.apiextensions.k8s.io/bgppeers.crd.projectcalico.org configured
+customresourcedefinition.apiextensions.k8s.io/blockaffinities.crd.projectcalico.org configured
+customresourcedefinition.apiextensions.k8s.io/caliconodestatuses.crd.projectcalico.org configured
+customresourcedefinition.apiextensions.k8s.io/clusterinformations.crd.projectcalico.org configured
+customresourcedefinition.apiextensions.k8s.io/deeppacketinspections.crd.projectcalico.org configured
+customresourcedefinition.apiextensions.k8s.io/egressgatewaypolicies.crd.projectcalico.org configured
+customresourcedefinition.apiextensions.k8s.io/externalnetworks.crd.projectcalico.org configured
+customresourcedefinition.apiextensions.k8s.io/felixconfigurations.crd.projectcalico.org configured
+customresourcedefinition.apiextensions.k8s.io/globalalerts.crd.projectcalico.org configured
+customresourcedefinition.apiextensions.k8s.io/globalalerttemplates.crd.projectcalico.org configured
+customresourcedefinition.apiextensions.k8s.io/globalnetworkpolicies.crd.projectcalico.org configured
+customresourcedefinition.apiextensions.k8s.io/globalnetworksets.crd.projectcalico.org configured
+customresourcedefinition.apiextensions.k8s.io/globalreports.crd.projectcalico.org configured
+customresourcedefinition.apiextensions.k8s.io/globalreporttypes.crd.projectcalico.org configured
+customresourcedefinition.apiextensions.k8s.io/globalthreatfeeds.crd.projectcalico.org configured
+customresourcedefinition.apiextensions.k8s.io/hostendpoints.crd.projectcalico.org configured
+customresourcedefinition.apiextensions.k8s.io/ipamblocks.crd.projectcalico.org configured
+customresourcedefinition.apiextensions.k8s.io/ipamconfigs.crd.projectcalico.org configured
+customresourcedefinition.apiextensions.k8s.io/ipamhandles.crd.projectcalico.org configured
+customresourcedefinition.apiextensions.k8s.io/ippools.crd.projectcalico.org configured
+customresourcedefinition.apiextensions.k8s.io/ipreservations.crd.projectcalico.org configured
+customresourcedefinition.apiextensions.k8s.io/kubecontrollersconfigurations.crd.projectcalico.org configured
+customresourcedefinition.apiextensions.k8s.io/licensekeys.crd.projectcalico.org configured
+customresourcedefinition.apiextensions.k8s.io/managedclusters.crd.projectcalico.org configured
+customresourcedefinition.apiextensions.k8s.io/networkpolicies.crd.projectcalico.org configured
+customresourcedefinition.apiextensions.k8s.io/networksets.crd.projectcalico.org configured
+customresourcedefinition.apiextensions.k8s.io/packetcaptures.crd.projectcalico.org configured
+customresourcedefinition.apiextensions.k8s.io/policyrecommendationscopes.crd.projectcalico.org configured
+customresourcedefinition.apiextensions.k8s.io/remoteclusterconfigurations.crd.projectcalico.org configured
+customresourcedefinition.apiextensions.k8s.io/securityeventwebhooks.crd.projectcalico.org configured
+customresourcedefinition.apiextensions.k8s.io/stagedglobalnetworkpolicies.crd.projectcalico.org configured
+customresourcedefinition.apiextensions.k8s.io/stagedkubernetesnetworkpolicies.crd.projectcalico.org configured
+customresourcedefinition.apiextensions.k8s.io/stagednetworkpolicies.crd.projectcalico.org configured
+customresourcedefinition.apiextensions.k8s.io/tiers.crd.projectcalico.org configured
+customresourcedefinition.apiextensions.k8s.io/uisettings.crd.projectcalico.org configured
+customresourcedefinition.apiextensions.k8s.io/uisettingsgroups.crd.projectcalico.org configured
+customresourcedefinition.apiextensions.k8s.io/licenseusagereports.usage.tigera.io configured
+# Create a namespace in the API for the tests to use.
+docker exec -ti st-apiserver-6444 kubectl \
+	--server=https://127.0.0.1:6444 \
+	create namespace test
+Error from server (AlreadyExists): namespaces "test" already exists
+make[1]: [Makefile:183: run-kubernetes-master] Error 1 (ignored)
+make[1]: Leaving directory '/home/mazdak/src/calico-private/calicoctl'
+# Ensure anonymous is permitted to be admin.
+while ! docker exec st-apiserver-6443 kubectl --server=https://127.0.0.1:6443 create clusterrolebinding anonymous-admin --clusterrole=cluster-admin --user=system:anonymous; do sleep 2; done
+clusterrolebinding.rbac.authorization.k8s.io/anonymous-admin created
+# Run the tests
+mkdir -p /home/mazdak/src/calico-private/.go-pkg-cache bin /home/mazdak/src/go/pkg/mod && docker run --rm --net=host --init -e GOPRIVATE=github.com/tigera/* -v /run/user/1000/keyring/ssh:/ssh-agent --env SSH_AUTH_SOCK=/ssh-agent -v /home/mazdak/src/go/pkg/mod:/go/pkg/mod:rw -e LOCAL_USER_ID=1000 -e GOCACHE=/go-cache -e GOARCH=amd64 -e GOPATH=/go -e OS=linux -e GOOS=linux -e GOFLAGS= -e ACK_GINKGO_DEPRECATIONS=1.16.5 -e ACK_GINKGO_RC=true -v /home/mazdak/src/calico-private:/go/src/github.com/projectcalico/calico:rw -v /home/mazdak/src/calico-private/.go-pkg-cache:/go-cache:rw -w /go/src/github.com/projectcalico/calico/calicoctl -v /home/mazdak/.banzai/secrets:/secrets calico/go-build:v0.91 sh -c 'cd /go/src/github.com/projectcalico/calico/calicoctl && go test  ./tests/fv'
+Starting with UID: 1000
+ok  	github.com/projectcalico/calico/calicoctl/tests/fv	25.081s
+# Cleanup
+make stop-etcd
+make[1]: Entering directory '/home/mazdak/src/calico-private/calicoctl'
+calico-etcd
+make[1]: Leaving directory '/home/mazdak/src/calico-private/calicoctl'
+make stop-kubernetes-master KUBE_APISERVER_PORT=6443
+make[1]: Entering directory '/home/mazdak/src/calico-private/calicoctl'
+# Delete the cluster role binding.
+docker exec st-apiserver-6443 kubectl delete clusterrolebinding anonymous-admin
+Error from server (Timeout): Timeout: request did not complete within requested timeout - context deadline exceeded
+make[1]: [Makefile:234: stop-kubernetes-master] Error 1 (ignored)
+# Stop master components.
+docker rm -f st-apiserver-6443 st-controller-manager-6443
+st-apiserver-6443
+st-controller-manager-6443
+make[1]: Leaving directory '/home/mazdak/src/calico-private/calicoctl'
+make stop-kubernetes-master KUBE_APISERVER_PORT=6444
+make[1]: Entering directory '/home/mazdak/src/calico-private/calicoctl'
+# Delete the cluster role binding.
+docker exec st-apiserver-6444 kubectl delete clusterrolebinding anonymous-admin
+E0807 19:53:31.950171     110 memcache.go:265] couldn't get current server API group list: Get "https://127.0.0.1:6443/api?timeout=32s": dial tcp 127.0.0.1:6443: connect: connection refused
+E0807 19:53:31.950335     110 memcache.go:265] couldn't get current server API group list: Get "https://127.0.0.1:6443/api?timeout=32s": dial tcp 127.0.0.1:6443: connect: connection refused
+E0807 19:53:31.951595     110 memcache.go:265] couldn't get current server API group list: Get "https://127.0.0.1:6443/api?timeout=32s": dial tcp 127.0.0.1:6443: connect: connection refused
+E0807 19:53:31.951734     110 memcache.go:265] couldn't get current server API group list: Get "https://127.0.0.1:6443/api?timeout=32s": dial tcp 127.0.0.1:6443: connect: connection refused
+E0807 19:53:31.952949     110 memcache.go:265] couldn't get current server API group list: Get "https://127.0.0.1:6443/api?timeout=32s": dial tcp 127.0.0.1:6443: connect: connection refused
+The connection to the server 127.0.0.1:6443 was refused - did you specify the right host or port?
+make[1]: [Makefile:234: stop-kubernetes-master] Error 1 (ignored)
+# Stop master components.
+docker rm -f st-apiserver-6444 st-controller-manager-6444
+st-apiserver-6444
+st-controller-manager-6444
+make[1]: Leaving directory '/home/mazdak/src/calico-private/calicoctl'

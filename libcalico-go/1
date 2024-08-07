@@ -1,0 +1,5 @@
+Starting with UID: 1000
+Error from server (NotFound): nodes "kind-control-plane" not found
+make[1]: [../lib.Makefile:1234: kind-cluster-destroy] Error 1 (ignored)
+Deleting cluster "kind-single" ...
+Deleted nodes: ["kind-single-control-plane"]
