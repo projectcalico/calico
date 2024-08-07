@@ -151,7 +151,7 @@ require (
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/checkpoint-restore/go-criu/v5 v5.3.0 // indirect
 	github.com/cilium/ebpf v0.9.1 // indirect
-	github.com/cloudflare/circl v1.3.3 // indirect
+	github.com/cloudflare/circl v1.3.7 // indirect
 	github.com/cncf/xds/go v0.0.0-20240318125728-8a4994d93e50 // indirect
 	github.com/containerd/cgroups v1.1.0 // indirect
 	github.com/containerd/console v1.0.3 // indirect
@@ -314,8 +314,8 @@ require (
 replace (
 	github.com/projectcalico/api => ./api
 
-  // Pin the version of grpc temporarily to avoid deprecation error.
-  // This should be removed once the grpc.Dial is update to use grpc.NewClient.
+	// Pin the version of grpc temporarily to avoid deprecation error.
+	// This should be removed once the grpc.Dial is update to use grpc.NewClient.
 	google.golang.org/grpc => google.golang.org/grpc v1.61.1
 
 	k8s.io/api => k8s.io/api v0.28.9
