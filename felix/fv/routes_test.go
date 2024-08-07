@@ -89,7 +89,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ routing table tests", []api
 
 		waitForInitialRouteProgramming := func() (winner, loser int) {
 			// Winner is non-deterministic.
-			Eventually(tc.Felixes[0].ExecOutputFn("ip", "r", "get", "10.65.0.2"), "40s").Should(Or(
+			Eventually(tc.Felixes[0].ExecOutputFn("ip", "r", "get", "10.65.0.2"), "10s").Should(Or(
 				ContainSubstring(w[0][0].InterfaceName),
 				ContainSubstring(w[0][1].InterfaceName),
 			))
@@ -133,7 +133,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ routing table tests", []api
 			}
 
 			// VXLAN route gets suppressed by the calc graph so local workload route will "win".
-			Eventually(tc.Felixes[0].ExecOutputFn("ip", "r", "get", "10.65.0.2"), "30s").Should(
+			Eventually(tc.Felixes[0].ExecOutputFn("ip", "r", "get", "10.65.0.2"), "10s").Should(
 				ContainSubstring(w[0][0].InterfaceName))
 			Consistently(tc.Felixes[0].ExecOutputFn("ip", "r", "get", "10.65.0.2"), "5s").Should(
 				ContainSubstring(w[0][0].InterfaceName),
