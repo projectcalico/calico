@@ -44,6 +44,8 @@ type Interface interface {
 	NetworkSets() NetworkSetInformer
 	// Profiles returns a ProfileInformer.
 	Profiles() ProfileInformer
+	// Tiers returns a TierInformer.
+	Tiers() TierInformer
 }
 
 type version struct {
@@ -140,4 +142,9 @@ func (v *version) NetworkSets() NetworkSetInformer {
 // Profiles returns a ProfileInformer.
 func (v *version) Profiles() ProfileInformer {
 	return &profileInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
+}
+
+// Tiers returns a TierInformer.
+func (v *version) Tiers() TierInformer {
+	return &tierInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
 }

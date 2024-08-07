@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	calico "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 
@@ -36,18 +36,20 @@ func testWatch(t *testing.T, list bool) {
 	ctx, store, gnpStore := testSetup(t)
 	defer func() {
 		testCleanup(t, ctx, store, gnpStore)
-		_, _ = store.client.NetworkPolicies().Delete(ctx, "default", "foo", options.DeleteOptions{})
-		_, _ = store.client.NetworkPolicies().Delete(ctx, "default", "bar", options.DeleteOptions{})
+		_, _ = store.client.NetworkPolicies().Delete(ctx, "default", "default.foo", options.DeleteOptions{})
+		_, _ = store.client.NetworkPolicies().Delete(ctx, "default", "default.bar", options.DeleteOptions{})
 	}()
 
-	policyFoo := &calico.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "foo"}}
+	policyFoo := &v3.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "default.foo"}}
 	policyFoo.SetCreationTimestamp(metav1.Time{Time: time.Now()})
 	policyFoo.SetUID("test_uid_foo")
-	policyBar := &calico.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "bar"}}
+	policyBar := &v3.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "default.bar"}}
 	policyBar.SetCreationTimestamp(metav1.Time{Time: time.Now()})
 	policyBar.SetUID("test_uid_bar")
 
 	policyBar.Spec.Selector = "my_label == \"set\""
+	//policyFoo1 := &calico.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "foo1"}}
+	//policyFoo2 := &calico.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "foo2"}}
 
 	tests := []struct {
 		pred       storage.SelectionPredicate
@@ -55,7 +57,7 @@ func testWatch(t *testing.T, list bool) {
 	}{{ // create a key
 		watchTests: []*testWatchStruct{
 			{
-				key:         "projectcalico.org/networkpolicies/default/foo",
+				key:         "projectcalico.org/networkpolicies/default/default.foo",
 				obj:         policyFoo,
 				expectEvent: true,
 				watchType:   watch.Added,
@@ -65,13 +67,13 @@ func testWatch(t *testing.T, list bool) {
 	}, { // create a key but obj gets filtered. Then update it with unfiltered obj
 		watchTests: []*testWatchStruct{
 			{
-				key:         "projectcalico.org/networkpolicies/default/foo",
+				key:         "projectcalico.org/networkpolicies/default/default.foo",
 				obj:         policyFoo,
 				expectEvent: false,
 				watchType:   "",
 			},
 			{
-				key:         "projectcalico.org/networkpolicies/default/bar",
+				key:         "projectcalico.org/networkpolicies/default/default.bar",
 				obj:         policyBar,
 				expectEvent: true,
 				watchType:   watch.Added,
@@ -79,9 +81,9 @@ func testWatch(t *testing.T, list bool) {
 		},
 		pred: storage.SelectionPredicate{
 			Label: labels.Everything(),
-			Field: fields.ParseSelectorOrDie("metadata.name=bar"),
+			Field: fields.ParseSelectorOrDie("metadata.name=default.bar"),
 			GetAttrs: func(obj runtime.Object) (labels.Set, fields.Set, error) {
-				policy := obj.(*calico.NetworkPolicy)
+				policy := obj.(*v3.NetworkPolicy)
 				return nil, fields.Set{"metadata.name": policy.Name}, nil
 			},
 		},
@@ -95,7 +97,7 @@ func testWatch(t *testing.T, list bool) {
 				t.Fatalf("Watch failed: %v", err)
 			}
 		}
-		var prevObj *calico.NetworkPolicy
+		var prevObj *v3.NetworkPolicy
 		for _, watchTest := range tt.watchTests {
 			if !list {
 				ns, name, err := NamespaceAndNameFromKey(watchTest.key, true)
@@ -110,7 +112,7 @@ func testWatch(t *testing.T, list bool) {
 					t.Fatalf("Watch failed: %v", err)
 				}
 			}
-			out := &calico.NetworkPolicy{}
+			out := &v3.NetworkPolicy{}
 			err = store.GuaranteedUpdate(ctx, watchTest.key, out, true, nil, storage.SimpleUpdate(
 				func(runtime.Object) (runtime.Object, error) {
 					return watchTest.obj, nil
@@ -141,7 +143,7 @@ func testWatch(t *testing.T, list bool) {
 
 type testWatchStruct struct {
 	key         string
-	obj         *calico.NetworkPolicy
+	obj         *v3.NetworkPolicy
 	expectEvent bool
 	watchType   watch.EventType
 }
@@ -157,7 +159,7 @@ func testCheckEventType(t *testing.T, expectEventType watch.EventType, w watch.I
 	}
 }
 
-func testCheckResult(t *testing.T, i int, expectEventType watch.EventType, w watch.Interface, expectObj *calico.NetworkPolicy) {
+func testCheckResult(t *testing.T, i int, expectEventType watch.EventType, w watch.Interface, expectObj *v3.NetworkPolicy) {
 	select {
 	case res := <-w.ResultChan():
 		if res.Type != expectEventType {
@@ -178,8 +180,8 @@ func testCheckStop(t *testing.T, i int, w watch.Interface) {
 		if ok {
 			var obj string
 			switch e.Object.(type) {
-			case *calico.NetworkPolicy:
-				obj = e.Object.(*calico.NetworkPolicy).Name
+			case *v3.NetworkPolicy:
+				obj = e.Object.(*v3.NetworkPolicy).Name
 			case *metav1.Status:
 				obj = e.Object.(*metav1.Status).Message
 			}
