@@ -53,6 +53,9 @@ class TestCalicoctlConvert(TestBase):
     """
     Test calicoctl convert
     """
+    
+    def setUp(self):
+        super(TestCalicoctlConvert, self).setUp()
 
     def _test_convert(self, filename, applySuccess, format="yaml"):
         """
