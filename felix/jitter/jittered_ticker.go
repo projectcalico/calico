@@ -16,6 +16,7 @@ package jitter
 
 import (
 	"math/rand"
+	"sync"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -24,6 +25,7 @@ import (
 // Ticker tries to emit events on channel C at minDuration intervals plus up to maxJitter.
 type Ticker struct {
 	C           <-chan time.Time
+	stopOnce    sync.Once
 	stop        chan bool
 	MinDuration time.Duration
 	MaxJitter   time.Duration
@@ -48,17 +50,22 @@ func NewTicker(minDuration time.Duration, maxJitter time.Duration) *Ticker {
 }
 
 func (t *Ticker) loop(c chan time.Time) {
-tickLoop:
+	timer := time.NewTimer(t.calculateDelay())
+	defer timer.Stop()
+
+	var cMask chan time.Time
+	var ts time.Time
 	for {
-		time.Sleep(t.calculateDelay())
-		// Send best-effort then go back to sleep.
 		select {
+		case ts = <-timer.C:
+			cMask = c
+			timer.Reset(t.calculateDelay())
 		case <-t.stop:
-			log.Info("Stopping jittered ticker")
+			log.Debug("Stopping jitter.Ticker")
 			close(c)
-			break tickLoop
-		case c <- time.Now():
-		default:
+			return
+		case cMask <- ts:
+			cMask = nil
 		}
 	}
 }
@@ -70,7 +77,9 @@ func (t *Ticker) calculateDelay() time.Duration {
 }
 
 func (t *Ticker) Stop() {
-	t.stop <- true
+	t.stopOnce.Do(func() {
+		close(t.stop)
+	})
 }
 
 func (t *Ticker) Channel() <-chan time.Time {
@@ -81,7 +90,7 @@ func (t *Ticker) Done() chan bool {
 	return t.stop
 }
 
-type JitterTicker interface {
+type TickerInterface interface {
 	Stop()
 	Channel() <-chan time.Time
 	Done() chan bool
