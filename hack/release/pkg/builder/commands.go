@@ -32,14 +32,20 @@ func (r *RealCommandRunner) RunInDir(dir, name string, args []string, env []stri
 	}
 	cmd.Dir = dir
 	var outb, errb bytes.Buffer
-	cmd.Stdout = io.MultiWriter(os.Stdout, &outb)
-	cmd.Stderr = io.MultiWriter(os.Stderr, &errb)
+	if logrus.IsLevelEnabled(logrus.DebugLevel) {
+		// If debug level is enabled, also write to stdout.
+		cmd.Stdout = io.MultiWriter(os.Stdout, &outb)
+		cmd.Stderr = io.MultiWriter(os.Stderr, &errb)
+	} else {
+		// Otherwise, just capture the output to return.
+		cmd.Stdout = io.MultiWriter(&outb)
+		cmd.Stderr = io.MultiWriter(&errb)
+	}
 	logrus.WithFields(logrus.Fields{
 		"cmd": cmd.String(),
 		"dir": dir,
 	}).Infof("Running %s command", name)
 	err := cmd.Run()
-	logrus.Debug(outb.String())
 	if err != nil {
 		err = fmt.Errorf("%s: %s", err, strings.TrimSpace(errb.String()))
 	}
