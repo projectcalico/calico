@@ -65,9 +65,9 @@ var urlTemplates = map[string]map[string]string{
 var dnsmasqVersion = "2.79_calico1-2"
 
 var (
-	ubuntuTemplate  = `{{ .BaseUrl }}/{{ .Component }}_{{ .Version }}-{{ .OSVersion }}_{{ .Arch }}.deb`
-	rhelTemplate    = `{{ .BaseUrl }}/{{ .Component }}-{{ .Version }}.{{ .OSVersion }}.{{ .Arch }}.rpm`
-	dnsmasqTemplate = `{{ .BaseUrl }}/{{ .Component }}-{{ .Version }}.{{ .OSVersion }}.2.{{ .Arch }}.rpm`
+	ubuntuTemplate  = `{{ .BaseURL }}/{{ .Component }}_{{ .Version }}-{{ .OSVersion }}_{{ .Arch }}.deb`
+	rhelTemplate    = `{{ .BaseURL }}/{{ .Component }}-{{ .Version }}.{{ .OSVersion }}.{{ .Arch }}.rpm`
+	dnsmasqTemplate = `{{ .BaseURL }}/{{ .Component }}-{{ .Version }}.{{ .OSVersion }}.2.{{ .Arch }}.rpm`
 )
 
 var rhelVersions = [...]string{

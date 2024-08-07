@@ -10,7 +10,7 @@ import (
 	"github.com/google/go-github/v63/github"
 )
 
-var githubToken = os.Getenv("githubToken")
+var githubToken = os.Getenv("GITHUB_TOKEN")
 
 // GetGithubClient returns an instance of github.Client using a token from the environment.
 func GetGithubClient() *github.Client {
