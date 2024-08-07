@@ -164,6 +164,13 @@ var localWlEp1DifferentIPs = WorkloadEndpoint{
 	},
 }
 
+var ep1IPs = []string{
+	"10.0.0.1/32", // ep1
+	"fc00:fe11::1/128",
+	"10.0.0.2/32", // shared with ep2
+	"fc00:fe11::2/128",
+}
+
 var localWlEp2 = WorkloadEndpoint{
 	State:      "active",
 	Name:       "cali2",

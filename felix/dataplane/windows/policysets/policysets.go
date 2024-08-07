@@ -352,7 +352,9 @@ func (s *PolicySets) protoRuleToHnsRules(policyId string, pRule *proto.Rule, isI
 		aclPolicy.Action = hns.Allow
 	case "deny":
 		aclPolicy.Action = hns.Block
-	case "next-tier", "pass", "log":
+	case "next-tier", "pass":
+		aclPolicy.Action = ActionPass
+	case "log":
 		logCxt.WithField("action", ruleCopy.Action).Info("This rule action is not supported, rule will be skipped")
 		return nil, ErrNotSupported
 	default:

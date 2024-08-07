@@ -18,3 +18,4 @@ spec:
   pod: frontend-5gs43
   profiles:
   - profile1
+status: {}
