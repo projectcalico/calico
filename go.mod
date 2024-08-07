@@ -19,7 +19,7 @@ require (
 	github.com/coreos/go-semver v0.3.1
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
 	github.com/docker/distribution v2.8.2+incompatible
-	github.com/docker/docker v27.0.3+incompatible
+	github.com/docker/docker v27.1.0+incompatible
 	github.com/docopt/docopt-go v0.0.0-20180111231733-ee0de3bc6815
 	github.com/envoyproxy/go-control-plane v0.12.0
 	github.com/fsnotify/fsnotify v1.7.0
@@ -314,8 +314,8 @@ require (
 replace (
 	github.com/projectcalico/api => ./api
 
-  // Pin the version of grpc temporarily to avoid deprecation error.
-  // This should be removed once the grpc.Dial is update to use grpc.NewClient.
+	// Pin the version of grpc temporarily to avoid deprecation error.
+	// This should be removed once the grpc.Dial is update to use grpc.NewClient.
 	google.golang.org/grpc => google.golang.org/grpc v1.61.1
 
 	k8s.io/api => k8s.io/api v0.28.9
