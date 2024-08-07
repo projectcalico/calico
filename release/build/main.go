@@ -11,6 +11,26 @@ import (
 	cli "github.com/urfave/cli/v2"
 )
 
+var debug bool
+
+func configureLogging() {
+	if debug {
+		logrus.SetLevel(logrus.DebugLevel)
+	} else {
+		logrus.SetLevel(logrus.WarnLevel)
+	}
+}
+
+// globalFlags are flags that are available to all sub-commands.
+var globalFlags = []cli.Flag{
+	&cli.BoolFlag{
+		Name:        "debug",
+		Usage:       "Enable verbose log output",
+		Value:       false,
+		Destination: &debug,
+	},
+}
+
 func main() {
 	cfg := config.LoadConfig()
 	runner := registry.MustDockerRunner()
@@ -18,6 +38,7 @@ func main() {
 	app := &cli.App{
 		Name:     "release",
 		Usage:    "release is a tool for building Calico releases",
+		Flags:    globalFlags,
 		Commands: []*cli.Command{},
 	}
 
@@ -44,8 +65,14 @@ func hashrelaseSubCommands(cfg *config.Config, runner *registry.DockerRunner) []
 		{
 			Name:  "build",
 			Usage: "Build a hashrelease locally in output/",
+			Flags: []cli.Flag{
+				&cli.BoolFlag{Name: "skip-validation", Usage: "Skip pre-build validation", Value: false},
+			},
 			Action: func(c *cli.Context) error {
-				tasks.PreReleaseValidate(cfg)
+				configureLogging()
+				if !c.Bool("skip-validation") {
+					tasks.PreReleaseValidate(cfg)
+				}
 				tasks.PinnedVersion(cfg)
 				tasks.OperatorHashreleaseBuild(runner, cfg)
 				tasks.HashreleaseBuild(cfg)
@@ -59,8 +86,14 @@ func hashrelaseSubCommands(cfg *config.Config, runner *registry.DockerRunner) []
 		{
 			Name:  "publish",
 			Usage: "Publish hashrelease from output/ to hashrelease server",
+			Flags: []cli.Flag{
+				&cli.BoolFlag{Name: "skip-validation", Usage: "Skip pre-publish validation", Value: false},
+			},
 			Action: func(c *cli.Context) error {
-				tasks.HashreleaseValidate(cfg)
+				configureLogging()
+				if !c.Bool("skip-validation") {
+					tasks.HashreleaseValidate(cfg)
+				}
 				tasks.HashreleasePush(cfg)
 				return nil
 			},
@@ -72,6 +105,7 @@ func hashrelaseSubCommands(cfg *config.Config, runner *registry.DockerRunner) []
 			Usage:   "Clean up older hashreleases",
 			Aliases: []string{"gc"},
 			Action: func(c *cli.Context) error {
+				configureLogging()
 				tasks.HashreleaseCleanRemote(cfg)
 				return nil
 			},

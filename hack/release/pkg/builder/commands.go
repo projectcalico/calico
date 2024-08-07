@@ -37,7 +37,7 @@ func (r *RealCommandRunner) RunInDir(dir, name string, args []string, env []stri
 	logrus.WithFields(logrus.Fields{
 		"cmd": cmd.String(),
 		"dir": dir,
-	}).Debugf("Running %s command", name)
+	}).Infof("Running %s command", name)
 	err := cmd.Run()
 	logrus.Debug(outb.String())
 	if err != nil {
