@@ -79,3 +79,7 @@ type NetworkSetNamespaceListerExpansion interface{}
 // ProfileListerExpansion allows custom methods to be added to
 // ProfileLister.
 type ProfileListerExpansion interface{}
+
+// TierListerExpansion allows custom methods to be added to
+// TierLister.
+type TierListerExpansion interface{}
