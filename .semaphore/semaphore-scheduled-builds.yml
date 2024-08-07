@@ -498,6 +498,14 @@ blocks:
           minutes: 180
         commands:
           - ./.semaphore/run-tests-on-vms ${VM_PREFIX}
+      - name: UT/FV tests on new kernel (nftables)
+        env_vars:
+          - name: FELIX_FV_NFTABLES
+            value: "Enabled"
+        execution_time_limit:
+          minutes: 180
+        commands:
+          - ./.semaphore/run-tests-on-vms ${VM_PREFIX}
     epilogue:
       always:
         commands:
