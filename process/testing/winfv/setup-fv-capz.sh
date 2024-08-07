@@ -52,7 +52,7 @@ function prepare_env(){
   fi
 
   if [[ $SEMAPHORE == "true" ]]; then
-    export CLUSTER_NAME_CAPZ="${USER}-capz-win-${RAND}"
+    export CLUSTER_NAME_CAPZ="${USER}-capz-win-felix-${SEMAPHORE_WORKFLOW_ID:0:8}"
   fi
 
   . $CALICO_HOME/process/testing/winfv/capz/export-env.sh
