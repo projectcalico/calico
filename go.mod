@@ -75,6 +75,7 @@ require (
 	github.com/spf13/viper v1.18.2
 	github.com/tchap/go-patricia/v2 v2.3.1
 	github.com/termie/go-shutil v0.0.0-20140729215957-bcacb06fecae
+	github.com/urfave/cli/v2 v2.27.3
 	github.com/vishvananda/netlink v1.2.1-beta.2.0.20240703200800-b54f85093f4a
 	go.etcd.io/etcd/api/v3 v3.5.12
 	go.etcd.io/etcd/client/pkg/v3 v3.5.12
@@ -159,7 +160,7 @@ require (
 	github.com/containerd/ttrpc v1.2.2 // indirect
 	github.com/coreos/go-iptables v0.6.0 // indirect
 	github.com/coreos/go-systemd/v22 v22.5.0 // indirect
-	github.com/cpuguy83/go-md2man/v2 v2.0.3 // indirect
+	github.com/cpuguy83/go-md2man/v2 v2.0.4 // indirect
 	github.com/cyphar/filepath-securejoin v0.2.4 // indirect
 	github.com/distribution/reference v0.6.0 // indirect
 	github.com/docker/go-connections v0.5.0 // indirect
@@ -259,6 +260,7 @@ require (
 	github.com/urfave/cli v1.22.4 // indirect
 	github.com/vishvananda/netns v0.0.4 // indirect
 	github.com/vmware/govmomi v0.30.6 // indirect
+	github.com/xrash/smetrics v0.0.0-20240521201337-686a1a2994c1 // indirect
 	go.opencensus.io v0.24.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/github.com/emicklei/go-restful/otelrestful v0.46.1 // indirect
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.49.0 // indirect
@@ -314,8 +316,8 @@ require (
 replace (
 	github.com/projectcalico/api => ./api
 
-  // Pin the version of grpc temporarily to avoid deprecation error.
-  // This should be removed once the grpc.Dial is update to use grpc.NewClient.
+	// Pin the version of grpc temporarily to avoid deprecation error.
+	// This should be removed once the grpc.Dial is update to use grpc.NewClient.
 	google.golang.org/grpc => google.golang.org/grpc v1.61.1
 
 	k8s.io/api => k8s.io/api v0.28.9
