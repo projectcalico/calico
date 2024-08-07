@@ -50,6 +50,11 @@ type FakeCalicoClient struct {
 	ipamClient ipam.Interface
 }
 
+// Tiers returns an interface for managing tier resources.
+func (f *FakeCalicoClient) Tiers() clientv3.TierInterface {
+	panic("not implemented") // TODO: Implement
+}
+
 func (f *FakeCalicoClient) Backend() bapi.Client {
 	return nil
 }
