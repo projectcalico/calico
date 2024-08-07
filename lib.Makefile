@@ -206,8 +206,8 @@ ifeq ($(GIT_USE_SSH),true)
 	GIT_CONFIG_SSH ?= git config --global url."ssh://git@github.com/".insteadOf "https://github.com/";
 endif
 
-# Get version from git.
-GIT_VERSION:=$(shell git describe --tags --dirty --always --abbrev=12)
+# Get version from git. We allow setting this manually for the hashrelease process.
+GIT_VERSION ?= $(shell git describe --tags --dirty --always --abbrev=12)
 
 # Figure out version information.  To support builds from release tarballs, we default to
 # <unknown> if this isn't a git checkout.
