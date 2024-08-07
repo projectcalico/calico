@@ -39,6 +39,12 @@ func PreReleaseValidate(cfg *config.Config) {
 		}
 		logrus.Warnf("Not on a release branch, images will be pushed to %s", cfg.Registry)
 	}
+	dirty, err := utils.GitIsDirty(cfg.RepoRootDir)
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to check if git is dirty")
+	} else if dirty {
+		logrus.Fatal("There are uncommitted changes in the repository, please commit or stash them before building the hashrelease")
+	}
 	logrus.WithFields(logrus.Fields{
 		"releaseBranch":  releaseBranch,
 		"operatorBranch": cfg.OperatorBranchName,
