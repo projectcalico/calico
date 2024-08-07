@@ -4726,6 +4726,7 @@ rules:
       - hostendpoints
       - blockaffinities
       - caliconodestatuses
+      - tiers
     verbs:
       - get
       - list
