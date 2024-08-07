@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 package testutils
 
 import (
@@ -27,6 +28,7 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+
 	log "github.com/sirupsen/logrus"
 
 	gomegatypes "github.com/onsi/gomega/types"
@@ -546,7 +548,7 @@ func updatesEqual(actual, expected api.Update) bool {
 // update - this makes writing tests simpler.
 func kvpsEqual(actual, expected model.KVPair) bool {
 	if !reflect.DeepEqual(expected.Key, actual.Key) {
-		log.Debug("Keys are not equal: %#v != %#v", expected.Key, actual.Key)
+		log.Debugf("Keys are not equal: %#v != %#v", expected.Key, actual.Key)
 		return false
 	}
 	if expected.UID != nil && (actual.UID == nil || *actual.UID != *expected.UID) {

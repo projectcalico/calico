@@ -50,14 +50,14 @@ if [[ $FV_PROVISIONER == "aws" ]]; then
   SCP_CMD=$(echo scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ${FV_DIR}/${MASTER_CONNECT_KEY})
   ${SCP_CMD} -r ubuntu@${MASTER_IP}:/home/ubuntu/report /home/semaphore
 elif [[ $FV_PROVISIONER == "capz" ]]; then
-  chmod +x $FV_DIR/capz/create-cluster.sh
-  chmod +x $FV_DIR/capz/install-calico.sh
-  chmod +x $FV_DIR/capz/generate-helpers.sh
   export KUBE_VERSION="$K8S_VERSION"
-  /bin/bash -x ./setup-fv-capz.sh -q | tee fv.log
+  /bin/bash -x ./setup-fv-capz.sh -q | tee setup-fv.log
   if [[ ${PIPESTATUS[0]} != 0 ]]; then
     ERROR_CODE=${PIPESTATUS[0]}
   fi
+  mv ./report /home/semaphore/report
+  mv ./setup-fv.log /home/semaphore/report/setup-fv.log
+  popd
 fi
 ls -ltr ./report
 mkdir /home/semaphore/fv.log

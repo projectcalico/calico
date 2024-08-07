@@ -303,18 +303,27 @@ func (p *proxy) OnServiceSynced() {
 }
 
 func (p *proxy) OnEndpointSliceAdd(eps *discovery.EndpointSlice) {
+	if p.IPFamily() != eps.AddressType {
+		return
+	}
 	if p.epsChanges.EndpointSliceUpdate(eps, false) && p.isInitialized() {
 		p.syncDP()
 	}
 }
 
 func (p *proxy) OnEndpointSliceUpdate(_, eps *discovery.EndpointSlice) {
+	if p.IPFamily() != eps.AddressType {
+		return
+	}
 	if p.epsChanges.EndpointSliceUpdate(eps, false) && p.isInitialized() {
 		p.syncDP()
 	}
 }
 
 func (p *proxy) OnEndpointSliceDelete(eps *discovery.EndpointSlice) {
+	if p.IPFamily() != eps.AddressType {
+		return
+	}
 	if p.epsChanges.EndpointSliceUpdate(eps, true) && p.isInitialized() {
 		p.syncDP()
 	}
@@ -332,6 +341,13 @@ func (p *proxy) SetSyncer(s DPSyncer) {
 	p.syncerLck.Unlock()
 
 	p.forceSyncDP()
+}
+
+func (p *proxy) IPFamily() discovery.AddressType {
+	if p.ipFamily == 4 {
+		return discovery.AddressTypeIPv4
+	}
+	return discovery.AddressTypeIPv6
 }
 
 type initState struct {

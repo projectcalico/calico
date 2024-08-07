@@ -668,7 +668,7 @@ message ServiceUpdate {
 	string name = 1;
 	string namespace = 2;
 	string type = 3;
-	string cluster_ip = 4;
+	repeated string cluster_ips = 4;
 	string loadbalancer_ip = 5;
 	repeated string external_ips = 6;
 	repeated ServicePort ports = 7;

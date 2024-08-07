@@ -27,7 +27,7 @@ set -o nounset
 set -o pipefail
 
 GIT_VERSION=$(git describe --tags --dirty --long --always --abbrev=12)
-CALICO_HOME=$(cd $(dirname $0)/../../../; pwd)
+CALICO_HOME=$(cd "$(dirname $0)"/../../../; pwd)
 CAPZ_LOCATION=$CALICO_HOME/process/testing/winfv/capz
 KUBECONFIG=$CALICO_HOME/process/testing/winfv/capz/kubeconfig
 SEMAPHORE="${SEMAPHORE:="false"}"
@@ -52,7 +52,7 @@ function prepare_env(){
   fi
 
   if [[ $SEMAPHORE == "true" ]]; then
-    export CLUSTER_NAME_CAPZ="${USER}-capz-win-${RAND}"
+    export CLUSTER_NAME_CAPZ="${USER}-capz-win-felix-${SEMAPHORE_WORKFLOW_ID:0:8}"
   fi
 
   . $CALICO_HOME/process/testing/winfv/capz/export-env.sh

@@ -693,11 +693,11 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 			mustGetMapIDByPath := func(felix *infrastructure.Felix, filename string) int {
 				var mapID int
-				Eventually(func() error {
+				EventuallyWithOffset(1, func() error {
 					var err error
 					mapID, err = getMapIDByPath(felix, filename)
 					return err
-				}, "10s").ShouldNot(HaveOccurred())
+				}, "10s", "300ms").ShouldNot(HaveOccurred())
 				return mapID
 			}
 
@@ -5593,7 +5593,7 @@ func checkServiceRoute(felix *infrastructure.Felix, ip string) bool {
 		err error
 	)
 
-	if felix.TopologyOptions.EnableIPv6 {
+	if strings.Contains(ip, ":") && felix.TopologyOptions.EnableIPv6 {
 		out, err = felix.ExecOutput("ip", "-6", "route")
 	} else {
 		out, err = felix.ExecOutput("ip", "route")

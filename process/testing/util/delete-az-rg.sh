@@ -1,6 +1,6 @@
-#!/bin/bash
-# Copyright (c) 2023 Tigera, Inc. All rights reserved.
-# Copyright 2020 The Kubernetes Authors.
+#!/usr/bin/env bash
+
+# Copyright (c) 2024 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,17 +14,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-unset -f retry_command
-function retry_command() {
-  local RETRY=$(($1/10))
-  local CMD=$2
-  echo
+RESOURCE_GROUP=$1
 
-  for i in `seq 1 $RETRY`; do
-    echo Trying $CMD, attempt ${i}
-    $CMD && return 0 || sleep 10
-  done
-  echo "Command '${CMD}' failed after $RETRY attempts"
-  return 1
-}
-
+if ! az group show --name "${RESOURCE_GROUP}" --subscription ${AZ_SUBSCRIPTION_ID} 2>&1 | grep ResourceGroupNotFound; then
+  echo "Deleting azure resource group ${RESOURCE_GROUP}"
+  az group delete --name "${RESOURCE_GROUP}" --subscription ${AZ_SUBSCRIPTION_ID} --yes
+else
+  echo "No resource group ${RESOURCE_GROUP} found. Doing nothing"
+fi
