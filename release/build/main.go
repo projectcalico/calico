@@ -1,11 +1,14 @@
 package main
 
 import (
+	"io"
 	"os"
 
+	"github.com/projectcalico/calico/hack/release/pkg/builder"
 	"github.com/projectcalico/calico/release/internal/config"
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/pkg/tasks"
+	"gopkg.in/natefinch/lumberjack.v2"
 
 	"github.com/sirupsen/logrus"
 	cli "github.com/urfave/cli/v2"
@@ -17,12 +20,21 @@ const (
 
 var debug bool
 
-func configureLogging() {
+func configureLogging(filename string) {
 	if debug {
 		logrus.SetLevel(logrus.DebugLevel)
 	} else {
 		logrus.SetLevel(logrus.InfoLevel)
 	}
+
+	// Set up logging to both stdout as well as a file.
+	writers := []io.Writer{os.Stdout, &lumberjack.Logger{
+		Filename:   filename,
+		MaxSize:    100,
+		MaxAge:     30,
+		MaxBackups: 10,
+	}}
+	logrus.SetOutput(io.MultiWriter(writers...))
 }
 
 // globalFlags are flags that are available to all sub-commands.
@@ -57,6 +69,14 @@ func main() {
 		Subcommands: hashrelaseSubCommands(cfg, runner),
 	})
 
+	// The release command suite is used to build and publish official Calico releases.
+	app.Commands = append(app.Commands, &cli.Command{
+		Name:        "release",
+		Aliases:     []string{"rel"},
+		Usage:       "Build and publish official Calico releases.",
+		Subcommands: releaseSubCommands(),
+	})
+
 	// Run the app.
 	if err := app.Run(os.Args); err != nil {
 		logrus.WithError(err).Fatal("Error running task")
@@ -73,7 +93,7 @@ func hashrelaseSubCommands(cfg *config.Config, runner *registry.DockerRunner) []
 				&cli.BoolFlag{Name: skipValidationFlag, Usage: "Skip pre-build validation", Value: false},
 			},
 			Action: func(c *cli.Context) error {
-				configureLogging()
+				configureLogging("hashrelease-build.log")
 				if !c.Bool(skipValidationFlag) {
 					tasks.PreReleaseValidate(cfg)
 				}
@@ -94,7 +114,7 @@ func hashrelaseSubCommands(cfg *config.Config, runner *registry.DockerRunner) []
 				&cli.BoolFlag{Name: skipValidationFlag, Usage: "Skip pre-publish validation", Value: false},
 			},
 			Action: func(c *cli.Context) error {
-				configureLogging()
+				configureLogging("hashrelease-publish.log")
 				if !c.Bool(skipValidationFlag) {
 					tasks.HashreleaseValidate(cfg)
 				}
@@ -110,9 +130,36 @@ func hashrelaseSubCommands(cfg *config.Config, runner *registry.DockerRunner) []
 			Usage:   "Clean up older hashreleases",
 			Aliases: []string{"gc"},
 			Action: func(c *cli.Context) error {
-				configureLogging()
+				configureLogging("hashrelease-garbage-collect.log")
 				tasks.HashreleaseCleanRemote(cfg)
 				return nil
+			},
+		},
+	}
+}
+
+func releaseSubCommands() []*cli.Command {
+	// Create a releaseBuilder to use.
+	r := builder.NewReleaseBuilder(&builder.RealCommandRunner{})
+
+	return []*cli.Command{
+		// Build a release.
+		{
+			Name:  "build",
+			Usage: "Build an official Calico release",
+			Action: func(c *cli.Context) error {
+				configureLogging("release-build.log")
+				return r.BuildRelease()
+			},
+		},
+
+		// Publish a release.
+		{
+			Name:  "publish",
+			Usage: "Publish a pre-built Calico release",
+			Action: func(c *cli.Context) error {
+				configureLogging("release-publish.log")
+				return r.PublishRelease()
 			},
 		},
 	}
