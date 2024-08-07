@@ -71,12 +71,12 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Prometheus metrics tests", 
 		})
 
 		It("should serve a felix custom metric", func() {
-			Eventually(tc.Felixes[0].PromMetric("felix_resync_state").Int, "45s").Should(Equal(3 /*in-sync*/))
+			Eventually(tc.Felixes[0].PromMetric("felix_resync_state").Int, "5s").Should(Equal(3 /*in-sync*/))
 		})
 
 		It("should not serve debug paths on the prometheus port", func() {
 			// Wait for server to come up.
-			Eventually(tc.Felixes[0].PromMetric("felix_resync_state").Int, "35s").Should(Equal(3 /*in-sync*/))
+			Eventually(tc.Felixes[0].PromMetric("felix_resync_state").Int, "5s").Should(Equal(3 /*in-sync*/))
 
 			metricsServer := fmt.Sprintf("http://%s:%d/", tc.Felixes[0].IP, metrics.Port)
 			debugServer := fmt.Sprintf("http://%s:%d/", tc.Felixes[0].IP, 6061)

@@ -140,7 +140,7 @@ var _ = Describe("_HEALTH_ _BPF-SAFE_ health tests", func() {
 		Describe("after replacing iptables/nftables with a slow version", func() {
 			BeforeEach(func() {
 				// Wait until felix gets into steady state.
-				Eventually(felixReady, "35s", "100ms").Should(BeGood())
+				Eventually(felixReady, "5s", "100ms").Should(BeGood())
 
 				toReplace := "/usr/sbin/iptables-legacy-restore"
 				slowBinary := "slow-iptables-restore"
