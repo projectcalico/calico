@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2024 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -35,7 +35,7 @@ func main() {
 	flag.Parse()
 
 	opts := uds.GetDialOptions()
-	conn, err := grpc.Dial(dialPath, opts...)
+	conn, err := grpc.NewClient(dialPath, opts...)
 	if err != nil {
 		log.Fatalf("fail to dial: %v", err)
 	}
