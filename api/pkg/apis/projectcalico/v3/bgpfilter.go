@@ -64,6 +64,8 @@ type BGPFilterSpec struct {
 type BGPFilterRuleV4 struct {
 	CIDR string `json:"cidr,omitempty" validate:"omitempty,netv4"`
 
+	PrefixLength BGPFilterPrefixLength `json:"prefixLength,omitempty"`
+
 	Source BGPFilterMatchSource `json:"source,omitempty" validate:"omitempty,oneof=RemotePeers"`
 
 	Interface string `json:"interface,omitempty" validate:"omitempty,bgpFilterInterface"`
@@ -77,6 +79,8 @@ type BGPFilterRuleV4 struct {
 type BGPFilterRuleV6 struct {
 	CIDR string `json:"cidr,omitempty" validate:"omitempty,netv6"`
 
+	PrefixLength BGPFilterPrefixLength `json:"prefixLength,omitempty"`
+
 	Source BGPFilterMatchSource `json:"source,omitempty" validate:"omitempty,oneof=RemotePeers"`
 
 	Interface string `json:"interface,omitempty" validate:"omitempty,bgpFilterInterface"`
@@ -84,6 +88,11 @@ type BGPFilterRuleV6 struct {
 	MatchOperator BGPFilterMatchOperator `json:"matchOperator,omitempty" validate:"omitempty,matchOperator"`
 
 	Action BGPFilterAction `json:"action" validate:"required,filterAction"`
+}
+
+type BGPFilterPrefixLength struct {
+	Min int `json:"min,omitempty"`
+	Max int `json:"max,omitempty"`
 }
 
 type BGPFilterMatchSource string

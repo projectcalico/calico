@@ -346,6 +346,13 @@ spec:
                       type: string
                     matchOperator:
                       type: string
+                    prefixLength:
+                      properties:
+                        max:
+                          type: integer
+                        min:
+                          type: integer
+                      type: object
                     source:
                       type: string
                   required:
@@ -367,6 +374,13 @@ spec:
                       type: string
                     matchOperator:
                       type: string
+                    prefixLength:
+                      properties:
+                        max:
+                          type: integer
+                        min:
+                          type: integer
+                      type: object
                     source:
                       type: string
                   required:
@@ -388,6 +402,13 @@ spec:
                       type: string
                     matchOperator:
                       type: string
+                    prefixLength:
+                      properties:
+                        max:
+                          type: integer
+                        min:
+                          type: integer
+                      type: object
                     source:
                       type: string
                   required:
@@ -409,6 +430,13 @@ spec:
                       type: string
                     matchOperator:
                       type: string
+                    prefixLength:
+                      properties:
+                        max:
+                          type: integer
+                        min:
+                          type: integer
+                      type: object
                     source:
                       type: string
                   required:
