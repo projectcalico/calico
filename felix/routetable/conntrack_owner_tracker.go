@@ -136,7 +136,7 @@ func (c *ConntrackCleanupManager) RemoveCIDROwner(cidr ip.CIDR) {
 // StartConntrackCleanupAndReset.
 //
 // No cleanup is triggered if there is a desired route for the given CIDR
-// and that desirec route is staying on this interface.
+// and that desired route is staying on this interface.
 func (c *ConntrackCleanupManager) OnDataplaneRouteDeleted(cidr ip.CIDR, ifindex int) {
 	if !cidr.IsSingleAddress() {
 		return
@@ -283,15 +283,21 @@ func (c *ConntrackCleanupManager) WaitForPendingDeletion(cidr ip.CIDR) {
 	case <-ch:
 		goto done
 	default:
-		logrus.WithField("ip", ipAddr).Info("Waiting for pending conntrack deletion to finish")
+		logrus.WithField("ip", ipAddr).Info("Need to wait for pending conntrack deletion to finish...")
 	}
 	for {
 		select {
 		case <-ch:
-			logrus.WithField("ip", ipAddr).Info("Done waiting for pending conntrack deletion to finish")
+			logrus.WithFields(logrus.Fields{
+				"ip": ipAddr,
+				"timeWaiting": time.Since(startTime),
+			}).Info("Done waiting for pending conntrack deletion to finish")
 			goto done
 		case <-time.After(10 * time.Second):
-			logrus.WithField("ip", ipAddr).Info("Still waiting for pending conntrack deletion to finish...")
+			logrus.WithFields(logrus.Fields{
+				"ip": ipAddr,
+				"timeWaiting": time.Since(startTime),
+			}).Info("Still waiting for pending conntrack deletion to finish...")
 		}
 	}
 done:
