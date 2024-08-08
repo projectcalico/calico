@@ -88,7 +88,7 @@ require (
 	golang.org/x/time v0.5.0
 	golang.zx2c4.com/wireguard/wgctrl v0.0.0-20200324154536-ceff61240acf
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240701130421-f6361c86f094
-	google.golang.org/grpc v1.64.0
+	google.golang.org/grpc v1.65.0
 	gopkg.in/go-playground/validator.v9 v9.30.2
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 	gopkg.in/yaml.v2 v2.4.0
@@ -149,11 +149,11 @@ require (
 	github.com/blang/semver/v4 v4.0.0 // indirect
 	github.com/boombuler/barcode v1.0.1 // indirect
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
-	github.com/cespare/xxhash/v2 v2.2.0 // indirect
+	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/checkpoint-restore/go-criu/v5 v5.3.0 // indirect
 	github.com/cilium/ebpf v0.9.1 // indirect
 	github.com/cloudflare/circl v1.3.3 // indirect
-	github.com/cncf/xds/go v0.0.0-20240318125728-8a4994d93e50 // indirect
+	github.com/cncf/xds/go v0.0.0-20240423153145-555b57ec207b // indirect
 	github.com/containerd/cgroups v1.1.0 // indirect
 	github.com/containerd/console v1.0.3 // indirect
 	github.com/containerd/containerd v1.6.26 // indirect
@@ -314,10 +314,6 @@ require (
 
 replace (
 	github.com/projectcalico/api => ./api
-
-  // Pin the version of grpc temporarily to avoid deprecation error.
-  // This should be removed once the grpc.Dial is update to use grpc.NewClient.
-	google.golang.org/grpc => google.golang.org/grpc v1.61.1
 
 	k8s.io/api => k8s.io/api v0.28.9
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.28.9

@@ -57,6 +57,7 @@ import (
 	"github.com/projectcalico/calico/felix/netlinkshim"
 	mocknetlink "github.com/projectcalico/calico/felix/netlinkshim/mocknetlink"
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
@@ -461,7 +462,8 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			filterTableV6,
 			nil,
 			logutils.NewSummarizer("test"),
-			&environment.FakeFeatureDetector{},
+			&routetable.DummyTable{}, // FIXME test the routes.
+			&routetable.DummyTable{}, // FIXME test the routes.
 			nil,
 			environment.NewFeatureDetector(nil).GetFeatures(),
 			1250,
