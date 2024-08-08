@@ -5,8 +5,8 @@ execution_time_limit:
 
 agent:
   machine:
-    type: e1-standard-2
-    os_image: ubuntu2004
+    type: f1-standard-2
+    os_image: ubuntu2204
 
 auto_cancel:
   running:
