@@ -133,7 +133,7 @@ func (t IPSetType) IsMemberIPV6(member string) bool {
 
 		return cidr1
 	case IPSetTypeBitmapPort:
-		return strings.HasPrefix("v6,", member)
+		return strings.HasPrefix(member, "v6,")
 	}
 	log.WithField("type", string(t)).Panic("Unknown IPSetType")
 	return false
