@@ -357,8 +357,8 @@ type bpfEndpointManager struct {
 
 	bpfPolicyDebugEnabled bool
 
-	routeTableV4     routetable.RouteTableInterface
-	routeTableV6     routetable.RouteTableInterface
+	routeTableV4     *routetable.ClassView
+	routeTableV6     *routetable.ClassView
 	services         map[serviceKey][]ip.CIDR
 	dirtyServices    set.Set[serviceKey]
 	natExcludedCIDRs *ip.CIDRTrie
@@ -434,7 +434,8 @@ func NewTestEpMgr(
 		generictables.NewNoopTable(),
 		nil,
 		logutils.NewSummarizer("test"),
-		new(environment.FakeFeatureDetector),
+		&routetable.DummyTable{},
+		&routetable.DummyTable{},
 		nil,
 		nil,
 		1500,
@@ -454,7 +455,8 @@ func newBPFEndpointManager(
 	iptablesFilterTableV6 Table,
 	livenessCallback func(),
 	opReporter logutils.OpRecorder,
-	featureDetector environment.FeatureDetectorIface,
+	mainRouteTableV4 routetable.Interface,
+	mainRouteTableV6 routetable.Interface,
 	healthAggregator *health.HealthAggregator,
 	dataplanefeatures *environment.Features,
 	bpfIfaceMTU int,
@@ -571,33 +573,8 @@ func newBPFEndpointManager(
 
 	if m.hostNetworkedNATMode != hostNetworkedNATDisabled {
 		log.Infof("HostNetworkedNATMode is %d", m.hostNetworkedNATMode)
-		if m.v4 != nil {
-			m.routeTableV4 = routetable.New(
-				[]string{dataplanedefs.BPFInDev},
-				uint8(4),
-				config.NetlinkTimeout,
-				nil, // deviceRouteSourceAddress
-				config.DeviceRouteProtocol,
-				true, // removeExternalRoutes
-				unix.RT_TABLE_MAIN,
-				opReporter,
-				featureDetector,
-			)
-		}
-		if m.v6 != nil {
-			m.routeTableV6 = routetable.New(
-				[]string{dataplanedefs.BPFInDev},
-				uint8(6),
-				config.NetlinkTimeout,
-				nil, // deviceRouteSourceAddress
-				config.DeviceRouteProtocol,
-				true, // removeExternalRoutes
-				unix.RT_TABLE_MAIN,
-				opReporter,
-				featureDetector,
-			)
-		}
-
+		m.routeTableV4 = routetable.NewClassView(routetable.RouteClassBPFSpecial, mainRouteTableV4)
+		m.routeTableV6 = routetable.NewClassView(routetable.RouteClassBPFSpecial, mainRouteTableV6)
 		m.services = make(map[serviceKey][]ip.CIDR)
 		m.dirtyServices = set.New[serviceKey]()
 		m.natExcludedCIDRs = ip.NewCIDRTrie()
@@ -3998,22 +3975,6 @@ func (m *bpfEndpointManager) delRoute(cidr ip.CIDR) {
 	log.WithFields(log.Fields{
 		"cidr": cidr,
 	}).Debug("delRoute")
-}
-
-func (m *bpfEndpointManager) GetRouteTableSyncers() []routetable.RouteTableSyncer {
-	if m.hostNetworkedNATMode == hostNetworkedNATDisabled {
-		return nil
-	}
-
-	tables := []routetable.RouteTableSyncer{}
-	if m.v4 != nil {
-		tables = append(tables, m.routeTableV4)
-	}
-	if m.v6 != nil {
-		tables = append(tables, m.routeTableV6)
-	}
-
-	return tables
 }
 
 // updatePolicyCache modifies entries in the cache, adding new entries and marking old entries dirty.
