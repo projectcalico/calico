@@ -28,8 +28,7 @@ var _ = Describe("Real 20ms + 10ms Ticker", func() {
 	var startTime time.Time
 	BeforeEach(func() {
 		startTime = time.Now()
-		ticker = NewTicker(20*time.Millisecond,
-			10*time.Millisecond)
+		ticker = NewTicker(20*time.Millisecond, 10*time.Millisecond)
 	})
 	AfterEach(func() {
 		ticker.Stop()
@@ -62,6 +61,15 @@ var _ = Describe("Real 20ms + 10ms Ticker", func() {
 		Expect(foundLT5).To(BeTrue())
 		Expect(foundGT5).To(BeTrue())
 	}, 1)
+})
+
+var _ = Describe("Ticker.Stop()", func() {
+	It("should interrupt the current tick", func() {
+		ticker := NewTicker(5*time.Second, 10*time.Millisecond)
+		startTime := time.Now()
+		ticker.Stop()
+		Expect(time.Since(startTime)).To(BeNumerically("<", 100*time.Millisecond))
+	})
 })
 
 var _ = Describe("Delay calculation", func() {
