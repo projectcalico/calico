@@ -34,8 +34,6 @@ global_job_config:
   - name: docker-hub
   prologue:
     commands:
-      # make some room on the disk
-      - sudo rm -rf ~/.kiex ~/.phpbrew ~/.rbenv ~/.nvm ~/.kerl
       - echo $DOCKERHUB_PASSWORD | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
 
 blocks:
@@ -144,8 +142,6 @@ blocks:
       - sudo systemctl stop docker
       - sudo umount /var/lib/docker && sudo killall qemu-nbd || true
       - sudo systemctl start docker
-      # Free up space on the build machine.
-      - sudo rm -rf ~/.kiex ~/.phpbrew ~/.rbenv ~/.nvm ~/.kerl
       - checkout
       - cache restore go-pkg-cache
       - cache restore go-mod-cache
