@@ -134,3 +134,21 @@ var _ = DescribeTable("Contains",
 	Entry("IPv6 /112 true", "fc00:fe11::/112", "fc00:fe11::3", true),
 	Entry("IPv6 /112 false", "fc00:fe11::/112", "fc00:fe12::3", false),
 )
+
+var _ = DescribeTable("IsSingleAddress",
+	func(inputAddr string, expected bool) {
+		cidr := MustParseCIDROrIP(inputAddr)
+		Expect(cidr.IsSingleAddress()).To(Equal(expected))
+	},
+	Entry("0.0.0.0/0", "0.0.0.0/0", false),
+	Entry("0.0.0.0", "0.0.0.0", true),
+	Entry("10.0.0.0/8", "10.0.0.0/8", false),
+	Entry("10.1.2.3/32", "10.1.2.3/32", true),
+	Entry("10.1.2.0/31", "10.1.2.0/31", false),
+
+	Entry("::/0", "::/0", false),
+	Entry("::", "::", true),
+	Entry("dead::/16", "dead::/16", false),
+	Entry("dead::beef/128", "dead::beef/128", true),
+	Entry("dead::beef/127", "dead::beef/127", false),
+)
