@@ -820,7 +820,14 @@ func (c *Container) IPSetNames() []string {
 }
 
 func (c *Container) nftablesSetNames() []string {
-	out, err := c.ExecOutput("nft", "list", "sets", "ip")
+	// Get the set names for both IPv4 and IPv6.
+	ipv4Names := c.nftablesSetNamesForVersion("ip")
+	ipv6Names := c.nftablesSetNamesForVersion("ip6")
+	return append(ipv4Names, ipv6Names...)
+}
+
+func (c *Container) nftablesSetNamesForVersion(ver string) []string {
+	out, err := c.ExecOutput("nft", "list", "sets", ver)
 	Expect(err).NotTo(HaveOccurred(), out)
 	var names []string
 	for _, line := range strings.Split(out, "\n") {
