@@ -46,12 +46,6 @@ func PinnedVersion(cfg *config.Config) {
 func HashreleaseBuild(cfg *config.Config) {
 	outputDir := cfg.OutputDir
 	hashreleaseOutputDir := cfg.HashreleaseDir()
-	dirty, err := utils.GitIsDirty(cfg.RepoRootDir)
-	if err != nil {
-		logrus.WithError(err).Fatal("Failed to check if git is dirty")
-	} else if dirty {
-		logrus.Fatal("There are uncommitted changes in the repository, please commit or stash them before building the hashrelease")
-	}
 	if err := os.MkdirAll(hashreleaseOutputDir, utils.DirPerms); err != nil {
 		logrus.WithError(err).Fatal("Failed to create hashrelease directory")
 	}
