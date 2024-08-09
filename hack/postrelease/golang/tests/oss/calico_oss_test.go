@@ -3,7 +3,6 @@ package oss
 import (
 	"fmt"
 	"os"
-	"slices"
 	"strings"
 	"testing"
 
@@ -13,8 +12,7 @@ import (
 	"calico_postrelease/pkg/openstack"
 	"calico_postrelease/pkg/registry"
 
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
+	"github.com/stretchr/testify/assert"
 )
 
 var (
@@ -109,212 +107,179 @@ var expectedWindowsImages = []string{
 	"node-windows",
 }
 
-func TestGolang(t *testing.T) {
-	RegisterFailHandler(Fail)
-	RunSpecs(t, "Calico OSS Postrelease Test Suite")
-}
-
 var (
 	regCheck     registry.Checker
 	err          error
 	imagesToTest []container.Image
 )
 
-var _ = BeforeSuite(func() {
+func TestMain(m *testing.M) {
+	var failed = false
+	if calicoReleaseTag == "" {
+		fmt.Println("Missing CALICO_RELEASE variable!")
+		failed = true
+	}
+	if operatorReleaseVersion == "" {
+		fmt.Println("Missing OPERATOR_RELEASE variable!")
+		failed = true
+	}
+	if flannelReleaseTag == "" {
+		fmt.Println("Missing FLANNEL_RELEASE variable!")
+		failed = true
+	}
+	if failed {
+		fmt.Println("Please set the appropriate variables and then re-run the test suite")
+		os.Exit(2)
+	}
+
+	v := m.Run()
+	if v == 0 {
+		os.Exit(1)
+	}
+	os.Exit(0)
+}
+
+func Test_ImagesPublished(t *testing.T) {
+	t.Parallel()
 	regCheck, err = registry.New()
 	if err != nil {
 		fmt.Println("I guess something failed")
 		panic(err)
 	}
-	imagesToTest = make([]container.Image, 400)
+	imagesToTest = make([]container.Image, 0)
 
-	imagesToTest = append(imagesToTest, container.Image{
-		Name:     "operator",
+	containerImage := container.Image{
+		Name:     "tigera/operator",
 		Tag:      operatorReleaseVersion,
 		HostName: "quay.io",
-	})
-})
+	}
 
-var _ = AfterSuite(func() {
-	// if cacheHits, found := regCheck.Cache.Get("CacheHit"); found {
-	// 	fmt.Printf("Cache hits: %v\n", cacheHits)
-	// }
-	// if cacheMiss, found := regCheck.Cache.Get("CacheMiss"); found {
-	// 	fmt.Printf("Cache misses: %v\n", cacheMiss)
-	// }
-})
+	imagesToTest = append(imagesToTest, containerImage)
+	fmt.Println(containerImage.FullPath())
+	for _, hostName := range dockerReleaseHosts {
+		for _, imageName := range expectedCalicoImages {
 
-var _ = Describe(
-	"Validate published image",
-	Label("docker"),
-	func() {
-		for _, hostName := range dockerReleaseHosts {
-			Context(
-				fmt.Sprintf("at registry %s", hostName),
-				Label(hostName),
-				func() {
-					for _, imageName := range expectedCalicoImages {
-						Context(fmt.Sprintf("image %s", imageName), Label(imageName), func() {
-							containerImage := container.Image{
-								Name:     imageName,
-								Tag:      calicoReleaseTag,
-								HostName: hostName,
-							}
-							It("should exist", func() {
-								Expect(regCheck.CheckImageTagExists(containerImage)).NotTo(HaveOccurred())
-							})
-						})
-					}
-					for _, imageName := range expectedCalicoImages {
-						Describe(fmt.Sprintf("image %s", imageName),
-							Label("imageName"),
-							func() {
-								for _, archName := range expectedCalicoArches {
-									containerImage := container.Image{
-										Name:     imageName,
-										Tag:      fmt.Sprintf("%s-%s", calicoReleaseTag, archName),
-										HostName: hostName,
-									}
-									It(fmt.Sprintf("Should have %s", archName), Label(archName), func() {
-										Expect(regCheck.CheckImageTagExists(containerImage)).NotTo(HaveOccurred())
-									})
-								}
-							})
-					}
+			containerImage := container.Image{
+				Name:     imageName,
+				Tag:      calicoReleaseTag,
+				HostName: hostName,
+			}
 
-					for _, imageName := range expectedWindowsImages {
-						Context(fmt.Sprintf("arch-specific image %s", imageName), func() {
-							containerImage := container.Image{
-								Name:     imageName,
-								Tag:      calicoReleaseTag,
-								HostName: hostName,
-							}
-							It("should exist", func() {
-								Expect(regCheck.CheckImageTagExists(containerImage)).NotTo(HaveOccurred())
-							})
-						})
-					}
-				},
-			)
+			imagesToTest = append(imagesToTest, containerImage)
+
+			for _, archName := range expectedCalicoArches {
+				containerImage := container.Image{
+					Name:     imageName,
+					Tag:      fmt.Sprintf("%s-%s", calicoReleaseTag, archName),
+					HostName: hostName,
+				}
+				imagesToTest = append(imagesToTest, containerImage)
+			}
 		}
-	})
+		for _, imageName := range expectedWindowsImages {
 
-var _ = Describe(
-	"Validate calico release",
-	Label("github"),
-	Label("calico"),
-	Ordered,
-	func() {
-		Context(fmt.Sprintf("release %s", calicoReleaseTag), func() {
-			It("should be published", func() {
-				_, err := github.GetProjectReleaseByTag(calicoProjectName, calicoReleaseTag)
-				if err != nil {
-					Fail(fmt.Sprintf("Error getting release tag %s from project %s", calicoReleaseTag, calicoProjectName))
-				}
-			})
-			Context(
-				"should contain asset",
-				func() {
-					releaseArtifactNames, err := github.GetProjectReleaseArtifactNames(calicoProjectName, calicoReleaseTag)
-					if err != nil {
-						fmt.Printf("Could not get release artifact names for %s: %s", calicoProjectName, err)
-					}
+			containerImage := container.Image{
+				Name:     imageName,
+				Tag:      calicoReleaseTag,
+				HostName: hostName,
+			}
 
-					for _, desiredName := range expectedCalicoAssets {
-						if strings.Contains(desiredName, "%s") {
-							desiredName = fmt.Sprintf(desiredName, calicoReleaseTag)
-						}
-						It(desiredName, Label("asset"), func() {
-							if !slices.Contains(releaseArtifactNames, desiredName) {
-								Fail(fmt.Sprintf("missing asset %s in release", desiredName))
-							}
-						})
-					}
-				},
-			)
+			imagesToTest = append(imagesToTest, containerImage)
+		}
+	}
+	for _, ci := range imagesToTest {
+		testName := fmt.Sprintf("ImageVerification:%s", ci.FullPathWithTag())
+		t.Run(testName, func(t *testing.T) {
+			t.Parallel()
+			err := regCheck.CheckImageTagExists(ci)
+			assert.NoError(t, err)
 		})
+	}
+
+	t.Cleanup(func() {
+		var hitsCount int
+		var missesCount int
+		hits, _ := regCheck.Cache.Get("CacheHit")
+		misses, _ := regCheck.Cache.Get("CacheMiss")
+		hitsCount = hits.(int)
+		missesCount = misses.(int)
+		fmt.Printf("Got %v cache hits, %v misses (%v%% hit rate)\n", hitsCount, missesCount, hitsCount/(hitsCount+missesCount)*100)
 	})
 
-var _ = Describe(
-	"Validate flannel release",
-	Label("github"),
-	Label("flannel"),
-	Ordered,
-	func() {
-		Context(fmt.Sprintf("release %s", calicoReleaseTag), func() {
-			It("should be published", func() {
-				_, err := github.GetProjectReleaseByTag(flannelProjectName, flannelReleaseTag)
-				if err != nil {
-					Fail(fmt.Sprintf("Error getting release tag %s from project %s", flannelReleaseTag, flannelProjectName))
-				}
-			})
-			Context(
-				"should contain asset",
-				Ordered,
-				func() {
-					releaseArtifactNames, err := github.GetProjectReleaseArtifactNames(flannelProjectName, flannelReleaseTag)
-					if err != nil {
-						Fail(fmt.Sprintf("Could not get release artifact names for %s: %s", flannelProjectName, err))
-					}
+}
 
-					for _, desiredName := range expectedFlannelAssets {
-						if strings.Contains(desiredName, "%s") {
-							desiredName = fmt.Sprintf(desiredName, flannelReleaseTag)
-						}
-						It(desiredName, Label("asset"), func() {
-							if !slices.Contains(releaseArtifactNames, desiredName) {
-								Fail(fmt.Sprintf("missing asset %s in release", desiredName))
-							}
-						})
-					}
-				},
-			)
+func Test_CalicoGithubRelease(t *testing.T) {
+	_, err := github.GetProjectReleaseByTag(calicoProjectName, calicoReleaseTag)
+	assert.NoError(t, err)
+
+	releaseArtifactNames, err := github.GetProjectReleaseArtifactNames(calicoProjectName, calicoReleaseTag)
+	assert.NoError(t, err)
+
+	for _, desiredName := range expectedCalicoAssets {
+		if strings.Contains(desiredName, "%s") {
+			desiredName = fmt.Sprintf(desiredName, calicoReleaseTag)
+		}
+		testName := fmt.Sprintf("ReleaseAssetExists:%s", desiredName)
+		t.Run(testName, func(t *testing.T) {
+			t.Parallel()
+			assert.Contains(t, releaseArtifactNames, desiredName)
 		})
-	})
+	}
 
-var _ = Describe(
-	"Validate Openstack publishing",
-	Label("openstack"),
-	func() {
-		packageList := openstack.GetPackages(calicoReleaseTag)
-		Context("check openstack files", func() {
-			for _, packageObj := range packageList {
-				It(
-					fmt.Sprintf("should have published %s %s for %s", packageObj.Component, packageObj.Version, packageObj.OSVersion),
-					Label(packageObj.Component),
-					func() {
-						resp, err := packageObj.Head()
-						if err != nil {
-							Fail("Failed to fetch package")
-						}
-						if resp.StatusCode != 200 {
-							Fail(fmt.Sprintf("Caught unexpected HTTP status code %v", resp.StatusCode))
-						}
-					},
-				)
+}
+
+func Test_FlannelGithubRelease(t *testing.T) {
+	_, err := github.GetProjectReleaseByTag(flannelProjectName, flannelReleaseTag)
+	assert.NoError(t, err)
+
+	releaseArtifactNames, err := github.GetProjectReleaseArtifactNames(flannelProjectName, flannelReleaseTag)
+	assert.NoError(t, err)
+
+	for _, desiredName := range expectedFlannelAssets {
+		if strings.Contains(desiredName, "%s") {
+			desiredName = fmt.Sprintf(desiredName, flannelReleaseTag)
+		}
+		testName := fmt.Sprintf("ReleaseAssetExists:%s", desiredName)
+		t.Run(testName, func(t *testing.T) {
+			t.Parallel()
+			assert.Contains(t, releaseArtifactNames, desiredName)
+		})
+	}
+
+}
+
+func Test_OpenStackPublished(t *testing.T) {
+	packageList := openstack.GetPackages(calicoReleaseTag)
+	for packagePlatform, packageObjList := range packageList {
+		t.Run(packagePlatform, func(t *testing.T) {
+			for _, packageObj := range packageObjList {
+				testName := fmt.Sprintf("%s/%s/%s:%s", packageObj.OSVersion, packageObj.Arch, packageObj.Component, packageObj.Version)
+				fmt.Println(packageObj)
+				t.Run(testName, func(t *testing.T) {
+					t.Parallel()
+					resp, err := packageObj.Head()
+					assert.NoError(t, err)
+					assert.Equal(t, 200, resp.StatusCode, "blahblah")
+				})
 			}
 		})
+	}
+
+}
+
+func Test_ValidateHelmChart(t *testing.T) {
+	t.Parallel()
+	t.Run("HelmChartIsInIndex", func(t *testing.T) {
+		t.Parallel()
+		index, err := helm.GetIndex()
+		assert.NoError(t, err)
+		assert.True(t, index.CheckVersionIsPublished(calicoReleaseTag))
 	})
 
-var _ = Describe(
-	"Validate helm chart",
-	Label("helm"),
-	func() {
-		Context("the latest helm chart", func() {
-			It("should be in the published index", func() {
-				index, err := helm.GetIndex()
-				if err != nil {
-					Fail(fmt.Sprintf("could not fetch helm index: %s", err))
-				}
-				if !index.CheckVersionIsPublished(calicoReleaseTag) {
-					Fail(fmt.Sprintf("helm index does not contain an entry for version %s", calicoReleaseTag))
-				}
-			})
-			It("should be fetchable and load-able by helm", func() {
-				err := helm.LoadArchiveForVersion(calicoReleaseTag)
-				if err != nil {
-					Fail(fmt.Sprintf("%s", err))
-				}
-			})
-		})
+	t.Run("HelmChartCanBeLoaded", func(t *testing.T) {
+		t.Parallel()
+		err := helm.LoadArchiveForVersion(calicoReleaseTag)
+		assert.NoError(t, err)
 	})
+
+}

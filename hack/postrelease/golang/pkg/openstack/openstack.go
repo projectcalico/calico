@@ -113,7 +113,7 @@ var ubuntuComponents = [...]ubuntuComponent{
 }
 
 // GetPackages calculates and returns the expected packages for a given calico release
-func GetPackages(releaseStream string) []PackageRevision {
+func GetPackages(releaseStream string) map[string][]PackageRevision {
 	var ppaVersion = strings.Replace(releaseStream[0:5], "v", "calico-", 1)
 	var calicoComponentVersion = strings.Replace(releaseStream, "v", "", 1)
 
@@ -131,7 +131,7 @@ func GetPackages(releaseStream string) []PackageRevision {
 		panic(err)
 	}
 
-	packageList := make([]PackageRevision, 0)
+	packageList := make(map[string][]PackageRevision, 0)
 
 	for _, rpmArch := range rpmArches {
 		for _, rhelVersion := range rhelVersions {
@@ -159,7 +159,7 @@ func GetPackages(releaseStream string) []PackageRevision {
 					Arch:      arch,
 					Template:  template,
 				}
-				packageList = append(packageList, component)
+				packageList["rhel"] = append(packageList["rhel"], component)
 			}
 		}
 	}
@@ -181,7 +181,7 @@ func GetPackages(releaseStream string) []PackageRevision {
 				Arch:      arch,
 				Template:  ubuntuTmpl,
 			}
-			packageList = append(packageList, component)
+			packageList["ubuntu"] = append(packageList["ubuntu"], component)
 		}
 	}
 

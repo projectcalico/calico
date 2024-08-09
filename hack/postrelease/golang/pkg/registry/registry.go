@@ -9,7 +9,6 @@ import (
 
 	"calico_postrelease/pkg/container"
 
-	. "github.com/onsi/ginkgo/v2"
 	"github.com/patrickmn/go-cache"
 	"github.com/regclient/regclient"
 	"github.com/regclient/regclient/types/ref"
@@ -44,7 +43,7 @@ func (reg Checker) fetchImageTagInfo(ImageName string) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create ref: %w", err)
 	}
-	defer reg.Registry.Close(reg.Context, imageRef)
+	// defer reg.Registry.Close(reg.Context, imageRef)
 
 	// get a manifest (or call other regclient methods)
 	TagList, err := reg.Registry.TagList(reg.Context, imageRef)
@@ -64,15 +63,12 @@ func (reg Checker) CheckImageTagExists(ContainerImage container.Image) error {
 
 	if x, found := reg.Cache.Get(ImagePath); found {
 		reg.Cache.IncrementInt("CacheHit", 1)
-		// fmt.Println("Got image data from cache")
 		TagList = x.([]string)
 	} else {
 		reg.Cache.IncrementInt("CacheMiss", 1)
-		// fmt.Printf("Getting image data from server for %s", ContainerImage.FullPath())
 		x, err := reg.fetchImageTagInfo(ImagePath)
 		if err != nil {
 			errmsg := fmt.Sprintf("failed to fetch image tag info for %s", ImagePath)
-			Fail(errmsg)
 			return fmt.Errorf("%s: %w", errmsg, err)
 		}
 		TagList = x
@@ -84,6 +80,5 @@ func (reg Checker) CheckImageTagExists(ContainerImage container.Image) error {
 		return nil
 	}
 	errmsg := fmt.Sprintf("tag %s not found in tag list for %s", ContainerImage.Tag, ImagePath)
-	Fail(errmsg)
 	return fmt.Errorf(errmsg)
 }
