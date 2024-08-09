@@ -211,6 +211,9 @@ func (kds *K8sDatastoreInfra) runK8sApiserver() {
 		utils.Config.K8sImage,
 		"kube-apiserver",
 		"--v=0",
+		// NOTE! We must disable UnauthenticatedHTTP2DOSMitigation in our FV's.
+		// Felix uses the anonymous user for API requests in the FVs, which triggers the above feature and leads to very slow networking, and test timeouts.
+		"--feature-gates=UnauthenticatedHTTP2DOSMitigation=false",
 		"--service-cluster-ip-range=" + kds.serviceClusterIPRange,
 		"--authorization-mode=RBAC",
 		fmt.Sprintf("--etcd-servers=http://%s:2379", kds.containerGetIPForURL(kds.etcdContainer)),
