@@ -26,6 +26,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/bpfdefs"
 	"github.com/projectcalico/calico/felix/bpf/hook"
 	"github.com/projectcalico/calico/felix/bpf/libbpf"
+	"github.com/projectcalico/calico/felix/bpf/maps"
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 )
 
@@ -167,7 +168,13 @@ func (ap *AttachPoint) AttachProgram() (bpf.AttachResult, error) {
 			}
 			continue
 		}
-		// TODO: We need to set map size here like tc.
+
+		if size := maps.Size(mapName); size != 0 {
+			if err := m.SetSize(size); err != nil {
+				return nil, fmt.Errorf("error resizing map %s: %w", mapName, err)
+			}
+		}
+
 		pinDir := bpf.MapPinDir(m.Type(), mapName, ap.Iface, hook.XDP)
 		if err := m.SetPinPath(path.Join(pinDir, mapName)); err != nil {
 			return nil, fmt.Errorf("error pinning map %s: %w", mapName, err)
