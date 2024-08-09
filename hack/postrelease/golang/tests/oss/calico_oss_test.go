@@ -133,10 +133,7 @@ func TestMain(m *testing.M) {
 	}
 
 	v := m.Run()
-	if v == 0 {
-		os.Exit(1)
-	}
-	os.Exit(0)
+	os.Exit(v)
 }
 
 func Test_ImagesPublished(t *testing.T) {
@@ -155,7 +152,6 @@ func Test_ImagesPublished(t *testing.T) {
 	}
 
 	imagesToTest = append(imagesToTest, containerImage)
-	fmt.Println(containerImage.FullPath())
 	for _, hostName := range dockerReleaseHosts {
 		for _, imageName := range expectedCalicoImages {
 
@@ -254,7 +250,6 @@ func Test_OpenStackPublished(t *testing.T) {
 		t.Run(packagePlatform, func(t *testing.T) {
 			for _, packageObj := range packageObjList {
 				testName := fmt.Sprintf("%s/%s/%s:%s", packageObj.OSVersion, packageObj.Arch, packageObj.Component, packageObj.Version)
-				fmt.Println(packageObj)
 				t.Run(testName, func(t *testing.T) {
 					t.Parallel()
 					resp, err := packageObj.Head()
