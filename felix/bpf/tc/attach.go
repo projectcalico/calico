@@ -30,6 +30,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/bpfdefs"
 	"github.com/projectcalico/calico/felix/bpf/hook"
 	"github.com/projectcalico/calico/felix/bpf/libbpf"
+	"github.com/projectcalico/calico/felix/bpf/maps"
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 )
 
@@ -97,6 +98,12 @@ func (ap *AttachPoint) loadObject(file string) (*libbpf.Obj, error) {
 				return nil, fmt.Errorf("failed to configure %s: %w", file, err)
 			}
 			continue
+		}
+
+		if size := maps.Size(mapName); size != 0 {
+			if err := m.SetSize(size); err != nil {
+				return nil, fmt.Errorf("error resizing map %s: %w", mapName, err)
+			}
 		}
 
 		log.Debugf("Pinning map %s k %d v %d", mapName, m.KeySize(), m.ValueSize())

@@ -20,14 +20,13 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"net"
-	"os"
 	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
@@ -35,7 +34,9 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/nat"
 	"github.com/projectcalico/calico/felix/bpf/routes"
+	"github.com/projectcalico/calico/felix/fv/connectivity"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
+	"github.com/projectcalico/calico/felix/fv/workload"
 	"github.com/projectcalico/calico/felix/timeshim"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
@@ -45,7 +46,7 @@ import (
 
 var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test configurable map size", []apiconfig.DatastoreType{apiconfig.EtcdV3}, func(getInfra infrastructure.InfraFactory) {
 
-	if os.Getenv("FELIX_FV_ENABLE_BPF") != "true" {
+	if !BPFMode() {
 		// Non-BPF run.
 		return
 	}
@@ -54,19 +55,26 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test configurable
 		infra  infrastructure.DatastoreInfra
 		tc     infrastructure.TopologyContainers
 		client client.Interface
+
+		w  [2]*workload.Workload
+		cc *connectivity.Checker
 	)
 
 	BeforeEach(func() {
 		infra = getInfra()
 		opts := infrastructure.DefaultTopologyOptions()
 		tc, client = infrastructure.StartNNodeTopology(1, opts, infra)
+
+		infra.AddDefaultAllow()
 	})
 
 	AfterEach(func() {
 		if CurrentGinkgoTestDescription().Failed {
 			infra.DumpErrorData()
 		}
-
+		for _, wl := range w {
+			wl.Stop()
+		}
 		tc.Stop()
 		infra.Stop()
 	})
@@ -115,7 +123,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test configurable
 		out, err = tc.Felixes[0].ExecOutput("calico-bpf", "conntrack", "dump")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(strings.Count(out, srcIP.String())).To(Equal(1), "entry not found in conntrack map")
-
 	})
 
 	It("should program new map sizes", func() {
@@ -155,6 +162,24 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test configurable
 		Eventually(getMapSizeFn(felix, affMap), "10s", "200ms").Should(Equal(newNATAffSize))
 		Eventually(getMapSizeFn(felix, ipsMap), "10s", "200ms").Should(Equal(newIpSetMapSize))
 		Eventually(getMapSizeFn(felix, ctMap), "10s", "200ms").Should(Equal(newCtMapSize))
+
+		// Add some workloads after resize to verify that provisioning is working with the new map sizes.
+		for i := range w {
+			w[i] = workload.Run(
+				tc.Felixes[0],
+				fmt.Sprintf("w%d", i),
+				"default",
+				fmt.Sprintf("10.65.0.%d", i+2),
+				"8080",
+				"tcp",
+			)
+			w[i].ConfigureInInfra(infra)
+		}
+		cc = &connectivity.Checker{}
+
+		cc.Expect(connectivity.Some, w[0], w[1])
+		cc.Expect(connectivity.Some, w[1], w[0])
+		cc.CheckConnectivity()
 	})
 })
 
