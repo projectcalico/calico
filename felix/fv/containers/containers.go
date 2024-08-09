@@ -761,7 +761,11 @@ func (c *Container) NFTSetSizes() map[string]int {
 	numMembers := map[string]int{}
 	names := c.IPSetNames()
 	for _, name := range names {
-		numMembers[name] = c.NumNFTSetMembers(4, name)
+		if strings.HasPrefix(name, "cali60") {
+			numMembers[name] = c.NumNFTSetMembers(6, name)
+		} else {
+			numMembers[name] = c.NumNFTSetMembers(4, name)
+		}
 	}
 	return numMembers
 }
