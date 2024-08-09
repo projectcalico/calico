@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@ import (
 	api "github.com/projectcalico/calico/libcalico-go/lib/apis/v1"
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/v1/unversioned"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/calico/libcalico-go/lib/names"
 )
 
 // PolicyConverter implements a set of functions used for converting between
@@ -29,6 +30,7 @@ func (p PolicyConverter) ConvertMetadataToKey(m unversioned.ResourceMetadata) (m
 	pm := m.(api.PolicyMetadata)
 	k := model.PolicyKey{
 		Name: pm.Name,
+		Tier: names.TierOrDefault(pm.Tier),
 	}
 	return k, nil
 }
@@ -99,6 +101,7 @@ func (p PolicyConverter) ConvertKVPairToAPI(d *model.KVPair) (unversioned.Resour
 
 	ap := api.NewPolicy()
 	ap.Metadata.Name = bk.Name
+	ap.Metadata.Tier = bk.Tier
 	ap.Metadata.Annotations = bp.Annotations
 	ap.Spec.Order = bp.Order
 	ap.Spec.IngressRules = RulesBackendToAPI(bp.InboundRules)

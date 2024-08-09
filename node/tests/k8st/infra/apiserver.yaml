@@ -160,6 +160,7 @@ rules:
 - apiGroups:
   - crd.projectcalico.org
   resources:
+  - tiers
   - globalnetworkpolicies
   - networkpolicies
   - clusterinformations

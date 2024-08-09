@@ -154,7 +154,7 @@ func parsedRuleToProtoRule(in *ParsedRule) *proto.Rule {
 				protoMatch := &proto.HTTPMatch_PathMatch_Prefix{Prefix: pathMatch.Prefix}
 				paths = append(paths, &proto.HTTPMatch_PathMatch{PathMatch: protoMatch})
 			} else {
-				log.Error("Ignoring unknown patch match type", pathMatch)
+				log.Error("Ignoring unknown path match type", pathMatch)
 			}
 		}
 		if len(paths) > 0 {

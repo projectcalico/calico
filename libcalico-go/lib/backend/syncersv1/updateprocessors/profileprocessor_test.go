@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -161,8 +161,8 @@ var _ = Describe("Test the Profile update processor", func() {
 		})
 		Expect(err).NotTo(HaveOccurred())
 
-		v1irule := updateprocessors.RuleAPIV2ToBackend(irule, "")
-		v1erule := updateprocessors.RuleAPIV2ToBackend(erule, "")
+		v1irule := updateprocessors.RuleAPIV3ToBackend(irule, "")
+		v1erule := updateprocessors.RuleAPIV3ToBackend(erule, "")
 		Expect(kvps).To(HaveLen(3))
 		Expect(kvps[0]).To(Equal(&model.KVPair{
 			Key:      model.ProfileLabelsKey{v1ProfileKey2},

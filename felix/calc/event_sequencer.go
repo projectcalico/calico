@@ -304,7 +304,7 @@ func (buf *EventSequencer) flushPolicyUpdates() {
 func ParsedRulesToActivePolicyUpdate(key model.PolicyKey, rules *ParsedRules) *proto.ActivePolicyUpdate {
 	return &proto.ActivePolicyUpdate{
 		Id: &proto.PolicyID{
-			Tier: "default",
+			Tier: key.Tier,
 			Name: key.Name,
 		},
 		Policy: &proto.Policy{
@@ -335,7 +335,7 @@ func (buf *EventSequencer) flushPolicyDeletes() {
 	buf.pendingPolicyDeletes.Iter(func(item model.PolicyKey) error {
 		buf.Callback(&proto.ActivePolicyRemove{
 			Id: &proto.PolicyID{
-				Tier: "default",
+				Tier: item.Tier,
 				Name: item.Name,
 			},
 		})

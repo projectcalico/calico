@@ -1095,7 +1095,7 @@ var _ = Describe("rule metadata tests", func() {
 		)
 		Expect(chains).To(ConsistOf(
 			&generictables.Chain{
-				Name: "cali-pi-_ffOMcf6pikpiZ6hgKcW",
+				Name: "cali-pi-_FJ9yUkNpzshVDh2n7mg",
 				Rules: []generictables.Rule{
 					{
 						Match:  iptables.Match(),
@@ -1107,7 +1107,7 @@ var _ = Describe("rule metadata tests", func() {
 				},
 			},
 			&generictables.Chain{
-				Name: "cali-po-_ffOMcf6pikpiZ6hgKcW",
+				Name: "cali-po-_FJ9yUkNpzshVDh2n7mg",
 				Rules: []generictables.Rule{
 					{
 						Comment: []string{

@@ -1,4 +1,4 @@
-// Copyright (c) 2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -535,4 +535,98 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Service network policy test
 		cc.ExpectSome(w[1], w[0].Port(81))
 		cc.CheckConnectivity()
 	})
+
+	It("should work properly in the non-default tier", func() {
+		// Expect basic connectivity to work.
+		cc.ExpectSome(w[0], w[1].Port(80))
+		cc.ExpectSome(w[0], w[1].Port(81))
+		cc.ExpectSome(w[1], w[0].Port(80))
+		cc.ExpectSome(w[1], w[0].Port(81))
+		cc.CheckConnectivity()
+
+		// Create a default-deny egress policy in the default tier.
+		defaultDenyPolicy := api.NewNetworkPolicy()
+		defaultDenyPolicy.Namespace = "default"
+		defaultDenyPolicy.Name = "default-deny"
+		thousand := 1000.0
+		defaultDenyPolicy.Spec.Tier = "default"
+		defaultDenyPolicy.Spec.Order = &thousand
+		defaultDenyPolicy.Spec.Selector = "all()"
+		defaultDenyPolicy.Spec.Types = []api.PolicyType{api.PolicyTypeEgress}
+		_, err := client.NetworkPolicies().Create(utils.Ctx, defaultDenyPolicy, utils.NoOptions)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Expect no traffic allowed.
+		cc.ResetExpectations()
+		cc.ExpectNone(w[0], w[1].Port(80))
+		cc.ExpectNone(w[1], w[0].Port(80))
+		cc.ExpectNone(w[0], w[1].Port(81))
+		cc.ExpectNone(w[1], w[0].Port(81))
+		cc.CheckConnectivity()
+
+		// Create a Kubernetes EndpointSlice for a service named "w1-service" that includes
+		// the endpoint information for w1.
+		//
+		// A service isn't required, as Felix is driven entirely off of endpoint slices.
+		kc := infra.(*infrastructure.K8sDatastoreInfra).K8sClient
+		eighty := int32(80)
+		tcp := v1.ProtocolTCP
+		eps := &discovery.EndpointSlice{}
+		eps.Name = "w1-eps"
+		eps.Namespace = "default"
+		eps.Labels = map[string]string{"kubernetes.io/service-name": "w1-service"}
+		eps.AddressType = discovery.AddressTypeIPv4
+		eps.Endpoints = []discovery.Endpoint{
+			{Addresses: []string{w[1].IP}},
+		}
+		eps.Ports = []discovery.EndpointPort{
+			{Port: &eighty, Protocol: &tcp},
+		}
+		eps, err = kc.DiscoveryV1().EndpointSlices("default").Create(utils.Ctx, eps, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Make sure we clean up after ourselves.
+		defer func() {
+			err = kc.DiscoveryV1().EndpointSlices("default").Delete(utils.Ctx, eps.Name, metav1.DeleteOptions{})
+			Expect(err).NotTo(HaveOccurred())
+		}()
+
+		// Create a new tier.
+		order := 100.0
+		tier := api.NewTier()
+		tier.Name = "tier1"
+		tier.Spec.Order = &order
+		_, err = client.Tiers().Create(utils.Ctx, tier, utils.NoOptions)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Create a network policy which allows to the service in a new tier.
+		allowServicePolicy := api.NewNetworkPolicy()
+		allowServicePolicy.Namespace = "default"
+		allowServicePolicy.Name = "tier1.allow-to-w1"
+		allowServicePolicy.Spec.Order = &thousand
+		allowServicePolicy.Spec.Tier = "tier1"
+		allowServicePolicy.Spec.Selector = "all()"
+		allowServicePolicy.Spec.Types = []api.PolicyType{api.PolicyTypeEgress}
+		allowServicePolicy.Spec.Egress = []api.Rule{
+			{
+				Action:      api.Allow,
+				Destination: api.EntityRule{Services: &api.ServiceMatch{Name: "w1-service", Namespace: "default"}},
+			},
+			{
+				Action: api.Pass,
+			},
+		}
+		_, err = client.NetworkPolicies().Create(utils.Ctx, allowServicePolicy, utils.NoOptions)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Expect traffic is allowed to the endpoint specified in the service - w1, TCP 80
+		// Traffic the other direction, and to other ports should not be allowed.
+		cc.ResetExpectations()
+		cc.ExpectSome(w[0], w[1].Port(80))
+		cc.ExpectNone(w[0], w[1].Port(81))
+		cc.ExpectNone(w[1], w[0].Port(80))
+		cc.ExpectNone(w[1], w[0].Port(81))
+		cc.CheckConnectivity()
+	})
+
 })

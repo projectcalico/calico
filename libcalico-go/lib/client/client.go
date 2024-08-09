@@ -66,6 +66,11 @@ func NewFromEnv() (*Client, error) {
 	return New(*config)
 }
 
+// Tiers returns an interface for managing tier resources.
+func (c *Client) Tiers() TierInterface {
+	return newTiers(c)
+}
+
 // Nodes returns an interface for managing node resources.
 func (c *Client) Nodes() NodeInterface {
 	return newNodes(c)

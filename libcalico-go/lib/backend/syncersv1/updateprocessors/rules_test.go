@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -77,7 +77,7 @@ var _ = Describe("Test the Rules Conversion Functions", func() {
 				Annotations: map[string]string{"fizz": "buzz"}},
 		}
 		// Correct inbound rule
-		rulev1 := updateprocessors.RuleAPIV2ToBackend(irule, "namespace2")
+		rulev1 := updateprocessors.RuleAPIV3ToBackend(irule, "namespace2")
 
 		// Assert we don't change the original protocol.
 		Expect(irule.Protocol.String()).To(Equal("TCP"))
@@ -161,7 +161,7 @@ var _ = Describe("Test the Rules Conversion Functions", func() {
 			},
 		}
 		// Correct outbound rule
-		rulev1 = updateprocessors.RuleAPIV2ToBackend(erule, "")
+		rulev1 = updateprocessors.RuleAPIV3ToBackend(erule, "")
 		Expect(rulev1.IPVersion).To(Equal(&v4))
 		Expect(rulev1.Protocol).To(Equal(&eproto))
 		Expect(rulev1.ICMPCode).To(Equal(&ecode))
@@ -197,7 +197,7 @@ var _ = Describe("Test the Rules Conversion Functions", func() {
 		Expect(rulev1.OriginalDstServiceAccountNames).To(BeNil())
 
 		By("Converting multiple rules")
-		rulesv1 := updateprocessors.RulesAPIV2ToBackend([]apiv3.Rule{irule, erule}, "namespace1")
+		rulesv1 := updateprocessors.RulesAPIV3ToBackend([]apiv3.Rule{irule, erule}, "namespace1")
 		rulev1 = rulesv1[0]
 		Expect(rulev1.Action).To(Equal("allow"))
 		Expect(rulev1.IPVersion).To(Equal(&v4))
@@ -278,7 +278,7 @@ var _ = Describe("Test the Rules Conversion Functions", func() {
 		}
 
 		// Process the rule and get the corresponding v1 representation.
-		rulev1 := updateprocessors.RuleAPIV2ToBackend(r, "")
+		rulev1 := updateprocessors.RuleAPIV3ToBackend(r, "")
 
 		expected := "has(foo)"
 		By("generating the correct source selector", func() {
@@ -306,7 +306,7 @@ var _ = Describe("Test the Rules Conversion Functions", func() {
 		}
 
 		// Process the rule and get the corresponding v1 representation.
-		rulev1 := updateprocessors.RuleAPIV2ToBackend(r, "")
+		rulev1 := updateprocessors.RuleAPIV3ToBackend(r, "")
 
 		By("generating an empty source selector", func() {
 			Expect(rulev1.SrcSelector).To(Equal(""))
@@ -340,7 +340,7 @@ var _ = Describe("Test the Rules Conversion Functions", func() {
 		}
 
 		// Process the rule and get the corresponding v1 representation.
-		rulev1 := updateprocessors.RuleAPIV2ToBackend(r, "namespace")
+		rulev1 := updateprocessors.RuleAPIV3ToBackend(r, "namespace")
 
 		expected := "(pcns.key == \"value\") && (projectcalico.org/orchestrator == 'k8s')"
 		By("generating the correct source selector", func() {
@@ -367,7 +367,7 @@ var _ = Describe("Test the Rules Conversion Functions", func() {
 		}
 
 		// Process the rule and get the corresponding v1 representation.
-		rulev1 := updateprocessors.RuleAPIV2ToBackend(r, "namespace")
+		rulev1 := updateprocessors.RuleAPIV3ToBackend(r, "namespace")
 
 		By("generating the correct source selector", func() {
 			Expect(rulev1.SrcSelector).To(Equal(e))
@@ -400,7 +400,7 @@ var _ = Describe("Test the Rules Conversion Functions", func() {
 		}
 
 		// Process the rule and get the corresponding v1 representation.
-		rulev1 := updateprocessors.RuleAPIV2ToBackend(r, "namespace")
+		rulev1 := updateprocessors.RuleAPIV3ToBackend(r, "namespace")
 
 		By("generating the correct source selector", func() {
 			Expect(rulev1.SrcSelector).To(Equal(srce))
@@ -427,7 +427,7 @@ var _ = Describe("Test the Rules Conversion Functions", func() {
 		}
 
 		// Process the rule and get the corresponding v1 representation.
-		rulev1 := updateprocessors.RuleAPIV2ToBackend(r, "")
+		rulev1 := updateprocessors.RuleAPIV3ToBackend(r, "")
 
 		By("generating the correct source selector", func() {
 			Expect(rulev1.SrcSelector).To(Equal(srce))
@@ -444,7 +444,7 @@ var _ = Describe("Test the Rules Conversion Functions", func() {
 		}
 
 		// Process the rule and get the corresponding v1 representation.
-		rulev1 := updateprocessors.RuleAPIV2ToBackend(r, "")
+		rulev1 := updateprocessors.RuleAPIV3ToBackend(r, "")
 
 		By("generating an empty source selector", func() {
 			Expect(rulev1.SrcSelector).To(Equal(""))
@@ -463,7 +463,7 @@ var _ = Describe("Test the Rules Conversion Functions", func() {
 		}
 
 		// Process the rule and get the corresponding v1 representation.
-		rulev1 := updateprocessors.RuleAPIV2ToBackend(r, "")
+		rulev1 := updateprocessors.RuleAPIV3ToBackend(r, "")
 
 		By("generating an empty source selector", func() {
 			Expect(rulev1.SrcSelector).To(Equal(""))
@@ -487,7 +487,7 @@ var _ = Describe("Test the Rules Conversion Functions", func() {
 		}
 
 		// Process the rule and get the corresponding v1 representation.
-		rulev1 := updateprocessors.RuleAPIV2ToBackend(r, "")
+		rulev1 := updateprocessors.RuleAPIV3ToBackend(r, "")
 
 		By("generating an empty destination selector", func() {
 			Expect(rulev1.DstSelector).To(Equal(""))
@@ -515,7 +515,7 @@ var _ = Describe("Test the Rules Conversion Functions", func() {
 		}
 
 		// Process the rule and get the corresponding v1 representation.
-		rulev1 := updateprocessors.RuleAPIV2ToBackend(r, "namespace")
+		rulev1 := updateprocessors.RuleAPIV3ToBackend(r, "namespace")
 
 		By("generating the correct destination selector", func() {
 			Expect(rulev1.DstSelector).To(Equal(dste))
@@ -547,7 +547,7 @@ var _ = Describe("Test the Rules Conversion Functions", func() {
 			},
 		}
 
-		outRules := updateprocessors.RulesAPIV2ToBackend(rules, "namespace")
+		outRules := updateprocessors.RulesAPIV3ToBackend(rules, "namespace")
 		// The first rule should select "namespace `red`, the second rule should have 'has(projectcalico.org/namespace)'
 		// and third rule should select '!has(projectcalico.org/namespace)'
 		Expect(outRules[0].DstSelector).To(Equal("(pcns.namespace == \"red\") && (has(label1))"))

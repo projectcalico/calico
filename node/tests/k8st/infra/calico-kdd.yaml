@@ -125,6 +125,7 @@ rules:
       - blockaffinities
       - ipamblocks
       - ipamhandles
+      - tiers
     verbs:
       - get
       - list
@@ -271,6 +272,7 @@ rules:
       - hostendpoints
       - blockaffinities
       - caliconodestatuses
+      - tiers
     verbs:
       - get
       - list

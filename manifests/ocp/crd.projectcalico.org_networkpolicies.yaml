@@ -779,10 +779,10 @@ spec:
               order:
                 description: Order is an optional field that specifies the order in
                   which the policy is applied. Policies with higher "order" are applied
-                  after those with lower order.  If the order is omitted, it may be
-                  considered to be "infinite" - i.e. the policy will be applied last.  Policies
-                  with identical order will be applied in alphanumerical order based
-                  on the Policy "Name".
+                  after those with lower order within the same tier.  If the order
+                  is omitted, it may be considered to be "infinite" - i.e. the policy
+                  will be applied last.  Policies with identical order will be applied
+                  in alphanumerical order based on the Policy "Name" within the tier.
                 type: number
               performanceHints:
                 description: "PerformanceHints contains a list of hints to Calico's
@@ -819,6 +819,14 @@ spec:
               serviceAccountSelector:
                 description: ServiceAccountSelector is an optional field for an expression
                   used to select a pod based on service accounts.
+                type: string
+              tier:
+                description: The name of the tier that this policy belongs to.  If
+                  this is omitted, the default tier (name is "default") is assumed.  The
+                  specified tier must exist in order to create security policies within
+                  the tier, the "default" tier is created automatically if it does
+                  not exist, this means for deployments requiring only a single Tier,
+                  the tier name may be omitted on all policy management requests.
                 type: string
               types:
                 description: "Types indicates whether this policy applies to ingress,

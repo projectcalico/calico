@@ -24,24 +24,30 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/watchersyncer"
+	"github.com/projectcalico/calico/libcalico-go/lib/names"
 )
 
 // Create a new SyncerUpdateProcessor to sync NetworkPolicy data in v1 format for
 // consumption by Felix.
 func NewNetworkPolicyUpdateProcessor() watchersyncer.SyncerUpdateProcessor {
-	return NewSimpleUpdateProcessor(apiv3.KindNetworkPolicy, convertNetworkPolicyV2ToV1Key, convertNetworkPolicyV2ToV1Value)
+	return NewSimpleUpdateProcessor(apiv3.KindNetworkPolicy, convertNetworkPolicyV3ToV1Key, convertNetworkPolicyV3ToV1Value)
 }
 
-func convertNetworkPolicyV2ToV1Key(v3key model.ResourceKey) (model.Key, error) {
+func convertNetworkPolicyV3ToV1Key(v3key model.ResourceKey) (model.Key, error) {
 	if v3key.Name == "" || v3key.Namespace == "" {
 		return model.PolicyKey{}, errors.New("Missing Name or Namespace field to create a v1 NetworkPolicy Key")
 	}
+	tier, err := names.TierFromPolicyName(v3key.Name)
+	if err != nil {
+		return model.PolicyKey{}, err
+	}
 	return model.PolicyKey{
 		Name: v3key.Namespace + "/" + v3key.Name,
+		Tier: tier,
 	}, nil
 }
 
-func convertNetworkPolicyV2ToV1Value(val interface{}) (interface{}, error) {
+func convertNetworkPolicyV3ToV1Value(val interface{}) (interface{}, error) {
 	v3res, ok := val.(*apiv3.NetworkPolicy)
 	if !ok {
 		return nil, errors.New("Value is not a valid NetworkPolicy resource value")
@@ -64,10 +70,10 @@ func convertNetworkPolicyV2ToV1Value(val interface{}) (interface{}, error) {
 	v1value := &model.Policy{
 		Namespace:        v3res.Namespace,
 		Order:            spec.Order,
-		InboundRules:     RulesAPIV2ToBackend(spec.Ingress, v3res.Namespace),
-		OutboundRules:    RulesAPIV2ToBackend(spec.Egress, v3res.Namespace),
+		InboundRules:     RulesAPIV3ToBackend(spec.Ingress, v3res.Namespace),
+		OutboundRules:    RulesAPIV3ToBackend(spec.Egress, v3res.Namespace),
 		Selector:         selector,
-		Types:            policyTypesAPIV2ToBackend(spec.Types),
+		Types:            policyTypesAPIV3ToBackend(spec.Types),
 		ApplyOnForward:   false,
 		PerformanceHints: v3res.Spec.PerformanceHints,
 	}
@@ -75,16 +81,16 @@ func convertNetworkPolicyV2ToV1Value(val interface{}) (interface{}, error) {
 	return v1value, nil
 }
 
-// policyTypesAPIV2ToBackend converts the policy type field value from the API
+// policyTypesAPIV3ToBackend converts the policy type field value from the API
 // value to the equivalent backend value.
-func policyTypesAPIV2ToBackend(ptypes []apiv3.PolicyType) []string {
+func policyTypesAPIV3ToBackend(ptypes []apiv3.PolicyType) []string {
 	var v1ptypes []string
 	for _, ptype := range ptypes {
-		v1ptypes = append(v1ptypes, policyTypeAPIV2ToBackend(ptype))
+		v1ptypes = append(v1ptypes, policyTypeAPIV3ToBackend(ptype))
 	}
 	return v1ptypes
 }
 
-func policyTypeAPIV2ToBackend(ptype apiv3.PolicyType) string {
+func policyTypeAPIV3ToBackend(ptype apiv3.PolicyType) string {
 	return strings.ToLower(string(ptype))
 }

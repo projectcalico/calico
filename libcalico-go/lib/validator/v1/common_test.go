@@ -128,6 +128,28 @@ var _ = Describe("Test ValidateMetadataIDsAssigned function", func() {
 			err := validator.ValidateMetadataIDsAssigned(policy.Metadata)
 			Expect(err).NotTo(HaveOccurred())
 		})
+		It("should pass with a Name and Tier specified", func() {
+			policy.Metadata.Tier = "notdefault"
+			err := validator.ValidateMetadataIDsAssigned(policy.Metadata)
+			Expect(err).NotTo(HaveOccurred())
+		})
+	})
+
+	Context("with Tier Metadata", func() {
+		var tier *api.Tier
+		BeforeEach(func() {
+			tier = api.NewTier()
+			tier.Metadata.Name = "testTier"
+		})
+		It("should fail if missing Name", func() {
+			tier.Metadata.Name = ""
+			err := validator.ValidateMetadataIDsAssigned(tier.Metadata)
+			Expect(err).To(HaveOccurred())
+		})
+		It("should pass with a Name specified", func() {
+			err := validator.ValidateMetadataIDsAssigned(tier.Metadata)
+			Expect(err).NotTo(HaveOccurred())
+		})
 	})
 
 	Context("with Profile Metadata", func() {

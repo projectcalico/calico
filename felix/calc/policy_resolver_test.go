@@ -81,6 +81,7 @@ func TestPolicyResolver_OnPolicyMatch(t *testing.T) {
 	pr, recorder := createPolicyResolver()
 
 	polKey := model.PolicyKey{
+		Tier: "default",
 		Name: "test-policy",
 	}
 
@@ -89,7 +90,10 @@ func TestPolicyResolver_OnPolicyMatch(t *testing.T) {
 	endpointKey := model.WorkloadEndpointKey{
 		Hostname: "test-workload-ep",
 	}
-	pr.endpoints[endpointKey] = "the endpoint"
+	wep := &model.WorkloadEndpoint{
+		Name: "we1",
+	}
+	pr.endpoints[endpointKey] = wep
 
 	pr.allPolicies[polKey] = &pol
 
@@ -123,9 +127,10 @@ func TestPolicyResolver_OnPolicyMatch(t *testing.T) {
 	}
 	if d := cmp.Diff(recorder.updates[0], policyResolverUpdate{
 		Key:      endpointKey,
-		Endpoint: "the endpoint",
+		Endpoint: wep,
 		Tiers: []TierInfo{{
-			Name: "default",
+			Name:  "default",
+			Valid: true,
 			OrderedPolicies: []PolKV{
 				{
 					Key:   polKey,
@@ -143,6 +148,7 @@ func TestPolicyResolver_OnPolicyMatchStopped(t *testing.T) {
 	pr.OnDatamodelStatus(api.InSync)
 
 	polKey := model.PolicyKey{
+		Tier: "default",
 		Name: "test-policy",
 	}
 

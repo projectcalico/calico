@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017,2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,9 +18,8 @@ import (
 	"context"
 	"strings"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
@@ -34,14 +33,15 @@ func init() {
 		newNetworkPolicyList(),
 		true,
 		[]string{"networkpolicy", "networkpolicies", "policy", "np", "policies", "pol", "pols"},
-		[]string{"NAME"},
-		[]string{"NAME", "ORDER", "SELECTOR"},
+		[]string{"NAME", "TIER"},
+		[]string{"NAME", "TIER", "ORDER", "SELECTOR"},
 		// NAMESPACE may be prepended in GrabTableTemplate so needs to remain in the map below
 		map[string]string{
 			"NAME":      "{{.ObjectMeta.Name}}",
 			"NAMESPACE": "{{.ObjectMeta.Namespace}}",
 			"ORDER":     "{{.Spec.Order}}",
 			"SELECTOR":  "{{.Spec.Selector}}",
+			"TIER":      "{{.Spec.Tier}}",
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
 			r := resource.(*api.NetworkPolicy)

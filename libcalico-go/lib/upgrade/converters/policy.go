@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -37,6 +37,7 @@ func (_ Policy) APIV1ToBackendV1(a unversioned.Resource) (*model.KVPair, error) 
 	d := model.KVPair{
 		Key: model.PolicyKey{
 			Name: ap.Metadata.Name,
+			Tier: ap.Metadata.Tier,
 		},
 		Value: &model.Policy{
 			Order:         ap.Spec.Order,
@@ -102,8 +103,13 @@ func (_ Policy) BackendV1ToAPIV3(kvp *model.KVPair) (Resource, error) {
 	}
 
 	ap := apiv3.NewGlobalNetworkPolicy()
-	ap.Name = convertNameNoDots(bk.Name)
+	tier := convertNameNoDots(bk.Tier)
+	if tier == "" {
+		tier = "default"
+	}
+	ap.Name = tier + "." + convertNameNoDots(bk.Name)
 	ap.Annotations = bp.Annotations
+	ap.Labels = map[string]string{apiv3.LabelTier: tier}
 	ap.Spec.Order = bp.Order
 	ap.Spec.Ingress = rulesV1BackendToV3API(bp.InboundRules)
 	ap.Spec.Egress = rulesV1BackendToV3API(bp.OutboundRules)
@@ -112,6 +118,7 @@ func (_ Policy) BackendV1ToAPIV3(kvp *model.KVPair) (Resource, error) {
 	ap.Spec.PreDNAT = bp.PreDNAT
 	ap.Spec.ApplyOnForward = bp.ApplyOnForward
 	ap.Spec.Types = nil // Set later.
+	ap.Spec.Tier = tier
 
 	if !bp.ApplyOnForward && (bp.DoNotTrack || bp.PreDNAT) {
 		// This case happens when there is a preexisting policy in the datastore, from before

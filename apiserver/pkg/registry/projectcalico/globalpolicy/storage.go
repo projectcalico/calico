@@ -1,4 +1,4 @@
-// Copyright (c) 2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,7 +19,10 @@ import (
 
 	calico "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
+	"github.com/projectcalico/calico/apiserver/pkg/rbac"
+	"github.com/projectcalico/calico/apiserver/pkg/registry/projectcalico/authorizer"
 	"github.com/projectcalico/calico/apiserver/pkg/registry/projectcalico/server"
+	"github.com/projectcalico/calico/apiserver/pkg/registry/projectcalico/util"
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	metainternalversion "k8s.io/apimachinery/pkg/apis/meta/internalversion"
@@ -35,6 +38,8 @@ import (
 // rest implements a RESTStorage for API services against etcd
 type REST struct {
 	*genericregistry.Store
+	rbac.CalicoResourceLister
+	authorizer authorizer.TierAuthorizer
 	shortNames []string
 }
 
@@ -49,7 +54,7 @@ func NewList() runtime.Object {
 }
 
 // NewREST returns a RESTStorage object that will work against API services.
-func NewREST(scheme *runtime.Scheme, opts server.Options) (*REST, error) {
+func NewREST(scheme *runtime.Scheme, opts server.Options, calicoResourceLister rbac.CalicoResourceLister) (*REST, error) {
 	strategy := NewStrategy(scheme)
 
 	prefix := "/" + opts.ResourcePrefix()
@@ -98,32 +103,69 @@ func NewREST(scheme *runtime.Scheme, opts server.Options) (*REST, error) {
 		Storage:     storageInterface,
 		DestroyFunc: dFunc,
 	}
-	return &REST{store, opts.ShortNames}, nil
+
+	return &REST{store, calicoResourceLister, authorizer.NewTierAuthorizer(opts.Authorizer), []string{}}, nil
 }
 
 func (r *REST) List(ctx context.Context, options *metainternalversion.ListOptions) (runtime.Object, error) {
+	err := util.EnsureTierSelector(ctx, options, r.authorizer, r.CalicoResourceLister)
+	if err != nil {
+		return nil, err
+	}
+
 	return r.Store.List(ctx, options)
 }
 
 func (r *REST) Create(ctx context.Context, obj runtime.Object, val rest.ValidateObjectFunc, createOpt *metav1.CreateOptions) (runtime.Object, error) {
+	policy := obj.(*calico.GlobalNetworkPolicy)
+	// Is Tier prepended. If not prepend default?
+	tierName, _ := util.GetTierFromPolicyName(policy.Name)
+	err := r.authorizer.AuthorizeTierOperation(ctx, policy.Name, tierName)
+	if err != nil {
+		return nil, err
+	}
+
 	return r.Store.Create(ctx, obj, val, createOpt)
 }
 
 func (r *REST) Update(ctx context.Context, name string, objInfo rest.UpdatedObjectInfo, createValidation rest.ValidateObjectFunc,
 	updateValidation rest.ValidateObjectUpdateFunc, forceAllowCreate bool, options *metav1.UpdateOptions) (runtime.Object, bool, error) {
+	tierName, _ := util.GetTierFromPolicyName(name)
+	err := r.authorizer.AuthorizeTierOperation(ctx, name, tierName)
+	if err != nil {
+		return nil, false, err
+	}
+
 	return r.Store.Update(ctx, name, objInfo, createValidation, updateValidation, forceAllowCreate, options)
 }
 
 // Get retrieves the item from storage.
 func (r *REST) Get(ctx context.Context, name string, options *metav1.GetOptions) (runtime.Object, error) {
+	tierName, _ := util.GetTierFromPolicyName(name)
+	err := r.authorizer.AuthorizeTierOperation(ctx, name, tierName)
+	if err != nil {
+		return nil, err
+	}
+
 	return r.Store.Get(ctx, name, options)
 }
 
 func (r *REST) Delete(ctx context.Context, name string, deleteValidation rest.ValidateObjectFunc, options *metav1.DeleteOptions) (runtime.Object, bool, error) {
+	tierName, _ := util.GetTierFromPolicyName(name)
+	err := r.authorizer.AuthorizeTierOperation(ctx, name, tierName)
+	if err != nil {
+		return nil, false, err
+	}
+
 	return r.Store.Delete(ctx, name, deleteValidation, options)
 }
 
 func (r *REST) Watch(ctx context.Context, options *metainternalversion.ListOptions) (watch.Interface, error) {
+	err := util.EnsureTierSelector(ctx, options, r.authorizer, r.CalicoResourceLister)
+	if err != nil {
+		return nil, err
+	}
+
 	return r.Store.Watch(ctx, options)
 }
 

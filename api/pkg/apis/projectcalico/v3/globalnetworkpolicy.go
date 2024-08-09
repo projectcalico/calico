@@ -1,4 +1,4 @@
-// Copyright (c) 2017,2019-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -46,11 +46,17 @@ type GlobalNetworkPolicy struct {
 }
 
 type GlobalNetworkPolicySpec struct {
+	// The name of the tier that this policy belongs to.  If this is omitted, the default
+	// tier (name is "default") is assumed.  The specified tier must exist in order to create
+	// security policies within the tier, the "default" tier is created automatically if it
+	// does not exist, this means for deployments requiring only a single Tier, the tier name
+	// may be omitted on all policy management requests.
+	Tier string `json:"tier,omitempty" validate:"omitempty,name"`
 	// Order is an optional field that specifies the order in which the policy is applied.
 	// Policies with higher "order" are applied after those with lower
-	// order.  If the order is omitted, it may be considered to be "infinite" - i.e. the
+	// order within the same tier.  If the order is omitted, it may be considered to be "infinite" - i.e. the
 	// policy will be applied last.  Policies with identical order will be applied in
-	// alphanumerical order based on the Policy "Name".
+	// alphanumerical order based on the Policy "Name" within the tier.
 	Order *float64 `json:"order,omitempty"`
 	// The ordered set of ingress rules.  Each rule contains a set of packet match criteria and
 	// a corresponding action to apply.

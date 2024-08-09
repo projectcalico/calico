@@ -1567,3 +1567,7 @@ func (c shimClient) BlockAffinities() client.BlockAffinityInterface {
 func (c shimClient) EnsureInitialized(ctx context.Context, calicoVersion, clusterType string) error {
 	return nil
 }
+
+func (c shimClient) Tiers() client.TierInterface {
+	panic("not implemented")
+}

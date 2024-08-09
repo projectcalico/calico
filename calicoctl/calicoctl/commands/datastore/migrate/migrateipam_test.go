@@ -183,6 +183,10 @@ func NewMockIPAMClient(bc bapi.Client) client.Interface {
 	}
 }
 
+func (c *MockIPAMClient) Tiers() client.TierInterface {
+	return nil
+}
+
 func (c *MockIPAMClient) Backend() bapi.Client {
 	return c.backend
 }

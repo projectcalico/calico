@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -125,12 +125,24 @@ func KeyToDefaultPath(key Key) (string, error) {
 // directories and leaves) key/value datastore such as etcd v3.
 //
 // KeyToDefaultDeletePath returns a different path to KeyToDefaultPath when
-// it is a passed a Key that represents a non-leaf which, for example, has its
-// own metadata but also contains other resource types as children.
+// it is a passed a Key that represents a non-leaf, such as a TierKey.  (A
+// tier has its own metadata but it also contains policies as children.)
 //
 // KeyToDefaultDeletePath returns the common prefix of the non-leaf key and
 // its children so that a recursive delete of that key would delete the
 // object itself and any children it has.
+//
+// For example, KeyToDefaultDeletePath(TierKey{Tier: "a"}) returns
+//
+//	"/calico/v1/policy/tier/a"
+//
+// which is a prefix of both KeyToDefaultPath(TierKey{Tier: "a"}):
+//
+//	"/calico/v1/policy/tier/a/metadata"
+//
+// and KeyToDefaultPath(PolicyKey{Tier: "a", Name: "b"}):
+//
+//	"/calico/v1/policy/tier/a/policy/b"
 func KeyToDefaultDeletePath(key Key) (string, error) {
 	return key.defaultDeletePath()
 }
@@ -167,7 +179,19 @@ func KeyToDefaultDeleteParentPaths(key Key) ([]string, error) {
 
 // ListOptionsToDefaultPathRoot converts list options struct into a
 // common-prefix path suitable for querying a datastore that uses the paths
-// returned by KeyToDefaultPath.
+// returned by KeyToDefaultPath.  For example,
+//
+//	ListOptionsToDefaultPathRoot(TierListOptions{})
+//
+// doesn't specify any particular tier so it returns
+// "/calico/v1/policy/tier" which is a prefix for all tiers.  The datastore
+// must then do a recursive query to find all children of that path.
+// However,
+//
+//	ListOptionsToDefaultPathRoot(TierListOptions{Tier:"a"})
+//
+// returns a more-specific path, which filters down to the specific tier of
+// interest: "/calico/v1/policy/tier/a"
 func ListOptionsToDefaultPathRoot(listOptions ListInterface) string {
 	return listOptions.defaultPathRoot()
 }
@@ -247,7 +271,7 @@ func keyFromDefaultPathInner(path string, parts []string) Key {
 				}
 			case "config":
 				return HostConfigKey{
-					Hostname: hostname,
+					Hostname: unescapeName(hostname),
 					Name:     strings.Join(parts[5:], "/"),
 				}
 			case "metadata":
@@ -262,14 +286,14 @@ func keyFromDefaultPathInner(path string, parts []string) Key {
 					return nil
 				}
 				return HostIPKey{
-					Hostname: hostname,
+					Hostname: unescapeName(hostname),
 				}
 			case "wireguard":
 				if len(parts) != 5 {
 					return nil
 				}
 				return WireguardKey{
-					NodeName: hostname,
+					NodeName: unescapeName(hostname),
 				}
 			}
 		case "netset":
@@ -294,11 +318,19 @@ func keyFromDefaultPathInner(path string, parts []string) Key {
 					return nil
 				}
 				switch parts[5] {
+				case "metadata":
+					if len(parts) != 6 {
+						return nil
+					}
+					return TierKey{
+						Name: unescapeName(parts[4]),
+					}
 				case "policy":
 					if len(parts) != 7 {
 						return nil
 					}
 					return PolicyKey{
+						Tier: unescapeName(parts[4]),
 						Name: unescapeName(parts[6]),
 					}
 				}
@@ -484,6 +516,7 @@ func OldKeyFromDefaultPath(path string) Key {
 	} else if m := matchPolicy.FindStringSubmatch(path); m != nil {
 		log.Debugf("Path is a policy: %v", path)
 		return PolicyKey{
+			Tier: unescapeName(m[1]),
 			Name: unescapeName(m[2]),
 		}
 	} else if m := matchProfile.FindStringSubmatch(path); m != nil {
@@ -498,12 +531,15 @@ func OldKeyFromDefaultPath(path string) Key {
 			return ProfileLabelsKey{ProfileKey: pk}
 		}
 		return nil
+	} else if m := matchTier.FindStringSubmatch(path); m != nil {
+		log.Debugf("Path is a policy tier: %v", path)
+		return TierKey{Name: m[1]}
 	} else if m := matchHostIp.FindStringSubmatch(path); m != nil {
 		log.Debugf("Path is a host ID: %v", path)
-		return HostIPKey{Hostname: m[1]}
+		return HostIPKey{Hostname: unescapeName(m[1])}
 	} else if m := matchWireguard.FindStringSubmatch(path); m != nil {
 		log.Debugf("Path is a node name: %v", path)
-		return WireguardKey{NodeName: m[1]}
+		return WireguardKey{NodeName: unescapeName(m[1])}
 	} else if m := matchIPPool.FindStringSubmatch(path); m != nil {
 		log.Debugf("Path is a pool: %v", path)
 		mungedCIDR := m[1]
@@ -519,7 +555,7 @@ func OldKeyFromDefaultPath(path string) Key {
 		return GlobalConfigKey{Name: m[1]}
 	} else if m := matchHostConfig.FindStringSubmatch(path); m != nil {
 		log.Debugf("Path is a host config: %v", path)
-		return HostConfigKey{Hostname: m[1], Name: m[2]}
+		return HostConfigKey{Hostname: unescapeName(m[1]), Name: m[2]}
 	} else if matchReadyFlag.MatchString(path) {
 		log.Debugf("Path is a ready flag: %v", path)
 		return ReadyFlagKey{}

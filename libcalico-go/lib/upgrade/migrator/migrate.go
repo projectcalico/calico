@@ -475,6 +475,18 @@ func (m *migrationHelper) queryAndConvertResources() (*MigrationData, error) {
 	}
 
 	if m.clientv1.IsKDD() {
+		m.statusBullet("skipping Tier resources - these do not need migrating")
+	} else {
+		m.statusBullet("handling Tier resources")
+		// Query and convert the Tiers
+		if err := m.queryAndConvertV1ToV3Resources(
+			data, model.TierListOptions{}, converters.Tier{}, noFilter,
+		); err != nil {
+			return nil, err
+		}
+	}
+
+	if m.clientv1.IsKDD() {
 		m.statusBullet("skipping GlobalNetworkPolicy resources - these do not need migrating")
 	} else {
 		m.statusBullet("handling GlobalNetworkPolicy resources")
