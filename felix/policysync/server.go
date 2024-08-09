@@ -21,6 +21,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/felix/types"
 	"github.com/projectcalico/calico/pod2daemon/binder"
 
 	"google.golang.org/grpc"
@@ -37,6 +38,7 @@ const OutputQueueLen = 100
 // There is a single instance of the Server, it disambiguates connections from different clients by the
 // credentials present in the gRPC request.
 type Server struct {
+	proto.UnimplementedPolicySyncServer
 	JoinUpdates chan<- interface{}
 	nextJoinUID func() uint64
 }
@@ -75,8 +77,8 @@ func (s *Server) Sync(_ *proto.SyncRequest, stream proto.PolicySync_SyncServer) 
 	logCxt.Info("New policy sync connection identified")
 
 	// Send a join request to the processor to ask it to start sending us updates.
-	updates := make(chan proto.ToDataplane, OutputQueueLen)
-	epID := proto.WorkloadEndpointID{
+	updates := make(chan *proto.ToDataplane, OutputQueueLen)
+	epID := types.WorkloadEndpointID{
 		OrchestratorId: OrchestratorId,
 		EndpointId:     EndpointId,
 		WorkloadId:     workloadID,
@@ -118,7 +120,7 @@ func (s *Server) Sync(_ *proto.SyncRequest, stream proto.PolicySync_SyncServer) 
 	}()
 
 	for update := range updates {
-		err := stream.Send(&update)
+		err := stream.Send(update)
 		if err != nil {
 			logCxt.WithError(err).Warn("Failed to send update to policy sync client")
 			return err

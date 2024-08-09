@@ -1,4 +1,4 @@
-//go:generate protoc -I=. --gogo_out=plugins=grpc:. ./cnibackend.proto
+//go:generate protoc --proto_path=. --go_out=. --go-grpc_out=. --go_opt=paths=source_relative cnibackend.proto
 
 package proto
 

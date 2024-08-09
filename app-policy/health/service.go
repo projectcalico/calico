@@ -24,6 +24,7 @@ import (
 
 // An implementation of the HealthzServer health check service.
 type healthCheckService struct {
+	dikastesproto.UnimplementedHealthzServer
 	reporter ReadinessReporter
 }
 

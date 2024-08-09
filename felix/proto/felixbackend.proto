@@ -1,6 +1,6 @@
 syntax = "proto3";
 package felix;
-option go_package = "proto";
+option go_package = "./proto";
 
 service PolicySync {
   // On this API, only the following payloads will be sent:

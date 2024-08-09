@@ -18,6 +18,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/felix/types"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -48,7 +49,7 @@ func newEndpointStatusCombiner(fromDataplane chan interface{}, ipv6Enabled bool)
 
 func (e *endpointStatusCombiner) OnEndpointStatusUpdate(
 	ipVersion uint8,
-	id interface{}, // proto.HostEndpointID or proto.WorkloadEndpointID
+	id interface{}, // types.HostEndpointID or types.WorkloadEndpointID
 	status string,
 ) {
 	log.WithFields(log.Fields{
@@ -85,28 +86,32 @@ func (e *endpointStatusCombiner) Apply() {
 		if statusToReport == "" {
 			logCxt.Info("Reporting endpoint removed.")
 			switch id := id.(type) {
-			case proto.WorkloadEndpointID:
+			case types.WorkloadEndpointID:
+				protoID := types.WorkloadEndpointIDToProto(id)
 				e.fromDataplane <- &proto.WorkloadEndpointStatusRemove{
-					Id: &id,
+					Id: protoID,
 				}
-			case proto.HostEndpointID:
+			case types.HostEndpointID:
+				protoID := types.HostEndpointIDToProto(id)
 				e.fromDataplane <- &proto.HostEndpointStatusRemove{
-					Id: &id,
+					Id: protoID,
 				}
 			}
 		} else {
 			logCxt.WithField("status", statusToReport).Info("Reporting combined status.")
 			switch id := id.(type) {
-			case proto.WorkloadEndpointID:
+			case types.WorkloadEndpointID:
+				protoID := types.WorkloadEndpointIDToProto(id)
 				e.fromDataplane <- &proto.WorkloadEndpointStatusUpdate{
-					Id: &id,
+					Id: protoID,
 					Status: &proto.EndpointStatus{
 						Status: statusToReport,
 					},
 				}
-			case proto.HostEndpointID:
+			case types.HostEndpointID:
+				protoID := types.HostEndpointIDToProto(id)
 				e.fromDataplane <- &proto.HostEndpointStatusUpdate{
-					Id: &id,
+					Id: protoID,
 					Status: &proto.EndpointStatus{
 						Status: statusToReport,
 					},
