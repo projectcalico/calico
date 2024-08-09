@@ -19,7 +19,7 @@ from tests.st.utils.utils import assert_number_endpoints, get_ip, \
 _log = logging.getLogger(__name__)
 _log.setLevel(logging.DEBUG)
 
-POST_DOCKER_COMMANDS = ["docker load -i /code/cnx-node.tar",
+POST_DOCKER_COMMANDS = ["docker load -i /code/calico-node.tar",
                         "docker load -i /code/busybox.tar",
                         "docker load -i /code/workload.tar"]
 
