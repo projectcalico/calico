@@ -19,6 +19,7 @@ import (
 	"net"
 
 	"github.com/projectcalico/calico/felix/generictables"
+	"github.com/projectcalico/calico/felix/iptables"
 	. "github.com/projectcalico/calico/felix/rules"
 
 	. "github.com/onsi/ginkgo"
@@ -1084,7 +1085,8 @@ var _ = Describe("Static", func() {
 						Name: "cali-PREROUTING",
 						Rules: []generictables.Rule{
 							{Action: ClearMarkAction{Mark: allCalicoMarkBits}},
-							{Match: Match().Protocol("udp").DestPort(uint16(rr.VXLANPort)),
+							{
+								Match:  Match().Protocol("udp").DestPort(uint16(rr.VXLANPort)),
 								Action: NoTrackAction{},
 							},
 						},
@@ -1092,7 +1094,7 @@ var _ = Describe("Static", func() {
 
 					for _, ifacePrefix := range rr.WorkloadIfacePrefixes {
 						chain.Rules = append(chain.Rules, generictables.Rule{
-							Match:  Match().InInterface(ifacePrefix + "+"),
+							Match:  Match().InInterface(ifacePrefix + iptables.Wildcard),
 							Action: SetMarkAction{Mark: markFromWorkload},
 						})
 					}
@@ -1124,10 +1126,14 @@ var _ = Describe("Static", func() {
 						Rules: []generictables.Rule{
 							{Action: ClearMarkAction{Mark: allCalicoMarkBits}},
 							{Action: JumpAction{Target: ChainDispatchToHostEndpoint}},
-							{Match: Match().Protocol("udp").DestPort(uint16(rr.VXLANPort)),
-								Action: NoTrackAction{}},
-							{Match: Match().MarkSingleBitSet(rr.IptablesMarkAccept),
-								Action: AcceptAction{}},
+							{
+								Match:  Match().Protocol("udp").DestPort(uint16(rr.VXLANPort)),
+								Action: NoTrackAction{},
+							},
+							{
+								Match:  Match().MarkSingleBitSet(rr.IptablesMarkAccept),
+								Action: AcceptAction{},
+							},
 						},
 					},
 					))
@@ -1196,7 +1202,8 @@ var _ = Describe("Static", func() {
 						Name: "cali-PREROUTING",
 						Rules: []generictables.Rule{
 							{Action: ClearMarkAction{Mark: allCalicoMarkBits}},
-							{Match: Match().Protocol("udp").DestPort(uint16(rr.VXLANPort)),
+							{
+								Match:  Match().Protocol("udp").DestPort(uint16(rr.VXLANPort)),
 								Action: NoTrackAction{},
 							},
 						},
@@ -1204,7 +1211,7 @@ var _ = Describe("Static", func() {
 
 					for _, ifacePrefix := range rr.WorkloadIfacePrefixes {
 						chain.Rules = append(chain.Rules, generictables.Rule{
-							Match:  Match().InInterface(ifacePrefix + "+"),
+							Match:  Match().InInterface(ifacePrefix + iptables.Wildcard),
 							Action: SetMarkAction{Mark: markFromWorkload},
 						})
 					}

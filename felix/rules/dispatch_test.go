@@ -1146,7 +1146,7 @@ func outboundGotoRule(ifaceMatch string, target string) generictables.Rule {
 
 func smUnknownEndpointDropRule(ifacePrefix string) generictables.Rule {
 	return generictables.Rule{
-		Match:   iptables.Match().InInterface(ifacePrefix + "+"),
+		Match:   iptables.Match().InInterface(ifacePrefix + iptables.Wildcard),
 		Action:  iptables.DropAction{},
 		Comment: []string{"Unknown endpoint"},
 	}

@@ -57,7 +57,7 @@ for batch in "${batches[@]}"; do
     pid=$!
     pids+=( $pid )
   else
-    VM_NAME=$vm_name ./.semaphore/on-test-vm make --directory=calico/${REPO_NAME} fv-bpf GINKGO_FOCUS=BPF-SAFE FV_NUM_BATCHES=8 FV_BATCHES_TO_RUN="$batch" >& "$log_file" &
+    VM_NAME=$vm_name ./.semaphore/on-test-vm make --directory=calico/${REPO_NAME} fv-bpf FELIX_FV_NFTABLES="$FELIX_FV_NFTABLES" GINKGO_FOCUS=BPF-SAFE FV_NUM_BATCHES=8 FV_BATCHES_TO_RUN="$batch" >& "$log_file" &
     pid=$!
     pids+=( $pid )
   fi

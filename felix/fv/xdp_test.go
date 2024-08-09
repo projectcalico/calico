@@ -390,7 +390,7 @@ func xdpTest(getInfra infrastructure.InfraFactory, proto string) {
 				expectBlocked(cc)
 			})
 
-			It("should have expected no dropped packets in iptables", func() {
+			It("should have expected no dropped packets in iptables / nftables", func() {
 				versionReader, err := environment.GetKernelVersionReader()
 				Expect(err).NotTo(HaveOccurred())
 
@@ -405,17 +405,19 @@ func xdpTest(getInfra infrastructure.InfraFactory, proto string) {
 				expectBlocked(cc)
 
 				// The only rule that refers to a cali40-prefixed ipset should have 0 packets/bytes
-				if !BPFMode() && !NFTMode() {
-					Eventually(func() string {
-						out, _ := tc.Felixes[srvr].ExecOutput("iptables", "-t", "raw", "-v", "-n", "-L",
-							"cali-pi-default.xdp-filter")
-						return out
-					}).Should(MatchRegexp(`(?m)^\s+0\s+0.*cali40s:`))
-				} else if NFTMode() {
-					Eventually(func() string {
-						out, _ := tc.Felixes[srvr].ExecOutput("nft", "list", "chain", "ip", "calico", "raw-cali-pi-default.xdp-filter")
-						return out
-					}).Should(MatchRegexp(`packets 0 bytes 0`))
+				if !BPFMode() {
+					if !NFTMode() {
+						Eventually(func() string {
+							out, _ := tc.Felixes[srvr].ExecOutput("iptables", "-t", "raw", "-v", "-n", "-L",
+								"cali-pi-default.xdp-filter")
+							return out
+						}).Should(MatchRegexp(`(?m)^\s+0\s+0.*cali40s:`))
+					} else {
+						Eventually(func() string {
+							out, _ := tc.Felixes[srvr].ExecOutput("nft", "list", "chain", "ip", "calico", "raw-cali-pi-default.xdp-filter")
+							return out
+						}).Should(MatchRegexp(`packets 0 bytes 0`))
+					}
 				}
 			})
 

@@ -45,8 +45,10 @@ import (
 	"github.com/projectcalico/calico/felix/idalloc"
 	"github.com/projectcalico/calico/felix/ifacemonitor"
 	"github.com/projectcalico/calico/felix/ipsets"
+	"github.com/projectcalico/calico/felix/iptables"
 	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/markbits"
+	"github.com/projectcalico/calico/felix/nftables"
 	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/felix/wireguard"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
@@ -276,7 +278,7 @@ func StartDataplaneDriver(configParams *config.Config,
 				IptablesNATOutgoingInterfaceFilter: configParams.IptablesNATOutgoingInterfaceFilter,
 				NATOutgoingAddress:                 configParams.NATOutgoingAddress,
 				BPFEnabled:                         configParams.BPFEnabled,
-				BPFForceTrackPacketsFromIfaces:     configParams.BPFForceTrackPacketsFromIfaces,
+				BPFForceTrackPacketsFromIfaces:     replaceWildcards(configParams.NFTablesMode == "Enabled", configParams.BPFForceTrackPacketsFromIfaces),
 				ServiceLoopPrevention:              configParams.ServiceLoopPrevention,
 			},
 			Wireguard: wireguard.Config{
@@ -433,4 +435,19 @@ func ConfigurePrometheusMetrics(configParams *config.Config) {
 			prometheus.Unregister(wireguard.MustNewWireguardMetrics())
 		}
 	}
+}
+
+func replaceWildcards(nftEnabled bool, s []string) []string {
+	for i, v := range s {
+		s[i] = replaceWildcard(nftEnabled, v)
+	}
+	return s
+}
+
+func replaceWildcard(nftEnabled bool, s string) string {
+	// Need to replace the "+" wildcard with "*" for nftables.
+	if nftEnabled && strings.HasSuffix(s, iptables.Wildcard) {
+		return s[:len(s)-1] + nftables.Wildcard
+	}
+	return s
 }
