@@ -97,7 +97,8 @@ var _ = Describe("Masquerade manager", func() {
 						Action: iptables.MasqAction{},
 						Match: iptables.Match().
 							SourceIPSet("cali40masq-ipam-pools").
-							NotDestIPSet("cali40all-ipam-pools"),
+							NotDestIPSet("cali40all-ipam-pools").
+							NotDestIPSet("cali40all-hosts-net"),
 					},
 				},
 			}}})
@@ -147,7 +148,8 @@ var _ = Describe("Masquerade manager", func() {
 							Action: iptables.MasqAction{},
 							Match: iptables.Match().
 								SourceIPSet("cali40masq-ipam-pools").
-								NotDestIPSet("cali40all-ipam-pools"),
+								NotDestIPSet("cali40all-ipam-pools").
+								NotDestIPSet("cali40all-hosts-net"),
 						},
 					},
 				}}})

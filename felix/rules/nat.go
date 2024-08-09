@@ -58,6 +58,11 @@ func (r *DefaultRuleRenderer) makeNATOutgoingRuleIPTables(ipVersion uint8, proto
 		SourceIPSet(masqIPsSetName).
 		NotDestIPSet(allIPsSetName)
 
+	if !r.Config.DisableHostSubnetNATExclusion {
+		allHostsIPsSetName := ipConf.NameForMainIPSet(IPSetIDAllHostNets)
+		match = match.NotDestIPSet(allHostsIPsSetName)
+	}
+
 	if protocol != "" {
 		match = match.Protocol(protocol)
 	}
