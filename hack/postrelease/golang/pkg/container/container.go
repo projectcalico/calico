@@ -23,5 +23,14 @@ func (i Image) FullPath() string {
 		registryPath = "calico"
 	}
 
-	return fmt.Sprintf("%s/%s/%s", i.HostName, registryPath, i.Name)
+	if strings.Contains(i.Name, "/") {
+		return fmt.Sprintf("%s/%s", i.HostName, i.Name)
+	} else {
+		return fmt.Sprintf("%s/%s/%s", i.HostName, registryPath, i.Name)
+	}
+
+}
+
+func (i Image) FullPathWithTag() string {
+	return fmt.Sprintf("%s:%s", i.FullPath(), i.Tag)
 }
