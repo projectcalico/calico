@@ -25,6 +25,8 @@ import (
 
 	"golang.org/x/sys/unix"
 
+	"github.com/vishvananda/netlink"
+
 	"github.com/projectcalico/calico/felix/logutils"
 )
 
@@ -241,11 +243,20 @@ func (r *RouteRules) Apply() error {
 		return ConnectFailed
 	}
 
-	nlRules, err := nl.RuleList(r.netlinkFamily)
-	if err != nil {
-		r.logCxt.WithError(err).Error("Failed to list routing rules, retrying...")
-		r.closeNetlinkHandle() // Defensive: force a netlink reconnection next time.
-		return ListFailed
+	var nlRules []netlink.Rule
+	retries := 3
+	for {
+		nlRules, err = nl.RuleList(r.netlinkFamily)
+		if err != nil {
+			if errors.Is(err, unix.EINTR) && retries > 0 {
+				retries--
+				continue
+			}
+			r.logCxt.WithError(err).Error("Failed to list routing rules, retrying...")
+			r.closeNetlinkHandle() // Defensive: force a netlink reconnection next time.
+			return ListFailed
+		}
+		break
 	}
 
 	// Set the Family onto the rules, the netlink lib does not populate this field.

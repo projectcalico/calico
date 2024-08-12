@@ -110,6 +110,60 @@ func (m *mockVXLANDataplane) LinkDel(netlink.Link) error {
 	return nil
 }
 
+func (m *mockVXLANDataplane) RouteListFiltered(family int, filter *netlink.Route, filterMask uint64) ([]netlink.Route, error) {
+	return []netlink.Route{}, nil
+}
+
+func (m *mockVXLANDataplane) RouteAdd(route *netlink.Route) error {
+	return nil
+}
+
+func (m *mockVXLANDataplane) RouteReplace(route *netlink.Route) error {
+	return nil
+}
+
+func (m *mockVXLANDataplane) RouteDel(route *netlink.Route) error {
+	return nil
+}
+
+func (m *mockVXLANDataplane) SetSocketTimeout(to time.Duration) error {
+	return nil
+}
+
+func (m *mockVXLANDataplane) SetStrictCheck(b bool) error {
+	return nil
+}
+
+func (m *mockVXLANDataplane) RuleList(family int) ([]netlink.Rule, error) {
+	return []netlink.Rule{}, nil
+}
+
+func (m *mockVXLANDataplane) RuleAdd(rule *netlink.Rule) error {
+	return nil
+}
+
+func (m *mockVXLANDataplane) RuleDel(rule *netlink.Rule) error {
+	return nil
+}
+
+func (m *mockVXLANDataplane) Delete() {}
+
+func (m *mockVXLANDataplane) NeighAdd(neigh *netlink.Neigh) error {
+	return nil
+}
+
+func (m *mockVXLANDataplane) NeighList(linkIndex, family int) ([]netlink.Neigh, error) {
+	return []netlink.Neigh{}, nil
+}
+
+func (m *mockVXLANDataplane) NeighSet(a *netlink.Neigh) error {
+	return nil
+}
+
+func (m *mockVXLANDataplane) NeighDel(a *netlink.Neigh) error {
+	return nil
+}
+
 type mockVXLANFDB struct {
 	setVTEPsCalls int
 	currentVTEPs  []vxlanfdb.VTEP

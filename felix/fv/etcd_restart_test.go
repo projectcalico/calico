@@ -29,8 +29,6 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/sirupsen/logrus"
 
-	"github.com/vishvananda/netlink"
-
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/felix/fv/containers"
@@ -60,7 +58,7 @@ var _ = Context("etcd connection interruption", func() {
 		// Wait until the tunl0 device appears; it is created when felix inserts the ipip module
 		// into the kernel.
 		Eventually(func() error {
-			links, err := netlink.LinkList()
+			links, err := utils.LinkList()
 			if err != nil {
 				return err
 			}
