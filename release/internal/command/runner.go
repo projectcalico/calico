@@ -6,11 +6,6 @@ func runner() builder.CommandRunner {
 	return &builder.RealCommandRunner{}
 }
 
-// Builder returns a new release builder.
-func Builder(rootDir string) *builder.ReleaseBuilder {
-	return builder.NewReleaseBuilder(builder.WithRepoRoot(rootDir))
-}
-
 // Run runs a command with arguments.
 func Run(command string, args []string) (string, error) {
 	return runner().Run(command, args, nil)

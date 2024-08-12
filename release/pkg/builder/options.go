@@ -16,9 +16,17 @@ func IsHashRelease() Option {
 	}
 }
 
-func WithPreReleaseValidation(skip bool) Option {
+func WithPreReleaseValidation(validate bool) Option {
 	return func(r *ReleaseBuilder) error {
-		r.skipPreReleaseValidation = skip
+		r.validate = validate
+		return nil
+	}
+}
+
+func WithVersions(calicoVersion, operatorVersion string) Option {
+	return func(r *ReleaseBuilder) error {
+		r.calicoVersion = calicoVersion
+		r.operatorVersion = operatorVersion
 		return nil
 	}
 }

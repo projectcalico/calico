@@ -12,7 +12,6 @@ import (
 	"github.com/projectcalico/calico/release/internal/hashrelease"
 	"github.com/projectcalico/calico/release/internal/imagescanner"
 	"github.com/projectcalico/calico/release/internal/operator"
-	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/slack"
 	"github.com/projectcalico/calico/release/internal/utils"
@@ -32,7 +31,7 @@ func ciURL() string {
 // It clones the operator repository,
 // then call GeneratePinnedVersion to generate the pinned-version.yaml file.
 // The location of the pinned-version.yaml file is logged.
-func PinnedVersion(cfg *config.Config) {
+func PinnedVersion(cfg *config.Config) (string, string) {
 	outputDir := cfg.OutputDir
 	if err := os.MkdirAll(outputDir, utils.DirPerms); err != nil {
 		logrus.WithError(err).Fatal("Failed to create output directory")
@@ -44,43 +43,12 @@ func PinnedVersion(cfg *config.Config) {
 			"operator branch": cfg.OperatorBranchName,
 		}).WithError(err).Fatal("Failed to clone operator repository")
 	}
-	pinnedVersionFilePath, err := hashrelease.GeneratePinnedVersionFile(cfg.RepoRootDir, operatorDir, cfg.DevTagSuffix, cfg.Registry, outputDir)
+	pinnedVersionFilePath, data, err := hashrelease.GeneratePinnedVersionFile(cfg.RepoRootDir, operatorDir, cfg.DevTagSuffix, cfg.Registry, outputDir)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to generate pinned-version.yaml")
 	}
 	logrus.WithField("file", pinnedVersionFilePath).Info("Generated pinned-version.yaml")
-}
-
-// HashreleaseBuild builds the artificts hashrelease
-//
-// This includes the windows archive, helm archive, and manifests.
-func HashreleaseBuild(cfg *config.Config) {
-	outputDir := cfg.OutputDir
-	hashreleaseOutputDir := cfg.HashreleaseDir()
-	if err := os.MkdirAll(hashreleaseOutputDir, utils.DirPerms); err != nil {
-		logrus.WithError(err).Fatal("Failed to create hashrelease directory")
-	}
-	releaseVersion, err := hashrelease.RetrievePinnedCalicoVersion(outputDir)
-	if err != nil {
-		logrus.WithError(err).Fatal("Failed to get candidate name")
-	}
-	operatorVersion, err := hashrelease.RetrievePinnedOperatorVersion(outputDir)
-	if err != nil {
-		logrus.WithError(err).Fatal("Failed to get operator version")
-	}
-	if err := outputs.ReleaseWindowsArchive(cfg.RepoRootDir, releaseVersion, hashreleaseOutputDir); err != nil {
-		logrus.WithError(err).Fatal("Failed to release windows archive")
-	}
-	if err := outputs.HelmArchive(cfg.RepoRootDir, releaseVersion, operatorVersion, hashreleaseOutputDir); err != nil {
-		logrus.WithError(err).Fatal("Failed to release helm archive")
-	}
-	if err := outputs.Manifests(cfg.RepoRootDir, releaseVersion, operatorVersion, hashreleaseOutputDir); err != nil {
-		logrus.WithError(err).Fatal("Failed to generate manifests")
-	}
-
-	if err := outputs.Metadata(hashreleaseOutputDir, releaseVersion, operatorVersion); err != nil {
-		logrus.WithError(err).Fatal("Failed to generate metadata")
-	}
+	return data.CalicoVersion, data.Operator.Version
 }
 
 type imageExistsResult struct {

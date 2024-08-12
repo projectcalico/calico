@@ -98,15 +98,28 @@ func hashrelaseSubCommands(cfg *config.Config, runner *registry.DockerRunner) []
 				if !c.Bool(skipValidationFlag) {
 					tasks.PreReleaseValidate(cfg)
 				}
-				tasks.PinnedVersion(cfg)
 				return nil
 			},
 			Action: func(c *cli.Context) error {
+				// Create the pinned-version.yaml file and extract the versions.
+				ver, operatorVer := tasks.PinnedVersion(cfg)
+
 				tasks.OperatorHashreleaseBuild(runner, cfg)
-				tasks.HashreleaseBuild(cfg)
-				tasks.ReleaseNotes(cfg)
-				logrus.Infof("%s build complete.", cfg.ReleaseType())
-				return nil
+
+				// Configure a release builder using the generated versions, and use it
+				// to build a Calico release.
+				opts := []builder.Option{
+					builder.WithRepoRoot(cfg.RepoRootDir),
+					builder.IsHashRelease(),
+					builder.WithVersions(ver, operatorVer),
+				}
+				if !c.Bool("skip-validation") {
+					opts = append(opts, builder.WithPreReleaseValidation(false))
+				}
+				r := builder.NewReleaseBuilder(opts...)
+				return r.Build()
+
+				// TODO: tasks.ReleaseNotes(cfg)
 			},
 		},
 

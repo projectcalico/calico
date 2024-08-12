@@ -42,7 +42,7 @@ func main() {
 
 	if create {
 		configureLogging("release-build.log")
-		err := r.BuildRelease()
+		err := r.Build()
 		if err != nil {
 			logrus.WithError(err).Error("Failed to create Calico release")
 			os.Exit(1)
