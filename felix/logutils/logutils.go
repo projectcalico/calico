@@ -142,7 +142,8 @@ func ConfigureLogging(configParams *config.Config) {
 
 	// Since we push our logs onto a second thread via a channel, we can disable the
 	// Logger's built-in mutex completely.
-	log.StandardLogger().SetNoLock()
+	// FIXME: disabled due to causing a race in felix's set-up.
+	//log.StandardLogger().SetNoLock()
 
 	// Do any deferred error logging.
 	if fileDirErr != nil {

@@ -602,7 +602,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				Describe("with custom IptablesMarkMask", func() {
 					BeforeEach(func() {
 						// Disable core dumps, we know we're about to cause a panic.
-						options.ExtraEnvVars["GOTRACEBACK"] = ""
+						options.FelixCoreDumpsEnabled = false
 						felixPanicExpected = true
 					})
 
