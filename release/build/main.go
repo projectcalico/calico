@@ -4,9 +4,9 @@ import (
 	"io"
 	"os"
 
-	"github.com/projectcalico/calico/hack/release/pkg/builder"
 	"github.com/projectcalico/calico/release/internal/config"
 	"github.com/projectcalico/calico/release/internal/registry"
+	"github.com/projectcalico/calico/release/pkg/builder"
 	"github.com/projectcalico/calico/release/pkg/tasks"
 	"gopkg.in/natefinch/lumberjack.v2"
 

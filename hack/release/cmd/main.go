@@ -5,10 +5,9 @@ import (
 	"io"
 	"os"
 
+	"github.com/projectcalico/calico/release/pkg/builder"
 	"github.com/sirupsen/logrus"
 	lumberjack "gopkg.in/natefinch/lumberjack.v2"
-
-	"github.com/projectcalico/calico/hack/release/pkg/builder"
 )
 
 var (
@@ -29,7 +28,7 @@ func init() {
 
 func main() {
 	// Create a releaseBuilder to use.
-	r := builder.NewReleaseBuilder(&builder.RealCommandRunner{})
+	r := builder.NewReleaseBuilder(&builder.RealCommandRunner{}, os.Getenv("REPO_ROOT"))
 
 	if meta {
 		configureLogging("metadata.log")
