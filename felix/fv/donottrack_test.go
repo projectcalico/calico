@@ -19,6 +19,7 @@ package fv_test
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	. "github.com/projectcalico/calico/felix/fv/connectivity"
@@ -201,7 +202,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ do-not-track policy tests; 
 			cancel()
 		})
 
-		It("should implement untracked policy correctly", func() {
+		checkUntrackedPol := func() {
 			// This test covers both normal connectivity and failsafe connectivity.  We combine the
 			// tests because we rely on the changes of normal connectivity at each step to make sure
 			// that the policy has actually flowed through to the dataplane.
@@ -271,10 +272,19 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ do-not-track policy tests; 
 			if BPFMode() {
 				expectFullConnectivity(ExpectWithIPVersion(6))
 				By("Having a Linux IP set for the egress policy")
-				Expect(tc.Felixes[0].IPSetNames()).To(ContainElements(
+
+				elems := []string{
 					utils.IPSetNameForSelector(4, host1Selector),
 					utils.IPSetNameForSelector(6, host1Selector),
-				))
+				}
+				if NFTMode() {
+					// NFT uses a different prefixing scheme, since the ":" character is not allowed.
+					// e.g., cali40- instead of cali40:
+					for i, elem := range elems {
+						elems[i] = strings.Replace(elem, ":", "-", 1)
+					}
+				}
+				Expect(tc.Felixes[0].IPSetNames()).To(ContainElements(elems))
 			}
 
 			By("Having only failsafe connectivity after replacing host-0's egress rules with Deny")
@@ -329,6 +339,31 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ do-not-track policy tests; 
 			if BPFMode() {
 				expectFailSafeOnlyConnectivityWithHost0(ExpectWithIPVersion(6))
 			}
-		})
+		}
+
+		It("should implement untracked policy correctly", checkUntrackedPol)
+
+		if BPFMode() {
+			Describe("with a custom map size", func() {
+				BeforeEach(func() {
+					newRtSize := 1000
+					newNATFeSize := 2000
+					newNATBeSize := 3000
+					newNATAffSize := 4000
+					newIpSetMapSize := 5000
+					newCtMapSize := 6000
+					infrastructure.UpdateFelixConfiguration(client, func(cfg *api.FelixConfiguration) {
+						cfg.Spec.BPFMapSizeRoute = &newRtSize
+						cfg.Spec.BPFMapSizeNATFrontend = &newNATFeSize
+						cfg.Spec.BPFMapSizeNATBackend = &newNATBeSize
+						cfg.Spec.BPFMapSizeNATAffinity = &newNATAffSize
+						cfg.Spec.BPFMapSizeIPSets = &newIpSetMapSize
+						cfg.Spec.BPFMapSizeConntrack = &newCtMapSize
+					})
+				})
+
+				It("should implement untracked policy correctly", checkUntrackedPol)
+			})
+		}
 	})
 })

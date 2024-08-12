@@ -17,7 +17,7 @@
 
 ## 🐾 Welcome to Project Calico!
 
-Project Calico is an open-source project with an active development and user community. Calico Open Source has grown to be the most widely adopted solution for container networking and security, powering 8M+ nodes daily across 166 countries.
+Project Calico, created and maintained by [Tigera][tigera], is an open-source project with an active development and user community. Calico Open Source has grown to be the most widely adopted solution for container networking and security, powering 8M+ nodes daily across 166 countries.
 
 ## 🌟 Why use Calico?
 
@@ -63,6 +63,7 @@ Project Calico is an open-source project with an active development and user com
 - [Technical Blog][blog]
 - [Careers][join]: Passionate about open source? Join our team.
 
+[tigera]: https://www.tigera.io/
 [big-cats]: https://www.tigera.io/project-calico/calico-big-cats-ambassador-program/#meet-calico-big-cats
 [community-meetings]: https://calendar.google.com/calendar/u/0/embed?src=tigera.io_uunmavdev5ndovf0hc4frtl0i0@group.calendar.google.com
 [first-issues]: https://github.com/projectcalico/calico/labels/good%20first%20issue
