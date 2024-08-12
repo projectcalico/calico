@@ -15,3 +15,10 @@ func IsHashRelease() Option {
 		return nil
 	}
 }
+
+func WithPreReleaseValidation(skip bool) Option {
+	return func(r *ReleaseBuilder) error {
+		r.skipPreReleaseValidation = skip
+		return nil
+	}
+}

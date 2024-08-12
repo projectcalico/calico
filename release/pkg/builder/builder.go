@@ -65,6 +65,9 @@ type ReleaseBuilder struct {
 
 	// isHashRelease is a flag to indicate that we should build a hashrelease.
 	isHashRelease bool
+
+	// skipPreReleaseValidation is a flag to indicate that we should skip pre-release validation.
+	skipPreReleaseValidation bool
 }
 
 // releaseImages returns the set of images that should be expected for a release.
@@ -86,6 +89,63 @@ func releaseImages(version, operatorVersion string) []string {
 		fmt.Sprintf("calico/cni-windows:%s", version),
 		fmt.Sprintf("calico/node-windows:%s", version),
 	}
+}
+
+func (r *ReleaseBuilder) Build() error {
+	ver, err := r.DetermineVersion()
+	if err != nil {
+		return err
+	}
+
+	// TODO If this is a hashrelease, we need to build the pinned versions file here.
+
+	if !r.skipPreReleaseValidation {
+		if err = r.PreReleaseValidate(ver); err != nil {
+			return err
+		}
+	}
+
+	if !r.isHashRelease {
+		// Only tag release if this is not a hashrelease.
+		// TODO: Option to skip producing a tag, for development.
+		if err = r.TagRelease(ver); err != nil {
+			return err
+		}
+
+		// Successfully tagged. If we fail to release after this stage, we need to delete the tag.
+		defer func() {
+			if err != nil {
+				logrus.WithError(err).Warn("Failed to release, cleaning up tag")
+				r.DeleteTag(ver)
+			}
+		}()
+
+		// Hashreleases don't currently build container images - instead, they use the images
+		// already published as part of CI.
+		if err = r.BuildContainerImages(ver); err != nil {
+			return err
+		}
+	}
+
+	// TODO: If this is a hashrelease, we need to build an operator image here.
+
+	// TODO: If this is a hashrelease, we need to modify the helm chart values here.
+
+	if err = r.BuildHelm(); err != nil {
+		return err
+	}
+	if err = r.BuildOCPBundle(); err != nil {
+		return err
+	}
+
+	// TODO: If this is a hashrelease, we need to generate manfiests here.
+
+	if err = r.CollectGithubArtifacts(ver); err != nil {
+		return err
+	}
+
+	// TODO: If this is a hashrelease, we need to reset the dirty repo here.
+	return nil
 }
 
 func (r *ReleaseBuilder) BuildMetadata(dir string) error {
