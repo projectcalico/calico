@@ -559,7 +559,9 @@ func (s *IPSets) resyncIPSet(ipSetName string) error {
 				// Start of a Members entry, following this, there'll be one member per
 				// line then EOF or a blank line.
 
-				// Look up to see if this is one of our none temporary IP sets.
+				// Optimisation: skip parsing temporary IP set members.
+				// We only need to track their metadata to make sure they 
+				// are deleted.
 				if s.IPVersionConfig.IsTempIPSetName(ipSetName) {
 					if debug {
 						s.logCxt.WithField("name", ipSetName).Debug("Skip parsing members of IP set.")
