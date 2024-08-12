@@ -782,7 +782,10 @@ func (c *Container) NumNFTSetMembers(ipVersion int, setName string) int {
 		ip = "ip6"
 	}
 	out, err := c.ExecOutput("nft", "--json", "list", "set", ip, "calico", setName)
-	Expect(err).NotTo(HaveOccurred())
+	if err != nil {
+		log.WithError(err).Warn("Failed to list nft IP set.")
+		return -1
+	}
 
 	type nftResp struct {
 		Nftables []map[string]interface{} `json:"nftables"`
