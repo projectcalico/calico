@@ -6,5 +6,5 @@ import (
 
 // Metadata generates metadata for a release.
 func Metadata(repoRootDir, calicoVersion, operatorVersion string) error {
-	return command.Builder().BuildMetadataWithVersions(repoRootDir, calicoVersion, operatorVersion)
+	return command.Builder(repoRootDir).BuildMetadataWithVersions(repoRootDir, calicoVersion, operatorVersion)
 }

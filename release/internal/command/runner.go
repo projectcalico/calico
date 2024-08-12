@@ -9,8 +9,8 @@ func runner() builder.CommandRunner {
 }
 
 // Builder returns a new release builder.
-func Builder() *builder.ReleaseBuilder {
-	return builder.NewReleaseBuilder(runner())
+func Builder(rootDir string) *builder.ReleaseBuilder {
+	return builder.NewReleaseBuilder(runner(), rootDir)
 }
 
 // Run runs a command with arguments.
