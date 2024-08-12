@@ -139,9 +139,6 @@ func hashrelaseSubCommands(cfg *config.Config, runner *registry.DockerRunner) []
 }
 
 func releaseSubCommands(cfg *config.Config) []*cli.Command {
-	// Create a releaseBuilder to use.
-	r := builder.NewReleaseBuilder(builder.WithRepoRoot(cfg.RepoRootDir))
-
 	return []*cli.Command{
 		// Build a release.
 		{
@@ -149,44 +146,19 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 			Usage: "Build an official Calico release",
 			Flags: []cli.Flag{
 				&cli.BoolFlag{Name: "skip-validation", Usage: "Skip pre-build validation", Value: false},
-				&cli.BoolFlag{Name: "build-images", Usage: "Control whether or not images are built", Value: true},
 			},
 			Action: func(c *cli.Context) error {
 				configureLogging("release-build.log")
-				ver, err := r.DetermineVersion()
-				if err != nil {
-					return err
+
+				// Configure the builder based on CLI flags.
+				opts := []builder.Option{
+					builder.WithRepoRoot(cfg.RepoRootDir),
 				}
 				if !c.Bool("skip-validation") {
-					if err = r.PreReleaseValidate(ver); err != nil {
-						return err
-					}
-					if err = r.TagRelease(ver); err != nil {
-						return err
-					}
-					// Successfully tagged. If we fail to release after this stage, we need to delete the tag.
-					defer func() {
-						if err != nil {
-							logrus.WithError(err).Warn("Failed to release, cleaning up tag")
-							r.DeleteTag(ver)
-						}
-					}()
+					opts = append(opts, builder.WithPreReleaseValidation(false))
 				}
-				if c.Bool("build-images") {
-					if err = r.BuildContainerImages(ver); err != nil {
-						return err
-					}
-				}
-				if err = r.BuildHelm(); err != nil {
-					return err
-				}
-				if err = r.BuildOCPBundle(); err != nil {
-					return err
-				}
-				if err = r.CollectGithubArtifacts(ver); err != nil {
-					return err
-				}
-				return nil
+				r := builder.NewReleaseBuilder(opts...)
+				return r.Build()
 			},
 		},
 
@@ -196,6 +168,7 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 			Usage: "Publish a pre-built Calico release",
 			Action: func(c *cli.Context) error {
 				configureLogging("release-publish.log")
+				r := builder.NewReleaseBuilder(builder.WithRepoRoot(cfg.RepoRootDir))
 				return r.PublishRelease()
 			},
 		},
