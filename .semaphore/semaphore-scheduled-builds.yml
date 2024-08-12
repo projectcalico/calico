@@ -505,6 +505,42 @@ blocks:
           - ./.semaphore/clean-up-vms ${VM_PREFIX}
     secrets:
       - name: google-service-account-for-gce
+
+- name: "Felix: BPF UT/FV tests on new kernel (nftables)"
+  run:
+    when: "true or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+  dependencies:
+    - Prerequisites
+  task:
+    prologue:
+      commands:
+        - cd felix
+        - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/secret.google-service-account-key.json
+        - export SHORT_WORKFLOW_ID=$(echo ${SEMAPHORE_WORKFLOW_ID} | sha256sum | cut -c -8)
+        - export ZONE=europe-west3-c
+        - export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-felix-nft-
+        - echo VM_PREFIX=${VM_PREFIX}
+        - export REPO_NAME=$(basename $(pwd))
+        - export NUM_FV_BATCHES=8
+        - mkdir artifacts
+        - ./.semaphore/create-test-vms ${VM_PREFIX}
+    jobs:
+      - name: UT/FV tests on new kernel
+        env_vars:
+          - name: FELIX_FV_NFTABLES
+            value: "Enabled"
+        execution_time_limit:
+          minutes: 180
+        commands:
+          - ./.semaphore/run-tests-on-vms ${VM_PREFIX}
+    epilogue:
+      always:
+        commands:
+          - ./.semaphore/collect-artifacts-from-vms ${VM_PREFIX}
+          - ./.semaphore/publish-artifacts
+          - ./.semaphore/clean-up-vms ${VM_PREFIX}
+    secrets:
+      - name: google-service-account-for-gce
 - name: kube-controllers
   run:
     when: "true or change_in(['/*', '/api/', '/libcalico-go/', '/kube-controllers/', '/hack/test/certs/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"

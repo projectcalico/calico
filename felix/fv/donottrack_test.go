@@ -19,6 +19,7 @@ package fv_test
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	. "github.com/projectcalico/calico/felix/fv/connectivity"
@@ -271,10 +272,19 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ do-not-track policy tests; 
 			if BPFMode() {
 				expectFullConnectivity(ExpectWithIPVersion(6))
 				By("Having a Linux IP set for the egress policy")
-				Expect(tc.Felixes[0].IPSetNames()).To(ContainElements(
+
+				elems := []string{
 					utils.IPSetNameForSelector(4, host1Selector),
 					utils.IPSetNameForSelector(6, host1Selector),
-				))
+				}
+				if NFTMode() {
+					// NFT uses a different prefixing scheme, since the ":" character is not allowed.
+					// e.g., cali40- instead of cali40:
+					for i, elem := range elems {
+						elems[i] = strings.Replace(elem, ":", "-", 1)
+					}
+				}
+				Expect(tc.Felixes[0].IPSetNames()).To(ContainElements(elems))
 			}
 
 			By("Having only failsafe connectivity after replacing host-0's egress rules with Deny")
