@@ -249,8 +249,10 @@ spec:
                     prefixLength:
                       properties:
                         max:
+                          format: int32
                           type: integer
                         min:
+                          format: int32
                           type: integer
                       type: object
                     source:
@@ -277,8 +279,10 @@ spec:
                     prefixLength:
                       properties:
                         max:
+                          format: int32
                           type: integer
                         min:
+                          format: int32
                           type: integer
                       type: object
                     source:
@@ -305,8 +309,10 @@ spec:
                     prefixLength:
                       properties:
                         max:
+                          format: int32
                           type: integer
                         min:
+                          format: int32
                           type: integer
                       type: object
                     source:
@@ -333,8 +339,10 @@ spec:
                     prefixLength:
                       properties:
                         max:
+                          format: int32
                           type: integer
                         min:
+                          format: int32
                           type: integer
                       type: object
                     source:

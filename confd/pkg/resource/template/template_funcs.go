@@ -65,7 +65,7 @@ func filterStatement(fields filterArgs) (string, error) {
 		if fields.operator == "" {
 			return "", fmt.Errorf("operator not included in BGPFilter")
 		}
-		cidrCondition, err := filterMatchCIDR(fields.cidr, fields.prefixLength, fields.operator)
+		cidrCondition, err := filterMatchCIDR(fields.cidr, fields.prefixLengthV4, fields.prefixLengthV6, fields.operator)
 		if err != nil {
 			return "", err
 		}
@@ -111,35 +111,45 @@ var (
 	}
 )
 
-func filterMatchPrefixLength(cidr string, prefixLength v3.BGPFilterPrefixLength) string {
-	cidrIP, cidrNet, _ := net.ParseCIDR(cidr)
-	minLength, _ := cidrNet.Mask.Size()
-	maxLength := 32
+func filterMatchPrefixLength(cidr string, prefixMin, prefixMax *int32) string {
+	cidrIP, cidrNet, err := net.ParseCIDR(cidr)
+	if err != nil {
+		fmt.Printf("WARNING: unexpected error when parsing cird %s: %s", cidr, err)
+	}
+
+	mask, _ := cidrNet.Mask.Size()
+	minLength := int32(mask)
+	// default for ipv4
+	maxLength := int32(32)
+
 	// check for ipv6 IP
 	if cidrIP.To4() == nil {
 		maxLength = 128
 	}
 
-	if prefixLength.Min > minLength || (prefixLength.Max >= minLength && prefixLength.Max < maxLength) {
-		minLength = max(minLength, prefixLength.Min)
-
-		// add compare to prevent default int value of 0 for prefixLength.Max
-		if prefixLength.Max != 0 {
-			maxLength = min(maxLength, prefixLength.Max)
-		}
-		return fmt.Sprintf("[ %s{%d,%d} ]", cidr, minLength, maxLength)
+	if prefixMin != nil {
+		minLength = max(minLength, *prefixMin)
+	}
+	if prefixMax != nil {
+		maxLength = min(maxLength, *prefixMax)
 	}
 
-	return cidr
+	return fmt.Sprintf("[ %s{%d,%d} ]", cidr, minLength, maxLength)
 }
 
-func filterMatchCIDR(cidr string, prefixLength v3.BGPFilterPrefixLength, operator v3.BGPFilterMatchOperator) (string, error) {
+func filterMatchCIDR(cidr string, prefixLengthV4 *v3.BGPFilterPrefixLengthV4, prefixLengthV6 *v3.BGPFilterPrefixLengthV6, operator v3.BGPFilterMatchOperator) (string, error) {
 	op, ok := operatorLUT[operator]
 	if !ok {
 		return "", fmt.Errorf("unexpected operator found in BGPFilter: %s", operator)
 	}
 
-	return fmt.Sprintf("(net %s %s)", op, filterMatchPrefixLength(cidr, prefixLength)), nil
+	if prefixLengthV4 != nil {
+		cidr = filterMatchPrefixLength(cidr, prefixLengthV4.Min, prefixLengthV4.Max)
+	} else if prefixLengthV6 != nil {
+		cidr = filterMatchPrefixLength(cidr, prefixLengthV6.Min, prefixLengthV6.Max)
+	}
+
+	return fmt.Sprintf("(net %s %s)", op, cidr), nil
 }
 
 func filterMatchSource(source v3.BGPFilterMatchSource) (string, error) {
@@ -178,12 +188,13 @@ func BGPFilterFunctionName(filterName, direction, version string) (string, error
 }
 
 type filterArgs struct {
-	operator     v3.BGPFilterMatchOperator
-	cidr         string
-	prefixLength v3.BGPFilterPrefixLength
-	source       v3.BGPFilterMatchSource
-	iface        string
-	action       v3.BGPFilterAction
+	operator       v3.BGPFilterMatchOperator
+	cidr           string
+	prefixLengthV4 *v3.BGPFilterPrefixLengthV4
+	prefixLengthV6 *v3.BGPFilterPrefixLengthV6
+	source         v3.BGPFilterMatchSource
+	iface          string
+	action         v3.BGPFilterAction
 }
 
 // BGPFilterBIRDFuncs generates a set of BIRD functions for BGPFilter resources that have been packaged into KVPairs.
@@ -285,23 +296,23 @@ func BGPFilterBIRDFuncs(pairs memkv.KVPairs, version int) ([]string, error) {
 			if v4Selected {
 				for _, importV4 := range importFiltersV4 {
 					ruleFields = append(ruleFields, filterArgs{
-						operator:     importV4.MatchOperator,
-						cidr:         importV4.CIDR,
-						prefixLength: importV4.PrefixLength,
-						source:       importV4.Source,
-						iface:        importV4.Interface,
-						action:       importV4.Action,
+						operator:       importV4.MatchOperator,
+						cidr:           importV4.CIDR,
+						prefixLengthV4: importV4.PrefixLength,
+						source:         importV4.Source,
+						iface:          importV4.Interface,
+						action:         importV4.Action,
 					})
 				}
 			} else {
 				for _, importV6 := range importFiltersV6 {
 					ruleFields = append(ruleFields, filterArgs{
-						operator:     importV6.MatchOperator,
-						cidr:         importV6.CIDR,
-						prefixLength: importV6.PrefixLength,
-						source:       importV6.Source,
-						iface:        importV6.Interface,
-						action:       importV6.Action,
+						operator:       importV6.MatchOperator,
+						cidr:           importV6.CIDR,
+						prefixLengthV6: importV6.PrefixLength,
+						source:         importV6.Source,
+						iface:          importV6.Interface,
+						action:         importV6.Action,
 					})
 				}
 			}
@@ -332,23 +343,23 @@ func BGPFilterBIRDFuncs(pairs memkv.KVPairs, version int) ([]string, error) {
 			if v4Selected {
 				for _, exportV4 := range exportFiltersV4 {
 					ruleFields = append(ruleFields, filterArgs{
-						operator:     exportV4.MatchOperator,
-						cidr:         exportV4.CIDR,
-						prefixLength: exportV4.PrefixLength,
-						source:       exportV4.Source,
-						iface:        exportV4.Interface,
-						action:       exportV4.Action,
+						operator:       exportV4.MatchOperator,
+						cidr:           exportV4.CIDR,
+						prefixLengthV4: exportV4.PrefixLength,
+						source:         exportV4.Source,
+						iface:          exportV4.Interface,
+						action:         exportV4.Action,
 					})
 				}
 			} else {
 				for _, exportV6 := range exportFiltersV6 {
 					ruleFields = append(ruleFields, filterArgs{
-						operator:     exportV6.MatchOperator,
-						cidr:         exportV6.CIDR,
-						prefixLength: exportV6.PrefixLength,
-						source:       exportV6.Source,
-						iface:        exportV6.Interface,
-						action:       exportV6.Action,
+						operator:       exportV6.MatchOperator,
+						cidr:           exportV6.CIDR,
+						prefixLengthV6: exportV6.PrefixLength,
+						source:         exportV6.Source,
+						iface:          exportV6.Interface,
+						action:         exportV6.Action,
 					})
 				}
 			}

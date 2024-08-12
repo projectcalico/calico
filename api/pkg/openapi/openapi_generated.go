@@ -26,7 +26,8 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPDaemonStatus":                    schema_pkg_apis_projectcalico_v3_BGPDaemonStatus(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilter":                          schema_pkg_apis_projectcalico_v3_BGPFilter(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterList":                      schema_pkg_apis_projectcalico_v3_BGPFilterList(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterPrefixLength":              schema_pkg_apis_projectcalico_v3_BGPFilterPrefixLength(ref),
+		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterPrefixLengthV4":            schema_pkg_apis_projectcalico_v3_BGPFilterPrefixLengthV4(ref),
+		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterPrefixLengthV6":            schema_pkg_apis_projectcalico_v3_BGPFilterPrefixLengthV6(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterRuleV4":                    schema_pkg_apis_projectcalico_v3_BGPFilterRuleV4(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterRuleV6":                    schema_pkg_apis_projectcalico_v3_BGPFilterRuleV6(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterSpec":                      schema_pkg_apis_projectcalico_v3_BGPFilterSpec(ref),
@@ -803,7 +804,31 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterList(ref common.ReferenceCallback
 	}
 }
 
-func schema_pkg_apis_projectcalico_v3_BGPFilterPrefixLength(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_pkg_apis_projectcalico_v3_BGPFilterPrefixLengthV4(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"min": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"integer"},
+							Format: "int32",
+						},
+					},
+					"max": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"integer"},
+							Format: "int32",
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func schema_pkg_apis_projectcalico_v3_BGPFilterPrefixLengthV6(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -842,8 +867,7 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterRuleV4(ref common.ReferenceCallba
 					},
 					"prefixLength": {
 						SchemaProps: spec.SchemaProps{
-							Default: map[string]interface{}{},
-							Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterPrefixLength"),
+							Ref: ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterPrefixLengthV4"),
 						},
 					},
 					"source": {
@@ -876,7 +900,7 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterRuleV4(ref common.ReferenceCallba
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterPrefixLength"},
+			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterPrefixLengthV4"},
 	}
 }
 
@@ -895,8 +919,7 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterRuleV6(ref common.ReferenceCallba
 					},
 					"prefixLength": {
 						SchemaProps: spec.SchemaProps{
-							Default: map[string]interface{}{},
-							Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterPrefixLength"),
+							Ref: ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterPrefixLengthV6"),
 						},
 					},
 					"source": {
@@ -929,7 +952,7 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterRuleV6(ref common.ReferenceCallba
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterPrefixLength"},
+			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterPrefixLengthV6"},
 	}
 }
 

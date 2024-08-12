@@ -78,39 +78,43 @@ var (
 	andOr               = `(&&|\|\|)`
 	globalSelectorRegex = regexp.MustCompile(fmt.Sprintf(`%v global\(\)|global\(\) %v`, andOr, andOr))
 
-	interfaceRegex          = regexp.MustCompile("^[a-zA-Z0-9_.-]{1,15}$")
-	bgpFilterInterfaceRegex = regexp.MustCompile("^[a-zA-Z0-9_.*-]{1,15}$")
-	ignoredInterfaceRegex   = regexp.MustCompile("^[a-zA-Z0-9_.*-]{1,15}$")
-	ifaceFilterRegex        = regexp.MustCompile("^[a-zA-Z0-9:._+-]{1,15}$")
-	actionRegex             = regexp.MustCompile("^(Allow|Deny|Log|Pass)$")
-	protocolRegex           = regexp.MustCompile("^(TCP|UDP|ICMP|ICMPv6|SCTP|UDPLite)$")
-	ipipModeRegex           = regexp.MustCompile("^(Always|CrossSubnet|Never)$")
-	vxlanModeRegex          = regexp.MustCompile("^(Always|CrossSubnet|Never)$")
-	logLevelRegex           = regexp.MustCompile("^(Debug|Info|Warning|Error|Fatal)$")
-	bpfLogLevelRegex        = regexp.MustCompile("^(Debug|Info|Off)$")
-	bpfServiceModeRegex     = regexp.MustCompile("^(Tunnel|DSR)$")
-	bpfCTLBRegex            = regexp.MustCompile("^(Disabled|Enabled|TCP)$")
-	bpfHostNatRegex         = regexp.MustCompile("^(Disabled|Enabled)$")
-	datastoreType           = regexp.MustCompile("^(etcdv3|kubernetes)$")
-	routeSource             = regexp.MustCompile("^(WorkloadIPs|CalicoIPAM)$")
-	dropAcceptReturnRegex   = regexp.MustCompile("^(Drop|Accept|Return)$")
-	acceptReturnRegex       = regexp.MustCompile("^(Accept|Return)$")
-	dropRejectRegex         = regexp.MustCompile("^(Drop|Reject)$")
-	ipTypeRegex             = regexp.MustCompile("^(CalicoNodeIP|InternalIP|ExternalIP)$")
-	standardCommunity       = regexp.MustCompile(`^(\d+):(\d+)$`)
-	largeCommunity          = regexp.MustCompile(`^(\d+):(\d+):(\d+)$`)
-	number                  = regexp.MustCompile(`(\d+)`)
-	IPv4PortFormat          = regexp.MustCompile(`^(\d+).(\d+).(\d+).(\d+):(\d+)$`)
-	IPv6PortFormat          = regexp.MustCompile(`^\[[0-9a-fA-F:.]+\]:(\d+)$`)
-	reasonString            = "Reason: "
-	poolUnstictCIDR         = "IP pool CIDR is not strictly masked"
-	overlapsV4LinkLocal     = "IP pool range overlaps with IPv4 Link Local range 169.254.0.0/16"
-	overlapsV6LinkLocal     = "IP pool range overlaps with IPv6 Link Local range fe80::/10"
-	protocolPortsMsg        = "rules that specify ports must set protocol to TCP or UDP or SCTP"
-	protocolIcmpMsg         = "rules that specify ICMP fields must set protocol to ICMP"
-	protocolAndHTTPMsg      = "rules that specify HTTP fields must set protocol to TCP or empty"
-	globalSelectorEntRule   = fmt.Sprintf("%v can only be used in an EntityRule namespaceSelector", globalSelector)
-	globalSelectorOnly      = fmt.Sprintf("%v cannot be combined with other selectors", globalSelector)
+	interfaceRegex             = regexp.MustCompile("^[a-zA-Z0-9_.-]{1,15}$")
+	bgpFilterInterfaceRegex    = regexp.MustCompile("^[a-zA-Z0-9_.*-]{1,15}$")
+	bgpFilterPrefixLengthMinV4 = regexp.MustCompile("^([0-9]|[12][0-9]|3[0-2])$")
+	bgpFilterPrefixLengthMaxV4 = regexp.MustCompile("^([1-9]|[12][0-9]|3[0-2])$")
+	bgpFilterPrefixLengthMinV6 = regexp.MustCompile("^([0-9]|[1-9][0-9]|1[1-2][0-8])$")
+	bgpFilterPrefixLengthMaxV6 = regexp.MustCompile("^([1-9]|[1-9][0-9]|1[1-2][0-8])$")
+	ignoredInterfaceRegex      = regexp.MustCompile("^[a-zA-Z0-9_.*-]{1,15}$")
+	ifaceFilterRegex           = regexp.MustCompile("^[a-zA-Z0-9:._+-]{1,15}$")
+	actionRegex                = regexp.MustCompile("^(Allow|Deny|Log|Pass)$")
+	protocolRegex              = regexp.MustCompile("^(TCP|UDP|ICMP|ICMPv6|SCTP|UDPLite)$")
+	ipipModeRegex              = regexp.MustCompile("^(Always|CrossSubnet|Never)$")
+	vxlanModeRegex             = regexp.MustCompile("^(Always|CrossSubnet|Never)$")
+	logLevelRegex              = regexp.MustCompile("^(Debug|Info|Warning|Error|Fatal)$")
+	bpfLogLevelRegex           = regexp.MustCompile("^(Debug|Info|Off)$")
+	bpfServiceModeRegex        = regexp.MustCompile("^(Tunnel|DSR)$")
+	bpfCTLBRegex               = regexp.MustCompile("^(Disabled|Enabled|TCP)$")
+	bpfHostNatRegex            = regexp.MustCompile("^(Disabled|Enabled)$")
+	datastoreType              = regexp.MustCompile("^(etcdv3|kubernetes)$")
+	routeSource                = regexp.MustCompile("^(WorkloadIPs|CalicoIPAM)$")
+	dropAcceptReturnRegex      = regexp.MustCompile("^(Drop|Accept|Return)$")
+	acceptReturnRegex          = regexp.MustCompile("^(Accept|Return)$")
+	dropRejectRegex            = regexp.MustCompile("^(Drop|Reject)$")
+	ipTypeRegex                = regexp.MustCompile("^(CalicoNodeIP|InternalIP|ExternalIP)$")
+	standardCommunity          = regexp.MustCompile(`^(\d+):(\d+)$`)
+	largeCommunity             = regexp.MustCompile(`^(\d+):(\d+):(\d+)$`)
+	number                     = regexp.MustCompile(`(\d+)`)
+	IPv4PortFormat             = regexp.MustCompile(`^(\d+).(\d+).(\d+).(\d+):(\d+)$`)
+	IPv6PortFormat             = regexp.MustCompile(`^\[[0-9a-fA-F:.]+\]:(\d+)$`)
+	reasonString               = "Reason: "
+	poolUnstictCIDR            = "IP pool CIDR is not strictly masked"
+	overlapsV4LinkLocal        = "IP pool range overlaps with IPv4 Link Local range 169.254.0.0/16"
+	overlapsV6LinkLocal        = "IP pool range overlaps with IPv6 Link Local range fe80::/10"
+	protocolPortsMsg           = "rules that specify ports must set protocol to TCP or UDP or SCTP"
+	protocolIcmpMsg            = "rules that specify ICMP fields must set protocol to ICMP"
+	protocolAndHTTPMsg         = "rules that specify HTTP fields must set protocol to TCP or empty"
+	globalSelectorEntRule      = fmt.Sprintf("%v can only be used in an EntityRule namespaceSelector", globalSelector)
+	globalSelectorOnly         = fmt.Sprintf("%v cannot be combined with other selectors", globalSelector)
 
 	SourceAddressRegex = regexp.MustCompile("^(UseNodeIP|None)$")
 
@@ -163,6 +167,10 @@ func init() {
 	registerFieldValidator("action", validateAction)
 	registerFieldValidator("interface", validateInterface)
 	registerFieldValidator("bgpFilterInterface", validateBGPFilterInterface)
+	registerFieldValidator("bgpFilterPrefixLengthMinV4", validateBGPFilterPrefixLengthMinV4)
+	registerFieldValidator("bgpFilterPrefixLengthMaxV4", validateBGPFilterPrefixLengthMaxV4)
+	registerFieldValidator("bgpFilterPrefixLengthMinV6", validateBGPFilterPrefixLengthMinV6)
+	registerFieldValidator("bgpFilterPrefixLengthMaxV6", validateBGPFilterPrefixLengthMaxV6)
 	registerFieldValidator("ignoredInterface", validateIgnoredInterface)
 	registerFieldValidator("datastoreType", validateDatastoreType)
 	registerFieldValidator("name", validateName)
@@ -300,6 +308,30 @@ func validateBGPFilterInterface(fl validator.FieldLevel) bool {
 	s := fl.Field().String()
 	log.Debugf("Validate BGPFilter rule interface: %s", s)
 	return s == "*" || bgpFilterInterfaceRegex.MatchString(s)
+}
+
+func validateBGPFilterPrefixLengthMinV4(fl validator.FieldLevel) bool {
+	s := fmt.Sprint(fl.Field())
+	log.Debugf("Validate BGPFilter PrefixLength Min v4: %s", s)
+	return s == "*" || bgpFilterPrefixLengthMinV4.MatchString(s)
+}
+
+func validateBGPFilterPrefixLengthMaxV4(fl validator.FieldLevel) bool {
+	s := fmt.Sprint(fl.Field())
+	log.Debugf("Validate BGPFilter PrefixLength Max v4: %s", s)
+	return s == "*" || bgpFilterPrefixLengthMaxV4.MatchString(s)
+}
+
+func validateBGPFilterPrefixLengthMinV6(fl validator.FieldLevel) bool {
+	s := fmt.Sprint(fl.Field())
+	log.Debugf("Validate BGPFilter PrefixLength Min v6: %s", s)
+	return s == "*" || bgpFilterPrefixLengthMinV6.MatchString(s)
+}
+
+func validateBGPFilterPrefixLengthMaxV6(fl validator.FieldLevel) bool {
+	s := fmt.Sprint(fl.Field())
+	log.Debugf("Validate BGPFilter PrefixLength Max v6: %s", s)
+	return s == "*" || bgpFilterPrefixLengthMaxV6.MatchString(s)
 }
 
 func validateIgnoredInterface(fl validator.FieldLevel) bool {
@@ -606,7 +638,7 @@ func ValidateIPv4Network(addr string) error {
 	return fmt.Errorf("Invalid IPv4 network %s", addr)
 }
 
-// validateIPv4Network validates the field is a valid (strictly masked) IPv6 network.
+// validateIPv6Network validates the field is a valid (strictly masked) IPv6 network.
 // An IP address is valid, and assumed to be fully masked (i.e /128)
 func validateIPv6Network(fl validator.FieldLevel) bool {
 	n := fl.Field().String()
