@@ -151,7 +151,7 @@ func hashrelaseSubCommands(cfg *config.Config, runner *registry.DockerRunner) []
 
 func releaseSubCommands(cfg *config.Config) []*cli.Command {
 	// Create a releaseBuilder to use.
-	r := builder.NewReleaseBuilder(&builder.RealCommandRunner{}, cfg.RepoRootDir)
+	r := builder.NewReleaseBuilder(builder.WithRepoRoot(cfg.RepoRootDir))
 
 	return []*cli.Command{
 		// Build a release.
