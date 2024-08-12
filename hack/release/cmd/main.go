@@ -28,7 +28,7 @@ func init() {
 
 func main() {
 	// Create a releaseBuilder to use.
-	r := builder.NewReleaseBuilder(&builder.RealCommandRunner{}, os.Getenv("REPO_ROOT"))
+	r := builder.NewReleaseBuilder(builder.WithRepoRoot(os.Getenv("REPO_ROOT")))
 
 	if meta {
 		configureLogging("metadata.log")

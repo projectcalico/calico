@@ -43,11 +43,17 @@ var (
 	origin       = "origin"
 )
 
-func NewReleaseBuilder(runner CommandRunner, root string) *ReleaseBuilder {
-	return &ReleaseBuilder{
-		runner:   runner,
-		repoRoot: root,
+func NewReleaseBuilder(opts ...Option) *ReleaseBuilder {
+	b := &ReleaseBuilder{runner: &RealCommandRunner{}}
+	for _, o := range opts {
+		if err := o(b); err != nil {
+			logrus.WithError(err).Fatal("Failed to apply option to release builder")
+		}
 	}
+	if b.repoRoot == "" {
+		logrus.Fatal("No repo root specified")
+	}
+	return b
 }
 
 type ReleaseBuilder struct {
@@ -56,6 +62,9 @@ type ReleaseBuilder struct {
 
 	// The abs path of the root of the repository.
 	repoRoot string
+
+	// isHashRelease is a flag to indicate that we should build a hashrelease.
+	isHashRelease bool
 }
 
 // releaseImages returns the set of images that should be expected for a release.
