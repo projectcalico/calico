@@ -141,9 +141,14 @@ func (r *ReleaseBuilder) Build() error {
 		if err = r.generateManifests(); err != nil {
 			return err
 		}
-	}
 
-	// TODO: If this is a hashrelease, we need to build an operator image here.
+		// Real releases call "make release-build" to do this, but hashreleases don't.
+		// For now, call it explicitly. We should aim to remove this exception.
+		env := append(os.Environ(), fmt.Sprintf("VERSION=%s", ver))
+		if _, err = r.runner.RunInDir(r.repoRoot, "make", []string{"-C", "node", "release-windows-archive"}, env); err != nil {
+			return err
+		}
+	}
 
 	if err = r.BuildHelm(); err != nil {
 		return err
