@@ -177,7 +177,7 @@ func (s *PolicySets) GetPolicySetRules(setIds []string, isInbound bool) (rules [
 
 	// Finally, for RS3 only, add default allow rule with a host-scope to allow traffic through
 	// the host windows firewall
-	rules = append(rules, s.NewHostRule(isInbound))
+	//rules = append(rules, s.NewHostRule(isInbound))
 
 	return
 }
