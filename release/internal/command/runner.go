@@ -1,8 +1,6 @@
 package command
 
-import (
-	"github.com/projectcalico/calico/hack/release/pkg/builder"
-)
+import "github.com/projectcalico/calico/release/pkg/builder"
 
 func runner() builder.CommandRunner {
 	return &builder.RealCommandRunner{}
