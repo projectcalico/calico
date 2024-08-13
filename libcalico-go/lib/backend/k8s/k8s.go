@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -145,6 +145,12 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 		reflect.TypeOf(model.ResourceListOptions{}),
 		apiv3.KindNetworkSet,
 		resources.NewNetworkSetClient(cs, crdClientV1),
+	)
+	kubeClient.registerResourceClient(
+		reflect.TypeOf(model.ResourceKey{}),
+		reflect.TypeOf(model.ResourceListOptions{}),
+		apiv3.KindTier,
+		resources.NewTierClient(cs, crdClientV1),
 	)
 	kubeClient.registerResourceClient(
 		reflect.TypeOf(model.ResourceKey{}),
@@ -423,6 +429,7 @@ func (c *KubeClient) Clean() error {
 		apiv3.KindFelixConfiguration,
 		apiv3.KindGlobalNetworkPolicy,
 		apiv3.KindNetworkPolicy,
+		apiv3.KindTier,
 		apiv3.KindGlobalNetworkSet,
 		apiv3.KindNetworkSet,
 		apiv3.KindIPPool,
@@ -539,6 +546,8 @@ func buildCRDClientV1(cfg rest.Config) (*rest.RESTClient, error) {
 					&apiv3.NetworkPolicyList{},
 					&apiv3.NetworkSet{},
 					&apiv3.NetworkSetList{},
+					&apiv3.Tier{},
+					&apiv3.TierList{},
 					&apiv3.HostEndpoint{},
 					&apiv3.HostEndpointList{},
 					&libapiv3.BlockAffinity{},
