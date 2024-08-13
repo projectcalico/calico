@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"fmt"
 	"os/exec"
+	"time"
 
 	"context"
 
@@ -89,7 +90,23 @@ func newClient() clientv3.Interface {
 	cfg.Spec.Kubeconfig = `c:\k\config`
 	client, err := clientv3.New(*cfg)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred())
+	mustInitDatastore(client)
 	return client
+}
+
+func mustInitDatastore(client clientv3.Interface) {
+	Eventually(func() error {
+		log.Info("Initializing the datastore...")
+		ctx, cancelFun := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancelFun()
+		err := client.EnsureInitialized(
+			ctx,
+			"v3.0.0-test",
+			"felix-fv",
+		)
+		log.WithError(err).Info("EnsureInitialized result")
+		return err
+	}).ShouldNot(HaveOccurred(), "mustInitDatastore failed")
 }
 
 // These Windows policy FV tests rely on a 2 node cluster (1 Linux and 1 Windows) provisioned using internal tooling.
