@@ -1813,6 +1813,13 @@ func init() {
 				Max: int32Helper(64),
 			},
 		}, false),
+		Entry("should reject BGPFilterV4 rule with PrefixLength populated and CIDR missing", api.BGPFilterRuleV4{
+			Interface: "ethx.",
+			Action:    "Reject",
+			PrefixLength: &api.BGPFilterPrefixLengthV4{
+				Min: int32Helper(16),
+			},
+		}, false),
 		Entry("should accept BGPFilterV6 rule with PrefixLength Min set", api.BGPFilterRuleV6{
 			CIDR:          "ffff::/128",
 			MatchOperator: "In",
@@ -1835,6 +1842,13 @@ func init() {
 			Action:        "Reject",
 			PrefixLength: &api.BGPFilterPrefixLengthV6{
 				Min: int32Helper(-16),
+			},
+		}, false),
+		Entry("should reject BGPFilterV6 rule with PrefixLength populated and CIDR missing", api.BGPFilterRuleV6{
+			Interface: "*.calico",
+			Action:    "Reject",
+			PrefixLength: &api.BGPFilterPrefixLengthV6{
+				Min: int32Helper(120),
 			},
 		}, false),
 

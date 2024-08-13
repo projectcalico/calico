@@ -78,43 +78,41 @@ var (
 	andOr               = `(&&|\|\|)`
 	globalSelectorRegex = regexp.MustCompile(fmt.Sprintf(`%v global\(\)|global\(\) %v`, andOr, andOr))
 
-	interfaceRegex             = regexp.MustCompile("^[a-zA-Z0-9_.-]{1,15}$")
-	bgpFilterInterfaceRegex    = regexp.MustCompile("^[a-zA-Z0-9_.*-]{1,15}$")
-	bgpFilterPrefixLengthMinV4 = regexp.MustCompile("^([0-9]|[12][0-9]|3[0-2])$")
-	bgpFilterPrefixLengthMaxV4 = regexp.MustCompile("^([1-9]|[12][0-9]|3[0-2])$")
-	bgpFilterPrefixLengthMinV6 = regexp.MustCompile("^([0-9]|[1-9][0-9]|1[1-2][0-8])$")
-	bgpFilterPrefixLengthMaxV6 = regexp.MustCompile("^([1-9]|[1-9][0-9]|1[1-2][0-8])$")
-	ignoredInterfaceRegex      = regexp.MustCompile("^[a-zA-Z0-9_.*-]{1,15}$")
-	ifaceFilterRegex           = regexp.MustCompile("^[a-zA-Z0-9:._+-]{1,15}$")
-	actionRegex                = regexp.MustCompile("^(Allow|Deny|Log|Pass)$")
-	protocolRegex              = regexp.MustCompile("^(TCP|UDP|ICMP|ICMPv6|SCTP|UDPLite)$")
-	ipipModeRegex              = regexp.MustCompile("^(Always|CrossSubnet|Never)$")
-	vxlanModeRegex             = regexp.MustCompile("^(Always|CrossSubnet|Never)$")
-	logLevelRegex              = regexp.MustCompile("^(Debug|Info|Warning|Error|Fatal)$")
-	bpfLogLevelRegex           = regexp.MustCompile("^(Debug|Info|Off)$")
-	bpfServiceModeRegex        = regexp.MustCompile("^(Tunnel|DSR)$")
-	bpfCTLBRegex               = regexp.MustCompile("^(Disabled|Enabled|TCP)$")
-	bpfHostNatRegex            = regexp.MustCompile("^(Disabled|Enabled)$")
-	datastoreType              = regexp.MustCompile("^(etcdv3|kubernetes)$")
-	routeSource                = regexp.MustCompile("^(WorkloadIPs|CalicoIPAM)$")
-	dropAcceptReturnRegex      = regexp.MustCompile("^(Drop|Accept|Return)$")
-	acceptReturnRegex          = regexp.MustCompile("^(Accept|Return)$")
-	dropRejectRegex            = regexp.MustCompile("^(Drop|Reject)$")
-	ipTypeRegex                = regexp.MustCompile("^(CalicoNodeIP|InternalIP|ExternalIP)$")
-	standardCommunity          = regexp.MustCompile(`^(\d+):(\d+)$`)
-	largeCommunity             = regexp.MustCompile(`^(\d+):(\d+):(\d+)$`)
-	number                     = regexp.MustCompile(`(\d+)`)
-	IPv4PortFormat             = regexp.MustCompile(`^(\d+).(\d+).(\d+).(\d+):(\d+)$`)
-	IPv6PortFormat             = regexp.MustCompile(`^\[[0-9a-fA-F:.]+\]:(\d+)$`)
-	reasonString               = "Reason: "
-	poolUnstictCIDR            = "IP pool CIDR is not strictly masked"
-	overlapsV4LinkLocal        = "IP pool range overlaps with IPv4 Link Local range 169.254.0.0/16"
-	overlapsV6LinkLocal        = "IP pool range overlaps with IPv6 Link Local range fe80::/10"
-	protocolPortsMsg           = "rules that specify ports must set protocol to TCP or UDP or SCTP"
-	protocolIcmpMsg            = "rules that specify ICMP fields must set protocol to ICMP"
-	protocolAndHTTPMsg         = "rules that specify HTTP fields must set protocol to TCP or empty"
-	globalSelectorEntRule      = fmt.Sprintf("%v can only be used in an EntityRule namespaceSelector", globalSelector)
-	globalSelectorOnly         = fmt.Sprintf("%v cannot be combined with other selectors", globalSelector)
+	interfaceRegex          = regexp.MustCompile("^[a-zA-Z0-9_.-]{1,15}$")
+	bgpFilterInterfaceRegex = regexp.MustCompile("^[a-zA-Z0-9_.*-]{1,15}$")
+	bgpFilterPrefixLengthV4 = regexp.MustCompile("^([0-9]|[12][0-9]|3[0-2])$")
+	bgpFilterPrefixLengthV6 = regexp.MustCompile("^([0-9]|[1-9][0-9]|1[0-1][0-9]|12[0-8])$")
+	ignoredInterfaceRegex   = regexp.MustCompile("^[a-zA-Z0-9_.*-]{1,15}$")
+	ifaceFilterRegex        = regexp.MustCompile("^[a-zA-Z0-9:._+-]{1,15}$")
+	actionRegex             = regexp.MustCompile("^(Allow|Deny|Log|Pass)$")
+	protocolRegex           = regexp.MustCompile("^(TCP|UDP|ICMP|ICMPv6|SCTP|UDPLite)$")
+	ipipModeRegex           = regexp.MustCompile("^(Always|CrossSubnet|Never)$")
+	vxlanModeRegex          = regexp.MustCompile("^(Always|CrossSubnet|Never)$")
+	logLevelRegex           = regexp.MustCompile("^(Debug|Info|Warning|Error|Fatal)$")
+	bpfLogLevelRegex        = regexp.MustCompile("^(Debug|Info|Off)$")
+	bpfServiceModeRegex     = regexp.MustCompile("^(Tunnel|DSR)$")
+	bpfCTLBRegex            = regexp.MustCompile("^(Disabled|Enabled|TCP)$")
+	bpfHostNatRegex         = regexp.MustCompile("^(Disabled|Enabled)$")
+	datastoreType           = regexp.MustCompile("^(etcdv3|kubernetes)$")
+	routeSource             = regexp.MustCompile("^(WorkloadIPs|CalicoIPAM)$")
+	dropAcceptReturnRegex   = regexp.MustCompile("^(Drop|Accept|Return)$")
+	acceptReturnRegex       = regexp.MustCompile("^(Accept|Return)$")
+	dropRejectRegex         = regexp.MustCompile("^(Drop|Reject)$")
+	ipTypeRegex             = regexp.MustCompile("^(CalicoNodeIP|InternalIP|ExternalIP)$")
+	standardCommunity       = regexp.MustCompile(`^(\d+):(\d+)$`)
+	largeCommunity          = regexp.MustCompile(`^(\d+):(\d+):(\d+)$`)
+	number                  = regexp.MustCompile(`(\d+)`)
+	IPv4PortFormat          = regexp.MustCompile(`^(\d+).(\d+).(\d+).(\d+):(\d+)$`)
+	IPv6PortFormat          = regexp.MustCompile(`^\[[0-9a-fA-F:.]+\]:(\d+)$`)
+	reasonString            = "Reason: "
+	poolUnstictCIDR         = "IP pool CIDR is not strictly masked"
+	overlapsV4LinkLocal     = "IP pool range overlaps with IPv4 Link Local range 169.254.0.0/16"
+	overlapsV6LinkLocal     = "IP pool range overlaps with IPv6 Link Local range fe80::/10"
+	protocolPortsMsg        = "rules that specify ports must set protocol to TCP or UDP or SCTP"
+	protocolIcmpMsg         = "rules that specify ICMP fields must set protocol to ICMP"
+	protocolAndHTTPMsg      = "rules that specify HTTP fields must set protocol to TCP or empty"
+	globalSelectorEntRule   = fmt.Sprintf("%v can only be used in an EntityRule namespaceSelector", globalSelector)
+	globalSelectorOnly      = fmt.Sprintf("%v cannot be combined with other selectors", globalSelector)
 
 	SourceAddressRegex = regexp.MustCompile("^(UseNodeIP|None)$")
 
@@ -167,10 +165,8 @@ func init() {
 	registerFieldValidator("action", validateAction)
 	registerFieldValidator("interface", validateInterface)
 	registerFieldValidator("bgpFilterInterface", validateBGPFilterInterface)
-	registerFieldValidator("bgpFilterPrefixLengthMinV4", validateBGPFilterPrefixLengthMinV4)
-	registerFieldValidator("bgpFilterPrefixLengthMaxV4", validateBGPFilterPrefixLengthMaxV4)
-	registerFieldValidator("bgpFilterPrefixLengthMinV6", validateBGPFilterPrefixLengthMinV6)
-	registerFieldValidator("bgpFilterPrefixLengthMaxV6", validateBGPFilterPrefixLengthMaxV6)
+	registerFieldValidator("bgpFilterPrefixLengthV4", validateBGPFilterPrefixLengthV4)
+	registerFieldValidator("bgpFilterPrefixLengthV6", validateBGPFilterPrefixLengthV6)
 	registerFieldValidator("ignoredInterface", validateIgnoredInterface)
 	registerFieldValidator("datastoreType", validateDatastoreType)
 	registerFieldValidator("name", validateName)
@@ -310,28 +306,16 @@ func validateBGPFilterInterface(fl validator.FieldLevel) bool {
 	return s == "*" || bgpFilterInterfaceRegex.MatchString(s)
 }
 
-func validateBGPFilterPrefixLengthMinV4(fl validator.FieldLevel) bool {
+func validateBGPFilterPrefixLengthV4(fl validator.FieldLevel) bool {
 	s := fmt.Sprint(fl.Field())
-	log.Debugf("Validate BGPFilter PrefixLength Min v4: %s", s)
-	return s == "*" || bgpFilterPrefixLengthMinV4.MatchString(s)
+	log.Debugf("Validate BGPFilter PrefixLength v4: %s", s)
+	return s == "*" || bgpFilterPrefixLengthV4.MatchString(s)
 }
 
-func validateBGPFilterPrefixLengthMaxV4(fl validator.FieldLevel) bool {
+func validateBGPFilterPrefixLengthV6(fl validator.FieldLevel) bool {
 	s := fmt.Sprint(fl.Field())
-	log.Debugf("Validate BGPFilter PrefixLength Max v4: %s", s)
-	return s == "*" || bgpFilterPrefixLengthMaxV4.MatchString(s)
-}
-
-func validateBGPFilterPrefixLengthMinV6(fl validator.FieldLevel) bool {
-	s := fmt.Sprint(fl.Field())
-	log.Debugf("Validate BGPFilter PrefixLength Min v6: %s", s)
-	return s == "*" || bgpFilterPrefixLengthMinV6.MatchString(s)
-}
-
-func validateBGPFilterPrefixLengthMaxV6(fl validator.FieldLevel) bool {
-	s := fmt.Sprint(fl.Field())
-	log.Debugf("Validate BGPFilter PrefixLength Max v6: %s", s)
-	return s == "*" || bgpFilterPrefixLengthMaxV6.MatchString(s)
+	log.Debugf("Validate BGPFilter PrefixLength v6: %s", s)
+	return s == "*" || bgpFilterPrefixLengthV6.MatchString(s)
 }
 
 func validateIgnoredInterface(fl validator.FieldLevel) bool {
@@ -1427,15 +1411,15 @@ func validateReachableByField(fl validator.FieldLevel) bool {
 
 func validateBGPFilterRuleV4(structLevel validator.StructLevel) {
 	fs := structLevel.Current().Interface().(api.BGPFilterRuleV4)
-	validateBGPFilterRule(structLevel, fs.CIDR, fs.MatchOperator)
+	validateBGPFilterRule(structLevel, fs.CIDR, fs.MatchOperator, fs.PrefixLength, nil)
 }
 
 func validateBGPFilterRuleV6(structLevel validator.StructLevel) {
 	fs := structLevel.Current().Interface().(api.BGPFilterRuleV6)
-	validateBGPFilterRule(structLevel, fs.CIDR, fs.MatchOperator)
+	validateBGPFilterRule(structLevel, fs.CIDR, fs.MatchOperator, nil, fs.PrefixLength)
 }
 
-func validateBGPFilterRule(structLevel validator.StructLevel, cidr string, op api.BGPFilterMatchOperator) {
+func validateBGPFilterRule(structLevel validator.StructLevel, cidr string, op api.BGPFilterMatchOperator, prefixLengthV4 *api.BGPFilterPrefixLengthV4, prefixLengthV6 *api.BGPFilterPrefixLengthV6) {
 	if cidr != "" && op == "" {
 		structLevel.ReportError(cidr, "CIDR", "",
 			reason("MatchOperator cannot be empty when CIDR is not"), "")
@@ -1443,6 +1427,14 @@ func validateBGPFilterRule(structLevel validator.StructLevel, cidr string, op ap
 	if cidr == "" && op != "" {
 		structLevel.ReportError(op, "MatchOperator", "",
 			reason("CIDR cannot be empty when MatchOperator is not"), "")
+	}
+	if cidr == "" && prefixLengthV4 != nil {
+		structLevel.ReportError(prefixLengthV4, "PrefixLength", "",
+			reason("CIDR cannot be empty when PrefixLength is not"), "")
+	}
+	if cidr == "" && prefixLengthV6 != nil {
+		structLevel.ReportError(prefixLengthV6, "PrefixLength", "",
+			reason("CIDR cannot be empty when PrefixLength is not"), "")
 	}
 }
 

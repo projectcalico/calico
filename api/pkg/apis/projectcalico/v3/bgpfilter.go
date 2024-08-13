@@ -93,19 +93,19 @@ type BGPFilterRuleV6 struct {
 type BGPFilterPrefixLengthV4 struct {
 	// +kubebuilder:validation:Minimum=0
 	// +kubebuilder:validation:Maximum=32
-	Min *int32 `json:"min,omitempty" validate:"omitempty,bgpFilterPrefixLengthMinV4"`
+	Min *int32 `json:"min,omitempty" validate:"omitempty,bgpFilterPrefixLengthV4"`
 	// +kubebuilder:validation:Minimum=0
 	// +kubebuilder:validation:Maximum=32
-	Max *int32 `json:"max,omitempty" validate:"omitempty,bgpFilterPrefixLengthMaxV4"`
+	Max *int32 `json:"max,omitempty" validate:"omitempty,bgpFilterPrefixLengthV4"`
 }
 
 type BGPFilterPrefixLengthV6 struct {
 	// +kubebuilder:validation:Minimum=0
 	// +kubebuilder:validation:Maximum=128
-	Min *int32 `json:"min,omitempty" validate:"omitempty,bgpFilterPrefixLengthMinV6"`
+	Min *int32 `json:"min,omitempty" validate:"omitempty,bgpFilterPrefixLengthV6"`
 	// +kubebuilder:validation:Minimum=0
 	// +kubebuilder:validation:Maximum=128
-	Max *int32 `json:"max,omitempty" validate:"omitempty,bgpFilterPrefixLengthMaxV6"`
+	Max *int32 `json:"max,omitempty" validate:"omitempty,bgpFilterPrefixLengthV6"`
 }
 
 type BGPFilterMatchSource string
