@@ -135,9 +135,16 @@ func (r *ReleaseBuilder) Build() error {
 			return err
 		}
 
-	} else {
+	}
+
+	if err = r.BuildHelm(); err != nil {
+		return err
+	}
+
+	if r.isHashRelease {
 		// This is a hashrelease.
-		// Re-generate manifests using the desired versions.
+		// Re-generate manifests using the desired versions. This needs to happen
+		// before building the OCP bundle, since the OCP bundle uses the manifests.
 		if err = r.generateManifests(); err != nil {
 			return err
 		}
@@ -155,14 +162,11 @@ func (r *ReleaseBuilder) Build() error {
 		}
 	}
 
-	if err = r.BuildHelm(); err != nil {
-		return err
-	}
-	if err = r.BuildOCPBundle(); err != nil {
+	if err = r.buildOCPBundle(); err != nil {
 		return err
 	}
 
-	if err = r.CollectGithubArtifacts(ver); err != nil {
+	if err = r.collectGithubArtifacts(ver); err != nil {
 		return err
 	}
 
@@ -310,17 +314,9 @@ func (r *ReleaseBuilder) BuildHelm() error {
 	return nil
 }
 
-func (r *ReleaseBuilder) BuildOCPBundle() error {
+func (r *ReleaseBuilder) buildOCPBundle() error {
 	// Build OpenShift bundle.
 	if _, err := r.runner.RunInDir(r.repoRoot, "make", []string{"bin/ocp.tgz"}, []string{}); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (r *ReleaseBuilder) CollectGithubArtifacts(ver string) error {
-	// Build artifacts to upload to github.
-	if err := r.collectGithubArtifacts(ver); err != nil {
 		return err
 	}
 	return nil
