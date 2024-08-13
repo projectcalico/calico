@@ -111,10 +111,10 @@ var (
 	}
 )
 
-func filterMatchPrefixLength(cidr string, prefixMin, prefixMax *int32) string {
+func filterMatchPrefixLength(cidr string, prefixMin, prefixMax *int32) (string, error) {
 	cidrIP, cidrNet, err := net.ParseCIDR(cidr)
 	if err != nil {
-		fmt.Printf("WARNING: unexpected error when parsing cird %s: %s", cidr, err)
+		return "", fmt.Errorf("unexpected error when parsing cidr %s: %s", cidr, err)
 	}
 
 	mask, _ := cidrNet.Mask.Size()
@@ -134,7 +134,7 @@ func filterMatchPrefixLength(cidr string, prefixMin, prefixMax *int32) string {
 		maxLength = min(maxLength, *prefixMax)
 	}
 
-	return fmt.Sprintf("[ %s{%d,%d} ]", cidr, minLength, maxLength)
+	return fmt.Sprintf("[ %s{%d,%d} ]", cidr, minLength, maxLength), nil
 }
 
 func filterMatchCIDR(cidr string, prefixLengthV4 *v3.BGPFilterPrefixLengthV4, prefixLengthV6 *v3.BGPFilterPrefixLengthV6, operator v3.BGPFilterMatchOperator) (string, error) {
@@ -143,10 +143,15 @@ func filterMatchCIDR(cidr string, prefixLengthV4 *v3.BGPFilterPrefixLengthV4, pr
 		return "", fmt.Errorf("unexpected operator found in BGPFilter: %s", operator)
 	}
 
+	var err error
 	if prefixLengthV4 != nil {
-		cidr = filterMatchPrefixLength(cidr, prefixLengthV4.Min, prefixLengthV4.Max)
+		cidr, err = filterMatchPrefixLength(cidr, prefixLengthV4.Min, prefixLengthV4.Max)
 	} else if prefixLengthV6 != nil {
-		cidr = filterMatchPrefixLength(cidr, prefixLengthV6.Min, prefixLengthV6.Max)
+		cidr, err = filterMatchPrefixLength(cidr, prefixLengthV6.Min, prefixLengthV6.Max)
+	}
+
+	if err != nil {
+		return "", err
 	}
 
 	return fmt.Sprintf("(net %s %s)", op, cidr), nil
