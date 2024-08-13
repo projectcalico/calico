@@ -21,7 +21,7 @@ import (
 // then call GeneratePinnedVersion to generate the pinned-version.yaml file.
 // The location of the pinned-version.yaml file is logged.
 func PinnedVersion(cfg *config.Config) (string, string) {
-	outputDir := cfg.OutputDir
+	outputDir := cfg.TmpFolderPath()
 	if err := os.MkdirAll(outputDir, utils.DirPerms); err != nil {
 		logrus.WithError(err).Fatal("Failed to create output directory")
 	}
@@ -60,7 +60,7 @@ func imgExists(name string, component hashrelease.Component, ch chan imageExists
 // These images are checked to ensure they exist in the registry
 // as they should have been pushed in the standard build process.
 func HashreleaseValidate(cfg *config.Config) {
-	images, err := hashrelease.RetrieveComponentsToValidate(cfg.OutputDir)
+	images, err := hashrelease.RetrieveComponentsToValidate(cfg.TmpFolderPath())
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get pinned version")
 	}
@@ -95,8 +95,8 @@ func HashreleaseValidate(cfg *config.Config) {
 }
 
 // HashreleaseValidate publishes the hashrelease
-func HashreleasePush(cfg *config.Config) {
-	outputDir := cfg.OutputDir
+func HashreleasePush(cfg *config.Config, path string) {
+	outputDir := cfg.TmpFolderPath()
 	sshConfig := command.NewSSHConfig(cfg.DocsHost, cfg.DocsUser, cfg.DocsKey, cfg.DocsPort)
 	name, err := hashrelease.RetrieveReleaseName(outputDir)
 	if err != nil {
@@ -116,7 +116,7 @@ func HashreleasePush(cfg *config.Config) {
 	}
 	releaseVersion := version.Version(calicoVersion)
 	logrus.WithField("note", note).Info("Publishing hashrelease")
-	if err := hashrelease.PublishHashrelease(name, releaseHash, note, releaseVersion.Stream(), cfg.HashreleaseDir(), sshConfig); err != nil {
+	if err := hashrelease.PublishHashrelease(name, releaseHash, note, releaseVersion.Stream(), path, sshConfig); err != nil {
 		logrus.WithError(err).Fatal("Failed to publish hashrelease")
 	}
 }
