@@ -141,12 +141,17 @@ func (r *ReleaseBuilder) Build() error {
 		if err = r.generateManifests(); err != nil {
 			return err
 		}
+		defer r.resetManifests()
 
-		// Real releases call "make release-build" to do this, but hashreleases don't.
-		// For now, call it explicitly. We should aim to remove this exception.
+		// Real releases call "make release-build", but hashreleases don't.
+		// Instead, we build some of the targets directly. In the future, we should instead align the release
+		// and hashrelease build processes to avoid these separate paths.
 		env := append(os.Environ(), fmt.Sprintf("VERSION=%s", ver))
-		if _, err = r.runner.RunInDir(r.repoRoot, "make", []string{"-C", "node", "release-windows-archive"}, env); err != nil {
-			return err
+		targets := []string{"release-windows-archive", "dist/install-calico-windows.ps1"}
+		for _, target := range targets {
+			if _, err = r.runner.RunInDir(r.repoRoot, "make", []string{"-C", "node", target}, env); err != nil {
+				return fmt.Errorf("error building target %s: %s", target, err)
+			}
 		}
 	}
 
@@ -515,6 +520,12 @@ func (r *ReleaseBuilder) generateManifests() error {
 		return err
 	}
 	return nil
+}
+
+func (r *ReleaseBuilder) resetManifests() {
+	if _, err := r.runner.RunInDir(r.repoRoot, "git", []string{"checkout", "manifests"}, nil); err != nil {
+		logrus.WithError(err).Error("Failed to reset manifests")
+	}
 }
 
 func (r *ReleaseBuilder) uploadDir(ver string) string {
