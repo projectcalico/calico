@@ -90,7 +90,7 @@ func newClient() clientv3.Interface {
 	cfg.Spec.Kubeconfig = `c:\k\config`
 	client, err := clientv3.New(*cfg)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred())
-	mustInitDatastore(client)
+	//mustInitDatastore(client)
 	return client
 }
 
