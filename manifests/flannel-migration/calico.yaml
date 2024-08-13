@@ -333,9 +333,13 @@ spec:
                       properties:
                         max:
                           format: int32
+                          maximum: 32
+                          minimum: 0
                           type: integer
                         min:
                           format: int32
+                          maximum: 32
+                          minimum: 0
                           type: integer
                       type: object
                     source:
@@ -363,9 +367,13 @@ spec:
                       properties:
                         max:
                           format: int32
+                          maximum: 128
+                          minimum: 0
                           type: integer
                         min:
                           format: int32
+                          maximum: 128
+                          minimum: 0
                           type: integer
                       type: object
                     source:
@@ -393,9 +401,13 @@ spec:
                       properties:
                         max:
                           format: int32
+                          maximum: 32
+                          minimum: 0
                           type: integer
                         min:
                           format: int32
+                          maximum: 32
+                          minimum: 0
                           type: integer
                       type: object
                     source:
@@ -423,9 +435,13 @@ spec:
                       properties:
                         max:
                           format: int32
+                          maximum: 128
+                          minimum: 0
                           type: integer
                         min:
                           format: int32
+                          maximum: 128
+                          minimum: 0
                           type: integer
                       type: object
                     source:
