@@ -1,9 +1,12 @@
 package main
 
 import (
+	"fmt"
 	"io"
 	"os"
+	"strings"
 
+	"github.com/coreos/go-semver/semver"
 	"github.com/projectcalico/calico/release/internal/config"
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/pkg/builder"
@@ -17,6 +20,7 @@ import (
 const (
 	skipValidationFlag = "skip-validation"
 	skipImageScanFlag  = "skip-image-scan"
+	pathFlag           = "path"
 )
 
 var debug bool
@@ -89,7 +93,7 @@ func hashrelaseSubCommands(cfg *config.Config, runner *registry.DockerRunner) []
 		// The build command is used to produce a new local hashrelease in the output directory.
 		{
 			Name:  "build",
-			Usage: "Build a hashrelease locally in output/",
+			Usage: "Build a hashrelease locally in _output/",
 			Flags: []cli.Flag{
 				&cli.BoolFlag{Name: skipValidationFlag, Usage: "Skip pre-build validation", Value: false},
 			},
@@ -126,10 +130,11 @@ func hashrelaseSubCommands(cfg *config.Config, runner *registry.DockerRunner) []
 		// The publish command is used to publish a locally built hashrelease to the hashrelease server.
 		{
 			Name:  "publish",
-			Usage: "Publish hashrelease from output/ to hashrelease server",
+			Usage: "Publish hashrelease from _output/ to hashrelease server",
 			Flags: []cli.Flag{
 				&cli.BoolFlag{Name: skipValidationFlag, Usage: "Skip pre-build validation", Value: false},
 				&cli.BoolFlag{Name: skipImageScanFlag, Usage: "Skip sending images to image scan service.\nIf pre-build validation is skipped, image scanning also gets skipped", Value: false},
+				&cli.StringFlag{Name: pathFlag, Usage: "Path to the hashrelease to publish", Required: true},
 			},
 			Before: func(c *cli.Context) error {
 				configureLogging("hashrelease-publish.log")
@@ -143,7 +148,7 @@ func hashrelaseSubCommands(cfg *config.Config, runner *registry.DockerRunner) []
 					tasks.HashreleaseValidate(cfg, c.Bool(skipImageScanFlag))
 				}
 				tasks.OperatorHashreleasePush(runner, cfg)
-				tasks.HashreleasePush(cfg)
+				tasks.HashreleasePush(cfg, c.String(pathFlag))
 				return nil
 			},
 		},
@@ -170,13 +175,22 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 			Usage: "Build an official Calico release",
 			Flags: []cli.Flag{
 				&cli.BoolFlag{Name: "skip-validation", Usage: "Skip pre-build validation", Value: false},
+				&cli.StringFlag{Name: "operator-version", Usage: "The version of the operator to use", Required: true},
 			},
 			Action: func(c *cli.Context) error {
 				configureLogging("release-build.log")
 
+				// Determine the versions to use for the release.
+				ver, err := determineReleaseVersion()
+				if err != nil {
+					return err
+				}
+				operatorVer := c.String("operator-version")
+
 				// Configure the builder based on CLI flags.
 				opts := []builder.Option{
 					builder.WithRepoRoot(cfg.RepoRootDir),
+					builder.WithVersions(ver, operatorVer),
 				}
 				if !c.Bool("skip-validation") {
 					opts = append(opts, builder.WithPreReleaseValidation(false))
@@ -196,5 +210,37 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 				return r.PublishRelease()
 			},
 		},
+	}
+}
+
+// determineReleaseVersion uses historical clues to figure out the next semver
+// release number to use for this release.
+func determineReleaseVersion() (string, error) {
+	r := &builder.RealCommandRunner{}
+	args := []string{"describe", "--tags", "--dirty", "--always", "--abbrev=12"}
+	previousTag, err := r.Run("git", args, nil)
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to git describe")
+	}
+	logrus.WithField("out", previousTag).Info("Current git describe")
+
+	// There are two types of tag that this might be - either it was a previous patch release,
+	// or it was a "vX.Y.Z-0.dev" tag produced when cutting the release branch.
+	if strings.Contains(previousTag, "-0.dev") {
+		// This is the first release from this branch - we can simply extract the version from
+		// the dev tag.
+		return strings.Split(previousTag, "-0.dev")[0], nil
+	} else {
+		// This is a patch release - we need to parse the previous, and
+		// bump the patch version.
+		previousVersion := strings.Split(previousTag, "-")[0]
+		logrus.WithField("previousVersion", previousVersion).Info("Previous version")
+		v, err := semver.NewVersion(strings.TrimPrefix(previousVersion, "v"))
+		if err != nil {
+			logrus.WithField("previousVersion", previousVersion).WithError(err).Error("Failed to parse git version as semver")
+			return "", fmt.Errorf("failed to parse git version as semver: %s", err)
+		}
+		v.BumpPatch()
+		return fmt.Sprintf("v%s", v.String()), nil
 	}
 }
