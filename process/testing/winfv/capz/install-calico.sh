@@ -67,8 +67,7 @@ if [ ${PRODUCT} == 'calient' ]; then
     ${KCAPZ} create -f ./EE/persistent-volume.yaml
 fi
 # Install Calico on Linux nodes
-curl -sSf -L --retry 5 ${RELEASE_BASE_URL}/manifests/tigera-operator.yaml -o tigera-operator.yaml
-${KCAPZ} create -f ./tigera-operator.yaml
+${KCAPZ} create -f ../../../../manifests/tigera-operator.yaml
 if [[ ${PRODUCT} == 'calient' ]]; then
     # Install prometheus operator
     curl -sSf -L --retry 5 ${RELEASE_BASE_URL}/manifests/tigera-prometheus-operator.yaml -o tigera-prometheus-operator.yaml
