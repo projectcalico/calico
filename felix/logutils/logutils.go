@@ -140,11 +140,6 @@ func ConfigureLogging(configParams *config.Config) {
 	// hook above to fan out logs to multiple destinations.
 	log.SetOutput(&logutils.NullWriter{})
 
-	// Since we push our logs onto a second thread via a channel, we can disable the
-	// Logger's built-in mutex completely.
-	// FIXME: disabled due to causing a race in felix's set-up.
-	//log.StandardLogger().SetNoLock()
-
 	// Do any deferred error logging.
 	if fileDirErr != nil {
 		log.WithError(fileDirErr).WithField("file", configParams.LogFilePath).
