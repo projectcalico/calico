@@ -39,7 +39,9 @@ func main() {
 	// The ConsistentListFromCache feature gate requires our resourceStore
 	// to support method RequestWatchProgress, which it does not.  Force-disable
 	// the gate.
-	err := feature.DefaultMutableFeatureGate.SetFromMap(map[string]bool{string(features.ConsistentListFromCache): false})
+	err := feature.DefaultMutableFeatureGate.SetFromMap(map[string]bool{
+		string(features.ConsistentListFromCache): false,
+	})
 	if err != nil {
 		klog.Errorf("Error setting feature gates: %v.", err)
 		logs.FlushLogs()
