@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2023 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@ import (
 	"strings"
 
 	log "github.com/sirupsen/logrus"
+	"github.com/vishvananda/netlink"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
@@ -151,6 +152,7 @@ type endpointManager struct {
 	activeUpIfaces                   set.Set[string]
 	activeWlIDToChains               map[proto.WorkloadEndpointID][]*generictables.Chain
 	activeWlDispatchChains           map[string]*generictables.Chain
+	activeWlRPFDispatchChains        map[string]*generictables.Chain
 	activeEPMarkDispatchChains       map[string]*generictables.Chain
 	ifaceNameToPolicyGroupChainNames map[string][]string /*chain name*/
 
@@ -199,6 +201,10 @@ type endpointManager struct {
 	// activeIfaceNameToHostEpID records which endpoint we resolved each host interface to.
 	activeIfaceNameToHostEpID map[string]proto.HostEndpointID
 	newIfaceNameToHostEpID    map[string]proto.HostEndpointID
+	// tcpStatsProgramAttached holds the list of workloads with tcp stats bpf program attached.
+	tcpStatsProgramAttached map[string]struct{}
+	// Interfaces to which we've added a host-side address, for egress IP function to work.
+	egressGatewayAddressAdded map[string]netlink.Addr
 
 	needToCheckDispatchChains     bool
 	needToCheckEndpointMarkChains bool
@@ -208,6 +214,9 @@ type endpointManager struct {
 	callbacks              endpointManagerCallbacks
 	bpfEnabled             bool
 	bpfEndpointManager     hepListener
+	nlHandle               netlinkHandle
+	tcpStatsEnabled        bool
+	bpfLogLevel            string
 }
 
 type EndpointStatusUpdateCallback func(ipVersion uint8, id interface{}, status string)
@@ -229,9 +238,12 @@ func newEndpointManager(
 	bpfEnabled bool,
 	bpfEndpointManager hepListener,
 	callbacks *common.Callbacks,
+	bpfLogLevel string,
 	floatingIPsEnabled bool,
 	nft bool,
 ) *endpointManager {
+	nlHandle, _ := netlink.NewHandle()
+
 	return newEndpointManagerWithShims(
 		rawTable,
 		mangleTable,
@@ -249,6 +261,8 @@ func newEndpointManager(
 		bpfEnabled,
 		bpfEndpointManager,
 		callbacks,
+		nlHandle,
+		bpfLogLevel,
 		floatingIPsEnabled,
 		nft,
 	)
@@ -271,6 +285,8 @@ func newEndpointManagerWithShims(
 	bpfEnabled bool,
 	bpfEndpointManager hepListener,
 	callbacks *common.Callbacks,
+	nlHandle netlinkHandle,
+	bpfLogLevel string,
 	floatingIPsEnabled bool,
 	nft bool,
 ) *endpointManager {
@@ -334,6 +350,10 @@ func newEndpointManagerWithShims(
 		rawHostEndpoints:   map[proto.HostEndpointID]*proto.HostEndpoint{},
 		hostEndpointsDirty: true,
 
+		egressGatewayAddressAdded: map[string]netlink.Addr{},
+
+		tcpStatsProgramAttached: map[string]struct{}{},
+
 		activeHostIfaceToRawChains:           map[string][]*generictables.Chain{},
 		activeHostIfaceToFiltChains:          map[string][]*generictables.Chain{},
 		activeHostIfaceToMangleIngressChains: map[string][]*generictables.Chain{},
@@ -342,6 +362,7 @@ func newEndpointManagerWithShims(
 		// Caches of the current dispatch chains indexed by chain name.  We use these to
 		// calculate deltas when we need to update the chains.
 		activeWlDispatchChains:         map[string]*generictables.Chain{},
+		activeWlRPFDispatchChains:      map[string]*generictables.Chain{},
 		activeHostFilterDispatchChains: map[string]*generictables.Chain{},
 		activeHostMangleDispatchChains: map[string]*generictables.Chain{},
 		activeHostRawDispatchChains:    map[string]*generictables.Chain{},
@@ -351,6 +372,8 @@ func newEndpointManagerWithShims(
 
 		OnEndpointStatusUpdate: onWorkloadEndpointStatusUpdate,
 		callbacks:              newEndpointManagerCallbacks(callbacks, ipVersion),
+		nlHandle:               nlHandle,
+		bpfLogLevel:            bpfLogLevel,
 	}
 }
 
@@ -378,6 +401,14 @@ func (m *endpointManager) OnUpdate(protoBufMsg interface{}) {
 		m.pendingIfaceUpdates[msg.Name] = msg.State
 	case *ifaceAddrsUpdate:
 		log.WithField("update", msg).Debug("Interface addrs changed.")
+		// If we added an address to this interface for egress gateway function, check if it
+		// is still there, and update our tracking if not, so that we don't try to remove it
+		// again later.  This is part of the normal endpoint deletion process.
+		egressAddr := m.egressGatewayAddressAdded[msg.Name]
+		if egressAddr.IPNet != nil && !msg.Addrs.Contains(egressAddr.IP.String()) {
+			log.Debug("Egress gateway address has disappeared")
+			delete(m.egressGatewayAddressAdded, msg.Name)
+		}
 		if m.wlIfacesRegexp.MatchString(msg.Name) {
 			log.WithField("update", msg).Debug("Workload interface, ignoring.")
 			return
@@ -727,14 +758,9 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 					m.wlIfaceNamesToReconfigure.Discard(oldWorkload.Name)
 					delete(m.activeWlIfaceNameToID, oldWorkload.Name)
 				}
-				var ingressPolicyNames, egressPolicyNames []string
-				if len(workload.Tiers) > 0 {
-					ingressPolicyNames = workload.Tiers[0].IngressPolicies
-					egressPolicyNames = workload.Tiers[0].EgressPolicies
-				}
 				adminUp := workload.State == "active"
 				if !m.bpfEnabled {
-					m.updateWorkloadEndpointChains(id, workload, ingressPolicyNames, egressPolicyNames, adminUp)
+					m.updateWorkloadEndpointChains(id, workload, adminUp)
 
 					if len(workload.AllowSpoofedSourcePrefixes) > 0 && !m.hasSourceSpoofingConfiguration(workload.Name) {
 						logCxt.Infof("Disabling RPF check for workload %s", workload.Name)
@@ -825,6 +851,9 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 						m.pendingWlEpUpdates[bestShadowedId] = m.shadowedWlEndpoints[bestShadowedId]
 						delete(m.shadowedWlEndpoints, bestShadowedId)
 					}
+					if m.tcpStatsEnabled {
+						delete(m.tcpStatsProgramAttached, oldWorkload.Name)
+					}
 				}
 			}
 
@@ -861,24 +890,46 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 func (m *endpointManager) updateWorkloadEndpointChains(
 	id proto.WorkloadEndpointID,
 	workload *proto.WorkloadEndpoint,
-	ingressPolicyNames []string,
-	egressPolicyNames []string,
 	adminUp bool,
 ) {
-	ingressGroups := m.groupPolicies("default", ingressPolicyNames, rules.PolicyDirectionInbound)
-	egressGroups := m.groupPolicies("default", egressPolicyNames, rules.PolicyDirectionOutbound)
-	m.updatePolicyGroups(workload.Name, append(ingressGroups, egressGroups...))
+	tierGroups := m.groupTieredPolicy(workload.Tiers, includeInbound|includeOutbound)
+	m.updatePolicyGroups(workload.Name, tierGroups)
 
 	chains := m.ruleRenderer.WorkloadEndpointToIptablesChains(
 		workload.Name,
 		m.epMarkMapper,
 		adminUp,
-		ingressGroups,
-		egressGroups,
+		tierGroups,
 		workload.ProfileIds,
 	)
 	m.filterTable.UpdateChains(chains)
 	m.activeWlIDToChains[id] = chains
+}
+
+type tierGroupFilter int
+
+const (
+	includeInbound tierGroupFilter = 1 << iota
+	includeOutbound
+)
+
+func (m *endpointManager) groupTieredPolicy(tieredPolicies []*proto.TierInfo, filter tierGroupFilter) []rules.TierPolicyGroups {
+	var tierPolGroups []rules.TierPolicyGroups
+	for _, tierInfo := range tieredPolicies {
+		var inPols, outPols []*rules.PolicyGroup
+		if filter&includeInbound != 0 {
+			inPols = m.groupPolicies(tierInfo.Name, tierInfo.IngressPolicies, rules.PolicyDirectionInbound)
+		}
+		if filter&includeOutbound != 0 {
+			outPols = m.groupPolicies(tierInfo.Name, tierInfo.EgressPolicies, rules.PolicyDirectionOutbound)
+		}
+		tierPolGroups = append(tierPolGroups, rules.TierPolicyGroups{
+			Name:            tierInfo.Name,
+			IngressPolicies: inPols,
+			EgressPolicies:  outPols,
+		})
+	}
+	return tierPolGroups
 }
 
 func wlIdsAscending(id1, id2 *proto.WorkloadEndpointID) bool {
@@ -1101,8 +1152,8 @@ func (m *endpointManager) updateHostEndpoints() {
 		}
 	}
 
-	ifaceNameToPolicyGroups := map[string][]*rules.PolicyGroup{}
-	addPolicyGroups := func(ifaceName string, pgs []*rules.PolicyGroup) {
+	ifaceNameToPolicyGroups := map[string][]rules.TierPolicyGroups{}
+	addPolicyGroups := func(ifaceName string, pgs []rules.TierPolicyGroups) {
 		ifaceNameToPolicyGroups[ifaceName] = append(ifaceNameToPolicyGroups[ifaceName], pgs...)
 	}
 
@@ -1115,33 +1166,16 @@ func (m *endpointManager) updateHostEndpoints() {
 			hostEp := m.rawHostEndpoints[id]
 
 			// Update chains in the filter and mangle tables, for normal traffic.
-			var ingressPolicyNames, egressPolicyNames []string
-			var ingressForwardPolicyNames, egressForwardPolicyNames []string
-			if len(hostEp.Tiers) > 0 {
-				ingressPolicyNames = hostEp.Tiers[0].IngressPolicies
-				egressPolicyNames = hostEp.Tiers[0].EgressPolicies
-			}
-			if len(hostEp.ForwardTiers) > 0 {
-				ingressForwardPolicyNames = hostEp.ForwardTiers[0].IngressPolicies
-				egressForwardPolicyNames = hostEp.ForwardTiers[0].EgressPolicies
-			}
-
-			ingressGroups := m.groupPolicies("default", ingressPolicyNames, rules.PolicyDirectionInbound)
-			addPolicyGroups(ifaceName, ingressGroups)
-			egressGroups := m.groupPolicies("default", egressPolicyNames, rules.PolicyDirectionOutbound)
-			addPolicyGroups(ifaceName, egressGroups)
-			ingressForwardGroups := m.groupPolicies("default", ingressForwardPolicyNames, rules.PolicyDirectionInbound)
-			addPolicyGroups(ifaceName, ingressForwardGroups)
-			egressForwardGroups := m.groupPolicies("default", egressForwardPolicyNames, rules.PolicyDirectionOutbound)
-			addPolicyGroups(ifaceName, egressForwardGroups)
+			normalTierGroups := m.groupTieredPolicy(hostEp.Tiers, includeInbound|includeOutbound)
+			addPolicyGroups(ifaceName, normalTierGroups)
+			forwardTierGroups := m.groupTieredPolicy(hostEp.ForwardTiers, includeInbound|includeOutbound)
+			addPolicyGroups(ifaceName, forwardTierGroups)
 
 			filtChains := m.ruleRenderer.HostEndpointToFilterChains(
 				ifaceName,
+				normalTierGroups,
+				forwardTierGroups,
 				m.epMarkMapper,
-				ingressGroups,
-				egressGroups,
-				ingressForwardGroups,
-				egressForwardGroups,
 				hostEp.ProfileIds,
 			)
 
@@ -1153,7 +1187,7 @@ func (m *endpointManager) updateHostEndpoints() {
 
 			mangleChains := m.ruleRenderer.HostEndpointToMangleEgressChains(
 				ifaceName,
-				egressGroups,
+				normalTierGroups,
 				hostEp.ProfileIds,
 			)
 			if !reflect.DeepEqual(mangleChains, m.activeHostIfaceToMangleEgressChains[ifaceName]) {
@@ -1170,15 +1204,11 @@ func (m *endpointManager) updateHostEndpoints() {
 			hostEp := m.rawHostEndpoints[id]
 
 			// Update the mangle table for preDNAT policy.
-			var ingressPolicyNames []string
-			if len(hostEp.PreDnatTiers) > 0 {
-				ingressPolicyNames = hostEp.PreDnatTiers[0].IngressPolicies
-			}
-			ingressGroups := m.groupPolicies("default", ingressPolicyNames, rules.PolicyDirectionInbound)
-			addPolicyGroups(ifaceName, ingressGroups)
+			preDNATTierGroups := m.groupTieredPolicy(hostEp.PreDnatTiers, includeInbound)
+			addPolicyGroups(ifaceName, preDNATTierGroups)
 			mangleChains := m.ruleRenderer.HostEndpointToMangleIngressChains(
 				ifaceName,
-				ingressGroups,
+				preDNATTierGroups,
 			)
 			if !reflect.DeepEqual(mangleChains, m.activeHostIfaceToMangleIngressChains[ifaceName]) {
 				m.mangleTable.UpdateChains(mangleChains)
@@ -1219,30 +1249,22 @@ func (m *endpointManager) updateHostEndpoints() {
 		hostEp := m.rawHostEndpoints[id]
 
 		// Update the raw chain, for untracked traffic.
-		var ingressPolicyNames, egressPolicyNames []string
-		if len(hostEp.UntrackedTiers) > 0 {
-			ingressPolicyNames = hostEp.UntrackedTiers[0].IngressPolicies
-			egressPolicyNames = hostEp.UntrackedTiers[0].EgressPolicies
-		}
 		var rawChains []*generictables.Chain
 		if m.bpfEnabled {
-			egressGroups := m.groupPolicies("default", egressPolicyNames, rules.PolicyDirectionOutbound)
-			addPolicyGroups(ifaceName, egressGroups)
+			untrackedTierGroups := m.groupTieredPolicy(hostEp.UntrackedTiers, includeOutbound)
+			addPolicyGroups(ifaceName, untrackedTierGroups)
 
 			rawChains = append(rawChains, m.ruleRenderer.HostEndpointToRawEgressChain(
 				ifaceName,
-				egressGroups,
+				untrackedTierGroups,
 			))
 		} else {
-			ingressGroups := m.groupPolicies("default", ingressPolicyNames, rules.PolicyDirectionInbound)
-			addPolicyGroups(ifaceName, ingressGroups)
-			egressGroups := m.groupPolicies("default", egressPolicyNames, rules.PolicyDirectionOutbound)
-			addPolicyGroups(ifaceName, egressGroups)
+			untrackedTierGroups := m.groupTieredPolicy(hostEp.UntrackedTiers, includeInbound|includeOutbound)
+			addPolicyGroups(ifaceName, untrackedTierGroups)
 
 			rawChains = m.ruleRenderer.HostEndpointToRawChains(
 				ifaceName,
-				ingressGroups,
-				egressGroups,
+				untrackedTierGroups,
 			)
 		}
 		if !reflect.DeepEqual(rawChains, m.activeHostIfaceToRawChains[ifaceName]) {
@@ -1375,6 +1397,7 @@ func (m *endpointManager) interfaceExistsInProcSys(name string) (bool, error) {
 func configureInterface(name string, ipVersion int, rpFilter string, writeProcSys procSysWriter) error {
 	log.WithField("ifaceName", name).Info(
 		"Applying /proc/sys configuration to interface.")
+
 	if ipVersion == 4 {
 		// Enable routing to localhost.  This is required to allow for NAT to the local
 		// host.
@@ -1530,6 +1553,13 @@ func (m *endpointManager) groupPolicies(tierName string, names []string, directi
 	return groups
 }
 
+func (m *endpointManager) increfTierGroups(tierGroups []rules.TierPolicyGroups) {
+	for _, tg := range tierGroups {
+		m.increfGroups(tg.IngressPolicies)
+		m.increfGroups(tg.EgressPolicies)
+	}
+}
+
 func (m *endpointManager) increfGroups(groups []*rules.PolicyGroup) {
 	for _, group := range groups {
 		if group.ShouldBeInlined() {
@@ -1566,22 +1596,27 @@ func (m *endpointManager) decrefGroups(chainNames []string) {
 	}
 }
 
-func (m *endpointManager) updatePolicyGroups(ifaceName string, allGroups []*rules.PolicyGroup) {
+func (m *endpointManager) updatePolicyGroups(ifaceName string, allGroups []rules.TierPolicyGroups) {
 	log.WithFields(log.Fields{
 		"ifaceName": ifaceName,
-		"groups":    rules.PolicyGroupSliceStringer(allGroups),
+		"groups":    rules.TierPolicyGroupsStringer(allGroups),
 	}).Debug("Updating policy groups for iface")
 	oldChainNames := m.ifaceNameToPolicyGroupChainNames[ifaceName]
 
 	// Incref first to avoid flapping.
-	m.increfGroups(allGroups)
+	m.increfTierGroups(allGroups)
 	m.decrefGroups(oldChainNames)
 
-	if len(allGroups) > 0 {
-		newChainNames := make([]string, len(allGroups))
-		for i, g := range allGroups {
-			newChainNames[i] = g.ChainName()
+	var newChainNames []string
+	for _, tg := range allGroups {
+		for _, groups := range [][]*rules.PolicyGroup{tg.IngressPolicies, tg.EgressPolicies} {
+			for _, group := range groups {
+				newChainNames = append(newChainNames, group.ChainName())
+			}
 		}
+	}
+
+	if len(newChainNames) > 0 {
 		m.ifaceNameToPolicyGroupChainNames[ifaceName] = newChainNames
 	} else {
 		delete(m.ifaceNameToPolicyGroupChainNames, ifaceName)
