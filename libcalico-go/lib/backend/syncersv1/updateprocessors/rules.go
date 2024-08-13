@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,14 +29,14 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/selector/parser"
 )
 
-func RulesAPIV2ToBackend(ars []apiv3.Rule, ns string) []model.Rule {
+func RulesAPIV3ToBackend(ars []apiv3.Rule, ns string) []model.Rule {
 	if len(ars) == 0 {
 		return nil
 	}
 
 	brs := make([]model.Rule, len(ars))
 	for idx, ar := range ars {
-		brs[idx] = RuleAPIV2ToBackend(ar, ns)
+		brs[idx] = RuleAPIV3ToBackend(ar, ns)
 	}
 	return brs
 }
@@ -127,7 +127,7 @@ func getEndpointSelector(namespaceSelector, endpointSelector, serviceAccountSele
 }
 
 // RuleAPIToBackend converts an API Rule structure to a Backend Rule structure.
-func RuleAPIV2ToBackend(ar apiv3.Rule, ns string) model.Rule {
+func RuleAPIV3ToBackend(ar apiv3.Rule, ns string) model.Rule {
 	var icmpCode, icmpType, notICMPCode, notICMPType *int
 	if ar.ICMP != nil {
 		icmpCode = ar.ICMP.Code
@@ -163,7 +163,7 @@ func RuleAPIV2ToBackend(ar apiv3.Rule, ns string) model.Rule {
 	}
 
 	r := model.Rule{
-		Action:      ruleActionAPIV2ToBackend(ar.Action),
+		Action:      ruleActionAPIV3ToBackend(ar.Action),
 		IPVersion:   ar.IPVersion,
 		Protocol:    convertV3ProtocolToV1(ar.Protocol),
 		ICMPCode:    icmpCode,
@@ -284,9 +284,9 @@ func NormalizeIPNets(nets []string) []*cnet.IPNet {
 	return out
 }
 
-// ruleActionAPIV2ToBackend converts the rule action field value from the API
+// ruleActionAPIV3ToBackend converts the rule action field value from the API
 // value to the equivalent backend value.
-func ruleActionAPIV2ToBackend(action apiv3.Action) string {
+func ruleActionAPIV3ToBackend(action apiv3.Action) string {
 	if action == apiv3.Pass {
 		return "next-tier"
 	}
