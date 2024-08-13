@@ -1319,8 +1319,11 @@ func (m *bpfEndpointManager) markEndpointsDirty(ids set.Set[any], kind string) {
 					}
 				}
 			} else {
-				log.Debugf("Mark host iface dirty, for host %v change", kind)
+				log.Debugf("Mark host iface dirty %v, for host %v change", id, kind)
 				m.dirtyIfaceNames.Add(id)
+				for _, slaveIface := range m.getBondSlaves(id) {
+					m.dirtyIfaceNames.Add(slaveIface)
+				}
 			}
 		}
 		return nil
@@ -3140,6 +3143,9 @@ func (m *bpfEndpointManager) OnHEPUpdate(hostIfaceToEpMap map[string]proto.HostE
 				delete(m.hostIfaceToEpMap, ifaceName)
 			}
 			m.dirtyIfaceNames.Add(ifaceName)
+			for _, slaveIface := range m.getBondSlaves(ifaceName) {
+				m.dirtyIfaceNames.Add(slaveIface)
+			}
 		}
 		delete(hostIfaceToEpMap, ifaceName)
 	}
@@ -3154,6 +3160,10 @@ func (m *bpfEndpointManager) OnHEPUpdate(hostIfaceToEpMap map[string]proto.HostE
 		m.addHEPToIndexes(ifaceName, &newEp)
 		m.hostIfaceToEpMap[ifaceName] = newEp
 		m.dirtyIfaceNames.Add(ifaceName)
+		for _, slaveIface := range m.getBondSlaves(ifaceName) {
+			m.dirtyIfaceNames.Add(slaveIface)
+		}
+
 	}
 }
 
@@ -4134,6 +4144,25 @@ func (m *bpfEndpointManager) getIfaceTypeFromLink(link netlink.Link) IfaceType {
 		}
 	}
 	return IfaceTypeData
+}
+
+func (m *bpfEndpointManager) getBondSlaves(masterIfName string) []string {
+	m.ifacesLock.Lock()
+	val, ok := m.nameToIface[masterIfName]
+	m.ifacesLock.Unlock()
+
+	if !ok || val.info.ifaceType != IfaceTypeBond {
+		return []string{}
+	}
+
+	masterIfIndex := val.info.ifIndex
+	slaveDevices := []string{}
+	for name, iface := range m.nameToIface {
+		if iface.info.masterIfIndex == masterIfIndex {
+			slaveDevices = append(slaveDevices, name)
+		}
+	}
+	return slaveDevices
 }
 
 func newJumpMapAlloc(entryPoints int) *jumpMapAlloc {
