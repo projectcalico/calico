@@ -51,7 +51,7 @@ var (
 	// v3Dot14Dot0 added the random-fully feature on the iptables interface.
 	v3Dot14Dot0 = MustParseVersion("3.14.0")
 	// v5Dot7Dot0 contains a fix for checksum offloading.
-	v5Dot7Dot0 = MustParseVersion("5.7.0")
+	//v5Dot7Dot0 = MustParseVersion("5.7.0")
 	// v5Dot14Dot0 is the fist kernel version that IPIP tunnels acts like other L3
 	// devices where bpf programs only see inner IP header. In RHEL based distros,
 	// kernel 4.18.0 (v4Dot18Dot0_330) is the first one with this behavior.
