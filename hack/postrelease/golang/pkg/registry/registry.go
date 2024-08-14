@@ -7,7 +7,7 @@ import (
 	"slices"
 	"sync"
 
-	"calico_postrelease/pkg/container"
+	"github.com/projectcalico/calico/hack/postrelease/golang/pkg/container"
 
 	"github.com/patrickmn/go-cache"
 	"github.com/regclient/regclient"
