@@ -24,7 +24,6 @@ import (
 	"strings"
 
 	log "github.com/sirupsen/logrus"
-	"github.com/vishvananda/netlink"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
@@ -152,7 +151,6 @@ type endpointManager struct {
 	activeUpIfaces                   set.Set[string]
 	activeWlIDToChains               map[proto.WorkloadEndpointID][]*generictables.Chain
 	activeWlDispatchChains           map[string]*generictables.Chain
-	activeWlRPFDispatchChains        map[string]*generictables.Chain
 	activeEPMarkDispatchChains       map[string]*generictables.Chain
 	ifaceNameToPolicyGroupChainNames map[string][]string /*chain name*/
 
@@ -201,10 +199,6 @@ type endpointManager struct {
 	// activeIfaceNameToHostEpID records which endpoint we resolved each host interface to.
 	activeIfaceNameToHostEpID map[string]proto.HostEndpointID
 	newIfaceNameToHostEpID    map[string]proto.HostEndpointID
-	// tcpStatsProgramAttached holds the list of workloads with tcp stats bpf program attached.
-	tcpStatsProgramAttached map[string]struct{}
-	// Interfaces to which we've added a host-side address, for egress IP function to work.
-	egressGatewayAddressAdded map[string]netlink.Addr
 
 	needToCheckDispatchChains     bool
 	needToCheckEndpointMarkChains bool
@@ -214,8 +208,6 @@ type endpointManager struct {
 	callbacks              endpointManagerCallbacks
 	bpfEnabled             bool
 	bpfEndpointManager     hepListener
-	nlHandle               netlinkHandle
-	tcpStatsEnabled        bool
 	bpfLogLevel            string
 }
 
@@ -242,8 +234,6 @@ func newEndpointManager(
 	floatingIPsEnabled bool,
 	nft bool,
 ) *endpointManager {
-	nlHandle, _ := netlink.NewHandle()
-
 	return newEndpointManagerWithShims(
 		rawTable,
 		mangleTable,
@@ -261,7 +251,6 @@ func newEndpointManager(
 		bpfEnabled,
 		bpfEndpointManager,
 		callbacks,
-		nlHandle,
 		bpfLogLevel,
 		floatingIPsEnabled,
 		nft,
@@ -285,7 +274,6 @@ func newEndpointManagerWithShims(
 	bpfEnabled bool,
 	bpfEndpointManager hepListener,
 	callbacks *common.Callbacks,
-	nlHandle netlinkHandle,
 	bpfLogLevel string,
 	floatingIPsEnabled bool,
 	nft bool,
@@ -350,10 +338,6 @@ func newEndpointManagerWithShims(
 		rawHostEndpoints:   map[proto.HostEndpointID]*proto.HostEndpoint{},
 		hostEndpointsDirty: true,
 
-		egressGatewayAddressAdded: map[string]netlink.Addr{},
-
-		tcpStatsProgramAttached: map[string]struct{}{},
-
 		activeHostIfaceToRawChains:           map[string][]*generictables.Chain{},
 		activeHostIfaceToFiltChains:          map[string][]*generictables.Chain{},
 		activeHostIfaceToMangleIngressChains: map[string][]*generictables.Chain{},
@@ -362,7 +346,6 @@ func newEndpointManagerWithShims(
 		// Caches of the current dispatch chains indexed by chain name.  We use these to
 		// calculate deltas when we need to update the chains.
 		activeWlDispatchChains:         map[string]*generictables.Chain{},
-		activeWlRPFDispatchChains:      map[string]*generictables.Chain{},
 		activeHostFilterDispatchChains: map[string]*generictables.Chain{},
 		activeHostMangleDispatchChains: map[string]*generictables.Chain{},
 		activeHostRawDispatchChains:    map[string]*generictables.Chain{},
@@ -372,7 +355,6 @@ func newEndpointManagerWithShims(
 
 		OnEndpointStatusUpdate: onWorkloadEndpointStatusUpdate,
 		callbacks:              newEndpointManagerCallbacks(callbacks, ipVersion),
-		nlHandle:               nlHandle,
 		bpfLogLevel:            bpfLogLevel,
 	}
 }
@@ -401,14 +383,6 @@ func (m *endpointManager) OnUpdate(protoBufMsg interface{}) {
 		m.pendingIfaceUpdates[msg.Name] = msg.State
 	case *ifaceAddrsUpdate:
 		log.WithField("update", msg).Debug("Interface addrs changed.")
-		// If we added an address to this interface for egress gateway function, check if it
-		// is still there, and update our tracking if not, so that we don't try to remove it
-		// again later.  This is part of the normal endpoint deletion process.
-		egressAddr := m.egressGatewayAddressAdded[msg.Name]
-		if egressAddr.IPNet != nil && !msg.Addrs.Contains(egressAddr.IP.String()) {
-			log.Debug("Egress gateway address has disappeared")
-			delete(m.egressGatewayAddressAdded, msg.Name)
-		}
 		if m.wlIfacesRegexp.MatchString(msg.Name) {
 			log.WithField("update", msg).Debug("Workload interface, ignoring.")
 			return
@@ -850,9 +824,6 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 					if bestShadowedId.EndpointId != "" {
 						m.pendingWlEpUpdates[bestShadowedId] = m.shadowedWlEndpoints[bestShadowedId]
 						delete(m.shadowedWlEndpoints, bestShadowedId)
-					}
-					if m.tcpStatsEnabled {
-						delete(m.tcpStatsProgramAttached, oldWorkload.Name)
 					}
 				}
 			}

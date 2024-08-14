@@ -90,7 +90,7 @@ func (gc GlobalNetworkPolicyConverter) convertToAAPI(libcalicoObject resourceObj
 	lcgGlobalNetworkPolicy := libcalicoObject.(*api.GlobalNetworkPolicy)
 	aapiGlobalNetworkPolicy := aapiObj.(*aapi.GlobalNetworkPolicy)
 	aapiGlobalNetworkPolicy.Spec = lcgGlobalNetworkPolicy.Spec
-	// Tier field maybe left blank when policy created vi OS libcalico.
+	// Tier field maybe left blank when policy created via OSS libcalico.
 	// Initialize it to default in that case to make work with field selector.
 	if aapiGlobalNetworkPolicy.Spec.Tier == "" {
 		aapiGlobalNetworkPolicy.Spec.Tier = "default"

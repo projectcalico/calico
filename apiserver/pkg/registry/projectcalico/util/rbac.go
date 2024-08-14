@@ -20,8 +20,7 @@ import (
 )
 
 const (
-	policyDelim     = "."
-	uiSettingsDelim = "."
+	policyDelim = "."
 )
 
 // EnsureTierSelector parses the given options and ensures the correct tier selector is set.

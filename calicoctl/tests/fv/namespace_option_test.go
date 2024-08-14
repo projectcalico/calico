@@ -57,13 +57,6 @@ func TestMultiOption(t *testing.T) {
 		Expect(err).NotTo(HaveOccurred())
 	}()
 
-	// Create the default tier.
-	/*dt := v3.NewTier()
-	dt.Name = "default"
-	_, err = client.Tiers().Create(ctx, dt, options.SetOptions{})
-	Expect(err).NotTo(HaveOccurred())*/
-	// Default tier cannot be deleted so skip the cleanup step.
-
 	np := v3.NewNetworkPolicy()
 	np.Name = "policy1"
 	np.Namespace = "firstns"

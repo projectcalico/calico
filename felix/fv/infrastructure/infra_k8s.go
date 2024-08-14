@@ -100,15 +100,14 @@ var (
 		Transport: insecureTransport,
 	}
 
-	// Support two infrastructures for local <> remote tests. Indexed by K8sInfraIndex.
-	K8sInfra [2]*K8sDatastoreInfra
+	// Currently only require a single instance.
+	K8sInfra [1]*K8sDatastoreInfra
 )
 
 type K8sInfraIndex int
 
 const (
-	K8SInfraLocalCluster  K8sInfraIndex = 0
-	K8sInfraRemoteCluster K8sInfraIndex = 1
+	K8SInfraLocalCluster K8sInfraIndex = 0
 )
 
 func TearDownK8sInfra(kds *K8sDatastoreInfra) {

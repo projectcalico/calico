@@ -32,7 +32,6 @@ import (
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/iptables"
-	mocknetlink "github.com/projectcalico/calico/felix/netlinkshim/mocknetlink"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/rules"
@@ -718,7 +717,6 @@ func endpointManagerTests(ipVersion uint8) func() {
 			routeTable      *mockRouteTable
 			mockProcSys     *testProcSys
 			statusReportRec *statusReportRecorder
-			nlDataplane     *mocknetlink.MockNetlinkDataplane
 			hepListener     *testHEPListener
 		)
 
@@ -760,9 +758,6 @@ func endpointManagerTests(ipVersion uint8) func() {
 			}
 			mockProcSys = &testProcSys{state: map[string]string{}, pathsThatExist: map[string]bool{}}
 			statusReportRec = &statusReportRecorder{currentState: map[interface{}]string{}}
-			nlDataplane = mocknetlink.New()
-			nlHandle, err := nlDataplane.NewMockNetlink()
-			Expect(err).NotTo(HaveOccurred())
 			hepListener = &testHEPListener{}
 			epMgr = newEndpointManagerWithShims(
 				rawTable,
@@ -781,7 +776,6 @@ func endpointManagerTests(ipVersion uint8) func() {
 				false,
 				hepListener,
 				common.NewCallbacks(),
-				nlHandle,
 				"info",
 				true,
 				false,

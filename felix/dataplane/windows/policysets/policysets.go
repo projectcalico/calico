@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -174,10 +174,6 @@ func (s *PolicySets) GetPolicySetRules(setIds []string, isInbound bool) (rules [
 	// Apply a default block rule for this direction at the end of the policy
 	currentPriority++
 	rules = append(rules, s.NewRule(isInbound, currentPriority))
-
-	// Finally, for RS3 only, add default allow rule with a host-scope to allow traffic through
-	// the host windows firewall
-	//rules = append(rules, s.NewHostRule(isInbound))
 
 	return
 }

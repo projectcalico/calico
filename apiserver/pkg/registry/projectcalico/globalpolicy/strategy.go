@@ -50,6 +50,7 @@ func (policyStrategy) PrepareForUpdate(ctx context.Context, obj, old runtime.Obj
 
 func (policyStrategy) Validate(ctx context.Context, obj runtime.Object) field.ErrorList {
 	return field.ErrorList{}
+	// TODO:
 	// return validation.ValidatePolicy(obj.(*calico.Policy))
 }
 
@@ -74,6 +75,7 @@ func (policyStrategy) Canonicalize(obj runtime.Object) {
 
 func (policyStrategy) ValidateUpdate(ctx context.Context, obj, old runtime.Object) field.ErrorList {
 	return field.ErrorList{}
+	// TODO:
 	// return validation.ValidatePolicyUpdate(obj.(*calico.Policy), old.(*calico.Policy))
 }
 

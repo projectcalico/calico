@@ -458,8 +458,8 @@ func (p RESTStorageProvider) NewV3Storage(
 	)
 
 	storage := map[string]rest.Storage{}
-	storage["networkpolicies"] = rESTInPeace(calicopolicy.NewREST(scheme, *policyOpts, calicoLister))
 	storage["tiers"] = rESTInPeace(calicotier.NewREST(scheme, *tierOpts))
+	storage["networkpolicies"] = rESTInPeace(calicopolicy.NewREST(scheme, *policyOpts, calicoLister))
 	storage["globalnetworkpolicies"] = rESTInPeace(calicogpolicy.NewREST(scheme, *gpolicyOpts, calicoLister))
 	storage["globalnetworksets"] = rESTInPeace(calicognetworkset.NewREST(scheme, *gNetworkSetOpts))
 	storage["networksets"] = rESTInPeace(caliconetworkset.NewREST(scheme, *networksetOpts))
