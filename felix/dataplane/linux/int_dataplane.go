@@ -64,6 +64,7 @@ import (
 	"github.com/projectcalico/calico/felix/jitter"
 	"github.com/projectcalico/calico/felix/labelindex"
 	"github.com/projectcalico/calico/felix/logutils"
+	"github.com/projectcalico/calico/felix/netlinkshim"
 	"github.com/projectcalico/calico/felix/nftables"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routerule"
@@ -1106,9 +1107,16 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 // findHostMTU auto-detects the smallest host interface MTU.
 func findHostMTU(matchRegex *regexp.Regexp) (int, error) {
 	// Find all the interfaces on the host.
-	links, err := netlink.LinkList()
+
+	nlHandle, err := netlinkshim.NewRealNetlink()
 	if err != nil {
-		log.WithError(err).Error("Failed to list interfaces. Unable to auto-detect MTU")
+		log.WithError(err).Error("Failed to create netlink handle. Unable to auto-detect MTU.")
+		return 0, err
+	}
+
+	links, err := nlHandle.LinkList()
+	if err != nil {
+		log.WithError(err).Error("Failed to list interfaces. Unable to auto-detect MTU.")
 		return 0, err
 	}
 
