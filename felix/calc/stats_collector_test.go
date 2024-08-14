@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -61,7 +61,7 @@ var _ = Describe("Stats collector", func() {
 			Expect(lastStatsUpdate).To(BeNil())
 		})
 		It("should do nothing on policy count update", func() {
-			sc.UpdatePolicyCounts(10, 10, 10)
+			sc.UpdatePolicyCounts(5, 10, 10, 10)
 			Expect(lastStatsUpdate).To(BeNil())
 		})
 	})
@@ -96,19 +96,20 @@ var _ = Describe("Stats collector", func() {
 			}))
 		})
 		It("should count a policy", func() {
-			sc.UpdatePolicyCounts(1, 0, 0)
+			sc.UpdatePolicyCounts(1, 1, 0, 0)
 			Expect(*lastStatsUpdate).To(Equal(StatsUpdate{
+				NumTiers:    1,
 				NumPolicies: 1,
 			}))
 		})
 		It("should count a profile", func() {
-			sc.UpdatePolicyCounts(0, 1, 0)
+			sc.UpdatePolicyCounts(0, 0, 1, 0)
 			Expect(*lastStatsUpdate).To(Equal(StatsUpdate{
 				NumProfiles: 1,
 			}))
 		})
 		It("should count a ALP policy", func() {
-			sc.UpdatePolicyCounts(0, 0, 1)
+			sc.UpdatePolicyCounts(0, 0, 0, 1)
 			Expect(*lastStatsUpdate).To(Equal(StatsUpdate{
 				NumALPPolicies: 1,
 			}))

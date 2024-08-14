@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -49,8 +49,6 @@ func TestRuleRenderingWithStaticRules(t *testing.T) {
 			RuleType: hns.Host, Priority: 300, RemoteAddresses: "10.0.0.2/32", RemotePorts: "90"},
 		// Default deny rule.
 		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.In, RuleType: hns.Switch, Priority: 1001},
-		// Default host/pod rule.
-		{Type: hns.ACL, Protocol: 256, Action: hns.Allow, Direction: hns.In, RuleType: hns.Host},
 	}), "unexpected rules returned for unknown policy")
 
 	// Empty policy should return no rules (apart from the default drop).
@@ -65,8 +63,6 @@ func TestRuleRenderingWithStaticRules(t *testing.T) {
 			RuleType: hns.Host, Priority: 300, RemoteAddresses: "10.0.0.2/32", RemotePorts: "90"},
 		// Default deny rule.
 		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.In, RuleType: hns.Switch, Priority: 1001},
-		// Default host/pod rule.
-		{Type: hns.ACL, Protocol: 256, Action: hns.Allow, Direction: hns.In, RuleType: hns.Host},
 	}), "unexpected rules returned for empty policy")
 
 	Expect(ps.GetPolicySetRules([]string{"empty"}, false)).To(Equal([]*hns.ACLPolicy{
@@ -75,8 +71,6 @@ func TestRuleRenderingWithStaticRules(t *testing.T) {
 			RuleType: hns.Switch, Priority: 200, RemoteAddresses: "10.0.0.1/32", RemotePorts: "80"},
 		// Default deny rule.
 		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.Out, RuleType: hns.Switch, Priority: 1001},
-		// Default host/pod rule.
-		{Type: hns.ACL, Protocol: 256, Action: hns.Allow, Direction: hns.Out, RuleType: hns.Host},
 	}), "unexpected rules returned for empty policy")
 
 	// Tests of basic policy matches: CIDRs, protocol, ports.
@@ -150,8 +144,6 @@ func TestRuleRenderingWithStaticRules(t *testing.T) {
 		},
 		// Default deny rule.
 		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.In, RuleType: hns.Switch, Priority: 1002},
-		// Default host/pod rule.
-		{Type: hns.ACL, Protocol: 256, Action: hns.Allow, Direction: hns.In, RuleType: hns.Host},
 	}), "unexpected rules returned for basic policy")
 
 	Expect(ps.GetPolicySetRules([]string{"basic"}, false)).To(Equal([]*hns.ACLPolicy{
@@ -166,8 +158,6 @@ func TestRuleRenderingWithStaticRules(t *testing.T) {
 		},
 		// Default deny rule.
 		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.Out, RuleType: hns.Switch, Priority: 1001},
-		// Default host/pod rule.
-		{Type: hns.ACL, Protocol: 256, Action: hns.Allow, Direction: hns.Out, RuleType: hns.Host},
 	}), "unexpected rules returned for basic policy")
 }
 
@@ -192,8 +182,6 @@ func TestRuleRendering(t *testing.T) {
 	Expect(ps.GetPolicySetRules([]string{"unknown"}, true)).To(Equal([]*hns.ACLPolicy{
 		// Default deny rule.
 		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.In, RuleType: hns.Switch, Priority: 1001},
-		// Default host/pod rule.
-		{Type: hns.ACL, Protocol: 256, Action: hns.Allow, Direction: hns.In, RuleType: hns.Host},
 	}), "unexpected rules returned for unknown policy")
 
 	// Empty policy should return no rules (apart from the default drop).
@@ -205,8 +193,6 @@ func TestRuleRendering(t *testing.T) {
 	Expect(ps.GetPolicySetRules([]string{"empty"}, true)).To(Equal([]*hns.ACLPolicy{
 		// Default deny rule.
 		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.In, RuleType: hns.Switch, Priority: 1001},
-		// Default host/pod rule.
-		{Type: hns.ACL, Protocol: 256, Action: hns.Allow, Direction: hns.In, RuleType: hns.Host},
 	}), "unexpected rules returned for empty policy")
 
 	// Tests of basic policy matches: CIDRs, protocol, ports.
@@ -271,8 +257,6 @@ func TestRuleRendering(t *testing.T) {
 		},
 		// Default deny rule.
 		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.In, RuleType: hns.Switch, Priority: 1002},
-		// Default host/pod rule.
-		{Type: hns.ACL, Protocol: 256, Action: hns.Allow, Direction: hns.In, RuleType: hns.Host},
 	}), "unexpected rules returned for basic policy")
 
 	// Tests for Profile
@@ -285,8 +269,6 @@ func TestRuleRendering(t *testing.T) {
 	Expect(ps.GetPolicySetRules([]string{"empty-profile"}, true)).To(Equal([]*hns.ACLPolicy{
 		// Default deny rule.
 		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.In, RuleType: hns.Switch, Priority: 1001},
-		// Default host/pod rule.
-		{Type: hns.ACL, Protocol: 256, Action: hns.Allow, Direction: hns.In, RuleType: hns.Host},
 	}), "unexpected rules returned for empty profile")
 
 	// Test for Rule with profile
@@ -307,8 +289,6 @@ func TestRuleRendering(t *testing.T) {
 		},
 		// Default deny rule.
 		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.In, RuleType: hns.Switch, Priority: 1001},
-		// Default host/pod rule.
-		{Type: hns.ACL, Protocol: 256, Action: hns.Allow, Direction: hns.In, RuleType: hns.Host},
 	}), "unexpected rules returned for profile")
 
 	//Test with Mixed CIDR to filterout IpV4
@@ -346,8 +326,6 @@ func TestRuleRendering(t *testing.T) {
 	Expect(ps.GetPolicySetRules([]string{"mixed-cidr"}, true)).To(Equal([]*hns.ACLPolicy{
 		// Default deny rule.
 		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.In, RuleType: hns.Switch, Priority: 1001},
-		// Default host/pod rule.
-		{Type: hns.ACL, Protocol: 256, Action: hns.Allow, Direction: hns.In, RuleType: hns.Host},
 	}), "unexpected rules returned for mixed-cidr")
 
 	//Outbound policy with SrcNet
@@ -370,8 +348,6 @@ func TestRuleRendering(t *testing.T) {
 		},
 		// Default deny rule.
 		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.Out, RuleType: hns.Switch, Priority: 1001},
-		// Default host/pod rule.
-		{Type: hns.ACL, Protocol: 256, Action: hns.Allow, Direction: hns.Out, RuleType: hns.Host},
 	}), "unexpected rules returned for outbound policy with SrcNet")
 
 }
@@ -426,8 +402,6 @@ func TestIpPortRuleRendering(t *testing.T) {
 		},
 		// Default deny rule.
 		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.Out, RuleType: hns.Switch, Priority: 1001},
-		// Default host/pod rule.
-		{Type: hns.ACL, Protocol: 256, Action: hns.Allow, Direction: hns.Out, RuleType: hns.Host},
 	}), "unexpected rules returned for IP+port policy")
 }
 
@@ -481,8 +455,6 @@ func TestIpPortRuleRenderingMultiPort(t *testing.T) {
 		},
 		// Default deny rule.
 		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.Out, RuleType: hns.Switch, Priority: 1001},
-		// Default host/pod rule.
-		{Type: hns.ACL, Protocol: 256, Action: hns.Allow, Direction: hns.Out, RuleType: hns.Host},
 	}), "unexpected rules returned for IP+port policy")
 }
 
@@ -518,8 +490,6 @@ func TestIpPortRuleRenderingEmptyIPSet(t *testing.T) {
 	Expect(ps.GetPolicySetRules([]string{"basic"}, false)).To(Equal([]*hns.ACLPolicy{
 		// Default deny rule.
 		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.Out, RuleType: hns.Switch, Priority: 1001},
-		// Default host/pod rule.
-		{Type: hns.ACL, Protocol: 256, Action: hns.Allow, Direction: hns.Out, RuleType: hns.Host},
 	}), "unexpected rules returned for IP+port policy")
 }
 
@@ -562,8 +532,6 @@ func TestNegativeTestCases(t *testing.T) {
 		// Only the Default rules should exist.
 		// Default deny rule.
 		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.In, RuleType: hns.Switch, Priority: 1001},
-		// Default host/pod rule.
-		{Type: hns.ACL, Protocol: 256, Action: hns.Allow, Direction: hns.In, RuleType: hns.Host},
 	}), "unexpected rules returned for ipset-that-does-not-exist")
 
 	//Negative test: Unsupported protocol
@@ -587,8 +555,6 @@ func TestNegativeTestCases(t *testing.T) {
 		},
 		// Default deny rule.
 		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.In, RuleType: hns.Switch, Priority: 1001},
-		// Default host/pod rule.
-		{Type: hns.ACL, Protocol: 256, Action: hns.Allow, Direction: hns.In, RuleType: hns.Host},
 	}), "unexpected rule returned for Unsupported protocol")
 
 	//Negative test: Unsupported IP version (IP v6)
@@ -608,8 +574,6 @@ func TestNegativeTestCases(t *testing.T) {
 		//The rule with IP v6 should be skipped
 		// Default deny rule.
 		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.In, RuleType: hns.Switch, Priority: 1001},
-		// Default host/pod rule.
-		{Type: hns.ACL, Protocol: 256, Action: hns.Allow, Direction: hns.In, RuleType: hns.Host},
 	}), "unexpected rule returned for unsupported IP version")
 
 	//Negative test: Named port
@@ -629,8 +593,6 @@ func TestNegativeTestCases(t *testing.T) {
 		//The rule with named port should be skipped
 		// Default deny rule.
 		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.In, RuleType: hns.Switch, Priority: 1001},
-		// Default host/pod
-		{Type: hns.ACL, Protocol: 256, Action: hns.Allow, Direction: hns.In, RuleType: hns.Host},
 	}), "unexpected rule with named port")
 
 	//Negative test: ICMP type
@@ -649,8 +611,6 @@ func TestNegativeTestCases(t *testing.T) {
 		//The rule with ICMP type should be skipped
 		// Default deny rule.
 		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.In, RuleType: hns.Switch, Priority: 1001},
-		// Default host/pod
-		{Type: hns.ACL, Protocol: 256, Action: hns.Allow, Direction: hns.In, RuleType: hns.Host},
 	}), "unexpected rule with ICMP Type")
 
 	//Negative test: With Negative Matches
@@ -669,8 +629,6 @@ func TestNegativeTestCases(t *testing.T) {
 		//The rule with negative match should be skipped
 		// Default deny rule.
 		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.In, RuleType: hns.Switch, Priority: 1001},
-		// Default host/pod
-		{Type: hns.ACL, Protocol: 256, Action: hns.Allow, Direction: hns.In, RuleType: hns.Host},
 	}), "unexpected rule with Negative match")
 
 	//Test with invalid argument to AddOrReplacePolicySet (Other than Profile/Policy)
@@ -681,8 +639,6 @@ func TestNegativeTestCases(t *testing.T) {
 	Expect(ps.GetPolicySetRules([]string{"invalid-arg"}, true)).To(Equal([]*hns.ACLPolicy{
 		// Default deny rule.
 		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.In, RuleType: hns.Switch, Priority: 1001},
-		// Default host/pod rule.
-		{Type: hns.ACL, Protocol: 256, Action: hns.Allow, Direction: hns.In, RuleType: hns.Host},
 	}), "unexpected rules returned when invalid argument is passed to addOrReplacePolicySet function")
 
 	//Negative test for protoRuleToHnsRules
@@ -1024,8 +980,6 @@ func TestMultiIpPortChunks(t *testing.T) {
 		},
 		// Default deny rule.
 		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.In, RuleType: hns.Switch, Priority: 1001},
-		// Default host/pod rule.
-		{Type: hns.ACL, Protocol: 256, Action: hns.Allow, Direction: hns.In, RuleType: hns.Host},
 	}), "unexpected rules returned for selector multi ips policy")
 
 	// Source and dest IP sets should be converted into hns rule with multi ips.
@@ -1049,8 +1003,6 @@ func TestMultiIpPortChunks(t *testing.T) {
 		},
 		// Default deny rule.
 		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.In, RuleType: hns.Switch, Priority: 1001},
-		// Default host/pod rule.
-		{Type: hns.ACL, Protocol: 256, Action: hns.Allow, Direction: hns.In, RuleType: hns.Host},
 	}), "unexpected rules returned for selector ipset multi ips")
 
 	// The source IP set should be intersected with the source CIDR.
@@ -1105,8 +1057,6 @@ func TestMultiIpPortChunks(t *testing.T) {
 
 		// Default deny rule.
 		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.In, RuleType: hns.Switch, Priority: 1001},
-		// Default host/pod rule.
-		{Type: hns.ACL, Protocol: 256, Action: hns.Allow, Direction: hns.In, RuleType: hns.Host},
 	}), "unexpected rules returned for selector CIDR filtering policy")
 
 	//Complete coverage of IPSetUpdate
@@ -1131,8 +1081,6 @@ func TestMultiIpPortChunks(t *testing.T) {
 		},
 		// Default deny rule.
 		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.In, RuleType: hns.Switch, Priority: 1001},
-		// Default host/pod rule.
-		{Type: hns.ACL, Protocol: 256, Action: hns.Allow, Direction: hns.In, RuleType: hns.Host},
 	}), "unexpected rules returned after ipset update")
 
 	// Test for the ProcessIpSetUpdate while applying policy after updating the ipset
@@ -1152,8 +1100,6 @@ func TestMultiIpPortChunks(t *testing.T) {
 		// Only the Default rules should exist.
 		// Default deny rule.
 		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.In, RuleType: hns.Switch, Priority: 1001},
-		// Default host/pod rule.
-		{Type: hns.ACL, Protocol: 256, Action: hns.Allow, Direction: hns.In, RuleType: hns.Host},
 	}), "unexpected rules returned for ipset-update")
 
 	//Updating the ipset
@@ -1194,8 +1140,6 @@ func TestMultiIpPortChunks(t *testing.T) {
 		},
 		// Default deny rule.
 		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.In, RuleType: hns.Switch, Priority: 1001},
-		// Default host/pod rule.
-		{Type: hns.ACL, Protocol: 256, Action: hns.Allow, Direction: hns.In, RuleType: hns.Host},
 	}), "unexpected rules returned for ipset-update")
 
 	//Test where ProcessIpSetUpdate() receives an ipset-Id that doesn't have any policies linked
@@ -1225,8 +1169,6 @@ func TestMultiIpPortChunks(t *testing.T) {
 		// We expect the rules to be skipped as no overlapping exist
 		// Default deny rule.
 		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.In, RuleType: hns.Switch, Priority: 1001},
-		// Default host/pod rule.
-		{Type: hns.ACL, Protocol: 256, Action: hns.Allow, Direction: hns.In, RuleType: hns.Host},
 	}), "unexpected rules returned for no-overlapping")
 
 }
@@ -1260,8 +1202,6 @@ func TestPolicyOrdering(t *testing.T) {
 			Id: "deny--0"},
 		// Default deny rule.
 		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.In, RuleType: hns.Switch, Priority: 1002},
-		// Default host/pod rule.
-		{Type: hns.ACL, Protocol: 256, Action: hns.Allow, Direction: hns.In, RuleType: hns.Host},
 	}), "incorrect rules returned for allow,deny")
 
 	Expect(ps.GetPolicySetRules([]string{"allow", "allow"}, true)).To(Equal([]*hns.ACLPolicy{
@@ -1271,8 +1211,6 @@ func TestPolicyOrdering(t *testing.T) {
 			Id: "allow--0"},
 		// Default deny rule.
 		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.In, RuleType: hns.Switch, Priority: 1001},
-		// Default host/pod rule.
-		{Type: hns.ACL, Protocol: 256, Action: hns.Allow, Direction: hns.In, RuleType: hns.Host},
 	}), "incorrect rules returned for allow,allow")
 
 	Expect(ps.GetPolicySetRules([]string{"deny", "allow"}, true)).To(Equal([]*hns.ACLPolicy{
@@ -1282,8 +1220,6 @@ func TestPolicyOrdering(t *testing.T) {
 			Id: "allow--0"},
 		// Default deny rule.
 		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.In, RuleType: hns.Switch, Priority: 1002},
-		// Default host/pod rule.
-		{Type: hns.ACL, Protocol: 256, Action: hns.Allow, Direction: hns.In, RuleType: hns.Host},
 	}), "incorrect rules returned for deny,allow")
 }
 

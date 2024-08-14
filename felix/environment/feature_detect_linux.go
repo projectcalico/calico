@@ -129,10 +129,11 @@ func (d *FeatureDetector) refreshFeaturesLockHeld() {
 
 	// Calculate the features.
 	features := Features{
-		SNATFullyRandom:          iptV.Compare(v1Dot6Dot0) >= 0 && kerV.Compare(v3Dot14Dot0) >= 0,
-		MASQFullyRandom:          iptV.Compare(v1Dot6Dot2) >= 0 && kerV.Compare(v3Dot14Dot0) >= 0,
-		RestoreSupportsLock:      iptV.Compare(v1Dot6Dot2) >= 0,
-		ChecksumOffloadBroken:    kerV.Compare(v5Dot7Dot0) <= 0,
+		SNATFullyRandom:     iptV.Compare(v1Dot6Dot0) >= 0 && kerV.Compare(v3Dot14Dot0) >= 0,
+		MASQFullyRandom:     iptV.Compare(v1Dot6Dot2) >= 0 && kerV.Compare(v3Dot14Dot0) >= 0,
+		RestoreSupportsLock: iptV.Compare(v1Dot6Dot2) >= 0,
+		//ChecksumOffloadBroken:    kerV.Compare(v5Dot7Dot0) <= 0,
+		ChecksumOffloadBroken:    true,
 		IPIPDeviceIsL3:           d.ipipDeviceIsL3(),
 		KernelSideRouteFiltering: netlinkSupportsStrict,
 	}
