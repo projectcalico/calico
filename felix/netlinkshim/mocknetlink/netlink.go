@@ -307,6 +307,7 @@ type MockNetlinkDataplane struct {
 	mutex                   *sync.Mutex
 	deletedConntrackEntries set.Set[ip.Addr]
 	ConntrackSleep          time.Duration
+	IPVersion               uint8
 }
 
 type NeighKey struct {

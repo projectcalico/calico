@@ -33,24 +33,12 @@ import (
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/logutils"
+	"github.com/projectcalico/calico/felix/netlinkshim"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/felix/vxlanfdb"
 )
-
-// added so that we can shim netlink for tests
-type netlinkHandle interface {
-	LinkByName(name string) (netlink.Link, error)
-	LinkSetMTU(link netlink.Link, mtu int) error
-	LinkSetUp(link netlink.Link) error
-	AddrList(link netlink.Link, family int) ([]netlink.Addr, error)
-	AddrAdd(link netlink.Link, addr *netlink.Addr) error
-	AddrDel(link netlink.Link, addr *netlink.Addr) error
-	LinkList() ([]netlink.Link, error)
-	LinkAdd(netlink.Link) error
-	LinkDel(netlink.Link) error
-}
 
 type vxlanManager struct {
 	// Our dependencies.
@@ -81,7 +69,7 @@ type vxlanManager struct {
 	ipSetMetadata     ipsets.IPSetMetadata
 	externalNodeCIDRs []string
 	vtepsDirty        bool
-	nlHandle          netlinkHandle
+	nlHandle          netlinkshim.Interface
 	dpConfig          Config
 	noEncapProtocol   netlink.RouteProtocol
 
@@ -103,7 +91,7 @@ func newVXLANManager(
 	opRecorder logutils.OpRecorder,
 	ipVersion uint8,
 ) *vxlanManager {
-	nlHandle, _ := netlink.NewHandle(syscall.NETLINK_ROUTE)
+	nlHandle, _ := netlinkshim.NewRealNetlink()
 	return newVXLANManagerWithShims(
 		ipsetsDataplane,
 		mainRouteTable,
@@ -123,7 +111,7 @@ func newVXLANManagerWithShims(
 	deviceName string,
 	dpConfig Config,
 	opRecorder logutils.OpRecorder,
-	nlHandle netlinkHandle,
+	nlHandle netlinkshim.Interface,
 	ipVersion uint8,
 ) *vxlanManager {
 	logCtx := logrus.WithField("ipVersion", ipVersion)

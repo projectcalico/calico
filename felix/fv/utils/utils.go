@@ -28,6 +28,7 @@ import (
 	"github.com/kelseyhightower/envconfig"
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
+	"github.com/vishvananda/netlink"
 
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
@@ -39,6 +40,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/calc"
 	"github.com/projectcalico/calico/felix/ipsets"
+	"github.com/projectcalico/calico/felix/netlinkshim"
 	"github.com/projectcalico/calico/felix/nftables"
 	"github.com/projectcalico/calico/felix/rules"
 )
@@ -291,4 +293,18 @@ func GetSysArch() string {
 		arch = "amd64"
 	}
 	return arch
+}
+
+func LinkList() ([]netlink.Link, error) {
+	nlHandle, err := netlinkshim.NewRealNetlink()
+	if err != nil {
+		log.WithError(err).Error("failed to created netlink handle. Unable to list interfaces")
+		return []netlink.Link{}, err
+	}
+
+	links, err := nlHandle.LinkList()
+	if err != nil {
+		log.WithError(err).Error("Failed to list interfaces")
+	}
+	return links, err
 }
