@@ -115,6 +115,8 @@ func (m *mockDataplane) loadDefaultPolicies() error {
 }
 
 func (m *mockDataplane) ensureProgramAttached(ap attachPoint) (qDiscInfo, error) {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
 	var qdisc qDiscInfo
 	key := ap.IfaceName() + ":" + ap.HookName().String()
 	m.numAttaches[key] = m.numAttaches[key] + 1
@@ -830,6 +832,41 @@ var _ = Describe("BPF Endpoint Manager", func() {
 				Expect(err).NotTo(HaveOccurred())
 				genIfaceUpdate("eth11", ifacemonitor.StateNotPresent, 21)()
 				genIfaceUpdate("foo0", ifacemonitor.StateNotPresent, 11)()
+			})
+
+			It("should attach XDP to slave devices", func() {
+				By("adding untracked policy")
+				genUntracked("default", "untracked1")()
+				newHEP := hostEp
+				newHEP.UntrackedTiers = []*proto.TierInfo{{
+					Name:            "default",
+					IngressPolicies: []string{"untracked1"},
+				}}
+				genHEPUpdate("bond0", newHEP)()
+				err := bpfEpMgr.CompleteDeferredWork()
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(dp.programAttached("bond0:ingress")).To(BeTrue())
+				Expect(dp.programAttached("bond0:egress")).To(BeTrue())
+				Expect(dp.programAttached("bond0:xdp")).To(BeFalse())
+				checkIfState(10, "bond0", ifstate.FlgIPv4Ready|ifstate.FlgBond)
+
+				Expect(dp.programAttached("eth10:ingress")).To(BeFalse())
+				Expect(dp.programAttached("eth10:egress")).To(BeFalse())
+				Expect(dp.programAttached("eth20:ingress")).To(BeFalse())
+				Expect(dp.programAttached("eth20:egress")).To(BeFalse())
+				Expect(dp.programAttached("eth10:xdp")).To(BeTrue())
+				Expect(dp.programAttached("eth20:xdp")).To(BeTrue())
+
+				By("removing the untracked policy")
+				genHEPUpdate("bond0", hostEp)()
+				err = bpfEpMgr.CompleteDeferredWork()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(dp.programAttached("bond0:ingress")).To(BeTrue())
+				Expect(dp.programAttached("bond0:egress")).To(BeTrue())
+				Expect(dp.programAttached("eth10:xdp")).To(BeFalse())
+				Expect(dp.programAttached("eth20:xdp")).To(BeFalse())
+
 			})
 		})
 	})
