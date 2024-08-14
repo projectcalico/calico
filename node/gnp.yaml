@@ -1,0 +1,15 @@
+apiVersion: projectcalico.org/v3
+kind: GlobalNetworkPolicy
+metadata:
+  name: security.restrict-development-access2
+spec:
+  tier: security
+  namespaceSelector: 'environment == "development"'
+  ingress:
+    - action: Allow
+      source:
+        namespaceSelector: 'environment == "development"'
+  egress:
+    - action: Allow
+      destination:
+        namespaceSelector: 'environment == "development"'
