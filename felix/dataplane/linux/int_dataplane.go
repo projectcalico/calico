@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -908,6 +908,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		config.BPFEnabled,
 		bpfEndpointManager,
 		callbacks,
+		config.BPFLogLevel,
 		config.FloatingIPsEnabled,
 		config.RulesConfig.NFTables,
 	)
@@ -1041,6 +1042,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			config.BPFEnabled,
 			nil,
 			callbacks,
+			config.BPFLogLevel,
 			config.FloatingIPsEnabled,
 			config.RulesConfig.NFTables,
 		))
@@ -1799,10 +1801,14 @@ func (d *InternalDataplane) setUpIptablesNormal() {
 		//
 		// N.B. ChainFIPSnat does not do MASQ, but does not collide with k8s
 		// service, namely nodeports.
-		t.AppendRules("POSTROUTING", []generictables.Rule{{
+		t.InsertOrAppendRules("POSTROUTING", []generictables.Rule{{
 			Match:  d.newMatch(),
 			Action: d.actions.Jump(rules.ChainNATPostrouting),
 		}})
+		/*t.AppendRules("POSTROUTING", []generictables.Rule{{
+			Match:  d.newMatch(),
+			Action: d.actions.Jump(rules.ChainNATPostrouting),
+		}})*/
 		t.InsertOrAppendRules("OUTPUT", []generictables.Rule{{
 			Match:  d.newMatch(),
 			Action: d.actions.Jump(rules.ChainNATOutput),

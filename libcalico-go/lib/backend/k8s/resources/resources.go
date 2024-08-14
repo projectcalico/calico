@@ -308,6 +308,14 @@ func ConvertK8sResourceToCalicoResource(res Resource) error {
 		meta.SetCreationTimestamp(rom.GetCreationTimestamp())
 	}
 
+	// If no creation timestamp was stored in the metadata annotation, use the one from the CR.
+	// The timestamp is normally set in the clientv3 code. However, for objects that bypass
+	// the v3 client (e.g., IPAM), we won't have generated a creation timestamp and the field
+	// is required on update calls.
+	if meta.GetCreationTimestamp().Time.IsZero() {
+		meta.SetCreationTimestamp(rom.GetCreationTimestamp())
+	}
+
 	// Overwrite the K8s metadata with the Calico metadata.
 	meta.DeepCopyInto(rom.(*metav1.ObjectMeta))
 

@@ -1,6 +1,6 @@
 //go:build !windows
 
-// Copyright (c) 2021-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -583,7 +583,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		PreDnatTiers: []*proto.TierInfo{
 			{
 				Name:            "default",
-				IngressPolicies: []string{"mypolicy"},
+				IngressPolicies: []string{"default.mypolicy"},
 			},
 		},
 	}
@@ -593,8 +593,8 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		Tiers: []*proto.TierInfo{
 			{
 				Name:            "default",
-				IngressPolicies: []string{"mypolicy"},
-				EgressPolicies:  []string{"mypolicy"},
+				IngressPolicies: []string{"default.mypolicy"},
+				EgressPolicies:  []string{"default.mypolicy"},
 			},
 		},
 	}
@@ -836,7 +836,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 	Context("with eth0 up", func() {
 		JustBeforeEach(func() {
-			genPolicy("default", "mypolicy")()
+			genPolicy("default", "default.mypolicy")()
 			genIfaceUpdate("eth0", ifacemonitor.StateUp, 10)()
 		})
 
@@ -915,7 +915,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 				Expect(bpfEpMgr.hostIfaceToEpMap["eth0"]).To(Equal(hostEp))
 				Expect(bpfEpMgr.policiesToWorkloads[proto.PolicyID{
 					Tier: "default",
-					Name: "mypolicy",
+					Name: "default.mypolicy",
 				}]).To(HaveKey("eth0"))
 
 				var eth0I, eth0E, eth0X *polprog.Rules
@@ -965,7 +965,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 				Expect(bpfEpMgr.hostIfaceToEpMap["eth0"]).To(Equal(hostEp))
 				Expect(bpfEpMgr.policiesToWorkloads[proto.PolicyID{
 					Tier: "default",
-					Name: "mypolicy",
+					Name: "default.mypolicy",
 				}]).To(HaveKey("eth0"))
 			})
 		})
@@ -973,7 +973,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 	Context("with eth0 host endpoint", func() {
 		JustBeforeEach(func() {
-			genPolicy("default", "mypolicy")()
+			genPolicy("default", "default.mypolicy")()
 			genHEPUpdate("eth0", hostEp)()
 		})
 
@@ -984,7 +984,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 				Expect(bpfEpMgr.hostIfaceToEpMap["eth0"]).To(Equal(hostEp))
 				Expect(bpfEpMgr.policiesToWorkloads[proto.PolicyID{
 					Tier: "default",
-					Name: "mypolicy",
+					Name: "default.mypolicy",
 				}]).To(HaveKey("eth0"))
 			})
 		})
@@ -992,7 +992,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 	Context("with host-* endpoint", func() {
 		JustBeforeEach(func() {
-			genPolicy("default", "mypolicy")()
+			genPolicy("default", "default.mypolicy")()
 			genHEPUpdate(allInterfaces, hostEp)()
 		})
 
@@ -1003,7 +1003,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 				Expect(bpfEpMgr.hostIfaceToEpMap["eth0"]).To(Equal(hostEp))
 				Expect(bpfEpMgr.policiesToWorkloads[proto.PolicyID{
 					Tier: "default",
-					Name: "mypolicy",
+					Name: "default.mypolicy",
 				}]).To(HaveKey("eth0"))
 			})
 
@@ -1014,7 +1014,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 					Expect(bpfEpMgr.hostIfaceToEpMap).To(BeEmpty())
 					Expect(bpfEpMgr.policiesToWorkloads[proto.PolicyID{
 						Tier: "default",
-						Name: "mypolicy",
+						Name: "default.mypolicy",
 					}]).NotTo(HaveKey("eth0"))
 				})
 			})
@@ -1025,7 +1025,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 					Expect(bpfEpMgr.hostIfaceToEpMap).To(BeEmpty())
 					Expect(bpfEpMgr.policiesToWorkloads[proto.PolicyID{
 						Tier: "default",
-						Name: "mypolicy",
+						Name: "default.mypolicy",
 					}]).NotTo(HaveKey("eth0"))
 				})
 			})
