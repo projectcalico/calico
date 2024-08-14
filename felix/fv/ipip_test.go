@@ -44,6 +44,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
+	"github.com/projectcalico/calico/felix/fv/netlinkutils"
 	"github.com/projectcalico/calico/felix/fv/workload"
 )
 
@@ -71,7 +72,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 		// Wait until the tunl0 device appears; it is created when felix inserts the ipip module
 		// into the kernel.
 		Eventually(func() error {
-			links, err := utils.LinkList()
+			links, err := netlinkutils.LinkListRetryEINTR()
 			if err != nil {
 				return err
 			}

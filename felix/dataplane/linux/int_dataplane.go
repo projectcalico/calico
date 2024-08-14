@@ -1110,13 +1110,13 @@ func findHostMTU(matchRegex *regexp.Regexp) (int, error) {
 
 	nlHandle, err := netlinkshim.NewRealNetlink()
 	if err != nil {
-		log.WithError(err).Error("failed to created netlink handle. Unable to auto-detect MTU")
+		log.WithError(err).Error("Failed to create netlink handle. Unable to auto-detect MTU.")
 		return 0, err
 	}
 
 	links, err := nlHandle.LinkList()
 	if err != nil {
-		log.WithError(err).Error("Failed to list interfaces. Unable to auto-detect MTU")
+		log.WithError(err).Error("Failed to list interfaces. Unable to auto-detect MTU.")
 		return 0, err
 	}
 

@@ -55,9 +55,12 @@ type RealNetlink struct {
 
 func NewRealNetlink() (Interface, error) {
 	nlHandle, err := netlink.NewHandle(syscall.NETLINK_ROUTE)
+	if err != nil {
+		return nil, err
+	}
 	return &RealNetlink{
 		nlHandle: nlHandle,
-	}, err
+	}, nil
 }
 
 func (r *RealNetlink) SetSocketTimeout(to time.Duration) error {
