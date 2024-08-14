@@ -1,4 +1,4 @@
-// Copyright (c) 2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -50,8 +50,7 @@ func (policyStrategy) PrepareForUpdate(ctx context.Context, obj, old runtime.Obj
 
 func (policyStrategy) Validate(ctx context.Context, obj runtime.Object) field.ErrorList {
 	return field.ErrorList{}
-	// TODO:
-	//return validation.ValidatePolicy(obj.(*calico.Policy))
+	// return validation.ValidatePolicy(obj.(*calico.Policy))
 }
 
 func (policyStrategy) AllowCreateOnUpdate() bool {
@@ -75,7 +74,6 @@ func (policyStrategy) Canonicalize(obj runtime.Object) {
 
 func (policyStrategy) ValidateUpdate(ctx context.Context, obj, old runtime.Object) field.ErrorList {
 	return field.ErrorList{}
-	// TODO:
 	// return validation.ValidatePolicyUpdate(obj.(*calico.Policy), old.(*calico.Policy))
 }
 
@@ -101,5 +99,6 @@ func MatchPolicy(label labels.Selector, field fields.Selector) storage.Selection
 func PolicyToSelectableFields(obj *calico.GlobalNetworkPolicy) fields.Set {
 	return fields.Set{
 		"metadata.name": obj.Name,
+		"spec.tier":     obj.Spec.Tier,
 	}
 }
