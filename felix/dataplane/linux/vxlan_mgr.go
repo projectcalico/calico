@@ -33,6 +33,7 @@ import (
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/logutils"
+	"github.com/projectcalico/calico/felix/netlinkshim"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/rules"
@@ -103,7 +104,7 @@ func newVXLANManager(
 	opRecorder logutils.OpRecorder,
 	ipVersion uint8,
 ) *vxlanManager {
-	nlHandle, _ := netlink.NewHandle(syscall.NETLINK_ROUTE)
+	nlHandle, _ := netlinkshim.NewRealNetlink()
 	return newVXLANManagerWithShims(
 		ipsetsDataplane,
 		mainRouteTable,
