@@ -40,6 +40,19 @@ import (
 	"github.com/projectcalico/calico/felix/vxlanfdb"
 )
 
+// added so that we can shim netlink for tests
+type netlinkHandle interface {
+	LinkByName(name string) (netlink.Link, error)
+	LinkSetMTU(link netlink.Link, mtu int) error
+	LinkSetUp(link netlink.Link) error
+	AddrList(link netlink.Link, family int) ([]netlink.Addr, error)
+	AddrAdd(link netlink.Link, addr *netlink.Addr) error
+	AddrDel(link netlink.Link, addr *netlink.Addr) error
+	LinkList() ([]netlink.Link, error)
+	LinkAdd(netlink.Link) error
+	LinkDel(netlink.Link) error
+}
+
 type vxlanManager struct {
 	// Our dependencies.
 	hostname        string
@@ -69,7 +82,7 @@ type vxlanManager struct {
 	ipSetMetadata     ipsets.IPSetMetadata
 	externalNodeCIDRs []string
 	vtepsDirty        bool
-	nlHandle          netlinkshim.Interface
+	nlHandle          netlinkHandle
 	dpConfig          Config
 	noEncapProtocol   netlink.RouteProtocol
 
@@ -111,7 +124,7 @@ func newVXLANManagerWithShims(
 	deviceName string,
 	dpConfig Config,
 	opRecorder logutils.OpRecorder,
-	nlHandle netlinkshim.Interface,
+	nlHandle netlinkHandle,
 	ipVersion uint8,
 ) *vxlanManager {
 	logCtx := logrus.WithField("ipVersion", ipVersion)
