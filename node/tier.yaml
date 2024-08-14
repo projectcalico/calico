@@ -1,6 +1,0 @@
-apiVersion: projectcalico.org/v3
-kind: Tier
-metadata:
-  name: security
-spec:
-  order: 300
