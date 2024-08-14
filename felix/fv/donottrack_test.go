@@ -149,7 +149,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ do-not-track policy tests; 
 				felix.Exec(append([]string{"ip", "r", "add"}, defaultRouteArgs...)...)
 				felix.Exec(append([]string{"ip", "r", "replace"}, subnetArgs...)...)
 				if BPFMode() {
-					ensureRightIFStateFlags(felix, ifstate.FlgIPv4Ready|ifstate.FlgBondSlave, map[string]uint32{"bond0": ifstate.FlgIPv4Ready | ifstate.FlgBond})
+					ensureRightIFStateFlags(felix, ifstate.FlgIPv4Ready, ifstate.FlgBondSlave, map[string]uint32{"bond0": ifstate.FlgIPv4Ready | ifstate.FlgBond})
 				}
 				createHostEndpoint(felix, "bond0", []string{felix.IP}, client, ctx)
 			}
@@ -330,8 +330,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ do-not-track policy tests; 
 				createHostEndpoint(f, "eth0", []string{f.IP, f.IPv6}, client, ctx)
 			}
 			if BPFMode() {
-				ensureRightIFStateFlags(tc.Felixes[0], ifstate.FlgIPv4Ready|ifstate.FlgIPv6Ready|ifstate.FlgHEP, nil)
-				ensureRightIFStateFlags(tc.Felixes[1], ifstate.FlgIPv4Ready|ifstate.FlgIPv6Ready|ifstate.FlgHEP, nil)
+				ensureRightIFStateFlags(tc.Felixes[0], ifstate.FlgIPv4Ready|ifstate.FlgIPv6Ready, ifstate.FlgHEP, nil)
+				ensureRightIFStateFlags(tc.Felixes[1], ifstate.FlgIPv4Ready|ifstate.FlgIPv6Ready, ifstate.FlgHEP, nil)
 			}
 		})
 

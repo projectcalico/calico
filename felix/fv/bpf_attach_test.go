@@ -124,7 +124,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf reattach object",
 		tc.Felixes[0].Exec("ifconfig", "eth20", "up")
 
 		Eventually(getBPFNet, "15s", "1s").Should(ContainElements("eth10", "eth20"))
-		ensureRightIFStateFlags(tc.Felixes[0], ifstate.FlgIPv4Ready|ifstate.FlgHEP, map[string]uint32{"eth10": ifstate.FlgIPv4Ready | ifstate.FlgHEP, "eth20": ifstate.FlgIPv4Ready | ifstate.FlgHEP})
+		ensureRightIFStateFlags(tc.Felixes[0], ifstate.FlgIPv4Ready, ifstate.FlgHEP, map[string]uint32{"eth10": ifstate.FlgIPv4Ready | ifstate.FlgHEP, "eth20": ifstate.FlgIPv4Ready | ifstate.FlgHEP})
 
 		By("Creating a bond interface and eth10, eth20 to the bond")
 		tc.Felixes[0].Exec("ip", "link", "add", "bond0", "type", "bond", "mode", "802.3ad")
@@ -136,20 +136,20 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf reattach object",
 		time.Sleep(0 * time.Second)
 		Eventually(getBPFNet, "15s", "1s").Should(ContainElement("bond0"))
 		Eventually(getBPFNet, "15s", "1s").ShouldNot(ContainElements("eth10", "eth20"))
-		ensureRightIFStateFlags(tc.Felixes[0], ifstate.FlgIPv4Ready|ifstate.FlgHEP, map[string]uint32{"bond0": ifstate.FlgIPv4Ready | ifstate.FlgBond})
+		ensureRightIFStateFlags(tc.Felixes[0], ifstate.FlgIPv4Ready, ifstate.FlgHEP, map[string]uint32{"bond0": ifstate.FlgIPv4Ready | ifstate.FlgBond})
 
 		By("Removing eth10 from bond")
 		tc.Felixes[0].Exec("ip", "link", "set", "eth10", "nomaster")
 		tc.Felixes[0].Exec("ifconfig", "eth10", "up")
 		Eventually(getBPFNet, "15s", "1s").ShouldNot(ContainElement("eth20"))
 		Eventually(getBPFNet, "15s", "1s").Should(ContainElements("bond0", "eth10"))
-		ensureRightIFStateFlags(tc.Felixes[0], ifstate.FlgIPv4Ready|ifstate.FlgHEP, map[string]uint32{"bond0": ifstate.FlgIPv4Ready | ifstate.FlgBond, "eth10": ifstate.FlgIPv4Ready | ifstate.FlgHEP})
+		ensureRightIFStateFlags(tc.Felixes[0], ifstate.FlgIPv4Ready, ifstate.FlgHEP, map[string]uint32{"bond0": ifstate.FlgIPv4Ready | ifstate.FlgBond, "eth10": ifstate.FlgIPv4Ready | ifstate.FlgHEP})
 
 		By("Removing eth20 from bond")
 		tc.Felixes[0].Exec("ip", "link", "set", "eth20", "nomaster")
 		tc.Felixes[0].Exec("ifconfig", "eth20", "up")
 		Eventually(getBPFNet, "15s", "1s").Should(ContainElements("bond0", "eth10", "eth20"))
-		ensureRightIFStateFlags(tc.Felixes[0], ifstate.FlgIPv4Ready|ifstate.FlgHEP, map[string]uint32{"eth10": ifstate.FlgIPv4Ready | ifstate.FlgHEP, "eth20": ifstate.FlgIPv4Ready | ifstate.FlgHEP})
+		ensureRightIFStateFlags(tc.Felixes[0], ifstate.FlgIPv4Ready, ifstate.FlgHEP, map[string]uint32{"eth10": ifstate.FlgIPv4Ready | ifstate.FlgHEP, "eth20": ifstate.FlgIPv4Ready | ifstate.FlgHEP})
 
 		By("Creating a bond interface which does match BPFDataIfacePattern")
 		tc.Felixes[0].Exec("ip", "link", "add", "foo0", "type", "bond", "mode", "802.3ad")
