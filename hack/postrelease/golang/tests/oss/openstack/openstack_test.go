@@ -32,17 +32,15 @@ func TestMain(m *testing.M) {
 func Test_OpenStackPublished(t *testing.T) {
 	packageList := openstack.GetPackages(calicoReleaseTag)
 	for packagePlatform, packageObjList := range packageList {
-		t.Run(packagePlatform, func(t *testing.T) {
-			for _, packageObj := range packageObjList {
-				testName := fmt.Sprintf("%s/%s/%s:%s", packageObj.OSVersion, packageObj.Arch, packageObj.Component, packageObj.Version)
-				t.Run(testName, func(t *testing.T) {
-					t.Parallel()
-					resp, err := packageObj.Head()
-					assert.NoError(t, err)
-					assert.Equal(t, 200, resp.StatusCode, "blahblah")
-				})
-			}
-		})
+		for _, packageObj := range packageObjList {
+			testName := fmt.Sprintf("%s/%s/%s/%s %s", packagePlatform, packageObj.OSVersion, packageObj.Arch, packageObj.Component, packageObj.Version)
+			t.Run(testName, func(t *testing.T) {
+				t.Parallel()
+				resp, err := packageObj.Head()
+				assert.NoError(t, err)
+				assert.Equal(t, 200, resp.StatusCode, "blahblah")
+			})
+		}
 	}
 
 }
