@@ -6,7 +6,7 @@ execution_time_limit:
 
 agent:
   machine:
-    type: e1-standard-2
+    type: f1-standard-2
     os_image: ubuntu2004
 
 auto_cancel:
@@ -34,8 +34,6 @@ global_job_config:
   - name: docker-hub
   prologue:
     commands:
-      # make some room on the disk
-      - sudo rm -rf ~/.kiex ~/.phpbrew ~/.rbenv ~/.nvm ~/.kerl
       - echo $DOCKERHUB_PASSWORD | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
 
 blocks:
@@ -44,7 +42,7 @@ blocks:
   task:
     agent:
       machine:
-        type: e1-standard-4
+        type: f1-standard-2
         os_image: ubuntu2004
     jobs:
     - name: Build and run UT, k8sfv
@@ -144,8 +142,6 @@ blocks:
       - sudo systemctl stop docker
       - sudo umount /var/lib/docker && sudo killall qemu-nbd || true
       - sudo systemctl start docker
-      # Free up space on the build machine.
-      - sudo rm -rf ~/.kiex ~/.phpbrew ~/.rbenv ~/.nvm ~/.kerl
       - checkout
       - cache restore go-pkg-cache
       - cache restore go-mod-cache
@@ -206,13 +202,13 @@ blocks:
         - ./.semaphore/clean-up-vms ${VM_PREFIX}
     secrets:
     - name: google-service-account-for-gce
-- name: Static checks on e1-standard-8
+- name: Static checks on f1-standard-4
   dependencies: []
   task:
     agent:
       machine:
         # Linters use a lot of RAM so use a bigger machine type.
-        type: e1-standard-8
+        type: f1-standard-4
         os_image: ubuntu2004
     prologue:
       commands:

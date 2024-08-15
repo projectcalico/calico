@@ -761,7 +761,11 @@ func (c *Container) NFTSetSizes() map[string]int {
 	numMembers := map[string]int{}
 	names := c.IPSetNames()
 	for _, name := range names {
-		numMembers[name] = c.NumNFTSetMembers(4, name)
+		if strings.HasPrefix(name, "cali60") {
+			numMembers[name] = c.NumNFTSetMembers(6, name)
+		} else {
+			numMembers[name] = c.NumNFTSetMembers(4, name)
+		}
 	}
 	return numMembers
 }
@@ -782,7 +786,10 @@ func (c *Container) NumNFTSetMembers(ipVersion int, setName string) int {
 		ip = "ip6"
 	}
 	out, err := c.ExecOutput("nft", "--json", "list", "set", ip, "calico", setName)
-	Expect(err).NotTo(HaveOccurred())
+	if err != nil {
+		log.WithError(err).Warn("Failed to list nft IP set.")
+		return -1
+	}
 
 	type nftResp struct {
 		Nftables []map[string]interface{} `json:"nftables"`
@@ -820,7 +827,14 @@ func (c *Container) IPSetNames() []string {
 }
 
 func (c *Container) nftablesSetNames() []string {
-	out, err := c.ExecOutput("nft", "list", "sets", "ip")
+	// Get the set names for both IPv4 and IPv6.
+	ipv4Names := c.nftablesSetNamesForVersion("ip")
+	ipv6Names := c.nftablesSetNamesForVersion("ip6")
+	return append(ipv4Names, ipv6Names...)
+}
+
+func (c *Container) nftablesSetNamesForVersion(ver string) []string {
+	out, err := c.ExecOutput("nft", "list", "sets", ver)
 	Expect(err).NotTo(HaveOccurred(), out)
 	var names []string
 	for _, line := range strings.Split(out, "\n") {

@@ -284,6 +284,31 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ do-not-track policy tests; 
 		It("should implement untracked policy correctly", func() {
 			testDonotTrackPolicy("eth0")
 		})
+
+		if BPFMode() {
+			Describe("with a custom map size", func() {
+				BeforeEach(func() {
+					newRtSize := 1000
+					newNATFeSize := 2000
+					newNATBeSize := 3000
+					newNATAffSize := 4000
+					newIpSetMapSize := 5000
+					newCtMapSize := 6000
+					infrastructure.UpdateFelixConfiguration(client, func(cfg *api.FelixConfiguration) {
+						cfg.Spec.BPFMapSizeRoute = &newRtSize
+						cfg.Spec.BPFMapSizeNATFrontend = &newNATFeSize
+						cfg.Spec.BPFMapSizeNATBackend = &newNATBeSize
+						cfg.Spec.BPFMapSizeNATAffinity = &newNATAffSize
+						cfg.Spec.BPFMapSizeIPSets = &newIpSetMapSize
+						cfg.Spec.BPFMapSizeConntrack = &newCtMapSize
+					})
+				})
+
+				It("should implement untracked policy correctly", func() {
+					testDonotTrackPolicy("eth0")
+				})
+			})
+		}
 	})
 
 	Context("after adding eth0 to a bond interface", func() {
