@@ -328,9 +328,10 @@ type bpfEndpointManager struct {
 	updatePolicyProgramFn func(rules polprog.Rules, polDir string, ap attachPoint, ipFamily proto.IPVersion) error
 
 	// HEP processing.
-	hostIfaceToEpMap     map[string]proto.HostEndpoint
-	wildcardHostEndpoint proto.HostEndpoint
-	wildcardExists       bool
+	hostIfaceToEpMap        map[string]proto.HostEndpoint
+	wildcardHostEndpoint    proto.HostEndpoint
+	wildcardExists          bool
+	hostIfaceToSlaveDevices map[string]set.Set[string]
 
 	// UT-able BPF dataplane interface.
 	dp bpfDataplane
@@ -502,12 +503,13 @@ func newBPFEndpointManager(
 		// Note: the allocators only allocate a fraction of the map, the
 		// rest is reserved for sub-programs generated if a single program
 		// would be too large.
-		jumpMapAlloc:     newJumpMapAlloc(jump.TCMaxEntryPoints),
-		xdpJumpMapAlloc:  newJumpMapAlloc(jump.XDPMaxEntryPoints),
-		ruleRenderer:     iptablesRuleRenderer,
-		onStillAlive:     livenessCallback,
-		hostIfaceToEpMap: map[string]proto.HostEndpoint{},
-		opReporter:       opReporter,
+		jumpMapAlloc:            newJumpMapAlloc(jump.TCMaxEntryPoints),
+		xdpJumpMapAlloc:         newJumpMapAlloc(jump.XDPMaxEntryPoints),
+		ruleRenderer:            iptablesRuleRenderer,
+		onStillAlive:            livenessCallback,
+		hostIfaceToEpMap:        map[string]proto.HostEndpoint{},
+		hostIfaceToSlaveDevices: map[string]set.Set[string]{},
+		opReporter:              opReporter,
 		// ipv6Enabled Should be set to config.Ipv6Enabled, but for now it is better
 		// to set it to BPFIpv6Enabled which is a dedicated flag for development of IPv6.
 		// TODO: set ipv6Enabled to config.Ipv6Enabled when IPv6 support is complete
@@ -1090,7 +1092,9 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceStateUpdate) {
 	}
 
 	masterIfIndex := 0
+	prevMasterIfIndex := 0
 	curIfaceType := IfaceTypeUnknown
+	prevIfaceType := IfaceTypeUnknown
 	if update.State != ifacemonitor.StateNotPresent && !m.isWorkloadIface(update.Name) {
 		// Determine the type of interface.
 		// These include host, bond, slave, ipip, wireguard, l3.
@@ -1106,9 +1110,9 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceStateUpdate) {
 			curIfaceType = m.getIfaceTypeFromLink(link)
 			masterIfIndex = link.Attrs().MasterIndex
 		}
-		prevIfaceType := IfaceTypeUnknown
 		if val, ok := m.nameToIface[update.Name]; ok {
 			prevIfaceType = val.info.ifaceType
+			prevMasterIfIndex = val.info.masterIfIndex
 		}
 		if prevIfaceType != curIfaceType {
 			if curIfaceType == IfaceTypeBondSlave {
@@ -1119,6 +1123,40 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceStateUpdate) {
 				} else {
 					if err := m.cleanupOldAttach(update.Name, ai[update.Name]); err != nil {
 						log.WithError(err).Warnf("Failed to detach old programs from now bonding device '%s'", update.Name)
+					}
+				}
+			} else if curIfaceType == IfaceTypeBond {
+				// create an entry in the hostIfaceToSlaveDevices
+				m.hostIfaceToSlaveDevices[update.Name] = set.New[string]()
+			}
+		}
+	}
+
+	if !m.isWorkloadIface(update.Name) {
+		// Update slave devices
+		if curIfaceType == IfaceTypeBondSlave {
+			// Interface is now part of a bond
+			netiface, err := m.dp.interfaceByIndex(masterIfIndex)
+			if err != nil {
+				log.WithError(err).Warn("Failed to get master interface name. Slave devices not updated")
+			} else {
+				if _, ok := m.hostIfaceToSlaveDevices[netiface.Name]; ok {
+					m.hostIfaceToSlaveDevices[netiface.Name].Add(update.Name)
+				}
+			}
+		} else {
+			if update.State == ifacemonitor.StateNotPresent {
+				delete(m.hostIfaceToSlaveDevices, update.Name)
+				for k := range m.hostIfaceToSlaveDevices {
+					m.hostIfaceToSlaveDevices[k].Discard(update.Name)
+				}
+			} else {
+				netiface, err := m.dp.interfaceByIndex(prevMasterIfIndex)
+				if err != nil {
+					log.WithError(err).Warn("Failed to get master interface name. Slave devices not updated")
+				} else {
+					if _, ok := m.hostIfaceToSlaveDevices[netiface.Name]; ok {
+						m.hostIfaceToSlaveDevices[netiface.Name].Discard(update.Name)
 					}
 				}
 			}
@@ -1296,8 +1334,11 @@ func (m *bpfEndpointManager) markEndpointsDirty(ids set.Set[any], kind string) {
 					}
 				}
 			} else {
-				log.Debugf("Mark host iface dirty, for host %v change", kind)
+				log.Debugf("Mark host iface dirty %v, for host %v change", id, kind)
 				m.dirtyIfaceNames.Add(id)
+				for _, slaveIface := range m.getBondSlaves(id) {
+					m.dirtyIfaceNames.Add(slaveIface)
+				}
 			}
 		}
 		return nil
@@ -1670,7 +1711,7 @@ func (m *bpfEndpointManager) reportHealth(ready bool, detail string) {
 	})
 }
 
-func (m *bpfEndpointManager) doApplyPolicyToDataIface(iface string) (bpfInterfaceState, error) {
+func (m *bpfEndpointManager) doApplyPolicyToDataIface(iface, masterIface string, ifaceType IfaceType, attachXDPOnly bool) (bpfInterfaceState, error) {
 	var (
 		err   error
 		up    bool
@@ -1689,16 +1730,22 @@ func (m *bpfEndpointManager) doApplyPolicyToDataIface(iface string) (bpfInterfac
 		log.WithField("iface", iface).Debug("Ignoring interface that is down")
 		return state, nil
 	}
-	if err := m.dataIfaceStateFillJumps(ifaceName, &state); err != nil {
+	if err := m.dataIfaceStateFillJumps(ifaceName, attachXDPOnly, &state); err != nil {
 		return state, err
 	}
 
-	_, err = m.dp.ensureQdisc(iface)
-	if err != nil {
-		return state, err
+	hepIface := iface
+	if !attachXDPOnly {
+		_, err = m.dp.ensureQdisc(iface)
+		if err != nil {
+			return state, err
+		}
+	} else {
+		hepIface = masterIface
 	}
+
 	var hepPtr *proto.HostEndpoint
-	if hep, hepExists := m.hostIfaceToEpMap[iface]; hepExists {
+	if hep, hepExists := m.hostIfaceToEpMap[hepIface]; hepExists {
 		hepPtr = &hep
 	}
 
@@ -1723,12 +1770,12 @@ func (m *bpfEndpointManager) doApplyPolicyToDataIface(iface string) (bpfInterfac
 		go func() {
 			defer parallelWG.Done()
 			ingressAP6, egressAP6, xdpAP6, err6 = m.v6.applyPolicyToDataIface(iface, hepPtr, &state,
-				tcAttachPoint, xdpAttachPoint)
+				tcAttachPoint, xdpAttachPoint, ifaceType, attachXDPOnly)
 		}()
 	}
 	if m.v4 != nil {
 		ingressAP4, egressAP4, xdpAP4, err4 = m.v4.applyPolicyToDataIface(iface, hepPtr, &state,
-			tcAttachPoint, xdpAttachPoint)
+			tcAttachPoint, xdpAttachPoint, ifaceType, attachXDPOnly)
 	}
 
 	parallelWG.Wait()
@@ -1749,10 +1796,12 @@ func (m *bpfEndpointManager) doApplyPolicyToDataIface(iface string) (bpfInterfac
 	go func() {
 		defer parallelWG.Done()
 		xdpAP := mergeAttachPoints(xdpAP4, xdpAP6)
-		if hepPtr != nil && len(hepPtr.UntrackedTiers) == 1 && xdpAP != nil {
-			_, xdpErr = m.dp.ensureProgramAttached(xdpAP)
-		} else {
-			xdpErr = m.dp.ensureNoProgram(xdpAP)
+		if xdpAP != nil {
+			if hepPtr != nil && len(hepPtr.UntrackedTiers) == 1 {
+				_, xdpErr = m.dp.ensureProgramAttached(xdpAP)
+			} else {
+				xdpErr = m.dp.ensureNoProgram(xdpAP)
+			}
 		}
 	}()
 
@@ -1821,6 +1870,8 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 			}
 			return nil
 		}
+		attachXDPOnly := false
+		masterName := ""
 		m.ifacesLock.Lock()
 		val, ok := m.nameToIface[iface]
 		m.ifacesLock.Unlock()
@@ -1832,12 +1883,15 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 				masterIfa, err := m.dp.interfaceByIndex(val.info.masterIfIndex)
 				if err != nil {
 					log.Warnf("Failed to get master interface details for '%s'. Continuing to attach program", iface)
-				} else if !m.isDataIface(masterIfa.Name) {
-					log.Warnf("Master interface '%s' ignored. Add it to the bpfDataIfacePattern config", masterIfa.Name)
 				} else {
-					log.WithField("iface", iface).Debug(
-						"Ignoring bonding slave interface")
-					return set.RemoveItem
+					masterName = masterIfa.Name
+					if !m.isDataIface(masterIfa.Name) {
+						log.Warnf("Master interface '%s' ignored. Add it to the bpfDataIfacePattern config", masterIfa.Name)
+					} else {
+						log.WithField("iface", iface).Debug(
+							"Attaching xdp only")
+						attachXDPOnly = true
+					}
 				}
 			}
 		}
@@ -1846,7 +1900,7 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 		wg.Add(1)
 		go func(ifaceName string) {
 			defer wg.Done()
-			state, err := m.doApplyPolicyToDataIface(ifaceName)
+			state, err := m.doApplyPolicyToDataIface(ifaceName, masterName, val.info.ifaceType, attachXDPOnly)
 			m.ifacesLock.Lock()
 			m.withIface(ifaceName, func(bpfIface *bpfInterface) bool {
 				bpfIface.dpState = state
@@ -2001,19 +2055,21 @@ func (m *bpfEndpointManager) allocJumpIndicesForWEP(ifaceName string, idx *bpfIn
 	return nil
 }
 
-func (m *bpfEndpointManager) allocJumpIndicesForDataIface(ifaceName string, idx *bpfInterfaceJumpIndices) error {
+func (m *bpfEndpointManager) allocJumpIndicesForDataIface(ifaceName string, attachXDPOnly bool, idx *bpfInterfaceJumpIndices) error {
 	var err error
-	if idx.policyIdx[hook.Ingress] == -1 {
-		idx.policyIdx[hook.Ingress], err = m.jumpMapAlloc.Get(ifaceName)
-		if err != nil {
-			return err
+	if !attachXDPOnly {
+		if idx.policyIdx[hook.Ingress] == -1 {
+			idx.policyIdx[hook.Ingress], err = m.jumpMapAlloc.Get(ifaceName)
+			if err != nil {
+				return err
+			}
 		}
-	}
 
-	if idx.policyIdx[hook.Egress] == -1 {
-		idx.policyIdx[hook.Egress], err = m.jumpMapAlloc.Get(ifaceName)
-		if err != nil {
-			return err
+		if idx.policyIdx[hook.Egress] == -1 {
+			idx.policyIdx[hook.Egress], err = m.jumpMapAlloc.Get(ifaceName)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
@@ -2063,18 +2119,18 @@ func (m *bpfEndpointManager) wepStateFillJumps(ifaceName string, state *bpfInter
 	return nil
 }
 
-func (m *bpfEndpointManager) dataIfaceStateFillJumps(ifaceName string, state *bpfInterfaceState) error {
+func (m *bpfEndpointManager) dataIfaceStateFillJumps(ifaceName string, attachXDPOnly bool, state *bpfInterfaceState) error {
 	var err error
 
 	if m.v4 != nil {
-		err = m.allocJumpIndicesForDataIface(ifaceName, &state.v4)
+		err = m.allocJumpIndicesForDataIface(ifaceName, attachXDPOnly, &state.v4)
 		if err != nil {
 			return err
 		}
 	}
 
 	if m.v6 != nil {
-		err = m.allocJumpIndicesForDataIface(ifaceName, &state.v6)
+		err = m.allocJumpIndicesForDataIface(ifaceName, attachXDPOnly, &state.v6)
 		if err != nil {
 			return err
 		}
@@ -2527,37 +2583,58 @@ func (d *bpfEndpointManagerDataplane) applyPolicyToWeps(
 	return ingressAP, egressAP, errors.Join(ingressErr, egressErr)
 }
 
+func (d *bpfEndpointManagerDataplane) attachTCProgramToDataIface(
+	ifaceName string,
+	ep *proto.HostEndpoint,
+	state *bpfInterfaceState,
+	ap *tc.AttachPoint) (*tc.AttachPoint, *tc.AttachPoint, error) {
+	ingressAttachPoint := *ap
+	egressAttachPoint := *ap
+
+	var ingressErr, egressErr error
+	var parallelWG sync.WaitGroup
+	var ingressAP, egressAP *tc.AttachPoint
+	parallelWG.Add(1)
+	go func() {
+		defer parallelWG.Done()
+		ingressAP, ingressErr = d.attachDataIfaceProgram(ifaceName, ep, PolDirnIngress, state, &ingressAttachPoint)
+	}()
+
+	egressAP, egressErr = d.attachDataIfaceProgram(ifaceName, ep, PolDirnEgress, state, &egressAttachPoint)
+	parallelWG.Wait()
+	return ingressAP, egressAP, errors.Join(ingressErr, egressErr)
+}
+
 func (d *bpfEndpointManagerDataplane) applyPolicyToDataIface(
 	ifaceName string,
 	ep *proto.HostEndpoint,
 	state *bpfInterfaceState,
 	ap *tc.AttachPoint,
 	apxdp *xdp.AttachPoint,
+	ifaceType IfaceType,
+	attachXDPOnly bool,
 ) (*tc.AttachPoint, *tc.AttachPoint, *xdp.AttachPoint, error) {
-	ingressAttachPoint := *ap
-	egressAttachPoint := *ap
 	xdpAttachPoint := *apxdp
 
 	var parallelWG sync.WaitGroup
-	var ingressAP, egressAP *tc.AttachPoint
 	var xdpAP *xdp.AttachPoint
-	var ingressErr, egressErr, xdpErr error
+	var ingressAP, egressAP *tc.AttachPoint
+	var xdpErr, tcErr error
 
-	parallelWG.Add(2)
-	go func() {
-		defer parallelWG.Done()
-		ingressAP, ingressErr = d.attachDataIfaceProgram(ifaceName, ep, PolDirnIngress, state, &ingressAttachPoint)
-	}()
+	if ifaceType != IfaceTypeBond {
+		parallelWG.Add(1)
+		go func() {
+			defer parallelWG.Done()
+			xdpAP, xdpErr = d.attachXDPProgram(&xdpAttachPoint, ep, state)
+		}()
+	}
 
-	go func() {
-		defer parallelWG.Done()
-		xdpAP, xdpErr = d.attachXDPProgram(&xdpAttachPoint, ep, state)
-	}()
-
-	egressAP, egressErr = d.attachDataIfaceProgram(ifaceName, ep, PolDirnEgress, state, &egressAttachPoint)
+	if !attachXDPOnly {
+		ingressAP, egressAP, tcErr = d.attachTCProgramToDataIface(ifaceName, ep, state, ap)
+	}
 	parallelWG.Wait()
 
-	return ingressAP, egressAP, xdpAP, errors.Join(ingressErr, egressErr, xdpErr)
+	return ingressAP, egressAP, xdpAP, errors.Join(xdpErr, tcErr)
 }
 
 func (d *bpfEndpointManagerDataplane) attachDataIfaceProgram(
@@ -3081,6 +3158,9 @@ func (m *bpfEndpointManager) OnHEPUpdate(hostIfaceToEpMap map[string]proto.HostE
 				delete(m.hostIfaceToEpMap, ifaceName)
 			}
 			m.dirtyIfaceNames.Add(ifaceName)
+			for _, slaveIface := range m.getBondSlaves(ifaceName) {
+				m.dirtyIfaceNames.Add(slaveIface)
+			}
 		}
 		delete(hostIfaceToEpMap, ifaceName)
 	}
@@ -3095,6 +3175,10 @@ func (m *bpfEndpointManager) OnHEPUpdate(hostIfaceToEpMap map[string]proto.HostE
 		m.addHEPToIndexes(ifaceName, &newEp)
 		m.hostIfaceToEpMap[ifaceName] = newEp
 		m.dirtyIfaceNames.Add(ifaceName)
+		for _, slaveIface := range m.getBondSlaves(ifaceName) {
+			m.dirtyIfaceNames.Add(slaveIface)
+		}
+
 	}
 }
 
@@ -4059,6 +4143,15 @@ func (m *bpfEndpointManager) getIfaceTypeFromLink(link netlink.Link) IfaceType {
 		}
 	}
 	return IfaceTypeData
+}
+
+func (m *bpfEndpointManager) getBondSlaves(masterIfName string) []string {
+	slaveDevices := []string{}
+
+	if val, ok := m.hostIfaceToSlaveDevices[masterIfName]; ok {
+		slaveDevices = append(slaveDevices, val.Slice()...)
+	}
+	return slaveDevices
 }
 
 func newJumpMapAlloc(entryPoints int) *jumpMapAlloc {
