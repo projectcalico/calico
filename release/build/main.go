@@ -11,6 +11,10 @@ import (
 	cli "github.com/urfave/cli/v2"
 )
 
+const (
+	skipValidationFlag = "skip-validation"
+)
+
 var debug bool
 
 func configureLogging() {
@@ -66,11 +70,11 @@ func hashrelaseSubCommands(cfg *config.Config, runner *registry.DockerRunner) []
 			Name:  "build",
 			Usage: "Build a hashrelease locally in output/",
 			Flags: []cli.Flag{
-				&cli.BoolFlag{Name: "skip-validation", Usage: "Skip pre-build validation", Value: false},
+				&cli.BoolFlag{Name: skipValidationFlag, Usage: "Skip pre-build validation", Value: false},
 			},
 			Action: func(c *cli.Context) error {
 				configureLogging()
-				if !c.Bool("skip-validation") {
+				if !c.Bool(skipValidationFlag) {
 					tasks.PreReleaseValidate(cfg)
 				}
 				tasks.PinnedVersion(cfg)
@@ -87,11 +91,11 @@ func hashrelaseSubCommands(cfg *config.Config, runner *registry.DockerRunner) []
 			Name:  "publish",
 			Usage: "Publish hashrelease from output/ to hashrelease server",
 			Flags: []cli.Flag{
-				&cli.BoolFlag{Name: "skip-validation", Usage: "Skip pre-publish validation", Value: false},
+				&cli.BoolFlag{Name: skipValidationFlag, Usage: "Skip pre-publish validation", Value: false},
 			},
 			Action: func(c *cli.Context) error {
 				configureLogging()
-				if !c.Bool("skip-validation") {
+				if !c.Bool(skipValidationFlag) {
 					tasks.HashreleaseValidate(cfg)
 				}
 				tasks.OperatorHashreleasePush(runner, cfg)
