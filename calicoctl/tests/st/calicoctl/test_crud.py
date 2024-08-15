@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2021 Tigera, Inc. All rights reserved.
+# Copyright (c) 2015-2024 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,7 +20,7 @@ from nose_parameterized import parameterized
 from tests.st.test_base import TestBase
 from tests.st.utils.utils import log_and_run, calicoctl, \
     API_VERSION, name, ERROR_CONFLICT, NOT_FOUND, NOT_NAMESPACED, \
-    SET_DEFAULT, NOT_SUPPORTED, KUBERNETES_NP, writeyaml
+    SET_DEFAULT, NOT_SUPPORTED, KUBERNETES_NP, writeyaml, add_tier_label, kind, namespace
 from tests.st.utils.data import *
 
 logging.basicConfig(level=logging.DEBUG, format="%(message)s")
@@ -34,6 +34,9 @@ class TestCalicoctlCommands(TestBase):
     BGP exported routes are hard to test and aren't expected to change much so
     write tests for them (yet)
     """
+
+    def setUp(self):
+        super(TestCalicoctlCommands, self).setUp()
 
     def test_get(self):
         """
@@ -115,14 +118,14 @@ class TestCalicoctlCommands(TestBase):
         rc.assert_no_error()
 
         # Get the 2 resources by name
-        rc = calicoctl("get ippool %s %s" % (name(ippool_name1_rev1_v4), name(ippool_name2_rev1_v6)))
+        rc = calicoctl("get ippool %s %s --export" % (name(ippool_name1_rev1_v4), name(ippool_name2_rev1_v6)))
         rc.assert_no_error()
         rc.assert_output_equals(ippool_name1_rev1_table + "   \n\n" + ippool_name2_rev1_table)
 
         rcNoErr = rc
 
         # Get the 2 + one that does not exist
-        rc = calicoctl("get ippool %s %s %s" % (name(ippool_name1_rev1_v4), "blah", name(ippool_name2_rev1_v6)))
+        rc = calicoctl("get ippool %s %s %s --export" % (name(ippool_name1_rev1_v4), "blah", name(ippool_name2_rev1_v6)))
         rc.assert_error()
         rc.assert_output_equals(ippool_name1_rev1_table +
                 "   \n\n" +
@@ -130,7 +133,7 @@ class TestCalicoctlCommands(TestBase):
                 "      \n\n" +
                 "resource does not exist: IPPool(blah) with error: <nil>\n")
 
-        rc = calicoctl("get ippool %s %s %s" % (name(ippool_name1_rev1_v4), "blah", name(ippool_name2_rev1_v6)),
+        rc = calicoctl("get ippool %s %s %s --export" % (name(ippool_name1_rev1_v4), "blah", name(ippool_name2_rev1_v6)),
                 only_stdout=True)
 
         # Check that the output with no errors and with some errors equal for
@@ -396,21 +399,24 @@ class TestCalicoctlCommands(TestBase):
         rc = calicoctl("create", data=globalnetworkpolicy_name1_rev1, format="json", load_as_stdin=True)
         rc.assert_no_error()
         rc = calicoctl("get globalnetworkpolicy %s -o json" % name(globalnetworkpolicy_name1_rev1))
-        rc.assert_data(globalnetworkpolicy_name1_rev1, format="json")
+        res = add_tier_label(globalnetworkpolicy_name1_rev1)
+        rc.assert_data(res, format="json")
 
         # Use apply to update the GlobalNetworkPolicy and get the resource to check the
         # data was stored (using YAML input/output).
         rc = calicoctl("apply", data=globalnetworkpolicy_name1_rev2, format="yaml", load_as_stdin=True)
         rc.assert_no_error()
         rc = calicoctl("get globalnetworkpolicy %s -o yaml" % name(globalnetworkpolicy_name1_rev1))
-        rc.assert_data(globalnetworkpolicy_name1_rev2, format="yaml")
+        res = add_tier_label(globalnetworkpolicy_name1_rev2)
+        rc.assert_data(res, format="yaml")
 
         # Use replace to update the GlobalNetworkPolicy and get the resource to check the
         # data was stored (using JSON input/output).
         rc = calicoctl("replace", data=globalnetworkpolicy_name1_rev1, format="json", load_as_stdin=True)
         rc.assert_no_error()
         rc = calicoctl("get globalnetworkpolicy %s -o json" % name(globalnetworkpolicy_name1_rev1))
-        rc.assert_data(globalnetworkpolicy_name1_rev1, format="json")
+        res = add_tier_label(globalnetworkpolicy_name1_rev1)
+        rc.assert_data(res, format="json")
 
         # Use delete to delete the GlobalNetworkPolicy (using YAML input).
         rc = calicoctl("delete", data=globalnetworkpolicy_name1_rev1, format="yaml", load_as_stdin=True)
@@ -433,7 +439,8 @@ class TestCalicoctlCommands(TestBase):
         # Get the resources using file based input.  It should return the
         # same results.
         rc = calicoctl("get -o yaml", data=resources)
-        rc.assert_data(resources)
+        res = add_tier_label(resources)
+        rc.assert_data(res)
 
         # Use a get/list to get one of the resource types and an exact get to
         # get the other.  Join them together and use it to delete the resource.
@@ -441,7 +448,8 @@ class TestCalicoctlCommands(TestBase):
         # We use the data returned from the get since this should be able to
         # be used directly as input into the next command.
         rc = calicoctl("get globalnetworkpolicy %s -o yaml" % name(globalnetworkpolicy_name1_rev1))
-        rc.assert_data(globalnetworkpolicy_name1_rev1)
+        res = add_tier_label(globalnetworkpolicy_name1_rev1)
+        rc.assert_data(res)
         gnp = rc.decoded
 
         rc = calicoctl("get workloadendpoints -o yaml --all-namespaces")
@@ -494,11 +502,36 @@ class TestCalicoctlCommands(TestBase):
         (hostendpoint_name1_rev1,),
         (bgppeer_name1_rev1_v4,),
         (node_name1_rev1,),
+        (tier_name1_rev1,),
     ])
+
     def test_non_namespaced(self, data):
         """
         Test namespace is handled as expected for each non-namespaced resource type.
         """
+        return self._test_non_namespaced(data)
+
+    @parameterized.expand([
+        (globalnetworkpolicy_tiered_name2_rev1,),
+    ])
+    def test_non_namespaced_tiered(self, data):
+        """
+        Test namespace is handled as expected for each non-namespaced resource type.
+        """
+        self._create_admin_tier()
+        self._test_non_namespaced(data)
+        self._delete_admin_tier()
+
+    def _create_admin_tier(self):
+        rc = calicoctl("create", data=tier_name1_rev1)
+        rc.assert_no_error()
+
+    def _delete_admin_tier(self):
+        # Delete the resource
+        rc = calicoctl("delete", data=tier_name1_rev1)
+        rc.assert_no_error()
+
+    def _test_non_namespaced(self, data):
         # Clone the data so that we can modify the metadata parms.
         data1 = copy.deepcopy(data)
         kind = data['kind']
@@ -600,6 +633,20 @@ class TestCalicoctlCommands(TestBase):
         """
         Tests namespace is handled as expected for each namespaced resource type.
         """
+        self._test_namespaced(data)
+
+    @parameterized.expand([
+        (networkpolicy_tiered_name2_rev1,),
+    ])
+    def test_namespaced_tiered(self, data):
+        """
+        Tests namespace is handled as expected for each namespaced resource type.
+        """
+        self._create_admin_tier()
+        self._test_namespaced(data)
+        self._delete_admin_tier()
+
+    def _test_namespaced(self, data):
         # Clone the data so that we can modify the metadata parms.
         data1 = copy.deepcopy(data)
         data2 = copy.deepcopy(data)
@@ -626,6 +673,17 @@ class TestCalicoctlCommands(TestBase):
             data1['metadata']['name'] = "name1"
             data2['metadata']['name'] = "name2"
             data2['spec']['cidr'] = "10.10.1.0/24"
+        elif kind == "NetworkPolicy" or kind == "StagedNetworkPolicy" or kind == "StagedKubernetesNetworkPolicy":
+            tier = "default"
+            if 'tier' in data1['spec']:
+                tier = data1['spec']['tier']
+            data1['metadata']['name'] = tier + "." + 'name1'
+            data1 = add_tier_label(data1)
+            tier = "default"
+            if 'tier' in data2['spec']:
+                tier = data2['spec']['tier']
+            data2['metadata']['name'] = tier + "." + 'name2'
+            data2 = add_tier_label(data2)
         else:
             data1['metadata']['name'] = "name1"
             data2['metadata']['name'] = "name2"
@@ -649,7 +707,7 @@ class TestCalicoctlCommands(TestBase):
         # Get the resource with name1 and default namespace.  For a namespaced
         # resource this should match the modified data to default the
         # namespace.
-        rc = calicoctl("get %s %s --namespace default -o yaml" % (kind, data1['metadata']['name']))
+        rc = calicoctl("get %s %s --namespace default -o yaml" % ((str(kind)).lower(), data1['metadata']['name']))
         rc.assert_data(data1)
 
         if kind == "WorkloadEndpoint":
@@ -700,6 +758,54 @@ class TestCalicoctlCommands(TestBase):
         rc.assert_error(NOT_FOUND)
         rc = calicoctl("delete", data2)
         rc.assert_no_error()
+
+    @parameterized.expand([
+        (globalnetworkpolicy_os_name1_rev1, False),
+        (networkpolicy_os_name1_rev1, True),
+    ])
+    def test_os_compat(self, data, is_namespaced):
+        """
+        Test policy CRUD commands with calico (open source) style manifests.
+        """
+        # Clone the data so that we can modify the metadata parms.
+        data1 = copy.deepcopy(data)
+
+        # Create the policy without a tier present in the name or spec.
+        rc = calicoctl("create", data=data1)
+        rc.assert_no_error()
+
+        # On get, we expect name to be prefixed with the "default" tier name as
+        # well as have the tier field and value present in the spec.
+        # First we check with the name without tier in the name.
+        if is_namespaced:
+            rc = calicoctl("get %s %s --namespace default -o yaml" % (data['kind'], data['metadata']['name']))
+        else:
+            rc = calicoctl("get %s %s -o yaml" % (data['kind'], data['metadata']['name']))
+        data1['metadata']['name'] = 'default.' + data1['metadata']['name']
+        data1['spec']['tier'] = 'default'
+        data1 = add_tier_label(data1)
+        rc.assert_data(data1)
+
+        # Then we check with the tiered policy name.
+        if is_namespaced:
+            rc = calicoctl("get %s %s --namespace default -o yaml" % (data['kind'], data1['metadata']['name']))
+        else:
+            rc = calicoctl("get %s %s -o yaml" % (data['kind'], data1['metadata']['name']))
+        rc.assert_data(data1)
+
+        # Deleting without a tiered policy name will delete the correct policy
+        if is_namespaced:
+            rc = calicoctl("delete %s %s --namespace default" % (data['kind'], data['metadata']['name']))
+        else:
+            rc = calicoctl("delete %s %s" % (data['kind'], data['metadata']['name']))
+        rc.assert_no_error()
+
+        # And we re-check to make sure the deleted policy is not present.
+        if is_namespaced:
+            rc = calicoctl("get %s %s --namespace default -o yaml" % (data['kind'], data['metadata']['name']))
+        else:
+            rc = calicoctl("get %s %s -o yaml" % (data['kind'], data['metadata']['name']))
+        rc.assert_error(NOT_FOUND)
 
     def test_bgpconfig(self):
         """
@@ -804,17 +910,6 @@ class TestCalicoctlCommands(TestBase):
         """
         # Try to create a cluster info, should be rejected.
         rc = calicoctl("create", data=clusterinfo_name1_rev1)
-        rc.assert_error(NOT_SUPPORTED)
-        rc = calicoctl("get clusterinfo %s -o yaml" % name(clusterinfo_name1_rev1))
-        rc.assert_error(NOT_FOUND)
-
-        # Replace the cluster information (with no resource version) - assert not supported.
-        rc = calicoctl("replace", data=clusterinfo_name1_rev2)
-        rc.assert_error(NOT_FOUND)
-
-        # Apply an update to the cluster information and assert not found (we need the node to
-        # create it).
-        rc = calicoctl("apply", data=clusterinfo_name1_rev2)
         rc.assert_error(NOT_SUPPORTED)
 
         # Delete the resource by name (i.e. without using a resource version) - assert not
@@ -1016,6 +1111,29 @@ class TestCalicoctlCommands(TestBase):
         rc = calicoctl("delete", data=k8s_np)
         rc.assert_error(text=NOT_SUPPORTED)
         rc.assert_error(text=KUBERNETES_NP)
+
+    def test_tier_list_order(self):
+        """
+        Test that the list output for a tier is ordered by
+        the order field.
+        """
+        # Create 3 tiers.
+        resources = [tier_name1_rev1, tier_name2_rev1, globalnetworkpolicy_name1_rev1]
+        rc = calicoctl ("create", data=resources)
+        rc.assert_no_error()
+
+        # Get all the tiers.
+        rc = calicoctl("get tiers -o yaml")
+        rc.assert_no_error()
+        tierList = rc.decoded
+
+        # Validate the tiers are ordered correctly. Default should have a value of nil and should be placed last.
+        self.assertEqual(tierList['items'][0]['metadata']['name'], name(tier_name2_rev1))
+        self.assertEqual(tierList['items'][1]['metadata']['name'], name(tier_name1_rev1))
+        self.assertEqual(tierList['items'][2]['metadata']['name'], 'default')
+
+        # Delete the resources
+        rc = calicoctl("delete", data=resources)
 
     @parameterized.expand([
         ('replace'),
@@ -2379,6 +2497,9 @@ class InvalidData(TestBase):
         'metadata:\n'
         '  resourceVersion: ' % (API_VERSION, API_VERSION, testdata['kind'], testdata['kind'])
     )
+
+    def setUp(self):
+        super(InvalidData, self).setUp()
 
     @parameterized.expand(testdata)
     def test_invalid_profiles_rejected(self, name, testdata, error):
