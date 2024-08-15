@@ -56,14 +56,53 @@ var (
 	filterType = knftables.FilterType
 	routeType  = knftables.RouteType
 
-	// Each type of hook requires a specific filterPriority in order to be executed in the correct order.
+	// Each type of hook requires a specific filterPriority to be executed in the correct order.
+	// We also want to make sure that our priorities are unique, as to avoid unspecified ordering that can
+	// occur when two hooks share the same priority.
+	//
+	// Calico and kube-proxy share the following hooks, with relative priorities shown:
+	//
+	// INPUT:
+	// |------------|--------------|--------|
+	// | calico     | mangle-INPUT | -150
+	// | kube-proxy | filter-input | -110
+	// | calico     | filter-INPUT | 0
+	//
+	// FORWARD:
+	// |------------|----------------|--------|
+	// | calico     | mangle-FORWARD | -150
+	// | kube-proxy | filter-forward | -110
+	// | calico     | filter-FORWARD | 0
+	//
+	// OUTPUT:
+	// |------------|-------------------------|--------|
+	// | calico     | mangle-OUTPUT           | -150
+	// | kube-proxy | filter-output           | -110
+	// | calico     | filter-output-post-dnat | -90
+	// | calico     | filter-OUTPUT           | 0
+	//
+	// PREROUTING:
+	// |------------|-------------------|--------|
+	// | calico     | raw-PREROUTING    | -300
+	// | calico     | mangle-PREROUTING | -150
+	// | kube-proxy | filter-prerouting | -110
+	// | calico     | nat-PREROUTING    | -100
+	//
+	// POSTROUTING:
+	// |------------|--------------------|--------|
+	// | calico     | mangle-POSTROUTING | -150
+	// | kube-proxy | nat-postrouting    | 100
+	// | calico     | nat-POSTROUTING    | 110
+	//
+	// The full set of kube-proxy base chains can be found here:
+	// - https://github.com/kubernetes/kubernetes/blob/master/pkg/proxy/nftables/proxier.go
 	filterPriority = knftables.FilterPriority
 	rawPriority    = knftables.RawPriority
 	manglePriority = knftables.ManglePriority
-	snatPriority   = knftables.SNATPriority
+	snatPriority   = knftables.SNATPriority + "+10"
 	dnatPriority   = knftables.DNATPriority
 
-	// Calico uses a single nftables with a variety of hooks.
+	// Calico uses a single nftables table with a variety of hooks.
 	// The top level base chains are laid out below.
 	baseChains = map[string]knftables.Chain{
 		// Filter hook.
