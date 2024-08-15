@@ -738,7 +738,7 @@ func (m *bpfEndpointManager) withIface(ifaceName string, fn func(iface *bpfInter
 		m.nameToIface[ifaceName] = iface
 	}
 
-	dirty = dirty || reflect.DeepEqual(iface, ifaceCopy)
+	dirty = dirty || iface.info != ifaceCopy.info
 
 	if !dirty {
 		return
