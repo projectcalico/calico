@@ -80,6 +80,8 @@ var (
 
 	interfaceRegex          = regexp.MustCompile("^[a-zA-Z0-9_.-]{1,15}$")
 	bgpFilterInterfaceRegex = regexp.MustCompile("^[a-zA-Z0-9_.*-]{1,15}$")
+	bgpFilterPrefixLengthV4 = regexp.MustCompile("^([0-9]|[12][0-9]|3[0-2])$")
+	bgpFilterPrefixLengthV6 = regexp.MustCompile("^([0-9]|[1-9][0-9]|1[0-1][0-9]|12[0-8])$")
 	ignoredInterfaceRegex   = regexp.MustCompile("^[a-zA-Z0-9_.*-]{1,15}$")
 	ifaceFilterRegex        = regexp.MustCompile("^[a-zA-Z0-9:._+-]{1,15}$")
 	actionRegex             = regexp.MustCompile("^(Allow|Deny|Log|Pass)$")
@@ -163,6 +165,8 @@ func init() {
 	registerFieldValidator("action", validateAction)
 	registerFieldValidator("interface", validateInterface)
 	registerFieldValidator("bgpFilterInterface", validateBGPFilterInterface)
+	registerFieldValidator("bgpFilterPrefixLengthV4", validateBGPFilterPrefixLengthV4)
+	registerFieldValidator("bgpFilterPrefixLengthV6", validateBGPFilterPrefixLengthV6)
 	registerFieldValidator("ignoredInterface", validateIgnoredInterface)
 	registerFieldValidator("datastoreType", validateDatastoreType)
 	registerFieldValidator("name", validateName)
@@ -300,6 +304,18 @@ func validateBGPFilterInterface(fl validator.FieldLevel) bool {
 	s := fl.Field().String()
 	log.Debugf("Validate BGPFilter rule interface: %s", s)
 	return s == "*" || bgpFilterInterfaceRegex.MatchString(s)
+}
+
+func validateBGPFilterPrefixLengthV4(fl validator.FieldLevel) bool {
+	s := fmt.Sprint(fl.Field())
+	log.Debugf("Validate BGPFilter PrefixLength v4: %s", s)
+	return s == "*" || bgpFilterPrefixLengthV4.MatchString(s)
+}
+
+func validateBGPFilterPrefixLengthV6(fl validator.FieldLevel) bool {
+	s := fmt.Sprint(fl.Field())
+	log.Debugf("Validate BGPFilter PrefixLength v6: %s", s)
+	return s == "*" || bgpFilterPrefixLengthV6.MatchString(s)
 }
 
 func validateIgnoredInterface(fl validator.FieldLevel) bool {
@@ -606,7 +622,7 @@ func ValidateIPv4Network(addr string) error {
 	return fmt.Errorf("Invalid IPv4 network %s", addr)
 }
 
-// validateIPv4Network validates the field is a valid (strictly masked) IPv6 network.
+// validateIPv6Network validates the field is a valid (strictly masked) IPv6 network.
 // An IP address is valid, and assumed to be fully masked (i.e /128)
 func validateIPv6Network(fl validator.FieldLevel) bool {
 	n := fl.Field().String()
@@ -1395,15 +1411,15 @@ func validateReachableByField(fl validator.FieldLevel) bool {
 
 func validateBGPFilterRuleV4(structLevel validator.StructLevel) {
 	fs := structLevel.Current().Interface().(api.BGPFilterRuleV4)
-	validateBGPFilterRule(structLevel, fs.CIDR, fs.MatchOperator)
+	validateBGPFilterRule(structLevel, fs.CIDR, fs.MatchOperator, fs.PrefixLength, nil)
 }
 
 func validateBGPFilterRuleV6(structLevel validator.StructLevel) {
 	fs := structLevel.Current().Interface().(api.BGPFilterRuleV6)
-	validateBGPFilterRule(structLevel, fs.CIDR, fs.MatchOperator)
+	validateBGPFilterRule(structLevel, fs.CIDR, fs.MatchOperator, nil, fs.PrefixLength)
 }
 
-func validateBGPFilterRule(structLevel validator.StructLevel, cidr string, op api.BGPFilterMatchOperator) {
+func validateBGPFilterRule(structLevel validator.StructLevel, cidr string, op api.BGPFilterMatchOperator, prefixLengthV4 *api.BGPFilterPrefixLengthV4, prefixLengthV6 *api.BGPFilterPrefixLengthV6) {
 	if cidr != "" && op == "" {
 		structLevel.ReportError(cidr, "CIDR", "",
 			reason("MatchOperator cannot be empty when CIDR is not"), "")
@@ -1411,6 +1427,14 @@ func validateBGPFilterRule(structLevel validator.StructLevel, cidr string, op ap
 	if cidr == "" && op != "" {
 		structLevel.ReportError(op, "MatchOperator", "",
 			reason("CIDR cannot be empty when MatchOperator is not"), "")
+	}
+	if cidr == "" && prefixLengthV4 != nil {
+		structLevel.ReportError(prefixLengthV4, "PrefixLength", "",
+			reason("CIDR cannot be empty when PrefixLength is not"), "")
+	}
+	if cidr == "" && prefixLengthV6 != nil {
+		structLevel.ReportError(prefixLengthV6, "PrefixLength", "",
+			reason("CIDR cannot be empty when PrefixLength is not"), "")
 	}
 }
 
