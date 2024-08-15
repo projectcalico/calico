@@ -3496,6 +3496,7 @@ var _ = Describe("Wireguard (disabled)", func() {
 	for _, testFailFlags := range []mocknetlink.FailFlags{
 		mocknetlink.FailNextNewNetlink, mocknetlink.FailNextLinkDel, mocknetlink.FailNextLinkByName,
 		mocknetlink.FailNextRuleList, mocknetlink.FailNextRuleDel, mocknetlink.FailNextRouteList,
+		mocknetlink.FailNextRouteListEINTR,
 	} {
 		failFlags := testFailFlags
 		desc := fmt.Sprintf("failed netlink management (%v), sync with incorrect rule", failFlags)
