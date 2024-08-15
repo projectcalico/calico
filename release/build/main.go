@@ -94,6 +94,7 @@ func hashrelaseSubCommands(cfg *config.Config, runner *registry.DockerRunner) []
 				if !c.Bool("skip-validation") {
 					tasks.HashreleaseValidate(cfg)
 				}
+				tasks.OperatorHashreleasePush(runner, cfg)
 				tasks.HashreleasePush(cfg)
 				return nil
 			},
