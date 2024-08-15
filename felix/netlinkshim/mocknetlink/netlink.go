@@ -121,6 +121,7 @@ const (
 	FailNextLinkByName
 	FailNextLinkByNameNotFound
 	FailNextRouteList
+	FailNextRouteListEINTR
 	FailNextRouteAddOrReplace
 	FailNextRouteAdd
 	FailNextRouteReplace
@@ -718,6 +719,21 @@ func (d *MockNetlinkDataplane) RuleDel(rule *netlink.Rule) error {
 	return nil
 }
 
+func (d *MockNetlinkDataplane) RouteListFilteredIter(
+	family int,
+	filter *netlink.Route,
+	filterMask uint64,
+	f func(netlink.Route) (cont bool),
+) error {
+	routes, err := d.RouteListFiltered(family, filter, filterMask)
+	for _, route := range routes {
+		if !f(route) {
+			break
+		}
+	}
+	return err
+}
+
 func (d *MockNetlinkDataplane) RouteListFiltered(family int, filter *netlink.Route, filterMask uint64) ([]netlink.Route, error) {
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
@@ -792,6 +808,11 @@ func (d *MockNetlinkDataplane) RouteListFiltered(family int, filter *netlink.Rou
 		}
 		routes = append(routes, route)
 	}
+
+	if d.shouldFail(FailNextRouteListEINTR) {
+		return routes[:len(routes)/2], unix.EINTR
+	}
+
 	return routes, nil
 }
 
