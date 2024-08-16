@@ -308,8 +308,12 @@ func New(
 		ifaceToRoutes: map[RouteClass]map[string]map[ip.CIDR]Target{},
 		cidrToIfaces:  map[RouteClass]map[ip.CIDR]set.Set[string]{},
 
-		kernelRoutes: deltatracker.New[kernelRouteKey, kernelRoute](),
-		pendingARPs:  map[string]map[ip.Addr]net.HardwareAddr{},
+		kernelRoutes: deltatracker.New[kernelRouteKey, kernelRoute](
+			deltatracker.WithValuesEqualFn[kernelRouteKey, kernelRoute](func(a, b kernelRoute) bool {
+				return a == b
+			}),
+		),
+		pendingARPs: map[string]map[ip.Addr]net.HardwareAddr{},
 
 		ifaceIndexToGraceInfo: map[int]graceInfo{},
 		ifaceNameToIndex:      map[string]int{},
