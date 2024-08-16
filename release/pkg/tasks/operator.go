@@ -27,7 +27,7 @@ func getOperatorRepoDetails(cfg *config.Config) (string, string) {
 // OperatorHashreleaseBuild builds the operator images for the hashrelease.
 // As images are build with the latest tag, they are re-tagged with the hashrelease version
 func OperatorHashreleaseBuild(runner *registry.DockerRunner, cfg *config.Config) {
-	outputDir := cfg.OutputDir
+	outputDir := cfg.TmpFolderPath()
 	operatorDir := operator.Dir(cfg.TmpFolderPath())
 	componentsVersionPath, err := hashrelease.GenerateComponentsVersionFile(outputDir)
 	if err != nil {
@@ -74,7 +74,7 @@ func OperatorHashreleaseBuild(runner *registry.DockerRunner, cfg *config.Config)
 // pushing the operator images to the registry,
 // then pushing a manifest list of the operator images to the registry.
 func OperatorHashreleasePush(runner *registry.DockerRunner, cfg *config.Config) {
-	operatorVersion, err := hashrelease.RetrievePinnedOperatorVersion(cfg.OutputDir)
+	operatorVersion, err := hashrelease.RetrievePinnedOperatorVersion(cfg.TmpFolderPath())
 	registry, imageName := getOperatorRepoDetails(cfg)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get operator version")
