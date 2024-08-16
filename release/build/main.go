@@ -18,9 +18,10 @@ import (
 )
 
 const (
-	skipValidationFlag = "skip-validation"
-	skipImageScanFlag  = "skip-image-scan"
-	pathFlag           = "path"
+	skipValidationFlag  = "skip-validation"
+	skipImageScanFlag   = "skip-image-scan"
+	pathFlag            = "path"
+	operatorVersionFlag = "operator-version"
 )
 
 var debug bool
@@ -174,8 +175,8 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 			Name:  "build",
 			Usage: "Build an official Calico release",
 			Flags: []cli.Flag{
-				&cli.BoolFlag{Name: "skip-validation", Usage: "Skip pre-build validation", Value: false},
-				&cli.StringFlag{Name: "operator-version", Usage: "The version of the operator to use", Required: true},
+				&cli.BoolFlag{Name: skipValidationFlag, Usage: "Skip pre-build validation", Value: false},
+				&cli.StringFlag{Name: operatorVersionFlag, Usage: "The version of the operator to use", Required: true},
 			},
 			Action: func(c *cli.Context) error {
 				configureLogging("release-build.log")
@@ -185,14 +186,14 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 				if err != nil {
 					return err
 				}
-				operatorVer := c.String("operator-version")
+				operatorVer := c.String(operatorVersionFlag)
 
 				// Configure the builder based on CLI flags.
 				opts := []builder.Option{
 					builder.WithRepoRoot(cfg.RepoRootDir),
 					builder.WithVersions(ver, operatorVer),
 				}
-				if !c.Bool("skip-validation") {
+				if !c.Bool(skipValidationFlag) {
 					opts = append(opts, builder.WithPreReleaseValidation(false))
 				}
 				r := builder.NewReleaseBuilder(opts...)
