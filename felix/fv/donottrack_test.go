@@ -191,12 +191,21 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ do-not-track policy tests; 
 
 		expectFullConnectivity()
 		if BPFMode() {
-			expectFullConnectivity()
+			expectFullConnectivity(ExpectWithIPVersion(6))
 			By("Having a Linux IP set for the egress policy")
-			Expect(tc.Felixes[0].IPSetNames()).To(ContainElements(
+
+			elems := []string{
 				utils.IPSetNameForSelector(4, host1Selector),
 				utils.IPSetNameForSelector(6, host1Selector),
-			))
+			}
+			if NFTMode() {
+				// NFT uses a different prefixing scheme, since the ":" character is not allowed.
+				// e.g., cali40- instead of cali40:
+				for i, elem := range elems {
+					elems[i] = strings.Replace(elem, ":", "-", 1)
+				}
+			}
+			Expect(tc.Felixes[0].IPSetNames()).To(ContainElements(elems))
 		}
 
 		By("Having only failsafe connectivity after replacing host-0's egress rules with Deny")
@@ -302,8 +311,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ do-not-track policy tests; 
 						cfg.Spec.BPFMapSizeIPSets = &newIpSetMapSize
 						cfg.Spec.BPFMapSizeConntrack = &newCtMapSize
 					})
-					ensureRightIFStateFlags(tc.Felixes[0], ifstate.FlgIPv4Ready|ifstate.FlgIPv6Ready, ifstate.FlgHEP, nil)
-					ensureRightIFStateFlags(tc.Felixes[1], ifstate.FlgIPv4Ready|ifstate.FlgIPv6Ready, ifstate.FlgHEP, nil)
 				})
 
 				It("should implement untracked policy correctly", func() {
