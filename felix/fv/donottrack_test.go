@@ -302,6 +302,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ do-not-track policy tests; 
 						cfg.Spec.BPFMapSizeIPSets = &newIpSetMapSize
 						cfg.Spec.BPFMapSizeConntrack = &newCtMapSize
 					})
+					ensureRightIFStateFlags(tc.Felixes[0], ifstate.FlgIPv4Ready|ifstate.FlgIPv6Ready, ifstate.FlgHEP, nil)
+					ensureRightIFStateFlags(tc.Felixes[1], ifstate.FlgIPv4Ready|ifstate.FlgIPv6Ready, ifstate.FlgHEP, nil)
 				})
 
 				It("should implement untracked policy correctly", func() {
