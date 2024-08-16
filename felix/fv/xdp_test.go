@@ -183,23 +183,6 @@ func xdpTest(getInfra infrastructure.InfraFactory, proto string) {
 		expectNoConnectivity(cc)
 	})
 
-	xdpProgramID := func(felix *infrastructure.Felix, iface string) int {
-		out, err := felix.ExecCombinedOutput("ip", "link", "show", "dev", iface)
-		Expect(err).NotTo(HaveOccurred())
-		r := regexp.MustCompile(`prog/xdp id (\d+)`)
-		matches := r.FindStringSubmatch(out)
-		if len(matches) == 0 {
-			return 0
-		}
-		id, err := strconv.Atoi(matches[1])
-		Expect(err).NotTo(HaveOccurred())
-		return id
-	}
-
-	xdpProgramAttached := func(felix *infrastructure.Felix, iface string) bool {
-		return xdpProgramID(felix, iface) != 0
-	}
-
 	xdpProgramAttachedServerEth0 := func() bool {
 		return xdpProgramAttached(tc.Felixes[srvr], "eth0")
 	}
@@ -538,4 +521,21 @@ func xdpTest(getInfra infrastructure.InfraFactory, proto string) {
 			})
 		})
 	})
+}
+
+func xdpProgramID(felix *infrastructure.Felix, iface string) int {
+	out, err := felix.ExecCombinedOutput("ip", "link", "show", "dev", iface)
+	Expect(err).NotTo(HaveOccurred())
+	r := regexp.MustCompile(`prog/xdp id (\d+)`)
+	matches := r.FindStringSubmatch(out)
+	if len(matches) == 0 {
+		return 0
+	}
+	id, err := strconv.Atoi(matches[1])
+	Expect(err).NotTo(HaveOccurred())
+	return id
+}
+
+func xdpProgramAttached(felix *infrastructure.Felix, iface string) bool {
+	return xdpProgramID(felix, iface) != 0
 }
