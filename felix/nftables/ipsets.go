@@ -569,7 +569,7 @@ func (s *IPSets) NFTablesSet(name string) *knftables.Set {
 		return nil
 	}
 
-	flags := make([]knftables.SetFlag, 0, 1)
+	var flags []knftables.SetFlag
 	switch metadata.Type {
 	case ipsets.IPSetTypeHashIPPort:
 		// IP and port sets don't support the interval flag.

@@ -16,6 +16,7 @@ package infrastructure
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"os"
 	"path"
@@ -26,7 +27,12 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
+
+	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
+	"github.com/projectcalico/calico/libcalico-go/lib/errors"
+	"github.com/projectcalico/calico/libcalico-go/lib/options"
 
 	"github.com/projectcalico/calico/felix/bpf/jump"
 	"github.com/projectcalico/calico/felix/bpf/polprog"
@@ -566,4 +572,22 @@ func (p PrometheusMetric) Float() (float64, error) {
 		return 0, err
 	}
 	return strconv.ParseFloat(raw, 64)
+}
+
+func UpdateFelixConfiguration(client client.Interface, deltaFn func(*api.FelixConfiguration)) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	cfg, err := client.FelixConfigurations().Get(ctx, "default", options.GetOptions{})
+	if _, doesNotExist := err.(errors.ErrorResourceDoesNotExist); doesNotExist {
+		cfg = api.NewFelixConfiguration()
+		cfg.Name = "default"
+		deltaFn(cfg)
+		_, err = client.FelixConfigurations().Create(ctx, cfg, options.SetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+	} else {
+		Expect(err).NotTo(HaveOccurred())
+		deltaFn(cfg)
+		_, err = client.FelixConfigurations().Update(ctx, cfg, options.SetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+	}
 }

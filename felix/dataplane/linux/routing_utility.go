@@ -91,7 +91,10 @@ func blackholeRoutes(localIPAMBlocks map[string]*proto.RouteUpdate) []routetable
 	return rtt
 }
 
-func noEncapRoute(cidr ip.CIDR, r *proto.RouteUpdate) *routetable.Target {
+func noEncapRoute(parentIface string, cidr ip.CIDR, r *proto.RouteUpdate) *routetable.Target {
+	if parentIface == "" {
+		return nil
+	}
 	if !r.GetSameSubnet() {
 		return nil
 	}
