@@ -44,12 +44,20 @@ var (
 )
 
 func NewReleaseBuilder(opts ...Option) *ReleaseBuilder {
-	b := &ReleaseBuilder{runner: &RealCommandRunner{}}
+	// Configure defaults here.
+	b := &ReleaseBuilder{
+		runner:   &RealCommandRunner{},
+		validate: true,
+	}
+
+	// Run through provided options.
 	for _, o := range opts {
 		if err := o(b); err != nil {
 			logrus.WithError(err).Fatal("Failed to apply option to release builder")
 		}
 	}
+
+	// Validate the resulting configuration.
 	if b.repoRoot == "" {
 		logrus.Fatal("No repo root specified")
 	}
