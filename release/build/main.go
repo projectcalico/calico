@@ -118,7 +118,7 @@ func hashrelaseSubCommands(cfg *config.Config, runner *registry.DockerRunner) []
 					builder.IsHashRelease(),
 					builder.WithVersions(ver, operatorVer),
 				}
-				if !c.Bool("skip-validation") {
+				if !c.Bool(skipValidationFlag) {
 					opts = append(opts, builder.WithPreReleaseValidation(false))
 				}
 				r := builder.NewReleaseBuilder(opts...)
