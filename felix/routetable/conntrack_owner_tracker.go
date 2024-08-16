@@ -99,8 +99,12 @@ var _ RouteOwnershipTracker = (*ConntrackCleanupManager)(nil)
 
 func NewConntrackCleanupManager(ipVersion uint8, conntrack conntrackIface) *ConntrackCleanupManager {
 	return &ConntrackCleanupManager{
-		ipVersion:      ipVersion,
-		addrOwners:     deltatracker.New[ip.Addr, conntrackOwner](),
+		ipVersion: ipVersion,
+		addrOwners: deltatracker.New[ip.Addr, conntrackOwner](
+			deltatracker.WithValuesEqualFn[ip.Addr, conntrackOwner](func(a, b conntrackOwner) bool {
+				return a == b
+			}),
+		),
 		addrsToCleanUp: set.New[ip.Addr](),
 		perIPDoneChans: map[ip.Addr]chan struct{}{},
 		cleanupDoneC:   make(chan ip.Addr),
