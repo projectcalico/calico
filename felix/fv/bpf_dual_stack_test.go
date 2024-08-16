@@ -273,8 +273,8 @@ func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 		if !ipv6Dataplane {
 			JustBeforeEach(func() {
 				tc.TriggerDelayedStart()
-				ensureRightIFStateFlags(tc.Felixes[0], ifstate.FlgIPv4Ready, nil)
-				ensureRightIFStateFlags(tc.Felixes[1], ifstate.FlgIPv4Ready, nil)
+				ensureRightIFStateFlags(tc.Felixes[0], ifstate.FlgIPv4Ready, ifstate.FlgHEP, nil)
+				ensureRightIFStateFlags(tc.Felixes[1], ifstate.FlgIPv4Ready, ifstate.FlgHEP, nil)
 			})
 			It("should drop ipv6 packets at workload interface and allow ipv6 packets at host interface when in IPv4 only mode", func() {
 				// IPv4 connectivity must work.
@@ -365,8 +365,8 @@ func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 
 				tc.TriggerDelayedStart()
 
-				ensureRightIFStateFlags(tc.Felixes[0], ifstate.FlgIPv4Ready, nil)
-				ensureRightIFStateFlags(tc.Felixes[1], ifstate.FlgIPv4Ready|ifstate.FlgIPv6Ready, nil)
+				ensureRightIFStateFlags(tc.Felixes[0], ifstate.FlgIPv4Ready, ifstate.FlgHEP, nil)
+				ensureRightIFStateFlags(tc.Felixes[1], ifstate.FlgIPv4Ready|ifstate.FlgIPv6Ready, ifstate.FlgHEP, nil)
 				cc.ExpectSome(w[0][1], w[0][0])
 				cc.ExpectSome(w[1][0], w[0][0])
 				cc.ExpectSome(w[1][1], w[0][0])
@@ -398,7 +398,7 @@ func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 				_, err = k8sClient.CoreV1().Nodes().UpdateStatus(context.Background(), node, metav1.UpdateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
-				ensureRightIFStateFlags(tc.Felixes[0], ifstate.FlgIPv4Ready|ifstate.FlgIPv6Ready, nil)
+				ensureRightIFStateFlags(tc.Felixes[0], ifstate.FlgIPv4Ready|ifstate.FlgIPv6Ready, ifstate.FlgHEP, nil)
 				cc.ExpectSome(w[0][1], w[0][0])
 				cc.ExpectSome(w[1][0], w[0][0])
 				cc.ExpectSome(w[1][1], w[0][0])
@@ -413,8 +413,8 @@ func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 				tc.TriggerDelayedStart()
 				externalClient := infrastructure.RunExtClient("ext-client")
 				_ = externalClient
-				ensureRightIFStateFlags(tc.Felixes[0], ifstate.FlgIPv4Ready|ifstate.FlgIPv6Ready, nil)
-				ensureRightIFStateFlags(tc.Felixes[1], ifstate.FlgIPv4Ready|ifstate.FlgIPv6Ready, nil)
+				ensureRightIFStateFlags(tc.Felixes[0], ifstate.FlgIPv4Ready|ifstate.FlgIPv6Ready, ifstate.FlgHEP, nil)
+				ensureRightIFStateFlags(tc.Felixes[1], ifstate.FlgIPv4Ready|ifstate.FlgIPv6Ready, ifstate.FlgHEP, nil)
 
 				tcpdump := externalClient.AttachTCPDump("any")
 				tcpdump.SetLogEnabled(true)
@@ -559,9 +559,9 @@ func removeIPv6Address(k8sClient *kubernetes.Clientset, felix *infrastructure.Fe
 	felix.Exec("ip", "-6", "addr", "del", felix.Container.IPv6+"/64", "dev", "eth0")
 }
 
-func ensureRightIFStateFlags(felix *infrastructure.Felix, ready uint32, additionalInterfaces map[string]uint32) {
+func ensureRightIFStateFlags(felix *infrastructure.Felix, ready uint32, hostIfType uint32, additionalInterfaces map[string]uint32) {
 	expectedIfacesToFlags := map[string]uint32{
-		"eth0": ifstate.FlgHEP | ready,
+		"eth0": hostIfType | ready,
 	}
 
 	if additionalInterfaces != nil {

@@ -47,6 +47,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ do-not-track policy tests; 
 		client         client.Interface
 		cc             *Checker
 		externalClient *containers.Container
+		ctx            context.Context
+		cancel         context.CancelFunc
 	)
 
 	BeforeEach(func() {
@@ -159,6 +161,107 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ do-not-track policy tests; 
 		cc.CheckConnectivityOffset(1)
 	}
 
+	testDonotTrackPolicy := func(iface string) {
+		// This test covers both normal connectivity and failsafe connectivity.  We combine the
+		// tests because we rely on the changes of normal connectivity at each step to make sure
+		// that the policy has actually flowed through to the dataplane.
+
+		By("having only failsafe connectivity to start with")
+		expectFailSafeOnlyConnectivity()
+
+		if BPFMode() {
+			expectFailSafeOnlyConnectivity(ExpectWithIPVersion(6))
+			By("Having no Linux IP sets")
+			Consistently(tc.Felixes[0].IPSetNames, "2s", "1s").Should(BeEmpty())
+		}
+
+		host0Selector := fmt.Sprintf("name == '%s-%s'", iface, tc.Felixes[0].Name)
+		host1Selector := fmt.Sprintf("name == '%s-%s'", iface, tc.Felixes[1].Name)
+
+		By("Having connectivity after installing bidirectional policies")
+		host0Pol := createDonotTrackPolicy("host-0-pol", host0Selector, host1Selector, client, ctx)
+		_ = createDonotTrackPolicy("host-1-pol", host1Selector, host0Selector, client, ctx)
+
+		if iface == "bond0" {
+			Consistently(xdpProgramAttached(tc.Felixes[0], "bond0"), "2s", "1s").Should(BeFalse())
+			Consistently(xdpProgramAttached(tc.Felixes[1], "bond0"), "2s", "1s").Should(BeFalse())
+			Eventually(xdpProgramAttached(tc.Felixes[0], "eth0"), "10s", "1s").Should(BeTrue())
+			Eventually(xdpProgramAttached(tc.Felixes[1], "eth0"), "10s", "1s").Should(BeTrue())
+		}
+
+		expectFullConnectivity()
+		if BPFMode() {
+			expectFullConnectivity(ExpectWithIPVersion(6))
+			By("Having a Linux IP set for the egress policy")
+
+			elems := []string{
+				utils.IPSetNameForSelector(4, host1Selector),
+				utils.IPSetNameForSelector(6, host1Selector),
+			}
+			if NFTMode() {
+				// NFT uses a different prefixing scheme, since the ":" character is not allowed.
+				// e.g., cali40- instead of cali40:
+				for i, elem := range elems {
+					elems[i] = strings.Replace(elem, ":", "-", 1)
+				}
+			}
+			Expect(tc.Felixes[0].IPSetNames()).To(ContainElements(elems))
+		}
+
+		By("Having only failsafe connectivity after replacing host-0's egress rules with Deny")
+		// Since there's no conntrack, removing rules in one direction is enough to prevent
+		// connectivity in either direction.
+		host0Pol.Spec.Egress = []api.Rule{
+			{
+				Action: api.Deny,
+				Destination: api.EntityRule{
+					Selector: host0Selector,
+				},
+			},
+		}
+		host0Pol, err := client.GlobalNetworkPolicies().Update(ctx, host0Pol, options.SetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		expectFailSafeOnlyConnectivityWithHost0()
+		if BPFMode() {
+			expectFailSafeOnlyConnectivityWithHost0(ExpectWithIPVersion(6))
+		}
+
+		By("Having full connectivity after putting them back")
+		host0Pol.Spec.Egress = []api.Rule{
+			{
+				Action: api.Allow,
+				Destination: api.EntityRule{
+					Selector: host1Selector,
+				},
+			},
+		}
+		host0Pol, err = client.GlobalNetworkPolicies().Update(ctx, host0Pol, options.SetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		expectFullConnectivity()
+		if BPFMode() {
+			expectFullConnectivity(ExpectWithIPVersion(6))
+		}
+
+		By("Having only failsafe connectivity after replacing host-0's ingress rules with Deny")
+		host0Pol.Spec.Ingress = []api.Rule{
+			{
+				Action: api.Deny,
+				Destination: api.EntityRule{
+					Selector: host0Selector,
+				},
+			},
+		}
+		host0Pol, err = client.GlobalNetworkPolicies().Update(ctx, host0Pol, options.SetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		expectFailSafeOnlyConnectivityWithHost0()
+		if BPFMode() {
+			expectFailSafeOnlyConnectivityWithHost0(ExpectWithIPVersion(6))
+		}
+	}
+
 	It("before adding policy, should have connectivity between hosts", func() {
 		expectFullConnectivity()
 		if BPFMode() {
@@ -167,11 +270,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ do-not-track policy tests; 
 	})
 
 	Context("after adding host endpoints", func() {
-		var (
-			ctx    context.Context
-			cancel context.CancelFunc
-		)
-
 		BeforeEach(func() {
 			// Make sure our new host endpoints don't cut felix off from the datastore.
 			err := infra.AddAllowToDatastore("host-endpoint=='true'")
@@ -180,21 +278,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ do-not-track policy tests; 
 			ctx, cancel = context.WithTimeout(context.Background(), 50*time.Second)
 
 			for _, f := range tc.Felixes {
-				hep := api.NewHostEndpoint()
-				hep.Name = "eth0-" + f.Name
-				hep.Labels = map[string]string{
-					"name":          hep.Name,
-					"host-endpoint": "true",
-				}
-				hep.Spec.Node = f.Hostname
-				hep.Spec.InterfaceName = "eth0"
-				hep.Spec.ExpectedIPs = []string{f.IP, f.IPv6}
-				_, err := client.HostEndpoints().Create(ctx, hep, options.SetOptions{})
-				Expect(err).NotTo(HaveOccurred())
+				createHostEndpoint(f, "eth0", []string{f.IP, f.IPv6}, client, ctx)
 			}
 			if BPFMode() {
-				ensureRightIFStateFlags(tc.Felixes[0], ifstate.FlgIPv4Ready|ifstate.FlgIPv6Ready, nil)
-				ensureRightIFStateFlags(tc.Felixes[1], ifstate.FlgIPv4Ready|ifstate.FlgIPv6Ready, nil)
+				ensureRightIFStateFlags(tc.Felixes[0], ifstate.FlgIPv4Ready|ifstate.FlgIPv6Ready, ifstate.FlgHEP, nil)
+				ensureRightIFStateFlags(tc.Felixes[1], ifstate.FlgIPv4Ready|ifstate.FlgIPv6Ready, ifstate.FlgHEP, nil)
 			}
 		})
 
@@ -202,146 +290,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ do-not-track policy tests; 
 			cancel()
 		})
 
-		checkUntrackedPol := func() {
-			// This test covers both normal connectivity and failsafe connectivity.  We combine the
-			// tests because we rely on the changes of normal connectivity at each step to make sure
-			// that the policy has actually flowed through to the dataplane.
-
-			By("having only failsafe connectivity to start with")
-			expectFailSafeOnlyConnectivity()
-
-			if BPFMode() {
-				expectFailSafeOnlyConnectivity(ExpectWithIPVersion(6))
-				By("Having no Linux IP sets")
-				Consistently(tc.Felixes[0].IPSetNames, "2s", "1s").Should(BeEmpty())
-			}
-
-			host0Selector := fmt.Sprintf("name == 'eth0-%s'", tc.Felixes[0].Name)
-			host1Selector := fmt.Sprintf("name == 'eth0-%s'", tc.Felixes[1].Name)
-
-			By("Having connectivity after installing bidirectional policies")
-			host0Pol := api.NewGlobalNetworkPolicy()
-			host0Pol.Name = "host-0-pol"
-			host0Pol.Spec.Selector = host0Selector
-			host0Pol.Spec.DoNotTrack = true
-			host0Pol.Spec.ApplyOnForward = true
-			host0Pol.Spec.Ingress = []api.Rule{
-				{
-					Action: api.Allow,
-					Source: api.EntityRule{
-						Selector: host1Selector,
-					},
-				},
-			}
-			host0Pol.Spec.Egress = []api.Rule{
-				{
-					Action: api.Allow,
-					Destination: api.EntityRule{
-						Selector: host1Selector,
-					},
-				},
-			}
-			host0Pol, err := client.GlobalNetworkPolicies().Create(ctx, host0Pol, options.SetOptions{})
-			Expect(err).NotTo(HaveOccurred())
-
-			host1Pol := api.NewGlobalNetworkPolicy()
-			host1Pol.Name = "host-1-pol"
-			host1Pol.Spec.Selector = host1Selector
-			host1Pol.Spec.DoNotTrack = true
-			host1Pol.Spec.ApplyOnForward = true
-			host1Pol.Spec.Ingress = []api.Rule{
-				{
-					Action: api.Allow,
-					Source: api.EntityRule{
-						Selector: host0Selector,
-					},
-				},
-			}
-			host1Pol.Spec.Egress = []api.Rule{
-				{
-					Action: api.Allow,
-					Destination: api.EntityRule{
-						Selector: host0Selector,
-					},
-				},
-			}
-			host1Pol, err = client.GlobalNetworkPolicies().Create(ctx, host1Pol, options.SetOptions{})
-			Expect(err).NotTo(HaveOccurred())
-
-			expectFullConnectivity()
-			if BPFMode() {
-				expectFullConnectivity(ExpectWithIPVersion(6))
-				By("Having a Linux IP set for the egress policy")
-
-				elems := []string{
-					utils.IPSetNameForSelector(4, host1Selector),
-					utils.IPSetNameForSelector(6, host1Selector),
-				}
-				if NFTMode() {
-					// NFT uses a different prefixing scheme, since the ":" character is not allowed.
-					// e.g., cali40- instead of cali40:
-					for i, elem := range elems {
-						elems[i] = strings.Replace(elem, ":", "-", 1)
-					}
-				}
-				Expect(tc.Felixes[0].IPSetNames()).To(ContainElements(elems))
-			}
-
-			By("Having only failsafe connectivity after replacing host-0's egress rules with Deny")
-			// Since there's no conntrack, removing rules in one direction is enough to prevent
-			// connectivity in either direction.
-			host0Pol.Spec.Egress = []api.Rule{
-				{
-					Action: api.Deny,
-					Destination: api.EntityRule{
-						Selector: host0Selector,
-					},
-				},
-			}
-			host0Pol, err = client.GlobalNetworkPolicies().Update(ctx, host0Pol, options.SetOptions{})
-			Expect(err).NotTo(HaveOccurred())
-
-			expectFailSafeOnlyConnectivityWithHost0()
-			if BPFMode() {
-				expectFailSafeOnlyConnectivityWithHost0(ExpectWithIPVersion(6))
-			}
-
-			By("Having full connectivity after putting them back")
-			host0Pol.Spec.Egress = []api.Rule{
-				{
-					Action: api.Allow,
-					Destination: api.EntityRule{
-						Selector: host1Selector,
-					},
-				},
-			}
-			host0Pol, err = client.GlobalNetworkPolicies().Update(ctx, host0Pol, options.SetOptions{})
-			Expect(err).NotTo(HaveOccurred())
-
-			expectFullConnectivity()
-			if BPFMode() {
-				expectFullConnectivity(ExpectWithIPVersion(6))
-			}
-
-			By("Having only failsafe connectivity after replacing host-0's ingress rules with Deny")
-			host0Pol.Spec.Ingress = []api.Rule{
-				{
-					Action: api.Deny,
-					Destination: api.EntityRule{
-						Selector: host0Selector,
-					},
-				},
-			}
-			host0Pol, err = client.GlobalNetworkPolicies().Update(ctx, host0Pol, options.SetOptions{})
-			Expect(err).NotTo(HaveOccurred())
-
-			expectFailSafeOnlyConnectivityWithHost0()
-			if BPFMode() {
-				expectFailSafeOnlyConnectivityWithHost0(ExpectWithIPVersion(6))
-			}
-		}
-
-		It("should implement untracked policy correctly", checkUntrackedPol)
+		It("should implement untracked policy correctly", func() {
+			testDonotTrackPolicy("eth0")
+		})
 
 		if BPFMode() {
 			Describe("with a custom map size", func() {
@@ -362,8 +313,125 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ do-not-track policy tests; 
 					})
 				})
 
-				It("should implement untracked policy correctly", checkUntrackedPol)
+				It("should implement untracked policy correctly", func() {
+					testDonotTrackPolicy("eth0")
+				})
 			})
 		}
 	})
+
+	Context("after adding eth0 to a bond interface", func() {
+		if !BPFMode() {
+			return
+		}
+
+		BeforeEach(func() {
+			// Make sure our new host endpoints don't cut felix off from the datastore.
+			err := infra.AddAllowToDatastore("host-endpoint=='true'")
+			Expect(err).NotTo(HaveOccurred())
+
+			ctx, cancel = context.WithTimeout(context.Background(), 50*time.Second)
+			for _, felix := range tc.Felixes {
+				// recreate those after moving the IP.
+				defaultRoute, err := felix.ExecOutput("ip", "route", "show", "default")
+				Expect(err).NotTo(HaveOccurred())
+				lines := strings.Split(strings.Trim(defaultRoute, "\n "), "\n")
+				Expect(lines).To(HaveLen(1))
+				defaultRouteArgs := strings.Split(strings.Replace(lines[0], "eth0", "bond0", -1), " ")
+
+				// Assuming the subnet route will be "proto kernel" and that will be the only such route.
+				subnetRoute, err := felix.ExecOutput("ip", "route", "show", "proto", "kernel")
+				Expect(err).NotTo(HaveOccurred())
+				lines = strings.Split(strings.Trim(subnetRoute, "\n "), "\n")
+				Expect(lines).To(HaveLen(1), "expected only one proto kernel route, has docker's routing set-up changed?")
+				subnetArgs := strings.Split(strings.Replace(lines[0], "eth0", "bond0", -1), " ")
+
+				//Move IPv6
+				defaultRoute6, err := felix.ExecOutput("ip", "-6", "route", "show", "default")
+				Expect(err).NotTo(HaveOccurred())
+				lines = strings.Split(strings.Trim(defaultRoute6, "\n "), "\n")
+				Expect(lines).To(HaveLen(1))
+				defaultRoute6Args := strings.Split(strings.Replace(lines[0], "eth0", "bond0", -1), " ")
+
+				// Assuming the subnet route will be "proto kernel" and that will be the only such route.
+				subnetRoute6, err := felix.ExecOutput("ip", "-6", "route", "show", "proto", "kernel")
+				Expect(err).NotTo(HaveOccurred())
+				lines = strings.Split(strings.Trim(subnetRoute6, "\n "), "\n")
+				subnet6Args := strings.Split(strings.Replace(lines[0], "eth0", "bond0", -1), " ")
+
+				felix.Exec("ip", "addr", "del", felix.IP, "dev", "eth0")
+				ip6WithSubnet := felix.IPv6 + "/" + felix.GetIPv6Prefix()
+				felix.Exec("ip", "-6", "addr", "del", ip6WithSubnet, "dev", "eth0")
+
+				felix.Exec("ip", "link", "add", "dev", "bond0", "type", "bond")
+				felix.Exec("ip", "link", "set", "dev", "eth0", "down")
+				felix.Exec("ip", "link", "set", "dev", "eth0", "master", "bond0")
+				felix.Exec("ip", "link", "set", "dev", "eth0", "up")
+				felix.Exec("ip", "link", "set", "dev", "bond0", "up")
+
+				ipWithSubnet := felix.IP + "/" + felix.GetIPPrefix()
+				felix.Exec("ip", "addr", "add", ipWithSubnet, "dev", "bond0")
+				felix.Exec(append([]string{"ip", "r", "add"}, defaultRouteArgs...)...)
+				felix.Exec(append([]string{"ip", "r", "replace"}, subnetArgs...)...)
+
+				felix.Exec("ip", "-6", "addr", "add", ip6WithSubnet, "dev", "bond0")
+				felix.Exec(append([]string{"ip", "-6", "r", "add"}, defaultRoute6Args...)...)
+				felix.Exec(append([]string{"ip", "-6", "r", "replace"}, subnet6Args...)...)
+
+				ensureRightIFStateFlags(felix, ifstate.FlgIPv4Ready|ifstate.FlgIPv6Ready, ifstate.FlgBondSlave, map[string]uint32{"bond0": ifstate.FlgIPv4Ready | ifstate.FlgIPv6Ready | ifstate.FlgBond})
+				createHostEndpoint(felix, "bond0", []string{felix.IP, felix.IPv6}, client, ctx)
+			}
+		})
+
+		AfterEach(func() {
+			cancel()
+		})
+		It("should implement untracked policy correctly", func() {
+			testDonotTrackPolicy("bond0")
+		})
+
+	})
+
 })
+
+func createHostEndpoint(f *infrastructure.Felix, iface string,
+	expectedIPs []string, client client.Interface, ctx context.Context) {
+	hep := api.NewHostEndpoint()
+	hep.Name = iface + "-" + f.Name
+	hep.Labels = map[string]string{
+		"name":          hep.Name,
+		"host-endpoint": "true",
+	}
+	hep.Spec.Node = f.Hostname
+	hep.Spec.InterfaceName = iface
+	hep.Spec.ExpectedIPs = expectedIPs
+	_, err := client.HostEndpoints().Create(ctx, hep, options.SetOptions{})
+	Expect(err).NotTo(HaveOccurred())
+}
+
+func createDonotTrackPolicy(name, selector, dstSelector string, client client.Interface, ctx context.Context) *api.GlobalNetworkPolicy {
+	pol := api.NewGlobalNetworkPolicy()
+	pol.Name = name
+	pol.Spec.Selector = selector
+	pol.Spec.DoNotTrack = true
+	pol.Spec.ApplyOnForward = true
+	pol.Spec.Ingress = []api.Rule{
+		{
+			Action: api.Allow,
+			Source: api.EntityRule{
+				Selector: dstSelector,
+			},
+		},
+	}
+	pol.Spec.Egress = []api.Rule{
+		{
+			Action: api.Allow,
+			Destination: api.EntityRule{
+				Selector: dstSelector,
+			},
+		},
+	}
+	pol, err := client.GlobalNetworkPolicies().Create(ctx, pol, options.SetOptions{})
+	Expect(err).NotTo(HaveOccurred())
+	return pol
+}
