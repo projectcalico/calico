@@ -114,7 +114,7 @@ func hashrelaseSubCommands(cfg *config.Config, runner *registry.DockerRunner) []
 					builder.IsHashRelease(),
 					builder.WithVersions(ver, operatorVer),
 				}
-				if !c.Bool(skipValidationFlag) {
+				if c.Bool(skipValidationFlag) {
 					opts = append(opts, builder.WithPreReleaseValidation(false))
 				}
 				r := builder.NewReleaseBuilder(opts...)
@@ -182,7 +182,7 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 					builder.WithRepoRoot(cfg.RepoRootDir),
 					builder.WithVersions(ver, operatorVer),
 				}
-				if !c.Bool(skipValidationFlag) {
+				if c.Bool(skipValidationFlag) {
 					opts = append(opts, builder.WithPreReleaseValidation(false))
 				}
 				r := builder.NewReleaseBuilder(opts...)
