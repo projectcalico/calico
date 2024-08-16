@@ -5,14 +5,15 @@ import (
 	"io"
 	"os"
 
+	"github.com/projectcalico/calico/release/pkg/builder"
 	"github.com/sirupsen/logrus"
 	lumberjack "gopkg.in/natefinch/lumberjack.v2"
-
-	"github.com/projectcalico/calico/hack/release/pkg/builder"
 )
 
-var create, publish, newBranch, meta bool
-var dir string
+var (
+	create, publish, newBranch, meta bool
+	dir                              string
+)
 
 func init() {
 	flag.BoolVar(&create, "create", false, "Create a release from the current commit")
@@ -27,7 +28,7 @@ func init() {
 
 func main() {
 	// Create a releaseBuilder to use.
-	r := builder.NewReleaseBuilder(&builder.RealCommandRunner{})
+	r := builder.NewReleaseBuilder(builder.WithRepoRoot(os.Getenv("REPO_ROOT")))
 
 	if meta {
 		configureLogging("metadata.log")
@@ -41,7 +42,7 @@ func main() {
 
 	if create {
 		configureLogging("release-build.log")
-		err := r.BuildRelease()
+		err := r.Build()
 		if err != nil {
 			logrus.WithError(err).Error("Failed to create Calico release")
 			os.Exit(1)
