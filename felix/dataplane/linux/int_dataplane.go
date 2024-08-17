@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -143,10 +143,13 @@ type Config struct {
 	NodeZone             string
 	IPv6Enabled          bool
 	RuleRendererOverride rules.RuleRenderer
-	IPIPMTU              int
-	VXLANMTU             int
-	VXLANMTUV6           int
-	VXLANPort            int
+
+	IPIPMTU           int
+	ProgramIPIPRoutes bool
+
+	VXLANMTU   int
+	VXLANMTUV6 int
+	VXLANPort  int
 
 	MaxIPSetSize int
 
@@ -294,6 +297,7 @@ type InternalDataplane struct {
 	ipSets          []dpsets.IPSetsDataplane
 
 	ipipManager *ipipManager
+	ipipParentC chan string
 
 	vxlanManager   *vxlanManager
 	vxlanParentC   chan string
@@ -917,10 +921,33 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	dp.RegisterManager(newFloatingIPManager(natTableV4, ruleRenderer, 4, config.FloatingIPsEnabled))
 	dp.RegisterManager(newMasqManager(ipSetsV4, natTableV4, ruleRenderer, config.MaxIPSetSize, 4))
 	if config.RulesConfig.IPIPEnabled {
-		log.Info("IPIP enabled, starting thread to keep tunnel configuration in sync.")
-		// Add a manager to keep the all-hosts IP set up to date.
-		dp.ipipManager = newIPIPManager(ipSetsV4, config.MaxIPSetSize, config.ExternalNodesCidrs)
-		go dp.ipipManager.KeepIPIPDeviceInSync(config.IPIPMTU, config.RulesConfig.IPIPTunnelAddress, dataplaneFeatures.ChecksumOffloadBroken)
+		if config.ProgramIPIPRoutes {
+			log.Info("IPIP enabled, starting thread to keep tunnel configuration in sync.")
+			// Add a manager to keep the all-hosts IP set up to date.
+			dp.ipipManager = newIPIPManager(
+				ipSetsV4,
+				routeTableV4,
+				dataplanedefs.IPIPIfaceNameV4,
+				config,
+				dp.loopSummarizer,
+				4,
+				featureDetector,
+			)
+			dp.ipipParentC = make(chan string, 1)
+			go dp.ipipManager.KeepCalicoIPIPDeviceInSync(context.Background(), dataplaneFeatures.ChecksumOffloadBroken, 10*time.Second, dp.ipipParentC)
+		} else {
+			log.Info("IPIP using BGP enabled, starting thread to keep tunnel configuration in sync.")
+			dp.ipipManager = newIPIPManager(
+				ipSetsV4,
+				nil,
+				dataplanedefs.IPIPDefaultIfaceNameV4,
+				config,
+				dp.loopSummarizer,
+				4,
+				featureDetector,
+			)
+			go dp.ipipManager.KeepIPIPDeviceInSync(dataplaneFeatures.ChecksumOffloadBroken)
+		}
 		dp.RegisterManager(dp.ipipManager) // IPv4-only
 	} else {
 		// Only clean up IPIP addresses if IPIP is implicitly disabled (no IPIP pools and not explicitly set in FelixConfig)
@@ -1927,6 +1954,8 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 			d.vxlanManager.OnParentNameUpdate(name)
 		case name := <-d.vxlanParentCV6:
 			d.vxlanManagerV6.OnParentNameUpdate(name)
+		case name := <-d.ipipParentC:
+			d.ipipManager.OnParentNameUpdate(name)
 		case <-ipSetsRefreshC:
 			log.Debug("Refreshing IP sets state")
 			d.forceIPSetsRefresh = true
