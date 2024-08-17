@@ -19,9 +19,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"regexp"
-	"sort"
-	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -29,7 +26,6 @@ import (
 	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
-	"golang.org/x/sys/unix"
 
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
 	"github.com/projectcalico/calico/felix/environment"
@@ -37,10 +33,10 @@ import (
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/logutils"
+	"github.com/projectcalico/calico/felix/netlinkshim"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/rules"
-	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 // ipipManager manages the all-hosts IP set, which is used by some rules in our static chains
@@ -50,12 +46,8 @@ import (
 // ipipManager also takes care of the configuration of the IPIP tunnel device.
 type ipipManager struct {
 	// Our dependencies.
-	routeTable                routetable.RouteTableInterface
-	blackholeRouteTable       routetable.RouteTableInterface
-	noEncapRouteTable         routetable.RouteTableInterface
-	parentIfaceName           string
-	lastParentDevUpdate       time.Time
-	previouslyUsedParentNames set.Set[string]
+	routeTable      routetable.Interface
+	parentIfaceName string
 
 	// activeHostnameToIP maps hostname to string IP address. We don't bother to parse into
 	// net.IPs because we're going to pass them directly to the IPSet API.
@@ -85,86 +77,36 @@ type ipipManager struct {
 	externalNodeCIDRs []string
 	nlHandle          netlinkHandle
 	dpConfig          Config
-	noEncapProtocol   netlink.RouteProtocol
-
-	// Used so that we can shim the no encap route table for the tests
-	noEncapRTConstruct func(
-		interfacePrefixes []string, ipVersion uint8, netlinkTimeout time.Duration,
-		deviceRouteSourceAddress net.IP, deviceRouteProtocol netlink.RouteProtocol,
-		removeExternalRoutes bool,
-	) routetable.RouteTableInterface
-
-	// Log context
-	logCtx *logrus.Entry
+	logCtx            *logrus.Entry
 }
 
 func newIPIPManager(
 	ipsetsDataplane dpsets.IPSetsDataplane,
-	rt routetable.RouteTableInterface,
+	mainRouteTable routetable.Interface,
 	deviceName string,
 	dpConfig Config,
 	opRecorder logutils.OpRecorder,
 	ipVersion uint8,
 	featureDetector environment.FeatureDetectorIface,
 ) *ipipManager {
-	if ipVersion != 4 {
-		logrus.Errorf("IPIP manager only supports IPv4")
-		return nil
-	}
-	nlHandle, _ := netlink.NewHandle(syscall.NETLINK_ROUTE)
-	blackHoleProto := calculateRouteProtocol(dpConfig)
-
-	var brt routetable.RouteTableInterface
-	if dpConfig.ProgramIPIPRoutes {
-		if !dpConfig.RouteSyncDisabled {
-			logrus.Debug("RouteSyncDisabled is false.")
-			brt = routetable.New(
-				[]string{routetable.InterfaceNone},
-				4,
-				dpConfig.NetlinkTimeout,
-				dpConfig.DeviceRouteSourceAddress,
-				blackHoleProto,
-				false,
-				unix.RT_TABLE_MAIN,
-				opRecorder,
-				featureDetector,
-			)
-		} else {
-			logrus.Info("RouteSyncDisabled is true, using DummyTable.")
-			brt = &routetable.DummyTable{}
-		}
-	}
+	nlHandle, _ := netlinkshim.NewRealNetlink()
 	return newIPIPManagerWithShim(
 		ipsetsDataplane,
-		rt, brt,
+		mainRouteTable,
 		deviceName,
 		dpConfig,
 		nlHandle,
 		ipVersion,
-		func(interfaceRegexes []string, ipVersion uint8, netlinkTimeout time.Duration,
-			deviceRouteSourceAddress net.IP, deviceRouteProtocol netlink.RouteProtocol,
-			removeExternalRoutes bool,
-		) routetable.RouteTableInterface {
-			return routetable.New(interfaceRegexes, ipVersion, netlinkTimeout,
-				deviceRouteSourceAddress, deviceRouteProtocol, removeExternalRoutes, unix.RT_TABLE_MAIN,
-				opRecorder, featureDetector,
-			)
-		},
 	)
 }
 
 func newIPIPManagerWithShim(
 	ipsetsDataplane dpsets.IPSetsDataplane,
-	rt, brt routetable.RouteTableInterface,
+	mainRouteTable routetable.Interface,
 	deviceName string,
 	dpConfig Config,
 	nlHandle netlinkHandle,
 	ipVersion uint8,
-	noEncapRTConstruct func(
-		interfacePrefixes []string, ipVersion uint8, netlinkTimeout time.Duration,
-		deviceRouteSourceAddress net.IP, deviceRouteProtocol netlink.RouteProtocol,
-		removeExternalRoutes bool,
-	) routetable.RouteTableInterface,
 ) *ipipManager {
 	if ipVersion != 4 {
 		logrus.Errorf("IPIP manager only supports IPv4")
@@ -179,22 +121,18 @@ func newIPIPManagerWithShim(
 			SetID:   rules.IPSetIDAllHostNets,
 			Type:    ipsets.IPSetTypeHashNet,
 		},
-		hostname:                  dpConfig.Hostname,
-		routeTable:                rt,
-		blackholeRouteTable:       brt,
-		previouslyUsedParentNames: set.New[string](),
-		routesByDest:              map[string]*proto.RouteUpdate{},
-		localIPAMBlocks:           map[string]*proto.RouteUpdate{},
-		ipipDevice:                deviceName,
-		ipVersion:                 ipVersion,
-		externalNodeCIDRs:         dpConfig.ExternalNodesCidrs,
-		routesDirty:               true,
-		ipSetDirty:                true,
-		dpConfig:                  dpConfig,
-		nlHandle:                  nlHandle,
-		noEncapProtocol:           calculateRouteProtocol(dpConfig),
-		noEncapRTConstruct:        noEncapRTConstruct,
-		logCtx:                    logrus.WithField("ipVersion", ipVersion),
+		hostname:          dpConfig.Hostname,
+		routeTable:        mainRouteTable,
+		routesByDest:      map[string]*proto.RouteUpdate{},
+		localIPAMBlocks:   map[string]*proto.RouteUpdate{},
+		ipipDevice:        deviceName,
+		ipVersion:         ipVersion,
+		externalNodeCIDRs: dpConfig.ExternalNodesCidrs,
+		routesDirty:       true,
+		ipSetDirty:        true,
+		dpConfig:          dpConfig,
+		nlHandle:          nlHandle,
+		logCtx:            logrus.WithField("ipVersion", ipVersion),
 	}
 }
 
@@ -295,36 +233,46 @@ func (m *ipipManager) getLocalHostAddr() string {
 	return m.hostAddr
 }
 
-func (m *ipipManager) GetRouteTableSyncers() []routetable.RouteTableSyncer {
-	var rts []routetable.RouteTableSyncer
-	if m.routeTable != nil {
-		rts = append(rts, m.routeTable)
-	}
-	if m.blackholeRouteTable != nil {
-		rts = append(rts, m.blackholeRouteTable)
-	}
-
-	if time.Since(m.lastParentDevUpdate) > 5*time.Minute && m.previouslyUsedParentNames.Len() > 1 {
-		// Make sure the set of names doesn't grow forever.
-		m.previouslyUsedParentNames.Clear()
-	}
-
-	if m.noEncapRouteTable != nil {
-		m.previouslyUsedParentNames.Add(m.parentIfaceName)
-		rts = append(rts, m.noEncapRouteTable)
-	}
-	return rts
-}
-
 func (m *ipipManager) CompleteDeferredWork() error {
-	if !m.ipSetDirty && !m.routesAreDirty() {
-		return nil
-	}
 	if m.ipSetDirty {
 		m.updateAllHostsIPSet()
 		m.ipSetDirty = false
 	}
-	if m.routesAreDirty() {
+	m.logCtx.Infof("marmar1 %v", m.dpConfig.ProgramIPIPRoutes)
+	// Program IPIP routes, only if ProgramIPIPRoutes is true
+	if !m.dpConfig.ProgramIPIPRoutes {
+		m.routesDirty = false
+		return nil
+	}
+	if m.parentIfaceName == "" {
+		// Background goroutine hasn't sent us the parent interface name yet,
+		// but we can look it up synchronously.  OnParentNameUpdate will handle
+		// any duplicate update when it arrives.
+		parent, err := m.getParentInterface()
+		if err != nil {
+			// If we can't look up the parent interface then we're in trouble.
+			// It likely means that our VTEP is missing or conflicting.  We
+			// won't be able to program same-subnet routes at all, so we'll
+			// fall back to programming all tunnel routes.  However, unless the
+			// VXLAN device happens to already exist, we won't be able to
+			// program tunnel routes either.  The RouteTable will be the
+			// component that spots that the interface is missing.
+			//
+			// Note: this behaviour changed when we unified all the main
+			// RouteTable instances into one.  Before that change, we chose to
+			// defer creation of our "no encap" RouteTable, so that the
+			// dataplane would stay untouched until the conflict was resolved.
+			// With only a single RouteTable, we need a different fallback.
+			m.logCtx.WithError(err).WithField("local address", m.getLocalHostAddr()).Error(
+				"Failed to find VXLAN tunnel device parent. Missing/conflicting local VTEP? VXLAN route " +
+					"programming is likely to fail.")
+		} else {
+			m.parentIfaceName = parent.Attrs().Name
+			m.routesDirty = true
+		}
+	}
+	m.logCtx.Infof("marmar0 %v", m.routesDirty)
+	if m.routesDirty {
 		err := m.updateRoutes()
 		if err != nil {
 			return err
@@ -354,6 +302,7 @@ func (m *ipipManager) updateRoutes() error {
 	// Iterate through all of our L3 routes and send them through to the route table.
 	var ipipRoutes []routetable.Target
 	var noEncapRoutes []routetable.Target
+	m.logCtx.Info("marmar")
 	for _, r := range m.routesByDest {
 		logCtx := m.logCtx.WithField("route", r)
 		cidr, err := ip.CIDRFromString(r.Dst)
@@ -363,7 +312,7 @@ func (m *ipipManager) updateRoutes() error {
 			continue
 		}
 
-		if noEncapRoute := noEncapRoute(cidr, r); noEncapRoute != nil {
+		if noEncapRoute := noEncapRoute(m.parentIfaceName, cidr, r); noEncapRoute != nil {
 			// We've got everything we need to program this route as a no-encap route.
 			noEncapRoutes = append(noEncapRoutes, *noEncapRoute)
 			logCtx.WithField("route", r).Debug("Destination in same subnet, using no-encap route.")
@@ -376,16 +325,18 @@ func (m *ipipManager) updateRoutes() error {
 	}
 
 	m.logCtx.WithField("ipipRoutes", ipipRoutes).Debug("IPIP manager setting IPIP tunnled routes")
-	m.routeTable.SetRoutes(m.ipipDevice, ipipRoutes)
+	m.routeTable.SetRoutes(routetable.RouteClassIPIPTTunnel, m.ipipDevice, ipipRoutes)
 
 	bhRoutes := blackholeRoutes(m.localIPAMBlocks)
-	m.logCtx.WithField("balckhole routes", bhRoutes).Debug("IPIP manager setting blackhole routes")
-	m.blackholeRouteTable.SetRoutes(routetable.InterfaceNone, bhRoutes)
+	m.logCtx.WithField("balckholes", bhRoutes).Debug("IPIP manager setting blackhole routes")
+	m.routeTable.SetRoutes(routetable.RouteClassIPAMBlockDrop, routetable.InterfaceNone, bhRoutes)
 
-	if m.noEncapRouteTable != nil {
-		m.logCtx.WithField("link", m.parentIfaceName).WithField("routes", noEncapRoutes).Debug(
-			"IPIP manager sending unencapsulated L3 updates")
-		m.noEncapRouteTable.SetRoutes(m.parentIfaceName, noEncapRoutes)
+	if m.parentIfaceName != "" {
+		m.logCtx.WithFields(logrus.Fields{
+			"noEncapDevice": m.parentIfaceName,
+			"routes":        noEncapRoutes,
+		}).Debug("IPIP manager sending unencapsulated L3 updates")
+		m.routeTable.SetRoutes(routetable.RouteClassIPIPTSameSubnet, m.parentIfaceName, noEncapRoutes)
 	} else {
 		return errors.New("no encap route table not set, will defer adding routes")
 	}
@@ -414,37 +365,25 @@ func (m *ipipManager) OnParentNameUpdate(name string) {
 		m.logCtx.Warn("Empty parent interface name? Ignoring.")
 		return
 	}
-	m.logCtx.WithField("parent", name).Info("Parent interface updated, creating new routing table.")
-	devRouteSrcAddr := m.dpConfig.DeviceRouteSourceAddress
+	if name == m.parentIfaceName {
+		return
+	}
+	if m.parentIfaceName != "" {
+		// We're changing parent interface, remove the old routes.
+		m.routeTable.SetRoutes(routetable.RouteClassIPIPTSameSubnet, m.parentIfaceName, nil)
+	}
 	m.parentIfaceName = name
-	m.lastParentDevUpdate = time.Now()
-
-	// If we're changing the name, we need to make sure the new RouteTable will
-	// clean up the routes on the old interface.  Add previously-used names to
-	// the regexp.
-	names := m.previouslyUsedParentNames.Slice()
-	if !m.previouslyUsedParentNames.Contains(m.parentIfaceName) {
-		names = append(names, m.parentIfaceName)
-	}
-	sort.Strings(names)
-	for i, name := range names {
-		names[i] = regexp.QuoteMeta(name)
-	}
-
-	m.noEncapRouteTable = m.noEncapRTConstruct(
-		[]string{"^" + strings.Join(names, "|") + "$"},
-		m.ipVersion,
-		m.dpConfig.NetlinkTimeout,
-		devRouteSrcAddr,
-		m.noEncapProtocol,
-		false,
-	)
 	m.routesDirty = true
 }
 
 // KeepIPIPDeviceInSync is a goroutine that configures the IPIP tunnel device, then periodically
 // checks that it is still correctly configured.
-func (m *ipipManager) KeepCalicoIPIPDeviceInSync(ctx context.Context, xsumBroken bool, wait time.Duration, parentNameC chan string) {
+func (m *ipipManager) KeepCalicoIPIPDeviceInSync(
+	ctx context.Context,
+	xsumBroken bool,
+	wait time.Duration,
+	parentNameC chan string,
+) {
 	mtu := m.dpConfig.IPIPMTU
 	address := m.dpConfig.RulesConfig.IPIPTunnelAddress
 	m.logCtx.WithFields(logrus.Fields{
@@ -535,13 +474,12 @@ func (m *ipipManager) KeepIPIPDeviceInSync(xsumBroken bool) {
 // getParentInterface returns the parent interface for the given local address. This link returned is nil
 // if, and only if, an error occurred
 func (m *ipipManager) getParentInterface() (netlink.Link, error) {
-	m.logCtx.WithField("local hostname", m.hostname).Debug("Getting parent interface")
-	address := m.getLocalHostAddr()
-	if address == "" {
-		return nil, fmt.Errorf("local address not found, will defer adding routes")
+	localAddr := m.getLocalHostAddr()
+	if localAddr == "" {
+		return nil, fmt.Errorf("local address not found")
 	}
-	m.logCtx.Debugf("Found parent's address: %v", address)
 
+	m.logCtx.WithField("local address", localAddr).Debug("Getting parent interface")
 	links, err := m.nlHandle.LinkList()
 	if err != nil {
 		return nil, err
@@ -553,13 +491,13 @@ func (m *ipipManager) getParentInterface() (netlink.Link, error) {
 			return nil, err
 		}
 		for _, addr := range addrs {
-			if addr.IPNet.IP.String() == address {
+			if addr.IPNet.IP.String() == localAddr {
 				m.logCtx.Debugf("Found parent interface: %s", link)
 				return link, nil
 			}
 		}
 	}
-	return nil, fmt.Errorf("Unable to find parent interface with address %s", address)
+	return nil, fmt.Errorf("Unable to find parent interface with address %s", localAddr)
 }
 
 // configureIPIPDevice ensures the IPIP tunnel device is up and configures correctly.
@@ -685,8 +623,4 @@ func (m *ipipManager) setLinkAddressV4(linkName string, address net.IP) error {
 	logCxt.Debug("Address set.")
 
 	return nil
-}
-
-func (m *ipipManager) routesAreDirty() bool {
-	return m.dpConfig.ProgramIPIPRoutes && m.routesDirty
 }

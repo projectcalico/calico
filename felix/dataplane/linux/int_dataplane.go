@@ -922,21 +922,11 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	dp.RegisterManager(newMasqManager(ipSetsV4, natTableV4, ruleRenderer, config.MaxIPSetSize, 4))
 	if config.RulesConfig.IPIPEnabled {
 		if config.ProgramIPIPRoutes {
-			var routeTableIPIP routetable.RouteTableInterface
-			if !config.RouteSyncDisabled {
-				log.Debug("RouteSyncDisabled is false.")
-				routeTableIPIP = routetable.New([]string{"^" + dataplanedefs.IPIPIfaceNameV4 + "$"}, 4, config.NetlinkTimeout,
-					config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, true, unix.RT_TABLE_MAIN,
-					dp.loopSummarizer, featureDetector, routetable.WithLivenessCB(dp.reportHealth))
-			} else {
-				log.Info("RouteSyncDisabled is true, using DummyTable.")
-				routeTableIPIP = &routetable.DummyTable{}
-			}
 			log.Info("IPIP enabled, starting thread to keep tunnel configuration in sync.")
 			// Add a manager to keep the all-hosts IP set up to date.
 			dp.ipipManager = newIPIPManager(
 				ipSetsV4,
-				routeTableIPIP,
+				routeTableV4,
 				dataplanedefs.IPIPIfaceNameV4,
 				config,
 				dp.loopSummarizer,
@@ -947,7 +937,15 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			go dp.ipipManager.KeepCalicoIPIPDeviceInSync(context.Background(), dataplaneFeatures.ChecksumOffloadBroken, 10*time.Second, dp.ipipParentC)
 		} else {
 			log.Info("IPIP using BGP enabled, starting thread to keep tunnel configuration in sync.")
-			dp.ipipManager = newIPIPManager(ipSetsV4, nil, dataplanedefs.IPIPDefaultIfaceNameV4, config, dp.loopSummarizer, 4, featureDetector)
+			dp.ipipManager = newIPIPManager(
+				ipSetsV4,
+				nil,
+				dataplanedefs.IPIPDefaultIfaceNameV4,
+				config,
+				dp.loopSummarizer,
+				4,
+				featureDetector,
+			)
 			go dp.ipipManager.KeepIPIPDeviceInSync(dataplaneFeatures.ChecksumOffloadBroken)
 		}
 		dp.RegisterManager(dp.ipipManager) // IPv4-only

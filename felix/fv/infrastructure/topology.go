@@ -92,7 +92,7 @@ func (c *TopologyContainers) TriggerDelayedStart() {
 }
 
 func DefaultTopologyOptions() TopologyOptions {
-	felixLogLevel := "Info"
+	felixLogLevel := "Debug"
 	if envLogLevel := os.Getenv("FV_FELIX_LOG_LEVEL"); envLogLevel != "" {
 		log.WithField("level", envLogLevel).Info("FV_FELIX_LOG_LEVEL env var set; overriding felix log level")
 		felixLogLevel = envLogLevel
@@ -435,7 +435,7 @@ func StartNNodeTopology(n int, opts TopologyOptions, infra DatastoreInfra) (tc T
 					// not ready yet, which can happen especially if Felix start was
 					// delayed.
 					Eventually(func() error {
-						return iFelix.ExecMayFail("ip", "route", "add", jBlock, "via", jFelix.IP, "dev", "tunl0", "onlink")
+						return iFelix.ExecMayFail("ip", "route", "add", jBlock, "via", jFelix.IP, "dev", "tunl0", "onlink", "proto", "100")
 					}, "10s", "1s").ShouldNot(HaveOccurred())
 				} else if !opts.IPIPEnabled && opts.VXLANMode == api.VXLANModeNever {
 					// If VXLAN is enabled, Felix will program these routes itself.

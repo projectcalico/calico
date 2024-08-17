@@ -42,10 +42,10 @@ var (
 
 var _ = Describe("IpipMgr (tunnel configuration)", func() {
 	var (
-		ipipMgr      *ipipManager
-		ipSets       *dpsets.MockIPSets
-		dataplane    *mockIPIPDataplane
-		rt, brt, prt *mockRouteTable
+		ipipMgr   *ipipManager
+		ipSets    *dpsets.MockIPSets
+		dataplane *mockIPIPDataplane
+		rt        *mockRouteTable
 	)
 
 	ip, _, err := net.ParseCIDR("10.0.0.1/32")
@@ -63,14 +63,8 @@ var _ = Describe("IpipMgr (tunnel configuration)", func() {
 		rt = &mockRouteTable{
 			currentRoutes: map[string][]routetable.Target{},
 		}
-		brt = &mockRouteTable{
-			currentRoutes: map[string][]routetable.Target{},
-		}
-		prt = &mockRouteTable{
-			currentRoutes: map[string][]routetable.Target{},
-		}
 		ipipMgr = newIPIPManagerWithShim(
-			ipSets, rt, brt, dataplanedefs.IPIPIfaceNameV4,
+			ipSets, rt, dataplanedefs.IPIPIfaceNameV4,
 			Config{
 				MaxIPSetSize:       1024,
 				Hostname:           "node1",
@@ -78,12 +72,6 @@ var _ = Describe("IpipMgr (tunnel configuration)", func() {
 			},
 			dataplane,
 			4,
-			func(interfacePrefixes []string, ipVersion uint8, netlinkTimeout time.Duration,
-				deviceRouteSourceAddress net.IP, deviceRouteProtocol netlink.RouteProtocol,
-				removeExternalRoutes bool,
-			) routetable.RouteTableInterface {
-				return prt
-			},
 		)
 	})
 
@@ -235,9 +223,9 @@ var _ = Describe("IpipMgr (tunnel configuration)", func() {
 
 var _ = Describe("ipipManager IP set updates", func() {
 	var (
-		ipipMgr      *ipipManager
-		ipSets       *dpsets.MockIPSets
-		rt, brt, prt *mockRouteTable
+		ipipMgr *ipipManager
+		ipSets  *dpsets.MockIPSets
+		rt      *mockRouteTable
 	)
 
 	const (
@@ -249,17 +237,11 @@ var _ = Describe("ipipManager IP set updates", func() {
 		rt = &mockRouteTable{
 			currentRoutes: map[string][]routetable.Target{},
 		}
-		brt = &mockRouteTable{
-			currentRoutes: map[string][]routetable.Target{},
-		}
-		prt = &mockRouteTable{
-			currentRoutes: map[string][]routetable.Target{},
-		}
 
 		la := netlink.NewLinkAttrs()
 		la.Name = "eth0"
 		ipipMgr = newIPIPManagerWithShim(
-			ipSets, rt, brt, dataplanedefs.IPIPIfaceNameV4,
+			ipSets, rt, dataplanedefs.IPIPIfaceNameV4,
 			Config{
 				MaxIPSetSize:       1024,
 				Hostname:           "host1",
@@ -269,12 +251,6 @@ var _ = Describe("ipipManager IP set updates", func() {
 				links: []netlink.Link{&mockLink{attrs: la}},
 			},
 			4,
-			func(interfacePrefixes []string, ipVersion uint8, netlinkTimeout time.Duration,
-				deviceRouteSourceAddress net.IP, deviceRouteProtocol netlink.RouteProtocol,
-				removeExternalRoutes bool,
-			) routetable.RouteTableInterface {
-				return prt
-			},
 		)
 		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
 			Hostname: "host1",
@@ -410,7 +386,7 @@ var _ = Describe("ipipManager IP set updates", func() {
 
 var _ = Describe("IPIPManager", func() {
 	var manager *ipipManager
-	var rt, brt, prt *mockRouteTable
+	var rt *mockRouteTable
 	var ipSets *dpsets.MockIPSets
 
 	BeforeEach(func() {
@@ -418,17 +394,11 @@ var _ = Describe("IPIPManager", func() {
 		rt = &mockRouteTable{
 			currentRoutes: map[string][]routetable.Target{},
 		}
-		brt = &mockRouteTable{
-			currentRoutes: map[string][]routetable.Target{},
-		}
-		prt = &mockRouteTable{
-			currentRoutes: map[string][]routetable.Target{},
-		}
 
 		la := netlink.NewLinkAttrs()
 		la.Name = "eth0"
 		manager = newIPIPManagerWithShim(
-			ipSets, rt, brt, dataplanedefs.IPIPIfaceNameV4,
+			ipSets, rt, dataplanedefs.IPIPIfaceNameV4,
 			Config{
 				MaxIPSetSize:       1024,
 				Hostname:           "host1",
@@ -443,12 +413,6 @@ var _ = Describe("IPIPManager", func() {
 				links: []netlink.Link{&mockLink{attrs: la}},
 			},
 			4,
-			func(interfacePrefixes []string, ipVersion uint8, netlinkTimeout time.Duration,
-				deviceRouteSourceAddress net.IP, deviceRouteProtocol netlink.RouteProtocol,
-				removeExternalRoutes bool,
-			) routetable.RouteTableInterface {
-				return prt
-			},
 		)
 	})
 
@@ -467,7 +431,7 @@ var _ = Describe("IPIPManager", func() {
 		manager.OnParentNameUpdate("eth0")
 
 		Expect(manager.hostAddr).NotTo(BeZero())
-		Expect(manager.noEncapRouteTable).NotTo(BeNil())
+		Expect(manager.parentIfaceName).NotTo(BeEmpty())
 		parent, err := manager.getParentInterface()
 
 		Expect(parent).NotTo(BeNil())
@@ -510,14 +474,14 @@ var _ = Describe("IPIPManager", func() {
 		})
 
 		Expect(rt.currentRoutes[dataplanedefs.IPIPIfaceNameV4]).To(HaveLen(0))
-		Expect(brt.currentRoutes[routetable.InterfaceNone]).To(HaveLen(0))
+		Expect(rt.currentRoutes[routetable.InterfaceNone]).To(HaveLen(0))
 
 		err = manager.CompleteDeferredWork()
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(rt.currentRoutes[dataplanedefs.IPIPIfaceNameV4]).To(HaveLen(1))
-		Expect(brt.currentRoutes[routetable.InterfaceNone]).To(HaveLen(1))
-		Expect(prt.currentRoutes["eth0"]).NotTo(BeNil())
+		Expect(rt.currentRoutes[routetable.InterfaceNone]).To(HaveLen(1))
+		Expect(rt.currentRoutes["eth0"]).NotTo(BeNil())
 	})
 
 	It("adds the route to the default table on next try when the parent route table is not immediately found", func() {
@@ -560,12 +524,11 @@ var _ = Describe("IPIPManager", func() {
 		err = manager.configureIPIPDevice(50, manager.dpConfig.RulesConfig.IPIPTunnelAddress, false)
 		Expect(err).NotTo(HaveOccurred())
 
-		Expect(prt.currentRoutes["eth0"]).To(HaveLen(0))
+		Expect(rt.currentRoutes["eth0"]).To(HaveLen(0))
 		err = manager.CompleteDeferredWork()
-
 		Expect(err).NotTo(HaveOccurred())
 		Expect(manager.routesDirty).To(BeFalse())
-		Expect(prt.currentRoutes["eth0"]).To(HaveLen(1))
+		Expect(rt.currentRoutes["eth0"]).To(HaveLen(1))
 	})
 })
 

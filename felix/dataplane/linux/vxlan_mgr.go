@@ -69,7 +69,6 @@ type vxlanManager struct {
 	vtepsDirty        bool
 	nlHandle          netlinkHandle
 	dpConfig          Config
-	noEncapProtocol   netlink.RouteProtocol
 
 	// Log context
 	logCtx     *logrus.Entry
@@ -135,7 +134,6 @@ func newVXLANManagerWithShims(
 		vtepsDirty:        true,
 		dpConfig:          dpConfig,
 		nlHandle:          nlHandle,
-		noEncapProtocol:   calculateRouteProtocol(dpConfig),
 		logCtx:            logrus.WithField("ipVersion", ipVersion),
 		opRecorder:        opRecorder,
 	}
@@ -360,6 +358,7 @@ func (m *vxlanManager) updateRoutes() {
 
 	m.logCtx.WithField("vxlanRoutes", vxlanRoutes).Debug("VXLAN manager setting VXLAN tunneled routes")
 	m.routeTable.SetRoutes(routetable.RouteClassVXLANTunnel, m.vxlanDevice, vxlanRoutes)
+
 	bhRoutes := blackholeRoutes(m.localIPAMBlocks)
 	m.logCtx.WithField("balckholes", bhRoutes).Debug("VXLAN manager setting blackhole routes")
 	m.routeTable.SetRoutes(routetable.RouteClassIPAMBlockDrop, routetable.InterfaceNone, bhRoutes)
