@@ -494,8 +494,8 @@ type FelixConfigurationSpec struct {
 	// NFTablesMode configures nftables support in Felix. [Default: Disabled]
 	NFTablesMode *NFTablesMode `json:"nftablesMode,omitempty"`
 
-	// NftablesTableRefreshInterval controls the interval at which Felix periodically refreshes the nftables rules. [Default: 90s]
-	NftablesTableRefreshInterval *metav1.Duration `json:"nftablesTableRefreshInterval,omitempty" configv1timescale:"seconds"`
+	// NftablesRefreshInterval controls the interval at which Felix periodically refreshes the nftables rules. [Default: 90s]
+	NftablesRefreshInterval *metav1.Duration `json:"nftablesRefreshInterval,omitempty" configv1timescale:"seconds"`
 
 	// +kubebuilder:validation:Pattern=`^(?i)(Accept|Return)?$`
 	NftablesFilterAllowAction string `json:"nftablesFilterAllowAction,omitempty" validate:"omitempty,acceptReturn"`
